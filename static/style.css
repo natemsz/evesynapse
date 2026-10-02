@@ -3,6 +3,13 @@
    dark panels) with a single dependency-free stylesheet. */
 
 @font-face {
+  font-family: 'Shentox';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/static/fonts/shentox-regular.woff2') format('woff2');
+}
+@font-face {
   font-family: 'Univers Next Pro';
   font-style: normal;
   font-weight: 500;
@@ -87,8 +94,8 @@ body {
   background: #000 url("/static/bg.jpg") no-repeat top center fixed;
   background-size: cover;
   color: var(--text);
-  font-family: "Univers Next Pro", "UniversNextPro330BasicLightLatin", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-weight: 500;
+  font-family: "Shentox", "Univers Next Pro", "UniversNextPro330BasicLightLatin", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 400;
   font-size: 15px;
   line-height: 1.5;
   text-rendering: optimizeLegibility;

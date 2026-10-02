@@ -153,7 +153,7 @@ main {
   padding: 1.25rem 1.25rem 1.5rem;
 }
 .panel > h1:first-child {
-  background: linear-gradient(90deg, #c9ecff, #63c7f2 35%, #2f9be8 65%, #3f6fd8);
+  background: linear-gradient(90deg, #f2fcff 0%, #7ce3ff 30%, #26a8ec 60%, #2743c7 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;

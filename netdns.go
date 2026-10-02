@@ -5,6 +5,11 @@ import (
 	"log"
 	"net"
 	"time"
+
+	// Embed Mozilla's root CA set: Android/Termux keeps system
+	// certificates where a Linux binary never looks, so without this
+	// every TLS verification fails with "signed by unknown authority".
+	_ "golang.org/x/crypto/x509roots/fallback"
 )
 
 // Android (Termux) has no /etc/resolv.conf, so Go's built-in resolver

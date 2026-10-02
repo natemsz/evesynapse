@@ -48,3 +48,35 @@ ORDER BY id;
 -- name: ListAllCharacters :many
 SELECT * FROM characters
 ORDER BY user_id, name;
+
+-- name: UpdateCharacterTokens :exec
+UPDATE characters
+SET access_token = ?, refresh_token = ?, token_expiry = ?, updated_at = datetime('now')
+WHERE character_id = ?;
+
+-- name: GetSnapshot :one
+SELECT * FROM character_snapshots
+WHERE character_id = ? AND kind = ?;
+
+-- name: UpsertSnapshot :exec
+INSERT INTO character_snapshots (character_id, kind, payload, fetched_at, cached_until)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (character_id, kind) DO UPDATE SET
+    payload      = excluded.payload,
+    fetched_at   = excluded.fetched_at,
+    cached_until = excluded.cached_until;
+
+-- name: ListSnapshotsByCharacter :many
+SELECT * FROM character_snapshots
+WHERE character_id = ?
+ORDER BY kind;
+
+-- name: GetTypeName :one
+SELECT name FROM type_names
+WHERE type_id = ?;
+
+-- name: UpsertTypeName :exec
+INSERT INTO type_names (type_id, name)
+VALUES (?, ?)
+ON CONFLICT (type_id) DO UPDATE SET
+    name = excluded.name;

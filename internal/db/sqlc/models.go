@@ -21,6 +21,19 @@ type Character struct {
 	UpdatedAt    string         `json:"updated_at"`
 }
 
+type CharacterSnapshot struct {
+	CharacterID int64          `json:"character_id"`
+	Kind        string         `json:"kind"`
+	Payload     string         `json:"payload"`
+	FetchedAt   string         `json:"fetched_at"`
+	CachedUntil sql.NullString `json:"cached_until"`
+}
+
+type TypeName struct {
+	TypeID int64  `json:"type_id"`
+	Name   string `json:"name"`
+}
+
 type User struct {
 	ID        int64  `json:"id"`
 	CreatedAt string `json:"created_at"`

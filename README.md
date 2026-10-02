@@ -23,11 +23,15 @@ and key/vCode auth.
 - `config.go` — environment config + a small hand-rolled `.env` loader
 - `auth.go` — EVE SSO: login redirect, callback, JWT/JWKS verification,
   sign-out, and the dev-only `/dev-login`
-- `esi.go` — minimal ESI client (character/corporation lookups)
+- `refresh.go` — access-token freshness: refresh + rotation persistence
+- `esi.go` — ESI client with snapshot caching and type-name resolution
 - `pages.go` — home/admin handlers + template rendering
-- `worker.go` — background goroutine (future ESI refresh scheduler)
+- `worker.go` — background ESI refresh scheduler (60s cycle)
+- `netdns.go` — Android/Termux DNS + embedded CA roots
 - `templates/` — embedded html/templates (`base.html` layout)
-- `schema/` — SQL schema (sqlc input; `001_init.sql`)
+- `static/` — embedded assets: the 2013 wallpaper (`bg.jpg`) and the
+  dependency-free stylesheet (`style.css`), served at `/static/`
+- `schema/` — SQL schema (sqlc input; `001_init.sql`, `002_snapshots.sql`)
 - `internal/db/query/` — hand-written queries (sqlc input)
 - `internal/db/sqlc/` — sqlc-generated code (do not edit)
 
@@ -42,8 +46,7 @@ The app auto-loads `./.env` at startup (keys already set in the real
 environment win). Then open <http://localhost:8080>:
 
 - `/` — home; signed out it shows the EVE SSO login button, signed in
-  it shows the character sheet (name, portrait, corporation, birthday,
-  security status)
+  it shows the character sheet (identity, wallet, skills, skill queue)
 - `/auth/eve` — starts EVE SSO login (also "Link another character")
 - `/auth/callback` — OAuth2 callback (see SSO flow below)
 - `/auth/logout` — destroys the session
@@ -77,20 +80,49 @@ character-for-character), `SESSION_KEY`, plus optional `ADDR`
    and granted scopes. Re-login (or "Link another character" while
    signed in) attaches characters to the same account. The session
    token is rotated at sign-in.
-5. **Character pull**: the signed-in home page fetches
-   `GET https://esi.evetech.net/characters/{id}/` live with the stored
-   access token (User-Agent `EveSynapse/0.1 (dev)`), resolves the
-   corporation name via `GET /corporations/{id}/`, and shows the
-   portrait from `images.evetech.net`.
+5. **Character pull**: the signed-in home page shows the character
+   sheet — identity (name, portrait, corporation, birthday, security
+   status), ISK wallet balance, total/unallocated SP, the currently
+   training skill, and the 25 heaviest skills with names resolved via
+   `GET /universe/types/{id}/` (cached in-process and in the
+   `type_names` table).
 
 Tokens, authorization codes and the client secret are never logged;
 request logs contain paths only, no query strings.
 
-Known limitations (by design, for now): ESI is fetched live per page
-load (no caching yet — ESI caching is per-endpoint and belongs with
-the worker's scheduler), and stored access tokens expire after ~20
-minutes with no refresh yet, so the sheet gracefully degrades to
-identity-only until the worker grows refresh-token handling.
+## Token refresh & caching
+
+EVE SSO access tokens live ~20 minutes. `validAccessToken`
+(refresh.go) returns the stored token while it has more than 60
+seconds left; otherwise it refreshes against CCP and persists the new
+access token, the **rotated** refresh token, and the new expiry.
+Refreshes are serialized process-wide and the character row is
+re-read first, so a rotated refresh token is never replayed.
+
+ESI responses for skills, skill queue and wallet are cached as raw
+JSON in `character_snapshots` (schema `002_snapshots.sql`), keyed by
+(character, kind) with the response's `Expires` header stored as
+`cached_until` (5-minute fallback when ESI sends none). Pages serve
+fresh snapshots without calling ESI; on fetch failure a stale
+snapshot is served instead of an error. ESI's error-limit statuses
+(420/429) are treated as a hard back-off signal.
+
+## Background worker
+
+Every 60 seconds the worker walks all linked characters: it ensures
+each access token is usable (refreshing when needed) and re-fetches
+any snapshot whose `cached_until` has passed — a first pass runs at
+boot. On a 420/429 the cycle stops and waits for the next tick. Logs
+stay quiet: one summary line per cycle only when something was
+refreshed or failed, plus a heartbeat every 10 minutes.
+
+## Look & feel
+
+The UI echoes the 2013 EveSynapse theme — the original planet/nebula
+wallpaper (served from `/static/bg.jpg`), teal-blue accents
+(`#326b8c`), translucent dark panels over the art — rebuilt with a
+single dependency-free stylesheet (`static/style.css`): no Bootstrap,
+no jQuery, no external fonts, responsive down to phone widths.
 
 ## Dev login
 
@@ -103,8 +135,10 @@ it is on.
 ## Database & sqlc
 
 The app opens/creates the SQLite file from `DB_PATH`, creates the scs
-`sessions` table, and — on first boot of a fresh database — applies
-`schema/001_init.sql` (the `users`/`characters` tables). Regenerate
+`sessions` table, applies `schema/001_init.sql` on first boot of a
+fresh database (the `users`/`characters` tables), and applies
+`schema/002_snapshots.sql` whenever the snapshot tables are absent
+(existing databases gain the new tables in place). Regenerate
 query code after editing `internal/db/query/queries.sql` with:
 
 ```sh
@@ -115,9 +149,10 @@ make gen   # sqlc generate
 
 - [x] Wire EVE SSO: redirect, `/auth/callback`, JWT verification,
       token persistence
-- [x] Character sheet basics on the home page (live ESI pull)
-- [ ] Token refresh + worker-driven ESI caching honoring `cached_until`
-- [ ] Fuller character sheet (skills, wallet, assets — scopes already
-      requested at login)
+- [x] Character sheet on the home page (identity, wallet, skills,
+      skill queue) via cached ESI snapshots
+- [x] Token refresh + worker-driven ESI caching honoring `cached_until`
+- [x] 2013 look & feel (original wallpaper, dark panels, teal accents)
+- [ ] Assets pages (scope already requested at login)
 - [ ] Import CCP SDE into side tables for the market/fitting modules
 - [x] Multiple characters per account (link more while signed in)

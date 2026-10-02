@@ -52,6 +52,12 @@ type application struct {
 	// type_names table).
 	typeNamesMu sync.RWMutex
 	typeNames   map[int64]string
+
+	// In-memory cache of built corporation views, keyed by
+	// corporation ID; each entry expires with the ESI Expires
+	// header of the response it was built from (corporation.go).
+	corpMu    sync.Mutex
+	corpCache map[int64]corpCacheEntry
 }
 
 func main() {
@@ -91,6 +97,7 @@ func main() {
 		queries:   db.New(dbConn),
 		jwks:      &jwksCache{},
 		typeNames: make(map[int64]string),
+		corpCache: make(map[int64]corpCacheEntry),
 	}
 
 	workerCtx, stopWorker := context.WithCancel(context.Background())
@@ -159,6 +166,11 @@ func (app *application) routes() http.Handler {
 	r.Route("/admin", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleAdmin)
+	})
+
+	r.Route("/corporations", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleCorporations)
 	})
 
 	return r

@@ -44,8 +44,31 @@ type esiCharacter struct {
 	SecurityStatus float64 `json:"security_status"`
 }
 
-// esiCorporation is GET /corporations/{id}/ (name only, for now).
+// esiCorporation is GET /corporations/{id}/ (public, unauthenticated).
+// Corporation IDs are stable, so responses are cached per the ESI
+// Expires header (see corporation.go).
 type esiCorporation struct {
+	Name          string  `json:"name"`
+	Ticker        string  `json:"ticker"`
+	MemberCount   int64   `json:"member_count"`
+	CEOID         int64   `json:"ceo_id"`
+	CreatorID     int64   `json:"creator_id"`
+	AllianceID    int64   `json:"alliance_id"` // 0 when not in an alliance
+	HomeStationID int64   `json:"home_station_id"`
+	TaxRate       float64 `json:"tax_rate"`     // fraction: 0.10 = 10%
+	DateFounded   string  `json:"date_founded"` // RFC3339
+	Description   string  `json:"description"`  // contains EVE-flavored HTML
+	URL           string  `json:"url"`
+}
+
+// esiAlliance is GET /alliances/{id}/ (the slice we consume).
+type esiAlliance struct {
+	Name   string `json:"name"`
+	Ticker string `json:"ticker"`
+}
+
+// esiStation is GET /universe/stations/{id}/ (the slice we consume).
+type esiStation struct {
 	Name string `json:"name"`
 }
 

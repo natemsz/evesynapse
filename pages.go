@@ -19,6 +19,7 @@ type pageData struct {
 	SSOConfigured bool
 	Error         string // friendly, user-safe banner (never internals)
 	Character     *characterSheet
+	Corps         []corpView
 	Users         []db.User
 	Characters    []db.Character
 	Snapshots     []adminSnapshotRow

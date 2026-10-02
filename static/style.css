@@ -38,8 +38,14 @@ h1, h2, h3, h4 {
   text-shadow: 0 -1px 0 #000;
 }
 h1 { font-size: 1.6rem; }
-h2 { font-size: 1.3rem; color: var(--accent); }
-h3 { font-size: 1.1rem; color: var(--accent); margin: 1.4rem 0 0.4rem; }
+h2, h3 {
+  background: linear-gradient(90deg, #6ea8cf, #326b8c 60%, #2e86a3);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+h2 { font-size: 1.3rem; }
+h3 { font-size: 1.1rem; margin: 1.4rem 0 0.4rem; }
 
 small { color: #9a9a9a; }
 
@@ -62,11 +68,13 @@ header nav {
   flex-wrap: wrap;
 }
 .wordmark {
-  color: #e6ebee;
   font-size: 1.05rem;
-  font-weight: 300;
+  font-weight: 400;
   letter-spacing: 0.35em;
-  text-shadow: 0 0 1px #000, 0 0 8px rgba(50, 107, 140, 0.55);
+  background: linear-gradient(90deg, #8fc3e8, #326b8c 55%, #3fa8c9);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 .wordmark:hover { color: #fff; text-decoration: none; }
 header nav .spacer { flex: 1; }
@@ -81,9 +89,9 @@ main {
   padding: 0 1rem;
 }
 .panel {
-  background: var(--panel);
-  border: 1px solid #000;
-  outline: 1px solid #222;
+  background: linear-gradient(#202020, #1c1c1c) padding-box,
+    linear-gradient(135deg, #4a86ad 0%, #326b8c 45%, #16303f 100%) border-box;
+  border: 1px solid transparent;
   border-radius: 4px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 2px 14px rgba(0, 0, 0, 0.55);
   padding: 1.25rem 1.25rem 1.5rem;
@@ -93,7 +101,8 @@ main {
   color: var(--accent);
   margin: -1.25rem -1.25rem 1rem;
   padding: 0.6rem 1.25rem;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid;
+  border-image: linear-gradient(90deg, #4a86ad, #326b8c 50%, #16303f) 1;
   border-radius: 4px 4px 0 0;
   letter-spacing: 0.06em;
   font-size: 1.25rem;

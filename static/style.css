@@ -266,6 +266,8 @@ img.portrait {
 
 .isk { font-size: 1.15rem; color: #e6ebee; }
 
+.corp-desc { white-space: pre-line; }
+
 /* --- footer --- */
 footer {
   background: #0a0a0a;

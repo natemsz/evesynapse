@@ -1,0 +1,27 @@
+{{define "title"}}Corporation{{end}}
+{{define "content"}}
+<h1>Corporation</h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{range .Corps}}
+  <h2>{{.Name}} [{{.Ticker}}]</h2>
+  <p><img class="portrait" src="{{.LogoURL}}" alt="Logo of {{.Name}}" width="128" height="128"></p>
+  <div class="tw">
+  <table>
+    <tbody>
+      <tr><th>Members</th><td>{{.MemberCount}}</td></tr>
+      <tr><th>CEO</th><td>{{if .CEOName}}<img src="{{.CEOPortraitURL}}" alt="Portrait of {{.CEOName}}" width="32" height="32"> {{.CEOName}}{{else}}—{{end}}</td></tr>
+      <tr><th>Alliance</th><td>{{.Alliance}}</td></tr>
+      <tr><th>Tax rate</th><td>{{.TaxRate}}</td></tr>
+      <tr><th>Founded</th><td>{{.Founded}}</td></tr>
+      <tr><th>Home station</th><td>{{.HomeStation}}</td></tr>
+      <tr><th>Your characters</th><td>{{range $i, $n := .Characters}}{{if $i}}, {{end}}{{$n}}{{end}}</td></tr>
+    </tbody>
+  </table>
+  </div>
+  {{if .Description}}<h3>About</h3><p class="corp-desc">{{.Description}}</p>{{end}}
+{{else}}
+  <p>No corporations to show yet — link a character first.</p>
+{{end}}
+{{end}}

@@ -64,8 +64,8 @@ character-for-character), `SESSION_KEY`, plus optional `ADDR`
    and secret in `.env`.
 2. **Login**: `GET /auth/eve` stores a random `state` in the session
    and redirects to `login.eveonline.com` requesting these scopes:
-   `esi-skills.read_skills_v1`, `esi-skills.read_skillqueue_v1`,
-   `esi-wallet.read_character_wallet_v1`, `esi-assets.read_assets_v1`.
+   `esi-skills.read_skills.v1`, `esi-skills.read_skillqueue.v1`,
+   `esi-wallet.read_character_wallet.v1`, `esi-assets.read_assets.v1`.
 3. **Callback**: `GET /auth/callback` verifies the `state`
    (constant-time, single-use), exchanges the authorization code for
    tokens, then verifies the access-token JWT: RS256 signature against

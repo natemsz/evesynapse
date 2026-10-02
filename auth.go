@@ -45,10 +45,10 @@ const (
 // eveScopes is the single source of truth for the scopes requested at
 // login — one per ESI data type EveSynapse reads.
 var eveScopes = []string{
-	"esi-skills.read_skills_v1",
-	"esi-skills.read_skillqueue_v1",
-	"esi-wallet.read_character_wallet_v1",
-	"esi-assets.read_assets_v1",
+	"esi-skills.read_skills.v1",
+	"esi-skills.read_skillqueue.v1",
+	"esi-wallet.read_character_wallet.v1",
+	"esi-assets.read_assets.v1",
 }
 
 // loginHTTPClient is shared by the SSO/JWKS calls (auth.go) and ESI.

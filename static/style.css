@@ -2,6 +2,49 @@
    Echoes the original evesynapse.css (wallpaper, teal-blue accents,
    dark panels) with a single dependency-free stylesheet. */
 
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/static/fonts/inter-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/static/fonts/inter-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/static/fonts/inter-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Rajdhani';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/static/fonts/rajdhani-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Rajdhani';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/static/fonts/rajdhani-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Rajdhani';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/static/fonts/rajdhani-700.woff2') format('woff2');
+}
+
 :root {
   --text: #c6c6c6;
   --accent: #326b8c;
@@ -23,7 +66,7 @@ body {
   background: #000 url("/static/bg.jpg") no-repeat top center fixed;
   background-size: cover;
   color: var(--text);
-  font-family: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 15px;
   line-height: 1.5;
   text-rendering: optimizeLegibility;
@@ -32,9 +75,13 @@ body {
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: #4a86ad; text-decoration: underline; }
 
+h1, h2, h3, h4, .wordmark, .btn, thead th {
+  font-family: "Rajdhani", "Inter", sans-serif;
+}
+
 h1, h2, h3, h4 {
   color: var(--text);
-  font-weight: 400;
+  font-weight: 600;
   text-shadow: 0 -1px 0 #000;
 }
 h1 { font-size: 1.6rem; }
@@ -56,7 +103,7 @@ header {
   top: 0;
   z-index: 10;
   background: linear-gradient(to bottom, #1c1c1c, #000);
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid #1c1c1c;
   box-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
 }
 header nav {
@@ -70,7 +117,7 @@ header nav {
 }
 .wordmark {
   font-size: 1.05rem;
-  font-weight: 400;
+  font-weight: 600;
   letter-spacing: 0.35em;
   background: linear-gradient(90deg, #8fc3e8, #326b8c 55%, #3fa8c9);
   -webkit-background-clip: text;
@@ -103,7 +150,7 @@ main {
   margin: -1.25rem -1.25rem 1rem;
   padding: 0.6rem 1.25rem;
   border-bottom: 1px solid;
-  border-image: linear-gradient(90deg, #4a86ad, #326b8c 50%, #16303f) 1;
+  border-image: linear-gradient(90deg, #2c4f68, #1d3a4d 50%, #101c26) 1;
   border-radius: 4px 4px 0 0;
   letter-spacing: 0.06em;
   font-size: 1.25rem;
@@ -152,7 +199,11 @@ thead th {
   color: var(--accent);
   text-shadow: 1px -1px 0 #000;
   border-bottom: 1px solid #000;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.85rem;
 }
+td, .isk { font-variant-numeric: tabular-nums; }
 tbody tr { background: var(--row); }
 tbody tr:nth-child(even) { background: var(--row-alt); }
 tbody tr:hover td { background: var(--row-hover); }

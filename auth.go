@@ -38,7 +38,7 @@ const (
 // EVE SSO (OAuth2 + OpenID Connect) endpoints. Discovery document:
 // https://login.eveonline.com/.well-known/oauth-authorization-server
 const (
-	eveIssuer       = "login.eveonline.com" // required `iss` claim
+	eveIssuer       = "https://login.eveonline.com" // required `iss` claim
 	eveDiscoveryURL = "https://login.eveonline.com/.well-known/oauth-authorization-server"
 )
 

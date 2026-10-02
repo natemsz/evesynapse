@@ -74,6 +74,24 @@ func main() {
 		// anyone who asks. It exists for local development only.
 		log.Printf("WARNING: DEV_LOGIN=1 — /dev-login is ENABLED. Never run like this in production.")
 	}
+	// One-shot reachability probe so phone (Termux) logs immediately
+	// show whether CCP is reachable — DNS trouble there otherwise only
+	// surfaces midway through a login attempt.
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		defer cancel()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, eveDiscoveryURL, nil)
+		if err != nil {
+			return
+		}
+		resp, err := loginHTTPClient.Do(req)
+		if err != nil {
+			log.Printf("evesynapse: WARNING EVE SSO discovery not reachable: %v", err)
+			return
+		}
+		defer resp.Body.Close()
+		log.Printf("evesynapse: EVE SSO discovery reachable (HTTP %d)", resp.StatusCode)
+	}()
 	log.Fatal(srv.ListenAndServe())
 }
 

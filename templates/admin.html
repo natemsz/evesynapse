@@ -1,0 +1,29 @@
+{{define "title"}}Admin{{end}}
+{{define "content"}}
+<h1>Admin</h1>
+<p>Placeholder layout. Users, characters, and background-job status will live here; the tables below are shape-only.</p>
+
+<h2>Users</h2>
+<table>
+  <thead><tr><th>ID</th><th>Created</th><th>Characters</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>—</td><td>0 (placeholder)</td></tr>
+  </tbody>
+</table>
+
+<h2>Characters</h2>
+<table>
+  <thead><tr><th>Character ID</th><th>User</th><th>Name</th><th>Scopes</th><th>Cached until</th></tr></thead>
+  <tbody>
+    <tr><td>90000001</td><td>1</td><td>Dev Capsuleer</td><td>—</td><td>— (placeholder)</td></tr>
+  </tbody>
+</table>
+
+<h2>Background jobs</h2>
+<table>
+  <thead><tr><th>Job</th><th>Status</th><th>Last run</th></tr></thead>
+  <tbody>
+    <tr><td>worker heartbeat</td><td>running (see server log)</td><td>— (placeholder)</td></tr>
+  </tbody>
+</table>
+{{end}}

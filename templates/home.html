@@ -1,0 +1,18 @@
+{{define "title"}}Home{{end}}
+{{define "content"}}
+<h1>EveSynapse</h1>
+<p>One-stop EVE Online companion: characters, market, fitting, intel. Rebuilt in Go on ESI + EVE SSO.</p>
+
+{{if .LoggedIn}}
+  <p>You are signed in{{if .CharacterName}} as <strong>{{.CharacterName}}</strong>{{end}} (placeholder session).</p>
+  <p><a class="btn" href="/admin/">Open the admin</a></p>
+{{else}}
+  <p>You are not signed in.</p>
+  <p><a class="btn" href="/auth/eve">Log in with EVE SSO</a></p>
+  {{if .SSOConfigured}}
+  <p><small>EVE SSO client is configured; the login flow itself is stubbed for now.</small></p>
+  {{else}}
+  <p><small>EVE SSO is not configured — set <code>EVE_CLIENT_ID</code> / <code>EVE_CLIENT_SECRET</code> (see <code>.env.example</code>).</small></p>
+  {{end}}
+{{end}}
+{{end}}

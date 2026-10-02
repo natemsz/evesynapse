@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block title %}User Settings{% endblock %}
+
+{% block page-header %}
+    <div class="page-header">
+        <div class="content-center">
+            <div class="container">
+                <h3>Change Password</h3>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+    <div class="settings-nav">
+        <ul>
+            <li><a href="{% url api.views.api_key %}"><i class="icon-wrench icon-white"> </i> Manage API Keys</a></li>
+            <li><a href="{% url api.views.characters %}"><i class="icon-th-list icon-white"> </i> Manage Pilots</a></li>
+            <li class="settings-nav-active"><a href="{% url auth.views.profile %}"><i class="icon-lock icon-white"> </i> Change Password</a></li>
+        </ul>
+    </div>
+
+    <div style="width: 560px; margin-left: auto; margin-right: auto;">
+        <form class="form-horizontal" action="" method="post">
+          {% csrf_token %}
+          <fieldset>
+            {% if form.non_field_errors %}
+                <div class="alert alert-error fade in">{{ form.non_field_errors }}</div>
+            {% endif %}
+            {% for field in form.hidden_fields %}
+                {{ hidden }}
+            {% endfor %}
+            {% for field in form.visible_fields %}
+                <p>
+                <div class="control-group {%if field.errors %}error{%endif%}">
+                    <label class="control-label" for="id_{{ field.label }}">
+                        {{ field.label }}:
+                    </label>
+                    <div class="controls">
+                        {{ field }}
+                        <span class="help-inline">{{ field.errors }}</span>
+                    </div>
+                </div>
+                </p>
+            {% endfor %}
+            </fieldset>
+            <div class="control-group">
+                <div class="controls">
+                    <input type="submit" class="btn btn-primary" value="Go!" />
+                </div>
+            </div>
+        </form>
+    </div>
+{% endblock %}

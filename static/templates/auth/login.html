@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+
+{% block title %}Log In{% endblock %}
+
+{% block nav-login %}<li class="active">{% endblock %}
+
+{% block page-header %}
+    <div class="page-header">
+        <div class="content-center">
+            <div class="container">
+                <h3>Login</h3>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+
+{% if user.is_authenticated %}
+<div class="alert alert-error">
+    You are already signed in! Click <a href="/">here</a> to go back to the home page.
+</div>
+{% else %}
+
+    <div style="width: 560px; margin-left: auto; margin-right: auto;">
+        <form class="form-horizontal" action="" method="post">
+          {% csrf_token %}
+          <fieldset>
+            {% if form.non_field_errors %}
+                <div class="alert alert-error"><p />{{ form.non_field_errors }}</div>
+            {% endif %}
+            {% for field in form %}
+              <p>
+                <div class="control-group {%if field.errors %}error{%endif%}">
+                    <label class="control-label" for="id_{{ field.label }}">
+                        {{ field.label }}:
+                    </label>
+                    <div class="controls">
+                        {{ field }}
+                        <span class="help-inline">{{ field.errors }}</span>
+                    </div>
+                </div>
+                </p>
+            {% endfor %}
+            </fieldset>
+            <div class="control-group">
+                <div class="controls">
+                    <input type="submit" class="btn btn-primary" value="Log In" />
+                    <p class="forgot-password">
+                        <a href='/accounts/reset_password/' title="Forgot your password?">
+                            Forgot your password?
+                        </a>
+                    </p>
+                    {% if next %}<input type="hidden" name="next" value="{{ next }}" />{% endif %}
+                </div>
+            </div>
+        </form>
+    </div>
+{% endif %}
+{% endblock %}

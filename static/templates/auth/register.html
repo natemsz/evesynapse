@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block title %}Register{% endblock %}
+
+{% block nav-register %}<li class="active">{% endblock %}
+
+{% block page-header %}
+    <div class="page-header">
+        <div class="content-center">
+            <div class="container">
+                <h3>Register</h3>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+
+    <div style="width: 560px; margin-left: auto; margin-right: auto;">
+        <form class="form-horizontal" action="" method="post">
+          {% csrf_token %}
+          <fieldset>
+            {% if form.non_field_errors %}
+            <div class="alert alert-error"><p />{{ form.non_field_errors }}</div>
+            {% endif %}
+            {% for field in form %}
+                <p>
+                    <div class="control-group {%if field.errors %}error{%endif%}">
+                        <label class="control-label" for="id_{{ field.label }}">
+                            {{ field.label }}:
+                        </label>
+                        <div class="controls">
+                            {{ field }}
+                            <span class="help-inline">{{ field.errors }}</span>
+                        </div>
+                    </div>
+                </p>
+            {% endfor %}
+            </fieldset>
+            <div class="control-group">
+                <div class="controls">
+                    <input type="submit" class="btn btn-primary" value="Register" />
+                </div>
+            </div>
+        </form>
+    </div>
+{% endblock %}

@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% load custom_filters %}
+{% load humanize %}
+{% block title %}
+Manage API Keys
+{% endblock %}
+
+{% block page-header %}
+    <div class="page-header">
+        <div class="content-center">
+            <div class="container">
+                <h3>Manage API Keys</h3>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+    <div class="settings-nav">
+        <ul>
+            <li class="settings-nav-active"><a href="{% url api.views.api_key %}"><i class="icon-wrench icon-white"> </i> Manage API Keys</a></li>
+            <li><a href="{% url api.views.characters %}"><i class="icon-th-list icon-white"> </i> Manage Pilots</a></li>
+            <li><a href="{% url auth.views.profile %}"><i class="icon-lock icon-white"> </i> Change Password</a></li>
+        </ul>
+    </div>
+    {% if char_keys or corp_keys %}
+        {% if char_keys %}
+            <h4>
+                Character Keys
+            </h4>
+            <table class='table table-striped table-hover'>
+                <thead>
+                    <tr>
+                        <td>
+                            <strong>Characters</strong>
+                        </td>
+                        <td>
+                            <strong>KeyID</strong>
+                        </td>
+                        <td></td>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for key in char_keys %}
+                        {% if key.is_valid %}
+                            <tr>
+                                <td>
+                                    {% for char in key.character_set.all %}
+                                        {% if forloop.last %}
+                                            {{char.name}}
+                                        {% else %}
+                                            {{char.name}},
+                                        {% endif %}
+                                    {% endfor %}
+                                </td>
+                                <td>
+                                    {{ key.keyid }}
+                                </td>
+                                <td>
+                                    <div class="pull-right">
+                                        <a class="btn btn-inverse" href='{% url refresh_api_key apikey_id=key.keyid %}' rel='tooltip' title='Refresh Key'>
+                                            <i class='icon-refresh icon-white'></i>
+                                        </a>
+                                        <a class="btn btn-inverse" href='{% url add_characters api_id=key.keyid api_verification_code=key.vcode %}' rel='tooltip' title='Manage Characters'>
+                                            <i class='icon-edit icon-white'></i>
+                                        </a>
+                                        <a class="btn btn-inverse" href='{% url remove_api_key apikey_id=key.keyid %}' rel='tooltip' title='Remove Key & Data'>
+                                            <i class='icon-remove icon-white'></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr class='error'>
+                                <td>
+                                    {% for char in key.character_set.all %}
+                                        {% if forloop.last %}
+                                            {{char.name}}
+                                        {% else %}
+                                            {{char.name}},
+                                        {% endif %}
+                                    {% endfor %}
+                                </td>
+                            <td>
+                                {{ key.keyid }}
+                            </td>
+                            <td>
+                                <div class="pull-right">
+                                    <a class="btn btn-inverse" href='{% url refresh_api_key apikey_id=key.keyid %}' rel='tooltip' title='Refresh Key'>
+                                        <i class='icon-refresh icon-white'></i> 
+                                    </a> 
+                                    <a class="btn btn-inverse" href='#' rel='tooltip' title='Manage Characters'>
+                                        <i class='icon-edit icon-white'></i> 
+                                    </a> 
+                                    <a class="btn btn-inverse" href='{% url remove_api_key apikey_id=key.keyid %}' rel='tooltip' title='Remove Key & Data'>
+                                        <i class='icon-remove icon-white'></i> 
+                                    </a> 
+                                </div>
+                            </td>
+                            </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+        {% if corp_keys %}
+            <h4>
+                Corporate Keys
+            </h4>
+            <table class='table table-hover table-striped'>
+                <thead>
+                    <tr>
+                        <td>
+                            <strong>KeyID</strong>
+                        </td>
+                        <td>
+                            <strong>vCode</strong>
+                        <td></td>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for key in corp_keys %}
+                        <tr>
+                            <td>
+                                {{ key.keyid }}
+                            </td>
+                            <td>
+                                {{ key.vcode }}
+                            </td>
+                            <td>
+                                <div class="pull-right">
+                                    <a class="btn btn-inverse" href='{% url remove_api_key apikey_id=key.keyid %}' rel='tooltip' title='Remove Key'>
+                                        <i class='icon-remove icon-white'></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    {% else %}
+        <div class="well">
+            <strong>You have not saved any API keys yet!</strong>
+            <p>To get started, add an API key to your account by clicking the button below.</p>
+            <p>You can find your API Keys and create new ones by visiting the <a href="http://support.eveonline.com/api" target="_blank">Eve API support page</a>. 
+            Or click <a href='http://support.eveonline.com/api/Key/CreatePredefined/23531659' target='_blank'>here</a> to create a predefined key for EveSynapse.</p>
+            <p>For best results, use a key with an access mask of <strong>23531659</strong>.</p>
+        </div>
+    {% endif %}
+    <a href="#add_key" role="button" class="btn btn-primary pull-right" data-toggle="modal"><i class="icon-plus icon-white"></i> Add API Key</a>
+    <div id="add_key" class="modal hide fade">
+        <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+            <h5>Add API Key</h5>
+        </div>
+        <div class="modal-body">
+            <form class='form-horizontal' action='{% url manage_api_keys %}' method='post'>
+                <fieldset>
+                    {% csrf_token %}
+                    <div class='control-group{{form.api_id|css_error}}'>
+                        <label class='control-label' for='api_id'>KeyID</label>
+                        <div class='controls'>
+                            {{ form.api_id }}
+                            {% if form.api_id.errors %}
+                                <span class='help-inline'>
+                                    {% for error in form.api_id.errors %}
+                                        {{ error|escape }}
+                                    {% endfor %}
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class='control-group{{form.api_verification_code|css_error}}'>
+                        <label class='control-label' for='api_verification_code'>vCode</label>
+                        <div class='controls'>
+                            {{ form.api_verification_code }}
+                            {% if form.api_verification_code.errors %}
+                                <span class='help-inline'>
+                                    {% for error in form.api_verification_code.errors %}
+                                        {{ error|escape }}
+                                    {% endfor %}
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </fieldset>
+        </div>
+        <div class="modal-footer">
+            <div class='control-group'>
+                <div class='controls'>
+                    <button class="btn" data-dismiss="modal" aria-hidden="true">Cancel</button>
+                    <button class='btn btn-primary' type='submit'>
+                        <i class='icon-check icon-white'></i>
+                        Save Key
+                    </button>
+                </div>
+            </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}

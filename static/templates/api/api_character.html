@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% load custom_filters %}
+{% block title %}
+Add Characters
+{% endblock %}
+
+{% block page-header %}
+    <div class="page-header">
+        <div class="content-center">
+            <div class="container">
+                <h3>Add Characters</h3>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+    
+{% block content %}
+  <form class='form-horizontal' action='{{request.get_full_path}}' method='post'>
+    <fieldset>
+      {% csrf_token %}
+      <table class="table table-hover table-striped">
+        <thead>
+          <tr>
+            <th></th>
+            <th>
+              Name
+            </th>
+            <th>
+              Corporation
+            </th>
+            <td>
+              Add
+            </td>
+          </tr>
+        </thead>
+        <tbody>
+          {% for char in chars %}
+            <tr>
+              <td>
+                <img src='http://image.eveonline.com/Character/{{char.characterID}}_64.jpg' />
+              </td>
+              <td>
+                {{ char.name }}
+              </td>
+              <td>
+                {{ char.corporationName }}
+              </td>
+              <td>
+                <input type='checkbox' name='characters' value='{{char.characterID}}' />
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class='control-group'>
+        <div class='controls'>
+          <button class='btn btn-primary pull-right' type='submit'>
+            Add Characters
+
+          </button>
+        </div>
+      </div>
+    </fieldset>
+  </form>
+</div>
+{% endblock %}

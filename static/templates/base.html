@@ -1,0 +1,106 @@
+{% load staticfiles %}{% spaceless %}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>EveSynapse | {% block title %}Home{% endblock %}</title>
+        <!-- Bootstrap -->
+        <link href="{% static 'style/css/bootstrap.min.css' %}" rel="stylesheet" media="screen">
+        <link href="{% static 'style/css/font-awesome.min.css' %}" rel="stylesheet" media="screen">
+        <link href="{% static 'style/css/evesynapse.css' %}" rel="stylesheet" media="screen">
+        <link rel="shortcut icon" href="{% static 'ico/favicon.png' %}" />
+        <!--[if lt IE 9]>
+          <script src="https://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+        <![endif]-->        
+    </head>
+    <body>
+        <!--Nav-->
+        <div class="container main-border clearfix header-container">
+            <div class="container">
+                <div class="navbar navbar-static-top navbar-centered navbar-es">
+                    <div class="navbar-inner">
+                        <a href="{% url core.views.home %}"><div class="brand-img"></div></a>
+                        <div class="nav-right">
+                            <ul class="nav">
+                                {% block navbar %}
+                                {% block nav-home %}<li>{% endblock %}<a href="/" rel='tooltip' data-placement="bottom" data-animation="true" title='Home'><i class="icon-home icon-white" style="font-size: 16px;"></i></a></li>
+                                <li class="divider-vertical"></li>
+                            </ul>
+                        {% if not user.is_authenticated %}
+                        <ul class="nav pull-right">
+                            {% block nav-login %}<li>{% endblock %}<a href="/accounts/login/">
+                                <i class="icon-user icon-white"></i> <strong> Log In</strong></a>
+                            </li>
+                            {% block nav-register %}<li>{% endblock %}<a href="/accounts/register/">
+                                <i class="icon-plus icon-white"></i> <strong> Register</strong></a>
+                            </li>
+                        </ul>
+                        </div>
+                        {% else %}
+                        <ul class="nav pull-right">
+                            <li class="dropdown">
+                                <a href="#" class="dropdown-toggle" data-toggle="dropdown"><i class="icon-user icon-white"> </i>
+                                    <strong> {{ user.username }} </strong>
+                                <b class="caret"></b></a>
+                                <ul class="dropdown-menu">
+                                    <li><a href="{% url api.views.api_key %}"><i class="icon-wrench icon-white"> </i> Manage API Keys</a></li>
+                                    <li><a href="{% url api.views.characters %}"><i class="icon-th-list icon-white"> </i> Manage Pilots</a></li>
+                                    <li><a href="{% url auth.views.profile %}"><i class="icon-lock icon-white"> </i> Change Password</a></li>
+                                    <li><a href="{% url auth.views.logout %}"><i class="icon-off icon-white"> </i> Log Out</a></li>
+                                </ul>
+                            </li>
+                        </ul>
+                        </div>
+                        {% endif %}
+                        {% endblock %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!--Content-->
+        <div class="container main-border clearfix">
+            <div class="container">
+                <div class="content">
+                    <div class="row">
+                        <div class="span12">
+                            {% if messages %}
+                                {% for message in messages %}
+                                    <div{% if message.tags %} class="alert alert-{{ message.tags }} fade in"{% endif %}>
+                                        <a class="close" data-dismiss="alert" href="#">&times;</a>
+                                        {{ message }}
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                            
+                            {% block content %}{% endblock %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!--Footer-->
+        <div class="container main-border clearfix" style="padding: 0px 5px 5px 5px; margin-bottom: 20px;">
+            <div class="footer">
+                <div class="row">
+                    <div class="container">
+                        &copy; 2013 EveSynapse
+                        <p>
+                        EVE Online and all associated material are the intellectual property of CCP Games hf and are used with permission.
+                        <br/>No official affiliation or endorsement by CCP Games hf is stated or implied.
+                        </p>
+                        <div class="version-info">
+                            <ul>
+                                <li>EveSynapse 0.1.1 Alpha</li>
+                                <li>Eve DB Retribution 1.0.7</li>
+                            </ul>
+                        </div>
+                        <p>{% now "r" %}</p>
+                    </div>
+                </div>
+            </div>
+        </div>    
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.0/jquery.min.js"></script>
+        <script src="{% static 'style/js/bootstrap.min.js' %}"></script>
+        </body>
+</html>
+{% endspaceless %}

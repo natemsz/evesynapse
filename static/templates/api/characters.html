@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% load custom_filters %}
+{% block title %}Manage Pilots{% endblock %}
+
+{% block page-header %}
+    <div class="page-header">
+        <div class="content-center">
+            <div class="container">
+                <h3>Pilots</h3>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+<div class="settings-nav">
+    <ul>
+        <li><a href="{% url api.views.api_key %}"><i class="icon-wrench icon-white"> </i> Manage API Keys</a></li>
+        <li class="settings-nav-active"><a href="{% url api.views.characters %}"><i class="icon-th-list icon-white"> </i> Manage Pilots</a></li>
+        <li><a href="{% url auth.views.profile %}"><i class="icon-lock icon-white"> </i> Change Password</a></li>
+    </ul>
+</div>
+
+    <table class="table table-hover table-striped">
+        <thead>
+            <tr>
+                <th></th>
+                <th>
+                    Name
+                </th>
+                <th>
+                    Corporation
+                </th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+          {% for char in characters %}
+            <tr>
+                <td>
+                    <img src="http://image.eveonline.com/Character/{{char.id}}_64.jpg">
+                </td>
+                <td>
+                    <a href='{% url pilot_sheet char_id=char.id %}'>{{ char.name }}</a>
+                </td>
+                <td>
+                    {{ char.corp_name }}
+                </td>
+                <td>
+                    <a class="btn btn-inverse" href='{% url remove_character char_id=char.id %}' rel='tooltip' data-placement="right" title='Remove Pilot'>
+                        <i class='icon-remove icon-white'></i>
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

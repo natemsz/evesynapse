@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}
+Pilot Details - {{ char.name }}
+{% endblock %}
+
+{% block page-header %}
+    <div class="page-header">
+        <div class="content-center">
+            <div class="container">
+                <h3>Pilot Details - {{char.name}}</h3>
+            </div>
+        </div>
+    </div>
+{% endblock %}    
+
+{% block content %}
+    <div class="pull-left">
+        <img src="http://image.eveonline.com/Character/{{char.id}}_256.jpg" width="220px" alt={{char.name}}>
+        <br />
+        <center>
+            <img src="http://image.eveonline.com/Corporation/{{char.corp_id}}_64.png"> 
+            <img src="http://media.evesynapse.com/char/races/{{char.race}}.png"> 
+            <img src="http://media.evesynapse.com/char/bloodlines/{{char.bloodline}}.png"> 
+            <br />
+            <small><i>Next Update: {{ next_update }}</i></small>
+        </center>
+    </div>
+    <div class="span9 pull-right">
+        <table class='table table-condensed table-striped'>
+            <thead>
+                <tr>
+                    <th>
+                        General Info
+                    </th>
+                    <th>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <strong>Name:</strong>
+                    </td>
+                    <td>
+                        {{ char.name }}
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <strong>Race:</strong>
+                    </td>
+                    <td>
+                        {{char.race}}
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <strong>Bloodline:</strong>
+                    </td>
+                    <td>
+                        {{char.bloodline}}
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <strong>Ancestry:</strong>
+                    </td>
+                    <td>
+                        {{char.ancestry}}
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <strong>Gender:</strong>
+                    </td>
+                    <td>
+                        {{char.gender}}
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <strong>Corporation:</strong>
+                    </td>
+                    <td>
+                        {{char.corp_name}}
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <strong>Alliance:</strong>
+                    </td>
+                    <td>
+                        {{char.alliance_name}}
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <strong>Balance:</strong>
+                    </td>
+                    <td>
+                        {{char.balance|intcomma}} ISK
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <p>
+        <table class='table table-condensed table-striped'>
+            <thead>
+                <tr>
+                    <th>
+                        Implants
+                    </th>
+                    <th>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if char.implant_memory_name %}
+                <tr>
+                    <td>
+                        {{char.implant_memory_name}}
+                    </td>
+                    <td>
+                        +{{char.implant_memory_bonus}} Mem.
+                    </td>
+                </tr>
+                {% endif %}
+                {% if char.implant_intelligence_name %}
+                <tr>
+                    <td>
+                        {{char.implant_intelligence_name}}
+                    </td>
+                    <td>
+                        +{{char.implant_intelligence_bonus}} Int.
+                    </td>
+                </tr>
+                {% endif %}
+                {% if char.implant_charisma_name %}
+                <tr>
+                    <td>
+                        {{char.implant_charisma_name}}
+                    </td>
+                    <td>
+                        +{{char.implant_charisma_bonus}} Cha.
+                    </td>
+                </tr>
+                {% endif %}
+                {% if char.implant_willpower_name %}
+                <tr>
+                    <td>
+                        {{char.implant_willpower_name}}
+                    </td>
+                    <td>
+                        +{{char.implant_willpower_bonus}} Wil.
+                    </td>
+                </tr>
+                {% endif %}
+                {% if char.implant_perception_name %}
+                <tr>
+                    <td>
+                        {{char.implant_perception_name}}
+                    </td>
+                    <td>
+                        +{{char.implant_perception_bonus}} Per.
+                    </td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </p>
+{% endblock %}

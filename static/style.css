@@ -108,7 +108,7 @@ h1, h2, h3, h4 {
 }
 h1 { font-size: 1.6rem; }
 h2, h3 {
-  background: linear-gradient(90deg, #8fc3e8, #4a86ad 60%, #3fa8c9);
+  background: linear-gradient(90deg, #2ee6ff, #00a3ff 45%, #8a4dff);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -141,7 +141,7 @@ header nav {
   font-size: 1.05rem;
   font-weight: 600;
   letter-spacing: 0.35em;
-  background: linear-gradient(90deg, #8fc3e8, #326b8c 55%, #3fa8c9);
+  background: linear-gradient(90deg, #2ee6ff, #00a3ff 45%, #8a4dff);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -167,7 +167,7 @@ main {
   padding: 1.25rem 1.25rem 1.5rem;
 }
 .panel > h1:first-child {
-  background: linear-gradient(90deg, #f2fcff 0%, #7ce3ff 30%, #26a8ec 60%, #2743c7 100%);
+  background: linear-gradient(92deg, #2ee6ff 0%, #00a3ff 35%, #2f6bff 65%, #8a4dff 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;

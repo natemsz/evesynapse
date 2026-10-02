@@ -5,6 +5,13 @@
 @font-face {
   font-family: 'Inter';
   font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('/static/fonts/inter-300.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
   font-weight: 400;
   font-display: swap;
   src: url('/static/fonts/inter-400.woff2') format('woff2');
@@ -66,7 +73,8 @@ body {
   background: #000 url("/static/bg.jpg") no-repeat top center fixed;
   background-size: cover;
   color: var(--text);
-  font-family: "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: "UniversNextPro330BasicLightLatin", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 300;
   font-size: 15px;
   line-height: 1.5;
   text-rendering: optimizeLegibility;
@@ -145,15 +153,19 @@ main {
   padding: 1.25rem 1.25rem 1.5rem;
 }
 .panel > h1:first-child {
-  background: var(--panel-head);
-  color: var(--accent);
+  background: linear-gradient(90deg, #c9ecff, #63c7f2 35%, #2f9be8 65%, #3f6fd8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+  font-weight: 700;
   margin: -1.25rem -1.25rem 1rem;
   padding: 0.6rem 1.25rem;
   border-bottom: 1px solid;
   border-image: linear-gradient(90deg, #2c4f68, #1d3a4d 50%, #101c26) 1;
   border-radius: 4px 4px 0 0;
   letter-spacing: 0.06em;
-  font-size: 1.25rem;
+  font-size: 1.4rem;
 }
 
 /* --- buttons --- */

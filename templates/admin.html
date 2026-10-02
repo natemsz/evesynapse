@@ -1,29 +1,46 @@
 {{define "title"}}Admin{{end}}
 {{define "content"}}
 <h1>Admin</h1>
-<p>Placeholder layout. Users, characters, and background-job status will live here; the tables below are shape-only.</p>
+<p>Accounts, linked characters, and background-job status.</p>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 <h2>Users</h2>
 <table>
-  <thead><tr><th>ID</th><th>Created</th><th>Characters</th></tr></thead>
+  <thead><tr><th>ID</th><th>Created</th></tr></thead>
   <tbody>
-    <tr><td>1</td><td>—</td><td>0 (placeholder)</td></tr>
+  {{range .Users}}
+    <tr><td>{{.ID}}</td><td>{{.CreatedAt}}</td></tr>
+  {{else}}
+    <tr><td colspan="2">No users yet.</td></tr>
+  {{end}}
   </tbody>
 </table>
 
 <h2>Characters</h2>
 <table>
-  <thead><tr><th>Character ID</th><th>User</th><th>Name</th><th>Scopes</th><th>Cached until</th></tr></thead>
+  <thead><tr><th>Name</th><th>Character ID</th><th>User</th><th>Token expiry</th><th>Scopes</th><th>Cached until</th></tr></thead>
   <tbody>
-    <tr><td>90000001</td><td>1</td><td>Dev Capsuleer</td><td>—</td><td>— (placeholder)</td></tr>
+  {{range .Characters}}
+    <tr>
+      <td>{{.Name}}</td>
+      <td>{{.CharacterID}}</td>
+      <td>{{.UserID}}</td>
+      <td>{{if .TokenExpiry.Valid}}{{.TokenExpiry.String}}{{else}}—{{end}}</td>
+      <td>{{.Scopes}}</td>
+      <td>{{if .CachedUntil.Valid}}{{.CachedUntil.String}}{{else}}—{{end}}</td>
+    </tr>
+  {{else}}
+    <tr><td colspan="6">No characters linked yet.</td></tr>
+  {{end}}
   </tbody>
 </table>
 
 <h2>Background jobs</h2>
 <table>
-  <thead><tr><th>Job</th><th>Status</th><th>Last run</th></tr></thead>
+  <thead><tr><th>Job</th><th>Status</th></tr></thead>
   <tbody>
-    <tr><td>worker heartbeat</td><td>running (see server log)</td><td>— (placeholder)</td></tr>
+    <tr><td>worker heartbeat</td><td>{{.WorkerStatus}}</td></tr>
   </tbody>
 </table>
 {{end}}

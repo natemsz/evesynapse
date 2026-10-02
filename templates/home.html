@@ -3,15 +3,35 @@
 <h1>EveSynapse</h1>
 <p>One-stop EVE Online companion: characters, market, fitting, intel. Rebuilt in Go on ESI + EVE SSO.</p>
 
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
 {{if .LoggedIn}}
-  <p>You are signed in{{if .CharacterName}} as <strong>{{.CharacterName}}</strong>{{end}} (placeholder session).</p>
-  <p><a class="btn" href="/admin/">Open the admin</a></p>
+  {{with .Character}}
+    <h2>{{.Name}}</h2>
+    {{if .PortraitURL}}<p><img src="{{.PortraitURL}}" alt="Portrait of {{.Name}}" width="128" height="128"></p>{{end}}
+    {{if .Fetched}}
+    <table>
+      <tbody>
+        <tr><th>Corporation</th><td>{{.CorporationName}}</td></tr>
+        <tr><th>Birthday</th><td>{{.Birthday}}</td></tr>
+        <tr><th>Security status</th><td>{{printf "%.2f" .SecurityStatus}}</td></tr>
+      </tbody>
+    </table>
+    {{else if .Unavailable}}
+    <p><small>Live ESI data is unavailable right now (the stored access token may have expired) — showing what we have.</small></p>
+    {{end}}
+  {{else}}
+    <p>You are signed in{{if .CharacterName}} as <strong>{{.CharacterName}}</strong>{{end}}.</p>
+  {{end}}
+  <p>
+    <a class="btn" href="/auth/eve">Link another character</a>
+    <a class="btn" href="/admin/">Open the admin</a>
+    <a class="btn" href="/auth/logout">Sign out</a>
+  </p>
 {{else}}
   <p>You are not signed in.</p>
   <p><a class="btn" href="/auth/eve">Log in with EVE SSO</a></p>
-  {{if .SSOConfigured}}
-  <p><small>EVE SSO client is configured; the login flow itself is stubbed for now.</small></p>
-  {{else}}
+  {{if not .SSOConfigured}}
   <p><small>EVE SSO is not configured — set <code>EVE_CLIENT_ID</code> / <code>EVE_CLIENT_SECRET</code> (see <code>.env.example</code>).</small></p>
   {{end}}
 {{end}}

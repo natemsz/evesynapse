@@ -40,3 +40,11 @@ ORDER BY name;
 -- name: DeleteCharacter :exec
 DELETE FROM characters
 WHERE character_id = ? AND user_id = ?;
+
+-- name: ListUsers :many
+SELECT * FROM users
+ORDER BY id;
+
+-- name: ListAllCharacters :many
+SELECT * FROM characters
+ORDER BY user_id, name;

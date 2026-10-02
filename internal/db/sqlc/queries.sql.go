@@ -73,6 +73,45 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 	return i, err
 }
 
+const listAllCharacters = `-- name: ListAllCharacters :many
+SELECT character_id, user_id, name, access_token, refresh_token, token_expiry, scopes, cached_until, created_at, updated_at FROM characters
+ORDER BY user_id, name
+`
+
+func (q *Queries) ListAllCharacters(ctx context.Context) ([]Character, error) {
+	rows, err := q.db.QueryContext(ctx, listAllCharacters)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Character
+	for rows.Next() {
+		var i Character
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.UserID,
+			&i.Name,
+			&i.AccessToken,
+			&i.RefreshToken,
+			&i.TokenExpiry,
+			&i.Scopes,
+			&i.CachedUntil,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCharactersByUser = `-- name: ListCharactersByUser :many
 SELECT character_id, user_id, name, access_token, refresh_token, token_expiry, scopes, cached_until, created_at, updated_at FROM characters
 WHERE user_id = ?
@@ -100,6 +139,34 @@ func (q *Queries) ListCharactersByUser(ctx context.Context, userID int64) ([]Cha
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUsers = `-- name: ListUsers :many
+SELECT id, created_at FROM users
+ORDER BY id
+`
+
+func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
+	rows, err := q.db.QueryContext(ctx, listUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(&i.ID, &i.CreatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -6,6 +6,7 @@ require (
 	github.com/alexedwards/scs/sqlite3store v0.0.0-20251002162104-209de6e426de
 	github.com/alexedwards/scs/v2 v2.9.0
 	github.com/go-chi/chi/v5 v5.3.2
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	golang.org/x/oauth2 v0.37.0
 	modernc.org/sqlite v1.60.1
 )

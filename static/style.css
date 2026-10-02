@@ -7,7 +7,7 @@
   --accent: #326b8c;
   --success: #328c53;
   --danger: #8c326b;
-  --panel: rgba(0, 0, 0, 0.62);
+  --panel: #202020;
   --panel-head: #101010;
   --row: #181818;
   --row-alt: #151515;
@@ -85,8 +85,6 @@ main {
   border: 1px solid #000;
   outline: 1px solid #222;
   border-radius: 4px;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 2px 14px rgba(0, 0, 0, 0.55);
   padding: 1.25rem 1.25rem 1.5rem;
 }
@@ -174,7 +172,7 @@ img.portrait {
 
 /* --- footer --- */
 footer {
-  background: rgba(5, 5, 5, 0.88);
+  background: #0a0a0a;
   border-top: 1px solid #1c1c1c;
   color: #666;
   text-align: center;

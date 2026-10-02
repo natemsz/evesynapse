@@ -61,6 +61,41 @@ func (q *Queries) GetCharacter(ctx context.Context, characterID int64) (Characte
 	return i, err
 }
 
+const getSnapshot = `-- name: GetSnapshot :one
+SELECT character_id, kind, payload, fetched_at, cached_until FROM character_snapshots
+WHERE character_id = ? AND kind = ?
+`
+
+type GetSnapshotParams struct {
+	CharacterID int64  `json:"character_id"`
+	Kind        string `json:"kind"`
+}
+
+func (q *Queries) GetSnapshot(ctx context.Context, arg GetSnapshotParams) (CharacterSnapshot, error) {
+	row := q.db.QueryRowContext(ctx, getSnapshot, arg.CharacterID, arg.Kind)
+	var i CharacterSnapshot
+	err := row.Scan(
+		&i.CharacterID,
+		&i.Kind,
+		&i.Payload,
+		&i.FetchedAt,
+		&i.CachedUntil,
+	)
+	return i, err
+}
+
+const getTypeName = `-- name: GetTypeName :one
+SELECT name FROM type_names
+WHERE type_id = ?
+`
+
+func (q *Queries) GetTypeName(ctx context.Context, typeID int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getTypeName, typeID)
+	var name string
+	err := row.Scan(&name)
+	return name, err
+}
+
 const getUser = `-- name: GetUser :one
 SELECT id, created_at FROM users
 WHERE id = ?
@@ -152,6 +187,41 @@ func (q *Queries) ListCharactersByUser(ctx context.Context, userID int64) ([]Cha
 	return items, nil
 }
 
+const listSnapshotsByCharacter = `-- name: ListSnapshotsByCharacter :many
+SELECT character_id, kind, payload, fetched_at, cached_until FROM character_snapshots
+WHERE character_id = ?
+ORDER BY kind
+`
+
+func (q *Queries) ListSnapshotsByCharacter(ctx context.Context, characterID int64) ([]CharacterSnapshot, error) {
+	rows, err := q.db.QueryContext(ctx, listSnapshotsByCharacter, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CharacterSnapshot
+	for rows.Next() {
+		var i CharacterSnapshot
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.Kind,
+			&i.Payload,
+			&i.FetchedAt,
+			&i.CachedUntil,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUsers = `-- name: ListUsers :many
 SELECT id, created_at FROM users
 ORDER BY id
@@ -178,6 +248,29 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateCharacterTokens = `-- name: UpdateCharacterTokens :exec
+UPDATE characters
+SET access_token = ?, refresh_token = ?, token_expiry = ?, updated_at = datetime('now')
+WHERE character_id = ?
+`
+
+type UpdateCharacterTokensParams struct {
+	AccessToken  string         `json:"access_token"`
+	RefreshToken string         `json:"refresh_token"`
+	TokenExpiry  sql.NullString `json:"token_expiry"`
+	CharacterID  int64          `json:"character_id"`
+}
+
+func (q *Queries) UpdateCharacterTokens(ctx context.Context, arg UpdateCharacterTokensParams) error {
+	_, err := q.db.ExecContext(ctx, updateCharacterTokens,
+		arg.AccessToken,
+		arg.RefreshToken,
+		arg.TokenExpiry,
+		arg.CharacterID,
+	)
+	return err
 }
 
 const upsertCharacter = `-- name: UpsertCharacter :one
@@ -238,4 +331,49 @@ func (q *Queries) UpsertCharacter(ctx context.Context, arg UpsertCharacterParams
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const upsertSnapshot = `-- name: UpsertSnapshot :exec
+INSERT INTO character_snapshots (character_id, kind, payload, fetched_at, cached_until)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (character_id, kind) DO UPDATE SET
+    payload      = excluded.payload,
+    fetched_at   = excluded.fetched_at,
+    cached_until = excluded.cached_until
+`
+
+type UpsertSnapshotParams struct {
+	CharacterID int64          `json:"character_id"`
+	Kind        string         `json:"kind"`
+	Payload     string         `json:"payload"`
+	FetchedAt   string         `json:"fetched_at"`
+	CachedUntil sql.NullString `json:"cached_until"`
+}
+
+func (q *Queries) UpsertSnapshot(ctx context.Context, arg UpsertSnapshotParams) error {
+	_, err := q.db.ExecContext(ctx, upsertSnapshot,
+		arg.CharacterID,
+		arg.Kind,
+		arg.Payload,
+		arg.FetchedAt,
+		arg.CachedUntil,
+	)
+	return err
+}
+
+const upsertTypeName = `-- name: UpsertTypeName :exec
+INSERT INTO type_names (type_id, name)
+VALUES (?, ?)
+ON CONFLICT (type_id) DO UPDATE SET
+    name = excluded.name
+`
+
+type UpsertTypeNameParams struct {
+	TypeID int64  `json:"type_id"`
+	Name   string `json:"name"`
+}
+
+func (q *Queries) UpsertTypeName(ctx context.Context, arg UpsertTypeNameParams) error {
+	_, err := q.db.ExecContext(ctx, upsertTypeName, arg.TypeID, arg.Name)
+	return err
 }

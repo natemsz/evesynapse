@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"time"
 
 	db "evesynapse/internal/db/sqlc"
 )
@@ -20,11 +21,14 @@ type pageData struct {
 	Character     *characterSheet
 	Users         []db.User
 	Characters    []db.Character
+	Snapshots     []adminSnapshotRow
 	WorkerStatus  string
 }
 
 // characterSheet is what the home page shows for the signed-in
-// character: identity from the session/DB, live data from ESI.
+// character: identity from the session/DB, live data from ESI. The
+// wallet/skills/queue blocks each carry their own OK flag so one
+// failing ESI endpoint dims only its own section.
 type characterSheet struct {
 	Name            string
 	PortraitURL     string
@@ -33,6 +37,39 @@ type characterSheet struct {
 	SecurityStatus  float64
 	Fetched         bool // true when the live ESI data loaded
 	Unavailable     bool // signed in, but ESI couldn't be reached
+
+	// Wallet block.
+	ISKOK bool
+	ISK   string // formatted balance
+
+	// Skills block.
+	SkillsOK      bool
+	TotalSP       string // formatted
+	UnallocatedSP string // formatted, "" when zero
+	Skills        []skillRow
+	SkillsShown   int
+	SkillsCount   int
+
+	// Skill-queue block.
+	QueueOK  bool
+	Training string // "Skill Name V — finishes 2026-10-03 14:22 UTC"; "" = paused/empty
+}
+
+// skillRow is one line of the home-page skills table.
+type skillRow struct {
+	Name    string
+	Trained string // trained level, roman
+	Active  string // active level, roman
+	SP      string // formatted
+}
+
+// adminSnapshotRow is one line of the admin snapshots overview.
+type adminSnapshotRow struct {
+	CharacterID   int64
+	CharacterName string
+	Kind          string
+	FetchedAt     string
+	CachedUntil   string // "—" when unset
 }
 
 func (app *application) render(w http.ResponseWriter, status int, page string, data pageData) {
@@ -91,10 +128,12 @@ func (app *application) handleHome(w http.ResponseWriter, r *http.Request) {
 
 // loadCharacterSheet assembles the home-page character block.
 //
-// NOTE: ESI data is fetched live on every page load. The characters
-// table has a cached_until column for exactly this, but ESI caching is
-// per-endpoint and the sheet will fan out to several endpoints — proper
-// caching belongs with the worker's refresh scheduler. Future work.
+// Identity comes from the public character endpoint; wallet, skills
+// and skill queue come through the snapshot cache (getCached), which
+// serves ESI-cached payloads and only calls out within ESI's cache
+// window — the worker keeps those snapshots warm in the background.
+// Every section degrades independently: a dead endpoint dims its own
+// block, never the whole page.
 func (app *application) loadCharacterSheet(ctx context.Context) *characterSheet {
 	sheet := &characterSheet{
 		Name: app.sessions.GetString(ctx, sessionCharacterName),
@@ -117,11 +156,17 @@ func (app *application) loadCharacterSheet(ctx context.Context) *characterSheet 
 		sheet.Name = character.Name
 	}
 
+	// One valid token for the whole page: this refreshes (and
+	// persists the rotation) when the stored token is near expiry.
+	token, err := app.validAccessToken(ctx, character)
+	if err != nil {
+		log.Printf("home: no valid token for character %d: %v", characterID, err)
+		sheet.Unavailable = true
+		return sheet
+	}
+
 	var pub esiCharacter
-	if err := esiGet(ctx, character.AccessToken, fmt.Sprintf("/characters/%d/", characterID), &pub); err != nil {
-		// Most likely cause over time: the stored access token expired
-		// (~20 min lifetime). Token refresh via the worker is future
-		// work; degrade to identity-only instead of failing the page.
+	if err := esiGet(ctx, token, fmt.Sprintf("/characters/%d/", characterID), &pub); err != nil {
 		log.Printf("home: ESI character fetch for %d failed: %v", characterID, err)
 		sheet.Unavailable = true
 		return sheet
@@ -144,7 +189,93 @@ func (app *application) loadCharacterSheet(ctx context.Context) *characterSheet 
 	}
 
 	sheet.Fetched = true
+	app.loadWalletSection(ctx, character, sheet)
+	app.loadSkillsSection(ctx, character, sheet)
+	app.loadQueueSection(ctx, character, sheet)
 	return sheet
+}
+
+// loadWalletSection fills the wallet block; failures only dim it.
+func (app *application) loadWalletSection(ctx context.Context, ch db.Character, sheet *characterSheet) {
+	var balance float64
+	if err := app.getCached(ctx, ch, snapWallet, &balance); err != nil {
+		log.Printf("home: wallet for character %d: %v", ch.CharacterID, err)
+		return
+	}
+	sheet.ISK = formatISK(balance)
+	sheet.ISKOK = true
+}
+
+// loadSkillsSection fills the skills block: totals plus the heaviest
+// 25 skills, names resolved via the type-name cache.
+func (app *application) loadSkillsSection(ctx context.Context, ch db.Character, sheet *characterSheet) {
+	var skills esiSkills
+	if err := app.getCached(ctx, ch, snapSkills, &skills); err != nil {
+		log.Printf("home: skills for character %d: %v", ch.CharacterID, err)
+		return
+	}
+
+	sheet.TotalSP = formatInt(skills.TotalSP)
+	if skills.UnallocatedSP > 0 {
+		sheet.UnallocatedSP = formatInt(skills.UnallocatedSP)
+	}
+	sheet.SkillsCount = len(skills.Skills)
+
+	ids := sortedSkillIDs(skills.Skills)
+	shown := ids
+	if len(shown) > 25 {
+		shown = shown[:25]
+	}
+	names := app.resolveTypeNames(ctx, shown)
+
+	byID := make(map[int64]esiSkill, len(skills.Skills))
+	for _, s := range skills.Skills {
+		byID[s.SkillID] = s
+	}
+	for _, id := range shown {
+		s := byID[id]
+		name, ok := names[id]
+		if !ok {
+			name = fmt.Sprintf("Type #%d", id)
+		}
+		sheet.Skills = append(sheet.Skills, skillRow{
+			Name:    name,
+			Trained: romanLevel(s.TrainedSkillLevel),
+			Active:  romanLevel(s.ActiveSkillLevel),
+			SP:      formatInt(s.SkillpointsInSkill),
+		})
+	}
+	sheet.SkillsShown = len(sheet.Skills)
+	sheet.SkillsOK = true
+}
+
+// loadQueueSection fills the "currently training" line from the first
+// queue entry (position 0). An empty queue is a valid state, not an
+// error: QueueOK stays true and Training stays empty.
+func (app *application) loadQueueSection(ctx context.Context, ch db.Character, sheet *characterSheet) {
+	var queue esiSkillqueue
+	if err := app.getCached(ctx, ch, snapSkillqueue, &queue); err != nil {
+		log.Printf("home: skill queue for character %d: %v", ch.CharacterID, err)
+		return
+	}
+	sheet.QueueOK = true
+
+	for _, entry := range queue {
+		if entry.QueuePosition != 0 {
+			continue
+		}
+		name := app.typeName(ctx, entry.SkillID)
+		finish := entry.FinishDate
+		if t, err := time.Parse(time.RFC3339, entry.FinishDate); err == nil {
+			finish = t.UTC().Format("2006-01-02 15:04 UTC")
+		}
+		if finish != "" {
+			sheet.Training = fmt.Sprintf("%s %s — finishes %s", name, romanLevel(entry.FinishedLevel), finish)
+		} else {
+			sheet.Training = fmt.Sprintf("%s %s", name, romanLevel(entry.FinishedLevel))
+		}
+		return
+	}
 }
 
 func (app *application) handleAdmin(w http.ResponseWriter, r *http.Request) {
@@ -153,8 +284,7 @@ func (app *application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		LoggedIn:      true,
 		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
 		SSOConfigured: app.cfg.ssoConfigured(),
-		// Placeholder until the worker reports real job state.
-		WorkerStatus: "heartbeat running (see server log)",
+		WorkerStatus:  "ESI refresh cycle every 60s; snapshots honor ESI cached_until",
 	}
 
 	users, err := app.queries.ListUsers(ctx)
@@ -171,6 +301,29 @@ func (app *application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		data.Error = "Could not load admin data; check the server log."
 	} else {
 		data.Characters = characters
+	}
+
+	// Snapshot cache overview: per character, which ESI kinds are
+	// cached and when each expires.
+	for _, ch := range data.Characters {
+		snaps, err := app.queries.ListSnapshotsByCharacter(ctx, ch.CharacterID)
+		if err != nil {
+			log.Printf("admin: list snapshots for character %d: %v", ch.CharacterID, err)
+			continue
+		}
+		for _, snap := range snaps {
+			until := "—"
+			if snap.CachedUntil.Valid && snap.CachedUntil.String != "" {
+				until = snap.CachedUntil.String
+			}
+			data.Snapshots = append(data.Snapshots, adminSnapshotRow{
+				CharacterID:   ch.CharacterID,
+				CharacterName: ch.Name,
+				Kind:          snap.Kind,
+				FetchedAt:     snap.FetchedAt,
+				CachedUntil:   until,
+			})
+		}
 	}
 
 	app.render(w, http.StatusOK, "admin.html", data)

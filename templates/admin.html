@@ -6,6 +6,7 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 <h2>Users</h2>
+<div class="tw">
 <table>
   <thead><tr><th>ID</th><th>Created</th></tr></thead>
   <tbody>
@@ -16,8 +17,10 @@
   {{end}}
   </tbody>
 </table>
+</div>
 
 <h2>Characters</h2>
+<div class="tw">
 <table>
   <thead><tr><th>Name</th><th>Character ID</th><th>User</th><th>Token expiry</th><th>Scopes</th><th>Cached until</th></tr></thead>
   <tbody>
@@ -35,12 +38,35 @@
   {{end}}
   </tbody>
 </table>
+</div>
+
+<h2>Snapshot cache</h2>
+<div class="tw">
+<table>
+  <thead><tr><th>Character</th><th>Character ID</th><th>Kind</th><th>Fetched at</th><th>Cached until</th></tr></thead>
+  <tbody>
+  {{range .Snapshots}}
+    <tr>
+      <td>{{.CharacterName}}</td>
+      <td>{{.CharacterID}}</td>
+      <td>{{.Kind}}</td>
+      <td>{{.FetchedAt}}</td>
+      <td>{{.CachedUntil}}</td>
+    </tr>
+  {{else}}
+    <tr><td colspan="5">No snapshots cached yet.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
 
 <h2>Background jobs</h2>
+<div class="tw">
 <table>
   <thead><tr><th>Job</th><th>Status</th></tr></thead>
   <tbody>
-    <tr><td>worker heartbeat</td><td>{{.WorkerStatus}}</td></tr>
+    <tr><td>ESI refresh worker</td><td>{{.WorkerStatus}}</td></tr>
   </tbody>
 </table>
+</div>
 {{end}}

@@ -7,16 +7,20 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/alexedwards/scs/sqlite3store"
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	_ "modernc.org/sqlite" // pure-Go SQLite driver, registers as "sqlite"
+	_ "golang.org/x/crypto/x509roots/fallback" // embedded Mozilla roots when no system cert store is visible (Android/Termux)
+	_ "modernc.org/sqlite"                     // pure-Go SQLite driver, registers as "sqlite"
 
 	db "evesynapse/internal/db/sqlc"
 )
@@ -27,14 +31,45 @@ var templatesFS embed.FS
 //go:embed schema/001_init.sql
 var initSchema string
 
+//go:embed schema/002_snapshots.sql
+var snapshotsSchema string
+
+//go:embed static
+var staticFS embed.FS
+
 type application struct {
 	cfg      config
 	sessions *scs.SessionManager
 	queries  *db.Queries
 	jwks     *jwksCache
+
+	// tokenMu serializes access-token refreshes: CCP rotates refresh
+	// tokens on every refresh, so two concurrent refreshes on the same
+	// stored token could invalidate each other.
+	tokenMu sync.Mutex
+
+	// In-process cache of EVE type ID → name (backed by the
+	// type_names table).
+	typeNamesMu sync.RWMutex
+	typeNames   map[int64]string
 }
 
 func main() {
+	// Android/Termux has no usable /etc/resolv.conf, so Go's resolver
+	// falls back to a dead [::1]:53. Pin public DNS servers instead.
+	net.DefaultResolver = &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			d := net.Dialer{Timeout: 5 * time.Second}
+			for _, dns := range []string{"8.8.8.8:53", "1.1.1.1:53"} {
+				if conn, err := d.DialContext(ctx, network, dns); err == nil {
+					return conn, nil
+				}
+			}
+			return d.DialContext(ctx, network, "9.9.9.9:53")
+		},
+	}
+
 	cfg := loadConfig()
 
 	dbConn, err := openDB(cfg.dbPath)
@@ -51,15 +86,16 @@ func main() {
 	sessionManager.Cookie.Secure = false
 
 	app := &application{
-		cfg:      cfg,
-		sessions: sessionManager,
-		queries:  db.New(dbConn),
-		jwks:     &jwksCache{},
+		cfg:       cfg,
+		sessions:  sessionManager,
+		queries:   db.New(dbConn),
+		jwks:      &jwksCache{},
+		typeNames: make(map[int64]string),
 	}
 
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	defer stopWorker()
-	go runWorker(workerCtx)
+	go app.runWorker(workerCtx)
 
 	srv := &http.Server{
 		Addr:              cfg.addr,
@@ -103,6 +139,11 @@ func (app *application) routes() http.Handler {
 
 	r.Get("/", app.handleHome)
 	r.Get("/healthz", handleHealthz)
+
+	// Embedded static assets (2013 wallpaper, stylesheet).
+	if sub, err := fs.Sub(staticFS, "static"); err == nil {
+		r.Handle("/static/*", http.StripPrefix("/static", http.FileServer(http.FS(sub))))
+	}
 	r.Get("/auth/eve", app.handleEVELogin)
 	r.Get("/auth/callback", app.handleEVECallback)
 	r.Get("/auth/logout", app.handleSignOut)
@@ -187,6 +228,19 @@ func openDB(path string) (*sql.DB, error) {
 	}
 	if usersTables == 0 {
 		if err := applySchema(conn, initSchema); err != nil {
+			return nil, err
+		}
+	}
+	// Schema 002 (snapshot + type-name caches), applied the same
+	// guarded way: only when its tables don't exist yet. On an
+	// existing database this adds the new tables alongside the old
+	// ones without disturbing them.
+	var snapshotTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'character_snapshots'`).Scan(&snapshotTables); err != nil {
+		return nil, err
+	}
+	if snapshotTables == 0 {
+		if err := applySchema(conn, snapshotsSchema); err != nil {
 			return nil, err
 		}
 	}

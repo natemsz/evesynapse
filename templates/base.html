@@ -4,33 +4,27 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{template "title" .}} · EveSynapse</title>
-<style>
-  body { font-family: system-ui, sans-serif; margin: 2rem auto; max-width: 56rem; padding: 0 1rem; line-height: 1.45; }
-  header nav { display: flex; gap: 1rem; align-items: baseline; border-bottom: 1px solid #ccc; padding-bottom: .5rem; }
-  header nav .brand { font-weight: 700; font-size: 1.15rem; text-decoration: none; color: inherit; }
-  table { border-collapse: collapse; width: 100%; margin: .5rem 0 1.5rem; }
-  th, td { border: 1px solid #ccc; padding: .35rem .6rem; text-align: left; }
-  th { background: #f2f2f2; }
-  .btn { display: inline-block; padding: .5rem 1rem; border: 1px solid #888; border-radius: .375rem; text-decoration: none; color: inherit; }
-  .err { color: #b00020; border: 1px solid #b00020; border-radius: .375rem; padding: .5rem .75rem; }
-  img { border-radius: .5rem; }
-  footer { margin-top: 3rem; color: #666; font-size: .875rem; }
-</style>
+<link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header>
   <nav>
-    <a class="brand" href="/">EveSynapse</a>
-    <a href="/">Home</a>
-    <a href="/admin/">Admin</a>
-    <span>{{if .LoggedIn}}Signed in{{if .CharacterName}} as {{.CharacterName}}{{end}} · <a href="/auth/logout">Sign out</a>{{else}}Not signed in{{end}}</span>
+    <a class="wordmark" href="/">EVESYNAPSE</a>
+    <span class="spacer"></span>
+    <a class="navlink" href="/">Home</a>
+    <a class="navlink" href="/admin/">Admin</a>
+    <span class="who">{{if .LoggedIn}}Signed in{{if .CharacterName}} as {{.CharacterName}}{{end}} · <a href="/auth/logout">Sign out</a>{{else}}Not signed in{{end}}</span>
   </nav>
 </header>
 <main>
+  <div class="panel">
 {{template "content" .}}
+  </div>
 </main>
 <footer>
-  <p>EveSynapse — modernization skeleton. EVE Online and EVE SSO are trademarks of CCP hf.</p>
+  <p>EVE Online and all associated material are the intellectual property of CCP Games hf and are used with permission.<br>
+  No official affiliation or endorsement by CCP Games hf is stated or implied.</p>
+  <p class="version"><span>EveSynapse 0.2.0 — Go rewrite</span><span>ESI + EVE SSO</span><span>Not affiliated with CCP Games</span></p>
 </footer>
 </body>
 </html>

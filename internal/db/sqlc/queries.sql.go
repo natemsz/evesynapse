@@ -76,6 +76,23 @@ func (q *Queries) CountSDETypes(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countSDETypesInGroupFiltered = `-- name: CountSDETypesInGroupFiltered :one
+SELECT COUNT(*) FROM sde_types
+WHERE group_id = ? AND instr(lower(name), lower(?)) > 0
+`
+
+type CountSDETypesInGroupFilteredParams struct {
+	GroupID int64  `json:"group_id"`
+	LOWER   string `json:"LOWER"`
+}
+
+func (q *Queries) CountSDETypesInGroupFiltered(ctx context.Context, arg CountSDETypesInGroupFilteredParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSDETypesInGroupFiltered, arg.GroupID, arg.LOWER)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countWarDetails = `-- name: CountWarDetails :one
 SELECT COUNT(*) FROM war_details
 `
@@ -310,7 +327,7 @@ func (q *Queries) GetSDESystem(ctx context.Context, systemID int64) (SdeSystem, 
 
 const getSDEType = `-- name: GetSDEType :one
 
-SELECT type_id, name, group_id FROM sde_types
+SELECT type_id, name, group_id, market_group_id, published FROM sde_types
 WHERE type_id = ?
 `
 
@@ -322,7 +339,13 @@ WHERE type_id = ?
 func (q *Queries) GetSDEType(ctx context.Context, typeID int64) (SdeType, error) {
 	row := q.db.QueryRowContext(ctx, getSDEType, typeID)
 	var i SdeType
-	err := row.Scan(&i.TypeID, &i.Name, &i.GroupID)
+	err := row.Scan(
+		&i.TypeID,
+		&i.Name,
+		&i.GroupID,
+		&i.MarketGroupID,
+		&i.Published,
+	)
 	return i, err
 }
 
@@ -703,6 +726,82 @@ func (q *Queries) ListKillmailDetailsByCharacter(ctx context.Context, characterI
 	return items, nil
 }
 
+const listSDECategoriesWithCounts = `-- name: ListSDECategoriesWithCounts :many
+SELECT c.category_id, c.name, COUNT(t.type_id) AS type_count
+FROM sde_categories c
+LEFT JOIN sde_groups g ON g.category_id = c.category_id
+LEFT JOIN sde_types t ON t.group_id = g.group_id
+GROUP BY c.category_id, c.name
+ORDER BY c.name
+`
+
+type ListSDECategoriesWithCountsRow struct {
+	CategoryID int64  `json:"category_id"`
+	Name       string `json:"name"`
+	TypeCount  int64  `json:"type_count"`
+}
+
+func (q *Queries) ListSDECategoriesWithCounts(ctx context.Context) ([]ListSDECategoriesWithCountsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDECategoriesWithCounts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDECategoriesWithCountsRow
+	for rows.Next() {
+		var i ListSDECategoriesWithCountsRow
+		if err := rows.Scan(&i.CategoryID, &i.Name, &i.TypeCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDEGroupsInCategory = `-- name: ListSDEGroupsInCategory :many
+SELECT g.group_id, g.name, COUNT(t.type_id) AS type_count
+FROM sde_groups g
+LEFT JOIN sde_types t ON t.group_id = g.group_id
+WHERE g.category_id = ?
+GROUP BY g.group_id, g.name
+ORDER BY g.name
+`
+
+type ListSDEGroupsInCategoryRow struct {
+	GroupID   int64  `json:"group_id"`
+	Name      string `json:"name"`
+	TypeCount int64  `json:"type_count"`
+}
+
+func (q *Queries) ListSDEGroupsInCategory(ctx context.Context, categoryID int64) ([]ListSDEGroupsInCategoryRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDEGroupsInCategory, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDEGroupsInCategoryRow
+	for rows.Next() {
+		var i ListSDEGroupsInCategoryRow
+		if err := rows.Scan(&i.GroupID, &i.Name, &i.TypeCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDETypeIDs = `-- name: ListSDETypeIDs :many
 SELECT type_id FROM sde_types
 ORDER BY type_id
@@ -721,6 +820,54 @@ func (q *Queries) ListSDETypeIDs(ctx context.Context) ([]int64, error) {
 			return nil, err
 		}
 		items = append(items, type_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDETypesInGroup = `-- name: ListSDETypesInGroup :many
+SELECT type_id, name, market_group_id FROM sde_types
+WHERE group_id = ? AND instr(lower(name), lower(?)) > 0
+ORDER BY name
+LIMIT ? OFFSET ?
+`
+
+type ListSDETypesInGroupParams struct {
+	GroupID int64  `json:"group_id"`
+	LOWER   string `json:"LOWER"`
+	Limit   int64  `json:"limit"`
+	Offset  int64  `json:"offset"`
+}
+
+type ListSDETypesInGroupRow struct {
+	TypeID        int64  `json:"type_id"`
+	Name          string `json:"name"`
+	MarketGroupID int64  `json:"market_group_id"`
+}
+
+func (q *Queries) ListSDETypesInGroup(ctx context.Context, arg ListSDETypesInGroupParams) ([]ListSDETypesInGroupRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDETypesInGroup,
+		arg.GroupID,
+		arg.LOWER,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDETypesInGroupRow
+	for rows.Next() {
+		var i ListSDETypesInGroupRow
+		if err := rows.Scan(&i.TypeID, &i.Name, &i.MarketGroupID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -880,6 +1027,49 @@ func (q *Queries) SearchTypeNames(ctx context.Context, name string) ([]TypeName,
 	var items []TypeName
 	for rows.Next() {
 		var i TypeName
+		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const suggestSDETypes = `-- name: SuggestSDETypes :many
+
+SELECT type_id, name FROM sde_types
+WHERE market_group_id > 0 AND published = 1
+  AND instr(lower(name), lower(?1)) > 0
+ORDER BY CASE WHEN instr(lower(name), lower(?1)) = 1 THEN 0 ELSE 1 END, name
+LIMIT 10
+`
+
+type SuggestSDETypesRow struct {
+	TypeID int64  `json:"type_id"`
+	Name   string `json:"name"`
+}
+
+// ---------------------------------------------------------------------
+// Layout + market toolkit (schema 008): live market suggestions and
+// the item database explorer. All local SDE reads. Matching uses
+// instr() rather than LIKE: case-insensitive substring positions
+// (1 = a prefix match), no wildcard escaping to worry about.
+// ---------------------------------------------------------------------
+func (q *Queries) SuggestSDETypes(ctx context.Context, lower string) ([]SuggestSDETypesRow, error) {
+	rows, err := q.db.QueryContext(ctx, suggestSDETypes, lower)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SuggestSDETypesRow
+	for rows.Next() {
+		var i SuggestSDETypesRow
 		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
 			return nil, err
 		}

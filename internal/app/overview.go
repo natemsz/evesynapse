@@ -577,6 +577,7 @@ type fleetRow struct {
 	SystemName     string
 	DockedName     string
 	ShipTypeName   string
+	ShipTypeID     int64
 	ShipName       string
 	OnlineKnown    bool
 	Online         bool
@@ -636,8 +637,10 @@ type netWorthWidget struct {
 
 type industryRow struct {
 	Char     string
+	CharID   int64
 	Activity string
 	Name     string
+	TypeID   int64
 	Ends     string
 	Left     string
 }
@@ -650,7 +653,9 @@ type industryWidget struct {
 
 type marketExpiry struct {
 	Char    string
+	CharID  int64
 	Item    string
+	TypeID  int64
 	Expires string
 	Left    string
 }
@@ -667,10 +672,13 @@ type marketWidget struct {
 }
 
 type skillFinish struct {
-	Char   string
-	Skill  string
-	Finish string
-	Left   string
+	Char    string
+	CharID  int64
+	Skill   string
+	SkillID int64
+	Level   string // roman level being finished
+	Finish  string
+	Left    string
 }
 
 type skillsWidget struct {
@@ -681,6 +689,7 @@ type skillsWidget struct {
 // piExpiryLine is one extractor deadline in the PI widget.
 type piExpiryLine struct {
 	Char    string
+	CharID  int64
 	Planet  string
 	Expires string
 	Left    string // "in 2d 3h", "" once expired
@@ -745,6 +754,7 @@ func (app *Application) buildFleet(ctx context.Context, bundles []*charSnaps) *f
 		}
 		if b.ship != nil {
 			row.ShipTypeName = app.typeNameOrID(ctx, b.ship.ShipTypeID)
+			row.ShipTypeID = b.ship.ShipTypeID
 			row.ShipName = b.ship.ShipName
 		}
 		if b.online != nil {
@@ -1206,8 +1216,10 @@ func (app *Application) buildIndustry(ctx context.Context, bundles []*charSnaps)
 				pendingRows = append(pendingRows, pending{
 					row: industryRow{
 						Char:     b.ch.Name,
+						CharID:   b.ch.CharacterID,
 						Activity: industryActivityLabel(j.ActivityID),
 						Name:     nameFor(nameID),
+						TypeID:   nameID,
 						Ends:     formatFinish(j.EndDate),
 						Left:     humanDuration(time.Until(end)),
 					},
@@ -1256,7 +1268,9 @@ func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps) *
 				expiring = append(expiring, expiryRow{
 					row: marketExpiry{
 						Char:    b.ch.Name,
+						CharID:  b.ch.CharacterID,
 						Item:    app.typeNameOrID(ctx, o.TypeID),
+						TypeID:  o.TypeID,
 						Expires: formatFinish(expiry.UTC().Format(time.RFC3339)),
 						Left:    humanDuration(time.Until(expiry)),
 					},
@@ -1359,10 +1373,13 @@ func (app *Application) buildSkills(ctx context.Context, bundles []*charSnaps) *
 		}
 		pendingRows = append(pendingRows, pending{
 			row: skillFinish{
-				Char:   b.ch.Name,
-				Skill:  fmt.Sprintf("%s %s", name, esi.RomanLevel(head.FinishedLevel)),
-				Finish: formatFinish(head.FinishDate),
-				Left:   humanDuration(time.Until(finish)),
+				Char:    b.ch.Name,
+				CharID:  b.ch.CharacterID,
+				Skill:   name,
+				SkillID: head.SkillID,
+				Level:   esi.RomanLevel(head.FinishedLevel),
+				Finish:  formatFinish(head.FinishDate),
+				Left:    humanDuration(time.Until(finish)),
 			},
 			finish: finish,
 		})
@@ -1410,6 +1427,7 @@ func (app *Application) buildPI(ctx context.Context, bundles []*charSnaps) *piWi
 				}
 				row := piExpiryLine{
 					Char:    b.ch.Name,
+					CharID:  b.ch.CharacterID,
 					Planet:  planet,
 					Expires: formatFinish(ex.Expiry.UTC().Format(time.RFC3339)),
 				}

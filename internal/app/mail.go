@@ -38,6 +38,7 @@ type mailRow struct {
 	ID      int64
 	Subject string
 	From    string
+	FromID  int64
 	Date    string
 	Unread  bool
 	Labels  []string
@@ -46,6 +47,7 @@ type mailRow struct {
 type mailDetail struct {
 	Subject string
 	From    string
+	FromID  int64
 	Date    string
 	To      []string
 	Labels  []string
@@ -127,6 +129,7 @@ func (app *Application) handleMail(w http.ResponseWriter, r *http.Request) {
 				ID:      h.MailID,
 				Subject: h.Subject,
 				From:    characterDisplay(app.esi, h.From),
+				FromID:  h.From,
 				Date:    formatFinish(h.Timestamp),
 				Unread:  !h.IsRead,
 			}
@@ -147,6 +150,7 @@ func (app *Application) handleMail(w http.ResponseWriter, r *http.Request) {
 			detail := &mailDetail{
 				Subject: mail.Subject,
 				From:    characterDisplay(app.esi, mail.From),
+				FromID:  mail.From,
 				Date:    formatFinish(mail.Timestamp),
 				Body:    sanitizeMailHTML(mail.Body),
 			}

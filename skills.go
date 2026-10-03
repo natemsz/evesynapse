@@ -2,22 +2,28 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"sort"
 	"strconv"
 	"time"
+
+	db "evesynapse/internal/db/sqlc"
 )
 
 // skillsView is the Skill Sheet page body for one character.
 // Loaded is false when the skills snapshot could not be produced
-// at all; the template dims to an unavailable note. Queue data
-// degrades independently: a failed queue fetch leaves Queue
-// empty and Training blank.
+// at all; Warming marks the cold-start case (no snapshot yet —
+// the worker is still importing), which gets friendlier copy
+// than a hard failure. Queue data degrades independently: a
+// failed queue fetch leaves Queue empty and Training blank.
 type skillsView struct {
 	CharacterName string
 	Loaded        bool
+	Warming       bool
 	TotalSP       string // thousands-separated
 	UnallocatedSP string // thousands-separated, "" when zero
 	LevelVCount   int    // skills trained to level V
@@ -44,13 +50,15 @@ type skillQueueRow struct {
 }
 
 // maxGroupNameLookups bounds the number of ESI /universe/groups
-// lookups a single skill-sheet render will make.
+// lookups a single resolveGroupNames call will make.
 const maxGroupNameLookups = 40
 
 // handleSkills renders the full Skill Sheet for one of the
 // signed-in user's characters (switchable via ?character=). All
-// data comes through the snapshot cache (skills + skillqueue), so
-// the page only calls ESI inside the cache window.
+// data comes through the snapshot cache (skills + skillqueue),
+// and every name is resolved from local caches only — the worker
+// pre-warms snapshots and names, so this page never waits on ESI
+// name lookups.
 func (app *application) handleSkills(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := pageData{
@@ -109,6 +117,11 @@ func (app *application) handleSkills(w http.ResponseWriter, r *http.Request) {
 	var skills esiSkills
 	if err := app.getCached(ctx, active, snapSkills, &skills); err != nil {
 		log.Printf("skills: load skills for character %d: %v", active.CharacterID, err)
+		// No snapshot row at all = cold start: the worker is still
+		// importing this character, which the Sync page shows live.
+		if _, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: active.CharacterID, Kind: snapSkills}); errors.Is(serr, sql.ErrNoRows) {
+			view.Warming = true
+		}
 		app.render(w, http.StatusOK, "skills.html", data)
 		return
 	}
@@ -141,7 +154,7 @@ func (app *application) fillQueue(ctx context.Context, view *skillsView, queue e
 	for _, entry := range sorted {
 		ids = append(ids, entry.SkillID)
 	}
-	names := app.resolveTypeNames(ctx, ids)
+	names := app.cachedTypeNames(ctx, ids)
 	nameFor := func(id int64) string {
 		if name, ok := names[id]; ok {
 			return name
@@ -199,10 +212,12 @@ func (app *application) fillSkillSections(ctx context.Context, view *skillsView,
 			view.LevelVCount++
 		}
 	}
-	// Names first: the fetch also populates the type→group cache
-	// resolveTypeGroups reads, so most group IDs come free.
-	names := app.resolveTypeNames(ctx, ids)
-	groupsByType := app.resolveTypeGroups(ctx, ids)
+	// Cache-only resolution: names, type→group links and group
+	// names all come from the worker-warmed caches; anything still
+	// missing renders as "Type #<id>" / "Ungrouped" until a later
+	// worker pass fills it in.
+	names := app.cachedTypeNames(ctx, ids)
+	groupsByType := app.cachedTypeGroups(ctx, ids)
 
 	groupIDsSeen := make(map[int64]bool)
 	for _, gid := range groupsByType {
@@ -214,7 +229,7 @@ func (app *application) fillSkillSections(ctx context.Context, view *skillsView,
 	for gid := range groupIDsSeen {
 		groupIDs = append(groupIDs, gid)
 	}
-	groupNames := app.resolveGroupNames(ctx, groupIDs)
+	groupNames := app.cachedGroupNames(ctx, groupIDs)
 
 	type workingRow struct {
 		row skillRow
@@ -291,8 +306,9 @@ func (app *application) fillSkillSections(ctx context.Context, view *skillsView,
 
 // resolveGroupNames resolves skill-group ID → display name via
 // GET /universe/groups/{id}/ (public), cached in-process, capped
-// per render. Unresolved groups are absent from the result; the
-// caller falls back to "Group #<id>".
+// per call. This is the network tier — page renders use
+// cachedGroupNames instead; unresolved groups are absent from
+// the result and the caller falls back to "Group #<id>".
 func (app *application) resolveGroupNames(ctx context.Context, ids []int64) map[int64]string {
 	out := make(map[int64]string, len(ids))
 

@@ -81,6 +81,15 @@ type application struct {
 	pricesMu     sync.Mutex
 	prices       map[int64]esiMarketPrice
 	pricesExpiry time.Time
+
+	// Character IDs flagged for first-in-line warm-up on the next
+	// worker cycle (fresh SSO logins, Sync-page re-warm requests).
+	priorityMu    sync.Mutex
+	priorityChars map[int64]bool
+
+	// The worker's user-visible status (Sync/Admin pages).
+	workerMu sync.Mutex
+	worker   workerStatus
 }
 
 func main() {
@@ -115,16 +124,17 @@ func main() {
 	sessionManager.Cookie.Secure = false
 
 	app := &application{
-		cfg:        cfg,
-		sessions:   sessionManager,
-		queries:    db.New(dbConn),
-		jwks:       &jwksCache{},
-		typeNames:  make(map[int64]string),
-		typeGroups: make(map[int64]int64),
-		groupNames: make(map[int64]string),
-		corpCache:  make(map[int64]corpCacheEntry),
-		placeNames: make(map[int64]string),
-		prices:     make(map[int64]esiMarketPrice),
+		cfg:           cfg,
+		sessions:      sessionManager,
+		queries:       db.New(dbConn),
+		jwks:          &jwksCache{},
+		typeNames:     make(map[int64]string),
+		typeGroups:    make(map[int64]int64),
+		groupNames:    make(map[int64]string),
+		corpCache:     make(map[int64]corpCacheEntry),
+		placeNames:    make(map[int64]string),
+		prices:        make(map[int64]esiMarketPrice),
+		priorityChars: make(map[int64]bool),
 	}
 
 	workerCtx, stopWorker := context.WithCancel(context.Background())
@@ -213,6 +223,12 @@ func (app *application) routes() http.Handler {
 	r.Route("/skills", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleSkills)
+	})
+
+	r.Route("/sync", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleSync)
+		r.Post("/warm", app.handleSyncWarm)
 	})
 
 	return r

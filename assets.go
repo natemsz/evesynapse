@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"sort"
 	"strconv"
+
+	db "evesynapse/internal/db/sqlc"
 )
 
 // assetCharLink is one entry of the Assets page character switcher.
@@ -32,12 +36,13 @@ type assetLocation struct {
 }
 
 // assetsView is the Assets page body for one character. Loaded is
-// false when the snapshot could not be produced at all; the counts
-// are display-ready (Stacks counts stacks, TotalItems sums
-// quantities across every stack).
+// false when the snapshot could not be produced at all; Warming
+// marks the cold-start case (no snapshot yet — the worker is still
+// importing), which gets friendlier copy than a hard failure.
 type assetsView struct {
 	CharacterName string
 	Loaded        bool
+	Warming       bool
 	Stacks        int
 	TotalItems    int64
 	Locations     []assetLocation
@@ -49,8 +54,9 @@ const maxAssetRowsPerLocation = 25
 
 // handleAssets renders the Assets page for one of the signed-in
 // user's characters (switchable via ?character=). Asset data comes
-// through the snapshot cache, so the page only calls ESI inside the
-// cache window; the worker keeps snapshots warm.
+// through the snapshot cache, and every name is resolved from local
+// caches only — the worker pre-warms snapshots and names, so this
+// page never waits on ESI name lookups.
 func (app *application) handleAssets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := pageData{
@@ -109,6 +115,11 @@ func (app *application) handleAssets(w http.ResponseWriter, r *http.Request) {
 	var items []esiAsset
 	if err := app.getCached(ctx, active, snapAssets, &items); err != nil {
 		log.Printf("assets: load for character %d: %v", active.CharacterID, err)
+		// No snapshot row at all = cold start: the worker is still
+		// importing this character, which the Sync page shows live.
+		if _, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: active.CharacterID, Kind: snapAssets}); errors.Is(serr, sql.ErrNoRows) {
+			view.Warming = true
+		}
 		app.render(w, http.StatusOK, "assets.html", data)
 		return
 	}
@@ -128,15 +139,15 @@ func (app *application) handleAssets(w http.ResponseWriter, r *http.Request) {
 func (app *application) buildAssetLocations(ctx context.Context, items []esiAsset) []assetLocation {
 	// One name-resolution pass covers item types AND the parent
 	// items other items live inside (their type IDs are in the same
-	// payload). resolveTypeNames applies its per-render lookup
-	// budget; misses render as "Type #<id>" and fill in over time.
+	// payload). Cache-only: unresolved names render as "Type #<id>"
+	// and fill in as the worker's warm-up pass resolves them.
 	typeIDs := make([]int64, 0, len(items))
 	itemType := make(map[int64]int64, len(items))
 	for _, it := range items {
 		typeIDs = append(typeIDs, it.TypeID)
 		itemType[it.ItemID] = it.TypeID
 	}
-	names := app.resolveTypeNames(ctx, typeIDs)
+	names := app.cachedTypeNames(ctx, typeIDs)
 	nameOf := func(typeID int64) string {
 		if n, ok := names[typeID]; ok {
 			return n
@@ -155,7 +166,7 @@ func (app *application) buildAssetLocations(ctx context.Context, items []esiAsse
 
 	locations := make([]assetLocation, 0, len(byLoc))
 	for locID, entries := range byLoc {
-		loc := assetLocation{Title: app.assetLocationTitle(ctx, locID, locType[locID], itemType, nameOf)}
+		loc := assetLocation{Title: app.assetLocationTitle(locID, locType[locID], itemType, nameOf)}
 
 		sorted := append([]esiAsset(nil), entries...)
 		sort.Slice(sorted, func(i, j int) bool {
@@ -190,17 +201,24 @@ func (app *application) buildAssetLocations(ctx context.Context, items []esiAsse
 }
 
 // assetLocationTitle turns a (location_id, location_type) pair into
-// a display title. Stations and solar systems resolve via public
-// ESI (cached in-process); player structures cannot be named
-// without an ESI scope this app does not hold, so they stay honest
-// "Structure #<id>"; items inside another owned item (a ship, a
-// container) are labelled with the parent's type name.
-func (app *application) assetLocationTitle(ctx context.Context, locID int64, locType string, itemType map[int64]int64, nameOf func(int64) string) string {
+// a display title. Station and solar-system names come from the
+// local place-name cache (the worker warms it); player structures
+// cannot be named without an ESI scope this app does not hold, so
+// they stay honest "Structure #<id>"; items inside another owned
+// item (a ship, a container) are labelled with the parent's type
+// name.
+func (app *application) assetLocationTitle(locID int64, locType string, itemType map[int64]int64, nameOf func(int64) string) string {
 	switch locType {
 	case "station":
-		return app.placeName(ctx, fmt.Sprintf("/universe/stations/%d/", locID), locID, fmt.Sprintf("Station #%d", locID))
+		if name, ok := app.cachedPlaceName(locID); ok {
+			return name
+		}
+		return fmt.Sprintf("Station #%d", locID)
 	case "solar_system":
-		return app.placeName(ctx, fmt.Sprintf("/universe/systems/%d/", locID), locID, fmt.Sprintf("System #%d", locID))
+		if name, ok := app.cachedPlaceName(locID); ok {
+			return name
+		}
+		return fmt.Sprintf("System #%d", locID)
 	case "structure":
 		return fmt.Sprintf("Structure #%d", locID)
 	default: // "other", "item", anything unexpected
@@ -213,8 +231,8 @@ func (app *application) assetLocationTitle(ctx context.Context, locID int64, loc
 
 // placeName resolves a station or solar-system ID to its name via
 // public ESI, caching successes in-process (the data is stable).
-// The endpoint slice decodes into esiStation, which carries just
-// the name field both endpoints share.
+// This is the network tier: renders use cachedPlaceName instead;
+// the market page's interactive order lookups still come here.
 func (app *application) placeName(ctx context.Context, path string, id int64, fallback string) string {
 	app.placeMu.Lock()
 	name, ok := app.placeNames[id]

@@ -489,21 +489,28 @@ func (app *application) resolveTypeNames(ctx context.Context, ids []int64) map[i
 			continue
 		}
 		out[id] = t.Name
+		app.storeTypeName(ctx, id, t)
+	}
+	return out
+}
+
+// storeTypeName records a fetched type in the in-process caches and
+// the type_names table. The group ID rides along on the same
+// /universe/types payload, so name and group are stored together.
+func (app *application) storeTypeName(ctx context.Context, id int64, t esiType) {
+	if t.Name != "" {
 		app.typeNamesMu.Lock()
 		app.typeNames[id] = t.Name
 		app.typeNamesMu.Unlock()
-		// Group IDs ride along on the same payload: stash them so
-		// the skill sheet's grouping needs no second fetch.
-		if t.GroupID > 0 {
-			app.typeGroupsMu.Lock()
-			app.typeGroups[id] = t.GroupID
-			app.typeGroupsMu.Unlock()
-		}
 		if err := app.queries.UpsertTypeName(ctx, db.UpsertTypeNameParams{TypeID: id, Name: t.Name}); err != nil {
 			log.Printf("esi: persist type name %d: %v", id, err)
 		}
 	}
-	return out
+	if t.GroupID > 0 {
+		app.typeGroupsMu.Lock()
+		app.typeGroups[id] = t.GroupID
+		app.typeGroupsMu.Unlock()
+	}
 }
 
 // maxTypeGroupLookups bounds the number of ESI /universe/types
@@ -558,6 +565,96 @@ func (app *application) resolveTypeGroups(ctx context.Context, ids []int64) map[
 		app.typeGroupsMu.Unlock()
 	}
 	return out
+}
+
+// ---------------------------------------------------------------------------
+// Cache-only resolution: the render-path tier. These consult the
+// in-process maps and the type_names table ONLY — never the network —
+// so page renders can't block on ESI. Misses are simply absent (or
+// reported unknown), and the worker's warm-up pass fills the gaps.
+// ---------------------------------------------------------------------------
+
+// cachedTypeNames resolves type IDs from the in-process map, then the
+// type_names table. Zero network. Unresolved IDs are absent.
+func (app *application) cachedTypeNames(ctx context.Context, ids []int64) map[int64]string {
+	out := make(map[int64]string, len(ids))
+
+	seen := make(map[int64]bool, len(ids))
+	var todo []int64
+	for _, id := range ids {
+		if id <= 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		todo = append(todo, id)
+	}
+
+	app.typeNamesMu.RLock()
+	var missing []int64
+	for _, id := range todo {
+		if name, ok := app.typeNames[id]; ok {
+			out[id] = name
+		} else {
+			missing = append(missing, id)
+		}
+	}
+	app.typeNamesMu.RUnlock()
+
+	for _, id := range missing {
+		if name, err := app.queries.GetTypeName(ctx, id); err == nil && name != "" {
+			out[id] = name
+			app.typeNamesMu.Lock()
+			app.typeNames[id] = name
+			app.typeNamesMu.Unlock()
+		}
+	}
+	return out
+}
+
+// cachedTypeName is the single-ID form of cachedTypeNames; it
+// returns "" when the ID isn't cached yet.
+func (app *application) cachedTypeName(ctx context.Context, id int64) string {
+	if names := app.cachedTypeNames(ctx, []int64{id}); names != nil {
+		return names[id]
+	}
+	return ""
+}
+
+// cachedTypeGroups resolves type ID → group ID from the in-process
+// cache only (populated by network fetches the worker performs).
+func (app *application) cachedTypeGroups(ctx context.Context, ids []int64) map[int64]int64 {
+	out := make(map[int64]int64, len(ids))
+	app.typeGroupsMu.RLock()
+	defer app.typeGroupsMu.RUnlock()
+	for _, id := range ids {
+		if gid, ok := app.typeGroups[id]; ok {
+			out[id] = gid
+		}
+	}
+	return out
+}
+
+// cachedGroupNames resolves group ID → name from the in-process
+// cache only.
+func (app *application) cachedGroupNames(ctx context.Context, ids []int64) map[int64]string {
+	out := make(map[int64]string, len(ids))
+	app.groupNamesMu.Lock()
+	defer app.groupNamesMu.Unlock()
+	for _, id := range ids {
+		if name, ok := app.groupNames[id]; ok {
+			out[id] = name
+		}
+	}
+	return out
+}
+
+// cachedPlaceName resolves a station/system ID from the in-process
+// place-name cache only.
+func (app *application) cachedPlaceName(id int64) (string, bool) {
+	app.placeMu.Lock()
+	defer app.placeMu.Unlock()
+	name, ok := app.placeNames[id]
+	return name, ok
 }
 
 // sortedSkillIDs is a small helper used by the home page to pick the

@@ -264,6 +264,10 @@ func (app *application) handleEVECallback(w http.ResponseWriter, r *http.Request
 
 	log.Printf("sso: signed in character %d (%s) on user %d", characterID, characterName, userID)
 
+	// Warm this character first on the next worker cycle so its
+	// pages are ready moments after login, not minutes later.
+	app.markCharacterPriority(characterID)
+
 	// Rotate the session token on privilege change, then sign in.
 	if err := app.sessions.RenewToken(ctx); err != nil {
 		log.Printf("sso callback: renew session token: %v", err)

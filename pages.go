@@ -17,6 +17,7 @@ type pageData struct {
 	LoggedIn      bool
 	CharacterName string
 	SSOConfigured bool
+	AutoRefresh   bool   // base.html emits a meta-refresh (Sync page)
 	Error         string // friendly, user-safe banner (never internals)
 	Character     *characterSheet
 	Corps         []corpView
@@ -25,6 +26,7 @@ type pageData struct {
 	Market        *marketView
 	Skills        *skillsView
 	SkillsChars   []assetCharLink
+	Sync          *syncView
 	Users         []db.User
 	Characters    []db.Character
 	Snapshots     []adminSnapshotRow
@@ -232,7 +234,7 @@ func (app *application) loadSkillsSection(ctx context.Context, ch db.Character, 
 	if len(shown) > 25 {
 		shown = shown[:25]
 	}
-	names := app.resolveTypeNames(ctx, shown)
+	names := app.cachedTypeNames(ctx, shown)
 
 	byID := make(map[int64]esiSkill, len(skills.Skills))
 	for _, s := range skills.Skills {
@@ -270,7 +272,10 @@ func (app *application) loadQueueSection(ctx context.Context, ch db.Character, s
 		if entry.QueuePosition != 0 {
 			continue
 		}
-		name := app.typeName(ctx, entry.SkillID)
+		name := app.cachedTypeName(ctx, entry.SkillID)
+		if name == "" {
+			name = fmt.Sprintf("Type #%d", entry.SkillID)
+		}
 		finish := entry.FinishDate
 		if t, err := time.Parse(time.RFC3339, entry.FinishDate); err == nil {
 			finish = t.UTC().Format("2006-01-02 15:04 UTC")
@@ -290,7 +295,7 @@ func (app *application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		LoggedIn:      true,
 		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
 		SSOConfigured: app.cfg.ssoConfigured(),
-		WorkerStatus:  "ESI refresh cycle every 60s; snapshots honor ESI cached_until",
+		WorkerStatus:  app.workerStatusText(),
 	}
 
 	users, err := app.queries.ListUsers(ctx)

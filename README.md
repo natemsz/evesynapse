@@ -19,26 +19,33 @@ and key/vCode auth.
 
 ## Layout
 
-- `main.go` — entrypoint: DB open (schema bootstrap), router, server
-- `config.go` — environment config + a small hand-rolled `.env` loader
-- `auth.go` — EVE SSO: login redirect, callback, JWT/JWKS verification,
-  sign-out, and the dev-only `/dev-login`
-- `refresh.go` — access-token freshness: refresh + rotation persistence
-- `esi.go` — ESI client with snapshot caching and type-name resolution
-- `pages.go` — home/admin handlers + template rendering
-- `assets.go` — assets browser (per-location stacks, switchable per character)
-- `skills.go` — full skill sheet (every skill grouped by category,
-  complete queue, switchable per character)
-- `sync.go` — Sync page (worker status, snapshot freshness and
-  name-coverage per character, re-warm buttons)
-- `market.go` — market browser (public ESI: name search, price guide,
-  regional order books)
-- `worker.go` — background ESI refresh + name warm-up scheduler (60s cycle)
-- `netdns.go` — Android/Termux DNS + embedded CA roots
-- `templates/` — embedded html/templates (`base.html` layout)
-- `static/` — embedded assets: the 2013 wallpaper (`bg.jpg`) and the
-  dependency-free stylesheet (`style.css`), served at `/static/`
-- `schema/` — SQL schema (sqlc input; `001_init.sql`, `002_snapshots.sql`)
+- `cmd/evesynapse/` — release entrypoint: thin wiring (config → app →
+  HTTP server). It does not import the devtools package, so the
+  release binary contains no dev-login code; `DEV_LOGIN=1` has no
+  effect on it.
+- `cmd/evesynapse-dev/` — dev entrypoint: identical wiring plus the
+  dev-only routes (`/dev-login`). Local testing only — never deploy
+  this binary.
+- `internal/app/` — the application: config + `.env` loader
+  (`config.go`), EVE SSO auth/sessions/JWT verification (`auth.go`),
+  token refresh (`refresh.go`), the application struct, router and DB
+  bootstrap (`app.go`, `db.go`), page handlers and view models
+  (`pages.go`, `assets.go`, `skills.go`, `corporation.go`,
+  `market.go`, `sync.go`), the background worker (`worker.go`), and
+  the Termux DNS/CA shim (`netdns.go`)
+- `internal/app/templates/` — embedded html/templates (`base.html`
+  layout)
+- `internal/app/static/` — embedded assets: the 2013 wallpaper
+  (`bg.jpg`) and the dependency-free stylesheet (`style.css`), served
+  at `/static/`
+- `internal/app/schema/` — SQL schema (sqlc input; `001_init.sql`,
+  `002_snapshots.sql`), embedded for DB bootstrap
+- `internal/esi/` — the ESI client: HTTP layer, per-character
+  snapshot cache, and the two-tier type/group/place name resolution
+  (network tier + cache-only render tier). Never imports
+  `internal/app`; access tokens are injected via a callback.
+- `internal/devtools/` — dev-only routes (`/dev-login`), imported
+  solely by `cmd/evesynapse-dev`
 - `internal/db/query/` — hand-written queries (sqlc input)
 - `internal/db/sqlc/` — sqlc-generated code (do not edit)
 
@@ -46,8 +53,17 @@ and key/vCode auth.
 
 ```sh
 cp .env.example .env   # fill in EVE_CLIENT_ID / EVE_CLIENT_SECRET
-make run               # or: go build -o bin/evesynapse . && ./bin/evesynapse
+make run               # or: go build -o bin/evesynapse ./cmd/evesynapse && ./bin/evesynapse
 ```
+
+`make run` runs the **release** build (`cmd/evesynapse`). If you fork
+this project, that's the build you get by default — it has no
+dev-login route at all. `make build` produces `bin/evesynapse`,
+`make build-arm64` cross-compiles `bin/evesynapse-arm64`. For local
+development there is also a dev build (`make build-dev`, binary
+`bin/evesynapse-dev`, entrypoint `cmd/evesynapse-dev`) that
+additionally registers `/dev-login` when started with `DEV_LOGIN=1`;
+see "Dev login" below. Never deploy the dev build.
 
 The app auto-loads `./.env` at startup (keys already set in the real
 environment win). Then open <http://localhost:8080>:
@@ -122,14 +138,15 @@ request logs contain paths only, no query strings.
 ## Token refresh & caching
 
 EVE SSO access tokens live ~20 minutes. `validAccessToken`
-(refresh.go) returns the stored token while it has more than 60
+(internal/app/refresh.go) returns the stored token while it has more
 seconds left; otherwise it refreshes against CCP and persists the new
 access token, the **rotated** refresh token, and the new expiry.
 Refreshes are serialized process-wide and the character row is
 re-read first, so a rotated refresh token is never replayed.
 
 ESI responses for skills, skill queue, wallet and assets are cached as raw
-JSON in `character_snapshots` (schema `002_snapshots.sql`), keyed by
+JSON in `character_snapshots` (schema
+`internal/app/schema/002_snapshots.sql`), keyed by
 (character, kind) with the response's `Expires` header stored as
 `cached_until` (5-minute fallback when ESI sends none). Assets are
 paginated: every page is fetched and stored as one merged JSON array. Pages serve
@@ -166,25 +183,30 @@ pages.
 The UI echoes the 2013 EveSynapse theme — the original planet/nebula
 wallpaper (served from `/static/bg.jpg`), teal-blue accents
 (`#326b8c`), translucent dark panels over the art — rebuilt with a
-single dependency-free stylesheet (`static/style.css`): no Bootstrap,
+single dependency-free stylesheet (`internal/app/static/style.css`): no Bootstrap,
 no jQuery, no external fonts, responsive down to phone widths.
 
 ## Dev login
 
-`DEV_LOGIN=1` registers `/dev-login`, which flips the session to
-signed-in without EVE SSO so the admin can be exercised locally. It
-hands a session to anyone who asks: **never enable it on a deployment
-anyone else can reach.** The server logs a loud warning at boot when
-it is on.
+The dev build (`cmd/evesynapse-dev`, `make build-dev`) registers
+`/dev-login` when started with `DEV_LOGIN=1`: it flips the session to
+signed-in without EVE SSO so the admin can be exercised locally. The
+handler lives in `internal/devtools` and is only wired into the dev
+entrypoint — the release binary (`cmd/evesynapse`) doesn't contain
+the code, and `DEV_LOGIN=1` has no effect on it. `/dev-login` hands
+a session to anyone who asks: **never enable it on a deployment
+anyone else can reach, and never deploy the dev build.** The dev
+server logs a loud warning at boot when it is on.
 
 ## Database & sqlc
 
 The app opens/creates the SQLite file from `DB_PATH`, creates the scs
-`sessions` table, applies `schema/001_init.sql` on first boot of a
-fresh database (the `users`/`characters` tables), and applies
-`schema/002_snapshots.sql` whenever the snapshot tables are absent
-(existing databases gain the new tables in place). Regenerate
-query code after editing `internal/db/query/queries.sql` with:
+`sessions` table, applies `internal/app/schema/001_init.sql` on first
+boot of a fresh database (the `users`/`characters` tables), and
+applies `internal/app/schema/002_snapshots.sql` whenever the snapshot
+tables are absent (existing databases gain the new tables in place).
+Regenerate query code after editing `internal/db/query/queries.sql`
+with:
 
 ```sh
 make gen   # sqlc generate

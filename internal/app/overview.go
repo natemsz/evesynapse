@@ -25,10 +25,12 @@ import (
 // keeps warm (esi.SnapProfile), and the character sheet itself
 // lives at /character/.
 //
-// Layout: which widgets are on, in what order, persisted per
-// account as a JSON array of widget ids on the user record
-// (schema 010). Unknown ids are ignored on load, so a layout
-// saved by a newer build never breaks an older binary.
+// Layout: which widgets are on, in what order, with a per-user
+// span preference for flexible ones, persisted per account as a
+// JSON array on the user record (schema 010; v2 object entries
+// since the grid engine — v1 id arrays still load). Unknown ids
+// are ignored on load, so a layout saved by a newer build never
+// breaks an older binary.
 // ---------------------------------------------------------------------------
 
 // Widget ids. These strings are persisted in users.home_layout;
@@ -44,23 +46,40 @@ const (
 	widgetPI        = "pi"
 )
 
+// Widget size classes for the home grid engine. A full module
+// always owns its row; a flex module takes half a row and pairs
+// with the next flex module that fits (see solveHomeSpans).
+const (
+	widgetSizeFull = "full"
+	widgetSizeFlex = "flex"
+)
+
+// Per-user span preferences for flex modules, persisted in the
+// layout: auto pairs the module with a neighbor when the solver
+// can; wide forces it onto its own row.
+const (
+	spanAuto = ""
+	spanWide = "wide"
+)
+
 // widgetDef is one entry of the widget catalog: what Customize
 // offers and what a saved layout may name.
 type widgetDef struct {
 	ID          string
 	Title       string
 	Description string
+	Size        string // widgetSizeFull | widgetSizeFlex
 }
 
 var homeWidgetCatalog = []widgetDef{
-	{widgetFleet, "Fleet overview", "Every linked character at a glance: where they are, what they're flying, what they're training."},
-	{widgetAttention, "Needs attention", "Characters that need you: re-links, idle queues, finished jobs, expiring orders, waiting contracts."},
-	{widgetNetWorth, "Net worth", "Wallets, assets and open-order escrow across all characters, at market prices. An estimate."},
-	{widgetIndustry, "Industry", "Active industry jobs across characters, soonest delivery first."},
-	{widgetPI, "Planetary industry", "Colonies across your characters: extractor timers, expired heads, and the next planet needing a visit."},
-	{widgetMarket, "Market", "Open orders across characters: counts, sell/buy value, orders expiring soonest."},
-	{widgetSkills, "Skills", "The next skill finishes across the fleet, plus who isn't training."},
-	{widgetServer, "Tranquility", "Server status: players online."},
+	{widgetFleet, "Fleet overview", "Every linked character at a glance: where they are, what they're flying, what they're training.", widgetSizeFull},
+	{widgetAttention, "Needs attention", "Characters that need you: re-links, idle queues, finished jobs, expiring orders, waiting contracts.", widgetSizeFull},
+	{widgetNetWorth, "Net worth", "Wallets, assets and open-order escrow across all characters, at market prices. An estimate.", widgetSizeFlex},
+	{widgetIndustry, "Industry", "Active industry jobs across characters, soonest delivery first.", widgetSizeFlex},
+	{widgetPI, "Planetary industry", "Colonies across your characters: extractor timers, expired heads, and the next planet needing a visit.", widgetSizeFlex},
+	{widgetMarket, "Market", "Open orders across characters: counts, sell/buy value, orders expiring soonest.", widgetSizeFlex},
+	{widgetSkills, "Skills", "The next skill finishes across the fleet, plus who isn't training.", widgetSizeFlex},
+	{widgetServer, "Tranquility", "Server status: players online.", widgetSizeFlex},
 }
 
 // defaultHomeLayout is what accounts with no saved layout get:
@@ -79,40 +98,182 @@ func widgetDefFor(id string) (widgetDef, bool) {
 	return widgetDef{}, false
 }
 
+// widgetSizeOf resolves a widget's catalog size class; unknown
+// ids (which a normalized layout cannot contain) read as flex.
+func widgetSizeOf(id string) string {
+	if def, ok := widgetDefFor(id); ok {
+		return def.Size
+	}
+	return widgetSizeFlex
+}
+
+// homeLayoutItem is one persisted layout entry: the widget, plus
+// its span preference (flex modules only; ignored for full ones).
+type homeLayoutItem struct {
+	ID   string `json:"id"`
+	Span string `json:"span,omitempty"` // spanAuto ("") | spanWide
+}
+
 // parseHomeLayout normalizes a persisted layout: unknown ids
 // dropped, duplicates dropped, order preserved. Empty storage
 // (or unparseable JSON) yields the default layout; a saved empty
 // array is honored — the user turned everything off.
-func parseHomeLayout(raw string) []string {
+//
+// Two storage formats load identically: v1, the bare id array
+// (["fleet", ...]) every build up to Phase 2 wrote, and v2, the
+// object array ([{"id":"fleet"}, {"id":"market","span":"wide"}])
+// written since the grid engine. Each entry is decoded on its
+// own, so a corrupted entry drops out instead of taking the
+// whole layout down; an invalid span value drops back to auto.
+func parseHomeLayout(raw string) []homeLayoutItem {
 	if strings.TrimSpace(raw) == "" {
-		return append([]string(nil), defaultHomeLayout...)
+		return defaultHomeLayoutItems()
 	}
-	var ids []string
-	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
-		return append([]string(nil), defaultHomeLayout...)
+	var entries []json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &entries); err != nil {
+		return defaultHomeLayoutItems()
 	}
-	out := make([]string, 0, len(ids))
-	seen := make(map[string]bool, len(ids))
-	for _, id := range ids {
-		if _, ok := widgetDefFor(id); !ok || seen[id] {
+	out := make([]homeLayoutItem, 0, len(entries))
+	seen := make(map[string]bool, len(entries))
+	for _, entry := range entries {
+		item, ok := parseHomeLayoutEntry(entry)
+		if !ok || seen[item.ID] {
 			continue
 		}
-		seen[id] = true
-		out = append(out, id)
+		seen[item.ID] = true
+		out = append(out, item)
 	}
 	return out
 }
 
-// encodeHomeLayout serializes a normalized layout for storage.
-func encodeHomeLayout(ids []string) string {
-	if ids == nil {
-		ids = []string{}
+// parseHomeLayoutEntry decodes one layout entry in either format.
+func parseHomeLayoutEntry(entry json.RawMessage) (homeLayoutItem, bool) {
+	// v1: a bare widget id string.
+	var id string
+	if err := json.Unmarshal(entry, &id); err == nil {
+		if _, ok := widgetDefFor(id); !ok {
+			return homeLayoutItem{}, false
+		}
+		return homeLayoutItem{ID: id}, true
 	}
-	data, err := json.Marshal(ids)
+	// v2: {"id": ..., "span": ...}.
+	var obj struct {
+		ID   string `json:"id"`
+		Span string `json:"span"`
+	}
+	if err := json.Unmarshal(entry, &obj); err != nil {
+		return homeLayoutItem{}, false
+	}
+	if _, ok := widgetDefFor(obj.ID); !ok {
+		return homeLayoutItem{}, false
+	}
+	item := homeLayoutItem{ID: obj.ID}
+	if obj.Span == spanWide {
+		item.Span = spanWide
+	}
+	return item, true
+}
+
+// encodeHomeLayout serializes a normalized layout for storage —
+// always in the v2 object format (span omitted when auto).
+func encodeHomeLayout(items []homeLayoutItem) string {
+	if items == nil {
+		items = []homeLayoutItem{}
+	}
+	data, err := json.Marshal(items)
 	if err != nil {
 		return "[]"
 	}
 	return string(data)
+}
+
+// defaultHomeLayoutItems is the default layout in item form.
+func defaultHomeLayoutItems() []homeLayoutItem {
+	items := make([]homeLayoutItem, len(defaultHomeLayout))
+	for i, id := range defaultHomeLayout {
+		items[i] = homeLayoutItem{ID: id}
+	}
+	return items
+}
+
+// layoutIDs extracts the widget ids of a layout, in order.
+func layoutIDs(items []homeLayoutItem) []string {
+	ids := make([]string, len(items))
+	for i, item := range items {
+		ids[i] = item.ID
+	}
+	return ids
+}
+
+// ---------------------------------------------------------------------------
+// The home grid engine: a pure packing solver decides every
+// module's column span, so the arrangement is computed — never
+// stretched into place by the browser. The Go solver renders the
+// page (correct with zero JavaScript); the app.js mirror
+// re-solves live while a module is dragged. Both implement the
+// one rule below.
+// ---------------------------------------------------------------------------
+
+// solveHomeSpans resolves each layout item's column span on a
+// grid of cols columns. Walking the saved order left to right:
+//
+//   - a full module, and a flex module marked wide, takes the
+//     whole row (cols);
+//   - a flex module takes half the row (cols/2) and pairs with
+//     the next flex module that fits beside it;
+//   - a flex module left ALONE in its row — nothing pairable
+//     follows before the next full/wide row boundary — stretches
+//     to the whole row.
+//
+// Rows therefore always tile exactly: no stranded gaps and no
+// overflow, at any column count.
+func solveHomeSpans(items []homeLayoutItem, cols int) []int {
+	spans := make([]int, len(items))
+	if cols < 2 {
+		for i := range spans {
+			spans[i] = 1
+		}
+		return spans
+	}
+	flex := cols / 2
+	rowUsed, rowStart := 0, 0
+	// closeRow ends the current row at index next, stretching a
+	// lone half-width module in it to the full row.
+	closeRow := func(next int) {
+		if next-rowStart == 1 && spans[rowStart] < cols {
+			spans[rowStart] = cols
+		}
+		rowStart, rowUsed = next, 0
+	}
+	for i, item := range items {
+		span := flex
+		if item.Span == spanWide || widgetSizeOf(item.ID) == widgetSizeFull {
+			span = cols
+		}
+		if rowUsed > 0 && rowUsed+span > cols {
+			closeRow(i)
+		}
+		spans[i] = span
+		rowUsed += span
+		if rowUsed == cols {
+			closeRow(i + 1)
+		}
+	}
+	if rowUsed > 0 {
+		closeRow(len(items))
+	}
+	return spans
+}
+
+// spanClass names the CSS class carrying a span solved on the
+// 6-column grid: span3 (half row) or span6 (whole row). The CSS
+// maps the same two classes onto the phone grids (2 columns,
+// then 1), so the server renders one class set for every screen.
+func spanClass(span int) string {
+	if span > 3 {
+		return "span6"
+	}
+	return "span3"
 }
 
 // ---------------------------------------------------------------------------
@@ -385,6 +546,9 @@ func queueState(queue esi.Skillqueue, now time.Time) (training bool, finishedAt 
 type homeWidget struct {
 	ID        string
 	Title     string
+	SpanClass string // solved grid span class: span3 | span6
+	Size      string // catalog size class (flex modules get the resize toggle)
+	SpanPref  string // user's span preference: "" (auto) | wide
 	Fleet     *fleetWidget
 	Attention *attentionWidget
 	NetWorth  *netWorthWidget
@@ -1163,11 +1327,15 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		return view
 	}
 
-	bundles := app.loadCharSnaps(ctx, userID, chars, layout)
-	for _, id := range layout {
-		def, _ := widgetDefFor(id)
-		w := homeWidget{ID: id, Title: def.Title}
-		switch id {
+	bundles := app.loadCharSnaps(ctx, userID, chars, layoutIDs(layout))
+	spans := solveHomeSpans(layout, 6)
+	for i, item := range layout {
+		def, _ := widgetDefFor(item.ID)
+		w := homeWidget{
+			ID: item.ID, Title: def.Title,
+			SpanClass: spanClass(spans[i]), Size: def.Size, SpanPref: item.Span,
+		}
+		switch item.ID {
 		case widgetFleet:
 			w.Fleet = app.buildFleet(ctx, bundles)
 		case widgetAttention:
@@ -1201,16 +1369,20 @@ type customizeEntry struct {
 	Position    int // 1-based among enabled; 0 when disabled
 	CanUp       bool
 	CanDown     bool
+	Span        string // span preference ("wide" or "")
+	IsFlex      bool   // flex modules offer the half/full resize control
 }
 
 type customizeView struct {
 	Entries []customizeEntry
 }
 
-func buildCustomizeView(layout []string) *customizeView {
+func buildCustomizeView(layout []homeLayoutItem) *customizeView {
 	position := make(map[string]int, len(layout))
-	for i, id := range layout {
-		position[id] = i + 1
+	spans := make(map[string]string, len(layout))
+	for i, item := range layout {
+		position[item.ID] = i + 1
+		spans[item.ID] = item.Span
 	}
 	view := &customizeView{}
 	for _, def := range homeWidgetCatalog {
@@ -1220,6 +1392,8 @@ func buildCustomizeView(layout []string) *customizeView {
 			Description: def.Description,
 			Enabled:     position[def.ID] > 0,
 			Position:    position[def.ID],
+			Span:        spans[def.ID],
+			IsFlex:      def.Size == widgetSizeFlex,
 		}
 		if entry.Enabled {
 			entry.CanUp = entry.Position > 1
@@ -1231,7 +1405,7 @@ func buildCustomizeView(layout []string) *customizeView {
 }
 
 // saveHomeLayout persists a normalized layout for the user.
-func (app *Application) saveHomeLayout(ctx context.Context, userID int64, layout []string) {
+func (app *Application) saveHomeLayout(ctx context.Context, userID int64, layout []homeLayoutItem) {
 	err := app.queries.SetUserHomeLayout(ctx, db.SetUserHomeLayoutParams{
 		HomeLayout: encodeHomeLayout(layout),
 		ID:         userID,
@@ -1242,13 +1416,15 @@ func (app *Application) saveHomeLayout(ctx context.Context, userID int64, layout
 }
 
 // handleHomeLayout applies one layout change (POST /home/layout):
-// toggle a widget on/off, move one up/down, reset to the default,
-// or — from a drag on the customize view — accept the whole new
-// order at once (action=order, ids comma-joined). Every control
+// toggle a widget on/off, move one up/down, flip a flex widget's
+// span preference (action=span, span=auto|wide), reset to the
+// default, or — from a drag on the customize view — accept the
+// whole new order at once (action=order, ids comma-joined; span
+// preferences ride along from the saved layout). Every control
 // is a plain form, so arranging works with no JavaScript; the
 // change saves immediately and bounces back to Customize. The
-// drag/×/add-module enhancements POST with X-Requested-With and
-// get a bare 200 instead of the redirect, so the page never
+// drag/×/span/add-module enhancements POST with X-Requested-With
+// and get a bare 200 instead of the redirect, so the page never
 // navigates under the user's fingers.
 func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -1269,30 +1445,28 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 		_, known := widgetDefFor(widget)
 		switch action {
 		case "reset":
-			layout = append([]string(nil), defaultHomeLayout...)
-			// Storing "" would mean "no saved layout" — which
-			// is the default anyway, so store the canonical
-			// default JSON instead to keep intent explicit.
-			app.saveHomeLayout(ctx, userID, layout)
+			// Store the canonical default rather than "": the
+			// intent (default set, auto spans) stays explicit.
+			app.saveHomeLayout(ctx, userID, defaultHomeLayoutItems())
 		case "toggle":
 			if known {
 				found := -1
-				for i, id := range layout {
-					if id == widget {
+				for i, item := range layout {
+					if item.ID == widget {
 						found = i
 					}
 				}
 				if found >= 0 {
 					layout = append(layout[:found], layout[found+1:]...)
 				} else {
-					layout = append(layout, widget)
+					layout = append(layout, homeLayoutItem{ID: widget})
 				}
 				app.saveHomeLayout(ctx, userID, layout)
 			}
 		case "up", "down":
 			if known {
-				for i, id := range layout {
-					if id != widget {
+				for i, item := range layout {
+					if item.ID != widget {
 						continue
 					}
 					j := i - 1
@@ -1307,13 +1481,52 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 				app.saveHomeLayout(ctx, userID, layout)
 			}
 		case "order":
-			// The whole arrangement, as dragged. Normalizing
-			// through encode+parse drops unknown and duplicate
-			// ids and keeps the submitted order; an empty or
+			// The whole arrangement, as dragged. Unknown and
+			// duplicate ids drop out and the submitted order
+			// wins; span preferences carry over from the saved
+			// layout (they are orthogonal to order), and an id
+			// never seen before starts auto. An empty or
 			// all-unknown list turns everything off, exactly
 			// like toggling each widget off would.
-			layout = parseHomeLayout(encodeHomeLayout(strings.Split(r.FormValue("ids"), ",")))
-			app.saveHomeLayout(ctx, userID, layout)
+			prefs := make(map[string]string, len(layout))
+			for _, item := range layout {
+				prefs[item.ID] = item.Span
+			}
+			next := make([]homeLayoutItem, 0, len(layout))
+			seen := make(map[string]bool, len(layout))
+			for _, id := range strings.Split(r.FormValue("ids"), ",") {
+				id = strings.TrimSpace(id)
+				if _, ok := widgetDefFor(id); !ok || seen[id] {
+					continue
+				}
+				seen[id] = true
+				next = append(next, homeLayoutItem{ID: id, Span: prefs[id]})
+			}
+			app.saveHomeLayout(ctx, userID, next)
+		case "span":
+			// Flip one widget's span preference; the id must
+			// already be on the home and the value exactly
+			// auto|wide — anything else is not a layout change.
+			if known {
+				pref, valid := spanAuto, true
+				switch r.FormValue("span") {
+				case spanWide:
+					pref = spanWide
+				case "auto":
+					pref = spanAuto
+				default:
+					valid = false
+				}
+				if valid {
+					for i := range layout {
+						if layout[i].ID == widget {
+							layout[i].Span = pref
+							app.saveHomeLayout(ctx, userID, layout)
+							break
+						}
+					}
+				}
+			}
 		}
 	}
 	if r.Header.Get("X-Requested-With") == "XMLHttpRequest" {

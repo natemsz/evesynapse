@@ -119,13 +119,16 @@
     }
   }
 
-  // --- Home customize: drag, remove, add module -----------------
+  // --- Home customize: drag, resize, remove, add module --------
   // Layered over the plain customize forms, never replacing them:
   // this runs only on the customize view (the data-customize grid)
   // and stores through the same /home/layout endpoint — a drag
   // saves once, on drop, and the server stays the normalizer of
-  // whatever order it is handed. Without JS the up/down +
-  // add/remove forms in the module list do the same job.
+  // whatever order it is handed. The grid itself is solved, not
+  // stretched: the mirror solver below recomputes every module's
+  // span live so the arrangement under the finger is the final
+  // one. Without JS the up/down, half/full and add/remove forms
+  // in the module list do the same job.
   var homeGrid = document.getElementById("home-grid");
   if (homeGrid && homeGrid.getAttribute("data-customize") === "1" && window.fetch) {
     initHomeCustomize(homeGrid);
@@ -156,8 +159,77 @@
 
     function closeModal() { if (modal) modal.hidden = true; }
 
-    // Give one card its drag handle and × button. Cards added
-    // from the pop-up pass through here too.
+    // --- the grid engine, mirrored ----------------------------
+    // solveHomeSpans is the exact mirror of the Go solver in
+    // overview.go: walk the order once — a full module, or a
+    // flex module marked wide, owns its row; a flex module
+    // takes half a row and pairs with the next flex module that
+    // fits; a flex module left alone in its row stretches full.
+    // The server renders these spans as span3/span6 classes; the
+    // mirror re-solves live (drag, resize toggles), so what is
+    // under the finger is always the final arrangement.
+    function solveHomeSpans(descs, cols) {
+      var spans = [];
+      var k;
+      if (cols < 2) {
+        for (k = 0; k < descs.length; k++) spans.push(1);
+        return spans;
+      }
+      var flex = Math.floor(cols / 2);
+      var rowUsed = 0, rowStart = 0;
+      function closeRow(next) {
+        if (next - rowStart === 1 && spans[rowStart] < cols) spans[rowStart] = cols;
+        rowStart = next;
+        rowUsed = 0;
+      }
+      for (var i = 0; i < descs.length; i++) {
+        var span = (descs[i].wide || descs[i].full) ? cols : flex;
+        if (rowUsed > 0 && rowUsed + span > cols) closeRow(i);
+        spans[i] = span;
+        rowUsed += span;
+        if (rowUsed === cols) closeRow(i + 1);
+      }
+      if (rowUsed > 0) closeRow(descs.length);
+      return spans;
+    }
+
+    function cardDescriptor(el) {
+      return {
+        wide: el.getAttribute("data-span") === "wide",
+        full: el.getAttribute("data-size") === "full"
+      };
+    }
+
+    function applySpanClass(el, span) {
+      el.classList.remove("span3");
+      el.classList.remove("span6");
+      el.classList.remove("spanall");
+      el.classList.add(span >= 6 ? "span6" : "span3");
+    }
+
+    // Re-solve the grid and hand every card its span class. Mid
+    // drag the dragged card is out of flow and the placeholder
+    // stands in for it — pass both; otherwise pass nulls.
+    function respan(placeholder, draggedCard) {
+      var nodes = [], descs = [];
+      var kids = grid.children;
+      for (var i = 0; i < kids.length; i++) {
+        var el = kids[i];
+        if (draggedCard && el === draggedCard) continue;
+        if (placeholder && el === placeholder) {
+          nodes.push(el);
+          descs.push(cardDescriptor(draggedCard));
+        } else if (el.classList && el.classList.contains("card") && el.hasAttribute("data-widget")) {
+          nodes.push(el);
+          descs.push(cardDescriptor(el));
+        }
+      }
+      var spans = solveHomeSpans(descs, 6);
+      for (var j = 0; j < nodes.length; j++) applySpanClass(nodes[j], spans[j]);
+    }
+
+    // Give one card its drag handle, resize toggle and × button.
+    // Cards added from the pop-up pass through here too.
     function enhanceCard(card) {
       var heading = card.querySelector(":scope > h2, :scope > h3");
       if (!heading || card.querySelector(".draghandle")) return;
@@ -176,6 +248,36 @@
         startDrag(ev, card, handle);
       });
 
+      // Flex modules get the half/full resize toggle: flip the
+      // stored span preference, then re-solve the grid in place.
+      if (card.getAttribute("data-size") === "flex") {
+        card.classList.add("has-spanbtn");
+        var spanBtn = document.createElement("button");
+        spanBtn.type = "button";
+        spanBtn.className = "cardspan";
+        spanBtn.textContent = "⤢";
+        var paintSpanBtn = function () {
+          var wide = card.getAttribute("data-span") === "wide";
+          spanBtn.setAttribute("aria-pressed", wide ? "true" : "false");
+          spanBtn.setAttribute("aria-label", wide
+            ? "Show " + title + " at half width"
+            : "Show " + title + " full width");
+        };
+        paintSpanBtn();
+        spanBtn.addEventListener("click", function () {
+          var next = card.getAttribute("data-span") === "wide" ? "auto" : "wide";
+          spanBtn.disabled = true;
+          postLayout({ action: "span", widget: id, span: next }).then(function (ok) {
+            spanBtn.disabled = false;
+            if (!ok) return;
+            card.setAttribute("data-span", next === "wide" ? "wide" : "");
+            paintSpanBtn();
+            flipSiblings(function () { respan(null, null); });
+          });
+        });
+        card.appendChild(spanBtn);
+      }
+
       var remove = document.createElement("button");
       remove.type = "button";
       remove.className = "cardremove";
@@ -184,38 +286,53 @@
       remove.addEventListener("click", function () {
         remove.disabled = true;
         postLayout({ action: "toggle", widget: id }).then(function (ok) {
-          if (ok) card.remove();
-          else remove.disabled = false;
+          if (ok) {
+            flipSiblings(function () {
+              card.remove();
+              respan(null, null);
+            });
+          } else {
+            remove.disabled = false;
+          }
         });
       });
       card.appendChild(remove);
     }
 
     // --- dragging ---------------------------------------------
-    // The model: lifting a card swaps a same-size placeholder
-    // into its grid slot, so the layout never collapses mid-drag;
-    // the card itself goes position:fixed and follows the pointer,
-    // fully opaque with its real panel colors. When the pointer
-    // crosses a sibling boundary the placeholder hops slots and
-    // the displaced siblings FLIP-animate into their new cells
-    // instead of teleporting. Holding the card near a viewport
-    // edge auto-scrolls the page, so long moves on a short screen
+    // The model: lifting a card swaps a placeholder into its
+    // slot, wearing the span class the solver assigns the card
+    // at the hovered position, so the layout never collapses
+    // mid-drag; the card itself goes position:fixed and follows
+    // the pointer, fully opaque with its real panel colors.
+    // When the pointer crosses a sibling's center (plus a
+    // hysteresis margin) the placeholder hops slots, everything
+    // re-solves, and the displaced siblings FLIP-animate into
+    // their new cells — position and size — instead of
+    // teleporting. Holding the card near a viewport edge
+    // auto-scrolls the page, so long moves on a short screen
     // don't need grab-drop-grab. On drop the card animates into
     // the placeholder's slot and swaps places with it; a
-    // cancelled drag or a failed save restores the pre-drag order
-    // from a DOM snapshot taken at lift-off.
+    // cancelled drag or a failed save restores the pre-drag
+    // order from a DOM snapshot taken at lift-off.
     var reducedMotion = window.matchMedia &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // Midpoint hysteresis, in pixels: the pointer must push
+    // this far past the neighbor cell's center before the solve
+    // may change, so a boundary never flickers under the finger.
+    var hyst = 10;
 
     function siblingCards() {
       return grid.querySelectorAll(".card[data-widget]:not(.dragging)");
     }
 
     // FLIP-animate the sibling cards around a DOM mutation:
-    // measure, mutate, then invert each moved card back onto its
-    // old spot and let a transition play it into the new one.
-    // Cleanup removes both inline properties, on transitionend
-    // or a fallback timer, whichever comes first.
+    // measure (position and size), mutate, then invert each
+    // moved card back onto its old spot — a translate, plus a
+    // brief scale for cards whose solved span changed size —
+    // and let a transition play it into the new cell. Cleanup
+    // removes every inline property again.
     function flipSiblings(mutate) {
       var cards = siblingCards();
       var first = [];
@@ -228,8 +345,11 @@
         (function (el, before) {
           var now = el.getBoundingClientRect();
           var dx = before.left - now.left, dy = before.top - now.top;
-          if (!dx && !dy) return;
-          el.style.transform = "translate(" + dx + "px," + dy + "px)";
+          var sx = now.width ? before.width / now.width : 1;
+          var sy = now.height ? before.height / now.height : 1;
+          if (!dx && !dy && sx === 1 && sy === 1) return;
+          el.style.transformOrigin = "0 0";
+          el.style.transform = "translate(" + dx + "px," + dy + "px) scale(" + sx + "," + sy + ")";
           el.style.transition = "none";
           // Reading offsetWidth commits the inverted state
           // before the transition is armed.
@@ -239,6 +359,7 @@
           var done = function () {
             el.style.transition = "";
             el.style.transform = "";
+            el.style.transformOrigin = "";
             el.removeEventListener("transitionend", done);
           };
           el.addEventListener("transitionend", done);
@@ -247,18 +368,37 @@
       }
     }
 
-    // The sibling card the placeholder should sit in front of for
-    // a pointer at (x, y), row-major: a card counts as passed
-    // once the pointer is below its middle, or right of its
-    // middle within its row. Null: the placeholder goes last.
-    function insertionTarget(x, y) {
+    // The insertion index a pointer at (x, y) asks for, counted
+    // in sibling cards before the placeholder, row-major: a card
+    // counts as passed once the pointer crosses its middle —
+    // below its center, or right of its center within its row.
+    function insertionIndex(x, y) {
       var cards = siblingCards();
       for (var i = 0; i < cards.length; i++) {
         var r = cards[i].getBoundingClientRect();
-        if (y < r.top + r.height / 2) return cards[i];
-        if (y <= r.bottom && x < r.left + r.width / 2) return cards[i];
+        if (y < r.top + r.height / 2) return i;
+        if (y <= r.bottom && x < r.left + r.width / 2) return i;
       }
-      return null;
+      return cards.length;
+    }
+
+    // The index the drag may actually use: the natural index,
+    // damped by midpoint hysteresis against the placeholder's
+    // current neighbor, so the solve never flip-flops while the
+    // pointer hovers on a boundary.
+    function desiredIndex(x, y, current) {
+      var want = insertionIndex(x, y);
+      if (want === current) return current;
+      var cards = siblingCards();
+      var boundary = want > current ? cards[current] : cards[current - 1];
+      if (!boundary) return want;
+      var r = boundary.getBoundingClientRect();
+      var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      var inRow = y >= r.top && y <= r.bottom;
+      if (want > current) {
+        return (inRow ? x > cx + hyst : y > cy + hyst) ? want : current;
+      }
+      return (inRow ? x < cx - hyst : y < cy - hyst) ? want : current;
     }
 
     function startDrag(ev, card, handle) {
@@ -270,6 +410,7 @@
       var active = false;   // pointer passed the grab threshold
       var lifted = false;   // card out of flow, placeholder in
       var placeholder = null;
+      var phIndex = 0;      // sibling cards ahead of the placeholder
       var grabDX = 0, grabDY = 0;
       var savedNodes = null;
       var rafId = 0;
@@ -283,15 +424,20 @@
         savedNodes = [];
         var all = grid.querySelectorAll(".card[data-widget]");
         for (var i = 0; i < all.length; i++) savedNodes.push(all[i]);
+        phIndex = 0;
+        for (var j = 0; j < all.length; j++) {
+          if (all[j] === card) { phIndex = j; break; }
+        }
         var rect = card.getBoundingClientRect();
         grabDX = lastX - rect.left;
         grabDY = lastY - rect.top;
-        // The placeholder takes the card's exact footprint —
-        // same span class, same height — so the grid underneath
-        // is the final layout, undisturbed, for the whole drag.
+        // The placeholder takes the card's slot wearing the span
+        // the solver gives it there and the card's own height,
+        // so the grid underneath is the solved final layout for
+        // the whole drag.
         placeholder = document.createElement("section");
-        placeholder.className = "card drag-placeholder" +
-          (card.classList.contains("spanall") ? " spanall" : "");
+        placeholder.className = "card drag-placeholder";
+        applySpanClass(placeholder, card.classList.contains("span6") ? 6 : 3);
         placeholder.style.height = rect.height + "px";
         placeholder.setAttribute("aria-hidden", "true");
         grid.insertBefore(placeholder, card.nextSibling);
@@ -300,6 +446,7 @@
         card.style.height = rect.height + "px";
         card.style.left = rect.left + "px";
         card.style.top = rect.top + "px";
+        respan(placeholder, card);
         document.body.classList.add("drag-active");
         rafId = requestAnimationFrame(tick);
       }
@@ -329,20 +476,22 @@
         card.style.top = (lastY - grabDY) + "px";
       }
 
-      // Hop the placeholder only when the pointer has actually
-      // crossed into a different slot; the siblings FLIP around
-      // the hop, so nothing under the finger teleports.
+      // Hop the placeholder only when the pointer has carried
+      // the insertion past the current neighbor's center (plus
+      // hysteresis); the grid re-solves around the hop and the
+      // siblings FLIP into their new cells, so nothing under
+      // the finger teleports.
       function movePlaceholder() {
-        var target = insertionTarget(lastX, lastY);
-        var next = placeholder.nextElementSibling;
-        while (next && (next === card || !next.classList.contains("card"))) {
-          next = next.nextElementSibling;
-        }
-        if (next === target) return; // already in the asked-for slot
+        var idx = desiredIndex(lastX, lastY, phIndex);
+        if (idx === phIndex) return;
+        var cards = siblingCards();
+        var target = idx < cards.length ? cards[idx] : null;
         flipSiblings(function () {
           if (target) grid.insertBefore(placeholder, target);
           else grid.appendChild(placeholder);
+          respan(placeholder, card);
         });
+        phIndex = idx;
       }
 
       function onMove(e) {
@@ -383,20 +532,27 @@
       function onUp() {
         detach();
         if (!lifted) return;
-        // Settle: animate the card into the placeholder's slot,
-        // swap the two in the DOM, then save. A failed save
-        // restores the pre-drag arrangement.
+        // Settle: animate the card into the placeholder's solved
+        // slot (gliding to its position and size), swap the two
+        // in the DOM, then save. A failed save restores the
+        // pre-drag arrangement.
         var slot = placeholder.getBoundingClientRect();
         card.classList.add("drag-settle");
         card.style.left = slot.left + "px";
         card.style.top = slot.top + "px";
+        card.style.width = slot.width + "px";
+        card.style.height = slot.height + "px";
         card.style.transform = "scale(1)";
         var swapIn = function () {
           grid.replaceChild(card, placeholder);
           placeholder = null;
           cleanup();
+          respan(null, null);
           postLayout({ action: "order", ids: widgetIDs().join(",") }).then(function (ok) {
-            if (!ok) restoreOrder();
+            if (!ok) {
+              restoreOrder();
+              respan(null, null);
+            }
             savedNodes = null;
           });
         };
@@ -409,6 +565,7 @@
         if (!lifted) return;
         cleanup();
         restoreOrder();
+        respan(null, null);
         savedNodes = null;
       }
 
@@ -437,7 +594,10 @@
           // one lands.
           var stale = grid.querySelector('.card[data-widget="' + id + '"]');
           if (stale) stale.remove();
-          grid.appendChild(node);
+          flipSiblings(function () {
+            grid.appendChild(node);
+            respan(null, null);
+          });
           addFold(node, node.querySelector(":scope > h2, :scope > h3"));
           enhanceCard(node);
           closeModal();
@@ -447,6 +607,9 @@
 
     var cards = grid.querySelectorAll(".card[data-widget]");
     for (var i = 0; i < cards.length; i++) enhanceCard(cards[i]);
+    // The server solved and rendered these spans already; one
+    // mirror pass here keeps the two solvers in lockstep.
+    respan(null, null);
 
     // Add-module pop-up. The full catalog is rendered into it;
     // each open re-filters against what is on the home right now,

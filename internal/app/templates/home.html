@@ -34,7 +34,7 @@
 <div class="grid home-grid{{if .Home.Customize}} home-custom{{end}}"{{if .Home.Customize}} id="home-grid" data-customize="1"{{end}}>
 {{range .Home.Widgets}}
 {{if eq .ID "fleet"}}
-<section class="card spanall" data-widget="{{.ID}}">
+<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
   <h3>Fleet overview</h3>
   {{with .Fleet}}
   <p class="fleet-tools">
@@ -66,7 +66,7 @@
 {{end}}
 
 {{if eq .ID "attention"}}
-<section class="card spanall" data-widget="{{.ID}}">
+<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
   <h3>Needs attention</h3>
   {{with .Attention}}
   {{if .Items}}
@@ -82,7 +82,7 @@
 {{end}}
 
 {{if eq .ID "networth"}}
-<section class="card" data-widget="{{.ID}}">
+<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
   <h3>Net worth</h3>
   {{with .NetWorth}}
   {{if .Any}}
@@ -105,7 +105,7 @@
 {{end}}
 
 {{if eq .ID "industry"}}
-<section class="card" data-widget="{{.ID}}">
+<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
   <h3>Industry</h3>
   {{with .Industry}}
   <p><small>{{.ActiveJobs}} active job{{if ne .ActiveJobs 1}}s{{end}}{{if .ReadyJobs}} · {{.ReadyJobs}} ready for delivery{{end}}</small></p>
@@ -126,7 +126,7 @@
 {{end}}
 
 {{if eq .ID "market"}}
-<section class="card" data-widget="{{.ID}}">
+<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
   <h3>Market</h3>
   {{with .Market}}
   {{if .Open}}
@@ -149,7 +149,7 @@
 {{end}}
 
 {{if eq .ID "skills"}}
-<section class="card" data-widget="{{.ID}}">
+<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
   <h3>Skills</h3>
   {{with .Skills}}
   {{if .Finishing}}
@@ -170,7 +170,7 @@
 {{end}}
 
 {{if eq .ID "pi"}}
-<section class="card" data-widget="{{.ID}}">
+<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
   <h3>Planetary industry</h3>
   {{with .PI}}
   {{if .Any}}
@@ -195,7 +195,7 @@
 {{end}}
 
 {{if eq .ID "server"}}
-<section class="card" data-widget="{{.ID}}">
+<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
   <h3>Tranquility</h3>
   {{if .Server}}<p>Tranquility: {{.Server.Players}} players online</p>{{else}}<p><small>Server status has not loaded yet.</small></p>{{end}}
 </section>
@@ -243,6 +243,14 @@
       <input type="hidden" name="widget" value="{{.ID}}">
       <button type="submit"{{if not .CanDown}} disabled{{end}}>Move down</button>
     </form>
+    {{if .IsFlex}}
+    <form method="post" action="/home/layout">
+      <input type="hidden" name="action" value="span">
+      <input type="hidden" name="widget" value="{{.ID}}">
+      <input type="hidden" name="span" value="{{if eq .Span "wide"}}auto{{else}}wide{{end}}">
+      <button type="submit">{{if eq .Span "wide"}}Half width{{else}}Full width{{end}}</button>
+    </form>
+    {{end}}
     {{end}}
   </p>
 </div>

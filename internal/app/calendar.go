@@ -30,17 +30,20 @@ type calendarRow struct {
 
 type calendarAttendeeRow struct {
 	Name     string
+	ID       int64
 	Response string
 }
 
 type calendarDetail struct {
-	Title     string
-	Date      string
-	Duration  string
-	Owner     string // ESI's owner_name, verbatim
-	Text      string // plain text; template-escaped at render
-	Attendees []calendarAttendeeRow
-	Warming   bool // detail snapshot not yet warmed
+	Title       string
+	Date        string
+	Duration    string
+	Owner       string // ESI's owner_name, verbatim
+	OwnerID     int64
+	OwnerIsChar bool   // owner_type == "character"
+	Text        string // plain text; template-escaped at render
+	Attendees   []calendarAttendeeRow
+	Warming     bool // detail snapshot not yet warmed
 }
 
 type calendarView struct {
@@ -100,6 +103,8 @@ func (app *Application) handleCalendar(w http.ResponseWriter, r *http.Request) {
 			detail.Title = ev.Title
 			detail.Date = formatFinish(ev.Date)
 			detail.Owner = ev.OwnerName
+			detail.OwnerID = ev.OwnerID
+			detail.OwnerIsChar = ev.OwnerType == "character"
 			detail.Text = ev.Text
 			if ev.Duration > 0 {
 				detail.Duration = humanDuration(time.Duration(ev.Duration) * time.Minute)
@@ -109,6 +114,7 @@ func (app *Application) handleCalendar(w http.ResponseWriter, r *http.Request) {
 				for _, a := range attendees {
 					detail.Attendees = append(detail.Attendees, calendarAttendeeRow{
 						Name:     characterDisplay(app.esi, a.CharacterID),
+						ID:       a.CharacterID,
 						Response: humanizeEnum(a.EventResponse),
 					})
 				}

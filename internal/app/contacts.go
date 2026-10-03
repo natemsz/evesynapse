@@ -21,6 +21,8 @@ import (
 
 type contactRow struct {
 	Name     string
+	ID       int64
+	IsChar   bool   // contact is a character (others stay text)
 	Type     string // display-cased contact kind
 	Standing string // signed, one decimal
 	Watched  bool
@@ -69,6 +71,8 @@ func (app *Application) handleContacts(w http.ResponseWriter, r *http.Request) {
 			pending = append(pending, pendingRow{
 				row: contactRow{
 					Name:     app.contactDisplayName(ctx, c),
+					ID:       c.ContactID,
+					IsChar:   c.ContactType == "character",
 					Type:     humanizeEnum(c.ContactType),
 					Standing: fmt.Sprintf("%+.1f", c.Standing),
 					Watched:  c.IsWatched,

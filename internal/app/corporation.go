@@ -25,17 +25,25 @@ type corpView struct {
 	LogoURL        string
 	MemberCount    string // thousands-separated
 	CEOName        string
+	CEOID          int64
 	CEOPortraitURL string
 	Alliance       string // "Name [TICK]", "" when not in an alliance
 	TaxRate        string // "10.0%"
 	Founded        string // YYYY-MM-DD
 	HomeStation    string
 	Description    string // plain text, template escapes it
-	Characters     []string
+	Characters     []corpCharacterRef
 	// LinkCharacterID is one of the user's characters in this
 	// corporation; the template links the corporation subpages
 	// with it (those pages follow the selected character's corp).
 	LinkCharacterID int64
+}
+
+// corpCharacterRef is one of the user's characters in a
+// corporation, for the overview's "Your characters" line.
+type corpCharacterRef struct {
+	ID   int64
+	Name string
 }
 
 // corpCacheEntry is a built corpView (minus the per-user Characters
@@ -109,6 +117,7 @@ func (app *Application) fetchCorporation(ctx context.Context, corpID int64) (cor
 	}
 
 	if corp.CEOID > 0 {
+		view.CEOID = corp.CEOID
 		view.CEOPortraitURL = fmt.Sprintf("https://images.evetech.net/characters/%d/portrait?size=64", corp.CEOID)
 		var ceo esi.Character
 		if err := app.esi.Get(ctx, "", fmt.Sprintf("/characters/%d/", corp.CEOID), &ceo); err == nil {
@@ -188,7 +197,7 @@ func (app *Application) handleCorporations(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Group the user's characters by corporation.
-	byCorp := make(map[int64][]string)
+	byCorp := make(map[int64][]corpCharacterRef)
 	linkChar := make(map[int64]int64)
 	for _, ch := range characters {
 		var pub esi.Character
@@ -203,20 +212,20 @@ func (app *Application) handleCorporations(w http.ResponseWriter, r *http.Reques
 		if name == "" {
 			name = pub.Name
 		}
-		byCorp[pub.CorporationID] = append(byCorp[pub.CorporationID], name)
+		byCorp[pub.CorporationID] = append(byCorp[pub.CorporationID], corpCharacterRef{ID: ch.CharacterID, Name: name})
 		if _, seen := linkChar[pub.CorporationID]; !seen {
 			linkChar[pub.CorporationID] = ch.CharacterID
 		}
 	}
 
-	for corpID, names := range byCorp {
+	for corpID, chars := range byCorp {
 		view, err := app.corporation(ctx, corpID)
 		if err != nil {
 			log.Printf("corporations: build corporation %d: %v", corpID, err)
 			continue
 		}
-		sort.Strings(names)
-		view.Characters = names
+		sort.Slice(chars, func(i, j int) bool { return chars[i].Name < chars[j].Name })
+		view.Characters = chars
 		view.LinkCharacterID = linkChar[corpID]
 		data.Corps = append(data.Corps, view)
 	}

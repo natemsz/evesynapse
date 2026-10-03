@@ -121,16 +121,17 @@ func humanDuration(d time.Duration) string {
 
 // jumpCloneView is one jump clone line of the Character page.
 type jumpCloneView struct {
-	Name     string   // pilot-given clone name, "" when unnamed
-	Location string   // resolved location title
-	Implants []string // implant names in slot order; empty = no implants
+	Name     string       // pilot-given clone name, "" when unnamed
+	Location string       // resolved location title
+	Implants []implantRow // implants in slot order; empty = no implants
 }
 
 // implantRow is one active-implant line; Slot is 1-based (EVE
 // implant slots run 1..10, the ESI array is in slot order).
 type implantRow struct {
-	Slot int
-	Name string
+	Slot   int
+	Name   string
+	TypeID int64
 }
 
 // characterView is the Character page body for one character. Each
@@ -157,6 +158,7 @@ type characterView struct {
 	DockedAt      string // station/structure title, "" when in space
 	ShipKnown     bool
 	ShipTypeName  string
+	ShipTypeID    int64
 	ShipName      string
 
 	// Fatigue snapshot.
@@ -281,6 +283,7 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 	} else {
 		view.ShipKnown = true
 		view.ShipTypeName = app.typeNameOrID(ctx, ship.ShipTypeID)
+		view.ShipTypeID = ship.ShipTypeID
 		view.ShipName = ship.ShipName
 	}
 
@@ -336,7 +339,7 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 	if implantsLoaded {
 		view.ImplantsKnown = true
 		for i, id := range implants {
-			view.Implants = append(view.Implants, implantRow{Slot: i + 1, Name: implantName(id)})
+			view.Implants = append(view.Implants, implantRow{Slot: i + 1, Name: implantName(id), TypeID: id})
 		}
 	}
 	if clonesLoaded {
@@ -348,8 +351,8 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 				Name:     jc.Name,
 				Location: app.locationTitle(ctx, jc.LocationID, jc.LocationType),
 			}
-			for _, id := range jc.Implants {
-				jcv.Implants = append(jcv.Implants, implantName(id))
+			for i, id := range jc.Implants {
+				jcv.Implants = append(jcv.Implants, implantRow{Slot: i + 1, Name: implantName(id), TypeID: id})
 			}
 			view.JumpClones = append(view.JumpClones, jcv)
 		}

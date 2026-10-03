@@ -25,9 +25,10 @@ import (
 
 // contractItemRow is one warmed item line of a contract.
 type contractItemRow struct {
-	Name string
-	Qty  string
-	Note string // "wanted", "BPO", "BPC", "singleton"
+	Name   string
+	TypeID int64
+	Qty    string
+	Note   string // "wanted", "BPO", "BPC", "singleton"
 }
 
 // contractRow is one contract line.
@@ -36,16 +37,22 @@ type contractRow struct {
 	Type       string // humanized
 	Status     string // humanized
 	Issuer     string
+	IssuerID   int64
 	Assignee   string // "Public" for public contracts
-	Acceptor   string // "" until accepted
-	Price      string
-	Reward     string
-	Collateral string
-	Route      string // couriers: "Start → End"
-	Issued     string
-	Expires    string
-	Items      []contractItemRow
-	ItemsNote  string // "details warming" while the store lacks the list
+	AssigneeID int64
+	// AssigneeIsChar is false when the assignee is a corporation
+	// (or public) — corporations stay text.
+	AssigneeIsChar bool
+	Acceptor       string // "" until accepted
+	AcceptorID     int64
+	Price          string
+	Reward         string
+	Collateral     string
+	Route          string // couriers: "Start → End"
+	Issued         string
+	Expires        string
+	Items          []contractItemRow
+	ItemsNote      string // "details warming" while the store lacks the list
 }
 
 // contractsView is the Contracts page body.
@@ -104,6 +111,7 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 			Type:       humanizeEnum(c.Type),
 			Status:     humanizeEnum(c.Status),
 			Issuer:     characterDisplay(app.esi, c.IssuerID),
+			IssuerID:   c.IssuerID,
 			Price:      esi.FormatISK(c.Price),
 			Reward:     esi.FormatISK(c.Reward),
 			Collateral: esi.FormatISK(c.Collateral),
@@ -115,11 +123,16 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 		}
 		if c.AssigneeID > 0 {
 			row.Assignee = characterDisplay(app.esi, c.AssigneeID)
+			row.AssigneeID = c.AssigneeID
+			// An assignee can be a corporation; only link when
+			// the ID resolves as a character.
+			_, row.AssigneeIsChar = app.esi.CachedCharacterName(c.AssigneeID)
 		} else if c.Availability == "public" {
 			row.Assignee = "Public"
 		}
 		if c.AcceptorID > 0 {
 			row.Acceptor = characterDisplay(app.esi, c.AcceptorID)
+			row.AcceptorID = c.AcceptorID
 		}
 		if c.Type == "courier" && (c.StartLocationID > 0 || c.EndLocationID > 0) {
 			row.Route = fmt.Sprintf("%s → %s",
@@ -148,9 +161,10 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 					note = "singleton"
 				}
 				row.Items = append(row.Items, contractItemRow{
-					Name: app.typeNameOrID(ctx, it.TypeID),
-					Qty:  esi.FormatInt(it.Quantity),
-					Note: note,
+					Name:   app.typeNameOrID(ctx, it.TypeID),
+					TypeID: it.TypeID,
+					Qty:    esi.FormatInt(it.Quantity),
+					Note:   note,
 				})
 			}
 		case c.Type == "item_exchange":

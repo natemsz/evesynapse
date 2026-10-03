@@ -417,6 +417,33 @@ func (q *Queries) GetMarketFetchState(ctx context.Context, kind string) (MarketF
 	return i, err
 }
 
+const getPilotRecord = `-- name: GetPilotRecord :one
+
+SELECT character_id, payload, state, fetched_at
+FROM pilot_records
+WHERE character_id = ?
+`
+
+// ---------------------------------------------------------------------
+// Public pilot records (schema 015): the queue behind /pilot/.
+// Pending rows are always due; ready rows re-check once their
+// fetched_at passes the stale cutoff; missing rows (ESI 404)
+// settle for good. The item details page enqueues type
+// descriptions the same way: a type_details row with an empty
+// fetched_at is a want.
+// ---------------------------------------------------------------------
+func (q *Queries) GetPilotRecord(ctx context.Context, characterID int64) (PilotRecord, error) {
+	row := q.db.QueryRowContext(ctx, getPilotRecord, characterID)
+	var i PilotRecord
+	err := row.Scan(
+		&i.CharacterID,
+		&i.Payload,
+		&i.State,
+		&i.FetchedAt,
+	)
+	return i, err
+}
+
 const getSDEBlueprint = `-- name: GetSDEBlueprint :one
 SELECT blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds
 FROM sde_blueprints
@@ -647,6 +674,47 @@ func (q *Queries) GetSnapshotFetchState(ctx context.Context, arg GetSnapshotFetc
 		&i.Detail,
 		&i.AttemptedAt,
 	)
+	return i, err
+}
+
+const getStructureName = `-- name: GetStructureName :one
+
+SELECT structure_id, name, state, resolved_at
+FROM structure_names
+WHERE structure_id = ?
+`
+
+// ---------------------------------------------------------------------
+// Player structure names (schema 014): queued when a worker-computed
+// view or the market book view meets an unresolved structure id,
+// resolved in the background via any linked character holding
+// esi-universe.read_structures.v1 (the lookup endpoint is
+// authenticated-only). 'resolved' rows re-check after 30 days
+// (structures can be renamed); 'missing' rows (403/404: private or
+// gone) re-check after 24 hours; 'pending' rows are always due.
+// ---------------------------------------------------------------------
+func (q *Queries) GetStructureName(ctx context.Context, structureID int64) (StructureName, error) {
+	row := q.db.QueryRowContext(ctx, getStructureName, structureID)
+	var i StructureName
+	err := row.Scan(
+		&i.StructureID,
+		&i.Name,
+		&i.State,
+		&i.ResolvedAt,
+	)
+	return i, err
+}
+
+const getTypeDetail = `-- name: GetTypeDetail :one
+SELECT type_id, description, fetched_at
+FROM type_details
+WHERE type_id = ?
+`
+
+func (q *Queries) GetTypeDetail(ctx context.Context, typeID int64) (TypeDetail, error) {
+	row := q.db.QueryRowContext(ctx, getTypeDetail, typeID)
+	var i TypeDetail
+	err := row.Scan(&i.TypeID, &i.Description, &i.FetchedAt)
 	return i, err
 }
 
@@ -1063,18 +1131,23 @@ func (q *Queries) ListKillmailDetailsByCharacter(ctx context.Context, characterI
 const listMarketHistory = `-- name: ListMarketHistory :many
 SELECT region_id, type_id, date, average, highest, lowest, volume, order_count
 FROM market_history
-WHERE region_id = ? AND type_id = ? AND date >= ?
-ORDER BY date ASC
+WHERE region_id = ? AND type_id = ?
+ORDER BY date DESC
+LIMIT ?
 `
 
 type ListMarketHistoryParams struct {
-	RegionID int64  `json:"region_id"`
-	TypeID   int64  `json:"type_id"`
-	Date     string `json:"date"`
+	RegionID int64 `json:"region_id"`
+	TypeID   int64 `json:"type_id"`
+	Limit    int64 `json:"limit"`
 }
 
+// The history window is a row count, not a calendar span: the
+// chart and change math read the newest N rows of recorded
+// trades, newest first, so a sparse item's stored trades are
+// never hidden by an arbitrary date cutoff.
 func (q *Queries) ListMarketHistory(ctx context.Context, arg ListMarketHistoryParams) ([]MarketHistory, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketHistory, arg.RegionID, arg.TypeID, arg.Date)
+	rows, err := q.db.QueryContext(ctx, listMarketHistory, arg.RegionID, arg.TypeID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -1218,6 +1291,43 @@ func (q *Queries) ListOrderHealthByUser(ctx context.Context, userID int64) ([]Or
 	return items, nil
 }
 
+const listPilotDrains = `-- name: ListPilotDrains :many
+SELECT character_id
+FROM pilot_records
+WHERE state = 'pending'
+   OR (state = 'ready' AND fetched_at < ?1)
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, fetched_at
+LIMIT ?2
+`
+
+type ListPilotDrainsParams struct {
+	StaleCutoff string `json:"stale_cutoff"`
+	DrainLimit  int64  `json:"drain_limit"`
+}
+
+func (q *Queries) ListPilotDrains(ctx context.Context, arg ListPilotDrainsParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listPilotDrains, arg.StaleCutoff, arg.DrainLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var character_id int64
+		if err := rows.Scan(&character_id); err != nil {
+			return nil, err
+		}
+		items = append(items, character_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPlanetLayoutsForUser = `-- name: ListPlanetLayoutsForUser :many
 SELECT s.character_id, s.kind, s.payload, s.fetched_at
 FROM character_snapshots s
@@ -1316,6 +1426,50 @@ func (q *Queries) ListSDEBlueprintSkills(ctx context.Context, blueprintTypeID in
 	for rows.Next() {
 		var i ListSDEBlueprintSkillsRow
 		if err := rows.Scan(&i.SkillTypeID, &i.Level); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDEBlueprintsUsingMaterial = `-- name: ListSDEBlueprintsUsingMaterial :many
+SELECT b.blueprint_type_id, b.product_type_id, b.product_quantity, m.quantity AS material_quantity
+FROM sde_blueprint_materials m
+JOIN sde_blueprints b ON b.blueprint_type_id = m.blueprint_type_id
+WHERE m.material_type_id = ?
+ORDER BY b.product_type_id
+LIMIT 50
+`
+
+type ListSDEBlueprintsUsingMaterialRow struct {
+	BlueprintTypeID  int64 `json:"blueprint_type_id"`
+	ProductTypeID    int64 `json:"product_type_id"`
+	ProductQuantity  int64 `json:"product_quantity"`
+	MaterialQuantity int64 `json:"material_quantity"`
+}
+
+func (q *Queries) ListSDEBlueprintsUsingMaterial(ctx context.Context, materialTypeID int64) ([]ListSDEBlueprintsUsingMaterialRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDEBlueprintsUsingMaterial, materialTypeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDEBlueprintsUsingMaterialRow
+	for rows.Next() {
+		var i ListSDEBlueprintsUsingMaterialRow
+		if err := rows.Scan(
+			&i.BlueprintTypeID,
+			&i.ProductTypeID,
+			&i.ProductQuantity,
+			&i.MaterialQuantity,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1888,6 +2042,76 @@ func (q *Queries) ListSnapshotsForUser(ctx context.Context, arg ListSnapshotsFor
 	return items, nil
 }
 
+const listStructureResolutions = `-- name: ListStructureResolutions :many
+SELECT structure_id
+FROM structure_names
+WHERE state = 'pending'
+   OR (state = 'resolved' AND resolved_at < ?1)
+   OR (state = 'missing' AND resolved_at < ?2)
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, structure_id
+LIMIT ?3
+`
+
+type ListStructureResolutionsParams struct {
+	ResolvedCutoff  string `json:"resolved_cutoff"`
+	MissingCutoff   string `json:"missing_cutoff"`
+	ResolutionLimit int64  `json:"resolution_limit"`
+}
+
+func (q *Queries) ListStructureResolutions(ctx context.Context, arg ListStructureResolutionsParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listStructureResolutions, arg.ResolvedCutoff, arg.MissingCutoff, arg.ResolutionLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var structure_id int64
+		if err := rows.Scan(&structure_id); err != nil {
+			return nil, err
+		}
+		items = append(items, structure_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTypeDetailWants = `-- name: ListTypeDetailWants :many
+SELECT type_id
+FROM type_details
+WHERE fetched_at = ''
+ORDER BY type_id
+LIMIT ?
+`
+
+func (q *Queries) ListTypeDetailWants(ctx context.Context, limit int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listTypeDetailWants, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var type_id int64
+		if err := rows.Scan(&type_id); err != nil {
+			return nil, err
+		}
+		items = append(items, type_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUsers = `-- name: ListUsers :many
 SELECT id, created_at, home_layout FROM users
 ORDER BY id
@@ -2135,6 +2359,77 @@ type SetCharacterTagsParams struct {
 
 func (q *Queries) SetCharacterTags(ctx context.Context, arg SetCharacterTagsParams) error {
 	_, err := q.db.ExecContext(ctx, setCharacterTags, arg.Tags, arg.CharacterID, arg.UserID)
+	return err
+}
+
+const setPilotRecord = `-- name: SetPilotRecord :exec
+INSERT INTO pilot_records (character_id, payload, state, fetched_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (character_id) DO UPDATE SET
+    payload    = excluded.payload,
+    state      = excluded.state,
+    fetched_at = excluded.fetched_at
+`
+
+type SetPilotRecordParams struct {
+	CharacterID int64  `json:"character_id"`
+	Payload     string `json:"payload"`
+	State       string `json:"state"`
+	FetchedAt   string `json:"fetched_at"`
+}
+
+func (q *Queries) SetPilotRecord(ctx context.Context, arg SetPilotRecordParams) error {
+	_, err := q.db.ExecContext(ctx, setPilotRecord,
+		arg.CharacterID,
+		arg.Payload,
+		arg.State,
+		arg.FetchedAt,
+	)
+	return err
+}
+
+const setStructureName = `-- name: SetStructureName :exec
+INSERT INTO structure_names (structure_id, name, state, resolved_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (structure_id) DO UPDATE SET
+    name        = excluded.name,
+    state       = excluded.state,
+    resolved_at = excluded.resolved_at
+`
+
+type SetStructureNameParams struct {
+	StructureID int64  `json:"structure_id"`
+	Name        string `json:"name"`
+	State       string `json:"state"`
+	ResolvedAt  string `json:"resolved_at"`
+}
+
+func (q *Queries) SetStructureName(ctx context.Context, arg SetStructureNameParams) error {
+	_, err := q.db.ExecContext(ctx, setStructureName,
+		arg.StructureID,
+		arg.Name,
+		arg.State,
+		arg.ResolvedAt,
+	)
+	return err
+}
+
+const setTypeDetail = `-- name: SetTypeDetail :exec
+INSERT INTO type_details (type_id, description, fetched_at)
+VALUES (?, ?, ?)
+ON CONFLICT (type_id) DO UPDATE SET
+    description = excluded.description,
+    fetched_at  = excluded.fetched_at
+`
+
+type SetTypeDetailParams struct {
+	TypeID      int64  `json:"type_id"`
+	Description string `json:"description"`
+	FetchedAt   string `json:"fetched_at"`
+}
+
+func (q *Queries) SetTypeDetail(ctx context.Context, arg SetTypeDetailParams) error {
+	_, err := q.db.ExecContext(ctx, setTypeDetail, arg.TypeID, arg.Description, arg.FetchedAt)
 	return err
 }
 
@@ -2549,6 +2844,16 @@ func (q *Queries) UpsertOrderHealth(ctx context.Context, arg UpsertOrderHealthPa
 	return err
 }
 
+const upsertPilotWant = `-- name: UpsertPilotWant :exec
+INSERT OR IGNORE INTO pilot_records (character_id)
+VALUES (?)
+`
+
+func (q *Queries) UpsertPilotWant(ctx context.Context, characterID int64) error {
+	_, err := q.db.ExecContext(ctx, upsertPilotWant, characterID)
+	return err
+}
+
 const upsertSDEMeta = `-- name: UpsertSDEMeta :exec
 INSERT INTO sde_meta (key, value)
 VALUES (?, ?)
@@ -2645,6 +2950,26 @@ func (q *Queries) UpsertSnapshotFetchState(ctx context.Context, arg UpsertSnapsh
 		arg.Detail,
 		arg.AttemptedAt,
 	)
+	return err
+}
+
+const upsertStructureSeen = `-- name: UpsertStructureSeen :exec
+INSERT OR IGNORE INTO structure_names (structure_id)
+VALUES (?)
+`
+
+func (q *Queries) UpsertStructureSeen(ctx context.Context, structureID int64) error {
+	_, err := q.db.ExecContext(ctx, upsertStructureSeen, structureID)
+	return err
+}
+
+const upsertTypeDetailWant = `-- name: UpsertTypeDetailWant :exec
+INSERT OR IGNORE INTO type_details (type_id)
+VALUES (?)
+`
+
+func (q *Queries) UpsertTypeDetailWant(ctx context.Context, typeID int64) error {
+	_, err := q.db.ExecContext(ctx, upsertTypeDetailWant, typeID)
 	return err
 }
 

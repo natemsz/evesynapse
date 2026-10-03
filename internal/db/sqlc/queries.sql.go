@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const countSDECategories = `-- name: CountSDECategories :one
@@ -107,13 +108,13 @@ func (q *Queries) CountWarDetails(ctx context.Context) (int64, error) {
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (created_at)
 VALUES (datetime('now'))
-RETURNING id, created_at
+RETURNING id, created_at, home_layout
 `
 
 func (q *Queries) CreateUser(ctx context.Context) (User, error) {
 	row := q.db.QueryRowContext(ctx, createUser)
 	var i User
-	err := row.Scan(&i.ID, &i.CreatedAt)
+	err := row.Scan(&i.ID, &i.CreatedAt, &i.HomeLayout)
 	return i, err
 }
 
@@ -418,15 +419,32 @@ func (q *Queries) GetTypeName(ctx context.Context, typeID int64) (string, error)
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, created_at FROM users
+SELECT id, created_at, home_layout FROM users
 WHERE id = ?
 `
 
 func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 	row := q.db.QueryRowContext(ctx, getUser, id)
 	var i User
-	err := row.Scan(&i.ID, &i.CreatedAt)
+	err := row.Scan(&i.ID, &i.CreatedAt, &i.HomeLayout)
 	return i, err
+}
+
+const getUserHomeLayout = `-- name: GetUserHomeLayout :one
+
+SELECT home_layout FROM users
+WHERE id = ?
+`
+
+// ---------------------------------------------------------------------
+// Phase 1B home overview (schema 010): per-account widget layout and
+// the one batched snapshot read every widget renders from.
+// ---------------------------------------------------------------------
+func (q *Queries) GetUserHomeLayout(ctx context.Context, id int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getUserHomeLayout, id)
+	var home_layout string
+	err := row.Scan(&home_layout)
+	return home_layout, err
 }
 
 const getWarDetail = `-- name: GetWarDetail :one
@@ -960,8 +978,61 @@ func (q *Queries) ListSnapshotsByCharacter(ctx context.Context, characterID int6
 	return items, nil
 }
 
+const listSnapshotsForUser = `-- name: ListSnapshotsForUser :many
+SELECT s.character_id, s.kind, s.payload, s.fetched_at, s.cached_until
+FROM character_snapshots s
+JOIN characters c ON c.character_id = s.character_id
+WHERE c.user_id = ? AND s.kind IN (/*SLICE:kinds*/?)
+ORDER BY s.character_id, s.kind
+`
+
+type ListSnapshotsForUserParams struct {
+	UserID int64    `json:"user_id"`
+	Kinds  []string `json:"kinds"`
+}
+
+func (q *Queries) ListSnapshotsForUser(ctx context.Context, arg ListSnapshotsForUserParams) ([]CharacterSnapshot, error) {
+	query := listSnapshotsForUser
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.UserID)
+	if len(arg.Kinds) > 0 {
+		for _, v := range arg.Kinds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:kinds*/?", strings.Repeat(",?", len(arg.Kinds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:kinds*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CharacterSnapshot
+	for rows.Next() {
+		var i CharacterSnapshot
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.Kind,
+			&i.Payload,
+			&i.FetchedAt,
+			&i.CachedUntil,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUsers = `-- name: ListUsers :many
-SELECT id, created_at FROM users
+SELECT id, created_at, home_layout FROM users
 ORDER BY id
 `
 
@@ -974,7 +1045,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	var items []User
 	for rows.Next() {
 		var i User
-		if err := rows.Scan(&i.ID, &i.CreatedAt); err != nil {
+		if err := rows.Scan(&i.ID, &i.CreatedAt, &i.HomeLayout); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1084,6 +1155,22 @@ type SetCharacterTagsParams struct {
 
 func (q *Queries) SetCharacterTags(ctx context.Context, arg SetCharacterTagsParams) error {
 	_, err := q.db.ExecContext(ctx, setCharacterTags, arg.Tags, arg.CharacterID, arg.UserID)
+	return err
+}
+
+const setUserHomeLayout = `-- name: SetUserHomeLayout :exec
+UPDATE users
+SET home_layout = ?
+WHERE id = ?
+`
+
+type SetUserHomeLayoutParams struct {
+	HomeLayout string `json:"home_layout"`
+	ID         int64  `json:"id"`
+}
+
+func (q *Queries) SetUserHomeLayout(ctx context.Context, arg SetUserHomeLayoutParams) error {
+	_, err := q.db.ExecContext(ctx, setUserHomeLayout, arg.HomeLayout, arg.ID)
 	return err
 }
 

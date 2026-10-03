@@ -5,29 +5,65 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{template "title" .}} · EveSynapse</title>
 {{if .AutoRefresh}}<meta http-equiv="refresh" content="5">{{end}}
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header>
-  <nav>
+  <nav class="topbar">
     <a class="wordmark" href="/">EVESYNAPSE</a>
-    <span class="spacer"></span>
-    <a class="navlink" href="/">Home</a>
-    <a class="navlink" href="/character/">Character</a>
-    <a class="navlink" href="/corporations/">Corporation</a>
-    <a class="navlink" href="/assets/">Assets</a>
-    <a class="navlink" href="/market/">Market</a>
-    <a class="navlink" href="/skills/">Skills</a>
-    <a class="navlink" href="/fittings/">Fittings</a>
-    <a class="navlink" href="/killmails/">Killmails</a>
-    <a class="navlink" href="/wallet/">Wallet</a>
-    <a class="navlink" href="/orders/">Orders</a>
-    <a class="navlink" href="/contracts/">Contracts</a>
-    <a class="navlink" href="/industry/">Industry</a>
-    <a class="navlink" href="/intel/wars/">Intel</a>
-    <a class="navlink" href="/sync/">Sync</a>
-    <a class="navlink" href="/admin/">Admin</a>
     <span class="who">{{if .LoggedIn}}Signed in{{if .CharacterName}} as {{.CharacterName}}{{end}} · <a href="/auth/logout">Sign out</a>{{else}}Not signed in{{end}}</span>
+  </nav>
+  <nav class="mainnav" aria-label="Primary">
+    <a class="navlink{{if eq .Section "home"}} active{{end}}" href="/">Home</a>
+    <details class="branch{{if eq .Section "character"}} active{{end}}" name="mainnav">
+      <summary>Character</summary>
+      <div class="menu">
+        <a href="/character/"{{if and (eq .Section "character") (eq .NavPage "character.html")}} class="active"{{end}}>Character</a>
+        <a href="/skills/"{{if eq .NavPage "skills.html"}} class="active"{{end}}>Skills</a>
+        <a href="/fittings/"{{if eq .NavPage "fittings.html"}} class="active"{{end}}>Fittings</a>
+        <a href="/killmails/"{{if and (eq .Section "character") (eq .NavPage "killmails.html")}} class="active"{{end}}>Killmails</a>
+      </div>
+    </details>
+    <details class="branch{{if eq .Section "assets"}} active{{end}}" name="mainnav">
+      <summary>Assets</summary>
+      <div class="menu">
+        <a href="/assets/"{{if eq .NavPage "assets.html"}} class="active"{{end}}>Assets</a>
+        <a href="/industry/"{{if eq .NavPage "industry.html"}} class="active"{{end}}>Industry</a>
+      </div>
+    </details>
+    <details class="branch{{if eq .Section "economy"}} active{{end}}" name="mainnav">
+      <summary>Economy</summary>
+      <div class="menu">
+        <a href="/market/"{{if eq .NavPage "market.html"}} class="active"{{end}}>Market</a>
+        <a href="/wallet/"{{if eq .NavPage "wallet.html"}} class="active"{{end}}>Wallet</a>
+        <a href="/orders/"{{if eq .NavPage "orders.html"}} class="active"{{end}}>Orders</a>
+        <a href="/contracts/"{{if eq .NavPage "contracts.html"}} class="active"{{end}}>Contracts</a>
+      </div>
+    </details>
+    <details class="branch{{if eq .Section "corporation"}} active{{end}}" name="mainnav">
+      <summary>Corporation</summary>
+      <div class="menu">
+        <a href="/corporations/"{{if eq .NavPage "corporations.html"}} class="active"{{end}}>Overview</a>
+        <a href="/corporations/members/"{{if eq .NavPage "corp_members.html"}} class="active"{{end}}>Members</a>
+        <a href="/corporations/wallets/"{{if eq .NavPage "corp_wallets.html"}} class="active"{{end}}>Wallets</a>
+        <a href="/corporations/orders/"{{if eq .NavPage "corp_orders.html"}} class="active"{{end}}>Orders</a>
+        <a href="/corporations/assets/"{{if eq .NavPage "corp_assets.html"}} class="active"{{end}}>Assets</a>
+        <a href="/corporations/structures/"{{if eq .NavPage "corp_structures.html"}} class="active"{{end}}>Structures</a>
+        <a href="/corporations/killmails/"{{if and (eq .Section "corporation") (eq .NavPage "killmails.html")}} class="active"{{end}}>Killmails</a>
+      </div>
+    </details>
+    <details class="branch{{if eq .Section "intel"}} active{{end}}" name="mainnav">
+      <summary>Intel</summary>
+      <div class="menu">
+        <a href="/intel/wars/"{{if eq .NavPage "intel_wars.html"}} class="active"{{end}}>Wars</a>
+        <a href="/intel/incursions/"{{if eq .NavPage "intel_incursions.html"}} class="active"{{end}}>Incursions</a>
+        <a href="/intel/fw/"{{if eq .NavPage "intel_fw.html"}} class="active"{{end}}>Faction Warfare</a>
+      </div>
+    </details>
+    <span class="spacer"></span>
+    <a class="navlink utility{{if eq .Section "sync"}} active{{end}}" href="/sync/">Sync</a>
+    <a class="navlink utility{{if eq .Section "admin"}} active{{end}}" href="/admin/">Admin</a>
   </nav>
 </header>
 <main>

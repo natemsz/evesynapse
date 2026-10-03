@@ -561,6 +561,10 @@ func (app *Application) handleCorpKillmails(w http.ResponseWriter, r *http.Reque
 		LoggedIn:      true,
 		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
 		SSOConfigured: app.cfg.SSOConfigured(),
+		// This page renders killmails.html, which on its own maps
+		// to the Character branch; the corp view belongs to the
+		// Corporation branch of the top nav.
+		Section: "corporation",
 	}
 
 	sel, ok, err := app.pickCorpPage(ctx, r)

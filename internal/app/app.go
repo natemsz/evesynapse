@@ -211,6 +211,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 
 	r.Get("/", app.handleHome)
 	r.Get("/healthz", handleHealthz)
+	r.Get("/favicon.ico", handleFavicon)
 
 	// Embedded static assets (2013 wallpaper, stylesheet).
 	if sub, err := fs.Sub(staticFS, "static"); err == nil {
@@ -312,6 +313,22 @@ func handleHealthz(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok\n"))
+}
+
+// handleFavicon serves the app icon. Browsers request
+// /favicon.ico by default even though the icon is SVG (the modern
+// format, also linked from base.html as /static/favicon.svg);
+// serving the SVG here with its real content type keeps the
+// request from 404ing in the logs.
+func handleFavicon(w http.ResponseWriter, r *http.Request) {
+	icon, err := fs.ReadFile(staticFS, "static/favicon.svg")
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Cache-Control", "public, max-age=604800")
+	_, _ = w.Write(icon)
 }
 
 // requireAuth gates the admin on the session "authenticated" flag, which

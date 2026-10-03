@@ -20,6 +20,8 @@ type pageData struct {
 	SSOConfigured   bool
 	AutoRefresh     bool   // base.html emits a meta-refresh (Sync page)
 	Error           string // friendly, user-safe banner (never internals)
+	Section         string // top-nav branch key (base.html); filled by render from the page when empty
+	NavPage         string // template file rendered, for marking the exact nav link; filled by render
 	Character       *characterSheet
 	CharChars       []assetCharLink
 	CharacterPage   *characterView
@@ -118,7 +120,41 @@ type adminSnapshotRow struct {
 	CachedUntil   string // "—" when unset
 }
 
+// sectionForPage maps a template file to the top-nav branch that
+// contains it (see templates/base.html). Handlers whose page lives
+// in a different branch than its template suggests — the corp
+// killmails view reuses killmails.html — set pageData.Section
+// explicitly and render leaves it alone.
+func sectionForPage(page string) string {
+	switch page {
+	case "home.html":
+		return "home"
+	case "character.html", "skills.html", "fittings.html", "killmails.html":
+		return "character"
+	case "assets.html", "industry.html":
+		return "assets"
+	case "market.html", "wallet.html", "orders.html", "contracts.html":
+		return "economy"
+	case "corporations.html", "corp_members.html", "corp_wallets.html",
+		"corp_orders.html", "corp_assets.html", "corp_structures.html":
+		return "corporation"
+	case "intel_wars.html", "intel_incursions.html", "intel_fw.html":
+		return "intel"
+	case "sync.html":
+		return "sync"
+	case "admin.html":
+		return "admin"
+	}
+	return ""
+}
+
 func (app *Application) render(w http.ResponseWriter, status int, page string, data pageData) {
+	if data.Section == "" {
+		data.Section = sectionForPage(page)
+	}
+	if data.NavPage == "" {
+		data.NavPage = page
+	}
 	ts, err := template.New("base").ParseFS(templatesFS, "templates/base.html", "templates/"+page)
 	if err != nil {
 		log.Printf("parse template %s: %v", page, err)
@@ -160,11 +196,19 @@ func friendlyLoginError(code string) string {
 
 func (app *Application) handleHome(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	loggedIn := app.sessions.GetBool(ctx, sessionAuthenticated)
 	data := pageData{
-		LoggedIn:      app.sessions.GetBool(ctx, sessionAuthenticated),
+		LoggedIn:      loggedIn,
 		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
 		SSOConfigured: app.cfg.SSOConfigured(),
-		Error:         friendlyLoginError(r.URL.Query().Get("error")),
+	}
+	// The ?error= banner explains a failed sign-in attempt; it is
+	// only meaningful signed out. A stale or duplicate SSO callback
+	// can bounce a signed-in user back here with an error code, and
+	// showing "that login attempt couldn't be verified" above a
+	// working character sheet is just confusing.
+	if !loggedIn {
+		data.Error = friendlyLoginError(r.URL.Query().Get("error"))
 	}
 	if data.LoggedIn {
 		data.Character = app.loadCharacterSheet(ctx)

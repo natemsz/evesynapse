@@ -625,12 +625,17 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 			}
 		default:
 			// Per-division wallet ledgers: counterparties and
-			// journal parties resolve through the same cache.
+			// journal parties resolve through the same cache. The
+			// >= 90M harvest threshold matches the character-side
+			// ledgers (corporation/alliance IDs below it would
+			// just fail the character endpoint); IDs above it
+			// that still aren't characters are remembered by the
+			// client's negative cache after one definitive answer.
 			if strings.HasPrefix(snap.Kind, esi.SnapCorpTxnsPrefix) {
 				var txns esi.CorpWalletTransactions
 				if err := json.Unmarshal([]byte(snap.Payload), &txns); err == nil {
 					for _, t := range txns {
-						if t.ClientID > 0 {
+						if t.ClientID >= 90_000_000 {
 							charIDs[t.ClientID] = true
 						}
 					}
@@ -640,10 +645,10 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 				var journal esi.CorpJournal
 				if err := json.Unmarshal([]byte(snap.Payload), &journal); err == nil {
 					for _, e := range journal {
-						if e.FirstPartyID > 0 {
+						if e.FirstPartyID >= 90_000_000 {
 							charIDs[e.FirstPartyID] = true
 						}
-						if e.SecondPartyID > 0 {
+						if e.SecondPartyID >= 90_000_000 {
 							charIDs[e.SecondPartyID] = true
 						}
 					}
@@ -757,9 +762,13 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 	}
 	var missingChars []int64
 	for _, id := range sortedInt64Keys(charIDs) {
-		if _, ok := app.esi.CachedCharacterName(id); !ok {
-			missingChars = append(missingChars, id)
+		if _, ok := app.esi.CachedCharacterName(id); ok {
+			continue
 		}
+		if app.esi.CharacterNameMissed(id) {
+			continue // ESI already said this ID is not a character
+		}
+		missingChars = append(missingChars, id)
 	}
 	resolved += app.runWarmPool(ctx, missingChars, budget, func(ctx context.Context, id int64) bool {
 		return app.warmCharacterName(ctx, budget, id)
@@ -836,6 +845,9 @@ func (app *Application) warmPlaceName(ctx context.Context, budget *warmBudget, p
 }
 
 func (app *Application) warmCharacterName(ctx context.Context, budget *warmBudget, id int64) bool {
+	if app.esi.CharacterNameMissed(id) {
+		return false // not a character; ESI answered definitively once already
+	}
 	name, err := app.esi.CharacterName(ctx, id)
 	if err != nil {
 		if errors.Is(err, esi.ErrErrorLimit) {

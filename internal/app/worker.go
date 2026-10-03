@@ -311,6 +311,37 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		}
 	}
 
+	// Structure names: resolve the due slice of the structure
+	// queue with any scoped character's token (structures.go).
+	if !limited {
+		sResolved, sLimited := app.resolveStructureNames(ctx, characters, allowance)
+		refreshed += sResolved
+		if sLimited {
+			log.Printf("worker: ESI error limit hit resolving structure names; backing off until next cycle")
+			limited = true
+		}
+	}
+
+	// Public records: fill the pilot queue (strangers viewed on
+	// /pilot/) and the item-description wants the item details
+	// page notes. Public endpoints, same cycle allowance.
+	if !limited {
+		pDrained, pLimited := app.refreshPilotRecords(ctx, allowance)
+		refreshed += pDrained
+		if pLimited {
+			log.Printf("worker: ESI error limit hit draining pilot records; backing off until next cycle")
+			limited = true
+		}
+	}
+	if !limited {
+		tDrained, tLimited := app.refreshTypeDetails(ctx, allowance)
+		refreshed += tDrained
+		if tLimited {
+			log.Printf("worker: ESI error limit hit draining type details; backing off until next cycle")
+			limited = true
+		}
+	}
+
 	// Name warm-up: resolve whatever the local caches still lack —
 	// type names (persisted in type_names), type→group links, group
 	// names, station/system names — from the characters' latest
@@ -597,8 +628,9 @@ feed:
 // station/system names — plus character names for the victims and
 // final-blow attackers in its stored killmail details. It returns
 // how many entries were resolved.
-// (Structure locations are skipped: their names need an auth scope
-// this app does not hold, so they render as "Structure #<id>".)
+// (Structure ids met in snapshots are noted for the background
+// structure-name queue — see structures.go — never fetched here;
+// pages render "Structure #<id>" until the queue lands a name.)
 func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character, budget *warmBudget) int {
 	snaps, err := app.queries.ListSnapshotsByCharacter(ctx, ch.CharacterID)
 	if err != nil {
@@ -611,6 +643,7 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 	charIDs := make(map[int64]bool)      // character names (killmail people + corp rosters)
 	planetIDs := make(map[int64]bool)    // planet names (colony planets)
 	schematicIDs := make(map[int64]bool) // PI schematic names + cycle times
+	structureIDs := make(map[int64]bool) // structure ids for the name queue
 	for _, snap := range snaps {
 		switch snap.Kind {
 		case esi.SnapSkills:
@@ -632,6 +665,9 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 				typeIDs[it.TypeID] = true
 				if it.LocationType == "station" || it.LocationType == "solar_system" {
 					placeKinds[it.LocationID] = it.LocationType
+				}
+				if it.LocationType == "structure" {
+					structureIDs[it.LocationID] = true
 				}
 			}
 		case esi.SnapCorpMembers:
@@ -672,6 +708,9 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 				if it.LocationType == "station" || it.LocationType == "solar_system" {
 					placeKinds[it.LocationID] = it.LocationType
 				}
+				if it.LocationType == "structure" {
+					structureIDs[it.LocationID] = true
+				}
 			}
 		case esi.SnapCorpOrders:
 			var orders esi.CorpOrders
@@ -691,6 +730,20 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 			for _, s := range structures {
 				if s.TypeID > 0 {
 					typeIDs[s.TypeID] = true
+				}
+				// The corp's own structures arrive already named:
+				// seed the structure-name cache for free.
+				if s.Name != "" {
+					if _, ok := app.esi.CachedStructureName(ctx, s.StructureID); !ok {
+						if err := app.queries.SetStructureName(ctx, db.SetStructureNameParams{
+							StructureID: s.StructureID, Name: s.Name,
+							State: esi.StructureResolved, ResolvedAt: time.Now().UTC().Format(time.RFC3339),
+						}); err != nil {
+							log.Printf("worker: warm names for character %d: seed structure %d: %v", ch.CharacterID, s.StructureID, err)
+						} else {
+							app.esi.StoreStructureName(s.StructureID, s.Name)
+						}
+					}
 				}
 			}
 		case esi.SnapWalletJournal:
@@ -728,6 +781,9 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 					if o.TypeID > 0 {
 						typeIDs[o.TypeID] = true
 					}
+					if isStructureID(o.LocationID) {
+						structureIDs[o.LocationID] = true
+					}
 				}
 			}
 		case esi.SnapOrdersHistory:
@@ -759,6 +815,9 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 					}
 					if j.ProductTypeID > 0 {
 						typeIDs[j.ProductTypeID] = true
+					}
+					if isStructureID(j.FacilityID) {
+						structureIDs[j.FacilityID] = true
 					}
 				}
 			}
@@ -890,6 +949,17 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 			}
 		}
 	}
+	// Structure ids met in this character's snapshots join the
+	// background resolution queue (structures.go). A plain queue
+	// note, no fetches — resolution runs once per cycle below.
+	if len(structureIDs) > 0 {
+		ids := make([]int64, 0, len(structureIDs))
+		for id := range structureIDs {
+			ids = append(ids, id)
+		}
+		app.noteStructureIDs(ctx, ids...)
+	}
+
 	// With no skills/assets yet, the type/group/place passes below
 	// simply no-op on empty ID sets; the killmail character-name
 	// pass at the end may still have work to do.

@@ -523,10 +523,15 @@ INSERT OR REPLACE INTO market_history (region_id, type_id, date, average, highes
 VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: ListMarketHistory :many
+-- The history window is a row count, not a calendar span: the
+-- chart and change math read the newest N rows of recorded
+-- trades, newest first, so a sparse item's stored trades are
+-- never hidden by an arbitrary date cutoff.
 SELECT region_id, type_id, date, average, highest, lowest, volume, order_count
 FROM market_history
-WHERE region_id = ? AND type_id = ? AND date >= ?
-ORDER BY date ASC;
+WHERE region_id = ? AND type_id = ?
+ORDER BY date DESC
+LIMIT ?;
 
 -- name: UpsertMarketHistoryWant :exec
 INSERT INTO market_history_wants (region_id, type_id, last_requested_at)
@@ -612,3 +617,104 @@ FROM order_health oh
 JOIN characters c ON c.character_id = oh.character_id
 WHERE c.user_id = ?
 ORDER BY c.name, oh.type_id, oh.order_id;
+
+-- ---------------------------------------------------------------------
+-- Player structure names (schema 014): queued when a worker-computed
+-- view or the market book view meets an unresolved structure id,
+-- resolved in the background via any linked character holding
+-- esi-universe.read_structures.v1 (the lookup endpoint is
+-- authenticated-only). 'resolved' rows re-check after 30 days
+-- (structures can be renamed); 'missing' rows (403/404: private or
+-- gone) re-check after 24 hours; 'pending' rows are always due.
+-- ---------------------------------------------------------------------
+
+-- name: GetStructureName :one
+SELECT structure_id, name, state, resolved_at
+FROM structure_names
+WHERE structure_id = ?;
+
+-- name: UpsertStructureSeen :exec
+INSERT OR IGNORE INTO structure_names (structure_id)
+VALUES (?);
+
+-- name: SetStructureName :exec
+INSERT INTO structure_names (structure_id, name, state, resolved_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (structure_id) DO UPDATE SET
+    name        = excluded.name,
+    state       = excluded.state,
+    resolved_at = excluded.resolved_at;
+
+-- name: ListStructureResolutions :many
+SELECT structure_id
+FROM structure_names
+WHERE state = 'pending'
+   OR (state = 'resolved' AND resolved_at < sqlc.arg(resolved_cutoff))
+   OR (state = 'missing' AND resolved_at < sqlc.arg(missing_cutoff))
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, structure_id
+LIMIT sqlc.arg(resolution_limit);
+
+-- ---------------------------------------------------------------------
+-- Public pilot records (schema 015): the queue behind /pilot/.
+-- Pending rows are always due; ready rows re-check once their
+-- fetched_at passes the stale cutoff; missing rows (ESI 404)
+-- settle for good. The item details page enqueues type
+-- descriptions the same way: a type_details row with an empty
+-- fetched_at is a want.
+-- ---------------------------------------------------------------------
+
+-- name: GetPilotRecord :one
+SELECT character_id, payload, state, fetched_at
+FROM pilot_records
+WHERE character_id = ?;
+
+-- name: UpsertPilotWant :exec
+INSERT OR IGNORE INTO pilot_records (character_id)
+VALUES (?);
+
+-- name: SetPilotRecord :exec
+INSERT INTO pilot_records (character_id, payload, state, fetched_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (character_id) DO UPDATE SET
+    payload    = excluded.payload,
+    state      = excluded.state,
+    fetched_at = excluded.fetched_at;
+
+-- name: ListPilotDrains :many
+SELECT character_id
+FROM pilot_records
+WHERE state = 'pending'
+   OR (state = 'ready' AND fetched_at < sqlc.arg(stale_cutoff))
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, fetched_at
+LIMIT sqlc.arg(drain_limit);
+
+-- name: GetTypeDetail :one
+SELECT type_id, description, fetched_at
+FROM type_details
+WHERE type_id = ?;
+
+-- name: UpsertTypeDetailWant :exec
+INSERT OR IGNORE INTO type_details (type_id)
+VALUES (?);
+
+-- name: SetTypeDetail :exec
+INSERT INTO type_details (type_id, description, fetched_at)
+VALUES (?, ?, ?)
+ON CONFLICT (type_id) DO UPDATE SET
+    description = excluded.description,
+    fetched_at  = excluded.fetched_at;
+
+-- name: ListTypeDetailWants :many
+SELECT type_id
+FROM type_details
+WHERE fetched_at = ''
+ORDER BY type_id
+LIMIT ?;
+
+-- name: ListSDEBlueprintsUsingMaterial :many
+SELECT b.blueprint_type_id, b.product_type_id, b.product_quantity, m.quantity AS material_quantity
+FROM sde_blueprint_materials m
+JOIN sde_blueprints b ON b.blueprint_type_id = m.blueprint_type_id
+WHERE m.material_type_id = ?
+ORDER BY b.product_type_id
+LIMIT 50;

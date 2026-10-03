@@ -111,6 +111,13 @@ type OrderHealth struct {
 	ComputedAt  string  `json:"computed_at"`
 }
 
+type PilotRecord struct {
+	CharacterID int64  `json:"character_id"`
+	Payload     string `json:"payload"`
+	State       string `json:"state"`
+	FetchedAt   string `json:"fetched_at"`
+}
+
 type SdeBlueprint struct {
 	BlueprintTypeID          int64 `json:"blueprint_type_id"`
 	ProductTypeID            int64 `json:"product_type_id"`
@@ -207,6 +214,19 @@ type SnapshotFetchState struct {
 	State       string `json:"state"`
 	Detail      string `json:"detail"`
 	AttemptedAt string `json:"attempted_at"`
+}
+
+type StructureName struct {
+	StructureID int64  `json:"structure_id"`
+	Name        string `json:"name"`
+	State       string `json:"state"`
+	ResolvedAt  string `json:"resolved_at"`
+}
+
+type TypeDetail struct {
+	TypeID      int64  `json:"type_id"`
+	Description string `json:"description"`
+	FetchedAt   string `json:"fetched_at"`
 }
 
 type TypeName struct {

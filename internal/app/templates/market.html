@@ -17,6 +17,7 @@
 {{if .Market.Item}}
   {{$item := .Market.Item}}
   <h2>{{$item.Name}}</h2>
+  <p><small><a href="/items/type/{{$item.TypeID}}/">Item details</a></small></p>
   <p><small>Average price: {{if $item.AveragePrice}}{{$item.AveragePrice}} ISK{{else}}—{{end}} · Adjusted price: {{if $item.AdjustedPrice}}{{$item.AdjustedPrice}} ISK{{else}}—{{end}}</small></p>
   <p>{{range $i, $r := $item.Regions}}{{if $i}} · {{end}}{{if $r.Active}}<strong>{{$r.Name}}</strong>{{else}}<a href="/market/?type={{$item.TypeID}}&region={{$r.ID}}">{{$r.Name}}</a>{{end}}{{end}}</p>
 
@@ -26,6 +27,7 @@
 
   <section class="foldable">
   <h3>Price history — {{$item.RegionName}}</h3>
+  {{if eq $item.HistoryState "chart"}}
   {{if $item.Chart}}
   {{$c := $item.Chart}}
   <svg viewBox="0 0 {{$c.Width}} {{$c.Height}}" width="100%" role="img" aria-label="Daily average price and volume, last 90 days" preserveAspectRatio="none" style="max-width:720px">
@@ -39,8 +41,20 @@
     <text x="{{$c.Width}}" y="{{$c.Height}}" font-size="11" fill="#c9a06a" text-anchor="end">{{$c.From}} → {{$c.To}}</text>
   </svg>
   {{if $item.Stats}}
-  <p><small>Last {{$item.Stats.Days}} days in {{$item.RegionName}}: average {{$item.Stats.Mean}} ISK · low {{$item.Stats.Min}} · high {{$item.Stats.Max}} · latest {{$item.Stats.Latest}} ({{$item.Stats.LastDay}}){{if $item.Change7}} · 7 days {{$item.Change7}}{{end}}{{if $item.Change30}} · 30 days {{$item.Change30}}{{end}}</small></p>
+  <p><small>{{$item.Stats.Days}} days of recorded trades in {{$item.RegionName}}: average {{$item.Stats.Mean}} ISK · low {{$item.Stats.Min}} · high {{$item.Stats.Max}} · latest {{$item.Stats.Latest}} ({{$item.Stats.LastDay}}){{if $item.Change7}} · 7 days {{$item.Change7}}{{end}}{{if $item.Change30}} · 30 days {{$item.Change30}}{{end}}</small></p>
   {{end}}
+  {{if $item.HistoryLastDay}}<p><small>Last trades {{$item.HistoryLastDay}} — this item hasn't traded in {{$item.RegionName}} recently.</small></p>{{end}}
+  {{else}}
+  <p><small>Price history for this item hasn't charted yet — check back soon.</small></p>
+  {{end}}
+  {{else if eq $item.HistoryState "few"}}
+  {{if $item.Stats}}
+  <p><small>Only {{$item.Stats.Days}} {{if eq $item.Stats.Days 1}}day{{else}}days{{end}} of recorded trades in {{$item.RegionName}} — not enough history to chart yet. Average {{$item.Stats.Mean}} ISK · low {{$item.Stats.Min}} · high {{$item.Stats.Max}} · latest {{$item.Stats.Latest}} ({{$item.Stats.LastDay}}).{{if $item.HistoryLastDay}} Last trades {{$item.HistoryLastDay}}.{{end}}</small></p>
+  {{else}}
+  <p><small>Only a little trade history in {{$item.RegionName}} so far — not enough to chart yet.</small></p>
+  {{end}}
+  {{else if eq $item.HistoryState "empty"}}
+  <p><small>No trade history in {{$item.RegionName}} for this item yet.</small></p>
   {{else}}
   <p><small>Price history is still loading for this item — it fills in on its own, check back soon.</small></p>
   {{end}}
@@ -146,7 +160,7 @@
   <tbody>
   {{range $wl.Rows}}
     <tr>
-      <td><a href="/market/?type={{.TypeID}}&region={{.RegionID}}">{{.Name}}</a></td>
+      <td><a href="/items/type/{{.TypeID}}/">{{.Name}}</a></td>
       <td>{{.Region}}</td>
       <td>{{.Current}}</td>
       <td>{{.Change7}}</td>
@@ -191,8 +205,8 @@
   <tbody>
   {{range .Market.YourOrders}}
     <tr>
-      <td>{{.Char}}</td>
-      <td>{{.Item}}</td>
+      <td>{{charLink $.ViewerChars .CharID .Char}}</td>
+      <td>{{itemLink .TypeID .Item}}</td>
       <td>{{.Price}}</td>
       <td>{{.Location}}</td>
       <td>{{if .Bad}}<strong>{{.Status}}</strong>{{else}}{{.Status}}{{end}}</td>

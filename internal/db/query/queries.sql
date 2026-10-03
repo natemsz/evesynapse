@@ -314,6 +314,27 @@ ON CONFLICT (war_id) DO UPDATE SET
 SELECT COUNT(*) FROM war_details;
 
 -- ---------------------------------------------------------------------
+-- Phase 1B home overview (schema 010): per-account widget layout and
+-- the one batched snapshot read every widget renders from.
+-- ---------------------------------------------------------------------
+
+-- name: GetUserHomeLayout :one
+SELECT home_layout FROM users
+WHERE id = ?;
+
+-- name: SetUserHomeLayout :exec
+UPDATE users
+SET home_layout = ?
+WHERE id = ?;
+
+-- name: ListSnapshotsForUser :many
+SELECT s.character_id, s.kind, s.payload, s.fetched_at, s.cached_until
+FROM character_snapshots s
+JOIN characters c ON c.character_id = s.character_id
+WHERE c.user_id = ? AND s.kind IN (sqlc.slice('kinds'))
+ORDER BY s.character_id, s.kind;
+
+-- ---------------------------------------------------------------------
 -- Layout + market toolkit (schema 008): live market suggestions and
 -- the item database explorer. All local SDE reads. Matching uses
 -- instr() rather than LIKE: case-insensitive substring positions

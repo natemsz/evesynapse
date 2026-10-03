@@ -576,3 +576,21 @@ footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
 .switcher .menu { left: auto; right: 0; min-width: 15rem; }
 .switcher .menu a { display: flex; align-items: center; gap: 0.5rem; }
 .portrait { border-radius: 3px; vertical-align: middle; }
+
+/* --- Phase 1B home overview widgets ---
+   The widget grid is the standard .grid/.card vocabulary; only
+   the fleet table, attention list and customize rows need their
+   own rules. */
+.home-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.fleet-tools { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+.fleet-tools input[type="search"] { background: var(--row); color: var(--text); border: 1px solid #333; padding: 0.4rem 0.6rem; border-radius: 3px; }
+.chip { border: 1px solid #444; background: var(--row); color: var(--text); border-radius: 999px; padding: 0.15rem 0.7rem; cursor: pointer; font: inherit; font-size: 0.85rem; }
+.chip.on { border-color: var(--accent); color: var(--accent); }
+.relink { color: var(--danger); }
+.attention { list-style: none; margin: 0; padding: 0; }
+.attention li { padding: 0.35rem 0; border-bottom: 1px solid #222; }
+.attention li:last-child { border-bottom: none; }
+.cust-row { border: 1px solid #262626; background: var(--row); padding: 0.6rem 0.8rem; margin: 0.5rem 0; border-radius: 3px; }
+.cust-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.3rem 0 0; }
+.cust-actions form { margin: 0; }
+.cust-actions button, .cust-row > form button { font: inherit; cursor: pointer; }

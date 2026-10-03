@@ -122,8 +122,9 @@ type TypeName struct {
 }
 
 type User struct {
-	ID        int64  `json:"id"`
-	CreatedAt string `json:"created_at"`
+	ID         int64  `json:"id"`
+	CreatedAt  string `json:"created_at"`
+	HomeLayout string `json:"home_layout"`
 }
 
 type WarDetail struct {

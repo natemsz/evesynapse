@@ -1,140 +1,217 @@
 {{define "title"}}Home{{end}}
 {{define "content"}}
-{{if .LoggedIn}}<h1><span class="gt">Character Sheet</span></h1>{{else}}<h1><span class="gt">Welcome</span></h1>{{end}}
+{{if .LoggedIn}}
+<h1><span class="gt">Overview</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .Home}}
+{{if .Home.LoadFailed}}
+<p>Could not load your characters — check the server log.</p>
+{{else if not .Home.HasChars}}
+<p>No characters are linked to this account yet. EveSynapse tracks every character you sign in with here — link one to start.</p>
+<p><a class="btn" href="/auth/eve">Link your first character</a></p>
+{{else if .Home.Customize}}
+<h2>Customize home</h2>
+<p><small>Turn widgets on or off and set their order — every change saves as you go, no JavaScript needed.</small></p>
+
+{{range .Home.Customize.Entries}}
+<div class="cust-row">
+  <strong>{{.Title}}</strong>{{if .Enabled}} <small>· position {{.Position}}</small>{{end}}
+  <p><small>{{.Description}}</small></p>
+  <p class="cust-actions">
+    <form method="post" action="/home/layout">
+      <input type="hidden" name="action" value="toggle">
+      <input type="hidden" name="widget" value="{{.ID}}">
+      <button type="submit">{{if .Enabled}}Remove{{else}}Add{{end}}</button>
+    </form>
+    {{if .Enabled}}
+    <form method="post" action="/home/layout">
+      <input type="hidden" name="action" value="up">
+      <input type="hidden" name="widget" value="{{.ID}}">
+      <button type="submit"{{if not .CanUp}} disabled{{end}}>Move up</button>
+    </form>
+    <form method="post" action="/home/layout">
+      <input type="hidden" name="action" value="down">
+      <input type="hidden" name="widget" value="{{.ID}}">
+      <button type="submit"{{if not .CanDown}} disabled{{end}}>Move down</button>
+    </form>
+    {{end}}
+  </p>
+</div>
+{{end}}
+
+<p>
+  <form method="post" action="/home/layout">
+    <input type="hidden" name="action" value="reset">
+    <button type="submit">Reset to default layout</button>
+  </form>
+  <a class="btn" href="/">Done</a>
+</p>
+{{else}}
+<p class="home-actions">
+  <a class="btn" href="/?customize=1">Customize</a>
+  <a class="btn" href="/auth/eve">Link another character</a>
+</p>
+
+<div class="grid">
+{{range .Home.Widgets}}
+{{if eq .ID "fleet"}}
+<section class="card spanall">
+  <h3>Fleet overview</h3>
+  {{with .Fleet}}
+  <p class="fleet-tools">
+    <input id="fleet-filter" type="search" placeholder="Filter by name, tag, corporation or system…" size="36">
+    {{range .Tags}}<button type="button" class="chip" data-tag="{{.}}">{{.}}</button>{{end}}
+  </p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Character</th><th>Corporation</th><th>Location</th><th>Ship</th><th>Status</th><th>Training</th><th>Wallet</th></tr></thead>
+    <tbody>
+    {{range .Rows}}
+    <tr class="fleet-row" data-search="{{.Search}}">
+      <td><img class="portrait" src="{{.PortraitURL}}" alt="" width="32" height="32"> <a href="/character/?character={{.ID}}">{{.Name}}</a>{{if .Tags}} <small>· {{.Tags}}</small>{{end}}{{if .Relink}} <strong class="relink">re-link needed</strong>{{end}}</td>
+      <td>{{.CorpName}}</td>
+      <td>{{.SystemName}}{{if .DockedName}}<br><small>docked: {{.DockedName}}</small>{{end}}</td>
+      <td>{{.ShipTypeName}}{{if .ShipName}}<br><small>&ldquo;{{.ShipName}}&rdquo;</small>{{end}}</td>
+      <td>{{if .OnlineKnown}}{{if .Online}}<span class="dot on"></span>Online{{else}}<span class="dot off"></span>Offline{{end}}{{if .LastLogin}}<br><small>last login {{.LastLogin}}</small>{{end}}{{else}}—{{end}}</td>
+      <td>{{if .QueueKnown}}{{if .Training}}{{.Training}}{{if .TrainingFinish}} <span class="countdown" data-finish="{{.TrainingFinish}}">{{.TrainingLeft}}</span>{{end}}{{else}}<em>Not training</em>{{end}}{{else}}—{{end}}</td>
+      <td>{{if .WalletKnown}}{{.ISK}} ISK{{else}}—{{end}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  <p class="fleet-nomatch" hidden>No characters match the filter.</p>
+  {{end}}
+</section>
+{{end}}
+
+{{if eq .ID "attention"}}
+<section class="card spanall">
+  <h3>Needs attention</h3>
+  {{with .Attention}}
+  {{if .Items}}
+  <ul class="attention">
+  {{range .Items}}<li><a href="{{.Link}}">{{.Text}}</a>{{if .When}} <small>{{.When}}</small>{{end}}</li>{{end}}
+  </ul>
+  {{if .More}}<p><small>…and {{.More}} more</small></p>{{end}}
+  {{else}}
+  <p><small>All clear — nothing needs you right now.</small></p>
+  {{end}}
+  {{end}}
+</section>
+{{end}}
+
+{{if eq .ID "networth"}}
+<section class="card">
+  <h3>Net worth</h3>
+  {{with .NetWorth}}
+  {{if .Any}}
+  <p class="isk">{{.Total}} <small>ISK</small></p>
+  <div class="tw">
+  <table>
+    <tbody>
+      {{if .Wallet}}<tr><th>Wallets</th><td>{{.Wallet}}</td></tr>{{end}}
+      {{if .AssetsKnown}}<tr><th>Assets</th><td>{{.Assets}}</td></tr>{{else}}<tr><th>Assets</th><td><small>price data still warming</small></td></tr>{{end}}
+      {{if .Escrow}}<tr><th>Order escrow</th><td>{{.Escrow}}</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  <p><small>Estimate{{if .AsOf}} · data as of {{.AsOf}}{{end}}</small></p>
+  {{else}}
+  <p><small>Still warming — balances appear once the worker has synced your characters.</small></p>
+  {{end}}
+  {{end}}
+</section>
+{{end}}
+
+{{if eq .ID "industry"}}
+<section class="card">
+  <h3>Industry</h3>
+  {{with .Industry}}
+  <p><small>{{.ActiveJobs}} active job{{if ne .ActiveJobs 1}}s{{end}}{{if .ReadyJobs}} · {{.ReadyJobs}} ready for delivery{{end}}</small></p>
+  {{if .Rows}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>Character</th><th>Activity</th><th>Product</th><th>Ends</th></tr></thead>
+    <tbody>
+    {{range .Rows}}<tr><td>{{.Char}}</td><td>{{.Activity}}</td><td>{{.Name}}</td><td>{{.Ends}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else}}
+  <p><small>No active jobs right now.</small></p>
+  {{end}}
+  {{end}}
+</section>
+{{end}}
+
+{{if eq .ID "market"}}
+<section class="card">
+  <h3>Market</h3>
+  {{with .Market}}
+  {{if .Open}}
+  <p><strong>{{.Open}}</strong> open orders — {{.SellCount}} sell ({{.SellValue}} ISK) · {{.BuyCount}} buy ({{.BuyValue}} ISK in escrow)</p>
+  {{if .Expiring}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>Character</th><th>Item</th><th>Expires</th></tr></thead>
+    <tbody>
+    {{range .Expiring}}<tr><td>{{.Char}}</td><td>{{.Item}}</td><td>{{.Expires}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+  {{else}}
+  <p><small>No open orders across your characters.</small></p>
+  {{end}}
+  {{end}}
+</section>
+{{end}}
+
+{{if eq .ID "skills"}}
+<section class="card">
+  <h3>Skills</h3>
+  {{with .Skills}}
+  {{if .Finishing}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>Character</th><th>Skill</th><th>Finishes</th></tr></thead>
+    <tbody>
+    {{range .Finishing}}<tr><td>{{.Char}}</td><td>{{.Skill}}</td><td>{{.Finish}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else}}
+  <p><small>No queue data yet.</small></p>
+  {{end}}
+  {{if .NotTraining}}<p><small>{{.NotTraining}} character{{if ne .NotTraining 1}}s{{end}} not training.</small></p>{{end}}
+  {{end}}
+</section>
+{{end}}
+
+{{if eq .ID "server"}}
+<section class="card">
+  <h3>Tranquility</h3>
+  {{if .Server}}<p>Tranquility: {{.Server.Players}} players online</p>{{else}}<p><small>Server status still warming.</small></p>{{end}}
+</section>
+{{end}}
+{{end}}
+</div>
+{{end}}
+{{end}}
+
+{{else}}
+<h1><span class="gt">Welcome</span></h1>
 <p>One-stop EVE Online companion: characters, market, fitting, intel. Rebuilt in Go on ESI + EVE SSO.</p>
 {{if .ServerStatus}}<p><small>Tranquility: {{.ServerStatus.Players}} players online</small></p>{{end}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
-
-{{if .LoggedIn}}
-  {{with .Character}}
-    <h2>{{.Name}}</h2>
-    {{if .PortraitURL}}<p><img class="portrait" src="{{.PortraitURL}}" alt="Portrait of {{.Name}}" width="128" height="128"></p>{{end}}
-    {{if .Fetched}}
-    <div class="tw">
-    <table>
-      <tbody>
-        <tr><th>Corporation</th><td>{{.CorporationName}}</td></tr>
-        <tr><th>Birthday</th><td>{{.Birthday}}</td></tr>
-        <tr><th>Security status</th><td>{{printf "%.2f" .SecurityStatus}}</td></tr>
-      </tbody>
-    </table>
-    </div>
-    {{end}}
-
-    {{if and .Unavailable .Sections}}
-    <p><small>Live ESI data is unavailable right now — showing cached data.</small></p>
-    {{end}}
-
-    {{if or .CurrentlyOK .Sections}}
-    <div class="grid">
-    {{if .CurrentlyOK}}
-    <section class="card">
-    <h3>Currently</h3>
-    <div class="tw">
-    <table>
-      <tbody>
-        <tr><th>System</th><td>{{.SysName}}{{if .DockedName}} · docked at {{.DockedName}}{{end}}</td></tr>
-        {{if .ShipTypeName}}<tr><th>Ship</th><td>{{.ShipTypeName}}{{if .ShipName}} — &ldquo;{{.ShipName}}&rdquo;{{end}}</td></tr>{{end}}
-        {{if .OnlineKnown}}<tr><th>Status</th><td>{{if .Online}}<span class="dot on"></span>Online{{else}}<span class="dot off"></span>Offline{{end}}{{if .LastLogin}} · last login {{.LastLogin}}{{end}}</td></tr>{{end}}
-      </tbody>
-    </table>
-    </div>
-    </section>
-    {{end}}
-
-    {{if .Sections}}
-    <section class="card">
-    <h3>Wallet</h3>
-    {{if .ISKOK}}
-    <p class="isk">{{.ISK}} ISK</p>
-    {{else}}
-    <p><small>Wallet unavailable right now.</small></p>
-    {{end}}
-    </section>
-
-    <section class="card spanall">
-    <h3>Skills</h3>
-    {{if .QueueOK}}
-      {{if .Training}}
-      <p>Currently training: <strong>{{.Training}}</strong>{{if .TrainingFinish}} <span class="countdown" data-finish="{{.TrainingFinish}}">{{.TrainingLeft}}</span>{{end}}</p>
-      {{else}}
-      <p><small>Skill queue is paused or empty.</small></p>
-      {{end}}
-    {{else}}
-    <p><small>Skill queue unavailable right now.</small></p>
-    {{end}}
-    {{if .SkillsOK}}
-    <p>Total SP: <strong>{{.TotalSP}}</strong>{{if .UnallocatedSP}} · {{.UnallocatedSP}} unallocated{{end}}</p>
-    <div class="tw">
-    <table>
-      <thead><tr><th>Skill</th><th>Trained</th><th>Active</th><th>SP</th></tr></thead>
-      <tbody>
-      {{range .Skills}}
-        <tr><td>{{.Name}}</td><td>{{.Trained}}</td><td>{{.Active}}</td><td>{{.SP}}</td></tr>
-      {{end}}
-      </tbody>
-    </table>
-    </div>
-    <p><small>Showing {{.SkillsShown}} of {{.SkillsCount}} skills, heaviest first.</small></p>
-    {{else}}
-    <p><small>Skills unavailable right now.</small></p>
-    {{end}}
-    </section>
-    {{end}}
-    </div>
-    {{end}}
-
-    {{if and (not .Sections) .Unavailable}}
-    <p><small>Live ESI data is unavailable right now (the stored access token may have expired) — showing what we have.</small></p>
-    {{end}}
-  {{else}}
-    <p>You are signed in{{if .CharacterName}} as <strong>{{.CharacterName}}</strong>{{end}}.</p>
-  {{end}}
-  <p>
-    <a class="btn" href="/auth/eve">Link another character</a>
-    <a class="btn" href="/character/">Character</a>
-    <a class="btn" href="/corporations/">Corporation</a>
-    <a class="btn" href="/assets/">Assets</a>
-    <a class="btn" href="/market/">Market</a>
-    <a class="btn" href="/skills/">Skills</a>
-    <a class="btn" href="/fittings/">Fittings</a>
-    <a class="btn" href="/killmails/">Killmails</a>
-    <a class="btn" href="/admin/">Open the admin</a>
-    <a class="btn" href="/auth/logout">Sign out</a>
-  </p>
-{{else}}
-  <p>You are not signed in.</p>
-  <p><a class="btn" href="/auth/eve">Log in with EVE SSO</a></p>
-  {{if not .SSOConfigured}}
-  <p><small>EVE SSO is not configured — set <code>EVE_CLIENT_ID</code> / <code>EVE_CLIENT_SECRET</code> (see <code>.env.example</code>).</small></p>
-  {{end}}
+<p>You are not signed in.</p>
+<p><a class="btn" href="/auth/eve">Log in with EVE SSO</a></p>
+{{if not .SSOConfigured}}
+<p><small>EVE SSO is not configured — set <code>EVE_CLIENT_ID</code> / <code>EVE_CLIENT_SECRET</code> (see <code>.env.example</code>).</small></p>
 {{end}}
-{{if .Character}}{{if .Character.TrainingFinish}}
-<script>
-// Live countdown to the skill-queue finish time. Without JS the
-// server-rendered remainder next to the training line simply stays.
-(function () {
-  var els = document.querySelectorAll("[data-finish]");
-  if (!els.length) return;
-  function fmt(ms) {
-    if (ms <= 0) return "done";
-    var s = Math.floor(ms / 1000);
-    var d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-    if (d > 0) return "in " + d + "d " + h + "h " + m + "m";
-    if (h > 0) return "in " + h + "h " + m + "m";
-    if (m > 0) return "in " + m + "m " + sec + "s";
-    return "in " + sec + "s";
-  }
-  function tick() {
-    for (var i = 0; i < els.length; i++) {
-      var t = Date.parse(els[i].getAttribute("data-finish"));
-      if (!isNaN(t)) els[i].textContent = fmt(t - Date.now());
-    }
-  }
-  tick();
-  setInterval(tick, 1000);
-})();
-</script>
-{{end}}{{end}}
+{{end}}
 {{end}}

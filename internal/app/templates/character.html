@@ -11,6 +11,50 @@
 {{if .CharacterPage}}
   {{if .CharacterPage.Loaded}}
 
+  {{if .CharacterPage.IdentityKnown}}
+  <h2><img class="portrait" src="{{.CharacterPage.PortraitURL}}" alt="">{{.CharacterPage.CharacterName}}</h2>
+  <div class="tw">
+  <table>
+    <tbody>
+      {{if .CharacterPage.CorpName}}<tr><th>Corporation</th><td>{{.CharacterPage.CorpName}}</td></tr>{{end}}
+      {{if .CharacterPage.Birthday}}<tr><th>Born</th><td>{{.CharacterPage.Birthday}}</td></tr>{{end}}
+      {{if .CharacterPage.SecurityStatus}}<tr><th>Security status</th><td>{{.CharacterPage.SecurityStatus}}</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+
+  {{if .CharacterPage.WalletKnown}}
+  <h3>Wallet</h3>
+  <p class="isk">{{.CharacterPage.ISK}} <small>ISK</small></p>
+  {{end}}
+
+  {{if .CharacterPage.QueueKnown}}
+  <h3>Training</h3>
+  {{if .CharacterPage.Training}}
+  <p>{{.CharacterPage.Training}}{{if .CharacterPage.TrainingLeft}} (<span class="countdown" data-finish="{{.CharacterPage.TrainingFinish}}">{{.CharacterPage.TrainingLeft}}</span>){{end}}</p>
+  {{else}}
+  <p><small>Not training — empty queue.</small></p>
+  {{end}}
+  {{end}}
+
+  {{if .CharacterPage.SkillsKnown}}
+  <h3>Skills</h3>
+  <p><small>Total skill points: {{.CharacterPage.TotalSP}}{{if .CharacterPage.UnallocatedSP}} · Unallocated: {{.CharacterPage.UnallocatedSP}}{{end}}{{if .CharacterPage.SkillsCount}} · {{.CharacterPage.SkillsCount}} skills{{if gt .CharacterPage.SkillsCount .CharacterPage.SkillsShown}} (top {{.CharacterPage.SkillsShown}} by SP){{end}}{{end}}</small></p>
+  {{if .CharacterPage.Skills}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>Skill</th><th>Trained</th><th>Active</th><th>SP</th></tr></thead>
+    <tbody>
+    {{range .CharacterPage.Skills}}
+      <tr><td>{{.Name}}</td><td>{{.Trained}}</td><td>{{.Active}}</td><td>{{.SP}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+  {{end}}
+
   {{if .CharacterPage.OnlineKnown}}
   <h3>Status</h3>
   <div class="tw">

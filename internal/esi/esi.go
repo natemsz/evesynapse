@@ -58,6 +58,14 @@ const (
 	SnapWallet     = "wallet"
 	SnapAssets     = "assets"
 
+	// SnapProfile is the public character record (name, birthday,
+	// security status, corporation) warmed like every other
+	// snapshot so no page ever fetches identity live at render —
+	// the old home sheet used to, which broke the cache-only rule.
+	// The endpoint is public, so the payload needs no token; it is
+	// still stored per character like the other kinds.
+	SnapProfile = "profile"
+
 	// Module sweep, cluster 1 (character): live-state endpoints.
 	SnapLocation  = "location"
 	SnapShip      = "ship"
@@ -1061,6 +1069,8 @@ func (c *Client) postJSON(ctx context.Context, accessToken, path string, payload
 // snapshotPath maps a snapshot kind to its ESI path for a character.
 func snapshotPath(characterID int64, kind string) string {
 	switch kind {
+	case SnapProfile:
+		return fmt.Sprintf("/characters/%d/", characterID)
 	case SnapSkills:
 		return fmt.Sprintf("/characters/%d/skills/", characterID)
 	case SnapSkillqueue:

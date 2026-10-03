@@ -54,6 +54,9 @@ var intelSchema string
 //go:embed schema/008_marketable.sql
 var marketableSchema string
 
+//go:embed schema/009_character_foundation.sql
+var characterFoundationSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -271,6 +274,14 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/character", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleCharacter)
+	})
+
+	r.Route("/characters", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleCharacters)
+		r.Get("/switch", app.handleCharacterSwitch)
+		r.Post("/tags", app.handleCharacterTags)
+		r.Post("/unlink", app.handleCharacterUnlink)
 	})
 
 	r.Route("/fittings", func(r chi.Router) {

@@ -49,10 +49,14 @@ func (app *Application) pickCharacter(ctx context.Context, r *http.Request, path
 		}
 		return false
 	}
-	if want, _ := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64); want == 0 || !pick(want) {
-		if sid := int64(app.sessions.GetInt(ctx, sessionCharacterID)); sid == 0 || !pick(sid) {
-			active = characters[0]
-		}
+	if want, _ := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64); want != 0 && pick(want) {
+		// An explicit pick becomes the session's acting
+		// character, so the header switcher and every other
+		// page agree on who is being viewed.
+		app.sessions.Put(ctx, sessionCharacterID, int(active.CharacterID))
+		app.sessions.Put(ctx, sessionCharacterName, active.Name)
+	} else if sid := int64(app.sessions.GetInt(ctx, sessionCharacterID)); sid == 0 || !pick(sid) {
+		active = characters[0]
 	}
 
 	links := make([]assetCharLink, 0, len(characters))
@@ -180,11 +184,11 @@ func (app *Application) handleCharacter(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		log.Printf("character: list characters: %v", err)
 		data.Error = "Could not load character data; check the server log."
-		app.render(w, http.StatusOK, "character.html", data)
+		app.render(ctx, w, http.StatusOK, "character.html", data)
 		return
 	}
 	if links == nil {
-		app.render(w, http.StatusOK, "character.html", data)
+		app.render(ctx, w, http.StatusOK, "character.html", data)
 		return
 	}
 	data.CharChars = links
@@ -193,7 +197,7 @@ func (app *Application) handleCharacter(w http.ResponseWriter, r *http.Request) 
 	data.CharacterPage = view
 	app.fillCharacterView(ctx, active, view)
 
-	app.render(w, http.StatusOK, "character.html", data)
+	app.render(ctx, w, http.StatusOK, "character.html", data)
 }
 
 // fillCharacterView loads every Character-page section from the

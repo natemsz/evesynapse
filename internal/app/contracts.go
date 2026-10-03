@@ -72,11 +72,11 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		log.Printf("contracts: list characters: %v", err)
 		data.Error = "Could not load contract data; check the server log."
-		app.render(w, http.StatusOK, "contracts.html", data)
+		app.render(ctx, w, http.StatusOK, "contracts.html", data)
 		return
 	}
 	if links == nil {
-		app.render(w, http.StatusOK, "contracts.html", data)
+		app.render(ctx, w, http.StatusOK, "contracts.html", data)
 		return
 	}
 	data.ContractsChars = links
@@ -87,7 +87,7 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 	var contracts esi.Contracts
 	view.Contracts = app.econSection(ctx, active.CharacterID, esi.SnapContracts, &contracts)
 	if !view.Contracts.Loaded {
-		app.render(w, http.StatusOK, "contracts.html", data)
+		app.render(ctx, w, http.StatusOK, "contracts.html", data)
 		return
 	}
 
@@ -159,7 +159,7 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 		view.Rows = append(view.Rows, row)
 	}
 
-	app.render(w, http.StatusOK, "contracts.html", data)
+	app.render(ctx, w, http.StatusOK, "contracts.html", data)
 }
 
 // loadContractItems reads one contract's warmed item list from

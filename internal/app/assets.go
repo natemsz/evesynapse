@@ -69,7 +69,7 @@ func (app *Application) handleAssets(w http.ResponseWriter, r *http.Request) {
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
 	if userID == 0 {
 		// Dev-login sessions carry no user; nothing to show.
-		app.render(w, http.StatusOK, "assets.html", data)
+		app.render(ctx, w, http.StatusOK, "assets.html", data)
 		return
 	}
 
@@ -77,11 +77,11 @@ func (app *Application) handleAssets(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("assets: list characters for user %d: %v", userID, err)
 		data.Error = "Could not load asset data; check the server log."
-		app.render(w, http.StatusOK, "assets.html", data)
+		app.render(ctx, w, http.StatusOK, "assets.html", data)
 		return
 	}
 	if len(characters) == 0 {
-		app.render(w, http.StatusOK, "assets.html", data)
+		app.render(ctx, w, http.StatusOK, "assets.html", data)
 		return
 	}
 
@@ -97,10 +97,13 @@ func (app *Application) handleAssets(w http.ResponseWriter, r *http.Request) {
 		}
 		return false
 	}
-	if want, _ := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64); want == 0 || !pick(want) {
-		if sid := int64(app.sessions.GetInt(ctx, sessionCharacterID)); sid == 0 || !pick(sid) {
-			active = characters[0]
-		}
+	if want, _ := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64); want != 0 && pick(want) {
+		// An explicit pick becomes the session's acting
+		// character (see pickCharacter in character.go).
+		app.sessions.Put(ctx, sessionCharacterID, int(active.CharacterID))
+		app.sessions.Put(ctx, sessionCharacterName, active.Name)
+	} else if sid := int64(app.sessions.GetInt(ctx, sessionCharacterID)); sid == 0 || !pick(sid) {
+		active = characters[0]
 	}
 	for _, ch := range characters {
 		data.AssetsChars = append(data.AssetsChars, assetCharLink{
@@ -121,7 +124,7 @@ func (app *Application) handleAssets(w http.ResponseWriter, r *http.Request) {
 		if _, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: active.CharacterID, Kind: esi.SnapAssets}); errors.Is(serr, sql.ErrNoRows) {
 			view.Warming = true
 		}
-		app.render(w, http.StatusOK, "assets.html", data)
+		app.render(ctx, w, http.StatusOK, "assets.html", data)
 		return
 	}
 
@@ -132,7 +135,7 @@ func (app *Application) handleAssets(w http.ResponseWriter, r *http.Request) {
 	}
 	view.Locations = app.buildAssetLocations(ctx, items)
 
-	app.render(w, http.StatusOK, "assets.html", data)
+	app.render(ctx, w, http.StatusOK, "assets.html", data)
 }
 
 // buildAssetLocations groups asset stacks by location, resolves

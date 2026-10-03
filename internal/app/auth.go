@@ -21,8 +21,6 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/oauth2"
-
-	db "evesynapse/internal/db/sqlc"
 )
 
 // Session keys. Values stored via scs are gob-encoded; keep them typed
@@ -221,7 +219,7 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 	}
 	// From here on `token` holds the access/refresh tokens: never log it.
 
-	characterID, characterName, grantedScopes, err := app.verifyAccessToken(ctx, token.AccessToken)
+	characterID, characterName, grantedScopes, ownerHash, err := app.verifyAccessToken(ctx, token.AccessToken)
 	if err != nil {
 		log.Printf("sso callback: access token verification failed: %v", err)
 		fail("verify")
@@ -245,21 +243,26 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 	if !token.Expiry.IsZero() {
 		expiry = token.Expiry.UTC().Format(time.RFC3339)
 	}
-	if _, err := app.queries.UpsertCharacter(ctx, db.UpsertCharacterParams{
-		CharacterID:  characterID,
+	result, err := app.linkVerifiedCharacter(ctx, linkCharacterInput{
 		UserID:       userID,
+		CharacterID:  characterID,
 		Name:         characterName,
+		Scopes:       grantedScopes,
+		OwnerHash:    ownerHash,
 		AccessToken:  token.AccessToken,
 		RefreshToken: token.RefreshToken,
 		TokenExpiry:  sql.NullString{String: expiry, Valid: expiry != ""},
-		Scopes:       grantedScopes,
-		// CachedUntil stays NULL for now: ESI caching is per-endpoint,
-		// while this column models the (single) character-sheet cache.
-		// The live-per-page-load sheet fetch doesn't populate it yet.
-	}); err != nil {
+	})
+	if err != nil {
 		log.Printf("sso callback: store character %d: %v", characterID, err)
 		fail("save")
 		return
+	}
+	if result.Moved {
+		log.Printf("sso: character %d moved to user %d (already linked elsewhere; fresh sign-in wins)", characterID, userID)
+	}
+	if result.OwnerChanged {
+		log.Printf("sso: character %d owner hash changed since the link was verified; flagged for re-verification", characterID)
 	}
 
 	log.Printf("sso: signed in character %d (%s) on user %d", characterID, characterName, userID)
@@ -439,9 +442,10 @@ func publicKeyFromJWK(nB64, eB64 string) (*rsa.PublicKey, error) {
 // verifyAccessToken validates an EVE SSO access token (RS256 JWT)
 // against CCP's JWKS and extracts the character it belongs to. It
 // returns the character ID, the character name from the `name` claim,
-// and the granted scopes (from the `scp` claim, falling back to the
-// requested scopes).
-func (app *Application) verifyAccessToken(ctx context.Context, accessToken string) (characterID int64, characterName, scopes string, err error) {
+// the granted scopes (from the `scp` claim, falling back to the
+// requested scopes), and the character owner hash from the `owner`
+// claim (empty when CCP didn't send one).
+func (app *Application) verifyAccessToken(ctx context.Context, accessToken string) (characterID int64, characterName, scopes, ownerHash string, err error) {
 	claims := jwt.MapClaims{}
 	_, err = jwt.ParseWithClaims(accessToken, claims, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
@@ -454,29 +458,32 @@ func (app *Application) verifyAccessToken(ctx context.Context, accessToken strin
 		return app.jwks.keyFor(ctx, kid)
 	}, jwt.WithValidMethods([]string{"RS256"}))
 	if err != nil {
-		return 0, "", "", err
+		return 0, "", "", "", err
 	}
 
 	iss, err := claims.GetIssuer()
 	if err != nil || iss != eveIssuer {
-		return 0, "", "", fmt.Errorf("unexpected issuer %q", iss)
+		return 0, "", "", "", fmt.Errorf("unexpected issuer %q", iss)
 	}
 
 	sub, err := claims.GetSubject()
 	if err != nil {
-		return 0, "", "", fmt.Errorf("read sub claim: %w", err)
+		return 0, "", "", "", fmt.Errorf("read sub claim: %w", err)
 	}
 	// sub looks like "CHARACTER:EVE:123456789".
 	parts := strings.Split(sub, ":")
 	if len(parts) != 3 || parts[0] != "CHARACTER" || parts[1] != "EVE" {
-		return 0, "", "", fmt.Errorf("unexpected sub claim format")
+		return 0, "", "", "", fmt.Errorf("unexpected sub claim format")
 	}
 	characterID, err = strconv.ParseInt(parts[2], 10, 64)
 	if err != nil {
-		return 0, "", "", fmt.Errorf("parse character id from sub: %w", err)
+		return 0, "", "", "", fmt.Errorf("parse character id from sub: %w", err)
 	}
 
 	characterName, _ = claims["name"].(string)
+	// The owner hash identifies the EVE account currently owning
+	// the character; it changes when the character is transferred.
+	ownerHash, _ = claims["owner"].(string)
 
 	scopes = strings.Join(eveScopes, " ")
 	if scp, ok := claims["scp"].([]any); ok && len(scp) > 0 {
@@ -490,5 +497,5 @@ func (app *Application) verifyAccessToken(ctx context.Context, accessToken strin
 			scopes = strings.Join(granted, " ")
 		}
 	}
-	return characterID, characterName, scopes, nil
+	return characterID, characterName, scopes, ownerHash, nil
 }

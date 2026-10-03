@@ -298,6 +298,19 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		}
 	}
 
+	// Market pass (Phase 5): price-history warming for
+	// watchlists/wants/order types, and per-order health from
+	// regional books. Public data, but it spends from the same
+	// cycle allowance; with the budget gone it only prunes.
+	if !limited {
+		mStored, mLimited := app.refreshMarketData(ctx, characters, allowance)
+		refreshed += mStored
+		if mLimited {
+			log.Printf("worker: ESI error limit hit refreshing market data; backing off until next cycle")
+			limited = true
+		}
+	}
+
 	// Name warm-up: resolve whatever the local caches still lack —
 	// type names (persisted in type_names), type→group links, group
 	// names, station/system names — from the characters' latest

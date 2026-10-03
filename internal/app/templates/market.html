@@ -25,6 +25,56 @@
   Spread: {{$item.Spread}}{{end}}</p>
 
   <section class="foldable">
+  <h3>Price history — {{$item.RegionName}}</h3>
+  {{if $item.Chart}}
+  {{$c := $item.Chart}}
+  <svg viewBox="0 0 {{$c.Width}} {{$c.Height}}" width="100%" role="img" aria-label="Daily average price and volume, last 90 days" preserveAspectRatio="none" style="max-width:720px">
+    <line x1="0" y1="{{$c.BaseY}}" x2="{{$c.Width}}" y2="{{$c.BaseY}}" stroke="#3a2a1a" stroke-width="1"/>
+    <line x1="0" y1="{{$c.TopY}}" x2="{{$c.Width}}" y2="{{$c.TopY}}" stroke="#241708" stroke-width="1"/>
+    {{range $c.Bars}}<rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" fill="#d63c14" fill-opacity="0.55"/>{{end}}
+    {{if $c.Points}}<polyline points="{{$c.Points}}" fill="none" stroke="#ffb84d" stroke-width="1.5"/>{{end}}
+    {{range $c.Dots}}<circle cx="{{.X}}" cy="{{.Y}}" r="1.6" fill="#ffb84d"/>{{end}}
+    <text x="2" y="11" font-size="11" fill="#c9a06a">high {{$c.MaxISK}} ISK</text>
+    <text x="2" y="{{$c.Height}}" font-size="11" fill="#c9a06a">low {{$c.MinISK}} ISK</text>
+    <text x="{{$c.Width}}" y="{{$c.Height}}" font-size="11" fill="#c9a06a" text-anchor="end">{{$c.From}} → {{$c.To}}</text>
+  </svg>
+  {{if $item.Stats}}
+  <p><small>Last {{$item.Stats.Days}} days in {{$item.RegionName}}: average {{$item.Stats.Mean}} ISK · low {{$item.Stats.Min}} · high {{$item.Stats.Max}} · latest {{$item.Stats.Latest}} ({{$item.Stats.LastDay}}){{if $item.Change7}} · 7 days {{$item.Change7}}{{end}}{{if $item.Change30}} · 30 days {{$item.Change30}}{{end}}</small></p>
+  {{end}}
+  {{else}}
+  <p><small>Price history is still loading for this item — it fills in on its own, check back soon.</small></p>
+  {{end}}
+  {{if $item.Watched}}
+  <form method="post" action="/market/watch">
+    <input type="hidden" name="action" value="update">
+    <input type="hidden" name="type" value="{{$item.TypeID}}">
+    <input type="hidden" name="region" value="{{$item.RegionID}}">
+    <input type="hidden" name="next" value="/market/?type={{$item.TypeID}}&region={{$item.RegionID}}">
+    <label><small>Watching in {{$item.RegionName}} — alert me at</small>
+      <input type="number" name="threshold" min="1" max="50" step="any" value="{{$item.WatchThreshold}}" size="4">
+      <small>% over 7 days</small></label>
+    <button class="btn" type="submit">Update watch</button>
+  </form>
+  <form method="post" action="/market/watch">
+    <input type="hidden" name="action" value="remove">
+    <input type="hidden" name="type" value="{{$item.TypeID}}">
+    <input type="hidden" name="region" value="{{$item.RegionID}}">
+    <input type="hidden" name="next" value="/market/?type={{$item.TypeID}}&region={{$item.RegionID}}">
+    <button class="btn" type="submit">Stop watching</button>
+  </form>
+  {{else}}
+  <form method="post" action="/market/watch">
+    <input type="hidden" name="action" value="add">
+    <input type="hidden" name="type" value="{{$item.TypeID}}">
+    <input type="hidden" name="region" value="{{$item.RegionID}}">
+    <input type="hidden" name="threshold" value="5">
+    <input type="hidden" name="next" value="/market/?type={{$item.TypeID}}&region={{$item.RegionID}}">
+    <button class="btn" type="submit">Watch this item</button>
+  </form>
+  {{end}}
+  </section>
+
+  <section class="foldable">
   <h3>Sell orders — {{$item.RegionName}}</h3>
   <div class="tw">
   <table>
@@ -68,6 +118,90 @@
   <p>No items matched "{{.Market.Query}}".</p>
 {{else}}
   <p><small>Search for an item to see its guide prices and regional order books.</small></p>
+{{end}}
+
+{{if .Market.Watchlist}}
+{{$wl := .Market.Watchlist}}
+<section class="foldable">
+<h3>Watchlist</h3>
+<form method="get" action="/market/">
+  <input type="text" name="wq" value="{{$wl.Query}}" placeholder="Find an item to watch" autocomplete="off">
+  <button class="btn" type="submit">Find</button>
+</form>
+{{if $wl.Matches}}
+<p>{{range $i, $m := $wl.Matches}}{{if $i}} · {{end}}{{$m.Name}}
+  <form method="post" action="/market/watch" style="display:inline">
+    <input type="hidden" name="action" value="add">
+    <input type="hidden" name="type" value="{{$m.ID}}">
+    <input type="hidden" name="region" value="{{$.Market.Region}}">
+    <input type="hidden" name="threshold" value="5">
+    <input type="hidden" name="next" value="/market/">
+    <button class="btn" type="submit">Watch</button>
+  </form>{{end}}</p>
+{{end}}
+{{if $wl.Rows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th>Region</th><th>Average</th><th>7 days</th><th>30 days</th><th>Status</th><th>Alert at</th><th></th></tr></thead>
+  <tbody>
+  {{range $wl.Rows}}
+    <tr>
+      <td><a href="/market/?type={{.TypeID}}&region={{.RegionID}}">{{.Name}}</a></td>
+      <td>{{.Region}}</td>
+      <td>{{.Current}}</td>
+      <td>{{.Change7}}</td>
+      <td>{{.Change30}}</td>
+      <td>{{if .Moving}}<strong>{{.MoveText}}</strong>{{else}}Calm{{end}}</td>
+      <td>
+        <form method="post" action="/market/watch">
+          <input type="hidden" name="action" value="update">
+          <input type="hidden" name="type" value="{{.TypeID}}">
+          <input type="hidden" name="region" value="{{.RegionID}}">
+          <input type="hidden" name="next" value="/market/">
+          <input type="number" name="threshold" min="1" max="50" step="any" value="{{.Threshold}}" size="4">%
+          <button class="btn" type="submit">Set</button>
+        </form>
+      </td>
+      <td>
+        <form method="post" action="/market/watch">
+          <input type="hidden" name="action" value="remove">
+          <input type="hidden" name="type" value="{{.TypeID}}">
+          <input type="hidden" name="region" value="{{.RegionID}}">
+          <input type="hidden" name="next" value="/market/">
+          <button class="btn" type="submit">Remove</button>
+        </form>
+      </td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p><small>Nothing watched yet — watch an item and you'll hear about it here and on Home when its price moves.</small></p>
+{{end}}
+</section>
+{{end}}
+
+{{if .Market.YourOrders}}
+<section class="foldable">
+<h3>Your orders</h3>
+<div class="tw">
+<table>
+  <thead><tr><th>Character</th><th>Item</th><th>Price</th><th>Location</th><th>Status</th></tr></thead>
+  <tbody>
+  {{range .Market.YourOrders}}
+    <tr>
+      <td>{{.Char}}</td>
+      <td>{{.Item}}</td>
+      <td>{{.Price}}</td>
+      <td>{{.Location}}</td>
+      <td>{{if .Bad}}<strong>{{.Status}}</strong>{{else}}{{.Status}}{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+</section>
 {{end}}
 {{end}}
 {{end}}

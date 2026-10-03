@@ -66,6 +66,51 @@ type KillmailDetail struct {
 	FetchedAt   string `json:"fetched_at"`
 }
 
+type MarketFetchState struct {
+	Kind        string `json:"kind"`
+	State       string `json:"state"`
+	Detail      string `json:"detail"`
+	AttemptedAt string `json:"attempted_at"`
+}
+
+type MarketHistory struct {
+	RegionID   int64   `json:"region_id"`
+	TypeID     int64   `json:"type_id"`
+	Date       string  `json:"date"`
+	Average    float64 `json:"average"`
+	Highest    float64 `json:"highest"`
+	Lowest     float64 `json:"lowest"`
+	Volume     int64   `json:"volume"`
+	OrderCount int64   `json:"order_count"`
+}
+
+type MarketHistoryWant struct {
+	RegionID        int64  `json:"region_id"`
+	TypeID          int64  `json:"type_id"`
+	LastRequestedAt string `json:"last_requested_at"`
+}
+
+type MarketWatchlist struct {
+	UserID       int64   `json:"user_id"`
+	TypeID       int64   `json:"type_id"`
+	RegionID     int64   `json:"region_id"`
+	ThresholdPct float64 `json:"threshold_pct"`
+	CreatedAt    string  `json:"created_at"`
+}
+
+type OrderHealth struct {
+	CharacterID int64   `json:"character_id"`
+	OrderID     int64   `json:"order_id"`
+	TypeID      int64   `json:"type_id"`
+	RegionID    int64   `json:"region_id"`
+	LocationID  int64   `json:"location_id"`
+	MyPrice     float64 `json:"my_price"`
+	StationBest float64 `json:"station_best"`
+	RegionBest  float64 `json:"region_best"`
+	Status      string  `json:"status"`
+	ComputedAt  string  `json:"computed_at"`
+}
+
 type SdeBlueprint struct {
 	BlueprintTypeID          int64 `json:"blueprint_type_id"`
 	ProductTypeID            int64 `json:"product_type_id"`

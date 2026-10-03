@@ -512,3 +512,103 @@ UPDATE skill_plan_items SET position = ? WHERE plan_id = ? AND skill_type_id = ?
 
 -- name: DeleteSkillPlanItem :exec
 DELETE FROM skill_plan_items WHERE plan_id = ? AND skill_type_id = ?;
+
+-- ---------------------------------------------------------------------
+-- Market history + alerts (schema 013): daily aggregates, wants,
+-- fetch state, the watchlist, and worker-computed order health.
+-- ---------------------------------------------------------------------
+
+-- name: UpsertMarketHistory :exec
+INSERT OR REPLACE INTO market_history (region_id, type_id, date, average, highest, lowest, volume, order_count)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: ListMarketHistory :many
+SELECT region_id, type_id, date, average, highest, lowest, volume, order_count
+FROM market_history
+WHERE region_id = ? AND type_id = ? AND date >= ?
+ORDER BY date ASC;
+
+-- name: UpsertMarketHistoryWant :exec
+INSERT INTO market_history_wants (region_id, type_id, last_requested_at)
+VALUES (?, ?, ?)
+ON CONFLICT (region_id, type_id) DO UPDATE SET
+    last_requested_at = excluded.last_requested_at;
+
+-- name: ListMarketHistoryWants :many
+SELECT region_id, type_id, last_requested_at
+FROM market_history_wants
+WHERE last_requested_at >= ?
+ORDER BY region_id, type_id;
+
+-- name: GetMarketFetchState :one
+SELECT kind, state, detail, attempted_at
+FROM market_fetch_state
+WHERE kind = ?;
+
+-- name: UpsertMarketFetchState :exec
+INSERT INTO market_fetch_state (kind, state, detail, attempted_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (kind) DO UPDATE SET
+    state        = excluded.state,
+    detail       = excluded.detail,
+    attempted_at = excluded.attempted_at;
+
+-- name: ListWatchlistByUser :many
+SELECT user_id, type_id, region_id, threshold_pct, created_at
+FROM market_watchlist
+WHERE user_id = ?
+ORDER BY type_id, region_id;
+
+-- name: ListAllWatchlistEntries :many
+SELECT user_id, type_id, region_id, threshold_pct, created_at
+FROM market_watchlist
+ORDER BY type_id, region_id;
+
+-- name: GetWatchlistEntry :one
+SELECT user_id, type_id, region_id, threshold_pct, created_at
+FROM market_watchlist
+WHERE user_id = ? AND type_id = ? AND region_id = ?;
+
+-- name: UpsertWatchlistEntry :exec
+INSERT INTO market_watchlist (user_id, type_id, region_id, threshold_pct, created_at)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (user_id, type_id, region_id) DO UPDATE SET
+    threshold_pct = excluded.threshold_pct;
+
+-- name: DeleteWatchlistEntry :exec
+DELETE FROM market_watchlist
+WHERE user_id = ? AND type_id = ? AND region_id = ?;
+
+-- name: UpsertOrderHealth :exec
+INSERT INTO order_health (character_id, order_id, type_id, region_id, location_id, my_price, station_best, region_best, status, computed_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (character_id, order_id) DO UPDATE SET
+    type_id      = excluded.type_id,
+    region_id    = excluded.region_id,
+    location_id  = excluded.location_id,
+    my_price     = excluded.my_price,
+    station_best = excluded.station_best,
+    region_best  = excluded.region_best,
+    status       = excluded.status,
+    computed_at  = excluded.computed_at;
+
+-- name: DeleteOrderHealthForCharacter :exec
+DELETE FROM order_health
+WHERE character_id = ?;
+
+-- name: DeleteOrderHealthEntry :exec
+DELETE FROM order_health
+WHERE character_id = ? AND order_id = ?;
+
+-- name: ListOrderHealthByCharacter :many
+SELECT character_id, order_id, type_id, region_id, location_id, my_price, station_best, region_best, status, computed_at
+FROM order_health
+WHERE character_id = ?
+ORDER BY type_id, order_id;
+
+-- name: ListOrderHealthByUser :many
+SELECT oh.character_id, oh.order_id, oh.type_id, oh.region_id, oh.location_id, oh.my_price, oh.station_best, oh.region_best, oh.status, oh.computed_at
+FROM order_health oh
+JOIN characters c ON c.character_id = oh.character_id
+WHERE c.user_id = ?
+ORDER BY c.name, oh.type_id, oh.order_id;

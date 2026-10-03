@@ -11,6 +11,23 @@ import (
 	"strings"
 )
 
+const countSDEBlueprints = `-- name: CountSDEBlueprints :one
+
+SELECT COUNT(*) FROM sde_blueprints
+`
+
+// ---------------------------------------------------------------------
+// Phase 3 (schema 011): industry build planner reads. Bulk import
+// inserts stay hand-rolled in the SDE importer alongside the other
+// sde_* tables; only reads live here.
+// ---------------------------------------------------------------------
+func (q *Queries) CountSDEBlueprints(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSDEBlueprints)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countSDECategories = `-- name: CountSDECategories :one
 SELECT COUNT(*) FROM sde_categories
 `
@@ -249,6 +266,46 @@ func (q *Queries) GetKillmailDetail(ctx context.Context, killmailID int64) (Kill
 		&i.Hash,
 		&i.Payload,
 		&i.FetchedAt,
+	)
+	return i, err
+}
+
+const getSDEBlueprint = `-- name: GetSDEBlueprint :one
+SELECT blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds
+FROM sde_blueprints
+WHERE blueprint_type_id = ?
+`
+
+func (q *Queries) GetSDEBlueprint(ctx context.Context, blueprintTypeID int64) (SdeBlueprint, error) {
+	row := q.db.QueryRowContext(ctx, getSDEBlueprint, blueprintTypeID)
+	var i SdeBlueprint
+	err := row.Scan(
+		&i.BlueprintTypeID,
+		&i.ProductTypeID,
+		&i.ProductQuantity,
+		&i.MaxProductionLimit,
+		&i.ManufacturingTimeSeconds,
+	)
+	return i, err
+}
+
+const getSDEBlueprintForProduct = `-- name: GetSDEBlueprintForProduct :one
+SELECT blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds
+FROM sde_blueprints
+WHERE product_type_id = ?
+ORDER BY blueprint_type_id
+LIMIT 1
+`
+
+func (q *Queries) GetSDEBlueprintForProduct(ctx context.Context, productTypeID int64) (SdeBlueprint, error) {
+	row := q.db.QueryRowContext(ctx, getSDEBlueprintForProduct, productTypeID)
+	var i SdeBlueprint
+	err := row.Scan(
+		&i.BlueprintTypeID,
+		&i.ProductTypeID,
+		&i.ProductQuantity,
+		&i.MaxProductionLimit,
+		&i.ManufacturingTimeSeconds,
 	)
 	return i, err
 }
@@ -799,6 +856,74 @@ func (q *Queries) ListPlanetLayoutsForUser(ctx context.Context, userID int64) ([
 	return items, nil
 }
 
+const listSDEBlueprintMaterials = `-- name: ListSDEBlueprintMaterials :many
+SELECT material_type_id, quantity FROM sde_blueprint_materials
+WHERE blueprint_type_id = ?
+ORDER BY material_type_id
+`
+
+type ListSDEBlueprintMaterialsRow struct {
+	MaterialTypeID int64 `json:"material_type_id"`
+	Quantity       int64 `json:"quantity"`
+}
+
+func (q *Queries) ListSDEBlueprintMaterials(ctx context.Context, blueprintTypeID int64) ([]ListSDEBlueprintMaterialsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDEBlueprintMaterials, blueprintTypeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDEBlueprintMaterialsRow
+	for rows.Next() {
+		var i ListSDEBlueprintMaterialsRow
+		if err := rows.Scan(&i.MaterialTypeID, &i.Quantity); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDEBlueprintSkills = `-- name: ListSDEBlueprintSkills :many
+SELECT skill_type_id, level FROM sde_blueprint_skills
+WHERE blueprint_type_id = ?
+ORDER BY level DESC, skill_type_id
+`
+
+type ListSDEBlueprintSkillsRow struct {
+	SkillTypeID int64 `json:"skill_type_id"`
+	Level       int64 `json:"level"`
+}
+
+func (q *Queries) ListSDEBlueprintSkills(ctx context.Context, blueprintTypeID int64) ([]ListSDEBlueprintSkillsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDEBlueprintSkills, blueprintTypeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDEBlueprintSkillsRow
+	for rows.Next() {
+		var i ListSDEBlueprintSkillsRow
+		if err := rows.Scan(&i.SkillTypeID, &i.Level); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDECategoriesWithCounts = `-- name: ListSDECategoriesWithCounts :many
 SELECT c.category_id, c.name, COUNT(t.type_id) AS type_count
 FROM sde_categories c
@@ -1089,6 +1214,44 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	for rows.Next() {
 		var i User
 		if err := rows.Scan(&i.ID, &i.CreatedAt, &i.HomeLayout); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchManufacturableProducts = `-- name: SearchManufacturableProducts :many
+SELECT t.type_id, t.name, b.blueprint_type_id
+FROM sde_blueprints b
+JOIN sde_types t ON t.type_id = b.product_type_id
+WHERE t.published = 1 AND instr(lower(t.name), lower(?1)) > 0
+ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT 50
+`
+
+type SearchManufacturableProductsRow struct {
+	TypeID          int64  `json:"type_id"`
+	Name            string `json:"name"`
+	BlueprintTypeID int64  `json:"blueprint_type_id"`
+}
+
+func (q *Queries) SearchManufacturableProducts(ctx context.Context, lower string) ([]SearchManufacturableProductsRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchManufacturableProducts, lower)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchManufacturableProductsRow
+	for rows.Next() {
+		var i SearchManufacturableProductsRow
+		if err := rows.Scan(&i.TypeID, &i.Name, &i.BlueprintTypeID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

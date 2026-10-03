@@ -60,6 +60,9 @@ var characterFoundationSchema string
 //go:embed schema/010_home_overview.sql
 var homeLayoutSchema string
 
+//go:embed schema/011_industry_planner.sql
+var industryPlannerSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -339,6 +342,11 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/industry", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleIndustry)
+	})
+
+	r.Route("/planner", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handlePlanner)
 	})
 
 	r.Route("/intel", func(r chi.Router) {

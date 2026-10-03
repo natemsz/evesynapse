@@ -34,6 +34,7 @@ type pageData struct {
 	ContractsChars  []assetCharLink
 	Industry        *industryView
 	IndustryChars   []assetCharLink
+	Planner         *plannerView
 	IntelWars       *warsView
 	IntelIncursions *incursionsView
 	IntelFW         *fwView
@@ -115,7 +116,7 @@ func sectionForPage(page string) string {
 	case "character.html", "skills.html", "fittings.html", "killmails.html", "characters.html",
 		"mail.html", "calendar.html", "contacts.html":
 		return "character"
-	case "assets.html", "industry.html", "planets.html":
+	case "assets.html", "industry.html", "planets.html", "planner.html":
 		return "assets"
 	case "market.html", "wallet.html", "orders.html", "contracts.html", "items.html":
 		return "economy"

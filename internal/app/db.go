@@ -153,6 +153,18 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 011 (Phase 3 industry planner: blueprint static
+	// data), applied the same guarded way: only when its table
+	// doesn't exist yet.
+	var plannerTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sde_blueprints'`).Scan(&plannerTables); err != nil {
+		return nil, err
+	}
+	if plannerTables == 0 {
+		if err := applySchema(conn, industryPlannerSchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

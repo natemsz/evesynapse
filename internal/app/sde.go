@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -33,7 +34,12 @@ import (
 // EVE_SDE_BASE_URL overrides the base for mirrors.
 // ---------------------------------------------------------------------------
 
-// sdeFileNames are the six dump tables EveSynapse imports.
+// sdeFileNames are the dump tables EveSynapse imports: the six
+// base tables, plus the four industry tables the build planner
+// (schema 011) reads. industryActivitySkills.csv is deliberately
+// NOT in this list: it only seasons the planner with required
+// skills, so a dump or mirror lacking it must not fail the whole
+// import — importSDE fetches it best-effort instead.
 var sdeFileNames = []string{
 	"invTypes.csv",
 	"invGroups.csv",
@@ -41,7 +47,15 @@ var sdeFileNames = []string{
 	"staStations.csv",
 	"mapSolarSystems.csv",
 	"mapRegions.csv",
+	"industryBlueprints.csv",
+	"industryActivity.csv",
+	"industryActivityProducts.csv",
+	"industryActivityMaterials.csv",
 }
+
+// sdeSkillsFileName is the optional fifth industry file (see
+// sdeFileNames).
+const sdeSkillsFileName = "industryActivitySkills.csv"
 
 // sdeHTTPClient downloads the dump files. No total timeout (the
 // types table is ~20 MB); each request carries its own context
@@ -174,13 +188,22 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 		app.startSDEImport("initial")
 		return
 	}
-	// One-time backfill: databases imported before schema 008 have
-	// no market-group/published values, so re-import once (the
-	// store writes the marker when it lands). Retries on later
-	// ticks while an import keeps failing.
-	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "2" {
-		log.Printf("sde: static data predates market columns — re-importing to backfill")
-		app.startSDEImport("schema-008 backfill")
+	// One-time backfills: databases imported before schema 008
+	// have no market-group/published values, and anything stored
+	// before schema 011 lacks the planner's industry tables, so
+	// re-import once (the store writes the marker when it lands).
+	// Retries on later ticks while an import keeps failing.
+	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "3" {
+		log.Printf("sde: static data predates current columns — re-importing to backfill")
+		app.startSDEImport("schema-011 backfill")
+		return
+	}
+	// Even with a current marker, an empty planner table (say the
+	// tables were cleared by hand) refills here rather than
+	// waiting for the weekly tick.
+	if n, err := app.queries.CountSDEBlueprints(ctx); err == nil && n == 0 {
+		log.Printf("sde: planner tables empty — importing industry data")
+		app.startSDEImport("planner backfill")
 		return
 	}
 	if last, err := app.sdeMeta(ctx, "last_check_at"); err == nil && last != "" {
@@ -219,7 +242,7 @@ func normalizeETag(etag string) string {
 	return inner
 }
 
-// sdeRemoteChanged reports whether any of the six dump files
+// sdeRemoteChanged reports whether any of the dump files
 // differs from the markers recorded at the last import. ETag wins
 // when both sides have one; Last-Modified is the fallback. Missing
 // stored markers (never imported) count as changed.
@@ -275,7 +298,7 @@ func (app *Application) headSDEFile(ctx context.Context, name string) (fileMarke
 }
 
 // ---------------------------------------------------------------------------
-// Import: download + parse all six tables, then replace the sde_*
+// Import: download + parse all dump tables, then replace the sde_*
 // contents in one transaction (deletes + bulk inserts + meta). The
 // tables are never touched until every file downloaded and parsed
 // cleanly, so a failed import leaves the previous data intact.
@@ -297,14 +320,27 @@ func (app *Application) importSDE(ctx context.Context) error {
 		parsed.markers[name] = marker
 	}
 
+	// The skills file is best-effort (see sdeFileNames): its
+	// absence or a parse hiccup must not fail an otherwise good
+	// import — the planner just shows no required skills.
+	if marker, err := app.fetchAndParseSDEFile(ctx, base, sdeSkillsFileName, parsed); err != nil {
+		log.Printf("sde: optional %s unavailable, continuing without it: %v", sdeSkillsFileName, err)
+	} else {
+		parsed.markers[sdeSkillsFileName] = marker
+	}
+	parsed.buildIndustryRows()
+
 	// A real dump never has an empty table; an empty parse means
 	// the file layout changed under us, and storing it would wipe
-	// good data for bad.
+	// good data for bad. The planner's blueprint table is held to
+	// the same rule (the skills table is not: it is optional).
 	if len(parsed.types) == 0 || len(parsed.groups) == 0 || len(parsed.categories) == 0 ||
-		len(parsed.stations) == 0 || len(parsed.systems) == 0 || len(parsed.regions) == 0 {
-		return fmt.Errorf("parsed dump has empty table(s): %d types, %d groups, %d categories, %d stations, %d systems, %d regions",
+		len(parsed.stations) == 0 || len(parsed.systems) == 0 || len(parsed.regions) == 0 ||
+		len(parsed.blueprints) == 0 {
+		return fmt.Errorf("parsed dump has empty table(s): %d types, %d groups, %d categories, %d stations, %d systems, %d regions, %d blueprints",
 			len(parsed.types), len(parsed.groups), len(parsed.categories),
-			len(parsed.stations), len(parsed.systems), len(parsed.regions))
+			len(parsed.stations), len(parsed.systems), len(parsed.regions),
+			len(parsed.blueprints))
 	}
 
 	app.updateSDEStatus(func(s *sdeStatus) {
@@ -326,7 +362,10 @@ func (app *Application) importSDE(ctx context.Context) error {
 }
 
 // parsedSDE holds one full dump in memory, ready for the replace
-// transaction, plus each file's remote freshness markers.
+// transaction, plus each file's remote freshness markers. The
+// industry tables parse into intermediate maps (the blueprint row
+// joins three files) and are flattened by buildIndustryRows once
+// every file is in.
 type parsedSDE struct {
 	types      []sdeTypeRow
 	groups     []sdeGroupRow
@@ -335,6 +374,43 @@ type parsedSDE struct {
 	systems    []sdeSystemRow
 	regions    []sdeRegionRow
 	markers    map[string]fileMarker
+
+	// Industry (schema 011): per-blueprint joins over the four
+	// industry files, keyed by blueprint type ID, plus the flat
+	// material/skill rows and the joined blueprint rows.
+	indMaxLimit map[int64]int64
+	indTime     map[int64]int64 // activityID 1 seconds per run
+	indProduct  map[int64]sdeIndustryProduct
+	indMats     map[[2]int64]int64 // (blueprint, material) → base qty per run
+	indSkills   map[[2]int64]int64 // (blueprint, skill) → required level
+	blueprints  []sdeBlueprintRow
+	bpMaterials []sdeBlueprintMaterialRow
+	bpSkills    []sdeBlueprintSkillRow
+}
+
+type sdeIndustryProduct struct {
+	productTypeID int64
+	quantity      int64 // units produced per run
+}
+
+type sdeBlueprintRow struct {
+	blueprintTypeID          int64
+	productTypeID            int64
+	productQuantity          int64
+	maxProductionLimit       int64
+	manufacturingTimeSeconds int64
+}
+
+type sdeBlueprintMaterialRow struct {
+	blueprintTypeID int64
+	materialTypeID  int64
+	quantity        int64
+}
+
+type sdeBlueprintSkillRow struct {
+	blueprintTypeID int64
+	skillTypeID     int64
+	level           int64
 }
 
 type sdeTypeRow struct {
@@ -457,6 +533,16 @@ func parseSDEFile(name string, body io.Reader, parsed *parsedSDE) error {
 		parsed.systems, err = parseSDESystems(cr, idx)
 	case "mapRegions.csv":
 		parsed.regions, err = parseSDERegions(cr, idx)
+	case "industryBlueprints.csv":
+		err = parseSDEIndustryBlueprints(cr, idx, parsed)
+	case "industryActivity.csv":
+		err = parseSDEIndustryActivity(cr, idx, parsed)
+	case "industryActivityProducts.csv":
+		err = parseSDEIndustryActivityProducts(cr, idx, parsed)
+	case "industryActivityMaterials.csv":
+		err = parseSDEIndustryActivityMaterials(cr, idx, parsed)
+	case sdeSkillsFileName:
+		err = parseSDEIndustryActivitySkills(cr, idx, parsed)
 	default:
 		err = fmt.Errorf("unknown SDE file %q", name)
 	}
@@ -661,6 +747,185 @@ func parseSDERegions(cr *csv.Reader, idx map[string]int) ([]sdeRegionRow, error)
 	return rows, err
 }
 
+// ---------------------------------------------------------------------------
+// Industry files (schema 011, the build planner). All four keep
+// only the manufacturing activity (activityID 1): invention,
+// research and reactions live in the same files under other
+// activity IDs and are not the planner's business. The blueprint
+// row joins industryBlueprints (production limit),
+// industryActivity (base time) and industryActivityProducts (what
+// one run makes); buildIndustryRows flattens the maps into sorted
+// rows once every file is parsed.
+// ---------------------------------------------------------------------------
+
+func parseSDEIndustryBlueprints(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error {
+	if parsed.indMaxLimit == nil {
+		parsed.indMaxLimit = make(map[int64]int64)
+	}
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		id, err := csvID(rec, idx, "typeID")
+		if err != nil {
+			return errSkipRow
+		}
+		parsed.indMaxLimit[id] = csvIDOrZero(rec, idx, "maxProductionLimit")
+		return nil
+	})
+	return err
+}
+
+func parseSDEIndustryActivity(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error {
+	if parsed.indTime == nil {
+		parsed.indTime = make(map[int64]int64)
+	}
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		if csvIDOrZero(rec, idx, "activityID") != 1 {
+			return nil // manufacturing only
+		}
+		id, err := csvID(rec, idx, "typeID")
+		if err != nil {
+			return errSkipRow
+		}
+		parsed.indTime[id] = csvIDOrZero(rec, idx, "time")
+		return nil
+	})
+	return err
+}
+
+func parseSDEIndustryActivityProducts(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error {
+	if parsed.indProduct == nil {
+		parsed.indProduct = make(map[int64]sdeIndustryProduct)
+	}
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		if csvIDOrZero(rec, idx, "activityID") != 1 {
+			return nil // manufacturing only
+		}
+		id, err := csvID(rec, idx, "typeID")
+		if err != nil {
+			return errSkipRow
+		}
+		// The dump carries exactly one manufacturing product per
+		// blueprint; first row wins should that ever change.
+		if _, seen := parsed.indProduct[id]; seen {
+			return nil
+		}
+		qty := csvIDOrZero(rec, idx, "quantity")
+		if qty < 1 {
+			qty = 1
+		}
+		parsed.indProduct[id] = sdeIndustryProduct{
+			productTypeID: csvIDOrZero(rec, idx, "productTypeID"),
+			quantity:      qty,
+		}
+		return nil
+	})
+	return err
+}
+
+func parseSDEIndustryActivityMaterials(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error {
+	if parsed.indMats == nil {
+		parsed.indMats = make(map[[2]int64]int64)
+	}
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		if csvIDOrZero(rec, idx, "activityID") != 1 {
+			return nil // manufacturing only
+		}
+		bpID, err := csvID(rec, idx, "typeID")
+		if err != nil {
+			return errSkipRow
+		}
+		matID := csvIDOrZero(rec, idx, "materialTypeID")
+		if matID == 0 {
+			return errSkipRow
+		}
+		// Duplicate (blueprint, material) rows add up rather than
+		// colliding on the primary key at store time.
+		parsed.indMats[[2]int64{bpID, matID}] += csvIDOrZero(rec, idx, "quantity")
+		return nil
+	})
+	return err
+}
+
+func parseSDEIndustryActivitySkills(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error {
+	if parsed.indSkills == nil {
+		parsed.indSkills = make(map[[2]int64]int64)
+	}
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		if csvIDOrZero(rec, idx, "activityID") != 1 {
+			return nil // manufacturing only
+		}
+		bpID, err := csvID(rec, idx, "typeID")
+		if err != nil {
+			return errSkipRow
+		}
+		skillID := csvIDOrZero(rec, idx, "skillID")
+		if skillID == 0 {
+			return errSkipRow
+		}
+		key := [2]int64{bpID, skillID}
+		if lvl := csvIDOrZero(rec, idx, "level"); lvl > parsed.indSkills[key] {
+			parsed.indSkills[key] = lvl
+		}
+		return nil
+	})
+	return err
+}
+
+// buildIndustryRows flattens the parsed industry maps into the
+// sorted row slices storeSDE inserts. A blueprint becomes a
+// planner row only when the dump gives it a manufacturing
+// product; the production limit and base time default to 0 when
+// their files don't mention the blueprint.
+func (parsed *parsedSDE) buildIndustryRows() {
+	parsed.blueprints = parsed.blueprints[:0]
+	for bpID, prod := range parsed.indProduct {
+		if prod.productTypeID == 0 {
+			continue
+		}
+		parsed.blueprints = append(parsed.blueprints, sdeBlueprintRow{
+			blueprintTypeID:          bpID,
+			productTypeID:            prod.productTypeID,
+			productQuantity:          prod.quantity,
+			maxProductionLimit:       parsed.indMaxLimit[bpID],
+			manufacturingTimeSeconds: parsed.indTime[bpID],
+		})
+	}
+	sort.Slice(parsed.blueprints, func(i, j int) bool {
+		return parsed.blueprints[i].blueprintTypeID < parsed.blueprints[j].blueprintTypeID
+	})
+
+	parsed.bpMaterials = parsed.bpMaterials[:0]
+	for key, qty := range parsed.indMats {
+		if qty <= 0 {
+			continue
+		}
+		parsed.bpMaterials = append(parsed.bpMaterials, sdeBlueprintMaterialRow{
+			blueprintTypeID: key[0], materialTypeID: key[1], quantity: qty,
+		})
+	}
+	sort.Slice(parsed.bpMaterials, func(i, j int) bool {
+		if parsed.bpMaterials[i].blueprintTypeID != parsed.bpMaterials[j].blueprintTypeID {
+			return parsed.bpMaterials[i].blueprintTypeID < parsed.bpMaterials[j].blueprintTypeID
+		}
+		return parsed.bpMaterials[i].materialTypeID < parsed.bpMaterials[j].materialTypeID
+	})
+
+	parsed.bpSkills = parsed.bpSkills[:0]
+	for key, lvl := range parsed.indSkills {
+		if lvl <= 0 {
+			continue
+		}
+		parsed.bpSkills = append(parsed.bpSkills, sdeBlueprintSkillRow{
+			blueprintTypeID: key[0], skillTypeID: key[1], level: lvl,
+		})
+	}
+	sort.Slice(parsed.bpSkills, func(i, j int) bool {
+		if parsed.bpSkills[i].blueprintTypeID != parsed.bpSkills[j].blueprintTypeID {
+			return parsed.bpSkills[i].blueprintTypeID < parsed.bpSkills[j].blueprintTypeID
+		}
+		return parsed.bpSkills[i].skillTypeID < parsed.bpSkills[j].skillTypeID
+	})
+}
+
 // storeSDE replaces the sde_* contents with the parsed dump in one
 // transaction: deletes, then bulk inserts via prepared statements
 // (importer volume — tens of thousands of rows — is why these are
@@ -673,7 +938,8 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	}
 	defer tx.Rollback()
 
-	for _, table := range []string{"sde_types", "sde_groups", "sde_categories", "sde_stations", "sde_systems", "sde_regions"} {
+	for _, table := range []string{"sde_types", "sde_groups", "sde_categories", "sde_stations", "sde_systems", "sde_regions",
+		"sde_blueprints", "sde_blueprint_materials", "sde_blueprint_skills"} {
 		if _, err := tx.ExecContext(ctx, "DELETE FROM "+table); err != nil {
 			return 0, fmt.Errorf("clear %s: %w", table, err)
 		}
@@ -729,9 +995,28 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	}); err != nil {
 		return 0, err
 	}
+	if err := insert("INSERT INTO sde_blueprints (blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds) VALUES (?, ?, ?, ?, ?)", len(parsed.blueprints), func(i int) []any {
+		r := parsed.blueprints[i]
+		return []any{r.blueprintTypeID, r.productTypeID, r.productQuantity, r.maxProductionLimit, r.manufacturingTimeSeconds}
+	}); err != nil {
+		return 0, err
+	}
+	if err := insert("INSERT INTO sde_blueprint_materials (blueprint_type_id, material_type_id, quantity) VALUES (?, ?, ?)", len(parsed.bpMaterials), func(i int) []any {
+		r := parsed.bpMaterials[i]
+		return []any{r.blueprintTypeID, r.materialTypeID, r.quantity}
+	}); err != nil {
+		return 0, err
+	}
+	if err := insert("INSERT INTO sde_blueprint_skills (blueprint_type_id, skill_type_id, level) VALUES (?, ?, ?)", len(parsed.bpSkills), func(i int) []any {
+		r := parsed.bpSkills[i]
+		return []any{r.blueprintTypeID, r.skillTypeID, r.level}
+	}); err != nil {
+		return 0, err
+	}
 
 	total := int64(len(parsed.types) + len(parsed.groups) + len(parsed.categories) +
-		len(parsed.stations) + len(parsed.systems) + len(parsed.regions))
+		len(parsed.stations) + len(parsed.systems) + len(parsed.regions) +
+		len(parsed.blueprints) + len(parsed.bpMaterials) + len(parsed.bpSkills))
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	tq := db.New(tx)
@@ -741,11 +1026,11 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		{Key: "last_check_at", Value: now},
 		{Key: "total_rows", Value: strconv.FormatInt(total, 10)},
 		// Marker that the schema-008 market columns are populated
-		// (sdeMaintenance backfills once when it's missing).
-		{Key: "sde_import_version", Value: "2"},
+		// and, from 3, the schema-011 planner tables too
+		// (sdeMaintenance backfills once when it's behind).
+		{Key: "sde_import_version", Value: "3"},
 	}
-	for _, name := range sdeFileNames {
-		m := parsed.markers[name]
+	for name, m := range parsed.markers {
 		meta = append(meta,
 			db.UpsertSDEMetaParams{Key: "etag:" + name, Value: m.etag},
 			db.UpsertSDEMetaParams{Key: "last_modified:" + name, Value: m.lastModified},
@@ -815,6 +1100,7 @@ func (app *Application) loadSDEView(ctx context.Context) *sdeView {
 		{"Stations", app.queries.CountSDEStations},
 		{"Systems", app.queries.CountSDESystems},
 		{"Regions", app.queries.CountSDERegions},
+		{"Blueprints (planner)", app.queries.CountSDEBlueprints},
 	}
 	for _, c := range counts {
 		n, err := c.fn(ctx)

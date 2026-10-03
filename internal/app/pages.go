@@ -72,6 +72,16 @@ type pageData struct {
 	// Filled by render; handlers never set it.
 	Switcher []switcherEntry
 
+	// ViewerChars is the set of the signed-in user's own linked
+	// character IDs — the charLink/killCharLink template helpers
+	// route own characters to their sheet and everyone else to
+	// the public pilot page (or zKillboard in kill contexts).
+	// Filled by render from Switcher; handlers never set it.
+	ViewerChars map[int64]bool
+
+	// Public pilot page (/pilot/): a stranger's public record.
+	Pilot *pilotView
+
 	// Character management page (/characters/).
 	CharactersPage *charactersView
 }
@@ -91,6 +101,7 @@ type switcherEntry struct {
 // skillRow is one line of the home-page skills table.
 type skillRow struct {
 	Name    string
+	TypeID  int64
 	Trained string // trained level, roman
 	Active  string // active level, roman
 	SP      string // formatted
@@ -115,7 +126,7 @@ func sectionForPage(page string) string {
 	case "home.html":
 		return "home"
 	case "character.html", "skills.html", "skillplans.html", "fittings.html", "killmails.html", "characters.html",
-		"mail.html", "calendar.html", "contacts.html":
+		"mail.html", "calendar.html", "contacts.html", "pilot.html":
 		return "character"
 	case "assets.html", "industry.html", "planets.html", "planner.html":
 		return "assets"
@@ -144,7 +155,13 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 	if data.LoggedIn && data.Switcher == nil {
 		data.Switcher = app.switcherEntries(ctx)
 	}
-	ts, err := template.New("base").ParseFS(templatesFS, "templates/base.html", "templates/"+page)
+	if data.LoggedIn && data.ViewerChars == nil {
+		data.ViewerChars = make(map[int64]bool, len(data.Switcher))
+		for _, entry := range data.Switcher {
+			data.ViewerChars[entry.ID] = true
+		}
+	}
+	ts, err := template.New("base").Funcs(linkFuncMap()).ParseFS(templatesFS, "templates/base.html", "templates/"+page)
 	if err != nil {
 		log.Printf("parse template %s: %v", page, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)

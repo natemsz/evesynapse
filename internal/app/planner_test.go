@@ -506,9 +506,9 @@ func TestPlannerRendersFromLocalData(t *testing.T) {
 		"Fixture Component",
 		"Tritanium",
 		"ME 8% · TE 12% (owned blueprint)",
-		"Requires Industry I",                  // root blueprint skill line (skill type name from SDE)
-		"Tritanium — 5 × 5.00 ISK = 25.00 ISK", // 20 needed, 15 on hand, 5 left at 5 ISK
-		"975.00 ISK",                           // margin: 1,000.00 value − 25.00 to buy
+		"Requires Industry I", // root blueprint skill line (skill type name from SDE)
+		`<a href="/items/type/34/">Tritanium</a> — 5 × 5.00 ISK = 25.00 ISK`, // 20 needed, 15 on hand, 5 left at 5 ISK
+		"975.00 ISK", // margin: 1,000.00 value − 25.00 to buy
 	)
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handler made %d outbound calls, want 0", got)

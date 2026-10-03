@@ -135,20 +135,22 @@ func (app *Application) planetDisplayName(ctx context.Context, planetID int64) s
 
 // extractorRow is one extractor line of a colony.
 type extractorRow struct {
-	Product   string
-	Qty       string
-	Cycle     string
-	Heads     int
-	Expires   string // formatted expiry
-	FinishRaw string // RFC3339, drives the live countdown
-	Left      string // "in 2d 3h" while running
-	Expired   bool
+	Product       string
+	ProductTypeID int64
+	Qty           string
+	Cycle         string
+	Heads         int
+	Expires       string // formatted expiry
+	FinishRaw     string // RFC3339, drives the live countdown
+	Left          string // "in 2d 3h" while running
+	Expired       bool
 }
 
 // factoryRow is one factory line of a colony.
 type factoryRow struct {
 	Schematic string
 	PinType   string
+	PinTypeID int64
 	Cycle     string // schematic cycle time, when the cache has it
 }
 
@@ -254,10 +256,11 @@ func (app *Application) colonyLayoutRows(ctx context.Context, layout esi.PlanetL
 	var extractors []extractorRow
 	for _, ex := range layoutExtractors(layout) {
 		row := extractorRow{
-			Product: app.typeNameOrID(ctx, ex.ProductID),
-			Qty:     esi.FormatInt(ex.QtyPerCycle),
-			Cycle:   humanDuration(time.Duration(ex.CycleTime) * time.Second),
-			Heads:   ex.Heads,
+			Product:       app.typeNameOrID(ctx, ex.ProductID),
+			ProductTypeID: ex.ProductID,
+			Qty:           esi.FormatInt(ex.QtyPerCycle),
+			Cycle:         humanDuration(time.Duration(ex.CycleTime) * time.Second),
+			Heads:         ex.Heads,
 		}
 		if ex.ExpiryOK {
 			row.Expires = formatFinish(ex.Expiry.UTC().Format(time.RFC3339))
@@ -282,7 +285,7 @@ func (app *Application) colonyLayoutRows(ctx context.Context, layout esi.PlanetL
 			if pin.FactoryDetails != nil && pin.FactoryDetails.SchematicID > 0 {
 				schematicID = pin.FactoryDetails.SchematicID
 			}
-			row := factoryRow{PinType: app.typeNameOrID(ctx, pin.TypeID)}
+			row := factoryRow{PinType: app.typeNameOrID(ctx, pin.TypeID), PinTypeID: pin.TypeID}
 			if schematic, ok := app.esi.CachedSchematic(schematicID); ok && schematic.SchematicName != "" {
 				row.Schematic = schematic.SchematicName
 				if schematic.CycleTime > 0 {

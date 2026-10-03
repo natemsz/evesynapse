@@ -67,7 +67,7 @@ type planView struct {
 type planRowView struct {
 	Pad        int // indent in px (depth × 18)
 	Name       string
-	URL        string // market item view
+	URL        string // item details page
 	Badge      string // "Build" | "Buy" | "Have"
 	Base       string // "×86 per run"
 	Need       string
@@ -257,7 +257,7 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 	for _, line := range res.Shopping {
 		row := planRowView{
 			Name: nameOf(line.TypeID),
-			URL:  fmt.Sprintf("/market/?type=%d", line.TypeID),
+			URL:  fmt.Sprintf("/items/type/%d/", line.TypeID),
 			Need: esi.FormatInt(line.Quantity),
 		}
 		if line.PriceKnown {
@@ -310,7 +310,7 @@ func planRow(n *planNode, nameOf func(int64) string) planRowView {
 	row := planRowView{
 		Pad:  n.Depth * 18,
 		Name: nameOf(n.TypeID),
-		URL:  fmt.Sprintf("/market/?type=%d", n.TypeID),
+		URL:  fmt.Sprintf("/items/type/%d/", n.TypeID),
 		Need: esi.FormatInt(n.RequiredQty),
 	}
 	if n.BasePerRun > 0 {

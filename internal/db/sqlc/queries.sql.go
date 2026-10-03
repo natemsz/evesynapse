@@ -127,6 +127,29 @@ func (q *Queries) GetCharacter(ctx context.Context, characterID int64) (Characte
 	return i, err
 }
 
+const getKillmailDetail = `-- name: GetKillmailDetail :one
+
+SELECT killmail_id, character_id, hash, payload, fetched_at FROM killmail_details
+WHERE killmail_id = ?
+`
+
+// ---------------------------------------------------------------------
+// Module sweep (schema 004): killmail detail store. The worker warms
+// details from the recent-killmails snapshot; pages only read here.
+// ---------------------------------------------------------------------
+func (q *Queries) GetKillmailDetail(ctx context.Context, killmailID int64) (KillmailDetail, error) {
+	row := q.db.QueryRowContext(ctx, getKillmailDetail, killmailID)
+	var i KillmailDetail
+	err := row.Scan(
+		&i.KillmailID,
+		&i.CharacterID,
+		&i.Hash,
+		&i.Payload,
+		&i.FetchedAt,
+	)
+	return i, err
+}
+
 const getSDECategory = `-- name: GetSDECategory :one
 SELECT category_id, name FROM sde_categories
 WHERE category_id = ?
@@ -362,6 +385,70 @@ func (q *Queries) ListCharactersByUser(ctx context.Context, userID int64) ([]Cha
 			&i.CachedUntil,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listKillmailDetailIDsByCharacter = `-- name: ListKillmailDetailIDsByCharacter :many
+SELECT killmail_id FROM killmail_details
+WHERE character_id = ?
+ORDER BY killmail_id
+`
+
+func (q *Queries) ListKillmailDetailIDsByCharacter(ctx context.Context, characterID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listKillmailDetailIDsByCharacter, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var killmail_id int64
+		if err := rows.Scan(&killmail_id); err != nil {
+			return nil, err
+		}
+		items = append(items, killmail_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listKillmailDetailsByCharacter = `-- name: ListKillmailDetailsByCharacter :many
+SELECT killmail_id, character_id, hash, payload, fetched_at FROM killmail_details
+WHERE character_id = ?
+ORDER BY killmail_id
+`
+
+func (q *Queries) ListKillmailDetailsByCharacter(ctx context.Context, characterID int64) ([]KillmailDetail, error) {
+	rows, err := q.db.QueryContext(ctx, listKillmailDetailsByCharacter, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []KillmailDetail
+	for rows.Next() {
+		var i KillmailDetail
+		if err := rows.Scan(
+			&i.KillmailID,
+			&i.CharacterID,
+			&i.Hash,
+			&i.Payload,
+			&i.FetchedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -613,6 +700,35 @@ func (q *Queries) UpsertCharacter(ctx context.Context, arg UpsertCharacterParams
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const upsertKillmailDetail = `-- name: UpsertKillmailDetail :exec
+INSERT INTO killmail_details (killmail_id, character_id, hash, payload, fetched_at)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (killmail_id) DO UPDATE SET
+    character_id = excluded.character_id,
+    hash         = excluded.hash,
+    payload      = excluded.payload,
+    fetched_at   = excluded.fetched_at
+`
+
+type UpsertKillmailDetailParams struct {
+	KillmailID  int64  `json:"killmail_id"`
+	CharacterID int64  `json:"character_id"`
+	Hash        string `json:"hash"`
+	Payload     string `json:"payload"`
+	FetchedAt   string `json:"fetched_at"`
+}
+
+func (q *Queries) UpsertKillmailDetail(ctx context.Context, arg UpsertKillmailDetailParams) error {
+	_, err := q.db.ExecContext(ctx, upsertKillmailDetail,
+		arg.KillmailID,
+		arg.CharacterID,
+		arg.Hash,
+		arg.Payload,
+		arg.FetchedAt,
+	)
+	return err
 }
 
 const upsertSDEMeta = `-- name: UpsertSDEMeta :exec

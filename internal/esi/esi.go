@@ -57,6 +57,16 @@ const (
 	SnapSkillqueue = "skillqueue"
 	SnapWallet     = "wallet"
 	SnapAssets     = "assets"
+
+	// Module sweep, cluster 1 (character): live-state endpoints.
+	SnapLocation  = "location"
+	SnapShip      = "ship"
+	SnapOnline    = "online"
+	SnapClones    = "clones"
+	SnapImplants  = "implants"
+	SnapFittings  = "fittings"
+	SnapFatigue   = "fatigue"
+	SnapKillmails = "killmails" // recent list (id+hash pairs); details live in killmail_details
 )
 
 // ErrErrorLimit marks ESI's error-limit responses (420/429): callers
@@ -96,6 +106,12 @@ type Client struct {
 	// location titles; both are stable public data.
 	placeMu    sync.Mutex
 	placeNames map[int64]string
+
+	// In-process cache of character ID → name, warmed by the
+	// worker from killmail details so the killmail list can label
+	// victims and final-blow attackers. Public data.
+	charNamesMu sync.RWMutex
+	charNames   map[int64]string
 }
 
 // New builds a Client. httpClient performs every ESI request (the
@@ -111,6 +127,7 @@ func New(httpClient *http.Client, queries *db.Queries, tokens TokenFunc) *Client
 		typeGroups: make(map[int64]int64),
 		groupNames: make(map[int64]string),
 		placeNames: make(map[int64]string),
+		charNames:  make(map[int64]string),
 	}
 }
 
@@ -250,6 +267,129 @@ type MarketOrder struct {
 }
 
 // ---------------------------------------------------------------------------
+// Module sweep, cluster 1: character live-state payloads.
+// ---------------------------------------------------------------------------
+
+// Location is GET /characters/{id}/location/. station_id and
+// structure_id are mutually exclusive and both absent in space.
+type Location struct {
+	SolarSystemID int64 `json:"solar_system_id"`
+	StationID     int64 `json:"station_id"`
+	StructureID   int64 `json:"structure_id"`
+}
+
+// Ship is GET /characters/{id}/ship/.
+type Ship struct {
+	ShipTypeID int64  `json:"ship_type_id"`
+	ShipItemID int64  `json:"ship_item_id"`
+	ShipName   string `json:"ship_name"`
+}
+
+// Online is GET /characters/{id}/online/.
+type Online struct {
+	Online     bool   `json:"online"`
+	LastLogin  string `json:"last_login"`  // RFC3339
+	LastLogout string `json:"last_logout"` // RFC3339
+	Logins     int64  `json:"logins"`
+}
+
+// CloneHome is the home_location object of GET /characters/{id}/clones/.
+type CloneHome struct {
+	LocationID   int64  `json:"location_id"`
+	LocationType string `json:"location_type"` // station|structure
+}
+
+// JumpClone is one jump clone of GET /characters/{id}/clones/.
+// Implants are type IDs in slot order.
+type JumpClone struct {
+	JumpCloneID  int64   `json:"jump_clone_id"`
+	LocationID   int64   `json:"location_id"`
+	LocationType string  `json:"location_type"` // station|structure
+	Name         string  `json:"name"`          // pilot-given clone name, may be empty
+	Implants     []int64 `json:"implants"`
+}
+
+// Clones is GET /characters/{id}/clones/.
+type Clones struct {
+	HomeLocation      CloneHome   `json:"home_location"`
+	JumpClones        []JumpClone `json:"jump_clones"`
+	LastCloneJumpDate string      `json:"last_clone_jump_date"` // RFC3339, may be empty
+}
+
+// Implants is GET /characters/{id}/implants/: active implant type
+// IDs in slot order.
+type Implants []int64
+
+// Fatigue is GET /characters/{id}/fatigue/. All dates RFC3339;
+// LastJumpDate may be empty for a character that never jumped.
+type Fatigue struct {
+	LastJumpDate          string `json:"last_jump_date"`
+	JumpFatigueExpireDate string `json:"jump_fatigue_expire_date"`
+	LastUpdateDate        string `json:"last_update_date"`
+}
+
+// FittingItem is one fitted module/charge of a Fitting.
+type FittingItem struct {
+	TypeID   int64  `json:"type_id"`
+	Quantity int64  `json:"quantity"`
+	Flag     string `json:"flag"` // HiSlot0, MedSlot2, DroneBay, Cargo, ...
+}
+
+// Fitting is one entry of GET /characters/{id}/fittings/.
+type Fitting struct {
+	FittingID  int64         `json:"fitting_id"`
+	Name       string        `json:"name"`
+	ShipTypeID int64         `json:"ship_type_id"`
+	Items      []FittingItem `json:"items"`
+}
+
+// Fittings is GET /characters/{id}/fittings/.
+type Fittings []Fitting
+
+// KillmailRef is one entry of GET /characters/{id}/killmails/recent/:
+// an ID plus the hash that unlocks the public detail endpoint.
+type KillmailRef struct {
+	KillmailID   int64  `json:"killmail_id"`
+	KillmailHash string `json:"killmail_hash"`
+}
+
+// KillmailVictimItem is one destroyed/dropped item on a killmail
+// victim. Quantities are optional in ESI (singletons omit both).
+type KillmailVictimItem struct {
+	ItemTypeID        int64 `json:"item_type_id"`
+	QuantityDestroyed int64 `json:"quantity_destroyed"`
+	QuantityDropped   int64 `json:"quantity_dropped"`
+}
+
+// KillmailVictim is the victim block of a killmail detail.
+type KillmailVictim struct {
+	CharacterID   int64                `json:"character_id"` // 0 for NPC victims
+	CorporationID int64                `json:"corporation_id"`
+	ShipTypeID    int64                `json:"ship_type_id"`
+	DamageTaken   int64                `json:"damage_taken"`
+	Items         []KillmailVictimItem `json:"items"`
+}
+
+// KillmailAttacker is one attacker on a killmail detail.
+// CharacterID is 0 for NPC attackers.
+type KillmailAttacker struct {
+	CharacterID   int64 `json:"character_id"`
+	CorporationID int64 `json:"corporation_id"`
+	ShipTypeID    int64 `json:"ship_type_id"`
+	FinalBlow     bool  `json:"final_blow"`
+	DamageDone    int64 `json:"damage_done"`
+}
+
+// Killmail is GET /killmails/{id}/{hash}/ (the detail payload).
+type Killmail struct {
+	KillmailID    int64              `json:"killmail_id"`
+	KillmailTime  string             `json:"killmail_time"` // RFC3339
+	SolarSystemID int64              `json:"solar_system_id"`
+	Victim        KillmailVictim     `json:"victim"`
+	Attackers     []KillmailAttacker `json:"attackers"`
+}
+
+// ---------------------------------------------------------------------------
 // HTTP layer.
 // ---------------------------------------------------------------------------
 
@@ -351,6 +491,22 @@ func snapshotPath(characterID int64, kind string) string {
 		return fmt.Sprintf("/characters/%d/wallet/", characterID)
 	case SnapAssets:
 		return fmt.Sprintf("/characters/%d/assets/", characterID)
+	case SnapLocation:
+		return fmt.Sprintf("/characters/%d/location/", characterID)
+	case SnapShip:
+		return fmt.Sprintf("/characters/%d/ship/", characterID)
+	case SnapOnline:
+		return fmt.Sprintf("/characters/%d/online/", characterID)
+	case SnapClones:
+		return fmt.Sprintf("/characters/%d/clones/", characterID)
+	case SnapImplants:
+		return fmt.Sprintf("/characters/%d/implants/", characterID)
+	case SnapFittings:
+		return fmt.Sprintf("/characters/%d/fittings/", characterID)
+	case SnapFatigue:
+		return fmt.Sprintf("/characters/%d/fatigue/", characterID)
+	case SnapKillmails:
+		return fmt.Sprintf("/characters/%d/killmails/recent/", characterID)
 	}
 	return ""
 }
@@ -982,6 +1138,49 @@ func (c *Client) StorePlaceName(id int64, name string) {
 	c.placeMu.Lock()
 	c.placeNames[id] = name
 	c.placeMu.Unlock()
+}
+
+// ---------------------------------------------------------------------------
+// Character-name resolution: killmail victims and final-blow
+// attackers. Same two tiers as places: CharacterName is the network
+// tier (public GET /characters/{id}/), CachedCharacterName is the
+// render tier and never touches the network — the worker warms the
+// cache from killmail details.
+// ---------------------------------------------------------------------------
+
+// CharacterName resolves a character ID to its name, consulting the
+// in-process cache then public ESI (successes cached in-process).
+// This is the network tier; renders use CachedCharacterName.
+func (c *Client) CharacterName(ctx context.Context, id int64) (string, error) {
+	if name, ok := c.CachedCharacterName(id); ok {
+		return name, nil
+	}
+	var ch Character
+	if err := c.Get(ctx, "", fmt.Sprintf("/characters/%d/", id), &ch); err != nil {
+		return "", err
+	}
+	if ch.Name == "" {
+		return "", fmt.Errorf("character %d: empty name", id)
+	}
+	c.StoreCharacterName(id, ch.Name)
+	return ch.Name, nil
+}
+
+// CachedCharacterName resolves a character ID from the in-process
+// cache only. Zero network.
+func (c *Client) CachedCharacterName(id int64) (string, bool) {
+	c.charNamesMu.RLock()
+	defer c.charNamesMu.RUnlock()
+	name, ok := c.charNames[id]
+	return name, ok
+}
+
+// StoreCharacterName records a character name in the in-process
+// cache (the worker's warm-up pass stores fetched names this way).
+func (c *Client) StoreCharacterName(id int64, name string) {
+	c.charNamesMu.Lock()
+	c.charNames[id] = name
+	c.charNamesMu.Unlock()
 }
 
 // ---------------------------------------------------------------------------

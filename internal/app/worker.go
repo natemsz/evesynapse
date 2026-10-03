@@ -168,7 +168,11 @@ func (app *Application) refreshCycle(ctx context.Context) {
 			continue
 		}
 
-		for _, kind := range []string{esi.SnapSkills, esi.SnapSkillqueue, esi.SnapWallet, esi.SnapAssets} {
+		for _, kind := range []string{
+			esi.SnapSkills, esi.SnapSkillqueue, esi.SnapWallet, esi.SnapAssets,
+			esi.SnapLocation, esi.SnapShip, esi.SnapOnline, esi.SnapClones,
+			esi.SnapImplants, esi.SnapFittings, esi.SnapFatigue, esi.SnapKillmails,
+		} {
 			snap, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: kind})
 			switch {
 			case serr == nil && esi.SnapshotFresh(snap):
@@ -188,6 +192,18 @@ func (app *Application) refreshCycle(ctx context.Context) {
 				break // don't keep pushing this character this cycle
 			}
 			refreshed++
+		}
+
+		// Killmail details behind the recent list: immutable once
+		// posted, so each missing detail is fetched once and kept.
+		// Bounded per character per cycle (warmKillmailDetails).
+		if !limited {
+			warmed, ltd := app.warmKillmailDetails(ctx, ch)
+			refreshed += warmed
+			if ltd {
+				log.Printf("worker: ESI error limit hit warming killmail details for character %d; backing off until next cycle", ch.CharacterID)
+				limited = true
+			}
 		}
 		if limited {
 			break
@@ -381,7 +397,9 @@ feed:
 // warmCharacterNames resolves every name the local caches still lack
 // for one character, derived from its latest skills + assets
 // snapshots: type names, type→group links, group names, and
-// station/system names. It returns how many entries were resolved.
+// station/system names — plus character names for the victims and
+// final-blow attackers in its stored killmail details. It returns
+// how many entries were resolved.
 // (Structure locations are skipped: their names need an auth scope
 // this app does not hold, so they render as "Structure #<id>".)
 func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character, budget *warmBudget) int {
@@ -418,9 +436,9 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 			}
 		}
 	}
-	if len(typeIDs) == 0 && len(placeKinds) == 0 {
-		return 0
-	}
+	// With no skills/assets yet, the type/group/place passes below
+	// simply no-op on empty ID sets; the killmail character-name
+	// pass at the end may still have work to do.
 	ids := sortedInt64Keys(typeIDs)
 
 	resolved := 0
@@ -496,6 +514,41 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 	resolved += app.runWarmPool(ctx, missingPlaces, budget, func(ctx context.Context, id int64) bool {
 		return app.warmPlaceName(ctx, budget, pathByID[id], id)
 	})
+	if budget.stopped() {
+		return resolved
+	}
+
+	// Character names from this character's stored killmail
+	// details: victims and final-blow attackers, so the killmail
+	// list can label people instead of raw IDs.
+	charIDs := make(map[int64]bool)
+	if rows, err := app.queries.ListKillmailDetailsByCharacter(ctx, ch.CharacterID); err != nil {
+		log.Printf("worker: warm names for character %d: list killmail details: %v", ch.CharacterID, err)
+	} else {
+		for _, row := range rows {
+			var km esi.Killmail
+			if err := json.Unmarshal([]byte(row.Payload), &km); err != nil {
+				continue // undecodable payload: nothing to derive
+			}
+			if km.Victim.CharacterID > 0 {
+				charIDs[km.Victim.CharacterID] = true
+			}
+			for _, a := range km.Attackers {
+				if a.FinalBlow && a.CharacterID > 0 {
+					charIDs[a.CharacterID] = true
+				}
+			}
+		}
+	}
+	var missingChars []int64
+	for _, id := range sortedInt64Keys(charIDs) {
+		if _, ok := app.esi.CachedCharacterName(id); !ok {
+			missingChars = append(missingChars, id)
+		}
+	}
+	resolved += app.runWarmPool(ctx, missingChars, budget, func(ctx context.Context, id int64) bool {
+		return app.warmCharacterName(ctx, budget, id)
+	})
 
 	return resolved
 }
@@ -565,6 +618,87 @@ func (app *Application) warmPlaceName(ctx context.Context, budget *warmBudget, p
 	}
 	app.esi.StorePlaceName(id, place.Name)
 	return true
+}
+
+func (app *Application) warmCharacterName(ctx context.Context, budget *warmBudget, id int64) bool {
+	name, err := app.esi.CharacterName(ctx, id)
+	if err != nil {
+		if errors.Is(err, esi.ErrErrorLimit) {
+			budget.hitLimit()
+		} else if ctx.Err() == nil {
+			log.Printf("worker: warm character %d: %v", id, err)
+		}
+		return false
+	}
+	return name != ""
+}
+
+// ---------------------------------------------------------------------------
+// Killmail detail warming. The recent-killmails list is a snapshot;
+// the detail payloads behind it are immutable, so the worker fills
+// the killmail_details store once per killmail (bounded per cycle)
+// and pages render from the store only — never from the network.
+// ---------------------------------------------------------------------------
+
+// maxKillmailDetailsPerCycle bounds detail fetches per character
+// per worker cycle; a busy character's backlog converges over a
+// few cycles instead of turning one cycle into an ESI marathon.
+const maxKillmailDetailsPerCycle = 10
+
+// warmKillmailDetails fetches detail payloads for the entries of
+// the character's recent-killmails snapshot that are not stored
+// yet, at most maxKillmailDetailsPerCycle of them. It reports how
+// many were stored and whether ESI's error limit stopped the pass.
+// The detail endpoint is public (the hash authorizes it), so no
+// character token is involved.
+func (app *Application) warmKillmailDetails(ctx context.Context, ch db.Character) (fetched int, limited bool) {
+	snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: esi.SnapKillmails})
+	if err != nil {
+		return 0, false // no recent list yet; nothing to warm
+	}
+	var refs []esi.KillmailRef
+	if err := json.Unmarshal([]byte(snap.Payload), &refs); err != nil {
+		log.Printf("worker: warm killmail details for character %d: decode recent list: %v", ch.CharacterID, err)
+		return 0, false
+	}
+
+	for _, ref := range refs {
+		if fetched >= maxKillmailDetailsPerCycle {
+			break
+		}
+		if ref.KillmailID <= 0 || ref.KillmailHash == "" {
+			continue
+		}
+		if _, err := app.queries.GetKillmailDetail(ctx, ref.KillmailID); err == nil {
+			continue // already stored (by any character's list)
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			log.Printf("worker: warm killmail details for character %d: read detail %d: %v", ch.CharacterID, ref.KillmailID, err)
+			continue
+		}
+
+		body, _, err := app.esi.FetchRaw(ctx, "", fmt.Sprintf("/killmails/%d/%s/", ref.KillmailID, ref.KillmailHash))
+		if err != nil {
+			if errors.Is(err, esi.ErrErrorLimit) {
+				return fetched, true
+			}
+			if ctx.Err() == nil {
+				log.Printf("worker: killmail detail %d for character %d: %v", ref.KillmailID, ch.CharacterID, err)
+			}
+			continue
+		}
+		if err := app.queries.UpsertKillmailDetail(ctx, db.UpsertKillmailDetailParams{
+			KillmailID:  ref.KillmailID,
+			CharacterID: ch.CharacterID,
+			Hash:        ref.KillmailHash,
+			Payload:     string(body),
+			FetchedAt:   time.Now().UTC().Format(time.RFC3339),
+		}); err != nil {
+			log.Printf("worker: store killmail detail %d for character %d: %v", ref.KillmailID, ch.CharacterID, err)
+			continue
+		}
+		fetched++
+	}
+	return fetched, false
 }
 
 func sortedInt64Keys(set map[int64]bool) []int64 {

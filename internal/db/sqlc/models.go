@@ -29,6 +29,14 @@ type CharacterSnapshot struct {
 	CachedUntil sql.NullString `json:"cached_until"`
 }
 
+type KillmailDetail struct {
+	KillmailID  int64  `json:"killmail_id"`
+	CharacterID int64  `json:"character_id"`
+	Hash        string `json:"hash"`
+	Payload     string `json:"payload"`
+	FetchedAt   string `json:"fetched_at"`
+}
+
 type SdeCategory struct {
 	CategoryID int64  `json:"category_id"`
 	Name       string `json:"name"`

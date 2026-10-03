@@ -158,3 +158,31 @@ INSERT INTO sde_meta (key, value)
 VALUES (?, ?)
 ON CONFLICT (key) DO UPDATE SET
     value = excluded.value;
+
+-- ---------------------------------------------------------------------
+-- Module sweep (schema 004): killmail detail store. The worker warms
+-- details from the recent-killmails snapshot; pages only read here.
+-- ---------------------------------------------------------------------
+
+-- name: GetKillmailDetail :one
+SELECT * FROM killmail_details
+WHERE killmail_id = ?;
+
+-- name: ListKillmailDetailIDsByCharacter :many
+SELECT killmail_id FROM killmail_details
+WHERE character_id = ?
+ORDER BY killmail_id;
+
+-- name: ListKillmailDetailsByCharacter :many
+SELECT * FROM killmail_details
+WHERE character_id = ?
+ORDER BY killmail_id;
+
+-- name: UpsertKillmailDetail :exec
+INSERT INTO killmail_details (killmail_id, character_id, hash, payload, fetched_at)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (killmail_id) DO UPDATE SET
+    character_id = excluded.character_id,
+    hash         = excluded.hash,
+    payload      = excluded.payload,
+    fetched_at   = excluded.fetched_at;

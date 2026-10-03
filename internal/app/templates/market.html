@@ -27,37 +27,7 @@
 
   <section class="foldable">
   <h3>Price history — {{$item.RegionName}}</h3>
-  {{if eq $item.HistoryState "chart"}}
-  {{if $item.Chart}}
-  {{$c := $item.Chart}}
-  <svg viewBox="0 0 {{$c.Width}} {{$c.Height}}" width="100%" role="img" aria-label="Daily average price and volume, last 90 days" preserveAspectRatio="none" style="max-width:720px">
-    <line x1="0" y1="{{$c.BaseY}}" x2="{{$c.Width}}" y2="{{$c.BaseY}}" stroke="#3a2a1a" stroke-width="1"/>
-    <line x1="0" y1="{{$c.TopY}}" x2="{{$c.Width}}" y2="{{$c.TopY}}" stroke="#241708" stroke-width="1"/>
-    {{range $c.Bars}}<rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" fill="#d63c14" fill-opacity="0.55"/>{{end}}
-    {{if $c.Points}}<polyline points="{{$c.Points}}" fill="none" stroke="#ffb84d" stroke-width="1.5"/>{{end}}
-    {{range $c.Dots}}<circle cx="{{.X}}" cy="{{.Y}}" r="1.6" fill="#ffb84d"/>{{end}}
-    <text x="2" y="11" font-size="11" fill="#c9a06a">high {{$c.MaxISK}} ISK</text>
-    <text x="2" y="{{$c.Height}}" font-size="11" fill="#c9a06a">low {{$c.MinISK}} ISK</text>
-    <text x="{{$c.Width}}" y="{{$c.Height}}" font-size="11" fill="#c9a06a" text-anchor="end">{{$c.From}} → {{$c.To}}</text>
-  </svg>
-  {{if $item.Stats}}
-  <p><small>{{$item.Stats.Days}} days of recorded trades in {{$item.RegionName}}: average {{$item.Stats.Mean}} ISK · low {{$item.Stats.Min}} · high {{$item.Stats.Max}} · latest {{$item.Stats.Latest}} ({{$item.Stats.LastDay}}){{if $item.Change7}} · 7 days {{$item.Change7}}{{end}}{{if $item.Change30}} · 30 days {{$item.Change30}}{{end}}</small></p>
-  {{end}}
-  {{if $item.HistoryLastDay}}<p><small>Last trades {{$item.HistoryLastDay}} — this item hasn't traded in {{$item.RegionName}} recently.</small></p>{{end}}
-  {{else}}
-  <p><small>Price history for this item hasn't charted yet — check back soon.</small></p>
-  {{end}}
-  {{else if eq $item.HistoryState "few"}}
-  {{if $item.Stats}}
-  <p><small>Only {{$item.Stats.Days}} {{if eq $item.Stats.Days 1}}day{{else}}days{{end}} of recorded trades in {{$item.RegionName}} — not enough history to chart yet. Average {{$item.Stats.Mean}} ISK · low {{$item.Stats.Min}} · high {{$item.Stats.Max}} · latest {{$item.Stats.Latest}} ({{$item.Stats.LastDay}}).{{if $item.HistoryLastDay}} Last trades {{$item.HistoryLastDay}}.{{end}}</small></p>
-  {{else}}
-  <p><small>Only a little trade history in {{$item.RegionName}} so far — not enough to chart yet.</small></p>
-  {{end}}
-  {{else if eq $item.HistoryState "empty"}}
-  <p><small>No trade history in {{$item.RegionName}} for this item yet.</small></p>
-  {{else}}
-  <p><small>Price history is still loading for this item — it fills in on its own, check back soon.</small></p>
-  {{end}}
+  {{template "history-section" $item}}
   {{if $item.Watched}}
   <form method="post" action="/market/watch">
     <input type="hidden" name="action" value="update">
@@ -218,4 +188,40 @@
 </section>
 {{end}}
 {{end}}
+{{end}}
+
+{{define "history-section"}}
+<div class="history-body" data-poll-state="{{.HistoryState}}"{{if eq .HistoryState "pending"}} data-live-region data-poll-url="/market/history-fragment?region={{.RegionID}}&amp;type={{.TypeID}}"{{end}}>
+  {{if eq .HistoryState "chart"}}
+  {{if .Chart}}
+  {{$c := .Chart}}
+  <svg viewBox="0 0 {{$c.Width}} {{$c.Height}}" width="100%" role="img" aria-label="Daily average price and volume, last 90 days" preserveAspectRatio="none" style="max-width:720px">
+    <line x1="0" y1="{{$c.BaseY}}" x2="{{$c.Width}}" y2="{{$c.BaseY}}" stroke="#3a2a1a" stroke-width="1"/>
+    <line x1="0" y1="{{$c.TopY}}" x2="{{$c.Width}}" y2="{{$c.TopY}}" stroke="#241708" stroke-width="1"/>
+    {{range $c.Bars}}<rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" fill="#d63c14" fill-opacity="0.55"/>{{end}}
+    {{if $c.Points}}<polyline points="{{$c.Points}}" fill="none" stroke="#ffb84d" stroke-width="1.5"/>{{end}}
+    {{range $c.Dots}}<circle cx="{{.X}}" cy="{{.Y}}" r="1.6" fill="#ffb84d"/>{{end}}
+    <text x="2" y="11" font-size="11" fill="#c9a06a">high {{$c.MaxISK}} ISK</text>
+    <text x="2" y="{{$c.Height}}" font-size="11" fill="#c9a06a">low {{$c.MinISK}} ISK</text>
+    <text x="{{$c.Width}}" y="{{$c.Height}}" font-size="11" fill="#c9a06a" text-anchor="end">{{$c.From}} → {{$c.To}}</text>
+  </svg>
+  {{if .Stats}}
+  <p><small>{{.Stats.Days}} days of recorded trades in {{.RegionName}}: average {{.Stats.Mean}} ISK · low {{.Stats.Min}} · high {{.Stats.Max}} · latest {{.Stats.Latest}} ({{.Stats.LastDay}}){{if .Change7}} · 7 days {{.Change7}}{{end}}{{if .Change30}} · 30 days {{.Change30}}{{end}}</small></p>
+  {{end}}
+  {{if .HistoryLastDay}}<p><small>Last trades {{.HistoryLastDay}} — this item hasn't traded in {{.RegionName}} recently.</small></p>{{end}}
+  {{else}}
+  <p><small>Price history for this item hasn't charted yet — check back soon.</small></p>
+  {{end}}
+  {{else if eq .HistoryState "few"}}
+  {{if .Stats}}
+  <p><small>Only {{.Stats.Days}} {{if eq .Stats.Days 1}}day{{else}}days{{end}} of recorded trades in {{.RegionName}} — not enough history to chart yet. Average {{.Stats.Mean}} ISK · low {{.Stats.Min}} · high {{.Stats.Max}} · latest {{.Stats.Latest}} ({{.Stats.LastDay}}).{{if .HistoryLastDay}} Last trades {{.HistoryLastDay}}.{{end}}</small></p>
+  {{else}}
+  <p><small>Only a little trade history in {{.RegionName}} so far — not enough to chart yet.</small></p>
+  {{end}}
+  {{else if eq .HistoryState "empty"}}
+  <p><small>No trade history in {{.RegionName}} for this item yet.</small></p>
+  {{else}}
+  <p><span class="loading-pulse" aria-hidden="true"></span><small>This one's queued — it will be ready in a moment.</small></p>
+  {{end}}
+</div>
 {{end}}

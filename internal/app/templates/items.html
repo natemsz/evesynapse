@@ -92,11 +92,7 @@
 {{if $d.BlueprintID}} · <a href="/planner/?product={{$d.ID}}">Plan manufacturing</a>{{end}}
 </p>
 
-{{if $d.HasDescription}}
-<div class="mailbody">{{$d.Description}}</div>
-{{else if $d.DescriptionPending}}
-<p><small>Item description is still loading — it fills in on a coming sync cycle.</small></p>
-{{end}}
+{{template "type-description" $d}}
 
 {{if $d.UsedIn}}
 <h3>Used in</h3>
@@ -115,3 +111,8 @@
 
 {{end}}
 {{end}}
+
+{{define "type-description"}}
+{{if eq .DescState "ready"}}<div class="mailbody" data-poll-state="ready">{{.Description}}</div>
+{{else if eq .DescState "pending"}}<div data-live-region data-poll-url="/items/description-fragment?type={{.ID}}" data-poll-state="pending"><p><span class="loading-pulse" aria-hidden="true"></span><small>This description is queued — it will be ready in a moment.</small></p></div>
+{{end}}{{end}}

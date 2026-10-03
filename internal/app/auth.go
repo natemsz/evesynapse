@@ -46,12 +46,24 @@ const (
 // (GET https://esi.evetech.net/meta/openapi.json →
 // components.securitySchemes), minus every mutating scope — anything
 // whose name contains write_, send_, respond_, organize_, manage_ or
-// open_window (9 scopes excluded: respond_calendar_events,
+// open_window (8 scopes excluded: respond_calendar_events,
 // write_contacts, write_fittings, write_fleet, organize_mail,
-// send_mail, manage_planets, open_window, write_waypoint). The user's
+// send_mail, open_window, write_waypoint; esi-planets.manage_planets.v1
+// is the one deliberate exception — see below). The user's
 // developer-portal application has the same read scopes enabled, so
 // SSO grants exactly what is requested here. Already-linked
 // characters keep their previously granted scopes until re-linked.
+//
+// One deliberate exception (Phase 2): esi-planets.manage_planets.v1
+// IS requested. CCP publishes no read scope for planetary industry —
+// manage_planets is the only scope gating the two colony GETs
+// (/characters/{id}/planets and /characters/{id}/planets/{planet_id}),
+// and no write endpoint hangs off it in the current ESI surface.
+// The app only ever GETs colonies; EVE's consent screen still words
+// the grant "manage your planetary installations". Characters linked
+// before this scope was added get a 403 on the colonies endpoint,
+// which the worker records as "PI not enabled" until they re-link
+// (see planets_worker.go).
 var eveScopes = []string{
 	"esi-access.read_lists.v1",
 	"esi-activities.read_character.v1",
@@ -105,6 +117,9 @@ var eveScopes = []string{
 	"esi-markets.read_character_orders.v1",
 	"esi-markets.read_corporation_orders.v1",
 	"esi-markets.structure_markets.v1",
+	// The only "manage_" scope requested — see the eveScopes
+	// comment: it gates the colony GETs and nothing else.
+	"esi-planets.manage_planets.v1",
 	"esi-planets.read_customs_offices.v1",
 	"esi-search.search_structures.v1",
 	"esi-skills.read_skillqueue.v1",

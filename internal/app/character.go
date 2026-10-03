@@ -135,6 +135,7 @@ type implantRow struct {
 // only its own block. Loaded is true when any section loaded;
 // Warming marks the cold-start case (no snapshots at all yet).
 type characterView struct {
+	CharacterID   int64
 	CharacterName string
 	Loaded        bool
 	Warming       bool
@@ -194,6 +195,16 @@ type characterView struct {
 	Training       string // "Skill V — finishes …", "" = not training
 	TrainingFinish string // raw finish, drives the live countdown
 	TrainingLeft   string
+
+	// Planetary industry summary (Phase 2): colony count plus
+	// the soonest extractor expiry, from the colonies + layout
+	// snapshots. PINotEnabled marks the recorded scope refusal.
+	PIKnown      bool
+	PINotEnabled bool
+	PIColonies   int
+	PIExpired    int
+	PISoonest    string // formatted soonest extractor expiry
+	PISoonestIn  string // "in 2d 3h" while it is still ahead
 }
 
 // handleCharacter renders the Character page for one of the
@@ -219,7 +230,7 @@ func (app *Application) handleCharacter(w http.ResponseWriter, r *http.Request) 
 	}
 	data.CharChars = links
 
-	view := &characterView{CharacterName: active.Name}
+	view := &characterView{CharacterID: active.CharacterID, CharacterName: active.Name}
 	view.PortraitURL = portraitURL(active.CharacterID, 128)
 	data.CharacterPage = view
 	app.fillCharacterView(ctx, active, view)
@@ -448,9 +459,25 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 		}
 	}
 
+	// Planetary industry summary: colonies + soonest extractor
+	// expiry from the PI snapshots (worker-warmed; the section
+	// links to the full colonies page).
+	pi := app.characterPISummary(ctx, ch)
+	view.PIKnown = pi.Known
+	view.PINotEnabled = pi.NotEnabled
+	view.PIColonies = pi.Colonies
+	view.PIExpired = pi.Expired
+	if pi.SoonestOK {
+		view.PISoonest = formatFinish(pi.Soonest.UTC().Format(time.RFC3339))
+		if left := time.Until(pi.Soonest); left > 0 {
+			view.PISoonestIn = "in " + humanDuration(left)
+		}
+	}
+
 	view.Loaded = view.OnlineKnown || view.LocationKnown || view.ShipKnown ||
 		view.FatigueKnown || view.ImplantsKnown || view.ClonesKnown ||
-		view.IdentityKnown || view.WalletKnown || view.SkillsKnown || view.QueueKnown
+		view.IdentityKnown || view.WalletKnown || view.SkillsKnown || view.QueueKnown ||
+		view.PIKnown || view.PINotEnabled
 	if !view.Loaded {
 		// No section produced data: cold start (worker still
 		// importing this character's live-state snapshots) gets

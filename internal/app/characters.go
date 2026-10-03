@@ -31,19 +31,20 @@ type charactersView struct {
 
 // managedCharacter is one row of the management page.
 type managedCharacter struct {
-	ID          int64
-	Name        string
-	PortraitURL string
-	CorpName    string // "" when unknown
-	Tags        string
-	State       string // link_state as stored
-	StateLabel  string // "Linked" | "Re-link needed"
-	StateDetail string // why a re-link is needed ("" when linked)
-	Since       string // link_state_at, when parked
-	Snapshots   int    // stored snapshot rows
-	Fresh       int    // of those, inside their cache window
-	Newest      string // newest fetched_at, "—" when none
-	Active      bool   // the session's acting character
+	ID           int64
+	Name         string
+	PortraitURL  string
+	CorpName     string // "" when unknown
+	Tags         string
+	State        string // link_state as stored
+	StateLabel   string // "Linked" | "Re-link needed"
+	StateDetail  string // why a re-link is needed ("" when linked)
+	PINotEnabled bool   // planetary scope missing on this login; re-link enables PI
+	Since        string // link_state_at, when parked
+	Snapshots    int    // stored snapshot rows
+	Fresh        int    // of those, inside their cache window
+	Newest       string // newest fetched_at, "—" when none
+	Active       bool   // the session's acting character
 }
 
 // portraitURL is the CCP image-server portrait for a character.
@@ -180,6 +181,11 @@ func (app *Application) managedCharacterRow(ctx context.Context, ch db.Character
 			row.CorpName = info.Name
 		}
 	}
+
+	// Planetary industry enablement (Phase 2): the link itself
+	// is healthy, but its scope grant predates the planetary
+	// scope, so colonies stay dark until a fresh sign-in.
+	row.PINotEnabled = app.piNotEnabled(ctx, ch)
 
 	snaps, err := app.queries.ListSnapshotsByCharacter(ctx, ch.CharacterID)
 	if err == nil {

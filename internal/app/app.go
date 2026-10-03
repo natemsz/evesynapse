@@ -260,6 +260,26 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/", app.handleAssets)
 	})
 
+	r.Route("/planets", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handlePlanets)
+	})
+
+	r.Route("/mail", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleMail)
+	})
+
+	r.Route("/calendar", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleCalendar)
+	})
+
+	r.Route("/contacts", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleContacts)
+	})
+
 	r.Route("/market", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleMarket)

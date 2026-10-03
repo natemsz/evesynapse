@@ -233,19 +233,26 @@ func (app *Application) seedStructurePlaceNames(ctx context.Context, ch db.Chara
 // POST /corporations/{id}/assets/names/, at most
 // maxCorpAssetNameItemsPerCycle unresolved items per cycle. The
 // names POST needs the same Director role as the assets list;
-// outcomes are recorded under the corp_asset_names pseudo-kind so a
-// refusal backs off instead of retrying every minute. CCP reports
-// "None" for unnamed items — those are skipped (and retried next
-// time the item still lacks a name, which costs nothing while the
-// cycle cap holds).
+// outcomes are recorded under the corp_asset_names pseudo-kind so
+// a refusal — or a 404 batch rejection — backs off instead of
+// retrying every minute. CCP reports "None" for unnamed items —
+// those are skipped (and retried next time the item still lacks
+// a name, which costs nothing while the cycle cap holds).
 func (app *Application) warmCorpAssetNames(ctx context.Context, ch db.Character, corpID int64) {
 	var items []esi.Asset
 	if !app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapCorpAssets, &items) {
 		return // no assets snapshot yet; nothing to name
 	}
 
-	// Respect a recent role refusal on the names endpoint itself.
-	if state, err := app.queries.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: ch.CharacterID, Kind: corpAssetNamesKind}); err == nil && state.State == fetchStateRoleMissing {
+	// Respect a recent refusal or failure on the names endpoint
+	// itself. A 403 means the Director role is missing; a 404
+	// (ESI rejects the whole batch when even one submitted item
+	// no longer resolves, e.g. a snapshot outlived its assets)
+	// won't heal by retrying every minute either. Either way the
+	// next attempt waits out the usual backoff, which also keeps
+	// the failure log to one line per backoff window.
+	if state, err := app.queries.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: ch.CharacterID, Kind: corpAssetNamesKind}); err == nil &&
+		(state.State == fetchStateRoleMissing || state.State == fetchStateError) {
 		if attempted, perr := time.Parse(time.RFC3339, state.AttemptedAt); perr == nil && time.Since(attempted) < roleMissingBackoff {
 			return
 		}

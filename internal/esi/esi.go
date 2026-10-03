@@ -156,6 +156,18 @@ func IsForbidden(err error) bool {
 	return errors.As(err, &se) && se.Code == http.StatusForbidden
 }
 
+// StatusCode returns the HTTP status of a failed ESI call when the
+// error carries one (0 otherwise). Lets callers distinguish a
+// definitive answer about the request itself (404/422: this ID is
+// not that kind of entity) from transient failures worth retrying.
+func StatusCode(err error) (int, bool) {
+	var se *StatusError
+	if errors.As(err, &se) {
+		return se.Code, true
+	}
+	return 0, false
+}
+
 // TokenFunc returns an access token for the character that is safe
 // to use right now (refreshing and persisting a rotated pair first
 // when needed). Token values must never be logged.
@@ -196,6 +208,14 @@ type Client struct {
 	charNamesMu sync.RWMutex
 	charNames   map[int64]string
 
+	// IDs ESI has definitively said are not characters (404/422
+	// from GET /characters/{id}/): corporation and alliance IDs
+	// share the numeric space and get harvested from ledger
+	// payloads, and without this negative cache the worker would
+	// re-ask about them every cycle. In-process only — a restart
+	// re-proves a handful of IDs once.
+	charNameMisses map[int64]bool
+
 	// In-process caches of corporation and alliance ID → name,
 	// warmed by the worker from war details so the Intel pages
 	// can label war parties. Two maps on purpose: corporation
@@ -229,6 +249,7 @@ func New(httpClient *http.Client, queries *db.Queries, tokens TokenFunc) *Client
 		groupNames:         make(map[int64]string),
 		placeNames:         make(map[int64]string),
 		charNames:          make(map[int64]string),
+		charNameMisses:     make(map[int64]bool),
 		corpNames:          make(map[int64]string),
 		allianceNames:      make(map[int64]string),
 		constellationNames: make(map[int64]string),
@@ -2055,8 +2076,17 @@ func (c *Client) CharacterName(ctx context.Context, id int64) (string, error) {
 	if name, ok := c.CachedCharacterName(id); ok {
 		return name, nil
 	}
+	if c.CharacterNameMissed(id) {
+		return "", fmt.Errorf("character %d: not a character (remembered answer)", id)
+	}
 	var ch Character
 	if err := c.Get(ctx, "", fmt.Sprintf("/characters/%d/", id), &ch); err != nil {
+		// A 404/422 here is definitive — the ID belongs to some
+		// other entity kind (or nothing) — so remember it instead
+		// of letting the caller re-ask every cycle.
+		if code, ok := StatusCode(err); ok && (code == http.StatusNotFound || code == 422) {
+			c.StoreCharacterNameMiss(id)
+		}
 		return "", err
 	}
 	if ch.Name == "" {
@@ -2080,6 +2110,22 @@ func (c *Client) CachedCharacterName(id int64) (string, bool) {
 func (c *Client) StoreCharacterName(id int64, name string) {
 	c.charNamesMu.Lock()
 	c.charNames[id] = name
+	c.charNamesMu.Unlock()
+}
+
+// CharacterNameMissed reports whether ESI has already definitively
+// answered that this ID is not a character (see charNameMisses).
+func (c *Client) CharacterNameMissed(id int64) bool {
+	c.charNamesMu.RLock()
+	defer c.charNamesMu.RUnlock()
+	return c.charNameMisses[id]
+}
+
+// StoreCharacterNameMiss records a definitive "not a character"
+// answer for an ID so the warm-up pass skips it from now on.
+func (c *Client) StoreCharacterNameMiss(id int64) {
+	c.charNamesMu.Lock()
+	c.charNameMisses[id] = true
 	c.charNamesMu.Unlock()
 }
 

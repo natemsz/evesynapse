@@ -67,11 +67,64 @@ const (
 	SnapFittings  = "fittings"
 	SnapFatigue   = "fatigue"
 	SnapKillmails = "killmails" // recent list (id+hash pairs); details live in killmail_details
+
+	// Module sweep, cluster 2 (corporation): corporation endpoints,
+	// stored per viewing character (the character whose token
+	// fetched them, against that character's corporation) under
+	// corp_* kinds. Journal/transaction kinds are per wallet
+	// division: corp_journal_1..7 and corp_txns_1..7 (see
+	// CorpJournalKind / CorpTxnsKind).
+	SnapCorpInfo           = "corp_info" // GET /corporations/{id}/ (public payload)
+	SnapCorpMembers        = "corp_members"
+	SnapCorpMemberTracking = "corp_membertracking"
+	SnapCorpWallets        = "corp_wallets"
+	SnapCorpOrders         = "corp_orders"
+	SnapCorpAssets         = "corp_assets"
+	SnapCorpStructures     = "corp_structures"
+	SnapCorpKillmails      = "corp_killmails" // recent list (id+hash pairs); details share killmail_details
+
+	// Snapshot-kind prefixes for the per-division wallet kinds.
+	SnapCorpJournalPrefix = "corp_journal_"
+	SnapCorpTxnsPrefix    = "corp_txns_"
 )
+
+// CorpJournalKind is the snapshot kind holding wallet division d's
+// journal (d in 1..7).
+func CorpJournalKind(division int64) string {
+	return SnapCorpJournalPrefix + strconv.FormatInt(division, 10)
+}
+
+// CorpTxnsKind is the snapshot kind holding wallet division d's
+// transactions (d in 1..7).
+func CorpTxnsKind(division int64) string {
+	return SnapCorpTxnsPrefix + strconv.FormatInt(division, 10)
+}
 
 // ErrErrorLimit marks ESI's error-limit responses (420/429): callers
 // (notably the worker) should back off rather than keep hammering.
 var ErrErrorLimit = errors.New("ESI error limit")
+
+// StatusError is a non-200 ESI response that isn't the error limit:
+// the worker distinguishes 403 (an in-game role or a scope the
+// character hasn't granted) from other failures so role-gated
+// corporation endpoints can record a "role missing" state instead
+// of retrying forever. The message matches the plain format the
+// client has always produced, so log output is unchanged.
+type StatusError struct {
+	Method string // "GET" or "POST"
+	Path   string
+	Code   int
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("ESI %s %s: status %d", e.Method, e.Path, e.Code)
+}
+
+// IsForbidden reports whether err is an ESI 403.
+func IsForbidden(err error) bool {
+	var se *StatusError
+	return errors.As(err, &se) && se.Code == http.StatusForbidden
+}
 
 // TokenFunc returns an access token for the character that is safe
 // to use right now (refreshing and persisting a rotated pair first
@@ -390,6 +443,143 @@ type Killmail struct {
 }
 
 // ---------------------------------------------------------------------------
+// Module sweep, cluster 2: corporation payloads. Shapes verified
+// against CCP's ESI OpenAPI document (components/schemas
+// CorporationsCorporationId*). Dates are RFC3339 strings, matching
+// the rest of this package.
+// ---------------------------------------------------------------------------
+
+// CorpMembers is GET /corporations/{id}/members/: the member
+// character IDs (names resolve through the character-name cache).
+type CorpMembers []int64
+
+// CorpMemberTracking is one entry of GET
+// /corporations/{id}/membertracking/ (Director role in-game).
+// Only character_id is guaranteed; the rest fill in as CCP tracks
+// the member.
+type CorpMemberTracking struct {
+	CharacterID int64  `json:"character_id"`
+	BaseID      int64  `json:"base_id"`      // home station, 0 when unset
+	LocationID  int64  `json:"location_id"`  // current station/system/structure, 0 when unknown
+	LogoffDate  string `json:"logoff_date"`  // RFC3339
+	LogonDate   string `json:"logon_date"`   // RFC3339, last login
+	ShipTypeID  int64  `json:"ship_type_id"` // current ship type, 0 when unknown
+	StartDate   string `json:"start_date"`   // RFC3339, when the member joined
+}
+
+// CorpMemberTrackings is GET /corporations/{id}/membertracking/.
+type CorpMemberTrackings []CorpMemberTracking
+
+// CorpWalletDivision is one entry of GET /corporations/{id}/wallets/.
+type CorpWalletDivision struct {
+	Division int64   `json:"division"` // 1..7
+	Balance  float64 `json:"balance"`
+}
+
+// CorpWallets is GET /corporations/{id}/wallets/.
+type CorpWallets []CorpWalletDivision
+
+// CorpJournalEntry is one entry of GET
+// /corporations/{id}/wallets/{division}/journal/. Only id, date,
+// ref_type and description are guaranteed by the spec.
+type CorpJournalEntry struct {
+	ID            int64   `json:"id"`
+	Date          string  `json:"date"` // RFC3339
+	RefType       string  `json:"ref_type"`
+	Amount        float64 `json:"amount"` // + into the wallet, - out of it
+	Balance       float64 `json:"balance"`
+	Description   string  `json:"description"`
+	Reason        string  `json:"reason"`
+	FirstPartyID  int64   `json:"first_party_id"`
+	SecondPartyID int64   `json:"second_party_id"`
+	ContextID     int64   `json:"context_id"`
+	ContextType   string  `json:"context_id_type"`
+}
+
+// CorpJournal is one page of a division journal.
+type CorpJournal []CorpJournalEntry
+
+// CorpWalletTransaction is one entry of GET
+// /corporations/{id}/wallets/{division}/transactions/.
+type CorpWalletTransaction struct {
+	TransactionID int64   `json:"transaction_id"`
+	Date          string  `json:"date"` // RFC3339
+	TypeID        int64   `json:"type_id"`
+	LocationID    int64   `json:"location_id"`
+	UnitPrice     float64 `json:"unit_price"`
+	Quantity      int64   `json:"quantity"`
+	ClientID      int64   `json:"client_id"` // counterparty character/corporation
+	IsBuy         bool    `json:"is_buy"`
+	JournalRefID  int64   `json:"journal_ref_id"`
+}
+
+// CorpWalletTransactions is one fetch of a division's transactions.
+type CorpWalletTransactions []CorpWalletTransaction
+
+// CorpOrder is one entry of GET /corporations/{id}/orders/ (open
+// orders only).
+type CorpOrder struct {
+	OrderID      int64   `json:"order_id"`
+	TypeID       int64   `json:"type_id"`
+	LocationID   int64   `json:"location_id"`
+	RegionID     int64   `json:"region_id"`
+	IsBuyOrder   bool    `json:"is_buy_order"`
+	Price        float64 `json:"price"`
+	VolumeTotal  int64   `json:"volume_total"`
+	VolumeRemain int64   `json:"volume_remain"`
+	MinVolume    int64   `json:"min_volume"`
+	Range        string  `json:"range"`
+	Issued       string  `json:"issued"` // RFC3339
+	Duration     int64   `json:"duration"`
+	Escrow       float64 `json:"escrow"`
+	WalletDiv    int64   `json:"wallet_division"`
+	IssuedBy     int64   `json:"issued_by"`
+}
+
+// CorpOrders is GET /corporations/{id}/orders/ (all pages merged).
+type CorpOrders []CorpOrder
+
+// CorpStructureService is one service module of a CorpStructure.
+type CorpStructureService struct {
+	Name  string `json:"name"`
+	State string `json:"state"` // online|offline|cleanup
+}
+
+// CorpStructure is one entry of GET /corporations/{id}/structures/
+// (Station Manager role in-game). The payload carries the
+// structure's name directly. Optional timers (fuel, reinforce
+// transitions, unanchoring) are empty strings when absent; the
+// reinforce hours are pointers because 0 is a real hour.
+type CorpStructure struct {
+	StructureID       int64                  `json:"structure_id"`
+	TypeID            int64                  `json:"type_id"`
+	SystemID          int64                  `json:"system_id"`
+	CorporationID     int64                  `json:"corporation_id"`
+	Name              string                 `json:"name"`
+	FuelExpires       string                 `json:"fuel_expires"` // RFC3339
+	State             string                 `json:"state"`
+	StateTimerStart   string                 `json:"state_timer_start"` // RFC3339
+	StateTimerEnd     string                 `json:"state_timer_end"`   // RFC3339
+	ReinforceHour     *int64                 `json:"reinforce_hour"`    // 0..23, nil when omitted
+	NextReinforceHour *int64                 `json:"next_reinforce_hour"`
+	NextReinforceAt   string                 `json:"next_reinforce_apply"` // RFC3339
+	UnanchorsAt       string                 `json:"unanchors_at"`         // RFC3339
+	Services          []CorpStructureService `json:"services"`
+}
+
+// CorpStructures is GET /corporations/{id}/structures/ (all pages
+// merged).
+type CorpStructures []CorpStructure
+
+// AssetName is one entry of POST /corporations/{id}/assets/names/:
+// the player-given name of a singleton item (a fitted ship, a
+// renamed container). CCP reports "None" for items nobody named.
+type AssetName struct {
+	ItemID int64  `json:"item_id"`
+	Name   string `json:"name"`
+}
+
+// ---------------------------------------------------------------------------
 // HTTP layer.
 // ---------------------------------------------------------------------------
 
@@ -433,7 +623,7 @@ func (c *Client) FetchRaw(ctx context.Context, accessToken, path string) ([]byte
 		return nil, resp.Header, fmt.Errorf("ESI GET %s: status %d: %w", path, resp.StatusCode, ErrErrorLimit)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, resp.Header, fmt.Errorf("ESI GET %s: status %d", path, resp.StatusCode)
+		return nil, resp.Header, &StatusError{Method: http.MethodGet, Path: path, Code: resp.StatusCode}
 	}
 	return body, resp.Header, nil
 }
@@ -441,9 +631,15 @@ func (c *Client) FetchRaw(ctx context.Context, accessToken, path string) ([]byte
 // PostJSON POSTs payload as JSON to ESI and decodes the response
 // into out, following FetchRaw's conventions (User-Agent header,
 // 420/429 wrapped as ErrErrorLimit, other non-200 statuses as
-// plain errors). Used by POST /universe/ids/ for exact name → ID
+// StatusError). Used by POST /universe/ids/ for exact name → ID
 // resolution; no auth token — the endpoint is public.
 func (c *Client) PostJSON(ctx context.Context, path string, payload any, out any) error {
+	return c.postJSON(ctx, "", path, payload, out)
+}
+
+// postJSON is PostJSON with an optional Bearer token (sent only
+// when non-empty; token values are never logged).
+func (c *Client) postJSON(ctx context.Context, accessToken, path string, payload any, out any) error {
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("ESI POST %s: encode: %w", path, err)
@@ -455,6 +651,9 @@ func (c *Client) PostJSON(ctx context.Context, path string, payload any, out any
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", userAgent)
+	if accessToken != "" {
+		req.Header.Set("Authorization", "Bearer "+accessToken)
+	}
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return fmt.Errorf("ESI POST %s: %w", path, err)
@@ -468,7 +667,7 @@ func (c *Client) PostJSON(ctx context.Context, path string, payload any, out any
 		return fmt.Errorf("ESI POST %s: status %d: %w", path, resp.StatusCode, ErrErrorLimit)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("ESI POST %s: status %d", path, resp.StatusCode)
+		return &StatusError{Method: http.MethodPost, Path: path, Code: resp.StatusCode}
 	}
 	if err := json.Unmarshal(body, out); err != nil {
 		return fmt.Errorf("ESI POST %s: decode: %w", path, err)
@@ -566,6 +765,124 @@ func (c *Client) FetchAndStoreSnapshot(ctx context.Context, ch db.Character, kin
 		return nil, fmt.Errorf("store %s snapshot for character %d: %w", kind, ch.CharacterID, err)
 	}
 	return body, nil
+}
+
+// corpSnapshotPath maps a corporation snapshot kind to its ESI
+// path for a corporation, reporting whether the endpoint paginates
+// (assets/orders/structures merge every page into one stored
+// array, exactly like character assets) and whether the kind is
+// known at all. The journal/transactions kinds carry their wallet
+// division as a suffix (corp_journal_3). Everything else is a
+// single fetch: the killmail list page shows the most recent
+// entries first, and journal/transactions pages render "recent"
+// views, so page 1 is the whole story for both.
+func corpSnapshotPath(corporationID int64, kind string) (path string, paginated bool, ok bool) {
+	switch kind {
+	case SnapCorpInfo:
+		return fmt.Sprintf("/corporations/%d/", corporationID), false, true
+	case SnapCorpMembers:
+		return fmt.Sprintf("/corporations/%d/members/", corporationID), false, true
+	case SnapCorpMemberTracking:
+		return fmt.Sprintf("/corporations/%d/membertracking/", corporationID), false, true
+	case SnapCorpWallets:
+		return fmt.Sprintf("/corporations/%d/wallets/", corporationID), false, true
+	case SnapCorpOrders:
+		return fmt.Sprintf("/corporations/%d/orders/", corporationID), true, true
+	case SnapCorpAssets:
+		return fmt.Sprintf("/corporations/%d/assets/", corporationID), true, true
+	case SnapCorpStructures:
+		return fmt.Sprintf("/corporations/%d/structures/", corporationID), true, true
+	case SnapCorpKillmails:
+		return fmt.Sprintf("/corporations/%d/killmails/recent/", corporationID), false, true
+	}
+	if division, found := parseDivisionKind(kind, SnapCorpJournalPrefix); found {
+		return fmt.Sprintf("/corporations/%d/wallets/%d/journal/", corporationID, division), false, true
+	}
+	if division, found := parseDivisionKind(kind, SnapCorpTxnsPrefix); found {
+		return fmt.Sprintf("/corporations/%d/wallets/%d/transactions/", corporationID, division), false, true
+	}
+	return "", false, false
+}
+
+// parseDivisionKind extracts the wallet division (1..7) from a
+// per-division snapshot kind ("corp_journal_3"); anything outside
+// 1..7 or unparseable is not a division kind.
+func parseDivisionKind(kind, prefix string) (int64, bool) {
+	if !strings.HasPrefix(kind, prefix) {
+		return 0, false
+	}
+	d, err := strconv.ParseInt(strings.TrimPrefix(kind, prefix), 10, 64)
+	if err != nil || d < 1 || d > 7 {
+		return 0, false
+	}
+	return d, true
+}
+
+// FetchAndStoreCorpSnapshot is FetchAndStoreSnapshot for the
+// corporation endpoints: the payload is fetched with ch's access
+// token against ch's corporation and stored under ch's character
+// ID + kind (corp data rides the per-character snapshot table —
+// see the SnapCorp* kind comments). A 403 comes back as a
+// StatusError (see IsForbidden): the caller records the missing
+// in-game role and leaves the cache untouched.
+func (c *Client) FetchAndStoreCorpSnapshot(ctx context.Context, ch db.Character, corporationID int64, kind string) ([]byte, error) {
+	path, paginated, known := corpSnapshotPath(corporationID, kind)
+	if !known {
+		return nil, fmt.Errorf("unknown corp snapshot kind %q", kind)
+	}
+
+	token, err := c.tokens(ctx, ch)
+	if err != nil {
+		return nil, err
+	}
+
+	var body []byte
+	var header http.Header
+	if paginated {
+		body, header, err = c.fetchAllPages(ctx, token, path)
+	} else {
+		body, header, err = c.FetchRaw(ctx, token, path)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	cachedUntil := time.Now().Add(5 * time.Minute)
+	if exp := header.Get("Expires"); exp != "" {
+		if t, perr := http.ParseTime(exp); perr == nil {
+			cachedUntil = t
+		}
+	}
+
+	now := time.Now().UTC()
+	if err := c.queries.UpsertSnapshot(ctx, db.UpsertSnapshotParams{
+		CharacterID: ch.CharacterID,
+		Kind:        kind,
+		Payload:     string(body),
+		FetchedAt:   now.Format(time.RFC3339),
+		CachedUntil: sql.NullString{String: cachedUntil.UTC().Format(time.RFC3339), Valid: true},
+	}); err != nil {
+		return nil, fmt.Errorf("store %s snapshot for character %d: %w", kind, ch.CharacterID, err)
+	}
+	return body, nil
+}
+
+// FetchCorpAssetNames resolves player-given names for corporation
+// asset items via POST /corporations/{id}/assets/names/ (ESI
+// accepts at most 1,000 item IDs per call; the worker bounds its
+// per-cycle batches). The endpoint needs the Director role,
+// like the corporation assets list itself.
+func (c *Client) FetchCorpAssetNames(ctx context.Context, ch db.Character, corporationID int64, itemIDs []int64) ([]AssetName, error) {
+	token, err := c.tokens(ctx, ch)
+	if err != nil {
+		return nil, err
+	}
+	var out []AssetName
+	path := fmt.Sprintf("/corporations/%d/assets/names/", corporationID)
+	if err := c.postJSON(ctx, token, path, itemIDs, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // fetchAllPages GETs every page of a paginated ESI endpoint (page

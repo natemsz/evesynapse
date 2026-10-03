@@ -127,6 +127,30 @@ func (q *Queries) GetCharacter(ctx context.Context, characterID int64) (Characte
 	return i, err
 }
 
+const getCharacterCorporation = `-- name: GetCharacterCorporation :one
+SELECT character_id, corporation_id, updated_at FROM character_corporations
+WHERE character_id = ?
+`
+
+func (q *Queries) GetCharacterCorporation(ctx context.Context, characterID int64) (CharacterCorporation, error) {
+	row := q.db.QueryRowContext(ctx, getCharacterCorporation, characterID)
+	var i CharacterCorporation
+	err := row.Scan(&i.CharacterID, &i.CorporationID, &i.UpdatedAt)
+	return i, err
+}
+
+const getItemName = `-- name: GetItemName :one
+SELECT name FROM item_names
+WHERE item_id = ?
+`
+
+func (q *Queries) GetItemName(ctx context.Context, itemID int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getItemName, itemID)
+	var name string
+	err := row.Scan(&name)
+	return name, err
+}
+
 const getKillmailDetail = `-- name: GetKillmailDetail :one
 
 SELECT killmail_id, character_id, hash, payload, fetched_at FROM killmail_details
@@ -268,6 +292,35 @@ func (q *Queries) GetSnapshot(ctx context.Context, arg GetSnapshotParams) (Chara
 	return i, err
 }
 
+const getSnapshotFetchState = `-- name: GetSnapshotFetchState :one
+
+SELECT character_id, kind, state, detail, attempted_at FROM snapshot_fetch_state
+WHERE character_id = ? AND kind = ?
+`
+
+type GetSnapshotFetchStateParams struct {
+	CharacterID int64  `json:"character_id"`
+	Kind        string `json:"kind"`
+}
+
+// ---------------------------------------------------------------------
+// Module sweep, cluster 2 (schema 005): corporation support.
+// Fetch-outcome log (role-missing state), character-to-corporation
+// map, and player-given item names.
+// ---------------------------------------------------------------------
+func (q *Queries) GetSnapshotFetchState(ctx context.Context, arg GetSnapshotFetchStateParams) (SnapshotFetchState, error) {
+	row := q.db.QueryRowContext(ctx, getSnapshotFetchState, arg.CharacterID, arg.Kind)
+	var i SnapshotFetchState
+	err := row.Scan(
+		&i.CharacterID,
+		&i.Kind,
+		&i.State,
+		&i.Detail,
+		&i.AttemptedAt,
+	)
+	return i, err
+}
+
 const getTypeName = `-- name: GetTypeName :one
 SELECT name FROM type_names
 WHERE type_id = ?
@@ -399,6 +452,34 @@ func (q *Queries) ListCharactersByUser(ctx context.Context, userID int64) ([]Cha
 	return items, nil
 }
 
+const listItemNames = `-- name: ListItemNames :many
+SELECT item_id, name FROM item_names
+ORDER BY item_id
+`
+
+func (q *Queries) ListItemNames(ctx context.Context) ([]ItemName, error) {
+	rows, err := q.db.QueryContext(ctx, listItemNames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ItemName
+	for rows.Next() {
+		var i ItemName
+		if err := rows.Scan(&i.ItemID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listKillmailDetailIDsByCharacter = `-- name: ListKillmailDetailIDsByCharacter :many
 SELECT killmail_id FROM killmail_details
 WHERE character_id = ?
@@ -481,6 +562,41 @@ func (q *Queries) ListSDETypeIDs(ctx context.Context) ([]int64, error) {
 			return nil, err
 		}
 		items = append(items, type_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSnapshotFetchStatesByCharacter = `-- name: ListSnapshotFetchStatesByCharacter :many
+SELECT character_id, kind, state, detail, attempted_at FROM snapshot_fetch_state
+WHERE character_id = ?
+ORDER BY kind
+`
+
+func (q *Queries) ListSnapshotFetchStatesByCharacter(ctx context.Context, characterID int64) ([]SnapshotFetchState, error) {
+	rows, err := q.db.QueryContext(ctx, listSnapshotFetchStatesByCharacter, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SnapshotFetchState
+	for rows.Next() {
+		var i SnapshotFetchState
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.Kind,
+			&i.State,
+			&i.Detail,
+			&i.AttemptedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -702,6 +818,42 @@ func (q *Queries) UpsertCharacter(ctx context.Context, arg UpsertCharacterParams
 	return i, err
 }
 
+const upsertCharacterCorporation = `-- name: UpsertCharacterCorporation :exec
+INSERT INTO character_corporations (character_id, corporation_id, updated_at)
+VALUES (?, ?, ?)
+ON CONFLICT (character_id) DO UPDATE SET
+    corporation_id = excluded.corporation_id,
+    updated_at     = excluded.updated_at
+`
+
+type UpsertCharacterCorporationParams struct {
+	CharacterID   int64  `json:"character_id"`
+	CorporationID int64  `json:"corporation_id"`
+	UpdatedAt     string `json:"updated_at"`
+}
+
+func (q *Queries) UpsertCharacterCorporation(ctx context.Context, arg UpsertCharacterCorporationParams) error {
+	_, err := q.db.ExecContext(ctx, upsertCharacterCorporation, arg.CharacterID, arg.CorporationID, arg.UpdatedAt)
+	return err
+}
+
+const upsertItemName = `-- name: UpsertItemName :exec
+INSERT INTO item_names (item_id, name)
+VALUES (?, ?)
+ON CONFLICT (item_id) DO UPDATE SET
+    name = excluded.name
+`
+
+type UpsertItemNameParams struct {
+	ItemID int64  `json:"item_id"`
+	Name   string `json:"name"`
+}
+
+func (q *Queries) UpsertItemName(ctx context.Context, arg UpsertItemNameParams) error {
+	_, err := q.db.ExecContext(ctx, upsertItemName, arg.ItemID, arg.Name)
+	return err
+}
+
 const upsertKillmailDetail = `-- name: UpsertKillmailDetail :exec
 INSERT INTO killmail_details (killmail_id, character_id, hash, payload, fetched_at)
 VALUES (?, ?, ?, ?, ?)
@@ -772,6 +924,34 @@ func (q *Queries) UpsertSnapshot(ctx context.Context, arg UpsertSnapshotParams) 
 		arg.Payload,
 		arg.FetchedAt,
 		arg.CachedUntil,
+	)
+	return err
+}
+
+const upsertSnapshotFetchState = `-- name: UpsertSnapshotFetchState :exec
+INSERT INTO snapshot_fetch_state (character_id, kind, state, detail, attempted_at)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (character_id, kind) DO UPDATE SET
+    state        = excluded.state,
+    detail       = excluded.detail,
+    attempted_at = excluded.attempted_at
+`
+
+type UpsertSnapshotFetchStateParams struct {
+	CharacterID int64  `json:"character_id"`
+	Kind        string `json:"kind"`
+	State       string `json:"state"`
+	Detail      string `json:"detail"`
+	AttemptedAt string `json:"attempted_at"`
+}
+
+func (q *Queries) UpsertSnapshotFetchState(ctx context.Context, arg UpsertSnapshotFetchStateParams) error {
+	_, err := q.db.ExecContext(ctx, upsertSnapshotFetchState,
+		arg.CharacterID,
+		arg.Kind,
+		arg.State,
+		arg.Detail,
+		arg.AttemptedAt,
 	)
 	return err
 }

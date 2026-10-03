@@ -104,6 +104,17 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 007 (intel cluster: global public-data store + war
+	// detail store), applied the same guarded way.
+	var intelTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'global_snapshots'`).Scan(&intelTables); err != nil {
+		return nil, err
+	}
+	if intelTables == 0 {
+		if err := applySchema(conn, intelSchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

@@ -32,7 +32,8 @@ and key/vCode auth.
   bootstrap (`app.go`, `db.go`), page handlers and view models
   (`pages.go`, `assets.go`, `skills.go`, `corporation.go`,
   `market.go`, `sync.go`, `character.go`, `fittings.go`,
-  `killmails.go`), the background worker (`worker.go`), the
+  `killmails.go`, `intel.go`), the background worker (`worker.go`,
+  plus `intel_worker.go` for the public-data pass), the
   SDE static-data importer (`sde.go`), and the Termux DNS/CA shim
   (`netdns.go`)
 - `internal/app/templates/` — embedded html/templates (`base.html`
@@ -41,7 +42,8 @@ and key/vCode auth.
   (`bg.jpg`) and the dependency-free stylesheet (`style.css`), served
   at `/static/`
 - `internal/app/schema/` — SQL schema (sqlc input; `001_init.sql`,
-  `002_snapshots.sql`, `003_sde.sql`, `004_module_sweep.sql`),
+  `002_snapshots.sql`, `003_sde.sql`, `004_module_sweep.sql`,
+  `005_corp.sql`, `006_economy.sql`, `007_intel.sql`),
   embedded for DB bootstrap
 - `internal/esi/` — the ESI client: HTTP layer, per-character
   snapshot cache, and the two-tier type/group/place name resolution
@@ -135,6 +137,18 @@ environment win). Then open <http://localhost:8080>:
   SDE static-data block (row counts, import state, update check);
   the page auto-refreshes so an import can be watched as it lands
   (requires login)
+- `/intel/wars/` — current wars from the public war list and
+  worker-warmed war details: aggressor/defender names, state,
+  kill records, open-for-allies/mutual badges, and a flag on wars
+  involving one of your characters' corporations (requires login;
+  all data is public ESI)
+- `/intel/incursions/` — active Sansha incursions: constellation,
+  staging system, state, influence bar, boss presence and the
+  affected systems (requires login; public ESI)
+- `/intel/fw/` — faction warfare: per-faction summary cards
+  (systems held, pilots, kills and victory points) and the most
+  contested front-line systems with occupier/owner factions
+  (requires login; public ESI)
 - `/healthz` — plain `ok`
 - `/dev-login` — dev-only fake sign-in, registered **only** when
   `DEV_LOGIN=1` (see below)
@@ -231,6 +245,22 @@ worker's warm-up pass fills it in. The interactive Market lookup
 is the one exception: it may make a single name fetch for an item
 nobody has cached yet.
 
+The Intel cluster (module sweep cluster 4, schema
+`007_intel.sql`) is public ESI data — wars, incursions, faction
+warfare and Tranquility status — so it doesn't ride the
+per-character snapshot table. The worker keeps it in a small
+global store instead: `global_snapshots` (one raw payload per
+dataset, same `Expires`/`cached_until` contract) plus a
+`war_details` store for `GET /wars/{war_id}/` payloads, warmed
+newest-first at most 50 per cycle and refreshed while a war is
+active (finished wars are immutable). War-party corporation and
+alliance names and incursion constellation names warm into
+in-process caches through the worker cycle's shared lookup
+budget; faction names come from the stored factions list itself.
+The Intel pages and the Home page's Tranquility line render from
+the store only — and the worker pass runs even with no characters
+linked, since none of it needs a token.
+
 ## Static data (SDE)
 
 Item, skill, group, station and system names come primarily from a
@@ -264,7 +294,11 @@ each access token is usable (refreshing when needed) and re-fetches
 any snapshot whose `cached_until` has passed — a first pass runs at
 boot. It also warms killmail details behind each character's recent
 list and contract item lists behind the contracts list (both
-bounded per cycle) so those pages never wait on ESI.
+bounded per cycle) so those pages never wait on ESI. The same
+cycle refreshes the public Intel store (server status, war list
+and details, incursions, faction-warfare systems/stats, factions)
+and the public names behind the Intel pages, spending from the
+same per-cycle lookup budget.
 It then warms the name caches from the fresh snapshots (type
 names and type→group links, group names, station/system names, and
 character names for killmail victims and final-blow attackers) with
@@ -311,7 +345,9 @@ support tables (fetch-state log, character→corporation map, item
 names) are absent (existing databases gain
 the new tables
 in place), and `internal/app/schema/006_economy.sql` whenever the
-contract-detail table is absent. Regenerate query code after editing `internal/db/query/queries.sql`
+contract-detail table is absent, and
+`internal/app/schema/007_intel.sql` whenever the global
+public-data tables are absent. Regenerate query code after editing `internal/db/query/queries.sql`
 with:
 
 ```sh
@@ -356,3 +392,8 @@ make gen   # sqlc generate
       warmed into a detail store like killmail details), Industry
       page (jobs incl. completed, blueprint library with BPO/BPC
       semantics, mining ledger)
+- [x] Module sweep cluster 4 (intel): Wars, Incursions and
+      Faction Warfare pages over a worker-warmed global public-data
+      store (no token needed; war details bounded like killmail
+      details), plus a Tranquility players-online line on Home —
+      renders stay cache-only throughout

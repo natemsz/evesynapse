@@ -290,6 +290,9 @@ img.portrait {
 .badge.loss { color: #f0b8c6; border-color: var(--danger); background: rgba(140, 50, 107, 0.28); }
 .countdown { font-variant-numeric: tabular-nums; color: var(--accent); }
 
+/* --- intel: wars involving one of the user's corporations --- */
+tbody tr.yours td { background: rgba(50, 140, 83, 0.12); }
+
 /* --- footer --- */
 footer {
   background: #0a0a0a;

@@ -48,6 +48,9 @@ var corpSchema string
 //go:embed schema/006_economy.sql
 var economySchema string
 
+//go:embed schema/007_intel.sql
+var intelSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -286,6 +289,13 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/industry", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleIndustry)
+	})
+
+	r.Route("/intel", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/wars/", app.handleIntelWars)
+		r.Get("/incursions/", app.handleIntelIncursions)
+		r.Get("/fw/", app.handleIntelFW)
 	})
 
 	r.Route("/sync", func(r chi.Router) {

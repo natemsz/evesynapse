@@ -15,43 +15,47 @@ import (
 
 // pageData is the view model shared by the templates.
 type pageData struct {
-	LoggedIn       bool
-	CharacterName  string
-	SSOConfigured  bool
-	AutoRefresh    bool   // base.html emits a meta-refresh (Sync page)
-	Error          string // friendly, user-safe banner (never internals)
-	Character      *characterSheet
-	CharChars      []assetCharLink
-	CharacterPage  *characterView
-	Fittings       *fittingsView
-	FittingsChars  []assetCharLink
-	Killmails      *killmailsView
-	KillmailChars  []assetCharLink
-	Wallet         *walletView
-	WalletChars    []assetCharLink
-	Orders         *ordersView
-	OrdersChars    []assetCharLink
-	Contracts      *contractsView
-	ContractsChars []assetCharLink
-	Industry       *industryView
-	IndustryChars  []assetCharLink
-	Corps          []corpView
-	CorpChars      []assetCharLink
-	CorpMembers    *corpMembersView
-	CorpWallets    *corpWalletsView
-	CorpOrders     *corpOrdersView
-	CorpAssets     *corpAssetsView
-	CorpStructs    *corpStructuresView
-	Assets         *assetsView
-	AssetsChars    []assetCharLink
-	Market         *marketView
-	Skills         *skillsView
-	SkillsChars    []assetCharLink
-	Sync           *syncView
-	Users          []db.User
-	Characters     []db.Character
-	Snapshots      []adminSnapshotRow
-	WorkerStatus   string
+	LoggedIn        bool
+	CharacterName   string
+	SSOConfigured   bool
+	AutoRefresh     bool   // base.html emits a meta-refresh (Sync page)
+	Error           string // friendly, user-safe banner (never internals)
+	Character       *characterSheet
+	CharChars       []assetCharLink
+	CharacterPage   *characterView
+	Fittings        *fittingsView
+	FittingsChars   []assetCharLink
+	Killmails       *killmailsView
+	KillmailChars   []assetCharLink
+	Wallet          *walletView
+	WalletChars     []assetCharLink
+	Orders          *ordersView
+	OrdersChars     []assetCharLink
+	Contracts       *contractsView
+	ContractsChars  []assetCharLink
+	Industry        *industryView
+	IndustryChars   []assetCharLink
+	IntelWars       *warsView
+	IntelIncursions *incursionsView
+	IntelFW         *fwView
+	ServerStatus    *serverStatusView
+	Corps           []corpView
+	CorpChars       []assetCharLink
+	CorpMembers     *corpMembersView
+	CorpWallets     *corpWalletsView
+	CorpOrders      *corpOrdersView
+	CorpAssets      *corpAssetsView
+	CorpStructs     *corpStructuresView
+	Assets          *assetsView
+	AssetsChars     []assetCharLink
+	Market          *marketView
+	Skills          *skillsView
+	SkillsChars     []assetCharLink
+	Sync            *syncView
+	Users           []db.User
+	Characters      []db.Character
+	Snapshots       []adminSnapshotRow
+	WorkerStatus    string
 }
 
 // characterSheet is what the home page shows for the signed-in
@@ -164,6 +168,11 @@ func (app *Application) handleHome(w http.ResponseWriter, r *http.Request) {
 	}
 	if data.LoggedIn {
 		data.Character = app.loadCharacterSheet(ctx)
+	}
+	// Tranquility status line: from the worker-warmed global
+	// store only; absent until the first intel pass lands it.
+	if status, ok := app.loadServerStatus(ctx); ok {
+		data.ServerStatus = status
 	}
 	app.render(w, http.StatusOK, "home.html", data)
 }

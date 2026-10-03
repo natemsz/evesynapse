@@ -484,6 +484,18 @@ type MarketPrice struct {
 	AdjustedPrice float64 `json:"adjusted_price"`
 }
 
+// MarketHistoryDay is one row of GET /markets/{region_id}/history/
+// — CCP's daily aggregate for a type in a region. Date is the ESI
+// day ("2006-01-02").
+type MarketHistoryDay struct {
+	Date       string  `json:"date"`
+	Average    float64 `json:"average"`
+	Highest    float64 `json:"highest"`
+	Lowest     float64 `json:"lowest"`
+	Volume     int64   `json:"volume"`
+	OrderCount int64   `json:"order_count"`
+}
+
 // MarketOrder is one order of GET /markets/{region}/orders/.
 type MarketOrder struct {
 	OrderID      int64   `json:"order_id"`

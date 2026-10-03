@@ -27,6 +27,8 @@ and key/vCode auth.
 - `esi.go` — ESI client with snapshot caching and type-name resolution
 - `pages.go` — home/admin handlers + template rendering
 - `assets.go` — assets browser (per-location stacks, switchable per character)
+- `market.go` — market browser (public ESI: name search, price guide,
+  regional order books)
 - `worker.go` — background ESI refresh scheduler (60s cycle)
 - `netdns.go` — Android/Termux DNS + embedded CA roots
 - `templates/` — embedded html/templates (`base.html` layout)
@@ -54,6 +56,10 @@ environment win). Then open <http://localhost:8080>:
 - `/admin/` — users, linked characters, worker status (requires login)
 - `/assets/` — asset browser: every stack grouped by location for the
   signed-in user's characters (requires login; `esi-assets.read_assets.v1`)
+- `/market/` — market browser: item search (local name cache + exact
+  ESI resolution), guide prices, and best/top orders for The Forge,
+  Domain, Sinq Laison, Heimatar and Metropolis (requires login; all
+  data is public ESI, order books capped at 20 pages)
 - `/healthz` — plain `ok`
 - `/dev-login` — dev-only fake sign-in, registered **only** when
   `DEV_LOGIN=1` (see below)
@@ -159,5 +165,7 @@ make gen   # sqlc generate
 - [x] 2013 look & feel (original wallpaper, dark panels, teal accents)
 - [x] Assets page: every stack grouped by location, worker-refreshed
       (scope already requested at login)
+- [x] Market page: type search, guide prices and regional order
+      books via public ESI (no scope needed)
 - [ ] Import CCP SDE into side tables for the market/fitting modules
 - [x] Multiple characters per account (link more while signed in)

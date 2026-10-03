@@ -250,6 +250,36 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
+const searchTypeNames = `-- name: SearchTypeNames :many
+SELECT type_id, name FROM type_names
+WHERE name LIKE ?
+ORDER BY name
+LIMIT 20
+`
+
+func (q *Queries) SearchTypeNames(ctx context.Context, name string) ([]TypeName, error) {
+	rows, err := q.db.QueryContext(ctx, searchTypeNames, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TypeName
+	for rows.Next() {
+		var i TypeName
+		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateCharacterTokens = `-- name: UpdateCharacterTokens :exec
 UPDATE characters
 SET access_token = ?, refresh_token = ?, token_expiry = ?, updated_at = datetime('now')

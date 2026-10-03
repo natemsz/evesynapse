@@ -86,3 +86,7 @@ SELECT type_id, name FROM type_names
 WHERE name LIKE ?
 ORDER BY name
 LIMIT 20;
+
+-- name: ListAllTypeNames :many
+SELECT type_id, name FROM type_names
+ORDER BY type_id;

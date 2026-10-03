@@ -29,9 +29,11 @@ and key/vCode auth.
 - `assets.go` — assets browser (per-location stacks, switchable per character)
 - `skills.go` — full skill sheet (every skill grouped by category,
   complete queue, switchable per character)
+- `sync.go` — Sync page (worker status, snapshot freshness and
+  name-coverage per character, re-warm buttons)
 - `market.go` — market browser (public ESI: name search, price guide,
   regional order books)
-- `worker.go` — background ESI refresh scheduler (60s cycle)
+- `worker.go` — background ESI refresh + name warm-up scheduler (60s cycle)
 - `netdns.go` — Android/Termux DNS + embedded CA roots
 - `templates/` — embedded html/templates (`base.html` layout)
 - `static/` — embedded assets: the 2013 wallpaper (`bg.jpg`) and the
@@ -66,6 +68,10 @@ environment win). Then open <http://localhost:8080>:
   the complete training queue, and every known skill grouped by
   category with per-group SP subtotals (requires login;
   `esi-skills.read_skills.v1` + `esi-skills.read_skillqueue.v1`)
+- `/sync/` — sync status: worker state, per-character snapshot
+  freshness and type-name coverage, with re-warm buttons; the page
+  auto-refreshes so an import can be watched as it lands (requires
+  login)
 - `/healthz` — plain `ok`
 - `/dev-login` — dev-only fake sign-in, registered **only** when
   `DEV_LOGIN=1` (see below)
@@ -131,14 +137,29 @@ fresh snapshots without calling ESI; on fetch failure a stale
 snapshot is served instead of an error. ESI's error-limit statuses
 (420/429) are treated as a hard back-off signal.
 
+Name resolution is split in two tiers. Page renders resolve type,
+group and place names from local caches only (the in-process maps
+plus the `type_names` table) — a render never waits on ESI; anything
+still missing shows as `Type #<id>` (or an "Ungrouped" skill section)
+until the worker's warm-up pass fills it in. The interactive Market
+lookup is the one exception: it may make a single name fetch for an
+item nobody has cached yet.
+
 ## Background worker
 
 Every 60 seconds the worker walks all linked characters: it ensures
 each access token is usable (refreshing when needed) and re-fetches
 any snapshot whose `cached_until` has passed — a first pass runs at
-boot. On a 420/429 the cycle stops and waits for the next tick. Logs
-stay quiet: one summary line per cycle only when something was
-refreshed or failed, plus a heartbeat every 10 minutes.
+boot. It then warms the name caches from the fresh snapshots (type
+names and type→group links, group names, station/system names) with
+a small concurrent pool, capped per cycle; a huge account simply
+converges over a few cycles. Characters are warmed first when they
+were just linked via SSO or flagged on the Sync page. On a 420/429
+the cycle stops and waits for the next tick. Logs stay quiet: one
+summary line per cycle only when something was refreshed or failed,
+plus a heartbeat every 10 minutes. The current status (last run,
+summary, cumulative names resolved) shows on the Admin and Sync
+pages.
 
 ## Look & feel
 
@@ -183,6 +204,8 @@ make gen   # sqlc generate
       books via public ESI (no scope needed)
 - [x] Skill sheet page: every skill grouped by category, full
       queue, per-group totals (from the cached snapshots)
+- [x] Cache-only renders: pages resolve names locally while the
+      worker pre-warms snapshots + names; Sync page shows progress
 - [x] Login requests the full read-only ESI scope set (63 scopes;
       mutating scopes excluded), matching the developer-portal app
 - [ ] Import CCP SDE into side tables for the market/fitting modules

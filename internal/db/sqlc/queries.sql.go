@@ -147,6 +147,34 @@ func (q *Queries) ListAllCharacters(ctx context.Context) ([]Character, error) {
 	return items, nil
 }
 
+const listAllTypeNames = `-- name: ListAllTypeNames :many
+SELECT type_id, name FROM type_names
+ORDER BY type_id
+`
+
+func (q *Queries) ListAllTypeNames(ctx context.Context) ([]TypeName, error) {
+	rows, err := q.db.QueryContext(ctx, listAllTypeNames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TypeName
+	for rows.Next() {
+		var i TypeName
+		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCharactersByUser = `-- name: ListCharactersByUser :many
 SELECT character_id, user_id, name, access_token, refresh_token, token_expiry, scopes, cached_until, created_at, updated_at FROM characters
 WHERE user_id = ?

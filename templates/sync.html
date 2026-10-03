@@ -1,0 +1,37 @@
+{{define "title"}}Sync{{end}}
+{{define "content"}}
+<h1>Sync</h1>
+<p>Background import status: snapshots and name caches are warmed by the worker so pages load instantly. This page refreshes itself every few seconds.</p>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .Sync}}
+<p><small>Worker: {{.Sync.WorkerLine}}{{if .Sync.Warming}} — warming in progress…{{end}}</small></p>
+
+{{if .Sync.Characters}}
+<p>
+  <form method="post" action="/sync/warm"><button class="btn" type="submit">Re-warm all characters</button></form>
+</p>
+{{range .Sync.Characters}}
+<h2>{{.Name}}</h2>
+<div class="tw">
+<table>
+  <thead><tr><th>Data</th><th>State</th><th>Fetched at</th><th>Cached until</th></tr></thead>
+  <tbody>
+  {{range .Snapshots}}
+    <tr><td>{{.Kind}}</td><td>{{.State}}</td><td>{{.FetchedAt}}</td><td>{{.CachedUntil}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p>Names resolved {{.NamesResolved}} of {{.NamesTotal}} ({{.NamesPercent}}%)</p>
+<div style="background:#1c1c1c; height:8px; max-width:420px;"><div style="background:#326b8c; height:8px; width:{{.NamesPercent}}%;"></div></div>
+<p>
+  <form method="post" action="/sync/warm?character={{.ID}}"><button class="btn" type="submit">Re-warm now</button></form>
+</p>
+{{end}}
+{{else}}
+<p>No characters linked yet — log in with EVE SSO to start warming.</p>
+{{end}}
+{{end}}
+{{end}}

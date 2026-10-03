@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{template "title" .}} · EveSynapse</title>
+{{if .AutoRefresh}}<meta http-equiv="refresh" content="5">{{end}}
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -16,6 +17,7 @@
     <a class="navlink" href="/assets/">Assets</a>
     <a class="navlink" href="/market/">Market</a>
     <a class="navlink" href="/skills/">Skills</a>
+    <a class="navlink" href="/sync/">Sync</a>
     <a class="navlink" href="/admin/">Admin</a>
     <span class="who">{{if .LoggedIn}}Signed in{{if .CharacterName}} as {{.CharacterName}}{{end}} · <a href="/auth/logout">Sign out</a>{{else}}Not signed in{{end}}</span>
   </nav>

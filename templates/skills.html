@@ -47,7 +47,11 @@
   <p><small>Group total: {{.SubtotalSP}} SP</small></p>
   {{end}}
   {{else}}
+  {{if .Skills.Warming}}
+  <p>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</p>
+  {{else}}
   <p><small>Skills are unavailable right now — check the server log.</small></p>
+  {{end}}
   {{end}}
 {{else}}
   <p>No skills to show yet — link a character first.</p>

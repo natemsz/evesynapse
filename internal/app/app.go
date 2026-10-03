@@ -69,6 +69,12 @@ var skillPlansSchema string
 //go:embed schema/013_market_history.sql
 var marketHistorySchema string
 
+//go:embed schema/014_structure_names.sql
+var structureNamesSchema string
+
+//go:embed schema/015_pilot_records.sql
+var pilotRecordsSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -301,6 +307,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/", app.handleItems)
 		r.Get("/category/{categoryID}/", app.handleItemsCategory)
 		r.Get("/group/{groupID}/", app.handleItemsGroup)
+		r.Get("/type/{typeID}/", app.handleItemType)
 	})
 
 	r.Route("/skills", func(r chi.Router) {
@@ -320,6 +327,13 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/character", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleCharacter)
+	})
+
+	// Public pilot page: a stranger's public record (profile +
+	// employment history), warmed by the worker from public ESI.
+	r.Route("/pilot", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handlePilot)
 	})
 
 	r.Route("/characters", func(r chi.Router) {

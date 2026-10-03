@@ -253,13 +253,16 @@ func (app *Application) corpStructureNames(ctx context.Context, characterID int6
 // corpLocationTitle renders an order/tracking location: NPC
 // station and system names from the local caches, player
 // structures from the structures snapshot when it named them,
-// and honest "#<id>" fallbacks otherwise (structure names beyond
-// the corp's own need a scope this app does not hold).
+// then the resolved structure-name cache (structures.go), and
+// honest "#<id>" fallbacks otherwise.
 func (app *Application) corpLocationTitle(ctx context.Context, locationID int64, structureNames map[int64]string) string {
 	if name, ok := app.esi.CachedPlaceName(ctx, locationID); ok {
 		return name
 	}
 	if name, ok := structureNames[locationID]; ok {
+		return name
+	}
+	if name := app.resolvedStructureTitle(ctx, locationID); name != "" {
 		return name
 	}
 	// Upwell structure IDs live up around 1e12, far above the

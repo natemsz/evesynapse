@@ -35,11 +35,13 @@ func humanizeEnum(s string) string {
 // corpMemberRow is one roster line, enriched with member-tracking
 // fields when the tracking snapshot is available.
 type corpMemberRow struct {
-	Name     string
-	Joined   string // start_date, date only
-	LastSeen string // last logon, formatted
-	Ship     string // current ship type name
-	Location string // current location title
+	Name       string
+	ID         int64
+	Joined     string // start_date, date only
+	LastSeen   string // last logon, formatted
+	Ship       string // current ship type name
+	ShipTypeID int64
+	Location   string // current location title
 }
 
 // corpMembersView is the Corporation Members page body.
@@ -103,7 +105,7 @@ func (app *Application) handleCorpMembers(w http.ResponseWriter, r *http.Request
 
 	structureNames := app.corpStructureNames(ctx, sel.Active.CharacterID)
 	for _, id := range members {
-		row := corpMemberRow{Name: characterDisplay(app.esi, id)}
+		row := corpMemberRow{Name: characterDisplay(app.esi, id), ID: id}
 		if t, ok := byCharacter[id]; ok {
 			if len(t.StartDate) >= 10 {
 				row.Joined = t.StartDate[:10]
@@ -111,6 +113,7 @@ func (app *Application) handleCorpMembers(w http.ResponseWriter, r *http.Request
 			row.LastSeen = formatFinish(t.LogonDate)
 			if t.ShipTypeID > 0 {
 				row.Ship = app.typeNameOrID(ctx, t.ShipTypeID)
+				row.ShipTypeID = t.ShipTypeID
 			}
 			if t.LocationID > 0 {
 				row.Location = app.corpLocationTitle(ctx, t.LocationID, structureNames)
@@ -147,13 +150,18 @@ type corpJournalRow struct {
 
 // corpTxnRow is one transaction line of the selected division.
 type corpTxnRow struct {
-	Date  string
-	Item  string
-	Qty   string
-	Unit  string // unit price
-	Total string // qty x unit price
-	Side  string // "Buy" | "Sell"
-	With  string // counterparty display
+	Date     string
+	Item     string
+	TypeID   int64
+	Qty      string
+	Unit     string // unit price
+	Total    string // qty x unit price
+	Side     string // "Buy" | "Sell"
+	With     string // counterparty display
+	ClientID int64
+	// ClientIsChar: counterparty resolved as a character (else a
+	// corporation — text).
+	ClientIsChar bool
 }
 
 // corpWalletsView is the Corporation Wallets page body.
@@ -268,14 +276,18 @@ func (app *Application) handleCorpWallets(w http.ResponseWriter, r *http.Request
 			if t.IsBuy {
 				side = "Buy"
 			}
+			_, clientIsChar := app.esi.CachedCharacterName(t.ClientID)
 			view.Txns = append(view.Txns, corpTxnRow{
-				Date:  formatFinish(t.Date),
-				Item:  app.typeNameOrID(ctx, t.TypeID),
-				Qty:   esi.FormatInt(t.Quantity),
-				Unit:  esi.FormatISK(t.UnitPrice),
-				Total: esi.FormatISK(t.UnitPrice * float64(t.Quantity)),
-				Side:  side,
-				With:  characterDisplay(app.esi, t.ClientID),
+				Date:         formatFinish(t.Date),
+				Item:         app.typeNameOrID(ctx, t.TypeID),
+				TypeID:       t.TypeID,
+				Qty:          esi.FormatInt(t.Quantity),
+				Unit:         esi.FormatISK(t.UnitPrice),
+				Total:        esi.FormatISK(t.UnitPrice * float64(t.Quantity)),
+				Side:         side,
+				With:         characterDisplay(app.esi, t.ClientID),
+				ClientID:     t.ClientID,
+				ClientIsChar: clientIsChar,
 			})
 		}
 	}
@@ -290,14 +302,16 @@ func (app *Application) handleCorpWallets(w http.ResponseWriter, r *http.Request
 // corpOrdersRow is one open-order line of the Corporation Orders
 // page (renamed from the earlier corpOrderRow sketch).
 type corpOrderRow struct {
-	Item     string
-	Side     string // "Buy" | "Sell"
-	Price    string
-	Volume   string // "remain / total"
-	Location string
-	Region   string
-	Expires  string
-	IssuedBy string
+	Item       string
+	TypeID     int64
+	Side       string // "Buy" | "Sell"
+	Price      string
+	Volume     string // "remain / total"
+	Location   string
+	Region     string
+	Expires    string
+	IssuedBy   string
+	IssuedByID int64
 }
 
 // corpOrdersView is the Corporation Orders page body.
@@ -363,14 +377,16 @@ func (app *Application) handleCorpOrders(w http.ResponseWriter, r *http.Request)
 			expires = t.Add(time.Duration(o.Duration) * 24 * time.Hour).UTC().Format("2006-01-02 15:04 UTC")
 		}
 		rows = append(rows, corpOrderRow{
-			Item:     app.typeNameOrID(ctx, o.TypeID),
-			Side:     side,
-			Price:    esi.FormatISK(o.Price),
-			Volume:   fmt.Sprintf("%s / %s", esi.FormatInt(o.VolumeRemain), esi.FormatInt(o.VolumeTotal)),
-			Location: app.corpLocationTitle(ctx, o.LocationID, structureNames),
-			Region:   regionName(o.RegionID),
-			Expires:  expires,
-			IssuedBy: characterDisplay(app.esi, o.IssuedBy),
+			Item:       app.typeNameOrID(ctx, o.TypeID),
+			TypeID:     o.TypeID,
+			Side:       side,
+			Price:      esi.FormatISK(o.Price),
+			Volume:     fmt.Sprintf("%s / %s", esi.FormatInt(o.VolumeRemain), esi.FormatInt(o.VolumeTotal)),
+			Location:   app.corpLocationTitle(ctx, o.LocationID, structureNames),
+			Region:     regionName(o.RegionID),
+			Expires:    expires,
+			IssuedBy:   characterDisplay(app.esi, o.IssuedBy),
+			IssuedByID: o.IssuedBy,
 		})
 	}
 	sort.Slice(rows, func(i, j int) bool {
@@ -462,6 +478,7 @@ func (app *Application) handleCorpAssets(w http.ResponseWriter, r *http.Request)
 type corpStructureRow struct {
 	Name     string
 	Type     string
+	TypeID   int64
 	System   string
 	State    string // humanized
 	Fuel     string // formatted expiry ("" when unfuelled/unreported)
@@ -512,12 +529,17 @@ func (app *Application) handleCorpStructures(w http.ResponseWriter, r *http.Requ
 	rows := make([]corpStructureRow, 0, len(structures))
 	for _, s := range structures {
 		row := corpStructureRow{
-			Name:  s.Name,
-			Type:  app.typeNameOrID(ctx, s.TypeID),
-			State: humanizeEnum(s.State),
+			Name:   s.Name,
+			Type:   app.typeNameOrID(ctx, s.TypeID),
+			TypeID: s.TypeID,
+			State:  humanizeEnum(s.State),
 		}
 		if row.Name == "" {
-			row.Name = fmt.Sprintf("Structure #%d", s.StructureID)
+			if name := app.resolvedStructureTitle(ctx, s.StructureID); name != "" {
+				row.Name = name
+			} else {
+				row.Name = fmt.Sprintf("Structure #%d", s.StructureID)
+			}
 		}
 		row.System = app.locationTitle(ctx, s.SystemID, "solar_system")
 		if s.FuelExpires != "" {

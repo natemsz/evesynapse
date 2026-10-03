@@ -24,6 +24,7 @@ type assetCharLink struct {
 // assetRow is one item stack in a location table.
 type assetRow struct {
 	Name     string
+	TypeID   int64
 	Quantity string // thousands-separated
 	Note     string // "BPC", "singleton", or ""
 }
@@ -203,6 +204,7 @@ func (app *Application) buildAssetLocationsWith(ctx context.Context, items []esi
 			}
 			loc.Items = append(loc.Items, assetRow{
 				Name:     name,
+				TypeID:   it.TypeID,
 				Quantity: esi.FormatInt(it.Quantity),
 				Note:     assetNote(it),
 			})
@@ -224,9 +226,9 @@ func (app *Application) buildAssetLocationsWith(ctx context.Context, items []esi
 // assetLocationTitle turns a (location_id, location_type) pair into
 // a display title. Station and solar-system names come from the
 // local caches (SDE tables first, then the worker-warmed place
-// cache); player structures
-// cannot be named without an ESI scope this app does not hold, so
-// they stay honest "Structure #<id>" unless extraTitles names them
+// cache); player structures show the worker-resolved name once it
+// lands (structures.go), and otherwise stay honest "Structure
+// #<id>" unless extraTitles names them
 // (the corporation cluster passes the corp's own structures);
 // items inside another owned item (a ship, a container) are
 // labelled with the parent's type name.
@@ -246,6 +248,9 @@ func (app *Application) assetLocationTitle(ctx context.Context, locID int64, loc
 		}
 		return fmt.Sprintf("System #%d", locID)
 	case "structure":
+		if name := app.resolvedStructureTitle(ctx, locID); name != "" {
+			return name
+		}
 		return fmt.Sprintf("Structure #%d", locID)
 	default: // "other", "item", anything unexpected
 		if parentType, ok := itemType[locID]; ok {

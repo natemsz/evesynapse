@@ -73,8 +73,8 @@ func (app *Application) pickCharacter(ctx context.Context, r *http.Request, path
 // locationTitle renders a station, structure, or solar-system
 // location the way the character pages show it: the SDE/cache name
 // when known, an honest "#<id>" fallback otherwise. Player
-// structures resolve only when a name was cached by other means —
-// their names need an ESI scope this app does not hold.
+// structures show the name the worker resolved for them once it
+// lands (structures.go); until then the same "#<id>" fallback.
 func (app *Application) locationTitle(ctx context.Context, id int64, locType string) string {
 	if name, ok := app.esi.CachedPlaceName(ctx, id); ok {
 		return name
@@ -83,6 +83,9 @@ func (app *Application) locationTitle(ctx context.Context, id int64, locType str
 	case "station":
 		return fmt.Sprintf("Station #%d", id)
 	case "structure":
+		if name := app.resolvedStructureTitle(ctx, id); name != "" {
+			return name
+		}
 		return fmt.Sprintf("Structure #%d", id)
 	default:
 		return fmt.Sprintf("System #%d", id)
@@ -419,6 +422,7 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 			}
 			view.Skills = append(view.Skills, skillRow{
 				Name:    name,
+				TypeID:  id,
 				Trained: esi.RomanLevel(s.TrainedSkillLevel),
 				Active:  esi.RomanLevel(s.ActiveSkillLevel),
 				SP:      esi.FormatInt(s.SkillpointsInSkill),

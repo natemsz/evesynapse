@@ -188,6 +188,29 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 014 (player structure-name resolution queue), applied
+	// the same guarded way.
+	var structureNameTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'structure_names'`).Scan(&structureNameTables); err != nil {
+		return nil, err
+	}
+	if structureNameTables == 0 {
+		if err := applySchema(conn, structureNamesSchema); err != nil {
+			return nil, err
+		}
+	}
+	// Schema 015 (public pilot records + item type details: the
+	// wants queues behind /pilot/ and the item details page),
+	// applied the same guarded way.
+	var pilotTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'pilot_records'`).Scan(&pilotTables); err != nil {
+		return nil, err
+	}
+	if pilotTables == 0 {
+		if err := applySchema(conn, pilotRecordsSchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

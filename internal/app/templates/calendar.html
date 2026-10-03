@@ -1,0 +1,72 @@
+{{define "title"}}Calendar{{end}}
+{{define "content"}}
+<h1><span class="gt">Calendar</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .CalendarChars}}
+<p>{{range $i, $c := .CalendarChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/calendar/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
+{{end}}
+
+{{if .Calendar}}
+<h2>{{.Calendar.CharacterName}}</h2>
+
+{{if .Calendar.Detail}}
+<section class="foldable">
+{{if .Calendar.Detail.Warming}}
+<h3>{{if .Calendar.Detail.Title}}{{.Calendar.Detail.Title}}{{else}}Event{{end}}</h3>
+<p><small>Event details are still warming up — check back shortly.</small></p>
+{{else}}
+{{with .Calendar.Detail}}
+<h3>{{.Title}}</h3>
+<div class="tw">
+<table>
+  <tbody>
+    <tr><th>Starts</th><td>{{.Date}}</td></tr>
+    {{if .Duration}}<tr><th>Duration</th><td>{{.Duration}}</td></tr>{{end}}
+    {{if .Owner}}<tr><th>Owner</th><td>{{.Owner}}</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+{{if .Text}}<p>{{.Text}}</p>{{end}}
+{{if .Attendees}}
+<div class="tw">
+<table>
+  <thead><tr><th>Attendee</th><th>Response</th></tr></thead>
+  <tbody>
+  {{range .Attendees}}
+    <tr><td>{{.Name}}</td><td>{{.Response}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+{{end}}
+{{end}}
+<p><a href="/calendar/?character={{$.Calendar.CharacterID}}">Back to upcoming events</a></p>
+</section>
+{{end}}
+
+{{if .Calendar.Events.Note}}
+<p><small>{{.Calendar.Events.Note}}</small></p>
+{{else if .Calendar.Events.Warming}}
+<p><small>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</small></p>
+{{else if .Calendar.Rows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Date</th><th>Event</th><th>Your response</th><th></th></tr></thead>
+  <tbody>
+  {{range .Calendar.Rows}}
+    <tr><td>{{.Date}}</td><td><a href="/calendar/?character={{$.Calendar.CharacterID}}&amp;event={{.ID}}">{{.Title}}</a></td><td>{{.Response}}</td><td>{{if .Important}}<strong>Important</strong>{{end}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>Upcoming events. EveSynapse only reads your calendar — responses happen in-game.</small></p>
+{{else}}
+<p><small>No upcoming events in the latest snapshot.</small></p>
+{{end}}
+{{else}}
+<p>No character to show yet — link a character first.</p>
+{{end}}
+{{end}}

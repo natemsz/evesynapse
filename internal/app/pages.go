@@ -47,6 +47,14 @@ type pageData struct {
 	CorpStructs     *corpStructuresView
 	Assets          *assetsView
 	AssetsChars     []assetCharLink
+	Planets         *planetsView
+	PlanetsChars    []assetCharLink
+	Mail            *mailView
+	MailChars       []assetCharLink
+	Calendar        *calendarView
+	CalendarChars   []assetCharLink
+	Contacts        *contactsView
+	ContactsChars   []assetCharLink
 	Market          *marketView
 	Items           *itemsView
 	Skills          *skillsView
@@ -104,9 +112,10 @@ func sectionForPage(page string) string {
 	switch page {
 	case "home.html":
 		return "home"
-	case "character.html", "skills.html", "fittings.html", "killmails.html", "characters.html":
+	case "character.html", "skills.html", "fittings.html", "killmails.html", "characters.html",
+		"mail.html", "calendar.html", "contacts.html":
 		return "character"
-	case "assets.html", "industry.html":
+	case "assets.html", "industry.html", "planets.html":
 		return "assets"
 	case "market.html", "wallet.html", "orders.html", "contracts.html", "items.html":
 		return "economy"

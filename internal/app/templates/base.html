@@ -35,6 +35,9 @@
         <a href="/skills/"{{if eq .NavPage "skills.html"}} class="active"{{end}}>Skills</a>
         <a href="/fittings/"{{if eq .NavPage "fittings.html"}} class="active"{{end}}>Fittings</a>
         <a href="/killmails/"{{if and (eq .Section "character") (eq .NavPage "killmails.html")}} class="active"{{end}}>Killmails</a>
+        <a href="/mail/"{{if eq .NavPage "mail.html"}} class="active"{{end}}>Mail</a>
+        <a href="/calendar/"{{if eq .NavPage "calendar.html"}} class="active"{{end}}>Calendar</a>
+        <a href="/contacts/"{{if eq .NavPage "contacts.html"}} class="active"{{end}}>Contacts</a>
       </div>
     </details>
     <details class="branch{{if eq .Section "assets"}} active{{end}}" name="mainnav">
@@ -42,6 +45,7 @@
       <div class="menu">
         <a href="/assets/"{{if eq .NavPage "assets.html"}} class="active"{{end}}>Assets</a>
         <a href="/industry/"{{if eq .NavPage "industry.html"}} class="active"{{end}}>Industry</a>
+        <a href="/planets/"{{if eq .NavPage "planets.html"}} class="active"{{end}}>Planetary Industry</a>
       </div>
     </details>
     <details class="branch{{if eq .Section "economy"}} active{{end}}" name="mainnav">

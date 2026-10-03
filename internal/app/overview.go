@@ -41,6 +41,7 @@ const (
 	widgetMarket    = "market"
 	widgetSkills    = "skills"
 	widgetServer    = "server"
+	widgetPI        = "pi"
 )
 
 // widgetDef is one entry of the widget catalog: what Customize
@@ -56,6 +57,7 @@ var homeWidgetCatalog = []widgetDef{
 	{widgetAttention, "Needs attention", "Characters that need you: re-links, idle queues, finished jobs, expiring orders, waiting contracts."},
 	{widgetNetWorth, "Net worth", "Wallets, assets and open-order escrow across all characters, at market prices. An estimate."},
 	{widgetIndustry, "Industry", "Active industry jobs across characters, soonest delivery first."},
+	{widgetPI, "Planetary industry", "Colonies across your characters: extractor timers, expired heads, and the next planet needing a visit."},
 	{widgetMarket, "Market", "Open orders across characters: counts, sell/buy value, orders expiring soonest."},
 	{widgetSkills, "Skills", "The next skill finishes across the fleet, plus who isn't training."},
 	{widgetServer, "Tranquility", "Server status: players online."},
@@ -121,13 +123,14 @@ func encodeHomeLayout(ids []string) string {
 // ---------------------------------------------------------------------------
 
 var widgetSnapshotKinds = map[string][]string{
-	widgetFleet:     {esi.SnapProfile, esi.SnapCorpInfo, esi.SnapLocation, esi.SnapShip, esi.SnapOnline, esi.SnapSkillqueue, esi.SnapWallet},
-	widgetAttention: {esi.SnapSkillqueue, esi.SnapIndustryJobs, esi.SnapContracts, esi.SnapOrders},
+	widgetFleet:     {esi.SnapProfile, esi.SnapCorpInfo, esi.SnapLocation, esi.SnapShip, esi.SnapOnline, esi.SnapSkillqueue, esi.SnapWallet, esi.SnapMailLabels},
+	widgetAttention: {esi.SnapSkillqueue, esi.SnapIndustryJobs, esi.SnapContracts, esi.SnapOrders, esi.SnapPlanets},
 	widgetNetWorth:  {esi.SnapWallet, esi.SnapAssets, esi.SnapOrders},
 	widgetIndustry:  {esi.SnapIndustryJobs},
 	widgetMarket:    {esi.SnapOrders},
 	widgetSkills:    {esi.SnapSkillqueue},
 	widgetServer:    {},
+	widgetPI:        {esi.SnapPlanets},
 }
 
 // charSnaps is one character's decoded snapshot bundle. Fields
@@ -160,6 +163,15 @@ type charSnaps struct {
 
 	assetsKnown bool
 	assets      []esi.Asset
+
+	// Phase 2: planetary industry (colonies list + whichever
+	// per-planet layouts have warmed) and the mail label set
+	// (the fleet's unread badge reads the total from it).
+	planetsKnown bool
+	colonies     []esi.Colony
+	layouts      map[int64]*esi.PlanetLayout
+
+	mailLabels *esi.MailLabels
 
 	// fetched records each snapshot's fetch timestamp (RFC3339)
 	// so widgets can date their data ("as of").
@@ -213,6 +225,43 @@ func (app *Application) loadCharSnaps(ctx context.Context, userID int64, chars [
 		}
 		b.fetched[row.Kind] = row.FetchedAt
 		b.decode(row.Kind, row.Payload)
+	}
+
+	// Per-planet layouts ride suffix-keyed snapshots, so they
+	// cannot join the batched kind list above: load them in a
+	// second pass when a visible widget (attention, PI) reads
+	// them.
+	needLayouts := false
+	for _, id := range layout {
+		if id == widgetAttention || id == widgetPI {
+			needLayouts = true
+			break
+		}
+	}
+	if needLayouts {
+		layoutRows, err := app.queries.ListPlanetLayoutsForUser(ctx, userID)
+		if err != nil {
+			log.Printf("home: list planet layouts for user %d: %v", userID, err)
+		} else {
+			for _, row := range layoutRows {
+				b := bundles[row.CharacterID]
+				if b == nil {
+					continue
+				}
+				planetID, ok := esi.PlanetLayoutPlanetID(row.Kind)
+				if !ok {
+					continue
+				}
+				var v esi.PlanetLayout
+				if json.Unmarshal([]byte(row.Payload), &v) != nil {
+					continue
+				}
+				if b.layouts == nil {
+					b.layouts = map[int64]*esi.PlanetLayout{}
+				}
+				b.layouts[planetID] = &v
+			}
+		}
 	}
 	return out
 }
@@ -274,6 +323,16 @@ func (b *charSnaps) decode(kind, payload string) {
 		if json.Unmarshal([]byte(payload), &v) == nil {
 			b.assetsKnown, b.assets = true, v
 		}
+	case esi.SnapPlanets:
+		var v []esi.Colony
+		if json.Unmarshal([]byte(payload), &v) == nil {
+			b.planetsKnown, b.colonies = true, v
+		}
+	case esi.SnapMailLabels:
+		var v esi.MailLabels
+		if json.Unmarshal([]byte(payload), &v) == nil {
+			b.mailLabels = &v
+		}
 	}
 }
 
@@ -333,6 +392,7 @@ type homeWidget struct {
 	Market    *marketWidget
 	Skills    *skillsWidget
 	Server    *serverStatusView
+	PI        *piWidget
 }
 
 // homeView is the signed-in Home body (pageData.Home).
@@ -364,6 +424,8 @@ type fleetRow struct {
 	TrainingLeft   string
 	WalletKnown    bool
 	ISK            string
+	UnreadKnown    bool  // mail label set has landed
+	Unread         int64 // total unread mail (label set total)
 	Relink         bool
 	Search         string // lowercase filter haystack (name/tags/corp/system)
 }
@@ -451,6 +513,22 @@ type skillsWidget struct {
 	NotTraining int
 }
 
+// piExpiryLine is one extractor deadline in the PI widget.
+type piExpiryLine struct {
+	Char    string
+	Planet  string
+	Expires string
+	Left    string // "in 2d 3h", "" once expired
+	Expired bool
+}
+
+type piWidget struct {
+	Any      bool // any colonies data at all
+	Colonies int
+	Expired  int
+	Soonest  []piExpiryLine
+}
+
 // orderExpiry computes an order's expiry from ESI's issued +
 // duration-days pair.
 func orderExpiry(o esi.CharOrder) (time.Time, bool) {
@@ -533,6 +611,10 @@ func (app *Application) buildFleet(ctx context.Context, bundles []*charSnaps) *f
 		if b.walletKnown {
 			row.ISK = esi.FormatISK(b.wallet)
 		}
+		if b.mailLabels != nil {
+			row.UnreadKnown = true
+			row.Unread = b.mailLabels.TotalUnreadCount
+		}
 		row.Search = strings.ToLower(strings.Join([]string{
 			row.Name, row.Tags, row.CorpName, row.SystemName,
 		}, " "))
@@ -554,6 +636,7 @@ const (
 	attentionJobReady
 	attentionOrderExpiring
 	attentionContract
+	attentionPI // Phase 2: expired/imminent extractors (appended; order preserved)
 )
 
 func (app *Application) buildAttention(ctx context.Context, bundles []*charSnaps) *attentionWidget {
@@ -663,6 +746,44 @@ func (app *Application) buildAttention(ctx context.Context, bundles []*charSnaps
 					Rank: attentionContract,
 					At:   at,
 				})
+			}
+		}
+
+		// Phase 2: extractors expired or running dry within a
+		// day, from the warmed colony layouts (expiry fixed at
+		// install time, so the countdown is real).
+		if b.planetsKnown {
+			for _, colony := range b.colonies {
+				layout := b.layouts[colony.PlanetID]
+				if layout == nil {
+					continue
+				}
+				planet := app.planetDisplayName(ctx, colony.PlanetID)
+				for _, ex := range layoutExtractors(*layout) {
+					if !ex.ExpiryOK {
+						continue
+					}
+					switch {
+					case ex.Expiry.Before(now):
+						items = append(items, attentionItem{
+							Char: b.ch.Name,
+							Text: fmt.Sprintf("%s — extractor on %s has expired.", b.ch.Name, planet),
+							Link: fmt.Sprintf("/planets/?character=%d", b.ch.CharacterID),
+							When: "expired " + formatFinish(ex.Expiry.UTC().Format(time.RFC3339)),
+							Rank: attentionPI,
+							At:   ex.Expiry,
+						})
+					case ex.Expiry.Before(now.Add(24 * time.Hour)):
+						items = append(items, attentionItem{
+							Char: b.ch.Name,
+							Text: fmt.Sprintf("%s — extractor on %s runs dry in %s.", b.ch.Name, planet, humanDuration(time.Until(ex.Expiry))),
+							Link: fmt.Sprintf("/planets/?character=%d", b.ch.CharacterID),
+							When: "expires " + formatFinish(ex.Expiry.UTC().Format(time.RFC3339)),
+							Rank: attentionPI,
+							At:   ex.Expiry,
+						})
+					}
+				}
 			}
 		}
 	}
@@ -949,6 +1070,62 @@ func (app *Application) buildSkills(ctx context.Context, bundles []*charSnaps) *
 	return w
 }
 
+// buildPI assembles the planetary-industry widget: colonies
+// across the fleet, how many extractor heads have stopped, and
+// the soonest extractor deadlines (expired first, most overdue
+// leading). Deadlines come from layout expiry fields only —
+// fixed at install time, the one PI number ESI keeps honest.
+func (app *Application) buildPI(ctx context.Context, bundles []*charSnaps) *piWidget {
+	now := time.Now()
+	w := &piWidget{}
+	type pending struct {
+		row piExpiryLine
+		at  time.Time
+	}
+	var pendingRows []pending
+	for _, b := range bundles {
+		if !b.planetsKnown {
+			continue
+		}
+		w.Any = true
+		w.Colonies += len(b.colonies)
+		for _, colony := range b.colonies {
+			layout := b.layouts[colony.PlanetID]
+			if layout == nil {
+				continue
+			}
+			planet := app.planetDisplayName(ctx, colony.PlanetID)
+			for _, ex := range layoutExtractors(*layout) {
+				if !ex.ExpiryOK {
+					continue
+				}
+				row := piExpiryLine{
+					Char:    b.ch.Name,
+					Planet:  planet,
+					Expires: formatFinish(ex.Expiry.UTC().Format(time.RFC3339)),
+				}
+				if ex.Expiry.Before(now) {
+					row.Expired = true
+					w.Expired++
+				} else {
+					row.Left = "in " + humanDuration(time.Until(ex.Expiry))
+				}
+				pendingRows = append(pendingRows, pending{row: row, at: ex.Expiry})
+			}
+		}
+	}
+	sort.SliceStable(pendingRows, func(i, j int) bool {
+		return pendingRows[i].at.Before(pendingRows[j].at)
+	})
+	for i, p := range pendingRows {
+		if i >= 5 {
+			break
+		}
+		w.Soonest = append(w.Soonest, p.row)
+	}
+	return w
+}
+
 // ---------------------------------------------------------------------------
 // Home assembly + layout handlers.
 // ---------------------------------------------------------------------------
@@ -1003,6 +1180,8 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 			w.Market = app.buildMarket(ctx, bundles)
 		case widgetSkills:
 			w.Skills = app.buildSkills(ctx, bundles)
+		case widgetPI:
+			w.PI = app.buildPI(ctx, bundles)
 		case widgetServer:
 			if status, ok := app.loadServerStatus(ctx); ok {
 				w.Server = status

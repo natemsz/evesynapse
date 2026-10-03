@@ -12,7 +12,11 @@ import (
 
 // syncKindOrder fixes the snapshot-kind display order on the Sync
 // page (ListSnapshotsByCharacter orders alphabetically instead).
-var syncKindOrder = []string{esi.SnapSkills, esi.SnapSkillqueue, esi.SnapWallet, esi.SnapAssets}
+var syncKindOrder = []string{
+	esi.SnapSkills, esi.SnapSkillqueue, esi.SnapWallet, esi.SnapAssets,
+	esi.SnapLocation, esi.SnapShip, esi.SnapOnline, esi.SnapClones,
+	esi.SnapImplants, esi.SnapFittings, esi.SnapFatigue, esi.SnapKillmails,
+}
 
 // syncSnapshotRow is one snapshot kind's cache state for a character.
 type syncSnapshotRow struct {

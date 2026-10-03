@@ -31,7 +31,8 @@ and key/vCode auth.
   token refresh (`refresh.go`), the application struct, router and DB
   bootstrap (`app.go`, `db.go`), page handlers and view models
   (`pages.go`, `assets.go`, `skills.go`, `corporation.go`,
-  `market.go`, `sync.go`), the background worker (`worker.go`), the
+  `market.go`, `sync.go`, `character.go`, `fittings.go`,
+  `killmails.go`), the background worker (`worker.go`), the
   SDE static-data importer (`sde.go`), and the Termux DNS/CA shim
   (`netdns.go`)
 - `internal/app/templates/` — embedded html/templates (`base.html`
@@ -40,7 +41,8 @@ and key/vCode auth.
   (`bg.jpg`) and the dependency-free stylesheet (`style.css`), served
   at `/static/`
 - `internal/app/schema/` — SQL schema (sqlc input; `001_init.sql`,
-  `002_snapshots.sql`, `003_sde.sql`), embedded for DB bootstrap
+  `002_snapshots.sql`, `003_sde.sql`, `004_module_sweep.sql`),
+  embedded for DB bootstrap
 - `internal/esi/` — the ESI client: HTTP layer, per-character
   snapshot cache, and the two-tier type/group/place name resolution
   (network tier + cache-only render tier). Never imports
@@ -70,7 +72,19 @@ The app auto-loads `./.env` at startup (keys already set in the real
 environment win). Then open <http://localhost:8080>:
 
 - `/` — home; signed out it shows the EVE SSO login button, signed in
-  it shows the character sheet (identity, wallet, skills, skill queue)
+  it shows the character sheet (identity, wallet, skills, skill queue,
+  plus a "Currently" block — system/station, active ship, online
+  state — and a live countdown to the training skill's finish)
+- `/character/` — character live state for one character: online
+  status and login history, location, active ship, jump fatigue,
+  active implants, home/jump clones with their implants (requires
+  login; `esi-location.*`, `esi-clones.*`, `esi-characters.read_fatigue.v1`)
+- `/fittings/` — saved ship fittings grouped by slot category
+  (requires login; `esi-fittings.read_fittings.v1`)
+- `/killmails/` — the 50 most recent kills/losses with KILL/LOSS
+  badges, final-blow attacker, involved count and an estimated
+  destroyed+dropped value (requires login;
+  `esi-killmails.read_killmails.v1`; details warmed by the worker)
 - `/auth/eve` — starts EVE SSO login (also "Link another character")
 - `/auth/callback` — OAuth2 callback (see SSO flow below)
 - `/auth/logout` — destroys the session
@@ -150,7 +164,13 @@ ESI responses for skills, skill queue, wallet and assets are cached as raw
 JSON in `character_snapshots` (schema
 `internal/app/schema/002_snapshots.sql`), keyed by
 (character, kind) with the response's `Expires` header stored as
-`cached_until` (5-minute fallback when ESI sends none). Assets are
+`cached_until` (5-minute fallback when ESI sends none). The module
+sweep caches the character live-state endpoints the same way
+(location, ship, online, clones, implants, fittings, fatigue and the
+recent-killmails list). Killmail *details* are different: they are
+immutable, so the worker warms them once per killmail into the
+`killmail_details` store (schema `004_module_sweep.sql`, at most 10
+per character per cycle) and pages read the store only. Assets are
 paginated: every page is fetched and stored as one merged JSON array. Pages serve
 fresh snapshots without calling ESI; on fetch failure a stale
 snapshot is served instead of an error. ESI's error-limit statuses
@@ -196,8 +216,11 @@ lacks — notably player-structure names, which aren't in the dump.
 Every 60 seconds the worker walks all linked characters: it ensures
 each access token is usable (refreshing when needed) and re-fetches
 any snapshot whose `cached_until` has passed — a first pass runs at
-boot. It then warms the name caches from the fresh snapshots (type
-names and type→group links, group names, station/system names) with
+boot. It also warms killmail details behind each character's recent
+list (bounded per cycle) so the Killmails page never waits on ESI.
+It then warms the name caches from the fresh snapshots (type
+names and type→group links, group names, station/system names, and
+character names for killmail victims and final-blow attackers) with
 a small concurrent pool, capped per cycle; a huge account simply
 converges over a few cycles. Characters are warmed first when they
 were just linked via SSO or flagged on the Sync page. On a 420/429
@@ -233,8 +256,10 @@ The app opens/creates the SQLite file from `DB_PATH`, creates the scs
 `sessions` table, applies `internal/app/schema/001_init.sql` on first
 boot of a fresh database (the `users`/`characters` tables), applies
 `internal/app/schema/002_snapshots.sql` whenever the snapshot
-tables are absent, and `internal/app/schema/003_sde.sql` whenever
-the SDE tables are absent (existing databases gain the new tables
+tables are absent, `internal/app/schema/003_sde.sql` whenever
+the SDE tables are absent, and `internal/app/schema/004_module_sweep.sql`
+whenever the killmail-detail table is absent (existing databases gain
+the new tables
 in place). Regenerate query code after editing `internal/db/query/queries.sql`
 with:
 
@@ -264,3 +289,7 @@ make gen   # sqlc generate
       stations/systems/regions) as the primary name source for the
       market and character pages
 - [x] Multiple characters per account (link more while signed in)
+- [x] Module sweep cluster 1 (character): location/ship/online on
+      the home sheet with a live training countdown, Character page
+      (status, fatigue, implants, clones), Fittings page, Killmails
+      page with worker-warmed immutable details

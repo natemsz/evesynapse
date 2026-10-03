@@ -1,0 +1,44 @@
+{{define "title"}}Fittings{{end}}
+{{define "content"}}
+<h1>Fittings</h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .FittingsChars}}
+<p>{{range $i, $c := .FittingsChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/fittings/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
+{{end}}
+
+{{if .Fittings}}
+  {{if .Fittings.Loaded}}
+  {{if .Fittings.Fittings}}
+  {{range .Fittings.Fittings}}
+  <h3>{{.Name}}</h3>
+  <p><small>{{.ShipType}}</small></p>
+  {{range .Groups}}
+  <h4>{{.Label}}</h4>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Item</th><th>Quantity</th></tr></thead>
+    <tbody>
+    {{range .Items}}
+      <tr><td>{{.Name}}</td><td>{{.Quantity}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+  {{end}}
+  {{else}}
+  <p><small>No saved fittings for this character.</small></p>
+  {{end}}
+  {{else}}
+  {{if .Fittings.Warming}}
+  <p>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</p>
+  {{else}}
+  <p><small>Fittings are unavailable right now — check the server log.</small></p>
+  {{end}}
+  {{end}}
+{{else}}
+  <p>No fittings to show yet — link a character first.</p>
+{{end}}
+{{end}}

@@ -224,6 +224,19 @@ func (app *Application) marketPrices(ctx context.Context) (map[int64]esi.MarketP
 	return prices, nil
 }
 
+// cachedPrices returns the in-memory /markets/prices/ cache when a
+// Market visit has populated it, nil otherwise. It never fetches:
+// render-path consumers (killmail values) show "—" until the cache
+// exists rather than blocking a page on the price guide.
+func (app *Application) cachedPrices() map[int64]esi.MarketPrice {
+	app.pricesMu.Lock()
+	defer app.pricesMu.Unlock()
+	if len(app.prices) == 0 {
+		return nil
+	}
+	return app.prices
+}
+
 // fetchOrderBook reads one region's orders for a type, following
 // X-Pages up to maxOrderPages. Split into sides, unsorted.
 func (app *Application) fetchOrderBook(ctx context.Context, regionID, typeID int64) (sells, buys []esi.MarketOrder, truncated bool, err error) {

@@ -19,7 +19,26 @@
       </tbody>
     </table>
     </div>
+    {{end}}
 
+    {{if .CurrentlyOK}}
+    <h3>Currently</h3>
+    <div class="tw">
+    <table>
+      <tbody>
+        <tr><th>System</th><td>{{.SysName}}{{if .DockedName}} · docked at {{.DockedName}}{{end}}</td></tr>
+        {{if .ShipTypeName}}<tr><th>Ship</th><td>{{.ShipTypeName}}{{if .ShipName}} — &ldquo;{{.ShipName}}&rdquo;{{end}}</td></tr>{{end}}
+        {{if .OnlineKnown}}<tr><th>Status</th><td>{{if .Online}}<span class="dot on"></span>Online{{else}}<span class="dot off"></span>Offline{{end}}{{if .LastLogin}} · last login {{.LastLogin}}{{end}}</td></tr>{{end}}
+      </tbody>
+    </table>
+    </div>
+    {{end}}
+
+    {{if and .Unavailable .Sections}}
+    <p><small>Live ESI data is unavailable right now — showing cached data.</small></p>
+    {{end}}
+
+    {{if .Sections}}
     <h3>Wallet</h3>
     {{if .ISKOK}}
     <p class="isk">{{.ISK}} ISK</p>
@@ -30,7 +49,7 @@
     <h3>Skills</h3>
     {{if .QueueOK}}
       {{if .Training}}
-      <p>Currently training: <strong>{{.Training}}</strong></p>
+      <p>Currently training: <strong>{{.Training}}</strong>{{if .TrainingFinish}} <span class="countdown" data-finish="{{.TrainingFinish}}">{{.TrainingLeft}}</span>{{end}}</p>
       {{else}}
       <p><small>Skill queue is paused or empty.</small></p>
       {{end}}
@@ -61,10 +80,13 @@
   {{end}}
   <p>
     <a class="btn" href="/auth/eve">Link another character</a>
+    <a class="btn" href="/character/">Character</a>
     <a class="btn" href="/corporations/">Corporation</a>
     <a class="btn" href="/assets/">Assets</a>
     <a class="btn" href="/market/">Market</a>
     <a class="btn" href="/skills/">Skills</a>
+    <a class="btn" href="/fittings/">Fittings</a>
+    <a class="btn" href="/killmails/">Killmails</a>
     <a class="btn" href="/admin/">Open the admin</a>
     <a class="btn" href="/auth/logout">Sign out</a>
   </p>
@@ -75,4 +97,31 @@
   <p><small>EVE SSO is not configured — set <code>EVE_CLIENT_ID</code> / <code>EVE_CLIENT_SECRET</code> (see <code>.env.example</code>).</small></p>
   {{end}}
 {{end}}
+{{if .Character}}{{if .Character.TrainingFinish}}
+<script>
+// Live countdown to the skill-queue finish time. Without JS the
+// server-rendered remainder next to the training line simply stays.
+(function () {
+  var els = document.querySelectorAll("[data-finish]");
+  if (!els.length) return;
+  function fmt(ms) {
+    if (ms <= 0) return "done";
+    var s = Math.floor(ms / 1000);
+    var d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    if (d > 0) return "in " + d + "d " + h + "h " + m + "m";
+    if (h > 0) return "in " + h + "h " + m + "m";
+    if (m > 0) return "in " + m + "m " + sec + "s";
+    return "in " + sec + "s";
+  }
+  function tick() {
+    for (var i = 0; i < els.length; i++) {
+      var t = Date.parse(els[i].getAttribute("data-finish"));
+      if (!isNaN(t)) els[i].textContent = fmt(t - Date.now());
+    }
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
+{{end}}{{end}}
 {{end}}

@@ -39,6 +39,9 @@ var snapshotsSchema string
 //go:embed schema/003_sde.sql
 var sdeSchema string
 
+//go:embed schema/004_module_sweep.sql
+var moduleSweepSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -236,6 +239,21 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/skills", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleSkills)
+	})
+
+	r.Route("/character", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleCharacter)
+	})
+
+	r.Route("/fittings", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleFittings)
+	})
+
+	r.Route("/killmails", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleKillmails)
 	})
 
 	r.Route("/sync", func(r chi.Router) {

@@ -21,6 +21,12 @@ type pageData struct {
 	AutoRefresh   bool   // base.html emits a meta-refresh (Sync page)
 	Error         string // friendly, user-safe banner (never internals)
 	Character     *characterSheet
+	CharChars     []assetCharLink
+	CharacterPage *characterView
+	Fittings      *fittingsView
+	FittingsChars []assetCharLink
+	Killmails     *killmailsView
+	KillmailChars []assetCharLink
 	Corps         []corpView
 	Assets        *assetsView
 	AssetsChars   []assetCharLink
@@ -46,6 +52,17 @@ type characterSheet struct {
 	SecurityStatus  float64
 	Fetched         bool // true when the live ESI data loaded
 	Unavailable     bool // signed in, but ESI couldn't be reached
+	Sections        bool // snapshot sections were attempted (DB character known)
+
+	// Currently block (location/ship/online snapshots).
+	CurrentlyOK  bool
+	SysName      string
+	DockedName   string // station/structure title, "" when in space
+	ShipTypeName string
+	ShipName     string
+	OnlineKnown  bool
+	Online       bool
+	LastLogin    string
 
 	// Wallet block.
 	ISKOK bool
@@ -60,8 +77,10 @@ type characterSheet struct {
 	SkillsCount   int
 
 	// Skill-queue block.
-	QueueOK  bool
-	Training string // "Skill Name V — finishes 2026-10-03 14:22 UTC"; "" = paused/empty
+	QueueOK        bool
+	Training       string // "Skill Name V — finishes 2026-10-03 14:22 UTC"; "" = paused/empty
+	TrainingFinish string // RFC3339 finish of the training entry, for the live countdown
+	TrainingLeft   string // server-rendered "in 1d 2h" the countdown starts from
 }
 
 // skillRow is one line of the home-page skills table.
@@ -137,12 +156,14 @@ func (app *Application) handleHome(w http.ResponseWriter, r *http.Request) {
 
 // loadCharacterSheet assembles the home-page character block.
 //
-// Identity comes from the public character endpoint; wallet, skills
-// and skill queue come through the snapshot cache (getCached), which
-// serves ESI-cached payloads and only calls out within ESI's cache
-// window — the worker keeps those snapshots warm in the background.
-// Every section degrades independently: a dead endpoint dims its own
-// block, never the whole page.
+// Identity comes from the public character endpoint; wallet, skills,
+// skill queue and the "Currently" block (location/ship/online) come
+// through the snapshot cache, which serves ESI-cached payloads and
+// only calls out within ESI's cache window — the worker keeps those
+// snapshots warm in the background. The snapshot sections load even
+// when the live identity fetch fails. Every section degrades
+// independently: a dead endpoint dims its own block, never the
+// whole page.
 func (app *Application) loadCharacterSheet(ctx context.Context) *characterSheet {
 	sheet := &characterSheet{
 		Name: app.sessions.GetString(ctx, sessionCharacterName),
@@ -165,7 +186,16 @@ func (app *Application) loadCharacterSheet(ctx context.Context) *characterSheet 
 		sheet.Name = character.Name
 	}
 
-	// One valid token for the whole page: this refreshes (and
+	// Snapshot sections first: they serve from the worker-warmed
+	// cache and degrade independently, so they load even when the
+	// live identity fetch below fails (dead token, ESI outage).
+	sheet.Sections = true
+	app.loadCurrentlySection(ctx, character, sheet)
+	app.loadWalletSection(ctx, character, sheet)
+	app.loadSkillsSection(ctx, character, sheet)
+	app.loadQueueSection(ctx, character, sheet)
+
+	// One valid token for the identity fetch: this refreshes (and
 	// persists the rotation) when the stored token is near expiry.
 	token, err := app.validAccessToken(ctx, character)
 	if err != nil {
@@ -198,10 +228,44 @@ func (app *Application) loadCharacterSheet(ctx context.Context) *characterSheet 
 	}
 
 	sheet.Fetched = true
-	app.loadWalletSection(ctx, character, sheet)
-	app.loadSkillsSection(ctx, character, sheet)
-	app.loadQueueSection(ctx, character, sheet)
 	return sheet
+}
+
+// loadCurrentlySection fills the "Currently" block from the
+// location, ship and online snapshots; each sub-block degrades on
+// its own, and names resolve from the local caches only.
+func (app *Application) loadCurrentlySection(ctx context.Context, ch db.Character, sheet *characterSheet) {
+	var loc esi.Location
+	if err := app.esi.GetCached(ctx, ch, esi.SnapLocation, &loc); err != nil {
+		log.Printf("home: location for character %d: %v", ch.CharacterID, err)
+	} else {
+		sheet.SysName = app.locationTitle(ctx, loc.SolarSystemID, "solar_system")
+		if loc.StationID > 0 {
+			sheet.DockedName = app.locationTitle(ctx, loc.StationID, "station")
+		} else if loc.StructureID > 0 {
+			sheet.DockedName = app.locationTitle(ctx, loc.StructureID, "structure")
+		}
+		sheet.CurrentlyOK = true
+	}
+
+	var ship esi.Ship
+	if err := app.esi.GetCached(ctx, ch, esi.SnapShip, &ship); err != nil {
+		log.Printf("home: ship for character %d: %v", ch.CharacterID, err)
+	} else {
+		sheet.ShipTypeName = app.typeNameOrID(ctx, ship.ShipTypeID)
+		sheet.ShipName = ship.ShipName
+		sheet.CurrentlyOK = true
+	}
+
+	var online esi.Online
+	if err := app.esi.GetCached(ctx, ch, esi.SnapOnline, &online); err != nil {
+		log.Printf("home: online for character %d: %v", ch.CharacterID, err)
+	} else {
+		sheet.OnlineKnown = true
+		sheet.Online = online.Online
+		sheet.LastLogin = formatFinish(online.LastLogin)
+		sheet.CurrentlyOK = true
+	}
 }
 
 // loadWalletSection fills the wallet block; failures only dim it.
@@ -280,6 +344,13 @@ func (app *Application) loadQueueSection(ctx context.Context, ch db.Character, s
 		finish := entry.FinishDate
 		if t, err := time.Parse(time.RFC3339, entry.FinishDate); err == nil {
 			finish = t.UTC().Format("2006-01-02 15:04 UTC")
+			// The live countdown ticks down from this finish time
+			// client-side; the server-rendered remainder is what
+			// no-JS clients keep.
+			sheet.TrainingFinish = t.UTC().Format(time.RFC3339)
+			if left := time.Until(t); left > 0 {
+				sheet.TrainingLeft = "in " + humanDuration(left)
+			}
 		}
 		if finish != "" {
 			sheet.Training = fmt.Sprintf("%s %s — finishes %s", name, esi.RomanLevel(entry.FinishedLevel), finish)

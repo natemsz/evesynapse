@@ -268,6 +268,28 @@ img.portrait {
 
 .corp-desc { white-space: pre-line; }
 
+/* --- character live state: status dot, kill/loss badges, countdown --- */
+.dot {
+  display: inline-block;
+  width: 0.6em;
+  height: 0.6em;
+  border-radius: 50%;
+  margin-right: 0.4em;
+  background: #666;
+}
+.dot.on { background: #4caf7d; }
+.dot.off { background: #8c3250; }
+.badge {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  padding: 0.1em 0.5em;
+  border-radius: 3px;
+  border: 1px solid;
+}
+.badge.kill { color: #9fd8b4; border-color: var(--success); background: rgba(50, 140, 83, 0.22); }
+.badge.loss { color: #f0b8c6; border-color: var(--danger); background: rgba(140, 50, 107, 0.28); }
+.countdown { font-variant-numeric: tabular-nums; color: var(--accent); }
+
 /* --- footer --- */
 footer {
   background: #0a0a0a;

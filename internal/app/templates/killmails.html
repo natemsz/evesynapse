@@ -1,0 +1,47 @@
+{{define "title"}}Killmails{{end}}
+{{define "content"}}
+<h1>Killmails</h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .KillmailChars}}
+<p>{{range $i, $c := .KillmailChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/killmails/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
+{{end}}
+
+{{if .Killmails}}
+  {{if .Killmails.Loaded}}
+  {{if .Killmails.Rows}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>Time</th><th>System</th><th>Result</th><th>Victim</th><th>Ship</th><th>Final blow</th><th>Involved</th><th>Est. value</th></tr></thead>
+    <tbody>
+    {{range .Killmails.Rows}}
+      <tr>
+        <td>{{.Time}}</td>
+        <td>{{.System}}</td>
+        <td>{{if .Warming}}<small>details warming</small>{{else if .Loss}}<span class="badge loss">LOSS</span>{{else}}<span class="badge kill">KILL</span>{{end}}</td>
+        <td>{{.Victim}}</td>
+        <td>{{.Ship}}</td>
+        <td>{{.FinalBlow}}</td>
+        <td>{{.Involved}}</td>
+        <td>{{if eq .Value "—"}}—{{else}}{{.Value}} ISK{{end}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  <p><small>Estimated value covers destroyed and dropped items at CCP average prices, once the price cache has been populated by a Market visit.</small></p>
+  {{else}}
+  <p><small>No recent killmails for this character.</small></p>
+  {{end}}
+  {{else}}
+  {{if .Killmails.Warming}}
+  <p>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</p>
+  {{else}}
+  <p><small>Killmails are unavailable right now — check the server log.</small></p>
+  {{end}}
+  {{end}}
+{{else}}
+  <p>No killmails to show yet — link a character first.</p>
+{{end}}
+{{end}}

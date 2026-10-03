@@ -70,6 +70,17 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 004 (module sweep: killmail detail store), applied the
+	// same guarded way.
+	var killmailTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'killmail_details'`).Scan(&killmailTables); err != nil {
+		return nil, err
+	}
+	if killmailTables == 0 {
+		if err := applySchema(conn, moduleSweepSchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

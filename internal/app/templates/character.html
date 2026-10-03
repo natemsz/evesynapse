@@ -1,0 +1,125 @@
+{{define "title"}}Character{{end}}
+{{define "content"}}
+<h1>Character</h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .CharChars}}
+<p>{{range $i, $c := .CharChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/character/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
+{{end}}
+
+{{if .CharacterPage}}
+  {{if .CharacterPage.Loaded}}
+
+  {{if .CharacterPage.OnlineKnown}}
+  <h3>Status</h3>
+  <div class="tw">
+  <table>
+    <tbody>
+      <tr><th>Online</th><td>{{if .CharacterPage.Online}}<span class="dot on"></span>Online now{{else}}<span class="dot off"></span>Offline{{end}}</td></tr>
+      {{if .CharacterPage.LastLogin}}<tr><th>Last login</th><td>{{.CharacterPage.LastLogin}}</td></tr>{{end}}
+      {{if .CharacterPage.LastLogout}}<tr><th>Last logout</th><td>{{.CharacterPage.LastLogout}}</td></tr>{{end}}
+      {{if .CharacterPage.Logins}}<tr><th>Total logins</th><td>{{.CharacterPage.Logins}}</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+
+  {{if .CharacterPage.LocationKnown}}
+  <h3>Location</h3>
+  <div class="tw">
+  <table>
+    <tbody>
+      <tr><th>System</th><td>{{.CharacterPage.SystemName}}{{if .CharacterPage.SystemSec}} (security {{.CharacterPage.SystemSec}}){{end}}</td></tr>
+      {{if .CharacterPage.DockedAt}}<tr><th>Docked at</th><td>{{.CharacterPage.DockedAt}}</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+
+  {{if .CharacterPage.ShipKnown}}
+  <h3>Ship</h3>
+  <div class="tw">
+  <table>
+    <tbody>
+      <tr><th>Active ship</th><td>{{.CharacterPage.ShipTypeName}}{{if .CharacterPage.ShipName}} — &ldquo;{{.CharacterPage.ShipName}}&rdquo;{{end}}</td></tr>
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+
+  {{if .CharacterPage.FatigueKnown}}
+  <h3>Jump fatigue</h3>
+  <div class="tw">
+  <table>
+    <tbody>
+      {{if .CharacterPage.LastJump}}<tr><th>Last jump</th><td>{{.CharacterPage.LastJump}}</td></tr>{{end}}
+      {{if .CharacterPage.FatigueUntil}}<tr><th>Fatigue expires</th><td>{{.CharacterPage.FatigueUntil}}{{if .CharacterPage.FatigueLeft}} ({{.CharacterPage.FatigueLeft}}){{end}}</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+
+  {{if .CharacterPage.ImplantsKnown}}
+  <h3>Active implants</h3>
+  {{if .CharacterPage.Implants}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>Slot</th><th>Implant</th></tr></thead>
+    <tbody>
+    {{range .CharacterPage.Implants}}
+      <tr><td>{{.Slot}}</td><td>{{.Name}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else}}
+  <p><small>No implants plugged in.</small></p>
+  {{end}}
+  {{end}}
+
+  {{if .CharacterPage.ClonesKnown}}
+  <h3>Clones</h3>
+  <div class="tw">
+  <table>
+    <tbody>
+      {{if .CharacterPage.HomeLocation}}<tr><th>Home clone</th><td>{{.CharacterPage.HomeLocation}}</td></tr>{{end}}
+      {{if .CharacterPage.LastCloneJump}}<tr><th>Last clone jump</th><td>{{.CharacterPage.LastCloneJump}}</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  {{if .CharacterPage.JumpClones}}
+  {{range .CharacterPage.JumpClones}}
+  <h4>Jump clone{{if .Name}} — &ldquo;{{.Name}}&rdquo;{{end}}</h4>
+  <p><small>Location: {{.Location}}</small></p>
+  {{if .Implants}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>Implant</th></tr></thead>
+    <tbody>
+    {{range .Implants}}
+      <tr><td>{{.}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else}}
+  <p><small>No implants in this clone.</small></p>
+  {{end}}
+  {{end}}
+  {{else}}
+  <p><small>No jump clones installed.</small></p>
+  {{end}}
+  {{end}}
+
+  {{else}}
+  {{if .CharacterPage.Warming}}
+  <p>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</p>
+  {{else}}
+  <p><small>Character data is unavailable right now — check the server log.</small></p>
+  {{end}}
+  {{end}}
+{{else}}
+  <p>No character data to show yet — link a character first.</p>
+{{end}}
+{{end}}

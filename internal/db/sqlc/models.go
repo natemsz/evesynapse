@@ -66,6 +66,26 @@ type KillmailDetail struct {
 	FetchedAt   string `json:"fetched_at"`
 }
 
+type SdeBlueprint struct {
+	BlueprintTypeID          int64 `json:"blueprint_type_id"`
+	ProductTypeID            int64 `json:"product_type_id"`
+	ProductQuantity          int64 `json:"product_quantity"`
+	MaxProductionLimit       int64 `json:"max_production_limit"`
+	ManufacturingTimeSeconds int64 `json:"manufacturing_time_seconds"`
+}
+
+type SdeBlueprintMaterial struct {
+	BlueprintTypeID int64 `json:"blueprint_type_id"`
+	MaterialTypeID  int64 `json:"material_type_id"`
+	Quantity        int64 `json:"quantity"`
+}
+
+type SdeBlueprintSkill struct {
+	BlueprintTypeID int64 `json:"blueprint_type_id"`
+	SkillTypeID     int64 `json:"skill_type_id"`
+	Level           int64 `json:"level"`
+}
+
 type SdeCategory struct {
 	CategoryID int64  `json:"category_id"`
 	Name       string `json:"name"`

@@ -380,3 +380,42 @@ SELECT type_id, name, market_group_id FROM sde_types
 WHERE group_id = ? AND instr(lower(name), lower(?)) > 0
 ORDER BY name
 LIMIT ? OFFSET ?;
+
+-- ---------------------------------------------------------------------
+-- Phase 3 (schema 011): industry build planner reads. Bulk import
+-- inserts stay hand-rolled in the SDE importer alongside the other
+-- sde_* tables; only reads live here.
+-- ---------------------------------------------------------------------
+
+-- name: CountSDEBlueprints :one
+SELECT COUNT(*) FROM sde_blueprints;
+
+-- name: GetSDEBlueprintForProduct :one
+SELECT blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds
+FROM sde_blueprints
+WHERE product_type_id = ?
+ORDER BY blueprint_type_id
+LIMIT 1;
+
+-- name: GetSDEBlueprint :one
+SELECT blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds
+FROM sde_blueprints
+WHERE blueprint_type_id = ?;
+
+-- name: ListSDEBlueprintMaterials :many
+SELECT material_type_id, quantity FROM sde_blueprint_materials
+WHERE blueprint_type_id = ?
+ORDER BY material_type_id;
+
+-- name: ListSDEBlueprintSkills :many
+SELECT skill_type_id, level FROM sde_blueprint_skills
+WHERE blueprint_type_id = ?
+ORDER BY level DESC, skill_type_id;
+
+-- name: SearchManufacturableProducts :many
+SELECT t.type_id, t.name, b.blueprint_type_id
+FROM sde_blueprints b
+JOIN sde_types t ON t.type_id = b.product_type_id
+WHERE t.published = 1 AND instr(lower(t.name), lower(?1)) > 0
+ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT 50;

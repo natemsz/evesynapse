@@ -1,0 +1,99 @@
+{{define "title"}}Build Planner{{end}}
+{{define "content"}}
+<h1><span class="gt">Build Planner</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .Planner}}
+{{if .Planner.Warming}}
+<p>The planner's build data hasn't landed yet — it arrives with the static-data import. Check <a href="/sync/">Sync</a> for progress and try again shortly.</p>
+{{else}}
+
+<section class="foldable">
+<h3>Find something to build</h3>
+<form method="get" action="/planner/">
+  <p>
+    <input type="search" name="q" value="{{.Planner.Query}}" placeholder="Product name, e.g. Rifter" size="32">
+    <button type="submit">Search</button>
+  </p>
+</form>
+{{if .Planner.Searched}}
+{{if .Planner.Results}}
+<ul>
+{{range .Planner.Results}}<li><a href="{{.URL}}">{{.Name}}</a></li>{{end}}
+</ul>
+{{else}}
+<p><small>No manufacturable products match that name.</small></p>
+{{end}}
+{{end}}
+</section>
+
+{{if .Planner.Notice}}<p>{{.Planner.Notice}}</p>{{end}}
+
+{{with .Planner.Plan}}
+<section class="foldable">
+<h3>{{.ProductName}}</h3>
+<p><small>From <strong>{{.BlueprintName}}</strong> — builds {{.ProducedLine}}.{{if .MaxRunNote}} {{.MaxRunNote}}.{{end}}</small></p>
+{{if .Skills}}<p><small>Requires {{range $i, $s := .Skills}}{{if $i}}, {{end}}{{$s}}{{end}}.</small></p>{{end}}
+{{if .StockNote}}<p><small>{{.StockNote}}</small></p>{{end}}
+
+<form method="get" action="/planner/">
+  <input type="hidden" name="product" value="{{.ProductTypeID}}">
+  <p>
+    <label>Runs <input type="number" name="runs" value="{{.Runs}}" min="1" size="6"></label>
+    {{range .MEInputs}}<label title="Material efficiency for the blueprint behind {{.Label}}">{{.Label}} ME <input type="number" name="{{.FieldName}}" value="{{.Value}}" min="0" max="10" size="3"></label> {{end}}
+    <button type="submit">Recalculate</button>
+  </p>
+</form>
+
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th>Per run</th><th>Need</th><th>Have</th><th>To buy</th><th>Build</th><th>ME / TE</th><th>Time</th><th>Unit price</th><th>Buy cost</th></tr></thead>
+  <tbody>
+  {{range .Rows}}
+    <tr>
+      <td style="padding-left:{{.Pad}}px"><a href="{{.URL}}">{{.Name}}</a>{{if .Badge}} <small>({{.Badge}})</small>{{end}}{{if .SkillsLine}}<br><small>{{.SkillsLine}}</small>{{end}}{{if .Note}}<br><small>{{.Note}}</small>{{end}}</td>
+      <td>{{.Base}}</td>
+      <td>{{.Need}}</td>
+      <td>{{.Have}}</td>
+      <td>{{.ToBuy}}</td>
+      <td>{{.RunsLine}}</td>
+      <td>{{.ME}}</td>
+      <td>{{.Time}}</td>
+      <td>{{.UnitPrice}}</td>
+      <td>{{.LineCost}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+</section>
+
+<section class="foldable">
+<h3>Totals</h3>
+<table>
+  <tbody>
+    <tr><th>Shopping total</th><td>{{if .ShoppingTotal}}{{.ShoppingTotal}}{{else}}— (partial: some prices missing){{end}}</td></tr>
+    <tr><th>Total build time</th><td>{{.TotalTime}}{{if ne .TotalTime "<1m"}} if every job ran one after another{{end}}</td></tr>
+    {{if .ProductValue}}<tr><th>Market value (guide)</th><td>{{.ProductValue}}</td></tr>{{end}}
+    {{if .Margin}}<tr><th>Margin</th><td>{{.Margin}}{{if .MarginNote}} ({{.MarginNote}}){{end}}</td></tr>
+    {{else if .MarginNote}}<tr><th>Margin</th><td><small>{{.MarginNote}}</small></td></tr>{{end}}
+  </tbody>
+</table>
+<p><small>{{.PricesNote}}</small></p>
+</section>
+
+{{if .Shopping}}
+<section class="foldable">
+<h3>Shopping list</h3>
+<ul>
+{{range .Shopping}}<li>{{.Name}} — {{.Need}}{{if .UnitPrice}} × {{.UnitPrice}}{{if .LineCost}} = {{.LineCost}}{{end}}{{end}}</li>{{end}}
+</ul>
+{{if .ShoppingTotal}}<p><small>Total: {{.ShoppingTotal}}</small></p>{{end}}
+</section>
+{{end}}
+
+{{end}}
+{{end}}
+{{end}}
+{{end}}

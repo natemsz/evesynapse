@@ -334,6 +334,13 @@ JOIN characters c ON c.character_id = s.character_id
 WHERE c.user_id = ? AND s.kind IN (sqlc.slice('kinds'))
 ORDER BY s.character_id, s.kind;
 
+-- name: ListPlanetLayoutsForUser :many
+SELECT s.character_id, s.kind, s.payload, s.fetched_at
+FROM character_snapshots s
+JOIN characters c ON c.character_id = s.character_id
+WHERE c.user_id = ? AND instr(s.kind, 'planet_layout_') = 1
+ORDER BY s.character_id, s.kind;
+
 -- ---------------------------------------------------------------------
 -- Layout + market toolkit (schema 008): live market suggestions and
 -- the item database explorer. All local SDE reads. Matching uses

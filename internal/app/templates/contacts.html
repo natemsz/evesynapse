@@ -1,0 +1,36 @@
+{{define "title"}}Contacts{{end}}
+{{define "content"}}
+<h1><span class="gt">Contacts</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .ContactsChars}}
+<p>{{range $i, $c := .ContactsChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/contacts/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
+{{end}}
+
+{{if .Contacts}}
+<h2>{{.Contacts.CharacterName}}</h2>
+
+{{if .Contacts.Contacts.Note}}
+<p><small>{{.Contacts.Contacts.Note}}</small></p>
+{{else if .Contacts.Contacts.Warming}}
+<p><small>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</small></p>
+{{else if .Contacts.Rows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Contact</th><th>Kind</th><th>Standing</th><th></th></tr></thead>
+  <tbody>
+  {{range .Contacts.Rows}}
+    <tr><td>{{.Name}}</td><td>{{.Type}}</td><td>{{.Standing}}</td><td>{{if .Blocked}}Blocked{{else if .Watched}}Watched{{end}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>Standings run −10.0 (terrible) to +10.0 (excellent). EveSynapse only reads your contacts — changes happen in-game.</small></p>
+{{else}}
+<p><small>No contacts in the latest snapshot.</small></p>
+{{end}}
+{{else}}
+<p>No character to show yet — link a character first.</p>
+{{end}}
+{{end}}

@@ -63,6 +63,18 @@
   </section>
   {{end}}
 
+  {{if .CharacterPage.PIKnown}}
+  <section class="foldable">
+  <h3>Planetary industry</h3>
+  <p><small>{{.CharacterPage.PIColonies}} colon{{if eq .CharacterPage.PIColonies 1}}y{{else}}ies{{end}}{{if .CharacterPage.PIExpired}} · {{.CharacterPage.PIExpired}} extractor{{if ne .CharacterPage.PIExpired 1}}s{{end}} expired{{end}}{{if .CharacterPage.PISoonest}} · next extractor expiry {{.CharacterPage.PISoonest}}{{if .CharacterPage.PISoonestIn}} ({{.CharacterPage.PISoonestIn}}){{end}}{{end}} — <a href="/planets/?character={{.CharacterPage.CharacterID}}">view colonies</a></small></p>
+  </section>
+  {{else if .CharacterPage.PINotEnabled}}
+  <section class="foldable">
+  <h3>Planetary industry</h3>
+  <p><small>Not enabled for this character — <a href="/planets/?character={{.CharacterPage.CharacterID}}">re-link to enable</a>.</small></p>
+  </section>
+  {{end}}
+
   {{if .CharacterPage.OnlineKnown}}
   <section class="foldable">
   <h3>Status</h3>

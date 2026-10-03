@@ -1,0 +1,69 @@
+{{define "title"}}Mail{{end}}
+{{define "content"}}
+<h1><span class="gt">Mail</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .MailChars}}
+<p>{{range $i, $c := .MailChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/mail/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
+{{end}}
+
+{{if .Mail}}
+<h2>{{.Mail.CharacterName}}{{if .Mail.UnreadKnown}} <small>· {{.Mail.UnreadCount}} unread</small>{{end}}</h2>
+
+{{if .Mail.Selected}}
+<section class="foldable">
+{{if .Mail.DetailWarming}}
+<h3>Mail</h3>
+<p><small>This mail's body is still warming up — check back shortly.</small></p>
+<p><a href="/mail/?character={{.Mail.CharacterID}}">Back to the inbox</a></p>
+{{else}}
+{{with .Mail.Detail}}
+<h3>{{.Subject}}</h3>
+<div class="tw">
+<table>
+  <tbody>
+    <tr><th>From</th><td>{{.From}}</td></tr>
+    {{if .To}}<tr><th>To</th><td>{{range $i, $t := .To}}{{if $i}}, {{end}}{{$t}}{{end}}</td></tr>{{end}}
+    <tr><th>Date</th><td>{{.Date}}</td></tr>
+    {{if .Labels}}<tr><th>Labels</th><td>{{range $i, $l := .Labels}}{{if $i}}, {{end}}{{$l}}{{end}}</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+<div class="mailbody">{{.Body}}</div>
+<p><a href="/mail/?character={{$.Mail.CharacterID}}">Back to the inbox</a></p>
+{{end}}
+{{end}}
+</section>
+{{end}}
+
+{{if .Mail.LabelChips}}
+<p class="fleet-tools">
+  <a class="chip{{if not .Mail.LabelFilter}} active{{end}}" href="/mail/?character={{.Mail.CharacterID}}">All mail</a>
+  {{range .Mail.LabelChips}}<a class="chip{{if eq $.Mail.LabelFilter .ID}} active{{end}}" href="/mail/?character={{$.Mail.CharacterID}}&amp;label={{.ID}}">{{.Name}}{{if .Unread}} ({{.Unread}}){{end}}</a>{{end}}
+</p>
+{{end}}
+
+{{if .Mail.Headers.Note}}
+<p><small>{{.Mail.Headers.Note}}</small></p>
+{{else if .Mail.Headers.Warming}}
+<p><small>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</small></p>
+{{else if .Mail.Rows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Subject</th><th>From</th><th>Date</th><th>Labels</th></tr></thead>
+  <tbody>
+  {{range .Mail.Rows}}
+    <tr><td>{{if .Unread}}<strong><a href="/mail/?character={{$.Mail.CharacterID}}&amp;mail={{.ID}}">{{.Subject}}</a></strong>{{else}}<a href="/mail/?character={{$.Mail.CharacterID}}&amp;mail={{.ID}}">{{.Subject}}</a>{{end}}</td><td>{{.From}}</td><td>{{.Date}}</td><td>{{range $i, $l := .Labels}}{{if $i}}, {{end}}{{$l}}{{end}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>The 50 most recent mails. Reading here never marks mail read in-game — EveSynapse only reads.</small></p>
+{{else}}
+<p><small>No mail in the latest snapshot{{if .Mail.LabelFilter}} with that label{{end}}.</small></p>
+{{end}}
+{{else}}
+<p>No character to show yet — link a character first.</p>
+{{end}}
+{{end}}

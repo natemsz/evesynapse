@@ -43,7 +43,7 @@
   </p>
   <div class="tw">
   <table>
-    <thead><tr><th>Character</th><th>Corporation</th><th>Location</th><th>Ship</th><th>Status</th><th>Training</th><th>Wallet</th></tr></thead>
+    <thead><tr><th>Character</th><th>Corporation</th><th>Location</th><th>Ship</th><th>Status</th><th>Training</th><th>Wallet</th><th>Mail</th></tr></thead>
     <tbody>
     {{range .Rows}}
     <tr class="fleet-row" data-search="{{.Search}}">
@@ -54,6 +54,7 @@
       <td>{{if .OnlineKnown}}{{if .Online}}<span class="dot on"></span>Online{{else}}<span class="dot off"></span>Offline{{end}}{{if .LastLogin}}<br><small>last login {{.LastLogin}}</small>{{end}}{{else}}—{{end}}</td>
       <td>{{if .QueueKnown}}{{if .Training}}{{.Training}}{{if .TrainingFinish}} <span class="countdown" data-finish="{{.TrainingFinish}}">{{.TrainingLeft}}</span>{{end}}{{else}}<em>Not training</em>{{end}}{{else}}—{{end}}</td>
       <td>{{if .WalletKnown}}{{.ISK}} ISK{{else}}—{{end}}</td>
+      <td>{{if .UnreadKnown}}{{if .Unread}}<a href="/mail/?character={{.ID}}">{{.Unread}} unread</a>{{else}}—{{end}}{{else}}—{{end}}</td>
     </tr>
     {{end}}
     </tbody>
@@ -164,6 +165,31 @@
   <p><small>No queue data yet.</small></p>
   {{end}}
   {{if .NotTraining}}<p><small>{{.NotTraining}} character{{if ne .NotTraining 1}}s{{end}} not training.</small></p>{{end}}
+  {{end}}
+</section>
+{{end}}
+
+{{if eq .ID "pi"}}
+<section class="card" data-widget="{{.ID}}">
+  <h3>Planetary industry</h3>
+  {{with .PI}}
+  {{if .Any}}
+  <p><small>{{.Colonies}} colon{{if eq .Colonies 1}}y{{else}}ies{{end}} across your characters{{if .Expired}} · {{.Expired}} extractor{{if ne .Expired 1}}s{{end}} expired{{end}} · <a href="/planets/">colonies</a></small></p>
+  {{if .Soonest}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>Character</th><th>Planet</th><th>Extractor</th></tr></thead>
+    <tbody>
+    {{range .Soonest}}<tr><td>{{.Char}}</td><td>{{.Planet}}</td><td>{{if .Expired}}expired {{end}}{{.Expires}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else}}
+  <p><small>No extractor timers yet.</small></p>
+  {{end}}
+  {{else}}
+  <p><small>Colonies appear here once your characters have synced.</small></p>
+  {{end}}
   {{end}}
 </section>
 {{end}}

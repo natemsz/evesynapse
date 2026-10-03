@@ -1,0 +1,61 @@
+{{define "title"}}Planetary Industry{{end}}
+{{define "content"}}
+<h1><span class="gt">Planetary industry</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .PlanetsChars}}
+<p>{{range $i, $c := .PlanetsChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/planets/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
+{{end}}
+
+{{if .Planets}}
+<h2>{{.Planets.CharacterName}}</h2>
+
+{{if .Planets.Colonies.Note}}
+<p>{{.Planets.Colonies.Note}}</p>
+{{else if .Planets.Colonies.Warming}}
+<p><small>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</small></p>
+{{else if .Planets.Rows}}
+{{range .Planets.Rows}}
+<section class="foldable">
+<h3>{{.Planet}} <small>· {{.System}} · {{.Type}} · command center upgrades {{.Upgrade}} · {{.Pins}} pins{{if .Updated}} · updated {{.Updated}}{{end}}</small></h3>
+{{if .LayoutWarming}}
+<p><small>Colony layout still warming up.</small></p>
+{{else}}
+{{if .Extractors}}
+<div class="tw">
+<table>
+  <thead><tr><th>Extractor product</th><th>Per cycle</th><th>Cycle</th><th>Heads</th><th>Program ends</th><th></th></tr></thead>
+  <tbody>
+  {{range .Extractors}}
+    <tr><td>{{.Product}}</td><td>{{.Qty}}</td><td>{{.Cycle}}</td><td>{{.Heads}}</td><td>{{.Expires}}</td><td>{{if .Expired}}<strong>Expired</strong>{{else if .Left}}<span class="countdown" data-finish="{{.FinishRaw}}">{{.Left}}</span>{{end}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+{{if .Factories}}
+<div class="tw">
+<table>
+  <thead><tr><th>Factory schematic</th><th>Pin</th><th>Cycle</th></tr></thead>
+  <tbody>
+  {{range .Factories}}
+    <tr><td>{{.Schematic}}</td><td>{{.PinType}}</td><td>{{.Cycle}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+{{if .Others}}<p><small>Also on this planet: {{.Others}}.</small></p>{{end}}
+{{if and (not .Extractors) (not .Factories) (not .Others)}}<p><small>No pins reported for this colony.</small></p>{{end}}
+{{end}}
+</section>
+{{end}}
+<p><small>Extractor timers (end time, per-cycle yield, head count) are fixed when a program is installed, so the countdowns above are exact. Stored commodity amounts are not shown: EVE only recalculates them when you open the colony in-game, so any number here would be a quiet lie.</small></p>
+{{else}}
+<p><small>No colonies for this character in the latest snapshot.</small></p>
+{{end}}
+{{else}}
+<p>No character to show yet — link a character first.</p>
+{{end}}
+{{end}}

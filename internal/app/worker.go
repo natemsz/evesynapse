@@ -270,6 +270,29 @@ func (app *Application) refreshCycle(ctx context.Context) {
 				limited = true
 			}
 		}
+
+		// Phase 2 datasets: planetary industry (colonies +
+		// layouts, planets_worker.go) and mail/calendar/contacts
+		// (list kinds + bodies + event details, comms_worker.go).
+		// Both passes spend from the cycle's shared fetch
+		// allowance, so they compose with the core pass's budget
+		// instead of adding an unbounded tail.
+		if !limited && !allowance.exhausted() {
+			warmed, ltd := app.refreshPlanetarySnapshots(ctx, ch, allowance)
+			refreshed += warmed
+			if ltd {
+				log.Printf("worker: ESI error limit hit refreshing planetary industry for character %d; backing off until next cycle", ch.CharacterID)
+				limited = true
+			}
+		}
+		if !limited && !allowance.exhausted() {
+			warmed, ltd := app.refreshCommsSnapshots(ctx, ch, allowance)
+			refreshed += warmed
+			if ltd {
+				log.Printf("worker: ESI error limit hit refreshing mail/calendar/contacts for character %d; backing off until next cycle", ch.CharacterID)
+				limited = true
+			}
+		}
 		if limited {
 			break
 		}
@@ -573,6 +596,8 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 	typeIDs := make(map[int64]bool)
 	placeKinds := make(map[int64]string) // location id -> "station"|"solar_system"
 	charIDs := make(map[int64]bool)      // character names (killmail people + corp rosters)
+	planetIDs := make(map[int64]bool)    // planet names (colony planets)
+	schematicIDs := make(map[int64]bool) // PI schematic names + cycle times
 	for _, snap := range snaps {
 		switch snap.Kind {
 		case esi.SnapSkills:
@@ -742,6 +767,47 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 					}
 				}
 			}
+		case esi.SnapPlanets:
+			// Colony planets resolve through the place-name
+			// cache (their names come from /universe/planets/);
+			// their systems ride the station/system pass.
+			var colonies esi.Colonies
+			if err := json.Unmarshal([]byte(snap.Payload), &colonies); err == nil {
+				for _, c := range colonies {
+					if c.PlanetID > 0 {
+						planetIDs[c.PlanetID] = true
+					}
+					if c.SolarSystemID > 0 {
+						placeKinds[c.SolarSystemID] = "solar_system"
+					}
+				}
+			}
+		case esi.SnapMail:
+			// Senders and character recipients resolve through
+			// the character-name cache (same >= 90M harvest rule
+			// as the ledger payloads).
+			var headers esi.MailHeaders
+			if err := json.Unmarshal([]byte(snap.Payload), &headers); err == nil {
+				for _, h := range headers {
+					if h.From >= 90_000_000 {
+						charIDs[h.From] = true
+					}
+					for _, rcpt := range h.Recipients {
+						if rcpt.RecipientType == "character" && rcpt.RecipientID >= 90_000_000 {
+							charIDs[rcpt.RecipientID] = true
+						}
+					}
+				}
+			}
+		case esi.SnapContacts:
+			var contacts esi.Contacts
+			if err := json.Unmarshal([]byte(snap.Payload), &contacts); err == nil {
+				for _, c := range contacts {
+					if c.ContactType == "character" && c.ContactID >= 90_000_000 {
+						charIDs[c.ContactID] = true
+					}
+				}
+			}
 		default:
 			// Per-division wallet ledgers: counterparties and
 			// journal parties resolve through the same cache. The
@@ -769,6 +835,42 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 						}
 						if e.SecondPartyID >= 90_000_000 {
 							charIDs[e.SecondPartyID] = true
+						}
+					}
+				}
+			}
+			// Colony layouts (suffix-keyed snapshots): pin and
+			// product types resolve through the type caches,
+			// factory schematics through the schematic cache.
+			if strings.HasPrefix(snap.Kind, esi.SnapPlanetLayoutPrefix) {
+				var layout esi.PlanetLayout
+				if err := json.Unmarshal([]byte(snap.Payload), &layout); err == nil {
+					for _, pin := range layout.Pins {
+						if pin.TypeID > 0 {
+							typeIDs[pin.TypeID] = true
+						}
+						if pin.ExtractorDetails != nil && pin.ExtractorDetails.ProductTypeID > 0 {
+							typeIDs[pin.ExtractorDetails.ProductTypeID] = true
+						}
+						if pin.FactoryDetails != nil && pin.FactoryDetails.SchematicID > 0 {
+							schematicIDs[pin.FactoryDetails.SchematicID] = true
+						}
+						if pin.SchematicID > 0 {
+							schematicIDs[pin.SchematicID] = true
+						}
+					}
+				}
+			}
+			// Calendar event details: a character owner resolves
+			// through the character-name cache (attendees resolve
+			// the same way from their own snapshots below — the
+			// attendee list payloads carry character ids only).
+			if strings.HasPrefix(snap.Kind, esi.SnapCalendarAttPrefix) {
+				var attendees esi.CalendarAttendees
+				if err := json.Unmarshal([]byte(snap.Payload), &attendees); err == nil {
+					for _, a := range attendees {
+						if a.CharacterID >= 90_000_000 {
+							charIDs[a.CharacterID] = true
 						}
 					}
 				}
@@ -852,6 +954,37 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 	sort.Slice(missingPlaces, func(i, j int) bool { return missingPlaces[i] < missingPlaces[j] })
 	resolved += app.runWarmPool(ctx, missingPlaces, budget, func(ctx context.Context, id int64) bool {
 		return app.warmPlaceName(ctx, budget, pathByID[id], id)
+	})
+	if budget.stopped() {
+		return resolved
+	}
+
+	// Planet names for the character's colonies (the place cache
+	// carries them; the network tier is /universe/planets/).
+	var missingPlanets []int64
+	for _, id := range sortedInt64Keys(planetIDs) {
+		if _, ok := app.esi.CachedPlaceName(ctx, id); ok {
+			continue
+		}
+		missingPlanets = append(missingPlanets, id)
+	}
+	resolved += app.runWarmPool(ctx, missingPlanets, budget, func(ctx context.Context, id int64) bool {
+		return app.warmPlanetName(ctx, budget, id)
+	})
+	if budget.stopped() {
+		return resolved
+	}
+
+	// PI schematics for the colony layouts' factory pins.
+	var missingSchematics []int64
+	for _, id := range sortedInt64Keys(schematicIDs) {
+		if _, ok := app.esi.CachedSchematic(id); ok {
+			continue
+		}
+		missingSchematics = append(missingSchematics, id)
+	}
+	resolved += app.runWarmPool(ctx, missingSchematics, budget, func(ctx context.Context, id int64) bool {
+		return app.warmSchematic(ctx, budget, id)
 	})
 	if budget.stopped() {
 		return resolved
@@ -977,6 +1110,40 @@ func (app *Application) warmCharacterName(ctx context.Context, budget *warmBudge
 		return false
 	}
 	return name != ""
+}
+
+// warmPlanetName resolves one planet's name from the public
+// /universe/planets/ endpoint into the place-name cache.
+func (app *Application) warmPlanetName(ctx context.Context, budget *warmBudget, id int64) bool {
+	var planet esi.Station // the payload's name field is all we need
+	if err := app.esi.Get(ctx, "", fmt.Sprintf("/universe/planets/%d/", id), &planet); err != nil {
+		if errors.Is(err, esi.ErrErrorLimit) {
+			budget.hitLimit()
+		} else if ctx.Err() == nil {
+			log.Printf("worker: warm planet %d: %v", id, err)
+		}
+		return false
+	}
+	if planet.Name == "" {
+		return false
+	}
+	app.esi.StorePlaceName(id, planet.Name)
+	return true
+}
+
+// warmSchematic resolves one PI schematic (name + cycle time)
+// into the client's schematic cache.
+func (app *Application) warmSchematic(ctx context.Context, budget *warmBudget, id int64) bool {
+	s, err := app.esi.FetchSchematic(ctx, id)
+	if err != nil {
+		if errors.Is(err, esi.ErrErrorLimit) {
+			budget.hitLimit()
+		} else if ctx.Err() == nil {
+			log.Printf("worker: warm schematic %d: %v", id, err)
+		}
+		return false
+	}
+	return s.SchematicName != ""
 }
 
 // ---------------------------------------------------------------------------

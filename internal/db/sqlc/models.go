@@ -116,6 +116,7 @@ type PilotRecord struct {
 	Payload     string `json:"payload"`
 	State       string `json:"state"`
 	FetchedAt   string `json:"fetched_at"`
+	Priority    int64  `json:"priority"`
 }
 
 type SdeBlueprint struct {

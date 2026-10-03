@@ -104,6 +104,11 @@ func (app *Application) runWorker(ctx context.Context) {
 	// snapshot refreshes.
 	go app.sdeMaintenance(ctx)
 
+	// The urgent want drain polls the want queues every few
+	// seconds so a click that outruns proactive coverage fills in
+	// within seconds instead of waiting for the minute cycle.
+	go app.runUrgentDrain(ctx)
+
 	cycle := time.NewTicker(time.Minute)
 	heartbeat := time.NewTicker(10 * time.Minute)
 	sdeTick := time.NewTicker(time.Hour)
@@ -322,9 +327,12 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		}
 	}
 
-	// Public records: fill the pilot queue (strangers viewed on
-	// /pilot/) and the item-description wants the item details
-	// page notes. Public endpoints, same cycle allowance.
+	// Public records: note the counterparty orbit (everyone the
+	// deployment's data mentions) ahead of the pilot drain, then
+	// fill the pilot queue (strangers viewed on /pilot/) and the
+	// item-description wants the item details page notes. Public
+	// endpoints, same cycle allowance.
+	app.notePilotOrbit(ctx)
 	if !limited {
 		pDrained, pLimited := app.refreshPilotRecords(ctx, allowance)
 		refreshed += pDrained

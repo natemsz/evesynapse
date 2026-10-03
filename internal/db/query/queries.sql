@@ -193,6 +193,20 @@ SELECT * FROM killmail_details
 WHERE character_id = ?
 ORDER BY killmail_id;
 
+-- name: ListRecentKillmailDetails :many
+SELECT payload FROM killmail_details
+ORDER BY fetched_at DESC
+LIMIT ?;
+
+-- name: ListLiquidCoreTypes :many
+SELECT mh.type_id, SUM(mh.volume * mh.average) AS isk_velocity
+FROM market_history mh
+WHERE mh.region_id = sqlc.arg(region_id)
+  AND mh.date >= (SELECT date(MAX(mh2.date), '-7 days') FROM market_history mh2 WHERE mh2.region_id = sqlc.arg(region_id))
+GROUP BY mh.type_id
+ORDER BY isk_velocity DESC
+LIMIT sqlc.arg(core_limit);
+
 -- name: UpsertKillmailDetail :exec
 INSERT INTO killmail_details (killmail_id, character_id, hash, payload, fetched_at)
 VALUES (?, ?, ?, ?, ?)
@@ -389,6 +403,9 @@ LIMIT ? OFFSET ?;
 
 -- name: CountSDEBlueprints :one
 SELECT COUNT(*) FROM sde_blueprints;
+
+-- name: ListSDEBlueprintProducts :many
+SELECT blueprint_type_id, product_type_id FROM sde_blueprints;
 
 -- name: GetSDEBlueprintForProduct :one
 SELECT blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds
@@ -669,8 +686,17 @@ FROM pilot_records
 WHERE character_id = ?;
 
 -- name: UpsertPilotWant :exec
-INSERT OR IGNORE INTO pilot_records (character_id)
-VALUES (?);
+INSERT INTO pilot_records (character_id, priority)
+VALUES (?, 1)
+ON CONFLICT (character_id) DO UPDATE SET priority = MAX(priority, 1);
+
+-- name: InsertPilotOrbitWant :exec
+INSERT OR IGNORE INTO pilot_records (character_id, priority)
+VALUES (?, 0);
+
+-- name: ListPilotRecordIDs :many
+SELECT character_id
+FROM pilot_records;
 
 -- name: SetPilotRecord :exec
 INSERT INTO pilot_records (character_id, payload, state, fetched_at)
@@ -685,7 +711,7 @@ SELECT character_id
 FROM pilot_records
 WHERE state = 'pending'
    OR (state = 'ready' AND fetched_at < sqlc.arg(stale_cutoff))
-ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, fetched_at
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at
 LIMIT sqlc.arg(drain_limit);
 
 -- name: GetTypeDetail :one

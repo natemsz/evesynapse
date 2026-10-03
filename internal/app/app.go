@@ -63,6 +63,9 @@ var homeLayoutSchema string
 //go:embed schema/011_industry_planner.sql
 var industryPlannerSchema string
 
+//go:embed schema/012_skill_plans.sql
+var skillPlansSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -299,6 +302,15 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/skills", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleSkills)
+		r.Get("/plans", app.handleSkillPlans)
+		r.Get("/plans/fit", app.handleSkillPlanFitPreview)
+		r.Post("/plans/create", app.handleSkillPlanCreate)
+		r.Post("/plans/item-add", app.handleSkillPlanItemAdd)
+		r.Post("/plans/item-remove", app.handleSkillPlanItemRemove)
+		r.Post("/plans/item-move", app.handleSkillPlanItemMove)
+		r.Post("/plans/delete", app.handleSkillPlanDelete)
+		r.Post("/plans/from-template", app.handleSkillPlanFromTemplate)
+		r.Post("/plans/from-fit", app.handleSkillPlanFromFit)
 	})
 
 	r.Route("/character", func(r chi.Router) {

@@ -60,6 +60,7 @@ type pageData struct {
 	Items           *itemsView
 	Skills          *skillsView
 	SkillsChars     []assetCharLink
+	SkillPlans      *skillPlansView
 	Sync            *syncView
 	Users           []db.User
 	Characters      []db.Character
@@ -113,7 +114,7 @@ func sectionForPage(page string) string {
 	switch page {
 	case "home.html":
 		return "home"
-	case "character.html", "skills.html", "fittings.html", "killmails.html", "characters.html",
+	case "character.html", "skills.html", "skillplans.html", "fittings.html", "killmails.html", "characters.html",
 		"mail.html", "calendar.html", "contacts.html":
 		return "character"
 	case "assets.html", "industry.html", "planets.html", "planner.html":

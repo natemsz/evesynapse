@@ -33,13 +33,15 @@ type fittingGroup struct {
 
 // fittingEntry is one saved fitting: ship, name, grouped items.
 type fittingEntry struct {
-	Name     string
-	ShipType string
-	Groups   []fittingGroup
+	FittingID int64
+	Name      string
+	ShipType  string
+	Groups    []fittingGroup
 }
 
 // fittingsView is the Fittings page body for one character.
 type fittingsView struct {
+	CharacterID   int64
 	CharacterName string
 	Loaded        bool
 	Warming       bool
@@ -97,7 +99,7 @@ func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 	}
 	data.FittingsChars = links
 
-	view := &fittingsView{CharacterName: active.Name}
+	view := &fittingsView{CharacterID: active.CharacterID, CharacterName: active.Name}
 	data.Fittings = view
 
 	var fittings esi.Fittings
@@ -130,7 +132,7 @@ func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, f := range fittings {
-		entry := fittingEntry{Name: f.Name, ShipType: nameOf(f.ShipTypeID)}
+		entry := fittingEntry{FittingID: f.FittingID, Name: f.Name, ShipType: nameOf(f.ShipTypeID)}
 
 		byLabel := make(map[string][]fittingItemRow)
 		for _, it := range f.Items {

@@ -165,6 +165,17 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 012 (Phase 4 skill plans: dogma skill graph +
+	// user plans), applied the same guarded way.
+	var skillPlanTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sde_skill_meta'`).Scan(&skillPlanTables); err != nil {
+		return nil, err
+	}
+	if skillPlanTables == 0 {
+		if err := applySchema(conn, skillPlansSchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

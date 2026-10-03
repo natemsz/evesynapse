@@ -51,6 +51,12 @@ var sdeFileNames = []string{
 	"industryActivity.csv",
 	"industryActivityProducts.csv",
 	"industryActivityMaterials.csv",
+	// dgmTypeAttributes.csv carries the dogma attribute rows the
+	// skill planner reads (schema 012): skill rank/attributes and
+	// every type's required-skill rows. It is big (16 MB, ~1.2M
+	// rows); the parser stream-filters to the dozen attribute IDs
+	// that matter, so import memory stays modest.
+	"dgmTypeAttributes.csv",
 }
 
 // sdeSkillsFileName is the optional fifth industry file (see
@@ -189,13 +195,14 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 		return
 	}
 	// One-time backfills: databases imported before schema 008
-	// have no market-group/published values, and anything stored
-	// before schema 011 lacks the planner's industry tables, so
+	// have no market-group/published values, databases stored
+	// before schema 011 lack the planner's industry tables, and
+	// anything before schema 012 lacks the dogma skill graph, so
 	// re-import once (the store writes the marker when it lands).
 	// Retries on later ticks while an import keeps failing.
-	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "3" {
+	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "4" {
 		log.Printf("sde: static data predates current columns — re-importing to backfill")
-		app.startSDEImport("schema-011 backfill")
+		app.startSDEImport("schema-012 backfill")
 		return
 	}
 	// Even with a current marker, an empty planner table (say the
@@ -204,6 +211,11 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 	if n, err := app.queries.CountSDEBlueprints(ctx); err == nil && n == 0 {
 		log.Printf("sde: planner tables empty — importing industry data")
 		app.startSDEImport("planner backfill")
+		return
+	}
+	if n, err := app.queries.CountSDESkillMeta(ctx); err == nil && n == 0 {
+		log.Printf("sde: skill graph tables empty — importing dogma data")
+		app.startSDEImport("skill graph backfill")
 		return
 	}
 	if last, err := app.sdeMeta(ctx, "last_check_at"); err == nil && last != "" {
@@ -329,18 +341,20 @@ func (app *Application) importSDE(ctx context.Context) error {
 		parsed.markers[sdeSkillsFileName] = marker
 	}
 	parsed.buildIndustryRows()
+	parsed.buildSkillRows()
 
 	// A real dump never has an empty table; an empty parse means
 	// the file layout changed under us, and storing it would wipe
-	// good data for bad. The planner's blueprint table is held to
-	// the same rule (the skills table is not: it is optional).
+	// good data for bad. The planner's blueprint table and the
+	// skill graph are held to the same rule (the blueprint
+	// skills table is not: it is optional).
 	if len(parsed.types) == 0 || len(parsed.groups) == 0 || len(parsed.categories) == 0 ||
 		len(parsed.stations) == 0 || len(parsed.systems) == 0 || len(parsed.regions) == 0 ||
-		len(parsed.blueprints) == 0 {
-		return fmt.Errorf("parsed dump has empty table(s): %d types, %d groups, %d categories, %d stations, %d systems, %d regions, %d blueprints",
+		len(parsed.blueprints) == 0 || len(parsed.skillMeta) == 0 || len(parsed.skillReqs) == 0 {
+		return fmt.Errorf("parsed dump has empty table(s): %d types, %d groups, %d categories, %d stations, %d systems, %d regions, %d blueprints, %d skill meta, %d requirements",
 			len(parsed.types), len(parsed.groups), len(parsed.categories),
 			len(parsed.stations), len(parsed.systems), len(parsed.regions),
-			len(parsed.blueprints))
+			len(parsed.blueprints), len(parsed.skillMeta), len(parsed.skillReqs))
 	}
 
 	app.updateSDEStatus(func(s *sdeStatus) {
@@ -386,6 +400,26 @@ type parsedSDE struct {
 	blueprints  []sdeBlueprintRow
 	bpMaterials []sdeBlueprintMaterialRow
 	bpSkills    []sdeBlueprintSkillRow
+
+	// Skill graph (schema 012): the dogma attribute rows that
+	// matter, keyed type → attribute → value, flattened by
+	// buildSkillRows into the meta/requirement tables.
+	dogma     map[int64]map[int64]float64
+	skillMeta []sdeSkillMetaRow
+	skillReqs []sdeRequirementRow
+}
+
+type sdeSkillMetaRow struct {
+	typeID        int64
+	rank          float64
+	primaryAttr   int64
+	secondaryAttr int64
+}
+
+type sdeRequirementRow struct {
+	typeID      int64
+	skillTypeID int64
+	level       int64
 }
 
 type sdeIndustryProduct struct {
@@ -543,6 +577,8 @@ func parseSDEFile(name string, body io.Reader, parsed *parsedSDE) error {
 		err = parseSDEIndustryActivityMaterials(cr, idx, parsed)
 	case sdeSkillsFileName:
 		err = parseSDEIndustryActivitySkills(cr, idx, parsed)
+	case "dgmTypeAttributes.csv":
+		err = parseSDEDogmaAttributes(cr, idx, parsed)
 	default:
 		err = fmt.Errorf("unknown SDE file %q", name)
 	}
@@ -926,6 +962,162 @@ func (parsed *parsedSDE) buildIndustryRows() {
 	})
 }
 
+// ---------------------------------------------------------------------------
+// Dogma attributes (schema 012, the skill graph). dgmTypeAttributes
+// carries ~1.2M rows, but the skill planner only ever reads a
+// dozen attribute IDs, verified against the dump's own
+// dgmAttributeTypes names and live rows (Gunnery 3300: 180=167
+// Perception, 181=168 Willpower, 275=1.0):
+//
+//   275 skillTimeConstant   — the skill rank multiplier
+//   180 primaryAttribute    — value is a character attribute ID
+//   181 secondaryAttribute    (164-168: charisma/intelligence/
+//                             memory/perception/willpower)
+//
+// Required skills come in (skill, level) attribute pairs — five
+// pairs carry rows in the current dump; the sixth pair exists in
+// the attribute table but is unused so far. Every pair found is
+// honored, so a ship listing five prerequisites expands fully:
+//
+//   182/277, 183/278, 184/279, 1285/1286, 1289/1287, 1290/1288
+//          (requiredSkillN / requiredSkillNLevel — note pair 5's
+//          level attribute has the smaller number)
+// ---------------------------------------------------------------------------
+
+// dogmaSkillAttrPairs maps each requiredSkillN attribute to its
+// requiredSkillNLevel attribute.
+var dogmaSkillAttrPairs = [][2]int64{
+	{182, 277}, {183, 278}, {184, 279},
+	{1285, 1286}, {1289, 1287}, {1290, 1288},
+}
+
+const (
+	dogmaAttrRank      = 275
+	dogmaAttrPrimary   = 180
+	dogmaAttrSecondary = 181
+)
+
+// dogmaWantedAttrs is the stream filter for the 16 MB dogma file.
+var dogmaWantedAttrs = func() map[int64]bool {
+	m := map[int64]bool{dogmaAttrRank: true, dogmaAttrPrimary: true, dogmaAttrSecondary: true}
+	for _, pair := range dogmaSkillAttrPairs {
+		m[pair[0]] = true
+		m[pair[1]] = true
+	}
+	return m
+}()
+
+func parseSDEDogmaAttributes(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error {
+	if parsed.dogma == nil {
+		parsed.dogma = make(map[int64]map[int64]float64)
+	}
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		attrID, err := csvID(rec, idx, "attributeID")
+		if err != nil {
+			return errSkipRow
+		}
+		if !dogmaWantedAttrs[attrID] {
+			return nil // the other million rows are not our business
+		}
+		typeID, err := csvID(rec, idx, "typeID")
+		if err != nil {
+			return errSkipRow
+		}
+		// Values land in valueInt or valueFloat depending on the
+		// attribute (skill IDs arrive as floats: 3386.0); anything
+		// unparseable is a row we cannot use.
+		raw, ferr := csvField(rec, idx, "valueInt")
+		if ferr != nil || strings.TrimSpace(raw) == "" {
+			if raw, ferr = csvField(rec, idx, "valueFloat"); ferr != nil {
+				return errSkipRow
+			}
+		}
+		value, perr := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+		if perr != nil {
+			return errSkipRow
+		}
+		attrs := parsed.dogma[typeID]
+		if attrs == nil {
+			attrs = make(map[int64]float64, 4)
+			parsed.dogma[typeID] = attrs
+		}
+		attrs[attrID] = value
+		return nil
+	})
+	return err
+}
+
+// buildSkillRows flattens the filtered dogma rows into the
+// schema-012 tables. Skill meta covers published category-16
+// types (the EVE skill category) that carry a skillTimeConstant —
+// dogma's own definition of a trainable skill. Requirements cover
+// every type in the dump (modules/ships/charges carry their own
+// required skills), with duplicate (type, skill) rows across the
+// six pairs collapsing to the highest level.
+func (parsed *parsedSDE) buildSkillRows() {
+	groupCategory := make(map[int64]int64, len(parsed.groups))
+	for _, g := range parsed.groups {
+		groupCategory[g.groupID] = g.categoryID
+	}
+
+	parsed.skillMeta = parsed.skillMeta[:0]
+	for _, t := range parsed.types {
+		if t.published != 1 || groupCategory[t.groupID] != 16 {
+			continue
+		}
+		attrs := parsed.dogma[t.typeID]
+		rank, ok := attrs[dogmaAttrRank]
+		if !ok {
+			continue // no training-time constant: not a skill
+		}
+		if rank <= 0 {
+			rank = 1
+		}
+		parsed.skillMeta = append(parsed.skillMeta, sdeSkillMetaRow{
+			typeID:        t.typeID,
+			rank:          rank,
+			primaryAttr:   int64(attrs[dogmaAttrPrimary]),
+			secondaryAttr: int64(attrs[dogmaAttrSecondary]),
+		})
+	}
+	sort.Slice(parsed.skillMeta, func(i, j int) bool {
+		return parsed.skillMeta[i].typeID < parsed.skillMeta[j].typeID
+	})
+
+	levels := make(map[[2]int64]int64)
+	for typeID, attrs := range parsed.dogma {
+		for _, pair := range dogmaSkillAttrPairs {
+			skillID := int64(attrs[pair[0]])
+			if skillID <= 0 {
+				continue
+			}
+			level := int64(attrs[pair[1]])
+			if level < 1 {
+				level = 1
+			}
+			if level > 5 {
+				level = 5
+			}
+			key := [2]int64{typeID, skillID}
+			if level > levels[key] {
+				levels[key] = level
+			}
+		}
+	}
+	parsed.skillReqs = parsed.skillReqs[:0]
+	for key, level := range levels {
+		parsed.skillReqs = append(parsed.skillReqs, sdeRequirementRow{
+			typeID: key[0], skillTypeID: key[1], level: level,
+		})
+	}
+	sort.Slice(parsed.skillReqs, func(i, j int) bool {
+		if parsed.skillReqs[i].typeID != parsed.skillReqs[j].typeID {
+			return parsed.skillReqs[i].typeID < parsed.skillReqs[j].typeID
+		}
+		return parsed.skillReqs[i].skillTypeID < parsed.skillReqs[j].skillTypeID
+	})
+}
+
 // storeSDE replaces the sde_* contents with the parsed dump in one
 // transaction: deletes, then bulk inserts via prepared statements
 // (importer volume — tens of thousands of rows — is why these are
@@ -939,7 +1131,8 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	defer tx.Rollback()
 
 	for _, table := range []string{"sde_types", "sde_groups", "sde_categories", "sde_stations", "sde_systems", "sde_regions",
-		"sde_blueprints", "sde_blueprint_materials", "sde_blueprint_skills"} {
+		"sde_blueprints", "sde_blueprint_materials", "sde_blueprint_skills",
+		"sde_skill_meta", "sde_requirements"} {
 		if _, err := tx.ExecContext(ctx, "DELETE FROM "+table); err != nil {
 			return 0, fmt.Errorf("clear %s: %w", table, err)
 		}
@@ -1013,10 +1206,23 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	}); err != nil {
 		return 0, err
 	}
+	if err := insert("INSERT INTO sde_skill_meta (type_id, rank, primary_attr, secondary_attr) VALUES (?, ?, ?, ?)", len(parsed.skillMeta), func(i int) []any {
+		r := parsed.skillMeta[i]
+		return []any{r.typeID, r.rank, r.primaryAttr, r.secondaryAttr}
+	}); err != nil {
+		return 0, err
+	}
+	if err := insert("INSERT INTO sde_requirements (type_id, skill_type_id, level) VALUES (?, ?, ?)", len(parsed.skillReqs), func(i int) []any {
+		r := parsed.skillReqs[i]
+		return []any{r.typeID, r.skillTypeID, r.level}
+	}); err != nil {
+		return 0, err
+	}
 
 	total := int64(len(parsed.types) + len(parsed.groups) + len(parsed.categories) +
 		len(parsed.stations) + len(parsed.systems) + len(parsed.regions) +
-		len(parsed.blueprints) + len(parsed.bpMaterials) + len(parsed.bpSkills))
+		len(parsed.blueprints) + len(parsed.bpMaterials) + len(parsed.bpSkills) +
+		len(parsed.skillMeta) + len(parsed.skillReqs))
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	tq := db.New(tx)
@@ -1025,10 +1231,11 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		{Key: "imported_at", Value: now},
 		{Key: "last_check_at", Value: now},
 		{Key: "total_rows", Value: strconv.FormatInt(total, 10)},
-		// Marker that the schema-008 market columns are populated
-		// and, from 3, the schema-011 planner tables too
-		// (sdeMaintenance backfills once when it's behind).
-		{Key: "sde_import_version", Value: "3"},
+		// Marker that the schema-008 market columns are populated,
+		// the schema-011 planner tables from 3, and the schema-012
+		// skill graph from 4 (sdeMaintenance backfills once when
+		// it's behind).
+		{Key: "sde_import_version", Value: "4"},
 	}
 	for name, m := range parsed.markers {
 		meta = append(meta,
@@ -1101,6 +1308,8 @@ func (app *Application) loadSDEView(ctx context.Context) *sdeView {
 		{"Systems", app.queries.CountSDESystems},
 		{"Regions", app.queries.CountSDERegions},
 		{"Blueprints (planner)", app.queries.CountSDEBlueprints},
+		{"Skills (plan graph)", app.queries.CountSDESkillMeta},
+		{"Skill requirements", app.queries.CountSDERequirements},
 	}
 	for _, c := range counts {
 		n, err := c.fn(ctx)

@@ -663,6 +663,7 @@ type marketWidget struct {
 	BuyCount    int
 	BuyValue    string
 	Expiring    []marketExpiry
+	Health      string // Phase 5 one-liner: undercuts + watchlist moves, "" when quiet
 }
 
 type skillFinish struct {
@@ -801,6 +802,8 @@ const (
 	attentionOrderExpiring
 	attentionContract
 	attentionPI // Phase 2: expired/imminent extractors (appended; order preserved)
+	attentionUndercut
+	attentionMarketMove
 )
 
 func (app *Application) buildAttention(ctx context.Context, bundles []*charSnaps) *attentionWidget {
@@ -952,6 +955,12 @@ func (app *Application) buildAttention(ctx context.Context, bundles []*charSnaps
 		}
 	}
 
+	// Phase 5: market health — undercut sell orders and
+	// watchlist moves, from the worker's stored verdicts and
+	// price history. Account-level (not per bundle), appended
+	// after the extractor rules.
+	items = append(items, app.attentionMarketItems(ctx, bundles)...)
+
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].Rank != items[j].Rank {
 			return items[i].Rank < items[j].Rank
@@ -965,6 +974,102 @@ func (app *Application) buildAttention(ctx context.Context, bundles []*charSnaps
 	}
 	w.Items = items
 	return w
+}
+
+// attentionMarketItems builds the Phase 5 Needs-attention lines
+// for one account: undercut sell orders (one line each, folded
+// into a single summary past three) and watchlist moves past the
+// user's threshold. Everything reads the stored verdicts and
+// history — a quiet market adds nothing.
+func (app *Application) attentionMarketItems(ctx context.Context, bundles []*charSnaps) []attentionItem {
+	if len(bundles) == 0 {
+		return nil
+	}
+	userID := bundles[0].ch.UserID
+	charNames := make(map[int64]string, len(bundles))
+	for _, b := range bundles {
+		charNames[b.ch.CharacterID] = b.ch.Name
+	}
+
+	var items []attentionItem
+	health, err := app.queries.ListOrderHealthByUser(ctx, userID)
+	if err != nil {
+		log.Printf("home: attention: list order health for user %d: %v", userID, err)
+	} else {
+		var undercut []db.OrderHealth
+		for _, h := range health {
+			if h.Status == "undercut_station" || h.Status == "undercut_region" {
+				undercut = append(undercut, h)
+			}
+		}
+		switch {
+		case len(undercut) > 3:
+			items = append(items, attentionItem{
+				Text: fmt.Sprintf("%d of your sell orders are undercut right now.", len(undercut)),
+				Link: "/market/",
+				Rank: attentionUndercut,
+			})
+		default:
+			for _, h := range undercut {
+				text, _ := orderHealthText(h.MyPrice, h.Status, h.StationBest, h.RegionBest)
+				at, _ := parseRFC3339(h.ComputedAt)
+				items = append(items, attentionItem{
+					Char: charNames[h.CharacterID],
+					Text: fmt.Sprintf("%s — %s sell order: %s.",
+						charNames[h.CharacterID], app.typeNameOrID(ctx, h.TypeID), lowerFirst(text)),
+					Link: "/market/",
+					Rank: attentionUndercut,
+					At:   at,
+				})
+			}
+		}
+	}
+
+	entries, err := app.queries.ListWatchlistByUser(ctx, userID)
+	if err != nil {
+		log.Printf("home: attention: list watchlist for user %d: %v", userID, err)
+		return items
+	}
+	since := time.Now().UTC().AddDate(0, 0, -(historyChartDays + 5)).Format(historyDateLayout)
+	for _, e := range entries {
+		rows, err := app.queries.ListMarketHistory(ctx, db.ListMarketHistoryParams{
+			RegionID: e.RegionID, TypeID: e.TypeID, Date: since,
+		})
+		if err != nil {
+			log.Printf("home: attention: history for watched type %d: %v", e.TypeID, err)
+			continue
+		}
+		pct, ok := historyChangePct(rows, 7)
+		if !ok || absFloat(pct) < e.ThresholdPct {
+			continue
+		}
+		items = append(items, attentionItem{
+			Text: fmt.Sprintf("%s %s over 7 days in %s.",
+				app.typeNameOrID(ctx, e.TypeID), changeDirection(pct),
+				app.marketRegionLabel(ctx, e.RegionID)),
+			Link: "/market/",
+			Rank: attentionMarketMove,
+		})
+	}
+	return items
+}
+
+// lowerFirst lowercases a string's first letter ("Undercut…" →
+// "undercut…") for embedding mid-sentence.
+func lowerFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToLower(s[:1]) + s[1:]
+}
+
+// absFloat is |x| for the attention threshold comparison (keeps
+// overview.go free of a math import it otherwise doesn't need).
+func absFloat(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
 
 // queueLastFinish returns the latest finish_date in the queue, or
@@ -1180,7 +1285,60 @@ func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps) *
 		w.SellValue = esi.FormatISK(sellSum)
 		w.BuyValue = esi.FormatISK(buySum)
 	}
+	// Phase 5 health line: how many sell orders are undercut and
+	// how many watched items are moving, from the same stored
+	// verdicts the attention feed reads. Quiet when zero.
+	if len(bundles) > 0 {
+		w.Health = app.marketHealthLine(ctx, bundles[0].ch.UserID)
+	}
 	return w
+}
+
+// marketHealthLine sums the market widget's one-line health
+// summary for one account: "2 orders undercut · watchlist: 1
+// moving" (either half omitted when quiet).
+func (app *Application) marketHealthLine(ctx context.Context, userID int64) string {
+	var parts []string
+	if userID > 0 {
+		if health, err := app.queries.ListOrderHealthByUser(ctx, userID); err == nil {
+			undercut := 0
+			for _, h := range health {
+				if h.Status == "undercut_station" || h.Status == "undercut_region" {
+					undercut++
+				}
+			}
+			if undercut > 0 {
+				noun := "orders"
+				if undercut == 1 {
+					noun = "order"
+				}
+				parts = append(parts, fmt.Sprintf("%d %s undercut", undercut, noun))
+			}
+		} else {
+			log.Printf("home: market widget: list order health for user %d: %v", userID, err)
+		}
+		if entries, err := app.queries.ListWatchlistByUser(ctx, userID); err == nil {
+			since := time.Now().UTC().AddDate(0, 0, -(historyChartDays + 5)).Format(historyDateLayout)
+			moving := 0
+			for _, e := range entries {
+				rows, err := app.queries.ListMarketHistory(ctx, db.ListMarketHistoryParams{
+					RegionID: e.RegionID, TypeID: e.TypeID, Date: since,
+				})
+				if err != nil {
+					continue
+				}
+				if pct, ok := historyChangePct(rows, 7); ok && absFloat(pct) >= e.ThresholdPct {
+					moving++
+				}
+			}
+			if moving > 0 {
+				parts = append(parts, fmt.Sprintf("watchlist: %d moving", moving))
+			}
+		} else {
+			log.Printf("home: market widget: list watchlist for user %d: %v", userID, err)
+		}
+	}
+	return strings.Join(parts, " · ")
 }
 
 func (app *Application) buildSkills(ctx context.Context, bundles []*charSnaps) *skillsWidget {

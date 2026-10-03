@@ -131,6 +131,7 @@
   {{with .Market}}
   {{if .Open}}
   <p><strong>{{.Open}}</strong> open orders — {{.SellCount}} sell ({{.SellValue}} ISK) · {{.BuyCount}} buy ({{.BuyValue}} ISK in escrow)</p>
+  {{if .Health}}<p><small>{{.Health}}</small></p>{{end}}
   {{if .Expiring}}
   <div class="tw">
   <table>

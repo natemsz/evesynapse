@@ -5,7 +5,7 @@
 
 CREATE TABLE character_snapshots (
     character_id INTEGER NOT NULL REFERENCES characters (character_id) ON DELETE CASCADE,
-    kind         TEXT    NOT NULL, -- "skills" | "skillqueue" | "wallet"
+    kind         TEXT    NOT NULL, -- "skills" | "skillqueue" | "wallet" | "assets"
     payload      TEXT    NOT NULL, -- raw ESI JSON body
     fetched_at   TEXT    NOT NULL, -- RFC3339
     cached_until TEXT,             -- RFC3339, from the ESI Expires header

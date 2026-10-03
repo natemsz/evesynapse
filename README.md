@@ -26,6 +26,7 @@ and key/vCode auth.
 - `refresh.go` — access-token freshness: refresh + rotation persistence
 - `esi.go` — ESI client with snapshot caching and type-name resolution
 - `pages.go` — home/admin handlers + template rendering
+- `assets.go` — assets browser (per-location stacks, switchable per character)
 - `worker.go` — background ESI refresh scheduler (60s cycle)
 - `netdns.go` — Android/Termux DNS + embedded CA roots
 - `templates/` — embedded html/templates (`base.html` layout)
@@ -51,6 +52,8 @@ environment win). Then open <http://localhost:8080>:
 - `/auth/callback` — OAuth2 callback (see SSO flow below)
 - `/auth/logout` — destroys the session
 - `/admin/` — users, linked characters, worker status (requires login)
+- `/assets/` — asset browser: every stack grouped by location for the
+  signed-in user's characters (requires login; `esi-assets.read_assets.v1`)
 - `/healthz` — plain `ok`
 - `/dev-login` — dev-only fake sign-in, registered **only** when
   `DEV_LOGIN=1` (see below)
@@ -99,10 +102,11 @@ access token, the **rotated** refresh token, and the new expiry.
 Refreshes are serialized process-wide and the character row is
 re-read first, so a rotated refresh token is never replayed.
 
-ESI responses for skills, skill queue and wallet are cached as raw
+ESI responses for skills, skill queue, wallet and assets are cached as raw
 JSON in `character_snapshots` (schema `002_snapshots.sql`), keyed by
 (character, kind) with the response's `Expires` header stored as
-`cached_until` (5-minute fallback when ESI sends none). Pages serve
+`cached_until` (5-minute fallback when ESI sends none). Assets are
+paginated: every page is fetched and stored as one merged JSON array. Pages serve
 fresh snapshots without calling ESI; on fetch failure a stale
 snapshot is served instead of an error. ESI's error-limit statuses
 (420/429) are treated as a hard back-off signal.
@@ -153,6 +157,7 @@ make gen   # sqlc generate
       skill queue) via cached ESI snapshots
 - [x] Token refresh + worker-driven ESI caching honoring `cached_until`
 - [x] 2013 look & feel (original wallpaper, dark panels, teal accents)
-- [ ] Assets pages (scope already requested at login)
+- [x] Assets page: every stack grouped by location, worker-refreshed
+      (scope already requested at login)
 - [ ] Import CCP SDE into side tables for the market/fitting modules
 - [x] Multiple characters per account (link more while signed in)

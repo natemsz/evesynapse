@@ -13,6 +13,17 @@
   <nav class="topbar">
     <a class="wordmark" href="/">EVESYNAPSE</a>
     <span class="who">{{if .LoggedIn}}Signed in{{if .CharacterName}} as {{.CharacterName}}{{end}} · <a href="/auth/logout">Sign out</a>{{else}}Not signed in{{end}}</span>
+    {{if and .LoggedIn .Switcher}}
+    <details class="branch switcher" name="mainnav">
+      <summary>Switch character</summary>
+      <div class="menu">
+        {{range .Switcher}}
+        <a href="/characters/switch?character={{.ID}}"{{if .Active}} class="active"{{end}}><img class="portrait" src="{{.PortraitURL}}" alt="" width="24" height="24"> {{.Name}}{{if .Tags}} <small>· {{.Tags}}</small>{{end}}{{if .Relink}} <small>· re-link needed</small>{{end}}</a>
+        {{end}}
+        <a href="/characters/">Manage characters</a>
+      </div>
+    </details>
+    {{end}}
   </nav>
   <nav class="mainnav" aria-label="Primary">
     <a class="navlink{{if eq .Section "home"}} active{{end}}" href="/">Home</a>
@@ -20,6 +31,7 @@
       <summary>Character</summary>
       <div class="menu">
         <a href="/character/"{{if and (eq .Section "character") (eq .NavPage "character.html")}} class="active"{{end}}>Character</a>
+        <a href="/characters/"{{if eq .NavPage "characters.html"}} class="active"{{end}}>Characters</a>
         <a href="/skills/"{{if eq .NavPage "skills.html"}} class="active"{{end}}>Skills</a>
         <a href="/fittings/"{{if eq .NavPage "fittings.html"}} class="active"{{end}}>Fittings</a>
         <a href="/killmails/"{{if and (eq .Section "character") (eq .NavPage "killmails.html")}} class="active"{{end}}>Killmails</a>

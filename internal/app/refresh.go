@@ -3,13 +3,16 @@ package app
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"time"
 
 	"golang.org/x/oauth2"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
 )
 
 // tokenRefreshWindow: refresh the access token when it expires within
@@ -53,6 +56,13 @@ func (app *Application) validAccessToken(ctx context.Context, ch db.Character) (
 	}
 	tok, err := eveOAuthConfig(app.cfg).TokenSource(ctx, stale).Token()
 	if err != nil {
+		// A definitive rejection (revoked/expired refresh token)
+		// parks the character as token-dead instead of failing
+		// the same way every worker cycle; transient failures
+		// just retry next time.
+		if isDefinitiveTokenFailure(err) {
+			app.markCharacterTokenDead(ctx, ch.CharacterID)
+		}
 		return "", fmt.Errorf("character %d: token refresh failed: %w", ch.CharacterID, err)
 	}
 
@@ -89,4 +99,24 @@ func parseTokenExpiry(v sql.NullString) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return t, true
+}
+
+// isDefinitiveTokenFailure reports whether a token-refresh or ESI
+// failure proves the character's credentials are dead rather than
+// the network being flaky: CCP's token endpoint answering
+// invalid_grant (revoked/expired refresh token) or an ESI 401 for a
+// token we believed valid. Only definitive failures park a
+// character as token-dead; everything else retries next cycle.
+func isDefinitiveTokenFailure(err error) bool {
+	var rerr *oauth2.RetrieveError
+	if errors.As(err, &rerr) {
+		switch rerr.ErrorCode {
+		case "invalid_grant", "invalid_token":
+			return true
+		}
+	}
+	if code, ok := esi.StatusCode(err); ok && code == http.StatusUnauthorized {
+		return true
+	}
+	return false
 }

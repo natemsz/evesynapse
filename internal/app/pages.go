@@ -59,6 +59,24 @@ type pageData struct {
 	Characters      []db.Character
 	Snapshots       []adminSnapshotRow
 	WorkerStatus    string
+
+	// Header character switcher (base.html): every character
+	// linked to the signed-in account, the acting one marked.
+	// Filled by render; handlers never set it.
+	Switcher []switcherEntry
+
+	// Character management page (/characters/).
+	CharactersPage *charactersView
+}
+
+// switcherEntry is one linked character in the header switcher.
+type switcherEntry struct {
+	ID          int64
+	Name        string
+	Tags        string
+	PortraitURL string
+	Active      bool
+	Relink      bool // token_dead / owner_changed: needs a fresh sign-in
 }
 
 // characterSheet is what the home page shows for the signed-in
@@ -130,7 +148,7 @@ func sectionForPage(page string) string {
 	switch page {
 	case "home.html":
 		return "home"
-	case "character.html", "skills.html", "fittings.html", "killmails.html":
+	case "character.html", "skills.html", "fittings.html", "killmails.html", "characters.html":
 		return "character"
 	case "assets.html", "industry.html":
 		return "assets"
@@ -149,12 +167,15 @@ func sectionForPage(page string) string {
 	return ""
 }
 
-func (app *Application) render(w http.ResponseWriter, status int, page string, data pageData) {
+func (app *Application) render(ctx context.Context, w http.ResponseWriter, status int, page string, data pageData) {
 	if data.Section == "" {
 		data.Section = sectionForPage(page)
 	}
 	if data.NavPage == "" {
 		data.NavPage = page
+	}
+	if data.LoggedIn && data.Switcher == nil {
+		data.Switcher = app.switcherEntries(ctx)
 	}
 	ts, err := template.New("base").ParseFS(templatesFS, "templates/base.html", "templates/"+page)
 	if err != nil {
@@ -219,7 +240,7 @@ func (app *Application) handleHome(w http.ResponseWriter, r *http.Request) {
 	if status, ok := app.loadServerStatus(ctx); ok {
 		data.ServerStatus = status
 	}
-	app.render(w, http.StatusOK, "home.html", data)
+	app.render(ctx, w, http.StatusOK, "home.html", data)
 }
 
 // loadCharacterSheet assembles the home-page character block.
@@ -477,5 +498,5 @@ func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	app.render(w, http.StatusOK, "admin.html", data)
+	app.render(ctx, w, http.StatusOK, "admin.html", data)
 }

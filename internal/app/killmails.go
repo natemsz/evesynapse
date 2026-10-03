@@ -70,11 +70,11 @@ func (app *Application) handleKillmails(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		log.Printf("killmails: list characters: %v", err)
 		data.Error = "Could not load killmail data; check the server log."
-		app.render(w, http.StatusOK, "killmails.html", data)
+		app.render(ctx, w, http.StatusOK, "killmails.html", data)
 		return
 	}
 	if links == nil {
-		app.render(w, http.StatusOK, "killmails.html", data)
+		app.render(ctx, w, http.StatusOK, "killmails.html", data)
 		return
 	}
 	data.KillmailChars = links
@@ -95,7 +95,7 @@ func (app *Application) handleKillmails(w http.ResponseWriter, r *http.Request) 
 		if _, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: active.CharacterID, Kind: esi.SnapKillmails}); errors.Is(serr, sql.ErrNoRows) {
 			view.Warming = true
 		}
-		app.render(w, http.StatusOK, "killmails.html", data)
+		app.render(ctx, w, http.StatusOK, "killmails.html", data)
 		return
 	}
 	view.Loaded = true
@@ -113,7 +113,7 @@ func (app *Application) handleKillmails(w http.ResponseWriter, r *http.Request) 
 		view.Rows = append(view.Rows, app.killmailRow(ctx, viewer, ref, prices))
 	}
 
-	app.render(w, http.StatusOK, "killmails.html", data)
+	app.render(ctx, w, http.StatusOK, "killmails.html", data)
 }
 
 // killmailViewer decides a row's KILL/LOSS badge: the character

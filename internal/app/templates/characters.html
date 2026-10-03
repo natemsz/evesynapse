@@ -1,0 +1,60 @@
+{{define "title"}}Characters{{end}}
+{{define "content"}}
+<h1><span class="gt">Characters</span></h1>
+<p>Every character linked to your account. The worker keeps each one's data warm in the background; tags are your own labels for telling a fleet of alts apart (EVE doesn't reveal which characters share a game account, so grouping is yours).</p>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .CharactersPage}}
+{{with .CharactersPage}}
+
+{{if .ConfirmUnlink}}
+<section class="card">
+<h2>Unlink {{.ConfirmUnlink.Name}}?</h2>
+<p>This removes the character from your account and deletes its saved login and all cached data for it (snapshots, wallet/order history views, corp data warmed through it). Data other characters warmed is untouched. This cannot be undone — you can link the character again with EVE sign-in at any time.</p>
+<form method="post" action="/characters/unlink">
+  <input type="hidden" name="character_id" value="{{.ConfirmUnlink.ID}}">
+  <button class="btn" type="submit">Unlink {{.ConfirmUnlink.Name}}</button>
+  <a class="btn" href="/characters/">Cancel</a>
+</form>
+</section>
+{{end}}
+
+{{if .Chars}}
+<p><small>{{.Linked}} linked{{if .Relink}} · {{.Relink}} needing re-link{{end}} · <a href="/auth/eve">Link another character</a></small></p>
+<div class="tw">
+<table>
+  <thead>
+    <tr><th>Character</th><th>Corporation</th><th>Link</th><th>Data</th><th>Tags</th><th></th></tr>
+  </thead>
+  <tbody>
+  {{range .Chars}}
+    <tr{{if .Active}} class="yours"{{end}}>
+      <td><img class="portrait" src="{{.PortraitURL}}" alt="" width="32" height="32"> <strong>{{.Name}}</strong>{{if .Active}} <small>· active</small>{{end}}<br><small>#{{.ID}}</small></td>
+      <td>{{if .CorpName}}{{.CorpName}}{{else}}—{{end}}</td>
+      <td>{{.StateLabel}}{{if .StateDetail}}<br><small>{{.StateDetail}}</small>{{end}}{{if .Since}}<br><small>since {{.Since}}</small>{{end}}</td>
+      <td>{{if .Snapshots}}{{.Fresh}} of {{.Snapshots}} fresh<br><small>newest {{.Newest}}</small>{{else}}—{{end}}</td>
+      <td>
+        <form method="post" action="/characters/tags">
+          <input type="hidden" name="character_id" value="{{.ID}}">
+          <input type="text" name="tags" value="{{.Tags}}" placeholder="e.g. PI alt, Trader" size="18">
+          <button class="btn" type="submit">Save</button>
+        </form>
+      </td>
+      <td>
+        {{if not .Active}}<a href="/characters/switch?character={{.ID}}">Make active</a><br>{{end}}
+        {{if ne .State "ok"}}<a href="/auth/eve">Sign in again</a><br>{{end}}
+        <a href="/characters/?confirm_unlink={{.ID}}">Unlink</a>
+      </td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p>No characters linked yet. <a href="/auth/eve">Sign in with EVE SSO</a> to link your first character — you can add the rest the same way.</p>
+{{end}}
+
+{{end}}
+{{end}}
+{{end}}

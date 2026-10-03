@@ -90,7 +90,7 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
 	if userID == 0 {
 		// Dev-login sessions carry no user; nothing to show.
-		app.render(w, http.StatusOK, "sync.html", data)
+		app.render(ctx, w, http.StatusOK, "sync.html", data)
 		return
 	}
 
@@ -98,7 +98,7 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("sync: list characters for user %d: %v", userID, err)
 		data.Error = "Could not load sync data; check the server log."
-		app.render(w, http.StatusOK, "sync.html", data)
+		app.render(ctx, w, http.StatusOK, "sync.html", data)
 		return
 	}
 
@@ -185,7 +185,7 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 		view.Characters = append(view.Characters, cv)
 	}
 
-	app.render(w, http.StatusOK, "sync.html", data)
+	app.render(ctx, w, http.StatusOK, "sync.html", data)
 }
 
 // loadGlobalView builds the Sync page's public-data block: one

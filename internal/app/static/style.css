@@ -568,3 +568,11 @@ footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
   .searchwrap { width: calc(100vw - 9.5rem); }
   th, td { padding: 0.35rem 0.45rem; }
 }
+
+/* --- header character switcher + /characters/ page (Phase 1A) ---
+   The switcher is a nav .branch living in the topbar; its menu
+   right-aligns to the bar's edge instead of the left. Portrait
+   chips align with the text they label. */
+.switcher .menu { left: auto; right: 0; min-width: 15rem; }
+.switcher .menu a { display: flex; align-items: center; gap: 0.5rem; }
+.portrait { border-radius: 3px; vertical-align: middle; }

@@ -170,7 +170,7 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 		view.Matches = app.searchTypes(ctx, view.Query)
 	}
 
-	app.render(w, http.StatusOK, "market.html", data)
+	app.render(ctx, w, http.StatusOK, "market.html", data)
 }
 
 // searchTypes merges exact /universe/ids/ hits (first) with partial

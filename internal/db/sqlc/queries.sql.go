@@ -424,6 +424,13 @@ FROM pilot_records
 WHERE character_id = ?
 `
 
+type GetPilotRecordRow struct {
+	CharacterID int64  `json:"character_id"`
+	Payload     string `json:"payload"`
+	State       string `json:"state"`
+	FetchedAt   string `json:"fetched_at"`
+}
+
 // ---------------------------------------------------------------------
 // Public pilot records (schema 015): the queue behind /pilot/.
 // Pending rows are always due; ready rows re-check once their
@@ -432,9 +439,9 @@ WHERE character_id = ?
 // descriptions the same way: a type_details row with an empty
 // fetched_at is a want.
 // ---------------------------------------------------------------------
-func (q *Queries) GetPilotRecord(ctx context.Context, characterID int64) (PilotRecord, error) {
+func (q *Queries) GetPilotRecord(ctx context.Context, characterID int64) (GetPilotRecordRow, error) {
 	row := q.db.QueryRowContext(ctx, getPilotRecord, characterID)
-	var i PilotRecord
+	var i GetPilotRecordRow
 	err := row.Scan(
 		&i.CharacterID,
 		&i.Payload,
@@ -796,6 +803,16 @@ func (q *Queries) GetWatchlistEntry(ctx context.Context, arg GetWatchlistEntryPa
 	return i, err
 }
 
+const insertPilotOrbitWant = `-- name: InsertPilotOrbitWant :exec
+INSERT OR IGNORE INTO pilot_records (character_id, priority)
+VALUES (?, 0)
+`
+
+func (q *Queries) InsertPilotOrbitWant(ctx context.Context, characterID int64) error {
+	_, err := q.db.ExecContext(ctx, insertPilotOrbitWant, characterID)
+	return err
+}
+
 const listAllCharacters = `-- name: ListAllCharacters :many
 SELECT character_id, user_id, name, access_token, refresh_token, token_expiry, scopes, cached_until, created_at, updated_at, owner_hash, tags, link_state, link_state_at FROM characters
 ORDER BY user_id, name
@@ -1128,6 +1145,49 @@ func (q *Queries) ListKillmailDetailsByCharacter(ctx context.Context, characterI
 	return items, nil
 }
 
+const listLiquidCoreTypes = `-- name: ListLiquidCoreTypes :many
+SELECT mh.type_id, SUM(mh.volume * mh.average) AS isk_velocity
+FROM market_history mh
+WHERE mh.region_id = ?1
+  AND mh.date >= (SELECT date(MAX(mh2.date), '-7 days') FROM market_history mh2 WHERE mh2.region_id = ?1)
+GROUP BY mh.type_id
+ORDER BY isk_velocity DESC
+LIMIT ?2
+`
+
+type ListLiquidCoreTypesParams struct {
+	RegionID  int64 `json:"region_id"`
+	CoreLimit int64 `json:"core_limit"`
+}
+
+type ListLiquidCoreTypesRow struct {
+	TypeID      int64           `json:"type_id"`
+	IskVelocity sql.NullFloat64 `json:"isk_velocity"`
+}
+
+func (q *Queries) ListLiquidCoreTypes(ctx context.Context, arg ListLiquidCoreTypesParams) ([]ListLiquidCoreTypesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLiquidCoreTypes, arg.RegionID, arg.CoreLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLiquidCoreTypesRow
+	for rows.Next() {
+		var i ListLiquidCoreTypesRow
+		if err := rows.Scan(&i.TypeID, &i.IskVelocity); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMarketHistory = `-- name: ListMarketHistory :many
 SELECT region_id, type_id, date, average, highest, lowest, volume, order_count
 FROM market_history
@@ -1296,7 +1356,7 @@ SELECT character_id
 FROM pilot_records
 WHERE state = 'pending'
    OR (state = 'ready' AND fetched_at < ?1)
-ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, fetched_at
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at
 LIMIT ?2
 `
 
@@ -1307,6 +1367,34 @@ type ListPilotDrainsParams struct {
 
 func (q *Queries) ListPilotDrains(ctx context.Context, arg ListPilotDrainsParams) ([]int64, error) {
 	rows, err := q.db.QueryContext(ctx, listPilotDrains, arg.StaleCutoff, arg.DrainLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var character_id int64
+		if err := rows.Scan(&character_id); err != nil {
+			return nil, err
+		}
+		items = append(items, character_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPilotRecordIDs = `-- name: ListPilotRecordIDs :many
+SELECT character_id
+FROM pilot_records
+`
+
+func (q *Queries) ListPilotRecordIDs(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listPilotRecordIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -1371,6 +1459,35 @@ func (q *Queries) ListPlanetLayoutsForUser(ctx context.Context, userID int64) ([
 	return items, nil
 }
 
+const listRecentKillmailDetails = `-- name: ListRecentKillmailDetails :many
+SELECT payload FROM killmail_details
+ORDER BY fetched_at DESC
+LIMIT ?
+`
+
+func (q *Queries) ListRecentKillmailDetails(ctx context.Context, limit int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listRecentKillmailDetails, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var payload string
+		if err := rows.Scan(&payload); err != nil {
+			return nil, err
+		}
+		items = append(items, payload)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDEBlueprintMaterials = `-- name: ListSDEBlueprintMaterials :many
 SELECT material_type_id, quantity FROM sde_blueprint_materials
 WHERE blueprint_type_id = ?
@@ -1392,6 +1509,38 @@ func (q *Queries) ListSDEBlueprintMaterials(ctx context.Context, blueprintTypeID
 	for rows.Next() {
 		var i ListSDEBlueprintMaterialsRow
 		if err := rows.Scan(&i.MaterialTypeID, &i.Quantity); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDEBlueprintProducts = `-- name: ListSDEBlueprintProducts :many
+SELECT blueprint_type_id, product_type_id FROM sde_blueprints
+`
+
+type ListSDEBlueprintProductsRow struct {
+	BlueprintTypeID int64 `json:"blueprint_type_id"`
+	ProductTypeID   int64 `json:"product_type_id"`
+}
+
+func (q *Queries) ListSDEBlueprintProducts(ctx context.Context) ([]ListSDEBlueprintProductsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDEBlueprintProducts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDEBlueprintProductsRow
+	for rows.Next() {
+		var i ListSDEBlueprintProductsRow
+		if err := rows.Scan(&i.BlueprintTypeID, &i.ProductTypeID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -2845,8 +2994,9 @@ func (q *Queries) UpsertOrderHealth(ctx context.Context, arg UpsertOrderHealthPa
 }
 
 const upsertPilotWant = `-- name: UpsertPilotWant :exec
-INSERT OR IGNORE INTO pilot_records (character_id)
-VALUES (?)
+INSERT INTO pilot_records (character_id, priority)
+VALUES (?, 1)
+ON CONFLICT (character_id) DO UPDATE SET priority = MAX(priority, 1)
 `
 
 func (q *Queries) UpsertPilotWant(ctx context.Context, characterID int64) error {

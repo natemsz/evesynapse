@@ -210,6 +210,31 @@ func (q *Queries) DeleteCharacter(ctx context.Context, arg DeleteCharacterParams
 	return err
 }
 
+const deleteOrderHealthEntry = `-- name: DeleteOrderHealthEntry :exec
+DELETE FROM order_health
+WHERE character_id = ? AND order_id = ?
+`
+
+type DeleteOrderHealthEntryParams struct {
+	CharacterID int64 `json:"character_id"`
+	OrderID     int64 `json:"order_id"`
+}
+
+func (q *Queries) DeleteOrderHealthEntry(ctx context.Context, arg DeleteOrderHealthEntryParams) error {
+	_, err := q.db.ExecContext(ctx, deleteOrderHealthEntry, arg.CharacterID, arg.OrderID)
+	return err
+}
+
+const deleteOrderHealthForCharacter = `-- name: DeleteOrderHealthForCharacter :exec
+DELETE FROM order_health
+WHERE character_id = ?
+`
+
+func (q *Queries) DeleteOrderHealthForCharacter(ctx context.Context, characterID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteOrderHealthForCharacter, characterID)
+	return err
+}
+
 const deleteSkillPlan = `-- name: DeleteSkillPlan :exec
 DELETE FROM skill_plans WHERE id = ? AND user_id = ?
 `
@@ -235,6 +260,22 @@ type DeleteSkillPlanItemParams struct {
 
 func (q *Queries) DeleteSkillPlanItem(ctx context.Context, arg DeleteSkillPlanItemParams) error {
 	_, err := q.db.ExecContext(ctx, deleteSkillPlanItem, arg.PlanID, arg.SkillTypeID)
+	return err
+}
+
+const deleteWatchlistEntry = `-- name: DeleteWatchlistEntry :exec
+DELETE FROM market_watchlist
+WHERE user_id = ? AND type_id = ? AND region_id = ?
+`
+
+type DeleteWatchlistEntryParams struct {
+	UserID   int64 `json:"user_id"`
+	TypeID   int64 `json:"type_id"`
+	RegionID int64 `json:"region_id"`
+}
+
+func (q *Queries) DeleteWatchlistEntry(ctx context.Context, arg DeleteWatchlistEntryParams) error {
+	_, err := q.db.ExecContext(ctx, deleteWatchlistEntry, arg.UserID, arg.TypeID, arg.RegionID)
 	return err
 }
 
@@ -354,6 +395,24 @@ func (q *Queries) GetKillmailDetail(ctx context.Context, killmailID int64) (Kill
 		&i.Hash,
 		&i.Payload,
 		&i.FetchedAt,
+	)
+	return i, err
+}
+
+const getMarketFetchState = `-- name: GetMarketFetchState :one
+SELECT kind, state, detail, attempted_at
+FROM market_fetch_state
+WHERE kind = ?
+`
+
+func (q *Queries) GetMarketFetchState(ctx context.Context, kind string) (MarketFetchState, error) {
+	row := q.db.QueryRowContext(ctx, getMarketFetchState, kind)
+	var i MarketFetchState
+	err := row.Scan(
+		&i.Kind,
+		&i.State,
+		&i.Detail,
+		&i.AttemptedAt,
 	)
 	return i, err
 }
@@ -644,6 +703,31 @@ func (q *Queries) GetWarDetail(ctx context.Context, warID int64) (WarDetail, err
 	return i, err
 }
 
+const getWatchlistEntry = `-- name: GetWatchlistEntry :one
+SELECT user_id, type_id, region_id, threshold_pct, created_at
+FROM market_watchlist
+WHERE user_id = ? AND type_id = ? AND region_id = ?
+`
+
+type GetWatchlistEntryParams struct {
+	UserID   int64 `json:"user_id"`
+	TypeID   int64 `json:"type_id"`
+	RegionID int64 `json:"region_id"`
+}
+
+func (q *Queries) GetWatchlistEntry(ctx context.Context, arg GetWatchlistEntryParams) (MarketWatchlist, error) {
+	row := q.db.QueryRowContext(ctx, getWatchlistEntry, arg.UserID, arg.TypeID, arg.RegionID)
+	var i MarketWatchlist
+	err := row.Scan(
+		&i.UserID,
+		&i.TypeID,
+		&i.RegionID,
+		&i.ThresholdPct,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const listAllCharacters = `-- name: ListAllCharacters :many
 SELECT character_id, user_id, name, access_token, refresh_token, token_expiry, scopes, cached_until, created_at, updated_at, owner_hash, tags, link_state, link_state_at FROM characters
 ORDER BY user_id, name
@@ -730,6 +814,41 @@ func (q *Queries) ListAllTypeNames(ctx context.Context) ([]TypeName, error) {
 	for rows.Next() {
 		var i TypeName
 		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAllWatchlistEntries = `-- name: ListAllWatchlistEntries :many
+SELECT user_id, type_id, region_id, threshold_pct, created_at
+FROM market_watchlist
+ORDER BY type_id, region_id
+`
+
+func (q *Queries) ListAllWatchlistEntries(ctx context.Context) ([]MarketWatchlist, error) {
+	rows, err := q.db.QueryContext(ctx, listAllWatchlistEntries)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketWatchlist
+	for rows.Next() {
+		var i MarketWatchlist
+		if err := rows.Scan(
+			&i.UserID,
+			&i.TypeID,
+			&i.RegionID,
+			&i.ThresholdPct,
+			&i.CreatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -927,6 +1046,164 @@ func (q *Queries) ListKillmailDetailsByCharacter(ctx context.Context, characterI
 			&i.Hash,
 			&i.Payload,
 			&i.FetchedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketHistory = `-- name: ListMarketHistory :many
+SELECT region_id, type_id, date, average, highest, lowest, volume, order_count
+FROM market_history
+WHERE region_id = ? AND type_id = ? AND date >= ?
+ORDER BY date ASC
+`
+
+type ListMarketHistoryParams struct {
+	RegionID int64  `json:"region_id"`
+	TypeID   int64  `json:"type_id"`
+	Date     string `json:"date"`
+}
+
+func (q *Queries) ListMarketHistory(ctx context.Context, arg ListMarketHistoryParams) ([]MarketHistory, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketHistory, arg.RegionID, arg.TypeID, arg.Date)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketHistory
+	for rows.Next() {
+		var i MarketHistory
+		if err := rows.Scan(
+			&i.RegionID,
+			&i.TypeID,
+			&i.Date,
+			&i.Average,
+			&i.Highest,
+			&i.Lowest,
+			&i.Volume,
+			&i.OrderCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketHistoryWants = `-- name: ListMarketHistoryWants :many
+SELECT region_id, type_id, last_requested_at
+FROM market_history_wants
+WHERE last_requested_at >= ?
+ORDER BY region_id, type_id
+`
+
+func (q *Queries) ListMarketHistoryWants(ctx context.Context, lastRequestedAt string) ([]MarketHistoryWant, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketHistoryWants, lastRequestedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketHistoryWant
+	for rows.Next() {
+		var i MarketHistoryWant
+		if err := rows.Scan(&i.RegionID, &i.TypeID, &i.LastRequestedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOrderHealthByCharacter = `-- name: ListOrderHealthByCharacter :many
+SELECT character_id, order_id, type_id, region_id, location_id, my_price, station_best, region_best, status, computed_at
+FROM order_health
+WHERE character_id = ?
+ORDER BY type_id, order_id
+`
+
+func (q *Queries) ListOrderHealthByCharacter(ctx context.Context, characterID int64) ([]OrderHealth, error) {
+	rows, err := q.db.QueryContext(ctx, listOrderHealthByCharacter, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OrderHealth
+	for rows.Next() {
+		var i OrderHealth
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.OrderID,
+			&i.TypeID,
+			&i.RegionID,
+			&i.LocationID,
+			&i.MyPrice,
+			&i.StationBest,
+			&i.RegionBest,
+			&i.Status,
+			&i.ComputedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOrderHealthByUser = `-- name: ListOrderHealthByUser :many
+SELECT oh.character_id, oh.order_id, oh.type_id, oh.region_id, oh.location_id, oh.my_price, oh.station_best, oh.region_best, oh.status, oh.computed_at
+FROM order_health oh
+JOIN characters c ON c.character_id = oh.character_id
+WHERE c.user_id = ?
+ORDER BY c.name, oh.type_id, oh.order_id
+`
+
+func (q *Queries) ListOrderHealthByUser(ctx context.Context, userID int64) ([]OrderHealth, error) {
+	rows, err := q.db.QueryContext(ctx, listOrderHealthByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OrderHealth
+	for rows.Next() {
+		var i OrderHealth
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.OrderID,
+			&i.TypeID,
+			&i.RegionID,
+			&i.LocationID,
+			&i.MyPrice,
+			&i.StationBest,
+			&i.RegionBest,
+			&i.Status,
+			&i.ComputedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1639,6 +1916,42 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
+const listWatchlistByUser = `-- name: ListWatchlistByUser :many
+SELECT user_id, type_id, region_id, threshold_pct, created_at
+FROM market_watchlist
+WHERE user_id = ?
+ORDER BY type_id, region_id
+`
+
+func (q *Queries) ListWatchlistByUser(ctx context.Context, userID int64) ([]MarketWatchlist, error) {
+	rows, err := q.db.QueryContext(ctx, listWatchlistByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketWatchlist
+	for rows.Next() {
+		var i MarketWatchlist
+		if err := rows.Scan(
+			&i.UserID,
+			&i.TypeID,
+			&i.RegionID,
+			&i.ThresholdPct,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const nextSkillPlanPosition = `-- name: NextSkillPlanPosition :one
 SELECT COALESCE(MAX(position), 0) + 1 FROM skill_plan_items WHERE plan_id = ?
 `
@@ -2114,6 +2427,128 @@ func (q *Queries) UpsertKillmailDetail(ctx context.Context, arg UpsertKillmailDe
 	return err
 }
 
+const upsertMarketFetchState = `-- name: UpsertMarketFetchState :exec
+INSERT INTO market_fetch_state (kind, state, detail, attempted_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (kind) DO UPDATE SET
+    state        = excluded.state,
+    detail       = excluded.detail,
+    attempted_at = excluded.attempted_at
+`
+
+type UpsertMarketFetchStateParams struct {
+	Kind        string `json:"kind"`
+	State       string `json:"state"`
+	Detail      string `json:"detail"`
+	AttemptedAt string `json:"attempted_at"`
+}
+
+func (q *Queries) UpsertMarketFetchState(ctx context.Context, arg UpsertMarketFetchStateParams) error {
+	_, err := q.db.ExecContext(ctx, upsertMarketFetchState,
+		arg.Kind,
+		arg.State,
+		arg.Detail,
+		arg.AttemptedAt,
+	)
+	return err
+}
+
+const upsertMarketHistory = `-- name: UpsertMarketHistory :exec
+
+INSERT OR REPLACE INTO market_history (region_id, type_id, date, average, highest, lowest, volume, order_count)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`
+
+type UpsertMarketHistoryParams struct {
+	RegionID   int64   `json:"region_id"`
+	TypeID     int64   `json:"type_id"`
+	Date       string  `json:"date"`
+	Average    float64 `json:"average"`
+	Highest    float64 `json:"highest"`
+	Lowest     float64 `json:"lowest"`
+	Volume     int64   `json:"volume"`
+	OrderCount int64   `json:"order_count"`
+}
+
+// ---------------------------------------------------------------------
+// Market history + alerts (schema 013): daily aggregates, wants,
+// fetch state, the watchlist, and worker-computed order health.
+// ---------------------------------------------------------------------
+func (q *Queries) UpsertMarketHistory(ctx context.Context, arg UpsertMarketHistoryParams) error {
+	_, err := q.db.ExecContext(ctx, upsertMarketHistory,
+		arg.RegionID,
+		arg.TypeID,
+		arg.Date,
+		arg.Average,
+		arg.Highest,
+		arg.Lowest,
+		arg.Volume,
+		arg.OrderCount,
+	)
+	return err
+}
+
+const upsertMarketHistoryWant = `-- name: UpsertMarketHistoryWant :exec
+INSERT INTO market_history_wants (region_id, type_id, last_requested_at)
+VALUES (?, ?, ?)
+ON CONFLICT (region_id, type_id) DO UPDATE SET
+    last_requested_at = excluded.last_requested_at
+`
+
+type UpsertMarketHistoryWantParams struct {
+	RegionID        int64  `json:"region_id"`
+	TypeID          int64  `json:"type_id"`
+	LastRequestedAt string `json:"last_requested_at"`
+}
+
+func (q *Queries) UpsertMarketHistoryWant(ctx context.Context, arg UpsertMarketHistoryWantParams) error {
+	_, err := q.db.ExecContext(ctx, upsertMarketHistoryWant, arg.RegionID, arg.TypeID, arg.LastRequestedAt)
+	return err
+}
+
+const upsertOrderHealth = `-- name: UpsertOrderHealth :exec
+INSERT INTO order_health (character_id, order_id, type_id, region_id, location_id, my_price, station_best, region_best, status, computed_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (character_id, order_id) DO UPDATE SET
+    type_id      = excluded.type_id,
+    region_id    = excluded.region_id,
+    location_id  = excluded.location_id,
+    my_price     = excluded.my_price,
+    station_best = excluded.station_best,
+    region_best  = excluded.region_best,
+    status       = excluded.status,
+    computed_at  = excluded.computed_at
+`
+
+type UpsertOrderHealthParams struct {
+	CharacterID int64   `json:"character_id"`
+	OrderID     int64   `json:"order_id"`
+	TypeID      int64   `json:"type_id"`
+	RegionID    int64   `json:"region_id"`
+	LocationID  int64   `json:"location_id"`
+	MyPrice     float64 `json:"my_price"`
+	StationBest float64 `json:"station_best"`
+	RegionBest  float64 `json:"region_best"`
+	Status      string  `json:"status"`
+	ComputedAt  string  `json:"computed_at"`
+}
+
+func (q *Queries) UpsertOrderHealth(ctx context.Context, arg UpsertOrderHealthParams) error {
+	_, err := q.db.ExecContext(ctx, upsertOrderHealth,
+		arg.CharacterID,
+		arg.OrderID,
+		arg.TypeID,
+		arg.RegionID,
+		arg.LocationID,
+		arg.MyPrice,
+		arg.StationBest,
+		arg.RegionBest,
+		arg.Status,
+		arg.ComputedAt,
+	)
+	return err
+}
+
 const upsertSDEMeta = `-- name: UpsertSDEMeta :exec
 INSERT INTO sde_meta (key, value)
 VALUES (?, ?)
@@ -2246,5 +2681,31 @@ type UpsertWarDetailParams struct {
 
 func (q *Queries) UpsertWarDetail(ctx context.Context, arg UpsertWarDetailParams) error {
 	_, err := q.db.ExecContext(ctx, upsertWarDetail, arg.WarID, arg.Payload, arg.FetchedAt)
+	return err
+}
+
+const upsertWatchlistEntry = `-- name: UpsertWatchlistEntry :exec
+INSERT INTO market_watchlist (user_id, type_id, region_id, threshold_pct, created_at)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (user_id, type_id, region_id) DO UPDATE SET
+    threshold_pct = excluded.threshold_pct
+`
+
+type UpsertWatchlistEntryParams struct {
+	UserID       int64   `json:"user_id"`
+	TypeID       int64   `json:"type_id"`
+	RegionID     int64   `json:"region_id"`
+	ThresholdPct float64 `json:"threshold_pct"`
+	CreatedAt    string  `json:"created_at"`
+}
+
+func (q *Queries) UpsertWatchlistEntry(ctx context.Context, arg UpsertWatchlistEntryParams) error {
+	_, err := q.db.ExecContext(ctx, upsertWatchlistEntry,
+		arg.UserID,
+		arg.TypeID,
+		arg.RegionID,
+		arg.ThresholdPct,
+		arg.CreatedAt,
+	)
 	return err
 }

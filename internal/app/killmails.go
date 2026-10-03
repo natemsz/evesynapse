@@ -28,16 +28,20 @@ const maxKillmailsShown = 50
 // killmailRow is one list line. Rows without a stored detail yet
 // carry Warming=true and placeholder fields.
 type killmailRow struct {
-	Time      string // formatted kill time, "—" while warming
-	System    string
-	Kill      bool // badge: victim is someone else
-	Loss      bool // badge: victim is the viewing character
-	Victim    string
-	Ship      string // victim ship type name
-	FinalBlow string // final-blow attacker display
-	Involved  string // attacker count, "—" while warming
-	Value     string // estimated destroyed+dropped value, bare number; "—" when unpriced
-	Warming   bool
+	KillmailID  int64  // set even while warming — the zKillboard link never waits
+	Time        string // formatted kill time, "—" while warming
+	System      string
+	Kill        bool // badge: victim is someone else
+	Loss        bool // badge: victim is the viewing character
+	Victim      string
+	VictimID    int64
+	Ship        string // victim ship type name
+	ShipTypeID  int64
+	FinalBlow   string // final-blow attacker display
+	FinalBlowID int64
+	Involved    string // attacker count, "—" while warming
+	Value       string // estimated destroyed+dropped value, bare number; "—" when unpriced
+	Warming     bool
 }
 
 // killmailsView is the killmails page body; one shape serves both
@@ -132,14 +136,15 @@ type killmailViewer struct {
 // warming placeholder row.
 func (app *Application) killmailRow(ctx context.Context, viewer killmailViewer, ref esi.KillmailRef, prices map[int64]esi.MarketPrice) killmailRow {
 	row := killmailRow{
-		Time:      "—",
-		System:    "—",
-		Victim:    "—",
-		Ship:      "—",
-		FinalBlow: "—",
-		Involved:  "—",
-		Value:     "—",
-		Warming:   true,
+		KillmailID: ref.KillmailID,
+		Time:       "—",
+		System:     "—",
+		Victim:     "—",
+		Ship:       "—",
+		FinalBlow:  "—",
+		Involved:   "—",
+		Value:      "—",
+		Warming:    true,
 	}
 
 	stored, err := app.queries.GetKillmailDetail(ctx, ref.KillmailID)
@@ -168,11 +173,14 @@ func (app *Application) killmailRow(ctx context.Context, viewer killmailViewer, 
 		row.Kill = true
 	}
 	row.Victim = characterDisplay(app.esi, km.Victim.CharacterID)
+	row.VictimID = km.Victim.CharacterID
 	row.Ship = app.typeNameOrID(ctx, km.Victim.ShipTypeID)
+	row.ShipTypeID = km.Victim.ShipTypeID
 	row.Involved = fmt.Sprintf("%d", len(km.Attackers))
 	for _, a := range km.Attackers {
 		if a.FinalBlow {
 			row.FinalBlow = characterDisplay(app.esi, a.CharacterID)
+			row.FinalBlowID = a.CharacterID
 			break
 		}
 	}

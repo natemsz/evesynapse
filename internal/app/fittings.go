@@ -22,6 +22,7 @@ import (
 // fittingItemRow is one fitted item line.
 type fittingItemRow struct {
 	Name     string
+	TypeID   int64
 	Quantity string // thousands-separated
 }
 
@@ -33,10 +34,11 @@ type fittingGroup struct {
 
 // fittingEntry is one saved fitting: ship, name, grouped items.
 type fittingEntry struct {
-	FittingID int64
-	Name      string
-	ShipType  string
-	Groups    []fittingGroup
+	FittingID  int64
+	Name       string
+	ShipType   string
+	ShipTypeID int64
+	Groups     []fittingGroup
 }
 
 // fittingsView is the Fittings page body for one character.
@@ -132,13 +134,14 @@ func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, f := range fittings {
-		entry := fittingEntry{FittingID: f.FittingID, Name: f.Name, ShipType: nameOf(f.ShipTypeID)}
+		entry := fittingEntry{FittingID: f.FittingID, Name: f.Name, ShipType: nameOf(f.ShipTypeID), ShipTypeID: f.ShipTypeID}
 
 		byLabel := make(map[string][]fittingItemRow)
 		for _, it := range f.Items {
 			label := fittingSlotCategory(it.Flag)
 			byLabel[label] = append(byLabel[label], fittingItemRow{
 				Name:     nameOf(it.TypeID),
+				TypeID:   it.TypeID,
 				Quantity: esi.FormatInt(it.Quantity),
 			})
 		}

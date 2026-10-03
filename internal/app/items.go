@@ -1,6 +1,7 @@
 package app
 
 import (
+	"html/template"
 	"log"
 	"net/http"
 	"strconv"
@@ -44,7 +45,7 @@ type itemTypeRow struct {
 // itemsView is the Item Database page body: exactly one of the
 // three levels is populated per render.
 type itemsView struct {
-	Mode string // "categories" | "category" | "group"
+	Mode string // "categories" | "category" | "group" | "type"
 
 	Categories []itemCategoryRow
 
@@ -61,6 +62,37 @@ type itemsView struct {
 	HasNext    bool
 	PrevPage   int
 	NextPage   int
+
+	// TypeDetail is the Mode "type" body: one item's details
+	// page, the target of every item link in the app.
+	TypeDetail *itemTypeDetail
+}
+
+// itemTypeDetail is one item's details page: identity, guide
+// prices, its (worker-warmed) description, and where it fits —
+// what it builds into and what builds it.
+type itemTypeDetail struct {
+	ID       int64
+	Name     string
+	Category *itemCategoryRow
+	Group    *itemGroupRow
+	OnMarket bool
+
+	AveragePrice  string // guide prices, "" when unknown
+	AdjustedPrice string
+
+	HasDescription     bool
+	Description        template.HTML // sanitized like mail bodies
+	DescriptionPending bool          // asked for; fills in on a coming sync cycle
+
+	BlueprintID int64           // != 0: manufacturable — link the planner
+	UsedIn      []itemUsedInRow // blueprints consuming this type
+}
+
+type itemUsedInRow struct {
+	ProductID   int64
+	ProductName string
+	PerRun      string // formatted material quantity per production run
 }
 
 func (app *Application) itemsPageData(r *http.Request) pageData {
@@ -193,6 +225,93 @@ func (app *Application) handleItemsGroup(w http.ResponseWriter, r *http.Request)
 			})
 		}
 	}
+	data.Items = view
+	app.render(ctx, w, http.StatusOK, "items.html", data)
+}
+
+// handleItemType renders one item's details page — the target of
+// every item link in EveSynapse (planner rows, wallet entries,
+// market watchlists, skill names…). Identity and "used in" facts
+// are local SDE reads; the description comes from the type_details
+// warm queue (public ESI type payloads), so a first visit notes
+// the want and shows an honest filling-in state. Onward links:
+// orders & price history on the Market page, and the Industry
+// planner when the item can be built.
+func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	data := app.itemsPageData(r)
+	view := &itemsView{Mode: "type"}
+
+	typeID, err := strconv.ParseInt(chi.URLParam(r, "typeID"), 10, 64)
+	if err != nil || typeID <= 0 {
+		http.Redirect(w, r, "/items/", http.StatusSeeOther)
+		return
+	}
+	t, err := app.queries.GetSDEType(ctx, typeID)
+	if err != nil {
+		http.Redirect(w, r, "/items/", http.StatusSeeOther)
+		return
+	}
+
+	detail := &itemTypeDetail{
+		ID:       t.TypeID,
+		Name:     t.Name,
+		OnMarket: t.MarketGroupID > 0,
+	}
+	if grp, gerr := app.queries.GetSDEGroup(ctx, t.GroupID); gerr == nil {
+		detail.Group = &itemGroupRow{ID: grp.GroupID, Name: grp.Name}
+		if cat, cerr := app.queries.GetSDECategory(ctx, grp.CategoryID); cerr == nil {
+			detail.Category = &itemCategoryRow{ID: cat.CategoryID, Name: cat.Name}
+		}
+	}
+
+	// Description: stored by the worker's type-details drain.
+	// Nothing stored (or only an unfilled want): note the want so
+	// a coming cycle fills it.
+	td, terr := app.queries.GetTypeDetail(ctx, typeID)
+	switch {
+	case terr == nil && td.FetchedAt != "" && td.Description != "":
+		detail.HasDescription = true
+		detail.Description = sanitizeMailHTML(td.Description)
+	case terr == nil && td.FetchedAt != "":
+		// Settled empty: ESI has no description for this type.
+	default:
+		if qerr := app.queries.UpsertTypeDetailWant(ctx, typeID); qerr != nil {
+			log.Printf("items: note type detail want for %d: %v", typeID, qerr)
+		}
+		detail.DescriptionPending = true
+	}
+
+	if p, ok := app.cachedPrices()[typeID]; ok {
+		if p.AveragePrice > 0 {
+			detail.AveragePrice = esi.FormatISK(p.AveragePrice)
+		}
+		if p.AdjustedPrice > 0 {
+			detail.AdjustedPrice = esi.FormatISK(p.AdjustedPrice)
+		}
+	}
+
+	if bp, berr := app.queries.GetSDEBlueprintForProduct(ctx, typeID); berr == nil {
+		detail.BlueprintID = bp.BlueprintTypeID
+	}
+
+	if rows, uerr := app.queries.ListSDEBlueprintsUsingMaterial(ctx, typeID); uerr == nil {
+		for _, row := range rows {
+			product, perr := app.queries.GetSDEType(ctx, row.ProductTypeID)
+			if perr != nil || product.Name == "" {
+				continue
+			}
+			detail.UsedIn = append(detail.UsedIn, itemUsedInRow{
+				ProductID:   row.ProductTypeID,
+				ProductName: product.Name,
+				PerRun:      esi.FormatInt(row.MaterialQuantity),
+			})
+		}
+	} else {
+		log.Printf("items: list blueprints using %d: %v", typeID, uerr)
+	}
+
+	view.TypeDetail = detail
 	data.Items = view
 	app.render(ctx, w, http.StatusOK, "items.html", data)
 }

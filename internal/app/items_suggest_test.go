@@ -98,7 +98,7 @@ func TestMarketSuggestAndItemsExplorer(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /items/group/910/: status %d", code)
 	}
-	mustContain(t, "/items/group/910/", body, "Tritanium", `href="/market/?type=34"`, "on market")
+	mustContain(t, "/items/group/910/", body, "Tritanium", `href="/items/type/34/"`, "on market")
 
 	// Unknown ids bounce back to the top instead of 500ing.
 	if code, _ := getPage(t, app, cookie, "/items/group/424242/"); code != http.StatusSeeOther {

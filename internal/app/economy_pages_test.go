@@ -139,7 +139,7 @@ func TestEconomyPagesRenderFromSnapshots(t *testing.T) {
 	}
 	mustContain(t, "/contracts/", body,
 		"Fixture Deal", "item exchange", "outstanding", "Member One",
-		"Tritanium × 100", "BPO", "courier", "Courier:")
+		`<a href="/items/type/34/">Tritanium</a> × 100`, "BPO", "courier", "Courier:")
 
 	code, body = getPage(t, app, cookie, "/industry/?character=90000001")
 	if code != http.StatusOK {

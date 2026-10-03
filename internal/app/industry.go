@@ -42,19 +42,24 @@ func industryActivityLabel(id int64) string {
 
 // industryJobRow is one job line.
 type industryJobRow struct {
-	Activity  string
-	Blueprint string // blueprint type name
-	Product   string // product type name (invention/manufacturing output), "" when n/a
-	Facility  string
-	Runs      string // "5" or "3 / 5 successful" for finished invention-type runs
-	Status    string // humanized
-	Ends      string // end date + remaining time while active
-	Cost      string
+	Activity        string
+	Blueprint       string // blueprint type name
+	BlueprintTypeID int64
+	Product         string // product type name (invention/manufacturing output), "" when n/a
+	ProductTypeID   int64
+	Installer       string
+	InstallerID     int64
+	Facility        string
+	Runs            string // "5" or "3 / 5 successful" for finished invention-type runs
+	Status          string // humanized
+	Ends            string // end date + remaining time while active
+	Cost            string
 }
 
 // blueprintRow is one blueprint-library line.
 type blueprintRow struct {
 	Name     string
+	TypeID   int64
 	Kind     string // "BPO" | "BPC"
 	ME       string // "10%"
 	TE       string // "20%"
@@ -66,6 +71,7 @@ type blueprintRow struct {
 type miningRow struct {
 	Date   string
 	Ore    string
+	TypeID int64
 	Qty    string
 	System string
 }
@@ -127,10 +133,14 @@ func (app *Application) fillIndustryJobs(ctx context.Context, characterID int64,
 	rows := make([]industryJobRow, 0, len(jobs))
 	for _, j := range jobs {
 		row := industryJobRow{
-			Activity:  industryActivityLabel(j.ActivityID),
-			Blueprint: app.typeNameOrID(ctx, j.BlueprintTypeID),
-			Status:    humanizeEnum(j.Status),
-			Cost:      esi.FormatISK(j.Cost),
+			Activity:        industryActivityLabel(j.ActivityID),
+			Blueprint:       app.typeNameOrID(ctx, j.BlueprintTypeID),
+			BlueprintTypeID: j.BlueprintTypeID,
+			ProductTypeID:   j.ProductTypeID,
+			Installer:       characterDisplay(app.esi, j.InstallerID),
+			InstallerID:     j.InstallerID,
+			Status:          humanizeEnum(j.Status),
+			Cost:            esi.FormatISK(j.Cost),
 		}
 		if j.ProductTypeID > 0 {
 			row.Product = app.typeNameOrID(ctx, j.ProductTypeID)
@@ -185,9 +195,10 @@ func (app *Application) fillBlueprints(ctx context.Context, characterID int64, v
 	rows := make([]blueprintRow, 0, len(blueprints))
 	for _, bp := range blueprints {
 		row := blueprintRow{
-			Name: app.typeNameOrID(ctx, bp.TypeID),
-			ME:   fmt.Sprintf("%d%%", bp.MaterialEfficiency),
-			TE:   fmt.Sprintf("%d%%", bp.TimeEfficiency),
+			Name:   app.typeNameOrID(ctx, bp.TypeID),
+			TypeID: bp.TypeID,
+			ME:     fmt.Sprintf("%d%%", bp.MaterialEfficiency),
+			TE:     fmt.Sprintf("%d%%", bp.TimeEfficiency),
 		}
 		// ESI semantics: quantity -1 marks an original (runs -1 =
 		// unlimited), -2 a copy; anything else is a stack count.
@@ -226,6 +237,7 @@ func (app *Application) fillMining(ctx context.Context, characterID int64, view 
 		rows = append(rows, miningRow{
 			Date:   m.Date,
 			Ore:    app.typeNameOrID(ctx, m.TypeID),
+			TypeID: m.TypeID,
 			Qty:    esi.FormatInt(m.Quantity),
 			System: app.locationTitle(ctx, m.SolarSystemID, "solar_system"),
 		})

@@ -251,7 +251,7 @@ func TestMarketWorkerHistoryDrainAndGate(t *testing.T) {
 	if got := transport.calls.Load(); got != 10 {
 		t.Fatalf("first pass made %d calls, want 10", got)
 	}
-	rows, err := q.ListMarketHistory(ctx, db.ListMarketHistoryParams{RegionID: 10000002, TypeID: 1000, Date: "2026-01-01"})
+	rows, err := q.ListMarketHistory(ctx, db.ListMarketHistoryParams{RegionID: 10000002, TypeID: 1000, Limit: 90})
 	if err != nil || len(rows) != 2 {
 		t.Fatalf("stored history for type 1000: rows=%d err=%v, want 2", len(rows), err)
 	}

@@ -20,12 +20,19 @@ import (
 // The colonies endpoint is gated by esi-planets.manage_planets.v1,
 // which the app only started requesting in Phase 2 (CCP publishes
 // no read scope for it — see auth.go). A character linked before
-// that gets a 403: it is recorded in snapshot_fetch_state like the
+// that gets a refusal: ESI answers 403 for some scope failures and
+// 401 for others (a token lacking the scope is "unauthorized" for
+// the endpoint), so both statuses classify as the scope missing.
+// The refusal is recorded in snapshot_fetch_state like the
 // economy stale-scope refusals, the kind backs off for
 // roleMissingBackoff instead of retrying every minute, and the
-// pages say "PI not enabled — re-link" from the record. When the
-// character's granted scopes show the scope has landed (a re-link),
-// the backoff is bypassed so PI starts within a cycle.
+// pages say "PI not enabled — re-link" from the record. It is
+// never a dead token: the cycle's validAccessToken gate runs
+// before this pass, so a 401 here means the (valid) token simply
+// lacks the planetary scope, and link_state is never touched.
+// When the character's granted scopes show the scope has landed
+// (a re-link), the backoff is bypassed so PI starts within a
+// cycle.
 // ---------------------------------------------------------------------------
 
 // planetScope is the only SSO scope gating the colony GETs.
@@ -51,6 +58,22 @@ func characterHasScope(ch db.Character, scope string) bool {
 		}
 	}
 	return false
+}
+
+// piScopeRefusal reports whether an ESI failure on a planetary
+// endpoint means "this login never granted the planetary scope"
+// rather than a broken token or a transient error. CCP answers
+// scope-gated endpoints inconsistently — 403 for some, 401 for
+// others (verified live: the colonies endpoint answers 401 to a
+// token without esi-planets.manage_planets.v1) — so both statuses
+// classify the same way here. This is deliberately NOT the
+// token-dead path: it only ever records the scope-missing state.
+func piScopeRefusal(err error) bool {
+	if esi.IsForbidden(err) {
+		return true
+	}
+	code, ok := esi.StatusCode(err)
+	return ok && code == 401
 }
 
 // piNotEnabled reports whether PI is dark for this character
@@ -114,10 +137,11 @@ func (app *Application) fetchPlanetsKind(ctx context.Context, ch db.Character, a
 		case errors.Is(err, esi.ErrErrorLimit):
 			log.Printf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", esi.SnapPlanets, ch.CharacterID)
 			return corpFetchLimited
-		case esi.IsForbidden(err):
+		case piScopeRefusal(err):
+			code, _ := esi.StatusCode(err)
 			detail := piScopeDetail + " — sign in again to re-link and grant the planetary scope."
 			app.recordCorpFetchState(ctx, ch.CharacterID, esi.SnapPlanets, fetchStateError, detail)
-			log.Printf("worker: %s for character %d refused by ESI (403); planetary scope not granted on this login", esi.SnapPlanets, ch.CharacterID)
+			log.Printf("worker: %s for character %d refused by ESI (%d); planetary scope not granted on this login", esi.SnapPlanets, ch.CharacterID, code)
 			return corpFetchFailed
 		default:
 			log.Printf("worker: refresh %s for character %d: %v", esi.SnapPlanets, ch.CharacterID, err)
@@ -179,10 +203,11 @@ func (app *Application) warmPlanetLayouts(ctx context.Context, ch db.Character, 
 			switch {
 			case errors.Is(err, esi.ErrErrorLimit):
 				return fetched, true
-			case esi.IsForbidden(err):
+			case piScopeRefusal(err):
+				code, _ := esi.StatusCode(err)
 				detail := piScopeDetail + " — sign in again to re-link and grant the planetary scope."
 				app.recordCorpFetchState(ctx, ch.CharacterID, kind, fetchStateError, detail)
-				log.Printf("worker: %s for character %d refused by ESI (403); planetary scope not granted on this login", kind, ch.CharacterID)
+				log.Printf("worker: %s for character %d refused by ESI (%d); planetary scope not granted on this login", kind, ch.CharacterID, code)
 			default:
 				if ctx.Err() == nil {
 					log.Printf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)

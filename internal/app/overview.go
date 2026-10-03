@@ -1030,15 +1030,8 @@ func (app *Application) attentionMarketItems(ctx context.Context, bundles []*cha
 		log.Printf("home: attention: list watchlist for user %d: %v", userID, err)
 		return items
 	}
-	since := time.Now().UTC().AddDate(0, 0, -(historyChartDays + 5)).Format(historyDateLayout)
 	for _, e := range entries {
-		rows, err := app.queries.ListMarketHistory(ctx, db.ListMarketHistoryParams{
-			RegionID: e.RegionID, TypeID: e.TypeID, Date: since,
-		})
-		if err != nil {
-			log.Printf("home: attention: history for watched type %d: %v", e.TypeID, err)
-			continue
-		}
+		rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, historyChartRows)
 		pct, ok := historyChangePct(rows, 7)
 		if !ok || absFloat(pct) < e.ThresholdPct {
 			continue
@@ -1318,15 +1311,9 @@ func (app *Application) marketHealthLine(ctx context.Context, userID int64) stri
 			log.Printf("home: market widget: list order health for user %d: %v", userID, err)
 		}
 		if entries, err := app.queries.ListWatchlistByUser(ctx, userID); err == nil {
-			since := time.Now().UTC().AddDate(0, 0, -(historyChartDays + 5)).Format(historyDateLayout)
 			moving := 0
 			for _, e := range entries {
-				rows, err := app.queries.ListMarketHistory(ctx, db.ListMarketHistoryParams{
-					RegionID: e.RegionID, TypeID: e.TypeID, Date: since,
-				})
-				if err != nil {
-					continue
-				}
+				rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, historyChartRows)
 				if pct, ok := historyChangePct(rows, 7); ok && absFloat(pct) >= e.ThresholdPct {
 					moving++
 				}

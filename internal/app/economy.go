@@ -129,11 +129,11 @@ func (app *Application) handleWallet(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("wallet: list characters: %v", err)
 		data.Error = "Could not load wallet data; check the server log."
-		app.render(w, http.StatusOK, "wallet.html", data)
+		app.render(ctx, w, http.StatusOK, "wallet.html", data)
 		return
 	}
 	if links == nil {
-		app.render(w, http.StatusOK, "wallet.html", data)
+		app.render(ctx, w, http.StatusOK, "wallet.html", data)
 		return
 	}
 	data.WalletChars = links
@@ -203,7 +203,7 @@ func (app *Application) handleWallet(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	app.render(w, http.StatusOK, "wallet.html", data)
+	app.render(ctx, w, http.StatusOK, "wallet.html", data)
 }
 
 // ---------------------------------------------------------------------------
@@ -262,11 +262,11 @@ func (app *Application) handleOrders(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("orders: list characters: %v", err)
 		data.Error = "Could not load order data; check the server log."
-		app.render(w, http.StatusOK, "orders.html", data)
+		app.render(ctx, w, http.StatusOK, "orders.html", data)
 		return
 	}
 	if links == nil {
-		app.render(w, http.StatusOK, "orders.html", data)
+		app.render(ctx, w, http.StatusOK, "orders.html", data)
 		return
 	}
 	data.OrdersChars = links
@@ -336,5 +336,5 @@ func (app *Application) handleOrders(w http.ResponseWriter, r *http.Request) {
 		view.HistoryRows = rows
 	}
 
-	app.render(w, http.StatusOK, "orders.html", data)
+	app.render(ctx, w, http.StatusOK, "orders.html", data)
 }

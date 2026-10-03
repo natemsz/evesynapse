@@ -62,11 +62,11 @@ func (app *Application) handleCorpMembers(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		log.Printf("corp members: pick character: %v", err)
 		data.Error = "Could not load corporation data; check the server log."
-		app.render(w, http.StatusOK, "corp_members.html", data)
+		app.render(ctx, w, http.StatusOK, "corp_members.html", data)
 		return
 	}
 	if !ok {
-		app.render(w, http.StatusOK, "corp_members.html", data)
+		app.render(ctx, w, http.StatusOK, "corp_members.html", data)
 		return
 	}
 	data.CorpChars = sel.Links
@@ -77,7 +77,7 @@ func (app *Application) handleCorpMembers(w http.ResponseWriter, r *http.Request
 	var members esi.CorpMembers
 	view.corpSectionState = app.corpSection(ctx, sel.Active.CharacterID, esi.SnapCorpMembers, &members)
 	if !view.Loaded {
-		app.render(w, http.StatusOK, "corp_members.html", data)
+		app.render(ctx, w, http.StatusOK, "corp_members.html", data)
 		return
 	}
 
@@ -120,7 +120,7 @@ func (app *Application) handleCorpMembers(w http.ResponseWriter, r *http.Request
 	}
 	sort.Slice(view.Rows, func(i, j int) bool { return view.Rows[i].Name < view.Rows[j].Name })
 
-	app.render(w, http.StatusOK, "corp_members.html", data)
+	app.render(ctx, w, http.StatusOK, "corp_members.html", data)
 }
 
 // ---------------------------------------------------------------------------
@@ -186,11 +186,11 @@ func (app *Application) handleCorpWallets(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		log.Printf("corp wallets: pick character: %v", err)
 		data.Error = "Could not load corporation data; check the server log."
-		app.render(w, http.StatusOK, "corp_wallets.html", data)
+		app.render(ctx, w, http.StatusOK, "corp_wallets.html", data)
 		return
 	}
 	if !ok {
-		app.render(w, http.StatusOK, "corp_wallets.html", data)
+		app.render(ctx, w, http.StatusOK, "corp_wallets.html", data)
 		return
 	}
 	data.CorpChars = sel.Links
@@ -201,7 +201,7 @@ func (app *Application) handleCorpWallets(w http.ResponseWriter, r *http.Request
 	var wallets esi.CorpWallets
 	view.corpSectionState = app.corpSection(ctx, sel.Active.CharacterID, esi.SnapCorpWallets, &wallets)
 	if !view.Loaded {
-		app.render(w, http.StatusOK, "corp_wallets.html", data)
+		app.render(ctx, w, http.StatusOK, "corp_wallets.html", data)
 		return
 	}
 
@@ -280,7 +280,7 @@ func (app *Application) handleCorpWallets(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	app.render(w, http.StatusOK, "corp_wallets.html", data)
+	app.render(ctx, w, http.StatusOK, "corp_wallets.html", data)
 }
 
 // ---------------------------------------------------------------------------
@@ -319,11 +319,11 @@ func (app *Application) handleCorpOrders(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		log.Printf("corp orders: pick character: %v", err)
 		data.Error = "Could not load corporation data; check the server log."
-		app.render(w, http.StatusOK, "corp_orders.html", data)
+		app.render(ctx, w, http.StatusOK, "corp_orders.html", data)
 		return
 	}
 	if !ok {
-		app.render(w, http.StatusOK, "corp_orders.html", data)
+		app.render(ctx, w, http.StatusOK, "corp_orders.html", data)
 		return
 	}
 	data.CorpChars = sel.Links
@@ -334,7 +334,7 @@ func (app *Application) handleCorpOrders(w http.ResponseWriter, r *http.Request)
 	var orders esi.CorpOrders
 	view.corpSectionState = app.corpSection(ctx, sel.Active.CharacterID, esi.SnapCorpOrders, &orders)
 	if !view.Loaded {
-		app.render(w, http.StatusOK, "corp_orders.html", data)
+		app.render(ctx, w, http.StatusOK, "corp_orders.html", data)
 		return
 	}
 
@@ -384,7 +384,7 @@ func (app *Application) handleCorpOrders(w http.ResponseWriter, r *http.Request)
 	})
 	view.Rows = rows
 
-	app.render(w, http.StatusOK, "corp_orders.html", data)
+	app.render(ctx, w, http.StatusOK, "corp_orders.html", data)
 }
 
 // ---------------------------------------------------------------------------
@@ -413,11 +413,11 @@ func (app *Application) handleCorpAssets(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		log.Printf("corp assets: pick character: %v", err)
 		data.Error = "Could not load corporation data; check the server log."
-		app.render(w, http.StatusOK, "corp_assets.html", data)
+		app.render(ctx, w, http.StatusOK, "corp_assets.html", data)
 		return
 	}
 	if !ok {
-		app.render(w, http.StatusOK, "corp_assets.html", data)
+		app.render(ctx, w, http.StatusOK, "corp_assets.html", data)
 		return
 	}
 	data.CorpChars = sel.Links
@@ -428,7 +428,7 @@ func (app *Application) handleCorpAssets(w http.ResponseWriter, r *http.Request)
 	var items []esi.Asset
 	view.corpSectionState = app.corpSection(ctx, sel.Active.CharacterID, esi.SnapCorpAssets, &items)
 	if !view.Loaded {
-		app.render(w, http.StatusOK, "corp_assets.html", data)
+		app.render(ctx, w, http.StatusOK, "corp_assets.html", data)
 		return
 	}
 
@@ -451,7 +451,7 @@ func (app *Application) handleCorpAssets(w http.ResponseWriter, r *http.Request)
 
 	view.Locations = app.buildAssetLocationsWith(ctx, items, structureTitles, overrides)
 
-	app.render(w, http.StatusOK, "corp_assets.html", data)
+	app.render(ctx, w, http.StatusOK, "corp_assets.html", data)
 }
 
 // ---------------------------------------------------------------------------
@@ -490,11 +490,11 @@ func (app *Application) handleCorpStructures(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		log.Printf("corp structures: pick character: %v", err)
 		data.Error = "Could not load corporation data; check the server log."
-		app.render(w, http.StatusOK, "corp_structures.html", data)
+		app.render(ctx, w, http.StatusOK, "corp_structures.html", data)
 		return
 	}
 	if !ok {
-		app.render(w, http.StatusOK, "corp_structures.html", data)
+		app.render(ctx, w, http.StatusOK, "corp_structures.html", data)
 		return
 	}
 	data.CorpChars = sel.Links
@@ -505,7 +505,7 @@ func (app *Application) handleCorpStructures(w http.ResponseWriter, r *http.Requ
 	var structures esi.CorpStructures
 	view.corpSectionState = app.corpSection(ctx, sel.Active.CharacterID, esi.SnapCorpStructures, &structures)
 	if !view.Loaded {
-		app.render(w, http.StatusOK, "corp_structures.html", data)
+		app.render(ctx, w, http.StatusOK, "corp_structures.html", data)
 		return
 	}
 
@@ -544,7 +544,7 @@ func (app *Application) handleCorpStructures(w http.ResponseWriter, r *http.Requ
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
 	view.Rows = rows
 
-	app.render(w, http.StatusOK, "corp_structures.html", data)
+	app.render(ctx, w, http.StatusOK, "corp_structures.html", data)
 }
 
 // ---------------------------------------------------------------------------
@@ -571,11 +571,11 @@ func (app *Application) handleCorpKillmails(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		log.Printf("corp killmails: pick character: %v", err)
 		data.Error = "Could not load killmail data; check the server log."
-		app.render(w, http.StatusOK, "killmails.html", data)
+		app.render(ctx, w, http.StatusOK, "killmails.html", data)
 		return
 	}
 	if !ok {
-		app.render(w, http.StatusOK, "killmails.html", data)
+		app.render(ctx, w, http.StatusOK, "killmails.html", data)
 		return
 	}
 	data.KillmailChars = sel.Links
@@ -600,7 +600,7 @@ func (app *Application) handleCorpKillmails(w http.ResponseWriter, r *http.Reque
 		view.Warming = true
 	}
 	if !view.Loaded {
-		app.render(w, http.StatusOK, "killmails.html", data)
+		app.render(ctx, w, http.StatusOK, "killmails.html", data)
 		return
 	}
 
@@ -614,5 +614,5 @@ func (app *Application) handleCorpKillmails(w http.ResponseWriter, r *http.Reque
 		view.Rows = append(view.Rows, app.killmailRow(ctx, viewer, ref, prices))
 	}
 
-	app.render(w, http.StatusOK, "killmails.html", data)
+	app.render(ctx, w, http.StatusOK, "killmails.html", data)
 }

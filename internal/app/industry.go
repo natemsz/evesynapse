@@ -99,11 +99,11 @@ func (app *Application) handleIndustry(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("industry: list characters: %v", err)
 		data.Error = "Could not load industry data; check the server log."
-		app.render(w, http.StatusOK, "industry.html", data)
+		app.render(ctx, w, http.StatusOK, "industry.html", data)
 		return
 	}
 	if links == nil {
-		app.render(w, http.StatusOK, "industry.html", data)
+		app.render(ctx, w, http.StatusOK, "industry.html", data)
 		return
 	}
 	data.IndustryChars = links
@@ -115,7 +115,7 @@ func (app *Application) handleIndustry(w http.ResponseWriter, r *http.Request) {
 	app.fillBlueprints(ctx, active.CharacterID, view)
 	app.fillMining(ctx, active.CharacterID, view)
 
-	app.render(w, http.StatusOK, "industry.html", data)
+	app.render(ctx, w, http.StatusOK, "industry.html", data)
 }
 
 func (app *Application) fillIndustryJobs(ctx context.Context, characterID int64, view *industryView) {

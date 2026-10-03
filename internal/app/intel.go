@@ -155,7 +155,7 @@ func (app *Application) handleIntelWars(w http.ResponseWriter, r *http.Request) 
 	var list esi.WarList
 	if !app.loadGlobalSnapshot(ctx, esi.GlobalWars, &list) {
 		view.Warming = true
-		app.render(w, http.StatusOK, "intel_wars.html", data)
+		app.render(ctx, w, http.StatusOK, "intel_wars.html", data)
 		return
 	}
 	view.Loaded = true
@@ -171,7 +171,7 @@ func (app *Application) handleIntelWars(w http.ResponseWriter, r *http.Request) 
 		view.Rows = append(view.Rows, app.warRow(ctx, id, yourCorps))
 	}
 
-	app.render(w, http.StatusOK, "intel_wars.html", data)
+	app.render(ctx, w, http.StatusOK, "intel_wars.html", data)
 }
 
 // warRow builds one wars-page line from the stored detail. A
@@ -284,7 +284,7 @@ func (app *Application) handleIntelIncursions(w http.ResponseWriter, r *http.Req
 	var incursions esi.Incursions
 	if !app.loadGlobalSnapshot(ctx, esi.GlobalIncursions, &incursions) {
 		view.Warming = true
-		app.render(w, http.StatusOK, "intel_incursions.html", data)
+		app.render(ctx, w, http.StatusOK, "intel_incursions.html", data)
 		return
 	}
 	view.Loaded = true
@@ -315,7 +315,7 @@ func (app *Application) handleIntelIncursions(w http.ResponseWriter, r *http.Req
 		view.Rows = append(view.Rows, row)
 	}
 
-	app.render(w, http.StatusOK, "intel_incursions.html", data)
+	app.render(ctx, w, http.StatusOK, "intel_incursions.html", data)
 }
 
 // humanizeState renders an ESI state enum ("established",
@@ -388,7 +388,7 @@ func (app *Application) handleIntelFW(w http.ResponseWriter, r *http.Request) {
 	haveSystems := app.loadGlobalSnapshot(ctx, esi.GlobalFWSystems, &systems)
 	if !haveStats && !haveSystems {
 		view.Warming = true
-		app.render(w, http.StatusOK, "intel_fw.html", data)
+		app.render(ctx, w, http.StatusOK, "intel_fw.html", data)
 		return
 	}
 	view.Loaded = true
@@ -439,7 +439,7 @@ func (app *Application) handleIntelFW(w http.ResponseWriter, r *http.Request) {
 		view.Systems = rows
 	}
 
-	app.render(w, http.StatusOK, "intel_fw.html", data)
+	app.render(ctx, w, http.StatusOK, "intel_fw.html", data)
 }
 
 // contestedPercent computes a front-line system's contested

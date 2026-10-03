@@ -90,7 +90,7 @@ func (app *Application) handleItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	data.Items = view
-	app.render(w, http.StatusOK, "items.html", data)
+	app.render(ctx, w, http.StatusOK, "items.html", data)
 }
 
 // handleItemsCategory renders one category's groups.
@@ -123,7 +123,7 @@ func (app *Application) handleItemsCategory(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	data.Items = view
-	app.render(w, http.StatusOK, "items.html", data)
+	app.render(ctx, w, http.StatusOK, "items.html", data)
 }
 
 // handleItemsGroup renders one group's types, paginated, with an
@@ -160,7 +160,7 @@ func (app *Application) handleItemsGroup(w http.ResponseWriter, r *http.Request)
 		log.Printf("items: count types of group %d: %v", groupID, err)
 		data.Error = "Item database unavailable right now — check the server log."
 		data.Items = view
-		app.render(w, http.StatusOK, "items.html", data)
+		app.render(ctx, w, http.StatusOK, "items.html", data)
 		return
 	}
 	view.TotalTypes = total
@@ -194,5 +194,5 @@ func (app *Application) handleItemsGroup(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	data.Items = view
-	app.render(w, http.StatusOK, "items.html", data)
+	app.render(ctx, w, http.StatusOK, "items.html", data)
 }

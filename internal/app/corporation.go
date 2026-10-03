@@ -175,7 +175,7 @@ func (app *Application) handleCorporations(w http.ResponseWriter, r *http.Reques
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
 	if userID == 0 {
 		// Dev-login sessions carry no user; nothing to group.
-		app.render(w, http.StatusOK, "corporations.html", data)
+		app.render(ctx, w, http.StatusOK, "corporations.html", data)
 		return
 	}
 
@@ -183,7 +183,7 @@ func (app *Application) handleCorporations(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		log.Printf("corporations: list characters for user %d: %v", userID, err)
 		data.Error = "Could not load corporation data; check the server log."
-		app.render(w, http.StatusOK, "corporations.html", data)
+		app.render(ctx, w, http.StatusOK, "corporations.html", data)
 		return
 	}
 
@@ -222,5 +222,5 @@ func (app *Application) handleCorporations(w http.ResponseWriter, r *http.Reques
 	}
 	sort.Slice(data.Corps, func(i, j int) bool { return data.Corps[i].Name < data.Corps[j].Name })
 
-	app.render(w, http.StatusOK, "corporations.html", data)
+	app.render(ctx, w, http.StatusOK, "corporations.html", data)
 }

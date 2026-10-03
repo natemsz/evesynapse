@@ -123,6 +123,7 @@ func seedCharacter(t *testing.T, q *db.Queries, userID, characterID int64, name 
 		AccessToken:  "fixture",
 		RefreshToken: "fixture",
 		TokenExpiry:  sql.NullString{String: "2999-01-01T00:00:00Z", Valid: true},
+		LinkState:    "ok",
 	})
 	if err != nil {
 		t.Fatalf("seed character %d: %v", characterID, err)

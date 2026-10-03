@@ -88,11 +88,11 @@ func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("fittings: list characters: %v", err)
 		data.Error = "Could not load fitting data; check the server log."
-		app.render(w, http.StatusOK, "fittings.html", data)
+		app.render(ctx, w, http.StatusOK, "fittings.html", data)
 		return
 	}
 	if links == nil {
-		app.render(w, http.StatusOK, "fittings.html", data)
+		app.render(ctx, w, http.StatusOK, "fittings.html", data)
 		return
 	}
 	data.FittingsChars = links
@@ -108,7 +108,7 @@ func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 		if _, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: active.CharacterID, Kind: esi.SnapFittings}); errors.Is(serr, sql.ErrNoRows) {
 			view.Warming = true
 		}
-		app.render(w, http.StatusOK, "fittings.html", data)
+		app.render(ctx, w, http.StatusOK, "fittings.html", data)
 		return
 	}
 	view.Loaded = true
@@ -155,5 +155,5 @@ func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 		view.Fittings = append(view.Fittings, entry)
 	}
 
-	app.render(w, http.StatusOK, "fittings.html", data)
+	app.render(ctx, w, http.StatusOK, "fittings.html", data)
 }

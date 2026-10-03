@@ -128,6 +128,18 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 009 (multi-character foundation: owner hash, tags,
+	// link state on characters), guarded on the columns
+	// themselves like 008.
+	var foundationCols int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('characters') WHERE name IN ('owner_hash', 'tags', 'link_state', 'link_state_at')`).Scan(&foundationCols); err != nil {
+		return nil, err
+	}
+	if foundationCols < 4 {
+		if err := applySchema(conn, characterFoundationSchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

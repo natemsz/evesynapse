@@ -15,6 +15,7 @@
   <section class="foldable">
   <h3>{{.Name}}</h3>
   <p><small>{{.ShipType}}</small></p>
+  <p><a href="/skills/plans/fit?character={{$.Fittings.CharacterID}}&fitting={{.FittingID}}">Training plan for this fit</a></p>
   {{range .Groups}}
   <h4>{{.Label}}</h4>
   <div class="tw">

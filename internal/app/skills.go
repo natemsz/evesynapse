@@ -23,6 +23,7 @@ import (
 // failed queue fetch leaves Queue empty and Training blank.
 type skillsView struct {
 	CharacterName string
+	CharacterID   int64
 	Loaded        bool
 	Warming       bool
 	TotalSP       string // thousands-separated
@@ -33,6 +34,31 @@ type skillsView struct {
 	Queue         []skillQueueRow
 	CompletesAt   string // finish time of the last queue entry, "" when queue empty
 	Groups        []skillGroupSection
+
+	// Browse (Phase 4): the full skill catalog from the SDE
+	// graph, with plan quick-add forms. BrowseWarming marks the
+	// pre-import state; BrowseGroups stay empty then.
+	Browse        []browseSkillGroup
+	BrowseWarming bool
+	Plans         []skillPlanSummary
+}
+
+// browseSkillGroup is one catalog block of the Browse section.
+type browseSkillGroup struct {
+	Name   string
+	Skills []browseSkillRow
+}
+
+// browseSkillRow is one catalog skill with the character's state.
+type browseSkillRow struct {
+	TypeID    int64
+	Name      string
+	Rank      string // "2x"
+	Trained   string // roman level, "—" when untrained
+	SP        string // formatted SP in skill, "" when untrained
+	Primary   string // attribute name
+	Secondary string
+	Prereqs   int // direct prerequisite skills
 }
 
 // skillGroupSection is one skill-category block of the sheet.
@@ -111,7 +137,7 @@ func (app *Application) handleSkills(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	view := &skillsView{CharacterName: active.Name}
+	view := &skillsView{CharacterName: active.Name, CharacterID: active.CharacterID}
 	data.Skills = view
 
 	var skills esi.Skills
@@ -137,7 +163,80 @@ func (app *Application) handleSkills(w http.ResponseWriter, r *http.Request) {
 	}
 
 	app.fillSkillSections(ctx, view, skills)
+	app.fillBrowse(ctx, view, active, skills, userID)
 	app.render(ctx, w, http.StatusOK, "skills.html", data)
+}
+
+// fillBrowse loads the SDE skill catalog (grouped, with the
+// character's trained state) plus the character's plans for the
+// quick-add forms. A missing SDE skill graph renders the honest
+// warming state instead of an empty catalog.
+func (app *Application) fillBrowse(ctx context.Context, view *skillsView, ch db.Character, skills esi.Skills, userID int64) {
+	if n, err := app.queries.CountSDESkillMeta(ctx); err != nil || n == 0 {
+		if err != nil {
+			log.Printf("skills: count skill meta: %v", err)
+		}
+		view.BrowseWarming = true
+		return
+	}
+	catalog, err := app.queries.ListSDESkillCatalog(ctx)
+	if err != nil {
+		log.Printf("skills: skill catalog: %v", err)
+		view.BrowseWarming = true
+		return
+	}
+
+	trained := make(map[int64]esi.Skill, len(skills.Skills))
+	for _, s := range skills.Skills {
+		trained[s.SkillID] = s
+	}
+	ids := make([]int64, 0, len(catalog))
+	for _, row := range catalog {
+		ids = append(ids, row.TypeID)
+	}
+	prereqCounts := make(map[int64]int)
+	if rows, err := app.queries.ListSDERequirementsByTypes(ctx, ids); err == nil {
+		for _, r := range rows {
+			prereqCounts[r.TypeID]++
+		}
+	} else {
+		log.Printf("skills: catalog requirements: %v", err)
+	}
+
+	var groups []browseSkillGroup
+	for _, row := range catalog {
+		if len(groups) == 0 || groups[len(groups)-1].Name != row.GroupName {
+			groups = append(groups, browseSkillGroup{Name: row.GroupName})
+		}
+		brow := browseSkillRow{
+			TypeID:    row.TypeID,
+			Name:      row.Name,
+			Rank:      formatRank(row.Rank),
+			Trained:   "—",
+			Primary:   attributeName(row.PrimaryAttr),
+			Secondary: attributeName(row.SecondaryAttr),
+			Prereqs:   prereqCounts[row.TypeID],
+		}
+		if s, ok := trained[row.TypeID]; ok {
+			brow.Trained = esi.RomanLevel(s.TrainedSkillLevel)
+			brow.SP = esi.FormatInt(s.SkillpointsInSkill)
+		}
+		groups[len(groups)-1].Skills = append(groups[len(groups)-1].Skills, brow)
+	}
+	view.Browse = groups
+
+	plans, err := app.queries.ListSkillPlans(ctx, db.ListSkillPlansParams{UserID: userID, CharacterID: ch.CharacterID})
+	if err != nil {
+		log.Printf("skills: plans for character %d: %v", ch.CharacterID, err)
+		return
+	}
+	for _, p := range plans {
+		items, err := app.queries.ListSkillPlanItems(ctx, p.ID)
+		if err != nil {
+			continue
+		}
+		view.Plans = append(view.Plans, skillPlanSummary{ID: p.ID, Name: p.Name, Items: len(items), Character: p.CharacterID})
+	}
 }
 
 // fillQueue builds the queue block: one row per entry in queue

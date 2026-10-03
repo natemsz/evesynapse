@@ -1,0 +1,188 @@
+{{define "title"}}Skill plans{{end}}
+{{define "content"}}
+<h1><span class="gt">Skill plans</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .SkillsChars}}
+<p>{{range $i, $c := .SkillsChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/skills/plans?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
+{{end}}
+
+{{if .SkillPlans}}
+{{with .SkillPlans}}
+
+{{if .GraphWarming}}
+<p>Skill data is still loading — plans appear once the static-data import lands. Watch the <a href="/sync/">Sync page</a>.</p>
+{{else}}
+
+{{if .FitPreview}}
+{{with .FitPreview}}
+<section class="foldable">
+<h3>Training plan for “{{.FitName}}”</h3>
+<p><small>{{.ShipName}} · {{.ToTrain}} skill(s) to train · {{.AlreadyMet}} already covered{{if .MissingData}} · {{.MissingData}} without training data (left out){{end}}</small></p>
+<div class="tw">
+<table>
+  <thead><tr><th>Skill</th><th>Level</th><th>Status</th></tr></thead>
+  <tbody>
+  {{range .Rows}}
+    <tr><td>{{.Skill}}</td><td>{{.Level}}</td><td>{{.Status}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<form method="post" action="/skills/plans/from-fit">
+  <input type="hidden" name="character" value="{{$.SkillPlans.CharacterID}}">
+  <input type="hidden" name="fitting" value="{{.FittingID}}">
+  <button type="submit">Create this plan</button>
+</form>
+<p><small><a href="/fittings/?character={{$.SkillPlans.CharacterID}}">Back to fittings</a></small></p>
+</section>
+{{end}}
+{{end}}
+
+<section class="foldable">
+<h3>Your plans</h3>
+{{if .Plans}}
+<ul>
+{{range .Plans}}
+  <li>{{if and $.SkillPlans.Plan (eq .ID $.SkillPlans.Plan.ID)}}<strong>{{.Name}}</strong>{{else}}<a href="/skills/plans?character={{$.SkillPlans.CharacterID}}&plan={{.ID}}">{{.Name}}</a>{{end}} <small>({{.Items}} skill targets)</small></li>
+{{end}}
+</ul>
+{{else}}
+<p><small>No plans yet for this character.</small></p>
+{{end}}
+
+<form method="post" action="/skills/plans/create">
+  <input type="hidden" name="character" value="{{.CharacterID}}">
+  <label>New plan <input type="text" name="name" maxlength="80" placeholder="Plan name"></label>
+  <button type="submit">Create plan</button>
+</form>
+
+<form method="post" action="/skills/plans/from-template">
+  <input type="hidden" name="character" value="{{.CharacterID}}">
+  <input type="hidden" name="template" value="magic14">
+  <button type="submit">Create the Magic 14 plan</button>
+  <small>— the 14 fundamental skills to V, after EVE University's list</small>
+</form>
+</section>
+
+{{if .Plan}}
+{{with .Plan}}
+<section class="foldable">
+<h3>{{.Name}}</h3>
+
+{{if .AttrsNote}}<p><small>{{.AttrsNote}}</small></p>{{end}}
+{{if .AttrsLine}}<p><small>{{.AttrsLine}}</small></p>{{end}}
+
+{{if .Items}}
+<div class="tw">
+<table>
+  <thead><tr><th>Skill</th><th>Target</th><th></th></tr></thead>
+  <tbody>
+  {{range .Items}}
+    <tr>
+      <td>{{.Skill}}</td>
+      <td>{{.Level}}</td>
+      <td>
+        <form method="post" action="/skills/plans/item-move">
+          <input type="hidden" name="character" value="{{$.SkillPlans.CharacterID}}">
+          <input type="hidden" name="plan" value="{{$.SkillPlans.Plan.ID}}">
+          <input type="hidden" name="skill" value="{{.SkillID}}">
+          <button type="submit" name="dir" value="up"{{if not .CanUp}} disabled{{end}}>↑</button>
+          <button type="submit" name="dir" value="down"{{if not .CanDown}} disabled{{end}}>↓</button>
+        </form>
+        <form method="post" action="/skills/plans/item-remove">
+          <input type="hidden" name="character" value="{{$.SkillPlans.CharacterID}}">
+          <input type="hidden" name="plan" value="{{$.SkillPlans.Plan.ID}}">
+          <input type="hidden" name="skill" value="{{.SkillID}}">
+          <button type="submit">Remove</button>
+        </form>
+      </td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p><small>This plan is empty — add skills below, or browse the <a href="/skills/?character={{$.SkillPlans.CharacterID}}">skill catalog</a>.</small></p>
+{{end}}
+
+<form method="get" action="/skills/plans">
+  <input type="hidden" name="character" value="{{$.SkillPlans.CharacterID}}">
+  <input type="hidden" name="plan" value="{{.ID}}">
+  <label>Add skill <input type="search" name="q" value="{{$.SkillPlans.SearchQuery}}" placeholder="Skill name"></label>
+  <button type="submit">Search</button>
+</form>
+{{if $.SkillPlans.SearchResults}}
+<div class="tw">
+<table>
+  <thead><tr><th>Skill</th><th>Rank</th><th>Target</th><th></th></tr></thead>
+  <tbody>
+  {{range $.SkillPlans.SearchResults}}
+    <tr>
+      <td>{{.Name}}</td>
+      <td>{{.Rank}}</td>
+      <td colspan="2">
+        <form method="post" action="/skills/plans/item-add">
+          <input type="hidden" name="character" value="{{$.SkillPlans.CharacterID}}">
+          <input type="hidden" name="plan" value="{{$.SkillPlans.Plan.ID}}">
+          <input type="hidden" name="skill" value="{{.SkillID}}">
+          <select name="level"><option value="1">I</option><option value="2">II</option><option value="3">III</option><option value="4">IV</option><option value="5" selected>V</option></select>
+          <button type="submit">Add</button>
+        </form>
+      </td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+{{if .Steps}}
+<h4>Training order</h4>
+{{if .StartsNote}}<p><small>{{.StartsNote}}</small></p>{{end}}
+<div class="tw">
+<table>
+  <thead><tr><th>Skill</th><th>Levels</th><th>SP</th><th>Time</th><th>Finishes</th></tr></thead>
+  <tbody>
+  {{range .Steps}}
+    <tr><td>{{.Skill}}{{if .Prereq}} <small>(prerequisite)</small>{{end}}</td><td>{{.FromTo}}</td><td>{{.SP}}</td><td>{{.Time}}</td><td>{{.Finish}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><strong>Total:</strong> {{.TotalSP}} SP · {{.TotalTime}}</p>
+{{if .UnallocatedNote}}<p><small>{{.UnallocatedNote}}</small></p>{{end}}
+{{end}}
+
+{{if .Dropped}}
+<p><small>Already covered: {{range $i, $d := .Dropped}}{{if $i}} · {{end}}{{$d}}{{end}}</small></p>
+{{end}}
+{{if .Unknown}}
+<p><small>No training data for: {{range $i, $u := .Unknown}}{{if $i}}, {{end}}{{$u}}{{end}}</small></p>
+{{end}}
+
+{{if .Remap}}
+<h4>Remap advisor</h4>
+<p><small>Current spread ({{.Remap.CurrentLine}}) trains this plan in {{.Remap.CurrentTime}}.{{if .Remap.Saving}} A remap to {{.Remap.BestLine}} would take {{.Remap.BestTime}} — saving {{.Remap.Saving}}.{{else}} Your current spread is already the fastest for this plan.{{end}}{{if .Remap.BonusNote}} {{.Remap.BonusNote}}.{{end}}</small></p>
+{{end}}
+
+{{if .ConfirmDelete}}
+<form method="post" action="/skills/plans/delete">
+  <input type="hidden" name="character" value="{{$.SkillPlans.CharacterID}}">
+  <input type="hidden" name="plan" value="{{.ID}}">
+  <p>Delete the plan “{{.Name}}”? This cannot be undone. <button type="submit">Delete plan</button> <a href="/skills/plans?character={{$.SkillPlans.CharacterID}}&plan={{.ID}}">Keep it</a></p>
+</form>
+{{else}}
+<p><small><a href="/skills/plans?character={{$.SkillPlans.CharacterID}}&plan={{.ID}}&confirm=delete">Delete this plan</a></small></p>
+{{end}}
+</section>
+{{end}}
+{{end}}
+
+{{end}}
+{{end}}
+{{else}}
+  <p>No skill plans to show yet — link a character first.</p>
+{{end}}
+{{end}}

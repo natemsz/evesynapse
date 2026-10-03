@@ -191,14 +191,72 @@
       card.appendChild(remove);
     }
 
-    // The card the pointer is currently asking to displace:
-    // first sibling (row-major) whose top is below the pointer,
-    // or same-row sibling whose center is right of it.
-    function dragAfter(x, y) {
-      var sibs = grid.querySelectorAll(".card[data-widget]:not(.dragging)");
-      for (var i = 0; i < sibs.length; i++) {
-        var r = sibs[i].getBoundingClientRect();
-        if (y < r.top || (y <= r.bottom && x < r.left + r.width / 2)) return sibs[i];
+    // --- dragging ---------------------------------------------
+    // The model: lifting a card swaps a same-size placeholder
+    // into its grid slot, so the layout never collapses mid-drag;
+    // the card itself goes position:fixed and follows the pointer,
+    // fully opaque with its real panel colors. When the pointer
+    // crosses a sibling boundary the placeholder hops slots and
+    // the displaced siblings FLIP-animate into their new cells
+    // instead of teleporting. Holding the card near a viewport
+    // edge auto-scrolls the page, so long moves on a short screen
+    // don't need grab-drop-grab. On drop the card animates into
+    // the placeholder's slot and swaps places with it; a
+    // cancelled drag or a failed save restores the pre-drag order
+    // from a DOM snapshot taken at lift-off.
+    var reducedMotion = window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    function siblingCards() {
+      return grid.querySelectorAll(".card[data-widget]:not(.dragging)");
+    }
+
+    // FLIP-animate the sibling cards around a DOM mutation:
+    // measure, mutate, then invert each moved card back onto its
+    // old spot and let a transition play it into the new one.
+    // Cleanup removes both inline properties, on transitionend
+    // or a fallback timer, whichever comes first.
+    function flipSiblings(mutate) {
+      var cards = siblingCards();
+      var first = [];
+      for (var i = 0; i < cards.length; i++) {
+        first.push(cards[i].getBoundingClientRect());
+      }
+      mutate();
+      if (reducedMotion) return;
+      for (var j = 0; j < cards.length; j++) {
+        (function (el, before) {
+          var now = el.getBoundingClientRect();
+          var dx = before.left - now.left, dy = before.top - now.top;
+          if (!dx && !dy) return;
+          el.style.transform = "translate(" + dx + "px," + dy + "px)";
+          el.style.transition = "none";
+          // Reading offsetWidth commits the inverted state
+          // before the transition is armed.
+          void el.offsetWidth;
+          el.style.transition = "transform 180ms ease";
+          el.style.transform = "";
+          var done = function () {
+            el.style.transition = "";
+            el.style.transform = "";
+            el.removeEventListener("transitionend", done);
+          };
+          el.addEventListener("transitionend", done);
+          window.setTimeout(done, 260);
+        })(cards[j], first[j]);
+      }
+    }
+
+    // The sibling card the placeholder should sit in front of for
+    // a pointer at (x, y), row-major: a card counts as passed
+    // once the pointer is below its middle, or right of its
+    // middle within its row. Null: the placeholder goes last.
+    function insertionTarget(x, y) {
+      var cards = siblingCards();
+      for (var i = 0; i < cards.length; i++) {
+        var r = cards[i].getBoundingClientRect();
+        if (y < r.top + r.height / 2) return cards[i];
+        if (y <= r.bottom && x < r.left + r.width / 2) return cards[i];
       }
       return null;
     }
@@ -206,53 +264,157 @@
     function startDrag(ev, card, handle) {
       if (ev.pointerType === "mouse" && ev.button !== 0) return;
       ev.preventDefault();
+
       var startX = ev.clientX, startY = ev.clientY;
-      var moved = false;
-      card.classList.add("dragging");
+      var lastX = startX, lastY = startY;
+      var active = false;   // pointer passed the grab threshold
+      var lifted = false;   // card out of flow, placeholder in
+      var placeholder = null;
+      var grabDX = 0, grabDY = 0;
+      var savedNodes = null;
+      var rafId = 0;
+
       if (handle.setPointerCapture) {
         try { handle.setPointerCapture(ev.pointerId); } catch (err) { /* capture is a nicety */ }
       }
 
-      // The card's layout position with the follow-the-pointer
-      // transform momentarily cleared, so a DOM reorder can
-      // compensate its start point and the card never jumps.
-      function layoutRect() {
-        var t = card.style.transform;
-        card.style.transform = "";
-        var r = card.getBoundingClientRect();
-        card.style.transform = t;
-        return r;
+      function lift() {
+        lifted = true;
+        savedNodes = [];
+        var all = grid.querySelectorAll(".card[data-widget]");
+        for (var i = 0; i < all.length; i++) savedNodes.push(all[i]);
+        var rect = card.getBoundingClientRect();
+        grabDX = lastX - rect.left;
+        grabDY = lastY - rect.top;
+        // The placeholder takes the card's exact footprint —
+        // same span class, same height — so the grid underneath
+        // is the final layout, undisturbed, for the whole drag.
+        placeholder = document.createElement("section");
+        placeholder.className = "card drag-placeholder" +
+          (card.classList.contains("spanall") ? " spanall" : "");
+        placeholder.style.height = rect.height + "px";
+        placeholder.setAttribute("aria-hidden", "true");
+        grid.insertBefore(placeholder, card.nextSibling);
+        card.classList.add("dragging");
+        card.style.width = rect.width + "px";
+        card.style.height = rect.height + "px";
+        card.style.left = rect.left + "px";
+        card.style.top = rect.top + "px";
+        document.body.classList.add("drag-active");
+        rafId = requestAnimationFrame(tick);
+      }
+
+      // One loop drives the follow-the-pointer positioning, the
+      // edge auto-scroll and the placeholder hop, so a burst of
+      // pointermove events costs one frame of work.
+      function tick() {
+        rafId = 0;
+        if (!lifted) return;
+        position();
+        // Edge auto-scroll: the closer the pointer rides to a
+        // viewport edge, the faster the page rolls under it.
+        var edge = 76, maxStep = 14, speed = 0;
+        if (lastY < edge) {
+          speed = -Math.min(maxStep, Math.ceil((edge - lastY) / 5));
+        } else if (lastY > window.innerHeight - edge) {
+          speed = Math.min(maxStep, Math.ceil((lastY - (window.innerHeight - edge)) / 5));
+        }
+        if (speed !== 0) window.scrollBy(0, speed);
+        movePlaceholder();
+        rafId = requestAnimationFrame(tick);
+      }
+
+      function position() {
+        card.style.left = (lastX - grabDX) + "px";
+        card.style.top = (lastY - grabDY) + "px";
+      }
+
+      // Hop the placeholder only when the pointer has actually
+      // crossed into a different slot; the siblings FLIP around
+      // the hop, so nothing under the finger teleports.
+      function movePlaceholder() {
+        var target = insertionTarget(lastX, lastY);
+        var next = placeholder.nextElementSibling;
+        while (next && (next === card || !next.classList.contains("card"))) {
+          next = next.nextElementSibling;
+        }
+        if (next === target) return; // already in the asked-for slot
+        flipSiblings(function () {
+          if (target) grid.insertBefore(placeholder, target);
+          else grid.appendChild(placeholder);
+        });
       }
 
       function onMove(e) {
-        var dx = e.clientX - startX, dy = e.clientY - startY;
-        if (!moved && Math.abs(dx) + Math.abs(dy) < 3) return;
-        moved = true;
-        card.style.transform = "translate(" + dx + "px," + dy + "px)";
-        var before = layoutRect();
-        var after = dragAfter(e.clientX, e.clientY);
-        if (after) grid.insertBefore(card, after);
-        else grid.appendChild(card);
-        var now = layoutRect();
-        startX += now.left - before.left;
-        startY += now.top - before.top;
-        card.style.transform = "translate(" + (e.clientX - startX) + "px," + (e.clientY - startY) + "px)";
+        lastX = e.clientX;
+        lastY = e.clientY;
+        if (!active) {
+          if (Math.abs(lastX - startX) + Math.abs(lastY - startY) < 5) return;
+          active = true;
+          lift();
+        }
+      }
+
+      function detach() {
+        handle.removeEventListener("pointermove", onMove);
+        handle.removeEventListener("pointerup", onUp);
+        handle.removeEventListener("pointercancel", onCancel);
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+
+      // Every exit path funnels through here: no placeholder,
+      // no lifted card, no inline style survives a drag.
+      function cleanup() {
+        if (placeholder) { placeholder.remove(); placeholder = null; }
+        card.classList.remove("dragging");
+        card.classList.remove("drag-settle");
+        card.style.cssText = "";
+        document.body.classList.remove("drag-active");
+      }
+
+      function restoreOrder() {
+        if (!savedNodes) return;
+        for (var i = 0; i < savedNodes.length; i++) {
+          grid.appendChild(savedNodes[i]);
+        }
       }
 
       function onUp() {
-        handle.removeEventListener("pointermove", onMove);
-        handle.removeEventListener("pointerup", onUp);
-        handle.removeEventListener("pointercancel", onUp);
-        card.classList.remove("dragging");
-        card.style.transform = "";
-        if (moved) {
-          postLayout({ action: "order", ids: widgetIDs().join(",") });
-        }
+        detach();
+        if (!lifted) return;
+        // Settle: animate the card into the placeholder's slot,
+        // swap the two in the DOM, then save. A failed save
+        // restores the pre-drag arrangement.
+        var slot = placeholder.getBoundingClientRect();
+        card.classList.add("drag-settle");
+        card.style.left = slot.left + "px";
+        card.style.top = slot.top + "px";
+        card.style.transform = "scale(1)";
+        var swapIn = function () {
+          grid.replaceChild(card, placeholder);
+          placeholder = null;
+          cleanup();
+          postLayout({ action: "order", ids: widgetIDs().join(",") }).then(function (ok) {
+            if (!ok) restoreOrder();
+            savedNodes = null;
+          });
+        };
+        if (reducedMotion) swapIn();
+        else window.setTimeout(swapIn, 190);
+      }
+
+      function onCancel() {
+        detach();
+        if (!lifted) return;
+        cleanup();
+        restoreOrder();
+        savedNodes = null;
       }
 
       handle.addEventListener("pointermove", onMove);
       handle.addEventListener("pointerup", onUp);
-      handle.addEventListener("pointercancel", onUp);
+      handle.addEventListener("pointercancel", onCancel);
     }
 
     function addModule(id, btn) {
@@ -270,6 +432,11 @@
           var fresh = doc.querySelector('.card[data-widget="' + id + '"]');
           if (!fresh) { window.location.reload(); return; }
           var node = document.importNode(fresh, true);
+          // Never two cards for one module: if a stale copy is
+          // somehow still in the grid, it goes before the fresh
+          // one lands.
+          var stale = grid.querySelector('.card[data-widget="' + id + '"]');
+          if (stale) stale.remove();
           grid.appendChild(node);
           addFold(node, node.querySelector(":scope > h2, :scope > h3"));
           enhanceCard(node);

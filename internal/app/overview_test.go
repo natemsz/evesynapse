@@ -594,6 +594,17 @@ func TestCustomizeDragAssetsServed(t *testing.T) {
 		`cardremove`,
 		`data-add-widget`,
 		`add-module-modal`,
+		// The rebuilt drag machinery: placeholder + FLIP +
+		// edge auto-scroll + rAF-throttled moves + cancel path
+		// + full inline-style cleanup.
+		`drag-placeholder`,
+		`insertBefore(placeholder`,
+		`replaceChild(card, placeholder)`,
+		`requestAnimationFrame(tick)`,
+		`window.scrollBy(0, speed)`,
+		`addEventListener("pointercancel", onCancel)`,
+		`card.style.cssText = ""`,
+		`prefers-reduced-motion`,
 	)
 
 	code, css := getPage(t, app, cookie, "/static/style.css")
@@ -607,7 +618,33 @@ func TestCustomizeDragAssetsServed(t *testing.T) {
 		".cardremove",
 		".modal-backdrop[hidden]",
 		".modal-item",
+		".drag-placeholder",
+		".card.drag-settle",
+		"grid-auto-flow: dense",
+		"prefers-reduced-motion",
 	)
+
+	// The lifted card must be fully opaque: whatever is under
+	// the finger stays readable. Dig the .card.dragging block
+	// out and check it carries no opacity at all, and that the
+	// old translucent rule is gone from the sheet entirely.
+	start := strings.Index(css, ".card.dragging {")
+	if start < 0 {
+		t.Fatal("style.css: .card.dragging rule missing")
+	}
+	block := css[start:]
+	if end := strings.Index(block, "}"); end >= 0 {
+		block = block[:end]
+	}
+	if strings.Contains(block, "opacity") {
+		t.Errorf(".card.dragging must not set opacity (lifted card is opaque): %q", block)
+	}
+	if !strings.Contains(block, "position: fixed") {
+		t.Errorf(".card.dragging should take the card out of flow: %q", block)
+	}
+	if strings.Contains(css, "opacity: 0.88") {
+		t.Error("style.css still carries the old translucent dragging rule")
+	}
 }
 
 // identity, wallet, skills, training — renders at /character/

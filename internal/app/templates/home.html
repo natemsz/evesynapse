@@ -31,7 +31,7 @@
 </div>
 {{end}}
 
-<div class="grid{{if .Home.Customize}} home-custom{{end}}"{{if .Home.Customize}} id="home-grid" data-customize="1"{{end}}>
+<div class="grid home-grid{{if .Home.Customize}} home-custom{{end}}"{{if .Home.Customize}} id="home-grid" data-customize="1"{{end}}>
 {{range .Home.Widgets}}
 {{if eq .ID "fleet"}}
 <section class="card spanall" data-widget="{{.ID}}">

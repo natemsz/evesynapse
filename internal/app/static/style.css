@@ -626,11 +626,36 @@ footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
   margin-right: 0.45rem;
 }
 .draghandle:active { cursor: grabbing; }
+/* The lifted card: fully opaque in its real panel colors, fixed
+   to the viewport at its true size, ember glow and a deep
+   shadow. Nothing behind it can bleed through. */
 .card.dragging {
-  opacity: 0.88;
+  position: fixed;
+  margin: 0;
+  z-index: 50;
+  pointer-events: none;
+  background: #101010;
   border-color: var(--accent);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.65), 0 0 10px rgba(255, 106, 26, 0.45);
-  z-index: 6;
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.72), 0 0 14px rgba(255, 106, 26, 0.55);
+  transform: scale(1.01);
+}
+/* Drop settle: the card glides from the pointer into its slot
+   (left/top/transform animate; JS swaps it into the DOM after). */
+.card.drag-settle { transition: left 170ms ease, top 170ms ease, transform 170ms ease; }
+/* The placeholder holds the dragged card's grid slot for the
+   whole drag — same span, height set inline — so the layout
+   under the finger is the final layout and never collapses. */
+.drag-placeholder {
+  background: rgba(255, 106, 26, 0.08);
+  border: 1px dashed #6b3410;
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.45);
+}
+/* No half-empty rows on the widget grid, mid-drag or after:
+   later modules backfill the gaps a wide module leaves. */
+.grid.home-grid { grid-auto-flow: dense; }
+body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbing; }
+@media (prefers-reduced-motion: reduce) {
+  .card.drag-settle { transition: none; }
 }
 .cardremove {
   position: absolute;

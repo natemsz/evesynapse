@@ -11,11 +11,13 @@ WHERE id = ?;
 INSERT INTO characters (
     character_id, user_id, name,
     access_token, refresh_token, token_expiry,
-    scopes, cached_until, updated_at
+    scopes, cached_until, owner_hash, link_state, link_state_at,
+    updated_at
 ) VALUES (
     ?, ?, ?,
     ?, ?, ?,
-    ?, ?, datetime('now')
+    ?, ?, ?, ?, ?,
+    datetime('now')
 )
 ON CONFLICT (character_id) DO UPDATE SET
     user_id       = excluded.user_id,
@@ -25,6 +27,9 @@ ON CONFLICT (character_id) DO UPDATE SET
     token_expiry  = excluded.token_expiry,
     scopes        = excluded.scopes,
     cached_until  = excluded.cached_until,
+    owner_hash    = excluded.owner_hash,
+    link_state    = excluded.link_state,
+    link_state_at = excluded.link_state_at,
     updated_at    = excluded.updated_at
 RETURNING *;
 
@@ -40,6 +45,16 @@ ORDER BY name;
 -- name: DeleteCharacter :exec
 DELETE FROM characters
 WHERE character_id = ? AND user_id = ?;
+
+-- name: SetCharacterTags :exec
+UPDATE characters
+SET tags = ?, updated_at = datetime('now')
+WHERE character_id = ? AND user_id = ?;
+
+-- name: SetCharacterLinkState :exec
+UPDATE characters
+SET link_state = ?, link_state_at = ?, updated_at = datetime('now')
+WHERE character_id = ?;
 
 -- name: ListUsers :many
 SELECT * FROM users

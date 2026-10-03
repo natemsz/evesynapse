@@ -147,33 +147,56 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		return
 	}
 
-	// Characters flagged since the last cycle (fresh logins, Sync
-	// page requests) warm first; the rest follow in list order.
-	characters = orderByPriority(characters, app.takePriorityCharacters())
-
-	var refreshed, failed int
-	limited := false
-
+	// Parked characters (token_dead, owner_changed) are never
+	// synced until the user signs them in again; they are counted
+	// for the status line but cost no fetches.
+	var eligible []db.Character
+	parked := 0
 	for _, ch := range characters {
+		if characterSyncs(ch) {
+			eligible = append(eligible, ch)
+		} else {
+			parked++
+		}
+	}
+
+	// Due order: characters flagged since the last cycle (fresh
+	// logins, Sync page requests) first, then most-overdue first
+	// (earliest cached_until across the core kinds; a kind with no
+	// snapshot at all counts as due immediately). With dozens of
+	// linked characters the stalest work always goes first.
+	eligible = app.orderByDue(ctx, eligible)
+	eligible = orderByPriority(eligible, app.takePriorityCharacters())
+
+	var refreshed, failed, deferred int
+	limited := false
+	allowance := &fetchBudget{left: maxFetchesPerCycle}
+
+	for i, ch := range eligible {
 		if ctx.Err() != nil {
 			app.updateWorkerStatus(func(s *workerStatus) { s.Warming = false })
 			return
+		}
+		if allowance.exhausted() {
+			// The cycle's work budget is spent; the rest keep
+			// their place in the due order for the next cycle
+			// instead of one giant pass over every character.
+			deferred = len(eligible) - i
+			break
 		}
 
 		// Ensure the token is usable before touching snapshots; a
 		// revoked refresh token means this character needs a fresh
 		// login, and fetching would only fail three more times.
+		// (A definitive rejection parks the character inside
+		// validAccessToken — see links.go.)
 		if _, err := app.validAccessToken(ctx, ch); err != nil {
 			log.Printf("worker: token for character %d unusable: %v", ch.CharacterID, err)
 			failed++
 			continue
 		}
 
-		for _, kind := range []string{
-			esi.SnapSkills, esi.SnapSkillqueue, esi.SnapWallet, esi.SnapAssets,
-			esi.SnapLocation, esi.SnapShip, esi.SnapOnline, esi.SnapClones,
-			esi.SnapImplants, esi.SnapFittings, esi.SnapFatigue, esi.SnapKillmails,
-		} {
+		for _, kind := range coreSnapshotKinds {
 			snap, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: kind})
 			switch {
 			case serr == nil && esi.SnapshotFresh(snap):
@@ -182,13 +205,24 @@ func (app *Application) refreshCycle(ctx context.Context) {
 				log.Printf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
 			}
 
+			if !allowance.take() {
+				break
+			}
 			if _, err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
 				failed++
 				if errors.Is(err, esi.ErrErrorLimit) {
 					log.Printf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)
 					limited = true
 				} else {
-					log.Printf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
+					if isDefinitiveTokenFailure(err) {
+						// The access token itself was rejected:
+						// park the character rather than failing
+						// the same way every cycle.
+						app.markCharacterTokenDead(ctx, ch.CharacterID)
+						log.Printf("worker: character %d token rejected refreshing %s; parked until re-login", ch.CharacterID, kind)
+					} else {
+						log.Printf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
+					}
 				}
 				break // don't keep pushing this character this cycle
 			}
@@ -198,7 +232,10 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		// Killmail details behind the recent list: immutable once
 		// posted, so each missing detail is fetched once and kept.
 		// Bounded per character per cycle (warmKillmailDetails).
-		if !limited {
+		// The sub-passes below keep their own per-character caps
+		// and freshness gates; the cycle budget only stops new
+		// characters from starting once it is spent.
+		if !limited && !allowance.exhausted() {
 			warmed, ltd := app.warmKillmailDetails(ctx, ch)
 			refreshed += warmed
 			if ltd {
@@ -211,7 +248,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		// corporation subpages, plus the details behind the corp's
 		// recent killmail list (corp_worker.go). 403 role refusals
 		// are recorded state there, not failures.
-		if !limited {
+		if !limited && !allowance.exhausted() {
 			refreshed += app.refreshCorpSnapshots(ctx, ch)
 			warmed, ltd := app.warmCorpKillmailDetails(ctx, ch)
 			refreshed += warmed
@@ -224,7 +261,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		// Economy datasets (cluster 3): the wallet/orders/
 		// contracts/industry snapshots, plus the contract item
 		// lists behind the contracts snapshot (economy_worker.go).
-		if !limited {
+		if !limited && !allowance.exhausted() {
 			refreshed += app.refreshEconomySnapshots(ctx, ch)
 			warmed, ltd := app.warmContractItems(ctx, ch)
 			refreshed += warmed
@@ -256,7 +293,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 				limited = true
 				break
 			}
-			if budget.exhausted() {
+			if allowance.exhausted() {
 				break
 			}
 		}
@@ -276,7 +313,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		}
 	}
 
-	summary := cycleSummary(refreshed, namesResolved, failed, limited)
+	summary := cycleSummary(refreshed, namesResolved, failed, limited, parked, deferred)
 	app.updateWorkerStatus(func(s *workerStatus) {
 		s.Warming = false
 		s.Summary = summary
@@ -289,7 +326,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 }
 
 // cycleSummary builds the one-line status/log summary of a cycle.
-func cycleSummary(refreshed, namesResolved, failed int, limited bool) string {
+func cycleSummary(refreshed, namesResolved, failed int, limited bool, parked, deferred int) string {
 	var parts []string
 	if refreshed > 0 {
 		parts = append(parts, fmt.Sprintf("refreshed %d snapshot(s)", refreshed))
@@ -299,6 +336,12 @@ func cycleSummary(refreshed, namesResolved, failed int, limited bool) string {
 	}
 	if failed > 0 {
 		parts = append(parts, fmt.Sprintf("%d failure(s)", failed))
+	}
+	if parked > 0 {
+		parts = append(parts, fmt.Sprintf("%d awaiting re-login", parked))
+	}
+	if deferred > 0 {
+		parts = append(parts, fmt.Sprintf("%d deferred (cycle budget)", deferred))
 	}
 	if len(parts) == 0 {
 		parts = append(parts, "idle")
@@ -311,6 +354,82 @@ func cycleSummary(refreshed, namesResolved, failed int, limited bool) string {
 		out += ", " + p
 	}
 	return out
+}
+
+// coreSnapshotKinds are the per-character snapshot kinds the main
+// worker pass keeps warm (the cluster 1 set).
+var coreSnapshotKinds = []string{
+	esi.SnapSkills, esi.SnapSkillqueue, esi.SnapWallet, esi.SnapAssets,
+	esi.SnapLocation, esi.SnapShip, esi.SnapOnline, esi.SnapClones,
+	esi.SnapImplants, esi.SnapFittings, esi.SnapFatigue, esi.SnapKillmails,
+}
+
+// maxFetchesPerCycle bounds snapshot fetches in the main character
+// pass of one worker cycle. With dozens of linked characters the
+// stalest work goes first (due order) and the rest waits for the
+// next one-minute cycle instead of one giant pass; the killmail /
+// corp / economy sub-passes keep their own per-character caps.
+const maxFetchesPerCycle = 120
+
+// fetchBudget is the main pass's fetch allowance for one cycle.
+// Sequential use only (the character pass is single-goroutine).
+type fetchBudget struct{ left int }
+
+// take spends one fetch, reporting whether it was available.
+func (b *fetchBudget) take() bool {
+	if b.left <= 0 {
+		return false
+	}
+	b.left--
+	return true
+}
+
+func (b *fetchBudget) exhausted() bool { return b.left <= 0 }
+
+// orderByDue stably orders characters most-overdue first: a
+// character's due key is the earliest cached_until among the core
+// snapshot kinds (a kind with no snapshot yet is due immediately,
+// key zero). The sort is stable, so callers can layer the
+// priority-flag ordering on top.
+func (app *Application) orderByDue(ctx context.Context, characters []db.Character) []db.Character {
+	due := make(map[int64]time.Time, len(characters))
+	for _, ch := range characters {
+		due[ch.CharacterID] = app.characterDueKey(ctx, ch)
+	}
+	out := append([]db.Character(nil), characters...)
+	sort.SliceStable(out, func(i, j int) bool {
+		return due[out[i].CharacterID].Before(due[out[j].CharacterID])
+	})
+	return out
+}
+
+// characterDueKey computes a character's most-overdue moment: the
+// earliest cached_until across every stored snapshot, pulled to
+// the zero time when any core kind has never been fetched.
+func (app *Application) characterDueKey(ctx context.Context, ch db.Character) time.Time {
+	snaps, err := app.queries.ListSnapshotsByCharacter(ctx, ch.CharacterID)
+	if err != nil {
+		return time.Time{} // unreadable state: treat as due now
+	}
+	seen := make(map[string]bool, len(snaps))
+	var earliest time.Time
+	for _, snap := range snaps {
+		seen[snap.Kind] = true
+		if !snap.CachedUntil.Valid || snap.CachedUntil.String == "" {
+			continue
+		}
+		if until, err := time.Parse(time.RFC3339, snap.CachedUntil.String); err == nil {
+			if earliest.IsZero() || until.Before(earliest) {
+				earliest = until
+			}
+		}
+	}
+	for _, kind := range coreSnapshotKinds {
+		if !seen[kind] {
+			return time.Time{} // never fetched: most due
+		}
+	}
+	return earliest
 }
 
 // orderByPriority stably reorders characters so flagged IDs come

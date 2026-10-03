@@ -19,6 +19,10 @@ type Character struct {
 	CachedUntil  sql.NullString `json:"cached_until"`
 	CreatedAt    string         `json:"created_at"`
 	UpdatedAt    string         `json:"updated_at"`
+	OwnerHash    string         `json:"owner_hash"`
+	Tags         string         `json:"tags"`
+	LinkState    string         `json:"link_state"`
+	LinkStateAt  sql.NullString `json:"link_state_at"`
 }
 
 type CharacterCorporation struct {

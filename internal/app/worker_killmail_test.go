@@ -65,6 +65,7 @@ func seedKillmailCharacter(t *testing.T, transport http.RoundTripper, n int) (*A
 		AccessToken:  "fixture",
 		RefreshToken: "fixture",
 		TokenExpiry:  sql.NullString{String: "2999-01-01T00:00:00Z", Valid: true},
+		LinkState:    "ok",
 	})
 	if err != nil {
 		t.Fatalf("upsert character: %v", err)

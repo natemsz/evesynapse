@@ -133,7 +133,7 @@ func (q *Queries) DeleteCharacter(ctx context.Context, arg DeleteCharacterParams
 }
 
 const getCharacter = `-- name: GetCharacter :one
-SELECT character_id, user_id, name, access_token, refresh_token, token_expiry, scopes, cached_until, created_at, updated_at FROM characters
+SELECT character_id, user_id, name, access_token, refresh_token, token_expiry, scopes, cached_until, created_at, updated_at, owner_hash, tags, link_state, link_state_at FROM characters
 WHERE character_id = ?
 `
 
@@ -151,6 +151,10 @@ func (q *Queries) GetCharacter(ctx context.Context, characterID int64) (Characte
 		&i.CachedUntil,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OwnerHash,
+		&i.Tags,
+		&i.LinkState,
+		&i.LinkStateAt,
 	)
 	return i, err
 }
@@ -438,7 +442,7 @@ func (q *Queries) GetWarDetail(ctx context.Context, warID int64) (WarDetail, err
 }
 
 const listAllCharacters = `-- name: ListAllCharacters :many
-SELECT character_id, user_id, name, access_token, refresh_token, token_expiry, scopes, cached_until, created_at, updated_at FROM characters
+SELECT character_id, user_id, name, access_token, refresh_token, token_expiry, scopes, cached_until, created_at, updated_at, owner_hash, tags, link_state, link_state_at FROM characters
 ORDER BY user_id, name
 `
 
@@ -462,6 +466,10 @@ func (q *Queries) ListAllCharacters(ctx context.Context) ([]Character, error) {
 			&i.CachedUntil,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.OwnerHash,
+			&i.Tags,
+			&i.LinkState,
+			&i.LinkStateAt,
 		); err != nil {
 			return nil, err
 		}
@@ -533,7 +541,7 @@ func (q *Queries) ListAllTypeNames(ctx context.Context) ([]TypeName, error) {
 }
 
 const listCharactersByUser = `-- name: ListCharactersByUser :many
-SELECT character_id, user_id, name, access_token, refresh_token, token_expiry, scopes, cached_until, created_at, updated_at FROM characters
+SELECT character_id, user_id, name, access_token, refresh_token, token_expiry, scopes, cached_until, created_at, updated_at, owner_hash, tags, link_state, link_state_at FROM characters
 WHERE user_id = ?
 ORDER BY name
 `
@@ -558,6 +566,10 @@ func (q *Queries) ListCharactersByUser(ctx context.Context, userID int64) ([]Cha
 			&i.CachedUntil,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.OwnerHash,
+			&i.Tags,
+			&i.LinkState,
+			&i.LinkStateAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1041,6 +1053,40 @@ func (q *Queries) SearchTypeNames(ctx context.Context, name string) ([]TypeName,
 	return items, nil
 }
 
+const setCharacterLinkState = `-- name: SetCharacterLinkState :exec
+UPDATE characters
+SET link_state = ?, link_state_at = ?, updated_at = datetime('now')
+WHERE character_id = ?
+`
+
+type SetCharacterLinkStateParams struct {
+	LinkState   string         `json:"link_state"`
+	LinkStateAt sql.NullString `json:"link_state_at"`
+	CharacterID int64          `json:"character_id"`
+}
+
+func (q *Queries) SetCharacterLinkState(ctx context.Context, arg SetCharacterLinkStateParams) error {
+	_, err := q.db.ExecContext(ctx, setCharacterLinkState, arg.LinkState, arg.LinkStateAt, arg.CharacterID)
+	return err
+}
+
+const setCharacterTags = `-- name: SetCharacterTags :exec
+UPDATE characters
+SET tags = ?, updated_at = datetime('now')
+WHERE character_id = ? AND user_id = ?
+`
+
+type SetCharacterTagsParams struct {
+	Tags        string `json:"tags"`
+	CharacterID int64  `json:"character_id"`
+	UserID      int64  `json:"user_id"`
+}
+
+func (q *Queries) SetCharacterTags(ctx context.Context, arg SetCharacterTagsParams) error {
+	_, err := q.db.ExecContext(ctx, setCharacterTags, arg.Tags, arg.CharacterID, arg.UserID)
+	return err
+}
+
 const suggestSDETypes = `-- name: SuggestSDETypes :many
 
 SELECT type_id, name FROM sde_types
@@ -1111,11 +1157,13 @@ const upsertCharacter = `-- name: UpsertCharacter :one
 INSERT INTO characters (
     character_id, user_id, name,
     access_token, refresh_token, token_expiry,
-    scopes, cached_until, updated_at
+    scopes, cached_until, owner_hash, link_state, link_state_at,
+    updated_at
 ) VALUES (
     ?, ?, ?,
     ?, ?, ?,
-    ?, ?, datetime('now')
+    ?, ?, ?, ?, ?,
+    datetime('now')
 )
 ON CONFLICT (character_id) DO UPDATE SET
     user_id       = excluded.user_id,
@@ -1125,8 +1173,11 @@ ON CONFLICT (character_id) DO UPDATE SET
     token_expiry  = excluded.token_expiry,
     scopes        = excluded.scopes,
     cached_until  = excluded.cached_until,
+    owner_hash    = excluded.owner_hash,
+    link_state    = excluded.link_state,
+    link_state_at = excluded.link_state_at,
     updated_at    = excluded.updated_at
-RETURNING character_id, user_id, name, access_token, refresh_token, token_expiry, scopes, cached_until, created_at, updated_at
+RETURNING character_id, user_id, name, access_token, refresh_token, token_expiry, scopes, cached_until, created_at, updated_at, owner_hash, tags, link_state, link_state_at
 `
 
 type UpsertCharacterParams struct {
@@ -1138,6 +1189,9 @@ type UpsertCharacterParams struct {
 	TokenExpiry  sql.NullString `json:"token_expiry"`
 	Scopes       string         `json:"scopes"`
 	CachedUntil  sql.NullString `json:"cached_until"`
+	OwnerHash    string         `json:"owner_hash"`
+	LinkState    string         `json:"link_state"`
+	LinkStateAt  sql.NullString `json:"link_state_at"`
 }
 
 func (q *Queries) UpsertCharacter(ctx context.Context, arg UpsertCharacterParams) (Character, error) {
@@ -1150,6 +1204,9 @@ func (q *Queries) UpsertCharacter(ctx context.Context, arg UpsertCharacterParams
 		arg.TokenExpiry,
 		arg.Scopes,
 		arg.CachedUntil,
+		arg.OwnerHash,
+		arg.LinkState,
+		arg.LinkStateAt,
 	)
 	var i Character
 	err := row.Scan(
@@ -1163,6 +1220,10 @@ func (q *Queries) UpsertCharacter(ctx context.Context, arg UpsertCharacterParams
 		&i.CachedUntil,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OwnerHash,
+		&i.Tags,
+		&i.LinkState,
+		&i.LinkStateAt,
 	)
 	return i, err
 }

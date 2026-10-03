@@ -174,6 +174,15 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 		app.startSDEImport("initial")
 		return
 	}
+	// One-time backfill: databases imported before schema 008 have
+	// no market-group/published values, so re-import once (the
+	// store writes the marker when it lands). Retries on later
+	// ticks while an import keeps failing.
+	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "2" {
+		log.Printf("sde: static data predates market columns — re-importing to backfill")
+		app.startSDEImport("schema-008 backfill")
+		return
+	}
 	if last, err := app.sdeMeta(ctx, "last_check_at"); err == nil && last != "" {
 		if t, perr := time.Parse(time.RFC3339, last); perr == nil && time.Since(t) < 7*24*time.Hour {
 			return // checked within the week
@@ -329,9 +338,11 @@ type parsedSDE struct {
 }
 
 type sdeTypeRow struct {
-	typeID  int64
-	name    string
-	groupID int64
+	typeID        int64
+	name          string
+	groupID       int64
+	marketGroupID int64 // 0 = cannot be listed on the market
+	published     int64 // 1 unless the dump explicitly says 0
 }
 
 type sdeGroupRow struct {
@@ -537,7 +548,20 @@ func parseSDETypes(cr *csv.Reader, idx map[string]int) ([]sdeTypeRow, error) {
 		if err != nil {
 			return err
 		}
-		rows = append(rows, sdeTypeRow{typeID: id, name: name, groupID: csvIDOrZero(rec, idx, "groupID")})
+		// published is only ever an explicit 0 in the dump; an
+		// empty or absent value still means the type is live, so
+		// anything but a literal "0" counts as published.
+		published := int64(1)
+		if raw, ferr := csvField(rec, idx, "published"); ferr == nil && strings.TrimSpace(raw) == "0" {
+			published = 0
+		}
+		rows = append(rows, sdeTypeRow{
+			typeID:        id,
+			name:          name,
+			groupID:       csvIDOrZero(rec, idx, "groupID"),
+			marketGroupID: csvIDOrZero(rec, idx, "marketGroupID"),
+			published:     published,
+		})
 		return nil
 	})
 	return rows, err
@@ -669,9 +693,9 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		return nil
 	}
 
-	if err := insert("INSERT INTO sde_types (type_id, name, group_id) VALUES (?, ?, ?)", len(parsed.types), func(i int) []any {
+	if err := insert("INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES (?, ?, ?, ?, ?)", len(parsed.types), func(i int) []any {
 		r := parsed.types[i]
-		return []any{r.typeID, r.name, r.groupID}
+		return []any{r.typeID, r.name, r.groupID, r.marketGroupID, r.published}
 	}); err != nil {
 		return 0, err
 	}
@@ -716,6 +740,9 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		{Key: "imported_at", Value: now},
 		{Key: "last_check_at", Value: now},
 		{Key: "total_rows", Value: strconv.FormatInt(total, 10)},
+		// Marker that the schema-008 market columns are populated
+		// (sdeMaintenance backfills once when it's missing).
+		{Key: "sde_import_version", Value: "2"},
 	}
 	for _, name := range sdeFileNames {
 		m := parsed.markers[name]

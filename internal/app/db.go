@@ -115,6 +115,19 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 008 (marketable SDE types: market group + published
+	// flag), guarded on the columns themselves: an existing
+	// database gets the ALTERs, a new one gets them right after
+	// 003 creates the base table.
+	var marketCols int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('sde_types') WHERE name IN ('market_group_id', 'published')`).Scan(&marketCols); err != nil {
+		return nil, err
+	}
+	if marketCols < 2 {
+		if err := applySchema(conn, marketableSchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

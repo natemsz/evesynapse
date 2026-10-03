@@ -47,6 +47,33 @@ const maxOrderPages = 20
 // topMarketOrders is how many orders per side the tables show.
 const topMarketOrders = 5
 
+// suggestItem is one live-suggestion entry for the Market search
+// box: the type and where its market page lives.
+type suggestItem struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// handleMarketSuggest serves the Market search box's live
+// suggestions: up to 10 marketable (market-group-bearing,
+// published) SDE types whose name contains the query, prefix
+// matches first. Local SDE only — no ESI, no token.
+func (app *Application) handleMarketSuggest(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "private, max-age=30")
+	out := []suggestItem{}
+	if q := strings.TrimSpace(r.URL.Query().Get("q")); len(q) >= 2 {
+		rows, err := app.queries.SuggestSDETypes(r.Context(), q)
+		if err != nil {
+			log.Printf("market: suggest %q: %v", q, err)
+		}
+		for _, row := range rows {
+			out = append(out, suggestItem{ID: row.TypeID, Name: row.Name})
+		}
+	}
+	_ = json.NewEncoder(w).Encode(out)
+}
+
 func marketRegionName(id int64) (string, bool) {
 	for _, r := range marketRegions {
 		if r.ID == id {

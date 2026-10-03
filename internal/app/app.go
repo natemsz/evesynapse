@@ -51,6 +51,9 @@ var economySchema string
 //go:embed schema/007_intel.sql
 var intelSchema string
 
+//go:embed schema/008_marketable.sql
+var marketableSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -250,6 +253,14 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/market", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleMarket)
+		r.Get("/suggest", app.handleMarketSuggest)
+	})
+
+	r.Route("/items", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleItems)
+		r.Get("/category/{categoryID}/", app.handleItemsCategory)
+		r.Get("/group/{groupID}/", app.handleItemsGroup)
 	})
 
 	r.Route("/skills", func(r chi.Router) {

@@ -51,6 +51,7 @@ type pageData struct {
 	Assets          *assetsView
 	AssetsChars     []assetCharLink
 	Market          *marketView
+	Items           *itemsView
 	Skills          *skillsView
 	SkillsChars     []assetCharLink
 	Sync            *syncView
@@ -133,7 +134,7 @@ func sectionForPage(page string) string {
 		return "character"
 	case "assets.html", "industry.html":
 		return "assets"
-	case "market.html", "wallet.html", "orders.html", "contracts.html":
+	case "market.html", "wallet.html", "orders.html", "contracts.html", "items.html":
 		return "economy"
 	case "corporations.html", "corp_members.html", "corp_wallets.html",
 		"corp_orders.html", "corp_assets.html", "corp_structures.html":

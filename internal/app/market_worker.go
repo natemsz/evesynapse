@@ -14,18 +14,28 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Market worker pass (Phase 5): keeps market_history warm for the
-// (region, type) pairs somebody actually looks at, and computes
+// Market worker pass (Phase 5, coverage reworked by the proactive-
+// warming build): keeps market_history warm for a maintained
+// coverage set, warmed before anyone clicks, and computes
 // per-order health from regional order books. Everything here is
 // public ESI — no character token — but it spends from the
 // cycle's shared fetch allowance like every other pass, and a
 // 420/429 stops it until the next cycle.
 //
-// What wants history, in priority order:
+// What gets history, in priority order (the first tiers win the
+// per-cycle fetch cap on a cold start; everything eventually
+// converges and stays fresh):
 //   1. item-page "wants" (a user opened a type with no rows yet —
 //      someone is staring at that page, the strongest signal),
 //   2. watchlist entries (any user's — the alerts read them),
-//   3. types with open orders on file (their regions ride along).
+//   3. types with open orders on file (their regions ride along),
+//   4. the liquid core: top types by ISK velocity in The Forge,
+//      ranked from our own stored history (with a cold-start
+//      supplement from recent killmail details),
+//   5. the orbit: everything the deployment's characters touch —
+//      asset inventories, industry job products and their
+//      blueprint products, saved-fitting types, contract item
+//      types — kept at The Forge.
 // A pair is refetched at most once per 20h; CCP's aggregates are
 // daily, so fresher would be waste. Order books gate at 10
 // minutes on the same fetch-state table (orders Expires on the
@@ -49,6 +59,16 @@ const (
 	// historyWantMaxAge is how long an unviewed want keeps its
 	// place in the fetch queue.
 	historyWantMaxAge = 7 * 24 * time.Hour
+	// liquidCoreSize bounds the ISK-velocity core kept warm in
+	// The Forge.
+	liquidCoreSize = 200
+	// liquidCoreKillmailScan caps how many recent killmail
+	// detail payloads the cold-start core supplement reads.
+	liquidCoreKillmailScan = 100
+	// maxCoverageTypeDetailNotesPerCycle bounds the type-detail
+	// (item description) wants the coverage pass notes per cycle,
+	// so descriptions converge for every type history covers.
+	maxCoverageTypeDetailNotesPerCycle = 40
 )
 
 // marketKey is one (region, type) pair to warm.
@@ -72,13 +92,19 @@ func (app *Application) refreshMarketData(ctx context.Context, characters []db.C
 }
 
 // warmMarketHistory downloads due history pairs, best-priority
-// first, at most maxHistoryFetchesPerCycle of them.
+// first, at most maxHistoryFetchesPerCycle of them. The pass runs
+// under the shared fetch lock so the urgent drain never
+// double-fetches the same pair in the same moment.
 func (app *Application) warmMarketHistory(ctx context.Context, allowance *fetchBudget) (stored int, limited bool) {
+	app.fetchMu.Lock()
+	defer app.fetchMu.Unlock()
+
 	candidates, err := app.historyCandidates(ctx)
 	if err != nil {
 		log.Printf("worker: market history: collect candidates: %v", err)
 		return 0, false
 	}
+	app.noteCoverageTypeDetails(ctx, candidates)
 	for _, key := range candidates {
 		if stored >= maxHistoryFetchesPerCycle || ctx.Err() != nil {
 			break
@@ -90,34 +116,50 @@ func (app *Application) warmMarketHistory(ctx context.Context, allowance *fetchB
 		if !allowance.take() {
 			break
 		}
-		rows, err := app.fetchMarketHistory(ctx, key)
-		if err != nil {
-			if errors.Is(err, esi.ErrErrorLimit) {
-				log.Printf("worker: market history: ESI error limit hit fetching %s; backing off until next cycle", kind)
-				return stored, true
-			}
-			log.Printf("worker: market history: fetch %s: %v", kind, err)
-			app.recordMarketFetch(ctx, kind, fetchStateError, err.Error())
-			continue
+		fetched, limited := app.fetchAndStoreHistory(ctx, key)
+		if limited {
+			return stored, true
 		}
-		for _, row := range rows {
-			if err := app.queries.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
-				RegionID:   key.RegionID,
-				TypeID:     key.TypeID,
-				Date:       row.Date,
-				Average:    row.Average,
-				Highest:    row.Highest,
-				Lowest:     row.Lowest,
-				Volume:     row.Volume,
-				OrderCount: row.OrderCount,
-			}); err != nil {
-				log.Printf("worker: market history: store %s day %s: %v", kind, row.Date, err)
-			}
+		if fetched {
+			stored++
 		}
-		app.recordMarketFetch(ctx, kind, fetchStateOK, "")
-		stored++
 	}
 	return stored, false
+}
+
+// fetchAndStoreHistory downloads one pair's daily aggregates,
+// upserts them, and settles the fetch state. fetched reports a
+// successful read (even an empty one — that still settles the
+// pair); limited reports ESI's stop signal. Shared by the cycle's
+// history pass and the urgent want drain.
+func (app *Application) fetchAndStoreHistory(ctx context.Context, key marketKey) (fetched, limited bool) {
+	kind := marketFetchKind("history", key)
+	rows, err := app.fetchMarketHistory(ctx, key)
+	if err != nil {
+		if errors.Is(err, esi.ErrErrorLimit) {
+			log.Printf("worker: market history: ESI error limit hit fetching %s; backing off", kind)
+			return false, true
+		}
+		log.Printf("worker: market history: fetch %s: %v", kind, err)
+		app.recordMarketFetch(ctx, kind, fetchStateError, err.Error())
+		return false, false
+	}
+	for _, row := range rows {
+		if err := app.queries.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
+			RegionID:   key.RegionID,
+			TypeID:     key.TypeID,
+			Date:       row.Date,
+			Average:    row.Average,
+			Highest:    row.Highest,
+			Lowest:     row.Lowest,
+			Volume:     row.Volume,
+			OrderCount: row.OrderCount,
+		}); err != nil {
+			log.Printf("worker: market history: store %s day %s: %v", kind, row.Date, err)
+		}
+	}
+	app.recordMarketFetch(ctx, kind, fetchStateOK, "")
+	return true, false
 }
 
 // historyCandidates builds the prioritized fetch queue: viewed-item
@@ -182,7 +224,176 @@ func (app *Application) historyCandidates(ctx context.Context) ([]marketKey, err
 	for _, k := range orderKeys {
 		add(k.RegionID, k.TypeID)
 	}
+
+	// The liquid core: the types that actually move in The Forge,
+	// kept warm whether or not anyone here trades them yet.
+	for _, typeID := range app.liquidCoreTypeIDs(ctx) {
+		add(defaultMarketRegion, typeID)
+	}
+
+	// The orbit: everything the deployment's characters touch,
+	// kept warm in The Forge (assets span every region of space;
+	// history per-region for every asset location is unbounded).
+	orbit := app.orbitForgeTypeIDs(ctx)
+	orbitIDs := make([]int64, 0, len(orbit))
+	for typeID := range orbit {
+		orbitIDs = append(orbitIDs, typeID)
+	}
+	sort.Slice(orbitIDs, func(i, j int) bool { return orbitIDs[i] < orbitIDs[j] })
+	for _, typeID := range orbitIDs {
+		add(defaultMarketRegion, typeID)
+	}
 	return out, nil
+}
+
+// liquidCoreTypeIDs ranks The Forge's most liquid types from our
+// own stored history: ISK velocity (volume × average price)
+// summed over the region's newest seven stored days, capped at
+// liquidCoreSize. Before any history exists the ranking is empty,
+// so the tail is supplemented from the types in recent killmail
+// details — the ships and modules the deployment actually loses —
+// until the stored ranking can stand on its own. Recomputed from
+// the database on every candidate build, so the core tracks the
+// market as history accumulates.
+func (app *Application) liquidCoreTypeIDs(ctx context.Context) []int64 {
+	seen := make(map[int64]bool)
+	var out []int64
+	add := func(typeID int64) {
+		if typeID > 0 && !seen[typeID] {
+			seen[typeID] = true
+			out = append(out, typeID)
+		}
+	}
+	rows, err := app.queries.ListLiquidCoreTypes(ctx, db.ListLiquidCoreTypesParams{
+		RegionID:  defaultMarketRegion,
+		CoreLimit: liquidCoreSize,
+	})
+	if err != nil {
+		log.Printf("worker: market history: liquid core ranking: %v", err)
+	} else {
+		for _, r := range rows {
+			add(r.TypeID)
+		}
+	}
+	if len(out) < liquidCoreSize {
+		payloads, err := app.queries.ListRecentKillmailDetails(ctx, liquidCoreKillmailScan)
+		if err != nil {
+			log.Printf("worker: market history: killmail core supplement: %v", err)
+			return out
+		}
+		for _, payload := range payloads {
+			var km esi.Killmail
+			if err := json.Unmarshal([]byte(payload), &km); err != nil {
+				continue
+			}
+			add(km.Victim.ShipTypeID)
+			for _, item := range km.Victim.Items {
+				add(item.ItemTypeID)
+			}
+			if len(out) >= liquidCoreSize {
+				break
+			}
+		}
+	}
+	return out
+}
+
+// orbitForgeTypeIDs enumerates every type the deployment's
+// characters touch, for Forge history coverage: industry job
+// products, the products of owned blueprints, saved-fitting ships
+// and modules, asset inventory types, and contract item types.
+// Whatever snapshots exist contribute; a missing snapshot simply
+// has nothing to say this cycle.
+func (app *Application) orbitForgeTypeIDs(ctx context.Context) map[int64]bool {
+	out := make(map[int64]bool)
+	add := func(typeID int64) {
+		if typeID > 0 {
+			out[typeID] = true
+		}
+	}
+	bpProduct := make(map[int64]int64)
+	if rows, err := app.queries.ListSDEBlueprintProducts(ctx); err != nil {
+		log.Printf("worker: market history: orbit blueprint products: %v", err)
+	} else {
+		for _, r := range rows {
+			bpProduct[r.BlueprintTypeID] = r.ProductTypeID
+		}
+	}
+	characters, err := app.queries.ListAllCharacters(ctx)
+	if err != nil {
+		log.Printf("worker: market history: orbit characters: %v", err)
+		return out
+	}
+	for _, ch := range characters {
+		if jobs, ok := loadSnapshot[[]esi.IndustryJob](app, ctx, ch.CharacterID, esi.SnapIndustryJobs); ok {
+			for _, j := range jobs {
+				add(j.ProductTypeID)
+			}
+		}
+		if owned, ok := loadSnapshot[[]esi.Blueprint](app, ctx, ch.CharacterID, esi.SnapBlueprints); ok {
+			for _, bp := range owned {
+				if product, ok := bpProduct[bp.TypeID]; ok {
+					add(product)
+				}
+			}
+		}
+		if fits, ok := loadSnapshot[[]esi.Fitting](app, ctx, ch.CharacterID, esi.SnapFittings); ok {
+			for _, f := range fits {
+				add(f.ShipTypeID)
+				for _, item := range f.Items {
+					add(item.TypeID)
+				}
+			}
+		}
+		if assets, ok := loadSnapshot[[]esi.Asset](app, ctx, ch.CharacterID, esi.SnapAssets); ok {
+			for _, a := range assets {
+				add(a.TypeID)
+			}
+		}
+		detailIDs, err := app.queries.ListContractDetailIDsByCharacter(ctx, ch.CharacterID)
+		if err != nil {
+			log.Printf("worker: market history: orbit contract ids %d: %v", ch.CharacterID, err)
+			continue
+		}
+		for _, contractID := range detailIDs {
+			rec, err := app.queries.GetContractDetail(ctx, contractID)
+			if err != nil {
+				continue
+			}
+			var items []esi.ContractItem
+			if err := json.Unmarshal([]byte(rec.Payload), &items); err != nil {
+				continue
+			}
+			for _, item := range items {
+				add(item.TypeID)
+			}
+		}
+	}
+	return out
+}
+
+// noteCoverageTypeDetails records description wants for the types
+// in this cycle's coverage, so item pages for covered types fill
+// in without waiting for a click. Bounded per cycle; every note
+// is an insert-or-ignore against rows the type-details drain
+// already settles.
+func (app *Application) noteCoverageTypeDetails(ctx context.Context, candidates []marketKey) {
+	seen := make(map[int64]bool)
+	noted := 0
+	for _, key := range candidates {
+		if noted >= maxCoverageTypeDetailNotesPerCycle {
+			break
+		}
+		if key.TypeID <= 0 || seen[key.TypeID] {
+			continue
+		}
+		seen[key.TypeID] = true
+		if err := app.queries.UpsertTypeDetailWant(ctx, key.TypeID); err != nil {
+			log.Printf("worker: market history: note type detail %d: %v", key.TypeID, err)
+			continue
+		}
+		noted++
+	}
 }
 
 // fetchMarketHistory downloads one pair's daily aggregates.

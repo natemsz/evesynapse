@@ -12,6 +12,7 @@ import (
 
 // pageData is the view model shared by the templates.
 type pageData struct {
+	Version         string // footer product version ("v0.3.00.002"); filled by render
 	LoggedIn        bool
 	CharacterName   string
 	SSOConfigured   bool
@@ -146,6 +147,9 @@ func sectionForPage(page string) string {
 }
 
 func (app *Application) render(ctx context.Context, w http.ResponseWriter, status int, page string, data pageData) {
+	if data.Version == "" {
+		data.Version = appVersion
+	}
 	if data.Section == "" {
 		data.Section = sectionForPage(page)
 	}

@@ -48,6 +48,10 @@ const maxOrderPages = 20
 // topMarketOrders is how many orders per side the tables show.
 const topMarketOrders = 5
 
+// maxSearchPrefetchWants caps the history wants a rendered
+// search notes for its result types (results shown, never more).
+const maxSearchPrefetchWants = 50
+
 // suggestItem is one live-suggestion entry for the Market search
 // box: the type and where its market page lives.
 type suggestItem struct {
@@ -231,6 +235,9 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 		app.attachHistory(ctx, view.Item, typeID, view.Region, userID)
 	} else if view.Query != "" {
 		view.Matches = app.searchTypes(ctx, view.Query)
+		// Prefetch: every result's history is wanted now, so a
+		// tap on any of them lands on a chart instead of a wait.
+		app.noteSearchHistoryWants(ctx, view.Region, view.Matches)
 	}
 
 	if userID > 0 {
@@ -279,6 +286,32 @@ func (app *Application) recentHistoryRows(ctx context.Context, regionID, typeID 
 //     row is stale, HistoryLastDay captions when trading stopped.
 //
 // A nil item (the live item view failed) still records the want —
+// noteSearchHistoryWants records history wants for every type a
+// search just rendered, so whichever result the user taps has its
+// fetch already queued at top priority. Bounded by the number of
+// matches shown (capped at maxSearchPrefetchWants); the handler
+// only writes rows — the urgent drain and the cycle do the
+// fetching, never this.
+func (app *Application) noteSearchHistoryWants(ctx context.Context, regionID int64, matches []marketMatch) {
+	stamp := time.Now().UTC().Format(time.RFC3339)
+	noted := 0
+	for _, m := range matches {
+		if noted >= maxSearchPrefetchWants {
+			break
+		}
+		if m.ID <= 0 {
+			continue
+		}
+		if err := app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
+			RegionID: regionID, TypeID: m.ID, LastRequestedAt: stamp,
+		}); err != nil {
+			log.Printf("market: prefetch want for type %d in region %d: %v", m.ID, regionID, err)
+			continue
+		}
+		noted++
+	}
+}
+
 // the user asked about this type either way.
 func (app *Application) attachHistory(ctx context.Context, item *marketItem, typeID, regionID, userID int64) {
 	rows := app.recentHistoryRows(ctx, regionID, typeID, historyChartRows)
@@ -624,6 +657,9 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 			for _, row := range rows {
 				view.Matches = append(view.Matches, marketMatch{ID: row.TypeID, Name: row.Name})
 			}
+			// Prefetch, same as the main search: a tap on any
+			// match should land on a chart.
+			app.noteSearchHistoryWants(ctx, defaultMarketRegion, view.Matches)
 		}
 	}
 	entries, err := app.queries.ListWatchlistByUser(ctx, userID)

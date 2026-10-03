@@ -390,7 +390,7 @@ func TestHomeLayoutOrderAction(t *testing.T) {
 	if body != `{"ok":true}` {
 		t.Fatalf("XHR order POST body = %q, want {\"ok\":true}", body)
 	}
-	if got := saved(); got != `["market","fleet","attention"]` {
+	if got := saved(); got != `[{"id":"market"},{"id":"fleet"},{"id":"attention"}]` {
 		t.Fatalf("saved layout = %q, want dragged order", got)
 	}
 	code, body = getPage(t, app, cookie, "/")
@@ -410,7 +410,7 @@ func TestHomeLayoutOrderAction(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("XHR order POST (junk ids): status %d", code)
 	}
-	if got := saved(); got != `["skills","fleet"]` {
+	if got := saved(); got != `[{"id":"skills"},{"id":"fleet"}]` {
 		t.Fatalf("saved layout = %q, want normalized [skills fleet]", got)
 	}
 
@@ -421,7 +421,7 @@ func TestHomeLayoutOrderAction(t *testing.T) {
 	if code != http.StatusSeeOther {
 		t.Fatalf("form order POST: status %d, want 303", code)
 	}
-	if got := saved(); got != `["fleet"]` {
+	if got := saved(); got != `[{"id":"fleet"}]` {
 		t.Fatalf("saved layout = %q, want [fleet]", got)
 	}
 
@@ -605,6 +605,15 @@ func TestCustomizeDragAssetsServed(t *testing.T) {
 		`addEventListener("pointercancel", onCancel)`,
 		`card.style.cssText = ""`,
 		`prefers-reduced-motion`,
+		// The grid-engine mirror: solver, re-solving around the
+		// placeholder, midpoint hysteresis, the span toggle save.
+		`function solveHomeSpans(descs, cols)`,
+		`function respan(placeholder, draggedCard)`,
+		`var hyst = 10`,
+		`desiredIndex(lastX, lastY, phIndex)`,
+		`action: "span"`,
+		`cardspan`,
+		`scale(" + sx + "," + sy + ")`,
 	)
 
 	code, css := getPage(t, app, cookie, "/static/style.css")
@@ -622,6 +631,14 @@ func TestCustomizeDragAssetsServed(t *testing.T) {
 		".card.drag-settle",
 		"grid-auto-flow: dense",
 		"prefers-reduced-motion",
+		// The grid engine: solved span classes on both column
+		// modes, and the resize toggle's states.
+		".grid.home-grid > .span3",
+		".span6 { grid-column: span 6; }",
+		"@media (max-width: 719px)",
+		"span 1; }",
+		"@media (max-width: 339px)",
+		".cardspan",
 	)
 
 	// The lifted card must be fully opaque: whatever is under

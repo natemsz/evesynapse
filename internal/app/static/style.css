@@ -639,20 +639,43 @@ footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
   box-shadow: 0 16px 38px rgba(0, 0, 0, 0.72), 0 0 14px rgba(255, 106, 26, 0.55);
   transform: scale(1.01);
 }
-/* Drop settle: the card glides from the pointer into its slot
-   (left/top/transform animate; JS swaps it into the DOM after). */
-.card.drag-settle { transition: left 170ms ease, top 170ms ease, transform 170ms ease; }
-/* The placeholder holds the dragged card's grid slot for the
-   whole drag — same span, height set inline — so the layout
-   under the finger is the final layout and never collapses. */
+/* Drop settle: the card glides from the pointer into its solved
+   slot — position, and size when the solver gives it a different
+   span there — then JS swaps it into the DOM. */
+.card.drag-settle { transition: left 170ms ease, top 170ms ease, width 170ms ease, height 170ms ease, transform 170ms ease; }
+/* The placeholder holds the dragged card's slot for the whole
+   drag, wearing the span class the solver assigns the card at
+   the hovered position and the card's own height — so the grid
+   underneath is always the solved final layout, never collapsed. */
 .drag-placeholder {
   background: rgba(255, 106, 26, 0.08);
   border: 1px dashed #6b3410;
   box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.45);
 }
-/* No half-empty rows on the widget grid, mid-drag or after:
-   later modules backfill the gaps a wide module leaves. */
-.grid.home-grid { grid-auto-flow: dense; }
+/* The home grid engine: the server solves every module's column
+   span (see solveHomeSpans) and the CSS only applies it. Six
+   columns on desktop; cards in a row stretch to equal height,
+   content top-aligned by block flow. */
+.grid.home-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  align-items: stretch;
+  grid-auto-flow: dense;
+}
+.grid.home-grid > .span3 { grid-column: span 3; }
+.grid.home-grid > .span6 { grid-column: span 6; }
+.grid.home-grid > .card { min-width: 0; }
+/* Phones: two columns — wide modules own a row, flex modules
+   pair two-up, a lone flex module stretches across both. */
+@media (max-width: 719px) {
+  .grid.home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid.home-grid > .span3 { grid-column: span 1; }
+  .grid.home-grid > .span6 { grid-column: span 2; }
+}
+/* Very small screens: a single column, everything full width. */
+@media (max-width: 339px) {
+  .grid.home-grid { grid-template-columns: minmax(0, 1fr); }
+  .grid.home-grid > .span3, .grid.home-grid > .span6 { grid-column: span 1; }
+}
 body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbing; }
 @media (prefers-reduced-motion: reduce) {
   .card.drag-settle { transition: none; }
@@ -675,7 +698,29 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
   cursor: pointer;
 }
 .cardremove:hover { color: #fff6e6; border-color: var(--danger); }
+/* The half/full resize toggle sits left of the × on flex
+   modules; the heading leaves room for all three controls. */
+.cardspan {
+  position: absolute;
+  top: 0.5rem;
+  right: 4.5rem;
+  z-index: 2;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  font-size: 0.95rem;
+  line-height: 1;
+  font-family: inherit;
+  color: #ffd27a;
+  background: #0e0e0e;
+  border: 1px solid #4a2408;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.cardspan:hover { color: #fff6e6; border-color: var(--accent); }
+.cardspan[aria-pressed="true"] { color: #fff6e6; border-color: var(--accent); }
 .home-custom.has-controls .card > h2:first-child, .home-custom.has-controls .card > h3:first-child { padding-right: 4.6rem; }
+.home-custom.has-controls .card.has-spanbtn > h2:first-child, .home-custom.has-controls .card.has-spanbtn > h3:first-child { padding-right: 6.6rem; }
 
 /* Add-module pop-up: solid Dominion panel over a dimmed page,
    dismissed by its close button, a tap on the backdrop, or

@@ -10,6 +10,72 @@ import (
 	"database/sql"
 )
 
+const countSDECategories = `-- name: CountSDECategories :one
+SELECT COUNT(*) FROM sde_categories
+`
+
+func (q *Queries) CountSDECategories(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSDECategories)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSDEGroups = `-- name: CountSDEGroups :one
+SELECT COUNT(*) FROM sde_groups
+`
+
+func (q *Queries) CountSDEGroups(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSDEGroups)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSDERegions = `-- name: CountSDERegions :one
+SELECT COUNT(*) FROM sde_regions
+`
+
+func (q *Queries) CountSDERegions(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSDERegions)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSDEStations = `-- name: CountSDEStations :one
+SELECT COUNT(*) FROM sde_stations
+`
+
+func (q *Queries) CountSDEStations(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSDEStations)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSDESystems = `-- name: CountSDESystems :one
+SELECT COUNT(*) FROM sde_systems
+`
+
+func (q *Queries) CountSDESystems(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSDESystems)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSDETypes = `-- name: CountSDETypes :one
+SELECT COUNT(*) FROM sde_types
+`
+
+func (q *Queries) CountSDETypes(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSDETypes)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (created_at)
 VALUES (datetime('now'))
@@ -58,6 +124,101 @@ func (q *Queries) GetCharacter(ctx context.Context, characterID int64) (Characte
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
+	return i, err
+}
+
+const getSDECategory = `-- name: GetSDECategory :one
+SELECT category_id, name FROM sde_categories
+WHERE category_id = ?
+`
+
+func (q *Queries) GetSDECategory(ctx context.Context, categoryID int64) (SdeCategory, error) {
+	row := q.db.QueryRowContext(ctx, getSDECategory, categoryID)
+	var i SdeCategory
+	err := row.Scan(&i.CategoryID, &i.Name)
+	return i, err
+}
+
+const getSDEGroup = `-- name: GetSDEGroup :one
+SELECT group_id, name, category_id FROM sde_groups
+WHERE group_id = ?
+`
+
+func (q *Queries) GetSDEGroup(ctx context.Context, groupID int64) (SdeGroup, error) {
+	row := q.db.QueryRowContext(ctx, getSDEGroup, groupID)
+	var i SdeGroup
+	err := row.Scan(&i.GroupID, &i.Name, &i.CategoryID)
+	return i, err
+}
+
+const getSDEMeta = `-- name: GetSDEMeta :one
+SELECT value FROM sde_meta
+WHERE key = ?
+`
+
+func (q *Queries) GetSDEMeta(ctx context.Context, key string) (string, error) {
+	row := q.db.QueryRowContext(ctx, getSDEMeta, key)
+	var value string
+	err := row.Scan(&value)
+	return value, err
+}
+
+const getSDERegion = `-- name: GetSDERegion :one
+SELECT region_id, name FROM sde_regions
+WHERE region_id = ?
+`
+
+func (q *Queries) GetSDERegion(ctx context.Context, regionID int64) (SdeRegion, error) {
+	row := q.db.QueryRowContext(ctx, getSDERegion, regionID)
+	var i SdeRegion
+	err := row.Scan(&i.RegionID, &i.Name)
+	return i, err
+}
+
+const getSDEStation = `-- name: GetSDEStation :one
+SELECT station_id, name, system_id FROM sde_stations
+WHERE station_id = ?
+`
+
+func (q *Queries) GetSDEStation(ctx context.Context, stationID int64) (SdeStation, error) {
+	row := q.db.QueryRowContext(ctx, getSDEStation, stationID)
+	var i SdeStation
+	err := row.Scan(&i.StationID, &i.Name, &i.SystemID)
+	return i, err
+}
+
+const getSDESystem = `-- name: GetSDESystem :one
+SELECT system_id, name, region_id, security FROM sde_systems
+WHERE system_id = ?
+`
+
+func (q *Queries) GetSDESystem(ctx context.Context, systemID int64) (SdeSystem, error) {
+	row := q.db.QueryRowContext(ctx, getSDESystem, systemID)
+	var i SdeSystem
+	err := row.Scan(
+		&i.SystemID,
+		&i.Name,
+		&i.RegionID,
+		&i.Security,
+	)
+	return i, err
+}
+
+const getSDEType = `-- name: GetSDEType :one
+
+SELECT type_id, name, group_id FROM sde_types
+WHERE type_id = ?
+`
+
+// ---------------------------------------------------------------------
+// SDE static data (schema 003): lookup getters, search, counts, meta.
+// Bulk import inserts are hand-rolled prepared statements inside one
+// transaction in the importer (internal/app/sde.go); reads stay sqlc.
+// ---------------------------------------------------------------------
+func (q *Queries) GetSDEType(ctx context.Context, typeID int64) (SdeType, error) {
+	row := q.db.QueryRowContext(ctx, getSDEType, typeID)
+	var i SdeType
+	err := row.Scan(&i.TypeID, &i.Name, &i.GroupID)
 	return i, err
 }
 
@@ -215,6 +376,34 @@ func (q *Queries) ListCharactersByUser(ctx context.Context, userID int64) ([]Cha
 	return items, nil
 }
 
+const listSDETypeIDs = `-- name: ListSDETypeIDs :many
+SELECT type_id FROM sde_types
+ORDER BY type_id
+`
+
+func (q *Queries) ListSDETypeIDs(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listSDETypeIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var type_id int64
+		if err := rows.Scan(&type_id); err != nil {
+			return nil, err
+		}
+		items = append(items, type_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSnapshotsByCharacter = `-- name: ListSnapshotsByCharacter :many
 SELECT character_id, kind, payload, fetched_at, cached_until FROM character_snapshots
 WHERE character_id = ?
@@ -265,6 +454,41 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	for rows.Next() {
 		var i User
 		if err := rows.Scan(&i.ID, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchSDETypes = `-- name: SearchSDETypes :many
+SELECT type_id, name FROM sde_types
+WHERE name LIKE ?
+ORDER BY name
+LIMIT 20
+`
+
+type SearchSDETypesRow struct {
+	TypeID int64  `json:"type_id"`
+	Name   string `json:"name"`
+}
+
+func (q *Queries) SearchSDETypes(ctx context.Context, name string) ([]SearchSDETypesRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchSDETypes, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchSDETypesRow
+	for rows.Next() {
+		var i SearchSDETypesRow
+		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -389,6 +613,23 @@ func (q *Queries) UpsertCharacter(ctx context.Context, arg UpsertCharacterParams
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const upsertSDEMeta = `-- name: UpsertSDEMeta :exec
+INSERT INTO sde_meta (key, value)
+VALUES (?, ?)
+ON CONFLICT (key) DO UPDATE SET
+    value = excluded.value
+`
+
+type UpsertSDEMetaParams struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+func (q *Queries) UpsertSDEMeta(ctx context.Context, arg UpsertSDEMetaParams) error {
+	_, err := q.db.ExecContext(ctx, upsertSDEMeta, arg.Key, arg.Value)
+	return err
 }
 
 const upsertSnapshot = `-- name: UpsertSnapshot :exec

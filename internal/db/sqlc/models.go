@@ -29,6 +29,46 @@ type CharacterSnapshot struct {
 	CachedUntil sql.NullString `json:"cached_until"`
 }
 
+type SdeCategory struct {
+	CategoryID int64  `json:"category_id"`
+	Name       string `json:"name"`
+}
+
+type SdeGroup struct {
+	GroupID    int64  `json:"group_id"`
+	Name       string `json:"name"`
+	CategoryID int64  `json:"category_id"`
+}
+
+type SdeMetum struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+type SdeRegion struct {
+	RegionID int64  `json:"region_id"`
+	Name     string `json:"name"`
+}
+
+type SdeStation struct {
+	StationID int64  `json:"station_id"`
+	Name      string `json:"name"`
+	SystemID  int64  `json:"system_id"`
+}
+
+type SdeSystem struct {
+	SystemID int64   `json:"system_id"`
+	Name     string  `json:"name"`
+	RegionID int64   `json:"region_id"`
+	Security float64 `json:"security"`
+}
+
+type SdeType struct {
+	TypeID  int64  `json:"type_id"`
+	Name    string `json:"name"`
+	GroupID int64  `json:"group_id"`
+}
+
 type TypeName struct {
 	TypeID int64  `json:"type_id"`
 	Name   string `json:"name"`

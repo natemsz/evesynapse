@@ -11,6 +11,13 @@
 // CachedTypeGroups, CachedGroupNames, CachedPlaceName) that never
 // touches the network, so page renders can never block on ESI.
 //
+// "Local" now means, in order: the in-process maps, the SDE static
+// data tables (sde_types/sde_groups/sde_stations/sde_systems — the
+// app's local copy of CCP's data dump, the primary source), then
+// the type_names drip-feed table. The network tier still exists
+// below all three for anything the SDE lacks (notably
+// player-structure names).
+//
 // The client performs no account logic of its own: turning a
 // character row into a usable access token is the caller's job,
 // injected at construction (see TokenFunc), so this package never
@@ -29,6 +36,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -512,8 +520,9 @@ func (c *Client) GetCached(ctx context.Context, ch db.Character, kind string, ou
 const maxTypeNameLookups = 60
 
 // TypeName returns the display name for one EVE type ID, consulting
-// the in-process map, then the type_names table, then ESI (public
-// endpoint, unauthenticated). Falls back to "Type #<id>".
+// the in-process map, then the SDE tables, then the type_names
+// table, then ESI (public endpoint, unauthenticated). Falls back
+// to "Type #<id>".
 func (c *Client) TypeName(ctx context.Context, id int64) string {
 	names := c.ResolveTypeNames(ctx, []int64{id})
 	if name, ok := names[id]; ok {
@@ -522,10 +531,11 @@ func (c *Client) TypeName(ctx context.Context, id int64) string {
 	return fmt.Sprintf("Type #%d", id)
 }
 
-// ResolveTypeNames resolves a batch of type IDs. Cached names (memory,
-// then DB) are returned for everything requested; uncached IDs are
-// fetched from ESI, at most maxTypeNameLookups per call, and persisted.
-// Names that can't be resolved are simply absent from the result.
+// ResolveTypeNames resolves a batch of type IDs. Cached names
+// (memory, then the SDE tables, then the type_names table) are
+// returned for everything requested; uncached IDs are fetched from
+// ESI, at most maxTypeNameLookups per call, and persisted. Names
+// that can't be resolved are simply absent from the result.
 func (c *Client) ResolveTypeNames(ctx context.Context, ids []int64) map[int64]string {
 	out := make(map[int64]string, len(ids))
 
@@ -551,8 +561,19 @@ func (c *Client) ResolveTypeNames(ctx context.Context, ids []int64) map[int64]st
 	}
 	c.typeNamesMu.RUnlock()
 
-	var fetch []int64
+	// The SDE tables are the primary source; the type_names
+	// drip-feed table is only a fallback overlay now.
+	var unstored []int64
 	for _, id := range missing {
+		if row, ok := c.sdeType(ctx, id); ok && row.Name != "" {
+			out[id] = row.Name
+		} else {
+			unstored = append(unstored, id)
+		}
+	}
+
+	var fetch []int64
+	for _, id := range unstored {
 		if name, err := c.queries.GetTypeName(ctx, id); err == nil && name != "" {
 			out[id] = name
 			c.typeNamesMu.Lock()
@@ -602,14 +623,77 @@ func (c *Client) StoreTypeName(ctx context.Context, id int64, t Type) {
 	}
 }
 
+// cacheType records a name (and its group link, when known) in the
+// in-process caches only. Unlike StoreTypeName it writes nothing to
+// the type_names table — SDE-derived names already live in
+// sde_types.
+func (c *Client) cacheType(id int64, name string, groupID int64) {
+	if name != "" {
+		c.typeNamesMu.Lock()
+		c.typeNames[id] = name
+		c.typeNamesMu.Unlock()
+	}
+	if groupID > 0 {
+		c.typeGroupsMu.Lock()
+		c.typeGroups[id] = groupID
+		c.typeGroupsMu.Unlock()
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SDE lookups: the local static-data tables are the primary name
+// source now. Every helper treats a miss (or no import yet) as a
+// plain "not found" — the type_names table and the network tier
+// remain below as fallback.
+// ---------------------------------------------------------------------------
+
+// sdeType looks one type up in sde_types, filling the in-process
+// caches (name + group link) on a hit.
+func (c *Client) sdeType(ctx context.Context, id int64) (db.SdeType, bool) {
+	row, err := c.queries.GetSDEType(ctx, id)
+	if err != nil {
+		return db.SdeType{}, false
+	}
+	c.cacheType(row.TypeID, row.Name, row.GroupID)
+	return row, true
+}
+
+// sdeGroupName looks one group up in sde_groups, filling the
+// in-process group-name cache on a hit.
+func (c *Client) sdeGroupName(ctx context.Context, id int64) (string, bool) {
+	row, err := c.queries.GetSDEGroup(ctx, id)
+	if err != nil || row.Name == "" {
+		return "", false
+	}
+	c.StoreGroupName(id, row.Name)
+	return row.Name, true
+}
+
+// sdePlaceName looks a station or system ID up in the SDE tables
+// (stations first — asset locations are usually stations; the ID
+// spaces don't collide in practice), filling the place cache on a
+// hit.
+func (c *Client) sdePlaceName(ctx context.Context, id int64) (string, bool) {
+	if row, err := c.queries.GetSDEStation(ctx, id); err == nil && row.Name != "" {
+		c.StorePlaceName(id, row.Name)
+		return row.Name, true
+	}
+	if row, err := c.queries.GetSDESystem(ctx, id); err == nil && row.Name != "" {
+		c.StorePlaceName(id, row.Name)
+		return row.Name, true
+	}
+	return "", false
+}
+
 // maxTypeGroupLookups bounds the number of ESI /universe/types
 // lookups a single ResolveTypeGroups call will make.
 const maxTypeGroupLookups = 60
 
 // ResolveTypeGroups resolves type ID → group ID for a batch of
 // types, from the in-process cache first (populated as a side
-// effect of ResolveTypeNames fetches), then ESI, bounded per call.
-// Types whose group can't be resolved are absent from the result.
+// effect of ResolveTypeNames fetches), then the SDE tables, then
+// ESI, bounded per call. Types whose group can't be resolved are
+// absent from the result.
 func (c *Client) ResolveTypeGroups(ctx context.Context, ids []int64) map[int64]int64 {
 	out := make(map[int64]int64, len(ids))
 
@@ -634,8 +718,17 @@ func (c *Client) ResolveTypeGroups(ctx context.Context, ids []int64) map[int64]i
 	}
 	c.typeGroupsMu.RUnlock()
 
-	lookups := 0
+	var fetch []int64
 	for _, id := range missing {
+		if row, ok := c.sdeType(ctx, id); ok && row.GroupID > 0 {
+			out[id] = row.GroupID
+		} else {
+			fetch = append(fetch, id)
+		}
+	}
+
+	lookups := 0
+	for _, id := range fetch {
 		if lookups >= maxTypeGroupLookups {
 			break
 		}
@@ -660,11 +753,12 @@ func (c *Client) ResolveTypeGroups(ctx context.Context, ids []int64) map[int64]i
 // lookups a single ResolveGroupNames call will make.
 const maxGroupNameLookups = 40
 
-// ResolveGroupNames resolves skill-group ID → display name via
-// GET /universe/groups/{id}/ (public), cached in-process, capped
-// per call. This is the network tier — page renders use
-// CachedGroupNames instead; unresolved groups are absent from
-// the result and the caller falls back to "Group #<id>".
+// ResolveGroupNames resolves skill-group ID → display name from the
+// in-process cache, then the SDE tables, then GET
+// /universe/groups/{id}/ (public), capped per call. This is the
+// network tier — page renders use CachedGroupNames instead;
+// unresolved groups are absent from the result and the caller
+// falls back to "Group #<id>".
 func (c *Client) ResolveGroupNames(ctx context.Context, ids []int64) map[int64]string {
 	out := make(map[int64]string, len(ids))
 
@@ -682,8 +776,17 @@ func (c *Client) ResolveGroupNames(ctx context.Context, ids []int64) map[int64]s
 	}
 	c.groupNamesMu.Unlock()
 
-	lookups := 0
+	var fetch []int64
 	for _, id := range missing {
+		if name, ok := c.sdeGroupName(ctx, id); ok {
+			out[id] = name
+		} else {
+			fetch = append(fetch, id)
+		}
+	}
+
+	lookups := 0
+	for _, id := range fetch {
 		if lookups >= maxGroupNameLookups {
 			break
 		}
@@ -704,8 +807,9 @@ func (c *Client) ResolveGroupNames(ctx context.Context, ids []int64) map[int64]s
 	return out
 }
 
-// PlaceName resolves a station or solar-system ID to its name via
-// public ESI, caching successes in-process (the data is stable).
+// PlaceName resolves a station or solar-system ID to its name,
+// consulting the in-process cache, then the SDE tables, then
+// public ESI (successes cached in-process — the data is stable).
 // This is the network tier: renders use CachedPlaceName instead;
 // the market page's interactive order lookups still come here.
 func (c *Client) PlaceName(ctx context.Context, path string, id int64, fallback string) string {
@@ -714,6 +818,19 @@ func (c *Client) PlaceName(ctx context.Context, path string, id int64, fallback 
 	c.placeMu.Unlock()
 	if ok {
 		return name
+	}
+
+	// The SDE table matching the path's collection.
+	if strings.Contains(path, "/stations/") {
+		if row, err := c.queries.GetSDEStation(ctx, id); err == nil && row.Name != "" {
+			c.StorePlaceName(id, row.Name)
+			return row.Name
+		}
+	} else if strings.Contains(path, "/systems/") {
+		if row, err := c.queries.GetSDESystem(ctx, id); err == nil && row.Name != "" {
+			c.StorePlaceName(id, row.Name)
+			return row.Name
+		}
 	}
 
 	var place Station
@@ -733,11 +850,13 @@ func (c *Client) PlaceName(ctx context.Context, path string, id int64, fallback 
 
 // ---------------------------------------------------------------------------
 // Cache-only resolution: the render-path tier. These consult the
-// in-process maps and the type_names table ONLY — never the network.
+// in-process maps, the SDE tables, and the type_names table ONLY —
+// never the network.
 // ---------------------------------------------------------------------------
 
-// CachedTypeNames resolves type IDs from the in-process map, then the
-// type_names table. Zero network. Unresolved IDs are absent.
+// CachedTypeNames resolves type IDs from the in-process map, then
+// the SDE tables, then the type_names table. Zero network.
+// Unresolved IDs are absent.
 func (c *Client) CachedTypeNames(ctx context.Context, ids []int64) map[int64]string {
 	out := make(map[int64]string, len(ids))
 
@@ -762,7 +881,16 @@ func (c *Client) CachedTypeNames(ctx context.Context, ids []int64) map[int64]str
 	}
 	c.typeNamesMu.RUnlock()
 
+	var unstored []int64
 	for _, id := range missing {
+		if row, ok := c.sdeType(ctx, id); ok && row.Name != "" {
+			out[id] = row.Name
+		} else {
+			unstored = append(unstored, id)
+		}
+	}
+
+	for _, id := range unstored {
 		if name, err := c.queries.GetTypeName(ctx, id); err == nil && name != "" {
 			out[id] = name
 			c.typeNamesMu.Lock()
@@ -783,27 +911,44 @@ func (c *Client) CachedTypeName(ctx context.Context, id int64) string {
 }
 
 // CachedTypeGroups resolves type ID → group ID from the in-process
-// cache only (populated by network fetches the worker performs).
+// cache, then the SDE tables (populated by network fetches the
+// worker performs, for anything the SDE lacks).
 func (c *Client) CachedTypeGroups(ctx context.Context, ids []int64) map[int64]int64 {
 	out := make(map[int64]int64, len(ids))
 	c.typeGroupsMu.RLock()
-	defer c.typeGroupsMu.RUnlock()
+	var missing []int64
 	for _, id := range ids {
 		if gid, ok := c.typeGroups[id]; ok {
 			out[id] = gid
+		} else {
+			missing = append(missing, id)
+		}
+	}
+	c.typeGroupsMu.RUnlock()
+	for _, id := range missing {
+		if row, ok := c.sdeType(ctx, id); ok && row.GroupID > 0 {
+			out[id] = row.GroupID
 		}
 	}
 	return out
 }
 
 // CachedGroupNames resolves group ID → name from the in-process
-// cache only.
+// cache, then the SDE tables.
 func (c *Client) CachedGroupNames(ctx context.Context, ids []int64) map[int64]string {
 	out := make(map[int64]string, len(ids))
 	c.groupNamesMu.Lock()
-	defer c.groupNamesMu.Unlock()
+	var missing []int64
 	for _, id := range ids {
 		if name, ok := c.groupNames[id]; ok {
+			out[id] = name
+		} else {
+			missing = append(missing, id)
+		}
+	}
+	c.groupNamesMu.Unlock()
+	for _, id := range missing {
+		if name, ok := c.sdeGroupName(ctx, id); ok {
 			out[id] = name
 		}
 	}
@@ -811,12 +956,15 @@ func (c *Client) CachedGroupNames(ctx context.Context, ids []int64) map[int64]st
 }
 
 // CachedPlaceName resolves a station/system ID from the in-process
-// place-name cache only.
-func (c *Client) CachedPlaceName(id int64) (string, bool) {
+// place-name cache, then the SDE tables.
+func (c *Client) CachedPlaceName(ctx context.Context, id int64) (string, bool) {
 	c.placeMu.Lock()
-	defer c.placeMu.Unlock()
 	name, ok := c.placeNames[id]
-	return name, ok
+	c.placeMu.Unlock()
+	if ok {
+		return name, true
+	}
+	return c.sdePlaceName(ctx, id)
 }
 
 // StoreGroupName records a group name in the in-process cache (the

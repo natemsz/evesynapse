@@ -1,0 +1,40 @@
+{{define "title"}}Corporation Members{{end}}
+{{define "content"}}
+<h1>Corporation Members</h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .CorpChars}}
+<p>{{range $i, $c := .CorpChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/corporations/members/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
+{{end}}
+
+{{if .CorpMembers}}
+<h2>{{.CorpMembers.CorpTitle}}{{if .CorpMembers.MemberCount}} · {{.CorpMembers.MemberCount}} members{{end}}</h2>
+<p><small><a href="/corporations/">Overview</a> · Members · <a href="/corporations/wallets/?character={{.CorpMembers.CharacterID}}">Wallets</a> · <a href="/corporations/orders/?character={{.CorpMembers.CharacterID}}">Orders</a> · <a href="/corporations/assets/?character={{.CorpMembers.CharacterID}}">Assets</a> · <a href="/corporations/structures/?character={{.CorpMembers.CharacterID}}">Structures</a> · <a href="/corporations/killmails/?character={{.CorpMembers.CharacterID}}">Killmails</a></small></p>
+
+  {{if .CorpMembers.Forbidden}}
+  {{if .CorpMembers.RoleMissing}}
+  <p>Needs the <b>{{.CorpMembers.RoleMissing}}</b> role in-game — {{.CorpMembers.CharacterName}} doesn't hold it, so ESI won't share this corporation's member list. It appears here once they do.</p>
+  {{else}}
+  <p>Membership was refused by ESI (403) — this list appears once {{.CorpMembers.CharacterName}} is a member of this corporation again.</p>
+  {{end}}
+  {{else if .CorpMembers.Warming}}
+  <p>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</p>
+  {{else if .CorpMembers.Loaded}}
+  {{if .CorpMembers.TrackingNote}}<p><small>{{.CorpMembers.TrackingNote}}</small></p>{{end}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>Member</th><th>Joined</th><th>Last login</th><th>Current ship</th><th>Location</th></tr></thead>
+    <tbody>
+    {{range .CorpMembers.Rows}}
+      <tr><td>{{.Name}}</td><td>{{.Joined}}</td><td>{{.LastSeen}}</td><td>{{.Ship}}</td><td>{{.Location}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  <p><small>Login, ship and location columns come from member tracking, which needs the Director role in-game.</small></p>
+  {{end}}
+{{else}}
+  <p>No corporation to show yet — link a character first.</p>
+{{end}}
+{{end}}

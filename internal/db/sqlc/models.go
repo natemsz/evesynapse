@@ -21,12 +21,23 @@ type Character struct {
 	UpdatedAt    string         `json:"updated_at"`
 }
 
+type CharacterCorporation struct {
+	CharacterID   int64  `json:"character_id"`
+	CorporationID int64  `json:"corporation_id"`
+	UpdatedAt     string `json:"updated_at"`
+}
+
 type CharacterSnapshot struct {
 	CharacterID int64          `json:"character_id"`
 	Kind        string         `json:"kind"`
 	Payload     string         `json:"payload"`
 	FetchedAt   string         `json:"fetched_at"`
 	CachedUntil sql.NullString `json:"cached_until"`
+}
+
+type ItemName struct {
+	ItemID int64  `json:"item_id"`
+	Name   string `json:"name"`
 }
 
 type KillmailDetail struct {
@@ -75,6 +86,14 @@ type SdeType struct {
 	TypeID  int64  `json:"type_id"`
 	Name    string `json:"name"`
 	GroupID int64  `json:"group_id"`
+}
+
+type SnapshotFetchState struct {
+	CharacterID int64  `json:"character_id"`
+	Kind        string `json:"kind"`
+	State       string `json:"state"`
+	Detail      string `json:"detail"`
+	AttemptedAt string `json:"attempted_at"`
 }
 
 type TypeName struct {

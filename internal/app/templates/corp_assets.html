@@ -1,0 +1,44 @@
+{{define "title"}}Corporation Assets{{end}}
+{{define "content"}}
+<h1>Corporation Assets</h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .CorpChars}}
+<p>{{range $i, $c := .CorpChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/corporations/assets/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
+{{end}}
+
+{{if .CorpAssets}}
+<h2>{{.CorpAssets.CorpTitle}}</h2>
+<p><small><a href="/corporations/">Overview</a> · <a href="/corporations/members/?character={{.CorpAssets.CharacterID}}">Members</a> · <a href="/corporations/wallets/?character={{.CorpAssets.CharacterID}}">Wallets</a> · <a href="/corporations/orders/?character={{.CorpAssets.CharacterID}}">Orders</a> · Assets · <a href="/corporations/structures/?character={{.CorpAssets.CharacterID}}">Structures</a> · <a href="/corporations/killmails/?character={{.CorpAssets.CharacterID}}">Killmails</a></small></p>
+
+  {{if .CorpAssets.Forbidden}}
+  {{if .CorpAssets.RoleMissing}}
+  <p>Needs the <b>{{.CorpAssets.RoleMissing}}</b> role in-game — {{.CorpAssets.CharacterName}} doesn't hold it, so ESI won't share this corporation's assets. They appear here once they do.</p>
+  {{else}}
+  <p>Assets were refused by ESI (403) — they appear here once {{.CorpAssets.CharacterName}} holds the Director role in this corporation.</p>
+  {{end}}
+  {{else if .CorpAssets.Warming}}
+  <p>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</p>
+  {{else if .CorpAssets.Loaded}}
+  <p><small>{{.CorpAssets.Stacks}} stacks · {{.CorpAssets.TotalItems}} items · {{len .CorpAssets.Locations}} locations</small></p>
+  {{range .CorpAssets.Locations}}
+    <h3>{{.Title}}</h3>
+    <div class="tw">
+    <table>
+      <thead><tr><th>Item</th><th>Quantity</th><th>Note</th></tr></thead>
+      <tbody>
+      {{range .Items}}
+        <tr><td>{{.Name}}</td><td>{{.Quantity}}</td><td>{{.Note}}</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+    </div>
+    {{if .MoreStacks}}<p><small>+ {{.MoreStacks}} more stacks</small></p>{{end}}
+  {{end}}
+  <p><small>Ships and renamed containers show their player-given names once the worker has resolved them; other items show their type names.</small></p>
+  {{end}}
+{{else}}
+  <p>No corporation to show yet — link a character first.</p>
+{{end}}
+{{end}}

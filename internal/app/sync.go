@@ -12,10 +12,19 @@ import (
 
 // syncKindOrder fixes the snapshot-kind display order on the Sync
 // page (ListSnapshotsByCharacter orders alphabetically instead).
+// The corporation kinds (corpSnapshotKinds, including the
+// per-division wallet kinds) follow the character kinds.
 var syncKindOrder = []string{
 	esi.SnapSkills, esi.SnapSkillqueue, esi.SnapWallet, esi.SnapAssets,
 	esi.SnapLocation, esi.SnapShip, esi.SnapOnline, esi.SnapClones,
 	esi.SnapImplants, esi.SnapFittings, esi.SnapFatigue, esi.SnapKillmails,
+}
+
+// syncDisplayKinds is the full Sync-page kind list: character
+// kinds, then corporation kinds.
+func syncDisplayKinds() []string {
+	kinds := append([]string(nil), syncKindOrder...)
+	return append(kinds, corpSnapshotKinds()...)
 }
 
 // syncSnapshotRow is one snapshot kind's cache state for a character.
@@ -112,7 +121,19 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		for _, kind := range syncKindOrder {
+		// Recorded fetch outcomes (corporation role refusals and
+		// errors) so a missing snapshot explains itself instead of
+		// looking like an endless warm-up.
+		fetchStates := make(map[string]db.SnapshotFetchState)
+		if rows, err := app.queries.ListSnapshotFetchStatesByCharacter(ctx, ch.CharacterID); err != nil {
+			log.Printf("sync: list fetch states for character %d: %v", ch.CharacterID, err)
+		} else {
+			for _, fs := range rows {
+				fetchStates[fs.Kind] = fs
+			}
+		}
+
+		for _, kind := range syncDisplayKinds() {
 			row := syncSnapshotRow{Kind: kind, State: "Missing", FetchedAt: "—", CachedUntil: "—"}
 			if snap, ok := byKind[kind]; ok {
 				row.FetchedAt = snap.FetchedAt
@@ -124,6 +145,16 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 				} else {
 					row.State = "Stale"
 				}
+			} else if fs, ok := fetchStates[kind]; ok && fs.State == fetchStateRoleMissing {
+				row.State = "Role missing"
+				row.FetchedAt = "—"
+				row.CachedUntil = "needs the " + fs.Detail + " role"
+				if fs.Detail == "" {
+					row.CachedUntil = "refused by ESI (403)"
+				}
+			} else if fs, ok := fetchStates[kind]; ok && fs.State == fetchStateError {
+				row.State = "Error"
+				row.CachedUntil = fs.Detail
 			}
 			cv.Snapshots = append(cv.Snapshots, row)
 		}

@@ -1,0 +1,43 @@
+{{define "title"}}Corporation Orders{{end}}
+{{define "content"}}
+<h1>Corporation Orders</h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .CorpChars}}
+<p>{{range $i, $c := .CorpChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/corporations/orders/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
+{{end}}
+
+{{if .CorpOrders}}
+<h2>{{.CorpOrders.CorpTitle}}</h2>
+<p><small><a href="/corporations/">Overview</a> · <a href="/corporations/members/?character={{.CorpOrders.CharacterID}}">Members</a> · <a href="/corporations/wallets/?character={{.CorpOrders.CharacterID}}">Wallets</a> · Orders · <a href="/corporations/assets/?character={{.CorpOrders.CharacterID}}">Assets</a> · <a href="/corporations/structures/?character={{.CorpOrders.CharacterID}}">Structures</a> · <a href="/corporations/killmails/?character={{.CorpOrders.CharacterID}}">Killmails</a></small></p>
+
+  {{if .CorpOrders.Forbidden}}
+  {{if .CorpOrders.RoleMissing}}
+  <p>Needs the <b>{{.CorpOrders.RoleMissing}}</b> role in-game — {{.CorpOrders.CharacterName}} doesn't hold it, so ESI won't share this corporation's open orders. They appear here once they do.</p>
+  {{else}}
+  <p>Open orders were refused by ESI (403) — they appear here once {{.CorpOrders.CharacterName}} holds a market role in this corporation.</p>
+  {{end}}
+  {{else if .CorpOrders.Warming}}
+  <p>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</p>
+  {{else if .CorpOrders.Loaded}}
+  {{if .CorpOrders.Rows}}
+  <p><small>{{len .CorpOrders.Rows}} open orders</small></p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Item</th><th>Side</th><th>Price</th><th>Volume left</th><th>Location</th><th>Region</th><th>Expires</th><th>Issued by</th></tr></thead>
+    <tbody>
+    {{range .CorpOrders.Rows}}
+      <tr><td>{{.Item}}</td><td>{{.Side}}</td><td>{{.Price}} ISK</td><td>{{.Volume}}</td><td>{{.Location}}</td><td>{{.Region}}</td><td>{{.Expires}}</td><td>{{.IssuedBy}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else}}
+  <p><small>No open corporation orders.</small></p>
+  {{end}}
+  {{end}}
+{{else}}
+  <p>No corporation to show yet — link a character first.</p>
+{{end}}
+{{end}}

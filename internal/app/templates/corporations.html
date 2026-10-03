@@ -20,6 +20,14 @@
     </tbody>
   </table>
   </div>
+  {{if .LinkCharacterID}}<p><small>Corporation details:
+    <a href="/corporations/members/?character={{.LinkCharacterID}}">Members</a> ·
+    <a href="/corporations/wallets/?character={{.LinkCharacterID}}">Wallets</a> ·
+    <a href="/corporations/orders/?character={{.LinkCharacterID}}">Orders</a> ·
+    <a href="/corporations/assets/?character={{.LinkCharacterID}}">Assets</a> ·
+    <a href="/corporations/structures/?character={{.LinkCharacterID}}">Structures</a> ·
+    <a href="/corporations/killmails/?character={{.LinkCharacterID}}">Killmails</a>
+  </small></p>{{end}}
   {{if .Description}}<h3>About</h3><p class="corp-desc">{{.Description}}</p>{{end}}
 {{else}}
   <p>No corporations to show yet — link a character first.</p>

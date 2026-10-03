@@ -186,3 +186,51 @@ ON CONFLICT (killmail_id) DO UPDATE SET
     hash         = excluded.hash,
     payload      = excluded.payload,
     fetched_at   = excluded.fetched_at;
+
+-- ---------------------------------------------------------------------
+-- Module sweep, cluster 2 (schema 005): corporation support.
+-- Fetch-outcome log (role-missing state), character-to-corporation
+-- map, and player-given item names.
+-- ---------------------------------------------------------------------
+
+-- name: GetSnapshotFetchState :one
+SELECT * FROM snapshot_fetch_state
+WHERE character_id = ? AND kind = ?;
+
+-- name: ListSnapshotFetchStatesByCharacter :many
+SELECT * FROM snapshot_fetch_state
+WHERE character_id = ?
+ORDER BY kind;
+
+-- name: UpsertSnapshotFetchState :exec
+INSERT INTO snapshot_fetch_state (character_id, kind, state, detail, attempted_at)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (character_id, kind) DO UPDATE SET
+    state        = excluded.state,
+    detail       = excluded.detail,
+    attempted_at = excluded.attempted_at;
+
+-- name: GetCharacterCorporation :one
+SELECT * FROM character_corporations
+WHERE character_id = ?;
+
+-- name: UpsertCharacterCorporation :exec
+INSERT INTO character_corporations (character_id, corporation_id, updated_at)
+VALUES (?, ?, ?)
+ON CONFLICT (character_id) DO UPDATE SET
+    corporation_id = excluded.corporation_id,
+    updated_at     = excluded.updated_at;
+
+-- name: GetItemName :one
+SELECT name FROM item_names
+WHERE item_id = ?;
+
+-- name: ListItemNames :many
+SELECT item_id, name FROM item_names
+ORDER BY item_id;
+
+-- name: UpsertItemName :exec
+INSERT INTO item_names (item_id, name)
+VALUES (?, ?)
+ON CONFLICT (item_id) DO UPDATE SET
+    name = excluded.name;

@@ -1,11 +1,11 @@
 {{define "title"}}Killmails{{end}}
 {{define "content"}}
-<h1>Killmails</h1>
+<h1>{{if .Killmails}}{{.Killmails.Title}}{{else}}Killmails{{end}}</h1>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{if .KillmailChars}}
-<p>{{range $i, $c := .KillmailChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/killmails/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
+<p>{{range $i, $c := .KillmailChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="{{$.Killmails.BasePath}}?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
 {{end}}
 
 {{if .Killmails}}
@@ -32,10 +32,12 @@
   </div>
   <p><small>Estimated value covers destroyed and dropped items at CCP average prices, once the price cache has been populated by a Market visit.</small></p>
   {{else}}
-  <p><small>No recent killmails for this character.</small></p>
+  <p><small>No recent killmails for {{.Killmails.Subject}}.</small></p>
   {{end}}
   {{else}}
-  {{if .Killmails.Warming}}
+  {{if .Killmails.RoleMissing}}
+  <p>Needs the <b>{{.Killmails.RoleMissing}}</b> role in-game — {{.Killmails.CharacterName}} doesn't hold it, so ESI won't share {{.Killmails.Subject}}'s recent killmails. The list appears here once they do.</p>
+  {{else if .Killmails.Warming}}
   <p>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</p>
   {{else}}
   <p><small>Killmails are unavailable right now — check the server log.</small></p>

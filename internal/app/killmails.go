@@ -40,11 +40,19 @@ type killmailRow struct {
 	Warming   bool
 }
 
-// killmailsView is the Killmails page body for one character.
+// killmailsView is the killmails page body; one shape serves both
+// the character view (cluster 1) and the corporation view
+// (cluster 2), which share this page and the killmail_details
+// store — only the kill/loss test differs (see killmailViewer).
 type killmailsView struct {
-	CharacterName string
+	CharacterName string // viewing character (switcher + copy)
+	Title         string // page heading
+	BasePath      string // switcher link base: /killmails/ | /corporations/killmails/
+	Subject       string // "this character" | "this corporation" (copy)
+	CorpID        int64  // corporation view: the corporation's ID
 	Loaded        bool
-	Warming       bool // no recent-list snapshot yet at all
+	Warming       bool   // no recent-list snapshot yet at all
+	RoleMissing   string // in-game role label when ESI refused the list (corp view only)
 	Rows          []killmailRow
 }
 
@@ -71,7 +79,12 @@ func (app *Application) handleKillmails(w http.ResponseWriter, r *http.Request) 
 	}
 	data.KillmailChars = links
 
-	view := &killmailsView{CharacterName: active.Name}
+	view := &killmailsView{
+		CharacterName: active.Name,
+		Title:         active.Name + " — Killmails",
+		BasePath:      "/killmails/",
+		Subject:       "this character",
+	}
 	data.Killmails = view
 
 	var refs []esi.KillmailRef
@@ -95,17 +108,29 @@ func (app *Application) handleKillmails(w http.ResponseWriter, r *http.Request) 
 	// cache when it has been populated; nothing here fetches.
 	prices := app.cachedPrices()
 
+	viewer := killmailViewer{characterID: active.CharacterID}
 	for _, ref := range refs {
-		view.Rows = append(view.Rows, app.killmailRow(ctx, active.CharacterID, ref, prices))
+		view.Rows = append(view.Rows, app.killmailRow(ctx, viewer, ref, prices))
 	}
 
 	app.render(w, http.StatusOK, "killmails.html", data)
 }
 
+// killmailViewer decides a row's KILL/LOSS badge: the character
+// view marks mails whose victim is the viewing character; the
+// corporation view marks mails whose victim belongs to the
+// corporation. Memory says character and corporation IDs share
+// EVE's numeric space in theory, so the two IDs travel in
+// separate fields and are never compared cross-wise.
+type killmailViewer struct {
+	characterID   int64 // character view (0 in the corp view)
+	corporationID int64 // corp view (0 in the character view)
+}
+
 // killmailRow builds one list line from the stored detail. A
 // missing detail (worker has not warmed it yet) yields the
 // warming placeholder row.
-func (app *Application) killmailRow(ctx context.Context, characterID int64, ref esi.KillmailRef, prices map[int64]esi.MarketPrice) killmailRow {
+func (app *Application) killmailRow(ctx context.Context, viewer killmailViewer, ref esi.KillmailRef, prices map[int64]esi.MarketPrice) killmailRow {
 	row := killmailRow{
 		Time:      "—",
 		System:    "—",
@@ -133,7 +158,11 @@ func (app *Application) killmailRow(ctx context.Context, characterID int64, ref 
 
 	row.Time = formatFinish(km.KillmailTime)
 	row.System = app.locationTitle(ctx, km.SolarSystemID, "solar_system")
-	if km.Victim.CharacterID == characterID {
+	isLoss := km.Victim.CharacterID == viewer.characterID
+	if viewer.corporationID > 0 {
+		isLoss = km.Victim.CorporationID == viewer.corporationID
+	}
+	if isLoss {
 		row.Loss = true
 	} else {
 		row.Kill = true

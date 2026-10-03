@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -202,6 +203,20 @@ func (app *Application) refreshCycle(ctx context.Context) {
 			refreshed += warmed
 			if ltd {
 				log.Printf("worker: ESI error limit hit warming killmail details for character %d; backing off until next cycle", ch.CharacterID)
+				limited = true
+			}
+		}
+
+		// Corporation datasets: the corp_* snapshots behind the
+		// corporation subpages, plus the details behind the corp's
+		// recent killmail list (corp_worker.go). 403 role refusals
+		// are recorded state there, not failures.
+		if !limited {
+			refreshed += app.refreshCorpSnapshots(ctx, ch)
+			warmed, ltd := app.warmCorpKillmailDetails(ctx, ch)
+			refreshed += warmed
+			if ltd {
+				log.Printf("worker: ESI error limit hit warming corp killmail details for character %d; backing off until next cycle", ch.CharacterID)
 				limited = true
 			}
 		}
@@ -411,6 +426,7 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 
 	typeIDs := make(map[int64]bool)
 	placeKinds := make(map[int64]string) // location id -> "station"|"solar_system"
+	charIDs := make(map[int64]bool)      // character names (killmail people + corp rosters)
 	for _, snap := range snaps {
 		switch snap.Kind {
 		case esi.SnapSkills:
@@ -432,6 +448,91 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 				typeIDs[it.TypeID] = true
 				if it.LocationType == "station" || it.LocationType == "solar_system" {
 					placeKinds[it.LocationID] = it.LocationType
+				}
+			}
+		case esi.SnapCorpMembers:
+			// The roster's names resolve through the same cache.
+			var members esi.CorpMembers
+			if err := json.Unmarshal([]byte(snap.Payload), &members); err != nil {
+				log.Printf("worker: warm names for character %d: decode corp members snapshot: %v", ch.CharacterID, err)
+				continue
+			}
+			for _, id := range members {
+				if id > 0 {
+					charIDs[id] = true
+				}
+			}
+		case esi.SnapCorpMemberTracking:
+			var tracking esi.CorpMemberTrackings
+			if err := json.Unmarshal([]byte(snap.Payload), &tracking); err != nil {
+				log.Printf("worker: warm names for character %d: decode corp membertracking snapshot: %v", ch.CharacterID, err)
+				continue
+			}
+			for _, t := range tracking {
+				if t.CharacterID > 0 {
+					charIDs[t.CharacterID] = true
+				}
+				if t.ShipTypeID > 0 {
+					typeIDs[t.ShipTypeID] = true
+				}
+			}
+		case esi.SnapCorpAssets:
+			// Same payload shape as character assets.
+			var items []esi.Asset
+			if err := json.Unmarshal([]byte(snap.Payload), &items); err != nil {
+				log.Printf("worker: warm names for character %d: decode corp assets snapshot: %v", ch.CharacterID, err)
+				continue
+			}
+			for _, it := range items {
+				typeIDs[it.TypeID] = true
+				if it.LocationType == "station" || it.LocationType == "solar_system" {
+					placeKinds[it.LocationID] = it.LocationType
+				}
+			}
+		case esi.SnapCorpOrders:
+			var orders esi.CorpOrders
+			if err := json.Unmarshal([]byte(snap.Payload), &orders); err != nil {
+				log.Printf("worker: warm names for character %d: decode corp orders snapshot: %v", ch.CharacterID, err)
+				continue
+			}
+			for _, o := range orders {
+				typeIDs[o.TypeID] = true
+			}
+		case esi.SnapCorpStructures:
+			var structures esi.CorpStructures
+			if err := json.Unmarshal([]byte(snap.Payload), &structures); err != nil {
+				log.Printf("worker: warm names for character %d: decode corp structures snapshot: %v", ch.CharacterID, err)
+				continue
+			}
+			for _, s := range structures {
+				if s.TypeID > 0 {
+					typeIDs[s.TypeID] = true
+				}
+			}
+		default:
+			// Per-division wallet ledgers: counterparties and
+			// journal parties resolve through the same cache.
+			if strings.HasPrefix(snap.Kind, esi.SnapCorpTxnsPrefix) {
+				var txns esi.CorpWalletTransactions
+				if err := json.Unmarshal([]byte(snap.Payload), &txns); err == nil {
+					for _, t := range txns {
+						if t.ClientID > 0 {
+							charIDs[t.ClientID] = true
+						}
+					}
+				}
+			}
+			if strings.HasPrefix(snap.Kind, esi.SnapCorpJournalPrefix) {
+				var journal esi.CorpJournal
+				if err := json.Unmarshal([]byte(snap.Payload), &journal); err == nil {
+					for _, e := range journal {
+						if e.FirstPartyID > 0 {
+							charIDs[e.FirstPartyID] = true
+						}
+						if e.SecondPartyID > 0 {
+							charIDs[e.SecondPartyID] = true
+						}
+					}
 				}
 			}
 		}
@@ -520,8 +621,8 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 
 	// Character names from this character's stored killmail
 	// details: victims and final-blow attackers, so the killmail
-	// list can label people instead of raw IDs.
-	charIDs := make(map[int64]bool)
+	// list can label people instead of raw IDs. (Corp rosters and
+	// tracking rows harvested above feed the same set.)
 	if rows, err := app.queries.ListKillmailDetailsByCharacter(ctx, ch.CharacterID); err != nil {
 		log.Printf("worker: warm names for character %d: list killmail details: %v", ch.CharacterID, err)
 	} else {
@@ -650,9 +751,17 @@ const maxKillmailDetailsPerCycle = 10
 // yet, at most maxKillmailDetailsPerCycle of them. It reports how
 // many were stored and whether ESI's error limit stopped the pass.
 // The detail endpoint is public (the hash authorizes it), so no
-// character token is involved.
+// character token is involved. The corporation pass shares this
+// machinery via warmKillmailDetailsFor.
 func (app *Application) warmKillmailDetails(ctx context.Context, ch db.Character) (fetched int, limited bool) {
-	snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: esi.SnapKillmails})
+	return app.warmKillmailDetailsFor(ctx, ch, esi.SnapKillmails)
+}
+
+// warmKillmailDetailsFor is warmKillmailDetails against an
+// arbitrary recent-list snapshot kind (the character's killmails,
+// or the corporation's).
+func (app *Application) warmKillmailDetailsFor(ctx context.Context, ch db.Character, kind string) (fetched int, limited bool) {
+	snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: kind})
 	if err != nil {
 		return 0, false // no recent list yet; nothing to warm
 	}

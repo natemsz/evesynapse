@@ -28,6 +28,12 @@ type pageData struct {
 	Killmails     *killmailsView
 	KillmailChars []assetCharLink
 	Corps         []corpView
+	CorpChars     []assetCharLink
+	CorpMembers   *corpMembersView
+	CorpWallets   *corpWalletsView
+	CorpOrders    *corpOrdersView
+	CorpAssets    *corpAssetsView
+	CorpStructs   *corpStructuresView
 	Assets        *assetsView
 	AssetsChars   []assetCharLink
 	Market        *marketView

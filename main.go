@@ -58,6 +58,11 @@ type application struct {
 	// header of the response it was built from (corporation.go).
 	corpMu    sync.Mutex
 	corpCache map[int64]corpCacheEntry
+
+	// In-process cache of station/system ID → name for asset
+	// location titles; both are stable public data (assets.go).
+	placeMu    sync.Mutex
+	placeNames map[int64]string
 }
 
 func main() {
@@ -92,12 +97,13 @@ func main() {
 	sessionManager.Cookie.Secure = false
 
 	app := &application{
-		cfg:       cfg,
-		sessions:  sessionManager,
-		queries:   db.New(dbConn),
-		jwks:      &jwksCache{},
-		typeNames: make(map[int64]string),
-		corpCache: make(map[int64]corpCacheEntry),
+		cfg:        cfg,
+		sessions:   sessionManager,
+		queries:    db.New(dbConn),
+		jwks:       &jwksCache{},
+		typeNames:  make(map[int64]string),
+		corpCache:  make(map[int64]corpCacheEntry),
+		placeNames: make(map[int64]string),
 	}
 
 	workerCtx, stopWorker := context.WithCancel(context.Background())
@@ -171,6 +177,11 @@ func (app *application) routes() http.Handler {
 	r.Route("/corporations", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleCorporations)
+	})
+
+	r.Route("/assets", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleAssets)
 	})
 
 	return r

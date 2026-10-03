@@ -20,6 +20,8 @@ type pageData struct {
 	Error         string // friendly, user-safe banner (never internals)
 	Character     *characterSheet
 	Corps         []corpView
+	Assets        *assetsView
+	AssetsChars   []assetCharLink
 	Users         []db.User
 	Characters    []db.Character
 	Snapshots     []adminSnapshotRow

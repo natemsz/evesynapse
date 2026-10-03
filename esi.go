@@ -29,6 +29,7 @@ const (
 	snapSkills     = "skills"
 	snapSkillqueue = "skillqueue"
 	snapWallet     = "wallet"
+	snapAssets     = "assets"
 )
 
 // errESIErrorLimit marks ESI's error-limit responses (420/429): callers
@@ -104,6 +105,19 @@ type esiSkillqueueEntry struct {
 // esiSkillqueue is GET /characters/{id}/skillqueue/.
 type esiSkillqueue []esiSkillqueueEntry
 
+// esiAsset is one entry of GET /characters/{id}/assets/. is_blueprint_copy
+// is only present on blueprint items; absent decodes as false.
+type esiAsset struct {
+	ItemID          int64  `json:"item_id"`
+	TypeID          int64  `json:"type_id"`
+	Quantity        int64  `json:"quantity"`
+	LocationID      int64  `json:"location_id"`
+	LocationType    string `json:"location_type"` // station|solar_system|structure|other|item
+	LocationFlag    string `json:"location_flag"`
+	IsSingleton     bool   `json:"is_singleton"`
+	IsBlueprintCopy bool   `json:"is_blueprint_copy"`
+}
+
 // esiType is the slice of GET /universe/types/{id}/ we consume.
 type esiType struct {
 	Name string `json:"name"`
@@ -163,6 +177,8 @@ func snapshotPath(characterID int64, kind string) string {
 		return fmt.Sprintf("/characters/%d/skillqueue/", characterID)
 	case snapWallet:
 		return fmt.Sprintf("/characters/%d/wallet/", characterID)
+	case snapAssets:
+		return fmt.Sprintf("/characters/%d/assets/", characterID)
 	}
 	return ""
 }
@@ -191,7 +207,15 @@ func (app *application) fetchAndStoreSnapshot(ctx context.Context, ch db.Charact
 		return nil, err
 	}
 
-	body, header, err := esiFetchRaw(ctx, token, path)
+	var body []byte
+	var header http.Header
+	if kind == snapAssets {
+		// Assets are paginated; the stored snapshot is the merged
+		// array so downstream code sees one flat list.
+		body, header, err = fetchAllPages(ctx, token, path)
+	} else {
+		body, header, err = esiFetchRaw(ctx, token, path)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -214,6 +238,55 @@ func (app *application) fetchAndStoreSnapshot(ctx context.Context, ch db.Charact
 		return nil, fmt.Errorf("store %s snapshot for character %d: %w", kind, ch.CharacterID, err)
 	}
 	return body, nil
+}
+
+// fetchAllPages GETs every page of a paginated ESI endpoint (page
+// count from the X-Pages header of the first response) and returns
+// the entries merged into a single JSON array, plus the first
+// response's headers (whose Expires drives snapshot bookkeeping).
+func fetchAllPages(ctx context.Context, token, path string) ([]byte, http.Header, error) {
+	body, header, err := esiFetchRaw(ctx, token, path)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	pages := 1
+	if xp := header.Get("X-Pages"); xp != "" {
+		if n, aerr := strconv.Atoi(xp); aerr == nil && n > 1 {
+			pages = n
+		}
+	}
+	if pages == 1 {
+		return body, header, nil
+	}
+
+	merged := []json.RawMessage{}
+	appendPage := func(b []byte) error {
+		var entries []json.RawMessage
+		if err := json.Unmarshal(b, &entries); err != nil {
+			return fmt.Errorf("ESI GET %s: decode page: %w", path, err)
+		}
+		merged = append(merged, entries...)
+		return nil
+	}
+	if err := appendPage(body); err != nil {
+		return nil, nil, err
+	}
+	for page := 2; page <= pages; page++ {
+		b, _, err := esiFetchRaw(ctx, token, fmt.Sprintf("%s?page=%d", path, page))
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := appendPage(b); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	combined, err := json.Marshal(merged)
+	if err != nil {
+		return nil, nil, fmt.Errorf("ESI GET %s: merge pages: %w", path, err)
+	}
+	return combined, header, nil
 }
 
 // getCached returns ESI data for (character, kind), decoded into out.

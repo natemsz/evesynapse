@@ -70,7 +70,7 @@ func (app *application) refreshCycle(ctx context.Context) {
 			continue
 		}
 
-		for _, kind := range []string{snapSkills, snapSkillqueue, snapWallet} {
+		for _, kind := range []string{snapSkills, snapSkillqueue, snapWallet, snapAssets} {
 			snap, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: kind})
 			switch {
 			case serr == nil && snapshotFresh(snap):

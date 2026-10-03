@@ -109,6 +109,32 @@ const (
 	SnapIndustryJobs  = "industry_jobs"
 	SnapBlueprints    = "blueprints"
 	SnapMining        = "mining"
+
+	// Phase 2 (planetary industry): the colonies list, plus one
+	// layout snapshot per planet keyed by planet id in the kind
+	// (planet_layout_<planet id>) — the same suffix keying the
+	// corporation wallet divisions use (corp_journal_3).
+	SnapPlanets            = "planets"
+	SnapPlanetLayoutPrefix = "planet_layout_"
+
+	// Phase 2 (mail): the header list (ESI's 50 most recent), the
+	// label set with per-label and total unread counts, the
+	// character's mailing lists, and one body snapshot per mail
+	// keyed by mail id (mail_body_<mail id>). Mail bodies are
+	// immutable once delivered: the worker warms each once.
+	SnapMail           = "mail"
+	SnapMailLabels     = "mail_labels"
+	SnapMailLists      = "mail_lists"
+	SnapMailBodyPrefix = "mail_body_"
+
+	// Phase 2 (calendar + contacts): event summaries (the next
+	// 50 chronological from now), one detail snapshot and one
+	// attendee-list snapshot per event (suffix-keyed like the
+	// planet layouts), and the character's contact list.
+	SnapCalendar            = "calendar"
+	SnapCalendarEventPrefix = "calendar_event_"
+	SnapCalendarAttPrefix   = "calendar_attendees_"
+	SnapContacts            = "contacts"
 )
 
 // Global snapshot kinds stored in global_snapshots (schema 007):
@@ -136,6 +162,49 @@ func CorpJournalKind(division int64) string {
 // transactions (d in 1..7).
 func CorpTxnsKind(division int64) string {
 	return SnapCorpTxnsPrefix + strconv.FormatInt(division, 10)
+}
+
+// PlanetLayoutKind is the snapshot kind holding one planet's
+// colony layout (the planet id keying the layout endpoint).
+func PlanetLayoutKind(planetID int64) string {
+	return SnapPlanetLayoutPrefix + strconv.FormatInt(planetID, 10)
+}
+
+// PlanetLayoutPlanetID extracts the planet id from a planet-layout
+// snapshot kind; ok=false for any other kind.
+func PlanetLayoutPlanetID(kind string) (int64, bool) {
+	return kindSuffixID(kind, SnapPlanetLayoutPrefix)
+}
+
+// MailBodyKind is the snapshot kind holding one mail's body.
+func MailBodyKind(mailID int64) string {
+	return SnapMailBodyPrefix + strconv.FormatInt(mailID, 10)
+}
+
+// CalendarEventKind is the snapshot kind holding one calendar
+// event's detail.
+func CalendarEventKind(eventID int64) string {
+	return SnapCalendarEventPrefix + strconv.FormatInt(eventID, 10)
+}
+
+// CalendarAttendeesKind is the snapshot kind holding one calendar
+// event's attendee list.
+func CalendarAttendeesKind(eventID int64) string {
+	return SnapCalendarAttPrefix + strconv.FormatInt(eventID, 10)
+}
+
+// kindSuffixID parses the trailing integer of a suffix-keyed
+// snapshot kind ("planet_layout_40123456" → 40123456); anything
+// without a positive trailing integer is not a keyed kind.
+func kindSuffixID(kind, prefix string) (int64, bool) {
+	if !strings.HasPrefix(kind, prefix) {
+		return 0, false
+	}
+	id, err := strconv.ParseInt(strings.TrimPrefix(kind, prefix), 10, 64)
+	if err != nil || id <= 0 {
+		return 0, false
+	}
+	return id, true
 }
 
 // ErrErrorLimit marks ESI's error-limit responses (420/429): callers
@@ -241,6 +310,15 @@ type Client struct {
 	// the IDs sit in their own range, clear of stations/systems).
 	constellationNamesMu sync.RWMutex
 	constellationNames   map[int64]string
+
+	// In-process cache of PI schematic ID → schematic (name +
+	// cycle time) for the planetary-industry pages. Schematics
+	// are stable public data; the worker warms the cache from the
+	// factory pins in colony layouts, and renders read it
+	// cache-only. In-process only — the full schematic universe
+	// is ~90 entries, so a restart re-warms in a cycle or two.
+	schematicsMu sync.RWMutex
+	schematics   map[int64]Schematic
 }
 
 // New builds a Client. httpClient performs every ESI request (the
@@ -261,6 +339,7 @@ func New(httpClient *http.Client, queries *db.Queries, tokens TokenFunc) *Client
 		corpNames:          make(map[int64]string),
 		allianceNames:      make(map[int64]string),
 		constellationNames: make(map[int64]string),
+		schematics:         make(map[int64]Schematic),
 	}
 }
 
@@ -967,6 +1046,237 @@ type Constellation struct {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 2: planetary industry payloads (auth scope
+// esi-planets.manage_planets.v1 — the only scope CCP publishes for
+// the two colony GETs). Shapes verified against CCP's ESI OpenAPI
+// document (components/schemas CharactersCharacterIdPlanets*,
+// UniverseSchematicsSchematicIdGet). Dates are RFC3339 strings.
+// ---------------------------------------------------------------------------
+
+// Colony is one entry of GET /characters/{id}/planets/.
+type Colony struct {
+	PlanetID      int64  `json:"planet_id"`
+	OwnerID       int64  `json:"owner_id"` // the owning character
+	SolarSystemID int64  `json:"solar_system_id"`
+	PlanetType    string `json:"planet_type"` // temperate|barren|oceanic|ice|gas|lava|storm|plasma
+	NumPins       int64  `json:"num_pins"`
+	UpgradeLevel  int64  `json:"upgrade_level"` // command-center upgrade level 0..5
+	LastUpdate    string `json:"last_update"`   // RFC3339
+}
+
+// Colonies is GET /characters/{id}/planets/.
+type Colonies []Colony
+
+// PlanetExtractorHead is one extraction head of an extractor pin.
+type PlanetExtractorHead struct {
+	HeadID    int64   `json:"head_id"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+}
+
+// PlanetExtractor is the extractor_details object of an extractor
+// pin. CycleTime, QtyPerCycle and the head layout are fixed at pin
+// install time, so they stay true for the pin's life.
+type PlanetExtractor struct {
+	ProductTypeID int64                 `json:"product_type_id"`
+	CycleTime     int64                 `json:"cycle_time"` // seconds
+	QtyPerCycle   int64                 `json:"qty_per_cycle"`
+	Heads         []PlanetExtractorHead `json:"heads"`
+}
+
+// PlanetFactory is the factory_details object of a factory pin.
+type PlanetFactory struct {
+	SchematicID int64 `json:"schematic_id"`
+}
+
+// PlanetPinContent is one stored commodity of a pin. ESI only
+// recalculates amounts when the colony is viewed through the game
+// client, so readers must not present them as live truth — the PI
+// pages omit them entirely (see planets.go).
+type PlanetPinContent struct {
+	TypeID int64 `json:"type_id"`
+	Amount int64 `json:"amount"`
+}
+
+// PlanetPin is one pin of GET /characters/{id}/planets/{planet_id}/.
+// ExpiryTime rides the pin itself (extractor pins carry it); it is
+// fixed when the extractor program is installed, so expiry
+// countdowns computed from it are reliable. LastCycleStart shares
+// the contents staleness caveat above.
+type PlanetPin struct {
+	PinID            int64              `json:"pin_id"`
+	TypeID           int64              `json:"type_id"`
+	SchematicID      int64              `json:"schematic_id"` // factory pins; mirrors FactoryDetails
+	ExpiryTime       string             `json:"expiry_time"`  // RFC3339, extractor pins
+	InstallTime      string             `json:"install_time"` // RFC3339
+	LastCycleStart   string             `json:"last_cycle_start"`
+	ExtractorDetails *PlanetExtractor   `json:"extractor_details"`
+	FactoryDetails   *PlanetFactory     `json:"factory_details"`
+	Contents         []PlanetPinContent `json:"contents"`
+}
+
+// PlanetLink is one link of a colony layout.
+type PlanetLink struct {
+	SourcePinID      int64 `json:"source_pin_id"`
+	DestinationPinID int64 `json:"destination_pin_id"`
+	LinkLevel        int64 `json:"link_level"`
+}
+
+// PlanetRoute is one commodity route of a colony layout.
+type PlanetRoute struct {
+	RouteID          int64   `json:"route_id"`
+	SourcePinID      int64   `json:"source_pin_id"`
+	DestinationPinID int64   `json:"destination_pin_id"`
+	ContentTypeID    int64   `json:"content_type_id"`
+	Quantity         float64 `json:"quantity"`
+	Waypoints        []int64 `json:"waypoints"`
+}
+
+// PlanetLayout is GET /characters/{id}/planets/{planet_id}/.
+type PlanetLayout struct {
+	Pins   []PlanetPin   `json:"pins"`
+	Links  []PlanetLink  `json:"links"`
+	Routes []PlanetRoute `json:"routes"`
+}
+
+// Schematic is GET /universe/schematics/{schematic_id}/ (public).
+// This is the complete ESI surface for a schematic: its name and
+// cycle time. ESI exposes no input/output bill of materials (that
+// lives only in the SDE), so factory pins display the schematic
+// name and never a guessed input list.
+type Schematic struct {
+	SchematicName string `json:"schematic_name"`
+	CycleTime     int64  `json:"cycle_time"` // seconds per run
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2: mail payloads (auth scope esi-mail.read_mail.v1, the
+// only mail scope this app requests — no organize/send).
+// Shapes verified against CCP's ESI OpenAPI document
+// (components/schemas CharactersCharacterIdMail*).
+// ---------------------------------------------------------------------------
+
+// MailRecipient is one addressee of a mail header/body.
+type MailRecipient struct {
+	RecipientID   int64  `json:"recipient_id"`
+	RecipientType string `json:"recipient_type"` // alliance|character|corporation|mailing_list
+}
+
+// MailHeader is one entry of GET /characters/{id}/mail/ (the 50
+// most recent matching headers).
+type MailHeader struct {
+	MailID     int64           `json:"mail_id"`
+	From       int64           `json:"from"` // sender character id
+	Subject    string          `json:"subject"`
+	Timestamp  string          `json:"timestamp"` // RFC3339
+	IsRead     bool            `json:"is_read"`
+	Labels     []int64         `json:"labels"` // label ids
+	Recipients []MailRecipient `json:"recipients"`
+}
+
+// MailHeaders is GET /characters/{id}/mail/.
+type MailHeaders []MailHeader
+
+// Mail is GET /characters/{id}/mail/{mail_id}/: one mail with
+// body. Body is EVE-flavored HTML; it is never rendered unsanitized
+// (see sanitizeMailHTML in mail.go).
+type Mail struct {
+	From       int64           `json:"from"`
+	Subject    string          `json:"subject"`
+	Body       string          `json:"body"`
+	Timestamp  string          `json:"timestamp"` // RFC3339
+	Read       bool            `json:"read"`
+	Labels     []int64         `json:"labels"`
+	Recipients []MailRecipient `json:"recipients"`
+}
+
+// MailLabel is one entry of the label set: a user label with its
+// unread count.
+type MailLabel struct {
+	LabelID     int64  `json:"label_id"`
+	Name        string `json:"name"`
+	Color       string `json:"color"`
+	UnreadCount int64  `json:"unread_count"`
+}
+
+// MailLabels is GET /characters/{id}/mail/labels/.
+type MailLabels struct {
+	Labels           []MailLabel `json:"labels"`
+	TotalUnreadCount int64       `json:"total_unread_count"`
+}
+
+// MailList is one entry of GET /characters/{id}/mail/lists/: a
+// mailing list the character belongs to.
+type MailList struct {
+	MailingListID int64  `json:"mailing_list_id"`
+	Name          string `json:"name"`
+}
+
+// MailLists is GET /characters/{id}/mail/lists/.
+type MailLists []MailList
+
+// ---------------------------------------------------------------------------
+// Phase 2: calendar + contacts payloads (auth scopes
+// esi-calendar.read_calendar_events.v1 and
+// esi-characters.read_contacts.v1, both long held). Shapes
+// verified against CCP's ESI OpenAPI document
+// (components/schemas CharactersCharacterIdCalendar* /
+// CharactersCharacterIdContactsGet). Dates are RFC3339 strings.
+// ---------------------------------------------------------------------------
+
+// CalendarEventSummary is one entry of GET
+// /characters/{id}/calendar/ (the next 50 chronological event
+// summaries from now).
+type CalendarEventSummary struct {
+	EventID       int64  `json:"event_id"`
+	EventDate     string `json:"event_date"` // RFC3339
+	Title         string `json:"title"`
+	Importance    int64  `json:"importance"`
+	EventResponse string `json:"event_response"` // accepted|declined|tentative|not_responded
+}
+
+// CalendarEventSummaries is GET /characters/{id}/calendar/.
+type CalendarEventSummaries []CalendarEventSummary
+
+// CalendarEvent is GET /characters/{id}/calendar/{event_id}/.
+type CalendarEvent struct {
+	EventID    int64  `json:"event_id"`
+	Date       string `json:"date"`     // RFC3339
+	Duration   int64  `json:"duration"` // minutes
+	Importance int64  `json:"importance"`
+	OwnerID    int64  `json:"owner_id"`
+	OwnerName  string `json:"owner_name"`
+	OwnerType  string `json:"owner_type"` // eve_server|corporation|faction|character|alliance
+	Response   string `json:"response"`
+	Title      string `json:"title"`
+	Text       string `json:"text"`
+}
+
+// CalendarAttendee is one entry of GET
+// /characters/{id}/calendar/{event_id}/attendees/.
+type CalendarAttendee struct {
+	CharacterID   int64  `json:"character_id"`
+	EventResponse string `json:"event_response"` // accepted|declined|tentative|not_responded
+}
+
+// CalendarAttendees is GET /characters/{id}/calendar/{event_id}/attendees/.
+type CalendarAttendees []CalendarAttendee
+
+// Contact is one entry of GET /characters/{id}/contacts/ (paged;
+// the stored snapshot merges every page).
+type Contact struct {
+	ContactID   int64   `json:"contact_id"`
+	ContactType string  `json:"contact_type"` // character|corporation|alliance|faction
+	Standing    float64 `json:"standing"`     // -10..10
+	IsBlocked   bool    `json:"is_blocked"`
+	IsWatched   bool    `json:"is_watched"`
+	LabelIDs    []int64 `json:"label_ids"`
+}
+
+// Contacts is GET /characters/{id}/contacts/.
+type Contacts []Contact
+
+// ---------------------------------------------------------------------------
 // HTTP layer.
 // ---------------------------------------------------------------------------
 
@@ -1111,6 +1421,33 @@ func snapshotPath(characterID int64, kind string) string {
 		return fmt.Sprintf("/characters/%d/blueprints/", characterID)
 	case SnapMining:
 		return fmt.Sprintf("/characters/%d/mining/", characterID)
+	case SnapPlanets:
+		return fmt.Sprintf("/characters/%d/planets/", characterID)
+	case SnapMail:
+		return fmt.Sprintf("/characters/%d/mail/", characterID)
+	case SnapMailLabels:
+		return fmt.Sprintf("/characters/%d/mail/labels/", characterID)
+	case SnapMailLists:
+		return fmt.Sprintf("/characters/%d/mail/lists/", characterID)
+	case SnapCalendar:
+		return fmt.Sprintf("/characters/%d/calendar/", characterID)
+	case SnapContacts:
+		return fmt.Sprintf("/characters/%d/contacts/", characterID)
+	}
+	// Suffix-keyed kinds: the entity id travels in the kind
+	// (planet_layout_<planet id>, mail_body_<mail id>,
+	// calendar_event_<event id>, calendar_attendees_<event id>).
+	if planetID, ok := kindSuffixID(kind, SnapPlanetLayoutPrefix); ok {
+		return fmt.Sprintf("/characters/%d/planets/%d/", characterID, planetID)
+	}
+	if mailID, ok := kindSuffixID(kind, SnapMailBodyPrefix); ok {
+		return fmt.Sprintf("/characters/%d/mail/%d/", characterID, mailID)
+	}
+	if eventID, ok := kindSuffixID(kind, SnapCalendarEventPrefix); ok {
+		return fmt.Sprintf("/characters/%d/calendar/%d/", characterID, eventID)
+	}
+	if eventID, ok := kindSuffixID(kind, SnapCalendarAttPrefix); ok {
+		return fmt.Sprintf("/characters/%d/calendar/%d/attendees/", characterID, eventID)
 	}
 	return ""
 }
@@ -1142,7 +1479,7 @@ func (c *Client) FetchAndStoreSnapshot(ctx context.Context, ch db.Character, kin
 	var body []byte
 	var header http.Header
 	switch kind {
-	case SnapAssets, SnapContracts, SnapBlueprints, SnapMining:
+	case SnapAssets, SnapContracts, SnapBlueprints, SnapMining, SnapContacts:
 		// Paginated; the stored snapshot is the merged array so
 		// downstream code sees one flat list.
 		body, header, err = c.fetchAllPages(ctx, token, path)
@@ -2195,6 +2532,41 @@ func (c *Client) StoreConstellationName(id int64, name string) {
 	c.constellationNamesMu.Lock()
 	c.constellationNames[id] = name
 	c.constellationNamesMu.Unlock()
+}
+
+// ---------------------------------------------------------------------------
+// PI schematics: same two tiers as the name caches — FetchSchematic
+// is the network tier (public GET /universe/schematics/{id}/, no
+// token) for the worker's warm-up pass; CachedSchematic is the
+// render tier and never touches the network.
+// ---------------------------------------------------------------------------
+
+// FetchSchematic GETs one schematic (public endpoint) and caches
+// it. Errors carry the path and status, nothing sensitive.
+func (c *Client) FetchSchematic(ctx context.Context, id int64) (Schematic, error) {
+	var s Schematic
+	if err := c.Get(ctx, "", fmt.Sprintf("/universe/schematics/%d/", id), &s); err != nil {
+		return Schematic{}, err
+	}
+	c.StoreSchematic(id, s)
+	return s, nil
+}
+
+// CachedSchematic resolves a schematic ID from the in-process
+// cache only. Zero network.
+func (c *Client) CachedSchematic(id int64) (Schematic, bool) {
+	c.schematicsMu.RLock()
+	defer c.schematicsMu.RUnlock()
+	s, ok := c.schematics[id]
+	return s, ok
+}
+
+// StoreSchematic records a fetched schematic in the in-process
+// cache (the worker's warm-up pass stores schematics this way).
+func (c *Client) StoreSchematic(id int64, s Schematic) {
+	c.schematicsMu.Lock()
+	c.schematics[id] = s
+	c.schematicsMu.Unlock()
 }
 
 // ---------------------------------------------------------------------------

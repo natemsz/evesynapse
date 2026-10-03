@@ -23,6 +23,8 @@ type pageData struct {
 	Assets        *assetsView
 	AssetsChars   []assetCharLink
 	Market        *marketView
+	Skills        *skillsView
+	SkillsChars   []assetCharLink
 	Users         []db.User
 	Characters    []db.Character
 	Snapshots     []adminSnapshotRow

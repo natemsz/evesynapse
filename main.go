@@ -53,6 +53,17 @@ type application struct {
 	typeNamesMu sync.RWMutex
 	typeNames   map[int64]string
 
+	// In-process cache of EVE type ID → group ID, populated as a
+	// side effect of type fetches; feeds skill-sheet grouping
+	// (skills.go).
+	typeGroupsMu sync.RWMutex
+	typeGroups   map[int64]int64
+
+	// In-process cache of EVE group ID → name for skill-sheet
+	// section headers; group names are stable public data.
+	groupNamesMu sync.Mutex
+	groupNames   map[int64]string
+
 	// In-memory cache of built corporation views, keyed by
 	// corporation ID; each entry expires with the ESI Expires
 	// header of the response it was built from (corporation.go).
@@ -109,6 +120,8 @@ func main() {
 		queries:    db.New(dbConn),
 		jwks:       &jwksCache{},
 		typeNames:  make(map[int64]string),
+		typeGroups: make(map[int64]int64),
+		groupNames: make(map[int64]string),
 		corpCache:  make(map[int64]corpCacheEntry),
 		placeNames: make(map[int64]string),
 		prices:     make(map[int64]esiMarketPrice),
@@ -195,6 +208,11 @@ func (app *application) routes() http.Handler {
 	r.Route("/market", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleMarket)
+	})
+
+	r.Route("/skills", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleSkills)
 	})
 
 	return r

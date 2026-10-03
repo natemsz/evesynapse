@@ -120,7 +120,15 @@ type esiAsset struct {
 }
 
 // esiType is the slice of GET /universe/types/{id}/ we consume.
+// GroupID feeds skill grouping on the skill sheet; name-only
+// consumers simply ignore it.
 type esiType struct {
+	Name    string `json:"name"`
+	GroupID int64  `json:"group_id"`
+}
+
+// esiGroup is the slice of GET /universe/groups/{id}/ we consume.
+type esiGroup struct {
 	Name string `json:"name"`
 }
 
@@ -484,9 +492,70 @@ func (app *application) resolveTypeNames(ctx context.Context, ids []int64) map[i
 		app.typeNamesMu.Lock()
 		app.typeNames[id] = t.Name
 		app.typeNamesMu.Unlock()
+		// Group IDs ride along on the same payload: stash them so
+		// the skill sheet's grouping needs no second fetch.
+		if t.GroupID > 0 {
+			app.typeGroupsMu.Lock()
+			app.typeGroups[id] = t.GroupID
+			app.typeGroupsMu.Unlock()
+		}
 		if err := app.queries.UpsertTypeName(ctx, db.UpsertTypeNameParams{TypeID: id, Name: t.Name}); err != nil {
 			log.Printf("esi: persist type name %d: %v", id, err)
 		}
+	}
+	return out
+}
+
+// maxTypeGroupLookups bounds the number of ESI /universe/types
+// lookups a single resolveTypeGroups call will make.
+const maxTypeGroupLookups = 60
+
+// resolveTypeGroups resolves type ID → group ID for a batch of
+// types, from the in-process cache first (populated as a side
+// effect of resolveTypeNames fetches), then ESI, bounded per call.
+// Types whose group can't be resolved are absent from the result.
+func (app *application) resolveTypeGroups(ctx context.Context, ids []int64) map[int64]int64 {
+	out := make(map[int64]int64, len(ids))
+
+	seen := make(map[int64]bool, len(ids))
+	var todo []int64
+	for _, id := range ids {
+		if id <= 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		todo = append(todo, id)
+	}
+
+	app.typeGroupsMu.RLock()
+	var missing []int64
+	for _, id := range todo {
+		if gid, ok := app.typeGroups[id]; ok {
+			out[id] = gid
+		} else {
+			missing = append(missing, id)
+		}
+	}
+	app.typeGroupsMu.RUnlock()
+
+	lookups := 0
+	for _, id := range missing {
+		if lookups >= maxTypeGroupLookups {
+			break
+		}
+		lookups++
+		var t esiType
+		if err := esiGet(ctx, "", fmt.Sprintf("/universe/types/%d/", id), &t); err != nil {
+			log.Printf("esi: type group lookup %d: %v", id, err)
+			continue
+		}
+		if t.GroupID <= 0 {
+			continue
+		}
+		out[id] = t.GroupID
+		app.typeGroupsMu.Lock()
+		app.typeGroups[id] = t.GroupID
+		app.typeGroupsMu.Unlock()
 	}
 	return out
 }

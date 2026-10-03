@@ -61,6 +61,35 @@ func (q *Queries) CountSDERegions(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countSDERequirements = `-- name: CountSDERequirements :one
+SELECT COUNT(*) FROM sde_requirements
+`
+
+func (q *Queries) CountSDERequirements(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSDERequirements)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSDESkillMeta = `-- name: CountSDESkillMeta :one
+
+SELECT COUNT(*) FROM sde_skill_meta
+`
+
+// ---------------------------------------------------------------------
+// Phase 4 (schema 012): skill graph reads and user skill plans.
+// The dogma bulk inserts stay hand-rolled in the SDE importer
+// alongside the other sde_* tables; only reads live here. Plans
+// are plain CRUD.
+// ---------------------------------------------------------------------
+func (q *Queries) CountSDESkillMeta(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSDESkillMeta)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countSDEStations = `-- name: CountSDEStations :one
 SELECT COUNT(*) FROM sde_stations
 `
@@ -122,6 +151,37 @@ func (q *Queries) CountWarDetails(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const createSkillPlan = `-- name: CreateSkillPlan :one
+INSERT INTO skill_plans (user_id, character_id, name, created_at)
+VALUES (?, ?, ?, ?)
+RETURNING id, user_id, character_id, name, created_at
+`
+
+type CreateSkillPlanParams struct {
+	UserID      int64  `json:"user_id"`
+	CharacterID int64  `json:"character_id"`
+	Name        string `json:"name"`
+	CreatedAt   string `json:"created_at"`
+}
+
+func (q *Queries) CreateSkillPlan(ctx context.Context, arg CreateSkillPlanParams) (SkillPlan, error) {
+	row := q.db.QueryRowContext(ctx, createSkillPlan,
+		arg.UserID,
+		arg.CharacterID,
+		arg.Name,
+		arg.CreatedAt,
+	)
+	var i SkillPlan
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.CharacterID,
+		&i.Name,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (created_at)
 VALUES (datetime('now'))
@@ -147,6 +207,34 @@ type DeleteCharacterParams struct {
 
 func (q *Queries) DeleteCharacter(ctx context.Context, arg DeleteCharacterParams) error {
 	_, err := q.db.ExecContext(ctx, deleteCharacter, arg.CharacterID, arg.UserID)
+	return err
+}
+
+const deleteSkillPlan = `-- name: DeleteSkillPlan :exec
+DELETE FROM skill_plans WHERE id = ? AND user_id = ?
+`
+
+type DeleteSkillPlanParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) DeleteSkillPlan(ctx context.Context, arg DeleteSkillPlanParams) error {
+	_, err := q.db.ExecContext(ctx, deleteSkillPlan, arg.ID, arg.UserID)
+	return err
+}
+
+const deleteSkillPlanItem = `-- name: DeleteSkillPlanItem :exec
+DELETE FROM skill_plan_items WHERE plan_id = ? AND skill_type_id = ?
+`
+
+type DeleteSkillPlanItemParams struct {
+	PlanID      int64 `json:"plan_id"`
+	SkillTypeID int64 `json:"skill_type_id"`
+}
+
+func (q *Queries) DeleteSkillPlanItem(ctx context.Context, arg DeleteSkillPlanItemParams) error {
+	_, err := q.db.ExecContext(ctx, deleteSkillPlanItem, arg.PlanID, arg.SkillTypeID)
 	return err
 }
 
@@ -358,6 +446,23 @@ func (q *Queries) GetSDERegion(ctx context.Context, regionID int64) (SdeRegion, 
 	return i, err
 }
 
+const getSDESkillMeta = `-- name: GetSDESkillMeta :one
+SELECT type_id, rank, primary_attr, secondary_attr FROM sde_skill_meta
+WHERE type_id = ?
+`
+
+func (q *Queries) GetSDESkillMeta(ctx context.Context, typeID int64) (SdeSkillMetum, error) {
+	row := q.db.QueryRowContext(ctx, getSDESkillMeta, typeID)
+	var i SdeSkillMetum
+	err := row.Scan(
+		&i.TypeID,
+		&i.Rank,
+		&i.PrimaryAttr,
+		&i.SecondaryAttr,
+	)
+	return i, err
+}
+
 const getSDEStation = `-- name: GetSDEStation :one
 SELECT station_id, name, system_id FROM sde_stations
 WHERE station_id = ?
@@ -407,6 +512,29 @@ func (q *Queries) GetSDEType(ctx context.Context, typeID int64) (SdeType, error)
 		&i.GroupID,
 		&i.MarketGroupID,
 		&i.Published,
+	)
+	return i, err
+}
+
+const getSkillPlan = `-- name: GetSkillPlan :one
+SELECT id, user_id, character_id, name, created_at FROM skill_plans
+WHERE id = ? AND user_id = ?
+`
+
+type GetSkillPlanParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) GetSkillPlan(ctx context.Context, arg GetSkillPlanParams) (SkillPlan, error) {
+	row := q.db.QueryRowContext(ctx, getSkillPlan, arg.ID, arg.UserID)
+	var i SkillPlan
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.CharacterID,
+		&i.Name,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -1000,6 +1128,171 @@ func (q *Queries) ListSDEGroupsInCategory(ctx context.Context, categoryID int64)
 	return items, nil
 }
 
+const listSDERequirementsByType = `-- name: ListSDERequirementsByType :many
+SELECT skill_type_id, level FROM sde_requirements
+WHERE type_id = ?
+ORDER BY level DESC, skill_type_id
+`
+
+type ListSDERequirementsByTypeRow struct {
+	SkillTypeID int64 `json:"skill_type_id"`
+	Level       int64 `json:"level"`
+}
+
+func (q *Queries) ListSDERequirementsByType(ctx context.Context, typeID int64) ([]ListSDERequirementsByTypeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDERequirementsByType, typeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDERequirementsByTypeRow
+	for rows.Next() {
+		var i ListSDERequirementsByTypeRow
+		if err := rows.Scan(&i.SkillTypeID, &i.Level); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDERequirementsByTypes = `-- name: ListSDERequirementsByTypes :many
+SELECT type_id, skill_type_id, level FROM sde_requirements
+WHERE type_id IN (/*SLICE:type_ids*/?)
+ORDER BY type_id, level DESC, skill_type_id
+`
+
+func (q *Queries) ListSDERequirementsByTypes(ctx context.Context, typeIds []int64) ([]SdeRequirement, error) {
+	query := listSDERequirementsByTypes
+	var queryParams []interface{}
+	if len(typeIds) > 0 {
+		for _, v := range typeIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:type_ids*/?", strings.Repeat(",?", len(typeIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:type_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SdeRequirement
+	for rows.Next() {
+		var i SdeRequirement
+		if err := rows.Scan(&i.TypeID, &i.SkillTypeID, &i.Level); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDESkillCatalog = `-- name: ListSDESkillCatalog :many
+SELECT m.type_id, t.name, g.name AS group_name, m.rank, m.primary_attr, m.secondary_attr
+FROM sde_skill_meta m
+JOIN sde_types t ON t.type_id = m.type_id
+JOIN sde_groups g ON g.group_id = t.group_id
+ORDER BY g.name, t.name
+`
+
+type ListSDESkillCatalogRow struct {
+	TypeID        int64   `json:"type_id"`
+	Name          string  `json:"name"`
+	GroupName     string  `json:"group_name"`
+	Rank          float64 `json:"rank"`
+	PrimaryAttr   int64   `json:"primary_attr"`
+	SecondaryAttr int64   `json:"secondary_attr"`
+}
+
+// The browsable skill catalog: every published skill with its
+// group, rank and training attributes.
+func (q *Queries) ListSDESkillCatalog(ctx context.Context) ([]ListSDESkillCatalogRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDESkillCatalog)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDESkillCatalogRow
+	for rows.Next() {
+		var i ListSDESkillCatalogRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Name,
+			&i.GroupName,
+			&i.Rank,
+			&i.PrimaryAttr,
+			&i.SecondaryAttr,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDESkillMetaByIDs = `-- name: ListSDESkillMetaByIDs :many
+SELECT type_id, rank, primary_attr, secondary_attr FROM sde_skill_meta
+WHERE type_id IN (/*SLICE:type_ids*/?)
+`
+
+func (q *Queries) ListSDESkillMetaByIDs(ctx context.Context, typeIds []int64) ([]SdeSkillMetum, error) {
+	query := listSDESkillMetaByIDs
+	var queryParams []interface{}
+	if len(typeIds) > 0 {
+		for _, v := range typeIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:type_ids*/?", strings.Repeat(",?", len(typeIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:type_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SdeSkillMetum
+	for rows.Next() {
+		var i SdeSkillMetum
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Rank,
+			&i.PrimaryAttr,
+			&i.SecondaryAttr,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDETypeIDs = `-- name: ListSDETypeIDs :many
 SELECT type_id FROM sde_types
 ORDER BY type_id
@@ -1018,6 +1311,51 @@ func (q *Queries) ListSDETypeIDs(ctx context.Context) ([]int64, error) {
 			return nil, err
 		}
 		items = append(items, type_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDETypesByNames = `-- name: ListSDETypesByNames :many
+SELECT type_id, name FROM sde_types
+WHERE name IN (/*SLICE:names*/?)
+`
+
+type ListSDETypesByNamesRow struct {
+	TypeID int64  `json:"type_id"`
+	Name   string `json:"name"`
+}
+
+// Name-to-type-ID lookups for the plan templates (Magic 14 &
+// friends), which name their skills the way the wiki does.
+func (q *Queries) ListSDETypesByNames(ctx context.Context, names []string) ([]ListSDETypesByNamesRow, error) {
+	query := listSDETypesByNames
+	var queryParams []interface{}
+	if len(names) > 0 {
+		for _, v := range names {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:names*/?", strings.Repeat(",?", len(names))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:names*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDETypesByNamesRow
+	for rows.Next() {
+		var i ListSDETypesByNamesRow
+		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -1063,6 +1401,80 @@ func (q *Queries) ListSDETypesInGroup(ctx context.Context, arg ListSDETypesInGro
 	for rows.Next() {
 		var i ListSDETypesInGroupRow
 		if err := rows.Scan(&i.TypeID, &i.Name, &i.MarketGroupID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSkillPlanItems = `-- name: ListSkillPlanItems :many
+SELECT plan_id, skill_type_id, target_level, position FROM skill_plan_items
+WHERE plan_id = ?
+ORDER BY position, skill_type_id
+`
+
+func (q *Queries) ListSkillPlanItems(ctx context.Context, planID int64) ([]SkillPlanItem, error) {
+	rows, err := q.db.QueryContext(ctx, listSkillPlanItems, planID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SkillPlanItem
+	for rows.Next() {
+		var i SkillPlanItem
+		if err := rows.Scan(
+			&i.PlanID,
+			&i.SkillTypeID,
+			&i.TargetLevel,
+			&i.Position,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSkillPlans = `-- name: ListSkillPlans :many
+SELECT id, user_id, character_id, name, created_at FROM skill_plans
+WHERE user_id = ? AND character_id = ?
+ORDER BY created_at, id
+`
+
+type ListSkillPlansParams struct {
+	UserID      int64 `json:"user_id"`
+	CharacterID int64 `json:"character_id"`
+}
+
+func (q *Queries) ListSkillPlans(ctx context.Context, arg ListSkillPlansParams) ([]SkillPlan, error) {
+	rows, err := q.db.QueryContext(ctx, listSkillPlans, arg.UserID, arg.CharacterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SkillPlan
+	for rows.Next() {
+		var i SkillPlan
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.CharacterID,
+			&i.Name,
+			&i.CreatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1227,6 +1639,17 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
+const nextSkillPlanPosition = `-- name: NextSkillPlanPosition :one
+SELECT COALESCE(MAX(position), 0) + 1 FROM skill_plan_items WHERE plan_id = ?
+`
+
+func (q *Queries) NextSkillPlanPosition(ctx context.Context, planID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, nextSkillPlanPosition, planID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const searchManufacturableProducts = `-- name: SearchManufacturableProducts :many
 SELECT t.type_id, t.name, b.blueprint_type_id
 FROM sde_blueprints b
@@ -1252,6 +1675,44 @@ func (q *Queries) SearchManufacturableProducts(ctx context.Context, lower string
 	for rows.Next() {
 		var i SearchManufacturableProductsRow
 		if err := rows.Scan(&i.TypeID, &i.Name, &i.BlueprintTypeID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchSDESkills = `-- name: SearchSDESkills :many
+SELECT m.type_id, t.name, m.rank
+FROM sde_skill_meta m
+JOIN sde_types t ON t.type_id = m.type_id
+WHERE instr(lower(t.name), lower(?)) > 0
+ORDER BY CASE WHEN instr(lower(t.name), lower(?)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT 25
+`
+
+type SearchSDESkillsRow struct {
+	TypeID int64   `json:"type_id"`
+	Name   string  `json:"name"`
+	Rank   float64 `json:"rank"`
+}
+
+func (q *Queries) SearchSDESkills(ctx context.Context, lower string) ([]SearchSDESkillsRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchSDESkills, lower)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchSDESkillsRow
+	for rows.Next() {
+		var i SearchSDESkillsRow
+		if err := rows.Scan(&i.TypeID, &i.Name, &i.Rank); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1443,6 +1904,21 @@ func (q *Queries) UpdateCharacterTokens(ctx context.Context, arg UpdateCharacter
 		arg.TokenExpiry,
 		arg.CharacterID,
 	)
+	return err
+}
+
+const updateSkillPlanItemPosition = `-- name: UpdateSkillPlanItemPosition :exec
+UPDATE skill_plan_items SET position = ? WHERE plan_id = ? AND skill_type_id = ?
+`
+
+type UpdateSkillPlanItemPositionParams struct {
+	Position    int64 `json:"position"`
+	PlanID      int64 `json:"plan_id"`
+	SkillTypeID int64 `json:"skill_type_id"`
+}
+
+func (q *Queries) UpdateSkillPlanItemPosition(ctx context.Context, arg UpdateSkillPlanItemPositionParams) error {
+	_, err := q.db.ExecContext(ctx, updateSkillPlanItemPosition, arg.Position, arg.PlanID, arg.SkillTypeID)
 	return err
 }
 
@@ -1652,6 +2128,32 @@ type UpsertSDEMetaParams struct {
 
 func (q *Queries) UpsertSDEMeta(ctx context.Context, arg UpsertSDEMetaParams) error {
 	_, err := q.db.ExecContext(ctx, upsertSDEMeta, arg.Key, arg.Value)
+	return err
+}
+
+const upsertSkillPlanItem = `-- name: UpsertSkillPlanItem :exec
+INSERT INTO skill_plan_items (plan_id, skill_type_id, target_level, position)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(plan_id, skill_type_id) DO UPDATE SET target_level = excluded.target_level
+`
+
+type UpsertSkillPlanItemParams struct {
+	PlanID      int64 `json:"plan_id"`
+	SkillTypeID int64 `json:"skill_type_id"`
+	TargetLevel int64 `json:"target_level"`
+	Position    int64 `json:"position"`
+}
+
+// Adding an existing skill raises (or keeps) its target level and
+// leaves position to the caller: a fresh insert takes MAX(position)+1
+// (the handler supplies it).
+func (q *Queries) UpsertSkillPlanItem(ctx context.Context, arg UpsertSkillPlanItemParams) error {
+	_, err := q.db.ExecContext(ctx, upsertSkillPlanItem,
+		arg.PlanID,
+		arg.SkillTypeID,
+		arg.TargetLevel,
+		arg.Position,
+	)
 	return err
 }
 

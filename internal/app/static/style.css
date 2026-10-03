@@ -91,7 +91,11 @@ html, body { min-height: 100%; }
 
 body {
   margin: 0;
-  background: #0d0503 url("/static/bg.jpg") no-repeat top center fixed;
+  /* The 2013 wallpaper stays, but ghosted: a near-black grey wash over
+     it keeps the page backdrop effectively black at a glance, with the
+     artwork only faintly present behind the panels. */
+  background: linear-gradient(rgba(9, 8, 8, 0.9), rgba(9, 8, 8, 0.9)),
+    #0b0b0b url("/static/bg.jpg") no-repeat top center fixed;
   background-size: cover;
   color: var(--text);
   font-family: "Shentox", "Univers Next Pro", "UniversNextPro330BasicLightLatin", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;

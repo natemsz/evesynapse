@@ -1,0 +1,37 @@
+{{define "base"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{template "title" .}} · EveSynapse</title>
+{{if .AutoRefresh}}<meta http-equiv="refresh" content="5">{{end}}
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <nav>
+    <a class="wordmark" href="/">EVESYNAPSE</a>
+    <span class="spacer"></span>
+    <a class="navlink" href="/">Home</a>
+    <a class="navlink" href="/corporations/">Corporation</a>
+    <a class="navlink" href="/assets/">Assets</a>
+    <a class="navlink" href="/market/">Market</a>
+    <a class="navlink" href="/skills/">Skills</a>
+    <a class="navlink" href="/sync/">Sync</a>
+    <a class="navlink" href="/admin/">Admin</a>
+    <span class="who">{{if .LoggedIn}}Signed in{{if .CharacterName}} as {{.CharacterName}}{{end}} · <a href="/auth/logout">Sign out</a>{{else}}Not signed in{{end}}</span>
+  </nav>
+</header>
+<main>
+  <div class="panel">
+{{template "content" .}}
+  </div>
+</main>
+<footer>
+  <p>EVE Online and all associated material are the intellectual property of CCP Games hf and are used with permission.<br>
+  No official affiliation or endorsement by CCP Games hf is stated or implied.</p>
+  <p class="version"><span>EveSynapse 0.2.0 — Go rewrite</span><span>ESI + EVE SSO</span><span>Not affiliated with CCP Games</span></p>
+</footer>
+</body>
+</html>
+{{end}}

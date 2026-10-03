@@ -1,0 +1,64 @@
+{{define "title"}}Market{{end}}
+{{define "content"}}
+<h1>Market</h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .Market}}
+<form method="get" action="/market/">
+  <input type="text" name="q" value="{{.Market.Query}}" placeholder="Item name, e.g. Tritanium">
+  {{if .Market.Item}}<input type="hidden" name="region" value="{{.Market.Item.RegionID}}">{{end}}
+  <button class="btn" type="submit">Search</button>
+</form>
+
+{{if .Market.Item}}
+  {{$item := .Market.Item}}
+  <h2>{{$item.Name}}</h2>
+  <p><small>Average price: {{if $item.AveragePrice}}{{$item.AveragePrice}} ISK{{else}}—{{end}} · Adjusted price: {{if $item.AdjustedPrice}}{{$item.AdjustedPrice}} ISK{{else}}—{{end}}</small></p>
+  <p>{{range $i, $r := $item.Regions}}{{if $i}} · {{end}}{{if $r.Active}}<strong>{{$r.Name}}</strong>{{else}}<a href="/market/?type={{$item.TypeID}}&region={{$r.ID}}">{{$r.Name}}</a>{{end}}{{end}}</p>
+
+  <p>Best sell: <strong>{{if $item.BestSell}}{{$item.BestSell}} ISK{{else}}—{{end}}</strong>{{if $item.BestSellLoc}} ({{$item.BestSellLoc}}){{end}}<br>
+  Best buy: <strong>{{if $item.BestBuy}}{{$item.BestBuy}} ISK{{else}}—{{end}}</strong>{{if $item.BestBuyLoc}} ({{$item.BestBuyLoc}}){{end}}{{if $item.Spread}}<br>
+  Spread: {{$item.Spread}}{{end}}</p>
+
+  <h3>Sell orders — {{$item.RegionName}}</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Price</th><th>Volume</th><th>Location</th></tr></thead>
+    <tbody>
+    {{range $item.Sells}}
+      <tr><td>{{.Price}}</td><td>{{.Volume}}</td><td>{{.Location}}</td></tr>
+    {{else}}
+      <tr><td colspan="3">No sell orders in this region.</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  <p><small>Showing top {{len $item.Sells}} · {{$item.SellOrders}} sell orders · {{$item.SellVolume}} total volume</small></p>
+
+  <h3>Buy orders — {{$item.RegionName}}</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Price</th><th>Volume</th><th>Location</th></tr></thead>
+    <tbody>
+    {{range $item.Buys}}
+      <tr><td>{{.Price}}</td><td>{{.Volume}}</td><td>{{.Location}}</td></tr>
+    {{else}}
+      <tr><td colspan="3">No buy orders in this region.</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  <p><small>Showing top {{len $item.Buys}} · {{$item.BuyOrders}} buy orders · {{$item.BuyVolume}} total volume</small></p>
+
+  {{if $item.Truncated}}<p><small>Order book truncated — only the first 20 pages were read, so best prices are best-within-those.</small></p>{{end}}
+{{else if .Market.Matches}}
+  <h3>Matches</h3>
+  <p>{{range $i, $m := .Market.Matches}}{{if $i}} · {{end}}<a href="/market/?type={{$m.ID}}&region={{$.Market.Region}}">{{$m.Name}}</a>{{end}}</p>
+{{else if .Market.Query}}
+  <p>No items matched "{{.Market.Query}}".</p>
+{{else}}
+  <p><small>Search for an item to see its guide prices and regional order books.</small></p>
+{{end}}
+{{end}}
+{{end}}

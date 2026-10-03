@@ -135,6 +135,12 @@ const (
 	SnapCalendarEventPrefix = "calendar_event_"
 	SnapCalendarAttPrefix   = "calendar_attendees_"
 	SnapContacts            = "contacts"
+
+	// Phase 4 (skill plans): the character's five attributes,
+	// warmed alongside the skills snapshots — the plan engine
+	// times every step against these, so the plans pages must
+	// read them from the cache like everything else.
+	SnapAttributes = "attributes"
 )
 
 // Global snapshot kinds stored in global_snapshots (schema 007):
@@ -415,6 +421,21 @@ type SkillqueueEntry struct {
 
 // Skillqueue is GET /characters/{id}/skillqueue/.
 type Skillqueue []SkillqueueEntry
+
+// Attributes is GET /characters/{id}/attributes/: the five
+// training attributes as final values (base + implants, after any
+// remap) plus the remap bookkeeping the plan page reports.
+// BonusRemaps and the dates are optional in ESI, hence pointers.
+type Attributes struct {
+	Charisma                 int    `json:"charisma"`
+	Intelligence             int    `json:"intelligence"`
+	Memory                   int    `json:"memory"`
+	Perception               int    `json:"perception"`
+	Willpower                int    `json:"willpower"`
+	BonusRemaps              *int   `json:"bonus_remaps,omitempty"`
+	LastRemapDate            string `json:"last_remap_date,omitempty"`
+	AccruedRemapCooldownDate string `json:"accrued_remap_cooldown_date,omitempty"`
+}
 
 // Asset is one entry of GET /characters/{id}/assets/. is_blueprint_copy
 // is only present on blueprint items; absent decodes as false.
@@ -1385,6 +1406,8 @@ func snapshotPath(characterID int64, kind string) string {
 		return fmt.Sprintf("/characters/%d/skills/", characterID)
 	case SnapSkillqueue:
 		return fmt.Sprintf("/characters/%d/skillqueue/", characterID)
+	case SnapAttributes:
+		return fmt.Sprintf("/characters/%d/attributes/", characterID)
 	case SnapWallet:
 		return fmt.Sprintf("/characters/%d/wallet/", characterID)
 	case SnapAssets:

@@ -63,6 +63,13 @@ type application struct {
 	// location titles; both are stable public data (assets.go).
 	placeMu    sync.Mutex
 	placeNames map[int64]string
+
+	// In-memory cache of GET /markets/prices/ keyed by type ID,
+	// refreshed once stale per the response Expires header
+	// (market.go).
+	pricesMu     sync.Mutex
+	prices       map[int64]esiMarketPrice
+	pricesExpiry time.Time
 }
 
 func main() {
@@ -104,6 +111,7 @@ func main() {
 		typeNames:  make(map[int64]string),
 		corpCache:  make(map[int64]corpCacheEntry),
 		placeNames: make(map[int64]string),
+		prices:     make(map[int64]esiMarketPrice),
 	}
 
 	workerCtx, stopWorker := context.WithCancel(context.Background())
@@ -182,6 +190,11 @@ func (app *application) routes() http.Handler {
 	r.Route("/assets", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleAssets)
+	})
+
+	r.Route("/market", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleMarket)
 	})
 
 	return r

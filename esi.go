@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -123,6 +124,42 @@ type esiType struct {
 	Name string `json:"name"`
 }
 
+// esiUniverseIDEntry is one group entry of POST /universe/ids/;
+// the response carries several groups (characters, corporations,
+// inventory_types, ...), of which we consume inventory_types.
+type esiUniverseIDEntry struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// esiUniverseIDs is the slice of POST /universe/ids/ we consume.
+type esiUniverseIDs struct {
+	InventoryTypes []esiUniverseIDEntry `json:"inventory_types"`
+}
+
+// esiMarketPrice is one row of GET /markets/prices/ (CCP's market
+// guide: recent average and the adjusted price used for taxes).
+type esiMarketPrice struct {
+	TypeID        int64   `json:"type_id"`
+	AveragePrice  float64 `json:"average_price"`
+	AdjustedPrice float64 `json:"adjusted_price"`
+}
+
+// esiMarketOrder is one order of GET /markets/{region}/orders/.
+type esiMarketOrder struct {
+	OrderID      int64   `json:"order_id"`
+	TypeID       int64   `json:"type_id"`
+	LocationID   int64   `json:"location_id"`
+	SystemID     int64   `json:"system_id"`
+	IsBuyOrder   bool    `json:"is_buy_order"`
+	Price        float64 `json:"price"`
+	VolumeTotal  int64   `json:"volume_total"`
+	VolumeRemain int64   `json:"volume_remain"`
+	Range        string  `json:"range"`
+	Issued       string  `json:"issued"`
+	Duration     int     `json:"duration"`
+}
+
 // esiGet performs a GET against ESI and JSON-decodes the response into
 // out. The access token is sent as a Bearer header when non-empty and
 // is never logged. Errors carry the path and status, nothing sensitive.
@@ -166,6 +203,44 @@ func esiFetchRaw(ctx context.Context, accessToken, path string) ([]byte, http.He
 		return nil, resp.Header, fmt.Errorf("ESI GET %s: status %d", path, resp.StatusCode)
 	}
 	return body, resp.Header, nil
+}
+
+// esiPostJSON POSTs payload as JSON to ESI and decodes the response
+// into out, following esiFetchRaw's conventions (User-Agent header,
+// 420/429 wrapped as errESIErrorLimit, other non-200 statuses as
+// plain errors). Used by POST /universe/ids/ for exact name → ID
+// resolution; no auth token — the endpoint is public.
+func esiPostJSON(ctx context.Context, path string, payload any, out any) error {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("ESI POST %s: encode: %w", path, err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, esiBaseURL+path, bytes.NewReader(raw))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", esiUserAgent)
+	resp, err := loginHTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("ESI POST %s: %w", path, err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return fmt.Errorf("ESI POST %s: read body: %w", path, err)
+	}
+	if resp.StatusCode == 420 || resp.StatusCode == http.StatusTooManyRequests {
+		return fmt.Errorf("ESI POST %s: status %d: %w", path, resp.StatusCode, errESIErrorLimit)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("ESI POST %s: status %d", path, resp.StatusCode)
+	}
+	if err := json.Unmarshal(body, out); err != nil {
+		return fmt.Errorf("ESI POST %s: decode: %w", path, err)
+	}
+	return nil
 }
 
 // snapshotPath maps a snapshot kind to its ESI path for a character.

@@ -80,3 +80,9 @@ INSERT INTO type_names (type_id, name)
 VALUES (?, ?)
 ON CONFLICT (type_id) DO UPDATE SET
     name = excluded.name;
+
+-- name: SearchTypeNames :many
+SELECT type_id, name FROM type_names
+WHERE name LIKE ?
+ORDER BY name
+LIMIT 20;

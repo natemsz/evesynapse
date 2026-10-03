@@ -76,6 +76,17 @@ func (q *Queries) CountSDETypes(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countWarDetails = `-- name: CountWarDetails :one
+SELECT COUNT(*) FROM war_details
+`
+
+func (q *Queries) CountWarDetails(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countWarDetails)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (created_at)
 VALUES (datetime('now'))
@@ -158,6 +169,29 @@ func (q *Queries) GetContractDetail(ctx context.Context, contractID int64) (Cont
 		&i.CharacterID,
 		&i.Payload,
 		&i.FetchedAt,
+	)
+	return i, err
+}
+
+const getGlobalSnapshot = `-- name: GetGlobalSnapshot :one
+
+SELECT kind, payload, fetched_at, cached_until FROM global_snapshots
+WHERE kind = ?
+`
+
+// ---------------------------------------------------------------------
+// Module sweep, cluster 4 (schema 007): intel public-data store.
+// Global snapshots are the public-data counterpart of
+// character_snapshots; war details mirror killmail_details.
+// ---------------------------------------------------------------------
+func (q *Queries) GetGlobalSnapshot(ctx context.Context, kind string) (GlobalSnapshot, error) {
+	row := q.db.QueryRowContext(ctx, getGlobalSnapshot, kind)
+	var i GlobalSnapshot
+	err := row.Scan(
+		&i.Kind,
+		&i.Payload,
+		&i.FetchedAt,
+		&i.CachedUntil,
 	)
 	return i, err
 }
@@ -368,6 +402,18 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 	return i, err
 }
 
+const getWarDetail = `-- name: GetWarDetail :one
+SELECT war_id, payload, fetched_at FROM war_details
+WHERE war_id = ?
+`
+
+func (q *Queries) GetWarDetail(ctx context.Context, warID int64) (WarDetail, error) {
+	row := q.db.QueryRowContext(ctx, getWarDetail, warID)
+	var i WarDetail
+	err := row.Scan(&i.WarID, &i.Payload, &i.FetchedAt)
+	return i, err
+}
+
 const listAllCharacters = `-- name: ListAllCharacters :many
 SELECT character_id, user_id, name, access_token, refresh_token, token_expiry, scopes, cached_until, created_at, updated_at FROM characters
 ORDER BY user_id, name
@@ -397,6 +443,34 @@ func (q *Queries) ListAllCharacters(ctx context.Context) ([]Character, error) {
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAllCorporationIDs = `-- name: ListAllCorporationIDs :many
+SELECT DISTINCT corporation_id FROM character_corporations
+ORDER BY corporation_id
+`
+
+func (q *Queries) ListAllCorporationIDs(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listAllCorporationIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var corporation_id int64
+		if err := rows.Scan(&corporation_id); err != nil {
+			return nil, err
+		}
+		items = append(items, corporation_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -494,6 +568,39 @@ func (q *Queries) ListContractDetailIDsByCharacter(ctx context.Context, characte
 			return nil, err
 		}
 		items = append(items, contract_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGlobalSnapshots = `-- name: ListGlobalSnapshots :many
+SELECT kind, payload, fetched_at, cached_until FROM global_snapshots
+ORDER BY kind
+`
+
+func (q *Queries) ListGlobalSnapshots(ctx context.Context) ([]GlobalSnapshot, error) {
+	rows, err := q.db.QueryContext(ctx, listGlobalSnapshots)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GlobalSnapshot
+	for rows.Next() {
+		var i GlobalSnapshot
+		if err := rows.Scan(
+			&i.Kind,
+			&i.Payload,
+			&i.FetchedAt,
+			&i.CachedUntil,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -915,6 +1022,32 @@ func (q *Queries) UpsertContractDetail(ctx context.Context, arg UpsertContractDe
 	return err
 }
 
+const upsertGlobalSnapshot = `-- name: UpsertGlobalSnapshot :exec
+INSERT INTO global_snapshots (kind, payload, fetched_at, cached_until)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (kind) DO UPDATE SET
+    payload      = excluded.payload,
+    fetched_at   = excluded.fetched_at,
+    cached_until = excluded.cached_until
+`
+
+type UpsertGlobalSnapshotParams struct {
+	Kind        string `json:"kind"`
+	Payload     string `json:"payload"`
+	FetchedAt   string `json:"fetched_at"`
+	CachedUntil string `json:"cached_until"`
+}
+
+func (q *Queries) UpsertGlobalSnapshot(ctx context.Context, arg UpsertGlobalSnapshotParams) error {
+	_, err := q.db.ExecContext(ctx, upsertGlobalSnapshot,
+		arg.Kind,
+		arg.Payload,
+		arg.FetchedAt,
+		arg.CachedUntil,
+	)
+	return err
+}
+
 const upsertItemName = `-- name: UpsertItemName :exec
 INSERT INTO item_names (item_id, name)
 VALUES (?, ?)
@@ -1048,5 +1181,24 @@ type UpsertTypeNameParams struct {
 
 func (q *Queries) UpsertTypeName(ctx context.Context, arg UpsertTypeNameParams) error {
 	_, err := q.db.ExecContext(ctx, upsertTypeName, arg.TypeID, arg.Name)
+	return err
+}
+
+const upsertWarDetail = `-- name: UpsertWarDetail :exec
+INSERT INTO war_details (war_id, payload, fetched_at)
+VALUES (?, ?, ?)
+ON CONFLICT (war_id) DO UPDATE SET
+    payload    = excluded.payload,
+    fetched_at = excluded.fetched_at
+`
+
+type UpsertWarDetailParams struct {
+	WarID     int64  `json:"war_id"`
+	Payload   string `json:"payload"`
+	FetchedAt string `json:"fetched_at"`
+}
+
+func (q *Queries) UpsertWarDetail(ctx context.Context, arg UpsertWarDetailParams) error {
+	_, err := q.db.ExecContext(ctx, upsertWarDetail, arg.WarID, arg.Payload, arg.FetchedAt)
 	return err
 }

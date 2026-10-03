@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -55,6 +56,8 @@ type syncView struct {
 	Warming    bool // a worker cycle is running right now
 	Characters []syncCharacterView
 	SDE        *sdeView
+	Global     []syncSnapshotRow // public-data store (intel cluster)
+	WarDetails string            // stored war detail count, formatted
 }
 
 // handleSync renders the Sync page: live worker status, per-character
@@ -75,6 +78,12 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 		WorkerLine: app.workerStatusText(),
 		Warming:    status.Warming,
 		SDE:        app.loadSDEView(ctx),
+		Global:     app.loadGlobalView(ctx),
+	}
+	if n, err := app.queries.CountWarDetails(ctx); err != nil {
+		log.Printf("sync: count war details: %v", err)
+	} else {
+		view.WarDetails = esi.FormatInt(n)
 	}
 	data.Sync = view
 
@@ -177,6 +186,36 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 	}
 
 	app.render(w, http.StatusOK, "sync.html", data)
+}
+
+// loadGlobalView builds the Sync page's public-data block: one
+// row per global snapshot kind (fresh/stale/missing), the
+// counterpart of the per-character snapshot tables. DB only.
+func (app *Application) loadGlobalView(ctx context.Context) []syncSnapshotRow {
+	byKind := make(map[string]db.GlobalSnapshot)
+	if snaps, err := app.queries.ListGlobalSnapshots(ctx); err != nil {
+		log.Printf("sync: list global snapshots: %v", err)
+	} else {
+		for _, snap := range snaps {
+			byKind[snap.Kind] = snap
+		}
+	}
+
+	rows := make([]syncSnapshotRow, 0, len(globalKindOrder))
+	for _, kind := range globalKindOrder {
+		row := syncSnapshotRow{Kind: kind, State: "Missing", FetchedAt: "—", CachedUntil: "—"}
+		if snap, ok := byKind[kind]; ok {
+			row.FetchedAt = snap.FetchedAt
+			row.CachedUntil = snap.CachedUntil
+			if esi.GlobalSnapshotFresh(snap) {
+				row.State = "Fresh"
+			} else {
+				row.State = "Stale"
+			}
+		}
+		rows = append(rows, row)
+	}
+	return rows
 }
 
 // snapshotTypeIDs collects the distinct type IDs a character's

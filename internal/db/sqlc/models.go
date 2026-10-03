@@ -42,6 +42,13 @@ type ContractDetail struct {
 	FetchedAt   string `json:"fetched_at"`
 }
 
+type GlobalSnapshot struct {
+	Kind        string `json:"kind"`
+	Payload     string `json:"payload"`
+	FetchedAt   string `json:"fetched_at"`
+	CachedUntil string `json:"cached_until"`
+}
+
 type ItemName struct {
 	ItemID int64  `json:"item_id"`
 	Name   string `json:"name"`
@@ -111,4 +118,10 @@ type TypeName struct {
 type User struct {
 	ID        int64  `json:"id"`
 	CreatedAt string `json:"created_at"`
+}
+
+type WarDetail struct {
+	WarID     int64  `json:"war_id"`
+	Payload   string `json:"payload"`
+	FetchedAt string `json:"fetched_at"`
 }

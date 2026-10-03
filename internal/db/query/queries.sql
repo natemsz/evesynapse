@@ -257,3 +257,43 @@ INSERT INTO item_names (item_id, name)
 VALUES (?, ?)
 ON CONFLICT (item_id) DO UPDATE SET
     name = excluded.name;
+
+-- name: ListAllCorporationIDs :many
+SELECT DISTINCT corporation_id FROM character_corporations
+ORDER BY corporation_id;
+
+-- ---------------------------------------------------------------------
+-- Module sweep, cluster 4 (schema 007): intel public-data store.
+-- Global snapshots are the public-data counterpart of
+-- character_snapshots; war details mirror killmail_details.
+-- ---------------------------------------------------------------------
+
+-- name: GetGlobalSnapshot :one
+SELECT * FROM global_snapshots
+WHERE kind = ?;
+
+-- name: UpsertGlobalSnapshot :exec
+INSERT INTO global_snapshots (kind, payload, fetched_at, cached_until)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (kind) DO UPDATE SET
+    payload      = excluded.payload,
+    fetched_at   = excluded.fetched_at,
+    cached_until = excluded.cached_until;
+
+-- name: ListGlobalSnapshots :many
+SELECT * FROM global_snapshots
+ORDER BY kind;
+
+-- name: GetWarDetail :one
+SELECT * FROM war_details
+WHERE war_id = ?;
+
+-- name: UpsertWarDetail :exec
+INSERT INTO war_details (war_id, payload, fetched_at)
+VALUES (?, ?, ?)
+ON CONFLICT (war_id) DO UPDATE SET
+    payload    = excluded.payload,
+    fetched_at = excluded.fetched_at;
+
+-- name: CountWarDetails :one
+SELECT COUNT(*) FROM war_details;

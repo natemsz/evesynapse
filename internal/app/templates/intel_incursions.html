@@ -1,0 +1,40 @@
+{{define "title"}}Incursions{{end}}
+{{define "content"}}
+<h1>Incursions</h1>
+<p>
+  <a class="btn" href="/intel/wars/">Wars</a>
+  <a class="btn" href="/intel/incursions/">Incursions</a>
+  <a class="btn" href="/intel/fw/">Faction Warfare</a>
+</p>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .IntelIncursions}}
+  {{if .IntelIncursions.Warming}}
+  <p>Still warming up — the worker pulls the public incursion list on its regular cycle. Watch progress on the <a href="/sync/">Sync page</a>.</p>
+  {{else}}
+  {{if .IntelIncursions.Rows}}
+  {{range .IntelIncursions.Rows}}
+  <h2>{{.Constellation}}</h2>
+  <div class="tw">
+  <table>
+    <tbody>
+      <tr><th>Staging</th><td>{{.Staging}}</td></tr>
+      <tr><th>State</th><td>{{.State}}{{if .Boss}} · final-encounter boss is up{{end}}</td></tr>
+      <tr><th>Faction</th><td>{{.FactionName}}</td></tr>
+      <tr><th>Influence</th><td>{{.InfluencePct}}%
+        <div style="background:#1c1c1c; height:8px; max-width:420px;"><div style="background:#326b8c; height:8px; width:{{.InfluencePct}}%;"></div></div>
+      </td></tr>
+      <tr><th>Affected systems</th><td>{{range $i, $s := .Systems}}{{if $i}}, {{end}}{{$s}}{{end}}</td></tr>
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+  {{else}}
+  <p><small>No active incursions right now.</small></p>
+  {{end}}
+  {{end}}
+{{else}}
+  <p>No intel to show yet.</p>
+{{end}}
+{{end}}

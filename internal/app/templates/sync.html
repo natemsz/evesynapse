@@ -42,6 +42,22 @@
 </p>
 {{end}}
 
+{{if .Sync.Global}}
+<h2>Public data (no login needed)</h2>
+<p><small>Wars, incursions, faction warfare and server status are public ESI data; the worker keeps them warm in a shared store (Intel pages, Home status line).</small></p>
+<div class="tw">
+<table>
+  <thead><tr><th>Data</th><th>State</th><th>Fetched at</th><th>Cached until</th></tr></thead>
+  <tbody>
+  {{range .Sync.Global}}
+    <tr><td>{{.Kind}}</td><td>{{.State}}</td><td>{{.FetchedAt}}</td><td>{{.CachedUntil}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{if .Sync.WarDetails}}<p><small>War detail payloads stored: {{.Sync.WarDetails}}</small></p>{{end}}
+{{end}}
+
 {{if .Sync.Characters}}
 <p>
   <form method="post" action="/sync/warm"><button class="btn" type="submit">Re-warm all characters</button></form>

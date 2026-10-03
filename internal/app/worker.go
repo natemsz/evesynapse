@@ -244,8 +244,8 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// snapshots, so renders resolve from memory/DB only. Bounded
 	// per cycle; whatever doesn't fit converges over later cycles.
 	namesResolved := 0
+	budget := &warmBudget{left: maxWarmLookupsPerCycle}
 	if !limited {
-		budget := &warmBudget{left: maxWarmLookupsPerCycle}
 		for _, ch := range characters {
 			if ctx.Err() != nil {
 				break
@@ -259,6 +259,20 @@ func (app *Application) refreshCycle(ctx context.Context) {
 			if budget.exhausted() {
 				break
 			}
+		}
+	}
+
+	// Intel (public data): global snapshots, war details and the
+	// public name caches, spending whatever of the cycle's lookup
+	// budget the character pass left. Runs with zero characters
+	// linked too — none of it needs a token.
+	if !limited {
+		iStored, iNames, iLimited := app.refreshIntel(ctx, budget)
+		refreshed += iStored
+		namesResolved += iNames
+		if iLimited {
+			log.Printf("worker: ESI error limit hit refreshing intel; backing off until next cycle")
+			limited = true
 		}
 	}
 

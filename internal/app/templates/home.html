@@ -2,6 +2,7 @@
 {{define "content"}}
 {{if .LoggedIn}}<h1>Character Sheet</h1>{{else}}<h1>Welcome</h1>{{end}}
 <p>One-stop EVE Online companion: characters, market, fitting, intel. Rebuilt in Go on ESI + EVE SSO.</p>
+{{if .ServerStatus}}<p><small>Tranquility: {{.ServerStatus.Players}} players online</small></p>{{end}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 

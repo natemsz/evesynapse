@@ -1,0 +1,60 @@
+{{define "title"}}Faction Warfare{{end}}
+{{define "content"}}
+<h1>Faction Warfare</h1>
+<p>
+  <a class="btn" href="/intel/wars/">Wars</a>
+  <a class="btn" href="/intel/incursions/">Incursions</a>
+  <a class="btn" href="/intel/fw/">Faction Warfare</a>
+</p>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .IntelFW}}
+  {{if .IntelFW.Warming}}
+  <p>Still warming up — the worker pulls the public faction-warfare data on its regular cycle. Watch progress on the <a href="/sync/">Sync page</a>.</p>
+  {{else}}
+  {{if .IntelFW.Factions}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>Faction</th><th>Systems held</th><th>Pilots</th><th>Kills yesterday</th><th>Kills last week</th><th>VP yesterday</th><th>VP last week</th></tr></thead>
+    <tbody>
+    {{range .IntelFW.Factions}}
+      <tr>
+        <td>{{.Name}}</td>
+        <td>{{.Systems}}</td>
+        <td>{{.Pilots}}</td>
+        <td>{{.KillsYesterday}}</td>
+        <td>{{.KillsLastWeek}}</td>
+        <td>{{.VictoryYesterday}}</td>
+        <td>{{.VictoryLastWeek}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+  {{if .IntelFW.Systems}}
+  <h2>Contested systems</h2>
+  <div class="tw">
+  <table>
+    <thead><tr><th>System</th><th>Occupier</th><th>Owner</th><th>State</th><th>Contested</th></tr></thead>
+    <tbody>
+    {{range .IntelFW.Systems}}
+      <tr>
+        <td>{{.System}}</td>
+        <td>{{.Occupier}}</td>
+        <td>{{.Owner}}</td>
+        <td>{{.State}}</td>
+        <td>{{if ge .Percent 0}}{{.Percent}}%{{else}}—{{end}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  <p><small>Contested % is victory points over the flip threshold — the ratio the in-game display tracks.{{if gt .IntelFW.Total (len .IntelFW.Systems)}} Showing the {{len .IntelFW.Systems}} most contested of {{.IntelFW.Total}} front-line systems.{{end}}</small></p>
+  {{end}}
+  {{end}}
+{{else}}
+  <p>No intel to show yet.</p>
+{{end}}
+{{end}}

@@ -1,0 +1,44 @@
+{{define "title"}}Wars{{end}}
+{{define "content"}}
+<h1>Wars</h1>
+<p>
+  <a class="btn" href="/intel/wars/">Wars</a>
+  <a class="btn" href="/intel/incursions/">Incursions</a>
+  <a class="btn" href="/intel/fw/">Faction Warfare</a>
+</p>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .IntelWars}}
+  {{if .IntelWars.Warming}}
+  <p>Still warming up — the worker pulls the public war list on its regular cycle. Watch progress on the <a href="/sync/">Sync page</a>.</p>
+  {{else}}
+  {{if .IntelWars.Rows}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>War</th><th>Aggressor</th><th>Defender</th><th>State</th><th>Declared</th><th>Aggressor record</th><th>Defender record</th></tr></thead>
+    <tbody>
+    {{range .IntelWars.Rows}}
+      <tr{{if .Yours}} class="yours"{{end}}>
+        <td>#{{.ID}}{{if .Yours}}<br><span class="badge kill">Your corporation</span>{{end}}</td>
+        <td>{{.Aggressor}}{{if .OpenAllies}}<br><span class="badge loss">Open for allies</span>{{end}}{{if .Mutual}}<br><small>Mutual</small>{{end}}</td>
+        <td>{{.Defender}}{{if .Allies}}<br><small>Allies: {{.Allies}}</small>{{end}}</td>
+        <td>{{if .Warming}}<small>details warming</small>{{else}}{{.State}}{{end}}</td>
+        <td>{{.Declared}}</td>
+        <td>{{.AggKills}}</td>
+        <td>{{.DefKills}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{if gt .IntelWars.Total (len .IntelWars.Rows)}}<p><small>Showing the {{len .IntelWars.Rows}} most recent of {{.IntelWars.Total}} wars.</small></p>{{end}}
+  <p><small>Wars involving one of your characters' corporations are flagged. Records cover ships killed and ISK destroyed on each side.</small></p>
+  {{else}}
+  <p><small>No wars on record right now.</small></p>
+  {{end}}
+  {{end}}
+{{else}}
+  <p>No intel to show yet.</p>
+{{end}}
+{{end}}

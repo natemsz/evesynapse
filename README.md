@@ -263,7 +263,8 @@ Every 60 seconds the worker walks all linked characters: it ensures
 each access token is usable (refreshing when needed) and re-fetches
 any snapshot whose `cached_until` has passed — a first pass runs at
 boot. It also warms killmail details behind each character's recent
-list (bounded per cycle) so the Killmails page never waits on ESI.
+list and contract item lists behind the contracts list (both
+bounded per cycle) so those pages never wait on ESI.
 It then warms the name caches from the fresh snapshots (type
 names and type→group links, group names, station/system names, and
 character names for killmail victims and final-blow attackers) with
@@ -309,7 +310,8 @@ whenever the killmail-detail table is absent, and
 support tables (fetch-state log, character→corporation map, item
 names) are absent (existing databases gain
 the new tables
-in place). Regenerate query code after editing `internal/db/query/queries.sql`
+in place), and `internal/app/schema/006_economy.sql` whenever the
+contract-detail table is absent. Regenerate query code after editing `internal/db/query/queries.sql`
 with:
 
 ```sh
@@ -348,3 +350,9 @@ make gen   # sqlc generate
       killmails sharing cluster 1's store and rendering — all
       snapshot-cached with role-missing (403) states recorded
       instead of retried
+- [x] Module sweep cluster 3 (economy): Wallet page (balance,
+      bounded journal + transaction windows), Orders page (open +
+      recent history), Contracts page (couriers routed, item lists
+      warmed into a detail store like killmail details), Industry
+      page (jobs incl. completed, blueprint library with BPO/BPC
+      semantics, mining ledger)

@@ -1,0 +1,79 @@
+{{define "title"}}Industry{{end}}
+{{define "content"}}
+<h1>Industry</h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .IndustryChars}}
+<p>{{range $i, $c := .IndustryChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/industry/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
+{{end}}
+
+{{if .Industry}}
+<h2>{{.Industry.CharacterName}}</h2>
+
+<h3>Jobs</h3>
+{{if .Industry.Jobs.Note}}
+<p><small>{{.Industry.Jobs.Note}}</small></p>
+{{else if .Industry.Jobs.Warming}}
+<p><small>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</small></p>
+{{else if .Industry.JobRows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Activity</th><th>Blueprint</th><th>Product</th><th>Facility</th><th>Runs</th><th>Status</th><th>Ends</th><th>Cost</th></tr></thead>
+  <tbody>
+  {{range .Industry.JobRows}}
+    <tr><td>{{.Activity}}</td><td>{{.Blueprint}}</td><td>{{.Product}}</td><td>{{.Facility}}</td><td>{{.Runs}}</td><td>{{.Status}}</td><td>{{.Ends}}</td><td>{{.Cost}} ISK</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{if .Industry.JobsCut}}<p><small>+ {{.Industry.JobsCut}} older jobs in this snapshot.</small></p>{{end}}
+{{else}}
+<p><small>No industry jobs in the latest snapshot.</small></p>
+{{end}}
+
+<h3>Blueprints</h3>
+{{if .Industry.Blueprints.Note}}
+<p><small>{{.Industry.Blueprints.Note}}</small></p>
+{{else if .Industry.Blueprints.Warming}}
+<p><small>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</small></p>
+{{else if .Industry.BlueprintRows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Blueprint</th><th>Kind</th><th>ME</th><th>TE</th><th>Runs</th><th>Location</th></tr></thead>
+  <tbody>
+  {{range .Industry.BlueprintRows}}
+    <tr><td>{{.Name}}</td><td>{{.Kind}}</td><td>{{.ME}}</td><td>{{.TE}}</td><td>{{.Runs}}</td><td>{{.Location}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{if .Industry.BlueprintsCut}}<p><small>+ {{.Industry.BlueprintsCut}} more blueprints in this snapshot.</small></p>{{end}}
+{{else}}
+<p><small>No blueprints in the latest snapshot.</small></p>
+{{end}}
+
+<h3>Mining ledger</h3>
+{{if .Industry.Mining.Note}}
+<p><small>{{.Industry.Mining.Note}}</small></p>
+{{else if .Industry.Mining.Warming}}
+<p><small>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</small></p>
+{{else if .Industry.MiningRows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Date</th><th>Ore</th><th>Quantity</th><th>System</th></tr></thead>
+  <tbody>
+  {{range .Industry.MiningRows}}
+    <tr><td>{{.Date}}</td><td>{{.Ore}}</td><td>{{.Qty}}</td><td>{{.System}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{if .Industry.MiningCut}}<p><small>+ {{.Industry.MiningCut}} older entries in this snapshot.</small></p>{{end}}
+{{else}}
+<p><small>No mining entries in the latest snapshot.</small></p>
+{{end}}
+{{else}}
+<p>No character to show yet — link a character first.</p>
+{{end}}
+{{end}}

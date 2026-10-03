@@ -1,0 +1,181 @@
+package app
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"net/http"
+	"sort"
+
+	"evesynapse/internal/esi"
+)
+
+// ---------------------------------------------------------------------------
+// Contracts page: the character's contracts from the contracts
+// snapshot. Item lists behind item-exchange contracts warm into
+// the contract_details store in the background (schema 006, the
+// killmail detail pattern) — this page reads the store only, so
+// expanding a contract never waits on ESI. Auction bids are not
+// fetched (issuer-only in ESI and rarely wanted); the buyout is
+// shown from the contract row instead.
+// ---------------------------------------------------------------------------
+
+// contractItemRow is one warmed item line of a contract.
+type contractItemRow struct {
+	Name string
+	Qty  string
+	Note string // "wanted", "BPO", "BPC", "singleton"
+}
+
+// contractRow is one contract line.
+type contractRow struct {
+	Title      string
+	Type       string // humanized
+	Status     string // humanized
+	Issuer     string
+	Assignee   string // "Public" for public contracts
+	Acceptor   string // "" until accepted
+	Price      string
+	Reward     string
+	Collateral string
+	Route      string // couriers: "Start → End"
+	Issued     string
+	Expires    string
+	Items      []contractItemRow
+	ItemsNote  string // "details warming" while the store lacks the list
+}
+
+// contractsView is the Contracts page body.
+type contractsView struct {
+	CharacterName string
+	Contracts     econSectionState
+	Rows          []contractRow
+	Cut           int
+}
+
+// maxContractsShown caps the contract list; details warm into the
+// store for the contracts shown.
+const maxContractsShown = 100
+
+func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	data := pageData{
+		LoggedIn:      true,
+		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
+		SSOConfigured: app.cfg.SSOConfigured(),
+	}
+
+	_, active, links, err := app.pickCharacter(ctx, r, "/contracts/")
+	if err != nil {
+		log.Printf("contracts: list characters: %v", err)
+		data.Error = "Could not load contract data; check the server log."
+		app.render(w, http.StatusOK, "contracts.html", data)
+		return
+	}
+	if links == nil {
+		app.render(w, http.StatusOK, "contracts.html", data)
+		return
+	}
+	data.ContractsChars = links
+
+	view := &contractsView{CharacterName: active.Name}
+	data.Contracts = view
+
+	var contracts esi.Contracts
+	view.Contracts = app.econSection(ctx, active.CharacterID, esi.SnapContracts, &contracts)
+	if !view.Contracts.Loaded {
+		app.render(w, http.StatusOK, "contracts.html", data)
+		return
+	}
+
+	// Newest issued first.
+	sort.SliceStable(contracts, func(i, j int) bool { return contracts[i].DateIssued > contracts[j].DateIssued })
+	if len(contracts) > maxContractsShown {
+		view.Cut = len(contracts) - maxContractsShown
+		contracts = contracts[:maxContractsShown]
+	}
+
+	for _, c := range contracts {
+		row := contractRow{
+			Title:      c.Title,
+			Type:       humanizeEnum(c.Type),
+			Status:     humanizeEnum(c.Status),
+			Issuer:     characterDisplay(app.esi, c.IssuerID),
+			Price:      esi.FormatISK(c.Price),
+			Reward:     esi.FormatISK(c.Reward),
+			Collateral: esi.FormatISK(c.Collateral),
+			Issued:     formatFinish(c.DateIssued),
+			Expires:    formatFinish(c.DateExpired),
+		}
+		if row.Title == "" {
+			row.Title = "Untitled"
+		}
+		if c.AssigneeID > 0 {
+			row.Assignee = characterDisplay(app.esi, c.AssigneeID)
+		} else if c.Availability == "public" {
+			row.Assignee = "Public"
+		}
+		if c.AcceptorID > 0 {
+			row.Acceptor = characterDisplay(app.esi, c.AcceptorID)
+		}
+		if c.Type == "courier" && (c.StartLocationID > 0 || c.EndLocationID > 0) {
+			row.Route = fmt.Sprintf("%s → %s",
+				app.econLocationTitle(ctx, c.StartLocationID),
+				app.econLocationTitle(ctx, c.EndLocationID))
+		}
+
+		// Warmed item list from the detail store (item-exchange
+		// contracts mainly; other types carry lists too).
+		items, ok, err := app.loadContractItems(ctx, c.ContractID)
+		if err != nil {
+			log.Printf("contracts: read items for contract %d: %v", c.ContractID, err)
+		}
+		switch {
+		case ok:
+			for _, it := range items {
+				note := ""
+				switch {
+				case !it.IsIncluded:
+					note = "wanted"
+				case it.RawQuantity == -1:
+					note = "BPO"
+				case it.RawQuantity == -2:
+					note = "BPC"
+				case it.IsSingleton:
+					note = "singleton"
+				}
+				row.Items = append(row.Items, contractItemRow{
+					Name: app.typeNameOrID(ctx, it.TypeID),
+					Qty:  esi.FormatInt(it.Quantity),
+					Note: note,
+				})
+			}
+		case c.Type == "item_exchange":
+			row.ItemsNote = "Item details are still warming up."
+		}
+		view.Rows = append(view.Rows, row)
+	}
+
+	app.render(w, http.StatusOK, "contracts.html", data)
+}
+
+// loadContractItems reads one contract's warmed item list from
+// contract_details. ok=false means the worker has not warmed it
+// yet (or the contract has no list stored).
+func (app *Application) loadContractItems(ctx context.Context, contractID int64) (esi.ContractItems, bool, error) {
+	row, err := app.queries.GetContractDetail(ctx, contractID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	var items esi.ContractItems
+	if err := json.Unmarshal([]byte(row.Payload), &items); err != nil {
+		return nil, false, fmt.Errorf("decode contract %d items: %w", contractID, err)
+	}
+	return items, true, nil
+}

@@ -93,6 +93,17 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 006 (economy cluster: contract detail store), applied
+	// the same guarded way.
+	var contractTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'contract_details'`).Scan(&contractTables); err != nil {
+		return nil, err
+	}
+	if contractTables == 0 {
+		if err := applySchema(conn, economySchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

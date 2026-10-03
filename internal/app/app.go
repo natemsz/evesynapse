@@ -45,6 +45,9 @@ var moduleSweepSchema string
 //go:embed schema/005_corp.sql
 var corpSchema string
 
+//go:embed schema/006_economy.sql
+var economySchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -263,6 +266,26 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/killmails", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleKillmails)
+	})
+
+	r.Route("/wallet", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleWallet)
+	})
+
+	r.Route("/orders", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleOrders)
+	})
+
+	r.Route("/contracts", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleContracts)
+	})
+
+	r.Route("/industry", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleIndustry)
 	})
 
 	r.Route("/sync", func(r chi.Router) {

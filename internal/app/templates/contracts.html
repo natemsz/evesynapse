@@ -1,0 +1,38 @@
+{{define "title"}}Contracts{{end}}
+{{define "content"}}
+<h1>Contracts</h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .ContractsChars}}
+<p>{{range $i, $c := .ContractsChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/contracts/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
+{{end}}
+
+{{if .Contracts}}
+<h2>{{.Contracts.CharacterName}}</h2>
+{{if .Contracts.Contracts.Note}}
+<p><small>{{.Contracts.Contracts.Note}}</small></p>
+{{else if .Contracts.Contracts.Warming}}
+<p><small>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</small></p>
+{{else if .Contracts.Rows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Title</th><th>Type</th><th>Status</th><th>Issuer</th><th>Assignee</th><th>Price</th><th>Reward</th><th>Collateral</th><th>Issued</th><th>Expires</th></tr></thead>
+  <tbody>
+  {{range .Contracts.Rows}}
+    <tr><td>{{.Title}}</td><td>{{.Type}}</td><td>{{.Status}}</td><td>{{.Issuer}}</td><td>{{.Assignee}}{{if .Acceptor}} (accepted by {{.Acceptor}}){{end}}</td><td>{{.Price}} ISK</td><td>{{.Reward}} ISK</td><td>{{.Collateral}} ISK</td><td>{{.Issued}}</td><td>{{.Expires}}</td></tr>
+    {{if .Route}}<tr><td colspan="10"><small>Courier: {{.Route}}</small></td></tr>{{end}}
+    {{if .Items}}<tr><td colspan="10"><small>{{range $i, $it := .Items}}{{if $i}} · {{end}}{{$it.Name}} × {{$it.Qty}}{{if $it.Note}} ({{$it.Note}}){{end}}{{end}}</small></td></tr>{{end}}
+    {{if .ItemsNote}}<tr><td colspan="10"><small>{{.ItemsNote}}</small></td></tr>{{end}}
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{if .Contracts.Cut}}<p><small>+ {{.Contracts.Cut}} older contracts in this snapshot.</small></p>{{end}}
+{{else}}
+<p><small>No contracts in the latest snapshot.</small></p>
+{{end}}
+{{else}}
+<p>No character to show yet — link a character first.</p>
+{{end}}
+{{end}}

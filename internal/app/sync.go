@@ -18,6 +18,9 @@ var syncKindOrder = []string{
 	esi.SnapSkills, esi.SnapSkillqueue, esi.SnapWallet, esi.SnapAssets,
 	esi.SnapLocation, esi.SnapShip, esi.SnapOnline, esi.SnapClones,
 	esi.SnapImplants, esi.SnapFittings, esi.SnapFatigue, esi.SnapKillmails,
+	esi.SnapWalletJournal, esi.SnapWalletTxns,
+	esi.SnapOrders, esi.SnapOrdersHistory, esi.SnapContracts,
+	esi.SnapIndustryJobs, esi.SnapBlueprints, esi.SnapMining,
 }
 
 // syncDisplayKinds is the full Sync-page kind list: character

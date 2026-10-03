@@ -147,8 +147,8 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 }
 
 // searchTypes merges exact /universe/ids/ hits (first) with partial
-// matches from the local type_names cache. Exact hits are persisted
-// to type_names so later local searches find them too.
+// matches from the local SDE type table. Exact hits are persisted
+// to type_names so the fallback cache finds them too.
 func (app *Application) searchTypes(ctx context.Context, query string) []marketMatch {
 	var matches []marketMatch
 	seen := make(map[int64]bool)
@@ -169,7 +169,7 @@ func (app *Application) searchTypes(ctx context.Context, query string) []marketM
 		}
 	}
 
-	rows, err := app.queries.SearchTypeNames(ctx, "%"+query+"%")
+	rows, err := app.queries.SearchSDETypes(ctx, "%"+query+"%")
 	if err != nil {
 		log.Printf("market: local search for %q: %v", query, err)
 		return matches

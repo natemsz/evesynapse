@@ -8,6 +8,40 @@
 {{if .Sync}}
 <p><small>Worker: {{.Sync.WorkerLine}}{{if .Sync.Warming}} — warming in progress…{{end}}</small></p>
 
+{{if .Sync.SDE}}
+<h2>EVE static data (SDE)</h2>
+<p><small>Item, skill, station and system names come from a local copy of CCP's static data export (via Fuzzwork's CSV conversion), refreshed on a weekly check — ESI is only a fallback for names the SDE lacks.</small></p>
+<p>State: <strong>{{.Sync.SDE.State}}</strong>
+{{if .Sync.SDE.ImportedAt}} · imported {{.Sync.SDE.ImportedAt}}{{end}}
+<br><small>Source: {{.Sync.SDE.SourceBase}}</small></p>
+{{if .Sync.SDE.Progress}}<p><small>{{.Sync.SDE.Progress}}</small></p>{{end}}
+{{if .Sync.SDE.Message}}<p><small>{{.Sync.SDE.Message}}</small></p>{{end}}
+{{if .Sync.SDE.LastError}}<p class="err">Last SDE error: {{.Sync.SDE.LastError}}</p>{{end}}
+<div class="tw">
+<table>
+  <thead><tr><th>Table</th><th>Rows</th></tr></thead>
+  <tbody>
+  {{range .Sync.SDE.Tables}}
+    <tr><td>{{.Name}}</td><td>{{.Rows}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<div class="tw">
+<table>
+  <thead><tr><th>Dump file</th><th>Remote last modified</th></tr></thead>
+  <tbody>
+  {{range .Sync.SDE.Files}}
+    <tr><td>{{.File}}</td><td>{{.LastModified}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p>
+  <form method="post" action="/sync/sde"><button class="btn" type="submit">Check for SDE update</button></form>
+</p>
+{{end}}
+
 {{if .Sync.Characters}}
 <p>
   <form method="post" action="/sync/warm"><button class="btn" type="submit">Re-warm all characters</button></form>

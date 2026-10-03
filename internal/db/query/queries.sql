@@ -90,3 +90,71 @@ LIMIT 20;
 -- name: ListAllTypeNames :many
 SELECT type_id, name FROM type_names
 ORDER BY type_id;
+
+-- ---------------------------------------------------------------------
+-- SDE static data (schema 003): lookup getters, search, counts, meta.
+-- Bulk import inserts are hand-rolled prepared statements inside one
+-- transaction in the importer (internal/app/sde.go); reads stay sqlc.
+-- ---------------------------------------------------------------------
+
+-- name: GetSDEType :one
+SELECT type_id, name, group_id FROM sde_types
+WHERE type_id = ?;
+
+-- name: GetSDEGroup :one
+SELECT group_id, name, category_id FROM sde_groups
+WHERE group_id = ?;
+
+-- name: GetSDECategory :one
+SELECT category_id, name FROM sde_categories
+WHERE category_id = ?;
+
+-- name: GetSDEStation :one
+SELECT station_id, name, system_id FROM sde_stations
+WHERE station_id = ?;
+
+-- name: GetSDESystem :one
+SELECT system_id, name, region_id, security FROM sde_systems
+WHERE system_id = ?;
+
+-- name: GetSDERegion :one
+SELECT region_id, name FROM sde_regions
+WHERE region_id = ?;
+
+-- name: SearchSDETypes :many
+SELECT type_id, name FROM sde_types
+WHERE name LIKE ?
+ORDER BY name
+LIMIT 20;
+
+-- name: ListSDETypeIDs :many
+SELECT type_id FROM sde_types
+ORDER BY type_id;
+
+-- name: CountSDETypes :one
+SELECT COUNT(*) FROM sde_types;
+
+-- name: CountSDEGroups :one
+SELECT COUNT(*) FROM sde_groups;
+
+-- name: CountSDECategories :one
+SELECT COUNT(*) FROM sde_categories;
+
+-- name: CountSDEStations :one
+SELECT COUNT(*) FROM sde_stations;
+
+-- name: CountSDESystems :one
+SELECT COUNT(*) FROM sde_systems;
+
+-- name: CountSDERegions :one
+SELECT COUNT(*) FROM sde_regions;
+
+-- name: GetSDEMeta :one
+SELECT value FROM sde_meta
+WHERE key = ?;
+
+-- name: UpsertSDEMeta :exec
+INSERT INTO sde_meta (key, value)
+VALUES (?, ?)
+ON CONFLICT (key) DO UPDATE SET
+    value = excluded.value;

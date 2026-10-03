@@ -90,13 +90,25 @@ func (app *Application) workerStatusText() string {
 // Logging is deliberately quiet: one summary line per cycle only when
 // something was refreshed or failed, plus a 10-minute heartbeat so
 // liveness is visible without spamming the console.
+//
+// The same goroutine also hosts the hourly SDE maintenance tick
+// (first import + weekly update check; sde.go).
 func (app *Application) runWorker(ctx context.Context) {
 	log.Printf("worker: started")
 
+	// SDE maintenance runs alongside the ESI cycle: a first import
+	// when the static-data tables are empty, then a weekly update
+	// check (patch-day cadence) — see sdeMaintenance in sde.go. It
+	// only ever starts background operations, so it never delays
+	// snapshot refreshes.
+	go app.sdeMaintenance(ctx)
+
 	cycle := time.NewTicker(time.Minute)
 	heartbeat := time.NewTicker(10 * time.Minute)
+	sdeTick := time.NewTicker(time.Hour)
 	defer cycle.Stop()
 	defer heartbeat.Stop()
+	defer sdeTick.Stop()
 
 	// First pass right away so a cold start doesn't wait a minute for
 	// fresh data.
@@ -109,6 +121,8 @@ func (app *Application) runWorker(ctx context.Context) {
 			return
 		case <-heartbeat.C:
 			log.Printf("worker: alive")
+		case <-sdeTick.C:
+			app.sdeMaintenance(ctx)
 		case <-cycle.C:
 			app.refreshCycle(ctx)
 		}
@@ -468,7 +482,7 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 	pathByID := make(map[int64]string, len(placeKinds))
 	var missingPlaces []int64
 	for id, kind := range placeKinds {
-		if _, ok := app.esi.CachedPlaceName(id); ok {
+		if _, ok := app.esi.CachedPlaceName(ctx, id); ok {
 			continue
 		}
 		dir := "stations"

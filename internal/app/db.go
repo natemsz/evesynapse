@@ -9,8 +9,8 @@ import (
 
 // openDB opens the SQLite database at path and applies the embedded
 // schemas on first boot (001 on an empty database, 002 when the
-// snapshot tables are absent), plus the sessions table the scs
-// sqlite3store expects.
+// snapshot tables are absent, 003 when the SDE tables are absent),
+// plus the sessions table the scs sqlite3store expects.
 func openDB(path string) (*sql.DB, error) {
 	dsn := "file:" + path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)"
 	conn, err := sql.Open("sqlite", dsn)
@@ -57,6 +57,16 @@ func openDB(path string) (*sql.DB, error) {
 	}
 	if snapshotTables == 0 {
 		if err := applySchema(conn, snapshotsSchema); err != nil {
+			return nil, err
+		}
+	}
+	// Schema 003 (SDE static data), applied the same guarded way.
+	var sdeTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sde_types'`).Scan(&sdeTables); err != nil {
+		return nil, err
+	}
+	if sdeTables == 0 {
+		if err := applySchema(conn, sdeSchema); err != nil {
 			return nil, err
 		}
 	}

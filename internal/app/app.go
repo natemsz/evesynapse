@@ -36,6 +36,9 @@ var initSchema string
 //go:embed schema/002_snapshots.sql
 var snapshotsSchema string
 
+//go:embed schema/003_sde.sql
+var sdeSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -55,6 +58,7 @@ type Application struct {
 	// db and stopWorker are the resources Close releases.
 	db         *sql.DB
 	stopWorker context.CancelFunc
+	workerCtx  context.Context // the worker's context, captured in New for background jobs (SDE import)
 
 	// tokenMu serializes access-token refreshes: CCP rotates refresh
 	// tokens on every refresh, so two concurrent refreshes on the same
@@ -82,6 +86,11 @@ type Application struct {
 	// The worker's user-visible status (Sync/Admin pages).
 	workerMu sync.Mutex
 	worker   workerStatus
+
+	// The SDE importer's user-visible status (Sync page), guarded
+	// the same way as the worker status. See sde.go.
+	sdeMu sync.Mutex
+	sde   sdeStatus
 }
 
 // New opens the database (applying the embedded schemas on first
@@ -117,6 +126,7 @@ func New(cfg Config) (*Application, error) {
 
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	app.stopWorker = stopWorker
+	app.workerCtx = workerCtx
 	go app.runWorker(workerCtx)
 
 	// One-shot reachability probe so phone (Termux) logs immediately
@@ -232,6 +242,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleSync)
 		r.Post("/warm", app.handleSyncWarm)
+		r.Post("/sde", app.handleSyncSDE)
 	})
 
 	return r

@@ -167,7 +167,7 @@ func (app *Application) buildAssetLocations(ctx context.Context, items []esi.Ass
 
 	locations := make([]assetLocation, 0, len(byLoc))
 	for locID, entries := range byLoc {
-		loc := assetLocation{Title: app.assetLocationTitle(locID, locType[locID], itemType, nameOf)}
+		loc := assetLocation{Title: app.assetLocationTitle(ctx, locID, locType[locID], itemType, nameOf)}
 
 		sorted := append([]esi.Asset(nil), entries...)
 		sort.Slice(sorted, func(i, j int) bool {
@@ -203,20 +203,21 @@ func (app *Application) buildAssetLocations(ctx context.Context, items []esi.Ass
 
 // assetLocationTitle turns a (location_id, location_type) pair into
 // a display title. Station and solar-system names come from the
-// local place-name cache (the worker warms it); player structures
+// local caches (SDE tables first, then the worker-warmed place
+// cache); player structures
 // cannot be named without an ESI scope this app does not hold, so
 // they stay honest "Structure #<id>"; items inside another owned
 // item (a ship, a container) are labelled with the parent's type
 // name.
-func (app *Application) assetLocationTitle(locID int64, locType string, itemType map[int64]int64, nameOf func(int64) string) string {
+func (app *Application) assetLocationTitle(ctx context.Context, locID int64, locType string, itemType map[int64]int64, nameOf func(int64) string) string {
 	switch locType {
 	case "station":
-		if name, ok := app.esi.CachedPlaceName(locID); ok {
+		if name, ok := app.esi.CachedPlaceName(ctx, locID); ok {
 			return name
 		}
 		return fmt.Sprintf("Station #%d", locID)
 	case "solar_system":
-		if name, ok := app.esi.CachedPlaceName(locID); ok {
+		if name, ok := app.esi.CachedPlaceName(ctx, locID); ok {
 			return name
 		}
 		return fmt.Sprintf("System #%d", locID)

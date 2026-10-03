@@ -31,15 +31,16 @@ and key/vCode auth.
   token refresh (`refresh.go`), the application struct, router and DB
   bootstrap (`app.go`, `db.go`), page handlers and view models
   (`pages.go`, `assets.go`, `skills.go`, `corporation.go`,
-  `market.go`, `sync.go`), the background worker (`worker.go`), and
-  the Termux DNS/CA shim (`netdns.go`)
+  `market.go`, `sync.go`), the background worker (`worker.go`), the
+  SDE static-data importer (`sde.go`), and the Termux DNS/CA shim
+  (`netdns.go`)
 - `internal/app/templates/` — embedded html/templates (`base.html`
   layout)
 - `internal/app/static/` — embedded assets: the 2013 wallpaper
   (`bg.jpg`) and the dependency-free stylesheet (`style.css`), served
   at `/static/`
 - `internal/app/schema/` — SQL schema (sqlc input; `001_init.sql`,
-  `002_snapshots.sql`), embedded for DB bootstrap
+  `002_snapshots.sql`, `003_sde.sql`), embedded for DB bootstrap
 - `internal/esi/` — the ESI client: HTTP layer, per-character
   snapshot cache, and the two-tier type/group/place name resolution
   (network tier + cache-only render tier). Never imports
@@ -85,9 +86,10 @@ environment win). Then open <http://localhost:8080>:
   category with per-group SP subtotals (requires login;
   `esi-skills.read_skills.v1` + `esi-skills.read_skillqueue.v1`)
 - `/sync/` — sync status: worker state, per-character snapshot
-  freshness and type-name coverage, with re-warm buttons; the page
-  auto-refreshes so an import can be watched as it lands (requires
-  login)
+  freshness and type-name coverage, with re-warm buttons, plus the
+  SDE static-data block (row counts, import state, update check);
+  the page auto-refreshes so an import can be watched as it lands
+  (requires login)
 - `/healthz` — plain `ok`
 - `/dev-login` — dev-only fake sign-in, registered **only** when
   `DEV_LOGIN=1` (see below)
@@ -155,12 +157,39 @@ snapshot is served instead of an error. ESI's error-limit statuses
 (420/429) are treated as a hard back-off signal.
 
 Name resolution is split in two tiers. Page renders resolve type,
-group and place names from local caches only (the in-process maps
-plus the `type_names` table) — a render never waits on ESI; anything
-still missing shows as `Type #<id>` (or an "Ungrouped" skill section)
-until the worker's warm-up pass fills it in. The interactive Market
-lookup is the one exception: it may make a single name fetch for an
-item nobody has cached yet.
+group and place names from local data only — the in-process maps,
+the SDE static-data tables (below), and the `type_names` fallback
+table — a render never waits on ESI; anything still missing shows
+as `Type #<id>` (or an "Ungrouped" skill section) until the
+worker's warm-up pass fills it in. The interactive Market lookup
+is the one exception: it may make a single name fetch for an item
+nobody has cached yet.
+
+## Static data (SDE)
+
+Item, skill, group, station and system names come primarily from a
+local copy of CCP's static data export (the SDE), stored in the
+`sde_*` tables (schema `internal/app/schema/003_sde.sql`): types,
+groups, categories, NPC stations, solar systems and regions. The
+ESI drip-feed caches remain only as fallback for anything the SDE
+lacks — notably player-structure names, which aren't in the dump.
+
+- **Source**: [Fuzzwork's community CSV conversion](https://www.fuzzwork.co.uk/dump/)
+  of the SDE. The six tables are fetched from
+  `https://www.fuzzwork.co.uk/dump/latest/csv/` (plain `.csv`;
+  `.csv.bz2` names and bzip2 content are also handled). Override
+  with `EVE_SDE_BASE_URL` to use a mirror.
+- **Import**: on first boot with empty SDE tables the worker
+  imports automatically. The import downloads and parses all six
+  files first, then replaces the tables in a single transaction —
+  a failed import leaves the previous data untouched.
+- **Cadence**: static data changes on patch days, not on ESI's
+  cache clock. The worker checks the remote files' ETag /
+  Last-Modified weekly and re-imports only when they changed.
+- **Manual update**: the Sync page's "Check for SDE update" button
+  runs the same check on demand (and imports when the dump moved);
+  it also shows import state, per-table row counts, and each file's
+  remote last-modified marker.
 
 ## Background worker
 
@@ -202,10 +231,11 @@ server logs a loud warning at boot when it is on.
 
 The app opens/creates the SQLite file from `DB_PATH`, creates the scs
 `sessions` table, applies `internal/app/schema/001_init.sql` on first
-boot of a fresh database (the `users`/`characters` tables), and
-applies `internal/app/schema/002_snapshots.sql` whenever the snapshot
-tables are absent (existing databases gain the new tables in place).
-Regenerate query code after editing `internal/db/query/queries.sql`
+boot of a fresh database (the `users`/`characters` tables), applies
+`internal/app/schema/002_snapshots.sql` whenever the snapshot
+tables are absent, and `internal/app/schema/003_sde.sql` whenever
+the SDE tables are absent (existing databases gain the new tables
+in place). Regenerate query code after editing `internal/db/query/queries.sql`
 with:
 
 ```sh
@@ -230,5 +260,7 @@ make gen   # sqlc generate
       worker pre-warms snapshots + names; Sync page shows progress
 - [x] Login requests the full read-only ESI scope set (63 scopes;
       mutating scopes excluded), matching the developer-portal app
-- [ ] Import CCP SDE into side tables for the market/fitting modules
+- [x] Import CCP SDE into local tables (types/groups/categories/
+      stations/systems/regions) as the primary name source for the
+      market and character pages
 - [x] Multiple characters per account (link more while signed in)

@@ -17,6 +17,7 @@ type Config struct {
 	eveCallbackURL  string // OAuth2 redirect URI registered with CCP
 	sessionKey      string // reserved for cookie signing hardening
 	devLogin        bool   // DEV_LOGIN=1: register the /dev-login route
+	sdeBaseURL      string // EVE SDE CSV dump base URL (Fuzzwork by default)
 }
 
 // SSOConfigured reports whether EVE SSO can run: it needs both the
@@ -31,6 +32,24 @@ func (c Config) Addr() string { return c.addr }
 // DBPath returns the configured SQLite database file path.
 func (c Config) DBPath() string { return c.dbPath }
 
+// defaultSDEBaseURL is Fuzzwork's community SDE conversion, CSV
+// tables under /dump/latest/csv/ (verified live 2026-10-02; the
+// dump previously lived directly under /dump/latest/ as .csv.bz2).
+const defaultSDEBaseURL = "https://www.fuzzwork.co.uk/dump/latest/csv/"
+
+// SDEBaseURL returns the base URL the SDE importer downloads the
+// CSV tables from, always with a trailing slash.
+func (c Config) SDEBaseURL() string {
+	base := c.sdeBaseURL
+	if base == "" {
+		base = defaultSDEBaseURL
+	}
+	if !strings.HasSuffix(base, "/") {
+		base += "/"
+	}
+	return base
+}
+
 // loadConfig loads ./.env (if present) and then reads the environment.
 func LoadConfig() Config {
 	loadDotEnv(".env")
@@ -42,6 +61,7 @@ func LoadConfig() Config {
 		eveCallbackURL:  getenvDefault("EVE_CALLBACK_URL", "http://localhost:8080/auth/callback"),
 		sessionKey:      os.Getenv("SESSION_KEY"),
 		devLogin:        os.Getenv("DEV_LOGIN") == "1",
+		sdeBaseURL:      getenvDefault("EVE_SDE_BASE_URL", defaultSDEBaseURL),
 	}
 }
 

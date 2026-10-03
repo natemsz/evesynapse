@@ -38,6 +38,7 @@ type syncView struct {
 	WorkerLine string
 	Warming    bool // a worker cycle is running right now
 	Characters []syncCharacterView
+	SDE        *sdeView
 }
 
 // handleSync renders the Sync page: live worker status, per-character
@@ -57,6 +58,7 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 	view := &syncView{
 		WorkerLine: app.workerStatusText(),
 		Warming:    status.Warming,
+		SDE:        app.loadSDEView(ctx),
 	}
 	data.Sync = view
 
@@ -75,14 +77,22 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The whole type_names table as a membership set for coverage
-	// math (one query; the table is small and local).
+	// The name-coverage denominator resolves against the SDE type
+	// table plus the type_names fallback cache (one query each; the
+	// tables are local).
 	known := make(map[int64]bool)
 	if rows, err := app.queries.ListAllTypeNames(ctx); err != nil {
 		log.Printf("sync: list type names: %v", err)
 	} else {
 		for _, row := range rows {
 			known[row.TypeID] = true
+		}
+	}
+	if ids, err := app.queries.ListSDETypeIDs(ctx); err != nil {
+		log.Printf("sync: list SDE type ids: %v", err)
+	} else {
+		for _, id := range ids {
+			known[id] = true
 		}
 	}
 
@@ -177,5 +187,14 @@ func (app *Application) handleSyncWarm(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	http.Redirect(w, r, "/sync/", http.StatusSeeOther)
+}
+
+// handleSyncSDE kicks off an SDE update check (which imports only
+// when the remote dump changed), then bounces back to the Sync
+// page to watch it happen. The same check runs weekly in the
+// worker; this is its manual trigger.
+func (app *Application) handleSyncSDE(w http.ResponseWriter, r *http.Request) {
+	app.startSDECheck("manual")
 	http.Redirect(w, r, "/sync/", http.StatusSeeOther)
 }

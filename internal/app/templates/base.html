@@ -36,6 +36,7 @@
       <summary>Economy</summary>
       <div class="menu">
         <a href="/market/"{{if eq .NavPage "market.html"}} class="active"{{end}}>Market</a>
+        <a href="/items/"{{if eq .NavPage "items.html"}} class="active"{{end}}>Items</a>
         <a href="/wallet/"{{if eq .NavPage "wallet.html"}} class="active"{{end}}>Wallet</a>
         <a href="/orders/"{{if eq .NavPage "orders.html"}} class="active"{{end}}>Orders</a>
         <a href="/contracts/"{{if eq .NavPage "contracts.html"}} class="active"{{end}}>Contracts</a>
@@ -76,6 +77,7 @@
   No official affiliation or endorsement by CCP Games hf is stated or implied.</p>
   <p class="version"><span>EveSynapse 0.2.0 — Go rewrite</span><span>ESI + EVE SSO</span><span>Not affiliated with CCP Games</span></p>
 </footer>
+<script src="/static/app.js" defer></script>
 </body>
 </html>
 {{end}}

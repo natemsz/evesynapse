@@ -1,6 +1,6 @@
 {{define "title"}}Killmails{{end}}
 {{define "content"}}
-<h1>{{if .Killmails}}{{.Killmails.Title}}{{else}}Killmails{{end}}</h1>
+<h1><span class="gt">{{if .Killmails}}{{.Killmails.Title}}{{else}}Killmails{{end}}</span></h1>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 

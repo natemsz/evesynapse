@@ -1,13 +1,16 @@
 {{define "title"}}Market{{end}}
 {{define "content"}}
-<h1>Market</h1>
+<h1><span class="gt">Market</span></h1>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{if .Market}}
-<form method="get" action="/market/">
-  <input type="text" name="q" value="{{.Market.Query}}" placeholder="Item name, e.g. Tritanium">
-  {{if .Market.Item}}<input type="hidden" name="region" value="{{.Market.Item.RegionID}}">{{end}}
+<form method="get" action="/market/" id="market-search">
+  <span class="searchwrap">
+    <input type="text" name="q" id="market-q" value="{{.Market.Query}}" placeholder="Item name, e.g. Tritanium" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="market-suggest" aria-autocomplete="list">
+    <ul class="suggest" id="market-suggest" role="listbox" hidden></ul>
+  </span>
+  <input type="hidden" name="region" id="market-region" value="{{.Market.Region}}">
   <button class="btn" type="submit">Search</button>
 </form>
 

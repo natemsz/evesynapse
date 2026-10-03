@@ -97,9 +97,11 @@ type SdeSystem struct {
 }
 
 type SdeType struct {
-	TypeID  int64  `json:"type_id"`
-	Name    string `json:"name"`
-	GroupID int64  `json:"group_id"`
+	TypeID        int64  `json:"type_id"`
+	Name          string `json:"name"`
+	GroupID       int64  `json:"group_id"`
+	MarketGroupID int64  `json:"market_group_id"`
+	Published     int64  `json:"published"`
 }
 
 type SnapshotFetchState struct {

@@ -1,6 +1,6 @@
 {{define "title"}}Home{{end}}
 {{define "content"}}
-{{if .LoggedIn}}<h1>Character Sheet</h1>{{else}}<h1>Welcome</h1>{{end}}
+{{if .LoggedIn}}<h1><span class="gt">Character Sheet</span></h1>{{else}}<h1><span class="gt">Welcome</span></h1>{{end}}
 <p>One-stop EVE Online companion: characters, market, fitting, intel. Rebuilt in Go on ESI + EVE SSO.</p>
 {{if .ServerStatus}}<p><small>Tranquility: {{.ServerStatus.Players}} players online</small></p>{{end}}
 
@@ -22,7 +22,14 @@
     </div>
     {{end}}
 
+    {{if and .Unavailable .Sections}}
+    <p><small>Live ESI data is unavailable right now — showing cached data.</small></p>
+    {{end}}
+
+    {{if or .CurrentlyOK .Sections}}
+    <div class="grid">
     {{if .CurrentlyOK}}
+    <section class="card">
     <h3>Currently</h3>
     <div class="tw">
     <table>
@@ -33,20 +40,20 @@
       </tbody>
     </table>
     </div>
-    {{end}}
-
-    {{if and .Unavailable .Sections}}
-    <p><small>Live ESI data is unavailable right now — showing cached data.</small></p>
+    </section>
     {{end}}
 
     {{if .Sections}}
+    <section class="card">
     <h3>Wallet</h3>
     {{if .ISKOK}}
     <p class="isk">{{.ISK}} ISK</p>
     {{else}}
     <p><small>Wallet unavailable right now.</small></p>
     {{end}}
+    </section>
 
+    <section class="card spanall">
     <h3>Skills</h3>
     {{if .QueueOK}}
       {{if .Training}}
@@ -73,7 +80,12 @@
     {{else}}
     <p><small>Skills unavailable right now.</small></p>
     {{end}}
-    {{else if .Unavailable}}
+    </section>
+    {{end}}
+    </div>
+    {{end}}
+
+    {{if and (not .Sections) .Unavailable}}
     <p><small>Live ESI data is unavailable right now (the stored access token may have expired) — showing what we have.</small></p>
     {{end}}
   {{else}}

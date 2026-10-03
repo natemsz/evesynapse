@@ -1,6 +1,6 @@
 {{define "title"}}Incursions{{end}}
 {{define "content"}}
-<h1>Incursions</h1>
+<h1><span class="gt">Incursions</span></h1>
 <p>
   <a class="btn" href="/intel/wars/">Wars</a>
   <a class="btn" href="/intel/incursions/">Incursions</a>
@@ -14,7 +14,9 @@
   <p>Still warming up — the worker pulls the public incursion list on its regular cycle. Watch progress on the <a href="/sync/">Sync page</a>.</p>
   {{else}}
   {{if .IntelIncursions.Rows}}
+  <div class="grid">
   {{range .IntelIncursions.Rows}}
+  <section class="card">
   <h2>{{.Constellation}}</h2>
   <div class="tw">
   <table>
@@ -29,7 +31,9 @@
     </tbody>
   </table>
   </div>
+  </section>
   {{end}}
+  </div>
   {{else}}
   <p><small>No active incursions right now.</small></p>
   {{end}}

@@ -115,28 +115,19 @@ a { color: var(--accent); text-decoration: none; }
 a:hover { color: #ffb84d; text-decoration: underline; }
 
 /* Headers, wordmark, nav labels, buttons, badges, and table
-   headers ride a clean humanist stack led by Univers Next Pro:
-   display headers, the wordmark, buttons, and table headers in
-   the true Bold cut; nav labels and badges in Medium. Synthetic
-   emboldening is disabled so nothing renders faux-bold. Rajdhani
-   is retired from this stack; its files remain on disk but are
-   no longer referenced. */
+   headers ride the Condensed cut of Univers Next Pro in Medium
+   (500): it stays legible packed tight in dense tables and nav
+   rows. The wordmark alone keeps Bold Condensed (600) — at
+   letterspaced caps the Medium reads too light for the brand
+   mark. Synthetic emboldening is disabled so nothing renders
+   faux-bold. Body text keeps the Shentox stack. */
 h1, h2, h3, h4, .wordmark, .btn, thead th, .badge,
 header a.navlink, .branch > summary, .branch .menu a {
-  font-family: "Univers Next Pro", -apple-system, "SF Pro Display", "Segoe UI", "Inter", sans-serif;
+  font-family: "Univers Next Pro Condensed", "Univers Next Pro", -apple-system, "SF Pro Display", "Segoe UI", "Inter", sans-serif;
   font-weight: 500;
   font-synthesis-weight: none;
 }
-
-h1, h2, h3, h4, .btn, thead th { font-weight: 700; }
-
-/* Table headers and the top nav run the Condensed cut — it stays
-   legible packed tight in dense tables. Table headers take the
-   Bold Condensed (600); nav labels stay Medium Condensed (500). */
-thead th, header a.navlink, .branch > summary {
-  font-family: "Univers Next Pro Condensed", "Univers Next Pro", -apple-system, "Segoe UI", "Inter", sans-serif;
-}
-thead th { font-weight: 600; }
+.wordmark { font-weight: 600; }
 
 h1, h2, h3, h4 {
   color: var(--text);
@@ -145,7 +136,7 @@ h1, h2, h3, h4 {
 }
 h1 { font-size: 1.28rem; }
 h2, h3 {
-  background: linear-gradient(90deg, #ffd27a, #ff6a1a 45%, #d63c14);
+  background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -172,7 +163,7 @@ header {
   box-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
 }
 header nav {
-  max-width: 1100px;
+  max-width: 1560px;
   margin: 0 auto;
   padding-left: 1rem;
   padding-right: 1rem;
@@ -187,9 +178,9 @@ header .topbar {
 .wordmark {
   display: inline-block;
   font-size: 0.86rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.28em;
-  background: linear-gradient(90deg, #ffd27a, #ff6a1a 45%, #d63c14);
+  background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -272,8 +263,12 @@ header a.navlink.utility { font-size: 0.9em; color: #8a7458; }
 .branch .menu a.active { color: #ffd27a; background: rgba(255, 106, 26, 0.18); }
 
 /* --- layout + panels --- */
+/* Fluid width: the container runs nearly the full viewport on
+   wide screens (1560px cap) instead of the old fixed 1100px
+   column, and simply fills narrow ones. */
+html, body { overflow-x: clip; }
 main {
-  max-width: 1100px;
+  max-width: 1560px;
   margin: 1.5rem auto 2rem;
   padding: 0 1rem;
 }
@@ -286,17 +281,12 @@ main {
   padding: 1.25rem 1.25rem 1.5rem;
 }
 .panel > h1:first-child {
-  /* Stops are in px, not %: the bar spans the full panel width by
-     design, so a percentage gradient would leave short titles
-     like "Sync" stuck in the leftmost gold slice. The ramp now
-     completes within the first ~230px whatever the bar's width,
-     and long station names simply hold ember past that. */
-  background: linear-gradient(92deg, #ffd27a 0, #ffb84d 60px, #ff6a1a 140px, #d63c14 230px);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  /* The bar spans the full panel width by design; the gradient
+     rides the title text (an inline span), so the ramp is scoped
+     to the text itself and reads the same on "Sync" as on a long
+     station name. Without the span (it is emitted by every page
+     template) the title simply renders in the plain text color. */
   text-shadow: none;
-  font-weight: 700;
   margin: -1.25rem -1.25rem 1rem;
   padding: 0.6rem 1.25rem;
   border-bottom: 1px solid;
@@ -305,6 +295,64 @@ main {
   letter-spacing: 0.06em;
   font-size: 1.1rem;
 }
+/* One gradient everywhere: gold at 0%, mid orange at 50%, ember
+   at 100%, always relative to the text's own width — on the
+   wordmark, on h2/h3 (inline-block), and here on the title span. */
+.panel > h1:first-child > .gt {
+  background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* --- responsive widget grid + cards (Home, Sync, Intel) --- */
+/* Sibling widgets flow into as many ~350px columns as the width
+   allows and stack to one column on narrow screens, so wide
+   monitors spend width on content instead of empty margins. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(350px, 100%), 1fr));
+  gap: 1rem;
+  align-items: start;
+  margin: 1rem 0 0.5rem;
+}
+.grid .spanall { grid-column: 1 / -1; }
+.card {
+  position: relative;
+  background: #101010;
+  border: 1px solid #262626;
+  border-radius: 4px;
+  padding: 0.85rem 1rem 1rem;
+}
+.card > h2:first-child, .card > h3:first-child { margin-top: 0.15rem; }
+.card table { margin-bottom: 0.5rem; }
+.card.has-fold > h2:first-child, .card.has-fold > h3:first-child { padding-right: 2.2rem; }
+
+/* --- collapsible panels (JS-enhanced; open and inert without) --- */
+.panel { position: relative; }
+.foldbtn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.7rem;
+  z-index: 2;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+  font-family: inherit;
+  color: #ffd27a;
+  background: #0e0e0e;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  border: 1px solid #4a2408;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.foldbtn:hover { color: #fff6e6; border-color: var(--accent); }
+.panel.has-fold > h1:first-child { padding-right: 3rem; }
+.panel.folded > *:not(h1),
+.card.folded > *:not(:first-child) { display: none; }
 
 /* --- buttons --- */
 .btn {
@@ -358,6 +406,22 @@ tbody tr { background: var(--row); }
 tbody tr:nth-child(even) { background: var(--row-alt); }
 tbody tr:hover td { background: var(--row-hover); }
 
+/* Portable tables: inside their .tw scroll container, the first
+   column stays pinned while the rest slides beneath it — the row
+   identity is never lost on a narrow screen. Backgrounds are
+   restated per-cell (a pinned cell can't rely on the row's). */
+.tw th:first-child, .tw td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  border-right: 1px solid #222222;
+}
+.tw thead th:first-child { background: var(--panel-head); z-index: 2; }
+.tw tbody td:first-child, .tw tbody th:first-child { background: var(--row); }
+.tw tbody tr:nth-child(even) td:first-child,
+.tw tbody tr:nth-child(even) th:first-child { background: var(--row-alt); }
+.tw tbody tr:hover td:first-child, .tw tbody tr:hover th:first-child { background: var(--row-hover); }
+
 /* --- alerts --- */
 .err {
   background: rgba(120, 26, 6, 0.38);
@@ -384,12 +448,58 @@ img.portrait {
 .isk {
   font-family: "Univers Next Pro", "Inter", sans-serif;
   font-weight: 300;
-  font-size: 1.5rem;
+  /* Just under the 1.1rem panel title: the balance reads as a
+     display numeral without out-shouting the page header. */
+  font-size: 1.05rem;
   letter-spacing: 0.01em;
   color: #ffe9c9;
 }
 
 .corp-desc { white-space: pre-line; }
+
+/* --- form inputs + market search suggestions --- */
+input[type="text"], input[type="search"] {
+  background: #0e0e0e;
+  border: 1px solid #2a2a2a;
+  border-radius: 3px;
+  color: var(--text);
+  padding: 0.42rem 0.6rem;
+  font: inherit;
+}
+input[type="text"]:focus, input[type="search"]:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 8px rgba(255, 106, 26, 0.35);
+}
+.searchwrap {
+  position: relative;
+  display: inline-block;
+  width: min(26rem, calc(100vw - 10rem));
+}
+.searchwrap input { width: 100%; }
+.suggest {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 50;
+  margin: 0;
+  padding: 0.3rem;
+  list-style: none;
+  background: #0e0e0e;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
+}
+.suggest li {
+  padding: 0.5rem 0.6rem;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.suggest li.sel { background: rgba(255, 106, 26, 0.18); color: #fff6e6; }
 
 /* --- character live state: status dot, kill/loss badges, countdown --- */
 .dot {
@@ -415,6 +525,9 @@ img.portrait {
 
 /* --- intel: wars involving one of the user's corporations --- */
 tbody tr.yours td { background: rgba(255, 184, 77, 0.10); }
+/* The pinned first cell of a highlighted row needs the tint
+   solid, or scrolled columns would show through it. */
+.tw tbody tr.yours td:first-child { background: #2a2015; }
 
 /* --- footer --- */
 footer {
@@ -445,5 +558,13 @@ footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
      the header (its nearest positioned ancestor). */
   .branch { position: static; }
   .branch .menu { left: 0; right: 0; top: 100%; min-width: 0; }
+  /* Bigger, unmistakable tap targets on small screens, and the
+     open branch reads as a pressed tab rather than a color shift. */
+  .topbar { flex-wrap: wrap; }
+  header a.navlink, .branch > summary { padding: 0.5rem 0.65rem; }
+  .branch .menu { padding: 0.4rem; }
+  .branch .menu a { padding: 0.65rem 0.8rem; }
+  .branch[open] > summary { background: rgba(255, 106, 26, 0.15); }
+  .searchwrap { width: calc(100vw - 9.5rem); }
   th, td { padding: 0.35rem 0.45rem; }
 }

@@ -1,0 +1,74 @@
+{{define "title"}}Item Database{{end}}
+{{define "content"}}
+<h1><span class="gt">Item Database</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .Items}}
+{{$v := .Items}}
+
+{{if eq $v.Mode "categories"}}
+<p><small>Browse every item category in the local static data. Pick a category to see its groups, then a group for its types — each type links to its market page.</small></p>
+{{if $v.Categories}}
+<div class="tw">
+<table>
+  <thead><tr><th>Category</th><th>Types</th></tr></thead>
+  <tbody>
+  {{range $v.Categories}}
+    <tr><td><a href="/items/category/{{.ID}}/">{{.Name}}</a></td><td>{{.Types}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p><small>No static data yet — the item database fills in once the SDE import lands (watch the <a href="/sync/">Sync page</a>).</small></p>
+{{end}}
+{{end}}
+
+{{if eq $v.Mode "category"}}
+<p><small><a href="/items/">Item Database</a> › {{$v.Category.Name}}</small></p>
+<h2>{{$v.Category.Name}}</h2>
+{{if $v.Groups}}
+<div class="tw">
+<table>
+  <thead><tr><th>Group</th><th>Types</th></tr></thead>
+  <tbody>
+  {{range $v.Groups}}
+    <tr><td><a href="/items/group/{{.ID}}/">{{.Name}}</a></td><td>{{.Types}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p><small>No groups in this category.</small></p>
+{{end}}
+{{end}}
+
+{{if eq $v.Mode "group"}}
+<p><small><a href="/items/">Item Database</a>{{if $v.Category}} › <a href="/items/category/{{$v.Category.ID}}/">{{$v.Category.Name}}</a>{{end}} › {{$v.Group.Name}}</small></p>
+<h2>{{$v.Group.Name}}</h2>
+<form method="get" action="/items/group/{{$v.Group.ID}}/">
+  <input type="search" name="q" value="{{$v.Query}}" placeholder="Filter types in this group">
+  <button class="btn" type="submit">Filter</button>
+</form>
+{{if $v.Types}}
+<div class="tw">
+<table>
+  <thead><tr><th>Type</th><th>Market</th></tr></thead>
+  <tbody>
+  {{range $v.Types}}
+    <tr><td><a href="/market/?type={{.ID}}">{{.Name}}</a></td><td>{{if .OnMarket}}<small>on market</small>{{else}}<small>—</small>{{end}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>{{$v.TotalTypes}} types{{if $v.Query}} matching "{{$v.Query}}"{{end}} · page {{$v.Page}} of {{$v.TotalPages}}</small>
+{{if $v.HasPrev}} · <a href="/items/group/{{$v.Group.ID}}/?page={{$v.PrevPage}}{{if $v.Query}}&q={{$v.Query}}{{end}}">← Prev</a>{{end}}
+{{if $v.HasNext}} · <a href="/items/group/{{$v.Group.ID}}/?page={{$v.NextPage}}{{if $v.Query}}&q={{$v.Query}}{{end}}">Next →</a>{{end}}</p>
+{{else}}
+<p><small>No types{{if $v.Query}} matching "{{$v.Query}}"{{end}} in this group.</small></p>
+{{end}}
+{{end}}
+
+{{end}}
+{{end}}

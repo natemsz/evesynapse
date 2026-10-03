@@ -10,6 +10,7 @@ import (
 	"context"
 	"database/sql"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -337,7 +338,278 @@ func TestHomeLayoutRoundTrip(t *testing.T) {
 	}
 }
 
-// TestCharacterSheetFromSnapshots proves the character sheet —
+// doLayoutPost POSTs /home/layout, optionally as the fetch
+// calls app.js makes (X-Requested-With), and returns status+body.
+func doLayoutPost(t *testing.T, app *Application, form url.Values, cookie *http.Cookie, xhr bool) (int, string) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/home/layout", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if xhr {
+		req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	}
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	rec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, req)
+	return rec.Code, rec.Body.String()
+}
+
+// TestHomeLayoutOrderAction: the drag-save action accepts the
+// whole arrangement at once — reorders persist, unknown and
+// duplicate ids normalize away server-side, XHR callers get a
+// bare 200 instead of the redirect, and anonymous POSTs bounce.
+func TestHomeLayoutOrderAction(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+
+	saved := func() string {
+		t.Helper()
+		raw, err := q.GetUserHomeLayout(ctx, user.ID)
+		if err != nil {
+			t.Fatalf("read layout: %v", err)
+		}
+		return raw
+	}
+
+	// Drag order: Market above Fleet, as one XHR save.
+	code, body := doLayoutPost(t, app, url.Values{
+		"action": {"order"}, "ids": {"market,fleet,attention"},
+	}, cookie, true)
+	if code != http.StatusOK {
+		t.Fatalf("XHR order POST: status %d, want 200 (body %q)", code, body)
+	}
+	if body != `{"ok":true}` {
+		t.Fatalf("XHR order POST body = %q, want {\"ok\":true}", body)
+	}
+	if got := saved(); got != `["market","fleet","attention"]` {
+		t.Fatalf("saved layout = %q, want dragged order", got)
+	}
+	code, body = getPage(t, app, cookie, "/")
+	if code != http.StatusOK {
+		t.Fatalf("GET /: status %d", code)
+	}
+	mAt := strings.Index(body, `data-widget="market"`)
+	fAt := strings.Index(body, `data-widget="fleet"`)
+	if mAt < 0 || fAt < 0 || mAt > fAt {
+		t.Errorf("market should render above fleet after drag (market=%d fleet=%d)", mAt, fAt)
+	}
+
+	// Unknown + duplicate ids normalize away; order survives.
+	code, _ = doLayoutPost(t, app, url.Values{
+		"action": {"order"}, "ids": {"skills,bogus,skills,fleet,fleet"},
+	}, cookie, true)
+	if code != http.StatusOK {
+		t.Fatalf("XHR order POST (junk ids): status %d", code)
+	}
+	if got := saved(); got != `["skills","fleet"]` {
+		t.Fatalf("saved layout = %q, want normalized [skills fleet]", got)
+	}
+
+	// The same action as a plain form POST still redirects.
+	code, _ = doLayoutPost(t, app, url.Values{
+		"action": {"order"}, "ids": {"fleet"},
+	}, cookie, false)
+	if code != http.StatusSeeOther {
+		t.Fatalf("form order POST: status %d, want 303", code)
+	}
+	if got := saved(); got != `["fleet"]` {
+		t.Fatalf("saved layout = %q, want [fleet]", got)
+	}
+
+	// Anonymous order POSTs bounce, signed-in XHR or not.
+	code, _, _ = doReq(t, app, http.MethodPost, "/home/layout",
+		url.Values{"action": {"order"}, "ids": {"fleet"}})
+	if code != http.StatusSeeOther {
+		t.Fatalf("anonymous order POST: status %d, want 303", code)
+	}
+
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("handlers made %d outbound calls, want 0", got)
+	}
+}
+
+// TestHomeLayoutToggleRoundTrips: the two saves behind the
+// customize-mode controls — × removal (toggle off) and
+// add-from-catalog (toggle on, appends at the end).
+func TestHomeLayoutToggleRoundTrips(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+
+	// × on Net worth: the card leaves the home and the grid.
+	code, _ := doLayoutPost(t, app, url.Values{
+		"action": {"toggle"}, "widget": {widgetNetWorth},
+	}, cookie, true)
+	if code != http.StatusOK {
+		t.Fatalf("XHR toggle-off POST: status %d, want 200", code)
+	}
+	code, body := getPage(t, app, cookie, "/?customize=1")
+	if code != http.StatusOK {
+		t.Fatalf("GET /?customize=1: status %d", code)
+	}
+	if strings.Contains(body, `data-widget="networth"`) {
+		t.Error("net worth card still on the customize grid after × removal")
+	}
+	// …but it is offered in the add-module pop-up.
+	mustContain(t, "/?customize=1 (after remove)", body, `data-add-widget="networth"`)
+
+	// Add Skills from the catalog: appended after the survivors.
+	code, _ = doLayoutPost(t, app, url.Values{
+		"action": {"toggle"}, "widget": {widgetSkills},
+	}, cookie, true)
+	if code != http.StatusOK {
+		t.Fatalf("XHR toggle-on POST: status %d, want 200", code)
+	}
+	code, body = getPage(t, app, cookie, "/")
+	if code != http.StatusOK {
+		t.Fatalf("GET /: status %d", code)
+	}
+	skAt := strings.Index(body, `data-widget="skills"`)
+	svAt := strings.Index(body, `data-widget="server"`)
+	if skAt < 0 {
+		t.Fatal("skills card missing after add-from-catalog")
+	}
+	if svAt < 0 || skAt < svAt {
+		t.Errorf("added module should append at the end (skills=%d server=%d)", skAt, svAt)
+	}
+
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("handlers made %d outbound calls, want 0", got)
+	}
+}
+
+// TestHomeCustomizeSurface: customize mode renders the live
+// widget grid (draggable cards, add-module pop-up) on top of the
+// plain no-JS module list, with end-user copy only — the old
+// implementation-flavored hint is gone everywhere on Home.
+func TestHomeCustomizeSurface(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+
+	code, body := getPage(t, app, cookie, "/?customize=1")
+	if code != http.StatusOK {
+		t.Fatalf("GET /?customize=1: status %d", code)
+	}
+	mustContain(t, "/?customize=1", body,
+		// Live draggable grid.
+		`id="home-grid"`, `data-customize="1"`, `home-custom`,
+		`data-widget="fleet"`, `data-widget="server"`,
+		// Save-changes exit + Add module entry point.
+		">Save changes</a>", `id="add-module-btn"`, ">Add module</a>",
+		// The pop-up: full catalog, name + plain description.
+		`id="add-module-modal"`, `data-add-widget="skills"`,
+		"The next skill finishes across the fleet",
+		"Every module is already on your home.",
+		// The no-JS foundation underneath: the module list forms.
+		"<noscript>", `id="home-module-list"`,
+		`name="widget" value="skills"`, "Move up", "Move down",
+		// End-user copy.
+		"Changes save automatically.",
+	)
+	for _, gone := range []string{
+		"no JavaScript needed", "Turn widgets on or off",
+		"check the server log",
+	} {
+		if strings.Contains(body, gone) {
+			t.Errorf("customize page still carries developer copy %q", gone)
+		}
+	}
+
+	// Plain home: no customize machinery leaks in, and the
+	// not-yet-loaded states speak plainly (no warming jargon).
+	code, body = getPage(t, app, cookie, "/")
+	if code != http.StatusOK {
+		t.Fatalf("GET /: status %d", code)
+	}
+	mustContain(t, "/", body,
+		"Balances appear here once your characters have synced.",
+		"Server status has not loaded yet.",
+	)
+	for _, gone := range []string{
+		`data-customize="1"`, `id="add-module-modal"`,
+		"still warming", "the worker has synced",
+	} {
+		if strings.Contains(body, gone) {
+			t.Errorf("plain home carries %q, want it gone", gone)
+		}
+	}
+
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("handlers made %d outbound calls, want 0", got)
+	}
+}
+
+// TestCustomizeDragAssetsServed: the served app.js carries the
+// pointer-drag wiring and the served CSS carries its states —
+// structurally asserted, the same way the fold rules are.
+func TestCustomizeDragAssetsServed(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+
+	user, err := q.CreateUser(t.Context())
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+
+	code, js := getPage(t, app, cookie, "/static/app.js")
+	if code != http.StatusOK {
+		t.Fatalf("/static/app.js status = %d", code)
+	}
+	mustContain(t, "/static/app.js", js,
+		`getElementById("home-grid")`,
+		`data-customize") === "1"`,
+		`addEventListener("pointerdown"`,
+		`setPointerCapture`,
+		`addEventListener("pointermove"`,
+		`addEventListener("pointerup"`,
+		`action: "order"`,
+		`action: "toggle"`,
+		`draghandle`,
+		`cardremove`,
+		`data-add-widget`,
+		`add-module-modal`,
+	)
+
+	code, css := getPage(t, app, cookie, "/static/style.css")
+	if code != http.StatusOK {
+		t.Fatalf("/static/style.css status = %d", code)
+	}
+	mustContain(t, "/static/style.css", css,
+		".draghandle",
+		"touch-action: none",
+		".card.dragging",
+		".cardremove",
+		".modal-backdrop[hidden]",
+		".modal-item",
+	)
+}
+
 // identity, wallet, skills, training — renders at /character/
 // purely from worker-warmed snapshots (profile included), with
 // zero outbound calls. This is the page that absorbed the old

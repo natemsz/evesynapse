@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"sort"
@@ -954,8 +955,8 @@ func (app *Application) buildSkills(ctx context.Context, bundles []*charSnaps) *
 
 // buildHome assembles the signed-in Home body: the user's layout
 // applied to freshly-decoded snapshot bundles. Customize mode
-// returns the catalog state instead — the widgets themselves are
-// not built (nothing to show until Done).
+// builds the same widgets (they render live under the arrange
+// controls) and adds the catalog state on top.
 func (app *Application) buildHome(ctx context.Context, customize bool) *homeView {
 	view := &homeView{}
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
@@ -980,7 +981,6 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 
 	if customize {
 		view.Customize = buildCustomizeView(layout)
-		return view
 	}
 	if !view.HasChars || len(layout) == 0 {
 		return view
@@ -1063,10 +1063,14 @@ func (app *Application) saveHomeLayout(ctx context.Context, userID int64, layout
 }
 
 // handleHomeLayout applies one layout change (POST /home/layout):
-// toggle a widget on/off, move one up/down, or reset to the
-// default. Every control is a plain form, so reordering works
-// with no JavaScript; the change saves immediately and bounces
-// back to Customize.
+// toggle a widget on/off, move one up/down, reset to the default,
+// or — from a drag on the customize view — accept the whole new
+// order at once (action=order, ids comma-joined). Every control
+// is a plain form, so arranging works with no JavaScript; the
+// change saves immediately and bounces back to Customize. The
+// drag/×/add-module enhancements POST with X-Requested-With and
+// get a bare 200 instead of the redirect, so the page never
+// navigates under the user's fingers.
 func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
@@ -1091,8 +1095,6 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 			// is the default anyway, so store the canonical
 			// default JSON instead to keep intent explicit.
 			app.saveHomeLayout(ctx, userID, layout)
-			http.Redirect(w, r, "/?customize=1", http.StatusSeeOther)
-			return
 		case "toggle":
 			if known {
 				found := -1
@@ -1125,7 +1127,21 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 				}
 				app.saveHomeLayout(ctx, userID, layout)
 			}
+		case "order":
+			// The whole arrangement, as dragged. Normalizing
+			// through encode+parse drops unknown and duplicate
+			// ids and keeps the submitted order; an empty or
+			// all-unknown list turns everything off, exactly
+			// like toggling each widget off would.
+			layout = parseHomeLayout(encodeHomeLayout(strings.Split(r.FormValue("ids"), ",")))
+			app.saveHomeLayout(ctx, userID, layout)
 		}
+	}
+	if r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, `{"ok":true}`)
+		return
 	}
 	http.Redirect(w, r, "/?customize=1", http.StatusSeeOther)
 }

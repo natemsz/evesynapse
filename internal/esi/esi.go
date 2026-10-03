@@ -325,6 +325,14 @@ type Client struct {
 	// is ~90 entries, so a restart re-warms in a cycle or two.
 	schematicsMu sync.RWMutex
 	schematics   map[int64]Schematic
+
+	// In-process cache of player structure ID → name. Unlike the
+	// public caches above, structure names live behind an
+	// authenticated endpoint, so the durable copy sits in the
+	// structure_names table (schema 014) and this map is only a
+	// warm tier over it; the worker resolves, pages only read.
+	structNamesMu sync.RWMutex
+	structNames   map[int64]string
 }
 
 // New builds a Client. httpClient performs every ESI request (the
@@ -346,6 +354,7 @@ func New(httpClient *http.Client, queries *db.Queries, tokens TokenFunc) *Client
 		allianceNames:      make(map[int64]string),
 		constellationNames: make(map[int64]string),
 		schematics:         make(map[int64]Schematic),
+		structNames:        make(map[int64]string),
 	}
 }
 
@@ -354,13 +363,33 @@ func New(httpClient *http.Client, queries *db.Queries, tokens TokenFunc) *Client
 // ---------------------------------------------------------------------------
 
 // Character is the public character sheet: GET /characters/{id}/
-// (returned fields EveSynapse currently consumes).
+// (returned fields EveSynapse consumes). AllianceID/FactionID are
+// 0 when unset; Description is EVE-flavored HTML and is only ever
+// rendered sanitized (see sanitizeMailHTML); Title is the
+// character's in-corp title, "" for most pilots.
 type Character struct {
 	Name           string  `json:"name"`
 	CorporationID  int64   `json:"corporation_id"`
+	AllianceID     int64   `json:"alliance_id"`
+	FactionID      int64   `json:"faction_id"`
 	Birthday       string  `json:"birthday"` // RFC3339
 	SecurityStatus float64 `json:"security_status"`
+	Description    string  `json:"description"`
+	Title          string  `json:"title"`
 }
+
+// CorpHistoryEntry is one entry of GET
+// /characters/{id}/corporationhistory/ (public): a stint in one
+// corporation starting at StartDate.
+type CorpHistoryEntry struct {
+	CorporationID int64  `json:"corporation_id"`
+	StartDate     string `json:"start_date"` // RFC3339
+	RecordID      int64  `json:"record_id"`
+}
+
+// CorpHistory is the character's employment history, newest
+// record last as ESI returns it (callers sort for display).
+type CorpHistory []CorpHistoryEntry
 
 // Corporation is GET /corporations/{id}/ (public, unauthenticated).
 // Corporation IDs are stable, so responses are cached per the ESI
@@ -454,8 +483,9 @@ type Asset struct {
 // GroupID feeds skill grouping on the skill sheet; name-only
 // consumers simply ignore it.
 type Type struct {
-	Name    string `json:"name"`
-	GroupID int64  `json:"group_id"`
+	Name        string `json:"name"`
+	GroupID     int64  `json:"group_id"`
+	Description string `json:"description"` // EVE-flavored text; rendered escaped, never raw
 }
 
 // Group is the slice of GET /universe/groups/{id}/ we consume.
@@ -675,17 +705,19 @@ type CorpWallets []CorpWalletDivision
 // /corporations/{id}/wallets/{division}/journal/. Only id, date,
 // ref_type and description are guaranteed by the spec.
 type CorpJournalEntry struct {
-	ID            int64   `json:"id"`
-	Date          string  `json:"date"` // RFC3339
-	RefType       string  `json:"ref_type"`
-	Amount        float64 `json:"amount"` // + into the wallet, - out of it
-	Balance       float64 `json:"balance"`
-	Description   string  `json:"description"`
-	Reason        string  `json:"reason"`
-	FirstPartyID  int64   `json:"first_party_id"`
-	SecondPartyID int64   `json:"second_party_id"`
-	ContextID     int64   `json:"context_id"`
-	ContextType   string  `json:"context_id_type"`
+	ID              int64   `json:"id"`
+	Date            string  `json:"date"` // RFC3339
+	RefType         string  `json:"ref_type"`
+	Amount          float64 `json:"amount"` // + into the wallet, - out of it
+	Balance         float64 `json:"balance"`
+	Description     string  `json:"description"`
+	Reason          string  `json:"reason"`
+	FirstPartyID    int64   `json:"first_party_id"`
+	FirstPartyType  string  `json:"first_party_type"` // "character" | "corporation" | "alliance" | …
+	SecondPartyID   int64   `json:"second_party_id"`
+	SecondPartyType string  `json:"second_party_type"`
+	ContextID       int64   `json:"context_id"`
+	ContextType     string  `json:"context_id_type"`
 }
 
 // CorpJournal is one page of a division journal.
@@ -782,17 +814,19 @@ type AssetName struct {
 // ?page=). The stored snapshot is a bounded newest-first window
 // merged across pages (see fetchJournalWindow), not one raw page.
 type WalletJournalEntry struct {
-	ID            int64   `json:"id"`
-	Date          string  `json:"date"` // RFC3339
-	RefType       string  `json:"ref_type"`
-	Amount        float64 `json:"amount"` // + into the wallet, - out of it
-	Balance       float64 `json:"balance"`
-	Description   string  `json:"description"`
-	Reason        string  `json:"reason"`
-	FirstPartyID  int64   `json:"first_party_id"`
-	SecondPartyID int64   `json:"second_party_id"`
-	ContextID     int64   `json:"context_id"`
-	ContextType   string  `json:"context_id_type"`
+	ID              int64   `json:"id"`
+	Date            string  `json:"date"` // RFC3339
+	RefType         string  `json:"ref_type"`
+	Amount          float64 `json:"amount"` // + into the wallet, - out of it
+	Balance         float64 `json:"balance"`
+	Description     string  `json:"description"`
+	Reason          string  `json:"reason"`
+	FirstPartyID    int64   `json:"first_party_id"`
+	FirstPartyType  string  `json:"first_party_type"` // "character" | "corporation" | "alliance" | …
+	SecondPartyID   int64   `json:"second_party_id"`
+	SecondPartyType string  `json:"second_party_type"`
+	ContextID       int64   `json:"context_id"`
+	ContextType     string  `json:"context_id_type"`
 }
 
 // WalletJournal is the stored journal window.
@@ -2441,6 +2475,73 @@ func (c *Client) StorePlaceName(id int64, name string) {
 	c.placeMu.Lock()
 	c.placeNames[id] = name
 	c.placeMu.Unlock()
+}
+
+// ---------------------------------------------------------------------------
+// Player structure names. GET /universe/structures/{id}/ is
+// authenticated-only (an unauthenticated call answers 401), so the
+// two tiers differ from the public caches above: FetchStructure is
+// the network tier and runs in the worker with a linked character's
+// token; CachedStructureName is the render tier, in-process map
+// then the durable structure_names table, and never fetches.
+// ---------------------------------------------------------------------------
+
+// UniverseStructure is GET /universe/structures/{structure_id}/
+// (authenticated; needs esi-universe.read_structures.v1).
+type UniverseStructure struct {
+	Name          string `json:"name"`
+	SolarSystemID int64  `json:"solar_system_id"`
+	TypeID        int64  `json:"type_id"`
+}
+
+// StructureState values for the structure_names table (schema
+// 014), shared with the app layer's queue bookkeeping.
+const (
+	StructurePending  = "pending"
+	StructureResolved = "resolved"
+	StructureMissing  = "missing"
+)
+
+// FetchStructure resolves one structure id with a character's
+// token (network tier). A 403 means the token can see the
+// structure exists but not its name (no docking access); 404
+// means it is gone. Callers record a negative answer for those
+// instead of asking again every cycle.
+func (c *Client) FetchStructure(ctx context.Context, ch db.Character, structureID int64) (UniverseStructure, error) {
+	token, err := c.tokens(ctx, ch)
+	if err != nil {
+		return UniverseStructure{}, err
+	}
+	var out UniverseStructure
+	if err := c.Get(ctx, token, fmt.Sprintf("/universe/structures/%d/", structureID), &out); err != nil {
+		return UniverseStructure{}, err
+	}
+	return out, nil
+}
+
+// CachedStructureName answers from the in-process cache, then the
+// durable structure_names table. Render tier: never fetches.
+func (c *Client) CachedStructureName(ctx context.Context, structureID int64) (string, bool) {
+	c.structNamesMu.RLock()
+	name, ok := c.structNames[structureID]
+	c.structNamesMu.RUnlock()
+	if ok {
+		return name, true
+	}
+	row, err := c.queries.GetStructureName(ctx, structureID)
+	if err != nil || row.State != StructureResolved || row.Name == "" {
+		return "", false
+	}
+	c.StoreStructureName(structureID, row.Name)
+	return row.Name, true
+}
+
+// StoreStructureName records a resolved name in the in-process
+// cache (the app layer persists it in structure_names).
+func (c *Client) StoreStructureName(structureID int64, name string) {
+	c.structNamesMu.Lock()
+	c.structNames[structureID] = name
+	c.structNamesMu.Unlock()
 }
 
 // ---------------------------------------------------------------------------

@@ -119,6 +119,211 @@
     }
   }
 
+  // --- Home customize: drag, remove, add module -----------------
+  // Layered over the plain customize forms, never replacing them:
+  // this runs only on the customize view (the data-customize grid)
+  // and stores through the same /home/layout endpoint — a drag
+  // saves once, on drop, and the server stays the normalizer of
+  // whatever order it is handed. Without JS the up/down +
+  // add/remove forms in the module list do the same job.
+  var homeGrid = document.getElementById("home-grid");
+  if (homeGrid && homeGrid.getAttribute("data-customize") === "1" && window.fetch) {
+    initHomeCustomize(homeGrid);
+  }
+
+  function initHomeCustomize(grid) {
+    var modal = document.getElementById("add-module-modal");
+    grid.classList.add("has-controls");
+
+    function postLayout(params) {
+      var body = new URLSearchParams();
+      for (var key in params) body.set(key, params[key]);
+      return fetch("/home/layout", {
+        method: "POST",
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        body: body
+      }).then(function (resp) { return resp.ok; }, function () { return false; });
+    }
+
+    function widgetIDs() {
+      var ids = [];
+      var cards = grid.querySelectorAll(".card[data-widget]");
+      for (var i = 0; i < cards.length; i++) {
+        ids.push(cards[i].getAttribute("data-widget"));
+      }
+      return ids;
+    }
+
+    function closeModal() { if (modal) modal.hidden = true; }
+
+    // Give one card its drag handle and × button. Cards added
+    // from the pop-up pass through here too.
+    function enhanceCard(card) {
+      var heading = card.querySelector(":scope > h2, :scope > h3");
+      if (!heading || card.querySelector(".draghandle")) return;
+      var id = card.getAttribute("data-widget");
+      // The fold button (+ / –) already lives in the heading;
+      // keep its glyph out of the accessible name.
+      var title = heading.textContent.replace(/[+–-]\s*$/, "").trim();
+
+      var handle = document.createElement("button");
+      handle.type = "button";
+      handle.className = "draghandle";
+      handle.textContent = "⠿";
+      handle.setAttribute("aria-label", "Drag to reorder " + title);
+      heading.insertBefore(handle, heading.firstChild);
+      handle.addEventListener("pointerdown", function (ev) {
+        startDrag(ev, card, handle);
+      });
+
+      var remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "cardremove";
+      remove.textContent = "×";
+      remove.setAttribute("aria-label", "Remove " + title + " from your home");
+      remove.addEventListener("click", function () {
+        remove.disabled = true;
+        postLayout({ action: "toggle", widget: id }).then(function (ok) {
+          if (ok) card.remove();
+          else remove.disabled = false;
+        });
+      });
+      card.appendChild(remove);
+    }
+
+    // The card the pointer is currently asking to displace:
+    // first sibling (row-major) whose top is below the pointer,
+    // or same-row sibling whose center is right of it.
+    function dragAfter(x, y) {
+      var sibs = grid.querySelectorAll(".card[data-widget]:not(.dragging)");
+      for (var i = 0; i < sibs.length; i++) {
+        var r = sibs[i].getBoundingClientRect();
+        if (y < r.top || (y <= r.bottom && x < r.left + r.width / 2)) return sibs[i];
+      }
+      return null;
+    }
+
+    function startDrag(ev, card, handle) {
+      if (ev.pointerType === "mouse" && ev.button !== 0) return;
+      ev.preventDefault();
+      var startX = ev.clientX, startY = ev.clientY;
+      var moved = false;
+      card.classList.add("dragging");
+      if (handle.setPointerCapture) {
+        try { handle.setPointerCapture(ev.pointerId); } catch (err) { /* capture is a nicety */ }
+      }
+
+      // The card's layout position with the follow-the-pointer
+      // transform momentarily cleared, so a DOM reorder can
+      // compensate its start point and the card never jumps.
+      function layoutRect() {
+        var t = card.style.transform;
+        card.style.transform = "";
+        var r = card.getBoundingClientRect();
+        card.style.transform = t;
+        return r;
+      }
+
+      function onMove(e) {
+        var dx = e.clientX - startX, dy = e.clientY - startY;
+        if (!moved && Math.abs(dx) + Math.abs(dy) < 3) return;
+        moved = true;
+        card.style.transform = "translate(" + dx + "px," + dy + "px)";
+        var before = layoutRect();
+        var after = dragAfter(e.clientX, e.clientY);
+        if (after) grid.insertBefore(card, after);
+        else grid.appendChild(card);
+        var now = layoutRect();
+        startX += now.left - before.left;
+        startY += now.top - before.top;
+        card.style.transform = "translate(" + (e.clientX - startX) + "px," + (e.clientY - startY) + "px)";
+      }
+
+      function onUp() {
+        handle.removeEventListener("pointermove", onMove);
+        handle.removeEventListener("pointerup", onUp);
+        handle.removeEventListener("pointercancel", onUp);
+        card.classList.remove("dragging");
+        card.style.transform = "";
+        if (moved) {
+          postLayout({ action: "order", ids: widgetIDs().join(",") });
+        }
+      }
+
+      handle.addEventListener("pointermove", onMove);
+      handle.addEventListener("pointerup", onUp);
+      handle.addEventListener("pointercancel", onUp);
+    }
+
+    function addModule(id, btn) {
+      btn.disabled = true;
+      postLayout({ action: "toggle", widget: id }).then(function (ok) {
+        if (!ok) { btn.disabled = false; return; }
+        // Widget markup is server-rendered; lift the new card
+        // out of a fresh copy of this page rather than rebuilding
+        // it client-side. If anything about that fails, a reload
+        // lands in the same place — the add already saved.
+        fetch("/?customize=1", { headers: { "Accept": "text/html" } }).then(function (resp) {
+          return resp.ok ? resp.text() : "";
+        }).then(function (html) {
+          var doc = new DOMParser().parseFromString(html, "text/html");
+          var fresh = doc.querySelector('.card[data-widget="' + id + '"]');
+          if (!fresh) { window.location.reload(); return; }
+          var node = document.importNode(fresh, true);
+          grid.appendChild(node);
+          addFold(node, node.querySelector(":scope > h2, :scope > h3"));
+          enhanceCard(node);
+          closeModal();
+        }, function () { window.location.reload(); });
+      });
+    }
+
+    var cards = grid.querySelectorAll(".card[data-widget]");
+    for (var i = 0; i < cards.length; i++) enhanceCard(cards[i]);
+
+    // Add-module pop-up. The full catalog is rendered into it;
+    // each open re-filters against what is on the home right now,
+    // so removes and adds are reflected immediately.
+    var addBtn = document.getElementById("add-module-btn");
+    if (addBtn && modal) {
+      var emptyNote = modal.querySelector(".modal-empty");
+      var addItems = modal.querySelectorAll("[data-add-widget]");
+      var refreshModal = function () {
+        var onHome = {};
+        var ids = widgetIDs();
+        for (var i = 0; i < ids.length; i++) onHome[ids[i]] = true;
+        var available = 0;
+        for (var j = 0; j < addItems.length; j++) {
+          var off = !!onHome[addItems[j].getAttribute("data-add-widget")];
+          addItems[j].parentElement.hidden = off;
+          addItems[j].disabled = false;
+          if (!off) available++;
+        }
+        if (emptyNote) emptyNote.hidden = available > 0;
+      };
+      addBtn.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        refreshModal();
+        modal.hidden = false;
+      });
+      modal.addEventListener("click", function (ev) {
+        if (ev.target === modal) closeModal();
+      });
+      var closers = modal.querySelectorAll("[data-close-modal]");
+      for (var c = 0; c < closers.length; c++) {
+        closers[c].addEventListener("click", closeModal);
+      }
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key === "Escape" && !modal.hidden) closeModal();
+      });
+      for (var a = 0; a < addItems.length; a++) {
+        addItems[a].addEventListener("click", function () {
+          addModule(this.getAttribute("data-add-widget"), this);
+        });
+      }
+    }
+  }
+
   // --- Market search suggestions --------------------------------
   var input = document.getElementById("market-q");
   var list = document.getElementById("market-suggest");

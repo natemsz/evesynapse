@@ -7,57 +7,34 @@
 
 {{if .Home}}
 {{if .Home.LoadFailed}}
-<p>Could not load your characters — check the server log.</p>
+<p>Could not load your characters — please try again shortly.</p>
 {{else if not .Home.HasChars}}
 <p>No characters are linked to this account yet. EveSynapse tracks every character you sign in with here — link one to start.</p>
 <p><a class="btn" href="/auth/eve">Link your first character</a></p>
-{{else if .Home.Customize}}
+{{else}}
+{{if .Home.Customize}}
 <h2>Customize home</h2>
-<p><small>Turn widgets on or off and set their order — every change saves as you go, no JavaScript needed.</small></p>
-
-{{range .Home.Customize.Entries}}
-<div class="cust-row">
-  <strong>{{.Title}}</strong>{{if .Enabled}} <small>· position {{.Position}}</small>{{end}}
-  <p><small>{{.Description}}</small></p>
-  <p class="cust-actions">
-    <form method="post" action="/home/layout">
-      <input type="hidden" name="action" value="toggle">
-      <input type="hidden" name="widget" value="{{.ID}}">
-      <button type="submit">{{if .Enabled}}Remove{{else}}Add{{end}}</button>
-    </form>
-    {{if .Enabled}}
-    <form method="post" action="/home/layout">
-      <input type="hidden" name="action" value="up">
-      <input type="hidden" name="widget" value="{{.ID}}">
-      <button type="submit"{{if not .CanUp}} disabled{{end}}>Move up</button>
-    </form>
-    <form method="post" action="/home/layout">
-      <input type="hidden" name="action" value="down">
-      <input type="hidden" name="widget" value="{{.ID}}">
-      <button type="submit"{{if not .CanDown}} disabled{{end}}>Move down</button>
-    </form>
-    {{end}}
-  </p>
+<p><small>Arrange the modules on your home and choose which ones appear. Changes save automatically.</small></p>
+<div class="home-actions">
+  <a class="btn" href="/">Save changes</a>
+  <a class="btn" href="#home-module-list" id="add-module-btn">Add module</a>
+  <form method="post" action="/home/layout">
+    <input type="hidden" name="action" value="reset">
+    <button type="submit" class="btn">Reset to default layout</button>
+  </form>
+</div>
+{{if not .Home.Widgets}}<p><small>Your home is empty right now — add a module to get started.</small></p>{{end}}
+{{else}}
+<div class="home-actions">
+  <a class="btn" href="/?customize=1">Customize</a>
+  <a class="btn" href="/auth/eve">Link another character</a>
 </div>
 {{end}}
 
-<p>
-  <form method="post" action="/home/layout">
-    <input type="hidden" name="action" value="reset">
-    <button type="submit">Reset to default layout</button>
-  </form>
-  <a class="btn" href="/">Done</a>
-</p>
-{{else}}
-<p class="home-actions">
-  <a class="btn" href="/?customize=1">Customize</a>
-  <a class="btn" href="/auth/eve">Link another character</a>
-</p>
-
-<div class="grid">
+<div class="grid{{if .Home.Customize}} home-custom{{end}}"{{if .Home.Customize}} id="home-grid" data-customize="1"{{end}}>
 {{range .Home.Widgets}}
 {{if eq .ID "fleet"}}
-<section class="card spanall">
+<section class="card spanall" data-widget="{{.ID}}">
   <h3>Fleet overview</h3>
   {{with .Fleet}}
   <p class="fleet-tools">
@@ -88,7 +65,7 @@
 {{end}}
 
 {{if eq .ID "attention"}}
-<section class="card spanall">
+<section class="card spanall" data-widget="{{.ID}}">
   <h3>Needs attention</h3>
   {{with .Attention}}
   {{if .Items}}
@@ -104,7 +81,7 @@
 {{end}}
 
 {{if eq .ID "networth"}}
-<section class="card">
+<section class="card" data-widget="{{.ID}}">
   <h3>Net worth</h3>
   {{with .NetWorth}}
   {{if .Any}}
@@ -113,21 +90,21 @@
   <table>
     <tbody>
       {{if .Wallet}}<tr><th>Wallets</th><td>{{.Wallet}}</td></tr>{{end}}
-      {{if .AssetsKnown}}<tr><th>Assets</th><td>{{.Assets}}</td></tr>{{else}}<tr><th>Assets</th><td><small>price data still warming</small></td></tr>{{end}}
+      {{if .AssetsKnown}}<tr><th>Assets</th><td>{{.Assets}}</td></tr>{{else}}<tr><th>Assets</th><td><small>prices not loaded yet</small></td></tr>{{end}}
       {{if .Escrow}}<tr><th>Order escrow</th><td>{{.Escrow}}</td></tr>{{end}}
     </tbody>
   </table>
   </div>
   <p><small>Estimate{{if .AsOf}} · data as of {{.AsOf}}{{end}}</small></p>
   {{else}}
-  <p><small>Still warming — balances appear once the worker has synced your characters.</small></p>
+  <p><small>Balances appear here once your characters have synced.</small></p>
   {{end}}
   {{end}}
 </section>
 {{end}}
 
 {{if eq .ID "industry"}}
-<section class="card">
+<section class="card" data-widget="{{.ID}}">
   <h3>Industry</h3>
   {{with .Industry}}
   <p><small>{{.ActiveJobs}} active job{{if ne .ActiveJobs 1}}s{{end}}{{if .ReadyJobs}} · {{.ReadyJobs}} ready for delivery{{end}}</small></p>
@@ -148,7 +125,7 @@
 {{end}}
 
 {{if eq .ID "market"}}
-<section class="card">
+<section class="card" data-widget="{{.ID}}">
   <h3>Market</h3>
   {{with .Market}}
   {{if .Open}}
@@ -171,7 +148,7 @@
 {{end}}
 
 {{if eq .ID "skills"}}
-<section class="card">
+<section class="card" data-widget="{{.ID}}">
   <h3>Skills</h3>
   {{with .Skills}}
   {{if .Finishing}}
@@ -192,13 +169,62 @@
 {{end}}
 
 {{if eq .ID "server"}}
-<section class="card">
+<section class="card" data-widget="{{.ID}}">
   <h3>Tranquility</h3>
-  {{if .Server}}<p>Tranquility: {{.Server.Players}} players online</p>{{else}}<p><small>Server status still warming.</small></p>{{end}}
+  {{if .Server}}<p>Tranquility: {{.Server.Players}} players online</p>{{else}}<p><small>Server status has not loaded yet.</small></p>{{end}}
 </section>
 {{end}}
 {{end}}
 </div>
+
+{{if .Home.Customize}}
+<div class="modal-backdrop" id="add-module-modal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="add-module-title">
+    <div class="modal-head">
+      <h2 id="add-module-title">Add a module</h2>
+      <button type="button" class="modal-close" data-close-modal aria-label="Close">×</button>
+    </div>
+    <ul class="modal-list">
+      {{range .Home.Customize.Entries}}
+      <li><button type="button" class="modal-item" data-add-widget="{{.ID}}"><strong>{{.Title}}</strong><small>{{.Description}}</small></button></li>
+      {{end}}
+    </ul>
+    <p class="modal-empty" hidden>Every module is already on your home.</p>
+  </div>
+</div>
+
+<noscript>
+<div id="home-module-list">
+<h3>Modules</h3>
+{{range .Home.Customize.Entries}}
+<div class="cust-row">
+  <strong>{{.Title}}</strong>{{if .Enabled}} <small>· position {{.Position}}</small>{{end}}
+  <p><small>{{.Description}}</small></p>
+  <p class="cust-actions">
+    <form method="post" action="/home/layout">
+      <input type="hidden" name="action" value="toggle">
+      <input type="hidden" name="widget" value="{{.ID}}">
+      <button type="submit">{{if .Enabled}}Remove{{else}}Add{{end}}</button>
+    </form>
+    {{if .Enabled}}
+    <form method="post" action="/home/layout">
+      <input type="hidden" name="action" value="up">
+      <input type="hidden" name="widget" value="{{.ID}}">
+      <button type="submit"{{if not .CanUp}} disabled{{end}}>Move up</button>
+    </form>
+    <form method="post" action="/home/layout">
+      <input type="hidden" name="action" value="down">
+      <input type="hidden" name="widget" value="{{.ID}}">
+      <button type="submit"{{if not .CanDown}} disabled{{end}}>Move down</button>
+    </form>
+    {{end}}
+  </p>
+</div>
+{{end}}
+<p><a class="btn" href="/">Save changes</a></p>
+</div>
+</noscript>
+{{end}}
 {{end}}
 {{end}}
 

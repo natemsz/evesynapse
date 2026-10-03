@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"sort"
 	"strconv"
@@ -104,7 +105,9 @@ type marketOrderRow struct {
 }
 
 // marketItem is the item view: guide prices from /markets/prices/
-// plus the order book for one region.
+// plus the order book for one region. Phase 5 adds the stored
+// price history (chart + changes, from market_history only — the
+// worker fills it) and the watch state for "Watch this item".
 type marketItem struct {
 	TypeID        int64
 	Name          string
@@ -125,14 +128,57 @@ type marketItem struct {
 	Truncated     bool // order book capped at maxOrderPages
 	Sells         []marketOrderRow
 	Buys          []marketOrderRow
+
+	// Phase 5 price history (cache-only, from stored rows).
+	HistoryPending bool // no rows yet: the chart is still filling in
+	Chart          *priceChart
+	Stats          *historyStats
+	Change7        string // "+8.2%", "" when not computable
+	Change30       string
+	Watched        bool
+	WatchThreshold float64
+}
+
+// watchlistRow is one watchlist line, display-ready.
+type watchlistRow struct {
+	TypeID    int64
+	Name      string
+	RegionID  int64
+	Region    string
+	Current   string // latest daily average, "—" when unknown
+	Change7   string // "+8.2%", "—" when not computable
+	Change30  string
+	Moving    bool   // currently past the user's threshold
+	MoveText  string // "up 8.2% over 7 days", Moving only
+	Threshold string
+}
+
+// watchlistView is the /market/ watchlist section.
+type watchlistView struct {
+	Rows    []watchlistRow
+	Query   string        // watch-search box value (wq)
+	Matches []marketMatch // local candidates for the watch
+}
+
+// yourOrderRow is one of the user's open sell orders with its
+// worker-computed health.
+type yourOrderRow struct {
+	Char     string
+	Item     string
+	Price    string
+	Location string
+	Status   string
+	Bad      bool // undercut: highlighted
 }
 
 // marketView is the Market page body.
 type marketView struct {
-	Query   string
-	Region  int64 // active region (search results link into it)
-	Matches []marketMatch
-	Item    *marketItem
+	Query      string
+	Region     int64 // active region (search results link into it)
+	Matches    []marketMatch
+	Item       *marketItem
+	Watchlist  *watchlistView
+	YourOrders []yourOrderRow
 }
 
 // handleMarket renders the Market page: a name search (local
@@ -157,6 +203,7 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	data.Market = view
+	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
 
 	if typeID, err := strconv.ParseInt(q.Get("type"), 10, 64); err == nil && typeID > 0 {
 		item, err := app.loadMarketItem(ctx, typeID, view.Region)
@@ -166,11 +213,69 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 		} else {
 			view.Item = item
 		}
+		app.attachHistory(ctx, view.Item, typeID, view.Region, userID)
 	} else if view.Query != "" {
 		view.Matches = app.searchTypes(ctx, view.Query)
 	}
 
+	if userID > 0 {
+		view.Watchlist = app.buildWatchlistView(ctx, userID, strings.TrimSpace(q.Get("wq")))
+		view.YourOrders = app.buildYourOrders(ctx, userID)
+	}
+
 	app.render(ctx, w, http.StatusOK, "market.html", data)
+}
+
+// attachHistory fills an item view's Phase 5 history fields from
+// stored rows (never the network). No rows yet: mark the chart as
+// still filling in and leave a want for the worker to pick up. A
+// nil item (the live item view failed) still records the want —
+// the user asked about this type either way.
+func (app *Application) attachHistory(ctx context.Context, item *marketItem, typeID, regionID, userID int64) {
+	since := time.Now().UTC().AddDate(0, 0, -(historyChartDays + 5)).Format(historyDateLayout)
+	rows, err := app.queries.ListMarketHistory(ctx, db.ListMarketHistoryParams{
+		RegionID: regionID, TypeID: typeID, Date: since,
+	})
+	if err != nil {
+		log.Printf("market: load history for type %d in region %d: %v", typeID, regionID, err)
+		return
+	}
+	if len(rows) == 0 {
+		if err := app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
+			RegionID: regionID, TypeID: typeID,
+			LastRequestedAt: time.Now().UTC().Format(time.RFC3339),
+		}); err != nil {
+			log.Printf("market: record history want for type %d in region %d: %v", typeID, regionID, err)
+		}
+		if item != nil {
+			item.HistoryPending = true
+		}
+		return
+	}
+	if item == nil {
+		return
+	}
+	if chart, ok := buildPriceChart(rows); ok {
+		c := chart
+		item.Chart = &c
+	}
+	if stats, ok := summarizeHistory(rows); ok {
+		item.Stats = &stats
+	}
+	if pct, ok := historyChangePct(rows, 7); ok {
+		item.Change7 = formatChangePct(pct)
+	}
+	if pct, ok := historyChangePct(rows, 30); ok {
+		item.Change30 = formatChangePct(pct)
+	}
+	if userID > 0 {
+		if entry, err := app.queries.GetWatchlistEntry(ctx, db.GetWatchlistEntryParams{
+			UserID: userID, TypeID: typeID, RegionID: regionID,
+		}); err == nil {
+			item.Watched = true
+			item.WatchThreshold = entry.ThresholdPct
+		}
+	}
 }
 
 // searchTypes merges exact /universe/ids/ hits (first) with partial
@@ -404,4 +509,205 @@ func (app *Application) orderLocation(ctx context.Context, locationID, systemID 
 		}
 	}
 	return app.esi.PlaceName(ctx, fmt.Sprintf("/universe/systems/%d/", systemID), systemID, fmt.Sprintf("System #%d", systemID))
+}
+
+// marketRegionLabel names a region for display: the five trade
+// hubs by their short names, anything else from the SDE region
+// table, and an honest placeholder for ids neither knows.
+func (app *Application) marketRegionLabel(ctx context.Context, regionID int64) string {
+	if name, ok := marketRegionName(regionID); ok {
+		return name
+	}
+	if row, err := app.queries.GetSDERegion(ctx, regionID); err == nil && row.Name != "" {
+		return row.Name
+	}
+	return fmt.Sprintf("Region #%d", regionID)
+}
+
+// buildWatchlistView assembles the watchlist section: the user's
+// watched types with their current average and 7/30-day moves,
+// plus local search matches when the watch search box was used.
+// Stored rows only.
+func (app *Application) buildWatchlistView(ctx context.Context, userID int64, watchQuery string) *watchlistView {
+	view := &watchlistView{Query: watchQuery}
+	if len(watchQuery) >= 2 {
+		if rows, err := app.queries.SuggestSDETypes(ctx, watchQuery); err != nil {
+			log.Printf("market: watch search %q: %v", watchQuery, err)
+		} else {
+			for _, row := range rows {
+				view.Matches = append(view.Matches, marketMatch{ID: row.TypeID, Name: row.Name})
+			}
+		}
+	}
+	entries, err := app.queries.ListWatchlistByUser(ctx, userID)
+	if err != nil {
+		log.Printf("market: list watchlist for user %d: %v", userID, err)
+		return view
+	}
+	since := time.Now().UTC().AddDate(0, 0, -(historyChartDays + 5)).Format(historyDateLayout)
+	for _, e := range entries {
+		row := watchlistRow{
+			TypeID:    e.TypeID,
+			Name:      app.typeNameOrID(ctx, e.TypeID),
+			RegionID:  e.RegionID,
+			Region:    app.marketRegionLabel(ctx, e.RegionID),
+			Current:   "—",
+			Change7:   "—",
+			Change30:  "—",
+			Threshold: fmt.Sprintf("%g", e.ThresholdPct),
+		}
+		rows, err := app.queries.ListMarketHistory(ctx, db.ListMarketHistoryParams{
+			RegionID: e.RegionID, TypeID: e.TypeID, Date: since,
+		})
+		if err != nil {
+			log.Printf("market: watchlist history for type %d: %v", e.TypeID, err)
+			view.Rows = append(view.Rows, row)
+			continue
+		}
+		if len(rows) > 0 {
+			row.Current = esi.FormatISK(rows[len(rows)-1].Average)
+		}
+		if pct, ok := historyChangePct(rows, 7); ok {
+			row.Change7 = formatChangePct(pct)
+			if math.Abs(pct) >= e.ThresholdPct {
+				row.Moving = true
+				row.MoveText = changeDirection(pct) + " over 7 days"
+			}
+		}
+		if pct, ok := historyChangePct(rows, 30); ok {
+			row.Change30 = formatChangePct(pct)
+		}
+		view.Rows = append(view.Rows, row)
+	}
+	return view
+}
+
+// buildYourOrders assembles the "Your orders" section: every open
+// sell order across the user's characters with the health verdict
+// the worker computed (or a "not checked yet" line before the
+// first book pass lands).
+func (app *Application) buildYourOrders(ctx context.Context, userID int64) []yourOrderRow {
+	chars, err := app.queries.ListCharactersByUser(ctx, userID)
+	if err != nil {
+		log.Printf("market: your orders: list characters for user %d: %v", userID, err)
+		return nil
+	}
+	health := make(map[int64]db.OrderHealth)
+	if rows, err := app.queries.ListOrderHealthByUser(ctx, userID); err != nil {
+		log.Printf("market: your orders: list health for user %d: %v", userID, err)
+	} else {
+		for _, h := range rows {
+			health[h.OrderID] = h
+		}
+	}
+	var out []yourOrderRow
+	for _, ch := range chars {
+		orders, ok := app.loadOrdersSnapshot(ctx, ch.CharacterID)
+		if !ok {
+			continue
+		}
+		sort.SliceStable(orders, func(i, j int) bool {
+			if orders[i].TypeID != orders[j].TypeID {
+				return orders[i].TypeID < orders[j].TypeID
+			}
+			return orders[i].OrderID < orders[j].OrderID
+		})
+		for _, o := range orders {
+			if o.IsBuyOrder || o.VolumeRemain <= 0 {
+				continue
+			}
+			row := yourOrderRow{
+				Char:     ch.Name,
+				Item:     app.typeNameOrID(ctx, o.TypeID),
+				Price:    esi.FormatISK(o.Price) + " ISK",
+				Location: app.econLocationTitle(ctx, o.LocationID),
+				Status:   "Not checked against the order book yet",
+			}
+			if h, ok := health[o.OrderID]; ok && h.CharacterID == ch.CharacterID {
+				row.Status, row.Bad = orderHealthText(h.MyPrice, h.Status, h.StationBest, h.RegionBest)
+			}
+			out = append(out, row)
+		}
+	}
+	return out
+}
+
+// orderHealthText turns a stored verdict into the user's line.
+// Prices are display-ready; percents are against the order's own
+// price.
+func orderHealthText(myPrice float64, status string, stationBest, regionBest float64) (string, bool) {
+	undercutBy := func(best float64) string {
+		if best <= 0 || myPrice <= 0 {
+			return ""
+		}
+		return fmt.Sprintf(" by %s ISK (%.1f%%)", esi.FormatISK(myPrice-best), (myPrice-best)/myPrice*100)
+	}
+	switch status {
+	case "undercut_station":
+		return "Undercut" + undercutBy(stationBest) + " at this station", true
+	case "undercut_region":
+		return "Undercut" + undercutBy(regionBest) + " elsewhere in the region", true
+	case "best_region_cheaper":
+		text := "Best price here"
+		if regionBest > 0 {
+			text += fmt.Sprintf(" — cheaper in the region (best %s ISK)", esi.FormatISK(regionBest))
+		}
+		return text, false
+	default: // "best"
+		return "Best price here", false
+	}
+}
+
+// handleMarketWatch applies one watchlist change (POST
+// /market/watch): add (from an item page or the watch search),
+// threshold update, or removal. Thresholds clamp to 1–50 — the
+// number users type is a percent, and a 0 would alert on every
+// flicker while 500 would never fire.
+func (app *Application) handleMarketWatch(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	next := "/market/"
+	if err := r.ParseForm(); err == nil {
+		if n := r.Form.Get("next"); strings.HasPrefix(n, "/") && !strings.HasPrefix(n, "//") {
+			next = n
+		}
+		if userID > 0 {
+			typeID, _ := strconv.ParseInt(r.Form.Get("type"), 10, 64)
+			regionID, _ := strconv.ParseInt(r.Form.Get("region"), 10, 64)
+			if regionID <= 0 {
+				regionID = defaultMarketRegion
+			}
+			switch r.Form.Get("action") {
+			case "add", "update":
+				threshold := 5.0
+				if v, err := strconv.ParseFloat(r.Form.Get("threshold"), 64); err == nil && !math.IsNaN(v) {
+					threshold = v
+				}
+				if threshold < 1 {
+					threshold = 1
+				}
+				if threshold > 50 {
+					threshold = 50
+				}
+				if typeID > 0 {
+					if err := app.queries.UpsertWatchlistEntry(ctx, db.UpsertWatchlistEntryParams{
+						UserID: userID, TypeID: typeID, RegionID: regionID,
+						ThresholdPct: threshold,
+						CreatedAt:    time.Now().UTC().Format(time.RFC3339),
+					}); err != nil {
+						log.Printf("market: watch upsert type %d for user %d: %v", typeID, userID, err)
+					}
+				}
+			case "remove":
+				if typeID > 0 {
+					if err := app.queries.DeleteWatchlistEntry(ctx, db.DeleteWatchlistEntryParams{
+						UserID: userID, TypeID: typeID, RegionID: regionID,
+					}); err != nil {
+						log.Printf("market: watch remove type %d for user %d: %v", typeID, userID, err)
+					}
+				}
+			}
+		}
+	}
+	http.Redirect(w, r, next, http.StatusSeeOther)
 }

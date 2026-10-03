@@ -66,6 +66,9 @@ var industryPlannerSchema string
 //go:embed schema/012_skill_plans.sql
 var skillPlansSchema string
 
+//go:embed schema/013_market_history.sql
+var marketHistorySchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -290,6 +293,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleMarket)
 		r.Get("/suggest", app.handleMarketSuggest)
+		r.Post("/watch", app.handleMarketWatch)
 	})
 
 	r.Route("/items", func(r chi.Router) {

@@ -176,6 +176,18 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 013 (Phase 5 market history + alerts: history rows,
+	// wants, fetch state, watchlist, order health), applied the
+	// same guarded way.
+	var marketHistoryTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'market_history'`).Scan(&marketHistoryTables); err != nil {
+		return nil, err
+	}
+	if marketHistoryTables == 0 {
+		if err := applySchema(conn, marketHistorySchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

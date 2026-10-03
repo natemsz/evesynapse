@@ -107,6 +107,19 @@ type SdeRegion struct {
 	Name     string `json:"name"`
 }
 
+type SdeRequirement struct {
+	TypeID      int64 `json:"type_id"`
+	SkillTypeID int64 `json:"skill_type_id"`
+	Level       int64 `json:"level"`
+}
+
+type SdeSkillMetum struct {
+	TypeID        int64   `json:"type_id"`
+	Rank          float64 `json:"rank"`
+	PrimaryAttr   int64   `json:"primary_attr"`
+	SecondaryAttr int64   `json:"secondary_attr"`
+}
+
 type SdeStation struct {
 	StationID int64  `json:"station_id"`
 	Name      string `json:"name"`
@@ -126,6 +139,21 @@ type SdeType struct {
 	GroupID       int64  `json:"group_id"`
 	MarketGroupID int64  `json:"market_group_id"`
 	Published     int64  `json:"published"`
+}
+
+type SkillPlan struct {
+	ID          int64  `json:"id"`
+	UserID      int64  `json:"user_id"`
+	CharacterID int64  `json:"character_id"`
+	Name        string `json:"name"`
+	CreatedAt   string `json:"created_at"`
+}
+
+type SkillPlanItem struct {
+	PlanID      int64 `json:"plan_id"`
+	SkillTypeID int64 `json:"skill_type_id"`
+	TargetLevel int64 `json:"target_level"`
+	Position    int64 `json:"position"`
 }
 
 type SnapshotFetchState struct {

@@ -419,3 +419,96 @@ JOIN sde_types t ON t.type_id = b.product_type_id
 WHERE t.published = 1 AND instr(lower(t.name), lower(?1)) > 0
 ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
 LIMIT 50;
+
+-- ---------------------------------------------------------------------
+-- Phase 4 (schema 012): skill graph reads and user skill plans.
+-- The dogma bulk inserts stay hand-rolled in the SDE importer
+-- alongside the other sde_* tables; only reads live here. Plans
+-- are plain CRUD.
+-- ---------------------------------------------------------------------
+
+-- name: CountSDESkillMeta :one
+SELECT COUNT(*) FROM sde_skill_meta;
+
+-- name: CountSDERequirements :one
+SELECT COUNT(*) FROM sde_requirements;
+
+-- The browsable skill catalog: every published skill with its
+-- group, rank and training attributes.
+-- name: ListSDESkillCatalog :many
+SELECT m.type_id, t.name, g.name AS group_name, m.rank, m.primary_attr, m.secondary_attr
+FROM sde_skill_meta m
+JOIN sde_types t ON t.type_id = m.type_id
+JOIN sde_groups g ON g.group_id = t.group_id
+ORDER BY g.name, t.name;
+
+-- name: GetSDESkillMeta :one
+SELECT type_id, rank, primary_attr, secondary_attr FROM sde_skill_meta
+WHERE type_id = ?;
+
+-- name: ListSDESkillMetaByIDs :many
+SELECT type_id, rank, primary_attr, secondary_attr FROM sde_skill_meta
+WHERE type_id IN (sqlc.slice('type_ids'));
+
+-- name: ListSDERequirementsByType :many
+SELECT skill_type_id, level FROM sde_requirements
+WHERE type_id = ?
+ORDER BY level DESC, skill_type_id;
+
+-- name: ListSDERequirementsByTypes :many
+SELECT type_id, skill_type_id, level FROM sde_requirements
+WHERE type_id IN (sqlc.slice('type_ids'))
+ORDER BY type_id, level DESC, skill_type_id;
+
+-- name: SearchSDESkills :many
+SELECT m.type_id, t.name, m.rank
+FROM sde_skill_meta m
+JOIN sde_types t ON t.type_id = m.type_id
+WHERE instr(lower(t.name), lower(?)) > 0
+ORDER BY CASE WHEN instr(lower(t.name), lower(?)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT 25;
+
+-- Name-to-type-ID lookups for the plan templates (Magic 14 &
+-- friends), which name their skills the way the wiki does.
+-- name: ListSDETypesByNames :many
+SELECT type_id, name FROM sde_types
+WHERE name IN (sqlc.slice('names'));
+
+-- name: CreateSkillPlan :one
+INSERT INTO skill_plans (user_id, character_id, name, created_at)
+VALUES (?, ?, ?, ?)
+RETURNING id, user_id, character_id, name, created_at;
+
+-- name: ListSkillPlans :many
+SELECT id, user_id, character_id, name, created_at FROM skill_plans
+WHERE user_id = ? AND character_id = ?
+ORDER BY created_at, id;
+
+-- name: GetSkillPlan :one
+SELECT id, user_id, character_id, name, created_at FROM skill_plans
+WHERE id = ? AND user_id = ?;
+
+-- name: DeleteSkillPlan :exec
+DELETE FROM skill_plans WHERE id = ? AND user_id = ?;
+
+-- name: ListSkillPlanItems :many
+SELECT plan_id, skill_type_id, target_level, position FROM skill_plan_items
+WHERE plan_id = ?
+ORDER BY position, skill_type_id;
+
+-- Adding an existing skill raises (or keeps) its target level and
+-- leaves position to the caller: a fresh insert takes MAX(position)+1
+-- (the handler supplies it).
+-- name: UpsertSkillPlanItem :exec
+INSERT INTO skill_plan_items (plan_id, skill_type_id, target_level, position)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(plan_id, skill_type_id) DO UPDATE SET target_level = excluded.target_level;
+
+-- name: NextSkillPlanPosition :one
+SELECT COALESCE(MAX(position), 0) + 1 FROM skill_plan_items WHERE plan_id = ?;
+
+-- name: UpdateSkillPlanItemPosition :exec
+UPDATE skill_plan_items SET position = ? WHERE plan_id = ? AND skill_type_id = ?;
+
+-- name: DeleteSkillPlanItem :exec
+DELETE FROM skill_plan_items WHERE plan_id = ? AND skill_type_id = ?;

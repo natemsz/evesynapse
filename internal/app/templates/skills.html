@@ -50,6 +50,47 @@
   <p><small>Group total: {{.SubtotalSP}} SP</small></p>
   </section>
   {{end}}
+
+  <h2>Browse skills</h2>
+  {{if .Skills.BrowseWarming}}
+  <p><small>Skill data is still loading — the full catalog appears once the static-data import lands. Watch the <a href="/sync/">Sync page</a>.</small></p>
+  {{else}}
+  {{if not .Skills.Plans}}<p><small><a href="/skills/plans?character={{.Skills.CharacterID}}">Create a skill plan</a> to add skills straight from this catalog.</small></p>{{end}}
+  {{range .Skills.Browse}}
+  <section class="foldable" data-fold="closed">
+  <h3>{{.Name}}</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Skill</th><th>Trained</th><th>SP</th><th>Rank</th><th>Trains on</th><th>Prereqs</th>{{if $.Skills.Plans}}<th>Add to plan</th>{{end}}</tr></thead>
+    <tbody>
+    {{range .Skills}}
+      <tr>
+        <td>{{.Name}}</td>
+        <td>{{.Trained}}</td>
+        <td>{{.SP}}</td>
+        <td>{{.Rank}}</td>
+        <td>{{.Primary}} / {{.Secondary}}</td>
+        <td>{{.Prereqs}}</td>
+        {{if $.Skills.Plans}}
+        <td>
+          <form method="post" action="/skills/plans/item-add">
+            <input type="hidden" name="character" value="{{$.Skills.CharacterID}}">
+            <input type="hidden" name="skill" value="{{.TypeID}}">
+            <input type="hidden" name="return" value="skills">
+            <select name="plan">{{range $.Skills.Plans}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
+            <select name="level"><option value="1">I</option><option value="2">II</option><option value="3">III</option><option value="4">IV</option><option value="5" selected>V</option></select>
+            <button type="submit">Add</button>
+          </form>
+        </td>
+        {{end}}
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  </section>
+  {{end}}
+  {{end}}
   {{else}}
   {{if .Skills.Warming}}
   <p>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</p>

@@ -27,6 +27,8 @@ and key/vCode auth.
 - `esi.go` — ESI client with snapshot caching and type-name resolution
 - `pages.go` — home/admin handlers + template rendering
 - `assets.go` — assets browser (per-location stacks, switchable per character)
+- `skills.go` — full skill sheet (every skill grouped by category,
+  complete queue, switchable per character)
 - `market.go` — market browser (public ESI: name search, price guide,
   regional order books)
 - `worker.go` — background ESI refresh scheduler (60s cycle)
@@ -60,6 +62,10 @@ environment win). Then open <http://localhost:8080>:
   ESI resolution), guide prices, and best/top orders for The Forge,
   Domain, Sinq Laison, Heimatar and Metropolis (requires login; all
   data is public ESI, order books capped at 20 pages)
+- `/skills/` — full skill sheet: total/unallocated SP, level-V count,
+  the complete training queue, and every known skill grouped by
+  category with per-group SP subtotals (requires login;
+  `esi-skills.read_skills.v1` + `esi-skills.read_skillqueue.v1`)
 - `/healthz` — plain `ok`
 - `/dev-login` — dev-only fake sign-in, registered **only** when
   `DEV_LOGIN=1` (see below)
@@ -75,9 +81,17 @@ character-for-character), `SESSION_KEY`, plus optional `ADDR`
    callback URL from `EVE_CALLBACK_URL`, and put the issued client ID
    and secret in `.env`.
 2. **Login**: `GET /auth/eve` stores a random `state` in the session
-   and redirects to `login.eveonline.com` requesting these scopes:
-   `esi-skills.read_skills.v1`, `esi-skills.read_skillqueue.v1`,
-   `esi-wallet.read_character_wallet.v1`, `esi-assets.read_assets.v1`.
+   and redirects to `login.eveonline.com` requesting the full
+   read-only ESI scope set (63 scopes from the OAuth2 catalog in
+   CCP's ESI OpenAPI document; every mutating scope — names
+   containing `write_`, `send_`, `respond_`, `organize_`, `manage_`
+   or `open_window` — is excluded). The one-time subset the app
+   originally requested (`esi-skills.read_skills.v1`,
+   `esi-skills.read_skillqueue.v1`,
+   `esi-wallet.read_character_wallet.v1`,
+   `esi-assets.read_assets.v1`) is contained in that set; characters
+   linked before the expansion keep their granted scopes until
+   re-linked.
 3. **Callback**: `GET /auth/callback` verifies the `state`
    (constant-time, single-use), exchanges the authorization code for
    tokens, then verifies the access-token JWT: RS256 signature against
@@ -167,5 +181,9 @@ make gen   # sqlc generate
       (scope already requested at login)
 - [x] Market page: type search, guide prices and regional order
       books via public ESI (no scope needed)
+- [x] Skill sheet page: every skill grouped by category, full
+      queue, per-group totals (from the cached snapshots)
+- [x] Login requests the full read-only ESI scope set (63 scopes;
+      mutating scopes excluded), matching the developer-portal app
 - [ ] Import CCP SDE into side tables for the market/fitting modules
 - [x] Multiple characters per account (link more while signed in)

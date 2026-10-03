@@ -756,6 +756,49 @@ func (q *Queries) ListKillmailDetailsByCharacter(ctx context.Context, characterI
 	return items, nil
 }
 
+const listPlanetLayoutsForUser = `-- name: ListPlanetLayoutsForUser :many
+SELECT s.character_id, s.kind, s.payload, s.fetched_at
+FROM character_snapshots s
+JOIN characters c ON c.character_id = s.character_id
+WHERE c.user_id = ? AND instr(s.kind, 'planet_layout_') = 1
+ORDER BY s.character_id, s.kind
+`
+
+type ListPlanetLayoutsForUserRow struct {
+	CharacterID int64  `json:"character_id"`
+	Kind        string `json:"kind"`
+	Payload     string `json:"payload"`
+	FetchedAt   string `json:"fetched_at"`
+}
+
+func (q *Queries) ListPlanetLayoutsForUser(ctx context.Context, userID int64) ([]ListPlanetLayoutsForUserRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPlanetLayoutsForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPlanetLayoutsForUserRow
+	for rows.Next() {
+		var i ListPlanetLayoutsForUserRow
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.Kind,
+			&i.Payload,
+			&i.FetchedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDECategoriesWithCounts = `-- name: ListSDECategoriesWithCounts :many
 SELECT c.category_id, c.name, COUNT(t.type_id) AS type_count
 FROM sde_categories c

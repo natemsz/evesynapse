@@ -86,6 +86,21 @@ const (
 	// Snapshot-kind prefixes for the per-division wallet kinds.
 	SnapCorpJournalPrefix = "corp_journal_"
 	SnapCorpTxnsPrefix    = "corp_txns_"
+
+	// Module sweep, cluster 3 (economy): character economy
+	// endpoints. Journal/transactions are bounded recent windows
+	// the worker merges (see fetchJournalWindow/fetchTxnsWindow);
+	// contract *items* are not a snapshot at all — they warm into
+	// the contract_details table (schema 006), like killmail
+	// details.
+	SnapWalletJournal = "wallet_journal"
+	SnapWalletTxns    = "wallet_txns"
+	SnapOrders        = "orders"
+	SnapOrdersHistory = "orders_history"
+	SnapContracts     = "contracts"
+	SnapIndustryJobs  = "industry_jobs"
+	SnapBlueprints    = "blueprints"
+	SnapMining        = "mining"
 )
 
 // CorpJournalKind is the snapshot kind holding wallet division d's
@@ -580,6 +595,190 @@ type AssetName struct {
 }
 
 // ---------------------------------------------------------------------------
+// Module sweep, cluster 3: character economy payloads. Shapes
+// verified against CCP's ESI OpenAPI document (components/schemas
+// CharactersCharacterId*). Dates are RFC3339 strings.
+// ---------------------------------------------------------------------------
+
+// WalletJournalEntry is one entry of GET
+// /characters/{id}/wallet/journal/ (30 days back, paged by
+// ?page=). The stored snapshot is a bounded newest-first window
+// merged across pages (see fetchJournalWindow), not one raw page.
+type WalletJournalEntry struct {
+	ID            int64   `json:"id"`
+	Date          string  `json:"date"` // RFC3339
+	RefType       string  `json:"ref_type"`
+	Amount        float64 `json:"amount"` // + into the wallet, - out of it
+	Balance       float64 `json:"balance"`
+	Description   string  `json:"description"`
+	Reason        string  `json:"reason"`
+	FirstPartyID  int64   `json:"first_party_id"`
+	SecondPartyID int64   `json:"second_party_id"`
+	ContextID     int64   `json:"context_id"`
+	ContextType   string  `json:"context_id_type"`
+}
+
+// WalletJournal is the stored journal window.
+type WalletJournal []WalletJournalEntry
+
+// WalletTransaction is one entry of GET
+// /characters/{id}/wallet/transactions/ (steps backward via
+// ?from_id=). The stored snapshot is a bounded newest-first window.
+type WalletTransaction struct {
+	TransactionID int64   `json:"transaction_id"`
+	Date          string  `json:"date"` // RFC3339
+	TypeID        int64   `json:"type_id"`
+	LocationID    int64   `json:"location_id"`
+	UnitPrice     float64 `json:"unit_price"`
+	Quantity      int64   `json:"quantity"`
+	ClientID      int64   `json:"client_id"` // counterparty character/corporation
+	IsBuy         bool    `json:"is_buy"`
+	IsPersonal    bool    `json:"is_personal"`
+	JournalRefID  int64   `json:"journal_ref_id"`
+}
+
+// WalletTransactions is the stored transactions window.
+type WalletTransactions []WalletTransaction
+
+// CharOrder is one entry of GET /characters/{id}/orders/ (open).
+type CharOrder struct {
+	OrderID       int64   `json:"order_id"`
+	TypeID        int64   `json:"type_id"`
+	LocationID    int64   `json:"location_id"`
+	RegionID      int64   `json:"region_id"`
+	IsBuyOrder    bool    `json:"is_buy_order"`
+	IsCorporation bool    `json:"is_corporation"`
+	Price         float64 `json:"price"`
+	VolumeTotal   int64   `json:"volume_total"`
+	VolumeRemain  int64   `json:"volume_remain"`
+	MinVolume     int64   `json:"min_volume"`
+	Range         string  `json:"range"`  // "station"|"solarsystem"|"region"|"1".."40"
+	Issued        string  `json:"issued"` // RFC3339
+	Duration      int64   `json:"duration"`
+	Escrow        float64 `json:"escrow"`
+}
+
+// CharOrders is GET /characters/{id}/orders/.
+type CharOrders []CharOrder
+
+// CharOrderHistoryEntry is one entry of GET
+// /characters/{id}/orders/history/: a closed order. State is
+// "cancelled"/"expired" per the spec (filled orders appear only
+// while CCP retains them, with their final volume_remain).
+type CharOrderHistoryEntry struct {
+	CharOrder
+	State string `json:"state"`
+}
+
+// CharOrderHistory is GET /characters/{id}/orders/history/.
+type CharOrderHistory []CharOrderHistoryEntry
+
+// Contract is one entry of GET /characters/{id}/contracts/ (all
+// pages merged). AssigneeID is 0 for public contracts; AcceptorID
+// is 0 until accepted.
+type Contract struct {
+	ContractID          int64   `json:"contract_id"`
+	IssuerID            int64   `json:"issuer_id"`
+	IssuerCorporationID int64   `json:"issuer_corporation_id"`
+	AssigneeID          int64   `json:"assignee_id"`
+	AcceptorID          int64   `json:"acceptor_id"`
+	Type                string  `json:"type"` // item_exchange|auction|courier|loan|unknown
+	Status              string  `json:"status"`
+	Availability        string  `json:"availability"`
+	Title               string  `json:"title"`
+	ForCorporation      bool    `json:"for_corporation"`
+	Price               float64 `json:"price"`
+	Reward              float64 `json:"reward"`
+	Buyout              float64 `json:"buyout"`
+	Collateral          float64 `json:"collateral"`
+	Volume              float64 `json:"volume"` // m3
+	StartLocationID     int64   `json:"start_location_id"`
+	EndLocationID       int64   `json:"end_location_id"`
+	DateIssued          string  `json:"date_issued"`  // RFC3339
+	DateExpired         string  `json:"date_expired"` // RFC3339
+	DateAccepted        string  `json:"date_accepted"`
+	DateCompleted       string  `json:"date_completed"`
+	DaysToComplete      int64   `json:"days_to_complete"`
+}
+
+// Contracts is GET /characters/{id}/contracts/.
+type Contracts []Contract
+
+// ContractItem is one entry of GET
+// /characters/{id}/contracts/{contract_id}/items/. A negative
+// RawQuantity flags a singleton blueprint: -1 original, -2 copy.
+type ContractItem struct {
+	RecordID    int64 `json:"record_id"`
+	TypeID      int64 `json:"type_id"`
+	Quantity    int64 `json:"quantity"`
+	RawQuantity int64 `json:"raw_quantity"`
+	IsIncluded  bool  `json:"is_included"`
+	IsSingleton bool  `json:"is_singleton"`
+}
+
+// ContractItems is GET /characters/{id}/contracts/{id}/items/.
+type ContractItems []ContractItem
+
+// IndustryJob is one entry of GET /characters/{id}/industry/jobs/
+// (fetched with include_completed=true).
+type IndustryJob struct {
+	JobID                int64   `json:"job_id"`
+	ActivityID           int64   `json:"activity_id"`
+	BlueprintTypeID      int64   `json:"blueprint_type_id"`
+	BlueprintID          int64   `json:"blueprint_id"`
+	BlueprintLocationID  int64   `json:"blueprint_location_id"`
+	OutputLocationID     int64   `json:"output_location_id"`
+	FacilityID           int64   `json:"facility_id"`
+	StationID            int64   `json:"station_id"` // facility's NPC station, when one
+	InstallerID          int64   `json:"installer_id"`
+	Runs                 int64   `json:"runs"`
+	LicensedRuns         int64   `json:"licensed_runs"`
+	SuccessfulRuns       int64   `json:"successful_runs"`
+	Status               string  `json:"status"`     // active|paused|ready|delivered|cancelled|reverted
+	StartDate            string  `json:"start_date"` // RFC3339
+	EndDate              string  `json:"end_date"`   // RFC3339
+	PauseDate            string  `json:"pause_date"`
+	CompletedDate        string  `json:"completed_date"`
+	Duration             int64   `json:"duration"` // seconds
+	Cost                 float64 `json:"cost"`
+	ProductTypeID        int64   `json:"product_type_id"`
+	Probability          float64 `json:"probability"`
+	CompletedCharacterID int64   `json:"completed_character_id"`
+}
+
+// IndustryJobs is GET /characters/{id}/industry/jobs/.
+type IndustryJobs []IndustryJob
+
+// Blueprint is one entry of GET /characters/{id}/blueprints/ (all
+// pages merged). ESI semantics: Quantity -1 marks an original
+// (BPO), -2 a copy (BPC); Runs -1 means unlimited (originals).
+type Blueprint struct {
+	ItemID             int64  `json:"item_id"`
+	TypeID             int64  `json:"type_id"`
+	LocationID         int64  `json:"location_id"`
+	LocationFlag       string `json:"location_flag"`
+	MaterialEfficiency int64  `json:"material_efficiency"`
+	TimeEfficiency     int64  `json:"time_efficiency"`
+	Quantity           int64  `json:"quantity"`
+	Runs               int64  `json:"runs"`
+}
+
+// Blueprints is GET /characters/{id}/blueprints/.
+type Blueprints []Blueprint
+
+// MiningEntry is one entry of GET /characters/{id}/mining/ (all
+// pages merged): one ore type, one system, one day.
+type MiningEntry struct {
+	Date          string `json:"date"` // YYYY-MM-DD
+	TypeID        int64  `json:"type_id"`
+	SolarSystemID int64  `json:"solar_system_id"`
+	Quantity      int64  `json:"quantity"`
+}
+
+// MiningLedger is GET /characters/{id}/mining/.
+type MiningLedger []MiningEntry
+
+// ---------------------------------------------------------------------------
 // HTTP layer.
 // ---------------------------------------------------------------------------
 
@@ -706,6 +905,22 @@ func snapshotPath(characterID int64, kind string) string {
 		return fmt.Sprintf("/characters/%d/fatigue/", characterID)
 	case SnapKillmails:
 		return fmt.Sprintf("/characters/%d/killmails/recent/", characterID)
+	case SnapWalletJournal:
+		return fmt.Sprintf("/characters/%d/wallet/journal/", characterID)
+	case SnapWalletTxns:
+		return fmt.Sprintf("/characters/%d/wallet/transactions/", characterID)
+	case SnapOrders:
+		return fmt.Sprintf("/characters/%d/orders/", characterID)
+	case SnapOrdersHistory:
+		return fmt.Sprintf("/characters/%d/orders/history/", characterID)
+	case SnapContracts:
+		return fmt.Sprintf("/characters/%d/contracts/", characterID)
+	case SnapIndustryJobs:
+		return fmt.Sprintf("/characters/%d/industry/jobs/?include_completed=true", characterID)
+	case SnapBlueprints:
+		return fmt.Sprintf("/characters/%d/blueprints/", characterID)
+	case SnapMining:
+		return fmt.Sprintf("/characters/%d/mining/", characterID)
 	}
 	return ""
 }
@@ -736,11 +951,18 @@ func (c *Client) FetchAndStoreSnapshot(ctx context.Context, ch db.Character, kin
 
 	var body []byte
 	var header http.Header
-	if kind == SnapAssets {
-		// Assets are paginated; the stored snapshot is the merged
-		// array so downstream code sees one flat list.
+	switch kind {
+	case SnapAssets, SnapContracts, SnapBlueprints, SnapMining:
+		// Paginated; the stored snapshot is the merged array so
+		// downstream code sees one flat list.
 		body, header, err = c.fetchAllPages(ctx, token, path)
-	} else {
+	case SnapWalletJournal:
+		// Paginated, but only a bounded recent window is stored.
+		body, header, err = c.fetchJournalWindow(ctx, token, path)
+	case SnapWalletTxns:
+		// Steps backward via from_id; bounded recent window.
+		body, header, err = c.fetchTxnsWindow(ctx, token, path)
+	default:
 		body, header, err = c.FetchRaw(ctx, token, path)
 	}
 	if err != nil {
@@ -932,6 +1154,134 @@ func (c *Client) fetchAllPages(ctx context.Context, token, path string) ([]byte,
 		return nil, nil, fmt.Errorf("ESI GET %s: merge pages: %w", path, err)
 	}
 	return combined, header, nil
+}
+
+// ---------------------------------------------------------------------------
+// Cluster 3 windowed fetches. The wallet journal pages forward via
+// X-Pages; wallet transactions step backward via from_id. Both are
+// stored as one bounded newest-first window so the snapshot stays
+// small and the page renders from one flat list.
+// ---------------------------------------------------------------------------
+
+const (
+	// maxJournalEntries bounds the stored journal window.
+	maxJournalEntries = 300
+	// maxJournalPages bounds one journal refresh (each page holds
+	// up to 1,000 entries, so the window normally fills on page 1).
+	maxJournalPages = 3
+	// maxTxnEntries bounds the stored transactions window.
+	maxTxnEntries = 300
+	// maxTxnRequests bounds the from_id steps in one refresh.
+	maxTxnRequests = 3
+)
+
+// fetchJournalWindow GETs journal pages (newest first) until the
+// window is full or the endpoint runs out of pages, and returns
+// the merged array plus the first response's headers.
+func (c *Client) fetchJournalWindow(ctx context.Context, token, path string) ([]byte, http.Header, error) {
+	merged := []json.RawMessage{}
+	var firstHeader http.Header
+	for page := 1; page <= maxJournalPages; page++ {
+		p := path
+		if page > 1 {
+			p = fmt.Sprintf("%s?page=%d", path, page)
+		}
+		body, header, err := c.FetchRaw(ctx, token, p)
+		if err != nil {
+			return nil, nil, err
+		}
+		if page == 1 {
+			firstHeader = header
+		}
+		var entries []json.RawMessage
+		if err := json.Unmarshal(body, &entries); err != nil {
+			return nil, nil, fmt.Errorf("ESI GET %s: decode page: %w", path, err)
+		}
+		merged = append(merged, entries...)
+		if len(merged) >= maxJournalEntries {
+			break
+		}
+		pages := 1
+		if xp := header.Get("X-Pages"); xp != "" {
+			if n, aerr := strconv.Atoi(xp); aerr == nil && n > 1 {
+				pages = n
+			}
+		}
+		if page >= pages {
+			break
+		}
+	}
+	if len(merged) > maxJournalEntries {
+		merged = merged[:maxJournalEntries]
+	}
+	combined, err := json.Marshal(merged)
+	if err != nil {
+		return nil, nil, fmt.Errorf("ESI GET %s: merge pages: %w", path, err)
+	}
+	return combined, firstHeader, nil
+}
+
+// fetchTxnsWindow GETs wallet transactions newest-first, stepping
+// backward with from_id (each response covers the transactions
+// older than the given one) until the window is full or the
+// endpoint runs dry, at most maxTxnRequests calls.
+func (c *Client) fetchTxnsWindow(ctx context.Context, token, path string) ([]byte, http.Header, error) {
+	merged := []json.RawMessage{}
+	var firstHeader http.Header
+	var fromID int64
+	for call := 0; call < maxTxnRequests; call++ {
+		p := path
+		if fromID > 0 {
+			p = fmt.Sprintf("%s?from_id=%d", path, fromID)
+		}
+		body, header, err := c.FetchRaw(ctx, token, p)
+		if err != nil {
+			return nil, nil, err
+		}
+		if call == 0 {
+			firstHeader = header
+		}
+		var entries []json.RawMessage
+		if err := json.Unmarshal(body, &entries); err != nil {
+			return nil, nil, fmt.Errorf("ESI GET %s: decode page: %w", path, err)
+		}
+		if len(entries) == 0 {
+			break
+		}
+		merged = append(merged, entries...)
+		if len(merged) >= maxTxnEntries {
+			break
+		}
+		// Step from the oldest transaction just seen.
+		var last struct {
+			TransactionID int64 `json:"transaction_id"`
+		}
+		if err := json.Unmarshal(entries[len(entries)-1], &last); err != nil || last.TransactionID <= 0 {
+			break
+		}
+		fromID = last.TransactionID
+	}
+	if len(merged) > maxTxnEntries {
+		merged = merged[:maxTxnEntries]
+	}
+	combined, err := json.Marshal(merged)
+	if err != nil {
+		return nil, nil, fmt.Errorf("ESI GET %s: merge pages: %w", path, err)
+	}
+	return combined, firstHeader, nil
+}
+
+// FetchContractItems GETs one contract's item list with the
+// character's token. Contract items are immutable once posted, so
+// the worker warms them into the contract_details store once and
+// pages render from there (see internal/app/schema 006).
+func (c *Client) FetchContractItems(ctx context.Context, ch db.Character, contractID int64) ([]byte, error) {
+	token, err := c.tokens(ctx, ch)
+	if err != nil {
+		return nil, err
+	}
+	body, _, err := c.FetchRaw(ctx, token, fmt.Sprintf("/characters/%d/contracts/%d/items/", ch.CharacterID, contractID))
+	return body, err
 }
 
 // GetCached returns ESI data for (character, kind), decoded into out.

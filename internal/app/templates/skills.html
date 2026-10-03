@@ -12,6 +12,7 @@
   {{if .Skills.Loaded}}
   <p>Total SP: <strong>{{.Skills.TotalSP}}</strong>{{if .Skills.UnallocatedSP}} · {{.Skills.UnallocatedSP}} unallocated{{end}} · {{.Skills.SkillsKnown}} skills known · {{.Skills.LevelVCount}} at level V</p>
 
+  <section class="foldable">
   <h3>Skill queue</h3>
   {{if .Skills.Training}}
   <p>Currently training: <strong>{{.Skills.Training}}</strong></p>
@@ -31,8 +32,10 @@
   </div>
   {{if .Skills.CompletesAt}}<p><small>Queue completes {{.Skills.CompletesAt}}</small></p>{{end}}
   {{end}}
+  </section>
 
   {{range .Skills.Groups}}
+  <section class="foldable" data-fold="closed">
   <h3>{{.Name}}</h3>
   <div class="tw">
   <table>
@@ -45,6 +48,7 @@
   </table>
   </div>
   <p><small>Group total: {{.SubtotalSP}} SP</small></p>
+  </section>
   {{end}}
   {{else}}
   {{if .Skills.Warming}}

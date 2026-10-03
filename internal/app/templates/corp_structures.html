@@ -23,6 +23,7 @@
   {{else if .CorpStructs.Loaded}}
   {{if .CorpStructs.Rows}}
   {{range .CorpStructs.Rows}}
+    <section class="foldable">
     <h3>{{.Name}}</h3>
     <div class="tw">
     <table>
@@ -37,6 +38,7 @@
       </tbody>
     </table>
     </div>
+    </section>
   {{end}}
   {{else}}
   <p><small>This corporation owns no Upwell structures.</small></p>

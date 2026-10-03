@@ -11,6 +11,7 @@
 {{if .Industry}}
 <h2>{{.Industry.CharacterName}}</h2>
 
+<section class="foldable">
 <h3>Jobs</h3>
 {{if .Industry.Jobs.Note}}
 <p><small>{{.Industry.Jobs.Note}}</small></p>
@@ -31,7 +32,9 @@
 {{else}}
 <p><small>No industry jobs in the latest snapshot.</small></p>
 {{end}}
+</section>
 
+<section class="foldable">
 <h3>Blueprints</h3>
 {{if .Industry.Blueprints.Note}}
 <p><small>{{.Industry.Blueprints.Note}}</small></p>
@@ -52,7 +55,9 @@
 {{else}}
 <p><small>No blueprints in the latest snapshot.</small></p>
 {{end}}
+</section>
 
+<section class="foldable">
 <h3>Mining ledger</h3>
 {{if .Industry.Mining.Note}}
 <p><small>{{.Industry.Mining.Note}}</small></p>
@@ -73,6 +78,7 @@
 {{else}}
 <p><small>No mining entries in the latest snapshot.</small></p>
 {{end}}
+</section>
 {{else}}
 <p>No character to show yet — link a character first.</p>
 {{end}}

@@ -352,7 +352,16 @@ main {
 .foldbtn:hover { color: #fff6e6; border-color: var(--accent); }
 .panel.has-fold > h1:first-child { padding-right: 3rem; }
 .panel.folded > *:not(h1),
-.card.folded > *:not(:first-child) { display: none; }
+.card.folded > *:not(:first-child),
+.foldable.folded > *:not(:first-child) { display: none; }
+
+/* .foldable sections: the h2/h3 blocks inside a multi-section page
+   panel (Character, Skills, Industry…). Each carries its own fold
+   button in its heading and folds independently; sections listed
+   data-fold="closed" in markup start folded once JS loads (skill
+   categories), and stay plain visible content without JS. */
+.foldable { position: relative; }
+.foldable.has-fold > h2:first-child, .foldable.has-fold > h3:first-child { padding-right: 2.2rem; }
 
 /* --- buttons --- */
 .btn {

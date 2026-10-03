@@ -34,6 +34,7 @@
   </div>
   {{end}}
   {{if .IntelFW.Systems}}
+  <section class="foldable">
   <h2>Contested systems</h2>
   <div class="tw">
   <table>
@@ -52,6 +53,7 @@
   </table>
   </div>
   <p><small>Contested % is victory points over the flip threshold — the ratio the in-game display tracks.{{if gt .IntelFW.Total (len .IntelFW.Systems)}} Showing the {{len .IntelFW.Systems}} most contested of {{.IntelFW.Total}} front-line systems.{{end}}</small></p>
+  </section>
   {{end}}
   {{end}}
 {{else}}

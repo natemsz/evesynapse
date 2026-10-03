@@ -12,6 +12,7 @@
   {{if .Assets.Loaded}}
   <p><small>{{.Assets.Stacks}} stacks · {{.Assets.TotalItems}} items · {{len .Assets.Locations}} locations</small></p>
   {{range .Assets.Locations}}
+    <section class="foldable">
     <h3>{{.Title}}</h3>
     <div class="tw">
     <table>
@@ -24,6 +25,7 @@
     </table>
     </div>
     {{if .MoreStacks}}<p><small>+ {{.MoreStacks}} more stacks</small></p>{{end}}
+    </section>
   {{end}}
   {{else}}
   {{if .Assets.Warming}}

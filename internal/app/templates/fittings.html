@@ -12,6 +12,7 @@
   {{if .Fittings.Loaded}}
   {{if .Fittings.Fittings}}
   {{range .Fittings.Fittings}}
+  <section class="foldable">
   <h3>{{.Name}}</h3>
   <p><small>{{.ShipType}}</small></p>
   {{range .Groups}}
@@ -27,6 +28,7 @@
   </table>
   </div>
   {{end}}
+  </section>
   {{end}}
   {{else}}
   <p><small>No saved fittings for this character.</small></p>

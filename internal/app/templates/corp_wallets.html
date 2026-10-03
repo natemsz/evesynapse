@@ -32,6 +32,7 @@
   </table>
   </div>
 
+  <section class="foldable">
   <h3>{{if eq .CorpWallets.Division 1}}Master Wallet{{else}}Division {{.CorpWallets.Division}}{{end}} — recent journal</h3>
   {{if .CorpWallets.LedgerNote}}
   <p><small>{{.CorpWallets.LedgerNote}}</small></p>
@@ -50,7 +51,9 @@
   {{else}}
   <p><small>No journal entries in this division's latest snapshot.</small></p>
   {{end}}
+  </section>
 
+  <section class="foldable">
   <h3>{{if eq .CorpWallets.Division 1}}Master Wallet{{else}}Division {{.CorpWallets.Division}}{{end}} — recent transactions</h3>
   {{if .CorpWallets.Txns}}
   <div class="tw">
@@ -67,6 +70,7 @@
   {{else if not .CorpWallets.LedgerNote}}
   <p><small>No transactions in this division's latest snapshot.</small></p>
   {{end}}
+  </section>
   {{end}}
 {{else}}
   <p>No corporation to show yet — link a character first.</p>

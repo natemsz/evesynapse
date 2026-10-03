@@ -11,6 +11,7 @@
 {{if .Orders}}
 <h2>{{.Orders.CharacterName}}</h2>
 
+<section class="foldable">
 <h3>Open orders</h3>
 {{if .Orders.Open.Note}}
 <p><small>{{.Orders.Open.Note}}</small></p>
@@ -30,7 +31,9 @@
 {{else}}
 <p><small>No open orders in the latest snapshot.</small></p>
 {{end}}
+</section>
 
+<section class="foldable">
 <h3>Recent history</h3>
 {{if .Orders.History.Note}}
 <p><small>{{.Orders.History.Note}}</small></p>
@@ -51,6 +54,7 @@
 {{else}}
 <p><small>No closed orders in the latest snapshot.</small></p>
 {{end}}
+</section>
 {{else}}
 <p>No character to show yet — link a character first.</p>
 {{end}}

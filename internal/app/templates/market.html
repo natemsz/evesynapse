@@ -24,6 +24,7 @@
   Best buy: <strong>{{if $item.BestBuy}}{{$item.BestBuy}} ISK{{else}}—{{end}}</strong>{{if $item.BestBuyLoc}} ({{$item.BestBuyLoc}}){{end}}{{if $item.Spread}}<br>
   Spread: {{$item.Spread}}{{end}}</p>
 
+  <section class="foldable">
   <h3>Sell orders — {{$item.RegionName}}</h3>
   <div class="tw">
   <table>
@@ -38,7 +39,9 @@
   </table>
   </div>
   <p><small>Showing top {{len $item.Sells}} · {{$item.SellOrders}} sell orders · {{$item.SellVolume}} total volume</small></p>
+  </section>
 
+  <section class="foldable">
   <h3>Buy orders — {{$item.RegionName}}</h3>
   <div class="tw">
   <table>
@@ -53,11 +56,14 @@
   </table>
   </div>
   <p><small>Showing top {{len $item.Buys}} · {{$item.BuyOrders}} buy orders · {{$item.BuyVolume}} total volume</small></p>
+  </section>
 
   {{if $item.Truncated}}<p><small>Order book truncated — only the first 20 pages were read, so best prices are best-within-those.</small></p>{{end}}
 {{else if .Market.Matches}}
+  <section class="foldable">
   <h3>Matches</h3>
   <p>{{range $i, $m := .Market.Matches}}{{if $i}} · {{end}}<a href="/market/?type={{$m.ID}}&region={{$.Market.Region}}">{{$m.Name}}</a>{{end}}</p>
+  </section>
 {{else if .Market.Query}}
   <p>No items matched "{{.Market.Query}}".</p>
 {{else}}

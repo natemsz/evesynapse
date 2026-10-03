@@ -5,31 +5,47 @@
 (function () {
   "use strict";
 
-  // --- Collapsible panels -------------------------------------
-  // The base template wraps every page in one .panel; grid pages
-  // add .card widgets inside it. Each gets a fold button in its
-  // header area (the panel's h1 bar, a card's first heading).
-  // Content starts open; the button folds it away and back.
+  // --- Collapsible sections -----------------------------------
+  // Folding lives at the smallest sensible unit on each page:
+  //   - .foldable sections (the h2/h3 blocks inside a page panel)
+  //     fold independently, section by section;
+  //   - .card widgets fold whole (Home widgets, Sync cards);
+  //   - the page .panel itself folds whole only when it wraps no
+  //     .foldable section and no cards — single-block pages like
+  //     Killmails or Wars, where the whole window IS the section.
+  // Sections marked data-fold="closed" start folded; that state
+  // is applied here, on load, so with JavaScript disabled every
+  // section is simply visible — folding is pure enhancement and
+  // nothing is ever hidden in the raw markup.
+  function setFolded(container, btn, folded) {
+    container.classList.toggle("folded", folded);
+    btn.textContent = folded ? "+" : "–"; // + when folded, en dash to fold
+    btn.setAttribute("aria-expanded", folded ? "false" : "true");
+    btn.setAttribute("aria-label", folded ? "Expand section" : "Collapse section");
+  }
+
   function addFold(container, heading) {
     if (!container || !heading) return;
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "foldbtn";
-    btn.textContent = "–"; // en dash: fold; becomes + when folded
-    btn.setAttribute("aria-expanded", "true");
-    btn.setAttribute("aria-label", "Collapse section");
     btn.addEventListener("click", function () {
-      var folded = container.classList.toggle("folded");
-      btn.textContent = folded ? "+" : "–";
-      btn.setAttribute("aria-expanded", folded ? "false" : "true");
-      btn.setAttribute("aria-label", folded ? "Expand section" : "Collapse section");
+      setFolded(container, btn, !container.classList.contains("folded"));
     });
     heading.appendChild(btn);
     container.classList.add("has-fold");
+    setFolded(container, btn, container.getAttribute("data-fold") === "closed");
   }
 
   var panel = document.querySelector("main > .panel");
-  if (panel) addFold(panel, panel.querySelector(":scope > h1"));
+  if (panel && !panel.querySelector(".foldable, .card")) {
+    addFold(panel, panel.querySelector(":scope > h1"));
+  }
+
+  var foldables = document.querySelectorAll(".foldable");
+  for (var i = 0; i < foldables.length; i++) {
+    addFold(foldables[i], foldables[i].querySelector(":scope > h2, :scope > h3"));
+  }
 
   var cards = document.querySelectorAll(".card");
   for (var i = 0; i < cards.length; i++) {

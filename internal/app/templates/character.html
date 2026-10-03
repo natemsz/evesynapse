@@ -12,6 +12,7 @@
   {{if .CharacterPage.Loaded}}
 
   {{if .CharacterPage.IdentityKnown}}
+  <section class="foldable">
   <h2><img class="portrait" src="{{.CharacterPage.PortraitURL}}" alt="">{{.CharacterPage.CharacterName}}</h2>
   <div class="tw">
   <table>
@@ -22,23 +23,29 @@
     </tbody>
   </table>
   </div>
+  </section>
   {{end}}
 
   {{if .CharacterPage.WalletKnown}}
+  <section class="foldable">
   <h3>Wallet</h3>
   <p class="isk">{{.CharacterPage.ISK}} <small>ISK</small></p>
+  </section>
   {{end}}
 
   {{if .CharacterPage.QueueKnown}}
+  <section class="foldable">
   <h3>Training</h3>
   {{if .CharacterPage.Training}}
   <p>{{.CharacterPage.Training}}{{if .CharacterPage.TrainingLeft}} (<span class="countdown" data-finish="{{.CharacterPage.TrainingFinish}}">{{.CharacterPage.TrainingLeft}}</span>){{end}}</p>
   {{else}}
   <p><small>Not training — empty queue.</small></p>
   {{end}}
+  </section>
   {{end}}
 
   {{if .CharacterPage.SkillsKnown}}
+  <section class="foldable">
   <h3>Skills</h3>
   <p><small>Total skill points: {{.CharacterPage.TotalSP}}{{if .CharacterPage.UnallocatedSP}} · Unallocated: {{.CharacterPage.UnallocatedSP}}{{end}}{{if .CharacterPage.SkillsCount}} · {{.CharacterPage.SkillsCount}} skills{{if gt .CharacterPage.SkillsCount .CharacterPage.SkillsShown}} (top {{.CharacterPage.SkillsShown}} by SP){{end}}{{end}}</small></p>
   {{if .CharacterPage.Skills}}
@@ -53,9 +60,11 @@
   </table>
   </div>
   {{end}}
+  </section>
   {{end}}
 
   {{if .CharacterPage.OnlineKnown}}
+  <section class="foldable">
   <h3>Status</h3>
   <div class="tw">
   <table>
@@ -67,9 +76,11 @@
     </tbody>
   </table>
   </div>
+  </section>
   {{end}}
 
   {{if .CharacterPage.LocationKnown}}
+  <section class="foldable">
   <h3>Location</h3>
   <div class="tw">
   <table>
@@ -79,9 +90,11 @@
     </tbody>
   </table>
   </div>
+  </section>
   {{end}}
 
   {{if .CharacterPage.ShipKnown}}
+  <section class="foldable">
   <h3>Ship</h3>
   <div class="tw">
   <table>
@@ -90,9 +103,11 @@
     </tbody>
   </table>
   </div>
+  </section>
   {{end}}
 
   {{if .CharacterPage.FatigueKnown}}
+  <section class="foldable">
   <h3>Jump fatigue</h3>
   <div class="tw">
   <table>
@@ -102,9 +117,11 @@
     </tbody>
   </table>
   </div>
+  </section>
   {{end}}
 
   {{if .CharacterPage.ImplantsKnown}}
+  <section class="foldable">
   <h3>Active implants</h3>
   {{if .CharacterPage.Implants}}
   <div class="tw">
@@ -120,9 +137,11 @@
   {{else}}
   <p><small>No implants plugged in.</small></p>
   {{end}}
+  </section>
   {{end}}
 
   {{if .CharacterPage.ClonesKnown}}
+  <section class="foldable">
   <h3>Clones</h3>
   <div class="tw">
   <table>
@@ -154,6 +173,7 @@
   {{else}}
   <p><small>No jump clones installed.</small></p>
   {{end}}
+  </section>
   {{end}}
 
   {{else}}

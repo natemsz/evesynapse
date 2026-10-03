@@ -5,6 +5,7 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{range .Corps}}
+  <section class="foldable">
   <h2>{{.Name}} [{{.Ticker}}]</h2>
   <p><img class="portrait" src="{{.LogoURL}}" alt="Logo of {{.Name}}" width="128" height="128"></p>
   <div class="tw">
@@ -29,6 +30,7 @@
     <a href="/corporations/killmails/?character={{.LinkCharacterID}}">Killmails</a>
   </small></p>{{end}}
   {{if .Description}}<h3>About</h3><p class="corp-desc">{{.Description}}</p>{{end}}
+  </section>
 {{else}}
   <p>No corporations to show yet — link a character first.</p>
 {{end}}

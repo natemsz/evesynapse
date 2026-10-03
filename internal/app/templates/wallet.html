@@ -12,6 +12,7 @@
 <h2>{{.Wallet.CharacterName}}</h2>
 {{if .Wallet.BalanceOK}}<p>Balance: <strong>{{.Wallet.Balance}} ISK</strong></p>{{end}}
 
+<section class="foldable">
 <h3>Recent journal</h3>
 {{if .Wallet.Journal.Note}}
 <p><small>{{.Wallet.Journal.Note}}</small></p>
@@ -32,7 +33,9 @@
 {{else}}
 <p><small>No journal entries in the latest snapshot.</small></p>
 {{end}}
+</section>
 
+<section class="foldable">
 <h3>Recent transactions</h3>
 {{if .Wallet.Txns.Note}}
 <p><small>{{.Wallet.Txns.Note}}</small></p>
@@ -53,6 +56,7 @@
 {{else}}
 <p><small>No transactions in the latest snapshot.</small></p>
 {{end}}
+</section>
 {{else}}
 <p>No character to show yet — link a character first.</p>
 {{end}}

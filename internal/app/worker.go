@@ -220,6 +220,19 @@ func (app *Application) refreshCycle(ctx context.Context) {
 				limited = true
 			}
 		}
+
+		// Economy datasets (cluster 3): the wallet/orders/
+		// contracts/industry snapshots, plus the contract item
+		// lists behind the contracts snapshot (economy_worker.go).
+		if !limited {
+			refreshed += app.refreshEconomySnapshots(ctx, ch)
+			warmed, ltd := app.warmContractItems(ctx, ch)
+			refreshed += warmed
+			if ltd {
+				log.Printf("worker: ESI error limit hit warming contract items for character %d; backing off until next cycle", ch.CharacterID)
+				limited = true
+			}
+		}
 		if limited {
 			break
 		}
@@ -507,6 +520,93 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 			for _, s := range structures {
 				if s.TypeID > 0 {
 					typeIDs[s.TypeID] = true
+				}
+			}
+		case esi.SnapWalletJournal:
+			// Journal parties resolve through the character-name
+			// cache; only plausible character IDs are harvested
+			// (corporations/alliances share the numeric space and
+			// would just 404 the character endpoint every cycle).
+			var journal esi.WalletJournal
+			if err := json.Unmarshal([]byte(snap.Payload), &journal); err == nil {
+				for _, e := range journal {
+					if e.FirstPartyID >= 90_000_000 {
+						charIDs[e.FirstPartyID] = true
+					}
+					if e.SecondPartyID >= 90_000_000 {
+						charIDs[e.SecondPartyID] = true
+					}
+				}
+			}
+		case esi.SnapWalletTxns:
+			var txns esi.WalletTransactions
+			if err := json.Unmarshal([]byte(snap.Payload), &txns); err == nil {
+				for _, t := range txns {
+					if t.TypeID > 0 {
+						typeIDs[t.TypeID] = true
+					}
+					if t.ClientID >= 90_000_000 {
+						charIDs[t.ClientID] = true
+					}
+				}
+			}
+		case esi.SnapOrders:
+			var orders esi.CharOrders
+			if err := json.Unmarshal([]byte(snap.Payload), &orders); err == nil {
+				for _, o := range orders {
+					if o.TypeID > 0 {
+						typeIDs[o.TypeID] = true
+					}
+				}
+			}
+		case esi.SnapOrdersHistory:
+			var history esi.CharOrderHistory
+			if err := json.Unmarshal([]byte(snap.Payload), &history); err == nil {
+				for _, o := range history {
+					if o.TypeID > 0 {
+						typeIDs[o.TypeID] = true
+					}
+				}
+			}
+		case esi.SnapContracts:
+			var contracts esi.Contracts
+			if err := json.Unmarshal([]byte(snap.Payload), &contracts); err == nil {
+				for _, c := range contracts {
+					for _, id := range []int64{c.IssuerID, c.AssigneeID, c.AcceptorID} {
+						if id >= 90_000_000 {
+							charIDs[id] = true
+						}
+					}
+				}
+			}
+		case esi.SnapIndustryJobs:
+			var jobs esi.IndustryJobs
+			if err := json.Unmarshal([]byte(snap.Payload), &jobs); err == nil {
+				for _, j := range jobs {
+					if j.BlueprintTypeID > 0 {
+						typeIDs[j.BlueprintTypeID] = true
+					}
+					if j.ProductTypeID > 0 {
+						typeIDs[j.ProductTypeID] = true
+					}
+				}
+			}
+		case esi.SnapBlueprints:
+			var blueprints esi.Blueprints
+			if err := json.Unmarshal([]byte(snap.Payload), &blueprints); err == nil {
+				for _, bp := range blueprints {
+					if bp.TypeID > 0 {
+						typeIDs[bp.TypeID] = true
+					}
+				}
+			}
+		case esi.SnapMining:
+			var ledger esi.MiningLedger
+			if err := json.Unmarshal([]byte(snap.Payload), &ledger); err == nil {
+				for _, m := range ledger {
+					if m.TypeID > 0 {
+						typeIDs[m.TypeID] = true
+					}
 				}
 			}
 		default:

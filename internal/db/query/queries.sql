@@ -188,6 +188,29 @@ ON CONFLICT (killmail_id) DO UPDATE SET
     fetched_at   = excluded.fetched_at;
 
 -- ---------------------------------------------------------------------
+-- Module sweep, cluster 3 (schema 006): contract detail store. The
+-- worker warms contract item lists from the contracts snapshot;
+-- pages only read here.
+-- ---------------------------------------------------------------------
+
+-- name: GetContractDetail :one
+SELECT * FROM contract_details
+WHERE contract_id = ?;
+
+-- name: ListContractDetailIDsByCharacter :many
+SELECT contract_id FROM contract_details
+WHERE character_id = ?
+ORDER BY contract_id;
+
+-- name: UpsertContractDetail :exec
+INSERT INTO contract_details (contract_id, character_id, payload, fetched_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (contract_id) DO UPDATE SET
+    character_id = excluded.character_id,
+    payload      = excluded.payload,
+    fetched_at   = excluded.fetched_at;
+
+-- ---------------------------------------------------------------------
 -- Module sweep, cluster 2 (schema 005): corporation support.
 -- Fetch-outcome log (role-missing state), character-to-corporation
 -- map, and player-given item names.

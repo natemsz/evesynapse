@@ -1,0 +1,57 @@
+{{define "title"}}Orders{{end}}
+{{define "content"}}
+<h1>Orders</h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .OrdersChars}}
+<p>{{range $i, $c := .OrdersChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/orders/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
+{{end}}
+
+{{if .Orders}}
+<h2>{{.Orders.CharacterName}}</h2>
+
+<h3>Open orders</h3>
+{{if .Orders.Open.Note}}
+<p><small>{{.Orders.Open.Note}}</small></p>
+{{else if .Orders.Open.Warming}}
+<p><small>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</small></p>
+{{else if .Orders.OpenRows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th>Side</th><th>Price</th><th>Volume</th><th>Location</th><th>Region</th><th>Range</th><th>Issued</th><th>Expires</th></tr></thead>
+  <tbody>
+  {{range .Orders.OpenRows}}
+    <tr><td>{{.Item}}{{if .Corp}} (corp){{end}}</td><td>{{.Side}}</td><td>{{.Price}} ISK</td><td>{{.Volume}}</td><td>{{.Location}}</td><td>{{.Region}}</td><td>{{.Range}}</td><td>{{.Issued}}</td><td>{{.Expires}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p><small>No open orders in the latest snapshot.</small></p>
+{{end}}
+
+<h3>Recent history</h3>
+{{if .Orders.History.Note}}
+<p><small>{{.Orders.History.Note}}</small></p>
+{{else if .Orders.History.Warming}}
+<p><small>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</small></p>
+{{else if .Orders.HistoryRows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th>Side</th><th>Price</th><th>Volume</th><th>Location</th><th>State</th><th>Issued</th></tr></thead>
+  <tbody>
+  {{range .Orders.HistoryRows}}
+    <tr><td>{{.Item}}{{if .Corp}} (corp){{end}}</td><td>{{.Side}}</td><td>{{.Price}} ISK</td><td>{{.Volume}}</td><td>{{.Location}}</td><td>{{.State}}</td><td>{{.Issued}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{if .Orders.HistoryCut}}<p><small>+ {{.Orders.HistoryCut}} older closed orders in this snapshot.</small></p>{{end}}
+{{else}}
+<p><small>No closed orders in the latest snapshot.</small></p>
+{{end}}
+{{else}}
+<p>No character to show yet — link a character first.</p>
+{{end}}
+{{end}}

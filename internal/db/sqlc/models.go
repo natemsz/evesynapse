@@ -35,6 +35,13 @@ type CharacterSnapshot struct {
 	CachedUntil sql.NullString `json:"cached_until"`
 }
 
+type ContractDetail struct {
+	ContractID  int64  `json:"contract_id"`
+	CharacterID int64  `json:"character_id"`
+	Payload     string `json:"payload"`
+	FetchedAt   string `json:"fetched_at"`
+}
+
 type ItemName struct {
 	ItemID int64  `json:"item_id"`
 	Name   string `json:"name"`

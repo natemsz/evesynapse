@@ -139,6 +139,29 @@ func (q *Queries) GetCharacterCorporation(ctx context.Context, characterID int64
 	return i, err
 }
 
+const getContractDetail = `-- name: GetContractDetail :one
+
+SELECT contract_id, character_id, payload, fetched_at FROM contract_details
+WHERE contract_id = ?
+`
+
+// ---------------------------------------------------------------------
+// Module sweep, cluster 3 (schema 006): contract detail store. The
+// worker warms contract item lists from the contracts snapshot;
+// pages only read here.
+// ---------------------------------------------------------------------
+func (q *Queries) GetContractDetail(ctx context.Context, contractID int64) (ContractDetail, error) {
+	row := q.db.QueryRowContext(ctx, getContractDetail, contractID)
+	var i ContractDetail
+	err := row.Scan(
+		&i.ContractID,
+		&i.CharacterID,
+		&i.Payload,
+		&i.FetchedAt,
+	)
+	return i, err
+}
+
 const getItemName = `-- name: GetItemName :one
 SELECT name FROM item_names
 WHERE item_id = ?
@@ -442,6 +465,35 @@ func (q *Queries) ListCharactersByUser(ctx context.Context, userID int64) ([]Cha
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listContractDetailIDsByCharacter = `-- name: ListContractDetailIDsByCharacter :many
+SELECT contract_id FROM contract_details
+WHERE character_id = ?
+ORDER BY contract_id
+`
+
+func (q *Queries) ListContractDetailIDsByCharacter(ctx context.Context, characterID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listContractDetailIDsByCharacter, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var contract_id int64
+		if err := rows.Scan(&contract_id); err != nil {
+			return nil, err
+		}
+		items = append(items, contract_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -834,6 +886,32 @@ type UpsertCharacterCorporationParams struct {
 
 func (q *Queries) UpsertCharacterCorporation(ctx context.Context, arg UpsertCharacterCorporationParams) error {
 	_, err := q.db.ExecContext(ctx, upsertCharacterCorporation, arg.CharacterID, arg.CorporationID, arg.UpdatedAt)
+	return err
+}
+
+const upsertContractDetail = `-- name: UpsertContractDetail :exec
+INSERT INTO contract_details (contract_id, character_id, payload, fetched_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (contract_id) DO UPDATE SET
+    character_id = excluded.character_id,
+    payload      = excluded.payload,
+    fetched_at   = excluded.fetched_at
+`
+
+type UpsertContractDetailParams struct {
+	ContractID  int64  `json:"contract_id"`
+	CharacterID int64  `json:"character_id"`
+	Payload     string `json:"payload"`
+	FetchedAt   string `json:"fetched_at"`
+}
+
+func (q *Queries) UpsertContractDetail(ctx context.Context, arg UpsertContractDetailParams) error {
+	_, err := q.db.ExecContext(ctx, upsertContractDetail,
+		arg.ContractID,
+		arg.CharacterID,
+		arg.Payload,
+		arg.FetchedAt,
+	)
 	return err
 }
 

@@ -103,6 +103,21 @@ const (
 	SnapMining        = "mining"
 )
 
+// Global snapshot kinds stored in global_snapshots (schema 007):
+// the module sweep's Intel cluster. Everything here is public
+// ESI data — no character token — so it lives in a global store
+// rather than the per-character snapshot table. War *details*
+// are not a global snapshot; they warm into the war_details
+// table like killmail details (see the worker).
+const (
+	GlobalStatus     = "status"     // GET /status/
+	GlobalWars       = "wars"       // GET /wars/ (war ID list)
+	GlobalIncursions = "incursions" // GET /incursions/
+	GlobalFWSystems  = "fw_systems" // GET /fw/systems/
+	GlobalFWStats    = "fw_stats"   // GET /fw/stats/
+	GlobalFactions   = "factions"   // GET /universe/factions/
+)
+
 // CorpJournalKind is the snapshot kind holding wallet division d's
 // journal (d in 1..7).
 func CorpJournalKind(division int64) string {
@@ -180,6 +195,24 @@ type Client struct {
 	// victims and final-blow attackers. Public data.
 	charNamesMu sync.RWMutex
 	charNames   map[int64]string
+
+	// In-process caches of corporation and alliance ID → name,
+	// warmed by the worker from war details so the Intel pages
+	// can label war parties. Two maps on purpose: corporation
+	// and alliance IDs share EVE's numeric space, and the app
+	// never compares them cross-wise (see the corp cluster's
+	// keying rule). Public data.
+	corpNamesMu sync.RWMutex
+	corpNames   map[int64]string
+
+	allianceNamesMu sync.RWMutex
+	allianceNames   map[int64]string
+
+	// In-process cache of constellation ID → name for the
+	// incursions page (constellations aren't in the SDE tables;
+	// the IDs sit in their own range, clear of stations/systems).
+	constellationNamesMu sync.RWMutex
+	constellationNames   map[int64]string
 }
 
 // New builds a Client. httpClient performs every ESI request (the
@@ -188,14 +221,17 @@ type Client struct {
 // access tokens for authenticated character endpoints.
 func New(httpClient *http.Client, queries *db.Queries, tokens TokenFunc) *Client {
 	return &Client{
-		http:       httpClient,
-		queries:    queries,
-		tokens:     tokens,
-		typeNames:  make(map[int64]string),
-		typeGroups: make(map[int64]int64),
-		groupNames: make(map[int64]string),
-		placeNames: make(map[int64]string),
-		charNames:  make(map[int64]string),
+		http:               httpClient,
+		queries:            queries,
+		tokens:             tokens,
+		typeNames:          make(map[int64]string),
+		typeGroups:         make(map[int64]int64),
+		groupNames:         make(map[int64]string),
+		placeNames:         make(map[int64]string),
+		charNames:          make(map[int64]string),
+		corpNames:          make(map[int64]string),
+		allianceNames:      make(map[int64]string),
+		constellationNames: make(map[int64]string),
 	}
 }
 
@@ -779,6 +815,129 @@ type MiningEntry struct {
 type MiningLedger []MiningEntry
 
 // ---------------------------------------------------------------------------
+// Module sweep, cluster 4: Intel payloads (all public ESI).
+// Shapes verified against CCP's ESI OpenAPI document
+// (components/schemas WarsWarIdGet, IncursionsGet, FwSystemsGet,
+// FwStatsGet, UniverseFactionsGet, Status,
+// UniverseConstellationsConstellationIdGet). Dates are RFC3339
+// strings.
+// ---------------------------------------------------------------------------
+
+// ServerStatus is GET /status/: Tranquility's vital signs.
+type ServerStatus struct {
+	Players       int64  `json:"players"`
+	ServerVersion string `json:"server_version"`
+	StartTime     string `json:"start_time"` // RFC3339
+	VIP           bool   `json:"vip"`
+}
+
+// WarParty is one side (aggressor/defender) of a war: exactly one
+// of CorporationID/AllianceID is set.
+type WarParty struct {
+	CorporationID int64   `json:"corporation_id"`
+	AllianceID    int64   `json:"alliance_id"`
+	ISKDestroyed  float64 `json:"isk_destroyed"`
+	ShipsKilled   int64   `json:"ships_killed"`
+}
+
+// WarAlly is one entry of a war's allies list: exactly one of
+// CorporationID/AllianceID is set.
+type WarAlly struct {
+	CorporationID int64 `json:"corporation_id"`
+	AllianceID    int64 `json:"alliance_id"`
+}
+
+// War is GET /wars/{war_id}/. Started/Retracted/Finished are
+// empty until the war reaches that point; a non-empty Finished
+// freezes the payload (the worker never refetches those).
+type War struct {
+	ID            int64     `json:"id"`
+	Aggressor     WarParty  `json:"aggressor"`
+	Defender      WarParty  `json:"defender"`
+	Allies        []WarAlly `json:"allies"`
+	Declared      string    `json:"declared"`  // RFC3339
+	Started       string    `json:"started"`   // RFC3339
+	Retracted     string    `json:"retracted"` // RFC3339
+	Finished      string    `json:"finished"`  // RFC3339
+	Mutual        bool      `json:"mutual"`
+	OpenForAllies bool      `json:"open_for_allies"`
+}
+
+// WarList is GET /wars/: war IDs, most recent first (the worker
+// warms details for a bounded head of the list).
+type WarList []int64
+
+// Incursion is one entry of GET /incursions/.
+type Incursion struct {
+	ConstellationID int64   `json:"constellation_id"`
+	FactionID       int64   `json:"faction_id"`
+	HasBoss         bool    `json:"has_boss"`
+	InfestedSystems []int64 `json:"infested_solar_systems"`
+	Influence       float64 `json:"influence"` // 0..1
+	StagingSystemID int64   `json:"staging_solar_system_id"`
+	State           string  `json:"state"` // established|mobilizing|withdrawing
+	Type            string  `json:"type"`
+}
+
+// Incursions is GET /incursions/.
+type Incursions []Incursion
+
+// FWSystem is one entry of GET /fw/systems/. Contested is CCP's
+// state label (captured|contested|uncontested|vulnerable); the
+// contested percentage pages show is VictoryPoints over
+// VictoryPointsThreshold, the ratio the in-game display tracks.
+type FWSystem struct {
+	SolarSystemID          int64  `json:"solar_system_id"`
+	OccupierFactionID      int64  `json:"occupier_faction_id"`
+	OwnerFactionID         int64  `json:"owner_faction_id"`
+	Contested              string `json:"contested"`
+	VictoryPoints          int64  `json:"victory_points"`
+	VictoryPointsThreshold int64  `json:"victory_points_threshold"`
+}
+
+// FWSystems is GET /fw/systems/.
+type FWSystems []FWSystem
+
+// FWPeriod is a yesterday/last-week/total counter block (kills
+// and victory points share the shape in /fw/stats/).
+type FWPeriod struct {
+	Yesterday int64 `json:"yesterday"`
+	LastWeek  int64 `json:"last_week"`
+	Total     int64 `json:"total"`
+}
+
+// FWStat is one faction's entry of GET /fw/stats/.
+type FWStat struct {
+	FactionID         int64    `json:"faction_id"`
+	Pilots            int64    `json:"pilots"`
+	SystemsControlled int64    `json:"systems_controlled"`
+	Kills             FWPeriod `json:"kills"`
+	VictoryPoints     FWPeriod `json:"victory_points"`
+}
+
+// FWStats is GET /fw/stats/.
+type FWStats []FWStat
+
+// Faction is one entry of GET /universe/factions/ (the slice
+// EveSynapse consumes; the list is nearly static).
+type Faction struct {
+	FactionID     int64  `json:"faction_id"`
+	Name          string `json:"name"`
+	CorporationID int64  `json:"corporation_id"` // the faction's NPC corporation, 0 when none
+}
+
+// Factions is GET /universe/factions/.
+type Factions []Faction
+
+// Constellation is GET /universe/constellations/{id}/ (the slice
+// EveSynapse consumes).
+type Constellation struct {
+	ConstellationID int64  `json:"constellation_id"`
+	Name            string `json:"name"`
+	RegionID        int64  `json:"region_id"`
+}
+
+// ---------------------------------------------------------------------------
 // HTTP layer.
 // ---------------------------------------------------------------------------
 
@@ -1326,6 +1485,80 @@ func (c *Client) GetCached(ctx context.Context, ch db.Character, kind string, ou
 }
 
 // ---------------------------------------------------------------------------
+// Global public-data store (Intel cluster). The datasets here are
+// public ESI — no character token — so they live in the
+// global_snapshots table under the same cache contract as the
+// per-character snapshots (raw payload + Expires as cached_until,
+// 5-minute fallback). Handlers read the table directly and never
+// call this: only the worker fetches.
+// ---------------------------------------------------------------------------
+
+// globalSnapshotPath maps a global snapshot kind to its ESI path.
+func globalSnapshotPath(kind string) string {
+	switch kind {
+	case GlobalStatus:
+		return "/status/"
+	case GlobalWars:
+		return "/wars/"
+	case GlobalIncursions:
+		return "/incursions/"
+	case GlobalFWSystems:
+		return "/fw/systems/"
+	case GlobalFWStats:
+		return "/fw/stats/"
+	case GlobalFactions:
+		return "/universe/factions/"
+	}
+	return ""
+}
+
+// GlobalSnapshotFresh reports whether the stored global payload
+// is still inside its ESI cache window. A missing/unparseable
+// expiry counts as stale — same rule as SnapshotFresh.
+func GlobalSnapshotFresh(snap db.GlobalSnapshot) bool {
+	if snap.CachedUntil == "" {
+		return false
+	}
+	until, err := time.Parse(time.RFC3339, snap.CachedUntil)
+	return err == nil && time.Now().Before(until)
+}
+
+// FetchAndStoreGlobalSnapshot fetches the kind's public ESI path
+// (no token) and stores the raw payload, honoring the response
+// Expires header as cached_until (fallback: now + 5 minutes when
+// ESI doesn't send one). It mirrors FetchAndStoreSnapshot's
+// bookkeeping for the per-character store.
+func (c *Client) FetchAndStoreGlobalSnapshot(ctx context.Context, kind string) ([]byte, error) {
+	path := globalSnapshotPath(kind)
+	if path == "" {
+		return nil, fmt.Errorf("unknown global snapshot kind %q", kind)
+	}
+
+	body, header, err := c.FetchRaw(ctx, "", path)
+	if err != nil {
+		return nil, err
+	}
+
+	cachedUntil := time.Now().Add(5 * time.Minute)
+	if exp := header.Get("Expires"); exp != "" {
+		if t, perr := http.ParseTime(exp); perr == nil {
+			cachedUntil = t
+		}
+	}
+
+	now := time.Now().UTC()
+	if err := c.queries.UpsertGlobalSnapshot(ctx, db.UpsertGlobalSnapshotParams{
+		Kind:        kind,
+		Payload:     string(body),
+		FetchedAt:   now.Format(time.RFC3339),
+		CachedUntil: cachedUntil.UTC().Format(time.RFC3339),
+	}); err != nil {
+		return nil, fmt.Errorf("store global snapshot %s: %w", kind, err)
+	}
+	return body, nil
+}
+
+// ---------------------------------------------------------------------------
 // Type-name resolution: skill/item IDs -> display names. The network
 // tier (ResolveTypeNames, ResolveTypeGroups, ResolveGroupNames,
 // TypeName, PlaceName) fetches and caches what the local caches
@@ -1848,6 +2081,64 @@ func (c *Client) StoreCharacterName(id int64, name string) {
 	c.charNamesMu.Lock()
 	c.charNames[id] = name
 	c.charNamesMu.Unlock()
+}
+
+// ---------------------------------------------------------------------------
+// Organization and constellation names: war parties and
+// incursion constellations. Same two tiers as character names —
+// the Cached* accessors never touch the network; the worker warms
+// the caches from war details and the incursions snapshot.
+// ---------------------------------------------------------------------------
+
+// CachedCorpName resolves a corporation ID from the in-process
+// cache only. Zero network.
+func (c *Client) CachedCorpName(id int64) (string, bool) {
+	c.corpNamesMu.RLock()
+	defer c.corpNamesMu.RUnlock()
+	name, ok := c.corpNames[id]
+	return name, ok
+}
+
+// StoreCorpName records a corporation name in the in-process
+// cache (the worker's warm-up pass stores fetched names this way).
+func (c *Client) StoreCorpName(id int64, name string) {
+	c.corpNamesMu.Lock()
+	c.corpNames[id] = name
+	c.corpNamesMu.Unlock()
+}
+
+// CachedAllianceName resolves an alliance ID from the in-process
+// cache only. Zero network.
+func (c *Client) CachedAllianceName(id int64) (string, bool) {
+	c.allianceNamesMu.RLock()
+	defer c.allianceNamesMu.RUnlock()
+	name, ok := c.allianceNames[id]
+	return name, ok
+}
+
+// StoreAllianceName records an alliance name in the in-process
+// cache.
+func (c *Client) StoreAllianceName(id int64, name string) {
+	c.allianceNamesMu.Lock()
+	c.allianceNames[id] = name
+	c.allianceNamesMu.Unlock()
+}
+
+// CachedConstellationName resolves a constellation ID from the
+// in-process cache only. Zero network.
+func (c *Client) CachedConstellationName(id int64) (string, bool) {
+	c.constellationNamesMu.RLock()
+	defer c.constellationNamesMu.RUnlock()
+	name, ok := c.constellationNames[id]
+	return name, ok
+}
+
+// StoreConstellationName records a constellation name in the
+// in-process cache.
+func (c *Client) StoreConstellationName(id int64, name string) {
+	c.constellationNamesMu.Lock()
+	c.constellationNames[id] = name
+	c.constellationNamesMu.Unlock()
 }
 
 // ---------------------------------------------------------------------------

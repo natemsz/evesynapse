@@ -57,6 +57,9 @@ var marketableSchema string
 //go:embed schema/009_character_foundation.sql
 var characterFoundationSchema string
 
+//go:embed schema/010_home_overview.sql
+var homeLayoutSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -216,6 +219,10 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Use(app.sessions.LoadAndSave)
 
 	r.Get("/", app.handleHome)
+	r.Route("/home", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Post("/layout", app.handleHomeLayout)
+	})
 	r.Get("/healthz", handleHealthz)
 	r.Get("/favicon.ico", handleFavicon)
 

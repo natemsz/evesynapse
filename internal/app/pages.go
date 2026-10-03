@@ -3,14 +3,11 @@ package app
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"html/template"
 	"log"
 	"net/http"
-	"time"
 
 	db "evesynapse/internal/db/sqlc"
-	"evesynapse/internal/esi"
 )
 
 // pageData is the view model shared by the templates.
@@ -22,7 +19,7 @@ type pageData struct {
 	Error           string // friendly, user-safe banner (never internals)
 	Section         string // top-nav branch key (base.html); filled by render from the page when empty
 	NavPage         string // template file rendered, for marking the exact nav link; filled by render
-	Character       *characterSheet
+	Home            *homeView
 	CharChars       []assetCharLink
 	CharacterPage   *characterView
 	Fittings        *fittingsView
@@ -79,48 +76,7 @@ type switcherEntry struct {
 	Relink      bool // token_dead / owner_changed: needs a fresh sign-in
 }
 
-// characterSheet is what the home page shows for the signed-in
-// character: identity from the session/DB, live data from ESI. The
-// wallet/skills/queue blocks each carry their own OK flag so one
-// failing ESI endpoint dims only its own section.
-type characterSheet struct {
-	Name            string
-	PortraitURL     string
-	CorporationName string
-	Birthday        string // YYYY-MM-DD
-	SecurityStatus  float64
-	Fetched         bool // true when the live ESI data loaded
-	Unavailable     bool // signed in, but ESI couldn't be reached
-	Sections        bool // snapshot sections were attempted (DB character known)
-
-	// Currently block (location/ship/online snapshots).
-	CurrentlyOK  bool
-	SysName      string
-	DockedName   string // station/structure title, "" when in space
-	ShipTypeName string
-	ShipName     string
-	OnlineKnown  bool
-	Online       bool
-	LastLogin    string
-
-	// Wallet block.
-	ISKOK bool
-	ISK   string // formatted balance
-
-	// Skills block.
-	SkillsOK      bool
-	TotalSP       string // formatted
-	UnallocatedSP string // formatted, "" when zero
-	Skills        []skillRow
-	SkillsShown   int
-	SkillsCount   int
-
-	// Skill-queue block.
-	QueueOK        bool
-	Training       string // "Skill Name V — finishes 2026-10-03 14:22 UTC"; "" = paused/empty
-	TrainingFinish string // RFC3339 finish of the training entry, for the live countdown
-	TrainingLeft   string // server-rendered "in 1d 2h" the countdown starts from
-}
+// skillRow is one line of the character-page skills table.
 
 // skillRow is one line of the home-page skills table.
 type skillRow struct {
@@ -233,7 +189,7 @@ func (app *Application) handleHome(w http.ResponseWriter, r *http.Request) {
 		data.Error = friendlyLoginError(r.URL.Query().Get("error"))
 	}
 	if data.LoggedIn {
-		data.Character = app.loadCharacterSheet(ctx)
+		data.Home = app.buildHome(ctx, r.URL.Query().Get("customize") == "1")
 	}
 	// Tranquility status line: from the worker-warmed global
 	// store only; absent until the first intel pass lands it.
@@ -241,213 +197,6 @@ func (app *Application) handleHome(w http.ResponseWriter, r *http.Request) {
 		data.ServerStatus = status
 	}
 	app.render(ctx, w, http.StatusOK, "home.html", data)
-}
-
-// loadCharacterSheet assembles the home-page character block.
-//
-// Identity comes from the public character endpoint; wallet, skills,
-// skill queue and the "Currently" block (location/ship/online) come
-// through the snapshot cache, which serves ESI-cached payloads and
-// only calls out within ESI's cache window — the worker keeps those
-// snapshots warm in the background. The snapshot sections load even
-// when the live identity fetch fails. Every section degrades
-// independently: a dead endpoint dims its own block, never the
-// whole page.
-func (app *Application) loadCharacterSheet(ctx context.Context) *characterSheet {
-	sheet := &characterSheet{
-		Name: app.sessions.GetString(ctx, sessionCharacterName),
-	}
-
-	characterID := int64(app.sessions.GetInt(ctx, sessionCharacterID))
-	if characterID == 0 {
-		// Dev-login or pre-SSO session: name only, nothing to fetch.
-		return sheet
-	}
-	sheet.PortraitURL = fmt.Sprintf("https://images.evetech.net/characters/%d/portrait?size=128", characterID)
-
-	character, err := app.queries.GetCharacter(ctx, characterID)
-	if err != nil {
-		log.Printf("home: load character %d: %v", characterID, err)
-		sheet.Unavailable = true
-		return sheet
-	}
-	if character.Name != "" {
-		sheet.Name = character.Name
-	}
-
-	// Snapshot sections first: they serve from the worker-warmed
-	// cache and degrade independently, so they load even when the
-	// live identity fetch below fails (dead token, ESI outage).
-	sheet.Sections = true
-	app.loadCurrentlySection(ctx, character, sheet)
-	app.loadWalletSection(ctx, character, sheet)
-	app.loadSkillsSection(ctx, character, sheet)
-	app.loadQueueSection(ctx, character, sheet)
-
-	// One valid token for the identity fetch: this refreshes (and
-	// persists the rotation) when the stored token is near expiry.
-	token, err := app.validAccessToken(ctx, character)
-	if err != nil {
-		log.Printf("home: no valid token for character %d: %v", characterID, err)
-		sheet.Unavailable = true
-		return sheet
-	}
-
-	var pub esi.Character
-	if err := app.esi.Get(ctx, token, fmt.Sprintf("/characters/%d/", characterID), &pub); err != nil {
-		log.Printf("home: ESI character fetch for %d failed: %v", characterID, err)
-		sheet.Unavailable = true
-		return sheet
-	}
-	if pub.Name != "" {
-		sheet.Name = pub.Name
-	}
-	sheet.SecurityStatus = pub.SecurityStatus
-	if len(pub.Birthday) >= 10 {
-		sheet.Birthday = pub.Birthday[:10]
-	}
-
-	// Corporation name is a separate public endpoint; a failure here
-	// just leaves the field blank, the rest of the sheet still renders.
-	var corp esi.Corporation
-	if err := app.esi.Get(ctx, "", fmt.Sprintf("/corporations/%d/", pub.CorporationID), &corp); err == nil {
-		sheet.CorporationName = corp.Name
-	} else {
-		log.Printf("home: ESI corporation fetch for %d failed: %v", pub.CorporationID, err)
-	}
-
-	sheet.Fetched = true
-	return sheet
-}
-
-// loadCurrentlySection fills the "Currently" block from the
-// location, ship and online snapshots; each sub-block degrades on
-// its own, and names resolve from the local caches only.
-func (app *Application) loadCurrentlySection(ctx context.Context, ch db.Character, sheet *characterSheet) {
-	var loc esi.Location
-	if err := app.esi.GetCached(ctx, ch, esi.SnapLocation, &loc); err != nil {
-		log.Printf("home: location for character %d: %v", ch.CharacterID, err)
-	} else {
-		sheet.SysName = app.locationTitle(ctx, loc.SolarSystemID, "solar_system")
-		if loc.StationID > 0 {
-			sheet.DockedName = app.locationTitle(ctx, loc.StationID, "station")
-		} else if loc.StructureID > 0 {
-			sheet.DockedName = app.locationTitle(ctx, loc.StructureID, "structure")
-		}
-		sheet.CurrentlyOK = true
-	}
-
-	var ship esi.Ship
-	if err := app.esi.GetCached(ctx, ch, esi.SnapShip, &ship); err != nil {
-		log.Printf("home: ship for character %d: %v", ch.CharacterID, err)
-	} else {
-		sheet.ShipTypeName = app.typeNameOrID(ctx, ship.ShipTypeID)
-		sheet.ShipName = ship.ShipName
-		sheet.CurrentlyOK = true
-	}
-
-	var online esi.Online
-	if err := app.esi.GetCached(ctx, ch, esi.SnapOnline, &online); err != nil {
-		log.Printf("home: online for character %d: %v", ch.CharacterID, err)
-	} else {
-		sheet.OnlineKnown = true
-		sheet.Online = online.Online
-		sheet.LastLogin = formatFinish(online.LastLogin)
-		sheet.CurrentlyOK = true
-	}
-}
-
-// loadWalletSection fills the wallet block; failures only dim it.
-func (app *Application) loadWalletSection(ctx context.Context, ch db.Character, sheet *characterSheet) {
-	var balance float64
-	if err := app.esi.GetCached(ctx, ch, esi.SnapWallet, &balance); err != nil {
-		log.Printf("home: wallet for character %d: %v", ch.CharacterID, err)
-		return
-	}
-	sheet.ISK = esi.FormatISK(balance)
-	sheet.ISKOK = true
-}
-
-// loadSkillsSection fills the skills block: totals plus the heaviest
-// 25 skills, names resolved via the type-name cache.
-func (app *Application) loadSkillsSection(ctx context.Context, ch db.Character, sheet *characterSheet) {
-	var skills esi.Skills
-	if err := app.esi.GetCached(ctx, ch, esi.SnapSkills, &skills); err != nil {
-		log.Printf("home: skills for character %d: %v", ch.CharacterID, err)
-		return
-	}
-
-	sheet.TotalSP = esi.FormatInt(skills.TotalSP)
-	if skills.UnallocatedSP > 0 {
-		sheet.UnallocatedSP = esi.FormatInt(skills.UnallocatedSP)
-	}
-	sheet.SkillsCount = len(skills.Skills)
-
-	ids := esi.SortedSkillIDs(skills.Skills)
-	shown := ids
-	if len(shown) > 25 {
-		shown = shown[:25]
-	}
-	names := app.esi.CachedTypeNames(ctx, shown)
-
-	byID := make(map[int64]esi.Skill, len(skills.Skills))
-	for _, s := range skills.Skills {
-		byID[s.SkillID] = s
-	}
-	for _, id := range shown {
-		s := byID[id]
-		name, ok := names[id]
-		if !ok {
-			name = fmt.Sprintf("Type #%d", id)
-		}
-		sheet.Skills = append(sheet.Skills, skillRow{
-			Name:    name,
-			Trained: esi.RomanLevel(s.TrainedSkillLevel),
-			Active:  esi.RomanLevel(s.ActiveSkillLevel),
-			SP:      esi.FormatInt(s.SkillpointsInSkill),
-		})
-	}
-	sheet.SkillsShown = len(sheet.Skills)
-	sheet.SkillsOK = true
-}
-
-// loadQueueSection fills the "currently training" line from the first
-// queue entry (position 0). An empty queue is a valid state, not an
-// error: QueueOK stays true and Training stays empty.
-func (app *Application) loadQueueSection(ctx context.Context, ch db.Character, sheet *characterSheet) {
-	var queue esi.Skillqueue
-	if err := app.esi.GetCached(ctx, ch, esi.SnapSkillqueue, &queue); err != nil {
-		log.Printf("home: skill queue for character %d: %v", ch.CharacterID, err)
-		return
-	}
-	sheet.QueueOK = true
-
-	for _, entry := range queue {
-		if entry.QueuePosition != 0 {
-			continue
-		}
-		name := app.esi.CachedTypeName(ctx, entry.SkillID)
-		if name == "" {
-			name = fmt.Sprintf("Type #%d", entry.SkillID)
-		}
-		finish := entry.FinishDate
-		if t, err := time.Parse(time.RFC3339, entry.FinishDate); err == nil {
-			finish = t.UTC().Format("2006-01-02 15:04 UTC")
-			// The live countdown ticks down from this finish time
-			// client-side; the server-rendered remainder is what
-			// no-JS clients keep.
-			sheet.TrainingFinish = t.UTC().Format(time.RFC3339)
-			if left := time.Until(t); left > 0 {
-				sheet.TrainingLeft = "in " + humanDuration(left)
-			}
-		}
-		if finish != "" {
-			sheet.Training = fmt.Sprintf("%s %s — finishes %s", name, esi.RomanLevel(entry.FinishedLevel), finish)
-		} else {
-			sheet.Training = fmt.Sprintf("%s %s", name, esi.RomanLevel(entry.FinishedLevel))
-		}
-		return
-	}
 }
 
 func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {

@@ -43,6 +43,66 @@
     for (var i = 0; i < open.length; i++) open[i].removeAttribute("open");
   });
 
+  // --- Live countdowns ---------------------------------------
+  // Any element carrying data-finish (RFC3339) counts down to
+  // that moment (home fleet widget, character page training
+  // line). Without JS the server-rendered remainder stays.
+  var countdowns = document.querySelectorAll("[data-finish]");
+  if (countdowns.length) {
+    var fmtLeft = function (ms) {
+      if (ms <= 0) return "done";
+      var s = Math.floor(ms / 1000);
+      var d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600),
+          m = Math.floor((s % 3600) / 60), sec = s % 60;
+      if (d > 0) return "in " + d + "d " + h + "h " + m + "m";
+      if (h > 0) return "in " + h + "h " + m + "m";
+      if (m > 0) return "in " + m + "m " + sec + "s";
+      return "in " + sec + "s";
+    };
+    var tickCountdowns = function () {
+      for (var i = 0; i < countdowns.length; i++) {
+        var t = Date.parse(countdowns[i].getAttribute("data-finish"));
+        if (!isNaN(t)) countdowns[i].textContent = fmtLeft(t - Date.now());
+      }
+    };
+    tickCountdowns();
+    setInterval(tickCountdowns, 1000);
+  }
+
+  // --- Fleet filter (home overview) ---------------------------
+  // The fleet table renders every character server-side; this
+  // just hides rows that don't match the typed text or the
+  // active tag chip. No JS: the full list is simply visible.
+  var fleetFilter = document.getElementById("fleet-filter");
+  var fleetRows = document.querySelectorAll(".fleet-row");
+  if (fleetFilter && fleetRows.length) {
+    var noMatch = document.querySelector(".fleet-nomatch");
+    var chips = document.querySelectorAll(".chip[data-tag]");
+    var activeTag = "";
+    var applyFleetFilter = function () {
+      var q = fleetFilter.value.trim().toLowerCase();
+      var shown = 0;
+      for (var i = 0; i < fleetRows.length; i++) {
+        var hay = fleetRows[i].getAttribute("data-search") || "";
+        var ok = (!q || hay.indexOf(q) !== -1) && (!activeTag || hay.indexOf(activeTag) !== -1);
+        fleetRows[i].style.display = ok ? "" : "none";
+        if (ok) shown++;
+      }
+      if (noMatch) noMatch.hidden = shown > 0;
+    };
+    fleetFilter.addEventListener("input", applyFleetFilter);
+    for (var c = 0; c < chips.length; c++) {
+      chips[c].addEventListener("click", function () {
+        var tag = (this.getAttribute("data-tag") || "").toLowerCase();
+        activeTag = activeTag === tag ? "" : tag;
+        for (var j = 0; j < chips.length; j++) {
+          chips[j].classList.toggle("on", (chips[j].getAttribute("data-tag") || "").toLowerCase() === activeTag);
+        }
+        applyFleetFilter();
+      });
+    }
+  }
+
   // --- Market search suggestions --------------------------------
   var input = document.getElementById("market-q");
   var list = document.getElementById("market-suggest");

@@ -140,10 +140,22 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 010 (Phase 1B widget home: per-account home layout
+	// JSON). Column-existence guard, same as schema 009's columns.
+	var homeLayoutCols int
+	if err := conn.QueryRow(
+		`SELECT COUNT(*) FROM pragma_table_info('users') WHERE name IN ('home_layout')`,
+	).Scan(&homeLayoutCols); err != nil {
+		return nil, err
+	}
+	if homeLayoutCols < 1 {
+		if err := applySchema(conn, homeLayoutSchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 
-// applySchema executes a multi-statement DDL script statement by
 // statement (the modernc driver Exec handles one statement at a time).
 // Full-line -- comments are stripped first: they may contain ";" and
 // would otherwise break the naive split.

@@ -168,6 +168,32 @@ type characterView struct {
 	HomeLocation  string
 	LastCloneJump string
 	JumpClones    []jumpCloneView
+
+	// Identity (profile snapshot): the name/birthday/security/
+	// corporation block the old home sheet fetched live. Since
+	// Phase 1B it comes from the worker-warmed profile snapshot,
+	// so this page — like every other — renders cache-only.
+	IdentityKnown  bool
+	PortraitURL    string
+	CorpName       string
+	Birthday       string
+	SecurityStatus string
+
+	// Wallet snapshot.
+	WalletKnown bool
+	ISK         string
+
+	// Skills + queue snapshots (the rest of the old home sheet).
+	SkillsKnown    bool
+	TotalSP        string
+	UnallocatedSP  string
+	Skills         []skillRow
+	SkillsShown    int
+	SkillsCount    int
+	QueueKnown     bool
+	Training       string // "Skill V — finishes …", "" = not training
+	TrainingFinish string // raw finish, drives the live countdown
+	TrainingLeft   string
 }
 
 // handleCharacter renders the Character page for one of the
@@ -194,6 +220,7 @@ func (app *Application) handleCharacter(w http.ResponseWriter, r *http.Request) 
 	data.CharChars = links
 
 	view := &characterView{CharacterName: active.Name}
+	view.PortraitURL = portraitURL(active.CharacterID, 128)
 	data.CharacterPage = view
 	app.fillCharacterView(ctx, active, view)
 
@@ -314,8 +341,116 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 		}
 	}
 
+	// Identity: the profile snapshot the worker now warms (Phase
+	// 1B) — name/birthday/security/corporation. This is the block
+	// the old home sheet fetched live at render; it is a plain
+	// snapshot read here like everything else. The corporation
+	// name resolves from the cached corp record (warmed by the
+	// worker), falling back to the recorded corp id.
+	var profile esi.Character
+	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapProfile, &profile) {
+		view.IdentityKnown = true
+		if len(profile.Birthday) >= 10 {
+			view.Birthday = profile.Birthday[:10]
+		}
+		view.SecurityStatus = fmt.Sprintf("%.2f", profile.SecurityStatus)
+		corpID := profile.CorporationID
+		if corpID == 0 {
+			if mapping, err := app.queries.GetCharacterCorporation(ctx, ch.CharacterID); err == nil {
+				corpID = mapping.CorporationID
+			}
+		}
+		if corpID > 0 {
+			// The worker warms this character's own corp_info
+			// snapshot, so the name is a local read; fall back
+			// to the recorded id until it lands.
+			var info esi.Corporation
+			if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapCorpInfo, &info) && info.Name != "" {
+				view.CorpName = info.Name
+			} else {
+				view.CorpName = fmt.Sprintf("Corporation #%d", corpID)
+			}
+		}
+	}
+
+	// Wallet.
+	var balance float64
+	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapWallet, &balance) {
+		view.WalletKnown = true
+		view.ISK = esi.FormatISK(balance)
+	}
+
+	// Skills: totals plus the heaviest 25, same shape the old
+	// home sheet showed.
+	var skills esi.Skills
+	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapSkills, &skills) {
+		view.SkillsKnown = true
+		view.TotalSP = esi.FormatInt(skills.TotalSP)
+		if skills.UnallocatedSP > 0 {
+			view.UnallocatedSP = esi.FormatInt(skills.UnallocatedSP)
+		}
+		view.SkillsCount = len(skills.Skills)
+		ids := esi.SortedSkillIDs(skills.Skills)
+		shown := ids
+		if len(shown) > 25 {
+			shown = shown[:25]
+		}
+		names := app.esi.CachedTypeNames(ctx, shown)
+		byID := make(map[int64]esi.Skill, len(skills.Skills))
+		for _, s := range skills.Skills {
+			byID[s.SkillID] = s
+		}
+		for _, id := range shown {
+			s := byID[id]
+			name, ok := names[id]
+			if !ok {
+				name = fmt.Sprintf("Type #%d", id)
+			}
+			view.Skills = append(view.Skills, skillRow{
+				Name:    name,
+				Trained: esi.RomanLevel(s.TrainedSkillLevel),
+				Active:  esi.RomanLevel(s.ActiveSkillLevel),
+				SP:      esi.FormatInt(s.SkillpointsInSkill),
+			})
+		}
+		view.SkillsShown = len(view.Skills)
+	}
+
+	// Queue: the currently-training line (position 0). An empty
+	// queue is a valid state: QueueKnown true, Training "".
+	var queue esi.Skillqueue
+	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapSkillqueue, &queue) {
+		view.QueueKnown = true
+		for _, entry := range queue {
+			if entry.QueuePosition != 0 {
+				continue
+			}
+			name := app.esi.CachedTypeName(ctx, entry.SkillID)
+			if name == "" {
+				name = fmt.Sprintf("Type #%d", entry.SkillID)
+			}
+			finish := entry.FinishDate
+			if t, err := time.Parse(time.RFC3339, entry.FinishDate); err == nil {
+				finish = t.UTC().Format("2006-01-02 15:04 UTC")
+				view.TrainingFinish = t.UTC().Format(time.RFC3339)
+				if left := time.Until(t); left > 0 {
+					view.TrainingLeft = "in " + humanDuration(left)
+				} else {
+					view.TrainingLeft = "done"
+				}
+			}
+			if finish != "" {
+				view.Training = fmt.Sprintf("%s %s — finishes %s", name, esi.RomanLevel(entry.FinishedLevel), finish)
+			} else {
+				view.Training = fmt.Sprintf("%s %s", name, esi.RomanLevel(entry.FinishedLevel))
+			}
+			break
+		}
+	}
+
 	view.Loaded = view.OnlineKnown || view.LocationKnown || view.ShipKnown ||
-		view.FatigueKnown || view.ImplantsKnown || view.ClonesKnown
+		view.FatigueKnown || view.ImplantsKnown || view.ClonesKnown ||
+		view.IdentityKnown || view.WalletKnown || view.SkillsKnown || view.QueueKnown
 	if !view.Loaded {
 		// No section produced data: cold start (worker still
 		// importing this character's live-state snapshots) gets
@@ -323,6 +458,8 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 		sectionKinds := map[string]bool{
 			esi.SnapLocation: true, esi.SnapShip: true, esi.SnapOnline: true,
 			esi.SnapClones: true, esi.SnapImplants: true, esi.SnapFatigue: true,
+			esi.SnapProfile: true, esi.SnapWallet: true, esi.SnapSkills: true,
+			esi.SnapSkillqueue: true,
 		}
 		if snaps, err := app.queries.ListSnapshotsByCharacter(ctx, ch.CharacterID); err == nil {
 			any := false

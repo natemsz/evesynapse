@@ -25,7 +25,7 @@
     <thead><tr><th>#</th><th>Skill</th><th>Level</th><th>Finishes</th></tr></thead>
     <tbody>
     {{range .Skills.Queue}}
-      <tr><td>{{.Num}}</td><td>{{.Skill}}</td><td>{{.Level}}</td><td>{{.Finishes}}</td></tr>
+      <tr><td>{{.Num}}</td><td>{{itemLink .SkillID .Skill}}</td><td>{{.Level}}</td><td>{{.Finishes}}</td></tr>
     {{end}}
     </tbody>
   </table>
@@ -42,7 +42,7 @@
     <thead><tr><th>Skill</th><th>Trained</th><th>Active</th><th>SP</th></tr></thead>
     <tbody>
     {{range .Skills}}
-      <tr><td>{{.Name}}</td><td>{{.Trained}}</td><td>{{.Active}}</td><td>{{.SP}}</td></tr>
+      <tr><td>{{itemLink .TypeID .Name}}</td><td>{{.Trained}}</td><td>{{.Active}}</td><td>{{.SP}}</td></tr>
     {{end}}
     </tbody>
   </table>
@@ -65,7 +65,7 @@
     <tbody>
     {{range .Skills}}
       <tr>
-        <td>{{.Name}}</td>
+        <td>{{itemLink .TypeID .Name}}</td>
         <td>{{.Trained}}</td>
         <td>{{.SP}}</td>
         <td>{{.Rank}}</td>

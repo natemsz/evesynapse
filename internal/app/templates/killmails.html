@@ -13,18 +13,19 @@
   {{if .Killmails.Rows}}
   <div class="tw">
   <table>
-    <thead><tr><th>Time</th><th>System</th><th>Result</th><th>Victim</th><th>Ship</th><th>Final blow</th><th>Involved</th><th>Est. value</th></tr></thead>
+    <thead><tr><th>Time</th><th>System</th><th>Result</th><th>Victim</th><th>Ship</th><th>Final blow</th><th>Involved</th><th>Est. value</th><th></th></tr></thead>
     <tbody>
     {{range .Killmails.Rows}}
       <tr>
         <td>{{.Time}}</td>
         <td>{{.System}}</td>
         <td>{{if .Warming}}<small>details warming</small>{{else if .Loss}}<span class="badge loss">LOSS</span>{{else}}<span class="badge kill">KILL</span>{{end}}</td>
-        <td>{{.Victim}}</td>
-        <td>{{.Ship}}</td>
-        <td>{{.FinalBlow}}</td>
+        <td>{{killCharLink $.ViewerChars .VictimID .Victim}}</td>
+        <td>{{itemLink .ShipTypeID .Ship}}</td>
+        <td>{{killCharLink $.ViewerChars .FinalBlowID .FinalBlow}}</td>
         <td>{{.Involved}}</td>
         <td>{{if eq .Value "—"}}—{{else}}{{.Value}} ISK{{end}}</td>
+        <td><small>{{zkillKillLink .KillmailID}}</small></td>
       </tr>
     {{end}}
     </tbody>

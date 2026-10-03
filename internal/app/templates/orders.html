@@ -23,7 +23,7 @@
   <thead><tr><th>Item</th><th>Side</th><th>Price</th><th>Volume</th><th>Location</th><th>Region</th><th>Range</th><th>Issued</th><th>Expires</th></tr></thead>
   <tbody>
   {{range .Orders.OpenRows}}
-    <tr><td>{{.Item}}{{if .Corp}} (corp){{end}}</td><td>{{.Side}}</td><td>{{.Price}} ISK</td><td>{{.Volume}}</td><td>{{.Location}}</td><td>{{.Region}}</td><td>{{.Range}}</td><td>{{.Issued}}</td><td>{{.Expires}}</td></tr>
+    <tr><td>{{itemLink .TypeID .Item}}{{if .Corp}} (corp){{end}}</td><td>{{.Side}}</td><td>{{.Price}} ISK</td><td>{{.Volume}}</td><td>{{.Location}}</td><td>{{.Region}}</td><td>{{.Range}}</td><td>{{.Issued}}</td><td>{{.Expires}}</td></tr>
   {{end}}
   </tbody>
 </table>
@@ -45,7 +45,7 @@
   <thead><tr><th>Item</th><th>Side</th><th>Price</th><th>Volume</th><th>Location</th><th>State</th><th>Issued</th></tr></thead>
   <tbody>
   {{range .Orders.HistoryRows}}
-    <tr><td>{{.Item}}{{if .Corp}} (corp){{end}}</td><td>{{.Side}}</td><td>{{.Price}} ISK</td><td>{{.Volume}}</td><td>{{.Location}}</td><td>{{.State}}</td><td>{{.Issued}}</td></tr>
+    <tr><td>{{itemLink .TypeID .Item}}{{if .Corp}} (corp){{end}}</td><td>{{.Side}}</td><td>{{.Price}} ISK</td><td>{{.Volume}}</td><td>{{.Location}}</td><td>{{.State}}</td><td>{{.Issued}}</td></tr>
   {{end}}
   </tbody>
 </table>

@@ -19,13 +19,13 @@
 {{with .FitPreview}}
 <section class="foldable">
 <h3>Training plan for “{{.FitName}}”</h3>
-<p><small>{{.ShipName}} · {{.ToTrain}} skill(s) to train · {{.AlreadyMet}} already covered{{if .MissingData}} · {{.MissingData}} without training data (left out){{end}}</small></p>
+<p><small>{{itemLink .ShipTypeID .ShipName}} · {{.ToTrain}} skill(s) to train · {{.AlreadyMet}} already covered{{if .MissingData}} · {{.MissingData}} without training data (left out){{end}}</small></p>
 <div class="tw">
 <table>
   <thead><tr><th>Skill</th><th>Level</th><th>Status</th></tr></thead>
   <tbody>
   {{range .Rows}}
-    <tr><td>{{.Skill}}</td><td>{{.Level}}</td><td>{{.Status}}</td></tr>
+    <tr><td>{{itemLink .SkillID .Skill}}</td><td>{{.Level}}</td><td>{{.Status}}</td></tr>
   {{end}}
   </tbody>
 </table>
@@ -81,7 +81,7 @@
   <tbody>
   {{range .Items}}
     <tr>
-      <td>{{.Skill}}</td>
+      <td>{{itemLink .SkillID .Skill}}</td>
       <td>{{.Level}}</td>
       <td>
         <form method="post" action="/skills/plans/item-move">
@@ -120,7 +120,7 @@
   <tbody>
   {{range $.SkillPlans.SearchResults}}
     <tr>
-      <td>{{.Name}}</td>
+      <td>{{itemLink .SkillID .Name}}</td>
       <td>{{.Rank}}</td>
       <td colspan="2">
         <form method="post" action="/skills/plans/item-add">
@@ -146,7 +146,7 @@
   <thead><tr><th>Skill</th><th>Levels</th><th>SP</th><th>Time</th><th>Finishes</th></tr></thead>
   <tbody>
   {{range .Steps}}
-    <tr><td>{{.Skill}}{{if .Prereq}} <small>(prerequisite)</small>{{end}}</td><td>{{.FromTo}}</td><td>{{.SP}}</td><td>{{.Time}}</td><td>{{.Finish}}</td></tr>
+    <tr><td>{{itemLink .SkillID .Skill}}{{if .Prereq}} <small>(prerequisite)</small>{{end}}</td><td>{{.FromTo}}</td><td>{{.SP}}</td><td>{{.Time}}</td><td>{{.Finish}}</td></tr>
   {{end}}
   </tbody>
 </table>

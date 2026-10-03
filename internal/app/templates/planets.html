@@ -28,7 +28,7 @@
   <thead><tr><th>Extractor product</th><th>Per cycle</th><th>Cycle</th><th>Heads</th><th>Program ends</th><th></th></tr></thead>
   <tbody>
   {{range .Extractors}}
-    <tr><td>{{.Product}}</td><td>{{.Qty}}</td><td>{{.Cycle}}</td><td>{{.Heads}}</td><td>{{.Expires}}</td><td>{{if .Expired}}<strong>Expired</strong>{{else if .Left}}<span class="countdown" data-finish="{{.FinishRaw}}">{{.Left}}</span>{{end}}</td></tr>
+    <tr><td>{{itemLink .ProductTypeID .Product}}</td><td>{{.Qty}}</td><td>{{.Cycle}}</td><td>{{.Heads}}</td><td>{{.Expires}}</td><td>{{if .Expired}}<strong>Expired</strong>{{else if .Left}}<span class="countdown" data-finish="{{.FinishRaw}}">{{.Left}}</span>{{end}}</td></tr>
   {{end}}
   </tbody>
 </table>
@@ -40,7 +40,7 @@
   <thead><tr><th>Factory schematic</th><th>Pin</th><th>Cycle</th></tr></thead>
   <tbody>
   {{range .Factories}}
-    <tr><td>{{.Schematic}}</td><td>{{.PinType}}</td><td>{{.Cycle}}</td></tr>
+    <tr><td>{{.Schematic}}</td><td>{{itemLink .PinTypeID .PinType}}</td><td>{{.Cycle}}</td></tr>
   {{end}}
   </tbody>
 </table>

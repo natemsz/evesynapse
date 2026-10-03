@@ -8,7 +8,7 @@
 {{$v := .Items}}
 
 {{if eq $v.Mode "categories"}}
-<p><small>Browse every item category in the local static data. Pick a category to see its groups, then a group for its types — each type links to its market page.</small></p>
+<p><small>Browse every item category in the local static data. Pick a category to see its groups, then a group for its types — each type links to its details page.</small></p>
 {{if $v.Categories}}
 <div class="tw">
 <table>
@@ -57,7 +57,7 @@
   <thead><tr><th>Type</th><th>Market</th></tr></thead>
   <tbody>
   {{range $v.Types}}
-    <tr><td><a href="/market/?type={{.ID}}">{{.Name}}</a></td><td>{{if .OnMarket}}<small>on market</small>{{else}}<small>—</small>{{end}}</td></tr>
+    <tr><td>{{itemLink .ID .Name}}</td><td>{{if .OnMarket}}<small>on market</small>{{else}}<small>—</small>{{end}}</td></tr>
   {{end}}
   </tbody>
 </table>
@@ -67,6 +67,49 @@
 {{if $v.HasNext}} · <a href="/items/group/{{$v.Group.ID}}/?page={{$v.NextPage}}{{if $v.Query}}&q={{$v.Query}}{{end}}">Next →</a>{{end}}</p>
 {{else}}
 <p><small>No types{{if $v.Query}} matching "{{$v.Query}}"{{end}} in this group.</small></p>
+{{end}}
+{{end}}
+
+{{if eq $v.Mode "type"}}
+{{$d := $v.TypeDetail}}
+<p><small><a href="/items/">Item Database</a>{{if $d.Category}} › <a href="/items/category/{{$d.Category.ID}}/">{{$d.Category.Name}}</a>{{end}}{{if $d.Group}} › <a href="/items/group/{{$d.Group.ID}}/">{{$d.Group.Name}}</a>{{end}}</small></p>
+<h2>{{$d.Name}}</h2>
+
+<div class="tw">
+<table>
+  <tbody>
+    {{if $d.Group}}<tr><th>Group</th><td>{{$d.Group.Name}}</td></tr>{{end}}
+    {{if $d.Category}}<tr><th>Category</th><td>{{$d.Category.Name}}</td></tr>{{end}}
+    <tr><th>Market</th><td>{{if $d.OnMarket}}Traded on the market{{else}}Not traded on the market{{end}}</td></tr>
+    {{if $d.AveragePrice}}<tr><th>Average price</th><td>{{$d.AveragePrice}} ISK</td></tr>{{end}}
+    {{if $d.AdjustedPrice}}<tr><th>Adjusted price</th><td>{{$d.AdjustedPrice}} ISK</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+
+<p>
+{{if $d.OnMarket}}<a href="/market/?type={{$d.ID}}">Orders &amp; price history</a>{{end}}
+{{if $d.BlueprintID}} · <a href="/planner/?product={{$d.ID}}">Plan manufacturing</a>{{end}}
+</p>
+
+{{if $d.HasDescription}}
+<div class="mailbody">{{$d.Description}}</div>
+{{else if $d.DescriptionPending}}
+<p><small>Item description is still loading — it fills in on a coming sync cycle.</small></p>
+{{end}}
+
+{{if $d.UsedIn}}
+<h3>Used in</h3>
+<div class="tw">
+<table>
+  <thead><tr><th>Product</th><th>Per run</th></tr></thead>
+  <tbody>
+  {{range $d.UsedIn}}
+    <tr><td>{{itemLink .ProductID .ProductName}}</td><td>{{.PerRun}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
 {{end}}
 {{end}}
 

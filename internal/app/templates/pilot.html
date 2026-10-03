@@ -1,0 +1,55 @@
+{{define "title"}}{{if and .Pilot .Pilot.Name}}{{.Pilot.Name}}{{else}}Pilot{{end}}{{end}}
+{{define "content"}}
+{{if .Pilot}}
+{{$v := .Pilot}}
+
+{{if eq $v.State "missing"}}
+<h1><span class="gt">Pilot</span></h1>
+<p><small>EVE has no public record for that character.</small></p>
+{{else if eq $v.State "loading"}}
+<h1><span class="gt">Pilot</span></h1>
+<p><img class="portrait" src="{{$v.PortraitURL}}" alt="" width="128" height="128"></p>
+<p><small>Loading this pilot's public record… it fills in on the next sync cycle — check the <a href="/sync/">Sync page</a>, then come back.</small></p>
+{{else}}
+<h1><span class="gt">{{$v.Name}}</span></h1>
+<p><img class="portrait" src="{{$v.PortraitURL}}" alt="" width="128" height="128"></p>
+{{if $v.Title}}<p><small>{{$v.Title}}</small></p>{{end}}
+
+<div class="tw">
+<table>
+  <tbody>
+    {{if $v.CorpLine}}<tr><th>Corporation</th><td>{{$v.CorpLine}}</td></tr>{{end}}
+    {{if $v.AllianceLine}}<tr><th>Alliance</th><td>{{$v.AllianceLine}}</td></tr>{{end}}
+    {{if $v.FactionName}}<tr><th>Faction</th><td>{{$v.FactionName}}</td></tr>{{end}}
+    <tr><th>Security status</th><td>{{$v.Security}}</td></tr>
+    {{if $v.Birthday}}<tr><th>Born</th><td>{{$v.Birthday}}</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+
+{{if $v.HasDescription}}
+<h2>About</h2>
+<div class="mailbody">{{$v.Description}}</div>
+{{end}}
+
+{{if $v.History}}
+<h2>Employment history</h2>
+<div class="tw">
+<table>
+  <thead><tr><th>Corporation</th><th>From</th><th>To</th></tr></thead>
+  <tbody>
+  {{range $v.History}}
+    <tr><td>{{.CorpName}}</td><td>{{.From}}</td><td>{{.To}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p><small>No employment history on record.</small></p>
+{{end}}
+
+<p><small>Public information from EVE's servers — what anyone can see about this pilot.</small></p>
+{{end}}
+
+{{end}}
+{{end}}

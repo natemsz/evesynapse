@@ -87,7 +87,7 @@
 <section class="foldable">
 <h3>Shopping list</h3>
 <ul>
-{{range .Shopping}}<li>{{.Name}} — {{.Need}}{{if .UnitPrice}} × {{.UnitPrice}}{{if .LineCost}} = {{.LineCost}}{{end}}{{end}}</li>{{end}}
+{{range .Shopping}}<li><a href="{{.URL}}">{{.Name}}</a> — {{.Need}}{{if .UnitPrice}} × {{.UnitPrice}}{{if .LineCost}} = {{.LineCost}}{{end}}{{end}}</li>{{end}}
 </ul>
 {{if .ShoppingTotal}}<p><small>Total: {{.ShoppingTotal}}</small></p>{{end}}
 </section>

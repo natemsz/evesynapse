@@ -23,7 +23,7 @@
 <div class="tw">
 <table>
   <tbody>
-    <tr><th>From</th><td>{{.From}}</td></tr>
+    <tr><th>From</th><td>{{charLink $.ViewerChars .FromID .From}}</td></tr>
     {{if .To}}<tr><th>To</th><td>{{range $i, $t := .To}}{{if $i}}, {{end}}{{$t}}{{end}}</td></tr>{{end}}
     <tr><th>Date</th><td>{{.Date}}</td></tr>
     {{if .Labels}}<tr><th>Labels</th><td>{{range $i, $l := .Labels}}{{if $i}}, {{end}}{{$l}}{{end}}</td></tr>{{end}}
@@ -54,7 +54,7 @@
   <thead><tr><th>Subject</th><th>From</th><th>Date</th><th>Labels</th></tr></thead>
   <tbody>
   {{range .Mail.Rows}}
-    <tr><td>{{if .Unread}}<strong><a href="/mail/?character={{$.Mail.CharacterID}}&amp;mail={{.ID}}">{{.Subject}}</a></strong>{{else}}<a href="/mail/?character={{$.Mail.CharacterID}}&amp;mail={{.ID}}">{{.Subject}}</a>{{end}}</td><td>{{.From}}</td><td>{{.Date}}</td><td>{{range $i, $l := .Labels}}{{if $i}}, {{end}}{{$l}}{{end}}</td></tr>
+    <tr><td>{{if .Unread}}<strong><a href="/mail/?character={{$.Mail.CharacterID}}&amp;mail={{.ID}}">{{.Subject}}</a></strong>{{else}}<a href="/mail/?character={{$.Mail.CharacterID}}&amp;mail={{.ID}}">{{.Subject}}</a>{{end}}</td><td>{{charLink $.ViewerChars .FromID .From}}</td><td>{{.Date}}</td><td>{{range $i, $l := .Labels}}{{if $i}}, {{end}}{{$l}}{{end}}</td></tr>
   {{end}}
   </tbody>
 </table>

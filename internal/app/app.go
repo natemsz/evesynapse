@@ -42,6 +42,9 @@ var sdeSchema string
 //go:embed schema/004_module_sweep.sql
 var moduleSweepSchema string
 
+//go:embed schema/005_corp.sql
+var corpSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -224,6 +227,12 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/corporations", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleCorporations)
+		r.Get("/members/", app.handleCorpMembers)
+		r.Get("/wallets/", app.handleCorpWallets)
+		r.Get("/orders/", app.handleCorpOrders)
+		r.Get("/assets/", app.handleCorpAssets)
+		r.Get("/structures/", app.handleCorpStructures)
+		r.Get("/killmails/", app.handleCorpKillmails)
 	})
 
 	r.Route("/assets", func(r chi.Router) {

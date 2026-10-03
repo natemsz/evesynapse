@@ -85,6 +85,37 @@ environment win). Then open <http://localhost:8080>:
   badges, final-blow attacker, involved count and an estimated
   destroyed+dropped value (requires login;
   `esi-killmails.read_killmails.v1`; details warmed by the worker)
+- `/corporations/` — public corporation overviews for the user's
+  characters' corporations (name, CEO, alliance, tax, home station;
+  public ESI, cached per CCP's `Expires` header)
+- `/corporations/members/` — member roster with, when member
+  tracking is available, join date, last login, current ship and
+  location (roster: no role; tracking requires the **Director**
+  role in-game)
+- `/corporations/wallets/` — the seven wallet divisions with
+  balances, plus the selected division's recent journal and
+  transactions (requires the **Accountant** or **Junior
+  Accountant** role in-game)
+- `/corporations/orders/` — open corporation orders with item,
+  location and region names, price, volume remaining and expiry
+  (requires the **Accountant** or **Trader** role in-game)
+- `/corporations/assets/` — corporation assets grouped by
+  location, with player-given singleton names (named ships,
+  renamed containers) resolved by the worker via the assets/names
+  endpoint (requires the **Director** role in-game)
+- `/corporations/structures/` — Upwell structures: type, system,
+  state, fuel expiry, reinforce timers and service states
+  (requires the **Station Manager** role in-game)
+- `/corporations/killmails/` — the corporation's recent kills and
+  losses, sharing the killmail store and page rendering with
+  `/killmails/` (a victim in the corp is a LOSS; requires the
+  **Director** role in-game)
+
+  All corporation subpages follow the selected character's
+  corporation (switch characters with `?character=`, like Assets),
+  render from worker-warmed snapshots only, and show a plain
+  "needs the role" state when ESI refused the dataset for want of
+  an in-game role — see the caching section below.
 - `/auth/eve` — starts EVE SSO login (also "Link another character")
 - `/auth/callback` — OAuth2 callback (see SSO flow below)
 - `/auth/logout` — destroys the session
@@ -170,7 +201,22 @@ sweep caches the character live-state endpoints the same way
 recent-killmails list). Killmail *details* are different: they are
 immutable, so the worker warms them once per killmail into the
 `killmail_details` store (schema `004_module_sweep.sql`, at most 10
-per character per cycle) and pages read the store only. Assets are
+per character per cycle) and pages read the store only. Corporation
+datasets (module sweep cluster 2, schema `005_corp.sql`) ride the
+same snapshot table as `corp_*` kinds, fetched with each viewing
+character's token against that character's corporation — so pages
+follow the selected character's corp, and character/corporation ID
+collisions can never cross-contaminate. Role-gated corporation
+endpoints answer 403 when the character lacks the in-game role;
+the worker records that in `snapshot_fetch_state` (state
+`role_missing` plus the role label), backs the kind off for six
+hours instead of retrying every minute, and never writes a
+snapshot for a refused kind — the subpages and the Sync page
+render the recorded state ("Needs the Director role in-game")
+until a fetch succeeds. Corp asset singleton names come from
+`POST /corporations/{id}/assets/names/` (bounded to 1,000 items
+per cycle, stored in `item_names`; CCP's `"None"` placeholder for
+unnamed items is skipped). Assets are
 paginated: every page is fetched and stored as one merged JSON array. Pages serve
 fresh snapshots without calling ESI; on fetch failure a stale
 snapshot is served instead of an error. ESI's error-limit statuses
@@ -258,7 +304,10 @@ boot of a fresh database (the `users`/`characters` tables), applies
 `internal/app/schema/002_snapshots.sql` whenever the snapshot
 tables are absent, `internal/app/schema/003_sde.sql` whenever
 the SDE tables are absent, and `internal/app/schema/004_module_sweep.sql`
-whenever the killmail-detail table is absent (existing databases gain
+whenever the killmail-detail table is absent, and
+`internal/app/schema/005_corp.sql` whenever the corporation
+support tables (fetch-state log, character→corporation map, item
+names) are absent (existing databases gain
 the new tables
 in place). Regenerate query code after editing `internal/db/query/queries.sql`
 with:
@@ -293,3 +342,9 @@ make gen   # sqlc generate
       the home sheet with a live training countdown, Character page
       (status, fatigue, implants, clones), Fittings page, Killmails
       page with worker-warmed immutable details
+- [x] Module sweep cluster 2 (corporation): members + member
+      tracking, wallets with per-division journal/transactions,
+      orders, assets (with singleton names), structures, and corp
+      killmails sharing cluster 1's store and rendering — all
+      snapshot-cached with role-missing (403) states recorded
+      instead of retried

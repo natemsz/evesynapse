@@ -32,6 +32,10 @@ type corpView struct {
 	HomeStation    string
 	Description    string // plain text, template escapes it
 	Characters     []string
+	// LinkCharacterID is one of the user's characters in this
+	// corporation; the template links the corporation subpages
+	// with it (those pages follow the selected character's corp).
+	LinkCharacterID int64
 }
 
 // corpCacheEntry is a built corpView (minus the per-user Characters
@@ -185,6 +189,7 @@ func (app *Application) handleCorporations(w http.ResponseWriter, r *http.Reques
 
 	// Group the user's characters by corporation.
 	byCorp := make(map[int64][]string)
+	linkChar := make(map[int64]int64)
 	for _, ch := range characters {
 		var pub esi.Character
 		if err := app.esi.Get(ctx, "", fmt.Sprintf("/characters/%d/", ch.CharacterID), &pub); err != nil {
@@ -199,6 +204,9 @@ func (app *Application) handleCorporations(w http.ResponseWriter, r *http.Reques
 			name = pub.Name
 		}
 		byCorp[pub.CorporationID] = append(byCorp[pub.CorporationID], name)
+		if _, seen := linkChar[pub.CorporationID]; !seen {
+			linkChar[pub.CorporationID] = ch.CharacterID
+		}
 	}
 
 	for corpID, names := range byCorp {
@@ -209,6 +217,7 @@ func (app *Application) handleCorporations(w http.ResponseWriter, r *http.Reques
 		}
 		sort.Strings(names)
 		view.Characters = names
+		view.LinkCharacterID = linkChar[corpID]
 		data.Corps = append(data.Corps, view)
 	}
 	sort.Slice(data.Corps, func(i, j int) bool { return data.Corps[i].Name < data.Corps[j].Name })

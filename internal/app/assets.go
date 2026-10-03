@@ -138,6 +138,19 @@ func (app *Application) handleAssets(w http.ResponseWriter, r *http.Request) {
 // buildAssetLocations groups asset stacks by location, resolves
 // type and location names, and sorts biggest-first at both levels.
 func (app *Application) buildAssetLocations(ctx context.Context, items []esi.Asset) []assetLocation {
+	return app.buildAssetLocationsWith(ctx, items, nil, nil)
+}
+
+// buildAssetLocationsWith is buildAssetLocations with two
+// corporation-cluster additions, both nil for the character page
+// (byte-identical behavior there):
+//   - extraTitles names locations from outside the place cache —
+//     the corp's own structures, which the corp assets endpoint
+//     reports as location_type "item"/"other" with no structure
+//     label, so the structure IDs must be recognised explicitly;
+//   - nameOverrides replaces type names with player-given item
+//     names for singletons (named ships, renamed containers).
+func (app *Application) buildAssetLocationsWith(ctx context.Context, items []esi.Asset, extraTitles map[int64]string, nameOverrides map[int64]string) []assetLocation {
 	// One name-resolution pass covers item types AND the parent
 	// items other items live inside (their type IDs are in the same
 	// payload). Cache-only: unresolved names render as "Type #<id>"
@@ -167,7 +180,7 @@ func (app *Application) buildAssetLocations(ctx context.Context, items []esi.Ass
 
 	locations := make([]assetLocation, 0, len(byLoc))
 	for locID, entries := range byLoc {
-		loc := assetLocation{Title: app.assetLocationTitle(ctx, locID, locType[locID], itemType, nameOf)}
+		loc := assetLocation{Title: app.assetLocationTitle(ctx, locID, locType[locID], itemType, nameOf, extraTitles)}
 
 		sorted := append([]esi.Asset(nil), entries...)
 		sort.Slice(sorted, func(i, j int) bool {
@@ -181,8 +194,12 @@ func (app *Application) buildAssetLocations(ctx context.Context, items []esi.Ass
 			sorted = sorted[:maxAssetRowsPerLocation]
 		}
 		for _, it := range sorted {
+			name := nameOf(it.TypeID)
+			if override, ok := nameOverrides[it.ItemID]; ok && override != "" {
+				name = override
+			}
 			loc.Items = append(loc.Items, assetRow{
-				Name:     nameOf(it.TypeID),
+				Name:     name,
 				Quantity: esi.FormatInt(it.Quantity),
 				Note:     assetNote(it),
 			})
@@ -206,10 +223,14 @@ func (app *Application) buildAssetLocations(ctx context.Context, items []esi.Ass
 // local caches (SDE tables first, then the worker-warmed place
 // cache); player structures
 // cannot be named without an ESI scope this app does not hold, so
-// they stay honest "Structure #<id>"; items inside another owned
-// item (a ship, a container) are labelled with the parent's type
-// name.
-func (app *Application) assetLocationTitle(ctx context.Context, locID int64, locType string, itemType map[int64]int64, nameOf func(int64) string) string {
+// they stay honest "Structure #<id>" unless extraTitles names them
+// (the corporation cluster passes the corp's own structures);
+// items inside another owned item (a ship, a container) are
+// labelled with the parent's type name.
+func (app *Application) assetLocationTitle(ctx context.Context, locID int64, locType string, itemType map[int64]int64, nameOf func(int64) string, extraTitles map[int64]string) string {
+	if title, ok := extraTitles[locID]; ok {
+		return title
+	}
 	switch locType {
 	case "station":
 		if name, ok := app.esi.CachedPlaceName(ctx, locID); ok {

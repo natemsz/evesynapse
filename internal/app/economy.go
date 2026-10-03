@@ -66,13 +66,16 @@ func orderRangeLabel(r string) string {
 
 // econLocationTitle renders an order/transaction/contract
 // location: NPC station and system names from the local caches,
-// an honest "#<id>" otherwise (player-structure names need a
-// scope this app does not hold).
+// then the worker-resolved structure name, then an honest
+// "#<id>".
 func (app *Application) econLocationTitle(ctx context.Context, locationID int64) string {
 	if name, ok := app.esi.CachedPlaceName(ctx, locationID); ok {
 		return name
 	}
 	if locationID > 1_000_000_000 {
+		if name := app.resolvedStructureTitle(ctx, locationID); name != "" {
+			return name
+		}
 		return fmt.Sprintf("Structure #%d", locationID)
 	}
 	return fmt.Sprintf("Station #%d", locationID)
@@ -82,26 +85,37 @@ func (app *Application) econLocationTitle(ctx context.Context, locationID int64)
 // Wallet page: balance header, journal window, transaction window.
 // ---------------------------------------------------------------------------
 
-// walletJournalRow is one journal line.
+// walletJournalRow is one journal line. Counterparties carry
+// their IDs and whether each is a character, so the template can
+// link characters and leave corporations as text.
 type walletJournalRow struct {
-	Date    string
-	Type    string // humanized ref_type
-	Amount  string // signed, esi.FormatISK
-	Balance string
-	Parties string // "From → To", "" when neither party is known
-	Desc    string
+	Date        string
+	Type        string // humanized ref_type
+	Amount      string // signed, esi.FormatISK
+	Balance     string
+	ShowParties bool
+	FromName    string
+	FromID      int64
+	FromIsChar  bool
+	ToName      string
+	ToID        int64
+	ToIsChar    bool
+	Desc        string
 }
 
 // walletTxnRow is one transaction line.
 type walletTxnRow struct {
-	Date     string
-	Item     string
-	Qty      string
-	Unit     string
-	Total    string
-	Side     string // "Buy" | "Sell"
-	Location string
-	With     string // counterparty display
+	Date         string
+	Item         string
+	TypeID       int64
+	Qty          string
+	Unit         string
+	Total        string
+	Side         string // "Buy" | "Sell"
+	Location     string
+	With         string // counterparty display
+	ClientID     int64
+	ClientIsChar bool // counterparty resolved as a character (else a corporation — text)
 }
 
 // walletView is the Wallet page body.
@@ -156,9 +170,18 @@ func (app *Application) handleWallet(w http.ResponseWriter, r *http.Request) {
 				view.JournalCut++
 				continue
 			}
-			parties := ""
+			row := walletJournalRow{
+				Date:    formatFinish(e.Date),
+				Type:    humanizeEnum(e.RefType),
+				Amount:  esi.FormatISK(e.Amount),
+				Balance: esi.FormatISK(e.Balance),
+			}
 			if e.FirstPartyID > 0 || e.SecondPartyID > 0 {
-				parties = characterDisplay(app.esi, e.FirstPartyID) + " → " + characterDisplay(app.esi, e.SecondPartyID)
+				row.ShowParties = true
+				row.FromName, row.FromIsChar = app.journalParty(e.FirstPartyID, e.FirstPartyType)
+				row.FromID = e.FirstPartyID
+				row.ToName, row.ToIsChar = app.journalParty(e.SecondPartyID, e.SecondPartyType)
+				row.ToID = e.SecondPartyID
 			}
 			desc := e.Description
 			if e.Reason != "" {
@@ -167,14 +190,8 @@ func (app *Application) handleWallet(w http.ResponseWriter, r *http.Request) {
 				}
 				desc += e.Reason
 			}
-			view.JournalRows = append(view.JournalRows, walletJournalRow{
-				Date:    formatFinish(e.Date),
-				Type:    humanizeEnum(e.RefType),
-				Amount:  esi.FormatISK(e.Amount),
-				Balance: esi.FormatISK(e.Balance),
-				Parties: parties,
-				Desc:    desc,
-			})
+			row.Desc = desc
+			view.JournalRows = append(view.JournalRows, row)
 		}
 	}
 
@@ -193,17 +210,42 @@ func (app *Application) handleWallet(w http.ResponseWriter, r *http.Request) {
 			view.TxnRows = append(view.TxnRows, walletTxnRow{
 				Date:     formatFinish(t.Date),
 				Item:     app.typeNameOrID(ctx, t.TypeID),
+				TypeID:   t.TypeID,
 				Qty:      esi.FormatInt(t.Quantity),
 				Unit:     esi.FormatISK(t.UnitPrice),
 				Total:    esi.FormatISK(t.UnitPrice * float64(t.Quantity)),
 				Side:     side,
 				Location: app.econLocationTitle(ctx, t.LocationID),
 				With:     characterDisplay(app.esi, t.ClientID),
+				ClientID: t.ClientID,
+				ClientIsChar: func() bool {
+					_, ok := app.esi.CachedCharacterName(t.ClientID)
+					return ok
+				}(),
 			})
 		}
 	}
 
 	app.render(ctx, w, http.StatusOK, "wallet.html", data)
+}
+
+// journalParty resolves one journal counterparty to its display
+// name and whether it is a character (characters link; everything
+// else stays text). The kind comes from ESI's party_type when the
+// snapshot carries it; older snapshots fall back to the character
+// name cache — a hit means character, a miss stays unlinked
+// (corporations deliberately render as text in this pass).
+func (app *Application) journalParty(id int64, kind string) (name string, isChar bool) {
+	name = characterDisplay(app.esi, id)
+	switch kind {
+	case "character":
+		return name, id > 0
+	case "":
+		_, ok := app.esi.CachedCharacterName(id)
+		return name, ok
+	default:
+		return name, false
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -213,6 +255,7 @@ func (app *Application) handleWallet(w http.ResponseWriter, r *http.Request) {
 // orderRow is one order line (open or historical).
 type orderRow struct {
 	Item     string
+	TypeID   int64
 	Side     string // "Buy" | "Sell"
 	Price    string
 	Volume   string // "remain / total"
@@ -282,6 +325,7 @@ func (app *Application) handleOrders(w http.ResponseWriter, r *http.Request) {
 		}
 		return orderRow{
 			Item:     app.typeNameOrID(ctx, o.TypeID),
+			TypeID:   o.TypeID,
 			Side:     side,
 			Price:    esi.FormatISK(o.Price),
 			Volume:   fmt.Sprintf("%s / %s", esi.FormatInt(o.VolumeRemain), esi.FormatInt(o.VolumeTotal)),

@@ -22,8 +22,9 @@ import (
 // 420/429 stops it until the next cycle.
 //
 // What wants history, in priority order:
-//   1. watchlist entries (any user's — the alerts read them),
-//   2. item-page "wants" (a user opened a type with no rows yet),
+//   1. item-page "wants" (a user opened a type with no rows yet —
+//      someone is staring at that page, the strongest signal),
+//   2. watchlist entries (any user's — the alerts read them),
 //   3. types with open orders on file (their regions ride along).
 // A pair is refetched at most once per 20h; CCP's aggregates are
 // daily, so fresher would be waste. Order books gate at 10
@@ -119,8 +120,9 @@ func (app *Application) warmMarketHistory(ctx context.Context, allowance *fetchB
 	return stored, false
 }
 
-// historyCandidates builds the prioritized fetch queue: watchlist
-// pairs first, then recent item-page wants, then types with open
+// historyCandidates builds the prioritized fetch queue: viewed-item
+// wants first (someone is staring at that page — the strongest
+// signal the app gets), then watchlist pairs, then types with open
 // orders (the region each order sits in).
 func (app *Application) historyCandidates(ctx context.Context) ([]marketKey, error) {
 	seen := make(map[marketKey]bool)
@@ -137,14 +139,6 @@ func (app *Application) historyCandidates(ctx context.Context) ([]marketKey, err
 		out = append(out, k)
 	}
 
-	entries, err := app.queries.ListAllWatchlistEntries(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, e := range entries {
-		add(e.RegionID, e.TypeID)
-	}
-
 	wants, err := app.queries.ListMarketHistoryWants(ctx,
 		time.Now().UTC().Add(-historyWantMaxAge).Format(time.RFC3339))
 	if err != nil {
@@ -152,6 +146,14 @@ func (app *Application) historyCandidates(ctx context.Context) ([]marketKey, err
 	}
 	for _, wn := range wants {
 		add(wn.RegionID, wn.TypeID)
+	}
+
+	entries, err := app.queries.ListAllWatchlistEntries(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range entries {
+		add(e.RegionID, e.TypeID)
 	}
 
 	// Types with open orders ride their orders snapshots; a
@@ -270,6 +272,16 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 		books++
 		stored++
 		app.recordMarketFetch(ctx, kind, fetchStateOK, "")
+		// Book locations join the structure-name queue: best
+		// buy/sell at a player structure is exactly where the
+		// "#<id>" fallback hurts most.
+		{
+			ids := make([]int64, 0, len(sells))
+			for _, o := range sells {
+				ids = append(ids, o.LocationID)
+			}
+			app.noteStructureIDs(ctx, ids...)
+		}
 		now := time.Now().UTC().Format(time.RFC3339)
 		for _, ref := range groups[key] {
 			status, stationBest, regionBest := computeOrderHealth(ref.order, sells)

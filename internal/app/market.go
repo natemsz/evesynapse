@@ -130,11 +130,24 @@ type marketItem struct {
 	Buys          []marketOrderRow
 
 	// Phase 5 price history (cache-only, from stored rows).
-	HistoryPending bool // no rows yet: the chart is still filling in
+	// HistoryState is computed by attachHistory from the stored
+	// rows plus the fetch-state record: historyStatePending (no
+	// rows yet, fetch not settled), historyStateEmpty (worker
+	// fetched, ESI had no trades), historyStateFew (a few rows —
+	// summary only, no chart), or historyStateChart (enough rows
+	// for the chart). The template renders a deliberate body for
+	// every state; there is no blank state.
+	HistoryState   string
+	HistoryPending bool // true only in the pending state
 	Chart          *priceChart
 	Stats          *historyStats
 	Change7        string // "+8.2%", "" when not computable
 	Change30       string
+	// HistoryLastDay is the newest recorded trade day, set when it
+	// is older than historyStaleAfterDays so the section can say
+	// when trading stopped instead of implying the chart is
+	// current.
+	HistoryLastDay string
 	Watched        bool
 	WatchThreshold float64
 }
@@ -164,7 +177,9 @@ type watchlistView struct {
 // worker-computed health.
 type yourOrderRow struct {
 	Char     string
+	CharID   int64
 	Item     string
+	TypeID   int64
 	Price    string
 	Location string
 	Status   string
@@ -226,41 +241,85 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 	app.render(ctx, w, http.StatusOK, "market.html", data)
 }
 
-// attachHistory fills an item view's Phase 5 history fields from
-// stored rows (never the network). No rows yet: mark the chart as
-// still filling in and leave a want for the worker to pick up. A
-// nil item (the live item view failed) still records the want —
-// the user asked about this type either way.
-func (app *Application) attachHistory(ctx context.Context, item *marketItem, typeID, regionID, userID int64) {
-	since := time.Now().UTC().AddDate(0, 0, -(historyChartDays + 5)).Format(historyDateLayout)
+// recentHistoryRows loads the most recent `limit` recorded trade
+// rows for a (region, type) in date-ascending order. The window is
+// a row count, not a calendar span: a sparse item's stored trades
+// are never filtered out by an arbitrary cutoff, which used to
+// leave the chart claiming it was loading for rows the worker had
+// already stored.
+func (app *Application) recentHistoryRows(ctx context.Context, regionID, typeID int64, limit int) []db.MarketHistory {
 	rows, err := app.queries.ListMarketHistory(ctx, db.ListMarketHistoryParams{
-		RegionID: regionID, TypeID: typeID, Date: since,
+		RegionID: regionID, TypeID: typeID, Limit: int64(limit),
 	})
 	if err != nil {
 		log.Printf("market: load history for type %d in region %d: %v", typeID, regionID, err)
-		return
+		return nil
 	}
+	// The query returns newest first; chart math wants ascending.
+	for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
+		rows[i], rows[j] = rows[j], rows[i]
+	}
+	return rows
+}
+
+// attachHistory fills an item view's history section from stored
+// rows (never the network) and sets HistoryState, which the
+// template turns into a deliberate body:
+//
+//   - pending: no rows and the worker hasn't settled the fetch —
+//     the section says history is on its way, and the view leaves
+//     a want for the worker.
+//   - empty: the worker fetched and ESI returned no trades at
+//     all — the section says so and the want settles (the 20h
+//     refetch gate, keyed on the fetch-state record, is what
+//     re-checks later; repeat views do not re-arm the want).
+//   - few: some trades but not enough to draw — the section shows
+//     the summary numbers instead of a chart.
+//   - chart: enough rows — the chart plus stats; when the newest
+//     row is stale, HistoryLastDay captions when trading stopped.
+//
+// A nil item (the live item view failed) still records the want —
+// the user asked about this type either way.
+func (app *Application) attachHistory(ctx context.Context, item *marketItem, typeID, regionID, userID int64) {
+	rows := app.recentHistoryRows(ctx, regionID, typeID, historyChartRows)
 	if len(rows) == 0 {
+		if item != nil {
+			item.HistoryState = historyStatePending
+			item.HistoryPending = true
+		}
+		if app.historyFetchSettled(ctx, regionID, typeID) {
+			if item != nil {
+				item.HistoryState = historyStateEmpty
+				item.HistoryPending = false
+			}
+			return
+		}
 		if err := app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
 			RegionID: regionID, TypeID: typeID,
 			LastRequestedAt: time.Now().UTC().Format(time.RFC3339),
 		}); err != nil {
 			log.Printf("market: record history want for type %d in region %d: %v", typeID, regionID, err)
 		}
-		if item != nil {
-			item.HistoryPending = true
-		}
 		return
 	}
 	if item == nil {
 		return
 	}
-	if chart, ok := buildPriceChart(rows); ok {
-		c := chart
-		item.Chart = &c
+	if len(rows) == 1 {
+		item.HistoryState = historyStateFew
+	} else {
+		item.HistoryState = historyStateChart
+		if chart, ok := buildPriceChart(rows); ok {
+			c := chart
+			item.Chart = &c
+		}
 	}
 	if stats, ok := summarizeHistory(rows); ok {
 		item.Stats = &stats
+	}
+	if newest, err := time.Parse(historyDateLayout, rows[len(rows)-1].Date); err == nil &&
+		time.Since(newest) > historyStaleAfterDays*24*time.Hour {
+		item.HistoryLastDay = rows[len(rows)-1].Date
 	}
 	if pct, ok := historyChangePct(rows, 7); ok {
 		item.Change7 = formatChangePct(pct)
@@ -276,6 +335,15 @@ func (app *Application) attachHistory(ctx context.Context, item *marketItem, typ
 			item.WatchThreshold = entry.ThresholdPct
 		}
 	}
+}
+
+// historyFetchSettled reports whether the worker has ever
+// completed a history fetch for this (region, type) — the marker
+// that distinguishes "ESI has no trades for this" (empty state)
+// from "never asked" (pending state).
+func (app *Application) historyFetchSettled(ctx context.Context, regionID, typeID int64) bool {
+	state, err := app.queries.GetMarketFetchState(ctx, marketFetchKind("history", marketKey{RegionID: regionID, TypeID: typeID}))
+	return err == nil && state.State == fetchStateOK
 }
 
 // searchTypes merges exact /universe/ids/ hits (first) with partial
@@ -457,6 +525,21 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 	sort.Slice(sells, func(i, j int) bool { return sells[i].Price < sells[j].Price })
 	sort.Slice(buys, func(i, j int) bool { return buys[i].Price > buys[j].Price })
 
+	// Locations the book shows join the structure-name queue so
+	// the worker resolves their names in the background; this
+	// render only ever reads the cache (a queue note, same as the
+	// history want an item view leaves).
+	{
+		ids := make([]int64, 0, len(sells)+len(buys))
+		for _, o := range sells {
+			ids = append(ids, o.LocationID)
+		}
+		for _, o := range buys {
+			ids = append(ids, o.LocationID)
+		}
+		app.noteStructureIDs(ctx, ids...)
+	}
+
 	if len(sells) > 0 {
 		item.BestSell = esi.FormatISK(sells[0].Price)
 		item.BestSellLoc = app.orderLocation(ctx, sells[0].LocationID, sells[0].SystemID)
@@ -494,13 +577,17 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 
 // orderLocation renders where an order sits: the NPC station name
 // when the location is one, the solar-system name for system-level
-// orders (and as fallback), and an honest "Structure #<id>" for
-// player structures, whose names need a scope this app doesn't
-// hold. Station/system names reuse the shared place-name cache.
+// orders (and as fallback), and for player structures the name
+// the worker has resolved (structures.go) or an honest
+// "Structure #<id>" until it lands. Station/system names reuse
+// the shared place-name cache. Cache-only: never fetches.
 func (app *Application) orderLocation(ctx context.Context, locationID, systemID int64) string {
 	// Upwell structure IDs live up around 1e12, far above the
 	// station (6e7) and system (3e7) ranges.
 	if locationID > 1_000_000_000 {
+		if name := app.resolvedStructureTitle(ctx, locationID); name != "" {
+			return name
+		}
 		return fmt.Sprintf("Structure #%d", locationID)
 	}
 	if locationID != 0 && locationID != systemID {
@@ -544,7 +631,6 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 		log.Printf("market: list watchlist for user %d: %v", userID, err)
 		return view
 	}
-	since := time.Now().UTC().AddDate(0, 0, -(historyChartDays + 5)).Format(historyDateLayout)
 	for _, e := range entries {
 		row := watchlistRow{
 			TypeID:    e.TypeID,
@@ -556,14 +642,7 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 			Change30:  "—",
 			Threshold: fmt.Sprintf("%g", e.ThresholdPct),
 		}
-		rows, err := app.queries.ListMarketHistory(ctx, db.ListMarketHistoryParams{
-			RegionID: e.RegionID, TypeID: e.TypeID, Date: since,
-		})
-		if err != nil {
-			log.Printf("market: watchlist history for type %d: %v", e.TypeID, err)
-			view.Rows = append(view.Rows, row)
-			continue
-		}
+		rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, historyChartRows)
 		if len(rows) > 0 {
 			row.Current = esi.FormatISK(rows[len(rows)-1].Average)
 		}
@@ -618,7 +697,9 @@ func (app *Application) buildYourOrders(ctx context.Context, userID int64) []you
 			}
 			row := yourOrderRow{
 				Char:     ch.Name,
+				CharID:   ch.CharacterID,
 				Item:     app.typeNameOrID(ctx, o.TypeID),
+				TypeID:   o.TypeID,
 				Price:    esi.FormatISK(o.Price) + " ISK",
 				Location: app.econLocationTitle(ctx, o.LocationID),
 				Status:   "Not checked against the order book yet",

@@ -25,6 +25,27 @@ const historyDateLayout = "2006-01-02"
 // aggregates.
 const historyChartDays = 90
 
+// historyChartRows is how many recent stored rows a history read
+// loads: the newest rows by date, not a calendar span, so a
+// sparse item's whole recorded history stays visible instead of
+// being cut off by an arbitrary date window.
+const historyChartRows = 90
+
+// historyStaleAfterDays: when the newest recorded trade is older
+// than this, the chart section captions the last trade date so it
+// never implies the data is current.
+const historyStaleAfterDays = 14
+
+// The four states of the item view's history section, computed by
+// attachHistory. The template renders a deliberate body for each;
+// there is no fifth, silent state.
+const (
+	historyStatePending = "pending" // nothing fetched yet
+	historyStateEmpty   = "empty"   // fetched: ESI has no trades
+	historyStateFew     = "few"     // a few rows: summary, no chart
+	historyStateChart   = "chart"   // enough rows for the chart
+)
+
 // historyChangePct computes the percent change of a type's daily
 // average between the latest stored day and the day `days` before
 // it: (latest − base) / base × 100, where base is the stored day

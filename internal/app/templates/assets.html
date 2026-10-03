@@ -19,7 +19,7 @@
       <thead><tr><th>Item</th><th>Quantity</th><th>Note</th></tr></thead>
       <tbody>
       {{range .Items}}
-        <tr><td>{{.Name}}</td><td>{{.Quantity}}</td><td>{{.Note}}</td></tr>
+        <tr><td>{{itemLink .TypeID .Name}}</td><td>{{.Quantity}}</td><td>{{.Note}}</td></tr>
       {{end}}
       </tbody>
     </table>

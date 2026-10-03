@@ -24,7 +24,7 @@
   <tbody>
     <tr><th>Starts</th><td>{{.Date}}</td></tr>
     {{if .Duration}}<tr><th>Duration</th><td>{{.Duration}}</td></tr>{{end}}
-    {{if .Owner}}<tr><th>Owner</th><td>{{.Owner}}</td></tr>{{end}}
+    {{if .Owner}}<tr><th>Owner</th><td>{{if .OwnerIsChar}}{{charLink $.ViewerChars .OwnerID .Owner}}{{else}}{{.Owner}}{{end}}</td></tr>{{end}}
   </tbody>
 </table>
 </div>
@@ -35,7 +35,7 @@
   <thead><tr><th>Attendee</th><th>Response</th></tr></thead>
   <tbody>
   {{range .Attendees}}
-    <tr><td>{{.Name}}</td><td>{{.Response}}</td></tr>
+    <tr><td>{{charLink $.ViewerChars .ID .Name}}</td><td>{{.Response}}</td></tr>
   {{end}}
   </tbody>
 </table>

@@ -14,7 +14,7 @@
   {{range .Fittings.Fittings}}
   <section class="foldable">
   <h3>{{.Name}}</h3>
-  <p><small>{{.ShipType}}</small></p>
+  <p><small>{{itemLink .ShipTypeID .ShipType}}</small></p>
   <p><a href="/skills/plans/fit?character={{$.Fittings.CharacterID}}&fitting={{.FittingID}}">Training plan for this fit</a></p>
   {{range .Groups}}
   <h4>{{.Label}}</h4>
@@ -23,7 +23,7 @@
     <thead><tr><th>Item</th><th>Quantity</th></tr></thead>
     <tbody>
     {{range .Items}}
-      <tr><td>{{.Name}}</td><td>{{.Quantity}}</td></tr>
+      <tr><td>{{itemLink .TypeID .Name}}</td><td>{{.Quantity}}</td></tr>
     {{end}}
     </tbody>
   </table>

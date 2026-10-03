@@ -72,6 +72,7 @@ type skillGroupSection struct {
 type skillQueueRow struct {
 	Num      int // 1-based queue position for display
 	Skill    string
+	SkillID  int64
 	Level    string // roman level the entry completes
 	Finishes string // UTC timestamp, "" when ESI gives none
 }
@@ -265,6 +266,7 @@ func (app *Application) fillQueue(ctx context.Context, view *skillsView, queue e
 		view.Queue = append(view.Queue, skillQueueRow{
 			Num:      i + 1,
 			Skill:    nameFor(entry.SkillID),
+			SkillID:  entry.SkillID,
 			Level:    esi.RomanLevel(entry.FinishedLevel),
 			Finishes: formatFinish(entry.FinishDate),
 		})
@@ -365,6 +367,7 @@ func (app *Application) fillSkillSections(ctx context.Context, view *skillsView,
 		sec.rows = append(sec.rows, workingRow{
 			row: skillRow{
 				Name:    skillName,
+				TypeID:  s.SkillID,
 				Trained: esi.RomanLevel(s.TrainedSkillLevel),
 				Active:  esi.RomanLevel(s.ActiveSkillLevel),
 				SP:      esi.FormatInt(s.SkillpointsInSkill),

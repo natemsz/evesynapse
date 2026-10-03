@@ -61,7 +61,7 @@
     <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>Unit price</th><th>Total</th><th>Side</th><th>Counterparty</th></tr></thead>
     <tbody>
     {{range .CorpWallets.Txns}}
-      <tr><td>{{.Date}}</td><td>{{.Item}}</td><td>{{.Qty}}</td><td>{{.Unit}} ISK</td><td>{{.Total}} ISK</td><td>{{.Side}}</td><td>{{.With}}</td></tr>
+      <tr><td>{{.Date}}</td><td>{{itemLink .TypeID .Item}}</td><td>{{.Qty}}</td><td>{{.Unit}} ISK</td><td>{{.Total}} ISK</td><td>{{.Side}}</td><td>{{if .ClientIsChar}}{{charLink $.ViewerChars .ClientID .With}}{{else}}{{.With}}{{end}}</td></tr>
     {{end}}
     </tbody>
   </table>

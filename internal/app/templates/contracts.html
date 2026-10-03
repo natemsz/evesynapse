@@ -20,9 +20,9 @@
   <thead><tr><th>Title</th><th>Type</th><th>Status</th><th>Issuer</th><th>Assignee</th><th>Price</th><th>Reward</th><th>Collateral</th><th>Issued</th><th>Expires</th></tr></thead>
   <tbody>
   {{range .Contracts.Rows}}
-    <tr><td>{{.Title}}</td><td>{{.Type}}</td><td>{{.Status}}</td><td>{{.Issuer}}</td><td>{{.Assignee}}{{if .Acceptor}} (accepted by {{.Acceptor}}){{end}}</td><td>{{.Price}} ISK</td><td>{{.Reward}} ISK</td><td>{{.Collateral}} ISK</td><td>{{.Issued}}</td><td>{{.Expires}}</td></tr>
+    <tr><td>{{.Title}}</td><td>{{.Type}}</td><td>{{.Status}}</td><td>{{charLink $.ViewerChars .IssuerID .Issuer}}</td><td>{{if .AssigneeIsChar}}{{charLink $.ViewerChars .AssigneeID .Assignee}}{{else}}{{.Assignee}}{{end}}{{if .Acceptor}} (accepted by {{charLink $.ViewerChars .AcceptorID .Acceptor}}){{end}}</td><td>{{.Price}} ISK</td><td>{{.Reward}} ISK</td><td>{{.Collateral}} ISK</td><td>{{.Issued}}</td><td>{{.Expires}}</td></tr>
     {{if .Route}}<tr><td colspan="10"><small>Courier: {{.Route}}</small></td></tr>{{end}}
-    {{if .Items}}<tr><td colspan="10"><small>{{range $i, $it := .Items}}{{if $i}} · {{end}}{{$it.Name}} × {{$it.Qty}}{{if $it.Note}} ({{$it.Note}}){{end}}{{end}}</small></td></tr>{{end}}
+    {{if .Items}}<tr><td colspan="10"><small>{{range $i, $it := .Items}}{{if $i}} · {{end}}{{itemLink $it.TypeID $it.Name}} × {{$it.Qty}}{{if $it.Note}} ({{$it.Note}}){{end}}{{end}}</small></td></tr>{{end}}
     {{if .ItemsNote}}<tr><td colspan="10"><small>{{.ItemsNote}}</small></td></tr>{{end}}
   {{end}}
   </tbody>

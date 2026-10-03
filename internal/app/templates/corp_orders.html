@@ -28,7 +28,7 @@
     <thead><tr><th>Item</th><th>Side</th><th>Price</th><th>Volume left</th><th>Location</th><th>Region</th><th>Expires</th><th>Issued by</th></tr></thead>
     <tbody>
     {{range .CorpOrders.Rows}}
-      <tr><td>{{.Item}}</td><td>{{.Side}}</td><td>{{.Price}} ISK</td><td>{{.Volume}}</td><td>{{.Location}}</td><td>{{.Region}}</td><td>{{.Expires}}</td><td>{{.IssuedBy}}</td></tr>
+      <tr><td>{{itemLink .TypeID .Item}}</td><td>{{.Side}}</td><td>{{.Price}} ISK</td><td>{{.Volume}}</td><td>{{.Location}}</td><td>{{.Region}}</td><td>{{.Expires}}</td><td>{{charLink $.ViewerChars .IssuedByID .IssuedBy}}</td></tr>
     {{end}}
     </tbody>
   </table>

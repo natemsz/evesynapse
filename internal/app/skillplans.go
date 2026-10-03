@@ -163,12 +163,13 @@ type skillPlanSummary struct {
 
 // skillPlanStepRow is one computed step of the plan editor.
 type skillPlanStepRow struct {
-	Skill  string
-	FromTo string // "III → V"
-	SP     string
-	Time   string
-	Finish string // RFC3339 UTC
-	Prereq bool
+	Skill   string
+	SkillID int64
+	FromTo  string // "III → V"
+	SP      string
+	Time    string
+	Finish  string // RFC3339 UTC
+	Prereq  bool
 }
 
 // skillPlanItemRow is one editor row: the user's entries in intent
@@ -234,6 +235,7 @@ type fitPreview struct {
 	FittingID   int64
 	FitName     string
 	ShipName    string
+	ShipTypeID  int64
 	Rows        []fitPreviewRow
 	MissingData int // closure skills without SDE meta (left out on create)
 	AlreadyMet  int // skills the character already satisfies
@@ -241,9 +243,10 @@ type fitPreview struct {
 }
 
 type fitPreviewRow struct {
-	Skill  string
-	Level  string // roman required level
-	Status string // "trained" | "in queue" | "to train" | "no data"
+	Skill   string
+	SkillID int64
+	Level   string // roman required level
+	Status  string // "trained" | "in queue" | "to train" | "no data"
 }
 
 // ---------------------------------------------------------------------------
@@ -395,12 +398,13 @@ func (app *Application) buildPlanDetail(ctx context.Context, ch db.Character, pl
 	}
 	for _, s := range outcome.Steps {
 		detail.Steps = append(detail.Steps, skillPlanStepRow{
-			Skill:  nameOrID(names, s.SkillID),
-			FromTo: fmt.Sprintf("%s → %s", esi.RomanLevel(s.FromLevel), esi.RomanLevel(s.ToLevel)),
-			SP:     esi.FormatInt(s.SPRemaining),
-			Time:   humanDuration(time.Duration(s.Seconds * float64(time.Second))),
-			Finish: s.Finish.UTC().Format("2006-01-02 15:04 UTC"),
-			Prereq: s.Prereq,
+			Skill:   nameOrID(names, s.SkillID),
+			SkillID: s.SkillID,
+			FromTo:  fmt.Sprintf("%s → %s", esi.RomanLevel(s.FromLevel), esi.RomanLevel(s.ToLevel)),
+			SP:      esi.FormatInt(s.SPRemaining),
+			Time:    humanDuration(time.Duration(s.Seconds * float64(time.Second))),
+			Finish:  s.Finish.UTC().Format("2006-01-02 15:04 UTC"),
+			Prereq:  s.Prereq,
 		})
 	}
 	for _, d := range outcome.Dropped {
@@ -825,12 +829,13 @@ func (app *Application) fitClosureTargets(ctx context.Context, ch db.Character, 
 	}()...))
 
 	preview = &fitPreview{
-		FittingID: fit.FittingID,
-		FitName:   fit.Name,
-		ShipName:  nameOrID(names, fit.ShipTypeID),
+		FittingID:  fit.FittingID,
+		FitName:    fit.Name,
+		ShipName:   nameOrID(names, fit.ShipTypeID),
+		ShipTypeID: fit.ShipTypeID,
 	}
 	for _, t := range targets {
-		row := fitPreviewRow{Skill: nameOrID(names, t.SkillID), Level: esi.RomanLevel(t.Level)}
+		row := fitPreviewRow{Skill: nameOrID(names, t.SkillID), SkillID: t.SkillID, Level: esi.RomanLevel(t.Level)}
 		meta, hasMeta := graph.Meta(t.SkillID)
 		switch {
 		case !hasMeta:

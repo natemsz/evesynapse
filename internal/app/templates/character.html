@@ -54,7 +54,7 @@
     <thead><tr><th>Skill</th><th>Trained</th><th>Active</th><th>SP</th></tr></thead>
     <tbody>
     {{range .CharacterPage.Skills}}
-      <tr><td>{{.Name}}</td><td>{{.Trained}}</td><td>{{.Active}}</td><td>{{.SP}}</td></tr>
+      <tr><td>{{itemLink .TypeID .Name}}</td><td>{{.Trained}}</td><td>{{.Active}}</td><td>{{.SP}}</td></tr>
     {{end}}
     </tbody>
   </table>
@@ -111,7 +111,7 @@
   <div class="tw">
   <table>
     <tbody>
-      <tr><th>Active ship</th><td>{{.CharacterPage.ShipTypeName}}{{if .CharacterPage.ShipName}} — &ldquo;{{.CharacterPage.ShipName}}&rdquo;{{end}}</td></tr>
+      <tr><th>Active ship</th><td>{{itemLink .CharacterPage.ShipTypeID .CharacterPage.ShipTypeName}}{{if .CharacterPage.ShipName}} — &ldquo;{{.CharacterPage.ShipName}}&rdquo;{{end}}</td></tr>
     </tbody>
   </table>
   </div>
@@ -141,7 +141,7 @@
     <thead><tr><th>Slot</th><th>Implant</th></tr></thead>
     <tbody>
     {{range .CharacterPage.Implants}}
-      <tr><td>{{.Slot}}</td><td>{{.Name}}</td></tr>
+      <tr><td>{{.Slot}}</td><td>{{itemLink .TypeID .Name}}</td></tr>
     {{end}}
     </tbody>
   </table>
@@ -173,7 +173,7 @@
     <thead><tr><th>Implant</th></tr></thead>
     <tbody>
     {{range .Implants}}
-      <tr><td>{{.}}</td></tr>
+      <tr><td>{{itemLink .TypeID .Name}}</td></tr>
     {{end}}
     </tbody>
   </table>

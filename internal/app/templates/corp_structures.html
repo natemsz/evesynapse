@@ -28,7 +28,7 @@
     <div class="tw">
     <table>
       <tbody>
-        <tr><th>Type</th><td>{{.Type}}</td></tr>
+        <tr><th>Type</th><td>{{itemLink .TypeID .Type}}</td></tr>
         <tr><th>System</th><td>{{.System}}</td></tr>
         <tr><th>State</th><td>{{.State}}</td></tr>
         {{if .Fuel}}<tr><th>Fuel expires</th><td>{{.Fuel}}{{if .FuelLeft}} ({{.FuelLeft}}){{end}}</td></tr>{{end}}

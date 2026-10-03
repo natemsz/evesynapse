@@ -27,7 +27,7 @@
     <thead><tr><th>Member</th><th>Joined</th><th>Last login</th><th>Current ship</th><th>Location</th></tr></thead>
     <tbody>
     {{range .CorpMembers.Rows}}
-      <tr><td>{{.Name}}</td><td>{{.Joined}}</td><td>{{.LastSeen}}</td><td>{{.Ship}}</td><td>{{.Location}}</td></tr>
+      <tr><td>{{charLink $.ViewerChars .ID .Name}}</td><td>{{.Joined}}</td><td>{{.LastSeen}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td>{{.Location}}</td></tr>
     {{end}}
     </tbody>
   </table>

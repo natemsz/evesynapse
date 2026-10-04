@@ -10,6 +10,8 @@
 // With no arguments it runs the web app. Maintenance modes:
 //
 //	evesynapse -version                print the version and exit
+//	evesynapse -update -arm64 / -x86   update to the latest release
+//	                                   for this kind of computer
 //	evesynapse -update <url> [sha256]  download, verify, and install
 //	                                   a new build, restarting the
 //	                                   running server onto it
@@ -63,6 +65,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage:")
 	fmt.Fprintln(w, "  evesynapse                          run the web app")
 	fmt.Fprintln(w, "  evesynapse -version                 print the version and exit")
+	fmt.Fprintln(w, "  evesynapse -update -arm64           update to the latest release for this computer (-x86 on Intel/AMD)")
 	fmt.Fprintln(w, "  evesynapse -update <url> [checksum] install a downloaded update and restart")
 	fmt.Fprintln(w, "  evesynapse -refresh                 refresh all cached data on next start (app must be stopped)")
 }

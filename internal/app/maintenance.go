@@ -8,13 +8,21 @@ package app
 //   evesynapse -version
 //       Print the version and exit.
 //
+//   evesynapse -update [-arm64|-x86]
+//       Check the release channel for a newer build of this
+//       computer's kind, and when there is one download it,
+//       verify it against the published checksum, swap it into
+//       place, and restart onto it (the -update form below).
+//       With no flag the binary's own kind is used.
+//
 //   evesynapse -update <url|file> [sha256]
-//       Download a new build, verify it really is an EveSynapse
-//       program for this kind of computer (ARM ELF, optionally
-//       checksum-matched), swap it into place, and ask the
-//       running server to restart onto it. The running process
-//       keeps its old inode during the swap, so an update can
-//       never corrupt a copy that is serving pages right now.
+//       Download a new build from an explicit address, verify it
+//       really is an EveSynapse program for this kind of
+//       computer (ELF, optionally checksum-matched), swap it
+//       into place, and ask the running server to restart onto
+//       it. The running process keeps its old inode during the
+//       swap, so an update can never corrupt a copy that is
+//       serving pages right now.
 //
 //   evesynapse -refresh
 //       Mark every cached download out of date so the next start
@@ -34,6 +42,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -43,13 +52,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 )
 
-// Version returns the rendered product version ("v0.3.16.009"),
+// Version returns the rendered product version ("v0.3.17.001"),
 // the same string the page footer shows.
 func Version() string { return appVersion }
 
@@ -192,8 +202,187 @@ const (
 	elfMachineAArch64 = 183
 )
 
-// RunUpdate implements `evesynapse -update <url> [sha256]`. It
-// never starts the server and never touches the database.
+// ---------------------------------------------------------------------------
+// The release channel: CI publishes every build as a GitHub
+// release carrying a tiny manifest per CPU kind — the version it
+// names and the checksum of the binary beside it. The updater
+// reads its kind's manifest, compares versions, and downloads
+// only when the release is newer.
+// ---------------------------------------------------------------------------
+
+const (
+	// elfMachineAMD64 is ELF e_machine for x86-64 — the desktop
+	// build's counterpart to elfMachineAArch64.
+	elfMachineAMD64 = 62
+)
+
+// releaseBaseURL is where release manifests and binaries live:
+// GitHub's "latest release" download shortcut, so the address
+// stays the same as versions come and go. A var so tests can
+// point it at a local server.
+var releaseBaseURL = "https://github.com/natemsz/evesynapse/releases/latest/download"
+
+// releaseManifest is the per-arch pointer published with each
+// release: the version it names and the checksum of the binary
+// beside it.
+type releaseManifest struct {
+	Version string `json:"version"`
+	Arch    string `json:"arch"`
+	SHA256  string `json:"sha256"`
+}
+
+// parseArchArg normalizes an -update arch flag ("-arm64",
+// "-amd64", "-x86") to the release arch name, or "" when the
+// argument isn't an arch flag.
+func parseArchArg(arg string) string {
+	switch strings.ToLower(strings.TrimPrefix(arg, "-")) {
+	case "arm64":
+		return "arm64"
+	case "amd64", "x86", "x86_64", "x64":
+		return "amd64"
+	}
+	return ""
+}
+
+// ownReleaseArch is the CPU kind this very binary was built for.
+func ownReleaseArch() string { return runtime.GOARCH }
+
+// elfMachineForArch maps a release arch to its ELF e_machine.
+func elfMachineForArch(arch string) (uint16, bool) {
+	switch arch {
+	case "arm64":
+		return elfMachineAArch64, true
+	case "amd64":
+		return elfMachineAMD64, true
+	}
+	return 0, false
+}
+
+// compareVersions orders dotted numeric versions: -1 when a is
+// the older, 0 when equal, +1 when a is the newer. A leading
+// "v" is ignored and missing parts count as 0.
+func compareVersions(a, b string) int {
+	pa, pb := versionParts(a), versionParts(b)
+	for i := 0; i < len(pa) || i < len(pb); i++ {
+		var x, y int
+		if i < len(pa) {
+			x = pa[i]
+		}
+		if i < len(pb) {
+			y = pb[i]
+		}
+		if x < y {
+			return -1
+		}
+		if x > y {
+			return 1
+		}
+	}
+	return 0
+}
+
+func versionParts(v string) []int {
+	v = strings.TrimPrefix(strings.TrimSpace(v), "v")
+	fields := strings.Split(v, ".")
+	parts := make([]int, len(fields))
+	for i, f := range fields {
+		n, err := strconv.Atoi(f)
+		if err != nil {
+			n = 0
+		}
+		parts[i] = n
+	}
+	return parts
+}
+
+// fetchReleaseManifest downloads and parses the manifest for
+// arch from the release channel.
+func fetchReleaseManifest(ctx context.Context, arch string) (releaseManifest, error) {
+	var m releaseManifest
+	u := releaseBaseURL + "/latest-" + arch + ".json"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return m, err
+	}
+	req.Header.Set("User-Agent", "EveSynapse-Updater")
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return m, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return m, fmt.Errorf("the update server answered %s", resp.Status)
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&m); err != nil {
+		return m, errors.New("the update information couldn't be read")
+	}
+	m.SHA256 = strings.ToLower(strings.TrimSpace(m.SHA256))
+	if _, err := hex.DecodeString(m.SHA256); err != nil || len(m.SHA256) != sha256.Size*2 {
+		return m, errors.New("the update information couldn't be read")
+	}
+	if strings.TrimSpace(m.Version) == "" {
+		return m, errors.New("the update information couldn't be read")
+	}
+	return m, nil
+}
+
+// runReleaseUpdate implements the release-channel forms of
+// -update (`-update`, `-update -arm64`, `-update -x86`): check
+// the manifest for arch, and only when it names a newer version
+// download, verify, and install it.
+func runReleaseUpdate(target, arch string, stdout, stderr io.Writer) int {
+	machine, ok := elfMachineForArch(arch)
+	if !ok {
+		fmt.Fprintf(stderr, "EveSynapse doesn't publish builds for %q computers. Nothing was changed.\n", arch)
+		return 2
+	}
+	current := Version()
+	fmt.Fprintf(stdout, "Checking for updates… you're on %s.\n", current)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	m, err := fetchReleaseManifest(ctx, arch)
+	cancel()
+	if err != nil {
+		fmt.Fprintf(stderr, "Couldn't check for updates: %v\nNothing was changed.\n", err)
+		return 1
+	}
+	latest := "v" + strings.TrimPrefix(m.Version, "v")
+	if compareVersions(m.Version, current) <= 0 {
+		fmt.Fprintf(stdout, "You're up to date — %s is the latest version.\n", current)
+		return 0
+	}
+	fmt.Fprintf(stdout, "A new version is available: %s.\n", latest)
+	source := releaseBaseURL + "/evesynapse-" + arch
+	if code := installUpdate(target, source, m.SHA256, machine, stdout, stderr); code != 0 {
+		return code
+	}
+	if got, ok := installedVersion(target); ok {
+		fmt.Fprintf(stdout, "EveSynapse is now on %s.\n", got)
+	} else {
+		fmt.Fprintf(stdout, "EveSynapse is now on %s.\n", latest)
+	}
+	return 0
+}
+
+// installedVersion runs the freshly installed binary's -version
+// mode and returns what it reports, so an update reads its own
+// new version back instead of trusting the download.
+func installedVersion(target string) (string, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, target, "-version").Output()
+	if err != nil {
+		return "", false
+	}
+	v := strings.TrimSpace(string(out))
+	if v == "" || !strings.HasPrefix(v, "v") {
+		return "", false
+	}
+	return v, true
+}
+
+// RunUpdate implements `evesynapse -update`. It never starts
+// the server and never touches the database.
 func RunUpdate(args []string, stdout, stderr io.Writer) int {
 	target, err := os.Executable()
 	if err != nil {
@@ -204,8 +393,19 @@ func RunUpdate(args []string, stdout, stderr io.Writer) int {
 }
 
 func runUpdate(target string, args []string, stdout, stderr io.Writer) int {
-	if len(args) < 1 || len(args) > 2 {
-		fmt.Fprintln(stderr, "Usage: evesynapse -update <download address> [checksum]")
+	// Release-channel forms first: no argument (this computer's
+	// own kind) or a single arch flag. Everything else keeps the
+	// original explicit-address form below.
+	if len(args) == 0 {
+		return runReleaseUpdate(target, ownReleaseArch(), stdout, stderr)
+	}
+	if len(args) == 1 {
+		if arch := parseArchArg(args[0]); arch != "" {
+			return runReleaseUpdate(target, arch, stdout, stderr)
+		}
+	}
+	if len(args) > 2 {
+		fmt.Fprintln(stderr, "Usage: evesynapse -update [-arm64|-x86] or evesynapse -update <download address> [checksum]")
 		return 2
 	}
 	source := args[0]
@@ -218,6 +418,14 @@ func runUpdate(target string, args []string, stdout, stderr io.Writer) int {
 		}
 	}
 
+	return installUpdate(target, source, wantHash, elfMachineAArch64, stdout, stderr)
+}
+
+// installUpdate downloads source, verifies it (size, ELF
+// machine kind, checksum when wantHash is set), swaps it into
+// place at target, and asks the running server to restart onto
+// it. Shared by the explicit-address and release-channel forms.
+func installUpdate(target, source, wantHash string, wantMachine uint16, stdout, stderr io.Writer) int {
 	dir := filepath.Dir(target)
 	tmpPath := filepath.Join(dir, fmt.Sprintf(".evesynapse.update-%d", os.Getpid()))
 	defer os.Remove(tmpPath) // no-op once the temp file has been renamed into place
@@ -239,7 +447,7 @@ func runUpdate(target string, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "The download is too small to be the EveSynapse program — it may not have downloaded properly. Nothing was changed.")
 		return 1
 	}
-	if err := verifyARMExecutable(tmpPath); err != nil {
+	if err := verifyExecutableMachine(tmpPath, wantMachine); err != nil {
 		fmt.Fprintf(stderr, "%v\nNothing was changed.\n", err)
 		return 1
 	}
@@ -339,10 +547,17 @@ func fetchUpdate(ctx context.Context, source, dstPath string) error {
 }
 
 // verifyARMExecutable checks that path is an ELF program built
-// for 64-bit ARM — the one check that keeps a wrong download
-// (error page, build for another kind of computer) from ever
-// replacing the working copy.
+// for 64-bit ARM. Kept for the explicit-address update form,
+// whose downloads are always the ARM build.
 func verifyARMExecutable(path string) error {
+	return verifyExecutableMachine(path, elfMachineAArch64)
+}
+
+// verifyExecutableMachine checks that path is an ELF program
+// built for the given machine kind — the one check that keeps a
+// wrong download (error page, build for another kind of
+// computer) from ever replacing the working copy.
+func verifyExecutableMachine(path string, wantMachine uint16) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -355,7 +570,7 @@ func verifyARMExecutable(path string) error {
 	if hdr[0] != 0x7f || hdr[1] != 'E' || hdr[2] != 'L' || hdr[3] != 'F' {
 		return errors.New("the download isn't an EveSynapse program — it may be an error page instead of the update")
 	}
-	if machine := binary.LittleEndian.Uint16(hdr[18:20]); machine != elfMachineAArch64 {
+	if machine := binary.LittleEndian.Uint16(hdr[18:20]); machine != wantMachine {
 		return errors.New("the download was built for a different kind of computer, so it wouldn't run here")
 	}
 	return nil

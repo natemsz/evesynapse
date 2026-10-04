@@ -120,12 +120,18 @@ func (app *Application) characterPISummary(ctx context.Context, ch db.Character)
 	return summary
 }
 
-// planetDisplayName renders a colony planet: warmed name when the
-// cache has one, the honest id fallback until then.
+// planetDisplayName renders a colony planet: the resolved name
+// when the cache has one (in-process place cache, then the
+// durable planet_names table), the honest id fallback until
+// then. An unresolved id is noted as a want so the worker
+// resolves it in the background; the page never waits on it.
+// Every PI surface — colonies page, home widget, attention and
+// briefing lines — renders planets through here.
 func (app *Application) planetDisplayName(ctx context.Context, planetID int64) string {
-	if name, ok := app.esi.CachedPlaceName(ctx, planetID); ok && name != "" {
+	if name, ok := app.esi.CachedPlanetName(ctx, planetID); ok && name != "" {
 		return name
 	}
+	app.notePlanetIDs(ctx, planetID)
 	return fmt.Sprintf("Planet #%d", planetID)
 }
 
@@ -159,7 +165,8 @@ type factoryRow struct {
 type colonyRow struct {
 	Planet        string
 	System        string
-	Type          string // planet type, display-cased
+	SystemRef     placeRef // System classified for the link policy
+	Type          string   // planet type, display-cased
 	Upgrade       int64
 	Pins          int64
 	Updated       string // last_update, formatted
@@ -226,6 +233,7 @@ func (app *Application) handlePlanets(w http.ResponseWriter, r *http.Request) {
 			Pins:    colony.NumPins,
 			Updated: formatFinish(colony.LastUpdate),
 		}
+		row.SystemRef = app.linkPlace(ctx, colony.SolarSystemID, row.System)
 		layout, ok := app.loadPlanetLayout(ctx, active.CharacterID, colony.PlanetID)
 		if !ok {
 			row.LayoutWarming = true

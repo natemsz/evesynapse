@@ -82,6 +82,7 @@ type pilotHistoryRow struct {
 }
 
 type pilotHistoryView struct {
+	CorpID   int64
 	CorpName string
 	From     string
 	To       string // "Present" for the current stint
@@ -94,7 +95,9 @@ type pilotView struct {
 	PortraitURL    string
 	Name           string
 	Title          string
+	CorpID         int64
 	CorpLine       string // name [ticker], "" when unknown
+	AllianceID     int64
 	AllianceLine   string
 	FactionName    string
 	Security       string
@@ -202,12 +205,14 @@ func buildPilotView(id int64, payload string) (*pilotView, bool) {
 		FactionName: p.FactionName,
 	}
 	if p.Corp.Name != "" {
+		view.CorpID = p.Profile.CorporationID
 		view.CorpLine = p.Corp.Name
 		if p.Corp.Ticker != "" {
 			view.CorpLine += " [" + p.Corp.Ticker + "]"
 		}
 	}
 	if p.Alliance.Name != "" {
+		view.AllianceID = p.Profile.AllianceID
 		view.AllianceLine = p.Alliance.Name
 		if p.Alliance.Ticker != "" {
 			view.AllianceLine += " [" + p.Alliance.Ticker + "]"
@@ -222,9 +227,12 @@ func buildPilotView(id int64, payload string) (*pilotView, bool) {
 		view.Description = sanitizeMailHTML(p.Profile.Description)
 	}
 	for _, stint := range p.History {
-		row := pilotHistoryView{CorpName: stint.CorpName, To: "Present"}
+		row := pilotHistoryView{CorpID: stint.CorpID, CorpName: stint.CorpName, To: "Present"}
 		if row.CorpName == "" {
+			// An unresolved stint stays plain text rather than
+			// linking a placeholder label at the corporation page.
 			row.CorpName = "Unknown corporation"
+			row.CorpID = 0
 		}
 		if t, err := time.Parse(time.RFC3339, stint.Start); err == nil {
 			row.From = t.UTC().Format("2006-01-02")

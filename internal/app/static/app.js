@@ -677,9 +677,32 @@
     var items = [];
     var selected = -1;
     var timer = null;
+    var retryTimer = null;
+    var pendingRetries = 0;
     var lastQuery = "";
 
+    function isPending(it) {
+      return !!(it && it.kind === "pilot-pending");
+    }
+    function firstSelectable() {
+      for (var i = 0; i < items.length; i++) {
+        if (!isPending(items[i])) return i;
+      }
+      return -1;
+    }
+    function nextSelectable(from, delta) {
+      if (!items.length) return -1;
+      var idx = from;
+      for (var step = 0; step < items.length; step++) {
+        idx = (idx + delta + items.length) % items.length;
+        if (!isPending(items[idx])) return idx;
+      }
+      return -1;
+    }
+
     function close() {
+      if (retryTimer) window.clearTimeout(retryTimer);
+      retryTimer = null;
       list.hidden = true;
       items = [];
       selected = -1;
@@ -706,6 +729,13 @@
           li.className = "sel";
           input.setAttribute("aria-activedescendant", li.id);
         }
+        if (isPending(it)) {
+          // A name search still warming: shown, never a pick.
+          li.className = (li.className ? li.className + " " : "") + "pending";
+          li.setAttribute("aria-disabled", "true");
+          list.appendChild(li);
+          return;
+        }
         // mousedown, not click: it fires before the input's blur,
         // so the pick lands before anything can close the list.
         li.addEventListener("mousedown", function (ev) {
@@ -725,21 +755,38 @@
 
     function pick(idx) {
       var it = items[idx];
-      if (!it) return;
+      if (!it || isPending(it)) return;
       close();
       onPick(it, input);
     }
 
     function query(q) {
       fetch(endpoint(q), {
+        cache: "no-store",
         headers: { "Accept": "application/json" }
       }).then(function (resp) {
         return resp.ok ? resp.json() : [];
       }).then(function (rows) {
         if (input.value.trim() !== q) return; // typed past this result
         items = Array.isArray(rows) ? rows : [];
-        selected = items.length ? 0 : -1;
+        selected = firstSelectable();
         paint();
+        // A pilot-name search still warming re-asks on a short
+        // fuse; the same query returns the real suggestion once
+        // the record lands. Bounded, and only while this exact
+        // text is still in the box.
+        if (retryTimer) window.clearTimeout(retryTimer);
+        retryTimer = null;
+        var hasPending = false;
+        for (var i = 0; i < items.length; i++) {
+          if (isPending(items[i])) { hasPending = true; break; }
+        }
+        if (hasPending && pendingRetries < 8) {
+          pendingRetries++;
+          retryTimer = window.setTimeout(function () { query(q); }, 2500);
+        } else if (!hasPending) {
+          pendingRetries = 0;
+        }
       }).catch(function () { close(); });
     }
 
@@ -748,6 +795,9 @@
       if (q === lastQuery) return;
       lastQuery = q;
       if (timer) window.clearTimeout(timer);
+      if (retryTimer) window.clearTimeout(retryTimer);
+      retryTimer = null;
+      pendingRetries = 0;
       if (q.length < 2) { close(); return; }
       timer = window.setTimeout(function () { query(q); }, 150);
     });
@@ -757,9 +807,7 @@
       if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
         ev.preventDefault();
         if (!items.length) return;
-        selected = ev.key === "ArrowDown"
-          ? (selected + 1) % items.length
-          : (selected - 1 + items.length) % items.length;
+        selected = nextSelectable(selected, ev.key === "ArrowDown" ? 1 : -1);
         paint();
       } else if (ev.key === "Enter") {
         if (selected >= 0) {
@@ -920,11 +968,16 @@
 // --- Market history chart: day-point tooltips ---------------
 // Hover (mouse) or focus (keyboard) follows the point; a tap
 // pins the tip so it can be read, and the next tap — the same
-// point again, or anywhere else — lets it go. Delegation on
-// document throughout, so the live-region fragment swap that
-// replaces the chart body keeps working untouched.
+// point again, or anywhere else — lets it go. Pressing and
+// dragging across the chart scrubs to the nearest recorded day
+// while the tip follows the pointer. Delegation on document
+// throughout, so the live-region fragment swap that replaces
+// the chart body keeps working untouched.
 (function () {
   var pinned = null; // the .cdot holding the tip open by tap
+  var scrub = null; // active pointer drag across a chart
+  var suppressClickChart = null;
+  var suppressClickUntil = 0;
 
   function tipOf(dot) {
     var chart = dot.closest ? dot.closest(".pchart") : null;
@@ -950,15 +1003,28 @@
     }
   }
 
-  function show(dot) {
+  function markSelected(dot) {
+    var chart = dot.closest ? dot.closest(".pchart") : null;
+    if (!chart) return;
+    var selected = chart.querySelectorAll(".cdot.is-selected");
+    for (var i = 0; i < selected.length; i++) {
+      if (selected[i] !== dot) selected[i].classList.remove("is-selected");
+    }
+    dot.classList.add("is-selected");
+  }
+
+  function show(dot, clientX) {
     var tip = tipOf(dot);
     if (!tip) return;
+    markSelected(dot);
     fill(tip, dot);
     tip.hidden = false;
     var chart = tip.parentElement;
     var crect = chart.getBoundingClientRect();
     var drect = dot.getBoundingClientRect();
-    var left = drect.left - crect.left + drect.width / 2;
+    var left = (typeof clientX === "number")
+      ? clientX - crect.left
+      : drect.left - crect.left + drect.width / 2;
     var half = tip.offsetWidth / 2;
     if (left < half) left = half;
     if (left > crect.width - half) left = crect.width - half;
@@ -969,12 +1035,64 @@
   function hide(dot) {
     var tip = tipOf(dot);
     if (tip) tip.hidden = true;
+    if (dot) dot.classList.remove("is-selected");
   }
 
   function asDot(ev) {
     var t = ev.target;
     return t && t.closest ? t.closest(".cdot") : null;
   }
+
+  function chartOf(target) {
+    return target && target.closest ? target.closest(".pchart") : null;
+  }
+
+  function nearestDot(chart, clientX) {
+    var dots = chart.querySelectorAll(".cdot");
+    var best = null;
+    var bestDistance = Infinity;
+    for (var i = 0; i < dots.length; i++) {
+      var rect = dots[i].getBoundingClientRect();
+      var distance = Math.abs(clientX - (rect.left + rect.width / 2));
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = dots[i];
+      }
+    }
+    return best;
+  }
+
+  document.addEventListener("pointerdown", function (ev) {
+    if (ev.button !== undefined && ev.button !== 0) return;
+    var chart = chartOf(ev.target);
+    if (!chart || !chart.hasAttribute("data-chart-scrub")) return;
+    if (!ev.target || !ev.target.closest || !ev.target.closest("svg")) return;
+    var dot = nearestDot(chart, ev.clientX);
+    if (!dot) return;
+    scrub = { chart: chart, pointerId: ev.pointerId, dot: dot, moved: false };
+    show(dot, ev.clientX);
+  });
+  document.addEventListener("pointermove", function (ev) {
+    if (!scrub || ev.pointerId !== scrub.pointerId) return;
+    var dot = nearestDot(scrub.chart, ev.clientX);
+    if (!dot) return;
+    scrub.moved = true;
+    scrub.dot = dot;
+    show(dot, ev.clientX);
+  });
+  function endScrub(ev) {
+    if (!scrub || ev.pointerId !== scrub.pointerId) return;
+    if (scrub.moved && ev.type !== "pointercancel") {
+      if (pinned && pinned !== scrub.dot) hide(pinned);
+      pinned = scrub.dot;
+      show(scrub.dot, ev.clientX);
+      suppressClickChart = scrub.chart;
+      suppressClickUntil = Date.now() + 500;
+    }
+    scrub = null;
+  }
+  document.addEventListener("pointerup", endScrub);
+  document.addEventListener("pointercancel", endScrub);
 
   document.addEventListener("mouseover", function (ev) {
     var dot = asDot(ev);
@@ -993,6 +1111,11 @@
     if (dot && pinned !== dot) hide(dot);
   });
   document.addEventListener("click", function (ev) {
+    var clickChart = chartOf(ev.target);
+    if (clickChart && clickChart === suppressClickChart && Date.now() <= suppressClickUntil) {
+      suppressClickChart = null;
+      return;
+    }
     var dot = asDot(ev);
     if (dot) {
       if (pinned === dot) {
@@ -1070,4 +1193,119 @@
       // until the attempt cap.
     });
   }, 1500);
+})();
+
+// Navigation state: the wide sidebar can be expanded, collapsed
+// to an icon rail, or hidden entirely; the choice persists in
+// local storage. On small screens the same sidebar is an
+// off-canvas drawer driven by the checkbox in the page markup,
+// so it still opens and closes with scripts disabled.
+(function () {
+  "use strict";
+  var root = document.documentElement;
+  var sidebar = document.getElementById("site-nav");
+  var drawerToggle = document.getElementById("nav-drawer-toggle");
+  var hamburger = document.querySelector(".nav-hamburger");
+  var collapseButton = document.getElementById("nav-collapse");
+  var hideButton = document.getElementById("nav-hide");
+  var reopenButton = document.getElementById("nav-reopen");
+  var drawerQuery = window.matchMedia ? window.matchMedia("(max-width: 860px)") : { matches: false };
+  var storageKey = "evesynapse-nav";
+
+  function currentState() {
+    return root.getAttribute("data-nav") || "expanded";
+  }
+  function storeState(state) {
+    try {
+      window.localStorage.setItem(storageKey, state);
+    } catch (e) { /* private mode: this page still works */ }
+  }
+  function syncNavigationControls() {
+    var drawerOpen = !!(drawerToggle && drawerToggle.checked && drawerQuery.matches);
+    if (hamburger) {
+      hamburger.setAttribute("aria-expanded", drawerOpen ? "true" : "false");
+    }
+    if (reopenButton) {
+      reopenButton.setAttribute("aria-expanded", currentState() === "hidden" ? "false" : "true");
+    }
+    if (collapseButton) {
+      var rail = currentState() === "rail";
+      collapseButton.textContent = rail ? "»" : "«";
+      collapseButton.setAttribute("aria-label", rail ? "Expand navigation" : "Collapse navigation");
+      collapseButton.setAttribute("title", rail ? "Expand navigation" : "Collapse navigation");
+    }
+  }
+  function applyNavigationState(state) {
+    if (state === "expanded") {
+      root.removeAttribute("data-nav");
+    } else {
+      root.setAttribute("data-nav", state);
+    }
+    storeState(state);
+    syncNavigationControls();
+  }
+  function closeDrawer(returnFocus) {
+    if (drawerToggle && drawerToggle.checked) {
+      drawerToggle.checked = false;
+      drawerToggle.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    if (returnFocus && hamburger) {
+      hamburger.focus();
+    }
+  }
+  if (collapseButton) {
+    collapseButton.addEventListener("click", function () {
+      applyNavigationState(currentState() === "rail" ? "expanded" : "rail");
+    });
+  }
+  if (hideButton) {
+    hideButton.addEventListener("click", function () {
+      applyNavigationState("hidden");
+    });
+  }
+  if (reopenButton) {
+    reopenButton.addEventListener("click", function () {
+      applyNavigationState("expanded");
+      reopenButton.setAttribute("aria-expanded", "true");
+    });
+  }
+  if (drawerToggle) {
+    drawerToggle.addEventListener("change", syncNavigationControls);
+  }
+  if (hamburger) {
+    hamburger.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        hamburger.click();
+      }
+    });
+  }
+  if (sidebar) {
+    sidebar.addEventListener("click", function (e) {
+      if (!drawerQuery.matches || !drawerToggle || !drawerToggle.checked) {
+        return;
+      }
+      var link = e.target && e.target.closest ? e.target.closest("a") : null;
+      if (link) {
+        closeDrawer(false);
+      }
+    });
+  }
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && drawerQuery.matches) {
+      closeDrawer(true);
+    }
+  });
+  function handleDrawerBreakpoint(event) {
+    if (!event.matches) {
+      closeDrawer(false);
+    }
+    syncNavigationControls();
+  }
+  if (drawerQuery.addEventListener) {
+    drawerQuery.addEventListener("change", handleDrawerBreakpoint);
+  } else if (drawerQuery.addListener) {
+    drawerQuery.addListener(handleDrawerBreakpoint);
+  }
+  syncNavigationControls();
 })();

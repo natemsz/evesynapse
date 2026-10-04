@@ -245,12 +245,29 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		"background: linear-gradient(to bottom, rgba(24, 24, 24, 0.9), rgba(11, 11, 11, 0.9));",
 		"-webkit-backdrop-filter: blur(10px);",
 		"backdrop-filter: blur(10px);",
-		// v0.3.07.009: the sidebar wears the top bar's glass
+		// v0.3.07.010: the sidebar wears the top bar's glass
 		// recipe with its own colors kept — #151515 (21,21,21)
-		// into #111111 (17,17,17) at 90% over the same blur.
+		// into #111111 (17,17,17) at 93% over the same blur.
 		// The rail flyout menus stay solid (no pin changes
 		// there); only the bar itself goes glass.
-		"background: linear-gradient(rgba(21, 21, 21, 0.9), rgba(17, 17, 17, 0.9)) padding-box;\n  -webkit-backdrop-filter: blur(10px);\n  backdrop-filter: blur(10px);",
+		"background: linear-gradient(rgba(21, 21, 21, 0.93), rgba(17, 17, 17, 0.93)) padding-box;\n  -webkit-backdrop-filter: blur(10px);\n  backdrop-filter: blur(10px);",
+		// v0.3.07.010: shared darker header bands restored —
+		// panel titles, card/module headings, foldable section
+		// headings, and direct panel section headings all sit
+		// on the same solid darker band while the ember ramp
+		// still paints the heading text.
+		"background: var(--panel-head);\n  margin: -1.25rem -1.25rem 1rem;",
+		".panel > h2, .panel > h3,\n.card > h2:first-child, .card > h3:first-child,\n.foldable > h2:first-child, .foldable > h3:first-child {",
+		"background-image: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%), linear-gradient(var(--panel-head), var(--panel-head));",
+		"-webkit-background-clip: text, border-box;\n  background-clip: text, border-box;",
+		".card > h2:first-child, .card > h3:first-child { margin: -0.85rem -1rem 0.75rem; padding: 0.55rem 1rem; border-radius: 4px 4px 0 0; }",
+		".foldable > h2:first-child, .foldable > h3:first-child { margin: 0 0 0.75rem; padding: 0.45rem 0.65rem; border-radius: 3px; }",
+		// v0.3.07.010 drawer refinement: on small screens the
+		// open drawer does NOT blur the page beneath it — the
+		// scrim stays a plain dark veil and the drawer keeps
+		// the same 93% retained-color paint, crisp over content.
+		"z-index: 80;\n    background: linear-gradient(rgba(21, 21, 21, 0.93), rgba(17, 17, 17, 0.93)) padding-box;\n    -webkit-backdrop-filter: none;\n    backdrop-filter: none;\n    transform: translateX(-105%);",
+		".nav-backdrop {\n    position: fixed;\n    inset: 0;\n    z-index: 70;\n    background: rgba(0, 0, 0, 0.66);\n    cursor: pointer;\n  }",
 		"padding-top: calc(3.75rem + 1px);",
 		".topbar { min-height: 3.75rem; }",
 		"top: calc(3.75rem + 1px);",
@@ -311,7 +328,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		".hamburger-lines",
 		".nav-hamburger-text",
 		// v0.3.07.009: the sidebar's old fully-solid paint is
-		// gone — the bar is glass now.
+		// gone — the bar is glass now (93% since v0.3.07.010).
 		"background: linear-gradient(#151515, #111111) padding-box;",
 	} {
 		if strings.Contains(css, unwanted) {

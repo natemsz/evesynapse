@@ -305,6 +305,7 @@ main {
      station name. Without the span (it is emitted by every page
      template) the title simply renders in the plain text color. */
   text-shadow: none;
+  background: var(--panel-head);
   margin: -1.25rem -1.25rem 1rem;
   padding: 0.6rem 1.25rem;
   border-bottom: 1px solid;
@@ -342,7 +343,23 @@ main {
   border-radius: 4px;
   padding: 0.85rem 1rem 1rem;
 }
-.card > h2:first-child, .card > h3:first-child { margin-top: 0.15rem; }
+/* v0.3.07.010: shared darker header bands. Panel titles,
+   card/module headings, foldable section headings, and direct
+   panel section headings sit on the same solid darker band;
+   the ember ramp still paints the heading text through the
+   first background layer. Table headers keep their own rule. */
+.panel > h2, .panel > h3,
+.card > h2:first-child, .card > h3:first-child,
+.foldable > h2:first-child, .foldable > h3:first-child {
+  display: block;
+  background-image: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%), linear-gradient(var(--panel-head), var(--panel-head));
+  -webkit-background-clip: text, border-box;
+  background-clip: text, border-box;
+  border-bottom: 1px solid #262626;
+}
+.panel > h2, .panel > h3 { margin: 1.1rem 0 0.65rem; padding: 0.45rem 0.65rem; border-radius: 3px; }
+.card > h2:first-child, .card > h3:first-child { margin: -0.85rem -1rem 0.75rem; padding: 0.55rem 1rem; border-radius: 4px 4px 0 0; }
+.foldable > h2:first-child, .foldable > h3:first-child { margin: 0 0 0.75rem; padding: 0.45rem 0.65rem; border-radius: 3px; }
 .card table { margin-bottom: 0.5rem; }
 .card.has-fold > h2:first-child, .card.has-fold > h3:first-child { padding-right: 2.2rem; }
 
@@ -1000,12 +1017,12 @@ html[data-nav="hidden"] body { grid-template-columns: 0 minmax(0, 1fr); }
   height: calc(100vh - 3.75rem - 1px);
   height: calc(100dvh - 3.75rem - 1px);
   min-width: 0;
-  /* v0.3.07.009: the sidebar takes the top bar's glass
+  /* v0.3.07.010: the sidebar takes the top bar's glass
      treatment (user ask) — same recipe, its own colors kept:
-     the #151515 → #111111 paint at 90% over a backdrop blur.
-     Rail flyouts and content panels stay solid; the 90% paint
+     the #151515 → #111111 paint at 93% over a backdrop blur.
+     Rail flyouts and content panels stay solid; the 93% paint
      alone is the no-blur fallback. */
-  background: linear-gradient(rgba(21, 21, 21, 0.9), rgba(17, 17, 17, 0.9)) padding-box;
+  background: linear-gradient(rgba(21, 21, 21, 0.93), rgba(17, 17, 17, 0.93)) padding-box;
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border-right: 1px solid #262626;
@@ -1336,6 +1353,8 @@ tbody tr.yours td { background-color: #2a2015; }
   body { display: block; padding-top: 0; }
   html[data-nav="hidden"] .sidebar { display: block; }
   header { position: sticky; z-index: 90; }
+  /* Drawer form: no backdrop blur over the page underneath
+     (the 93% retained-color paint stays near-solid + crisp). */
   .sidebar {
     position: fixed;
     top: 0;
@@ -1344,6 +1363,9 @@ tbody tr.yours td { background-color: #2a2015; }
     width: min(20rem, calc(100vw - 3rem));
     height: 100dvh;
     z-index: 80;
+    background: linear-gradient(rgba(21, 21, 21, 0.93), rgba(17, 17, 17, 0.93)) padding-box;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
     transform: translateX(-105%);
     visibility: hidden;
     box-shadow: 18px 0 42px rgba(0, 0, 0, 0.55);

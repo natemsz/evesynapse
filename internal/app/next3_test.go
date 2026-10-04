@@ -186,6 +186,19 @@ func TestMarketItemChartMarkupAndSnapshot(t *testing.T) {
 		"9.1% of the sell price",
 	)
 
+	// The chart spans the panel edge to edge — no fixed-width
+	// cap left on the svg — and the settled snapshot is not a
+	// live region (nothing left to fill in).
+	if strings.Contains(body, "max-width:720px") {
+		t.Fatal("/market/?type=34 chart svg still caps its width at 720px")
+	}
+	mustContain(t, "/market/?type=34 (full-width chart)", body,
+		`<svg viewBox="0 0 720 240" width="100%"`,
+		`<div class="trader-body" data-poll-state="chart">`)
+	if strings.Contains(body, "/market/trader-fragment") {
+		t.Fatal("settled market page still polls the trader fragment")
+	}
+
 	// The history fragment stays cache-only: polling it must not
 	// move the transport, and it re-renders the same day data.
 	calls := transport.calls.Load()

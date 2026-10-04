@@ -343,19 +343,34 @@ main {
   border-radius: 4px;
   padding: 0.85rem 1rem 1rem;
 }
-/* v0.3.07.010: shared darker header bands. Panel titles,
-   card/module headings, foldable section headings, and direct
-   panel section headings sit on the same solid darker band;
-   the ember ramp still paints the heading text through the
-   first background layer. Table headers keep their own rule. */
+/* v0.3.07.012: shared darker header bands, minus the layered
+   background trick. v0.3.07.010 layered the ember ramp over
+   the band on the heading itself and relied on a two-value
+   per-layer background clip to keep the ramp inside the
+   glyphs; where that clip does not hold, the
+   ramp paints the whole bar and the transparent heading text
+   vanishes into it. Now the band is a solid ::before behind
+   the heading, and the ramp reaches the glyphs only through
+   the plain single-layer gradient-text rule on h2/h3 above —
+   the same configuration the rest of the app already uses.
+   Table headers keep their own rule. */
 .panel > h2, .panel > h3,
 .card > h2:first-child, .card > h3:first-child,
 .foldable > h2:first-child, .foldable > h3:first-child {
   display: block;
-  background-image: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%), linear-gradient(var(--panel-head), var(--panel-head));
-  -webkit-background-clip: text, border-box;
-  background-clip: text, border-box;
+  position: relative;
+  z-index: 0;
   border-bottom: 1px solid #262626;
+}
+.panel > h2::before, .panel > h3::before,
+.card > h2:first-child::before, .card > h3:first-child::before,
+.foldable > h2:first-child::before, .foldable > h3:first-child::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--panel-head);
+  border-radius: inherit;
 }
 .panel > h2, .panel > h3 { margin: 1.1rem 0 0.65rem; padding: 0.45rem 0.65rem; border-radius: 3px; }
 .card > h2:first-child, .card > h3:first-child { margin: -0.85rem -1rem 0.75rem; padding: 0.55rem 1rem; border-radius: 4px 4px 0 0; }
@@ -668,7 +683,9 @@ footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
 .chip.on { border-color: var(--accent); color: var(--accent); }
 .relink { color: var(--danger); }
 .attention { list-style: none; margin: 0; padding: 0; }
-.attention li { padding: 0.35rem 0; border-bottom: 1px solid #222; }
+.attention li { background: var(--row); padding: 0.35rem 0.5rem; border-bottom: 1px solid #222; }
+.attention li:nth-child(even) { background: var(--row-alt); }
+.attention li:hover { background: var(--row-hover); }
 .attention li:last-child { border-bottom: none; }
 .cust-row { border: 1px solid #262626; background: var(--row); padding: 0.6rem 0.8rem; margin: 0.5rem 0; border-radius: 3px; }
 .cust-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.3rem 0 0; }

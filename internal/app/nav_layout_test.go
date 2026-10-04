@@ -269,11 +269,21 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// panel titles, card/module headings, foldable section
 		// headings, and direct panel section headings all sit
 		// on the same solid darker band while the ember ramp
-		// still paints the heading text.
+		// still paints the heading text. v0.3.07.012: the band
+		// is a solid ::before behind the heading, never a
+		// layered background on the heading itself — these
+		// pins assert the rendered distinction (solid bar +
+		// clipped text), not the intention.
 		"background: var(--panel-head);\n  margin: -1.25rem -1.25rem 1rem;",
-		".panel > h2, .panel > h3,\n.card > h2:first-child, .card > h3:first-child,\n.foldable > h2:first-child, .foldable > h3:first-child {",
-		"background-image: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%), linear-gradient(var(--panel-head), var(--panel-head));",
-		"-webkit-background-clip: text, border-box;\n  background-clip: text, border-box;",
+		".panel > h2, .panel > h3,\n.card > h2:first-child, .card > h3:first-child,\n.foldable > h2:first-child, .foldable > h3:first-child {\n  display: block;\n  position: relative;\n  z-index: 0;\n  border-bottom: 1px solid #262626;\n}",
+		".panel > h2::before, .panel > h3::before,\n.card > h2:first-child::before, .card > h3:first-child::before,\n.foldable > h2:first-child::before, .foldable > h3:first-child::before {\n  content: \"\";\n  position: absolute;\n  inset: 0;\n  z-index: -1;\n  background: var(--panel-head);\n  border-radius: inherit;\n}",
+		"h2, h3 {\n  background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);\n  -webkit-background-clip: text;\n  background-clip: text;\n  color: transparent;",
+		// v0.3.07.012: Needs attention rows wear the same
+		// zebra as table rows — same --row/--row-alt cycle
+		// and the same hover fill.
+		".attention li { background: var(--row); padding: 0.35rem 0.5rem; border-bottom: 1px solid #222; }",
+		".attention li:nth-child(even) { background: var(--row-alt); }",
+		".attention li:hover { background: var(--row-hover); }",
 		".card > h2:first-child, .card > h3:first-child { margin: -0.85rem -1rem 0.75rem; padding: 0.55rem 1rem; border-radius: 4px 4px 0 0; }",
 		".foldable > h2:first-child, .foldable > h3:first-child { margin: 0 0 0.75rem; padding: 0.45rem 0.65rem; border-radius: 3px; }",
 		// v0.3.07.010 drawer refinement: on small screens the
@@ -344,6 +354,11 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// v0.3.07.009: the sidebar's old fully-solid paint is
 		// gone — the bar is glass now (93% since v0.3.07.010).
 		"background: linear-gradient(#151515, #111111) padding-box;",
+		// v0.3.07.012: the layered header background that
+		// filled module header bars with the ember ramp is
+		// gone for good.
+		"background-clip: text, border-box",
+		"linear-gradient(var(--panel-head), var(--panel-head))",
 	} {
 		if strings.Contains(css, unwanted) {
 			t.Errorf("style.css still contains %q", unwanted)

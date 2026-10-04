@@ -654,105 +654,203 @@
     }
   }
 
-  // --- Market search suggestions --------------------------------
-  var input = document.getElementById("market-q");
-  var list = document.getElementById("market-suggest");
-  if (!input || !list || !window.fetch) return;
+  // --- Search suggestions -------------------------------------
+  // One autocomplete widget behind every search box: the market
+  // and watchlist finders, the planner, the skill-plan add box,
+  // the Items DB search, and the banner's global search. Each
+  // box names its feed (a pool of the one suggestion endpoint)
+  // and what a pick does; without one of them the plain form
+  // still submits exactly as before.
+  function attachSuggest(input, list, endpoint, onPick) {
+    if (!input || !list || !window.fetch) return;
+    var items = [];
+    var selected = -1;
+    var timer = null;
+    var lastQuery = "";
 
-  var form = document.getElementById("market-search");
-  var regionField = document.getElementById("market-region");
-  var items = [];
-  var selected = -1;
-  var timer = null;
-  var lastQuery = "";
-
-  function close() {
-    list.hidden = true;
-    items = [];
-    selected = -1;
-    input.setAttribute("aria-expanded", "false");
-    input.removeAttribute("aria-activedescendant");
-  }
-
-  function paint() {
-    list.innerHTML = "";
-    items.forEach(function (it, idx) {
-      var li = document.createElement("li");
-      li.id = "market-suggest-" + idx;
-      li.setAttribute("role", "option");
-      li.textContent = it.name;
-      if (idx === selected) {
-        li.className = "sel";
-        input.setAttribute("aria-activedescendant", li.id);
-      }
-      // mousedown, not click: it fires before the input's blur,
-      // so the pick lands before anything can close the list.
-      li.addEventListener("mousedown", function (ev) {
-        ev.preventDefault();
-        pick(idx);
-      });
-      list.appendChild(li);
-    });
-    list.hidden = items.length === 0;
-    input.setAttribute("aria-expanded", items.length ? "true" : "false");
-  }
-
-  function pick(idx) {
-    var it = items[idx];
-    if (!it) return;
-    var region = regionField ? regionField.value : "";
-    var url = "/market/?type=" + encodeURIComponent(it.id);
-    if (region) url += "&region=" + encodeURIComponent(region);
-    window.location.href = url;
-  }
-
-  function query(q) {
-    fetch("/market/suggest?q=" + encodeURIComponent(q), {
-      headers: { "Accept": "application/json" }
-    }).then(function (resp) {
-      return resp.ok ? resp.json() : [];
-    }).then(function (rows) {
-      if (input.value.trim() !== q) return; // typed past this result
-      items = Array.isArray(rows) ? rows.slice(0, 10) : [];
-      selected = items.length ? 0 : -1;
-      paint();
-    }).catch(function () { close(); });
-  }
-
-  input.addEventListener("input", function () {
-    var q = input.value.trim();
-    if (q === lastQuery) return;
-    lastQuery = q;
-    if (timer) window.clearTimeout(timer);
-    if (q.length < 2) { close(); return; }
-    timer = window.setTimeout(function () { query(q); }, 150);
-  });
-
-  input.addEventListener("keydown", function (ev) {
-    if (list.hidden) return;
-    if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
-      ev.preventDefault();
-      if (!items.length) return;
-      selected = ev.key === "ArrowDown"
-        ? (selected + 1) % items.length
-        : (selected - 1 + items.length) % items.length;
-      paint();
-    } else if (ev.key === "Enter") {
-      if (selected >= 0) {
-        ev.preventDefault();
-        pick(selected);
-      }
-      // No selection: let the form submit as it always has.
-    } else if (ev.key === "Escape") {
-      close();
+    function close() {
+      list.hidden = true;
+      items = [];
+      selected = -1;
+      input.setAttribute("aria-expanded", "false");
+      input.removeAttribute("aria-activedescendant");
     }
-  });
 
-  input.addEventListener("blur", function () {
-    // Let a mousedown pick win the race, then close.
-    window.setTimeout(close, 120);
-  });
-  if (form) form.addEventListener("submit", function () { close(); });
+    function paint() {
+      list.innerHTML = "";
+      items.forEach(function (it, idx) {
+        var li = document.createElement("li");
+        li.id = list.id + "-" + idx;
+        li.setAttribute("role", "option");
+        var name = document.createElement("span");
+        name.textContent = it.name;
+        li.appendChild(name);
+        if (it.label) {
+          var lab = document.createElement("span");
+          lab.className = "sug-label";
+          lab.textContent = it.label;
+          li.appendChild(lab);
+        }
+        if (idx === selected) {
+          li.className = "sel";
+          input.setAttribute("aria-activedescendant", li.id);
+        }
+        // mousedown, not click: it fires before the input's blur,
+        // so the pick lands before anything can close the list.
+        li.addEventListener("mousedown", function (ev) {
+          ev.preventDefault();
+          pick(idx);
+        });
+        // Touch: tap selects without stealing the scroll.
+        li.addEventListener("touchstart", function (ev) {
+          ev.preventDefault();
+          pick(idx);
+        }, { passive: false });
+        list.appendChild(li);
+      });
+      list.hidden = items.length === 0;
+      input.setAttribute("aria-expanded", items.length ? "true" : "false");
+    }
+
+    function pick(idx) {
+      var it = items[idx];
+      if (!it) return;
+      close();
+      onPick(it, input);
+    }
+
+    function query(q) {
+      fetch(endpoint(q), {
+        headers: { "Accept": "application/json" }
+      }).then(function (resp) {
+        return resp.ok ? resp.json() : [];
+      }).then(function (rows) {
+        if (input.value.trim() !== q) return; // typed past this result
+        items = Array.isArray(rows) ? rows : [];
+        selected = items.length ? 0 : -1;
+        paint();
+      }).catch(function () { close(); });
+    }
+
+    input.addEventListener("input", function () {
+      var q = input.value.trim();
+      if (q === lastQuery) return;
+      lastQuery = q;
+      if (timer) window.clearTimeout(timer);
+      if (q.length < 2) { close(); return; }
+      timer = window.setTimeout(function () { query(q); }, 150);
+    });
+
+    input.addEventListener("keydown", function (ev) {
+      if (list.hidden) return;
+      if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+        ev.preventDefault();
+        if (!items.length) return;
+        selected = ev.key === "ArrowDown"
+          ? (selected + 1) % items.length
+          : (selected - 1 + items.length) % items.length;
+        paint();
+      } else if (ev.key === "Enter") {
+        if (selected >= 0) {
+          ev.preventDefault();
+          pick(selected);
+        }
+        // No selection: let the form submit as it always has.
+      } else if (ev.key === "Escape") {
+        close();
+      }
+    });
+
+    input.addEventListener("blur", function () {
+      // Let a mousedown pick win the race, then close.
+      window.setTimeout(close, 120);
+    });
+    var form = input.form;
+    if (form) form.addEventListener("submit", function () { close(); });
+  }
+
+  function suggestURL(base, pool) {
+    return function (q) {
+      return base + "?q=" + encodeURIComponent(q) + (pool ? "&pool=" + pool : "");
+    };
+  }
+
+  // Market: a pick jumps straight to that item's market page,
+  // keeping the region the page is showing.
+  (function () {
+    var regionField = document.getElementById("market-region");
+    attachSuggest(
+      document.getElementById("market-q"),
+      document.getElementById("market-suggest"),
+      suggestURL("/market/suggest", null),
+      function (it) {
+        var url = "/market/?type=" + encodeURIComponent(it.id);
+        if (regionField && regionField.value) {
+          url += "&region=" + encodeURIComponent(regionField.value);
+        }
+        window.location.href = url;
+      });
+  })();
+
+  // Watchlist finder: a pick fills the box with the exact name
+  // and runs the same find the button would.
+  (function () {
+    var input = document.getElementById("watch-q");
+    attachSuggest(input, document.getElementById("watch-suggest"),
+      suggestURL("/items/search.json", "market"),
+      function (it, input) {
+        input.value = it.name;
+        if (input.form) input.form.submit();
+      });
+  })();
+
+  // Planner: a pick opens that product's plan.
+  attachSuggest(
+    document.getElementById("planner-q"),
+    document.getElementById("planner-suggest"),
+    suggestURL("/items/search.json", "planner"),
+    function (it) {
+      window.location.href = "/planner/?product=" + encodeURIComponent(it.id);
+    });
+
+  // Skill-plan add box: a pick fills the exact skill name and
+  // runs the search, which offers the level picker as usual.
+  (function () {
+    var input = document.getElementById("skill-q");
+    attachSuggest(input, document.getElementById("skill-suggest"),
+      suggestURL("/items/search.json", "skills"),
+      function (it, input) {
+        input.value = it.name;
+        if (input.form) input.form.submit();
+      });
+  })();
+
+  // Items DB search: a pick opens the item's details page.
+  attachSuggest(
+    document.getElementById("items-q"),
+    document.getElementById("items-suggest"),
+    suggestURL("/items/search.json", "all"),
+    function (it) {
+      window.location.href = "/items/type/" + encodeURIComponent(it.id) + "/";
+    });
+
+  // Banner global search: items, your characters, and pilots the
+  // app already knows, each to its own page.
+  attachSuggest(
+    document.getElementById("topbar-q"),
+    document.getElementById("topbar-suggest"),
+    function (q) { return "/search.json?q=" + encodeURIComponent(q); },
+    function (it) {
+      var url;
+      if (it.kind === "character") {
+        url = "/character/?character=" + encodeURIComponent(it.id);
+      } else if (it.kind === "pilot") {
+        url = "/pilot/?character=" + encodeURIComponent(it.id);
+      } else {
+        url = "/items/type/" + encodeURIComponent(it.id) + "/";
+      }
+      window.location.href = url;
+    });
 })();
 
 // Live regions: a section rendered while its data is still

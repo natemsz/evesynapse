@@ -8,6 +8,7 @@
 {{$v := .Items}}
 
 {{if eq $v.Mode "categories"}}
+{{template "items-search-form" $v}}
 <p><small>Browse every item category in the local static data. Pick a category to see its groups, then a group for its types — each type links to its details page.</small></p>
 {{if $v.Categories}}
 <div class="tw">
@@ -44,11 +45,38 @@
 {{end}}
 {{end}}
 
+{{if eq $v.Mode "search"}}
+{{template "items-search-form" $v}}
+{{if $v.SearchResults}}
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th>Group</th><th>Category</th><th>Market</th></tr></thead>
+  <tbody>
+  {{range $v.SearchResults}}
+    <tr>
+      <td>{{itemLink .ID .Name}}</td>
+      <td>{{if .GroupID}}<a href="/items/group/{{.GroupID}}/">{{.GroupName}}</a>{{else}}<small>—</small>{{end}}</td>
+      <td>{{if .CategoryID}}<a href="/items/category/{{.CategoryID}}/">{{.CategoryName}}</a>{{else}}<small>—</small>{{end}}</td>
+      <td>{{if .OnMarket}}<small>on market</small>{{else}}<small>—</small>{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>{{$v.TotalTypes}} items{{if $v.SearchQuery}} matching "{{$v.SearchQuery}}"{{end}}{{if $v.MarketOnly}} on the market{{end}} · page {{$v.Page}} of {{$v.TotalPages}}</small>
+{{if $v.HasPrev}} · <a href="/items/?q={{$v.SearchQuery}}{{if $v.MarketOnly}}&market=1{{end}}{{if $v.CategoryID}}&category={{$v.CategoryID}}{{end}}{{if $v.GroupID}}&group={{$v.GroupID}}{{end}}&page={{$v.PrevPage}}">← Prev</a>{{end}}
+{{if $v.HasNext}} · <a href="/items/?q={{$v.SearchQuery}}{{if $v.MarketOnly}}&market=1{{end}}{{if $v.CategoryID}}&category={{$v.CategoryID}}{{end}}{{if $v.GroupID}}&group={{$v.GroupID}}{{end}}&page={{$v.NextPage}}">Next →</a>{{end}}</p>
+{{else}}
+<p><small>No items{{if $v.SearchQuery}} matching "{{$v.SearchQuery}}"{{end}}{{if $v.MarketOnly}} on the market{{end}} in the local static data.{{if $v.MarketOnly}} Try turning off “Market items only” — plenty of items exist that can't be traded.{{end}}</small></p>
+{{end}}
+{{end}}
+
 {{if eq $v.Mode "group"}}
 <p><small><a href="/items/">Item Database</a>{{if $v.Category}} › <a href="/items/category/{{$v.Category.ID}}/">{{$v.Category.Name}}</a>{{end}} › {{$v.Group.Name}}</small></p>
 <h2>{{$v.Group.Name}}</h2>
 <form method="get" action="/items/group/{{$v.Group.ID}}/">
   <input type="search" name="q" value="{{$v.Query}}" placeholder="Filter types in this group">
+  <label><small><input type="checkbox" name="market" value="1"{{if $v.MarketOnly}} checked{{end}}> Market items only</small></label>
   <button class="btn" type="submit">Filter</button>
 </form>
 {{if $v.Types}}
@@ -62,9 +90,9 @@
   </tbody>
 </table>
 </div>
-<p><small>{{$v.TotalTypes}} types{{if $v.Query}} matching "{{$v.Query}}"{{end}} · page {{$v.Page}} of {{$v.TotalPages}}</small>
-{{if $v.HasPrev}} · <a href="/items/group/{{$v.Group.ID}}/?page={{$v.PrevPage}}{{if $v.Query}}&q={{$v.Query}}{{end}}">← Prev</a>{{end}}
-{{if $v.HasNext}} · <a href="/items/group/{{$v.Group.ID}}/?page={{$v.NextPage}}{{if $v.Query}}&q={{$v.Query}}{{end}}">Next →</a>{{end}}</p>
+<p><small>{{$v.TotalTypes}} types{{if $v.Query}} matching "{{$v.Query}}"{{end}}{{if $v.MarketOnly}} on the market{{end}} · page {{$v.Page}} of {{$v.TotalPages}}</small>
+{{if $v.HasPrev}} · <a href="/items/group/{{$v.Group.ID}}/?page={{$v.PrevPage}}{{if $v.Query}}&q={{$v.Query}}{{end}}{{if $v.MarketOnly}}&market=1{{end}}">← Prev</a>{{end}}
+{{if $v.HasNext}} · <a href="/items/group/{{$v.Group.ID}}/?page={{$v.NextPage}}{{if $v.Query}}&q={{$v.Query}}{{end}}{{if $v.MarketOnly}}&market=1{{end}}">Next →</a>{{end}}</p>
 {{else}}
 <p><small>No types{{if $v.Query}} matching "{{$v.Query}}"{{end}} in this group.</small></p>
 {{end}}
@@ -116,3 +144,24 @@
 {{if eq .DescState "ready"}}<div class="mailbody" data-poll-state="ready">{{.Description}}</div>
 {{else if eq .DescState "pending"}}<div data-live-region data-poll-url="/items/description-fragment?type={{.ID}}" data-poll-state="pending"><p><span class="loading-pulse" aria-hidden="true"></span><small>This description is queued — it will be ready in a moment.</small></p></div>
 {{end}}{{end}}
+
+{{define "items-search-form"}}
+<form method="get" action="/items/" role="search">
+  <span class="searchwrap">
+    <input type="search" name="q" id="items-q" value="{{.SearchQuery}}" placeholder="Search every item by name" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="items-suggest" aria-autocomplete="list">
+    <ul class="suggest" id="items-suggest" role="listbox" hidden></ul>
+  </span>
+  <label><small><input type="checkbox" name="market" value="1"{{if .MarketOnly}} checked{{end}}> Market items only</small></label>
+  <label><small>Category
+    <select name="category">
+      <option value="">All categories</option>
+      {{range .Categories}}<option value="{{.ID}}"{{if eq .ID $.CategoryID}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select></small></label>
+  {{if .CategoryID}}<label><small>Group
+    <select name="group">
+      <option value="">All groups</option>
+      {{range .Groups}}<option value="{{.ID}}"{{if eq .ID $.GroupID}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select></small></label>{{end}}
+  <button class="btn" type="submit">Search</button>
+</form>
+{{end}}

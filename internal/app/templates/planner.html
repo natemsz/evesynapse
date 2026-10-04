@@ -13,7 +13,10 @@
 <h3>Find something to build</h3>
 <form method="get" action="/planner/">
   <p>
-    <input type="search" name="q" value="{{.Planner.Query}}" placeholder="Product name, e.g. Rifter" size="32">
+    <span class="searchwrap">
+      <input type="search" name="q" id="planner-q" value="{{.Planner.Query}}" placeholder="Product name, e.g. Rifter" size="32" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="planner-suggest" aria-autocomplete="list">
+      <ul class="suggest" id="planner-suggest" role="listbox" hidden></ul>
+    </span>
     <button type="submit">Search</button>
   </p>
 </form>

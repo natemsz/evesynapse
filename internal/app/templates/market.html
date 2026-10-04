@@ -109,7 +109,10 @@
 <section class="foldable">
 <h3>Watchlist</h3>
 <form method="get" action="/market/">
-  <input type="text" name="wq" value="{{$wl.Query}}" placeholder="Find an item to watch" autocomplete="off">
+  <span class="searchwrap">
+    <input type="text" name="wq" id="watch-q" value="{{$wl.Query}}" placeholder="Find an item to watch" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="watch-suggest" aria-autocomplete="list">
+    <ul class="suggest" id="watch-suggest" role="listbox" hidden></ul>
+  </span>
   <button class="btn" type="submit">Find</button>
 </form>
 {{if $wl.Matches}}

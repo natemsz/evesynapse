@@ -243,6 +243,15 @@ type User struct {
 	LastBriefingAt string `json:"last_briefing_at"`
 }
 
+type WalletHistory struct {
+	UserID      int64           `json:"user_id"`
+	CharacterID int64           `json:"character_id"`
+	Day         string          `json:"day"`
+	Balance     float64         `json:"balance"`
+	NetWorth    sql.NullFloat64 `json:"net_worth"`
+	SampledAt   string          `json:"sampled_at"`
+}
+
 type WarDetail struct {
 	WarID     int64  `json:"war_id"`
 	Payload   string `json:"payload"`

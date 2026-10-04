@@ -14,6 +14,14 @@
 <header>
   <nav class="topbar">
     <a class="wordmark" href="/">EVESYNAPSE</a>
+    {{if .LoggedIn}}
+    <form class="topsearch" method="get" action="/items/" role="search">
+      <span class="searchwrap topsearch-wrap">
+        <input type="search" name="q" id="topbar-q" placeholder="Search items and pilots" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="topbar-suggest" aria-autocomplete="list" aria-label="Search items and pilots">
+        <ul class="suggest" id="topbar-suggest" role="listbox" hidden></ul>
+      </span>
+    </form>
+    {{end}}
     <span class="who">{{if .LoggedIn}}Signed in{{if .CharacterName}} as {{.CharacterName}}{{end}} · <a href="/auth/logout">Sign out</a>{{else}}Not signed in{{end}}</span>
     {{if .LoggedIn}}<span id="page-sync-indicator" class="page-sync" role="status" aria-live="polite" hidden><span class="loading-pulse" aria-hidden="true"></span><span data-page-sync-label>Loading page data…</span></span>{{end}}
     {{if and .LoggedIn .Switcher}}

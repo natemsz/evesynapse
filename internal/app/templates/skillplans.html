@@ -110,7 +110,12 @@
 <form method="get" action="/skills/plans">
   <input type="hidden" name="character" value="{{$.SkillPlans.CharacterID}}">
   <input type="hidden" name="plan" value="{{.ID}}">
-  <label>Add skill <input type="search" name="q" value="{{$.SkillPlans.SearchQuery}}" placeholder="Skill name"></label>
+  <label>Add skill
+    <span class="searchwrap">
+      <input type="search" name="q" id="skill-q" value="{{$.SkillPlans.SearchQuery}}" placeholder="Skill name" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="skill-suggest" aria-autocomplete="list">
+      <ul class="suggest" id="skill-suggest" role="listbox" hidden></ul>
+    </span>
+  </label>
   <button type="submit">Search</button>
 </form>
 {{if $.SkillPlans.SearchResults}}

@@ -495,7 +495,8 @@ type Group struct {
 
 // UniverseIDEntry is one group entry of POST /universe/ids/;
 // the response carries several groups (characters, corporations,
-// inventory_types, ...), of which we consume inventory_types.
+// inventory_types, ...), of which we consume inventory_types and
+// characters.
 type UniverseIDEntry struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
@@ -503,6 +504,7 @@ type UniverseIDEntry struct {
 
 // UniverseIDs is the slice of POST /universe/ids/ we consume.
 type UniverseIDs struct {
+	Characters     []UniverseIDEntry `json:"characters"`
 	InventoryTypes []UniverseIDEntry `json:"inventory_types"`
 }
 

@@ -83,6 +83,20 @@ type pageData struct {
 	// Public pilot page (/pilot/): a stranger's public record.
 	Pilot *pilotView
 
+	// Public corporation & alliance pages (/corporation/,
+	// /alliance/): an organization's public record.
+	Corporation *corporationPageView
+	Alliance    *alliancePageView
+
+	// Solar system & station pages (/system/, /station/): an SDE
+	// place record.
+	System  *systemPageView
+	Station *stationPageView
+
+	// Player structure page (/structure/): the local structure
+	// record.
+	Structure *structurePageView
+
 	// Character management page (/characters/).
 	CharactersPage *charactersView
 }
@@ -131,10 +145,11 @@ func sectionForPage(page string) string {
 		return "character"
 	case "assets.html", "industry.html", "planets.html", "planner.html":
 		return "assets"
-	case "market.html", "wallet.html", "orders.html", "contracts.html", "items.html":
+	case "market.html", "wallet.html", "orders.html", "contracts.html", "items.html", "system.html", "station.html", "structure.html":
 		return "economy"
 	case "corporations.html", "corp_members.html", "corp_wallets.html",
-		"corp_orders.html", "corp_assets.html", "corp_structures.html":
+		"corp_orders.html", "corp_assets.html", "corp_structures.html",
+		"corporation.html", "alliance.html":
 		return "corporation"
 	case "intel_wars.html", "intel_incursions.html", "intel_fw.html":
 		return "intel"

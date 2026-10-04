@@ -42,6 +42,11 @@ const (
 	pageWantCorporation     pageWantKind = "corporation"
 	pageWantAlliance        pageWantKind = "alliance"
 	pageWantPlace           pageWantKind = "place"
+	// pageWantGuidePrices: kill content rendered with no price
+	// guide to value it; settled once prices are held anywhere
+	// (fresh from ESI, the worker's stored mirror, or a memory
+	// still valid) so the pending veil lifts.
+	pageWantGuidePrices pageWantKind = "guide_prices"
 )
 
 // pageWantTTL bounds how long the banner indicator waits on one
@@ -128,11 +133,27 @@ func (app *Application) notePageWant(ctx context.Context, kind pageWantKind, id 
 				log.Printf("pagewant: note history want for type %d in region %d: %v", id, regionID, err)
 			}
 		}
-	case pageWantCorporation, pageWantAlliance, pageWantPlace:
-		// No dedicated queue exists for these labels yet; they are
+	case pageWantCorporation:
+		if err := app.queries.UpsertCorporationWant(ctx, id); err != nil {
+			log.Printf("pagewant: note corporation want for %d: %v", id, err)
+		}
+	case pageWantAlliance:
+		if err := app.queries.UpsertAllianceWant(ctx, id); err != nil {
+			log.Printf("pagewant: note alliance want for %d: %v", id, err)
+		}
+	case pageWantPlace:
+		// No dedicated queue exists for place labels yet; they are
 		// tracked so the indicator is honest while the background
 		// warmers (pilot profiles, intel snapshots, SDE places)
 		// fill the caches they read from.
+	case pageWantGuidePrices:
+		// The want is a single global row: the price guide is
+		// shared by every viewer, so one note covers them all;
+		// the urgent drain answers it with a guide refresh when
+		// ESI's cache window allows.
+		if err := app.queries.NoteGuidePriceWant(ctx, time.Now().UTC().Format(time.RFC3339)); err != nil {
+			log.Printf("pagewant: note guide price want: %v", err)
+		}
 	}
 
 	scope := pageScope(ctx)
@@ -242,14 +263,22 @@ func (app *Application) pageWantSettled(ctx context.Context, want pageWant) bool
 		return len(app.recentHistoryRows(ctx, want.RegionID, want.ID, 1)) > 0 ||
 			app.historyFetchSettled(ctx, want.RegionID, want.ID)
 	case pageWantCorporation:
-		name, ok := app.esi.CachedCorpName(want.ID)
-		return ok && name != ""
+		if name, ok := app.esi.CachedCorpName(want.ID); ok && name != "" {
+			return true
+		}
+		rec, err := app.queries.GetCorporationRecord(ctx, want.ID)
+		return err == nil && rec.State != orgStatePending
 	case pageWantAlliance:
-		name, ok := app.esi.CachedAllianceName(want.ID)
-		return ok && name != ""
+		if name, ok := app.esi.CachedAllianceName(want.ID); ok && name != "" {
+			return true
+		}
+		rec, err := app.queries.GetAllianceRecord(ctx, want.ID)
+		return err == nil && rec.State != orgStatePending
 	case pageWantPlace:
 		_, ok := app.esi.CachedPlaceName(ctx, want.ID)
 		return ok
+	case pageWantGuidePrices:
+		return app.valuationPrices(ctx) != nil
 	}
 	return true
 }

@@ -554,6 +554,13 @@ func (b *charSnaps) corpName() string {
 	return ""
 }
 
+func (b *charSnaps) corpID() int64 {
+	if b.profile != nil {
+		return b.profile.CorporationID
+	}
+	return 0
+}
+
 // currentEntry returns the queue's head entry (position 0) — the
 // skill training right now — or nil.
 func queueHead(queue esi.Skillqueue) *esi.SkillqueueEntry {
@@ -619,10 +626,13 @@ type fleetRow struct {
 	ID             int64
 	Name           string
 	PortraitURL    string
+	CorpID         int64
 	CorpName       string
 	Tags           string
 	SystemName     string
+	SystemRef      placeRef // SystemName classified for the link policy
 	DockedName     string
+	DockedRef      placeRef // DockedName classified for the link policy
 	ShipTypeName   string
 	ShipTypeID     int64
 	ShipName       string
@@ -822,6 +832,7 @@ func (app *Application) buildFleet(ctx context.Context, bundles []*charSnaps) *f
 			ID:          b.ch.CharacterID,
 			Name:        b.ch.Name,
 			PortraitURL: portraitURL(b.ch.CharacterID, 64),
+			CorpID:      b.corpID(),
 			CorpName:    b.corpName(),
 			Tags:        b.ch.Tags,
 			Relink:      b.ch.LinkState != "" && b.ch.LinkState != linkStateOK,
@@ -832,10 +843,13 @@ func (app *Application) buildFleet(ctx context.Context, bundles []*charSnaps) *f
 		}
 		if b.location != nil {
 			row.SystemName = app.locationTitle(ctx, b.location.SolarSystemID, "solar_system")
+			row.SystemRef = app.linkPlace(ctx, b.location.SolarSystemID, row.SystemName)
 			if b.location.StationID > 0 {
 				row.DockedName = app.locationTitle(ctx, b.location.StationID, "station")
+				row.DockedRef = app.linkPlace(ctx, b.location.StationID, row.DockedName)
 			} else if b.location.StructureID > 0 {
 				row.DockedName = app.locationTitle(ctx, b.location.StructureID, "structure")
+				row.DockedRef = app.linkPlace(ctx, b.location.StructureID, row.DockedName)
 			}
 		}
 		if b.ship != nil {

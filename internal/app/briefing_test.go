@@ -377,8 +377,8 @@ func TestBriefingFontPreloadAndFooter(t *testing.T) {
 	mustContain(t, "home head", body,
 		`<link rel="preload" as="font" type="font/woff2" href="/static/fonts/shentox-regular.woff2" crossorigin>`,
 		`<link rel="preload" as="font" type="font/woff2" href="/static/fonts/univers-next-pro-medium-condensed.woff2" crossorigin>`,
-		`<link rel="stylesheet" href="/static/style.css?v=v0.3.06.001">`,
-		`EveSynapse v0.3.06.001`,
+		`<link rel="stylesheet" href="/static/style.css?v=v0.3.07.001">`,
+		`EveSynapse v0.3.07.001`,
 	)
 
 	// The font file itself rides the immutable cache header.

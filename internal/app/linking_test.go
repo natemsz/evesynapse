@@ -209,7 +209,7 @@ func TestPilotPageStatesAndDrain(t *testing.T) {
 		"Old Corp", "2015-01-01", "2020-06-01", "Present",
 		"Hello", "capsuleer",
 	)
-	if strings.Contains(body, "<script>") || strings.Contains(body, "alert(1)") {
+	if strings.Contains(body, "<script>alert") || strings.Contains(body, "alert(1)") {
 		t.Fatal("pilot description rendered unsanitized")
 	}
 

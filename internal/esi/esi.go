@@ -410,8 +410,12 @@ type Corporation struct {
 
 // Alliance is GET /alliances/{id}/ (the slice we consume).
 type Alliance struct {
-	Name   string `json:"name"`
-	Ticker string `json:"ticker"`
+	Name                  string `json:"name"`
+	Ticker                string `json:"ticker"`
+	CreatorID             int64  `json:"creator_id"`
+	CreatorCorporationID  int64  `json:"creator_corporation_id"`
+	ExecutorCorporationID int64  `json:"executor_corporation_id"` // 0 for NPC-run alliances
+	DateFounded           string `json:"date_founded"`            // RFC3339
 }
 
 // Station is GET /universe/stations/{id}/ (the slice we consume).
@@ -2557,6 +2561,69 @@ func (c *Client) StoreStructureName(structureID int64, name string) {
 	c.structNamesMu.Lock()
 	c.structNames[structureID] = name
 	c.structNamesMu.Unlock()
+}
+
+// ---------------------------------------------------------------------------
+// Planet names. GET /universe/planets/{planet_id}/ is public (no
+// token), and planet names never change, so resolution is cheap
+// and durable: FetchPlanet is the network tier (worker only),
+// CachedPlanetName is the render tier — in-process place cache,
+// then the durable planet_names table — and never fetches.
+// ---------------------------------------------------------------------------
+
+// UniversePlanet is GET /universe/planets/{planet_id}/ (public).
+// Only the name feeds the app today; system_id and type_id ride
+// along for future surfaces.
+type UniversePlanet struct {
+	Name     string `json:"name"`
+	PlanetID int64  `json:"planet_id"`
+	SystemID int64  `json:"system_id"`
+	TypeID   int64  `json:"type_id"`
+}
+
+// PlanetState values for the planet_names table (schema 025),
+// shared with the app layer's queue bookkeeping.
+const (
+	PlanetPending  = "pending"
+	PlanetResolved = "resolved"
+	PlanetMissing  = "missing"
+)
+
+// FetchPlanet resolves one planet id (network tier; the endpoint
+// is public, so no token is involved). A 404 means the id is not
+// a planet — colony planet ids always exist, so callers treat a
+// 404 as a rare negative and back it off rather than failing.
+func (c *Client) FetchPlanet(ctx context.Context, planetID int64) (UniversePlanet, error) {
+	var out UniversePlanet
+	if err := c.Get(ctx, "", fmt.Sprintf("/universe/planets/%d/", planetID), &out); err != nil {
+		return UniversePlanet{}, err
+	}
+	return out, nil
+}
+
+// CachedPlanetName answers from the in-process place cache (the
+// worker's warm passes store planet names there), then the
+// durable planet_names table. Render tier: never fetches.
+func (c *Client) CachedPlanetName(ctx context.Context, planetID int64) (string, bool) {
+	c.placeMu.Lock()
+	name, ok := c.placeNames[planetID]
+	c.placeMu.Unlock()
+	if ok {
+		return name, true
+	}
+	row, err := c.queries.GetPlanetName(ctx, planetID)
+	if err != nil || row.State != PlanetResolved || row.Name == "" {
+		return "", false
+	}
+	c.StorePlaceName(planetID, row.Name)
+	return row.Name, true
+}
+
+// StorePlanetName records a resolved planet name in the
+// in-process place cache (the app layer persists it in
+// planet_names).
+func (c *Client) StorePlanetName(planetID int64, name string) {
+	c.StorePlaceName(planetID, name)
 }
 
 // ---------------------------------------------------------------------------

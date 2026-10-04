@@ -1,0 +1,35 @@
+# EveSynapse service unit.
+#
+# ONE-TIME CHANGE vs. the original unit: Restart=on-failure is now
+# Restart=always, so the binary's self-update mode
+# (`evesynapse -update <url>`) can restart the app onto the new
+# build: the updater swaps the program file in place, asks the
+# running server to stop, and this unit brings it straight back up
+# on the new version. An explicit `systemctl stop evesynapse` still
+# stays stopped — Restart=always never overrides a requested stop.
+# StartLimitBurst keeps a broken build from restart-looping forever:
+# after 5 starts in a minute the unit gives up and waits for a human.
+#
+# Apply once on the box:
+#   sudo cp deploy/evesynapse.service /etc/systemd/system/evesynapse.service
+#   sudo systemctl daemon-reload
+# (The rest of the unit is unchanged, so nothing else moves.)
+
+[Unit]
+Description=EveSynapse — EVE Online companion
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=evesynapse
+WorkingDirectory=/opt/evesynapse
+EnvironmentFile=/opt/evesynapse/.env
+ExecStart=/opt/evesynapse/evesynapse
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

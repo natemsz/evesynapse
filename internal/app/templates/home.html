@@ -108,12 +108,13 @@
   <table>
     <tbody>
       {{if .Wallet}}<tr><th>Wallets</th><td>{{.Wallet}}</td></tr>{{end}}
-      {{if .AssetsKnown}}<tr><th>Assets</th><td>{{.Assets}}</td></tr>{{else}}<tr><th>Assets</th><td><small>prices not loaded yet</small></td></tr>{{end}}
+      {{if .AssetsKnown}}<tr><th>Assets</th><td>{{.Assets}}</td></tr>{{end}}
       {{if .Escrow}}<tr><th>Order escrow</th><td>{{.Escrow}}</td></tr>{{end}}
     </tbody>
   </table>
   </div>
   <p><small>Estimate{{if .AsOf}} · data as of {{.AsOf}}{{end}}</small></p>
+  {{if .AssetsNote}}<p><small>{{.AssetsNote}}</small></p>{{end}}
   {{else}}
   <p><small>Balances appear here once your characters have synced.</small></p>
   {{end}}
@@ -145,10 +146,46 @@
 {{if eq .ID "market"}}
 <section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
   <h3>Market</h3>
+  {{$customize := .Customize}}
   {{with .Market}}
-  {{if .Open}}
+  <form class="widget-scope" method="post" action="/home/widget-config">
+    <input type="hidden" name="widget" value="market">
+    <input type="hidden" name="next" value="{{if $customize}}/?customize=1{{else}}/{{end}}">
+    <label>Orders for
+      <select name="scope">
+        {{range .ScopeOptions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+      </select>
+    </label>
+    {{if .ShowMerge}}
+    <label>Show
+      <select name="merge">
+        <option value="both"{{if eq .Merge "both"}} selected{{end}}>Totals and each character</option>
+        <option value="combined"{{if eq .Merge "combined"}} selected{{end}}>Totals only</option>
+        <option value="per-character"{{if eq .Merge "per-character"}} selected{{end}}>Each character only</option>
+      </select>
+    </label>
+    {{end}}
+    <button class="btn" type="submit">Apply</button>
+  </form>
+  {{if .ScopeEmpty}}
+  <p><small>{{.ScopeEmpty}}</small></p>
+  {{else if not .AnyData}}
+  <p><small>Order data appears here once your characters have synced.</small></p>
+  {{else if .Open}}
+  {{if ne .Merge "per-character"}}
   <p><strong>{{.Open}}</strong> open orders — {{.SellCount}} sell ({{.SellValue}} ISK) · {{.BuyCount}} buy ({{.BuyValue}} ISK in escrow)</p>
   {{if .Health}}<p><small>{{.Health}}</small></p>{{end}}
+  {{end}}
+  {{if eq .Merge "per-character"}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>Character</th><th>Orders</th><th>Soonest expiry</th></tr></thead>
+    <tbody>
+    {{range .PerChar}}<tr><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{if .NoOrders}}No open orders{{else}}{{.Sell}}{{if and .Sell .Buy}} · {{end}}{{.Buy}}{{end}}</td><td>{{.Soonest}}</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else if eq .Merge "both"}}
   {{if .Expiring}}
   <div class="tw">
   <table>
@@ -159,8 +196,29 @@
   </table>
   </div>
   {{end}}
+  {{end}}
   {{else}}
-  <p><small>No open orders across your characters.</small></p>
+  <p><small>{{.EmptyOrders}}</small></p>
+  {{end}}
+  {{end}}
+</section>
+{{end}}
+
+{{if eq .ID "watchlist"}}
+<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+  <h3>Market watchlist</h3>
+  {{with .Watchlist}}
+  {{if .Rows}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>Item</th><th>Region</th><th>Average</th><th>7 days</th><th>30 days</th><th>Status</th></tr></thead>
+    <tbody>
+    {{range .Rows}}<tr><td><a href="/items/type/{{.TypeID}}/">{{.Name}}</a></td><td>{{.Region}}</td><td>{{.Current}}</td><td>{{.Change7}}</td><td>{{.Change30}}</td><td>{{if .Moving}}<strong>{{.MoveText}}</strong>{{else}}Calm{{end}}</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else}}
+  <p><small>Nothing watched yet — add items from the <a href="/market/">Market page</a> and their price moves will show up here.</small></p>
   {{end}}
   {{end}}
 </section>

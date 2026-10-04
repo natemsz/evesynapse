@@ -19,12 +19,17 @@ import (
 // ESI, no token — so handlers keep the zero-outbound-call rule.
 //
 // Suggestion pools pick which slice of the type table a box
-// searches:
-//   market  — tradeable types only (the Market page's original
-//             behaviour: a market group and published)
-//   planner — published types a blueprint builds
+// searches. Every pool shares one floor (v0.3.04): published
+// types with a market group — things a player can actually
+// obtain on the market or through contracts. Unpublished and
+// untradeable database rows never surface in a search box; the
+// Items DB explorer keeps its own explicit toggle for digging
+// through those. On top of the floor:
+//   market  — the floor alone (the Market page's behaviour)
+//   planner — types a blueprint builds
 //   skills  — skill types (the skill-plan add box)
-//   all     — every type in the database (Items DB, top banner)
+//   all     — the floor alone, broadly labelled (Items DB,
+//             top banner)
 // ---------------------------------------------------------------------------
 
 const (

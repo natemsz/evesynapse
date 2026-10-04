@@ -21,9 +21,9 @@ import (
 // A day's row keeps the latest values seen that day: when the
 // wallet snapshot advances, the row is rewritten; when it hasn't,
 // the row is left alone (one cheap lookup per character per
-// cycle). net_worth rides along only when the market price cache
-// is warm enough to value assets the same way the home Net worth
-// widget does; otherwise it stays NULL — "not computed" must
+// cycle). net_worth rides along only when the price guide (live
+// or worker-stored) can value assets the same way the home Net
+// worth widget does; otherwise it stays NULL — "not computed" must
 // never read as zero.
 // ---------------------------------------------------------------------------
 
@@ -56,7 +56,7 @@ func (app *Application) sampleWalletHistory(ctx context.Context, ch db.Character
 	}
 
 	netWorth := sql.NullFloat64{}
-	if prices := app.cachedPrices(); prices != nil {
+	if prices := app.valuationPrices(ctx); prices != nil {
 		if total, ok := app.characterNetWorth(ctx, ch.CharacterID, balance, prices); ok {
 			netWorth = sql.NullFloat64{Float64: total, Valid: true}
 		}

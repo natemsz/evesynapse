@@ -177,6 +177,18 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	limited := false
 	allowance := &fetchBudget{left: maxFetchesPerCycle}
 
+	// The market guide (v0.3.04): one public call mirrors into
+	// the stored table on ESI's cache window, ahead of the
+	// character pass so asset valuation — the net-worth card
+	// and the daily sampler below — always has prices to work
+	// with. Fresh tables cost nothing here.
+	if stored, gLimited := app.refreshGuidePrices(ctx); stored {
+		refreshed++
+	} else if gLimited {
+		log.Printf("worker: ESI error limit hit refreshing guide prices; backing off until next cycle")
+		limited = true
+	}
+
 	for i, ch := range eligible {
 		if ctx.Err() != nil {
 			app.updateWorkerStatus(func(s *workerStatus) { s.Warming = false })

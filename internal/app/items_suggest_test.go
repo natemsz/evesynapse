@@ -188,5 +188,5 @@ func TestLayoutInvariants(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
-	mustContain(t, "/", body, `<script src="/static/app.js"`, `<span class="gt">`)
+	mustContain(t, "/", body, `<script src="/static/app.js?v=`, `<span class="gt">`)
 }

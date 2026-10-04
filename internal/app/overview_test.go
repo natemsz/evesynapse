@@ -151,7 +151,11 @@ func TestHomeOverviewMultiChar(t *testing.T) {
 	ntAt := strings.Index(body, "Fixture Bravo isn")
 	jrAt := strings.Index(body, "job ready for delivery")
 	oeAt := strings.Index(body, "order expires in")
-	ctAt := strings.Index(body, "contract waiting for you")
+	// The Briefing module (rendered above this one) may mention
+	// the same contracts; the attention feed's own order is what
+	// counts, so search from its heading down.
+	attStart := strings.Index(body, "<h3>Needs attention</h3>")
+	ctAt := attStart + strings.Index(body[attStart:], "contract waiting for you")
 	if !(relAt >= 0 && relAt < ntAt && ntAt < jrAt && jrAt < oeAt && oeAt < ctAt) {
 		t.Errorf("attention items out of rule order: relink=%d nottraining=%d jobready=%d order=%d contract=%d",
 			relAt, ntAt, jrAt, oeAt, ctAt)

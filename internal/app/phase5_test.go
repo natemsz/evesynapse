@@ -471,9 +471,13 @@ func TestHomeAttentionMarketRules(t *testing.T) {
 		"Tritanium up 8.0% over 7 days in The Forge.",
 		"1 order undercut · watchlist: 1 moving",
 	)
-	jobAt := strings.Index(body, "job ready for delivery")
-	undercutAt := strings.Index(body, "sell order: undercut")
-	moveAt := strings.Index(body, "over 7 days in The Forge")
+	// Scope the order check to the attention feed: the Briefing
+	// above it reports the same market moves in its own order.
+	attStart := strings.Index(body, "<h3>Needs attention</h3>")
+	attBody := body[attStart:]
+	jobAt := strings.Index(attBody, "job ready for delivery")
+	undercutAt := strings.Index(attBody, "sell order: undercut")
+	moveAt := strings.Index(attBody, "over 7 days in The Forge")
 	if !(jobAt >= 0 && jobAt < undercutAt && undercutAt < moveAt) {
 		t.Fatalf("attention order: job %d, undercut %d, move %d — want job < undercut < move", jobAt, undercutAt, moveAt)
 	}

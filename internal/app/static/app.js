@@ -1032,12 +1032,19 @@
     date.className = "ctip-date";
     date.textContent = dot.getAttribute("data-date");
     tip.appendChild(date);
-    var rows = [
-      ["Average", dot.getAttribute("data-avg") + " ISK"],
-      ["High", dot.getAttribute("data-high") + " ISK"],
-      ["Low", dot.getAttribute("data-low") + " ISK"],
-      ["Volume", dot.getAttribute("data-vol")]
-    ];
+    var rows = [];
+    // Balance charts carry one figure; market history dots
+    // carry the full day. Render whichever the dot brought.
+    var balance = dot.getAttribute("data-balance");
+    if (balance) {
+      rows.push(["Balance", balance + " ISK"]);
+    }
+    if (dot.getAttribute("data-avg")) {
+      rows.push(["Average", dot.getAttribute("data-avg") + " ISK"]);
+      rows.push(["High", dot.getAttribute("data-high") + " ISK"]);
+      rows.push(["Low", dot.getAttribute("data-low") + " ISK"]);
+      rows.push(["Volume", dot.getAttribute("data-vol")]);
+    }
     for (var i = 0; i < rows.length; i++) {
       var line = document.createElement("div");
       line.textContent = rows[i][0] + ": " + rows[i][1];

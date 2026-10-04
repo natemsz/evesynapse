@@ -496,6 +496,12 @@ FROM wallet_history
 WHERE user_id = ? AND character_id = ?
 ORDER BY day;
 
+-- name: ListUserWalletHistory :many
+SELECT user_id, character_id, day, balance, net_worth, sampled_at
+FROM wallet_history
+WHERE user_id = ?
+ORDER BY day, character_id;
+
 -- ---------------------------------------------------------------------
 -- v0.3.04 widget configuration (schema 020): one JSON blob per
 -- (user, widget). The layout (schema 010) owns placement; this

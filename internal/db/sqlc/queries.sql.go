@@ -185,13 +185,18 @@ func (q *Queries) CreateSkillPlan(ctx context.Context, arg CreateSkillPlanParams
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (created_at)
 VALUES (datetime('now'))
-RETURNING id, created_at, home_layout
+RETURNING id, created_at, home_layout, last_briefing_at
 `
 
 func (q *Queries) CreateUser(ctx context.Context) (User, error) {
 	row := q.db.QueryRowContext(ctx, createUser)
 	var i User
-	err := row.Scan(&i.ID, &i.CreatedAt, &i.HomeLayout)
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.HomeLayout,
+		&i.LastBriefingAt,
+	)
 	return i, err
 }
 
@@ -738,15 +743,33 @@ func (q *Queries) GetTypeName(ctx context.Context, typeID int64) (string, error)
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, created_at, home_layout FROM users
+SELECT id, created_at, home_layout, last_briefing_at FROM users
 WHERE id = ?
 `
 
 func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 	row := q.db.QueryRowContext(ctx, getUser, id)
 	var i User
-	err := row.Scan(&i.ID, &i.CreatedAt, &i.HomeLayout)
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.HomeLayout,
+		&i.LastBriefingAt,
+	)
 	return i, err
+}
+
+const getUserBriefingAnchor = `-- name: GetUserBriefingAnchor :one
+SELECT last_briefing_at FROM users
+WHERE id = ?
+`
+
+// Phase 6 (schema 017): the Briefing module's window anchor.
+func (q *Queries) GetUserBriefingAnchor(ctx context.Context, id int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getUserBriefingAnchor, id)
+	var last_briefing_at string
+	err := row.Scan(&last_briefing_at)
+	return last_briefing_at, err
 }
 
 const getUserHomeLayout = `-- name: GetUserHomeLayout :one
@@ -2262,7 +2285,7 @@ func (q *Queries) ListTypeDetailWants(ctx context.Context, limit int64) ([]int64
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, created_at, home_layout FROM users
+SELECT id, created_at, home_layout, last_briefing_at FROM users
 ORDER BY id
 `
 
@@ -2275,7 +2298,12 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	var items []User
 	for rows.Next() {
 		var i User
-		if err := rows.Scan(&i.ID, &i.CreatedAt, &i.HomeLayout); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.HomeLayout,
+			&i.LastBriefingAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -2579,6 +2607,22 @@ type SetTypeDetailParams struct {
 
 func (q *Queries) SetTypeDetail(ctx context.Context, arg SetTypeDetailParams) error {
 	_, err := q.db.ExecContext(ctx, setTypeDetail, arg.TypeID, arg.Description, arg.FetchedAt)
+	return err
+}
+
+const setUserBriefingAnchor = `-- name: SetUserBriefingAnchor :exec
+UPDATE users
+SET last_briefing_at = ?
+WHERE id = ?
+`
+
+type SetUserBriefingAnchorParams struct {
+	LastBriefingAt string `json:"last_briefing_at"`
+	ID             int64  `json:"id"`
+}
+
+func (q *Queries) SetUserBriefingAnchor(ctx context.Context, arg SetUserBriefingAnchorParams) error {
+	_, err := q.db.ExecContext(ctx, setUserBriefingAnchor, arg.LastBriefingAt, arg.ID)
 	return err
 }
 

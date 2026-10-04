@@ -1239,7 +1239,6 @@
       return;
     }
     var allOpen = allCategoriesOpen();
-    expandAllButton.textContent = allOpen ? "Collapse all" : "Expand all";
     expandAllButton.setAttribute("aria-expanded", allOpen ? "true" : "false");
     expandAllButton.setAttribute("aria-label", allOpen ? "Collapse all navigation categories" : "Expand all navigation categories");
     expandAllButton.setAttribute("title", allOpen ? "Collapse all navigation categories" : "Expand all navigation categories");

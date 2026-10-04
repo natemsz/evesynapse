@@ -480,7 +480,9 @@ func TestHistoryFewRowsSummaryAndStaleChart(t *testing.T) {
 	_, body := getPage(t, app, cookie, "/market/?type=34")
 	mustContain(t, "/market/?type=34 (one row)", body,
 		"Only 1 day of recorded trades in The Forge")
-	if strings.Contains(body, "<svg") {
+	// (v0.3.07.003: the nav carries inline SVG icons, so the
+	// no-chart check scopes to the chart container itself.)
+	if strings.Contains(body, `class="pchart"`) {
 		t.Fatal("one-row page drew a chart")
 	}
 	if strings.Contains(body, "This one's queued") {
@@ -493,7 +495,7 @@ func TestHistoryFewRowsSummaryAndStaleChart(t *testing.T) {
 	seed(120, 10.0)
 	seed(150, 9.0)
 	_, body = getPage(t, app, cookie, "/market/?type=34")
-	mustContain(t, "/market/?type=34 (stale sparse)", body, "<svg")
+	mustContain(t, "/market/?type=34 (stale sparse)", body, `class="pchart"`)
 
 	// A type whose newest trades are 120 days old: caption shows.
 	if err := q.UpsertTypeName(ctx, db.UpsertTypeNameParams{TypeID: 35, Name: "Mexallon"}); err != nil {
@@ -513,7 +515,7 @@ func TestHistoryFewRowsSummaryAndStaleChart(t *testing.T) {
 	}
 	_, body = getPage(t, app, cookie, "/market/?type=35")
 	mustContain(t, "/market/?type=35 (stale)", body,
-		"<svg", "Last trades "+now.AddDate(0, 0, -120).Format(historyDateLayout))
+		`class="pchart"`, "Last trades "+now.AddDate(0, 0, -120).Format(historyDateLayout))
 }
 
 func TestHistoryChartRowWindow(t *testing.T) {

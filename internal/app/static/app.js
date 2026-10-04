@@ -916,22 +916,46 @@
 // warming polls its fragment endpoint and swaps itself in when
 // the state leaves pending. The server renders the section again
 // from stored rows only; polling stops as soon as the returned
-// fragment settles, and gives up quietly after ~40 tries,
-// leaving the pending copy standing.
+// fragment settles. It never gives up while the fragment keeps
+// answering pending: a fast cadence at first, then a slower
+// steady one, so a slow first warm (a cold worker catching up
+// after a restart) still fills the page in on its own instead
+// of stranding the pending copy until a manual refresh. When
+// the tab becomes visible again the next poll happens at once
+// instead of whenever a throttled timer gets round to it.
 (function () {
   var regions = document.querySelectorAll("[data-live-region]");
   if (!regions.length || !window.fetch) return;
+  var kicks = [];
 
   function arm(region) {
     var url = region.getAttribute("data-poll-url");
     if (!url) return;
-    var attempts = 0;
-    var timer = window.setInterval(function () {
-      attempts += 1;
-      if (attempts > 40) {
-        window.clearInterval(timer);
+    var polls = 0;
+    var timer = null;
+    var stopped = false;
+
+    function stop() {
+      stopped = true;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+    }
+    function schedule() {
+      if (stopped) return;
+      // ~1.5s while the wait is young (the first minute or
+      // so), then a steady ~5s for as long as it takes.
+      timer = window.setTimeout(poll, polls < 40 ? 1500 : 5000);
+    }
+    function poll() {
+      timer = null;
+      if (stopped) return;
+      if (!document.contains(region)) {
+        stop();
         return;
       }
+      polls += 1;
       window.fetch(url, {
         credentials: "same-origin",
         headers: { "X-Requested-With": "XMLHttpRequest" }
@@ -944,25 +968,43 @@
         if (!fresh) {
           // Not a fragment (a redirect to a full page, an
           // error): stop polling and let a reload show it.
-          window.clearInterval(timer);
+          stop();
           window.location.reload();
           return;
         }
         var state = fresh.getAttribute("data-poll-state");
         if (state !== "pending" && state !== "loading") {
-          window.clearInterval(timer);
+          stop();
           region.outerHTML = html;
+        } else {
+          schedule();
         }
       }).catch(function () {
-        // A failed poll is not news; the next tick retries
-        // until the attempt cap.
+        // A failed poll is not news; the next one is already
+        // scheduled and retries at the same cadence.
+        schedule();
       });
-    }, 1500);
+    }
+    kicks.push(function () {
+      if (stopped) return;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+      poll();
+    });
+    schedule();
   }
 
   for (var i = 0; i < regions.length; i++) {
     arm(regions[i]);
   }
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState !== "visible") return;
+    for (var i = 0; i < kicks.length; i++) {
+      kicks[i]();
+    }
+  });
 })();
 
 // --- Market history chart: day-point tooltips ---------------
@@ -1143,15 +1185,22 @@
 // way (names, descriptions, price history it asked for), the
 // top banner shows a small ember ring with the count. It polls
 // a cache-only status endpoint — never the data itself — and
-// hides the moment the page has everything. Background sync in
-// general is not reported here.
+// hides the moment the page has everything. Polling never
+// gives up while the page is still waiting: fast at first,
+// then a slower steady cadence for as long as the status says
+// pending, so the ring never sits spinning over a page nobody
+// is checking on any more (a cold worker can take minutes to
+// warm a first name; the page still fills itself in). A tab
+// coming back to the front re-checks immediately. Background
+// sync in general is not reported here.
 (function () {
   var indicator = document.getElementById("page-sync-indicator");
   if (!indicator || !window.fetch) return;
   var label = indicator.querySelector("[data-page-sync-label]");
   var page = window.location.pathname + window.location.search;
-  var attempts = 0;
-  var maxAttempts = 80; // ~2 minutes at 1.5s, then leave the page as-is
+  var polls = 0;
+  var timer = null;
+  var stopped = false;
 
   function unresolvedRegions() {
     return document.querySelectorAll(
@@ -1168,13 +1217,23 @@
     }
   }
 
-  var timer = window.setInterval(function () {
-    attempts += 1;
-    if (attempts > maxAttempts) {
-      window.clearInterval(timer);
-      indicator.hidden = true;
-      return;
+  function stop() {
+    stopped = true;
+    if (timer !== null) {
+      window.clearTimeout(timer);
+      timer = null;
     }
+  }
+  function schedule() {
+    if (stopped) return;
+    // ~1.5s for the first couple of minutes, then a steady
+    // ~5s while the page is still waiting.
+    timer = window.setTimeout(poll, polls <= 80 ? 1500 : 5000);
+  }
+  function poll() {
+    timer = null;
+    if (stopped) return;
+    polls += 1;
     window.fetch("/sync/page-status?page=" + encodeURIComponent(page), {
       credentials: "same-origin",
       headers: { "X-Requested-With": "XMLHttpRequest" }
@@ -1184,15 +1243,26 @@
       var pending = status && typeof status.pending === "number" ? status.pending : 0;
       if (pending > 0 || unresolvedRegions() > 0) {
         show(pending);
+        schedule();
       } else {
         indicator.hidden = true;
-        window.clearInterval(timer);
+        stop();
       }
     }).catch(function () {
-      // A failed status poll is not news; the next tick retries
-      // until the attempt cap.
+      // A failed status poll is not news; the next one retries
+      // at the same cadence.
+      schedule();
     });
-  }, 1500);
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState !== "visible" || stopped) return;
+    if (timer !== null) {
+      window.clearTimeout(timer);
+      timer = null;
+    }
+    poll();
+  });
+  schedule();
 })();
 
 // Navigation state: the wide sidebar can be expanded, collapsed
@@ -1243,6 +1313,16 @@
     expandAllButton.setAttribute("aria-label", allOpen ? "Collapse all navigation categories" : "Expand all navigation categories");
     expandAllButton.setAttribute("title", allOpen ? "Collapse all navigation categories" : "Expand all navigation categories");
   }
+  function closeCategoryBranches(except) {
+    for (var i = 0; i < categoryBranches.length; i++) {
+      if (categoryBranches[i] !== except) {
+        categoryBranches[i].open = false;
+      }
+    }
+  }
+  function railActive() {
+    return currentState() === "rail" && !drawerQuery.matches;
+  }
   function syncNavigationControls() {
     var drawerOpen = !!(drawerToggle && drawerToggle.checked && drawerQuery.matches);
     if (hamburger) {
@@ -1259,6 +1339,15 @@
     syncExpandAllButton();
   }
   function applyNavigationState(state) {
+    if (state === "rail") {
+      // Arrive in the rail clean: categories opened in the
+      // wide sidebar keep their <details open> state across
+      // the switch, and each one would paint its own tall
+      // flyout in the rail column — a merged stack under a
+      // row of lit-up icons. Fold them all; from here the
+      // rail opens one flyout at a time.
+      closeCategoryBranches(null);
+    }
     if (state === "expanded") {
       root.removeAttribute("data-nav");
     } else {
@@ -1286,7 +1375,15 @@
     });
   }
   for (var categoryIndex = 0; categoryIndex < categoryBranches.length; categoryIndex++) {
-    categoryBranches[categoryIndex].addEventListener("toggle", syncExpandAllButton);
+    categoryBranches[categoryIndex].addEventListener("toggle", function (event) {
+      // In the rail one flyout at a time: opening a category
+      // folds whichever flyout is already out. The wide and
+      // drawer presentations keep their many-open behavior.
+      if (event.target.open && railActive()) {
+        closeCategoryBranches(event.target);
+      }
+      syncExpandAllButton();
+    });
   }
   if (collapseButton) {
     collapseButton.addEventListener("click", function () {
@@ -1334,6 +1431,18 @@
       }
     });
   }
+  document.addEventListener("click", function (e) {
+    // Rail flyouts dismiss on an outside click, like the
+    // drawer does; a click inside the open category (its
+    // summary, its menu) is the category's own business.
+    if (!railActive() || !sidebar) {
+      return;
+    }
+    var openBranch = sidebar.querySelector(".sidenav details.branch[open]");
+    if (openBranch && !openBranch.contains(e.target)) {
+      closeCategoryBranches(null);
+    }
+  });
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && drawerQuery.matches) {
       closeDrawer(true);
@@ -1354,6 +1463,13 @@
   // restored or stale checkbox state must not pop it open.
   if (drawerQuery.matches) {
     closeDrawer(false);
+  }
+  // A page that loads straight into the rail (the saved choice
+  // the head script applied, a restored page) starts with
+  // every category folded too — no flyout stack waiting under
+  // the icons.
+  if (currentState() === "rail") {
+    closeCategoryBranches(null);
   }
   syncNavigationControls();
 })();

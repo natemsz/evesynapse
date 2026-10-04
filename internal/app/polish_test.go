@@ -54,7 +54,7 @@ func TestPolishNavAndFavicon(t *testing.T) {
 	}
 	mustContain(t, "/", body,
 		`<details class="branch"`,
-		`name="mainnav"`,
+		`data-nav-category="character"`,
 		`href="/corporations/members/"`,
 		`href="/corporations/killmails/"`,
 		`href="/intel/fw/"`,

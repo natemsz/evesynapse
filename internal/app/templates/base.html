@@ -13,19 +13,20 @@
 <link rel="stylesheet" href="/static/style.css?v={{.Version}}">
 </head>
 <body>
-<input class="nav-drawer-checkbox" type="checkbox" id="nav-drawer-toggle" tabindex="-1" aria-hidden="true">
+<input class="nav-drawer-checkbox" type="checkbox" id="nav-drawer-toggle" autocomplete="off" tabindex="-1" aria-hidden="true">
 <aside class="sidebar" id="site-nav">
   <div class="sidebar-inner">
     <div class="sidebar-brand">
-      <a class="wordmark sidebar-wordmark" href="/">EVESYNAPSE</a>
       <div class="sidebar-actions">
+        <button type="button" class="nav-expand-btn" id="nav-expand-all" aria-label="Expand all navigation categories" aria-expanded="false">Expand all</button>
         <button type="button" class="nav-state-btn" id="nav-collapse" aria-label="Collapse navigation" title="Collapse navigation">«</button>
         <button type="button" class="nav-state-btn" id="nav-hide" aria-label="Hide navigation" title="Hide navigation">×</button>
+        <label class="nav-drawer-close" for="nav-drawer-toggle" role="button" tabindex="0" aria-label="Close navigation">×</label>
       </div>
     </div>
     <nav class="sidenav" aria-label="Primary">
       <a class="navlink{{if eq .Section "home"}} active{{end}}" href="/"><span class="nav-icon" aria-hidden="true">⌂</span><span class="nav-label">Home</span></a>
-      <details class="branch{{if eq .Section "character"}} active{{end}}" name="mainnav">
+      <details class="branch{{if eq .Section "character"}} active{{end}}" data-nav-category="character">
         <summary><span class="nav-icon" aria-hidden="true">◉</span><span class="nav-label">Character</span></summary>
         <div class="menu">
           <a href="/character/"{{if and (eq .Section "character") (eq .NavPage "character.html")}} class="active"{{end}}>Character</a>
@@ -39,7 +40,7 @@
           <a href="/contacts/"{{if eq .NavPage "contacts.html"}} class="active"{{end}}>Contacts</a>
         </div>
       </details>
-      <details class="branch{{if eq .Section "assets"}} active{{end}}" name="mainnav">
+      <details class="branch{{if eq .Section "assets"}} active{{end}}" data-nav-category="assets">
         <summary><span class="nav-icon" aria-hidden="true">▦</span><span class="nav-label">Assets</span></summary>
         <div class="menu">
           <a href="/assets/"{{if eq .NavPage "assets.html"}} class="active"{{end}}>Assets</a>
@@ -48,8 +49,8 @@
           <a href="/planets/"{{if eq .NavPage "planets.html"}} class="active"{{end}}>Planetary Industry</a>
         </div>
       </details>
-      <details class="branch{{if eq .Section "economy"}} active{{end}}" name="mainnav">
-        <summary><span class="nav-icon" aria-hidden="true">¤</span><span class="nav-label">Economy</span></summary>
+      <details class="branch{{if eq .Section "economy"}} active{{end}}" data-nav-category="economy">
+        <summary><span class="nav-icon nav-icon-bars" aria-hidden="true">▂▄▆</span><span class="nav-label">Economy</span></summary>
         <div class="menu">
           <a href="/market/"{{if eq .NavPage "market.html"}} class="active"{{end}}>Market</a>
           <a href="/items/"{{if eq .NavPage "items.html"}} class="active"{{end}}>Items</a>
@@ -58,8 +59,8 @@
           <a href="/contracts/"{{if eq .NavPage "contracts.html"}} class="active"{{end}}>Contracts</a>
         </div>
       </details>
-      <details class="branch{{if eq .Section "corporation"}} active{{end}}" name="mainnav">
-        <summary><span class="nav-icon" aria-hidden="true">⬢</span><span class="nav-label">Corporation</span></summary>
+      <details class="branch{{if eq .Section "corporation"}} active{{end}}" data-nav-category="corporation">
+        <summary><span class="nav-icon" aria-hidden="true">★</span><span class="nav-label">Corporation</span></summary>
         <div class="menu">
           <a href="/corporations/"{{if eq .NavPage "corporations.html"}} class="active"{{end}}>Overview</a>
           <a href="/corporations/members/"{{if eq .NavPage "corp_members.html"}} class="active"{{end}}>Members</a>
@@ -70,7 +71,7 @@
           <a href="/corporations/killmails/"{{if and (eq .Section "corporation") (eq .NavPage "killmails.html")}} class="active"{{end}}>Killmails</a>
         </div>
       </details>
-      <details class="branch{{if eq .Section "intel"}} active{{end}}" name="mainnav">
+      <details class="branch{{if eq .Section "intel"}} active{{end}}" data-nav-category="intel">
         <summary><span class="nav-icon" aria-hidden="true">◎</span><span class="nav-label">Intel</span></summary>
         <div class="menu">
           <a href="/intel/wars/"{{if eq .NavPage "intel_wars.html"}} class="active"{{end}}>Wars</a>
@@ -83,19 +84,22 @@
         <a class="navlink utility{{if eq .Section "admin"}} active{{end}}" href="/admin/"><span class="nav-icon" aria-hidden="true">✦</span><span class="nav-label">Admin</span></a>
       </div>
     </nav>
-    <div class="sidebar-account">
-      <span class="who">{{if .LoggedIn}}Signed in{{if .CharacterName}} as {{.CharacterName}}{{end}} · <a href="/auth/logout">Sign out</a>{{else}}Not signed in{{end}}</span>
-      {{if and .LoggedIn .Switcher}}
-      <details class="branch switcher" name="mainnav">
-        <summary>Switch character</summary>
-        <div class="menu">
-          {{range .Switcher}}
-          <a href="/characters/switch?character={{.ID}}"{{if .Active}} class="active"{{end}}><img class="portrait" src="{{.PortraitURL}}" alt="" width="24" height="24"> {{.Name}}{{if .Tags}} <small>· {{.Tags}}</small>{{end}}{{if .Relink}} <small>· re-link needed</small>{{end}}</a>
-          {{end}}
-          <a href="/characters/">Manage characters</a>
-        </div>
-      </details>
-      {{end}}
+    <div class="sidebar-account{{if .LoggedIn}} has-character{{end}}">
+      <div class="sidebar-character">
+        <span class="who">{{if .LoggedIn}}Signed in{{if .CharacterName}} as {{.CharacterName}}{{end}}{{else}}Not signed in{{end}}</span>
+        {{if and .LoggedIn .Switcher}}
+        <details class="branch switcher">
+          <summary>Switch character</summary>
+          <div class="menu">
+            {{range .Switcher}}
+            <a href="/characters/switch?character={{.ID}}"{{if .Active}} class="active"{{end}}><img class="portrait" src="{{.PortraitURL}}" alt="" width="24" height="24"> {{.Name}}{{if .Tags}} <small>· {{.Tags}}</small>{{end}}{{if .Relink}} <small>· re-link needed</small>{{end}}</a>
+            {{end}}
+            <a href="/characters/">Manage characters</a>
+          </div>
+        </details>
+        {{end}}
+      </div>
+      {{if .LoggedIn}}<a class="sidebar-signout" href="/auth/logout">Sign out</a>{{end}}
     </div>
   </div>
 </aside>
@@ -107,13 +111,28 @@
     <button type="button" class="nav-reopen" id="nav-reopen" aria-label="Show navigation" aria-controls="site-nav" aria-expanded="false"><span aria-hidden="true">☰</span><span>Menu</span></button>
     <a class="wordmark topbar-wordmark" href="/">EVESYNAPSE</a>
     {{if .LoggedIn}}
+    <span id="page-sync-indicator" class="page-sync" role="status" aria-live="polite" hidden><span class="loading-pulse" aria-hidden="true"></span><span data-page-sync-label>Loading page data…</span></span>
     <form class="topsearch" method="get" action="/items/" role="search">
       <span class="searchwrap topsearch-wrap">
         <input type="search" name="q" id="topbar-q" placeholder="Search items and pilots" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="topbar-suggest" aria-autocomplete="list" aria-label="Search items and pilots">
         <ul class="suggest" id="topbar-suggest" role="listbox" hidden></ul>
       </span>
     </form>
-    <span id="page-sync-indicator" class="page-sync" role="status" aria-live="polite" hidden><span class="loading-pulse" aria-hidden="true"></span><span data-page-sync-label>Loading page data…</span></span>
+    <div class="topbar-character">
+      {{range .Switcher}}{{if .Active}}<img class="portrait topbar-portrait" src="{{.PortraitURL}}" alt="" width="32" height="32">{{end}}{{end}}
+      <span class="topbar-character-name">{{.CharacterName}}</span>
+      {{if .Switcher}}
+      <details class="branch switcher topbar-switcher">
+        <summary>Switch character</summary>
+        <div class="menu">
+          {{range .Switcher}}
+          <a href="/characters/switch?character={{.ID}}"{{if .Active}} class="active"{{end}}><img class="portrait" src="{{.PortraitURL}}" alt="" width="24" height="24"> {{.Name}}{{if .Tags}} <small>· {{.Tags}}</small>{{end}}{{if .Relink}} <small>· re-link needed</small>{{end}}</a>
+          {{end}}
+          <a href="/characters/">Manage characters</a>
+        </div>
+      </details>
+      {{end}}
+    </div>
     {{end}}
   </nav>
 </header>

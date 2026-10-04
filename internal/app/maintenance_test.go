@@ -56,8 +56,175 @@ func writeTestFile(t *testing.T, path string, data []byte, perm os.FileMode) {
 }
 
 func TestVersionMatchesRelease(t *testing.T) {
-	if got := Version(); got != "v0.3.16.009" {
-		t.Fatalf("Version() = %q, want v0.3.16.009", got)
+	if got := Version(); got != "v0.3.17.001" {
+		t.Fatalf("Version() = %q, want v0.3.17.001", got)
+	}
+}
+
+func TestCompareVersions(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want int
+	}{
+		{"0.3.17.1", "0.3.16.9", 1},
+		{"0.3.16.9", "0.3.17.1", -1},
+		{"0.3.17.001", "0.3.17.1", 0},
+		{"v0.3.17.1", "0.3.17.1", 0},
+		{"0.3.17", "0.3.17.0", 0},
+		{"0.3.17.2", "0.3.17.10", -1}, // numeric, not lexical
+		{"0.3.17.10", "0.3.17.2", 1},
+	}
+	for _, tc := range cases {
+		if got := compareVersions(tc.a, tc.b); got != tc.want {
+			t.Errorf("compareVersions(%q, %q) = %d, want %d", tc.a, tc.b, got, tc.want)
+		}
+	}
+}
+
+func TestParseArchArg(t *testing.T) {
+	cases := map[string]string{
+		"-arm64":        "arm64",
+		"arm64":         "arm64",
+		"-amd64":        "amd64",
+		"-x86":          "amd64",
+		"-x64":          "amd64",
+		"https://x/y":   "",
+		"-refresh":      "",
+		"":              "",
+		"evesynapse.db": "",
+	}
+	for arg, want := range cases {
+		if got := parseArchArg(arg); got != want {
+			t.Errorf("parseArchArg(%q) = %q, want %q", arg, got, want)
+		}
+	}
+}
+
+// withReleaseBase points the release channel at a test server
+// for the duration of one test.
+func withReleaseBase(t *testing.T, url string) {
+	t.Helper()
+	old := releaseBaseURL
+	releaseBaseURL = url
+	t.Cleanup(func() { releaseBaseURL = old })
+}
+
+func TestReleaseUpdateUpToDate(t *testing.T) {
+	bare := strings.TrimPrefix(Version(), "v")
+	mux := http.NewServeMux()
+	mux.HandleFunc("/latest-arm64.json", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"version":%q,"arch":"arm64","sha256":%q}`, bare, strings.Repeat("0", 64))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	withReleaseBase(t, srv.URL)
+
+	dir := t.TempDir()
+	target := filepath.Join(dir, "evesynapse")
+	writeTestFile(t, target, []byte("old build"), 0o755)
+
+	var out, errOut bytes.Buffer
+	if code := runUpdate(target, []string{"-arm64"}, &out, &errOut); code != 0 {
+		t.Fatalf("code %d, stderr %q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "up to date") {
+		t.Fatalf("output %q missing the up-to-date note", out.String())
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "old build" {
+		t.Fatal("target changed during an up-to-date check")
+	}
+}
+
+func TestReleaseUpdateInstallsNewer(t *testing.T) {
+	fresh := fakeELF(elfMachineAArch64, updateMinBytes+100)
+	sum, err := sha256FileHexBytes(fresh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/latest-arm64.json", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"version":"9.9.9.9","arch":"arm64","sha256":%q}`, sum)
+	})
+	mux.HandleFunc("/evesynapse-arm64", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(fresh)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	withReleaseBase(t, srv.URL)
+
+	dir := t.TempDir()
+	target := filepath.Join(dir, "evesynapse")
+	writeTestFile(t, target, []byte("old build"), 0o755)
+
+	var out, errOut bytes.Buffer
+	if code := runUpdate(target, []string{"-arm64"}, &out, &errOut); code != 0 {
+		t.Fatalf("code %d, stderr %q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "A new version is available: v9.9.9.9") {
+		t.Fatalf("output %q missing the new-version note", out.String())
+	}
+	if !strings.Contains(out.String(), "now on v9.9.9.9") {
+		t.Fatalf("output %q missing the new-version readout", out.String())
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, fresh) {
+		t.Fatal("target not replaced by the release download")
+	}
+}
+
+func TestReleaseUpdateX86Alias(t *testing.T) {
+	fresh := fakeELF(elfMachineAMD64, updateMinBytes+100)
+	sum, err := sha256FileHexBytes(fresh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/latest-amd64.json", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"version":"9.9.9.9","arch":"amd64","sha256":%q}`, sum)
+	})
+	mux.HandleFunc("/evesynapse-amd64", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(fresh)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	withReleaseBase(t, srv.URL)
+
+	dir := t.TempDir()
+	target := filepath.Join(dir, "evesynapse")
+	writeTestFile(t, target, []byte("old build"), 0o755)
+
+	var out, errOut bytes.Buffer
+	if code := runUpdate(target, []string{"-x86"}, &out, &errOut); code != 0 {
+		t.Fatalf("code %d, stderr %q", code, errOut.String())
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, fresh) {
+		t.Fatal("target not replaced by the x86 release download")
+	}
+}
+
+func TestReleaseUpdateServerDown(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	defer srv.Close()
+	withReleaseBase(t, srv.URL)
+
+	target := filepath.Join(t.TempDir(), "evesynapse")
+	var out, errOut bytes.Buffer
+	if code := runUpdate(target, []string{"-arm64"}, &out, &errOut); code != 1 {
+		t.Fatalf("code %d, want 1; stdout %q", code, out.String())
+	}
+	if !strings.Contains(errOut.String(), "Couldn't check for updates") {
+		t.Fatalf("stderr %q missing the check failure", errOut.String())
 	}
 }
 
@@ -93,9 +260,6 @@ func TestVerifyARMExecutable(t *testing.T) {
 func TestRunUpdateUsageErrors(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "evesynapse")
 	var out, errOut bytes.Buffer
-	if code := runUpdate(target, nil, &out, &errOut); code != 2 {
-		t.Fatalf("no args: code %d, want 2", code)
-	}
 	if code := runUpdate(target, []string{"a", "b", "c"}, &out, &errOut); code != 2 {
 		t.Fatalf("too many args: code %d, want 2", code)
 	}

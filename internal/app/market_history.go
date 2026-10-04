@@ -164,18 +164,40 @@ const (
 
 // priceChart is a fully-computed, template-ready SVG chart.
 type priceChart struct {
-	Width  int
-	Height int
-	Points string // polyline points for the average-price line
-	Dots   []chartDot
-	Bars   []chartBar
-	Recent []chartDay // newest first, capped at recentChartDays
-	TopY   int        // y of the max-price line (price band top)
-	BaseY  int        // y of the min-price line (price band bottom)
-	MaxISK string
-	MinISK string
-	From   string // oldest date label
-	To     string // newest date label
+	Width       int
+	Height      int
+	Points      string // polyline points for the average-price line
+	Dots        []chartDot
+	Bars        []chartBar
+	Recent      []chartDay // newest first, capped at recentChartDays
+	TopY        int        // y of the max-price line (price band top)
+	BaseY       int        // y of the min-price line (price band bottom)
+	MaxISK      string
+	MinISK      string
+	From        string // oldest date label
+	To          string // newest date label
+	PriceTicks  []chartAxisTick
+	VolumeTicks []chartAxisTick
+	DateTicks   []chartDateTick
+}
+
+// chartAxisTick is one labelled gridline on a price or volume
+// axis. Class carries the responsive tick role (the middle tick
+// is dropped first on narrow screens).
+type chartAxisTick struct {
+	Label  string
+	Y      int
+	LabelY int
+	Class  string
+}
+
+// chartDateTick is one x-axis date label, anchored so the first
+// and last labels stay inside the chart.
+type chartDateTick struct {
+	Label  string
+	X      int
+	Anchor string
+	Class  string
 }
 
 // recentChartDays caps the recent-days table under the chart.
@@ -202,6 +224,42 @@ type chartDot struct {
 type chartBar struct {
 	X, Y, W, H int
 	Title      string // "<date>: volume N"
+}
+
+// formatCompactAxisNumber renders an axis value in the short
+// form a dense chart can carry: 950 stays 950, 12,345 becomes
+// 12K, 3,400,000 becomes 3.4M. It labels scales only — the exact
+// figures stay in the tooltips and the recent-days table.
+func formatCompactAxisNumber(v float64) string {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return ""
+	}
+	abs := math.Abs(v)
+	if abs < 1000 {
+		if v == math.Trunc(v) {
+			return fmt.Sprintf("%d", int64(v))
+		}
+		return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", v), "0"), ".")
+	}
+	units := []struct {
+		scale  float64
+		suffix string
+	}{
+		{1e12, "T"},
+		{1e9, "B"},
+		{1e6, "M"},
+		{1e3, "K"},
+	}
+	for _, u := range units {
+		if abs >= u.scale {
+			scaled := v / u.scale
+			if math.Abs(scaled) >= 100 {
+				return fmt.Sprintf("%.0f%s", scaled, u.suffix)
+			}
+			return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.1f", scaled), "0"), ".") + u.suffix
+		}
+	}
+	return fmt.Sprintf("%.0f", v)
 }
 
 // buildPriceChart turns stored daily aggregates into SVG
@@ -247,6 +305,37 @@ func buildPriceChart(rows []db.MarketHistory) (priceChart, bool) {
 	}
 	chart.MaxISK = esi.FormatISK(maxP)
 	chart.MinISK = esi.FormatISK(minP)
+	barTop := barBottom - barH
+	priceTick := func(value float64, y int, class string) chartAxisTick {
+		return chartAxisTick{
+			Label:  formatCompactAxisNumber(value) + " ISK",
+			Y:      y,
+			LabelY: y + 3,
+			Class:  class,
+		}
+	}
+	chart.PriceTicks = []chartAxisTick{
+		priceTick(maxP, priceTop, ""),
+		priceTick((minP+maxP)/2, priceTop+priceH/2, "tick-mid"),
+		priceTick(minP, priceBottom, ""),
+	}
+	volumeTick := func(value float64, y int, class string) chartAxisTick {
+		return chartAxisTick{
+			Label:  formatCompactAxisNumber(value),
+			Y:      y,
+			LabelY: y + 3,
+			Class:  class,
+		}
+	}
+	if maxV > 0 {
+		chart.VolumeTicks = []chartAxisTick{
+			volumeTick(float64(maxV), barTop, ""),
+			volumeTick(float64(maxV)/2, barTop+barH/2, "tick-mid"),
+			volumeTick(0, barBottom, ""),
+		}
+	} else {
+		chart.VolumeTicks = []chartAxisTick{volumeTick(0, barBottom, "")}
+	}
 
 	x := func(i int) int {
 		if len(rows) == 1 {
@@ -285,6 +374,24 @@ func buildPriceChart(rows []db.MarketHistory) (priceChart, bool) {
 	}
 	chart.From = rows[0].Date
 	chart.To = rows[len(rows)-1].Date
+	if len(rows) == 1 {
+		chart.DateTicks = []chartDateTick{
+			{Label: rows[0].Date, X: x(0), Anchor: "middle"},
+		}
+	} else {
+		chart.DateTicks = []chartDateTick{
+			{Label: rows[0].Date, X: x(0), Anchor: "start"},
+		}
+		if len(rows) > 2 {
+			mid := len(rows) / 2
+			chart.DateTicks = append(chart.DateTicks, chartDateTick{
+				Label: rows[mid].Date, X: x(mid), Anchor: "middle", Class: "tick-mid",
+			})
+		}
+		chart.DateTicks = append(chart.DateTicks, chartDateTick{
+			Label: rows[len(rows)-1].Date, X: x(len(rows) - 1), Anchor: "end",
+		})
+	}
 	return chart, true
 }
 

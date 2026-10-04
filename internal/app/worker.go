@@ -345,11 +345,20 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		}
 	}
 
-	// Public records: note the counterparty orbit (everyone the
+	// Public records: resolve any pilot names the topbar search
+	// is waiting on, note the counterparty orbit (everyone the
 	// deployment's data mentions) ahead of the pilot drain, then
 	// fill the pilot queue (strangers viewed on /pilot/) and the
 	// item-description wants the item details page notes. Public
 	// endpoints, same cycle allowance.
+	if !limited {
+		nResolved, nLimited := app.refreshPilotNameWants(ctx, allowance)
+		refreshed += nResolved
+		if nLimited {
+			log.Printf("worker: ESI error limit hit resolving pilot names; backing off until next cycle")
+			limited = true
+		}
+	}
 	app.notePilotOrbit(ctx)
 	if !limited {
 		pDrained, pLimited := app.refreshPilotRecords(ctx, allowance)

@@ -40,9 +40,11 @@ type contractRow struct {
 	IssuerID   int64
 	Assignee   string // "Public" for public contracts
 	AssigneeID int64
-	// AssigneeIsChar is false when the assignee is a corporation
-	// (or public) — corporations stay text.
+	// AssigneeIsChar / AssigneeIsCorp say how the assignee
+	// resolved: an assignee can be a character or a corporation,
+	// and each links to its own public page (public stays text).
 	AssigneeIsChar bool
+	AssigneeIsCorp bool
 	Acceptor       string // "" until accepted
 	AcceptorID     int64
 	// Pending labels: the counterparty's name is still on its
@@ -53,7 +55,9 @@ type contractRow struct {
 	Price           string
 	Reward          string
 	Collateral      string
-	Route           string // couriers: "Start → End"
+	RouteStart      placeRef // couriers only: pickup location
+	RouteEnd        placeRef // couriers only: drop-off location
+	HasRoute        bool     // couriers: either end known
 	Issued          string
 	Expires         string
 	Items           []contractItemRow
@@ -127,11 +131,18 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 			row.Title = "Untitled"
 		}
 		if c.AssigneeID > 0 {
-			row.Assignee, row.AssigneePending = app.contractCharLabel(ctx, c.AssigneeID)
 			row.AssigneeID = c.AssigneeID
-			// An assignee can be a corporation; only link when
-			// the ID resolves as a character.
-			_, row.AssigneeIsChar = app.esi.CachedCharacterName(c.AssigneeID)
+			// An assignee can be a character or a corporation;
+			// resolve whichever tier knows the ID and link
+			// accordingly. While neither tier knows it, the cell
+			// polls the character label like the issuer does.
+			name, isChar, isCorp := app.txnCounterparty(ctx, c.AssigneeID)
+			row.Assignee = name
+			row.AssigneeIsChar = isChar
+			row.AssigneeIsCorp = isCorp
+			if !isChar && !isCorp {
+				_, row.AssigneePending = app.contractCharLabel(ctx, c.AssigneeID)
+			}
 		} else if c.Availability == "public" {
 			row.Assignee = "Public"
 		}
@@ -140,9 +151,9 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 			row.AcceptorID = c.AcceptorID
 		}
 		if c.Type == "courier" && (c.StartLocationID > 0 || c.EndLocationID > 0) {
-			row.Route = fmt.Sprintf("%s → %s",
-				app.econLocationTitle(ctx, c.StartLocationID),
-				app.econLocationTitle(ctx, c.EndLocationID))
+			row.HasRoute = true
+			row.RouteStart = app.linkPlace(ctx, c.StartLocationID, app.econLocationTitle(ctx, c.StartLocationID))
+			row.RouteEnd = app.linkPlace(ctx, c.EndLocationID, app.econLocationTitle(ctx, c.EndLocationID))
 		}
 
 		// Warmed item list from the detail store (item-exchange

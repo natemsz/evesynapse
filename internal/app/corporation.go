@@ -27,6 +27,7 @@ type corpView struct {
 	CEOName        string
 	CEOID          int64
 	CEOPortraitURL string
+	AllianceID     int64
 	Alliance       string // "Name [TICK]", "" when not in an alliance
 	TaxRate        string // "10.0%"
 	Founded        string // YYYY-MM-DD
@@ -128,6 +129,7 @@ func (app *Application) fetchCorporation(ctx context.Context, corpID int64) (cor
 	}
 
 	if corp.AllianceID > 0 {
+		view.AllianceID = corp.AllianceID
 		var ally esi.Alliance
 		if err := app.esi.Get(ctx, "", fmt.Sprintf("/alliances/%d/", corp.AllianceID), &ally); err == nil {
 			if ally.Ticker != "" {

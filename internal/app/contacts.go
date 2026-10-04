@@ -24,6 +24,7 @@ type contactRow struct {
 	Name        string
 	ID          int64
 	IsChar      bool   // contact is a character (others stay text)
+	Kind        string // raw contact kind: character | corporation | alliance | faction
 	NamePending bool   // character name still on its way; the row polls for it
 	PollURL     string // live-region fragment for a pending character name
 	Type        string // display-cased contact kind
@@ -74,6 +75,7 @@ func (app *Application) handleContacts(w http.ResponseWriter, r *http.Request) {
 			row := contactRow{
 				ID:       c.ContactID,
 				IsChar:   c.ContactType == "character",
+				Kind:     c.ContactType,
 				Type:     humanizeEnum(c.ContactType),
 				Standing: fmt.Sprintf("%+.1f", c.Standing),
 				Watched:  c.IsWatched,
@@ -151,17 +153,9 @@ func (app *Application) contactDisplayName(ctx context.Context, c esi.Contact) s
 	case "character":
 		return app.displayCharacter(ctx, c.ContactID)
 	case "corporation":
-		if name, ok := app.esi.CachedCorpName(c.ContactID); ok && name != "" {
-			return name
-		}
-		app.notePageWantFromContext(ctx, pageWantCorporation, c.ContactID)
-		return fmt.Sprintf("Corporation #%d", c.ContactID)
+		return app.corpDisplayName(ctx, c.ContactID)
 	case "alliance":
-		if name, ok := app.esi.CachedAllianceName(c.ContactID); ok && name != "" {
-			return name
-		}
-		app.notePageWantFromContext(ctx, pageWantAlliance, c.ContactID)
-		return fmt.Sprintf("Alliance #%d", c.ContactID)
+		return app.allianceDisplayName(ctx, c.ContactID)
 	case "faction":
 		if name := app.factionName(ctx, c.ContactID); name != "" {
 			return name

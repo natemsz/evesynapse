@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 )
 
@@ -159,9 +160,10 @@ type corpTxnRow struct {
 	Side     string // "Buy" | "Sell"
 	With     string // counterparty display
 	ClientID int64
-	// ClientIsChar: counterparty resolved as a character (else a
-	// corporation — text).
+	// ClientIsChar: counterparty resolved as a character;
+	// ClientIsCorp: resolved as a corporation (else text).
 	ClientIsChar bool
+	ClientIsCorp bool
 }
 
 // corpWalletsView is the Corporation Wallets page body.
@@ -276,7 +278,7 @@ func (app *Application) handleCorpWallets(w http.ResponseWriter, r *http.Request
 			if t.IsBuy {
 				side = "Buy"
 			}
-			_, clientIsChar := app.esi.CachedCharacterName(t.ClientID)
+			with, clientIsChar, clientIsCorp := app.txnCounterparty(ctx, t.ClientID)
 			view.Txns = append(view.Txns, corpTxnRow{
 				Date:         formatFinish(t.Date),
 				Item:         app.typeNameOrID(ctx, t.TypeID),
@@ -285,9 +287,10 @@ func (app *Application) handleCorpWallets(w http.ResponseWriter, r *http.Request
 				Unit:         esi.FormatISK(t.UnitPrice),
 				Total:        esi.FormatISK(t.UnitPrice * float64(t.Quantity)),
 				Side:         side,
-				With:         app.displayCharacter(ctx, t.ClientID),
+				With:         with,
 				ClientID:     t.ClientID,
 				ClientIsChar: clientIsChar,
+				ClientIsCorp: clientIsCorp,
 			})
 		}
 	}
@@ -302,14 +305,19 @@ func (app *Application) handleCorpWallets(w http.ResponseWriter, r *http.Request
 // corpOrdersRow is one open-order line of the Corporation Orders
 // page (renamed from the earlier corpOrderRow sketch).
 type corpOrderRow struct {
-	Item       string
-	TypeID     int64
-	Side       string // "Buy" | "Sell"
-	Price      string
-	Volume     string // "remain / total"
-	Location   string
-	Region     string
-	Expires    string
+	Item     string
+	TypeID   int64
+	Side     string // "Buy" | "Sell"
+	Price    string
+	Volume   string // "remain / total"
+	Location placeRef
+	Region   string
+	Expires  string
+	// Status: the order-health verdict when the worker has one
+	// for this order (see handleCorpOrders); "" when the order
+	// was placed by someone whose orders the app doesn't check.
+	Status     string
+	Bad        bool // Status is a needs-attention verdict (undercut)
 	IssuedBy   string
 	IssuedByID int64
 }
@@ -366,6 +374,35 @@ func (app *Application) handleCorpOrders(w http.ResponseWriter, r *http.Request)
 		return name
 	}
 
+	// Order health reaches corporation orders too: an order a
+	// synced character placed for the corp sits in that
+	// character's order snapshot under the same order id, so the
+	// worker's health rows cover it keyed (issuer, order). A
+	// verdict shows when one matches; a sell order placed by one
+	// of the account's own characters without a verdict yet gets
+	// the same not-checked line as everywhere else. Orders from
+	// issuers the app doesn't sync stay blank — promising a
+	// check that never runs would be a lie.
+	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	health := make(map[int64]db.OrderHealth)
+	ownChars := make(map[int64]bool)
+	if userID > 0 {
+		if rows, err := app.queries.ListOrderHealthByUser(ctx, userID); err != nil {
+			log.Printf("corp orders: list health for user %d: %v", userID, err)
+		} else {
+			for _, h := range rows {
+				health[h.OrderID] = h
+			}
+		}
+		if chars, err := app.queries.ListCharactersByUser(ctx, userID); err != nil {
+			log.Printf("corp orders: list characters for user %d: %v", userID, err)
+		} else {
+			for _, ch := range chars {
+				ownChars[ch.CharacterID] = true
+			}
+		}
+	}
+
 	rows := make([]corpOrderRow, 0, len(orders))
 	for _, o := range orders {
 		side := "Sell"
@@ -376,18 +413,26 @@ func (app *Application) handleCorpOrders(w http.ResponseWriter, r *http.Request)
 		if t, err := time.Parse(time.RFC3339, o.Issued); err == nil && o.Duration > 0 {
 			expires = t.Add(time.Duration(o.Duration) * 24 * time.Hour).UTC().Format("2006-01-02 15:04 UTC")
 		}
-		rows = append(rows, corpOrderRow{
+		row := corpOrderRow{
 			Item:       app.typeNameOrID(ctx, o.TypeID),
 			TypeID:     o.TypeID,
 			Side:       side,
 			Price:      esi.FormatISK(o.Price),
 			Volume:     fmt.Sprintf("%s / %s", esi.FormatInt(o.VolumeRemain), esi.FormatInt(o.VolumeTotal)),
-			Location:   app.corpLocationTitle(ctx, o.LocationID, structureNames),
+			Location:   app.linkPlace(ctx, o.LocationID, app.corpLocationTitle(ctx, o.LocationID, structureNames)),
 			Region:     regionName(o.RegionID),
 			Expires:    expires,
 			IssuedBy:   app.displayCharacter(ctx, o.IssuedBy),
 			IssuedByID: o.IssuedBy,
-		})
+		}
+		if !o.IsBuyOrder {
+			if h, ok := health[o.OrderID]; ok && h.CharacterID == o.IssuedBy {
+				row.Status, row.Bad = orderHealthText(h.MyPrice, h.Status, h.StationBest, h.RegionBest)
+			} else if ownChars[o.IssuedBy] {
+				row.Status = "Not checked against the order book yet"
+			}
+		}
+		rows = append(rows, row)
 	}
 	sort.Slice(rows, func(i, j int) bool {
 		if rows[i].Item != rows[j].Item {
@@ -477,6 +522,7 @@ func (app *Application) handleCorpAssets(w http.ResponseWriter, r *http.Request)
 // corpStructureRow is one structure line.
 type corpStructureRow struct {
 	Name     string
+	LinkID   int64 // structure id when Name is a resolved name (links to its page); 0 for the "#<id>" fallback
 	Type     string
 	TypeID   int64
 	System   string
@@ -540,6 +586,9 @@ func (app *Application) handleCorpStructures(w http.ResponseWriter, r *http.Requ
 			} else {
 				row.Name = fmt.Sprintf("Structure #%d", s.StructureID)
 			}
+		}
+		if row.Name != fmt.Sprintf("Structure #%d", s.StructureID) {
+			row.LinkID = s.StructureID
 		}
 		row.System = app.locationTitle(ctx, s.SystemID, "solar_system")
 		if s.FuelExpires != "" {
@@ -630,7 +679,13 @@ func (app *Application) handleCorpKillmails(w http.ResponseWriter, r *http.Reque
 		refs = refs[:maxKillmailsShown]
 	}
 
-	prices := app.cachedPrices()
+	// Values read the price guide wherever the app holds it
+	// (see handleKillmails); with none anywhere, the view notes
+	// the durable guide-price want so the worker fills it in.
+	prices := app.valuationPrices(ctx)
+	if prices == nil {
+		app.notePageWant(ctx, pageWantGuidePrices, 1, 0)
+	}
 	viewer := killmailViewer{corporationID: sel.Base.CorpID}
 	for _, ref := range refs {
 		view.Rows = append(view.Rows, app.killmailRow(ctx, viewer, ref, prices))

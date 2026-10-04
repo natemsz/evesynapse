@@ -215,12 +215,16 @@ func (app *Application) refreshCorpMapping(ctx context.Context, ch db.Character)
 
 // seedStructurePlaceNames stores the corp's structure names from
 // the structures snapshot into the ESI client's place cache, so
-// location titles elsewhere (orders, tracking) can use them.
+// location titles elsewhere (orders, tracking) can use them. The
+// snapshot's facts also land in the durable structure_context
+// store (and its names in structure_names) behind the structure
+// page.
 func (app *Application) seedStructurePlaceNames(ctx context.Context, ch db.Character) {
 	var structures esi.CorpStructures
 	if !app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapCorpStructures, &structures) {
 		return
 	}
+	app.persistStructureContexts(ctx, structures)
 	for _, s := range structures {
 		if s.Name != "" {
 			app.esi.StorePlaceName(s.StructureID, s.Name)

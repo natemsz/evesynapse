@@ -306,6 +306,70 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 024 (v0.3.10 market category tree: the
+	// invMarketGroups browse hierarchy), applied the same guarded
+	// way: only when its table doesn't exist yet.
+	var marketGroupTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sde_market_groups'`).Scan(&marketGroupTables); err != nil {
+		return nil, err
+	}
+	if marketGroupTables == 0 {
+		if err := applySchema(conn, marketGroupsSchema); err != nil {
+			return nil, err
+		}
+	}
+	// Schema 025 (v0.3.11 planet names: the durable resolution
+	// queue behind the PI surfaces, so "Planet #<id>" fallbacks
+	// resolve in the background via the public planets endpoint
+	// and stay resolved across restarts), applied the same
+	// guarded way.
+	var planetNameTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'planet_names'`).Scan(&planetNameTables); err != nil {
+		return nil, err
+	}
+	if planetNameTables == 0 {
+		if err := applySchema(conn, planetNamesSchema); err != nil {
+			return nil, err
+		}
+	}
+	// Schema 026 (v0.3.12 public corporation & alliance records:
+	// the wants queues behind /corporation/ and /alliance/,
+	// mirroring pilot_records), applied the same guarded way.
+	var orgRecordTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'corporation_records'`).Scan(&orgRecordTables); err != nil {
+		return nil, err
+	}
+	if orgRecordTables == 0 {
+		if err := applySchema(conn, orgRecordsSchema); err != nil {
+			return nil, err
+		}
+	}
+	// Schema 027 (v0.3.14 guide-price wants: the durable note a
+	// kill view leaves when it has no prices to value with, so
+	// the worker refreshes the stored guide on the urgent tick
+	// instead of kill values waiting on a Market visit), applied
+	// the same guarded way.
+	var guidePriceWantTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'guide_price_wants'`).Scan(&guidePriceWantTables); err != nil {
+		return nil, err
+	}
+	if guidePriceWantTables == 0 {
+		if err := applySchema(conn, guidePriceWantsSchema); err != nil {
+			return nil, err
+		}
+	}
+	// Schema 028 (v0.3.16 structure context: owner/system/type
+	// facts distilled from corporation structure snapshots behind
+	// the structure page), applied the same guarded way.
+	var structureContextTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'structure_context'`).Scan(&structureContextTables); err != nil {
+		return nil, err
+	}
+	if structureContextTables == 0 {
+		if err := applySchema(conn, structureContextSchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

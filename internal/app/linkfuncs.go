@@ -20,11 +20,23 @@ import (
 //     (/pilot/?character=<id>) — except in kill contexts, where
 //     strangers link to their zKillboard pilot page instead, since
 //     kill history is what zKillboard does best.
+//   - Corporations link to the public corporation page
+//     (/corporation/?corporation=<id>) and alliances to the public
+//     alliance page (/alliance/?alliance=<id>) — in every context,
+//     kill pages included: only characters change destination in
+//     kill contexts, organizations stay in-app.
+//   - Solar systems link to the system page (/system/?system=<id>)
+//     and NPC stations to the station page
+//     (/station/?station=<id>), again in every context. Player
+//     structures link to the structure page
+//     (/structure/?structure=<id>) once the worker has resolved
+//     their name or the app knows their context; while a structure
+//     is still just "Structure #<id>", its name stays text.
 //
 // The helpers are template functions (registered in pages.go's
 // render) taking the page's ViewerChars set, so templates phrase
 // every link identically and the policy lives in exactly one place.
-// All three degrade to plain escaped text when the id is unknown
+// All of them degrade to plain escaped text when the id is unknown
 // (<= 0) or the name unresolved — an unresolvable name stays text
 // instead of becoming a dead link.
 // =====================================================================
@@ -75,6 +87,81 @@ func zkillKillLink(killmailID int64) template.HTML {
 	return template.HTML(fmt.Sprintf(`<a href="https://zkillboard.com/kill/%d/" target="_blank" rel="noopener noreferrer">View on zKillboard</a>`, killmailID))
 }
 
+// corpLink renders a corporation name as a link to the public
+// corporation page. Plain text when either side is missing.
+func corpLink(corpID int64, name string) template.HTML {
+	if corpID <= 0 || name == "" {
+		return template.HTML(html.EscapeString(name))
+	}
+	return template.HTML(fmt.Sprintf(`<a href="/corporation/?corporation=%d">%s</a>`, corpID, html.EscapeString(name)))
+}
+
+// allianceLink renders an alliance name as a link to the public
+// alliance page. Plain text when either side is missing.
+func allianceLink(allianceID int64, name string) template.HTML {
+	if allianceID <= 0 || name == "" {
+		return template.HTML(html.EscapeString(name))
+	}
+	return template.HTML(fmt.Sprintf(`<a href="/alliance/?alliance=%d">%s</a>`, allianceID, html.EscapeString(name)))
+}
+
+// systemLink renders a solar-system name as a link to the system
+// page. Plain text when either side is missing.
+func systemLink(systemID int64, name string) template.HTML {
+	if systemID <= 0 || name == "" {
+		return template.HTML(html.EscapeString(name))
+	}
+	return template.HTML(fmt.Sprintf(`<a href="/system/?system=%d">%s</a>`, systemID, html.EscapeString(name)))
+}
+
+// stationLink renders an NPC station name as a link to the
+// station page. Plain text when either side is missing.
+func stationLink(stationID int64, name string) template.HTML {
+	if stationID <= 0 || name == "" {
+		return template.HTML(html.EscapeString(name))
+	}
+	return template.HTML(fmt.Sprintf(`<a href="/station/?station=%d">%s</a>`, stationID, html.EscapeString(name)))
+}
+
+// structureLink renders a player structure's resolved name as a
+// link to the structure page. Plain text when either side is
+// missing — callers pass the id only once resolution has landed,
+// so an unresolved "Structure #<id>" stays text.
+func structureLink(structureID int64, name string) template.HTML {
+	if structureID <= 0 || name == "" {
+		return template.HTML(html.EscapeString(name))
+	}
+	return template.HTML(fmt.Sprintf(`<a href="/structure/?structure=%d">%s</a>`, structureID, html.EscapeString(name)))
+}
+
+// placeRef is one rendered location: its display title (resolved
+// with the usual fallbacks) plus the page it links to when the
+// location is a kind the link policy covers — StationID for an
+// NPC station, SystemID for a solar system, StructureID for a
+// player structure whose name or context the app holds — all 0
+// for containers and unresolved ids, which stay text.
+type placeRef struct {
+	Name        string
+	StationID   int64
+	StructureID int64
+	SystemID    int64
+}
+
+// placeLink renders a placeRef by the policy: station wins, then
+// structure, then system, otherwise the plain title.
+func placeLink(ref placeRef) template.HTML {
+	if ref.StationID > 0 {
+		return stationLink(ref.StationID, ref.Name)
+	}
+	if ref.StructureID > 0 {
+		return structureLink(ref.StructureID, ref.Name)
+	}
+	if ref.SystemID > 0 {
+		return systemLink(ref.SystemID, ref.Name)
+	}
+	return template.HTML(html.EscapeString(ref.Name))
+}
+
 // linkFuncMap is the template function set carrying the link
 // policy; pages.go registers it for every render.
 func linkFuncMap() template.FuncMap {
@@ -83,5 +170,11 @@ func linkFuncMap() template.FuncMap {
 		"charLink":      charLink,
 		"killCharLink":  killCharLink,
 		"zkillKillLink": zkillKillLink,
+		"corpLink":      corpLink,
+		"allianceLink":  allianceLink,
+		"systemLink":    systemLink,
+		"stationLink":   stationLink,
+		"structureLink": structureLink,
+		"placeLink":     placeLink,
 	}
 }

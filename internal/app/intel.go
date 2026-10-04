@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"sort"
@@ -87,21 +88,16 @@ func (app *Application) userCorporationIDs(ctx context.Context) map[int64]bool {
 	return out
 }
 
-// orgDisplay renders a war party: corporation or alliance name
-// from the worker-warmed caches, honest "#<id>" fallbacks while a
-// name is still warming. Never networks.
-func (app *Application) orgDisplay(corporationID, allianceID int64) string {
+// orgDisplay renders a war party as a link to its public page:
+// alliance names to the alliance page, corporation names to the
+// corporation page, honest "#<id>" labels while a name is still
+// warming. Never networks.
+func (app *Application) orgDisplay(ctx context.Context, corporationID, allianceID int64) template.HTML {
 	if allianceID > 0 {
-		if name, ok := app.esi.CachedAllianceName(allianceID); ok {
-			return name
-		}
-		return fmt.Sprintf("Alliance #%d", allianceID)
+		return allianceLink(allianceID, app.allianceDisplayName(ctx, allianceID))
 	}
 	if corporationID > 0 {
-		if name, ok := app.esi.CachedCorpName(corporationID); ok {
-			return name
-		}
-		return fmt.Sprintf("Corporation #%d", corporationID)
+		return corpLink(corporationID, app.corpDisplayName(ctx, corporationID))
 	}
 	return "—"
 }
@@ -118,10 +114,10 @@ const maxWarsShown = 50
 // has not landed yet carry Warming=true and placeholder fields.
 type warRow struct {
 	ID         int64
-	Aggressor  string
-	Defender   string
-	Allies     string // allied defenders, joined; "" when none
-	State      string // Active | Retracted … | Ended …
+	Aggressor  template.HTML // linked organization name (see orgDisplay)
+	Defender   template.HTML
+	Allies     []template.HTML // allied defenders, "" when none
+	State      string          // Active | Retracted … | Ended …
 	Declared   string
 	Mutual     bool
 	OpenAllies bool
@@ -191,8 +187,8 @@ func (app *Application) warRow(ctx context.Context, warID int64, yourCorps map[i
 	}
 	row.Warming = false
 
-	row.Aggressor = app.orgDisplay(war.Aggressor.CorporationID, war.Aggressor.AllianceID)
-	row.Defender = app.orgDisplay(war.Defender.CorporationID, war.Defender.AllianceID)
+	row.Aggressor = app.orgDisplay(ctx, war.Aggressor.CorporationID, war.Aggressor.AllianceID)
+	row.Defender = app.orgDisplay(ctx, war.Defender.CorporationID, war.Defender.AllianceID)
 	row.AggKills = warPartyRecord(war.Aggressor)
 	row.DefKills = warPartyRecord(war.Defender)
 	row.Declared = formatFinish(war.Declared)
@@ -209,11 +205,11 @@ func (app *Application) warRow(ctx context.Context, warID int64, yourCorps map[i
 		row.State = "Pending start" // declared; the 24h warm-up is still running
 	}
 
-	var allies []string
+	var allies []template.HTML
 	for _, ally := range war.Allies {
-		allies = append(allies, app.orgDisplay(ally.CorporationID, ally.AllianceID))
+		allies = append(allies, app.orgDisplay(ctx, ally.CorporationID, ally.AllianceID))
 	}
-	row.Allies = strings.Join(allies, ", ")
+	row.Allies = allies
 
 	row.Yours = warInvolves(war, yourCorps)
 	return row
@@ -251,12 +247,12 @@ func warInvolves(war esi.War, yourCorps map[int64]bool) bool {
 // incursionRow is one line of the incursions page.
 type incursionRow struct {
 	Constellation string
-	Staging       string // staging solar system name
-	State         string // humanized
-	InfluencePct  int    // 0..100, drives the bar
-	Boss          bool   // final-encounter boss present
+	Staging       placeRef // staging solar system (linked when the SDE knows it)
+	State         string   // humanized
+	InfluencePct  int      // 0..100, drives the bar
+	Boss          bool     // final-encounter boss present
 	FactionName   string
-	Systems       []string // affected (infested) system names
+	Systems       []placeRef // affected (infested) systems
 }
 
 // incursionsView is the Incursions page body.
@@ -293,7 +289,7 @@ func (app *Application) handleIntelIncursions(w http.ResponseWriter, r *http.Req
 	for _, inc := range incursions {
 		row := incursionRow{
 			Constellation: fmt.Sprintf("Constellation #%d", inc.ConstellationID),
-			Staging:       app.locationTitle(ctx, inc.StagingSystemID, "solar_system"),
+			Staging:       app.linkPlace(ctx, inc.StagingSystemID, app.locationTitle(ctx, inc.StagingSystemID, "solar_system")),
 			State:         humanizeState(inc.State),
 			Boss:          inc.HasBoss,
 			FactionName:   factionDisplay(factions, inc.FactionID),
@@ -310,7 +306,7 @@ func (app *Application) handleIntelIncursions(w http.ResponseWriter, r *http.Req
 		}
 		row.InfluencePct = pct
 		for _, systemID := range inc.InfestedSystems {
-			row.Systems = append(row.Systems, app.locationTitle(ctx, systemID, "solar_system"))
+			row.Systems = append(row.Systems, app.linkPlace(ctx, systemID, app.locationTitle(ctx, systemID, "solar_system")))
 		}
 		view.Rows = append(view.Rows, row)
 	}
@@ -352,7 +348,7 @@ type fwFactionCard struct {
 
 // fwSystemRow is one contested-system line.
 type fwSystemRow struct {
-	System   string
+	System   placeRef
 	Occupier string
 	Owner    string
 	State    string // humanized contested label
@@ -418,7 +414,7 @@ func (app *Application) handleIntelFW(w http.ResponseWriter, r *http.Request) {
 		rows := make([]fwSystemRow, 0, len(systems))
 		for _, sys := range systems {
 			rows = append(rows, fwSystemRow{
-				System:   app.locationTitle(ctx, sys.SolarSystemID, "solar_system"),
+				System:   app.linkPlace(ctx, sys.SolarSystemID, app.locationTitle(ctx, sys.SolarSystemID, "solar_system")),
 				Occupier: factionDisplay(factions, sys.OccupierFactionID),
 				Owner:    factionDisplay(factions, sys.OwnerFactionID),
 				State:    humanizeState(sys.Contested),
@@ -431,7 +427,7 @@ func (app *Application) handleIntelFW(w http.ResponseWriter, r *http.Request) {
 			if rows[i].Percent != rows[j].Percent {
 				return rows[i].Percent > rows[j].Percent
 			}
-			return rows[i].System < rows[j].System
+			return rows[i].System.Name < rows[j].System.Name
 		})
 		if len(rows) > maxFWSystemsShown {
 			rows = rows[:maxFWSystemsShown]

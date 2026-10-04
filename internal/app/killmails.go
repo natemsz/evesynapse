@@ -28,11 +28,11 @@ const maxKillmailsShown = 50
 // killmailRow is one list line. Rows without a stored detail yet
 // carry Warming=true and placeholder fields.
 type killmailRow struct {
-	KillmailID  int64  // set even while warming — the zKillboard link never waits
-	Time        string // formatted kill time, "—" while warming
-	System      string
-	Kill        bool // badge: victim is someone else
-	Loss        bool // badge: victim is the viewing character
+	KillmailID  int64    // set even while warming — the zKillboard link never waits
+	Time        string   // formatted kill time, "—" while warming
+	System      placeRef // link-ified per the place policy; text when the SDE doesn't know it
+	Kill        bool     // badge: victim is someone else
+	Loss        bool     // badge: victim is the viewing character
 	Victim      string
 	VictimID    int64
 	Ship        string // victim ship type name
@@ -108,9 +108,17 @@ func (app *Application) handleKillmails(w http.ResponseWriter, r *http.Request) 
 		refs = refs[:maxKillmailsShown]
 	}
 
-	// Estimated values reuse the Market page's /markets/prices/
-	// cache when it has been populated; nothing here fetches.
-	prices := app.cachedPrices()
+	// Estimated values read the price guide wherever the app
+	// holds it — the live in-memory guide from a Market visit,
+	// else the worker's stored mirror; nothing here fetches.
+	// With no guide anywhere yet, viewing kill content notes a
+	// durable want (schema 027) so the worker refreshes the
+	// stored guide and values fill in on the next render
+	// instead of waiting on a Market visit.
+	prices := app.valuationPrices(ctx)
+	if prices == nil {
+		app.notePageWant(ctx, pageWantGuidePrices, 1, 0)
+	}
 
 	viewer := killmailViewer{characterID: active.CharacterID}
 	for _, ref := range refs {
@@ -138,7 +146,7 @@ func (app *Application) killmailRow(ctx context.Context, viewer killmailViewer, 
 	row := killmailRow{
 		KillmailID: ref.KillmailID,
 		Time:       "—",
-		System:     "—",
+		System:     placeRef{Name: "—"},
 		Victim:     "—",
 		Ship:       "—",
 		FinalBlow:  "—",
@@ -162,7 +170,7 @@ func (app *Application) killmailRow(ctx context.Context, viewer killmailViewer, 
 	row.Warming = false
 
 	row.Time = formatFinish(km.KillmailTime)
-	row.System = app.locationTitle(ctx, km.SolarSystemID, "solar_system")
+	row.System = app.linkPlace(ctx, km.SolarSystemID, app.locationTitle(ctx, km.SolarSystemID, "solar_system"))
 	isLoss := km.Victim.CharacterID == viewer.characterID
 	if viewer.corporationID > 0 {
 		isLoss = km.Victim.CorporationID == viewer.corporationID

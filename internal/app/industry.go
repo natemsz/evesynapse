@@ -49,7 +49,7 @@ type industryJobRow struct {
 	ProductTypeID   int64
 	Installer       string
 	InstallerID     int64
-	Facility        string
+	Facility        placeRef
 	Runs            string // "5" or "3 / 5 successful" for finished invention-type runs
 	Status          string // humanized
 	Ends            string // end date + remaining time while active
@@ -64,7 +64,7 @@ type blueprintRow struct {
 	ME       string // "10%"
 	TE       string // "20%"
 	Runs     string // runs remaining; "∞" for originals
-	Location string
+	Location placeRef
 }
 
 // miningRow is one mining-ledger line.
@@ -73,7 +73,7 @@ type miningRow struct {
 	Ore    string
 	TypeID int64
 	Qty    string
-	System string
+	System placeRef
 }
 
 // industryView is the Industry page body.
@@ -150,7 +150,7 @@ func (app *Application) fillIndustryJobs(ctx context.Context, characterID int64,
 			facilityID = j.StationID
 		}
 		if facilityID > 0 {
-			row.Facility = app.econLocationTitle(ctx, facilityID)
+			row.Facility = app.linkPlace(ctx, facilityID, app.econLocationTitle(ctx, facilityID))
 		}
 		if j.SuccessfulRuns > 0 || j.Status == "delivered" {
 			row.Runs = fmt.Sprintf("%d / %s", j.SuccessfulRuns, esi.FormatInt(j.Runs))
@@ -214,7 +214,7 @@ func (app *Application) fillBlueprints(ctx context.Context, characterID int64, v
 			row.Runs = esi.FormatInt(bp.Runs)
 		}
 		if bp.LocationID > 0 {
-			row.Location = app.econLocationTitle(ctx, bp.LocationID)
+			row.Location = app.linkPlace(ctx, bp.LocationID, app.econLocationTitle(ctx, bp.LocationID))
 		}
 		rows = append(rows, row)
 	}
@@ -239,7 +239,7 @@ func (app *Application) fillMining(ctx context.Context, characterID int64, view 
 			Ore:    app.typeNameOrID(ctx, m.TypeID),
 			TypeID: m.TypeID,
 			Qty:    esi.FormatInt(m.Quantity),
-			System: app.locationTitle(ctx, m.SolarSystemID, "solar_system"),
+			System: app.linkPlace(ctx, m.SolarSystemID, app.locationTitle(ctx, m.SolarSystemID, "solar_system")),
 		})
 	}
 	sort.SliceStable(rows, func(i, j int) bool {

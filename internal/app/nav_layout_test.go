@@ -9,6 +9,7 @@ package app
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -42,6 +43,10 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`<label class="nav-drawer-close" for="nav-drawer-toggle" role="button" tabindex="0" aria-label="Close navigation"><svg class="nav-control-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17" fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2.2" stroke-linecap="round"/></svg></label>`,
 		`id="nav-drawer-toggle" autocomplete="off"`,
 		`<button type="button" class="nav-reopen" id="nav-reopen"`,
+		`<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">`,
+		`<svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true">`,
+		`<path d="M24 17.2V12M29.4 27.6l6 3M18.6 27.6l-6 3"/>`,
+		`<circle cx="24" cy="24" r="6.5"/>`,
 		`<a class="wordmark topbar-wordmark" href="/">EVESYNAPSE</a>`,
 		`data-nav-category="character"`,
 		`data-nav-category="corporation"`,
@@ -149,6 +154,19 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	if !strings.Contains(body[topbarStart:topbarStart+topbarEnd], `<a class="wordmark topbar-wordmark" href="/">EVESYNAPSE</a>`) {
 		t.Error("topbar is missing the wordmark")
 	}
+	// v0.3.07.007 branding: The Hub brand mark sits in the top
+	// bar immediately before the wordmark, painted from the
+	// same shared gradient def (the one-def count above keeps
+	// it honest).
+	topbar := body[topbarStart : topbarStart+topbarEnd]
+	brandAt := strings.Index(topbar, `<svg class="brand-mark"`)
+	wordmarkAt := strings.Index(topbar, `<a class="wordmark topbar-wordmark"`)
+	if brandAt < 0 || wordmarkAt < 0 || brandAt > wordmarkAt {
+		t.Errorf("brand mark at %d, wordmark at %d in topbar; want the mark first", brandAt, wordmarkAt)
+	}
+	if !strings.Contains(body, "</svg>\n    <a class=\"wordmark topbar-wordmark\" href=\"/\">EVESYNAPSE</a>") {
+		t.Error("brand mark does not sit immediately before the wordmark")
+	}
 
 	code, css := getPage(t, app, cookie, "/static/style.css")
 	if code != http.StatusOK {
@@ -211,7 +229,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// in-flow header and drop the body offset.
 		"header {\n  position: fixed;\n  top: 0;\n  right: 0;\n  left: 0;\n  z-index: 60;\n}",
 		"header nav { max-width: none; }",
-		"background: linear-gradient(to bottom, rgba(24, 24, 24, 0.95), rgba(11, 11, 11, 0.95));",
+		"background: linear-gradient(to bottom, rgba(24, 24, 24, 0.9), rgba(11, 11, 11, 0.9));",
 		"-webkit-backdrop-filter: blur(10px);",
 		"backdrop-filter: blur(10px);",
 		"padding-top: calc(3.75rem + 1px);",
@@ -224,6 +242,10 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		".nav-expand-btn",
 		"html.js .nav-expand-btn { display: inline-flex; }",
 		"html[data-nav=\"rail\"] .sidebar .nav-expand-btn { display: inline-flex; }",
+		// v0.3.07.007: the glyph-only controls float bare —
+		// no resting background or visible border; the labeled
+		// .nav-reopen keeps its box.
+		".nav-state-btn,\n.nav-drawer-close,\n.nav-expand-btn {\n  background: transparent;\n  border-color: transparent;\n}",
 		// v0.3.07.005 wide top bar: the wordmark's auto margin
 		// pins the sync/search/character cluster to the right
 		// edge as one group, and the search field carries its
@@ -234,6 +256,11 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		".search-glyph {",
 		"pointer-events: none;",
 		".topsearch input { padding: 0.3rem 0.55rem 0.3rem 2rem; font-size: 0.85rem; }",
+		// v0.3.07.007 branding: the Hub mark rides at the word-
+		// mark's left at a fixed square size, pulled slightly
+		// into the topbar flex gap so the gap before the text
+		// stays small.
+		".brand-mark {\n  display: block;\n  flex: none;\n  width: 1.35rem;\n  height: 1.35rem;\n  margin-right: -0.45rem;\n}",
 		// v0.3.07.006 rail discipline: closed categories never
 		// paint a flyout panel, and the active-section pill is
 		// the current page's category alone — a merely open
@@ -308,5 +335,34 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		if strings.Contains(js, gone) {
 			t.Errorf("app.js still contains the poller give-up %q", gone)
 		}
+	}
+
+	// v0.3.07.007 branding: the favicon asset itself. The file
+	// server must hand it out as SVG (Go's mime table covers
+	// .svg in this environment — this pins that it stays true),
+	// carrying The Hub on the page-base backdrop instead of the
+	// retired E glyph.
+	freq := httptest.NewRequest(http.MethodGet, "/static/favicon.svg", nil)
+	frec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(frec, freq)
+	if frec.Code != http.StatusOK {
+		t.Fatalf("GET /static/favicon.svg: status %d", frec.Code)
+	}
+	if ct := frec.Header().Get("Content-Type"); !strings.Contains(ct, "image/svg+xml") {
+		t.Errorf("favicon.svg content type %q, want image/svg+xml", ct)
+	}
+	fav := frec.Body.String()
+	for _, want := range []string{
+		`viewBox="0 0 48 48"`,
+		`<rect width="48" height="48" rx="10" fill="#0d0503"/>`,
+		`<circle cx="24" cy="24" r="6.5"/>`,
+		`<circle cx="40" cy="33" r="4.5"/>`,
+	} {
+		if !strings.Contains(fav, want) {
+			t.Errorf("favicon.svg missing %q", want)
+		}
+	}
+	if strings.Contains(fav, "M20 16h26") {
+		t.Error("favicon.svg still carries the retired E glyph")
 	}
 }

@@ -119,6 +119,17 @@
     }
   }
 
+  // --- Widget settings (orders scope picker) ------------------
+  // A change applies at once: the form IS the plain submit (the
+  // no-JS path), this just skips the button press. In customize
+  // mode the page reloads so the live card re-renders in place.
+  var scopeForms = document.querySelectorAll("form.widget-scope");
+  for (var s = 0; s < scopeForms.length; s++) {
+    scopeForms[s].addEventListener("change", function () {
+      this.submit();
+    });
+  }
+
   // --- Home customize: drag, resize, remove, add module --------
   // Layered over the plain customize forms, never replacing them:
   // this runs only on the customize view (the data-customize grid)

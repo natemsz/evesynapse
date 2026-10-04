@@ -11,11 +11,11 @@ import (
 )
 
 func TestVersionFileAndFooter(t *testing.T) {
-	if got := strings.TrimSpace(versionFile); got != "0.3.03.001" {
-		t.Fatalf("version.txt = %q, want 0.3.03.001", got)
+	if got := strings.TrimSpace(versionFile); got != "0.3.04.001" {
+		t.Fatalf("version.txt = %q, want 0.3.04.001", got)
 	}
-	if appVersion != "v0.3.03.001" {
-		t.Fatalf("appVersion = %q, want v0.3.03.001", appVersion)
+	if appVersion != "v0.3.04.001" {
+		t.Fatalf("appVersion = %q, want v0.3.04.001", appVersion)
 	}
 
 	transport := &countingTransport{}
@@ -29,7 +29,7 @@ func TestVersionFileAndFooter(t *testing.T) {
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
 
 	_, body := getPage(t, app, cookie, "/market/")
-	mustContain(t, "/market/ footer", body, "EveSynapse v0.3.03.001")
+	mustContain(t, "/market/ footer", body, "EveSynapse v0.3.04.001")
 	if strings.Contains(body, "0.2.0") {
 		t.Fatal("footer still shows the old hardcoded version")
 	}

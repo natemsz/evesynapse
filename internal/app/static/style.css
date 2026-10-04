@@ -622,6 +622,20 @@ footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
 .cust-actions form { margin: 0; }
 .cust-actions button, .cust-row > form button { font: inherit; cursor: pointer; }
 
+/* --- widget settings (orders scope): a quiet inline form at the
+   top of the card. Selects follow the input palette; the button
+   is the no-JS path (app.js submits on change). --- */
+.widget-scope { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; margin: 0 0 0.5rem; }
+.widget-scope select {
+  background: #0e0e0e;
+  border: 1px solid #2a2a2a;
+  border-radius: 3px;
+  color: var(--text);
+  padding: 0.3rem 0.4rem;
+  font: inherit;
+}
+.widget-scope select:focus { border-color: var(--accent); outline: none; }
+
 /* --- home customize mode: drag handles, × removal, add-module
    pop-up. All three controls are inserted by app.js on the
    customize view only; the raw markup carries the plain

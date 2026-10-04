@@ -169,7 +169,13 @@ header {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: linear-gradient(to bottom, #181818, #0b0b0b);
+  /* The one glass surface in the app (user override, top bar
+     only): the bar paint at 95% over a backdrop blur, so what
+     scrolls beneath reads frosted. Bar content stays opaque;
+     the 95% paint alone is the no-blur fallback. */
+  background: linear-gradient(to bottom, rgba(24, 24, 24, 0.95), rgba(11, 11, 11, 0.95));
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   border-bottom: 1px solid #262626;
   box-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
 }
@@ -943,11 +949,25 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
    on the dedicated body::before layer above; navigation lives in
    a left sidebar on wide screens and in an off-canvas drawer on
    small screens. Content panels remain opaque. */
+/* Wide screens: the top bar is a fixed full-width strip across
+   the very top (wordmark in its left corner, cluster at the
+   right), and the sidebar hangs below it — its top edge offset
+   by the bar height in expanded, rail, and hidden states alike,
+   so the bar never moves, resizes, or gets covered. */
 body {
   display: grid;
   grid-template-columns: 15.5rem minmax(0, 1fr);
   align-items: start;
+  padding-top: calc(3.75rem + 1px);
 }
+header {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 60;
+}
+header nav { max-width: none; }
 html[data-nav="rail"] body { grid-template-columns: 5rem minmax(0, 1fr); }
 html[data-nav="hidden"] body { grid-template-columns: 0 minmax(0, 1fr); }
 .nav-drawer-checkbox {
@@ -961,10 +981,10 @@ html[data-nav="hidden"] body { grid-template-columns: 0 minmax(0, 1fr); }
 }
 .sidebar {
   position: sticky;
-  top: 0;
+  top: calc(3.75rem + 1px);
   z-index: 50;
-  height: 100vh;
-  height: 100dvh;
+  height: calc(100vh - 3.75rem - 1px);
+  height: calc(100dvh - 3.75rem - 1px);
   min-width: 0;
   background: linear-gradient(#151515, #111111) padding-box;
   border-right: 1px solid #262626;
@@ -1011,12 +1031,36 @@ html[data-nav="hidden"] .sidebar { display: none; }
 html.js .nav-state-btn { display: inline-flex; }
 html.js .nav-expand-btn { display: inline-flex; }
 html.js[data-nav="hidden"] .nav-reopen { display: inline-flex; }
-.nav-expand-btn {
-  padding-right: 0.35rem;
-  padding-left: 0.35rem;
-  font-size: 0.92rem;
-  white-space: nowrap;
+/* Expand-all wears the family box like its « / × siblings;
+   the sign is drawn, not typed — plus while any category is
+   closed, minus once all are open (the script keeps
+   aria-expanded truthful, including hand-toggled categories). */
+.nav-expand-btn .expand-glyph {
+  position: relative;
+  flex: none;
+  width: 0.78rem;
+  height: 0.78rem;
 }
+.nav-expand-btn .expand-glyph::before,
+.nav-expand-btn .expand-glyph::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 1px;
+  background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);
+}
+.nav-expand-btn .expand-glyph::before {
+  width: 100%;
+  height: 2px;
+  transform: translate(-50%, -50%);
+}
+.nav-expand-btn .expand-glyph::after {
+  width: 2px;
+  height: 100%;
+  transform: translate(-50%, -50%);
+}
+.nav-expand-btn[aria-expanded="true"] .expand-glyph::after { display: none; }
 .nav-state-btn:hover,
 .nav-reopen:hover,
 .nav-drawer-close:hover,
@@ -1056,15 +1100,30 @@ html.js[data-nav="hidden"] .nav-reopen { display: inline-flex; }
 .nav-icon {
   flex: 0 0 1.35rem;
   width: 1.35rem;
-  color: #ffb84d;
+  background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
   font-family: "Shentox", "Segoe UI", system-ui, sans-serif;
   font-size: 1rem;
   line-height: 1;
   text-align: center;
 }
-.nav-icon-bars {
-  font-size: 0.72rem;
-  letter-spacing: -0.12em;
+/* The one drawn icon: same slot as the text glyphs, painted
+   with the brand ramp from its own gradient defs. */
+.nav-icon svg {
+  display: block;
+  width: 1.05em;
+  height: 1.05em;
+  margin: 0 auto;
+}
+/* On the ember active pill the glyphs get a slightly brighter
+   sweep of the same ramp so they never go muddy. */
+.sidebar .branch.active > summary .nav-icon,
+.sidenav a.navlink.active .nav-icon {
+  background: linear-gradient(90deg, #ffe3a3 0%, #ff8b36 50%, #f0551f 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
 }
 .nav-label {
   min-width: 0;
@@ -1156,7 +1215,7 @@ html[data-nav="rail"] .sidebar .branch .menu {
 }
 html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
 .page-shell { min-width: 0; }
-.topbar { min-height: 3.2rem; }
+.topbar { min-height: 3.75rem; }
 .topbar-wordmark { display: inline-block; }
 .topbar-character {
   display: flex;
@@ -1176,9 +1235,11 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
 .nav-hamburger {
   display: none;
   align-items: center;
+  justify-content: center;
   gap: 0.45rem;
   min-height: 2.35rem;
   padding: 0.35rem 0.5rem;
+  line-height: 1;
   color: var(--text);
   background: #111111;
   border: 1px solid #333333;
@@ -1190,11 +1251,13 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
   text-transform: uppercase;
 }
 .hamburger-lines {
+  flex: none;
   width: 1rem;
   height: 2px;
   background: #ffb84d;
   box-shadow: 0 -5px 0 #ffb84d, 0 5px 0 #ffb84d;
 }
+.nav-hamburger-text { line-height: 1; }
 .topsearch { flex: 0 1 22rem; margin-left: 0; }
 .searchwrap.topsearch-wrap { flex: 1 1 auto; width: 100%; }
 .nav-hamburger:focus-visible,
@@ -1223,6 +1286,7 @@ tbody tr.yours td { background-color: #2a2015; }
   h2,
   h3,
   .wordmark,
+  .nav-icon,
   .panel > h1:first-child > .gt {
     background: none;
     color: #ffb84d;
@@ -1230,9 +1294,9 @@ tbody tr.yours td { background-color: #2a2015; }
   }
 }
 @media (max-width: 860px) {
-  body { display: block; }
+  body { display: block; padding-top: 0; }
   html[data-nav="hidden"] .sidebar { display: block; }
-  header { z-index: 90; }
+  header { position: sticky; z-index: 90; }
   .sidebar {
     position: fixed;
     top: 0;
@@ -1295,6 +1359,7 @@ tbody tr.yours td { background-color: #2a2015; }
   .topbar {
     flex-wrap: nowrap;
     gap: 0.5rem;
+    min-height: 3.2rem;
     padding: 0.45rem 0.6rem;
   }
   .topbar-wordmark {

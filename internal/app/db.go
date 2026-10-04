@@ -211,6 +211,18 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 016 (pilot drain priority: viewed wants outrank the
+	// proactively noted orbit), guarded on the column itself like
+	// 008/009.
+	var pilotPriorityCols int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('pilot_records') WHERE name = 'priority'`).Scan(&pilotPriorityCols); err != nil {
+		return nil, err
+	}
+	if pilotPriorityCols < 1 {
+		if err := applySchema(conn, pilotPrioritySchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

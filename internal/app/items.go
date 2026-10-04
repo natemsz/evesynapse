@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"html/template"
 	"log"
 	"net/http"
@@ -84,6 +85,7 @@ type itemTypeDetail struct {
 	HasDescription     bool
 	Description        template.HTML // sanitized like mail bodies
 	DescriptionPending bool          // asked for; fills in on a coming sync cycle
+	DescState          string        // "ready" | "empty" | "pending" — drives the live-region fragment
 
 	BlueprintID int64           // != 0: manufacturable — link the planner
 	UsedIn      []itemUsedInRow // blueprints consuming this type
@@ -229,6 +231,27 @@ func (app *Application) handleItemsGroup(w http.ResponseWriter, r *http.Request)
 	app.render(ctx, w, http.StatusOK, "items.html", data)
 }
 
+// itemDescription resolves one type's description state from the
+// type_details queue: "ready" with sanitized HTML when ESI had
+// text, "empty" once ESI settled with none, and "pending" while
+// the description is still on its way (noting the want so the
+// worker fills it). Shared by the item page and its live-region
+// fragment.
+func (app *Application) itemDescription(ctx context.Context, typeID int64) (string, template.HTML) {
+	td, err := app.queries.GetTypeDetail(ctx, typeID)
+	switch {
+	case err == nil && td.FetchedAt != "" && td.Description != "":
+		return "ready", sanitizeMailHTML(td.Description)
+	case err == nil && td.FetchedAt != "":
+		return "empty", ""
+	default:
+		if qerr := app.queries.UpsertTypeDetailWant(ctx, typeID); qerr != nil {
+			log.Printf("items: note type detail want for %d: %v", typeID, qerr)
+		}
+		return "pending", ""
+	}
+}
+
 // handleItemType renders one item's details page — the target of
 // every item link in EveSynapse (planner rows, wallet entries,
 // market watchlists, skill names…). Identity and "used in" facts
@@ -268,19 +291,9 @@ func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
 	// Description: stored by the worker's type-details drain.
 	// Nothing stored (or only an unfilled want): note the want so
 	// a coming cycle fills it.
-	td, terr := app.queries.GetTypeDetail(ctx, typeID)
-	switch {
-	case terr == nil && td.FetchedAt != "" && td.Description != "":
-		detail.HasDescription = true
-		detail.Description = sanitizeMailHTML(td.Description)
-	case terr == nil && td.FetchedAt != "":
-		// Settled empty: ESI has no description for this type.
-	default:
-		if qerr := app.queries.UpsertTypeDetailWant(ctx, typeID); qerr != nil {
-			log.Printf("items: note type detail want for %d: %v", typeID, qerr)
-		}
-		detail.DescriptionPending = true
-	}
+	detail.DescState, detail.Description = app.itemDescription(ctx, typeID)
+	detail.HasDescription = detail.DescState == "ready"
+	detail.DescriptionPending = detail.DescState == "pending"
 
 	if p, ok := app.cachedPrices()[typeID]; ok {
 		if p.AveragePrice > 0 {

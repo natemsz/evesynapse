@@ -13,6 +13,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -75,8 +76,19 @@ var structureNamesSchema string
 //go:embed schema/015_pilot_records.sql
 var pilotRecordsSchema string
 
+//go:embed schema/016_pilot_priority.sql
+var pilotPrioritySchema string
+
 //go:embed static
 var staticFS embed.FS
+
+//go:embed version.txt
+var versionFile string
+
+// appVersion is the product version rendered in the footer
+// ("v0.3.00.002"). version.txt is the single source of truth:
+// every shipped build bumps it, nothing else stamps versions.
+var appVersion = "v" + strings.TrimSpace(versionFile)
 
 // Application is the EveSynapse server: config, sessions, the sqlc
 // handle, the ESI client, and the in-memory caches the page
@@ -100,6 +112,18 @@ type Application struct {
 	// tokens on every refresh, so two concurrent refreshes on the same
 	// stored token could invalidate each other.
 	tokenMu sync.Mutex
+
+	// fetchMu serializes the market-history, pilot-record, and
+	// type-detail fetch passes between the minute cycle and the
+	// urgent want drain, so the two never fetch the same queue row
+	// in the same moment.
+	fetchMu sync.Mutex
+
+	// urgentMu guards urgentHoldUntil: after ESI pushes back, the
+	// urgent drain stays quiet for a while instead of nudging
+	// every few seconds into a wall.
+	urgentMu        sync.Mutex
+	urgentHoldUntil time.Time
 
 	// In-memory cache of built corporation views, keyed by
 	// corporation ID; each entry expires with the ESI Expires
@@ -299,12 +323,14 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleMarket)
 		r.Get("/suggest", app.handleMarketSuggest)
+		r.Get("/history-fragment", app.handleMarketHistoryFragment)
 		r.Post("/watch", app.handleMarketWatch)
 	})
 
 	r.Route("/items", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleItems)
+		r.Get("/description-fragment", app.handleItemDescriptionFragment)
 		r.Get("/category/{categoryID}/", app.handleItemsCategory)
 		r.Get("/group/{groupID}/", app.handleItemsGroup)
 		r.Get("/type/{typeID}/", app.handleItemType)
@@ -334,6 +360,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/pilot", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handlePilot)
+		r.Get("/fragment", app.handlePilotFragment)
 	})
 
 	r.Route("/characters", func(r chi.Router) {

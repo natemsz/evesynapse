@@ -1027,7 +1027,36 @@ html[data-nav="hidden"] body { grid-template-columns: 0 minmax(0, 1fr); }
   backdrop-filter: blur(10px);
   border-right: 1px solid #262626;
 }
-html[data-nav="hidden"] .sidebar { display: none; }
+html[data-nav="hidden"] .sidebar {
+  visibility: hidden;
+  pointer-events: none;
+  overflow: hidden;
+  border-right-color: transparent;
+}
+/* v0.3.07.011: wide nav state changes glide instead of
+   snapping. The head script applies any saved state before
+   first paint; app.js adds .nav-motion-ready only after that
+   initial layout has had frames to land, so a refresh or
+   navigation into a saved rail/hidden state never sweeps in.
+   The drawer below already slides on its own transform. */
+@media (min-width: 861px) {
+  html.nav-motion-ready body {
+    transition: grid-template-columns 180ms ease-out;
+  }
+  html.nav-motion-ready .sidebar {
+    transition: visibility 0s linear 180ms;
+  }
+  html.nav-motion-ready:not([data-nav="hidden"]) .sidebar {
+    transition-delay: 0s;
+  }
+  html.nav-motion-ready .nav-label {
+    transition: max-width 180ms ease-out, opacity 140ms ease-out, transform 180ms ease-out;
+  }
+  html.nav-motion-ready .sidenav a.navlink,
+  html.nav-motion-ready .sidebar .branch > summary {
+    transition: gap 180ms ease-out, padding-right 180ms ease-out, padding-left 180ms ease-out;
+  }
+}
 .sidebar-inner {
   display: flex;
   flex-direction: column;
@@ -1165,6 +1194,7 @@ html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
 }
 .nav-label {
   min-width: 0;
+  max-width: 12rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1226,8 +1256,12 @@ html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
   color: #ffb84d;
 }
 html[data-nav="rail"] .sidebar-inner { overflow: visible; }
-html[data-nav="rail"] .nav-label,
 html[data-nav="rail"] .sidebar-account { display: none; }
+html[data-nav="rail"] .nav-label {
+  max-width: 0;
+  opacity: 0;
+  transform: translateX(-0.25rem);
+}
 html[data-nav="rail"] .sidebar-brand { justify-content: center; padding-right: 0; padding-left: 0; }
 html[data-nav="rail"] .sidebar-actions { margin-left: 0; }
 html[data-nav="rail"] .nav-expand-btn { display: none; }
@@ -1235,6 +1269,7 @@ html[data-nav="rail"] #nav-hide { display: none; }
 html[data-nav="rail"] .sidenav a.navlink,
 html[data-nav="rail"] .sidebar .branch > summary {
   justify-content: center;
+  gap: 0;
   padding-right: 0.25rem;
   padding-left: 0.25rem;
 }
@@ -1351,7 +1386,11 @@ tbody tr.yours td { background-color: #2a2015; }
 }
 @media (max-width: 860px) {
   body { display: block; padding-top: 0; }
-  html[data-nav="hidden"] .sidebar { display: block; }
+  html[data-nav="hidden"] .sidebar {
+    display: block;
+    overflow: visible;
+    pointer-events: auto;
+  }
   header { position: sticky; z-index: 90; }
   /* Drawer form: no backdrop blur over the page underneath
      (the 93% retained-color paint stays near-solid + crisp). */
@@ -1385,7 +1424,12 @@ tbody tr.yours td { background-color: #2a2015; }
   .sidebar .nav-drawer-close { display: inline-flex; }
   html[data-nav="rail"] .sidebar .nav-expand-btn { display: inline-flex; }
   html[data-nav="rail"] .sidebar-inner { overflow-y: auto; }
-  html[data-nav="rail"] .nav-label { display: block; }
+  html[data-nav="rail"] .nav-label {
+    display: block;
+    max-width: 12rem;
+    opacity: 1;
+    transform: none;
+  }
   html[data-nav="rail"] .sidebar-account { display: block; }
   .sidebar-account.has-character .sidebar-character { display: block; }
   html[data-nav="rail"] .sidebar-brand { justify-content: flex-start; padding-right: 0.35rem; padding-left: 0.35rem; }
@@ -1497,5 +1541,9 @@ tbody tr.yours td { background-color: #2a2015; }
   .topbar-wordmark { letter-spacing: 0.1em; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .sidebar { transition: none; }
+  body,
+  .sidebar,
+  .nav-label,
+  .sidenav a.navlink,
+  .sidebar .branch > summary { transition: none !important; }
 }

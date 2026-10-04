@@ -169,10 +169,11 @@ header {
   position: sticky;
   top: 0;
   z-index: 10;
-  /* The one glass surface in the app (user override, top bar
-     only): the bar paint at 90% over a backdrop blur, so what
-     scrolls beneath reads frosted. Bar content stays opaque;
-     the 90% paint alone is the no-blur fallback. */
+  /* One of the app's two glass surfaces (user override:
+     this bar and, since v0.3.07.009, the sidebar): the bar
+     paint at 90% over a backdrop blur, so what scrolls
+     beneath reads frosted. Bar content stays opaque; the
+     90% paint alone is the no-blur fallback. */
   background: linear-gradient(to bottom, rgba(24, 24, 24, 0.9), rgba(11, 11, 11, 0.9));
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
@@ -999,7 +1000,14 @@ html[data-nav="hidden"] body { grid-template-columns: 0 minmax(0, 1fr); }
   height: calc(100vh - 3.75rem - 1px);
   height: calc(100dvh - 3.75rem - 1px);
   min-width: 0;
-  background: linear-gradient(#151515, #111111) padding-box;
+  /* v0.3.07.009: the sidebar takes the top bar's glass
+     treatment (user ask) — same recipe, its own colors kept:
+     the #151515 → #111111 paint at 90% over a backdrop blur.
+     Rail flyouts and content panels stay solid; the 90% paint
+     alone is the no-blur fallback. */
+  background: linear-gradient(rgba(21, 21, 21, 0.9), rgba(17, 17, 17, 0.9)) padding-box;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   border-right: 1px solid #262626;
 }
 html[data-nav="hidden"] .sidebar { display: none; }

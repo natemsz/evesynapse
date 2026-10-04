@@ -245,6 +245,12 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		"background: linear-gradient(to bottom, rgba(24, 24, 24, 0.9), rgba(11, 11, 11, 0.9));",
 		"-webkit-backdrop-filter: blur(10px);",
 		"backdrop-filter: blur(10px);",
+		// v0.3.07.009: the sidebar wears the top bar's glass
+		// recipe with its own colors kept — #151515 (21,21,21)
+		// into #111111 (17,17,17) at 90% over the same blur.
+		// The rail flyout menus stay solid (no pin changes
+		// there); only the bar itself goes glass.
+		"background: linear-gradient(rgba(21, 21, 21, 0.9), rgba(17, 17, 17, 0.9)) padding-box;\n  -webkit-backdrop-filter: blur(10px);\n  backdrop-filter: blur(10px);",
 		"padding-top: calc(3.75rem + 1px);",
 		".topbar { min-height: 3.75rem; }",
 		"top: calc(3.75rem + 1px);",
@@ -304,6 +310,9 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		".expand-glyph",
 		".hamburger-lines",
 		".nav-hamburger-text",
+		// v0.3.07.009: the sidebar's old fully-solid paint is
+		// gone — the bar is glass now.
+		"background: linear-gradient(#151515, #111111) padding-box;",
 	} {
 		if strings.Contains(css, unwanted) {
 			t.Errorf("style.css still contains %q", unwanted)

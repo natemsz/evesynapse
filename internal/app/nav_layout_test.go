@@ -48,8 +48,8 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`<defs><linearGradient id="brand-glyph-gradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd27a"/><stop offset=".52" stop-color="#ff6a1a"/><stop offset="1" stop-color="#d63c14"/></linearGradient></defs>`,
 		`stroke="url(#brand-glyph-gradient)"`,
 		`fill="url(#brand-glyph-gradient)"`,
-		`<path d="M24 17.2V12M29.4 27.6l6 3M18.6 27.6l-6 3"/>`,
-		`<circle cx="24" cy="24" r="6.5"/>`,
+		`<path d="M28.1 12.2L23.1 17.1M22.9 23.1L25.1 25.4M24.8 31.2L18.0 36.9"/>`,
+		`<circle cx="31" cy="9.5" r="2.9"/>`,
 		`<a class="wordmark topbar-wordmark" href="/">EVESYNAPSE</a>`,
 		`data-nav-category="character"`,
 		`data-nav-category="corporation"`,
@@ -457,8 +457,8 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	for _, want := range []string{
 		`viewBox="0 0 48 48"`,
 		`<rect width="48" height="48" rx="10" fill="#0d0503"/>`,
-		`<circle cx="24" cy="24" r="6.5"/>`,
-		`<circle cx="40" cy="33" r="4.5"/>`,
+		`<circle cx="31" cy="9.5" r="2.9"/>`,
+		`<circle cx="15" cy="39.5" r="2.9"/>`,
 	} {
 		if !strings.Contains(fav, want) {
 			t.Errorf("favicon.svg missing %q", want)

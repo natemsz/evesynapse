@@ -1366,9 +1366,9 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
 .topbar { min-height: 3.75rem; }
 .wordmark-glyph {
   display: inline-block;
-  height: 0.82em;
+  height: 1.15em;
   width: auto;
-  vertical-align: -0.055em;
+  vertical-align: -0.06em;
   margin: 0 0.15em;
 }
 .topbar-wordmark { display: inline-block; }

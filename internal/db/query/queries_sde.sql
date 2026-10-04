@@ -1,0 +1,321 @@
+-- name: GetTypeName :one
+SELECT name FROM type_names
+WHERE type_id = ?;
+-- name: UpsertTypeName :exec
+INSERT INTO type_names (type_id, name)
+VALUES (?, ?)
+ON CONFLICT (type_id) DO UPDATE SET
+    name = excluded.name;
+-- name: SearchTypeNames :many
+SELECT type_id, name FROM type_names
+WHERE name LIKE ?
+ORDER BY name
+LIMIT 20;
+-- name: ListAllTypeNames :many
+SELECT type_id, name FROM type_names
+ORDER BY type_id;
+
+-- ---------------------------------------------------------------------
+-- SDE static data (schema 003): lookup getters, search, counts, meta.
+-- Bulk import inserts are hand-rolled prepared statements inside one
+-- transaction in the importer (internal/app/sde.go); reads stay sqlc.
+-- ---------------------------------------------------------------------
+-- name: GetSDEType :one
+SELECT type_id, name, group_id, market_group_id, published, description FROM sde_types
+WHERE type_id = ?;
+-- name: GetSDEGroup :one
+SELECT group_id, name, category_id FROM sde_groups
+WHERE group_id = ?;
+-- name: GetSDECategory :one
+SELECT category_id, name FROM sde_categories
+WHERE category_id = ?;
+-- name: GetSDEStation :one
+SELECT station_id, name, system_id FROM sde_stations
+WHERE station_id = ?;
+-- name: ListSDEStationsBySystem :many
+SELECT station_id, name, system_id FROM sde_stations
+WHERE system_id = ?
+ORDER BY name;
+-- name: GetSDESystem :one
+SELECT system_id, name, region_id, security FROM sde_systems
+WHERE system_id = ?;
+-- name: GetSDERegion :one
+SELECT region_id, name FROM sde_regions
+WHERE region_id = ?;
+-- name: SearchSDETypes :many
+SELECT type_id, name FROM sde_types
+WHERE name LIKE ?
+ORDER BY name
+LIMIT 20;
+-- name: ListSDETypeIDs :many
+SELECT type_id FROM sde_types
+ORDER BY type_id;
+-- name: CountSDETypes :one
+SELECT COUNT(*) FROM sde_types;
+-- name: CountSDEGroups :one
+SELECT COUNT(*) FROM sde_groups;
+-- name: CountSDECategories :one
+SELECT COUNT(*) FROM sde_categories;
+-- name: CountSDEStations :one
+SELECT COUNT(*) FROM sde_stations;
+-- name: CountSDESystems :one
+SELECT COUNT(*) FROM sde_systems;
+-- name: CountSDERegions :one
+SELECT COUNT(*) FROM sde_regions;
+
+-- Market browse tree (schema 024): the invMarketGroups hierarchy.
+-- Reads only; the bulk import stays hand-rolled in sde.go like the
+-- other SDE tables. Listed types keep the app-wide marketable floor
+-- (published = 1 AND market_group_id > 0).
+-- name: GetSDEMarketGroup :one
+SELECT market_group_id, parent_group_id, name, icon_id, has_types FROM sde_market_groups
+WHERE market_group_id = ?;
+-- name: ListSDEMarketGroupsByParent :many
+SELECT market_group_id, parent_group_id, name, icon_id, has_types FROM sde_market_groups
+WHERE parent_group_id = ?
+ORDER BY name;
+-- name: ListSDETypesInMarketGroup :many
+SELECT type_id, name FROM sde_types
+WHERE market_group_id = ? AND published = 1 AND market_group_id > 0
+ORDER BY name;
+-- name: CountSDEMarketGroups :one
+SELECT COUNT(*) FROM sde_market_groups;
+-- name: GetSDEMeta :one
+SELECT value FROM sde_meta
+WHERE key = ?;
+-- name: UpsertSDEMeta :exec
+INSERT INTO sde_meta (key, value)
+VALUES (?, ?)
+ON CONFLICT (key) DO UPDATE SET
+    value = excluded.value;
+
+-- ---------------------------------------------------------------------
+-- Module sweep (schema 004): killmail detail store. The worker warms
+-- details from the recent-killmails snapshot; pages only read here.
+-- ---------------------------------------------------------------------
+-- name: GetItemName :one
+SELECT name FROM item_names
+WHERE item_id = ?;
+-- name: ListItemNames :many
+SELECT item_id, name FROM item_names
+ORDER BY item_id;
+-- name: UpsertItemName :exec
+INSERT INTO item_names (item_id, name)
+VALUES (?, ?)
+ON CONFLICT (item_id) DO UPDATE SET
+    name = excluded.name;
+-- name: SuggestSDETypes :many
+SELECT type_id, name FROM sde_types
+WHERE market_group_id > 0 AND published = 1
+  AND instr(lower(name), lower(?1)) > 0
+ORDER BY CASE WHEN instr(lower(name), lower(?1)) = 1 THEN 0 ELSE 1 END, name
+LIMIT 10;
+-- name: ListSDECategoriesWithCounts :many
+SELECT c.category_id, c.name, COUNT(t.type_id) AS type_count
+FROM sde_categories c
+LEFT JOIN sde_groups g ON g.category_id = c.category_id
+LEFT JOIN sde_types t ON t.group_id = g.group_id
+GROUP BY c.category_id, c.name
+ORDER BY c.name;
+-- name: ListSDEGroupsInCategory :many
+SELECT g.group_id, g.name, COUNT(t.type_id) AS type_count
+FROM sde_groups g
+LEFT JOIN sde_types t ON t.group_id = g.group_id
+WHERE g.category_id = ?
+GROUP BY g.group_id, g.name
+ORDER BY g.name;
+-- name: CountSDETypesInGroupFiltered :one
+SELECT COUNT(*) FROM sde_types
+WHERE group_id = ? AND instr(lower(name), lower(?)) > 0
+  AND (@market_only = 0 OR (market_group_id > 0 AND published = 1));
+-- name: ListSDETypesInGroup :many
+SELECT type_id, name, market_group_id FROM sde_types
+WHERE group_id = ? AND instr(lower(name), lower(?)) > 0
+  AND (@market_only = 0 OR (market_group_id > 0 AND published = 1))
+ORDER BY name
+LIMIT ? OFFSET ?;
+
+-- ---------------------------------------------------------------------
+-- Next-1 (search & findability): the Items DB global search and
+-- the one shared suggestion feed behind every autocomplete box.
+-- All local SDE reads; the market-only predicate is the same
+-- marketable+published pair everywhere it appears.
+-- ---------------------------------------------------------------------
+-- name: SearchSDETypesFiltered :many
+SELECT t.type_id, t.name, t.group_id, t.market_group_id, t.published,
+       COALESCE(g.name, '') AS group_name,
+       COALESCE(g.category_id, 0) AS category_id,
+       COALESCE(c.name, '') AS category_name
+FROM sde_types t
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+LEFT JOIN sde_categories c ON c.category_id = g.category_id
+WHERE instr(lower(t.name), lower(@q)) > 0
+  AND (@market_only = 0 OR (t.market_group_id > 0 AND t.published = 1))
+  AND (@category_id = 0 OR g.category_id = @category_id)
+  AND (@group_id = 0 OR t.group_id = @group_id)
+ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT @lim OFFSET @off;
+-- name: CountSDETypesFiltered :one
+SELECT COUNT(*)
+FROM sde_types t
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+WHERE instr(lower(t.name), lower(@q)) > 0
+  AND (@market_only = 0 OR (t.market_group_id > 0 AND t.published = 1))
+  AND (@category_id = 0 OR g.category_id = @category_id)
+  AND (@group_id = 0 OR t.group_id = @group_id);
+-- name: SuggestSDETypesShared :many
+SELECT t.type_id, t.name,
+       COALESCE(g.name, '') AS group_name,
+       COALESCE(c.name, '') AS category_name
+FROM sde_types t
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+LEFT JOIN sde_categories c ON c.category_id = g.category_id
+WHERE instr(lower(t.name), lower(@q)) > 0
+  AND t.published = 1 AND t.market_group_id > 0
+  AND (@pool != 'planner' OR EXISTS (
+        SELECT 1 FROM sde_blueprints b WHERE b.product_type_id = t.type_id))
+  AND (@pool != 'skills' OR EXISTS (
+        SELECT 1 FROM sde_skill_meta m WHERE m.type_id = t.type_id))
+ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT @lim;
+
+-- Pilot-name search for the top banner: ready records whose
+-- stored payload mentions the text; the handler re-checks the
+-- pilot's own name field before offering a row, so bios that
+-- merely mention a name never produce a hit.
+-- name: SearchPilotRecordsByName :many
+SELECT character_id, payload
+FROM pilot_records
+WHERE state = 'ready' AND payload != ''
+  AND instr(lower(payload), lower(?1)) > 0
+ORDER BY character_id
+LIMIT 100;
+
+-- Corporation-name search for the top banner and quick jump:
+-- ready records whose stored payload mentions the text; the
+-- handler re-checks the corporation's own name field before
+-- offering a row, same as the pilot search above.
+-- name: SearchCorporationRecordsByName :many
+SELECT corporation_id, payload
+FROM corporation_records
+WHERE state = 'ready' AND payload != ''
+  AND instr(lower(payload), lower(?1)) > 0
+ORDER BY corporation_id
+LIMIT 100;
+
+-- Alliance-name search, same posture as the corporation one.
+-- name: SearchAllianceRecordsByName :many
+SELECT alliance_id, payload
+FROM alliance_records
+WHERE state = 'ready' AND payload != ''
+  AND instr(lower(payload), lower(?1)) > 0
+ORDER BY alliance_id
+LIMIT 100;
+
+-- ---------------------------------------------------------------------
+-- Next-1 rider (schema 019): the daily wallet-history sampler.
+-- One row per character per day; the upsert keeps the day's
+-- latest values as fresher snapshots land.
+-- ---------------------------------------------------------------------
+-- name: CountSDEBlueprints :one
+SELECT COUNT(*) FROM sde_blueprints;
+-- name: ListSDEBlueprintProducts :many
+SELECT blueprint_type_id, product_type_id FROM sde_blueprints;
+-- name: GetSDEBlueprintForProduct :one
+SELECT blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds
+FROM sde_blueprints
+WHERE product_type_id = ?
+ORDER BY blueprint_type_id
+LIMIT 1;
+-- name: GetSDEBlueprint :one
+SELECT blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds
+FROM sde_blueprints
+WHERE blueprint_type_id = ?;
+-- name: ListSDEBlueprintMaterials :many
+SELECT material_type_id, quantity FROM sde_blueprint_materials
+WHERE blueprint_type_id = ?
+ORDER BY material_type_id;
+-- name: ListSDEBlueprintSkills :many
+SELECT skill_type_id, level FROM sde_blueprint_skills
+WHERE blueprint_type_id = ?
+ORDER BY level DESC, skill_type_id;
+-- name: SearchManufacturableProducts :many
+SELECT t.type_id, t.name, b.blueprint_type_id
+FROM sde_blueprints b
+JOIN sde_types t ON t.type_id = b.product_type_id
+WHERE t.published = 1 AND instr(lower(t.name), lower(?1)) > 0
+ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT 50;
+
+-- ---------------------------------------------------------------------
+-- Phase 4 (schema 012): skill graph reads and user skill plans.
+-- The dogma bulk inserts stay hand-rolled in the SDE importer
+-- alongside the other sde_* tables; only reads live here. Plans
+-- are plain CRUD.
+-- ---------------------------------------------------------------------
+-- name: CountSDESkillMeta :one
+SELECT COUNT(*) FROM sde_skill_meta;
+-- name: CountSDERequirements :one
+SELECT COUNT(*) FROM sde_requirements;
+
+-- The browsable skill catalog: every published skill with its
+-- group, rank and training attributes.
+-- name: ListSDESkillCatalog :many
+SELECT m.type_id, t.name, g.name AS group_name, m.rank, m.primary_attr, m.secondary_attr
+FROM sde_skill_meta m
+JOIN sde_types t ON t.type_id = m.type_id
+JOIN sde_groups g ON g.group_id = t.group_id
+ORDER BY g.name, t.name;
+-- name: GetSDESkillMeta :one
+SELECT type_id, rank, primary_attr, secondary_attr FROM sde_skill_meta
+WHERE type_id = ?;
+-- name: ListSDESkillMetaByIDs :many
+SELECT type_id, rank, primary_attr, secondary_attr FROM sde_skill_meta
+WHERE type_id IN (sqlc.slice('type_ids'));
+-- name: ListSDERequirementsByType :many
+SELECT skill_type_id, level FROM sde_requirements
+WHERE type_id = ?
+ORDER BY level DESC, skill_type_id;
+-- name: ListSDERequirementsByTypes :many
+SELECT type_id, skill_type_id, level FROM sde_requirements
+WHERE type_id IN (sqlc.slice('type_ids'))
+ORDER BY type_id, level DESC, skill_type_id;
+-- name: SearchSDESkills :many
+SELECT m.type_id, t.name, m.rank
+FROM sde_skill_meta m
+JOIN sde_types t ON t.type_id = m.type_id
+WHERE instr(lower(t.name), lower(?)) > 0
+ORDER BY CASE WHEN instr(lower(t.name), lower(?)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT 25;
+
+-- Name-to-type-ID lookups for the plan templates (Magic 14 &
+-- friends), which name their skills the way the wiki does.
+-- name: ListSDETypesByNames :many
+SELECT type_id, name FROM sde_types
+WHERE name IN (sqlc.slice('names'));
+-- name: GetTypeDetail :one
+SELECT type_id, description, fetched_at
+FROM type_details
+WHERE type_id = ?;
+-- name: UpsertTypeDetailWant :exec
+INSERT OR IGNORE INTO type_details (type_id)
+VALUES (?);
+-- name: SetTypeDetail :exec
+INSERT INTO type_details (type_id, description, fetched_at)
+VALUES (?, ?, ?)
+ON CONFLICT (type_id) DO UPDATE SET
+    description = excluded.description,
+    fetched_at  = excluded.fetched_at;
+-- name: ListTypeDetailWants :many
+SELECT type_id
+FROM type_details
+WHERE fetched_at = ''
+ORDER BY type_id
+LIMIT ?;
+-- name: ListSDEBlueprintsUsingMaterial :many
+SELECT b.blueprint_type_id, b.product_type_id, b.product_quantity, m.quantity AS material_quantity
+FROM sde_blueprint_materials m
+JOIN sde_blueprints b ON b.blueprint_type_id = m.blueprint_type_id
+WHERE m.material_type_id = ?
+ORDER BY b.product_type_id
+LIMIT 50;

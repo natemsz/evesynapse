@@ -397,13 +397,99 @@ ORDER BY g.name;
 
 -- name: CountSDETypesInGroupFiltered :one
 SELECT COUNT(*) FROM sde_types
-WHERE group_id = ? AND instr(lower(name), lower(?)) > 0;
+WHERE group_id = ? AND instr(lower(name), lower(?)) > 0
+  AND (@market_only = 0 OR (market_group_id > 0 AND published = 1));
 
 -- name: ListSDETypesInGroup :many
 SELECT type_id, name, market_group_id FROM sde_types
 WHERE group_id = ? AND instr(lower(name), lower(?)) > 0
+  AND (@market_only = 0 OR (market_group_id > 0 AND published = 1))
 ORDER BY name
 LIMIT ? OFFSET ?;
+
+-- ---------------------------------------------------------------------
+-- Next-1 (search & findability): the Items DB global search and
+-- the one shared suggestion feed behind every autocomplete box.
+-- All local SDE reads; the market-only predicate is the same
+-- marketable+published pair everywhere it appears.
+-- ---------------------------------------------------------------------
+
+-- name: SearchSDETypesFiltered :many
+SELECT t.type_id, t.name, t.group_id, t.market_group_id, t.published,
+       COALESCE(g.name, '') AS group_name,
+       COALESCE(g.category_id, 0) AS category_id,
+       COALESCE(c.name, '') AS category_name
+FROM sde_types t
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+LEFT JOIN sde_categories c ON c.category_id = g.category_id
+WHERE instr(lower(t.name), lower(@q)) > 0
+  AND (@market_only = 0 OR (t.market_group_id > 0 AND t.published = 1))
+  AND (@category_id = 0 OR g.category_id = @category_id)
+  AND (@group_id = 0 OR t.group_id = @group_id)
+ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT @lim OFFSET @off;
+
+-- name: CountSDETypesFiltered :one
+SELECT COUNT(*)
+FROM sde_types t
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+WHERE instr(lower(t.name), lower(@q)) > 0
+  AND (@market_only = 0 OR (t.market_group_id > 0 AND t.published = 1))
+  AND (@category_id = 0 OR g.category_id = @category_id)
+  AND (@group_id = 0 OR t.group_id = @group_id);
+
+-- name: SuggestSDETypesShared :many
+SELECT t.type_id, t.name,
+       COALESCE(g.name, '') AS group_name,
+       COALESCE(c.name, '') AS category_name
+FROM sde_types t
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+LEFT JOIN sde_categories c ON c.category_id = g.category_id
+WHERE instr(lower(t.name), lower(@q)) > 0
+  AND (@pool != 'market' OR (t.market_group_id > 0 AND t.published = 1))
+  AND (@pool != 'planner' OR (t.published = 1 AND EXISTS (
+        SELECT 1 FROM sde_blueprints b WHERE b.product_type_id = t.type_id)))
+  AND (@pool != 'skills' OR EXISTS (
+        SELECT 1 FROM sde_skill_meta m WHERE m.type_id = t.type_id))
+ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT @lim;
+
+-- Pilot-name search for the top banner: ready records whose
+-- stored payload mentions the text; the handler re-checks the
+-- pilot's own name field before offering a row, so bios that
+-- merely mention a name never produce a hit.
+-- name: SearchPilotRecordsByName :many
+SELECT character_id, payload
+FROM pilot_records
+WHERE state = 'ready' AND payload != ''
+  AND instr(lower(payload), lower(?1)) > 0
+ORDER BY character_id
+LIMIT 100;
+
+-- ---------------------------------------------------------------------
+-- Next-1 rider (schema 019): the daily wallet-history sampler.
+-- One row per character per day; the upsert keeps the day's
+-- latest values as fresher snapshots land.
+-- ---------------------------------------------------------------------
+
+-- name: GetWalletHistorySample :one
+SELECT user_id, character_id, day, balance, net_worth, sampled_at
+FROM wallet_history
+WHERE user_id = ? AND character_id = ? AND day = ?;
+
+-- name: UpsertWalletHistorySample :exec
+INSERT INTO wallet_history (user_id, character_id, day, balance, net_worth, sampled_at)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT (user_id, character_id, day) DO UPDATE SET
+    balance    = excluded.balance,
+    net_worth   = excluded.net_worth,
+    sampled_at = excluded.sampled_at;
+
+-- name: ListWalletHistorySamples :many
+SELECT user_id, character_id, day, balance, net_worth, sampled_at
+FROM wallet_history
+WHERE user_id = ? AND character_id = ?
+ORDER BY day;
 
 -- ---------------------------------------------------------------------
 -- Phase 3 (schema 011): industry build planner reads. Bulk import

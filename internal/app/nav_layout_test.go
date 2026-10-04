@@ -284,6 +284,13 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		".attention li { background: var(--row); padding: 0.35rem 0.5rem; border-bottom: 1px solid #222; }",
 		".attention li:nth-child(even) { background: var(--row-alt); }",
 		".attention li:hover { background: var(--row-hover); }",
+		// v0.3.07.013: nav category labels keep Medium
+		// Condensed; the menu links themselves (dropdown
+		// entries plus the standalone Home/Sync/Admin rows,
+		// sidebar and drawer alike) ride the non-condensed
+		// Univers at regular weight.
+		".branch > summary {\n  font-family: \"Univers Next Pro Condensed\", \"Univers Next Pro\", -apple-system, \"SF Pro Display\", \"Segoe UI\", \"Inter\", sans-serif;\n  font-weight: 500;\n  font-synthesis-weight: none;\n}",
+		"header a.navlink, .sidenav a.navlink, .branch .menu a {\n  font-family: \"Univers Next Pro\", -apple-system, \"SF Pro Display\", \"Segoe UI\", \"Inter\", sans-serif;\n  font-weight: 400;\n  font-synthesis-weight: none;\n}",
 		".card > h2:first-child, .card > h3:first-child { margin: -0.85rem -1rem 0.75rem; padding: 0.55rem 1rem; border-radius: 4px 4px 0 0; }",
 		".foldable > h2:first-child, .foldable > h3:first-child { margin: 0 0 0.75rem; padding: 0.45rem 0.65rem; border-radius: 3px; }",
 		// v0.3.07.010 drawer refinement: on small screens the
@@ -359,6 +366,9 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// gone for good.
 		"background-clip: text, border-box",
 		"linear-gradient(var(--panel-head), var(--panel-head))",
+		// v0.3.07.013: the nav links left the condensed rule —
+		// the old combined selector cannot come back.
+		"header a.navlink, .sidenav a.navlink, .branch > summary, .branch .menu a",
 	} {
 		if strings.Contains(css, unwanted) {
 			t.Errorf("style.css still contains %q", unwanted)

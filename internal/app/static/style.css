@@ -125,17 +125,29 @@ body::before {
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: #ffb84d; text-decoration: underline; }
 
-/* Headers, wordmark, nav labels, buttons, badges, and table
-   headers ride the Condensed cut of Univers Next Pro in Medium
-   (500): it stays legible packed tight in dense tables and nav
-   rows. The wordmark alone keeps Bold Condensed (600) — at
-   letterspaced caps the Medium reads too light for the brand
-   mark. Synthetic emboldening is disabled so nothing renders
-   faux-bold. Body text keeps the Shentox stack. */
+/* Headers, wordmark, nav category labels, buttons, badges,
+   and table headers ride the Condensed cut of Univers Next
+   Pro in Medium (500): it stays legible packed tight in
+   dense tables and nav rows. The wordmark alone keeps Bold
+   Condensed (600) — at letterspaced caps the Medium reads
+   too light for the brand mark. Synthetic emboldening is
+   disabled so nothing renders faux-bold. The nav menu links
+   themselves ride the non-condensed cut at regular weight
+   (next rule), opening up against the condensed category
+   labels. Body text keeps the Shentox stack. */
 h1, h2, h3, h4, .wordmark, .btn, thead th, .badge,
-header a.navlink, .sidenav a.navlink, .branch > summary, .branch .menu a {
+.branch > summary {
   font-family: "Univers Next Pro Condensed", "Univers Next Pro", -apple-system, "SF Pro Display", "Segoe UI", "Inter", sans-serif;
   font-weight: 500;
+  font-synthesis-weight: none;
+}
+/* Nav menu links: the entries under the category headers
+   plus the standalone top-level rows (Home, Sync, Admin).
+   Non-condensed Univers at regular weight; sizes, colors,
+   and hover/active treatments stay as they were. */
+header a.navlink, .sidenav a.navlink, .branch .menu a {
+  font-family: "Univers Next Pro", -apple-system, "SF Pro Display", "Segoe UI", "Inter", sans-serif;
+  font-weight: 400;
   font-synthesis-weight: none;
 }
 .wordmark { font-weight: 600; }

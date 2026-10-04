@@ -158,6 +158,38 @@ Environment: `EVE_CLIENT_ID`, `EVE_CLIENT_SECRET`, `EVE_CALLBACK_URL`
 character-for-character), `SESSION_KEY`, plus optional `ADDR`
 (default `:8080`) and `DB_PATH` (default `evesynapse.db`).
 
+## Updating
+
+Builds are published automatically: every push to `main` runs the
+test suite in CI and, when `internal/app/version.txt` names a
+version that has no release yet, publishes a GitHub release with
+builds for ARM64 and AMD64 plus a small manifest per build (the
+version and its SHA-256 checksum).
+
+To update a running install, run the updater. With no flag it
+automatically picks the build that matches the machine it's
+running on:
+
+```sh
+sudo /opt/evesynapse/evesynapse -update          # right build for this machine
+sudo /opt/evesynapse/evesynapse -update -arm64   # ARM build explicitly
+sudo /opt/evesynapse/evesynapse -update -amd64   # Intel/AMD build (-x86 and -x64 also work)
+```
+
+The updater asks the latest release what version it carries and
+compares it with its own. If they're the same, it just says so
+and stops. If the release is newer, it downloads that build,
+verifies it against the published checksum and checks it's built
+for the right kind of computer, swaps it into place, restarts the
+running server onto it, and reports the new version number.
+
+There's also a manual form that installs from a specific address
+(or local file), with an optional checksum:
+
+```sh
+sudo /opt/evesynapse/evesynapse -update <url|file> [sha256]
+```
+
 ## EVE SSO flow
 
 1. **Register the app** at <https://developers.eveonline.com> with the

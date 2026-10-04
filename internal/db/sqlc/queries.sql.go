@@ -481,6 +481,34 @@ func (q *Queries) GetMarketFetchState(ctx context.Context, kind string) (MarketF
 	return i, err
 }
 
+const getPilotNameWant = `-- name: GetPilotNameWant :one
+
+SELECT normalized_name, display_name, state, character_id, requested_at, resolved_at, next_try_at, attempts
+FROM pilot_name_wants
+WHERE normalized_name = ?
+`
+
+// Pilot name-resolution wants (schema 022): a topbar search for
+// a pilot name no local tier knows notes the name once; the
+// worker resolves due rows through ESI's public name lookup.
+// 'missing' and 'ready' are settled states; 'error' rows wait
+// for next_try_at so a failing lookup is not re-asked per search.
+func (q *Queries) GetPilotNameWant(ctx context.Context, normalizedName string) (PilotNameWant, error) {
+	row := q.db.QueryRowContext(ctx, getPilotNameWant, normalizedName)
+	var i PilotNameWant
+	err := row.Scan(
+		&i.NormalizedName,
+		&i.DisplayName,
+		&i.State,
+		&i.CharacterID,
+		&i.RequestedAt,
+		&i.ResolvedAt,
+		&i.NextTryAt,
+		&i.Attempts,
+	)
+	return i, err
+}
+
 const getPilotRecord = `-- name: GetPilotRecord :one
 
 SELECT character_id, payload, state, fetched_at
@@ -1148,6 +1176,52 @@ func (q *Queries) ListContractDetailIDsByCharacter(ctx context.Context, characte
 			return nil, err
 		}
 		items = append(items, contract_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDuePilotNameWants = `-- name: ListDuePilotNameWants :many
+SELECT normalized_name, display_name, state, character_id, requested_at, resolved_at, next_try_at, attempts
+FROM pilot_name_wants
+WHERE (state = 'pending' OR state = 'error')
+  AND (next_try_at = '' OR next_try_at <= ?1)
+ORDER BY requested_at
+LIMIT ?2
+`
+
+type ListDuePilotNameWantsParams struct {
+	Now string `json:"now"`
+	Lim int64  `json:"lim"`
+}
+
+func (q *Queries) ListDuePilotNameWants(ctx context.Context, arg ListDuePilotNameWantsParams) ([]PilotNameWant, error) {
+	rows, err := q.db.QueryContext(ctx, listDuePilotNameWants, arg.Now, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PilotNameWant
+	for rows.Next() {
+		var i PilotNameWant
+		if err := rows.Scan(
+			&i.NormalizedName,
+			&i.DisplayName,
+			&i.State,
+			&i.CharacterID,
+			&i.RequestedAt,
+			&i.ResolvedAt,
+			&i.NextTryAt,
+			&i.Attempts,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -2884,6 +2958,56 @@ func (q *Queries) SetCharacterTags(ctx context.Context, arg SetCharacterTagsPara
 	return err
 }
 
+const setPilotNameWantError = `-- name: SetPilotNameWantError :exec
+UPDATE pilot_name_wants
+SET state = 'error', attempts = attempts + 1, resolved_at = ?, next_try_at = ?
+WHERE normalized_name = ?
+`
+
+type SetPilotNameWantErrorParams struct {
+	ResolvedAt     string `json:"resolved_at"`
+	NextTryAt      string `json:"next_try_at"`
+	NormalizedName string `json:"normalized_name"`
+}
+
+func (q *Queries) SetPilotNameWantError(ctx context.Context, arg SetPilotNameWantErrorParams) error {
+	_, err := q.db.ExecContext(ctx, setPilotNameWantError, arg.ResolvedAt, arg.NextTryAt, arg.NormalizedName)
+	return err
+}
+
+const setPilotNameWantMissing = `-- name: SetPilotNameWantMissing :exec
+UPDATE pilot_name_wants
+SET state = 'missing', resolved_at = ?, next_try_at = ''
+WHERE normalized_name = ?
+`
+
+type SetPilotNameWantMissingParams struct {
+	ResolvedAt     string `json:"resolved_at"`
+	NormalizedName string `json:"normalized_name"`
+}
+
+func (q *Queries) SetPilotNameWantMissing(ctx context.Context, arg SetPilotNameWantMissingParams) error {
+	_, err := q.db.ExecContext(ctx, setPilotNameWantMissing, arg.ResolvedAt, arg.NormalizedName)
+	return err
+}
+
+const setPilotNameWantReady = `-- name: SetPilotNameWantReady :exec
+UPDATE pilot_name_wants
+SET state = 'ready', character_id = ?, resolved_at = ?, next_try_at = ''
+WHERE normalized_name = ?
+`
+
+type SetPilotNameWantReadyParams struct {
+	CharacterID    int64  `json:"character_id"`
+	ResolvedAt     string `json:"resolved_at"`
+	NormalizedName string `json:"normalized_name"`
+}
+
+func (q *Queries) SetPilotNameWantReady(ctx context.Context, arg SetPilotNameWantReadyParams) error {
+	_, err := q.db.ExecContext(ctx, setPilotNameWantReady, arg.CharacterID, arg.ResolvedAt, arg.NormalizedName)
+	return err
+}
+
 const setPilotRecord = `-- name: SetPilotRecord :exec
 INSERT INTO pilot_records (character_id, payload, state, fetched_at)
 VALUES (?, ?, ?, ?)
@@ -3474,6 +3598,22 @@ func (q *Queries) UpsertOrderHealth(ctx context.Context, arg UpsertOrderHealthPa
 		arg.Status,
 		arg.ComputedAt,
 	)
+	return err
+}
+
+const upsertPilotNameWant = `-- name: UpsertPilotNameWant :exec
+INSERT OR IGNORE INTO pilot_name_wants (normalized_name, display_name, state, requested_at)
+VALUES (?, ?, 'pending', ?)
+`
+
+type UpsertPilotNameWantParams struct {
+	NormalizedName string `json:"normalized_name"`
+	DisplayName    string `json:"display_name"`
+	RequestedAt    string `json:"requested_at"`
+}
+
+func (q *Queries) UpsertPilotNameWant(ctx context.Context, arg UpsertPilotNameWantParams) error {
+	_, err := q.db.ExecContext(ctx, upsertPilotNameWant, arg.NormalizedName, arg.DisplayName, arg.RequestedAt)
 	return err
 }
 

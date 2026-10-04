@@ -97,6 +97,9 @@ var guidePricesSchema string
 //go:embed schema/022_pilot_name_wants.sql
 var pilotNameWantsSchema string
 
+//go:embed schema/023_structure_name_provenance.sql
+var structureNameProvenanceSchema string
+
 //go:embed static
 var staticFS embed.FS
 

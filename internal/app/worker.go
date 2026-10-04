@@ -335,7 +335,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	}
 
 	// Structure names: resolve the due slice of the structure
-	// queue with any scoped character's token (structures.go).
+	// queue across every scoped character (structures.go).
 	if !limited {
 		sResolved, sLimited := app.resolveStructureNames(ctx, characters, allowance)
 		refreshed += sResolved
@@ -767,15 +767,13 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 					typeIDs[s.TypeID] = true
 				}
 				// The corp's own structures arrive already named:
-				// seed the structure-name cache for free.
+				// seed the structure-name cache for free (tier 2,
+				// provenance 'corp' — ESI truth, below only the
+				// per-structure lookup itself).
 				if s.Name != "" {
 					if _, ok := app.esi.CachedStructureName(ctx, s.StructureID); !ok {
-						if err := app.queries.SetStructureName(ctx, db.SetStructureNameParams{
-							StructureID: s.StructureID, Name: s.Name,
-							State: esi.StructureResolved, ResolvedAt: time.Now().UTC().Format(time.RFC3339),
-						}); err != nil {
-							log.Printf("worker: warm names for character %d: seed structure %d: %v", ch.CharacterID, s.StructureID, err)
-						} else {
+						if app.storeStructureName(ctx, s.StructureID, s.Name,
+							esi.StructureResolved, esi.StructureSourceCorp, time.Now().UTC().Format(time.RFC3339)) {
 							app.esi.StoreStructureName(s.StructureID, s.Name)
 						}
 					}

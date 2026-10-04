@@ -2,8 +2,10 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
+	"sort"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -17,12 +19,28 @@ import (
 // come from a background lookup — pages must never wait on one.
 // The queue lives in the structure_names table: worker-computed
 // views and the market book view note the structure ids they meet
-// (noteStructureIDs), the worker resolves the due ones with any
-// linked character holding the scope (resolveStructureNames), and
-// every "Structure #<id>" fallback in the render layer reads the
-// cache first. Resolved names re-check after 30 days (structures
-// can be renamed); 403/404 answers negative-cache for 24 hours so
-// private structures aren't re-asked every cycle.
+// (noteStructureIDs), the worker resolves the due ones in the
+// background (resolveStructureNames), and every "Structure #<id>"
+// fallback in the render layer reads the cache first. Resolved
+// names re-check after 30 days (structures can be renamed);
+// negative answers negative-cache for 24 hours so private
+// structures aren't re-asked every cycle.
+//
+// Resolution tiers (v0.3.08):
+//  1. Multi-character attempts — every linked character whose
+//     login granted the scope may be asked, corp-mates of the
+//     owning corporation first, then most recently active. One
+//     character's 403 never poisons the cache: a negative answer
+//     is recorded only after every candidate has answered no.
+//     The first success warms the shared cache for everyone.
+//  2. Corporation structures — the corp structure list already
+//     carries names, so a due id the list covers resolves with
+//     no per-structure call at all (provenance 'corp').
+//  3. Community dataset — plumbed only: cached names record
+//     their provenance ('source', schema 023) and ESI truth
+//     outranks the community tier, but no dataset ships and no
+//     name is ever invented. Unresolved ids keep the honest
+//     "Structure #<id>" floor.
 // ---------------------------------------------------------------------------
 
 const (
@@ -64,18 +82,105 @@ func (app *Application) noteStructureIDs(ctx context.Context, ids ...int64) {
 	}
 }
 
-// structureResolverCharacter picks the character whose token
-// resolves structure names: any syncing character whose login
-// granted the structure scope. A login predating the scope simply
-// doesn't qualify — the queue waits for a re-link, and pages keep
-// the "#<id>" fallback meanwhile.
-func (app *Application) structureResolverCharacter(characters []db.Character) (db.Character, bool) {
-	for _, ch := range characters {
-		if characterSyncs(ch) && characterHasScope(ch, structureScope) {
-			return ch, true
+// structureSourceRank orders name provenance: ESI truth (the
+// authenticated lookup, then the corp structure list) always
+// outranks the community tier, so a lower-trust name can never
+// overwrite a better one.
+func structureSourceRank(source string) int {
+	switch source {
+	case esi.StructureSourceESI:
+		return 3
+	case esi.StructureSourceCorp:
+		return 2
+	case esi.StructureSourceCommunity:
+		return 1
+	}
+	return 0
+}
+
+// storeStructureName records a resolution outcome, respecting
+// provenance: an existing resolved name from a better-trusted
+// source is kept. Reports whether the row was written.
+func (app *Application) storeStructureName(ctx context.Context, structureID int64, name, state, source, stamp string) bool {
+	if existing, err := app.queries.GetStructureName(ctx, structureID); err == nil &&
+		existing.State == esi.StructureResolved &&
+		structureSourceRank(existing.Source) > structureSourceRank(source) {
+		return false
+	}
+	if err := app.queries.SetStructureName(ctx, db.SetStructureNameParams{
+		StructureID: structureID, Name: name, State: state, ResolvedAt: stamp, Source: source,
+	}); err != nil {
+		log.Printf("worker: structures: store %s name for %d: %v", source, structureID, err)
+		return false
+	}
+	return true
+}
+
+// corpStructureIndex distils the corporation-structure snapshots
+// the worker already keeps into a name/owner index. The corp
+// list carries names directly (tier 2), and knowing the owning
+// corporation lets tier 1 ask corp-mates first — a character in
+// the owning corp is the most likely to hold docking access.
+type corpStructureIndex struct {
+	names map[int64]string
+	owner map[int64]int64
+}
+
+func (app *Application) corpStructureIndex(ctx context.Context) corpStructureIndex {
+	idx := corpStructureIndex{names: map[int64]string{}, owner: map[int64]int64{}}
+	snaps, err := app.queries.ListSnapshotsByKind(ctx, esi.SnapCorpStructures)
+	if err != nil {
+		log.Printf("worker: structures: list corp structure snapshots: %v", err)
+		return idx
+	}
+	for _, snap := range snaps {
+		var structures esi.CorpStructures
+		if err := json.Unmarshal([]byte(snap.Payload), &structures); err != nil {
+			continue
+		}
+		for _, s := range structures {
+			if s.CorporationID > 0 {
+				idx.owner[s.StructureID] = s.CorporationID
+			}
+			if s.Name != "" {
+				idx.names[s.StructureID] = s.Name
+			}
 		}
 	}
-	return db.Character{}, false
+	return idx
+}
+
+// structureResolverCandidates orders the characters whose tokens
+// may resolve structure names: syncing characters (parked
+// token_dead / owner_changed links are never fetched) whose
+// login granted the structure scope. Corp-mates of the owning
+// corporation go first, then most recently active; a login
+// predating the scope simply doesn't qualify — the queue waits
+// for a re-link, and pages keep the "#<id>" fallback meanwhile.
+func (app *Application) structureResolverCandidates(ctx context.Context, characters []db.Character, ownerCorpID int64) []db.Character {
+	var out []db.Character
+	corpOf := map[int64]int64{}
+	for _, ch := range characters {
+		if !characterSyncs(ch) || !characterHasScope(ch, structureScope) {
+			continue
+		}
+		out = append(out, ch)
+		if row, err := app.queries.GetCharacterCorporation(ctx, ch.CharacterID); err == nil {
+			corpOf[ch.CharacterID] = row.CorporationID
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		iMatch := ownerCorpID > 0 && corpOf[out[i].CharacterID] == ownerCorpID
+		jMatch := ownerCorpID > 0 && corpOf[out[j].CharacterID] == ownerCorpID
+		if iMatch != jMatch {
+			return iMatch
+		}
+		if out[i].UpdatedAt != out[j].UpdatedAt {
+			return out[i].UpdatedAt > out[j].UpdatedAt
+		}
+		return out[i].CharacterID < out[j].CharacterID
+	})
+	return out
 }
 
 // resolveStructureNames drains the due slice of the structure
@@ -96,45 +201,63 @@ func (app *Application) resolveStructureNames(ctx context.Context, characters []
 	if len(ids) == 0 {
 		return 0, false
 	}
-	resolver, ok := app.structureResolverCharacter(characters)
-	if !ok {
-		return 0, false
-	}
+	corpIdx := app.corpStructureIndex(ctx)
 	stamp := now.Format(time.RFC3339)
+idsLoop:
 	for _, id := range ids {
-		if ctx.Err() != nil || !allowance.take() {
+		if ctx.Err() != nil {
 			break
 		}
-		info, err := app.esi.FetchStructure(ctx, resolver, id)
-		if err != nil {
-			if errors.Is(err, esi.ErrErrorLimit) {
-				log.Printf("worker: structures: ESI error limit hit resolving structure %d; backing off until next cycle", id)
-				return resolved, true
+		// Tier 2: the corporation structure list already names
+		// this one — no per-structure ESI call needed.
+		if name, ok := corpIdx.names[id]; ok {
+			if app.storeStructureName(ctx, id, name, esi.StructureResolved, esi.StructureSourceCorp, stamp) {
+				app.esi.StoreStructureName(id, name)
+				resolved++
 			}
-			if code, has := esi.StatusCode(err); has && (code == 403 || code == 404) {
-				// Private or destroyed: remember the answer so
-				// this id isn't re-asked for a day.
-				if serr := app.queries.SetStructureName(ctx, db.SetStructureNameParams{
-					StructureID: id, Name: "", State: esi.StructureMissing, ResolvedAt: stamp,
-				}); serr != nil {
-					log.Printf("worker: structures: record miss for %d: %v", id, serr)
+			continue
+		}
+		// Tier 1: ask every eligible character, best bet first,
+		// until one can name it.
+		candidates := app.structureResolverCandidates(ctx, characters, corpIdx.owner[id])
+		negatives := 0
+		for _, ch := range candidates {
+			if ctx.Err() != nil || !allowance.take() {
+				break idsLoop
+			}
+			info, err := app.esi.FetchStructure(ctx, ch, id)
+			if err != nil {
+				if errors.Is(err, esi.ErrErrorLimit) {
+					log.Printf("worker: structures: ESI error limit hit resolving structure %d; backing off until next cycle", id)
+					return resolved, true
 				}
+				if code, has := esi.StatusCode(err); has && (code == 403 || code == 404) {
+					// This character can't name it; another
+					// still might. Only an exhausted set earns
+					// the negative cache entry.
+					negatives++
+					continue
+				}
+				log.Printf("worker: structures: resolve structure %d via character %d: %v", id, ch.CharacterID, err)
 				continue
 			}
-			log.Printf("worker: structures: resolve structure %d: %v", id, err)
-			continue
+			if info.Name == "" {
+				negatives++
+				continue
+			}
+			if app.storeStructureName(ctx, id, info.Name, esi.StructureResolved, esi.StructureSourceESI, stamp) {
+				app.esi.StoreStructureName(id, info.Name)
+				resolved++
+			}
+			negatives = -1 // settled: not an all-negative outcome
+			break
 		}
-		if info.Name == "" {
-			continue
+		// Every candidate answered 403/404: remember the answer
+		// so this id isn't re-asked for a day. A pass interrupted
+		// by transient errors leaves the row pending instead.
+		if len(candidates) > 0 && negatives == len(candidates) {
+			app.storeStructureName(ctx, id, "", esi.StructureMissing, esi.StructureSourceESI, stamp)
 		}
-		if err := app.queries.SetStructureName(ctx, db.SetStructureNameParams{
-			StructureID: id, Name: info.Name, State: esi.StructureResolved, ResolvedAt: stamp,
-		}); err != nil {
-			log.Printf("worker: structures: store name for %d: %v", id, err)
-			continue
-		}
-		app.esi.StoreStructureName(id, info.Name)
-		resolved++
 	}
 	return resolved, false
 }

@@ -172,14 +172,14 @@ func (app *Application) killmailRow(ctx context.Context, viewer killmailViewer, 
 	} else {
 		row.Kill = true
 	}
-	row.Victim = characterDisplay(app.esi, km.Victim.CharacterID)
+	row.Victim = app.displayCharacter(ctx, km.Victim.CharacterID)
 	row.VictimID = km.Victim.CharacterID
 	row.Ship = app.typeNameOrID(ctx, km.Victim.ShipTypeID)
 	row.ShipTypeID = km.Victim.ShipTypeID
 	row.Involved = fmt.Sprintf("%d", len(km.Attackers))
 	for _, a := range km.Attackers {
 		if a.FinalBlow {
-			row.FinalBlow = characterDisplay(app.esi, a.CharacterID)
+			row.FinalBlow = app.displayCharacter(ctx, a.CharacterID)
 			row.FinalBlowID = a.CharacterID
 			break
 		}

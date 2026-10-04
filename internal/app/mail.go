@@ -128,7 +128,7 @@ func (app *Application) handleMail(w http.ResponseWriter, r *http.Request) {
 			row := mailRow{
 				ID:      h.MailID,
 				Subject: h.Subject,
-				From:    characterDisplay(app.esi, h.From),
+				From:    app.displayCharacter(ctx, h.From),
 				FromID:  h.From,
 				Date:    formatFinish(h.Timestamp),
 				Unread:  !h.IsRead,
@@ -149,7 +149,7 @@ func (app *Application) handleMail(w http.ResponseWriter, r *http.Request) {
 		if app.loadCorpSnapshot(ctx, active.CharacterID, esi.MailBodyKind(mailID), &mail) {
 			detail := &mailDetail{
 				Subject: mail.Subject,
-				From:    characterDisplay(app.esi, mail.From),
+				From:    app.displayCharacter(ctx, mail.From),
 				FromID:  mail.From,
 				Date:    formatFinish(mail.Timestamp),
 				Body:    sanitizeMailHTML(mail.Body),
@@ -177,16 +177,18 @@ func (app *Application) handleMail(w http.ResponseWriter, r *http.Request) {
 func (app *Application) mailRecipientDisplay(ctx context.Context, rcpt esi.MailRecipient, listNames map[int64]string) string {
 	switch rcpt.RecipientType {
 	case "character":
-		return characterDisplay(app.esi, rcpt.RecipientID)
+		return app.displayCharacter(ctx, rcpt.RecipientID)
 	case "corporation":
 		if name, ok := app.esi.CachedCorpName(rcpt.RecipientID); ok && name != "" {
 			return name
 		}
+		app.notePageWantFromContext(ctx, pageWantCorporation, rcpt.RecipientID)
 		return fmt.Sprintf("Corporation #%d", rcpt.RecipientID)
 	case "alliance":
 		if name, ok := app.esi.CachedAllianceName(rcpt.RecipientID); ok && name != "" {
 			return name
 		}
+		app.notePageWantFromContext(ctx, pageWantAlliance, rcpt.RecipientID)
 		return fmt.Sprintf("Alliance #%d", rcpt.RecipientID)
 	case "mailing_list":
 		if name, ok := listNames[rcpt.RecipientID]; ok && name != "" {

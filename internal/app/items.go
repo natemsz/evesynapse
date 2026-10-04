@@ -231,13 +231,44 @@ func (app *Application) handleItemsGroup(w http.ResponseWriter, r *http.Request)
 	app.render(ctx, w, http.StatusOK, "items.html", data)
 }
 
-// itemDescription resolves one type's description state from the
-// type_details queue: "ready" with sanitized HTML when ESI had
-// text, "empty" once ESI settled with none, and "pending" while
-// the description is still on its way (noting the want so the
-// worker fills it). Shared by the item page and its live-region
-// fragment.
+// sdeTypeDescription is the bulk-cached invTypes flavor text
+// for one type ("" when the dump carries none for it).
+func (app *Application) sdeTypeDescription(ctx context.Context, typeID int64) string {
+	t, err := app.queries.GetSDEType(ctx, typeID)
+	if err != nil {
+		return ""
+	}
+	return t.Description
+}
+
+// descriptionState reports one type's description state without
+// noting any want: SDE-bulk text first, then the worker-stored
+// ESI answer. settled=false means a fetch is still owed.
+func (app *Application) descriptionState(ctx context.Context, typeID int64) (state string, settled bool) {
+	if app.sdeTypeDescription(ctx, typeID) != "" {
+		return "ready", true
+	}
+	td, err := app.queries.GetTypeDetail(ctx, typeID)
+	if err == nil && td.FetchedAt != "" {
+		if td.Description != "" {
+			return "ready", true
+		}
+		return "empty", true
+	}
+	return "pending", false
+}
+
+// itemDescription resolves one type's description state: the
+// local SDE dump first (bulk-cached for every type by the weekly
+// import), then the type_details queue — "ready" with sanitized
+// HTML when text exists, "empty" once ESI settled with none, and
+// "pending" while the description is still on its way (noting the
+// want so the worker fills it). Shared by the item page and its
+// live-region fragment.
 func (app *Application) itemDescription(ctx context.Context, typeID int64) (string, template.HTML) {
+	if desc := app.sdeTypeDescription(ctx, typeID); desc != "" {
+		return "ready", sanitizeMailHTML(desc)
+	}
 	td, err := app.queries.GetTypeDetail(ctx, typeID)
 	switch {
 	case err == nil && td.FetchedAt != "" && td.Description != "":
@@ -288,10 +319,13 @@ func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Description: stored by the worker's type-details drain.
-	// Nothing stored (or only an unfilled want): note the want so
-	// a coming cycle fills it.
+	// Description: the local SDE dump first; the worker's
+	// type-details drain is only the fallback for types the dump
+	// has no text for.
 	detail.DescState, detail.Description = app.itemDescription(ctx, typeID)
+	if detail.DescState == "pending" {
+		app.notePageWant(ctx, pageWantTypeDescription, typeID, 0)
+	}
 	detail.HasDescription = detail.DescState == "ready"
 	detail.DescriptionPending = detail.DescState == "pending"
 

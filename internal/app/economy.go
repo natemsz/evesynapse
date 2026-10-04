@@ -76,8 +76,10 @@ func (app *Application) econLocationTitle(ctx context.Context, locationID int64)
 		if name := app.resolvedStructureTitle(ctx, locationID); name != "" {
 			return name
 		}
+		app.notePageWantFromContext(ctx, pageWantStructure, locationID)
 		return fmt.Sprintf("Structure #%d", locationID)
 	}
+	app.notePageWantFromContext(ctx, pageWantPlace, locationID)
 	return fmt.Sprintf("Station #%d", locationID)
 }
 
@@ -178,9 +180,9 @@ func (app *Application) handleWallet(w http.ResponseWriter, r *http.Request) {
 			}
 			if e.FirstPartyID > 0 || e.SecondPartyID > 0 {
 				row.ShowParties = true
-				row.FromName, row.FromIsChar = app.journalParty(e.FirstPartyID, e.FirstPartyType)
+				row.FromName, row.FromIsChar = app.journalParty(ctx, e.FirstPartyID, e.FirstPartyType)
 				row.FromID = e.FirstPartyID
-				row.ToName, row.ToIsChar = app.journalParty(e.SecondPartyID, e.SecondPartyType)
+				row.ToName, row.ToIsChar = app.journalParty(ctx, e.SecondPartyID, e.SecondPartyType)
 				row.ToID = e.SecondPartyID
 			}
 			desc := e.Description
@@ -216,7 +218,7 @@ func (app *Application) handleWallet(w http.ResponseWriter, r *http.Request) {
 				Total:    esi.FormatISK(t.UnitPrice * float64(t.Quantity)),
 				Side:     side,
 				Location: app.econLocationTitle(ctx, t.LocationID),
-				With:     characterDisplay(app.esi, t.ClientID),
+				With:     app.displayCharacter(ctx, t.ClientID),
 				ClientID: t.ClientID,
 				ClientIsChar: func() bool {
 					_, ok := app.esi.CachedCharacterName(t.ClientID)
@@ -235,8 +237,8 @@ func (app *Application) handleWallet(w http.ResponseWriter, r *http.Request) {
 // snapshot carries it; older snapshots fall back to the character
 // name cache — a hit means character, a miss stays unlinked
 // (corporations deliberately render as text in this pass).
-func (app *Application) journalParty(id int64, kind string) (name string, isChar bool) {
-	name = characterDisplay(app.esi, id)
+func (app *Application) journalParty(ctx context.Context, id int64, kind string) (name string, isChar bool) {
+	name = app.displayCharacter(ctx, id)
 	switch kind {
 	case "character":
 		return name, id > 0

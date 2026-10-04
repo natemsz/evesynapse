@@ -234,6 +234,19 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 018 (item descriptions bulk-cached from the SDE
+	// invTypes dump), column-guarded like 008/009: every database
+	// that lacks the column — fresh ones included, since 003
+	// predates it — gains it here.
+	var sdeDescriptionCols int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('sde_types') WHERE name = 'description'`).Scan(&sdeDescriptionCols); err != nil {
+		return nil, err
+	}
+	if sdeDescriptionCols < 1 {
+		if err := applySchema(conn, sdeTypeDescriptionsSchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

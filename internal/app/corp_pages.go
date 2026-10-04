@@ -105,7 +105,7 @@ func (app *Application) handleCorpMembers(w http.ResponseWriter, r *http.Request
 
 	structureNames := app.corpStructureNames(ctx, sel.Active.CharacterID)
 	for _, id := range members {
-		row := corpMemberRow{Name: characterDisplay(app.esi, id), ID: id}
+		row := corpMemberRow{Name: app.displayCharacter(ctx, id), ID: id}
 		if t, ok := byCharacter[id]; ok {
 			if len(t.StartDate) >= 10 {
 				row.Joined = t.StartDate[:10]
@@ -285,7 +285,7 @@ func (app *Application) handleCorpWallets(w http.ResponseWriter, r *http.Request
 				Unit:         esi.FormatISK(t.UnitPrice),
 				Total:        esi.FormatISK(t.UnitPrice * float64(t.Quantity)),
 				Side:         side,
-				With:         characterDisplay(app.esi, t.ClientID),
+				With:         app.displayCharacter(ctx, t.ClientID),
 				ClientID:     t.ClientID,
 				ClientIsChar: clientIsChar,
 			})
@@ -385,7 +385,7 @@ func (app *Application) handleCorpOrders(w http.ResponseWriter, r *http.Request)
 			Location:   app.corpLocationTitle(ctx, o.LocationID, structureNames),
 			Region:     regionName(o.RegionID),
 			Expires:    expires,
-			IssuedBy:   characterDisplay(app.esi, o.IssuedBy),
+			IssuedBy:   app.displayCharacter(ctx, o.IssuedBy),
 			IssuedByID: o.IssuedBy,
 		})
 	}

@@ -44,12 +44,12 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`id="nav-drawer-toggle" autocomplete="off"`,
 		`<button type="button" class="nav-reopen" id="nav-reopen"`,
 		`<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">`,
-		`<svg class="wordmark-glyph" viewBox="10.7 5.2 24.6 38.6" aria-hidden="true">`,
+		`<svg class="wordmark-glyph" viewBox="11.8 5.1 24.2 38" aria-hidden="true">`,
 		`<defs><linearGradient id="brand-glyph-gradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd27a"/><stop offset=".52" stop-color="#ff6a1a"/><stop offset="1" stop-color="#d63c14"/></linearGradient></defs>`,
 		`stroke="url(#brand-glyph-gradient)"`,
 		`fill="url(#brand-glyph-gradient)"`,
-		`<path d="M27.9 12.5L23.4 16.8M23.2 23.4L24.8 25.1M24.5 31.5L18.3 36.7"/>`,
-		`<circle cx="31" cy="9.5" r="3.3"/>`,
+		`<path d="M29.5 15.9L26.4 12.2M20.8 11.6L19.1 13.0M18.7 18.6L20.5 20.6M27.1 27.6L29.1 29.7M28.8 35.2L27.0 36.6M21.4 36.0L18.3 32.1"/>`,
+		`<circle cx="31.82" cy="18.76" r="2.7"/>`,
 		`<a class="wordmark topbar-wordmark" href="/" aria-label="EveSynapse home">EVE<svg class="wordmark-glyph"`,
 		`data-nav-category="character"`,
 		`data-nav-category="corporation"`,
@@ -457,8 +457,8 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	for _, want := range []string{
 		`viewBox="0 0 48 48"`,
 		`<rect width="48" height="48" rx="10" fill="#0d0503"/>`,
-		`<circle cx="31" cy="9.5" r="3.3"/>`,
-		`<circle cx="15" cy="39.5" r="3.3"/>`,
+		`<circle cx="31.82" cy="18.76" r="2.7"/>`,
+		`<circle cx="16.01" cy="29.23" r="2.7"/>`,
 	} {
 		if !strings.Contains(fav, want) {
 			t.Errorf("favicon.svg missing %q", want)

@@ -165,7 +165,7 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 			data.ViewerChars[entry.ID] = true
 		}
 	}
-	ts, err := template.New("base").Funcs(linkFuncMap()).ParseFS(templatesFS, "templates/base.html", "templates/"+page)
+	ts, err := template.New("base").Funcs(linkFuncMap()).ParseFS(templatesFS, "templates/base.html", "templates/balancechart.html", "templates/"+page)
 	if err != nil {
 		log.Printf("parse template %s: %v", page, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)

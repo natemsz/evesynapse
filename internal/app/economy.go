@@ -125,6 +125,7 @@ type walletView struct {
 	CharacterName string
 	BalanceOK     bool
 	Balance       string // esi.FormatISK, bare number
+	Graph         *walletGraphView
 	Journal       econSectionState
 	JournalRows   []walletJournalRow
 	JournalCut    int
@@ -227,6 +228,11 @@ func (app *Application) handleWallet(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
+
+	// Balance history rides the same stored rows: the decoded
+	// journal above, the daily samples, and the wallet snapshot
+	// the header balance came from.
+	view.Graph = app.attachWalletGraph(ctx, active.UserID, active.CharacterID, journal, view.Journal.Loaded)
 
 	app.render(ctx, w, http.StatusOK, "wallet.html", data)
 }

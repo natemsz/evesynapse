@@ -443,6 +443,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/wallet", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleWallet)
+		r.Get("/graph-fragment", app.handleWalletGraphFragment)
 	})
 
 	r.Route("/orders", func(r chi.Router) {

@@ -7,6 +7,8 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+
+	"evesynapse/internal/esi"
 )
 
 // ---------------------------------------------------------------------------
@@ -28,7 +30,7 @@ import (
 // in pilot.html, type-description in items.html) with the same
 // link helpers the full pages use.
 func (app *Application) renderFragment(w http.ResponseWriter, page, define string, data any) {
-	ts, err := template.New("fragment").Funcs(linkFuncMap()).ParseFS(templatesFS, "templates/"+page)
+	ts, err := template.New("fragment").Funcs(linkFuncMap()).ParseFS(templatesFS, "templates/balancechart.html", "templates/"+page)
 	if err != nil {
 		log.Printf("parse fragment template %s: %v", page, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -95,6 +97,26 @@ func (app *Application) handleMarketTraderFragment(w http.ResponseWriter, r *htt
 	}
 	app.attachHistory(ctx, item, typeID, regionID, 0)
 	app.renderFragment(w, "market.html", "trader-section", item)
+}
+
+// handleWalletGraphFragment re-renders just the wallet page's
+// balance-history section from stored rows, so the graph fills
+// in when the journal snapshot lands instead of waiting for a
+// manual refresh. Cache-only, like every fragment.
+func (app *Application) handleWalletGraphFragment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	_, active, links, err := app.pickCharacter(ctx, r, "/wallet/")
+	if err != nil || links == nil {
+		app.renderFragment(w, "wallet.html", "wallet-graph", &walletGraphView{State: walletGraphEmpty})
+		return
+	}
+	var journal esi.WalletJournal
+	loaded := app.loadCorpSnapshot(ctx, active.CharacterID, esi.SnapWalletJournal, &journal)
+	if !loaded {
+		journal = nil
+	}
+	app.renderFragment(w, "wallet.html", "wallet-graph",
+		app.attachWalletGraph(ctx, active.UserID, active.CharacterID, journal, loaded))
 }
 
 // handlePilotFragment re-renders just the pilot record body from

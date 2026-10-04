@@ -1,0 +1,18 @@
+{{define "balance-chart"}}
+{{$c := .}}
+<div class="pchart" data-chart-scrub="true">
+  <div class="chart-legend">
+    <span class="legend-item"><span class="legend-swatch legend-price" aria-hidden="true"></span>Balance</span>
+    <span class="legend-note">Balance in ISK</span>
+  </div>
+  <svg viewBox="0 0 {{$c.Width}} {{$c.Height}}" width="100%" role="img" aria-label="{{$c.Label}}">
+    {{range $c.Ticks}}<line class="chart-gridline price-gridline {{.Class}}" x1="0" y1="{{.Y}}" x2="{{$c.Width}}" y2="{{.Y}}"/>{{end}}
+    {{if $c.Points}}<polyline points="{{$c.Points}}" fill="none" stroke="#ffb84d" stroke-width="1.5"/>{{end}}
+    {{range $c.Dots}}<circle cx="{{.X}}" cy="{{.Y}}" r="1.6" fill="#ffb84d"/>{{end}}
+    {{range $c.Dots}}<circle class="cdot" cx="{{.X}}" cy="{{.Y}}" r="9" tabindex="0" aria-label="{{.Title}}" data-date="{{.Date}}" data-balance="{{.Balance}}"><title>{{.Title}}</title></circle>{{end}}
+    {{range $c.Ticks}}<text class="chart-axis-label price-axis {{.Class}}" x="2" y="{{.LabelY}}">{{.Label}}</text>{{end}}
+    {{range $c.DateTicks}}<text class="chart-axis-label chart-date-tick {{.Class}}" x="{{.X}}" y="{{$c.Height}}" text-anchor="{{.Anchor}}">{{.Label}}</text>{{end}}
+  </svg>
+  <div class="ctip" hidden></div>
+</div>
+{{end}}

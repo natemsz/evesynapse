@@ -665,10 +665,10 @@ tbody tr.yours td { background: rgba(255, 184, 77, 0.10); }
 
 /* --- footer --- */
 footer {
-  /* 75% opacity with blur (user spec, matching the top bar and
-     sidebar glass treatment); the 75% paint alone is the no-blur
+  /* 85% opacity with blur (user spec, matching the top bar and
+     sidebar glass treatment); the 85% paint alone is the no-blur
      fallback. */
-  background: rgba(11, 11, 11, 0.75);
+  background: rgba(11, 11, 11, 0.85);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border-top: 1px solid #262626;
@@ -1080,10 +1080,10 @@ html[data-nav="hidden"] body { grid-template-columns: 0 minmax(0, 1fr); }
   min-width: 0;
   /* v0.3.07.010: the sidebar takes the top bar's glass
      treatment (user ask) — same recipe, its own colors kept:
-     the #151515 → #111111 paint at 93% over a backdrop blur.
+     the #151515 → #111111 paint at 90% over a backdrop blur.
      Rail flyouts and content panels stay solid; the 93% paint
      alone is the no-blur fallback. */
-  background: linear-gradient(rgba(21, 21, 21, 0.93), rgba(17, 17, 17, 0.93)) padding-box;
+  background: linear-gradient(rgba(21, 21, 21, 0.9), rgba(17, 17, 17, 0.9)) padding-box;
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border-right: 1px solid #262626;
@@ -1463,7 +1463,7 @@ tbody tr.yours td { background-color: #2a2015; }
     width: min(20rem, calc(100vw - 3rem));
     height: 100dvh;
     z-index: 80;
-    background: linear-gradient(rgba(21, 21, 21, 0.93), rgba(17, 17, 17, 0.93)) padding-box;
+    background: linear-gradient(rgba(21, 21, 21, 0.9), rgba(17, 17, 17, 0.9)) padding-box;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
     transform: translateX(-105%);

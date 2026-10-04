@@ -673,14 +673,16 @@ type attentionWidget struct {
 const attentionCap = 12
 
 type netWorthWidget struct {
-	Any         bool
-	Total       string
-	Wallet      string
-	Assets      string
-	AssetsKnown bool   // an assets snapshot exists (the value is always real then)
-	AssetsNote  string // partial-pricing coverage line, "" when everything priced
-	Escrow      string
-	AsOf        string
+	Any             bool
+	Total           string
+	Wallet          string
+	Assets          string
+	AssetsKnown     bool   // an assets snapshot exists (the value is always real then)
+	AssetsNote      string // partial-pricing coverage line, "" when everything priced
+	Escrow          string
+	AsOf            string
+	History         *balanceChart // net worth over time, when 2+ sampled days exist
+	HistoryBuilding bool          // history recording, not yet chartable
 }
 
 type industryRow struct {
@@ -1171,7 +1173,7 @@ func (b *charSnaps) queueLastFinish() string {
 	return last
 }
 
-func (app *Application) buildNetWorth(ctx context.Context, bundles []*charSnaps) *netWorthWidget {
+func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles []*charSnaps) *netWorthWidget {
 	var walletSum, assetSum, escrowSum float64
 	var walletOK, escrowOK bool
 	var assetsSeen bool
@@ -1260,6 +1262,10 @@ func (app *Application) buildNetWorth(ctx context.Context, bundles []*charSnaps)
 	if !asOf.IsZero() {
 		w.AsOf = formatFinish(asOf.UTC().Format(time.RFC3339))
 	}
+	// Net worth over time from the daily sampler (schema 019):
+	// a chart once two sampled days exist, an honest "building"
+	// note before that. Stored rows only — no fetching here.
+	app.attachNetWorthHistory(ctx, w, userID)
 	return w
 }
 
@@ -1716,7 +1722,7 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		case widgetAttention:
 			w.Attention = app.buildAttention(ctx, bundles)
 		case widgetNetWorth:
-			w.NetWorth = app.buildNetWorth(ctx, bundles)
+			w.NetWorth = app.buildNetWorth(ctx, userID, bundles)
 		case widgetIndustry:
 			w.Industry = app.buildIndustry(ctx, bundles)
 		case widgetMarket:

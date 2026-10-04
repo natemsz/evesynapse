@@ -12,6 +12,13 @@
 <h2>{{.Wallet.CharacterName}}</h2>
 {{if .Wallet.BalanceOK}}<p>Balance: <strong>{{.Wallet.Balance}} ISK</strong></p>{{end}}
 
+{{if .Wallet.Graph}}
+<section class="foldable">
+<h3>Balance history</h3>
+{{template "wallet-graph" .Wallet.Graph}}
+</section>
+{{end}}
+
 <section class="foldable">
 <h3>Recent journal</h3>
 {{if .Wallet.Journal.Note}}
@@ -60,4 +67,19 @@
 {{else}}
 <p>No character to show yet — link a character first.</p>
 {{end}}
+{{end}}
+
+{{define "wallet-graph"}}
+<div class="wallet-graph-body" data-poll-state="{{.State}}"{{if eq .State "pending"}} data-live-region data-poll-url="{{.PollURL}}"{{end}}>
+  {{if eq .State "chart"}}
+  {{template "balance-chart" .Chart}}
+  <p><small>Balance from {{.Chart.From}} to {{.Chart.To}} — every journal entry up close, daily samples further back.</small></p>
+  {{else if eq .State "few"}}
+  <p><small>Balance history is building — one point recorded so far{{if .Latest}} ({{.Latest}} ISK){{end}}. The graph draws itself once there's a second.</small></p>
+  {{else if eq .State "empty"}}
+  <p><small>No wallet activity recorded yet — the graph starts with your first journal entries.</small></p>
+  {{else}}
+  <p><span class="loading-pulse" aria-hidden="true"></span><small>Your balance history is on its way — it fills in here on its own.</small></p>
+  {{end}}
+</div>
 {{end}}

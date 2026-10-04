@@ -223,6 +223,17 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 017 (Phase 6 briefing: the account's last-looked
+	// anchor for the home digest), column-guarded like 010.
+	var briefingAnchorCols int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('users') WHERE name = 'last_briefing_at'`).Scan(&briefingAnchorCols); err != nil {
+		return nil, err
+	}
+	if briefingAnchorCols < 1 {
+		if err := applySchema(conn, briefingAnchorSchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

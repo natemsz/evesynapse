@@ -79,6 +79,9 @@ var pilotRecordsSchema string
 //go:embed schema/016_pilot_priority.sql
 var pilotPrioritySchema string
 
+//go:embed schema/017_briefing_anchor.sql
+var briefingAnchorSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -266,8 +269,16 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Get("/favicon.ico", handleFavicon)
 
 	// Embedded static assets (2013 wallpaper, stylesheet).
+	// Font files never change at a given URL, so they cache
+	// forever; everything else revalidates normally.
 	if sub, err := fs.Sub(staticFS, "static"); err == nil {
-		r.Handle("/static/*", http.StripPrefix("/static", http.FileServer(http.FS(sub))))
+		fileServer := http.FileServer(http.FS(sub))
+		r.Handle("/static/*", http.StripPrefix("/static", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			if strings.HasPrefix(req.URL.Path, "/fonts/") {
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			}
+			fileServer.ServeHTTP(w, req)
+		})))
 	}
 	r.Get("/auth/eve", app.handleEVELogin)
 	r.Get("/auth/callback", app.handleEVECallback)

@@ -8,6 +8,14 @@ import (
 	"database/sql"
 )
 
+type AllianceRecord struct {
+	AllianceID int64  `json:"alliance_id"`
+	Payload    string `json:"payload"`
+	State      string `json:"state"`
+	FetchedAt  string `json:"fetched_at"`
+	Priority   int64  `json:"priority"`
+}
+
 type Character struct {
 	CharacterID  int64          `json:"character_id"`
 	UserID       int64          `json:"user_id"`
@@ -46,6 +54,14 @@ type ContractDetail struct {
 	FetchedAt   string `json:"fetched_at"`
 }
 
+type CorporationRecord struct {
+	CorporationID int64  `json:"corporation_id"`
+	Payload       string `json:"payload"`
+	State         string `json:"state"`
+	FetchedAt     string `json:"fetched_at"`
+	Priority      int64  `json:"priority"`
+}
+
 type GlobalSnapshot struct {
 	Kind        string `json:"kind"`
 	Payload     string `json:"payload"`
@@ -57,6 +73,11 @@ type GuidePrice struct {
 	TypeID        int64   `json:"type_id"`
 	AdjustedPrice float64 `json:"adjusted_price"`
 	AveragePrice  float64 `json:"average_price"`
+}
+
+type GuidePriceWant struct {
+	ID       int64  `json:"id"`
+	WantedAt string `json:"wanted_at"`
 }
 
 type GuidePricesMetum struct {
@@ -142,6 +163,13 @@ type PilotRecord struct {
 	Priority    int64  `json:"priority"`
 }
 
+type PlanetName struct {
+	PlanetID   int64  `json:"planet_id"`
+	Name       string `json:"name"`
+	State      string `json:"state"`
+	ResolvedAt string `json:"resolved_at"`
+}
+
 type SdeBlueprint struct {
 	BlueprintTypeID          int64 `json:"blueprint_type_id"`
 	ProductTypeID            int64 `json:"product_type_id"`
@@ -171,6 +199,14 @@ type SdeGroup struct {
 	GroupID    int64  `json:"group_id"`
 	Name       string `json:"name"`
 	CategoryID int64  `json:"category_id"`
+}
+
+type SdeMarketGroup struct {
+	MarketGroupID int64  `json:"market_group_id"`
+	ParentGroupID int64  `json:"parent_group_id"`
+	Name          string `json:"name"`
+	IconID        int64  `json:"icon_id"`
+	HasTypes      int64  `json:"has_types"`
 }
 
 type SdeMetum struct {
@@ -239,6 +275,14 @@ type SnapshotFetchState struct {
 	State       string `json:"state"`
 	Detail      string `json:"detail"`
 	AttemptedAt string `json:"attempted_at"`
+}
+
+type StructureContext struct {
+	StructureID        int64  `json:"structure_id"`
+	OwnerCorporationID int64  `json:"owner_corporation_id"`
+	SystemID           int64  `json:"system_id"`
+	TypeID             int64  `json:"type_id"`
+	UpdatedAt          string `json:"updated_at"`
 }
 
 type StructureName struct {

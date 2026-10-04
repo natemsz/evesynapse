@@ -779,7 +779,7 @@ func (q *Queries) GetSnapshotFetchState(ctx context.Context, arg GetSnapshotFetc
 
 const getStructureName = `-- name: GetStructureName :one
 
-SELECT structure_id, name, state, resolved_at
+SELECT structure_id, name, state, resolved_at, source
 FROM structure_names
 WHERE structure_id = ?
 `
@@ -792,6 +792,9 @@ WHERE structure_id = ?
 // authenticated-only). 'resolved' rows re-check after 30 days
 // (structures can be renamed); 'missing' rows (403/404: private or
 // gone) re-check after 24 hours; 'pending' rows are always due.
+// The worker tries every eligible linked character before a
+// negative answer is cached, and 'source' (schema 023) records the
+// name's provenance so ESI truth outranks any lower-trust tier.
 // ---------------------------------------------------------------------
 func (q *Queries) GetStructureName(ctx context.Context, structureID int64) (StructureName, error) {
 	row := q.db.QueryRowContext(ctx, getStructureName, structureID)
@@ -801,6 +804,7 @@ func (q *Queries) GetStructureName(ctx context.Context, structureID int64) (Stru
 		&i.Name,
 		&i.State,
 		&i.ResolvedAt,
+		&i.Source,
 	)
 	return i, err
 }
@@ -2381,6 +2385,41 @@ func (q *Queries) ListSnapshotsByCharacter(ctx context.Context, characterID int6
 	return items, nil
 }
 
+const listSnapshotsByKind = `-- name: ListSnapshotsByKind :many
+SELECT character_id, kind, payload, fetched_at, cached_until FROM character_snapshots
+WHERE kind = ?
+ORDER BY character_id
+`
+
+func (q *Queries) ListSnapshotsByKind(ctx context.Context, kind string) ([]CharacterSnapshot, error) {
+	rows, err := q.db.QueryContext(ctx, listSnapshotsByKind, kind)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CharacterSnapshot
+	for rows.Next() {
+		var i CharacterSnapshot
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.Kind,
+			&i.Payload,
+			&i.FetchedAt,
+			&i.CachedUntil,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSnapshotsForUser = `-- name: ListSnapshotsForUser :many
 SELECT s.character_id, s.kind, s.payload, s.fetched_at, s.cached_until
 FROM character_snapshots s
@@ -3035,12 +3074,13 @@ func (q *Queries) SetPilotRecord(ctx context.Context, arg SetPilotRecordParams) 
 }
 
 const setStructureName = `-- name: SetStructureName :exec
-INSERT INTO structure_names (structure_id, name, state, resolved_at)
-VALUES (?, ?, ?, ?)
+INSERT INTO structure_names (structure_id, name, state, resolved_at, source)
+VALUES (?, ?, ?, ?, ?)
 ON CONFLICT (structure_id) DO UPDATE SET
     name        = excluded.name,
     state       = excluded.state,
-    resolved_at = excluded.resolved_at
+    resolved_at = excluded.resolved_at,
+    source      = excluded.source
 `
 
 type SetStructureNameParams struct {
@@ -3048,6 +3088,7 @@ type SetStructureNameParams struct {
 	Name        string `json:"name"`
 	State       string `json:"state"`
 	ResolvedAt  string `json:"resolved_at"`
+	Source      string `json:"source"`
 }
 
 func (q *Queries) SetStructureName(ctx context.Context, arg SetStructureNameParams) error {
@@ -3056,6 +3097,7 @@ func (q *Queries) SetStructureName(ctx context.Context, arg SetStructureNamePara
 		arg.Name,
 		arg.State,
 		arg.ResolvedAt,
+		arg.Source,
 	)
 	return err
 }

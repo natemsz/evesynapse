@@ -268,3 +268,50 @@ func (app *Application) resolvedStructureTitle(ctx context.Context, structureID 
 	name, _ := app.esi.CachedStructureName(ctx, structureID)
 	return name
 }
+
+// persistStructureContexts distils one corporation-structures
+// snapshot into the structure_context store (schema 028): the
+// owning corporation, system, and type each entry reports, so the
+// structure page renders context from a single row instead of
+// re-reading snapshot payloads. A named entry also lands its name
+// in structure_names at 'corp' provenance through the usual
+// precedence guard -- ESI truth already cached is never demoted.
+// Called wherever snapshots are processed (the corp fetch path and
+// the worker's name-warming pass); best-effort per entry, like
+// every other queue note.
+func (app *Application) persistStructureContexts(ctx context.Context, structures esi.CorpStructures) {
+	stamp := time.Now().UTC().Format(time.RFC3339)
+	for _, s := range structures {
+		if s.StructureID <= 0 {
+			continue
+		}
+		if err := app.queries.SetStructureContext(ctx, db.SetStructureContextParams{
+			StructureID:        s.StructureID,
+			OwnerCorporationID: s.CorporationID,
+			SystemID:           s.SystemID,
+			TypeID:             s.TypeID,
+			UpdatedAt:          stamp,
+		}); err != nil {
+			log.Printf("structures: persist context for %d: %v", s.StructureID, err)
+		}
+		if s.Name != "" {
+			if app.storeStructureName(ctx, s.StructureID, s.Name, esi.StructureResolved, esi.StructureSourceCorp, stamp) {
+				app.esi.StoreStructureName(s.StructureID, s.Name)
+			}
+		}
+	}
+}
+
+// structureLinkable reports whether the structure page has
+// something real to show for this id: a resolved name, or stored
+// context (owner/system/type) from a corporation snapshot. The
+// link policy only links structure titles then — an unresolved
+// "Structure #<id>" stays text rather than pointing at a page
+// that would only say "not yet". Cache-only.
+func (app *Application) structureLinkable(ctx context.Context, structureID int64) bool {
+	if name := app.resolvedStructureTitle(ctx, structureID); name != "" {
+		return true
+	}
+	_, err := app.queries.GetStructureContext(ctx, structureID)
+	return err == nil
+}

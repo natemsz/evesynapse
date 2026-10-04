@@ -1603,3 +1603,153 @@ tbody tr.yours td { background-color: #2a2015; }
   .sidenav a.navlink,
   .sidebar .branch > summary { transition: none !important; }
 }
+
+/* --- market category browser (v0.3.10) ------------------------
+   Top-level market groups and their subgroups as glyph cards.
+   Icons paint from the shared nav gradient; the solid flare
+   gold here is the fallback when gradient paint fails, same as
+   the nav icon set. */
+.market-crumbs { margin: 0 0 0.4rem; }
+.market-group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
+  gap: 0.55rem;
+  margin: 0.6rem 0 0.8rem;
+}
+.market-group-card {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 3.1rem;
+  padding: 0.55rem 0.7rem;
+  background: var(--row);
+  border: 1px solid #262626;
+  border-radius: 4px;
+  color: var(--text);
+}
+.market-group-card:hover {
+  background: var(--row-hover);
+  color: #fff6e6;
+  text-decoration: none;
+}
+.market-group-icon {
+  flex: 0 0 1.7rem;
+  width: 1.7rem;
+  color: #ffb84d;
+  line-height: 1;
+}
+.market-group-icon svg {
+  display: block;
+  width: 1.7rem;
+  height: 1.7rem;
+  fill: #ffb84d;
+  stroke: #ffb84d;
+}
+.market-group-name { min-width: 0; }
+
+/* --- quick jump palette (v0.3.15) -----------------------------
+   Ctrl+K overlay: a solid panel on an opaque surround (the two
+   approved glass surfaces stay the only translucent ones). The
+   ember ramp paints the panel's top edge and the group heads,
+   matching the nav icon family. */
+.quickjump-btn {
+  flex: none;
+  margin-left: 0.5rem;
+  padding: 0.28rem 0.45rem;
+  background: #0e0e0e;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  color: #b8a58c;
+  cursor: pointer;
+  font: inherit;
+}
+.quickjump-btn:hover, .quickjump-btn:focus-visible {
+  border-color: var(--accent);
+  color: #fff6e6;
+  outline: none;
+}
+.quickjump-btn kbd {
+  font: inherit;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+.quickjump {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: #0d0503;
+  overflow-y: auto;
+}
+.quickjump-panel {
+  width: min(38rem, calc(100vw - 2rem));
+  margin: 9vh auto 2rem;
+  background: var(--panel);
+  border: 1px solid #2a2a2a;
+  border-top: 3px solid var(--accent);
+  border-radius: 6px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.8);
+  padding: 0.8rem;
+  animation: quickjump-in 120ms ease-out;
+}
+@keyframes quickjump-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .quickjump-panel { animation: none; }
+}
+.quickjump-panel input[type="search"] {
+  width: 100%;
+  font-size: 1rem;
+  padding: 0.6rem 0.7rem;
+}
+.quickjump-results {
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+  max-height: 52vh;
+  overflow-y: auto;
+}
+.quickjump-results li {
+  padding: 0.5rem 0.6rem;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.quickjump-results li.sel { background: #2a1a0c; color: #fff6e6; }
+.quickjump-results li.qj-group {
+  padding: 0.55rem 0.6rem 0.2rem;
+  cursor: default;
+  font-family: "Univers Next Pro Condensed", "Univers Next Pro", sans-serif;
+  font-weight: 600;
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #ffb84d;
+}
+.quickjump-results li.qj-pending {
+  color: #c9a06a;
+  cursor: default;
+}
+.quickjump-results .qj-label {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: #b8a58c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.quickjump-hint {
+  margin: 0.55rem 0.1rem 0;
+  font-size: 0.75rem;
+  color: #b8a58c;
+}
+body.quickjump-open { overflow: hidden; }
+@media (max-width: 720px) {
+  .quickjump-panel { margin-top: 4vh; }
+  .quickjump-results { max-height: 60vh; }
+  .quickjump-btn { margin-left: 0.35rem; }
+}

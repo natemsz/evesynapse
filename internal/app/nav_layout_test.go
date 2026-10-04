@@ -36,10 +36,10 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`<nav class="sidenav" aria-label="Primary">`,
 		`<label class="nav-hamburger" for="nav-drawer-toggle" role="button" tabindex="0" aria-expanded="false" aria-controls="site-nav">`,
 		`<label class="nav-backdrop" for="nav-drawer-toggle" aria-hidden="true"></label>`,
-		`<button type="button" class="nav-expand-btn" id="nav-expand-all" aria-label="Expand all navigation categories" title="Expand all navigation categories" aria-expanded="false"><span class="expand-glyph" aria-hidden="true"></span></button>`,
+		`<button type="button" class="nav-expand-btn" id="nav-expand-all" aria-label="Expand all navigation categories" title="Expand all navigation categories" aria-expanded="false"><span class="expand-icons" aria-hidden="true"><svg class="nav-control-svg expand-icon expand-icon-plus" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M12 8.5v7M8.5 12h7"/></g></svg><svg class="nav-control-svg expand-icon expand-icon-minus" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M8.5 12h7"/></g></svg></span></button>`,
 		`<button type="button" class="nav-state-btn" id="nav-collapse"`,
 		`<button type="button" class="nav-state-btn" id="nav-hide"`,
-		`<label class="nav-drawer-close" for="nav-drawer-toggle" role="button" tabindex="0" aria-label="Close navigation">×</label>`,
+		`<label class="nav-drawer-close" for="nav-drawer-toggle" role="button" tabindex="0" aria-label="Close navigation"><svg class="nav-control-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17" fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2.2" stroke-linecap="round"/></svg></label>`,
 		`id="nav-drawer-toggle" autocomplete="off"`,
 		`<button type="button" class="nav-reopen" id="nav-reopen"`,
 		`<a class="wordmark topbar-wordmark" href="/">EVESYNAPSE</a>`,
@@ -48,11 +48,19 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`<span class="nav-label">Character</span>`,
 		`<span class="nav-label">Corporation</span>`,
 		`<defs><linearGradient id="nav-glyph-gradient" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffd27a"/><stop offset="0.5" stop-color="#ff6a1a"/><stop offset="1" stop-color="#d63c14"/></linearGradient></defs>`,
+		`<svg class="nav-icon-svg nav-icon-home" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.2 11.4 12 4.4l7.8 7M6.6 9.7v9.9h10.8V9.7" fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+		`<svg class="nav-icon-svg nav-icon-character" viewBox="0 0 24 24" aria-hidden="true">`,
 		`<circle cx="12" cy="8.2" r="3.8"/>`,
+		`<svg class="nav-icon-svg nav-icon-assets" viewBox="0 0 24 24" aria-hidden="true"><g fill="url(#nav-glyph-gradient)"><rect x="4" y="4" width="7" height="7" rx="1.2"/><rect x="13" y="4" width="7" height="7" rx="1.2"/><rect x="4" y="13" width="7" height="7" rx="1.2"/><rect x="13" y="13" width="7" height="7" rx="1.2"/></g></svg>`,
+		`<svg class="nav-icon-svg nav-icon-economy" viewBox="0 0 24 24" aria-hidden="true">`,
 		`<rect x="16.3" y="7" width="4.2" height="13" rx="1"/>`,
+		`<svg class="nav-icon-svg nav-icon-corporation" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.7l2.45 4.97 5.48.8-3.97 3.87.94 5.46L12 16.24l-4.9 2.56.94-5.46L4.07 9.47l5.48-.8Z" fill="url(#nav-glyph-gradient)"/></svg>`,
+		`<svg class="nav-icon-svg nav-icon-intel" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2"><circle cx="12" cy="12" r="7.4"/><circle cx="12" cy="12" r="3.6"/></g><circle cx="12" cy="12" r="1.35" fill="url(#nav-glyph-gradient)"/></svg>`,
+		`<svg class="nav-icon-svg nav-icon-sync" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.2 12a7.2 7.2 0 1 1-2.1-5.05"/><path d="M17.4 3.4v3.9h-3.9"/></g></svg>`,
+		`<svg class="nav-icon-svg nav-icon-admin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2 7 7 2-7 2-2 7-2-7-7-2 7-2Z" fill="url(#nav-glyph-gradient)"/></svg>`,
+		`<path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`,
 		`stroke="url(#nav-glyph-gradient)"`,
 		`<span class="nav-label">Economy</span>`,
-		`<span class="nav-icon" aria-hidden="true">★</span><span class="nav-label">Corporation</span>`,
 		`<div class="topbar-character">`,
 		`<span class="topbar-character-name">`,
 		`<details class="branch switcher topbar-switcher">`,
@@ -66,12 +74,25 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	if strings.Contains(body, `name="mainnav"`) {
 		t.Error("page still carries the exclusive mainnav details group")
 	}
-	// Both drawn icons share the one gradient definition, and
-	// the retired text glyphs stay retired.
+	// Every category and sidebar control icon is drawn SVG
+	// sharing the one gradient definition, and the retired
+	// text glyphs stay retired.
 	if n := strings.Count(body, "<linearGradient"); n != 1 {
 		t.Errorf("page carries %d linearGradient definitions, want exactly 1 shared def", n)
 	}
-	for _, gone := range []string{"▂▄▆", "◉", "nav-icon-bars", "nav-economy-gradient"} {
+	for _, gone := range []string{
+		"▂▄▆", "◉", "nav-icon-bars", "nav-economy-gradient",
+		`<span class="nav-icon" aria-hidden="true">⌂</span>`,
+		`<span class="nav-icon" aria-hidden="true">▦</span>`,
+		`<span class="nav-icon" aria-hidden="true">★</span>`,
+		`<span class="nav-icon" aria-hidden="true">◎</span>`,
+		`<span class="nav-icon" aria-hidden="true">↻</span>`,
+		`<span class="nav-icon" aria-hidden="true">✦</span>`,
+		`<span class="expand-glyph"`,
+		`>«</button>`,
+		`>×</button>`,
+		`>×</label>`,
+	} {
 		if strings.Contains(body, gone) {
 			t.Errorf("page still contains retired nav glyph markup %q", gone)
 		}
@@ -147,13 +168,16 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// full labeled list (labels, account block, inline
 		// branch menus) no matter what data-nav says.
 		".nav-drawer-close",
-		".nav-icon {\n  flex: 0 0 1.35rem;\n  width: 1.35rem;\n  background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);\n  -webkit-background-clip: text;\n  background-clip: text;\n  color: transparent;",
-		".nav-icon svg {\n  display: block;\n  width: 1.05em;\n  height: 1.05em;\n  margin: 0 auto;\n}",
-		"background: linear-gradient(90deg, #ffe3a3 0%, #ff8b36 50%, #f0551f 100%);",
+		".nav-icon {\n  flex: 0 0 1.35rem;\n  width: 1.35rem;\n  color: #ffb84d;\n  line-height: 1;\n  text-align: center;\n}",
+		".nav-icon svg {\n  display: block;\n  width: 1.05em;\n  height: 1.05em;\n  margin: 0 auto;\n  fill: #ffb84d;\n  stroke: #ffb84d;\n}",
+		".sidebar .branch.active > summary .nav-icon svg,\n.sidenav a.navlink.active .nav-icon svg {\n  filter: brightness(1.15);\n}",
 		".nav-hamburger {\n  display: none;\n  align-items: center;\n  justify-content: center;",
 		".nav-hamburger-text { line-height: 1; }",
-		".nav-expand-btn .expand-glyph {",
-		".nav-expand-btn[aria-expanded=\"true\"] .expand-glyph::after { display: none; }",
+		".nav-control-svg {\n  display: block;\n  flex: none;\n  width: 1.05rem;\n  height: 1.05rem;\n  fill: #ffb84d;\n  stroke: #ffb84d;\n}",
+		".nav-expand-btn .expand-icon-minus { display: none; }",
+		".nav-expand-btn[aria-expanded=\"true\"] .expand-icon-plus { display: none; }",
+		".nav-expand-btn[aria-expanded=\"true\"] .expand-icon-minus { display: block; }",
+		"html[data-nav=\"rail\"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }",
 		".sidebar .sidebar-actions .nav-state-btn { display: none; }",
 		".sidebar .nav-drawer-close { display: inline-flex; }",
 		"html[data-nav=\"rail\"] .nav-label { display: block; }",
@@ -200,6 +224,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		"background-attachment: fixed",
 		`url("/static/bg.jpg") no-repeat top center fixed`,
 		".nav-icon-bars",
+		".expand-glyph",
 	} {
 		if strings.Contains(css, unwanted) {
 			t.Errorf("style.css still contains %q", unwanted)
@@ -228,5 +253,8 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		if !strings.Contains(js, want) {
 			t.Errorf("app.js missing %q", want)
 		}
+	}
+	if strings.Contains(js, "collapseButton.textContent") {
+		t.Error("app.js still rewrites the collapse control as a text glyph")
 	}
 }

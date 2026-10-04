@@ -1253,7 +1253,6 @@
     }
     if (collapseButton) {
       var rail = currentState() === "rail";
-      collapseButton.textContent = rail ? "»" : "«";
       collapseButton.setAttribute("aria-label", rail ? "Expand navigation" : "Collapse navigation");
       collapseButton.setAttribute("title", rail ? "Expand navigation" : "Collapse navigation");
     }

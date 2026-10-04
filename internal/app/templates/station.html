@@ -1,0 +1,22 @@
+{{define "title"}}{{if and .Station .Station.Name}}{{.Station.Name}}{{else}}Station{{end}}{{end}}
+{{define "content"}}
+{{if .Station}}
+{{if eq .Station.State "missing"}}
+<h1><span class="gt">Station</span></h1>
+<p><small>That station isn't in the local directory yet — it will appear once the star map data covers it.</small></p>
+{{else}}
+<h1><span class="gt">{{.Station.Name}}</span></h1>
+
+<div class="tw">
+<table>
+  <tbody>
+    {{if .Station.System}}<tr><th>System</th><td>{{systemLink .Station.SystemID .Station.System}}</td></tr>{{end}}
+    {{if .Station.Region}}<tr><th>Region</th><td>{{.Station.Region}}</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+
+<p><small>From the local star map — the same data EVE's own map carries.</small></p>
+{{end}}
+{{end}}
+{{end}}

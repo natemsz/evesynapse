@@ -253,7 +253,7 @@ func TestSDEImportParsesAndStoresDescriptions(t *testing.T) {
 		t.Fatalf("parsed types = %+v, want empty description", parsed2.types)
 	}
 
-	// The store round-trips the text and stamps import version 5.
+	// The store round-trips the text and stamps import version 6.
 	if _, err := app.storeSDE(ctx, "fixture", &parsed); err != nil {
 		t.Fatalf("store SDE: %v", err)
 	}
@@ -261,8 +261,8 @@ func TestSDEImportParsesAndStoresDescriptions(t *testing.T) {
 	if err != nil || row.Description != "A basic mineral." {
 		t.Fatalf("stored type = %+v err=%v, want description", row, err)
 	}
-	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "5" {
-		t.Fatalf("sde_import_version = %q, want 5", ver)
+	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "6" {
+		t.Fatalf("sde_import_version = %q, want 6", ver)
 	}
 	if state, html := app.itemDescription(ctx, 34); state != "ready" || !strings.Contains(string(html), "A basic mineral.") {
 		t.Fatalf("itemDescription = %q %q, want local ready text", state, html)

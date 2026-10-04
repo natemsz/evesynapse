@@ -21,8 +21,8 @@
 <div class="tw">
 <table>
   <tbody>
-    {{if .CorpLine}}<tr><th>Corporation</th><td>{{.CorpLine}}</td></tr>{{end}}
-    {{if .AllianceLine}}<tr><th>Alliance</th><td>{{.AllianceLine}}</td></tr>{{end}}
+    {{if .CorpLine}}<tr><th>Corporation</th><td>{{corpLink .CorpID .CorpLine}}</td></tr>{{end}}
+    {{if .AllianceLine}}<tr><th>Alliance</th><td>{{allianceLink .AllianceID .AllianceLine}}</td></tr>{{end}}
     {{if .FactionName}}<tr><th>Faction</th><td>{{.FactionName}}</td></tr>{{end}}
     <tr><th>Security status</th><td>{{.Security}}</td></tr>
     {{if .Birthday}}<tr><th>Born</th><td>{{.Birthday}}</td></tr>{{end}}
@@ -42,7 +42,7 @@
   <thead><tr><th>Corporation</th><th>From</th><th>To</th></tr></thead>
   <tbody>
   {{range .History}}
-    <tr><td>{{.CorpName}}</td><td>{{.From}}</td><td>{{.To}}</td></tr>
+    <tr><td>{{corpLink .CorpID .CorpName}}</td><td>{{.From}}</td><td>{{.To}}</td></tr>
   {{end}}
   </tbody>
 </table>

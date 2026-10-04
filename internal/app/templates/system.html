@@ -1,0 +1,35 @@
+{{define "title"}}{{if and .System .System.Name}}{{.System.Name}}{{else}}Solar system{{end}}{{end}}
+{{define "content"}}
+{{if .System}}
+{{if eq .System.State "missing"}}
+<h1><span class="gt">Solar system</span></h1>
+<p><small>That system isn't in the local star map yet — it will appear once the star map data covers it.</small></p>
+{{else}}
+<h1><span class="gt">{{.System.Name}}</span></h1>
+
+<div class="tw">
+<table>
+  <tbody>
+    <tr><th>Security status</th><td>{{.System.Security}}</td></tr>
+    {{if .System.Region}}<tr><th>Region</th><td>{{.System.Region}}</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+
+{{if .System.Stations}}
+<h2>Stations</h2>
+<div class="tw">
+<table>
+  <tbody>
+    {{range .System.Stations}}
+    <tr><td>{{stationLink .StationID .Name}}</td></tr>
+    {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+<p><small>From the local star map — the same data EVE's own map carries.</small></p>
+{{end}}
+{{end}}
+{{end}}

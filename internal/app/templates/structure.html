@@ -1,0 +1,34 @@
+{{define "title"}}{{if and .Structure .Structure.Name}}{{.Structure.Name}}{{else}}Structure{{end}}{{end}}
+{{define "content"}}
+{{if .Structure}}{{template "structure-body" .Structure}}{{end}}
+{{end}}
+
+{{define "structure-body"}}
+<div data-poll-state="{{.State}}"{{if eq .State "loading"}} data-live-region data-poll-url="/structure/fragment?structure={{.StructureID}}"{{end}}>
+
+{{if eq .State "missing"}}
+<h1><span class="gt">Structure</span></h1>
+<p><small>None of your characters can see this structure's name — it may be private, or it may no longer be standing.</small></p>
+{{else if eq .State "loading"}}
+<h1><span class="gt">Structure</span></h1>
+<p><span class="loading-pulse" aria-hidden="true"></span><small>Looking up this structure…</small></p>
+{{else}}
+<h1><span class="gt">{{.Name}}</span></h1>
+{{if .IconURL}}<p><img class="portrait" src="{{.IconURL}}" alt="" width="64" height="64"></p>{{end}}
+{{end}}
+
+{{if .HasContext}}
+<div class="tw">
+<table>
+  <tbody>
+    {{if .TypeID}}<tr><th>Type</th><td>{{itemLink .TypeID .TypeName}}</td></tr>{{end}}
+    {{if .OwnerCorpID}}<tr><th>Owner</th><td>{{corpLink .OwnerCorpID .OwnerCorpName}}</td></tr>{{end}}
+    {{if .SystemName}}<tr><th>System</th><td>{{systemLink .SystemID .SystemName}}</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+{{if eq .State "ready"}}<p><small>A player-built structure — what EveSynapse knows about it from your characters' records.</small></p>{{end}}
+</div>
+{{end}}

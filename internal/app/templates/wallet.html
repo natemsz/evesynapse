@@ -31,7 +31,7 @@
   <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Balance</th><th>Parties</th><th>Description</th></tr></thead>
   <tbody>
   {{range .Wallet.JournalRows}}
-    <tr><td>{{.Date}}</td><td>{{.Type}}</td><td>{{.Amount}} ISK</td><td>{{.Balance}} ISK</td><td>{{if .ShowParties}}{{if .FromIsChar}}{{charLink $.ViewerChars .FromID .FromName}}{{else}}{{.FromName}}{{end}} → {{if .ToIsChar}}{{charLink $.ViewerChars .ToID .ToName}}{{else}}{{.ToName}}{{end}}{{end}}</td><td>{{.Desc}}</td></tr>
+    <tr><td>{{.Date}}</td><td>{{.Type}}</td><td>{{.Amount}} ISK</td><td>{{.Balance}} ISK</td><td>{{if .ShowParties}}{{if eq .FromKind "character"}}{{charLink $.ViewerChars .FromID .FromName}}{{else if eq .FromKind "corporation"}}{{corpLink .FromID .FromName}}{{else if eq .FromKind "alliance"}}{{allianceLink .FromID .FromName}}{{else}}{{.FromName}}{{end}} → {{if eq .ToKind "character"}}{{charLink $.ViewerChars .ToID .ToName}}{{else if eq .ToKind "corporation"}}{{corpLink .ToID .ToName}}{{else if eq .ToKind "alliance"}}{{allianceLink .ToID .ToName}}{{else}}{{.ToName}}{{end}}{{end}}</td><td>{{.Desc}}</td></tr>
   {{end}}
   </tbody>
 </table>
@@ -54,7 +54,7 @@
   <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>Unit price</th><th>Total</th><th>Side</th><th>Location</th><th>Counterparty</th></tr></thead>
   <tbody>
   {{range .Wallet.TxnRows}}
-    <tr><td>{{.Date}}</td><td>{{itemLink .TypeID .Item}}</td><td>{{.Qty}}</td><td>{{.Unit}} ISK</td><td>{{.Total}} ISK</td><td>{{.Side}}</td><td>{{.Location}}</td><td>{{if .ClientIsChar}}{{charLink $.ViewerChars .ClientID .With}}{{else}}{{.With}}{{end}}</td></tr>
+    <tr><td>{{.Date}}</td><td>{{itemLink .TypeID .Item}}</td><td>{{.Qty}}</td><td>{{.Unit}} ISK</td><td>{{.Total}} ISK</td><td>{{.Side}}</td><td>{{placeLink .Loc}}</td><td>{{if .ClientIsChar}}{{charLink $.ViewerChars .ClientID .With}}{{else if .ClientIsCorp}}{{corpLink .ClientID .With}}{{else}}{{.With}}{{end}}</td></tr>
   {{end}}
   </tbody>
 </table>

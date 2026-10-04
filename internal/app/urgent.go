@@ -29,6 +29,7 @@ const (
 	urgentTickInterval        = 5 * time.Second
 	urgentHistoryPerNudge     = 3
 	urgentPilotsPerNudge      = 3
+	urgentOrgsPerNudge        = 2
 	urgentTypeDetailsPerNudge = 2
 	urgentErrorBackoff        = 2 * time.Minute
 	urgentPilotFetchAllowance = 20
@@ -70,14 +71,16 @@ func (app *Application) urgentDrain(ctx context.Context) {
 // drainUrgentWants fetches what the want queues are holding,
 // current-page wants first: pilot name resolutions the topbar
 // search is waiting on (each queues the pilot record it names),
-// pilot records (the drain query already orders viewed wants
-// ahead of the proactively noted orbit, so a name someone is
-// looking at jumps the queue), then market history wants
-// (gate-respecting), then a couple of type descriptions. Every
-// pass spends from the same small allowances as before —
-// urgency reorders the work, it never widens it. Returns ESI's
-// stop signal. Runs under the shared fetch lock so it never
-// races the cycle's passes over the same queue rows.
+// planet names behind any "Planet #<id>" on screen, pilot
+// records (the drain query already orders viewed wants ahead of
+// the proactively noted orbit, so a name someone is looking at
+// jumps the queue), then market history wants
+// (gate-respecting), then a couple of type descriptions, and
+// finally the guide-price want a kill view left behind (schema
+// 027). Every pass spends from the same small allowances as
+// before — urgency reorders the work, it never widens it.
+// Returns ESI's stop signal. Runs under the shared fetch lock
+// so it never races the cycle's passes over the same queue rows.
 func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 	app.fetchMu.Lock()
 	defer app.fetchMu.Unlock()
@@ -86,6 +89,13 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 
 	allowance := &fetchBudget{left: urgentPilotFetchAllowance}
 	if _, ltd := app.drainPilotNameWants(ctx, allowance); ltd {
+		return true
+	}
+	// Planet names: a "Planet #<id>" on the page the user is
+	// looking at is a current-page want like any other (schema
+	// 025). Idempotent upserts make an overlap with the cycle's
+	// planet pass harmless.
+	if _, ltd := app.resolvePlanetNames(ctx, allowance); ltd {
 		return true
 	}
 	ids, err := app.queries.ListPilotDrains(ctx, db.ListPilotDrainsParams{
@@ -103,6 +113,15 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 				return true
 			}
 		}
+	}
+
+	// Organization records: a corporation or alliance page the
+	// user is looking at fills in within seconds the same way.
+	if _, ltd := app.drainCorporationPass(ctx, allowance, urgentOrgsPerNudge, now); ltd {
+		return true
+	}
+	if _, ltd := app.drainAlliancePass(ctx, allowance, urgentOrgsPerNudge, now); ltd {
+		return true
 	}
 
 	wants, err := app.queries.ListMarketHistoryWants(ctx, now.Add(-historyWantMaxAge).Format(time.RFC3339))
@@ -137,6 +156,37 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 			if _, ltd := app.fetchOneTypeDetail(ctx, id, stamp); ltd {
 				return true
 			}
+		}
+	}
+
+	// Guide prices: a kill view that found no prices to value
+	// with left the durable want behind (schema 027); answer it
+	// with a guide refresh so kill values stop depending on a
+	// Market visit.
+	if app.drainGuidePriceWant(ctx) {
+		return true
+	}
+	return false
+}
+
+// drainGuidePriceWant answers the durable guide-price want a
+// kill view noted (schema 027): refresh the stored guide when
+// ESI's cache window allows, then clear the note. The refresh
+// self-gates on the meta row's cached_until, so a want noted
+// while the guide is still fresh costs no call — and the note
+// clears as soon as prices are held by any route. Reports
+// whether ESI's error limit stopped the refresh.
+func (app *Application) drainGuidePriceWant(ctx context.Context) (limited bool) {
+	if _, err := app.queries.GetGuidePriceWant(ctx); err != nil {
+		return false // no want on file
+	}
+	stored, ltd := app.refreshGuidePrices(ctx)
+	if ltd {
+		return true
+	}
+	if stored || app.storedGuidePrices(ctx) != nil {
+		if err := app.queries.ClearGuidePriceWant(ctx); err != nil {
+			log.Printf("worker: urgent drain: clear guide price want: %v", err)
 		}
 	}
 	return false

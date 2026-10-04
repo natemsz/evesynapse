@@ -24,7 +24,7 @@
 <table>
   <tbody>
     <tr><th>From</th><td>{{charLink $.ViewerChars .FromID .From}}</td></tr>
-    {{if .To}}<tr><th>To</th><td>{{range $i, $t := .To}}{{if $i}}, {{end}}{{$t}}{{end}}</td></tr>{{end}}
+    {{if .To}}<tr><th>To</th><td>{{range $i, $t := .To}}{{if $i}}, {{end}}{{if eq $t.Kind "character"}}{{charLink $.ViewerChars $t.ID $t.Name}}{{else if eq $t.Kind "corporation"}}{{corpLink $t.ID $t.Name}}{{else if eq $t.Kind "alliance"}}{{allianceLink $t.ID $t.Name}}{{else}}{{$t.Name}}{{end}}{{end}}</td></tr>{{end}}
     <tr><th>Date</th><td>{{.Date}}</td></tr>
     {{if .Labels}}<tr><th>Labels</th><td>{{range $i, $l := .Labels}}{{if $i}}, {{end}}{{$l}}{{end}}</td></tr>{{end}}
   </tbody>

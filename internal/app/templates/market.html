@@ -21,8 +21,8 @@
   <p><small>Average price: {{if $item.AveragePrice}}{{$item.AveragePrice}} ISK{{else}}—{{end}} · Adjusted price: {{if $item.AdjustedPrice}}{{$item.AdjustedPrice}} ISK{{else}}—{{end}}</small></p>
   <p>{{range $i, $r := $item.Regions}}{{if $i}} · {{end}}{{if $r.Active}}<strong>{{$r.Name}}</strong>{{else}}<a href="/market/?type={{$item.TypeID}}&region={{$r.ID}}">{{$r.Name}}</a>{{end}}{{end}}</p>
 
-  <p>Best sell: <strong>{{if $item.BestSell}}{{$item.BestSell}} ISK{{else}}—{{end}}</strong>{{if $item.BestSellLoc}} ({{$item.BestSellLoc}}){{end}}<br>
-  Best buy: <strong>{{if $item.BestBuy}}{{$item.BestBuy}} ISK{{else}}—{{end}}</strong>{{if $item.BestBuyLoc}} ({{$item.BestBuyLoc}}){{end}}{{if $item.Spread}}<br>
+  <p>Best sell: <strong>{{if $item.BestSell}}{{$item.BestSell}} ISK{{else}}—{{end}}</strong>{{if $item.BestSellLoc.Name}} ({{placeLink $item.BestSellLoc}}){{end}}<br>
+  Best buy: <strong>{{if $item.BestBuy}}{{$item.BestBuy}} ISK{{else}}—{{end}}</strong>{{if $item.BestBuyLoc.Name}} ({{placeLink $item.BestBuyLoc}}){{end}}{{if $item.Spread}}<br>
   Spread: {{$item.Spread}}{{end}}</p>
 
   <section class="foldable">
@@ -72,7 +72,7 @@
     <thead><tr><th>Price</th><th>Volume</th><th>Location</th></tr></thead>
     <tbody>
     {{range $item.Sells}}
-      <tr><td>{{.Price}}</td><td>{{.Volume}}</td><td>{{.Location}}</td></tr>
+      <tr><td>{{.Price}}</td><td>{{.Volume}}</td><td>{{placeLink .Loc}}</td></tr>
     {{else}}
       <tr><td colspan="3">No sell orders in this region.</td></tr>
     {{end}}
@@ -89,7 +89,7 @@
     <thead><tr><th>Price</th><th>Volume</th><th>Location</th></tr></thead>
     <tbody>
     {{range $item.Buys}}
-      <tr><td>{{.Price}}</td><td>{{.Volume}}</td><td>{{.Location}}</td></tr>
+      <tr><td>{{.Price}}</td><td>{{.Volume}}</td><td>{{placeLink .Loc}}</td></tr>
     {{else}}
       <tr><td colspan="3">No buy orders in this region.</td></tr>
     {{end}}
@@ -109,6 +109,39 @@
   <p>No items matched "{{.Market.Query}}".</p>
 {{else}}
   <p><small>Search for an item to see its guide prices and regional order books.</small></p>
+{{end}}
+
+{{if .Market.Browse}}
+{{$b := .Market.Browse}}
+<section class="foldable market-browse">
+{{if $b.Current}}
+<p class="market-crumbs"><small><a href="/market/">Market</a>{{range $b.Breadcrumbs}} › <a href="/market/?group={{.ID}}&region={{$.Market.Region}}">{{.Name}}</a>{{end}} › {{$b.Current.Name}}</small></p>
+<h3>{{$b.Current.Name}}</h3>
+{{else}}
+<h3>Browse categories</h3>
+{{end}}
+{{if $b.Groups}}
+<div class="market-group-grid">
+{{range $b.Groups}}
+  <a class="market-group-card" href="/market/?group={{.ID}}&region={{$.Market.Region}}"><span class="market-group-icon" aria-hidden="true">{{.Icon}}</span><span class="market-group-name">{{.Name}}</span></a>
+{{end}}
+</div>
+{{else if not $b.Types}}
+<p><small>{{if $b.Current}}Nothing lists here yet.{{else}}Market categories fill in once the static data import lands.{{end}}</small></p>
+{{end}}
+{{if $b.Types}}
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th></tr></thead>
+  <tbody>
+  {{range $b.Types}}
+    <tr><td><a href="/market/?type={{.ID}}&region={{$.Market.Region}}">{{.Name}}</a></td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+</section>
 {{end}}
 
 {{if .Market.Watchlist}}
@@ -188,7 +221,7 @@
       <td>{{charLink $.ViewerChars .CharID .Char}}</td>
       <td>{{itemLink .TypeID .Item}}</td>
       <td>{{.Price}}</td>
-      <td>{{.Location}}</td>
+      <td>{{placeLink .Loc}}</td>
       <td>{{if .Bad}}<strong>{{.Status}}</strong>{{else}}{{.Status}}{{end}}</td>
     </tr>
   {{end}}

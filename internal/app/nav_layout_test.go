@@ -250,7 +250,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// into #111111 (17,17,17) at 93% over the same blur.
 		// The rail flyout menus stay solid (no pin changes
 		// there); only the bar itself goes glass.
-		"background: linear-gradient(rgba(21, 21, 21, 0.93), rgba(17, 17, 17, 0.93)) padding-box;\n  -webkit-backdrop-filter: blur(10px);\n  backdrop-filter: blur(10px);",
+		"background: linear-gradient(rgba(21, 21, 21, 0.9), rgba(17, 17, 17, 0.9)) padding-box;\n  -webkit-backdrop-filter: blur(10px);\n  backdrop-filter: blur(10px);",
 		// v0.3.07.011: user toggles between wide nav states
 		// glide on the grid track that actually drives the
 		// layout, labels fade as the rail narrows, and hidden
@@ -312,7 +312,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// open drawer does NOT blur the page beneath it — the
 		// scrim stays a plain dark veil and the drawer keeps
 		// the same 93% retained-color paint, crisp over content.
-		"z-index: 80;\n    background: linear-gradient(rgba(21, 21, 21, 0.93), rgba(17, 17, 17, 0.93)) padding-box;\n    -webkit-backdrop-filter: none;\n    backdrop-filter: none;\n    transform: translateX(-105%);",
+		"z-index: 80;\n    background: linear-gradient(rgba(21, 21, 21, 0.9), rgba(17, 17, 17, 0.9)) padding-box;\n    -webkit-backdrop-filter: none;\n    backdrop-filter: none;\n    transform: translateX(-105%);",
 		".nav-backdrop {\n    position: fixed;\n    inset: 0;\n    z-index: 70;\n    background: rgba(0, 0, 0, 0.66);\n    cursor: pointer;\n  }",
 		"padding-top: calc(3.75rem + 1px);",
 		".topbar { min-height: 3.75rem; }",

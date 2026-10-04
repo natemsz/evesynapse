@@ -293,6 +293,19 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 023 (v0.3.08 structure-name provenance: every cached
+	// structure name records whether ESI, a corp structure list,
+	// or—later—a community dataset provided it), column-guarded
+	// like 016–018.
+	var structureSourceCols int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('structure_names') WHERE name = 'source'`).Scan(&structureSourceCols); err != nil {
+		return nil, err
+	}
+	if structureSourceCols < 1 {
+		if err := applySchema(conn, structureNameProvenanceSchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

@@ -893,8 +893,8 @@
       window.location.href = "/items/type/" + encodeURIComponent(it.id) + "/";
     });
 
-  // Banner global search: items, your characters, and pilots the
-  // app already knows, each to its own page.
+  // Banner global search: items, your characters, pilots and
+  // organizations the app already knows, each to its own page.
   attachSuggest(
     document.getElementById("topbar-q"),
     document.getElementById("topbar-suggest"),
@@ -905,6 +905,10 @@
         url = "/character/?character=" + encodeURIComponent(it.id);
       } else if (it.kind === "pilot") {
         url = "/pilot/?character=" + encodeURIComponent(it.id);
+      } else if (it.kind === "corporation") {
+        url = "/corporation/?corporation=" + encodeURIComponent(it.id);
+      } else if (it.kind === "alliance") {
+        url = "/alliance/?alliance=" + encodeURIComponent(it.id);
       } else {
         url = "/items/type/" + encodeURIComponent(it.id) + "/";
       }
@@ -1493,4 +1497,270 @@
   } else {
     window.setTimeout(enableNavMotion, 0);
   }
+})();
+
+// --- Quick jump (Ctrl+K) --------------------------------------
+// A keyboard-first palette over the same pool the banner search
+// serves (/search.json): your characters, items, corporations,
+// alliances and known pilots, each jumping to the page it links
+// to everywhere else. The app's own pages ride along as a static
+// group, so the palette is useful before a single letter is
+// typed. Everything renders from text nodes; nothing here makes
+// a request the banner search wouldn't.
+(function () {
+  "use strict";
+  var overlay = document.getElementById("quickjump");
+  var input = document.getElementById("quickjump-q");
+  var list = document.getElementById("quickjump-results");
+  var openBtn = document.getElementById("quickjump-open");
+  if (!overlay || !input || !list || !window.fetch) return;
+
+  // The palette's page group: every destination the sidebar
+  // offers, in sidebar order. A test pins this list against
+  // base.html's nav, so a new page joins both or neither.
+  var quickJumpPages = [
+    { name: "Home", url: "/" },
+    { name: "Character", url: "/character/" },
+    { name: "Characters", url: "/characters/" },
+    { name: "Skills", url: "/skills/" },
+    { name: "Skill plans", url: "/skills/plans" },
+    { name: "Fittings", url: "/fittings/" },
+    { name: "Killmails", url: "/killmails/" },
+    { name: "Mail", url: "/mail/" },
+    { name: "Calendar", url: "/calendar/" },
+    { name: "Contacts", url: "/contacts/" },
+    { name: "Assets", url: "/assets/" },
+    { name: "Industry", url: "/industry/" },
+    { name: "Build Planner", url: "/planner/" },
+    { name: "Planetary Industry", url: "/planets/" },
+    { name: "Market", url: "/market/" },
+    { name: "Items", url: "/items/" },
+    { name: "Wallet", url: "/wallet/" },
+    { name: "Orders", url: "/orders/" },
+    { name: "Contracts", url: "/contracts/" },
+    { name: "Corporation Overview", url: "/corporations/" },
+    { name: "Corporation Members", url: "/corporations/members/" },
+    { name: "Corporation Wallets", url: "/corporations/wallets/" },
+    { name: "Corporation Orders", url: "/corporations/orders/" },
+    { name: "Corporation Assets", url: "/corporations/assets/" },
+    { name: "Corporation Structures", url: "/corporations/structures/" },
+    { name: "Corporation Killmails", url: "/corporations/killmails/" },
+    { name: "Wars", url: "/intel/wars/" },
+    { name: "Incursions", url: "/intel/incursions/" },
+    { name: "Faction Warfare", url: "/intel/fw/" },
+    { name: "Sync", url: "/sync/" },
+    { name: "Admin", url: "/admin/" }
+  ];
+
+  // Result groups, in display order; server hits carry these
+  // kinds already, pages are matched locally.
+  var quickJumpGroups = [
+    ["page", "Pages"],
+    ["character", "Characters"],
+    ["item", "Items"],
+    ["corporation", "Corporations"],
+    ["alliance", "Alliances"],
+    ["pilot", "Pilots"]
+  ];
+
+  function jumpURL(hit) {
+    switch (hit.kind) {
+      case "page": return hit.url;
+      case "character": return "/character/?character=" + encodeURIComponent(hit.id);
+      case "pilot": return "/pilot/?character=" + encodeURIComponent(hit.id);
+      case "corporation": return "/corporation/?corporation=" + encodeURIComponent(hit.id);
+      case "alliance": return "/alliance/?alliance=" + encodeURIComponent(hit.id);
+      default: return "/market/?type=" + encodeURIComponent(hit.id);
+    }
+  }
+
+  var entries = [];   // flat, selectable rows in display order
+  var selected = -1;
+  var lastFocus = null;
+  var timer = null;
+  var querySerial = 0;
+
+  function isOpen() { return !overlay.hidden; }
+
+  function paint(groups) {
+    list.innerHTML = "";
+    entries = [];
+    selected = -1;
+    for (var g = 0; g < groups.length; g++) {
+      var hits = groups[g].hits;
+      if (!hits.length) continue;
+      var head = document.createElement("li");
+      head.className = "qj-group";
+      head.setAttribute("role", "presentation");
+      head.textContent = groups[g].label;
+      list.appendChild(head);
+      for (var i = 0; i < hits.length; i++) {
+        (function (hit) {
+          var li = document.createElement("li");
+          li.setAttribute("role", "option");
+          li.id = "quickjump-result-" + entries.length;
+          var name = document.createElement("span");
+          name.textContent = hit.name;
+          li.appendChild(name);
+          if (hit.label) {
+            var lab = document.createElement("span");
+            lab.className = "qj-label";
+            lab.textContent = hit.label;
+            li.appendChild(lab);
+          }
+          if (hit.kind === "pilot-pending") {
+            li.className = "qj-pending";
+            li.setAttribute("aria-disabled", "true");
+            list.appendChild(li);
+            return;
+          }
+          var idx = entries.length;
+          entries.push({ url: jumpURL(hit), el: li });
+          li.addEventListener("mousedown", function (ev) {
+            ev.preventDefault();
+            go(idx);
+          });
+          li.addEventListener("mousemove", function () { select(idx); });
+          list.appendChild(li);
+        })(hits[i]);
+      }
+    }
+    if (entries.length) select(0);
+  }
+
+  function select(idx) {
+    if (idx === selected) return;
+    if (entries[selected]) entries[selected].el.classList.remove("sel");
+    selected = idx;
+    if (entries[selected]) {
+      entries[selected].el.classList.add("sel");
+      input.setAttribute("aria-activedescendant", entries[selected].el.id);
+      if (entries[selected].el.scrollIntoView) {
+        entries[selected].el.scrollIntoView({ block: "nearest" });
+      }
+    } else {
+      input.removeAttribute("aria-activedescendant");
+    }
+  }
+
+  function go(idx) {
+    var entry = entries[idx];
+    if (!entry) return;
+    closePalette();
+    window.location.href = entry.url;
+  }
+
+  function pageHits(q) {
+    var out = [];
+    for (var i = 0; i < quickJumpPages.length; i++) {
+      if (!q || quickJumpPages[i].name.toLowerCase().indexOf(q) !== -1) {
+        out.push({
+          kind: "page", name: quickJumpPages[i].name,
+          url: quickJumpPages[i].url, label: quickJumpPages[i].url
+        });
+      }
+    }
+    return out;
+  }
+
+  function render(hits, q) {
+    var groups = [{ label: "Pages", hits: pageHits(q) }];
+    var byKind = {};
+    for (var i = 0; i < hits.length; i++) {
+      (byKind[hits[i].kind] = byKind[hits[i].kind] || []).push(hits[i]);
+    }
+    for (var g = 1; g < quickJumpGroups.length; g++) {
+      var kind = quickJumpGroups[g][0];
+      var rows = byKind[kind] || [];
+      if (kind === "pilot" && byKind["pilot-pending"]) {
+        rows = rows.concat(byKind["pilot-pending"]);
+      }
+      groups.push({ label: quickJumpGroups[g][1], hits: rows });
+    }
+    paint(groups);
+  }
+
+  function ask(q) {
+    var serial = ++querySerial;
+    render([], q); // page matches land instantly
+    if (q.length < 2) return;
+    window.fetch("/search.json?q=" + encodeURIComponent(q), {
+      cache: "no-store",
+      headers: { "Accept": "application/json" }
+    }).then(function (resp) {
+      return resp.ok ? resp.json() : [];
+    }).then(function (rows) {
+      if (serial !== querySerial) return; // typed past this answer
+      render(Array.isArray(rows) ? rows : [], q);
+    }).catch(function () { /* page matches already stand */ });
+  }
+
+  function openPalette() {
+    if (isOpen()) return;
+    lastFocus = document.activeElement;
+    overlay.hidden = false;
+    document.body.classList.add("quickjump-open");
+    input.value = "";
+    ask("");
+    input.focus();
+    input.select();
+  }
+
+  function closePalette() {
+    if (!isOpen()) return;
+    overlay.hidden = true;
+    document.body.classList.remove("quickjump-open");
+    querySerial++; // an answer in flight no longer matters
+    if (timer) window.clearTimeout(timer);
+    timer = null;
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+    lastFocus = null;
+  }
+
+  if (openBtn) {
+    openBtn.addEventListener("click", function () {
+      if (isOpen()) closePalette(); else openPalette();
+    });
+  }
+
+  // Ctrl+K / Cmd+K from anywhere — including inside a form
+  // field, which is the point — opens or closes the palette.
+  // Plain typing never does; the modifiers are the trigger.
+  document.addEventListener("keydown", function (ev) {
+    if ((ev.ctrlKey || ev.metaKey) && !ev.altKey &&
+        (ev.key === "k" || ev.key === "K")) {
+      ev.preventDefault();
+      if (isOpen()) closePalette(); else openPalette();
+    }
+  });
+
+  input.addEventListener("input", function () {
+    var q = input.value.trim().toLowerCase();
+    if (timer) window.clearTimeout(timer);
+    timer = window.setTimeout(function () { ask(q); }, 150);
+  });
+
+  input.addEventListener("keydown", function (ev) {
+    if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+      ev.preventDefault();
+      if (!entries.length) return;
+      var delta = ev.key === "ArrowDown" ? 1 : -1;
+      select((selected + delta + entries.length) % entries.length);
+    } else if (ev.key === "Enter") {
+      if (selected >= 0) {
+        ev.preventDefault();
+        go(selected);
+      }
+    } else if (ev.key === "Escape") {
+      ev.preventDefault();
+      ev.stopPropagation();
+      closePalette();
+    }
+  });
+
+  // A click on the dimmed surround closes; clicks inside the
+  // panel (on the input, on gaps between rows) do not.
+  overlay.addEventListener("mousedown", function (ev) {
+    if (ev.target === overlay) closePalette();
+  });
 })();

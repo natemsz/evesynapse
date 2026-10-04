@@ -123,18 +123,49 @@ func (q *Queries) CountSDETypes(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countSDETypesFiltered = `-- name: CountSDETypesFiltered :one
+SELECT COUNT(*)
+FROM sde_types t
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+WHERE instr(lower(t.name), lower(?1)) > 0
+  AND (?2 = 0 OR (t.market_group_id > 0 AND t.published = 1))
+  AND (?3 = 0 OR g.category_id = ?3)
+  AND (?4 = 0 OR t.group_id = ?4)
+`
+
+type CountSDETypesFilteredParams struct {
+	Q          string      `json:"q"`
+	MarketOnly interface{} `json:"market_only"`
+	CategoryID interface{} `json:"category_id"`
+	GroupID    interface{} `json:"group_id"`
+}
+
+func (q *Queries) CountSDETypesFiltered(ctx context.Context, arg CountSDETypesFilteredParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSDETypesFiltered,
+		arg.Q,
+		arg.MarketOnly,
+		arg.CategoryID,
+		arg.GroupID,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countSDETypesInGroupFiltered = `-- name: CountSDETypesInGroupFiltered :one
 SELECT COUNT(*) FROM sde_types
 WHERE group_id = ? AND instr(lower(name), lower(?)) > 0
+  AND (? = 0 OR (market_group_id > 0 AND published = 1))
 `
 
 type CountSDETypesInGroupFilteredParams struct {
-	GroupID int64  `json:"group_id"`
-	LOWER   string `json:"LOWER"`
+	GroupID    int64       `json:"group_id"`
+	LOWER      string      `json:"LOWER"`
+	MarketOnly interface{} `json:"market_only"`
 }
 
 func (q *Queries) CountSDETypesInGroupFiltered(ctx context.Context, arg CountSDETypesInGroupFilteredParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDETypesInGroupFiltered, arg.GroupID, arg.LOWER)
+	row := q.db.QueryRowContext(ctx, countSDETypesInGroupFiltered, arg.GroupID, arg.LOWER, arg.MarketOnly)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -788,6 +819,38 @@ func (q *Queries) GetUserHomeLayout(ctx context.Context, id int64) (string, erro
 	var home_layout string
 	err := row.Scan(&home_layout)
 	return home_layout, err
+}
+
+const getWalletHistorySample = `-- name: GetWalletHistorySample :one
+
+SELECT user_id, character_id, day, balance, net_worth, sampled_at
+FROM wallet_history
+WHERE user_id = ? AND character_id = ? AND day = ?
+`
+
+type GetWalletHistorySampleParams struct {
+	UserID      int64  `json:"user_id"`
+	CharacterID int64  `json:"character_id"`
+	Day         string `json:"day"`
+}
+
+// ---------------------------------------------------------------------
+// Next-1 rider (schema 019): the daily wallet-history sampler.
+// One row per character per day; the upsert keeps the day's
+// latest values as fresher snapshots land.
+// ---------------------------------------------------------------------
+func (q *Queries) GetWalletHistorySample(ctx context.Context, arg GetWalletHistorySampleParams) (WalletHistory, error) {
+	row := q.db.QueryRowContext(ctx, getWalletHistorySample, arg.UserID, arg.CharacterID, arg.Day)
+	var i WalletHistory
+	err := row.Scan(
+		&i.UserID,
+		&i.CharacterID,
+		&i.Day,
+		&i.Balance,
+		&i.NetWorth,
+		&i.SampledAt,
+	)
+	return i, err
 }
 
 const getWarDetail = `-- name: GetWarDetail :one
@@ -1973,15 +2036,17 @@ func (q *Queries) ListSDETypesByNames(ctx context.Context, names []string) ([]Li
 const listSDETypesInGroup = `-- name: ListSDETypesInGroup :many
 SELECT type_id, name, market_group_id FROM sde_types
 WHERE group_id = ? AND instr(lower(name), lower(?)) > 0
+  AND (? = 0 OR (market_group_id > 0 AND published = 1))
 ORDER BY name
 LIMIT ? OFFSET ?
 `
 
 type ListSDETypesInGroupParams struct {
-	GroupID int64  `json:"group_id"`
-	LOWER   string `json:"LOWER"`
-	Limit   int64  `json:"limit"`
-	Offset  int64  `json:"offset"`
+	GroupID    int64       `json:"group_id"`
+	LOWER      string      `json:"LOWER"`
+	MarketOnly interface{} `json:"market_only"`
+	Limit      int64       `json:"limit"`
+	Offset     int64       `json:"offset"`
 }
 
 type ListSDETypesInGroupRow struct {
@@ -1994,6 +2059,7 @@ func (q *Queries) ListSDETypesInGroup(ctx context.Context, arg ListSDETypesInGro
 	rows, err := q.db.QueryContext(ctx, listSDETypesInGroup,
 		arg.GroupID,
 		arg.LOWER,
+		arg.MarketOnly,
 		arg.Limit,
 		arg.Offset,
 	)
@@ -2318,6 +2384,48 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
+const listWalletHistorySamples = `-- name: ListWalletHistorySamples :many
+SELECT user_id, character_id, day, balance, net_worth, sampled_at
+FROM wallet_history
+WHERE user_id = ? AND character_id = ?
+ORDER BY day
+`
+
+type ListWalletHistorySamplesParams struct {
+	UserID      int64 `json:"user_id"`
+	CharacterID int64 `json:"character_id"`
+}
+
+func (q *Queries) ListWalletHistorySamples(ctx context.Context, arg ListWalletHistorySamplesParams) ([]WalletHistory, error) {
+	rows, err := q.db.QueryContext(ctx, listWalletHistorySamples, arg.UserID, arg.CharacterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WalletHistory
+	for rows.Next() {
+		var i WalletHistory
+		if err := rows.Scan(
+			&i.UserID,
+			&i.CharacterID,
+			&i.Day,
+			&i.Balance,
+			&i.NetWorth,
+			&i.SampledAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWatchlistByUser = `-- name: ListWatchlistByUser :many
 SELECT user_id, type_id, region_id, threshold_pct, created_at
 FROM market_watchlist
@@ -2403,6 +2511,47 @@ func (q *Queries) SearchManufacturableProducts(ctx context.Context, lower string
 	return items, nil
 }
 
+const searchPilotRecordsByName = `-- name: SearchPilotRecordsByName :many
+SELECT character_id, payload
+FROM pilot_records
+WHERE state = 'ready' AND payload != ''
+  AND instr(lower(payload), lower(?1)) > 0
+ORDER BY character_id
+LIMIT 100
+`
+
+type SearchPilotRecordsByNameRow struct {
+	CharacterID int64  `json:"character_id"`
+	Payload     string `json:"payload"`
+}
+
+// Pilot-name search for the top banner: ready records whose
+// stored payload mentions the text; the handler re-checks the
+// pilot's own name field before offering a row, so bios that
+// merely mention a name never produce a hit.
+func (q *Queries) SearchPilotRecordsByName(ctx context.Context, lower string) ([]SearchPilotRecordsByNameRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchPilotRecordsByName, lower)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchPilotRecordsByNameRow
+	for rows.Next() {
+		var i SearchPilotRecordsByNameRow
+		if err := rows.Scan(&i.CharacterID, &i.Payload); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const searchSDESkills = `-- name: SearchSDESkills :many
 SELECT m.type_id, t.name, m.rank
 FROM sde_skill_meta m
@@ -2463,6 +2612,88 @@ func (q *Queries) SearchSDETypes(ctx context.Context, name string) ([]SearchSDET
 	for rows.Next() {
 		var i SearchSDETypesRow
 		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchSDETypesFiltered = `-- name: SearchSDETypesFiltered :many
+
+SELECT t.type_id, t.name, t.group_id, t.market_group_id, t.published,
+       COALESCE(g.name, '') AS group_name,
+       COALESCE(g.category_id, 0) AS category_id,
+       COALESCE(c.name, '') AS category_name
+FROM sde_types t
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+LEFT JOIN sde_categories c ON c.category_id = g.category_id
+WHERE instr(lower(t.name), lower(?1)) > 0
+  AND (?2 = 0 OR (t.market_group_id > 0 AND t.published = 1))
+  AND (?3 = 0 OR g.category_id = ?3)
+  AND (?4 = 0 OR t.group_id = ?4)
+ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT ?6 OFFSET ?5
+`
+
+type SearchSDETypesFilteredParams struct {
+	Q          string      `json:"q"`
+	MarketOnly interface{} `json:"market_only"`
+	CategoryID interface{} `json:"category_id"`
+	GroupID    interface{} `json:"group_id"`
+	Off        int64       `json:"off"`
+	Lim        int64       `json:"lim"`
+}
+
+type SearchSDETypesFilteredRow struct {
+	TypeID        int64  `json:"type_id"`
+	Name          string `json:"name"`
+	GroupID       int64  `json:"group_id"`
+	MarketGroupID int64  `json:"market_group_id"`
+	Published     int64  `json:"published"`
+	GroupName     string `json:"group_name"`
+	CategoryID    int64  `json:"category_id"`
+	CategoryName  string `json:"category_name"`
+}
+
+// ---------------------------------------------------------------------
+// Next-1 (search & findability): the Items DB global search and
+// the one shared suggestion feed behind every autocomplete box.
+// All local SDE reads; the market-only predicate is the same
+// marketable+published pair everywhere it appears.
+// ---------------------------------------------------------------------
+func (q *Queries) SearchSDETypesFiltered(ctx context.Context, arg SearchSDETypesFilteredParams) ([]SearchSDETypesFilteredRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchSDETypesFiltered,
+		arg.Q,
+		arg.MarketOnly,
+		arg.CategoryID,
+		arg.GroupID,
+		arg.Off,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchSDETypesFilteredRow
+	for rows.Next() {
+		var i SearchSDETypesFilteredRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Name,
+			&i.GroupID,
+			&i.MarketGroupID,
+			&i.Published,
+			&i.GroupName,
+			&i.CategoryID,
+			&i.CategoryName,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -2673,6 +2904,64 @@ func (q *Queries) SuggestSDETypes(ctx context.Context, lower string) ([]SuggestS
 	for rows.Next() {
 		var i SuggestSDETypesRow
 		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const suggestSDETypesShared = `-- name: SuggestSDETypesShared :many
+SELECT t.type_id, t.name,
+       COALESCE(g.name, '') AS group_name,
+       COALESCE(c.name, '') AS category_name
+FROM sde_types t
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+LEFT JOIN sde_categories c ON c.category_id = g.category_id
+WHERE instr(lower(t.name), lower(?1)) > 0
+  AND (?2 != 'market' OR (t.market_group_id > 0 AND t.published = 1))
+  AND (?2 != 'planner' OR (t.published = 1 AND EXISTS (
+        SELECT 1 FROM sde_blueprints b WHERE b.product_type_id = t.type_id)))
+  AND (?2 != 'skills' OR EXISTS (
+        SELECT 1 FROM sde_skill_meta m WHERE m.type_id = t.type_id))
+ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT ?3
+`
+
+type SuggestSDETypesSharedParams struct {
+	Q    string      `json:"q"`
+	Pool interface{} `json:"pool"`
+	Lim  int64       `json:"lim"`
+}
+
+type SuggestSDETypesSharedRow struct {
+	TypeID       int64  `json:"type_id"`
+	Name         string `json:"name"`
+	GroupName    string `json:"group_name"`
+	CategoryName string `json:"category_name"`
+}
+
+func (q *Queries) SuggestSDETypesShared(ctx context.Context, arg SuggestSDETypesSharedParams) ([]SuggestSDETypesSharedRow, error) {
+	rows, err := q.db.QueryContext(ctx, suggestSDETypesShared, arg.Q, arg.Pool, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SuggestSDETypesSharedRow
+	for rows.Next() {
+		var i SuggestSDETypesSharedRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Name,
+			&i.GroupName,
+			&i.CategoryName,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -3182,6 +3471,36 @@ type UpsertTypeNameParams struct {
 
 func (q *Queries) UpsertTypeName(ctx context.Context, arg UpsertTypeNameParams) error {
 	_, err := q.db.ExecContext(ctx, upsertTypeName, arg.TypeID, arg.Name)
+	return err
+}
+
+const upsertWalletHistorySample = `-- name: UpsertWalletHistorySample :exec
+INSERT INTO wallet_history (user_id, character_id, day, balance, net_worth, sampled_at)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT (user_id, character_id, day) DO UPDATE SET
+    balance    = excluded.balance,
+    net_worth   = excluded.net_worth,
+    sampled_at = excluded.sampled_at
+`
+
+type UpsertWalletHistorySampleParams struct {
+	UserID      int64           `json:"user_id"`
+	CharacterID int64           `json:"character_id"`
+	Day         string          `json:"day"`
+	Balance     float64         `json:"balance"`
+	NetWorth    sql.NullFloat64 `json:"net_worth"`
+	SampledAt   string          `json:"sampled_at"`
+}
+
+func (q *Queries) UpsertWalletHistorySample(ctx context.Context, arg UpsertWalletHistorySampleParams) error {
+	_, err := q.db.ExecContext(ctx, upsertWalletHistorySample,
+		arg.UserID,
+		arg.CharacterID,
+		arg.Day,
+		arg.Balance,
+		arg.NetWorth,
+		arg.SampledAt,
+	)
 	return err
 }
 

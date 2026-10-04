@@ -42,7 +42,7 @@ func seedNext1SDE(t *testing.T, conn *sql.DB) {
 		   (37, 'Secret Tritanium', 910, 0, 1),
 		   (41, 'Lost Tritanium Relic', 920, 0, 0),
 		   (42, 'Tritanium of Elsewhere', 930, 5, 1),
-		   (1001, 'Tritanium Skill', 910, 0, 1)`,
+		   (1001, 'Tritanium Skill', 910, 5, 1)`,
 		`INSERT INTO sde_skill_meta (type_id, rank, primary_attr, secondary_attr) VALUES (1001, 1, 165, 166)`,
 		`INSERT INTO sde_blueprints (blueprint_type_id, product_type_id) VALUES (5000, 35), (5001, 38)`,
 	}
@@ -84,12 +84,14 @@ func TestItemsGlobalSearchAndMarketOnly(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET search market-only: status %d", code)
 	}
-	for _, name := range []string{"Tritanium Alloy", "Tritanium of Elsewhere"} {
+	// (The skill stays: its fixture type carries a market group,
+	// as skill books do.)
+	for _, name := range []string{"Tritanium Alloy", "Tritanium of Elsewhere", "Tritanium Skill"} {
 		if !strings.Contains(body, name) {
 			t.Errorf("market-only search missing %q", name)
 		}
 	}
-	for _, name := range []string{"Tritanium Draft", "Secret Tritanium", "Lost Tritanium Relic", "Tritanium Skill"} {
+	for _, name := range []string{"Tritanium Draft", "Secret Tritanium", "Lost Tritanium Relic"} {
 		if strings.Contains(body, name) {
 			t.Errorf("market-only search must exclude %q", name)
 		}
@@ -166,11 +168,19 @@ func TestSharedSuggestPools(t *testing.T) {
 		return m
 	}
 
-	// Default pool (all): every type, with its tree label.
+	// Every pool shares the tradeable floor now (v0.3.04):
+	// published with a market group — the skill type carries a
+	// market group too (skill books trade), so it clears the
+	// floor in the broad pools.
 	all := ids(get("/items/search.json?q=trit"))
-	for _, id := range []int64{34, 35, 38, 37, 41, 42, 1001} {
+	for _, id := range []int64{34, 35, 42, 1001} {
 		if !all[id] {
-			t.Errorf("pool=all missing type %d", id)
+			t.Errorf("pool=all missing tradeable type %d", id)
+		}
+	}
+	for _, id := range []int64{38, 37, 41} {
+		if all[id] {
+			t.Errorf("pool=all must exclude untradeable type %d", id)
 		}
 	}
 	for _, row := range get("/items/search.json?q=trit") {
@@ -179,14 +189,14 @@ func TestSharedSuggestPools(t *testing.T) {
 		}
 	}
 
-	// Market pool: the marketable+published pair only.
+	// Market pool: the floor alone.
 	market := ids(get("/items/search.json?q=trit&pool=market"))
-	for _, id := range []int64{34, 35, 42} {
+	for _, id := range []int64{34, 35, 42, 1001} {
 		if !market[id] {
 			t.Errorf("pool=market missing type %d", id)
 		}
 	}
-	for _, id := range []int64{38, 37, 41, 1001} {
+	for _, id := range []int64{38, 37, 41} {
 		if market[id] {
 			t.Errorf("pool=market must exclude type %d", id)
 		}

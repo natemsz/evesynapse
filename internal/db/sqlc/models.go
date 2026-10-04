@@ -53,6 +53,18 @@ type GlobalSnapshot struct {
 	CachedUntil string `json:"cached_until"`
 }
 
+type GuidePrice struct {
+	TypeID        int64   `json:"type_id"`
+	AdjustedPrice float64 `json:"adjusted_price"`
+	AveragePrice  float64 `json:"average_price"`
+}
+
+type GuidePricesMetum struct {
+	ID          int64  `json:"id"`
+	FetchedAt   string `json:"fetched_at"`
+	CachedUntil string `json:"cached_until"`
+}
+
 type ItemName struct {
 	ItemID int64  `json:"item_id"`
 	Name   string `json:"name"`
@@ -256,4 +268,11 @@ type WarDetail struct {
 	WarID     int64  `json:"war_id"`
 	Payload   string `json:"payload"`
 	FetchedAt string `json:"fetched_at"`
+}
+
+type WidgetConfig struct {
+	UserID    int64  `json:"user_id"`
+	WidgetID  string `json:"widget_id"`
+	Config    string `json:"config"`
+	UpdatedAt string `json:"updated_at"`
 }

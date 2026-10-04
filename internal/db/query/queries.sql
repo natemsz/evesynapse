@@ -446,9 +446,9 @@ FROM sde_types t
 LEFT JOIN sde_groups g ON g.group_id = t.group_id
 LEFT JOIN sde_categories c ON c.category_id = g.category_id
 WHERE instr(lower(t.name), lower(@q)) > 0
-  AND (@pool != 'market' OR (t.market_group_id > 0 AND t.published = 1))
-  AND (@pool != 'planner' OR (t.published = 1 AND EXISTS (
-        SELECT 1 FROM sde_blueprints b WHERE b.product_type_id = t.type_id)))
+  AND t.published = 1 AND t.market_group_id > 0
+  AND (@pool != 'planner' OR EXISTS (
+        SELECT 1 FROM sde_blueprints b WHERE b.product_type_id = t.type_id))
   AND (@pool != 'skills' OR EXISTS (
         SELECT 1 FROM sde_skill_meta m WHERE m.type_id = t.type_id))
 ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
@@ -490,6 +490,60 @@ SELECT user_id, character_id, day, balance, net_worth, sampled_at
 FROM wallet_history
 WHERE user_id = ? AND character_id = ?
 ORDER BY day;
+
+-- ---------------------------------------------------------------------
+-- v0.3.04 widget configuration (schema 020): one JSON blob per
+-- (user, widget). The layout (schema 010) owns placement; this
+-- owns behaviour (the orders widget's scope + merge mode first).
+-- ---------------------------------------------------------------------
+
+-- name: GetWidgetConfig :one
+SELECT config FROM widget_configs
+WHERE user_id = ? AND widget_id = ?;
+
+-- name: UpsertWidgetConfig :exec
+INSERT INTO widget_configs (user_id, widget_id, config, updated_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (user_id, widget_id) DO UPDATE SET
+    config     = excluded.config,
+    updated_at = excluded.updated_at;
+
+-- name: ListWidgetConfigsByUser :many
+SELECT user_id, widget_id, config, updated_at FROM widget_configs
+WHERE user_id = ?
+ORDER BY widget_id;
+
+-- ---------------------------------------------------------------------
+-- v0.3.04 stored market guide (schema 021): the worker mirrors
+-- GET /markets/prices/ here wholesale (delete + insert inside
+-- one transaction) so asset valuation never waits on a Market
+-- page visit. Meta is the single bookkeeping row.
+-- ---------------------------------------------------------------------
+
+-- name: DeleteGuidePrices :exec
+DELETE FROM guide_prices;
+
+-- name: UpsertGuidePrice :exec
+INSERT INTO guide_prices (type_id, adjusted_price, average_price)
+VALUES (?, ?, ?)
+ON CONFLICT (type_id) DO UPDATE SET
+    adjusted_price = excluded.adjusted_price,
+    average_price  = excluded.average_price;
+
+-- name: ListGuidePrices :many
+SELECT type_id, adjusted_price, average_price FROM guide_prices
+ORDER BY type_id;
+
+-- name: GetGuidePricesMeta :one
+SELECT id, fetched_at, cached_until FROM guide_prices_meta
+WHERE id = 1;
+
+-- name: UpsertGuidePricesMeta :exec
+INSERT INTO guide_prices_meta (id, fetched_at, cached_until)
+VALUES (1, ?, ?)
+ON CONFLICT (id) DO UPDATE SET
+    fetched_at   = excluded.fetched_at,
+    cached_until = excluded.cached_until;
 
 -- ---------------------------------------------------------------------
 -- Phase 3 (schema 011): industry build planner reads. Bulk import

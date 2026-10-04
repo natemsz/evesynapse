@@ -9,7 +9,7 @@
 {{end}}
 
 {{if .CorpOrders}}
-<h2>{{.CorpOrders.CorpTitle}}</h2>
+<h2>{{corpLink .CorpOrders.CorpID .CorpOrders.CorpTitle}}</h2>
 <p><small><a href="/corporations/">Overview</a> · <a href="/corporations/members/?character={{.CorpOrders.CharacterID}}">Members</a> · <a href="/corporations/wallets/?character={{.CorpOrders.CharacterID}}">Wallets</a> · Orders · <a href="/corporations/assets/?character={{.CorpOrders.CharacterID}}">Assets</a> · <a href="/corporations/structures/?character={{.CorpOrders.CharacterID}}">Structures</a> · <a href="/corporations/killmails/?character={{.CorpOrders.CharacterID}}">Killmails</a></small></p>
 
   {{if .CorpOrders.Forbidden}}
@@ -25,10 +25,10 @@
   <p><small>{{len .CorpOrders.Rows}} open orders</small></p>
   <div class="tw">
   <table>
-    <thead><tr><th>Item</th><th>Side</th><th>Price</th><th>Volume left</th><th>Location</th><th>Region</th><th>Expires</th><th>Issued by</th></tr></thead>
+    <thead><tr><th>Item</th><th>Side</th><th>Price</th><th>Status</th><th>Volume left</th><th>Location</th><th>Region</th><th>Expires</th><th>Issued by</th></tr></thead>
     <tbody>
     {{range .CorpOrders.Rows}}
-      <tr><td>{{itemLink .TypeID .Item}}</td><td>{{.Side}}</td><td>{{.Price}} ISK</td><td>{{.Volume}}</td><td>{{.Location}}</td><td>{{.Region}}</td><td>{{.Expires}}</td><td>{{charLink $.ViewerChars .IssuedByID .IssuedBy}}</td></tr>
+      <tr><td>{{itemLink .TypeID .Item}}</td><td>{{.Side}}</td><td>{{.Price}} ISK</td><td>{{if .Status}}{{if .Bad}}<strong>{{.Status}}</strong>{{else}}{{.Status}}{{end}}{{end}}</td><td>{{.Volume}}</td><td>{{placeLink .Location}}</td><td>{{.Region}}</td><td>{{.Expires}}</td><td>{{charLink $.ViewerChars .IssuedByID .IssuedBy}}</td></tr>
     {{end}}
     </tbody>
   </table>

@@ -21,7 +21,7 @@
   <thead><tr><th>Contact</th><th>Kind</th><th>Standing</th><th></th></tr></thead>
   <tbody>
   {{range .Contacts.Rows}}
-    <tr><td>{{if .IsChar}}{{if .NamePending}}<span data-live-region data-poll-url="{{.PollURL}}" data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for {{.Name}}…</span>{{else}}{{charLink $.ViewerChars .ID .Name}}{{end}}{{else}}{{.Name}}{{end}}</td><td>{{.Type}}</td><td>{{.Standing}}</td><td>{{if .Blocked}}Blocked{{else if .Watched}}Watched{{end}}</td></tr>
+    <tr><td>{{if .IsChar}}{{if .NamePending}}<span data-live-region data-poll-url="{{.PollURL}}" data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for {{.Name}}…</span>{{else}}{{charLink $.ViewerChars .ID .Name}}{{end}}{{else if eq .Kind "corporation"}}{{corpLink .ID .Name}}{{else if eq .Kind "alliance"}}{{allianceLink .ID .Name}}{{else}}{{.Name}}{{end}}</td><td>{{.Type}}</td><td>{{.Standing}}</td><td>{{if .Blocked}}Blocked{{else if .Watched}}Watched{{end}}</td></tr>
   {{end}}
   </tbody>
 </table>

@@ -65,8 +65,8 @@
     {{range .Rows}}
     <tr class="fleet-row" data-search="{{.Search}}">
       <td><img class="portrait" src="{{.PortraitURL}}" alt="" width="32" height="32"> <a href="/character/?character={{.ID}}">{{.Name}}</a>{{if .Tags}} <small>· {{.Tags}}</small>{{end}}{{if .Relink}} <strong class="relink">re-link needed</strong>{{end}}</td>
-      <td>{{.CorpName}}</td>
-      <td>{{.SystemName}}{{if .DockedName}}<br><small>docked: {{.DockedName}}</small>{{end}}</td>
+      <td>{{corpLink .CorpID .CorpName}}</td>
+      <td>{{placeLink .SystemRef}}{{if .DockedName}}<br><small>docked: {{placeLink .DockedRef}}</small>{{end}}</td>
       <td>{{itemLink .ShipTypeID .ShipTypeName}}{{if .ShipName}}<br><small>&ldquo;{{.ShipName}}&rdquo;</small>{{end}}</td>
       <td>{{if .OnlineKnown}}{{if .Online}}<span class="dot on"></span>Online{{else}}<span class="dot off"></span>Offline{{end}}{{if .LastLogin}}<br><small>last login {{.LastLogin}}</small>{{end}}{{else}}—{{end}}</td>
       <td>{{if .QueueKnown}}{{if .Training}}{{.Training}}{{if .TrainingFinish}} <span class="countdown" data-finish="{{.TrainingFinish}}">{{.TrainingLeft}}</span>{{end}}{{else}}<em>Not training</em>{{end}}{{else}}—{{end}}</td>

@@ -17,7 +17,7 @@
   <div class="tw">
   <table>
     <tbody>
-      {{if .CharacterPage.CorpName}}<tr><th>Corporation</th><td>{{.CharacterPage.CorpName}}</td></tr>{{end}}
+      {{if .CharacterPage.CorpName}}<tr><th>Corporation</th><td>{{corpLink .CharacterPage.CorpID .CharacterPage.CorpName}}</td></tr>{{end}}
       {{if .CharacterPage.Birthday}}<tr><th>Born</th><td>{{.CharacterPage.Birthday}}</td></tr>{{end}}
       {{if .CharacterPage.SecurityStatus}}<tr><th>Security status</th><td>{{.CharacterPage.SecurityStatus}}</td></tr>{{end}}
     </tbody>
@@ -97,8 +97,8 @@
   <div class="tw">
   <table>
     <tbody>
-      <tr><th>System</th><td>{{.CharacterPage.SystemName}}{{if .CharacterPage.SystemSec}} (security {{.CharacterPage.SystemSec}}){{end}}</td></tr>
-      {{if .CharacterPage.DockedAt}}<tr><th>Docked at</th><td>{{.CharacterPage.DockedAt}}</td></tr>{{end}}
+      <tr><th>System</th><td>{{systemLink .CharacterPage.SystemID .CharacterPage.SystemName}}{{if .CharacterPage.SystemSec}} (security {{.CharacterPage.SystemSec}}){{end}}</td></tr>
+      {{if .CharacterPage.DockedAt}}<tr><th>Docked at</th><td>{{placeLink .CharacterPage.DockedRef}}</td></tr>{{end}}
     </tbody>
   </table>
   </div>

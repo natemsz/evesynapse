@@ -6,14 +6,14 @@
 
 {{range .Corps}}
   <section class="foldable">
-  <h2>{{.Name}} [{{.Ticker}}]</h2>
+  <h2>{{corpLink .ID .Name}} [{{.Ticker}}]</h2>
   <p><img class="portrait" src="{{.LogoURL}}" alt="Logo of {{.Name}}" width="128" height="128"></p>
   <div class="tw">
   <table>
     <tbody>
       <tr><th>Members</th><td>{{.MemberCount}}</td></tr>
       <tr><th>CEO</th><td>{{if .CEOName}}<img src="{{.CEOPortraitURL}}" alt="Portrait of {{.CEOName}}" width="32" height="32"> {{charLink $.ViewerChars .CEOID .CEOName}}{{else}}—{{end}}</td></tr>
-      <tr><th>Alliance</th><td>{{.Alliance}}</td></tr>
+      <tr><th>Alliance</th><td>{{if .AllianceID}}{{allianceLink .AllianceID .Alliance}}{{else}}{{.Alliance}}{{end}}</td></tr>
       <tr><th>Tax rate</th><td>{{.TaxRate}}</td></tr>
       <tr><th>Founded</th><td>{{.Founded}}</td></tr>
       <tr><th>Home station</th><td>{{.HomeStation}}</td></tr>

@@ -119,9 +119,9 @@
         <ul class="suggest" id="topbar-suggest" role="listbox" hidden></ul>
       </span>
     </form>
+    <button type="button" class="quickjump-btn" id="quickjump-open" aria-haspopup="dialog" aria-controls="quickjump" title="Quick jump (Ctrl+K)"><kbd>⌘K</kbd></button>
     <div class="topbar-character">
-      {{range .Switcher}}{{if .Active}}<img class="portrait topbar-portrait" src="{{.PortraitURL}}" alt="" width="32" height="32">{{end}}{{end}}
-      <span class="topbar-character-name">{{.CharacterName}}</span>
+      {{range .Switcher}}{{if .Active}}<img class="portrait topbar-portrait" src="{{.PortraitURL}}" alt="" width="32" height="32">{{end}}{{end}}      <span class="topbar-character-name">{{.CharacterName}}</span>
       {{if .Switcher}}
       <details class="branch switcher topbar-switcher">
         <summary>Switch character</summary>
@@ -150,6 +150,15 @@
 </footer>
 </div>
 <script src="/static/app.js?v={{.Version}}" defer></script>
+{{if .LoggedIn}}
+<div class="quickjump" id="quickjump" hidden>
+  <div class="quickjump-panel" role="dialog" aria-modal="true" aria-label="Quick jump">
+    <input type="search" id="quickjump-q" placeholder="Jump to a page, character, item…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="quickjump-results" aria-autocomplete="list" aria-label="Quick jump">
+    <ul class="quickjump-results" id="quickjump-results" role="listbox" aria-label="Quick jump results"></ul>
+    <p class="quickjump-hint">↑↓ to move · Enter to go · Esc to close</p>
+  </div>
+</div>
+{{end}}
 </body>
 </html>
 {{end}}

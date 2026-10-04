@@ -22,7 +22,7 @@
       <tr{{if .Yours}} class="yours"{{end}}>
         <td>#{{.ID}}{{if .Yours}}<br><span class="badge kill">Your corporation</span>{{end}}</td>
         <td>{{.Aggressor}}{{if .OpenAllies}}<br><span class="badge loss">Open for allies</span>{{end}}{{if .Mutual}}<br><small>Mutual</small>{{end}}</td>
-        <td>{{.Defender}}{{if .Allies}}<br><small>Allies: {{.Allies}}</small>{{end}}</td>
+        <td>{{.Defender}}{{if .Allies}}<br><small>Allies: {{range $i, $a := .Allies}}{{if $i}}, {{end}}{{$a}}{{end}}</small>{{end}}</td>
         <td>{{if .Warming}}<small>details warming</small>{{else}}{{.State}}{{end}}</td>
         <td>{{.Declared}}</td>
         <td>{{.AggKills}}</td>

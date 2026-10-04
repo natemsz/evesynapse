@@ -9,7 +9,7 @@
 {{end}}
 
 {{if .CorpWallets}}
-<h2>{{.CorpWallets.CorpTitle}}</h2>
+<h2>{{corpLink .CorpWallets.CorpID .CorpWallets.CorpTitle}}</h2>
 <p><small><a href="/corporations/">Overview</a> · <a href="/corporations/members/?character={{.CorpWallets.CharacterID}}">Members</a> · Wallets · <a href="/corporations/orders/?character={{.CorpWallets.CharacterID}}">Orders</a> · <a href="/corporations/assets/?character={{.CorpWallets.CharacterID}}">Assets</a> · <a href="/corporations/structures/?character={{.CorpWallets.CharacterID}}">Structures</a> · <a href="/corporations/killmails/?character={{.CorpWallets.CharacterID}}">Killmails</a></small></p>
 
   {{if .CorpWallets.Forbidden}}
@@ -61,7 +61,7 @@
     <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>Unit price</th><th>Total</th><th>Side</th><th>Counterparty</th></tr></thead>
     <tbody>
     {{range .CorpWallets.Txns}}
-      <tr><td>{{.Date}}</td><td>{{itemLink .TypeID .Item}}</td><td>{{.Qty}}</td><td>{{.Unit}} ISK</td><td>{{.Total}} ISK</td><td>{{.Side}}</td><td>{{if .ClientIsChar}}{{charLink $.ViewerChars .ClientID .With}}{{else}}{{.With}}{{end}}</td></tr>
+      <tr><td>{{.Date}}</td><td>{{itemLink .TypeID .Item}}</td><td>{{.Qty}}</td><td>{{.Unit}} ISK</td><td>{{.Total}} ISK</td><td>{{.Side}}</td><td>{{if .ClientIsChar}}{{charLink $.ViewerChars .ClientID .With}}{{else if .ClientIsCorp}}{{corpLink .ClientID .With}}{{else}}{{.With}}{{end}}</td></tr>
     {{end}}
     </tbody>
   </table>

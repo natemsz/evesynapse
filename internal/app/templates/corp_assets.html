@@ -9,7 +9,7 @@
 {{end}}
 
 {{if .CorpAssets}}
-<h2>{{.CorpAssets.CorpTitle}}</h2>
+<h2>{{corpLink .CorpAssets.CorpID .CorpAssets.CorpTitle}}</h2>
 <p><small><a href="/corporations/">Overview</a> · <a href="/corporations/members/?character={{.CorpAssets.CharacterID}}">Members</a> · <a href="/corporations/wallets/?character={{.CorpAssets.CharacterID}}">Wallets</a> · <a href="/corporations/orders/?character={{.CorpAssets.CharacterID}}">Orders</a> · Assets · <a href="/corporations/structures/?character={{.CorpAssets.CharacterID}}">Structures</a> · <a href="/corporations/killmails/?character={{.CorpAssets.CharacterID}}">Killmails</a></small></p>
 
   {{if .CorpAssets.Forbidden}}

@@ -9,7 +9,7 @@
 {{end}}
 
 {{if .CorpStructs}}
-<h2>{{.CorpStructs.CorpTitle}}</h2>
+<h2>{{corpLink .CorpStructs.CorpID .CorpStructs.CorpTitle}}</h2>
 <p><small><a href="/corporations/">Overview</a> · <a href="/corporations/members/?character={{.CorpStructs.CharacterID}}">Members</a> · <a href="/corporations/wallets/?character={{.CorpStructs.CharacterID}}">Wallets</a> · <a href="/corporations/orders/?character={{.CorpStructs.CharacterID}}">Orders</a> · <a href="/corporations/assets/?character={{.CorpStructs.CharacterID}}">Assets</a> · Structures · <a href="/corporations/killmails/?character={{.CorpStructs.CharacterID}}">Killmails</a></small></p>
 
   {{if .CorpStructs.Forbidden}}
@@ -24,7 +24,7 @@
   {{if .CorpStructs.Rows}}
   {{range .CorpStructs.Rows}}
     <section class="foldable">
-    <h3>{{.Name}}</h3>
+    <h3>{{structureLink .LinkID .Name}}</h3>
     <div class="tw">
     <table>
       <tbody>

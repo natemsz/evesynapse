@@ -18,7 +18,7 @@
     {{range .Killmails.Rows}}
       <tr>
         <td>{{.Time}}</td>
-        <td>{{.System}}</td>
+        <td>{{placeLink .System}}</td>
         <td>{{if .Warming}}<small>details warming</small>{{else if .Loss}}<span class="badge loss">LOSS</span>{{else}}<span class="badge kill">KILL</span>{{end}}</td>
         <td>{{killCharLink $.ViewerChars .VictimID .Victim}}</td>
         <td>{{itemLink .ShipTypeID .Ship}}</td>
@@ -31,7 +31,7 @@
     </tbody>
   </table>
   </div>
-  <p><small>Estimated value covers destroyed and dropped items at CCP average prices, once the price cache has been populated by a Market visit.</small></p>
+  <p><small>Estimated value covers destroyed and dropped items at CCP average prices.</small></p>
   {{else}}
   <p><small>No recent killmails for {{.Killmails.Subject}}.</small></p>
   {{end}}

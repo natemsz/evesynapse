@@ -1,0 +1,48 @@
+{{define "title"}}{{if and .Alliance .Alliance.Name}}{{.Alliance.Name}}{{else}}Alliance{{end}}{{end}}
+{{define "content"}}
+{{if .Alliance}}{{template "alliance-body" .Alliance}}{{end}}
+{{end}}
+
+{{define "alliance-body"}}
+<div data-poll-state="{{.State}}"{{if eq .State "loading"}} data-live-region data-poll-url="/alliance/fragment?alliance={{.AllianceID}}"{{end}}>
+
+{{if eq .State "missing"}}
+<h1><span class="gt">Alliance</span></h1>
+<p><small>EVE has no public record for that alliance.</small></p>
+{{else if eq .State "loading"}}
+<h1><span class="gt">Alliance</span></h1>
+<p><img class="portrait" src="{{.LogoURL}}" alt="" width="128" height="128"></p>
+<p><span class="loading-pulse" aria-hidden="true"></span><small>Loading this alliance's public record…</small></p>
+{{else}}
+<h1><span class="gt">{{.Name}}{{if .Ticker}} [{{.Ticker}}]{{end}}</span></h1>
+<p><img class="portrait" src="{{.LogoURL}}" alt="" width="128" height="128"></p>
+
+<div class="tw">
+<table>
+  <tbody>
+    {{if .Founded}}<tr><th>Founded</th><td>{{.Founded}}</td></tr>{{end}}
+    {{if .CreatorID}}<tr><th>Created by</th><td>{{charLink .ViewerChars .CreatorID .CreatorName}}</td></tr>{{end}}
+    {{if .CreatorCorpID}}<tr><th>Creator corporation</th><td>{{corpLink .CreatorCorpID .CreatorCorp}}</td></tr>{{end}}
+    {{if .ExecutorCorpID}}<tr><th>Executor corporation</th><td>{{corpLink .ExecutorCorpID .ExecutorCorp}}</td></tr>{{end}}
+    <tr><th>Member corporations</th><td>{{.MemberCount}}</td></tr>
+  </tbody>
+</table>
+</div>
+
+{{if .Members}}
+<h2>Member corporations</h2>
+<div class="tw">
+<table>
+  <tbody>
+  {{range .Members}}
+    <tr><td>{{corpLink .CorpID .Name}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+<p><small>Public information from EVE's servers — what anyone can see about this alliance.</small></p>
+{{end}}
+</div>
+{{end}}

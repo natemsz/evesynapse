@@ -13,7 +13,7 @@
   <p><small>{{.Assets.Stacks}} stacks · {{.Assets.TotalItems}} items · {{len .Assets.Locations}} locations</small></p>
   {{range .Assets.Locations}}
     <section class="foldable">
-    <h3>{{.Title}}</h3>
+    <h3>{{placeLink .Loc}}</h3>
     <div class="tw">
     <table>
       <thead><tr><th>Item</th><th>Quantity</th><th>Note</th></tr></thead>

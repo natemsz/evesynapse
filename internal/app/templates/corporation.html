@@ -1,0 +1,41 @@
+{{define "title"}}{{if and .Corporation .Corporation.Name}}{{.Corporation.Name}}{{else}}Corporation{{end}}{{end}}
+{{define "content"}}
+{{if .Corporation}}{{template "corporation-body" .Corporation}}{{end}}
+{{end}}
+
+{{define "corporation-body"}}
+<div data-poll-state="{{.State}}"{{if eq .State "loading"}} data-live-region data-poll-url="/corporation/fragment?corporation={{.CorporationID}}"{{end}}>
+
+{{if eq .State "missing"}}
+<h1><span class="gt">Corporation</span></h1>
+<p><small>EVE has no public record for that corporation.</small></p>
+{{else if eq .State "loading"}}
+<h1><span class="gt">Corporation</span></h1>
+<p><img class="portrait" src="{{.LogoURL}}" alt="" width="128" height="128"></p>
+<p><span class="loading-pulse" aria-hidden="true"></span><small>Loading this corporation's public record…</small></p>
+{{else}}
+<h1><span class="gt">{{.Name}}{{if .Ticker}} [{{.Ticker}}]{{end}}</span></h1>
+<p><img class="portrait" src="{{.LogoURL}}" alt="" width="128" height="128"></p>
+
+<div class="tw">
+<table>
+  <tbody>
+    <tr><th>Members</th><td>{{.MemberCount}}</td></tr>
+    {{if .CEOID}}<tr><th>CEO</th><td>{{charLink .ViewerChars .CEOID .CEOName}}</td></tr>{{end}}
+    {{if .AllianceID}}<tr><th>Alliance</th><td>{{allianceLink .AllianceID .AllianceLine}}</td></tr>{{end}}
+    <tr><th>Tax rate</th><td>{{.TaxRate}}</td></tr>
+    {{if .Founded}}<tr><th>Founded</th><td>{{.Founded}}</td></tr>{{end}}
+    {{if .HomeStation}}<tr><th>Home station</th><td>{{.HomeStation}}</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+
+{{if .HasDescription}}
+<h2>About</h2>
+<div class="mailbody">{{.Description}}</div>
+{{end}}
+
+<p><small>Public information from EVE's servers — what anyone can see about this corporation.</small></p>
+{{end}}
+</div>
+{{end}}

@@ -1472,4 +1472,18 @@
     closeCategoryBranches(null);
   }
   syncNavigationControls();
+  // Enable width/visibility transitions only after the
+  // state the head script restored has had frames to land:
+  // user toggles glide, but a refresh or navigation into a
+  // saved rail/hidden state opens already settled.
+  function enableNavMotion() {
+    root.classList.add("nav-motion-ready");
+  }
+  if (window.requestAnimationFrame) {
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(enableNavMotion);
+    });
+  } else {
+    window.setTimeout(enableNavMotion, 0);
+  }
 })();

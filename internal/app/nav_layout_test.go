@@ -220,7 +220,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		"html[data-nav=\"rail\"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }",
 		".sidebar .sidebar-actions .nav-state-btn { display: none; }",
 		".sidebar .nav-drawer-close { display: inline-flex; }",
-		"html[data-nav=\"rail\"] .nav-label { display: block; }",
+		"html[data-nav=\"rail\"] .nav-label {\n    display: block;\n    max-width: 12rem;\n    opacity: 1;\n    transform: none;\n  }",
 		"html[data-nav=\"rail\"] .sidebar-account { display: block; }",
 		"html[data-nav=\"rail\"] .sidebar .branch .menu {\n    position: static;",
 		// v0.3.07.002 top-bar cluster: the wordmark is always in
@@ -251,6 +251,20 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// The rail flyout menus stay solid (no pin changes
 		// there); only the bar itself goes glass.
 		"background: linear-gradient(rgba(21, 21, 21, 0.93), rgba(17, 17, 17, 0.93)) padding-box;\n  -webkit-backdrop-filter: blur(10px);\n  backdrop-filter: blur(10px);",
+		// v0.3.07.011: user toggles between wide nav states
+		// glide on the grid track that actually drives the
+		// layout, labels fade as the rail narrows, and hidden
+		// waits for the shrink before it leaves the screen.
+		// Transitions arm only once app.js marks the restored
+		// initial state ready, so loading a saved rail/hidden
+		// layout never sweeps; reduced motion snaps instead.
+		"html[data-nav=\"hidden\"] .sidebar {\n  visibility: hidden;\n  pointer-events: none;\n  overflow: hidden;\n  border-right-color: transparent;\n}",
+		"html.nav-motion-ready body {\n    transition: grid-template-columns 180ms ease-out;\n  }",
+		"html.nav-motion-ready .sidebar {\n    transition: visibility 0s linear 180ms;\n  }",
+		"html.nav-motion-ready:not([data-nav=\"hidden\"]) .sidebar {\n    transition-delay: 0s;\n  }",
+		"html.nav-motion-ready .nav-label {\n    transition: max-width 180ms ease-out, opacity 140ms ease-out, transform 180ms ease-out;\n  }",
+		"html[data-nav=\"rail\"] .nav-label {\n  max-width: 0;\n  opacity: 0;\n  transform: translateX(-0.25rem);\n}",
+		"@media (prefers-reduced-motion: reduce) {\n  body,\n  .sidebar,\n  .nav-label,\n  .sidenav a.navlink,\n  .sidebar .branch > summary { transition: none !important; }\n}",
 		// v0.3.07.010: shared darker header bands restored —
 		// panel titles, card/module headings, foldable section
 		// headings, and direct panel section headings all sit
@@ -354,6 +368,10 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`setAttribute("aria-expanded"`,
 		`matchMedia("(max-width: 860px)")`,
 		`"Escape"`,
+		// v0.3.07.011: motion arms after the restored state
+		// has landed, never during the load that restored it.
+		"nav-motion-ready",
+		"requestAnimationFrame",
 		// v0.3.07.006: entering the rail folds every category,
 		// and in the rail one flyout at a time opens.
 		"closeCategoryBranches",

@@ -142,11 +142,12 @@ func (app *Application) handleMarketSuggest(w http.ResponseWriter, r *http.Reque
 
 // searchHit is one top-banner result. Kind drives the link:
 // item → its details page, character → the character sheet,
-// pilot → the public pilot page. A "pilot-pending" hit is the
-// not-yet-resolved name search: it carries no link and is never
-// offered as a pick.
+// pilot → the public pilot page, corporation → the corporation
+// page, alliance → the alliance page. A "pilot-pending" hit is
+// the not-yet-resolved name search: it carries no link and is
+// never offered as a pick.
 type searchHit struct {
-	Kind  string `json:"kind"` // "item" | "character" | "pilot" | "pilot-pending"
+	Kind  string `json:"kind"` // "item" | "character" | "pilot" | "corporation" | "alliance" | "pilot-pending"
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
 	Label string `json:"label,omitempty"`
@@ -176,7 +177,12 @@ func sortHitsByName(hits []searchHit, q string) {
 
 // handleTopbarSearch serves GET /search.json?q=: the signed-in
 // user's characters first (they're the highest-intent match),
-// then items, then warmed pilot records.
+// then items, corporations, alliances, and warmed pilot
+// records. It also backs the Ctrl+K quick-jump palette, which
+// renders the same hits grouped by kind. Every item hit notes
+// the market-history prefetch wants the market page's search
+// notes, so whichever result the user jumps to already has its
+// chart warming.
 func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
@@ -211,10 +217,74 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 	}
 
 	itemHits := []searchHit{}
+	itemMatches := []marketMatch{}
 	for _, it := range app.suggestTypes(ctx, q, suggestPoolAll, 6) {
 		hit := searchHit{Kind: "item", ID: it.ID, Name: it.Name, Label: it.Label}
 		itemHits = append(itemHits, hit)
 		hits = append(hits, hit)
+		itemMatches = append(itemMatches, marketMatch{ID: it.ID, Name: it.Name})
+	}
+	// Prefetch, same as the market page: a jump to any of these
+	// items should land on a warming chart, not a cold one.
+	if len(itemMatches) > 0 {
+		app.noteSearchHistoryWants(ctx, defaultMarketRegion, itemMatches)
+	}
+
+	// Corporations and alliances whose public records have
+	// already been warmed answer here too, so a name the app
+	// knows links straight to its record page.
+	if rows, err := app.queries.SearchCorporationRecordsByName(ctx, q); err == nil {
+		corpHits := []searchHit{}
+		for _, row := range rows {
+			var payload corporationRecordPayload
+			if jerr := json.Unmarshal([]byte(row.Payload), &payload); jerr != nil || payload.Corp.Name == "" {
+				continue
+			}
+			if _, ok := nameMatchTier(payload.Corp.Name, q); !ok {
+				continue
+			}
+			label := "Corporation"
+			if payload.Corp.Ticker != "" {
+				label = "[" + payload.Corp.Ticker + "]"
+			}
+			corpHits = append(corpHits, searchHit{
+				Kind: "corporation", ID: row.CorporationID, Name: payload.Corp.Name, Label: label,
+			})
+		}
+		sortHitsByName(corpHits, q)
+		if len(corpHits) > 4 {
+			corpHits = corpHits[:4]
+		}
+		hits = append(hits, corpHits...)
+	} else {
+		log.Printf("search: corporation records for %q: %v", q, err)
+	}
+
+	if rows, err := app.queries.SearchAllianceRecordsByName(ctx, q); err == nil {
+		allianceHits := []searchHit{}
+		for _, row := range rows {
+			var payload allianceRecordPayload
+			if jerr := json.Unmarshal([]byte(row.Payload), &payload); jerr != nil || payload.Alliance.Name == "" {
+				continue
+			}
+			if _, ok := nameMatchTier(payload.Alliance.Name, q); !ok {
+				continue
+			}
+			label := "Alliance"
+			if payload.Alliance.Ticker != "" {
+				label = "[" + payload.Alliance.Ticker + "]"
+			}
+			allianceHits = append(allianceHits, searchHit{
+				Kind: "alliance", ID: row.AllianceID, Name: payload.Alliance.Name, Label: label,
+			})
+		}
+		sortHitsByName(allianceHits, q)
+		if len(allianceHits) > 4 {
+			allianceHits = allianceHits[:4]
+		}
+		hits = append(hits, allianceHits...)
+	} else {
+		log.Printf("search: alliance records for %q: %v", q, err)
 	}
 
 	pilotHitCount := 0

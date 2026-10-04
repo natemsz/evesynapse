@@ -34,16 +34,18 @@ import (
 // EVE_SDE_BASE_URL overrides the base for mirrors.
 // ---------------------------------------------------------------------------
 
-// sdeFileNames are the dump tables EveSynapse imports: the six
-// base tables, plus the four industry tables the build planner
-// (schema 011) reads. industryActivitySkills.csv is deliberately
-// NOT in this list: it only seasons the planner with required
-// skills, so a dump or mirror lacking it must not fail the whole
-// import — importSDE fetches it best-effort instead.
+// sdeFileNames are the dump tables EveSynapse imports: the base
+// tables (including the schema-024 market browse tree), plus the
+// industry tables the build planner (schema 011) reads.
+// industryActivitySkills.csv is deliberately NOT in this list: it
+// only seasons the planner with required skills, so a dump or
+// mirror lacking it must not fail the whole import — importSDE
+// fetches it best-effort instead.
 var sdeFileNames = []string{
 	"invTypes.csv",
 	"invGroups.csv",
 	"invCategories.csv",
+	"invMarketGroups.csv",
 	"staStations.csv",
 	"mapSolarSystems.csv",
 	"mapRegions.csv",
@@ -196,13 +198,14 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 	}
 	// One-time backfills: databases imported before schema 008
 	// have no market-group/published values, databases stored
-	// before schema 011 lack the planner's industry tables, and
-	// anything before schema 012 lacks the dogma skill graph, so
+	// before schema 011 lack the planner's industry tables,
+	// anything before schema 012 lacks the dogma skill graph, and
+	// anything before schema 024 lacks the market browse tree, so
 	// re-import once (the store writes the marker when it lands).
 	// Retries on later ticks while an import keeps failing.
-	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "5" {
+	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "6" {
 		log.Printf("sde: static data predates current columns — re-importing to backfill")
-		app.startSDEImport("schema-018 backfill")
+		app.startSDEImport("schema-024 backfill")
 		return
 	}
 	// Even with a current marker, an empty planner table (say the
@@ -349,10 +352,11 @@ func (app *Application) importSDE(ctx context.Context) error {
 	// skill graph are held to the same rule (the blueprint
 	// skills table is not: it is optional).
 	if len(parsed.types) == 0 || len(parsed.groups) == 0 || len(parsed.categories) == 0 ||
+		len(parsed.marketGroups) == 0 ||
 		len(parsed.stations) == 0 || len(parsed.systems) == 0 || len(parsed.regions) == 0 ||
 		len(parsed.blueprints) == 0 || len(parsed.skillMeta) == 0 || len(parsed.skillReqs) == 0 {
-		return fmt.Errorf("parsed dump has empty table(s): %d types, %d groups, %d categories, %d stations, %d systems, %d regions, %d blueprints, %d skill meta, %d requirements",
-			len(parsed.types), len(parsed.groups), len(parsed.categories),
+		return fmt.Errorf("parsed dump has empty table(s): %d types, %d groups, %d categories, %d market groups, %d stations, %d systems, %d regions, %d blueprints, %d skill meta, %d requirements",
+			len(parsed.types), len(parsed.groups), len(parsed.categories), len(parsed.marketGroups),
 			len(parsed.stations), len(parsed.systems), len(parsed.regions),
 			len(parsed.blueprints), len(parsed.skillMeta), len(parsed.skillReqs))
 	}
@@ -381,13 +385,14 @@ func (app *Application) importSDE(ctx context.Context) error {
 // joins three files) and are flattened by buildIndustryRows once
 // every file is in.
 type parsedSDE struct {
-	types      []sdeTypeRow
-	groups     []sdeGroupRow
-	categories []sdeCategoryRow
-	stations   []sdeStationRow
-	systems    []sdeSystemRow
-	regions    []sdeRegionRow
-	markers    map[string]fileMarker
+	types        []sdeTypeRow
+	groups       []sdeGroupRow
+	categories   []sdeCategoryRow
+	marketGroups []sdeMarketGroupRow
+	stations     []sdeStationRow
+	systems      []sdeSystemRow
+	regions      []sdeRegionRow
+	markers      map[string]fileMarker
 
 	// Industry (schema 011): per-blueprint joins over the four
 	// industry files, keyed by blueprint type ID, plus the flat
@@ -465,6 +470,19 @@ type sdeGroupRow struct {
 type sdeCategoryRow struct {
 	categoryID int64
 	name       string
+}
+
+// sdeMarketGroupRow is one invMarketGroups row (schema 024): the
+// market browse tree. parentGroupID is 0 at the top level; the
+// dump spells the parent column parentMarketGroupID (older
+// references shorten it to parentGroupID — the parser accepts
+// both).
+type sdeMarketGroupRow struct {
+	marketGroupID int64
+	parentGroupID int64 // 0 = top level
+	name          string
+	iconID        int64 // dump icon reference, kept as data
+	hasTypes      int64 // 1 when types list directly in this group
 }
 
 type sdeStationRow struct {
@@ -562,6 +580,8 @@ func parseSDEFile(name string, body io.Reader, parsed *parsedSDE) error {
 		parsed.groups, err = parseSDEGroups(cr, idx)
 	case "invCategories.csv":
 		parsed.categories, err = parseSDECategories(cr, idx)
+	case "invMarketGroups.csv":
+		parsed.marketGroups, err = parseSDEMarketGroups(cr, idx)
 	case "staStations.csv":
 		parsed.stations, err = parseSDEStations(cr, idx)
 	case "mapSolarSystems.csv":
@@ -725,6 +745,44 @@ func parseSDECategories(cr *csv.Reader, idx map[string]int) ([]sdeCategoryRow, e
 			return err
 		}
 		rows = append(rows, sdeCategoryRow{categoryID: id, name: name})
+		return nil
+	})
+	return rows, err
+}
+
+// parseSDEMarketGroups reads invMarketGroups.csv. The parent
+// column is parentMarketGroupID in the current dump (shortened to
+// parentGroupID in some references); top-level groups carry an
+// empty or 0 parent, normalized to 0 here. iconID and hasTypes
+// ride along when the dump provides them.
+func parseSDEMarketGroups(cr *csv.Reader, idx map[string]int) ([]sdeMarketGroupRow, error) {
+	parentColumn := "parentMarketGroupID"
+	if _, ok := idx[parentColumn]; !ok {
+		parentColumn = "parentGroupID"
+	}
+	var rows []sdeMarketGroupRow
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		id, err := csvID(rec, idx, "marketGroupID")
+		if err != nil {
+			return errSkipRow
+		}
+		name, err := csvField(rec, idx, "marketGroupName")
+		if err != nil {
+			return err
+		}
+		hasTypes := int64(0)
+		if raw, ferr := csvField(rec, idx, "hasTypes"); ferr == nil {
+			if trimmed := strings.TrimSpace(raw); trimmed == "1" || strings.EqualFold(trimmed, "true") {
+				hasTypes = 1
+			}
+		}
+		rows = append(rows, sdeMarketGroupRow{
+			marketGroupID: id,
+			parentGroupID: csvIDOrZero(rec, idx, parentColumn),
+			name:          name,
+			iconID:        csvIDOrZero(rec, idx, "iconID"),
+			hasTypes:      hasTypes,
+		})
 		return nil
 	})
 	return rows, err
@@ -1137,7 +1195,7 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	}
 	defer tx.Rollback()
 
-	for _, table := range []string{"sde_types", "sde_groups", "sde_categories", "sde_stations", "sde_systems", "sde_regions",
+	for _, table := range []string{"sde_types", "sde_groups", "sde_categories", "sde_market_groups", "sde_stations", "sde_systems", "sde_regions",
 		"sde_blueprints", "sde_blueprint_materials", "sde_blueprint_skills",
 		"sde_skill_meta", "sde_requirements"} {
 		if _, err := tx.ExecContext(ctx, "DELETE FROM "+table); err != nil {
@@ -1174,6 +1232,12 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	if err := insert("INSERT INTO sde_categories (category_id, name) VALUES (?, ?)", len(parsed.categories), func(i int) []any {
 		r := parsed.categories[i]
 		return []any{r.categoryID, r.name}
+	}); err != nil {
+		return 0, err
+	}
+	if err := insert("INSERT INTO sde_market_groups (market_group_id, parent_group_id, name, icon_id, has_types) VALUES (?, ?, ?, ?, ?)", len(parsed.marketGroups), func(i int) []any {
+		r := parsed.marketGroups[i]
+		return []any{r.marketGroupID, r.parentGroupID, r.name, r.iconID, r.hasTypes}
 	}); err != nil {
 		return 0, err
 	}
@@ -1227,6 +1291,7 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	}
 
 	total := int64(len(parsed.types) + len(parsed.groups) + len(parsed.categories) +
+		len(parsed.marketGroups) +
 		len(parsed.stations) + len(parsed.systems) + len(parsed.regions) +
 		len(parsed.blueprints) + len(parsed.bpMaterials) + len(parsed.bpSkills) +
 		len(parsed.skillMeta) + len(parsed.skillReqs))
@@ -1240,10 +1305,11 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		{Key: "total_rows", Value: strconv.FormatInt(total, 10)},
 		// Marker that the schema-008 market columns are populated,
 		// the schema-011 planner tables from 3, the schema-012
-		// skill graph from 4, and the schema-018 bulk item
-		// descriptions from 5 (sdeMaintenance backfills once when
-		// it's behind).
-		{Key: "sde_import_version", Value: "5"},
+		// skill graph from 4, the schema-018 bulk item
+		// descriptions from 5, and the schema-024 market browse
+		// tree from 6 (sdeMaintenance backfills once when it's
+		// behind).
+		{Key: "sde_import_version", Value: "6"},
 	}
 	for name, m := range parsed.markers {
 		meta = append(meta,
@@ -1312,6 +1378,7 @@ func (app *Application) loadSDEView(ctx context.Context) *sdeView {
 		{"Types", app.queries.CountSDETypes},
 		{"Groups", app.queries.CountSDEGroups},
 		{"Categories", app.queries.CountSDECategories},
+		{"Market groups", app.queries.CountSDEMarketGroups},
 		{"Stations", app.queries.CountSDEStations},
 		{"Systems", app.queries.CountSDESystems},
 		{"Regions", app.queries.CountSDERegions},

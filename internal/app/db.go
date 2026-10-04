@@ -247,6 +247,18 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 019 (daily wallet-history sampler: one balance row
+	// per character per day, written by the worker from snapshots
+	// it already keeps), applied the same guarded way.
+	var walletHistoryTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'wallet_history'`).Scan(&walletHistoryTables); err != nil {
+		return nil, err
+	}
+	if walletHistoryTables == 0 {
+		if err := applySchema(conn, walletHistorySchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

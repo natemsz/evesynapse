@@ -85,6 +85,9 @@ var briefingAnchorSchema string
 //go:embed schema/018_sde_type_descriptions.sql
 var sdeTypeDescriptionsSchema string
 
+//go:embed schema/019_wallet_history.sql
+var walletHistorySchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -360,11 +363,16 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/items", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleItems)
+		r.Get("/search.json", app.handleItemSearchJSON)
 		r.Get("/description-fragment", app.handleItemDescriptionFragment)
 		r.Get("/category/{categoryID}/", app.handleItemsCategory)
 		r.Get("/group/{groupID}/", app.handleItemsGroup)
 		r.Get("/type/{typeID}/", app.handleItemType)
 	})
+
+	// Top banner global search (items + own characters + warmed
+	// pilot records, all local).
+	r.With(app.requireAuth).Get("/search.json", app.handleTopbarSearch)
 
 	r.Route("/skills", func(r chi.Router) {
 		r.Use(app.requireAuth)

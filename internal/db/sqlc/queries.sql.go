@@ -2543,6 +2543,43 @@ func (q *Queries) ListTypeDetailWants(ctx context.Context, limit int64) ([]int64
 	return items, nil
 }
 
+const listUserWalletHistory = `-- name: ListUserWalletHistory :many
+SELECT user_id, character_id, day, balance, net_worth, sampled_at
+FROM wallet_history
+WHERE user_id = ?
+ORDER BY day, character_id
+`
+
+func (q *Queries) ListUserWalletHistory(ctx context.Context, userID int64) ([]WalletHistory, error) {
+	rows, err := q.db.QueryContext(ctx, listUserWalletHistory, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WalletHistory
+	for rows.Next() {
+		var i WalletHistory
+		if err := rows.Scan(
+			&i.UserID,
+			&i.CharacterID,
+			&i.Day,
+			&i.Balance,
+			&i.NetWorth,
+			&i.SampledAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUsers = `-- name: ListUsers :many
 SELECT id, created_at, home_layout, last_briefing_at FROM users
 ORDER BY id

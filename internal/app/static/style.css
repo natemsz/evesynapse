@@ -509,6 +509,24 @@ input[type="text"]:focus, input[type="search"]:focus {
   text-overflow: ellipsis;
 }
 .suggest li.sel { background: rgba(255, 106, 26, 0.18); color: #fff6e6; }
+.suggest li .sug-label {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: #b8a58c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- top banner global search: a quiet box between the wordmark
+   and the sign-in line; it yields width first on small screens. --- */
+.topsearch { margin: 0; }
+.searchwrap.topsearch-wrap { width: min(20rem, 34vw); }
+.topsearch input { padding: 0.3rem 0.55rem; font-size: 0.85rem; }
+@media (max-width: 720px) {
+  .searchwrap.topsearch-wrap { width: min(11rem, 40vw); }
+}
 
 /* --- character live state: status dot, kill/loss badges, countdown --- */
 .dot {

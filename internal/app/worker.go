@@ -880,10 +880,14 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 				}
 			}
 		case esi.SnapContacts:
+			// Contact kind is explicit in the payload, so the
+			// >= 90M harvest rule does not apply: pre-90M
+			// character contacts (the oldest pilots) warm their
+			// names here too.
 			var contacts esi.Contacts
 			if err := json.Unmarshal([]byte(snap.Payload), &contacts); err == nil {
 				for _, c := range contacts {
-					if c.ContactType == "character" && c.ContactID >= 90_000_000 {
+					if c.ContactType == "character" && c.ContactID > 0 {
 						charIDs[c.ContactID] = true
 					}
 				}

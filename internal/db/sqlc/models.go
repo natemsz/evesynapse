@@ -192,6 +192,7 @@ type SdeType struct {
 	GroupID       int64  `json:"group_id"`
 	MarketGroupID int64  `json:"market_group_id"`
 	Published     int64  `json:"published"`
+	Description   string `json:"description"`
 }
 
 type SkillPlan struct {

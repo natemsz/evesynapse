@@ -113,7 +113,7 @@ ORDER BY type_id;
 -- ---------------------------------------------------------------------
 
 -- name: GetSDEType :one
-SELECT type_id, name, group_id, market_group_id, published FROM sde_types
+SELECT type_id, name, group_id, market_group_id, published, description FROM sde_types
 WHERE type_id = ?;
 
 -- name: GetSDEGroup :one

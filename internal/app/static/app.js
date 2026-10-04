@@ -1209,6 +1209,9 @@
   var collapseButton = document.getElementById("nav-collapse");
   var hideButton = document.getElementById("nav-hide");
   var reopenButton = document.getElementById("nav-reopen");
+  var drawerClose = document.querySelector(".nav-drawer-close");
+  var expandAllButton = document.getElementById("nav-expand-all");
+  var categoryBranches = sidebar ? sidebar.querySelectorAll(".sidenav details.branch") : [];
   var drawerQuery = window.matchMedia ? window.matchMedia("(max-width: 860px)") : { matches: false };
   var storageKey = "evesynapse-nav";
 
@@ -1219,6 +1222,27 @@
     try {
       window.localStorage.setItem(storageKey, state);
     } catch (e) { /* private mode: this page still works */ }
+  }
+  function allCategoriesOpen() {
+    if (!categoryBranches.length) {
+      return false;
+    }
+    for (var i = 0; i < categoryBranches.length; i++) {
+      if (!categoryBranches[i].open) {
+        return false;
+      }
+    }
+    return true;
+  }
+  function syncExpandAllButton() {
+    if (!expandAllButton) {
+      return;
+    }
+    var allOpen = allCategoriesOpen();
+    expandAllButton.textContent = allOpen ? "Collapse all" : "Expand all";
+    expandAllButton.setAttribute("aria-expanded", allOpen ? "true" : "false");
+    expandAllButton.setAttribute("aria-label", allOpen ? "Collapse all navigation categories" : "Expand all navigation categories");
+    expandAllButton.setAttribute("title", allOpen ? "Collapse all navigation categories" : "Expand all navigation categories");
   }
   function syncNavigationControls() {
     var drawerOpen = !!(drawerToggle && drawerToggle.checked && drawerQuery.matches);
@@ -1234,6 +1258,7 @@
       collapseButton.setAttribute("aria-label", rail ? "Expand navigation" : "Collapse navigation");
       collapseButton.setAttribute("title", rail ? "Expand navigation" : "Collapse navigation");
     }
+    syncExpandAllButton();
   }
   function applyNavigationState(state) {
     if (state === "expanded") {
@@ -1252,6 +1277,18 @@
     if (returnFocus && hamburger) {
       hamburger.focus();
     }
+  }
+  if (expandAllButton) {
+    expandAllButton.addEventListener("click", function () {
+      var shouldOpen = !allCategoriesOpen();
+      for (var i = 0; i < categoryBranches.length; i++) {
+        categoryBranches[i].open = shouldOpen;
+      }
+      syncExpandAllButton();
+    });
+  }
+  for (var categoryIndex = 0; categoryIndex < categoryBranches.length; categoryIndex++) {
+    categoryBranches[categoryIndex].addEventListener("toggle", syncExpandAllButton);
   }
   if (collapseButton) {
     collapseButton.addEventListener("click", function () {
@@ -1280,6 +1317,14 @@
       }
     });
   }
+  if (drawerClose) {
+    drawerClose.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        drawerClose.click();
+      }
+    });
+  }
   if (sidebar) {
     sidebar.addEventListener("click", function (e) {
       if (!drawerQuery.matches || !drawerToggle || !drawerToggle.checked) {
@@ -1297,15 +1342,20 @@
     }
   });
   function handleDrawerBreakpoint(event) {
-    if (!event.matches) {
-      closeDrawer(false);
-    }
+    // Entering small screens always starts with the drawer
+    // closed; leaving them must not leave it hanging open either.
+    closeDrawer(false);
     syncNavigationControls();
   }
   if (drawerQuery.addEventListener) {
     drawerQuery.addEventListener("change", handleDrawerBreakpoint);
   } else if (drawerQuery.addListener) {
     drawerQuery.addListener(handleDrawerBreakpoint);
+  }
+  // The drawer starts closed on small screens, period: a
+  // restored or stale checkbox state must not pop it open.
+  if (drawerQuery.matches) {
+    closeDrawer(false);
   }
   syncNavigationControls();
 })();

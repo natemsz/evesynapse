@@ -2504,11 +2504,24 @@ const (
 	StructureMissing  = "missing"
 )
 
+// StructureSource values for the structure_names.source column
+// (schema 023): where a cached name came from. ESI truth — the
+// authenticated lookup or a corporation structure list — always
+// outranks the community tier; the app layer enforces that order
+// when storing. Community is plumbed but inactive: no dataset
+// ships yet, and no name is ever invented to fill the tier.
+const (
+	StructureSourceESI       = "esi"
+	StructureSourceCorp      = "corp"
+	StructureSourceCommunity = "community"
+)
+
 // FetchStructure resolves one structure id with a character's
 // token (network tier). A 403 means the token can see the
 // structure exists but not its name (no docking access); 404
-// means it is gone. Callers record a negative answer for those
-// instead of asking again every cycle.
+// means it is gone. One character's 403 is not the final word —
+// callers try every eligible character and record a negative
+// answer only once the whole set has answered no.
 func (c *Client) FetchStructure(ctx context.Context, ch db.Character, structureID int64) (UniverseStructure, error) {
 	token, err := c.tokens(ctx, ch)
 	if err != nil {

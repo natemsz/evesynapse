@@ -123,6 +123,17 @@ type OrderHealth struct {
 	ComputedAt  string  `json:"computed_at"`
 }
 
+type PilotNameWant struct {
+	NormalizedName string `json:"normalized_name"`
+	DisplayName    string `json:"display_name"`
+	State          string `json:"state"`
+	CharacterID    int64  `json:"character_id"`
+	RequestedAt    string `json:"requested_at"`
+	ResolvedAt     string `json:"resolved_at"`
+	NextTryAt      string `json:"next_try_at"`
+	Attempts       int64  `json:"attempts"`
+}
+
 type PilotRecord struct {
 	CharacterID int64  `json:"character_id"`
 	Payload     string `json:"payload"`

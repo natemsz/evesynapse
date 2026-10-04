@@ -864,6 +864,44 @@ WHERE state = 'pending'
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at
 LIMIT sqlc.arg(drain_limit);
 
+-- Pilot name-resolution wants (schema 022): a topbar search for
+-- a pilot name no local tier knows notes the name once; the
+-- worker resolves due rows through ESI's public name lookup.
+-- 'missing' and 'ready' are settled states; 'error' rows wait
+-- for next_try_at so a failing lookup is not re-asked per search.
+
+-- name: GetPilotNameWant :one
+SELECT normalized_name, display_name, state, character_id, requested_at, resolved_at, next_try_at, attempts
+FROM pilot_name_wants
+WHERE normalized_name = ?;
+
+-- name: UpsertPilotNameWant :exec
+INSERT OR IGNORE INTO pilot_name_wants (normalized_name, display_name, state, requested_at)
+VALUES (?, ?, 'pending', ?);
+
+-- name: ListDuePilotNameWants :many
+SELECT normalized_name, display_name, state, character_id, requested_at, resolved_at, next_try_at, attempts
+FROM pilot_name_wants
+WHERE (state = 'pending' OR state = 'error')
+  AND (next_try_at = '' OR next_try_at <= sqlc.arg(now))
+ORDER BY requested_at
+LIMIT sqlc.arg(lim);
+
+-- name: SetPilotNameWantReady :exec
+UPDATE pilot_name_wants
+SET state = 'ready', character_id = ?, resolved_at = ?, next_try_at = ''
+WHERE normalized_name = ?;
+
+-- name: SetPilotNameWantMissing :exec
+UPDATE pilot_name_wants
+SET state = 'missing', resolved_at = ?, next_try_at = ''
+WHERE normalized_name = ?;
+
+-- name: SetPilotNameWantError :exec
+UPDATE pilot_name_wants
+SET state = 'error', attempts = attempts + 1, resolved_at = ?, next_try_at = ?
+WHERE normalized_name = ?;
+
 -- name: GetTypeDetail :one
 SELECT type_id, description, fetched_at
 FROM type_details

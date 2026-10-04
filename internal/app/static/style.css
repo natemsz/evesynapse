@@ -665,7 +665,12 @@ tbody tr.yours td { background: rgba(255, 184, 77, 0.10); }
 
 /* --- footer --- */
 footer {
-  background: #0b0b0b;
+  /* 75% opacity with blur (user spec, matching the top bar and
+     sidebar glass treatment); the 75% paint alone is the no-blur
+     fallback. */
+  background: rgba(11, 11, 11, 0.75);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   border-top: 1px solid #262626;
   color: #8a7458;
   text-align: center;

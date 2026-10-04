@@ -56,8 +56,8 @@ func writeTestFile(t *testing.T, path string, data []byte, perm os.FileMode) {
 }
 
 func TestVersionMatchesRelease(t *testing.T) {
-	if got := Version(); got != "v0.3.08.002" {
-		t.Fatalf("Version() = %q, want v0.3.08.002", got)
+	if got := Version(); got != "v0.3.16.001" {
+		t.Fatalf("Version() = %q, want v0.3.16.001", got)
 	}
 }
 
@@ -412,7 +412,7 @@ func seedRefreshDB(t *testing.T) (string, *sql.DB) {
 		 VALUES (60000002, '', 'missing', '` + testFreshStamp + `')`,
 		`INSERT INTO structure_names (structure_id, name, state, resolved_at)
 		 VALUES (60000003, '', 'pending', '')`,
-		`INSERT INTO sde_meta (key, value) VALUES ('sde_import_version', '5')`,
+		`INSERT INTO sde_meta (key, value) VALUES ('sde_import_version', '6')`,
 		// Earned data: must survive untouched.
 		`INSERT INTO wallet_history (user_id, character_id, day, balance, net_worth, sampled_at)
 		 VALUES (1, 9001, '2026-10-03', 123.45, 999.5, '` + testFreshStamp + `')`,
@@ -516,7 +516,7 @@ func TestRefreshExpiresCachesKeepsEarnedData(t *testing.T) {
 		t.Fatalf("structure name = %q, want preserved", got)
 	}
 	// SDE re-import marker reset (anything but the current version).
-	if got := queryString(t, conn2, `SELECT value FROM sde_meta WHERE key = 'sde_import_version'`); got == "5" || got == "" {
+	if got := queryString(t, conn2, `SELECT value FROM sde_meta WHERE key = 'sde_import_version'`); got == "6" || got == "" {
 		t.Fatalf("sde_import_version = %q, want a reset marker", got)
 	}
 

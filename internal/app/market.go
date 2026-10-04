@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
 	"math"
 	"net/http"
@@ -76,9 +77,9 @@ type marketRegion struct {
 
 // marketOrderRow is one displayed order: display-ready strings.
 type marketOrderRow struct {
-	Price    string // esi.FormatISK
-	Volume   string // esi.FormatInt of volume_remain
-	Location string
+	Price  string // esi.FormatISK
+	Volume string // esi.FormatInt of volume_remain
+	Loc    placeRef
 }
 
 // marketItem is the item view: guide prices from /markets/prices/
@@ -95,8 +96,8 @@ type marketItem struct {
 	Regions       []marketRegion
 	BestSell      string // esi.FormatISK, "" when no sell orders
 	BestBuy       string // esi.FormatISK, "" when no buy orders
-	BestSellLoc   string
-	BestBuyLoc    string
+	BestSellLoc   placeRef
+	BestBuyLoc    placeRef
 	Spread        string // "12.3%", "" unless both sides exist
 	SellOrders    int
 	BuyOrders     int
@@ -170,14 +171,14 @@ type watchlistView struct {
 // yourOrderRow is one of the user's open sell orders with its
 // worker-computed health.
 type yourOrderRow struct {
-	Char     string
-	CharID   int64
-	Item     string
-	TypeID   int64
-	Price    string
-	Location string
-	Status   string
-	Bad      bool // undercut: highlighted
+	Char   string
+	CharID int64
+	Item   string
+	TypeID int64
+	Price  string
+	Loc    placeRef
+	Status string
+	Bad    bool // undercut: highlighted
 }
 
 // marketView is the Market page body.
@@ -188,6 +189,40 @@ type marketView struct {
 	Item       *marketItem
 	Watchlist  *watchlistView
 	YourOrders []yourOrderRow
+	Browse     *marketBrowseView
+}
+
+// marketBrowseGroup is one node of the category browser: a
+// market group with its ember glyph.
+type marketBrowseGroup struct {
+	ID       int64
+	Name     string
+	Icon     template.HTML
+	IconKey  string
+	HasTypes bool
+}
+
+// marketBrowseType is one type listed in a leaf market group.
+type marketBrowseType struct {
+	ID   int64
+	Name string
+}
+
+// marketBrowseCrumb is one breadcrumb step (an ancestor group).
+type marketBrowseCrumb struct {
+	ID   int64
+	Name string
+}
+
+// marketBrowseView is the category browser: the top-level groups,
+// or one group with its children, breadcrumbs, and leaf types.
+// Built entirely from the local SDE tables — rendering it never
+// touches the network.
+type marketBrowseView struct {
+	Current     *marketBrowseGroup
+	Breadcrumbs []marketBrowseCrumb
+	Groups      []marketBrowseGroup
+	Types       []marketBrowseType
 }
 
 // handleMarket renders the Market page: a name search (local
@@ -233,12 +268,97 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 		app.noteSearchHistoryWants(ctx, view.Region, view.Matches)
 	}
 
+	// The category browser rides every non-item render: the
+	// top-level groups on the landing, or the requested group's
+	// children, breadcrumbs and leaf types when ?group= is in
+	// play. Pure local SDE reads either way.
+	if view.Item == nil {
+		groupID, _ := strconv.ParseInt(q.Get("group"), 10, 64)
+		view.Browse = app.buildMarketBrowse(ctx, groupID)
+	}
+
 	if userID > 0 {
 		view.Watchlist = app.buildWatchlistView(ctx, userID, strings.TrimSpace(q.Get("wq")))
 		view.YourOrders = app.buildYourOrders(ctx, userID)
 	}
 
 	app.render(ctx, w, http.StatusOK, "market.html", data)
+}
+
+// buildMarketBrowse assembles the category browser from the
+// local market-group tree. groupID <= 0 (or an unknown id) renders
+// the top level; a known group renders its breadcrumb trail, its
+// child groups, and — for leaf groups — its types, already
+// filtered to the marketable floor (published = 1 AND
+// market_group_id > 0) by the query. Cache-only: local SDE reads,
+// never the network.
+func (app *Application) buildMarketBrowse(ctx context.Context, groupID int64) *marketBrowseView {
+	view := &marketBrowseView{}
+	current, err := app.queries.GetSDEMarketGroup(ctx, groupID)
+	if groupID <= 0 || err != nil {
+		rows, err := app.queries.ListSDEMarketGroupsByParent(ctx, 0)
+		if err != nil {
+			log.Printf("market: list top market groups: %v", err)
+			return view
+		}
+		for _, row := range rows {
+			view.Groups = append(view.Groups, marketBrowseGroupRow(row))
+		}
+		return view
+	}
+
+	currentRow := marketBrowseGroupRow(current)
+	view.Current = &currentRow
+
+	// Breadcrumb trail: walk parents to the root (cycle-guarded;
+	// real trees are a handful of levels deep).
+	seen := map[int64]bool{groupID: true}
+	var trail []marketBrowseCrumb
+	parentID := current.ParentGroupID
+	for parentID > 0 && !seen[parentID] && len(trail) < 16 {
+		seen[parentID] = true
+		parent, err := app.queries.GetSDEMarketGroup(ctx, parentID)
+		if err != nil {
+			break
+		}
+		trail = append(trail, marketBrowseCrumb{ID: parent.MarketGroupID, Name: parent.Name})
+		parentID = parent.ParentGroupID
+	}
+	for i, j := 0, len(trail)-1; i < j; i, j = i+1, j-1 {
+		trail[i], trail[j] = trail[j], trail[i]
+	}
+	view.Breadcrumbs = trail
+
+	children, err := app.queries.ListSDEMarketGroupsByParent(ctx, groupID)
+	if err != nil {
+		log.Printf("market: list child groups of %d: %v", groupID, err)
+	} else {
+		for _, row := range children {
+			view.Groups = append(view.Groups, marketBrowseGroupRow(row))
+		}
+	}
+
+	types, err := app.queries.ListSDETypesInMarketGroup(ctx, groupID)
+	if err != nil {
+		log.Printf("market: list types of market group %d: %v", groupID, err)
+	} else {
+		for _, row := range types {
+			view.Types = append(view.Types, marketBrowseType{ID: row.TypeID, Name: row.Name})
+		}
+	}
+	return view
+}
+
+// marketBrowseGroupRow adapts one sqlc market-group row to its
+// display row, glyph included.
+func marketBrowseGroupRow(row db.SdeMarketGroup) marketBrowseGroup {
+	return marketBrowseGroup{
+		ID:       row.MarketGroupID,
+		Name:     row.Name,
+		Icon:     marketGroupIconSVG(row.Name, row.MarketGroupID),
+		IconKey:  marketGroupIconKey(row.Name, row.MarketGroupID),
+		HasTypes: row.HasTypes > 0,
+	}
 }
 
 // recentHistoryRows loads the most recent `limit` recorded trade
@@ -576,12 +696,12 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 	if len(sells) > 0 {
 		item.BestSellRaw = sells[0].Price
 		item.BestSell = esi.FormatISK(sells[0].Price)
-		item.BestSellLoc = app.orderLocation(ctx, sells[0].LocationID, sells[0].SystemID)
+		item.BestSellLoc = app.orderPlace(ctx, sells[0].LocationID, sells[0].SystemID)
 	}
 	if len(buys) > 0 {
 		item.BestBuyRaw = buys[0].Price
 		item.BestBuy = esi.FormatISK(buys[0].Price)
-		item.BestBuyLoc = app.orderLocation(ctx, buys[0].LocationID, buys[0].SystemID)
+		item.BestBuyLoc = app.orderPlace(ctx, buys[0].LocationID, buys[0].SystemID)
 	}
 	if len(sells) > 0 && len(buys) > 0 && buys[0].Price > 0 {
 		item.Spread = fmt.Sprintf("%.1f%%", (sells[0].Price-buys[0].Price)/buys[0].Price*100)
@@ -592,9 +712,9 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 			break
 		}
 		item.Sells = append(item.Sells, marketOrderRow{
-			Price:    esi.FormatISK(o.Price) + " ISK",
-			Volume:   esi.FormatInt(o.VolumeRemain),
-			Location: app.orderLocation(ctx, o.LocationID, o.SystemID),
+			Price:  esi.FormatISK(o.Price) + " ISK",
+			Volume: esi.FormatInt(o.VolumeRemain),
+			Loc:    app.orderPlace(ctx, o.LocationID, o.SystemID),
 		})
 	}
 	for i, o := range buys {
@@ -602,12 +722,24 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 			break
 		}
 		item.Buys = append(item.Buys, marketOrderRow{
-			Price:    esi.FormatISK(o.Price) + " ISK",
-			Volume:   esi.FormatInt(o.VolumeRemain),
-			Location: app.orderLocation(ctx, o.LocationID, o.SystemID),
+			Price:  esi.FormatISK(o.Price) + " ISK",
+			Volume: esi.FormatInt(o.VolumeRemain),
+			Loc:    app.orderPlace(ctx, o.LocationID, o.SystemID),
 		})
 	}
 	return item, nil
+}
+
+// orderPlace is orderLocation classified for the link policy: an
+// NPC station or system the SDE knows links to its page; a player
+// structure stays text. Cache-only on top of orderLocation's own
+// resolution.
+func (app *Application) orderPlace(ctx context.Context, locationID, systemID int64) placeRef {
+	id := locationID
+	if id == 0 {
+		id = systemID
+	}
+	return app.linkPlace(ctx, id, app.orderLocation(ctx, locationID, systemID))
 }
 
 // orderLocation renders where an order sits: the NPC station name
@@ -734,13 +866,13 @@ func (app *Application) buildYourOrders(ctx context.Context, userID int64) []you
 				continue
 			}
 			row := yourOrderRow{
-				Char:     ch.Name,
-				CharID:   ch.CharacterID,
-				Item:     app.typeNameOrID(ctx, o.TypeID),
-				TypeID:   o.TypeID,
-				Price:    esi.FormatISK(o.Price) + " ISK",
-				Location: app.econLocationTitle(ctx, o.LocationID),
-				Status:   "Not checked against the order book yet",
+				Char:   ch.Name,
+				CharID: ch.CharacterID,
+				Item:   app.typeNameOrID(ctx, o.TypeID),
+				TypeID: o.TypeID,
+				Price:  esi.FormatISK(o.Price) + " ISK",
+				Loc:    app.linkPlace(ctx, o.LocationID, app.econLocationTitle(ctx, o.LocationID)),
+				Status: "Not checked against the order book yet",
 			}
 			if h, ok := health[o.OrderID]; ok && h.CharacterID == ch.CharacterID {
 				row.Status, row.Bad = orderHealthText(h.MyPrice, h.Status, h.StationBest, h.RegionBest)

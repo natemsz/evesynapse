@@ -44,12 +44,21 @@ type mailRow struct {
 	Labels  []string
 }
 
+// mailRecipientView is one mail recipient with its kind, so the
+// template links each by the name policy (characters to their
+// pages, corporations and alliances to theirs).
+type mailRecipientView struct {
+	Kind string // character | corporation | alliance | mailing_list
+	ID   int64
+	Name string
+}
+
 type mailDetail struct {
 	Subject string
 	From    string
 	FromID  int64
 	Date    string
-	To      []string
+	To      []mailRecipientView
 	Labels  []string
 	Body    template.HTML // sanitized; never raw ESI HTML
 }
@@ -174,30 +183,26 @@ func (app *Application) handleMail(w http.ResponseWriter, r *http.Request) {
 // mailRecipientDisplay renders one mail recipient by kind:
 // character, corporation, alliance and mailing-list names from
 // the local caches, with honest id fallbacks.
-func (app *Application) mailRecipientDisplay(ctx context.Context, rcpt esi.MailRecipient, listNames map[int64]string) string {
+func (app *Application) mailRecipientDisplay(ctx context.Context, rcpt esi.MailRecipient, listNames map[int64]string) mailRecipientView {
+	out := mailRecipientView{Kind: rcpt.RecipientType, ID: rcpt.RecipientID}
 	switch rcpt.RecipientType {
 	case "character":
-		return app.displayCharacter(ctx, rcpt.RecipientID)
+		out.Name = app.displayCharacter(ctx, rcpt.RecipientID)
 	case "corporation":
-		if name, ok := app.esi.CachedCorpName(rcpt.RecipientID); ok && name != "" {
-			return name
-		}
-		app.notePageWantFromContext(ctx, pageWantCorporation, rcpt.RecipientID)
-		return fmt.Sprintf("Corporation #%d", rcpt.RecipientID)
+		out.Name = app.corpDisplayName(ctx, rcpt.RecipientID)
 	case "alliance":
-		if name, ok := app.esi.CachedAllianceName(rcpt.RecipientID); ok && name != "" {
-			return name
-		}
-		app.notePageWantFromContext(ctx, pageWantAlliance, rcpt.RecipientID)
-		return fmt.Sprintf("Alliance #%d", rcpt.RecipientID)
+		out.Name = app.allianceDisplayName(ctx, rcpt.RecipientID)
 	case "mailing_list":
 		if name, ok := listNames[rcpt.RecipientID]; ok && name != "" {
-			return name
+			out.Name = name
+		} else {
+			out.Name = fmt.Sprintf("Mailing list #%d", rcpt.RecipientID)
 		}
-		return fmt.Sprintf("Mailing list #%d", rcpt.RecipientID)
 	default:
-		return fmt.Sprintf("#%d", rcpt.RecipientID)
+		out.Kind = ""
+		out.Name = fmt.Sprintf("#%d", rcpt.RecipientID)
 	}
+	return out
 }
 
 func containsInt64(ids []int64, want int64) bool {

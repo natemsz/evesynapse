@@ -159,8 +159,10 @@ type characterView struct {
 	// Location + ship snapshots.
 	LocationKnown bool
 	SystemName    string
-	SystemSec     string // "0.9", "" when the SDE lacks the system
-	DockedAt      string // station/structure title, "" when in space
+	SystemID      int64    // links the system name to its page
+	SystemSec     string   // "0.9", "" when the SDE lacks the system
+	DockedAt      string   // station/structure title, "" when in space
+	DockedRef     placeRef // DockedAt classified for the link policy (station, structure, or plain text)
 	ShipKnown     bool
 	ShipTypeName  string
 	ShipTypeID    int64
@@ -186,6 +188,7 @@ type characterView struct {
 	// so this page — like every other — renders cache-only.
 	IdentityKnown  bool
 	PortraitURL    string
+	CorpID         int64
 	CorpName       string
 	Birthday       string
 	SecurityStatus string
@@ -273,11 +276,16 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 		view.SystemName = app.locationTitle(ctx, loc.SolarSystemID, "solar_system")
 		if sys, err := app.queries.GetSDESystem(ctx, loc.SolarSystemID); err == nil {
 			view.SystemSec = fmt.Sprintf("%.1f", sys.Security)
+			// The system name links to its page only while the
+			// SDE can render that page; until then it stays text.
+			view.SystemID = loc.SolarSystemID
 		}
 		if loc.StationID > 0 {
 			view.DockedAt = app.locationTitle(ctx, loc.StationID, "station")
+			view.DockedRef = app.linkPlace(ctx, loc.StationID, view.DockedAt)
 		} else if loc.StructureID > 0 {
 			view.DockedAt = app.locationTitle(ctx, loc.StructureID, "structure")
+			view.DockedRef = app.linkPlace(ctx, loc.StructureID, view.DockedAt)
 		}
 	}
 
@@ -383,6 +391,7 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 			}
 		}
 		if corpID > 0 {
+			view.CorpID = corpID
 			// The worker warms this character's own corp_info
 			// snapshot, so the name is a local read; fall back
 			// to the recorded id until it lands.

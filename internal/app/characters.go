@@ -34,6 +34,7 @@ type managedCharacter struct {
 	ID           int64
 	Name         string
 	PortraitURL  string
+	CorpID       int64
 	CorpName     string // "" when unknown
 	Tags         string
 	State        string // link_state as stored
@@ -173,6 +174,7 @@ func (app *Application) managedCharacterRow(ctx context.Context, ch db.Character
 	}
 
 	if mapping, err := app.queries.GetCharacterCorporation(ctx, ch.CharacterID); err == nil {
+		row.CorpID = mapping.CorporationID
 		row.CorpName = fmt.Sprintf("Corporation #%d", mapping.CorporationID)
 		var info struct {
 			Name string `json:"name"`

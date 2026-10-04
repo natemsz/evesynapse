@@ -33,6 +33,7 @@ type assetRow struct {
 // largest stacks parked there.
 type assetLocation struct {
 	Title      string
+	Loc        placeRef // Title classified for the link policy
 	Items      []assetRow
 	MoreStacks int // stacks hidden past the per-location cap
 }
@@ -199,6 +200,7 @@ func (app *Application) buildAssetLocationsWith(ctx context.Context, items []esi
 	locations := make([]assetLocation, 0, len(byLoc))
 	for locID, entries := range byLoc {
 		loc := assetLocation{Title: app.assetLocationTitle(ctx, locID, locType[locID], itemType, nameOf, extraTitles)}
+		loc.Loc = app.linkPlace(ctx, locID, loc.Title)
 
 		sorted := append([]esi.Asset(nil), entries...)
 		sort.Slice(sorted, func(i, j int) bool {

@@ -100,6 +100,21 @@ var pilotNameWantsSchema string
 //go:embed schema/023_structure_name_provenance.sql
 var structureNameProvenanceSchema string
 
+//go:embed schema/024_market_groups.sql
+var marketGroupsSchema string
+
+//go:embed schema/025_planet_names.sql
+var planetNamesSchema string
+
+//go:embed schema/026_org_records.sql
+var orgRecordsSchema string
+
+//go:embed schema/027_guide_price_wants.sql
+var guidePriceWantsSchema string
+
+//go:embed schema/028_structure_context.sql
+var structureContextSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -420,6 +435,40 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handlePilot)
 		r.Get("/fragment", app.handlePilotFragment)
+	})
+
+	// Public corporation & alliance pages: an organization's
+	// public record, warmed by the worker from public ESI.
+	r.Route("/corporation", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleCorporationPage)
+		r.Get("/fragment", app.handleCorporationFragment)
+	})
+	r.Route("/alliance", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleAlliancePage)
+		r.Get("/fragment", app.handleAllianceFragment)
+	})
+
+	// Solar system & station pages: an SDE place record, the
+	// destination every system/station name links to. Nothing to
+	// warm — both render from the local SDE.
+	r.Route("/system", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleSystemPage)
+	})
+	r.Route("/station", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleStationPage)
+	})
+
+	// Player structure page: what this instance knows about one
+	// Upwell structure (resolved name, owning corporation, system,
+	// type), filled in by the background structure resolution.
+	r.Route("/structure", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleStructurePage)
+		r.Get("/fragment", app.handleStructureFragment)
 	})
 
 	r.Route("/characters", func(r chi.Router) {

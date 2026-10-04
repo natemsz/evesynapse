@@ -1211,6 +1211,20 @@ html[data-nav="rail"] .sidebar .branch .menu {
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
 }
 html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
+/* Rail flyout discipline: a closed category never paints a
+   panel, and the active-section pill (dark fill, ember left
+   bar) belongs to the current page's category alone. A merely
+   open flyout gets a faint ember wash instead, so a rail full
+   of categories left open in the wide sidebar stops looking
+   like every section is current at once. Wide screens only —
+   the drawer below keeps its expanded-style presentation. */
+@media (min-width: 861px) {
+  html[data-nav="rail"] .sidebar .branch:not([open]) > .menu { display: none; }
+  html[data-nav="rail"] .sidebar .branch[open]:not(.active) > summary {
+    background: rgba(255, 106, 26, 0.14);
+    box-shadow: none;
+  }
+}
 .page-shell { min-width: 0; }
 .topbar { min-height: 3.75rem; }
 .topbar-wordmark { display: inline-block; }
@@ -1390,6 +1404,20 @@ tbody tr.yours td { background-color: #2a2015; }
   .topbar-wordmark { margin-right: auto; }
   .page-sync { margin-left: 0; }
   .topsearch { flex: 0 1 22rem; }
+  /* v0.3.07.006: a slim ember divider between the search
+     field and the character switcher, centred in the 1rem
+     gap at roughly 60% of the bar height. */
+  .topbar-character { position: relative; }
+  .topbar-character::before {
+    content: "";
+    position: absolute;
+    left: calc(-0.5rem - 0.5px);
+    top: 50%;
+    width: 1px;
+    height: 2.25rem;
+    transform: translateY(-50%);
+    background: rgba(255, 106, 26, 0.25);
+  }
 }
 @media (max-width: 719px) {
   .grid.home-grid > .card[data-widget="briefing"] { grid-column: span 2; }

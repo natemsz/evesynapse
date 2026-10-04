@@ -234,6 +234,19 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		".search-glyph {",
 		"pointer-events: none;",
 		".topsearch input { padding: 0.3rem 0.55rem 0.3rem 2rem; font-size: 0.85rem; }",
+		// v0.3.07.006 rail discipline: closed categories never
+		// paint a flyout panel, and the active-section pill is
+		// the current page's category alone — a merely open
+		// flyout wears only a faint ember wash, wide screens
+		// only so the drawer keeps its expanded-style look.
+		"html[data-nav=\"rail\"] .sidebar .branch:not([open]) > .menu { display: none; }",
+		"html[data-nav=\"rail\"] .sidebar .branch[open]:not(.active) > summary {\n    background: rgba(255, 106, 26, 0.14);\n    box-shadow: none;\n  }",
+		".sidebar .branch.active > summary {\n  color: #fff6e6;\n  background: #1b1b1b;\n  box-shadow: inset 3px 0 0 var(--accent);\n}",
+		// v0.3.07.006 top-bar divider: a 1px ember rule between
+		// the search field and the character switcher, wide
+		// layout only (the character block is display:none on
+		// phones, and this block never applies there).
+		".topbar-character::before {\n    content: \"\";\n    position: absolute;\n    left: calc(-0.5rem - 0.5px);\n    top: 50%;\n    width: 1px;\n    height: 2.25rem;\n    transform: translateY(-50%);\n    background: rgba(255, 106, 26, 0.25);\n  }",
 	} {
 		if !strings.Contains(css, want) {
 			t.Errorf("style.css missing %q", want)
@@ -270,6 +283,16 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`setAttribute("aria-expanded"`,
 		`matchMedia("(max-width: 860px)")`,
 		`"Escape"`,
+		// v0.3.07.006: entering the rail folds every category,
+		// and in the rail one flyout at a time opens.
+		"closeCategoryBranches",
+		"closeCategoryBranches(null);",
+		"closeCategoryBranches(event.target);",
+		"railActive",
+		// v0.3.07.006: the live-fill pollers re-check the
+		// moment a hidden tab comes back to the front.
+		"visibilitychange",
+		"document.visibilityState",
 	} {
 		if !strings.Contains(js, want) {
 			t.Errorf("app.js missing %q", want)
@@ -277,5 +300,13 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	}
 	if strings.Contains(js, "collapseButton.textContent") {
 		t.Error("app.js still rewrites the collapse control as a text glyph")
+	}
+	// The live-fill pollers never abandon a page that is still
+	// waiting: no attempt cap may strand pending content behind
+	// a manual refresh (the cold-boot stall of v0.3.07.005).
+	for _, gone := range []string{"maxAttempts", "attempts > 40", "attempts > maxAttempts"} {
+		if strings.Contains(js, gone) {
+			t.Errorf("app.js still contains the poller give-up %q", gone)
+		}
 	}
 }

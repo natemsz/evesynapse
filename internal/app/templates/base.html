@@ -6,7 +6,9 @@
 <title>{{template "title" .}} · EveSynapse</title>
 {{if .AutoRefresh}}<meta http-equiv="refresh" content="5">{{end}}
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-<link rel="stylesheet" href="/static/style.css">
+<link rel="preload" as="font" type="font/woff2" href="/static/fonts/shentox-regular.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="/static/fonts/univers-next-pro-medium-condensed.woff2" crossorigin>
+<link rel="stylesheet" href="/static/style.css?v={{.Version}}">
 </head>
 <body>
 <header>
@@ -95,7 +97,7 @@
   No official affiliation or endorsement by CCP Games hf is stated or implied.</p>
   <p class="version"><span>EveSynapse {{.Version}}</span><span>ESI + EVE SSO</span><span>Not affiliated with CCP Games</span></p>
 </footer>
-<script src="/static/app.js" defer></script>
+<script src="/static/app.js?v={{.Version}}" defer></script>
 </body>
 </html>
 {{end}}

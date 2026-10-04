@@ -341,6 +341,16 @@ UPDATE users
 SET home_layout = ?
 WHERE id = ?;
 
+-- Phase 6 (schema 017): the Briefing module's window anchor.
+-- name: GetUserBriefingAnchor :one
+SELECT last_briefing_at FROM users
+WHERE id = ?;
+
+-- name: SetUserBriefingAnchor :exec
+UPDATE users
+SET last_briefing_at = ?
+WHERE id = ?;
+
 -- name: ListSnapshotsForUser :many
 SELECT s.character_id, s.kind, s.payload, s.fetched_at, s.cached_until
 FROM character_snapshots s

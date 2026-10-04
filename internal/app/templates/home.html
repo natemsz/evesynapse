@@ -33,6 +33,23 @@
 
 <div class="grid home-grid{{if .Home.Customize}} home-custom{{end}}"{{if .Home.Customize}} id="home-grid" data-customize="1"{{end}}>
 {{range .Home.Widgets}}
+{{if eq .ID "briefing"}}
+<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+  <h3>Briefing</h3>
+  {{with .Briefing}}
+  {{if .HTMLLines}}
+  <ul class="briefing">
+  {{range .HTMLLines}}<li>{{.}}</li>{{end}}
+  </ul>
+  {{if .More}}<p><small>+{{.More}} more need{{if eq .More 1}}s{{end}} your attention.</small></p>{{end}}
+  <p><small>Since {{.SinceLabel}}</small></p>
+  {{else}}
+  <p>All quiet — nothing needs you right now.</p>
+  {{end}}
+  {{end}}
+</section>
+{{end}}
+
 {{if eq .ID "fleet"}}
 <section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
   <h3>Fleet overview</h3>

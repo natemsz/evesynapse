@@ -36,6 +36,7 @@ import (
 // Widget ids. These strings are persisted in users.home_layout;
 // never rename one.
 const (
+	widgetBriefing  = "briefing"
 	widgetFleet     = "fleet"
 	widgetAttention = "attention"
 	widgetNetWorth  = "networth"
@@ -72,6 +73,7 @@ type widgetDef struct {
 }
 
 var homeWidgetCatalog = []widgetDef{
+	{widgetBriefing, "Briefing", "What changed since you last looked, and what needs you in the next day.", widgetSizeFlex},
 	{widgetFleet, "Fleet overview", "Every linked character at a glance: where they are, what they're flying, what they're training.", widgetSizeFull},
 	{widgetAttention, "Needs attention", "Characters that need you: re-links, idle queues, finished jobs, expiring orders, waiting contracts.", widgetSizeFull},
 	{widgetNetWorth, "Net worth", "Wallets, assets and open-order escrow across all characters, at market prices. An estimate.", widgetSizeFlex},
@@ -83,9 +85,11 @@ var homeWidgetCatalog = []widgetDef{
 }
 
 // defaultHomeLayout is what accounts with no saved layout get:
-// the fleet first, what needs the user next, then the money.
+// the briefing first, then the fleet, what needs the user next,
+// then the money. Accounts with a saved layout keep theirs —
+// the briefing only joins a home by the user's own arrangement.
 var defaultHomeLayout = []string{
-	widgetFleet, widgetAttention, widgetNetWorth,
+	widgetBriefing, widgetFleet, widgetAttention, widgetNetWorth,
 	widgetIndustry, widgetMarket, widgetServer,
 }
 
@@ -284,6 +288,7 @@ func spanClass(span int) string {
 // ---------------------------------------------------------------------------
 
 var widgetSnapshotKinds = map[string][]string{
+	widgetBriefing:  {esi.SnapSkillqueue, esi.SnapSkills, esi.SnapIndustryJobs, esi.SnapContracts, esi.SnapOrders, esi.SnapOrdersHistory, esi.SnapPlanets, esi.SnapMail, esi.SnapMailLabels, esi.SnapCalendar},
 	widgetFleet:     {esi.SnapProfile, esi.SnapCorpInfo, esi.SnapLocation, esi.SnapShip, esi.SnapOnline, esi.SnapSkillqueue, esi.SnapWallet, esi.SnapMailLabels},
 	widgetAttention: {esi.SnapSkillqueue, esi.SnapIndustryJobs, esi.SnapContracts, esi.SnapOrders, esi.SnapPlanets},
 	widgetNetWorth:  {esi.SnapWallet, esi.SnapAssets, esi.SnapOrders},
@@ -333,6 +338,21 @@ type charSnaps struct {
 	layouts      map[int64]*esi.PlanetLayout
 
 	mailLabels *esi.MailLabels
+
+	// Phase 6 (Briefing): trained skills (industry slot math),
+	// mail headers (newest unread sender), calendar summaries,
+	// and the closed-orders history (expired-order events).
+	skillsKnown bool
+	skills      esi.Skills
+
+	mailKnown bool
+	mail      esi.MailHeaders
+
+	calendarKnown bool
+	calendar      esi.CalendarEventSummaries
+
+	orderHistKnown bool
+	orderHist      esi.CharOrderHistory
 
 	// fetched records each snapshot's fetch timestamp (RFC3339)
 	// so widgets can date their data ("as of").
@@ -394,7 +414,7 @@ func (app *Application) loadCharSnaps(ctx context.Context, userID int64, chars [
 	// them.
 	needLayouts := false
 	for _, id := range layout {
-		if id == widgetAttention || id == widgetPI {
+		if id == widgetAttention || id == widgetPI || id == widgetBriefing {
 			needLayouts = true
 			break
 		}
@@ -494,6 +514,26 @@ func (b *charSnaps) decode(kind, payload string) {
 		if json.Unmarshal([]byte(payload), &v) == nil {
 			b.mailLabels = &v
 		}
+	case esi.SnapSkills:
+		var v esi.Skills
+		if json.Unmarshal([]byte(payload), &v) == nil {
+			b.skillsKnown, b.skills = true, v
+		}
+	case esi.SnapMail:
+		var v esi.MailHeaders
+		if json.Unmarshal([]byte(payload), &v) == nil {
+			b.mailKnown, b.mail = true, v
+		}
+	case esi.SnapCalendar:
+		var v esi.CalendarEventSummaries
+		if json.Unmarshal([]byte(payload), &v) == nil {
+			b.calendarKnown, b.calendar = true, v
+		}
+	case esi.SnapOrdersHistory:
+		var v esi.CharOrderHistory
+		if json.Unmarshal([]byte(payload), &v) == nil {
+			b.orderHistKnown, b.orderHist = true, v
+		}
 	}
 }
 
@@ -551,6 +591,7 @@ type homeWidget struct {
 	SpanPref  string // user's span preference: "" (auto) | wide
 	Fleet     *fleetWidget
 	Attention *attentionWidget
+	Briefing  *briefingWidget
 	NetWorth  *netWorthWidget
 	Industry  *industryWidget
 	Market    *marketWidget
@@ -1491,6 +1532,23 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 	}
 
 	bundles := app.loadCharSnaps(ctx, userID, chars, layoutIDs(layout))
+
+	// Phase 6: the briefing's "since you last looked" window,
+	// resolved before the widgets build. The anchor only exists
+	// once the module has rendered, so a home without it never
+	// touches the anchor at all.
+	now := time.Now()
+	briefingSince := time.Time{}
+	briefingIn := false
+	for _, item := range layout {
+		if item.ID == widgetBriefing {
+			briefingIn = true
+		}
+	}
+	if briefingIn {
+		briefingSince = app.briefingWindowStart(ctx, userID, now)
+	}
+
 	spans := solveHomeSpans(layout, 6)
 	for i, item := range layout {
 		def, _ := widgetDefFor(item.ID)
@@ -1499,6 +1557,8 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 			SpanClass: spanClass(spans[i]), Size: def.Size, SpanPref: item.Span,
 		}
 		switch item.ID {
+		case widgetBriefing:
+			w.Briefing = app.buildBriefing(ctx, bundles, briefingSince, now)
 		case widgetFleet:
 			w.Fleet = app.buildFleet(ctx, bundles)
 		case widgetAttention:
@@ -1519,6 +1579,14 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 			}
 		}
 		view.Widgets = append(view.Widgets, w)
+	}
+
+	// The anchor advances only after a real (non-Customize) home
+	// render that included the briefing: looking at the digest
+	// is what moves the window. A Customize pass arranges the
+	// module; it does not count as having read it.
+	if briefingIn && !customize {
+		app.advanceBriefingAnchor(ctx, userID, now)
 	}
 	return view
 }

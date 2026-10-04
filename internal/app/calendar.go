@@ -113,7 +113,7 @@ func (app *Application) handleCalendar(w http.ResponseWriter, r *http.Request) {
 			if app.loadCorpSnapshot(ctx, active.CharacterID, esi.CalendarAttendeesKind(eventID), &attendees) {
 				for _, a := range attendees {
 					detail.Attendees = append(detail.Attendees, calendarAttendeeRow{
-						Name:     characterDisplay(app.esi, a.CharacterID),
+						Name:     app.displayCharacter(ctx, a.CharacterID),
 						ID:       a.CharacterID,
 						Response: humanizeEnum(a.EventResponse),
 					})

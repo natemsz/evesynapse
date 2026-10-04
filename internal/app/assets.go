@@ -166,6 +166,20 @@ func (app *Application) buildAssetLocationsWith(ctx context.Context, items []esi
 		itemType[it.ItemID] = it.TypeID
 	}
 	names := app.esi.CachedTypeNames(ctx, typeIDs)
+	// Types no local tier can name yet become current-page wants
+	// on a page render (a no-op in worker contexts).
+	{
+		seen := make(map[int64]bool, len(typeIDs))
+		for _, id := range typeIDs {
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			if _, ok := names[id]; !ok {
+				app.notePageWantFromContext(ctx, pageWantTypeDescription, id)
+			}
+		}
+	}
 	nameOf := func(typeID int64) string {
 		if n, ok := names[typeID]; ok {
 			return n
@@ -241,16 +255,19 @@ func (app *Application) assetLocationTitle(ctx context.Context, locID int64, loc
 		if name, ok := app.esi.CachedPlaceName(ctx, locID); ok {
 			return name
 		}
+		app.notePageWantFromContext(ctx, pageWantPlace, locID)
 		return fmt.Sprintf("Station #%d", locID)
 	case "solar_system":
 		if name, ok := app.esi.CachedPlaceName(ctx, locID); ok {
 			return name
 		}
+		app.notePageWantFromContext(ctx, pageWantPlace, locID)
 		return fmt.Sprintf("System #%d", locID)
 	case "structure":
 		if name := app.resolvedStructureTitle(ctx, locID); name != "" {
 			return name
 		}
+		app.notePageWantFromContext(ctx, pageWantStructure, locID)
 		return fmt.Sprintf("Structure #%d", locID)
 	default: // "other", "item", anything unexpected
 		if parentType, ok := itemType[locID]; ok {

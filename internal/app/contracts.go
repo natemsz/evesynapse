@@ -45,14 +45,19 @@ type contractRow struct {
 	AssigneeIsChar bool
 	Acceptor       string // "" until accepted
 	AcceptorID     int64
-	Price          string
-	Reward         string
-	Collateral     string
-	Route          string // couriers: "Start → End"
-	Issued         string
-	Expires        string
-	Items          []contractItemRow
-	ItemsNote      string // "details warming" while the store lacks the list
+	// Pending labels: the counterparty's name is still on its
+	// way; the cell renders a live region that swaps it in.
+	IssuerPending   bool
+	AssigneePending bool
+	AcceptorPending bool
+	Price           string
+	Reward          string
+	Collateral      string
+	Route           string // couriers: "Start → End"
+	Issued          string
+	Expires         string
+	Items           []contractItemRow
+	ItemsNote       string // "details warming" while the store lacks the list
 }
 
 // contractsView is the Contracts page body.
@@ -110,7 +115,6 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 			Title:      c.Title,
 			Type:       humanizeEnum(c.Type),
 			Status:     humanizeEnum(c.Status),
-			Issuer:     characterDisplay(app.esi, c.IssuerID),
 			IssuerID:   c.IssuerID,
 			Price:      esi.FormatISK(c.Price),
 			Reward:     esi.FormatISK(c.Reward),
@@ -118,11 +122,12 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 			Issued:     formatFinish(c.DateIssued),
 			Expires:    formatFinish(c.DateExpired),
 		}
+		row.Issuer, row.IssuerPending = app.contractCharLabel(ctx, c.IssuerID)
 		if row.Title == "" {
 			row.Title = "Untitled"
 		}
 		if c.AssigneeID > 0 {
-			row.Assignee = characterDisplay(app.esi, c.AssigneeID)
+			row.Assignee, row.AssigneePending = app.contractCharLabel(ctx, c.AssigneeID)
 			row.AssigneeID = c.AssigneeID
 			// An assignee can be a corporation; only link when
 			// the ID resolves as a character.
@@ -131,7 +136,7 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 			row.Assignee = "Public"
 		}
 		if c.AcceptorID > 0 {
-			row.Acceptor = characterDisplay(app.esi, c.AcceptorID)
+			row.Acceptor, row.AcceptorPending = app.contractCharLabel(ctx, c.AcceptorID)
 			row.AcceptorID = c.AcceptorID
 		}
 		if c.Type == "courier" && (c.StartLocationID > 0 || c.EndLocationID > 0) {
@@ -174,6 +179,19 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 	}
 
 	app.render(ctx, w, http.StatusOK, "contracts.html", data)
+}
+
+// contractCharLabel resolves one counterparty label for the
+// contracts table: the name when a local tier has it, and a
+// pending flag while it is still on its way (the cell then
+// renders a live region). Rendering the label on a page leaves a
+// viewed-priority want behind via displayCharacter.
+func (app *Application) contractCharLabel(ctx context.Context, characterID int64) (string, bool) {
+	name := app.displayCharacter(ctx, characterID)
+	if name == fmt.Sprintf("Character #%d", characterID) && app.characterLabelPending(ctx, characterID) {
+		return name, true
+	}
+	return name, false
 }
 
 // loadContractItems reads one contract's warmed item list from

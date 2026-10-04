@@ -82,6 +82,9 @@ var pilotPrioritySchema string
 //go:embed schema/017_briefing_anchor.sql
 var briefingAnchorSchema string
 
+//go:embed schema/018_sde_type_descriptions.sql
+var sdeTypeDescriptionsSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -154,6 +157,12 @@ type Application struct {
 	// the same way as the worker status. See sde.go.
 	sdeMu sync.Mutex
 	sde   sdeStatus
+
+	// Current-page wants (pagewants.go): what each signed-in page
+	// is still waiting on, keyed by page scope, so the banner
+	// sync indicator can count it. Guarded by pageWantMu.
+	pageWantMu sync.Mutex
+	pageWants  map[string]map[string]pageWant
 }
 
 // New opens the database (applying the embedded schemas on first
@@ -184,6 +193,7 @@ func New(cfg Config) (*Application, error) {
 		corpCache:     make(map[int64]corpCacheEntry),
 		prices:        make(map[int64]esi.MarketPrice),
 		priorityChars: make(map[int64]bool),
+		pageWants:     make(map[string]map[string]pageWant),
 	}
 	app.esi = esi.New(loginHTTPClient, app.queries, app.validAccessToken)
 
@@ -259,6 +269,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(app.sessions.LoadAndSave)
+	r.Use(app.pageWantScopeMiddleware)
 
 	r.Get("/", app.handleHome)
 	r.Route("/home", func(r chi.Router) {
@@ -328,6 +339,14 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/contacts", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleContacts)
+		r.Get("/name-fragment", app.handleContactNameFragment)
+	})
+
+	// Generic entity-label live regions (pagewants.go): a pending
+	// character/structure label anywhere polls its own fragment.
+	r.Route("/labels", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/character-fragment", app.handleCharacterLabelFragment)
 	})
 
 	r.Route("/market", func(r chi.Router) {
@@ -427,6 +446,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/sync", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleSync)
+		r.Get("/page-status", app.handlePageSyncStatus)
 		r.Post("/warm", app.handleSyncWarm)
 		r.Post("/sde", app.handleSyncSDE)
 	})

@@ -81,13 +81,18 @@ func (app *Application) locationTitle(ctx context.Context, id int64, locType str
 	}
 	switch locType {
 	case "station":
+		app.notePageWantFromContext(ctx, pageWantPlace, id)
 		return fmt.Sprintf("Station #%d", id)
 	case "structure":
 		if name := app.resolvedStructureTitle(ctx, id); name != "" {
 			return name
 		}
+		// Join the background structure-name queue (when this is
+		// a page render) so the name lands without a click.
+		app.notePageWantFromContext(ctx, pageWantStructure, id)
 		return fmt.Sprintf("Structure #%d", id)
 	default:
+		app.notePageWantFromContext(ctx, pageWantPlace, id)
 		return fmt.Sprintf("System #%d", id)
 	}
 }
@@ -514,5 +519,8 @@ func (app *Application) typeNameOrID(ctx context.Context, id int64) string {
 	if name := app.esi.CachedTypeName(ctx, id); name != "" {
 		return name
 	}
+	// A type the SDE lacks can still be named by its ESI type
+	// payload; on a page that becomes a current-page want.
+	app.notePageWantFromContext(ctx, pageWantTypeDescription, id)
 	return fmt.Sprintf("Type #%d", id)
 }

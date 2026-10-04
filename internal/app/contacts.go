@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
 
 	"evesynapse/internal/esi"
 )
@@ -20,13 +21,15 @@ import (
 // ---------------------------------------------------------------------------
 
 type contactRow struct {
-	Name     string
-	ID       int64
-	IsChar   bool   // contact is a character (others stay text)
-	Type     string // display-cased contact kind
-	Standing string // signed, one decimal
-	Watched  bool
-	Blocked  bool
+	Name        string
+	ID          int64
+	IsChar      bool   // contact is a character (others stay text)
+	NamePending bool   // character name still on its way; the row polls for it
+	PollURL     string // live-region fragment for a pending character name
+	Type        string // display-cased contact kind
+	Standing    string // signed, one decimal
+	Watched     bool
+	Blocked     bool
 }
 
 type contactsView struct {
@@ -68,18 +71,33 @@ func (app *Application) handleContacts(w http.ResponseWriter, r *http.Request) {
 		}
 		pending := make([]pendingRow, 0, len(contacts))
 		for _, c := range contacts {
-			pending = append(pending, pendingRow{
-				row: contactRow{
-					Name:     app.contactDisplayName(ctx, c),
-					ID:       c.ContactID,
-					IsChar:   c.ContactType == "character",
-					Type:     humanizeEnum(c.ContactType),
-					Standing: fmt.Sprintf("%+.1f", c.Standing),
-					Watched:  c.IsWatched,
-					Blocked:  c.IsBlocked,
-				},
-				standing: c.Standing,
-			})
+			row := contactRow{
+				ID:       c.ContactID,
+				IsChar:   c.ContactType == "character",
+				Type:     humanizeEnum(c.ContactType),
+				Standing: fmt.Sprintf("%+.1f", c.Standing),
+				Watched:  c.IsWatched,
+				Blocked:  c.IsBlocked,
+			}
+			if row.IsChar {
+				// A contact's name is current-page data: an
+				// unresolved one leaves a viewed-priority want
+				// and renders as a live region that swaps the
+				// resolved, linked name in without a refresh.
+				if name, settled := app.resolvedCharacterName(ctx, c.ContactID); settled && name != "" {
+					row.Name = name
+				} else if settled {
+					row.Name = fmt.Sprintf("Character #%d", c.ContactID)
+				} else {
+					app.notePageWant(ctx, pageWantCharacter, c.ContactID, 0)
+					row.Name = fmt.Sprintf("Character #%d", c.ContactID)
+					row.NamePending = true
+					row.PollURL = fmt.Sprintf("/contacts/name-fragment?character=%d&contact=%d", active.CharacterID, c.ContactID)
+				}
+			} else {
+				row.Name = app.contactDisplayName(ctx, c)
+			}
+			pending = append(pending, pendingRow{row: row, standing: c.Standing})
 		}
 		// Standing first (excellent → terrible), then name:
 		// the order a pilot triages a contact list in.
@@ -97,21 +115,52 @@ func (app *Application) handleContacts(w http.ResponseWriter, r *http.Request) {
 	app.render(ctx, w, http.StatusOK, "contacts.html", data)
 }
 
+// handleContactNameFragment re-renders one contact's name cell
+// from the local caches: the resolved name as a pilot link once
+// it lands, a settled plain fallback when ESI has no such
+// character, and the pending live region until then. Cache-only —
+// the contacts page already left the want; this read never
+// enqueues and never fetches.
+func (app *Application) handleContactNameFragment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	q := r.URL.Query()
+	ownerID, oerr := strconv.ParseInt(q.Get("character"), 10, 64)
+	contactID, cerr := strconv.ParseInt(q.Get("contact"), 10, 64)
+	if oerr != nil || cerr != nil || ownerID <= 0 || contactID <= 0 {
+		http.Error(w, "bad contact name fragment request", http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+
+	name, settled := app.resolvedCharacterName(ctx, contactID)
+	switch {
+	case settled && name != "":
+		fmt.Fprintf(w, `<span data-poll-state="ready">%s</span>`, charLink(app.viewerCharSet(ctx), contactID, name))
+	case settled:
+		fmt.Fprintf(w, `<span data-poll-state="ready">Character #%d</span>`, contactID)
+	default:
+		fmt.Fprintf(w, `<span data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for Character #%d…</span>`, contactID)
+	}
+}
+
 // contactDisplayName resolves a contact's name by kind from the
 // local caches, with honest id fallbacks.
 func (app *Application) contactDisplayName(ctx context.Context, c esi.Contact) string {
 	switch c.ContactType {
 	case "character":
-		return characterDisplay(app.esi, c.ContactID)
+		return app.displayCharacter(ctx, c.ContactID)
 	case "corporation":
 		if name, ok := app.esi.CachedCorpName(c.ContactID); ok && name != "" {
 			return name
 		}
+		app.notePageWantFromContext(ctx, pageWantCorporation, c.ContactID)
 		return fmt.Sprintf("Corporation #%d", c.ContactID)
 	case "alliance":
 		if name, ok := app.esi.CachedAllianceName(c.ContactID); ok && name != "" {
 			return name
 		}
+		app.notePageWantFromContext(ctx, pageWantAlliance, c.ContactID)
 		return fmt.Sprintf("Alliance #%d", c.ContactID)
 	case "faction":
 		if name := app.factionName(ctx, c.ContactID); name != "" {

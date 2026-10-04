@@ -124,6 +124,9 @@ func (app *Application) handlePilot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data.Pilot = app.loadPilotView(ctx, id)
+	if data.Pilot != nil && data.Pilot.State == "loading" {
+		app.notePageWant(ctx, pageWantPilot, id, 0)
+	}
 	app.render(ctx, w, http.StatusOK, "pilot.html", data)
 }
 
@@ -547,6 +550,14 @@ func (app *Application) pilotCounterpartyIDs(ctx context.Context, characterID in
 			out[id] = true
 		}
 	}
+	// Contacts carry an explicit kind, so a character contact is
+	// a character even with a pre-90M ID (the oldest pilots) —
+	// those names must warm too, not just ledger counterparties.
+	addAny := func(id int64) {
+		if id > 0 {
+			out[id] = true
+		}
+	}
 	if journal, ok := loadSnapshot[esi.WalletJournal](app, ctx, characterID, esi.SnapWalletJournal); ok {
 		for _, e := range journal {
 			add(e.FirstPartyID)
@@ -568,7 +579,7 @@ func (app *Application) pilotCounterpartyIDs(ctx context.Context, characterID in
 	if contacts, ok := loadSnapshot[esi.Contacts](app, ctx, characterID, esi.SnapContacts); ok {
 		for _, c := range contacts {
 			if c.ContactType == "character" {
-				add(c.ContactID)
+				addAny(c.ContactID)
 			}
 		}
 	}

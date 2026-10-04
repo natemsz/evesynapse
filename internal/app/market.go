@@ -233,6 +233,9 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 			view.Item = item
 		}
 		app.attachHistory(ctx, view.Item, typeID, view.Region, userID)
+		if view.Item != nil && view.Item.HistoryPending {
+			app.notePageWant(ctx, pageWantHistory, typeID, view.Region)
+		}
 	} else if view.Query != "" {
 		view.Matches = app.searchTypes(ctx, view.Query)
 		// Prefetch: every result's history is wanted now, so a
@@ -308,6 +311,7 @@ func (app *Application) noteSearchHistoryWants(ctx context.Context, regionID int
 			log.Printf("market: prefetch want for type %d in region %d: %v", m.ID, regionID, err)
 			continue
 		}
+		app.notePageWant(ctx, pageWantHistory, m.ID, regionID)
 		noted++
 	}
 }

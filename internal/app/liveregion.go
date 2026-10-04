@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"html/template"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 )
@@ -23,9 +24,9 @@ import (
 // ---------------------------------------------------------------------------
 
 // renderFragment executes one named define from a page template
-// (history-section in market.html, pilot-body in pilot.html,
-// type-description in items.html) with the same link helpers the
-// full pages use.
+// (history-section and trader-section in market.html, pilot-body
+// in pilot.html, type-description in items.html) with the same
+// link helpers the full pages use.
 func (app *Application) renderFragment(w http.ResponseWriter, page, define string, data any) {
 	ts, err := template.New("fragment").Funcs(linkFuncMap()).ParseFS(templatesFS, "templates/"+page)
 	if err != nil {
@@ -63,6 +64,37 @@ func (app *Application) handleMarketHistoryFragment(w http.ResponseWriter, r *ht
 	item := &marketItem{TypeID: typeID, RegionID: regionID, RegionName: regionName}
 	app.attachHistory(ctx, item, typeID, regionID, 0)
 	app.renderFragment(w, "market.html", "history-section", item)
+}
+
+// handleMarketTraderFragment re-renders just the trading
+// snapshot of the market item view from stored rows, so the
+// averages fill in alongside the chart instead of waiting for
+// a manual refresh. The order book's best prices ride in from
+// the page render (bs/bb query params — numbers the page had
+// already fetched) purely so the margin row survives the swap;
+// the handler itself never fetches.
+func (app *Application) handleMarketTraderFragment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	q := r.URL.Query()
+	typeID, terr := strconv.ParseInt(q.Get("type"), 10, 64)
+	regionID, rerr := strconv.ParseInt(q.Get("region"), 10, 64)
+	if terr != nil || typeID <= 0 || rerr != nil {
+		http.Error(w, "bad trader fragment request", http.StatusBadRequest)
+		return
+	}
+	if _, ok := marketRegionName(regionID); !ok {
+		regionID = defaultMarketRegion
+	}
+	regionName, _ := marketRegionName(regionID)
+	item := &marketItem{TypeID: typeID, RegionID: regionID, RegionName: regionName}
+	if v, err := strconv.ParseFloat(q.Get("bs"), 64); err == nil && v > 0 && !math.IsInf(v, 0) {
+		item.BestSellRaw = v
+	}
+	if v, err := strconv.ParseFloat(q.Get("bb"), 64); err == nil && v > 0 && !math.IsInf(v, 0) {
+		item.BestBuyRaw = v
+	}
+	app.attachHistory(ctx, item, typeID, regionID, 0)
+	app.renderFragment(w, "market.html", "trader-section", item)
 }
 
 // handlePilotFragment re-renders just the pilot record body from

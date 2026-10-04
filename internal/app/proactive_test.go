@@ -456,6 +456,19 @@ func TestLiveRegionFragments(t *testing.T) {
 		`data-poll-url="/market/history-fragment?region=10000002&amp;type=34"`,
 		"This one's queued")
 
+	// Trader fragment: the averages carry the same live-fill
+	// contract as the chart. Pending shows the loading
+	// treatment; the bests ride in the poll URL so the margin
+	// survives the swap.
+	code, body = frag("/market/trader-fragment?region=10000002&type=34&bs=12&bb=10")
+	if code != http.StatusOK {
+		t.Fatalf("trader fragment: status %d", code)
+	}
+	mustContain(t, "trader fragment (pending)", body,
+		`data-live-region`, `data-poll-state="pending"`,
+		`data-poll-url="/market/trader-fragment?region=10000002&amp;type=34&amp;bs=12&amp;bb=10"`,
+		"loading-pulse", "the averages fill in")
+
 	// Then the chart state once rows exist.
 	for _, stmt := range []string{
 		`INSERT INTO market_history (region_id, type_id, date, average, highest, lowest, volume, order_count) VALUES (10000002, 34, '2026-09-30', 10, 11, 9, 100, 5)`,
@@ -470,9 +483,23 @@ func TestLiveRegionFragments(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("history fragment (chart): status %d", code)
 	}
-	mustContain(t, "history fragment (chart)", body, `data-poll-state="chart"`, "<svg")
+	mustContain(t, "history fragment (chart)", body, `data-poll-state="chart"`, "<svg",
+		"3 days of recorded trades in The Forge", "Last recorded days")
 	if strings.Contains(body, "data-live-region") {
 		t.Fatal("settled history fragment still carries a live region")
+	}
+
+	// Trader fragment once rows exist: the averages populate
+	// and the margin comes from the passed-along bests — the
+	// whole snapshot settles with the chart, no refresh needed.
+	code, body = frag("/market/trader-fragment?region=10000002&type=34&bs=12&bb=10")
+	if code != http.StatusOK {
+		t.Fatalf("trader fragment (chart): status %d", code)
+	}
+	mustContain(t, "trader fragment (chart)", body,
+		`data-poll-state="chart"`, ">10.50 ISK<", "16.7% of the sell price")
+	if strings.Contains(body, "data-live-region") {
+		t.Fatal("settled trader fragment still carries a live region")
 	}
 
 	// Pilot fragment: loading, then ready once the record lands.
@@ -525,7 +552,8 @@ func TestLiveRegionFragments(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("market item page: status %d", code)
 	}
-	mustContain(t, "/market/?type=35 (pending)", body, `data-poll-url="/market/history-fragment?region=10000002&amp;type=35"`)
+	mustContain(t, "/market/?type=35 (pending)", body, `data-poll-url="/market/history-fragment?region=10000002&amp;type=35"`,
+		`class="trader-body"`, `data-poll-url="/market/trader-fragment?region=10000002&amp;type=35`)
 }
 
 // ---------------------------------------------------------------------------

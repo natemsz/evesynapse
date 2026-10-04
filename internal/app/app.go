@@ -377,6 +377,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/", app.handleMarket)
 		r.Get("/suggest", app.handleMarketSuggest)
 		r.Get("/history-fragment", app.handleMarketHistoryFragment)
+		r.Get("/trader-fragment", app.handleMarketTraderFragment)
 		r.Post("/watch", app.handleMarketWatch)
 	})
 

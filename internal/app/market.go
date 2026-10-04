@@ -133,6 +133,19 @@ type marketItem struct {
 	WatchThreshold float64
 }
 
+// TraderPollURL is the trading snapshot's live-region target:
+// the region/type plus the order book's best prices, which the
+// page itself already fetched live. The fragment handler stays
+// cache-only — the bests ride along from the render that had
+// them, so the margin survives the live-fill swap unchanged
+// instead of flickering back to a dash.
+func (item *marketItem) TraderPollURL() string {
+	return fmt.Sprintf("/market/trader-fragment?region=%d&type=%d&bs=%s&bb=%s",
+		item.RegionID, item.TypeID,
+		strconv.FormatFloat(item.BestSellRaw, 'f', -1, 64),
+		strconv.FormatFloat(item.BestBuyRaw, 'f', -1, 64))
+}
+
 // watchlistRow is one watchlist line, display-ready.
 type watchlistRow struct {
 	TypeID    int64

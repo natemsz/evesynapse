@@ -61,19 +61,7 @@
   {{if $item.Trader}}
   <section class="foldable">
   <h3>Trading snapshot — {{$item.RegionName}}</h3>
-  <div class="tw">
-  <table>
-    <tbody>
-      <tr><th>7-day average</th><td>{{if $item.Trader.Avg7}}{{$item.Trader.Avg7}} ISK{{else}}—{{end}}</td></tr>
-      <tr><th>30-day average</th><td>{{if $item.Trader.Avg30}}{{$item.Trader.Avg30}} ISK{{else}}—{{end}}</td></tr>
-      <tr><th>7-day change</th><td>{{if $item.Change7}}{{$item.Change7}}{{else}}—{{end}}</td></tr>
-      <tr><th>30-day change</th><td>{{if $item.Change30}}{{$item.Change30}}{{else}}—{{end}}</td></tr>
-      <tr><th>Average daily volume (7 days)</th><td>{{if $item.Trader.AvgVol7}}{{$item.Trader.AvgVol7}}{{else}}—{{end}}</td></tr>
-      <tr><th>Margin at best prices</th><td>{{if $item.Trader.MarginPct}}{{$item.Trader.MarginPct}} of the sell price{{else}}—{{end}}</td></tr>
-    </tbody>
-  </table>
-  </div>
-  {{if eq $item.HistoryState "pending"}}<p><small>Price history is still on its way — the averages fill in as trades are recorded.</small></p>{{else}}<p><small>From recorded daily trades in {{$item.RegionName}} plus today's best orders. Margin is before broker fees and sales tax.</small></p>{{end}}
+  {{template "trader-section" $item}}
   </section>
   {{end}}
 
@@ -223,7 +211,7 @@
     <span class="legend-item"><span class="legend-swatch legend-volume" aria-hidden="true"></span>Volume</span>
     <span class="legend-note">Price in ISK · volume in units traded</span>
   </div>
-  <svg viewBox="0 0 {{$c.Width}} {{$c.Height}}" width="100%" role="img" aria-label="Daily average price and volume, last 90 days" style="max-width:720px">
+  <svg viewBox="0 0 {{$c.Width}} {{$c.Height}}" width="100%" role="img" aria-label="Daily average price and volume, last 90 days">
     {{range $c.PriceTicks}}<line class="chart-gridline price-gridline {{.Class}}" x1="0" y1="{{.Y}}" x2="{{$c.Width}}" y2="{{.Y}}"/>{{end}}
     {{range $c.VolumeTicks}}<line class="chart-gridline volume-gridline {{.Class}}" x1="0" y1="{{.Y}}" x2="{{$c.Width}}" y2="{{.Y}}"/>{{end}}
     {{range $c.Bars}}<rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" fill="#d63c14" fill-opacity="0.55"><title>{{.Title}}</title></rect>{{end}}
@@ -264,6 +252,28 @@
   <p><small>No trade history in {{.RegionName}} for this item yet.</small></p>
   {{else}}
   <p><span class="loading-pulse" aria-hidden="true"></span><small>This one's queued — it will be ready in a moment.</small></p>
+  {{end}}
+</div>
+{{end}}
+
+{{define "trader-section"}}
+<div class="trader-body" data-poll-state="{{.HistoryState}}"{{if eq .HistoryState "pending"}} data-live-region data-poll-url="{{.TraderPollURL}}"{{end}}>
+  {{if eq .HistoryState "pending"}}
+  <p><span class="loading-pulse" aria-hidden="true"></span><small>This one's queued — the averages fill in as trades are recorded.</small></p>
+  {{else}}
+  <div class="tw">
+  <table>
+    <tbody>
+      <tr><th>7-day average</th><td>{{if .Trader.Avg7}}{{.Trader.Avg7}} ISK{{else}}—{{end}}</td></tr>
+      <tr><th>30-day average</th><td>{{if .Trader.Avg30}}{{.Trader.Avg30}} ISK{{else}}—{{end}}</td></tr>
+      <tr><th>7-day change</th><td>{{if .Change7}}{{.Change7}}{{else}}—{{end}}</td></tr>
+      <tr><th>30-day change</th><td>{{if .Change30}}{{.Change30}}{{else}}—{{end}}</td></tr>
+      <tr><th>Average daily volume (7 days)</th><td>{{if .Trader.AvgVol7}}{{.Trader.AvgVol7}}{{else}}—{{end}}</td></tr>
+      <tr><th>Margin at best prices</th><td>{{if .Trader.MarginPct}}{{.Trader.MarginPct}} of the sell price{{else}}—{{end}}</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p><small>From recorded daily trades in {{.RegionName}} plus today's best orders. Margin is before broker fees and sales tax.</small></p>
   {{end}}
 </div>
 {{end}}

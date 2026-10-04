@@ -298,6 +298,12 @@ func (app *Application) refreshCycle(ctx context.Context) {
 				limited = true
 			}
 		}
+
+		// Daily wallet history (schema 019): record today from
+		// the snapshots just stored. Pure local reads — no fetch
+		// budget spent, no extra ESI calls.
+		app.sampleWalletHistory(ctx, ch, time.Now())
+
 		if limited {
 			break
 		}

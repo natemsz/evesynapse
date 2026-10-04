@@ -246,6 +246,22 @@ func (q *Queries) DeleteCharacter(ctx context.Context, arg DeleteCharacterParams
 	return err
 }
 
+const deleteGuidePrices = `-- name: DeleteGuidePrices :exec
+
+DELETE FROM guide_prices
+`
+
+// ---------------------------------------------------------------------
+// v0.3.04 stored market guide (schema 021): the worker mirrors
+// GET /markets/prices/ here wholesale (delete + insert inside
+// one transaction) so asset valuation never waits on a Market
+// page visit. Meta is the single bookkeeping row.
+// ---------------------------------------------------------------------
+func (q *Queries) DeleteGuidePrices(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteGuidePrices)
+	return err
+}
+
 const deleteOrderHealthEntry = `-- name: DeleteOrderHealthEntry :exec
 DELETE FROM order_health
 WHERE character_id = ? AND order_id = ?
@@ -397,6 +413,18 @@ func (q *Queries) GetGlobalSnapshot(ctx context.Context, kind string) (GlobalSna
 		&i.FetchedAt,
 		&i.CachedUntil,
 	)
+	return i, err
+}
+
+const getGuidePricesMeta = `-- name: GetGuidePricesMeta :one
+SELECT id, fetched_at, cached_until FROM guide_prices_meta
+WHERE id = 1
+`
+
+func (q *Queries) GetGuidePricesMeta(ctx context.Context) (GuidePricesMetum, error) {
+	row := q.db.QueryRowContext(ctx, getGuidePricesMeta)
+	var i GuidePricesMetum
+	err := row.Scan(&i.ID, &i.FetchedAt, &i.CachedUntil)
 	return i, err
 }
 
@@ -890,6 +918,29 @@ func (q *Queries) GetWatchlistEntry(ctx context.Context, arg GetWatchlistEntryPa
 	return i, err
 }
 
+const getWidgetConfig = `-- name: GetWidgetConfig :one
+
+SELECT config FROM widget_configs
+WHERE user_id = ? AND widget_id = ?
+`
+
+type GetWidgetConfigParams struct {
+	UserID   int64  `json:"user_id"`
+	WidgetID string `json:"widget_id"`
+}
+
+// ---------------------------------------------------------------------
+// v0.3.04 widget configuration (schema 020): one JSON blob per
+// (user, widget). The layout (schema 010) owns placement; this
+// owns behaviour (the orders widget's scope + merge mode first).
+// ---------------------------------------------------------------------
+func (q *Queries) GetWidgetConfig(ctx context.Context, arg GetWidgetConfigParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, getWidgetConfig, arg.UserID, arg.WidgetID)
+	var config string
+	err := row.Scan(&config)
+	return config, err
+}
+
 const insertPilotOrbitWant = `-- name: InsertPilotOrbitWant :exec
 INSERT OR IGNORE INTO pilot_records (character_id, priority)
 VALUES (?, 0)
@@ -1127,6 +1178,34 @@ func (q *Queries) ListGlobalSnapshots(ctx context.Context) ([]GlobalSnapshot, er
 			&i.FetchedAt,
 			&i.CachedUntil,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGuidePrices = `-- name: ListGuidePrices :many
+SELECT type_id, adjusted_price, average_price FROM guide_prices
+ORDER BY type_id
+`
+
+func (q *Queries) ListGuidePrices(ctx context.Context) ([]GuidePrice, error) {
+	rows, err := q.db.QueryContext(ctx, listGuidePrices)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GuidePrice
+	for rows.Next() {
+		var i GuidePrice
+		if err := rows.Scan(&i.TypeID, &i.AdjustedPrice, &i.AveragePrice); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -2462,6 +2541,40 @@ func (q *Queries) ListWatchlistByUser(ctx context.Context, userID int64) ([]Mark
 	return items, nil
 }
 
+const listWidgetConfigsByUser = `-- name: ListWidgetConfigsByUser :many
+SELECT user_id, widget_id, config, updated_at FROM widget_configs
+WHERE user_id = ?
+ORDER BY widget_id
+`
+
+func (q *Queries) ListWidgetConfigsByUser(ctx context.Context, userID int64) ([]WidgetConfig, error) {
+	rows, err := q.db.QueryContext(ctx, listWidgetConfigsByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WidgetConfig
+	for rows.Next() {
+		var i WidgetConfig
+		if err := rows.Scan(
+			&i.UserID,
+			&i.WidgetID,
+			&i.Config,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const nextSkillPlanPosition = `-- name: NextSkillPlanPosition :one
 SELECT COALESCE(MAX(position), 0) + 1 FROM skill_plan_items WHERE plan_id = ?
 `
@@ -2925,9 +3038,9 @@ FROM sde_types t
 LEFT JOIN sde_groups g ON g.group_id = t.group_id
 LEFT JOIN sde_categories c ON c.category_id = g.category_id
 WHERE instr(lower(t.name), lower(?1)) > 0
-  AND (?2 != 'market' OR (t.market_group_id > 0 AND t.published = 1))
-  AND (?2 != 'planner' OR (t.published = 1 AND EXISTS (
-        SELECT 1 FROM sde_blueprints b WHERE b.product_type_id = t.type_id)))
+  AND t.published = 1 AND t.market_group_id > 0
+  AND (?2 != 'planner' OR EXISTS (
+        SELECT 1 FROM sde_blueprints b WHERE b.product_type_id = t.type_id))
   AND (?2 != 'skills' OR EXISTS (
         SELECT 1 FROM sde_skill_meta m WHERE m.type_id = t.type_id))
 ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
@@ -3156,6 +3269,43 @@ func (q *Queries) UpsertGlobalSnapshot(ctx context.Context, arg UpsertGlobalSnap
 		arg.FetchedAt,
 		arg.CachedUntil,
 	)
+	return err
+}
+
+const upsertGuidePrice = `-- name: UpsertGuidePrice :exec
+INSERT INTO guide_prices (type_id, adjusted_price, average_price)
+VALUES (?, ?, ?)
+ON CONFLICT (type_id) DO UPDATE SET
+    adjusted_price = excluded.adjusted_price,
+    average_price  = excluded.average_price
+`
+
+type UpsertGuidePriceParams struct {
+	TypeID        int64   `json:"type_id"`
+	AdjustedPrice float64 `json:"adjusted_price"`
+	AveragePrice  float64 `json:"average_price"`
+}
+
+func (q *Queries) UpsertGuidePrice(ctx context.Context, arg UpsertGuidePriceParams) error {
+	_, err := q.db.ExecContext(ctx, upsertGuidePrice, arg.TypeID, arg.AdjustedPrice, arg.AveragePrice)
+	return err
+}
+
+const upsertGuidePricesMeta = `-- name: UpsertGuidePricesMeta :exec
+INSERT INTO guide_prices_meta (id, fetched_at, cached_until)
+VALUES (1, ?, ?)
+ON CONFLICT (id) DO UPDATE SET
+    fetched_at   = excluded.fetched_at,
+    cached_until = excluded.cached_until
+`
+
+type UpsertGuidePricesMetaParams struct {
+	FetchedAt   string `json:"fetched_at"`
+	CachedUntil string `json:"cached_until"`
+}
+
+func (q *Queries) UpsertGuidePricesMeta(ctx context.Context, arg UpsertGuidePricesMetaParams) error {
+	_, err := q.db.ExecContext(ctx, upsertGuidePricesMeta, arg.FetchedAt, arg.CachedUntil)
 	return err
 }
 
@@ -3545,6 +3695,31 @@ func (q *Queries) UpsertWatchlistEntry(ctx context.Context, arg UpsertWatchlistE
 		arg.RegionID,
 		arg.ThresholdPct,
 		arg.CreatedAt,
+	)
+	return err
+}
+
+const upsertWidgetConfig = `-- name: UpsertWidgetConfig :exec
+INSERT INTO widget_configs (user_id, widget_id, config, updated_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (user_id, widget_id) DO UPDATE SET
+    config     = excluded.config,
+    updated_at = excluded.updated_at
+`
+
+type UpsertWidgetConfigParams struct {
+	UserID    int64  `json:"user_id"`
+	WidgetID  string `json:"widget_id"`
+	Config    string `json:"config"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+func (q *Queries) UpsertWidgetConfig(ctx context.Context, arg UpsertWidgetConfigParams) error {
+	_, err := q.db.ExecContext(ctx, upsertWidgetConfig,
+		arg.UserID,
+		arg.WidgetID,
+		arg.Config,
+		arg.UpdatedAt,
 	)
 	return err
 }

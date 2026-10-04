@@ -345,6 +345,17 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		}
 	}
 
+	// Planet names: resolve the due slice of the planet queue
+	// (public endpoint, no token — planet_names.go).
+	if !limited {
+		plResolved, plLimited := app.resolvePlanetNames(ctx, allowance)
+		refreshed += plResolved
+		if plLimited {
+			log.Printf("worker: ESI error limit hit resolving planet names; backing off until next cycle")
+			limited = true
+		}
+	}
+
 	// Public records: resolve any pilot names the topbar search
 	// is waiting on, note the counterparty orbit (everyone the
 	// deployment's data mentions) ahead of the pilot drain, then
@@ -365,6 +376,25 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		refreshed += pDrained
 		if pLimited {
 			log.Printf("worker: ESI error limit hit draining pilot records; backing off until next cycle")
+			limited = true
+		}
+	}
+	// Public organization records (v0.3.12): corporations and
+	// alliances someone followed a name to. Public endpoints,
+	// same cycle allowance.
+	if !limited {
+		cDrained, cLimited := app.refreshCorporationRecords(ctx, allowance)
+		refreshed += cDrained
+		if cLimited {
+			log.Printf("worker: ESI error limit hit draining corporation records; backing off until next cycle")
+			limited = true
+		}
+	}
+	if !limited {
+		aDrained, aLimited := app.refreshAllianceRecords(ctx, allowance)
+		refreshed += aDrained
+		if aLimited {
+			log.Printf("worker: ESI error limit hit draining alliance records; backing off until next cycle")
 			limited = true
 		}
 	}
@@ -762,6 +792,9 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 				log.Printf("worker: warm names for character %d: decode corp structures snapshot: %v", ch.CharacterID, err)
 				continue
 			}
+			// Owner/system/type facts ride along into the
+			// structure_context store behind the structure page.
+			app.persistStructureContexts(ctx, structures)
 			for _, s := range structures {
 				if s.TypeID > 0 {
 					typeIDs[s.TypeID] = true
@@ -1233,7 +1266,9 @@ func (app *Application) warmCharacterName(ctx context.Context, budget *warmBudge
 }
 
 // warmPlanetName resolves one planet's name from the public
-// /universe/planets/ endpoint into the place-name cache.
+// /universe/planets/ endpoint into the place-name cache, and
+// persists it in planet_names (schema 025) so the name survives
+// restarts instead of re-warming every cold start.
 func (app *Application) warmPlanetName(ctx context.Context, budget *warmBudget, id int64) bool {
 	var planet esi.Station // the payload's name field is all we need
 	if err := app.esi.Get(ctx, "", fmt.Sprintf("/universe/planets/%d/", id), &planet); err != nil {
@@ -1248,6 +1283,12 @@ func (app *Application) warmPlanetName(ctx context.Context, budget *warmBudget, 
 		return false
 	}
 	app.esi.StorePlaceName(id, planet.Name)
+	if err := app.queries.SetPlanetName(ctx, db.SetPlanetNameParams{
+		PlanetID: id, Name: planet.Name, State: esi.PlanetResolved,
+		ResolvedAt: time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		log.Printf("worker: persist planet name %d: %v", id, err)
+	}
 	return true
 }
 

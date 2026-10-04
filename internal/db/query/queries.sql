@@ -133,6 +133,11 @@ WHERE category_id = ?;
 SELECT station_id, name, system_id FROM sde_stations
 WHERE station_id = ?;
 
+-- name: ListSDEStationsBySystem :many
+SELECT station_id, name, system_id FROM sde_stations
+WHERE system_id = ?
+ORDER BY name;
+
 -- name: GetSDESystem :one
 SELECT system_id, name, region_id, security FROM sde_systems
 WHERE system_id = ?;
@@ -168,6 +173,28 @@ SELECT COUNT(*) FROM sde_systems;
 
 -- name: CountSDERegions :one
 SELECT COUNT(*) FROM sde_regions;
+
+-- Market browse tree (schema 024): the invMarketGroups hierarchy.
+-- Reads only; the bulk import stays hand-rolled in sde.go like the
+-- other SDE tables. Listed types keep the app-wide marketable floor
+-- (published = 1 AND market_group_id > 0).
+
+-- name: GetSDEMarketGroup :one
+SELECT market_group_id, parent_group_id, name, icon_id, has_types FROM sde_market_groups
+WHERE market_group_id = ?;
+
+-- name: ListSDEMarketGroupsByParent :many
+SELECT market_group_id, parent_group_id, name, icon_id, has_types FROM sde_market_groups
+WHERE parent_group_id = ?
+ORDER BY name;
+
+-- name: ListSDETypesInMarketGroup :many
+SELECT type_id, name FROM sde_types
+WHERE market_group_id = ? AND published = 1 AND market_group_id > 0
+ORDER BY name;
+
+-- name: CountSDEMarketGroups :one
+SELECT COUNT(*) FROM sde_market_groups;
 
 -- name: GetSDEMeta :one
 SELECT value FROM sde_meta
@@ -471,6 +498,27 @@ WHERE state = 'ready' AND payload != ''
 ORDER BY character_id
 LIMIT 100;
 
+-- Corporation-name search for the top banner and quick jump:
+-- ready records whose stored payload mentions the text; the
+-- handler re-checks the corporation's own name field before
+-- offering a row, same as the pilot search above.
+-- name: SearchCorporationRecordsByName :many
+SELECT corporation_id, payload
+FROM corporation_records
+WHERE state = 'ready' AND payload != ''
+  AND instr(lower(payload), lower(?1)) > 0
+ORDER BY corporation_id
+LIMIT 100;
+
+-- Alliance-name search, same posture as the corporation one.
+-- name: SearchAllianceRecordsByName :many
+SELECT alliance_id, payload
+FROM alliance_records
+WHERE state = 'ready' AND payload != ''
+  AND instr(lower(payload), lower(?1)) > 0
+ORDER BY alliance_id
+LIMIT 100;
+
 -- ---------------------------------------------------------------------
 -- Next-1 rider (schema 019): the daily wallet-history sampler.
 -- One row per character per day; the upsert keeps the day's
@@ -555,6 +603,29 @@ VALUES (1, ?, ?)
 ON CONFLICT (id) DO UPDATE SET
     fetched_at   = excluded.fetched_at,
     cached_until = excluded.cached_until;
+
+
+-- ---------------------------------------------------------------------
+-- v0.3.14 guide-price wants (schema 027): the durable note a
+-- kill view leaves when it has no prices to value with. One
+-- singleton row -- the guide is global, so one want covers every
+-- viewer -- noted at render time, answered by the worker's
+-- urgent drain with a guide refresh when ESI's window allows.
+-- ---------------------------------------------------------------------
+
+-- name: NoteGuidePriceWant :exec
+INSERT INTO guide_price_wants (id, wanted_at)
+VALUES (1, ?)
+ON CONFLICT (id) DO UPDATE SET
+    wanted_at = excluded.wanted_at;
+
+-- name: GetGuidePriceWant :one
+SELECT id, wanted_at FROM guide_price_wants
+WHERE id = 1;
+
+-- name: ClearGuidePriceWant :exec
+DELETE FROM guide_price_wants
+WHERE id = 1;
 
 -- ---------------------------------------------------------------------
 -- Phase 3 (schema 011): industry build planner reads. Bulk import
@@ -837,6 +908,63 @@ ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, structure_id
 LIMIT sqlc.arg(resolution_limit);
 
 -- ---------------------------------------------------------------------
+-- Structure context (schema 028): owner/system/type facts the
+-- corporation structure snapshots report, persisted as the
+-- snapshots are processed so the structure page renders from one
+-- small row. Latest snapshot wins; names are NOT stored here (they
+-- live in structure_names under provenance rules).
+-- ---------------------------------------------------------------------
+
+-- name: GetStructureContext :one
+SELECT structure_id, owner_corporation_id, system_id, type_id, updated_at
+FROM structure_context
+WHERE structure_id = ?;
+
+-- name: SetStructureContext :exec
+INSERT INTO structure_context (structure_id, owner_corporation_id, system_id, type_id, updated_at)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (structure_id) DO UPDATE SET
+    owner_corporation_id = excluded.owner_corporation_id,
+    system_id            = excluded.system_id,
+    type_id              = excluded.type_id,
+    updated_at           = excluded.updated_at;
+
+-- ---------------------------------------------------------------------
+-- Planet names (schema 025): queued when a PI surface meets an
+-- unresolved planet id, resolved in the background through the
+-- public GET /universe/planets/{id}/ (no token). 'resolved' rows
+-- re-check after a long window (planet names never change);
+-- 'missing' rows (404: not a planet) re-check after days;
+-- 'pending' rows are always due.
+-- ---------------------------------------------------------------------
+
+-- name: GetPlanetName :one
+SELECT planet_id, name, state, resolved_at
+FROM planet_names
+WHERE planet_id = ?;
+
+-- name: UpsertPlanetSeen :exec
+INSERT OR IGNORE INTO planet_names (planet_id)
+VALUES (?);
+
+-- name: SetPlanetName :exec
+INSERT INTO planet_names (planet_id, name, state, resolved_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (planet_id) DO UPDATE SET
+    name        = excluded.name,
+    state       = excluded.state,
+    resolved_at = excluded.resolved_at;
+
+-- name: ListPlanetResolutions :many
+SELECT planet_id
+FROM planet_names
+WHERE state = 'pending'
+   OR (state = 'resolved' AND resolved_at < sqlc.arg(resolved_cutoff))
+   OR (state = 'missing' AND resolved_at < sqlc.arg(missing_cutoff))
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, planet_id
+LIMIT sqlc.arg(resolution_limit);
+
+-- ---------------------------------------------------------------------
 -- Public pilot records (schema 015): the queue behind /pilot/.
 -- Pending rows are always due; ready rows re-check once their
 -- fetched_at passes the stale cutoff; missing rows (ESI 404)
@@ -874,6 +1002,65 @@ ON CONFLICT (character_id) DO UPDATE SET
 -- name: ListPilotDrains :many
 SELECT character_id
 FROM pilot_records
+WHERE state = 'pending'
+   OR (state = 'ready' AND fetched_at < sqlc.arg(stale_cutoff))
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at
+LIMIT sqlc.arg(drain_limit);
+
+-- ---------------------------------------------------------------------
+-- Public corporation & alliance records (schema 026): the queues
+-- behind /corporation/ and /alliance/. Same posture as pilot
+-- records: pending rows are always due, ready rows re-check past
+-- the stale cutoff, missing rows settle for good.
+-- ---------------------------------------------------------------------
+
+-- name: GetCorporationRecord :one
+SELECT corporation_id, payload, state, fetched_at, priority
+FROM corporation_records
+WHERE corporation_id = ?;
+
+-- name: UpsertCorporationWant :exec
+INSERT INTO corporation_records (corporation_id, priority)
+VALUES (?, 1)
+ON CONFLICT (corporation_id) DO UPDATE SET priority = MAX(priority, 1);
+
+-- name: SetCorporationRecord :exec
+INSERT INTO corporation_records (corporation_id, payload, state, fetched_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (corporation_id) DO UPDATE SET
+    payload    = excluded.payload,
+    state      = excluded.state,
+    fetched_at = excluded.fetched_at;
+
+-- name: ListCorporationDrains :many
+SELECT corporation_id
+FROM corporation_records
+WHERE state = 'pending'
+   OR (state = 'ready' AND fetched_at < sqlc.arg(stale_cutoff))
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at
+LIMIT sqlc.arg(drain_limit);
+
+-- name: GetAllianceRecord :one
+SELECT alliance_id, payload, state, fetched_at, priority
+FROM alliance_records
+WHERE alliance_id = ?;
+
+-- name: UpsertAllianceWant :exec
+INSERT INTO alliance_records (alliance_id, priority)
+VALUES (?, 1)
+ON CONFLICT (alliance_id) DO UPDATE SET priority = MAX(priority, 1);
+
+-- name: SetAllianceRecord :exec
+INSERT INTO alliance_records (alliance_id, payload, state, fetched_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (alliance_id) DO UPDATE SET
+    payload    = excluded.payload,
+    state      = excluded.state,
+    fetched_at = excluded.fetched_at;
+
+-- name: ListAllianceDrains :many
+SELECT alliance_id
+FROM alliance_records
 WHERE state = 'pending'
    OR (state = 'ready' AND fetched_at < sqlc.arg(stale_cutoff))
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at

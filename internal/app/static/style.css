@@ -1031,36 +1031,24 @@ html[data-nav="hidden"] .sidebar { display: none; }
 html.js .nav-state-btn { display: inline-flex; }
 html.js .nav-expand-btn { display: inline-flex; }
 html.js[data-nav="hidden"] .nav-reopen { display: inline-flex; }
-/* Expand-all wears the family box like its « / × siblings;
-   the sign is drawn, not typed — plus while any category is
+/* Expand-all uses drawn SVG signs inside the same family box
+   as its chevron / close siblings — plus while any category is
    closed, minus once all are open (the script keeps
    aria-expanded truthful, including hand-toggled categories). */
-.nav-expand-btn .expand-glyph {
-  position: relative;
+.nav-control-svg {
+  display: block;
   flex: none;
-  width: 0.78rem;
-  height: 0.78rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  fill: #ffb84d;
+  stroke: #ffb84d;
 }
-.nav-expand-btn .expand-glyph::before,
-.nav-expand-btn .expand-glyph::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  border-radius: 1px;
-  background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);
-}
-.nav-expand-btn .expand-glyph::before {
-  width: 100%;
-  height: 2px;
-  transform: translate(-50%, -50%);
-}
-.nav-expand-btn .expand-glyph::after {
-  width: 2px;
-  height: 100%;
-  transform: translate(-50%, -50%);
-}
-.nav-expand-btn[aria-expanded="true"] .expand-glyph::after { display: none; }
+.nav-expand-btn .expand-icons { display: inline-flex; }
+.nav-expand-btn .expand-icon-minus { display: none; }
+.nav-expand-btn[aria-expanded="true"] .expand-icon-plus { display: none; }
+.nav-expand-btn[aria-expanded="true"] .expand-icon-minus { display: block; }
+#nav-collapse .nav-control-svg { transition: transform 0.15s ease; }
+html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
 .nav-state-btn:hover,
 .nav-reopen:hover,
 .nav-drawer-close:hover,
@@ -1100,30 +1088,26 @@ html.js[data-nav="hidden"] .nav-reopen { display: inline-flex; }
 .nav-icon {
   flex: 0 0 1.35rem;
   width: 1.35rem;
-  background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  font-family: "Shentox", "Segoe UI", system-ui, sans-serif;
-  font-size: 1rem;
+  color: #ffb84d;
   line-height: 1;
   text-align: center;
 }
-/* The one drawn icon: same slot as the text glyphs, painted
-   with the brand ramp from its own gradient defs. */
+/* Every category icon is drawn in the same slot and painted
+   with the brand ramp from the shared gradient def; the ember
+   fill/stroke here is the fallback if gradient paint fails. */
 .nav-icon svg {
   display: block;
   width: 1.05em;
   height: 1.05em;
   margin: 0 auto;
+  fill: #ffb84d;
+  stroke: #ffb84d;
 }
-/* On the ember active pill the glyphs get a slightly brighter
-   sweep of the same ramp so they never go muddy. */
-.sidebar .branch.active > summary .nav-icon,
-.sidenav a.navlink.active .nav-icon {
-  background: linear-gradient(90deg, #ffe3a3 0%, #ff8b36 50%, #f0551f 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
+/* On the ember active pill the icons get a slightly brighter
+   sweep so they never go muddy. */
+.sidebar .branch.active > summary .nav-icon svg,
+.sidenav a.navlink.active .nav-icon svg {
+  filter: brightness(1.15);
 }
 .nav-label {
   min-width: 0;
@@ -1286,7 +1270,6 @@ tbody tr.yours td { background-color: #2a2015; }
   h2,
   h3,
   .wordmark,
-  .nav-icon,
   .panel > h1:first-child > .gt {
     background: none;
     color: #ffb84d;

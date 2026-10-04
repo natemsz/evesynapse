@@ -167,18 +167,19 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	if !strings.Contains(body[topbarStart:topbarStart+topbarEnd], `<a class="wordmark topbar-wordmark" href="/" aria-label="EveSynapse home">EVE<svg class="wordmark-glyph"`) {
 		t.Error("topbar is missing the wordmark")
 	}
-	// Branding: the S of the wordmark is the node-and-spoke
-	// glyph itself (EVE + glyph + YNAPSE in one lockup),
-	// painted from its own diagonal gradient def (the nav
-	// icons keep the horizontal def).
+	// Branding: the wordmark is EVE + the node-and-spoke
+	// glyph + the full SYNAPSE (the glyph stands as its own
+	// mark, no longer replacing the S), painted from its own
+	// diagonal gradient def (the nav icons keep the
+	// horizontal def).
 	topbar := body[topbarStart : topbarStart+topbarEnd]
 	wordmarkAt := strings.Index(topbar, `<a class="wordmark topbar-wordmark"`)
 	sGlyphAt := strings.Index(topbar, `<svg class="wordmark-glyph"`)
 	if wordmarkAt < 0 || sGlyphAt < 0 || sGlyphAt < wordmarkAt {
 		t.Errorf("wordmark at %d, glyph at %d in topbar; want the glyph inside the wordmark link", wordmarkAt, sGlyphAt)
 	}
-	if !strings.Contains(topbar, "</svg>YNAPSE</a>") {
-		t.Error("glyph does not sit between EVE and YNAPSE in the wordmark")
+	if !strings.Contains(topbar, "</svg>SYNAPSE</a>") {
+		t.Error("glyph does not sit between EVE and SYNAPSE in the wordmark")
 	}
 
 	code, css := getPage(t, app, cookie, "/static/style.css")
@@ -342,7 +343,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// wordmark's left at a chunkier fixed square size,
 		// pulled slightly into the topbar flex gap so the
 		// gap before the text stays small.
-		".wordmark-glyph {\n  display: inline-block;\n  height: 0.82em;\n  width: auto;\n  vertical-align: -0.055em;\n  margin: 0 0.15em;\n}",
+		".wordmark-glyph {\n  display: inline-block;\n  height: 1.15em;\n  width: auto;\n  vertical-align: -0.06em;\n  margin: 0 0.15em;\n}",
 		// v0.3.07.008: the phone-bar hamburger floats bare
 		// like the sidebar glyph controls (no resting box on
 		// the same footprint), with the same faint hover wash.

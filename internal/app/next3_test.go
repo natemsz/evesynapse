@@ -51,6 +51,28 @@ func TestBuildPriceChartCarriesDayData(t *testing.T) {
 	if len(chart.Bars) != 3 || !strings.Contains(chart.Bars[0].Title, "volume 123,456") {
 		t.Fatalf("bars: %+v", chart.Bars)
 	}
+	// Axes: price carries max/mid/min in compact ISK, volume
+	// carries max/mid/zero on its own scale, and the x axis is
+	// anchored at the first, middle, and last recorded days.
+	if len(chart.PriceTicks) != 3 ||
+		chart.PriceTicks[0].Label != "10.5 ISK" ||
+		chart.PriceTicks[1].Label != "10.25 ISK" ||
+		chart.PriceTicks[2].Label != "10 ISK" {
+		t.Fatalf("price ticks: %+v", chart.PriceTicks)
+	}
+	if len(chart.VolumeTicks) != 3 ||
+		chart.VolumeTicks[0].Label != "123K" ||
+		chart.VolumeTicks[1].Label != "61.7K" ||
+		chart.VolumeTicks[2].Label != "0" {
+		t.Fatalf("volume ticks: %+v", chart.VolumeTicks)
+	}
+	if len(chart.DateTicks) != 3 ||
+		chart.DateTicks[0].Label != "2026-09-30" || chart.DateTicks[0].Anchor != "start" ||
+		chart.DateTicks[1].Label != "2026-10-01" || chart.DateTicks[1].Anchor != "middle" ||
+		chart.DateTicks[2].Label != "2026-10-02" || chart.DateTicks[2].Anchor != "end" ||
+		chart.DateTicks[1].X <= chart.DateTicks[0].X || chart.DateTicks[2].X <= chart.DateTicks[1].X {
+		t.Fatalf("date ticks: %+v", chart.DateTicks)
+	}
 	// Recent days: newest first, same figures.
 	if len(chart.Recent) != 3 || chart.Recent[0].Date != "2026-10-02" || chart.Recent[2].Date != "2026-09-30" {
 		t.Fatalf("recent: %+v", chart.Recent)
@@ -143,6 +165,15 @@ func TestMarketItemChartMarkupAndSnapshot(t *testing.T) {
 	newest := today.Format(historyDateLayout)
 	mustContain(t, "/market/?type=34 (interactive chart)", body,
 		`<circle class="cdot"`,
+		`data-chart-scrub="true"`,
+		`class="chart-legend"`,
+		"Average price",
+		"Price in ISK · volume in units traded",
+		`class="chart-axis-label price-axis`,
+		`class="chart-axis-label volume-axis`,
+		`class="chart-axis-label chart-date-tick`,
+		`>119 ISK<`,
+		`>1K<`,
 		`data-date="`+newest+`"`,
 		`data-avg="119.00"`,
 		`data-high="124.00"`,
@@ -163,6 +194,19 @@ func TestMarketItemChartMarkupAndSnapshot(t *testing.T) {
 	if got := transport.calls.Load(); got != calls {
 		t.Fatalf("history fragment made %d outbound calls, want 0", got-calls)
 	}
+
+	// The scrub interaction ships in the shared script: pointer
+	// drag selects the nearest day, and the selected point gets
+	// the visible ember halo.
+	_, js := getPage(t, app, cookie, "/static/app.js")
+	mustContain(t, "/static/app.js (chart scrub)", js,
+		"data-chart-scrub",
+		"nearestDot",
+		`"pointerdown"`,
+		`"pointermove"`,
+		`"pointerup"`,
+		`"pointercancel"`,
+		"is-selected")
 }
 
 // ---------------------------------------------------------------------------

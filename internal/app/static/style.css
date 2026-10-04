@@ -1364,12 +1364,12 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
 }
 .page-shell { min-width: 0; }
 .topbar { min-height: 3.75rem; }
-.brand-mark {
-  display: block;
-  flex: none;
-  width: 1.6rem;
-  height: 1.6rem;
-  margin-right: -0.45rem;
+.wordmark-glyph {
+  display: inline-block;
+  height: 1.05em;
+  width: auto;
+  vertical-align: -0.16em;
+  margin: 0 0.01em;
 }
 .topbar-wordmark { display: inline-block; }
 .topbar-character {

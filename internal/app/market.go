@@ -106,6 +106,10 @@ type marketItem struct {
 	Sells         []marketOrderRow
 	Buys          []marketOrderRow
 
+	BestSellRaw float64 // numeric bests behind the formatted strings (0 = none)
+	BestBuyRaw  float64
+	Trader      *traderStats // trading snapshot; set by attachHistory
+
 	// Phase 5 price history (cache-only, from stored rows).
 	// HistoryState is computed by attachHistory from the stored
 	// rows plus the fetch-state record: historyStatePending (no
@@ -292,6 +296,12 @@ func (app *Application) noteSearchHistoryWants(ctx context.Context, regionID int
 // the user asked about this type either way.
 func (app *Application) attachHistory(ctx context.Context, item *marketItem, typeID, regionID, userID int64) {
 	rows := app.recentHistoryRows(ctx, regionID, typeID, historyChartRows)
+	if item != nil {
+		// The trading snapshot rides on whatever rows exist
+		// (possibly none yet) plus the book's bests; missing
+		// figures render as dashes, never invented numbers.
+		item.Trader = buildTraderStats(rows, item.BestSellRaw, item.BestBuyRaw)
+	}
 	if len(rows) == 0 {
 		if item != nil {
 			item.HistoryState = historyStatePending
@@ -551,10 +561,12 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 	}
 
 	if len(sells) > 0 {
+		item.BestSellRaw = sells[0].Price
 		item.BestSell = esi.FormatISK(sells[0].Price)
 		item.BestSellLoc = app.orderLocation(ctx, sells[0].LocationID, sells[0].SystemID)
 	}
 	if len(buys) > 0 {
+		item.BestBuyRaw = buys[0].Price
 		item.BestBuy = esi.FormatISK(buys[0].Price)
 		item.BestBuyLoc = app.orderLocation(ctx, buys[0].LocationID, buys[0].SystemID)
 	}

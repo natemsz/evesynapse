@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,6 +43,7 @@ const (
 	widgetNetWorth  = "networth"
 	widgetIndustry  = "industry"
 	widgetMarket    = "market"
+	widgetWatchlist = "watchlist"
 	widgetSkills    = "skills"
 	widgetServer    = "server"
 	widgetPI        = "pi"
@@ -80,6 +82,7 @@ var homeWidgetCatalog = []widgetDef{
 	{widgetIndustry, "Industry", "Active industry jobs across characters, soonest delivery first.", widgetSizeFlex},
 	{widgetPI, "Planetary industry", "Colonies across your characters: extractor timers, expired heads, and the next planet needing a visit.", widgetSizeFlex},
 	{widgetMarket, "Market", "Open orders across characters: counts, sell/buy value, orders expiring soonest.", widgetSizeFlex},
+	{widgetWatchlist, "Market watchlist", "The items you're watching: latest prices, 7- and 30-day moves, and a flag when one crosses your alert line.", widgetSizeFlex},
 	{widgetSkills, "Skills", "The next skill finishes across the fleet, plus who isn't training.", widgetSizeFlex},
 	{widgetServer, "Tranquility", "Server status: players online.", widgetSizeFlex},
 }
@@ -294,6 +297,7 @@ var widgetSnapshotKinds = map[string][]string{
 	widgetNetWorth:  {esi.SnapWallet, esi.SnapAssets, esi.SnapOrders},
 	widgetIndustry:  {esi.SnapIndustryJobs},
 	widgetMarket:    {esi.SnapOrders},
+	widgetWatchlist: {}, // watchlist + stored history only; no character snapshots
 	widgetSkills:    {esi.SnapSkillqueue},
 	widgetServer:    {},
 	widgetPI:        {esi.SnapPlanets},
@@ -589,12 +593,14 @@ type homeWidget struct {
 	SpanClass string // solved grid span class: span3 | span6
 	Size      string // catalog size class (flex modules get the resize toggle)
 	SpanPref  string // user's span preference: "" (auto) | wide
+	Customize bool   // rendering under /?customize=1 (form return targets)
 	Fleet     *fleetWidget
 	Attention *attentionWidget
 	Briefing  *briefingWidget
 	NetWorth  *netWorthWidget
 	Industry  *industryWidget
 	Market    *marketWidget
+	Watchlist *watchlistWidget
 	Skills    *skillsWidget
 	Server    *serverStatusView
 	PI        *piWidget
@@ -671,7 +677,8 @@ type netWorthWidget struct {
 	Total       string
 	Wallet      string
 	Assets      string
-	AssetsKnown bool // false: no prices cache yet or no asset data
+	AssetsKnown bool   // an assets snapshot exists (the value is always real then)
+	AssetsNote  string // partial-pricing coverage line, "" when everything priced
 	Escrow      string
 	AsOf        string
 }
@@ -701,14 +708,50 @@ type marketExpiry struct {
 	Left    string
 }
 
+// marketScopeOption is one choice of the orders widget's scope
+// picker (All characters / one character / one tag).
+type marketScopeOption struct {
+	Value    string // "all" | "char:<id>" | "tag:<name>"
+	Label    string
+	Selected bool
+}
+
+// marketCharRow is one per-character breakdown row of the
+// orders widget (merge mode "per-character", or one half of
+// "both" when the expiring table isn't the breakdown).
+type marketCharRow struct {
+	Char     string
+	CharID   int64
+	Open     int
+	Sell     string // "3 sell · 1,234,567 ISK", "" when none
+	Buy      string // "1 buy · 234,567 ISK in escrow", "" when none
+	NoOrders bool   // orders snapshot known, nothing open
+	Soonest  string // soonest expiring order: "Tritanium (in 2d 3h)"
+}
+
+// watchlistWidget is the Home Market-watchlist module: the same
+// rows the Market page computes, at a glance.
+type watchlistWidget struct {
+	Rows []watchlistRow
+}
+
 type marketWidget struct {
-	OrdersKnown int // characters with an orders snapshot
+	// Scope controls (v0.3.04 widget config).
+	ScopeOptions []marketScopeOption
+	Merge        string // mergeBoth | mergeCombined | mergePerCharacter (render-resolved)
+	ShowMerge    bool   // scope covers >1 character: the merge picker matters
+	ScopeEmpty   string // scope selects nobody (unlinked character / unused tag)
+	EmptyOrders  string // scoped characters known, nothing open
+
+	AnyData     bool // at least one scoped character has an orders snapshot
+	OrdersKnown int  // scoped characters with an orders snapshot
 	Open        int
 	SellCount   int
 	SellValue   string
 	BuyCount    int
 	BuyValue    string
 	Expiring    []marketExpiry
+	PerChar     []marketCharRow
 	Health      string // Phase 5 one-liner: undercuts + watchlist moves, "" when quiet
 }
 
@@ -1130,9 +1173,15 @@ func (b *charSnaps) queueLastFinish() string {
 
 func (app *Application) buildNetWorth(ctx context.Context, bundles []*charSnaps) *netWorthWidget {
 	var walletSum, assetSum, escrowSum float64
-	var walletOK, assetsOK, escrowOK bool
+	var walletOK, escrowOK bool
+	var assetsSeen bool
+	var pricedItems, totalItems int
 	var asOf time.Time
-	prices := app.cachedPrices()
+	// Valuation prices: the live guide when a Market visit has
+	// fetched it, else the worker-stored guide (guide_prices.go)
+	// — the card always has prices to work with once the worker
+	// has run, instead of waiting on Market activity.
+	prices := app.valuationPrices(ctx)
 	w := &netWorthWidget{}
 
 	// The estimate is only as fresh as its stalest input.
@@ -1150,13 +1199,17 @@ func (app *Application) buildNetWorth(ctx context.Context, bundles []*charSnaps)
 			walletOK = true
 			noteAsOf(b, esi.SnapWallet)
 		}
-		// Assets price off the warmed adjusted/average market
-		// prices; with no price cache yet the widget says so
-		// instead of guessing. Unpriced types are skipped, the
-		// same rule killmail valuation follows.
-		if b.assetsKnown && prices != nil {
-			valued := false
+		// Assets price off the guide prices. Every stack counts
+		// toward coverage: priced when the guide knows the type,
+		// skipped honestly when it doesn't (the widget says how
+		// much of the estate the number covers).
+		if b.assetsKnown {
+			assetsSeen = true
 			for _, a := range b.assets {
+				totalItems++
+				if prices == nil {
+					continue
+				}
 				p, ok := prices[a.TypeID]
 				if !ok {
 					continue
@@ -1169,12 +1222,9 @@ func (app *Application) buildNetWorth(ctx context.Context, bundles []*charSnaps)
 					continue
 				}
 				assetSum += float64(a.Quantity) * price
-				valued = true
+				pricedItems++
 			}
-			if valued {
-				assetsOK = true
-				noteAsOf(b, esi.SnapAssets)
-			}
+			noteAsOf(b, esi.SnapAssets)
 		}
 		if b.ordersKnown {
 			for _, o := range b.orders {
@@ -1190,16 +1240,19 @@ func (app *Application) buildNetWorth(ctx context.Context, bundles []*charSnaps)
 	}
 
 	total := walletSum + assetSum + escrowSum
-	if walletOK || assetsOK || escrowOK {
+	if walletOK || assetsSeen || escrowOK {
 		w.Any = true
 		w.Total = esi.FormatISK(total)
 	}
 	if walletOK {
 		w.Wallet = esi.FormatISK(walletSum)
 	}
-	if assetsOK {
+	if assetsSeen {
 		w.Assets = esi.FormatISK(assetSum)
 		w.AssetsKnown = true
+		if totalItems > 0 && pricedItems < totalItems {
+			w.AssetsNote = fmt.Sprintf("Includes everything we could price — %d of %d items priced.", pricedItems, totalItems)
+		}
 	}
 	if escrowOK {
 		w.Escrow = esi.FormatISK(escrowSum)
@@ -1282,31 +1335,89 @@ func (app *Application) buildIndustry(ctx context.Context, bundles []*charSnaps)
 	return w
 }
 
-func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps) *marketWidget {
+// buildMarket assembles the orders widget over the characters
+// its configuration scopes to (all / one character / one tag),
+// rendered per the merge mode: combined totals, per-character
+// rows, or both. The scope picker offers every linked character
+// and every tag in use; a scope that selects nobody (unlinked
+// character, tag no longer carried) renders its quiet line.
+func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps, cfg ordersWidgetConfig) *marketWidget {
 	now := time.Now()
-	w := &marketWidget{}
+	w := &marketWidget{Merge: cfg.Merge}
+
+	// The picker: all characters, each character, each tag.
+	selected := cfg.encoded()
+	w.ScopeOptions = append(w.ScopeOptions, marketScopeOption{
+		Value: scopeAll, Label: "All characters", Selected: selected == scopeAll,
+	})
+	for _, b := range bundles {
+		value := "char:" + strconv.FormatInt(b.ch.CharacterID, 10)
+		w.ScopeOptions = append(w.ScopeOptions, marketScopeOption{
+			Value: value, Label: b.ch.Name, Selected: selected == value,
+		})
+	}
+	var tagChars []db.Character
+	for _, b := range bundles {
+		tagChars = append(tagChars, b.ch)
+	}
+	for _, tag := range userTags(tagChars) {
+		value := "tag:" + tag
+		w.ScopeOptions = append(w.ScopeOptions, marketScopeOption{
+			Value: value, Label: "Tag: " + tag, Selected: selected == value,
+		})
+	}
+
+	scoped, label := scopeBundles(bundles, cfg)
+	w.ShowMerge = len(scoped) > 1
+	if !w.ShowMerge {
+		// One character (or none) has nothing to merge: the
+		// totals-plus-rows reading always applies.
+		w.Merge = mergeBoth
+	}
+	if len(scoped) == 0 {
+		switch cfg.ScopeType {
+		case scopeCharacter:
+			w.ScopeEmpty = "That character isn't linked anymore."
+		case scopeTag:
+			w.ScopeEmpty = "No characters carry that tag right now."
+		default:
+			w.ScopeEmpty = "No characters to show orders for yet."
+		}
+		return w
+	}
+
 	var sellSum, buySum float64
 	type expiryRow struct {
 		row marketExpiry
 		at  time.Time
 	}
 	var expiring []expiryRow
-	for _, b := range bundles {
+	for _, b := range scoped {
 		if !b.ordersKnown {
 			continue
 		}
 		w.OrdersKnown++
+		row := marketCharRow{Char: b.ch.Name, CharID: b.ch.CharacterID, NoOrders: true}
+		var cSell, cBuy int
+		var cSellSum, cBuySum float64
+		var soonest *expiryRow
 		for _, o := range b.orders {
 			w.Open++
+			row.Open++
+			row.NoOrders = false
 			if o.IsBuyOrder {
 				w.BuyCount++
 				buySum += o.Escrow
+				cBuy++
+				cBuySum += o.Escrow
 			} else {
 				w.SellCount++
 				sellSum += o.Price * float64(o.VolumeRemain)
+				cSell++
+				cSellSum += o.Price * float64(o.VolumeRemain)
 			}
 			if expiry, ok := orderExpiry(o); ok && expiry.After(now) {
-				expiring = append(expiring, expiryRow{
+				er := expiryRow{
 					row: marketExpiry{
 						Char:    b.ch.Name,
 						CharID:  b.ch.CharacterID,
@@ -1316,10 +1427,28 @@ func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps) *
 						Left:    humanDuration(time.Until(expiry)),
 					},
 					at: expiry,
-				})
+				}
+				expiring = append(expiring, er)
+				if soonest == nil || er.at.Before(soonest.at) {
+					cp := er
+					soonest = &cp
+				}
 			}
 		}
+		if w.Merge == mergePerCharacter {
+			if cSell > 0 {
+				row.Sell = fmt.Sprintf("%d sell · %s ISK", cSell, esi.FormatISK(cSellSum))
+			}
+			if cBuy > 0 {
+				row.Buy = fmt.Sprintf("%d buy · %s ISK in escrow", cBuy, esi.FormatISK(cBuySum))
+			}
+			if soonest != nil {
+				row.Soonest = fmt.Sprintf("%s (in %s)", soonest.row.Item, humanDuration(time.Until(soonest.at)))
+			}
+			w.PerChar = append(w.PerChar, row)
+		}
 	}
+	w.AnyData = w.OrdersKnown > 0
 	sort.SliceStable(expiring, func(i, j int) bool {
 		return expiring[i].at.Before(expiring[j].at)
 	})
@@ -1332,14 +1461,36 @@ func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps) *
 	if w.Open > 0 {
 		w.SellValue = esi.FormatISK(sellSum)
 		w.BuyValue = esi.FormatISK(buySum)
+	} else if w.AnyData {
+		switch cfg.ScopeType {
+		case scopeCharacter:
+			w.EmptyOrders = fmt.Sprintf("No open orders for %s right now.", label)
+		case scopeTag:
+			w.EmptyOrders = fmt.Sprintf("No open orders for your %s characters right now.", label)
+		default:
+			w.EmptyOrders = "No open orders across your characters."
+		}
 	}
 	// Phase 5 health line: how many sell orders are undercut and
 	// how many watched items are moving, from the same stored
-	// verdicts the attention feed reads. Quiet when zero.
-	if len(bundles) > 0 {
+	// verdicts the attention feed reads. Quiet when zero. It is
+	// an account-wide summary, so it only reads under the
+	// all-characters scope it describes.
+	if cfg.ScopeType == scopeAll && len(bundles) > 0 {
 		w.Health = app.marketHealthLine(ctx, bundles[0].ch.UserID)
 	}
 	return w
+}
+
+// buildWatchlistWidget assembles the Home watchlist module from
+// the same stored rows the Market page renders: latest average,
+// 7/30-day moves, and the moving flag past the user's line.
+func (app *Application) buildWatchlistWidget(ctx context.Context, userID int64) *watchlistWidget {
+	view := app.buildWatchlistView(ctx, userID, "")
+	if view == nil {
+		return &watchlistWidget{}
+	}
+	return &watchlistWidget{Rows: view.Rows}
 }
 
 // marketHealthLine sums the market widget's one-line health
@@ -1555,6 +1706,7 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		w := homeWidget{
 			ID: item.ID, Title: def.Title,
 			SpanClass: spanClass(spans[i]), Size: def.Size, SpanPref: item.Span,
+			Customize: customize,
 		}
 		switch item.ID {
 		case widgetBriefing:
@@ -1568,7 +1720,9 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		case widgetIndustry:
 			w.Industry = app.buildIndustry(ctx, bundles)
 		case widgetMarket:
-			w.Market = app.buildMarket(ctx, bundles)
+			w.Market = app.buildMarket(ctx, bundles, app.ordersConfigFor(ctx, userID))
+		case widgetWatchlist:
+			w.Watchlist = app.buildWatchlistWidget(ctx, userID)
 		case widgetSkills:
 			w.Skills = app.buildSkills(ctx, bundles)
 		case widgetPI:

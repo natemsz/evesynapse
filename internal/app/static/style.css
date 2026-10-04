@@ -1369,7 +1369,7 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
   height: 0.82em;
   width: auto;
   vertical-align: -0.055em;
-  margin: 0 0.3em 0 0.06em;
+  margin: 0 0.15em;
 }
 .topbar-wordmark { display: inline-block; }
 .topbar-character {

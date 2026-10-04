@@ -44,13 +44,13 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`id="nav-drawer-toggle" autocomplete="off"`,
 		`<button type="button" class="nav-reopen" id="nav-reopen"`,
 		`<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">`,
-		`<svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true">`,
+		`<svg class="wordmark-glyph" viewBox="0 0 48 48" aria-hidden="true">`,
 		`<defs><linearGradient id="brand-glyph-gradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd27a"/><stop offset=".52" stop-color="#ff6a1a"/><stop offset="1" stop-color="#d63c14"/></linearGradient></defs>`,
 		`stroke="url(#brand-glyph-gradient)"`,
 		`fill="url(#brand-glyph-gradient)"`,
-		`<path d="M28.1 12.2L23.1 17.1M22.9 23.1L25.1 25.4M24.8 31.2L18.0 36.9"/>`,
-		`<circle cx="31" cy="9.5" r="2.9"/>`,
-		`<a class="wordmark topbar-wordmark" href="/">EVESYNAPSE</a>`,
+		`<path d="M27.9 12.5L23.4 16.8M23.2 23.4L24.8 25.1M24.5 31.5L18.3 36.7"/>`,
+		`<circle cx="31" cy="9.5" r="3.3"/>`,
+		`<a class="wordmark topbar-wordmark" href="/" aria-label="EveSynapse home">EVE<svg class="wordmark-glyph"`,
 		`data-nav-category="character"`,
 		`data-nav-category="corporation"`,
 		`<span class="nav-label">Character</span>`,
@@ -164,21 +164,21 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	if topbarEnd < 0 {
 		t.Fatal("topbar markup not closed")
 	}
-	if !strings.Contains(body[topbarStart:topbarStart+topbarEnd], `<a class="wordmark topbar-wordmark" href="/">EVESYNAPSE</a>`) {
+	if !strings.Contains(body[topbarStart:topbarStart+topbarEnd], `<a class="wordmark topbar-wordmark" href="/" aria-label="EveSynapse home">EVE<svg class="wordmark-glyph"`) {
 		t.Error("topbar is missing the wordmark")
 	}
-	// v0.3.07.008 branding: The Hub brand mark sits in the
-	// top bar immediately before the wordmark, painted from
-	// its own diagonal gradient def (the approved mock's
-	// ramp; the nav icons keep the horizontal def).
+	// Branding: the S of the wordmark is the node-and-spoke
+	// glyph itself (EVE + glyph + YNAPSE in one lockup),
+	// painted from its own diagonal gradient def (the nav
+	// icons keep the horizontal def).
 	topbar := body[topbarStart : topbarStart+topbarEnd]
-	brandAt := strings.Index(topbar, `<svg class="brand-mark"`)
 	wordmarkAt := strings.Index(topbar, `<a class="wordmark topbar-wordmark"`)
-	if brandAt < 0 || wordmarkAt < 0 || brandAt > wordmarkAt {
-		t.Errorf("brand mark at %d, wordmark at %d in topbar; want the mark first", brandAt, wordmarkAt)
+	sGlyphAt := strings.Index(topbar, `<svg class="wordmark-glyph"`)
+	if wordmarkAt < 0 || sGlyphAt < 0 || sGlyphAt < wordmarkAt {
+		t.Errorf("wordmark at %d, glyph at %d in topbar; want the glyph inside the wordmark link", wordmarkAt, sGlyphAt)
 	}
-	if !strings.Contains(body, "</svg>\n    <a class=\"wordmark topbar-wordmark\" href=\"/\">EVESYNAPSE</a>") {
-		t.Error("brand mark does not sit immediately before the wordmark")
+	if !strings.Contains(topbar, "</svg>YNAPSE</a>") {
+		t.Error("glyph does not sit between EVE and YNAPSE in the wordmark")
 	}
 
 	code, css := getPage(t, app, cookie, "/static/style.css")
@@ -342,7 +342,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// wordmark's left at a chunkier fixed square size,
 		// pulled slightly into the topbar flex gap so the
 		// gap before the text stays small.
-		".brand-mark {\n  display: block;\n  flex: none;\n  width: 1.6rem;\n  height: 1.6rem;\n  margin-right: -0.45rem;\n}",
+		".wordmark-glyph {\n  display: inline-block;\n  height: 1.05em;\n  width: auto;\n  vertical-align: -0.16em;\n  margin: 0 0.01em;\n}",
 		// v0.3.07.008: the phone-bar hamburger floats bare
 		// like the sidebar glyph controls (no resting box on
 		// the same footprint), with the same faint hover wash.
@@ -457,8 +457,8 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	for _, want := range []string{
 		`viewBox="0 0 48 48"`,
 		`<rect width="48" height="48" rx="10" fill="#0d0503"/>`,
-		`<circle cx="31" cy="9.5" r="2.9"/>`,
-		`<circle cx="15" cy="39.5" r="2.9"/>`,
+		`<circle cx="31" cy="9.5" r="3.3"/>`,
+		`<circle cx="15" cy="39.5" r="3.3"/>`,
 	} {
 		if !strings.Contains(fav, want) {
 			t.Errorf("favicon.svg missing %q", want)

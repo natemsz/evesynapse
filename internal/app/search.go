@@ -2,12 +2,16 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
+	"unicode"
 
 	db "evesynapse/internal/db/sqlc"
 )
@@ -128,16 +132,21 @@ func (app *Application) handleMarketSuggest(w http.ResponseWriter, r *http.Reque
 // ---------------------------------------------------------------------------
 // Top banner global search: one box over items, the signed-in
 // user's own characters, and strangers whose public records have
-// already been warmed. It only ever surfaces names the local
-// data already knows — nothing is fetched, nothing is queued;
-// unwarmed strangers simply aren't in the list yet.
+// already been warmed. When a full pilot name isn't in the local
+// data yet, the search notes a name-resolution want (a queue
+// write only — the request path still makes no outbound calls)
+// and answers with a "searching" row; the worker resolves the
+// name and warms the pilot record, and a later search turns the
+// row into the real pilot suggestion.
 // ---------------------------------------------------------------------------
 
 // searchHit is one top-banner result. Kind drives the link:
 // item → its details page, character → the character sheet,
-// pilot → the public pilot page.
+// pilot → the public pilot page. A "pilot-pending" hit is the
+// not-yet-resolved name search: it carries no link and is never
+// offered as a pick.
 type searchHit struct {
-	Kind  string `json:"kind"` // "item" | "character" | "pilot"
+	Kind  string `json:"kind"` // "item" | "character" | "pilot" | "pilot-pending"
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
 	Label string `json:"label,omitempty"`
@@ -180,6 +189,7 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
 
 	ownIDs := map[int64]bool{}
+	ownHitCount := 0
 	if chars, err := app.queries.ListCharactersByUser(ctx, userID); err == nil {
 		charHits := []searchHit{}
 		for _, ch := range chars {
@@ -194,15 +204,20 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 		if len(charHits) > 4 {
 			charHits = charHits[:4]
 		}
+		ownHitCount = len(charHits)
 		hits = append(hits, charHits...)
 	} else {
 		log.Printf("search: list characters for user %d: %v", userID, err)
 	}
 
+	itemHits := []searchHit{}
 	for _, it := range app.suggestTypes(ctx, q, suggestPoolAll, 6) {
-		hits = append(hits, searchHit{Kind: "item", ID: it.ID, Name: it.Name, Label: it.Label})
+		hit := searchHit{Kind: "item", ID: it.ID, Name: it.Name, Label: it.Label}
+		itemHits = append(itemHits, hit)
+		hits = append(hits, hit)
 	}
 
+	pilotHitCount := 0
 	if rows, err := app.queries.SearchPilotRecordsByName(ctx, q); err == nil {
 		pilotHits := []searchHit{}
 		for _, row := range rows {
@@ -228,12 +243,116 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 		if len(pilotHits) > 4 {
 			pilotHits = pilotHits[:4]
 		}
+		pilotHitCount = len(pilotHits)
 		hits = append(hits, pilotHits...)
 	} else {
 		log.Printf("search: pilot records for %q: %v", q, err)
 	}
 
+	// No local character of either kind matched: if the query
+	// reads as a full pilot name, note the one-per-name
+	// resolution want and say the search is under way instead of
+	// silently offering nothing.
+	pendingNameSearch := false
+	if ownHitCount == 0 && pilotHitCount == 0 && app.notePilotNameSearch(ctx, q, itemHits) {
+		pendingNameSearch = true
+		hits = append(hits, searchHit{
+			Kind:  "pilot-pending",
+			Name:  "Searching for “" + q + "”…",
+			Label: "Pilot",
+		})
+	}
+
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", "private, max-age=30")
+	if pendingNameSearch {
+		// The box re-asks while a name warms; a cached pending
+		// answer would hide the real suggestion when it lands.
+		w.Header().Set("Cache-Control", "no-store")
+	} else {
+		w.Header().Set("Cache-Control", "private, max-age=30")
+	}
 	_ = json.NewEncoder(w).Encode(hits)
+}
+
+// normalizePilotName folds a typed pilot name to the key its
+// resolution want is stored under: case-insensitive, with runs
+// of whitespace collapsed, so "Unwarmed  Stranger" and
+// "unwarmed stranger" are one want, not two.
+func normalizePilotName(name string) string {
+	return strings.ToLower(strings.Join(strings.Fields(name), " "))
+}
+
+// plausiblePilotName reports whether a search string could be a
+// complete character name worth an exact-name lookup: 3–37
+// characters of the letters, digits, spaces, and punctuation
+// EVE names allow. Partial words pass this test too; each one
+// is a distinct want that settles as 'missing' once, so typing
+// never re-asks about the same string twice.
+func plausiblePilotName(name string) bool {
+	runes := []rune(strings.Join(strings.Fields(name), " "))
+	if len(runes) < 3 || len(runes) > 37 {
+		return false
+	}
+	hasLetter := false
+	for _, r := range runes {
+		switch {
+		case unicode.IsLetter(r):
+			hasLetter = true
+		case unicode.IsDigit(r) || r == ' ' || r == '-' || r == '\'' || r == '.':
+		default:
+			return false
+		}
+	}
+	return hasLetter
+}
+
+// notePilotNameSearch records (or consults) the name-resolution
+// want for one topbar query and reports whether the answer
+// should carry the "searching" row: a want under way, or one
+// resolved to a character whose record is still warming. A name
+// ESI has settled as unknown stays quiet. Writes only.
+func (app *Application) notePilotNameSearch(ctx context.Context, q string, itemHits []searchHit) bool {
+	if !plausiblePilotName(q) {
+		return false
+	}
+	// An exact item match means the user is almost certainly
+	// after the item; don't spend a name lookup on it.
+	for _, hit := range itemHits {
+		if strings.EqualFold(hit.Name, q) {
+			return false
+		}
+	}
+	normalized := normalizePilotName(q)
+	want, err := app.queries.GetPilotNameWant(ctx, normalized)
+	if err == nil {
+		switch want.State {
+		case "missing":
+			return false
+		case "ready":
+			if want.CharacterID <= 0 {
+				return true
+			}
+			rec, rerr := app.queries.GetPilotRecord(ctx, want.CharacterID)
+			if rerr == nil && (rec.State == pilotStateMissing || rec.State == pilotStateReady) {
+				return false
+			}
+			return true
+		default: // pending, or an error waiting out its backoff
+			return true
+		}
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		log.Printf("search: read pilot name want %q: %v", normalized, err)
+		return false
+	}
+	display := strings.Join(strings.Fields(q), " ")
+	if qerr := app.queries.UpsertPilotNameWant(ctx, db.UpsertPilotNameWantParams{
+		NormalizedName: normalized,
+		DisplayName:    display,
+		RequestedAt:    time.Now().UTC().Format(time.RFC3339),
+	}); qerr != nil {
+		log.Printf("search: note pilot name want %q: %v", normalized, qerr)
+		return false
+	}
+	return true
 }

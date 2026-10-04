@@ -68,14 +68,16 @@ func (app *Application) urgentDrain(ctx context.Context) {
 }
 
 // drainUrgentWants fetches what the want queues are holding,
-// current-page wants first: pilot records (the drain query
-// already orders viewed wants ahead of the proactively noted
-// orbit, so a name someone is looking at jumps the queue), then
-// market history wants (gate-respecting), then a couple of type
-// descriptions. Every pass spends from the same small allowances
-// as before — urgency reorders the work, it never widens it.
-// Returns ESI's stop signal. Runs under the shared fetch lock so
-// it never races the cycle's passes over the same queue rows.
+// current-page wants first: pilot name resolutions the topbar
+// search is waiting on (each queues the pilot record it names),
+// pilot records (the drain query already orders viewed wants
+// ahead of the proactively noted orbit, so a name someone is
+// looking at jumps the queue), then market history wants
+// (gate-respecting), then a couple of type descriptions. Every
+// pass spends from the same small allowances as before —
+// urgency reorders the work, it never widens it. Returns ESI's
+// stop signal. Runs under the shared fetch lock so it never
+// races the cycle's passes over the same queue rows.
 func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 	app.fetchMu.Lock()
 	defer app.fetchMu.Unlock()
@@ -83,6 +85,9 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 	now := time.Now().UTC()
 
 	allowance := &fetchBudget{left: urgentPilotFetchAllowance}
+	if _, ltd := app.drainPilotNameWants(ctx, allowance); ltd {
+		return true
+	}
 	ids, err := app.queries.ListPilotDrains(ctx, db.ListPilotDrainsParams{
 		StaleCutoff: now.Add(-pilotStaleAfter).Format(time.RFC3339),
 		DrainLimit:  urgentPilotsPerNudge,

@@ -94,6 +94,9 @@ var widgetConfigsSchema string
 //go:embed schema/021_guide_prices.sql
 var guidePricesSchema string
 
+//go:embed schema/022_pilot_name_wants.sql
+var pilotNameWantsSchema string
+
 //go:embed static
 var staticFS embed.FS
 

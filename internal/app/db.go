@@ -281,6 +281,18 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 022 (pilot name-resolution wants: topbar searches
+	// for pilots nobody has warmed yet), applied the same guarded
+	// way.
+	var pilotNameWantTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'pilot_name_wants'`).Scan(&pilotNameWantTables); err != nil {
+		return nil, err
+	}
+	if pilotNameWantTables == 0 {
+		if err := applySchema(conn, pilotNameWantsSchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

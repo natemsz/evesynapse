@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -49,6 +50,8 @@ const (
 const (
 	pilotStaleAfter             = 7 * 24 * time.Hour
 	maxPilotDrainsPerCycle      = 5
+	maxPilotNameResolutions     = 3 // per pass; one ESI name lookup each
+	pilotNameWantRetryDelay     = 15 * time.Minute
 	maxHistoryCorpNamesPerDrain = 12
 	maxTypeDetailsPerCycle      = 8
 	// maxOrbitPilotsPerCycle bounds how many newly seen
@@ -266,6 +269,98 @@ func (app *Application) refreshPilotRecords(ctx context.Context, allowance *fetc
 		}
 	}
 	return drained, false
+}
+
+// refreshPilotNameWants resolves due pilot name wants (topbar
+// searches for names no local tier knew) inside the cycle
+// allowance. Each due name costs one public POST /universe/ids/
+// lookup; an exact character match queues that character's pilot
+// record at viewed priority, so the ordinary pilot drain — in
+// the same pass — fills the record the search is waiting on. A
+// name with no exact character match settles as 'missing' and is
+// never asked about again; transient failures back off instead
+// of being re-asked on every cycle. Holds the shared fetch lock
+// like the other pilot passes.
+func (app *Application) refreshPilotNameWants(ctx context.Context, allowance *fetchBudget) (resolved int, limited bool) {
+	app.fetchMu.Lock()
+	defer app.fetchMu.Unlock()
+	return app.drainPilotNameWants(ctx, allowance)
+}
+
+// drainPilotNameWants is refreshPilotNameWants for callers that
+// already hold the shared fetch lock (the urgent drain).
+func (app *Application) drainPilotNameWants(ctx context.Context, allowance *fetchBudget) (resolved int, limited bool) {
+	now := time.Now().UTC()
+	stamp := now.Format(time.RFC3339)
+	wants, err := app.queries.ListDuePilotNameWants(ctx, db.ListDuePilotNameWantsParams{
+		Now: stamp, Lim: maxPilotNameResolutions,
+	})
+	if err != nil {
+		log.Printf("worker: pilot name wants: list due: %v", err)
+		return 0, false
+	}
+	for _, want := range wants {
+		if ctx.Err() != nil || !allowance.take() {
+			break
+		}
+		var ids esi.UniverseIDs
+		err := app.esi.PostJSON(ctx, "/universe/ids/", []string{want.DisplayName}, &ids)
+		if errors.Is(err, esi.ErrErrorLimit) {
+			log.Printf("worker: pilot name wants: ESI error limit resolving %q; backing off", want.DisplayName)
+			return resolved, true
+		}
+		if err != nil {
+			if code, has := esi.StatusCode(err); has && (code == http.StatusBadRequest || code == http.StatusNotFound) {
+				if serr := app.queries.SetPilotNameWantMissing(ctx, db.SetPilotNameWantMissingParams{
+					ResolvedAt: stamp, NormalizedName: want.NormalizedName,
+				}); serr != nil {
+					log.Printf("worker: pilot name wants: settle miss %q: %v", want.DisplayName, serr)
+					continue
+				}
+				resolved++
+				continue
+			}
+			if serr := app.queries.SetPilotNameWantError(ctx, db.SetPilotNameWantErrorParams{
+				ResolvedAt:     stamp,
+				NextTryAt:      now.Add(pilotNameWantRetryDelay).Format(time.RFC3339),
+				NormalizedName: want.NormalizedName,
+			}); serr != nil {
+				log.Printf("worker: pilot name wants: record error %q: %v", want.DisplayName, serr)
+			}
+			log.Printf("worker: pilot name wants: resolve %q: %v", want.DisplayName, err)
+			continue
+		}
+		var match *esi.UniverseIDEntry
+		for i := range ids.Characters {
+			if strings.EqualFold(ids.Characters[i].Name, want.DisplayName) {
+				match = &ids.Characters[i]
+				break
+			}
+		}
+		if match == nil {
+			if serr := app.queries.SetPilotNameWantMissing(ctx, db.SetPilotNameWantMissingParams{
+				ResolvedAt: stamp, NormalizedName: want.NormalizedName,
+			}); serr != nil {
+				log.Printf("worker: pilot name wants: settle miss %q: %v", want.DisplayName, serr)
+				continue
+			}
+			resolved++
+			continue
+		}
+		app.esi.StoreCharacterName(match.ID, match.Name)
+		if qerr := app.queries.UpsertPilotWant(ctx, match.ID); qerr != nil {
+			log.Printf("worker: pilot name wants: queue pilot %d for %q: %v", match.ID, want.DisplayName, qerr)
+			continue
+		}
+		if serr := app.queries.SetPilotNameWantReady(ctx, db.SetPilotNameWantReadyParams{
+			CharacterID: match.ID, ResolvedAt: stamp, NormalizedName: want.NormalizedName,
+		}); serr != nil {
+			log.Printf("worker: pilot name wants: settle %q: %v", want.DisplayName, serr)
+			continue
+		}
+		resolved++
+	}
+	return resolved, false
 }
 
 // drainPilotRecord assembles and stores one pilot's public record

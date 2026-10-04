@@ -297,7 +297,13 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// Condensed; the menu links themselves (dropdown
 		// entries plus the standalone Home/Sync/Admin rows,
 		// sidebar and drawer alike) ride the non-condensed
-		// Univers at regular weight.
+		// Univers. v0.3.07.015: the links sit at Regular
+		// (400), which finally renders true Regular now
+		// that the genuine Regular face is embedded —
+		// before it landed, a 400 request resolved to the
+		// 500 Medium face (only 300/500/700 were declared),
+		// which reads bold.
+		"@font-face {\n  font-family: 'Univers Next Pro';\n  font-style: normal;\n  font-weight: 400;\n  font-display: swap;\n  src: url('/static/fonts/univers-next-pro-regular.woff2') format('woff2');\n}",
 		".branch > summary {\n  font-family: \"Univers Next Pro Condensed\", \"Univers Next Pro\", -apple-system, \"SF Pro Display\", \"Segoe UI\", \"Inter\", sans-serif;\n  font-weight: 500;\n  font-synthesis-weight: none;\n}",
 		"header a.navlink, .sidenav a.navlink, .branch .menu a {\n  font-family: \"Univers Next Pro\", -apple-system, \"SF Pro Display\", \"Segoe UI\", \"Inter\", sans-serif;\n  font-weight: 400;\n  font-synthesis-weight: none;\n}",
 		".card > h2:first-child, .card > h3:first-child { margin: -0.85rem -1rem 0.75rem; padding: 0.55rem 1rem; border-radius: 4px 4px 0 0; }",

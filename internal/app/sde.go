@@ -200,9 +200,9 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 	// anything before schema 012 lacks the dogma skill graph, so
 	// re-import once (the store writes the marker when it lands).
 	// Retries on later ticks while an import keeps failing.
-	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "4" {
+	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "5" {
 		log.Printf("sde: static data predates current columns — re-importing to backfill")
-		app.startSDEImport("schema-012 backfill")
+		app.startSDEImport("schema-018 backfill")
 		return
 	}
 	// Even with a current marker, an empty planner table (say the
@@ -450,6 +450,7 @@ type sdeBlueprintSkillRow struct {
 type sdeTypeRow struct {
 	typeID        int64
 	name          string
+	description   string // invTypes flavor text; "" when the dump has none
 	groupID       int64
 	marketGroupID int64 // 0 = cannot be listed on the market
 	published     int64 // 1 unless the dump explicitly says 0
@@ -677,9 +678,15 @@ func parseSDETypes(cr *csv.Reader, idx map[string]int) ([]sdeTypeRow, error) {
 		if raw, ferr := csvField(rec, idx, "published"); ferr == nil && strings.TrimSpace(raw) == "0" {
 			published = 0
 		}
+		// The invTypes description rides along so item pages can
+		// render flavor text from the local dump instead of a
+		// per-type ESI fetch. Optional: a dump without the column
+		// (or an empty cell) just leaves the ESI fallback in charge.
+		description, _ := csvField(rec, idx, "description")
 		rows = append(rows, sdeTypeRow{
 			typeID:        id,
 			name:          name,
+			description:   description,
 			groupID:       csvIDOrZero(rec, idx, "groupID"),
 			marketGroupID: csvIDOrZero(rec, idx, "marketGroupID"),
 			published:     published,
@@ -1152,9 +1159,9 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		return nil
 	}
 
-	if err := insert("INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES (?, ?, ?, ?, ?)", len(parsed.types), func(i int) []any {
+	if err := insert("INSERT INTO sde_types (type_id, name, group_id, market_group_id, published, description) VALUES (?, ?, ?, ?, ?, ?)", len(parsed.types), func(i int) []any {
 		r := parsed.types[i]
-		return []any{r.typeID, r.name, r.groupID, r.marketGroupID, r.published}
+		return []any{r.typeID, r.name, r.groupID, r.marketGroupID, r.published, r.description}
 	}); err != nil {
 		return 0, err
 	}
@@ -1232,10 +1239,11 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		{Key: "last_check_at", Value: now},
 		{Key: "total_rows", Value: strconv.FormatInt(total, 10)},
 		// Marker that the schema-008 market columns are populated,
-		// the schema-011 planner tables from 3, and the schema-012
-		// skill graph from 4 (sdeMaintenance backfills once when
+		// the schema-011 planner tables from 3, the schema-012
+		// skill graph from 4, and the schema-018 bulk item
+		// descriptions from 5 (sdeMaintenance backfills once when
 		// it's behind).
-		{Key: "sde_import_version", Value: "4"},
+		{Key: "sde_import_version", Value: "5"},
 	}
 	for name, m := range parsed.markers {
 		meta = append(meta,

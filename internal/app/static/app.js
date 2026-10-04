@@ -807,3 +807,59 @@
     arm(regions[i]);
   }
 })();
+
+// Page-sync indicator: while this page still has data on the
+// way (names, descriptions, price history it asked for), the
+// top banner shows a small ember ring with the count. It polls
+// a cache-only status endpoint — never the data itself — and
+// hides the moment the page has everything. Background sync in
+// general is not reported here.
+(function () {
+  var indicator = document.getElementById("page-sync-indicator");
+  if (!indicator || !window.fetch) return;
+  var label = indicator.querySelector("[data-page-sync-label]");
+  var page = window.location.pathname + window.location.search;
+  var attempts = 0;
+  var maxAttempts = 80; // ~2 minutes at 1.5s, then leave the page as-is
+
+  function unresolvedRegions() {
+    return document.querySelectorAll(
+      "[data-live-region][data-poll-state='pending'], [data-live-region][data-poll-state='loading']"
+    ).length;
+  }
+
+  function show(pending) {
+    indicator.hidden = false;
+    if (label) {
+      label.textContent = pending > 0
+        ? "Loading page data · " + pending
+        : "Loading page data…";
+    }
+  }
+
+  var timer = window.setInterval(function () {
+    attempts += 1;
+    if (attempts > maxAttempts) {
+      window.clearInterval(timer);
+      indicator.hidden = true;
+      return;
+    }
+    window.fetch("/sync/page-status?page=" + encodeURIComponent(page), {
+      credentials: "same-origin",
+      headers: { "X-Requested-With": "XMLHttpRequest" }
+    }).then(function (resp) {
+      return resp.json();
+    }).then(function (status) {
+      var pending = status && typeof status.pending === "number" ? status.pending : 0;
+      if (pending > 0 || unresolvedRegions() > 0) {
+        show(pending);
+      } else {
+        indicator.hidden = true;
+        window.clearInterval(timer);
+      }
+    }).catch(function () {
+      // A failed status poll is not news; the next tick retries
+      // until the attempt cap.
+    });
+  }, 1500);
+})();

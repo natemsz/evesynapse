@@ -246,6 +246,7 @@ type StructureName struct {
 	Name        string `json:"name"`
 	State       string `json:"state"`
 	ResolvedAt  string `json:"resolved_at"`
+	Source      string `json:"source"`
 }
 
 type TypeDetail struct {

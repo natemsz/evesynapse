@@ -86,6 +86,11 @@ SELECT * FROM character_snapshots
 WHERE character_id = ?
 ORDER BY kind;
 
+-- name: ListSnapshotsByKind :many
+SELECT * FROM character_snapshots
+WHERE kind = ?
+ORDER BY character_id;
+
 -- name: GetTypeName :one
 SELECT name FROM type_names
 WHERE type_id = ?;
@@ -793,10 +798,13 @@ ORDER BY c.name, oh.type_id, oh.order_id;
 -- authenticated-only). 'resolved' rows re-check after 30 days
 -- (structures can be renamed); 'missing' rows (403/404: private or
 -- gone) re-check after 24 hours; 'pending' rows are always due.
+-- The worker tries every eligible linked character before a
+-- negative answer is cached, and 'source' (schema 023) records the
+-- name's provenance so ESI truth outranks any lower-trust tier.
 -- ---------------------------------------------------------------------
 
 -- name: GetStructureName :one
-SELECT structure_id, name, state, resolved_at
+SELECT structure_id, name, state, resolved_at, source
 FROM structure_names
 WHERE structure_id = ?;
 
@@ -805,12 +813,13 @@ INSERT OR IGNORE INTO structure_names (structure_id)
 VALUES (?);
 
 -- name: SetStructureName :exec
-INSERT INTO structure_names (structure_id, name, state, resolved_at)
-VALUES (?, ?, ?, ?)
+INSERT INTO structure_names (structure_id, name, state, resolved_at, source)
+VALUES (?, ?, ?, ?, ?)
 ON CONFLICT (structure_id) DO UPDATE SET
     name        = excluded.name,
     state       = excluded.state,
-    resolved_at = excluded.resolved_at;
+    resolved_at = excluded.resolved_at,
+    source      = excluded.source;
 
 -- name: ListStructureResolutions :many
 SELECT structure_id

@@ -45,6 +45,9 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`<button type="button" class="nav-reopen" id="nav-reopen"`,
 		`<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">`,
 		`<svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true">`,
+		`<defs><linearGradient id="brand-glyph-gradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd27a"/><stop offset=".52" stop-color="#ff6a1a"/><stop offset="1" stop-color="#d63c14"/></linearGradient></defs>`,
+		`stroke="url(#brand-glyph-gradient)"`,
+		`fill="url(#brand-glyph-gradient)"`,
 		`<path d="M24 17.2V12M29.4 27.6l6 3M18.6 27.6l-6 3"/>`,
 		`<circle cx="24" cy="24" r="6.5"/>`,
 		`<a class="wordmark topbar-wordmark" href="/">EVESYNAPSE</a>`,
@@ -81,10 +84,20 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		t.Error("page still carries the exclusive mainnav details group")
 	}
 	// Every category and sidebar control icon is drawn SVG
-	// sharing the one gradient definition, and the retired
-	// text glyphs stay retired.
-	if n := strings.Count(body, "<linearGradient"); n != 1 {
-		t.Errorf("page carries %d linearGradient definitions, want exactly 1 shared def", n)
+	// painted from the shared nav gradient, and the retired
+	// text glyphs stay retired. The page carries exactly two
+	// gradient definitions: the shared horizontal nav def and
+	// the brand mark's own diagonal def (the approved mock's
+	// ramp — the .007 build painted the mark from the nav
+	// def and the nodes landed in the wrong colors), each with
+	// a unique id.
+	if n := strings.Count(body, "<linearGradient"); n != 2 {
+		t.Errorf("page carries %d linearGradient definitions, want 2 (nav + brand defs)", n)
+	}
+	for _, id := range []string{`id="nav-glyph-gradient"`, `id="brand-glyph-gradient"`} {
+		if n := strings.Count(body, id); n != 1 {
+			t.Errorf("page carries %d %q definitions, want exactly 1", n, id)
+		}
 	}
 	for _, gone := range []string{
 		"▂▄▆", "◉", "nav-icon-bars", "nav-economy-gradient",
@@ -154,10 +167,10 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	if !strings.Contains(body[topbarStart:topbarStart+topbarEnd], `<a class="wordmark topbar-wordmark" href="/">EVESYNAPSE</a>`) {
 		t.Error("topbar is missing the wordmark")
 	}
-	// v0.3.07.007 branding: The Hub brand mark sits in the top
-	// bar immediately before the wordmark, painted from the
-	// same shared gradient def (the one-def count above keeps
-	// it honest).
+	// v0.3.07.008 branding: The Hub brand mark sits in the
+	// top bar immediately before the wordmark, painted from
+	// its own diagonal gradient def (the approved mock's
+	// ramp; the nav icons keep the horizontal def).
 	topbar := body[topbarStart : topbarStart+topbarEnd]
 	brandAt := strings.Index(topbar, `<svg class="brand-mark"`)
 	wordmarkAt := strings.Index(topbar, `<a class="wordmark topbar-wordmark"`)
@@ -256,11 +269,16 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		".search-glyph {",
 		"pointer-events: none;",
 		".topsearch input { padding: 0.3rem 0.55rem 0.3rem 2rem; font-size: 0.85rem; }",
-		// v0.3.07.007 branding: the Hub mark rides at the word-
-		// mark's left at a fixed square size, pulled slightly
-		// into the topbar flex gap so the gap before the text
-		// stays small.
-		".brand-mark {\n  display: block;\n  flex: none;\n  width: 1.35rem;\n  height: 1.35rem;\n  margin-right: -0.45rem;\n}",
+		// v0.3.07.008 branding: the Hub mark rides at the
+		// wordmark's left at a chunkier fixed square size,
+		// pulled slightly into the topbar flex gap so the
+		// gap before the text stays small.
+		".brand-mark {\n  display: block;\n  flex: none;\n  width: 1.6rem;\n  height: 1.6rem;\n  margin-right: -0.45rem;\n}",
+		// v0.3.07.008: the phone-bar hamburger floats bare
+		// like the sidebar glyph controls (no resting box on
+		// the same footprint), with the same faint hover wash.
+		"background: transparent;\n  border: 1px solid transparent;\n  border-radius: 3px;\n  cursor: pointer;\n  font-family: \"Univers Next Pro Condensed\", \"Univers Next Pro\", sans-serif;",
+		".nav-hamburger:hover { background: rgba(255, 106, 26, 0.14); }",
 		// v0.3.07.006 rail discipline: closed categories never
 		// paint a flyout panel, and the active-section pill is
 		// the current page's category alone — a merely open

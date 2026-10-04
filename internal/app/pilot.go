@@ -51,6 +51,11 @@ const (
 	maxPilotDrainsPerCycle      = 5
 	maxHistoryCorpNamesPerDrain = 12
 	maxTypeDetailsPerCycle      = 8
+	// maxOrbitPilotsPerCycle bounds how many newly seen
+	// counterparties one cycle notes for proactive warming; the
+	// queue drains a few per cycle (and viewed pilots outrank
+	// the orbit), so a big roster converges over a few cycles.
+	maxOrbitPilotsPerCycle = 50
 )
 
 // pilotPayload is the stored public record: the profile, the
@@ -113,17 +118,39 @@ func (app *Application) handlePilot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Own characters belong on their full character sheet.
-	if userID := int64(app.sessions.GetInt(ctx, sessionUserID)); userID != 0 {
-		if chars, cerr := app.queries.ListCharactersByUser(ctx, userID); cerr == nil {
-			for _, ch := range chars {
-				if ch.CharacterID == id {
-					http.Redirect(w, r, "/character/?character="+strconv.FormatInt(id, 10), http.StatusSeeOther)
-					return
-				}
-			}
-		}
+	if app.isOwnCharacter(ctx, id) {
+		http.Redirect(w, r, "/character/?character="+strconv.FormatInt(id, 10), http.StatusSeeOther)
+		return
 	}
 
+	data.Pilot = app.loadPilotView(ctx, id)
+	app.render(ctx, w, http.StatusOK, "pilot.html", data)
+}
+
+// isOwnCharacter reports whether id is one of the signed-in
+// user's linked characters.
+func (app *Application) isOwnCharacter(ctx context.Context, id int64) bool {
+	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	if userID == 0 {
+		return false
+	}
+	chars, err := app.queries.ListCharactersByUser(ctx, userID)
+	if err != nil {
+		return false
+	}
+	for _, ch := range chars {
+		if ch.CharacterID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// loadPilotView builds the render model for a stranger's record
+// from the pilot_records queue, noting (and bumping) the want
+// when no settled record exists. Cache-only; shared by the page
+// and its live-region fragment.
+func (app *Application) loadPilotView(ctx context.Context, id int64) *pilotView {
 	view := &pilotView{CharacterID: id, PortraitURL: portraitURL(id, 128), State: "loading"}
 
 	rec, err := app.queries.GetPilotRecord(ctx, id)
@@ -151,8 +178,7 @@ func (app *Application) handlePilot(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	data.Pilot = view
-	app.render(ctx, w, http.StatusOK, "pilot.html", data)
+	return view
 }
 
 // buildPilotView turns a stored payload into the render model.
@@ -212,6 +238,9 @@ func buildPilotView(id int64, payload string) (*pilotView, bool) {
 // Returns how many records it settled and whether ESI's error
 // limit stopped the pass. Called from refreshCycle.
 func (app *Application) refreshPilotRecords(ctx context.Context, allowance *fetchBudget) (drained int, limited bool) {
+	app.fetchMu.Lock()
+	defer app.fetchMu.Unlock()
+
 	now := time.Now().UTC()
 	ids, err := app.queries.ListPilotDrains(ctx, db.ListPilotDrainsParams{
 		StaleCutoff: now.Add(-pilotStaleAfter).Format(time.RFC3339),
@@ -375,6 +404,9 @@ func (app *Application) drainPilotRecord(ctx context.Context, id int64, allowanc
 // longer knows settles with an empty description so the page
 // stops asking. Called from refreshCycle.
 func (app *Application) refreshTypeDetails(ctx context.Context, allowance *fetchBudget) (drained int, limited bool) {
+	app.fetchMu.Lock()
+	defer app.fetchMu.Unlock()
+
 	stamp := time.Now().UTC().Format(time.RFC3339)
 	ids, err := app.queries.ListTypeDetailWants(ctx, maxTypeDetailsPerCycle)
 	if err != nil {
@@ -385,33 +417,187 @@ func (app *Application) refreshTypeDetails(ctx context.Context, allowance *fetch
 		if ctx.Err() != nil || !allowance.take() {
 			break
 		}
-		var t esi.Type
-		err := app.esi.Get(ctx, "", fmt.Sprintf("/universe/types/%d/", id), &t)
-		switch {
-		case err == nil:
-			if serr := app.queries.SetTypeDetail(ctx, db.SetTypeDetailParams{
-				TypeID: id, Description: t.Description, FetchedAt: stamp,
-			}); serr != nil {
-				log.Printf("worker: type details: store %d: %v", id, serr)
-				continue
-			}
+		settled, limited := app.fetchOneTypeDetail(ctx, id, stamp)
+		if settled {
 			drained++
-		case errors.Is(err, esi.ErrErrorLimit):
-			log.Printf("worker: type details: ESI error limit hit fetching type %d; backing off until next cycle", id)
+		}
+		if limited {
 			return drained, true
-		default:
-			if code, has := esi.StatusCode(err); has && code == http.StatusNotFound {
-				if serr := app.queries.SetTypeDetail(ctx, db.SetTypeDetailParams{
-					TypeID: id, Description: "", FetchedAt: stamp,
-				}); serr != nil {
-					log.Printf("worker: type details: settle miss %d: %v", id, serr)
-					continue
-				}
-				drained++
-				continue
-			}
-			log.Printf("worker: type details: fetch type %d: %v", id, err)
 		}
 	}
 	return drained, false
+}
+
+// fetchOneTypeDetail downloads one type's public payload and
+// stores its description. A type ESI no longer knows settles
+// with an empty description so the page stops asking. limited
+// reports ESI's stop signal.
+func (app *Application) fetchOneTypeDetail(ctx context.Context, id int64, stamp string) (settled, limited bool) {
+	var t esi.Type
+	err := app.esi.Get(ctx, "", fmt.Sprintf("/universe/types/%d/", id), &t)
+	switch {
+	case err == nil:
+		if serr := app.queries.SetTypeDetail(ctx, db.SetTypeDetailParams{
+			TypeID: id, Description: t.Description, FetchedAt: stamp,
+		}); serr != nil {
+			log.Printf("worker: type details: store %d: %v", id, serr)
+			return false, false
+		}
+		return true, false
+	case errors.Is(err, esi.ErrErrorLimit):
+		log.Printf("worker: type details: ESI error limit hit fetching type %d; backing off", id)
+		return false, true
+	default:
+		if code, has := esi.StatusCode(err); has && code == http.StatusNotFound {
+			if serr := app.queries.SetTypeDetail(ctx, db.SetTypeDetailParams{
+				TypeID: id, Description: "", FetchedAt: stamp,
+			}); serr != nil {
+				log.Printf("worker: type details: settle miss %d: %v", id, serr)
+				return false, false
+			}
+			return true, false
+		}
+		log.Printf("worker: type details: fetch type %d: %v", id, err)
+		return false, false
+	}
+}
+
+// loadSnapshot decodes one character's snapshot payload into T;
+// ok=false when no snapshot exists or it will not decode. Shared
+// by the orbit derivations, which only ever read stored payloads.
+func loadSnapshot[T any](app *Application, ctx context.Context, characterID int64, kind string) (T, bool) {
+	var out T
+	snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: characterID, Kind: kind})
+	if err != nil {
+		return out, false
+	}
+	if err := json.Unmarshal([]byte(snap.Payload), &out); err != nil {
+		return out, false
+	}
+	return out, true
+}
+
+// notePilotOrbit proactively notes pilot records for every
+// character who appears in the deployment's own data — wallet
+// counterparties, contract parties, contacts, mail senders and
+// recipients, corporation rosters, corp wallet clients and
+// parties — so their /pilot/ page is already warm when a user
+// follows a name. Killmail participants are deliberately absent:
+// kill contexts link to zKillboard, never here. Records already
+// noted or settled are skipped, the user's own characters are
+// skipped (their names go to the full sheet), and noting is
+// bounded per cycle; the drain order (viewed wants first, then
+// the orbit) lives in the drain query. Notes only — no fetches
+// here. Called from refreshCycle ahead of the pilot drain.
+func (app *Application) notePilotOrbit(ctx context.Context) {
+	characters, err := app.queries.ListAllCharacters(ctx)
+	if err != nil {
+		log.Printf("worker: pilot orbit: list characters: %v", err)
+		return
+	}
+	own := make(map[int64]bool, len(characters))
+	for _, ch := range characters {
+		own[ch.CharacterID] = true
+	}
+	have := make(map[int64]bool)
+	recorded, err := app.queries.ListPilotRecordIDs(ctx)
+	if err != nil {
+		log.Printf("worker: pilot orbit: list records: %v", err)
+		return
+	}
+	for _, id := range recorded {
+		have[id] = true
+	}
+
+	found := make(map[int64]bool)
+	for _, ch := range characters {
+		app.pilotCounterpartyIDs(ctx, ch.CharacterID, found)
+	}
+	ids := make([]int64, 0, len(found))
+	for id := range found {
+		if own[id] || have[id] {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	noted := 0
+	for _, id := range ids {
+		if noted >= maxOrbitPilotsPerCycle {
+			break
+		}
+		if err := app.queries.InsertPilotOrbitWant(ctx, id); err != nil {
+			log.Printf("worker: pilot orbit: note %d: %v", id, err)
+			continue
+		}
+		noted++
+	}
+	if noted > 0 {
+		log.Printf("worker: pilot orbit: noted %d new counterparty records", noted)
+	}
+}
+
+// pilotCounterpartyIDs adds the plausible-character IDs (>= 90M,
+// the same harvest rule as the name warmer) found in one
+// character's ledger, contract, contact, mail, and roster
+// snapshots to out.
+func (app *Application) pilotCounterpartyIDs(ctx context.Context, characterID int64, out map[int64]bool) {
+	add := func(id int64) {
+		if id >= 90_000_000 {
+			out[id] = true
+		}
+	}
+	if journal, ok := loadSnapshot[esi.WalletJournal](app, ctx, characterID, esi.SnapWalletJournal); ok {
+		for _, e := range journal {
+			add(e.FirstPartyID)
+			add(e.SecondPartyID)
+		}
+	}
+	if txns, ok := loadSnapshot[esi.WalletTransactions](app, ctx, characterID, esi.SnapWalletTxns); ok {
+		for _, t := range txns {
+			add(t.ClientID)
+		}
+	}
+	if contracts, ok := loadSnapshot[esi.Contracts](app, ctx, characterID, esi.SnapContracts); ok {
+		for _, c := range contracts {
+			add(c.IssuerID)
+			add(c.AssigneeID)
+			add(c.AcceptorID)
+		}
+	}
+	if contacts, ok := loadSnapshot[esi.Contacts](app, ctx, characterID, esi.SnapContacts); ok {
+		for _, c := range contacts {
+			if c.ContactType == "character" {
+				add(c.ContactID)
+			}
+		}
+	}
+	if headers, ok := loadSnapshot[esi.MailHeaders](app, ctx, characterID, esi.SnapMail); ok {
+		for _, h := range headers {
+			add(h.From)
+			for _, rcpt := range h.Recipients {
+				if rcpt.RecipientType == "character" {
+					add(rcpt.RecipientID)
+				}
+			}
+		}
+	}
+	if members, ok := loadSnapshot[esi.CorpMembers](app, ctx, characterID, esi.SnapCorpMembers); ok {
+		for _, id := range members {
+			add(id)
+		}
+	}
+	for division := int64(1); division <= 7; division++ {
+		if journal, ok := loadSnapshot[esi.CorpJournal](app, ctx, characterID, esi.CorpJournalKind(division)); ok {
+			for _, e := range journal {
+				add(e.FirstPartyID)
+				add(e.SecondPartyID)
+			}
+		}
+		if txns, ok := loadSnapshot[esi.CorpWalletTransactions](app, ctx, characterID, esi.CorpTxnsKind(division)); ok {
+			for _, t := range txns {
+				add(t.ClientID)
+			}
+		}
+	}
 }

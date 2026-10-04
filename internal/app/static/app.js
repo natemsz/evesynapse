@@ -754,3 +754,56 @@
   });
   if (form) form.addEventListener("submit", function () { close(); });
 })();
+
+// Live regions: a section rendered while its data is still
+// warming polls its fragment endpoint and swaps itself in when
+// the state leaves pending. The server renders the section again
+// from stored rows only; polling stops as soon as the returned
+// fragment settles, and gives up quietly after ~40 tries,
+// leaving the pending copy standing.
+(function () {
+  var regions = document.querySelectorAll("[data-live-region]");
+  if (!regions.length || !window.fetch) return;
+
+  function arm(region) {
+    var url = region.getAttribute("data-poll-url");
+    if (!url) return;
+    var attempts = 0;
+    var timer = window.setInterval(function () {
+      attempts += 1;
+      if (attempts > 40) {
+        window.clearInterval(timer);
+        return;
+      }
+      window.fetch(url, {
+        credentials: "same-origin",
+        headers: { "X-Requested-With": "XMLHttpRequest" }
+      }).then(function (resp) {
+        return resp.text();
+      }).then(function (html) {
+        var probe = document.createElement("div");
+        probe.innerHTML = html;
+        var fresh = probe.querySelector("[data-poll-state]");
+        if (!fresh) {
+          // Not a fragment (a redirect to a full page, an
+          // error): stop polling and let a reload show it.
+          window.clearInterval(timer);
+          window.location.reload();
+          return;
+        }
+        var state = fresh.getAttribute("data-poll-state");
+        if (state !== "pending" && state !== "loading") {
+          window.clearInterval(timer);
+          region.outerHTML = html;
+        }
+      }).catch(function () {
+        // A failed poll is not news; the next tick retries
+        // until the attempt cap.
+      });
+    }, 1500);
+  }
+
+  for (var i = 0; i < regions.length; i++) {
+    arm(regions[i]);
+  }
+})();

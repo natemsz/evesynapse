@@ -28,7 +28,7 @@ import (
 const (
 	urgentTickInterval        = 5 * time.Second
 	urgentHistoryPerNudge     = 3
-	urgentPilotsPerNudge      = 1
+	urgentPilotsPerNudge      = 3
 	urgentTypeDetailsPerNudge = 2
 	urgentErrorBackoff        = 2 * time.Minute
 	urgentPilotFetchAllowance = 20
@@ -68,9 +68,12 @@ func (app *Application) urgentDrain(ctx context.Context) {
 }
 
 // drainUrgentWants fetches what the want queues are holding,
-// fresh wants first: market history wants (gate-respecting),
-// then one pilot record (the drain query already orders viewed
-// wants ahead of the orbit), then a couple of type descriptions.
+// current-page wants first: pilot records (the drain query
+// already orders viewed wants ahead of the proactively noted
+// orbit, so a name someone is looking at jumps the queue), then
+// market history wants (gate-respecting), then a couple of type
+// descriptions. Every pass spends from the same small allowances
+// as before — urgency reorders the work, it never widens it.
 // Returns ESI's stop signal. Runs under the shared fetch lock so
 // it never races the cycle's passes over the same queue rows.
 func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
@@ -78,6 +81,24 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 	defer app.fetchMu.Unlock()
 
 	now := time.Now().UTC()
+
+	allowance := &fetchBudget{left: urgentPilotFetchAllowance}
+	ids, err := app.queries.ListPilotDrains(ctx, db.ListPilotDrainsParams{
+		StaleCutoff: now.Add(-pilotStaleAfter).Format(time.RFC3339),
+		DrainLimit:  urgentPilotsPerNudge,
+	})
+	if err != nil {
+		log.Printf("worker: urgent drain: list pilot drains: %v", err)
+	} else {
+		for _, id := range ids {
+			if ctx.Err() != nil {
+				break
+			}
+			if _, ltd := app.drainPilotRecord(ctx, id, allowance, now); ltd {
+				return true
+			}
+		}
+	}
 
 	wants, err := app.queries.ListMarketHistoryWants(ctx, now.Add(-historyWantMaxAge).Format(time.RFC3339))
 	if err != nil {
@@ -94,24 +115,6 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 			}
 			fetched++
 			if _, ltd := app.fetchAndStoreHistory(ctx, key); ltd {
-				return true
-			}
-		}
-	}
-
-	allowance := &fetchBudget{left: urgentPilotFetchAllowance}
-	ids, err := app.queries.ListPilotDrains(ctx, db.ListPilotDrainsParams{
-		StaleCutoff: now.Add(-pilotStaleAfter).Format(time.RFC3339),
-		DrainLimit:  urgentPilotsPerNudge,
-	})
-	if err != nil {
-		log.Printf("worker: urgent drain: list pilot drains: %v", err)
-	} else {
-		for _, id := range ids {
-			if ctx.Err() != nil {
-				break
-			}
-			if _, ltd := app.drainPilotRecord(ctx, id, allowance, now); ltd {
 				return true
 			}
 		}

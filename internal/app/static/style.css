@@ -801,3 +801,16 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
 @media (prefers-reduced-motion: reduce) {
   .loading-pulse { animation: none; }
 }
+
+/* Top-banner page-sync indicator: shows only while this page
+   still has data on the way (the count of names, descriptions,
+   or history the page asked for). It says nothing about
+   background sync — that lives on the Sync page. */
+.page-sync {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+.page-sync[hidden] { display: none; }

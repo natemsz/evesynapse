@@ -40,10 +40,24 @@
 {{if .Skills}}<p><small>Requires {{range $i, $s := .Skills}}{{if $i}}, {{end}}{{$s}}{{end}}.</small></p>{{end}}
 {{if .StockNote}}<p><small>{{.StockNote}}</small></p>{{end}}
 
+{{with .SkillsJudge}}
+<p><strong>{{.Heading}}</strong></p>
+{{if .Known}}
+<ul>
+{{range .Lines}}<li><small>{{.Text}}{{if .OK}} — covered{{end}}</small></li>{{end}}
+</ul>
+{{if .Note}}<p><small>{{.Note}}</small></p>{{end}}
+<p><small>{{.Summary}}</small></p>
+{{else}}
+<p><small>{{.Note}}</small></p>
+{{end}}
+{{end}}
+
 <form method="get" action="/planner/">
   <input type="hidden" name="product" value="{{.ProductTypeID}}">
   <p>
     <label>Runs <input type="number" name="runs" value="{{.Runs}}" min="1" size="6"></label>
+    {{if .JudgeOptions}}<label>Judge as <select name="judge">{{range .JudgeOptions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label> {{end}}
     {{range .MEInputs}}<label title="Material efficiency for the blueprint behind {{.Label}}">{{.Label}} ME <input type="number" name="{{.FieldName}}" value="{{.Value}}" min="0" max="10" size="3"></label> {{end}}
     <button type="submit">Recalculate</button>
   </p>
@@ -85,6 +99,21 @@
 </table>
 <p><small>{{.PricesNote}}</small></p>
 </section>
+
+{{with .Verdict}}
+<section class="foldable">
+<h3>{{.Heading}}</h3>
+<table>
+  <tbody>
+    <tr><th>To buy (after stock on hand)</th><td>{{if .Cost}}{{.Cost}}{{else}}—{{end}}</td></tr>
+    <tr><th>Sell value of what comes out</th><td>{{if .SellValue}}{{.SellValue}}{{else}}—{{end}}</td></tr>
+    {{if .Profit}}<tr><th>Profit</th><td>{{.Profit}}</td></tr>{{end}}
+    {{if .ProfitPerRun}}<tr><th>Profit per run</th><td>{{.ProfitPerRun}}{{if .MarginPct}} ({{.MarginPct}}){{end}}</td></tr>{{end}}
+  </tbody>
+</table>
+{{if .Note}}<p><small>{{.Note}}</small></p>{{end}}
+</section>
+{{end}}
 
 {{if .Shopping}}
 <section class="foldable">

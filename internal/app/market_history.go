@@ -169,17 +169,40 @@ type priceChart struct {
 	Points string // polyline points for the average-price line
 	Dots   []chartDot
 	Bars   []chartBar
-	TopY   int // y of the max-price line (price band top)
-	BaseY  int // y of the min-price line (price band bottom)
+	Recent []chartDay // newest first, capped at recentChartDays
+	TopY   int        // y of the max-price line (price band top)
+	BaseY  int        // y of the min-price line (price band bottom)
 	MaxISK string
 	MinISK string
 	From   string // oldest date label
 	To     string // newest date label
 }
 
-type chartDot struct{ X, Y int }
+// recentChartDays caps the recent-days table under the chart.
+const recentChartDays = 14
 
-type chartBar struct{ X, Y, W, H int }
+// chartDay is one stored day's figures, display-ready: the
+// tooltip fields on a chart point and one row of the recent-days
+// table under the chart (which doubles as the no-JavaScript path
+// to the same numbers).
+type chartDay struct {
+	Date    string
+	Average string // esi.FormatISK
+	Highest string
+	Lowest  string
+	Volume  string // esi.FormatInt
+	Title   string // "<date>: average X ISK · high … · low … · volume …"
+}
+
+type chartDot struct {
+	X, Y int
+	chartDay
+}
+
+type chartBar struct {
+	X, Y, W, H int
+	Title      string // "<date>: volume N"
+}
 
 // buildPriceChart turns stored daily aggregates into SVG
 // geometry. ok=false only when there are no rows at all; a single
@@ -239,7 +262,7 @@ func buildPriceChart(rows []db.MarketHistory) (priceChart, bool) {
 	var pts []string
 	for i, r := range rows {
 		px, py := x(i), y(r.Average)
-		chart.Dots = append(chart.Dots, chartDot{X: px, Y: py})
+		chart.Dots = append(chart.Dots, chartDot{X: px, Y: py, chartDay: dayFigures(r)})
 		pts = append(pts, fmt.Sprintf("%d,%d", px, py))
 		if maxV > 0 && r.Volume > 0 {
 			h := int(float64(r.Volume) / float64(maxV) * float64(barH))
@@ -249,15 +272,38 @@ func buildPriceChart(rows []db.MarketHistory) (priceChart, bool) {
 			chart.Bars = append(chart.Bars, chartBar{
 				X: px, Y: barBottom - h,
 				W: barWidth(len(rows)), H: h,
+				Title: fmt.Sprintf("%s: volume %s", r.Date, esi.FormatInt(r.Volume)),
 			})
 		}
 	}
 	if len(pts) > 1 {
 		chart.Points = strings.Join(pts, " ")
 	}
+	// Recent days, newest first, for the table under the chart.
+	for i := len(rows) - 1; i >= 0 && len(chart.Recent) < recentChartDays; i-- {
+		chart.Recent = append(chart.Recent, dayFigures(rows[i]))
+	}
 	chart.From = rows[0].Date
 	chart.To = rows[len(rows)-1].Date
 	return chart, true
+}
+
+// dayFigures formats one stored row for the tooltip and the
+// recent-days table.
+func dayFigures(r db.MarketHistory) chartDay {
+	avg := esi.FormatISK(r.Average)
+	high := esi.FormatISK(r.Highest)
+	low := esi.FormatISK(r.Lowest)
+	vol := esi.FormatInt(r.Volume)
+	return chartDay{
+		Date:    r.Date,
+		Average: avg,
+		Highest: high,
+		Lowest:  low,
+		Volume:  vol,
+		Title: fmt.Sprintf("%s: average %s ISK · high %s · low %s · volume %s",
+			r.Date, avg, high, low, vol),
+	}
 }
 
 // barWidth sizes volume bars to the row count: dense windows get
@@ -274,4 +320,74 @@ func barWidth(n int) int {
 		return 10
 	}
 	return w
+}
+
+// ---------------------------------------------------------------------------
+// Trader snapshot: windowed averages and daily volume from the
+// same stored rows the chart draws, plus the live book's margin
+// when both sides exist. Everything derives from stored data —
+// the only live inputs are the best buy/sell the item view
+// already fetched — and whatever can't be computed renders as
+// an honest dash, never an invented number.
+// ---------------------------------------------------------------------------
+
+// traderStats is the item view's trading snapshot, display-ready.
+// Empty fields render as "—".
+type traderStats struct {
+	Avg7      string // mean daily average over the latest 7 recorded days
+	Avg30     string // mean daily average over the latest 30 recorded days
+	AvgVol7   string // mean daily volume over the latest 7 recorded days
+	MarginPct string // best-buy → best-sell margin, % of the sell price
+}
+
+// historyWindow means the daily average price and daily volume
+// over the trailing `days` recorded days (the newest stored day
+// and the days-1 days before it). Sparse histories simply have
+// fewer rows in the window; ok=false only with no rows at all.
+func historyWindow(rows []db.MarketHistory, days int) (priceAvg, volAvg float64, ok bool) {
+	if len(rows) == 0 || days < 1 {
+		return 0, 0, false
+	}
+	latest, err := time.Parse(historyDateLayout, rows[len(rows)-1].Date)
+	if err != nil {
+		return 0, 0, false
+	}
+	cutoff := latest.AddDate(0, 0, -(days - 1))
+	var priceSum, volSum float64
+	var n int
+	for _, r := range rows {
+		d, err := time.Parse(historyDateLayout, r.Date)
+		if err != nil || d.Before(cutoff) {
+			continue
+		}
+		priceSum += r.Average
+		volSum += float64(r.Volume)
+		n++
+	}
+	if n == 0 {
+		return 0, 0, false
+	}
+	return priceSum / float64(n), volSum / float64(n), true
+}
+
+// buildTraderStats computes the trading snapshot from stored
+// rows plus the live book's bests (0 when a side is absent).
+// The margin is what buying at the best buy and selling at the
+// best sell returns as a share of the sell price — before
+// broker fees and sales tax, which the template says.
+func buildTraderStats(rows []db.MarketHistory, bestSell, bestBuy float64) *traderStats {
+	stats := &traderStats{}
+	if avg, _, ok := historyWindow(rows, 7); ok {
+		stats.Avg7 = esi.FormatISK(avg)
+	}
+	if avg, _, ok := historyWindow(rows, 30); ok {
+		stats.Avg30 = esi.FormatISK(avg)
+	}
+	if _, vol, ok := historyWindow(rows, 7); ok {
+		stats.AvgVol7 = esi.FormatInt(int64(math.Round(vol)))
+	}
+	if bestSell > 0 && bestBuy > 0 {
+		stats.MarginPct = fmt.Sprintf("%.1f%%", (bestSell-bestBuy)/bestSell*100)
+	}
+	return stats
 }

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 )
 
@@ -60,6 +61,49 @@ type planView struct {
 	Margin        string
 	MarginNote    string
 	PricesNote    string
+
+	// "Judge as" scoping (character or tag), empty/nil when the
+	// plan is judged generally: a skill check against the
+	// scope's trained skills and a worth-making verdict priced
+	// from the same stored sources as the rest of the page.
+	JudgeOptions []judgeOption
+	SkillsJudge  *skillsJudge
+	Verdict      *planVerdict
+}
+
+// judgeOption is one entry of the "Judge as" select.
+type judgeOption struct {
+	Value    string // "" | "char:<id>" | "tag:<name>"
+	Label    string
+	Selected bool
+}
+
+// skillJudgeLine is one required skill held up against a scope.
+type skillJudgeLine struct {
+	Text string
+	OK   bool
+}
+
+// skillsJudge is the can-this-scope-build-it answer.
+type skillsJudge struct {
+	Heading  string // "Can Burzrujat build this?"
+	Known    bool   // the scope has skill snapshots at all
+	Note     string // why not, or partial-coverage honesty
+	CanBuild bool
+	Lines    []skillJudgeLine
+	Summary  string
+}
+
+// planVerdict is the worth-making economics of a scoped plan.
+type planVerdict struct {
+	Heading      string // "Worth it? — judged as …"
+	Cost         string // net buy cost after stock, "" when unpriceable
+	SellValue    string // expected value of the output, "" when unknown
+	Profit       string // whole plan, "" unless both sides known
+	ProfitPerRun string
+	MarginPct    string
+	Incomplete   bool // some input price is missing
+	Note         string
 }
 
 // planRowView is one display row of the plan tree (or, with fewer
@@ -171,8 +215,20 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 	}
 
 	src := &sdePlannerSource{app: app, ctx: ctx, memo: make(map[int64]*plannerBlueprint), none: make(map[int64]bool)}
-	owned, stock := app.plannerUserInputs(ctx)
-	prices := app.cachedPrices()
+
+	// "Judge as" scoping: the account's characters are the
+	// universe of scopes (one character, or everyone carrying a
+	// tag). An unknown or stale pick degrades to the general
+	// view, exactly like a stale widget scope on Home.
+	userChars := app.plannerAccountChars(ctx)
+	scope, judgeOptions := resolveJudgeScope(q.Get("judge"), userChars)
+	inputChars := userChars
+	if scope.active() {
+		inputChars = scope.Chars
+	}
+	scoped := app.plannerInputsForChars(ctx, inputChars)
+	owned, stock := scoped.Owned, scoped.Stock
+	prices := app.valuationPrices(ctx)
 
 	res, err := buildPlan(src, productID, plannerInput{
 		Runs:       runs,
@@ -235,8 +291,15 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 			view.Skills = append(view.Skills, fmt.Sprintf("%s %s", nameOf(s.TypeID), esi.RomanLevel(int(s.Level))))
 		}
 	}
-	if len(stock) > 0 {
+	if scope.active() {
+		view.StockNote = scopeStockNote(scope, scoped)
+	} else if len(stock) > 0 {
 		view.StockNote = "Requirements are net of everything your linked characters currently hold."
+	}
+	view.JudgeOptions = judgeOptions
+	if scope.active() {
+		view.SkillsJudge = judgeSkills(scope, scoped, requiredSkillLevels(root), nameOf)
+		view.Verdict = planVerdictFor(res, prices, productID, scope.Label)
 	}
 
 	// Flatten the tree; collect the ME inputs once per blueprint.
@@ -422,23 +485,42 @@ func (s *sdePlannerSource) BlueprintForProduct(productTypeID int64) (*plannerBlu
 	return bp, true
 }
 
-// plannerUserInputs aggregates the signed-in user's owned
-// blueprints (best copy per blueprint type) and total stockpile
-// (per item type, across every linked character) from snapshots.
-// A dev-login session (no user) and characters without snapshots
-// simply contribute nothing.
-func (app *Application) plannerUserInputs(ctx context.Context) (owned map[int64]ownedBlueprint, stock map[int64]int64) {
-	owned = make(map[int64]ownedBlueprint)
-	stock = make(map[int64]int64)
-
+// plannerAccountChars lists the signed-in user's characters —
+// the universe the planner's scopes pick from. A dev-login
+// session (no user) simply has none.
+func (app *Application) plannerAccountChars(ctx context.Context) []db.Character {
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
 	if userID == 0 {
-		return owned, stock
+		return nil
 	}
-	characters, err := app.queries.ListCharactersByUser(ctx, userID)
+	chars, err := app.queries.ListCharactersByUser(ctx, userID)
 	if err != nil {
 		log.Printf("planner: list characters for user %d: %v", userID, err)
-		return owned, stock
+		return nil
+	}
+	return chars
+}
+
+// plannerScopeData is everything a set of characters contributes
+// to a plan: their owned blueprints and stockpile (for netting),
+// how many of them have hangar data at all (honesty), and each
+// character's trained skills where a snapshot exists.
+type plannerScopeData struct {
+	Owned        map[int64]ownedBlueprint
+	Stock        map[int64]int64
+	AssetsLoaded int // characters whose assets snapshot was present
+	Skills       map[int64]map[int64]int
+}
+
+// plannerInputsForChars aggregates owned blueprints (best copy
+// per blueprint type), total stockpile, and trained skills over
+// exactly the given characters — the whole account for the
+// general view, one character or one tag's members when judged.
+func (app *Application) plannerInputsForChars(ctx context.Context, chars []db.Character) plannerScopeData {
+	data := plannerScopeData{
+		Owned:  make(map[int64]ownedBlueprint),
+		Stock:  make(map[int64]int64),
+		Skills: make(map[int64]map[int64]int),
 	}
 
 	type ownedBest struct {
@@ -469,7 +551,7 @@ func (app *Application) plannerUserInputs(ctx context.Context) (owned map[int64]
 		}
 	}
 
-	for _, ch := range characters {
+	for _, ch := range chars {
 		var bps esi.Blueprints
 		if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapBlueprints, &bps) {
 			for _, bp := range bps {
@@ -478,15 +560,240 @@ func (app *Application) plannerUserInputs(ctx context.Context) (owned map[int64]
 		}
 		var assets []esi.Asset
 		if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapAssets, &assets) {
+			data.AssetsLoaded++
 			for _, a := range assets {
 				if a.Quantity > 0 {
-					stock[a.TypeID] += a.Quantity
+					data.Stock[a.TypeID] += a.Quantity
 				}
 			}
 		}
+		var skills esi.Skills
+		if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapSkills, &skills) {
+			trained := make(map[int64]int, len(skills.Skills))
+			for _, s := range skills.Skills {
+				trained[s.SkillID] = s.TrainedSkillLevel
+			}
+			data.Skills[ch.CharacterID] = trained
+		}
 	}
 	for typeID, b := range best {
-		owned[typeID] = ownedBlueprint{ME: b.me, TE: b.te}
+		data.Owned[typeID] = ownedBlueprint{ME: b.me, TE: b.te}
 	}
-	return owned, stock
+	return data
+}
+
+// judgeScope is a resolved "Judge as" pick: the characters it
+// covers and how the copy names it.
+type judgeScope struct {
+	Kind  string // "" (general) | "char" | "tag"
+	Tag   string
+	Label string // "Burzrujat" | `the "industry" tag`
+	Chars []db.Character
+}
+
+func (s judgeScope) active() bool { return s.Kind != "" && len(s.Chars) > 0 }
+
+// resolveJudgeScope validates a raw `judge` parameter against
+// the account and builds the select's options with the current
+// pick marked. Anything stale or foreign degrades to the
+// general view — never an empty judgment.
+func resolveJudgeScope(raw string, chars []db.Character) (judgeScope, []judgeOption) {
+	scope := judgeScope{}
+	selected := ""
+	switch {
+	case strings.HasPrefix(raw, "char:"):
+		if id, err := strconv.ParseInt(strings.TrimPrefix(raw, "char:"), 10, 64); err == nil && id > 0 {
+			for _, ch := range chars {
+				if ch.CharacterID == id {
+					scope = judgeScope{Kind: "char", Label: ch.Name, Chars: []db.Character{ch}}
+					selected = raw
+				}
+			}
+		}
+	case strings.HasPrefix(raw, "tag:"):
+		tag := strings.TrimPrefix(raw, "tag:")
+		var members []db.Character
+		for _, ch := range chars {
+			for _, t := range splitTags(ch.Tags) {
+				if t == tag {
+					members = append(members, ch)
+					break
+				}
+			}
+		}
+		if tag != "" && len(members) > 0 {
+			scope = judgeScope{Kind: "tag", Tag: tag, Label: fmt.Sprintf("the %q tag", tag), Chars: members}
+			selected = raw
+		}
+	}
+
+	options := []judgeOption{{Value: "", Label: "Everyone together"}}
+	for _, ch := range chars {
+		value := "char:" + strconv.FormatInt(ch.CharacterID, 10)
+		options = append(options, judgeOption{Value: value, Label: ch.Name, Selected: value == selected})
+	}
+	for _, tag := range userTags(chars) {
+		value := "tag:" + tag
+		options = append(options, judgeOption{Value: value, Label: "Tag: " + tag, Selected: value == selected})
+	}
+	if len(chars) == 0 {
+		return judgeScope{}, nil
+	}
+	return scope, options
+}
+
+// scopeStockNote says whose hangars the plan netted against,
+// including the honest version when the data isn't in yet.
+func scopeStockNote(scope judgeScope, data plannerScopeData) string {
+	switch scope.Kind {
+	case "char":
+		name := scope.Chars[0].Name
+		if data.AssetsLoaded > 0 {
+			return fmt.Sprintf("Requirements are netted against what %s holds.", name)
+		}
+		return fmt.Sprintf("%s's hangars haven't synced yet — everything counts as to-buy for now.", name)
+	case "tag":
+		n := len(scope.Chars)
+		if data.AssetsLoaded == 0 {
+			return fmt.Sprintf("None of your %q characters have hangar data yet — everything counts as to-buy for now.", scope.Tag)
+		}
+		note := fmt.Sprintf("Requirements are netted against the combined hangars of your %q characters (%d of them).", scope.Tag, n)
+		if data.AssetsLoaded < n {
+			note += fmt.Sprintf(" Hangar data is in for %d of %d so far.", data.AssetsLoaded, n)
+		}
+		return note
+	}
+	return ""
+}
+
+// requiredSkillLevels collects the highest required level per
+// skill across every blueprint the plan actually builds.
+func requiredSkillLevels(root *planNode) map[int64]int64 {
+	reqs := make(map[int64]int64)
+	walkPlan(root, func(n *planNode) {
+		if n.Blueprint == nil {
+			return
+		}
+		for _, s := range n.Blueprint.Skills {
+			if s.Level > reqs[s.TypeID] {
+				reqs[s.TypeID] = s.Level
+			}
+		}
+	})
+	return reqs
+}
+
+// judgeSkills holds a plan's skill requirements up against a
+// scope: one character's trained skills, or the best level
+// across a tag's characters. Levels are EVE's 0–5.
+func judgeSkills(scope judgeScope, data plannerScopeData, reqs map[int64]int64, nameOf func(int64) string) *skillsJudge {
+	judge := &skillsJudge{}
+	switch scope.Kind {
+	case "char":
+		judge.Heading = fmt.Sprintf("Can %s build this?", scope.Chars[0].Name)
+	case "tag":
+		judge.Heading = fmt.Sprintf("Can your %q characters build this?", scope.Tag)
+	}
+
+	loaded := 0
+	for _, ch := range scope.Chars {
+		if _, ok := data.Skills[ch.CharacterID]; ok {
+			loaded++
+		}
+	}
+	if loaded == 0 {
+		switch scope.Kind {
+		case "char":
+			judge.Note = fmt.Sprintf("Skills haven't synced for %s yet — once they land, this says what they can build.", scope.Chars[0].Name)
+		default:
+			judge.Note = "Skills haven't synced for anyone with this tag yet — once they land, this says what they can build."
+		}
+		return judge
+	}
+	judge.Known = true
+	if scope.Kind == "tag" && loaded < len(scope.Chars) {
+		judge.Note = fmt.Sprintf("Skills are on file for %d of %d tagged characters; the rest count as untrained until they sync.", loaded, len(scope.Chars))
+	}
+
+	best := func(skillID int64) int {
+		level := 0
+		for _, ch := range scope.Chars {
+			if trained, ok := data.Skills[ch.CharacterID]; ok && trained[skillID] > level {
+				level = trained[skillID]
+			}
+		}
+		return level
+	}
+
+	ids := make([]int64, 0, len(reqs))
+	for id := range reqs {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return nameOf(ids[i]) < nameOf(ids[j]) })
+
+	judge.CanBuild = true
+	for _, id := range ids {
+		need, have := reqs[id], int64(best(id))
+		ok := have >= need
+		if !ok {
+			judge.CanBuild = false
+		}
+		line := skillJudgeLine{OK: ok}
+		switch {
+		case scope.Kind == "tag" && have == 0:
+			line.Text = fmt.Sprintf("%s — needs %s · nobody with this tag has it trained", nameOf(id), esi.RomanLevel(int(need)))
+		case scope.Kind == "tag":
+			line.Text = fmt.Sprintf("%s — needs %s · best on the tag %s", nameOf(id), esi.RomanLevel(int(need)), esi.RomanLevel(int(have)))
+		case have == 0:
+			line.Text = fmt.Sprintf("%s — needs %s · not trained", nameOf(id), esi.RomanLevel(int(need)))
+		default:
+			line.Text = fmt.Sprintf("%s — needs %s · trained %s", nameOf(id), esi.RomanLevel(int(need)), esi.RomanLevel(int(have)))
+		}
+		judge.Lines = append(judge.Lines, line)
+	}
+
+	switch {
+	case len(reqs) == 0:
+		judge.Summary = "Nothing in this build chain lists a skill requirement."
+	case judge.CanBuild:
+		judge.Summary = "Every skill in the chain is covered."
+	default:
+		judge.Summary = "Not yet — the short skills are listed above."
+	}
+	return judge
+}
+
+// planVerdictFor prices a scoped plan's judgement: the net buy
+// cost after stock against the expected sell value of what
+// comes out. Unknown prices stay unknown — the verdict says so
+// instead of pricing missing inputs at zero.
+func planVerdictFor(res *planResult, prices map[int64]esi.MarketPrice, productID int64, label string) *planVerdict {
+	root := res.Root
+	verdict := &planVerdict{Heading: "Worth making — judged as " + label}
+	var notes []string
+
+	costKnown := root.CostComplete && res.UnpricedLines == 0
+	if costKnown {
+		verdict.Cost = isk(root.LineCost)
+	} else if res.UnpricedLines > 0 {
+		verdict.Incomplete = true
+		notes = append(notes, fmt.Sprintf("Prices incomplete — %d shopping items have no price yet, so a profit figure would be a guess.", res.UnpricedLines))
+	}
+
+	if p, ok := unitPrice(prices, productID); ok {
+		value := p * float64(root.ProducedQty)
+		verdict.SellValue = isk(value)
+		if costKnown && value > 0 {
+			profit := value - root.LineCost
+			verdict.Profit = isk(profit)
+			if root.Runs > 0 {
+				verdict.ProfitPerRun = isk(profit / float64(root.Runs))
+			}
+			verdict.MarginPct = fmt.Sprintf("%.1f%% of the sell value", profit/value*100)
+		}
+	} else {
+		notes = append(notes, "No market price for the finished item yet, so there's no sell value to judge against.")
+	}
+	verdict.Note = strings.Join(notes, " ")
+	return verdict
 }

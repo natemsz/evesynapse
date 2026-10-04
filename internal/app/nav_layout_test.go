@@ -272,12 +272,21 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// still paints the heading text. v0.3.07.012: the band
 		// is a solid ::before behind the heading, never a
 		// layered background on the heading itself — these
-		// pins assert the rendered distinction (solid bar +
-		// clipped text), not the intention.
+		// pins assert the rendered distinction, not the
+		// intention. v0.3.07.014: the module titles themselves
+		// paint solid flare gold — the gradient-text clip
+		// inside these positioned headings does not paint on
+		// every phone browser, and an invisible title is worse
+		// than a solid one. Page titles keep the ramp.
 		"background: var(--panel-head);\n  margin: -1.25rem -1.25rem 1rem;",
 		".panel > h2, .panel > h3,\n.card > h2:first-child, .card > h3:first-child,\n.foldable > h2:first-child, .foldable > h3:first-child {\n  display: block;\n  position: relative;\n  z-index: 0;\n  border-bottom: 1px solid #262626;\n}",
 		".panel > h2::before, .panel > h3::before,\n.card > h2:first-child::before, .card > h3:first-child::before,\n.foldable > h2:first-child::before, .foldable > h3:first-child::before {\n  content: \"\";\n  position: absolute;\n  inset: 0;\n  z-index: -1;\n  background: var(--panel-head);\n  border-radius: inherit;\n}",
 		"h2, h3 {\n  background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);\n  -webkit-background-clip: text;\n  background-clip: text;\n  color: transparent;",
+		// v0.3.07.014: module/card/foldable titles are solid —
+		// no clipped ramp, no transparent glyphs on these
+		// headings; the exact-rule pin carries the assertion
+		// (solid #ffb84d, clip reset to border-box).
+		".panel > h2, .panel > h3,\n.card > h2:first-child, .card > h3:first-child,\n.foldable > h2:first-child, .foldable > h3:first-child {\n  background: none;\n  -webkit-background-clip: border-box;\n  background-clip: border-box;\n  color: #ffb84d;\n  -webkit-text-fill-color: currentColor;\n}",
 		// v0.3.07.012: Needs attention rows wear the same
 		// zebra as table rows — same --row/--row-alt cycle
 		// and the same hover fill.

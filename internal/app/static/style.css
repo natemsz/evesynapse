@@ -387,6 +387,23 @@ main {
 .panel > h2, .panel > h3 { margin: 1.1rem 0 0.65rem; padding: 0.45rem 0.65rem; border-radius: 3px; }
 .card > h2:first-child, .card > h3:first-child { margin: -0.85rem -1rem 0.75rem; padding: 0.55rem 1rem; border-radius: 4px 4px 0 0; }
 .foldable > h2:first-child, .foldable > h3:first-child { margin: 0 0 0.75rem; padding: 0.45rem 0.65rem; border-radius: 3px; }
+/* v0.3.07.014: module titles paint solid. The .012 band
+   leaned on the h2/h3 gradient-text clip above, and on at
+   least one phone Chrome build the clip does not paint
+   inside these positioned headings — the band renders, the
+   title does not. So the module/card/foldable titles take
+   the palette's solid flare gold (the @supports fallback
+   color) with no clipped background at all; page titles
+   keep the gradient text. */
+.panel > h2, .panel > h3,
+.card > h2:first-child, .card > h3:first-child,
+.foldable > h2:first-child, .foldable > h3:first-child {
+  background: none;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  color: #ffb84d;
+  -webkit-text-fill-color: currentColor;
+}
 .card table { margin-bottom: 0.5rem; }
 .card.has-fold > h2:first-child, .card.has-fold > h3:first-child { padding-right: 2.2rem; }
 

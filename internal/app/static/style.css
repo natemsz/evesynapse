@@ -984,17 +984,16 @@ html[data-nav="hidden"] .sidebar { display: none; }
   min-height: 2.4rem;
   padding: 0 0.35rem 0.55rem;
 }
-.sidebar-wordmark {
-  font-size: 0.94rem;
-  letter-spacing: 0.18em;
-}
 .sidebar-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.25rem;
   margin-left: auto;
 }
 .nav-state-btn,
-.nav-reopen {
+.nav-reopen,
+.nav-drawer-close,
+.nav-expand-btn {
   display: none;
   align-items: center;
   justify-content: center;
@@ -1010,9 +1009,18 @@ html[data-nav="hidden"] .sidebar { display: none; }
   font: inherit;
 }
 html.js .nav-state-btn { display: inline-flex; }
+html.js .nav-expand-btn { display: inline-flex; }
 html.js[data-nav="hidden"] .nav-reopen { display: inline-flex; }
+.nav-expand-btn {
+  padding-right: 0.35rem;
+  padding-left: 0.35rem;
+  font-size: 0.92rem;
+  white-space: nowrap;
+}
 .nav-state-btn:hover,
-.nav-reopen:hover { color: #fff6e6; border-color: var(--accent); }
+.nav-reopen:hover,
+.nav-drawer-close:hover,
+.nav-expand-btn:hover { color: #fff6e6; border-color: var(--accent); }
 .sidenav {
   display: flex;
   flex-direction: column;
@@ -1053,6 +1061,10 @@ html.js[data-nav="hidden"] .nav-reopen { display: inline-flex; }
   font-size: 1rem;
   line-height: 1;
   text-align: center;
+}
+.nav-icon-bars {
+  font-size: 0.72rem;
+  letter-spacing: -0.12em;
 }
 .nav-label {
   min-width: 0;
@@ -1110,12 +1122,18 @@ html.js[data-nav="hidden"] .nav-reopen { display: inline-flex; }
   font-size: 0.95rem;
 }
 .sidebar-account .branch .menu { margin-left: 0; }
+.sidebar-account.has-character .sidebar-character { display: none; }
+.sidebar-signout {
+  display: inline-flex;
+  margin-top: 0.45rem;
+  color: #ffb84d;
+}
 html[data-nav="rail"] .sidebar-inner { overflow: visible; }
-html[data-nav="rail"] .sidebar-wordmark,
 html[data-nav="rail"] .nav-label,
 html[data-nav="rail"] .sidebar-account { display: none; }
 html[data-nav="rail"] .sidebar-brand { justify-content: center; padding-right: 0; padding-left: 0; }
 html[data-nav="rail"] .sidebar-actions { margin-left: 0; }
+html[data-nav="rail"] .nav-expand-btn { display: none; }
 html[data-nav="rail"] #nav-hide { display: none; }
 html[data-nav="rail"] .sidenav a.navlink,
 html[data-nav="rail"] .sidebar .branch > summary {
@@ -1139,7 +1157,22 @@ html[data-nav="rail"] .sidebar .branch .menu {
 html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
 .page-shell { min-width: 0; }
 .topbar { min-height: 3.2rem; }
-.topbar-wordmark { display: none; }
+.topbar-wordmark { display: inline-block; }
+.topbar-character {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+.topbar-portrait { flex: none; }
+.topbar-character-name {
+  max-width: 11rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.topbar-switcher { flex: none; }
+.topbar-switcher > summary { white-space: nowrap; }
 .nav-hamburger {
   display: none;
   align-items: center;
@@ -1167,6 +1200,8 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
 .nav-hamburger:focus-visible,
 .nav-state-btn:focus-visible,
 .nav-reopen:focus-visible,
+.nav-drawer-close:focus-visible,
+.nav-expand-btn:focus-visible,
 .sidebar .branch > summary:focus-visible {
   outline: 2px solid #ffb84d;
   outline-offset: 2px;
@@ -1217,6 +1252,36 @@ tbody tr.yours td { background-color: #2a2015; }
     transition-delay: 0s;
   }
   .sidebar-inner { padding-top: 3.7rem; }
+  /* In drawer mode the navigation is always the full labeled
+     list: the wide-screen rail/hidden choices never leak in,
+     the state toggles make way for a real close control, and
+     branch menus open inline instead of as rail flyouts. */
+  .sidebar .sidebar-actions .nav-state-btn { display: none; }
+  .sidebar .nav-drawer-close { display: inline-flex; }
+  html[data-nav="rail"] .sidebar .nav-expand-btn { display: inline-flex; }
+  html[data-nav="rail"] .sidebar-inner { overflow-y: auto; }
+  html[data-nav="rail"] .nav-label { display: block; }
+  html[data-nav="rail"] .sidebar-account { display: block; }
+  .sidebar-account.has-character .sidebar-character { display: block; }
+  html[data-nav="rail"] .sidebar-brand { justify-content: flex-start; padding-right: 0.35rem; padding-left: 0.35rem; }
+  html[data-nav="rail"] .sidebar-actions { margin-left: auto; }
+  html[data-nav="rail"] .sidenav a.navlink,
+  html[data-nav="rail"] .sidebar .branch > summary {
+    justify-content: flex-start;
+    padding-right: 0.55rem;
+    padding-left: 0.55rem;
+  }
+  html[data-nav="rail"] .sidebar .branch > summary::after { display: block; }
+  html[data-nav="rail"] .sidebar .branch .menu {
+    position: static;
+    min-width: 0;
+    margin: 0.15rem 0 0.35rem 2.55rem;
+    padding: 0.15rem 0 0.15rem 0.4rem;
+    background: transparent;
+    border: 0;
+    border-left: 1px solid #2a2a2a;
+    box-shadow: none;
+  }
   .nav-backdrop {
     position: fixed;
     inset: 0;
@@ -1237,6 +1302,9 @@ tbody tr.yours td { background-color: #2a2015; }
     font-size: 0.78rem;
     letter-spacing: 0.14em;
   }
+  .topbar-character { display: none; }
+  .topbar > .topsearch { order: 3; }
+  .topbar > .page-sync { order: 4; }
   .topsearch {
     flex: 1 1 auto;
     min-width: 0;

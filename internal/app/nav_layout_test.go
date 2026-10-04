@@ -34,7 +34,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`<input class="nav-drawer-checkbox" type="checkbox" id="nav-drawer-toggle"`,
 		`<aside class="sidebar" id="site-nav">`,
 		`<nav class="sidenav" aria-label="Primary">`,
-		`<label class="nav-hamburger" for="nav-drawer-toggle" role="button" tabindex="0" aria-expanded="false" aria-controls="site-nav">`,
+		`<label class="nav-hamburger" for="nav-drawer-toggle" role="button" tabindex="0" aria-expanded="false" aria-controls="site-nav" aria-label="Menu" title="Menu"><svg class="nav-control-svg nav-hamburger-icon" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></g></svg></label>`,
 		`<label class="nav-backdrop" for="nav-drawer-toggle" aria-hidden="true"></label>`,
 		`<button type="button" class="nav-expand-btn" id="nav-expand-all" aria-label="Expand all navigation categories" title="Expand all navigation categories" aria-expanded="false"><span class="expand-icons" aria-hidden="true"><svg class="nav-control-svg expand-icon expand-icon-plus" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M12 8.5v7M8.5 12h7"/></g></svg><svg class="nav-control-svg expand-icon expand-icon-minus" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M8.5 12h7"/></g></svg></span></button>`,
 		`<button type="button" class="nav-state-btn" id="nav-collapse"`,
@@ -66,6 +66,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`<details class="branch switcher topbar-switcher">`,
 		`<a class="sidebar-signout" href="/auth/logout">Sign out</a>`,
 		`id="topbar-q"`,
+		`<svg class="search-glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round"><circle cx="10.8" cy="10.8" r="6.2"/><path d="M15.2 15.2 20.4 20.4"/></g></svg>`,
 		`id="topbar-suggest"`,
 		`id="page-sync-indicator"`)
 
@@ -89,6 +90,8 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`<span class="nav-icon" aria-hidden="true">↻</span>`,
 		`<span class="nav-icon" aria-hidden="true">✦</span>`,
 		`<span class="expand-glyph"`,
+		"hamburger-lines",
+		"nav-hamburger-text",
 		`>«</button>`,
 		`>×</button>`,
 		`>×</label>`,
@@ -104,6 +107,13 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	characterAt := strings.Index(body, `<div class="topbar-character">`)
 	if indicatorAt < 0 || searchAt < 0 || characterAt < 0 || !(indicatorAt < searchAt && searchAt < characterAt) {
 		t.Errorf("topbar cluster order = indicator %d, search %d, character %d; want indicator < search < character", indicatorAt, searchAt, characterAt)
+	}
+	// The search glyph parks inside the top search wrap, ahead
+	// of the input it decorates; the suggestion dropdown keeps
+	// anchoring to the same wrap.
+	glyphAt := strings.Index(body, `<svg class="search-glyph"`)
+	if glyphAt < 0 || glyphAt > searchAt {
+		t.Errorf("search glyph at %d, search input at %d; want the glyph inside the wrap before the input", glyphAt, searchAt)
 	}
 	// The top bar is a direct child of the body, ahead of the
 	// content column, so the fixed strip spans over the
@@ -172,7 +182,6 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		".nav-icon svg {\n  display: block;\n  width: 1.05em;\n  height: 1.05em;\n  margin: 0 auto;\n  fill: #ffb84d;\n  stroke: #ffb84d;\n}",
 		".sidebar .branch.active > summary .nav-icon svg,\n.sidenav a.navlink.active .nav-icon svg {\n  filter: brightness(1.15);\n}",
 		".nav-hamburger {\n  display: none;\n  align-items: center;\n  justify-content: center;",
-		".nav-hamburger-text { line-height: 1; }",
 		".nav-control-svg {\n  display: block;\n  flex: none;\n  width: 1.05rem;\n  height: 1.05rem;\n  fill: #ffb84d;\n  stroke: #ffb84d;\n}",
 		".nav-expand-btn .expand-icon-minus { display: none; }",
 		".nav-expand-btn[aria-expanded=\"true\"] .expand-icon-plus { display: none; }",
@@ -215,6 +224,16 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		".nav-expand-btn",
 		"html.js .nav-expand-btn { display: inline-flex; }",
 		"html[data-nav=\"rail\"] .sidebar .nav-expand-btn { display: inline-flex; }",
+		// v0.3.07.005 wide top bar: the wordmark's auto margin
+		// pins the sync/search/character cluster to the right
+		// edge as one group, and the search field carries its
+		// gradient magnifier on extra left padding.
+		"@media (min-width: 861px)",
+		".topbar-wordmark { margin-right: auto; }",
+		".topsearch { flex: 0 1 22rem; }",
+		".search-glyph {",
+		"pointer-events: none;",
+		".topsearch input { padding: 0.3rem 0.55rem 0.3rem 2rem; font-size: 0.85rem; }",
 	} {
 		if !strings.Contains(css, want) {
 			t.Errorf("style.css missing %q", want)
@@ -225,6 +244,8 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`url("/static/bg.jpg") no-repeat top center fixed`,
 		".nav-icon-bars",
 		".expand-glyph",
+		".hamburger-lines",
+		".nav-hamburger-text",
 	} {
 		if strings.Contains(css, unwanted) {
 			t.Errorf("style.css still contains %q", unwanted)

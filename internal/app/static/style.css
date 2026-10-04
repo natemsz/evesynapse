@@ -545,7 +545,20 @@ input[type="text"]:focus, input[type="search"]:focus {
    and the sign-in line; it yields width first on small screens. --- */
 .topsearch { margin: 0; }
 .searchwrap.topsearch-wrap { width: min(20rem, 34vw); }
-.topsearch input { padding: 0.3rem 0.55rem; font-size: 0.85rem; }
+.topsearch input { padding: 0.3rem 0.55rem 0.3rem 2rem; font-size: 0.85rem; }
+/* Gradient magnifier parked at the search field's left edge;
+   the input's extra left padding keeps text clear of it. */
+.search-glyph {
+  position: absolute;
+  left: 0.55rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1rem;
+  height: 1rem;
+  pointer-events: none;
+  fill: #ffb84d;
+  stroke: #ffb84d;
+}
 @media (max-width: 720px) {
   .searchwrap.topsearch-wrap { width: min(11rem, 40vw); }
 }
@@ -1234,14 +1247,6 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.hamburger-lines {
-  flex: none;
-  width: 1rem;
-  height: 2px;
-  background: #ffb84d;
-  box-shadow: 0 -5px 0 #ffb84d, 0 5px 0 #ffb84d;
-}
-.nav-hamburger-text { line-height: 1; }
 .topsearch { flex: 0 1 22rem; margin-left: 0; }
 .searchwrap.topsearch-wrap { flex: 1 1 auto; width: 100%; }
 .nav-hamburger:focus-visible,
@@ -1376,6 +1381,16 @@ tbody tr.yours td { background-color: #2a2015; }
   main { margin: 0.65rem auto; padding: 0 0.6rem; }
   footer { padding: 0 0.6rem 1rem; }
 }
+/* Wide top bar: the wordmark holds the left corner and the
+   page-sync indicator, search and character selector ride the
+   right edge as one group with even gaps. Pushing from the
+   wordmark (rendered on every page) keeps the group pinned
+   whether or not the indicator happens to be showing. */
+@media (min-width: 861px) {
+  .topbar-wordmark { margin-right: auto; }
+  .page-sync { margin-left: 0; }
+  .topsearch { flex: 0 1 22rem; }
+}
 @media (max-width: 719px) {
   .grid.home-grid > .card[data-widget="briefing"] { grid-column: span 2; }
   .fleet-tools input[type="search"] { max-width: 100%; }
@@ -1393,7 +1408,6 @@ tbody tr.yours td { background-color: #2a2015; }
   .fleet-tools { gap: 0.4rem; }
   .fleet-tools input[type="search"] { width: 100%; }
   .topbar-wordmark { letter-spacing: 0.1em; }
-  .nav-hamburger-text { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .sidebar { transition: none; }

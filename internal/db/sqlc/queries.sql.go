@@ -592,7 +592,7 @@ func (q *Queries) GetSDESystem(ctx context.Context, systemID int64) (SdeSystem, 
 
 const getSDEType = `-- name: GetSDEType :one
 
-SELECT type_id, name, group_id, market_group_id, published FROM sde_types
+SELECT type_id, name, group_id, market_group_id, published, description FROM sde_types
 WHERE type_id = ?
 `
 
@@ -610,6 +610,7 @@ func (q *Queries) GetSDEType(ctx context.Context, typeID int64) (SdeType, error)
 		&i.GroupID,
 		&i.MarketGroupID,
 		&i.Published,
+		&i.Description,
 	)
 	return i, err
 }

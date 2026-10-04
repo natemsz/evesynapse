@@ -917,6 +917,105 @@
   }
 })();
 
+// --- Market history chart: day-point tooltips ---------------
+// Hover (mouse) or focus (keyboard) follows the point; a tap
+// pins the tip so it can be read, and the next tap — the same
+// point again, or anywhere else — lets it go. Delegation on
+// document throughout, so the live-region fragment swap that
+// replaces the chart body keeps working untouched.
+(function () {
+  var pinned = null; // the .cdot holding the tip open by tap
+
+  function tipOf(dot) {
+    var chart = dot.closest ? dot.closest(".pchart") : null;
+    return chart ? chart.querySelector(".ctip") : null;
+  }
+
+  function fill(tip, dot) {
+    tip.innerHTML = "";
+    var date = document.createElement("div");
+    date.className = "ctip-date";
+    date.textContent = dot.getAttribute("data-date");
+    tip.appendChild(date);
+    var rows = [
+      ["Average", dot.getAttribute("data-avg") + " ISK"],
+      ["High", dot.getAttribute("data-high") + " ISK"],
+      ["Low", dot.getAttribute("data-low") + " ISK"],
+      ["Volume", dot.getAttribute("data-vol")]
+    ];
+    for (var i = 0; i < rows.length; i++) {
+      var line = document.createElement("div");
+      line.textContent = rows[i][0] + ": " + rows[i][1];
+      tip.appendChild(line);
+    }
+  }
+
+  function show(dot) {
+    var tip = tipOf(dot);
+    if (!tip) return;
+    fill(tip, dot);
+    tip.hidden = false;
+    var chart = tip.parentElement;
+    var crect = chart.getBoundingClientRect();
+    var drect = dot.getBoundingClientRect();
+    var left = drect.left - crect.left + drect.width / 2;
+    var half = tip.offsetWidth / 2;
+    if (left < half) left = half;
+    if (left > crect.width - half) left = crect.width - half;
+    tip.style.left = left + "px";
+    tip.style.top = (drect.top - crect.top) + "px";
+  }
+
+  function hide(dot) {
+    var tip = tipOf(dot);
+    if (tip) tip.hidden = true;
+  }
+
+  function asDot(ev) {
+    var t = ev.target;
+    return t && t.closest ? t.closest(".cdot") : null;
+  }
+
+  document.addEventListener("mouseover", function (ev) {
+    var dot = asDot(ev);
+    if (dot && pinned !== dot) show(dot);
+  });
+  document.addEventListener("mouseout", function (ev) {
+    var dot = asDot(ev);
+    if (dot && pinned !== dot) hide(dot);
+  });
+  document.addEventListener("focusin", function (ev) {
+    var dot = asDot(ev);
+    if (dot) show(dot);
+  });
+  document.addEventListener("focusout", function (ev) {
+    var dot = asDot(ev);
+    if (dot && pinned !== dot) hide(dot);
+  });
+  document.addEventListener("click", function (ev) {
+    var dot = asDot(ev);
+    if (dot) {
+      if (pinned === dot) {
+        pinned = null;
+        hide(dot);
+      } else {
+        if (pinned) hide(pinned);
+        pinned = dot;
+        show(dot);
+      }
+    } else if (pinned) {
+      hide(pinned);
+      pinned = null;
+    }
+  });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape" && pinned) {
+      hide(pinned);
+      pinned = null;
+    }
+  });
+})();
+
 // Page-sync indicator: while this page still has data on the
 // way (names, descriptions, price history it asked for), the
 // top banner shows a small ember ring with the count. It polls

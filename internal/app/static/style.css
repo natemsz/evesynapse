@@ -708,6 +708,36 @@ footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
   .grid.home-grid { grid-template-columns: minmax(0, 1fr); }
   .grid.home-grid > .span3, .grid.home-grid > .span6 { grid-column: span 1; }
 }
+/* --- market history chart: interactive day points ---------- */
+.pchart { position: relative; }
+.pchart .cdot {
+  fill: #ffb84d;
+  fill-opacity: 0;
+  stroke: none;
+  cursor: pointer;
+}
+.pchart .cdot:hover { fill-opacity: 0.18; }
+.pchart .cdot:focus {
+  outline: none;
+  fill-opacity: 0.22;
+  stroke: #ffd27a;
+  stroke-width: 1.5;
+}
+.ctip {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  background: var(--panel);
+  border: 1px solid #4a2408;
+  border-radius: 3px;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.85em;
+  line-height: 1.45;
+  white-space: nowrap;
+  transform: translate(-50%, -115%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+}
+.ctip .ctip-date { color: #ffd27a; font-weight: 600; }
 body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbing; }
 @media (prefers-reduced-motion: reduce) {
   .card.drag-settle { transition: none; }

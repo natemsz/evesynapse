@@ -88,6 +88,12 @@ var sdeTypeDescriptionsSchema string
 //go:embed schema/019_wallet_history.sql
 var walletHistorySchema string
 
+//go:embed schema/020_widget_configs.sql
+var widgetConfigsSchema string
+
+//go:embed schema/021_guide_prices.sql
+var guidePricesSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -146,6 +152,13 @@ type Application struct {
 	pricesMu     sync.Mutex
 	prices       map[int64]esi.MarketPrice
 	pricesExpiry time.Time
+
+	// The worker-stored market guide (guide_prices.go), cached
+	// in memory under its fetched_at stamp so renders reload
+	// only when a refresh has landed.
+	storedPricesMu    sync.Mutex
+	storedPricesCache map[int64]esi.MarketPrice
+	storedPricesStamp string
 
 	// Character IDs flagged for first-in-line warm-up on the next
 	// worker cycle (fresh SSO logins, Sync-page re-warm requests).
@@ -278,6 +291,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/home", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Post("/layout", app.handleHomeLayout)
+		r.Post("/widget-config", app.handleWidgetConfig)
 	})
 	r.Get("/healthz", handleHealthz)
 	r.Get("/favicon.ico", handleFavicon)

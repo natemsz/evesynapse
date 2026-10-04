@@ -259,6 +259,28 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 020 (per-widget configuration: the orders widget's
+	// scope + merge mode first), applied the same guarded way.
+	var widgetConfigTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'widget_configs'`).Scan(&widgetConfigTables); err != nil {
+		return nil, err
+	}
+	if widgetConfigTables == 0 {
+		if err := applySchema(conn, widgetConfigsSchema); err != nil {
+			return nil, err
+		}
+	}
+	// Schema 021 (stored market guide for always-on asset
+	// valuation), applied the same guarded way.
+	var guidePricesTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'guide_prices'`).Scan(&guidePricesTables); err != nil {
+		return nil, err
+	}
+	if guidePricesTables == 0 {
+		if err := applySchema(conn, guidePricesSchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

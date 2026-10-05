@@ -66,6 +66,16 @@ func (q *Queries) DeleteMarketRegionStatsByRegion(ctx context.Context, regionID 
 	return err
 }
 
+const deleteMarketStationLeaderboardByRegion = `-- name: DeleteMarketStationLeaderboardByRegion :exec
+DELETE FROM market_station_leaderboard
+WHERE region_id = $1
+`
+
+func (q *Queries) DeleteMarketStationLeaderboardByRegion(ctx context.Context, regionID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteMarketStationLeaderboardByRegion, regionID)
+	return err
+}
+
 const deleteMarketStationStatsByRegion = `-- name: DeleteMarketStationStatsByRegion :exec
 DELETE FROM market_station_stats
 WHERE region_id = $1
@@ -229,6 +239,19 @@ func (q *Queries) GetMarketFetchState(ctx context.Context, kind string) (MarketF
 		&i.AttemptedAt,
 	)
 	return i, err
+}
+
+const getMarketStationLeaderboardStamp = `-- name: GetMarketStationLeaderboardStamp :one
+SELECT CAST(COALESCE(MAX(updated_at), '') AS TEXT) AS stamp
+FROM market_station_leaderboard
+WHERE ($1::bigint = 0 OR region_id = $1::bigint)
+`
+
+func (q *Queries) GetMarketStationLeaderboardStamp(ctx context.Context, dollar_1 int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getMarketStationLeaderboardStamp, dollar_1)
+	var stamp string
+	err := row.Scan(&stamp)
+	return stamp, err
 }
 
 const getMarketSweepState = `-- name: GetMarketSweepState :one
@@ -1024,6 +1047,44 @@ func (q *Queries) ListMarketRegionStatsDaily(ctx context.Context, arg ListMarket
 	return items, nil
 }
 
+const listMarketStationLeaderboard = `-- name: ListMarketStationLeaderboard :many
+SELECT region_id, location_id, sell_orders, buy_orders, sell_value, buy_value, updated_at
+FROM market_station_leaderboard
+WHERE ($1::bigint = 0 OR region_id = $1::bigint)
+ORDER BY region_id, location_id
+`
+
+func (q *Queries) ListMarketStationLeaderboard(ctx context.Context, dollar_1 int64) ([]MarketStationLeaderboard, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketStationLeaderboard, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketStationLeaderboard
+	for rows.Next() {
+		var i MarketStationLeaderboard
+		if err := rows.Scan(
+			&i.RegionID,
+			&i.LocationID,
+			&i.SellOrders,
+			&i.BuyOrders,
+			&i.SellValue,
+			&i.BuyValue,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMarketStationStatsByRegion = `-- name: ListMarketStationStatsByRegion :many
 SELECT location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at
 FROM market_station_stats
@@ -1102,6 +1163,63 @@ func (q *Queries) ListMarketSweepStationAggregates(ctx context.Context, regionID
 			&i.MaxPrice,
 			&i.OrderCount,
 			&i.TotalVolume,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketSweepStationLeaderboardAggregates = `-- name: ListMarketSweepStationLeaderboardAggregates :many
+SELECT location_id, is_buy_order,
+       COUNT(*) AS order_count, CAST(SUM(price * volume_remain) AS DOUBLE PRECISION) AS open_value
+FROM market_sweep_orders
+WHERE region_id = $1 AND location_id > 0
+GROUP BY location_id, is_buy_order
+ORDER BY location_id, is_buy_order
+`
+
+type ListMarketSweepStationLeaderboardAggregatesRow struct {
+	LocationID int64   `json:"location_id"`
+	IsBuyOrder int64   `json:"is_buy_order"`
+	OrderCount int64   `json:"order_count"`
+	OpenValue  float64 `json:"open_value"`
+}
+
+// ---------------------------------------------------------------------
+// P5 station leaderboard (schema_pg 002): per-station open-order
+// counts and open ISK value per side, distilled by the same
+// whole-region sweeps as the stats above. A completed sweep
+// replaces the region's leaderboard rows inside the sweep
+// transaction: delete the region, then upsert the fresh measures
+// station by station. The aggregates read the staged book like
+// the station stats do, but grouped only by place: the open
+// value needs price times remaining volume per order, which the
+// type-grain aggregates cannot reconstruct. The leaderboard page
+// reads only these rows. A region argument of 0 means every
+// region.
+// ---------------------------------------------------------------------
+func (q *Queries) ListMarketSweepStationLeaderboardAggregates(ctx context.Context, regionID int64) ([]ListMarketSweepStationLeaderboardAggregatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketSweepStationLeaderboardAggregates, regionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketSweepStationLeaderboardAggregatesRow
+	for rows.Next() {
+		var i ListMarketSweepStationLeaderboardAggregatesRow
+		if err := rows.Scan(
+			&i.LocationID,
+			&i.IsBuyOrder,
+			&i.OrderCount,
+			&i.OpenValue,
 		); err != nil {
 			return nil, err
 		}
@@ -2134,6 +2252,40 @@ func (q *Queries) UpsertMarketRegionStatDaily(ctx context.Context, arg UpsertMar
 		arg.BuyOrders,
 		arg.SellVolume,
 		arg.BuyVolume,
+	)
+	return err
+}
+
+const upsertMarketStationLeaderboard = `-- name: UpsertMarketStationLeaderboard :exec
+INSERT INTO market_station_leaderboard (region_id, location_id, sell_orders, buy_orders, sell_value, buy_value, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (region_id, location_id) DO UPDATE SET
+    sell_orders = excluded.sell_orders,
+    buy_orders  = excluded.buy_orders,
+    sell_value  = excluded.sell_value,
+    buy_value   = excluded.buy_value,
+    updated_at  = excluded.updated_at
+`
+
+type UpsertMarketStationLeaderboardParams struct {
+	RegionID   int64   `json:"region_id"`
+	LocationID int64   `json:"location_id"`
+	SellOrders int64   `json:"sell_orders"`
+	BuyOrders  int64   `json:"buy_orders"`
+	SellValue  float64 `json:"sell_value"`
+	BuyValue   float64 `json:"buy_value"`
+	UpdatedAt  string  `json:"updated_at"`
+}
+
+func (q *Queries) UpsertMarketStationLeaderboard(ctx context.Context, arg UpsertMarketStationLeaderboardParams) error {
+	_, err := q.db.ExecContext(ctx, upsertMarketStationLeaderboard,
+		arg.RegionID,
+		arg.LocationID,
+		arg.SellOrders,
+		arg.BuyOrders,
+		arg.SellValue,
+		arg.BuyValue,
+		arg.UpdatedAt,
 	)
 	return err
 }

@@ -1780,10 +1780,14 @@
 
   var pilotSel = document.getElementById("fit-pilot");
   var nameInput = document.getElementById("fit-name");
-  var shipInput = document.getElementById("fit-ship-q");
-  var shipList = document.getElementById("fit-ship-suggest");
+  var searchInput = document.getElementById("fit-search");
+  var searchList = document.getElementById("fit-suggest");
+  var famChips = document.getElementById("fit-famchips");
+  var fittableChk = document.getElementById("fit-fittable");
+  var usableChk = document.getElementById("fit-usable");
+  var metaSel = document.getElementById("fit-meta");
   var picker = document.getElementById("fit-picker");
-  var pickerQ = document.getElementById("fit-picker-q");
+  var pickerHint = document.getElementById("fit-picker-hint");
   var pickerList = document.getElementById("fit-picker-list");
   var pickerFamily = document.getElementById("fit-picker-family");
   var saveBtn = document.getElementById("fit-save");
@@ -1840,7 +1844,27 @@
         next.charges = next.charges || {};
         state = next;
       }
+      syncFilterUI();
     }).catch(function () { /* the static copy stays honest */ });
+  }
+
+  // --- filter controls: enabled states follow ship/pilot ----------
+  function syncFilterUI() {
+    var hasShip = !!(state && state.shipTypeId);
+    if (fittableChk) {
+      fittableChk.disabled = !hasShip;
+      if (!hasShip) fittableChk.checked = false;
+      var fl = fittableChk.closest("label");
+      if (fl) fl.classList.toggle("disabled", !hasShip);
+    }
+    var allV = pilotID() === 0;
+    if (usableChk) {
+      usableChk.disabled = allV;
+      if (allV) usableChk.checked = false;
+      var ul = usableChk.closest("label");
+      if (ul) ul.classList.toggle("disabled", allV);
+      usableChk.title = allV ? "All V pilots can use everything" : "";
+    }
   }
 
   function findItem(typeID) {
@@ -1906,29 +1930,115 @@
     }
   });
 
-  if (pilotSel) pilotSel.addEventListener("change", simulate);
+  if (pilotSel) pilotSel.addEventListener("change", function () {
+    syncFilterUI();
+    simulate();
+  });
   if (nameInput) {
     nameInput.addEventListener("change", function () {
       state.name = nameInput.value;
     });
   }
+  syncFilterUI();
 
-  // --- ship search --------------------------------------------
-  var shipTimer = null;
-  function closeShip() { if (shipList) shipList.hidden = true; }
-  function queryShip() {
-    if (!shipInput || !shipList) return;
-    var q = shipInput.value.trim();
-    if (q.length < 2) { closeShip(); return; }
-    fetch("/fittings/picker.json?family=ship&q=" + encodeURIComponent(q), {
+  // --- unified search + filters -------------------------------
+  var searchFamily = "all";
+  var kindOrder = ["ship", "high", "medium", "low", "rig", "subsystem", "drone", "charge"];
+  var kindLabels = {
+    ship: "Ships", high: "High slots", medium: "Mid slots", low: "Low slots",
+    rig: "Rigs", subsystem: "Subsystems", drone: "Drones", charge: "Charges"
+  };
+
+  function filterQuery() {
+    var meta = metaSel ? metaSel.value : "0";
+    var usable = (usableChk && usableChk.checked && pilotID() > 0) ? "1" : "0";
+    return "&meta=" + encodeURIComponent(meta) + "&usable=" + usable + "&pilot=" + pilotID();
+  }
+  function pickerURL(family, q) {
+    return "/fittings/picker.json?family=" + encodeURIComponent(family) +
+      "&q=" + encodeURIComponent(q) + filterQuery();
+  }
+
+  // Fittable-only: kinds with free capacity on the current hull,
+  // from the slot-group Used/Max the workbench already renders.
+  function fittableKinds() {
+    if (!fittableChk || !fittableChk.checked) return null;
+    var wb = workbench();
+    if (!wb) return null;
+    var groups = wb.querySelectorAll(".fit-group");
+    if (!groups.length) return null;
+    var ok = {};
+    for (var i = 0; i < groups.length; i++) {
+      var g = groups[i];
+      var key = g.getAttribute("data-fit-group");
+      var used = parseInt(g.getAttribute("data-fit-used") || "0", 10) || 0;
+      var max = parseInt(g.getAttribute("data-fit-max") || "0", 10) || 0;
+      if (key && max > used) ok[key] = true;
+    }
+    var bw = parseFloat(wb.getAttribute("data-fit-bandwidth") || "0") || 0;
+    if (bw > 0) ok["drone"] = true;
+    ok["ship"] = true;
+    return ok;
+  }
+  function applyFittable(rows) {
+    var ok = fittableKinds();
+    if (!ok) return rows;
+    return (rows || []).filter(function (it) { return !!ok[it.kind || ""]; });
+  }
+
+  var searchTimer = null;
+  var suggestRows = [];
+  var suggestActive = -1;
+  function closeSearch() {
+    if (searchList) searchList.hidden = true;
+    if (searchInput) searchInput.setAttribute("aria-expanded", "false");
+    suggestActive = -1;
+  }
+  function suggestIcon(id) {
+    var img = document.createElement("img");
+    img.className = "sug-icon";
+    img.alt = "";
+    img.loading = "lazy";
+    img.draggable = false;
+    img.src = "https://images.evetech.net/types/" + id + "/icon?size=32";
+    return img;
+  }
+  function querySearch() {
+    if (!searchInput || !searchList) return;
+    var q = searchInput.value.trim();
+    if (q.length < 2) { closeSearch(); return; }
+    fetch(pickerURL(searchFamily, q), {
       cache: "no-store", headers: { "Accept": "application/json" }
     }).then(function (resp) {
       return resp.ok ? resp.json() : [];
     }).then(function (rows) {
-      shipList.innerHTML = "";
-      (rows || []).forEach(function (it) {
+      renderSuggest(applyFittable(rows));
+    }).catch(closeSearch);
+  }
+  function renderSuggest(rows) {
+    if (!searchList) return;
+    searchList.innerHTML = "";
+    suggestRows = [];
+    suggestActive = -1;
+    var groups = {};
+    (rows || []).forEach(function (it) {
+      var k = it.kind || "";
+      if (!groups[k]) groups[k] = [];
+      groups[k].push(it);
+    });
+    var any = false;
+    kindOrder.forEach(function (k) {
+      var items = groups[k];
+      if (!items || !items.length) return;
+      any = true;
+      var head = document.createElement("li");
+      head.className = "sug-kind";
+      head.textContent = kindLabels[k] || k;
+      searchList.appendChild(head);
+      items.forEach(function (it) {
         var li = document.createElement("li");
         li.setAttribute("role", "option");
+        li.appendChild(suggestIcon(it.id));
         var name = document.createElement("span");
         name.textContent = it.name;
         li.appendChild(name);
@@ -1938,61 +2048,121 @@
           lab.textContent = it.label;
           li.appendChild(lab);
         }
+        var row = { it: it, li: li };
+        suggestRows.push(row);
         li.addEventListener("mousedown", function (ev) {
           ev.preventDefault();
-          state.shipTypeId = it.id;
-          state.items = [];
-          state.charges = {};
-          shipInput.value = it.name;
-          closeShip();
-          simulate();
+          pickSuggestion(it);
         });
-        shipList.appendChild(li);
+        searchList.appendChild(li);
       });
-      shipList.hidden = !rows || rows.length === 0;
-    }).catch(closeShip);
-  }
-  if (shipInput) {
-    shipInput.addEventListener("input", function () {
-      if (shipTimer) window.clearTimeout(shipTimer);
-      shipTimer = window.setTimeout(queryShip, 150);
     });
-    shipInput.addEventListener("blur", function () {
-      window.setTimeout(closeShip, 120);
+    if (!any) {
+      var li = document.createElement("li");
+      li.className = "sug-empty";
+      li.textContent = "Nothing found — try a different search.";
+      searchList.appendChild(li);
+    }
+    searchInput.setAttribute("aria-expanded", any ? "true" : "false");
+    searchList.hidden = false;
+  }
+  function moveSuggest(dir) {
+    if (!suggestRows.length) return;
+    if (suggestActive >= 0 && suggestRows[suggestActive]) {
+      suggestRows[suggestActive].li.classList.remove("active");
+    }
+    suggestActive = (suggestActive + dir + suggestRows.length) % suggestRows.length;
+    var li = suggestRows[suggestActive].li;
+    li.classList.add("active");
+    if (li.scrollIntoView) li.scrollIntoView({ block: "nearest" });
+  }
+  function pickSuggestion(it) {
+    var kind = it.kind || "";
+    closeSearch();
+    if (kind === "ship") {
+      state.shipTypeId = it.id;
+      state.items = [];
+      state.charges = {};
+      if (searchInput) searchInput.value = it.name;
+      simulate();
+      return;
+    }
+    if (kind === "high" || kind === "medium" || kind === "low" ||
+        kind === "rig" || kind === "subsystem" || kind === "drone") {
+      addItem(it.id, 1);
+      return;
+    }
+    // Anything else (e.g. cargo items): jump the picker to it.
+    if (searchInput) searchInput.value = it.name;
+    openPicker("any");
+  }
+  if (searchInput) {
+    searchInput.addEventListener("input", function () {
+      if (searchTimer) window.clearTimeout(searchTimer);
+      searchTimer = window.setTimeout(querySearch, 150);
+    });
+    searchInput.addEventListener("keydown", function (ev) {
+      if (!searchList || searchList.hidden) return;
+      if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+        ev.preventDefault();
+        moveSuggest(ev.key === "ArrowDown" ? 1 : -1);
+      } else if (ev.key === "Enter") {
+        if (suggestActive >= 0 && suggestRows[suggestActive]) {
+          ev.preventDefault();
+          pickSuggestion(suggestRows[suggestActive].it);
+        }
+      } else if (ev.key === "Escape") {
+        closeSearch();
+      }
+    });
+    searchInput.addEventListener("blur", function () {
+      window.setTimeout(closeSearch, 120);
     });
   }
+  if (famChips) {
+    famChips.addEventListener("click", function (ev) {
+      var b = ev.target && ev.target.closest ? ev.target.closest("button[data-fam]") : null;
+      if (!b) return;
+      searchFamily = b.getAttribute("data-fam");
+      var btns = famChips.querySelectorAll("button[data-fam]");
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].classList.toggle("on", btns[i] === b);
+      }
+      querySearch();
+    });
+  }
+  function filtersChanged() {
+    querySearch();
+    if (picker && !picker.hidden) queryPicker();
+  }
+  if (fittableChk) fittableChk.addEventListener("change", filtersChanged);
+  if (usableChk) usableChk.addEventListener("change", filtersChanged);
+  if (metaSel) metaSel.addEventListener("change", filtersChanged);
 
   // --- module picker -------------------------------------------
   function openPicker(family) {
     if (!picker) return;
     picker.hidden = false;
-    if (pickerFamily && family) {
-      for (var i = 0; i < pickerFamily.options.length; i++) {
-        if (pickerFamily.options[i].value === family) {
-          pickerFamily.value = family;
-          break;
-        }
-      }
-    }
+    if (pickerFamily && family) pickerFamily.value = family;
     queryPicker();
-    if (pickerQ) pickerQ.focus();
     picker.scrollIntoView({ block: "nearest" });
   }
   function closePicker() { if (picker) picker.hidden = true; }
-  var pickerTimer = null;
   function queryPicker() {
     if (!pickerList) return;
     var family = pickerFamily ? pickerFamily.value : "any";
-    var q = pickerQ ? pickerQ.value.trim() : "";
-    fetch("/fittings/picker.json?family=" + encodeURIComponent(family) +
-      "&q=" + encodeURIComponent(q), {
+    var q = searchInput ? searchInput.value.trim() : "";
+    fetch(pickerURL(family, q), {
       cache: "no-store", headers: { "Accept": "application/json" }
     }).then(function (resp) {
       return resp.ok ? resp.json() : [];
     }).then(function (rows) {
       pickerList.innerHTML = "";
-      (rows || []).forEach(function (it) {
+      (applyFittable(rows) || []).forEach(function (it) {
         var li = document.createElement("li");
+        li.setAttribute("draggable", "true");
+        li.setAttribute("data-fit-pick", String(it.id));
+        li.appendChild(suggestIcon(it.id));
         var name = document.createElement("span");
         name.textContent = it.name;
         li.appendChild(name);
@@ -2013,17 +2183,89 @@
         li.textContent = "Nothing found — try a different search.";
         pickerList.appendChild(li);
       }
+      if (pickerHint) {
+        if (q.length >= 2) {
+          pickerHint.textContent = "matching \u201c" + q + "\u201d";
+          pickerHint.hidden = false;
+        } else {
+          pickerHint.hidden = true;
+        }
+      }
     }).catch(function () {});
-  }
-  if (pickerQ) {
-    pickerQ.addEventListener("input", function () {
-      if (pickerTimer) window.clearTimeout(pickerTimer);
-      pickerTimer = window.setTimeout(queryPicker, 150);
-    });
   }
   if (pickerFamily) pickerFamily.addEventListener("change", queryPicker);
   var pickerClose = document.getElementById("fit-picker-close");
   if (pickerClose) pickerClose.addEventListener("click", closePicker);
+
+  // --- drag and drop --------------------------------------------
+  // Mouse-only enhancement: the +/- buttons stay the touch path.
+  // Fitted slot circles drag between slots (decItem+addItem);
+  // dragging one off the display removes it. Picker rows drag in.
+  var dragTypeID = 0;
+  var dragFromFit = false;
+  function clearDropMarks() {
+    var marks = editor.querySelectorAll(".fit-vslot.drop-ok");
+    for (var i = 0; i < marks.length; i++) marks[i].classList.remove("drop-ok");
+  }
+  editor.addEventListener("dragstart", function (ev) {
+    var t = ev.target && ev.target.closest ? ev.target.closest("[data-fit-dec],[data-fit-pick]") : null;
+    if (!t || !ev.dataTransfer) return;
+    var dec = t.getAttribute("data-fit-dec");
+    var pick = t.getAttribute("data-fit-pick");
+    if (dec && t.classList.contains("fit-vslot")) {
+      dragTypeID = parseInt(dec, 10) || 0;
+      dragFromFit = true;
+      ev.dataTransfer.setData("text/plain", "fit:" + dragTypeID);
+      ev.dataTransfer.effectAllowed = "move";
+      t.classList.add("drag-src");
+    } else if (pick) {
+      dragTypeID = parseInt(pick, 10) || 0;
+      dragFromFit = false;
+      ev.dataTransfer.setData("text/plain", "pick:" + dragTypeID);
+      ev.dataTransfer.effectAllowed = "copy";
+    }
+  });
+  editor.addEventListener("dragover", function (ev) {
+    if (!dragTypeID) return;
+    var slot = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot") : null;
+    if (!slot) return;
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = dragFromFit ? "move" : "copy";
+    slot.classList.add("drop-ok");
+  });
+  editor.addEventListener("dragleave", function (ev) {
+    var slot = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot") : null;
+    if (slot) slot.classList.remove("drop-ok");
+  });
+  editor.addEventListener("drop", function (ev) {
+    if (!dragTypeID) return;
+    var slot = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot") : null;
+    if (!slot) return;
+    ev.preventDefault();
+    clearDropMarks();
+    var id = dragTypeID;
+    dragTypeID = 0;
+    if (dragFromFit) {
+      // Rearrange: take one off, put it back (lands in its own family).
+      decItem(id);
+      addItem(id, 1);
+    } else {
+      addItem(id, 1);
+    }
+    dragFromFit = false;
+  });
+  editor.addEventListener("dragend", function (ev) {
+    clearDropMarks();
+    if (dragFromFit && dragTypeID && ev.dataTransfer &&
+        ev.dataTransfer.dropEffect === "none") {
+      // Dropped off the display: same as the minus button.
+      decItem(dragTypeID);
+    }
+    dragTypeID = 0;
+    dragFromFit = false;
+    var src = editor.querySelector(".fit-vslot.drag-src");
+    if (src) src.classList.remove("drag-src");
+  });
 
   // --- save / export --------------------------------------------
   if (saveBtn) {
@@ -2077,4 +2319,35 @@
       }).catch(function () {});
     });
   }
+})();
+
+// --- ESI fittings list: client-side search + sort ----------------
+// (lists are small; the foldable sections now start collapsed)
+(function () {
+  var q = document.getElementById("fit-esi-q");
+  var sortSel = document.getElementById("fit-esi-sort");
+  var list = document.getElementById("fit-esi-list");
+  if (!q || !sortSel || !list) return;
+  function apply() {
+    var term = q.value.trim().toLowerCase();
+    var secs = Array.prototype.slice.call(list.querySelectorAll(":scope > section.foldable"));
+    secs.forEach(function (s) {
+      var name = (s.getAttribute("data-fit-name") || "").toLowerCase();
+      var ship = (s.getAttribute("data-fit-ship") || "").toLowerCase();
+      var hit = !term || name.indexOf(term) >= 0 || ship.indexOf(term) >= 0;
+      s.style.display = hit ? "" : "none";
+    });
+    var mode = sortSel.value;
+    var desc = mode.slice(-4) === "desc";
+    var byShip = mode.indexOf("ship") === 0;
+    secs.sort(function (a, b) {
+      var x = (byShip ? a.getAttribute("data-fit-ship") : a.getAttribute("data-fit-name")) || "";
+      var y = (byShip ? b.getAttribute("data-fit-ship") : b.getAttribute("data-fit-name")) || "";
+      var c = x.toLowerCase().localeCompare(y.toLowerCase());
+      return desc ? -c : c;
+    });
+    secs.forEach(function (s) { list.appendChild(s); });
+  }
+  q.addEventListener("input", apply);
+  sortSel.addEventListener("change", apply);
 })();

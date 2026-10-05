@@ -12,9 +12,9 @@
 <section class="foldable" id="fit-editor">
 <h3>Build a fitting</h3>
 <div class="fit-head">
-  <span class="searchwrap">
-    <input type="text" id="fit-ship-q" value="{{.FitEditor.Sim.ShipName}}" placeholder="Ship name, e.g. Rifter" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-ship-suggest" aria-autocomplete="list">
-    <ul class="suggest" id="fit-ship-suggest" role="listbox" hidden></ul>
+  <span class="searchwrap fit-searchwrap">
+    <input type="text" id="fit-search" value="{{.FitEditor.Sim.ShipName}}" placeholder="Search ships and modules…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-suggest" aria-autocomplete="list">
+    <ul class="suggest" id="fit-suggest" role="listbox" hidden></ul>
   </span>
   <label>Pilot
     <select id="fit-pilot">
@@ -27,6 +27,23 @@
   </label>
   <button type="button" class="btn" id="fit-save" data-fit-local-id="{{.FitEditor.LocalID}}">Save fit</button>
 </div>
+<div class="fit-searchrow">
+  <div class="fit-famchips" id="fit-famchips" role="group" aria-label="Kind filter">
+    <button type="button" data-fam="all" class="on">All</button><button type="button" data-fam="ship">Ships</button><button type="button" data-fam="high">High</button><button type="button" data-fam="medium">Mid</button><button type="button" data-fam="low">Low</button><button type="button" data-fam="rig">Rigs</button><button type="button" data-fam="subsystem">Subs</button><button type="button" data-fam="drone">Drones</button>
+  </div>
+  <label class="fit-check"><input type="checkbox" id="fit-fittable"> Fittable only</label>
+  <label class="fit-check"><input type="checkbox" id="fit-usable"> Usable by pilot</label>
+  <label class="fit-check">Meta
+    <select id="fit-meta">
+      <option value="0">Any</option>
+      <option value="1">Tech I</option>
+      <option value="2">Tech II</option>
+      <option value="4">Faction</option>
+      <option value="6">Deadspace</option>
+      <option value="5">Officer</option>
+    </select>
+  </label>
+</div>
 <p><small>Fits you save live in EveSynapse. Your EVE account's fittings are only ever read, never changed.</small></p>
 {{if .FitEditor.Notes}}
 <ul class="fit-notes">
@@ -37,7 +54,6 @@
 
 <div class="fit-picker" id="fit-picker" hidden>
   <div class="fit-picker-head">
-    <input type="text" id="fit-picker-q" placeholder="Search items by name" autocomplete="off">
     <select id="fit-picker-family">
       <option value="high">High slots</option>
       <option value="medium">Mid slots</option>
@@ -47,6 +63,7 @@
       <option value="drone">Drones</option>
       <option value="any">Any item</option>
     </select>
+    <span class="fit-picker-hint" id="fit-picker-hint" hidden></span>
     <button type="button" class="btn" id="fit-picker-close">Done</button>
   </div>
   <ul class="fit-picker-list" id="fit-picker-list"></ul>
@@ -87,8 +104,18 @@
 {{if .Fittings}}
   {{if .Fittings.Loaded}}
   {{if .Fittings.Fittings}}
+  <div class="fit-esi-controls">
+    <input type="text" id="fit-esi-q" placeholder="Search by fit or ship name…" autocomplete="off" aria-label="Search fittings">
+    <select id="fit-esi-sort" aria-label="Sort fittings">
+      <option value="name-asc">Name A–Z</option>
+      <option value="name-desc">Name Z–A</option>
+      <option value="ship-asc">Ship A–Z</option>
+      <option value="ship-desc">Ship Z–A</option>
+    </select>
+  </div>
+  <div id="fit-esi-list">
   {{range .Fittings.Fittings}}
-  <section class="foldable">
+  <section class="foldable" data-fold="closed" data-fit-name="{{.Name}}" data-fit-ship="{{.ShipType}}">
   <h3>{{.Name}}</h3>
   <p><small>{{itemLink .ShipTypeID .ShipType}}</small></p>
   <p><a href="/skills/plans/fit?character={{$.Fittings.CharacterID}}&fitting={{.FittingID}}">Training plan for this fit</a> · <a href="/fittings/?character={{$.Fittings.CharacterID}}&esi={{.FittingID}}#fit-editor">View stats</a></p>
@@ -107,6 +134,7 @@
   {{end}}
   </section>
   {{end}}
+  </div>
   {{else}}
   <p><small>No saved fittings for this character.</small></p>
   {{end}}
@@ -123,18 +151,30 @@
 {{end}}
 
 {{define "fit-workbench"}}
-<div class="fit-wb" data-fit-state="{{.StateJSON}}">
+<div class="fit-wb" data-fit-state="{{.StateJSON}}" data-fit-bandwidth="{{.DroneBWNum}}" data-fit-bay="{{.DroneBayNum}}">
 {{if .DataNote}}<p class="fit-note">{{.DataNote}}</p>{{end}}
 {{if .HasShip}}
+{{if .Visual}}
+<div class="fit-visual" id="fit-visual" role="group" aria-label="Visual fitting">
+  <img class="fit-vship" src="https://images.evetech.net/types/{{.Visual.ShipID}}/render?size=512" alt="{{.Visual.ShipName}}" draggable="false">
+  {{range .Visual.Slots}}
+  <button type="button" class="fit-vslot{{if .Filled}} filled{{end}}" style="left:{{printf "%.1f" .X}}%;top:{{printf "%.1f" .Y}}%"{{if .Filled}} draggable="true"{{end}}
+    {{if .Filled}}data-fit-dec="{{.TypeID}}" title="{{.Name}} — click to remove one, drag to move"{{else}}data-fit-add="{{.GroupKey}}" title="Add {{.GroupLabel}}"{{end}}>
+    {{if .Filled}}<img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{else}}<span aria-hidden="true">+</span>{{end}}
+  </button>
+  {{end}}
+</div>
+{{end}}
 <div class="fit-cols">
   <div class="fit-slots">
     {{range .Groups}}
     {{$group := .}}
-    <div class="fit-group">
+    <div class="fit-group" data-fit-group="{{$group.Key}}" data-fit-used="{{$group.Used}}" data-fit-max="{{$group.Max}}">
       <h4>{{.Label}}{{if .HasMax}} <small class="{{if .Over}}fit-over{{end}}">{{.Used}}/{{.Max}}{{if .Over}} — doesn't fit{{end}}</small>{{end}}</h4>
       <div class="fit-chips">
         {{range .Chips}}
         <span class="fit-chip">
+          <button type="button" class="fit-chip-btn" data-fit-dec="{{.TypeID}}" title="Remove one">−</button>
           <button type="button" class="fit-chip-name" data-fit-dec="{{.TypeID}}" title="Remove one">{{.Name}}</button>
           {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
           <button type="button" class="fit-chip-btn" data-fit-inc="{{.TypeID}}" title="Add another">+</button>
@@ -170,12 +210,12 @@
   {{with .Stats}}
   <div class="fit-stats">
     <h4>{{$.ShipName}} <small>with {{$.PilotLabel}}'s skills</small></h4>
-    <div class="fit-bar-row{{if .Powergrid.Over}} over{{end}}">
+    <div class="fit-bar-row{{if .Powergrid.Over}} over{{else}} good{{end}}">
       <span class="fit-bar-label">Powergrid</span>
       <span class="fit-bar"><span style="width:{{printf "%.1f" .Powergrid.Pct}}%"></span></span>
       <span class="fit-bar-nums">{{.Powergrid.Used}} of {{.Powergrid.Max}} ({{.Powergrid.Left}} left)</span>
     </div>
-    <div class="fit-bar-row{{if .CPU.Over}} over{{end}}">
+    <div class="fit-bar-row{{if .CPU.Over}} over{{else}} good{{end}}">
       <span class="fit-bar-label">CPU</span>
       <span class="fit-bar"><span style="width:{{printf "%.1f" .CPU.Pct}}%"></span></span>
       <span class="fit-bar-nums">{{.CPU.Used}} of {{.CPU.Max}} ({{.CPU.Left}} left)</span>
@@ -183,9 +223,9 @@
     <div class="tw">
     <table class="fit-table">
       <tbody>
-        <tr><th>Slots</th><td class="{{if .SlotsOver}}fit-over{{end}}">{{.SlotLine}}</td></tr>
-        <tr><th>Hardpoints</th><td class="{{if .HPOver}}fit-over{{end}}">{{.Hardpoints}}</td></tr>
-        <tr><th>Calibration</th><td class="{{if .CalibOver}}fit-over{{end}}">{{.Calibration}}</td></tr>
+        <tr><th>Slots</th><td class="{{if .SlotsOver}}fit-over{{else}}fit-good{{end}}">{{.SlotLine}}</td></tr>
+        <tr><th>Hardpoints</th><td class="{{if .HPOver}}fit-over{{else}}fit-good{{end}}">{{.Hardpoints}}</td></tr>
+        <tr><th>Calibration</th><td class="{{if .CalibOver}}fit-over{{else}}fit-good{{end}}">{{.Calibration}}</td></tr>
         <tr><th>Capacitor</th><td>{{.Capacitor}} · peak recharge {{.CapPeak}} · use {{.CapDraw}}</td></tr>
         <tr><th>Capacitor state</th><td class="{{if .CapStable}}fit-good{{else}}fit-over{{end}}">{{.CapState}}</td></tr>
         <tr><th>Damage per second</th><td>{{.TotalDPS}} — turrets {{.TurretDPS}} · missiles {{.MissileDPS}} · drones {{.DroneDPS}}</td></tr>

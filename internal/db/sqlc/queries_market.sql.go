@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/lib/pq"
 )
 
 const clearGuidePriceWant = `-- name: ClearGuidePriceWant :exec
@@ -241,6 +243,25 @@ func (q *Queries) GetMarketFetchState(ctx context.Context, kind string) (MarketF
 	return i, err
 }
 
+const getMarketRegionStatsStamp = `-- name: GetMarketRegionStatsStamp :one
+SELECT MAX(updated_at) AS stamp, COUNT(*) AS row_count
+FROM market_region_stats WHERE region_id = $1
+`
+
+type GetMarketRegionStatsStampRow struct {
+	Stamp    interface{} `json:"stamp"`
+	RowCount int64       `json:"row_count"`
+}
+
+// The freshest region-stat write for a region: the tradefinder
+// page's "figures last gathered" stamp without pulling rows.
+func (q *Queries) GetMarketRegionStatsStamp(ctx context.Context, regionID int64) (GetMarketRegionStatsStampRow, error) {
+	row := q.db.QueryRowContext(ctx, getMarketRegionStatsStamp, regionID)
+	var i GetMarketRegionStatsStampRow
+	err := row.Scan(&i.Stamp, &i.RowCount)
+	return i, err
+}
+
 const getMarketStationLeaderboardStamp = `-- name: GetMarketStationLeaderboardStamp :one
 SELECT CAST(COALESCE(MAX(updated_at), '') AS TEXT) AS stamp
 FROM market_station_leaderboard
@@ -252,6 +273,25 @@ func (q *Queries) GetMarketStationLeaderboardStamp(ctx context.Context, dollar_1
 	var stamp string
 	err := row.Scan(&stamp)
 	return stamp, err
+}
+
+const getMarketStationStatsStamp = `-- name: GetMarketStationStatsStamp :one
+SELECT MAX(updated_at) AS stamp, COUNT(*) AS row_count
+FROM market_station_stats WHERE region_id = $1
+`
+
+type GetMarketStationStatsStampRow struct {
+	Stamp    interface{} `json:"stamp"`
+	RowCount int64       `json:"row_count"`
+}
+
+// The freshest station-stat write for a region: the scanner
+// page's "prices as of" stamp without pulling the rows.
+func (q *Queries) GetMarketStationStatsStamp(ctx context.Context, regionID int64) (GetMarketStationStatsStampRow, error) {
+	row := q.db.QueryRowContext(ctx, getMarketStationStatsStamp, regionID)
+	var i GetMarketStationStatsStampRow
+	err := row.Scan(&i.Stamp, &i.RowCount)
+	return i, err
 }
 
 const getMarketSweepState = `-- name: GetMarketSweepState :one
@@ -606,6 +646,94 @@ func (q *Queries) ListAllianceDrains(ctx context.Context, arg ListAllianceDrains
 			return nil, err
 		}
 		items = append(items, alliance_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBestBuyStations = `-- name: ListBestBuyStations :many
+SELECT DISTINCT ON (type_id) type_id, location_id, best_buy
+FROM market_station_stats
+WHERE region_id = $1 AND type_id = ANY($2::bigint[]) AND best_buy > 0
+ORDER BY type_id, best_buy DESC, location_id
+`
+
+type ListBestBuyStationsParams struct {
+	RegionID int64   `json:"region_id"`
+	TypeIds  []int64 `json:"type_ids"`
+}
+
+type ListBestBuyStationsRow struct {
+	TypeID     int64   `json:"type_id"`
+	LocationID int64   `json:"location_id"`
+	BestBuy    float64 `json:"best_buy"`
+}
+
+// Per-type highest-buy station rows for a bounded type list:
+// the tradefinder's "best buyer at" hints without pulling the
+// region's whole station grain.
+func (q *Queries) ListBestBuyStations(ctx context.Context, arg ListBestBuyStationsParams) ([]ListBestBuyStationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listBestBuyStations, arg.RegionID, pq.Array(arg.TypeIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListBestBuyStationsRow
+	for rows.Next() {
+		var i ListBestBuyStationsRow
+		if err := rows.Scan(&i.TypeID, &i.LocationID, &i.BestBuy); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCheapestSellStations = `-- name: ListCheapestSellStations :many
+SELECT DISTINCT ON (type_id) type_id, location_id, best_sell
+FROM market_station_stats
+WHERE region_id = $1 AND type_id = ANY($2::bigint[]) AND best_sell > 0
+ORDER BY type_id, best_sell, location_id
+`
+
+type ListCheapestSellStationsParams struct {
+	RegionID int64   `json:"region_id"`
+	TypeIds  []int64 `json:"type_ids"`
+}
+
+type ListCheapestSellStationsRow struct {
+	TypeID     int64   `json:"type_id"`
+	LocationID int64   `json:"location_id"`
+	BestSell   float64 `json:"best_sell"`
+}
+
+// Per-type cheapest-sell station rows for a bounded type list:
+// the tradefinder's "cheapest at" hints without pulling the
+// region's whole station grain.
+func (q *Queries) ListCheapestSellStations(ctx context.Context, arg ListCheapestSellStationsParams) ([]ListCheapestSellStationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCheapestSellStations, arg.RegionID, pq.Array(arg.TypeIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCheapestSellStationsRow
+	for rows.Next() {
+		var i ListCheapestSellStationsRow
+		if err := rows.Scan(&i.TypeID, &i.LocationID, &i.BestSell); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -1634,6 +1762,86 @@ func (q *Queries) ListPlanetResolutions(ctx context.Context, arg ListPlanetResol
 	return items, nil
 }
 
+const listScannerOpportunities = `-- name: ListScannerOpportunities :many
+SELECT type_id, location_id, best_sell, best_buy, sell_volume, buy_volume, daily_volume
+FROM (
+    SELECT ss.type_id, ss.location_id, ss.best_sell, ss.best_buy,
+           ss.sell_volume, ss.buy_volume,
+           COALESCE(rs.avg_daily_volume, 0) AS daily_volume,
+           (ss.best_sell - ss.best_buy) * LEAST(COALESCE(rs.avg_daily_volume, 0), ss.sell_volume::double precision, ss.buy_volume::double precision) AS profit
+    FROM market_station_stats ss
+    LEFT JOIN market_region_stats rs ON rs.region_id = ss.region_id AND rs.type_id = ss.type_id
+    WHERE ss.region_id = $1
+      AND ss.best_buy > 0
+      AND ss.best_sell > ss.best_buy
+      AND (ss.best_sell - ss.best_buy) / ss.best_buy * 100 >= $2
+      AND COALESCE(rs.avg_daily_volume, 0) >= $3::bigint
+      AND LEAST(COALESCE(rs.avg_daily_volume, 0), ss.sell_volume::double precision, ss.buy_volume::double precision) > 0
+) ranked
+ORDER BY profit DESC, type_id, location_id
+LIMIT $4::bigint
+`
+
+type ListScannerOpportunitiesParams struct {
+	RegionID  int64   `json:"region_id"`
+	MinSpread float64 `json:"min_spread"`
+	MinVolume int64   `json:"min_volume"`
+	RowCap    int64   `json:"row_cap"`
+}
+
+type ListScannerOpportunitiesRow struct {
+	TypeID      int64   `json:"type_id"`
+	LocationID  int64   `json:"location_id"`
+	BestSell    float64 `json:"best_sell"`
+	BestBuy     float64 `json:"best_buy"`
+	SellVolume  int64   `json:"sell_volume"`
+	BuyVolume   int64   `json:"buy_volume"`
+	DailyVolume float64 `json:"daily_volume"`
+}
+
+// The spread scanner's opportunities, computed and ranked in SQL:
+// one bounded read of at most scannerRowCap rows instead of
+// pulling every stored station row for the region into Go.
+// Mirrors the old Go filter exactly: real buy above zero, sell
+// above the buy, spread floor, daily-volume floor, and the
+// tradeable size as the least of what trades, what sellers
+// hold, and what buyers want.
+func (q *Queries) ListScannerOpportunities(ctx context.Context, arg ListScannerOpportunitiesParams) ([]ListScannerOpportunitiesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listScannerOpportunities,
+		arg.RegionID,
+		arg.MinSpread,
+		arg.MinVolume,
+		arg.RowCap,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListScannerOpportunitiesRow
+	for rows.Next() {
+		var i ListScannerOpportunitiesRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.LocationID,
+			&i.BestSell,
+			&i.BestBuy,
+			&i.SellVolume,
+			&i.BuyVolume,
+			&i.DailyVolume,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStructureResolutions = `-- name: ListStructureResolutions :many
 SELECT structure_id
 FROM structure_names
@@ -1663,6 +1871,98 @@ func (q *Queries) ListStructureResolutions(ctx context.Context, arg ListStructur
 			return nil, err
 		}
 		items = append(items, structure_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTradefinderRoutes = `-- name: ListTradefinderRoutes :many
+SELECT type_id, origin_typical_buy, dest_typical_sell, dest_daily_volume,
+       origin_buy_volume, dest_sell_volume
+FROM (
+    SELECT o.type_id,
+           o.typical_buy AS origin_typical_buy,
+           d.typical_sell AS dest_typical_sell,
+           d.avg_daily_volume AS dest_daily_volume,
+           o.buy_volume AS origin_buy_volume,
+           d.sell_volume AS dest_sell_volume,
+           (d.typical_sell - o.typical_buy) * LEAST(d.avg_daily_volume, o.buy_volume::double precision, d.sell_volume::double precision) AS profit
+    FROM market_region_stats o
+    JOIN market_region_stats d ON d.region_id = $1 AND d.type_id = o.type_id
+    WHERE o.region_id = $2
+      AND o.typical_buy > 0 AND d.typical_sell > 0
+      AND d.typical_sell > o.typical_buy
+      AND ($3::bigint = 1 OR NOT (o.typical_sell > 0 AND o.typical_buy * 10 < o.typical_sell))
+      AND (d.typical_sell - o.typical_buy) / o.typical_buy * 100 >= $4
+      AND d.avg_daily_volume >= $5::bigint
+      AND LEAST(d.avg_daily_volume, o.buy_volume::double precision, d.sell_volume::double precision) > 0
+      AND o.updated_at >= $6 AND d.updated_at >= $6
+) ranked
+ORDER BY profit DESC, type_id
+LIMIT $7::bigint
+`
+
+type ListTradefinderRoutesParams struct {
+	DestRegion     int64   `json:"dest_region"`
+	OriginRegion   int64   `json:"origin_region"`
+	IncludeLowball int64   `json:"include_lowball"`
+	MinMargin      float64 `json:"min_margin"`
+	MinVolume      int64   `json:"min_volume"`
+	Cutoff         string  `json:"cutoff"`
+	RowCap         int64   `json:"row_cap"`
+}
+
+type ListTradefinderRoutesRow struct {
+	TypeID           int64   `json:"type_id"`
+	OriginTypicalBuy float64 `json:"origin_typical_buy"`
+	DestTypicalSell  float64 `json:"dest_typical_sell"`
+	DestDailyVolume  float64 `json:"dest_daily_volume"`
+	OriginBuyVolume  int64   `json:"origin_buy_volume"`
+	DestSellVolume   int64   `json:"dest_sell_volume"`
+}
+
+// The tradefinder's routes, computed and ranked in SQL: one
+// bounded read of at most tradefinderRowCap rows instead of
+// pulling both regions' stored stats into Go. Mirrors the old
+// Go filter exactly: fresh figures on both sides (3-day rule,
+// compared as RFC3339 text), a real typical buy and sell,
+// margin above zero, the lowball opt-out, the margin-% floor,
+// the sold-per-day floor, and the movable size as the least of
+// what trades, the origin's open buy volume, and the
+// destination's open sell volume.
+func (q *Queries) ListTradefinderRoutes(ctx context.Context, arg ListTradefinderRoutesParams) ([]ListTradefinderRoutesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTradefinderRoutes,
+		arg.DestRegion,
+		arg.OriginRegion,
+		arg.IncludeLowball,
+		arg.MinMargin,
+		arg.MinVolume,
+		arg.Cutoff,
+		arg.RowCap,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTradefinderRoutesRow
+	for rows.Next() {
+		var i ListTradefinderRoutesRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.OriginTypicalBuy,
+			&i.DestTypicalSell,
+			&i.DestDailyVolume,
+			&i.OriginBuyVolume,
+			&i.DestSellVolume,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

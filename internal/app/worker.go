@@ -97,17 +97,34 @@ func (app *Application) workerStatusText() string {
 func (app *Application) runWorker(ctx context.Context) {
 	log.Printf("worker: started")
 
+	// The two loops below run beside the minute cycle. runWorker
+	// waits for them on the way out, so when it returns the whole
+	// worker has stopped and Close may close the database handles
+	// without any pass still querying them.
+	var children sync.WaitGroup
+	children.Add(2)
+
 	// SDE maintenance runs alongside the ESI cycle: a first import
 	// when the static-data tables are empty, then a weekly update
 	// check (patch-day cadence) — see sdeMaintenance in sde.go. It
 	// only ever starts background operations, so it never delays
 	// snapshot refreshes.
-	go app.sdeMaintenance(ctx)
+	go func() {
+		defer children.Done()
+		app.sdeMaintenance(ctx)
+	}()
 
 	// The urgent want drain polls the want queues every few
 	// seconds so a click that outruns proactive coverage fills in
 	// within seconds instead of waiting for the minute cycle.
-	go app.runUrgentDrain(ctx)
+	go func() {
+		defer children.Done()
+		app.runUrgentDrain(ctx)
+	}()
+	defer func() {
+		children.Wait()
+		log.Printf("worker: stopped")
+	}()
 
 	cycle := time.NewTicker(time.Minute)
 	heartbeat := time.NewTicker(10 * time.Minute)
@@ -123,7 +140,6 @@ func (app *Application) runWorker(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("worker: stopped")
 			return
 		case <-heartbeat.C:
 			log.Printf("worker: alive")

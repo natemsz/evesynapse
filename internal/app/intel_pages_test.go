@@ -366,3 +366,47 @@ func TestRefreshIntel(t *testing.T) {
 		t.Fatalf("third pass made %d calls, want 1", got-before)
 	}
 }
+
+// TestUserCorporationIDsAreScopedToTheUser: the wars page flags
+// wars involving the signed-in user's corporations. The lookup
+// must never leak another user's corporations into that set:
+// user B's corp is not user A's "yours".
+func TestUserCorporationIDsAreScopedToTheUser(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+
+	userA, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user A: %v", err)
+	}
+	userB, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user B: %v", err)
+	}
+	seedCharacter(t, q, userA.ID, fixtureCharA, "Fixture Alpha")
+	seedCharacter(t, q, userB.ID, fixtureCharB, "Fixture Beta")
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err := q.UpsertCharacterCorporation(ctx, db.UpsertCharacterCorporationParams{
+		CharacterID: fixtureCharA, CorporationID: 98000001, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("seed corp A: %v", err)
+	}
+	if err := q.UpsertCharacterCorporation(ctx, db.UpsertCharacterCorporationParams{
+		CharacterID: fixtureCharB, CorporationID: 98000002, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("seed corp B: %v", err)
+	}
+
+	corpsA := app.userCorporationIDs(ctx, userA.ID)
+	if len(corpsA) != 1 || !corpsA[98000001] {
+		t.Fatalf("user A corps: %v, want only 98000001", corpsA)
+	}
+	corpsB := app.userCorporationIDs(ctx, userB.ID)
+	if len(corpsB) != 1 || !corpsB[98000002] {
+		t.Fatalf("user B corps: %v, want only 98000002", corpsB)
+	}
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("corporation lookup made %d outbound calls, want 0", got)
+	}
+}

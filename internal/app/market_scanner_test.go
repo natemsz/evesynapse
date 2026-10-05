@@ -276,3 +276,57 @@ func TestScannerPageEmptyBeforeAnySweep(t *testing.T) {
 		t.Fatalf("empty scanner page made %d outbound calls, want 0", got)
 	}
 }
+
+func TestScannerProfitRankingAndCapInSQL(t *testing.T) {
+	transport := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	now := time.Now().UTC().Format(time.RFC3339)
+	const stationA = int64(60003760)
+
+	for _, stmt := range []string{
+		`INSERT INTO sde_stations (station_id, name, system_id) VALUES (60003760, 'Jita 4 - Moon 4 - Caldari Navy Assembly Plant', 30000142)`,
+		`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30000142, 'Jita', 10000002, 0.9)`,
+		`INSERT INTO sde_regions (region_id, name) VALUES (10000002, 'The Forge')`,
+	} {
+		if _, err := conn.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed sde: %v", err)
+		}
+	}
+	// 105 qualifying rows with strictly increasing profit
+	// (1000+10i ISK): the single bounded query must return
+	// exactly the top 100 in profit-descending order.
+	for i := int64(0); i < 105; i++ {
+		typeID := int64(5000 + i)
+		if _, err := conn.ExecContext(ctx, `INSERT INTO sde_types (type_id, name, group_id) VALUES ($1, $2, 18)`, typeID, fmt.Sprintf("Rank Item %d", i)); err != nil {
+			t.Fatalf("seed rank type: %v", err)
+		}
+		if err := q.UpsertMarketStationStat(ctx, db.UpsertMarketStationStatParams{
+			LocationID: stationA, RegionID: 10000002, TypeID: typeID,
+			BestSell: 200 + float64(i), BestBuy: 100, SellOrders: 1, BuyOrders: 1,
+			SellVolume: 1000, BuyVolume: 1000, UpdatedAt: now,
+		}); err != nil {
+			t.Fatalf("seed rank stat: %v", err)
+		}
+		seedScannerVolume(t, q, 10000002, typeID, 10)
+	}
+
+	view := app.buildScannerView(ctx, url.Values{})
+	if !view.HasData {
+		t.Fatal("scanner has no data after seeding 105 rows")
+	}
+	if len(view.Rows) != scannerRowCap {
+		t.Fatalf("scanner rows: %d, want %d", len(view.Rows), scannerRowCap)
+	}
+	for i, row := range view.Rows {
+		if want := int64(5104 - i); row.TypeID != want {
+			t.Fatalf("row %d: type %d, want %d (profit-desc order)", i, row.TypeID, want)
+		}
+	}
+	if view.Rows[0].DailyProfit != esi.FormatISK(2040) {
+		t.Fatalf("top row profit: %s, want %s", view.Rows[0].DailyProfit, esi.FormatISK(2040))
+	}
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("scanner build made %d outbound calls, want 0", got)
+	}
+}

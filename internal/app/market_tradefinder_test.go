@@ -398,3 +398,51 @@ func TestTradefinderPageEmptyStates(t *testing.T) {
 		t.Fatalf("tradefinder empty pages made %d outbound calls, want 0", got)
 	}
 }
+
+func TestTradefinderMarginRankingAndCapInSQL(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	seedTradefinderFixture(t, app)
+	now := time.Now().UTC().Format(time.RFC3339)
+	conn := app.db
+
+	// 105 qualifying pairs with strictly increasing margin:
+	// origin typical buy 100, destination typical sell 200+i.
+	// units/day = min(10, 1000, 1000) = 10, so profit grows
+	// strictly with the type id: the single bounded query must
+	// return exactly the top 100 in margin-descending order.
+	for i := int64(0); i < 105; i++ {
+		typeID := int64(2000 + i)
+		if _, err := conn.ExecContext(ctx, `INSERT INTO sde_types (type_id, name, group_id) VALUES ($1, $2, 18)`, typeID, fmt.Sprintf("Rank Item %d", i)); err != nil {
+			t.Fatalf("seed rank type: %v", err)
+		}
+		if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfOrigin, typeID, 100, 0, 1000, 0, 0, now)); err != nil {
+			t.Fatalf("seed rank origin stat: %v", err)
+		}
+		if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfDest, typeID, 0, 200+float64(i), 0, 1000, 10, now)); err != nil {
+			t.Fatalf("seed rank dest stat: %v", err)
+		}
+	}
+
+	view := app.buildTradefinderView(ctx, url.Values{})
+	if !view.HasData() {
+		t.Fatal("tradefinder has no data after seeding 105 pairs")
+	}
+	if len(view.Rows) != tradefinderRowCap {
+		t.Fatalf("tradefinder rows: %d, want %d", len(view.Rows), tradefinderRowCap)
+	}
+	for i, row := range view.Rows {
+		if want := int64(2104 - i); row.TypeID != want {
+			t.Fatalf("row %d: type %d, want %d (margin-desc order)", i, row.TypeID, want)
+		}
+	}
+	// Top route: margin 204/item, 10/day -> 2040/day.
+	if view.Rows[0].ProfitItem != esi.FormatISK(204) || view.Rows[0].ProfitDay != esi.FormatISK(2040) {
+		t.Fatalf("top route: %s/item %s/day, want %s/item %s/day",
+			view.Rows[0].ProfitItem, view.Rows[0].ProfitDay, esi.FormatISK(204), esi.FormatISK(2040))
+	}
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("tradefinder build made %d outbound calls, want 0", got)
+	}
+}

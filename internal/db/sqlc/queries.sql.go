@@ -24,9 +24,9 @@ func (q *Queries) CountWarDetails(ctx context.Context) (int64, error) {
 }
 
 const createLocalFitting = `-- name: CreateLocalFitting :one
-INSERT INTO local_fittings (user_id, name, ship_type_id, items_json, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, user_id, name, ship_type_id, items_json, created_at, updated_at
+INSERT INTO local_fittings (user_id, name, ship_type_id, items_json, is_public, is_draft, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, user_id, name, ship_type_id, items_json, is_public, is_draft, created_at, updated_at
 `
 
 type CreateLocalFittingParams struct {
@@ -34,6 +34,20 @@ type CreateLocalFittingParams struct {
 	Name       string `json:"name"`
 	ShipTypeID int64  `json:"ship_type_id"`
 	ItemsJson  string `json:"items_json"`
+	IsPublic   bool   `json:"is_public"`
+	IsDraft    bool   `json:"is_draft"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
+}
+
+type CreateLocalFittingRow struct {
+	ID         int64  `json:"id"`
+	UserID     int64  `json:"user_id"`
+	Name       string `json:"name"`
+	ShipTypeID int64  `json:"ship_type_id"`
+	ItemsJson  string `json:"items_json"`
+	IsPublic   bool   `json:"is_public"`
+	IsDraft    bool   `json:"is_draft"`
 	CreatedAt  string `json:"created_at"`
 	UpdatedAt  string `json:"updated_at"`
 }
@@ -43,22 +57,26 @@ type CreateLocalFittingParams struct {
 // per user. items_json is the whole fit document (ship, item lines,
 // charge choices); reads/writes always scope to the owning user.
 // ---------------------------------------------------------------------
-func (q *Queries) CreateLocalFitting(ctx context.Context, arg CreateLocalFittingParams) (LocalFitting, error) {
+func (q *Queries) CreateLocalFitting(ctx context.Context, arg CreateLocalFittingParams) (CreateLocalFittingRow, error) {
 	row := q.db.QueryRowContext(ctx, createLocalFitting,
 		arg.UserID,
 		arg.Name,
 		arg.ShipTypeID,
 		arg.ItemsJson,
+		arg.IsPublic,
+		arg.IsDraft,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
-	var i LocalFitting
+	var i CreateLocalFittingRow
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
 		&i.Name,
 		&i.ShipTypeID,
 		&i.ItemsJson,
+		&i.IsPublic,
+		&i.IsDraft,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -279,7 +297,7 @@ func (q *Queries) GetKillmailDetail(ctx context.Context, killmailID int64) (Kill
 }
 
 const getLocalFitting = `-- name: GetLocalFitting :one
-SELECT id, user_id, name, ship_type_id, items_json, created_at, updated_at FROM local_fittings
+SELECT id, user_id, name, ship_type_id, items_json, is_public, is_draft, created_at, updated_at FROM local_fittings
 WHERE id = $1 AND user_id = $2
 `
 
@@ -288,17 +306,63 @@ type GetLocalFittingParams struct {
 	UserID int64 `json:"user_id"`
 }
 
-func (q *Queries) GetLocalFitting(ctx context.Context, arg GetLocalFittingParams) (LocalFitting, error) {
+type GetLocalFittingRow struct {
+	ID         int64  `json:"id"`
+	UserID     int64  `json:"user_id"`
+	Name       string `json:"name"`
+	ShipTypeID int64  `json:"ship_type_id"`
+	ItemsJson  string `json:"items_json"`
+	IsPublic   bool   `json:"is_public"`
+	IsDraft    bool   `json:"is_draft"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
+}
+
+func (q *Queries) GetLocalFitting(ctx context.Context, arg GetLocalFittingParams) (GetLocalFittingRow, error) {
 	row := q.db.QueryRowContext(ctx, getLocalFitting, arg.ID, arg.UserID)
-	var i LocalFitting
+	var i GetLocalFittingRow
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
 		&i.Name,
 		&i.ShipTypeID,
 		&i.ItemsJson,
+		&i.IsPublic,
+		&i.IsDraft,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getPublicFitting = `-- name: GetPublicFitting :one
+SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at,
+       COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '') AS author_name
+FROM local_fittings lf
+WHERE lf.id = $1 AND lf.is_public AND NOT lf.is_draft
+`
+
+type GetPublicFittingRow struct {
+	ID         int64       `json:"id"`
+	UserID     int64       `json:"user_id"`
+	Name       string      `json:"name"`
+	ShipTypeID int64       `json:"ship_type_id"`
+	ItemsJson  string      `json:"items_json"`
+	UpdatedAt  string      `json:"updated_at"`
+	AuthorName interface{} `json:"author_name"`
+}
+
+func (q *Queries) GetPublicFitting(ctx context.Context, id int64) (GetPublicFittingRow, error) {
+	row := q.db.QueryRowContext(ctx, getPublicFitting, id)
+	var i GetPublicFittingRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.ShipTypeID,
+		&i.ItemsJson,
+		&i.UpdatedAt,
+		&i.AuthorName,
 	)
 	return i, err
 }
@@ -405,6 +469,42 @@ func (q *Queries) GetUserBriefingAnchor(ctx context.Context, id int64) (string, 
 	var last_briefing_at string
 	err := row.Scan(&last_briefing_at)
 	return last_briefing_at, err
+}
+
+const getUserDraftFitting = `-- name: GetUserDraftFitting :one
+SELECT id, user_id, name, ship_type_id, items_json, is_public, is_draft, created_at, updated_at FROM local_fittings
+WHERE user_id = $1 AND is_draft
+ORDER BY updated_at DESC, id DESC
+LIMIT 1
+`
+
+type GetUserDraftFittingRow struct {
+	ID         int64  `json:"id"`
+	UserID     int64  `json:"user_id"`
+	Name       string `json:"name"`
+	ShipTypeID int64  `json:"ship_type_id"`
+	ItemsJson  string `json:"items_json"`
+	IsPublic   bool   `json:"is_public"`
+	IsDraft    bool   `json:"is_draft"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
+}
+
+func (q *Queries) GetUserDraftFitting(ctx context.Context, userID int64) (GetUserDraftFittingRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserDraftFitting, userID)
+	var i GetUserDraftFittingRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.ShipTypeID,
+		&i.ItemsJson,
+		&i.IsPublic,
+		&i.IsDraft,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const getUserHomeLayout = `-- name: GetUserHomeLayout :one
@@ -809,27 +909,41 @@ func (q *Queries) ListLiquidCoreTypes(ctx context.Context, arg ListLiquidCoreTyp
 }
 
 const listLocalFittings = `-- name: ListLocalFittings :many
-SELECT id, user_id, name, ship_type_id, items_json, created_at, updated_at FROM local_fittings
+SELECT id, user_id, name, ship_type_id, items_json, is_public, is_draft, created_at, updated_at FROM local_fittings
 WHERE user_id = $1
 ORDER BY updated_at DESC, id DESC
 LIMIT 100
 `
 
-func (q *Queries) ListLocalFittings(ctx context.Context, userID int64) ([]LocalFitting, error) {
+type ListLocalFittingsRow struct {
+	ID         int64  `json:"id"`
+	UserID     int64  `json:"user_id"`
+	Name       string `json:"name"`
+	ShipTypeID int64  `json:"ship_type_id"`
+	ItemsJson  string `json:"items_json"`
+	IsPublic   bool   `json:"is_public"`
+	IsDraft    bool   `json:"is_draft"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
+}
+
+func (q *Queries) ListLocalFittings(ctx context.Context, userID int64) ([]ListLocalFittingsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listLocalFittings, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []LocalFitting
+	var items []ListLocalFittingsRow
 	for rows.Next() {
-		var i LocalFitting
+		var i ListLocalFittingsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,
 			&i.Name,
 			&i.ShipTypeID,
 			&i.ItemsJson,
+			&i.IsPublic,
+			&i.IsDraft,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -1296,6 +1410,127 @@ func (q *Queries) NextSkillPlanPosition(ctx context.Context, planID int64) (int6
 	return column_1, err
 }
 
+const searchLocalFittings = `-- name: SearchLocalFittings :many
+SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.is_public, lf.is_draft, lf.created_at, lf.updated_at,
+       COALESCE(tn.name, '') AS ship_name
+FROM local_fittings lf
+LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
+WHERE lf.user_id = $1
+  AND ($2::text = '' OR lf.name ILIKE '%' || $2::text || '%' OR tn.name ILIKE '%' || $2::text || '%')
+ORDER BY lf.updated_at DESC, lf.id DESC
+LIMIT 20
+`
+
+type SearchLocalFittingsParams struct {
+	UserID int64  `json:"user_id"`
+	Q      string `json:"q"`
+}
+
+type SearchLocalFittingsRow struct {
+	ID         int64  `json:"id"`
+	UserID     int64  `json:"user_id"`
+	Name       string `json:"name"`
+	ShipTypeID int64  `json:"ship_type_id"`
+	ItemsJson  string `json:"items_json"`
+	IsPublic   bool   `json:"is_public"`
+	IsDraft    bool   `json:"is_draft"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
+	ShipName   string `json:"ship_name"`
+}
+
+func (q *Queries) SearchLocalFittings(ctx context.Context, arg SearchLocalFittingsParams) ([]SearchLocalFittingsRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchLocalFittings, arg.UserID, arg.Q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchLocalFittingsRow
+	for rows.Next() {
+		var i SearchLocalFittingsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Name,
+			&i.ShipTypeID,
+			&i.ItemsJson,
+			&i.IsPublic,
+			&i.IsDraft,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ShipName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchPublicFittings = `-- name: SearchPublicFittings :many
+SELECT lf.id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at,
+       COALESCE(tn.name, '') AS ship_name,
+       COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '') AS author_name
+FROM local_fittings lf
+LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
+WHERE lf.is_public AND NOT lf.is_draft AND lf.user_id != $1
+  AND ($2::text = '' OR lf.name ILIKE '%' || $2::text || '%' OR tn.name ILIKE '%' || $2::text || '%')
+ORDER BY lf.updated_at DESC, lf.id DESC
+LIMIT 20
+`
+
+type SearchPublicFittingsParams struct {
+	UserID int64  `json:"user_id"`
+	Q      string `json:"q"`
+}
+
+type SearchPublicFittingsRow struct {
+	ID         int64       `json:"id"`
+	Name       string      `json:"name"`
+	ShipTypeID int64       `json:"ship_type_id"`
+	ItemsJson  string      `json:"items_json"`
+	UpdatedAt  string      `json:"updated_at"`
+	ShipName   string      `json:"ship_name"`
+	AuthorName interface{} `json:"author_name"`
+}
+
+func (q *Queries) SearchPublicFittings(ctx context.Context, arg SearchPublicFittingsParams) ([]SearchPublicFittingsRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchPublicFittings, arg.UserID, arg.Q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchPublicFittingsRow
+	for rows.Next() {
+		var i SearchPublicFittingsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.ShipTypeID,
+			&i.ItemsJson,
+			&i.UpdatedAt,
+			&i.ShipName,
+			&i.AuthorName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setCharacterLinkState = `-- name: SetCharacterLinkState :exec
 UPDATE characters
 SET link_state = $1, link_state_at = $2, updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
@@ -1387,14 +1622,16 @@ func (q *Queries) UpdateCharacterTokens(ctx context.Context, arg UpdateCharacter
 
 const updateLocalFitting = `-- name: UpdateLocalFitting :exec
 UPDATE local_fittings
-SET name = $1, ship_type_id = $2, items_json = $3, updated_at = $4
-WHERE id = $5 AND user_id = $6
+SET name = $1, ship_type_id = $2, items_json = $3, is_public = $4, is_draft = $5, updated_at = $6
+WHERE id = $7 AND user_id = $8
 `
 
 type UpdateLocalFittingParams struct {
 	Name       string `json:"name"`
 	ShipTypeID int64  `json:"ship_type_id"`
 	ItemsJson  string `json:"items_json"`
+	IsPublic   bool   `json:"is_public"`
+	IsDraft    bool   `json:"is_draft"`
 	UpdatedAt  string `json:"updated_at"`
 	ID         int64  `json:"id"`
 	UserID     int64  `json:"user_id"`
@@ -1405,6 +1642,8 @@ func (q *Queries) UpdateLocalFitting(ctx context.Context, arg UpdateLocalFitting
 		arg.Name,
 		arg.ShipTypeID,
 		arg.ItemsJson,
+		arg.IsPublic,
+		arg.IsDraft,
 		arg.UpdatedAt,
 		arg.ID,
 		arg.UserID,

@@ -11,7 +11,6 @@ import (
 	"embed"
 	"io/fs"
 	"log"
-	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -21,8 +20,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	_ "golang.org/x/crypto/x509roots/fallback" // embedded Mozilla roots when no system cert store is visible (Android/Termux)
-	_ "modernc.org/sqlite"                     // pure-Go SQLite driver, registers as "sqlite"
+	_ "modernc.org/sqlite" // pure-Go SQLite driver, registers as "sqlite"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
@@ -207,7 +205,6 @@ type Application struct {
 // and the one-shot SSO reachability probe. Call Close to release
 // the database and stop the worker.
 func New(cfg Config) (*Application, error) {
-	installResolver()
 
 	dbConn, err := openDB(cfg.dbPath)
 	if err != nil {
@@ -268,26 +265,6 @@ func (app *Application) Close() {
 	}
 	if app.db != nil {
 		app.db.Close()
-	}
-}
-
-// installResolver pins public DNS servers: Android/Termux has no
-// usable /etc/resolv.conf, so Go's resolver falls back to a dead
-// [::1]:53. (netdns.go's init installs a second, fallback-aware
-// resolver; this one runs later and wins, exactly as when both
-// lived in package main.)
-func installResolver() {
-	net.DefaultResolver = &net.Resolver{
-		PreferGo: true,
-		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
-			d := net.Dialer{Timeout: 5 * time.Second}
-			for _, dns := range []string{"8.8.8.8:53", "1.1.1.1:53"} {
-				if conn, err := d.DialContext(ctx, network, dns); err == nil {
-					return conn, nil
-				}
-			}
-			return d.DialContext(ctx, network, "9.9.9.9:53")
-		},
 	}
 }
 

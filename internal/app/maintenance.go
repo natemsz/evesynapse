@@ -59,7 +59,7 @@ import (
 	"time"
 )
 
-// Version returns the rendered product version ("v0.3.17.001"),
+// Version returns the rendered product version ("v0.3.18.001"),
 // the same string the page footer shows.
 func Version() string { return appVersion }
 
@@ -216,11 +216,31 @@ const (
 	elfMachineAMD64 = 62
 )
 
-// releaseBaseURL is where release manifests and binaries live:
-// GitHub's "latest release" download shortcut, so the address
-// stays the same as versions come and go. A var so tests can
-// point it at a local server.
+// releaseBaseURL is where release manifests and binaries live
+// for the mainline project: GitHub's "latest release" download
+// shortcut, so the address stays the same as versions come and
+// go. A var so tests can point it at a local server.
 var releaseBaseURL = "https://github.com/natemsz/evesynapse/releases/latest/download"
+
+// releaseChannelBase resolves the address updates are fetched
+// from. Setting EVESYNAPSE_UPDATE_REPO to a fork's owner/repo
+// (in the environment, or in the .env file beside the binary)
+// points the updater at that fork's releases instead of the
+// mainline ones.
+func releaseChannelBase() string {
+	if repo := strings.Trim(strings.TrimSpace(os.Getenv("EVESYNAPSE_UPDATE_REPO")), "/"); repo != "" {
+		return "https://github.com/" + repo + "/releases/latest/download"
+	}
+	return releaseBaseURL
+}
+
+// loadInstallEnv fills in configuration from the .env file
+// beside the installed binary, so a hand-run `-update` sees the
+// same settings the service runs with. Values already in the
+// real environment win.
+func loadInstallEnv(target string) {
+	loadDotEnv(filepath.Join(filepath.Dir(target), ".env"))
+}
 
 // releaseManifest is the per-arch pointer published with each
 // release: the version it names and the checksum of the binary
@@ -299,7 +319,7 @@ func versionParts(v string) []int {
 // arch from the release channel.
 func fetchReleaseManifest(ctx context.Context, arch string) (releaseManifest, error) {
 	var m releaseManifest
-	u := releaseBaseURL + "/latest-" + arch + ".json"
+	u := releaseChannelBase() + "/latest-" + arch + ".json"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return m, err
@@ -337,6 +357,7 @@ func runReleaseUpdate(target, arch string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "EveSynapse doesn't publish builds for %q computers. Nothing was changed.\n", arch)
 		return 2
 	}
+	loadInstallEnv(target)
 	current := Version()
 	fmt.Fprintf(stdout, "Checking for updates… you're on %s.\n", current)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -352,7 +373,7 @@ func runReleaseUpdate(target, arch string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	fmt.Fprintf(stdout, "A new version is available: %s.\n", latest)
-	source := releaseBaseURL + "/evesynapse-" + arch
+	source := releaseChannelBase() + "/evesynapse-" + arch
 	if code := installUpdate(target, source, m.SHA256, machine, stdout, stderr); code != 0 {
 		return code
 	}

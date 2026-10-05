@@ -14,6 +14,16 @@ LIMIT 20;
 -- name: ListAllTypeNames :many
 SELECT type_id, name FROM type_names
 ORDER BY type_id;
+-- name: ListTypeNameIDsByIDs :many
+-- Batched name-cache hit check: which of the given type IDs
+-- have a resolved name, without pulling the whole table.
+SELECT type_id FROM type_names
+WHERE type_id = ANY(sqlc.arg(type_ids)::bigint[]);
+-- name: ListSDETypeIDsByIDs :many
+-- Batched SDE hit check: which of the given type IDs the SDE
+-- knows, without pulling all 53K type IDs.
+SELECT type_id FROM sde_types
+WHERE type_id = ANY(sqlc.arg(type_ids)::bigint[]);
 
 -- ---------------------------------------------------------------------
 -- SDE static data (schema 003): lookup getters, search, counts, meta.
@@ -78,6 +88,16 @@ ORDER BY name;
 SELECT type_id, name FROM sde_types
 WHERE market_group_id = $1 AND published = 1 AND market_group_id > 0
 ORDER BY name;
+-- name: ListSDETypesInMarketGroupPaged :many
+-- One page of a market group's types: the market browse tab
+-- pages big groups instead of pulling thousands of rows.
+SELECT type_id, name FROM sde_types
+WHERE market_group_id = $1 AND published = 1 AND market_group_id > 0
+ORDER BY name
+LIMIT sqlc.arg(row_limit)::bigint OFFSET sqlc.arg(row_offset)::bigint;
+-- name: CountSDETypesInMarketGroup :one
+SELECT COUNT(*) FROM sde_types
+WHERE market_group_id = $1 AND published = 1 AND market_group_id > 0;
 -- name: CountSDEMarketGroups :one
 SELECT COUNT(*) FROM sde_market_groups;
 -- name: GetSDEMeta :one
@@ -99,6 +119,11 @@ WHERE item_id = $1;
 -- name: ListItemNames :many
 SELECT item_id, name FROM item_names
 ORDER BY item_id;
+-- name: ListItemNamesByIDs :many
+-- Batched singleton-name lookup: the names for one page's item
+-- IDs, without pulling the whole item_names table.
+SELECT item_id, name FROM item_names
+WHERE item_id = ANY(sqlc.arg(item_ids)::bigint[]);
 -- name: UpsertItemName :exec
 INSERT INTO item_names (item_id, name)
 VALUES ($1, $2)

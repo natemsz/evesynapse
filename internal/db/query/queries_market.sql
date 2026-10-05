@@ -445,6 +445,90 @@ SELECT location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_or
 FROM market_station_stats
 WHERE region_id = $1
 ORDER BY location_id, type_id;
+-- name: ListScannerOpportunities :many
+-- The spread scanner's opportunities, computed and ranked in SQL:
+-- one bounded read of at most scannerRowCap rows instead of
+-- pulling every stored station row for the region into Go.
+-- Mirrors the old Go filter exactly: real buy above zero, sell
+-- above the buy, spread floor, daily-volume floor, and the
+-- tradeable size as the least of what trades, what sellers
+-- hold, and what buyers want.
+SELECT type_id, location_id, best_sell, best_buy, sell_volume, buy_volume, daily_volume
+FROM (
+    SELECT ss.type_id, ss.location_id, ss.best_sell, ss.best_buy,
+           ss.sell_volume, ss.buy_volume,
+           COALESCE(rs.avg_daily_volume, 0) AS daily_volume,
+           (ss.best_sell - ss.best_buy) * LEAST(COALESCE(rs.avg_daily_volume, 0), ss.sell_volume::double precision, ss.buy_volume::double precision) AS profit
+    FROM market_station_stats ss
+    LEFT JOIN market_region_stats rs ON rs.region_id = ss.region_id AND rs.type_id = ss.type_id
+    WHERE ss.region_id = $1
+      AND ss.best_buy > 0
+      AND ss.best_sell > ss.best_buy
+      AND (ss.best_sell - ss.best_buy) / ss.best_buy * 100 >= sqlc.arg(min_spread)
+      AND COALESCE(rs.avg_daily_volume, 0) >= sqlc.arg(min_volume)::bigint
+      AND LEAST(COALESCE(rs.avg_daily_volume, 0), ss.sell_volume::double precision, ss.buy_volume::double precision) > 0
+) ranked
+ORDER BY profit DESC, type_id, location_id
+LIMIT sqlc.arg(row_cap)::bigint;
+-- name: GetMarketStationStatsStamp :one
+-- The freshest station-stat write for a region: the scanner
+-- page's "prices as of" stamp without pulling the rows.
+SELECT MAX(updated_at) AS stamp, COUNT(*) AS row_count
+FROM market_station_stats WHERE region_id = $1;
+-- name: GetMarketRegionStatsStamp :one
+-- The freshest region-stat write for a region: the tradefinder
+-- page's "figures last gathered" stamp without pulling rows.
+SELECT MAX(updated_at) AS stamp, COUNT(*) AS row_count
+FROM market_region_stats WHERE region_id = $1;
+-- name: ListTradefinderRoutes :many
+-- The tradefinder's routes, computed and ranked in SQL: one
+-- bounded read of at most tradefinderRowCap rows instead of
+-- pulling both regions' stored stats into Go. Mirrors the old
+-- Go filter exactly: fresh figures on both sides (3-day rule,
+-- compared as RFC3339 text), a real typical buy and sell,
+-- margin above zero, the lowball opt-out, the margin-% floor,
+-- the sold-per-day floor, and the movable size as the least of
+-- what trades, the origin's open buy volume, and the
+-- destination's open sell volume.
+SELECT type_id, origin_typical_buy, dest_typical_sell, dest_daily_volume,
+       origin_buy_volume, dest_sell_volume
+FROM (
+    SELECT o.type_id,
+           o.typical_buy AS origin_typical_buy,
+           d.typical_sell AS dest_typical_sell,
+           d.avg_daily_volume AS dest_daily_volume,
+           o.buy_volume AS origin_buy_volume,
+           d.sell_volume AS dest_sell_volume,
+           (d.typical_sell - o.typical_buy) * LEAST(d.avg_daily_volume, o.buy_volume::double precision, d.sell_volume::double precision) AS profit
+    FROM market_region_stats o
+    JOIN market_region_stats d ON d.region_id = sqlc.arg(dest_region) AND d.type_id = o.type_id
+    WHERE o.region_id = sqlc.arg(origin_region)
+      AND o.typical_buy > 0 AND d.typical_sell > 0
+      AND d.typical_sell > o.typical_buy
+      AND (sqlc.arg(include_lowball)::bigint = 1 OR NOT (o.typical_sell > 0 AND o.typical_buy * 10 < o.typical_sell))
+      AND (d.typical_sell - o.typical_buy) / o.typical_buy * 100 >= sqlc.arg(min_margin)
+      AND d.avg_daily_volume >= sqlc.arg(min_volume)::bigint
+      AND LEAST(d.avg_daily_volume, o.buy_volume::double precision, d.sell_volume::double precision) > 0
+      AND o.updated_at >= sqlc.arg(cutoff) AND d.updated_at >= sqlc.arg(cutoff)
+) ranked
+ORDER BY profit DESC, type_id
+LIMIT sqlc.arg(row_cap)::bigint;
+-- name: ListCheapestSellStations :many
+-- Per-type cheapest-sell station rows for a bounded type list:
+-- the tradefinder's "cheapest at" hints without pulling the
+-- region's whole station grain.
+SELECT DISTINCT ON (type_id) type_id, location_id, best_sell
+FROM market_station_stats
+WHERE region_id = $1 AND type_id = ANY(sqlc.arg(type_ids)::bigint[]) AND best_sell > 0
+ORDER BY type_id, best_sell, location_id;
+-- name: ListBestBuyStations :many
+-- Per-type highest-buy station rows for a bounded type list:
+-- the tradefinder's "best buyer at" hints without pulling the
+-- region's whole station grain.
+SELECT DISTINCT ON (type_id) type_id, location_id, best_buy
+FROM market_station_stats
+WHERE region_id = $1 AND type_id = ANY(sqlc.arg(type_ids)::bigint[]) AND best_buy > 0
+ORDER BY type_id, best_buy DESC, location_id;
 
 -- ---------------------------------------------------------------------
 -- P4 order lifecycle (schema 033): append-only per-order history

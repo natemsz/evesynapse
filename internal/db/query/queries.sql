@@ -159,6 +159,16 @@ ON CONFLICT (character_id) DO UPDATE SET
 -- name: ListAllCorporationIDs :many
 SELECT DISTINCT corporation_id FROM character_corporations
 ORDER BY corporation_id;
+-- name: ListCorporationIDsByUser :many
+-- Every corporation the given user's characters belong to,
+-- from the worker-maintained character -> corporation map.
+-- Scoped to one user: per-user data stays siloed, so the
+-- wars page never flags another user's corporation as yours.
+SELECT DISTINCT cc.corporation_id
+FROM character_corporations cc
+JOIN characters c ON c.character_id = cc.character_id
+WHERE c.user_id = $1
+ORDER BY cc.corporation_id;
 
 -- ---------------------------------------------------------------------
 -- Module sweep, cluster 4 (schema 007): intel public-data store.

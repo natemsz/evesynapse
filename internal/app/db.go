@@ -393,6 +393,19 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 031 (P1 region stats platform: per-(region, type)
+	// book statistics from the worker's whole-region sweeps,
+	// plus their once-a-day snapshots), applied the same
+	// guarded way.
+	var regionStatsTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'market_region_stats'`).Scan(&regionStatsTables); err != nil {
+		return nil, err
+	}
+	if regionStatsTables == 0 {
+		if err := applySchema(conn, regionStatsSchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

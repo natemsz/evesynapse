@@ -754,10 +754,12 @@ func (app *Application) fitPilotLevels(ctx context.Context, pilotID int64, snap 
 // fitPilotImplants resolves the simulate request's implant set:
 // pilotID 0 (All V) is a theorycrafting view with no character,
 // so no implants. cloneID 0 is the active clone; otherwise the
-// matching jump clone's implants. Snapshots come from the
-// worker-warmed rows (never per-render fetches). The second
-// return is the effective clone ID (unknown IDs fall back to
-// active); the note covers warming and re-login states.
+// matching jump clone's implants. Clone labels fall back to
+// "Jump clone #<last-4-digits-of-id>" when ESI carries no custom
+// name (EVE doesn't let players name jump clones). Snapshots
+// come from the worker-warmed rows (never per-render fetches).
+// The second return is the effective clone ID (unknown IDs fall
+// back to active); the note covers warming and re-login states.
 func (app *Application) fitPilotImplants(ctx context.Context, pilotID, cloneID int64) (ids []int64, effectiveClone int64, clones []fitCloneOption, note string) {
 	if pilotID == 0 {
 		return nil, 0, nil, ""
@@ -775,8 +777,15 @@ func (app *Application) fitPilotImplants(ctx context.Context, pilotID, cloneID i
 	clones = []fitCloneOption{{ID: 0, Name: "Active clone", Implants: len(active)}}
 	for _, c := range jc.JumpClones {
 		name := strings.TrimSpace(c.Name)
-		if name == "" {
-			name = "Jump clone"
+		if name == "" || name == "Jump clone" {
+			// EVE doesn't let players name jump clones, so ESI's
+			// name field is usually empty or generic. Fall back to
+			// the clone ID's last four digits so the dropdown
+			// options stay distinguishable. A real custom name is
+			// always kept. The implant count is NOT folded in here:
+			// both the workbench template and handleFitClonesJSON
+			// append " (n)" themselves, so it appears exactly once.
+			name = fmt.Sprintf("Jump clone #%04d", c.JumpCloneID%10000)
 		}
 		loc := app.locationTitle(ctx, c.LocationID, c.LocationType)
 		clones = append(clones, fitCloneOption{

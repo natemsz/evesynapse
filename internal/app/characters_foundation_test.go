@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"golang.org/x/oauth2"
 
@@ -487,5 +488,56 @@ func TestResolveSignInUser(t *testing.T) {
 	}
 	if got == 0 || got == userA.ID || got == userB.ID {
 		t.Fatalf("resolve first-ever: got user %d, want a fresh account", got)
+	}
+}
+
+// TestSessionSlidingRenewal covers the sliding session: a
+// signed-in session near its deadline is renewed (token rotated,
+// deadline pushed back to a full sessionLifetime), so an active
+// user is not signed out simply for visiting daily.
+func TestSessionSlidingRenewal(t *testing.T) {
+	app, conn, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	app.sessions.Lifetime = sessionLifetime
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	linkFor(t, app, user.ID, fixtureCharA, "hash-one")
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Char A")
+
+	// Age the session: an hour from its deadline.
+	lctx, err := app.sessions.Load(ctx, cookie.Value)
+	if err != nil {
+		t.Fatalf("reload session: %v", err)
+	}
+	app.sessions.SetDeadline(lctx, time.Now().Add(time.Hour))
+	if _, _, err := app.sessions.Commit(lctx); err != nil {
+		t.Fatalf("age session: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("aged session page: got %d", rec.Code)
+	}
+	var rotated string
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "evesynapse_session" && c.Value != "" && c.Value != cookie.Value {
+			rotated = c.Value
+		}
+	}
+	if rotated == "" {
+		t.Fatalf("aged session was not renewed (cookie token unchanged)")
+	}
+	var daysLeft float64
+	if err := conn.QueryRow(`SELECT expiry - julianday('now') FROM sessions WHERE token = ?`, rotated).Scan(&daysLeft); err != nil {
+		t.Fatalf("read renewed expiry: %v", err)
+	}
+	if daysLeft < 29 {
+		t.Fatalf("renewed session expires in %.2f days, want ~30", daysLeft)
 	}
 }

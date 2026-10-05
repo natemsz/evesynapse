@@ -33,7 +33,33 @@ const (
 	sessionOAuthState    = "oauth_state"
 )
 
-// EVE SSO (OAuth2 + OpenID Connect) endpoints. Discovery document:
+// sessionLifetime is how long a sign-in lasts. The session slides
+// (see slideSession), so the 30 days only run out after a month
+// away, not a day after signing in.
+const sessionLifetime = 30 * 24 * time.Hour
+
+// slideSession keeps signed-in sessions alive while the user is
+// active: once more than a day of the session's lifetime has
+// elapsed, the token is renewed, pushing the deadline back out to
+// a full sessionLifetime. Renewing also rotates the cookie token,
+// which is why it happens at most once a day rather than on every
+// request. The renewed token's cookie is written by LoadAndSave
+// when it commits the session at the end of the request.
+func (app *Application) slideSession(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		if app.sessions.GetBool(ctx, sessionAuthenticated) {
+			if deadline := app.sessions.Deadline(ctx); !deadline.IsZero() &&
+				time.Until(deadline) < app.sessions.Lifetime-24*time.Hour {
+				if err := app.sessions.RenewToken(ctx); err != nil {
+					log.Printf("session: sliding renewal: %v", err)
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // https://login.eveonline.com/.well-known/oauth-authorization-server
 const (
 	eveIssuer       = "https://login.eveonline.com" // required `iss` claim

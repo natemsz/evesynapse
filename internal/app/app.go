@@ -219,7 +219,7 @@ func New(cfg Config) (*Application, error) {
 
 	sessionManager := scs.New()
 	sessionManager.Store = sqlite3store.New(dbConn)
-	sessionManager.Lifetime = 24 * time.Hour
+	sessionManager.Lifetime = sessionLifetime
 	sessionManager.Cookie.Name = "evesynapse_session"
 	// TODO(https): set Cookie.Secure = true once served over TLS.
 	sessionManager.Cookie.Secure = false
@@ -289,6 +289,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(app.sessions.LoadAndSave)
+	r.Use(app.slideSession)
 	r.Use(app.pageWantScopeMiddleware)
 
 	r.Get("/", app.handleHome)

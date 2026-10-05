@@ -70,47 +70,55 @@ type allianceRecordPayload struct {
 
 // corporationPageView is the /corporation/ page body.
 type corporationPageView struct {
-	CorporationID  int64
-	State          string // "loading" | "missing" | "ready"
-	LogoURL        string
-	Name           string
-	Ticker         string
-	MemberCount    string
-	Founded        string
-	TaxRate        string
-	CEOID          int64
-	CEOName        string
-	AllianceID     int64
-	AllianceLine   string // name [ticker], "" when not in an alliance
-	HomeStation    string
-	HasDescription bool
-	Description    template.HTML // sanitized, same rules as mail bodies
-	ViewerChars    map[int64]bool
+	CorporationID   int64
+	State           string // "loading" | "missing" | "ready"
+	LogoURL         string
+	Name            string
+	Ticker          string
+	MemberCount     string
+	Founded         string
+	TaxRate         string
+	CEOID           int64
+	CEOName         string
+	CEOPending      bool // CEO name still on its way; the cell polls for it
+	AllianceID      int64
+	AllianceLine    string // name [ticker], "" when not in an alliance
+	AlliancePending bool   // alliance name still on its way; the cell polls for it
+	HomeStationID   int64
+	HomeStation     string
+	HomePending     bool // home-station name still on its way; the cell polls for it
+	HasDescription  bool
+	Description     template.HTML // sanitized, same rules as mail bodies
+	ViewerChars     map[int64]bool
 }
 
 // allianceMemberView is one member-corporation line.
 type allianceMemberView struct {
-	CorpID int64
-	Name   string
+	CorpID      int64
+	Name        string
+	NamePending bool // corporation name still on its way; the cell polls for it
 }
 
 // alliancePageView is the /alliance/ page body.
 type alliancePageView struct {
-	AllianceID     int64
-	State          string // "loading" | "missing" | "ready"
-	LogoURL        string
-	Name           string
-	Ticker         string
-	Founded        string
-	CreatorID      int64
-	CreatorName    string
-	CreatorCorpID  int64
-	CreatorCorp    string
-	ExecutorCorpID int64
-	ExecutorCorp   string
-	MemberCount    int
-	Members        []allianceMemberView
-	ViewerChars    map[int64]bool
+	AllianceID         int64
+	State              string // "loading" | "missing" | "ready"
+	LogoURL            string
+	Name               string
+	Ticker             string
+	Founded            string
+	CreatorID          int64
+	CreatorName        string
+	CreatorPending     bool // creator name still on its way; the cell polls for it
+	CreatorCorpID      int64
+	CreatorCorp        string
+	CreatorCorpPending bool // creator-corporation name still on its way
+	ExecutorCorpID     int64
+	ExecutorCorp       string
+	ExecutorPending    bool // executor-corporation name still on its way
+	MemberCount        int
+	Members            []allianceMemberView
+	ViewerChars        map[int64]bool
 }
 
 // handleCorporationPage renders one corporation's public record.
@@ -246,6 +254,7 @@ func (app *Application) buildCorporationView(ctx context.Context, id int64, payl
 	if p.Corp.CEOID > 0 {
 		view.CEOID = p.Corp.CEOID
 		view.CEOName = app.displayCharacter(ctx, p.Corp.CEOID)
+		view.CEOPending = app.characterLabelPending(ctx, p.Corp.CEOID)
 	}
 	if p.Corp.AllianceID > 0 {
 		view.AllianceID = p.Corp.AllianceID
@@ -256,14 +265,23 @@ func (app *Application) buildCorporationView(ctx context.Context, id int64, payl
 			}
 		} else {
 			view.AllianceLine = app.allianceDisplayName(ctx, p.Corp.AllianceID)
+			view.AlliancePending = app.allianceNamePending(ctx, p.Corp.AllianceID)
 		}
 	}
 	if p.Corp.HomeStationID > 0 {
+		view.HomeStationID = p.Corp.HomeStationID
 		if name, ok := app.esi.CachedPlaceName(ctx, p.Corp.HomeStationID); ok && name != "" {
 			view.HomeStation = name
+		} else if name := app.resolvedStructureTitle(ctx, p.Corp.HomeStationID); name != "" {
+			view.HomeStation = name
 		} else {
-			app.notePageWantFromContext(ctx, pageWantPlace, p.Corp.HomeStationID)
+			if isStructureID(p.Corp.HomeStationID) {
+				app.notePageWantFromContext(ctx, pageWantStructure, p.Corp.HomeStationID)
+			} else {
+				app.notePageWantFromContext(ctx, pageWantPlace, p.Corp.HomeStationID)
+			}
 			view.HomeStation = fmt.Sprintf("Station #%d", p.Corp.HomeStationID)
+			view.HomePending = true
 		}
 	}
 	if p.Corp.Description != "" {
@@ -330,14 +348,17 @@ func (app *Application) buildAllianceView(ctx context.Context, id int64, payload
 	if p.Alliance.CreatorID > 0 {
 		view.CreatorID = p.Alliance.CreatorID
 		view.CreatorName = app.displayCharacter(ctx, p.Alliance.CreatorID)
+		view.CreatorPending = app.characterLabelPending(ctx, p.Alliance.CreatorID)
 	}
 	if p.Alliance.CreatorCorporationID > 0 {
 		view.CreatorCorpID = p.Alliance.CreatorCorporationID
 		view.CreatorCorp = app.corpDisplayName(ctx, p.Alliance.CreatorCorporationID)
+		view.CreatorCorpPending = app.corpNamePending(ctx, p.Alliance.CreatorCorporationID)
 	}
 	if p.Alliance.ExecutorCorporationID > 0 {
 		view.ExecutorCorpID = p.Alliance.ExecutorCorporationID
 		view.ExecutorCorp = app.corpDisplayName(ctx, p.Alliance.ExecutorCorporationID)
+		view.ExecutorPending = app.corpNamePending(ctx, p.Alliance.ExecutorCorporationID)
 	}
 	for _, member := range p.Corporations {
 		row := allianceMemberView{CorpID: member.ID, Name: member.Name}
@@ -347,9 +368,42 @@ func (app *Application) buildAllianceView(ctx context.Context, id int64, payload
 		if row.Name == "" {
 			row.Name = app.corpDisplayName(ctx, member.ID)
 		}
+		row.NamePending = row.Name == fmt.Sprintf("Corporation #%d", member.ID) &&
+			app.corpNamePending(ctx, member.ID)
 		view.Members = append(view.Members, row)
 	}
 	return view, true
+}
+
+// resolvedCorpName reads the corporation-name tiers without
+// queueing work: the name, and whether the answer is settled (a
+// settled empty name means EVE has no such corporation).
+func (app *Application) resolvedCorpName(ctx context.Context, corpID int64) (string, bool) {
+	if name, ok := app.esi.CachedCorpName(corpID); ok && name != "" {
+		return name, true
+	}
+	rec, err := app.queries.GetCorporationRecord(ctx, corpID)
+	if err != nil {
+		return "", false
+	}
+	if rec.State == orgStateReady && rec.Payload != "" {
+		var payload corporationRecordPayload
+		if jerr := json.Unmarshal([]byte(rec.Payload), &payload); jerr == nil && payload.Corp.Name != "" {
+			app.esi.StoreCorpName(corpID, payload.Corp.Name)
+			return payload.Corp.Name, true
+		}
+	}
+	if rec.State == orgStateMissing {
+		return "", true
+	}
+	return "", false
+}
+
+// corpNamePending reports whether a corporation label is still
+// waiting on its first local answer.
+func (app *Application) corpNamePending(ctx context.Context, corpID int64) bool {
+	_, settled := app.resolvedCorpName(ctx, corpID)
+	return !settled
 }
 
 // corpDisplayName resolves a corporation's display name from the
@@ -359,34 +413,66 @@ func (app *Application) buildAllianceView(ctx context.Context, id int64, payload
 // "Corporation #<id>" fallback is the answer until then. Shared
 // by every surface that renders a corporation name.
 func (app *Application) corpDisplayName(ctx context.Context, corpID int64) string {
-	if name, ok := app.esi.CachedCorpName(corpID); ok && name != "" {
+	if name, settled := app.resolvedCorpName(ctx, corpID); settled && name != "" {
 		return name
-	}
-	if rec, err := app.queries.GetCorporationRecord(ctx, corpID); err == nil && rec.State == orgStateReady && rec.Payload != "" {
-		var payload corporationRecordPayload
-		if jerr := json.Unmarshal([]byte(rec.Payload), &payload); jerr == nil && payload.Corp.Name != "" {
-			app.esi.StoreCorpName(corpID, payload.Corp.Name)
-			return payload.Corp.Name
-		}
 	}
 	app.notePageWantFromContext(ctx, pageWantCorporation, corpID)
 	return fmt.Sprintf("Corporation #%d", corpID)
 }
 
-// allianceDisplayName is corpDisplayName for alliances.
-func (app *Application) allianceDisplayName(ctx context.Context, allianceID int64) string {
+// resolvedAllianceName is resolvedCorpName for alliances.
+func (app *Application) resolvedAllianceName(ctx context.Context, allianceID int64) (string, bool) {
 	if name, ok := app.esi.CachedAllianceName(allianceID); ok && name != "" {
-		return name
+		return name, true
 	}
-	if rec, err := app.queries.GetAllianceRecord(ctx, allianceID); err == nil && rec.State == orgStateReady && rec.Payload != "" {
+	rec, err := app.queries.GetAllianceRecord(ctx, allianceID)
+	if err != nil {
+		return "", false
+	}
+	if rec.State == orgStateReady && rec.Payload != "" {
 		var payload allianceRecordPayload
 		if jerr := json.Unmarshal([]byte(rec.Payload), &payload); jerr == nil && payload.Alliance.Name != "" {
 			app.esi.StoreAllianceName(allianceID, payload.Alliance.Name)
-			return payload.Alliance.Name
+			return payload.Alliance.Name, true
 		}
+	}
+	if rec.State == orgStateMissing {
+		return "", true
+	}
+	return "", false
+}
+
+// allianceNamePending reports whether an alliance label is
+// still waiting on its first local answer.
+func (app *Application) allianceNamePending(ctx context.Context, allianceID int64) bool {
+	_, settled := app.resolvedAllianceName(ctx, allianceID)
+	return !settled
+}
+
+// allianceDisplayName is corpDisplayName for alliances.
+func (app *Application) allianceDisplayName(ctx context.Context, allianceID int64) string {
+	if name, settled := app.resolvedAllianceName(ctx, allianceID); settled && name != "" {
+		return name
 	}
 	app.notePageWantFromContext(ctx, pageWantAlliance, allianceID)
 	return fmt.Sprintf("Alliance #%d", allianceID)
+}
+
+// resolvedPlaceName reads the place-name tiers without queueing
+// work: the SDE/cache station or system name, then a resolved
+// structure title; settled with an empty name when the structure
+// queue has a settled miss for the id.
+func (app *Application) resolvedPlaceName(ctx context.Context, id int64) (string, bool) {
+	if name, ok := app.esi.CachedPlaceName(ctx, id); ok && name != "" {
+		return name, true
+	}
+	if name := app.resolvedStructureTitle(ctx, id); name != "" {
+		return name, true
+	}
+	if row, err := app.queries.GetStructureName(ctx, id); err == nil && row.State == esi.StructureMissing {
+		return "", true
+	}
+	return "", false
 }
 
 // refreshCorporationRecords drains the corporation queue inside

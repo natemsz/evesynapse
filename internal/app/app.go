@@ -362,6 +362,9 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/labels", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/character-fragment", app.handleCharacterLabelFragment)
+		r.Get("/corporation-fragment", app.handleCorporationLabelFragment)
+		r.Get("/alliance-fragment", app.handleAllianceLabelFragment)
+		r.Get("/place-fragment", app.handlePlaceLabelFragment)
 	})
 
 	r.Route("/market", func(r chi.Router) {

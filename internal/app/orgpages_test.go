@@ -427,3 +427,120 @@ func TestMigration026Reopen(t *testing.T) {
 		}
 	}
 }
+
+// TestOrgLabelLiveRegions (v0.3.20.002): names the organization
+// pages reference but have not cached yet — a corporation's CEO,
+// an alliance's creator and member corporations, a home station —
+// render a live "Loading name…" region that polls its label
+// fragment and swaps the linked name in place, instead of
+// sitting as a bare "#<id>" until a manual reload.
+func TestOrgLabelLiveRegions(t *testing.T) {
+	ctx := context.Background()
+	stub := &orgStub{
+		corps: map[int64]string{
+			98000001: `{"name":"Boars on Parade","ticker":"BOAR.","member_count":36,"ceo_id":2117407084,` +
+				`"alliance_id":99000001,"home_station_id":60003760,"tax_rate":0.1,` +
+				`"date_founded":"2014-04-14T00:00:00Z"}`,
+		},
+		alliances: map[int64]string{
+			99000001: `{"name":"The Tuskers Co.","ticker":"TUSK.","creator_id":1,"creator_corporation_id":1,"date_founded":"2010-01-02T00:00:00Z","executor_corporation_id":1}`,
+		},
+	}
+	app, conn, q := buildCorpTestApp(t, stub)
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+	if _, err := conn.ExecContext(ctx, `INSERT INTO sde_stations (station_id, name, system_id) VALUES (60003760, 'Jita IV - Moon 4 - Caldari Navy Assembly Plant', 30000142)`); err != nil {
+		t.Fatalf("seed sde station: %v", err)
+	}
+
+	if code, _ := getPage(t, app, cookie, "/corporation/?corporation=98000001"); code != http.StatusOK {
+		t.Fatalf("corporation enqueue page: status %d", code)
+	}
+	if drained, limited := app.refreshCorporationRecords(ctx, &fetchBudget{left: 120}); limited || drained != 1 {
+		t.Fatalf("corporation drain: drained=%d limited=%v, want 1/false", drained, limited)
+	}
+
+	// The CEO is nobody the app knows yet: the cell must offer
+	// the live region, not a bare id. The home station resolves
+	// from the SDE on the spot, so it renders plain.
+	code, body := getPage(t, app, cookie, "/corporation/?corporation=98000001")
+	if code != http.StatusOK {
+		t.Fatalf("corporation page: status %d", code)
+	}
+	mustContain(t, "/corporation/ ceo pending", body,
+		`data-poll-url="/labels/character-fragment?id=2117407084"`,
+		"Loading name for Character #2117407084",
+		"Jita IV - Moon 4 - Caldari Navy Assembly Plant",
+	)
+	if strings.Contains(body, `data-poll-url="/labels/place-fragment?id=60003760"`) {
+		t.Error("home station rendered a poll region even though its name is known")
+	}
+
+	// The character fragment still waits… then swaps the linked
+	// name in once a local tier learns it.
+	code, body = getPage(t, app, cookie, "/labels/character-fragment?id=2117407084")
+	if code != http.StatusOK || !strings.Contains(body, `data-poll-state="pending"`) {
+		t.Fatalf("character fragment before warm: %d %q", code, body)
+	}
+	app.esi.StoreCharacterName(2117407084, "Boars Ceo")
+	code, body = getPage(t, app, cookie, "/labels/character-fragment?id=2117407084")
+	if code != http.StatusOK {
+		t.Fatalf("character fragment after warm: status %d", code)
+	}
+	mustContain(t, "character fragment after warm", body,
+		`data-poll-state="ready"`,
+		`<a href="/pilot/?character=2117407084">Boars Ceo</a>`,
+	)
+	code, body = getPage(t, app, cookie, "/corporation/?corporation=98000001")
+	if code != http.StatusOK || !strings.Contains(body, `<a href="/pilot/?character=2117407084">Boars Ceo</a>`) {
+		t.Fatalf("corporation page after warm: %d, CEO not linked", code)
+	}
+
+	// Corporation fragment: waits, then serves the linked name
+	// once the record lands.
+	code, body = getPage(t, app, cookie, "/labels/corporation-fragment?id=98000077")
+	if code != http.StatusOK || !strings.Contains(body, "Loading name for Corporation #98000077") {
+		t.Fatalf("corporation fragment before record: %d %q", code, body)
+	}
+	if err := q.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
+		CorporationID: 98000077,
+		Payload:       `{"corp":{"name":"Late Corp","ticker":"LATE","member_count":3,"ceo_id":1,"tax_rate":0.1},"alliance":{}}`,
+		State:         orgStateReady, FetchedAt: "2026-01-01T00:00:00Z",
+	}); err != nil {
+		t.Fatalf("seed corporation record: %v", err)
+	}
+	code, body = getPage(t, app, cookie, "/labels/corporation-fragment?id=98000077")
+	if code != http.StatusOK {
+		t.Fatalf("corporation fragment after record: status %d", code)
+	}
+	mustContain(t, "corporation fragment after record", body,
+		`data-poll-state="ready"`,
+		`<a href="/corporation/?corporation=98000077">Late Corp</a>`,
+	)
+
+	// Place fragment answers a known station immediately, linked.
+	code, body = getPage(t, app, cookie, "/labels/place-fragment?id=60003760")
+	if code != http.StatusOK {
+		t.Fatalf("place fragment: status %d", code)
+	}
+	mustContain(t, "place fragment", body,
+		`data-poll-state="ready"`,
+		`<a href="/station/?station=60003760">Jita IV - Moon 4 - Caldari Navy Assembly Plant</a>`,
+	)
+
+	// A settled miss stops the polling: the alliance that does
+	// not exist renders its plain fallback as ready.
+	if err := q.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
+		AllianceID: 99000099, Payload: "", State: orgStateMissing, FetchedAt: "2026-01-01T00:00:00Z",
+	}); err != nil {
+		t.Fatalf("seed missing alliance: %v", err)
+	}
+	code, body = getPage(t, app, cookie, "/labels/alliance-fragment?id=99000099")
+	if code != http.StatusOK || !strings.Contains(body, `data-poll-state="ready">Alliance #99000099<`) {
+		t.Fatalf("alliance fragment (missing): %d %q", code, body)
+	}
+}

@@ -21,9 +21,9 @@
 <table>
   <tbody>
     {{if .Founded}}<tr><th>Founded</th><td>{{.Founded}}</td></tr>{{end}}
-    {{if .CreatorID}}<tr><th>Created by</th><td>{{charLink .ViewerChars .CreatorID .CreatorName}}</td></tr>{{end}}
-    {{if .CreatorCorpID}}<tr><th>Creator corporation</th><td>{{corpLink .CreatorCorpID .CreatorCorp}}</td></tr>{{end}}
-    {{if .ExecutorCorpID}}<tr><th>Executor corporation</th><td>{{corpLink .ExecutorCorpID .ExecutorCorp}}</td></tr>{{end}}
+    {{if .CreatorID}}<tr><th>Created by</th><td>{{if .CreatorPending}}<span data-live-region data-poll-url="/labels/character-fragment?id={{.CreatorID}}" data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for {{.CreatorName}}…</span>{{else}}{{charLink .ViewerChars .CreatorID .CreatorName}}{{end}}</td></tr>{{end}}
+    {{if .CreatorCorpID}}<tr><th>Creator corporation</th><td>{{if .CreatorCorpPending}}<span data-live-region data-poll-url="/labels/corporation-fragment?id={{.CreatorCorpID}}" data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for {{.CreatorCorp}}…</span>{{else}}{{corpLink .CreatorCorpID .CreatorCorp}}{{end}}</td></tr>{{end}}
+    {{if .ExecutorCorpID}}<tr><th>Executor corporation</th><td>{{if .ExecutorPending}}<span data-live-region data-poll-url="/labels/corporation-fragment?id={{.ExecutorCorpID}}" data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for {{.ExecutorCorp}}…</span>{{else}}{{corpLink .ExecutorCorpID .ExecutorCorp}}{{end}}</td></tr>{{end}}
     <tr><th>Member corporations</th><td>{{.MemberCount}}</td></tr>
   </tbody>
 </table>
@@ -35,7 +35,7 @@
 <table>
   <tbody>
   {{range .Members}}
-    <tr><td>{{corpLink .CorpID .Name}}</td></tr>
+    <tr><td>{{if .NamePending}}<span data-live-region data-poll-url="/labels/corporation-fragment?id={{.CorpID}}" data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for {{.Name}}…</span>{{else}}{{corpLink .CorpID .Name}}{{end}}</td></tr>
   {{end}}
   </tbody>
 </table>

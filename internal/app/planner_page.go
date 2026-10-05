@@ -338,9 +338,9 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 	buyTotal := root.LineCost
 	if !root.CostComplete || res.UnpricedLines > 0 {
 		missing := res.UnpricedLines
-		view.PricesNote = fmt.Sprintf("Prices come from the market guide cache; %d shopping item(s) have no price data, so totals are partial.", missing)
+		view.PricesNote = fmt.Sprintf("Unit prices are each item's average market price across the cluster; %d shopping item(s) have no price data, so totals are partial.", missing)
 	} else {
-		view.PricesNote = "Prices come from the market guide cache (average, adjusted where no average exists)."
+		view.PricesNote = "Unit prices are each item's average market price across the cluster (adjusted price where no average exists)."
 		view.ShoppingTotal = isk(buyTotal)
 	}
 

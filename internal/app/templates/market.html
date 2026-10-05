@@ -23,7 +23,9 @@
 
   <p>Best sell: <strong>{{if $item.BestSell}}{{$item.BestSell}} ISK{{else}}—{{end}}</strong>{{if $item.BestSellLoc.Name}} ({{placeLink $item.BestSellLoc}}){{end}}<br>
   Best buy: <strong>{{if $item.BestBuy}}{{$item.BestBuy}} ISK{{else}}—{{end}}</strong>{{if $item.BestBuyLoc.Name}} ({{placeLink $item.BestBuyLoc}}){{end}}{{if $item.Spread}}<br>
-  Spread: {{$item.Spread}}{{end}}</p>
+  Spread: {{$item.Spread}}{{end}}{{if $item.TypicalSell}}<br>
+  Typical sell: <strong>{{$item.TypicalSell}} ISK</strong> · 9 in 10 sell orders at or under {{$item.SellBand}} ISK{{end}}{{if $item.TypicalBuy}}<br>
+  Typical buy: <strong>{{$item.TypicalBuy}} ISK</strong> · 9 in 10 buy orders at or over {{$item.BuyBand}} ISK{{end}}</p>
 
   <section class="foldable">
   <h3>Price history — {{$item.RegionName}}</h3>

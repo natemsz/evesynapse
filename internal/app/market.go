@@ -109,6 +109,15 @@ type marketItem struct {
 
 	BestSellRaw float64 // numeric bests behind the formatted strings (0 = none)
 	BestBuyRaw  float64
+
+	// Honest prices: stats over the whole book behind the bests,
+	// so one joke order cannot stand in for the market. Typical*
+	// is the median order; the band lines give the price 9 in 10
+	// orders are at-or-under (sells) / at-or-over (buys).
+	TypicalSell string // esi.FormatISK, "" when no sell orders
+	SellBand    string
+	TypicalBuy  string
+	BuyBand     string
 	Trader      *traderStats // trading snapshot; set by attachHistory
 
 	// Phase 5 price history (cache-only, from stored rows).
@@ -627,6 +636,59 @@ func (app *Application) fetchOrderBook(ctx context.Context, regionID, typeID int
 	return sells, buys, truncated, nil
 }
 
+// bookStats summarizes one side of a regional order book so the
+// item page can quote prices a lone joke order cannot poison:
+// the median (typical) order and the band the bulk of orders sit
+// in. Prices are per order row — each order counts once,
+// whatever its volume.
+type bookStats struct {
+	Median float64 // typical order price
+	Low90  float64 // 9 in 10 orders are at or above this
+	High90 float64 // 9 in 10 orders are at or below this
+}
+
+// summarizeBook computes bookStats over one side's orders. ok is
+// false for an empty side.
+func summarizeBook(orders []esi.MarketOrder) (bookStats, bool) {
+	if len(orders) == 0 {
+		return bookStats{}, false
+	}
+	prices := make([]float64, len(orders))
+	for i, o := range orders {
+		prices[i] = o.Price
+	}
+	sort.Float64s(prices)
+	return bookStats{
+		Median: medianPrice(prices),
+		Low90:  pricePercentileNR(prices, 10),
+		High90: pricePercentileNR(prices, 90),
+	}, true
+}
+
+// medianPrice is the middle of ascending prices, averaging the
+// two middle values on an even count.
+func medianPrice(sorted []float64) float64 {
+	n := len(sorted)
+	if n%2 == 1 {
+		return sorted[n/2]
+	}
+	return (sorted[n/2-1] + sorted[n/2]) / 2
+}
+
+// pricePercentileNR returns the nearest-rank p-th percentile of
+// ascending prices: the smallest price at least p% of orders are
+// at or below, so a "9 in 10 orders" label is exactly true.
+func pricePercentileNR(sorted []float64, p float64) float64 {
+	idx := int(math.Ceil(p/100*float64(len(sorted)))) - 1
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= len(sorted) {
+		idx = len(sorted) - 1
+	}
+	return sorted[idx]
+}
+
 // loadMarketItem builds the item view for (type, region): guide
 // prices plus the best and top orders of the regional book.
 func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int64) (*marketItem, error) {
@@ -705,6 +767,15 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 	}
 	if len(sells) > 0 && len(buys) > 0 && buys[0].Price > 0 {
 		item.Spread = fmt.Sprintf("%.1f%%", (sells[0].Price-buys[0].Price)/buys[0].Price*100)
+	}
+
+	if stats, ok := summarizeBook(sells); ok {
+		item.TypicalSell = esi.FormatISK(stats.Median)
+		item.SellBand = esi.FormatISK(stats.High90)
+	}
+	if stats, ok := summarizeBook(buys); ok {
+		item.TypicalBuy = esi.FormatISK(stats.Median)
+		item.BuyBand = esi.FormatISK(stats.Low90)
 	}
 
 	for i, o := range sells {

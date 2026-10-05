@@ -67,18 +67,24 @@ const (
 )
 
 // eveScopes is the single source of truth for the scopes requested at
-// login: the full read-only ESI scope set. The list is generated from
-// the OAuth2 scope catalog in CCP's ESI OpenAPI document
+// login: the full read ESI scope set plus one write scope. The list is
+// generated from the OAuth2 scope catalog in CCP's ESI OpenAPI document
 // (GET https://esi.evetech.net/meta/openapi.json →
 // components.securitySchemes), minus every mutating scope — anything
 // whose name contains write_, send_, respond_, organize_, manage_ or
-// open_window (8 scopes excluded: respond_calendar_events,
-// write_contacts, write_fittings, write_fleet, organize_mail,
+// open_window (7 scopes excluded: respond_calendar_events,
+// write_contacts, write_fleet, organize_mail,
 // send_mail, open_window, write_waypoint; esi-planets.manage_planets.v1
-// is the one deliberate exception — see below). The user's
-// developer-portal application has the same read scopes enabled, so
+// is the one deliberate manage exception — see below). The user's
+// developer-portal application has the same scopes enabled, so
 // SSO grants exactly what is requested here. Already-linked
 // characters keep their previously granted scopes until re-linked.
+//
+// One deliberate write exception: esi-fittings.write_fittings.v1
+// IS requested, powering the fitting editor's "Save to EVE" button
+// (POST /characters/{id}/fittings/). Characters linked before this
+// scope was added get a 403 on that endpoint, which the handler
+// reports as "please sign in again" instead of failing silently.
 //
 // One deliberate exception (Phase 2): esi-planets.manage_planets.v1
 // IS requested. CCP publishes no read scope for planetary industry —
@@ -129,6 +135,7 @@ var eveScopes = []string{
 	"esi-corporations.read_titles.v1",
 	"esi-corporations.track_members.v1",
 	"esi-fittings.read_fittings.v1",
+	"esi-fittings.write_fittings.v1",
 	"esi-fleets.read_fleet.v1",
 	"esi-industry.read_character_jobs.v1",
 	"esi-industry.read_character_mining.v1",

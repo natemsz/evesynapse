@@ -190,6 +190,25 @@ const (
 	fitAttrHiSlotModifier            = 1374
 	fitAttrMedSlotModifier           = 1375
 	fitAttrLowSlotModifier           = 1376
+	// Ship-restriction attributes (dgmAttributeTypes, verified
+	// against the live dump 2026-10-05): a module carrying any of
+	// these may only be fitted when the hull matches one of the
+	// named ship groups or types. Siege modules point at group
+	// 485 (Dreadnought) via canFitShipGroup01; bastion at
+	// marauders, triage at carriers, same shape.
+	fitAttrCanFitShipGroup01 = 1298
+	fitAttrCanFitShipGroup04 = 1301
+	fitAttrCanFitShipType1   = 1302
+	fitAttrCanFitShipType4   = 1305
+	// Cap-warfare amounts (dgmAttributeTypes): neutralizers drain
+	// via energyNeutralizerAmount (97); nosferatu via
+	// powerTransferAmount (90), which remote capacitor
+	// transmitters (group 67) share — group 68 is the nosferatu
+	// group, so the engine only counts 68 as offensive drain.
+	fitAttrEnergyNeutralizerAmount = 97
+	fitAttrPowerTransferAmount     = 90
+	fitGroupRemoteCapTransmitter   = 67
+	fitGroupNosferatu              = 68
 )
 
 // Slot / fitting effect IDs (dgmEffects names verified live).
@@ -596,6 +615,19 @@ type fitResult struct {
 	DroneDPS   float64
 	DPS        float64
 
+	// Volley damage per weapon cycle, broken down like DPS.
+	TurretVolley  float64
+	MissileVolley float64
+	DroneVolley   float64
+	Volley        float64
+
+	// Capacitor warfare: neutralizer and nosferatu drain, per
+	// cycle and per second, from fitted modules.
+	NeutDrainPerCycle float64
+	NeutDrainPerSec   float64
+	NosDrainPerCycle  float64
+	NosDrainPerSec    float64
+
 	ShieldHP float64
 	ArmorHP  float64
 	HullHP   float64
@@ -632,6 +664,20 @@ type fitResult struct {
 	// skipped (deduped, sorted): domains/funcs it cannot target,
 	// overload-category effects, and similar.
 	Unmodeled []string
+
+	// Restricted lists fitted modules whose canFitShip*
+	// attributes forbid the current hull. The engine flags them
+	// as fit errors; it does not silently drop them.
+	Restricted []fitRestriction
+}
+
+// fitRestriction is one ship-restricted module on an
+// incompatible hull: the module type plus the ship groups/types
+// it may be fitted to.
+type fitRestriction struct {
+	TypeID    int64
+	NeedGroup []int64
+	NeedType  []int64
 }
 
 // fitEntityKind classifies one computation entity.
@@ -952,6 +998,16 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 		byType[skillID] = ent
 	}
 
+	// --- Ship restrictions -----------------------------------------
+	// Modules carrying canFitShipGroup*/canFitShipType* may only
+	// fly on the named hulls. Flag violations as fit errors.
+	shipGroup := snap.groups[shipTypeID]
+	for _, ent := range fitted {
+		if r := fitRestrictionFor(snap, shipTypeID, shipGroup, ent.typeID); r != nil {
+			res.Restricted = append(res.Restricted, *r)
+		}
+	}
+
 	// --- Modifier binding ------------------------------------------
 	// atShip are the entities sitting at the ship's location for
 	// Location* selectors: fitted equipment plus launched-craft
@@ -1233,6 +1289,21 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 		}
 		n := float64(maxInt(ent.instances, 1))
 		cycle := cycleSeconds(ent, snap)
+		// Capacitor warfare drains even where damage doesn't
+		// apply, so count it before the cycle gate.
+		if amt := ent.get(snap, fitAttrEnergyNeutralizerAmount); amt > 0 {
+			res.NeutDrainPerCycle += n * amt
+			if cycle > 0 {
+				res.NeutDrainPerSec += n * amt / cycle
+			}
+		}
+		if amt := ent.get(snap, fitAttrPowerTransferAmount); amt > 0 &&
+			snap.groups[ent.typeID] == fitGroupNosferatu {
+			res.NosDrainPerCycle += n * amt
+			if cycle > 0 {
+				res.NosDrainPerSec += n * amt / cycle
+			}
+		}
 		if cycle <= 0 {
 			continue
 		}
@@ -1247,7 +1318,9 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 			for _, a := range damageAttrs {
 				volley += charge.get(snap, a)
 			}
-			res.TurretDPS += n * volley * ent.get(snap, fitAttrDamageMultiplier) / cycle
+			volley *= ent.get(snap, fitAttrDamageMultiplier)
+			res.TurretVolley += n * volley
+			res.TurretDPS += n * volley / cycle
 		case snap.hasEffect(ent.typeID, fitEffectLauncherFitted):
 			if charge == nil {
 				noteUnmodeled(fmt.Sprintf("launcher type %d has no missile selected; damage not counted", ent.typeID))
@@ -1259,6 +1332,7 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 			}
 			volley *= charge.get(snap, fitAttrDamageMultiplier)
 			volley *= charEnt.get(snap, fitAttrMissileDamageMult)
+			res.MissileVolley += n * volley
 			res.MissileDPS += n * volley / cycle
 		}
 	}
@@ -1297,10 +1371,13 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 			for _, a := range damageAttrs {
 				volley += ent.get(snap, a)
 			}
-			res.DroneDPS += float64(fly) * volley * ent.get(snap, fitAttrDamageMultiplier) / cycle
+			volley *= ent.get(snap, fitAttrDamageMultiplier)
+			res.DroneVolley += float64(fly) * volley
+			res.DroneDPS += float64(fly) * volley / cycle
 		}
 	}
 	res.DPS = res.TurretDPS + res.MissileDPS + res.DroneDPS
+	res.Volley = res.TurretVolley + res.MissileVolley + res.DroneVolley
 
 	// Tank.
 	res.ShieldHP = sg(fitAttrShieldCapacity)
@@ -1396,6 +1473,43 @@ func finalAttrs(snap *fitSnapshot, e *fitEntity) map[int64]float64 {
 		out[attr] = e.get(snap, attr)
 	}
 	return out
+}
+
+// fitRestrictionFor returns the restriction for a module on the
+// given hull, or nil when the module fits. A module is
+// restricted when it carries any canFitShipGroup01-04
+// (1298-1301) or canFitShipType1-4 (1302-1305) attribute; it is
+// allowed when the hull's type or group matches any named one.
+func fitRestrictionFor(snap *fitSnapshot, shipTypeID, shipGroup, moduleTypeID int64) *fitRestriction {
+	attrs := snap.attrs[moduleTypeID]
+	if attrs == nil {
+		return nil
+	}
+	r := &fitRestriction{TypeID: moduleTypeID}
+	for a := int64(fitAttrCanFitShipGroup01); a <= int64(fitAttrCanFitShipGroup04); a++ {
+		if g := int64(attrs[a]); g > 0 {
+			r.NeedGroup = append(r.NeedGroup, g)
+		}
+	}
+	for a := int64(fitAttrCanFitShipType1); a <= int64(fitAttrCanFitShipType4); a++ {
+		if t := int64(attrs[a]); t > 0 {
+			r.NeedType = append(r.NeedType, t)
+		}
+	}
+	if len(r.NeedGroup) == 0 && len(r.NeedType) == 0 {
+		return nil
+	}
+	for _, t := range r.NeedType {
+		if t == shipTypeID {
+			return nil
+		}
+	}
+	for _, g := range r.NeedGroup {
+		if g == shipGroup {
+			return nil
+		}
+	}
+	return r
 }
 
 // cycleSeconds is an item's activation cycle in seconds:

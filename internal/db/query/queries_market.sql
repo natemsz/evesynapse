@@ -416,3 +416,64 @@ SELECT location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_or
 FROM market_station_stats
 WHERE region_id = ?
 ORDER BY location_id, type_id;
+
+-- ---------------------------------------------------------------------
+-- P4 order lifecycle (schema 033): append-only per-order history
+-- distilled from order snapshots. The worker upserts open orders,
+-- closes rows whose order has left the snapshot, and prunes old
+-- closed rows; the Orders page reads only these rows.
+-- ---------------------------------------------------------------------
+-- name: GetOrderLifecycle :one
+SELECT character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+FROM order_lifecycle
+WHERE character_id = ? AND order_id = ?;
+-- name: UpsertOrderLifecycle :exec
+INSERT INTO order_lifecycle (character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', 0, 0)
+ON CONFLICT (character_id, order_id) DO UPDATE SET
+    type_id            = excluded.type_id,
+    location_id        = excluded.location_id,
+    region_id          = excluded.region_id,
+    is_buy_order       = excluded.is_buy_order,
+    listed_price       = excluded.listed_price,
+    volume_total       = excluded.volume_total,
+    volume_remain_last = excluded.volume_remain_last,
+    last_seen_at       = excluded.last_seen_at;
+-- name: UpdateOrderLifecycleBeaten :exec
+UPDATE order_lifecycle
+SET beaten_now = ?, outbid_events = ?
+WHERE character_id = ? AND order_id = ? AND closed_at = '';
+-- name: CloseOrderLifecycle :exec
+UPDATE order_lifecycle
+SET closed_at = ?, close_kind = ?, beaten_now = 0
+WHERE character_id = ? AND order_id = ? AND closed_at = '';
+-- name: ListOrderLifecycleByCharacter :many
+SELECT character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+FROM order_lifecycle
+WHERE character_id = ?
+ORDER BY first_seen_at DESC, order_id DESC;
+-- name: ListOpenOrderLifecycleByCharacter :many
+SELECT character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+FROM order_lifecycle
+WHERE character_id = ? AND closed_at = ''
+ORDER BY order_id;
+-- name: ListOrderLifecycleByUser :many
+SELECT ol.character_id, ol.order_id, ol.type_id, ol.location_id, ol.region_id, ol.is_buy_order, ol.listed_price, ol.volume_total, ol.volume_remain_last, ol.first_seen_at, ol.last_seen_at, ol.closed_at, ol.close_kind, ol.outbid_events, ol.beaten_now
+FROM order_lifecycle ol
+JOIN characters c ON c.character_id = ol.character_id
+WHERE c.user_id = ?
+ORDER BY ol.closed_at DESC, ol.first_seen_at DESC, ol.order_id DESC;
+-- name: ListClosedOrderLifecycleByCharacter :many
+SELECT character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+FROM order_lifecycle
+WHERE character_id = ? AND closed_at != ''
+ORDER BY closed_at DESC, order_id DESC
+LIMIT ?;
+-- name: PruneOldOrderLifecycle :exec
+DELETE FROM order_lifecycle
+WHERE rowid IN (
+    SELECT ol.rowid FROM order_lifecycle AS ol
+    WHERE ol.closed_at != '' AND ol.closed_at < ?
+    ORDER BY ol.closed_at
+    LIMIT ?
+);

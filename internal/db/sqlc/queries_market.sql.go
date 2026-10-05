@@ -19,6 +19,29 @@ func (q *Queries) ClearGuidePriceWant(ctx context.Context) error {
 	return err
 }
 
+const closeOrderLifecycle = `-- name: CloseOrderLifecycle :exec
+UPDATE order_lifecycle
+SET closed_at = ?, close_kind = ?, beaten_now = 0
+WHERE character_id = ? AND order_id = ? AND closed_at = ''
+`
+
+type CloseOrderLifecycleParams struct {
+	ClosedAt    string `json:"closed_at"`
+	CloseKind   string `json:"close_kind"`
+	CharacterID int64  `json:"character_id"`
+	OrderID     int64  `json:"order_id"`
+}
+
+func (q *Queries) CloseOrderLifecycle(ctx context.Context, arg CloseOrderLifecycleParams) error {
+	_, err := q.db.ExecContext(ctx, closeOrderLifecycle,
+		arg.ClosedAt,
+		arg.CloseKind,
+		arg.CharacterID,
+		arg.OrderID,
+	)
+	return err
+}
+
 const deleteGuidePrices = `-- name: DeleteGuidePrices :exec
 DELETE FROM guide_prices
 `
@@ -184,6 +207,46 @@ func (q *Queries) GetMarketFetchState(ctx context.Context, kind string) (MarketF
 		&i.State,
 		&i.Detail,
 		&i.AttemptedAt,
+	)
+	return i, err
+}
+
+const getOrderLifecycle = `-- name: GetOrderLifecycle :one
+SELECT character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+FROM order_lifecycle
+WHERE character_id = ? AND order_id = ?
+`
+
+type GetOrderLifecycleParams struct {
+	CharacterID int64 `json:"character_id"`
+	OrderID     int64 `json:"order_id"`
+}
+
+// ---------------------------------------------------------------------
+// P4 order lifecycle (schema 033): append-only per-order history
+// distilled from order snapshots. The worker upserts open orders,
+// closes rows whose order has left the snapshot, and prunes old
+// closed rows; the Orders page reads only these rows.
+// ---------------------------------------------------------------------
+func (q *Queries) GetOrderLifecycle(ctx context.Context, arg GetOrderLifecycleParams) (OrderLifecycle, error) {
+	row := q.db.QueryRowContext(ctx, getOrderLifecycle, arg.CharacterID, arg.OrderID)
+	var i OrderLifecycle
+	err := row.Scan(
+		&i.CharacterID,
+		&i.OrderID,
+		&i.TypeID,
+		&i.LocationID,
+		&i.RegionID,
+		&i.IsBuyOrder,
+		&i.ListedPrice,
+		&i.VolumeTotal,
+		&i.VolumeRemainLast,
+		&i.FirstSeenAt,
+		&i.LastSeenAt,
+		&i.ClosedAt,
+		&i.CloseKind,
+		&i.OutbidEvents,
+		&i.BeatenNow,
 	)
 	return i, err
 }
@@ -428,6 +491,58 @@ func (q *Queries) ListAllianceDrains(ctx context.Context, arg ListAllianceDrains
 			return nil, err
 		}
 		items = append(items, alliance_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listClosedOrderLifecycleByCharacter = `-- name: ListClosedOrderLifecycleByCharacter :many
+SELECT character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+FROM order_lifecycle
+WHERE character_id = ? AND closed_at != ''
+ORDER BY closed_at DESC, order_id DESC
+LIMIT ?
+`
+
+type ListClosedOrderLifecycleByCharacterParams struct {
+	CharacterID int64 `json:"character_id"`
+	Limit       int64 `json:"limit"`
+}
+
+func (q *Queries) ListClosedOrderLifecycleByCharacter(ctx context.Context, arg ListClosedOrderLifecycleByCharacterParams) ([]OrderLifecycle, error) {
+	rows, err := q.db.QueryContext(ctx, listClosedOrderLifecycleByCharacter, arg.CharacterID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OrderLifecycle
+	for rows.Next() {
+		var i OrderLifecycle
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.OrderID,
+			&i.TypeID,
+			&i.LocationID,
+			&i.RegionID,
+			&i.IsBuyOrder,
+			&i.ListedPrice,
+			&i.VolumeTotal,
+			&i.VolumeRemainLast,
+			&i.FirstSeenAt,
+			&i.LastSeenAt,
+			&i.ClosedAt,
+			&i.CloseKind,
+			&i.OutbidEvents,
+			&i.BeatenNow,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -807,6 +922,52 @@ func (q *Queries) ListMarketStationStatsByRegion(ctx context.Context, regionID i
 	return items, nil
 }
 
+const listOpenOrderLifecycleByCharacter = `-- name: ListOpenOrderLifecycleByCharacter :many
+SELECT character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+FROM order_lifecycle
+WHERE character_id = ? AND closed_at = ''
+ORDER BY order_id
+`
+
+func (q *Queries) ListOpenOrderLifecycleByCharacter(ctx context.Context, characterID int64) ([]OrderLifecycle, error) {
+	rows, err := q.db.QueryContext(ctx, listOpenOrderLifecycleByCharacter, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OrderLifecycle
+	for rows.Next() {
+		var i OrderLifecycle
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.OrderID,
+			&i.TypeID,
+			&i.LocationID,
+			&i.RegionID,
+			&i.IsBuyOrder,
+			&i.ListedPrice,
+			&i.VolumeTotal,
+			&i.VolumeRemainLast,
+			&i.FirstSeenAt,
+			&i.LastSeenAt,
+			&i.ClosedAt,
+			&i.CloseKind,
+			&i.OutbidEvents,
+			&i.BeatenNow,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrderHealthByCharacter = `-- name: ListOrderHealthByCharacter :many
 SELECT character_id, order_id, type_id, region_id, location_id, my_price, station_best, region_best, status, computed_at
 FROM order_health
@@ -876,6 +1037,99 @@ func (q *Queries) ListOrderHealthByUser(ctx context.Context, userID int64) ([]Or
 			&i.RegionBest,
 			&i.Status,
 			&i.ComputedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOrderLifecycleByCharacter = `-- name: ListOrderLifecycleByCharacter :many
+SELECT character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+FROM order_lifecycle
+WHERE character_id = ?
+ORDER BY first_seen_at DESC, order_id DESC
+`
+
+func (q *Queries) ListOrderLifecycleByCharacter(ctx context.Context, characterID int64) ([]OrderLifecycle, error) {
+	rows, err := q.db.QueryContext(ctx, listOrderLifecycleByCharacter, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OrderLifecycle
+	for rows.Next() {
+		var i OrderLifecycle
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.OrderID,
+			&i.TypeID,
+			&i.LocationID,
+			&i.RegionID,
+			&i.IsBuyOrder,
+			&i.ListedPrice,
+			&i.VolumeTotal,
+			&i.VolumeRemainLast,
+			&i.FirstSeenAt,
+			&i.LastSeenAt,
+			&i.ClosedAt,
+			&i.CloseKind,
+			&i.OutbidEvents,
+			&i.BeatenNow,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOrderLifecycleByUser = `-- name: ListOrderLifecycleByUser :many
+SELECT ol.character_id, ol.order_id, ol.type_id, ol.location_id, ol.region_id, ol.is_buy_order, ol.listed_price, ol.volume_total, ol.volume_remain_last, ol.first_seen_at, ol.last_seen_at, ol.closed_at, ol.close_kind, ol.outbid_events, ol.beaten_now
+FROM order_lifecycle ol
+JOIN characters c ON c.character_id = ol.character_id
+WHERE c.user_id = ?
+ORDER BY ol.closed_at DESC, ol.first_seen_at DESC, ol.order_id DESC
+`
+
+func (q *Queries) ListOrderLifecycleByUser(ctx context.Context, userID int64) ([]OrderLifecycle, error) {
+	rows, err := q.db.QueryContext(ctx, listOrderLifecycleByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OrderLifecycle
+	for rows.Next() {
+		var i OrderLifecycle
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.OrderID,
+			&i.TypeID,
+			&i.LocationID,
+			&i.RegionID,
+			&i.IsBuyOrder,
+			&i.ListedPrice,
+			&i.VolumeTotal,
+			&i.VolumeRemainLast,
+			&i.FirstSeenAt,
+			&i.LastSeenAt,
+			&i.ClosedAt,
+			&i.CloseKind,
+			&i.OutbidEvents,
+			&i.BeatenNow,
 		); err != nil {
 			return nil, err
 		}
@@ -1088,6 +1342,26 @@ func (q *Queries) NoteGuidePriceWant(ctx context.Context, wantedAt string) error
 	return err
 }
 
+const pruneOldOrderLifecycle = `-- name: PruneOldOrderLifecycle :exec
+DELETE FROM order_lifecycle
+WHERE rowid IN (
+    SELECT ol.rowid FROM order_lifecycle AS ol
+    WHERE ol.closed_at != '' AND ol.closed_at < ?
+    ORDER BY ol.closed_at
+    LIMIT ?
+)
+`
+
+type PruneOldOrderLifecycleParams struct {
+	ClosedAt string `json:"closed_at"`
+	Limit    int64  `json:"limit"`
+}
+
+func (q *Queries) PruneOldOrderLifecycle(ctx context.Context, arg PruneOldOrderLifecycleParams) error {
+	_, err := q.db.ExecContext(ctx, pruneOldOrderLifecycle, arg.ClosedAt, arg.Limit)
+	return err
+}
+
 const setAllianceRecord = `-- name: SetAllianceRecord :exec
 INSERT INTO alliance_records (alliance_id, payload, state, fetched_at)
 VALUES (?, ?, ?, ?)
@@ -1296,6 +1570,29 @@ func (q *Queries) SetStructureName(ctx context.Context, arg SetStructureNamePara
 		arg.State,
 		arg.ResolvedAt,
 		arg.Source,
+	)
+	return err
+}
+
+const updateOrderLifecycleBeaten = `-- name: UpdateOrderLifecycleBeaten :exec
+UPDATE order_lifecycle
+SET beaten_now = ?, outbid_events = ?
+WHERE character_id = ? AND order_id = ? AND closed_at = ''
+`
+
+type UpdateOrderLifecycleBeatenParams struct {
+	BeatenNow    int64 `json:"beaten_now"`
+	OutbidEvents int64 `json:"outbid_events"`
+	CharacterID  int64 `json:"character_id"`
+	OrderID      int64 `json:"order_id"`
+}
+
+func (q *Queries) UpdateOrderLifecycleBeaten(ctx context.Context, arg UpdateOrderLifecycleBeatenParams) error {
+	_, err := q.db.ExecContext(ctx, updateOrderLifecycleBeaten,
+		arg.BeatenNow,
+		arg.OutbidEvents,
+		arg.CharacterID,
+		arg.OrderID,
 	)
 	return err
 }
@@ -1623,6 +1920,51 @@ func (q *Queries) UpsertOrderHealth(ctx context.Context, arg UpsertOrderHealthPa
 		arg.RegionBest,
 		arg.Status,
 		arg.ComputedAt,
+	)
+	return err
+}
+
+const upsertOrderLifecycle = `-- name: UpsertOrderLifecycle :exec
+INSERT INTO order_lifecycle (character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', 0, 0)
+ON CONFLICT (character_id, order_id) DO UPDATE SET
+    type_id            = excluded.type_id,
+    location_id        = excluded.location_id,
+    region_id          = excluded.region_id,
+    is_buy_order       = excluded.is_buy_order,
+    listed_price       = excluded.listed_price,
+    volume_total       = excluded.volume_total,
+    volume_remain_last = excluded.volume_remain_last,
+    last_seen_at       = excluded.last_seen_at
+`
+
+type UpsertOrderLifecycleParams struct {
+	CharacterID      int64   `json:"character_id"`
+	OrderID          int64   `json:"order_id"`
+	TypeID           int64   `json:"type_id"`
+	LocationID       int64   `json:"location_id"`
+	RegionID         int64   `json:"region_id"`
+	IsBuyOrder       int64   `json:"is_buy_order"`
+	ListedPrice      float64 `json:"listed_price"`
+	VolumeTotal      int64   `json:"volume_total"`
+	VolumeRemainLast int64   `json:"volume_remain_last"`
+	FirstSeenAt      string  `json:"first_seen_at"`
+	LastSeenAt       string  `json:"last_seen_at"`
+}
+
+func (q *Queries) UpsertOrderLifecycle(ctx context.Context, arg UpsertOrderLifecycleParams) error {
+	_, err := q.db.ExecContext(ctx, upsertOrderLifecycle,
+		arg.CharacterID,
+		arg.OrderID,
+		arg.TypeID,
+		arg.LocationID,
+		arg.RegionID,
+		arg.IsBuyOrder,
+		arg.ListedPrice,
+		arg.VolumeTotal,
+		arg.VolumeRemainLast,
+		arg.FirstSeenAt,
+		arg.LastSeenAt,
 	)
 	return err
 }

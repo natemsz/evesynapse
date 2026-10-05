@@ -21,6 +21,7 @@ import (
 
 	"evesynapse/internal/app"
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/pgtest"
 )
 
 // Fixture IDs shared across the page tests.
@@ -46,10 +47,11 @@ func (s *CountingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 }
 
 // Build constructs a fixture application (no worker goroutine)
-// over a temp database and registers its cleanup.
+// over a fresh embedded-Postgres test database and registers
+// its cleanup.
 func Build(t *testing.T, transport http.RoundTripper) *app.TestRig {
 	t.Helper()
-	rig, err := app.NewTestRig(t.TempDir(), transport)
+	rig, err := app.NewTestRig(pgtest.FreshDSN(t), transport)
 	if err != nil {
 		t.Fatalf("build test rig: %v", err)
 	}

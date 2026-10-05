@@ -16,11 +16,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alexedwards/scs/sqlite3store"
+	"github.com/alexedwards/scs/pgxstore"
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	_ "modernc.org/sqlite" // pure-Go SQLite driver, registers as "sqlite"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
@@ -29,110 +29,14 @@ import (
 //go:embed templates/*.html
 var templatesFS embed.FS
 
-//go:embed schema/001_init.sql
-var initSchema string
+// The collapsed Postgres baseline (schema_pg/001): the one-time
+// fold of the 35 SQLite migrations, applied by openDB on a fresh
+// database. The SQLite files stay in schema/ for the rollback
+// binary and the -migrate-pg source reader; new schema changes
+// land as new numbered files here.
 
-//go:embed schema/002_snapshots.sql
-var snapshotsSchema string
-
-//go:embed schema/003_sde.sql
-var sdeSchema string
-
-//go:embed schema/004_module_sweep.sql
-var moduleSweepSchema string
-
-//go:embed schema/005_corp.sql
-var corpSchema string
-
-//go:embed schema/006_economy.sql
-var economySchema string
-
-//go:embed schema/007_intel.sql
-var intelSchema string
-
-//go:embed schema/008_marketable.sql
-var marketableSchema string
-
-//go:embed schema/009_character_foundation.sql
-var characterFoundationSchema string
-
-//go:embed schema/010_home_overview.sql
-var homeLayoutSchema string
-
-//go:embed schema/011_industry_planner.sql
-var industryPlannerSchema string
-
-//go:embed schema/012_skill_plans.sql
-var skillPlansSchema string
-
-//go:embed schema/013_market_history.sql
-var marketHistorySchema string
-
-//go:embed schema/014_structure_names.sql
-var structureNamesSchema string
-
-//go:embed schema/015_pilot_records.sql
-var pilotRecordsSchema string
-
-//go:embed schema/016_pilot_priority.sql
-var pilotPrioritySchema string
-
-//go:embed schema/017_briefing_anchor.sql
-var briefingAnchorSchema string
-
-//go:embed schema/018_sde_type_descriptions.sql
-var sdeTypeDescriptionsSchema string
-
-//go:embed schema/019_wallet_history.sql
-var walletHistorySchema string
-
-//go:embed schema/020_widget_configs.sql
-var widgetConfigsSchema string
-
-//go:embed schema/021_guide_prices.sql
-var guidePricesSchema string
-
-//go:embed schema/022_pilot_name_wants.sql
-var pilotNameWantsSchema string
-
-//go:embed schema/023_structure_name_provenance.sql
-var structureNameProvenanceSchema string
-
-//go:embed schema/024_market_groups.sql
-var marketGroupsSchema string
-
-//go:embed schema/025_planet_names.sql
-var planetNamesSchema string
-
-//go:embed schema/026_org_records.sql
-var orgRecordsSchema string
-
-//go:embed schema/027_guide_price_wants.sql
-var guidePriceWantsSchema string
-
-//go:embed schema/028_structure_context.sql
-var structureContextSchema string
-
-//go:embed schema/029_dogma_fitting.sql
-var dogmaFittingSchema string
-
-//go:embed schema/030_local_fittings.sql
-var localFittingsSchema string
-
-//go:embed schema/031_market_region_stats.sql
-var regionStatsSchema string
-
-//go:embed schema/032_market_station_stats.sql
-var stationStatsSchema string
-
-//go:embed schema/033_market_order_lifecycle.sql
-var orderLifecycleSchema string
-
-//go:embed schema/034_market_sweep_staging.sql
-var sweepStagingSchema string
-
-//go:embed schema/035_region_stats_avg_volume.sql
-var regionStatsVolumeSchema string
+//go:embed schema_pg/001_baseline.sql
+var pgBaselineSchema string
 
 //go:embed static
 var staticFS embed.FS
@@ -158,9 +62,14 @@ type Application struct {
 	// the type/group/place name-resolution caches.
 	esi *esi.Client
 
-	// db and stopWorker are the resources Close releases.
+	// db, pool, and stopWorker/workerDone are the resources Close
+	// releases: it cancels the worker, waits for workerDone to
+	// signal the worker has fully stopped, and only then closes
+	// the handles.
 	db         *sql.DB
+	pool       *pgxpool.Pool
 	stopWorker context.CancelFunc
+	workerDone chan struct{}
 	workerCtx  context.Context // the worker's context, captured in New for background jobs (SDE import)
 
 	// tokenMu serializes access-token refreshes: CCP rotates refresh
@@ -229,19 +138,19 @@ type Application struct {
 	pageWants  map[string]map[string]pageWant
 }
 
-// New opens the database (applying the embedded schemas on first
-// boot), builds the application, and starts the background worker
-// and the one-shot SSO reachability probe. Call Close to release
-// the database and stop the worker.
+// New opens the database (applying the embedded baseline schema
+// on first boot), builds the application, and starts the
+// background worker and the one-shot SSO reachability probe.
+// Call Close to stop the worker and release the database.
 func New(cfg Config) (*Application, error) {
 
-	dbConn, err := openDB(cfg.dbPath)
+	dbConn, pool, err := openDB(context.Background(), cfg.databaseURL)
 	if err != nil {
 		return nil, err
 	}
 
 	sessionManager := scs.New()
-	sessionManager.Store = sqlite3store.New(dbConn)
+	sessionManager.Store = pgxstore.New(pool)
 	sessionManager.Lifetime = sessionLifetime
 	sessionManager.Cookie.Name = "evesynapse_session"
 	// TODO(https): set Cookie.Secure = true once served over TLS.
@@ -253,6 +162,7 @@ func New(cfg Config) (*Application, error) {
 		queries:       db.New(dbConn),
 		jwks:          &jwksCache{},
 		db:            dbConn,
+		pool:          pool,
 		corpCache:     make(map[int64]corpCacheEntry),
 		prices:        make(map[int64]esi.MarketPrice),
 		priorityChars: make(map[int64]bool),
@@ -263,7 +173,11 @@ func New(cfg Config) (*Application, error) {
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	app.stopWorker = stopWorker
 	app.workerCtx = workerCtx
-	go app.runWorker(workerCtx)
+	app.workerDone = make(chan struct{})
+	go func() {
+		defer close(app.workerDone)
+		app.runWorker(workerCtx)
+	}()
 
 	// One-shot reachability probe so phone (Termux) logs immediately
 	// show whether CCP is reachable — DNS trouble there otherwise only
@@ -287,13 +201,24 @@ func New(cfg Config) (*Application, error) {
 	return app, nil
 }
 
-// Close stops the background worker and closes the database.
+// Close shuts the application down in dependency order: cancel
+// the worker's context, wait for the worker (and every pass it
+// runs) to fully stop, and only then close the database handle
+// and the session pool. Closing the handle first is what used to
+// flood the log with "sql: database is closed" on every restart:
+// the worker passes still in flight kept querying a dead handle.
 func (app *Application) Close() {
 	if app.stopWorker != nil {
 		app.stopWorker()
 	}
+	if app.workerDone != nil {
+		<-app.workerDone
+	}
 	if app.db != nil {
 		app.db.Close()
+	}
+	if app.pool != nil {
+		app.pool.Close()
 	}
 }
 

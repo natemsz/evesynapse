@@ -11,7 +11,8 @@ import (
 // local .env); secrets are never hardcoded or logged.
 type Config struct {
 	addr            string // listen address
-	dbPath          string // SQLite database file
+	databaseURL     string // Postgres connection URL (DATABASE_URL)
+	dbPath          string // legacy SQLite file, read only by -migrate-pg
 	eveClientID     string // EVE SSO application client ID
 	eveClientSecret string // EVE SSO application client secret
 	eveCallbackURL  string // OAuth2 redirect URI registered with CCP
@@ -29,8 +30,32 @@ func (c Config) SSOConfigured() bool {
 // Addr returns the configured HTTP listen address.
 func (c Config) Addr() string { return c.addr }
 
-// DBPath returns the configured SQLite database file path.
+// DBPath returns the configured legacy SQLite database file
+// path. Since the Postgres cutover it is only the -migrate-pg
+// source (read, never written).
 func (c Config) DBPath() string { return c.dbPath }
+
+// DatabaseURL returns the Postgres connection URL the app opens.
+func (c Config) DatabaseURL() string { return c.databaseURL }
+
+// DatabaseLabel is the log-safe name of the database target:
+// scheme, host, and database name with any credentials removed,
+// so startup logs can say where the app connected without ever
+// printing the password out of DATABASE_URL.
+func (c Config) DatabaseLabel() string {
+	u := c.databaseURL
+	if i := strings.Index(u, "://"); i >= 0 {
+		rest := u[i+3:]
+		if j := strings.LastIndex(rest, "@"); j >= 0 {
+			rest = rest[j+1:]
+		}
+		if j := strings.Index(rest, "?"); j >= 0 {
+			rest = rest[:j]
+		}
+		return "postgres://" + rest
+	}
+	return "postgres"
+}
 
 // defaultSDEBaseURL is Fuzzwork's community SDE conversion, CSV
 // tables under /dump/latest/csv/ (verified live 2026-10-02; the
@@ -55,6 +80,7 @@ func LoadConfig() Config {
 	loadDotEnv(".env")
 	return Config{
 		addr:            getenvDefault("ADDR", ":8080"),
+		databaseURL:     getenvDefault("DATABASE_URL", "postgres://evesynapse@localhost:5432/evesynapse?sslmode=disable"),
 		dbPath:          getenvDefault("DB_PATH", "evesynapse.db"),
 		eveClientID:     os.Getenv("EVE_CLIENT_ID"),
 		eveClientSecret: os.Getenv("EVE_CLIENT_SECRET"),

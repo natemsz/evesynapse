@@ -2,21 +2,21 @@ package app
 
 // Test rig: the one exported seam the black-box page tests in
 // internal/app/tests build through. It assembles a fixture
-// Application over a temp database with a caller-supplied ESI
-// transport (the hermetic mirror of buildCorpTestApp), and
-// exposes only the five operations those tests are allowed:
-// the real router, the query handle, the raw DB, a signed-in
-// session cookie, and Close. No internals leave the package,
-// and no worker goroutine ever starts.
+// Application over a fresh test database (an empty Postgres
+// database minted by internal/pgtest, handed in as a DSN) with
+// a caller-supplied ESI transport (the hermetic mirror of
+// buildCorpTestApp), and exposes only the five operations those
+// tests are allowed: the real router, the query handle, the raw
+// DB, a signed-in session cookie, and Close. No internals leave
+// the package, and no worker goroutine ever starts.
 
 import (
 	"context"
 	"database/sql"
 	"net/http"
-	"path/filepath"
 	"time"
 
-	"github.com/alexedwards/scs/sqlite3store"
+	"github.com/alexedwards/scs/pgxstore"
 	"github.com/alexedwards/scs/v2"
 
 	db "evesynapse/internal/db/sqlc"
@@ -28,17 +28,17 @@ type TestRig struct {
 	app *Application
 }
 
-// NewTestRig builds a fixture Application over a fresh database
-// in dir, with ESI served by transport.
-func NewTestRig(dir string, transport http.RoundTripper) (*TestRig, error) {
-	conn, err := openDB(filepath.Join(dir, "test.db"))
+// NewTestRig builds a fixture Application over the fresh
+// database at dsn, with ESI served by transport.
+func NewTestRig(dsn string, transport http.RoundTripper) (*TestRig, error) {
+	conn, pool, err := openDB(context.Background(), dsn)
 	if err != nil {
 		return nil, err
 	}
 	queries := db.New(conn)
 
 	sessionManager := scs.New()
-	sessionManager.Store = sqlite3store.New(conn)
+	sessionManager.Store = pgxstore.New(pool)
 	sessionManager.Lifetime = 24 * time.Hour
 	sessionManager.Cookie.Name = "evesynapse_session"
 
@@ -51,6 +51,7 @@ func NewTestRig(dir string, transport http.RoundTripper) (*TestRig, error) {
 		queries:       queries,
 		esi:           client,
 		db:            conn,
+		pool:          pool,
 		corpCache:     make(map[int64]corpCacheEntry),
 		prices:        make(map[int64]esi.MarketPrice),
 		priorityChars: make(map[int64]bool),
@@ -85,5 +86,5 @@ func (r *TestRig) SessionCookie(userID, characterID int64, name string) (*http.C
 	return &http.Cookie{Name: "evesynapse_session", Value: token, Path: "/"}, nil
 }
 
-// Close closes the fixture database.
-func (r *TestRig) Close() { r.app.db.Close() }
+// Close closes the fixture database handles.
+func (r *TestRig) Close() { r.app.Close() }

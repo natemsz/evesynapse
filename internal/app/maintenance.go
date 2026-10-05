@@ -59,7 +59,7 @@ import (
 	"time"
 )
 
-// Version returns the rendered product version ("v0.3.30.002"),
+// Version returns the rendered product version ("v0.3.31.001"),
 // the same string the page footer shows.
 func Version() string { return appVersion }
 

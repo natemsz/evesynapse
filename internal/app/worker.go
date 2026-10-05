@@ -323,10 +323,10 @@ func (app *Application) refreshCycle(ctx context.Context) {
 
 	// Market pass (Phase 5): price-history warming for
 	// watchlists/wants/order types, and per-order health from
-	// regional books. Public data, but it spends from the same
-	// cycle allowance; with the budget gone it only prunes.
+	// regional books. Public data, spending from its own lane
+	// (refreshMarketData owns the market allowance).
 	if !limited {
-		mStored, mLimited := app.refreshMarketData(ctx, characters, allowance)
+		mStored, mLimited := app.refreshMarketData(ctx, characters)
 		refreshed += mStored
 		if mLimited {
 			log.Printf("worker: ESI error limit hit refreshing market data; backing off until next cycle")
@@ -503,9 +503,11 @@ var coreSnapshotKinds = []string{
 // corp / economy sub-passes keep their own per-character caps.
 const maxFetchesPerCycle = 120
 
-// fetchBudget is the main pass's fetch allowance for one cycle.
-// Safe for concurrent use: the region sweep pass advances every
-// hub region in parallel from the one cycle allowance.
+// fetchBudget is one pass's fetch allowance for one cycle: the
+// character pass and the market pass each hold one, so public
+// market data never queues behind character warming. Safe for
+// concurrent use: the region sweep pass advances every hub
+// region in parallel from the market lane's one allowance.
 type fetchBudget struct {
 	mu   sync.Mutex
 	left int

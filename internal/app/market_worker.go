@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"sort"
 	"time"
 
@@ -18,9 +19,10 @@ import (
 // warming build): keeps market_history warm for a maintained
 // coverage set, warmed before anyone clicks, and computes
 // per-order health from regional order books. Everything here is
-// public ESI — no character token — but it spends from the
-// cycle's shared fetch allowance like every other pass, and a
-// 420/429 stops it until the next cycle.
+// public ESI — no character token. It spends from the market
+// pass's own fetch lane (maxMarketFetchesPerCycle), never the
+// character pass's budget, and a 420/429 stops it until the
+// next cycle.
 //
 // What gets history, in priority order (the first tiers win the
 // per-cycle fetch cap on a cold start; everything eventually
@@ -50,6 +52,17 @@ const (
 	// historyRefetchGate is the minimum age of a successful
 	// history fetch before the pair is fetched again.
 	historyRefetchGate = 20 * time.Hour
+	// marketFetchErrorGate is the minimum age of a transiently
+	// failed market fetch before it retries. Without it a
+	// failed attempt is always due and one poisoned pair
+	// retries on every urgent tick forever (seen live
+	// 2026-10-04: two bad history pairs refetching every 5s).
+	marketFetchErrorGate = 10 * time.Minute
+	// maxMarketFetchesPerCycle is the market pass's own fetch
+	// lane, separate from the character pass budget: public
+	// prices and the region sweeps never queue behind
+	// per-character warming.
+	maxMarketFetchesPerCycle = 120
 	// maxBookFetchesPerCycle bounds regional order-book reads
 	// per cycle (each may still paginate in fetchOrderBook).
 	maxBookFetchesPerCycle = 10
@@ -83,7 +96,13 @@ type marketKey struct {
 // refreshMarketData runs one market pass, reporting how many
 // payloads it stored (history downloads + book reads + region
 // sweep pages) and whether ESI's error limit stopped it.
-func (app *Application) refreshMarketData(ctx context.Context, characters []db.Character, allowance *fetchBudget) (stored int, limited bool) {
+func (app *Application) refreshMarketData(ctx context.Context, characters []db.Character) (stored int, limited bool) {
+	// The market pass spends from its own lane, not the
+	// character pass's budget: the character pass can spend
+	// its whole allowance in a busy cycle, and a sweep
+	// starved of fetches logs nothing while it waits (the
+	// empty Scanner/Tradefinder stall of 2026-10-04).
+	allowance := &fetchBudget{left: maxMarketFetchesPerCycle}
 	hStored, ltd := app.warmMarketHistory(ctx, allowance)
 	stored += hStored
 	if ltd {
@@ -152,7 +171,7 @@ func (app *Application) fetchAndStoreHistory(ctx context.Context, key marketKey)
 			return false, true
 		}
 		log.Printf("worker: market history: fetch %s: %v", kind, err)
-		app.recordMarketFetch(ctx, kind, fetchStateError, err.Error())
+		app.recordMarketFetch(ctx, kind, marketFetchFailureState(err), err.Error())
 		return false, false
 	}
 	for _, row := range rows {
@@ -544,7 +563,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 				return stored, true
 			}
 			log.Printf("worker: order health: book %s: %v", kind, err)
-			app.recordMarketFetch(ctx, kind, fetchStateError, err.Error())
+			app.recordMarketFetch(ctx, kind, marketFetchFailureState(err), err.Error())
 			continue
 		}
 		books++
@@ -734,18 +753,36 @@ func marketFetchKind(prefix string, key marketKey) string {
 }
 
 // marketFetchDue reports whether a fetch kind may run again: a
-// missing record or a failed attempt is always due; a successful
-// one waits out its gate.
+// missing record is always due; a successful or definitively
+// failed (dead) attempt waits out the caller's gate; a
+// transient failure retries after marketFetchErrorGate
+// instead of on every pass.
 func (app *Application) marketFetchDue(ctx context.Context, kind string, gate time.Duration) bool {
 	state, err := app.queries.GetMarketFetchState(ctx, kind)
 	if err != nil {
 		return true // no record (or unreadable): try
 	}
-	if state.State != fetchStateOK {
+	attempted, err := time.Parse(time.RFC3339, state.AttemptedAt)
+	if err != nil {
 		return true
 	}
-	attempted, err := time.Parse(time.RFC3339, state.AttemptedAt)
-	return err != nil || time.Since(attempted) >= gate
+	if state.State == fetchStateError {
+		return time.Since(attempted) >= marketFetchErrorGate
+	}
+	return time.Since(attempted) >= gate
+}
+
+// marketFetchFailureState classifies a failed market fetch: a
+// definitive client error (400/404 -- the type id is wrong, or
+// the type simply has no such data in that region) settles as
+// dead and waits out the full refetch gate, because retrying
+// sooner can only fail the same way; anything else is a
+// transient error that retries after the error gate.
+func marketFetchFailureState(err error) string {
+	if code, ok := esi.StatusCode(err); ok && (code == http.StatusBadRequest || code == http.StatusNotFound) {
+		return fetchStateDead
+	}
+	return fetchStateError
 }
 
 // recordMarketFetch upserts one market fetch outcome (best

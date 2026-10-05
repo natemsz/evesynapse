@@ -22,6 +22,48 @@ func (q *Queries) CountWarDetails(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const createLocalFitting = `-- name: CreateLocalFitting :one
+INSERT INTO local_fittings (user_id, name, ship_type_id, items_json, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?)
+RETURNING id, user_id, name, ship_type_id, items_json, created_at, updated_at
+`
+
+type CreateLocalFittingParams struct {
+	UserID     int64  `json:"user_id"`
+	Name       string `json:"name"`
+	ShipTypeID int64  `json:"ship_type_id"`
+	ItemsJson  string `json:"items_json"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
+}
+
+// ---------------------------------------------------------------------
+// Fitting simulator (schema 030): fits built in the editor, stored
+// per user. items_json is the whole fit document (ship, item lines,
+// charge choices); reads/writes always scope to the owning user.
+// ---------------------------------------------------------------------
+func (q *Queries) CreateLocalFitting(ctx context.Context, arg CreateLocalFittingParams) (LocalFitting, error) {
+	row := q.db.QueryRowContext(ctx, createLocalFitting,
+		arg.UserID,
+		arg.Name,
+		arg.ShipTypeID,
+		arg.ItemsJson,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	var i LocalFitting
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.ShipTypeID,
+		&i.ItemsJson,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createSkillPlan = `-- name: CreateSkillPlan :one
 INSERT INTO skill_plans (user_id, character_id, name, created_at)
 VALUES (?, ?, ?, ?)
@@ -89,6 +131,20 @@ type DeleteCharacterParams struct {
 
 func (q *Queries) DeleteCharacter(ctx context.Context, arg DeleteCharacterParams) error {
 	_, err := q.db.ExecContext(ctx, deleteCharacter, arg.CharacterID, arg.UserID)
+	return err
+}
+
+const deleteLocalFitting = `-- name: DeleteLocalFitting :exec
+DELETE FROM local_fittings WHERE id = ? AND user_id = ?
+`
+
+type DeleteLocalFittingParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) DeleteLocalFitting(ctx context.Context, arg DeleteLocalFittingParams) error {
+	_, err := q.db.ExecContext(ctx, deleteLocalFitting, arg.ID, arg.UserID)
 	return err
 }
 
@@ -217,6 +273,31 @@ func (q *Queries) GetKillmailDetail(ctx context.Context, killmailID int64) (Kill
 		&i.Hash,
 		&i.Payload,
 		&i.FetchedAt,
+	)
+	return i, err
+}
+
+const getLocalFitting = `-- name: GetLocalFitting :one
+SELECT id, user_id, name, ship_type_id, items_json, created_at, updated_at FROM local_fittings
+WHERE id = ? AND user_id = ?
+`
+
+type GetLocalFittingParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) GetLocalFitting(ctx context.Context, arg GetLocalFittingParams) (LocalFitting, error) {
+	row := q.db.QueryRowContext(ctx, getLocalFitting, arg.ID, arg.UserID)
+	var i LocalFitting
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.ShipTypeID,
+		&i.ItemsJson,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -678,6 +759,44 @@ func (q *Queries) ListLiquidCoreTypes(ctx context.Context, arg ListLiquidCoreTyp
 	for rows.Next() {
 		var i ListLiquidCoreTypesRow
 		if err := rows.Scan(&i.TypeID, &i.IskVelocity); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLocalFittings = `-- name: ListLocalFittings :many
+SELECT id, user_id, name, ship_type_id, items_json, created_at, updated_at FROM local_fittings
+WHERE user_id = ?
+ORDER BY updated_at DESC, id DESC
+LIMIT 100
+`
+
+func (q *Queries) ListLocalFittings(ctx context.Context, userID int64) ([]LocalFitting, error) {
+	rows, err := q.db.QueryContext(ctx, listLocalFittings, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LocalFitting
+	for rows.Next() {
+		var i LocalFitting
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Name,
+			&i.ShipTypeID,
+			&i.ItemsJson,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1237,6 +1356,33 @@ func (q *Queries) UpdateCharacterTokens(ctx context.Context, arg UpdateCharacter
 		arg.RefreshToken,
 		arg.TokenExpiry,
 		arg.CharacterID,
+	)
+	return err
+}
+
+const updateLocalFitting = `-- name: UpdateLocalFitting :exec
+UPDATE local_fittings
+SET name = ?, ship_type_id = ?, items_json = ?, updated_at = ?
+WHERE id = ? AND user_id = ?
+`
+
+type UpdateLocalFittingParams struct {
+	Name       string `json:"name"`
+	ShipTypeID int64  `json:"ship_type_id"`
+	ItemsJson  string `json:"items_json"`
+	UpdatedAt  string `json:"updated_at"`
+	ID         int64  `json:"id"`
+	UserID     int64  `json:"user_id"`
+}
+
+func (q *Queries) UpdateLocalFitting(ctx context.Context, arg UpdateLocalFittingParams) error {
+	_, err := q.db.ExecContext(ctx, updateLocalFitting,
+		arg.Name,
+		arg.ShipTypeID,
+		arg.ItemsJson,
+		arg.UpdatedAt,
+		arg.ID,
+		arg.UserID,
 	)
 	return err
 }

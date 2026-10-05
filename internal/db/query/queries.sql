@@ -309,6 +309,30 @@ UPDATE skill_plan_items SET position = ? WHERE plan_id = ? AND skill_type_id = ?
 DELETE FROM skill_plan_items WHERE plan_id = ? AND skill_type_id = ?;
 
 -- ---------------------------------------------------------------------
+-- Fitting simulator (schema 030): fits built in the editor, stored
+-- per user. items_json is the whole fit document (ship, item lines,
+-- charge choices); reads/writes always scope to the owning user.
+-- ---------------------------------------------------------------------
+-- name: CreateLocalFitting :one
+INSERT INTO local_fittings (user_id, name, ship_type_id, items_json, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?)
+RETURNING id, user_id, name, ship_type_id, items_json, created_at, updated_at;
+-- name: ListLocalFittings :many
+SELECT id, user_id, name, ship_type_id, items_json, created_at, updated_at FROM local_fittings
+WHERE user_id = ?
+ORDER BY updated_at DESC, id DESC
+LIMIT 100;
+-- name: GetLocalFitting :one
+SELECT id, user_id, name, ship_type_id, items_json, created_at, updated_at FROM local_fittings
+WHERE id = ? AND user_id = ?;
+-- name: UpdateLocalFitting :exec
+UPDATE local_fittings
+SET name = ?, ship_type_id = ?, items_json = ?, updated_at = ?
+WHERE id = ? AND user_id = ?;
+-- name: DeleteLocalFitting :exec
+DELETE FROM local_fittings WHERE id = ? AND user_id = ?;
+
+-- ---------------------------------------------------------------------
 -- Market history + alerts (schema 013): daily aggregates, wants,
 -- fetch state, the watchlist, and worker-computed order health.
 -- ---------------------------------------------------------------------

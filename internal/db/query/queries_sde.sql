@@ -319,3 +319,115 @@ JOIN sde_blueprints b ON b.blueprint_type_id = m.blueprint_type_id
 WHERE m.material_type_id = ?
 ORDER BY b.product_type_id
 LIMIT 50;
+
+-- ---------------------------------------------------------------------
+-- Fitting simulator (schema 029): dogma attribute/effect reads for
+-- the stat engine. Bulk import stays hand-rolled in the SDE importer
+-- alongside the other sde_* tables; reads live here.
+-- ---------------------------------------------------------------------
+-- name: ListSDETypeAttributes :many
+SELECT attribute_id, value FROM sde_type_attributes
+WHERE type_id = ?
+ORDER BY attribute_id;
+-- name: ListSDETypeAttributesByIDs :many
+SELECT type_id, attribute_id, value FROM sde_type_attributes
+WHERE type_id IN (sqlc.slice('type_ids'))
+ORDER BY type_id, attribute_id;
+-- name: GetSDEAttributeType :one
+SELECT attribute_id, name, stackable, high_is_good, unit_id, default_value FROM sde_attribute_types
+WHERE attribute_id = ?;
+-- name: ListSDEAttributeTypesByIDs :many
+SELECT attribute_id, name, stackable, high_is_good, unit_id, default_value FROM sde_attribute_types
+WHERE attribute_id IN (sqlc.slice('attribute_ids'))
+ORDER BY attribute_id;
+-- name: ListSDETypeEffects :many
+SELECT effect_id, is_default FROM sde_type_effects
+WHERE type_id = ?
+ORDER BY effect_id;
+-- name: ListSDETypeEffectsByIDs :many
+SELECT type_id, effect_id, is_default FROM sde_type_effects
+WHERE type_id IN (sqlc.slice('type_ids'))
+ORDER BY type_id, effect_id;
+-- name: GetSDEEffect :one
+SELECT effect_id, name, category FROM sde_effects
+WHERE effect_id = ?;
+-- name: ListSDEEffectsByIDs :many
+SELECT effect_id, name, category FROM sde_effects
+WHERE effect_id IN (sqlc.slice('effect_ids'))
+ORDER BY effect_id;
+-- name: ListSDEEffectModifiers :many
+SELECT domain, func, modified_attr, modifying_attr, operation, group_id, skill_type_id FROM sde_effect_modifiers
+WHERE effect_id = ?
+ORDER BY domain, func, modified_attr;
+-- name: ListSDEEffectModifiersByIDs :many
+SELECT effect_id, domain, func, modified_attr, modifying_attr, operation, group_id, skill_type_id FROM sde_effect_modifiers
+WHERE effect_id IN (sqlc.slice('effect_ids'))
+ORDER BY effect_id, domain, func, modified_attr;
+-- name: ListSDETypeGroupsByIDs :many
+SELECT type_id, group_id FROM sde_types
+WHERE type_id IN (sqlc.slice('type_ids'))
+ORDER BY type_id;
+-- name: ListSDETypePhysicsByIDs :many
+SELECT type_id, mass, volume, capacity FROM sde_type_physics
+WHERE type_id IN (sqlc.slice('type_ids'))
+ORDER BY type_id;
+-- name: CountSDETypeAttributes :one
+SELECT COUNT(*) FROM sde_type_attributes;
+-- name: CountSDEAttributeTypes :one
+SELECT COUNT(*) FROM sde_attribute_types;
+-- name: CountSDEEffects :one
+SELECT COUNT(*) FROM sde_effects;
+-- name: CountSDEEffectModifiers :one
+SELECT COUNT(*) FROM sde_effect_modifiers;
+-- name: CountSDETypeEffects :one
+SELECT COUNT(*) FROM sde_type_effects;
+
+-- ---------------------------------------------------------------------
+-- Fitting simulator UI (v0.3.21): picker feeds for the fit editor.
+-- Slot families come from the module's slot effect (dgmEffects,
+-- verified against the dump 2026-10-04): 11 loPower, 12 hiPower,
+-- 13 medPower, 2663 rigSlot, 3772 subSystem. All reads are local
+-- SDE rows; the obtainable floor (published + market group) matches
+-- the shared suggestion feed.
+-- ---------------------------------------------------------------------
+-- name: SuggestSDEShips :many
+SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
+FROM sde_types t
+JOIN sde_groups g ON g.group_id = t.group_id
+WHERE g.category_id = 6 AND t.published = 1
+  AND instr(lower(t.name), lower(@q)) > 0
+ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT @lim;
+-- name: ListFitSlotTypes :many
+SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
+FROM sde_types t
+JOIN sde_type_effects te ON te.type_id = t.type_id AND te.effect_id = @effect_id
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+WHERE t.published = 1 AND t.market_group_id > 0
+  AND (@q = '' OR instr(lower(t.name), lower(@q)) > 0)
+ORDER BY CASE WHEN instr(lower(t.name), lower(?2)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT @lim;
+-- name: ListFitDroneTypes :many
+SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
+FROM sde_types t
+JOIN sde_type_attributes a ON a.type_id = t.type_id AND a.attribute_id = 1272 AND a.value > 0
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+WHERE t.published = 1 AND t.market_group_id > 0
+  AND (@q = '' OR instr(lower(t.name), lower(@q)) > 0)
+ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT @lim;
+-- name: ListFitChargeTypes :many
+SELECT t.type_id, t.name
+FROM sde_types t
+WHERE t.group_id IN (sqlc.slice('group_ids'))
+  AND t.published = 1 AND t.market_group_id > 0
+  AND (@charge_size <= 0 OR EXISTS (
+        SELECT 1 FROM sde_type_attributes a
+        WHERE a.type_id = t.type_id AND a.attribute_id = 128 AND a.value = @charge_size))
+ORDER BY t.name
+LIMIT 200;
+-- name: GetSDETypeByName :one
+SELECT type_id, name FROM sde_types
+WHERE lower(name) = lower(?)
+ORDER BY published DESC, market_group_id DESC, type_id
+LIMIT 1;

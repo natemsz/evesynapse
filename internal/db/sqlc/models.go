@@ -99,6 +99,16 @@ type KillmailDetail struct {
 	FetchedAt   string `json:"fetched_at"`
 }
 
+type LocalFitting struct {
+	ID         int64  `json:"id"`
+	UserID     int64  `json:"user_id"`
+	Name       string `json:"name"`
+	ShipTypeID int64  `json:"ship_type_id"`
+	ItemsJson  string `json:"items_json"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
+}
+
 type MarketFetchState struct {
 	Kind        string `json:"kind"`
 	State       string `json:"state"`
@@ -170,6 +180,15 @@ type PlanetName struct {
 	ResolvedAt string `json:"resolved_at"`
 }
 
+type SdeAttributeType struct {
+	AttributeID  int64   `json:"attribute_id"`
+	Name         string  `json:"name"`
+	Stackable    int64   `json:"stackable"`
+	HighIsGood   int64   `json:"high_is_good"`
+	UnitID       int64   `json:"unit_id"`
+	DefaultValue float64 `json:"default_value"`
+}
+
 type SdeBlueprint struct {
 	BlueprintTypeID          int64 `json:"blueprint_type_id"`
 	ProductTypeID            int64 `json:"product_type_id"`
@@ -193,6 +212,23 @@ type SdeBlueprintSkill struct {
 type SdeCategory struct {
 	CategoryID int64  `json:"category_id"`
 	Name       string `json:"name"`
+}
+
+type SdeEffect struct {
+	EffectID int64  `json:"effect_id"`
+	Name     string `json:"name"`
+	Category int64  `json:"category"`
+}
+
+type SdeEffectModifier struct {
+	EffectID      int64  `json:"effect_id"`
+	Domain        string `json:"domain"`
+	Func          string `json:"func"`
+	ModifiedAttr  int64  `json:"modified_attr"`
+	ModifyingAttr int64  `json:"modifying_attr"`
+	Operation     int64  `json:"operation"`
+	GroupID       int64  `json:"group_id"`
+	SkillTypeID   int64  `json:"skill_type_id"`
 }
 
 type SdeGroup struct {
@@ -252,6 +288,25 @@ type SdeType struct {
 	MarketGroupID int64  `json:"market_group_id"`
 	Published     int64  `json:"published"`
 	Description   string `json:"description"`
+}
+
+type SdeTypeAttribute struct {
+	TypeID      int64   `json:"type_id"`
+	AttributeID int64   `json:"attribute_id"`
+	Value       float64 `json:"value"`
+}
+
+type SdeTypeEffect struct {
+	TypeID    int64 `json:"type_id"`
+	EffectID  int64 `json:"effect_id"`
+	IsDefault int64 `json:"is_default"`
+}
+
+type SdeTypePhysic struct {
+	TypeID   int64   `json:"type_id"`
+	Mass     float64 `json:"mass"`
+	Volume   float64 `json:"volume"`
+	Capacity float64 `json:"capacity"`
 }
 
 type SkillPlan struct {

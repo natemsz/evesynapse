@@ -429,8 +429,10 @@ SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
 FROM sde_types t
 JOIN sde_type_effects te ON te.type_id = t.type_id AND te.effect_id = @effect_id
 LEFT JOIN sde_groups g ON g.group_id = t.group_id
+LEFT JOIN sde_type_attributes meta ON meta.type_id = t.type_id AND meta.attribute_id = 1692
 WHERE t.published = 1 AND t.market_group_id > 0
   AND (@q = '' OR strpos(lower(t.name), lower(@q)) > 0)
+  AND (@meta::bigint = 0 OR (@meta::bigint = 1 AND (meta.value IS NULL OR meta.value = 1)) OR (@meta::bigint > 1 AND meta.value = @meta::bigint))
 ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
 LIMIT @lim::bigint;
 -- name: ListFitDroneTypes :many
@@ -438,8 +440,10 @@ SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
 FROM sde_types t
 JOIN sde_type_attributes a ON a.type_id = t.type_id AND a.attribute_id = 1272 AND a.value > 0
 LEFT JOIN sde_groups g ON g.group_id = t.group_id
+LEFT JOIN sde_type_attributes meta ON meta.type_id = t.type_id AND meta.attribute_id = 1692
 WHERE t.published = 1 AND t.market_group_id > 0
   AND (@q = '' OR strpos(lower(t.name), lower(@q)) > 0)
+  AND (@meta::bigint = 0 OR (@meta::bigint = 1 AND (meta.value IS NULL OR meta.value = 1)) OR (@meta::bigint > 1 AND meta.value = @meta::bigint))
 ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
 LIMIT @lim::bigint;
 -- name: ListFitChargeTypes :many

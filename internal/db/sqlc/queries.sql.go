@@ -633,6 +633,41 @@ func (q *Queries) ListContractDetailIDsByCharacter(ctx context.Context, characte
 	return items, nil
 }
 
+const listCorporationIDsByUser = `-- name: ListCorporationIDsByUser :many
+SELECT DISTINCT cc.corporation_id
+FROM character_corporations cc
+JOIN characters c ON c.character_id = cc.character_id
+WHERE c.user_id = $1
+ORDER BY cc.corporation_id
+`
+
+// Every corporation the given user's characters belong to,
+// from the worker-maintained character -> corporation map.
+// Scoped to one user: per-user data stays siloed, so the
+// wars page never flags another user's corporation as yours.
+func (q *Queries) ListCorporationIDsByUser(ctx context.Context, userID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listCorporationIDsByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var corporation_id int64
+		if err := rows.Scan(&corporation_id); err != nil {
+			return nil, err
+		}
+		items = append(items, corporation_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listGlobalSnapshots = `-- name: ListGlobalSnapshots :many
 SELECT kind, payload, fetched_at, cached_until FROM global_snapshots
 ORDER BY kind

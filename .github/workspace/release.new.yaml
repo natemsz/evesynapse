@@ -1,0 +1,65 @@
+name: build-and-release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test-build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the source
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Decode the embedded assets (fonts, wallpaper)
+        run: |
+          mkdir -p internal/app/static/fonts
+          for f in ci-assets/fonts/*.b64; do
+            base64 -d "$f" > "internal/app/static/fonts/$(basename "${f%.b64}")"
+          done
+          cat ci-assets/bg.jpg.b64.part-* | base64 -d > internal/app/static/bg.jpg
+
+      - name: Run the test suite
+        run: go test ./...
+
+      - name: Read the version
+        id: ver
+        run: echo "version=$(tr -d '[:space:]' < internal/app/version.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Build both kinds
+        run: |
+          mkdir -p dist
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/evesynapse-arm64 ./cmd/evesynapse
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/evesynapse-amd64 ./cmd/evesynapse
+
+      - name: Write the update manifests
+        run: |
+          cd dist
+          for a in arm64 amd64; do
+            sha=$(sha256sum "evesynapse-$a" | cut -d' ' -f1)
+            printf '{"version":"%s","arch":"%s","sha256":"%s"}\n' "${{ steps.ver.outputs.version }}" "$a" "$sha" > "latest-$a.json"
+          done
+
+      - name: Publish the release (once per version)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${{ steps.ver.outputs.version }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; leaving it as it is."
+          else
+            gh release create "$tag" \
+              dist/evesynapse-arm64 dist/evesynapse-amd64 \
+              dist/latest-arm64.json dist/latest-amd64.json \
+              --title "EveSynapse $tag" \
+              --notes "Automated build of EveSynapse $tag. Update with: evesynapse -update -arm64 (or -amd64 / -x64) on Intel/AMD computers)."
+          fi

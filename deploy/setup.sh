@@ -4,7 +4,7 @@
 # Downloads the latest release build for this machine (verified
 # against the checksum published with it), installs it into
 # /opt/evesynapse, installs the systemd service, and links
-# `evesynapse` into /usr/local/bin so the commands stay short.
+# `evesynapse` into /usr/bin so the commands stay short.
 # Re-running it is safe: it refreshes the binary and the service
 # unit, and never overwrites an existing .env.
 #
@@ -17,7 +17,10 @@ set -euo pipefail
 REPO="${EVESYNAPSE_UPDATE_REPO:-natemsz/evesynapse}"
 INSTALL_DIR=/opt/evesynapse
 SERVICE_USER=evesynapse
-LINK=/usr/local/bin/evesynapse
+# The link lives in /usr/bin, not /usr/local/bin: updates always
+# run under sudo, and sudo's locked-down PATH does not search
+# /usr/local/bin on RHEL-family systems.
+LINK=/usr/bin/evesynapse
 
 die() { echo "setup: $*" >&2; exit 1; }
 
@@ -61,6 +64,11 @@ mkdir -p "$INSTALL_DIR"
 install -m 0755 -o "$SERVICE_USER" -g "$SERVICE_USER" "$TMP/evesynapse" "$INSTALL_DIR/.evesynapse.new"
 mv -f "$INSTALL_DIR/.evesynapse.new" "$INSTALL_DIR/evesynapse"
 ln -sf "$INSTALL_DIR/evesynapse" "$LINK"
+# An older setup put the link in /usr/local/bin, where sudo can't
+# see it; retire that one so there's a single canonical link.
+if [ -L /usr/local/bin/evesynapse ] && [ "$(readlink /usr/local/bin/evesynapse)" = "$INSTALL_DIR/evesynapse" ]; then
+  rm -f /usr/local/bin/evesynapse
+fi
 command -v restorecon >/dev/null && restorecon "$INSTALL_DIR/evesynapse" || true
 echo "Installed the program to $INSTALL_DIR/evesynapse (run it as plain \`evesynapse\`)."
 

@@ -177,10 +177,18 @@ registration for sign-in ("EVE SSO flow" below). Then:
    It downloads the latest build for your machine and verifies it
    against the checksum published with the release, creates the
    `evesynapse` user and `/opt/evesynapse`, installs the systemd
-   service, and links `evesynapse` into `/usr/local/bin` so you
+   service, and links `evesynapse` into `/usr/bin` so you
    can run it without typing the full path. It never overwrites
    an existing `.env`. Installing from a fork or from a build you
    made yourself works too:
+
+   > **Why `/usr/bin`?** Updating always runs under `sudo`, and
+   > `sudo` searches its own locked-down PATH — which does not
+   > include `/usr/local/bin` on RHEL-family systems. A link in
+   > `/usr/local/bin` works in your shell but is invisible to
+   > `sudo evesynapse …`, so the setup script puts the link in
+   > `/usr/bin` (and retires an older `/usr/local/bin` link if it
+   > finds one).
 
    ```sh
    sudo EVESYNAPSE_UPDATE_REPO=you/evesynapse bash deploy/setup.sh

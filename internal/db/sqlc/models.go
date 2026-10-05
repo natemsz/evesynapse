@@ -134,19 +134,20 @@ type MarketHistoryWant struct {
 }
 
 type MarketRegionStat struct {
-	RegionID    int64   `json:"region_id"`
-	TypeID      int64   `json:"type_id"`
-	BestSell    float64 `json:"best_sell"`
-	TypicalSell float64 `json:"typical_sell"`
-	SellBand    float64 `json:"sell_band"`
-	BestBuy     float64 `json:"best_buy"`
-	TypicalBuy  float64 `json:"typical_buy"`
-	BuyBand     float64 `json:"buy_band"`
-	SellOrders  int64   `json:"sell_orders"`
-	BuyOrders   int64   `json:"buy_orders"`
-	SellVolume  int64   `json:"sell_volume"`
-	BuyVolume   int64   `json:"buy_volume"`
-	UpdatedAt   string  `json:"updated_at"`
+	RegionID       int64   `json:"region_id"`
+	TypeID         int64   `json:"type_id"`
+	BestSell       float64 `json:"best_sell"`
+	TypicalSell    float64 `json:"typical_sell"`
+	SellBand       float64 `json:"sell_band"`
+	BestBuy        float64 `json:"best_buy"`
+	TypicalBuy     float64 `json:"typical_buy"`
+	BuyBand        float64 `json:"buy_band"`
+	SellOrders     int64   `json:"sell_orders"`
+	BuyOrders      int64   `json:"buy_orders"`
+	SellVolume     int64   `json:"sell_volume"`
+	BuyVolume      int64   `json:"buy_volume"`
+	UpdatedAt      string  `json:"updated_at"`
+	AvgDailyVolume float64 `json:"avg_daily_volume"`
 }
 
 type MarketRegionStatsDaily struct {

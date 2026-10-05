@@ -344,8 +344,8 @@ WHERE normalized_name = ?;
 DELETE FROM market_region_stats
 WHERE region_id = ?;
 -- name: UpsertMarketRegionStat :exec
-INSERT INTO market_region_stats (region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO market_region_stats (region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, avg_daily_volume, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (region_id, type_id) DO UPDATE SET
     best_sell    = excluded.best_sell,
     typical_sell = excluded.typical_sell,
@@ -357,17 +357,36 @@ ON CONFLICT (region_id, type_id) DO UPDATE SET
     buy_orders   = excluded.buy_orders,
     sell_volume  = excluded.sell_volume,
     buy_volume   = excluded.buy_volume,
+    avg_daily_volume = excluded.avg_daily_volume,
     updated_at   = excluded.updated_at;
 -- name: ListMarketRegionStatsByType :many
-SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
 FROM market_region_stats
 WHERE type_id = ?
 ORDER BY region_id;
 -- name: ListMarketRegionStatsByRegion :many
-SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
 FROM market_region_stats
 WHERE region_id = ?
 ORDER BY type_id;
+-- name: ListMarketAvgDailyVolumes :many
+-- The sold-per-day figure the sweep stores on each region stat:
+-- the mean recorded daily volume over the seven calendar days
+-- ending on the type's newest recorded day (the newest day and
+-- the six before it), which is exactly what historyWindow(rows,
+-- 7) averages at render time. One pass over the region's whole
+-- history at sweep completion; types with no recorded history
+-- have no row here and read as 0.
+SELECT h.type_id AS type_id, CAST(AVG(h.volume) AS REAL) AS avg_daily_volume
+FROM market_history h
+WHERE h.region_id = ?
+  AND h.date >= (
+      SELECT DATE(MAX(m.date), '-6 days')
+      FROM market_history m
+      WHERE m.region_id = h.region_id AND m.type_id = h.type_id
+  )
+GROUP BY h.type_id
+ORDER BY h.type_id;
 -- name: UpsertMarketRegionStatDaily :exec
 INSERT INTO market_region_stats_daily (region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -25,6 +24,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/pgtest"
 )
 
 // doReq drives the router and returns status, body, and any
@@ -420,27 +420,30 @@ func TestTokenDeadClassificationAndWorkerSkip(t *testing.T) {
 	}
 }
 
-// TestMigration009Reopen proves the schema guard is idempotent:
-// a second openDB over the same file applies nothing twice.
+// TestMigration009Reopen proves the schema bootstrap is
+// idempotent: a second openDB over the same database applies
+// nothing twice.
 func TestMigration009Reopen(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "test.db")
-	conn, err := openDB(path)
+	dsn := pgtest.FreshDSN(t)
+	conn, pool, err := openDB(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("first open: %v", err)
 	}
 	var cols int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('characters') WHERE name IN ('owner_hash', 'tags', 'link_state', 'link_state_at')`).Scan(&cols); err != nil {
-		t.Fatalf("pragma: %v", err)
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'characters' AND column_name IN ('owner_hash', 'tags', 'link_state', 'link_state_at')`).Scan(&cols); err != nil {
+		t.Fatalf("columns: %v", err)
 	}
 	if cols != 4 {
 		t.Fatalf("foundation columns: %d, want 4", cols)
 	}
 	conn.Close()
-	conn, err = openDB(path)
+	pool.Close()
+	conn, pool, err = openDB(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("second open: %v", err)
 	}
 	conn.Close()
+	pool.Close()
 }
 
 // TestResolveSignInUser covers which account a verified sign-in
@@ -534,7 +537,7 @@ func TestSessionSlidingRenewal(t *testing.T) {
 		t.Fatalf("aged session was not renewed (cookie token unchanged)")
 	}
 	var daysLeft float64
-	if err := conn.QueryRow(`SELECT expiry - julianday('now') FROM sessions WHERE token = ?`, rotated).Scan(&daysLeft); err != nil {
+	if err := conn.QueryRow(`SELECT EXTRACT(EPOCH FROM (expiry - now())) / 86400.0 FROM sessions WHERE token = $1`, rotated).Scan(&daysLeft); err != nil {
 		t.Fatalf("read renewed expiry: %v", err)
 	}
 	if daysLeft < 29 {

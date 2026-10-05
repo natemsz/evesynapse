@@ -22,17 +22,17 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/alexedwards/scs/sqlite3store"
+	"github.com/alexedwards/scs/pgxstore"
 	"github.com/alexedwards/scs/v2"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/pgtest"
 )
 
 const (
@@ -56,20 +56,20 @@ func (s *countingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	}, nil
 }
 
-// buildCorpTestApp builds an Application over a temp DB with a
-// stub ESI transport (no worker goroutine — tests drive the
-// worker functions directly).
+// buildCorpTestApp builds an Application over a fresh embedded-
+// Postgres test database with a stub ESI transport (no worker
+// goroutine — tests drive the worker functions directly).
 func buildCorpTestApp(t *testing.T, transport http.RoundTripper) (*Application, *sql.DB, *db.Queries) {
 	t.Helper()
-	conn, err := openDB(filepath.Join(t.TempDir(), "test.db"))
+	conn, pool, err := openDB(context.Background(), pgtest.FreshDSN(t))
 	if err != nil {
 		t.Fatalf("openDB: %v", err)
 	}
-	t.Cleanup(func() { conn.Close() })
+	t.Cleanup(func() { conn.Close(); pool.Close() })
 	queries := db.New(conn)
 
 	sessionManager := scs.New()
-	sessionManager.Store = sqlite3store.New(conn)
+	sessionManager.Store = pgxstore.New(pool)
 	sessionManager.Lifetime = 24 * time.Hour
 	sessionManager.Cookie.Name = "evesynapse_session"
 
@@ -82,6 +82,7 @@ func buildCorpTestApp(t *testing.T, transport http.RoundTripper) (*Application, 
 		queries:       queries,
 		esi:           client,
 		db:            conn,
+		pool:          pool,
 		corpCache:     make(map[int64]corpCacheEntry),
 		prices:        make(map[int64]esi.MarketPrice),
 		priorityChars: make(map[int64]bool),

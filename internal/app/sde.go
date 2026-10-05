@@ -1469,109 +1469,109 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		return nil
 	}
 
-	if err := insert("INSERT INTO sde_types (type_id, name, group_id, market_group_id, published, description) VALUES (?, ?, ?, ?, ?, ?)", len(parsed.types), func(i int) []any {
+	if err := insert("INSERT INTO sde_types (type_id, name, group_id, market_group_id, published, description) VALUES ($1, $2, $3, $4, $5, $6)", len(parsed.types), func(i int) []any {
 		r := parsed.types[i]
 		return []any{r.typeID, r.name, r.groupID, r.marketGroupID, r.published, r.description}
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_type_physics (type_id, mass, volume, capacity) VALUES (?, ?, ?, ?)", len(parsed.types), func(i int) []any {
+	if err := insert("INSERT INTO sde_type_physics (type_id, mass, volume, capacity) VALUES ($1, $2, $3, $4)", len(parsed.types), func(i int) []any {
 		r := parsed.types[i]
 		return []any{r.typeID, r.mass, r.volume, r.capacity}
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_groups (group_id, name, category_id) VALUES (?, ?, ?)", len(parsed.groups), func(i int) []any {
+	if err := insert("INSERT INTO sde_groups (group_id, name, category_id) VALUES ($1, $2, $3)", len(parsed.groups), func(i int) []any {
 		r := parsed.groups[i]
 		return []any{r.groupID, r.name, r.categoryID}
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_categories (category_id, name) VALUES (?, ?)", len(parsed.categories), func(i int) []any {
+	if err := insert("INSERT INTO sde_categories (category_id, name) VALUES ($1, $2)", len(parsed.categories), func(i int) []any {
 		r := parsed.categories[i]
 		return []any{r.categoryID, r.name}
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_market_groups (market_group_id, parent_group_id, name, icon_id, has_types) VALUES (?, ?, ?, ?, ?)", len(parsed.marketGroups), func(i int) []any {
+	if err := insert("INSERT INTO sde_market_groups (market_group_id, parent_group_id, name, icon_id, has_types) VALUES ($1, $2, $3, $4, $5)", len(parsed.marketGroups), func(i int) []any {
 		r := parsed.marketGroups[i]
 		return []any{r.marketGroupID, r.parentGroupID, r.name, r.iconID, r.hasTypes}
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_stations (station_id, name, system_id) VALUES (?, ?, ?)", len(parsed.stations), func(i int) []any {
+	if err := insert("INSERT INTO sde_stations (station_id, name, system_id) VALUES ($1, $2, $3)", len(parsed.stations), func(i int) []any {
 		r := parsed.stations[i]
 		return []any{r.stationID, r.name, r.systemID}
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (?, ?, ?, ?)", len(parsed.systems), func(i int) []any {
+	if err := insert("INSERT INTO sde_systems (system_id, name, region_id, security) VALUES ($1, $2, $3, $4)", len(parsed.systems), func(i int) []any {
 		r := parsed.systems[i]
 		return []any{r.systemID, r.name, r.regionID, r.security}
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_regions (region_id, name) VALUES (?, ?)", len(parsed.regions), func(i int) []any {
+	if err := insert("INSERT INTO sde_regions (region_id, name) VALUES ($1, $2)", len(parsed.regions), func(i int) []any {
 		r := parsed.regions[i]
 		return []any{r.regionID, r.name}
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_blueprints (blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds) VALUES (?, ?, ?, ?, ?)", len(parsed.blueprints), func(i int) []any {
+	if err := insert("INSERT INTO sde_blueprints (blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds) VALUES ($1, $2, $3, $4, $5)", len(parsed.blueprints), func(i int) []any {
 		r := parsed.blueprints[i]
 		return []any{r.blueprintTypeID, r.productTypeID, r.productQuantity, r.maxProductionLimit, r.manufacturingTimeSeconds}
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_blueprint_materials (blueprint_type_id, material_type_id, quantity) VALUES (?, ?, ?)", len(parsed.bpMaterials), func(i int) []any {
+	if err := insert("INSERT INTO sde_blueprint_materials (blueprint_type_id, material_type_id, quantity) VALUES ($1, $2, $3)", len(parsed.bpMaterials), func(i int) []any {
 		r := parsed.bpMaterials[i]
 		return []any{r.blueprintTypeID, r.materialTypeID, r.quantity}
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_blueprint_skills (blueprint_type_id, skill_type_id, level) VALUES (?, ?, ?)", len(parsed.bpSkills), func(i int) []any {
+	if err := insert("INSERT INTO sde_blueprint_skills (blueprint_type_id, skill_type_id, level) VALUES ($1, $2, $3)", len(parsed.bpSkills), func(i int) []any {
 		r := parsed.bpSkills[i]
 		return []any{r.blueprintTypeID, r.skillTypeID, r.level}
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_skill_meta (type_id, rank, primary_attr, secondary_attr) VALUES (?, ?, ?, ?)", len(parsed.skillMeta), func(i int) []any {
+	if err := insert("INSERT INTO sde_skill_meta (type_id, rank, primary_attr, secondary_attr) VALUES ($1, $2, $3, $4)", len(parsed.skillMeta), func(i int) []any {
 		r := parsed.skillMeta[i]
 		return []any{r.typeID, r.rank, r.primaryAttr, r.secondaryAttr}
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_requirements (type_id, skill_type_id, level) VALUES (?, ?, ?)", len(parsed.skillReqs), func(i int) []any {
+	if err := insert("INSERT INTO sde_requirements (type_id, skill_type_id, level) VALUES ($1, $2, $3)", len(parsed.skillReqs), func(i int) []any {
 		r := parsed.skillReqs[i]
 		return []any{r.typeID, r.skillTypeID, r.level}
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_type_attributes (type_id, attribute_id, value) VALUES (?, ?, ?)", len(parsed.typeAttrs), func(i int) []any {
+	if err := insert("INSERT INTO sde_type_attributes (type_id, attribute_id, value) VALUES ($1, $2, $3)", len(parsed.typeAttrs), func(i int) []any {
 		r := parsed.typeAttrs[i]
 		return []any{r.typeID, r.attributeID, r.value}
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_attribute_types (attribute_id, name, stackable, high_is_good, unit_id, default_value) VALUES (?, ?, ?, ?, ?, ?)", len(parsed.attrTypes), func(i int) []any {
+	if err := insert("INSERT INTO sde_attribute_types (attribute_id, name, stackable, high_is_good, unit_id, default_value) VALUES ($1, $2, $3, $4, $5, $6)", len(parsed.attrTypes), func(i int) []any {
 		r := parsed.attrTypes[i]
 		return []any{r.attributeID, r.name, r.stackable, r.highIsGood, r.unitID, r.defaultValue}
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_effects (effect_id, name, category) VALUES (?, ?, ?)", len(parsed.effects), func(i int) []any {
+	if err := insert("INSERT INTO sde_effects (effect_id, name, category) VALUES ($1, $2, $3)", len(parsed.effects), func(i int) []any {
 		r := parsed.effects[i]
 		return []any{r.effectID, r.name, r.category}
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_effect_modifiers (effect_id, domain, func, modified_attr, modifying_attr, operation, group_id, skill_type_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", len(parsed.modifiers), func(i int) []any {
+	if err := insert("INSERT INTO sde_effect_modifiers (effect_id, domain, func, modified_attr, modifying_attr, operation, group_id, skill_type_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)", len(parsed.modifiers), func(i int) []any {
 		r := parsed.modifiers[i]
 		return []any{r.effectID, r.domain, r.fn, r.modifiedAttr, r.modifyingAttr, r.operation, r.groupID, r.skillTypeID}
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_type_effects (type_id, effect_id, is_default) VALUES (?, ?, ?)", len(parsed.typeEffects), func(i int) []any {
+	if err := insert("INSERT INTO sde_type_effects (type_id, effect_id, is_default) VALUES ($1, $2, $3)", len(parsed.typeEffects), func(i int) []any {
 		r := parsed.typeEffects[i]
 		return []any{r.typeID, r.effectID, r.isDefault}
 	}); err != nil {

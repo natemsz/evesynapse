@@ -693,6 +693,7 @@ const (
 	fitEntDrone
 	fitEntMissile
 	fitEntCharge
+	fitEntImplant
 )
 
 // fitEntity is one thing whose attributes get computed: the ship,
@@ -885,8 +886,16 @@ type fitMultEntry struct {
 
 // computeFit runs the stat engine over one fit. charges maps a
 // weapon's type ID to its loaded charge type ID. Skill levels
-// are clamped to 0..5; absent skills are untrained.
-func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, levels map[int64]int, charges map[int64]int64) *fitResult {
+// are clamped to 0..5; absent skills are untrained. implants are
+// the active clone's implant type IDs: they become char-located
+// entities so their own effects (ItemModifier on the ship, the
+// charID LocationGroupModifier that builds pirate set bonuses)
+// flow through the same three-pass fold as everything else.
+// Implant sources never join the stacking-penalty group —
+// pirate set totals are documented unpenalized (a full
+// High-grade Snake set is +24.73% velocity, which only the
+// unpenalized product reproduces).
+func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, levels map[int64]int, charges map[int64]int64, implants []int64) *fitResult {
 	res := &fitResult{
 		ShipTypeID: shipTypeID,
 		ItemAttrs:  make(map[int64]map[int64]float64),
@@ -998,6 +1007,28 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 		byType[skillID] = ent
 	}
 
+	// Implants as char-located pseudo-items (one entity per
+	// implant type; slots are unique so instances stays 1).
+	var implantEnts []*fitEntity
+	seenImplant := make(map[int64]bool)
+	for _, implantID := range implants {
+		if implantID <= 0 || implantID == shipTypeID || seenImplant[implantID] {
+			continue
+		}
+		seenImplant[implantID] = true
+		ent := &fitEntity{
+			key:       fmt.Sprintf("implant:%d", implantID),
+			kind:      fitEntImplant,
+			typeID:    implantID,
+			instances: 1,
+			base:      cloneAttrMap(snap.attrs[implantID]),
+			calc:      map[int64]float64{},
+		}
+		implantEnts = append(implantEnts, ent)
+		entities = append(entities, ent)
+		byType[implantID] = ent
+	}
+
 	// --- Ship restrictions -----------------------------------------
 	// Modules carrying canFitShipGroup*/canFitShipType* may only
 	// fly on the named hulls. Flag violations as fit errors.
@@ -1061,28 +1092,51 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 				noteUnmodeled(shape + ": domain not modeled")
 			}
 		case "LocationModifier":
-			if m.Domain != "shipID" {
+			switch m.Domain {
+			case "shipID":
+				for _, t := range atShip {
+					switch t.kind {
+					case fitEntModule, fitEntRig, fitEntSubsystem:
+						targets(t)
+					}
+				}
+			case "charID":
+				// Attribute implants and similar char-located
+				// effects land on the character pseudo-item.
+				// Nothing downstream reads charEnt stats, so
+				// this is modeling completeness, not behavior.
+				targets(charEnt)
+			default:
 				noteUnmodeled(shape + ": domain not modeled")
 				return
-			}
-			for _, t := range atShip {
-				switch t.kind {
-				case fitEntModule, fitEntRig, fitEntSubsystem:
-					targets(t)
-				}
 			}
 		case "LocationGroupModifier":
-			if m.Domain != "shipID" {
+			switch m.Domain {
+			case "shipID":
+				for _, t := range atShip {
+					if t.kind == fitEntCharge {
+						continue // contained in its weapon, not at the ship
+					}
+					if snap.groups[t.typeID] == m.GroupID && m.GroupID != 0 {
+						targets(t)
+					}
+				}
+			case "charID":
+				// Pirate implant set bonuses: each set implant
+				// carries an effect like setBonusSerpentis that
+				// pre-multiplies the set's bonus attribute on
+				// every implant of the set group plugged into
+				// the character (SDE: implantSet* attributes,
+				// e.g. 802 implantSetSerpentis -> 315
+				// velocityBonus, operator 0 = pre-multiply).
+				for _, t := range implantEnts {
+					if snap.groups[t.typeID] == m.GroupID && m.GroupID != 0 {
+						targets(t)
+					}
+				}
+			default:
 				noteUnmodeled(shape + ": domain not modeled")
 				return
-			}
-			for _, t := range atShip {
-				if t.kind == fitEntCharge {
-					continue // contained in its weapon, not at the ship
-				}
-				if snap.groups[t.typeID] == m.GroupID && m.GroupID != 0 {
-					targets(t)
-				}
 			}
 		case "LocationRequiredSkillModifier":
 			if m.Domain != "shipID" {
@@ -1123,6 +1177,9 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 	sort.Slice(skillIDs, func(i, j int) bool { return skillIDs[i] < skillIDs[j] })
 	for _, id := range skillIDs {
 		sources = append(sources, skillEnts[id])
+	}
+	for _, ent := range implantEnts {
+		sources = append(sources, ent)
 	}
 	for _, ent := range fitted {
 		sources = append(sources, ent)

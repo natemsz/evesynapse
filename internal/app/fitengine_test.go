@@ -96,7 +96,7 @@ func TestFitEngineOperationSemantics(t *testing.T) {
 		fx.attrs(ship, map[int64]float64{265: 500})
 		fx.attrs(2001, map[int64]float64{1159: 1200})
 		fx.effect(2001, 2837, 4, fitMod("shipID", "ItemModifier", 265, 1159, 2))
-		res := computeFit(fx.snap, ship, []fitItemInput{{TypeID: 2001}}, nil, nil)
+		res := computeFit(fx.snap, ship, []fitItemInput{{TypeID: 2001}}, nil, nil, nil)
 		near(t, "armorHP", res.ArmorHP, 1700, 0.001)
 	})
 
@@ -111,7 +111,7 @@ func TestFitEngineOperationSemantics(t *testing.T) {
 		// shape on Amarr Frigate).
 		fx.attrs(2005, map[int64]float64{})
 		fx.effect(2005, 510, 0, fitMod("shipID", "ItemModifier", 464, 280, 0))
-		res := computeFit(fx.snap, ship, nil, map[int64]int{2005: 5}, nil)
+		res := computeFit(fx.snap, ship, nil, map[int64]int{2005: 5}, nil, nil)
 		// -4 * 5 = -20 -> 0.5 * (1 - 20/100) = 0.40.
 		near(t, "armor EM resonance", res.ShipAttrs[267], 0.4, 1e-9)
 	})
@@ -124,7 +124,7 @@ func TestFitEngineOperationSemantics(t *testing.T) {
 			fx.attrs(mod, map[int64]float64{64: 1.1})
 			fx.effect(mod, 9001, 4, fitMod("shipID", "ItemModifier", 64, 64, 4))
 		}
-		res := computeFit(fx.snap, ship, []fitItemInput{{TypeID: 2002}, {TypeID: 2003}}, nil, nil)
+		res := computeFit(fx.snap, ship, []fitItemInput{{TypeID: 2002}, {TypeID: 2003}}, nil, nil, nil)
 		// 2.0 * 1.1 * (1 + 0.1 * exp(-1/7.1289)) = 2.3912...
 		want := 2.0 * 1.1 * (1 + 0.1*math.Exp(-1.0/7.1289))
 		near(t, "stacked multiplier", res.ShipAttrs[64], want, 1e-6)
@@ -138,7 +138,7 @@ func TestFitEngineOperationSemantics(t *testing.T) {
 		fx.effect(2004, 9002, 4, fitMod("shipID", "ItemModifier", 64, 64, 4))
 		fx.attrs(2005, map[int64]float64{64: 0.8})
 		fx.effect(2005, 9003, 4, fitMod("shipID", "ItemModifier", 64, 64, 4))
-		res := computeFit(fx.snap, ship, []fitItemInput{{TypeID: 2004}, {TypeID: 2005}}, nil, nil)
+		res := computeFit(fx.snap, ship, []fitItemInput{{TypeID: 2004}, {TypeID: 2005}}, nil, nil, nil)
 		// Each is first in its own chain: both at full strength.
 		near(t, "bonus/penalty chains", res.ShipAttrs[64], 2.0*1.21*0.8, 1e-9)
 	})
@@ -151,7 +151,7 @@ func TestFitEngineOperationSemantics(t *testing.T) {
 			fx.attrs(mod, map[int64]float64{9001: -30})
 			fx.effect(mod, 9004, 4, fitMod("shipID", "ItemModifier", 267, 9001, 6))
 		}
-		res := computeFit(fx.snap, ship, []fitItemInput{{TypeID: 2006}, {TypeID: 2007}}, nil, nil)
+		res := computeFit(fx.snap, ship, []fitItemInput{{TypeID: 2006}, {TypeID: 2007}}, nil, nil, nil)
 		// 0.5 * (1-0.30) * (1 - 0.30*exp(-1/7.1289)).
 		want := 0.5 * 0.7 * (1 - 0.3*math.Exp(-1.0/7.1289))
 		near(t, "hardener stacking", res.ShipAttrs[267], want, 1e-6)
@@ -167,7 +167,7 @@ func TestFitEngineOperationSemantics(t *testing.T) {
 		fx.effect(2008, 2302, 4, fitMod("shipID", "ItemModifier", 267, 267, 0))
 		fx.attrs(2009, map[int64]float64{9001: -20})
 		fx.effect(2009, 9005, 4, fitMod("shipID", "ItemModifier", 267, 9001, 6))
-		res := computeFit(fx.snap, ship, []fitItemInput{{TypeID: 2008}, {TypeID: 2009}}, nil, nil)
+		res := computeFit(fx.snap, ship, []fitItemInput{{TypeID: 2008}, {TypeID: 2009}}, nil, nil, nil)
 		// (0.5 * 0.85) * (1 - 20/100) = 0.34.
 		near(t, "premul-then-percent", res.ShipAttrs[267], 0.34, 1e-9)
 	})
@@ -185,7 +185,7 @@ func TestFitEngineOperationSemantics(t *testing.T) {
 		// PostDiv (op 5, real effect 6010 shipMode MaxTargetRange).
 		fx.attrs(2012, map[int64]float64{1991: 2})
 		fx.effect(2012, 6010, 0, fitMod("shipID", "ItemModifier", 76, 1991, 5))
-		res := computeFit(fx.snap, ship, []fitItemInput{{TypeID: 2010}, {TypeID: 2011}, {TypeID: 2012}}, nil, nil)
+		res := computeFit(fx.snap, ship, []fitItemInput{{TypeID: 2010}, {TypeID: 2011}, {TypeID: 2012}}, nil, nil, nil)
 		near(t, "maxLockedTargets", res.ShipAttrs[192], 7, 1e-9)
 		near(t, "maxTargetRange postdiv", res.ShipAttrs[76], 10000, 1e-9)
 	})
@@ -287,7 +287,7 @@ func TestFitEngineCanonicalPunisherFit(t *testing.T) {
 		{TypeID: 519}, {TypeID: 20349}, {TypeID: 377}, {TypeID: 400},
 	}
 	res := computeFit(fx.snap, 597, items, map[int64]int{3300: 5, 3302: 5},
-		map[int64]int64{2889: 185})
+		map[int64]int64{2889: 185}, nil)
 
 	// Resources: PG 3*4 + 1 + 35 + 2 + 3 = 53 of 67;
 	// CPU 3*9 + 30 + 23 + 20 + 29 = 129 of 140.
@@ -383,7 +383,7 @@ func TestFitEngineDrones(t *testing.T) {
 	fit := []fitItemInput{{TypeID: 2456, Quantity: 5}}
 
 	// Drones V: 5 active, DPS = 5 * 20 * 1.92 / 4 = 48.
-	res := computeFit(fx.snap, 1002, fit, map[int64]int{3436: 5}, nil)
+	res := computeFit(fx.snap, 1002, fit, map[int64]int{3436: 5}, nil, nil)
 	if res.DronesActive != 5 {
 		t.Fatalf("drones active = %d, want 5", res.DronesActive)
 	}
@@ -392,7 +392,7 @@ func TestFitEngineDrones(t *testing.T) {
 	near(t, "drone bay used", res.DroneBayUsed, 25, 1e-9)
 
 	// Drones II: only 2 controlled.
-	res = computeFit(fx.snap, 1002, fit, map[int64]int{3436: 2}, nil)
+	res = computeFit(fx.snap, 1002, fit, map[int64]int{3436: 2}, nil, nil)
 	if res.DronesActive != 2 {
 		t.Fatalf("drones active = %d, want 2", res.DronesActive)
 	}
@@ -406,7 +406,7 @@ func TestFitEngineCapacitorEquilibrium(t *testing.T) {
 	fx.attrs(1003, map[int64]float64{482: 400, 55: 160000, 263: 100, 265: 100, 9: 100, 479: 100000})
 	// Draw 5 GJ/s (5 GJ per 1 s cycle): below the 6.25 peak.
 	fx.attrs(2013, map[int64]float64{6: 5, 73: 1000})
-	res := computeFit(fx.snap, 1003, []fitItemInput{{TypeID: 2013}}, nil, nil)
+	res := computeFit(fx.snap, 1003, []fitItemInput{{TypeID: 2013}}, nil, nil, nil)
 	if !res.CapacitorStable {
 		t.Fatal("cap should be stable at draw 5 < peak 6.25")
 	}
@@ -416,7 +416,7 @@ func TestFitEngineCapacitorEquilibrium(t *testing.T) {
 	near(t, "cap stable %", res.CapacitorStablePercent, 100*s*s, 0.05)
 
 	// No draw at all: stable at 100%.
-	res = computeFit(fx.snap, 1003, nil, nil, nil)
+	res = computeFit(fx.snap, 1003, nil, nil, nil, nil)
 	if !res.CapacitorStable || res.CapacitorStablePercent != 100 {
 		t.Fatalf("idle cap = stable %v at %v%%, want stable at 100", res.CapacitorStable, res.CapacitorStablePercent)
 	}
@@ -474,7 +474,7 @@ func TestFitEngineLoadSnapshot(t *testing.T) {
 		t.Fatalf("snapshot effect 2837 = %+v", eff)
 	}
 
-	res := computeFit(snap, 597, []fitItemInput{{TypeID: 20349}}, nil, nil)
+	res := computeFit(snap, 597, []fitItemInput{{TypeID: 20349}}, nil, nil, nil)
 	near(t, "armor after plate", res.ArmorHP, 1700, 0.001)
 }
 
@@ -522,7 +522,7 @@ func TestFitEngineT3Subsystems(t *testing.T) {
 	}
 
 	// Bare hull: no slots.
-	bare := computeFit(snap, 29984, nil, nil, nil)
+	bare := computeFit(snap, 29984, nil, nil, nil, nil)
 	if bare.HighSlots != 0 || bare.MediumSlots != 0 || bare.LowSlots != 0 {
 		t.Fatalf("bare T3 slots = %d/%d/%d, want 0/0/0",
 			bare.HighSlots, bare.MediumSlots, bare.LowSlots)
@@ -531,7 +531,7 @@ func TestFitEngineT3Subsystems(t *testing.T) {
 	// Full subsystem set: 8 high, 6 mid, 2 low, 6 launcher hardpoints.
 	res := computeFit(snap, 29984, []fitItemInput{
 		{TypeID: 45601}, {TypeID: 45589}, {TypeID: 45613}, {TypeID: 45625},
-	}, nil, nil)
+	}, nil, nil, nil)
 	if res.HighSlots != 8 || res.MediumSlots != 6 || res.LowSlots != 2 {
 		t.Fatalf("T3 slots = %d/%d/%d, want 8/6/2",
 			res.HighSlots, res.MediumSlots, res.LowSlots)
@@ -577,11 +577,11 @@ func TestFitEngineSubsystemSkillScaling(t *testing.T) {
 	items := []fitItemInput{{TypeID: sub, Quantity: 1}, {TypeID: web, Quantity: 1}}
 
 	// Level 3: 10% x 3 -> factor 1.3 -> -60 x 1.3 = -78.
-	res := computeFit(f.snap, ship, items, map[int64]int{skill: 3}, nil)
+	res := computeFit(f.snap, ship, items, map[int64]int{skill: 3}, nil, nil)
 	near(t, "web strength at skill 3", res.ItemAttrs[web][20], -78, 1e-9)
 
 	// All V: factor 1.5 -> -90.
-	res = computeFit(f.snap, ship, items, map[int64]int{skill: 5}, nil)
+	res = computeFit(f.snap, ship, items, map[int64]int{skill: 5}, nil, nil)
 	near(t, "web strength at skill 5", res.ItemAttrs[web][20], -90, 1e-9)
 }
 
@@ -611,7 +611,7 @@ func TestFitEngineDPSVolley(t *testing.T) {
 
 	items := []fitItemInput{{TypeID: gun, Quantity: 5}, {TypeID: drone, Quantity: 5}}
 	charges := map[int64]int64{gun: charge}
-	res := computeFit(f.snap, ship, items, map[int64]int{3436: 5}, charges)
+	res := computeFit(f.snap, ship, items, map[int64]int{3436: 5}, charges, nil)
 
 	// Per gun: volley 20 x multiplier 5 = 100; 5 guns = 500.
 	near(t, "turret volley", res.TurretVolley, 500, 1e-9)
@@ -646,7 +646,7 @@ func TestFitEngineCapWarfare(t *testing.T) {
 		{TypeID: nos, Quantity: 1},
 		{TypeID: xfer, Quantity: 1},
 	}
-	res := computeFit(f.snap, ship, items, map[int64]int{2001: 5}, nil)
+	res := computeFit(f.snap, ship, items, map[int64]int{2001: 5}, nil, nil)
 
 	near(t, "neut per cycle", res.NeutDrainPerCycle, 360, 1e-9)
 	near(t, "neut per sec", res.NeutDrainPerSec, 30, 1e-9)
@@ -671,12 +671,12 @@ func TestFitEngineShipRestricted(t *testing.T) {
 		flag(siege, 13)
 	items := []fitItemInput{{TypeID: siege, Quantity: 1}}
 
-	res := computeFit(f.snap, dread, items, map[int64]int{2001: 5}, nil)
+	res := computeFit(f.snap, dread, items, map[int64]int{2001: 5}, nil, nil)
 	if len(res.Restricted) != 0 {
 		t.Errorf("siege on dread: %d restrictions, want 0", len(res.Restricted))
 	}
 
-	res = computeFit(f.snap, ship, items, map[int64]int{2001: 5}, nil)
+	res = computeFit(f.snap, ship, items, map[int64]int{2001: 5}, nil, nil)
 	if len(res.Restricted) != 1 {
 		t.Fatalf("siege on cruiser: %d restrictions, want 1", len(res.Restricted))
 	}
@@ -685,5 +685,82 @@ func TestFitEngineShipRestricted(t *testing.T) {
 	}
 	if len(res.Restricted[0].NeedGroup) != 1 || res.Restricted[0].NeedGroup[0] != 485 {
 		t.Errorf("restricted needs %v, want group [485]", res.Restricted[0].NeedGroup)
+	}
+}
+
+// Real SDE values for the High-grade Snake implant set, copied
+// from the live ESI dogma endpoints on 2026-10-05. Attribute 315
+// = velocityBonus, 802 = implantSetSerpentis, 37 = maxVelocity.
+// Effect 394 (navigationVelocityBonusPostPercentMaxVelocityShip)
+// post-percents each implant's velocityBonus onto the ship;
+// effect 1261 (setBonusSerpentis) is a charID
+// LocationGroupModifier that PRE-MULTIPLIES (operator 0) every
+// set implant's velocityBonus by each set implant's
+// implantSetSerpentis. EVE University documents the full-set
+// total as +24.73% velocity, and its stated formula (set
+// multiplier = product of all set bonuses; each effect bonus
+// times that; the results multiplied together) is exactly what
+// this SDE mechanism computes — no special-case code.
+func snakeSetFixture() (*fitFixture, int64) {
+	fx := newFitFixture()
+	ship := int64(1001)
+	fx.attrs(ship, map[int64]float64{37: 300})
+	fx.meta(37, false, 0)
+	fx.meta(315, false, 0)
+	fx.meta(802, false, 0)
+	snakes := []struct {
+		id  int64
+		vb  float64 // 315; -1 = attribute absent (omega)
+		set float64 // 802
+	}{
+		{19540, 0.5, 1.15},   // Alpha
+		{19551, 0.625, 1.15}, // Beta
+		{19553, 0.75, 1.15},  // Gamma
+		{19554, 0.875, 1.15}, // Delta
+		{19555, 1.0, 1.15},   // Epsilon
+		{19556, -1, 3.0},     // Omega: set bonus only, no direct bonus
+	}
+	for _, s := range snakes {
+		a := map[int64]float64{802: s.set}
+		if s.vb >= 0 {
+			a[315] = s.vb
+		}
+		fx.attrs(s.id, a)
+		fx.group(s.id, 300)
+		fx.effect(s.id, 394, 0, fitModifier{Domain: "shipID", Func: "ItemModifier", ModifiedAttr: 37, ModifyingAttr: 315, Operation: 6})
+		fx.effect(s.id, 1261, 0, fitModifier{Domain: "charID", Func: "LocationGroupModifier", ModifiedAttr: 315, ModifyingAttr: 802, Operation: 0, GroupID: 300})
+	}
+	return fx, ship
+}
+
+func TestFitEngineImplantSetBonusFull(t *testing.T) {
+	fx, ship := snakeSetFixture()
+	implants := []int64{19540, 19551, 19553, 19554, 19555, 19556}
+	res := computeFit(fx.snap, ship, nil, nil, nil, implants)
+	// Set multiplier = 1.15^5 * 3.0 = 6.0340715625; each
+	// velocityBonus times that; ship x prod(1 + vb/100):
+	// 300 * 1.2473815114 = 374.214453 (+24.74%, the documented
+	// +24.73% within rounding).
+	if math.Abs(res.Velocity-374.214453) > 0.01 {
+		t.Errorf("full HG Snake set velocity = %.6f, want 374.214453", res.Velocity)
+	}
+}
+
+func TestFitEngineImplantSetBonusPartial(t *testing.T) {
+	fx, ship := snakeSetFixture()
+	// Alpha + Beta + Gamma only: set multiplier = 1.15^3.
+	implants := []int64{19540, 19551, 19553}
+	res := computeFit(fx.snap, ship, nil, nil, nil, implants)
+	// 300 * 1.0287846784 = 308.635404.
+	if math.Abs(res.Velocity-308.635404) > 0.01 {
+		t.Errorf("partial HG Snake set velocity = %.6f, want 308.635404", res.Velocity)
+	}
+}
+
+func TestFitEngineImplantsNoImplants(t *testing.T) {
+	fx, ship := snakeSetFixture()
+	res := computeFit(fx.snap, ship, nil, nil, nil, nil)
+	if math.Abs(res.Velocity-300) > 1e-9 {
+		t.Errorf("no implants velocity = %.6f, want 300", res.Velocity)
 	}
 }

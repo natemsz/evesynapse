@@ -609,3 +609,127 @@ func TestFitESIViewStats(t *testing.T) {
 		t.Errorf("made %d outbound calls, want 0", transport.calls.Load())
 	}
 }
+
+// seedSnakeUniverse adds the High-grade Snake implant set to the
+// synthetic universe with the real SDE values (see
+// snakeSetFixture): the per-implant velocityBonus (315), the set
+// attribute implantSetSerpentis (802), the ship postPercent
+// effect (394), and the charID set-bonus effect (1261).
+func seedSnakeUniverse(t *testing.T, exec func(string) error) {
+	t.Helper()
+	stmts := []string{
+		`INSERT INTO sde_groups (group_id, name, category_id) VALUES (300, 'Fixture Snake Implants', 20)`,
+		`INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES
+			(19540, 'High-grade Snake Alpha', 300, 1, 1),
+			(19551, 'High-grade Snake Beta', 300, 1, 1),
+			(19553, 'High-grade Snake Gamma', 300, 1, 1),
+			(19554, 'High-grade Snake Delta', 300, 1, 1),
+			(19555, 'High-grade Snake Epsilon', 300, 1, 1),
+			(19556, 'High-grade Snake Omega', 300, 1, 1)`,
+		`INSERT INTO sde_type_attributes (type_id, attribute_id, value) VALUES
+			(19540, 315, 0.5), (19540, 802, 1.15),
+			(19551, 315, 0.625), (19551, 802, 1.15),
+			(19553, 315, 0.75), (19553, 802, 1.15),
+			(19554, 315, 0.875), (19554, 802, 1.15),
+			(19555, 315, 1.0), (19555, 802, 1.15),
+			(19556, 802, 3.0)`,
+		`INSERT INTO sde_type_effects (type_id, effect_id, is_default) VALUES
+			(19540, 394, 0), (19540, 1261, 0),
+			(19551, 394, 0), (19551, 1261, 0),
+			(19553, 394, 0), (19553, 1261, 0),
+			(19554, 394, 0), (19554, 1261, 0),
+			(19555, 394, 0), (19555, 1261, 0),
+			(19556, 394, 0), (19556, 1261, 0)`,
+		`INSERT INTO sde_effects (effect_id, name, category) VALUES
+			(394, 'navigationVelocityBonusPostPercentMaxVelocityShip', 0),
+			(1261, 'setBonusSerpentis', 0)`,
+		`INSERT INTO sde_effect_modifiers (effect_id, domain, func, modified_attr, modifying_attr, operation, group_id, skill_type_id)
+			VALUES (394, 'shipID', 'ItemModifier', 37, 315, 6, 0, 0),
+				(1261, 'charID', 'LocationGroupModifier', 315, 802, 0, 300, 0)`,
+	}
+	for _, stmt := range stmts {
+		if err := exec(stmt); err != nil {
+			t.Fatalf("seed snake universe: %v", err)
+		}
+	}
+}
+
+// TestFitSimulateImplants: the full request path with a pilot
+// whose active clone holds a full High-grade Snake set. The
+// fixture frigate flies 300 m/s bare; the set bonus must land in
+// the fragment's Speed row (374 m/s), the implant list must name
+// the set, and the clone picker must offer the jump clone.
+func TestFitSimulateImplants(t *testing.T) {
+	transport := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")
+	exec := func(stmt string) error {
+		_, err := conn.ExecContext(ctx, stmt)
+		return err
+	}
+	seedFitUniverse(t, exec)
+	seedSnakeUniverse(t, exec)
+	seedSnapshot(t, q, fixtureCharA, esi.SnapFittings, esi.Fittings{})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapSkills, esi.Skills{})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapImplants,
+		esi.Implants{19540, 19551, 19553, 19554, 19555, 19556})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapClones, esi.Clones{
+		JumpClones: []esi.JumpClone{
+			{JumpCloneID: 11, LocationID: 60000001, LocationType: "station",
+				Name: "PvP clone", Implants: []int64{19540}},
+		},
+	})
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
+	t.Cleanup(func() {
+		if transport.calls.Load() != 0 {
+			t.Errorf("editor endpoints made %d outbound calls, want 0", transport.calls.Load())
+		}
+	})
+
+	// Active clone (default): full set -> 374 m/s.
+	code, body := postFitJSON(t, app, cookie, "/fittings/simulate/",
+		`{"shipTypeId":1001,"items":[],"charges":{},"pilot":90000001}`)
+	if code != http.StatusOK {
+		t.Fatalf("simulate status = %d, body %q", code, body)
+	}
+	mustContain(t, "/fittings/simulate/", body, ">374 m/s<")
+	mustContain(t, "/fittings/simulate/", body,
+		"High-grade Snake Alpha", "High-grade Snake Omega")
+
+	// Jump clone with a lone Alpha: set multiplier 1.15 on 0.5% ->
+	// 300 * 1.00575 = 301.725 -> "302 m/s".
+	code, body = postFitJSON(t, app, cookie, "/fittings/simulate/",
+		`{"shipTypeId":1001,"items":[],"charges":{},"pilot":90000001,"clone":11}`)
+	if code != http.StatusOK {
+		t.Fatalf("clone simulate status = %d, body %q", code, body)
+	}
+	mustContain(t, "/fittings/simulate/", body, ">302 m/s<")
+
+	// The clone picker lists the active clone and the jump clone.
+	req := httptest.NewRequest(http.MethodGet, "/fittings/clones.json?pilot=90000001", nil)
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("clones.json status = %d", rec.Code)
+	}
+	mustContain(t, "/fittings/clones.json", rec.Body.String(),
+		"Active clone", "PvP clone")
+
+	// A pilot the user doesn't own is refused.
+	req = httptest.NewRequest(http.MethodGet, "/fittings/clones.json?pilot=42424242", nil)
+	req.AddCookie(cookie)
+	rec = httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("foreign clones.json status = %d, want 200 with ok:false", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `"ok":false`) {
+		t.Errorf("foreign clones.json body = %q, want ok:false", rec.Body.String())
+	}
+}

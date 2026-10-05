@@ -208,9 +208,10 @@ func (app *Application) buildAssetLocationsWith(ctx context.Context, items []esi
 	}
 
 	locations := make([]assetLocation, 0, len(byLoc))
+	placeMemo := make(map[int64]placeRef)
 	for locID, entries := range byLoc {
 		loc := assetLocation{Title: app.assetLocationTitle(ctx, locID, locType[locID], itemType, nameOf, extraTitles)}
-		loc.Loc = app.linkPlace(ctx, locID, loc.Title)
+		loc.Loc = app.linkPlaceMemo(ctx, placeMemo, locID, loc.Title)
 
 		sorted := append([]esi.Asset(nil), entries...)
 		sort.Slice(sorted, func(i, j int) bool {
@@ -405,9 +406,10 @@ func (app *Application) searchCharacterAssets(ctx context.Context, items []esi.A
 	}
 
 	locations := make([]assetLocation, 0, len(byLoc))
+	placeMemo := make(map[int64]placeRef)
 	for locID, entries := range byLoc {
 		loc := assetLocation{Title: app.assetLocationTitle(ctx, locID, locType[locID], itemType, nameOf, nil)}
-		loc.Loc = app.linkPlace(ctx, locID, loc.Title)
+		loc.Loc = app.linkPlaceMemo(ctx, placeMemo, locID, loc.Title)
 		sorted := append([]esi.Asset(nil), entries...)
 		sort.Slice(sorted, func(i, j int) bool {
 			if sorted[i].Quantity != sorted[j].Quantity {

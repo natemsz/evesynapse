@@ -178,3 +178,16 @@ func (app *Application) linkPlace(ctx context.Context, locationID int64, title s
 	}
 	return ref
 }
+
+// linkPlaceMemo is linkPlace with a per-render memo: row-building
+// loops that touch the same locations repeatedly (corp orders,
+// assets, killmails) resolve each location once instead of
+// re-querying the SDE tables per row.
+func (app *Application) linkPlaceMemo(ctx context.Context, memo map[int64]placeRef, locationID int64, title string) placeRef {
+	if ref, ok := memo[locationID]; ok {
+		return ref
+	}
+	ref := app.linkPlace(ctx, locationID, title)
+	memo[locationID] = ref
+	return ref
+}

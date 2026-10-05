@@ -70,13 +70,15 @@ func factionDisplay(names map[int64]string, id int64) string {
 	return fmt.Sprintf("Faction #%d", id)
 }
 
-// userCorporationIDs returns every corporation the signed-in
-// user's characters belong to, from the worker-maintained
+// userCorporationIDs returns every corporation the given user's
+// characters belong to, from the worker-maintained
 // character → corporation map. The wars page uses it to flag
-// wars that involve the user's corporations. Map errors degrade
-// to "no known corporations" (nothing flagged).
-func (app *Application) userCorporationIDs(ctx context.Context) map[int64]bool {
-	ids, err := app.queries.ListAllCorporationIDs(ctx)
+// wars that involve the user's corporations. The query is
+// scoped to the signed-in user: another user's corporations
+// are never flagged as yours. Map errors degrade to "no known
+// corporations" (nothing flagged).
+func (app *Application) userCorporationIDs(ctx context.Context, userID int64) map[int64]bool {
+	ids, err := app.queries.ListCorporationIDsByUser(ctx, userID)
 	if err != nil {
 		log.Printf("intel: list user corporations: %v", err)
 		return nil
@@ -162,7 +164,7 @@ func (app *Application) handleIntelWars(w http.ResponseWriter, r *http.Request) 
 		ids = ids[:maxWarsShown]
 	}
 
-	yourCorps := app.userCorporationIDs(ctx)
+	yourCorps := app.userCorporationIDs(ctx, int64(app.sessions.GetInt(ctx, sessionUserID)))
 	for _, id := range ids {
 		view.Rows = append(view.Rows, app.warRow(ctx, id, yourCorps))
 	}

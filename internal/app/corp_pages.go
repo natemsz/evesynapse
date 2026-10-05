@@ -404,6 +404,7 @@ func (app *Application) handleCorpOrders(w http.ResponseWriter, r *http.Request)
 	}
 
 	rows := make([]corpOrderRow, 0, len(orders))
+	placeMemo := make(map[int64]placeRef)
 	for _, o := range orders {
 		side := "Sell"
 		if o.IsBuyOrder {
@@ -419,7 +420,7 @@ func (app *Application) handleCorpOrders(w http.ResponseWriter, r *http.Request)
 			Side:       side,
 			Price:      esi.FormatISK(o.Price),
 			Volume:     fmt.Sprintf("%s / %s", esi.FormatInt(o.VolumeRemain), esi.FormatInt(o.VolumeTotal)),
-			Location:   app.linkPlace(ctx, o.LocationID, app.corpLocationTitle(ctx, o.LocationID, structureNames)),
+			Location:   app.linkPlaceMemo(ctx, placeMemo, o.LocationID, app.corpLocationTitle(ctx, o.LocationID, structureNames)),
 			Region:     regionName(o.RegionID),
 			Expires:    expires,
 			IssuedBy:   app.displayCharacter(ctx, o.IssuedBy),
@@ -500,12 +501,19 @@ func (app *Application) handleCorpAssets(w http.ResponseWriter, r *http.Request)
 
 	// Player-given singleton names (worker-warmed) override type
 	// names; the corp's own structures title their locations.
+	// The lookup is batched over this page's item IDs only.
 	overrides := make(map[int64]string)
-	if rows, err := app.queries.ListItemNames(ctx); err != nil {
-		log.Printf("corp assets: list item names: %v", err)
-	} else {
-		for _, row := range rows {
-			overrides[row.ItemID] = row.Name
+	if len(items) > 0 {
+		itemIDs := make([]int64, 0, len(items))
+		for _, it := range items {
+			itemIDs = append(itemIDs, it.ItemID)
+		}
+		if rows, err := app.queries.ListItemNamesByIDs(ctx, itemIDs); err != nil {
+			log.Printf("corp assets: list item names: %v", err)
+		} else {
+			for _, row := range rows {
+				overrides[row.ItemID] = row.Name
+			}
 		}
 	}
 	structureTitles := app.corpStructureNames(ctx, sel.Active.CharacterID)
@@ -687,8 +695,9 @@ func (app *Application) handleCorpKillmails(w http.ResponseWriter, r *http.Reque
 		app.notePageWant(ctx, pageWantGuidePrices, 1, 0)
 	}
 	viewer := killmailViewer{corporationID: sel.Base.CorpID}
+	placeMemo := make(map[int64]placeRef)
 	for _, ref := range refs {
-		view.Rows = append(view.Rows, app.killmailRow(ctx, viewer, ref, prices))
+		view.Rows = append(view.Rows, app.killmailRow(ctx, viewer, ref, prices, placeMemo))
 	}
 
 	app.render(ctx, w, http.StatusOK, "killmails.html", data)

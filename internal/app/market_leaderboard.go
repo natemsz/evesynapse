@@ -80,13 +80,14 @@ func (app *Application) buildLeaderboardView(ctx context.Context, q url.Values) 
 		log.Printf("leaderboard: list rows for region %d: %v", view.RegionID, err)
 		return view
 	}
+	stationMemo := make(map[int64]placeRef)
 	for _, row := range rows {
 		regionName, ok := marketRegionName(row.RegionID)
 		if !ok {
 			continue
 		}
 		view.Rows = append(view.Rows, leaderboardRow{
-			Station:    app.scannerStationRef(ctx, row.LocationID),
+			Station:    app.scannerStationRef(ctx, stationMemo, row.LocationID),
 			RegionID:   row.RegionID,
 			RegionName: regionName,
 			Orders:     esi.FormatInt(row.SellOrders + row.BuyOrders),

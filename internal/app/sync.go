@@ -102,25 +102,15 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The name-coverage denominator resolves against the SDE type
-	// table plus the type_names fallback cache (one query each; the
-	// tables are local).
-	known := make(map[int64]bool)
-	if rows, err := app.queries.ListAllTypeNames(ctx); err != nil {
-		log.Printf("sync: list type names: %v", err)
-	} else {
-		for _, row := range rows {
-			known[row.TypeID] = true
-		}
+	// First pass: per-character snapshots and the type IDs whose
+	// names the coverage figure judges. The needed-ID set is
+	// bounded by what this user's own snapshots reference.
+	type syncCharWork struct {
+		cv     syncCharacterView
+		needed map[int64]bool
 	}
-	if ids, err := app.queries.ListSDETypeIDs(ctx); err != nil {
-		log.Printf("sync: list SDE type ids: %v", err)
-	} else {
-		for _, id := range ids {
-			known[id] = true
-		}
-	}
-
+	var work []syncCharWork
+	allNeeded := make(map[int64]bool)
 	for _, ch := range characters {
 		cv := syncCharacterView{ID: ch.CharacterID, Name: ch.Name}
 
@@ -172,8 +162,42 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 		}
 
 		needed := snapshotTypeIDs(byKind)
-		cv.NamesTotal = len(needed)
 		for id := range needed {
+			allNeeded[id] = true
+		}
+		work = append(work, syncCharWork{cv: cv, needed: needed})
+	}
+
+	// The name-coverage denominator resolves against the SDE type
+	// table plus the type_names fallback cache, in two batched
+	// lookups over the referenced IDs only -- never the whole
+	// tables.
+	known := make(map[int64]bool)
+	if len(allNeeded) > 0 {
+		ids := make([]int64, 0, len(allNeeded))
+		for id := range allNeeded {
+			ids = append(ids, id)
+		}
+		if rows, err := app.queries.ListTypeNameIDsByIDs(ctx, ids); err != nil {
+			log.Printf("sync: list type names: %v", err)
+		} else {
+			for _, id := range rows {
+				known[id] = true
+			}
+		}
+		if rows, err := app.queries.ListSDETypeIDsByIDs(ctx, ids); err != nil {
+			log.Printf("sync: list SDE type ids: %v", err)
+		} else {
+			for _, id := range rows {
+				known[id] = true
+			}
+		}
+	}
+
+	for _, w := range work {
+		cv := w.cv
+		cv.NamesTotal = len(w.needed)
+		for id := range w.needed {
 			if known[id] {
 				cv.NamesResolved++
 			}
@@ -181,7 +205,6 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 		if cv.NamesTotal > 0 {
 			cv.NamesPercent = cv.NamesResolved * 100 / cv.NamesTotal
 		}
-
 		view.Characters = append(view.Characters, cv)
 	}
 

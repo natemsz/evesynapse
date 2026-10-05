@@ -121,8 +121,9 @@ func (app *Application) handleKillmails(w http.ResponseWriter, r *http.Request) 
 	}
 
 	viewer := killmailViewer{characterID: active.CharacterID}
+	placeMemo := make(map[int64]placeRef)
 	for _, ref := range refs {
-		view.Rows = append(view.Rows, app.killmailRow(ctx, viewer, ref, prices))
+		view.Rows = append(view.Rows, app.killmailRow(ctx, viewer, ref, prices, placeMemo))
 	}
 
 	app.render(ctx, w, http.StatusOK, "killmails.html", data)
@@ -142,7 +143,7 @@ type killmailViewer struct {
 // killmailRow builds one list line from the stored detail. A
 // missing detail (worker has not warmed it yet) yields the
 // warming placeholder row.
-func (app *Application) killmailRow(ctx context.Context, viewer killmailViewer, ref esi.KillmailRef, prices map[int64]esi.MarketPrice) killmailRow {
+func (app *Application) killmailRow(ctx context.Context, viewer killmailViewer, ref esi.KillmailRef, prices map[int64]esi.MarketPrice, placeMemo map[int64]placeRef) killmailRow {
 	row := killmailRow{
 		KillmailID: ref.KillmailID,
 		Time:       "—",
@@ -170,7 +171,7 @@ func (app *Application) killmailRow(ctx context.Context, viewer killmailViewer, 
 	row.Warming = false
 
 	row.Time = formatFinish(km.KillmailTime)
-	row.System = app.linkPlace(ctx, km.SolarSystemID, app.locationTitle(ctx, km.SolarSystemID, "solar_system"))
+	row.System = app.linkPlaceMemo(ctx, placeMemo, km.SolarSystemID, app.locationTitle(ctx, km.SolarSystemID, "solar_system"))
 	isLoss := km.Victim.CharacterID == viewer.characterID
 	if viewer.corporationID > 0 {
 		isLoss = km.Victim.CorporationID == viewer.corporationID

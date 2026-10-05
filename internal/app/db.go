@@ -418,6 +418,18 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 033 (P4 own-order archaeology: append-only per-order
+	// lifecycle ledger distilled from order snapshots), applied
+	// the same guarded way.
+	var orderLifecycleTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'order_lifecycle'`).Scan(&orderLifecycleTables); err != nil {
+		return nil, err
+	}
+	if orderLifecycleTables == 0 {
+		if err := applySchema(conn, orderLifecycleSchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

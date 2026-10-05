@@ -125,6 +125,9 @@ var regionStatsSchema string
 //go:embed schema/032_market_station_stats.sql
 var stationStatsSchema string
 
+//go:embed schema/033_market_order_lifecycle.sql
+var orderLifecycleSchema string
+
 //go:embed static
 var staticFS embed.FS
 

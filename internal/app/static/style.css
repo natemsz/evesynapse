@@ -1271,6 +1271,7 @@ html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
   fill: #ffb84d;
   stroke: #ffb84d;
 }
+.nav-icon svg[hidden] { display: none; }
 /* On the ember active pill the icons get a slightly brighter
    sweep so they never go muddy. */
 .sidebar .branch.active > summary .nav-icon svg,
@@ -1795,12 +1796,15 @@ body.quickjump-open { overflow: hidden; }
 }
 .fit-head label { display: grid; gap: 0.25rem; font-size: 0.85rem; }
 .fit-head select, .fit-charge select {
-  background: #0e0e0e;
+  background: var(--input-bg);
   border: 1px solid #2a2a2a;
   border-radius: 3px;
   color: var(--text);
   padding: 0.42rem 0.6rem;
   font: inherit;
+}
+html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge select {
+  border-color: #d8cdb8;
 }
 .fit-head select:focus, .fit-charge select:focus {
   border-color: var(--accent);
@@ -2472,6 +2476,14 @@ html[data-theme="light"] .branch .menu a { color: #5c4a33; }
 html[data-theme="light"] .branch .menu a:hover { background: #f0e7d2; }
 html[data-theme="light"] .branch .menu a.active,
 html[data-theme="light"] .sidebar .branch .menu a.active { background-color: #f0dfbc; }
+html[data-theme="light"] .branch .menu {
+  background: #fdfbf6;
+  border-color: #d9cfba;
+}
+html[data-theme="light"] .fit-modsearch {
+  background: linear-gradient(to bottom, rgba(253, 251, 246, 0.97), rgba(248, 244, 236, 0.97));
+  border-color: #d9cfba;
+}
 html[data-theme="light"] .sidebar .branch .menu a { border-color: #d3c7ae; }
 html[data-theme="light"] .sidenav a.navlink:hover,
 html[data-theme="light"] .sidebar .branch > summary:hover,
@@ -2629,6 +2641,22 @@ html[data-theme="light"] .fit-tip-stats { color: #b39a7d; }
 }
 .sidebar-account-footer .navlink {
   width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.35rem;
+  padding: 0.42rem 0.55rem;
+  border-radius: 3px;
+  color: var(--text);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-decoration: none;
+}
+.sidebar-account-footer .navlink:hover {
+  background: rgba(255,255,255,0.04);
+  color: var(--text-bright);
 }
 #theme-toggle {
   background: transparent;

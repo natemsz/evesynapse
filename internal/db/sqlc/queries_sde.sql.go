@@ -235,6 +235,18 @@ func (q *Queries) CountSDETypesInGroupFiltered(ctx context.Context, arg CountSDE
 	return count, err
 }
 
+const countSDETypesInMarketGroup = `-- name: CountSDETypesInMarketGroup :one
+SELECT COUNT(*) FROM sde_types
+WHERE market_group_id = $1 AND published = 1 AND market_group_id > 0
+`
+
+func (q *Queries) CountSDETypesInMarketGroup(ctx context.Context, marketGroupID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSDETypesInMarketGroup, marketGroupID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getItemName = `-- name: GetItemName :one
 SELECT name FROM item_names
 WHERE item_id = $1
@@ -684,6 +696,36 @@ ORDER BY item_id
 
 func (q *Queries) ListItemNames(ctx context.Context) ([]ItemName, error) {
 	rows, err := q.db.QueryContext(ctx, listItemNames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ItemName
+	for rows.Next() {
+		var i ItemName
+		if err := rows.Scan(&i.ItemID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listItemNamesByIDs = `-- name: ListItemNamesByIDs :many
+SELECT item_id, name FROM item_names
+WHERE item_id = ANY($1::bigint[])
+`
+
+// Batched singleton-name lookup: the names for one page's item
+// IDs, without pulling the whole item_names table.
+func (q *Queries) ListItemNamesByIDs(ctx context.Context, itemIds []int64) ([]ItemName, error) {
+	rows, err := q.db.QueryContext(ctx, listItemNamesByIDs, pq.Array(itemIds))
 	if err != nil {
 		return nil, err
 	}
@@ -1477,6 +1519,36 @@ func (q *Queries) ListSDETypeIDs(ctx context.Context) ([]int64, error) {
 	return items, nil
 }
 
+const listSDETypeIDsByIDs = `-- name: ListSDETypeIDsByIDs :many
+SELECT type_id FROM sde_types
+WHERE type_id = ANY($1::bigint[])
+`
+
+// Batched SDE hit check: which of the given type IDs the SDE
+// knows, without pulling all 53K type IDs.
+func (q *Queries) ListSDETypeIDsByIDs(ctx context.Context, typeIds []int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listSDETypeIDsByIDs, pq.Array(typeIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var type_id int64
+		if err := rows.Scan(&type_id); err != nil {
+			return nil, err
+		}
+		items = append(items, type_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDETypePhysicsByIDs = `-- name: ListSDETypePhysicsByIDs :many
 SELECT type_id, mass, volume, capacity FROM sde_type_physics
 WHERE type_id = ANY($1::bigint[])
@@ -1631,6 +1703,49 @@ func (q *Queries) ListSDETypesInMarketGroup(ctx context.Context, marketGroupID i
 	return items, nil
 }
 
+const listSDETypesInMarketGroupPaged = `-- name: ListSDETypesInMarketGroupPaged :many
+SELECT type_id, name FROM sde_types
+WHERE market_group_id = $1 AND published = 1 AND market_group_id > 0
+ORDER BY name
+LIMIT $3::bigint OFFSET $2::bigint
+`
+
+type ListSDETypesInMarketGroupPagedParams struct {
+	MarketGroupID int64 `json:"market_group_id"`
+	RowOffset     int64 `json:"row_offset"`
+	RowLimit      int64 `json:"row_limit"`
+}
+
+type ListSDETypesInMarketGroupPagedRow struct {
+	TypeID int64  `json:"type_id"`
+	Name   string `json:"name"`
+}
+
+// One page of a market group's types: the market browse tab
+// pages big groups instead of pulling thousands of rows.
+func (q *Queries) ListSDETypesInMarketGroupPaged(ctx context.Context, arg ListSDETypesInMarketGroupPagedParams) ([]ListSDETypesInMarketGroupPagedRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDETypesInMarketGroupPaged, arg.MarketGroupID, arg.RowOffset, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDETypesInMarketGroupPagedRow
+	for rows.Next() {
+		var i ListSDETypesInMarketGroupPagedRow
+		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTypeDetailWants = `-- name: ListTypeDetailWants :many
 SELECT type_id
 FROM type_details
@@ -1641,6 +1756,36 @@ LIMIT $1::bigint
 
 func (q *Queries) ListTypeDetailWants(ctx context.Context, rowLimit int64) ([]int64, error) {
 	rows, err := q.db.QueryContext(ctx, listTypeDetailWants, rowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var type_id int64
+		if err := rows.Scan(&type_id); err != nil {
+			return nil, err
+		}
+		items = append(items, type_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTypeNameIDsByIDs = `-- name: ListTypeNameIDsByIDs :many
+SELECT type_id FROM type_names
+WHERE type_id = ANY($1::bigint[])
+`
+
+// Batched name-cache hit check: which of the given type IDs
+// have a resolved name, without pulling the whole table.
+func (q *Queries) ListTypeNameIDsByIDs(ctx context.Context, typeIds []int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listTypeNameIDsByIDs, pq.Array(typeIds))
 	if err != nil {
 		return nil, err
 	}

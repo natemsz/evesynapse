@@ -55,6 +55,27 @@
 <p><small>No closed orders in the latest snapshot.</small></p>
 {{end}}
 </section>
+
+<section class="foldable">
+<h3>Your order history</h3>
+{{if .Orders.LifecycleSummary}}
+<p><small>Orders tracked: {{.Orders.LifecycleSummary.Tracked}} &middot; Filled completely: {{.Orders.LifecycleSummary.FillShare}} &middot; Typical time to fill: {{.Orders.LifecycleSummary.TypicalFill}} &middot; Times beaten at your station: {{.Orders.LifecycleSummary.OutbidEvents}}</small></p>
+{{end}}
+{{if .Orders.LifecycleRows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th>Location</th><th>Price</th><th>Filled</th><th>Time open</th><th>Outcome</th></tr></thead>
+  <tbody>
+  {{range .Orders.LifecycleRows}}
+    <tr><td>{{itemLink .TypeID .Item}}</td><td>{{placeLink .Loc}}</td><td>{{.Price}} ISK</td><td>{{.Filled}}</td><td>{{.OpenDuration}}</td><td>{{.Outcome}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p><small>No finished orders yet — they&#8217;ll appear here as your orders fill or end.</small></p>
+{{end}}
+</section>
 {{else}}
 <p>No character to show yet — link a character first.</p>
 {{end}}

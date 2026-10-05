@@ -69,6 +69,9 @@ const (
 	// (item description) wants the coverage pass notes per cycle,
 	// so descriptions converge for every type history covers.
 	maxCoverageTypeDetailNotesPerCycle = 40
+	// lifecyclePrunePerCycle bounds how many old closed lifecycle
+	// rows one order-health pass may delete (365-day retention).
+	lifecyclePrunePerCycle = 500
 )
 
 // marketKey is one (region, type) pair to warm.
@@ -423,6 +426,11 @@ func (app *Application) fetchMarketHistory(ctx context.Context, key marketKey) (
 // orders, so the pass groups by (region, type): one book read
 // settles every order of that type in that region. Health rows
 // for orders that have closed are pruned.
+// The same pass also maintains the P4 order lifecycle ledger
+// (schema 033): every open order in the snapshot is upserted,
+// station-level beatings are counted, vanished orders are closed,
+// and old closed rows are pruned. Lifecycle work rides the
+// snapshots already loaded here -- it never fetches ESI itself.
 func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.Character, allowance *fetchBudget) (stored int, limited bool) {
 	type orderRef struct {
 		char  db.Character
@@ -430,6 +438,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 	}
 	groups := make(map[marketKey][]orderRef)
 	openByChar := make(map[int64]map[int64]bool)
+	allOpenByChar := make(map[int64]map[int64]esi.CharOrder)
 	for _, ch := range characters {
 		if !characterSyncs(ch) {
 			continue // parked characters' orders are stale news, not alerts
@@ -444,7 +453,9 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 			continue
 		}
 		open := make(map[int64]bool)
+		allOpen := make(map[int64]esi.CharOrder)
 		for _, o := range orders {
+			allOpen[o.OrderID] = o
 			if o.IsBuyOrder || o.VolumeRemain <= 0 {
 				continue
 			}
@@ -453,6 +464,54 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 			groups[k] = append(groups[k], orderRef{char: ch, order: o})
 		}
 		openByChar[ch.CharacterID] = open
+		allOpenByChar[ch.CharacterID] = allOpen
+	}
+
+	// P4 lifecycle: upsert every open order the snapshot shows.
+	// first_seen_at is set on insert only (the SQL leaves it alone
+	// on conflict); listed price and remaining volume follow the
+	// newest observation. Previous beaten state is remembered so
+	// the book pass below can count transitions, not polls.
+	lifecycleNow := time.Now().UTC().Format(time.RFC3339)
+	type lifecycleKey struct {
+		characterID int64
+		orderID     int64
+	}
+	prevBeaten := make(map[lifecycleKey]int64)
+	prevOutbid := make(map[lifecycleKey]int64)
+	for characterID, allOpen := range allOpenByChar {
+		for orderID, o := range allOpen {
+			key := lifecycleKey{characterID: characterID, orderID: orderID}
+			if existing, err := app.queries.GetOrderLifecycle(ctx, db.GetOrderLifecycleParams{CharacterID: characterID, OrderID: orderID}); err == nil {
+				if existing.ClosedAt != "" {
+					continue // already closed history; never resurrect
+				}
+				prevBeaten[key] = existing.BeatenNow
+				prevOutbid[key] = existing.OutbidEvents
+			} else {
+				prevBeaten[key] = 0
+				prevOutbid[key] = 0
+			}
+			isBuy := int64(0)
+			if o.IsBuyOrder {
+				isBuy = 1
+			}
+			if err := app.queries.UpsertOrderLifecycle(ctx, db.UpsertOrderLifecycleParams{
+				CharacterID:      characterID,
+				OrderID:          orderID,
+				TypeID:           o.TypeID,
+				LocationID:       o.LocationID,
+				RegionID:         o.RegionID,
+				IsBuyOrder:       isBuy,
+				ListedPrice:      o.Price,
+				VolumeTotal:      o.VolumeTotal,
+				VolumeRemainLast: o.VolumeRemain,
+				FirstSeenAt:      lifecycleNow,
+				LastSeenAt:       lifecycleNow,
+			}); err != nil {
+				log.Printf("worker: order lifecycle: upsert %d/%d: %v", characterID, orderID, err)
+			}
+		}
 	}
 
 	keys := make([]marketKey, 0, len(groups))
@@ -518,6 +577,35 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 			}); err != nil {
 				log.Printf("worker: order health: store order %d: %v", ref.order.OrderID, err)
 			}
+			// P4 beaten tracking: only a station-level undercut
+			// counts as beaten -- someone cheaper at the order's
+			// own station. Region-only cheapness
+			// (undercut_region, best_region_cheaper) does not.
+			// Buy orders carry no health verdict, so they are
+			// never marked beaten.
+			beaten := int64(0)
+			if status == "undercut_station" {
+				beaten = 1
+			}
+			lkey := lifecycleKey{characterID: ref.char.CharacterID, orderID: ref.order.OrderID}
+			prevB, prevO := prevBeaten[lkey], prevOutbid[lkey]
+			outbid := prevO
+			if prevB == 0 && beaten == 1 {
+				outbid++
+			}
+			if beaten != prevB || outbid != prevO {
+				if err := app.queries.UpdateOrderLifecycleBeaten(ctx, db.UpdateOrderLifecycleBeatenParams{
+					BeatenNow:    beaten,
+					OutbidEvents: outbid,
+					CharacterID:  ref.char.CharacterID,
+					OrderID:      ref.order.OrderID,
+				}); err != nil {
+					log.Printf("worker: order lifecycle: beaten %d/%d: %v", ref.char.CharacterID, ref.order.OrderID, err)
+				} else {
+					prevBeaten[lkey] = beaten
+					prevOutbid[lkey] = outbid
+				}
+			}
 		}
 	}
 
@@ -538,6 +626,44 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 				}
 			}
 		}
+	}
+
+	// P4 lifecycle: close rows whose order has left the snapshot.
+	// We only observe fills -- an order that vanishes with stock
+	// left is 'ended', never labelled cancelled vs expired.
+	for characterID, allOpen := range allOpenByChar {
+		openRows, err := app.queries.ListOpenOrderLifecycleByCharacter(ctx, characterID)
+		if err != nil {
+			log.Printf("worker: order lifecycle: list open %d: %v", characterID, err)
+			continue
+		}
+		for _, row := range openRows {
+			if _, stillOpen := allOpen[row.OrderID]; stillOpen {
+				continue
+			}
+			kind := "ended"
+			if row.VolumeRemainLast <= 0 {
+				kind = "filled"
+			}
+			if err := app.queries.CloseOrderLifecycle(ctx, db.CloseOrderLifecycleParams{
+				ClosedAt:    lifecycleNow,
+				CloseKind:   kind,
+				CharacterID: characterID,
+				OrderID:     row.OrderID,
+			}); err != nil {
+				log.Printf("worker: order lifecycle: close %d/%d: %v", characterID, row.OrderID, err)
+			}
+		}
+	}
+
+	// Prune closed rows past the 365-day retention, bounded per
+	// cycle so a first cleanup never stalls the pass.
+	cutoff := time.Now().UTC().Add(-365 * 24 * time.Hour).Format(time.RFC3339)
+	if err := app.queries.PruneOldOrderLifecycle(ctx, db.PruneOldOrderLifecycleParams{
+		ClosedAt: cutoff,
+		Limit:    lifecyclePrunePerCycle,
+	}); err != nil {
+		log.Printf("worker: order lifecycle: prune: %v", err)
 	}
 	return stored, false
 }

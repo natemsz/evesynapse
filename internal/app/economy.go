@@ -315,6 +315,169 @@ type ordersView struct {
 	History       econSectionState
 	HistoryRows   []orderRow
 	HistoryCut    int
+	// P4 lifecycle (schema 033): stored order history for the
+	// active character, computed from order_lifecycle rows only.
+	LifecycleSummary *orderLifecycleSummary
+	LifecycleRows    []orderLifecycleRow
+}
+
+// orderLifecycleSummary is the P4 summary strip for one
+// character: how many orders have been tracked, what share of
+// finished orders filled completely, the typical time a filled
+// order stayed open, and how often orders were beaten at their
+// own station.
+type orderLifecycleSummary struct {
+	Tracked      int
+	Filled       int
+	Ended        int
+	FillShare    string // e.g. "75% (3 of 4)" or "--" when nothing finished
+	TypicalFill  string // median open time for filled orders, or "--"
+	OutbidEvents int64
+}
+
+// orderLifecycleRow is one closed-order line of the P4 history.
+type orderLifecycleRow struct {
+	Item         string
+	TypeID       int64
+	Loc          placeRef
+	Price        string
+	Filled       string // "sold 800 of 1,000" or "bought ..."
+	OpenDuration string // "3 days 4 hours"
+	Outcome      string // "Filled" | "Ended before filling"
+}
+
+// formatOpenDuration renders an order's time open the way the
+// Orders page phrases it: "3 days 4 hours", "5 hours 12 minutes",
+// "45 minutes". Sub-minute spans read "<1 minute".
+func formatOpenDuration(d time.Duration) string {
+	if d < time.Minute {
+		return "<1 minute"
+	}
+	days := int(d / (24 * time.Hour))
+	hours := int((d - time.Duration(days)*24*time.Hour) / time.Hour)
+	minutes := int((d - time.Duration(days)*24*time.Hour - time.Duration(hours)*time.Hour) / time.Minute)
+	plural := func(n int, unit string) string {
+		if n == 1 {
+			return fmt.Sprintf("%d %s", n, unit)
+		}
+		return fmt.Sprintf("%d %ss", n, unit)
+	}
+	switch {
+	case days > 0:
+		if hours == 0 {
+			return plural(days, "day")
+		}
+		return plural(days, "day") + " " + plural(hours, "hour")
+	case hours > 0:
+		if minutes == 0 {
+			return plural(hours, "hour")
+		}
+		return plural(hours, "hour") + " " + plural(minutes, "minute")
+	default:
+		return plural(minutes, "minute")
+	}
+}
+
+// medianDuration returns the median of durations (average of the
+// two middle values on an even count).
+func medianDuration(durations []time.Duration) time.Duration {
+	if len(durations) == 0 {
+		return 0
+	}
+	sorted := make([]time.Duration, len(durations))
+	copy(sorted, durations)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+	n := len(sorted)
+	if n%2 == 1 {
+		return sorted[n/2]
+	}
+	return (sorted[n/2-1] + sorted[n/2]) / 2
+}
+
+// buildOrderLifecycle reads the stored lifecycle rows for one
+// character and distils the summary strip and the newest closed
+// orders. Cache-only: no ESI call ever leaves this function.
+func (app *Application) buildOrderLifecycle(ctx context.Context, characterID int64) (*orderLifecycleSummary, []orderLifecycleRow) {
+	rows, err := app.queries.ListOrderLifecycleByCharacter(ctx, characterID)
+	if err != nil {
+		log.Printf("orders: lifecycle for %d: %v", characterID, err)
+		return &orderLifecycleSummary{FillShare: "--", TypicalFill: "--"}, nil
+	}
+	summary := &orderLifecycleSummary{FillShare: "--", TypicalFill: "--"}
+	summary.Tracked = len(rows)
+	var filledDurations []time.Duration
+	for _, row := range rows {
+		summary.OutbidEvents += row.OutbidEvents
+		if row.ClosedAt == "" {
+			continue
+		}
+		if row.CloseKind == "filled" {
+			summary.Filled++
+			if first, err1 := time.Parse(time.RFC3339, row.FirstSeenAt); err1 == nil {
+				if closed, err2 := time.Parse(time.RFC3339, row.ClosedAt); err2 == nil {
+					if d := closed.Sub(first); d >= 0 {
+						filledDurations = append(filledDurations, d)
+					}
+				}
+			}
+		} else {
+			summary.Ended++
+		}
+	}
+	closedCount := summary.Filled + summary.Ended
+	if closedCount > 0 {
+		summary.FillShare = fmt.Sprintf("%d%% (%d of %d)", summary.Filled*100/closedCount, summary.Filled, closedCount)
+	}
+	if len(filledDurations) > 0 {
+		summary.TypicalFill = formatOpenDuration(medianDuration(filledDurations))
+	}
+	// Newest closed first, capped.
+	var closed []db.OrderLifecycle
+	for _, row := range rows {
+		if row.ClosedAt != "" {
+			closed = append(closed, row)
+		}
+	}
+	sort.Slice(closed, func(i, j int) bool {
+		if closed[i].ClosedAt != closed[j].ClosedAt {
+			return closed[i].ClosedAt > closed[j].ClosedAt
+		}
+		return closed[i].OrderID > closed[j].OrderID
+	})
+	if len(closed) > 50 {
+		closed = closed[:50]
+	}
+	out := make([]orderLifecycleRow, 0, len(closed))
+	for _, row := range closed {
+		filledQty := row.VolumeTotal - row.VolumeRemainLast
+		if filledQty < 0 {
+			filledQty = 0
+		}
+		verb := "sold"
+		if row.IsBuyOrder == 1 {
+			verb = "bought"
+		}
+		outcome := "Ended before filling"
+		if row.CloseKind == "filled" {
+			outcome = "Filled"
+		}
+		durText := ""
+		if first, err1 := time.Parse(time.RFC3339, row.FirstSeenAt); err1 == nil {
+			if closedAt, err2 := time.Parse(time.RFC3339, row.ClosedAt); err2 == nil {
+				durText = formatOpenDuration(closedAt.Sub(first))
+			}
+		}
+		out = append(out, orderLifecycleRow{
+			Item:         app.typeNameOrID(ctx, row.TypeID),
+			TypeID:       row.TypeID,
+			Loc:          app.linkPlace(ctx, row.LocationID, app.econLocationTitle(ctx, row.LocationID)),
+			Price:        esi.FormatISK(row.ListedPrice),
+			Filled:       fmt.Sprintf("%s %s of %s", verb, esi.FormatInt(filledQty), esi.FormatInt(row.VolumeTotal)),
+			OpenDuration: durText,
+			Outcome:      outcome,
+		})
+	}
+	return summary, out
 }
 
 // orderRegionName resolves a region ID through the SDE region
@@ -437,6 +600,10 @@ func (app *Application) handleOrders(w http.ResponseWriter, r *http.Request) {
 		}
 		view.HistoryRows = rows
 	}
+
+	// P4 order history: stored lifecycle rows for the active
+	// character (see buildOrderLifecycle -- cache-only).
+	view.LifecycleSummary, view.LifecycleRows = app.buildOrderLifecycle(ctx, active.CharacterID)
 
 	app.render(ctx, w, http.StatusOK, "orders.html", data)
 }

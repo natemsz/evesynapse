@@ -8,7 +8,6 @@
 <form method="get" action="/assets/">
 <p><label>Find an item on any of your characters <input type="search" name="q"{{if .AssetsSearch}} value="{{.AssetsSearch.Query}}"{{end}} placeholder="e.g. Rifter"></label> <button type="submit">Search</button>{{if .AssetsSearch}} <a href="/assets/">Clear search</a>{{end}}</p>
 </form>
-{{end}}
 
 {{if .AssetsSearch}}
   {{$v := .AssetsSearch}}

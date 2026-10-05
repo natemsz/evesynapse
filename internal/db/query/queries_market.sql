@@ -335,3 +335,50 @@ WHERE normalized_name = ?;
 UPDATE pilot_name_wants
 SET state = 'error', attempts = attempts + 1, resolved_at = ?, next_try_at = ?
 WHERE normalized_name = ?;
+-- P1 region stats (schema 031): worker-written per-(region,
+-- type) book statistics. A completed sweep replaces a region's
+-- rows inside one transaction: delete the region, then upsert
+-- the fresh measures type by type. The daily table keeps one
+-- snapshot row per (region, type, day) for trend work.
+-- name: DeleteMarketRegionStatsByRegion :exec
+DELETE FROM market_region_stats
+WHERE region_id = ?;
+-- name: UpsertMarketRegionStat :exec
+INSERT INTO market_region_stats (region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (region_id, type_id) DO UPDATE SET
+    best_sell    = excluded.best_sell,
+    typical_sell = excluded.typical_sell,
+    sell_band    = excluded.sell_band,
+    best_buy     = excluded.best_buy,
+    typical_buy  = excluded.typical_buy,
+    buy_band     = excluded.buy_band,
+    sell_orders  = excluded.sell_orders,
+    buy_orders   = excluded.buy_orders,
+    sell_volume  = excluded.sell_volume,
+    buy_volume   = excluded.buy_volume,
+    updated_at   = excluded.updated_at;
+-- name: ListMarketRegionStatsByType :many
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at
+FROM market_region_stats
+WHERE type_id = ?
+ORDER BY region_id;
+-- name: UpsertMarketRegionStatDaily :exec
+INSERT INTO market_region_stats_daily (region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (region_id, type_id, day) DO UPDATE SET
+    best_sell    = excluded.best_sell,
+    typical_sell = excluded.typical_sell,
+    sell_band    = excluded.sell_band,
+    best_buy     = excluded.best_buy,
+    typical_buy  = excluded.typical_buy,
+    buy_band     = excluded.buy_band,
+    sell_orders  = excluded.sell_orders,
+    buy_orders   = excluded.buy_orders,
+    sell_volume  = excluded.sell_volume,
+    buy_volume   = excluded.buy_volume;
+-- name: ListMarketRegionStatsDaily :many
+SELECT region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume
+FROM market_region_stats_daily
+WHERE region_id = ? AND type_id = ?
+ORDER BY day;

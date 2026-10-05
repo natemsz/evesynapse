@@ -28,6 +28,21 @@ func (q *Queries) DeleteGuidePrices(ctx context.Context) error {
 	return err
 }
 
+const deleteMarketRegionStatsByRegion = `-- name: DeleteMarketRegionStatsByRegion :exec
+DELETE FROM market_region_stats
+WHERE region_id = ?
+`
+
+// P1 region stats (schema 031): worker-written per-(region,
+// type) book statistics. A completed sweep replaces a region's
+// rows inside one transaction: delete the region, then upsert
+// the fresh measures type by type. The daily table keeps one
+// snapshot row per (region, type, day) for trend work.
+func (q *Queries) DeleteMarketRegionStatsByRegion(ctx context.Context, regionID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteMarketRegionStatsByRegion, regionID)
+	return err
+}
+
 const deleteOrderHealthEntry = `-- name: DeleteOrderHealthEntry :exec
 DELETE FROM order_health
 WHERE character_id = ? AND order_id = ?
@@ -583,6 +598,99 @@ func (q *Queries) ListMarketHistoryWants(ctx context.Context, lastRequestedAt st
 	for rows.Next() {
 		var i MarketHistoryWant
 		if err := rows.Scan(&i.RegionID, &i.TypeID, &i.LastRequestedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketRegionStatsByType = `-- name: ListMarketRegionStatsByType :many
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at
+FROM market_region_stats
+WHERE type_id = ?
+ORDER BY region_id
+`
+
+func (q *Queries) ListMarketRegionStatsByType(ctx context.Context, typeID int64) ([]MarketRegionStat, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketRegionStatsByType, typeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketRegionStat
+	for rows.Next() {
+		var i MarketRegionStat
+		if err := rows.Scan(
+			&i.RegionID,
+			&i.TypeID,
+			&i.BestSell,
+			&i.TypicalSell,
+			&i.SellBand,
+			&i.BestBuy,
+			&i.TypicalBuy,
+			&i.BuyBand,
+			&i.SellOrders,
+			&i.BuyOrders,
+			&i.SellVolume,
+			&i.BuyVolume,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketRegionStatsDaily = `-- name: ListMarketRegionStatsDaily :many
+SELECT region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume
+FROM market_region_stats_daily
+WHERE region_id = ? AND type_id = ?
+ORDER BY day
+`
+
+type ListMarketRegionStatsDailyParams struct {
+	RegionID int64 `json:"region_id"`
+	TypeID   int64 `json:"type_id"`
+}
+
+func (q *Queries) ListMarketRegionStatsDaily(ctx context.Context, arg ListMarketRegionStatsDailyParams) ([]MarketRegionStatsDaily, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketRegionStatsDaily, arg.RegionID, arg.TypeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketRegionStatsDaily
+	for rows.Next() {
+		var i MarketRegionStatsDaily
+		if err := rows.Scan(
+			&i.RegionID,
+			&i.TypeID,
+			&i.Day,
+			&i.BestSell,
+			&i.TypicalSell,
+			&i.SellBand,
+			&i.BestBuy,
+			&i.TypicalBuy,
+			&i.BuyBand,
+			&i.SellOrders,
+			&i.BuyOrders,
+			&i.SellVolume,
+			&i.BuyVolume,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1224,6 +1332,109 @@ type UpsertMarketHistoryWantParams struct {
 
 func (q *Queries) UpsertMarketHistoryWant(ctx context.Context, arg UpsertMarketHistoryWantParams) error {
 	_, err := q.db.ExecContext(ctx, upsertMarketHistoryWant, arg.RegionID, arg.TypeID, arg.LastRequestedAt)
+	return err
+}
+
+const upsertMarketRegionStat = `-- name: UpsertMarketRegionStat :exec
+INSERT INTO market_region_stats (region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (region_id, type_id) DO UPDATE SET
+    best_sell    = excluded.best_sell,
+    typical_sell = excluded.typical_sell,
+    sell_band    = excluded.sell_band,
+    best_buy     = excluded.best_buy,
+    typical_buy  = excluded.typical_buy,
+    buy_band     = excluded.buy_band,
+    sell_orders  = excluded.sell_orders,
+    buy_orders   = excluded.buy_orders,
+    sell_volume  = excluded.sell_volume,
+    buy_volume   = excluded.buy_volume,
+    updated_at   = excluded.updated_at
+`
+
+type UpsertMarketRegionStatParams struct {
+	RegionID    int64   `json:"region_id"`
+	TypeID      int64   `json:"type_id"`
+	BestSell    float64 `json:"best_sell"`
+	TypicalSell float64 `json:"typical_sell"`
+	SellBand    float64 `json:"sell_band"`
+	BestBuy     float64 `json:"best_buy"`
+	TypicalBuy  float64 `json:"typical_buy"`
+	BuyBand     float64 `json:"buy_band"`
+	SellOrders  int64   `json:"sell_orders"`
+	BuyOrders   int64   `json:"buy_orders"`
+	SellVolume  int64   `json:"sell_volume"`
+	BuyVolume   int64   `json:"buy_volume"`
+	UpdatedAt   string  `json:"updated_at"`
+}
+
+func (q *Queries) UpsertMarketRegionStat(ctx context.Context, arg UpsertMarketRegionStatParams) error {
+	_, err := q.db.ExecContext(ctx, upsertMarketRegionStat,
+		arg.RegionID,
+		arg.TypeID,
+		arg.BestSell,
+		arg.TypicalSell,
+		arg.SellBand,
+		arg.BestBuy,
+		arg.TypicalBuy,
+		arg.BuyBand,
+		arg.SellOrders,
+		arg.BuyOrders,
+		arg.SellVolume,
+		arg.BuyVolume,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
+const upsertMarketRegionStatDaily = `-- name: UpsertMarketRegionStatDaily :exec
+INSERT INTO market_region_stats_daily (region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (region_id, type_id, day) DO UPDATE SET
+    best_sell    = excluded.best_sell,
+    typical_sell = excluded.typical_sell,
+    sell_band    = excluded.sell_band,
+    best_buy     = excluded.best_buy,
+    typical_buy  = excluded.typical_buy,
+    buy_band     = excluded.buy_band,
+    sell_orders  = excluded.sell_orders,
+    buy_orders   = excluded.buy_orders,
+    sell_volume  = excluded.sell_volume,
+    buy_volume   = excluded.buy_volume
+`
+
+type UpsertMarketRegionStatDailyParams struct {
+	RegionID    int64   `json:"region_id"`
+	TypeID      int64   `json:"type_id"`
+	Day         string  `json:"day"`
+	BestSell    float64 `json:"best_sell"`
+	TypicalSell float64 `json:"typical_sell"`
+	SellBand    float64 `json:"sell_band"`
+	BestBuy     float64 `json:"best_buy"`
+	TypicalBuy  float64 `json:"typical_buy"`
+	BuyBand     float64 `json:"buy_band"`
+	SellOrders  int64   `json:"sell_orders"`
+	BuyOrders   int64   `json:"buy_orders"`
+	SellVolume  int64   `json:"sell_volume"`
+	BuyVolume   int64   `json:"buy_volume"`
+}
+
+func (q *Queries) UpsertMarketRegionStatDaily(ctx context.Context, arg UpsertMarketRegionStatDailyParams) error {
+	_, err := q.db.ExecContext(ctx, upsertMarketRegionStatDaily,
+		arg.RegionID,
+		arg.TypeID,
+		arg.Day,
+		arg.BestSell,
+		arg.TypicalSell,
+		arg.SellBand,
+		arg.BestBuy,
+		arg.TypicalBuy,
+		arg.BuyBand,
+		arg.SellOrders,
+		arg.BuyOrders,
+		arg.SellVolume,
+		arg.BuyVolume,
+	)
 	return err
 }
 

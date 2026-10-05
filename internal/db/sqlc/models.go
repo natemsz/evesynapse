@@ -133,6 +133,38 @@ type MarketHistoryWant struct {
 	LastRequestedAt string `json:"last_requested_at"`
 }
 
+type MarketRegionStat struct {
+	RegionID    int64   `json:"region_id"`
+	TypeID      int64   `json:"type_id"`
+	BestSell    float64 `json:"best_sell"`
+	TypicalSell float64 `json:"typical_sell"`
+	SellBand    float64 `json:"sell_band"`
+	BestBuy     float64 `json:"best_buy"`
+	TypicalBuy  float64 `json:"typical_buy"`
+	BuyBand     float64 `json:"buy_band"`
+	SellOrders  int64   `json:"sell_orders"`
+	BuyOrders   int64   `json:"buy_orders"`
+	SellVolume  int64   `json:"sell_volume"`
+	BuyVolume   int64   `json:"buy_volume"`
+	UpdatedAt   string  `json:"updated_at"`
+}
+
+type MarketRegionStatsDaily struct {
+	RegionID    int64   `json:"region_id"`
+	TypeID      int64   `json:"type_id"`
+	Day         string  `json:"day"`
+	BestSell    float64 `json:"best_sell"`
+	TypicalSell float64 `json:"typical_sell"`
+	SellBand    float64 `json:"sell_band"`
+	BestBuy     float64 `json:"best_buy"`
+	TypicalBuy  float64 `json:"typical_buy"`
+	BuyBand     float64 `json:"buy_band"`
+	SellOrders  int64   `json:"sell_orders"`
+	BuyOrders   int64   `json:"buy_orders"`
+	SellVolume  int64   `json:"sell_volume"`
+	BuyVolume   int64   `json:"buy_volume"`
+}
+
 type MarketWatchlist struct {
 	UserID       int64   `json:"user_id"`
 	TypeID       int64   `json:"type_id"`

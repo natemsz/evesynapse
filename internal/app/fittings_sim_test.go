@@ -271,7 +271,14 @@ func TestFitLocalSaveListDelete(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("page status = %d", code)
 	}
-	mustContain(t, "/fittings/", body, "Your fits", "Saved One", "Fixture Frigate")
+	// The editor no longer embeds the your-fits list; the search
+	// bar above finds saved fits through mine.json.
+	mustContain(t, "/fittings/", body, "Your fits", "fit-yourfits-search")
+	if strings.Contains(body, "Saved One") {
+		t.Errorf("editor embeds the saved fit list; it should only offer the search bar")
+	}
+	_, mbody := getPage(t, app, cookie, "/fittings/mine.json?q=Saved")
+	mustContain(t, "/fittings/mine.json", mbody, "Saved One")
 
 	// Opening it loads the fit into the editor.
 	_, body = getPage(t, app, cookie, "/fittings/?local="+strconv.FormatInt(saved.ID, 10))
@@ -281,8 +288,8 @@ func TestFitLocalSaveListDelete(t *testing.T) {
 	if code != http.StatusSeeOther {
 		t.Fatalf("delete status = %d, want 303", code)
 	}
-	_, body = getPage(t, app, cookie, "/fittings/")
-	if strings.Contains(body, "Saved One") {
+	_, mbody = getPage(t, app, cookie, "/fittings/mine.json?q=Saved")
+	if strings.Contains(mbody, "Saved One") {
 		t.Errorf("deleted fit still listed")
 	}
 }
@@ -355,6 +362,90 @@ func TestFitBuildVisual(t *testing.T) {
 		if s.X < 0 || s.X > 100 || s.Y < 0 || s.Y > 100 {
 			t.Errorf("separator %d at (%.1f, %.1f) outside the box", i, s.X, s.Y)
 		}
+	}
+}
+
+// TestFitVisualMetaName pins the meta-group vocabulary against the
+// SDE metaGroupID attribute (1692): a Tech II module must read
+// Tech II, never the Tech I default.
+func TestFitVisualMetaName(t *testing.T) {
+	cases := map[int]string{
+		1: "Tech I",
+		2: "Tech II",
+		3: "Storyline",
+		4: "Faction",
+		5: "Officer",
+		6: "Deadspace",
+	}
+	for group, want := range cases {
+		if got := fitVisualMetaName(group); got != want {
+			t.Errorf("meta group %d = %q, want %q", group, got, want)
+		}
+	}
+	if got := fitVisualMetaName(0); got != "Tech I" {
+		t.Errorf("unmarked meta group = %q, want the Tech I default", got)
+	}
+}
+
+// TestFitBuildVisualTooltips pins the tooltip contract: meta comes
+// from the static SDE metaGroupID (a Tech II module reads Tech
+// II), CPU/PG come from the engine's effective attributes (skills
+// and bonuses applied — not the raw SDE row), and a loaded charge
+// rides the slot for the badge and the tooltip.
+func TestFitBuildVisualTooltips(t *testing.T) {
+	const gunID = int64(3001)
+	res := &fitResult{
+		HighSlots: 3,
+		ItemAttrs: map[int64]map[int64]float64{
+			// Effective (post-dogma) CPU differs from the raw 15:
+			// the tooltip must show the effective figure.
+			gunID: {fitAttrCPU: 12, fitAttrPower: 10, fitAttrDamageMultiplier: 5},
+		},
+	}
+	doc := &fitDoc{
+		ShipTypeID: fitShipID,
+		Items:      []fitDocItem{{TypeID: gunID, Qty: 1}},
+		Charges:    map[int64]int64{gunID: 4001},
+	}
+	snap := &fitSnapshot{
+		attrs: map[int64]map[int64]float64{
+			gunID: {fitAttrCPU: 15, fitAttrPower: 10, 1692: 2},
+			4001:  {},
+		},
+	}
+	familyOf := map[int64]string{gunID: fitFamilyHigh}
+	names := map[int64]string{gunID: "Fixture Blaster", 4001: "Fixture Charge S"}
+	nameOf := func(id int64) string { return names[id] }
+
+	v := fitBuildVisual(res, doc, snap, familyOf, nameOf, false)
+	var slot *fitVisualSlot
+	for i := range v.Slots {
+		if v.Slots[i].Filled && v.Slots[i].TypeID == gunID {
+			slot = &v.Slots[i]
+			break
+		}
+	}
+	if slot == nil {
+		t.Fatalf("no filled slot for the blaster")
+	}
+	if slot.Meta != "Tech II" {
+		t.Errorf("Meta = %q, want Tech II", slot.Meta)
+	}
+	if slot.CPU != "12 tf" {
+		t.Errorf("CPU = %q, want the effective 12 tf (raw is 15)", slot.CPU)
+	}
+	if slot.ChargeID != 4001 || slot.ChargeName != "Fixture Charge S" {
+		t.Errorf("charge = %d %q, want 4001 Fixture Charge S", slot.ChargeID, slot.ChargeName)
+	}
+	if slot.GroupLabel != "High slot" {
+		t.Errorf("GroupLabel = %q, want High slot", slot.GroupLabel)
+	}
+	// Bordered segments: highs render, so one annular sector path.
+	if len(v.Segs) != 1 {
+		t.Fatalf("Segs = %d, want 1", len(v.Segs))
+	}
+	if !strings.HasPrefix(v.Segs[0].D, "M") || !strings.HasSuffix(v.Segs[0].D, "Z") {
+		t.Errorf("segment path = %q, want a closed annular sector", v.Segs[0].D)
 	}
 }
 

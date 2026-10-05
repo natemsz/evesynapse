@@ -194,6 +194,8 @@ type fitVisualSlot struct {
 	PG         string  // ("10 MW")
 	Meta       string  // ("Tech II")
 	Stat       string  // headline effective stat ("Strength 78%")
+	ChargeID   int64   // loaded charge type, 0 when the weapon is unloaded
+	ChargeName string  // loaded charge name for the badge + tooltip
 }
 
 // fitVisualView is the ship render with module slots arranged
@@ -204,6 +206,14 @@ type fitVisualView struct {
 	Slots      []fitVisualSlot
 	Separators []fitVisualSep   // ember divider ticks between slot groups
 	Labels     []fitVisualLabel // in-ring group captions (HIGH / MID / ...)
+	Segs       []fitVisualSeg   // bordered arc segments, one per rendered group
+}
+
+// fitVisualSeg is one bordered arc segment behind a slot group: an
+// annular sector path (SVG d) in the 0-100 viewBox, precomputed here
+// so the template stays declarative.
+type fitVisualSeg struct {
+	D string
 }
 
 // fitVisualSep is one ember divider tick between two rendered slot
@@ -290,6 +300,53 @@ func fitVisualNum(v float64) string {
 	return strconv.FormatFloat(v, 'f', 1, 64)
 }
 
+// fitArcPt places a point on the visual's 0-100 box: radius r at
+// angle deg (0 = east, positive clockwise in screen coords).
+func fitArcPt(r, deg float64) (float64, float64) {
+	rad := deg * math.Pi / 180
+	return 50 + r*math.Cos(rad), 50 + r*math.Sin(rad)
+}
+
+// fitSegPath is the SVG path for one bordered group segment: an
+// annular sector from a0 to a1 degrees between radii rIn and rOut.
+// Angles run clockwise (screen coords), so the outer arc sweeps
+// with flag 1 and the returning inner arc with flag 0.
+func fitSegPath(a0, a1, rIn, rOut float64) string {
+	x0o, y0o := fitArcPt(rOut, a0)
+	x1o, y1o := fitArcPt(rOut, a1)
+	x1i, y1i := fitArcPt(rIn, a1)
+	x0i, y0i := fitArcPt(rIn, a0)
+	large := 0
+	if a1-a0 > 180 {
+		large = 1
+	}
+	return fmt.Sprintf("M%.2f,%.2f A%.2f,%.2f 0 %d 1 %.2f,%.2f L%.2f,%.2f A%.2f,%.2f 0 %d 0 %.2f,%.2f Z",
+		x0o, y0o, rOut, rOut, large, x1o, y1o, x1i, y1i, rIn, rIn, large, x0i, y0i)
+}
+
+// fitMetaGroupID is the SDE attribute carrying the inv meta group.
+const fitMetaGroupID = 1692
+
+// fitVisualMetaOf reads the static SDE meta group for a type —
+// meta level is a property of the type itself, never modified by
+// skills or bonuses, so it comes from the raw snapshot, not the
+// effective attribute map. Returns "" when unknown.
+func fitVisualMetaOf(snap *fitSnapshot, eff map[int64]float64, typeID int64) string {
+	if snap != nil {
+		if a := snap.attrs[typeID]; a != nil {
+			if g, ok := a[fitMetaGroupID]; ok && g != 0 {
+				return fitVisualMetaName(int(g))
+			}
+		}
+	}
+	if eff != nil {
+		if g := eff[fitMetaGroupID]; g != 0 {
+			return fitVisualMetaName(int(g))
+		}
+	}
+	return ""
+}
+
 // fitBuildVisual shapes the visual fit display from the engine
 // result and the document's own lines: one circle per slot,
 // filled circles carrying their module, positioned on arcs around
@@ -359,7 +416,7 @@ func fitBuildVisual(res *fitResult, doc *fitDoc, snap *fitSnapshot, familyOf map
 					if pg := eff[fitAttrPower]; pg > 0 {
 						s.PG = fitVisualNum(pg) + " MW"
 					}
-					s.Meta = fitVisualMetaName(int(eff[1692]))
+					s.Meta = fitVisualMetaOf(snap, eff, ids[i])
 					// Headline effective stat (post-dogma): web
 					// strength and similar speedFactor bonuses
 					// show the skill-scaled value, not base.
@@ -370,6 +427,12 @@ func fitBuildVisual(res *fitResult, doc *fitDoc, snap *fitSnapshot, familyOf map
 							s.Stat = "Boost " + fitVisualNum(sf) + "%"
 						}
 					}
+				}
+				// Loaded charge rides the slot as a badge; the
+				// tooltip names it too.
+				if chID := doc.Charges[ids[i]]; chID > 0 {
+					s.ChargeID = chID
+					s.ChargeName = nameOf(chID)
 				}
 			}
 			v.Slots = append(v.Slots, s)
@@ -395,6 +458,13 @@ func fitBuildVisual(res *fitResult, doc *fitDoc, snap *fitSnapshot, familyOf map
 				X:   50 + arc[2]*math.Cos(end),
 				Y:   50 + arc[2]*math.Sin(end),
 				Rot: 90 - arc[1],
+			})
+		}
+		// Bordered arc segment behind the group's slots: the band
+		// the slot ring (radius arc[2]) sits inside.
+		if rendered[fam] {
+			v.Segs = append(v.Segs, fitVisualSeg{
+				D: fitSegPath(arc[0], arc[1], arc[2]-4.5, arc[2]+4.5),
 			})
 		}
 	}
@@ -1967,9 +2037,11 @@ func (app *Application) attachFitEditor(ctx context.Context, r *http.Request, da
 	editor.Description = doc.Description
 	editor.TagsList = doc.Tags
 	editor.Tags = strings.Join(doc.Tags, ", ")
-	if userID > 0 {
-		editor.LocalFits = app.listLocalFitEntries(ctx, userID)
-	}
+	// The editor no longer embeds the your-fits list (the search
+	// bar above loads fits through /fittings/mine.json), so the
+	// whole fits table is not pulled for this page. LocalFits stays
+	// on the view for API compatibility; listLocalFitEntries remains
+	// for the dedicated list consumers.
 	data.FitEditor = editor
 }
 

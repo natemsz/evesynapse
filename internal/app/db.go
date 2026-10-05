@@ -72,6 +72,26 @@ func openDB(ctx context.Context, dsn string) (*sql.DB, *pgxpool.Pool, error) {
 			return nil, nil, err
 		}
 	}
+	// Schema step 003 (fitting metadata) rides the same guarded
+	// path, probed on the is_public column: fresh installs get it
+	// right after the baseline above, existing installs gain it on
+	// their next boot, and a database that already has it is left
+	// alone.
+	var fitMetaCols int
+	if err := conn.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'local_fittings' AND column_name = 'is_public'`,
+	).Scan(&fitMetaCols); err != nil {
+		conn.Close()
+		pool.Close()
+		return nil, nil, err
+	}
+	if fitMetaCols == 0 {
+		if err := applySchema(conn, pgFitMetadataSchema); err != nil {
+			conn.Close()
+			pool.Close()
+			return nil, nil, err
+		}
+	}
 	return conn, pool, nil
 }
 

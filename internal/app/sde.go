@@ -5,6 +5,7 @@ import (
 	"compress/bzip2"
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -53,12 +54,18 @@ var sdeFileNames = []string{
 	"industryActivity.csv",
 	"industryActivityProducts.csv",
 	"industryActivityMaterials.csv",
-	// dgmTypeAttributes.csv carries the dogma attribute rows the
-	// skill planner reads (schema 012): skill rank/attributes and
-	// every type's required-skill rows. It is big (16 MB, ~1.2M
-	// rows); the parser stream-filters to the dozen attribute IDs
-	// that matter, so import memory stays modest.
+	// dgmTypeAttributes.csv carries every dogma attribute row
+	// (~1.2M): the skill planner reads a dozen skill-graph
+	// attributes from it, and the fitting simulator (schema 029)
+	// reads the rest, so the import keeps all rows. Streamed, as
+	// before.
 	"dgmTypeAttributes.csv",
+	// Fitting simulator (schema 029): attribute metadata (names,
+	// stackable flags, defaults), the effect set with its
+	// modifiers decoded from JSON, and the type -> effect links.
+	"dgmAttributeTypes.csv",
+	"dgmEffects.csv",
+	"dgmTypeEffects.csv",
 }
 
 // sdeSkillsFileName is the optional fifth industry file (see
@@ -199,13 +206,15 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 	// One-time backfills: databases imported before schema 008
 	// have no market-group/published values, databases stored
 	// before schema 011 lack the planner's industry tables,
-	// anything before schema 012 lacks the dogma skill graph, and
-	// anything before schema 024 lacks the market browse tree, so
-	// re-import once (the store writes the marker when it lands).
-	// Retries on later ticks while an import keeps failing.
-	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "6" {
+	// anything before schema 012 lacks the dogma skill graph,
+	// anything before schema 024 lacks the market browse tree,
+	// and anything before schema 029 lacks the full dogma
+	// attribute/effect set, so re-import once (the store writes
+	// the marker when it lands). Retries on later ticks while an
+	// import keeps failing.
+	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "7" {
 		log.Printf("sde: static data predates current columns — re-importing to backfill")
-		app.startSDEImport("schema-024 backfill")
+		app.startSDEImport("schema-029 backfill")
 		return
 	}
 	// Even with a current marker, an empty planner table (say the
@@ -354,11 +363,15 @@ func (app *Application) importSDE(ctx context.Context) error {
 	if len(parsed.types) == 0 || len(parsed.groups) == 0 || len(parsed.categories) == 0 ||
 		len(parsed.marketGroups) == 0 ||
 		len(parsed.stations) == 0 || len(parsed.systems) == 0 || len(parsed.regions) == 0 ||
-		len(parsed.blueprints) == 0 || len(parsed.skillMeta) == 0 || len(parsed.skillReqs) == 0 {
-		return fmt.Errorf("parsed dump has empty table(s): %d types, %d groups, %d categories, %d market groups, %d stations, %d systems, %d regions, %d blueprints, %d skill meta, %d requirements",
+		len(parsed.blueprints) == 0 || len(parsed.skillMeta) == 0 || len(parsed.skillReqs) == 0 ||
+		len(parsed.typeAttrs) == 0 || len(parsed.attrTypes) == 0 || len(parsed.effects) == 0 ||
+		len(parsed.modifiers) == 0 || len(parsed.typeEffects) == 0 {
+		return fmt.Errorf("parsed dump has empty table(s): %d types, %d groups, %d categories, %d market groups, %d stations, %d systems, %d regions, %d blueprints, %d skill meta, %d requirements, %d type attributes, %d attribute types, %d effects, %d modifiers, %d type effects",
 			len(parsed.types), len(parsed.groups), len(parsed.categories), len(parsed.marketGroups),
 			len(parsed.stations), len(parsed.systems), len(parsed.regions),
-			len(parsed.blueprints), len(parsed.skillMeta), len(parsed.skillReqs))
+			len(parsed.blueprints), len(parsed.skillMeta), len(parsed.skillReqs),
+			len(parsed.typeAttrs), len(parsed.attrTypes), len(parsed.effects),
+			len(parsed.modifiers), len(parsed.typeEffects))
 	}
 
 	app.updateSDEStatus(func(s *sdeStatus) {
@@ -412,6 +425,58 @@ type parsedSDE struct {
 	dogma     map[int64]map[int64]float64
 	skillMeta []sdeSkillMetaRow
 	skillReqs []sdeRequirementRow
+
+	// Fitting simulator (schema 029): the full dogma attribute
+	// rows (kept whole, unlike the skill graph's filtered view),
+	// attribute metadata, effects with decoded modifiers, and
+	// type -> effect links.
+	typeAttrs   []sdeTypeAttributeRow
+	attrTypes   []sdeAttributeTypeRow
+	effects     []sdeEffectRow
+	modifiers   []sdeEffectModifierRow
+	typeEffects []sdeTypeEffectRow
+}
+
+type sdeTypeAttributeRow struct {
+	typeID      int64
+	attributeID int64
+	value       float64
+}
+
+type sdeAttributeTypeRow struct {
+	attributeID  int64
+	name         string
+	stackable    int64
+	highIsGood   int64
+	unitID       int64
+	defaultValue float64
+}
+
+type sdeEffectRow struct {
+	effectID int64
+	name     string
+	category int64
+}
+
+// sdeEffectModifierRow is one modifier decoded from an effect's
+// modifierInfo JSON: (domain, func, modified, modifying,
+// operation) plus the group / required-skill selectors (0 when
+// the modifier carries none).
+type sdeEffectModifierRow struct {
+	effectID      int64
+	domain        string
+	fn            string
+	modifiedAttr  int64
+	modifyingAttr int64
+	operation     int64
+	groupID       int64
+	skillTypeID   int64
+}
+
+type sdeTypeEffectRow struct {
+	typeID    int64
+	effectID  int64
+	isDefault int64
 }
 
 type sdeSkillMetaRow struct {
@@ -459,6 +524,9 @@ type sdeTypeRow struct {
 	groupID       int64
 	marketGroupID int64 // 0 = cannot be listed on the market
 	published     int64 // 1 unless the dump explicitly says 0
+	mass          float64
+	volume        float64
+	capacity      float64
 }
 
 type sdeGroupRow struct {
@@ -600,6 +668,12 @@ func parseSDEFile(name string, body io.Reader, parsed *parsedSDE) error {
 		err = parseSDEIndustryActivitySkills(cr, idx, parsed)
 	case "dgmTypeAttributes.csv":
 		err = parseSDEDogmaAttributes(cr, idx, parsed)
+	case "dgmAttributeTypes.csv":
+		parsed.attrTypes, err = parseSDEAttributeTypes(cr, idx)
+	case "dgmEffects.csv":
+		err = parseSDEEffects(cr, idx, parsed)
+	case "dgmTypeEffects.csv":
+		err = parseSDETypeEffects(cr, idx, parsed)
 	default:
 		err = fmt.Errorf("unknown SDE file %q", name)
 	}
@@ -703,6 +777,18 @@ func parseSDETypes(cr *csv.Reader, idx map[string]int) ([]sdeTypeRow, error) {
 		// per-type ESI fetch. Optional: a dump without the column
 		// (or an empty cell) just leaves the ESI fallback in charge.
 		description, _ := csvField(rec, idx, "description")
+		// mass/volume/capacity are the type's physical facts
+		// (schema 029: dogma has no ship mass attribute, and
+		// drone-bay checks need volumes). Optional columns:
+		// a dump without them stores zeros.
+		floatCol := func(name string) float64 {
+			raw, ferr := csvField(rec, idx, name)
+			if ferr != nil {
+				return 0
+			}
+			v, _ := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+			return v
+		}
 		rows = append(rows, sdeTypeRow{
 			typeID:        id,
 			name:          name,
@@ -710,6 +796,9 @@ func parseSDETypes(cr *csv.Reader, idx map[string]int) ([]sdeTypeRow, error) {
 			groupID:       csvIDOrZero(rec, idx, "groupID"),
 			marketGroupID: csvIDOrZero(rec, idx, "marketGroupID"),
 			published:     published,
+			mass:          floatCol("mass"),
+			volume:        floatCol("volume"),
+			capacity:      floatCol("capacity"),
 		})
 		return nil
 	})
@@ -1062,7 +1151,8 @@ const (
 	dogmaAttrSecondary = 181
 )
 
-// dogmaWantedAttrs is the stream filter for the 16 MB dogma file.
+// dogmaWantedAttrs is the skill graph's view of the dogma file
+// (the fitting simulator keeps every row; see schema 029).
 var dogmaWantedAttrs = func() map[int64]bool {
 	m := map[int64]bool{dogmaAttrRank: true, dogmaAttrPrimary: true, dogmaAttrSecondary: true}
 	for _, pair := range dogmaSkillAttrPairs {
@@ -1081,9 +1171,6 @@ func parseSDEDogmaAttributes(cr *csv.Reader, idx map[string]int, parsed *parsedS
 		if err != nil {
 			return errSkipRow
 		}
-		if !dogmaWantedAttrs[attrID] {
-			return nil // the other million rows are not our business
-		}
 		typeID, err := csvID(rec, idx, "typeID")
 		if err != nil {
 			return errSkipRow
@@ -1101,12 +1188,176 @@ func parseSDEDogmaAttributes(cr *csv.Reader, idx map[string]int, parsed *parsedS
 		if perr != nil {
 			return errSkipRow
 		}
+		// The fitting simulator (schema 029) keeps every row; the
+		// skill graph keeps only its filtered view of the same pass.
+		parsed.typeAttrs = append(parsed.typeAttrs, sdeTypeAttributeRow{
+			typeID: typeID, attributeID: attrID, value: value,
+		})
+		if !dogmaWantedAttrs[attrID] {
+			return nil // the other million rows are not the skill graph's business
+		}
 		attrs := parsed.dogma[typeID]
 		if attrs == nil {
 			attrs = make(map[int64]float64, 4)
 			parsed.dogma[typeID] = attrs
 		}
 		attrs[attrID] = value
+		return nil
+	})
+	return err
+}
+
+// ---------------------------------------------------------------------------
+// Fitting simulator files (schema 029): attribute metadata, the
+// effect set with decoded modifiers, and type -> effect links.
+// ---------------------------------------------------------------------------
+
+// parseSDEAttributeTypes reads dgmAttributeTypes.csv: attribute
+// names, the stackable flag (drives stacking-penalty grouping in
+// the fitting engine), highIsGood, unit, and the default value an
+// attribute carries when a type does not set it.
+func parseSDEAttributeTypes(cr *csv.Reader, idx map[string]int) ([]sdeAttributeTypeRow, error) {
+	var rows []sdeAttributeTypeRow
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		id, err := csvID(rec, idx, "attributeID")
+		if err != nil {
+			return errSkipRow
+		}
+		name, err := csvField(rec, idx, "attributeName")
+		if err != nil {
+			return err
+		}
+		defaultValue := 0.0
+		if raw, ferr := csvField(rec, idx, "defaultValue"); ferr == nil {
+			defaultValue, _ = strconv.ParseFloat(strings.TrimSpace(raw), 64)
+		}
+		rows = append(rows, sdeAttributeTypeRow{
+			attributeID:  id,
+			name:         name,
+			stackable:    csvBoolOrOne(rec, idx, "stackable"),
+			highIsGood:   csvBoolOrOne(rec, idx, "highIsGood"),
+			unitID:       csvIDOrZero(rec, idx, "unitID"),
+			defaultValue: defaultValue,
+		})
+		return nil
+	})
+	return rows, err
+}
+
+// csvBoolOrOne reads a boolean-ish dump column (1/0, true/false,
+// empty) into 1 or 0; an absent column defaults to 1 (the dogma
+// default for both stackable and highIsGood).
+func csvBoolOrOne(rec []string, idx map[string]int, name string) int64 {
+	raw, err := csvField(rec, idx, name)
+	if err != nil {
+		return 1
+	}
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "0", "false":
+		return 0
+	}
+	return 1
+}
+
+// sdeModifierJSON is one modifier as dgmEffects.csv carries it in
+// the modifierInfo JSON column. Fields are pointers where the
+// dump legitimately omits them (EffectStopper rows carry no
+// operation; most modifiers carry no group/skill selector).
+type sdeModifierJSON struct {
+	Domain               *string `json:"domain"`
+	Func                 *string `json:"func"`
+	ModifiedAttributeID  *int64  `json:"modifiedAttributeID"`
+	ModifyingAttributeID *int64  `json:"modifyingAttributeID"`
+	Operation            *int64  `json:"operation"`
+	GroupID              *int64  `json:"groupID"`
+	SkillTypeID          *int64  `json:"skillTypeID"`
+}
+
+// parseSDEEffects reads dgmEffects.csv. Only rows whose
+// modifierInfo is non-empty are kept (the fitting-relevant set:
+// ~94% of the dump), with each modifier decoded into a row.
+// Rows whose modifier JSON fails to decode abort the import --
+// a silently partial effect set would compute wrong fits.
+func parseSDEEffects(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error {
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		id, err := csvID(rec, idx, "effectID")
+		if err != nil {
+			return errSkipRow
+		}
+		info, ferr := csvField(rec, idx, "modifierInfo")
+		if ferr != nil {
+			return ferr
+		}
+		if strings.TrimSpace(info) == "" {
+			return nil // no modifiers: not a fitting effect
+		}
+		var mods []sdeModifierJSON
+		if jerr := json.Unmarshal([]byte(info), &mods); jerr != nil {
+			return fmt.Errorf("effect %d: decode modifierInfo: %w", id, jerr)
+		}
+		name, ferr := csvField(rec, idx, "effectName")
+		if ferr != nil {
+			return ferr
+		}
+		kept := false
+		for _, m := range mods {
+			// Modifiers without both attributes or an operation
+			// (the EffectStopper rows) cannot be applied by the
+			// engine and are not stored; the engine reports the
+			// shapes it skips.
+			if m.ModifiedAttributeID == nil || m.ModifyingAttributeID == nil || m.Operation == nil {
+				continue
+			}
+			row := sdeEffectModifierRow{
+				effectID:      id,
+				modifiedAttr:  *m.ModifiedAttributeID,
+				modifyingAttr: *m.ModifyingAttributeID,
+				operation:     *m.Operation,
+			}
+			if m.Domain != nil {
+				row.domain = *m.Domain
+			}
+			if m.Func != nil {
+				row.fn = *m.Func
+			}
+			if m.GroupID != nil {
+				row.groupID = *m.GroupID
+			}
+			if m.SkillTypeID != nil {
+				row.skillTypeID = *m.SkillTypeID
+			}
+			parsed.modifiers = append(parsed.modifiers, row)
+			kept = true
+		}
+		if kept {
+			parsed.effects = append(parsed.effects, sdeEffectRow{
+				effectID: id,
+				name:     name,
+				category: csvIDOrZero(rec, idx, "effectCategory"),
+			})
+		}
+		return nil
+	})
+	return err
+}
+
+// parseSDETypeEffects reads dgmTypeEffects.csv: the type ->
+// effect links with isDefault flags.
+func parseSDETypeEffects(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error {
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		typeID, err := csvID(rec, idx, "typeID")
+		if err != nil {
+			return errSkipRow
+		}
+		effectID, err := csvID(rec, idx, "effectID")
+		if err != nil {
+			return errSkipRow
+		}
+		parsed.typeEffects = append(parsed.typeEffects, sdeTypeEffectRow{
+			typeID:    typeID,
+			effectID:  effectID,
+			isDefault: csvBoolOrOne(rec, idx, "isDefault"),
+		})
 		return nil
 	})
 	return err
@@ -1195,9 +1446,10 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	}
 	defer tx.Rollback()
 
-	for _, table := range []string{"sde_types", "sde_groups", "sde_categories", "sde_market_groups", "sde_stations", "sde_systems", "sde_regions",
+	for _, table := range []string{"sde_types", "sde_type_physics", "sde_groups", "sde_categories", "sde_market_groups", "sde_stations", "sde_systems", "sde_regions",
 		"sde_blueprints", "sde_blueprint_materials", "sde_blueprint_skills",
-		"sde_skill_meta", "sde_requirements"} {
+		"sde_skill_meta", "sde_requirements",
+		"sde_type_attributes", "sde_attribute_types", "sde_effects", "sde_effect_modifiers", "sde_type_effects"} {
 		if _, err := tx.ExecContext(ctx, "DELETE FROM "+table); err != nil {
 			return 0, fmt.Errorf("clear %s: %w", table, err)
 		}
@@ -1220,6 +1472,12 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	if err := insert("INSERT INTO sde_types (type_id, name, group_id, market_group_id, published, description) VALUES (?, ?, ?, ?, ?, ?)", len(parsed.types), func(i int) []any {
 		r := parsed.types[i]
 		return []any{r.typeID, r.name, r.groupID, r.marketGroupID, r.published, r.description}
+	}); err != nil {
+		return 0, err
+	}
+	if err := insert("INSERT INTO sde_type_physics (type_id, mass, volume, capacity) VALUES (?, ?, ?, ?)", len(parsed.types), func(i int) []any {
+		r := parsed.types[i]
+		return []any{r.typeID, r.mass, r.volume, r.capacity}
 	}); err != nil {
 		return 0, err
 	}
@@ -1289,12 +1547,44 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	}); err != nil {
 		return 0, err
 	}
+	if err := insert("INSERT INTO sde_type_attributes (type_id, attribute_id, value) VALUES (?, ?, ?)", len(parsed.typeAttrs), func(i int) []any {
+		r := parsed.typeAttrs[i]
+		return []any{r.typeID, r.attributeID, r.value}
+	}); err != nil {
+		return 0, err
+	}
+	if err := insert("INSERT INTO sde_attribute_types (attribute_id, name, stackable, high_is_good, unit_id, default_value) VALUES (?, ?, ?, ?, ?, ?)", len(parsed.attrTypes), func(i int) []any {
+		r := parsed.attrTypes[i]
+		return []any{r.attributeID, r.name, r.stackable, r.highIsGood, r.unitID, r.defaultValue}
+	}); err != nil {
+		return 0, err
+	}
+	if err := insert("INSERT INTO sde_effects (effect_id, name, category) VALUES (?, ?, ?)", len(parsed.effects), func(i int) []any {
+		r := parsed.effects[i]
+		return []any{r.effectID, r.name, r.category}
+	}); err != nil {
+		return 0, err
+	}
+	if err := insert("INSERT INTO sde_effect_modifiers (effect_id, domain, func, modified_attr, modifying_attr, operation, group_id, skill_type_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", len(parsed.modifiers), func(i int) []any {
+		r := parsed.modifiers[i]
+		return []any{r.effectID, r.domain, r.fn, r.modifiedAttr, r.modifyingAttr, r.operation, r.groupID, r.skillTypeID}
+	}); err != nil {
+		return 0, err
+	}
+	if err := insert("INSERT INTO sde_type_effects (type_id, effect_id, is_default) VALUES (?, ?, ?)", len(parsed.typeEffects), func(i int) []any {
+		r := parsed.typeEffects[i]
+		return []any{r.typeID, r.effectID, r.isDefault}
+	}); err != nil {
+		return 0, err
+	}
 
-	total := int64(len(parsed.types) + len(parsed.groups) + len(parsed.categories) +
+	total := int64(len(parsed.types) + len(parsed.types) + len(parsed.groups) + len(parsed.categories) +
 		len(parsed.marketGroups) +
 		len(parsed.stations) + len(parsed.systems) + len(parsed.regions) +
 		len(parsed.blueprints) + len(parsed.bpMaterials) + len(parsed.bpSkills) +
-		len(parsed.skillMeta) + len(parsed.skillReqs))
+		len(parsed.skillMeta) + len(parsed.skillReqs) +
+		len(parsed.typeAttrs) + len(parsed.attrTypes) + len(parsed.effects) +
+		len(parsed.modifiers) + len(parsed.typeEffects))
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	tq := db.New(tx)
@@ -1306,10 +1596,10 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		// Marker that the schema-008 market columns are populated,
 		// the schema-011 planner tables from 3, the schema-012
 		// skill graph from 4, the schema-018 bulk item
-		// descriptions from 5, and the schema-024 market browse
-		// tree from 6 (sdeMaintenance backfills once when it's
-		// behind).
-		{Key: "sde_import_version", Value: "6"},
+		// descriptions from 5, the schema-024 market browse
+		// tree from 6, and the schema-029 full dogma set from 7
+		// (sdeMaintenance backfills once when it's behind).
+		{Key: "sde_import_version", Value: "7"},
 	}
 	for name, m := range parsed.markers {
 		meta = append(meta,
@@ -1385,6 +1675,11 @@ func (app *Application) loadSDEView(ctx context.Context) *sdeView {
 		{"Blueprints (planner)", app.queries.CountSDEBlueprints},
 		{"Skills (plan graph)", app.queries.CountSDESkillMeta},
 		{"Skill requirements", app.queries.CountSDERequirements},
+		{"Dogma attributes", app.queries.CountSDETypeAttributes},
+		{"Attribute types", app.queries.CountSDEAttributeTypes},
+		{"Dogma effects", app.queries.CountSDEEffects},
+		{"Effect modifiers", app.queries.CountSDEEffectModifiers},
+		{"Type effects", app.queries.CountSDETypeEffects},
 	}
 	for _, c := range counts {
 		n, err := c.fn(ctx)

@@ -57,7 +57,7 @@ func TestSDEMarketGroupsParseAndStore(t *testing.T) {
 		t.Fatalf("legacy parse = %+v, want child parented to 4", legacy.marketGroups)
 	}
 
-	// The store round-trips the tree and stamps import version 6.
+	// The store round-trips the tree and stamps import version 7.
 	if _, err := app.storeSDE(ctx, "fixture", &parsed); err != nil {
 		t.Fatalf("store SDE: %v", err)
 	}
@@ -69,8 +69,8 @@ func TestSDEMarketGroupsParseAndStore(t *testing.T) {
 	if err != nil || len(children) != 1 || children[0].MarketGroupID != 404 {
 		t.Fatalf("children of Ships = %+v err=%v, want [Frigates]", children, err)
 	}
-	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "6" {
-		t.Fatalf("sde_import_version = %q, want 6", ver)
+	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "7" {
+		t.Fatalf("sde_import_version = %q, want 7", ver)
 	}
 }
 

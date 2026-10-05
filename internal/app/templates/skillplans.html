@@ -4,9 +4,7 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{if .SkillsChars}}
-<p>{{range $i, $c := .SkillsChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/skills/plans?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
-{{end}}
+{{template "charselector" .SkillsChars}}
 
 {{if .SkillPlans}}
 {{with .SkillPlans}}

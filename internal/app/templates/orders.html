@@ -4,9 +4,7 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{if .OrdersChars}}
-<p>{{range $i, $c := .OrdersChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/orders/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
-{{end}}
+{{template "charselector" .OrdersChars}}
 
 {{if .Orders}}
 <h2>{{.Orders.CharacterName}}</h2>

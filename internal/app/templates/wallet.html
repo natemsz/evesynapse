@@ -4,9 +4,7 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{if .WalletChars}}
-<p>{{range $i, $c := .WalletChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/wallet/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
-{{end}}
+{{template "charselector" .WalletChars}}
 
 {{if .Wallet}}
 <h2>{{.Wallet.CharacterName}}</h2>

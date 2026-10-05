@@ -4,9 +4,7 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{if .PlanetsChars}}
-<p>{{range $i, $c := .PlanetsChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/planets/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
-{{end}}
+{{template "charselector" .PlanetsChars}}
 
 {{if .Planets}}
 <h2>{{.Planets.CharacterName}}</h2>

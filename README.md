@@ -34,8 +34,8 @@ and key/vCode auth.
   `market.go`, `sync.go`, `character.go`, `fittings.go`,
   `killmails.go`, `intel.go`), the background worker (`worker.go`,
   plus `intel_worker.go` for the public-data pass), the
-  SDE static-data importer (`sde.go`), and the Termux DNS/CA shim
-  (`netdns.go`)
+  SDE static-data importer (`sde.go`), and the self-maintenance
+  modes (`maintenance.go`: `-version`, `-update`, `-refresh`)
 - `internal/app/templates/` — embedded html/templates (`base.html`
   layout)
 - `internal/app/static/` — embedded assets: the 2013 wallpaper
@@ -158,6 +158,65 @@ Environment: `EVE_CLIENT_ID`, `EVE_CLIENT_SECRET`, `EVE_CALLBACK_URL`
 character-for-character), `SESSION_KEY`, plus optional `ADDR`
 (default `:8080`) and `DB_PATH` (default `evesynapse.db`).
 
+## Install
+
+You need a Linux machine (ARM64 or x86-64) and an EVE app
+registration for sign-in ("EVE SSO flow" below). Then:
+
+1. **Get the program.** Easiest is the prebuilt binary from the
+   [releases page](https://github.com/natemsz/evesynapse/releases):
+   `evesynapse-arm64` for ARM machines (most ARM cloud instances),
+   `evesynapse-amd64` for Intel/AMD ones. Or build it yourself
+   ("Build from source" below).
+2. **Run the setup script** from a checkout of this repo:
+
+   ```sh
+   sudo bash deploy/setup.sh
+   ```
+
+   It downloads the latest build for your machine and verifies it
+   against the checksum published with the release, creates the
+   `evesynapse` user and `/opt/evesynapse`, installs the systemd
+   service, and links `evesynapse` into `/usr/local/bin` so you
+   can run it without typing the full path. It never overwrites
+   an existing `.env`. Installing from a fork or from a build you
+   made yourself works too:
+
+   ```sh
+   sudo EVESYNAPSE_UPDATE_REPO=you/evesynapse bash deploy/setup.sh
+   sudo EVESYNAPSE_BINARY=/path/to/evesynapse bash deploy/setup.sh
+   ```
+
+3. **Fill in `/opt/evesynapse/.env`** with your EVE app's client
+   ID, secret, and callback URL, then start it:
+
+   ```sh
+   sudo systemctl start evesynapse
+   ```
+
+   Open the address you configured and sign in with EVE.
+
+Updating afterwards is one command — see "Updating" below.
+
+## Build from source
+
+Needs Go (the version in `go.mod`). The fonts and wallpaper
+travel through the repo in encoded form (under `ci-assets/`), so
+decode them into place first, then build:
+
+```sh
+make assets        # decode the fonts and wallpaper
+make build         # bin/evesynapse for this machine
+make build-arm64   # bin/evesynapse-arm64
+make build-amd64   # bin/evesynapse-amd64
+```
+
+Install your build with:
+
+```sh
+sudo EVESYNAPSE_BINARY=$PWD/bin/evesynapse bash deploy/setup.sh
+```
+
 ## Updating
 
 Builds are published automatically: every push to `main` runs the
@@ -188,6 +247,36 @@ There's also a manual form that installs from a specific address
 
 ```sh
 sudo /opt/evesynapse/evesynapse -update <url|file> [sha256]
+```
+
+### Updating from your own fork
+
+By default the updater checks the mainline repo's releases. To
+have it check your fork instead, set this in
+`/opt/evesynapse/.env` (the setup script writes it for you when
+you install from a fork):
+
+```sh
+EVESYNAPSE_UPDATE_REPO=yourname/evesynapse
+```
+
+For your fork to publish releases the same way, enable Actions
+in the fork (GitHub turns them off on new forks): the workflow
+is already in the repo under `.github/workflows/`, and once it's
+allowed to run, your pushes get tested, built, and released
+exactly like the mainline ones.
+
+## Command-line modes
+
+```sh
+evesynapse                          run the web app
+evesynapse -version                 print the version and exit
+evesynapse -update                  update to the latest release (right build for this machine)
+evesynapse -update -arm64           update, fetching the ARM build
+evesynapse -update -amd64           update, fetching the Intel/AMD build (-x86, -x64 also work)
+evesynapse -update <url|file> [sha256]   install a specific build manually
+evesynapse -refresh                 mark all cached data stale (run while the app is stopped)
+evesynapse -h                       show this list
 ```
 
 ## EVE SSO flow

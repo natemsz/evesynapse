@@ -122,6 +122,9 @@ var localFittingsSchema string
 //go:embed schema/031_market_region_stats.sql
 var regionStatsSchema string
 
+//go:embed schema/032_market_station_stats.sql
+var stationStatsSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -389,6 +392,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/market", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleMarket)
+		r.Get("/scanner/", app.handleMarketScanner)
 		r.Get("/suggest", app.handleMarketSuggest)
 		r.Get("/history-fragment", app.handleMarketHistoryFragment)
 		r.Get("/trader-fragment", app.handleMarketTraderFragment)

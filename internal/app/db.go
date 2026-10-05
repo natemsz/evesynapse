@@ -406,6 +406,18 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 032 (P2 spread scanner: per-(station, type) book
+	// statistics from the same whole-region sweeps as 031), applied
+	// the same guarded way.
+	var stationStatsTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'market_station_stats'`).Scan(&stationStatsTables); err != nil {
+		return nil, err
+	}
+	if stationStatsTables == 0 {
+		if err := applySchema(conn, stationStatsSchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

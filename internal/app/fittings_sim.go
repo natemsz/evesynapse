@@ -64,10 +64,14 @@ var fitChargeGroupAttrs = []int64{604, 605, 606, 609, 610}
 
 const fitAttrChargeSize = 128
 
-// fitDocItem is one line of a fit document.
+// fitDocItem is one line of a fit document. States carries one
+// module state per instance ("", online/active/offline/
+// overheated; "" resolves to the type default); len(States) should
+// match Qty and is normalized by sanitizeFitDoc.
 type fitDocItem struct {
-	TypeID int64 `json:"typeId"`
-	Qty    int   `json:"qty"`
+	TypeID int64    `json:"typeId"`
+	Qty    int      `json:"qty"`
+	States []string `json:"states,omitempty"`
 }
 
 // fitDoc is one fitting: the editor's working state and the
@@ -114,6 +118,33 @@ func sanitizeFitDoc(doc *fitDoc) {
 		}
 	}
 	doc.Items = merged
+	// Normalize per-instance module states: one entry per
+	// instance, unknown values demoted to "" (the default), and
+	// all-default arrays dropped so stored docs stay lean.
+	for i := range merged {
+		it := &merged[i]
+		if len(it.States) > it.Qty {
+			it.States = it.States[:it.Qty]
+		}
+		for len(it.States) < it.Qty {
+			it.States = append(it.States, "")
+		}
+		allDefault := true
+		for j, s := range it.States {
+			switch s {
+			case "", fitStateOnline, fitStateActive, fitStateOffline, fitStateOverheated:
+			default:
+				it.States[j] = ""
+				s = ""
+			}
+			if s != "" {
+				allDefault = false
+			}
+		}
+		if allDefault {
+			it.States = nil
+		}
+	}
 	if doc.Charges == nil {
 		doc.Charges = make(map[int64]int64)
 	}
@@ -162,11 +193,14 @@ func fitFamilyFitted(family string) bool {
 // View model.
 // ---------------------------------------------------------------------------
 
-// fitSlotChip is one fitted item line in the slot grid.
+// fitSlotChip is one fitted item line in the slot grid. State
+// is the uniform resolved state when every instance shares one
+// ("" when mixed or stateless) — for the state visuals.
 type fitSlotChip struct {
 	TypeID int64
 	Name   string
 	Qty    int
+	State  string
 }
 
 // fitSlotGroup is one row of the slot grid.
@@ -196,6 +230,15 @@ type fitVisualSlot struct {
 	Stat       string  // headline effective stat ("Strength 78%")
 	ChargeID   int64   // loaded charge type, 0 when the weapon is unloaded
 	ChargeName string  // loaded charge name for the badge + tooltip
+	// State is the module's resolved state ("" for stateless
+	// kinds); ValidStates the states the tooltip may offer;
+	// StatesCSV the comma-joined valid list for the data
+	// attribute; TipKey ("typeID:ordinal") identifies the
+	// instance for state changes.
+	State       string
+	ValidStates []string
+	StatesCSV   string
+	TipKey      string
 }
 
 // fitVisualView is the ship render with module slots arranged
@@ -362,14 +405,30 @@ func fitBuildVisual(res *fitResult, doc *fitDoc, snap *fitSnapshot, familyOf map
 		fitFamilyRig:    res.RigSlots,
 	}
 	// Fitted modules per family, quantities expanded, doc order.
-	fitted := map[string][]int64{}
+	// Each placed module carries its resolved state and its
+	// per-type ordinal so the tooltip can address the instance.
+	type fitPlacedModule struct {
+		TypeID  int64
+		State   string
+		Ordinal int
+	}
+	fitted := map[string][]fitPlacedModule{}
+	ordinals := map[int64]int{}
 	for _, it := range doc.Items {
 		fam := familyOf[it.TypeID]
 		if _, ok := fitVisualArcs[fam]; !ok {
 			continue
 		}
 		for i := 0; i < it.Qty; i++ {
-			fitted[fam] = append(fitted[fam], it.TypeID)
+			st := ""
+			if i < len(it.States) {
+				st = it.States[i]
+			}
+			if snap != nil {
+				st = fitNormalizeModuleState(snap, it.TypeID, st)
+			}
+			fitted[fam] = append(fitted[fam], fitPlacedModule{TypeID: it.TypeID, State: st, Ordinal: ordinals[it.TypeID]})
+			ordinals[it.TypeID]++
 		}
 	}
 	maxOf[fitFamilySubsystem] = 0
@@ -399,15 +458,31 @@ func fitBuildVisual(res *fitResult, doc *fitDoc, snap *fitSnapshot, familyOf map
 				Y:          50 + arc[2]*math.Sin(ang),
 			}
 			if i < len(ids) {
+				pm := ids[i]
 				s.Filled = true
-				s.TypeID = ids[i]
-				s.Name = nameOf(ids[i])
+				s.TypeID = pm.TypeID
+				s.Name = nameOf(pm.TypeID)
+				s.State = pm.State
+				s.TipKey = fmt.Sprintf("%d:%d", pm.TypeID, pm.Ordinal)
+				if snap != nil {
+					if vs := fitModuleValidStates(snap, pm.TypeID); len(vs) > 0 {
+						s.ValidStates = vs
+						s.StatesCSV = strings.Join(vs, ",")
+					}
+				}
 				// Tooltip values are post-dogma: the engine's
 				// per-module effective attributes (skills + hull
-				// bonuses applied), not raw SDE rows.
-				eff := res.ItemAttrs[ids[i]]
+				// bonuses applied), not raw SDE rows. A module in
+				// a non-default state reads its own state's
+				// numbers (an overheated module shows heated).
+				eff := res.ItemAttrs[pm.TypeID]
+				if pm.State != "" {
+					if sa := res.StateAttrs[fitStateAttrKey(pm.TypeID, pm.State)]; sa != nil {
+						eff = sa
+					}
+				}
 				if eff == nil && snap != nil {
-					eff = snap.attrs[ids[i]]
+					eff = snap.attrs[pm.TypeID]
 				}
 				if eff != nil {
 					if cpu := eff[fitAttrCPU]; cpu > 0 {
@@ -416,7 +491,7 @@ func fitBuildVisual(res *fitResult, doc *fitDoc, snap *fitSnapshot, familyOf map
 					if pg := eff[fitAttrPower]; pg > 0 {
 						s.PG = fitVisualNum(pg) + " MW"
 					}
-					s.Meta = fitVisualMetaOf(snap, eff, ids[i])
+					s.Meta = fitVisualMetaOf(snap, eff, pm.TypeID)
 					// Headline effective stat (post-dogma): web
 					// strength and similar speedFactor bonuses
 					// show the skill-scaled value, not base.
@@ -430,7 +505,7 @@ func fitBuildVisual(res *fitResult, doc *fitDoc, snap *fitSnapshot, familyOf map
 				}
 				// Loaded charge rides the slot as a badge; the
 				// tooltip names it too.
-				if chID := doc.Charges[ids[i]]; chID > 0 {
+				if chID := doc.Charges[pm.TypeID]; chID > 0 {
 					s.ChargeID = chID
 					s.ChargeName = nameOf(chID)
 				}
@@ -772,14 +847,31 @@ func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotI
 	}
 
 	// Classify the fit's lines; only fitted families reach the
-	// engine (cargo is display-only).
+	// engine (cargo is display-only). Modules expand per state:
+	// identical modules in different states simulate as separate
+	// engine inputs so each binds only its state's categories.
 	familyOf := make(map[int64]string, len(doc.Items))
 	engineItems := make([]fitItemInput, 0, len(doc.Items))
 	for _, it := range doc.Items {
 		fam := fitSlotFamilyOf(snap, it.TypeID)
 		familyOf[it.TypeID] = fam
-		if fitFamilyFitted(fam) {
-			engineItems = append(engineItems, fitItemInput{TypeID: it.TypeID, Quantity: it.Qty})
+		if !fitFamilyFitted(fam) {
+			continue
+		}
+		byState := make(map[string]int, 2)
+		var order []string
+		for i := 0; i < it.Qty; i++ {
+			st := ""
+			if i < len(it.States) {
+				st = it.States[i]
+			}
+			if _, ok := byState[st]; !ok {
+				order = append(order, st)
+			}
+			byState[st]++
+		}
+		for _, st := range order {
+			engineItems = append(engineItems, fitItemInput{TypeID: it.TypeID, Quantity: byState[st], State: st})
 		}
 	}
 	res := computeFit(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, implantIDs)
@@ -798,7 +890,7 @@ func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotI
 		view.Implants = append(view.Implants, fitImplantEntry{TypeID: id, Name: nameOf(id)})
 	}
 
-	view.Groups = fitBuildGroups(res, doc, familyOf, nameOf, view.SupportsSubsystems)
+	view.Groups = fitBuildGroups(res, doc, snap, familyOf, nameOf, view.SupportsSubsystems)
 	view.Visual = fitBuildVisual(res, doc, snap, familyOf, nameOf, view.SupportsSubsystems)
 	view.DroneBWNum = res.DroneBandwidth
 	view.DroneBayNum = res.DroneBayCapacity
@@ -914,11 +1006,32 @@ func fitMissingList(ctx context.Context, app *Application, snap *fitSnapshot, do
 
 // fitBuildGroups shapes the slot grid from the engine result and
 // the document's own lines.
-func fitBuildGroups(res *fitResult, doc *fitDoc, familyOf map[int64]string, nameOf func(int64) string, supportsSubsystems bool) []fitSlotGroup {
+func fitBuildGroups(res *fitResult, doc *fitDoc, snap *fitSnapshot, familyOf map[int64]string, nameOf func(int64) string, supportsSubsystems bool) []fitSlotGroup {
 	chips := map[string][]fitSlotChip{}
 	for _, it := range doc.Items {
 		fam := familyOf[it.TypeID]
-		chips[fam] = append(chips[fam], fitSlotChip{TypeID: it.TypeID, Name: nameOf(it.TypeID), Qty: it.Qty})
+		// Uniform resolved state across the line's instances;
+		// mixed lines carry "" (no single state to show).
+		st, uniform := "", true
+		for i := 0; i < it.Qty; i++ {
+			s := ""
+			if i < len(it.States) {
+				s = it.States[i]
+			}
+			if snap != nil {
+				s = fitNormalizeModuleState(snap, it.TypeID, s)
+			}
+			if i == 0 {
+				st = s
+			} else if s != st {
+				uniform = false
+				break
+			}
+		}
+		if !uniform {
+			st = ""
+		}
+		chips[fam] = append(chips[fam], fitSlotChip{TypeID: it.TypeID, Name: nameOf(it.TypeID), Qty: it.Qty, State: st})
 	}
 	for fam := range chips {
 		sort.Slice(chips[fam], func(i, j int) bool { return chips[fam][i].Name < chips[fam][j].Name })
@@ -1053,8 +1166,6 @@ func fitPlainNotes(raw []string) []string {
 			add("Damage from turrets with no ammunition picked isn't counted yet — pick an ammo type to include it.")
 		case strings.Contains(s, "has no missile selected"):
 			add("Damage from launchers with no missiles picked isn't counted yet — pick a missile type to include it.")
-		case strings.Contains(s, "category 5"):
-			add("Heating a module (overload) isn't included in these numbers.")
 		default:
 			add("A few effects on this fit aren't fully calculated yet, so some bonuses may be missing.")
 		}

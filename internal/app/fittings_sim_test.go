@@ -43,20 +43,26 @@ func seedFitUniverse(t *testing.T, exec func(string) error) {
 		`INSERT INTO sde_groups (group_id, name, category_id) VALUES
 			(25, 'Fixture Frigates', 6), (59, 'Fixture Blasters', 7),
 			(60, 'Fixture Plates', 7), (901, 'Fixture Charges', 8),
-			(100, 'Fixture Drones', 18), (399, 'Fixture Gunnery Group', 16)`,
+			(100, 'Fixture Drones', 18), (399, 'Fixture Gunnery Group', 16),
+			(61, 'Fixture Heaters', 7)`,
 		`INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES
 			(1001, 'Fixture Frigate', 25, 1, 1),
 			(3001, 'Fixture Blaster', 59, 1, 1),
 			(3002, 'Fixture Plate', 60, 1, 1),
 			(4001, 'Fixture Charge S', 901, 1, 1),
 			(5001, 'Fixture Drone', 100, 1, 1),
-			(2001, 'Fixture Gunnery', 399, 0, 1)`,
+			(2001, 'Fixture Gunnery', 399, 0, 1),
+			(3003, 'Fixture Heater', 61, 1, 1)`,
 		`INSERT INTO sde_type_effects (type_id, effect_id, is_default) VALUES
 			(3001, 12, 0), (3001, 42, 0),
-			(3002, 11, 0), (3002, 2837, 1)`,
-		`INSERT INTO sde_effects (effect_id, name, category) VALUES (2837, 'armorHPBonusAdd', 4)`,
+			(3002, 11, 0), (3002, 2837, 1),
+			(3003, 13, 0), (3003, 9001, 0), (3003, 9002, 0)`,
+		`INSERT INTO sde_effects (effect_id, name, category) VALUES (2837, 'armorHPBonusAdd', 4),
+			(9001, 'fixtureActiveBonus', 1), (9002, 'fixtureOverloadBonus', 5)`,
 		`INSERT INTO sde_effect_modifiers (effect_id, domain, func, modified_attr, modifying_attr, operation, group_id, skill_type_id)
-			VALUES (2837, 'shipID', 'ItemModifier', 265, 1159, 2, 0, 0)`,
+			VALUES (2837, 'shipID', 'ItemModifier', 265, 1159, 2, 0, 0),
+			(9001, 'shipID', 'ItemModifier', 265, 9000, 2, 0, 0),
+			(9002, 'itemID', 'ItemModifier', 9000, 9001, 6, 0, 0)`,
 		`INSERT INTO sde_type_attributes (type_id, attribute_id, value) VALUES
 			(1001, 14, 3), (1001, 13, 3), (1001, 12, 2), (1001, 1137, 3),
 			(1001, 11, 50), (1001, 48, 150), (1001, 1132, 400),
@@ -72,7 +78,9 @@ func seedFitUniverse(t *testing.T, exec func(string) error) {
 			(3001, 604, 901), (3001, 128, 1), (3001, 1692, 2),
 			(3002, 1159, 200), (3002, 30, 5), (3002, 50, 5),
 			(4001, 128, 1), (4001, 118, 12), (4001, 117, 8),
-			(5001, 1272, 10), (5001, 51, 2000), (5001, 64, 1.2), (5001, 117, 10)`,
+			(5001, 1272, 10), (5001, 51, 2000), (5001, 64, 1.2), (5001, 117, 10),
+			(3003, 30, 10), (3003, 50, 10), (3003, 73, 5000), (3003, 6, 5),
+			(3003, 9000, 10), (3003, 9001, 20)`,
 		`INSERT INTO sde_type_physics (type_id, mass, volume, capacity) VALUES
 			(1001, 1100000, 2500, 350), (5001, 0, 5, 0)`,
 		`INSERT INTO sde_requirements (type_id, skill_type_id, level) VALUES
@@ -447,6 +455,76 @@ func TestFitBuildVisualTooltips(t *testing.T) {
 	if !strings.HasPrefix(v.Segs[0].D, "M") || !strings.HasSuffix(v.Segs[0].D, "Z") {
 		t.Errorf("segment path = %q, want a closed annular sector", v.Segs[0].D)
 	}
+}
+
+// TestFitSimulateModuleStates: the simulate fragment carries
+// each fitted module's valid states and current state on the
+// visual slot (for the tooltip's state row), states re-simulate
+// through the endpoint, and the overload note is gone now that
+// heat is modeled. The Fixture Heater (3003) adds its bonus attr
+// 9000 (=10) to armor HP when active, and its overload effect
+// (category 5) raises the bonus to 12 when overheated.
+func TestFitSimulateModuleStates(t *testing.T) {
+	app, cookie := fitTestApp(t)
+
+	// Default state (active): all four states offered, armor HP
+	// 450 + 10 = 460, full PG/CPU.
+	code, body := postFitJSON(t, app, cookie, "/fittings/simulate/",
+		`{"shipTypeId":1001,"items":[{"typeId":3003,"qty":1}],"pilot":0}`)
+	if code != http.StatusOK {
+		t.Fatalf("simulate status = %d, body %q", code, body)
+	}
+	mustContain(t, "/fittings/simulate/ states",
+		body,
+		`data-tip-states="offline,online,active,overheated"`,
+		`data-tip-state="active"`,
+		`data-tip-key="3003:0"`,
+		"<th>Armor</th><td>460</td>")
+	if strings.Contains(body, "Heating a module") {
+		t.Errorf("heat note still shown for a modeled overload effect")
+	}
+
+	// Overheated: the overload bonus applies (450 + 12 = 462) and
+	// the slot carries the ember class.
+	code, body = postFitJSON(t, app, cookie, "/fittings/simulate/",
+		`{"shipTypeId":1001,"items":[{"typeId":3003,"qty":1,"states":["overheated"]}],"pilot":0}`)
+	if code != http.StatusOK {
+		t.Fatalf("overheated simulate status = %d, body %q", code, body)
+	}
+	mustContain(t, "/fittings/simulate/ overheated",
+		body,
+		`data-tip-state="overheated"`,
+		"st-overheated",
+		"<th>Armor</th><td>462</td>")
+	if strings.Contains(body, "Heating a module") {
+		t.Errorf("heat note shown for an overheated module")
+	}
+
+	// Offline: no PG, no CPU, no effect (armor HP back to 450),
+	// dimmed slot.
+	code, body = postFitJSON(t, app, cookie, "/fittings/simulate/",
+		`{"shipTypeId":1001,"items":[{"typeId":3003,"qty":1,"states":["offline"]}],"pilot":0}`)
+	if code != http.StatusOK {
+		t.Fatalf("offline simulate status = %d, body %q", code, body)
+	}
+	mustContain(t, "/fittings/simulate/ offline",
+		body,
+		`data-tip-state="offline"`,
+		"st-offline",
+		"<th>Armor</th><td>450</td>",
+		">0 MW of 50 MW (50 MW left)<")
+
+	// Online but inactive: PG/CPU counted, effect not applied.
+	code, body = postFitJSON(t, app, cookie, "/fittings/simulate/",
+		`{"shipTypeId":1001,"items":[{"typeId":3003,"qty":1,"states":["online"]}],"pilot":0}`)
+	if code != http.StatusOK {
+		t.Fatalf("online simulate status = %d, body %q", code, body)
+	}
+	mustContain(t, "/fittings/simulate/ online",
+		body,
+		`data-tip-state="online"`,
+		"<th>Armor</th><td>450</td>",
+		">10 MW of 50 MW (40 MW left)<")
 }
 
 // TestFitESIFittingBody: the editor document maps to the ESI

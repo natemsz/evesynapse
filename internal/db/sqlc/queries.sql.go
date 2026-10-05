@@ -8,7 +8,8 @@ package db
 import (
 	"context"
 	"database/sql"
-	"strings"
+
+	"github.com/lib/pq"
 )
 
 const countWarDetails = `-- name: CountWarDetails :one
@@ -24,7 +25,7 @@ func (q *Queries) CountWarDetails(ctx context.Context) (int64, error) {
 
 const createLocalFitting = `-- name: CreateLocalFitting :one
 INSERT INTO local_fittings (user_id, name, ship_type_id, items_json, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id, user_id, name, ship_type_id, items_json, created_at, updated_at
 `
 
@@ -66,7 +67,7 @@ func (q *Queries) CreateLocalFitting(ctx context.Context, arg CreateLocalFitting
 
 const createSkillPlan = `-- name: CreateSkillPlan :one
 INSERT INTO skill_plans (user_id, character_id, name, created_at)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 RETURNING id, user_id, character_id, name, created_at
 `
 
@@ -103,7 +104,7 @@ func (q *Queries) CreateSkillPlan(ctx context.Context, arg CreateSkillPlanParams
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (created_at)
-VALUES (datetime('now'))
+VALUES (to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS'))
 RETURNING id, created_at, home_layout, last_briefing_at
 `
 
@@ -121,7 +122,7 @@ func (q *Queries) CreateUser(ctx context.Context) (User, error) {
 
 const deleteCharacter = `-- name: DeleteCharacter :exec
 DELETE FROM characters
-WHERE character_id = ? AND user_id = ?
+WHERE character_id = $1 AND user_id = $2
 `
 
 type DeleteCharacterParams struct {
@@ -135,7 +136,7 @@ func (q *Queries) DeleteCharacter(ctx context.Context, arg DeleteCharacterParams
 }
 
 const deleteLocalFitting = `-- name: DeleteLocalFitting :exec
-DELETE FROM local_fittings WHERE id = ? AND user_id = ?
+DELETE FROM local_fittings WHERE id = $1 AND user_id = $2
 `
 
 type DeleteLocalFittingParams struct {
@@ -149,7 +150,7 @@ func (q *Queries) DeleteLocalFitting(ctx context.Context, arg DeleteLocalFitting
 }
 
 const deleteSkillPlan = `-- name: DeleteSkillPlan :exec
-DELETE FROM skill_plans WHERE id = ? AND user_id = ?
+DELETE FROM skill_plans WHERE id = $1 AND user_id = $2
 `
 
 type DeleteSkillPlanParams struct {
@@ -163,7 +164,7 @@ func (q *Queries) DeleteSkillPlan(ctx context.Context, arg DeleteSkillPlanParams
 }
 
 const deleteSkillPlanItem = `-- name: DeleteSkillPlanItem :exec
-DELETE FROM skill_plan_items WHERE plan_id = ? AND skill_type_id = ?
+DELETE FROM skill_plan_items WHERE plan_id = $1 AND skill_type_id = $2
 `
 
 type DeleteSkillPlanItemParams struct {
@@ -178,7 +179,7 @@ func (q *Queries) DeleteSkillPlanItem(ctx context.Context, arg DeleteSkillPlanIt
 
 const getCharacter = `-- name: GetCharacter :one
 SELECT character_id, user_id, name, access_token, refresh_token, token_expiry, scopes, cached_until, created_at, updated_at, owner_hash, tags, link_state, link_state_at FROM characters
-WHERE character_id = ?
+WHERE character_id = $1
 `
 
 func (q *Queries) GetCharacter(ctx context.Context, characterID int64) (Character, error) {
@@ -205,7 +206,7 @@ func (q *Queries) GetCharacter(ctx context.Context, characterID int64) (Characte
 
 const getCharacterCorporation = `-- name: GetCharacterCorporation :one
 SELECT character_id, corporation_id, updated_at FROM character_corporations
-WHERE character_id = ?
+WHERE character_id = $1
 `
 
 func (q *Queries) GetCharacterCorporation(ctx context.Context, characterID int64) (CharacterCorporation, error) {
@@ -217,7 +218,7 @@ func (q *Queries) GetCharacterCorporation(ctx context.Context, characterID int64
 
 const getContractDetail = `-- name: GetContractDetail :one
 SELECT contract_id, character_id, payload, fetched_at FROM contract_details
-WHERE contract_id = ?
+WHERE contract_id = $1
 `
 
 // ---------------------------------------------------------------------
@@ -239,7 +240,7 @@ func (q *Queries) GetContractDetail(ctx context.Context, contractID int64) (Cont
 
 const getGlobalSnapshot = `-- name: GetGlobalSnapshot :one
 SELECT kind, payload, fetched_at, cached_until FROM global_snapshots
-WHERE kind = ?
+WHERE kind = $1
 `
 
 // ---------------------------------------------------------------------
@@ -261,7 +262,7 @@ func (q *Queries) GetGlobalSnapshot(ctx context.Context, kind string) (GlobalSna
 
 const getKillmailDetail = `-- name: GetKillmailDetail :one
 SELECT killmail_id, character_id, hash, payload, fetched_at FROM killmail_details
-WHERE killmail_id = ?
+WHERE killmail_id = $1
 `
 
 func (q *Queries) GetKillmailDetail(ctx context.Context, killmailID int64) (KillmailDetail, error) {
@@ -279,7 +280,7 @@ func (q *Queries) GetKillmailDetail(ctx context.Context, killmailID int64) (Kill
 
 const getLocalFitting = `-- name: GetLocalFitting :one
 SELECT id, user_id, name, ship_type_id, items_json, created_at, updated_at FROM local_fittings
-WHERE id = ? AND user_id = ?
+WHERE id = $1 AND user_id = $2
 `
 
 type GetLocalFittingParams struct {
@@ -304,7 +305,7 @@ func (q *Queries) GetLocalFitting(ctx context.Context, arg GetLocalFittingParams
 
 const getSkillPlan = `-- name: GetSkillPlan :one
 SELECT id, user_id, character_id, name, created_at FROM skill_plans
-WHERE id = ? AND user_id = ?
+WHERE id = $1 AND user_id = $2
 `
 
 type GetSkillPlanParams struct {
@@ -327,7 +328,7 @@ func (q *Queries) GetSkillPlan(ctx context.Context, arg GetSkillPlanParams) (Ski
 
 const getSnapshot = `-- name: GetSnapshot :one
 SELECT character_id, kind, payload, fetched_at, cached_until FROM character_snapshots
-WHERE character_id = ? AND kind = ?
+WHERE character_id = $1 AND kind = $2
 `
 
 type GetSnapshotParams struct {
@@ -350,7 +351,7 @@ func (q *Queries) GetSnapshot(ctx context.Context, arg GetSnapshotParams) (Chara
 
 const getSnapshotFetchState = `-- name: GetSnapshotFetchState :one
 SELECT character_id, kind, state, detail, attempted_at FROM snapshot_fetch_state
-WHERE character_id = ? AND kind = ?
+WHERE character_id = $1 AND kind = $2
 `
 
 type GetSnapshotFetchStateParams struct {
@@ -378,7 +379,7 @@ func (q *Queries) GetSnapshotFetchState(ctx context.Context, arg GetSnapshotFetc
 
 const getUser = `-- name: GetUser :one
 SELECT id, created_at, home_layout, last_briefing_at FROM users
-WHERE id = ?
+WHERE id = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
@@ -395,7 +396,7 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 
 const getUserBriefingAnchor = `-- name: GetUserBriefingAnchor :one
 SELECT last_briefing_at FROM users
-WHERE id = ?
+WHERE id = $1
 `
 
 // Phase 6 (schema 017): the Briefing module's window anchor.
@@ -408,7 +409,7 @@ func (q *Queries) GetUserBriefingAnchor(ctx context.Context, id int64) (string, 
 
 const getUserHomeLayout = `-- name: GetUserHomeLayout :one
 SELECT home_layout FROM users
-WHERE id = ?
+WHERE id = $1
 `
 
 // ---------------------------------------------------------------------
@@ -425,7 +426,7 @@ func (q *Queries) GetUserHomeLayout(ctx context.Context, id int64) (string, erro
 const getWalletHistorySample = `-- name: GetWalletHistorySample :one
 SELECT user_id, character_id, day, balance, net_worth, sampled_at
 FROM wallet_history
-WHERE user_id = ? AND character_id = ? AND day = ?
+WHERE user_id = $1 AND character_id = $2 AND day = $3
 `
 
 type GetWalletHistorySampleParams struct {
@@ -437,7 +438,7 @@ type GetWalletHistorySampleParams struct {
 // ---------------------------------------------------------------------
 // Layout + market toolkit (schema 008): live market suggestions and
 // the item database explorer. All local SDE reads. Matching uses
-// instr() rather than LIKE: case-insensitive substring positions
+// strpos() rather than LIKE: case-insensitive substring positions
 // (1 = a prefix match), no wildcard escaping to worry about.
 // ---------------------------------------------------------------------
 func (q *Queries) GetWalletHistorySample(ctx context.Context, arg GetWalletHistorySampleParams) (WalletHistory, error) {
@@ -456,7 +457,7 @@ func (q *Queries) GetWalletHistorySample(ctx context.Context, arg GetWalletHisto
 
 const getWarDetail = `-- name: GetWarDetail :one
 SELECT war_id, payload, fetched_at FROM war_details
-WHERE war_id = ?
+WHERE war_id = $1
 `
 
 func (q *Queries) GetWarDetail(ctx context.Context, warID int64) (WarDetail, error) {
@@ -468,7 +469,7 @@ func (q *Queries) GetWarDetail(ctx context.Context, warID int64) (WarDetail, err
 
 const getWidgetConfig = `-- name: GetWidgetConfig :one
 SELECT config FROM widget_configs
-WHERE user_id = ? AND widget_id = ?
+WHERE user_id = $1 AND widget_id = $2
 `
 
 type GetWidgetConfigParams struct {
@@ -561,7 +562,7 @@ func (q *Queries) ListAllCorporationIDs(ctx context.Context) ([]int64, error) {
 
 const listCharactersByUser = `-- name: ListCharactersByUser :many
 SELECT character_id, user_id, name, access_token, refresh_token, token_expiry, scopes, cached_until, created_at, updated_at, owner_hash, tags, link_state, link_state_at FROM characters
-WHERE user_id = ?
+WHERE user_id = $1
 ORDER BY name
 `
 
@@ -605,7 +606,7 @@ func (q *Queries) ListCharactersByUser(ctx context.Context, userID int64) ([]Cha
 
 const listContractDetailIDsByCharacter = `-- name: ListContractDetailIDsByCharacter :many
 SELECT contract_id FROM contract_details
-WHERE character_id = ?
+WHERE character_id = $1
 ORDER BY contract_id
 `
 
@@ -667,7 +668,7 @@ func (q *Queries) ListGlobalSnapshots(ctx context.Context) ([]GlobalSnapshot, er
 
 const listKillmailDetailIDsByCharacter = `-- name: ListKillmailDetailIDsByCharacter :many
 SELECT killmail_id FROM killmail_details
-WHERE character_id = ?
+WHERE character_id = $1
 ORDER BY killmail_id
 `
 
@@ -696,7 +697,7 @@ func (q *Queries) ListKillmailDetailIDsByCharacter(ctx context.Context, characte
 
 const listKillmailDetailsByCharacter = `-- name: ListKillmailDetailsByCharacter :many
 SELECT killmail_id, character_id, hash, payload, fetched_at FROM killmail_details
-WHERE character_id = ?
+WHERE character_id = $1
 ORDER BY killmail_id
 `
 
@@ -732,11 +733,11 @@ func (q *Queries) ListKillmailDetailsByCharacter(ctx context.Context, characterI
 const listLiquidCoreTypes = `-- name: ListLiquidCoreTypes :many
 SELECT mh.type_id, SUM(mh.volume * mh.average) AS isk_velocity
 FROM market_history mh
-WHERE mh.region_id = ?1
-  AND mh.date >= (SELECT date(MAX(mh2.date), '-7 days') FROM market_history mh2 WHERE mh2.region_id = ?1)
+WHERE mh.region_id = $1
+  AND mh.date >= (SELECT to_char(MAX(mh2.date)::date - INTERVAL '7 days', 'YYYY-MM-DD') FROM market_history mh2 WHERE mh2.region_id = $1)
 GROUP BY mh.type_id
 ORDER BY isk_velocity DESC
-LIMIT ?2
+LIMIT $2::bigint
 `
 
 type ListLiquidCoreTypesParams struct {
@@ -745,8 +746,8 @@ type ListLiquidCoreTypesParams struct {
 }
 
 type ListLiquidCoreTypesRow struct {
-	TypeID      int64           `json:"type_id"`
-	IskVelocity sql.NullFloat64 `json:"isk_velocity"`
+	TypeID      int64 `json:"type_id"`
+	IskVelocity int64 `json:"isk_velocity"`
 }
 
 func (q *Queries) ListLiquidCoreTypes(ctx context.Context, arg ListLiquidCoreTypesParams) ([]ListLiquidCoreTypesRow, error) {
@@ -774,7 +775,7 @@ func (q *Queries) ListLiquidCoreTypes(ctx context.Context, arg ListLiquidCoreTyp
 
 const listLocalFittings = `-- name: ListLocalFittings :many
 SELECT id, user_id, name, ship_type_id, items_json, created_at, updated_at FROM local_fittings
-WHERE user_id = ?
+WHERE user_id = $1
 ORDER BY updated_at DESC, id DESC
 LIMIT 100
 `
@@ -814,7 +815,7 @@ const listPlanetLayoutsForUser = `-- name: ListPlanetLayoutsForUser :many
 SELECT s.character_id, s.kind, s.payload, s.fetched_at
 FROM character_snapshots s
 JOIN characters c ON c.character_id = s.character_id
-WHERE c.user_id = ? AND instr(s.kind, 'planet_layout_') = 1
+WHERE c.user_id = $1 AND strpos(s.kind, 'planet_layout_') = 1
 ORDER BY s.character_id, s.kind
 `
 
@@ -856,11 +857,11 @@ func (q *Queries) ListPlanetLayoutsForUser(ctx context.Context, userID int64) ([
 const listRecentKillmailDetails = `-- name: ListRecentKillmailDetails :many
 SELECT payload FROM killmail_details
 ORDER BY fetched_at DESC
-LIMIT ?
+LIMIT $1::bigint
 `
 
-func (q *Queries) ListRecentKillmailDetails(ctx context.Context, limit int64) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, listRecentKillmailDetails, limit)
+func (q *Queries) ListRecentKillmailDetails(ctx context.Context, rowLimit int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listRecentKillmailDetails, rowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -884,7 +885,7 @@ func (q *Queries) ListRecentKillmailDetails(ctx context.Context, limit int64) ([
 
 const listSkillPlanItems = `-- name: ListSkillPlanItems :many
 SELECT plan_id, skill_type_id, target_level, position FROM skill_plan_items
-WHERE plan_id = ?
+WHERE plan_id = $1
 ORDER BY position, skill_type_id
 `
 
@@ -918,7 +919,7 @@ func (q *Queries) ListSkillPlanItems(ctx context.Context, planID int64) ([]Skill
 
 const listSkillPlans = `-- name: ListSkillPlans :many
 SELECT id, user_id, character_id, name, created_at FROM skill_plans
-WHERE user_id = ? AND character_id = ?
+WHERE user_id = $1 AND character_id = $2
 ORDER BY created_at, id
 `
 
@@ -958,7 +959,7 @@ func (q *Queries) ListSkillPlans(ctx context.Context, arg ListSkillPlansParams) 
 
 const listSnapshotFetchStatesByCharacter = `-- name: ListSnapshotFetchStatesByCharacter :many
 SELECT character_id, kind, state, detail, attempted_at FROM snapshot_fetch_state
-WHERE character_id = ?
+WHERE character_id = $1
 ORDER BY kind
 `
 
@@ -993,7 +994,7 @@ func (q *Queries) ListSnapshotFetchStatesByCharacter(ctx context.Context, charac
 
 const listSnapshotsByCharacter = `-- name: ListSnapshotsByCharacter :many
 SELECT character_id, kind, payload, fetched_at, cached_until FROM character_snapshots
-WHERE character_id = ?
+WHERE character_id = $1
 ORDER BY kind
 `
 
@@ -1028,7 +1029,7 @@ func (q *Queries) ListSnapshotsByCharacter(ctx context.Context, characterID int6
 
 const listSnapshotsByKind = `-- name: ListSnapshotsByKind :many
 SELECT character_id, kind, payload, fetched_at, cached_until FROM character_snapshots
-WHERE kind = ?
+WHERE kind = $1
 ORDER BY character_id
 `
 
@@ -1065,7 +1066,7 @@ const listSnapshotsForUser = `-- name: ListSnapshotsForUser :many
 SELECT s.character_id, s.kind, s.payload, s.fetched_at, s.cached_until
 FROM character_snapshots s
 JOIN characters c ON c.character_id = s.character_id
-WHERE c.user_id = ? AND s.kind IN (/*SLICE:kinds*/?)
+WHERE c.user_id = $1 AND s.kind = ANY($2::text[])
 ORDER BY s.character_id, s.kind
 `
 
@@ -1075,18 +1076,7 @@ type ListSnapshotsForUserParams struct {
 }
 
 func (q *Queries) ListSnapshotsForUser(ctx context.Context, arg ListSnapshotsForUserParams) ([]CharacterSnapshot, error) {
-	query := listSnapshotsForUser
-	var queryParams []interface{}
-	queryParams = append(queryParams, arg.UserID)
-	if len(arg.Kinds) > 0 {
-		for _, v := range arg.Kinds {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:kinds*/?", strings.Repeat(",?", len(arg.Kinds))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:kinds*/?", "NULL", 1)
-	}
-	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	rows, err := q.db.QueryContext(ctx, listSnapshotsForUser, arg.UserID, pq.Array(arg.Kinds))
 	if err != nil {
 		return nil, err
 	}
@@ -1117,7 +1107,7 @@ func (q *Queries) ListSnapshotsForUser(ctx context.Context, arg ListSnapshotsFor
 const listUserWalletHistory = `-- name: ListUserWalletHistory :many
 SELECT user_id, character_id, day, balance, net_worth, sampled_at
 FROM wallet_history
-WHERE user_id = ?
+WHERE user_id = $1
 ORDER BY day, character_id
 `
 
@@ -1187,7 +1177,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 const listWalletHistorySamples = `-- name: ListWalletHistorySamples :many
 SELECT user_id, character_id, day, balance, net_worth, sampled_at
 FROM wallet_history
-WHERE user_id = ? AND character_id = ?
+WHERE user_id = $1 AND character_id = $2
 ORDER BY day
 `
 
@@ -1228,7 +1218,7 @@ func (q *Queries) ListWalletHistorySamples(ctx context.Context, arg ListWalletHi
 
 const listWidgetConfigsByUser = `-- name: ListWidgetConfigsByUser :many
 SELECT user_id, widget_id, config, updated_at FROM widget_configs
-WHERE user_id = ?
+WHERE user_id = $1
 ORDER BY widget_id
 `
 
@@ -1261,7 +1251,7 @@ func (q *Queries) ListWidgetConfigsByUser(ctx context.Context, userID int64) ([]
 }
 
 const nextSkillPlanPosition = `-- name: NextSkillPlanPosition :one
-SELECT COALESCE(MAX(position), 0) + 1 FROM skill_plan_items WHERE plan_id = ?
+SELECT CAST(COALESCE(MAX(position), 0) + 1 AS BIGINT) FROM skill_plan_items WHERE plan_id = $1
 `
 
 func (q *Queries) NextSkillPlanPosition(ctx context.Context, planID int64) (int64, error) {
@@ -1273,8 +1263,8 @@ func (q *Queries) NextSkillPlanPosition(ctx context.Context, planID int64) (int6
 
 const setCharacterLinkState = `-- name: SetCharacterLinkState :exec
 UPDATE characters
-SET link_state = ?, link_state_at = ?, updated_at = datetime('now')
-WHERE character_id = ?
+SET link_state = $1, link_state_at = $2, updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+WHERE character_id = $3
 `
 
 type SetCharacterLinkStateParams struct {
@@ -1290,8 +1280,8 @@ func (q *Queries) SetCharacterLinkState(ctx context.Context, arg SetCharacterLin
 
 const setCharacterTags = `-- name: SetCharacterTags :exec
 UPDATE characters
-SET tags = ?, updated_at = datetime('now')
-WHERE character_id = ? AND user_id = ?
+SET tags = $1, updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+WHERE character_id = $2 AND user_id = $3
 `
 
 type SetCharacterTagsParams struct {
@@ -1307,8 +1297,8 @@ func (q *Queries) SetCharacterTags(ctx context.Context, arg SetCharacterTagsPara
 
 const setUserBriefingAnchor = `-- name: SetUserBriefingAnchor :exec
 UPDATE users
-SET last_briefing_at = ?
-WHERE id = ?
+SET last_briefing_at = $1
+WHERE id = $2
 `
 
 type SetUserBriefingAnchorParams struct {
@@ -1323,8 +1313,8 @@ func (q *Queries) SetUserBriefingAnchor(ctx context.Context, arg SetUserBriefing
 
 const setUserHomeLayout = `-- name: SetUserHomeLayout :exec
 UPDATE users
-SET home_layout = ?
-WHERE id = ?
+SET home_layout = $1
+WHERE id = $2
 `
 
 type SetUserHomeLayoutParams struct {
@@ -1339,8 +1329,8 @@ func (q *Queries) SetUserHomeLayout(ctx context.Context, arg SetUserHomeLayoutPa
 
 const updateCharacterTokens = `-- name: UpdateCharacterTokens :exec
 UPDATE characters
-SET access_token = ?, refresh_token = ?, token_expiry = ?, updated_at = datetime('now')
-WHERE character_id = ?
+SET access_token = $1, refresh_token = $2, token_expiry = $3, updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+WHERE character_id = $4
 `
 
 type UpdateCharacterTokensParams struct {
@@ -1362,8 +1352,8 @@ func (q *Queries) UpdateCharacterTokens(ctx context.Context, arg UpdateCharacter
 
 const updateLocalFitting = `-- name: UpdateLocalFitting :exec
 UPDATE local_fittings
-SET name = ?, ship_type_id = ?, items_json = ?, updated_at = ?
-WHERE id = ? AND user_id = ?
+SET name = $1, ship_type_id = $2, items_json = $3, updated_at = $4
+WHERE id = $5 AND user_id = $6
 `
 
 type UpdateLocalFittingParams struct {
@@ -1388,7 +1378,7 @@ func (q *Queries) UpdateLocalFitting(ctx context.Context, arg UpdateLocalFitting
 }
 
 const updateSkillPlanItemPosition = `-- name: UpdateSkillPlanItemPosition :exec
-UPDATE skill_plan_items SET position = ? WHERE plan_id = ? AND skill_type_id = ?
+UPDATE skill_plan_items SET position = $1 WHERE plan_id = $2 AND skill_type_id = $3
 `
 
 type UpdateSkillPlanItemPositionParams struct {
@@ -1409,10 +1399,10 @@ INSERT INTO characters (
     scopes, cached_until, owner_hash, link_state, link_state_at,
     updated_at
 ) VALUES (
-    ?, ?, ?,
-    ?, ?, ?,
-    ?, ?, ?, ?, ?,
-    datetime('now')
+    $1, $2, $3,
+    $4, $5, $6,
+    $7, $8, $9, $10, $11,
+    to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
 )
 ON CONFLICT (character_id) DO UPDATE SET
     user_id       = excluded.user_id,
@@ -1479,7 +1469,7 @@ func (q *Queries) UpsertCharacter(ctx context.Context, arg UpsertCharacterParams
 
 const upsertCharacterCorporation = `-- name: UpsertCharacterCorporation :exec
 INSERT INTO character_corporations (character_id, corporation_id, updated_at)
-VALUES (?, ?, ?)
+VALUES ($1, $2, $3)
 ON CONFLICT (character_id) DO UPDATE SET
     corporation_id = excluded.corporation_id,
     updated_at     = excluded.updated_at
@@ -1498,7 +1488,7 @@ func (q *Queries) UpsertCharacterCorporation(ctx context.Context, arg UpsertChar
 
 const upsertContractDetail = `-- name: UpsertContractDetail :exec
 INSERT INTO contract_details (contract_id, character_id, payload, fetched_at)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (contract_id) DO UPDATE SET
     character_id = excluded.character_id,
     payload      = excluded.payload,
@@ -1524,7 +1514,7 @@ func (q *Queries) UpsertContractDetail(ctx context.Context, arg UpsertContractDe
 
 const upsertGlobalSnapshot = `-- name: UpsertGlobalSnapshot :exec
 INSERT INTO global_snapshots (kind, payload, fetched_at, cached_until)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (kind) DO UPDATE SET
     payload      = excluded.payload,
     fetched_at   = excluded.fetched_at,
@@ -1550,7 +1540,7 @@ func (q *Queries) UpsertGlobalSnapshot(ctx context.Context, arg UpsertGlobalSnap
 
 const upsertKillmailDetail = `-- name: UpsertKillmailDetail :exec
 INSERT INTO killmail_details (killmail_id, character_id, hash, payload, fetched_at)
-VALUES (?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (killmail_id) DO UPDATE SET
     character_id = excluded.character_id,
     hash         = excluded.hash,
@@ -1579,7 +1569,7 @@ func (q *Queries) UpsertKillmailDetail(ctx context.Context, arg UpsertKillmailDe
 
 const upsertSkillPlanItem = `-- name: UpsertSkillPlanItem :exec
 INSERT INTO skill_plan_items (plan_id, skill_type_id, target_level, position)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT(plan_id, skill_type_id) DO UPDATE SET target_level = excluded.target_level
 `
 
@@ -1605,7 +1595,7 @@ func (q *Queries) UpsertSkillPlanItem(ctx context.Context, arg UpsertSkillPlanIt
 
 const upsertSnapshot = `-- name: UpsertSnapshot :exec
 INSERT INTO character_snapshots (character_id, kind, payload, fetched_at, cached_until)
-VALUES (?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (character_id, kind) DO UPDATE SET
     payload      = excluded.payload,
     fetched_at   = excluded.fetched_at,
@@ -1633,7 +1623,7 @@ func (q *Queries) UpsertSnapshot(ctx context.Context, arg UpsertSnapshotParams) 
 
 const upsertSnapshotFetchState = `-- name: UpsertSnapshotFetchState :exec
 INSERT INTO snapshot_fetch_state (character_id, kind, state, detail, attempted_at)
-VALUES (?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (character_id, kind) DO UPDATE SET
     state        = excluded.state,
     detail       = excluded.detail,
@@ -1661,7 +1651,7 @@ func (q *Queries) UpsertSnapshotFetchState(ctx context.Context, arg UpsertSnapsh
 
 const upsertWalletHistorySample = `-- name: UpsertWalletHistorySample :exec
 INSERT INTO wallet_history (user_id, character_id, day, balance, net_worth, sampled_at)
-VALUES (?, ?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (user_id, character_id, day) DO UPDATE SET
     balance    = excluded.balance,
     net_worth   = excluded.net_worth,
@@ -1691,7 +1681,7 @@ func (q *Queries) UpsertWalletHistorySample(ctx context.Context, arg UpsertWalle
 
 const upsertWarDetail = `-- name: UpsertWarDetail :exec
 INSERT INTO war_details (war_id, payload, fetched_at)
-VALUES (?, ?, ?)
+VALUES ($1, $2, $3)
 ON CONFLICT (war_id) DO UPDATE SET
     payload    = excluded.payload,
     fetched_at = excluded.fetched_at
@@ -1710,7 +1700,7 @@ func (q *Queries) UpsertWarDetail(ctx context.Context, arg UpsertWarDetailParams
 
 const upsertWidgetConfig = `-- name: UpsertWidgetConfig :exec
 INSERT INTO widget_configs (user_id, widget_id, config, updated_at)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (user_id, widget_id) DO UPDATE SET
     config     = excluded.config,
     updated_at = excluded.updated_at

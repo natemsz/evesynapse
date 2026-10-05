@@ -12,64 +12,65 @@ import (
 
 // pageData is the view model shared by the templates.
 type pageData struct {
-	Version         string // footer product version ("v0.3.00.002"); filled by render
-	LoggedIn        bool
-	CharacterName   string
-	SSOConfigured   bool
-	AutoRefresh     bool   // base.html emits a meta-refresh (Sync page)
-	Error           string // friendly, user-safe banner (never internals)
-	Section         string // top-nav branch key (base.html); filled by render from the page when empty
-	NavPage         string // template file rendered, for marking the exact nav link; filled by render
-	Home            *homeView
-	CharChars       []assetCharLink
-	CharacterPage   *characterView
-	Fittings        *fittingsView
-	FittingsChars   []assetCharLink
-	FitEditor       *fitEditorView
-	Killmails       *killmailsView
-	KillmailChars   []assetCharLink
-	Wallet          *walletView
-	WalletChars     []assetCharLink
-	Orders          *ordersView
-	OrdersChars     []assetCharLink
-	Contracts       *contractsView
-	ContractsChars  []assetCharLink
-	Industry        *industryView
-	IndustryChars   []assetCharLink
-	Planner         *plannerView
-	IntelWars       *warsView
-	IntelIncursions *incursionsView
-	IntelFW         *fwView
-	ServerStatus    *serverStatusView
-	Corps           []corpView
-	CorpChars       []assetCharLink
-	CorpMembers     *corpMembersView
-	CorpWallets     *corpWalletsView
-	CorpOrders      *corpOrdersView
-	CorpAssets      *corpAssetsView
-	CorpStructs     *corpStructuresView
-	Assets          *assetsView
-	AssetsChars     []assetCharLink
-	AssetsSearch    *assetsSearchView
-	Planets         *planetsView
-	PlanetsChars    []assetCharLink
-	Mail            *mailView
-	MailChars       []assetCharLink
-	Calendar        *calendarView
-	CalendarChars   []assetCharLink
-	Contacts        *contactsView
-	ContactsChars   []assetCharLink
-	Market          *marketView
-	MarketScanner   *scannerView
-	Items           *itemsView
-	Skills          *skillsView
-	SkillsChars     []assetCharLink
-	SkillPlans      *skillPlansView
-	Sync            *syncView
-	Users           []db.User
-	Characters      []db.Character
-	Snapshots       []adminSnapshotRow
-	WorkerStatus    string
+	Version           string // footer product version ("v0.3.00.002"); filled by render
+	LoggedIn          bool
+	CharacterName     string
+	SSOConfigured     bool
+	AutoRefresh       bool   // base.html emits a meta-refresh (Sync page)
+	Error             string // friendly, user-safe banner (never internals)
+	Section           string // top-nav branch key (base.html); filled by render from the page when empty
+	NavPage           string // template file rendered, for marking the exact nav link; filled by render
+	Home              *homeView
+	CharChars         []assetCharLink
+	CharacterPage     *characterView
+	Fittings          *fittingsView
+	FittingsChars     []assetCharLink
+	FitEditor         *fitEditorView
+	Killmails         *killmailsView
+	KillmailChars     []assetCharLink
+	Wallet            *walletView
+	WalletChars       []assetCharLink
+	Orders            *ordersView
+	OrdersChars       []assetCharLink
+	Contracts         *contractsView
+	ContractsChars    []assetCharLink
+	Industry          *industryView
+	IndustryChars     []assetCharLink
+	Planner           *plannerView
+	IntelWars         *warsView
+	IntelIncursions   *incursionsView
+	IntelFW           *fwView
+	ServerStatus      *serverStatusView
+	Corps             []corpView
+	CorpChars         []assetCharLink
+	CorpMembers       *corpMembersView
+	CorpWallets       *corpWalletsView
+	CorpOrders        *corpOrdersView
+	CorpAssets        *corpAssetsView
+	CorpStructs       *corpStructuresView
+	Assets            *assetsView
+	AssetsChars       []assetCharLink
+	AssetsSearch      *assetsSearchView
+	Planets           *planetsView
+	PlanetsChars      []assetCharLink
+	Mail              *mailView
+	MailChars         []assetCharLink
+	Calendar          *calendarView
+	CalendarChars     []assetCharLink
+	Contacts          *contactsView
+	ContactsChars     []assetCharLink
+	Market            *marketView
+	MarketScanner     *scannerView
+	MarketTradefinder *tradefinderView
+	Items             *itemsView
+	Skills            *skillsView
+	SkillsChars       []assetCharLink
+	SkillPlans        *skillPlansView
+	Sync              *syncView
+	Users             []db.User
+	Characters        []db.Character
+	Snapshots         []adminSnapshotRow
+	WorkerStatus      string
 
 	// Header character switcher (base.html): every character
 	// linked to the signed-in account, the acting one marked.
@@ -148,7 +149,7 @@ func sectionForPage(page string) string {
 		return "character"
 	case "assets.html", "industry.html", "planets.html", "planner.html":
 		return "assets"
-	case "market.html", "market_scanner.html", "wallet.html", "orders.html", "contracts.html", "items.html", "system.html", "station.html", "structure.html":
+	case "market.html", "market_scanner.html", "market_tradefinder.html", "wallet.html", "orders.html", "contracts.html", "items.html", "system.html", "station.html", "structure.html":
 		return "economy"
 	case "corporations.html", "corp_members.html", "corp_wallets.html",
 		"corp_orders.html", "corp_assets.html", "corp_structures.html",

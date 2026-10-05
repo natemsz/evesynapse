@@ -393,6 +393,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleMarket)
 		r.Get("/scanner/", app.handleMarketScanner)
+		r.Get("/tradefinder/", app.handleMarketTradefinder)
 		r.Get("/suggest", app.handleMarketSuggest)
 		r.Get("/history-fragment", app.handleMarketHistoryFragment)
 		r.Get("/trader-fragment", app.handleMarketTraderFragment)

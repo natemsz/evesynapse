@@ -435,6 +435,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/fittings", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleFittings)
+		r.Get("/saved/", app.handleFittingsSaved)
 		r.Post("/simulate/", app.handleFitSimulate)
 		r.Get("/clones.json", app.handleFitClonesJSON)
 		r.Get("/picker.json", app.handleFitPickerJSON)

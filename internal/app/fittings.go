@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -78,8 +79,9 @@ func fittingSlotCategory(flag string) string {
 	return "Other"
 }
 
-// handleFittings renders the Fittings page for one of the signed-in
-// user's characters (switchable via ?character=).
+// handleFittings renders the fit simulator page for one of the
+// signed-in user's characters (switchable via ?character=). The
+// saved-fits list lives on its own page (/fittings/saved/).
 func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := pageData{
@@ -102,6 +104,42 @@ func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 	}
 	data.FittingsChars = links
 
+	// The simulator resolves the ?esi= "View stats" deep link
+	// against the character's EVE fittings; a missing snapshot
+	// just means the link won't resolve.
+	var fittings esi.Fittings
+	if err := app.esi.GetCached(ctx, active, esi.SnapFittings, &fittings); err != nil {
+		log.Printf("fittings: load for character %d: %v", active.CharacterID, err)
+	}
+	app.attachFitEditor(ctx, r, &data, characters, active, fittings)
+	app.render(ctx, w, http.StatusOK, "fittings.html", data)
+}
+
+// handleFittingsSaved renders the "Saved fits" page: the signed-in
+// user's EVE fittings for one character (switchable via
+// ?character=), items grouped by slot category. Data comes from the
+// fittings snapshot; every name resolves from the local caches only.
+func (app *Application) handleFittingsSaved(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	data := pageData{
+		LoggedIn:      true,
+		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
+		SSOConfigured: app.cfg.SSOConfigured(),
+	}
+
+	_, active, links, err := app.pickCharacter(ctx, r, "/fittings/saved/")
+	if err != nil {
+		log.Printf("fittings: list characters: %v", err)
+		data.Error = "Could not load fitting data; check the server log."
+		app.render(ctx, w, http.StatusOK, "fittings_saved.html", data)
+		return
+	}
+	if links == nil {
+		app.render(ctx, w, http.StatusOK, "fittings_saved.html", data)
+		return
+	}
+	data.FittingsChars = links
+
 	view := &fittingsView{CharacterID: active.CharacterID, CharacterName: active.Name}
 	data.Fittings = view
 
@@ -113,13 +151,18 @@ func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 		if _, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: active.CharacterID, Kind: esi.SnapFittings}); errors.Is(serr, sql.ErrNoRows) {
 			view.Warming = true
 		}
-		app.attachFitEditor(ctx, r, &data, characters, active, nil)
-		app.render(ctx, w, http.StatusOK, "fittings.html", data)
+		app.render(ctx, w, http.StatusOK, "fittings_saved.html", data)
 		return
 	}
 	view.Loaded = true
+	view.Fittings = app.buildFittingEntries(ctx, fittings)
+	app.render(ctx, w, http.StatusOK, "fittings_saved.html", data)
+}
 
-	// One cache-only name pass covers ship types and every item.
+// buildFittingEntries groups one character's EVE fittings by slot
+// category, resolving every ship and item name from the local
+// caches. One cache-only name pass covers the whole list.
+func (app *Application) buildFittingEntries(ctx context.Context, fittings esi.Fittings) []fittingEntry {
 	typeIDs := make([]int64, 0, len(fittings))
 	for _, f := range fittings {
 		typeIDs = append(typeIDs, f.ShipTypeID)
@@ -135,6 +178,7 @@ func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 		return fmt.Sprintf("Type #%d", typeID)
 	}
 
+	entries := make([]fittingEntry, 0, len(fittings))
 	for _, f := range fittings {
 		entry := fittingEntry{FittingID: f.FittingID, Name: f.Name, ShipType: nameOf(f.ShipTypeID), ShipTypeID: f.ShipTypeID}
 
@@ -159,9 +203,7 @@ func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 			sort.Slice(items, func(i, j int) bool { return items[i].Name < items[j].Name })
 			entry.Groups = append(entry.Groups, fittingGroup{Label: "Other", Items: items})
 		}
-		view.Fittings = append(view.Fittings, entry)
+		entries = append(entries, entry)
 	}
-
-	app.attachFitEditor(ctx, r, &data, characters, active, fittings)
-	app.render(ctx, w, http.StatusOK, "fittings.html", data)
+	return entries
 }

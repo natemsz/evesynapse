@@ -145,7 +145,7 @@ func sectionForPage(page string) string {
 	switch page {
 	case "home.html":
 		return "home"
-	case "character.html", "skills.html", "skillplans.html", "fittings.html", "killmails.html", "characters.html",
+	case "character.html", "skills.html", "skillplans.html", "fittings.html", "fittings_saved.html", "killmails.html", "characters.html",
 		"mail.html", "calendar.html", "contacts.html", "pilot.html":
 		return "character"
 	case "assets.html", "industry.html", "planets.html", "planner.html":

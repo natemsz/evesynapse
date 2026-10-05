@@ -328,7 +328,7 @@ func (app *Application) handleSkillPlans(w http.ResponseWriter, r *http.Request)
 	// Editor skill search (only meaningful with a plan selected).
 	view.SearchQuery = strings.TrimSpace(r.URL.Query().Get("q"))
 	if view.SearchQuery != "" && selected != nil {
-		hits, err := app.queries.SearchSDESkills(ctx, view.SearchQuery)
+		hits, err := app.queries.SearchSDESkills(ctx, db.SearchSDESkillsParams{Lower: view.SearchQuery, Lower_2: view.SearchQuery})
 		if err != nil {
 			log.Printf("skill plans: search %q: %v", view.SearchQuery, err)
 		}

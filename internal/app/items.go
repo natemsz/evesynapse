@@ -322,7 +322,7 @@ func (app *Application) handleItemsGroup(w http.ResponseWriter, r *http.Request)
 		marketOnly = 1
 	}
 	total, err := app.queries.CountSDETypesInGroupFiltered(ctx,
-		db.CountSDETypesInGroupFilteredParams{GroupID: groupID, LOWER: view.Query, MarketOnly: marketOnly})
+		db.CountSDETypesInGroupFilteredParams{GroupID: groupID, Lower: view.Query, MarketOnly: marketOnly})
 	if err != nil {
 		log.Printf("items: count types of group %d: %v", groupID, err)
 		data.Error = "Item database unavailable right now — check the server log."
@@ -346,10 +346,10 @@ func (app *Application) handleItemsGroup(w http.ResponseWriter, r *http.Request)
 	rows, err := app.queries.ListSDETypesInGroup(ctx,
 		db.ListSDETypesInGroupParams{
 			GroupID:    groupID,
-			LOWER:      view.Query,
+			Lower:      view.Query,
 			MarketOnly: marketOnly,
-			Limit:      int64(itemsTypesPerPage),
-			Offset:     int64((view.Page - 1) * itemsTypesPerPage),
+			RowLimit:   int64(itemsTypesPerPage),
+			RowOffset:  int64((view.Page - 1) * itemsTypesPerPage),
 		})
 	if err != nil {
 		log.Printf("items: list types of group %d: %v", groupID, err)

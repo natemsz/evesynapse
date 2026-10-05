@@ -281,7 +281,7 @@ func TestFitLocalSaveListDelete(t *testing.T) {
 	}
 	// The editor no longer embeds the your-fits list; the search
 	// bar above finds saved fits through mine.json.
-	mustContain(t, "/fittings/", body, "Your fits", "fit-yourfits-search")
+	mustContain(t, "/fittings/", body, "Ship Loadouts", "fit-yourfits-search")
 	if strings.Contains(body, "Saved One") {
 		t.Errorf("editor embeds the saved fit list; it should only offer the search bar")
 	}
@@ -760,6 +760,13 @@ func TestFitSimulateImplants(t *testing.T) {
 		JumpClones: []esi.JumpClone{
 			{JumpCloneID: 11, LocationID: 60000001, LocationType: "station",
 				Name: "PvP clone", Implants: []int64{19540}},
+			// No custom name (ESI leaves it empty): the label must
+			// still distinguish this clone from others.
+			{JumpCloneID: 98765432, LocationID: 60000001, LocationType: "station",
+				Implants: []int64{19540, 19551}},
+			// Generic ESI name gets the same fallback treatment.
+			{JumpCloneID: 13579, LocationID: 60000001, LocationType: "station",
+				Name: "Jump clone"},
 		},
 	})
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
@@ -797,7 +804,7 @@ func TestFitSimulateImplants(t *testing.T) {
 		t.Fatalf("clones.json status = %d", rec.Code)
 	}
 	mustContain(t, "/fittings/clones.json", rec.Body.String(),
-		"Active clone", "PvP clone")
+		"Active clone", "PvP clone", "Jump clone #5432", "Jump clone #3579")
 
 	// A pilot the user doesn't own is refused.
 	req = httptest.NewRequest(http.MethodGet, "/fittings/clones.json?pilot=42424242", nil)

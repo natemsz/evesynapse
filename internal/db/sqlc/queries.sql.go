@@ -731,7 +731,7 @@ func (q *Queries) ListKillmailDetailsByCharacter(ctx context.Context, characterI
 }
 
 const listLiquidCoreTypes = `-- name: ListLiquidCoreTypes :many
-SELECT mh.type_id, SUM(mh.volume * mh.average) AS isk_velocity
+SELECT mh.type_id, SUM(mh.volume * mh.average)::bigint AS isk_velocity
 FROM market_history mh
 WHERE mh.region_id = $1
   AND mh.date >= (SELECT to_char(MAX(mh2.date)::date - INTERVAL '7 days', 'YYYY-MM-DD') FROM market_history mh2 WHERE mh2.region_id = $1)

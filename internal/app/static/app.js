@@ -1524,8 +1524,8 @@
     { name: "Characters", url: "/characters/" },
     { name: "Skills", url: "/skills/" },
     { name: "Skill plans", url: "/skills/plans" },
-    { name: "Fittings", url: "/fittings/" },
-    { name: "Saved fits", url: "/fittings/saved/" },
+    { name: "Ship Workbench", url: "/fittings/" },
+    { name: "Ship Loadouts", url: "/fittings/saved/" },
     { name: "Killmails", url: "/killmails/" },
     { name: "Mail", url: "/mail/" },
     { name: "Calendar", url: "/calendar/" },
@@ -1769,3 +1769,61 @@
   });
 })();
 
+
+// --- Theme toggle (dark/light) ------------------------------
+// A stored choice in localStorage wins and is written onto
+// document.documentElement.dataset.theme; with no stored
+// choice the attribute stays unset so the stylesheet's
+// prefers-color-scheme media query applies. The button only
+// renders while logged in (see base.html), so everything here
+// is guarded: no button, no work.
+(function () {
+  "use strict";
+  var btn = document.getElementById("theme-toggle");
+  if (!btn) return;
+  var root = document.documentElement;
+  var storageKey = "evesynapse-theme";
+  var sun = btn.querySelector(".theme-icon-sun");
+  var moon = btn.querySelector(".theme-icon-moon");
+
+  function readSaved() {
+    try {
+      var v = window.localStorage.getItem(storageKey);
+      return (v === "light" || v === "dark") ? v : "";
+    } catch (e) { return ""; }
+  }
+  function save(theme) {
+    try {
+      window.localStorage.setItem(storageKey, theme);
+    } catch (e) { /* private mode: the click still works this visit */ }
+  }
+  // The theme in effect right now: a manually set attribute
+  // wins; otherwise ask the OS, falling back to dark (the
+  // app's default palette).
+  function effective() {
+    var attr = root.getAttribute("data-theme");
+    if (attr === "light" || attr === "dark") return attr;
+    if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {
+      return "light";
+    }
+    return "dark";
+  }
+  // Show the sun icon while light is effective, the moon while
+  // dark is effective.
+  function paint() {
+    var theme = effective();
+    if (sun) sun.hidden = theme !== "light";
+    if (moon) moon.hidden = theme !== "dark";
+  }
+
+  var saved = readSaved();
+  if (saved) root.setAttribute("data-theme", saved);
+  paint();
+
+  btn.addEventListener("click", function () {
+    var next = effective() === "light" ? "dark" : "light";
+    root.setAttribute("data-theme", next);
+    save(next);
+    paint();
+  });
+})();

@@ -5,12 +5,6 @@ companion (character sheets, market, fitting, intel) rebuilt in Go on
 CCP's **ESI** API with **EVE SSO** login, replacing the retired XML API
 and key/vCode auth.
 
-Developed by Nate Sanchez (natemsz / IGN: Burzrujat) with love, and in the hopes it might be useful.
-
-EveSynapse is based on the 2013 project originally developed by natemsz, element, and j0ker (Rest in peace Matt. See you on the other side of the Eve Gate) 
-
-This project is dedicated to EVE Online, its pilots and its developers — the game and community that I have loved for over two decades.
-
 ## Stack
 
 - **Go** (module `evesynapse`; see `go.mod`)
@@ -479,6 +473,30 @@ summary line per cycle only when something was refreshed or failed,
 plus a heartbeat every 10 minutes. The current status (last run,
 summary, cumulative names resolved) shows on the Admin and Sync
 pages.
+
+## Performance principles
+
+EveSynapse is built to stay lightweight, lean, fast, and efficient at
+scale — without compromising features, power, or security. Two rules
+govern how data moves:
+
+1. **Precompute at ingest, never at render.** Expensive work (medians,
+   bands, aggregates, rankings) happens once in the background worker
+   when data arrives, and its results are stored. Page handlers never
+   recompute what a scheduled job already computed.
+2. **Bounded reads on every render.** A page handler may only read a
+   bounded number of rows per render (on the order of ~100). No
+   full-table scans, no unbounded sorts or filters in Go, no per-row
+   queries in loops. Filtering, sorting, and ranking belong in SQL
+   with a LIMIT; anything the page needs beyond that belongs in a
+   stored table written at ingest time.
+
+Data changes on a known schedule (market sweeps complete hourly;
+character snapshots refresh on their own cadence), so a page that
+re-derives everything per load is doing repeat work for an identical
+answer. Under one user that is a CPU spike; under a hundred it is an
+outage. When in doubt, push the work into the worker and store the
+result.
 
 ## Look & feel
 

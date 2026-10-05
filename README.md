@@ -8,7 +8,6 @@ EveSynapse is based on the 2013 project originally developed by natemsz, element
 
 This project is dedicated to EVE Online, its pilots and its developers — the game and community that I have loved for over two decades.
 
-
 ## Stack
 
 - **Go** (module `evesynapse`; see `go.mod`)

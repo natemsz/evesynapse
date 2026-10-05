@@ -15,6 +15,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -270,7 +271,7 @@ func TestFitLocalSaveListDelete(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("page status = %d", code)
 	}
-	mustContain(t, "/fittings/", body, "Your saved fits", "Saved One", "Fixture Frigate")
+	mustContain(t, "/fittings/", body, "Your fits", "Saved One", "Fixture Frigate")
 
 	// Opening it loads the fit into the editor.
 	_, body = getPage(t, app, cookie, "/fittings/?local="+strconv.FormatInt(saved.ID, 10))
@@ -298,7 +299,7 @@ func TestFitBuildVisual(t *testing.T) {
 	familyOf := map[int64]string{fitBlasterID: fitFamilyHigh, fitPlateID: fitFamilyLow}
 	nameOf := func(id int64) string { return "Type " + strconv.FormatInt(id, 10) }
 
-	v := fitBuildVisual(res, doc, familyOf, nameOf)
+	v := fitBuildVisual(res, doc, nil, familyOf, nameOf, false)
 	if v.ShipID != fitShipID {
 		t.Errorf("ShipID = %d, want %d", v.ShipID, fitShipID)
 	}
@@ -330,6 +331,103 @@ func TestFitBuildVisual(t *testing.T) {
 	}
 	if filled != 3 {
 		t.Errorf("filled = %d, want 3", filled)
+	}
+	// Ember dividers + in-ring captions: highs, mids, lows, rigs
+	// render (no subsystems fitted), so 4 labels and 3 dividers
+	// (high|mid, mid|low, low|rig).
+	wantLabels := []string{"HIGH", "MID", "LOW", "RIG"}
+	if len(v.Labels) != len(wantLabels) {
+		t.Fatalf("labels = %d, want %d", len(v.Labels), len(wantLabels))
+	}
+	for i, want := range wantLabels {
+		l := v.Labels[i]
+		if l.Text != want {
+			t.Errorf("label %d = %q, want %q", i, l.Text, want)
+		}
+		if l.X < 0 || l.X > 100 || l.Y < 0 || l.Y > 100 {
+			t.Errorf("label %q at (%.1f, %.1f) outside the box", l.Text, l.X, l.Y)
+		}
+	}
+	if len(v.Separators) != 3 {
+		t.Fatalf("separators = %d, want 3", len(v.Separators))
+	}
+	for i, s := range v.Separators {
+		if s.X < 0 || s.X > 100 || s.Y < 0 || s.Y > 100 {
+			t.Errorf("separator %d at (%.1f, %.1f) outside the box", i, s.X, s.Y)
+		}
+	}
+}
+
+// TestFitESIFittingBody: the editor document maps to the ESI
+// fitting body — one flag per module instance (HiSlot0-7 etc.),
+// charges riding their weapon's slot, drones to DroneBay and cargo
+// to Cargo. Over-slot documents are an error, never silently
+// truncated.
+func TestFitESIFittingBody(t *testing.T) {
+	const (
+		droneID  = int64(9001)
+		cargoID  = int64(9002)
+		chargeID = int64(9003)
+	)
+	doc := &fitDoc{
+		Name:       "Test fit",
+		ShipTypeID: fitShipID,
+		Items: []fitDocItem{
+			{TypeID: fitBlasterID, Qty: 2},
+			{TypeID: fitPlateID, Qty: 1},
+			{TypeID: droneID, Qty: 3},
+			{TypeID: cargoID, Qty: 10},
+		},
+		Charges: map[int64]int64{fitBlasterID: chargeID},
+	}
+	familyOf := map[int64]string{
+		fitBlasterID: fitFamilyHigh,
+		fitPlateID:   fitFamilyLow,
+		droneID:      fitFamilyDrone,
+		cargoID:      fitFamilyCargo,
+	}
+	body, err := fitESIFittingBody("Test fit", doc, familyOf)
+	if err != nil {
+		t.Fatalf("fitESIFittingBody: %v", err)
+	}
+	if body.Name != "Test fit" || body.ShipTypeID != fitShipID {
+		t.Errorf("body name/ship = %q/%d", body.Name, body.ShipTypeID)
+	}
+	if body.Description == "" {
+		t.Error("body description should mark EveSynapse as the creator")
+	}
+	got := map[string][]int64{}
+	qty := map[string]int64{}
+	for _, it := range body.Items {
+		got[it.Flag] = append(got[it.Flag], it.TypeID)
+		qty[it.Flag] = it.Quantity
+	}
+	// One flag per module instance; the charge rides the first
+	// blaster's slot (HiSlot0 carries both the module and its ammo).
+	want := map[string][]int64{
+		"HiSlot0":  {fitBlasterID, chargeID},
+		"HiSlot1":  {fitBlasterID},
+		"LoSlot0":  {fitPlateID},
+		"DroneBay": {droneID},
+		"Cargo":    {cargoID},
+	}
+	for flag, ids := range want {
+		if fmt.Sprint(got[flag]) != fmt.Sprint(ids) {
+			t.Errorf("flag %s = %v, want %v", flag, got[flag], ids)
+		}
+	}
+	if qty["DroneBay"] != 3 || qty["Cargo"] != 10 {
+		t.Errorf("drone/cargo quantities = %d/%d, want 3/10", qty["DroneBay"], qty["Cargo"])
+	}
+	if len(body.Items) != 6 { // 2 blasters + plate + drone + cargo + charge
+		t.Errorf("items = %d, want 6", len(body.Items))
+	}
+
+	// Nine high-slot modules: no HiSlot8 exists, so this is an
+	// error rather than a silent drop.
+	doc.Items = []fitDocItem{{TypeID: fitBlasterID, Qty: 9}}
+	if _, err := fitESIFittingBody("Test fit", doc, familyOf); err == nil {
+		t.Error("9 high-slot modules should be an error, got nil")
 	}
 }
 

@@ -543,3 +543,147 @@ func TestFitEngineT3Subsystems(t *testing.T) {
 		t.Fatalf("T3 rig slots = %d, want 3", res.RigSlots)
 	}
 }
+
+// TestFitEngineSubsystemSkillScaling pins the Loki acceptance
+// case with the live SDE's per-level pattern (verified
+// 2026-10-05): the subsystem skill's effect pre-multiplies the
+// subsystem's bonus attribute by skillLevel (op 0), and the
+// subsystem's effect applies the scaled bonus to webifiers
+// (op 6, postPercent). Effective strength = base x (1 +
+// bonusPerLevel x skillLevel).
+func TestFitEngineSubsystemSkillScaling(t *testing.T) {
+	const (
+		ship   = 1002
+		sub    = 6001
+		web    = 6002
+		skill  = 2002
+		subGrp = 900
+		webGrp = 902
+		bonus  = 2000 // web bonus attr, 10.0 = 10% per level
+	)
+	f := newFitFixture().
+		group(ship, 25).group(sub, subGrp).group(web, webGrp).
+		attrs(ship, map[int64]float64{14: 3, 13: 3, 12: 2}).
+		attrs(sub, map[int64]float64{bonus: 10.0}).
+		attrs(web, map[int64]float64{20: -60.0}).
+		attrs(skill, map[int64]float64{}).
+		flag(sub, 3772). // subsystem slot marker
+		flag(web, 12).   // high slot marker
+		effect(sub, 9001, 0,
+			fitModGroup(20, bonus, 6, webGrp)).
+		effect(skill, 9002, 0,
+			fitModGroup(bonus, 280, 0, subGrp)).
+		requires(sub, fitSkillReq{SkillTypeID: skill, Level: 1})
+	items := []fitItemInput{{TypeID: sub, Quantity: 1}, {TypeID: web, Quantity: 1}}
+
+	// Level 3: 10% x 3 -> factor 1.3 -> -60 x 1.3 = -78.
+	res := computeFit(f.snap, ship, items, map[int64]int{skill: 3}, nil)
+	near(t, "web strength at skill 3", res.ItemAttrs[web][20], -78, 1e-9)
+
+	// All V: factor 1.5 -> -90.
+	res = computeFit(f.snap, ship, items, map[int64]int{skill: 5}, nil)
+	near(t, "web strength at skill 5", res.ItemAttrs[web][20], -90, 1e-9)
+}
+
+// TestFitEngineDPSVolley pins DPS and volley on a gunned ship:
+// 5x T2 medium guns (damageMultiplier 5, 5s cycle, charge volley
+// 20) plus drones. Volley = multiplier x charge volley; DPS =
+// volley / cycle.
+func TestFitEngineDPSVolley(t *testing.T) {
+	const (
+		ship   = 1001
+		gun    = 3001
+		charge = 4001
+		drone  = 5001
+	)
+	f := newFitFixture().
+		group(ship, 25).group(gun, 59).group(charge, 901).group(drone, 100).
+		attrs(ship, map[int64]float64{14: 3, 13: 3, 12: 2, 1271: 50, 283: 50}).
+		attrs(gun, map[int64]float64{64: 5, 51: 5000, 50: 15, 30: 10}).
+		attrs(charge, map[int64]float64{114: 5, 116: 5, 117: 5, 118: 5, 64: 1}).
+		attrs(drone, map[int64]float64{1272: 10, 51: 1000, 64: 1.2, 114: 4, 116: 3, 117: 2, 118: 1}).
+		flag(gun, 12). // high slot
+		flag(gun, 42). // turret fitted (effect 42)
+		phys(drone, fitPhysics{Volume: 5})
+	// effect 42 = turret marker; the engine checks fitEffectTurretFitted.
+	f.snap.typeEffects[gun] = append(f.snap.typeEffects[gun], 42)
+	f.snap.effects[42] = &fitEffect{Category: 0}
+
+	items := []fitItemInput{{TypeID: gun, Quantity: 5}, {TypeID: drone, Quantity: 5}}
+	charges := map[int64]int64{gun: charge}
+	res := computeFit(f.snap, ship, items, map[int64]int{3436: 5}, charges)
+
+	// Per gun: volley 20 x multiplier 5 = 100; 5 guns = 500.
+	near(t, "turret volley", res.TurretVolley, 500, 1e-9)
+	// DPS: 500 / 5s = 100.
+	near(t, "turret DPS", res.TurretDPS, 100, 1e-9)
+	// Drones: 5 active (bandwidth 50/10), volley 10 x 1.2 = 12 each.
+	near(t, "drone volley", res.DroneVolley, 60, 1e-9)
+	near(t, "drone DPS", res.DroneDPS, 60, 1e-9)
+	near(t, "total DPS", res.DPS, 160, 1e-9)
+	near(t, "total volley", res.Volley, 560, 1e-9)
+}
+
+// TestFitEngineCapWarfare pins neutralizer and nosferatu drain.
+// Remote capacitor transmitters (group 67) are logistics, not
+// offensive drain, even though they share powerTransferAmount.
+func TestFitEngineCapWarfare(t *testing.T) {
+	const (
+		ship = 1001
+		neut = 6003
+		nos  = 6004
+		xfer = 6005
+	)
+	f := newFitFixture().
+		group(ship, 25).group(neut, 903).group(nos, 68).group(xfer, 67).
+		attrs(ship, map[int64]float64{14: 3, 13: 3, 12: 2}).
+		attrs(neut, map[int64]float64{97: 180, 73: 12000}).
+		attrs(nos, map[int64]float64{90: 90, 73: 10000}).
+		attrs(xfer, map[int64]float64{90: 90, 73: 10000}).
+		flag(neut, 13).flag(nos, 13).flag(xfer, 13)
+	items := []fitItemInput{
+		{TypeID: neut, Quantity: 2},
+		{TypeID: nos, Quantity: 1},
+		{TypeID: xfer, Quantity: 1},
+	}
+	res := computeFit(f.snap, ship, items, map[int64]int{2001: 5}, nil)
+
+	near(t, "neut per cycle", res.NeutDrainPerCycle, 360, 1e-9)
+	near(t, "neut per sec", res.NeutDrainPerSec, 30, 1e-9)
+	near(t, "nos per cycle", res.NosDrainPerCycle, 90, 1e-9)
+	near(t, "nos per sec", res.NosDrainPerSec, 9, 1e-9)
+}
+
+// TestFitEngineShipRestricted: a siege module (canFitShipGroup01
+// = 485 Dreadnought) is allowed on a dread and flagged on a
+// cruiser.
+func TestFitEngineShipRestricted(t *testing.T) {
+	const (
+		dread = 1003
+		ship  = 1001
+		siege = 6006
+	)
+	f := newFitFixture().
+		group(dread, 485).group(ship, 25).group(siege, 903).
+		attrs(dread, map[int64]float64{14: 3, 13: 3, 12: 2}).
+		attrs(ship, map[int64]float64{14: 3, 13: 3, 12: 2}).
+		attrs(siege, map[int64]float64{1298: 485}).
+		flag(siege, 13)
+	items := []fitItemInput{{TypeID: siege, Quantity: 1}}
+
+	res := computeFit(f.snap, dread, items, map[int64]int{2001: 5}, nil)
+	if len(res.Restricted) != 0 {
+		t.Errorf("siege on dread: %d restrictions, want 0", len(res.Restricted))
+	}
+
+	res = computeFit(f.snap, ship, items, map[int64]int{2001: 5}, nil)
+	if len(res.Restricted) != 1 {
+		t.Fatalf("siege on cruiser: %d restrictions, want 1", len(res.Restricted))
+	}
+	if res.Restricted[0].TypeID != siege {
+		t.Errorf("restricted type = %d, want %d", res.Restricted[0].TypeID, siege)
+	}
+	if len(res.Restricted[0].NeedGroup) != 1 || res.Restricted[0].NeedGroup[0] != 485 {
+		t.Errorf("restricted needs %v, want group [485]", res.Restricted[0].NeedGroup)
+	}
+}

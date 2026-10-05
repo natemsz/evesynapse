@@ -33,8 +33,8 @@
           <a href="/characters/"{{if eq .NavPage "characters.html"}} class="active"{{end}}>Characters</a>
           <a href="/skills/"{{if eq .NavPage "skills.html"}} class="active"{{end}}>Skills</a>
           <a href="/skills/plans"{{if eq .NavPage "skillplans.html"}} class="active"{{end}}>Skill plans</a>
-          <a href="/fittings/"{{if eq .NavPage "fittings.html"}} class="active"{{end}}>Fittings</a>
-          <a href="/fittings/saved/"{{if eq .NavPage "fittings_saved.html"}} class="active"{{end}}>Saved fits</a>
+          <a href="/fittings/"{{if eq .NavPage "fittings.html"}} class="active"{{end}}>Ship Workbench</a>
+          <a href="/fittings/saved/"{{if eq .NavPage "fittings_saved.html"}} class="active"{{end}}>Ship Loadouts</a>
           <a href="/killmails/"{{if and (eq .Section "character") (eq .NavPage "killmails.html")}} class="active"{{end}}>Killmails</a>
           <a href="/mail/"{{if eq .NavPage "mail.html"}} class="active"{{end}}>Mail</a>
           <a href="/calendar/"{{if eq .NavPage "calendar.html"}} class="active"{{end}}>Calendar</a>
@@ -103,7 +103,7 @@
         </details>
         {{end}}
       </div>
-      {{if .LoggedIn}}<a class="sidebar-signout" href="/auth/logout">Sign out</a>{{end}}
+      {{if .LoggedIn}}<button type="button" id="theme-toggle" class="theme-toggle" title="Toggle dark/light mode" aria-label="Toggle dark/light mode"><span class="theme-icon theme-icon-sun" aria-hidden="true">☀</span><span class="theme-icon theme-icon-moon" aria-hidden="true">🌙</span></button><a class="sidebar-signout" href="/auth/logout">Sign out</a>{{end}}
     </div>
   </div>
 </aside>

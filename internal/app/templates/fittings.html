@@ -1,6 +1,6 @@
-{{define "title"}}Fittings{{end}}
+{{define "title"}}Ship Workbench{{end}}
 {{define "content"}}
-<h1><span class="gt">Fittings</span></h1>
+<h1><span class="gt">Ship Workbench</span></h1>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
@@ -33,22 +33,13 @@
   {{end}}
   <span class="fit-saved" id="fit-saved-at" hidden></span>
 </div>
-<div class="fit-meta">
-  <label class="fit-meta-desc">Description
-    <input type="text" id="fit-desc" value="{{.FitEditor.Description}}" placeholder="What is this fit for?" autocomplete="off" maxlength="280">
-  </label>
-  <label class="fit-meta-tags">Tags
-    <input type="text" id="fit-tags" value="{{.FitEditor.Tags}}" placeholder="pvp, kiting, …" autocomplete="off">
-  </label>
-  <label class="fit-check"><input type="checkbox" id="fit-public"{{if .FitEditor.IsPublic}} checked{{end}}> Make public</label>
-</div>
 <div class="fit-yourfits">
   <span class="searchwrap fit-yourfitswrap">
-    <input type="text" id="fit-yourfits-search" placeholder="Your fits — search to load one…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-yourfits-suggest" aria-autocomplete="list">
+    <input type="text" id="fit-yourfits-search" placeholder="Search ship loadouts" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-yourfits-suggest" aria-autocomplete="list">
     <ul class="suggest" id="fit-yourfits-suggest" role="listbox" hidden></ul>
   </span>
   <label class="fit-check"><input type="checkbox" id="fit-community"> Include community fits</label>
-  <a href="/fittings/saved/">Your fits</a>
+  <button type="button" class="btn" id="fit-loadouts-btn" onclick="location.href='/fittings/saved/'">Ship Loadouts</button>
 </div>
 <p><small>Fits you save live in EveSynapse. Your EVE account's fittings are only ever read, never changed — except when you press Save to EVE.</small></p>
 {{if .FitEditor.Notes}}
@@ -80,6 +71,16 @@
   </div>
 </div>
 {{template "fit-workbench" .FitEditor.Sim}}
+
+<div class="fit-meta">
+  <label class="fit-meta-desc">Description
+    <input type="text" id="fit-desc" value="{{.FitEditor.Description}}" placeholder="What is this fit for?" autocomplete="off" maxlength="280">
+  </label>
+  <label class="fit-meta-tags">Tags
+    <input type="text" id="fit-tags" value="{{.FitEditor.Tags}}" placeholder="pvp, kiting, …" autocomplete="off">
+  </label>
+  <label class="fit-check"><input type="checkbox" id="fit-public"{{if .FitEditor.IsPublic}} checked{{end}}> Make public</label>
+</div>
 
 <div class="fit-picker" id="fit-picker" hidden>
   <div class="fit-picker-head">

@@ -1779,6 +1779,7 @@
   if (!editor || !window.fetch) return;
 
   var pilotSel = document.getElementById("fit-pilot");
+  var cloneSel = document.getElementById("fit-clone");
   var nameInput = document.getElementById("fit-name");
   var shipInput = document.getElementById("fit-ship-search");
   var shipList = document.getElementById("fit-ship-suggest");
@@ -1815,6 +1816,10 @@
     return pilotSel ? (parseInt(pilotSel.value, 10) || 0) : 0;
   }
 
+  function cloneID() {
+    return cloneSel ? (parseInt(cloneSel.value, 10) || 0) : 0;
+  }
+
   var simSeq = 0;
   var simInFlight = false;
   var simQueued = false;
@@ -1834,7 +1839,8 @@
       shipTypeId: state.shipTypeId,
       items: state.items,
       charges: state.charges,
-      pilot: pilotID()
+      pilot: pilotID(),
+      clone: cloneID()
     };
     function simDone() {
       simInFlight = false;
@@ -2154,6 +2160,44 @@
 
   if (pilotSel) pilotSel.addEventListener("change", function () {
     syncFilterUI();
+    refreshCloneOptions();
+  });
+  // The clone dropdown's options belong to the selected pilot;
+  // refresh them on pilot change (back to Active clone), then
+  // re-sim with the new pilot's implants.
+  function refreshCloneOptions() {
+    if (!cloneSel) { simulate(); return; }
+    var pid = pilotID();
+    function resetToActive() {
+      cloneSel.innerHTML = "";
+      var opt = document.createElement("option");
+      opt.value = "0";
+      opt.textContent = "Active clone";
+      cloneSel.appendChild(opt);
+      cloneSel.value = "0";
+      cloneSel.disabled = true;
+    }
+    if (!pid) { resetToActive(); simulate(); return; }
+    fetch("/fittings/clones.json?pilot=" + pid, { headers: { "Accept": "application/json" } })
+      .then(function (resp) { return resp.ok ? resp.json() : null; })
+      .then(function (data) {
+        if (!data || !data.ok || !data.clones || !data.clones.length) { resetToActive(); }
+        else {
+          cloneSel.innerHTML = "";
+          data.clones.forEach(function (c) {
+            var opt = document.createElement("option");
+            opt.value = String(c.id);
+            opt.textContent = c.name;
+            cloneSel.appendChild(opt);
+          });
+          cloneSel.value = "0";
+          cloneSel.disabled = false;
+        }
+        simulate();
+      })
+      .catch(function () { resetToActive(); simulate(); });
+  }
+  if (cloneSel) cloneSel.addEventListener("change", function () {
     simulate();
   });
   if (nameInput) {

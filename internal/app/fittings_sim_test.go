@@ -68,7 +68,7 @@ func seedFitUniverse(t *testing.T, exec func(string) error) {
 			(1001, 76, 50000), (1001, 564, 900), (1001, 208, 12), (1001, 192, 5),
 			(1001, 38, 350), (1001, 1271, 25), (1001, 283, 30), (1001, 70, 3.0),
 			(3001, 30, 10), (3001, 50, 15), (3001, 73, 5000), (3001, 64, 5),
-			(3001, 604, 901), (3001, 128, 1),
+			(3001, 604, 901), (3001, 128, 1), (3001, 1692, 2),
 			(3002, 1159, 200), (3002, 30, 5), (3002, 50, 5),
 			(4001, 128, 1), (4001, 118, 12), (4001, 117, 8),
 			(5001, 1272, 10), (5001, 51, 2000), (5001, 64, 1.2), (5001, 117, 10)`,
@@ -286,6 +286,53 @@ func TestFitLocalSaveListDelete(t *testing.T) {
 	}
 }
 
+// TestFitBuildVisual: the visual fit precomputes one circle per
+// slot on arcs around the ship, filled circles carrying modules,
+// positions inside the box with highs on top and lows below.
+func TestFitBuildVisual(t *testing.T) {
+	res := &fitResult{HighSlots: 3, MediumSlots: 3, LowSlots: 2, RigSlots: 3}
+	doc := &fitDoc{ShipTypeID: fitShipID, Items: []fitDocItem{
+		{TypeID: fitBlasterID, Qty: 2},
+		{TypeID: fitPlateID, Qty: 1},
+	}}
+	familyOf := map[int64]string{fitBlasterID: fitFamilyHigh, fitPlateID: fitFamilyLow}
+	nameOf := func(id int64) string { return "Type " + strconv.FormatInt(id, 10) }
+
+	v := fitBuildVisual(res, doc, familyOf, nameOf)
+	if v.ShipID != fitShipID {
+		t.Errorf("ShipID = %d, want %d", v.ShipID, fitShipID)
+	}
+	// 3 high + 3 mid + 2 low + 3 rig circles; no subsystems fitted.
+	if len(v.Slots) != 11 {
+		t.Fatalf("slots = %d, want 11", len(v.Slots))
+	}
+	filled := 0
+	for _, s := range v.Slots {
+		if s.X < 0 || s.X > 100 || s.Y < 0 || s.Y > 100 {
+			t.Errorf("slot at (%.1f, %.1f) outside the box", s.X, s.Y)
+		}
+		if s.Filled {
+			filled++
+			if s.TypeID == 0 || s.Name == "" {
+				t.Errorf("filled slot missing type/name")
+			}
+		}
+		switch s.GroupKey {
+		case fitFamilyHigh:
+			if s.Y >= 50 {
+				t.Errorf("high slot at y=%.1f, want above center", s.Y)
+			}
+		case fitFamilyLow:
+			if s.Y <= 50 {
+				t.Errorf("low slot at y=%.1f, want below center", s.Y)
+			}
+		}
+	}
+	if filled != 3 {
+		t.Errorf("filled = %d, want 3", filled)
+	}
+}
+
 // TestFitEditorEndpointsAndImport: the picker feeds, the EFT
 // import landing, and the EVE fit "View stats" deep link, all
 // with the transport pinned at zero calls (see fitTestApp's
@@ -302,6 +349,27 @@ func TestFitEditorEndpointsAndImport(t *testing.T) {
 	mustContain(t, "picker charge", body, "Fixture Charge S")
 	_, body = getPage(t, app, cookie, "/fittings/picker.json?family=drone&q=")
 	mustContain(t, "picker drone", body, "Fixture Drone")
+
+	// Unified search: ships and modules together, kinded.
+	_, body = getPage(t, app, cookie, "/fittings/picker.json?family=all&q=Fixture")
+	mustContain(t, "picker all", body,
+		`"kind":"ship"`, `"kind":"high"`, `"kind":"low"`, `"kind":"drone"`,
+		"Fixture Frigate", "Fixture Blaster", "Fixture Drone")
+	if strings.Contains(body, `"kind":"charge"`) {
+		t.Errorf("unified search should not offer charges, got %s", body)
+	}
+
+	// Meta filter: the blaster is Tech II (meta group 2).
+	_, body = getPage(t, app, cookie, "/fittings/picker.json?family=high&q=&meta=2")
+	mustContain(t, "picker meta=2", body, "Fixture Blaster")
+	_, body = getPage(t, app, cookie, "/fittings/picker.json?family=high&q=&meta=4")
+	if strings.Contains(body, "Fixture Blaster") {
+		t.Errorf("meta=4 should exclude the Tech II blaster, got %s", body)
+	}
+
+	// Usable-by-pilot without a pilot is a no-op, not an empty list.
+	_, body = getPage(t, app, cookie, "/fittings/picker.json?family=high&q=&usable=1&pilot=0")
+	mustContain(t, "picker usable no pilot", body, "Fixture Blaster")
 
 	// Import lands the fit (and its notes) in the editor.
 	code, _ := postFitForm(t, app, cookie, "/fittings/import/", url.Values{

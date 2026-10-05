@@ -49,10 +49,13 @@ const suggestDefaultLimit = 12
 
 // suggestItem is one type suggestion: the type plus the
 // category/group label the dropdown shows beside the name.
+// Kind is the fitting family (ship/high/medium/low/rig/
+// subsystem/drone) so the fitting UI can group and route picks.
 type suggestItem struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
 	Label string `json:"label,omitempty"`
+	Kind  string `json:"kind,omitempty"`
 }
 
 // suggestTypes runs the shared feed: prefix matches first, then

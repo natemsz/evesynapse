@@ -477,3 +477,69 @@ func TestFitEngineLoadSnapshot(t *testing.T) {
 	res := computeFit(snap, 597, []fitItemInput{{TypeID: 20349}}, nil, nil)
 	near(t, "armor after plate", res.ArmorHP, 1700, 0.001)
 }
+
+// TestFitEngineT3Subsystems pins strategic-cruiser slot morphing:
+// the T3 hull carries no slots of its own; fitted subsystems grant
+// them through the hiSlotModifier / medSlotModifier /
+// lowSlotModifier attributes (1374/1375/1376) plus hardpoint
+// modifiers (1368/1369). The dump's slotModifier effect (3774)
+// carries no dogma modifiers, so the grants sum directly.
+// Fixture values mirror the live dump for a Tengu (29984) with
+// four real subsystems (45601/45589/45613/45625): 8/6/2 in game.
+func TestFitEngineT3Subsystems(t *testing.T) {
+	_, conn, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+
+	stmts := []string{
+		`INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES
+		   (29984, 'Fixture Tengu', 963, 0, 1),
+		   (45601, 'Fixture Offensive', 956, 0, 1),
+		   (45589, 'Fixture Defensive', 954, 0, 1),
+		   (45613, 'Fixture Propulsion', 957, 0, 1),
+		   (45625, 'Fixture Core', 958, 0, 1)`,
+		// Hull: no slots of its own, 3 rig slots.
+		`INSERT INTO sde_type_attributes (type_id, attribute_id, value) VALUES
+		   (29984, 14, 0), (29984, 13, 0), (29984, 12, 0), (29984, 1137, 3)`,
+		// Subsystem slot/hardpoint grants (live dump values).
+		`INSERT INTO sde_type_attributes (type_id, attribute_id, value) VALUES
+		   (45601, 1374, 7), (45601, 1375, 0), (45601, 1376, 0), (45601, 1369, 6),
+		   (45589, 1374, 1), (45589, 1375, 3), (45589, 1376, 0),
+		   (45613, 1374, 0), (45613, 1375, 0), (45613, 1376, 1),
+		   (45625, 1374, 0), (45625, 1375, 3), (45625, 1376, 1)`,
+		`INSERT INTO sde_effects (effect_id, name, category) VALUES (3772, 'subSystem', 0)`,
+		`INSERT INTO sde_type_effects (type_id, effect_id, is_default) VALUES
+		   (45601, 3772, 0), (45589, 3772, 0), (45613, 3772, 0), (45625, 3772, 0)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := conn.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+
+	snap, err := loadFitSnapshot(ctx, q, []int64{29984, 45601, 45589, 45613, 45625})
+	if err != nil {
+		t.Fatalf("load snapshot: %v", err)
+	}
+
+	// Bare hull: no slots.
+	bare := computeFit(snap, 29984, nil, nil, nil)
+	if bare.HighSlots != 0 || bare.MediumSlots != 0 || bare.LowSlots != 0 {
+		t.Fatalf("bare T3 slots = %d/%d/%d, want 0/0/0",
+			bare.HighSlots, bare.MediumSlots, bare.LowSlots)
+	}
+
+	// Full subsystem set: 8 high, 6 mid, 2 low, 6 launcher hardpoints.
+	res := computeFit(snap, 29984, []fitItemInput{
+		{TypeID: 45601}, {TypeID: 45589}, {TypeID: 45613}, {TypeID: 45625},
+	}, nil, nil)
+	if res.HighSlots != 8 || res.MediumSlots != 6 || res.LowSlots != 2 {
+		t.Fatalf("T3 slots = %d/%d/%d, want 8/6/2",
+			res.HighSlots, res.MediumSlots, res.LowSlots)
+	}
+	if res.LauncherHardpoints != 6 {
+		t.Fatalf("T3 launcher hardpoints = %d, want 6", res.LauncherHardpoints)
+	}
+	if res.RigSlots != 3 {
+		t.Fatalf("T3 rig slots = %d, want 3", res.RigSlots)
+	}
+}

@@ -131,6 +131,9 @@ var orderLifecycleSchema string
 //go:embed schema/034_market_sweep_staging.sql
 var sweepStagingSchema string
 
+//go:embed schema/035_region_stats_avg_volume.sql
+var regionStatsVolumeSchema string
+
 //go:embed static
 var staticFS embed.FS
 

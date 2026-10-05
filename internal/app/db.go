@@ -443,6 +443,18 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 035 (web-tier scaling fix: the sweep-precomputed
+	// 7-day average daily volume on the region stats rows),
+	// applied the same guarded way.
+	var regionStatsVolumeCols int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('market_region_stats') WHERE name = 'avg_daily_volume'`).Scan(&regionStatsVolumeCols); err != nil {
+		return nil, err
+	}
+	if regionStatsVolumeCols < 1 {
+		if err := applySchema(conn, regionStatsVolumeSchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

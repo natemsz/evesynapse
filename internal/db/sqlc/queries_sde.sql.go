@@ -10,6 +10,17 @@ import (
 	"strings"
 )
 
+const countSDEAttributeTypes = `-- name: CountSDEAttributeTypes :one
+SELECT COUNT(*) FROM sde_attribute_types
+`
+
+func (q *Queries) CountSDEAttributeTypes(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSDEAttributeTypes)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countSDEBlueprints = `-- name: CountSDEBlueprints :one
 SELECT COUNT(*) FROM sde_blueprints
 `
@@ -32,6 +43,28 @@ SELECT COUNT(*) FROM sde_categories
 
 func (q *Queries) CountSDECategories(ctx context.Context) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countSDECategories)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSDEEffectModifiers = `-- name: CountSDEEffectModifiers :one
+SELECT COUNT(*) FROM sde_effect_modifiers
+`
+
+func (q *Queries) CountSDEEffectModifiers(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSDEEffectModifiers)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSDEEffects = `-- name: CountSDEEffects :one
+SELECT COUNT(*) FROM sde_effects
+`
+
+func (q *Queries) CountSDEEffects(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSDEEffects)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -120,6 +153,28 @@ func (q *Queries) CountSDESystems(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countSDETypeAttributes = `-- name: CountSDETypeAttributes :one
+SELECT COUNT(*) FROM sde_type_attributes
+`
+
+func (q *Queries) CountSDETypeAttributes(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSDETypeAttributes)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSDETypeEffects = `-- name: CountSDETypeEffects :one
+SELECT COUNT(*) FROM sde_type_effects
+`
+
+func (q *Queries) CountSDETypeEffects(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSDETypeEffects)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countSDETypes = `-- name: CountSDETypes :one
 SELECT COUNT(*) FROM sde_types
 `
@@ -195,6 +250,25 @@ func (q *Queries) GetItemName(ctx context.Context, itemID int64) (string, error)
 	return name, err
 }
 
+const getSDEAttributeType = `-- name: GetSDEAttributeType :one
+SELECT attribute_id, name, stackable, high_is_good, unit_id, default_value FROM sde_attribute_types
+WHERE attribute_id = ?
+`
+
+func (q *Queries) GetSDEAttributeType(ctx context.Context, attributeID int64) (SdeAttributeType, error) {
+	row := q.db.QueryRowContext(ctx, getSDEAttributeType, attributeID)
+	var i SdeAttributeType
+	err := row.Scan(
+		&i.AttributeID,
+		&i.Name,
+		&i.Stackable,
+		&i.HighIsGood,
+		&i.UnitID,
+		&i.DefaultValue,
+	)
+	return i, err
+}
+
 const getSDEBlueprint = `-- name: GetSDEBlueprint :one
 SELECT blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds
 FROM sde_blueprints
@@ -244,6 +318,18 @@ func (q *Queries) GetSDECategory(ctx context.Context, categoryID int64) (SdeCate
 	row := q.db.QueryRowContext(ctx, getSDECategory, categoryID)
 	var i SdeCategory
 	err := row.Scan(&i.CategoryID, &i.Name)
+	return i, err
+}
+
+const getSDEEffect = `-- name: GetSDEEffect :one
+SELECT effect_id, name, category FROM sde_effects
+WHERE effect_id = ?
+`
+
+func (q *Queries) GetSDEEffect(ctx context.Context, effectID int64) (SdeEffect, error) {
+	row := q.db.QueryRowContext(ctx, getSDEEffect, effectID)
+	var i SdeEffect
+	err := row.Scan(&i.EffectID, &i.Name, &i.Category)
 	return i, err
 }
 
@@ -375,6 +461,25 @@ func (q *Queries) GetSDEType(ctx context.Context, typeID int64) (SdeType, error)
 	return i, err
 }
 
+const getSDETypeByName = `-- name: GetSDETypeByName :one
+SELECT type_id, name FROM sde_types
+WHERE lower(name) = lower(?)
+ORDER BY published DESC, market_group_id DESC, type_id
+LIMIT 1
+`
+
+type GetSDETypeByNameRow struct {
+	TypeID int64  `json:"type_id"`
+	Name   string `json:"name"`
+}
+
+func (q *Queries) GetSDETypeByName(ctx context.Context, lower string) (GetSDETypeByNameRow, error) {
+	row := q.db.QueryRowContext(ctx, getSDETypeByName, lower)
+	var i GetSDETypeByNameRow
+	err := row.Scan(&i.TypeID, &i.Name)
+	return i, err
+}
+
 const getTypeDetail = `-- name: GetTypeDetail :one
 SELECT type_id, description, fetched_at
 FROM type_details
@@ -428,6 +533,153 @@ func (q *Queries) ListAllTypeNames(ctx context.Context) ([]TypeName, error) {
 	return items, nil
 }
 
+const listFitChargeTypes = `-- name: ListFitChargeTypes :many
+SELECT t.type_id, t.name
+FROM sde_types t
+WHERE t.group_id IN (/*SLICE:group_ids*/?)
+  AND t.published = 1 AND t.market_group_id > 0
+  AND (?2 <= 0 OR EXISTS (
+        SELECT 1 FROM sde_type_attributes a
+        WHERE a.type_id = t.type_id AND a.attribute_id = 128 AND a.value = ?2))
+ORDER BY t.name
+LIMIT 200
+`
+
+type ListFitChargeTypesParams struct {
+	GroupIds   []int64     `json:"group_ids"`
+	ChargeSize interface{} `json:"charge_size"`
+}
+
+type ListFitChargeTypesRow struct {
+	TypeID int64  `json:"type_id"`
+	Name   string `json:"name"`
+}
+
+func (q *Queries) ListFitChargeTypes(ctx context.Context, arg ListFitChargeTypesParams) ([]ListFitChargeTypesRow, error) {
+	query := listFitChargeTypes
+	var queryParams []interface{}
+	if len(arg.GroupIds) > 0 {
+		for _, v := range arg.GroupIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:group_ids*/?", strings.Repeat(",?", len(arg.GroupIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:group_ids*/?", "NULL", 1)
+	}
+	queryParams = append(queryParams, arg.ChargeSize)
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFitChargeTypesRow
+	for rows.Next() {
+		var i ListFitChargeTypesRow
+		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFitDroneTypes = `-- name: ListFitDroneTypes :many
+SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
+FROM sde_types t
+JOIN sde_type_attributes a ON a.type_id = t.type_id AND a.attribute_id = 1272 AND a.value > 0
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+WHERE t.published = 1 AND t.market_group_id > 0
+  AND (?1 = '' OR instr(lower(t.name), lower(?1)) > 0)
+ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT ?2
+`
+
+type ListFitDroneTypesParams struct {
+	Q   interface{} `json:"q"`
+	Lim int64       `json:"lim"`
+}
+
+type ListFitDroneTypesRow struct {
+	TypeID    int64  `json:"type_id"`
+	Name      string `json:"name"`
+	GroupName string `json:"group_name"`
+}
+
+func (q *Queries) ListFitDroneTypes(ctx context.Context, arg ListFitDroneTypesParams) ([]ListFitDroneTypesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFitDroneTypes, arg.Q, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFitDroneTypesRow
+	for rows.Next() {
+		var i ListFitDroneTypesRow
+		if err := rows.Scan(&i.TypeID, &i.Name, &i.GroupName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFitSlotTypes = `-- name: ListFitSlotTypes :many
+SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
+FROM sde_types t
+JOIN sde_type_effects te ON te.type_id = t.type_id AND te.effect_id = ?1
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+WHERE t.published = 1 AND t.market_group_id > 0
+  AND (?2 = '' OR instr(lower(t.name), lower(?2)) > 0)
+ORDER BY CASE WHEN instr(lower(t.name), lower(?2)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT ?3
+`
+
+type ListFitSlotTypesParams struct {
+	EffectID int64       `json:"effect_id"`
+	Q        interface{} `json:"q"`
+	Lim      int64       `json:"lim"`
+}
+
+type ListFitSlotTypesRow struct {
+	TypeID    int64  `json:"type_id"`
+	Name      string `json:"name"`
+	GroupName string `json:"group_name"`
+}
+
+func (q *Queries) ListFitSlotTypes(ctx context.Context, arg ListFitSlotTypesParams) ([]ListFitSlotTypesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFitSlotTypes, arg.EffectID, arg.Q, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFitSlotTypesRow
+	for rows.Next() {
+		var i ListFitSlotTypesRow
+		if err := rows.Scan(&i.TypeID, &i.Name, &i.GroupName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listItemNames = `-- name: ListItemNames :many
 SELECT item_id, name FROM item_names
 ORDER BY item_id
@@ -443,6 +695,52 @@ func (q *Queries) ListItemNames(ctx context.Context) ([]ItemName, error) {
 	for rows.Next() {
 		var i ItemName
 		if err := rows.Scan(&i.ItemID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDEAttributeTypesByIDs = `-- name: ListSDEAttributeTypesByIDs :many
+SELECT attribute_id, name, stackable, high_is_good, unit_id, default_value FROM sde_attribute_types
+WHERE attribute_id IN (/*SLICE:attribute_ids*/?)
+ORDER BY attribute_id
+`
+
+func (q *Queries) ListSDEAttributeTypesByIDs(ctx context.Context, attributeIds []int64) ([]SdeAttributeType, error) {
+	query := listSDEAttributeTypesByIDs
+	var queryParams []interface{}
+	if len(attributeIds) > 0 {
+		for _, v := range attributeIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:attribute_ids*/?", strings.Repeat(",?", len(attributeIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:attribute_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SdeAttributeType
+	for rows.Next() {
+		var i SdeAttributeType
+		if err := rows.Scan(
+			&i.AttributeID,
+			&i.Name,
+			&i.Stackable,
+			&i.HighIsGood,
+			&i.UnitID,
+			&i.DefaultValue,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -625,6 +923,140 @@ func (q *Queries) ListSDECategoriesWithCounts(ctx context.Context) ([]ListSDECat
 	for rows.Next() {
 		var i ListSDECategoriesWithCountsRow
 		if err := rows.Scan(&i.CategoryID, &i.Name, &i.TypeCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDEEffectModifiers = `-- name: ListSDEEffectModifiers :many
+SELECT domain, func, modified_attr, modifying_attr, operation, group_id, skill_type_id FROM sde_effect_modifiers
+WHERE effect_id = ?
+ORDER BY domain, func, modified_attr
+`
+
+type ListSDEEffectModifiersRow struct {
+	Domain        string `json:"domain"`
+	Func          string `json:"func"`
+	ModifiedAttr  int64  `json:"modified_attr"`
+	ModifyingAttr int64  `json:"modifying_attr"`
+	Operation     int64  `json:"operation"`
+	GroupID       int64  `json:"group_id"`
+	SkillTypeID   int64  `json:"skill_type_id"`
+}
+
+func (q *Queries) ListSDEEffectModifiers(ctx context.Context, effectID int64) ([]ListSDEEffectModifiersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDEEffectModifiers, effectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDEEffectModifiersRow
+	for rows.Next() {
+		var i ListSDEEffectModifiersRow
+		if err := rows.Scan(
+			&i.Domain,
+			&i.Func,
+			&i.ModifiedAttr,
+			&i.ModifyingAttr,
+			&i.Operation,
+			&i.GroupID,
+			&i.SkillTypeID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDEEffectModifiersByIDs = `-- name: ListSDEEffectModifiersByIDs :many
+SELECT effect_id, domain, func, modified_attr, modifying_attr, operation, group_id, skill_type_id FROM sde_effect_modifiers
+WHERE effect_id IN (/*SLICE:effect_ids*/?)
+ORDER BY effect_id, domain, func, modified_attr
+`
+
+func (q *Queries) ListSDEEffectModifiersByIDs(ctx context.Context, effectIds []int64) ([]SdeEffectModifier, error) {
+	query := listSDEEffectModifiersByIDs
+	var queryParams []interface{}
+	if len(effectIds) > 0 {
+		for _, v := range effectIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:effect_ids*/?", strings.Repeat(",?", len(effectIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:effect_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SdeEffectModifier
+	for rows.Next() {
+		var i SdeEffectModifier
+		if err := rows.Scan(
+			&i.EffectID,
+			&i.Domain,
+			&i.Func,
+			&i.ModifiedAttr,
+			&i.ModifyingAttr,
+			&i.Operation,
+			&i.GroupID,
+			&i.SkillTypeID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDEEffectsByIDs = `-- name: ListSDEEffectsByIDs :many
+SELECT effect_id, name, category FROM sde_effects
+WHERE effect_id IN (/*SLICE:effect_ids*/?)
+ORDER BY effect_id
+`
+
+func (q *Queries) ListSDEEffectsByIDs(ctx context.Context, effectIds []int64) ([]SdeEffect, error) {
+	query := listSDEEffectsByIDs
+	var queryParams []interface{}
+	if len(effectIds) > 0 {
+		for _, v := range effectIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:effect_ids*/?", strings.Repeat(",?", len(effectIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:effect_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SdeEffect
+	for rows.Next() {
+		var i SdeEffect
+		if err := rows.Scan(&i.EffectID, &i.Name, &i.Category); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -905,6 +1337,201 @@ func (q *Queries) ListSDEStationsBySystem(ctx context.Context, systemID int64) (
 	return items, nil
 }
 
+const listSDETypeAttributes = `-- name: ListSDETypeAttributes :many
+SELECT attribute_id, value FROM sde_type_attributes
+WHERE type_id = ?
+ORDER BY attribute_id
+`
+
+type ListSDETypeAttributesRow struct {
+	AttributeID int64   `json:"attribute_id"`
+	Value       float64 `json:"value"`
+}
+
+// ---------------------------------------------------------------------
+// Fitting simulator (schema 029): dogma attribute/effect reads for
+// the stat engine. Bulk import stays hand-rolled in the SDE importer
+// alongside the other sde_* tables; reads live here.
+// ---------------------------------------------------------------------
+func (q *Queries) ListSDETypeAttributes(ctx context.Context, typeID int64) ([]ListSDETypeAttributesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDETypeAttributes, typeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDETypeAttributesRow
+	for rows.Next() {
+		var i ListSDETypeAttributesRow
+		if err := rows.Scan(&i.AttributeID, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDETypeAttributesByIDs = `-- name: ListSDETypeAttributesByIDs :many
+SELECT type_id, attribute_id, value FROM sde_type_attributes
+WHERE type_id IN (/*SLICE:type_ids*/?)
+ORDER BY type_id, attribute_id
+`
+
+func (q *Queries) ListSDETypeAttributesByIDs(ctx context.Context, typeIds []int64) ([]SdeTypeAttribute, error) {
+	query := listSDETypeAttributesByIDs
+	var queryParams []interface{}
+	if len(typeIds) > 0 {
+		for _, v := range typeIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:type_ids*/?", strings.Repeat(",?", len(typeIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:type_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SdeTypeAttribute
+	for rows.Next() {
+		var i SdeTypeAttribute
+		if err := rows.Scan(&i.TypeID, &i.AttributeID, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDETypeEffects = `-- name: ListSDETypeEffects :many
+SELECT effect_id, is_default FROM sde_type_effects
+WHERE type_id = ?
+ORDER BY effect_id
+`
+
+type ListSDETypeEffectsRow struct {
+	EffectID  int64 `json:"effect_id"`
+	IsDefault int64 `json:"is_default"`
+}
+
+func (q *Queries) ListSDETypeEffects(ctx context.Context, typeID int64) ([]ListSDETypeEffectsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDETypeEffects, typeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDETypeEffectsRow
+	for rows.Next() {
+		var i ListSDETypeEffectsRow
+		if err := rows.Scan(&i.EffectID, &i.IsDefault); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDETypeEffectsByIDs = `-- name: ListSDETypeEffectsByIDs :many
+SELECT type_id, effect_id, is_default FROM sde_type_effects
+WHERE type_id IN (/*SLICE:type_ids*/?)
+ORDER BY type_id, effect_id
+`
+
+func (q *Queries) ListSDETypeEffectsByIDs(ctx context.Context, typeIds []int64) ([]SdeTypeEffect, error) {
+	query := listSDETypeEffectsByIDs
+	var queryParams []interface{}
+	if len(typeIds) > 0 {
+		for _, v := range typeIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:type_ids*/?", strings.Repeat(",?", len(typeIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:type_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SdeTypeEffect
+	for rows.Next() {
+		var i SdeTypeEffect
+		if err := rows.Scan(&i.TypeID, &i.EffectID, &i.IsDefault); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDETypeGroupsByIDs = `-- name: ListSDETypeGroupsByIDs :many
+SELECT type_id, group_id FROM sde_types
+WHERE type_id IN (/*SLICE:type_ids*/?)
+ORDER BY type_id
+`
+
+type ListSDETypeGroupsByIDsRow struct {
+	TypeID  int64 `json:"type_id"`
+	GroupID int64 `json:"group_id"`
+}
+
+func (q *Queries) ListSDETypeGroupsByIDs(ctx context.Context, typeIds []int64) ([]ListSDETypeGroupsByIDsRow, error) {
+	query := listSDETypeGroupsByIDs
+	var queryParams []interface{}
+	if len(typeIds) > 0 {
+		for _, v := range typeIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:type_ids*/?", strings.Repeat(",?", len(typeIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:type_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDETypeGroupsByIDsRow
+	for rows.Next() {
+		var i ListSDETypeGroupsByIDsRow
+		if err := rows.Scan(&i.TypeID, &i.GroupID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDETypeIDs = `-- name: ListSDETypeIDs :many
 SELECT type_id FROM sde_types
 ORDER BY type_id
@@ -923,6 +1550,50 @@ func (q *Queries) ListSDETypeIDs(ctx context.Context) ([]int64, error) {
 			return nil, err
 		}
 		items = append(items, type_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDETypePhysicsByIDs = `-- name: ListSDETypePhysicsByIDs :many
+SELECT type_id, mass, volume, capacity FROM sde_type_physics
+WHERE type_id IN (/*SLICE:type_ids*/?)
+ORDER BY type_id
+`
+
+func (q *Queries) ListSDETypePhysicsByIDs(ctx context.Context, typeIds []int64) ([]SdeTypePhysic, error) {
+	query := listSDETypePhysicsByIDs
+	var queryParams []interface{}
+	if len(typeIds) > 0 {
+		for _, v := range typeIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:type_ids*/?", strings.Repeat(",?", len(typeIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:type_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SdeTypePhysic
+	for rows.Next() {
+		var i SdeTypePhysic
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Mass,
+			&i.Volume,
+			&i.Capacity,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -1453,6 +2124,58 @@ type SetTypeDetailParams struct {
 func (q *Queries) SetTypeDetail(ctx context.Context, arg SetTypeDetailParams) error {
 	_, err := q.db.ExecContext(ctx, setTypeDetail, arg.TypeID, arg.Description, arg.FetchedAt)
 	return err
+}
+
+const suggestSDEShips = `-- name: SuggestSDEShips :many
+SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
+FROM sde_types t
+JOIN sde_groups g ON g.group_id = t.group_id
+WHERE g.category_id = 6 AND t.published = 1
+  AND instr(lower(t.name), lower(?1)) > 0
+ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT ?2
+`
+
+type SuggestSDEShipsParams struct {
+	Q   string `json:"q"`
+	Lim int64  `json:"lim"`
+}
+
+type SuggestSDEShipsRow struct {
+	TypeID    int64  `json:"type_id"`
+	Name      string `json:"name"`
+	GroupName string `json:"group_name"`
+}
+
+// ---------------------------------------------------------------------
+// Fitting simulator UI (v0.3.21): picker feeds for the fit editor.
+// Slot families come from the module's slot effect (dgmEffects,
+// verified against the dump 2026-10-04): 11 loPower, 12 hiPower,
+// 13 medPower, 2663 rigSlot, 3772 subSystem. All reads are local
+// SDE rows; the obtainable floor (published + market group) matches
+// the shared suggestion feed.
+// ---------------------------------------------------------------------
+func (q *Queries) SuggestSDEShips(ctx context.Context, arg SuggestSDEShipsParams) ([]SuggestSDEShipsRow, error) {
+	rows, err := q.db.QueryContext(ctx, suggestSDEShips, arg.Q, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SuggestSDEShipsRow
+	for rows.Next() {
+		var i SuggestSDEShipsRow
+		if err := rows.Scan(&i.TypeID, &i.Name, &i.GroupName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const suggestSDETypes = `-- name: SuggestSDETypes :many

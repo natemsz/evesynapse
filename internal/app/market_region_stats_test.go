@@ -408,3 +408,79 @@ func TestRibbonRendersStoredStats(t *testing.T) {
 		"No data yet", // regions a sweep has not covered yet
 	)
 }
+
+func TestRegionSweepStoresAvgDailyVolume(t *testing.T) {
+	transport := &regionBookTransport{books: map[int64][][]esi.MarketOrder{}}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	for _, region := range marketRegions {
+		if region.ID != 10000002 {
+			markRegionFresh(t, q, region.ID)
+		}
+	}
+
+	// Type 34: seven recorded days ending today at 10..70, plus
+	// an eighth row seven days back that the 7-day window must
+	// leave out (9999 would poison the average if it leaked in).
+	// Type 35: only three recorded days (90, 60, 30) -- the
+	// average runs over the days present, not the calendar span.
+	// Type 36: in the book but with no history at all -- 0.
+	now := time.Now().UTC()
+	seedHistory := func(typeID int64, dayOffset int, volume int64) {
+		t.Helper()
+		if err := q.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
+			RegionID: 10000002, TypeID: typeID,
+			Date:    now.AddDate(0, 0, -dayOffset).Format("2006-01-02"),
+			Average: 10, Highest: 10, Lowest: 10, Volume: volume, OrderCount: 1,
+		}); err != nil {
+			t.Fatalf("seed history type %d: %v", typeID, err)
+		}
+	}
+	for i, vol := range []int64{70, 60, 50, 40, 30, 20, 10} {
+		seedHistory(34, i, vol)
+	}
+	seedHistory(34, 7, 9999)
+	seedHistory(35, 0, 90)
+	seedHistory(35, 1, 60)
+	seedHistory(35, 2, 30)
+
+	transport.books[10000002] = [][]esi.MarketOrder{
+		{
+			{OrderID: 1, TypeID: 34, IsBuyOrder: false, Price: 5.0, VolumeRemain: 100},
+			{OrderID: 2, TypeID: 35, IsBuyOrder: false, Price: 100.0, VolumeRemain: 10},
+			{OrderID: 3, TypeID: 36, IsBuyOrder: false, Price: 50.0, VolumeRemain: 10},
+		},
+	}
+	sweepUntilIdle(t, app)
+
+	rows, err := q.ListMarketRegionStatsByRegion(ctx, 10000002)
+	if err != nil {
+		t.Fatalf("list region stats: %v", err)
+	}
+	byType := map[int64]db.MarketRegionStat{}
+	for _, r := range rows {
+		byType[r.TypeID] = r
+	}
+	close := func(got, want float64) bool {
+		d := got - want
+		return d < 1e-9 && d > -1e-9
+	}
+	if got := byType[34].AvgDailyVolume; !close(got, 40) {
+		t.Fatalf("type 34 avg daily volume: %v, want 40 (mean of 10..70 over the newest 7 recorded days)", got)
+	}
+	if got := byType[35].AvgDailyVolume; !close(got, 60) {
+		t.Fatalf("type 35 avg daily volume: %v, want 60 (mean over the 3 recorded days present)", got)
+	}
+	if got := byType[36].AvgDailyVolume; got != 0 {
+		t.Fatalf("type 36 avg daily volume: %v, want 0 (no recorded history)", got)
+	}
+	// The stored figure must be the render-time window's figure:
+	// historyWindow over the same rows agrees exactly.
+	_, want, ok := historyWindow(app.recentHistoryRows(ctx, 10000002, 34, historyChartRows), 7)
+	if !ok {
+		t.Fatal("history window empty for seeded type 34")
+	}
+	if got := byType[34].AvgDailyVolume; !close(got, want) {
+		t.Fatalf("stored avg %v disagrees with render-time historyWindow %v", got, want)
+	}
+}

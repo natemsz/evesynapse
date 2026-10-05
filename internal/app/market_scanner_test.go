@@ -17,18 +17,19 @@ import (
 	"evesynapse/internal/esi"
 )
 
-func seedScannerHistory(t *testing.T, q *db.Queries, regionID, typeID int64, dailyVolume int64, days int) {
+// seedScannerVolume stores the sweep-precomputed 7-day average
+// daily volume for one (region, type) the way a completed sweep
+// leaves it in market_region_stats (schema 035): the figure the
+// scanner now reads instead of re-averaging market_history per
+// render.
+func seedScannerVolume(t *testing.T, q *db.Queries, regionID, typeID int64, avgDailyVolume float64) {
 	t.Helper()
 	ctx := context.Background()
-	now := time.Now().UTC()
-	for i := 0; i < days; i++ {
-		day := now.AddDate(0, 0, -i).Format("2006-01-02")
-		if err := q.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
-			RegionID: regionID, TypeID: typeID, Date: day,
-			Average: 10, Highest: 10, Lowest: 10, Volume: dailyVolume, OrderCount: 1,
-		}); err != nil {
-			t.Fatalf("seed history type %d day %s: %v", typeID, day, err)
-		}
+	if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+		RegionID: regionID, TypeID: typeID, AvgDailyVolume: avgDailyVolume,
+		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		t.Fatalf("seed region volume type %d: %v", typeID, err)
 	}
 }
 
@@ -135,9 +136,9 @@ func TestScannerMathFiltersSortAndCap(t *testing.T) {
 			t.Fatalf("seed station stat: %v", err)
 		}
 	}
-	seedScannerHistory(t, q, 10000002, 34, 20, 7)
-	seedScannerHistory(t, q, 10000002, 35, 100, 7)
-	seedScannerHistory(t, q, 10000002, 36, 100, 7)
+	seedScannerVolume(t, q, 10000002, 34, 20)
+	seedScannerVolume(t, q, 10000002, 35, 100)
+	seedScannerVolume(t, q, 10000002, 36, 100)
 
 	view := app.buildScannerView(ctx, url.Values{})
 	if !view.HasData || len(view.Rows) != 2 {
@@ -180,7 +181,7 @@ func TestScannerMathFiltersSortAndCap(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("seed cap stat: %v", err)
 		}
-		seedScannerHistory(t, q, 10000002, typeID, 10, 1)
+		seedScannerVolume(t, q, 10000002, typeID, 10)
 	}
 	view = app.buildScannerView(ctx, url.Values{})
 	if len(view.Rows) != scannerRowCap {
@@ -224,7 +225,7 @@ func TestScannerPageRendersStoredRowsZeroOutbound(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed structure stat: %v", err)
 	}
-	seedScannerHistory(t, q, 10000002, 34, 20, 7)
+	seedScannerVolume(t, q, 10000002, 34, 20)
 
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 	code, body := getPage(t, app, cookie, "/market/scanner/?region=10000002")

@@ -24,7 +24,8 @@ const (
 )
 
 // seedTradefinderFixture lays down the SDE names a tradefinder
-// test judges by. Region stats and history are seeded per test.
+// test judges by. Region stats (with the stored sold-per-day
+// average) are seeded per test.
 func seedTradefinderFixture(t *testing.T, app *Application) {
 	t.Helper()
 	ctx := context.Background()
@@ -41,13 +42,13 @@ func seedTradefinderFixture(t *testing.T, app *Application) {
 	}
 }
 
-func tfRegionStat(regionID, typeID int64, typicalBuy, typicalSell float64, buyVolume, sellVolume int64, stamp string) db.UpsertMarketRegionStatParams {
+func tfRegionStat(regionID, typeID int64, typicalBuy, typicalSell float64, buyVolume, sellVolume int64, avgDailyVolume float64, stamp string) db.UpsertMarketRegionStatParams {
 	return db.UpsertMarketRegionStatParams{
 		RegionID: regionID, TypeID: typeID,
 		BestSell: typicalSell, TypicalSell: typicalSell, SellBand: typicalSell,
 		BestBuy: typicalBuy, TypicalBuy: typicalBuy, BuyBand: typicalBuy,
 		SellOrders: 1, BuyOrders: 1, SellVolume: sellVolume, BuyVolume: buyVolume,
-		UpdatedAt: stamp,
+		AvgDailyVolume: avgDailyVolume, UpdatedAt: stamp,
 	}
 }
 
@@ -73,32 +74,26 @@ func TestTradefinderMathFreshnessFiltersAndHints(t *testing.T) {
 	// though the origin side is fresh.
 	// Type 39: margin 2% -- under the 5% default floor.
 	originSeeds := []db.UpsertMarketRegionStatParams{
-		tfRegionStat(tfOrigin, 34, 4, 0, 50, 0, now),
-		tfRegionStat(tfOrigin, 35, 90, 0, 5, 0, now),
-		tfRegionStat(tfOrigin, 36, 4, 0, 50, 0, now),
-		tfRegionStat(tfOrigin, 37, 4, 0, 50, 0, stale),
-		tfRegionStat(tfOrigin, 38, 4, 0, 50, 0, now),
-		tfRegionStat(tfOrigin, 39, 100, 0, 50, 0, now),
+		tfRegionStat(tfOrigin, 34, 4, 0, 50, 0, 0, now),
+		tfRegionStat(tfOrigin, 35, 90, 0, 5, 0, 0, now),
+		tfRegionStat(tfOrigin, 36, 4, 0, 50, 0, 0, now),
+		tfRegionStat(tfOrigin, 37, 4, 0, 50, 0, 0, stale),
+		tfRegionStat(tfOrigin, 38, 4, 0, 50, 0, 0, now),
+		tfRegionStat(tfOrigin, 39, 100, 0, 50, 0, 0, now),
 	}
 	destSeeds := []db.UpsertMarketRegionStatParams{
-		tfRegionStat(tfDest, 34, 0, 10, 0, 100, now),
-		tfRegionStat(tfDest, 35, 0, 100, 0, 10, now),
-		tfRegionStat(tfDest, 36, 0, 10, 0, 0, now),
-		tfRegionStat(tfDest, 37, 0, 10, 0, 100, now),
-		tfRegionStat(tfDest, 38, 0, 10, 0, 100, stale),
-		tfRegionStat(tfDest, 39, 0, 102, 0, 100, now),
+		tfRegionStat(tfDest, 34, 0, 10, 0, 100, 20, now),
+		tfRegionStat(tfDest, 35, 0, 100, 0, 10, 100, now),
+		tfRegionStat(tfDest, 36, 0, 10, 0, 0, 100, now),
+		tfRegionStat(tfDest, 37, 0, 10, 0, 100, 100, now),
+		tfRegionStat(tfDest, 38, 0, 10, 0, 100, 100, stale),
+		tfRegionStat(tfDest, 39, 0, 102, 0, 100, 100, now),
 	}
 	for _, s := range append(originSeeds, destSeeds...) {
 		if err := q.UpsertMarketRegionStat(ctx, s); err != nil {
 			t.Fatalf("seed region stat: %v", err)
 		}
 	}
-	seedScannerHistory(t, q, tfDest, 34, 20, 7)
-	seedScannerHistory(t, q, tfDest, 35, 100, 7)
-	seedScannerHistory(t, q, tfDest, 36, 100, 7)
-	seedScannerHistory(t, q, tfDest, 37, 100, 7)
-	seedScannerHistory(t, q, tfDest, 38, 100, 7)
-	seedScannerHistory(t, q, tfDest, 39, 100, 7)
 
 	// Hints: type 34 sells cheapest at the second Jita station in
 	// the origin, and the best buyer in the destination sits at
@@ -188,13 +183,12 @@ func TestTradefinderCap(t *testing.T) {
 		if _, err := conn.ExecContext(ctx, `INSERT INTO sde_types (type_id, name, group_id) VALUES (?, ?, 18)`, typeID, fmt.Sprintf("Cap Item %d", i)); err != nil {
 			t.Fatalf("seed cap type: %v", err)
 		}
-		if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfOrigin, typeID, 10, 0, 1000, 0, now)); err != nil {
+		if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfOrigin, typeID, 10, 0, 1000, 0, 0, now)); err != nil {
 			t.Fatalf("seed cap origin stat: %v", err)
 		}
-		if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfDest, typeID, 0, 20, 0, 1000, now)); err != nil {
+		if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfDest, typeID, 0, 20, 0, 1000, 10, now)); err != nil {
 			t.Fatalf("seed cap dest stat: %v", err)
 		}
-		seedScannerHistory(t, q, tfDest, typeID, 10, 1)
 	}
 	view := app.buildTradefinderView(ctx, url.Values{})
 	if len(view.Rows) != tradefinderRowCap {
@@ -216,10 +210,10 @@ func TestTradefinderPageRendersStoredRowsZeroOutbound(t *testing.T) {
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
 	seedTradefinderFixture(t, app)
 	now := time.Now().UTC().Format(time.RFC3339)
-	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfOrigin, 34, 4, 0, 50, 0, now)); err != nil {
+	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfOrigin, 34, 4, 0, 50, 0, 0, now)); err != nil {
 		t.Fatalf("seed origin stat: %v", err)
 	}
-	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfDest, 34, 0, 10, 0, 100, now)); err != nil {
+	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfDest, 34, 0, 10, 0, 100, 20, now)); err != nil {
 		t.Fatalf("seed dest stat: %v", err)
 	}
 	if err := q.UpsertMarketStationStat(ctx, db.UpsertMarketStationStatParams{
@@ -232,7 +226,6 @@ func TestTradefinderPageRendersStoredRowsZeroOutbound(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed dest station stat: %v", err)
 	}
-	seedScannerHistory(t, q, tfDest, 34, 20, 7)
 
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 	code, body := getPage(t, app, cookie, "/market/tradefinder/")
@@ -289,13 +282,12 @@ func TestTradefinderPageEmptyStates(t *testing.T) {
 	// distinct no-routes state.
 	seedTradefinderFixture(t, app)
 	now := time.Now().UTC().Format(time.RFC3339)
-	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfOrigin, 34, 100, 0, 50, 0, now)); err != nil {
+	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfOrigin, 34, 100, 0, 50, 0, 0, now)); err != nil {
 		t.Fatalf("seed origin stat: %v", err)
 	}
-	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfDest, 34, 0, 101, 0, 100, now)); err != nil {
+	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfDest, 34, 0, 101, 0, 100, 20, now)); err != nil {
 		t.Fatalf("seed dest stat: %v", err)
 	}
-	seedScannerHistory(t, q, tfDest, 34, 20, 7)
 	code, body = getPage(t, app, cookie, "/market/tradefinder/")
 	if code != http.StatusOK {
 		t.Fatalf("tradefinder no-routes page: status %d", code)

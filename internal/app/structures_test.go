@@ -10,18 +10,18 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/alexedwards/scs/sqlite3store"
+	"github.com/alexedwards/scs/pgxstore"
 	scs "github.com/alexedwards/scs/v2"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/pgtest"
 )
 
 // structureAttemptTransport answers /universe/structures/{id}/
@@ -77,15 +77,15 @@ func (s *structureAttemptTransport) attemptOrder() []int64 {
 // apart.
 func buildStructureTestApp(t *testing.T, transport http.RoundTripper) (*Application, *db.Queries) {
 	t.Helper()
-	conn, err := openDB(filepath.Join(t.TempDir(), "test.db"))
+	conn, pool, err := openDB(context.Background(), pgtest.FreshDSN(t))
 	if err != nil {
 		t.Fatalf("openDB: %v", err)
 	}
-	t.Cleanup(func() { conn.Close() })
+	t.Cleanup(func() { conn.Close(); pool.Close() })
 	queries := db.New(conn)
 
 	sessionManager := scs.New()
-	sessionManager.Store = sqlite3store.New(conn)
+	sessionManager.Store = pgxstore.New(pool)
 	sessionManager.Lifetime = 24 * time.Hour
 	sessionManager.Cookie.Name = "evesynapse_session"
 

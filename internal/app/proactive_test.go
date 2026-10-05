@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -20,6 +19,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/pgtest"
 )
 
 const forge = defaultMarketRegion
@@ -385,7 +385,7 @@ func TestUrgentDrainFetchesAndGates(t *testing.T) {
 	}
 
 	app.urgentDrain(ctx)
-	rows, err := q.ListMarketHistory(ctx, db.ListMarketHistoryParams{RegionID: forge, TypeID: 34, Limit: 90})
+	rows, err := q.ListMarketHistory(ctx, db.ListMarketHistoryParams{RegionID: forge, TypeID: 34, RowLimit: 90})
 	if err != nil || len(rows) != 2 {
 		t.Fatalf("urgent drain stored %d rows (err=%v), want 2", len(rows), err)
 	}
@@ -562,15 +562,15 @@ func TestLiveRegionFragments(t *testing.T) {
 
 func TestMigration016Reopen(t *testing.T) {
 	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "reopen.db")
+	dsn := pgtest.FreshDSN(t)
 	for i := 0; i < 2; i++ {
-		conn, err := openDB(path)
+		conn, pool, err := openDB(context.Background(), dsn)
 		if err != nil {
 			t.Fatalf("openDB (pass %d): %v", i, err)
 		}
 		var cols int
 		if err := conn.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM pragma_table_info('pilot_records') WHERE name = 'priority'`).Scan(&cols); err != nil {
+			`SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'pilot_records' AND column_name = 'priority'`).Scan(&cols); err != nil {
 			t.Fatalf("priority column check (pass %d): %v", i, err)
 		}
 		if cols != 1 {
@@ -583,5 +583,6 @@ func TestMigration016Reopen(t *testing.T) {
 		if err := conn.Close(); err != nil {
 			t.Fatalf("close (pass %d): %v", i, err)
 		}
+		pool.Close()
 	}
 }

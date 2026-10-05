@@ -27,6 +27,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/pgtest"
 )
 
 // ---------------------------------------------------------------------------
@@ -505,20 +506,27 @@ func TestSkillPlanWarmStates(t *testing.T) {
 }
 
 func TestMigration012Reopen(t *testing.T) {
-	// Mirror of the 011 reopen test: applying the guarded schema
-	// to an existing database is idempotent.
-	app, _, _ := buildCorpTestApp(t, &countingTransport{})
+	// Mirror of the 011 reopen test: a second open over the
+	// same database applies nothing twice (and nothing breaks).
 	ctx := context.Background()
-	if _, err := app.db.ExecContext(ctx, skillPlansSchema); err != nil {
-		// applySchema strips full-line comments; Exec of the raw
-		// script also works since comments are legal SQL. Use the
-		// app path instead for fidelity:
-		if err2 := applySchema(app.db, skillPlansSchema); err2 != nil {
-			t.Fatalf("reapply schema 012: %v (raw: %v)", err2, err)
-		}
+	dsn := pgtest.FreshDSN(t)
+	conn, pool, err := openDB(ctx, dsn)
+	if err != nil {
+		t.Fatalf("first open: %v", err)
 	}
 	var n int
-	if err := app.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='skill_plans'`).Scan(&n); err != nil || n != 1 {
+	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'skill_plans'`).Scan(&n); err != nil || n != 1 {
 		t.Fatalf("skill_plans table count = %d, err %v", n, err)
 	}
+	conn.Close()
+	pool.Close()
+	conn, pool, err = openDB(ctx, dsn)
+	if err != nil {
+		t.Fatalf("second open: %v", err)
+	}
+	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'skill_plans'`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("skill_plans table count after reopen = %d, err %v", n, err)
+	}
+	conn.Close()
+	pool.Close()
 }

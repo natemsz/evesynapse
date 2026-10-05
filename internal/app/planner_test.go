@@ -17,11 +17,11 @@ package app
 import (
 	"context"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"evesynapse/internal/esi"
+	"evesynapse/internal/pgtest"
 )
 
 // ---------------------------------------------------------------------------
@@ -525,25 +525,27 @@ func TestPlannerRendersFromLocalData(t *testing.T) {
 	}
 }
 
-// TestMigration011Reopen proves the planner-table guard is
+// TestMigration011Reopen proves the schema bootstrap is
 // idempotent on reopen, like every schema before it.
 func TestMigration011Reopen(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "test.db")
-	conn, err := openDB(path)
+	dsn := pgtest.FreshDSN(t)
+	conn, pool, err := openDB(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("first open: %v", err)
 	}
 	var tables int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('sde_blueprints', 'sde_blueprint_materials', 'sde_blueprint_skills')`).Scan(&tables); err != nil {
-		t.Fatalf("sqlite_master: %v", err)
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('sde_blueprints', 'sde_blueprint_materials', 'sde_blueprint_skills')`).Scan(&tables); err != nil {
+		t.Fatalf("information_schema: %v", err)
 	}
 	if tables != 3 {
 		t.Fatalf("planner tables: %d, want 3", tables)
 	}
 	conn.Close()
-	conn, err = openDB(path)
+	pool.Close()
+	conn, pool, err = openDB(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("second open: %v", err)
 	}
 	conn.Close()
+	pool.Close()
 }

@@ -108,6 +108,8 @@ type LocalFitting struct {
 	ItemsJson  string `json:"items_json"`
 	CreatedAt  string `json:"created_at"`
 	UpdatedAt  string `json:"updated_at"`
+	IsPublic   bool   `json:"is_public"`
+	IsDraft    bool   `json:"is_draft"`
 }
 
 type MarketFetchState struct {

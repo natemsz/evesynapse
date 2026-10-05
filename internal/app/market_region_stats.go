@@ -390,6 +390,41 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 		return stationKeys[i].TypeID < stationKeys[j].TypeID
 	})
 
+	// Station leaderboard figures (P5) come from the same staged
+	// book, distilled here so the leaderboard page never
+	// aggregates at render time: one row per station with the
+	// open-order count and the open ISK value per side, where
+	// the open value needs price times remaining volume per
+	// order, which the type-grain aggregates cannot reconstruct.
+	type stationLeaderAccum struct {
+		sellOrders, buyOrders int64
+		sellValue, buyValue   float64
+	}
+	leaderAcc := make(map[int64]*stationLeaderAccum)
+	leaderRows, err := app.queries.ListMarketSweepStationLeaderboardAggregates(ctx, regionID)
+	if err != nil {
+		return 0, 0, fmt.Errorf("leaderboard aggregates: %w", err)
+	}
+	for _, row := range leaderRows {
+		acc := leaderAcc[row.LocationID]
+		if acc == nil {
+			acc = &stationLeaderAccum{}
+			leaderAcc[row.LocationID] = acc
+		}
+		if row.IsBuyOrder == 1 {
+			acc.buyOrders = row.OrderCount
+			acc.buyValue = row.OpenValue
+		} else {
+			acc.sellOrders = row.OrderCount
+			acc.sellValue = row.OpenValue
+		}
+	}
+	leaderKeys := make([]int64, 0, len(leaderAcc))
+	for loc := range leaderAcc {
+		leaderKeys = append(leaderKeys, loc)
+	}
+	sort.Slice(leaderKeys, func(i, j int) bool { return leaderKeys[i] < leaderKeys[j] })
+
 	tx, err := app.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, 0, err
@@ -457,6 +492,20 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 	}
 	if err := qtx.DeleteMarketSweepState(ctx, regionID); err != nil {
 		return 0, 0, err
+	}
+	if err := qtx.DeleteMarketStationLeaderboardByRegion(ctx, regionID); err != nil {
+		return 0, 0, err
+	}
+	for _, loc := range leaderKeys {
+		acc := leaderAcc[loc]
+		if err := qtx.UpsertMarketStationLeaderboard(ctx, db.UpsertMarketStationLeaderboardParams{
+			RegionID: regionID, LocationID: loc,
+			SellOrders: acc.sellOrders, BuyOrders: acc.buyOrders,
+			SellValue: acc.sellValue, BuyValue: acc.buyValue,
+			UpdatedAt: updatedAt,
+		}); err != nil {
+			return 0, 0, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return 0, 0, err

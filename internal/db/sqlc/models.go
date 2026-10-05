@@ -167,6 +167,16 @@ type MarketRegionStatsDaily struct {
 	BuyVolume   int64   `json:"buy_volume"`
 }
 
+type MarketStationLeaderboard struct {
+	RegionID   int64   `json:"region_id"`
+	LocationID int64   `json:"location_id"`
+	SellOrders int64   `json:"sell_orders"`
+	BuyOrders  int64   `json:"buy_orders"`
+	SellValue  float64 `json:"sell_value"`
+	BuyValue   float64 `json:"buy_value"`
+	UpdatedAt  string  `json:"updated_at"`
+}
+
 type MarketStationStat struct {
 	LocationID int64   `json:"location_id"`
 	RegionID   int64   `json:"region_id"`

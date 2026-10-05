@@ -754,6 +754,54 @@ func (q *Queries) ListGuidePrices(ctx context.Context) ([]GuidePrice, error) {
 	return items, nil
 }
 
+const listMarketAvgDailyVolumes = `-- name: ListMarketAvgDailyVolumes :many
+SELECT h.type_id AS type_id, CAST(AVG(h.volume) AS REAL) AS avg_daily_volume
+FROM market_history h
+WHERE h.region_id = ?
+  AND h.date >= (
+      SELECT DATE(MAX(m.date), '-6 days')
+      FROM market_history m
+      WHERE m.region_id = h.region_id AND m.type_id = h.type_id
+  )
+GROUP BY h.type_id
+ORDER BY h.type_id
+`
+
+type ListMarketAvgDailyVolumesRow struct {
+	TypeID         int64   `json:"type_id"`
+	AvgDailyVolume float64 `json:"avg_daily_volume"`
+}
+
+// The sold-per-day figure the sweep stores on each region stat:
+// the mean recorded daily volume over the seven calendar days
+// ending on the type's newest recorded day (the newest day and
+// the six before it), which is exactly what historyWindow(rows,
+// 7) averages at render time. One pass over the region's whole
+// history at sweep completion; types with no recorded history
+// have no row here and read as 0.
+func (q *Queries) ListMarketAvgDailyVolumes(ctx context.Context, regionID int64) ([]ListMarketAvgDailyVolumesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketAvgDailyVolumes, regionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketAvgDailyVolumesRow
+	for rows.Next() {
+		var i ListMarketAvgDailyVolumesRow
+		if err := rows.Scan(&i.TypeID, &i.AvgDailyVolume); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMarketHistory = `-- name: ListMarketHistory :many
 SELECT region_id, type_id, date, average, highest, lowest, volume, order_count
 FROM market_history
@@ -835,7 +883,7 @@ func (q *Queries) ListMarketHistoryWants(ctx context.Context, lastRequestedAt st
 }
 
 const listMarketRegionStatsByRegion = `-- name: ListMarketRegionStatsByRegion :many
-SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
 FROM market_region_stats
 WHERE region_id = ?
 ORDER BY type_id
@@ -864,6 +912,7 @@ func (q *Queries) ListMarketRegionStatsByRegion(ctx context.Context, regionID in
 			&i.SellVolume,
 			&i.BuyVolume,
 			&i.UpdatedAt,
+			&i.AvgDailyVolume,
 		); err != nil {
 			return nil, err
 		}
@@ -879,7 +928,7 @@ func (q *Queries) ListMarketRegionStatsByRegion(ctx context.Context, regionID in
 }
 
 const listMarketRegionStatsByType = `-- name: ListMarketRegionStatsByType :many
-SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
 FROM market_region_stats
 WHERE type_id = ?
 ORDER BY region_id
@@ -908,6 +957,7 @@ func (q *Queries) ListMarketRegionStatsByType(ctx context.Context, typeID int64)
 			&i.SellVolume,
 			&i.BuyVolume,
 			&i.UpdatedAt,
+			&i.AvgDailyVolume,
 		); err != nil {
 			return nil, err
 		}
@@ -1971,8 +2021,8 @@ func (q *Queries) UpsertMarketHistoryWant(ctx context.Context, arg UpsertMarketH
 }
 
 const upsertMarketRegionStat = `-- name: UpsertMarketRegionStat :exec
-INSERT INTO market_region_stats (region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO market_region_stats (region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, avg_daily_volume, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (region_id, type_id) DO UPDATE SET
     best_sell    = excluded.best_sell,
     typical_sell = excluded.typical_sell,
@@ -1984,23 +2034,25 @@ ON CONFLICT (region_id, type_id) DO UPDATE SET
     buy_orders   = excluded.buy_orders,
     sell_volume  = excluded.sell_volume,
     buy_volume   = excluded.buy_volume,
+    avg_daily_volume = excluded.avg_daily_volume,
     updated_at   = excluded.updated_at
 `
 
 type UpsertMarketRegionStatParams struct {
-	RegionID    int64   `json:"region_id"`
-	TypeID      int64   `json:"type_id"`
-	BestSell    float64 `json:"best_sell"`
-	TypicalSell float64 `json:"typical_sell"`
-	SellBand    float64 `json:"sell_band"`
-	BestBuy     float64 `json:"best_buy"`
-	TypicalBuy  float64 `json:"typical_buy"`
-	BuyBand     float64 `json:"buy_band"`
-	SellOrders  int64   `json:"sell_orders"`
-	BuyOrders   int64   `json:"buy_orders"`
-	SellVolume  int64   `json:"sell_volume"`
-	BuyVolume   int64   `json:"buy_volume"`
-	UpdatedAt   string  `json:"updated_at"`
+	RegionID       int64   `json:"region_id"`
+	TypeID         int64   `json:"type_id"`
+	BestSell       float64 `json:"best_sell"`
+	TypicalSell    float64 `json:"typical_sell"`
+	SellBand       float64 `json:"sell_band"`
+	BestBuy        float64 `json:"best_buy"`
+	TypicalBuy     float64 `json:"typical_buy"`
+	BuyBand        float64 `json:"buy_band"`
+	SellOrders     int64   `json:"sell_orders"`
+	BuyOrders      int64   `json:"buy_orders"`
+	SellVolume     int64   `json:"sell_volume"`
+	BuyVolume      int64   `json:"buy_volume"`
+	AvgDailyVolume float64 `json:"avg_daily_volume"`
+	UpdatedAt      string  `json:"updated_at"`
 }
 
 func (q *Queries) UpsertMarketRegionStat(ctx context.Context, arg UpsertMarketRegionStatParams) error {
@@ -2017,6 +2069,7 @@ func (q *Queries) UpsertMarketRegionStat(ctx context.Context, arg UpsertMarketRe
 		arg.BuyOrders,
 		arg.SellVolume,
 		arg.BuyVolume,
+		arg.AvgDailyVolume,
 		arg.UpdatedAt,
 	)
 	return err

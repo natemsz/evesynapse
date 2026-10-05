@@ -1816,7 +1816,17 @@
   }
 
   var simSeq = 0;
+  var simInFlight = false;
+  var simQueued = false;
+  // No silent taps: the last add/remove/charge change arms a flash
+  // that fires on the re-rendered target once simulate() lands.
+  var pendingFlash = null; // {type: "slot"|"group"|"charge", id: number, family: string}
   function simulate() {
+    // Coalesce bursts: one request in flight at a time; a change
+    // made mid-flight re-sends once with the latest state instead
+    // of piling up stale POSTs.
+    if (simInFlight) { simQueued = true; return; }
+    simInFlight = true;
     state.name = nameInput ? nameInput.value : (state.name || "");
     var seq = ++simSeq;
     var payload = {
@@ -1826,6 +1836,10 @@
       charges: state.charges,
       pilot: pilotID()
     };
+    function simDone() {
+      simInFlight = false;
+      if (simQueued) { simQueued = false; simulate(); }
+    }
     fetch("/fittings/simulate/", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Accept": "text/html" },
@@ -1833,12 +1847,12 @@
     }).then(function (resp) {
       return resp.ok ? resp.text() : "";
     }).then(function (html) {
-      if (!html || seq !== simSeq) return;
+      if (!html || seq !== simSeq) { simDone(); return; }
       var tmp = document.createElement("div");
       tmp.innerHTML = html;
       var fresh = tmp.querySelector(".fit-wb");
       var current = workbench();
-      if (!fresh || !current) return;
+      if (!fresh || !current) { simDone(); return; }
       current.replaceWith(fresh);
       var next = readState();
       if (next) {
@@ -1848,7 +1862,30 @@
       }
       syncFilterUI();
       syncSubsystemUI();
-    }).catch(function () { /* the static copy stays honest */ });
+      syncUndoButtons();
+      runPendingFlash();
+      simDone();
+    }).catch(function () { simDone(); /* the static copy stays honest */ });
+  }
+
+  // Fires the armed add/remove flash on the re-rendered target.
+  function runPendingFlash() {
+    var f = pendingFlash;
+    pendingFlash = null;
+    if (!f) return;
+    var el = null;
+    if (f.type === "slot") {
+      el = editor.querySelector('.fit-vslot[data-fit-vslot="' + f.id + '"]');
+    } else if (f.type === "group") {
+      el = editor.querySelector('.fit-group[data-fit-group="' + f.family + '"]');
+    } else if (f.type === "charge") {
+      el = editor.querySelector('select[data-fit-charge="' + f.id + '"]');
+      if (!el) el = editor.querySelector('.fit-vslot[data-fit-vslot="' + f.id + '"] .fit-vammo');
+    }
+    if (!el) return;
+    el.classList.add("flash");
+    if (el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
+    window.setTimeout(function () { el.classList.remove("flash"); }, 750);
   }
 
   // --- filter controls: enabled states follow ship/pilot ----------
@@ -1918,14 +1955,14 @@
     applySnap(future.pop());
     syncUndoButtons();
   }
-  var undoBtn = document.getElementById("fit-undo");
-  var redoBtn = document.getElementById("fit-redo");
+  // Undo/redo ride the visual's corner and re-render with it, so
+  // the buttons are re-queried every time (delegated clicks).
   function syncUndoButtons() {
-    if (undoBtn) undoBtn.disabled = !past.length;
-    if (redoBtn) redoBtn.disabled = !future.length;
+    var ub = editor.querySelectorAll("[data-fit-undo]");
+    var rb = editor.querySelectorAll("[data-fit-redo]");
+    for (var i = 0; i < ub.length; i++) ub[i].disabled = !past.length;
+    for (var j = 0; j < rb.length; j++) rb[j].disabled = !future.length;
   }
-  if (undoBtn) undoBtn.addEventListener("click", undo);
-  if (redoBtn) redoBtn.addEventListener("click", redo);
   syncUndoButtons();
 
   // --- autosave ----------------------------------------------------
@@ -2006,12 +2043,32 @@
     return false;
   }
 
+  // Slot families with a fixed maximum: adding past it is a
+  // plain-language refusal, never a silent no-op.
+  var fitFamLabels = { high: "high", medium: "mid", low: "low", rig: "rig" };
   function addItem(typeID, qty) {
+    var fam = familyOfType(typeID) || "";
+    if (fitFamLabels[fam]) {
+      var max = 0;
+      var g = editor.querySelector('.fit-group[data-fit-group="' + fam + '"]');
+      if (g) max = parseInt(g.getAttribute("data-fit-max") || "0", 10) || 0;
+      var count = 0;
+      for (var i = 0; i < state.items.length; i++) {
+        if ((familyOfType(state.items[i].typeId) || "") === fam) count += state.items[i].qty || 1;
+      }
+      if (max > 0 && count >= max) {
+        fitNotice("No free " + fitFamLabels[fam] + " slots — remove something first.", true, false);
+        return;
+      }
+    }
     pushHistory();
     var i = findItem(typeID);
     if (i >= 0) state.items[i].qty += qty;
     else state.items.push({ typeId: typeID, qty: qty });
     markDirty();
+    pendingFlash = fam === "drone" || fam === "cargo"
+      ? { type: "group", family: fam }
+      : { type: "slot", id: typeID };
     simulate();
   }
   // addItemAt inserts one module at a doc-order position (drag
@@ -2026,9 +2083,13 @@
     pushHistory();
     var i = findItem(typeID);
     if (i < 0) return;
+    var fam = familyOfType(typeID) || "";
     state.items[i].qty -= 1;
     if (state.items[i].qty <= 0) state.items.splice(i, 1);
     markDirty();
+    // The removed module is gone; flash its group so the removal
+    // reads as an action, not a glitch.
+    pendingFlash = fam ? { type: "group", family: fam } : null;
     simulate();
   }
   function setItemQty(typeID, qty) {
@@ -2058,12 +2119,18 @@
     if (!t || !t.getAttribute) return;
     var wb = workbench();
     if (wb && wb.contains(t)) {
+      if (t.closest("[data-fit-undo]")) { undo(); return; }
+      if (t.closest("[data-fit-redo]")) { redo(); return; }
       var dec = t.getAttribute("data-fit-dec");
       if (dec) { decItem(parseInt(dec, 10) || 0); return; }
       var inc = t.getAttribute("data-fit-inc");
       if (inc) { addItem(parseInt(inc, 10) || 0, 1); return; }
       var add = t.getAttribute("data-fit-add");
-      if (add) { openPicker(add); return; }
+      if (add) {
+        if (add === "drone") { focusModuleSearch("drone"); return; }
+        openPicker(add);
+        return;
+      }
     }
   });
   editor.addEventListener("change", function (ev) {
@@ -2075,6 +2142,7 @@
       var charge = parseInt(t.value, 10) || 0;
       if (charge > 0) state.charges[weapon] = charge;
       else delete state.charges[weapon];
+      pendingFlash = { type: "charge", id: weapon };
       simulate();
       return;
     }
@@ -2193,10 +2261,10 @@
       img.src = "https://images.evetech.net/types/" + id + "/icon?size=32";
       return img;
     }
-    function query() {
+    function query(force) {
       if (!input || !list) return;
       var q = input.value.trim();
-      if (q.length < 2) { close(); return; }
+      if (q.length < 2 && !force) { close(); return; }
       fetch(pickerURL(cfg.family(), q), {
         cache: "no-store", headers: { "Accept": "application/json" }
       }).then(function (resp) {
@@ -2359,12 +2427,45 @@
     famChips.addEventListener("click", function (ev) {
       var b = ev.target && ev.target.closest ? ev.target.closest("button[data-fam]") : null;
       if (!b) return;
-      modFamily = b.getAttribute("data-fam");
+      setFamChip(b.getAttribute("data-fam"));
+      // The user took the wheel: a chip set by the drone-add flow
+      // no longer restores.
+      modSearchReturnFam = null;
+    });
+  }
+  function setFamChip(fam) {
+    modFamily = fam;
+    if (famChips) {
       var btns = famChips.querySelectorAll("button[data-fam]");
       for (var i = 0; i < btns.length; i++) {
-        btns[i].classList.toggle("on", btns[i] === b);
+        btns[i].classList.toggle("on", btns[i].getAttribute("data-fam") === fam);
       }
-      modSearch.query();
+    }
+    modSearch.query();
+  }
+  // Drones flow: one search to rule them all. The "+ Add drones"
+  // control focuses the module search with the Drones chip
+  // pre-selected; drones are picked from the normal results. When
+  // the user clears the search or picks another chip, the previous
+  // filter state restores automatically.
+  var modSearchReturnFam = null;
+  function focusModuleSearch(fam) {
+    if (modSearchReturnFam === null) modSearchReturnFam = modFamily;
+    if (modInput) modInput.value = "";
+    setFamChip(fam);
+    modSearch.query(true); // empty query lists the whole family
+    if (modInput) {
+      if (modInput.scrollIntoView) modInput.scrollIntoView({ block: "center" });
+      try { modInput.focus({ preventScroll: true }); } catch (e) { modInput.focus(); }
+    }
+  }
+  if (modInput) {
+    modInput.addEventListener("input", function () {
+      if (modInput.value.trim() === "" && modSearchReturnFam !== null) {
+        var back = modSearchReturnFam;
+        modSearchReturnFam = null;
+        setFamChip(back);
+      }
     });
   }
   function filtersChanged() {
@@ -2527,8 +2628,10 @@
       pickerList.innerHTML = "";
       (applyFittable(rows) || []).forEach(function (it) {
         var li = document.createElement("li");
-        li.setAttribute("draggable", "true");
         li.setAttribute("data-fit-pick", String(it.id));
+        // Tap adds (handled by the pointer controller); press-and-
+        // drag moves it onto a slot. No mousedown+preventDefault
+        // here — that kills the drag gesture before it starts.
         li.appendChild(suggestIcon(it.id));
         var name = document.createElement("span");
         name.textContent = it.name;
@@ -2539,11 +2642,6 @@
           lab.textContent = it.label;
           li.appendChild(lab);
         }
-        li.addEventListener("mousedown", function (ev) {
-          ev.preventDefault();
-          if (checkRestricted(it.id, it.name)) return;
-          addItem(it.id, 1);
-        });
         pickerList.appendChild(li);
       });
       if (!rows || rows.length === 0) {
@@ -2565,106 +2663,207 @@
   var pickerClose = document.getElementById("fit-picker-close");
   if (pickerClose) pickerClose.addEventListener("click", closePicker);
 
-  // --- drag and drop --------------------------------------------
-  // In-game behavior: tap shows the tooltip (never deletes); drag
-  // moves between slots. Dropping on an empty highlighted slot
-  // moves the module there; on an occupied highlighted slot the
-  // two swap. Invalid drops cancel; drag-off-to-delete still
-  // removes (the chip minus buttons stay the touch path).
-  // Slots carry data-v-family / data-v-index (doc order); the
-  // reorder applies against state.items directly.
-  var dragTypeID = 0;
-  var dragFromFit = false;
-  var dragFamily = "";
-  var dropIndex = -1; // doc-order index in state.items, -1 = none
-  function slotAt(ev) {
-    var t = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot") : null;
+  // --- pointer drag and drop --------------------------------------
+  // In-game behavior, on mouse AND touch: tap shows the tooltip
+  // (never deletes); drag moves between slots. Dropping on an
+  // empty highlighted slot moves the module there; on an occupied
+  // highlighted slot the two swap. Invalid drops cancel;
+  // drag-off-to-delete still removes (the chip minus buttons stay
+  // the explicit touch path).
+  //
+  // Why Pointer Events and not HTML5 drag-and-drop: mobile
+  // browsers never fire dragstart/dragover/drop for touch, so the
+  // old HTML5 wiring was dead on phones; and the picker's
+  // mousedown+preventDefault killed the native drag on desktop
+  // too. One pointer controller serves both. Slots carry
+  // data-v-family / data-v-index (doc order); the reorder applies
+  // against state.items directly.
+  var DRAG_PX = 12;
+  var dragState = null; // pending or active pointer drag
+  var eatNextClick = false; // the synthetic click after a drag-source pointerup
+  function dragSourceAt(ev) {
+    var t = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot.filled,[data-fit-pick]") : null;
     return t;
   }
-  function clearDropMarks() {
+  function slotAtPoint(x, y) {
+    var el = document.elementFromPoint ? document.elementFromPoint(x, y) : null;
+    var t = el && el.closest ? el.closest(".fit-vslot") : null;
+    return t;
+  }
+  function dragGhost(d) {
+    var g = document.createElement("div");
+    g.className = "fit-drag-ghost";
+    var img = d.el.querySelector("img");
+    if (img) {
+      var c = document.createElement("img");
+      c.src = img.src;
+      c.alt = "";
+      c.draggable = false;
+      g.appendChild(c);
+    } else {
+      g.textContent = d.el.textContent;
+    }
+    document.body.appendChild(g);
+    return g;
+  }
+  function moveGhost(d, x, y) {
+    if (!d.ghost) return;
+    d.ghost.style.left = (x - 22) + "px";
+    d.ghost.style.top = (y - 22) + "px";
+  }
+  function clearDragMarks() {
     var marks = editor.querySelectorAll(".fit-vslot.drop-ok,.fit-vslot.drop-dim");
     for (var i = 0; i < marks.length; i++) {
       marks[i].classList.remove("drop-ok");
       marks[i].classList.remove("drop-dim");
     }
   }
-  function highlightForFamily() {
-    clearDropMarks();
-    if (!dragTypeID) return;
-    // A module this hull cannot fit lights up nothing.
-    if (restrictionFor(dragTypeID)) return;
+  function highlightForDrag(d) {
+    clearDragMarks();
+    if (restrictionFor(d.typeID)) return; // lights up nothing
     var slots = editor.querySelectorAll(".fit-vslot");
     for (var i = 0; i < slots.length; i++) {
       var s = slots[i];
       var fam = s.getAttribute("data-v-family") || "";
-      if (dragFamily && fam === dragFamily) s.classList.add("drop-ok");
+      if (d.family && fam === d.family) s.classList.add("drop-ok");
       else s.classList.add("drop-dim");
     }
   }
-  editor.addEventListener("dragstart", function (ev) {
-    var t = ev.target && ev.target.closest ? ev.target.closest("[data-fit-vslot],[data-fit-pick]") : null;
-    if (!t || !ev.dataTransfer) return;
+  function startPointerDrag(ev, d) {
+    if (restrictionFor(d.typeID)) { dragState = null; return; }
+    d.active = true;
+    closeTip();
+    try { d.el.setPointerCapture(ev.pointerId); } catch (e) { /* not critical */ }
+    d.ghost = dragGhost(d);
+    moveGhost(d, ev.clientX, ev.clientY);
+    d.el.classList.add("drag-src");
+    highlightForDrag(d);
+    movePointerDrag(ev, d);
+  }
+  function movePointerDrag(ev, d) {
+    moveGhost(d, ev.clientX, ev.clientY);
+    var slot = slotAtPoint(ev.clientX, ev.clientY);
+    d.dropIndex = -1;
+    if (slot) {
+      var fam = slot.getAttribute("data-v-family") || "";
+      if (d.family && fam === d.family && !restrictionFor(d.typeID)) {
+        d.dropIndex = parseInt(slot.getAttribute("data-v-index") || "-1", 10);
+        if (!(d.dropIndex >= 0)) d.dropIndex = -1;
+      }
+    }
+  }
+  function endPointerDrag(ev, d) {
+    if (d.ghost && d.ghost.parentNode) d.ghost.parentNode.removeChild(d.ghost);
+    d.el.classList.remove("drag-src");
+    clearDragMarks();
+    // The synthetic click lands right after pointerup; eat exactly it.
+    eatNextClick = true;
+    var typeID = d.typeID, fam = d.family, idx = d.dropIndex, fromFit = d.fromFit;
+    if (idx >= 0) {
+      if (fromFit) {
+        pendingFlash = { type: "slot", id: typeID };
+        moveItemTo(typeID, fam, idx);
+      } else if (!checkRestricted(typeID, "")) {
+        addItem(typeID, 1); // arms its own flash
+      }
+    } else if (fromFit) {
+      // Dropped off the display: same as the minus button.
+      decItem(typeID);
+    }
+    // A picker drag to nowhere simply cancels.
+  }
+  // Tap (press without drag): slot toggles the tooltip, the ammo
+  // badge jumps to the charge picker, a picker row adds its item.
+  function tapDragSource(ev, d) {
+    var ammo = ev.target && ev.target.closest ? ev.target.closest("[data-fit-ammo]") : null;
+    if (ammo) { jumpToCharge(ammo.getAttribute("data-fit-ammo")); return; }
+    if (d.fromFit) {
+      toggleTip(d.el);
+      return;
+    }
+    if (!checkRestricted(d.typeID, "")) addItem(d.typeID, 1);
+  }
+  editor.addEventListener("pointerdown", function (ev) {
+    if (ev.button !== undefined && ev.button > 0) return;
+    if (dragState) return;
+    var t = dragSourceAt(ev);
+    if (!t) return;
     var vslot = t.getAttribute("data-fit-vslot");
     var pick = t.getAttribute("data-fit-pick");
-    if (vslot && t.classList.contains("fit-vslot")) {
-      dragTypeID = parseInt(vslot, 10) || 0;
-      dragFromFit = true;
-      dragFamily = t.getAttribute("data-v-family") || "";
-      ev.dataTransfer.setData("text/plain", "fit:" + dragTypeID);
-      ev.dataTransfer.effectAllowed = "move";
-      t.classList.add("drag-src");
-      highlightForFamily();
-    } else if (pick) {
-      dragTypeID = parseInt(pick, 10) || 0;
-      dragFromFit = false;
-      // The picker's own family is unknown until dropped; infer
-      // it from the suggestion kind when available.
-      dragFamily = t.getAttribute("data-pick-family") || "";
-      ev.dataTransfer.setData("text/plain", "pick:" + dragTypeID);
-      ev.dataTransfer.effectAllowed = "copy";
-      highlightForFamily();
+    var typeID = parseInt(vslot || pick || "0", 10) || 0;
+    if (!typeID) return;
+    dragState = {
+      el: t, typeID: typeID, fromFit: !!vslot,
+      family: vslot ? (t.getAttribute("data-v-family") || "") : pickerDropFamily(),
+      x0: ev.clientX, y0: ev.clientY, pid: ev.pointerId,
+      active: false, dropIndex: -1, ghost: null,
+      mayScroll: !vslot // picker rows live in a scrollable list
+    };
+  });
+  // The bottom picker's family select is the drop family for picker
+  // drags ("any" has no slot family, so those taps only).
+  function pickerDropFamily() {
+    var v = pickerFamily ? pickerFamily.value : "";
+    return v === "any" ? "" : v;
+  }
+  editor.addEventListener("pointermove", function (ev) {
+    var d = dragState;
+    if (!d || ev.pointerId !== d.pid) return;
+    var dx = ev.clientX - d.x0, dy = ev.clientY - d.y0;
+    if (!d.active) {
+      if (Math.sqrt(dx * dx + dy * dy) < DRAG_PX) return;
+      // A mostly-vertical press on a picker row is a list scroll,
+      // not a drag — hand it back to the browser.
+      if (d.mayScroll && Math.abs(dy) > Math.abs(dx) * 1.4) { dragState = null; return; }
+      startPointerDrag(ev, d);
+      return;
+    }
+    movePointerDrag(ev, d);
+  });
+  function releasePointerDrag(ev) {
+    var d = dragState;
+    if (!d || ev.pointerId !== d.pid) return;
+    dragState = null;
+    // Eat the synthetic click after pointerup so a tap never
+    // double-fires (show-then-dismiss) and a drag never leaks a
+    // click into the workbench handlers. A fresh press clears it,
+    // so a cancelled click can't eat a later real one.
+    eatNextClick = true;
+    if (d.active) endPointerDrag(ev, d);
+    else tapDragSource(ev, d);
+  }
+  editor.addEventListener("pointerup", releasePointerDrag);
+  editor.addEventListener("pointercancel", function (ev) {
+    var d = dragState;
+    if (!d || ev.pointerId !== d.pid) return;
+    dragState = null;
+    if (d.active) {
+      if (d.ghost && d.ghost.parentNode) d.ghost.parentNode.removeChild(d.ghost);
+      d.el.classList.remove("drag-src");
+      clearDragMarks();
     }
   });
-  editor.addEventListener("dragover", function (ev) {
-    if (!dragTypeID) return;
-    var slot = slotAt(ev);
-    if (!slot) return;
-    ev.preventDefault();
-    ev.dataTransfer.dropEffect = dragFromFit ? "move" : "copy";
-    var fam = slot.getAttribute("data-v-family") || "";
-    dropIndex = -1;
-    if (dragFamily && fam === dragFamily && !restrictionFor(dragTypeID)) {
-      dropIndex = parseInt(slot.getAttribute("data-v-index") || "-1", 10);
-      if (!(dropIndex >= 0)) dropIndex = -1;
+  // A real drag ends in a click; eat exactly that one so taps and
+  // drags never double-fire. Clicks inside the tooltip itself
+  // (its close button) always pass through. Any fresh press
+  // clears the flag first, so a click that never arrives can't
+  // eat a later genuine one.
+  editor.addEventListener("pointerdown", function () { eatNextClick = false; }, true);
+  editor.addEventListener("click", function (ev) {
+    if (eatNextClick) {
+      eatNextClick = false;
+      if (ev.target && ev.target.closest && ev.target.closest(".fit-tip")) return;
+      ev.stopPropagation();
+      ev.preventDefault();
     }
+  }, true);
+
+  // A long-press must never pop the context menu mid-drag.
+  editor.addEventListener("contextmenu", function (ev) {
+    var t = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot,[data-fit-pick]") : null;
+    if (t) ev.preventDefault();
   });
-  editor.addEventListener("dragleave", function (ev) {
-    var slot = slotAt(ev);
-    if (slot) slot.classList.remove("drop-ok");
-  });
-  editor.addEventListener("drop", function (ev) {
-    if (!dragTypeID) return;
-    var slot = slotAt(ev);
-    if (!slot) return;
-    ev.preventDefault();
-    var id = dragTypeID;
-    var fam = dragFamily;
-    var idx = dropIndex;
-    dragTypeID = 0;
-    dragFromFit = false;
-    dragFamily = "";
-    dropIndex = -1;
-    clearDropMarks();
-    var src = editor.querySelector(".fit-vslot.drag-src");
-    if (src) src.classList.remove("drag-src");
-    if (checkRestricted(id, "")) return;
-    if (!(idx >= 0)) return; // invalid drop: cancel
-    if (fam) {
-      moveItemTo(id, fam, idx);
-    } else {
-      addItem(id, 1);
-    }
-  });
+
   // moveItemTo relocates one instance of typeID within its slot
   // family to doc-order position idx (counting only that
   // family's items). Dropping on an occupied slot swaps the two
@@ -2710,21 +2909,6 @@
     }
     return "";
   }
-  editor.addEventListener("dragend", function (ev) {
-    clearDropMarks();
-    if (dragFromFit && dragTypeID && ev.dataTransfer &&
-        ev.dataTransfer.dropEffect === "none") {
-      // Dropped off the display: same as the minus button.
-      decItem(dragTypeID);
-    }
-    dragTypeID = 0;
-    dragFromFit = false;
-    dragFamily = "";
-    dropIndex = -1;
-    var src = editor.querySelector(".fit-vslot.drag-src");
-    if (src) src.classList.remove("drag-src");
-  });
-
   // --- slot tooltips ----------------------------------------------
   // Hover (desktop) or tap (mobile) on a fitted icon shows the
   // quick-look tooltip: name, slot, meta, CPU/PG. Positioned
@@ -2744,6 +2928,7 @@
     var cpu = slot.getAttribute("data-tip-cpu") || "";
     var pg = slot.getAttribute("data-tip-pg") || "";
     var stat = slot.getAttribute("data-tip-stat") || "";
+    var charge = slot.getAttribute("data-tip-charge") || "";
     var wb = workbench();
     if (!wb || !name) return;
     tipEl = document.createElement("div");
@@ -2770,34 +2955,52 @@
       d.textContent = lines.join(" · ");
       tipEl.appendChild(d);
     }
+    if (charge) {
+      var c = document.createElement("div");
+      c.className = "fit-tip-stats";
+      c.textContent = charge;
+      tipEl.appendChild(c);
+    }
     var x = document.createElement("button");
     x.className = "fit-tip-x";
     x.setAttribute("aria-label", "Close");
     x.textContent = "×";
     x.addEventListener("click", function (ev) { ev.stopPropagation(); closeTip(); });
     tipEl.appendChild(x);
+    // Anchor to the slot icon: below it when there is room,
+    // otherwise above; clamped inside the workbench so it can
+    // never cover the page header. The workbench is the offset
+    // parent (position: relative).
+    tipEl.style.visibility = "hidden";
     wb.appendChild(tipEl);
-    // Position outward from the ship center.
     var wr = wb.getBoundingClientRect();
     var sr = slot.getBoundingClientRect();
-    var cx = wr.left + wr.width / 2, cy = wr.top + wr.height / 2;
-    var sx = sr.left + sr.width / 2, sy = sr.top + sr.height / 2;
-    var dx = sx - cx, dy = sy - cy;
-    var mag = Math.sqrt(dx * dx + dy * dy) || 1;
-    var ox = (dx / mag) * (sr.width / 2 + 12);
-    var oy = (dy / mag) * (sr.height / 2 + 12);
-    var tx = sx - wr.left + ox, ty = sy - wr.top + oy;
-    // Flip toward center when near the workbench edge.
-    var tw = 190, th = 110;
-    if (tx + tw > wr.width) tx = sx - wr.left - ox - tw;
-    if (ty + th > wr.height) ty = sy - wr.top - oy - th;
-    if (tx < 0) tx = 8;
-    if (ty < 0) ty = 8;
+    var tw = tipEl.offsetWidth || 190, th = tipEl.offsetHeight || 110;
+    var cx = sr.left - wr.left + sr.width / 2;
+    var below = sr.bottom - wr.top + 10;
+    var above = sr.top - wr.top - th - 10;
+    var ty = (below + th <= wr.height) ? below : Math.max(8, above);
+    var tx = cx - tw / 2;
+    if (tx < 8) tx = 8;
+    if (tx + tw > wr.width - 8) tx = wr.width - tw - 8;
+    if (tx < 8) tx = 8;
     tipEl.style.left = Math.round(tx) + "px";
     tipEl.style.top = Math.round(ty) + "px";
+    tipEl.style.visibility = "";
+  }
+  // Jumps to a weapon's ammunition select (from its slot badge).
+  function jumpToCharge(weaponID) {
+    var sel = editor.querySelector('select[data-fit-charge="' + weaponID + '"]');
+    if (!sel) return;
+    closeTip();
+    if (sel.scrollIntoView) sel.scrollIntoView({ block: "center" });
+    try { sel.focus({ preventScroll: true }); } catch (e) { try { sel.focus(); } catch (e2) {} }
+    sel.classList.add("flash");
+    window.setTimeout(function () { sel.classList.remove("flash"); }, 750);
   }
   var tipHoverSlot = null;
   editor.addEventListener("mouseover", function (ev) {
+    if (dragState && dragState.active) return; // no tooltips mid-drag
     var slot = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot[data-tip-name]") : null;
     if (slot && slot !== tipHoverSlot) {
       tipHoverSlot = slot;
@@ -2811,20 +3014,27 @@
       closeTip();
     }
   });
-  // Tap toggles the tooltip; never deletes or navigates.
-  editor.addEventListener("click", function (ev) {
-    var slot = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot[data-tip-name]") : null;
-    if (slot) {
-      var key = slot.getAttribute("data-v-index") + ":" + (slot.getAttribute("data-v-family") || "");
-      if (tipEl && tipEl.getAttribute("data-for") === key) {
-        closeTip();
-      } else {
-        showTip(slot);
-        tipEl.setAttribute("data-for", key);
-      }
-      ev.stopPropagation();
-      return;
+  // Taps on slots are handled by the pointer controller (tap shows
+  // the tooltip); a tap anywhere else dismisses it. Never deletes
+  // or navigates. Keyboard: Enter/Space on a focused slot toggles
+  // its tooltip the same way a tap does.
+  function toggleTip(slot) {
+    var key = slot.getAttribute("data-v-index") + ":" + (slot.getAttribute("data-v-family") || "");
+    if (tipEl && tipEl.getAttribute("data-for") === key) {
+      closeTip();
+    } else {
+      showTip(slot);
+      if (tipEl) tipEl.setAttribute("data-for", key);
     }
+  }
+  editor.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Enter" && ev.key !== " ") return;
+    var slot = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot.filled") : null;
+    if (!slot) return;
+    ev.preventDefault();
+    toggleTip(slot);
+  });
+  editor.addEventListener("click", function (ev) {
     if (tipEl && !(ev.target && ev.target.closest && ev.target.closest(".fit-tip"))) closeTip();
   });
   document.addEventListener("keydown", function (ev) {

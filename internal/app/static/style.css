@@ -1272,6 +1272,16 @@ html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
   stroke: #ffb84d;
 }
 .nav-icon svg[hidden] { display: none; }
+/* Theme toggle icons swap via data-theme (head script sets this before
+   first paint, so no flash of both icons). */
+html[data-theme="light"] .theme-icon-moon { display: none; }
+html[data-theme="dark"] .theme-icon-sun { display: none; }
+@media (prefers-color-scheme: light) {
+  html:not([data-theme]) .theme-icon-moon { display: none; }
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) .theme-icon-sun { display: none; }
+}
 /* On the ember active pill the icons get a slightly brighter
    sweep so they never go muddy. */
 .sidebar .branch.active > summary .nav-icon svg,

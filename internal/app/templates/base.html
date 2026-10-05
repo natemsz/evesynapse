@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<script>try{document.documentElement.classList.add("js");var savedNav=window.localStorage.getItem("evesynapse-nav");if(savedNav==="rail"||savedNav==="hidden"||savedNav==="expanded"){document.documentElement.setAttribute("data-nav",savedNav);}}catch(e){}</script>
+<script>try{document.documentElement.classList.add("js");var savedNav=window.localStorage.getItem("evesynapse-nav");if(savedNav==="rail"||savedNav==="hidden"||savedNav==="expanded"){document.documentElement.setAttribute("data-nav",savedNav);}var savedTheme=window.localStorage.getItem("evesynapse-theme");if(savedTheme==="light"||savedTheme==="dark"){document.documentElement.setAttribute("data-theme",savedTheme);}else if(window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches){document.documentElement.setAttribute("data-theme","light");}}catch(e){}</script>
 <title>{{template "title" .}} · EveSynapse</title>
 {{if .AutoRefresh}}<meta http-equiv="refresh" content="5">{{end}}
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">

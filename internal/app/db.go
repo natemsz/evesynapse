@@ -430,6 +430,19 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 034 (P1 sweep upgrade: disk-staged whole-region
+	// sweeps -- one state row per region in mid-sweep plus the
+	// orders its fetched pages landed), applied the same
+	// guarded way.
+	var sweepStagingTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'market_sweep_state'`).Scan(&sweepStagingTables); err != nil {
+		return nil, err
+	}
+	if sweepStagingTables == 0 {
+		if err := applySchema(conn, sweepStagingSchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

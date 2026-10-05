@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
@@ -61,5 +61,5 @@ jobs:
               dist/evesynapse-arm64 dist/evesynapse-amd64 \
               dist/latest-arm64.json dist/latest-amd64.json \
               --title "EveSynapse $tag" \
-              --notes "Automated build of EveSynapse $tag. Update with: evesynapse -update -arm64 (or -x86 on Intel/AMD computers)."
+              --notes "Automated build of EveSynapse $tag. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers)."
           fi

@@ -7,7 +7,8 @@ package db
 
 import (
 	"context"
-	"strings"
+
+	"github.com/lib/pq"
 )
 
 const countSDEAttributeTypes = `-- name: CountSDEAttributeTypes :one
@@ -190,17 +191,17 @@ const countSDETypesFiltered = `-- name: CountSDETypesFiltered :one
 SELECT COUNT(*)
 FROM sde_types t
 LEFT JOIN sde_groups g ON g.group_id = t.group_id
-WHERE instr(lower(t.name), lower(?1)) > 0
-  AND (?2 = 0 OR (t.market_group_id > 0 AND t.published = 1))
-  AND (?3 = 0 OR g.category_id = ?3)
-  AND (?4 = 0 OR t.group_id = ?4)
+WHERE strpos(lower(t.name), lower($1)) > 0
+  AND (CAST($2 AS BIGINT) = 0 OR (t.market_group_id > 0 AND t.published = 1))
+  AND (CAST($3 AS BIGINT) = 0 OR g.category_id = $3)
+  AND (CAST($4 AS BIGINT) = 0 OR t.group_id = $4)
 `
 
 type CountSDETypesFilteredParams struct {
-	Q          string      `json:"q"`
-	MarketOnly interface{} `json:"market_only"`
-	CategoryID interface{} `json:"category_id"`
-	GroupID    interface{} `json:"group_id"`
+	Q          string `json:"q"`
+	MarketOnly int64  `json:"market_only"`
+	CategoryID int64  `json:"category_id"`
+	GroupID    int64  `json:"group_id"`
 }
 
 func (q *Queries) CountSDETypesFiltered(ctx context.Context, arg CountSDETypesFilteredParams) (int64, error) {
@@ -217,18 +218,18 @@ func (q *Queries) CountSDETypesFiltered(ctx context.Context, arg CountSDETypesFi
 
 const countSDETypesInGroupFiltered = `-- name: CountSDETypesInGroupFiltered :one
 SELECT COUNT(*) FROM sde_types
-WHERE group_id = ? AND instr(lower(name), lower(?)) > 0
-  AND (? = 0 OR (market_group_id > 0 AND published = 1))
+WHERE group_id = $1 AND strpos(lower(name), lower($2)) > 0
+  AND (CAST($3 AS BIGINT) = 0 OR (market_group_id > 0 AND published = 1))
 `
 
 type CountSDETypesInGroupFilteredParams struct {
-	GroupID    int64       `json:"group_id"`
-	LOWER      string      `json:"LOWER"`
-	MarketOnly interface{} `json:"market_only"`
+	GroupID    int64  `json:"group_id"`
+	Lower      string `json:"lower"`
+	MarketOnly int64  `json:"market_only"`
 }
 
 func (q *Queries) CountSDETypesInGroupFiltered(ctx context.Context, arg CountSDETypesInGroupFilteredParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDETypesInGroupFiltered, arg.GroupID, arg.LOWER, arg.MarketOnly)
+	row := q.db.QueryRowContext(ctx, countSDETypesInGroupFiltered, arg.GroupID, arg.Lower, arg.MarketOnly)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -236,7 +237,7 @@ func (q *Queries) CountSDETypesInGroupFiltered(ctx context.Context, arg CountSDE
 
 const getItemName = `-- name: GetItemName :one
 SELECT name FROM item_names
-WHERE item_id = ?
+WHERE item_id = $1
 `
 
 // ---------------------------------------------------------------------
@@ -252,7 +253,7 @@ func (q *Queries) GetItemName(ctx context.Context, itemID int64) (string, error)
 
 const getSDEAttributeType = `-- name: GetSDEAttributeType :one
 SELECT attribute_id, name, stackable, high_is_good, unit_id, default_value FROM sde_attribute_types
-WHERE attribute_id = ?
+WHERE attribute_id = $1
 `
 
 func (q *Queries) GetSDEAttributeType(ctx context.Context, attributeID int64) (SdeAttributeType, error) {
@@ -272,7 +273,7 @@ func (q *Queries) GetSDEAttributeType(ctx context.Context, attributeID int64) (S
 const getSDEBlueprint = `-- name: GetSDEBlueprint :one
 SELECT blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds
 FROM sde_blueprints
-WHERE blueprint_type_id = ?
+WHERE blueprint_type_id = $1
 `
 
 func (q *Queries) GetSDEBlueprint(ctx context.Context, blueprintTypeID int64) (SdeBlueprint, error) {
@@ -291,7 +292,7 @@ func (q *Queries) GetSDEBlueprint(ctx context.Context, blueprintTypeID int64) (S
 const getSDEBlueprintForProduct = `-- name: GetSDEBlueprintForProduct :one
 SELECT blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds
 FROM sde_blueprints
-WHERE product_type_id = ?
+WHERE product_type_id = $1
 ORDER BY blueprint_type_id
 LIMIT 1
 `
@@ -311,7 +312,7 @@ func (q *Queries) GetSDEBlueprintForProduct(ctx context.Context, productTypeID i
 
 const getSDECategory = `-- name: GetSDECategory :one
 SELECT category_id, name FROM sde_categories
-WHERE category_id = ?
+WHERE category_id = $1
 `
 
 func (q *Queries) GetSDECategory(ctx context.Context, categoryID int64) (SdeCategory, error) {
@@ -323,7 +324,7 @@ func (q *Queries) GetSDECategory(ctx context.Context, categoryID int64) (SdeCate
 
 const getSDEEffect = `-- name: GetSDEEffect :one
 SELECT effect_id, name, category FROM sde_effects
-WHERE effect_id = ?
+WHERE effect_id = $1
 `
 
 func (q *Queries) GetSDEEffect(ctx context.Context, effectID int64) (SdeEffect, error) {
@@ -335,7 +336,7 @@ func (q *Queries) GetSDEEffect(ctx context.Context, effectID int64) (SdeEffect, 
 
 const getSDEGroup = `-- name: GetSDEGroup :one
 SELECT group_id, name, category_id FROM sde_groups
-WHERE group_id = ?
+WHERE group_id = $1
 `
 
 func (q *Queries) GetSDEGroup(ctx context.Context, groupID int64) (SdeGroup, error) {
@@ -347,7 +348,7 @@ func (q *Queries) GetSDEGroup(ctx context.Context, groupID int64) (SdeGroup, err
 
 const getSDEMarketGroup = `-- name: GetSDEMarketGroup :one
 SELECT market_group_id, parent_group_id, name, icon_id, has_types FROM sde_market_groups
-WHERE market_group_id = ?
+WHERE market_group_id = $1
 `
 
 // Market browse tree (schema 024): the invMarketGroups hierarchy.
@@ -369,7 +370,7 @@ func (q *Queries) GetSDEMarketGroup(ctx context.Context, marketGroupID int64) (S
 
 const getSDEMeta = `-- name: GetSDEMeta :one
 SELECT value FROM sde_meta
-WHERE key = ?
+WHERE key = $1
 `
 
 func (q *Queries) GetSDEMeta(ctx context.Context, key string) (string, error) {
@@ -381,7 +382,7 @@ func (q *Queries) GetSDEMeta(ctx context.Context, key string) (string, error) {
 
 const getSDERegion = `-- name: GetSDERegion :one
 SELECT region_id, name FROM sde_regions
-WHERE region_id = ?
+WHERE region_id = $1
 `
 
 func (q *Queries) GetSDERegion(ctx context.Context, regionID int64) (SdeRegion, error) {
@@ -393,7 +394,7 @@ func (q *Queries) GetSDERegion(ctx context.Context, regionID int64) (SdeRegion, 
 
 const getSDESkillMeta = `-- name: GetSDESkillMeta :one
 SELECT type_id, rank, primary_attr, secondary_attr FROM sde_skill_meta
-WHERE type_id = ?
+WHERE type_id = $1
 `
 
 func (q *Queries) GetSDESkillMeta(ctx context.Context, typeID int64) (SdeSkillMetum, error) {
@@ -410,7 +411,7 @@ func (q *Queries) GetSDESkillMeta(ctx context.Context, typeID int64) (SdeSkillMe
 
 const getSDEStation = `-- name: GetSDEStation :one
 SELECT station_id, name, system_id FROM sde_stations
-WHERE station_id = ?
+WHERE station_id = $1
 `
 
 func (q *Queries) GetSDEStation(ctx context.Context, stationID int64) (SdeStation, error) {
@@ -422,7 +423,7 @@ func (q *Queries) GetSDEStation(ctx context.Context, stationID int64) (SdeStatio
 
 const getSDESystem = `-- name: GetSDESystem :one
 SELECT system_id, name, region_id, security FROM sde_systems
-WHERE system_id = ?
+WHERE system_id = $1
 `
 
 func (q *Queries) GetSDESystem(ctx context.Context, systemID int64) (SdeSystem, error) {
@@ -439,7 +440,7 @@ func (q *Queries) GetSDESystem(ctx context.Context, systemID int64) (SdeSystem, 
 
 const getSDEType = `-- name: GetSDEType :one
 SELECT type_id, name, group_id, market_group_id, published, description FROM sde_types
-WHERE type_id = ?
+WHERE type_id = $1
 `
 
 // ---------------------------------------------------------------------
@@ -463,7 +464,7 @@ func (q *Queries) GetSDEType(ctx context.Context, typeID int64) (SdeType, error)
 
 const getSDETypeByName = `-- name: GetSDETypeByName :one
 SELECT type_id, name FROM sde_types
-WHERE lower(name) = lower(?)
+WHERE lower(name) = lower($1)
 ORDER BY published DESC, market_group_id DESC, type_id
 LIMIT 1
 `
@@ -483,7 +484,7 @@ func (q *Queries) GetSDETypeByName(ctx context.Context, lower string) (GetSDETyp
 const getTypeDetail = `-- name: GetTypeDetail :one
 SELECT type_id, description, fetched_at
 FROM type_details
-WHERE type_id = ?
+WHERE type_id = $1
 `
 
 func (q *Queries) GetTypeDetail(ctx context.Context, typeID int64) (TypeDetail, error) {
@@ -495,7 +496,7 @@ func (q *Queries) GetTypeDetail(ctx context.Context, typeID int64) (TypeDetail, 
 
 const getTypeName = `-- name: GetTypeName :one
 SELECT name FROM type_names
-WHERE type_id = ?
+WHERE type_id = $1
 `
 
 func (q *Queries) GetTypeName(ctx context.Context, typeID int64) (string, error) {
@@ -536,11 +537,11 @@ func (q *Queries) ListAllTypeNames(ctx context.Context) ([]TypeName, error) {
 const listFitChargeTypes = `-- name: ListFitChargeTypes :many
 SELECT t.type_id, t.name
 FROM sde_types t
-WHERE t.group_id IN (/*SLICE:group_ids*/?)
+WHERE t.group_id = ANY($1::bigint[])
   AND t.published = 1 AND t.market_group_id > 0
-  AND (?2 <= 0 OR EXISTS (
+  AND ($2 <= 0 OR EXISTS (
         SELECT 1 FROM sde_type_attributes a
-        WHERE a.type_id = t.type_id AND a.attribute_id = 128 AND a.value = ?2))
+        WHERE a.type_id = t.type_id AND a.attribute_id = 128 AND a.value = $2))
 ORDER BY t.name
 LIMIT 200
 `
@@ -556,18 +557,7 @@ type ListFitChargeTypesRow struct {
 }
 
 func (q *Queries) ListFitChargeTypes(ctx context.Context, arg ListFitChargeTypesParams) ([]ListFitChargeTypesRow, error) {
-	query := listFitChargeTypes
-	var queryParams []interface{}
-	if len(arg.GroupIds) > 0 {
-		for _, v := range arg.GroupIds {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:group_ids*/?", strings.Repeat(",?", len(arg.GroupIds))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:group_ids*/?", "NULL", 1)
-	}
-	queryParams = append(queryParams, arg.ChargeSize)
-	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	rows, err := q.db.QueryContext(ctx, listFitChargeTypes, pq.Array(arg.GroupIds), arg.ChargeSize)
 	if err != nil {
 		return nil, err
 	}
@@ -595,14 +585,15 @@ FROM sde_types t
 JOIN sde_type_attributes a ON a.type_id = t.type_id AND a.attribute_id = 1272 AND a.value > 0
 LEFT JOIN sde_groups g ON g.group_id = t.group_id
 WHERE t.published = 1 AND t.market_group_id > 0
-  AND (?1 = '' OR instr(lower(t.name), lower(?1)) > 0)
-ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
-LIMIT ?2
+  AND ($2 = '' OR strpos(lower(t.name), lower($2)) > 0)
+ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT $3::bigint
 `
 
 type ListFitDroneTypesParams struct {
-	Q   interface{} `json:"q"`
-	Lim int64       `json:"lim"`
+	Lower string      `json:"lower"`
+	Q     interface{} `json:"q"`
+	Lim   int64       `json:"lim"`
 }
 
 type ListFitDroneTypesRow struct {
@@ -612,7 +603,7 @@ type ListFitDroneTypesRow struct {
 }
 
 func (q *Queries) ListFitDroneTypes(ctx context.Context, arg ListFitDroneTypesParams) ([]ListFitDroneTypesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFitDroneTypes, arg.Q, arg.Lim)
+	rows, err := q.db.QueryContext(ctx, listFitDroneTypes, arg.Lower, arg.Q, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -637,15 +628,16 @@ func (q *Queries) ListFitDroneTypes(ctx context.Context, arg ListFitDroneTypesPa
 const listFitSlotTypes = `-- name: ListFitSlotTypes :many
 SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
 FROM sde_types t
-JOIN sde_type_effects te ON te.type_id = t.type_id AND te.effect_id = ?1
+JOIN sde_type_effects te ON te.type_id = t.type_id AND te.effect_id = $2
 LEFT JOIN sde_groups g ON g.group_id = t.group_id
 WHERE t.published = 1 AND t.market_group_id > 0
-  AND (?2 = '' OR instr(lower(t.name), lower(?2)) > 0)
-ORDER BY CASE WHEN instr(lower(t.name), lower(?2)) = 1 THEN 0 ELSE 1 END, t.name
-LIMIT ?3
+  AND ($3 = '' OR strpos(lower(t.name), lower($3)) > 0)
+ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT $4::bigint
 `
 
 type ListFitSlotTypesParams struct {
+	Lower    string      `json:"lower"`
 	EffectID int64       `json:"effect_id"`
 	Q        interface{} `json:"q"`
 	Lim      int64       `json:"lim"`
@@ -658,7 +650,12 @@ type ListFitSlotTypesRow struct {
 }
 
 func (q *Queries) ListFitSlotTypes(ctx context.Context, arg ListFitSlotTypesParams) ([]ListFitSlotTypesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFitSlotTypes, arg.EffectID, arg.Q, arg.Lim)
+	rows, err := q.db.QueryContext(ctx, listFitSlotTypes,
+		arg.Lower,
+		arg.EffectID,
+		arg.Q,
+		arg.Lim,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -710,22 +707,12 @@ func (q *Queries) ListItemNames(ctx context.Context) ([]ItemName, error) {
 
 const listSDEAttributeTypesByIDs = `-- name: ListSDEAttributeTypesByIDs :many
 SELECT attribute_id, name, stackable, high_is_good, unit_id, default_value FROM sde_attribute_types
-WHERE attribute_id IN (/*SLICE:attribute_ids*/?)
+WHERE attribute_id = ANY($1::bigint[])
 ORDER BY attribute_id
 `
 
 func (q *Queries) ListSDEAttributeTypesByIDs(ctx context.Context, attributeIds []int64) ([]SdeAttributeType, error) {
-	query := listSDEAttributeTypesByIDs
-	var queryParams []interface{}
-	if len(attributeIds) > 0 {
-		for _, v := range attributeIds {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:attribute_ids*/?", strings.Repeat(",?", len(attributeIds))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:attribute_ids*/?", "NULL", 1)
-	}
-	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	rows, err := q.db.QueryContext(ctx, listSDEAttributeTypesByIDs, pq.Array(attributeIds))
 	if err != nil {
 		return nil, err
 	}
@@ -756,7 +743,7 @@ func (q *Queries) ListSDEAttributeTypesByIDs(ctx context.Context, attributeIds [
 
 const listSDEBlueprintMaterials = `-- name: ListSDEBlueprintMaterials :many
 SELECT material_type_id, quantity FROM sde_blueprint_materials
-WHERE blueprint_type_id = ?
+WHERE blueprint_type_id = $1
 ORDER BY material_type_id
 `
 
@@ -822,7 +809,7 @@ func (q *Queries) ListSDEBlueprintProducts(ctx context.Context) ([]ListSDEBluepr
 
 const listSDEBlueprintSkills = `-- name: ListSDEBlueprintSkills :many
 SELECT skill_type_id, level FROM sde_blueprint_skills
-WHERE blueprint_type_id = ?
+WHERE blueprint_type_id = $1
 ORDER BY level DESC, skill_type_id
 `
 
@@ -858,7 +845,7 @@ const listSDEBlueprintsUsingMaterial = `-- name: ListSDEBlueprintsUsingMaterial 
 SELECT b.blueprint_type_id, b.product_type_id, b.product_quantity, m.quantity AS material_quantity
 FROM sde_blueprint_materials m
 JOIN sde_blueprints b ON b.blueprint_type_id = m.blueprint_type_id
-WHERE m.material_type_id = ?
+WHERE m.material_type_id = $1
 ORDER BY b.product_type_id
 LIMIT 50
 `
@@ -938,7 +925,7 @@ func (q *Queries) ListSDECategoriesWithCounts(ctx context.Context) ([]ListSDECat
 
 const listSDEEffectModifiers = `-- name: ListSDEEffectModifiers :many
 SELECT domain, func, modified_attr, modifying_attr, operation, group_id, skill_type_id FROM sde_effect_modifiers
-WHERE effect_id = ?
+WHERE effect_id = $1
 ORDER BY domain, func, modified_attr
 `
 
@@ -985,22 +972,12 @@ func (q *Queries) ListSDEEffectModifiers(ctx context.Context, effectID int64) ([
 
 const listSDEEffectModifiersByIDs = `-- name: ListSDEEffectModifiersByIDs :many
 SELECT effect_id, domain, func, modified_attr, modifying_attr, operation, group_id, skill_type_id FROM sde_effect_modifiers
-WHERE effect_id IN (/*SLICE:effect_ids*/?)
+WHERE effect_id = ANY($1::bigint[])
 ORDER BY effect_id, domain, func, modified_attr
 `
 
 func (q *Queries) ListSDEEffectModifiersByIDs(ctx context.Context, effectIds []int64) ([]SdeEffectModifier, error) {
-	query := listSDEEffectModifiersByIDs
-	var queryParams []interface{}
-	if len(effectIds) > 0 {
-		for _, v := range effectIds {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:effect_ids*/?", strings.Repeat(",?", len(effectIds))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:effect_ids*/?", "NULL", 1)
-	}
-	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	rows, err := q.db.QueryContext(ctx, listSDEEffectModifiersByIDs, pq.Array(effectIds))
 	if err != nil {
 		return nil, err
 	}
@@ -1033,22 +1010,12 @@ func (q *Queries) ListSDEEffectModifiersByIDs(ctx context.Context, effectIds []i
 
 const listSDEEffectsByIDs = `-- name: ListSDEEffectsByIDs :many
 SELECT effect_id, name, category FROM sde_effects
-WHERE effect_id IN (/*SLICE:effect_ids*/?)
+WHERE effect_id = ANY($1::bigint[])
 ORDER BY effect_id
 `
 
 func (q *Queries) ListSDEEffectsByIDs(ctx context.Context, effectIds []int64) ([]SdeEffect, error) {
-	query := listSDEEffectsByIDs
-	var queryParams []interface{}
-	if len(effectIds) > 0 {
-		for _, v := range effectIds {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:effect_ids*/?", strings.Repeat(",?", len(effectIds))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:effect_ids*/?", "NULL", 1)
-	}
-	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	rows, err := q.db.QueryContext(ctx, listSDEEffectsByIDs, pq.Array(effectIds))
 	if err != nil {
 		return nil, err
 	}
@@ -1074,7 +1041,7 @@ const listSDEGroupsInCategory = `-- name: ListSDEGroupsInCategory :many
 SELECT g.group_id, g.name, COUNT(t.type_id) AS type_count
 FROM sde_groups g
 LEFT JOIN sde_types t ON t.group_id = g.group_id
-WHERE g.category_id = ?
+WHERE g.category_id = $1
 GROUP BY g.group_id, g.name
 ORDER BY g.name
 `
@@ -1110,7 +1077,7 @@ func (q *Queries) ListSDEGroupsInCategory(ctx context.Context, categoryID int64)
 
 const listSDEMarketGroupsByParent = `-- name: ListSDEMarketGroupsByParent :many
 SELECT market_group_id, parent_group_id, name, icon_id, has_types FROM sde_market_groups
-WHERE parent_group_id = ?
+WHERE parent_group_id = $1
 ORDER BY name
 `
 
@@ -1145,7 +1112,7 @@ func (q *Queries) ListSDEMarketGroupsByParent(ctx context.Context, parentGroupID
 
 const listSDERequirementsByType = `-- name: ListSDERequirementsByType :many
 SELECT skill_type_id, level FROM sde_requirements
-WHERE type_id = ?
+WHERE type_id = $1
 ORDER BY level DESC, skill_type_id
 `
 
@@ -1179,22 +1146,12 @@ func (q *Queries) ListSDERequirementsByType(ctx context.Context, typeID int64) (
 
 const listSDERequirementsByTypes = `-- name: ListSDERequirementsByTypes :many
 SELECT type_id, skill_type_id, level FROM sde_requirements
-WHERE type_id IN (/*SLICE:type_ids*/?)
+WHERE type_id = ANY($1::bigint[])
 ORDER BY type_id, level DESC, skill_type_id
 `
 
 func (q *Queries) ListSDERequirementsByTypes(ctx context.Context, typeIds []int64) ([]SdeRequirement, error) {
-	query := listSDERequirementsByTypes
-	var queryParams []interface{}
-	if len(typeIds) > 0 {
-		for _, v := range typeIds {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:type_ids*/?", strings.Repeat(",?", len(typeIds))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:type_ids*/?", "NULL", 1)
-	}
-	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	rows, err := q.db.QueryContext(ctx, listSDERequirementsByTypes, pq.Array(typeIds))
 	if err != nil {
 		return nil, err
 	}
@@ -1267,21 +1224,11 @@ func (q *Queries) ListSDESkillCatalog(ctx context.Context) ([]ListSDESkillCatalo
 
 const listSDESkillMetaByIDs = `-- name: ListSDESkillMetaByIDs :many
 SELECT type_id, rank, primary_attr, secondary_attr FROM sde_skill_meta
-WHERE type_id IN (/*SLICE:type_ids*/?)
+WHERE type_id = ANY($1::bigint[])
 `
 
 func (q *Queries) ListSDESkillMetaByIDs(ctx context.Context, typeIds []int64) ([]SdeSkillMetum, error) {
-	query := listSDESkillMetaByIDs
-	var queryParams []interface{}
-	if len(typeIds) > 0 {
-		for _, v := range typeIds {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:type_ids*/?", strings.Repeat(",?", len(typeIds))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:type_ids*/?", "NULL", 1)
-	}
-	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	rows, err := q.db.QueryContext(ctx, listSDESkillMetaByIDs, pq.Array(typeIds))
 	if err != nil {
 		return nil, err
 	}
@@ -1310,7 +1257,7 @@ func (q *Queries) ListSDESkillMetaByIDs(ctx context.Context, typeIds []int64) ([
 
 const listSDEStationsBySystem = `-- name: ListSDEStationsBySystem :many
 SELECT station_id, name, system_id FROM sde_stations
-WHERE system_id = ?
+WHERE system_id = $1
 ORDER BY name
 `
 
@@ -1339,7 +1286,7 @@ func (q *Queries) ListSDEStationsBySystem(ctx context.Context, systemID int64) (
 
 const listSDETypeAttributes = `-- name: ListSDETypeAttributes :many
 SELECT attribute_id, value FROM sde_type_attributes
-WHERE type_id = ?
+WHERE type_id = $1
 ORDER BY attribute_id
 `
 
@@ -1378,22 +1325,12 @@ func (q *Queries) ListSDETypeAttributes(ctx context.Context, typeID int64) ([]Li
 
 const listSDETypeAttributesByIDs = `-- name: ListSDETypeAttributesByIDs :many
 SELECT type_id, attribute_id, value FROM sde_type_attributes
-WHERE type_id IN (/*SLICE:type_ids*/?)
+WHERE type_id = ANY($1::bigint[])
 ORDER BY type_id, attribute_id
 `
 
 func (q *Queries) ListSDETypeAttributesByIDs(ctx context.Context, typeIds []int64) ([]SdeTypeAttribute, error) {
-	query := listSDETypeAttributesByIDs
-	var queryParams []interface{}
-	if len(typeIds) > 0 {
-		for _, v := range typeIds {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:type_ids*/?", strings.Repeat(",?", len(typeIds))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:type_ids*/?", "NULL", 1)
-	}
-	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	rows, err := q.db.QueryContext(ctx, listSDETypeAttributesByIDs, pq.Array(typeIds))
 	if err != nil {
 		return nil, err
 	}
@@ -1417,7 +1354,7 @@ func (q *Queries) ListSDETypeAttributesByIDs(ctx context.Context, typeIds []int6
 
 const listSDETypeEffects = `-- name: ListSDETypeEffects :many
 SELECT effect_id, is_default FROM sde_type_effects
-WHERE type_id = ?
+WHERE type_id = $1
 ORDER BY effect_id
 `
 
@@ -1451,22 +1388,12 @@ func (q *Queries) ListSDETypeEffects(ctx context.Context, typeID int64) ([]ListS
 
 const listSDETypeEffectsByIDs = `-- name: ListSDETypeEffectsByIDs :many
 SELECT type_id, effect_id, is_default FROM sde_type_effects
-WHERE type_id IN (/*SLICE:type_ids*/?)
+WHERE type_id = ANY($1::bigint[])
 ORDER BY type_id, effect_id
 `
 
 func (q *Queries) ListSDETypeEffectsByIDs(ctx context.Context, typeIds []int64) ([]SdeTypeEffect, error) {
-	query := listSDETypeEffectsByIDs
-	var queryParams []interface{}
-	if len(typeIds) > 0 {
-		for _, v := range typeIds {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:type_ids*/?", strings.Repeat(",?", len(typeIds))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:type_ids*/?", "NULL", 1)
-	}
-	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	rows, err := q.db.QueryContext(ctx, listSDETypeEffectsByIDs, pq.Array(typeIds))
 	if err != nil {
 		return nil, err
 	}
@@ -1490,7 +1417,7 @@ func (q *Queries) ListSDETypeEffectsByIDs(ctx context.Context, typeIds []int64) 
 
 const listSDETypeGroupsByIDs = `-- name: ListSDETypeGroupsByIDs :many
 SELECT type_id, group_id FROM sde_types
-WHERE type_id IN (/*SLICE:type_ids*/?)
+WHERE type_id = ANY($1::bigint[])
 ORDER BY type_id
 `
 
@@ -1500,17 +1427,7 @@ type ListSDETypeGroupsByIDsRow struct {
 }
 
 func (q *Queries) ListSDETypeGroupsByIDs(ctx context.Context, typeIds []int64) ([]ListSDETypeGroupsByIDsRow, error) {
-	query := listSDETypeGroupsByIDs
-	var queryParams []interface{}
-	if len(typeIds) > 0 {
-		for _, v := range typeIds {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:type_ids*/?", strings.Repeat(",?", len(typeIds))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:type_ids*/?", "NULL", 1)
-	}
-	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	rows, err := q.db.QueryContext(ctx, listSDETypeGroupsByIDs, pq.Array(typeIds))
 	if err != nil {
 		return nil, err
 	}
@@ -1562,22 +1479,12 @@ func (q *Queries) ListSDETypeIDs(ctx context.Context) ([]int64, error) {
 
 const listSDETypePhysicsByIDs = `-- name: ListSDETypePhysicsByIDs :many
 SELECT type_id, mass, volume, capacity FROM sde_type_physics
-WHERE type_id IN (/*SLICE:type_ids*/?)
+WHERE type_id = ANY($1::bigint[])
 ORDER BY type_id
 `
 
 func (q *Queries) ListSDETypePhysicsByIDs(ctx context.Context, typeIds []int64) ([]SdeTypePhysic, error) {
-	query := listSDETypePhysicsByIDs
-	var queryParams []interface{}
-	if len(typeIds) > 0 {
-		for _, v := range typeIds {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:type_ids*/?", strings.Repeat(",?", len(typeIds))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:type_ids*/?", "NULL", 1)
-	}
-	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	rows, err := q.db.QueryContext(ctx, listSDETypePhysicsByIDs, pq.Array(typeIds))
 	if err != nil {
 		return nil, err
 	}
@@ -1606,7 +1513,7 @@ func (q *Queries) ListSDETypePhysicsByIDs(ctx context.Context, typeIds []int64) 
 
 const listSDETypesByNames = `-- name: ListSDETypesByNames :many
 SELECT type_id, name FROM sde_types
-WHERE name IN (/*SLICE:names*/?)
+WHERE name = ANY($1::text[])
 `
 
 type ListSDETypesByNamesRow struct {
@@ -1617,17 +1524,7 @@ type ListSDETypesByNamesRow struct {
 // Name-to-type-ID lookups for the plan templates (Magic 14 &
 // friends), which name their skills the way the wiki does.
 func (q *Queries) ListSDETypesByNames(ctx context.Context, names []string) ([]ListSDETypesByNamesRow, error) {
-	query := listSDETypesByNames
-	var queryParams []interface{}
-	if len(names) > 0 {
-		for _, v := range names {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:names*/?", strings.Repeat(",?", len(names))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:names*/?", "NULL", 1)
-	}
-	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	rows, err := q.db.QueryContext(ctx, listSDETypesByNames, pq.Array(names))
 	if err != nil {
 		return nil, err
 	}
@@ -1651,18 +1548,18 @@ func (q *Queries) ListSDETypesByNames(ctx context.Context, names []string) ([]Li
 
 const listSDETypesInGroup = `-- name: ListSDETypesInGroup :many
 SELECT type_id, name, market_group_id FROM sde_types
-WHERE group_id = ? AND instr(lower(name), lower(?)) > 0
-  AND (? = 0 OR (market_group_id > 0 AND published = 1))
+WHERE group_id = $1 AND strpos(lower(name), lower($2)) > 0
+  AND (CAST($3 AS BIGINT) = 0 OR (market_group_id > 0 AND published = 1))
 ORDER BY name
-LIMIT ? OFFSET ?
+LIMIT $5::bigint OFFSET $4::bigint
 `
 
 type ListSDETypesInGroupParams struct {
-	GroupID    int64       `json:"group_id"`
-	LOWER      string      `json:"LOWER"`
-	MarketOnly interface{} `json:"market_only"`
-	Limit      int64       `json:"limit"`
-	Offset     int64       `json:"offset"`
+	GroupID    int64  `json:"group_id"`
+	Lower      string `json:"lower"`
+	MarketOnly int64  `json:"market_only"`
+	RowOffset  int64  `json:"row_offset"`
+	RowLimit   int64  `json:"row_limit"`
 }
 
 type ListSDETypesInGroupRow struct {
@@ -1674,10 +1571,10 @@ type ListSDETypesInGroupRow struct {
 func (q *Queries) ListSDETypesInGroup(ctx context.Context, arg ListSDETypesInGroupParams) ([]ListSDETypesInGroupRow, error) {
 	rows, err := q.db.QueryContext(ctx, listSDETypesInGroup,
 		arg.GroupID,
-		arg.LOWER,
+		arg.Lower,
 		arg.MarketOnly,
-		arg.Limit,
-		arg.Offset,
+		arg.RowOffset,
+		arg.RowLimit,
 	)
 	if err != nil {
 		return nil, err
@@ -1702,7 +1599,7 @@ func (q *Queries) ListSDETypesInGroup(ctx context.Context, arg ListSDETypesInGro
 
 const listSDETypesInMarketGroup = `-- name: ListSDETypesInMarketGroup :many
 SELECT type_id, name FROM sde_types
-WHERE market_group_id = ? AND published = 1 AND market_group_id > 0
+WHERE market_group_id = $1 AND published = 1 AND market_group_id > 0
 ORDER BY name
 `
 
@@ -1739,11 +1636,11 @@ SELECT type_id
 FROM type_details
 WHERE fetched_at = ''
 ORDER BY type_id
-LIMIT ?
+LIMIT $1::bigint
 `
 
-func (q *Queries) ListTypeDetailWants(ctx context.Context, limit int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listTypeDetailWants, limit)
+func (q *Queries) ListTypeDetailWants(ctx context.Context, rowLimit int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listTypeDetailWants, rowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -1769,7 +1666,7 @@ const searchAllianceRecordsByName = `-- name: SearchAllianceRecordsByName :many
 SELECT alliance_id, payload
 FROM alliance_records
 WHERE state = 'ready' AND payload != ''
-  AND instr(lower(payload), lower(?1)) > 0
+  AND strpos(lower(payload), lower($1)) > 0
 ORDER BY alliance_id
 LIMIT 100
 `
@@ -1807,7 +1704,7 @@ const searchCorporationRecordsByName = `-- name: SearchCorporationRecordsByName 
 SELECT corporation_id, payload
 FROM corporation_records
 WHERE state = 'ready' AND payload != ''
-  AND instr(lower(payload), lower(?1)) > 0
+  AND strpos(lower(payload), lower($1)) > 0
 ORDER BY corporation_id
 LIMIT 100
 `
@@ -1848,8 +1745,8 @@ const searchManufacturableProducts = `-- name: SearchManufacturableProducts :man
 SELECT t.type_id, t.name, b.blueprint_type_id
 FROM sde_blueprints b
 JOIN sde_types t ON t.type_id = b.product_type_id
-WHERE t.published = 1 AND instr(lower(t.name), lower(?1)) > 0
-ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
+WHERE t.published = 1 AND strpos(lower(t.name), lower($1)) > 0
+ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
 LIMIT 50
 `
 
@@ -1886,7 +1783,7 @@ const searchPilotRecordsByName = `-- name: SearchPilotRecordsByName :many
 SELECT character_id, payload
 FROM pilot_records
 WHERE state = 'ready' AND payload != ''
-  AND instr(lower(payload), lower(?1)) > 0
+  AND strpos(lower(payload), lower($1)) > 0
 ORDER BY character_id
 LIMIT 100
 `
@@ -1927,10 +1824,15 @@ const searchSDESkills = `-- name: SearchSDESkills :many
 SELECT m.type_id, t.name, m.rank
 FROM sde_skill_meta m
 JOIN sde_types t ON t.type_id = m.type_id
-WHERE instr(lower(t.name), lower(?)) > 0
-ORDER BY CASE WHEN instr(lower(t.name), lower(?)) = 1 THEN 0 ELSE 1 END, t.name
+WHERE strpos(lower(t.name), lower($1)) > 0
+ORDER BY CASE WHEN strpos(lower(t.name), lower($2)) = 1 THEN 0 ELSE 1 END, t.name
 LIMIT 25
 `
+
+type SearchSDESkillsParams struct {
+	Lower   string `json:"lower"`
+	Lower_2 string `json:"lower_2"`
+}
 
 type SearchSDESkillsRow struct {
 	TypeID int64   `json:"type_id"`
@@ -1938,8 +1840,8 @@ type SearchSDESkillsRow struct {
 	Rank   float64 `json:"rank"`
 }
 
-func (q *Queries) SearchSDESkills(ctx context.Context, lower string) ([]SearchSDESkillsRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchSDESkills, lower)
+func (q *Queries) SearchSDESkills(ctx context.Context, arg SearchSDESkillsParams) ([]SearchSDESkillsRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchSDESkills, arg.Lower, arg.Lower_2)
 	if err != nil {
 		return nil, err
 	}
@@ -1963,7 +1865,7 @@ func (q *Queries) SearchSDESkills(ctx context.Context, lower string) ([]SearchSD
 
 const searchSDETypes = `-- name: SearchSDETypes :many
 SELECT type_id, name FROM sde_types
-WHERE name LIKE ?
+WHERE name ILIKE $1
 ORDER BY name
 LIMIT 20
 `
@@ -2004,21 +1906,22 @@ SELECT t.type_id, t.name, t.group_id, t.market_group_id, t.published,
 FROM sde_types t
 LEFT JOIN sde_groups g ON g.group_id = t.group_id
 LEFT JOIN sde_categories c ON c.category_id = g.category_id
-WHERE instr(lower(t.name), lower(?1)) > 0
-  AND (?2 = 0 OR (t.market_group_id > 0 AND t.published = 1))
-  AND (?3 = 0 OR g.category_id = ?3)
-  AND (?4 = 0 OR t.group_id = ?4)
-ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
-LIMIT ?6 OFFSET ?5
+WHERE strpos(lower(t.name), lower($2)) > 0
+  AND (CAST($3 AS BIGINT) = 0 OR (t.market_group_id > 0 AND t.published = 1))
+  AND (CAST($4 AS BIGINT) = 0 OR g.category_id = $4)
+  AND (CAST($5 AS BIGINT) = 0 OR t.group_id = $5)
+ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT $7::bigint OFFSET $6::bigint
 `
 
 type SearchSDETypesFilteredParams struct {
-	Q          string      `json:"q"`
-	MarketOnly interface{} `json:"market_only"`
-	CategoryID interface{} `json:"category_id"`
-	GroupID    interface{} `json:"group_id"`
-	Off        int64       `json:"off"`
-	Lim        int64       `json:"lim"`
+	Lower      string `json:"lower"`
+	Q          string `json:"q"`
+	MarketOnly int64  `json:"market_only"`
+	CategoryID int64  `json:"category_id"`
+	GroupID    int64  `json:"group_id"`
+	Off        int64  `json:"off"`
+	Lim        int64  `json:"lim"`
 }
 
 type SearchSDETypesFilteredRow struct {
@@ -2040,6 +1943,7 @@ type SearchSDETypesFilteredRow struct {
 // ---------------------------------------------------------------------
 func (q *Queries) SearchSDETypesFiltered(ctx context.Context, arg SearchSDETypesFilteredParams) ([]SearchSDETypesFilteredRow, error) {
 	rows, err := q.db.QueryContext(ctx, searchSDETypesFiltered,
+		arg.Lower,
 		arg.Q,
 		arg.MarketOnly,
 		arg.CategoryID,
@@ -2079,7 +1983,7 @@ func (q *Queries) SearchSDETypesFiltered(ctx context.Context, arg SearchSDETypes
 
 const searchTypeNames = `-- name: SearchTypeNames :many
 SELECT type_id, name FROM type_names
-WHERE name LIKE ?
+WHERE name ILIKE $1
 ORDER BY name
 LIMIT 20
 `
@@ -2109,7 +2013,7 @@ func (q *Queries) SearchTypeNames(ctx context.Context, name string) ([]TypeName,
 
 const setTypeDetail = `-- name: SetTypeDetail :exec
 INSERT INTO type_details (type_id, description, fetched_at)
-VALUES (?, ?, ?)
+VALUES ($1, $2, $3)
 ON CONFLICT (type_id) DO UPDATE SET
     description = excluded.description,
     fetched_at  = excluded.fetched_at
@@ -2131,14 +2035,15 @@ SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
 FROM sde_types t
 JOIN sde_groups g ON g.group_id = t.group_id
 WHERE g.category_id = 6 AND t.published = 1
-  AND instr(lower(t.name), lower(?1)) > 0
-ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
-LIMIT ?2
+  AND strpos(lower(t.name), lower($2)) > 0
+ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT $3::bigint
 `
 
 type SuggestSDEShipsParams struct {
-	Q   string `json:"q"`
-	Lim int64  `json:"lim"`
+	Lower string `json:"lower"`
+	Q     string `json:"q"`
+	Lim   int64  `json:"lim"`
 }
 
 type SuggestSDEShipsRow struct {
@@ -2156,7 +2061,7 @@ type SuggestSDEShipsRow struct {
 // the shared suggestion feed.
 // ---------------------------------------------------------------------
 func (q *Queries) SuggestSDEShips(ctx context.Context, arg SuggestSDEShipsParams) ([]SuggestSDEShipsRow, error) {
-	rows, err := q.db.QueryContext(ctx, suggestSDEShips, arg.Q, arg.Lim)
+	rows, err := q.db.QueryContext(ctx, suggestSDEShips, arg.Lower, arg.Q, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -2181,8 +2086,8 @@ func (q *Queries) SuggestSDEShips(ctx context.Context, arg SuggestSDEShipsParams
 const suggestSDETypes = `-- name: SuggestSDETypes :many
 SELECT type_id, name FROM sde_types
 WHERE market_group_id > 0 AND published = 1
-  AND instr(lower(name), lower(?1)) > 0
-ORDER BY CASE WHEN instr(lower(name), lower(?1)) = 1 THEN 0 ELSE 1 END, name
+  AND strpos(lower(name), lower($1)) > 0
+ORDER BY CASE WHEN strpos(lower(name), lower($1)) = 1 THEN 0 ELSE 1 END, name
 LIMIT 10
 `
 
@@ -2221,20 +2126,21 @@ SELECT t.type_id, t.name,
 FROM sde_types t
 LEFT JOIN sde_groups g ON g.group_id = t.group_id
 LEFT JOIN sde_categories c ON c.category_id = g.category_id
-WHERE instr(lower(t.name), lower(?1)) > 0
+WHERE strpos(lower(t.name), lower($2)) > 0
   AND t.published = 1 AND t.market_group_id > 0
-  AND (?2 != 'planner' OR EXISTS (
+  AND (CAST($3 AS TEXT) != 'planner' OR EXISTS (
         SELECT 1 FROM sde_blueprints b WHERE b.product_type_id = t.type_id))
-  AND (?2 != 'skills' OR EXISTS (
+  AND (CAST($3 AS TEXT) != 'skills' OR EXISTS (
         SELECT 1 FROM sde_skill_meta m WHERE m.type_id = t.type_id))
-ORDER BY CASE WHEN instr(lower(t.name), lower(?1)) = 1 THEN 0 ELSE 1 END, t.name
-LIMIT ?3
+ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT $4::bigint
 `
 
 type SuggestSDETypesSharedParams struct {
-	Q    string      `json:"q"`
-	Pool interface{} `json:"pool"`
-	Lim  int64       `json:"lim"`
+	Lower string `json:"lower"`
+	Q     string `json:"q"`
+	Pool  string `json:"pool"`
+	Lim   int64  `json:"lim"`
 }
 
 type SuggestSDETypesSharedRow struct {
@@ -2245,7 +2151,12 @@ type SuggestSDETypesSharedRow struct {
 }
 
 func (q *Queries) SuggestSDETypesShared(ctx context.Context, arg SuggestSDETypesSharedParams) ([]SuggestSDETypesSharedRow, error) {
-	rows, err := q.db.QueryContext(ctx, suggestSDETypesShared, arg.Q, arg.Pool, arg.Lim)
+	rows, err := q.db.QueryContext(ctx, suggestSDETypesShared,
+		arg.Lower,
+		arg.Q,
+		arg.Pool,
+		arg.Lim,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -2274,7 +2185,7 @@ func (q *Queries) SuggestSDETypesShared(ctx context.Context, arg SuggestSDETypes
 
 const upsertItemName = `-- name: UpsertItemName :exec
 INSERT INTO item_names (item_id, name)
-VALUES (?, ?)
+VALUES ($1, $2)
 ON CONFLICT (item_id) DO UPDATE SET
     name = excluded.name
 `
@@ -2291,7 +2202,7 @@ func (q *Queries) UpsertItemName(ctx context.Context, arg UpsertItemNameParams) 
 
 const upsertSDEMeta = `-- name: UpsertSDEMeta :exec
 INSERT INTO sde_meta (key, value)
-VALUES (?, ?)
+VALUES ($1, $2)
 ON CONFLICT (key) DO UPDATE SET
     value = excluded.value
 `
@@ -2307,8 +2218,9 @@ func (q *Queries) UpsertSDEMeta(ctx context.Context, arg UpsertSDEMetaParams) er
 }
 
 const upsertTypeDetailWant = `-- name: UpsertTypeDetailWant :exec
-INSERT OR IGNORE INTO type_details (type_id)
-VALUES (?)
+INSERT INTO type_details (type_id)
+VALUES ($1)
+ON CONFLICT DO NOTHING
 `
 
 func (q *Queries) UpsertTypeDetailWant(ctx context.Context, typeID int64) error {
@@ -2318,7 +2230,7 @@ func (q *Queries) UpsertTypeDetailWant(ctx context.Context, typeID int64) error 
 
 const upsertTypeName = `-- name: UpsertTypeName :exec
 INSERT INTO type_names (type_id, name)
-VALUES (?, ?)
+VALUES ($1, $2)
 ON CONFLICT (type_id) DO UPDATE SET
     name = excluded.name
 `

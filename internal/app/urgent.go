@@ -29,7 +29,7 @@ const (
 	urgentTickInterval        = 5 * time.Second
 	urgentHistoryPerNudge     = 3
 	urgentPilotsPerNudge      = 3
-	urgentOrgsPerNudge        = 2
+	urgentOrgsPerNudge        = 8 // corp + alliance names are the cheapest ESI calls; a page that queues a handful (alliance member list) should clear in one tick, not four
 	urgentTypeDetailsPerNudge = 2
 	urgentErrorBackoff        = 2 * time.Minute
 	urgentPilotFetchAllowance = 20

@@ -504,11 +504,17 @@ var coreSnapshotKinds = []string{
 const maxFetchesPerCycle = 120
 
 // fetchBudget is the main pass's fetch allowance for one cycle.
-// Sequential use only (the character pass is single-goroutine).
-type fetchBudget struct{ left int }
+// Safe for concurrent use: the region sweep pass advances every
+// hub region in parallel from the one cycle allowance.
+type fetchBudget struct {
+	mu   sync.Mutex
+	left int
+}
 
 // take spends one fetch, reporting whether it was available.
 func (b *fetchBudget) take() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	if b.left <= 0 {
 		return false
 	}
@@ -516,7 +522,11 @@ func (b *fetchBudget) take() bool {
 	return true
 }
 
-func (b *fetchBudget) exhausted() bool { return b.left <= 0 }
+func (b *fetchBudget) exhausted() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.left <= 0
+}
 
 // orderByDue stably orders characters most-overdue first: a
 // character's due key is the earliest cached_until among the core

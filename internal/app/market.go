@@ -141,6 +141,13 @@ type marketItem struct {
 	HistoryLastDay string
 	Watched        bool
 	WatchThreshold float64
+
+	// RegionStats is the hub-regions strip (P1): one row per hub
+	// region from the worker's stored sweep stats, filled by
+	// attachRegionStats straight from the database — rendering
+	// a region never triggers a fetch. Empty until the item view
+	// is built with a type.
+	RegionStats []marketRegionStatRow
 }
 
 // TraderPollURL is the trading snapshot's live-region target:
@@ -267,6 +274,7 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 			view.Item = item
 		}
 		app.attachHistory(ctx, view.Item, typeID, view.Region, userID)
+		app.attachRegionStats(ctx, view.Item)
 		if view.Item != nil && view.Item.HistoryPending {
 			app.notePageWant(ctx, pageWantHistory, typeID, view.Region)
 		}
@@ -657,12 +665,21 @@ func summarizeBook(orders []esi.MarketOrder) (bookStats, bool) {
 	for i, o := range orders {
 		prices[i] = o.Price
 	}
+	return summarizePrices(prices), true
+}
+
+// summarizePrices is the shared core of summarizeBook: the same
+// median / 9-in-10 math over one side's raw order prices, for
+// callers that stream a book page by page and never hold whole
+// orders (the region sweep, market_region_stats.go). prices is
+// sorted in place.
+func summarizePrices(prices []float64) bookStats {
 	sort.Float64s(prices)
 	return bookStats{
 		Median: medianPrice(prices),
 		Low90:  pricePercentileNR(prices, 10),
 		High90: pricePercentileNR(prices, 90),
-	}, true
+	}
 }
 
 // medianPrice is the middle of ascending prices, averaging the

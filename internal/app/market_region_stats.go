@@ -67,6 +67,25 @@ type regionTypeAccum struct {
 	BuyVolume  int64
 }
 
+// stationKey identifies one (place, type) pair during a sweep.
+type stationKey struct {
+	LocationID int64
+	TypeID     int64
+}
+
+// stationAccum gathers one place-and-type's book during a sweep:
+// just the best price on each side, the order counts, and the
+// remaining volumes. Whole orders are never kept, same memory
+// discipline as the region accumulators.
+type stationAccum struct {
+	BestSell   float64 // lowest sell price seen; 0 = none yet
+	BestBuy    float64 // highest buy price seen; 0 = none yet
+	SellOrders int64
+	BuyOrders  int64
+	SellVolume int64
+	BuyVolume  int64
+}
+
 // regionSweepState is the one in-progress sweep: which region,
 // how far it has paged, and the per-type accumulators. Pages
 // append; nothing is written to the database until NextPage
@@ -76,6 +95,7 @@ type regionSweepState struct {
 	NextPage   int
 	TotalPages int // 0 until page 1 reports X-Pages
 	Types      map[int64]*regionTypeAccum
+	Stations   map[stationKey]*stationAccum
 }
 
 // sweepRegionStats is the P1 pass, called from refreshMarketData
@@ -98,6 +118,7 @@ func (app *Application) sweepRegionStats(ctx context.Context, allowance *fetchBu
 			RegionID: regionID,
 			NextPage: 1,
 			Types:    make(map[int64]*regionTypeAccum),
+			Stations: make(map[stationKey]*stationAccum),
 		}
 		app.regionSweep = sw
 		log.Printf("worker: region sweep: starting %s (%d)", marketRegionLabel(sw.RegionID), sw.RegionID)
@@ -140,6 +161,30 @@ func (app *Application) sweepRegionStats(ctx context.Context, allowance *fetchBu
 				acc.SellPrices = append(acc.SellPrices, o.Price)
 				acc.SellVolume += o.VolumeRemain
 			}
+			// Station grain (P2): the same order also feeds its
+			// own place's best prices and depth, so the spread
+			// scanner never re-reads a book.
+			if o.LocationID > 0 {
+				skey := stationKey{LocationID: o.LocationID, TypeID: o.TypeID}
+				sacc := sw.Stations[skey]
+				if sacc == nil {
+					sacc = &stationAccum{}
+					sw.Stations[skey] = sacc
+				}
+				if o.IsBuyOrder {
+					if o.Price > sacc.BestBuy {
+						sacc.BestBuy = o.Price
+					}
+					sacc.BuyOrders++
+					sacc.BuyVolume += o.VolumeRemain
+				} else {
+					if sacc.BestSell == 0 || o.Price < sacc.BestSell {
+						sacc.BestSell = o.Price
+					}
+					sacc.SellOrders++
+					sacc.SellVolume += o.VolumeRemain
+				}
+			}
 		}
 		pages++
 		sw.NextPage++
@@ -158,7 +203,7 @@ func (app *Application) sweepRegionStats(ctx context.Context, allowance *fetchBu
 		if err := app.storeRegionSweep(ctx, sw); err != nil {
 			log.Printf("worker: region sweep: store %s: %v", marketRegionLabel(sw.RegionID), err)
 		} else {
-			log.Printf("worker: region sweep: %s done: %d types over %d pages", marketRegionLabel(sw.RegionID), len(sw.Types), sw.NextPage-1)
+			log.Printf("worker: region sweep: %s done: %d types, %d station rows over %d pages", marketRegionLabel(sw.RegionID), len(sw.Types), len(sw.Stations), sw.NextPage-1)
 			app.regionSweep = nil // free the sweep's memory
 		}
 	}
@@ -203,11 +248,13 @@ func (app *Application) fetchRegionBookPage(ctx context.Context, regionID int64,
 
 // storeRegionSweep writes a completed sweep: the region's rows
 // are replaced wholesale inside one transaction (a type that
-// left the book loses its row), today's daily snapshot rows are
-// upserted alongside, and the sweep's fetch-state row is marked
-// ok so the region waits out regionSweepGate before the next
-// sweep. Per-type figures reuse summarizePrices -- the exact
-// median / 9-in-10 math the item page quotes live.
+// left the book loses its row), the station-grain rows for the
+// spread scanner are replaced in the same transaction, today's
+// daily snapshot rows are upserted alongside, and the sweep's
+// fetch-state row is marked ok so the region waits out
+// regionSweepGate before the next sweep. Per-type figures reuse
+// summarizePrices -- the exact median / 9-in-10 math the item
+// page quotes live.
 func (app *Application) storeRegionSweep(ctx context.Context, sw *regionSweepState) error {
 	now := time.Now().UTC()
 	updatedAt := now.Format(time.RFC3339)
@@ -219,6 +266,17 @@ func (app *Application) storeRegionSweep(ctx context.Context, sw *regionSweepSta
 	}
 	sort.Slice(typeIDs, func(i, j int) bool { return typeIDs[i] < typeIDs[j] })
 
+	stationKeys := make([]stationKey, 0, len(sw.Stations))
+	for k := range sw.Stations {
+		stationKeys = append(stationKeys, k)
+	}
+	sort.Slice(stationKeys, func(i, j int) bool {
+		if stationKeys[i].LocationID != stationKeys[j].LocationID {
+			return stationKeys[i].LocationID < stationKeys[j].LocationID
+		}
+		return stationKeys[i].TypeID < stationKeys[j].TypeID
+	})
+
 	tx, err := app.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -227,6 +285,9 @@ func (app *Application) storeRegionSweep(ctx context.Context, sw *regionSweepSta
 	qtx := app.queries.WithTx(tx)
 
 	if err := qtx.DeleteMarketRegionStatsByRegion(ctx, sw.RegionID); err != nil {
+		return err
+	}
+	if err := qtx.DeleteMarketStationStatsByRegion(ctx, sw.RegionID); err != nil {
 		return err
 	}
 	for _, typeID := range typeIDs {
@@ -261,6 +322,18 @@ func (app *Application) storeRegionSweep(ctx context.Context, sw *regionSweepSta
 			BestBuy: bestBuy, TypicalBuy: typicalBuy, BuyBand: buyBand,
 			SellOrders: int64(len(acc.SellPrices)), BuyOrders: int64(len(acc.BuyPrices)),
 			SellVolume: acc.SellVolume, BuyVolume: acc.BuyVolume,
+		}); err != nil {
+			return err
+		}
+	}
+	for _, k := range stationKeys {
+		sacc := sw.Stations[k]
+		if err := qtx.UpsertMarketStationStat(ctx, db.UpsertMarketStationStatParams{
+			LocationID: k.LocationID, RegionID: sw.RegionID, TypeID: k.TypeID,
+			BestSell: sacc.BestSell, BestBuy: sacc.BestBuy,
+			SellOrders: sacc.SellOrders, BuyOrders: sacc.BuyOrders,
+			SellVolume: sacc.SellVolume, BuyVolume: sacc.BuyVolume,
+			UpdatedAt: updatedAt,
 		}); err != nil {
 			return err
 		}

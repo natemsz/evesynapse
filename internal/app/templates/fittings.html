@@ -4,10 +4,6 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{if .FittingsChars}}
-<p>{{range $i, $c := .FittingsChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/fittings/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
-{{end}}
-
 {{if .FitEditor}}
 <section class="foldable" id="fit-editor">
 <h3>Build a fitting</h3>
@@ -26,8 +22,6 @@
     <input type="text" id="fit-name" value="{{.FitEditor.Sim.FitName}}" placeholder="Name this fit" autocomplete="off">
   </label>
   <input type="hidden" id="fit-local-id" value="{{.FitEditor.LocalID}}">
-  <button type="button" class="btn" id="fit-undo" title="Undo" disabled>↩</button>
-  <button type="button" class="btn" id="fit-redo" title="Redo" disabled>↪</button>
   <button type="button" class="btn" id="fit-save" data-fit-local-id="{{.FitEditor.LocalID}}">Save fit</button>
   {{if .FitEditor.EVECharID}}
   <button type="button" class="btn" id="fit-save-eve" data-fit-eve-char="{{.FitEditor.EVECharID}}" title="Save this fit to {{.FitEditor.EVECharName}}'s in-game fittings">Save to EVE</button>
@@ -49,7 +43,7 @@
     <ul class="suggest" id="fit-yourfits-suggest" role="listbox" hidden></ul>
   </span>
   <label class="fit-check"><input type="checkbox" id="fit-community"> Include community fits</label>
-  <a href="#your-fits">Your fits</a>
+  <a href="/fittings/">Your fits</a>
 </div>
 <p><small>Fits you save live in EveSynapse. Your EVE account's fittings are only ever read, never changed — except when you press Save to EVE.</small></p>
 {{if .FitEditor.Notes}}
@@ -90,7 +84,6 @@
       <option value="low">Low slots</option>
       <option value="rig">Rigs</option>
       <option value="subsystem">Subsystems</option>
-      <option value="drone">Drones</option>
       <option value="any">Any item</option>
     </select>
     <span class="fit-picker-hint" id="fit-picker-hint" hidden></span>
@@ -110,31 +103,6 @@
   </form>
 </div>
 
-{{if .FitEditor.LocalFits}}
-<h4 id="your-fits">Your fits</h4>
-<div class="fit-esi-controls">
-  <input type="text" id="fit-local-q" placeholder="Search by fit or ship name…" autocomplete="off" aria-label="Search your fits">
-  <select id="fit-local-sort" aria-label="Sort your fits">
-    <option value="name-asc">Name A–Z</option>
-    <option value="name-desc">Name Z–A</option>
-    <option value="ship-asc">Ship A–Z</option>
-    <option value="ship-desc">Ship Z–A</option>
-    <option value="updated-desc">Recently saved</option>
-    <option value="updated-asc">Oldest first</option>
-  </select>
-</div>
-<div id="fit-local-list">
-  {{range .FitEditor.LocalFits}}
-  <section class="foldable" data-fit-name="{{.Name}}" data-fit-ship="{{.ShipName}}" data-fit-updated="{{.Updated}}">
-  <h3>{{.Name}}{{if .IsPublic}} <small>· public</small>{{end}}{{if .IsDraft}} <small>· draft</small>{{end}}</h3>
-  <p><small>{{.ShipName}}{{if .Description}} — {{.Description}}{{end}}</small></p>
-  {{if .Tags}}<p><small>{{range .Tags}}<span class="fit-tag">{{.}}</span> {{end}}</small></p>{{end}}
-  <p><small>Saved {{.Updated}}</small></p>
-  <p><a href="/fittings/?local={{.ID}}#fit-editor">Open in editor</a> · <a href="/fittings/?local={{.ID}}&fork=1#fit-editor">Duplicate</a> · <form method="post" action="/fittings/delete/" style="display:inline"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" class="btn">Delete</button></form></p>
-  </section>
-  {{end}}
-</div>
-{{end}}
 </section>
 {{end}}
 
@@ -193,8 +161,14 @@
 {{if .HasShip}}
 {{if .Visual}}
 <div class="fit-visual" id="fit-visual" role="group" aria-label="Visual fitting">
+  <div class="fit-vring-outer" aria-hidden="true"></div>
   <div class="fit-vring" aria-hidden="true"></div>
+  {{if .Visual.Segs}}<svg class="fit-vsegs" viewBox="0 0 100 100" aria-hidden="true">{{range .Visual.Segs}}<path d="{{.D}}" class="fit-vseg"/>{{end}}</svg>{{end}}
   <div class="fit-vship"><img src="https://images.evetech.net/types/{{.Visual.ShipID}}/render?size=512" alt="{{.Visual.ShipName}}" draggable="false"></div>
+  <div class="fit-vhistory" role="group" aria-label="Undo and redo">
+    <button type="button" class="fit-vhist" data-fit-undo title="Undo" aria-label="Undo" disabled>↩</button>
+    <button type="button" class="fit-vhist" data-fit-redo title="Redo" aria-label="Redo" disabled>↪</button>
+  </div>
   {{range .Visual.Labels}}
   <div class="fit-vlabel" style="left:{{printf "%.1f" .X}}%;top:{{printf "%.1f" .Y}}%" aria-hidden="true">{{.Text}}</div>
   {{end}}
@@ -202,8 +176,8 @@
   <div class="fit-vsep" style="left:{{printf "%.1f" .X}}%;top:{{printf "%.1f" .Y}}%;transform:translate(-50%,-50%) rotate({{printf "%.0f" .Rot}}deg)" aria-hidden="true"></div>
   {{end}}
   {{range .Visual.Slots}}
-  <button type="button" class="fit-vslot{{if .Filled}} filled{{end}}" style="left:{{printf "%.1f" .X}}%;top:{{printf "%.1f" .Y}}%"{{if .Filled}} draggable="true" data-fit-vslot="{{.TypeID}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}} slot" data-tip-meta="{{.Meta}}" data-tip-cpu="{{.CPU}}" data-tip-pg="{{.PG}}" data-tip-stat="{{.Stat}}"{{else}}data-fit-add="{{.GroupKey}}" title="Add {{.GroupLabel}}"{{end}}>
-    {{if .Filled}}<img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{else}}<span aria-hidden="true">+</span>{{end}}
+  <button type="button" class="fit-vslot{{if .Filled}} filled{{end}}" style="left:{{printf "%.1f" .X}}%;top:{{printf "%.1f" .Y}}%"{{if .Filled}} data-fit-vslot="{{.TypeID}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}}" data-tip-meta="{{.Meta}}" data-tip-cpu="{{.CPU}}" data-tip-pg="{{.PG}}" data-tip-stat="{{.Stat}}"{{if .ChargeName}} data-tip-charge="Loaded: {{.ChargeName}}"{{end}}{{else}}data-fit-add="{{.GroupKey}}" title="Add {{.GroupLabel}}"{{end}}>
+    {{if .Filled}}<img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{if .ChargeID}}<span class="fit-vammo" data-fit-ammo="{{.TypeID}}" title="Loaded: {{.ChargeName}} — change ammunition"><img src="https://images.evetech.net/types/{{.ChargeID}}/icon?size=32" alt="{{.ChargeName}}" draggable="false"></span>{{end}}{{else}}<span aria-hidden="true">+</span>{{end}}
   </button>
   {{end}}
 </div>

@@ -1872,6 +1872,9 @@ body.quickjump-open { overflow: hidden; }
 .fit-missing > h4 { margin: 0 0 0.4rem; color: var(--danger); }
 .fit-missing ul { margin: 0; padding-left: 1.2rem; }
 /* Visual fitting: ship render with module slots on arcs around it. */
+/* The workbench is the tooltip's positioning context: tooltips
+   anchor to slot icons inside it, never the page header. */
+.fit-wb { position: relative; }
 .fit-visual {
   position: relative;
   width: min(34rem, 100%);
@@ -1880,6 +1883,56 @@ body.quickjump-open { overflow: hidden; }
   user-select: none;
   -webkit-user-select: none;
 }
+/* Distinct outer border ring around the whole display, ember. */
+.fit-vring-outer {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 98%;
+  aspect-ratio: 1 / 1;
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(255, 106, 26, 0.55);
+  border-radius: 50%;
+  box-shadow: 0 0 18px rgba(255, 106, 26, 0.35), inset 0 0 24px rgba(255, 106, 26, 0.10);
+  pointer-events: none;
+}
+/* Bordered per-group arc segments behind the slot ring. */
+.fit-vsegs {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.fit-vseg {
+  fill: rgba(255, 106, 26, 0.07);
+  stroke: rgba(255, 140, 40, 0.55);
+  stroke-width: 0.7;
+}
+/* Undo/redo ride the visual's top-right corner, always at hand. */
+.fit-vhistory {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  display: flex;
+  gap: 0.3rem;
+  z-index: 6;
+}
+.fit-vhist {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 106, 26, 0.6);
+  background: rgba(12, 10, 8, 0.85);
+  color: #ffb84d;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: 0 0 8px rgba(255, 106, 26, 0.25);
+}
+.fit-vhist:hover:not(:disabled) { border-color: #ffb84d; color: #ffd27a; }
+.fit-vhist:disabled { opacity: 0.3; cursor: default; box-shadow: none; }
 /* The ship is the centerpiece: circular showcase, ember gradient
    ring and glow — not a square thumbnail. */
 .fit-vship {
@@ -1956,12 +2009,38 @@ body.quickjump-open { overflow: hidden; }
   align-items: center;
   justify-content: center;
   font-size: 1.2rem;
-  touch-action: manipulation;
+  touch-action: none;
 }
 .fit-vslot:hover { border-color: var(--accent); color: var(--text); }
 .fit-vslot.filled { border-style: solid; border-color: #6b5a43; }
 .fit-vslot.filled:hover { border-color: var(--accent); }
 .fit-vslot.filled img { width: 84%; height: 84%; border-radius: 50%; pointer-events: none; }
+/* Loaded-charge badge: small icon tucked into the slot's corner.
+   Tap it to jump to the weapon's ammunition select. */
+.fit-vslot .fit-vammo {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 50%;
+  border: 1px solid #ffb84d;
+  background: #0a0a0a;
+  overflow: hidden;
+  box-shadow: 0 0 6px rgba(255, 184, 77, 0.55);
+  cursor: pointer;
+  padding: 0;
+}
+.fit-vslot .fit-vammo img { width: 100%; height: 100%; pointer-events: none; }
+/* No silent taps: every add/remove flashes its target ember so the
+   eye catches it within a frame of the re-render. */
+@keyframes fit-flash {
+  0% { box-shadow: 0 0 0 3px rgba(255, 184, 77, 0.95), 0 0 20px rgba(255, 106, 26, 0.85); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 184, 77, 0), 0 0 0 rgba(255, 106, 26, 0); }
+}
+.fit-vslot.flash { animation: fit-flash 0.7s ease-out; border-color: #ffb84d; }
+.fit-group.flash h3, .fit-charge.flash { animation: fit-flash 0.7s ease-out; border-radius: 4px; }
+select.flash { animation: fit-flash 0.7s ease-out; }
 .fit-vslot.drop-ok {
   border-color: #ffb84d;
   border-style: solid;
@@ -2023,9 +2102,31 @@ body.quickjump-open { overflow: hidden; }
   padding: 0.4rem 0.5rem;
   border-radius: 3px;
   cursor: pointer;
+  /* Vertical scroll stays native; a mostly-horizontal press
+     becomes a pointer drag onto a slot. */
+  touch-action: pan-y;
 }
 .fit-picker-list li:hover { background: var(--row-hover); }
 .fit-picker-list .sug-label { color: #b39a7d; font-size: 0.8rem; }
+/* The module icon that follows the pointer mid-drag. */
+.fit-drag-ghost {
+  position: fixed;
+  z-index: 200;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid #ffb84d;
+  background: rgba(10, 10, 10, 0.9);
+  box-shadow: 0 0 16px rgba(255, 106, 26, 0.7);
+  pointer-events: none;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffb84d;
+  font-size: 0.7rem;
+}
+.fit-drag-ghost img { width: 88%; height: 88%; border-radius: 50%; }
 .fit-picker-hint { color: #b39a7d; font-size: 0.8rem; }
 /* Module search: its own prominent input, sticky above the
    workbench so it stays visible while fitting. */

@@ -392,6 +392,15 @@ main {
   z-index: 0;
   border-bottom: 1px solid #262626;
 }
+.panel > h2, .panel > h3,
+.card > h2:first-child, .card > h3:first-child,
+.foldable > h2:first-child, .foldable > h3:first-child {
+  background: none;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  color: var(--success);
+  -webkit-text-fill-color: currentColor;
+}
 .panel > h2::before, .panel > h3::before,
 .card > h2:first-child::before, .card > h3:first-child::before,
 .foldable > h2:first-child::before, .foldable > h3:first-child::before {

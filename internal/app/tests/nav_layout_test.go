@@ -202,7 +202,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		"width: max-content;",
 		"min-width: 100%;",
 		"@supports not ((-webkit-background-clip: text) or (background-clip: text))",
-		"color: #ffb84d;",
+		"--success: #ffb84d;",
 		".grid.home-grid > .card[data-widget=\"briefing\"]",
 		".chart-legend",
 		".chart-axis-label",
@@ -213,7 +213,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// full labeled list (labels, account block, inline
 		// branch menus) no matter what data-nav says.
 		".nav-drawer-close",
-		".nav-icon {\n  flex: 0 0 1.35rem;\n  width: 1.35rem;\n  color: #ffb84d;\n  line-height: 1;\n  text-align: center;\n}",
+		".nav-icon {\n  flex: 0 0 1.35rem;\n  width: 1.35rem;\n  color: var(--success);\n  line-height: 1;\n  text-align: center;\n}",
 		".nav-icon svg {\n  display: block;\n  width: 1.05em;\n  height: 1.05em;\n  margin: 0 auto;\n  fill: #ffb84d;\n  stroke: #ffb84d;\n}",
 		".sidebar .branch.active > summary .nav-icon svg,\n.sidenav a.navlink.active .nav-icon svg {\n  filter: brightness(1.15);\n}",
 		".nav-hamburger {\n  display: none;\n  align-items: center;\n  justify-content: center;",
@@ -289,8 +289,8 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// v0.3.07.014: module/card/foldable titles are solid —
 		// no clipped ramp, no transparent glyphs on these
 		// headings; the exact-rule pin carries the assertion
-		// (solid #ffb84d, clip reset to border-box).
-		".panel > h2, .panel > h3,\n.card > h2:first-child, .card > h3:first-child,\n.foldable > h2:first-child, .foldable > h3:first-child {\n  background: none;\n  -webkit-background-clip: border-box;\n  background-clip: border-box;\n  color: #ffb84d;\n  -webkit-text-fill-color: currentColor;\n}",
+		// (solid --success, clip reset to border-box).
+		".panel > h2, .panel > h3,\n.card > h2:first-child, .card > h3:first-child,\n.foldable > h2:first-child, .foldable > h3:first-child {\n  background: none;\n  -webkit-background-clip: border-box;\n  background-clip: border-box;\n  color: var(--success);\n  -webkit-text-fill-color: currentColor;\n}",
 		// v0.3.07.012: Needs attention rows wear the same
 		// zebra as table rows — same --row/--row-alt cycle
 		// and the same hover fill.
@@ -359,7 +359,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// only so the drawer keeps its expanded-style look.
 		"html[data-nav=\"rail\"] .sidebar .branch:not([open]) > .menu { display: none; }",
 		"html[data-nav=\"rail\"] .sidebar .branch[open]:not(.active) > summary {\n    background: rgba(255, 106, 26, 0.14);\n    box-shadow: none;\n  }",
-		".sidebar .branch.active > summary {\n  color: #fff6e6;\n  background: #1b1b1b;\n  box-shadow: inset 3px 0 0 var(--accent);\n}",
+		".sidebar .branch.active > summary {\n  color: var(--text-bright);\n  background: #1b1b1b;\n  box-shadow: inset 3px 0 0 var(--accent);\n}",
 		// v0.3.07.006 top-bar divider: a 1px ember rule between
 		// the search field and the character switcher, wide
 		// layout only (the character block is display:none on

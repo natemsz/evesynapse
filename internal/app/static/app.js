@@ -1536,6 +1536,7 @@
     { name: "Market", url: "/market/" },
     { name: "Spread scanner", url: "/market/scanner/" },
     { name: "Tradefinder", url: "/market/tradefinder/" },
+    { name: "Top stations", url: "/market/leaderboard/" },
     { name: "Items", url: "/items/" },
     { name: "Wallet", url: "/wallet/" },
     { name: "Orders", url: "/orders/" },

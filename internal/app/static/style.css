@@ -106,6 +106,7 @@
   --row: #101010;
   --row-alt: #141414;
   --row-hover: #1b1b1b;
+  --input-bg: #0e0e0e;
 }
 
 * { box-sizing: border-box; }
@@ -574,12 +575,15 @@ img.portrait {
 
 /* --- form inputs + market search suggestions --- */
 input[type="text"], input[type="search"] {
-  background: #0e0e0e;
+  background: var(--input-bg);
   border: 1px solid #2a2a2a;
   border-radius: 3px;
   color: var(--text);
   padding: 0.42rem 0.6rem;
   font: inherit;
+}
+html[data-theme="light"] input[type="text"], html[data-theme="light"] input[type="search"] {
+  border-color: #d8cdb8;
 }
 input[type="text"]:focus, input[type="search"]:focus {
   border-color: var(--accent);
@@ -1335,6 +1339,7 @@ html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
 }
 html[data-nav="rail"] .sidebar-inner { overflow: visible; }
 html[data-nav="rail"] .sidebar-account { display: none; }
+html[data-nav="rail"] .sidebar-account-footer { display: flex; }
 html[data-nav="rail"] .nav-label {
   max-width: 0;
   opacity: 0;
@@ -2418,6 +2423,7 @@ html[data-theme="light"] {
   --row: #f8f4ec;
   --row-alt: #f1ebdf;
   --row-hover: #e9e0cf;
+  --input-bg: #ffffff;
 }
 html[data-theme="light"] body { background: #f4f1ea; }
 html[data-theme="light"] body::before { display: none; }

@@ -4,9 +4,7 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{if .CorpChars}}
-<p>{{range $i, $c := .CorpChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/corporations/assets/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
-{{end}}
+{{template "charselector" .CorpChars}}
 
 {{if .CorpAssets}}
 <h2>{{corpLink .CorpAssets.CorpID .CorpAssets.CorpTitle}}</h2>

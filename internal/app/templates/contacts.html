@@ -4,9 +4,7 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{if .ContactsChars}}
-<p>{{range $i, $c := .ContactsChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/contacts/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
-{{end}}
+{{template "charselector" .ContactsChars}}
 
 {{if .Contacts}}
 <h2>{{.Contacts.CharacterName}}</h2>

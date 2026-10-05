@@ -4,9 +4,7 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{if .CalendarChars}}
-<p>{{range $i, $c := .CalendarChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/calendar/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
-{{end}}
+{{template "charselector" .CalendarChars}}
 
 {{if .Calendar}}
 <h2>{{.Calendar.CharacterName}}</h2>

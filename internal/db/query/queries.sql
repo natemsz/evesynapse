@@ -1,10 +1,10 @@
 -- name: CreateUser :one
 INSERT INTO users (created_at)
-VALUES (datetime('now'))
+VALUES (to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS'))
 RETURNING *;
 -- name: GetUser :one
 SELECT * FROM users
-WHERE id = ?;
+WHERE id = $1;
 -- name: UpsertCharacter :one
 INSERT INTO characters (
     character_id, user_id, name,
@@ -12,10 +12,10 @@ INSERT INTO characters (
     scopes, cached_until, owner_hash, link_state, link_state_at,
     updated_at
 ) VALUES (
-    ?, ?, ?,
-    ?, ?, ?,
-    ?, ?, ?, ?, ?,
-    datetime('now')
+    $1, $2, $3,
+    $4, $5, $6,
+    $7, $8, $9, $10, $11,
+    to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
 )
 ON CONFLICT (character_id) DO UPDATE SET
     user_id       = excluded.user_id,
@@ -32,22 +32,22 @@ ON CONFLICT (character_id) DO UPDATE SET
 RETURNING *;
 -- name: GetCharacter :one
 SELECT * FROM characters
-WHERE character_id = ?;
+WHERE character_id = $1;
 -- name: ListCharactersByUser :many
 SELECT * FROM characters
-WHERE user_id = ?
+WHERE user_id = $1
 ORDER BY name;
 -- name: DeleteCharacter :exec
 DELETE FROM characters
-WHERE character_id = ? AND user_id = ?;
+WHERE character_id = $1 AND user_id = $2;
 -- name: SetCharacterTags :exec
 UPDATE characters
-SET tags = ?, updated_at = datetime('now')
-WHERE character_id = ? AND user_id = ?;
+SET tags = $1, updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+WHERE character_id = $2 AND user_id = $3;
 -- name: SetCharacterLinkState :exec
 UPDATE characters
-SET link_state = ?, link_state_at = ?, updated_at = datetime('now')
-WHERE character_id = ?;
+SET link_state = $1, link_state_at = $2, updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+WHERE character_id = $3;
 -- name: ListUsers :many
 SELECT * FROM users
 ORDER BY id;
@@ -56,52 +56,52 @@ SELECT * FROM characters
 ORDER BY user_id, name;
 -- name: UpdateCharacterTokens :exec
 UPDATE characters
-SET access_token = ?, refresh_token = ?, token_expiry = ?, updated_at = datetime('now')
-WHERE character_id = ?;
+SET access_token = $1, refresh_token = $2, token_expiry = $3, updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+WHERE character_id = $4;
 -- name: GetSnapshot :one
 SELECT * FROM character_snapshots
-WHERE character_id = ? AND kind = ?;
+WHERE character_id = $1 AND kind = $2;
 -- name: UpsertSnapshot :exec
 INSERT INTO character_snapshots (character_id, kind, payload, fetched_at, cached_until)
-VALUES (?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (character_id, kind) DO UPDATE SET
     payload      = excluded.payload,
     fetched_at   = excluded.fetched_at,
     cached_until = excluded.cached_until;
 -- name: ListSnapshotsByCharacter :many
 SELECT * FROM character_snapshots
-WHERE character_id = ?
+WHERE character_id = $1
 ORDER BY kind;
 -- name: ListSnapshotsByKind :many
 SELECT * FROM character_snapshots
-WHERE kind = ?
+WHERE kind = $1
 ORDER BY character_id;
 -- name: GetKillmailDetail :one
 SELECT * FROM killmail_details
-WHERE killmail_id = ?;
+WHERE killmail_id = $1;
 -- name: ListKillmailDetailIDsByCharacter :many
 SELECT killmail_id FROM killmail_details
-WHERE character_id = ?
+WHERE character_id = $1
 ORDER BY killmail_id;
 -- name: ListKillmailDetailsByCharacter :many
 SELECT * FROM killmail_details
-WHERE character_id = ?
+WHERE character_id = $1
 ORDER BY killmail_id;
 -- name: ListRecentKillmailDetails :many
 SELECT payload FROM killmail_details
 ORDER BY fetched_at DESC
-LIMIT ?;
+LIMIT sqlc.arg(row_limit)::bigint;
 -- name: ListLiquidCoreTypes :many
 SELECT mh.type_id, SUM(mh.volume * mh.average) AS isk_velocity
 FROM market_history mh
 WHERE mh.region_id = sqlc.arg(region_id)
-  AND mh.date >= (SELECT date(MAX(mh2.date), '-7 days') FROM market_history mh2 WHERE mh2.region_id = sqlc.arg(region_id))
+  AND mh.date >= (SELECT to_char(MAX(mh2.date)::date - INTERVAL '7 days', 'YYYY-MM-DD') FROM market_history mh2 WHERE mh2.region_id = sqlc.arg(region_id))
 GROUP BY mh.type_id
 ORDER BY isk_velocity DESC
-LIMIT sqlc.arg(core_limit);
+LIMIT sqlc.arg(core_limit)::bigint;
 -- name: UpsertKillmailDetail :exec
 INSERT INTO killmail_details (killmail_id, character_id, hash, payload, fetched_at)
-VALUES (?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (killmail_id) DO UPDATE SET
     character_id = excluded.character_id,
     hash         = excluded.hash,
@@ -115,14 +115,14 @@ ON CONFLICT (killmail_id) DO UPDATE SET
 -- ---------------------------------------------------------------------
 -- name: GetContractDetail :one
 SELECT * FROM contract_details
-WHERE contract_id = ?;
+WHERE contract_id = $1;
 -- name: ListContractDetailIDsByCharacter :many
 SELECT contract_id FROM contract_details
-WHERE character_id = ?
+WHERE character_id = $1
 ORDER BY contract_id;
 -- name: UpsertContractDetail :exec
 INSERT INTO contract_details (contract_id, character_id, payload, fetched_at)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (contract_id) DO UPDATE SET
     character_id = excluded.character_id,
     payload      = excluded.payload,
@@ -135,24 +135,24 @@ ON CONFLICT (contract_id) DO UPDATE SET
 -- ---------------------------------------------------------------------
 -- name: GetSnapshotFetchState :one
 SELECT * FROM snapshot_fetch_state
-WHERE character_id = ? AND kind = ?;
+WHERE character_id = $1 AND kind = $2;
 -- name: ListSnapshotFetchStatesByCharacter :many
 SELECT * FROM snapshot_fetch_state
-WHERE character_id = ?
+WHERE character_id = $1
 ORDER BY kind;
 -- name: UpsertSnapshotFetchState :exec
 INSERT INTO snapshot_fetch_state (character_id, kind, state, detail, attempted_at)
-VALUES (?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (character_id, kind) DO UPDATE SET
     state        = excluded.state,
     detail       = excluded.detail,
     attempted_at = excluded.attempted_at;
 -- name: GetCharacterCorporation :one
 SELECT * FROM character_corporations
-WHERE character_id = ?;
+WHERE character_id = $1;
 -- name: UpsertCharacterCorporation :exec
 INSERT INTO character_corporations (character_id, corporation_id, updated_at)
-VALUES (?, ?, ?)
+VALUES ($1, $2, $3)
 ON CONFLICT (character_id) DO UPDATE SET
     corporation_id = excluded.corporation_id,
     updated_at     = excluded.updated_at;
@@ -167,10 +167,10 @@ ORDER BY corporation_id;
 -- ---------------------------------------------------------------------
 -- name: GetGlobalSnapshot :one
 SELECT * FROM global_snapshots
-WHERE kind = ?;
+WHERE kind = $1;
 -- name: UpsertGlobalSnapshot :exec
 INSERT INTO global_snapshots (kind, payload, fetched_at, cached_until)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (kind) DO UPDATE SET
     payload      = excluded.payload,
     fetched_at   = excluded.fetched_at,
@@ -180,10 +180,10 @@ SELECT * FROM global_snapshots
 ORDER BY kind;
 -- name: GetWarDetail :one
 SELECT * FROM war_details
-WHERE war_id = ?;
+WHERE war_id = $1;
 -- name: UpsertWarDetail :exec
 INSERT INTO war_details (war_id, payload, fetched_at)
-VALUES (?, ?, ?)
+VALUES ($1, $2, $3)
 ON CONFLICT (war_id) DO UPDATE SET
     payload    = excluded.payload,
     fetched_at = excluded.fetched_at;
@@ -196,46 +196,46 @@ SELECT COUNT(*) FROM war_details;
 -- ---------------------------------------------------------------------
 -- name: GetUserHomeLayout :one
 SELECT home_layout FROM users
-WHERE id = ?;
+WHERE id = $1;
 -- name: SetUserHomeLayout :exec
 UPDATE users
-SET home_layout = ?
-WHERE id = ?;
+SET home_layout = $1
+WHERE id = $2;
 
 -- Phase 6 (schema 017): the Briefing module's window anchor.
 -- name: GetUserBriefingAnchor :one
 SELECT last_briefing_at FROM users
-WHERE id = ?;
+WHERE id = $1;
 -- name: SetUserBriefingAnchor :exec
 UPDATE users
-SET last_briefing_at = ?
-WHERE id = ?;
+SET last_briefing_at = $1
+WHERE id = $2;
 -- name: ListSnapshotsForUser :many
 SELECT s.character_id, s.kind, s.payload, s.fetched_at, s.cached_until
 FROM character_snapshots s
 JOIN characters c ON c.character_id = s.character_id
-WHERE c.user_id = ? AND s.kind IN (sqlc.slice('kinds'))
+WHERE c.user_id = $1 AND s.kind = ANY(sqlc.arg(kinds)::text[])
 ORDER BY s.character_id, s.kind;
 -- name: ListPlanetLayoutsForUser :many
 SELECT s.character_id, s.kind, s.payload, s.fetched_at
 FROM character_snapshots s
 JOIN characters c ON c.character_id = s.character_id
-WHERE c.user_id = ? AND instr(s.kind, 'planet_layout_') = 1
+WHERE c.user_id = $1 AND strpos(s.kind, 'planet_layout_') = 1
 ORDER BY s.character_id, s.kind;
 
 -- ---------------------------------------------------------------------
 -- Layout + market toolkit (schema 008): live market suggestions and
 -- the item database explorer. All local SDE reads. Matching uses
--- instr() rather than LIKE: case-insensitive substring positions
+-- strpos() rather than LIKE: case-insensitive substring positions
 -- (1 = a prefix match), no wildcard escaping to worry about.
 -- ---------------------------------------------------------------------
 -- name: GetWalletHistorySample :one
 SELECT user_id, character_id, day, balance, net_worth, sampled_at
 FROM wallet_history
-WHERE user_id = ? AND character_id = ? AND day = ?;
+WHERE user_id = $1 AND character_id = $2 AND day = $3;
 -- name: UpsertWalletHistorySample :exec
 INSERT INTO wallet_history (user_id, character_id, day, balance, net_worth, sampled_at)
-VALUES (?, ?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (user_id, character_id, day) DO UPDATE SET
     balance    = excluded.balance,
     net_worth   = excluded.net_worth,
@@ -243,12 +243,12 @@ ON CONFLICT (user_id, character_id, day) DO UPDATE SET
 -- name: ListWalletHistorySamples :many
 SELECT user_id, character_id, day, balance, net_worth, sampled_at
 FROM wallet_history
-WHERE user_id = ? AND character_id = ?
+WHERE user_id = $1 AND character_id = $2
 ORDER BY day;
 -- name: ListUserWalletHistory :many
 SELECT user_id, character_id, day, balance, net_worth, sampled_at
 FROM wallet_history
-WHERE user_id = ?
+WHERE user_id = $1
 ORDER BY day, character_id;
 
 -- ---------------------------------------------------------------------
@@ -258,16 +258,16 @@ ORDER BY day, character_id;
 -- ---------------------------------------------------------------------
 -- name: GetWidgetConfig :one
 SELECT config FROM widget_configs
-WHERE user_id = ? AND widget_id = ?;
+WHERE user_id = $1 AND widget_id = $2;
 -- name: UpsertWidgetConfig :exec
 INSERT INTO widget_configs (user_id, widget_id, config, updated_at)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (user_id, widget_id) DO UPDATE SET
     config     = excluded.config,
     updated_at = excluded.updated_at;
 -- name: ListWidgetConfigsByUser :many
 SELECT user_id, widget_id, config, updated_at FROM widget_configs
-WHERE user_id = ?
+WHERE user_id = $1
 ORDER BY widget_id;
 
 -- ---------------------------------------------------------------------
@@ -278,20 +278,20 @@ ORDER BY widget_id;
 -- ---------------------------------------------------------------------
 -- name: CreateSkillPlan :one
 INSERT INTO skill_plans (user_id, character_id, name, created_at)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 RETURNING id, user_id, character_id, name, created_at;
 -- name: ListSkillPlans :many
 SELECT id, user_id, character_id, name, created_at FROM skill_plans
-WHERE user_id = ? AND character_id = ?
+WHERE user_id = $1 AND character_id = $2
 ORDER BY created_at, id;
 -- name: GetSkillPlan :one
 SELECT id, user_id, character_id, name, created_at FROM skill_plans
-WHERE id = ? AND user_id = ?;
+WHERE id = $1 AND user_id = $2;
 -- name: DeleteSkillPlan :exec
-DELETE FROM skill_plans WHERE id = ? AND user_id = ?;
+DELETE FROM skill_plans WHERE id = $1 AND user_id = $2;
 -- name: ListSkillPlanItems :many
 SELECT plan_id, skill_type_id, target_level, position FROM skill_plan_items
-WHERE plan_id = ?
+WHERE plan_id = $1
 ORDER BY position, skill_type_id;
 
 -- Adding an existing skill raises (or keeps) its target level and
@@ -299,14 +299,14 @@ ORDER BY position, skill_type_id;
 -- (the handler supplies it).
 -- name: UpsertSkillPlanItem :exec
 INSERT INTO skill_plan_items (plan_id, skill_type_id, target_level, position)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT(plan_id, skill_type_id) DO UPDATE SET target_level = excluded.target_level;
 -- name: NextSkillPlanPosition :one
-SELECT COALESCE(MAX(position), 0) + 1 FROM skill_plan_items WHERE plan_id = ?;
+SELECT CAST(COALESCE(MAX(position), 0) + 1 AS BIGINT) FROM skill_plan_items WHERE plan_id = $1;
 -- name: UpdateSkillPlanItemPosition :exec
-UPDATE skill_plan_items SET position = ? WHERE plan_id = ? AND skill_type_id = ?;
+UPDATE skill_plan_items SET position = $1 WHERE plan_id = $2 AND skill_type_id = $3;
 -- name: DeleteSkillPlanItem :exec
-DELETE FROM skill_plan_items WHERE plan_id = ? AND skill_type_id = ?;
+DELETE FROM skill_plan_items WHERE plan_id = $1 AND skill_type_id = $2;
 
 -- ---------------------------------------------------------------------
 -- Fitting simulator (schema 030): fits built in the editor, stored
@@ -315,22 +315,22 @@ DELETE FROM skill_plan_items WHERE plan_id = ? AND skill_type_id = ?;
 -- ---------------------------------------------------------------------
 -- name: CreateLocalFitting :one
 INSERT INTO local_fittings (user_id, name, ship_type_id, items_json, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id, user_id, name, ship_type_id, items_json, created_at, updated_at;
 -- name: ListLocalFittings :many
 SELECT id, user_id, name, ship_type_id, items_json, created_at, updated_at FROM local_fittings
-WHERE user_id = ?
+WHERE user_id = $1
 ORDER BY updated_at DESC, id DESC
 LIMIT 100;
 -- name: GetLocalFitting :one
 SELECT id, user_id, name, ship_type_id, items_json, created_at, updated_at FROM local_fittings
-WHERE id = ? AND user_id = ?;
+WHERE id = $1 AND user_id = $2;
 -- name: UpdateLocalFitting :exec
 UPDATE local_fittings
-SET name = ?, ship_type_id = ?, items_json = ?, updated_at = ?
-WHERE id = ? AND user_id = ?;
+SET name = $1, ship_type_id = $2, items_json = $3, updated_at = $4
+WHERE id = $5 AND user_id = $6;
 -- name: DeleteLocalFitting :exec
-DELETE FROM local_fittings WHERE id = ? AND user_id = ?;
+DELETE FROM local_fittings WHERE id = $1 AND user_id = $2;
 
 -- ---------------------------------------------------------------------
 -- Market history + alerts (schema 013): daily aggregates, wants,

@@ -2,7 +2,7 @@
 DELETE FROM guide_prices;
 -- name: UpsertGuidePrice :exec
 INSERT INTO guide_prices (type_id, adjusted_price, average_price)
-VALUES (?, ?, ?)
+VALUES ($1, $2, $3)
 ON CONFLICT (type_id) DO UPDATE SET
     adjusted_price = excluded.adjusted_price,
     average_price  = excluded.average_price;
@@ -14,7 +14,7 @@ SELECT id, fetched_at, cached_until FROM guide_prices_meta
 WHERE id = 1;
 -- name: UpsertGuidePricesMeta :exec
 INSERT INTO guide_prices_meta (id, fetched_at, cached_until)
-VALUES (1, ?, ?)
+VALUES (1, $1, $2)
 ON CONFLICT (id) DO UPDATE SET
     fetched_at   = excluded.fetched_at,
     cached_until = excluded.cached_until;
@@ -29,7 +29,7 @@ ON CONFLICT (id) DO UPDATE SET
 -- ---------------------------------------------------------------------
 -- name: NoteGuidePriceWant :exec
 INSERT INTO guide_price_wants (id, wanted_at)
-VALUES (1, ?)
+VALUES (1, $1)
 ON CONFLICT (id) DO UPDATE SET
     wanted_at = excluded.wanted_at;
 -- name: GetGuidePriceWant :one
@@ -45,8 +45,14 @@ WHERE id = 1;
 -- sde_* tables; only reads live here.
 -- ---------------------------------------------------------------------
 -- name: UpsertMarketHistory :exec
-INSERT OR REPLACE INTO market_history (region_id, type_id, date, average, highest, lowest, volume, order_count)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO market_history (region_id, type_id, date, average, highest, lowest, volume, order_count)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT (region_id, type_id, date) DO UPDATE SET
+    average     = excluded.average,
+    highest     = excluded.highest,
+    lowest      = excluded.lowest,
+    volume      = excluded.volume,
+    order_count = excluded.order_count;
 -- name: ListMarketHistory :many
 -- The history window is a row count, not a calendar span: the
 -- chart and change math read the newest N rows of recorded
@@ -54,26 +60,26 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 -- never hidden by an arbitrary date cutoff.
 SELECT region_id, type_id, date, average, highest, lowest, volume, order_count
 FROM market_history
-WHERE region_id = ? AND type_id = ?
+WHERE region_id = $1 AND type_id = $2
 ORDER BY date DESC
-LIMIT ?;
+LIMIT sqlc.arg(row_limit)::bigint;
 -- name: UpsertMarketHistoryWant :exec
 INSERT INTO market_history_wants (region_id, type_id, last_requested_at)
-VALUES (?, ?, ?)
+VALUES ($1, $2, $3)
 ON CONFLICT (region_id, type_id) DO UPDATE SET
     last_requested_at = excluded.last_requested_at;
 -- name: ListMarketHistoryWants :many
 SELECT region_id, type_id, last_requested_at
 FROM market_history_wants
-WHERE last_requested_at >= ?
+WHERE last_requested_at >= $1
 ORDER BY region_id, type_id;
 -- name: GetMarketFetchState :one
 SELECT kind, state, detail, attempted_at
 FROM market_fetch_state
-WHERE kind = ?;
+WHERE kind = $1;
 -- name: UpsertMarketFetchState :exec
 INSERT INTO market_fetch_state (kind, state, detail, attempted_at)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (kind) DO UPDATE SET
     state        = excluded.state,
     detail       = excluded.detail,
@@ -81,7 +87,7 @@ ON CONFLICT (kind) DO UPDATE SET
 -- name: ListWatchlistByUser :many
 SELECT user_id, type_id, region_id, threshold_pct, created_at
 FROM market_watchlist
-WHERE user_id = ?
+WHERE user_id = $1
 ORDER BY type_id, region_id;
 -- name: ListAllWatchlistEntries :many
 SELECT user_id, type_id, region_id, threshold_pct, created_at
@@ -90,18 +96,18 @@ ORDER BY type_id, region_id;
 -- name: GetWatchlistEntry :one
 SELECT user_id, type_id, region_id, threshold_pct, created_at
 FROM market_watchlist
-WHERE user_id = ? AND type_id = ? AND region_id = ?;
+WHERE user_id = $1 AND type_id = $2 AND region_id = $3;
 -- name: UpsertWatchlistEntry :exec
 INSERT INTO market_watchlist (user_id, type_id, region_id, threshold_pct, created_at)
-VALUES (?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (user_id, type_id, region_id) DO UPDATE SET
     threshold_pct = excluded.threshold_pct;
 -- name: DeleteWatchlistEntry :exec
 DELETE FROM market_watchlist
-WHERE user_id = ? AND type_id = ? AND region_id = ?;
+WHERE user_id = $1 AND type_id = $2 AND region_id = $3;
 -- name: UpsertOrderHealth :exec
 INSERT INTO order_health (character_id, order_id, type_id, region_id, location_id, my_price, station_best, region_best, status, computed_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (character_id, order_id) DO UPDATE SET
     type_id      = excluded.type_id,
     region_id    = excluded.region_id,
@@ -113,20 +119,20 @@ ON CONFLICT (character_id, order_id) DO UPDATE SET
     computed_at  = excluded.computed_at;
 -- name: DeleteOrderHealthForCharacter :exec
 DELETE FROM order_health
-WHERE character_id = ?;
+WHERE character_id = $1;
 -- name: DeleteOrderHealthEntry :exec
 DELETE FROM order_health
-WHERE character_id = ? AND order_id = ?;
+WHERE character_id = $1 AND order_id = $2;
 -- name: ListOrderHealthByCharacter :many
 SELECT character_id, order_id, type_id, region_id, location_id, my_price, station_best, region_best, status, computed_at
 FROM order_health
-WHERE character_id = ?
+WHERE character_id = $1
 ORDER BY type_id, order_id;
 -- name: ListOrderHealthByUser :many
 SELECT oh.character_id, oh.order_id, oh.type_id, oh.region_id, oh.location_id, oh.my_price, oh.station_best, oh.region_best, oh.status, oh.computed_at
 FROM order_health oh
 JOIN characters c ON c.character_id = oh.character_id
-WHERE c.user_id = ?
+WHERE c.user_id = $1
 ORDER BY c.name, oh.type_id, oh.order_id;
 
 -- ---------------------------------------------------------------------
@@ -144,13 +150,14 @@ ORDER BY c.name, oh.type_id, oh.order_id;
 -- name: GetStructureName :one
 SELECT structure_id, name, state, resolved_at, source
 FROM structure_names
-WHERE structure_id = ?;
+WHERE structure_id = $1;
 -- name: UpsertStructureSeen :exec
-INSERT OR IGNORE INTO structure_names (structure_id)
-VALUES (?);
+INSERT INTO structure_names (structure_id)
+VALUES ($1)
+ON CONFLICT DO NOTHING;
 -- name: SetStructureName :exec
 INSERT INTO structure_names (structure_id, name, state, resolved_at, source)
-VALUES (?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (structure_id) DO UPDATE SET
     name        = excluded.name,
     state       = excluded.state,
@@ -163,7 +170,7 @@ WHERE state = 'pending'
    OR (state = 'resolved' AND resolved_at < sqlc.arg(resolved_cutoff))
    OR (state = 'missing' AND resolved_at < sqlc.arg(missing_cutoff))
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, structure_id
-LIMIT sqlc.arg(resolution_limit);
+LIMIT sqlc.arg(resolution_limit)::bigint;
 
 -- ---------------------------------------------------------------------
 -- Structure context (schema 028): owner/system/type facts the
@@ -175,10 +182,10 @@ LIMIT sqlc.arg(resolution_limit);
 -- name: GetStructureContext :one
 SELECT structure_id, owner_corporation_id, system_id, type_id, updated_at
 FROM structure_context
-WHERE structure_id = ?;
+WHERE structure_id = $1;
 -- name: SetStructureContext :exec
 INSERT INTO structure_context (structure_id, owner_corporation_id, system_id, type_id, updated_at)
-VALUES (?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (structure_id) DO UPDATE SET
     owner_corporation_id = excluded.owner_corporation_id,
     system_id            = excluded.system_id,
@@ -196,13 +203,14 @@ ON CONFLICT (structure_id) DO UPDATE SET
 -- name: GetPlanetName :one
 SELECT planet_id, name, state, resolved_at
 FROM planet_names
-WHERE planet_id = ?;
+WHERE planet_id = $1;
 -- name: UpsertPlanetSeen :exec
-INSERT OR IGNORE INTO planet_names (planet_id)
-VALUES (?);
+INSERT INTO planet_names (planet_id)
+VALUES ($1)
+ON CONFLICT DO NOTHING;
 -- name: SetPlanetName :exec
 INSERT INTO planet_names (planet_id, name, state, resolved_at)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (planet_id) DO UPDATE SET
     name        = excluded.name,
     state       = excluded.state,
@@ -214,7 +222,7 @@ WHERE state = 'pending'
    OR (state = 'resolved' AND resolved_at < sqlc.arg(resolved_cutoff))
    OR (state = 'missing' AND resolved_at < sqlc.arg(missing_cutoff))
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, planet_id
-LIMIT sqlc.arg(resolution_limit);
+LIMIT sqlc.arg(resolution_limit)::bigint;
 
 -- ---------------------------------------------------------------------
 -- Public pilot records (schema 015): the queue behind /pilot/.
@@ -227,20 +235,21 @@ LIMIT sqlc.arg(resolution_limit);
 -- name: GetPilotRecord :one
 SELECT character_id, payload, state, fetched_at
 FROM pilot_records
-WHERE character_id = ?;
+WHERE character_id = $1;
 -- name: UpsertPilotWant :exec
 INSERT INTO pilot_records (character_id, priority)
-VALUES (?, 1)
-ON CONFLICT (character_id) DO UPDATE SET priority = MAX(priority, 1);
+VALUES ($1, 1)
+ON CONFLICT (character_id) DO UPDATE SET priority = GREATEST(pilot_records.priority, 1);
 -- name: InsertPilotOrbitWant :exec
-INSERT OR IGNORE INTO pilot_records (character_id, priority)
-VALUES (?, 0);
+INSERT INTO pilot_records (character_id, priority)
+VALUES ($1, 0)
+ON CONFLICT DO NOTHING;
 -- name: ListPilotRecordIDs :many
 SELECT character_id
 FROM pilot_records;
 -- name: SetPilotRecord :exec
 INSERT INTO pilot_records (character_id, payload, state, fetched_at)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (character_id) DO UPDATE SET
     payload    = excluded.payload,
     state      = excluded.state,
@@ -251,7 +260,7 @@ FROM pilot_records
 WHERE state = 'pending'
    OR (state = 'ready' AND fetched_at < sqlc.arg(stale_cutoff))
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at
-LIMIT sqlc.arg(drain_limit);
+LIMIT sqlc.arg(drain_limit)::bigint;
 
 -- ---------------------------------------------------------------------
 -- Public corporation & alliance records (schema 026): the queues
@@ -262,14 +271,14 @@ LIMIT sqlc.arg(drain_limit);
 -- name: GetCorporationRecord :one
 SELECT corporation_id, payload, state, fetched_at, priority
 FROM corporation_records
-WHERE corporation_id = ?;
+WHERE corporation_id = $1;
 -- name: UpsertCorporationWant :exec
 INSERT INTO corporation_records (corporation_id, priority)
-VALUES (?, 1)
-ON CONFLICT (corporation_id) DO UPDATE SET priority = MAX(priority, 1);
+VALUES ($1, 1)
+ON CONFLICT (corporation_id) DO UPDATE SET priority = GREATEST(corporation_records.priority, 1);
 -- name: SetCorporationRecord :exec
 INSERT INTO corporation_records (corporation_id, payload, state, fetched_at)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (corporation_id) DO UPDATE SET
     payload    = excluded.payload,
     state      = excluded.state,
@@ -280,18 +289,18 @@ FROM corporation_records
 WHERE state = 'pending'
    OR (state = 'ready' AND fetched_at < sqlc.arg(stale_cutoff))
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at
-LIMIT sqlc.arg(drain_limit);
+LIMIT sqlc.arg(drain_limit)::bigint;
 -- name: GetAllianceRecord :one
 SELECT alliance_id, payload, state, fetched_at, priority
 FROM alliance_records
-WHERE alliance_id = ?;
+WHERE alliance_id = $1;
 -- name: UpsertAllianceWant :exec
 INSERT INTO alliance_records (alliance_id, priority)
-VALUES (?, 1)
-ON CONFLICT (alliance_id) DO UPDATE SET priority = MAX(priority, 1);
+VALUES ($1, 1)
+ON CONFLICT (alliance_id) DO UPDATE SET priority = GREATEST(alliance_records.priority, 1);
 -- name: SetAllianceRecord :exec
 INSERT INTO alliance_records (alliance_id, payload, state, fetched_at)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (alliance_id) DO UPDATE SET
     payload    = excluded.payload,
     state      = excluded.state,
@@ -302,7 +311,7 @@ FROM alliance_records
 WHERE state = 'pending'
    OR (state = 'ready' AND fetched_at < sqlc.arg(stale_cutoff))
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at
-LIMIT sqlc.arg(drain_limit);
+LIMIT sqlc.arg(drain_limit)::bigint;
 
 -- Pilot name-resolution wants (schema 022): a topbar search for
 -- a pilot name no local tier knows notes the name once; the
@@ -312,29 +321,30 @@ LIMIT sqlc.arg(drain_limit);
 -- name: GetPilotNameWant :one
 SELECT normalized_name, display_name, state, character_id, requested_at, resolved_at, next_try_at, attempts
 FROM pilot_name_wants
-WHERE normalized_name = ?;
+WHERE normalized_name = $1;
 -- name: UpsertPilotNameWant :exec
-INSERT OR IGNORE INTO pilot_name_wants (normalized_name, display_name, state, requested_at)
-VALUES (?, ?, 'pending', ?);
+INSERT INTO pilot_name_wants (normalized_name, display_name, state, requested_at)
+VALUES ($1, $2, 'pending', $3)
+ON CONFLICT DO NOTHING;
 -- name: ListDuePilotNameWants :many
 SELECT normalized_name, display_name, state, character_id, requested_at, resolved_at, next_try_at, attempts
 FROM pilot_name_wants
 WHERE (state = 'pending' OR state = 'error')
   AND (next_try_at = '' OR next_try_at <= sqlc.arg(now))
 ORDER BY requested_at
-LIMIT sqlc.arg(lim);
+LIMIT sqlc.arg(lim)::bigint;
 -- name: SetPilotNameWantReady :exec
 UPDATE pilot_name_wants
-SET state = 'ready', character_id = ?, resolved_at = ?, next_try_at = ''
-WHERE normalized_name = ?;
+SET state = 'ready', character_id = $1, resolved_at = $2, next_try_at = ''
+WHERE normalized_name = $3;
 -- name: SetPilotNameWantMissing :exec
 UPDATE pilot_name_wants
-SET state = 'missing', resolved_at = ?, next_try_at = ''
-WHERE normalized_name = ?;
+SET state = 'missing', resolved_at = $1, next_try_at = ''
+WHERE normalized_name = $2;
 -- name: SetPilotNameWantError :exec
 UPDATE pilot_name_wants
-SET state = 'error', attempts = attempts + 1, resolved_at = ?, next_try_at = ?
-WHERE normalized_name = ?;
+SET state = 'error', attempts = attempts + 1, resolved_at = $1, next_try_at = $2
+WHERE normalized_name = $3;
 -- P1 region stats (schema 031): worker-written per-(region,
 -- type) book statistics. A completed sweep replaces a region's
 -- rows inside one transaction: delete the region, then upsert
@@ -342,10 +352,10 @@ WHERE normalized_name = ?;
 -- snapshot row per (region, type, day) for trend work.
 -- name: DeleteMarketRegionStatsByRegion :exec
 DELETE FROM market_region_stats
-WHERE region_id = ?;
+WHERE region_id = $1;
 -- name: UpsertMarketRegionStat :exec
 INSERT INTO market_region_stats (region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, avg_daily_volume, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 ON CONFLICT (region_id, type_id) DO UPDATE SET
     best_sell    = excluded.best_sell,
     typical_sell = excluded.typical_sell,
@@ -362,12 +372,12 @@ ON CONFLICT (region_id, type_id) DO UPDATE SET
 -- name: ListMarketRegionStatsByType :many
 SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
 FROM market_region_stats
-WHERE type_id = ?
+WHERE type_id = $1
 ORDER BY region_id;
 -- name: ListMarketRegionStatsByRegion :many
 SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
 FROM market_region_stats
-WHERE region_id = ?
+WHERE region_id = $1
 ORDER BY type_id;
 -- name: ListMarketAvgDailyVolumes :many
 -- The sold-per-day figure the sweep stores on each region stat:
@@ -377,11 +387,11 @@ ORDER BY type_id;
 -- 7) averages at render time. One pass over the region's whole
 -- history at sweep completion; types with no recorded history
 -- have no row here and read as 0.
-SELECT h.type_id AS type_id, CAST(AVG(h.volume) AS REAL) AS avg_daily_volume
+SELECT h.type_id AS type_id, CAST(AVG(h.volume) AS DOUBLE PRECISION) AS avg_daily_volume
 FROM market_history h
-WHERE h.region_id = ?
+WHERE h.region_id = $1
   AND h.date >= (
-      SELECT DATE(MAX(m.date), '-6 days')
+      SELECT to_char(MAX(m.date)::date - INTERVAL '6 days', 'YYYY-MM-DD')
       FROM market_history m
       WHERE m.region_id = h.region_id AND m.type_id = h.type_id
   )
@@ -389,7 +399,7 @@ GROUP BY h.type_id
 ORDER BY h.type_id;
 -- name: UpsertMarketRegionStatDaily :exec
 INSERT INTO market_region_stats_daily (region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 ON CONFLICT (region_id, type_id, day) DO UPDATE SET
     best_sell    = excluded.best_sell,
     typical_sell = excluded.typical_sell,
@@ -404,7 +414,7 @@ ON CONFLICT (region_id, type_id, day) DO UPDATE SET
 -- name: ListMarketRegionStatsDaily :many
 SELECT region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume
 FROM market_region_stats_daily
-WHERE region_id = ? AND type_id = ?
+WHERE region_id = $1 AND type_id = $2
 ORDER BY day;
 
 -- ---------------------------------------------------------------------
@@ -417,10 +427,10 @@ ORDER BY day;
 -- ---------------------------------------------------------------------
 -- name: DeleteMarketStationStatsByRegion :exec
 DELETE FROM market_station_stats
-WHERE region_id = ?;
+WHERE region_id = $1;
 -- name: UpsertMarketStationStat :exec
 INSERT INTO market_station_stats (location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (location_id, type_id) DO UPDATE SET
     region_id   = excluded.region_id,
     best_sell   = excluded.best_sell,
@@ -433,7 +443,7 @@ ON CONFLICT (location_id, type_id) DO UPDATE SET
 -- name: ListMarketStationStatsByRegion :many
 SELECT location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at
 FROM market_station_stats
-WHERE region_id = ?
+WHERE region_id = $1
 ORDER BY location_id, type_id;
 
 -- ---------------------------------------------------------------------
@@ -443,12 +453,12 @@ ORDER BY location_id, type_id;
 -- closed rows; the Orders page reads only these rows.
 -- ---------------------------------------------------------------------
 -- name: GetOrderLifecycle :one
-SELECT character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+SELECT *
 FROM order_lifecycle
-WHERE character_id = ? AND order_id = ?;
+WHERE character_id = $1 AND order_id = $2;
 -- name: UpsertOrderLifecycle :exec
 INSERT INTO order_lifecycle (character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', 0, 0)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, '', '', 0, 0)
 ON CONFLICT (character_id, order_id) DO UPDATE SET
     type_id            = excluded.type_id,
     location_id        = excluded.location_id,
@@ -460,41 +470,41 @@ ON CONFLICT (character_id, order_id) DO UPDATE SET
     last_seen_at       = excluded.last_seen_at;
 -- name: UpdateOrderLifecycleBeaten :exec
 UPDATE order_lifecycle
-SET beaten_now = ?, outbid_events = ?
-WHERE character_id = ? AND order_id = ? AND closed_at = '';
+SET beaten_now = $1, outbid_events = $2
+WHERE character_id = $3 AND order_id = $4 AND closed_at = '';
 -- name: CloseOrderLifecycle :exec
 UPDATE order_lifecycle
-SET closed_at = ?, close_kind = ?, beaten_now = 0
-WHERE character_id = ? AND order_id = ? AND closed_at = '';
+SET closed_at = $1, close_kind = $2, beaten_now = 0
+WHERE character_id = $3 AND order_id = $4 AND closed_at = '';
 -- name: ListOrderLifecycleByCharacter :many
-SELECT character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+SELECT *
 FROM order_lifecycle
-WHERE character_id = ?
+WHERE character_id = $1
 ORDER BY first_seen_at DESC, order_id DESC;
 -- name: ListOpenOrderLifecycleByCharacter :many
-SELECT character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+SELECT *
 FROM order_lifecycle
-WHERE character_id = ? AND closed_at = ''
+WHERE character_id = $1 AND closed_at = ''
 ORDER BY order_id;
 -- name: ListOrderLifecycleByUser :many
-SELECT ol.character_id, ol.order_id, ol.type_id, ol.location_id, ol.region_id, ol.is_buy_order, ol.listed_price, ol.volume_total, ol.volume_remain_last, ol.first_seen_at, ol.last_seen_at, ol.closed_at, ol.close_kind, ol.outbid_events, ol.beaten_now
+SELECT ol.*
 FROM order_lifecycle ol
 JOIN characters c ON c.character_id = ol.character_id
-WHERE c.user_id = ?
+WHERE c.user_id = $1
 ORDER BY ol.closed_at DESC, ol.first_seen_at DESC, ol.order_id DESC;
 -- name: ListClosedOrderLifecycleByCharacter :many
-SELECT character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+SELECT *
 FROM order_lifecycle
-WHERE character_id = ? AND closed_at != ''
+WHERE character_id = $1 AND closed_at != ''
 ORDER BY closed_at DESC, order_id DESC
-LIMIT ?;
+LIMIT sqlc.arg(row_limit)::bigint;
 -- name: PruneOldOrderLifecycle :exec
 DELETE FROM order_lifecycle
-WHERE rowid IN (
-    SELECT ol.rowid FROM order_lifecycle AS ol
-    WHERE ol.closed_at != '' AND ol.closed_at < ?
+WHERE id IN (
+    SELECT ol.id FROM order_lifecycle AS ol
+    WHERE ol.closed_at != '' AND ol.closed_at < $1
     ORDER BY ol.closed_at
-    LIMIT ?
+    LIMIT sqlc.arg(row_limit)::bigint
 );
 
 -- ---------------------------------------------------------------------
@@ -509,38 +519,38 @@ WHERE rowid IN (
 -- name: GetMarketSweepState :one
 SELECT region_id, next_page, pages_total, started_at, updated_at
 FROM market_sweep_state
-WHERE region_id = ?;
+WHERE region_id = $1;
 -- name: InsertMarketSweepState :exec
 INSERT INTO market_sweep_state (region_id, next_page, pages_total, started_at, updated_at)
-VALUES (?, 1, 0, ?, ?);
+VALUES ($1, 1, 0, $2, $3);
 -- name: UpdateMarketSweepState :exec
 UPDATE market_sweep_state
-SET next_page = ?, pages_total = ?, updated_at = ?
-WHERE region_id = ?;
+SET next_page = $1, pages_total = $2, updated_at = $3
+WHERE region_id = $4;
 -- name: DeleteMarketSweepState :exec
 DELETE FROM market_sweep_state
-WHERE region_id = ?;
+WHERE region_id = $1;
 -- name: InsertMarketSweepOrder :exec
 INSERT INTO market_sweep_orders (region_id, type_id, is_buy_order, price, volume_remain, location_id)
-VALUES (?, ?, ?, ?, ?, ?);
+VALUES ($1, $2, $3, $4, $5, $6);
 -- name: DeleteMarketSweepOrdersByRegion :exec
 DELETE FROM market_sweep_orders
-WHERE region_id = ?;
+WHERE region_id = $1;
 -- name: ListMarketSweepTypeIDs :many
 SELECT DISTINCT type_id
 FROM market_sweep_orders
-WHERE region_id = ?
+WHERE region_id = $1
 ORDER BY type_id;
 -- name: ListMarketSweepTypeOrders :many
 SELECT is_buy_order, price, volume_remain
 FROM market_sweep_orders
-WHERE region_id = ? AND type_id = ?
+WHERE region_id = $1 AND type_id = $2
 ORDER BY is_buy_order, price;
 -- name: ListMarketSweepStationAggregates :many
 SELECT location_id, type_id, is_buy_order,
-       CAST(MIN(price) AS REAL) AS min_price, CAST(MAX(price) AS REAL) AS max_price,
-       COUNT(*) AS order_count, CAST(SUM(volume_remain) AS INTEGER) AS total_volume
+       CAST(MIN(price) AS DOUBLE PRECISION) AS min_price, CAST(MAX(price) AS DOUBLE PRECISION) AS max_price,
+       COUNT(*) AS order_count, CAST(SUM(volume_remain) AS BIGINT) AS total_volume
 FROM market_sweep_orders
-WHERE region_id = ? AND location_id > 0
+WHERE region_id = $1 AND location_id > 0
 GROUP BY location_id, type_id, is_buy_order
 ORDER BY location_id, type_id, is_buy_order;

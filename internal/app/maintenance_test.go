@@ -56,8 +56,31 @@ func writeTestFile(t *testing.T, path string, data []byte, perm os.FileMode) {
 }
 
 func TestVersionMatchesRelease(t *testing.T) {
-	if got := Version(); got != "v0.3.17.001" {
-		t.Fatalf("Version() = %q, want v0.3.17.001", got)
+	if got := Version(); got != "v0.3.18.001" {
+		t.Fatalf("Version() = %q, want v0.3.18.001", got)
+	}
+}
+
+func TestReleaseChannelBase(t *testing.T) {
+	if got := releaseChannelBase(); got != releaseBaseURL {
+		t.Fatalf("default channel = %q, want %q", got, releaseBaseURL)
+	}
+	t.Setenv("EVESYNAPSE_UPDATE_REPO", "someone/evesynapse")
+	want := "https://github.com/someone/evesynapse/releases/latest/download"
+	if got := releaseChannelBase(); got != want {
+		t.Fatalf("fork channel = %q, want %q", got, want)
+	}
+}
+
+func TestLoadInstallEnv(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, ".env"),
+		[]byte("EVESYNAPSE_UPDATE_REPO=someone/evesynapse\n"), 0o600)
+	t.Setenv("EVESYNAPSE_UPDATE_REPO", "")
+	os.Unsetenv("EVESYNAPSE_UPDATE_REPO")
+	loadInstallEnv(filepath.Join(dir, "evesynapse"))
+	if got := os.Getenv("EVESYNAPSE_UPDATE_REPO"); got != "someone/evesynapse" {
+		t.Fatalf("EVESYNAPSE_UPDATE_REPO = %q after loadInstallEnv", got)
 	}
 }
 

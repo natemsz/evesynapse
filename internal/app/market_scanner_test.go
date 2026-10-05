@@ -171,7 +171,7 @@ func TestScannerMathFiltersSortAndCap(t *testing.T) {
 	// Cap: 105 more qualifying types still list at most 100 rows.
 	for i := int64(0); i < 105; i++ {
 		typeID := int64(1000 + i)
-		if _, err := conn.ExecContext(ctx, `INSERT INTO sde_types (type_id, name, group_id) VALUES (?, ?, 18)`, typeID, fmt.Sprintf("Cap Item %d", i)); err != nil {
+		if _, err := conn.ExecContext(ctx, `INSERT INTO sde_types (type_id, name, group_id) VALUES ($1, $2, 18)`, typeID, fmt.Sprintf("Cap Item %d", i)); err != nil {
 			t.Fatalf("seed cap type: %v", err)
 		}
 		if err := q.UpsertMarketStationStat(ctx, db.UpsertMarketStationStatParams{

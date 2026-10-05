@@ -12,13 +12,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/pgtest"
 )
 
 // stubTransport answers every request with the configured status
@@ -41,16 +41,16 @@ func (s *stubTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}, nil
 }
 
-// seedKillmailCharacter builds an Application backed by a temp DB
-// holding one character whose recent-killmails snapshot lists n
-// refs with no stored details.
+// seedKillmailCharacter builds an Application backed by a fresh
+// test database holding one character whose recent-killmails
+// snapshot lists n refs with no stored details.
 func seedKillmailCharacter(t *testing.T, transport http.RoundTripper, n int) (*Application, db.Character) {
 	t.Helper()
-	conn, err := openDB(filepath.Join(t.TempDir(), "test.db"))
+	conn, pool, err := openDB(context.Background(), pgtest.FreshDSN(t))
 	if err != nil {
 		t.Fatalf("openDB: %v", err)
 	}
-	t.Cleanup(func() { conn.Close() })
+	t.Cleanup(func() { conn.Close(); pool.Close() })
 	queries := db.New(conn)
 
 	ctx := context.Background()

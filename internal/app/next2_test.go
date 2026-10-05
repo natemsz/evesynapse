@@ -21,6 +21,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/pgtest"
 )
 
 // seedWidgetOrders plants open orders for one character.
@@ -453,20 +454,21 @@ func TestGuidePricesWorkerRefresh(t *testing.T) {
 // TestMigrations020And021Reopen: the new tables' guards are
 // idempotent across reopens, like every schema before them.
 func TestMigrations020And021Reopen(t *testing.T) {
-	path := t.TempDir() + "/test.db"
+	dsn := pgtest.FreshDSN(t)
 	for i := 0; i < 2; i++ {
-		conn, err := openDB(path)
+		conn, pool, err := openDB(context.Background(), dsn)
 		if err != nil {
 			t.Fatalf("open %d: %v", i, err)
 		}
 		var tables int
-		if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('widget_configs','guide_prices','guide_prices_meta')`).Scan(&tables); err != nil {
+		if err := conn.QueryRow(`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('widget_configs','guide_prices','guide_prices_meta')`).Scan(&tables); err != nil {
 			t.Fatalf("count tables: %v", err)
 		}
 		if tables != 3 {
 			t.Fatalf("tables after open %d: %d, want 3", i, tables)
 		}
 		conn.Close()
+		pool.Close()
 	}
 
 	// A user with no saved config reads the defaults.

@@ -19,8 +19,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alexedwards/scs/sqlite3store"
+	"github.com/alexedwards/scs/pgxstore"
 	"github.com/alexedwards/scs/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
@@ -128,11 +129,11 @@ func (s *pagedBookTransport) clearFailures() {
 // test database: a simulated process restart. All sweep state
 // lives on disk (schema 034), so the "new process" resumes
 // exactly where the killed one stopped.
-func secondProcessApp(t *testing.T, conn *sql.DB, transport http.RoundTripper) *Application {
+func secondProcessApp(t *testing.T, conn *sql.DB, pool *pgxpool.Pool, transport http.RoundTripper) *Application {
 	t.Helper()
 	queries := db.New(conn)
 	sessionManager := scs.New()
-	sessionManager.Store = sqlite3store.New(conn)
+	sessionManager.Store = pgxstore.New(pool)
 	sessionManager.Lifetime = 24 * time.Hour
 	sessionManager.Cookie.Name = "evesynapse_session"
 	client := esi.New(&http.Client{Transport: transport}, queries,
@@ -151,10 +152,10 @@ func secondProcessApp(t *testing.T, conn *sql.DB, transport http.RoundTripper) *
 
 func sweepStateCount(t *testing.T, conn *sql.DB, regionID int64) (states, staged int) {
 	t.Helper()
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM market_sweep_state WHERE region_id = ?`, regionID).Scan(&states); err != nil {
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM market_sweep_state WHERE region_id = $1`, regionID).Scan(&states); err != nil {
 		t.Fatalf("count sweep state: %v", err)
 	}
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM market_sweep_orders WHERE region_id = ?`, regionID).Scan(&staged); err != nil {
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM market_sweep_orders WHERE region_id = $1`, regionID).Scan(&staged); err != nil {
 		t.Fatalf("count staged orders: %v", err)
 	}
 	return states, staged
@@ -208,7 +209,7 @@ func TestSweepRestartResumesMidSweep(t *testing.T) {
 	// The restarted process resumes at page 3 -- the two staged
 	// pages are never re-read -- and stores the whole book's
 	// figures, indistinguishable from an uninterrupted sweep.
-	restarted := secondProcessApp(t, conn, transport)
+	restarted := secondProcessApp(t, conn, app.pool, transport)
 	transport.drainRequests()
 	stored, limited = restarted.sweepRegionStats(ctx, &fetchBudget{left: 1000})
 	if limited || stored != 3 {

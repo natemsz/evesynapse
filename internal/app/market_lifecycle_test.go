@@ -311,7 +311,7 @@ func TestOrderLifecyclePruneBound(t *testing.T) {
 		t.Fatalf("after second prune: %d rows, want 5 recent", got)
 	}
 	var recentLeft int
-	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM order_lifecycle WHERE closed_at = ?`, recent).Scan(&recentLeft); err != nil {
+	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM order_lifecycle WHERE closed_at = $1`, recent).Scan(&recentLeft); err != nil {
 		t.Fatalf("count recent: %v", err)
 	}
 	if recentLeft != 5 {
@@ -381,7 +381,7 @@ func TestOrdersPageLifecycleRender(t *testing.T) {
 			t.Fatalf("seed lifecycle %d: %v", s.orderID, err)
 		}
 		// Upsert resets outbid to 0; set the fixture values directly.
-		if _, err := conn.ExecContext(ctx, `UPDATE order_lifecycle SET outbid_events = ? WHERE character_id = ? AND order_id = ?`, s.outbid, fixtureCharA, s.orderID); err != nil {
+		if _, err := conn.ExecContext(ctx, `UPDATE order_lifecycle SET outbid_events = $1 WHERE character_id = $2 AND order_id = $3`, s.outbid, fixtureCharA, s.orderID); err != nil {
 			t.Fatalf("seed outbid %d: %v", s.orderID, err)
 		}
 		if err := q.CloseOrderLifecycle(ctx, db.CloseOrderLifecycleParams{
@@ -448,7 +448,7 @@ func TestOrdersPageLifecycleRender(t *testing.T) {
 
 	// Empty state: the second pilot has only the one closed row
 	// seeded above, so clear it and re-render.
-	if _, err := conn.ExecContext(ctx, `DELETE FROM order_lifecycle WHERE character_id = ?`, fixtureCharB); err != nil {
+	if _, err := conn.ExecContext(ctx, `DELETE FROM order_lifecycle WHERE character_id = $1`, fixtureCharB); err != nil {
 		t.Fatalf("clear B lifecycle: %v", err)
 	}
 	seedSnapshot(t, q, fixtureCharB, esi.SnapOrders, []esi.CharOrder{})

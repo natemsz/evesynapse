@@ -75,7 +75,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`<div class="topbar-character">`,
 		`<span class="topbar-character-name">`,
 		`<details class="branch switcher topbar-switcher">`,
-		`<a class="sidebar-signout" href="/auth/logout">Sign out</a>`,
+		`<a class="navlink sidebar-signout" href="/auth/logout">`,
 		`id="topbar-q"`,
 		`<svg class="search-glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round"><circle cx="10.8" cy="10.8" r="6.2"/><path d="M15.2 15.2 20.4 20.4"/></g></svg>`,
 		`id="topbar-suggest"`,
@@ -156,7 +156,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	if strings.Contains(aside, "sidebar-wordmark") || strings.Contains(aside, "EVESYNAPSE") {
 		t.Error("sidebar still carries the wordmark")
 	}
-	if !strings.Contains(aside, `<a class="sidebar-signout" href="/auth/logout">Sign out</a>`) {
+	if !strings.Contains(aside, `class="navlink sidebar-signout" href="/auth/logout"`) {
 		t.Error("sidebar is missing its bottom sign-out link")
 	}
 	topbarStart := strings.Index(body, `<nav class="topbar">`)
@@ -225,7 +225,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		".sidebar .sidebar-actions .nav-state-btn { display: none; }",
 		".sidebar .nav-drawer-close { display: inline-flex; }",
 		"html[data-nav=\"rail\"] .nav-label {\n    display: block;\n    max-width: 12rem;\n    opacity: 1;\n    transform: none;\n  }",
-		"html[data-nav=\"rail\"] .sidebar-account { display: block; }",
+		"html[data-nav=\"rail\"] .sidebar-account-footer { display: flex; }",
 		"html[data-nav=\"rail\"] .sidebar .branch .menu {\n    position: static;",
 		// v0.3.07.002 top-bar cluster: the wordmark is always in
 		// the wide top bar, the active character block sits at

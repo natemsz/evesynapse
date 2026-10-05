@@ -254,6 +254,101 @@ func TestTradefinderPageRendersStoredRowsZeroOutbound(t *testing.T) {
 	}
 }
 
+func TestTradefinderLowballRoutesOptIn(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	seedTradefinderFixture(t, app)
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Type 40 is not in the SDE fixture; the stats are what the
+	// view judges, but the name keeps the row readable.
+	if _, err := app.db.ExecContext(ctx, `INSERT INTO sde_types (type_id, name, group_id) VALUES (40, 'Degenerate Coating', 18)`); err != nil {
+		t.Fatalf("seed lowball type: %v", err)
+	}
+
+	// Type 34: a sane route -- origin typical buy 4 against a
+	// typical sell of 5, destination typical sell 10.
+	// Type 40: the degenerate one -- origin typical buy 1.5
+	// against a typical sell of 240M (a buy book of lowball
+	// orders), destination typical sell 250M.
+	for _, s := range []db.UpsertMarketRegionStatParams{
+		tfRegionStat(tfOrigin, 34, 4, 5, 50, 0, 0, now),
+		tfRegionStat(tfDest, 34, 0, 10, 0, 100, 20, now),
+		tfRegionStat(tfOrigin, 40, 1.5, 240_000_000, 100, 0, 0, now),
+		tfRegionStat(tfDest, 40, 0, 250_000_000, 0, 100, 10, now),
+	} {
+		if err := q.UpsertMarketRegionStat(ctx, s); err != nil {
+			t.Fatalf("seed region stat: %v", err)
+		}
+	}
+
+	routeIDs := func(view *tradefinderView) map[int64]bool {
+		ids := make(map[int64]bool, len(view.Rows))
+		for _, r := range view.Rows {
+			ids[r.TypeID] = true
+		}
+		return ids
+	}
+
+	// Default: the degenerate route is hidden, the sane one shows.
+	view := app.buildTradefinderView(ctx, url.Values{})
+	if view.Lowball {
+		t.Error("default view has lowball routes on, want off")
+	}
+	if ids := routeIDs(view); !ids[34] || ids[40] {
+		t.Fatalf("default routes: %v, want type 34 only", ids)
+	}
+
+	// Opted in: both routes list, and the flag echoes for the form.
+	view = app.buildTradefinderView(ctx, url.Values{"lowball": {"1"}})
+	if !view.Lowball {
+		t.Error("lowball=1 view dropped the opt-in flag")
+	}
+	if ids := routeIDs(view); !ids[34] || !ids[40] {
+		t.Fatalf("lowball routes: %v, want types 34 and 40", ids)
+	}
+
+	// An explicit 0 is off, like an unchecked box.
+	view = app.buildTradefinderView(ctx, url.Values{"lowball": {"0"}})
+	if view.Lowball {
+		t.Error("lowball=0 view has lowball routes on, want off")
+	}
+
+	// The form carries the checkbox; the checked state survives a
+	// submit with the option on.
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+	code, body := getPage(t, app, cookie, "/market/tradefinder/")
+	if code != http.StatusOK {
+		t.Fatalf("tradefinder page: status %d", code)
+	}
+	if !strings.Contains(body, `name="lowball"`) {
+		t.Error("tradefinder form has no lowball checkbox")
+	}
+	if strings.Contains(body, `name="lowball" value="1" checked`) {
+		t.Error("lowball checkbox renders checked without the option")
+	}
+	code, body = getPage(t, app, cookie, "/market/tradefinder/?lowball=1")
+	if code != http.StatusOK {
+		t.Fatalf("tradefinder lowball page: status %d", code)
+	}
+	if !strings.Contains(body, `name="lowball" value="1" checked`) {
+		t.Error("lowball checkbox loses its checked state after submit")
+	}
+	if !strings.Contains(body, "Degenerate Coating") {
+		t.Error("lowball page omits the degenerate route")
+	}
+
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("lowball views made %d outbound calls, want 0", got)
+	}
+}
+
 func TestTradefinderPageEmptyStates(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)

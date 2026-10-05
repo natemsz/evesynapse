@@ -297,7 +297,7 @@ func TestPilotOrbitDerivationAndPriority(t *testing.T) {
 	seedCharacter(t, q, user.ID, fixtureCharB, "Second Pilot")
 
 	seedSnapshot(t, q, fixtureCharA, esi.SnapWalletJournal, []esi.WalletJournalEntry{
-		{ID: 1, FirstPartyID: 93300001, SecondPartyID: fixtureCharB},
+		{ID: 1, FirstPartyID: 93300001, FirstPartyType: "character", SecondPartyID: fixtureCharB, SecondPartyType: "character"},
 	})
 	seedSnapshot(t, q, fixtureCharA, esi.SnapMail, []esi.MailHeader{
 		{MailID: 1, From: 93300002},

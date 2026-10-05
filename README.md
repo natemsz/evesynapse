@@ -532,7 +532,7 @@ make gen   # sqlc generate
   - Developed by Nate Sanchez (natemsz / IGN: Burzrujat) with love, and in the hopes it might be useful.
   - EveSynapse is based on the 2013 project originally developed by natemsz, element, and j0ker (Rest in peace Matt. See you on the other side of the Eve Gate ❤️) 
 
-This project is dedicated to EVE Online, its pilots and its developers - to the game and community I have loved for over two decades.
+This project is dedicated to EVE Online, its pilots and its developers — the game and community that I have loved for over two decades.
 
 
 

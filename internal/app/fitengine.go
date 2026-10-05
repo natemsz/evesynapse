@@ -79,10 +79,12 @@ package app
 // LocationRequiredSkillModifier (sde_requirements match), and
 // OwnerRequiredSkillModifier (drone targets). Domains targetID /
 // target / structureID, the EffectStopper func, effect
-// categories outside {0 passive, 1 active, 4 online} (notably 5
-// = overload/overheating), and charge/group shapes that target
-// nothing listed here are skipped and reported in
-// fitResult.Unmodeled, never silently dropped.
+// categories outside {0 passive, 1 active, 4 online} — except 5 =
+// overload, which binds for overheated modules — and charge/group
+// shapes that target nothing listed here are skipped and reported
+// in fitResult.Unmodeled, never silently dropped. A heatable
+// module that simply isn't overheated skips its overload effects
+// silently: that's a fitting choice, not a modeling gap.
 //
 // Skill interplay is data-driven, not special-cased: a trained
 // skill becomes a pseudo-item whose attributes start from its
@@ -111,6 +113,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 
 	db "evesynapse/internal/db/sqlc"
 )
@@ -222,6 +225,24 @@ const (
 	fitEffectSubsystemSlot  = 3772
 )
 
+// Effect categories (dgmEffects): 5 is the overload/heat
+// category — the one heating a module engages.
+const fitCatOverload = 5
+
+// Module states: the values fitItemInput.State and
+// fitDocItem.States carry. pyfa/eos semantics —
+//   - offline:    fitted but contributes nothing (no CPU/PG, no effects)
+//   - online:     powered; passive + online-category effects apply,
+//     active effects don't, nothing cycles
+//   - active:     cycling; passive + online + active effects apply
+//   - overheated: active plus the module's overload effects
+const (
+	fitStateOnline     = "online"
+	fitStateActive     = "active"
+	fitStateOffline    = "offline"
+	fitStateOverheated = "overheated"
+)
+
 // Dogma operation codes (see the header comment for evidence).
 const (
 	fitOpPreAssign   = -1
@@ -331,6 +352,104 @@ func (snap *fitSnapshot) hasEffect(typeID, effectID int64) bool {
 		}
 	}
 	return false
+}
+
+// fitTypeEffectCats lists the effect categories a type carries.
+func (snap *fitSnapshot) fitTypeEffectCats(typeID int64) map[int64]bool {
+	out := make(map[int64]bool)
+	for _, eid := range snap.typeEffects[typeID] {
+		if eff := snap.effects[eid]; eff != nil {
+			out[eff.Category] = true
+		}
+	}
+	return out
+}
+
+// fitModuleValidStates lists the states a fitted module may take,
+// derived from SDE data, never per-module hardcoding: rigs,
+// subsystems, drones and cargo have no states; a module is
+// activatable with an active-category effect — or as a weapon
+// (turret/launcher fitted markers are passive in SDE, but weapons
+// cycle via F1 in-game); overheatable only with an
+// overload-category effect on top of that (heat is applied to a
+// cycling module).
+func fitModuleValidStates(snap *fitSnapshot, typeID int64) []string {
+	if snap.hasEffect(typeID, fitEffectRigSlot) || snap.hasEffect(typeID, fitEffectSubsystemSlot) {
+		return nil
+	}
+	if snap.attrs[typeID][fitAttrDroneBandwidthUsed] > 0 {
+		return nil
+	}
+	cats := snap.fitTypeEffectCats(typeID)
+	if len(cats) == 0 {
+		return nil
+	}
+	activatable := cats[1] ||
+		snap.hasEffect(typeID, fitEffectTurretFitted) ||
+		snap.hasEffect(typeID, fitEffectLauncherFitted)
+	states := []string{fitStateOffline, fitStateOnline}
+	if activatable {
+		states = append(states, fitStateActive)
+		if cats[fitCatOverload] {
+			states = append(states, fitStateOverheated)
+		}
+	}
+	return states
+}
+
+// fitDefaultModuleState is the state a fresh module takes: active
+// when it can cycle, online otherwise. This preserves the
+// engine's historical behavior (everything online and cycling)
+// for fits that predate states.
+func fitDefaultModuleState(snap *fitSnapshot, typeID int64) string {
+	cats := snap.fitTypeEffectCats(typeID)
+	if cats[1] ||
+		snap.hasEffect(typeID, fitEffectTurretFitted) ||
+		snap.hasEffect(typeID, fitEffectLauncherFitted) {
+		return fitStateActive
+	}
+	return fitStateOnline
+}
+
+// fitNormalizeModuleState resolves "" to the type default and
+// demotes states the type cannot take (stale docs, bad input) to
+// the default. Non-state kinds get "".
+func fitNormalizeModuleState(snap *fitSnapshot, typeID int64, state string) string {
+	valid := fitModuleValidStates(snap, typeID)
+	if len(valid) == 0 {
+		return ""
+	}
+	for _, v := range valid {
+		if v == state {
+			return state
+		}
+	}
+	return fitDefaultModuleState(snap, typeID)
+}
+
+// fitSourceCategories lists the effect categories that bind for
+// one entity under its module state (pyfa semantics): offline
+// modules bind nothing; online skips active and overload;
+// active adds the active category; overheated adds overload.
+func fitSourceCategories(e *fitEntity) map[int64]bool {
+	if e.kind != fitEntModule {
+		return map[int64]bool{0: true, 1: true, 4: true}
+	}
+	switch e.state {
+	case fitStateOffline:
+		return nil
+	case fitStateOnline:
+		return map[int64]bool{0: true, 4: true}
+	case fitStateOverheated:
+		return map[int64]bool{0: true, 1: true, 4: true, fitCatOverload: true}
+	default:
+		return map[int64]bool{0: true, 1: true, 4: true}
+	}
+}
+
+// fitStateAttrKey keys per-(type, state) attribute maps.
+func fitStateAttrKey(typeID int64, state string) string {
+	return strconv.FormatInt(typeID, 10) + "\x00" + state
 }
 
 // loadFitSnapshot loads the dogma rows for the given types and
@@ -553,11 +672,14 @@ func fitAllVSkillLevels(snap *fitSnapshot, shipTypeID int64, itemTypeIDs []int64
 // Engine.
 // ---------------------------------------------------------------------------
 
-// fitItemInput is one fitted item line: a type and how many of
-// it the fit carries (drones especially).
+// fitItemInput is one fitted item line: a type, how many of
+// it the fit carries (drones especially), and — for modules —
+// the module state ("", online/active/offline/overheated; ""
+// resolves to the type's default).
 type fitItemInput struct {
 	TypeID   int64
 	Quantity int
+	State    string
 }
 
 // fitEHPProfile is effective HP against a damage profile.
@@ -659,6 +781,11 @@ type fitResult struct {
 	// missile types appear here too. For the stats UI later.
 	ShipAttrs map[int64]float64
 	ItemAttrs map[int64]map[int64]float64
+	// StateAttrs holds per-(type, state) attributes for module
+	// entities whose state isn't the default, keyed by
+	// fitStateAttrKey — so a tooltip can show an overheated
+	// module's heated numbers rather than its resting ones.
+	StateAttrs map[string]map[int64]float64
 
 	// Unmodeled lists modifier shapes the engine deliberately
 	// skipped (deduped, sorted): domains/funcs it cannot target,
@@ -698,14 +825,37 @@ const (
 
 // fitEntity is one thing whose attributes get computed: the ship,
 // the character pseudo-item, a trained skill, or one fitted type
-// (counted Instances times where identity matters).
+// (counted Instances times where identity matters). Modules with
+// different states fold into separate entities (state is part of
+// the fold key); other kinds ignore it.
 type fitEntity struct {
 	key       string
 	kind      fitEntityKind
 	typeID    int64
 	instances int
+	state     string // module state, "" for other kinds
 	base      map[int64]float64
 	calc      map[int64]float64 // attributes touched by modifiers, post-pass
+}
+
+// cycling reports whether the entity's active effects are
+// engaged: everything but modules always is; a module only when
+// active or overheated. Empty state (no SDE effects to derive
+// states from) preserves the historical behavior: cycling.
+func (e *fitEntity) cycling() bool {
+	if e.kind != fitEntModule {
+		return true
+	}
+	return e.state == "" || e.state == fitStateActive || e.state == fitStateOverheated
+}
+
+// online reports whether passive/online-category effects apply:
+// everything but modules always; a module unless offline.
+func (e *fitEntity) online() bool {
+	if e.kind != fitEntModule {
+		return true
+	}
+	return e.state != fitStateOffline
 }
 
 func (e *fitEntity) get(snap *fitSnapshot, attr int64) float64 {
@@ -899,6 +1049,7 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 	res := &fitResult{
 		ShipTypeID: shipTypeID,
 		ItemAttrs:  make(map[int64]map[int64]float64),
+		StateAttrs: make(map[string]map[int64]float64),
 	}
 	unmodeled := make(map[string]bool)
 	noteUnmodeled := func(s string) { unmodeled[s] = true }
@@ -919,8 +1070,11 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 
 	// Module/rig/drone entities per fitted type (instances fold
 	// duplicates of the same type into one entity with a count).
+	// Modules fold by (type, state): two identical modules in
+	// different states are separate entities so each binds only
+	// the effect categories its state allows.
 	var fitted []*fitEntity // modules, rigs, subsystems, drones
-	fittedByType := make(map[int64]*fitEntity)
+	fittedByType := make(map[int64][]*fitEntity)
 	for _, it := range items {
 		if it.TypeID == shipTypeID {
 			continue
@@ -941,30 +1095,55 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 				qty = 0 // a drone line with no count carries nothing
 			}
 		}
-		if ent := fittedByType[it.TypeID]; ent != nil {
+		state := ""
+		if kind == fitEntModule {
+			state = fitNormalizeModuleState(snap, it.TypeID, it.State)
+		}
+		var ent *fitEntity
+		for _, e := range fittedByType[it.TypeID] {
+			if e.state == state {
+				ent = e
+				break
+			}
+		}
+		if ent != nil {
 			ent.instances += qty
 			continue
 		}
-		ent := &fitEntity{
-			key:       fmt.Sprintf("fit:%d", it.TypeID),
+		ent = &fitEntity{
+			key:       fmt.Sprintf("fit:%d:%s", it.TypeID, state),
 			kind:      kind,
 			typeID:    it.TypeID,
 			instances: qty,
+			state:     state,
 			base:      cloneAttrMap(snap.attrs[it.TypeID]),
 			calc:      map[int64]float64{},
 		}
-		fittedByType[it.TypeID] = ent
+		fittedByType[it.TypeID] = append(fittedByType[it.TypeID], ent)
 		fitted = append(fitted, ent)
 		entities = append(entities, ent)
 		byType[it.TypeID] = ent
 	}
 
 	// Charge entities (and missile entities for launchers),
-	// paired with the weapon type that carries them.
+	// paired with the weapon type that carries them. A charge is
+	// only modeled when at least one weapon of its type is
+	// cycling — a loaded charge in an offline or inactive weapon
+	// does nothing (the doc still remembers it).
 	weaponCharge := make(map[int64]*fitEntity) // weapon type -> charge/missile entity
 	for weaponType, chargeType := range charges {
-		weapon := fittedByType[weaponType]
-		if weapon == nil || chargeType == 0 {
+		ents := fittedByType[weaponType]
+		if len(ents) == 0 || chargeType == 0 {
+			continue
+		}
+		cycling := false
+		for _, e := range ents {
+			if e.cycling() {
+				cycling = true
+				break
+			}
+		}
+		if !cycling {
 			continue
 		}
 		kind := fitEntCharge
@@ -1082,7 +1261,7 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 				if source.kind == fitEntCharge || source.kind == fitEntMissile {
 					for weaponType, ent := range weaponCharge {
 						if ent == source {
-							targets(fittedByType[weaponType])
+							targets(fittedByType[weaponType]...)
 						}
 					}
 				} else {
@@ -1189,14 +1368,27 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 	}
 
 	for _, source := range sources {
+		// Effect categories bind per module state (pyfa
+		// semantics): an offline module binds nothing, an
+		// online-but-inactive one skips active and overload,
+		// overheated adds the overload category.
+		allowed := fitSourceCategories(source)
+		if allowed == nil {
+			continue
+		}
 		for _, effectID := range snap.typeEffects[source.typeID] {
 			eff := snap.effects[effectID]
 			if eff == nil {
 				continue // carries no modifiers; nothing to apply
 			}
-			switch eff.Category {
-			case 0, 1, 4: // passive, active, online
-			default:
+			if !allowed[eff.Category] {
+				// A heatable module that simply isn't heated is
+				// a fitting choice, not a modeling gap — skip
+				// silently so the heat note only fires for
+				// genuinely unmodeled categories.
+				if eff.Category == fitCatOverload && source.kind == fitEntModule {
+					continue
+				}
 				noteUnmodeled(fmt.Sprintf("effect %d %s: category %d skipped (overload/system/target mechanics not modeled)", effectID, eff.Name, eff.Category))
 				continue
 			}
@@ -1245,15 +1437,22 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 		if ent == ship || ent.kind == fitEntSkill || ent == charEnt {
 			continue
 		}
-		res.ItemAttrs[ent.typeID] = finalAttrs(snap, ent)
+		fa := finalAttrs(snap, ent)
+		if _, ok := res.ItemAttrs[ent.typeID]; !ok {
+			res.ItemAttrs[ent.typeID] = fa
+		}
+		if ent.kind == fitEntModule && ent.state != "" {
+			res.StateAttrs[fitStateAttrKey(ent.typeID, ent.state)] = fa
+		}
 	}
 
 	// --- Derived stats ----------------------------------------------
 	sg := func(attr int64) float64 { return ship.get(snap, attr) }
 
-	// Resources.
+	// Resources. Offline modules are fitted but dark: no PG,
+	// no CPU, no effects.
 	for _, ent := range fitted {
-		if ent.kind == fitEntDrone {
+		if ent.kind == fitEntDrone || !ent.online() {
 			continue
 		}
 		res.PowergridUsed += ent.get(snap, fitAttrPower) * float64(maxInt(ent.instances, 1))
@@ -1315,7 +1514,7 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 		res.CapacitorPeakRecharge = 2.5 * res.CapacitorCapacity / capRechargeSecs
 	}
 	for _, ent := range fitted {
-		if ent.kind == fitEntDrone {
+		if ent.kind == fitEntDrone || !ent.cycling() {
 			continue
 		}
 		need := ent.get(snap, fitAttrCapacitorNeed)
@@ -1342,6 +1541,11 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 	var damageAttrs = []int64{fitAttrDamageEM, fitAttrDamageExplosive, fitAttrDamageKinetic, fitAttrDamageThermal}
 	for _, ent := range fitted {
 		if ent.kind != fitEntModule {
+			continue
+		}
+		// Offline or inactive modules neither deal damage nor
+		// run cap warfare.
+		if !ent.cycling() {
 			continue
 		}
 		n := float64(maxInt(ent.instances, 1))
@@ -1458,7 +1662,7 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 		res.ShieldRegenPeak = 2.5 * res.ShieldHP / shieldRechargeSecs
 	}
 	for _, ent := range fitted {
-		if ent.kind != fitEntModule || ent.instances < 1 {
+		if ent.kind != fitEntModule || ent.instances < 1 || !ent.cycling() {
 			continue
 		}
 		cycle := cycleSeconds(ent, snap)
@@ -1481,7 +1685,7 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 	res.Mass = sg(fitAttrMass)
 	res.Velocity = sg(fitAttrMaxVelocity)
 	for _, ent := range fitted {
-		if ent.kind != fitEntModule {
+		if ent.kind != fitEntModule || !ent.cycling() {
 			continue
 		}
 		thrust := ent.get(snap, fitAttrSpeedBoostFactor)

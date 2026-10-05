@@ -764,3 +764,150 @@ func TestFitEngineImplantsNoImplants(t *testing.T) {
 		t.Errorf("no implants velocity = %.6f, want 300", res.Velocity)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Module states.
+// ---------------------------------------------------------------------------
+
+// stateFixture builds a ship plus three modules:
+//   - 2001 "Test Booster": active (cat 1) effect adding its bonus
+//     attr 1000 to ship attr 2000; CPU 10, PG 10, cap need 5/cycle,
+//     cycle 5 s.
+//   - 2002 "Test Plate": passive (cat 0) effect adding flat 50 to
+//     ship attr 2001; CPU 5, PG 5.
+//   - 2003 "Test Heater": like 2001, plus an overload (cat 5)
+//     effect raising its own bonus attr 1000 by 20% (op 6).
+//   - 2004 "Test Rig": rig-slot flag, passive bonus.
+func stateFixture() (*fitFixture, int64) {
+	const ship = int64(1001)
+	fx := newFitFixture()
+	fx.attrs(ship, map[int64]float64{2000: 100, 2001: 200})
+	// Active module.
+	fx.attrs(2001, map[int64]float64{50: 10, 30: 10, 6: 5, 73: 5000, 1000: 10})
+	fx.effect(2001, 9001, 1, fitMod("shipID", "ItemModifier", 2000, 1000, 2))
+	// Passive module.
+	fx.attrs(2002, map[int64]float64{50: 5, 30: 5, 1002: 50})
+	fx.effect(2002, 9002, 0, fitMod("shipID", "ItemModifier", 2001, 1002, 2))
+	// Heatable active module.
+	fx.attrs(2003, map[int64]float64{50: 10, 30: 10, 6: 5, 73: 5000, 1000: 10, 1001: 20})
+	fx.effect(2003, 9003, 1, fitMod("shipID", "ItemModifier", 2000, 1000, 2))
+	fx.effect(2003, 9004, 5, fitMod("itemID", "ItemModifier", 1000, 1001, 6))
+	// Rig.
+	fx.attrs(2004, map[int64]float64{1153: 10})
+	fx.flag(2004, fitEffectRigSlot)
+	fx.effect(2004, 9005, 0, fitMod("shipID", "ItemModifier", 2001, 1002, 2))
+	return fx, ship
+}
+
+func TestFitModuleStateDefaults(t *testing.T) {
+	fx, ship := stateFixture()
+	// No states given: active module behaves active, passive online.
+	res := computeFit(fx.snap, ship, []fitItemInput{{TypeID: 2001}, {TypeID: 2002}}, nil, nil, nil)
+	near(t, "default active bonus", res.ShipAttrs[2000], 110, 1e-9)
+	near(t, "default passive bonus", res.ShipAttrs[2001], 250, 1e-9)
+	near(t, "default CPU", res.CPUUsed, 15, 1e-9)
+	near(t, "default PG", res.PowergridUsed, 15, 1e-9)
+}
+
+func TestFitModuleStateOffline(t *testing.T) {
+	fx, ship := stateFixture()
+	res := computeFit(fx.snap, ship, []fitItemInput{
+		{TypeID: 2001, State: fitStateOffline},
+		{TypeID: 2002, State: fitStateOffline},
+	}, nil, nil, nil)
+	// Offline: no PG, no CPU, no effects, no cap draw.
+	near(t, "offline CPU", res.CPUUsed, 0, 1e-9)
+	near(t, "offline PG", res.PowergridUsed, 0, 1e-9)
+	near(t, "offline active bonus", res.ShipAttrs[2000], 100, 1e-9)
+	near(t, "offline passive bonus", res.ShipAttrs[2001], 200, 1e-9)
+	near(t, "offline cap draw", res.CapacitorDraw, 0, 1e-9)
+}
+
+func TestFitModuleStateOnlineInactive(t *testing.T) {
+	fx, ship := stateFixture()
+	res := computeFit(fx.snap, ship, []fitItemInput{
+		{TypeID: 2001, State: fitStateOnline},
+		{TypeID: 2002, State: fitStateOnline},
+	}, nil, nil, nil)
+	// Online: PG/CPU counted, passive effect applies, active
+	// effect does not, nothing cycles (no cap draw).
+	near(t, "online CPU", res.CPUUsed, 15, 1e-9)
+	near(t, "online PG", res.PowergridUsed, 15, 1e-9)
+	near(t, "online active bonus absent", res.ShipAttrs[2000], 100, 1e-9)
+	near(t, "online passive bonus present", res.ShipAttrs[2001], 250, 1e-9)
+	near(t, "online cap draw", res.CapacitorDraw, 0, 1e-9)
+}
+
+func TestFitModuleStateOverheated(t *testing.T) {
+	fx, ship := stateFixture()
+	active := computeFit(fx.snap, ship, []fitItemInput{{TypeID: 2003, State: fitStateActive}}, nil, nil, nil)
+	heated := computeFit(fx.snap, ship, []fitItemInput{{TypeID: 2003, State: fitStateOverheated}}, nil, nil, nil)
+	// Active: 100 + 10 = 110. Overheated: bonus attr 10 -> 12
+	// (+20% overload), ship 100 + 12 = 112.
+	near(t, "active bonus", active.ShipAttrs[2000], 110, 1e-9)
+	near(t, "overheated bonus", heated.ShipAttrs[2000], 112, 1e-9)
+	// Heat costs the same PG/CPU and still cycles.
+	near(t, "overheated CPU", heated.CPUUsed, 10, 1e-9)
+	near(t, "overheated cap draw", heated.CapacitorDraw, 1, 1e-9)
+	// The heat note must not fire: overload is modeled now.
+	for _, n := range heated.Unmodeled {
+		if len(n) >= 8 && n[:8] == "effect 9" {
+			t.Errorf("overheated fit still notes unmodeled: %q", n)
+		}
+	}
+}
+
+func TestFitModuleStateMixedInstances(t *testing.T) {
+	fx, ship := stateFixture()
+	// Two identical modules, one active one overheated: separate
+	// entities, both bonuses stack (100 + 10 + 12).
+	res := computeFit(fx.snap, ship, []fitItemInput{
+		{TypeID: 2003, Quantity: 1, State: fitStateActive},
+		{TypeID: 2003, Quantity: 1, State: fitStateOverheated},
+	}, nil, nil, nil)
+	near(t, "mixed states bonus", res.ShipAttrs[2000], 122, 1e-9)
+	near(t, "mixed states CPU", res.CPUUsed, 20, 1e-9)
+}
+
+func TestFitModuleValidStates(t *testing.T) {
+	fx, _ := stateFixture()
+	eq := func(what string, got, want []string) {
+		t.Helper()
+		if len(got) != len(want) {
+			t.Fatalf("%s = %v, want %v", what, got, want)
+		}
+		for i := range got {
+			if got[i] != want[i] {
+				t.Fatalf("%s = %v, want %v", what, got, want)
+			}
+		}
+	}
+	// Passive-only module: offline/online.
+	eq("passive", fitModuleValidStates(fx.snap, 2002), []string{"offline", "online"})
+	// Active, not heatable: + active.
+	eq("active", fitModuleValidStates(fx.snap, 2001), []string{"offline", "online", "active"})
+	// Active + overload: all four.
+	eq("heatable", fitModuleValidStates(fx.snap, 2003), []string{"offline", "online", "active", "overheated"})
+	// Rig: no states.
+	if vs := fitModuleValidStates(fx.snap, 2004); len(vs) != 0 {
+		t.Errorf("rig states = %v, want none", vs)
+	}
+}
+
+func TestFitNormalizeModuleState(t *testing.T) {
+	fx, _ := stateFixture()
+	if got := fitNormalizeModuleState(fx.snap, 2001, ""); got != fitStateActive {
+		t.Errorf("active default = %q, want active", got)
+	}
+	if got := fitNormalizeModuleState(fx.snap, 2002, ""); got != fitStateOnline {
+		t.Errorf("passive default = %q, want online", got)
+	}
+	// Overheat on a passive module demotes to the default.
+	if got := fitNormalizeModuleState(fx.snap, 2002, fitStateOverheated); got != fitStateOnline {
+		t.Errorf("passive overheated = %q, want online", got)
+	}
+	// Bogus input demotes to the default.
+	if got := fitNormalizeModuleState(fx.snap, 2001, "meltdown"); got != fitStateActive {
+		t.Errorf("bogus state = %q, want active", got)
+	}
+}

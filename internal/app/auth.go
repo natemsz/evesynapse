@@ -97,8 +97,6 @@ const (
 // which the worker records as "PI not enabled" until they re-link
 // (see planets_worker.go).
 var eveScopes = []string{
-	"esi-access.read_lists.v1",
-	"esi-activities.read_character.v1",
 	"esi-alliances.read_contacts.v1",
 	"esi-assets.read_assets.v1",
 	"esi-assets.read_corporation_assets.v1",
@@ -108,7 +106,6 @@ var eveScopes = []string{
 	"esi-characters.read_contacts.v1",
 	"esi-characters.read_corporation_roles.v1",
 	"esi-characters.read_fatigue.v1",
-	"esi-characters.read_freelance_jobs.v1",
 	"esi-characters.read_fw_stats.v1",
 	"esi-characters.read_loyalty.v1",
 	"esi-characters.read_medals.v1",
@@ -125,10 +122,8 @@ var eveScopes = []string{
 	"esi-corporations.read_corporation_membership.v1",
 	"esi-corporations.read_divisions.v1",
 	"esi-corporations.read_facilities.v1",
-	"esi-corporations.read_freelance_jobs.v1",
 	"esi-corporations.read_fw_stats.v1",
 	"esi-corporations.read_medals.v1",
-	"esi-corporations.read_projects.v1",
 	"esi-corporations.read_standings.v1",
 	"esi-corporations.read_starbases.v1",
 	"esi-corporations.read_structures.v1",
@@ -157,8 +152,6 @@ var eveScopes = []string{
 	"esi-search.search_structures.v1",
 	"esi-skills.read_skillqueue.v1",
 	"esi-skills.read_skills.v1",
-	"esi-structures.read_character.v1",
-	"esi-structures.read_corporation.v1",
 	"esi-universe.read_structures.v1",
 	"esi-wallet.read_character_wallet.v1",
 	"esi-wallet.read_corporation_wallets.v1",

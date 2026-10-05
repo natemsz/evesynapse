@@ -165,6 +165,11 @@
   </tbody>
 </table>
 </div>
+{{if gt $b.TotalPages 1}}
+<p><small>{{$b.TotalTypes}} items · page {{$b.Page}} of {{$b.TotalPages}}</small>
+{{if $b.HasPrev}} · <a href="/market/?group={{$b.GroupID}}&region={{$.Market.Region}}&page={{$b.PrevPage}}">← Prev</a>{{end}}
+{{if $b.HasNext}} · <a href="/market/?group={{$b.GroupID}}&region={{$.Market.Region}}&page={{$b.NextPage}}">Next →</a>{{end}}</p>
+{{end}}
 {{end}}
 </section>
 {{end}}

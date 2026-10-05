@@ -647,7 +647,7 @@ func writeLoadReport(t *testing.T, results []loadStageResult, stubCalls int64) {
 	b.WriteString(fmt.Sprintf("Run: %s\n\n", time.Now().UTC().Format("2006-01-02 15:04 UTC")))
 	b.WriteString("## Environment\n\n")
 	b.WriteString(fmt.Sprintf("- Sandbox host: %d CPUs visible to the test process, %s/%s, %s\n", runtime.NumCPU(), runtime.GOOS, runtime.GOARCH, runtime.Version()))
-	b.WriteString("- Database: SQLite (WAL, busy_timeout 5000) via the app's own openDB; session store and handlers are production code paths.\n")
+	b.WriteString("- Database: PostgreSQL 16 (embedded test server on this host) via the app's own openDB; session store and handlers are production code paths.\n")
 	b.WriteString("- ESI: in-process canned stub, no network. Item-page figures exclude the production live book fetch's network wait; stub book is 400 orders.\n")
 	b.WriteString("- Load generator and server share this process, so generator CPU competes with the server: absolute rates are conservative; the latency-vs-concurrency shape is the transferable result.\n")
 	b.WriteString("- Dataset: 12 characters with wallet/skills/assets (120 stacks each)/orders snapshots; 4,000 types x 2 regions of region stats and station stats; 56,000 history rows (7 days x 4,000 types x 2 regions); 600 order-lifecycle rows.\n")

@@ -249,7 +249,7 @@ func TestMigration014Reopen(t *testing.T) {
 	_, conn, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
 	var tables int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'structure_names'`).Scan(&tables); err != nil {
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'structure_names'`).Scan(&tables); err != nil {
 		t.Fatalf("count 014 table: %v", err)
 	}
 	if tables != 1 {

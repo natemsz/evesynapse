@@ -15,13 +15,13 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/pgtest"
 )
 
 // ---------------------------------------------------------------------------
@@ -273,9 +273,9 @@ func TestAllTemplatesParse(t *testing.T) {
 // this build reopens cleanly and the queues work.
 func TestMigration015Reopen(t *testing.T) {
 	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "reopen.db")
+	dsn := pgtest.FreshDSN(t)
 	for i := 0; i < 2; i++ {
-		conn, err := openDB(path)
+		conn, pool, err := openDB(context.Background(), dsn)
 		if err != nil {
 			t.Fatalf("openDB (pass %d): %v", i, err)
 		}
@@ -289,6 +289,7 @@ func TestMigration015Reopen(t *testing.T) {
 		if err := conn.Close(); err != nil {
 			t.Fatalf("close (pass %d): %v", i, err)
 		}
+		pool.Close()
 	}
 }
 

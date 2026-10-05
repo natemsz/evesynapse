@@ -324,23 +324,52 @@ DELETE FROM skill_plan_items WHERE plan_id = $1 AND skill_type_id = $2;
 -- charge choices); reads/writes always scope to the owning user.
 -- ---------------------------------------------------------------------
 -- name: CreateLocalFitting :one
-INSERT INTO local_fittings (user_id, name, ship_type_id, items_json, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, user_id, name, ship_type_id, items_json, created_at, updated_at;
+INSERT INTO local_fittings (user_id, name, ship_type_id, items_json, is_public, is_draft, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, user_id, name, ship_type_id, items_json, is_public, is_draft, created_at, updated_at;
 -- name: ListLocalFittings :many
-SELECT id, user_id, name, ship_type_id, items_json, created_at, updated_at FROM local_fittings
+SELECT id, user_id, name, ship_type_id, items_json, is_public, is_draft, created_at, updated_at FROM local_fittings
 WHERE user_id = $1
 ORDER BY updated_at DESC, id DESC
 LIMIT 100;
 -- name: GetLocalFitting :one
-SELECT id, user_id, name, ship_type_id, items_json, created_at, updated_at FROM local_fittings
+SELECT id, user_id, name, ship_type_id, items_json, is_public, is_draft, created_at, updated_at FROM local_fittings
 WHERE id = $1 AND user_id = $2;
 -- name: UpdateLocalFitting :exec
 UPDATE local_fittings
-SET name = $1, ship_type_id = $2, items_json = $3, updated_at = $4
-WHERE id = $5 AND user_id = $6;
+SET name = $1, ship_type_id = $2, items_json = $3, is_public = $4, is_draft = $5, updated_at = $6
+WHERE id = $7 AND user_id = $8;
 -- name: DeleteLocalFitting :exec
 DELETE FROM local_fittings WHERE id = $1 AND user_id = $2;
+-- name: GetUserDraftFitting :one
+SELECT id, user_id, name, ship_type_id, items_json, is_public, is_draft, created_at, updated_at FROM local_fittings
+WHERE user_id = $1 AND is_draft
+ORDER BY updated_at DESC, id DESC
+LIMIT 1;
+-- name: GetPublicFitting :one
+SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at,
+       COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '') AS author_name
+FROM local_fittings lf
+WHERE lf.id = $1 AND lf.is_public AND NOT lf.is_draft;
+-- name: SearchLocalFittings :many
+SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.is_public, lf.is_draft, lf.created_at, lf.updated_at,
+       COALESCE(tn.name, '') AS ship_name
+FROM local_fittings lf
+LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
+WHERE lf.user_id = sqlc.arg(user_id)
+  AND (sqlc.arg(q)::text = '' OR lf.name ILIKE '%' || sqlc.arg(q)::text || '%' OR tn.name ILIKE '%' || sqlc.arg(q)::text || '%')
+ORDER BY lf.updated_at DESC, lf.id DESC
+LIMIT 20;
+-- name: SearchPublicFittings :many
+SELECT lf.id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at,
+       COALESCE(tn.name, '') AS ship_name,
+       COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '') AS author_name
+FROM local_fittings lf
+LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
+WHERE lf.is_public AND NOT lf.is_draft AND lf.user_id != sqlc.arg(user_id)
+  AND (sqlc.arg(q)::text = '' OR lf.name ILIKE '%' || sqlc.arg(q)::text || '%' OR tn.name ILIKE '%' || sqlc.arg(q)::text || '%')
+ORDER BY lf.updated_at DESC, lf.id DESC
+LIMIT 20;
 
 -- ---------------------------------------------------------------------
 -- Market history + alerts (schema 013): daily aggregates, wants,

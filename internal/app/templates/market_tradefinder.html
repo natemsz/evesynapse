@@ -1,0 +1,67 @@
+{{define "title"}}Tradefinder{{end}}
+{{define "content"}}
+<h1><span class="gt">Tradefinder</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .MarketTradefinder}}
+{{$s := .MarketTradefinder}}
+<p><small>Find items that are cheap to buy in one region and sell for more in another. Prices are the typical (middle) prices from the latest sweep of each region, so one joke order cannot make a route look good.</small></p>
+
+<form method="get" action="/market/tradefinder/">
+  <label><small>Buy in</small>
+    <select name="origin">
+      {{range $s.Regions}}<option value="{{.ID}}"{{if eq .ID $s.OriginID}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </label>
+  <label><small>Sell in</small>
+    <select name="destination">
+      {{range $s.Regions}}<option value="{{.ID}}"{{if eq .ID $s.DestID}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </label>
+  <label><small>At least margin %</small>
+    <input type="number" name="minmargin" min="0" step="any" value="{{$s.MinMargin}}" size="6">
+  </label>
+  <label><small>At least sold per day in {{$s.DestName}}</small>
+    <input type="number" name="minvol" min="0" step="1" value="{{$s.MinVolume}}" size="6">
+  </label>
+  <button class="btn" type="submit">Find routes</button>
+</form>
+
+{{if $s.HasData}}
+<p><small>{{$s.OriginName}} {{$s.OriginAsOf}} · {{$s.DestName}} {{$s.DestAsOf}} · Figures older than 3 days are left out. Showing up to 100 routes, best estimated daily profit first.</small></p>
+
+{{if $s.SameRegion}}
+<p>Pick two different regions — buying and selling in the same region is what the <a href="/market/scanner/">Spread scanner</a> is for.</p>
+{{else if $s.Rows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th>Buy in {{$s.OriginName}} (typical)</th><th>Sell in {{$s.DestName}} (typical)</th><th>Profit per item</th><th>Margin</th><th>Sold per day in {{$s.DestName}}</th><th>Estimated profit per day</th></tr></thead>
+  <tbody>
+  {{range $s.Rows}}
+    <tr>
+      <td><a href="/market/?type={{.TypeID}}&amp;region={{$s.DestID}}">{{.ItemName}}</a>{{if .OriginBest}}<br><small>Cheapest at {{placeLink .OriginStation}} ({{.OriginBest}} ISK)</small>{{end}}{{if .DestBest}}<br><small>Best buyer at {{placeLink .DestStation}} ({{.DestBest}} ISK)</small>{{end}}</td>
+      <td>{{.BuyTypical}} ISK</td>
+      <td>{{.SellTypical}} ISK</td>
+      <td>{{.ProfitItem}} ISK</td>
+      <td>{{.MarginPct}}</td>
+      <td>{{.SoldPerDay}}</td>
+      <td><strong>{{.ProfitDay}} ISK</strong></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>Profit per item is the typical sell price in {{$s.DestName}} minus the typical buy price in {{$s.OriginName}}. Sold per day is the average daily amount that actually traded in {{$s.DestName}} over the last seven recorded days. Estimated profit per day is the profit per item times whichever runs out first: what trades each day in {{$s.DestName}}, the open buy volume in {{$s.OriginName}}, or the open sell volume in {{$s.DestName}}. Before broker fees, sales tax, and hauling.</small></p>
+{{else}}
+<p>No profitable routes between these regions right now. Try a lower minimum margin or fewer sold per day.</p>
+{{end}}
+
+{{else if $s.SameRegion}}
+<p>Pick two different regions — buying and selling in the same region is what the <a href="/market/scanner/">Spread scanner</a> is for.</p>
+{{else}}
+<p>Still gathering prices — check back soon. The tradefinder fills in once the first sweep of each region lands.</p>
+{{end}}
+
+{{end}}
+{{end}}

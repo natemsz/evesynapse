@@ -386,7 +386,7 @@ func marketBrowseGroupRow(row db.SdeMarketGroup) marketBrowseGroup {
 // already stored.
 func (app *Application) recentHistoryRows(ctx context.Context, regionID, typeID int64, limit int) []db.MarketHistory {
 	rows, err := app.queries.ListMarketHistory(ctx, db.ListMarketHistoryParams{
-		RegionID: regionID, TypeID: typeID, Limit: int64(limit),
+		RegionID: regionID, TypeID: typeID, RowLimit: int64(limit),
 	})
 	if err != nil {
 		log.Printf("market: load history for type %d in region %d: %v", typeID, regionID, err)

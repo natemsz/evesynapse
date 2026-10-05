@@ -680,7 +680,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 	cutoff := time.Now().UTC().Add(-365 * 24 * time.Hour).Format(time.RFC3339)
 	if err := app.queries.PruneOldOrderLifecycle(ctx, db.PruneOldOrderLifecycleParams{
 		ClosedAt: cutoff,
-		Limit:    lifecyclePrunePerCycle,
+		RowLimit: lifecyclePrunePerCycle,
 	}); err != nil {
 		log.Printf("worker: order lifecycle: prune: %v", err)
 	}

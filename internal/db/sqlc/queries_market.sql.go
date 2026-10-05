@@ -21,8 +21,8 @@ func (q *Queries) ClearGuidePriceWant(ctx context.Context) error {
 
 const closeOrderLifecycle = `-- name: CloseOrderLifecycle :exec
 UPDATE order_lifecycle
-SET closed_at = ?, close_kind = ?, beaten_now = 0
-WHERE character_id = ? AND order_id = ? AND closed_at = ''
+SET closed_at = $1, close_kind = $2, beaten_now = 0
+WHERE character_id = $3 AND order_id = $4 AND closed_at = ''
 `
 
 type CloseOrderLifecycleParams struct {
@@ -53,7 +53,7 @@ func (q *Queries) DeleteGuidePrices(ctx context.Context) error {
 
 const deleteMarketRegionStatsByRegion = `-- name: DeleteMarketRegionStatsByRegion :exec
 DELETE FROM market_region_stats
-WHERE region_id = ?
+WHERE region_id = $1
 `
 
 // P1 region stats (schema 031): worker-written per-(region,
@@ -68,7 +68,7 @@ func (q *Queries) DeleteMarketRegionStatsByRegion(ctx context.Context, regionID 
 
 const deleteMarketStationStatsByRegion = `-- name: DeleteMarketStationStatsByRegion :exec
 DELETE FROM market_station_stats
-WHERE region_id = ?
+WHERE region_id = $1
 `
 
 // ---------------------------------------------------------------------
@@ -86,7 +86,7 @@ func (q *Queries) DeleteMarketStationStatsByRegion(ctx context.Context, regionID
 
 const deleteMarketSweepOrdersByRegion = `-- name: DeleteMarketSweepOrdersByRegion :exec
 DELETE FROM market_sweep_orders
-WHERE region_id = ?
+WHERE region_id = $1
 `
 
 func (q *Queries) DeleteMarketSweepOrdersByRegion(ctx context.Context, regionID int64) error {
@@ -96,7 +96,7 @@ func (q *Queries) DeleteMarketSweepOrdersByRegion(ctx context.Context, regionID 
 
 const deleteMarketSweepState = `-- name: DeleteMarketSweepState :exec
 DELETE FROM market_sweep_state
-WHERE region_id = ?
+WHERE region_id = $1
 `
 
 func (q *Queries) DeleteMarketSweepState(ctx context.Context, regionID int64) error {
@@ -106,7 +106,7 @@ func (q *Queries) DeleteMarketSweepState(ctx context.Context, regionID int64) er
 
 const deleteOrderHealthEntry = `-- name: DeleteOrderHealthEntry :exec
 DELETE FROM order_health
-WHERE character_id = ? AND order_id = ?
+WHERE character_id = $1 AND order_id = $2
 `
 
 type DeleteOrderHealthEntryParams struct {
@@ -121,7 +121,7 @@ func (q *Queries) DeleteOrderHealthEntry(ctx context.Context, arg DeleteOrderHea
 
 const deleteOrderHealthForCharacter = `-- name: DeleteOrderHealthForCharacter :exec
 DELETE FROM order_health
-WHERE character_id = ?
+WHERE character_id = $1
 `
 
 func (q *Queries) DeleteOrderHealthForCharacter(ctx context.Context, characterID int64) error {
@@ -131,7 +131,7 @@ func (q *Queries) DeleteOrderHealthForCharacter(ctx context.Context, characterID
 
 const deleteWatchlistEntry = `-- name: DeleteWatchlistEntry :exec
 DELETE FROM market_watchlist
-WHERE user_id = ? AND type_id = ? AND region_id = ?
+WHERE user_id = $1 AND type_id = $2 AND region_id = $3
 `
 
 type DeleteWatchlistEntryParams struct {
@@ -148,7 +148,7 @@ func (q *Queries) DeleteWatchlistEntry(ctx context.Context, arg DeleteWatchlistE
 const getAllianceRecord = `-- name: GetAllianceRecord :one
 SELECT alliance_id, payload, state, fetched_at, priority
 FROM alliance_records
-WHERE alliance_id = ?
+WHERE alliance_id = $1
 `
 
 func (q *Queries) GetAllianceRecord(ctx context.Context, allianceID int64) (AllianceRecord, error) {
@@ -167,7 +167,7 @@ func (q *Queries) GetAllianceRecord(ctx context.Context, allianceID int64) (Alli
 const getCorporationRecord = `-- name: GetCorporationRecord :one
 SELECT corporation_id, payload, state, fetched_at, priority
 FROM corporation_records
-WHERE corporation_id = ?
+WHERE corporation_id = $1
 `
 
 // ---------------------------------------------------------------------
@@ -216,7 +216,7 @@ func (q *Queries) GetGuidePricesMeta(ctx context.Context) (GuidePricesMetum, err
 const getMarketFetchState = `-- name: GetMarketFetchState :one
 SELECT kind, state, detail, attempted_at
 FROM market_fetch_state
-WHERE kind = ?
+WHERE kind = $1
 `
 
 func (q *Queries) GetMarketFetchState(ctx context.Context, kind string) (MarketFetchState, error) {
@@ -234,7 +234,7 @@ func (q *Queries) GetMarketFetchState(ctx context.Context, kind string) (MarketF
 const getMarketSweepState = `-- name: GetMarketSweepState :one
 SELECT region_id, next_page, pages_total, started_at, updated_at
 FROM market_sweep_state
-WHERE region_id = ?
+WHERE region_id = $1
 `
 
 // ---------------------------------------------------------------------
@@ -260,9 +260,9 @@ func (q *Queries) GetMarketSweepState(ctx context.Context, regionID int64) (Mark
 }
 
 const getOrderLifecycle = `-- name: GetOrderLifecycle :one
-SELECT character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
 FROM order_lifecycle
-WHERE character_id = ? AND order_id = ?
+WHERE character_id = $1 AND order_id = $2
 `
 
 type GetOrderLifecycleParams struct {
@@ -280,6 +280,7 @@ func (q *Queries) GetOrderLifecycle(ctx context.Context, arg GetOrderLifecyclePa
 	row := q.db.QueryRowContext(ctx, getOrderLifecycle, arg.CharacterID, arg.OrderID)
 	var i OrderLifecycle
 	err := row.Scan(
+		&i.ID,
 		&i.CharacterID,
 		&i.OrderID,
 		&i.TypeID,
@@ -302,7 +303,7 @@ func (q *Queries) GetOrderLifecycle(ctx context.Context, arg GetOrderLifecyclePa
 const getPilotNameWant = `-- name: GetPilotNameWant :one
 SELECT normalized_name, display_name, state, character_id, requested_at, resolved_at, next_try_at, attempts
 FROM pilot_name_wants
-WHERE normalized_name = ?
+WHERE normalized_name = $1
 `
 
 // Pilot name-resolution wants (schema 022): a topbar search for
@@ -329,7 +330,7 @@ func (q *Queries) GetPilotNameWant(ctx context.Context, normalizedName string) (
 const getPilotRecord = `-- name: GetPilotRecord :one
 SELECT character_id, payload, state, fetched_at
 FROM pilot_records
-WHERE character_id = ?
+WHERE character_id = $1
 `
 
 type GetPilotRecordRow struct {
@@ -362,7 +363,7 @@ func (q *Queries) GetPilotRecord(ctx context.Context, characterID int64) (GetPil
 const getPlanetName = `-- name: GetPlanetName :one
 SELECT planet_id, name, state, resolved_at
 FROM planet_names
-WHERE planet_id = ?
+WHERE planet_id = $1
 `
 
 // ---------------------------------------------------------------------
@@ -388,7 +389,7 @@ func (q *Queries) GetPlanetName(ctx context.Context, planetID int64) (PlanetName
 const getStructureContext = `-- name: GetStructureContext :one
 SELECT structure_id, owner_corporation_id, system_id, type_id, updated_at
 FROM structure_context
-WHERE structure_id = ?
+WHERE structure_id = $1
 `
 
 // ---------------------------------------------------------------------
@@ -414,7 +415,7 @@ func (q *Queries) GetStructureContext(ctx context.Context, structureID int64) (S
 const getStructureName = `-- name: GetStructureName :one
 SELECT structure_id, name, state, resolved_at, source
 FROM structure_names
-WHERE structure_id = ?
+WHERE structure_id = $1
 `
 
 // ---------------------------------------------------------------------
@@ -445,7 +446,7 @@ func (q *Queries) GetStructureName(ctx context.Context, structureID int64) (Stru
 const getWatchlistEntry = `-- name: GetWatchlistEntry :one
 SELECT user_id, type_id, region_id, threshold_pct, created_at
 FROM market_watchlist
-WHERE user_id = ? AND type_id = ? AND region_id = ?
+WHERE user_id = $1 AND type_id = $2 AND region_id = $3
 `
 
 type GetWatchlistEntryParams struct {
@@ -469,7 +470,7 @@ func (q *Queries) GetWatchlistEntry(ctx context.Context, arg GetWatchlistEntryPa
 
 const insertMarketSweepOrder = `-- name: InsertMarketSweepOrder :exec
 INSERT INTO market_sweep_orders (region_id, type_id, is_buy_order, price, volume_remain, location_id)
-VALUES (?, ?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5, $6)
 `
 
 type InsertMarketSweepOrderParams struct {
@@ -495,7 +496,7 @@ func (q *Queries) InsertMarketSweepOrder(ctx context.Context, arg InsertMarketSw
 
 const insertMarketSweepState = `-- name: InsertMarketSweepState :exec
 INSERT INTO market_sweep_state (region_id, next_page, pages_total, started_at, updated_at)
-VALUES (?, 1, 0, ?, ?)
+VALUES ($1, 1, 0, $2, $3)
 `
 
 type InsertMarketSweepStateParams struct {
@@ -510,8 +511,9 @@ func (q *Queries) InsertMarketSweepState(ctx context.Context, arg InsertMarketSw
 }
 
 const insertPilotOrbitWant = `-- name: InsertPilotOrbitWant :exec
-INSERT OR IGNORE INTO pilot_records (character_id, priority)
-VALUES (?, 0)
+INSERT INTO pilot_records (character_id, priority)
+VALUES ($1, 0)
+ON CONFLICT DO NOTHING
 `
 
 func (q *Queries) InsertPilotOrbitWant(ctx context.Context, characterID int64) error {
@@ -558,9 +560,9 @@ const listAllianceDrains = `-- name: ListAllianceDrains :many
 SELECT alliance_id
 FROM alliance_records
 WHERE state = 'pending'
-   OR (state = 'ready' AND fetched_at < ?1)
+   OR (state = 'ready' AND fetched_at < $1)
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at
-LIMIT ?2
+LIMIT $2::bigint
 `
 
 type ListAllianceDrainsParams struct {
@@ -592,20 +594,20 @@ func (q *Queries) ListAllianceDrains(ctx context.Context, arg ListAllianceDrains
 }
 
 const listClosedOrderLifecycleByCharacter = `-- name: ListClosedOrderLifecycleByCharacter :many
-SELECT character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
 FROM order_lifecycle
-WHERE character_id = ? AND closed_at != ''
+WHERE character_id = $1 AND closed_at != ''
 ORDER BY closed_at DESC, order_id DESC
-LIMIT ?
+LIMIT $2::bigint
 `
 
 type ListClosedOrderLifecycleByCharacterParams struct {
 	CharacterID int64 `json:"character_id"`
-	Limit       int64 `json:"limit"`
+	RowLimit    int64 `json:"row_limit"`
 }
 
 func (q *Queries) ListClosedOrderLifecycleByCharacter(ctx context.Context, arg ListClosedOrderLifecycleByCharacterParams) ([]OrderLifecycle, error) {
-	rows, err := q.db.QueryContext(ctx, listClosedOrderLifecycleByCharacter, arg.CharacterID, arg.Limit)
+	rows, err := q.db.QueryContext(ctx, listClosedOrderLifecycleByCharacter, arg.CharacterID, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -614,6 +616,7 @@ func (q *Queries) ListClosedOrderLifecycleByCharacter(ctx context.Context, arg L
 	for rows.Next() {
 		var i OrderLifecycle
 		if err := rows.Scan(
+			&i.ID,
 			&i.CharacterID,
 			&i.OrderID,
 			&i.TypeID,
@@ -647,9 +650,9 @@ const listCorporationDrains = `-- name: ListCorporationDrains :many
 SELECT corporation_id
 FROM corporation_records
 WHERE state = 'pending'
-   OR (state = 'ready' AND fetched_at < ?1)
+   OR (state = 'ready' AND fetched_at < $1)
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at
-LIMIT ?2
+LIMIT $2::bigint
 `
 
 type ListCorporationDrainsParams struct {
@@ -684,9 +687,9 @@ const listDuePilotNameWants = `-- name: ListDuePilotNameWants :many
 SELECT normalized_name, display_name, state, character_id, requested_at, resolved_at, next_try_at, attempts
 FROM pilot_name_wants
 WHERE (state = 'pending' OR state = 'error')
-  AND (next_try_at = '' OR next_try_at <= ?1)
+  AND (next_try_at = '' OR next_try_at <= $1)
 ORDER BY requested_at
-LIMIT ?2
+LIMIT $2::bigint
 `
 
 type ListDuePilotNameWantsParams struct {
@@ -755,11 +758,11 @@ func (q *Queries) ListGuidePrices(ctx context.Context) ([]GuidePrice, error) {
 }
 
 const listMarketAvgDailyVolumes = `-- name: ListMarketAvgDailyVolumes :many
-SELECT h.type_id AS type_id, CAST(AVG(h.volume) AS REAL) AS avg_daily_volume
+SELECT h.type_id AS type_id, CAST(AVG(h.volume) AS DOUBLE PRECISION) AS avg_daily_volume
 FROM market_history h
-WHERE h.region_id = ?
+WHERE h.region_id = $1
   AND h.date >= (
-      SELECT DATE(MAX(m.date), '-6 days')
+      SELECT to_char(MAX(m.date)::date - INTERVAL '6 days', 'YYYY-MM-DD')
       FROM market_history m
       WHERE m.region_id = h.region_id AND m.type_id = h.type_id
   )
@@ -805,15 +808,15 @@ func (q *Queries) ListMarketAvgDailyVolumes(ctx context.Context, regionID int64)
 const listMarketHistory = `-- name: ListMarketHistory :many
 SELECT region_id, type_id, date, average, highest, lowest, volume, order_count
 FROM market_history
-WHERE region_id = ? AND type_id = ?
+WHERE region_id = $1 AND type_id = $2
 ORDER BY date DESC
-LIMIT ?
+LIMIT $3::bigint
 `
 
 type ListMarketHistoryParams struct {
 	RegionID int64 `json:"region_id"`
 	TypeID   int64 `json:"type_id"`
-	Limit    int64 `json:"limit"`
+	RowLimit int64 `json:"row_limit"`
 }
 
 // The history window is a row count, not a calendar span: the
@@ -821,7 +824,7 @@ type ListMarketHistoryParams struct {
 // trades, newest first, so a sparse item's stored trades are
 // never hidden by an arbitrary date cutoff.
 func (q *Queries) ListMarketHistory(ctx context.Context, arg ListMarketHistoryParams) ([]MarketHistory, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketHistory, arg.RegionID, arg.TypeID, arg.Limit)
+	rows, err := q.db.QueryContext(ctx, listMarketHistory, arg.RegionID, arg.TypeID, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -855,7 +858,7 @@ func (q *Queries) ListMarketHistory(ctx context.Context, arg ListMarketHistoryPa
 const listMarketHistoryWants = `-- name: ListMarketHistoryWants :many
 SELECT region_id, type_id, last_requested_at
 FROM market_history_wants
-WHERE last_requested_at >= ?
+WHERE last_requested_at >= $1
 ORDER BY region_id, type_id
 `
 
@@ -885,7 +888,7 @@ func (q *Queries) ListMarketHistoryWants(ctx context.Context, lastRequestedAt st
 const listMarketRegionStatsByRegion = `-- name: ListMarketRegionStatsByRegion :many
 SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
 FROM market_region_stats
-WHERE region_id = ?
+WHERE region_id = $1
 ORDER BY type_id
 `
 
@@ -930,7 +933,7 @@ func (q *Queries) ListMarketRegionStatsByRegion(ctx context.Context, regionID in
 const listMarketRegionStatsByType = `-- name: ListMarketRegionStatsByType :many
 SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
 FROM market_region_stats
-WHERE type_id = ?
+WHERE type_id = $1
 ORDER BY region_id
 `
 
@@ -975,7 +978,7 @@ func (q *Queries) ListMarketRegionStatsByType(ctx context.Context, typeID int64)
 const listMarketRegionStatsDaily = `-- name: ListMarketRegionStatsDaily :many
 SELECT region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume
 FROM market_region_stats_daily
-WHERE region_id = ? AND type_id = ?
+WHERE region_id = $1 AND type_id = $2
 ORDER BY day
 `
 
@@ -1024,7 +1027,7 @@ func (q *Queries) ListMarketRegionStatsDaily(ctx context.Context, arg ListMarket
 const listMarketStationStatsByRegion = `-- name: ListMarketStationStatsByRegion :many
 SELECT location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at
 FROM market_station_stats
-WHERE region_id = ?
+WHERE region_id = $1
 ORDER BY location_id, type_id
 `
 
@@ -1064,10 +1067,10 @@ func (q *Queries) ListMarketStationStatsByRegion(ctx context.Context, regionID i
 
 const listMarketSweepStationAggregates = `-- name: ListMarketSweepStationAggregates :many
 SELECT location_id, type_id, is_buy_order,
-       CAST(MIN(price) AS REAL) AS min_price, CAST(MAX(price) AS REAL) AS max_price,
-       COUNT(*) AS order_count, CAST(SUM(volume_remain) AS INTEGER) AS total_volume
+       CAST(MIN(price) AS DOUBLE PRECISION) AS min_price, CAST(MAX(price) AS DOUBLE PRECISION) AS max_price,
+       COUNT(*) AS order_count, CAST(SUM(volume_remain) AS BIGINT) AS total_volume
 FROM market_sweep_orders
-WHERE region_id = ? AND location_id > 0
+WHERE region_id = $1 AND location_id > 0
 GROUP BY location_id, type_id, is_buy_order
 ORDER BY location_id, type_id, is_buy_order
 `
@@ -1116,7 +1119,7 @@ func (q *Queries) ListMarketSweepStationAggregates(ctx context.Context, regionID
 const listMarketSweepTypeIDs = `-- name: ListMarketSweepTypeIDs :many
 SELECT DISTINCT type_id
 FROM market_sweep_orders
-WHERE region_id = ?
+WHERE region_id = $1
 ORDER BY type_id
 `
 
@@ -1146,7 +1149,7 @@ func (q *Queries) ListMarketSweepTypeIDs(ctx context.Context, regionID int64) ([
 const listMarketSweepTypeOrders = `-- name: ListMarketSweepTypeOrders :many
 SELECT is_buy_order, price, volume_remain
 FROM market_sweep_orders
-WHERE region_id = ? AND type_id = ?
+WHERE region_id = $1 AND type_id = $2
 ORDER BY is_buy_order, price
 `
 
@@ -1185,9 +1188,9 @@ func (q *Queries) ListMarketSweepTypeOrders(ctx context.Context, arg ListMarketS
 }
 
 const listOpenOrderLifecycleByCharacter = `-- name: ListOpenOrderLifecycleByCharacter :many
-SELECT character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
 FROM order_lifecycle
-WHERE character_id = ? AND closed_at = ''
+WHERE character_id = $1 AND closed_at = ''
 ORDER BY order_id
 `
 
@@ -1201,6 +1204,7 @@ func (q *Queries) ListOpenOrderLifecycleByCharacter(ctx context.Context, charact
 	for rows.Next() {
 		var i OrderLifecycle
 		if err := rows.Scan(
+			&i.ID,
 			&i.CharacterID,
 			&i.OrderID,
 			&i.TypeID,
@@ -1233,7 +1237,7 @@ func (q *Queries) ListOpenOrderLifecycleByCharacter(ctx context.Context, charact
 const listOrderHealthByCharacter = `-- name: ListOrderHealthByCharacter :many
 SELECT character_id, order_id, type_id, region_id, location_id, my_price, station_best, region_best, status, computed_at
 FROM order_health
-WHERE character_id = ?
+WHERE character_id = $1
 ORDER BY type_id, order_id
 `
 
@@ -1275,7 +1279,7 @@ const listOrderHealthByUser = `-- name: ListOrderHealthByUser :many
 SELECT oh.character_id, oh.order_id, oh.type_id, oh.region_id, oh.location_id, oh.my_price, oh.station_best, oh.region_best, oh.status, oh.computed_at
 FROM order_health oh
 JOIN characters c ON c.character_id = oh.character_id
-WHERE c.user_id = ?
+WHERE c.user_id = $1
 ORDER BY c.name, oh.type_id, oh.order_id
 `
 
@@ -1314,9 +1318,9 @@ func (q *Queries) ListOrderHealthByUser(ctx context.Context, userID int64) ([]Or
 }
 
 const listOrderLifecycleByCharacter = `-- name: ListOrderLifecycleByCharacter :many
-SELECT character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
 FROM order_lifecycle
-WHERE character_id = ?
+WHERE character_id = $1
 ORDER BY first_seen_at DESC, order_id DESC
 `
 
@@ -1330,6 +1334,7 @@ func (q *Queries) ListOrderLifecycleByCharacter(ctx context.Context, characterID
 	for rows.Next() {
 		var i OrderLifecycle
 		if err := rows.Scan(
+			&i.ID,
 			&i.CharacterID,
 			&i.OrderID,
 			&i.TypeID,
@@ -1360,10 +1365,10 @@ func (q *Queries) ListOrderLifecycleByCharacter(ctx context.Context, characterID
 }
 
 const listOrderLifecycleByUser = `-- name: ListOrderLifecycleByUser :many
-SELECT ol.character_id, ol.order_id, ol.type_id, ol.location_id, ol.region_id, ol.is_buy_order, ol.listed_price, ol.volume_total, ol.volume_remain_last, ol.first_seen_at, ol.last_seen_at, ol.closed_at, ol.close_kind, ol.outbid_events, ol.beaten_now
+SELECT ol.id, ol.character_id, ol.order_id, ol.type_id, ol.location_id, ol.region_id, ol.is_buy_order, ol.listed_price, ol.volume_total, ol.volume_remain_last, ol.first_seen_at, ol.last_seen_at, ol.closed_at, ol.close_kind, ol.outbid_events, ol.beaten_now
 FROM order_lifecycle ol
 JOIN characters c ON c.character_id = ol.character_id
-WHERE c.user_id = ?
+WHERE c.user_id = $1
 ORDER BY ol.closed_at DESC, ol.first_seen_at DESC, ol.order_id DESC
 `
 
@@ -1377,6 +1382,7 @@ func (q *Queries) ListOrderLifecycleByUser(ctx context.Context, userID int64) ([
 	for rows.Next() {
 		var i OrderLifecycle
 		if err := rows.Scan(
+			&i.ID,
 			&i.CharacterID,
 			&i.OrderID,
 			&i.TypeID,
@@ -1410,9 +1416,9 @@ const listPilotDrains = `-- name: ListPilotDrains :many
 SELECT character_id
 FROM pilot_records
 WHERE state = 'pending'
-   OR (state = 'ready' AND fetched_at < ?1)
+   OR (state = 'ready' AND fetched_at < $1)
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at
-LIMIT ?2
+LIMIT $2::bigint
 `
 
 type ListPilotDrainsParams struct {
@@ -1475,10 +1481,10 @@ const listPlanetResolutions = `-- name: ListPlanetResolutions :many
 SELECT planet_id
 FROM planet_names
 WHERE state = 'pending'
-   OR (state = 'resolved' AND resolved_at < ?1)
-   OR (state = 'missing' AND resolved_at < ?2)
+   OR (state = 'resolved' AND resolved_at < $1)
+   OR (state = 'missing' AND resolved_at < $2)
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, planet_id
-LIMIT ?3
+LIMIT $3::bigint
 `
 
 type ListPlanetResolutionsParams struct {
@@ -1514,10 +1520,10 @@ const listStructureResolutions = `-- name: ListStructureResolutions :many
 SELECT structure_id
 FROM structure_names
 WHERE state = 'pending'
-   OR (state = 'resolved' AND resolved_at < ?1)
-   OR (state = 'missing' AND resolved_at < ?2)
+   OR (state = 'resolved' AND resolved_at < $1)
+   OR (state = 'missing' AND resolved_at < $2)
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, structure_id
-LIMIT ?3
+LIMIT $3::bigint
 `
 
 type ListStructureResolutionsParams struct {
@@ -1552,7 +1558,7 @@ func (q *Queries) ListStructureResolutions(ctx context.Context, arg ListStructur
 const listWatchlistByUser = `-- name: ListWatchlistByUser :many
 SELECT user_id, type_id, region_id, threshold_pct, created_at
 FROM market_watchlist
-WHERE user_id = ?
+WHERE user_id = $1
 ORDER BY type_id, region_id
 `
 
@@ -1587,7 +1593,7 @@ func (q *Queries) ListWatchlistByUser(ctx context.Context, userID int64) ([]Mark
 
 const noteGuidePriceWant = `-- name: NoteGuidePriceWant :exec
 INSERT INTO guide_price_wants (id, wanted_at)
-VALUES (1, ?)
+VALUES (1, $1)
 ON CONFLICT (id) DO UPDATE SET
     wanted_at = excluded.wanted_at
 `
@@ -1606,27 +1612,27 @@ func (q *Queries) NoteGuidePriceWant(ctx context.Context, wantedAt string) error
 
 const pruneOldOrderLifecycle = `-- name: PruneOldOrderLifecycle :exec
 DELETE FROM order_lifecycle
-WHERE rowid IN (
-    SELECT ol.rowid FROM order_lifecycle AS ol
-    WHERE ol.closed_at != '' AND ol.closed_at < ?
+WHERE id IN (
+    SELECT ol.id FROM order_lifecycle AS ol
+    WHERE ol.closed_at != '' AND ol.closed_at < $1
     ORDER BY ol.closed_at
-    LIMIT ?
+    LIMIT $2::bigint
 )
 `
 
 type PruneOldOrderLifecycleParams struct {
 	ClosedAt string `json:"closed_at"`
-	Limit    int64  `json:"limit"`
+	RowLimit int64  `json:"row_limit"`
 }
 
 func (q *Queries) PruneOldOrderLifecycle(ctx context.Context, arg PruneOldOrderLifecycleParams) error {
-	_, err := q.db.ExecContext(ctx, pruneOldOrderLifecycle, arg.ClosedAt, arg.Limit)
+	_, err := q.db.ExecContext(ctx, pruneOldOrderLifecycle, arg.ClosedAt, arg.RowLimit)
 	return err
 }
 
 const setAllianceRecord = `-- name: SetAllianceRecord :exec
 INSERT INTO alliance_records (alliance_id, payload, state, fetched_at)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (alliance_id) DO UPDATE SET
     payload    = excluded.payload,
     state      = excluded.state,
@@ -1652,7 +1658,7 @@ func (q *Queries) SetAllianceRecord(ctx context.Context, arg SetAllianceRecordPa
 
 const setCorporationRecord = `-- name: SetCorporationRecord :exec
 INSERT INTO corporation_records (corporation_id, payload, state, fetched_at)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (corporation_id) DO UPDATE SET
     payload    = excluded.payload,
     state      = excluded.state,
@@ -1678,8 +1684,8 @@ func (q *Queries) SetCorporationRecord(ctx context.Context, arg SetCorporationRe
 
 const setPilotNameWantError = `-- name: SetPilotNameWantError :exec
 UPDATE pilot_name_wants
-SET state = 'error', attempts = attempts + 1, resolved_at = ?, next_try_at = ?
-WHERE normalized_name = ?
+SET state = 'error', attempts = attempts + 1, resolved_at = $1, next_try_at = $2
+WHERE normalized_name = $3
 `
 
 type SetPilotNameWantErrorParams struct {
@@ -1695,8 +1701,8 @@ func (q *Queries) SetPilotNameWantError(ctx context.Context, arg SetPilotNameWan
 
 const setPilotNameWantMissing = `-- name: SetPilotNameWantMissing :exec
 UPDATE pilot_name_wants
-SET state = 'missing', resolved_at = ?, next_try_at = ''
-WHERE normalized_name = ?
+SET state = 'missing', resolved_at = $1, next_try_at = ''
+WHERE normalized_name = $2
 `
 
 type SetPilotNameWantMissingParams struct {
@@ -1711,8 +1717,8 @@ func (q *Queries) SetPilotNameWantMissing(ctx context.Context, arg SetPilotNameW
 
 const setPilotNameWantReady = `-- name: SetPilotNameWantReady :exec
 UPDATE pilot_name_wants
-SET state = 'ready', character_id = ?, resolved_at = ?, next_try_at = ''
-WHERE normalized_name = ?
+SET state = 'ready', character_id = $1, resolved_at = $2, next_try_at = ''
+WHERE normalized_name = $3
 `
 
 type SetPilotNameWantReadyParams struct {
@@ -1728,7 +1734,7 @@ func (q *Queries) SetPilotNameWantReady(ctx context.Context, arg SetPilotNameWan
 
 const setPilotRecord = `-- name: SetPilotRecord :exec
 INSERT INTO pilot_records (character_id, payload, state, fetched_at)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (character_id) DO UPDATE SET
     payload    = excluded.payload,
     state      = excluded.state,
@@ -1754,7 +1760,7 @@ func (q *Queries) SetPilotRecord(ctx context.Context, arg SetPilotRecordParams) 
 
 const setPlanetName = `-- name: SetPlanetName :exec
 INSERT INTO planet_names (planet_id, name, state, resolved_at)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (planet_id) DO UPDATE SET
     name        = excluded.name,
     state       = excluded.state,
@@ -1780,7 +1786,7 @@ func (q *Queries) SetPlanetName(ctx context.Context, arg SetPlanetNameParams) er
 
 const setStructureContext = `-- name: SetStructureContext :exec
 INSERT INTO structure_context (structure_id, owner_corporation_id, system_id, type_id, updated_at)
-VALUES (?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (structure_id) DO UPDATE SET
     owner_corporation_id = excluded.owner_corporation_id,
     system_id            = excluded.system_id,
@@ -1809,7 +1815,7 @@ func (q *Queries) SetStructureContext(ctx context.Context, arg SetStructureConte
 
 const setStructureName = `-- name: SetStructureName :exec
 INSERT INTO structure_names (structure_id, name, state, resolved_at, source)
-VALUES (?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (structure_id) DO UPDATE SET
     name        = excluded.name,
     state       = excluded.state,
@@ -1838,8 +1844,8 @@ func (q *Queries) SetStructureName(ctx context.Context, arg SetStructureNamePara
 
 const updateMarketSweepState = `-- name: UpdateMarketSweepState :exec
 UPDATE market_sweep_state
-SET next_page = ?, pages_total = ?, updated_at = ?
-WHERE region_id = ?
+SET next_page = $1, pages_total = $2, updated_at = $3
+WHERE region_id = $4
 `
 
 type UpdateMarketSweepStateParams struct {
@@ -1861,8 +1867,8 @@ func (q *Queries) UpdateMarketSweepState(ctx context.Context, arg UpdateMarketSw
 
 const updateOrderLifecycleBeaten = `-- name: UpdateOrderLifecycleBeaten :exec
 UPDATE order_lifecycle
-SET beaten_now = ?, outbid_events = ?
-WHERE character_id = ? AND order_id = ? AND closed_at = ''
+SET beaten_now = $1, outbid_events = $2
+WHERE character_id = $3 AND order_id = $4 AND closed_at = ''
 `
 
 type UpdateOrderLifecycleBeatenParams struct {
@@ -1884,8 +1890,8 @@ func (q *Queries) UpdateOrderLifecycleBeaten(ctx context.Context, arg UpdateOrde
 
 const upsertAllianceWant = `-- name: UpsertAllianceWant :exec
 INSERT INTO alliance_records (alliance_id, priority)
-VALUES (?, 1)
-ON CONFLICT (alliance_id) DO UPDATE SET priority = MAX(priority, 1)
+VALUES ($1, 1)
+ON CONFLICT (alliance_id) DO UPDATE SET priority = GREATEST(alliance_records.priority, 1)
 `
 
 func (q *Queries) UpsertAllianceWant(ctx context.Context, allianceID int64) error {
@@ -1895,8 +1901,8 @@ func (q *Queries) UpsertAllianceWant(ctx context.Context, allianceID int64) erro
 
 const upsertCorporationWant = `-- name: UpsertCorporationWant :exec
 INSERT INTO corporation_records (corporation_id, priority)
-VALUES (?, 1)
-ON CONFLICT (corporation_id) DO UPDATE SET priority = MAX(priority, 1)
+VALUES ($1, 1)
+ON CONFLICT (corporation_id) DO UPDATE SET priority = GREATEST(corporation_records.priority, 1)
 `
 
 func (q *Queries) UpsertCorporationWant(ctx context.Context, corporationID int64) error {
@@ -1906,7 +1912,7 @@ func (q *Queries) UpsertCorporationWant(ctx context.Context, corporationID int64
 
 const upsertGuidePrice = `-- name: UpsertGuidePrice :exec
 INSERT INTO guide_prices (type_id, adjusted_price, average_price)
-VALUES (?, ?, ?)
+VALUES ($1, $2, $3)
 ON CONFLICT (type_id) DO UPDATE SET
     adjusted_price = excluded.adjusted_price,
     average_price  = excluded.average_price
@@ -1925,7 +1931,7 @@ func (q *Queries) UpsertGuidePrice(ctx context.Context, arg UpsertGuidePricePara
 
 const upsertGuidePricesMeta = `-- name: UpsertGuidePricesMeta :exec
 INSERT INTO guide_prices_meta (id, fetched_at, cached_until)
-VALUES (1, ?, ?)
+VALUES (1, $1, $2)
 ON CONFLICT (id) DO UPDATE SET
     fetched_at   = excluded.fetched_at,
     cached_until = excluded.cached_until
@@ -1943,7 +1949,7 @@ func (q *Queries) UpsertGuidePricesMeta(ctx context.Context, arg UpsertGuidePric
 
 const upsertMarketFetchState = `-- name: UpsertMarketFetchState :exec
 INSERT INTO market_fetch_state (kind, state, detail, attempted_at)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (kind) DO UPDATE SET
     state        = excluded.state,
     detail       = excluded.detail,
@@ -1968,8 +1974,14 @@ func (q *Queries) UpsertMarketFetchState(ctx context.Context, arg UpsertMarketFe
 }
 
 const upsertMarketHistory = `-- name: UpsertMarketHistory :exec
-INSERT OR REPLACE INTO market_history (region_id, type_id, date, average, highest, lowest, volume, order_count)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO market_history (region_id, type_id, date, average, highest, lowest, volume, order_count)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT (region_id, type_id, date) DO UPDATE SET
+    average     = excluded.average,
+    highest     = excluded.highest,
+    lowest      = excluded.lowest,
+    volume      = excluded.volume,
+    order_count = excluded.order_count
 `
 
 type UpsertMarketHistoryParams struct {
@@ -2004,7 +2016,7 @@ func (q *Queries) UpsertMarketHistory(ctx context.Context, arg UpsertMarketHisto
 
 const upsertMarketHistoryWant = `-- name: UpsertMarketHistoryWant :exec
 INSERT INTO market_history_wants (region_id, type_id, last_requested_at)
-VALUES (?, ?, ?)
+VALUES ($1, $2, $3)
 ON CONFLICT (region_id, type_id) DO UPDATE SET
     last_requested_at = excluded.last_requested_at
 `
@@ -2022,7 +2034,7 @@ func (q *Queries) UpsertMarketHistoryWant(ctx context.Context, arg UpsertMarketH
 
 const upsertMarketRegionStat = `-- name: UpsertMarketRegionStat :exec
 INSERT INTO market_region_stats (region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, avg_daily_volume, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 ON CONFLICT (region_id, type_id) DO UPDATE SET
     best_sell    = excluded.best_sell,
     typical_sell = excluded.typical_sell,
@@ -2077,7 +2089,7 @@ func (q *Queries) UpsertMarketRegionStat(ctx context.Context, arg UpsertMarketRe
 
 const upsertMarketRegionStatDaily = `-- name: UpsertMarketRegionStatDaily :exec
 INSERT INTO market_region_stats_daily (region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 ON CONFLICT (region_id, type_id, day) DO UPDATE SET
     best_sell    = excluded.best_sell,
     typical_sell = excluded.typical_sell,
@@ -2128,7 +2140,7 @@ func (q *Queries) UpsertMarketRegionStatDaily(ctx context.Context, arg UpsertMar
 
 const upsertMarketStationStat = `-- name: UpsertMarketStationStat :exec
 INSERT INTO market_station_stats (location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (location_id, type_id) DO UPDATE SET
     region_id   = excluded.region_id,
     best_sell   = excluded.best_sell,
@@ -2171,7 +2183,7 @@ func (q *Queries) UpsertMarketStationStat(ctx context.Context, arg UpsertMarketS
 
 const upsertOrderHealth = `-- name: UpsertOrderHealth :exec
 INSERT INTO order_health (character_id, order_id, type_id, region_id, location_id, my_price, station_best, region_best, status, computed_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (character_id, order_id) DO UPDATE SET
     type_id      = excluded.type_id,
     region_id    = excluded.region_id,
@@ -2214,7 +2226,7 @@ func (q *Queries) UpsertOrderHealth(ctx context.Context, arg UpsertOrderHealthPa
 
 const upsertOrderLifecycle = `-- name: UpsertOrderLifecycle :exec
 INSERT INTO order_lifecycle (character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', 0, 0)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, '', '', 0, 0)
 ON CONFLICT (character_id, order_id) DO UPDATE SET
     type_id            = excluded.type_id,
     location_id        = excluded.location_id,
@@ -2258,8 +2270,9 @@ func (q *Queries) UpsertOrderLifecycle(ctx context.Context, arg UpsertOrderLifec
 }
 
 const upsertPilotNameWant = `-- name: UpsertPilotNameWant :exec
-INSERT OR IGNORE INTO pilot_name_wants (normalized_name, display_name, state, requested_at)
-VALUES (?, ?, 'pending', ?)
+INSERT INTO pilot_name_wants (normalized_name, display_name, state, requested_at)
+VALUES ($1, $2, 'pending', $3)
+ON CONFLICT DO NOTHING
 `
 
 type UpsertPilotNameWantParams struct {
@@ -2275,8 +2288,8 @@ func (q *Queries) UpsertPilotNameWant(ctx context.Context, arg UpsertPilotNameWa
 
 const upsertPilotWant = `-- name: UpsertPilotWant :exec
 INSERT INTO pilot_records (character_id, priority)
-VALUES (?, 1)
-ON CONFLICT (character_id) DO UPDATE SET priority = MAX(priority, 1)
+VALUES ($1, 1)
+ON CONFLICT (character_id) DO UPDATE SET priority = GREATEST(pilot_records.priority, 1)
 `
 
 func (q *Queries) UpsertPilotWant(ctx context.Context, characterID int64) error {
@@ -2285,8 +2298,9 @@ func (q *Queries) UpsertPilotWant(ctx context.Context, characterID int64) error 
 }
 
 const upsertPlanetSeen = `-- name: UpsertPlanetSeen :exec
-INSERT OR IGNORE INTO planet_names (planet_id)
-VALUES (?)
+INSERT INTO planet_names (planet_id)
+VALUES ($1)
+ON CONFLICT DO NOTHING
 `
 
 func (q *Queries) UpsertPlanetSeen(ctx context.Context, planetID int64) error {
@@ -2295,8 +2309,9 @@ func (q *Queries) UpsertPlanetSeen(ctx context.Context, planetID int64) error {
 }
 
 const upsertStructureSeen = `-- name: UpsertStructureSeen :exec
-INSERT OR IGNORE INTO structure_names (structure_id)
-VALUES (?)
+INSERT INTO structure_names (structure_id)
+VALUES ($1)
+ON CONFLICT DO NOTHING
 `
 
 func (q *Queries) UpsertStructureSeen(ctx context.Context, structureID int64) error {
@@ -2306,7 +2321,7 @@ func (q *Queries) UpsertStructureSeen(ctx context.Context, structureID int64) er
 
 const upsertWatchlistEntry = `-- name: UpsertWatchlistEntry :exec
 INSERT INTO market_watchlist (user_id, type_id, region_id, threshold_pct, created_at)
-VALUES (?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (user_id, type_id, region_id) DO UPDATE SET
     threshold_pct = excluded.threshold_pct
 `

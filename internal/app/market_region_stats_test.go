@@ -78,18 +78,21 @@ func markRegionFresh(t *testing.T, q *db.Queries, regionID int64) {
 	}
 }
 
-// sweepUntilIdle drives sweepRegionStats until the region's
-// sweep has been stored (or the calls run out).
+// sweepUntilIdle drives sweepRegionStats until no region has a
+// sweep in progress. Sweep progress lives in market_sweep_state
+// now (schema 034), so idleness is a database question, not a
+// memory one.
 func sweepUntilIdle(t *testing.T, app *Application) {
 	t.Helper()
 	for i := 0; i < 10; i++ {
-		if _, limited := app.sweepRegionStats(context.Background(), &fetchBudget{left: 120}); limited {
+		if _, limited := app.sweepRegionStats(context.Background(), &fetchBudget{left: 1000}); limited {
 			t.Fatal("sweep hit the error limit on a healthy stub")
 		}
-		app.regionSweepMu.Lock()
-		idle := app.regionSweep == nil
-		app.regionSweepMu.Unlock()
-		if idle {
+		var open int
+		if err := app.db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM market_sweep_state`).Scan(&open); err != nil {
+			t.Fatalf("count in-progress sweeps: %v", err)
+		}
+		if open == 0 {
 			return
 		}
 	}
@@ -206,14 +209,14 @@ func TestRegionSweepIncrementalPageBudget(t *testing.T) {
 	app, conn, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
 
-	// Aim the sweep at Domain with a 30-page book -- more pages
+	// Aim the sweep at Domain with a 60-page book -- more pages
 	// than one cycle may read.
 	for _, region := range marketRegions {
 		if region.ID != 10000043 {
 			markRegionFresh(t, q, region.ID)
 		}
 	}
-	pages := make([][]esi.MarketOrder, 30)
+	pages := make([][]esi.MarketOrder, 60)
 	for i := range pages {
 		pages[i] = []esi.MarketOrder{
 			{OrderID: int64(1000 + i), TypeID: 34, IsBuyOrder: false, Price: float64(10 + i), VolumeRemain: 1},
@@ -221,7 +224,7 @@ func TestRegionSweepIncrementalPageBudget(t *testing.T) {
 	}
 	transport.books[10000043] = pages
 
-	stored, limited := app.sweepRegionStats(ctx, &fetchBudget{left: 120})
+	stored, limited := app.sweepRegionStats(ctx, &fetchBudget{left: 1000})
 	if limited {
 		t.Fatal("sweep reported the error limit on a healthy stub")
 	}
@@ -233,13 +236,23 @@ func TestRegionSweepIncrementalPageBudget(t *testing.T) {
 		t.Fatalf("count live stats: %v", err)
 	}
 	if live != 0 {
-		t.Fatalf("partial sweep stored %d rows, want 0 (writes land only on completion)", live)
+		t.Fatalf("partial sweep stored %d stats rows, want 0 (writes land only on completion)", live)
 	}
-	app.regionSweepMu.Lock()
-	inProgress := app.regionSweep != nil
-	app.regionSweepMu.Unlock()
-	if !inProgress {
-		t.Fatal("sweep lost its in-progress state between cycles")
+	// Progress lives on disk: the cursor sits at page 51 with
+	// the first 50 pages staged behind it.
+	var nextPage int64
+	if err := conn.QueryRow(`SELECT next_page FROM market_sweep_state WHERE region_id = 10000043`).Scan(&nextPage); err != nil {
+		t.Fatalf("read sweep cursor: %v", err)
+	}
+	if nextPage != 51 {
+		t.Fatalf("sweep cursor at page %d, want 51", nextPage)
+	}
+	var staged int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM market_sweep_orders WHERE region_id = 10000043`).Scan(&staged); err != nil {
+		t.Fatalf("count staged orders: %v", err)
+	}
+	if staged != 50 {
+		t.Fatalf("staged orders after one cycle: %d, want 50 (one per page)", staged)
 	}
 
 	sweepUntilIdle(t, app)
@@ -247,8 +260,22 @@ func TestRegionSweepIncrementalPageBudget(t *testing.T) {
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("stats after full sweep: rows=%d err=%v, want 1", len(rows), err)
 	}
-	if rows[0].SellOrders != 30 || rows[0].TypicalSell != 24.5 {
-		t.Fatalf("30-page book: %d sell orders, typical %v, want 30 / 24.5", rows[0].SellOrders, rows[0].TypicalSell)
+	if rows[0].SellOrders != 60 || rows[0].TypicalSell != 39.5 {
+		t.Fatalf("60-page book: %d sell orders, typical %v, want 60 / 39.5", rows[0].SellOrders, rows[0].TypicalSell)
+	}
+	// Completion cleared the staging and the cursor.
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM market_sweep_orders WHERE region_id = 10000043`).Scan(&staged); err != nil {
+		t.Fatalf("count staged orders after completion: %v", err)
+	}
+	if staged != 0 {
+		t.Fatalf("staged orders after completion: %d, want 0", staged)
+	}
+	var stateRows int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM market_sweep_state WHERE region_id = 10000043`).Scan(&stateRows); err != nil {
+		t.Fatalf("count sweep state after completion: %v", err)
+	}
+	if stateRows != 0 {
+		t.Fatalf("sweep state rows after completion: %d, want 0", stateRows)
 	}
 }
 
@@ -274,6 +301,16 @@ func TestRegionSweepErrorLimitKeepsProgress(t *testing.T) {
 	}
 	if live != 0 {
 		t.Fatalf("error-limited sweep stored %d rows, want 0", live)
+	}
+	// The sweep itself is not lost: its cursor waits on disk at
+	// page 1, so recovery resumes this sweep instead of starting
+	// over.
+	var open int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM market_sweep_state WHERE region_id = 10000002`).Scan(&open); err != nil {
+		t.Fatalf("count sweep state: %v", err)
+	}
+	if open != 1 {
+		t.Fatalf("error-limited sweep left %d sweep state rows, want 1 (the resumable cursor)", open)
 	}
 
 	// ESI recovers: the same sweep finishes and stores.

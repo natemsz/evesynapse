@@ -92,7 +92,7 @@ SELECT payload FROM killmail_details
 ORDER BY fetched_at DESC
 LIMIT sqlc.arg(row_limit)::bigint;
 -- name: ListLiquidCoreTypes :many
-SELECT mh.type_id, SUM(mh.volume * mh.average) AS isk_velocity
+SELECT mh.type_id, SUM(mh.volume * mh.average)::bigint AS isk_velocity
 FROM market_history mh
 WHERE mh.region_id = sqlc.arg(region_id)
   AND mh.date >= (SELECT to_char(MAX(mh2.date)::date - INTERVAL '7 days', 'YYYY-MM-DD') FROM market_history mh2 WHERE mh2.region_id = sqlc.arg(region_id))

@@ -554,3 +554,45 @@ FROM market_sweep_orders
 WHERE region_id = $1 AND location_id > 0
 GROUP BY location_id, type_id, is_buy_order
 ORDER BY location_id, type_id, is_buy_order;
+
+-- ---------------------------------------------------------------------
+-- P5 station leaderboard (schema_pg 002): per-station open-order
+-- counts and open ISK value per side, distilled by the same
+-- whole-region sweeps as the stats above. A completed sweep
+-- replaces the region's leaderboard rows inside the sweep
+-- transaction: delete the region, then upsert the fresh measures
+-- station by station. The aggregates read the staged book like
+-- the station stats do, but grouped only by place: the open
+-- value needs price times remaining volume per order, which the
+-- type-grain aggregates cannot reconstruct. The leaderboard page
+-- reads only these rows. A region argument of 0 means every
+-- region.
+-- ---------------------------------------------------------------------
+-- name: ListMarketSweepStationLeaderboardAggregates :many
+SELECT location_id, is_buy_order,
+       COUNT(*) AS order_count, CAST(SUM(price * volume_remain) AS DOUBLE PRECISION) AS open_value
+FROM market_sweep_orders
+WHERE region_id = $1 AND location_id > 0
+GROUP BY location_id, is_buy_order
+ORDER BY location_id, is_buy_order;
+-- name: DeleteMarketStationLeaderboardByRegion :exec
+DELETE FROM market_station_leaderboard
+WHERE region_id = $1;
+-- name: UpsertMarketStationLeaderboard :exec
+INSERT INTO market_station_leaderboard (region_id, location_id, sell_orders, buy_orders, sell_value, buy_value, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (region_id, location_id) DO UPDATE SET
+    sell_orders = excluded.sell_orders,
+    buy_orders  = excluded.buy_orders,
+    sell_value  = excluded.sell_value,
+    buy_value   = excluded.buy_value,
+    updated_at  = excluded.updated_at;
+-- name: ListMarketStationLeaderboard :many
+SELECT region_id, location_id, sell_orders, buy_orders, sell_value, buy_value, updated_at
+FROM market_station_leaderboard
+WHERE ($1::bigint = 0 OR region_id = $1::bigint)
+ORDER BY region_id, location_id;
+-- name: GetMarketStationLeaderboardStamp :one
+SELECT CAST(COALESCE(MAX(updated_at), '') AS TEXT) AS stamp
+FROM market_station_leaderboard
+WHERE ($1::bigint = 0 OR region_id = $1::bigint);

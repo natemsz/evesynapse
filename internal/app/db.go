@@ -53,6 +53,25 @@ func openDB(ctx context.Context, dsn string) (*sql.DB, *pgxpool.Pool, error) {
 			return nil, nil, err
 		}
 	}
+	// Schema step 002 (station leaderboard) rides the same
+	// guarded path: fresh installs get it right after the
+	// baseline above, existing installs gain it on their next
+	// boot, and a database that already has it is left alone.
+	var leaderboardTables int
+	if err := conn.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'market_station_leaderboard'`,
+	).Scan(&leaderboardTables); err != nil {
+		conn.Close()
+		pool.Close()
+		return nil, nil, err
+	}
+	if leaderboardTables == 0 {
+		if err := applySchema(conn, pgStationLeaderboardSchema); err != nil {
+			conn.Close()
+			pool.Close()
+			return nil, nil, err
+		}
+	}
 	return conn, pool, nil
 }
 

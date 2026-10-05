@@ -38,6 +38,13 @@ var templatesFS embed.FS
 //go:embed schema_pg/001_baseline.sql
 var pgBaselineSchema string
 
+// Schema step 002 (station leaderboard): applied by openDB
+// wherever the table is absent, so fresh installs get it right
+// after the baseline and existing installs on their next boot.
+
+//go:embed schema_pg/002_station_leaderboard.sql
+var pgStationLeaderboardSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -327,6 +334,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/", app.handleMarket)
 		r.Get("/scanner/", app.handleMarketScanner)
 		r.Get("/tradefinder/", app.handleMarketTradefinder)
+		r.Get("/leaderboard/", app.handleMarketLeaderboard)
 		r.Get("/suggest", app.handleMarketSuggest)
 		r.Get("/history-fragment", app.handleMarketHistoryFragment)
 		r.Get("/trader-fragment", app.handleMarketTraderFragment)

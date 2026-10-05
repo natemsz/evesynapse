@@ -62,6 +62,7 @@ type pageData struct {
 	Market            *marketView
 	MarketScanner     *scannerView
 	MarketTradefinder *tradefinderView
+	MarketLeaderboard *leaderboardView
 	Items             *itemsView
 	Skills            *skillsView
 	SkillsChars       []assetCharLink

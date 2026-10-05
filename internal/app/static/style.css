@@ -1345,6 +1345,7 @@ html[data-nav="rail"] .sidebar-actions { margin-left: 0; }
 html[data-nav="rail"] .nav-expand-btn { display: none; }
 html[data-nav="rail"] #nav-hide { display: none; }
 html[data-nav="rail"] .sidenav a.navlink,
+html[data-nav="rail"] .sidebar-account-footer .navlink,
 html[data-nav="rail"] .sidebar .branch > summary {
   justify-content: center;
   gap: 0;
@@ -2600,29 +2601,29 @@ html[data-theme="light"] .fit-tip-stats { color: #b39a7d; }
 }
 
 /* ============================================================
-   v0.3.30: theme toggle button.
-   Small, unobtrusive control that rides next to the sign-out
-   link in the sidebar account area.
+   v0.3.31: theme toggle + sign out footer.
+   Bottom-of-menu icon buttons that stay visible in rail mode.
    ============================================================ */
+.sidebar-account-footer {
+  margin-top: auto;
+  padding-top: 0.5rem;
+  border-top: 1px solid #262626;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.sidebar-account-footer .navlink {
+  width: 100%;
+}
 #theme-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.9rem;
-  height: 1.9rem;
-  margin-top: 0.45rem;
-  margin-left: 0.4rem;
-  padding: 0;
   background: transparent;
-  border: 1px solid #4a2408;
-  border-radius: 50%;
+  border: none;
+  border-radius: 0.4rem;
   color: var(--gold);
   font-size: 1rem;
   line-height: 1;
   cursor: pointer;
+  font-family: inherit;
+  text-align: left;
 }
-#theme-toggle:hover { border-color: var(--accent); color: var(--text-bright); }
-html[data-theme="light"] #theme-toggle { border-color: #d9b98a; }
-@media (prefers-color-scheme: light) {
-  html:not([data-theme]) #theme-toggle { border-color: #d9b98a; }
-}
+#theme-toggle:hover { color: var(--text-bright); background: rgba(255,255,255,0.04); }

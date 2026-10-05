@@ -103,7 +103,10 @@
         </details>
         {{end}}
       </div>
-      {{if .LoggedIn}}<button type="button" id="theme-toggle" class="theme-toggle" title="Toggle dark/light mode" aria-label="Toggle dark/light mode"><span class="theme-icon theme-icon-sun" aria-hidden="true">☀</span><span class="theme-icon theme-icon-moon" aria-hidden="true">🌙</span></button><a class="sidebar-signout" href="/auth/logout">Sign out</a>{{end}}
+      {{if .LoggedIn}}<div class="sidebar-account-footer">
+        <button type="button" id="theme-toggle" class="theme-toggle navlink" title="Toggle dark/light mode" aria-label="Toggle dark/light mode"><span class="nav-icon" aria-hidden="true"><span class="theme-icon theme-icon-sun" aria-hidden="true">☀</span><span class="theme-icon theme-icon-moon" aria-hidden="true">🌙</span></span><span class="nav-label">Theme</span></button>
+        <a class="navlink sidebar-signout" href="/auth/logout"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></g></svg></span><span class="nav-label">Sign out</span></a>
+      </div>{{end}}
     </div>
   </div>
 </aside>

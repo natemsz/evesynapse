@@ -103,7 +103,7 @@ func TestTopbarSearchIncludesOrganizations(t *testing.T) {
 	}
 	var wantCount int
 	if err := conn.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM market_history_wants WHERE region_id = ? AND type_id = 34`,
+		`SELECT COUNT(*) FROM market_history_wants WHERE region_id = $1 AND type_id = 34`,
 		defaultMarketRegion).Scan(&wantCount); err != nil {
 		t.Fatalf("count history wants: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestQuickJumpPaletteMarkupAndScript(t *testing.T) {
 		`<div class="quickjump" id="quickjump" hidden>`,
 		`id="quickjump-q"`,
 		`id="quickjump-results"`,
-		`Powered by EveSynapse v0.3.25.004 🏓`)
+		`Powered by EveSynapse v0.3.26.001 🏓`)
 
 	code, js := getPage(t, app, cookie, "/static/app.js")
 	if code != http.StatusOK {

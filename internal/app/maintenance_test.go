@@ -9,8 +9,10 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/binary"
+	"evesynapse/internal/pgtest"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -56,8 +58,8 @@ func writeTestFile(t *testing.T, path string, data []byte, perm os.FileMode) {
 }
 
 func TestVersionMatchesRelease(t *testing.T) {
-	if got := Version(); got != "v0.3.25.004" {
-		t.Fatalf("Version() = %q, want v0.3.25.004", got)
+	if got := Version(); got != "v0.3.26.001" {
+		t.Fatalf("Version() = %q, want v0.3.26.001", got)
 	}
 }
 
@@ -562,14 +564,16 @@ const testFreshStamp = "2026-10-04T00:00:00Z"
 
 // seedRefreshDB builds a database holding one of everything the
 // refresh cares about: live caches with fresh stamps, and earned
-// data whose survival the test then asserts.
+// data whose survival the test then asserts. Returns the DSN
+// (for building the Config runRefresh takes) and the open handle.
 func seedRefreshDB(t *testing.T) (string, *sql.DB) {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "evesynapse.db")
-	conn, err := openDB(path)
+	dsn := pgtest.FreshDSN(t)
+	conn, pool, err := openDB(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
+	t.Cleanup(func() { pool.Close() })
 	stmts := []string{
 		`INSERT INTO users (id) VALUES (1)`,
 		`INSERT INTO characters (character_id, user_id, name, access_token, refresh_token, cached_until)
@@ -617,7 +621,7 @@ func seedRefreshDB(t *testing.T) (string, *sql.DB) {
 			t.Fatalf("seed %q: %v", stmt, err)
 		}
 	}
-	return path, conn
+	return dsn, conn
 }
 
 func queryString(t *testing.T, conn *sql.DB, query string, args ...any) string {
@@ -630,10 +634,10 @@ func queryString(t *testing.T, conn *sql.DB, query string, args ...any) string {
 }
 
 func TestRefreshExpiresCachesKeepsEarnedData(t *testing.T) {
-	path, conn := seedRefreshDB(t)
+	dsn, conn := seedRefreshDB(t)
 	conn.Close()
 
-	cfg := Config{dbPath: path}
+	cfg := Config{databaseURL: dsn}
 	var out, errOut bytes.Buffer
 	// No pidfile anywhere near the fake executable path: run with
 	// a path that doesn't exist so no live-server check fires.
@@ -644,11 +648,12 @@ func TestRefreshExpiresCachesKeepsEarnedData(t *testing.T) {
 		t.Fatalf("output %q missing the earned-data note", out.String())
 	}
 
-	conn2, err := openDB(path)
+	conn2, pool2, err := openDB(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("reopen db: %v", err)
 	}
 	defer conn2.Close()
+	defer pool2.Close()
 
 	// Every consulted cache rewound to the epoch.
 	if got := queryString(t, conn2, `SELECT cached_until FROM character_snapshots WHERE character_id = 9001`); got != cacheEpoch {
@@ -744,7 +749,7 @@ func TestRefreshExpiresCachesKeepsEarnedData(t *testing.T) {
 }
 
 func TestRefreshRefusesWhileServerRuns(t *testing.T) {
-	path, conn := seedRefreshDB(t)
+	dsn, conn := seedRefreshDB(t)
 	conn.Close()
 
 	sleeper := startSleep(t)
@@ -752,7 +757,7 @@ func TestRefreshRefusesWhileServerRuns(t *testing.T) {
 	writeTestFile(t, pidfile, []byte(strconv.Itoa(sleeper.Process.Pid)+"\n"), 0o644)
 
 	var out, errOut bytes.Buffer
-	if code := runRefresh(Config{dbPath: path}, pidfile, &out, &errOut); code != 1 {
+	if code := runRefresh(Config{databaseURL: dsn}, pidfile, &out, &errOut); code != 1 {
 		t.Fatalf("runRefresh code %d, want refusal (1); stderr %q", code, errOut.String())
 	}
 	if !strings.Contains(errOut.String(), "still running") {
@@ -760,23 +765,26 @@ func TestRefreshRefusesWhileServerRuns(t *testing.T) {
 	}
 
 	// The refusal happened before the database was touched.
-	conn2, err := openDB(path)
+	conn2, pool2, err := openDB(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("reopen db: %v", err)
 	}
 	defer conn2.Close()
+	defer pool2.Close()
 	if got := queryString(t, conn2, `SELECT cached_until FROM character_snapshots WHERE character_id = 9001`); got != testFreshStamp {
 		t.Fatalf("cache stamp = %q after refusal, want untouched fresh stamp", got)
 	}
 }
 
 func TestRefreshMissingDatabase(t *testing.T) {
-	missing := filepath.Join(t.TempDir(), "nope.db")
+	// A DSN naming a database that was never created: the
+	// refresh must refuse and must not create anything.
+	missing := pgtest.DSNFor(t, "evetest_missing")
 	var out, errOut bytes.Buffer
-	if code := runRefresh(Config{dbPath: missing}, "", &out, &errOut); code != 1 {
+	if code := runRefresh(Config{databaseURL: missing}, "", &out, &errOut); code != 1 {
 		t.Fatalf("runRefresh code %d, want 1", code)
 	}
-	if _, err := os.Stat(missing); !os.IsNotExist(err) {
+	if _, _, err := openDB(context.Background(), missing); err == nil {
 		t.Fatal("runRefresh created a database where none existed")
 	}
 }

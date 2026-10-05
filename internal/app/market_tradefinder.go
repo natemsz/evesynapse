@@ -7,8 +7,11 @@ package app
 // (market_station_stats, schema 032) for the best-price hints,
 // and the sweeps' stored 7-day average traded volume at the
 // destination (schema 035) for the sold-per-day figure. It
-// never calls out: rendering is a handful of SQLite reads and
-// all the margin math happens here over stored numbers.
+// never calls out: rendering is a few small bounded reads --
+// the route filtering, margin math, and ranking all happen in
+// one SQL query capped at tradefinderRowCap rows, so a page
+// load costs the same whether the regions hold ten thousand
+// or a hundred thousand stored rows.
 //
 // Formula (deliberate; mirrored in the page copy):
 //
@@ -36,7 +39,6 @@ import (
 	"log"
 	"math"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -80,9 +82,6 @@ type tradefinderRow struct {
 	OriginBest    string // esi.FormatISK, "" when no sell order
 	DestStation   placeRef
 	DestBest      string // esi.FormatISK, "" when no buy order
-
-	// Raw figures behind the formatted strings, kept for the sort.
-	profitRaw float64
 }
 
 // tradefinderView is the /market/tradefinder/ page body.
@@ -184,38 +183,31 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 		})
 	}
 
-	originStats, err := app.queries.ListMarketRegionStatsByRegion(ctx, originID)
+	originStats, err := app.queries.GetMarketRegionStatsStamp(ctx, originID)
 	if err != nil {
-		log.Printf("tradefinder: list region stats for origin %d: %v", originID, err)
+		log.Printf("tradefinder: region stats stamp for origin %d: %v", originID, err)
 		return view
 	}
-	destStats, err := app.queries.ListMarketRegionStatsByRegion(ctx, destID)
+	destStats, err := app.queries.GetMarketRegionStatsStamp(ctx, destID)
 	if err != nil {
-		log.Printf("tradefinder: list region stats for destination %d: %v", destID, err)
+		log.Printf("tradefinder: region stats stamp for destination %d: %v", destID, err)
 		return view
 	}
-	view.OriginHasData = len(originStats) > 0
-	view.DestHasData = len(destStats) > 0
-	if at := latestStatStamp(originStats); at != "" {
-		view.OriginAsOf = "figures last gathered " + at
+	view.OriginHasData = originStats.RowCount > 0
+	view.DestHasData = destStats.RowCount > 0
+	if s, ok := originStats.Stamp.(string); ok {
+		if at, perr := time.Parse(time.RFC3339, s); perr == nil {
+			view.OriginAsOf = "figures last gathered " + at.Format("Jan 2, 3:04 PM")
+		}
 	}
-	if at := latestStatStamp(destStats); at != "" {
-		view.DestAsOf = "figures last gathered " + at
+	if s, ok := destStats.Stamp.(string); ok {
+		if at, perr := time.Parse(time.RFC3339, s); perr == nil {
+			view.DestAsOf = "figures last gathered " + at.Format("Jan 2, 3:04 PM")
+		}
 	}
 	if !view.HasData() || view.SameRegion {
 		return view // still-gathering state, or the same-region empty case
 	}
-
-	destByType := make(map[int64]db.MarketRegionStat, len(destStats))
-	for _, s := range destStats {
-		destByType[s.TypeID] = s
-	}
-
-	// Best-price hints: the cheapest sell station in the origin
-	// and the highest buy station in the destination, per type,
-	// from the station grain the sweeps already store.
-	originCheapest := cheapestSellByType(app.listStationStats(ctx, originID))
-	destBestBuy := bestBuyByType(app.listStationStats(ctx, destID))
 
 	typeNames := make(map[int64]string)
 	itemNameFor := func(typeID int64) string {
@@ -232,163 +224,92 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 		return name
 	}
 
-	now := time.Now().UTC()
-	var rows []tradefinderRow
-	for _, o := range originStats {
-		d, ok := destByType[o.TypeID]
-		if !ok {
-			continue
+	// The route math, margin math, freshness rule, and ranking
+	// all happen in one bounded SQL query (ListTradefinderRoutes);
+	// Go only formats the displayed rows.
+	lowballParam := int64(0)
+	if includeLowball {
+		lowballParam = 1
+	}
+	routes, err := app.queries.ListTradefinderRoutes(ctx, db.ListTradefinderRoutesParams{
+		DestRegion:     destID,
+		OriginRegion:   originID,
+		IncludeLowball: lowballParam,
+		MinMargin:      minMargin,
+		MinVolume:      minVolume,
+		Cutoff:         time.Now().UTC().Add(-tradefinderMaxStatAge).Format(time.RFC3339),
+		RowCap:         int64(tradefinderRowCap),
+	})
+	if err != nil {
+		log.Printf("tradefinder: list routes %d -> %d: %v", originID, destID, err)
+		return view
+	}
+
+	// Best-price hints: the cheapest sell station in the origin
+	// and the highest buy station in the destination, resolved
+	// only for the displayed routes -- never the whole region.
+	originCheapest := make(map[int64]db.ListCheapestSellStationsRow, len(routes))
+	destBestBuy := make(map[int64]db.ListBestBuyStationsRow, len(routes))
+	if len(routes) > 0 {
+		typeIDs := make([]int64, 0, len(routes))
+		for _, r := range routes {
+			typeIDs = append(typeIDs, r.TypeID)
 		}
-		if !statFresh(o.UpdatedAt, now) || !statFresh(d.UpdatedAt, now) {
-			continue // figures older than 3 days on either side: not a route
+		if hints, herr := app.queries.ListCheapestSellStations(ctx, db.ListCheapestSellStationsParams{RegionID: originID, TypeIds: typeIDs}); herr != nil {
+			log.Printf("tradefinder: cheapest-sell hints for region %d: %v", originID, herr)
+		} else {
+			for _, h := range hints {
+				originCheapest[h.TypeID] = h
+			}
 		}
-		if o.TypicalBuy <= 0 || d.TypicalSell <= 0 {
-			continue
+		if hints, herr := app.queries.ListBestBuyStations(ctx, db.ListBestBuyStationsParams{RegionID: destID, TypeIds: typeIDs}); herr != nil {
+			log.Printf("tradefinder: best-buy hints for region %d: %v", destID, herr)
+		} else {
+			for _, h := range hints {
+				destBestBuy[h.TypeID] = h
+			}
 		}
-		if !includeLowball && lowballRoute(o) {
-			continue // degenerate buy book; only lists when asked for
-		}
-		margin := d.TypicalSell - o.TypicalBuy
-		marginPct := margin / o.TypicalBuy * 100
-		if marginPct < minMargin {
-			continue
-		}
+	}
+
+	stationMemo := make(map[int64]placeRef)
+	for _, r := range routes {
+		margin := r.DestTypicalSell - r.OriginTypicalBuy
+		marginPct := margin / r.OriginTypicalBuy * 100
 		// Sold per day at the destination: the sweep's stored
 		// 7-day average on the destination's region row (schema
 		// 035) -- no per-type history reads at render time.
-		vol := d.AvgDailyVolume
-		if vol < float64(minVolume) {
-			continue
-		}
+		vol := r.DestDailyVolume
 		// The movable size is whichever runs out first: what
 		// actually trades at the destination each day, the open
 		// buy volume where the buying happens, or the open sell
 		// volume where the selling happens.
 		size := vol
-		if float64(o.BuyVolume) < size {
-			size = float64(o.BuyVolume)
+		if float64(r.OriginBuyVolume) < size {
+			size = float64(r.OriginBuyVolume)
 		}
-		if float64(d.SellVolume) < size {
-			size = float64(d.SellVolume)
-		}
-		if size <= 0 {
-			continue // any of the three at zero: this row cannot move
+		if float64(r.DestSellVolume) < size {
+			size = float64(r.DestSellVolume)
 		}
 		profit := margin * size
-		if profit <= 0 {
-			continue
-		}
 		row := tradefinderRow{
-			TypeID:      o.TypeID,
-			ItemName:    itemNameFor(o.TypeID),
-			BuyTypical:  esi.FormatISK(o.TypicalBuy),
-			SellTypical: esi.FormatISK(d.TypicalSell),
+			TypeID:      r.TypeID,
+			ItemName:    itemNameFor(r.TypeID),
+			BuyTypical:  esi.FormatISK(r.OriginTypicalBuy),
+			SellTypical: esi.FormatISK(r.DestTypicalSell),
 			ProfitItem:  esi.FormatISK(margin),
 			MarginPct:   fmt.Sprintf("%.1f%%", marginPct),
 			SoldPerDay:  esi.FormatInt(int64(math.Round(vol))),
 			ProfitDay:   esi.FormatISK(profit),
-			profitRaw:   profit,
 		}
-		if hint, ok := originCheapest[o.TypeID]; ok {
-			row.OriginStation = app.scannerStationRef(ctx, hint.LocationID)
+		if hint, ok := originCheapest[r.TypeID]; ok {
+			row.OriginStation = app.scannerStationRef(ctx, stationMemo, hint.LocationID)
 			row.OriginBest = esi.FormatISK(hint.BestSell)
 		}
-		if hint, ok := destBestBuy[o.TypeID]; ok {
-			row.DestStation = app.scannerStationRef(ctx, hint.LocationID)
+		if hint, ok := destBestBuy[r.TypeID]; ok {
+			row.DestStation = app.scannerStationRef(ctx, stationMemo, hint.LocationID)
 			row.DestBest = esi.FormatISK(hint.BestBuy)
 		}
-		rows = append(rows, row)
+		view.Rows = append(view.Rows, row)
 	}
-	sort.Slice(rows, func(i, j int) bool {
-		if rows[i].profitRaw != rows[j].profitRaw {
-			return rows[i].profitRaw > rows[j].profitRaw
-		}
-		return rows[i].TypeID < rows[j].TypeID
-	})
-	if len(rows) > tradefinderRowCap {
-		rows = rows[:tradefinderRowCap]
-	}
-	view.Rows = rows
 	return view
-}
-
-// lowballRoute reports whether a route's origin buy book is
-// degenerate: the typical buy sits below a tenth of the typical
-// sell, the signature of a buy side made of lowball orders
-// posted to catch a mistyped sell. The route is real (a viewer
-// may want to sit a slightly higher order on top of that book)
-// but it is not a trade route, so it only lists when lowball
-// routes are included.
-func lowballRoute(o db.MarketRegionStat) bool {
-	return o.TypicalBuy > 0 && o.TypicalSell > 0 && o.TypicalBuy*10 < o.TypicalSell
-}
-
-// statFresh reports whether an RFC3339 stats stamp is inside the
-// tradefinder's three-day freshness window. An unparseable stamp
-// is not fresh: unknown-age figures never price a route.
-func statFresh(rfc string, now time.Time) bool {
-	at, err := time.Parse(time.RFC3339, rfc)
-	if err != nil {
-		return false
-	}
-	return now.Sub(at) <= tradefinderMaxStatAge
-}
-
-// latestStatStamp renders the freshest stamp in a region's stats
-// as "Oct 4, 3:04 PM" for the page's plain-language freshness
-// lines, or "" when no stamp parses.
-func latestStatStamp(stats []db.MarketRegionStat) string {
-	latest := ""
-	for _, s := range stats {
-		if s.UpdatedAt > latest {
-			latest = s.UpdatedAt
-		}
-	}
-	at, err := time.Parse(time.RFC3339, latest)
-	if err != nil {
-		return ""
-	}
-	return at.Format("Jan 2, 3:04 PM")
-}
-
-// listStationStats reads one region's station-grain rows, logging
-// and returning nil on error (hints are decoration; a failed read
-// costs the hints, never the routes).
-func (app *Application) listStationStats(ctx context.Context, regionID int64) []db.MarketStationStat {
-	rows, err := app.queries.ListMarketStationStatsByRegion(ctx, regionID)
-	if err != nil {
-		log.Printf("tradefinder: list station stats for region %d: %v", regionID, err)
-		return nil
-	}
-	return rows
-}
-
-// cheapestSellByType picks, per type, the station row holding the
-// lowest sell price in a region (the "cheapest at" hint).
-func cheapestSellByType(stats []db.MarketStationStat) map[int64]db.MarketStationStat {
-	out := make(map[int64]db.MarketStationStat)
-	for _, s := range stats {
-		if s.BestSell <= 0 {
-			continue
-		}
-		if cur, ok := out[s.TypeID]; !ok || s.BestSell < cur.BestSell {
-			out[s.TypeID] = s
-		}
-	}
-	return out
-}
-
-// bestBuyByType picks, per type, the station row holding the
-// highest buy price in a region (the "best buyer at" hint).
-func bestBuyByType(stats []db.MarketStationStat) map[int64]db.MarketStationStat {
-	out := make(map[int64]db.MarketStationStat)
-	for _, s := range stats {
-		if s.BestBuy <= 0 {
-			continue
-		}
-		if cur, ok := out[s.TypeID]; !ok || s.BestBuy > cur.BestBuy {
-			out[s.TypeID] = s
-		}
-	}
-	return out
 }

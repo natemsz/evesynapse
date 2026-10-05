@@ -5,9 +5,11 @@ package app
 // book statistics (market_station_stats, schema 032, filled by
 // the same whole-region sweeps as the P1 region stats) plus the
 // sweeps' stored 7-day average traded volume per type (schema
-// 035) -- and never calls out. Rendering is a couple of SQLite
-// reads; all the spread and profit math happens here over stored
-// numbers.
+// 035) -- and never calls out. Rendering is a couple of tiny
+// bounded reads: the filter math, profit estimate, and ranking
+// all happen in one SQL query capped at scannerRowCap rows, so
+// a page load costs the same whether the region holds ten
+// thousand or a hundred thousand stored rows.
 
 import (
 	"context"
@@ -15,11 +17,11 @@ import (
 	"log"
 	"math"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 )
 
@@ -42,10 +44,6 @@ type scannerRow struct {
 	SpreadPct   string // "12.3%"
 	DailyVolume string // esi.FormatInt, sold per day in the region
 	DailyProfit string // esi.FormatISK, estimated daily profit
-
-	// Raw figures behind the formatted strings, kept for the
-	// sort (never rendered directly).
-	profitRaw float64
 }
 
 // scannerView is the /market/scanner/ page body.
@@ -88,7 +86,9 @@ func (app *Application) handleMarketScanner(w http.ResponseWriter, r *http.Reque
 // actually trades, what sellers hold, and what buyers want,
 // whichever is smallest. Rows need a real buy above zero, a
 // sell above the buy, enough daily trades, and a wide-enough
-// spread.
+// spread. The filtering, profit math, and ranking all happen
+// in one bounded SQL query (ListScannerOpportunities); Go
+// only formats the displayed rows.
 func (app *Application) buildScannerView(ctx context.Context, q map[string][]string) *scannerView {
 	regionID := defaultMarketRegion
 	if raw := firstQuery(q, "region"); raw != "" {
@@ -126,38 +126,22 @@ func (app *Application) buildScannerView(ctx context.Context, q map[string][]str
 		})
 	}
 
-	stats, err := app.queries.ListMarketStationStatsByRegion(ctx, regionID)
+	// The freshest station-stat write stamps the page: how
+	// current the prices a reader is judging are. No rows at
+	// all means the sweep hasn't covered this region yet.
+	stampRow, err := app.queries.GetMarketStationStatsStamp(ctx, regionID)
 	if err != nil {
-		log.Printf("scanner: list station stats for region %d: %v", regionID, err)
+		log.Printf("scanner: station stats stamp for region %d: %v", regionID, err)
 		return view
 	}
-	if len(stats) == 0 {
+	if stampRow.RowCount == 0 {
 		return view // no sweep yet: still-gathering state
 	}
 	view.HasData = true
-
-	// The freshest row stamps the page: how current the prices
-	// a reader is judging are.
-	latest := ""
-	for _, s := range stats {
-		if s.UpdatedAt > latest {
-			latest = s.UpdatedAt
-		}
-	}
-	view.Age = statsAgeText(latest)
-	if at, perr := time.Parse(time.RFC3339, latest); perr == nil {
-		view.AsOf = "Prices as of " + at.Format("Jan 2, 3:04 PM")
-	}
-
-	// Daily traded volume per type: the sweep's stored 7-day
-	// average from market_region_stats (schema 035), one read
-	// for the whole region -- not a history query per type.
-	dailyVolume := make(map[int64]float64)
-	if regionRows, rerr := app.queries.ListMarketRegionStatsByRegion(ctx, regionID); rerr != nil {
-		log.Printf("scanner: list region stats for region %d: %v", regionID, rerr)
-	} else {
-		for _, s := range regionRows {
-			dailyVolume[s.TypeID] = s.AvgDailyVolume
+	if latest, ok := stampRow.Stamp.(string); ok && latest != "" {
+		view.Age = statsAgeText(latest)
+		if at, perr := time.Parse(time.RFC3339, latest); perr == nil {
+			view.AsOf = "Prices as of " + at.Format("Jan 2, 3:04 PM")
 		}
 	}
 
@@ -178,19 +162,20 @@ func (app *Application) buildScannerView(ctx context.Context, q map[string][]str
 		return name
 	}
 
-	var rows []scannerRow
-	for _, s := range stats {
-		if s.BestBuy <= 0 || s.BestSell <= s.BestBuy {
-			continue
-		}
+	opp, err := app.queries.ListScannerOpportunities(ctx, db.ListScannerOpportunitiesParams{
+		RegionID:  regionID,
+		MinSpread: minSpread,
+		MinVolume: minVolume,
+		RowCap:    int64(scannerRowCap),
+	})
+	if err != nil {
+		log.Printf("scanner: list opportunities for region %d: %v", regionID, err)
+		return view
+	}
+	stationMemo := make(map[int64]placeRef)
+	for _, s := range opp {
 		spreadPct := (s.BestSell - s.BestBuy) / s.BestBuy * 100
-		if spreadPct < minSpread {
-			continue
-		}
-		vol := dailyVolume[s.TypeID]
-		if vol < float64(minVolume) {
-			continue
-		}
+		vol := s.DailyVolume
 		// The tradeable size is whichever runs out first: what
 		// actually trades each day, what sellers hold here, or
 		// what buyers want here.
@@ -201,38 +186,18 @@ func (app *Application) buildScannerView(ctx context.Context, q map[string][]str
 		if float64(s.BuyVolume) < size {
 			size = float64(s.BuyVolume)
 		}
-		if size <= 0 {
-			continue
-		}
 		profit := (s.BestSell - s.BestBuy) * size
-		if profit <= 0 {
-			continue
-		}
-		rows = append(rows, scannerRow{
+		view.Rows = append(view.Rows, scannerRow{
 			TypeID:      s.TypeID,
 			ItemName:    itemNameFor(s.TypeID),
-			Station:     app.scannerStationRef(ctx, s.LocationID),
+			Station:     app.scannerStationRef(ctx, stationMemo, s.LocationID),
 			BestBuy:     esi.FormatISK(s.BestBuy),
 			BestSell:    esi.FormatISK(s.BestSell),
 			SpreadPct:   fmt.Sprintf("%.1f%%", spreadPct),
 			DailyVolume: esi.FormatInt(int64(math.Round(vol))),
 			DailyProfit: esi.FormatISK(profit),
-			profitRaw:   profit,
 		})
 	}
-	sort.Slice(rows, func(i, j int) bool {
-		if rows[i].profitRaw != rows[j].profitRaw {
-			return rows[i].profitRaw > rows[j].profitRaw
-		}
-		if rows[i].TypeID != rows[j].TypeID {
-			return rows[i].TypeID < rows[j].TypeID
-		}
-		return rows[i].Station.Name < rows[j].Station.Name
-	})
-	if len(rows) > scannerRowCap {
-		rows = rows[:scannerRowCap]
-	}
-	view.Rows = rows
 	return view
 }
 
@@ -249,8 +214,19 @@ func firstQuery(q map[string][]string, key string) string {
 // knows links to the station page, a player structure with a
 // resolved name links to the structure page, and a structure
 // nobody has named yet reads "Player structure" as plain text
-// -- never a bare number. Cache-only.
-func (app *Application) scannerStationRef(ctx context.Context, locationID int64) placeRef {
+// -- never a bare number. Cache-only. The per-render memo keeps
+// row-building loops (scanner, tradefinder, leaderboard) to one
+// resolution per location per render.
+func (app *Application) scannerStationRef(ctx context.Context, memo map[int64]placeRef, locationID int64) placeRef {
+	if ref, ok := memo[locationID]; ok {
+		return ref
+	}
+	ref := app.resolveScannerStationRef(ctx, locationID)
+	memo[locationID] = ref
+	return ref
+}
+
+func (app *Application) resolveScannerStationRef(ctx context.Context, locationID int64) placeRef {
 	if locationID <= 0 {
 		return placeRef{Name: "Player structure"}
 	}

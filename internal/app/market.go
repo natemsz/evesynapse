@@ -239,7 +239,21 @@ type marketBrowseView struct {
 	Breadcrumbs []marketBrowseCrumb
 	Groups      []marketBrowseGroup
 	Types       []marketBrowseType
+	// Pagination for leaf-group type lists: big groups page
+	// like the items-group page instead of pulling thousands
+	// of rows per load.
+	GroupID    int64
+	Page       int
+	TotalPages int
+	TotalTypes int64
+	HasPrev    bool
+	HasNext    bool
+	PrevPage   int
+	NextPage   int
 }
+
+// marketBrowseTypesPerPage paginates a leaf group's type list.
+const marketBrowseTypesPerPage = 100
 
 // handleMarket renders the Market page: a name search (local
 // type-name cache plus exact ESI resolution) and, with ?type=, the
@@ -291,7 +305,8 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 	// play. Pure local SDE reads either way.
 	if view.Item == nil {
 		groupID, _ := strconv.ParseInt(q.Get("group"), 10, 64)
-		view.Browse = app.buildMarketBrowse(ctx, groupID)
+		browsePage, _ := strconv.Atoi(q.Get("page"))
+		view.Browse = app.buildMarketBrowse(ctx, groupID, browsePage)
 	}
 
 	if userID > 0 {
@@ -309,8 +324,11 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 // filtered to the marketable floor (published = 1 AND
 // market_group_id > 0) by the query. Cache-only: local SDE reads,
 // never the network.
-func (app *Application) buildMarketBrowse(ctx context.Context, groupID int64) *marketBrowseView {
-	view := &marketBrowseView{}
+func (app *Application) buildMarketBrowse(ctx context.Context, groupID int64, page int) *marketBrowseView {
+	view := &marketBrowseView{GroupID: groupID, Page: page}
+	if view.Page < 1 {
+		view.Page = 1
+	}
 	current, err := app.queries.GetSDEMarketGroup(ctx, groupID)
 	if groupID <= 0 || err != nil {
 		rows, err := app.queries.ListSDEMarketGroupsByParent(ctx, 0)
@@ -355,7 +373,28 @@ func (app *Application) buildMarketBrowse(ctx context.Context, groupID int64) *m
 		}
 	}
 
-	types, err := app.queries.ListSDETypesInMarketGroup(ctx, groupID)
+	total, err := app.queries.CountSDETypesInMarketGroup(ctx, groupID)
+	if err != nil {
+		log.Printf("market: count types of market group %d: %v", groupID, err)
+	} else {
+		view.TotalTypes = total
+		view.TotalPages = int((total + marketBrowseTypesPerPage - 1) / marketBrowseTypesPerPage)
+		if view.TotalPages < 1 {
+			view.TotalPages = 1
+		}
+		if view.Page > view.TotalPages {
+			view.Page = view.TotalPages
+		}
+		view.HasPrev = view.Page > 1
+		view.HasNext = view.Page < view.TotalPages
+		view.PrevPage = view.Page - 1
+		view.NextPage = view.Page + 1
+	}
+	types, err := app.queries.ListSDETypesInMarketGroupPaged(ctx, db.ListSDETypesInMarketGroupPagedParams{
+		MarketGroupID: groupID,
+		RowLimit:      int64(marketBrowseTypesPerPage),
+		RowOffset:     int64((view.Page - 1) * marketBrowseTypesPerPage),
+	})
 	if err != nil {
 		log.Printf("market: list types of market group %d: %v", groupID, err)
 	} else {

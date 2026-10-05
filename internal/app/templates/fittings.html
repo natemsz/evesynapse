@@ -140,7 +140,7 @@
   <div class="fit-vsep" style="left:{{printf "%.1f" .X}}%;top:{{printf "%.1f" .Y}}%;transform:translate(-50%,-50%) rotate({{printf "%.0f" .Rot}}deg)" aria-hidden="true"></div>
   {{end}}
   {{range .Visual.Slots}}
-  <button type="button" class="fit-vslot{{if .Filled}} filled{{end}}" style="left:{{printf "%.1f" .X}}%;top:{{printf "%.1f" .Y}}%"{{if .Filled}} data-fit-vslot="{{.TypeID}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}}" data-tip-meta="{{.Meta}}" data-tip-cpu="{{.CPU}}" data-tip-pg="{{.PG}}" data-tip-stat="{{.Stat}}"{{if .ChargeName}} data-tip-charge="Loaded: {{.ChargeName}}"{{end}}{{else}}data-fit-add="{{.GroupKey}}" title="Add {{.GroupLabel}}"{{end}}>
+  <button type="button" class="fit-vslot{{if .Filled}} filled{{end}}{{if .State}} st-{{.State}}{{end}}" style="left:{{printf "%.1f" .X}}%;top:{{printf "%.1f" .Y}}%"{{if .Filled}} data-fit-vslot="{{.TypeID}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" data-tip-key="{{.TipKey}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}}" data-tip-meta="{{.Meta}}" data-tip-cpu="{{.CPU}}" data-tip-pg="{{.PG}}" data-tip-stat="{{.Stat}}"{{if .State}} data-tip-state="{{.State}}"{{end}}{{if .StatesCSV}} data-tip-states="{{.StatesCSV}}"{{end}}{{if .ChargeName}} data-tip-charge="Loaded: {{.ChargeName}}"{{end}}{{else}}data-fit-add="{{.GroupKey}}" title="Add {{.GroupLabel}}"{{end}}>
     {{if .Filled}}<img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{if .ChargeID}}<span class="fit-vammo" data-fit-ammo="{{.TypeID}}" title="Loaded: {{.ChargeName}} — change ammunition"><img src="https://images.evetech.net/types/{{.ChargeID}}/icon?size=32" alt="{{.ChargeName}}" draggable="false"></span>{{end}}{{else}}<span aria-hidden="true">+</span>{{end}}
   </button>
   {{end}}
@@ -154,7 +154,7 @@
       <h4>{{.Label}}{{if .HasMax}} <small class="{{if .Over}}fit-over{{end}}">{{.Used}}/{{.Max}}{{if .Over}} — doesn't fit{{end}}</small>{{end}}</h4>
       <div class="fit-chips">
         {{range .Chips}}
-        <span class="fit-chip" data-fit-rowtype="{{.TypeID}}">
+        <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" data-fit-rowtype="{{.TypeID}}">
           <button type="button" class="fit-chip-btn" data-fit-dec="{{.TypeID}}" title="Remove one">−</button>
           <button type="button" class="fit-chip-name" data-fit-dec="{{.TypeID}}" title="Remove one">{{.Name}}</button>
           {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}

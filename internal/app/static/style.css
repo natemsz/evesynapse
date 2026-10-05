@@ -2018,6 +2018,24 @@ body.quickjump-open { overflow: hidden; }
 .fit-vslot.filled { border-style: solid; border-color: #6b5a43; }
 .fit-vslot.filled:hover { border-color: var(--accent); }
 .fit-vslot.filled img { width: 84%; height: 84%; border-radius: 50%; pointer-events: none; }
+/* Module states: in-game language. Offline modules go dark and
+   desaturated; online-but-inactive dims slightly; overheated
+   carries an ember glow (never green). */
+.fit-vslot.st-offline { opacity: 0.55; }
+.fit-vslot.st-offline img { filter: grayscale(1) brightness(0.55); }
+.fit-vslot.st-online img { filter: brightness(0.78); }
+.fit-vslot.st-overheated { border-color: #ff6a1a; }
+.fit-vslot.st-overheated img { filter: saturate(1.25) brightness(1.05); }
+.fit-vslot.st-overheated::after {
+  content: ""; position: absolute; inset: -4px; border-radius: 50%;
+  box-shadow: 0 0 12px rgba(255, 106, 26, 0.75), inset 0 0 8px rgba(255, 106, 26, 0.35);
+  pointer-events: none;
+}
+/* Chip state visuals echo the slot ring. */
+.fit-chip.st-offline { opacity: 0.55; }
+.fit-chip.st-offline .fit-chip-name { filter: grayscale(1); }
+.fit-chip.st-online { opacity: 0.85; }
+.fit-chip.st-overheated { border-color: #ff6a1a; box-shadow: 0 0 8px rgba(255, 106, 26, 0.45); }
 /* Loaded-charge badge: small icon tucked into the slot's corner.
    Tap it to jump to the weapon's ammunition select. */
 .fit-vslot .fit-vammo {
@@ -2088,6 +2106,19 @@ select.flash { animation: fit-flash 0.7s ease-out; }
   padding: 0.1rem 0.3rem;
 }
 .fit-tip-x:hover { color: var(--text); }
+/* Tooltip module-state row: only the states this module can
+   take, current one highlighted in ember. */
+.fit-tip-states { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.4rem; }
+.fit-tip-state {
+  background: #1c1c1c; border: 1px solid #3a3a3a; border-radius: 3px;
+  color: var(--text); font: inherit; font-size: 0.8rem; line-height: 1;
+  padding: 0.45rem 0.6rem; min-height: 2rem; cursor: pointer;
+}
+.fit-tip-state:hover { border-color: var(--accent); }
+.fit-tip-state.on {
+  border-color: #ff6a1a; color: #ffd9a8;
+  box-shadow: 0 0 8px rgba(255, 106, 26, 0.35);
+}
 .fit-picker {
   margin-top: 0.8rem;
   border: 1px solid #2c2c2c;

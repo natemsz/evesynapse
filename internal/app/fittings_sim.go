@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -72,10 +73,12 @@ type fitDocItem struct {
 // fitDoc is one fitting: the editor's working state and the
 // stored shape of a local fitting (local_fittings.items_json).
 type fitDoc struct {
-	Name       string          `json:"name"`
-	ShipTypeID int64           `json:"shipTypeId"`
-	Items      []fitDocItem    `json:"items"`
-	Charges    map[int64]int64 `json:"charges"` // weapon type -> loaded charge type
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Tags        []string        `json:"tags,omitempty"`
+	ShipTypeID  int64           `json:"shipTypeId"`
+	Items       []fitDocItem    `json:"items"`
+	Charges     map[int64]int64 `json:"charges"` // weapon type -> loaded charge type
 }
 
 // sanitizeFitDoc normalizes a fit document arriving from the
@@ -185,15 +188,37 @@ type fitVisualSlot struct {
 	GroupKey   string
 	GroupLabel string
 	Filled     bool
+	Index      int     // position within the family's slot row
 	X, Y       float64 // center position, percent of the visual box
+	CPU        string  // per-module quick-look for the tooltip ("15 tf")
+	PG         string  // ("10 MW")
+	Meta       string  // ("Tech II")
+	Stat       string  // headline effective stat ("Strength 78%")
 }
 
 // fitVisualView is the ship render with module slots arranged
 // around it, in-game style.
 type fitVisualView struct {
-	ShipID   int64
-	ShipName string
-	Slots    []fitVisualSlot
+	ShipID     int64
+	ShipName   string
+	Slots      []fitVisualSlot
+	Separators []fitVisualSep   // ember divider ticks between slot groups
+	Labels     []fitVisualLabel // in-ring group captions (HIGH / MID / ...)
+}
+
+// fitVisualSep is one ember divider tick between two rendered slot
+// groups, sitting on the slot ring at their shared boundary angle.
+// Rot orients the tick's long axis radially (CSS rotate, degrees).
+type fitVisualSep struct {
+	X, Y float64
+	Rot  float64
+}
+
+// fitVisualLabel is the in-ring caption for one rendered slot
+// group, set in the ember gradient like the app's titles.
+type fitVisualLabel struct {
+	X, Y float64
+	Text string
 }
 
 // fitVisualArcs places the five slot families on arcs around the
@@ -217,12 +242,61 @@ var fitVisualGroupLabels = map[string]string{
 	fitFamilySubsystem: "Subsystem",
 }
 
+// fitVisualGroupCaptions are the short in-ring captions, in circular
+// order around the ship (the same order as fitVisualArcs).
+var fitVisualGroupCaptions = map[string]string{
+	fitFamilyHigh:      "HIGH",
+	fitFamilyMedium:    "MID",
+	fitFamilyLow:       "LOW",
+	fitFamilyRig:       "RIG",
+	fitFamilySubsystem: "SUBSYSTEM",
+}
+
+// fitVisualGroupOrder is the circular order of slot groups around
+// the ship; separators sit at each rendered pair's shared boundary.
+var fitVisualGroupOrder = []string{
+	fitFamilyHigh,
+	fitFamilyMedium,
+	fitFamilyLow,
+	fitFamilyRig,
+	fitFamilySubsystem,
+}
+
+// fitVisualMetaName maps the SDE meta group (attribute 1692) to
+// the player's vocabulary.
+func fitVisualMetaName(group int) string {
+	switch group {
+	case 2:
+		return "Tech II"
+	case 3:
+		return "Storyline"
+	case 4:
+		return "Faction"
+	case 5:
+		return "Officer"
+	case 6:
+		return "Deadspace"
+	default:
+		return "Tech I"
+	}
+}
+
+// fitVisualNum formats a module CPU/PG figure the way the stat
+// panel does: whole numbers stay whole.
+func fitVisualNum(v float64) string {
+	if v == float64(int64(v)) {
+		return strconv.FormatInt(int64(v), 10)
+	}
+	return strconv.FormatFloat(v, 'f', 1, 64)
+}
+
 // fitBuildVisual shapes the visual fit display from the engine
 // result and the document's own lines: one circle per slot,
 // filled circles carrying their module, positioned on arcs around
 // the ship render. Positions are precomputed here so the template
-// stays declarative.
-func fitBuildVisual(res *fitResult, doc *fitDoc, familyOf map[int64]string, nameOf func(int64) string) *fitVisualView {
+// stays declarative. snap may be nil (tests); then the tooltip
+// figures stay empty.
+func fitBuildVisual(res *fitResult, doc *fitDoc, snap *fitSnapshot, familyOf map[int64]string, nameOf func(int64) string, supportsSubsystems bool) *fitVisualView {
 	v := &fitVisualView{ShipID: doc.ShipTypeID, ShipName: nameOf(doc.ShipTypeID)}
 	maxOf := map[string]int{
 		fitFamilyHigh:   res.HighSlots,
@@ -241,13 +315,18 @@ func fitBuildVisual(res *fitResult, doc *fitDoc, familyOf map[int64]string, name
 			fitted[fam] = append(fitted[fam], it.TypeID)
 		}
 	}
-	maxOf[fitFamilySubsystem] = len(fitted[fitFamilySubsystem])
+	maxOf[fitFamilySubsystem] = 0
+	if supportsSubsystems || len(fitted[fitFamilySubsystem]) > 0 {
+		maxOf[fitFamilySubsystem] = len(fitted[fitFamilySubsystem])
+	}
+	rendered := map[string]bool{}
 	for _, fam := range []string{fitFamilyHigh, fitFamilyMedium, fitFamilyLow, fitFamilyRig, fitFamilySubsystem} {
 		arc := fitVisualArcs[fam]
 		max := maxOf[fam]
 		if max <= 0 {
 			continue
 		}
+		rendered[fam] = true
 		span := arc[1] - arc[0]
 		ids := fitted[fam]
 		if len(ids) > max {
@@ -258,6 +337,7 @@ func fitBuildVisual(res *fitResult, doc *fitDoc, familyOf map[int64]string, name
 			s := fitVisualSlot{
 				GroupKey:   fam,
 				GroupLabel: fitVisualGroupLabels[fam],
+				Index:      i,
 				X:          50 + arc[2]*math.Cos(ang),
 				Y:          50 + arc[2]*math.Sin(ang),
 			}
@@ -265,8 +345,57 @@ func fitBuildVisual(res *fitResult, doc *fitDoc, familyOf map[int64]string, name
 				s.Filled = true
 				s.TypeID = ids[i]
 				s.Name = nameOf(ids[i])
+				// Tooltip values are post-dogma: the engine's
+				// per-module effective attributes (skills + hull
+				// bonuses applied), not raw SDE rows.
+				eff := res.ItemAttrs[ids[i]]
+				if eff == nil && snap != nil {
+					eff = snap.attrs[ids[i]]
+				}
+				if eff != nil {
+					if cpu := eff[fitAttrCPU]; cpu > 0 {
+						s.CPU = fitVisualNum(cpu) + " tf"
+					}
+					if pg := eff[fitAttrPower]; pg > 0 {
+						s.PG = fitVisualNum(pg) + " MW"
+					}
+					s.Meta = fitVisualMetaName(int(eff[1692]))
+					// Headline effective stat (post-dogma): web
+					// strength and similar speedFactor bonuses
+					// show the skill-scaled value, not base.
+					if sf := eff[fitAttrSpeedFactor]; sf != 0 {
+						if sf < 0 {
+							s.Stat = "Strength " + fitVisualNum(-sf) + "%"
+						} else {
+							s.Stat = "Boost " + fitVisualNum(sf) + "%"
+						}
+					}
+				}
 			}
 			v.Slots = append(v.Slots, s)
+		}
+	}
+	// Ember dividers between rendered groups, on the ring at their
+	// shared boundary angle, plus an in-ring caption per group so
+	// the rings read as distinct in-game-like sections.
+	for i, fam := range fitVisualGroupOrder {
+		next := fitVisualGroupOrder[(i+1)%len(fitVisualGroupOrder)]
+		arc := fitVisualArcs[fam]
+		if rendered[fam] {
+			mid := (arc[0] + arc[1]) / 2 * math.Pi / 180
+			v.Labels = append(v.Labels, fitVisualLabel{
+				X:    50 + 30*math.Cos(mid),
+				Y:    50 + 30*math.Sin(mid),
+				Text: fitVisualGroupCaptions[fam],
+			})
+		}
+		if rendered[fam] && rendered[next] {
+			end := arc[1] * math.Pi / 180
+			v.Separators = append(v.Separators, fitVisualSep{
+				X:   50 + arc[2]*math.Cos(end),
+				Y:   50 + arc[2]*math.Sin(end),
+				Rot: 90 - arc[1],
+			})
 		}
 	}
 	return v
@@ -309,40 +438,46 @@ type fitResistRow struct {
 
 // fitStatsView is the pyfa-vocabulary stat panel, preformatted.
 type fitStatsView struct {
-	Powergrid   fitBarRow
-	CPU         fitBarRow
-	Align       string
-	Velocity    string
-	Signature   string
-	Capacitor   string // capacity
-	CapPeak     string
-	CapDraw     string
-	CapState    string
-	CapStable   bool
-	TurretDPS   string
-	MissileDPS  string
-	DroneDPS    string
-	TotalDPS    string
-	Tank        []fitResistRow
-	EHPOmni     string
-	ShieldReg   string
-	ShieldBoost string
-	ArmorRep    string
-	HullRep     string
-	TargetRng   string
-	ScanRes     string
-	Sensor      string
-	LockedTgts  string
-	Cargo       string
-	DroneBW     string
-	DroneBay    string
-	DronesUp    string
-	Hardpoints  string // "Turrets 3/4 · Launchers 0/0"
-	HPOver      bool
-	Calibration string
-	CalibOver   bool
-	SlotLine    string // "High 3/3 · Medium 2/3 · Low 1/2 · Rigs 0/3"
-	SlotsOver   bool
+	Powergrid     fitBarRow
+	CPU           fitBarRow
+	Align         string
+	Velocity      string
+	Signature     string
+	Capacitor     string // capacity
+	CapPeak       string
+	CapDraw       string
+	CapState      string
+	CapStable     bool
+	TurretDPS     string
+	MissileDPS    string
+	DroneDPS      string
+	TotalDPS      string
+	TurretVolley  string
+	MissileVolley string
+	DroneVolley   string
+	TotalVolley   string
+	NeutDrain     string
+	NosDrain      string
+	Tank          []fitResistRow
+	EHPOmni       string
+	ShieldReg     string
+	ShieldBoost   string
+	ArmorRep      string
+	HullRep       string
+	TargetRng     string
+	ScanRes       string
+	Sensor        string
+	LockedTgts    string
+	Cargo         string
+	DroneBW       string
+	DroneBay      string
+	DronesUp      string
+	Hardpoints    string // "Turrets 3/4 · Launchers 0/0"
+	HPOver        bool
+	Calibration   string
+	CalibOver     bool
+	SlotLine      string // "High 3/3 · Medium 2/3 · Low 1/2 · Rigs 0/3"
+	SlotsOver     bool
 }
 
 // fitMissingSkill is one unmet requirement for the chosen pilot.
@@ -367,28 +502,45 @@ type fitSimView struct {
 	Visual      *fitVisualView // in-game-style ship + slot rings
 	DroneBWNum  float64        // drone bandwidth (for the fittable filter)
 	DroneBayNum float64        // drone bay m3 (for the fittable filter)
-	ChargeSets  []fitChargeSet
-	Stats       *fitStatsView
-	Missing     []fitMissingSkill
-	Notes       []string // plain-language modeling notes
+	// SupportsSubsystems: the hull is a strategic cruiser (SDE
+	// group), so the subsystem ring, group, and search family show.
+	SupportsSubsystems bool
+	// RestrictedJSON maps restricted module type IDs to their
+	// requirement label ("Dreadnoughts"), for the client-side
+	// add guard and drag highlighting.
+	RestrictedJSON string
+	ChargeSets     []fitChargeSet
+	Stats          *fitStatsView
+	Missing        []fitMissingSkill
+	Notes          []string // plain-language modeling notes
 }
 
 // fitEditorView is the editor chrome around the workbench.
 type fitEditorView struct {
-	PilotID   int64
-	Pilots    []assetCharLink // the user's characters; the template adds All V
-	Sim       *fitSimView
-	LocalID   int64 // saved fit currently open (0 = unsaved)
-	LocalFits []localFitRow
-	Notes     []string // import notes ("couldn't place ..."), shown once
+	PilotID     int64
+	Pilots      []assetCharLink // the user's characters; the template adds All V
+	EVECharID   int64           // active character: the Save-to-EVE target (0 = none)
+	EVECharName string
+	Description string // fit metadata, editable in the header, autosaved
+	Tags        string // comma-separated for the header field; stored as an array
+	TagsList    []string
+	IsPublic    bool
+	Sim         *fitSimView
+	LocalID     int64    // saved fit currently open (0 = unsaved)
+	Notes       []string // import notes ("couldn't place ..."), shown once
+	LocalFits   []localFitEntry
 }
 
-// localFitRow is one saved fit in the page's list.
-type localFitRow struct {
-	ID       int64
-	Name     string
-	ShipName string
-	Updated  string
+// localFitEntry is one saved fit for the your-fits list.
+type localFitEntry struct {
+	ID          int64
+	Name        string
+	ShipName    string
+	Description string
+	Tags        []string
+	Updated     string
+	IsPublic    bool
+	IsDraft     bool
 }
 
 // ---------------------------------------------------------------------------
@@ -429,6 +581,19 @@ func (app *Application) fitPilotLevels(ctx context.Context, pilotID int64, snap 
 
 // buildFitSimView runs the engine for one document and pilot and
 // shapes the result for the workbench template. pilotID 0 = All V.
+// shipSupportsSubsystems reports whether the hull can fit
+// subsystems. The four subsystem slots are a class rule, not a
+// hull attribute, so the data-driven signal is the ship's SDE
+// group: Strategic Cruiser. No hull list.
+func (app *Application) shipSupportsSubsystems(ctx context.Context, snap *fitSnapshot, shipTypeID int64) bool {
+	gid, ok := snap.groups[shipTypeID]
+	if !ok || gid == 0 {
+		return false
+	}
+	names := app.esi.CachedGroupNames(ctx, []int64{gid})
+	return names[gid] == "Strategic Cruiser"
+}
+
 func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotID int64, pilotLabel string) *fitSimView {
 	view := &fitSimView{PilotID: pilotID, FitName: doc.Name}
 	state, _ := json.Marshal(doc)
@@ -449,6 +614,7 @@ func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotI
 		return view
 	}
 	view.HasShip = true
+	view.SupportsSubsystems = app.shipSupportsSubsystems(ctx, snap, doc.ShipTypeID)
 
 	levels, note := app.fitPilotLevels(ctx, pilotID, snap, doc)
 	view.PilotLabel = pilotLabel
@@ -480,15 +646,60 @@ func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotI
 	view.ShipID = doc.ShipTypeID
 	view.ShipName = nameOf(doc.ShipTypeID)
 
-	view.Groups = fitBuildGroups(res, doc, familyOf, nameOf)
-	view.Visual = fitBuildVisual(res, doc, familyOf, nameOf)
+	view.Groups = fitBuildGroups(res, doc, familyOf, nameOf, view.SupportsSubsystems)
+	view.Visual = fitBuildVisual(res, doc, snap, familyOf, nameOf, view.SupportsSubsystems)
 	view.DroneBWNum = res.DroneBandwidth
 	view.DroneBayNum = res.DroneBayCapacity
 	view.ChargeSets = app.fitBuildChargeSets(ctx, doc, snap, nameOf)
 	view.Stats = fitBuildStats(res)
 	view.Missing = fitMissingList(ctx, app, snap, doc, engineItems, levels, pilotID)
 	view.Notes = fitPlainNotes(res.Unmodeled)
+	view.RestrictedJSON = app.fitRestrictedJSON(ctx, res.Restricted, nameOf)
+	for _, r := range res.Restricted {
+		view.Notes = append(view.Notes,
+			fmt.Sprintf("%s can only be fitted to %s.", nameOf(r.TypeID), app.fitRestrictionLabel(ctx, r)))
+	}
 	return view
+}
+
+// fitRestrictionLabel renders a fitRestriction's requirement in
+// plain language: "Dreadnoughts", "the Rorqual", or "X or Y".
+func (app *Application) fitRestrictionLabel(ctx context.Context, r fitRestriction) string {
+	var parts []string
+	if len(r.NeedGroup) > 0 {
+		gids := make([]int64, 0, len(r.NeedGroup))
+		gids = append(gids, r.NeedGroup...)
+		names := app.esi.CachedGroupNames(ctx, gids)
+		for _, g := range r.NeedGroup {
+			if n, ok := names[g]; ok && n != "" {
+				parts = append(parts, n+"s")
+			}
+		}
+	}
+	for _, t := range r.NeedType {
+		names := app.esi.CachedTypeNames(ctx, []int64{t})
+		if n, ok := names[t]; ok && n != "" {
+			parts = append(parts, "the "+n)
+		}
+	}
+	if len(parts) == 0 {
+		return "specific ships"
+	}
+	return strings.Join(parts, " or ")
+}
+
+// fitRestrictedJSON builds the client-side restriction map:
+// module type ID -> requirement label.
+func (app *Application) fitRestrictedJSON(ctx context.Context, rs []fitRestriction, nameOf func(int64) string) string {
+	if len(rs) == 0 {
+		return "{}"
+	}
+	m := make(map[string]string, len(rs))
+	for _, r := range rs {
+		m[strconv.FormatInt(r.TypeID, 10)] = app.fitRestrictionLabel(ctx, r)
+	}
+	b, _ := json.Marshal(m)
+	return string(b)
 }
 
 // engineItemsAll returns engine inputs plus charge types, for
@@ -551,7 +762,7 @@ func fitMissingList(ctx context.Context, app *Application, snap *fitSnapshot, do
 
 // fitBuildGroups shapes the slot grid from the engine result and
 // the document's own lines.
-func fitBuildGroups(res *fitResult, doc *fitDoc, familyOf map[int64]string, nameOf func(int64) string) []fitSlotGroup {
+func fitBuildGroups(res *fitResult, doc *fitDoc, familyOf map[int64]string, nameOf func(int64) string, supportsSubsystems bool) []fitSlotGroup {
 	chips := map[string][]fitSlotChip{}
 	for _, it := range doc.Items {
 		fam := familyOf[it.TypeID]
@@ -578,15 +789,23 @@ func fitBuildGroups(res *fitResult, doc *fitDoc, familyOf map[int64]string, name
 	for _, c := range chips[fitFamilyCargo] {
 		cargoCount += c.Qty
 	}
-	return []fitSlotGroup{
+	groups := []fitSlotGroup{
 		mk(fitFamilyHigh, "High slots", res.HighSlotsUsed, res.HighSlots, true),
 		mk(fitFamilyMedium, "Mid slots", res.MediumSlotsUsed, res.MediumSlots, true),
 		mk(fitFamilyLow, "Low slots", res.LowSlotsUsed, res.LowSlots, true),
 		mk(fitFamilyRig, "Rigs", res.RigSlotsUsed, res.RigSlots, true),
-		mk(fitFamilySubsystem, "Subsystems", len(chips[fitFamilySubsystem]), 0, false),
+	}
+	// Subsystems only where they belong: strategic-cruiser hulls.
+	// Fitted subsystems still show on any hull so an import never
+	// hides modules, but the empty group does not.
+	if supportsSubsystems || len(chips[fitFamilySubsystem]) > 0 {
+		groups = append(groups, mk(fitFamilySubsystem, "Subsystems", len(chips[fitFamilySubsystem]), 0, false))
+	}
+	groups = append(groups,
 		mk(fitFamilyDrone, "Drones", droneUsed, 0, false),
 		mk(fitFamilyCargo, "Cargo", cargoCount, 0, false),
-	}
+	)
+	return groups
 }
 
 // fitChargeCandidates lists the charge types a weapon can load:
@@ -831,6 +1050,20 @@ func fitBuildStats(res *fitResult) *fitStatsView {
 	st.MissileDPS = fitFmt1(res.MissileDPS)
 	st.DroneDPS = fitFmt1(res.DroneDPS)
 	st.TotalDPS = fitFmt1(res.DPS)
+
+	st.TurretVolley = fitFmt1(res.TurretVolley)
+	st.MissileVolley = fitFmt1(res.MissileVolley)
+	st.DroneVolley = fitFmt1(res.DroneVolley)
+	st.TotalVolley = fitFmt1(res.Volley)
+
+	if res.NeutDrainPerSec > 0 {
+		st.NeutDrain = fmt.Sprintf("%s GJ/s (%s GJ per cycle)",
+			fitFmt1(res.NeutDrainPerSec), fitFmt1(res.NeutDrainPerCycle))
+	}
+	if res.NosDrainPerSec > 0 {
+		st.NosDrain = fmt.Sprintf("%s GJ/s (%s GJ per cycle)",
+			fitFmt1(res.NosDrainPerSec), fitFmt1(res.NosDrainPerCycle))
+	}
 
 	st.Tank = []fitResistRow{
 		{Layer: "Shield", HP: fitFmt0(res.ShieldHP),
@@ -1139,8 +1372,29 @@ func (app *Application) handleFitPickerJSON(w http.ResponseWriter, r *http.Reque
 	writeSuggestJSON(w, usableByPilot(out))
 }
 
-// handleFitSave serves POST /fittings/save/: create or update
-// one of the user's local fittings.
+// parseFitTags turns the header's comma-separated tags field into
+// a clean array: trimmed, deduped, capped.
+func parseFitTags(raw string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, t := range strings.Split(raw, ",") {
+		t = strings.TrimSpace(t)
+		if t == "" || seen[strings.ToLower(t)] || len(out) >= 20 {
+			continue
+		}
+		seen[strings.ToLower(t)] = true
+		out = append(out, t)
+	}
+	return out
+}
+
+// handleFitSave serves POST /fittings/save/: create or update one
+// of the user's local fittings. The editor autosaves through this
+// same path: id 0 upserts the user's single draft row (never
+// spawning duplicates), id > 0 updates that row, and promote flips
+// a draft into a named fit when the Save button names it.
+// Description and tags ride inside the fit document; is_public is
+// the community-fit flag (drafts are never public).
 func (app *Application) handleFitSave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
@@ -1149,9 +1403,13 @@ func (app *Application) handleFitSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		ID   int64  `json:"id"`
-		Name string `json:"name"`
-		Fit  fitDoc `json:"fit"`
+		ID          int64  `json:"id"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Tags        string `json:"tags"`
+		IsPublic    bool   `json:"isPublic"`
+		Promote     bool   `json:"promote"`
+		Fit         fitDoc `json:"fit"`
 	}
 	body := http.MaxBytesReader(w, r.Body, 256<<10)
 	if err := json.NewDecoder(body).Decode(&req); err != nil {
@@ -1173,7 +1431,13 @@ func (app *Application) handleFitSave(w http.ResponseWriter, r *http.Request) {
 	if len(name) > 120 {
 		name = name[:120]
 	}
+	description := strings.TrimSpace(req.Description)
+	if len(description) > 500 {
+		description = description[:500]
+	}
 	req.Fit.Name = name
+	req.Fit.Description = description
+	req.Fit.Tags = parseFitTags(req.Tags)
 	raw, err := json.Marshal(req.Fit)
 	if err != nil {
 		http.Error(w, "That fitting couldn't be saved.", http.StatusBadRequest)
@@ -1182,23 +1446,51 @@ func (app *Application) handleFitSave(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	id := req.ID
+	isDraft := false
+	isPublic := false
 	if id > 0 {
-		if _, err := app.queries.GetLocalFitting(ctx, db.GetLocalFittingParams{ID: id, UserID: userID}); err != nil {
+		row, err := app.queries.GetLocalFitting(ctx, db.GetLocalFittingParams{ID: id, UserID: userID})
+		if err != nil {
 			http.Error(w, "That saved fit couldn't be found.", http.StatusNotFound)
 			return
 		}
+		isDraft = row.IsDraft
+		if isDraft && req.Promote && name != "Unnamed fit" {
+			isDraft = false // the Save button names the draft: it becomes a real fit
+		}
+		if !isDraft {
+			isPublic = req.IsPublic
+		}
 		if err := app.queries.UpdateLocalFitting(ctx, db.UpdateLocalFittingParams{
 			Name: name, ShipTypeID: req.Fit.ShipTypeID, ItemsJson: string(raw),
-			UpdatedAt: now, ID: id, UserID: userID,
+			IsPublic: isPublic, IsDraft: isDraft, UpdatedAt: now, ID: id, UserID: userID,
 		}); err != nil {
 			log.Printf("fittings save: update %d: %v", id, err)
 			http.Error(w, "That fitting couldn't be saved.", http.StatusInternalServerError)
 			return
 		}
+	} else if draft, derr := app.queries.GetUserDraftFitting(ctx, userID); derr == nil {
+		// Autosave reuses the one draft row; it never spawns
+		// duplicates.
+		id = draft.ID
+		if err := app.queries.UpdateLocalFitting(ctx, db.UpdateLocalFittingParams{
+			Name: name, ShipTypeID: req.Fit.ShipTypeID, ItemsJson: string(raw),
+			IsPublic: false, IsDraft: true, UpdatedAt: now, ID: id, UserID: userID,
+		}); err != nil {
+			log.Printf("fittings save: update draft %d: %v", id, err)
+			http.Error(w, "That fitting couldn't be saved.", http.StatusInternalServerError)
+			return
+		}
+		isDraft = true
 	} else {
+		isDraft = !(req.Promote && name != "Unnamed fit")
+		if !isDraft {
+			isPublic = req.IsPublic
+		}
 		row, err := app.queries.CreateLocalFitting(ctx, db.CreateLocalFittingParams{
 			UserID: userID, Name: name, ShipTypeID: req.Fit.ShipTypeID,
-			ItemsJson: string(raw), CreatedAt: now, UpdatedAt: now,
+			ItemsJson: string(raw), IsPublic: isPublic, IsDraft: isDraft,
+			CreatedAt: now, UpdatedAt: now,
 		})
 		if err != nil {
 			log.Printf("fittings save: create: %v", err)
@@ -1207,8 +1499,216 @@ func (app *Application) handleFitSave(w http.ResponseWriter, r *http.Request) {
 		}
 		id = row.ID
 	}
+	writeFitJSON(w, map[string]any{"id": id, "savedAt": now, "isDraft": isDraft})
+}
+
+// writeFitJSON answers a fitting-editor JSON endpoint.
+func writeFitJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(map[string]int64{"id": id})
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+// ---------------------------------------------------------------------------
+// Save to EVE: POST the fit to the character's in-game fittings.
+// ---------------------------------------------------------------------------
+
+// esiFittingItem is one line of POST /characters/{id}/fittings/.
+type esiFittingItem struct {
+	Flag     string `json:"flag"`
+	Quantity int64  `json:"quantity"`
+	TypeID   int64  `json:"type_id"`
+}
+
+// esiFittingBody is POST /characters/{id}/fittings/ (201 answers
+// {"fitting_id": ...}).
+type esiFittingBody struct {
+	Description string           `json:"description"`
+	Items       []esiFittingItem `json:"items"`
+	Name        string           `json:"name"`
+	ShipTypeID  int64            `json:"ship_type_id"`
+}
+
+// fitESIFlagFamilies maps editor families to their ESI slot-flag
+// prefix and slot count. Drones and cargo ride unindexed flags.
+var fitESIFlagFamilies = []struct {
+	family string
+	prefix string
+	slots  int
+	label  string
+}{
+	{fitFamilyHigh, "HiSlot", 8, "high-slot"},
+	{fitFamilyMedium, "MedSlot", 8, "mid-slot"},
+	{fitFamilyLow, "LoSlot", 8, "low-slot"},
+	{fitFamilyRig, "RigSlot", 3, "rig"},
+	{fitFamilySubsystem, "SubSystemSlot", 4, "subsystem"},
+}
+
+// fitESIFittingBody maps the editor document to the ESI fitting
+// body: one flag per fitted module instance (HiSlot0-7 and
+// friends), charges riding the same flag as their weapon's slot,
+// drones to DroneBay and cargo to Cargo. Items beyond the family's
+// slot count are an error — ESI has no flag for them, so the
+// handler reports it instead of silently dropping them.
+func fitESIFittingBody(name string, doc *fitDoc, familyOf map[int64]string) (esiFittingBody, error) {
+	body := esiFittingBody{
+		Description: "Created by EveSynapse (https://github.com/natemsz/evesynapse)",
+		Name:        name,
+		ShipTypeID:  doc.ShipTypeID,
+	}
+	byFamily := map[string][]int64{}
+	for _, it := range doc.Items {
+		switch familyOf[it.TypeID] {
+		case fitFamilyHigh, fitFamilyMedium, fitFamilyLow, fitFamilyRig, fitFamilySubsystem:
+			for i := 0; i < it.Qty; i++ {
+				byFamily[familyOf[it.TypeID]] = append(byFamily[familyOf[it.TypeID]], it.TypeID)
+			}
+		}
+	}
+	// Weapon slots first: charges need the flag of their weapon.
+	weaponFlag := map[int64]string{}
+	for _, ff := range fitESIFlagFamilies {
+		ids := byFamily[ff.family]
+		if len(ids) > ff.slots {
+			return body, fmt.Errorf("%d %s modules don't fit in %d %s slots — remove %d first",
+				len(ids), ff.label, ff.slots, ff.label, len(ids)-ff.slots)
+		}
+		for i, id := range ids {
+			flag := fmt.Sprintf("%s%d", ff.prefix, i)
+			body.Items = append(body.Items, esiFittingItem{Flag: flag, Quantity: 1, TypeID: id})
+			if _, ok := weaponFlag[id]; !ok {
+				weaponFlag[id] = flag
+			}
+		}
+	}
+	for _, it := range doc.Items {
+		switch familyOf[it.TypeID] {
+		case fitFamilyDrone:
+			body.Items = append(body.Items, esiFittingItem{Flag: "DroneBay", Quantity: int64(it.Qty), TypeID: it.TypeID})
+		case fitFamilyCargo:
+			body.Items = append(body.Items, esiFittingItem{Flag: "Cargo", Quantity: int64(it.Qty), TypeID: it.TypeID})
+		}
+	}
+	for weapon, charge := range doc.Charges {
+		flag, ok := weaponFlag[weapon]
+		if !ok {
+			continue // weapon not fitted: its charge can't ride along
+		}
+		body.Items = append(body.Items, esiFittingItem{Flag: flag, Quantity: 1, TypeID: charge})
+	}
+	return body, nil
+}
+
+// esiSaveToEVEHint turns an ESI failure into a plain sentence for
+// the editor; token values never appear.
+func esiSaveToEVEHint(err error) string {
+	var se *esi.StatusError
+	if errors.As(err, &se) {
+		switch se.Code {
+		case http.StatusBadRequest:
+			return "EVE rejected the fitting as sent — or the character's fitting list is full"
+		case http.StatusForbidden:
+			return "this character hasn't granted fitting write access"
+		case http.StatusUnprocessableEntity:
+			return "EVE couldn't place one of the modules"
+		}
+		return fmt.Sprintf("EVE answered status %d", se.Code)
+	}
+	if errors.Is(err, esi.ErrErrorLimit) {
+		return "EVE is rate-limiting requests right now"
+	}
+	return "the request to EVE failed"
+}
+
+// fitSaveToEVERequest is POST /fittings/save-to-eve/: the target
+// character plus the fit document.
+type fitSaveToEVERequest struct {
+	fitDoc
+	CharacterID int64 `json:"characterId"`
+}
+
+// handleFitSaveToEVE serves POST /fittings/save-to-eve/: map the
+// editor document to ESI slot flags and create the fitting in-game
+// for one of the signed-in user's characters. A 403 (character
+// linked before the write scope existed) is reported as "sign in
+// again", never silently swallowed.
+func (app *Application) handleFitSaveToEVE(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	var req fitSaveToEVERequest
+	body := http.MaxBytesReader(w, r.Body, 256<<10)
+	if err := json.NewDecoder(body).Decode(&req); err != nil {
+		writeFitJSON(w, map[string]any{"ok": false, "error": "That fitting couldn't be read."})
+		return
+	}
+	sanitizeFitDoc(&req.fitDoc)
+	fail := func(msg string, relink bool) {
+		writeFitJSON(w, map[string]any{"ok": false, "error": msg, "relink": relink})
+	}
+
+	charName, owned := app.fitPilotLabel(ctx, userID, req.CharacterID)
+	if !owned {
+		fail("That character isn't one of yours.", false)
+		return
+	}
+	if req.ShipTypeID <= 0 {
+		fail("Pick a ship before saving to EVE.", false)
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		name = "Unnamed fit"
+	}
+
+	snap, err := loadFitSnapshot(ctx, app.queries, fitDocTypeIDs(&req.fitDoc))
+	if err != nil {
+		log.Printf("fittings save-to-eve: snapshot: %v", err)
+		fail("Could not read the module data; try again.", false)
+		return
+	}
+	familyOf := map[int64]string{}
+	for _, it := range req.Items {
+		familyOf[it.TypeID] = fitSlotFamilyOf(snap, it.TypeID)
+	}
+	esiBody, err := fitESIFittingBody(name, &req.fitDoc, familyOf)
+	if err != nil {
+		fail(err.Error(), false)
+		return
+	}
+
+	ch, err := app.queries.GetCharacter(ctx, req.CharacterID)
+	if err != nil {
+		fail("That character isn't one of yours.", false)
+		return
+	}
+	token, err := app.validAccessToken(ctx, ch)
+	if err != nil {
+		log.Printf("fittings save-to-eve: token for character %d: %v", req.CharacterID, err)
+		fail("Could not reach EVE for "+charName+". Sign in again if it keeps failing.", true)
+		return
+	}
+	var created struct {
+		FittingID int64 `json:"fitting_id"`
+	}
+	path := fmt.Sprintf("/characters/%d/fittings/", req.CharacterID)
+	if err := app.esi.PostJSONAuthed(ctx, token, path, esiBody, &created); err != nil {
+		var se *esi.StatusError
+		if errors.As(err, &se) && se.Code == http.StatusForbidden {
+			fail(charName+" was linked before EveSynapse asked for fitting write access — sign in again to grant it, then save once more.", true)
+			return
+		}
+		log.Printf("fittings save-to-eve: ESI POST %s: %v", path, err)
+		fail("EVE refused the fitting ("+esiSaveToEVEHint(err)+").", false)
+		return
+	}
+
+	// Refresh the cached fittings so the new fit shows up in the
+	// list without waiting for the next worker cycle.
+	if _, ferr := app.esi.FetchAndStoreSnapshot(ctx, ch, esi.SnapFittings); ferr != nil {
+		log.Printf("fittings save-to-eve: refetch fittings for character %d: %v", req.CharacterID, ferr)
+	}
+	writeFitJSON(w, map[string]any{
+		"ok": true, "fittingId": created.FittingID, "name": name, "characterId": req.CharacterID,
+	})
 }
 
 // handleFitDelete serves POST /fittings/delete/ (form field id).
@@ -1227,6 +1727,136 @@ func (app *Application) handleFitDelete(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	http.Redirect(w, r, "/fittings/#fit-editor", http.StatusSeeOther)
+}
+
+// fitMineRow is one entry in the your-fits search results.
+type fitMineRow struct {
+	ID       int64  `json:"id"`
+	Name     string `json:"name"`
+	ShipName string `json:"shipName"`
+	Mine     bool   `json:"mine"`
+	IsPublic bool   `json:"isPublic"`
+	IsDraft  bool   `json:"isDraft"`
+	Author   string `json:"author,omitempty"`
+}
+
+// handleFitMineJSON serves GET /fittings/mine.json: the user's
+// saved fits matching q, plus other users' public fits when
+// community=1 (bounded, capped at 20). Drives the your-fits
+// search bar on the fitting screen.
+func (app *Application) handleFitMineJSON(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	if userID == 0 {
+		http.Error(w, "Sign in first.", http.StatusForbidden)
+		return
+	}
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(q) < 2 {
+		writeFitJSON(w, []fitMineRow{})
+		return
+	}
+	rows, err := app.queries.SearchLocalFittings(ctx, db.SearchLocalFittingsParams{UserID: userID, Q: q})
+	if err != nil {
+		log.Printf("fittings mine search: %v", err)
+		http.Error(w, "That search couldn't run.", http.StatusInternalServerError)
+		return
+	}
+	out := make([]fitMineRow, 0, len(rows)+20)
+	for _, row := range rows {
+		out = append(out, fitMineRow{
+			ID: row.ID, Name: row.Name, ShipName: row.ShipName,
+			Mine: true, IsPublic: row.IsPublic, IsDraft: row.IsDraft,
+		})
+	}
+	if r.URL.Query().Get("community") == "1" {
+		pub, err := app.queries.SearchPublicFittings(ctx, db.SearchPublicFittingsParams{UserID: userID, Q: q})
+		if err != nil {
+			log.Printf("fittings community search: %v", err)
+		} else {
+			for _, row := range pub {
+				author := ""
+				if s, ok := row.AuthorName.(string); ok {
+					author = s
+				}
+				out = append(out, fitMineRow{
+					ID: row.ID, Name: row.Name, ShipName: row.ShipName,
+					Mine: false, IsPublic: true, Author: author,
+				})
+			}
+		}
+	}
+	if len(out) > 20 {
+		out = out[:20]
+	}
+	writeFitJSON(w, out)
+}
+
+// handleFitFork serves POST /fittings/fork/: copy another user's
+// public fit into the caller's own fittings as a draft. The
+// origin is noted in the description; the source fit is never
+// touched.
+func (app *Application) handleFitFork(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	if userID == 0 {
+		http.Error(w, "Sign in first.", http.StatusForbidden)
+		return
+	}
+	var req struct {
+		ID int64 `json:"id"`
+	}
+	body := http.MaxBytesReader(w, r.Body, 64<<10)
+	if err := json.NewDecoder(body).Decode(&req); err != nil || req.ID <= 0 {
+		http.Error(w, "That fit couldn't be read.", http.StatusBadRequest)
+		return
+	}
+	src, err := app.queries.GetPublicFitting(ctx, req.ID)
+	if err != nil {
+		http.Error(w, "That fit couldn't be found.", http.StatusNotFound)
+		return
+	}
+	if src.UserID == userID {
+		writeFitJSON(w, map[string]any{"id": src.ID})
+		return
+	}
+	var doc fitDoc
+	if err := json.Unmarshal([]byte(src.ItemsJson), &doc); err != nil {
+		http.Error(w, "That fit couldn't be read.", http.StatusBadRequest)
+		return
+	}
+	sanitizeFitDoc(&doc)
+	author := ""
+	if s, ok := src.AuthorName.(string); ok {
+		author = s
+	}
+	origin := fmt.Sprintf("Based on %q by %s.", src.Name, author)
+	if doc.Description != "" {
+		doc.Description += "\n\n" + origin
+	} else {
+		doc.Description = origin
+	}
+	// Forks are always private drafts; the user publishes
+	// deliberately via the Make public toggle.
+	doc.Tags = nil
+	doc.Name = src.Name
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		http.Error(w, "That fit couldn't be copied.", http.StatusInternalServerError)
+		return
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	row, err := app.queries.CreateLocalFitting(ctx, db.CreateLocalFittingParams{
+		UserID: userID, Name: doc.Name, ShipTypeID: doc.ShipTypeID,
+		ItemsJson: string(raw), IsPublic: false, IsDraft: true,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		log.Printf("fittings fork %d: %v", req.ID, err)
+		http.Error(w, "That fit couldn't be copied.", http.StatusInternalServerError)
+		return
+	}
+	writeFitJSON(w, map[string]any{"id": row.ID})
 }
 
 // sessionFitStash carries an imported fit (plus its notes)
@@ -1286,6 +1916,7 @@ func (app *Application) attachFitEditor(ctx context.Context, r *http.Request, da
 			if json.Unmarshal([]byte(row.ItemsJson), &stored) == nil {
 				doc = &stored
 				editor.LocalID = row.ID
+				editor.IsPublic = row.IsPublic
 			}
 		}
 	case esiID > 0:
@@ -1324,6 +1955,8 @@ func (app *Application) attachFitEditor(ctx context.Context, r *http.Request, da
 		}
 	}
 	editor.PilotID = pilotID
+	editor.EVECharID = active.CharacterID
+	editor.EVECharName = active.Name
 	for _, ch := range characters {
 		editor.Pilots = append(editor.Pilots, assetCharLink{
 			ID: ch.CharacterID, Name: ch.Name, Active: ch.CharacterID == pilotID,
@@ -1331,31 +1964,49 @@ func (app *Application) attachFitEditor(ctx context.Context, r *http.Request, da
 	}
 	editor.Sim = app.buildFitSimView(ctx, doc, pilotID, pilotLabel)
 
+	editor.Description = doc.Description
+	editor.TagsList = doc.Tags
+	editor.Tags = strings.Join(doc.Tags, ", ")
 	if userID > 0 {
-		if rows, err := app.queries.ListLocalFittings(ctx, userID); err == nil {
-			shipIDs := make([]int64, 0, len(rows))
-			for _, row := range rows {
-				shipIDs = append(shipIDs, row.ShipTypeID)
-			}
-			names := app.esi.CachedTypeNames(ctx, shipIDs)
-			for _, row := range rows {
-				shipName := names[row.ShipTypeID]
-				if shipName == "" {
-					shipName = fmt.Sprintf("Type #%d", row.ShipTypeID)
-				}
-				updated := row.UpdatedAt
-				if t, terr := time.Parse(time.RFC3339, updated); terr == nil {
-					updated = t.Format("2006-01-02 15:04")
-				}
-				editor.LocalFits = append(editor.LocalFits, localFitRow{
-					ID: row.ID, Name: row.Name, ShipName: shipName, Updated: updated,
-				})
-			}
-		} else {
-			log.Printf("fittings: list local fits for user %d: %v", userID, err)
-		}
+		editor.LocalFits = app.listLocalFitEntries(ctx, userID)
 	}
 	data.FitEditor = editor
+}
+
+// listLocalFitEntries builds the your-fits list: the user's saved
+// fits, newest first, with ship names and the description/tags
+// stored inside each fit document.
+func (app *Application) listLocalFitEntries(ctx context.Context, userID int64) []localFitEntry {
+	rows, err := app.queries.ListLocalFittings(ctx, userID)
+	if err != nil {
+		log.Printf("fittings: list local fits: %v", err)
+		return nil
+	}
+	shipIDs := make([]int64, 0, len(rows))
+	for _, row := range rows {
+		shipIDs = append(shipIDs, row.ShipTypeID)
+	}
+	names := app.esi.CachedTypeNames(ctx, shipIDs)
+	entries := make([]localFitEntry, 0, len(rows))
+	for _, row := range rows {
+		var stored fitDoc
+		_ = json.Unmarshal([]byte(row.ItemsJson), &stored)
+		shipName := fmt.Sprintf("Type #%d", row.ShipTypeID)
+		if n, ok := names[row.ShipTypeID]; ok {
+			shipName = n
+		}
+		entries = append(entries, localFitEntry{
+			ID:          row.ID,
+			Name:        row.Name,
+			ShipName:    shipName,
+			Description: stored.Description,
+			Tags:        stored.Tags,
+			Updated:     row.UpdatedAt,
+			IsPublic:    row.IsPublic,
+			IsDraft:     row.IsDraft,
+		})
+	}
+	return entries
 }
 
 // fitDocFromESI turns one saved EVE fitting into an editor

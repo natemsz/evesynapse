@@ -45,6 +45,14 @@ var pgBaselineSchema string
 //go:embed schema_pg/002_station_leaderboard.sql
 var pgStationLeaderboardSchema string
 
+// Schema step 003 (fitting metadata: is_public / is_draft on
+// local_fittings): applied by openDB wherever the is_public column
+// is absent, so fresh installs get it right after the baseline and
+// existing installs on their next boot.
+
+//go:embed schema_pg/003_fit_metadata.sql
+var pgFitMetadataSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -430,9 +438,12 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/simulate/", app.handleFitSimulate)
 		r.Get("/picker.json", app.handleFitPickerJSON)
 		r.Post("/save/", app.handleFitSave)
+		r.Post("/save-to-eve/", app.handleFitSaveToEVE)
 		r.Post("/delete/", app.handleFitDelete)
 		r.Post("/import/", app.handleFitImport)
 		r.Post("/export/", app.handleFitExport)
+		r.Get("/mine.json", app.handleFitMineJSON)
+		r.Post("/fork/", app.handleFitFork)
 	})
 
 	r.Route("/killmails", func(r chi.Router) {

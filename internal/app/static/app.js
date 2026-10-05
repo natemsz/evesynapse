@@ -1525,6 +1525,7 @@
     { name: "Skills", url: "/skills/" },
     { name: "Skill plans", url: "/skills/plans" },
     { name: "Fittings", url: "/fittings/" },
+    { name: "Saved fits", url: "/fittings/saved/" },
     { name: "Killmails", url: "/killmails/" },
     { name: "Mail", url: "/mail/" },
     { name: "Calendar", url: "/calendar/" },

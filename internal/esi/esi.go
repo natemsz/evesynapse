@@ -1407,6 +1407,45 @@ func (c *Client) PostJSON(ctx context.Context, path string, payload any, out any
 	return c.postJSON(ctx, "", path, payload, out)
 }
 
+// PostJSONAuthed is postJSON with a required bearer token: the
+// authenticated-write path (currently only POST
+// /characters/{id}/fittings/). Non-201 statuses are errors; a 403
+// surfaces as StatusError so callers can tell a missing scope from a
+// bad payload. Token values are never logged.
+func (c *Client) PostJSONAuthed(ctx context.Context, accessToken, path string, payload any, out any) error {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("ESI POST %s: encode: %w", path, err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+path, bytes.NewReader(raw))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("ESI POST %s: %w", path, err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return fmt.Errorf("ESI POST %s: read body: %w", path, err)
+	}
+	if resp.StatusCode == 420 || resp.StatusCode == http.StatusTooManyRequests {
+		return fmt.Errorf("ESI POST %s: status %d: %w", path, resp.StatusCode, ErrErrorLimit)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		return &StatusError{Method: http.MethodPost, Path: path, Code: resp.StatusCode}
+	}
+	if err := json.Unmarshal(body, out); err != nil {
+		return fmt.Errorf("ESI POST %s: decode: %w", path, err)
+	}
+	return nil
+}
+
 // postJSON is PostJSON with an optional Bearer token (sent only
 // when non-empty; token values are never logged).
 func (c *Client) postJSON(ctx context.Context, accessToken, path string, payload any, out any) error {

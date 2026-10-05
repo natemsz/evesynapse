@@ -116,9 +116,33 @@ func (app *Application) briefingWindowStart(ctx context.Context, userID int64, n
 	return start
 }
 
-// advanceBriefingAnchor moves the account's window anchor. Only
-// a normal home render that included the module calls this.
+// briefingAnchorStep is the finest anchor movement worth a
+// database write. The digest label renders the anchor to the
+// minute, so an anchor that would move by less than this leaves
+// the window (and every line in it) unchanged; the advance is
+// then a render-path UPDATE whose only effect is queueing
+// behind every other writer. Repeat home renders inside the
+// step skip the write entirely.
+const briefingAnchorStep = time.Minute
+
+// advanceBriefingAnchor moves the account's window anchor, but
+// only when the stored anchor would actually move: at least a
+// full briefingAnchorStep behind this render (or unreadable,
+// which includes first-run). Only a normal home render that
+// included the module calls this.
 func (app *Application) advanceBriefingAnchor(ctx context.Context, userID int64, now time.Time) {
+	raw, err := app.queries.GetUserBriefingAnchor(ctx, userID)
+	if err != nil {
+		log.Printf("home: briefing anchor for user %d: %v", userID, err)
+		return
+	}
+	if anchor, ok := parseRFC3339(raw); ok && !anchor.Before(now.Add(-briefingAnchorStep)) {
+		// The stored anchor already sits within a step of this
+		// render (or ahead of it, under clock skew): advancing
+		// it would change nothing the digest can show, so skip
+		// the write.
+		return
+	}
 	if err := app.queries.SetUserBriefingAnchor(ctx, db.SetUserBriefingAnchorParams{
 		LastBriefingAt: now.UTC().Format(time.RFC3339),
 		ID:             userID,

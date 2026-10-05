@@ -297,6 +297,10 @@ func (app *Application) fetchRegionBookPage(ctx context.Context, regionID int64,
 // waits out regionSweepGate before the next sweep. Per-type
 // figures reuse summarizePrices over the staged price lists --
 // the exact median / 9-in-10 math the item page quotes live.
+// The same completion also stores each type's 7-day average
+// daily traded volume (from market_history) on its region row,
+// so the scanner and tradefinder read a stored figure instead
+// of recomputing it per render.
 func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (typeCount, stationCount int, err error) {
 	now := time.Now().UTC()
 	updatedAt := now.Format(time.RFC3339)
@@ -393,6 +397,20 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 	defer tx.Rollback()
 	qtx := app.queries.WithTx(tx)
 
+	// Sold per day per type, distilled from market_history in
+	// one aggregate pass and stored on the region rows below --
+	// the same 7-day average the scanner and tradefinder used
+	// to recompute per candidate type on every render. Types
+	// with no recorded history are absent here and store 0.
+	avgRows, err := qtx.ListMarketAvgDailyVolumes(ctx, regionID)
+	if err != nil {
+		return 0, 0, err
+	}
+	avgDailyVolume := make(map[int64]float64, len(avgRows))
+	for _, row := range avgRows {
+		avgDailyVolume[row.TypeID] = row.AvgDailyVolume
+	}
+
 	if err := qtx.DeleteMarketRegionStatsByRegion(ctx, regionID); err != nil {
 		return 0, 0, err
 	}
@@ -407,7 +425,8 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 			BestBuy: st.bestBuy, TypicalBuy: st.typicalBuy, BuyBand: st.buyBand,
 			SellOrders: st.sellOrders, BuyOrders: st.buyOrders,
 			SellVolume: st.sellVolume, BuyVolume: st.buyVolume,
-			UpdatedAt: updatedAt,
+			AvgDailyVolume: avgDailyVolume[typeID],
+			UpdatedAt:      updatedAt,
 		}); err != nil {
 			return 0, 0, err
 		}

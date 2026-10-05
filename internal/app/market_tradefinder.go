@@ -5,10 +5,10 @@ package app
 // type) book statistics (market_region_stats, schema 031) for both
 // ends of the route, the per-(station, type) bests
 // (market_station_stats, schema 032) for the best-price hints,
-// and the stored daily trade history (market_history) for the
-// destination's sold-per-day figure. It never calls out: rendering
-// is a handful of SQLite reads and all the margin math happens
-// here over stored numbers.
+// and the sweeps' stored 7-day average traded volume at the
+// destination (schema 035) for the sold-per-day figure. It
+// never calls out: rendering is a handful of SQLite reads and
+// all the margin math happens here over stored numbers.
 //
 // Formula (deliberate; mirrored in the page copy):
 //
@@ -125,9 +125,10 @@ func (app *Application) handleMarketTradefinder(w http.ResponseWriter, r *http.R
 
 // buildTradefinderView assembles the tradefinder page for one
 // origin/destination pair from stored region stats. Daily volume
-// at the destination comes from market_history -- ESI's recorded
-// daily trades, averaged over the newest seven recorded days (the
-// same window the spread scanner uses).
+// at the destination comes from the sweep's stored per-type
+// average (market_region_stats, schema 035) -- ESI's recorded
+// daily trades, averaged at sweep time over the newest seven
+// recorded days (the same window the spread scanner uses).
 func (app *Application) buildTradefinderView(ctx context.Context, q map[string][]string) *tradefinderView {
 	originID := defaultMarketRegion
 	if raw := firstQuery(q, "origin"); raw != "" {
@@ -209,23 +210,6 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 	originCheapest := cheapestSellByType(app.listStationStats(ctx, originID))
 	destBestBuy := bestBuyByType(app.listStationStats(ctx, destID))
 
-	// Daily traded volume per type at the destination, averaged
-	// over the newest seven recorded days. One history read per
-	// candidate type, cached across that type's row.
-	dailyVolume := make(map[int64]float64)
-	dailyVolumeFor := func(typeID int64) float64 {
-		if v, ok := dailyVolume[typeID]; ok {
-			return v
-		}
-		rows := app.recentHistoryRows(ctx, destID, typeID, historyChartRows)
-		_, vol, ok := historyWindow(rows, 7)
-		if !ok {
-			vol = 0
-		}
-		dailyVolume[typeID] = vol
-		return vol
-	}
-
 	typeNames := make(map[int64]string)
 	itemNameFor := func(typeID int64) string {
 		if name, ok := typeNames[typeID]; ok {
@@ -259,7 +243,10 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 		if marginPct < minMargin {
 			continue
 		}
-		vol := dailyVolumeFor(o.TypeID)
+		// Sold per day at the destination: the sweep's stored
+		// 7-day average on the destination's region row (schema
+		// 035) -- no per-type history reads at render time.
+		vol := d.AvgDailyVolume
 		if vol < float64(minVolume) {
 			continue
 		}

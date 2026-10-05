@@ -4,9 +4,10 @@ package app
 // screen. It reads only stored rows -- the worker's per-station
 // book statistics (market_station_stats, schema 032, filled by
 // the same whole-region sweeps as the P1 region stats) plus the
-// stored daily trade history (market_history) -- and never calls
-// out. Rendering is a couple of SQLite reads; all the spread and
-// profit math happens here over stored numbers.
+// sweeps' stored 7-day average traded volume per type (schema
+// 035) -- and never calls out. Rendering is a couple of SQLite
+// reads; all the spread and profit math happens here over stored
+// numbers.
 
 import (
 	"context"
@@ -77,15 +78,17 @@ func (app *Application) handleMarketScanner(w http.ResponseWriter, r *http.Reque
 }
 
 // buildScannerView assembles the scanner page for one region
-// from stored station stats. Daily volume comes from
-// market_history -- ESI's recorded daily trades, averaged over
-// the newest seven recorded days (the same window the item
-// page's trading snapshot uses). It is a liquidity proxy: the
-// column is labelled "sold per day in <region>" and the profit
-// estimate is capped by what actually trades, what sellers
-// hold, and what buyers want, whichever is smallest. Rows need
-// a real buy above zero, a sell above the buy, enough daily
-// trades, and a wide-enough spread.
+// from stored station stats. Daily volume comes from the
+// sweep's stored per-type average (market_region_stats,
+// schema 035) -- ESI's recorded daily trades, averaged at
+// sweep time over the newest seven recorded days (the same
+// window the item page's trading snapshot uses). It is a
+// liquidity proxy: the column is labelled "sold per day in
+// <region>" and the profit estimate is capped by what
+// actually trades, what sellers hold, and what buyers want,
+// whichever is smallest. Rows need a real buy above zero, a
+// sell above the buy, enough daily trades, and a wide-enough
+// spread.
 func (app *Application) buildScannerView(ctx context.Context, q map[string][]string) *scannerView {
 	regionID := defaultMarketRegion
 	if raw := firstQuery(q, "region"); raw != "" {
@@ -146,21 +149,16 @@ func (app *Application) buildScannerView(ctx context.Context, q map[string][]str
 		view.AsOf = "Prices as of " + at.Format("Jan 2, 3:04 PM")
 	}
 
-	// Daily traded volume per type, averaged over the newest
-	// seven recorded days. One history read per candidate type,
-	// cached across that type's stations.
+	// Daily traded volume per type: the sweep's stored 7-day
+	// average from market_region_stats (schema 035), one read
+	// for the whole region -- not a history query per type.
 	dailyVolume := make(map[int64]float64)
-	dailyVolumeFor := func(typeID int64) float64 {
-		if v, ok := dailyVolume[typeID]; ok {
-			return v
+	if regionRows, rerr := app.queries.ListMarketRegionStatsByRegion(ctx, regionID); rerr != nil {
+		log.Printf("scanner: list region stats for region %d: %v", regionID, rerr)
+	} else {
+		for _, s := range regionRows {
+			dailyVolume[s.TypeID] = s.AvgDailyVolume
 		}
-		rows := app.recentHistoryRows(ctx, regionID, typeID, historyChartRows)
-		_, vol, ok := historyWindow(rows, 7)
-		if !ok {
-			vol = 0
-		}
-		dailyVolume[typeID] = vol
-		return vol
 	}
 
 	typeNames := make(map[int64]string)
@@ -189,7 +187,7 @@ func (app *Application) buildScannerView(ctx context.Context, q map[string][]str
 		if spreadPct < minSpread {
 			continue
 		}
-		vol := dailyVolumeFor(s.TypeID)
+		vol := dailyVolume[s.TypeID]
 		if vol < float64(minVolume) {
 			continue
 		}

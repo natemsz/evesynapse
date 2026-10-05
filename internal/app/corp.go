@@ -39,6 +39,11 @@ const (
 	fetchStateOK          = "ok"
 	fetchStateRoleMissing = "role_missing"
 	fetchStateError       = "error"
+	// fetchStateDead marks a definitive market failure (the
+	// request itself is wrong -- a bad type id, or a type with
+	// no such data in that region): marketFetchDue gates it
+	// like a success, since retrying sooner fails the same way.
+	fetchStateDead = "dead"
 )
 
 // corpAssetNamesKind is the worker pseudo-kind under which the

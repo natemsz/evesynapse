@@ -6,6 +6,7 @@ package db
 
 import (
 	"database/sql"
+	"time"
 )
 
 type AllianceRecord struct {
@@ -218,21 +219,22 @@ type OrderHealth struct {
 }
 
 type OrderLifecycle struct {
-	CharacterID      int64   `json:"character_id"`
-	OrderID          int64   `json:"order_id"`
-	TypeID           int64   `json:"type_id"`
-	LocationID       int64   `json:"location_id"`
-	RegionID         int64   `json:"region_id"`
-	IsBuyOrder       int64   `json:"is_buy_order"`
-	ListedPrice      float64 `json:"listed_price"`
-	VolumeTotal      int64   `json:"volume_total"`
-	VolumeRemainLast int64   `json:"volume_remain_last"`
-	FirstSeenAt      string  `json:"first_seen_at"`
-	LastSeenAt       string  `json:"last_seen_at"`
-	ClosedAt         string  `json:"closed_at"`
-	CloseKind        string  `json:"close_kind"`
-	OutbidEvents     int64   `json:"outbid_events"`
-	BeatenNow        int64   `json:"beaten_now"`
+	ID               sql.NullInt64 `json:"id"`
+	CharacterID      int64         `json:"character_id"`
+	OrderID          int64         `json:"order_id"`
+	TypeID           int64         `json:"type_id"`
+	LocationID       int64         `json:"location_id"`
+	RegionID         int64         `json:"region_id"`
+	IsBuyOrder       int64         `json:"is_buy_order"`
+	ListedPrice      float64       `json:"listed_price"`
+	VolumeTotal      int64         `json:"volume_total"`
+	VolumeRemainLast int64         `json:"volume_remain_last"`
+	FirstSeenAt      string        `json:"first_seen_at"`
+	LastSeenAt       string        `json:"last_seen_at"`
+	ClosedAt         string        `json:"closed_at"`
+	CloseKind        string        `json:"close_kind"`
+	OutbidEvents     int64         `json:"outbid_events"`
+	BeatenNow        int64         `json:"beaten_now"`
 }
 
 type PilotNameWant struct {
@@ -388,6 +390,12 @@ type SdeTypePhysic struct {
 	Mass     float64 `json:"mass"`
 	Volume   float64 `json:"volume"`
 	Capacity float64 `json:"capacity"`
+}
+
+type Session struct {
+	Token  string    `json:"token"`
+	Data   []byte    `json:"data"`
+	Expiry time.Time `json:"expiry"`
 }
 
 type SkillPlan struct {

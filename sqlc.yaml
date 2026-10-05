@@ -1,10 +1,11 @@
 version: "2"
 sql:
-  - engine: "sqlite"
-    schema: "internal/app/schema"
+  - engine: "postgresql"
+    schema: "internal/app/schema_pg"
     queries: "internal/db/query"
     gen:
       go:
         package: "db"
         out: "internal/db/sqlc"
+        sql_package: "database/sql"
         emit_json_tags: true

@@ -629,6 +629,50 @@ func (q *Queries) ListMarketHistoryWants(ctx context.Context, lastRequestedAt st
 	return items, nil
 }
 
+const listMarketRegionStatsByRegion = `-- name: ListMarketRegionStatsByRegion :many
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at
+FROM market_region_stats
+WHERE region_id = ?
+ORDER BY type_id
+`
+
+func (q *Queries) ListMarketRegionStatsByRegion(ctx context.Context, regionID int64) ([]MarketRegionStat, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketRegionStatsByRegion, regionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketRegionStat
+	for rows.Next() {
+		var i MarketRegionStat
+		if err := rows.Scan(
+			&i.RegionID,
+			&i.TypeID,
+			&i.BestSell,
+			&i.TypicalSell,
+			&i.SellBand,
+			&i.BestBuy,
+			&i.TypicalBuy,
+			&i.BuyBand,
+			&i.SellOrders,
+			&i.BuyOrders,
+			&i.SellVolume,
+			&i.BuyVolume,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMarketRegionStatsByType = `-- name: ListMarketRegionStatsByType :many
 SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at
 FROM market_region_stats

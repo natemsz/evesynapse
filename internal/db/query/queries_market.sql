@@ -363,6 +363,11 @@ SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical
 FROM market_region_stats
 WHERE type_id = ?
 ORDER BY region_id;
+-- name: ListMarketRegionStatsByRegion :many
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at
+FROM market_region_stats
+WHERE region_id = ?
+ORDER BY type_id;
 -- name: UpsertMarketRegionStatDaily :exec
 INSERT INTO market_region_stats_daily (region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

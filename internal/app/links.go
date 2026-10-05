@@ -103,6 +103,33 @@ func (app *Application) linkVerifiedCharacter(ctx context.Context, in linkCharac
 	return result, nil
 }
 
+// resolveSignInUser decides which EveSynapse account a verified SSO
+// sign-in lands on. A session that already holds an account keeps it
+// ("link another character" reuses the same path). A fresh session
+// adopts the account the character is already linked to: an expired
+// session must never split a returning user's pilots onto a
+// brand-new account that holds only the character they happened to
+// sign in with. Only a character that has never signed in creates a
+// new account.
+func (app *Application) resolveSignInUser(ctx context.Context, sessionUserID, characterID int64) (int64, error) {
+	if sessionUserID != 0 {
+		return sessionUserID, nil
+	}
+	existing, err := app.queries.GetCharacter(ctx, characterID)
+	switch {
+	case err == nil:
+		return existing.UserID, nil
+	case errors.Is(err, sql.ErrNoRows):
+		user, err := app.queries.CreateUser(ctx)
+		if err != nil {
+			return 0, err
+		}
+		return user.ID, nil
+	default:
+		return 0, err
+	}
+}
+
 // markCharacterTokenDead flags a character token_dead: CCP has
 // definitively rejected its refresh token, so syncing stops until
 // the user signs the character in again. Only an ok link can go

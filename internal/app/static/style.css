@@ -1758,3 +1758,151 @@ body.quickjump-open { overflow: hidden; }
   .quickjump-results { max-height: 60vh; }
   .quickjump-btn { margin-left: 0.35rem; }
 }
+
+/* --- fitting simulator (v0.3.21) --- */
+.fit-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+  align-items: end;
+  margin-bottom: 0.4rem;
+}
+.fit-head label { display: grid; gap: 0.25rem; font-size: 0.85rem; }
+.fit-head select, .fit-charge select {
+  background: #0e0e0e;
+  border: 1px solid #2a2a2a;
+  border-radius: 3px;
+  color: var(--text);
+  padding: 0.42rem 0.6rem;
+  font: inherit;
+}
+.fit-head select:focus, .fit-charge select:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 8px rgba(255, 106, 26, 0.35);
+}
+.fit-cols { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; }
+.fit-slots { flex: 1 1 20rem; min-width: min(18rem, 100%); }
+.fit-stats {
+  flex: 1 1 22rem;
+  min-width: min(18rem, 100%);
+  background: var(--panel);
+  border: 1px solid #242424;
+  border-radius: 4px;
+  padding: 0.8rem 1rem;
+}
+.fit-stats > h4:first-child { margin-top: 0; color: #ffb84d; }
+.fit-group { margin-bottom: 0.8rem; }
+.fit-group > h4 { margin: 0 0 0.4rem; }
+.fit-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.fit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--row-alt);
+  border: 1px solid #2c2c2c;
+  border-radius: 3px;
+  padding: 0.15rem 0.4rem;
+}
+.fit-chip:hover { background: var(--row-hover); }
+.fit-chip-name {
+  background: none;
+  border: none;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.fit-chip-btn {
+  background: #242424;
+  border: 1px solid #3a3a3a;
+  border-radius: 3px;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  padding: 0.1rem 0.35rem;
+}
+.fit-chip-qty { color: #ffb84d; }
+.fit-qty {
+  width: 4.2rem;
+  background: #0e0e0e;
+  border: 1px solid #2a2a2a;
+  border-radius: 3px;
+  color: var(--text);
+  font: inherit;
+  padding: 0.15rem 0.3rem;
+}
+.fit-slot-empty {
+  background: transparent;
+  border: 1px dashed #3a3a3a;
+  border-radius: 3px;
+  color: #b39a7d;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.3rem 0.5rem;
+}
+.fit-slot-empty:hover { border-color: var(--accent); color: var(--text); }
+.fit-bar-row { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.45rem; }
+.fit-bar-label { flex: 0 0 5.2rem; font-size: 0.85rem; }
+.fit-bar {
+  flex: 1 1 auto;
+  height: 0.6rem;
+  background: #0a0a0a;
+  border: 1px solid #2c2c2c;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.fit-bar > span { display: block; height: 100%; background: var(--success); }
+.fit-bar-row.over .fit-bar > span { background: var(--danger); }
+.fit-bar-nums { font-size: 0.85rem; white-space: nowrap; }
+.fit-table { width: 100%; margin-bottom: 0.6rem; }
+.fit-over { color: var(--danger); }
+.fit-good { color: var(--success); }
+.fit-note, .fit-notes { color: #c9a06a; }
+.fit-notes { padding-left: 1.2rem; }
+.fit-missing {
+  border: 1px solid #4a3410;
+  border-radius: 4px;
+  padding: 0.6rem 0.8rem;
+  margin-top: 0.6rem;
+}
+.fit-missing > h4 { margin: 0 0 0.4rem; color: #ffb84d; }
+.fit-missing ul { margin: 0; padding-left: 1.2rem; }
+.fit-picker {
+  margin-top: 0.8rem;
+  border: 1px solid #2c2c2c;
+  border-radius: 4px;
+  background: var(--panel);
+  padding: 0.7rem;
+}
+.fit-picker-head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.fit-picker-head input[type="text"] { flex: 1 1 14rem; }
+.fit-picker-list { list-style: none; margin: 0.6rem 0 0; padding: 0; max-height: 16rem; overflow-y: auto; }
+.fit-picker-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.fit-picker-list li:hover { background: var(--row-hover); }
+.fit-picker-list .sug-label { color: #b39a7d; font-size: 0.8rem; }
+.fit-eft { margin-top: 1rem; }
+.fit-eft textarea {
+  width: 100%;
+  background: #0e0e0e;
+  border: 1px solid #2a2a2a;
+  border-radius: 3px;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.5rem 0.6rem;
+}
+.fit-eft textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 8px rgba(255, 106, 26, 0.35);
+}
+.fit-charge { margin: 0.3rem 0; }

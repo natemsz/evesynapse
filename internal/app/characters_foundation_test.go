@@ -441,3 +441,51 @@ func TestMigration009Reopen(t *testing.T) {
 	}
 	conn.Close()
 }
+
+// TestResolveSignInUser covers which account a verified sign-in
+// lands on: a fresh session adopts the account a returning
+// character is already linked to (an expired session must not split
+// a user's pilots onto a new account holding only that one
+// character), a first-ever character creates an account, and a
+// held session account always wins.
+func TestResolveSignInUser(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+
+	userA, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user A: %v", err)
+	}
+	linkFor(t, app, userA.ID, fixtureCharA, "hash-one")
+
+	// Fresh session, returning character: adopt A, do not mint.
+	got, err := app.resolveSignInUser(ctx, 0, fixtureCharA)
+	if err != nil {
+		t.Fatalf("resolve returning: %v", err)
+	}
+	if got != userA.ID {
+		t.Fatalf("resolve returning: got user %d, want %d", got, userA.ID)
+	}
+
+	// Held session account wins (link-another-character path).
+	userB, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user B: %v", err)
+	}
+	got, err = app.resolveSignInUser(ctx, userB.ID, fixtureCharA)
+	if err != nil {
+		t.Fatalf("resolve with session account: %v", err)
+	}
+	if got != userB.ID {
+		t.Fatalf("resolve with session account: got user %d, want %d", got, userB.ID)
+	}
+
+	// First-ever character: a new account appears.
+	got, err = app.resolveSignInUser(ctx, 0, fixtureCharB)
+	if err != nil {
+		t.Fatalf("resolve first-ever: %v", err)
+	}
+	if got == 0 || got == userA.ID || got == userB.ID {
+		t.Fatalf("resolve first-ever: got user %d, want a fresh account", got)
+	}
+}

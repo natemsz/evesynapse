@@ -241,17 +241,15 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Attach to the account this session already holds; create one on
-	// first login. ("Link another character" reuses the same path.)
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
-	if userID == 0 {
-		user, err := app.queries.CreateUser(ctx)
-		if err != nil {
-			log.Printf("sso callback: create user: %v", err)
-			fail("save")
-			return
-		}
-		userID = user.ID
+	// Land on the account this sign-in belongs to: the session's
+	// account when it holds one ("link another character"), else
+	// the account the character is already linked to, else a fresh
+	// account for a first-ever sign-in.
+	userID, err := app.resolveSignInUser(ctx, int64(app.sessions.GetInt(ctx, sessionUserID)), characterID)
+	if err != nil {
+		log.Printf("sso callback: resolve account for character %d: %v", characterID, err)
+		fail("save")
+		return
 	}
 
 	expiry := ""

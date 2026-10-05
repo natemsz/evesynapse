@@ -89,10 +89,18 @@
 
 :root {
   color-scheme: dark;
-  --text: #f5ead9;
+  /* v0.3.30: --text lightened a notch (#f5ead9 -> #faf3e6) for LCD
+     readability; the ember palette is untouched. The extra text-tone
+     variables below exist so the light theme can re-tone them. */
+  --text: #faf3e6;
+  --text-bright: #fff6e6;
   --accent: #ff6a1a;
   --success: #ffb84d;
   --danger: #c62f10;
+  --gold: #ffd27a;
+  --muted: #b39a7d;
+  --muted-2: #b8a58c;
+  --note: #c9a06a;
   --panel: #151515;
   --panel-head: #0e0e0e;
   --row: #101010;
@@ -130,7 +138,7 @@ body::before {
 }
 
 a { color: var(--accent); text-decoration: none; }
-a:hover { color: #ffb84d; text-decoration: underline; }
+a:hover { color: var(--success); text-decoration: underline; }
 
 /* Headers, wordmark, nav category labels, buttons, badges,
    and table headers ride the Condensed cut of Univers Next
@@ -184,7 +192,7 @@ h2, h3 {
 h2 { font-size: 1.04rem; }
 h3 { font-size: 0.88rem; margin: 1.4rem 0 0.4rem; }
 
-small { color: #b39a7d; }
+small { color: var(--muted); }
 
 /* --- top bar --- */
 header {
@@ -225,10 +233,10 @@ header .topbar {
   background-clip: text;
   color: transparent;
 }
-.wordmark:hover { color: #fff6e6; text-decoration: none; }
+.wordmark:hover { color: var(--text-bright); text-decoration: none; }
 header .who {
   margin-left: auto;
-  color: #b8a58c;
+  color: var(--muted-2);
   text-shadow: 0 1px 0 #000;
   text-align: right;
 }
@@ -246,19 +254,19 @@ header .mainnav {
 header .mainnav .spacer { flex: 1; }
 header a.navlink,
 .branch > summary {
-  color: #b8a58c;
+  color: var(--muted-2);
   text-shadow: 0 1px 0 #000;
   padding: 0.3rem 0.6rem;
   white-space: nowrap;
 }
 header a.navlink:hover,
-.branch > summary:hover { color: #ffe9c9; text-decoration: none; }
+.branch > summary:hover { color: var(--text-bright); text-decoration: none; }
 header a.navlink.active,
 .branch.active > summary {
-  color: #ffe9c9;
+  color: var(--text-bright);
   box-shadow: inset 0 -2px 0 var(--accent);
 }
-header a.navlink.utility { font-size: 0.9em; color: #8a7458; }
+header a.navlink.utility { font-size: 0.9em; color: var(--muted); }
 .branch { position: relative; }
 .branch > summary {
   cursor: pointer;
@@ -277,7 +285,7 @@ header a.navlink.utility { font-size: 0.9em; color: #8a7458; }
   font-size: 0.8em;
   transition: transform 0.15s ease;
 }
-.branch[open] > summary { color: #ffe9c9; }
+.branch[open] > summary { color: var(--text-bright); }
 .branch[open] > summary::after { transform: rotate(180deg); }
 .branch .menu {
   position: absolute;
@@ -299,8 +307,8 @@ header a.navlink.utility { font-size: 0.9em; color: #8a7458; }
   border-radius: 3px;
   white-space: nowrap;
 }
-.branch .menu a:hover { color: #fff6e6; background: #1b1b1b; text-decoration: none; }
-.branch .menu a.active { color: #ffd27a; background: rgba(255, 106, 26, 0.18); }
+.branch .menu a:hover { color: var(--text-bright); background: #1b1b1b; text-decoration: none; }
+.branch .menu a.active { color: var(--gold); background: rgba(255, 106, 26, 0.18); }
 
 /* --- layout + panels --- */
 /* Fluid width: the container runs nearly the full viewport on
@@ -411,7 +419,7 @@ main {
   background: none;
   -webkit-background-clip: border-box;
   background-clip: border-box;
-  color: #ffb84d;
+  color: var(--success);
   -webkit-text-fill-color: currentColor;
 }
 .card table { margin-bottom: 0.5rem; }
@@ -430,7 +438,7 @@ main {
   font-size: 1rem;
   line-height: 1;
   font-family: inherit;
-  color: #ffd27a;
+  color: var(--gold);
   background: #0e0e0e;
   -webkit-background-clip: border-box;
   background-clip: border-box;
@@ -438,7 +446,7 @@ main {
   border-radius: 3px;
   cursor: pointer;
 }
-.foldbtn:hover { color: #fff6e6; border-color: var(--accent); }
+.foldbtn:hover { color: var(--text-bright); border-color: var(--accent); }
 .panel.has-fold > h1:first-child { padding-right: 3rem; }
 .panel.folded > *:not(h1),
 .card.folded > *:not(:first-child),
@@ -467,7 +475,7 @@ main {
 .btn:hover {
   background: linear-gradient(to bottom, #ff6a1a, #d63c14 60%, #a12808) padding-box,
     linear-gradient(135deg, #ffd27a, #ff6a1a 50%, #a12808) border-box;
-  color: #fff6e6;
+  color: var(--text-bright);
   text-decoration: none;
 }
 .btn:focus-visible, a:focus-visible {
@@ -550,7 +558,7 @@ img.portrait {
      display numeral without out-shouting the page header. */
   font-size: 1.05rem;
   letter-spacing: 0.01em;
-  color: #ffe9c9;
+  color: var(--text-bright);
 }
 
 .corp-desc { white-space: pre-line; }
@@ -597,9 +605,9 @@ input[type="text"]:focus, input[type="search"]:focus {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.suggest li.sel { background: rgba(255, 106, 26, 0.18); color: #fff6e6; }
+.suggest li.sel { background: rgba(255, 106, 26, 0.18); color: var(--text-bright); }
 .suggest li.pending {
-  color: #c9a06a;
+  color: var(--note);
   cursor: default;
   background: transparent;
 }
@@ -607,7 +615,7 @@ input[type="text"]:focus, input[type="search"]:focus {
   display: block;
   font-size: 0.72rem;
   letter-spacing: 0.04em;
-  color: #b8a58c;
+  color: var(--muted-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -653,7 +661,7 @@ input[type="text"]:focus, input[type="search"]:focus {
   border-radius: 3px;
   border: 1px solid;
 }
-.badge.kill { color: #ffd27a; border-color: var(--success); background: rgba(255, 184, 77, 0.14); }
+.badge.kill { color: var(--gold); border-color: var(--success); background: rgba(255, 184, 77, 0.14); }
 .badge.loss { color: #ffab8f; border-color: var(--danger); background: rgba(120, 26, 6, 0.38); }
 .countdown { font-variant-numeric: tabular-nums; color: var(--accent); }
 
@@ -672,7 +680,7 @@ footer {
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border-top: 1px solid #262626;
-  color: #8a7458;
+  color: var(--muted);
   text-align: center;
   font-size: 0.72rem;
   text-shadow: 1px -1px 0 #000;
@@ -761,7 +769,7 @@ footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
   user-select: none;
   -webkit-user-select: none;
   cursor: grab;
-  color: #ffd27a;
+  color: var(--gold);
   background: #0e0e0e;
   border: 1px solid #4a2408;
   border-radius: 3px;
@@ -835,7 +843,7 @@ footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
   align-items: center;
   gap: 0.35rem 0.9rem;
   margin: 0.15rem 0 0.35rem;
-  color: #c9a06a;
+  color: var(--note);
   font-family: "Univers Next Pro Condensed", "Univers Next Pro", sans-serif;
   font-size: 0.92em;
   letter-spacing: 0.03em;
@@ -897,7 +905,7 @@ footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
   transform: translate(-50%, -115%);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
 }
-.ctip .ctip-date { color: #ffd27a; font-weight: 600; }
+.ctip .ctip-date { color: var(--gold); font-weight: 600; }
 body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbing; }
 @media (prefers-reduced-motion: reduce) {
   .card.drag-settle { transition: none; }
@@ -913,13 +921,13 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
   font-size: 1rem;
   line-height: 1;
   font-family: inherit;
-  color: #ffd27a;
+  color: var(--gold);
   background: #0e0e0e;
   border: 1px solid #4a2408;
   border-radius: 3px;
   cursor: pointer;
 }
-.cardremove:hover { color: #fff6e6; border-color: var(--danger); }
+.cardremove:hover { color: var(--text-bright); border-color: var(--danger); }
 /* The half/full resize toggle sits left of the × on flex
    modules; the heading leaves room for all three controls. */
 .cardspan {
@@ -933,14 +941,14 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
   font-size: 0.95rem;
   line-height: 1;
   font-family: inherit;
-  color: #ffd27a;
+  color: var(--gold);
   background: #0e0e0e;
   border: 1px solid #4a2408;
   border-radius: 3px;
   cursor: pointer;
 }
-.cardspan:hover { color: #fff6e6; border-color: var(--accent); }
-.cardspan[aria-pressed="true"] { color: #fff6e6; border-color: var(--accent); }
+.cardspan:hover { color: var(--text-bright); border-color: var(--accent); }
+.cardspan[aria-pressed="true"] { color: var(--text-bright); border-color: var(--accent); }
 .home-custom.has-controls .card > h2:first-child, .home-custom.has-controls .card > h3:first-child { padding-right: 4.6rem; }
 .home-custom.has-controls .card.has-spanbtn > h2:first-child, .home-custom.has-controls .card.has-spanbtn > h3:first-child { padding-right: 6.6rem; }
 
@@ -978,13 +986,13 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
   font-size: 1rem;
   line-height: 1;
   font-family: inherit;
-  color: #ffd27a;
+  color: var(--gold);
   background: #0e0e0e;
   border: 1px solid #4a2408;
   border-radius: 3px;
   cursor: pointer;
 }
-.modal-close:hover { color: #fff6e6; border-color: var(--accent); }
+.modal-close:hover { color: var(--text-bright); border-color: var(--accent); }
 .modal-list { list-style: none; margin: 0; padding: 0; }
 .modal-item {
   display: block;
@@ -1014,7 +1022,7 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
   vertical-align: -2px;
   border-radius: 50%;
   border: 2px solid #3a2a1a;
-  border-top-color: #ffb84d;
+  border-top-color: var(--success);
   animation: eve-spin 0.9s linear infinite;
 }
 @keyframes eve-spin {
@@ -1149,7 +1157,7 @@ html[data-nav="hidden"] .sidebar {
   min-width: 2rem;
   min-height: 2rem;
   padding: 0.25rem 0.45rem;
-  color: #ffd27a;
+  color: var(--gold);
   background: #0e0e0e;
   border: 1px solid #4a2408;
   border-radius: 3px;
@@ -1188,12 +1196,12 @@ html.js[data-nav="hidden"] .nav-reopen { display: inline-flex; }
 .nav-expand-btn[aria-expanded="true"] .expand-icon-minus { display: block; }
 #nav-collapse .nav-control-svg { transition: transform 0.15s ease; }
 html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
-.nav-reopen:hover { color: #fff6e6; border-color: var(--accent); }
+.nav-reopen:hover { color: var(--text-bright); border-color: var(--accent); }
 /* Glyph controls get feedback as a faint wash, not a box. */
 .nav-state-btn:hover,
 .nav-drawer-close:hover,
 .nav-expand-btn:hover {
-  color: #fff6e6;
+  color: var(--text-bright);
   background: rgba(255, 106, 26, 0.14);
   border-color: transparent;
 }
@@ -1218,13 +1226,13 @@ html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
 }
 .sidenav a.navlink:hover,
 .sidebar .branch > summary:hover {
-  color: #fff6e6;
+  color: var(--text-bright);
   background: #1b1b1b;
   text-decoration: none;
 }
 .sidenav a.navlink.active,
 .sidebar .branch.active > summary {
-  color: #fff6e6;
+  color: var(--text-bright);
   background: #1b1b1b;
   box-shadow: inset 3px 0 0 var(--accent);
 }
@@ -1232,7 +1240,7 @@ html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
 .nav-icon {
   flex: 0 0 1.35rem;
   width: 1.35rem;
-  color: #ffb84d;
+  color: var(--success);
   line-height: 1;
   text-align: center;
 }
@@ -1282,7 +1290,7 @@ html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
   border-radius: 3px;
 }
 .sidebar .branch .menu a.active {
-  color: #fff6e6;
+  color: var(--text-bright);
   background-color: #2a1a0c;
   box-shadow: inset 2px 0 0 var(--accent);
 }
@@ -1314,7 +1322,7 @@ html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
 .sidebar-signout {
   display: inline-flex;
   margin-top: 0.45rem;
-  color: #ffb84d;
+  color: var(--success);
 }
 html[data-nav="rail"] .sidebar-inner { overflow: visible; }
 html[data-nav="rail"] .sidebar-account { display: none; }
@@ -1441,7 +1449,7 @@ tbody tr.yours td { background-color: #2a2015; }
   .wordmark,
   .panel > h1:first-child > .gt {
     background: none;
-    color: #ffb84d;
+    color: var(--success);
     -webkit-text-fill-color: currentColor;
   }
 }
@@ -1634,13 +1642,13 @@ tbody tr.yours td { background-color: #2a2015; }
 }
 .market-group-card:hover {
   background: var(--row-hover);
-  color: #fff6e6;
+  color: var(--text-bright);
   text-decoration: none;
 }
 .market-group-icon {
   flex: 0 0 1.7rem;
   width: 1.7rem;
-  color: #ffb84d;
+  color: var(--success);
   line-height: 1;
 }
 .market-group-icon svg {
@@ -1664,13 +1672,13 @@ tbody tr.yours td { background-color: #2a2015; }
   background: #0e0e0e;
   border: 1px solid #2a2a2a;
   border-radius: 4px;
-  color: #b8a58c;
+  color: var(--muted-2);
   cursor: pointer;
   font: inherit;
 }
 .quickjump-btn:hover, .quickjump-btn:focus-visible {
   border-color: var(--accent);
-  color: #fff6e6;
+  color: var(--text-bright);
   outline: none;
 }
 .quickjump-btn kbd {
@@ -1723,7 +1731,7 @@ tbody tr.yours td { background-color: #2a2015; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.quickjump-results li.sel { background: #2a1a0c; color: #fff6e6; }
+.quickjump-results li.sel { background: #2a1a0c; color: var(--text-bright); }
 .quickjump-results li.qj-group {
   padding: 0.55rem 0.6rem 0.2rem;
   cursor: default;
@@ -1732,17 +1740,17 @@ tbody tr.yours td { background-color: #2a2015; }
   font-size: 0.78rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #ffb84d;
+  color: var(--success);
 }
 .quickjump-results li.qj-pending {
-  color: #c9a06a;
+  color: var(--note);
   cursor: default;
 }
 .quickjump-results .qj-label {
   display: block;
   font-size: 0.72rem;
   letter-spacing: 0.04em;
-  color: #b8a58c;
+  color: var(--muted-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1750,7 +1758,7 @@ tbody tr.yours td { background-color: #2a2015; }
 .quickjump-hint {
   margin: 0.55rem 0.1rem 0;
   font-size: 0.75rem;
-  color: #b8a58c;
+  color: var(--muted-2);
 }
 body.quickjump-open { overflow: hidden; }
 @media (max-width: 720px) {
@@ -1791,7 +1799,7 @@ body.quickjump-open { overflow: hidden; }
   border-radius: 4px;
   padding: 0.8rem 1rem;
 }
-.fit-stats > h4:first-child { margin-top: 0; color: #ffb84d; }
+.fit-stats > h4:first-child { margin-top: 0; color: var(--success); }
 .fit-group { margin-bottom: 0.8rem; }
 .fit-group > h4 { margin: 0 0 0.4rem; }
 .fit-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
@@ -1823,7 +1831,7 @@ body.quickjump-open { overflow: hidden; }
   line-height: 1;
   padding: 0.1rem 0.35rem;
 }
-.fit-chip-qty { color: #ffb84d; }
+.fit-chip-qty { color: var(--success); }
 .fit-qty {
   width: 4.2rem;
   background: #0e0e0e;
@@ -1837,7 +1845,7 @@ body.quickjump-open { overflow: hidden; }
   background: transparent;
   border: 1px dashed #3a3a3a;
   border-radius: 3px;
-  color: #b39a7d;
+  color: var(--muted);
   cursor: pointer;
   font: inherit;
   padding: 0.3rem 0.5rem;
@@ -1861,9 +1869,9 @@ body.quickjump-open { overflow: hidden; }
 .fit-table { width: 100%; margin-bottom: 0.6rem; }
 .fit-over { color: var(--danger); }
 .fit-good { color: var(--success); }
-.fit-note, .fit-notes { color: #c9a06a; }
+.fit-note, .fit-notes { color: var(--note); }
 .fit-notes { padding-left: 1.2rem; }
-.fit-implants { margin: 0.4rem 0; color: #c9a06a; }
+.fit-implants { margin: 0.4rem 0; color: var(--note); }
 .fit-implants summary { cursor: pointer; }
 .fit-implants ul { margin: 0.3rem 0 0; padding-left: 1.2rem; }
 .fit-missing {
@@ -1927,14 +1935,14 @@ body.quickjump-open { overflow: hidden; }
   border-radius: 50%;
   border: 1px solid rgba(255, 106, 26, 0.6);
   background: rgba(12, 10, 8, 0.85);
-  color: #ffb84d;
+  color: var(--success);
   font-size: 1rem;
   line-height: 1;
   cursor: pointer;
   padding: 0;
   box-shadow: 0 0 8px rgba(255, 106, 26, 0.25);
 }
-.fit-vhist:hover:not(:disabled) { border-color: #ffb84d; color: #ffd27a; }
+.fit-vhist:hover:not(:disabled) { border-color: var(--success); color: var(--gold); }
 .fit-vhist:disabled { opacity: 0.3; cursor: default; box-shadow: none; }
 /* The ship is the centerpiece: circular showcase, ember gradient
    ring and glow — not a square thumbnail. */
@@ -2005,7 +2013,7 @@ body.quickjump-open { overflow: hidden; }
   border-radius: 50%;
   border: 2px dashed #3a3a3a;
   background: rgba(10, 10, 10, 0.72);
-  color: #b39a7d;
+  color: var(--muted);
   cursor: pointer;
   padding: 0;
   display: flex;
@@ -2059,11 +2067,11 @@ body.quickjump-open { overflow: hidden; }
   0% { box-shadow: 0 0 0 3px rgba(255, 184, 77, 0.95), 0 0 20px rgba(255, 106, 26, 0.85); }
   100% { box-shadow: 0 0 0 0 rgba(255, 184, 77, 0), 0 0 0 rgba(255, 106, 26, 0); }
 }
-.fit-vslot.flash { animation: fit-flash 0.7s ease-out; border-color: #ffb84d; }
+.fit-vslot.flash { animation: fit-flash 0.7s ease-out; border-color: var(--success); }
 .fit-group.flash h3, .fit-charge.flash { animation: fit-flash 0.7s ease-out; border-radius: 4px; }
 select.flash { animation: fit-flash 0.7s ease-out; }
 .fit-vslot.drop-ok {
-  border-color: #ffb84d;
+  border-color: var(--success);
   border-style: solid;
   box-shadow: 0 0 10px rgba(255, 184, 77, 0.6);
 }
@@ -2071,7 +2079,7 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 /* Drag highlight: slots the dragged module could fit in glow
    ember/gold; the rest stay dim. Cleared on drop/dragend. */
 .fit-vslot.drop-valid {
-  border-color: #ffb84d;
+  border-color: var(--success);
   border-style: solid;
   box-shadow: 0 0 12px rgba(255, 184, 77, 0.55);
 }
@@ -2092,15 +2100,15 @@ select.flash { animation: fit-flash 0.7s ease-out; }
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6), 0 0 12px rgba(255, 106, 26, 0.25);
 }
 .fit-tip-name { font-weight: 600; color: var(--text); margin-bottom: 0.15rem; }
-.fit-tip-sub { color: #b39a7d; font-size: 0.75rem; }
-.fit-tip-stats { color: #b39a7d; font-size: 0.75rem; white-space: nowrap; }
+.fit-tip-sub { color: var(--muted); font-size: 0.75rem; }
+.fit-tip-stats { color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
 .fit-tip-x {
   position: absolute;
   top: 0.1rem;
   right: 0.3rem;
   background: none;
   border: none;
-  color: #b39a7d;
+  color: var(--muted);
   font-size: 1rem;
   cursor: pointer;
   padding: 0.1rem 0.3rem;
@@ -2141,7 +2149,7 @@ select.flash { animation: fit-flash 0.7s ease-out; }
   touch-action: pan-y;
 }
 .fit-picker-list li:hover { background: var(--row-hover); }
-.fit-picker-list .sug-label { color: #b39a7d; font-size: 0.8rem; }
+.fit-picker-list .sug-label { color: var(--muted); font-size: 0.8rem; }
 /* The module icon that follows the pointer mid-drag. */
 .fit-drag-ghost {
   position: fixed;
@@ -2157,11 +2165,11 @@ select.flash { animation: fit-flash 0.7s ease-out; }
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ffb84d;
+  color: var(--success);
   font-size: 0.7rem;
 }
 .fit-drag-ghost img { width: 88%; height: 88%; border-radius: 50%; }
-.fit-picker-hint { color: #b39a7d; font-size: 0.8rem; }
+.fit-picker-hint { color: var(--muted); font-size: 0.8rem; }
 /* Module search: its own prominent input, sticky above the
    workbench so it stays visible while fitting. */
 .fit-modsearch {
@@ -2205,7 +2213,7 @@ select.flash { animation: fit-flash 0.7s ease-out; }
   background: #141414;
   border: 1px solid #2c2c2c;
   border-radius: 999px;
-  color: #b39a7d;
+  color: var(--muted);
   cursor: pointer;
   font: inherit;
   font-size: 0.8rem;
@@ -2222,7 +2230,7 @@ select.flash { animation: fit-flash 0.7s ease-out; }
   align-items: center;
   gap: 0.35rem;
   font-size: 0.85rem;
-  color: #b39a7d;
+  color: var(--muted);
   cursor: pointer;
 }
 .fit-check.disabled { opacity: 0.45; cursor: default; }
@@ -2244,7 +2252,7 @@ select.flash { animation: fit-flash 0.7s ease-out; }
   border-radius: 3px;
   flex: 0 0 auto;
 }
-.suggest .sug-empty { color: #b39a7d; cursor: default; }
+.suggest .sug-empty { color: var(--muted); cursor: default; }
 .suggest .sug-empty:hover { background: none; }
 .fit-picker-list .sug-icon {
   width: 1.6rem;
@@ -2294,16 +2302,16 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 .fit-headline-num {
   font-size: 1.9rem;
   font-weight: 700;
-  color: #ffb84d;
+  color: var(--success);
   line-height: 1;
 }
 .fit-headline-label {
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #b39a7d;
+  color: var(--muted);
 }
-.fit-headline-sub { font-size: 0.78rem; color: #8a7a63; flex-basis: 100%; }
+.fit-headline-sub { font-size: 0.78rem; color: var(--muted); flex-basis: 100%; }
 
 /* Fit metadata + your-fits search in the editor header. */
 .fit-meta {
@@ -2315,7 +2323,7 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 }
 .fit-meta-desc { flex: 2 1 16rem; }
 .fit-meta-tags { flex: 1 1 10rem; }
-.fit-meta label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: #b39a7d; }
+.fit-meta label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--muted); }
 .fit-meta input[type="text"] { width: 100%; }
 .fit-yourfits {
   display: flex;
@@ -2326,7 +2334,7 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 }
 .fit-yourfitswrap { flex: 1 1 18rem; position: relative; }
 .fit-yourfitswrap .suggest { position: absolute; z-index: 50; }
-.fit-saved { font-size: 0.8rem; color: #8a7a63; }
+.fit-saved { font-size: 0.8rem; color: var(--muted); }
 .fit-tag {
   display: inline-block;
   background: rgba(255, 184, 77, 0.1);
@@ -2335,6 +2343,277 @@ select.flash { animation: fit-flash 0.7s ease-out; }
   padding: 0.05rem 0.4rem;
   margin-right: 0.25rem;
   font-size: 0.75rem;
-  color: #ffb84d;
+  color: var(--success);
 }
 #fit-undo:disabled, #fit-redo:disabled { opacity: 0.35; cursor: default; }
+
+/* ============================================================
+   v0.3.30: wide-screen fitting workbench.
+   At >=1100px the workbench becomes a 3-column grid: module
+   text lists LEFT, ship ring CENTER, stats panel RIGHT — all at
+   the same height so stat changes read in real time without
+   scrolling. .fit-cols flattens via display:contents so its
+   children (.fit-slots, .fit-stats) become direct grid items
+   alongside .fit-visual. When no ship is picked (.fit-visual
+   absent), .fit-slots and .fit-stats take columns 1 and 3.
+   Below 1100px the stacked layout is untouched.
+   ============================================================ */
+@media (min-width: 1100px) {
+  .fit-wb {
+    display: grid;
+    grid-template-columns: minmax(15rem, 1fr) minmax(20rem, 1.35fr) minmax(17rem, 1fr);
+    gap: 1.25rem;
+    align-items: start;
+  }
+  /* Flatten the wrapper so its children join the grid. */
+  .fit-wb > .fit-cols { display: contents; }
+  .fit-wb > .fit-visual {
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+    max-width: 34rem;
+    margin: 0;
+    justify-self: center;
+  }
+  .fit-wb > .fit-cols > .fit-slots { grid-column: 1; grid-row: 1; }
+  .fit-wb > .fit-cols > .fit-stats { grid-column: 3; grid-row: 1; }
+  /* No ship picked yet: no empty middle column — the stats
+     panel stretches over columns 2-3. */
+  .fit-wb:not(:has(> .fit-visual)) > .fit-cols > .fit-stats { grid-column: 2 / 4; }
+}
+
+/* ============================================================
+   v0.3.30: light theme.
+   All page theming flows through the :root variables, so the
+   light theme is a variable re-skin plus overrides for the
+   handful of surfaces painted with hardcoded dark colors.
+   Ember/gold accents are kept; positive states stay gold —
+   never green. The explicit toggle (documentElement[data-theme])
+   wins; with no explicit choice the OS prefers-color-scheme
+   decides (media query below).
+   ============================================================ */
+html[data-theme="light"] {
+  color-scheme: light;
+  --text: #2a241d;
+  --text-bright: #20180e;
+  --accent: #ff6a1a;
+  --success: #a86f14;   /* positive = deep gold, never green */
+  --danger: #b02a0d;
+  --gold: #9e6410;
+  --muted: #6e5a42;
+  --muted-2: #5f4c36;
+  --note: #8a5f24;
+  --panel: #fdfbf6;
+  --panel-head: #f0e9da;
+  --row: #f8f4ec;
+  --row-alt: #f1ebdf;
+  --row-hover: #e9e0cf;
+}
+html[data-theme="light"] body { background: #f4f1ea; }
+html[data-theme="light"] body::before { display: none; }
+/* Glass chrome: light paint, same blur recipe. */
+html[data-theme="light"] header {
+  background: linear-gradient(to bottom, rgba(247, 243, 235, 0.9), rgba(236, 229, 214, 0.9));
+  border-bottom-color: #d9cfba;
+  box-shadow: 0 1px 8px rgba(90, 70, 40, 0.25);
+}
+html[data-theme="light"] .sidebar {
+  background: linear-gradient(rgba(247, 243, 235, 0.9), rgba(236, 229, 214, 0.9)) padding-box;
+  border-right-color: #d9cfba;
+}
+html[data-theme="light"] footer {
+  background: rgba(244, 241, 234, 0.85);
+  border-top-color: #d9cfba;
+  text-shadow: none;
+}
+html[data-theme="light"] header a.navlink,
+html[data-theme="light"] .branch > summary,
+html[data-theme="light"] header .who,
+html[data-theme="light"] thead th { text-shadow: none; }
+/* Surfaces painted with hardcoded dark colors. */
+html[data-theme="light"] .card { background: #fdfbf6; border-color: #ddd2bd; }
+html[data-theme="light"] input[type="text"],
+html[data-theme="light"] input[type="search"],
+html[data-theme="light"] .fit-qty,
+html[data-theme="light"] .fit-eft textarea,
+html[data-theme="light"] .fit-tip-state { background: #fffdf9; border-color: #d3c7ae; }
+html[data-theme="light"] .suggest,
+html[data-theme="light"] .branch .menu {
+  background: #fffdf9;
+  border-color: #d3c7ae;
+  box-shadow: 0 10px 24px rgba(90, 70, 40, 0.22);
+}
+html[data-theme="light"] .branch .menu a { color: #5c4a33; }
+html[data-theme="light"] .branch .menu a:hover { background: #f0e7d2; }
+html[data-theme="light"] .branch .menu a.active,
+html[data-theme="light"] .sidebar .branch .menu a.active { background-color: #f0dfbc; }
+html[data-theme="light"] .sidebar .branch .menu a { border-color: #d3c7ae; }
+html[data-theme="light"] .sidenav a.navlink:hover,
+html[data-theme="light"] .sidebar .branch > summary:hover,
+html[data-theme="light"] .sidenav a.navlink.active,
+html[data-theme="light"] .sidebar .branch.active > summary,
+html[data-theme="light"] .sidebar .branch[open] > summary { background: #ece3cf; }
+html[data-theme="light"] .nav-state-btn,
+html[data-theme="light"] .nav-reopen,
+html[data-theme="light"] .nav-drawer-close,
+html[data-theme="light"] .nav-expand-btn { background: #fffdf9; border-color: #d9b98a; }
+/* Glyph chips keep a light paint so hover text stays readable. */
+html[data-theme="light"] .foldbtn,
+html[data-theme="light"] .cardremove,
+html[data-theme="light"] .cardspan,
+html[data-theme="light"] .modal-close,
+html[data-theme="light"] .quickjump-btn { background: #fffdf9; border-color: #d3c7ae; }
+/* The ember gradient button keeps its dark paint in light mode. */
+html[data-theme="light"] .btn:hover { color: #fff6e6; }
+/* Tables. */
+html[data-theme="light"] table { border-color: #d9cfba; }
+html[data-theme="light"] th,
+html[data-theme="light"] td { border-top-color: #e4d9c2; border-bottom-color: #d9cfba; }
+html[data-theme="light"] thead th { border-bottom-color: #d9cfba; }
+html[data-theme="light"] tbody tr.yours td { background-color: #f3e3bd; }
+html[data-theme="light"] .tw tbody tr.yours td:first-child { background: #f3e3bd; }
+/* Alerts: light tints, dark text. */
+html[data-theme="light"] .err { background: rgba(198, 47, 16, 0.08); color: #7a1e08; }
+html[data-theme="light"] .ok { background: rgba(255, 184, 77, 0.2); color: #7a5410; }
+/* Quickjump + fitting bits. */
+html[data-theme="light"] .quickjump-results li.sel { background: #f0dfbc; }
+html[data-theme="light"] .fit-stats { border-color: #ddd2bd; }
+html[data-theme="light"] .fit-chip { border-color: #d3c7ae; }
+html[data-theme="light"] .fit-chip-btn { background: #f0e9d8; border-color: #d3c7ae; }
+html[data-theme="light"] .fit-bar { background: #e7ddc8; border-color: #d3c7ae; }
+html[data-theme="light"] .fit-famchips button { background: #fffdf9; border-color: #d3c7ae; }
+html[data-theme="light"] .fit-famchips button.on { background: #f5e3c2; }
+html[data-theme="light"] .fit-headline { border-color: #d3c7ae; background: rgba(255, 184, 77, 0.1); }
+html[data-theme="light"] .fit-slot-empty { border-color: #c9b992; }
+html[data-theme="light"] .fit-vhist { background: rgba(255, 253, 249, 0.92); }
+html[data-theme="light"] .fit-tip-state.on { color: #8a4d0e; }
+/* Tooltips stay dark floating chips in both themes. */
+html[data-theme="light"] .fit-tip { color: #faf3e6; }
+html[data-theme="light"] .fit-tip-name { color: #fff6e6; }
+html[data-theme="light"] .fit-tip-sub,
+html[data-theme="light"] .fit-tip-stats { color: #b39a7d; }
+
+/* OS preference: light variables + the same surface overrides,
+   applied only when the user has not picked a theme explicitly. */
+@media (prefers-color-scheme: light) {
+  html:not([data-theme]) {
+    color-scheme: light;
+    --text: #2a241d;
+    --text-bright: #20180e;
+    --accent: #ff6a1a;
+    --success: #a86f14;
+    --danger: #b02a0d;
+    --gold: #9e6410;
+    --muted: #6e5a42;
+    --muted-2: #5f4c36;
+    --note: #8a5f24;
+    --panel: #fdfbf6;
+    --panel-head: #f0e9da;
+    --row: #f8f4ec;
+    --row-alt: #f1ebdf;
+    --row-hover: #e9e0cf;
+  }
+  html:not([data-theme]) body { background: #f4f1ea; }
+  html:not([data-theme]) body::before { display: none; }
+  html:not([data-theme]) header {
+    background: linear-gradient(to bottom, rgba(247, 243, 235, 0.9), rgba(236, 229, 214, 0.9));
+    border-bottom-color: #d9cfba;
+    box-shadow: 0 1px 8px rgba(90, 70, 40, 0.25);
+  }
+  html:not([data-theme]) .sidebar {
+    background: linear-gradient(rgba(247, 243, 235, 0.9), rgba(236, 229, 214, 0.9)) padding-box;
+    border-right-color: #d9cfba;
+  }
+  html:not([data-theme]) footer {
+    background: rgba(244, 241, 234, 0.85);
+    border-top-color: #d9cfba;
+    text-shadow: none;
+  }
+  html:not([data-theme]) header a.navlink,
+  html:not([data-theme]) .branch > summary,
+  html:not([data-theme]) header .who,
+  html:not([data-theme]) thead th { text-shadow: none; }
+  html:not([data-theme]) .card { background: #fdfbf6; border-color: #ddd2bd; }
+  html:not([data-theme]) input[type="text"],
+  html:not([data-theme]) input[type="search"],
+  html:not([data-theme]) .fit-qty,
+  html:not([data-theme]) .fit-eft textarea,
+  html:not([data-theme]) .fit-tip-state { background: #fffdf9; border-color: #d3c7ae; }
+  html:not([data-theme]) .suggest,
+  html:not([data-theme]) .branch .menu {
+    background: #fffdf9;
+    border-color: #d3c7ae;
+    box-shadow: 0 10px 24px rgba(90, 70, 40, 0.22);
+  }
+  html:not([data-theme]) .branch .menu a { color: #5c4a33; }
+  html:not([data-theme]) .branch .menu a:hover { background: #f0e7d2; }
+  html:not([data-theme]) .branch .menu a.active,
+  html:not([data-theme]) .sidebar .branch .menu a.active { background-color: #f0dfbc; }
+  html:not([data-theme]) .sidebar .branch .menu a { border-color: #d3c7ae; }
+  html:not([data-theme]) .sidenav a.navlink:hover,
+  html:not([data-theme]) .sidebar .branch > summary:hover,
+  html:not([data-theme]) .sidenav a.navlink.active,
+  html:not([data-theme]) .sidebar .branch.active > summary,
+  html:not([data-theme]) .sidebar .branch[open] > summary { background: #ece3cf; }
+  html:not([data-theme]) .nav-state-btn,
+  html:not([data-theme]) .nav-reopen,
+  html:not([data-theme]) .nav-drawer-close,
+  html:not([data-theme]) .nav-expand-btn { background: #fffdf9; border-color: #d9b98a; }
+  html:not([data-theme]) .foldbtn,
+  html:not([data-theme]) .cardremove,
+  html:not([data-theme]) .cardspan,
+  html:not([data-theme]) .modal-close,
+  html:not([data-theme]) .quickjump-btn { background: #fffdf9; border-color: #d3c7ae; }
+  html:not([data-theme]) .btn:hover { color: #fff6e6; }
+  html:not([data-theme]) table { border-color: #d9cfba; }
+  html:not([data-theme]) th,
+  html:not([data-theme]) td { border-top-color: #e4d9c2; border-bottom-color: #d9cfba; }
+  html:not([data-theme]) thead th { border-bottom-color: #d9cfba; }
+  html:not([data-theme]) tbody tr.yours td { background-color: #f3e3bd; }
+  html:not([data-theme]) .tw tbody tr.yours td:first-child { background: #f3e3bd; }
+  html:not([data-theme]) .err { background: rgba(198, 47, 16, 0.08); color: #7a1e08; }
+  html:not([data-theme]) .ok { background: rgba(255, 184, 77, 0.2); color: #7a5410; }
+  html:not([data-theme]) .quickjump-results li.sel { background: #f0dfbc; }
+  html:not([data-theme]) .fit-stats { border-color: #ddd2bd; }
+  html:not([data-theme]) .fit-chip { border-color: #d3c7ae; }
+  html:not([data-theme]) .fit-chip-btn { background: #f0e9d8; border-color: #d3c7ae; }
+  html:not([data-theme]) .fit-bar { background: #e7ddc8; border-color: #d3c7ae; }
+  html:not([data-theme]) .fit-famchips button { background: #fffdf9; border-color: #d3c7ae; }
+  html:not([data-theme]) .fit-famchips button.on { background: #f5e3c2; }
+  html:not([data-theme]) .fit-headline { border-color: #d3c7ae; background: rgba(255, 184, 77, 0.1); }
+  html:not([data-theme]) .fit-slot-empty { border-color: #c9b992; }
+  html:not([data-theme]) .fit-vhist { background: rgba(255, 253, 249, 0.92); }
+  html:not([data-theme]) .fit-tip-state.on { color: #8a4d0e; }
+  html:not([data-theme]) .fit-tip { color: #faf3e6; }
+  html:not([data-theme]) .fit-tip-name { color: #fff6e6; }
+  html:not([data-theme]) .fit-tip-sub,
+  html:not([data-theme]) .fit-tip-stats { color: #b39a7d; }
+}
+
+/* ============================================================
+   v0.3.30: theme toggle button.
+   Small, unobtrusive control that rides next to the sign-out
+   link in the sidebar account area.
+   ============================================================ */
+#theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  margin-top: 0.45rem;
+  margin-left: 0.4rem;
+  padding: 0;
+  background: transparent;
+  border: 1px solid #4a2408;
+  border-radius: 50%;
+  color: var(--gold);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+#theme-toggle:hover { border-color: var(--accent); color: var(--text-bright); }
+html[data-theme="light"] #theme-toggle { border-color: #d9b98a; }
+@media (prefers-color-scheme: light) {
+  html:not([data-theme]) #theme-toggle { border-color: #d9b98a; }
+}

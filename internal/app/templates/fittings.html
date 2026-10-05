@@ -13,8 +13,8 @@
 <h3>Build a fitting</h3>
 <div class="fit-head">
   <span class="searchwrap fit-searchwrap">
-    <input type="text" id="fit-search" value="{{.FitEditor.Sim.ShipName}}" placeholder="Search ships and modules…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-suggest" aria-autocomplete="list">
-    <ul class="suggest" id="fit-suggest" role="listbox" hidden></ul>
+    <input type="text" id="fit-ship-search" value="{{.FitEditor.Sim.ShipName}}" placeholder="Search ships…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-ship-suggest" aria-autocomplete="list">
+    <ul class="suggest" id="fit-ship-suggest" role="listbox" hidden></ul>
   </span>
   <label>Pilot
     <select id="fit-pilot">
@@ -25,31 +25,61 @@
   <label>Fit name
     <input type="text" id="fit-name" value="{{.FitEditor.Sim.FitName}}" placeholder="Name this fit" autocomplete="off">
   </label>
+  <input type="hidden" id="fit-local-id" value="{{.FitEditor.LocalID}}">
+  <button type="button" class="btn" id="fit-undo" title="Undo" disabled>↩</button>
+  <button type="button" class="btn" id="fit-redo" title="Redo" disabled>↪</button>
   <button type="button" class="btn" id="fit-save" data-fit-local-id="{{.FitEditor.LocalID}}">Save fit</button>
+  {{if .FitEditor.EVECharID}}
+  <button type="button" class="btn" id="fit-save-eve" data-fit-eve-char="{{.FitEditor.EVECharID}}" title="Save this fit to {{.FitEditor.EVECharName}}'s in-game fittings">Save to EVE</button>
+  {{end}}
+  <span class="fit-saved" id="fit-saved-at" hidden></span>
 </div>
-<div class="fit-searchrow">
-  <div class="fit-famchips" id="fit-famchips" role="group" aria-label="Kind filter">
-    <button type="button" data-fam="all" class="on">All</button><button type="button" data-fam="ship">Ships</button><button type="button" data-fam="high">High</button><button type="button" data-fam="medium">Mid</button><button type="button" data-fam="low">Low</button><button type="button" data-fam="rig">Rigs</button><button type="button" data-fam="subsystem">Subs</button><button type="button" data-fam="drone">Drones</button>
-  </div>
-  <label class="fit-check"><input type="checkbox" id="fit-fittable"> Fittable only</label>
-  <label class="fit-check"><input type="checkbox" id="fit-usable"> Usable by pilot</label>
-  <label class="fit-check">Meta
-    <select id="fit-meta">
-      <option value="0">Any</option>
-      <option value="1">Tech I</option>
-      <option value="2">Tech II</option>
-      <option value="4">Faction</option>
-      <option value="6">Deadspace</option>
-      <option value="5">Officer</option>
-    </select>
+<div class="fit-meta">
+  <label class="fit-meta-desc">Description
+    <input type="text" id="fit-desc" value="{{.FitEditor.Description}}" placeholder="What is this fit for?" autocomplete="off" maxlength="280">
   </label>
+  <label class="fit-meta-tags">Tags
+    <input type="text" id="fit-tags" value="{{.FitEditor.Tags}}" placeholder="pvp, kiting, …" autocomplete="off">
+  </label>
+  <label class="fit-check"><input type="checkbox" id="fit-public"{{if .FitEditor.IsPublic}} checked{{end}}> Make public</label>
 </div>
-<p><small>Fits you save live in EveSynapse. Your EVE account's fittings are only ever read, never changed.</small></p>
+<div class="fit-yourfits">
+  <span class="searchwrap fit-yourfitswrap">
+    <input type="text" id="fit-yourfits-search" placeholder="Your fits — search to load one…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-yourfits-suggest" aria-autocomplete="list">
+    <ul class="suggest" id="fit-yourfits-suggest" role="listbox" hidden></ul>
+  </span>
+  <label class="fit-check"><input type="checkbox" id="fit-community"> Include community fits</label>
+  <a href="#your-fits">Your fits</a>
+</div>
+<p><small>Fits you save live in EveSynapse. Your EVE account's fittings are only ever read, never changed — except when you press Save to EVE.</small></p>
 {{if .FitEditor.Notes}}
 <ul class="fit-notes">
   {{range .FitEditor.Notes}}<li>{{.}}</li>{{end}}
 </ul>
 {{end}}
+<div class="fit-modsearch" id="fit-modsearch">
+  <span class="searchwrap fit-modsearchwrap">
+    <input type="text" id="fit-mod-search" placeholder="Search modules, drones, rigs…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-mod-suggest" aria-autocomplete="list">
+    <ul class="suggest" id="fit-mod-suggest" role="listbox" hidden></ul>
+  </span>
+  <div class="fit-searchrow">
+    <div class="fit-famchips" id="fit-famchips" role="group" aria-label="Kind filter">
+      <button type="button" data-fam="all" class="on">All</button><button type="button" data-fam="high">High</button><button type="button" data-fam="medium">Mid</button><button type="button" data-fam="low">Low</button><button type="button" data-fam="rig">Rigs</button><button type="button" data-fam="subsystem">Subs</button><button type="button" data-fam="drone">Drones</button>
+    </div>
+    <label class="fit-check"><input type="checkbox" id="fit-fittable"> Fittable only</label>
+    <label class="fit-check"><input type="checkbox" id="fit-usable"> Usable by pilot</label>
+    <label class="fit-check">Meta
+      <select id="fit-meta">
+        <option value="0">Any</option>
+        <option value="1">Tech I</option>
+        <option value="2">Tech II</option>
+        <option value="4">Faction</option>
+        <option value="6">Deadspace</option>
+        <option value="5">Officer</option>
+      </select>
+    </label>
+  </div>
+</div>
 {{template "fit-workbench" .FitEditor.Sim}}
 
 <div class="fit-picker" id="fit-picker" hidden>
@@ -81,21 +111,28 @@
 </div>
 
 {{if .FitEditor.LocalFits}}
-<h4>Your saved fits</h4>
-<div class="tw">
-<table>
-  <thead><tr><th>Name</th><th>Ship</th><th>Saved</th><th></th></tr></thead>
-  <tbody>
+<h4 id="your-fits">Your fits</h4>
+<div class="fit-esi-controls">
+  <input type="text" id="fit-local-q" placeholder="Search by fit or ship name…" autocomplete="off" aria-label="Search your fits">
+  <select id="fit-local-sort" aria-label="Sort your fits">
+    <option value="name-asc">Name A–Z</option>
+    <option value="name-desc">Name Z–A</option>
+    <option value="ship-asc">Ship A–Z</option>
+    <option value="ship-desc">Ship Z–A</option>
+    <option value="updated-desc">Recently saved</option>
+    <option value="updated-asc">Oldest first</option>
+  </select>
+</div>
+<div id="fit-local-list">
   {{range .FitEditor.LocalFits}}
-    <tr>
-      <td><a href="/fittings/?local={{.ID}}#fit-editor">{{.Name}}</a></td>
-      <td>{{.ShipName}}</td>
-      <td>{{.Updated}}</td>
-      <td><form method="post" action="/fittings/delete/"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" class="btn">Delete</button></form></td>
-    </tr>
+  <section class="foldable" data-fit-name="{{.Name}}" data-fit-ship="{{.ShipName}}" data-fit-updated="{{.Updated}}">
+  <h3>{{.Name}}{{if .IsPublic}} <small>· public</small>{{end}}{{if .IsDraft}} <small>· draft</small>{{end}}</h3>
+  <p><small>{{.ShipName}}{{if .Description}} — {{.Description}}{{end}}</small></p>
+  {{if .Tags}}<p><small>{{range .Tags}}<span class="fit-tag">{{.}}</span> {{end}}</small></p>{{end}}
+  <p><small>Saved {{.Updated}}</small></p>
+  <p><a href="/fittings/?local={{.ID}}#fit-editor">Open in editor</a> · <a href="/fittings/?local={{.ID}}&fork=1#fit-editor">Duplicate</a> · <form method="post" action="/fittings/delete/" style="display:inline"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" class="btn">Delete</button></form></p>
+  </section>
   {{end}}
-  </tbody>
-</table>
 </div>
 {{end}}
 </section>
@@ -151,15 +188,21 @@
 {{end}}
 
 {{define "fit-workbench"}}
-<div class="fit-wb" data-fit-state="{{.StateJSON}}" data-fit-bandwidth="{{.DroneBWNum}}" data-fit-bay="{{.DroneBayNum}}">
+<div class="fit-wb" data-fit-state="{{.StateJSON}}" data-fit-bandwidth="{{.DroneBWNum}}" data-fit-bay="{{.DroneBayNum}}" data-fit-subsystems="{{if .SupportsSubsystems}}1{{else}}0{{end}}" data-fit-restricted='{{.RestrictedJSON}}'>
 {{if .DataNote}}<p class="fit-note">{{.DataNote}}</p>{{end}}
 {{if .HasShip}}
 {{if .Visual}}
 <div class="fit-visual" id="fit-visual" role="group" aria-label="Visual fitting">
-  <img class="fit-vship" src="https://images.evetech.net/types/{{.Visual.ShipID}}/render?size=512" alt="{{.Visual.ShipName}}" draggable="false">
+  <div class="fit-vring" aria-hidden="true"></div>
+  <div class="fit-vship"><img src="https://images.evetech.net/types/{{.Visual.ShipID}}/render?size=512" alt="{{.Visual.ShipName}}" draggable="false"></div>
+  {{range .Visual.Labels}}
+  <div class="fit-vlabel" style="left:{{printf "%.1f" .X}}%;top:{{printf "%.1f" .Y}}%" aria-hidden="true">{{.Text}}</div>
+  {{end}}
+  {{range .Visual.Separators}}
+  <div class="fit-vsep" style="left:{{printf "%.1f" .X}}%;top:{{printf "%.1f" .Y}}%;transform:translate(-50%,-50%) rotate({{printf "%.0f" .Rot}}deg)" aria-hidden="true"></div>
+  {{end}}
   {{range .Visual.Slots}}
-  <button type="button" class="fit-vslot{{if .Filled}} filled{{end}}" style="left:{{printf "%.1f" .X}}%;top:{{printf "%.1f" .Y}}%"{{if .Filled}} draggable="true"{{end}}
-    {{if .Filled}}data-fit-dec="{{.TypeID}}" title="{{.Name}} — click to remove one, drag to move"{{else}}data-fit-add="{{.GroupKey}}" title="Add {{.GroupLabel}}"{{end}}>
+  <button type="button" class="fit-vslot{{if .Filled}} filled{{end}}" style="left:{{printf "%.1f" .X}}%;top:{{printf "%.1f" .Y}}%"{{if .Filled}} draggable="true" data-fit-vslot="{{.TypeID}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}} slot" data-tip-meta="{{.Meta}}" data-tip-cpu="{{.CPU}}" data-tip-pg="{{.PG}}" data-tip-stat="{{.Stat}}"{{else}}data-fit-add="{{.GroupKey}}" title="Add {{.GroupLabel}}"{{end}}>
     {{if .Filled}}<img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{else}}<span aria-hidden="true">+</span>{{end}}
   </button>
   {{end}}
@@ -173,7 +216,7 @@
       <h4>{{.Label}}{{if .HasMax}} <small class="{{if .Over}}fit-over{{end}}">{{.Used}}/{{.Max}}{{if .Over}} — doesn't fit{{end}}</small>{{end}}</h4>
       <div class="fit-chips">
         {{range .Chips}}
-        <span class="fit-chip">
+        <span class="fit-chip" data-fit-rowtype="{{.TypeID}}">
           <button type="button" class="fit-chip-btn" data-fit-dec="{{.TypeID}}" title="Remove one">−</button>
           <button type="button" class="fit-chip-name" data-fit-dec="{{.TypeID}}" title="Remove one">{{.Name}}</button>
           {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
@@ -210,6 +253,18 @@
   {{with .Stats}}
   <div class="fit-stats">
     <h4>{{$.ShipName}} <small>with {{$.PilotLabel}}'s skills</small></h4>
+    <div class="fit-headline">
+      <div class="fit-headline-dps">
+        <span class="fit-headline-num">{{.TotalDPS}}</span>
+        <span class="fit-headline-label">DPS</span>
+        <span class="fit-headline-sub">turrets {{.TurretDPS}} · missiles {{.MissileDPS}} · drones {{.DroneDPS}}</span>
+      </div>
+      <div class="fit-headline-volley">
+        <span class="fit-headline-num">{{.TotalVolley}}</span>
+        <span class="fit-headline-label">volley</span>
+        <span class="fit-headline-sub">turrets {{.TurretVolley}} · missiles {{.MissileVolley}} · drones {{.DroneVolley}}</span>
+      </div>
+    </div>
     <div class="fit-bar-row{{if .Powergrid.Over}} over{{else}} good{{end}}">
       <span class="fit-bar-label">Powergrid</span>
       <span class="fit-bar"><span style="width:{{printf "%.1f" .Powergrid.Pct}}%"></span></span>
@@ -229,6 +284,9 @@
         <tr><th>Capacitor</th><td>{{.Capacitor}} · peak recharge {{.CapPeak}} · use {{.CapDraw}}</td></tr>
         <tr><th>Capacitor state</th><td class="{{if .CapStable}}fit-good{{else}}fit-over{{end}}">{{.CapState}}</td></tr>
         <tr><th>Damage per second</th><td>{{.TotalDPS}} — turrets {{.TurretDPS}} · missiles {{.MissileDPS}} · drones {{.DroneDPS}}</td></tr>
+        <tr><th>Volley damage</th><td>{{.TotalVolley}} — turrets {{.TurretVolley}} · missiles {{.MissileVolley}} · drones {{.DroneVolley}}</td></tr>
+        {{if .NeutDrain}}<tr><th>Neutralizer drain</th><td>{{.NeutDrain}}</td></tr>{{end}}
+        {{if .NosDrain}}<tr><th>Nosferatu drain</th><td>{{.NosDrain}}</td></tr>{{end}}
         <tr><th>Effective hit points</th><td>{{.EHPOmni}}</td></tr>
         <tr><th>Shield recharge</th><td>{{.ShieldReg}} at peak</td></tr>
         <tr><th>Shield boosting</th><td>{{.ShieldBoost}}</td></tr>

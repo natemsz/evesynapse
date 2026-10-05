@@ -1798,14 +1798,11 @@
     } catch (e) { /* private mode: the click still works this visit */ }
   }
   // The theme in effect right now: a manually set attribute
-  // wins; otherwise ask the OS, falling back to dark (the
-  // app's default palette).
+  // wins; otherwise dark is the default (the app's classic palette).
+  // The OS preference is intentionally ignored — dark is our best face.
   function effective() {
     var attr = root.getAttribute("data-theme");
     if (attr === "light" || attr === "dark") return attr;
-    if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {
-      return "light";
-    }
     return "dark";
   }
   // Show the sun icon while light is effective, the moon while

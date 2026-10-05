@@ -643,10 +643,14 @@ func (app *Application) notePilotOrbit(ctx context.Context) {
 	}
 }
 
-// pilotCounterpartyIDs adds the plausible-character IDs (>= 90M,
-// the same harvest rule as the name warmer) found in one
+// pilotCounterpartyIDs adds the character IDs found in one
 // character's ledger, contract, contact, mail, and roster
-// snapshots to out.
+// snapshots to out. Journal parties route by ESI's party_type
+// (corporations and alliances note org wants instead -- they are
+// not pilots and never reach the character endpoint); sources
+// that carry no kind (transaction clients, contract parties)
+// keep the >= 90M plausibility guess, and the client's negative
+// cache bounds a wrong guess to one lookup per ID.
 func (app *Application) pilotCounterpartyIDs(ctx context.Context, characterID int64, out map[int64]bool) {
 	add := func(id int64) {
 		if id >= 90_000_000 {
@@ -663,8 +667,8 @@ func (app *Application) pilotCounterpartyIDs(ctx context.Context, characterID in
 	}
 	if journal, ok := loadSnapshot[esi.WalletJournal](app, ctx, characterID, esi.SnapWalletJournal); ok {
 		for _, e := range journal {
-			add(e.FirstPartyID)
-			add(e.SecondPartyID)
+			app.harvestJournalParty(ctx, out, e.FirstPartyID, e.FirstPartyType)
+			app.harvestJournalParty(ctx, out, e.SecondPartyID, e.SecondPartyType)
 		}
 	}
 	if txns, ok := loadSnapshot[esi.WalletTransactions](app, ctx, characterID, esi.SnapWalletTxns); ok {
@@ -704,8 +708,8 @@ func (app *Application) pilotCounterpartyIDs(ctx context.Context, characterID in
 	for division := int64(1); division <= 7; division++ {
 		if journal, ok := loadSnapshot[esi.CorpJournal](app, ctx, characterID, esi.CorpJournalKind(division)); ok {
 			for _, e := range journal {
-				add(e.FirstPartyID)
-				add(e.SecondPartyID)
+				app.harvestJournalParty(ctx, out, e.FirstPartyID, e.FirstPartyType)
+				app.harvestJournalParty(ctx, out, e.SecondPartyID, e.SecondPartyType)
 			}
 		}
 		if txns, ok := loadSnapshot[esi.CorpWalletTransactions](app, ctx, characterID, esi.CorpTxnsKind(division)); ok {

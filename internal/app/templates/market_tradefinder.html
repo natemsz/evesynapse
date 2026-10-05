@@ -25,6 +25,7 @@
   <label><small>At least sold per day in {{$s.DestName}}</small>
     <input type="number" name="minvol" min="0" step="1" value="{{$s.MinVolume}}" size="6">
   </label>
+  <label><small><input type="checkbox" name="lowball" value="1"{{if $s.Lowball}} checked{{end}}> Include lowball routes</small></label>
   <button class="btn" type="submit">Find routes</button>
 </form>
 
@@ -54,7 +55,7 @@
 </div>
 <p><small>Profit per item is the typical sell price in {{$s.DestName}} minus the typical buy price in {{$s.OriginName}}. Sold per day is the average daily amount that actually traded in {{$s.DestName}} over the last seven recorded days. Estimated profit per day is the profit per item times whichever runs out first: what trades each day in {{$s.DestName}}, the open buy volume in {{$s.OriginName}}, or the open sell volume in {{$s.DestName}}. Before broker fees, sales tax, and hauling.</small></p>
 {{else}}
-<p>No profitable routes between these regions right now. Try a lower minimum margin or fewer sold per day.</p>
+<p>No profitable routes between these regions right now. Try a lower minimum margin or fewer sold per day{{if not $s.Lowball}}, or include lowball routes{{end}}.</p>
 {{end}}
 
 {{else if $s.SameRegion}}

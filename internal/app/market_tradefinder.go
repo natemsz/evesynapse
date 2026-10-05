@@ -26,7 +26,9 @@ package app
 // actually trades each day. A row with any of the three at zero
 // cannot move, so it drops out instead of showing a fantasy number.
 // Figures older than three days on EITHER side are excluded: a
-// route priced off a stale book is not a route.
+// route priced off a stale book is not a route. Routes out of a
+// degenerate origin buy book (lowballRoute) are hidden unless the
+// viewer opts in: real, but not trade routes.
 
 import (
 	"context"
@@ -92,6 +94,7 @@ type tradefinderView struct {
 	Regions       []marketRegion
 	MinMargin     string // margin-% floor as typed (echoed in the form)
 	MinVolume     int64  // sold-per-day floor from the filter
+	Lowball       bool   // include degenerate-book routes (hidden by default)
 	SameRegion    bool   // origin == destination: a valid but empty case
 	OriginHasData bool   // a sweep has covered the origin region
 	DestHasData   bool   // a sweep has covered the destination region
@@ -161,6 +164,9 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 			minVolume = v
 		}
 	}
+	// Lowball routes (degenerate origin buy books) stay hidden
+	// unless the viewer opts in; the flag echoes in the form.
+	includeLowball := firstQuery(q, "lowball") == "1"
 
 	view := &tradefinderView{
 		OriginID:   originID,
@@ -170,6 +176,7 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 		SameRegion: originID == destID,
 		MinMargin:  strconv.FormatFloat(minMargin, 'f', -1, 64),
 		MinVolume:  minVolume,
+		Lowball:    includeLowball,
 	}
 	for _, region := range marketRegions {
 		view.Regions = append(view.Regions, marketRegion{
@@ -238,6 +245,9 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 		if o.TypicalBuy <= 0 || d.TypicalSell <= 0 {
 			continue
 		}
+		if !includeLowball && lowballRoute(o) {
+			continue // degenerate buy book; only lists when asked for
+		}
 		margin := d.TypicalSell - o.TypicalBuy
 		marginPct := margin / o.TypicalBuy * 100
 		if marginPct < minMargin {
@@ -300,6 +310,17 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 	}
 	view.Rows = rows
 	return view
+}
+
+// lowballRoute reports whether a route's origin buy book is
+// degenerate: the typical buy sits below a tenth of the typical
+// sell, the signature of a buy side made of lowball orders
+// posted to catch a mistyped sell. The route is real (a viewer
+// may want to sit a slightly higher order on top of that book)
+// but it is not a trade route, so it only lists when lowball
+// routes are included.
+func lowballRoute(o db.MarketRegionStat) bool {
+	return o.TypicalBuy > 0 && o.TypicalSell > 0 && o.TypicalBuy*10 < o.TypicalSell
 }
 
 // statFresh reports whether an RFC3339 stats stamp is inside the

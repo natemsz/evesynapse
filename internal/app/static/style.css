@@ -2484,6 +2484,11 @@ html[data-theme="light"] .branch .menu {
   background: #fdfbf6;
   border-color: #d9cfba;
 }
+html[data-theme="light"][data-nav="rail"] .sidebar .branch .menu {
+  background: #fdfbf6;
+  border-color: #d9cfba;
+  box-shadow: 0 10px 24px rgba(90, 70, 40, 0.22);
+}
 html[data-theme="light"] .fit-modsearch {
   background: linear-gradient(to bottom, rgba(253, 251, 246, 0.97), rgba(248, 244, 236, 0.97));
   border-color: #d9cfba;

@@ -1764,3 +1764,314 @@
     if (ev.target === overlay) closePalette();
   });
 })();
+
+// Fitting simulator editor (v0.3.21): the browser keeps the fit
+// document (ship, items, charge choices) and posts it to
+// /fittings/simulate/ on every change; the server answers with
+// the re-rendered workbench fragment, which swaps in place. The
+// canonical document rides back on the fragment root, so the
+// editor state always matches what the server calculated.
+(function () {
+  var editor = document.getElementById("fit-editor");
+  if (!editor || !window.fetch) return;
+
+  var pilotSel = document.getElementById("fit-pilot");
+  var nameInput = document.getElementById("fit-name");
+  var shipInput = document.getElementById("fit-ship-q");
+  var shipList = document.getElementById("fit-ship-suggest");
+  var picker = document.getElementById("fit-picker");
+  var pickerQ = document.getElementById("fit-picker-q");
+  var pickerList = document.getElementById("fit-picker-list");
+  var pickerFamily = document.getElementById("fit-picker-family");
+  var saveBtn = document.getElementById("fit-save");
+  var exportBtn = document.getElementById("fit-export-btn");
+  var exportOut = document.getElementById("fit-eft-out");
+
+  function workbench() { return editor.querySelector(".fit-wb"); }
+
+  function readState() {
+    var wb = workbench();
+    if (!wb) return null;
+    try { return JSON.parse(wb.getAttribute("data-fit-state") || "{}"); }
+    catch (e) { return null; }
+  }
+
+  var state = readState() || {};
+  state.name = state.name || "";
+  state.shipTypeId = state.shipTypeId || 0;
+  state.items = state.items || [];
+  state.charges = state.charges || {};
+
+  function pilotID() {
+    return pilotSel ? (parseInt(pilotSel.value, 10) || 0) : 0;
+  }
+
+  var simSeq = 0;
+  function simulate() {
+    state.name = nameInput ? nameInput.value : (state.name || "");
+    var seq = ++simSeq;
+    var payload = {
+      name: state.name,
+      shipTypeId: state.shipTypeId,
+      items: state.items,
+      charges: state.charges,
+      pilot: pilotID()
+    };
+    fetch("/fittings/simulate/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "text/html" },
+      body: JSON.stringify(payload)
+    }).then(function (resp) {
+      return resp.ok ? resp.text() : "";
+    }).then(function (html) {
+      if (!html || seq !== simSeq) return;
+      var tmp = document.createElement("div");
+      tmp.innerHTML = html;
+      var fresh = tmp.querySelector(".fit-wb");
+      var current = workbench();
+      if (!fresh || !current) return;
+      current.replaceWith(fresh);
+      var next = readState();
+      if (next) {
+        next.items = next.items || [];
+        next.charges = next.charges || {};
+        state = next;
+      }
+    }).catch(function () { /* the static copy stays honest */ });
+  }
+
+  function findItem(typeID) {
+    for (var i = 0; i < state.items.length; i++) {
+      if (state.items[i].typeId === typeID) return i;
+    }
+    return -1;
+  }
+  function addItem(typeID, qty) {
+    var i = findItem(typeID);
+    if (i >= 0) state.items[i].qty += qty;
+    else state.items.push({ typeId: typeID, qty: qty });
+    simulate();
+  }
+  function decItem(typeID) {
+    var i = findItem(typeID);
+    if (i < 0) return;
+    state.items[i].qty -= 1;
+    if (state.items[i].qty <= 0) state.items.splice(i, 1);
+    simulate();
+  }
+  function setItemQty(typeID, qty) {
+    var i = findItem(typeID);
+    if (qty <= 0) {
+      if (i >= 0) state.items.splice(i, 1);
+    } else if (i >= 0) {
+      state.items[i].qty = qty;
+    } else {
+      state.items.push({ typeId: typeID, qty: qty });
+    }
+    simulate();
+  }
+
+  // --- workbench clicks (delegated: the workbench re-renders) --
+  editor.addEventListener("click", function (ev) {
+    var t = ev.target;
+    if (!t || !t.getAttribute) return;
+    var wb = workbench();
+    if (wb && wb.contains(t)) {
+      var dec = t.getAttribute("data-fit-dec");
+      if (dec) { decItem(parseInt(dec, 10) || 0); return; }
+      var inc = t.getAttribute("data-fit-inc");
+      if (inc) { addItem(parseInt(inc, 10) || 0, 1); return; }
+      var add = t.getAttribute("data-fit-add");
+      if (add) { openPicker(add); return; }
+    }
+  });
+  editor.addEventListener("change", function (ev) {
+    var t = ev.target;
+    if (!t || !t.getAttribute) return;
+    var chargeFor = t.getAttribute("data-fit-charge");
+    if (chargeFor) {
+      var weapon = parseInt(chargeFor, 10) || 0;
+      var charge = parseInt(t.value, 10) || 0;
+      if (charge > 0) state.charges[weapon] = charge;
+      else delete state.charges[weapon];
+      simulate();
+      return;
+    }
+    var qtyFor = t.getAttribute("data-fit-qty");
+    if (qtyFor) {
+      setItemQty(parseInt(qtyFor, 10) || 0, parseInt(t.value, 10) || 0);
+    }
+  });
+
+  if (pilotSel) pilotSel.addEventListener("change", simulate);
+  if (nameInput) {
+    nameInput.addEventListener("change", function () {
+      state.name = nameInput.value;
+    });
+  }
+
+  // --- ship search --------------------------------------------
+  var shipTimer = null;
+  function closeShip() { if (shipList) shipList.hidden = true; }
+  function queryShip() {
+    if (!shipInput || !shipList) return;
+    var q = shipInput.value.trim();
+    if (q.length < 2) { closeShip(); return; }
+    fetch("/fittings/picker.json?family=ship&q=" + encodeURIComponent(q), {
+      cache: "no-store", headers: { "Accept": "application/json" }
+    }).then(function (resp) {
+      return resp.ok ? resp.json() : [];
+    }).then(function (rows) {
+      shipList.innerHTML = "";
+      (rows || []).forEach(function (it) {
+        var li = document.createElement("li");
+        li.setAttribute("role", "option");
+        var name = document.createElement("span");
+        name.textContent = it.name;
+        li.appendChild(name);
+        if (it.label) {
+          var lab = document.createElement("span");
+          lab.className = "sug-label";
+          lab.textContent = it.label;
+          li.appendChild(lab);
+        }
+        li.addEventListener("mousedown", function (ev) {
+          ev.preventDefault();
+          state.shipTypeId = it.id;
+          state.items = [];
+          state.charges = {};
+          shipInput.value = it.name;
+          closeShip();
+          simulate();
+        });
+        shipList.appendChild(li);
+      });
+      shipList.hidden = !rows || rows.length === 0;
+    }).catch(closeShip);
+  }
+  if (shipInput) {
+    shipInput.addEventListener("input", function () {
+      if (shipTimer) window.clearTimeout(shipTimer);
+      shipTimer = window.setTimeout(queryShip, 150);
+    });
+    shipInput.addEventListener("blur", function () {
+      window.setTimeout(closeShip, 120);
+    });
+  }
+
+  // --- module picker -------------------------------------------
+  function openPicker(family) {
+    if (!picker) return;
+    picker.hidden = false;
+    if (pickerFamily && family) {
+      for (var i = 0; i < pickerFamily.options.length; i++) {
+        if (pickerFamily.options[i].value === family) {
+          pickerFamily.value = family;
+          break;
+        }
+      }
+    }
+    queryPicker();
+    if (pickerQ) pickerQ.focus();
+    picker.scrollIntoView({ block: "nearest" });
+  }
+  function closePicker() { if (picker) picker.hidden = true; }
+  var pickerTimer = null;
+  function queryPicker() {
+    if (!pickerList) return;
+    var family = pickerFamily ? pickerFamily.value : "any";
+    var q = pickerQ ? pickerQ.value.trim() : "";
+    fetch("/fittings/picker.json?family=" + encodeURIComponent(family) +
+      "&q=" + encodeURIComponent(q), {
+      cache: "no-store", headers: { "Accept": "application/json" }
+    }).then(function (resp) {
+      return resp.ok ? resp.json() : [];
+    }).then(function (rows) {
+      pickerList.innerHTML = "";
+      (rows || []).forEach(function (it) {
+        var li = document.createElement("li");
+        var name = document.createElement("span");
+        name.textContent = it.name;
+        li.appendChild(name);
+        if (it.label) {
+          var lab = document.createElement("span");
+          lab.className = "sug-label";
+          lab.textContent = it.label;
+          li.appendChild(lab);
+        }
+        li.addEventListener("mousedown", function (ev) {
+          ev.preventDefault();
+          addItem(it.id, 1);
+        });
+        pickerList.appendChild(li);
+      });
+      if (!rows || rows.length === 0) {
+        var li = document.createElement("li");
+        li.textContent = "Nothing found — try a different search.";
+        pickerList.appendChild(li);
+      }
+    }).catch(function () {});
+  }
+  if (pickerQ) {
+    pickerQ.addEventListener("input", function () {
+      if (pickerTimer) window.clearTimeout(pickerTimer);
+      pickerTimer = window.setTimeout(queryPicker, 150);
+    });
+  }
+  if (pickerFamily) pickerFamily.addEventListener("change", queryPicker);
+  var pickerClose = document.getElementById("fit-picker-close");
+  if (pickerClose) pickerClose.addEventListener("click", closePicker);
+
+  // --- save / export --------------------------------------------
+  if (saveBtn) {
+    saveBtn.addEventListener("click", function () {
+      if (!state.shipTypeId) return;
+      state.name = nameInput ? nameInput.value : state.name;
+      var payload = {
+        id: parseInt(saveBtn.getAttribute("data-fit-local-id") || "0", 10) || 0,
+        name: state.name,
+        fit: {
+          name: state.name,
+          shipTypeId: state.shipTypeId,
+          items: state.items,
+          charges: state.charges
+        }
+      };
+      fetch("/fittings/save/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify(payload)
+      }).then(function (resp) {
+        return resp.ok ? resp.json() : null;
+      }).then(function (row) {
+        if (row && row.id) {
+          window.location.href = "/fittings/?local=" + row.id + "#fit-editor";
+        }
+      }).catch(function () {});
+    });
+  }
+  if (exportBtn) {
+    exportBtn.addEventListener("click", function () {
+      state.name = nameInput ? nameInput.value : state.name;
+      fetch("/fittings/export/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "text/plain" },
+        body: JSON.stringify({
+          name: state.name,
+          shipTypeId: state.shipTypeId,
+          items: state.items,
+          charges: state.charges,
+          pilot: pilotID()
+        })
+      }).then(function (resp) {
+        return resp.ok ? resp.text() : "";
+      }).then(function (text) {
+        if (exportOut) {
+          exportOut.value = text;
+          exportOut.focus();
+          exportOut.select();
+        }
+      }).catch(function () {});
+    });
+  }
+})();

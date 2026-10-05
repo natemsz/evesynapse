@@ -429,7 +429,7 @@ func TestMigration026Reopen(t *testing.T) {
 	}
 }
 
-// TestOrgLabelLiveRegions (v0.3.27.002): names the organization
+// TestOrgLabelLiveRegions (v0.3.27.003): names the organization
 // pages reference but have not cached yet — a corporation's CEO,
 // an alliance's creator and member corporations, a home station —
 // render a live "Loading name…" region that polls its label

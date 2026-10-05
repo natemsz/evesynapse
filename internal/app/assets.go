@@ -21,6 +21,7 @@ type assetCharLink struct {
 	ID     int64
 	Name   string
 	Active bool
+	Tags   string
 }
 
 // assetRow is one item stack in a location table.

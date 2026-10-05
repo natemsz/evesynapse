@@ -1824,3 +1824,52 @@
     paint();
   });
 })();
+
+// v0.3.32: character selector dropdown with search/filter.
+(function() {
+  document.querySelectorAll('[data-charselector]').forEach(function(root) {
+    var input = root.querySelector('.charselector-input');
+    var dropdown = root.querySelector('.charselector-dropdown');
+    var options = Array.prototype.slice.call(root.querySelectorAll('.charselector-option'));
+    if (!input || !dropdown) return;
+
+    // Show active character name in the input initially.
+    var active = root.querySelector('.charselector-option.active');
+    if (active) input.value = active.getAttribute('data-name') || '';
+
+    function filter() {
+      var q = input.value.toLowerCase().trim();
+      options.forEach(function(opt) {
+        var name = (opt.getAttribute('data-name') || '').toLowerCase();
+        var tags = (opt.getAttribute('data-tags') || '').toLowerCase();
+        var match = !q || name.indexOf(q) !== -1 || tags.indexOf(q) !== -1;
+        opt.hidden = !match;
+      });
+    }
+
+    input.addEventListener('focus', function() {
+      input.value = '';
+      filter();
+      dropdown.hidden = false;
+    });
+    input.addEventListener('input', function() {
+      filter();
+      dropdown.hidden = false;
+    });
+    // Close on outside click.
+    document.addEventListener('click', function(e) {
+      if (!root.contains(e.target)) {
+        dropdown.hidden = true;
+        // Restore active name if input was cleared.
+        if (!input.value && active) input.value = active.getAttribute('data-name') || '';
+      }
+    });
+    // Close on Escape.
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        dropdown.hidden = true;
+        input.blur();
+      }
+    });
+  });
+})();

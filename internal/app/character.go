@@ -65,6 +65,7 @@ func (app *Application) pickCharacter(ctx context.Context, r *http.Request, path
 			ID:     ch.CharacterID,
 			Name:   ch.Name,
 			Active: ch.CharacterID == active.CharacterID,
+			Tags:   ch.Tags,
 		})
 	}
 	return characters, active, links, nil

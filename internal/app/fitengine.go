@@ -97,8 +97,13 @@ package app
 // count as online and cycling; propulsion-module velocity is
 // computed with the thrust/mass formula (their effects carry no
 // modifiers in the dump); missile figures are raw DPS (no
-// application math); T3 subsystems are ordinary items here --
-// their slot/stat morphing lands with the later UI phase.
+// application math). T3 strategic-cruiser subsystems grant slots
+// and hardpoints through their hiSlotModifier / medSlotModifier /
+// lowSlotModifier / hardPointModifier attributes (summed directly;
+// the dump's slotModifier effect 3774 carries no dogma modifiers,
+// so there is no modifier machinery to run — verified against the
+// live dump 2026-10-05); their PG/CPU and role bonuses flow through
+// the normal modifier machinery.
 // ---------------------------------------------------------------------------
 
 import (
@@ -175,6 +180,16 @@ const (
 	fitAttrDroneBandwidth     = 1271
 	fitAttrDroneBandwidthUsed = 1272
 	fitAttrDronesSkill        = 3436
+	// T3 subsystem slot/hardpoint grants (dgmAttributeTypes,
+	// verified against the live dump 2026-10-05): subsystems
+	// carry these as plain attributes; the dump's slotModifier
+	// effect (3774) has no dogma modifiers, so the grants sum
+	// directly instead of flowing through the modifier machinery.
+	fitAttrTurretHardPointModifier   = 1368
+	fitAttrLauncherHardPointModifier = 1369
+	fitAttrHiSlotModifier            = 1374
+	fitAttrMedSlotModifier           = 1375
+	fitAttrLowSlotModifier           = 1376
 )
 
 // Slot / fitting effect IDs (dgmEffects names verified live).
@@ -1141,6 +1156,20 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 	res.RigSlots = int(sg(fitAttrRigSlots))
 	res.TurretHardpoints = int(sg(fitAttrTurretSlotsLeft))
 	res.LauncherHardpoints = int(sg(fitAttrLauncherSlotsLeft))
+	// T3 strategic cruisers: the hull has no slots of its own;
+	// fitted subsystems grant them through the *SlotModifier
+	// attributes above (plain data, summed directly).
+	for _, ent := range fitted {
+		if ent.kind != fitEntSubsystem {
+			continue
+		}
+		n := float64(maxInt(ent.instances, 1))
+		res.HighSlots += int(ent.base[fitAttrHiSlotModifier] * n)
+		res.MediumSlots += int(ent.base[fitAttrMedSlotModifier] * n)
+		res.LowSlots += int(ent.base[fitAttrLowSlotModifier] * n)
+		res.TurretHardpoints += int(ent.base[fitAttrTurretHardPointModifier] * n)
+		res.LauncherHardpoints += int(ent.base[fitAttrLauncherHardPointModifier] * n)
+	}
 	for _, ent := range fitted {
 		n := maxInt(ent.instances, 1)
 		switch {

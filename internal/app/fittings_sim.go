@@ -178,6 +178,100 @@ type fitSlotGroup struct {
 	Empty  []int // empty slot buttons to render (slot ordinals)
 }
 
+// fitVisualSlot is one slot circle on the in-game-style visual fit.
+type fitVisualSlot struct {
+	TypeID     int64
+	Name       string
+	GroupKey   string
+	GroupLabel string
+	Filled     bool
+	X, Y       float64 // center position, percent of the visual box
+}
+
+// fitVisualView is the ship render with module slots arranged
+// around it, in-game style.
+type fitVisualView struct {
+	ShipID   int64
+	ShipName string
+	Slots    []fitVisualSlot
+}
+
+// fitVisualArcs places the five slot families on arcs around the
+// ship (screen degrees: 0=east, 90=south, so 270 is straight up):
+// highs across the top, mids down the right, lows across the
+// bottom, rigs and subsystems sharing the left. The third value
+// is the ring radius as a percent of the visual box.
+var fitVisualArcs = map[string][3]float64{
+	fitFamilyHigh:      {225, 315, 44},
+	fitFamilyMedium:    {315, 405, 44},
+	fitFamilyLow:       {45, 135, 44},
+	fitFamilyRig:       {135, 180, 44},
+	fitFamilySubsystem: {180, 225, 44},
+}
+
+var fitVisualGroupLabels = map[string]string{
+	fitFamilyHigh:      "High slot",
+	fitFamilyMedium:    "Mid slot",
+	fitFamilyLow:       "Low slot",
+	fitFamilyRig:       "Rig",
+	fitFamilySubsystem: "Subsystem",
+}
+
+// fitBuildVisual shapes the visual fit display from the engine
+// result and the document's own lines: one circle per slot,
+// filled circles carrying their module, positioned on arcs around
+// the ship render. Positions are precomputed here so the template
+// stays declarative.
+func fitBuildVisual(res *fitResult, doc *fitDoc, familyOf map[int64]string, nameOf func(int64) string) *fitVisualView {
+	v := &fitVisualView{ShipID: doc.ShipTypeID, ShipName: nameOf(doc.ShipTypeID)}
+	maxOf := map[string]int{
+		fitFamilyHigh:   res.HighSlots,
+		fitFamilyMedium: res.MediumSlots,
+		fitFamilyLow:    res.LowSlots,
+		fitFamilyRig:    res.RigSlots,
+	}
+	// Fitted modules per family, quantities expanded, doc order.
+	fitted := map[string][]int64{}
+	for _, it := range doc.Items {
+		fam := familyOf[it.TypeID]
+		if _, ok := fitVisualArcs[fam]; !ok {
+			continue
+		}
+		for i := 0; i < it.Qty; i++ {
+			fitted[fam] = append(fitted[fam], it.TypeID)
+		}
+	}
+	maxOf[fitFamilySubsystem] = len(fitted[fitFamilySubsystem])
+	for _, fam := range []string{fitFamilyHigh, fitFamilyMedium, fitFamilyLow, fitFamilyRig, fitFamilySubsystem} {
+		arc := fitVisualArcs[fam]
+		max := maxOf[fam]
+		if max <= 0 {
+			continue
+		}
+		span := arc[1] - arc[0]
+		ids := fitted[fam]
+		if len(ids) > max {
+			ids = ids[:max]
+		}
+		for i := 0; i < max; i++ {
+			ang := (arc[0] + (float64(i)+0.5)*span/float64(max)) * math.Pi / 180
+			s := fitVisualSlot{
+				GroupKey:   fam,
+				GroupLabel: fitVisualGroupLabels[fam],
+				X:          50 + arc[2]*math.Cos(ang),
+				Y:          50 + arc[2]*math.Sin(ang),
+			}
+			if i < len(ids) {
+				s.Filled = true
+				s.TypeID = ids[i]
+				s.Name = nameOf(ids[i])
+			}
+			v.Slots = append(v.Slots, s)
+		}
+	}
+	return v
+}
+
 // fitChargeOption is one selectable charge for a weapon group.
 type fitChargeOption struct {
 	ID       int64
@@ -261,19 +355,22 @@ type fitMissingSkill struct {
 // fitSimView is the workbench fragment (and its server-rendered
 // first paint inside the Fittings page).
 type fitSimView struct {
-	HasShip    bool
-	DataNote   string // ship data still downloading, skills still warming, ...
-	ShipID     int64
-	ShipName   string
-	FitName    string
-	PilotID    int64
-	PilotLabel string
-	StateJSON  string // canonical fit document for the editor script
-	Groups     []fitSlotGroup
-	ChargeSets []fitChargeSet
-	Stats      *fitStatsView
-	Missing    []fitMissingSkill
-	Notes      []string // plain-language modeling notes
+	HasShip     bool
+	DataNote    string // ship data still downloading, skills still warming, ...
+	ShipID      int64
+	ShipName    string
+	FitName     string
+	PilotID     int64
+	PilotLabel  string
+	StateJSON   string // canonical fit document for the editor script
+	Groups      []fitSlotGroup
+	Visual      *fitVisualView // in-game-style ship + slot rings
+	DroneBWNum  float64        // drone bandwidth (for the fittable filter)
+	DroneBayNum float64        // drone bay m3 (for the fittable filter)
+	ChargeSets  []fitChargeSet
+	Stats       *fitStatsView
+	Missing     []fitMissingSkill
+	Notes       []string // plain-language modeling notes
 }
 
 // fitEditorView is the editor chrome around the workbench.
@@ -384,6 +481,9 @@ func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotI
 	view.ShipName = nameOf(doc.ShipTypeID)
 
 	view.Groups = fitBuildGroups(res, doc, familyOf, nameOf)
+	view.Visual = fitBuildVisual(res, doc, familyOf, nameOf)
+	view.DroneBWNum = res.DroneBandwidth
+	view.DroneBayNum = res.DroneBayCapacity
 	view.ChargeSets = app.fitBuildChargeSets(ctx, doc, snap, nameOf)
 	view.Stats = fitBuildStats(res)
 	view.Missing = fitMissingList(ctx, app, snap, doc, engineItems, levels, pilotID)
@@ -885,9 +985,124 @@ func (app *Application) handleFitPickerJSON(w http.ResponseWriter, r *http.Reque
 	q := r.URL.Query()
 	family := q.Get("family")
 	query := q.Get("q")
+	meta, _ := strconv.ParseInt(q.Get("meta"), 10, 64)
+	pilotID, _ := strconv.ParseInt(q.Get("pilot"), 10, 64)
+	usableOnly := q.Get("usable") == "1" && pilotID > 0
+
+	// usableByPilot filters suggestions to what the pilot can actually
+	// use: every skill requirement (transitively) met by their levels.
+	usableByPilot := func(rows []suggestItem) []suggestItem {
+		if !usableOnly || len(rows) == 0 {
+			return rows
+		}
+		var skills esi.Skills
+		if !app.loadCorpSnapshot(ctx, pilotID, esi.SnapSkills, &skills) {
+			return rows // skills not warmed yet: don't hide everything
+		}
+		levels := briefingSkillLevels(skills)
+		ids := make([]int64, 0, len(rows))
+		for _, row := range rows {
+			ids = append(ids, row.ID)
+		}
+		// Requirement closure over a few rounds (module -> skill -> skill).
+		reqs := make(map[int64][]db.SdeRequirement)
+		pending := ids
+		for round := 0; round < 4 && len(pending) > 0; round++ {
+			batch, err := app.queries.ListSDERequirementsByTypes(ctx, pending)
+			if err != nil {
+				log.Printf("fittings picker: requirements: %v", err)
+				return rows
+			}
+			var next []int64
+			seen := make(map[int64]bool)
+			for _, b := range batch {
+				reqs[b.TypeID] = append(reqs[b.TypeID], b)
+				if !seen[b.SkillTypeID] {
+					seen[b.SkillTypeID] = true
+					next = append(next, b.SkillTypeID)
+				}
+			}
+			pending = next
+		}
+		usable := func(typeID int64) bool {
+			seen := make(map[int64]bool)
+			queue := []int64{typeID}
+			for len(queue) > 0 {
+				id := queue[0]
+				queue = queue[1:]
+				if seen[id] {
+					continue
+				}
+				seen[id] = true
+				for _, req := range reqs[id] {
+					if int64(levels[req.SkillTypeID]) < req.Level {
+						return false
+					}
+					queue = append(queue, req.SkillTypeID)
+				}
+			}
+			return true
+		}
+		out := rows[:0]
+		for _, row := range rows {
+			if usable(row.ID) {
+				out = append(out, row)
+			}
+		}
+		return out
+	}
+
+	slotKinds := []struct {
+		family string
+		effect int64
+		kind   string
+		lim    int64
+	}{
+		{fitFamilyHigh, fitEffectHiPower, "high", 8},
+		{fitFamilyMedium, fitEffectMedPower, "medium", 8},
+		{fitFamilyLow, fitEffectLoPower, "low", 8},
+		{fitFamilyRig, fitEffectRigSlot, "rig", 6},
+		{fitFamilySubsystem, fitEffectSubsystemSlot, "subsystem", 6},
+	}
+	querySlotFamily := func(family, kind string, lim int64) []suggestItem {
+		effectID := fitSlotEffectByFamily[family]
+		rows, err := app.queries.ListFitSlotTypes(ctx, db.ListFitSlotTypesParams{
+			EffectID: effectID, Q: query, Lim: lim, Meta: meta,
+		})
+		if err != nil {
+			log.Printf("fittings picker: family %s: %v", family, err)
+			return nil
+		}
+		out := make([]suggestItem, 0, len(rows))
+		for _, row := range rows {
+			out = append(out, suggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: kind})
+		}
+		return out
+	}
 
 	out := []suggestItem{}
 	switch {
+	case family == "all":
+		// Unified search: ships plus every module family, grouped
+		// by kind client-side. Charges are deliberately excluded:
+		// without a fitted weapon they cannot be placed.
+		if rows, err := app.queries.SuggestSDEShips(ctx, db.SuggestSDEShipsParams{Q: query, Lim: 6}); err == nil {
+			for _, row := range rows {
+				out = append(out, suggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "ship"})
+			}
+		} else {
+			log.Printf("fittings picker: ships: %v", err)
+		}
+		for _, sk := range slotKinds {
+			out = append(out, querySlotFamily(sk.family, sk.kind, sk.lim)...)
+		}
+		if rows, err := app.queries.ListFitDroneTypes(ctx, db.ListFitDroneTypesParams{Q: query, Lim: 6, Meta: meta}); err == nil {
+			for _, row := range rows {
+				out = append(out, suggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "drone"})
+			}
+		} else {
+			log.Printf("fittings picker: drones: %v", err)
+		}
 	case family == "ship":
 		rows, err := app.queries.SuggestSDEShips(ctx, db.SuggestSDEShipsParams{Q: query, Lim: 12})
 		if err != nil {
@@ -895,42 +1110,33 @@ func (app *Application) handleFitPickerJSON(w http.ResponseWriter, r *http.Reque
 			break
 		}
 		for _, row := range rows {
-			out = append(out, suggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName})
+			out = append(out, suggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "ship"})
 		}
 	case family == fitFamilyDrone:
-		rows, err := app.queries.ListFitDroneTypes(ctx, db.ListFitDroneTypesParams{Q: query, Lim: 25})
+		rows, err := app.queries.ListFitDroneTypes(ctx, db.ListFitDroneTypesParams{Q: query, Lim: 25, Meta: meta})
 		if err != nil {
 			log.Printf("fittings picker: drones: %v", err)
 			break
 		}
 		for _, row := range rows {
-			out = append(out, suggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName})
+			out = append(out, suggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "drone"})
 		}
 	case family == "charge":
 		weaponID, _ := strconv.ParseInt(q.Get("weapon"), 10, 64)
 		if weaponID > 0 {
 			for _, row := range app.fitChargeCandidates(ctx, weaponID) {
-				out = append(out, suggestItem{ID: row.TypeID, Name: row.Name})
+				out = append(out, suggestItem{ID: row.TypeID, Name: row.Name, Kind: "charge"})
 			}
 		}
 	default:
-		if effectID, isSlot := fitSlotEffectByFamily[family]; isSlot {
-			rows, err := app.queries.ListFitSlotTypes(ctx, db.ListFitSlotTypesParams{
-				EffectID: effectID, Q: query, Lim: 25,
-			})
-			if err != nil {
-				log.Printf("fittings picker: family %s: %v", family, err)
-				break
-			}
-			for _, row := range rows {
-				out = append(out, suggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName})
-			}
+		if _, isSlot := fitSlotEffectByFamily[family]; isSlot {
+			out = append(out, querySlotFamily(family, family, 25)...)
 			break
 		}
-		writeSuggestJSON(w, app.suggestTypes(ctx, query, suggestPoolMarket, 12))
+		writeSuggestJSON(w, usableByPilot(app.suggestTypes(ctx, query, suggestPoolMarket, 12)))
 		return
 	}
-	writeSuggestJSON(w, out)
+	writeSuggestJSON(w, usableByPilot(out))
 }
 
 // handleFitSave serves POST /fittings/save/: create or update

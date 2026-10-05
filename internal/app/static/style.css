@@ -1276,12 +1276,6 @@ html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
    first paint, so no flash of both icons). */
 html[data-theme="light"] .theme-icon-moon { display: none; }
 html[data-theme="dark"] .theme-icon-sun { display: none; }
-@media (prefers-color-scheme: light) {
-  html:not([data-theme]) .theme-icon-moon { display: none; }
-}
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme]) .theme-icon-sun { display: none; }
-}
 /* On the ember active pill the icons get a slightly brighter
    sweep so they never go muddy. */
 .sidebar .branch.active > summary .nav-icon svg,
@@ -2540,102 +2534,29 @@ html[data-theme="light"] .fit-tip-name { color: #fff6e6; }
 html[data-theme="light"] .fit-tip-sub,
 html[data-theme="light"] .fit-tip-stats { color: #b39a7d; }
 
-/* OS preference: light variables + the same surface overrides,
-   applied only when the user has not picked a theme explicitly. */
-@media (prefers-color-scheme: light) {
-  html:not([data-theme]) {
-    color-scheme: light;
-    --text: #2a241d;
-    --text-bright: #20180e;
-    --accent: #ff6a1a;
-    --success: #a86f14;
-    --danger: #b02a0d;
-    --gold: #9e6410;
-    --muted: #6e5a42;
-    --muted-2: #5f4c36;
-    --note: #8a5f24;
-    --panel: #fdfbf6;
-    --panel-head: #f0e9da;
-    --row: #f8f4ec;
-    --row-alt: #f1ebdf;
-    --row-hover: #e9e0cf;
-  }
-  html:not([data-theme]) body { background: #f4f1ea; }
-  html:not([data-theme]) body::before { display: none; }
-  html:not([data-theme]) header {
-    background: linear-gradient(to bottom, rgba(247, 243, 235, 0.9), rgba(236, 229, 214, 0.9));
-    border-bottom-color: #d9cfba;
-    box-shadow: 0 1px 8px rgba(90, 70, 40, 0.25);
-  }
-  html:not([data-theme]) .sidebar {
-    background: linear-gradient(rgba(247, 243, 235, 0.9), rgba(236, 229, 214, 0.9)) padding-box;
-    border-right-color: #d9cfba;
-  }
-  html:not([data-theme]) footer {
-    background: rgba(244, 241, 234, 0.85);
-    border-top-color: #d9cfba;
-    text-shadow: none;
-  }
-  html:not([data-theme]) header a.navlink,
-  html:not([data-theme]) .branch > summary,
-  html:not([data-theme]) header .who,
-  html:not([data-theme]) thead th { text-shadow: none; }
-  html:not([data-theme]) .card { background: #fdfbf6; border-color: #ddd2bd; }
-  html:not([data-theme]) input[type="text"],
-  html:not([data-theme]) input[type="search"],
-  html:not([data-theme]) .fit-qty,
-  html:not([data-theme]) .fit-eft textarea,
-  html:not([data-theme]) .fit-tip-state { background: #fffdf9; border-color: #d3c7ae; }
-  html:not([data-theme]) .suggest,
-  html:not([data-theme]) .branch .menu {
-    background: #fffdf9;
-    border-color: #d3c7ae;
-    box-shadow: 0 10px 24px rgba(90, 70, 40, 0.22);
-  }
-  html:not([data-theme]) .branch .menu a { color: #5c4a33; }
-  html:not([data-theme]) .branch .menu a:hover { background: #f0e7d2; }
-  html:not([data-theme]) .branch .menu a.active,
-  html:not([data-theme]) .sidebar .branch .menu a.active { background-color: #f0dfbc; }
-  html:not([data-theme]) .sidebar .branch .menu a { border-color: #d3c7ae; }
-  html:not([data-theme]) .sidenav a.navlink:hover,
-  html:not([data-theme]) .sidebar .branch > summary:hover,
-  html:not([data-theme]) .sidenav a.navlink.active,
-  html:not([data-theme]) .sidebar .branch.active > summary,
-  html:not([data-theme]) .sidebar .branch[open] > summary { background: #ece3cf; }
-  html:not([data-theme]) .nav-state-btn,
-  html:not([data-theme]) .nav-reopen,
-  html:not([data-theme]) .nav-drawer-close,
-  html:not([data-theme]) .nav-expand-btn { background: #fffdf9; border-color: #d9b98a; }
-  html:not([data-theme]) .foldbtn,
-  html:not([data-theme]) .cardremove,
-  html:not([data-theme]) .cardspan,
-  html:not([data-theme]) .modal-close,
-  html:not([data-theme]) .quickjump-btn { background: #fffdf9; border-color: #d3c7ae; }
-  html:not([data-theme]) .btn:hover { color: #fff6e6; }
-  html:not([data-theme]) table { border-color: #d9cfba; }
-  html:not([data-theme]) th,
-  html:not([data-theme]) td { border-top-color: #e4d9c2; border-bottom-color: #d9cfba; }
-  html:not([data-theme]) thead th { border-bottom-color: #d9cfba; }
-  html:not([data-theme]) tbody tr.yours td { background-color: #f3e3bd; }
-  html:not([data-theme]) .tw tbody tr.yours td:first-child { background: #f3e3bd; }
-  html:not([data-theme]) .err { background: rgba(198, 47, 16, 0.08); color: #7a1e08; }
-  html:not([data-theme]) .ok { background: rgba(255, 184, 77, 0.2); color: #7a5410; }
-  html:not([data-theme]) .quickjump-results li.sel { background: #f0dfbc; }
-  html:not([data-theme]) .fit-stats { border-color: #ddd2bd; }
-  html:not([data-theme]) .fit-chip { border-color: #d3c7ae; }
-  html:not([data-theme]) .fit-chip-btn { background: #f0e9d8; border-color: #d3c7ae; }
-  html:not([data-theme]) .fit-bar { background: #e7ddc8; border-color: #d3c7ae; }
-  html:not([data-theme]) .fit-famchips button { background: #fffdf9; border-color: #d3c7ae; }
-  html:not([data-theme]) .fit-famchips button.on { background: #f5e3c2; }
-  html:not([data-theme]) .fit-headline { border-color: #d3c7ae; background: rgba(255, 184, 77, 0.1); }
-  html:not([data-theme]) .fit-slot-empty { border-color: #c9b992; }
-  html:not([data-theme]) .fit-vhist { background: rgba(255, 253, 249, 0.92); }
-  html:not([data-theme]) .fit-tip-state.on { color: #8a4d0e; }
-  html:not([data-theme]) .fit-tip { color: #faf3e6; }
-  html:not([data-theme]) .fit-tip-name { color: #fff6e6; }
-  html:not([data-theme]) .fit-tip-sub,
-  html:not([data-theme]) .fit-tip-stats { color: #b39a7d; }
-}
+/* v0.3.31.007: comprehensive light-mode surface overrides — every
+   hardcoded dark background gets a light counterpart. */
+html[data-theme="light"] .branch .menu a:hover { background: #f0e7d2; color: #20180e; }
+html[data-theme="light"] .suggest { background: #fdfbf6; border-color: #d9cfba; }
+html[data-theme="light"] .suggest li.sel { background: #f0dfbc; }
+html[data-theme="light"] .draghandle { background: #f1ebdf; }
+html[data-theme="light"] .modal-close { background: #f1ebdf; color: #5c4a33; }
+html[data-theme="light"] .nav-expand-btn { background: #f1ebdf; }
+html[data-theme="light"] .quickjump { background: #f4f1ea; }
+html[data-theme="light"] .quickjump-panel { background: #fdfbf6; border-color: #d9cfba; }
+html[data-theme="light"] .quickjump-btn { background: #f1ebdf; }
+html[data-theme="light"] .fit-chip-btn { background: #f1ebdf; border-color: #d9cfba; color: #5c4a33; }
+html[data-theme="light"] .fit-qty { background: #fdfbf6; }
+html[data-theme="light"] .fit-bar { background: #e9e0cf; }
+html[data-theme="light"] .fit-vship img { background: #f1ebdf; }
+html[data-theme="light"] .fit-vslot .fit-vammo { background: #f1ebdf; }
+html[data-theme="light"] .fit-tip-state { background: #f1ebdf; border-color: #d9cfba; color: #5c4a33; }
+html[data-theme="light"] .fit-famchips button { background: #f1ebdf; border-color: #d9cfba; color: #5c4a33; }
+html[data-theme="light"] .fit-famchips button.on { background: #e8d5b5; color: #20180e; }
+html[data-theme="light"] .fit-eft textarea { background: #ffffff; border-color: #d8cdb8; color: #2a241d; }
+html[data-theme="light"] .drag-placeholder { background: #f0e7d2; }
+html[data-theme="light"] tbody tr.yours td { background-color: #f3e3bd; }
+
 
 /* ============================================================
    v0.3.31: theme toggle + sign out footer.

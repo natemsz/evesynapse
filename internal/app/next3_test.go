@@ -247,7 +247,7 @@ func plannerScopeApp(t *testing.T) (*Application, *db.Queries, *http.Cookie) {
 func setCharTags(t *testing.T, app *Application, characterID int64, tags string) {
 	t.Helper()
 	if _, err := app.db.ExecContext(context.Background(),
-		`UPDATE characters SET tags = ? WHERE character_id = ?`, tags, characterID); err != nil {
+		`UPDATE characters SET tags = $1 WHERE character_id = $2`, tags, characterID); err != nil {
 		t.Fatalf("set tags: %v", err)
 	}
 }

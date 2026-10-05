@@ -12,13 +12,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/pgtest"
 )
 
 // seedOverviewCharacter links one character to the user, tagged.
@@ -735,22 +735,24 @@ func TestCharacterSheetFromSnapshots(t *testing.T) {
 // TestMigration010Reopen proves the home-layout column guard is
 // idempotent, like every schema before it.
 func TestMigration010Reopen(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "test.db")
-	conn, err := openDB(path)
+	dsn := pgtest.FreshDSN(t)
+	conn, pool, err := openDB(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("first open: %v", err)
 	}
 	var cols int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('users') WHERE name IN ('home_layout')`).Scan(&cols); err != nil {
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'users' AND column_name IN ('home_layout')`).Scan(&cols); err != nil {
 		t.Fatalf("pragma: %v", err)
 	}
 	if cols != 1 {
 		t.Fatalf("home_layout columns: %d, want 1", cols)
 	}
 	conn.Close()
-	conn, err = openDB(path)
+	pool.Close()
+	conn, pool, err = openDB(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("second open: %v", err)
 	}
 	conn.Close()
+	pool.Close()
 }

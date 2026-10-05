@@ -251,7 +251,7 @@ func TestMarketWorkerHistoryDrainAndGate(t *testing.T) {
 	if got := transport.calls.Load(); got != 10 {
 		t.Fatalf("first pass made %d calls, want 10", got)
 	}
-	rows, err := q.ListMarketHistory(ctx, db.ListMarketHistoryParams{RegionID: 10000002, TypeID: 1000, Limit: 90})
+	rows, err := q.ListMarketHistory(ctx, db.ListMarketHistoryParams{RegionID: 10000002, TypeID: 1000, RowLimit: 90})
 	if err != nil || len(rows) != 2 {
 		t.Fatalf("stored history for type 1000: rows=%d err=%v, want 2", len(rows), err)
 	}
@@ -609,7 +609,7 @@ func TestMigration013Reopen(t *testing.T) {
 		t.Fatalf("order health on fresh DB: %v", err)
 	}
 	var tables int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('market_history','market_history_wants','market_fetch_state','market_watchlist','order_health')`).Scan(&tables); err != nil {
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('market_history','market_history_wants','market_fetch_state','market_watchlist','order_health')`).Scan(&tables); err != nil {
 		t.Fatalf("count 013 tables: %v", err)
 	}
 	if tables != 5 {

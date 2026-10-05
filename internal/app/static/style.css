@@ -1855,6 +1855,8 @@ body.quickjump-open { overflow: hidden; }
 }
 .fit-bar > span { display: block; height: 100%; background: var(--success); }
 .fit-bar-row.over .fit-bar > span { background: var(--danger); }
+.fit-bar-row.over .fit-bar-nums { color: var(--danger); }
+.fit-bar-row.good .fit-bar-nums { color: var(--success); }
 .fit-bar-nums { font-size: 0.85rem; white-space: nowrap; }
 .fit-table { width: 100%; margin-bottom: 0.6rem; }
 .fit-over { color: var(--danger); }
@@ -1867,8 +1869,53 @@ body.quickjump-open { overflow: hidden; }
   padding: 0.6rem 0.8rem;
   margin-top: 0.6rem;
 }
-.fit-missing > h4 { margin: 0 0 0.4rem; color: #ffb84d; }
+.fit-missing > h4 { margin: 0 0 0.4rem; color: var(--danger); }
 .fit-missing ul { margin: 0; padding-left: 1.2rem; }
+/* Visual fitting: ship render with module slots on arcs around it. */
+.fit-visual {
+  position: relative;
+  width: min(34rem, 100%);
+  aspect-ratio: 1 / 1;
+  margin: 0 auto 1rem;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.fit-vship {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 46%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  filter: drop-shadow(0 0 18px rgba(255, 106, 26, 0.25));
+}
+.fit-vslot {
+  position: absolute;
+  width: 2.9rem;
+  height: 2.9rem;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px dashed #3a3a3a;
+  background: rgba(10, 10, 10, 0.72);
+  color: #b39a7d;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  touch-action: manipulation;
+}
+.fit-vslot:hover { border-color: var(--accent); color: var(--text); }
+.fit-vslot.filled { border-style: solid; border-color: #6b5a43; }
+.fit-vslot.filled:hover { border-color: var(--accent); }
+.fit-vslot.filled img { width: 84%; height: 84%; border-radius: 50%; pointer-events: none; }
+.fit-vslot.drop-ok {
+  border-color: #ffb84d;
+  border-style: solid;
+  box-shadow: 0 0 10px rgba(255, 184, 77, 0.6);
+}
+.fit-vslot.drag-src { opacity: 0.35; }
 .fit-picker {
   margin-top: 0.8rem;
   border: 1px solid #2c2c2c;
@@ -1889,6 +1936,77 @@ body.quickjump-open { overflow: hidden; }
 }
 .fit-picker-list li:hover { background: var(--row-hover); }
 .fit-picker-list .sug-label { color: #b39a7d; font-size: 0.8rem; }
+.fit-picker-hint { color: #b39a7d; font-size: 0.8rem; }
+/* Unified search row: family chips + filters. */
+.fit-searchwrap { flex: 2 1 20rem; }
+.fit-searchrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  margin: 0.6rem 0;
+}
+.fit-famchips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.fit-famchips button {
+  background: #141414;
+  border: 1px solid #2c2c2c;
+  border-radius: 999px;
+  color: #b39a7d;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.25rem 0.7rem;
+  touch-action: manipulation;
+}
+.fit-famchips button.on {
+  border-color: var(--accent);
+  color: var(--text);
+  background: #1d1710;
+}
+.fit-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: #b39a7d;
+  cursor: pointer;
+}
+.fit-check.disabled { opacity: 0.45; cursor: default; }
+.fit-check select { font: inherit; font-size: 0.85rem; }
+/* Suggestion dropdown: kind groups, icons, keyboard nav. */
+.suggest li.sug-kind {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  cursor: default;
+  padding: 0.5rem 0.5rem 0.2rem;
+}
+.suggest li.sug-kind:hover { background: none; }
+.suggest li.active { background: var(--row-hover); }
+.suggest .sug-icon {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 3px;
+  flex: 0 0 auto;
+}
+.suggest .sug-empty { color: #b39a7d; cursor: default; }
+.suggest .sug-empty:hover { background: none; }
+.fit-picker-list .sug-icon {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 3px;
+  flex: 0 0 auto;
+}
+.fit-picker-list li { align-items: center; }
+/* ESI fittings list controls. */
+.fit-esi-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.6rem 0;
+}
+.fit-esi-controls input[type="text"] { flex: 1 1 14rem; }
 .fit-eft { margin-top: 1rem; }
 .fit-eft textarea {
   width: 100%;

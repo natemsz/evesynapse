@@ -59,7 +59,7 @@ import (
 	"time"
 )
 
-// Version returns the rendered product version ("v0.3.25.004"),
+// Version returns the rendered product version ("v0.3.26.001"),
 // the same string the page footer shows.
 func Version() string { return appVersion }
 
@@ -667,17 +667,13 @@ func runRefresh(cfg Config, pidfile string, stdout, stderr io.Writer) int {
 			return 1
 		}
 	}
-	dbPath := cfg.DBPath()
-	if _, err := os.Stat(dbPath); err != nil {
-		fmt.Fprintf(stderr, "No EveSynapse data found at %s — there's nothing to refresh yet.\n", dbPath)
-		return 1
-	}
-	conn, err := openDB(dbPath)
+	conn, pool, err := openDB(context.Background(), cfg.databaseURL)
 	if err != nil {
-		fmt.Fprintf(stderr, "Couldn't open the EveSynapse data: %v\n", err)
+		fmt.Fprintf(stderr, "Couldn't open the EveSynapse database: %v\n", err)
 		return 1
 	}
 	defer conn.Close()
+	defer pool.Close()
 
 	steps, err := expireCaches(conn)
 	if err != nil {
@@ -716,17 +712,17 @@ func expireCaches(conn *sql.DB) ([]string, error) {
 	expiries := []cacheExpiry{
 		{
 			label: "Character data (skills, wallets, assets, mail, contracts…)",
-			sql:   `UPDATE character_snapshots SET fetched_at = ?, cached_until = ?`,
+			sql:   `UPDATE character_snapshots SET fetched_at = $1, cached_until = $2`,
 			args:  []any{cacheEpoch, cacheEpoch},
 		},
 		{
 			label: "Character profiles",
-			sql:   `UPDATE characters SET cached_until = ? WHERE cached_until IS NOT NULL`,
+			sql:   `UPDATE characters SET cached_until = $1 WHERE cached_until IS NOT NULL`,
 			args:  []any{cacheEpoch},
 		},
 		{
 			label: "Public data (incursions, faction warfare…)",
-			sql:   `UPDATE global_snapshots SET fetched_at = ?, cached_until = ?`,
+			sql:   `UPDATE global_snapshots SET fetched_at = $1, cached_until = $2`,
 			args:  []any{cacheEpoch, cacheEpoch},
 		},
 		{
@@ -734,7 +730,7 @@ func expireCaches(conn *sql.DB) ([]string, error) {
 			// cached_until puts it outside ESI's window, so the
 			// worker fetches it again on the first cycle.
 			label: "Market price guide",
-			sql:   `UPDATE guide_prices_meta SET fetched_at = ?, cached_until = ?`,
+			sql:   `UPDATE guide_prices_meta SET fetched_at = $1, cached_until = $2`,
 			args:  []any{cacheEpoch, cacheEpoch},
 		},
 		{
@@ -742,12 +738,12 @@ func expireCaches(conn *sql.DB) ([]string, error) {
 			// lifts the "asked recently, wait" backoffs so the
 			// refetch starts on the first cycle, not the next day.
 			label: "Fetch retry timers",
-			sql:   `UPDATE snapshot_fetch_state SET attempted_at = ?`,
+			sql:   `UPDATE snapshot_fetch_state SET attempted_at = $1`,
 			args:  []any{cacheEpoch},
 		},
 		{
 			label: "Market fetch timers",
-			sql:   `UPDATE market_fetch_state SET attempted_at = ?`,
+			sql:   `UPDATE market_fetch_state SET attempted_at = $1`,
 			args:  []any{cacheEpoch},
 		},
 		{
@@ -755,7 +751,7 @@ func expireCaches(conn *sql.DB) ([]string, error) {
 			// drained again in the background; 'missing' rows are
 			// settled answers and stay settled.
 			label: "Pilot records",
-			sql:   `UPDATE pilot_records SET fetched_at = ? WHERE state = 'ready'`,
+			sql:   `UPDATE pilot_records SET fetched_at = $1 WHERE state = 'ready'`,
 			args:  []any{cacheEpoch},
 		},
 		{
@@ -769,7 +765,7 @@ func expireCaches(conn *sql.DB) ([]string, error) {
 			// Resolved names re-check after 30 days, missing ones
 			// after a day; the epoch puts both past their windows.
 			label: "Structure names",
-			sql:   `UPDATE structure_names SET resolved_at = ? WHERE state IN ('resolved', 'missing')`,
+			sql:   `UPDATE structure_names SET resolved_at = $1 WHERE state IN ('resolved', 'missing')`,
 			args:  []any{cacheEpoch},
 		},
 	}

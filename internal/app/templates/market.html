@@ -27,6 +27,29 @@
   Typical sell: <strong>{{$item.TypicalSell}} ISK</strong> · 9 in 10 sell orders at or under {{$item.SellBand}} ISK{{end}}{{if $item.TypicalBuy}}<br>
   Typical buy: <strong>{{$item.TypicalBuy}} ISK</strong> · 9 in 10 buy orders at or over {{$item.BuyBand}} ISK{{end}}</p>
 
+  {{if $item.RegionStats}}
+  <p><small>Typical prices across the hub regions:</small></p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Region</th><th>Typical sell</th><th>Typical buy</th><th>Updated</th></tr></thead>
+    <tbody>
+      {{range $item.RegionStats}}
+      <tr>
+        <td>{{if .Active}}<strong>{{.RegionName}}</strong>{{else}}<a href="/market/?type={{$item.TypeID}}&region={{.RegionID}}">{{.RegionName}}</a>{{end}}</td>
+        {{if .HasData}}
+        <td>{{if .TypicalSell}}{{.TypicalSell}} ISK{{else}}—{{end}}</td>
+        <td>{{if .TypicalBuy}}{{.TypicalBuy}} ISK{{else}}—{{end}}</td>
+        <td><small>{{.Age}}</small></td>
+        {{else}}
+        <td colspan="3"><small>No data yet</small></td>
+        {{end}}
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+
   <section class="foldable">
   <h3>Price history — {{$item.RegionName}}</h3>
   {{template "history-section" $item}}

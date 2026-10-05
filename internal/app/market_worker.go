@@ -78,8 +78,8 @@ type marketKey struct {
 }
 
 // refreshMarketData runs one market pass, reporting how many
-// payloads it stored (history downloads + book reads) and whether
-// ESI's error limit stopped it.
+// payloads it stored (history downloads + book reads + region
+// sweep pages) and whether ESI's error limit stopped it.
 func (app *Application) refreshMarketData(ctx context.Context, characters []db.Character, allowance *fetchBudget) (stored int, limited bool) {
 	hStored, ltd := app.warmMarketHistory(ctx, allowance)
 	stored += hStored
@@ -88,6 +88,14 @@ func (app *Application) refreshMarketData(ctx context.Context, characters []db.C
 	}
 	bStored, ltd := app.refreshOrderHealth(ctx, characters, allowance)
 	stored += bStored
+	if ltd {
+		return stored, true
+	}
+	// P1 region stats: advance the whole-region book sweep with
+	// what is left of the cycle's allowance. Additive -- the
+	// passes above are untouched.
+	sPages, ltd := app.sweepRegionStats(ctx, allowance)
+	stored += sPages
 	return stored, ltd
 }
 

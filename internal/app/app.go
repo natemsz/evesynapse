@@ -119,6 +119,9 @@ var dogmaFittingSchema string
 //go:embed schema/030_local_fittings.sql
 var localFittingsSchema string
 
+//go:embed schema/031_market_region_stats.sql
+var regionStatsSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -177,6 +180,15 @@ type Application struct {
 	pricesMu     sync.Mutex
 	prices       map[int64]esi.MarketPrice
 	pricesExpiry time.Time
+
+	// regionSweep is the one in-progress whole-region book sweep
+	// (P1 region stats, market_region_stats.go): it advances a
+	// bounded number of pages per worker cycle and only stores
+	// when a region's book has been read end to end, so at most
+	// one region's sweep is ever held in memory. Guarded by
+	// regionSweepMu; nil between sweeps.
+	regionSweepMu sync.Mutex
+	regionSweep   *regionSweepState
 
 	// The worker-stored market guide (guide_prices.go), cached
 	// in memory under its fetched_at stamp so renders reload

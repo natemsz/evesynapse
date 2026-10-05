@@ -48,7 +48,7 @@
     <ul class="suggest" id="fit-yourfits-suggest" role="listbox" hidden></ul>
   </span>
   <label class="fit-check"><input type="checkbox" id="fit-community"> Include community fits</label>
-  <a href="/fittings/">Your fits</a>
+  <a href="/fittings/saved/">Your fits</a>
 </div>
 <p><small>Fits you save live in EveSynapse. Your EVE account's fittings are only ever read, never changed — except when you press Save to EVE.</small></p>
 {{if .FitEditor.Notes}}
@@ -109,54 +109,6 @@
 </div>
 
 </section>
-{{end}}
-
-{{if .Fittings}}
-  {{if .Fittings.Loaded}}
-  {{if .Fittings.Fittings}}
-  <div class="fit-esi-controls">
-    <input type="text" id="fit-esi-q" placeholder="Search by fit or ship name…" autocomplete="off" aria-label="Search fittings">
-    <select id="fit-esi-sort" aria-label="Sort fittings">
-      <option value="name-asc">Name A–Z</option>
-      <option value="name-desc">Name Z–A</option>
-      <option value="ship-asc">Ship A–Z</option>
-      <option value="ship-desc">Ship Z–A</option>
-    </select>
-  </div>
-  <div id="fit-esi-list">
-  {{range .Fittings.Fittings}}
-  <section class="foldable" data-fold="closed" data-fit-name="{{.Name}}" data-fit-ship="{{.ShipType}}">
-  <h3>{{.Name}}</h3>
-  <p><small>{{itemLink .ShipTypeID .ShipType}}</small></p>
-  <p><a href="/skills/plans/fit?character={{$.Fittings.CharacterID}}&fitting={{.FittingID}}">Training plan for this fit</a> · <a href="/fittings/?character={{$.Fittings.CharacterID}}&esi={{.FittingID}}#fit-editor">View stats</a></p>
-  {{range .Groups}}
-  <h4>{{.Label}}</h4>
-  <div class="tw">
-  <table>
-    <thead><tr><th>Item</th><th>Quantity</th></tr></thead>
-    <tbody>
-    {{range .Items}}
-      <tr><td>{{itemLink .TypeID .Name}}</td><td>{{.Quantity}}</td></tr>
-    {{end}}
-    </tbody>
-  </table>
-  </div>
-  {{end}}
-  </section>
-  {{end}}
-  </div>
-  {{else}}
-  <p><small>No saved fittings for this character.</small></p>
-  {{end}}
-  {{else}}
-  {{if .Fittings.Warming}}
-  <p>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</p>
-  {{else}}
-  <p><small>Fittings are unavailable right now — check the server log.</small></p>
-  {{end}}
-  {{end}}
-{{else}}
-  <p>No fittings to show yet — link a character first.</p>
 {{end}}
 {{end}}
 

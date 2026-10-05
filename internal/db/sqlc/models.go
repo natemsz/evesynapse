@@ -178,6 +178,23 @@ type MarketStationStat struct {
 	UpdatedAt  string  `json:"updated_at"`
 }
 
+type MarketSweepOrder struct {
+	RegionID     int64   `json:"region_id"`
+	TypeID       int64   `json:"type_id"`
+	IsBuyOrder   int64   `json:"is_buy_order"`
+	Price        float64 `json:"price"`
+	VolumeRemain int64   `json:"volume_remain"`
+	LocationID   int64   `json:"location_id"`
+}
+
+type MarketSweepState struct {
+	RegionID   int64  `json:"region_id"`
+	NextPage   int64  `json:"next_page"`
+	PagesTotal int64  `json:"pages_total"`
+	StartedAt  string `json:"started_at"`
+	UpdatedAt  string `json:"updated_at"`
+}
+
 type MarketWatchlist struct {
 	UserID       int64   `json:"user_id"`
 	TypeID       int64   `json:"type_id"`

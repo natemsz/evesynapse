@@ -477,3 +477,51 @@ WHERE rowid IN (
     ORDER BY ol.closed_at
     LIMIT ?
 );
+
+-- ---------------------------------------------------------------------
+-- P1 sweep staging (schema 034): disk-staged whole-region
+-- sweeps. A market_sweep_state row means a sweep is in progress
+-- for that region and next_page is its resume cursor; each
+-- fetched page's orders land in market_sweep_orders in the same
+-- transaction that advances the cursor. At completion the
+-- staged book is distilled into the region/station stats above
+-- and the staging rows are deleted in that same transaction.
+-- ---------------------------------------------------------------------
+-- name: GetMarketSweepState :one
+SELECT region_id, next_page, pages_total, started_at, updated_at
+FROM market_sweep_state
+WHERE region_id = ?;
+-- name: InsertMarketSweepState :exec
+INSERT INTO market_sweep_state (region_id, next_page, pages_total, started_at, updated_at)
+VALUES (?, 1, 0, ?, ?);
+-- name: UpdateMarketSweepState :exec
+UPDATE market_sweep_state
+SET next_page = ?, pages_total = ?, updated_at = ?
+WHERE region_id = ?;
+-- name: DeleteMarketSweepState :exec
+DELETE FROM market_sweep_state
+WHERE region_id = ?;
+-- name: InsertMarketSweepOrder :exec
+INSERT INTO market_sweep_orders (region_id, type_id, is_buy_order, price, volume_remain, location_id)
+VALUES (?, ?, ?, ?, ?, ?);
+-- name: DeleteMarketSweepOrdersByRegion :exec
+DELETE FROM market_sweep_orders
+WHERE region_id = ?;
+-- name: ListMarketSweepTypeIDs :many
+SELECT DISTINCT type_id
+FROM market_sweep_orders
+WHERE region_id = ?
+ORDER BY type_id;
+-- name: ListMarketSweepTypeOrders :many
+SELECT is_buy_order, price, volume_remain
+FROM market_sweep_orders
+WHERE region_id = ? AND type_id = ?
+ORDER BY is_buy_order, price;
+-- name: ListMarketSweepStationAggregates :many
+SELECT location_id, type_id, is_buy_order,
+       CAST(MIN(price) AS REAL) AS min_price, CAST(MAX(price) AS REAL) AS max_price,
+       COUNT(*) AS order_count, CAST(SUM(volume_remain) AS INTEGER) AS total_volume
+FROM market_sweep_orders
+WHERE region_id = ? AND location_id > 0
+GROUP BY location_id, type_id, is_buy_order
+ORDER BY location_id, type_id, is_buy_order;

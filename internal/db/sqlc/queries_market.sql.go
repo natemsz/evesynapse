@@ -84,6 +84,26 @@ func (q *Queries) DeleteMarketStationStatsByRegion(ctx context.Context, regionID
 	return err
 }
 
+const deleteMarketSweepOrdersByRegion = `-- name: DeleteMarketSweepOrdersByRegion :exec
+DELETE FROM market_sweep_orders
+WHERE region_id = ?
+`
+
+func (q *Queries) DeleteMarketSweepOrdersByRegion(ctx context.Context, regionID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteMarketSweepOrdersByRegion, regionID)
+	return err
+}
+
+const deleteMarketSweepState = `-- name: DeleteMarketSweepState :exec
+DELETE FROM market_sweep_state
+WHERE region_id = ?
+`
+
+func (q *Queries) DeleteMarketSweepState(ctx context.Context, regionID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteMarketSweepState, regionID)
+	return err
+}
+
 const deleteOrderHealthEntry = `-- name: DeleteOrderHealthEntry :exec
 DELETE FROM order_health
 WHERE character_id = ? AND order_id = ?
@@ -207,6 +227,34 @@ func (q *Queries) GetMarketFetchState(ctx context.Context, kind string) (MarketF
 		&i.State,
 		&i.Detail,
 		&i.AttemptedAt,
+	)
+	return i, err
+}
+
+const getMarketSweepState = `-- name: GetMarketSweepState :one
+SELECT region_id, next_page, pages_total, started_at, updated_at
+FROM market_sweep_state
+WHERE region_id = ?
+`
+
+// ---------------------------------------------------------------------
+// P1 sweep staging (schema 034): disk-staged whole-region
+// sweeps. A market_sweep_state row means a sweep is in progress
+// for that region and next_page is its resume cursor; each
+// fetched page's orders land in market_sweep_orders in the same
+// transaction that advances the cursor. At completion the
+// staged book is distilled into the region/station stats above
+// and the staging rows are deleted in that same transaction.
+// ---------------------------------------------------------------------
+func (q *Queries) GetMarketSweepState(ctx context.Context, regionID int64) (MarketSweepState, error) {
+	row := q.db.QueryRowContext(ctx, getMarketSweepState, regionID)
+	var i MarketSweepState
+	err := row.Scan(
+		&i.RegionID,
+		&i.NextPage,
+		&i.PagesTotal,
+		&i.StartedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -417,6 +465,48 @@ func (q *Queries) GetWatchlistEntry(ctx context.Context, arg GetWatchlistEntryPa
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const insertMarketSweepOrder = `-- name: InsertMarketSweepOrder :exec
+INSERT INTO market_sweep_orders (region_id, type_id, is_buy_order, price, volume_remain, location_id)
+VALUES (?, ?, ?, ?, ?, ?)
+`
+
+type InsertMarketSweepOrderParams struct {
+	RegionID     int64   `json:"region_id"`
+	TypeID       int64   `json:"type_id"`
+	IsBuyOrder   int64   `json:"is_buy_order"`
+	Price        float64 `json:"price"`
+	VolumeRemain int64   `json:"volume_remain"`
+	LocationID   int64   `json:"location_id"`
+}
+
+func (q *Queries) InsertMarketSweepOrder(ctx context.Context, arg InsertMarketSweepOrderParams) error {
+	_, err := q.db.ExecContext(ctx, insertMarketSweepOrder,
+		arg.RegionID,
+		arg.TypeID,
+		arg.IsBuyOrder,
+		arg.Price,
+		arg.VolumeRemain,
+		arg.LocationID,
+	)
+	return err
+}
+
+const insertMarketSweepState = `-- name: InsertMarketSweepState :exec
+INSERT INTO market_sweep_state (region_id, next_page, pages_total, started_at, updated_at)
+VALUES (?, 1, 0, ?, ?)
+`
+
+type InsertMarketSweepStateParams struct {
+	RegionID  int64  `json:"region_id"`
+	StartedAt string `json:"started_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+func (q *Queries) InsertMarketSweepState(ctx context.Context, arg InsertMarketSweepStateParams) error {
+	_, err := q.db.ExecContext(ctx, insertMarketSweepState, arg.RegionID, arg.StartedAt, arg.UpdatedAt)
+	return err
 }
 
 const insertPilotOrbitWant = `-- name: InsertPilotOrbitWant :exec
@@ -909,6 +999,128 @@ func (q *Queries) ListMarketStationStatsByRegion(ctx context.Context, regionID i
 			&i.BuyVolume,
 			&i.UpdatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketSweepStationAggregates = `-- name: ListMarketSweepStationAggregates :many
+SELECT location_id, type_id, is_buy_order,
+       CAST(MIN(price) AS REAL) AS min_price, CAST(MAX(price) AS REAL) AS max_price,
+       COUNT(*) AS order_count, CAST(SUM(volume_remain) AS INTEGER) AS total_volume
+FROM market_sweep_orders
+WHERE region_id = ? AND location_id > 0
+GROUP BY location_id, type_id, is_buy_order
+ORDER BY location_id, type_id, is_buy_order
+`
+
+type ListMarketSweepStationAggregatesRow struct {
+	LocationID  int64   `json:"location_id"`
+	TypeID      int64   `json:"type_id"`
+	IsBuyOrder  int64   `json:"is_buy_order"`
+	MinPrice    float64 `json:"min_price"`
+	MaxPrice    float64 `json:"max_price"`
+	OrderCount  int64   `json:"order_count"`
+	TotalVolume int64   `json:"total_volume"`
+}
+
+func (q *Queries) ListMarketSweepStationAggregates(ctx context.Context, regionID int64) ([]ListMarketSweepStationAggregatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketSweepStationAggregates, regionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketSweepStationAggregatesRow
+	for rows.Next() {
+		var i ListMarketSweepStationAggregatesRow
+		if err := rows.Scan(
+			&i.LocationID,
+			&i.TypeID,
+			&i.IsBuyOrder,
+			&i.MinPrice,
+			&i.MaxPrice,
+			&i.OrderCount,
+			&i.TotalVolume,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketSweepTypeIDs = `-- name: ListMarketSweepTypeIDs :many
+SELECT DISTINCT type_id
+FROM market_sweep_orders
+WHERE region_id = ?
+ORDER BY type_id
+`
+
+func (q *Queries) ListMarketSweepTypeIDs(ctx context.Context, regionID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketSweepTypeIDs, regionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var type_id int64
+		if err := rows.Scan(&type_id); err != nil {
+			return nil, err
+		}
+		items = append(items, type_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketSweepTypeOrders = `-- name: ListMarketSweepTypeOrders :many
+SELECT is_buy_order, price, volume_remain
+FROM market_sweep_orders
+WHERE region_id = ? AND type_id = ?
+ORDER BY is_buy_order, price
+`
+
+type ListMarketSweepTypeOrdersParams struct {
+	RegionID int64 `json:"region_id"`
+	TypeID   int64 `json:"type_id"`
+}
+
+type ListMarketSweepTypeOrdersRow struct {
+	IsBuyOrder   int64   `json:"is_buy_order"`
+	Price        float64 `json:"price"`
+	VolumeRemain int64   `json:"volume_remain"`
+}
+
+func (q *Queries) ListMarketSweepTypeOrders(ctx context.Context, arg ListMarketSweepTypeOrdersParams) ([]ListMarketSweepTypeOrdersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketSweepTypeOrders, arg.RegionID, arg.TypeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketSweepTypeOrdersRow
+	for rows.Next() {
+		var i ListMarketSweepTypeOrdersRow
+		if err := rows.Scan(&i.IsBuyOrder, &i.Price, &i.VolumeRemain); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1570,6 +1782,29 @@ func (q *Queries) SetStructureName(ctx context.Context, arg SetStructureNamePara
 		arg.State,
 		arg.ResolvedAt,
 		arg.Source,
+	)
+	return err
+}
+
+const updateMarketSweepState = `-- name: UpdateMarketSweepState :exec
+UPDATE market_sweep_state
+SET next_page = ?, pages_total = ?, updated_at = ?
+WHERE region_id = ?
+`
+
+type UpdateMarketSweepStateParams struct {
+	NextPage   int64  `json:"next_page"`
+	PagesTotal int64  `json:"pages_total"`
+	UpdatedAt  string `json:"updated_at"`
+	RegionID   int64  `json:"region_id"`
+}
+
+func (q *Queries) UpdateMarketSweepState(ctx context.Context, arg UpdateMarketSweepStateParams) error {
+	_, err := q.db.ExecContext(ctx, updateMarketSweepState,
+		arg.NextPage,
+		arg.PagesTotal,
+		arg.UpdatedAt,
+		arg.RegionID,
 	)
 	return err
 }

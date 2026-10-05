@@ -1,0 +1,58 @@
+{{define "title"}}Spread scanner{{end}}
+{{define "content"}}
+<h1><span class="gt">Spread scanner</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .MarketScanner}}
+{{$s := .MarketScanner}}
+<p><small>Find items where buying low and selling high at the same station leaves a wide gap. Prices come from the latest sweep of each region — buy at the highest buy price, sell at the lowest sell price, and the gap in between is your room before fees.</small></p>
+
+<form method="get" action="/market/scanner/">
+  <label><small>Region</small>
+    <select name="region">
+      {{range $s.Regions}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </label>
+  <label><small>At least sold per day</small>
+    <input type="number" name="minvol" min="0" step="1" value="{{$s.MinVolume}}" size="6">
+  </label>
+  <label><small>At least spread %</small>
+    <input type="number" name="minspread" min="0" step="any" value="{{$s.MinSpread}}" size="6">
+  </label>
+  <button class="btn" type="submit">Scan</button>
+</form>
+
+{{if $s.HasData}}
+<p><small>{{$s.AsOf}}{{if $s.Age}} ({{$s.Age}}){{end}} · Region: <strong>{{$s.RegionName}}</strong> · Showing up to 100 opportunities, best estimated daily profit first.</small></p>
+
+{{if $s.Rows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th>Station</th><th>Highest buy price</th><th>Lowest sell price</th><th>Spread</th><th>Sold per day in {{$s.RegionName}}</th><th>Estimated daily profit</th></tr></thead>
+  <tbody>
+  {{range $s.Rows}}
+    <tr>
+      <td><a href="/market/?type={{.TypeID}}&amp;region={{$s.RegionID}}">{{.ItemName}}</a></td>
+      <td>{{placeLink .Station}}</td>
+      <td>{{.BestBuy}} ISK</td>
+      <td>{{.BestSell}} ISK</td>
+      <td>{{.SpreadPct}}</td>
+      <td>{{.DailyVolume}}</td>
+      <td><strong>{{.DailyProfit}} ISK</strong></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>Sold per day is the average daily amount that actually traded in {{$s.RegionName}} over the last seven recorded days. Estimated daily profit is the gap between the lowest sell and highest buy price at that station, times whichever runs out first: what trades each day, what sellers hold there, or what buyers want there. Before broker fees and sales tax.</small></p>
+{{else}}
+<p>No opportunities in {{$s.RegionName}} clear those filters right now. Try a lower minimum spread or fewer sold per day.</p>
+{{end}}
+
+{{else}}
+<p>Still gathering prices for {{$s.RegionName}} — check back soon. The scanner fills in once the first sweep of this region's stations lands.</p>
+{{end}}
+
+{{end}}
+{{end}}

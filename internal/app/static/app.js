@@ -1534,6 +1534,7 @@
     { name: "Build Planner", url: "/planner/" },
     { name: "Planetary Industry", url: "/planets/" },
     { name: "Market", url: "/market/" },
+    { name: "Spread scanner", url: "/market/scanner/" },
     { name: "Items", url: "/items/" },
     { name: "Wallet", url: "/wallet/" },
     { name: "Orders", url: "/orders/" },

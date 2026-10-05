@@ -841,19 +841,16 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 				}
 			}
 		case esi.SnapWalletJournal:
-			// Journal parties resolve through the character-name
-			// cache; only plausible character IDs are harvested
-			// (corporations/alliances share the numeric space and
-			// would just 404 the character endpoint every cycle).
+			// Journal parties route by ESI's party_type (see
+			// harvestJournalParty): characters join the
+			// character-name harvest; corporations and alliances
+			// note org wants instead of 404ing the character
+			// endpoint every cycle.
 			var journal esi.WalletJournal
 			if err := json.Unmarshal([]byte(snap.Payload), &journal); err == nil {
 				for _, e := range journal {
-					if e.FirstPartyID >= 90_000_000 {
-						charIDs[e.FirstPartyID] = true
-					}
-					if e.SecondPartyID >= 90_000_000 {
-						charIDs[e.SecondPartyID] = true
-					}
+					app.harvestJournalParty(ctx, charIDs, e.FirstPartyID, e.FirstPartyType)
+					app.harvestJournalParty(ctx, charIDs, e.SecondPartyID, e.SecondPartyType)
 				}
 			}
 		case esi.SnapWalletTxns:
@@ -950,8 +947,8 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 			}
 		case esi.SnapMail:
 			// Senders and character recipients resolve through
-			// the character-name cache (same >= 90M harvest rule
-			// as the ledger payloads).
+			// the character-name cache (senders are characters
+			// by construction; recipients by their recorded kind).
 			var headers esi.MailHeaders
 			if err := json.Unmarshal([]byte(snap.Payload), &headers); err == nil {
 				for _, h := range headers {
@@ -979,13 +976,11 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 				}
 			}
 		default:
-			// Per-division wallet ledgers: counterparties and
-			// journal parties resolve through the same cache. The
-			// >= 90M harvest threshold matches the character-side
-			// ledgers (corporation/alliance IDs below it would
-			// just fail the character endpoint); IDs above it
-			// that still aren't characters are remembered by the
-			// client's negative cache after one definitive answer.
+			// Per-division wallet ledgers: transaction clients
+			// carry no kind, so they keep the >= 90M harvest
+			// threshold and the client's negative cache bounds a
+			// wrong guess; journal parties route by ESI's
+			// party_type like the character-side journal.
 			if strings.HasPrefix(snap.Kind, esi.SnapCorpTxnsPrefix) {
 				var txns esi.CorpWalletTransactions
 				if err := json.Unmarshal([]byte(snap.Payload), &txns); err == nil {
@@ -1000,12 +995,8 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 				var journal esi.CorpJournal
 				if err := json.Unmarshal([]byte(snap.Payload), &journal); err == nil {
 					for _, e := range journal {
-						if e.FirstPartyID >= 90_000_000 {
-							charIDs[e.FirstPartyID] = true
-						}
-						if e.SecondPartyID >= 90_000_000 {
-							charIDs[e.SecondPartyID] = true
-						}
+						app.harvestJournalParty(ctx, charIDs, e.FirstPartyID, e.FirstPartyType)
+						app.harvestJournalParty(ctx, charIDs, e.SecondPartyID, e.SecondPartyType)
 					}
 				}
 			}

@@ -86,14 +86,33 @@ func startServer(t *testing.T) string {
 		port = ln.Addr().(*net.TCPAddr).Port
 		_ = ln.Close()
 
-		cfg := embeddedpostgres.DefaultConfig().
-			Version(embeddedpostgres.V16).
-			Port(uint32(port)).
-			Database("postgres").
-			RuntimePath(filepath.Join(os.TempDir(), fmt.Sprintf("evesynapse-pgtest-%d", os.Getpid())))
-		server = embeddedpostgres.NewDatabase(cfg)
-		if err := server.Start(); err != nil {
-			startErr = fmt.Errorf("start embedded postgres: %w", err)
+		// First start downloads the Postgres binaries; a
+		// transient fetch failure (CI runners share egress
+		// addresses that Maven Central sometimes throttles)
+		// must not fail the whole suite, so retry a few
+		// times with a fresh instance before giving up.
+		var lastErr error
+		for attempt := 1; attempt <= 4; attempt++ {
+			cfg := embeddedpostgres.DefaultConfig().
+				Version(embeddedpostgres.V16).
+				Port(uint32(port)).
+				Database("postgres").
+				RuntimePath(filepath.Join(os.TempDir(), fmt.Sprintf("evesynapse-pgtest-%d", os.Getpid())))
+			candidate := embeddedpostgres.NewDatabase(cfg)
+			if err := candidate.Start(); err != nil {
+				lastErr = err
+				_ = candidate.Stop()
+				if attempt < 4 {
+					time.Sleep(10 * time.Second)
+				}
+				continue
+			}
+			server = candidate
+			lastErr = nil
+			break
+		}
+		if lastErr != nil {
+			startErr = fmt.Errorf("start embedded postgres: %w", lastErr)
 			server = nil
 			return
 		}

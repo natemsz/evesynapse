@@ -232,53 +232,32 @@
   }
   syncUndoButtons();
 
-  // --- autosave ----------------------------------------------------
-  // Debounced ~1.5s after the last change, through the existing
-  // save path. A named fit updates in place; an unsaved draft
-  // keeps a single draft row (the server upserts it).
+  // --- explicit save (no autosave) --------------------------------
+  // Edits only persist when the user presses the Save fit button.
+  // markDirty() flags unsaved changes on the button itself
+  // (is-dirty class + " •" marker); the Save button's success
+  // handler clears the flag again via clearDirty().
   var dirty = false;
-  var autosaveTimer = null;
   var savedAtEl = document.getElementById("fit-saved-at");
   var descInput = document.getElementById("fit-desc");
   var tagsInput = document.getElementById("fit-tags");
   function markDirty() {
     dirty = true;
-    if (autosaveTimer) clearTimeout(autosaveTimer);
-    autosaveTimer = setTimeout(autosave, 1500);
+    if (saveBtn) {
+      saveBtn.classList.add("is-dirty");
+      if (!saveBtn.getAttribute("data-fit-label")) {
+        saveBtn.setAttribute("data-fit-label", saveBtn.textContent);
+      }
+      saveBtn.textContent = saveBtn.getAttribute("data-fit-label") + " •";
+    }
   }
-  function autosave() {
-    autosaveTimer = null;
-    if (!dirty || !state.shipTypeId) return;
-    var localID = parseInt((document.getElementById("fit-local-id") || {}).value || "0", 10) || 0;
-    var nm = nameInput ? nameInput.value : (state.name || "");
-    var payload = {
-      id: localID,
-      name: nm,
-      description: descInput ? descInput.value : "",
-      tags: tagsInput ? tagsInput.value : "",
-      fit: {
-        name: nm,
-        shipTypeId: state.shipTypeId,
-        items: state.items,
-        charges: state.charges
-      }
-    };
-    fetch("/fittings/save/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    }).then(function (resp) {
-      return resp.ok ? resp.json() : null;
-    }).then(function (data) {
-      if (!data || !data.id) return;
-      dirty = false;
-      var hid = document.getElementById("fit-local-id");
-      if (hid) hid.value = String(data.id);
-      if (savedAtEl && data.savedAt) {
-        savedAtEl.textContent = "Saved ✓ " + data.savedAt;
-        savedAtEl.hidden = false;
-      }
-    }).catch(function () { /* retry on the next change */ });
+  function clearDirty() {
+    dirty = false;
+    if (saveBtn) {
+      saveBtn.classList.remove("is-dirty");
+      var base = saveBtn.getAttribute("data-fit-label");
+      if (base) saveBtn.textContent = base;
+    }
   }
 
   // --- ship-restricted modules -------------------------------------
@@ -1424,6 +1403,19 @@
   }
 
   // --- save / export --------------------------------------------
+  // Ownership chain (defense in depth):
+  //   1. The "Your fits" search forks any non-owned fit via POST
+  //      /fittings/fork/ before the editor ever sees it (yfLoad),
+  //      so the editor only ever holds the signed-in user's own
+  //      fits — public fits are read-only here and never edited
+  //      in place.
+  //   2. Every save carries the fit's local id (data-fit-local-id,
+  //      mirrored in the hidden #fit-local-id), and the server
+  //      looks that id up scoped to the current user's userID, so
+  //      a save can never overwrite another user's fit.
+  //   3. If the row is gone anyway, the server answers 404 and the
+  //      handler below surfaces "That saved fit couldn't be
+  //      found." instead of failing silently.
   var saveEveBtn = document.getElementById("fit-save-eve");
   function fitNotice(msg, isErr, relink) {
     var old = editor.querySelector(".fit-notice");
@@ -1505,9 +1497,14 @@
         headers: { "Content-Type": "application/json", "Accept": "application/json" },
         body: JSON.stringify(payload)
       }).then(function (resp) {
+        if (resp.status === 404) {
+          fitNotice("That saved fit couldn't be found.", true, false);
+          return null;
+        }
         return resp.ok ? resp.json() : null;
       }).then(function (row) {
         if (row && row.id) {
+          clearDirty();
           window.location.href = "/fittings/?local=" + row.id + "#fit-editor";
         }
       }).catch(function () {});

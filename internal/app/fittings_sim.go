@@ -559,15 +559,37 @@ type fitMissingSkill struct {
 
 // fitSimView is the workbench fragment (and its server-rendered
 // first paint inside the Fittings page).
+// fitCloneOption is one entry in the editor's Clone dropdown:
+// the active clone (ID 0) or one of the pilot's jump clones.
+type fitCloneOption struct {
+	ID       int64
+	Name     string // "Active clone" or the clone's name + location
+	Implants int    // implant count, shown in the label
+}
+
+// fitImplantEntry is one applied implant for the compact list
+// under the workbench.
+type fitImplantEntry struct {
+	TypeID int64
+	Name   string
+}
+
 type fitSimView struct {
-	HasShip     bool
-	DataNote    string // ship data still downloading, skills still warming, ...
-	ShipID      int64
-	ShipName    string
-	FitName     string
-	PilotID     int64
-	PilotLabel  string
-	StateJSON   string // canonical fit document for the editor script
+	HasShip    bool
+	DataNote   string // ship data still downloading, skills still warming, ...
+	ShipID     int64
+	ShipName   string
+	FitName    string
+	PilotID    int64
+	PilotLabel string
+	StateJSON  string // canonical fit document for the editor script
+	// CloneID is the selected clone (0 = active clone); Clones
+	// feeds the Clone dropdown; Implants is the compact applied
+	// list; ImplantNote covers warming / re-login states.
+	CloneID     int64
+	Clones      []fitCloneOption
+	Implants    []fitImplantEntry
+	ImplantNote string
 	Groups      []fitSlotGroup
 	Visual      *fitVisualView // in-game-style ship + slot rings
 	DroneBWNum  float64        // drone bandwidth (for the fittable filter)
@@ -587,9 +609,14 @@ type fitSimView struct {
 
 // fitEditorView is the editor chrome around the workbench.
 type fitEditorView struct {
-	PilotID     int64
-	Pilots      []assetCharLink // the user's characters; the template adds All V
-	EVECharID   int64           // active character: the Save-to-EVE target (0 = none)
+	PilotID int64
+	Pilots  []assetCharLink // the user's characters; the template adds All V
+	// CloneID/Clones feed the Clone dropdown next to the pilot
+	// picker (copied from the initial Sim; the dropdown itself
+	// lives in the chrome so it survives workbench re-renders).
+	CloneID     int64
+	Clones      []fitCloneOption
+	EVECharID   int64 // active character: the Save-to-EVE target (0 = none)
 	EVECharName string
 	Description string // fit metadata, editable in the header, autosaved
 	Tags        string // comma-separated for the header field; stored as an array
@@ -649,6 +676,51 @@ func (app *Application) fitPilotLevels(ctx context.Context, pilotID int64, snap 
 	return briefingSkillLevels(skills), ""
 }
 
+// fitPilotImplants resolves the simulate request's implant set:
+// pilotID 0 (All V) is a theorycrafting view with no character,
+// so no implants. cloneID 0 is the active clone; otherwise the
+// matching jump clone's implants. Snapshots come from the
+// worker-warmed rows (never per-render fetches). The second
+// return is the effective clone ID (unknown IDs fall back to
+// active); the note covers warming and re-login states.
+func (app *Application) fitPilotImplants(ctx context.Context, pilotID, cloneID int64) (ids []int64, effectiveClone int64, clones []fitCloneOption, note string) {
+	if pilotID == 0 {
+		return nil, 0, nil, ""
+	}
+	var active esi.Implants
+	var jc esi.Clones
+	activeOK := app.loadCorpSnapshot(ctx, pilotID, esi.SnapImplants, &active)
+	clonesOK := app.loadCorpSnapshot(ctx, pilotID, esi.SnapClones, &jc)
+	if !activeOK || !clonesOK {
+		if st, _, found := app.corpKindState(ctx, pilotID, esi.SnapImplants); found && st == fetchStateRoleMissing {
+			return nil, 0, nil, "This character was linked before EveSynapse asked for clone access — sign in again to enable implants."
+		}
+		return nil, 0, nil, "This pilot's implant data is still on its way in — the fit below is calculated with no implants applied."
+	}
+	clones = []fitCloneOption{{ID: 0, Name: "Active clone", Implants: len(active)}}
+	for _, c := range jc.JumpClones {
+		name := strings.TrimSpace(c.Name)
+		if name == "" {
+			name = "Jump clone"
+		}
+		loc := app.locationTitle(ctx, c.LocationID, c.LocationType)
+		clones = append(clones, fitCloneOption{
+			ID:       c.JumpCloneID,
+			Name:     name + " — " + loc,
+			Implants: len(c.Implants),
+		})
+	}
+	ids = append(ids, active...)
+	for _, c := range jc.JumpClones {
+		if cloneID != 0 && c.JumpCloneID == cloneID {
+			ids = append([]int64{}, c.Implants...)
+			effectiveClone = cloneID
+			break
+		}
+	}
+	return ids, effectiveClone, clones, ""
+}
+
 // buildFitSimView runs the engine for one document and pilot and
 // shapes the result for the workbench template. pilotID 0 = All V.
 // shipSupportsSubsystems reports whether the hull can fit
@@ -664,7 +736,7 @@ func (app *Application) shipSupportsSubsystems(ctx context.Context, snap *fitSna
 	return names[gid] == "Strategic Cruiser"
 }
 
-func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotID int64, pilotLabel string) *fitSimView {
+func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotID int64, pilotLabel string, cloneID int64) *fitSimView {
 	view := &fitSimView{PilotID: pilotID, FitName: doc.Name}
 	state, _ := json.Marshal(doc)
 	view.StateJSON = string(state)
@@ -672,7 +744,14 @@ func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotI
 		return view
 	}
 
+	// Implants resolve before the snapshot load so their SDE
+	// types join the bounded type list.
+	implantIDs, effectiveClone, clones, implantNote := app.fitPilotImplants(ctx, pilotID, cloneID)
+	view.CloneID = effectiveClone
+	view.Clones = clones
+	view.ImplantNote = implantNote
 	typeIDs := fitDocTypeIDs(doc)
+	typeIDs = append(typeIDs, implantIDs...)
 	snap, err := loadFitSnapshot(ctx, app.queries, typeIDs)
 	if err != nil {
 		log.Printf("fittings sim: load snapshot for ship %d: %v", doc.ShipTypeID, err)
@@ -703,7 +782,7 @@ func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotI
 			engineItems = append(engineItems, fitItemInput{TypeID: it.TypeID, Quantity: it.Qty})
 		}
 	}
-	res := computeFit(snap, doc.ShipTypeID, engineItems, levels, doc.Charges)
+	res := computeFit(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, implantIDs)
 
 	// Names for everything the fragment prints.
 	names := app.esi.CachedTypeNames(ctx, typeIDs)
@@ -715,6 +794,9 @@ func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotI
 	}
 	view.ShipID = doc.ShipTypeID
 	view.ShipName = nameOf(doc.ShipTypeID)
+	for _, id := range implantIDs {
+		view.Implants = append(view.Implants, fitImplantEntry{TypeID: id, Name: nameOf(id)})
+	}
 
 	view.Groups = fitBuildGroups(res, doc, familyOf, nameOf, view.SupportsSubsystems)
 	view.Visual = fitBuildVisual(res, doc, snap, familyOf, nameOf, view.SupportsSubsystems)
@@ -1223,6 +1305,7 @@ func resistOf(res *fitResult, kind int, shield bool) float64 {
 type fitSimRequest struct {
 	fitDoc
 	Pilot int64 `json:"pilot"`
+	Clone int64 `json:"clone"` // jump clone ID; 0 = active clone
 }
 
 // readFitRequest decodes a fit JSON body (bounded) and sanitizes
@@ -1257,8 +1340,32 @@ func (app *Application) handleFitSimulate(w http.ResponseWriter, r *http.Request
 		}
 		pilotLabel = label
 	}
-	view := app.buildFitSimView(ctx, &req.fitDoc, req.Pilot, pilotLabel)
+	view := app.buildFitSimView(ctx, &req.fitDoc, req.Pilot, pilotLabel, req.Clone)
 	app.renderFragment(w, "fittings.html", "fit-workbench", view)
+}
+
+// handleFitClonesJSON serves GET /fittings/clones.json: the
+// Clone dropdown options for one pilot (active clone plus jump
+// clones). Lets the editor refresh the dropdown when the pilot
+// picker changes without a full page load.
+func (app *Application) handleFitClonesJSON(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	pilotID, _ := strconv.ParseInt(r.URL.Query().Get("pilot"), 10, 64)
+	if _, owned := app.fitPilotLabel(ctx, userID, pilotID); !owned {
+		writeFitJSON(w, map[string]any{"ok": false, "error": "That pilot isn't one of your characters."})
+		return
+	}
+	_, effectiveClone, clones, note := app.fitPilotImplants(ctx, pilotID, 0)
+	opts := make([]map[string]any, 0, len(clones))
+	for _, c := range clones {
+		label := c.Name
+		if c.Implants > 0 {
+			label = fmt.Sprintf("%s (%d)", c.Name, c.Implants)
+		}
+		opts = append(opts, map[string]any{"id": c.ID, "name": label})
+	}
+	writeFitJSON(w, map[string]any{"ok": true, "clones": opts, "clone": effectiveClone, "note": note})
 }
 
 // fitPilotLabel resolves a pilot character ID to its name when
@@ -2032,7 +2139,10 @@ func (app *Application) attachFitEditor(ctx context.Context, r *http.Request, da
 			ID: ch.CharacterID, Name: ch.Name, Active: ch.CharacterID == pilotID,
 		})
 	}
-	editor.Sim = app.buildFitSimView(ctx, doc, pilotID, pilotLabel)
+	cloneID, _ := strconv.ParseInt(q.Get("clone"), 10, 64)
+	editor.Sim = app.buildFitSimView(ctx, doc, pilotID, pilotLabel, cloneID)
+	editor.CloneID = editor.Sim.CloneID
+	editor.Clones = editor.Sim.Clones
 
 	editor.Description = doc.Description
 	editor.TagsList = doc.Tags

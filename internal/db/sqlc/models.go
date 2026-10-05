@@ -165,6 +165,19 @@ type MarketRegionStatsDaily struct {
 	BuyVolume   int64   `json:"buy_volume"`
 }
 
+type MarketStationStat struct {
+	LocationID int64   `json:"location_id"`
+	RegionID   int64   `json:"region_id"`
+	TypeID     int64   `json:"type_id"`
+	BestSell   float64 `json:"best_sell"`
+	BestBuy    float64 `json:"best_buy"`
+	SellOrders int64   `json:"sell_orders"`
+	BuyOrders  int64   `json:"buy_orders"`
+	SellVolume int64   `json:"sell_volume"`
+	BuyVolume  int64   `json:"buy_volume"`
+	UpdatedAt  string  `json:"updated_at"`
+}
+
 type MarketWatchlist struct {
 	UserID       int64   `json:"user_id"`
 	TypeID       int64   `json:"type_id"`

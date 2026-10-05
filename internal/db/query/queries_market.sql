@@ -382,3 +382,32 @@ SELECT region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, ty
 FROM market_region_stats_daily
 WHERE region_id = ? AND type_id = ?
 ORDER BY day;
+
+-- ---------------------------------------------------------------------
+-- P2 station stats (schema 032): per-(station, type) book
+-- statistics written by the same whole-region sweeps as the
+-- region stats above. A completed sweep replaces the region's
+-- station rows inside the sweep transaction: delete the region,
+-- then upsert the fresh measures station by station. The
+-- spread scanner page reads only these rows.
+-- ---------------------------------------------------------------------
+-- name: DeleteMarketStationStatsByRegion :exec
+DELETE FROM market_station_stats
+WHERE region_id = ?;
+-- name: UpsertMarketStationStat :exec
+INSERT INTO market_station_stats (location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (location_id, type_id) DO UPDATE SET
+    region_id   = excluded.region_id,
+    best_sell   = excluded.best_sell,
+    best_buy    = excluded.best_buy,
+    sell_orders = excluded.sell_orders,
+    buy_orders  = excluded.buy_orders,
+    sell_volume = excluded.sell_volume,
+    buy_volume  = excluded.buy_volume,
+    updated_at  = excluded.updated_at;
+-- name: ListMarketStationStatsByRegion :many
+SELECT location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at
+FROM market_station_stats
+WHERE region_id = ?
+ORDER BY location_id, type_id;

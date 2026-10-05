@@ -43,6 +43,24 @@ func (q *Queries) DeleteMarketRegionStatsByRegion(ctx context.Context, regionID 
 	return err
 }
 
+const deleteMarketStationStatsByRegion = `-- name: DeleteMarketStationStatsByRegion :exec
+DELETE FROM market_station_stats
+WHERE region_id = ?
+`
+
+// ---------------------------------------------------------------------
+// P2 station stats (schema 032): per-(station, type) book
+// statistics written by the same whole-region sweeps as the
+// region stats above. A completed sweep replaces the region's
+// station rows inside the sweep transaction: delete the region,
+// then upsert the fresh measures station by station. The
+// spread scanner page reads only these rows.
+// ---------------------------------------------------------------------
+func (q *Queries) DeleteMarketStationStatsByRegion(ctx context.Context, regionID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteMarketStationStatsByRegion, regionID)
+	return err
+}
+
 const deleteOrderHealthEntry = `-- name: DeleteOrderHealthEntry :exec
 DELETE FROM order_health
 WHERE character_id = ? AND order_id = ?
@@ -690,6 +708,47 @@ func (q *Queries) ListMarketRegionStatsDaily(ctx context.Context, arg ListMarket
 			&i.BuyOrders,
 			&i.SellVolume,
 			&i.BuyVolume,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketStationStatsByRegion = `-- name: ListMarketStationStatsByRegion :many
+SELECT location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at
+FROM market_station_stats
+WHERE region_id = ?
+ORDER BY location_id, type_id
+`
+
+func (q *Queries) ListMarketStationStatsByRegion(ctx context.Context, regionID int64) ([]MarketStationStat, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketStationStatsByRegion, regionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketStationStat
+	for rows.Next() {
+		var i MarketStationStat
+		if err := rows.Scan(
+			&i.LocationID,
+			&i.RegionID,
+			&i.TypeID,
+			&i.BestSell,
+			&i.BestBuy,
+			&i.SellOrders,
+			&i.BuyOrders,
+			&i.SellVolume,
+			&i.BuyVolume,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1434,6 +1493,49 @@ func (q *Queries) UpsertMarketRegionStatDaily(ctx context.Context, arg UpsertMar
 		arg.BuyOrders,
 		arg.SellVolume,
 		arg.BuyVolume,
+	)
+	return err
+}
+
+const upsertMarketStationStat = `-- name: UpsertMarketStationStat :exec
+INSERT INTO market_station_stats (location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (location_id, type_id) DO UPDATE SET
+    region_id   = excluded.region_id,
+    best_sell   = excluded.best_sell,
+    best_buy    = excluded.best_buy,
+    sell_orders = excluded.sell_orders,
+    buy_orders  = excluded.buy_orders,
+    sell_volume = excluded.sell_volume,
+    buy_volume  = excluded.buy_volume,
+    updated_at  = excluded.updated_at
+`
+
+type UpsertMarketStationStatParams struct {
+	LocationID int64   `json:"location_id"`
+	RegionID   int64   `json:"region_id"`
+	TypeID     int64   `json:"type_id"`
+	BestSell   float64 `json:"best_sell"`
+	BestBuy    float64 `json:"best_buy"`
+	SellOrders int64   `json:"sell_orders"`
+	BuyOrders  int64   `json:"buy_orders"`
+	SellVolume int64   `json:"sell_volume"`
+	BuyVolume  int64   `json:"buy_volume"`
+	UpdatedAt  string  `json:"updated_at"`
+}
+
+func (q *Queries) UpsertMarketStationStat(ctx context.Context, arg UpsertMarketStationStatParams) error {
+	_, err := q.db.ExecContext(ctx, upsertMarketStationStat,
+		arg.LocationID,
+		arg.RegionID,
+		arg.TypeID,
+		arg.BestSell,
+		arg.BestBuy,
+		arg.SellOrders,
+		arg.BuyOrders,
+		arg.SellVolume,
+		arg.BuyVolume,
+		arg.UpdatedAt,
 	)
 	return err
 }

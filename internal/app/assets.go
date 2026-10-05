@@ -3,12 +3,14 @@ package app
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
@@ -113,6 +115,14 @@ func (app *Application) handleAssets(w http.ResponseWriter, r *http.Request) {
 			Name:   ch.Name,
 			Active: ch.CharacterID == active.CharacterID,
 		})
+	}
+
+	// A ?q= search runs across every linked character instead of
+	// rendering one character's hangars.
+	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
+		data.AssetsSearch = app.searchAssets(ctx, characters, q)
+		app.render(ctx, w, http.StatusOK, "assets.html", data)
+		return
 	}
 
 	view := &assetsView{CharacterName: active.Name}
@@ -289,4 +299,143 @@ func assetNote(it esi.Asset) string {
 		return "singleton"
 	}
 	return ""
+}
+
+// assetSearchChar is one character's slice of a cross-character
+// search: the location blocks holding that character's matching
+// stacks.
+type assetSearchChar struct {
+	CharacterID   int64
+	CharacterName string
+	Locations     []assetLocation
+	Stacks        int // matching stacks across all locations
+}
+
+// assetsSearchView is the Assets page's cross-character search
+// result. Syncing names the characters whose first asset sync
+// has not landed yet — they are reported as not included, never
+// silently absent from the answer.
+type assetsSearchView struct {
+	Query       string
+	Results     []assetSearchChar
+	TotalStacks int
+	Syncing     []string
+}
+
+// searchAssets answers "which of my characters has an X, and
+// where is it": it scans every linked character's cached asset
+// snapshot for stacks whose item name contains the query
+// (case-insensitive) and groups the matches by character and
+// location. It reads snapshot rows directly and never fetches —
+// a character whose first sync has not landed is reported as
+// not included rather than fetched on the spot.
+func (app *Application) searchAssets(ctx context.Context, characters []db.Character, query string) *assetsSearchView {
+	view := &assetsSearchView{Query: query}
+	needle := strings.ToLower(query)
+	for _, ch := range characters {
+		snap, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: esi.SnapAssets})
+		if errors.Is(serr, sql.ErrNoRows) {
+			view.Syncing = append(view.Syncing, ch.Name)
+			continue
+		}
+		if serr != nil {
+			log.Printf("assets search: read snapshot for character %d: %v", ch.CharacterID, serr)
+			continue
+		}
+		var items []esi.Asset
+		if err := json.Unmarshal([]byte(snap.Payload), &items); err != nil {
+			log.Printf("assets search: decode snapshot for character %d: %v", ch.CharacterID, err)
+			continue
+		}
+		found := app.searchCharacterAssets(ctx, items, needle)
+		if found == nil {
+			continue
+		}
+		found.CharacterID = ch.CharacterID
+		found.CharacterName = ch.Name
+		view.Results = append(view.Results, *found)
+		view.TotalStacks += found.Stacks
+	}
+	sort.Slice(view.Results, func(i, j int) bool {
+		if view.Results[i].Stacks != view.Results[j].Stacks {
+			return view.Results[i].Stacks > view.Results[j].Stacks
+		}
+		return view.Results[i].CharacterName < view.Results[j].CharacterName
+	})
+	return view
+}
+
+// searchCharacterAssets groups one character's stacks whose item
+// name contains needle by location — same titles, same ordering,
+// same per-location cap as the full Assets page, so a search
+// result reads like the page it points to. Returns nil when
+// nothing matches. Name resolution covers the character's whole
+// hangar (not just the matches) so "Inside: <container>" labels
+// resolve the same way they do on the Assets page.
+func (app *Application) searchCharacterAssets(ctx context.Context, items []esi.Asset, needle string) *assetSearchChar {
+	typeIDs := make([]int64, 0, len(items))
+	itemType := make(map[int64]int64, len(items))
+	for _, it := range items {
+		typeIDs = append(typeIDs, it.TypeID)
+		itemType[it.ItemID] = it.TypeID
+	}
+	names := app.esi.CachedTypeNames(ctx, typeIDs)
+	nameOf := func(typeID int64) string {
+		if n, ok := names[typeID]; ok {
+			return n
+		}
+		return fmt.Sprintf("Type #%d", typeID)
+	}
+
+	byLoc := make(map[int64][]esi.Asset)
+	locType := make(map[int64]string)
+	stacks := 0
+	for _, it := range items {
+		if !strings.Contains(strings.ToLower(nameOf(it.TypeID)), needle) {
+			continue
+		}
+		byLoc[it.LocationID] = append(byLoc[it.LocationID], it)
+		if _, ok := locType[it.LocationID]; !ok {
+			locType[it.LocationID] = it.LocationType
+		}
+		stacks++
+	}
+	if stacks == 0 {
+		return nil
+	}
+
+	locations := make([]assetLocation, 0, len(byLoc))
+	for locID, entries := range byLoc {
+		loc := assetLocation{Title: app.assetLocationTitle(ctx, locID, locType[locID], itemType, nameOf, nil)}
+		loc.Loc = app.linkPlace(ctx, locID, loc.Title)
+		sorted := append([]esi.Asset(nil), entries...)
+		sort.Slice(sorted, func(i, j int) bool {
+			if sorted[i].Quantity != sorted[j].Quantity {
+				return sorted[i].Quantity > sorted[j].Quantity
+			}
+			return nameOf(sorted[i].TypeID) < nameOf(sorted[j].TypeID)
+		})
+		if len(sorted) > maxAssetRowsPerLocation {
+			loc.MoreStacks = len(sorted) - maxAssetRowsPerLocation
+			sorted = sorted[:maxAssetRowsPerLocation]
+		}
+		for _, it := range sorted {
+			loc.Items = append(loc.Items, assetRow{
+				Name:     nameOf(it.TypeID),
+				TypeID:   it.TypeID,
+				Quantity: esi.FormatInt(it.Quantity),
+				Note:     assetNote(it),
+			})
+		}
+		locations = append(locations, loc)
+	}
+	sort.Slice(locations, func(i, j int) bool {
+		ti := len(locations[i].Items) + locations[i].MoreStacks
+		tj := len(locations[j].Items) + locations[j].MoreStacks
+		if ti != tj {
+			return ti > tj
+		}
+		return locations[i].Title < locations[j].Title
+	})
+	return &assetSearchChar{Locations: locations, Stacks: stacks}
 }

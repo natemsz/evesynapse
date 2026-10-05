@@ -6,9 +6,39 @@
 
 {{if .AssetsChars}}
 <p>{{range $i, $c := .AssetsChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/assets/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
+<form method="get" action="/assets/">
+<p><label>Find an item on any of your characters <input type="search" name="q"{{if .AssetsSearch}} value="{{.AssetsSearch.Query}}"{{end}} placeholder="e.g. Rifter"></label> <button type="submit">Search</button>{{if .AssetsSearch}} <a href="/assets/">Clear search</a>{{end}}</p>
+</form>
 {{end}}
 
-{{if .Assets}}
+{{if .AssetsSearch}}
+  {{$v := .AssetsSearch}}
+  {{if $v.Results}}
+  <p><small>{{$v.TotalStacks}} stacks matching “{{$v.Query}}” across {{len $v.Results}} {{if eq (len $v.Results) 1}}character{{else}}characters{{end}}</small></p>
+  {{range $v.Results}}
+    <h2><a href="/assets/?character={{.CharacterID}}">{{.CharacterName}}</a></h2>
+    {{range .Locations}}
+    <section class="foldable">
+    <h3>{{placeLink .Loc}}</h3>
+    <div class="tw">
+    <table>
+      <thead><tr><th>Item</th><th>Quantity</th><th>Note</th></tr></thead>
+      <tbody>
+      {{range .Items}}
+        <tr><td>{{itemLink .TypeID .Name}}</td><td>{{.Quantity}}</td><td>{{.Note}}</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+    </div>
+    {{if .MoreStacks}}<p><small>+ {{.MoreStacks}} more matching stacks</small></p>{{end}}
+    </section>
+    {{end}}
+  {{end}}
+  {{else}}
+  <p>No stacks matching “{{$v.Query}}” on any character.</p>
+  {{end}}
+  {{if $v.Syncing}}<p><small>Not included yet — still waiting on a first sync for {{range $i, $n := $v.Syncing}}{{if $i}}, {{end}}{{$n}}{{end}}.</small></p>{{end}}
+{{else if .Assets}}
   {{if .Assets.Loaded}}
   <p><small>{{.Assets.Stacks}} stacks · {{.Assets.TotalItems}} items · {{len .Assets.Locations}} locations</small></p>
   {{range .Assets.Locations}}

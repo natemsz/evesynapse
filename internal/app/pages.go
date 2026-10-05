@@ -49,6 +49,7 @@ type pageData struct {
 	CorpStructs     *corpStructuresView
 	Assets          *assetsView
 	AssetsChars     []assetCharLink
+	AssetsSearch    *assetsSearchView
 	Planets         *planetsView
 	PlanetsChars    []assetCharLink
 	Mail            *mailView

@@ -1863,6 +1863,9 @@ body.quickjump-open { overflow: hidden; }
 .fit-good { color: var(--success); }
 .fit-note, .fit-notes { color: #c9a06a; }
 .fit-notes { padding-left: 1.2rem; }
+.fit-implants { margin: 0.4rem 0; color: #c9a06a; }
+.fit-implants summary { cursor: pointer; }
+.fit-implants ul { margin: 0.3rem 0 0; padding-left: 1.2rem; }
 .fit-missing {
   border: 1px solid #4a3410;
   border-radius: 4px;

@@ -18,6 +18,11 @@
       {{range .FitEditor.Pilots}}<option value="{{.ID}}"{{if eq .ID $.FitEditor.PilotID}} selected{{end}}>{{.Name}}</option>{{end}}
     </select>
   </label>
+  <label>Clone
+    <select id="fit-clone"{{if not .FitEditor.Clones}} disabled{{end}} title="Whose implants the numbers are calculated with">
+      {{if .FitEditor.Clones}}{{range .FitEditor.Clones}}<option value="{{.ID}}"{{if eq .ID $.FitEditor.CloneID}} selected{{end}}>{{.Name}}{{if .Implants}} ({{.Implants}}){{end}}</option>{{end}}{{else}}<option value="0">Active clone</option>{{end}}
+    </select>
+  </label>
   <label>Fit name
     <input type="text" id="fit-name" value="{{.FitEditor.Sim.FitName}}" placeholder="Name this fit" autocomplete="off">
   </label>
@@ -158,6 +163,13 @@
 {{define "fit-workbench"}}
 <div class="fit-wb" data-fit-state="{{.StateJSON}}" data-fit-bandwidth="{{.DroneBWNum}}" data-fit-bay="{{.DroneBayNum}}" data-fit-subsystems="{{if .SupportsSubsystems}}1{{else}}0{{end}}" data-fit-restricted='{{.RestrictedJSON}}'>
 {{if .DataNote}}<p class="fit-note">{{.DataNote}}</p>{{end}}
+{{if or .Implants .ImplantNote}}
+<details class="fit-implants">
+  <summary>Implants{{if .Implants}} ({{len .Implants}}){{end}}</summary>
+  {{if .ImplantNote}}<p class="fit-note">{{.ImplantNote}}</p>{{end}}
+  {{if .Implants}}<ul>{{range .Implants}}<li>{{.Name}}</li>{{end}}</ul>{{end}}
+</details>
+{{end}}
 {{if .HasShip}}
 {{if .Visual}}
 <div class="fit-visual" id="fit-visual" role="group" aria-label="Visual fitting">

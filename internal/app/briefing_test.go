@@ -377,8 +377,8 @@ func TestBriefingFontPreloadAndFooter(t *testing.T) {
 	mustContain(t, "home head", body,
 		`<link rel="preload" as="font" type="font/woff2" href="/static/fonts/shentox-regular.woff2" crossorigin>`,
 		`<link rel="preload" as="font" type="font/woff2" href="/static/fonts/univers-next-pro-medium-condensed.woff2" crossorigin>`,
-		`<link rel="stylesheet" href="/static/style.css?v=v0.3.25.002">`,
-		`Powered by EveSynapse v0.3.25.002 🏓 by <a href="https://github.com/natemsz" target="_blank" rel="noopener noreferrer">natemsz</a>`,
+		`<link rel="stylesheet" href="/static/style.css?v=v0.3.25.003">`,
+		`Powered by EveSynapse v0.3.25.003 🏓 by <a href="https://github.com/natemsz" target="_blank" rel="noopener noreferrer">natemsz</a>`,
 	)
 
 	// The font file itself rides the immutable cache header.
@@ -393,5 +393,65 @@ func TestBriefingFontPreloadAndFooter(t *testing.T) {
 	}
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("renders made %d outbound calls, want 0", got)
+	}
+}
+
+func TestBriefingAnchorWriteSkippedWhenFresh(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+
+	readAnchor := func() string {
+		t.Helper()
+		raw, err := q.GetUserBriefingAnchor(ctx, user.ID)
+		if err != nil {
+			t.Fatalf("read anchor: %v", err)
+		}
+		return raw
+	}
+
+	// An anchor half a minute old is already inside the step: a
+	// repeat home render must leave the stored value untouched
+	// byte for byte -- proof the render performed no write.
+	fresh := now.Add(-30 * time.Second).Format(time.RFC3339)
+	if err := q.SetUserBriefingAnchor(ctx, db.SetUserBriefingAnchorParams{
+		LastBriefingAt: fresh, ID: user.ID,
+	}); err != nil {
+		t.Fatalf("seed anchor: %v", err)
+	}
+	code, _ := getPage(t, app, cookie, "/")
+	if code != http.StatusOK {
+		t.Fatalf("GET /: status %d", code)
+	}
+	if got := readAnchor(); got != fresh {
+		t.Fatalf("anchor after repeat render = %q, want untouched %q", got, fresh)
+	}
+
+	// An anchor older than the step still advances to ~now.
+	stale := now.Add(-2 * time.Hour).Format(time.RFC3339)
+	if err := q.SetUserBriefingAnchor(ctx, db.SetUserBriefingAnchorParams{
+		LastBriefingAt: stale, ID: user.ID,
+	}); err != nil {
+		t.Fatalf("seed stale anchor: %v", err)
+	}
+	code, _ = getPage(t, app, cookie, "/")
+	if code != http.StatusOK {
+		t.Fatalf("GET / after stale anchor: status %d", code)
+	}
+	got := readAnchor()
+	at, ok := parseRFC3339(got)
+	if !ok || got == stale || time.Since(at) > 5*time.Minute {
+		t.Fatalf("anchor after stale render = %q, want advanced to ~now", got)
+	}
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("home renders made %d outbound calls, want 0", got)
 	}
 }

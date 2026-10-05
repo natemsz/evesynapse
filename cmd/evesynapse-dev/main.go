@@ -44,6 +44,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return app.RunUpdate(args[1:], stdout, stderr)
 		case "-refresh":
 			return app.RunRefresh(args[1:], app.LoadConfig(), stdout, stderr)
+		case "-migrate-pg":
+			return app.RunMigratePG(args[1:], app.LoadConfig(), stdout, stderr)
 		case "-h", "--help", "-help":
 			printUsage(stdout)
 			return 0
@@ -93,7 +95,7 @@ func serve() int {
 	go func() { errCh <- srv.ListenAndServe() }()
 
 	log.Printf("evesynapse-dev: listening on %s (db: %s, EVE SSO configured: %t)",
-		cfg.Addr(), cfg.DBPath(), cfg.SSOConfigured())
+		cfg.Addr(), cfg.DatabaseLabel(), cfg.SSOConfigured())
 
 	select {
 	case err := <-errCh:

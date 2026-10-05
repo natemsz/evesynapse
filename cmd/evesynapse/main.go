@@ -18,6 +18,10 @@
 //	evesynapse -refresh                mark all cached data out of
 //	                                   date so the next start fetches
 //	                                   fresh copies (server stopped)
+//	evesynapse -migrate-pg [-force]    one-time copy of the old
+//	                                   SQLite database (DB_PATH)
+//	                                   into Postgres (DATABASE_URL);
+//	                                   the SQLite file is only read
 package main
 
 import (
@@ -49,6 +53,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return app.RunUpdate(args[1:], stdout, stderr)
 		case "-refresh":
 			return app.RunRefresh(args[1:], app.LoadConfig(), stdout, stderr)
+		case "-migrate-pg":
+			return app.RunMigratePG(args[1:], app.LoadConfig(), stdout, stderr)
 		case "-h", "--help", "-help":
 			printUsage(stdout)
 			return 0
@@ -68,6 +74,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  evesynapse -update -arm64           update to the latest release for this computer (-x86 on Intel/AMD)")
 	fmt.Fprintln(w, "  evesynapse -update <url> [checksum] install a downloaded update and restart")
 	fmt.Fprintln(w, "  evesynapse -refresh                 refresh all cached data on next start (app must be stopped)")
+	fmt.Fprintln(w, "  evesynapse -migrate-pg [-force]     copy the old SQLite database into Postgres (one-time cutover)")
 }
 
 // serve runs the web app until a termination signal (SIGTERM from
@@ -100,7 +107,7 @@ func serve() int {
 	go func() { errCh <- srv.ListenAndServe() }()
 
 	log.Printf("evesynapse: listening on %s (db: %s, EVE SSO configured: %t)",
-		cfg.Addr(), cfg.DBPath(), cfg.SSOConfigured())
+		cfg.Addr(), cfg.DatabaseLabel(), cfg.SSOConfigured())
 
 	select {
 	case err := <-errCh:

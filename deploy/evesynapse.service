@@ -1,23 +1,25 @@
 # EveSynapse service unit.
 #
-# ONE-TIME CHANGE vs. the original unit: Restart=on-failure is now
-# Restart=always, so the binary's self-update mode
-# (`evesynapse -update <url>`) can restart the app onto the new
-# build: the updater swaps the program file in place, asks the
-# running server to stop, and this unit brings it straight back up
-# on the new version. An explicit `systemctl stop evesynapse` still
-# stays stopped — Restart=always never overrides a requested stop.
-# StartLimitBurst keeps a broken build from restart-looping forever:
-# after 5 starts in a minute the unit gives up and waits for a human.
+# TWO NOTES vs. the SQLite-era unit: Restart=always (so the
+# binary's self-update mode `evesynapse -update` can restart the
+# app onto the new build: the updater swaps the program file in
+# place, asks the running server to stop, and this unit brings
+# it straight back up on the new version — an explicit
+# `systemctl stop evesynapse` still stays stopped), and the
+# Postgres ordering below: since the v0.3.26 cutover the app
+# reads its data from the local PostgreSQL service, so it must
+# start after PostgreSQL (and stop before it: shutdown ordering
+# follows After= in reverse). StartLimitBurst keeps a broken
+# build from restart-looping forever: after 5 starts in a minute
+# the unit gives up and waits for a human.
 #
 # Apply once on the box:
 #   sudo cp deploy/evesynapse.service /etc/systemd/system/evesynapse.service
 #   sudo systemctl daemon-reload
-# (The rest of the unit is unchanged, so nothing else moves.)
 
 [Unit]
 Description=EveSynapse — EVE Online companion
-After=network-online.target
+After=network-online.target postgresql.service
 Wants=network-online.target
 StartLimitIntervalSec=60
 StartLimitBurst=5

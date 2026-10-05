@@ -9,8 +9,13 @@ and key/vCode auth.
 
 - **Go** (module `evesynapse`; see `go.mod`)
 - **chi** (`github.com/go-chi/chi/v5`) — HTTP router
-- **alexedwards/scs v2** — sessions, stored in SQLite via `sqlite3store`
-- **modernc.org/sqlite** — pure-Go SQLite driver (no cgo)
+- **alexedwards/scs v2** — sessions, stored in PostgreSQL via `pgxstore`
+- **PostgreSQL 16** — the app's database, reached through
+  **pgx/v5** (sqlc generates `database/sql` code over the pgx
+  stdlib driver; a pgxpool backs the session store)
+- **modernc.org/sqlite** — pure-Go SQLite driver (no cgo), kept
+  only so the one-time `-migrate-pg` move can read a SQLite-era
+  database file
 - **sqlc** — type-safe Go generated from hand-written SQL
 - **golang.org/x/oauth2** — EVE SSO authorization-code flow
 - **github.com/golang-jwt/jwt/v5** — SSO access-token verification
@@ -35,16 +40,21 @@ and key/vCode auth.
   `killmails.go`, `intel.go`), the background worker (`worker.go`,
   plus `intel_worker.go` for the public-data pass), the
   SDE static-data importer (`sde.go`), and the self-maintenance
-  modes (`maintenance.go`: `-version`, `-update`, `-refresh`)
+  modes (`maintenance.go`: `-version`, `-update`, `-refresh`;
+  `migratepg.go`: the one-time `-migrate-pg` cutover)
 - `internal/app/templates/` — embedded html/templates (`base.html`
   layout)
 - `internal/app/static/` — embedded assets: the 2013 wallpaper
   (`bg.jpg`) and the dependency-free stylesheet (`style.css`), served
   at `/static/`
-- `internal/app/schema/` — SQL schema (sqlc input; `001_init.sql`,
-  `002_snapshots.sql`, `003_sde.sql`, `004_module_sweep.sql`,
-  `005_corp.sql`, `006_economy.sql`, `007_intel.sql`),
-  embedded for DB bootstrap
+- `internal/app/schema_pg/` — the Postgres schema (sqlc input;
+  `001_baseline.sql`), embedded for DB bootstrap
+- `internal/app/schema/` — the original SQLite migrations
+  (001–035), kept for the rollback binary and the `-migrate-pg`
+  source reader
+- `internal/pgtest/` — test-only embedded-Postgres provisioning
+  (a fresh database per test; `go test ./...` needs no external
+  database)
 - `internal/esi/` — the ESI client: HTTP layer, per-character
   snapshot cache, and the two-tier type/group/place name resolution
   (network tier + cache-only render tier). Never imports
@@ -60,6 +70,12 @@ and key/vCode auth.
 cp .env.example .env   # fill in EVE_CLIENT_ID / EVE_CLIENT_SECRET
 make run               # or: go build -o bin/evesynapse ./cmd/evesynapse && ./bin/evesynapse
 ```
+
+The release build needs a PostgreSQL 16 database to point
+`DATABASE_URL` at; for a fresh local database the setup script
+below provisions one, or create role+database yourself and put
+the URL in `.env`. A fresh database gets the full schema from
+the embedded baseline on first boot.
 
 `make run` runs the **release** build (`cmd/evesynapse`). If you fork
 this project, that's the build you get by default — it has no
@@ -153,10 +169,23 @@ environment win). Then open <http://localhost:8080>:
 - `/dev-login` — dev-only fake sign-in, registered **only** when
   `DEV_LOGIN=1` (see below)
 
-Environment: `EVE_CLIENT_ID`, `EVE_CLIENT_SECRET`, `EVE_CALLBACK_URL`
-(must match the callback registered at developers.eveonline.com
-character-for-character), `SESSION_KEY`, plus optional `ADDR`
-(default `:8080`) and `DB_PATH` (default `evesynapse.db`).
+## Configuration
+
+Everything comes from the environment (after `./.env` fills any
+gaps; real environment variables win over the file):
+
+| Variable | Required | Default | Purpose |
+|----------|----------|---------|---------|
+| `EVE_CLIENT_ID` | yes | — | EVE SSO application client ID |
+| `EVE_CLIENT_SECRET` | yes | — | EVE SSO application client secret |
+| `EVE_CALLBACK_URL` | yes | `http://localhost:8080/auth/callback` | OAuth2 redirect URI; must match the callback registered at developers.eveonline.com character-for-character |
+| `DATABASE_URL` | yes | `postgres://evesynapse@localhost:5432/evesynapse?sslmode=disable` | PostgreSQL connection URL |
+| `ADDR` | no | `:8080` | HTTP listen address |
+| `SESSION_KEY` | no | — | Reserved for cookie signing hardening |
+| `EVESYNAPSE_UPDATE_REPO` | no | `natemsz/evesynapse` | GitHub repo (owner/repo) the updater checks |
+| `EVE_SDE_BASE_URL` | no | Fuzzwork's dump | Base URL of the SDE CSV dump the importer downloads |
+| `DEV_LOGIN` | no | — | Dev build only: `1` registers the `/dev-login` route |
+| `DB_PATH` | no | `evesynapse.db` | Legacy SQLite file; read only by the one-time `-migrate-pg` move (see "Upgrading from a SQLite-era install") |
 
 ## Install
 
@@ -176,10 +205,15 @@ registration for sign-in ("EVE SSO flow" below). Then:
 
    It downloads the latest build for your machine and verifies it
    against the checksum published with the release, creates the
-   `evesynapse` user and `/opt/evesynapse`, installs the systemd
-   service, and links `evesynapse` into `/usr/bin` so you
+   `evesynapse` user and `/opt/evesynapse`, installs and starts
+   PostgreSQL if it's missing and creates the app's database
+   (role `evesynapse`, database `evesynapse`, with a generated
+   password written into `/opt/evesynapse/.env` as `DATABASE_URL`;
+   the file is chmod 600), installs the systemd service (ordered
+   after `postgresql.service`), and links `evesynapse` into `/usr/bin` so you
    can run it without typing the full path. It never overwrites
-   an existing `.env`. Installing from a fork or from a build you
+   an existing `.env` (it only appends a `DATABASE_URL` that
+   isn't there yet). Installing from a fork or from a build you
    made yourself works too:
 
    > **Why `/usr/bin`?** Updating always runs under `sudo`, and
@@ -462,26 +496,60 @@ server logs a loud warning at boot when it is on.
 
 ## Database & sqlc
 
-The app opens/creates the SQLite file from `DB_PATH`, creates the scs
-`sessions` table, applies `internal/app/schema/001_init.sql` on first
-boot of a fresh database (the `users`/`characters` tables), applies
-`internal/app/schema/002_snapshots.sql` whenever the snapshot
-tables are absent, `internal/app/schema/003_sde.sql` whenever
-the SDE tables are absent, and `internal/app/schema/004_module_sweep.sql`
-whenever the killmail-detail table is absent, and
-`internal/app/schema/005_corp.sql` whenever the corporation
-support tables (fetch-state log, character→corporation map, item
-names) are absent (existing databases gain
-the new tables
-in place), and `internal/app/schema/006_economy.sql` whenever the
-contract-detail table is absent, and
-`internal/app/schema/007_intel.sql` whenever the global
-public-data tables are absent. Regenerate query code after editing `internal/db/query/queries.sql`
-with:
+The app runs on PostgreSQL 16 (the live deployment is 16.15;
+tests self-provision an embedded Postgres 16, so CI needs no
+database service). `openDB` connects with `DATABASE_URL` and, on
+a database where the EveSynapse tables are absent, applies the
+collapsed baseline in `internal/app/schema_pg/001_baseline.sql`
+— the one-time fold of the 35 SQLite migrations into a single
+Postgres schema (BIGINT/DOUBLE PRECISION keep the generated Go
+models' int64/float64 types; timestamps stay app-written RFC3339
+TEXT). Every query and the hand-rolled importer ride a
+`database/sql` handle over the pgx/v5 stdlib driver; a pgxpool
+exists only to back the scs `pgxstore` session store (sessions
+live in the `sessions` table the baseline creates). Future
+schema changes land as new numbered files in `schema_pg/`.
+Regenerate query code after editing `internal/db/query/` with:
 
 ```sh
 make gen   # sqlc generate
 ```
+
+### Upgrading from a SQLite-era install
+
+The binary carries a one-time migration mode for installs that
+still run on SQLite (pre-v0.3.26):
+
+```sh
+sudo systemctl stop evesynapse
+sudo /opt/evesynapse/evesynapse -update   # install the new build
+sudo bash deploy/setup.sh                  # provisions Postgres + appends DATABASE_URL to .env
+sudo /opt/evesynapse/evesynapse -migrate-pg
+sudo systemctl start evesynapse
+```
+
+`-migrate-pg` reads the SQLite file named by `DB_PATH`
+(read-only; it is never written), creates/verifies the Postgres
+schema, copies every table in foreign-key-safe order, rewinds
+the identity sequences, and verifies per-table row counts plus
+a refresh-token spot check before it declares success. Sessions
+are not migrated: everyone signs in once on the new build.
+Re-running into a non-empty target is refused unless `-force`
+is given (which truncates the target tables and re-copies).
+Rollback is the previous binary plus the untouched SQLite file
+and the old `.env`.
+
+## Backups
+
+Back the database up with `pg_dump` (and restore with `psql`):
+
+```sh
+pg_dump evesynapse > evesynapse-$(date +%F).sql
+psql evesynapse < evesynapse-2026-10-05.sql   # into a fresh database
+```
+
+The generated SQL file plus `/opt/evesynapse/.env` is a complete
+backup of an install.
 
 ## Status / next steps
 
@@ -526,13 +594,3 @@ make gen   # sqlc generate
       store (no token needed; war details bounded like killmail
       details), plus a Tranquility players-online line on Home —
       renders stay cache-only throughout
-
-# Credits
-
-  - Developed by Nate Sanchez (natemsz / IGN: Burzrujat) with love, and in the hopes it might be useful.
-  - EveSynapse is based on the 2013 project originally developed by natemsz, element, and j0ker (Rest in peace Matt. See you on the other side of the Eve Gate ❤️) 
-
-This project is dedicated to EVE Online, its pilots and its developers — the game and community that I have loved for over two decades.
-
-
-

@@ -88,7 +88,7 @@ func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 		SSOConfigured: app.cfg.SSOConfigured(),
 	}
 
-	_, active, links, err := app.pickCharacter(ctx, r, "/fittings/")
+	characters, active, links, err := app.pickCharacter(ctx, r, "/fittings/")
 	if err != nil {
 		log.Printf("fittings: list characters: %v", err)
 		data.Error = "Could not load fitting data; check the server log."
@@ -96,6 +96,7 @@ func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if links == nil {
+		app.attachFitEditor(ctx, r, &data, nil, db.Character{}, nil)
 		app.render(ctx, w, http.StatusOK, "fittings.html", data)
 		return
 	}
@@ -112,6 +113,7 @@ func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 		if _, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: active.CharacterID, Kind: esi.SnapFittings}); errors.Is(serr, sql.ErrNoRows) {
 			view.Warming = true
 		}
+		app.attachFitEditor(ctx, r, &data, characters, active, nil)
 		app.render(ctx, w, http.StatusOK, "fittings.html", data)
 		return
 	}
@@ -160,5 +162,6 @@ func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 		view.Fittings = append(view.Fittings, entry)
 	}
 
+	app.attachFitEditor(ctx, r, &data, characters, active, fittings)
 	app.render(ctx, w, http.StatusOK, "fittings.html", data)
 }

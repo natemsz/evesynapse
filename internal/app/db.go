@@ -370,6 +370,29 @@ func openDB(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Schema 029 (v0.3.21 dogma fitting data: full type attributes,
+	// attribute types, effects + decoded modifiers, type effects),
+	// applied the same guarded way.
+	var dogmaFittingTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sde_type_attributes'`).Scan(&dogmaFittingTables); err != nil {
+		return nil, err
+	}
+	if dogmaFittingTables == 0 {
+		if err := applySchema(conn, dogmaFittingSchema); err != nil {
+			return nil, err
+		}
+	}
+	// Schema 030 (v0.3.21 local fittings: fits built in the fitting
+	// simulator, stored per user), applied the same guarded way.
+	var localFittingTables int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'local_fittings'`).Scan(&localFittingTables); err != nil {
+		return nil, err
+	}
+	if localFittingTables == 0 {
+		if err := applySchema(conn, localFittingsSchema); err != nil {
+			return nil, err
+		}
+	}
 	return conn, nil
 }
 

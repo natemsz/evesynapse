@@ -8,6 +8,82 @@
 <p>{{range $i, $c := .FittingsChars}}{{if $i}} · {{end}}{{if $c.Active}}<strong>{{$c.Name}}</strong>{{else}}<a href="/fittings/?character={{$c.ID}}">{{$c.Name}}</a>{{end}}{{end}}</p>
 {{end}}
 
+{{if .FitEditor}}
+<section class="foldable" id="fit-editor">
+<h3>Build a fitting</h3>
+<div class="fit-head">
+  <span class="searchwrap">
+    <input type="text" id="fit-ship-q" value="{{.FitEditor.Sim.ShipName}}" placeholder="Ship name, e.g. Rifter" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-ship-suggest" aria-autocomplete="list">
+    <ul class="suggest" id="fit-ship-suggest" role="listbox" hidden></ul>
+  </span>
+  <label>Pilot
+    <select id="fit-pilot">
+      <option value="0"{{if eq .FitEditor.PilotID 0}} selected{{end}}>All V</option>
+      {{range .FitEditor.Pilots}}<option value="{{.ID}}"{{if eq .ID $.FitEditor.PilotID}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </label>
+  <label>Fit name
+    <input type="text" id="fit-name" value="{{.FitEditor.Sim.FitName}}" placeholder="Name this fit" autocomplete="off">
+  </label>
+  <button type="button" class="btn" id="fit-save" data-fit-local-id="{{.FitEditor.LocalID}}">Save fit</button>
+</div>
+<p><small>Fits you save live in EveSynapse. Your EVE account's fittings are only ever read, never changed.</small></p>
+{{if .FitEditor.Notes}}
+<ul class="fit-notes">
+  {{range .FitEditor.Notes}}<li>{{.}}</li>{{end}}
+</ul>
+{{end}}
+{{template "fit-workbench" .FitEditor.Sim}}
+
+<div class="fit-picker" id="fit-picker" hidden>
+  <div class="fit-picker-head">
+    <input type="text" id="fit-picker-q" placeholder="Search items by name" autocomplete="off">
+    <select id="fit-picker-family">
+      <option value="high">High slots</option>
+      <option value="medium">Mid slots</option>
+      <option value="low">Low slots</option>
+      <option value="rig">Rigs</option>
+      <option value="subsystem">Subsystems</option>
+      <option value="drone">Drones</option>
+      <option value="any">Any item</option>
+    </select>
+    <button type="button" class="btn" id="fit-picker-close">Done</button>
+  </div>
+  <ul class="fit-picker-list" id="fit-picker-list"></ul>
+</div>
+
+<div class="fit-eft">
+  <h4>Share this fit</h4>
+  <p><button type="button" class="btn" id="fit-export-btn">Show as EFT</button></p>
+  <textarea id="fit-eft-out" rows="9" readonly placeholder="The EFT text appears here — ready to paste into EVE or any fitting tool."></textarea>
+  <form method="post" action="/fittings/import/">
+    <p><label for="fit-eft-in">Import a fit — paste EFT text</label></p>
+    <textarea id="fit-eft-in" name="eft" rows="9" placeholder="[Rifter, My fit]&#10;Damage Control II&#10;..."></textarea>
+    <p><button type="submit" class="btn">Import</button></p>
+  </form>
+</div>
+
+{{if .FitEditor.LocalFits}}
+<h4>Your saved fits</h4>
+<div class="tw">
+<table>
+  <thead><tr><th>Name</th><th>Ship</th><th>Saved</th><th></th></tr></thead>
+  <tbody>
+  {{range .FitEditor.LocalFits}}
+    <tr>
+      <td><a href="/fittings/?local={{.ID}}#fit-editor">{{.Name}}</a></td>
+      <td>{{.ShipName}}</td>
+      <td>{{.Updated}}</td>
+      <td><form method="post" action="/fittings/delete/"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" class="btn">Delete</button></form></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+</section>
+{{end}}
+
 {{if .Fittings}}
   {{if .Fittings.Loaded}}
   {{if .Fittings.Fittings}}
@@ -15,7 +91,7 @@
   <section class="foldable">
   <h3>{{.Name}}</h3>
   <p><small>{{itemLink .ShipTypeID .ShipType}}</small></p>
-  <p><a href="/skills/plans/fit?character={{$.Fittings.CharacterID}}&fitting={{.FittingID}}">Training plan for this fit</a></p>
+  <p><a href="/skills/plans/fit?character={{$.Fittings.CharacterID}}&fitting={{.FittingID}}">Training plan for this fit</a> · <a href="/fittings/?character={{$.Fittings.CharacterID}}&esi={{.FittingID}}#fit-editor">View stats</a></p>
   {{range .Groups}}
   <h4>{{.Label}}</h4>
   <div class="tw">
@@ -44,4 +120,121 @@
 {{else}}
   <p>No fittings to show yet — link a character first.</p>
 {{end}}
+{{end}}
+
+{{define "fit-workbench"}}
+<div class="fit-wb" data-fit-state="{{.StateJSON}}">
+{{if .DataNote}}<p class="fit-note">{{.DataNote}}</p>{{end}}
+{{if .HasShip}}
+<div class="fit-cols">
+  <div class="fit-slots">
+    {{range .Groups}}
+    {{$group := .}}
+    <div class="fit-group">
+      <h4>{{.Label}}{{if .HasMax}} <small class="{{if .Over}}fit-over{{end}}">{{.Used}}/{{.Max}}{{if .Over}} — doesn't fit{{end}}</small>{{end}}</h4>
+      <div class="fit-chips">
+        {{range .Chips}}
+        <span class="fit-chip">
+          <button type="button" class="fit-chip-name" data-fit-dec="{{.TypeID}}" title="Remove one">{{.Name}}</button>
+          {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
+          <button type="button" class="fit-chip-btn" data-fit-inc="{{.TypeID}}" title="Add another">+</button>
+          {{if eq $group.Key "drone"}}<input type="number" class="fit-qty" data-fit-qty="{{.TypeID}}" value="{{.Qty}}" min="0" max="10000" title="How many">{{end}}
+        </span>
+        {{end}}
+        {{range .Empty}}
+        <button type="button" class="fit-slot-empty" data-fit-add="{{$group.Key}}">+ Empty {{$group.Label}} slot</button>
+        {{end}}
+        {{if and (not .HasMax) (eq .Key "drone")}}
+        <button type="button" class="fit-slot-empty" data-fit-add="drone">+ Add drones</button>
+        {{end}}
+        {{if and (not .HasMax) (eq .Key "cargo")}}
+        <button type="button" class="fit-slot-empty" data-fit-add="any">+ Add to cargo</button>
+        {{end}}
+        {{if and (not .HasMax) (eq .Key "subsystem")}}
+        <button type="button" class="fit-slot-empty" data-fit-add="subsystem">+ Add a subsystem</button>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+    {{range .ChargeSets}}
+    <p class="fit-charge">
+      <label>{{.WeaponName}} ammunition
+        <select data-fit-charge="{{.WeaponID}}">
+          <option value="0">No ammunition</option>
+          {{range .Options}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}
+        </select>
+      </label>
+    </p>
+    {{end}}
+  </div>
+  {{with .Stats}}
+  <div class="fit-stats">
+    <h4>{{$.ShipName}} <small>with {{$.PilotLabel}}'s skills</small></h4>
+    <div class="fit-bar-row{{if .Powergrid.Over}} over{{end}}">
+      <span class="fit-bar-label">Powergrid</span>
+      <span class="fit-bar"><span style="width:{{printf "%.1f" .Powergrid.Pct}}%"></span></span>
+      <span class="fit-bar-nums">{{.Powergrid.Used}} of {{.Powergrid.Max}} ({{.Powergrid.Left}} left)</span>
+    </div>
+    <div class="fit-bar-row{{if .CPU.Over}} over{{end}}">
+      <span class="fit-bar-label">CPU</span>
+      <span class="fit-bar"><span style="width:{{printf "%.1f" .CPU.Pct}}%"></span></span>
+      <span class="fit-bar-nums">{{.CPU.Used}} of {{.CPU.Max}} ({{.CPU.Left}} left)</span>
+    </div>
+    <div class="tw">
+    <table class="fit-table">
+      <tbody>
+        <tr><th>Slots</th><td class="{{if .SlotsOver}}fit-over{{end}}">{{.SlotLine}}</td></tr>
+        <tr><th>Hardpoints</th><td class="{{if .HPOver}}fit-over{{end}}">{{.Hardpoints}}</td></tr>
+        <tr><th>Calibration</th><td class="{{if .CalibOver}}fit-over{{end}}">{{.Calibration}}</td></tr>
+        <tr><th>Capacitor</th><td>{{.Capacitor}} · peak recharge {{.CapPeak}} · use {{.CapDraw}}</td></tr>
+        <tr><th>Capacitor state</th><td class="{{if .CapStable}}fit-good{{else}}fit-over{{end}}">{{.CapState}}</td></tr>
+        <tr><th>Damage per second</th><td>{{.TotalDPS}} — turrets {{.TurretDPS}} · missiles {{.MissileDPS}} · drones {{.DroneDPS}}</td></tr>
+        <tr><th>Effective hit points</th><td>{{.EHPOmni}}</td></tr>
+        <tr><th>Shield recharge</th><td>{{.ShieldReg}} at peak</td></tr>
+        <tr><th>Shield boosting</th><td>{{.ShieldBoost}}</td></tr>
+        <tr><th>Armor repair</th><td>{{.ArmorRep}}</td></tr>
+        <tr><th>Hull repair</th><td>{{.HullRep}}</td></tr>
+        <tr><th>Speed</th><td>{{.Velocity}}</td></tr>
+        <tr><th>Align time</th><td>{{.Align}}</td></tr>
+        <tr><th>Signature radius</th><td>{{.Signature}}</td></tr>
+        <tr><th>Targeting range</th><td>{{.TargetRng}}</td></tr>
+        <tr><th>Scan resolution</th><td>{{.ScanRes}}</td></tr>
+        <tr><th>Sensor strength</th><td>{{.Sensor}}</td></tr>
+        <tr><th>Locked targets</th><td>up to {{.LockedTgts}}</td></tr>
+        <tr><th>Cargo hold</th><td>{{.Cargo}}</td></tr>
+        <tr><th>Drone bandwidth</th><td>{{.DroneBW}}</td></tr>
+        <tr><th>Drone bay</th><td>{{.DroneBay}} · {{.DronesUp}}</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="tw">
+    <table class="fit-table">
+      <thead><tr><th></th><th>HP</th><th>EM</th><th>Thermal</th><th>Kinetic</th><th>Explosive</th><th>EHP</th></tr></thead>
+      <tbody>
+      {{range .Tank}}
+        <tr><th>{{.Layer}}</th><td>{{.HP}}</td><td>{{.EM}}</td><td>{{.Thermal}}</td><td>{{.Kinetic}}</td><td>{{.Explosive}}</td><td>{{.EHP}}</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+    </div>
+    {{if $.Missing}}
+    <div class="fit-missing">
+      <h4>Skills you're missing</h4>
+      <ul>
+      {{range $.Missing}}<li>{{.Name}} — {{.Have}} → {{.Need}}</li>{{end}}
+      </ul>
+    </div>
+    {{end}}
+    {{if $.Notes}}
+    <ul class="fit-notes">
+      {{range $.Notes}}<li>{{.}}</li>{{end}}
+    </ul>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+{{else}}
+{{if not .DataNote}}<p><small>Pick a ship above to start building your fit.</small></p>{{end}}
+{{end}}
+</div>
 {{end}}

@@ -113,6 +113,12 @@ var guidePriceWantsSchema string
 //go:embed schema/028_structure_context.sql
 var structureContextSchema string
 
+//go:embed schema/029_dogma_fitting.sql
+var dogmaFittingSchema string
+
+//go:embed schema/030_local_fittings.sql
+var localFittingsSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -462,6 +468,12 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/fittings", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleFittings)
+		r.Post("/simulate/", app.handleFitSimulate)
+		r.Get("/picker.json", app.handleFitPickerJSON)
+		r.Post("/save/", app.handleFitSave)
+		r.Post("/delete/", app.handleFitDelete)
+		r.Post("/import/", app.handleFitImport)
+		r.Post("/export/", app.handleFitExport)
 	})
 
 	r.Route("/killmails", func(r chi.Router) {

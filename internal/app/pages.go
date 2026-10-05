@@ -25,6 +25,7 @@ type pageData struct {
 	CharacterPage   *characterView
 	Fittings        *fittingsView
 	FittingsChars   []assetCharLink
+	FitEditor       *fitEditorView
 	Killmails       *killmailsView
 	KillmailChars   []assetCharLink
 	Wallet          *walletView

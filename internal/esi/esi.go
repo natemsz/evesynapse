@@ -333,6 +333,14 @@ type Client struct {
 	// warm tier over it; the worker resolves, pages only read.
 	structNamesMu sync.RWMutex
 	structNames   map[int64]string
+
+	// ESI error budget (v0.3.33): X-Esi-Error-Limit-Remain and
+	// X-Esi-Error-Limit-Reset from every response. Updated
+	// atomically on each request; workers check ErrorBudgetLow()
+	// before spending budget instead of discovering 420s.
+	errBudgetMu    sync.RWMutex
+	errBudgetRemain int
+	errBudgetReset  int64 // unix seconds when the budget resets
 }
 
 // New builds a Client. httpClient performs every ESI request (the
@@ -1385,6 +1393,7 @@ func (c *Client) FetchRaw(ctx context.Context, accessToken, path string) ([]byte
 		return nil, nil, fmt.Errorf("ESI GET %s: %w", path, err)
 	}
 	defer resp.Body.Close()
+	c.trackErrorBudget(resp.Header)
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
 		return nil, nil, fmt.Errorf("ESI GET %s: read body: %w", path, err)
@@ -1396,6 +1405,54 @@ func (c *Client) FetchRaw(ctx context.Context, accessToken, path string) ([]byte
 		return nil, resp.Header, &StatusError{Method: http.MethodGet, Path: path, Code: resp.StatusCode}
 	}
 	return body, resp.Header, nil
+}
+
+// trackErrorBudget records ESI's X-Esi-Error-Limit-Remain/Reset
+// headers (v0.3.33). Called on every response from FetchRaw and
+// postJSON; workers consult ErrorBudgetLow before spending budget.
+func (c *Client) trackErrorBudget(h http.Header) {
+	remainStr := h.Get("X-Esi-Error-Limit-Remain")
+	resetStr := h.Get("X-Esi-Error-Limit-Reset")
+	if remainStr == "" && resetStr == "" {
+		return
+	}
+	c.errBudgetMu.Lock()
+	defer c.errBudgetMu.Unlock()
+	if remainStr != "" {
+		if n, err := strconv.Atoi(remainStr); err == nil {
+			c.errBudgetRemain = n
+		}
+	}
+	if resetStr != "" {
+		if n, err := strconv.Atoi(resetStr); err == nil {
+			c.errBudgetReset = time.Now().Unix() + int64(n)
+		}
+	}
+}
+
+// ErrorBudgetLow reports whether ESI's error budget is exhausted or
+// nearly so. Workers should check this before spending fetch budget
+// and back off until the reset time instead of discovering 420s.
+func (c *Client) ErrorBudgetLow() bool {
+	c.errBudgetMu.RLock()
+	defer c.errBudgetMu.RUnlock()
+	// Never observed a budget header yet: not low.
+	if c.errBudgetReset == 0 {
+		return false
+	}
+	// Budget already reset: not low.
+	if time.Now().Unix() >= c.errBudgetReset {
+		return false
+	}
+	return c.errBudgetRemain <= 5
+}
+
+// ErrorBudgetStatus returns the last observed remain count and reset
+// time for status displays. Zero values mean no header seen yet.
+func (c *Client) ErrorBudgetStatus() (remain int, resetUnix int64) {
+	c.errBudgetMu.RLock()
+	defer c.errBudgetMu.RUnlock()
+	return c.errBudgetRemain, c.errBudgetReset
 }
 
 // PostJSON POSTs payload as JSON to ESI and decodes the response
@@ -1430,6 +1487,7 @@ func (c *Client) PostJSONAuthed(ctx context.Context, accessToken, path string, p
 		return fmt.Errorf("ESI POST %s: %w", path, err)
 	}
 	defer resp.Body.Close()
+	c.trackErrorBudget(resp.Header)
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
 		return fmt.Errorf("ESI POST %s: read body: %w", path, err)

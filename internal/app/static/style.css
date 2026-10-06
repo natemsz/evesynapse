@@ -2730,3 +2730,64 @@ html[data-theme="light"] .sidenav-utility,
 html[data-theme="light"] .sidebar-account {
   border-top-color: #d9cfba;
 }
+
+/* ============================================================
+   v0.3.35: in-game 5-box skill level indicators.
+   Five small squares per skill: filled light for trained levels,
+   gold when fully trained to V, blue-pulsing for the level
+   currently training, darker blue for queued levels, dark for
+   untrained. No green anywhere.
+   ============================================================ */
+.lvl {
+  display: inline-flex;
+  gap: 2px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.lvl i {
+  width: 10px;
+  height: 13px;
+  border-radius: 1px;
+  background: #232323;
+  border: 1px solid #3a3a3a;
+}
+.lvl i.on {
+  background: #e8e4da;
+  border-color: #e8e4da;
+}
+.lvl i.on.max {
+  background: #f5b301;
+  border-color: #f5b301;
+}
+.lvl i.training {
+  background: #3fa9f5;
+  border-color: #3fa9f5;
+  animation: lvl-pulse 1.2s ease-in-out infinite;
+}
+.lvl i.queued {
+  background: #2c4a66;
+  border-color: #3a5a78;
+}
+@keyframes lvl-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+html[data-theme="light"] .lvl i { background: #d9d2c2; border-color: #b8ad96; }
+html[data-theme="light"] .lvl i.on { background: #4a4438; border-color: #4a4438; }
+html[data-theme="light"] .lvl i.on.max { background: #c78d02; border-color: #c78d02; }
+html[data-theme="light"] .lvl i.training { background: #2b7fc4; border-color: #2b7fc4; }
+html[data-theme="light"] .lvl i.queued { background: #7fa3c4; border-color: #5f83a5; }
+
+/* Clone rename: inline disclosure, keeps the clone list compact. */
+.clone-rename { display: inline; }
+.clone-rename summary {
+  display: inline;
+  cursor: pointer;
+  color: var(--gold);
+  text-decoration: underline;
+}
+.clone-rename form { display: inline; margin-left: 0.5rem; }
+.clone-rename input[type="text"] {
+  width: 14rem;
+  max-width: 60vw;
+}

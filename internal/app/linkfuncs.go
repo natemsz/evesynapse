@@ -196,7 +196,7 @@ func skillLevel(trained, next int, state string) template.HTML {
 		switch {
 		case state == "training" && i == next:
 			cls = ` class="training"`
-		case state == "queued" && i == next:
+		case state == "queued" && i > trained && i <= next:
 			cls = ` class="queued"`
 		case i <= trained:
 			if trained >= 5 {

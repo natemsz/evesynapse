@@ -77,9 +77,12 @@ type skillQueueRow struct {
 	// numeric trained level (0 when the skill is untrained);
 	// State is "training" for the position-0 entry and "queued"
 	// for the rest, driving the 5-box level indicator.
-	LevelNum   int
-	TrainedLvl int
-	State      string
+	// MaxQueuedLvl is the highest queued level for this skill,
+	// so the level indicator shows all queued levels as queued.
+	LevelNum     int
+	TrainedLvl   int
+	State        string
+	MaxQueuedLvl int
 }
 
 // handleSkills used to render the standalone Skill Sheet. The
@@ -189,14 +192,24 @@ func (app *Application) fillQueue(ctx context.Context, view *skillsView, queue e
 		return fmt.Sprintf("Type #%d", id)
 	}
 
+	// Max queued level per skill, so each queue entry's level
+	// indicator shows all queued levels (not just its own).
+	maxQueued := map[int64]int{}
+	for _, entry := range sorted {
+		if entry.FinishedLevel > maxQueued[entry.SkillID] {
+			maxQueued[entry.SkillID] = entry.FinishedLevel
+		}
+	}
+
 	for i, entry := range sorted {
 		view.Queue = append(view.Queue, skillQueueRow{
-			Num:      i + 1,
-			Skill:    nameFor(entry.SkillID),
-			SkillID:  entry.SkillID,
-			Level:    esi.RomanLevel(entry.FinishedLevel),
-			LevelNum: entry.FinishedLevel,
-			Finishes: formatFinish(entry.FinishDate),
+			Num:          i + 1,
+			Skill:        nameFor(entry.SkillID),
+			SkillID:      entry.SkillID,
+			Level:        esi.RomanLevel(entry.FinishedLevel),
+			LevelNum:     entry.FinishedLevel,
+			MaxQueuedLvl: maxQueued[entry.SkillID],
+			Finishes:     formatFinish(entry.FinishDate),
 		})
 		if entry.QueuePosition == 0 && view.Training == "" {
 			line := fmt.Sprintf("%s %s", nameFor(entry.SkillID), esi.RomanLevel(entry.FinishedLevel))

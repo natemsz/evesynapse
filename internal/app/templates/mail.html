@@ -29,7 +29,11 @@
 </table>
 </div>
 <div class="mailbody">{{.Body}}</div>
-<p><a href="/mail/?character={{$.Mail.CharacterID}}">Back to the inbox</a></p>
+<p><form method="post" action="/mail/read/" style="display:inline">
+  <input type="hidden" name="character" value="{{$.Mail.CharacterID}}">
+  <input type="hidden" name="mail" value="{{$.Mail.DetailID}}">
+  <button class="btn" type="submit">Mark as read</button>
+</form> <a href="/mail/?character={{$.Mail.CharacterID}}">Back to the inbox</a></p>
 {{end}}
 {{end}}
 </section>
@@ -57,7 +61,7 @@
   </tbody>
 </table>
 </div>
-<p><small>The 50 most recent mails. Reading here never marks mail read in-game — EveSynapse only reads.</small></p>
+<p><small>The 50 most recent mails. Use “Mark as read” on an open mail to clear it in-game too.</small></p>
 {{else}}
 <p><small>No mail in the latest snapshot{{if .Mail.LabelFilter}} with that label{{end}}.</small></p>
 {{end}}

@@ -333,6 +333,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/mail", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleMail)
+		r.Post("/read/", app.handleMailMarkRead)
 	})
 
 	r.Route("/calendar", func(r chi.Router) {

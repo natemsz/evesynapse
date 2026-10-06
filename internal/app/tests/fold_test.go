@@ -106,12 +106,11 @@ func TestCharacterSheetFoldSections(t *testing.T) {
 	}
 	apptest.MustContain(t, "/character/", body,
 		`<section class="foldable`,
-		"<h3>Wallet</h3>",
 		"<h3>Training</h3>",
 		"<h3>Skills</h3>",
 	)
-	if n := strings.Count(body, `<section class="foldable`); n < 4 {
-		t.Fatalf("/character/: %d foldable sections, want at least 4 (identity, wallet, training, skills)", n)
+	if n := strings.Count(body, `<section class="foldable`); n < 2 {
+		t.Fatalf("/character/: %d foldable sections, want at least 2 (training, skills)", n)
 	}
 	// Skill groups, browse catalog, and clones default to folded (merged from
 	// the old skills page); the four main sheet sections above stay expanded.

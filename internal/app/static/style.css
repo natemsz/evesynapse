@@ -1381,6 +1381,38 @@ html[data-nav="rail"] .sidebar .branch > summary {
   padding-right: 0.25rem;
   padding-left: 0.25rem;
 }
+/* Rail-mode icon tooltips: hovering an icon for 2s reveals the
+   category name in a floating label to the right of the rail. */
+html[data-nav="rail"] .sidenav [data-tip] {
+  position: relative;
+}
+html[data-nav="rail"] .sidenav [data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: calc(100% + 0.75rem);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0.35rem 0.7rem;
+  border-radius: 0.4rem;
+  background: rgba(20, 16, 12, 0.95);
+  border: 1px solid rgba(255, 210, 122, 0.35);
+  color: #ffd27a;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, visibility 0.15s;
+  transition-delay: 2s;
+  z-index: 100;
+}
+html[data-nav="rail"] .sidenav [data-tip]:hover::after {
+  opacity: 1;
+  visibility: visible;
+}
+html[data-nav="rail"] .sidenav [data-tip]:not(:hover)::after {
+  transition-delay: 0s;
+}
 html[data-nav="rail"] .sidebar .branch > summary::after { display: none; }
 html[data-nav="rail"] .sidebar .branch .menu {
   position: absolute;

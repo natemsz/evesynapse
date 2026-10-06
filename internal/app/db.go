@@ -15,8 +15,7 @@ import (
 // pgxpool that exists only to back the scs session store
 // (pgxstore). On a database where the EveSynapse tables are
 // absent it applies the collapsed Postgres baseline
-// (schema_pg/001_baseline.sql) — the one-time fold of the old
-// SQLite migrations 001–035, so a fresh install comes up with the
+// (schema_pg/001_baseline.sql), so a fresh install comes up with the
 // full schema on first boot. Later schema changes land as new
 // numbered files in schema_pg applied by this same guarded path.
 func openDB(ctx context.Context, dsn string) (*sql.DB, *pgxpool.Pool, error) {

@@ -127,6 +127,23 @@ func openDB(ctx context.Context, dsn string) (*sql.DB, *pgxpool.Pool, error) {
 			return nil, nil, err
 		}
 	}
+	// Schema step 006 (v0.3.35: custom jump-clone names) rides the
+	// same guarded path, probed on the clone_names table.
+	var cloneNameTables int
+	if err := conn.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'clone_names'`,
+	).Scan(&cloneNameTables); err != nil {
+		conn.Close()
+		pool.Close()
+		return nil, nil, err
+	}
+	if cloneNameTables == 0 {
+		if err := applySchema(conn, pgCloneNamesSchema); err != nil {
+			conn.Close()
+			pool.Close()
+			return nil, nil, err
+		}
+	}
 	return conn, pool, nil
 }
 

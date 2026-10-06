@@ -66,6 +66,12 @@ var pgPriceCacheSchema string
 //go:embed schema_pg/005_restock.sql
 var pgRestockSchema string
 
+// Schema step 006 (v0.3.35: custom jump-clone names): applied by
+// openDB wherever the clone_names table is absent.
+
+//go:embed schema_pg/006_clone_names.sql
+var pgCloneNamesSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -396,6 +402,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/character", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleCharacter)
+		r.Post("/clones/rename", app.handleCloneRename)
 	})
 
 	// Public pilot page: a stranger's public record (profile +

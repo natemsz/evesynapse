@@ -2444,6 +2444,34 @@ html[data-theme="light"] {
 }
 html[data-theme="light"] body { background: #f4f1ea; }
 html[data-theme="light"] body::before { display: none; }
+
+/* v0.3.33: Faction themes (EVE-Nexus pattern). Each overrides the
+   accent/gold variables; the base dark palette stays. */
+html[data-theme="amarr"] {
+  --accent: #ffd75e;
+  --gold: #e8b923;
+  --text-bright: #fff8e1;
+}
+html[data-theme="caldari"] {
+  --accent: #5eb8ff;
+  --gold: #3a9bdc;
+  --text-bright: #e1f4ff;
+}
+html[data-theme="gallente"] {
+  --accent: #5effa8;
+  --gold: #2ecc71;
+  --text-bright: #e1fff0;
+}
+html[data-theme="minmatar"] {
+  --accent: #ff7a5e;
+  --gold: #d94f2b;
+  --text-bright: #ffe8e1;
+}
+html[data-theme="jove"] {
+  --accent: #c77dff;
+  --gold: #9d4edd;
+  --text-bright: #f3e8ff;
+}
 /* Glass chrome: light paint, same blur recipe. */
 html[data-theme="light"] header {
   background: linear-gradient(to bottom, rgba(247, 243, 235, 0.9), rgba(236, 229, 214, 0.9));

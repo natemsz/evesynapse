@@ -16,7 +16,7 @@
   {{range $v.Results}}
     <h2><a href="/assets/?character={{.CharacterID}}">{{.CharacterName}}</a></h2>
     {{range .Locations}}
-    <section class="foldable">
+    <section class="foldable" data-fold="closed">
     <h3>{{placeLink .Loc}}</h3>
     <div class="tw">
     <table>
@@ -40,7 +40,7 @@
   {{if .Assets.Loaded}}
   <p><small>{{.Assets.Stacks}} stacks · {{.Assets.TotalItems}} items · {{len .Assets.Locations}} locations</small></p>
   {{range .Assets.Locations}}
-    <section class="foldable">
+    <section class="foldable" data-fold="closed">
     <h3>{{placeLink .Loc}}</h3>
     <div class="tw">
     <table>

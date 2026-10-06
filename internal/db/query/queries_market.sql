@@ -680,3 +680,45 @@ ORDER BY region_id, location_id;
 SELECT CAST(COALESCE(MAX(updated_at), '') AS TEXT) AS stamp
 FROM market_station_leaderboard
 WHERE ($1::bigint = 0 OR region_id = $1::bigint);
+
+-- v0.3.33: per-type market price TTL cache. The worker refreshes
+-- only rows older than the TTL; pages read cache-only.
+-- name: UpsertMarketTypePrice :exec
+INSERT INTO market_type_prices (region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetched_at)
+VALUES ($1, $2, $3, $4, $5, $6, now())
+ON CONFLICT (region_id, type_id) DO UPDATE SET
+    buy_price   = excluded.buy_price,
+    sell_price  = excluded.sell_price,
+    buy_volume  = excluded.buy_volume,
+    sell_volume = excluded.sell_volume,
+    fetched_at  = excluded.fetched_at;
+-- name: GetMarketTypePrice :one
+SELECT region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetched_at
+FROM market_type_prices
+WHERE region_id = $1 AND type_id = $2;
+-- name: ListStaleMarketTypePrices :many
+SELECT region_id, type_id
+FROM market_type_prices
+WHERE fetched_at < now() - ($1::int * INTERVAL '1 second')
+ORDER BY fetched_at ASC
+LIMIT $2;
+-- name: ListMarketTypePricesForTypes :many
+SELECT region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetched_at
+FROM market_type_prices
+WHERE region_id = $1 AND type_id = ANY($2::bigint[]);
+
+-- v0.3.33: industry cost indices per (system, activity).
+-- name: UpsertIndustryCostIndex :exec
+INSERT INTO industry_cost_indices (solar_system_id, activity, cost_index, fetched_at)
+VALUES ($1, $2, $3, now())
+ON CONFLICT (solar_system_id, activity) DO UPDATE SET
+    cost_index = excluded.cost_index,
+    fetched_at = excluded.fetched_at;
+-- name: ListIndustryCostIndices :many
+SELECT solar_system_id, activity, cost_index, fetched_at
+FROM industry_cost_indices
+ORDER BY activity, cost_index ASC;
+-- name: GetIndustryCostIndex :one
+SELECT solar_system_id, activity, cost_index, fetched_at
+FROM industry_cost_indices
+WHERE solar_system_id = $1 AND activity = $2;

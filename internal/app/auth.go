@@ -72,9 +72,9 @@ const (
 // (GET https://esi.evetech.net/meta/openapi.json →
 // components.securitySchemes), minus every mutating scope — anything
 // whose name contains write_, send_, respond_, organize_, manage_ or
-// open_window (6 scopes excluded: respond_calendar_events,
+// open_window (5 scopes excluded: respond_calendar_events,
 // write_contacts, write_fleet,
-// send_mail, open_window, write_waypoint; esi-planets.manage_planets.v1
+// open_window, write_waypoint; esi-planets.manage_planets.v1
 // is the one deliberate manage exception — see below). The user's
 // developer-portal application has the same scopes enabled, so
 // SSO grants exactly what is requested here. Already-linked
@@ -146,6 +146,9 @@ var eveScopes = []string{
 	// /characters/{id}/mail/{mail_id}/). Characters linked before
 	// this scope was added get a 403, reported as "sign in again".
 	"esi-mail.organize_mail.v1",
+	// Issue 27: composing/sending mail needs send_mail (POST
+	// /characters/{id}/mail/). Same re-link note as above.
+	"esi-mail.send_mail.v1",
 	"esi-markets.read_character_orders.v1",
 	"esi-markets.read_corporation_orders.v1",
 	"esi-markets.structure_markets.v1",

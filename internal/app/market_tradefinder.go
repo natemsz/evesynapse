@@ -121,8 +121,37 @@ func (app *Application) handleMarketTradefinder(w http.ResponseWriter, r *http.R
 		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
 		SSOConfigured: app.cfg.SSOConfigured(),
 	}
-	data.MarketTradefinder = app.buildTradefinderView(ctx, r.URL.Query())
+	view := app.buildTradefinderView(ctx, r.URL.Query())
+	if wantCSV(r) {
+		serveTradefinderCSV(w, view)
+		return
+	}
+	data.MarketTradefinder = view
 	app.render(ctx, w, http.StatusOK, "market_tradefinder.html", data)
+}
+
+// serveTradefinderCSV writes the tradefinder's route rows as a CSV download.
+func serveTradefinderCSV(w http.ResponseWriter, view *tradefinderView) {
+	header := []string{"Item", "Buy region", "Buy typical", "Sell region", "Sell typical", "Profit per item", "Margin %", "Sold per day", "Profit per day", "Cheapest origin station", "Origin best", "Best dest station", "Dest best"}
+	rows := make([][]string, 0, len(view.Rows))
+	for _, row := range view.Rows {
+		rows = append(rows, []string{
+			row.ItemName,
+			view.OriginName,
+			row.BuyTypical,
+			view.DestName,
+			row.SellTypical,
+			row.ProfitItem,
+			row.MarginPct,
+			row.SoldPerDay,
+			row.ProfitDay,
+			row.OriginStation.Name,
+			row.OriginBest,
+			row.DestStation.Name,
+			row.DestBest,
+		})
+	}
+	serveCSV(w, "tradefinder", header, rows)
 }
 
 // buildTradefinderView assembles the tradefinder page for one

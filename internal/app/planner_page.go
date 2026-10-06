@@ -188,7 +188,46 @@ func (app *Application) handlePlanner(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if wantCSV(r) && view.Plan != nil {
+		servePlannerCSV(w, view.Plan)
+		return
+	}
 	app.render(ctx, w, http.StatusOK, "planner.html", data)
+}
+
+// servePlannerCSV writes the build plan's material rows and
+// shopping list as a CSV download.
+func servePlannerCSV(w http.ResponseWriter, plan *planView) {
+	header := []string{"Item", "Per run", "Need", "Have", "To buy", "Build", "ME/TE", "Time", "Unit price", "Buy cost", "Buy vs build"}
+	rows := make([][]string, 0, len(plan.Rows)+len(plan.Shopping)+2)
+	for _, row := range plan.Rows {
+		rows = append(rows, []string{
+			row.Name,
+			row.Base,
+			row.Need,
+			row.Have,
+			row.ToBuy,
+			row.RunsLine,
+			row.ME,
+			row.Time,
+			row.UnitPrice,
+			row.LineCost,
+			row.BvB,
+		})
+	}
+	if len(plan.Shopping) > 0 {
+		rows = append(rows, []string{}) // blank separator
+		rows = append(rows, []string{"Shopping list", "Qty", "Unit price", "Line cost"})
+		for _, row := range plan.Shopping {
+			rows = append(rows, []string{
+				row.Name,
+				row.Need,
+				row.UnitPrice,
+				row.LineCost,
+			})
+		}
+	}
+	serveCSV(w, "build-plan", header, rows)
 }
 
 // buildPlanView runs the engine for one product pick and shapes

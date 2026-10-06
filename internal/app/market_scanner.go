@@ -71,8 +71,31 @@ func (app *Application) handleMarketScanner(w http.ResponseWriter, r *http.Reque
 		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
 		SSOConfigured: app.cfg.SSOConfigured(),
 	}
-	data.MarketScanner = app.buildScannerView(ctx, r.URL.Query())
+	view := app.buildScannerView(ctx, r.URL.Query())
+	if wantCSV(r) {
+		serveScannerCSV(w, view)
+		return
+	}
+	data.MarketScanner = view
 	app.render(ctx, w, http.StatusOK, "market_scanner.html", data)
+}
+
+// serveScannerCSV writes the scanner's opportunity rows as a CSV download.
+func serveScannerCSV(w http.ResponseWriter, view *scannerView) {
+	header := []string{"Item", "Station", "Highest buy price", "Lowest sell price", "Spread %", "Sold per day", "Estimated daily profit"}
+	rows := make([][]string, 0, len(view.Rows))
+	for _, row := range view.Rows {
+		rows = append(rows, []string{
+			row.ItemName,
+			row.Station.Name,
+			row.BestBuy,
+			row.BestSell,
+			row.SpreadPct,
+			row.DailyVolume,
+			row.DailyProfit,
+		})
+	}
+	serveCSV(w, "spread-scanner", header, rows)
 }
 
 // buildScannerView assembles the scanner page for one region

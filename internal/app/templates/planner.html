@@ -36,7 +36,8 @@
 {{with .Planner.Plan}}
 <section class="foldable">
 <h3>{{.ProductName}}</h3>
-<p><small>From <strong>{{.BlueprintName}}</strong> — builds {{.ProducedLine}}.{{if .MaxRunNote}} {{.MaxRunNote}}.{{end}}</small></p>
+<p><small>From <strong>{{.BlueprintName}}</strong> — builds {{.ProducedLine}}.{{if .MaxRunNote}} {{.MaxRunNote}}.{{end}} · <a href="#" id="csv-export">Export CSV</a></small></p>
+<script>document.getElementById('csv-export').href = window.location.pathname + window.location.search + (window.location.search ? '&' : '?') + 'format=csv';</script>
 {{if .Skills}}<p><small>Requires {{range $i, $s := .Skills}}{{if $i}}, {{end}}{{$s}}{{end}}.</small></p>{{end}}
 {{if .StockNote}}<p><small>{{.StockNote}}</small></p>{{end}}
 

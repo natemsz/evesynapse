@@ -12,6 +12,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -55,8 +56,29 @@ func (app *Application) handleMarketLeaderboard(w http.ResponseWriter, r *http.R
 		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
 		SSOConfigured: app.cfg.SSOConfigured(),
 	}
-	data.MarketLeaderboard = app.buildLeaderboardView(ctx, r.URL.Query())
+	view := app.buildLeaderboardView(ctx, r.URL.Query())
+	if wantCSV(r) {
+		serveLeaderboardCSV(w, view)
+		return
+	}
+	data.MarketLeaderboard = view
 	app.render(ctx, w, http.StatusOK, "market_leaderboard.html", data)
+}
+
+// serveLeaderboardCSV writes the leaderboard's station rows as a CSV download.
+func serveLeaderboardCSV(w http.ResponseWriter, view *leaderboardView) {
+	header := []string{"Rank", "Station", "Region", "Open orders", "ISK on orders"}
+	rows := make([][]string, 0, len(view.Rows))
+	for _, row := range view.Rows {
+		rows = append(rows, []string{
+			fmt.Sprintf("%d", row.Rank),
+			row.Station.Name,
+			row.RegionName,
+			row.Orders,
+			row.OpenValue,
+		})
+	}
+	serveCSV(w, "top-stations", header, rows)
 }
 
 func (app *Application) buildLeaderboardView(ctx context.Context, q url.Values) *leaderboardView {

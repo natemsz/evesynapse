@@ -138,7 +138,7 @@ func TestQuickJumpPaletteMarkupAndScript(t *testing.T) {
 		`<div class="quickjump" id="quickjump" hidden>`,
 		`id="quickjump-q"`,
 		`id="quickjump-results"`,
-		`Powered by EveSynapse v0.3.34.005 🏓`)
+		`Powered by EveSynapse v0.3.35.001 🏓`)
 
 	code, js := getPage(t, app, cookie, "/static/app.js")
 	if code != http.StatusOK {

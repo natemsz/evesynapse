@@ -1022,9 +1022,18 @@
     var slots = editor.querySelectorAll(".fit-vslot");
     for (var i = 0; i < slots.length; i++) {
       var s = slots[i];
-      var fam = s.getAttribute("data-v-family") || "";
-      if (d.family && fam === d.family) s.classList.add("drop-ok");
-      else s.classList.add("drop-dim");
+      if (d.kind === "charge") {
+        // Charge drag: highlight filled weapon slots (Issue 2)
+        if (s.classList.contains("filled") && s.getAttribute("data-fit-vslot")) {
+          s.classList.add("drop-ok");
+        } else {
+          s.classList.add("drop-dim");
+        }
+      } else {
+        var fam = s.getAttribute("data-v-family") || "";
+        if (d.family && fam === d.family) s.classList.add("drop-ok");
+        else s.classList.add("drop-dim");
+      }
     }
   }
   function startPointerDrag(ev, d) {
@@ -1044,7 +1053,13 @@
     d.dropIndex = -1;
     if (slot) {
       var fam = slot.getAttribute("data-v-family") || "";
-      if (d.family && fam === d.family && !restrictionFor(d.typeID)) {
+      if (d.kind === "charge") {
+        // Charge drag: highlight filled weapon slots (Issue 2)
+        if (slot.classList.contains("filled") && slot.getAttribute("data-fit-vslot")) {
+          d.dropIndex = parseInt(slot.getAttribute("data-v-index") || "-1", 10);
+          if (!(d.dropIndex >= 0)) d.dropIndex = -1;
+        }
+      } else if (d.family && fam === d.family && !restrictionFor(d.typeID)) {
         d.dropIndex = parseInt(slot.getAttribute("data-v-index") || "-1", 10);
         if (!(d.dropIndex >= 0)) d.dropIndex = -1;
       }

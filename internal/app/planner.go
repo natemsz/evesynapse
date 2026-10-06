@@ -113,6 +113,17 @@ type planNode struct {
 	LineCost     float64 // leaf: Shortfall × unit price; build: rolled-up buy cost beneath
 	CostComplete bool    // false when some price beneath is unknown
 
+	// v0.3.33: per-node buy-vs-build (EVE-Nexus pattern). BuildCost
+	// is the recursive build cost (materials + job costs);
+	// BuyCost is Shortfall × unit price; BvBDelta = BuyCost −
+	// BuildCost (positive = building is cheaper). BvBApplicable
+	// is false for blueprint-type products (ESI lists BPO prices,
+	// not BPC contract prices — the EVE-Nexus guard).
+	BuildCost    float64
+	BuyCost      float64
+	BvBDelta     float64
+	BvBApplicable bool
+
 	Children []*planNode
 }
 
@@ -355,6 +366,12 @@ func (b *planBuilder) expand(typeID int64, bp *plannerBlueprint, depth int, base
 			node.UnitPrice = p
 			node.PriceKnown = true
 			node.LineCost = p * float64(node.Shortfall)
+			node.BuyCost = node.LineCost
+			// v0.3.33: leaves can't be built; BvB not applicable.
+			// The blueprint guard (EVE-Nexus): if this leaf IS a
+			// blueprint type, market prices are BPO not BPC — BvB
+			// would be meaningless, so mark inapplicable.
+			node.BvBApplicable = false
 		} else {
 			node.CostComplete = false
 		}
@@ -405,6 +422,22 @@ func (b *planBuilder) expand(typeID int64, bp *plannerBlueprint, depth int, base
 		if b.tooLarge {
 			break
 		}
+	}
+	// v0.3.33: per-node buy-vs-build. BuildCost is the rolled-up
+	// material cost (LineCost); BuyCost is market price for the
+	// shortfall. Delta positive = building saves money.
+	node.BuildCost = node.LineCost
+	if p, ok := unitPrice(b.prices, typeID); ok {
+		node.UnitPrice = p
+		node.PriceKnown = true
+		node.BuyCost = p * float64(node.Shortfall)
+		node.BvBDelta = node.BuyCost - node.BuildCost
+		// The EVE-Nexus guard: blueprint-type products are excluded
+		// from BvB (ESI lists BPO prices, not BPC contract prices).
+		// A product with a blueprint is not itself a blueprint, so
+		// BvB applies here; the guard matters for leaf materials
+		// that ARE blueprint types (handled in leaf()).
+		node.BvBApplicable = true
 	}
 	return node
 }

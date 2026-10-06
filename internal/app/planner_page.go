@@ -122,6 +122,7 @@ type planRowView struct {
 	Time       string
 	UnitPrice  string
 	LineCost   string
+	BvB        string // v0.3.33: buy-vs-build delta ("Build saves 1.2M" / "Buy saves 500K")
 	Note       string // surplus / cycle / covered-by-stock notes
 	SkillsLine string
 }
@@ -414,6 +415,16 @@ func planRow(n *planNode, nameOf func(int64) string) planRowView {
 			row.LineCost = isk(n.LineCost)
 		} else {
 			row.LineCost = "partial"
+		}
+		// v0.3.33: per-node buy-vs-build delta.
+		if n.BvBApplicable && n.PriceKnown {
+			if n.BvBDelta > 0 {
+				row.BvB = "Build saves " + isk(n.BvBDelta)
+			} else if n.BvBDelta < 0 {
+				row.BvB = "Buy saves " + isk(-n.BvBDelta)
+			} else {
+				row.BvB = "Even"
+			}
 		}
 	case n.Shortfall <= 0:
 		row.Badge = "Have"

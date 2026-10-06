@@ -37,11 +37,6 @@
     setFolded(container, btn, container.getAttribute("data-fold") === "closed");
   }
 
-  var panel = document.querySelector("main > .panel");
-  if (panel && !panel.querySelector(".foldable, .card")) {
-    addFold(panel, panel.querySelector(":scope > h1"));
-  }
-
   var foldables = document.querySelectorAll(".foldable");
   for (var i = 0; i < foldables.length; i++) {
     addFold(foldables[i], foldables[i].querySelector(":scope > h2, :scope > h3"));

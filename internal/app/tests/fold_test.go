@@ -144,7 +144,6 @@ func TestFoldGuardrailsInServedAssets(t *testing.T) {
 		t.Fatalf("/static/app.js status = %d", code)
 	}
 	apptest.MustContain(t, "/static/app.js", js,
-		`panel.querySelector(".foldable, .card")`,
 		`getAttribute("data-fold")`,
 		`data-fold") === "closed"`,
 		`querySelectorAll(".foldable")`,

@@ -1770,24 +1770,27 @@
 })();
 
 
-// --- Theme toggle (dark/light) ------------------------------
+// --- Theme toggle (dark/light/factions) ------------------------------
 // A stored choice in localStorage wins and is written onto
 // document.documentElement.dataset.theme; with no stored
 // choice the attribute stays unset so the stylesheet's
 // prefers-color-scheme media query applies. The button only
 // renders while logged in (see base.html), so everything here
 // is guarded: no button, no work.
+// v0.3.33: cycles through dark → light → amarr → caldari →
+// gallente → minmatar → jove → dark.
 (function () {
   "use strict";
   var btn = document.getElementById("theme-toggle");
   if (!btn) return;
   var root = document.documentElement;
   var storageKey = "evesynapse-theme";
+  var themes = ["dark", "light", "amarr", "caldari", "gallente", "minmatar", "jove"];
 
   function readSaved() {
     try {
       var v = window.localStorage.getItem(storageKey);
-      return (v === "light" || v === "dark") ? v : "";
+      return themes.indexOf(v) >= 0 ? v : "";
     } catch (e) { return ""; }
   }
   function save(theme) {
@@ -1801,7 +1804,7 @@
   // Icon visibility is CSS-driven (html[data-theme] selectors); no JS needed.
   function effective() {
     var attr = root.getAttribute("data-theme");
-    if (attr === "light" || attr === "dark") return attr;
+    if (themes.indexOf(attr) >= 0) return attr;
     return "dark";
   }
 
@@ -1809,7 +1812,9 @@
   if (saved) root.setAttribute("data-theme", saved);
 
   btn.addEventListener("click", function () {
-    var next = effective() === "light" ? "dark" : "light";
+    var cur = effective();
+    var idx = themes.indexOf(cur);
+    var next = themes[(idx + 1) % themes.length];
     root.setAttribute("data-theme", next);
     save(next);
   });

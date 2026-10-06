@@ -54,7 +54,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`<path d="M29.5 15.9L26.4 12.2M20.8 11.6L19.1 13.0M18.7 18.6L20.5 20.6M27.1 27.6L29.1 29.7M28.8 35.2L27.0 36.6M21.4 36.0L18.3 32.1"/>`,
 		`<circle cx="31.82" cy="18.76" r="2.7"/>`,
 		`<a class="wordmark topbar-wordmark" href="/" aria-label="EveSynapse home">EVE<svg class="wordmark-glyph"`,
-		`data-nav-category="character"`,
+		`data-nav-category="pilot"`,
 		`data-nav-category="corporation"`,
 		`<span class="nav-label">Character</span>`,
 		`<span class="nav-label">Corporation</span>`,

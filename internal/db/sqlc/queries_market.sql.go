@@ -141,6 +141,21 @@ func (q *Queries) DeleteOrderHealthForCharacter(ctx context.Context, characterID
 	return err
 }
 
+const deleteRestockTarget = `-- name: DeleteRestockTarget :exec
+DELETE FROM restock_targets
+WHERE user_id = $1 AND type_id = $2
+`
+
+type DeleteRestockTargetParams struct {
+	UserID int64 `json:"user_id"`
+	TypeID int64 `json:"type_id"`
+}
+
+func (q *Queries) DeleteRestockTarget(ctx context.Context, arg DeleteRestockTargetParams) error {
+	_, err := q.db.ExecContext(ctx, deleteRestockTarget, arg.UserID, arg.TypeID)
+	return err
+}
+
 const deleteWatchlistEntry = `-- name: DeleteWatchlistEntry :exec
 DELETE FROM market_watchlist
 WHERE user_id = $1 AND type_id = $2 AND region_id = $3
@@ -1887,6 +1902,42 @@ func (q *Queries) ListPlanetResolutions(ctx context.Context, arg ListPlanetResol
 	return items, nil
 }
 
+const listRestockTargets = `-- name: ListRestockTargets :many
+SELECT user_id, type_id, target_qty, min_margin_pct, updated_at
+FROM restock_targets
+WHERE user_id = $1
+ORDER BY type_id
+`
+
+func (q *Queries) ListRestockTargets(ctx context.Context, userID int64) ([]RestockTarget, error) {
+	rows, err := q.db.QueryContext(ctx, listRestockTargets, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RestockTarget
+	for rows.Next() {
+		var i RestockTarget
+		if err := rows.Scan(
+			&i.UserID,
+			&i.TypeID,
+			&i.TargetQty,
+			&i.MinMarginPct,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listScannerOpportunities = `-- name: ListScannerOpportunities :many
 SELECT type_id, location_id, best_sell, best_buy, sell_volume, buy_volume, daily_volume
 FROM (
@@ -2977,6 +3028,33 @@ ON CONFLICT DO NOTHING
 
 func (q *Queries) UpsertPlanetSeen(ctx context.Context, planetID int64) error {
 	_, err := q.db.ExecContext(ctx, upsertPlanetSeen, planetID)
+	return err
+}
+
+const upsertRestockTarget = `-- name: UpsertRestockTarget :exec
+INSERT INTO restock_targets (user_id, type_id, target_qty, min_margin_pct, updated_at)
+VALUES ($1, $2, $3, $4, now())
+ON CONFLICT (user_id, type_id) DO UPDATE SET
+    target_qty     = excluded.target_qty,
+    min_margin_pct = excluded.min_margin_pct,
+    updated_at     = excluded.updated_at
+`
+
+type UpsertRestockTargetParams struct {
+	UserID       int64   `json:"user_id"`
+	TypeID       int64   `json:"type_id"`
+	TargetQty    int64   `json:"target_qty"`
+	MinMarginPct float64 `json:"min_margin_pct"`
+}
+
+// v0.3.34: restock planner targets.
+func (q *Queries) UpsertRestockTarget(ctx context.Context, arg UpsertRestockTargetParams) error {
+	_, err := q.db.ExecContext(ctx, upsertRestockTarget,
+		arg.UserID,
+		arg.TypeID,
+		arg.TargetQty,
+		arg.MinMarginPct,
+	)
 	return err
 }
 

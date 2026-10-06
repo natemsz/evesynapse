@@ -23,6 +23,7 @@ func TestSyncNameCoverageFromBatchedLookups(t *testing.T) {
 		t.Fatalf("create user: %v", err)
 	}
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	grantTestAdmin(app, fixtureCharA)
 
 	// Skills reference type IDs 100, 101; assets reference
 	// 102, 103.

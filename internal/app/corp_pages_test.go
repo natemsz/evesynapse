@@ -77,7 +77,7 @@ func buildCorpTestApp(t *testing.T, transport http.RoundTripper) (*Application, 
 		func(context.Context, db.Character) (string, error) { return "fixture", nil })
 
 	app := &Application{
-		cfg:           Config{},
+		cfg:           Config{adminCharIDs: map[int64]bool{}},
 		sessions:      sessionManager,
 		queries:       queries,
 		esi:           client,
@@ -88,6 +88,16 @@ func buildCorpTestApp(t *testing.T, transport http.RoundTripper) (*Application, 
 		priorityChars: make(map[int64]bool),
 	}
 	return app, conn, queries
+}
+
+// grantTestAdmin marks characterID as an admin in the test app's
+// config (Issues 23/24): /admin/ and /sync/ now require admin
+// character identity, so tests hitting those pages must opt in.
+func grantTestAdmin(app *Application, characterID int64) {
+	if app.cfg.adminCharIDs == nil {
+		app.cfg.adminCharIDs = map[int64]bool{}
+	}
+	app.cfg.adminCharIDs[characterID] = true
 }
 
 // seedSnapshot stores one snapshot payload marked fresh until 2999.
@@ -449,6 +459,8 @@ func (s *corpStubTransport) RoundTrip(req *http.Request) (*http.Response, error)
 func TestRefreshCorpSnapshotsRoleMissing(t *testing.T) {
 	transport := &corpStubTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
+	grantTestAdmin(app, fixtureCharA)
+	grantTestAdmin(app, fixtureCharB)
 	ctx := context.Background()
 
 	user, err := q.CreateUser(ctx)

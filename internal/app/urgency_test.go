@@ -41,6 +41,7 @@ func settlePilotName(t *testing.T, q *db.Queries, characterID int64, name string
 func TestContactsUnresolvedNamesEnqueueAndLiveFill(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
+	grantTestAdmin(app, fixtureCharA)
 	ctx := context.Background()
 
 	user, err := q.CreateUser(ctx)
@@ -118,6 +119,7 @@ func TestContactsUnresolvedNamesEnqueueAndLiveFill(t *testing.T) {
 func TestContractsUnresolvedCounterpartyLiveFill(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
+	grantTestAdmin(app, fixtureCharA)
 	ctx := context.Background()
 
 	user, err := q.CreateUser(ctx)
@@ -165,6 +167,7 @@ func TestContractsUnresolvedCounterpartyLiveFill(t *testing.T) {
 func TestPageSyncStatusClearWhenNothingPending(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
+	grantTestAdmin(app, fixtureCharA)
 	ctx := context.Background()
 
 	user, err := q.CreateUser(ctx)

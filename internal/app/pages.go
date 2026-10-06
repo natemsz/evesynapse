@@ -65,6 +65,7 @@ type pageData struct {
 	MarketScanner     *scannerView
 	MarketTradefinder *tradefinderView
 	MarketLeaderboard *leaderboardView
+	Restock           *restockView
 	Items             *itemsView
 	Skills            *skillsView
 	SkillsChars       []assetCharLink
@@ -147,13 +148,20 @@ func sectionForPage(page string) string {
 	switch page {
 	case "home.html":
 		return "home"
-	case "character.html", "skills.html", "skillplans.html", "fittings.html", "fittings_saved.html", "killmails.html", "characters.html",
-		"mail.html", "calendar.html", "contacts.html", "pilot.html":
-		return "character"
-	case "assets.html", "industry.html", "planets.html", "planner.html":
-		return "assets"
-	case "market.html", "market_scanner.html", "market_tradefinder.html", "wallet.html", "orders.html", "contracts.html", "items.html", "system.html", "station.html", "structure.html":
-		return "economy"
+	case "character.html", "characters.html", "skills.html", "skillplans.html",
+		"mail.html", "calendar.html", "contacts.html", "pilot.html", "assets.html",
+		"killmails.html":
+		return "pilot"
+	case "fittings.html", "fittings_saved.html", "fit_shopping.html":
+		return "fitting"
+	case "industry.html", "planner.html", "planets.html":
+		return "industry"
+	case "market.html", "market_scanner.html", "market_tradefinder.html", "market_leaderboard.html",
+		"market_restock.html",
+		"wallet.html", "orders.html", "contracts.html", "system.html", "station.html", "structure.html":
+		return "market"
+	case "items.html":
+		return "tools"
 	case "corporations.html", "corp_members.html", "corp_wallets.html",
 		"corp_orders.html", "corp_assets.html", "corp_structures.html",
 		"corporation.html", "alliance.html":

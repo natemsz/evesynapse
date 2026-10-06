@@ -88,3 +88,13 @@ func (r *TestRig) SessionCookie(userID, characterID int64, name string) (*http.C
 
 // Close closes the fixture database handles.
 func (r *TestRig) Close() { r.app.Close() }
+
+// GrantAdmin marks characterID as an admin in the rig's config
+// (Issues 23/24): /admin/ and /sync/ require admin character
+// identity, so tests asserting the full nav must opt in.
+func (r *TestRig) GrantAdmin(characterID int64) {
+	if r.app.cfg.adminCharIDs == nil {
+		r.app.cfg.adminCharIDs = map[int64]bool{}
+	}
+	r.app.cfg.adminCharIDs[characterID] = true
+}

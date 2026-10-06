@@ -27,6 +27,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		t.Fatalf("create user: %v", err)
 	}
 	apptest.SeedCharacter(t, q, user.ID, apptest.FixtureCharA, "Fixture Ceo")
+	rig.GrantAdmin(apptest.FixtureCharA)
 	cookie := apptest.SessionCookie(t, rig, user.ID, 0, "")
 
 	code, body := apptest.GetPage(t, rig, cookie, "/")

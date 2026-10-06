@@ -30,7 +30,7 @@ import (
 // in pilot.html, type-description in items.html) with the same
 // link helpers the full pages use.
 func (app *Application) renderFragment(w http.ResponseWriter, page, define string, data any) {
-	ts, err := template.New("fragment").Funcs(linkFuncMap()).ParseFS(templatesFS, "templates/balancechart.html", "templates/"+page)
+	ts, err := template.New("fragment").Funcs(linkFuncMap()).ParseFS(templatesFS, "templates/balancechart.html", "templates/charselector.html", "templates/"+page)
 	if err != nil {
 		log.Printf("parse fragment template %s: %v", page, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)

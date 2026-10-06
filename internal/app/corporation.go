@@ -198,13 +198,13 @@ func (app *Application) handleCorporations(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Group the user's characters by corporation.
+	// Group the user's characters by corporation, using cached
+	// profile snapshots (not live ESI) to avoid N outbound calls.
 	byCorp := make(map[int64][]corpCharacterRef)
 	linkChar := make(map[int64]int64)
 	for _, ch := range characters {
 		var pub esi.Character
-		if err := app.esi.Get(ctx, "", fmt.Sprintf("/characters/%d/", ch.CharacterID), &pub); err != nil {
-			log.Printf("corporations: public fetch for character %d: %v", ch.CharacterID, err)
+		if !app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapProfile, &pub) {
 			continue
 		}
 		if pub.CorporationID == 0 {

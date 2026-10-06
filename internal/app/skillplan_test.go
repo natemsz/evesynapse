@@ -387,6 +387,14 @@ func TestSkillPlanPagesAndCRUD(t *testing.T) {
 	seedSnapshot(t, q, fixtureCharA, esi.SnapFittings, esi.Fittings{
 		{FittingID: 42, Name: "Test Fit", ShipTypeID: 3001, Items: []esi.FittingItem{{TypeID: 2001, Quantity: 1, Flag: "HiSlot0"}}},
 	})
+	// Unified character sheet also reads these; seed empty so GetCached
+	// doesn't fall through to live ESI (test expects zero outbound calls).
+	seedSnapshot(t, q, fixtureCharA, esi.SnapClones, esi.Clones{})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapImplants, esi.Implants{})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapOnline, esi.Online{})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapLocation, esi.Location{})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapShip, esi.Ship{})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapFatigue, esi.Fatigue{})
 
 	cookie := sessionCookie(t, app, userID, fixtureCharA, "Plan Tester")
 

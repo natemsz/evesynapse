@@ -53,6 +53,13 @@ var pgStationLeaderboardSchema string
 //go:embed schema_pg/003_fit_metadata.sql
 var pgFitMetadataSchema string
 
+// Schema step 004 (v0.3.33: per-type market price TTL cache and
+// industry cost index tracking): applied by openDB wherever the
+// market_type_prices table is absent.
+
+//go:embed schema_pg/004_price_cache_costindex.sql
+var pgPriceCacheSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -446,6 +453,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/export/", app.handleFitExport)
 		r.Get("/mine.json", app.handleFitMineJSON)
 		r.Post("/fork/", app.handleFitFork)
+		r.Get("/shopping/{id}/", app.handleFitShopping) // v0.3.33: fit → shopping list
 	})
 
 	r.Route("/killmails", func(r chi.Router) {

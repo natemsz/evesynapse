@@ -92,6 +92,24 @@ func openDB(ctx context.Context, dsn string) (*sql.DB, *pgxpool.Pool, error) {
 			return nil, nil, err
 		}
 	}
+	// Schema step 004 (v0.3.33: per-type price TTL cache + industry
+	// cost indices) rides the same guarded path, probed on the
+	// market_type_prices table.
+	var priceCacheTables int
+	if err := conn.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'market_type_prices'`,
+	).Scan(&priceCacheTables); err != nil {
+		conn.Close()
+		pool.Close()
+		return nil, nil, err
+	}
+	if priceCacheTables == 0 {
+		if err := applySchema(conn, pgPriceCacheSchema); err != nil {
+			conn.Close()
+			pool.Close()
+			return nil, nil, err
+		}
+	}
 	return conn, pool, nil
 }
 

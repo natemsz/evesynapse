@@ -653,6 +653,15 @@ input[type="text"]:focus, input[type="search"]:focus {
   fill: #ffb84d;
   stroke: #ffb84d;
 }
+/* All search inputs get the magnifier glyph, not just the top bar. */
+input[type="search"]:not(.topsearch input),
+.searchwrap input[type="text"] {
+  padding-left: 2rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffb84d' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='10.8' cy='10.8' r='6.2'/%3E%3Cpath d='M15.2 15.2 20.4 20.4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 0.55rem center;
+  background-size: 1rem 1rem;
+}
 @media (max-width: 720px) {
   .searchwrap.topsearch-wrap { width: min(11rem, 40vw); }
 }
@@ -2656,9 +2665,13 @@ html[data-theme="light"] tbody tr.yours td { background-color: #f3e3bd; }
   border: 1px solid #2a2a2a;
   border-radius: 3px;
   color: var(--text);
-  padding: 0.42rem 0.6rem;
+  padding: 0.42rem 0.6rem 0.42rem 2rem;
   font: inherit;
   cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffb84d' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='10.8' cy='10.8' r='6.2'/%3E%3Cpath d='M15.2 15.2 20.4 20.4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 0.55rem center;
+  background-size: 1rem 1rem;
 }
 .charselector-input:focus {
   border-color: var(--accent);

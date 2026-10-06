@@ -152,7 +152,8 @@ a:hover { color: var(--success); text-decoration: underline; }
    (next rule), opening up against the condensed
    category labels. Body text keeps the Shentox stack. */
 h1, h2, h3, h4, .wordmark, .btn, thead th, .badge,
-.branch > summary {
+.branch > summary,
+.sidenav a.navlink {
   font-family: "Univers Next Pro Condensed", "Univers Next Pro", -apple-system, "SF Pro Display", "Segoe UI", "Inter", sans-serif;
   font-weight: 500;
   font-synthesis-weight: none;
@@ -1448,7 +1449,7 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
   height: 1.9em;
   width: auto;
   vertical-align: -0.35em;
-  margin: 0 0.5em 0 0;
+  margin: 0 1.25rem 0 0;
   transform: rotate(100deg);
 }
 .topbar-wordmark { display: inline-block; }

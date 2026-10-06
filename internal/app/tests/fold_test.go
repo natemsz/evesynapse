@@ -1,1 +1,168 @@
-cGFja2FnZSB0ZXN0cwoKLy8gSGVybWV0aWMgdGVzdHMgZm9yIHRoZSBmb2xkLWdyYW51bGFyaXR5IGNoYW5nZTogZm9sZGluZyBsaXZlcwovLyBvbiB0aGUgU0VDVElPTiBoZWFkaW5ncyBvZiBtdWx0aS1zZWN0aW9uIHBhZ2VzIChlYWNoCi8vIDxzZWN0aW9uIGNsYXNzPSJmb2xkYWJsZSI+IGluIHRoZSBtYXJrdXApLCBub3Qgb24gdGhlIHBhZ2UKLy8gd2luZG93IGl0c2VsZi4gU2tpbGwtZ3JvdXAgc2VjdGlvbnMgb24gL3NraWxscy8gc3RhcnQgZm9sZGVkCi8vIGJ5IGRlZmF1bHQgdmlhIGRhdGEtZm9sZD0iY2xvc2VkIiwgd2hpY2ggdGhlIHNlcnZlZCBhcHAuanMKLy8gYXBwbGllcyBvbiBsb2FkIOKAlCB0aGUgcmF3IG1hcmt1cCBuZXZlciBoaWRlcyBjb250ZW50LCBzbwovLyBuby1KUyByZWFkZXJzIHNlZSBldmVyeXRoaW5nLiBUaGUgc2VydmVkIEpTIG11c3Qga2VlcCB0aGUKLy8gdHdvIGd1YXJkcmFpbHMgdGhhdCBlbmNvZGUgdGhlIHdob2xlIGRlc2lnbjogbm8gcGFnZS1sZXZlbAovLyAucGFuZWwgZm9sZCB3aGVuIHRoZSBwYW5lbCB3cmFwcyBmb2xkYWJsZSBzZWN0aW9ucyBvciBjYXJkcywKLy8gYW5kIGRlZmF1bHQtZm9sZGVkIHN0YXRlIGFwcGxpZWQgdmlhIEpTIG9ubHkuCgppbXBvcnQgKAoJInN0cmluZ3MiCgkidGVzdGluZyIKCSJ0aW1lIgoKCSJldmVzeW5hcHNlL2ludGVybmFsL2FwcHRlc3QiCgkiZXZlc3luYXBzZS9pbnRlcm5hbC9lc2kiCikKCi8vIFRlc3RTa2lsbHNQYWdlRm9sZERlZmF1bHRzOiB0aGUgc2tpbGwtcXVldWUgc2VjdGlvbiByZW5kZXJzIGFzCi8vIGEgcGxhaW4gLmZvbGRhYmxlIChzdGFydHMgb3Blbik7IGVhY2ggc2tpbGwtZ3JvdXAgc2VjdGlvbgovLyBjYXJyaWVzIGRhdGEtZm9sZD0iY2xvc2VkIiAoc3RhcnRzIGZvbGRlZCBvbmNlIEpTIGxvYWRzKS4KZnVuYyBUZXN0U2tpbGxzUGFnZUZvbGREZWZhdWx0cyh0ICp0ZXN0aW5nLlQpIHsKCXRyYW5zcG9ydCA6PSAmYXBwdGVzdC5Db3VudGluZ1RyYW5zcG9ydHt9CglyaWcgOj0gYXBwdGVzdC5CdWlsZCh0LCB0cmFuc3BvcnQpCglxIDo9IHJpZy5RdWVyaWVzKCkKCWN0eCA6PSB0LkNvbnRleHQoKQoJbm93IDo9IHRpbWUuTm93KCkKCgl1c2VyLCBlcnIgOj0gcS5DcmVhdGVVc2VyKGN0eCkKCWlmIGVyciAhPSBuaWwgewoJCXQuRmF0YWxmKCJjcmVhdGUgdXNlcjogJXYiLCBlcnIpCgl9CglhcHB0ZXN0LlNlZWRDaGFyYWN0ZXIodCwgcSwgdXNlci5JRCwgYXBwdGVzdC5GaXh0dXJlQ2hhckEsICJGaXh0dXJlIEFscGhhIikKCWFwcHRlc3QuU2VlZFNuYXBzaG90KHQsIHEsIGFwcHRlc3QuRml4dHVyZUNoYXJBLCBlc2kuU25hcFNraWxscywgZXNpLlNraWxsc3sKCQlUb3RhbFNQOiAxMjM0NTY3LAoJCVNraWxsczogW11lc2kuU2tpbGx7CgkJCXtTa2lsbElEOiAzMzAwLCBTa2lsbHBvaW50c0luU2tpbGw6IDI1NjAwMCwgVHJhaW5lZFNraWxsTGV2ZWw6IDUsIEFjdGl2ZVNraWxsTGV2ZWw6IDV9LAoJCQl7U2tpbGxJRDogMzMwMSwgU2tpbGxwb2ludHNJblNraWxsOiA4MDAwLCBUcmFpbmVkU2tpbGxMZXZlbDogNCwgQWN0aXZlU2tpbGxMZXZlbDogNH0sCgkJfSwKCX0pCglhcHB0ZXN0LlNlZWRTbmFwc2hvdCh0LCBxLCBhcHB0ZXN0LkZpeHR1cmVDaGFyQSwgZXNpLlNuYXBTa2lsbHF1ZXVlLCBlc2kuU2tpbGxxdWV1ZXsKCQl7U2tpbGxJRDogMzMwMSwgUXVldWVQb3NpdGlvbjogMCwgRmluaXNoZWRMZXZlbDogNSwgRmluaXNoRGF0ZTogYXBwdGVzdC5SRkMobm93LkFkZCg2ICogdGltZS5Ib3VyKSl9LAoJfSkKCgljb2RlLCBib2R5IDo9IGFwcHRlc3QuR2V0UGFnZSh0LCByaWcsIGFwcHRlc3QuU2Vzc2lvbkNvb2tpZSh0LCByaWcsIHVzZXIuSUQsIGFwcHRlc3QuRml4dHVyZUNoYXJBLCAiRml4dHVyZSBBbHBoYSIpLCAiL2NoYXJhY3Rlci8iKQoJaWYgY29kZSAhPSAyMDAgewoJCXQuRmF0YWxmKCIvY2hhcmFjdGVyLyBzdGF0dXMgPSAlZCIsIGNvZGUpCgl9CglhcHB0ZXN0Lk11c3RDb250YWluKHQsICIvY2hhcmFjdGVyLyIsIGJvZHksCgkJYDxzZWN0aW9uIGNsYXNzPSJmb2xkYWJsZSI+YCwKCQkiPGgzPlRyYWluaW5nPC9oMz4iLAoJCWA8c2VjdGlvbiBjbGFzcz0iZm9sZGFibGUiIGRhdGEtZm9sZD0iY2xvc2VkIj5gLAoJCSJDdXJyZW50bHkgdHJhaW5pbmc6IiwKCSkKCWlmIG4gOj0gc3RyaW5ncy5Db3VudChib2R5LCBgZGF0YS1mb2xkPSJjbG9zZWQiYCk7IG4gPCAxIHsKCQl0LkZhdGFsZigiL2NoYXJhY3Rlci86ICVkIGRlZmF1bHQtZm9sZGVkIHNlY3Rpb25zLCB3YW50IGF0IGxlYXN0IDEiLCBuKQoJfQoJLy8gVGhlIHF1ZXVlIHNlY3Rpb24gbXVzdCBiZSB0aGUgb3BlbiBvbmU6IHRoZSBjbG9zZWQgbWFya2VyCgkvLyBiZWxvbmdzIHRvIGEgZ3JvdXAgaGVhZGluZywgbmV2ZXIgdG8gdGhlIHF1ZXVlIGJsb2NrLgoJY2xvc2VkQXQgOj0gc3RyaW5ncy5JbmRleChib2R5LCBgZGF0YS1mb2xkPSJjbG9zZWQiYCkKCWlmIGNsb3NlZEF0IDwgMCB8fCBjbG9zZWRBdCA8IHN0cmluZ3MuSW5kZXgoYm9keSwgIjxoMz5Ta2lsbCBxdWV1ZTwvaDM+IikgewoJCXQuRmF0YWxmKCIvc2tpbGxzLzogZGVmYXVsdC1mb2xkZWQgbWFya2VyIGRvZXMgbm90IGZvbGxvdyB0aGUgcXVldWUgc2VjdGlvbiIpCgl9CglpZiB0cmFuc3BvcnQuQ2FsbHMuTG9hZCgpICE9IDAgewoJCXQuRmF0YWxmKCIvc2tpbGxzLyBtYWRlICVkIG91dGJvdW5kIGNhbGxzOyByZW5kZXJzIHN0YXkgY2FjaGUtb25seSIsIHRyYW5zcG9ydC5DYWxscy5Mb2FkKCkpCgl9Cn0KCi8vIFRlc3RDaGFyYWN0ZXJTaGVldEZvbGRTZWN0aW9uczogdGhlIGNoYXJhY3RlciBzaGVldCdzIGJsb2NrcwovLyAoaWRlbnRpdHksIHdhbGxldCwgdHJhaW5pbmcsIHNraWxsc+KApikgZWFjaCByZW5kZXIgYXMgdGhlaXIgb3duCi8vIC5mb2xkYWJsZSBzZWN0aW9uOyBub3RoaW5nIG9uIHRoZSBzaGVldCBkZWZhdWx0cyBmb2xkZWQuCmZ1bmMgVGVzdENoYXJhY3RlclNoZWV0Rm9sZFNlY3Rpb25zKHQgKnRlc3RpbmcuVCkgewoJdHJhbnNwb3J0IDo9ICZhcHB0ZXN0LkNvdW50aW5nVHJhbnNwb3J0e30KCXJpZyA6PSBhcHB0ZXN0LkJ1aWxkKHQsIHRyYW5zcG9ydCkKCXEgOj0gcmlnLlF1ZXJpZXMoKQoJY3R4IDo9IHQuQ29udGV4dCgpCglub3cgOj0gdGltZS5Ob3coKQoKCXVzZXIsIGVyciA6PSBxLkNyZWF0ZVVzZXIoY3R4KQoJaWYgZXJyICE9IG5pbCB7CgkJdC5GYXRhbGYoImNyZWF0ZSB1c2VyOiAldiIsIGVycikKCX0KCWFwcHRlc3QuU2VlZENoYXJhY3Rlcih0LCBxLCB1c2VyLklELCBhcHB0ZXN0LkZpeHR1cmVDaGFyQSwgIkZpeHR1cmUgQWxwaGEiKQoJYXBwdGVzdC5TZWVkU25hcHNob3QodCwgcSwgYXBwdGVzdC5GaXh0dXJlQ2hhckEsIGVzaS5TbmFwUHJvZmlsZSwgZXNpLkNoYXJhY3RlcnsKCQlOYW1lOiAiRml4dHVyZSBBbHBoYSIsIENvcnBvcmF0aW9uSUQ6IGFwcHRlc3QuRml4dHVyZUNvcnBBLAoJCUJpcnRoZGF5OiAiMjAwOS0xMi0yNFQwMDowMDowMFoiLCBTZWN1cml0eVN0YXR1czogMC41NSwKCX0pCglhcHB0ZXN0LlNlZWRTbmFwc2hvdCh0LCBxLCBhcHB0ZXN0LkZpeHR1cmVDaGFyQSwgZXNpLlNuYXBXYWxsZXQsIDEyMzQ1NjcuODkpCglhcHB0ZXN0LlNlZWRTbmFwc2hvdCh0LCBxLCBhcHB0ZXN0LkZpeHR1cmVDaGFyQSwgZXNpLlNuYXBTa2lsbHMsIGVzaS5Ta2lsbHN7CgkJVG90YWxTUDogOTk5OTk5LAoJCVNraWxsczogW11lc2kuU2tpbGx7CgkJCXtTa2lsbElEOiAzMzAwLCBTa2lsbHBvaW50c0luU2tpbGw6IDI1NjAwMCwgVHJhaW5lZFNraWxsTGV2ZWw6IDUsIEFjdGl2ZVNraWxsTGV2ZWw6IDV9LAoJCX0sCgl9KQoJYXBwdGVzdC5TZWVkU25hcHNob3QodCwgcSwgYXBwdGVzdC5GaXh0dXJlQ2hhckEsIGVzaS5TbmFwU2tpbGxxdWV1ZSwgZXNpLlNraWxscXVldWV7CgkJe1NraWxsSUQ6IDMzMDAsIFF1ZXVlUG9zaXRpb246IDAsIEZpbmlzaGVkTGV2ZWw6IDUsIEZpbmlzaERhdGU6IGFwcHRlc3QuUkZDKG5vdy5BZGQoMTIgKiB0aW1lLkhvdXIpKX0sCgl9KQoKCWNvZGUsIGJvZHkgOj0gYXBwdGVzdC5HZXRQYWdlKHQsIHJpZywgYXBwdGVzdC5TZXNzaW9uQ29va2llKHQsIHJpZywgdXNlci5JRCwgYXBwdGVzdC5GaXh0dXJlQ2hhckEsICJGaXh0dXJlIEFscGhhIiksICIvY2hhcmFjdGVyLyIpCglpZiBjb2RlICE9IDIwMCB7CgkJdC5GYXRhbGYoIi9jaGFyYWN0ZXIvIHN0YXR1cyA9ICVkIiwgY29kZSkKCX0KCWFwcHRlc3QuTXVzdENvbnRhaW4odCwgIi9jaGFyYWN0ZXIvIiwgYm9keSwKCQlgPHNlY3Rpb24gY2xhc3M9ImZvbGRhYmxlIj5gLAoJCSI8aDM+V2FsbGV0PC9oMz4iLAoJCSI8aDM+VHJhaW5pbmc8L2gzPiIsCgkJIjxoMz5Ta2lsbHM8L2gzPiIsCgkpCglpZiBuIDo9IHN0cmluZ3MuQ291bnQoYm9keSwgYDxzZWN0aW9uIGNsYXNzPSJmb2xkYWJsZSI+YCk7IG4gPCA0IHsKCQl0LkZhdGFsZigiL2NoYXJhY3Rlci86ICVkIGZvbGRhYmxlIHNlY3Rpb25zLCB3YW50IGF0IGxlYXN0IDQgKGlkZW50aXR5LCB3YWxsZXQsIHRyYWluaW5nLCBza2lsbHMpIiwgbikKCX0KCS8vIFNraWxsIGdyb3VwcywgYnJvd3NlIGNhdGFsb2csIGFuZCBjbG9uZXMgZGVmYXVsdCB0byBmb2xkZWQgKG1lcmdlZCBmcm9tCgkvLyB0aGUgb2xkIHNraWxscyBwYWdlKTsgdGhlIGZvdXIgbWFpbiBzaGVldCBzZWN0aW9ucyBhYm92ZSBzdGF5IGV4cGFuZGVkLgoJLy8gTm8gb3V0Ym91bmQtY2FsbCBhc3NlcnRpb24gaGVyZTogdGhlIGxlZ2FjeSAvY2hhcmFjdGVyLwoJLy8gaGFuZGxlciBmaWxscyBvcHRpb25hbCBzZWN0aW9ucyAob25saW5lLCBsb2NhdGlvbiwgc2hpcOKApikKCS8vIGxpdmUgd2hlbiB0aGVpciBzbmFwc2hvdHMgYXJlIGFic2VudDsgdGhhdCBwcmVkYXRlcyB0aGlzCgkvLyBjaGFuZ2UgYW5kIGlzIG91dCBvZiBzY29wZSBmb3IgdGhlIGZvbGQgd29yay4KCV8gPSB0cmFuc3BvcnQKfQoKLy8gVGVzdEZvbGRHdWFyZHJhaWxzSW5TZXJ2ZWRBc3NldHM6IHRoZSBzZXJ2ZWQgYXBwLmpzIGVuY29kZXMKLy8gdGhlIGZvbGQgcnVsZXMgKHBhZ2UtbGV2ZWwgZm9sZCBza2lwcGVkIHdoZW4gdGhlIHBhbmVsIHdyYXBzCi8vIHNlY3Rpb25zIG9yIGNhcmRzOyBkZWZhdWx0LWZvbGQgc3RhdGUgYXBwbGllZCBieSBKUyBvbmx5IGZyb20KLy8gZGF0YS1mb2xkKSwgYW5kIHRoZSBzZXJ2ZWQgQ1NTIGhpZGVzIGNvbnRlbnQgb25seSB1bmRlciB0aGUKLy8gSlMtYXBwbGllZCAuZm9sZGVkIGNsYXNzIOKAlCBzbyByYXcgbWFya3VwIHN0YXlzIGZ1bGx5IHZpc2libGUKLy8gd2l0aG91dCBKYXZhU2NyaXB0LgpmdW5jIFRlc3RGb2xkR3VhcmRyYWlsc0luU2VydmVkQXNzZXRzKHQgKnRlc3RpbmcuVCkgewoJdHJhbnNwb3J0IDo9ICZhcHB0ZXN0LkNvdW50aW5nVHJhbnNwb3J0e30KCXJpZyA6PSBhcHB0ZXN0LkJ1aWxkKHQsIHRyYW5zcG9ydCkKCXEgOj0gcmlnLlF1ZXJpZXMoKQoKCXVzZXIsIGVyciA6PSBxLkNyZWF0ZVVzZXIodC5Db250ZXh0KCkpCglpZiBlcnIgIT0gbmlsIHsKCQl0LkZhdGFsZigiY3JlYXRlIHVzZXI6ICV2IiwgZXJyKQoJfQoJYXBwdGVzdC5TZWVkQ2hhcmFjdGVyKHQsIHEsIHVzZXIuSUQsIGFwcHRlc3QuRml4dHVyZUNoYXJBLCAiRml4dHVyZSBBbHBoYSIpCgljb29raWUgOj0gYXBwdGVzdC5TZXNzaW9uQ29va2llKHQsIHJpZywgdXNlci5JRCwgYXBwdGVzdC5GaXh0dXJlQ2hhckEsICJGaXh0dXJlIEFscGhhIikKCgljb2RlLCBqcyA6PSBhcHB0ZXN0LkdldFBhZ2UodCwgcmlnLCBjb29raWUsICIvc3RhdGljL2FwcC5qcyIpCglpZiBjb2RlICE9IDIwMCB7CgkJdC5GYXRhbGYoIi9zdGF0aWMvYXBwLmpzIHN0YXR1cyA9ICVkIiwgY29kZSkKCX0KCWFwcHRlc3QuTXVzdENvbnRhaW4odCwgIi9zdGF0aWMvYXBwLmpzIiwganMsCgkJYHBhbmVsLnF1ZXJ5U2VsZWN0b3IoIi5mb2xkYWJsZSwgLmNhcmQiKWAsCgkJYGdldEF0dHJpYnV0ZSgiZGF0YS1mb2xkIilgLAoJCWBkYXRhLWZvbGQiKSA9PT0gImNsb3NlZCJgLAoJCWBxdWVyeVNlbGVjdG9yQWxsKCIuZm9sZGFibGUiKWAsCgkJYHF1ZXJ5U2VsZWN0b3JBbGwoIi5jYXJkIilgLAoJKQoJLy8gVGhlIG9sZCB1bmNvbmRpdGlvbmFsIHBhZ2Utd2luZG93IGZvbGQgbXVzdCBiZSBnb25lLgoJaWYgc3RyaW5ncy5Db250YWlucyhqcywgYGFkZEZvbGQocGFuZWwsIHBhbmVsLnF1ZXJ5U2VsZWN0b3IoIjpzY29wZSA+IGgxIikpYCsiXG4gIH0iKSAmJgoJCSFzdHJpbmdzLkNvbnRhaW5zKGpzLCBgIXBhbmVsLnF1ZXJ5U2VsZWN0b3IoIi5mb2xkYWJsZSwgLmNhcmQiKWApIHsKCQl0LkZhdGFsZigiYXBwLmpzIHN0aWxsIGZvbGRzIHRoZSBwYWdlIHdpbmRvdyB1bmNvbmRpdGlvbmFsbHkiKQoJfQoKCWNvZGUsIGNzcyA6PSBhcHB0ZXN0LkdldFBhZ2UodCwgcmlnLCBjb29raWUsICIvc3RhdGljL3N0eWxlLmNzcyIpCglpZiBjb2RlICE9IDIwMCB7CgkJdC5GYXRhbGYoIi9zdGF0aWMvc3R5bGUuY3NzIHN0YXR1cyA9ICVkIiwgY29kZSkKCX0KCWFwcHRlc3QuTXVzdENvbnRhaW4odCwgIi9zdGF0aWMvc3R5bGUuY3NzIiwgY3NzLAoJCSIuZm9sZGFibGUuZm9sZGVkID4gKjpub3QoOmZpcnN0LWNoaWxkKSIsCgkJIi5mb2xkYWJsZSB7IHBvc2l0aW9uOiByZWxhdGl2ZTsgfSIsCgkpCn0K
+package tests
+
+// Hermetic tests for the fold-granularity change: folding lives
+// on the SECTION headings of multi-section pages (each
+// <section class="foldable"> in the markup), not on the page
+// window itself. Skill-group sections on /skills/ start folded
+// by default via data-fold="closed", which the served app.js
+// applies on load — the raw markup never hides content, so
+// no-JS readers see everything. The served JS must keep the
+// two guardrails that encode the whole design: no page-level
+// .panel fold when the panel wraps foldable sections or cards,
+// and default-folded state applied via JS only.
+
+import (
+	"strings"
+	"testing"
+	"time"
+
+	"evesynapse/internal/apptest"
+	"evesynapse/internal/esi"
+)
+
+// TestSkillsPageFoldDefaults: the skill-queue section renders as
+// a plain .foldable (starts open); each skill-group section
+// carries data-fold="closed" (starts folded once JS loads).
+func TestSkillsPageFoldDefaults(t *testing.T) {
+	transport := &apptest.CountingTransport{}
+	rig := apptest.Build(t, transport)
+	q := rig.Queries()
+	ctx := t.Context()
+	now := time.Now()
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	apptest.SeedCharacter(t, q, user.ID, apptest.FixtureCharA, "Fixture Alpha")
+	apptest.SeedSnapshot(t, q, apptest.FixtureCharA, esi.SnapSkills, esi.Skills{
+		TotalSP: 1234567,
+		Skills: []esi.Skill{
+			{SkillID: 3300, SkillpointsInSkill: 256000, TrainedSkillLevel: 5, ActiveSkillLevel: 5},
+			{SkillID: 3301, SkillpointsInSkill: 8000, TrainedSkillLevel: 4, ActiveSkillLevel: 4},
+		},
+	})
+	apptest.SeedSnapshot(t, q, apptest.FixtureCharA, esi.SnapSkillqueue, esi.Skillqueue{
+		{SkillID: 3301, QueuePosition: 0, FinishedLevel: 5, FinishDate: apptest.RFC(now.Add(6 * time.Hour))},
+	})
+
+	code, body := apptest.GetPage(t, rig, apptest.SessionCookie(t, rig, user.ID, apptest.FixtureCharA, "Fixture Alpha"), "/character/")
+	if code != 200 {
+		t.Fatalf("/character/ status = %d", code)
+	}
+	apptest.MustContain(t, "/character/", body,
+		`<section class="foldable">`,
+		"<h3>Training</h3>",
+		`<section class="foldable" data-fold="closed">`,
+		"Currently training:",
+	)
+	if n := strings.Count(body, `data-fold="closed"`); n < 1 {
+		t.Fatalf("/character/: %d default-folded sections, want at least 1", n)
+	}
+	// The queue section must be the open one: the closed marker
+	// belongs to a group heading, never to the queue block.
+	closedAt := strings.Index(body, `data-fold="closed"`)
+	if closedAt < 0 || closedAt < strings.Index(body, "<h3>Skill queue</h3>") {
+		t.Fatalf("/skills/: default-folded marker does not follow the queue section")
+	}
+	if transport.Calls.Load() != 0 {
+		t.Fatalf("/skills/ made %d outbound calls; renders stay cache-only", transport.Calls.Load())
+	}
+}
+
+// TestCharacterSheetFoldSections: the character sheet's blocks
+// (identity, wallet, training, skills…) each render as their own
+// .foldable section; nothing on the sheet defaults folded.
+func TestCharacterSheetFoldSections(t *testing.T) {
+	transport := &apptest.CountingTransport{}
+	rig := apptest.Build(t, transport)
+	q := rig.Queries()
+	ctx := t.Context()
+	now := time.Now()
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	apptest.SeedCharacter(t, q, user.ID, apptest.FixtureCharA, "Fixture Alpha")
+	apptest.SeedSnapshot(t, q, apptest.FixtureCharA, esi.SnapProfile, esi.Character{
+		Name: "Fixture Alpha", CorporationID: apptest.FixtureCorpA,
+		Birthday: "2009-12-24T00:00:00Z", SecurityStatus: 0.55,
+	})
+	apptest.SeedSnapshot(t, q, apptest.FixtureCharA, esi.SnapWallet, 1234567.89)
+	apptest.SeedSnapshot(t, q, apptest.FixtureCharA, esi.SnapSkills, esi.Skills{
+		TotalSP: 999999,
+		Skills: []esi.Skill{
+			{SkillID: 3300, SkillpointsInSkill: 256000, TrainedSkillLevel: 5, ActiveSkillLevel: 5},
+		},
+	})
+	apptest.SeedSnapshot(t, q, apptest.FixtureCharA, esi.SnapSkillqueue, esi.Skillqueue{
+		{SkillID: 3300, QueuePosition: 0, FinishedLevel: 5, FinishDate: apptest.RFC(now.Add(12 * time.Hour))},
+	})
+
+	code, body := apptest.GetPage(t, rig, apptest.SessionCookie(t, rig, user.ID, apptest.FixtureCharA, "Fixture Alpha"), "/character/")
+	if code != 200 {
+		t.Fatalf("/character/ status = %d", code)
+	}
+	apptest.MustContain(t, "/character/", body,
+		`<section class="foldable">`,
+		"<h3>Wallet</h3>",
+		"<h3>Training</h3>",
+		"<h3>Skills</h3>",
+	)
+	if n := strings.Count(body, `<section class="foldable">`); n < 4 {
+		t.Fatalf("/character/: %d foldable sections, want at least 4 (identity, wallet, training, skills)", n)
+	}
+	// Skill groups, browse catalog, and clones default to folded (merged from
+	// the old skills page); the four main sheet sections above stay expanded.
+	// No outbound-call assertion here: the legacy /character/
+	// handler fills optional sections (online, location, ship…)
+	// live when their snapshots are absent; that predates this
+	// change and is out of scope for the fold work.
+	_ = transport
+}
+
+// TestFoldGuardrailsInServedAssets: the served app.js encodes
+// the fold rules (page-level fold skipped when the panel wraps
+// sections or cards; default-fold state applied by JS only from
+// data-fold), and the served CSS hides content only under the
+// JS-applied .folded class — so raw markup stays fully visible
+// without JavaScript.
+func TestFoldGuardrailsInServedAssets(t *testing.T) {
+	transport := &apptest.CountingTransport{}
+	rig := apptest.Build(t, transport)
+	q := rig.Queries()
+
+	user, err := q.CreateUser(t.Context())
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	apptest.SeedCharacter(t, q, user.ID, apptest.FixtureCharA, "Fixture Alpha")
+	cookie := apptest.SessionCookie(t, rig, user.ID, apptest.FixtureCharA, "Fixture Alpha")
+
+	code, js := apptest.GetPage(t, rig, cookie, "/static/app.js")
+	if code != 200 {
+		t.Fatalf("/static/app.js status = %d", code)
+	}
+	apptest.MustContain(t, "/static/app.js", js,
+		`panel.querySelector(".foldable, .card")`,
+		`getAttribute("data-fold")`,
+		`data-fold") === "closed"`,
+		`querySelectorAll(".foldable")`,
+		`querySelectorAll(".card")`,
+	)
+	// The old unconditional page-window fold must be gone.
+	if strings.Contains(js, `addFold(panel, panel.querySelector(":scope > h1"))`+"\n  }") &&
+		!strings.Contains(js, `!panel.querySelector(".foldable, .card")`) {
+		t.Fatalf("app.js still folds the page window unconditionally")
+	}
+
+	code, css := apptest.GetPage(t, rig, cookie, "/static/style.css")
+	if code != 200 {
+		t.Fatalf("/static/style.css status = %d", code)
+	}
+	apptest.MustContain(t, "/static/style.css", css,
+		".foldable.folded > *:not(:first-child)",
+		".foldable { position: relative; }",
+	)
+}

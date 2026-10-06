@@ -1156,6 +1156,12 @@ html[data-nav="hidden"] .sidebar {
   min-height: 2.4rem;
   padding: 0 0.35rem 0.55rem;
 }
+.topbar-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+/* Legacy: sidebar-actions no longer used (buttons moved to topbar in v0.3.32.004) */
 .sidebar-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1354,7 +1360,6 @@ html[data-nav="rail"] .nav-label {
   transform: translateX(-0.25rem);
 }
 html[data-nav="rail"] .sidebar-brand { justify-content: center; padding-right: 0; padding-left: 0; }
-html[data-nav="rail"] .sidebar-actions { margin-left: 0; }
 html[data-nav="rail"] .nav-expand-btn { display: none; }
 html[data-nav="rail"] #nav-hide { display: none; }
 html[data-nav="rail"] .sidenav a.navlink,
@@ -1512,7 +1517,6 @@ tbody tr.yours td { background-color: #2a2015; }
      list: the wide-screen rail/hidden choices never leak in,
      the state toggles make way for a real close control, and
      branch menus open inline instead of as rail flyouts. */
-  .sidebar .sidebar-actions .nav-state-btn { display: none; }
   .sidebar .nav-drawer-close { display: inline-flex; }
   html[data-nav="rail"] .sidebar .nav-expand-btn { display: inline-flex; }
   html[data-nav="rail"] .sidebar-inner { overflow-y: auto; }
@@ -1525,7 +1529,6 @@ tbody tr.yours td { background-color: #2a2015; }
   html[data-nav="rail"] .sidebar-account { display: block; }
   .sidebar-account.has-character .sidebar-character { display: block; }
   html[data-nav="rail"] .sidebar-brand { justify-content: flex-start; padding-right: 0.35rem; padding-left: 0.35rem; }
-  html[data-nav="rail"] .sidebar-actions { margin-left: auto; }
   html[data-nav="rail"] .sidenav a.navlink,
   html[data-nav="rail"] .sidebar .branch > summary {
     justify-content: flex-start;
@@ -2673,4 +2676,13 @@ html[data-theme="light"] .charselector-dropdown {
 }
 html[data-theme="light"] .charselector-option {
   border-bottom-color: rgba(0,0,0,0.05);
+}
+
+/* ============================================================
+   v0.3.32.004: light-mode sidebar separators.
+   The utility/account section borders were hardcoded dark.
+   ============================================================ */
+html[data-theme="light"] .sidenav-utility,
+html[data-theme="light"] .sidebar-account {
+  border-top-color: #d9cfba;
 }

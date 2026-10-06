@@ -292,6 +292,14 @@ type PlanetName struct {
 	ResolvedAt string `json:"resolved_at"`
 }
 
+type RestockTarget struct {
+	UserID       int64     `json:"user_id"`
+	TypeID       int64     `json:"type_id"`
+	TargetQty    int64     `json:"target_qty"`
+	MinMarginPct float64   `json:"min_margin_pct"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
 type SdeAttributeType struct {
 	AttributeID  int64   `json:"attribute_id"`
 	Name         string  `json:"name"`

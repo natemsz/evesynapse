@@ -722,3 +722,20 @@ ORDER BY activity, cost_index ASC;
 SELECT solar_system_id, activity, cost_index, fetched_at
 FROM industry_cost_indices
 WHERE solar_system_id = $1 AND activity = $2;
+
+-- v0.3.34: restock planner targets.
+-- name: UpsertRestockTarget :exec
+INSERT INTO restock_targets (user_id, type_id, target_qty, min_margin_pct, updated_at)
+VALUES ($1, $2, $3, $4, now())
+ON CONFLICT (user_id, type_id) DO UPDATE SET
+    target_qty     = excluded.target_qty,
+    min_margin_pct = excluded.min_margin_pct,
+    updated_at     = excluded.updated_at;
+-- name: ListRestockTargets :many
+SELECT user_id, type_id, target_qty, min_margin_pct, updated_at
+FROM restock_targets
+WHERE user_id = $1
+ORDER BY type_id;
+-- name: DeleteRestockTarget :exec
+DELETE FROM restock_targets
+WHERE user_id = $1 AND type_id = $2;

@@ -87,6 +87,13 @@ type GuidePricesMetum struct {
 	CachedUntil string `json:"cached_until"`
 }
 
+type IndustryCostIndex struct {
+	SolarSystemID int64     `json:"solar_system_id"`
+	Activity      string    `json:"activity"`
+	CostIndex     float64   `json:"cost_index"`
+	FetchedAt     time.Time `json:"fetched_at"`
+}
+
 type ItemName struct {
 	ItemID int64  `json:"item_id"`
 	Name   string `json:"name"`
@@ -207,6 +214,16 @@ type MarketSweepState struct {
 	PagesTotal int64  `json:"pages_total"`
 	StartedAt  string `json:"started_at"`
 	UpdatedAt  string `json:"updated_at"`
+}
+
+type MarketTypePrice struct {
+	RegionID   int64     `json:"region_id"`
+	TypeID     int64     `json:"type_id"`
+	BuyPrice   float64   `json:"buy_price"`
+	SellPrice  float64   `json:"sell_price"`
+	BuyVolume  int64     `json:"buy_volume"`
+	SellVolume int64     `json:"sell_volume"`
+	FetchedAt  time.Time `json:"fetched_at"`
 }
 
 type MarketWatchlist struct {

@@ -40,7 +40,7 @@
     <thead><tr><th>#</th><th>Skill</th><th>Level</th><th>Finishes</th></tr></thead>
     <tbody>
     {{range .CharacterPage.Queue}}
-      <tr><td>{{.Num}}</td><td>{{itemLink .SkillID .Skill}}</td><td>{{skillLevel .TrainedLvl .MaxQueuedLvl .State}}</td><td>{{.Finishes}}</td></tr>
+      <tr><td>{{.Num}}</td><td>{{itemLink .SkillID .Skill}}</td><td>{{skillLevel .TrainedLvl .LevelNum .State}}</td><td>{{.Finishes}}</td></tr>
     {{end}}
     </tbody>
   </table>

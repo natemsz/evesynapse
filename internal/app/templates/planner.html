@@ -65,7 +65,7 @@
 
 <div class="tw">
 <table>
-  <thead><tr><th>Item</th><th>Per run</th><th>Need</th><th>Have</th><th>To buy</th><th>Build</th><th>ME / TE</th><th>Time</th><th>Unit price</th><th>Buy cost</th></tr></thead>
+  <thead><tr><th>Item</th><th>Per run</th><th>Need</th><th>Have</th><th>To buy</th><th>Build</th><th>ME / TE</th><th>Time</th><th>Unit price</th><th>Buy cost</th><th>Buy vs Build</th></tr></thead>
   <tbody>
   {{range .Rows}}
     <tr>
@@ -79,6 +79,7 @@
       <td>{{.Time}}</td>
       <td>{{.UnitPrice}}</td>
       <td>{{.LineCost}}</td>
+      <td>{{.BvB}}</td>
     </tr>
   {{end}}
   </tbody>

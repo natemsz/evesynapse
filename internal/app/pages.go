@@ -20,6 +20,8 @@ type pageData struct {
 	Error             string // friendly, user-safe banner (never internals)
 	Section           string // top-nav branch key (base.html); filled by render from the page when empty
 	NavPage           string // template file rendered, for marking the exact nav link; filled by render
+	SyncStatus        string // footer ESI/sweep health ("ESI OK", "ESI limited", etc.); filled by render
+	Shopping          *shoppingView
 	Home              *homeView
 	CharChars         []assetCharLink
 	CharacterPage     *characterView
@@ -176,6 +178,11 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 	if data.NavPage == "" {
 		data.NavPage = page
 	}
+	// v0.3.33: sync status for the footer. Cheap: ESI error budget
+	// is in-memory; sweep state is a single cached query.
+	if data.SyncStatus == "" {
+		data.SyncStatus = app.syncStatusString(ctx)
+	}
 	if data.LoggedIn && data.Switcher == nil {
 		data.Switcher = app.switcherEntries(ctx)
 	}
@@ -222,6 +229,17 @@ func friendlyLoginError(code string) string {
 	default:
 		return ""
 	}
+}
+
+// syncStatusString returns a short ESI/sweep health string for the
+// footer (v0.3.33, EVE-Nexus pattern). "ESI OK" when the error budget
+// is healthy, "ESI limited" when low, plus sweep activity if a market
+// sweep is running.
+func (app *Application) syncStatusString(ctx context.Context) string {
+	if app.esi != nil && app.esi.ErrorBudgetLow() {
+		return "ESI limited"
+	}
+	return "ESI OK"
 }
 
 func (app *Application) handleHome(w http.ResponseWriter, r *http.Request) {

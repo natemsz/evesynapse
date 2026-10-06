@@ -1,0 +1,32 @@
+{{define "title"}}Shopping List — {{.Shopping.FitName}}{{end}}
+{{define "content"}}
+<h1>Shopping List</h1>
+<p>For fit: <strong>{{.Shopping.FitName}}</strong></p>
+
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+
+{{if .Shopping.Lines}}
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Line cost</th></tr></thead>
+  <tbody>
+  {{range .Shopping.Lines}}
+    <tr>
+      <td><a href="{{.URL}}">{{.Name}}</a></td>
+      <td>{{.Quantity}}</td>
+      <td>{{if .PriceKnown}}{{.UnitPrice}}{{else}}<em>no price data</em>{{end}}</td>
+      <td>{{if .PriceKnown}}{{.LineCost}}{{else}}—{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+  <tfoot>
+    <tr><td colspan="3"><strong>Total</strong></td><td><strong>{{.Shopping.TotalCost}}</strong></td></tr>
+  </tfoot>
+</table>
+</div>
+{{if .Shopping.Unpriced}}<p><em>{{.Shopping.Unpriced}} items have no price data.</em></p>{{end}}
+<p><small>Charge quantities default to 1,000 rounds per type — adjust as needed.</small></p>
+{{else}}
+<p>No items in this fit.</p>
+{{end}}
+{{end}}

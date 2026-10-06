@@ -433,7 +433,7 @@ main {
   -webkit-text-fill-color: currentColor;
 }
 .card table { margin-bottom: 0.5rem; }
-.card.has-fold > h2:first-child, .card.has-fold > h3:first-child { padding-right: 2.2rem; }
+.card.has-fold > h2:first-child, .card.has-fold > h3:first-child { padding-right: 2.2rem; position: relative; }
 
 /* --- collapsible panels (JS-enhanced; open and inert without) --- */
 .panel { position: relative; }
@@ -458,7 +458,7 @@ main {
   cursor: pointer;
 }
 .foldbtn:hover { color: var(--text-bright); border-color: var(--accent); }
-.panel.has-fold > h1:first-child { padding-right: 3rem; }
+.panel.has-fold > h1:first-child { padding-right: 3rem; position: relative; }
 .panel.folded > *:not(h1),
 .card.folded > *:not(:first-child),
 .foldable.folded > *:not(:first-child) { display: none; }
@@ -469,7 +469,7 @@ main {
    data-fold="closed" in markup start folded once JS loads (skill
    categories), and stay plain visible content without JS. */
 .foldable { position: relative; }
-.foldable.has-fold > h2:first-child, .foldable.has-fold > h3:first-child { padding-right: 2.2rem; }
+.foldable.has-fold > h2:first-child, .foldable.has-fold > h3:first-child { padding-right: 2.2rem; position: relative; }
 
 /* --- buttons --- */
 .btn {

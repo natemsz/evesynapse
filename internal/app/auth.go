@@ -67,13 +67,13 @@ const (
 )
 
 // eveScopes is the single source of truth for the scopes requested at
-// login: the full read ESI scope set plus one write scope. The list is
+// login: the full read ESI scope set plus two write scopes. The list is
 // generated from the OAuth2 scope catalog in CCP's ESI OpenAPI document
 // (GET https://esi.evetech.net/meta/openapi.json →
 // components.securitySchemes), minus every mutating scope — anything
 // whose name contains write_, send_, respond_, organize_, manage_ or
-// open_window (7 scopes excluded: respond_calendar_events,
-// write_contacts, write_fleet, organize_mail,
+// open_window (6 scopes excluded: respond_calendar_events,
+// write_contacts, write_fleet,
 // send_mail, open_window, write_waypoint; esi-planets.manage_planets.v1
 // is the one deliberate manage exception — see below). The user's
 // developer-portal application has the same scopes enabled, so
@@ -142,6 +142,10 @@ var eveScopes = []string{
 	"esi-location.read_online.v1",
 	"esi-location.read_ship_type.v1",
 	"esi-mail.read_mail.v1",
+	// Issue 26: marking mail read needs organize_mail (PUT
+	// /characters/{id}/mail/{mail_id}/). Characters linked before
+	// this scope was added get a 403, reported as "sign in again".
+	"esi-mail.organize_mail.v1",
 	"esi-markets.read_character_orders.v1",
 	"esi-markets.read_corporation_orders.v1",
 	"esi-markets.structure_markets.v1",

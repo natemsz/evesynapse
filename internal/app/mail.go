@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"html"
 	"html/template"
@@ -74,7 +75,8 @@ type mailView struct {
 	LabelFilter   int64 // 0 = all mail
 	Selected      bool  // a mail is open below the list
 	Detail        *mailDetail
-	DetailWarming bool // body snapshot has not warmed yet
+	DetailID      int64 // open mail's ID, for the mark-as-read form
+	DetailWarming bool  // body snapshot has not warmed yet
 }
 
 func (app *Application) handleMail(w http.ResponseWriter, r *http.Request) {
@@ -154,6 +156,7 @@ func (app *Application) handleMail(w http.ResponseWriter, r *http.Request) {
 	// An open mail renders under the list, from its body snapshot.
 	if mailID > 0 {
 		view.Selected = true
+		view.DetailID = mailID
 		var mail esi.Mail
 		if app.loadCorpSnapshot(ctx, active.CharacterID, esi.MailBodyKind(mailID), &mail) {
 			detail := &mailDetail{
@@ -455,4 +458,48 @@ func mailHref(attrs string) (string, bool) {
 		return value, true
 	}
 	return "", false
+}
+
+// handleMailMarkRead serves POST /mail/read/ (Issue 26): mark one
+// mail read in-game via PUT /characters/{id}/mail/{mail_id}/,
+// which needs the esi-mail.organize_mail.v1 scope. A 403 means
+// the character was linked before that scope existed — reported
+// as "sign in again", never silently swallowed.
+func (app *Application) handleMailMarkRead(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+	charID, _ := strconv.ParseInt(r.Form.Get("character"), 10, 64)
+	mailID, _ := strconv.ParseInt(r.Form.Get("mail"), 10, 64)
+	if charID <= 0 || mailID <= 0 {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+	ch, err := app.queries.GetCharacter(ctx, charID)
+	if err != nil || ch.UserID != userID {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	token, err := app.validAccessToken(ctx, ch)
+	if err != nil {
+		log.Printf("mail mark-read: token for character %d: %v", charID, err)
+		http.Error(w, "Could not reach EVE. Sign in again if it keeps failing.", http.StatusBadGateway)
+		return
+	}
+	path := fmt.Sprintf("/characters/%d/mail/%d/", charID, mailID)
+	if err := app.esi.PutJSONAuthed(ctx, token, path, map[string]bool{"read": true}); err != nil {
+		var se *esi.StatusError
+		if errors.As(err, &se) && se.Code == http.StatusForbidden {
+			http.Error(w, ch.Name+" was linked before EveSynapse asked for mail organize access — sign in again to grant it.", http.StatusForbidden)
+			return
+		}
+		log.Printf("mail mark-read: ESI PUT %s: %v", path, err)
+		http.Error(w, "EVE refused the update.", http.StatusBadGateway)
+		return
+	}
+	// Success: back to the mail view.
+	http.Redirect(w, r, fmt.Sprintf("/mail/?character=%d&mail=%d", charID, mailID), http.StatusSeeOther)
 }

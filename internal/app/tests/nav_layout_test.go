@@ -53,7 +53,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`fill="url(#brand-glyph-gradient)"`,
 		`<path d="M29.5 15.9L26.4 12.2M20.8 11.6L19.1 13.0M18.7 18.6L20.5 20.6M27.1 27.6L29.1 29.7M28.8 35.2L27.0 36.6M21.4 36.0L18.3 32.1"/>`,
 		`<circle cx="31.82" cy="18.76" r="2.7"/>`,
-		`<a class="wordmark topbar-wordmark" href="/" aria-label="EveSynapse home">EVE<svg class="wordmark-glyph"`,
+		`<a class="wordmark topbar-wordmark" href="/" aria-label="EveSynapse home"><svg class="wordmark-glyph"`,
 		`data-nav-category="pilot"`,
 		`data-nav-category="corporation"`,
 		`<span class="nav-label">Pilot</span>`,
@@ -166,22 +166,21 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	if topbarEnd < 0 {
 		t.Fatal("topbar markup not closed")
 	}
-	if !strings.Contains(body[topbarStart:topbarStart+topbarEnd], `<a class="wordmark topbar-wordmark" href="/" aria-label="EveSynapse home">EVE<svg class="wordmark-glyph"`) {
+	if !strings.Contains(body[topbarStart:topbarStart+topbarEnd], `<a class="wordmark topbar-wordmark" href="/" aria-label="EveSynapse home"><svg class="wordmark-glyph"`) {
 		t.Error("topbar is missing the wordmark")
 	}
-	// Branding: the wordmark is EVE + the node-and-spoke
-	// glyph + the full SYNAPSE (the glyph stands as its own
-	// mark, no longer replacing the S), painted from its own
-	// diagonal gradient def (the nav icons keep the
-	// horizontal def).
+	// Branding: the wordmark is the node-and-spoke glyph
+	// followed by the full EVESYNAPSE text (Issue 25), painted
+	// from its own diagonal gradient def (the nav icons keep
+	// the horizontal def).
 	topbar := body[topbarStart : topbarStart+topbarEnd]
 	wordmarkAt := strings.Index(topbar, `<a class="wordmark topbar-wordmark"`)
 	sGlyphAt := strings.Index(topbar, `<svg class="wordmark-glyph"`)
 	if wordmarkAt < 0 || sGlyphAt < 0 || sGlyphAt < wordmarkAt {
 		t.Errorf("wordmark at %d, glyph at %d in topbar; want the glyph inside the wordmark link", wordmarkAt, sGlyphAt)
 	}
-	if !strings.Contains(topbar, "</svg>SYNAPSE</a>") {
-		t.Error("glyph does not sit between EVE and SYNAPSE in the wordmark")
+	if !strings.Contains(topbar, "</svg><span>EVESYNAPSE</span></a>") {
+		t.Error("glyph does not lead the full EVESYNAPSE wordmark")
 	}
 
 	code, css := apptest.GetPage(t, rig, cookie, "/static/style.css")

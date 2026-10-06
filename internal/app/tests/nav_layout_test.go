@@ -344,7 +344,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// wordmark's left at a chunkier fixed square size,
 		// pulled slightly into the topbar flex gap so the
 		// gap before the text stays small.
-		".wordmark-glyph {\n  display: inline-block;\n  height: 1.9em;\n  width: auto;\n  vertical-align: -0.35em;\n  margin: 0 0.5em 0 0;\n  transform: rotate(100deg);\n}",
+		".wordmark-glyph {\n  display: inline-block;\n  height: 1.9em;\n  width: auto;\n  vertical-align: -0.35em;\n  margin: 0 1.25rem 0 0;\n  transform: rotate(100deg);\n}",
 		// v0.3.07.008: the phone-bar hamburger floats bare
 		// like the sidebar glyph controls (no resting box on
 		// the same footprint), with the same faint hover wash.

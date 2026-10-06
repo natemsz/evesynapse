@@ -475,6 +475,9 @@
   });
   syncFilterUI();
   syncSubsystemUI();
+  // Populate the clone dropdown for the initially-selected pilot
+  // (Issue 19); pilot changes refresh it via the change handler.
+  refreshCloneOptions();
 
   // --- split searches: ships at the top, modules above the workbench --
   // Ship search: ships only. Module search: modules/drones/rigs/subs

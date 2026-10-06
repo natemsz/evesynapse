@@ -14,6 +14,7 @@ import (
 type pageData struct {
 	Version           string // footer product version ("v0.3.00.002"); filled by render
 	LoggedIn          bool
+	IsAdmin           bool   // session character is in EVE_ADMIN_CHARACTER_IDS; filled by render
 	CharacterName     string
 	SSOConfigured     bool
 	AutoRefresh       bool   // base.html emits a meta-refresh (Sync page)
@@ -197,6 +198,9 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 	// is in-memory; sweep state is a single cached query.
 	if data.SyncStatus == "" {
 		data.SyncStatus = app.syncStatusString(ctx)
+	}
+	if !data.IsAdmin {
+		data.IsAdmin = app.isAdmin(ctx)
 	}
 	if data.LoggedIn && data.Switcher == nil {
 		data.Switcher = app.switcherEntries(ctx)

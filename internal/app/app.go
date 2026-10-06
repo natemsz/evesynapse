@@ -305,7 +305,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	}
 
 	r.Route("/admin", func(r chi.Router) {
-		r.Use(app.requireAuth)
+		r.Use(app.requireAdmin)
 		r.Get("/", app.handleAdmin)
 	})
 
@@ -511,7 +511,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	})
 
 	r.Route("/sync", func(r chi.Router) {
-		r.Use(app.requireAuth)
+		r.Use(app.requireAdmin)
 		r.Get("/", app.handleSync)
 		r.Get("/page-status", app.handlePageSyncStatus)
 		r.Post("/warm", app.handleSyncWarm)
@@ -549,6 +549,29 @@ func (app *Application) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !app.sessions.GetBool(r.Context(), sessionAuthenticated) {
 			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// isAdmin reports whether the request's session belongs to an admin
+// character (Issues 23/24): authenticated AND the EVE SSO character
+// ID is in EVE_ADMIN_CHARACTER_IDS.
+func (app *Application) isAdmin(ctx context.Context) bool {
+	if !app.sessions.GetBool(ctx, sessionAuthenticated) {
+		return false
+	}
+	cid := int64(app.sessions.GetInt(ctx, sessionCharacterID))
+	return cid != 0 && app.cfg.IsAdminCharacter(cid)
+}
+
+// requireAdmin gates debugging/dev pages (Admin, Sync) on admin
+// character identity, not just login. Non-admins get 403.
+func (app *Application) requireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !app.isAdmin(r.Context()) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
 		next.ServeHTTP(w, r)

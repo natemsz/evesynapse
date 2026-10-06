@@ -2,6 +2,7 @@ package app
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"strings"
 )
@@ -19,6 +20,7 @@ type Config struct {
 	sessionKey      string // reserved for cookie signing hardening
 	devLogin        bool   // DEV_LOGIN=1: register the /dev-login route
 	sdeBaseURL      string // EVE SDE CSV dump base URL (Fuzzwork by default)
+	adminCharIDs    map[int64]bool // EVE_ADMIN_CHARACTER_IDS (comma-separated)
 }
 
 // SSOConfigured reports whether EVE SSO can run: it needs both the
@@ -88,7 +90,34 @@ func LoadConfig() Config {
 		sessionKey:      os.Getenv("SESSION_KEY"),
 		devLogin:        os.Getenv("DEV_LOGIN") == "1",
 		sdeBaseURL:      getenvDefault("EVE_SDE_BASE_URL", defaultSDEBaseURL),
+		adminCharIDs:    parseAdminCharIDs(os.Getenv("EVE_ADMIN_CHARACTER_IDS")),
 	}
+}
+
+// parseAdminCharIDs parses a comma-separated list of EVE character
+// IDs into a set. Empty or malformed entries are skipped; an empty
+// list means nobody is admin.
+func parseAdminCharIDs(raw string) map[int64]bool {
+	out := map[int64]bool{}
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		var id int64
+		if _, err := fmt.Sscanf(part, "%d", &id); err != nil || id <= 0 {
+			continue
+		}
+		out[id] = true
+	}
+	return out
+}
+
+// IsAdminCharacter reports whether the given EVE character ID is an
+// administrator (Issues 23/24). Admin is tied to specific EVE SSO
+// characters via EVE_ADMIN_CHARACTER_IDS, not to login alone.
+func (c Config) IsAdminCharacter(id int64) bool {
+	return c.adminCharIDs[id]
 }
 
 // loadDotEnv is a small hand-rolled .env loader. Format: KEY=VALUE per

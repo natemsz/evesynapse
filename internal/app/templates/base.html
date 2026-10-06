@@ -94,8 +94,8 @@
         </div>
       </details>
 <div class="sidenav-utility">
-        <a class="navlink utility{{if eq .Section "sync"}} active{{end}}" href="/sync/"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg nav-icon-sync" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.2 12a7.2 7.2 0 1 1-2.1-5.05"/><path d="M17.4 3.4v3.9h-3.9"/></g></svg></span><span class="nav-label">Sync</span></a>
-        <a class="navlink utility{{if eq .Section "admin"}} active{{end}}" href="/admin/"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg nav-icon-admin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2 7 7 2-7 2-2 7-2-7-7-2 7-2Z" fill="url(#nav-glyph-gradient)"/></svg></span><span class="nav-label">Admin</span></a>
+        {{if .IsAdmin}}<a class="navlink utility{{if eq .Section "sync"}} active{{end}}" href="/sync/"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg nav-icon-sync" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.2 12a7.2 7.2 0 1 1-2.1-5.05"/><path d="M17.4 3.4v3.9h-3.9"/></g></svg></span><span class="nav-label">Sync</span></a>
+        <a class="navlink utility{{if eq .Section "admin"}} active{{end}}" href="/admin/"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg nav-icon-admin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2 7 7 2-7 2-2 7-2 7-2-7-7-2 7-2Z" fill="url(#nav-glyph-gradient)"/></svg></span><span class="nav-label">Admin</span></a>{{end}}
       </div>
     </nav>
     <div class="sidebar-account{{if .LoggedIn}} has-character{{end}}">

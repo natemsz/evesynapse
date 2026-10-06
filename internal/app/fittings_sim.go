@@ -2034,6 +2034,7 @@ type fitMineRow struct {
 	Mine     bool   `json:"mine"`
 	IsPublic bool   `json:"isPublic"`
 	IsDraft  bool   `json:"isDraft"`
+	IsESI    bool   `json:"isESI,omitempty"`
 	Author   string `json:"author,omitempty"`
 }
 
@@ -2065,6 +2066,26 @@ func (app *Application) handleFitMineJSON(w http.ResponseWriter, r *http.Request
 			ID: row.ID, Name: row.Name, ShipName: row.ShipName,
 			Mine: true, IsPublic: row.IsPublic, IsDraft: row.IsDraft,
 		})
+	}
+	// ESI fittings for the active character (Issue 1)
+	// These are the in-game fittings from the character's ESI snapshot.
+	if charID := int64(app.sessions.GetInt(ctx, sessionCharacterID)); charID != 0 {
+		if char, err := app.queries.GetCharacter(ctx, charID); err == nil {
+			var fittings esi.Fittings
+			if err := app.esi.GetCached(ctx, char, esi.SnapFittings, &fittings); err == nil {
+				qLower := strings.ToLower(q)
+				for _, f := range fittings {
+					if strings.Contains(strings.ToLower(f.Name), qLower) {
+						shipName := app.typeNameOrID(ctx, f.ShipTypeID)
+						out = append(out, fitMineRow{
+							ID: -f.FittingID, // negative ID marks ESI fit
+							Name: f.Name, ShipName: shipName,
+							Mine: true, IsESI: true,
+						})
+					}
+				}
+			}
+		}
 	}
 	if r.URL.Query().Get("community") == "1" {
 		pub, err := app.queries.SearchPublicFittings(ctx, db.SearchPublicFittingsParams{UserID: userID, Q: q})

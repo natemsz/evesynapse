@@ -39,16 +39,47 @@
 {{else if .Industry.Blueprints.Warming}}
 <p><small>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</small></p>
 {{else if .Industry.BlueprintRows}}
+<p><input type="search" id="bp-search" placeholder="Search blueprints..." aria-label="Search blueprints"></p>
 <div class="tw">
-<table>
-  <thead><tr><th>Blueprint</th><th>Kind</th><th>ME</th><th>TE</th><th>Runs</th><th>Location</th></tr></thead>
+<table id="bp-table">
+  <thead><tr><th>Blueprint</th><th>Produces</th><th>Category</th><th>Kind</th><th>ME</th><th>TE</th><th>Runs</th><th>Location</th></tr></thead>
   <tbody>
+  {{$lastCat := ""}}
   {{range .Industry.BlueprintRows}}
-    <tr><td>{{itemLink .TypeID .Name}}</td><td>{{.Kind}}</td><td>{{.ME}}</td><td>{{.TE}}</td><td>{{.Runs}}</td><td>{{placeLink .Location}}</td></tr>
+    {{if and .ProductCategory (ne .ProductCategory $lastCat)}}
+    <tr class="bp-cat-header"><td colspan="8"><strong>{{.ProductCategory}}</strong></td></tr>
+    {{$lastCat = .ProductCategory}}
+    {{end}}
+    <tr class="bp-row" data-search="{{.Name}} {{.ProductName}} {{.ProductCategory}}"><td>{{itemLink .TypeID .Name}}</td><td>{{if .ProductName}}{{.ProductName}}{{else}}—{{end}}</td><td>{{if .ProductCategory}}{{.ProductCategory}}{{else}}—{{end}}</td><td>{{.Kind}}</td><td>{{.ME}}</td><td>{{.TE}}</td><td>{{.Runs}}</td><td>{{placeLink .Location}}</td></tr>
   {{end}}
   </tbody>
 </table>
 </div>
+<script>
+(function() {
+  var input = document.getElementById('bp-search');
+  if (!input) return;
+  input.addEventListener('input', function() {
+    var q = input.value.toLowerCase();
+    var rows = document.querySelectorAll('#bp-table .bp-row');
+    var headers = document.querySelectorAll('#bp-table .bp-cat-header');
+    rows.forEach(function(r) {
+      var match = !q || r.getAttribute('data-search').toLowerCase().indexOf(q) >= 0;
+      r.style.display = match ? '' : 'none';
+    });
+    // Hide category headers with no visible rows
+    headers.forEach(function(h) {
+      var next = h.nextElementSibling;
+      var hasVisible = false;
+      while (next && !next.classList.contains('bp-cat-header')) {
+        if (next.style.display !== 'none') { hasVisible = true; break; }
+        next = next.nextElementSibling;
+      }
+      h.style.display = hasVisible ? '' : 'none';
+    });
+  });
+})();
+</script>
 {{if .Industry.BlueprintsCut}}<p><small>+ {{.Industry.BlueprintsCut}} more blueprints in this snapshot.</small></p>{{end}}
 {{else}}
 <p><small>No blueprints in the latest snapshot.</small></p>

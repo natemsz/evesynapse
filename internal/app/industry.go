@@ -58,13 +58,15 @@ type industryJobRow struct {
 
 // blueprintRow is one blueprint-library line.
 type blueprintRow struct {
-	Name     string
-	TypeID   int64
-	Kind     string // "BPO" | "BPC"
-	ME       string // "10%"
-	TE       string // "20%"
-	Runs     string // runs remaining; "∞" for originals
-	Location placeRef
+	Name            string
+	TypeID          int64
+	Kind            string // "BPO" | "BPC"
+	ME              string // "10%"
+	TE              string // "20%"
+	Runs            string // runs remaining; "∞" for originals
+	Location        placeRef
+	ProductName     string // what the blueprint produces
+	ProductCategory string // category of the produced item
 }
 
 // miningRow is one mining-ledger line.
@@ -192,6 +194,14 @@ func (app *Application) fillBlueprints(ctx context.Context, characterID int64, v
 	if !view.Blueprints.Loaded {
 		return
 	}
+	// Blueprint products for categorization (Issue 16)
+	bpProducts := map[int64]int64{}
+	if prodRows, err := app.queries.ListSDEBlueprintProducts(ctx); err == nil {
+		for _, pr := range prodRows {
+			bpProducts[pr.BlueprintTypeID] = pr.ProductTypeID
+		}
+	}
+
 	rows := make([]blueprintRow, 0, len(blueprints))
 	for _, bp := range blueprints {
 		row := blueprintRow{
@@ -199,6 +209,16 @@ func (app *Application) fillBlueprints(ctx context.Context, characterID int64, v
 			TypeID: bp.TypeID,
 			ME:     fmt.Sprintf("%d%%", bp.MaterialEfficiency),
 			TE:     fmt.Sprintf("%d%%", bp.TimeEfficiency),
+		}
+		// Product info for categorization (Issue 16)
+		if productID, ok := bpProducts[bp.TypeID]; ok {
+			row.ProductName = app.typeNameOrID(ctx, productID)
+			// Get product group for categorization
+			if sdeType, err := app.queries.GetSDEType(ctx, productID); err == nil {
+				if group, err := app.queries.GetSDEGroup(ctx, sdeType.GroupID); err == nil {
+					row.ProductCategory = group.Name
+				}
+			}
 		}
 		// ESI semantics: quantity -1 marks an original (runs -1 =
 		// unlimited), -2 a copy; anything else is a stack count.
@@ -218,7 +238,12 @@ func (app *Application) fillBlueprints(ctx context.Context, characterID int64, v
 		}
 		rows = append(rows, row)
 	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].ProductCategory != rows[j].ProductCategory {
+			return rows[i].ProductCategory < rows[j].ProductCategory
+		}
+		return rows[i].Name < rows[j].Name
+	})
 	if len(rows) > maxIndustryRows {
 		view.BlueprintsCut = len(rows) - maxIndustryRows
 		rows = rows[:maxIndustryRows]

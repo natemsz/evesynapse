@@ -58,6 +58,7 @@ type pageData struct {
 	PlanetsChars      []assetCharLink
 	Mail              *mailView
 	MailChars         []assetCharLink
+	MailCompose       *mailComposeView
 	Calendar          *calendarView
 	CalendarChars     []assetCharLink
 	Contacts          *contactsView

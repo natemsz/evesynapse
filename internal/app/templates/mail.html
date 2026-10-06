@@ -8,6 +8,7 @@
 
 {{if .Mail}}
 <h2>{{.Mail.CharacterName}}{{if .Mail.UnreadKnown}} <small>· {{.Mail.UnreadCount}} unread</small>{{end}}</h2>
+<p><a class="btn" href="/mail/compose/?character={{.Mail.CharacterID}}">Compose</a></p>
 
 {{if .Mail.Selected}}
 <section class="foldable">

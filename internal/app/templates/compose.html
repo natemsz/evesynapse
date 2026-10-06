@@ -1,0 +1,37 @@
+{{define "title"}}Compose Mail{{end}}
+{{define "content"}}
+<h1><span class="gt">Compose Mail</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{template "charselector" .MailChars}}
+
+{{if .MailCompose}}
+{{$c := .MailCompose}}
+<h2>From: {{$c.CharacterName}}</h2>
+
+{{if $c.Sent}}
+<p class="ok">Mail sent.</p>
+<p><a href="/mail/?character={{$c.CharacterID}}">Back to the inbox</a> · <a href="/mail/compose/?character={{$c.CharacterID}}">Write another</a></p>
+{{else}}
+{{if $c.Error}}<p class="err">{{$c.Error}}</p>{{end}}
+<form method="post" action="/mail/send/">
+  <input type="hidden" name="character" value="{{$c.CharacterID}}">
+  <p><label>To (character, corporation, or alliance name)<br>
+    <input type="text" name="to" value="{{$c.To}}" size="40" required autocomplete="off">
+  </label></p>
+  <p><label>Subject<br>
+    <input type="text" name="subject" value="{{$c.Subject}}" size="60" maxlength="100" required>
+  </label></p>
+  <p><label>Message<br>
+    <textarea name="body" rows="12" cols="70" required>{{$c.Body}}</textarea>
+  </label></p>
+  <p><button class="btn" type="submit">Send mail</button>
+  <a href="/mail/?character={{$c.CharacterID}}">Cancel</a></p>
+</form>
+<p><small>Sending mail costs a small in-game fee. The recipient name must match exactly.</small></p>
+{{end}}
+{{else}}
+<p>No character to send from yet — link a character first.</p>
+{{end}}
+{{end}}

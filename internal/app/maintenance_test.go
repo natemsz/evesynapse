@@ -58,8 +58,8 @@ func writeTestFile(t *testing.T, path string, data []byte, perm os.FileMode) {
 }
 
 func TestVersionMatchesRelease(t *testing.T) {
-	if got := Version(); got != "v0.3.36.004" {
-		t.Fatalf("Version() = %q, want v0.3.36.004", got)
+	if got := Version(); got != "v0.3.38.001-dev" {
+		t.Fatalf("Version() = %q, want v0.3.38.001-dev", got)
 	}
 }
 

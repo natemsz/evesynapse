@@ -1,6 +1,6 @@
-{{define "title"}}Character{{end}}
+{{define "title"}}Character Sheet{{end}}
 {{define "content"}}
-<h1><span class="gt">Character</span></h1>
+<h1><span class="gt">Character Sheet</span></h1>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
@@ -31,32 +31,91 @@
   </section>
   {{end}}
 
-  {{if .CharacterPage.QueueKnown}}
-  <section class="foldable">
-  <h3>Training</h3>
-  {{if .CharacterPage.Training}}
-  <p>{{.CharacterPage.Training}}{{if .CharacterPage.TrainingLeft}} (<span class="countdown" data-finish="{{.CharacterPage.TrainingFinish}}">{{.CharacterPage.TrainingLeft}}</span>){{end}}</p>
-  {{else}}
-  <p><small>Not training — empty queue.</small></p>
-  {{end}}
-  </section>
-  {{end}}
-
   {{if .CharacterPage.SkillsKnown}}
-  <section class="foldable">
+  <section class="foldable" id="skills">
   <h3>Skills</h3>
-  <p><small>Total skill points: {{.CharacterPage.TotalSP}}{{if .CharacterPage.UnallocatedSP}} · Unallocated: {{.CharacterPage.UnallocatedSP}}{{end}}{{if .CharacterPage.SkillsCount}} · {{.CharacterPage.SkillsCount}} skills{{if gt .CharacterPage.SkillsCount .CharacterPage.SkillsShown}} (top {{.CharacterPage.SkillsShown}} by SP){{end}}{{end}}</small></p>
-  {{if .CharacterPage.Skills}}
+  <p>Total SP: <strong>{{.CharacterPage.TotalSP}}</strong>{{if .CharacterPage.UnallocatedSP}} · {{.CharacterPage.UnallocatedSP}} unallocated{{end}} · {{.CharacterPage.SkillsCount}} skills known · {{.CharacterPage.LevelVCount}} at level V</p>
+  </section>
+
+  <section class="foldable" id="queue">
+  <h3>Skill queue</h3>
+  {{if .CharacterPage.Training}}
+  <p>Currently training: <strong>{{.CharacterPage.Training}}</strong>{{if .CharacterPage.TrainingLeft}} (<span class="countdown" data-finish="{{.CharacterPage.TrainingFinish}}">{{.CharacterPage.TrainingLeft}}</span>){{end}}</p>
+  {{else}}
+  <p><small>Skill queue is paused or empty.</small></p>
+  {{end}}
+  {{if .CharacterPage.Queue}}
   <div class="tw">
   <table>
-    <thead><tr><th>Skill</th><th>Trained</th><th>Active</th><th>SP</th></tr></thead>
+    <thead><tr><th>#</th><th>Skill</th><th>Level</th><th>Finishes</th></tr></thead>
     <tbody>
-    {{range .CharacterPage.Skills}}
-      <tr><td>{{itemLink .TypeID .Name}}</td><td>{{.Trained}}</td><td>{{.Active}}</td><td>{{.SP}}</td></tr>
+    {{range .CharacterPage.Queue}}
+      <tr><td>{{.Num}}</td><td>{{itemLink .SkillID .Skill}}</td><td>{{skillLevel .TrainedLvl .LevelNum .State}}</td><td>{{.Finishes}}</td></tr>
     {{end}}
     </tbody>
   </table>
   </div>
+  {{if .CharacterPage.CompletesAt}}<p><small>Queue completes {{.CharacterPage.CompletesAt}}</small></p>{{end}}
+  {{end}}
+  </section>
+
+  {{range .CharacterPage.SkillGroups}}
+  <section class="foldable" data-fold="closed">
+  <h3>{{.Name}}</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Skill</th><th>Level</th><th>SP</th></tr></thead>
+    <tbody>
+    {{range .Skills}}
+      <tr><td>{{itemLink .TypeID .Name}}</td><td>{{skillLevel .TrainedLvl .NextLvl .NextState}}</td><td>{{.SP}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  <p><small>Group total: {{.SubtotalSP}} SP</small></p>
+  </section>
+  {{end}}
+
+  <section class="foldable" id="browse" data-fold="closed">
+  <h3>Browse skills</h3>
+  {{if .CharacterPage.BrowseWarming}}
+  <p><small>Skill data is still loading — the full catalog appears once the static-data import lands. Watch the <a href="/sync/">Sync page</a>.</small></p>
+  {{else}}
+  {{if not .CharacterPage.Plans}}<p><small><a href="/skills/plans?character={{.CharacterPage.CharacterID}}">Create a skill plan</a> to add skills straight from this catalog.</small></p>{{end}}
+  {{range .CharacterPage.Browse}}
+  <section class="foldable" data-fold="closed">
+  <h3>{{.Name}}</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Skill</th><th>Level</th><th>SP</th><th>Rank</th><th>Trains on</th><th>Prereqs</th>{{if $.CharacterPage.Plans}}<th>Add to plan</th>{{end}}</tr></thead>
+    <tbody>
+    {{range .Skills}}
+      <tr>
+        <td>{{itemLink .TypeID .Name}}</td>
+        <td>{{skillLevel .TrainedLvl 0 ""}}</td>
+        <td>{{.SP}}</td>
+        <td>{{.Rank}}</td>
+        <td>{{.Primary}} / {{.Secondary}}</td>
+        <td>{{.Prereqs}}</td>
+        {{if $.CharacterPage.Plans}}
+        <td>
+          <form method="post" action="/skills/plans/item-add">
+            <input type="hidden" name="character" value="{{$.CharacterPage.CharacterID}}">
+            <input type="hidden" name="skill" value="{{.TypeID}}">
+            <input type="hidden" name="return" value="character">
+            <select name="plan">{{range $.CharacterPage.Plans}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
+            <select name="level"><option value="1">I</option><option value="2">II</option><option value="3">III</option><option value="4">IV</option><option value="5" selected>V</option></select>
+            <button type="submit">Add</button>
+          </form>
+        </td>
+        {{end}}
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  </section>
+  {{end}}
   {{end}}
   </section>
   {{end}}
@@ -151,8 +210,8 @@
   {{end}}
 
   {{if .CharacterPage.ClonesKnown}}
-  <section class="foldable">
-  <h3>Clones</h3>
+  <section class="foldable" id="clones" data-fold="closed">
+  <h3>Clones ({{len .CharacterPage.JumpClones}})</h3>
   <div class="tw">
   <table>
     <tbody>
@@ -163,15 +222,27 @@
   </div>
   {{if .CharacterPage.JumpClones}}
   {{range .CharacterPage.JumpClones}}
-  <h4>Jump clone{{if .Name}} — &ldquo;{{.Name}}&rdquo;{{end}}</h4>
-  <p><small>Location: {{.Location}}</small></p>
+  <section class="foldable" data-fold="closed">
+  <h3>{{.DisplayName}} <small>· {{.Location}}{{if .Implants}} · {{len .Implants}} implant{{if ne (len .Implants) 1}}s{{end}}{{end}}</small></h3>
+  <p><small>
+    {{if .CustomName}}Named &ldquo;{{.CustomName}}&rdquo;{{else if .Name}}ESI name &ldquo;{{.Name}}&rdquo;{{else}}Unnamed{{end}} ·
+    <details class="clone-rename"><summary>Rename</summary>
+    <form method="post" action="/character/clones/rename">
+      <input type="hidden" name="character" value="{{$.CharacterPage.CharacterID}}">
+      <input type="hidden" name="clone" value="{{.CloneID}}">
+      <input type="text" name="name" value="{{.CustomName}}" placeholder="Custom clone name" maxlength="60" aria-label="Custom name for {{.DisplayName}}">
+      <button type="submit">Save</button>
+      <small>Empty clears the name.</small>
+    </form>
+    </details>
+  </small></p>
   {{if .Implants}}
   <div class="tw">
   <table>
-    <thead><tr><th>Implant</th></tr></thead>
+    <thead><tr><th>Slot</th><th>Implant</th></tr></thead>
     <tbody>
     {{range .Implants}}
-      <tr><td>{{itemLink .TypeID .Name}}</td></tr>
+      <tr><td>{{.Slot}}</td><td>{{itemLink .TypeID .Name}}</td></tr>
     {{end}}
     </tbody>
   </table>
@@ -179,6 +250,7 @@
   {{else}}
   <p><small>No implants in this clone.</small></p>
   {{end}}
+  </section>
   {{end}}
   {{else}}
   <p><small>No jump clones installed.</small></p>

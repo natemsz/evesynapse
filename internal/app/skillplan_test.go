@@ -403,12 +403,13 @@ func TestSkillPlanPagesAndCRUD(t *testing.T) {
 		return rec.Code, rec.Body.String()
 	}
 
-	// Skills page: browse renders the catalog with trained state.
-	code, body := getPage(t, app, cookie, "/skills/?character=90000001")
+	// Character sheet: the skill catalog (browse) now lives on the
+	// unified character page and renders trained state there.
+	code, body := getPage(t, app, cookie, "/character/?character=90000001")
 	if code != 200 {
-		t.Fatalf("GET /skills/ = %d", code)
+		t.Fatalf("GET /character/ = %d", code)
 	}
-	mustContain(t, "/skills/", body, "Browse skills", "Alpha Skill", "Test Gunnery", "2x")
+	mustContain(t, "/character/", body, "Browse skills", "Alpha Skill", "Test Gunnery", "2x")
 
 	// Create a plan through the form endpoint.
 	code, _ = post("/skills/plans/create", url.Values{

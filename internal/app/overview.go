@@ -965,7 +965,7 @@ func (app *Application) buildAttention(ctx context.Context, bundles []*charSnaps
 				item := attentionItem{
 					Char: b.ch.Name,
 					Text: fmt.Sprintf("%s isn't training — the queue is empty.", b.ch.Name),
-					Link: fmt.Sprintf("/skills/?character=%d", b.ch.CharacterID),
+					Link: fmt.Sprintf("/character/?character=%d", b.ch.CharacterID),
 					Rank: attentionNotTraining,
 					At:   finishedAt,
 				}

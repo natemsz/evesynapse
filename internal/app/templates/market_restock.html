@@ -1,0 +1,57 @@
+{{define "title"}}Restock planner{{end}}
+{{define "content"}}
+<h1><span class="gt">Restock planner</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .Restock}}
+{{$s := .Restock}}
+<p><small>Set target stock levels for the items you trade. The planner compares each target against your open sell orders, shows the shortfall, and estimates the restock cost at current market sell prices.</small></p>
+
+<section class="foldable">
+<h3>Add a target</h3>
+<form method="post" action="/market/restock/save/">
+  <p>
+    <label>Type ID <input type="number" name="type_id" min="1" required size="10" placeholder="e.g. 34"></label>
+    <label>Target qty <input type="number" name="target_qty" min="0" value="0" size="10"></label>
+    <label title="Reserved for future margin alerts">Min margin % <input type="number" name="min_margin_pct" min="0" step="0.1" value="0" size="6"></label>
+    <button class="btn" type="submit">Save target</button>
+  </p>
+  <p><small>Tip: find a type ID on the <a href="/items/">Item Browser</a> page — it's in the URL (/items/type/&lt;id&gt;/).</small></p>
+</form>
+</section>
+
+{{if $s.HasData}}
+<p><small>Showing {{len $s.Rows}} targets, largest shortfall first. Total estimated restock cost: <strong>{{$s.TotalCost}}</strong>.</small></p>
+
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th>Target</th><th>Listed</th><th>Shortfall</th><th>Unit price</th><th>Est. cost</th><th></th></tr></thead>
+  <tbody>
+  {{range $s.Rows}}
+    <tr>
+      <td><a href="{{.URL}}">{{.Name}}</a></td>
+      <td>{{.TargetQty}}</td>
+      <td>{{.ListedQty}}</td>
+      <td>{{.Shortfall}}</td>
+      <td>{{.UnitPrice}}</td>
+      <td>{{.EstCost}}</td>
+      <td>
+        <form method="post" action="/market/restock/delete/" style="display:inline">
+          <input type="hidden" name="type_id" value="{{.TypeID}}">
+          <button class="btn btn-danger" type="submit" title="Remove target">×</button>
+        </form>
+      </td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<div class="card">
+  <h3>No targets yet</h3>
+  <p>Add your first restock target above — for example, the ammo or modules you sell regularly. The planner will track your open sell orders against each target and tell you what needs restocking.</p>
+</div>
+{{end}}
+{{end}}
+{{end}}

@@ -926,6 +926,7 @@
       (applyFittable(rows) || []).forEach(function (it) {
         var li = document.createElement("li");
         li.setAttribute("data-fit-pick", String(it.id));
+        if (it.kind) li.setAttribute("data-kind", it.kind);
         // Tap adds (handled by the pointer controller); press-and-
         // drag moves it onto a slot. No mousedown+preventDefault
         // here — that kills the drag gesture before it starts.
@@ -1060,6 +1061,17 @@
       if (fromFit) {
         pendingFlash = { type: "slot", id: typeID };
         moveItemTo(typeID, fam, idx);
+      } else if (d.kind === "charge") {
+        // Charge dropped on a weapon slot: set it as that weapon's ammo (Issue 2)
+        var slotEl = editor.querySelector('.fit-vslot[data-v-index="' + idx + '"]');
+        if (slotEl) {
+          var weaponID = parseInt(slotEl.getAttribute("data-fit-vslot") || "0", 10);
+          if (weaponID > 0) {
+            state.charges[weaponID] = typeID;
+            pendingFlash = { type: "charge", id: weaponID };
+            simulate();
+          }
+        }
       } else if (!checkRestricted(typeID, "")) {
         addItem(typeID, 1); // arms its own flash
       }
@@ -1092,6 +1104,7 @@
     dragState = {
       el: t, typeID: typeID, fromFit: !!vslot,
       family: vslot ? (t.getAttribute("data-v-family") || "") : pickerDropFamily(),
+      kind: t.getAttribute("data-kind") || "",
       x0: ev.clientX, y0: ev.clientY, pid: ev.pointerId,
       active: false, dropIndex: -1, ghost: null,
       mayScroll: !vslot // picker rows live in a scrollable list

@@ -503,3 +503,161 @@ func (app *Application) handleMailMarkRead(w http.ResponseWriter, r *http.Reques
 	// Success: back to the mail view.
 	http.Redirect(w, r, fmt.Sprintf("/mail/?character=%d&mail=%d", charID, mailID), http.StatusSeeOther)
 }
+
+// ---------------------------------------------------------------------------
+// Compose (Issue 27)
+// ---------------------------------------------------------------------------
+
+// mailComposeView is the compose form's view model.
+type mailComposeView struct {
+	CharacterID   int64
+	CharacterName string
+	To            string // sticky recipient name on error
+	Subject       string // sticky subject on error
+	Body          string // sticky body on error
+	Error         string // send failure, user-safe
+	Sent          bool   // just sent: show confirmation
+}
+
+// handleMailCompose serves GET /mail/compose/: the compose form.
+func (app *Application) handleMailCompose(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	data := pageData{
+		LoggedIn:      true,
+		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
+		SSOConfigured: app.cfg.SSOConfigured(),
+	}
+	_, active, links, err := app.pickCharacter(ctx, r, "/mail/compose/")
+	if err != nil {
+		log.Printf("mail compose: list characters: %v", err)
+		data.Error = "Could not load characters; check the server log."
+		app.render(ctx, w, http.StatusOK, "compose.html", data)
+		return
+	}
+	if links == nil {
+		app.render(ctx, w, http.StatusOK, "compose.html", data)
+		return
+	}
+	data.MailChars = links
+	data.MailCompose = &mailComposeView{
+		CharacterID:   active.CharacterID,
+		CharacterName: active.Name,
+	}
+	app.render(ctx, w, http.StatusOK, "compose.html", data)
+}
+
+// mailRecipientResolution is the /universe/ids/ subset we need to
+// address mail: characters, corporations, alliances.
+type mailRecipientResolution struct {
+	Characters   []esi.UniverseIDEntry `json:"characters"`
+	Corporations []esi.UniverseIDEntry `json:"corporations"`
+	Alliances    []esi.UniverseIDEntry `json:"alliances"`
+}
+
+// handleMailSend serves POST /mail/send/: resolve the recipient
+// name, then POST /characters/{id}/mail/. A 403 means the character
+// was linked before the send_mail scope existed.
+func (app *Application) handleMailSend(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+	charID, _ := strconv.ParseInt(r.Form.Get("character"), 10, 64)
+	toName := strings.TrimSpace(r.Form.Get("to"))
+	subject := strings.TrimSpace(r.Form.Get("subject"))
+	body := r.Form.Get("body")
+
+	data := pageData{
+		LoggedIn:      true,
+		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
+		SSOConfigured: app.cfg.SSOConfigured(),
+	}
+	_, active, links, err := app.pickCharacter(ctx, r, "/mail/compose/")
+	if err == nil && links != nil {
+		data.MailChars = links
+	}
+	view := &mailComposeView{
+		CharacterID: charID, To: toName, Subject: subject, Body: body,
+	}
+	if active.CharacterID != 0 {
+		view.CharacterName = active.Name
+	}
+	data.MailCompose = view
+	fail := func(msg string) {
+		view.Error = msg
+		app.render(ctx, w, http.StatusOK, "compose.html", data)
+	}
+
+	ch, err := app.queries.GetCharacter(ctx, charID)
+	if err != nil || ch.UserID != userID {
+		fail("That character isn't one of yours.")
+		return
+	}
+	if toName == "" {
+		fail("Enter a recipient.")
+		return
+	}
+	if subject == "" {
+		fail("Enter a subject.")
+		return
+	}
+	if strings.TrimSpace(body) == "" {
+		fail("Enter a message body.")
+		return
+	}
+
+	// Resolve the recipient name to an ID + type.
+	var res mailRecipientResolution
+	if err := app.esi.PostJSON(ctx, "/universe/ids/", []string{toName}, &res); err != nil {
+		log.Printf("mail send: resolve %q: %v", toName, err)
+		fail("Could not resolve recipient " + toName + ". Check the spelling.")
+		return
+	}
+	var recipientID int64
+	var recipientType string
+	switch {
+	case len(res.Characters) > 0:
+		recipientID, recipientType = res.Characters[0].ID, "character"
+	case len(res.Corporations) > 0:
+		recipientID, recipientType = res.Corporations[0].ID, "corporation"
+	case len(res.Alliances) > 0:
+		recipientID, recipientType = res.Alliances[0].ID, "alliance"
+	default:
+		fail("No character, corporation, or alliance named " + toName + " found.")
+		return
+	}
+
+	token, err := app.validAccessToken(ctx, ch)
+	if err != nil {
+		log.Printf("mail send: token for character %d: %v", charID, err)
+		fail("Could not reach EVE. Sign in again if it keeps failing.")
+		return
+	}
+	// approved_cost: EVE charges a small fee per recipient; 100k
+	// ISK approved headroom covers any normal mail.
+	payload := map[string]any{
+		"approved_cost": 100000,
+		"body":          body,
+		"recipients":    []map[string]any{{"recipient_id": recipientID, "recipient_type": recipientType}},
+		"subject":       subject,
+	}
+	var sent struct {
+		MailID int64 `json:"mail_id"`
+	}
+	path := fmt.Sprintf("/characters/%d/mail/", charID)
+	if err := app.esi.PostJSONAuthed(ctx, token, path, payload, &sent); err != nil {
+		var se *esi.StatusError
+		if errors.As(err, &se) && se.Code == http.StatusForbidden {
+			fail(ch.Name + " was linked before EveSynapse asked for mail send access — sign in again to grant it.")
+			return
+		}
+		log.Printf("mail send: ESI POST %s: %v", path, err)
+		fail("EVE refused the mail. Check the recipient and try again.")
+		return
+	}
+	view.Sent = true
+	view.To, view.Subject, view.Body = "", "", ""
+	app.render(ctx, w, http.StatusOK, "compose.html", data)
+}

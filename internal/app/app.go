@@ -60,6 +60,12 @@ var pgFitMetadataSchema string
 //go:embed schema_pg/004_price_cache_costindex.sql
 var pgPriceCacheSchema string
 
+// Schema step 005 (v0.3.34: restock planner targets): applied by
+// openDB wherever the restock_targets table is absent.
+
+//go:embed schema_pg/005_restock.sql
+var pgRestockSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -350,6 +356,9 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/scanner/", app.handleMarketScanner)
 		r.Get("/tradefinder/", app.handleMarketTradefinder)
 		r.Get("/leaderboard/", app.handleMarketLeaderboard)
+		r.Get("/restock/", app.handleRestock)
+		r.Post("/restock/save/", app.handleRestockSave)
+		r.Post("/restock/delete/", app.handleRestockDelete)
 		r.Get("/suggest", app.handleMarketSuggest)
 		r.Get("/history-fragment", app.handleMarketHistoryFragment)
 		r.Get("/trader-fragment", app.handleMarketTraderFragment)

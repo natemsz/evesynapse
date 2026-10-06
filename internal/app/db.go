@@ -110,6 +110,23 @@ func openDB(ctx context.Context, dsn string) (*sql.DB, *pgxpool.Pool, error) {
 			return nil, nil, err
 		}
 	}
+	// Schema step 005 (v0.3.34: restock planner targets) rides the
+	// same guarded path, probed on the restock_targets table.
+	var restockTables int
+	if err := conn.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'restock_targets'`,
+	).Scan(&restockTables); err != nil {
+		conn.Close()
+		pool.Close()
+		return nil, nil, err
+	}
+	if restockTables == 0 {
+		if err := applySchema(conn, pgRestockSchema); err != nil {
+			conn.Close()
+			pool.Close()
+			return nil, nil, err
+		}
+	}
 	return conn, pool, nil
 }
 

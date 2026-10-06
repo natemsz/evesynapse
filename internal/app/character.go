@@ -279,7 +279,6 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 	// Status.
 	var online esi.Online
 	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapOnline, &online) {
-	} else {
 		view.OnlineKnown = true
 		view.Online = online.Online
 		view.LastLogin = formatFinish(online.LastLogin)
@@ -290,7 +289,6 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 	// Location.
 	var loc esi.Location
 	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapLocation, &loc) {
-	} else {
 		view.LocationKnown = true
 		view.SystemName = app.locationTitle(ctx, loc.SolarSystemID, "solar_system")
 		if sys, err := app.queries.GetSDESystem(ctx, loc.SolarSystemID); err == nil {
@@ -311,7 +309,6 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 	// Ship.
 	var ship esi.Ship
 	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapShip, &ship) {
-	} else {
 		view.ShipKnown = true
 		view.ShipTypeName = app.typeNameOrID(ctx, ship.ShipTypeID)
 		view.ShipTypeID = ship.ShipTypeID
@@ -321,7 +318,6 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 	// Jump fatigue.
 	var fatigue esi.Fatigue
 	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapFatigue, &fatigue) {
-	} else {
 		view.FatigueKnown = true
 		view.LastJump = formatFinish(fatigue.LastJumpDate)
 		view.FatigueUntil = formatFinish(fatigue.JumpFatigueExpireDate)
@@ -339,13 +335,11 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 	var implants esi.Implants
 	implantsLoaded := false
 	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapImplants, &implants) {
-	} else {
 		implantsLoaded = true
 	}
 	var clones esi.Clones
 	clonesLoaded := false
 	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapClones, &clones) {
-	} else {
 		clonesLoaded = true
 	}
 

@@ -563,6 +563,57 @@ func (app *Application) handleSkillPlanItemAdd(w http.ResponseWriter, r *http.Re
 		skillPlansRedirect(w, r, characterID, planID)
 		return
 	}
+	// Enforce level ordering (Issue 5): can't add level N without levels 1..N-1 in plan
+	graph := newSDESkillGraph(app, ctx)
+	// Get existing plan items for this skill
+	existingItems, _ := app.queries.ListSkillPlanItems(ctx, planID)
+	maxPlannedLevel := 0
+	for _, item := range existingItems {
+		if item.SkillTypeID == skillID && int(item.TargetLevel) > maxPlannedLevel {
+			maxPlannedLevel = int(item.TargetLevel)
+		}
+	}
+	// If adding level N, ensure all lower levels are in the plan
+	// (trained levels are handled by computePlan)
+	if level > maxPlannedLevel+1 {
+		// Auto-add the missing intermediate levels
+		for l := maxPlannedLevel + 1; l < level; l++ {
+			pos, err := app.queries.NextSkillPlanPosition(ctx, planID)
+			if err != nil {
+				break
+			}
+			app.queries.UpsertSkillPlanItem(ctx, db.UpsertSkillPlanItemParams{
+				PlanID: planID, SkillTypeID: skillID, TargetLevel: int64(l), Position: pos,
+			})
+		}
+	}
+
+	// Auto-add missing prerequisites (Issue 5)
+	// e.g., Amarr Capital Ships requires Amarr Battleship 5
+	reqs := graph.Requirements(skillID)
+	for _, req := range reqs {
+		reqPlanned := 0
+		for _, item := range existingItems {
+			if item.SkillTypeID == req.SkillID && int(item.TargetLevel) > reqPlanned {
+				reqPlanned = int(item.TargetLevel)
+			}
+		}
+		if reqPlanned < req.Level {
+			// Add the missing prerequisite levels
+			for l := reqPlanned + 1; l <= req.Level; l++ {
+				pos, err := app.queries.NextSkillPlanPosition(ctx, planID)
+				if err != nil {
+					break
+				}
+				app.queries.UpsertSkillPlanItem(ctx, db.UpsertSkillPlanItemParams{
+					PlanID: planID, SkillTypeID: req.SkillID, TargetLevel: int64(l), Position: pos,
+				})
+			}
+			// Refresh existing items list
+			existingItems, _ = app.queries.ListSkillPlanItems(ctx, planID)
+		}
+	}
+
 	pos, err := app.queries.NextSkillPlanPosition(ctx, planID)
 	if err != nil {
 		log.Printf("skill plans: next position for plan %d: %v", planID, err)

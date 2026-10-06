@@ -185,6 +185,8 @@ func mustContain(t *testing.T, path, body string, wants ...string) {
 func TestCorpPagesRenderFromSnapshots(t *testing.T) {
 	transport := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, transport)
+	grantTestAdmin(app, fixtureCharA)
+	grantTestAdmin(app, fixtureCharB)
 	ctx := context.Background()
 	now := time.Now().UTC()
 
@@ -459,8 +461,6 @@ func (s *corpStubTransport) RoundTrip(req *http.Request) (*http.Response, error)
 func TestRefreshCorpSnapshotsRoleMissing(t *testing.T) {
 	transport := &corpStubTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
-	grantTestAdmin(app, fixtureCharA)
-	grantTestAdmin(app, fixtureCharB)
 	ctx := context.Background()
 
 	user, err := q.CreateUser(ctx)

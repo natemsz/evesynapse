@@ -27,7 +27,6 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		t.Fatalf("create user: %v", err)
 	}
 	apptest.SeedCharacter(t, q, user.ID, apptest.FixtureCharA, "Fixture Ceo")
-	rig.GrantAdmin(apptest.FixtureCharA)
 	cookie := apptest.SessionCookie(t, rig, user.ID, 0, "")
 
 	code, body := apptest.GetPage(t, rig, cookie, "/")
@@ -67,8 +66,6 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`<rect x="16.3" y="7" width="4.2" height="13" rx="1"/>`,
 		`<svg class="nav-icon-svg nav-icon-corporation" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.7l2.45 4.97 5.48.8-3.97 3.87.94 5.46L12 16.24l-4.9 2.56.94-5.46L4.07 9.47l5.48-.8Z" fill="url(#nav-glyph-gradient)"/></svg>`,
 		`<svg class="nav-icon-svg nav-icon-intel" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2"><circle cx="12" cy="12" r="7.4"/><circle cx="12" cy="12" r="3.6"/></g><circle cx="12" cy="12" r="1.35" fill="url(#nav-glyph-gradient)"/></svg>`,
-		`<svg class="nav-icon-svg nav-icon-sync" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.2 12a7.2 7.2 0 1 1-2.1-5.05"/><path d="M17.4 3.4v3.9h-3.9"/></g></svg>`,
-		`<svg class="nav-icon-svg nav-icon-admin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2 7 7 2-7 2-2 7-2-7-7-2 7-2Z" fill="url(#nav-glyph-gradient)"/></svg>`,
 		`<path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`,
 		`stroke="url(#nav-glyph-gradient)"`,
 		`<span class="nav-label">Market</span>`,

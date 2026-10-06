@@ -35,11 +35,14 @@ const (
 
 // TestPhase2Scopes proves the scope wiring: the planetary scope is
 // requested, the fitting write scope is requested (Save to EVE),
-// and the write scopes the app deliberately excluded stay excluded
-// (mail is read-only by construction).
+// the mail write scopes are requested (Issues 26/27: mark read,
+// compose), and the remaining write scopes the app deliberately
+// excluded stay excluded.
 func TestPhase2Scopes(t *testing.T) {
 	foundPlanets := false
 	foundFittingsWrite := false
+	foundOrganizeMail := false
+	foundSendMail := false
 	for _, s := range eveScopes {
 		if s == "esi-planets.manage_planets.v1" {
 			foundPlanets = true
@@ -47,9 +50,15 @@ func TestPhase2Scopes(t *testing.T) {
 		if s == "esi-fittings.write_fittings.v1" {
 			foundFittingsWrite = true
 		}
-		for _, banned := range []string{"organize_mail", "send_mail", "respond_calendar_events", "write_contacts", "write_fleet"} {
+		if s == "esi-mail.organize_mail.v1" {
+			foundOrganizeMail = true
+		}
+		if s == "esi-mail.send_mail.v1" {
+			foundSendMail = true
+		}
+		for _, banned := range []string{"respond_calendar_events", "write_contacts", "write_fleet", "open_window", "write_waypoint"} {
 			if strings.Contains(s, banned) {
-				t.Errorf("eveScopes must stay read-only for mail/calendar/contacts, found %q", s)
+				t.Errorf("eveScopes must stay read-only for calendar/contacts/fleet, found %q", s)
 			}
 		}
 	}
@@ -58,6 +67,12 @@ func TestPhase2Scopes(t *testing.T) {
 	}
 	if !foundFittingsWrite {
 		t.Error("eveScopes is missing esi-fittings.write_fittings.v1 (Save to EVE needs it)")
+	}
+	if !foundOrganizeMail {
+		t.Error("eveScopes is missing esi-mail.organize_mail.v1 (mark-as-read needs it)")
+	}
+	if !foundSendMail {
+		t.Error("eveScopes is missing esi-mail.send_mail.v1 (compose needs it)")
 	}
 }
 

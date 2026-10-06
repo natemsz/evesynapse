@@ -375,3 +375,22 @@ LIMIT 20;
 -- Market history + alerts (schema 013): daily aggregates, wants,
 -- fetch state, the watchlist, and worker-computed order health.
 -- ---------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------
+-- Custom jump-clone names (schema 006): pilot-given labels per clone.
+-- ---------------------------------------------------------------------
+
+-- name: UpsertCloneName :exec
+INSERT INTO clone_names (user_id, character_id, clone_id, custom_name, updated_at)
+VALUES ($1, $2, $3, $4, now())
+ON CONFLICT (user_id, character_id, clone_id)
+DO UPDATE SET custom_name = EXCLUDED.custom_name, updated_at = now();
+
+-- name: ListCloneNames :many
+SELECT character_id, clone_id, custom_name
+FROM clone_names
+WHERE user_id = $1 AND character_id = $2;
+
+-- name: DeleteCloneName :exec
+DELETE FROM clone_names
+WHERE user_id = $1 AND character_id = $2 AND clone_id = $3;

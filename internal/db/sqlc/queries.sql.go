@@ -153,6 +153,22 @@ func (q *Queries) DeleteCharacter(ctx context.Context, arg DeleteCharacterParams
 	return err
 }
 
+const deleteCloneName = `-- name: DeleteCloneName :exec
+DELETE FROM clone_names
+WHERE user_id = $1 AND character_id = $2 AND clone_id = $3
+`
+
+type DeleteCloneNameParams struct {
+	UserID      int64 `json:"user_id"`
+	CharacterID int64 `json:"character_id"`
+	CloneID     int64 `json:"clone_id"`
+}
+
+func (q *Queries) DeleteCloneName(ctx context.Context, arg DeleteCloneNameParams) error {
+	_, err := q.db.ExecContext(ctx, deleteCloneName, arg.UserID, arg.CharacterID, arg.CloneID)
+	return err
+}
+
 const deleteLocalFitting = `-- name: DeleteLocalFitting :exec
 DELETE FROM local_fittings WHERE id = $1 AND user_id = $2
 `
@@ -691,6 +707,46 @@ func (q *Queries) ListCharactersByUser(ctx context.Context, userID int64) ([]Cha
 			&i.LinkState,
 			&i.LinkStateAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCloneNames = `-- name: ListCloneNames :many
+SELECT character_id, clone_id, custom_name
+FROM clone_names
+WHERE user_id = $1 AND character_id = $2
+`
+
+type ListCloneNamesParams struct {
+	UserID      int64 `json:"user_id"`
+	CharacterID int64 `json:"character_id"`
+}
+
+type ListCloneNamesRow struct {
+	CharacterID int64  `json:"character_id"`
+	CloneID     int64  `json:"clone_id"`
+	CustomName  string `json:"custom_name"`
+}
+
+func (q *Queries) ListCloneNames(ctx context.Context, arg ListCloneNamesParams) ([]ListCloneNamesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCloneNames, arg.UserID, arg.CharacterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCloneNamesRow
+	for rows.Next() {
+		var i ListCloneNamesRow
+		if err := rows.Scan(&i.CharacterID, &i.CloneID, &i.CustomName); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1757,6 +1813,39 @@ type UpsertCharacterCorporationParams struct {
 
 func (q *Queries) UpsertCharacterCorporation(ctx context.Context, arg UpsertCharacterCorporationParams) error {
 	_, err := q.db.ExecContext(ctx, upsertCharacterCorporation, arg.CharacterID, arg.CorporationID, arg.UpdatedAt)
+	return err
+}
+
+const upsertCloneName = `-- name: UpsertCloneName :exec
+
+
+INSERT INTO clone_names (user_id, character_id, clone_id, custom_name, updated_at)
+VALUES ($1, $2, $3, $4, now())
+ON CONFLICT (user_id, character_id, clone_id)
+DO UPDATE SET custom_name = EXCLUDED.custom_name, updated_at = now()
+`
+
+type UpsertCloneNameParams struct {
+	UserID      int64  `json:"user_id"`
+	CharacterID int64  `json:"character_id"`
+	CloneID     int64  `json:"clone_id"`
+	CustomName  string `json:"custom_name"`
+}
+
+// ---------------------------------------------------------------------
+// Market history + alerts (schema 013): daily aggregates, wants,
+// fetch state, the watchlist, and worker-computed order health.
+// ---------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// Custom jump-clone names (schema 006): pilot-given labels per clone.
+// ---------------------------------------------------------------------
+func (q *Queries) UpsertCloneName(ctx context.Context, arg UpsertCloneNameParams) error {
+	_, err := q.db.ExecContext(ctx, upsertCloneName,
+		arg.UserID,
+		arg.CharacterID,
+		arg.CloneID,
+		arg.CustomName,
+	)
 	return err
 }
 

@@ -93,16 +93,30 @@
 {{else if .Industry.Mining.Warming}}
 <p><small>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</small></p>
 {{else if .Industry.MiningRows}}
+<p><input type="search" id="mining-search" placeholder="Search mining ledger..." aria-label="Search mining ledger"></p>
 <div class="tw">
-<table>
+<table id="mining-table">
   <thead><tr><th>Date</th><th>Ore</th><th>Quantity</th><th>System</th></tr></thead>
   <tbody>
   {{range .Industry.MiningRows}}
-    <tr><td>{{.Date}}</td><td>{{itemLink .TypeID .Ore}}</td><td>{{.Qty}}</td><td>{{placeLink .System}}</td></tr>
+    <tr class="mining-row" data-search="{{.Ore}} {{.System}}"><td>{{.Date}}</td><td>{{itemLink .TypeID .Ore}}</td><td>{{.Qty}}</td><td>{{placeLink .System}}</td></tr>
   {{end}}
   </tbody>
 </table>
 </div>
+<script>
+(function() {
+  var input = document.getElementById('mining-search');
+  if (!input) return;
+  input.addEventListener('input', function() {
+    var q = input.value.toLowerCase();
+    document.querySelectorAll('#mining-table .mining-row').forEach(function(r) {
+      var match = !q || r.getAttribute('data-search').toLowerCase().indexOf(q) >= 0;
+      r.style.display = match ? '' : 'none';
+    });
+  });
+})();
+</script>
 {{if .Industry.MiningCut}}<p><small>+ {{.Industry.MiningCut}} older entries in this snapshot.</small></p>{{end}}
 {{else}}
 <p><small>No mining entries in the latest snapshot.</small></p>

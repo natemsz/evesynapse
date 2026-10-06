@@ -9,7 +9,7 @@
 <p>The planner's build data hasn't landed yet — it arrives with the static-data import. Check <a href="/sync/">Sync</a> for progress and try again shortly.</p>
 {{else}}
 
-<div class="panel">
+<div class="foldable" data-fold="never">
 <h3>Find something to build</h3>
 <form method="get" action="/planner/">
   <p>
@@ -34,7 +34,7 @@
 {{if .Planner.Notice}}<p>{{.Planner.Notice}}</p>{{end}}
 
 {{with .Planner.Plan}}
-<div class="panel">
+<div class="foldable" data-fold="never">
 <h3>{{.ProductName}}</h3>
 <p><small>From <strong>{{.BlueprintName}}</strong> — builds {{.ProducedLine}}.{{if .MaxRunNote}} {{.MaxRunNote}}.{{end}} · <a href="#" id="csv-export">Export CSV</a></small></p>
 <script>document.getElementById('csv-export').href = window.location.pathname + window.location.search + (window.location.search ? '&' : '?') + 'format=csv';</script>
@@ -88,7 +88,7 @@
 </div>
 </div>
 
-<div class="panel">
+<div class="foldable" data-fold="never">
 <h3>Totals</h3>
 <table>
   <tbody>
@@ -103,7 +103,7 @@
 </div>
 
 {{with .Verdict}}
-<div class="panel">
+<div class="foldable" data-fold="never">
 <h3>{{.Heading}}</h3>
 <table>
   <tbody>
@@ -118,7 +118,7 @@
 {{end}}
 
 {{if .Shopping}}
-<div class="panel">
+<div class="foldable" data-fold="never">
 <h3>Shopping list</h3>
 <ul>
 {{range .Shopping}}<li><a href="{{.URL}}">{{.Name}}</a> — {{.Need}}{{if .UnitPrice}} × {{.UnitPrice}}{{if .LineCost}} = {{.LineCost}}{{end}}{{end}}</li>{{end}}

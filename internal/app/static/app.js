@@ -39,6 +39,9 @@
 
   var foldables = document.querySelectorAll(".foldable");
   for (var i = 0; i < foldables.length; i++) {
+    // data-fold="never": keep the foldable section styling but
+    // don't offer a fold button (Issue 17).
+    if (foldables[i].getAttribute("data-fold") === "never") continue;
     addFold(foldables[i], foldables[i].querySelector(":scope > h2, :scope > h3"));
   }
 

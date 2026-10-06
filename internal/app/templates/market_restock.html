@@ -8,7 +8,7 @@
 {{$s := .Restock}}
 <p><small>Set target stock levels for the items you trade. The planner compares each target against your open sell orders, shows the shortfall, and estimates the restock cost at current market sell prices.</small></p>
 
-<div class="panel">
+<div class="foldable" data-fold="never">
 <h3>Add a target</h3>
 <form method="post" action="/market/restock/save/">
   <p>

@@ -2402,7 +2402,10 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 @media (min-width: 1100px) {
   .fit-wb {
     display: grid;
-    grid-template-columns: minmax(15rem, 1fr) minmax(20rem, 1.35fr) minmax(17rem, 1fr);
+    /* Issue 18: the module lists column is capped so it can't hog
+       horizontal space and push the stats panel far right; the ship
+       and stats share whatever remains. */
+    grid-template-columns: minmax(15rem, 22rem) minmax(20rem, 1.35fr) minmax(17rem, 1fr);
     gap: 1.25rem;
     align-items: start;
   }

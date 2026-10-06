@@ -1503,6 +1503,38 @@ func (c *Client) PostJSONAuthed(ctx context.Context, accessToken, path string, p
 	}
 	return nil
 }
+// PutJSONAuthed is the PUT counterpart of PostJSONAuthed (Issue 26:
+// PUT /characters/{id}/mail/{mail_id}/ to mark mail read). Non-200
+// statuses are errors; a 403 surfaces as StatusError so callers can
+// tell a missing scope from a bad payload. Token values are never logged.
+func (c *Client) PutJSONAuthed(ctx context.Context, accessToken, path string, payload any) error {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("ESI PUT %s: encode: %w", path, err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, baseURL+path, bytes.NewReader(raw))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("ESI PUT %s: %w", path, err)
+	}
+	defer resp.Body.Close()
+	c.trackErrorBudget(resp.Header)
+	if resp.StatusCode == 420 || resp.StatusCode == http.StatusTooManyRequests {
+		return fmt.Errorf("ESI PUT %s: status %d: %w", path, resp.StatusCode, ErrErrorLimit)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return &StatusError{Method: http.MethodPut, Path: path, Code: resp.StatusCode}
+	}
+	return nil
+}
+
 
 // postJSON is PostJSON with an optional Bearer token (sent only
 // when non-empty; token values are never logged).

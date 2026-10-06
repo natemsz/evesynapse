@@ -1522,7 +1522,6 @@
     { name: "Home", url: "/" },
     { name: "Overview", url: "/character/" },
     { name: "Characters", url: "/characters/" },
-    { name: "Skills", url: "/skills/" },
     { name: "Skill plans", url: "/skills/plans" },
     { name: "Ship Workbench", url: "/fittings/" },
     { name: "Ship Loadouts", url: "/fittings/saved/" },
@@ -1778,20 +1777,18 @@
 // prefers-color-scheme media query applies. The button only
 // renders while logged in (see base.html), so everything here
 // is guarded: no button, no work.
-// v0.3.33: cycles through dark → light → amarr → caldari →
-// gallente → minmatar → jove → dark.
+// v0.3.34: simple dark/light toggle (faction themes deferred).
 (function () {
   "use strict";
   var btn = document.getElementById("theme-toggle");
   if (!btn) return;
   var root = document.documentElement;
   var storageKey = "evesynapse-theme";
-  var themes = ["dark", "light", "amarr", "caldari", "gallente", "minmatar", "jove"];
 
   function readSaved() {
     try {
       var v = window.localStorage.getItem(storageKey);
-      return themes.indexOf(v) >= 0 ? v : "";
+      return (v === "dark" || v === "light") ? v : "";
     } catch (e) { return ""; }
   }
   function save(theme) {
@@ -1805,7 +1802,7 @@
   // Icon visibility is CSS-driven (html[data-theme] selectors); no JS needed.
   function effective() {
     var attr = root.getAttribute("data-theme");
-    if (themes.indexOf(attr) >= 0) return attr;
+    if (attr === "dark" || attr === "light") return attr;
     return "dark";
   }
 
@@ -1813,9 +1810,7 @@
   if (saved) root.setAttribute("data-theme", saved);
 
   btn.addEventListener("click", function () {
-    var cur = effective();
-    var idx = themes.indexOf(cur);
-    var next = themes[(idx + 1) % themes.length];
+    var next = effective() === "dark" ? "light" : "dark";
     root.setAttribute("data-theme", next);
     save(next);
   });

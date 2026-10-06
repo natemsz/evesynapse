@@ -1809,8 +1809,8 @@
   // dark is effective.
   function paint() {
     var theme = effective();
-    if (sun) sun.hidden = theme !== "light";
-    if (moon) moon.hidden = theme !== "dark";
+    if (sun) sun.hidden = theme !== "dark";
+    if (moon) moon.hidden = theme !== "light";
   }
 
   var saved = readSaved();

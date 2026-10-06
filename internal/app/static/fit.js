@@ -1337,11 +1337,39 @@
       showTip(slot);
     }
   });
+  var tipCloseTimer = null;
+  function scheduleTipClose() {
+    if (tipCloseTimer) clearTimeout(tipCloseTimer);
+    tipCloseTimer = setTimeout(function() {
+      tipCloseTimer = null;
+      // Only close if mouse is not over the tooltip
+      if (tipEl && !tipEl.matches(':hover')) {
+        tipHoverSlot = null;
+        closeTip();
+      }
+    }, 150);
+  }
   editor.addEventListener("mouseout", function (ev) {
     var slot = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot[data-tip-name]") : null;
     if (slot && slot === tipHoverSlot) {
-      tipHoverSlot = null;
-      closeTip();
+      scheduleTipClose();
+    }
+  });
+  // Keep tooltip open when hovering over it
+  document.addEventListener("mouseover", function(ev) {
+    if (tipEl && ev.target && ev.target.closest && ev.target.closest(".fit-tip")) {
+      if (tipCloseTimer) {
+        clearTimeout(tipCloseTimer);
+        tipCloseTimer = null;
+      }
+    }
+  });
+  document.addEventListener("mouseout", function(ev) {
+    if (tipEl && ev.target && ev.target.closest && ev.target.closest(".fit-tip")) {
+      var toEl = ev.relatedTarget;
+      if (!toEl || !toEl.closest || !toEl.closest(".fit-tip")) {
+        scheduleTipClose();
+      }
     }
   });
   // Taps on slots are handled by the pointer controller (tap shows

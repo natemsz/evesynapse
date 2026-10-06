@@ -9,7 +9,7 @@
 <p>The planner's build data hasn't landed yet — it arrives with the static-data import. Check <a href="/sync/">Sync</a> for progress and try again shortly.</p>
 {{else}}
 
-<section class="foldable">
+<div class="panel">
 <h3>Find something to build</h3>
 <form method="get" action="/planner/">
   <p>
@@ -29,12 +29,12 @@
 <p><small>No manufacturable products match that name.</small></p>
 {{end}}
 {{end}}
-</section>
+</div>
 
 {{if .Planner.Notice}}<p>{{.Planner.Notice}}</p>{{end}}
 
 {{with .Planner.Plan}}
-<section class="foldable">
+<div class="panel">
 <h3>{{.ProductName}}</h3>
 <p><small>From <strong>{{.BlueprintName}}</strong> — builds {{.ProducedLine}}.{{if .MaxRunNote}} {{.MaxRunNote}}.{{end}} · <a href="#" id="csv-export">Export CSV</a></small></p>
 <script>document.getElementById('csv-export').href = window.location.pathname + window.location.search + (window.location.search ? '&' : '?') + 'format=csv';</script>
@@ -86,9 +86,9 @@
   </tbody>
 </table>
 </div>
-</section>
+</div>
 
-<section class="foldable">
+<div class="panel">
 <h3>Totals</h3>
 <table>
   <tbody>
@@ -100,10 +100,10 @@
   </tbody>
 </table>
 <p><small>{{.PricesNote}}</small></p>
-</section>
+</div>
 
 {{with .Verdict}}
-<section class="foldable">
+<div class="panel">
 <h3>{{.Heading}}</h3>
 <table>
   <tbody>
@@ -114,17 +114,17 @@
   </tbody>
 </table>
 {{if .Note}}<p><small>{{.Note}}</small></p>{{end}}
-</section>
+</div>
 {{end}}
 
 {{if .Shopping}}
-<section class="foldable">
+<div class="panel">
 <h3>Shopping list</h3>
 <ul>
 {{range .Shopping}}<li><a href="{{.URL}}">{{.Name}}</a> — {{.Need}}{{if .UnitPrice}} × {{.UnitPrice}}{{if .LineCost}} = {{.LineCost}}{{end}}{{end}}</li>{{end}}
 </ul>
 {{if .ShoppingTotal}}<p><small>Total: {{.ShoppingTotal}}</small></p>{{end}}
-</section>
+</div>
 {{end}}
 
 {{end}}

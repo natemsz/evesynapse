@@ -138,7 +138,7 @@
 
 {{if .Market.Browse}}
 {{$b := .Market.Browse}}
-<section class="foldable market-browse">
+<div class="panel market-browse">
 {{if $b.Current}}
 <p class="market-crumbs"><small><a href="/market/">Market</a>{{range $b.Breadcrumbs}} › <a href="/market/?group={{.ID}}&region={{$.Market.Region}}">{{.Name}}</a>{{end}} › {{$b.Current.Name}}</small></p>
 <h3>{{$b.Current.Name}}</h3>
@@ -171,12 +171,12 @@
 {{if $b.HasNext}} · <a href="/market/?group={{$b.GroupID}}&region={{$.Market.Region}}&page={{$b.NextPage}}">Next →</a>{{end}}</p>
 {{end}}
 {{end}}
-</section>
+</div>
 {{end}}
 
 {{if .Market.Watchlist}}
 {{$wl := .Market.Watchlist}}
-<section class="foldable">
+<div class="panel">
 <h3>Watchlist</h3>
 <form method="get" action="/market/">
   <span class="searchwrap">
@@ -236,7 +236,7 @@
 {{else}}
 <p><small>Nothing watched yet — watch an item and you'll hear about it here and on Home when its price moves.</small></p>
 {{end}}
-</section>
+</div>
 {{end}}
 
 {{if .Market.YourOrders}}

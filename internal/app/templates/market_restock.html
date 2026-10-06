@@ -8,7 +8,7 @@
 {{$s := .Restock}}
 <p><small>Set target stock levels for the items you trade. The planner compares each target against your open sell orders, shows the shortfall, and estimates the restock cost at current market sell prices.</small></p>
 
-<section class="foldable">
+<div class="panel">
 <h3>Add a target</h3>
 <form method="post" action="/market/restock/save/">
   <p>
@@ -19,7 +19,7 @@
   </p>
   <p><small>Tip: find a type ID on the <a href="/items/">Item Browser</a> page — it's in the URL (/items/type/&lt;id&gt;/).</small></p>
 </form>
-</section>
+</div>
 
 {{if $s.HasData}}
 <p><small>Showing {{len $s.Rows}} targets, largest shortfall first. Total estimated restock cost: <strong>{{$s.TotalCost}}</strong>.</small></p>

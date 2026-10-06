@@ -1783,8 +1783,6 @@
   if (!btn) return;
   var root = document.documentElement;
   var storageKey = "evesynapse-theme";
-  var sun = btn.querySelector(".theme-icon-sun");
-  var moon = btn.querySelector(".theme-icon-moon");
 
   function readSaved() {
     try {
@@ -1800,28 +1798,20 @@
   // The theme in effect right now: a manually set attribute
   // wins; otherwise dark is the default (the app's classic palette).
   // The OS preference is intentionally ignored — dark is our best face.
+  // Icon visibility is CSS-driven (html[data-theme] selectors); no JS needed.
   function effective() {
     var attr = root.getAttribute("data-theme");
     if (attr === "light" || attr === "dark") return attr;
     return "dark";
   }
-  // Show the sun icon while light is effective, the moon while
-  // dark is effective.
-  function paint() {
-    var theme = effective();
-    if (sun) sun.hidden = theme !== "dark";
-    if (moon) moon.hidden = theme !== "light";
-  }
 
   var saved = readSaved();
   if (saved) root.setAttribute("data-theme", saved);
-  paint();
 
   btn.addEventListener("click", function () {
     var next = effective() === "light" ? "dark" : "light";
     root.setAttribute("data-theme", next);
     save(next);
-    paint();
   });
 })();
 

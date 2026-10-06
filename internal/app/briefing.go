@@ -205,14 +205,14 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 			switch {
 			case !training:
 				add(briefingKey(b.ch.CharacterID, "not-training"), briefingNotTraining, finishedAt,
-					template.HTML(fmt.Sprintf("%s isn't training — the skill queue is empty. <a href=\"/skills/?character=%d\">Skills</a>", prefix, b.ch.CharacterID)))
+					template.HTML(fmt.Sprintf("%s isn't training — the skill queue is empty. <a href=\"/character/?character=%d\">Skills</a>", prefix, b.ch.CharacterID)))
 			default:
 				if head := queueHead(b.queue); head != nil {
 					if finish, ok := parseRFC3339(lastQueueFinish(b.queue)); ok && finish.After(now) && finish.Before(now.Add(briefingAhead)) {
 						skillID := head.SkillID
 						skillName := app.typeNameOrID(ctx, skillID)
 						add(briefingKey(b.ch.CharacterID, "queue-ending"), briefingSkillEnding, finish,
-							template.HTML(fmt.Sprintf("%s finishes %s %s in %s — queue runs dry after that. <a href=\"/skills/?character=%d\">Skills</a>",
+							template.HTML(fmt.Sprintf("%s finishes %s %s in %s — queue runs dry after that. <a href=\"/character/?character=%d\">Skills</a>",
 								prefix, string(itemLink(skillID, skillName)), esi.RomanLevel(head.FinishedLevel),
 								humanDuration(time.Until(finish)), b.ch.CharacterID)))
 					}

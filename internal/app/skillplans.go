@@ -574,8 +574,8 @@ func (app *Application) handleSkillPlanItemAdd(w http.ResponseWriter, r *http.Re
 	}); err != nil {
 		log.Printf("skill plans: add skill %d to plan %d: %v", skillID, planID, err)
 	}
-	if r.FormValue("return") == "skills" {
-		http.Redirect(w, r, fmt.Sprintf("/skills/?character=%d", characterID), http.StatusSeeOther)
+	if r.FormValue("return") == "character" {
+		http.Redirect(w, r, fmt.Sprintf("/character/?character=%d#browse", characterID), http.StatusSeeOther)
 		return
 	}
 	skillPlansRedirect(w, r, characterID, planID)

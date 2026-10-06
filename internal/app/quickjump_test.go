@@ -1,1 +1,242 @@
-cGFja2FnZSBhcHAKCi8vIFF1aWNrIGp1bXAgKHYwLjMuMTUpOiB0aGUgQ3RybCtLIHBhbGV0dGUgYW5kIHRoZSBzZWFyY2ggcG9vbAovLyB3aWRlbmluZyBiZWhpbmQgaXQuIFRoZSBwb29sIG5vdyBhbnN3ZXJzIGNvcnBvcmF0aW9ucyBhbmQKLy8gYWxsaWFuY2VzIGFsb25nc2lkZSBjaGFyYWN0ZXJzLCBpdGVtcyBhbmQgcGlsb3RzOyBldmVyeSBpdGVtCi8vIGhpdCBub3RlcyB0aGUgbWFya2V0LWhpc3RvcnkgcHJlZmV0Y2ggd2FudHM7IGFuZCB0aGUKLy8gcGFsZXR0ZSdzIHN0YXRpYyBwYWdlIGdyb3VwIG11c3QgbWlycm9yIHRoZSBzaWRlYmFyIGV4YWN0bHksCi8vIHNvIGEgZGVzdGluYXRpb24gam9pbnMgYm90aCBvciBuZWl0aGVyLgoKaW1wb3J0ICgKCSJjb250ZXh0IgoJImVuY29kaW5nL2pzb24iCgkibmV0L2h0dHAiCgkicmVnZXhwIgoJInNvcnQiCgkic3RyaW5ncyIKCSJ0ZXN0aW5nIgoKCWRiICJldmVzeW5hcHNlL2ludGVybmFsL2RiL3NxbGMiCgkiZXZlc3luYXBzZS9pbnRlcm5hbC9lc2kiCikKCmZ1bmMgVGVzdFRvcGJhclNlYXJjaEluY2x1ZGVzT3JnYW5pemF0aW9ucyh0ICp0ZXN0aW5nLlQpIHsKCXRyYW5zcG9ydCA6PSAmY291bnRpbmdUcmFuc3BvcnR7fQoJYXBwLCBjb25uLCBxIDo9IGJ1aWxkQ29ycFRlc3RBcHAodCwgdHJhbnNwb3J0KQoJY3R4IDo9IGNvbnRleHQuQmFja2dyb3VuZCgpCgoJdXNlciwgZXJyIDo9IHEuQ3JlYXRlVXNlcihjdHgpCglpZiBlcnIgIT0gbmlsIHsKCQl0LkZhdGFsZigiY3JlYXRlIHVzZXI6ICV2IiwgZXJyKQoJfQoJc2VlZENoYXJhY3Rlcih0LCBxLCB1c2VyLklELCBmaXh0dXJlQ2hhckEsICJGaXh0dXJlIENlbyIpCgljb29raWUgOj0gc2Vzc2lvbkNvb2tpZSh0LCBhcHAsIHVzZXIuSUQsIGZpeHR1cmVDaGFyQSwgIkZpeHR1cmUgQ2VvIikKCXNlZWROZXh0MVNERSh0LCBjb25uKQoKCWNvcnBQYXlsb2FkLCBlcnIgOj0ganNvbi5NYXJzaGFsKGNvcnBvcmF0aW9uUmVjb3JkUGF5bG9hZHsKCQlDb3JwOiBlc2kuQ29ycG9yYXRpb257TmFtZTogIkZpeHR1cmUgQ29ycCIsIFRpY2tlcjogIkZYQyJ9LAoJfSkKCWlmIGVyciAhPSBuaWwgewoJCXQuRmF0YWwoZXJyKQoJfQoJaWYgZXJyIDo9IHEuU2V0Q29ycG9yYXRpb25SZWNvcmQoY3R4LCBkYi5TZXRDb3Jwb3JhdGlvblJlY29yZFBhcmFtc3sKCQlDb3Jwb3JhdGlvbklEOiBmaXh0dXJlQ29ycEEsIFBheWxvYWQ6IHN0cmluZyhjb3JwUGF5bG9hZCksCgkJU3RhdGU6IG9yZ1N0YXRlUmVhZHksIEZldGNoZWRBdDogIjIwMjYtMTAtMDFUMDA6MDA6MDBaIiwKCX0pOyBlcnIgIT0gbmlsIHsKCQl0LkZhdGFsZigic2VlZCBjb3Jwb3JhdGlvbiByZWNvcmQ6ICV2IiwgZXJyKQoJfQoJYWxsaWFuY2VQYXlsb2FkLCBlcnIgOj0ganNvbi5NYXJzaGFsKGFsbGlhbmNlUmVjb3JkUGF5bG9hZHsKCQlBbGxpYW5jZTogZXNpLkFsbGlhbmNle05hbWU6ICJGaXh0dXJlIEFsbGlhbmNlIiwgVGlja2VyOiAiRlhBIn0sCgl9KQoJaWYgZXJyICE9IG5pbCB7CgkJdC5GYXRhbChlcnIpCgl9CglpZiBlcnIgOj0gcS5TZXRBbGxpYW5jZVJlY29yZChjdHgsIGRiLlNldEFsbGlhbmNlUmVjb3JkUGFyYW1zewoJCUFsbGlhbmNlSUQ6IDk5MDAwMDAxLCBQYXlsb2FkOiBzdHJpbmcoYWxsaWFuY2VQYXlsb2FkKSwKCQlTdGF0ZTogb3JnU3RhdGVSZWFkeSwgRmV0Y2hlZEF0OiAiMjAyNi0xMC0wMVQwMDowMDowMFoiLAoJfSk7IGVyciAhPSBuaWwgewoJCXQuRmF0YWxmKCJzZWVkIGFsbGlhbmNlIHJlY29yZDogJXYiLCBlcnIpCgl9CgoJY29kZSwgYm9keSA6PSBnZXRQYWdlKHQsIGFwcCwgY29va2llLCAiL3NlYXJjaC5qc29uP3E9Zml4dHVyZSIpCglpZiBjb2RlICE9IGh0dHAuU3RhdHVzT0sgewoJCXQuRmF0YWxmKCJHRVQgL3NlYXJjaC5qc29uOiBzdGF0dXMgJWQiLCBjb2RlKQoJfQoJdmFyIGhpdHMgW11zZWFyY2hIaXQKCWlmIGVyciA6PSBqc29uLlVubWFyc2hhbChbXWJ5dGUoYm9keSksICZoaXRzKTsgZXJyICE9IG5pbCB7CgkJdC5GYXRhbGYoImRlY29kZSBoaXRzOiAldiAoJXEpIiwgZXJyLCBib2R5KQoJfQoJYnlLaW5kIDo9IG1hcFtzdHJpbmddW11zZWFyY2hIaXR7fQoJZm9yIF8sIGggOj0gcmFuZ2UgaGl0cyB7CgkJYnlLaW5kW2guS2luZF0gPSBhcHBlbmQoYnlLaW5kW2guS2luZF0sIGgpCgl9CglpZiBsZW4oYnlLaW5kWyJjb3Jwb3JhdGlvbiJdKSAhPSAxIHx8IGJ5S2luZFsiY29ycG9yYXRpb24iXVswXS5JRCAhPSBmaXh0dXJlQ29ycEEgfHwKCQlieUtpbmRbImNvcnBvcmF0aW9uIl1bMF0uTmFtZSAhPSAiRml4dHVyZSBDb3JwIiB7CgkJdC5FcnJvcmYoImNvcnBvcmF0aW9uIGhpdHMgPSAlK3YsIHdhbnQgdGhlIHdhcm1lZCBGaXh0dXJlIENvcnAiLCBieUtpbmRbImNvcnBvcmF0aW9uIl0pCgl9CglpZiBsZW4oYnlLaW5kWyJhbGxpYW5jZSJdKSAhPSAxIHx8IGJ5S2luZFsiYWxsaWFuY2UiXVswXS5JRCAhPSA5OTAwMDAwMSB8fAoJCWJ5S2luZFsiYWxsaWFuY2UiXVswXS5OYW1lICE9ICJGaXh0dXJlIEFsbGlhbmNlIiB7CgkJdC5FcnJvcmYoImFsbGlhbmNlIGhpdHMgPSAlK3YsIHdhbnQgdGhlIHdhcm1lZCBGaXh0dXJlIEFsbGlhbmNlIiwgYnlLaW5kWyJhbGxpYW5jZSJdKQoJfQoKCS8vIEFuIGl0ZW0gaGl0IG5vdGVzIHRoZSBtYXJrZXQtaGlzdG9yeSBwcmVmZXRjaCB3YW50cyB0aGUKCS8vIG1hcmtldCBwYWdlJ3Mgc2VhcmNoIG5vdGVzLCBzbyB0aGUganVtcCBsYW5kcyB3YXJtLgoJaWYgXywgZXJyIDo9IGNvbm4uRXhlY0NvbnRleHQoY3R4LCBgREVMRVRFIEZST00gbWFya2V0X2hpc3Rvcnlfd2FudHNgKTsgZXJyICE9IG5pbCB7CgkJdC5GYXRhbGYoImNsZWFyIGhpc3Rvcnkgd2FudHM6ICV2IiwgZXJyKQoJfQoJY29kZSwgYm9keSA9IGdldFBhZ2UodCwgYXBwLCBjb29raWUsICIvc2VhcmNoLmpzb24/cT10cml0YW5pdW0iKQoJaWYgY29kZSAhPSBodHRwLlN0YXR1c09LIHsKCQl0LkZhdGFsZigiR0VUIC9zZWFyY2guanNvbiAoaXRlbXMpOiBzdGF0dXMgJWQiLCBjb2RlKQoJfQoJaGl0cyA9IG5pbAoJaWYgZXJyIDo9IGpzb24uVW5tYXJzaGFsKFtdYnl0ZShib2R5KSwgJmhpdHMpOyBlcnIgIT0gbmlsIHsKCQl0LkZhdGFsZigiZGVjb2RlIGl0ZW0gaGl0czogJXYgKCVxKSIsIGVyciwgYm9keSkKCX0KCWl0ZW1Gb3VuZCA6PSBmYWxzZQoJZm9yIF8sIGggOj0gcmFuZ2UgaGl0cyB7CgkJaWYgaC5LaW5kID09ICJpdGVtIiAmJiBoLklEID09IDM0IHsKCQkJaXRlbUZvdW5kID0gdHJ1ZQoJCX0KCX0KCWlmICFpdGVtRm91bmQgewoJCXQuRmF0YWxmKCJpdGVtIGhpdHMgPSAlK3YsIHdhbnQgVHJpdGFuaXVtIGFtb25nIHRoZW0iLCBoaXRzKQoJfQoJdmFyIHdhbnRDb3VudCBpbnQKCWlmIGVyciA6PSBjb25uLlF1ZXJ5Um93Q29udGV4dChjdHgsCgkJYFNFTEVDVCBDT1VOVCgqKSBGUk9NIG1hcmtldF9oaXN0b3J5X3dhbnRzIFdIRVJFIHJlZ2lvbl9pZCA9ICQxIEFORCB0eXBlX2lkID0gMzRgLAoJCWRlZmF1bHRNYXJrZXRSZWdpb24pLlNjYW4oJndhbnRDb3VudCk7IGVyciAhPSBuaWwgewoJCXQuRmF0YWxmKCJjb3VudCBoaXN0b3J5IHdhbnRzOiAldiIsIGVycikKCX0KCWlmIHdhbnRDb3VudCAhPSAxIHsKCQl0LkVycm9yZigiaGlzdG9yeSB3YW50cyBmb3IgVHJpdGFuaXVtID0gJWQsIHdhbnQgMSBub3RlZCIsIHdhbnRDb3VudCkKCX0KCglpZiBnb3QgOj0gdHJhbnNwb3J0LmNhbGxzLkxvYWQoKTsgZ290ICE9IDAgewoJCXQuRmF0YWxmKCJoYW5kbGVycyBtYWRlICVkIG91dGJvdW5kIGNhbGxzLCB3YW50IDAiLCBnb3QpCgl9Cn0KCmZ1bmMgVGVzdFF1aWNrSnVtcFBhbGV0dGVNYXJrdXBBbmRTY3JpcHQodCAqdGVzdGluZy5UKSB7Cgl0cmFuc3BvcnQgOj0gJmNvdW50aW5nVHJhbnNwb3J0e30KCWFwcCwgXywgcSA6PSBidWlsZENvcnBUZXN0QXBwKHQsIHRyYW5zcG9ydCkKCWN0eCA6PSBjb250ZXh0LkJhY2tncm91bmQoKQoKCXVzZXIsIGVyciA6PSBxLkNyZWF0ZVVzZXIoY3R4KQoJaWYgZXJyICE9IG5pbCB7CgkJdC5GYXRhbGYoImNyZWF0ZSB1c2VyOiAldiIsIGVycikKCX0KCXNlZWRDaGFyYWN0ZXIodCwgcSwgdXNlci5JRCwgZml4dHVyZUNoYXJBLCAiRml4dHVyZSBDZW8iKQoJY29va2llIDo9IHNlc3Npb25Db29raWUodCwgYXBwLCB1c2VyLklELCBmaXh0dXJlQ2hhckEsICJGaXh0dXJlIENlbyIpCgoJY29kZSwgYm9keSA6PSBnZXRQYWdlKHQsIGFwcCwgY29va2llLCAiLyIpCglpZiBjb2RlICE9IGh0dHAuU3RhdHVzT0sgewoJCXQuRmF0YWxmKCJHRVQgLzogc3RhdHVzICVkIiwgY29kZSkKCX0KCW11c3RDb250YWluKHQsICIvIiwgYm9keSwKCQlgaWQ9InF1aWNranVtcC1vcGVuImAsCgkJYGFyaWEtY29udHJvbHM9InF1aWNranVtcCJgLAoJCWA8ZGl2IGNsYXNzPSJxdWlja2p1bXAiIGlkPSJxdWlja2p1bXAiIGhpZGRlbj5gLAoJCWBpZD0icXVpY2tqdW1wLXEiYCwKCQlgaWQ9InF1aWNranVtcC1yZXN1bHRzImAsCgkJYFBvd2VyZWQgYnkgRXZlU3luYXBzZSB2MC4zLjM1LjAwNCDwn4+TYCkKCgljb2RlLCBqcyA6PSBnZXRQYWdlKHQsIGFwcCwgY29va2llLCAiL3N0YXRpYy9hcHAuanMiKQoJaWYgY29kZSAhPSBodHRwLlN0YXR1c09LIHsKCQl0LkZhdGFsZigiR0VUIC9zdGF0aWMvYXBwLmpzOiBzdGF0dXMgJWQiLCBjb2RlKQoJfQoJbXVzdENvbnRhaW4odCwgIi9zdGF0aWMvYXBwLmpzIiwganMsCgkJInZhciBxdWlja0p1bXBQYWdlcyA9IFsiLAoJCSIvc2VhcmNoLmpzb24/cT0iLAoJCSJjdHJsS2V5IiwKCQkibWV0YUtleSIsCgkJIkFycm93RG93biIsCgkJIkFycm93VXAiLAoJCWAiRW50ZXIiYCwKCQlgIkVzY2FwZSJgLAoJCSIvbWFya2V0Lz90eXBlPSIsCgkJIi9jb3Jwb3JhdGlvbi8/Y29ycG9yYXRpb249IiwKCQkiL2FsbGlhbmNlLz9hbGxpYW5jZT0iLAoJCSIvcGlsb3QvP2NoYXJhY3Rlcj0iLAoJCSIvY2hhcmFjdGVyLz9jaGFyYWN0ZXI9IikKCgljb2RlLCBjc3MgOj0gZ2V0UGFnZSh0LCBhcHAsIGNvb2tpZSwgIi9zdGF0aWMvc3R5bGUuY3NzIikKCWlmIGNvZGUgIT0gaHR0cC5TdGF0dXNPSyB7CgkJdC5GYXRhbGYoIkdFVCAvc3RhdGljL3N0eWxlLmNzczogc3RhdHVzICVkIiwgY29kZSkKCX0KCW11c3RDb250YWluKHQsICIvc3RhdGljL3N0eWxlLmNzcyIsIGNzcywKCQkiLnF1aWNranVtcCB7IiwKCQkiLnF1aWNranVtcC1wYW5lbCB7IiwKCQkiLnF1aWNranVtcC1yZXN1bHRzIGxpLnNlbCIsCgkJInByZWZlcnMtcmVkdWNlZC1tb3Rpb24iKQoKCWlmIGdvdCA6PSB0cmFuc3BvcnQuY2FsbHMuTG9hZCgpOyBnb3QgIT0gMCB7CgkJdC5GYXRhbGYoImhhbmRsZXJzIG1hZGUgJWQgb3V0Ym91bmQgY2FsbHMsIHdhbnQgMCIsIGdvdCkKCX0KfQoKLy8gVGVzdFF1aWNrSnVtcFBhZ2VzTWF0Y2hOYXYgcGlucyB0aGUgcGFsZXR0ZSdzIHN0YXRpYyBwYWdlCi8vIGdyb3VwIGFnYWluc3QgdGhlIGRlc3RpbmF0aW9ucyB0aGUgc2lkZWJhciBhY3R1YWxseSBvZmZlcnM6Ci8vIGV2ZXJ5IHNpZGVuYXYgbGluayAoYWNjb3VudCBzd2l0Y2hlciBhY3Rpb25zIGFzaWRlKSBpcyBpbgovLyB0aGUgcGFsZXR0ZSwgYW5kIHRoZSBwYWxldHRlIGludmVudHMgbm9uZS4KZnVuYyBUZXN0UXVpY2tKdW1wUGFnZXNNYXRjaE5hdih0ICp0ZXN0aW5nLlQpIHsKCWJhc2UsIGVyciA6PSB0ZW1wbGF0ZXNGUy5SZWFkRmlsZSgidGVtcGxhdGVzL2Jhc2UuaHRtbCIpCglpZiBlcnIgIT0gbmlsIHsKCQl0LkZhdGFsZigicmVhZCBiYXNlLmh0bWw6ICV2IiwgZXJyKQoJfQoJbmF2U3RhcnQgOj0gc3RyaW5ncy5JbmRleChzdHJpbmcoYmFzZSksIGA8bmF2IGNsYXNzPSJzaWRlbmF2ImApCgluYXZFbmQgOj0gc3RyaW5ncy5JbmRleChzdHJpbmcoYmFzZSksIGA8L25hdj5gKQoJaWYgbmF2U3RhcnQgPCAwIHx8IG5hdkVuZCA8IG5hdlN0YXJ0IHsKCQl0LkZhdGFsKCJzaWRlbmF2IGJsb2NrIG5vdCBmb3VuZCBpbiBiYXNlLmh0bWwiKQoJfQoJaHJlZlJlIDo9IHJlZ2V4cC5NdXN0Q29tcGlsZShgaHJlZj0iKFteIl0rKSJgKQoJbmF2VVJMcyA6PSBtYXBbc3RyaW5nXWJvb2x7fQoJZm9yIF8sIG0gOj0gcmFuZ2UgaHJlZlJlLkZpbmRBbGxTdHJpbmdTdWJtYXRjaChzdHJpbmcoYmFzZSlbbmF2U3RhcnQ6bmF2RW5kXSwgLTEpIHsKCQlocmVmIDo9IG1bMV0KCQlpZiBzdHJpbmdzLkNvbnRhaW5zKGhyZWYsICJzd2l0Y2giKSB8fCBzdHJpbmdzLkhhc1ByZWZpeChocmVmLCAiL2F1dGgvIikgewoJCQljb250aW51ZQoJCX0KCQluYXZVUkxzW2hyZWZdID0gdHJ1ZQoJfQoJaWYgbGVuKG5hdlVSTHMpID09IDAgewoJCXQuRmF0YWwoIm5vIG5hdiBsaW5rcyBleHRyYWN0ZWQgZnJvbSBiYXNlLmh0bWwiKQoJfQoKCWpzQnl0ZXMsIGVyciA6PSBzdGF0aWNGUy5SZWFkRmlsZSgic3RhdGljL2FwcC5qcyIpCglpZiBlcnIgIT0gbmlsIHsKCQl0LkZhdGFsZigicmVhZCBhcHAuanM6ICV2IiwgZXJyKQoJfQoJanMgOj0gc3RyaW5nKGpzQnl0ZXMpCglibG9ja1N0YXJ0IDo9IHN0cmluZ3MuSW5kZXgoanMsICJ2YXIgcXVpY2tKdW1wUGFnZXMgPSBbIikKCWJsb2NrRW5kIDo9IHN0cmluZ3MuSW5kZXgoanNbYmxvY2tTdGFydDpdLCAiXTsiKQoJaWYgYmxvY2tTdGFydCA8IDAgfHwgYmxvY2tFbmQgPCAwIHsKCQl0LkZhdGFsKCJxdWlja0p1bXBQYWdlcyBibG9jayBub3QgZm91bmQgaW4gYXBwLmpzIikKCX0KCWVudHJ5UmUgOj0gcmVnZXhwLk11c3RDb21waWxlKGBce1xzKm5hbWU6ICIoW14iXSspIiwgdXJsOiAiKFteIl0rKSJccypcfWApCglwYWdlVVJMcyA6PSBtYXBbc3RyaW5nXWJvb2x7fQoJZm9yIF8sIG0gOj0gcmFuZ2UgZW50cnlSZS5GaW5kQWxsU3RyaW5nU3VibWF0Y2goanNbYmxvY2tTdGFydDpibG9ja1N0YXJ0K2Jsb2NrRW5kXSwgLTEpIHsKCQlwYWdlVVJMc1ttWzJdXSA9IHRydWUKCX0KCWlmIGxlbihwYWdlVVJMcykgPT0gMCB7CgkJdC5GYXRhbCgibm8gcGFsZXR0ZSBwYWdlcyBleHRyYWN0ZWQgZnJvbSBhcHAuanMiKQoJfQoKCXZhciBtaXNzaW5nLCBleHRyYSBbXXN0cmluZwoJZm9yIHUgOj0gcmFuZ2UgbmF2VVJMcyB7CgkJaWYgIXBhZ2VVUkxzW3VdIHsKCQkJbWlzc2luZyA9IGFwcGVuZChtaXNzaW5nLCB1KQoJCX0KCX0KCWZvciB1IDo9IHJhbmdlIHBhZ2VVUkxzIHsKCQlpZiAhbmF2VVJMc1t1XSB7CgkJCWV4dHJhID0gYXBwZW5kKGV4dHJhLCB1KQoJCX0KCX0KCXNvcnQuU3RyaW5ncyhtaXNzaW5nKQoJc29ydC5TdHJpbmdzKGV4dHJhKQoJaWYgbGVuKG1pc3NpbmcpID4gMCB7CgkJdC5FcnJvcmYoInBhbGV0dGUgbWlzc2VzIG5hdiBkZXN0aW5hdGlvbnM6ICV2IiwgbWlzc2luZykKCX0KCWlmIGxlbihleHRyYSkgPiAwIHsKCQl0LkVycm9yZigicGFsZXR0ZSBsaXN0cyBub24tbmF2IGRlc3RpbmF0aW9uczogJXYiLCBleHRyYSkKCX0KfQo=
+package app
+
+// Quick jump (v0.3.15): the Ctrl+K palette and the search pool
+// widening behind it. The pool now answers corporations and
+// alliances alongside characters, items and pilots; every item
+// hit notes the market-history prefetch wants; and the
+// palette's static page group must mirror the sidebar exactly,
+// so a destination joins both or neither.
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"regexp"
+	"sort"
+	"strings"
+	"testing"
+
+	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
+)
+
+func TestTopbarSearchIncludesOrganizations(t *testing.T) {
+	transport := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
+	seedNext1SDE(t, conn)
+
+	corpPayload, err := json.Marshal(corporationRecordPayload{
+		Corp: esi.Corporation{Name: "Fixture Corp", Ticker: "FXC"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := q.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
+		CorporationID: fixtureCorpA, Payload: string(corpPayload),
+		State: orgStateReady, FetchedAt: "2026-10-01T00:00:00Z",
+	}); err != nil {
+		t.Fatalf("seed corporation record: %v", err)
+	}
+	alliancePayload, err := json.Marshal(allianceRecordPayload{
+		Alliance: esi.Alliance{Name: "Fixture Alliance", Ticker: "FXA"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := q.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
+		AllianceID: 99000001, Payload: string(alliancePayload),
+		State: orgStateReady, FetchedAt: "2026-10-01T00:00:00Z",
+	}); err != nil {
+		t.Fatalf("seed alliance record: %v", err)
+	}
+
+	code, body := getPage(t, app, cookie, "/search.json?q=fixture")
+	if code != http.StatusOK {
+		t.Fatalf("GET /search.json: status %d", code)
+	}
+	var hits []searchHit
+	if err := json.Unmarshal([]byte(body), &hits); err != nil {
+		t.Fatalf("decode hits: %v (%q)", err, body)
+	}
+	byKind := map[string][]searchHit{}
+	for _, h := range hits {
+		byKind[h.Kind] = append(byKind[h.Kind], h)
+	}
+	if len(byKind["corporation"]) != 1 || byKind["corporation"][0].ID != fixtureCorpA ||
+		byKind["corporation"][0].Name != "Fixture Corp" {
+		t.Errorf("corporation hits = %+v, want the warmed Fixture Corp", byKind["corporation"])
+	}
+	if len(byKind["alliance"]) != 1 || byKind["alliance"][0].ID != 99000001 ||
+		byKind["alliance"][0].Name != "Fixture Alliance" {
+		t.Errorf("alliance hits = %+v, want the warmed Fixture Alliance", byKind["alliance"])
+	}
+
+	// An item hit notes the market-history prefetch wants the
+	// market page's search notes, so the jump lands warm.
+	if _, err := conn.ExecContext(ctx, `DELETE FROM market_history_wants`); err != nil {
+		t.Fatalf("clear history wants: %v", err)
+	}
+	code, body = getPage(t, app, cookie, "/search.json?q=tritanium")
+	if code != http.StatusOK {
+		t.Fatalf("GET /search.json (items): status %d", code)
+	}
+	hits = nil
+	if err := json.Unmarshal([]byte(body), &hits); err != nil {
+		t.Fatalf("decode item hits: %v (%q)", err, body)
+	}
+	itemFound := false
+	for _, h := range hits {
+		if h.Kind == "item" && h.ID == 34 {
+			itemFound = true
+		}
+	}
+	if !itemFound {
+		t.Fatalf("item hits = %+v, want Tritanium among them", hits)
+	}
+	var wantCount int
+	if err := conn.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM market_history_wants WHERE region_id = $1 AND type_id = 34`,
+		defaultMarketRegion).Scan(&wantCount); err != nil {
+		t.Fatalf("count history wants: %v", err)
+	}
+	if wantCount != 1 {
+		t.Errorf("history wants for Tritanium = %d, want 1 noted", wantCount)
+	}
+
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("handlers made %d outbound calls, want 0", got)
+	}
+}
+
+func TestQuickJumpPaletteMarkupAndScript(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
+
+	code, body := getPage(t, app, cookie, "/")
+	if code != http.StatusOK {
+		t.Fatalf("GET /: status %d", code)
+	}
+	mustContain(t, "/", body,
+		`id="quickjump-open"`,
+		`aria-controls="quickjump"`,
+		`<div class="quickjump" id="quickjump" hidden>`,
+		`id="quickjump-q"`,
+		`id="quickjump-results"`,
+		`Powered by EveSynapse v0.3.35.004 🏓`)
+
+	code, js := getPage(t, app, cookie, "/static/app.js")
+	if code != http.StatusOK {
+		t.Fatalf("GET /static/app.js: status %d", code)
+	}
+	mustContain(t, "/static/app.js", js,
+		"var quickJumpPages = [",
+		"/search.json?q=",
+		"ctrlKey",
+		"metaKey",
+		"ArrowDown",
+		"ArrowUp",
+		`"Enter"`,
+		`"Escape"`,
+		"/market/?type=",
+		"/corporation/?corporation=",
+		"/alliance/?alliance=",
+		"/pilot/?character=",
+		"/character/?character=")
+
+	code, css := getPage(t, app, cookie, "/static/style.css")
+	if code != http.StatusOK {
+		t.Fatalf("GET /static/style.css: status %d", code)
+	}
+	mustContain(t, "/static/style.css", css,
+		".quickjump {",
+		".quickjump-panel {",
+		".quickjump-results li.sel",
+		"prefers-reduced-motion")
+
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("handlers made %d outbound calls, want 0", got)
+	}
+}
+
+// TestQuickJumpPagesMatchNav pins the palette's static page
+// group against the destinations the sidebar actually offers:
+// every sidenav link (account switcher actions aside) is in
+// the palette, and the palette invents none.
+func TestQuickJumpPagesMatchNav(t *testing.T) {
+	base, err := templatesFS.ReadFile("templates/base.html")
+	if err != nil {
+		t.Fatalf("read base.html: %v", err)
+	}
+	navStart := strings.Index(string(base), `<nav class="sidenav"`)
+	navEnd := strings.Index(string(base), `</nav>`)
+	if navStart < 0 || navEnd < navStart {
+		t.Fatal("sidenav block not found in base.html")
+	}
+	hrefRe := regexp.MustCompile(`href="([^"]+)"`)
+	navURLs := map[string]bool{}
+	for _, m := range hrefRe.FindAllStringSubmatch(string(base)[navStart:navEnd], -1) {
+		href := m[1]
+		if strings.Contains(href, "switch") || strings.HasPrefix(href, "/auth/") {
+			continue
+		}
+		navURLs[href] = true
+	}
+	if len(navURLs) == 0 {
+		t.Fatal("no nav links extracted from base.html")
+	}
+
+	jsBytes, err := staticFS.ReadFile("static/app.js")
+	if err != nil {
+		t.Fatalf("read app.js: %v", err)
+	}
+	js := string(jsBytes)
+	blockStart := strings.Index(js, "var quickJumpPages = [")
+	blockEnd := strings.Index(js[blockStart:], "];")
+	if blockStart < 0 || blockEnd < 0 {
+		t.Fatal("quickJumpPages block not found in app.js")
+	}
+	entryRe := regexp.MustCompile(`\{\s*name: "([^"]+)", url: "([^"]+)"\s*\}`)
+	pageURLs := map[string]bool{}
+	for _, m := range entryRe.FindAllStringSubmatch(js[blockStart:blockStart+blockEnd], -1) {
+		pageURLs[m[2]] = true
+	}
+	if len(pageURLs) == 0 {
+		t.Fatal("no palette pages extracted from app.js")
+	}
+
+	var missing, extra []string
+	for u := range navURLs {
+		if !pageURLs[u] {
+			missing = append(missing, u)
+		}
+	}
+	for u := range pageURLs {
+		if !navURLs[u] {
+			extra = append(extra, u)
+		}
+	}
+	sort.Strings(missing)
+	sort.Strings(extra)
+	if len(missing) > 0 {
+		t.Errorf("palette misses nav destinations: %v", missing)
+	}
+	if len(extra) > 0 {
+		t.Errorf("palette lists non-nav destinations: %v", extra)
+	}
+}

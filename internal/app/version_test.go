@@ -1,1 +1,36 @@
-cGFja2FnZSBhcHAKCi8vIFRoZSBmb290ZXIgdmVyc2lvbiBjb21lcyBmcm9tIHZlcnNpb24udHh0IGFsb25lOiB0aGUgZW1iZWRkZWQKLy8gZmlsZSBwYXJzZXMsIGFwcFZlcnNpb24gY2FycmllcyBpdCwgYW5kIGV2ZXJ5IHJlbmRlcmVkIHBhZ2UKLy8gc2hvd3MgaXQuCgppbXBvcnQgKAoJImNvbnRleHQiCgkic3RyaW5ncyIKCSJ0ZXN0aW5nIgopCgpmdW5jIFRlc3RWZXJzaW9uRmlsZUFuZEZvb3Rlcih0ICp0ZXN0aW5nLlQpIHsKCWlmIGdvdCA6PSBzdHJpbmdzLlRyaW1TcGFjZSh2ZXJzaW9uRmlsZSk7IGdvdCAhPSAiMC4zLjM1LjAwNCIgewoJCXQuRmF0YWxmKCJ2ZXJzaW9uLnR4dCA9ICVxLCB3YW50IDAuMy4zNS4wMDQiLCBnb3QpCgl9CglpZiBhcHBWZXJzaW9uICE9ICJ2MC4zLjM1LjAwNCIgewoJCXQuRmF0YWxmKCJhcHBWZXJzaW9uID0gJXEsIHdhbnQgdjAuMy4zNS4wMDQiLCBhcHBWZXJzaW9uKQoJfQoKCXRyYW5zcG9ydCA6PSAmY291bnRpbmdUcmFuc3BvcnR7fQoJYXBwLCBfLCBxIDo9IGJ1aWxkQ29ycFRlc3RBcHAodCwgdHJhbnNwb3J0KQoJY3R4IDo9IGNvbnRleHQuQmFja2dyb3VuZCgpCgl1c2VyLCBlcnIgOj0gcS5DcmVhdGVVc2VyKGN0eCkKCWlmIGVyciAhPSBuaWwgewoJCXQuRmF0YWxmKCJjcmVhdGUgdXNlcjogJXYiLCBlcnIpCgl9CglzZWVkQ2hhcmFjdGVyKHQsIHEsIHVzZXIuSUQsIGZpeHR1cmVDaGFyQSwgIkZpeHR1cmUgQ2VvIikKCWNvb2tpZSA6PSBzZXNzaW9uQ29va2llKHQsIGFwcCwgdXNlci5JRCwgZml4dHVyZUNoYXJBLCAiRml4dHVyZSBDZW8iKQoKCV8sIGJvZHkgOj0gZ2V0UGFnZSh0LCBhcHAsIGNvb2tpZSwgIi9tYXJrZXQvIikKCW11c3RDb250YWluKHQsICIvbWFya2V0LyBmb290ZXIiLCBib2R5LCBgUG93ZXJlZCBieSBFdmVTeW5hcHNlIHYwLjMuMzUuMDA0IPCfj5MgYnkgPGEgaHJlZj0iaHR0cHM6Ly9uYXRlbXMuZGV2IiB0YXJnZXQ9Il9ibGFuayIgcmVsPSJub29wZW5lciBub3JlZmVycmVyIj5uYXRlbXN6PC9hPmApCglpZiBzdHJpbmdzLkNvbnRhaW5zKGJvZHksICIwLjIuMCIpIHsKCQl0LkZhdGFsKCJmb290ZXIgc3RpbGwgc2hvd3MgdGhlIG9sZCBoYXJkY29kZWQgdmVyc2lvbiIpCgl9Cn0K
+package app
+
+// The footer version comes from version.txt alone: the embedded
+// file parses, appVersion carries it, and every rendered page
+// shows it.
+
+import (
+	"context"
+	"strings"
+	"testing"
+)
+
+func TestVersionFileAndFooter(t *testing.T) {
+	if got := strings.TrimSpace(versionFile); got != "0.3.35.004" {
+		t.Fatalf("version.txt = %q, want 0.3.35.004", got)
+	}
+	if appVersion != "v0.3.35.004" {
+		t.Fatalf("appVersion = %q, want v0.3.35.004", appVersion)
+	}
+
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
+
+	_, body := getPage(t, app, cookie, "/market/")
+	mustContain(t, "/market/ footer", body, `Powered by EveSynapse v0.3.35.004 🏓 by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>`)
+	if strings.Contains(body, "0.2.0") {
+		t.Fatal("footer still shows the old hardcoded version")
+	}
+}

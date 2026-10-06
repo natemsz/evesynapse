@@ -317,9 +317,64 @@ func versionParts(v string) []int {
 
 // fetchReleaseManifest downloads and parses the manifest for
 // arch from the release channel.
-func fetchReleaseManifest(ctx context.Context, arch string) (releaseManifest, error) {
+// latestDevManifestURL queries the GitHub API for releases and
+// returns the manifest asset URL of the newest tag ending in -dev.
+func latestDevManifestURL(ctx context.Context, arch string) (string, error) {
+	repo := "natemsz/evesynapse"
+	if r := strings.Trim(strings.TrimSpace(os.Getenv("EVESYNAPSE_UPDATE_REPO")), "/"); r != "" {
+		repo = r
+	}
+	apiURL := "https://api.github.com/repos/" + repo + "/releases?per_page=20"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "EveSynapse-Updater")
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("the update server answered %s", resp.Status)
+	}
+	var releases []struct {
+		TagName string `json:"tag_name"`
+		Assets  []struct {
+			Name               string `json:"name"`
+			BrowserDownloadURL string `json:"browser_download_url"`
+		} `json:"assets"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&releases); err != nil {
+		return "", errors.New("the update information couldn't be read")
+	}
+	want := "latest-" + arch + ".json"
+	for _, rel := range releases {
+		if !strings.HasSuffix(rel.TagName, "-dev") {
+			continue
+		}
+		for _, a := range rel.Assets {
+			if a.Name == want {
+				return a.BrowserDownloadURL, nil
+			}
+		}
+		return "", fmt.Errorf("dev release %s has no %s asset", rel.TagName, want)
+	}
+	return "", errors.New("no dev releases found")
+}
+
+func fetchReleaseManifest(ctx context.Context, arch string, dev bool) (releaseManifest, error) {
 	var m releaseManifest
 	u := releaseChannelBase() + "/latest-" + arch + ".json"
+	if dev {
+		devURL, err := latestDevManifestURL(ctx, arch)
+		if err != nil {
+			return m, err
+		}
+		u = devURL
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return m, err
@@ -350,8 +405,9 @@ func fetchReleaseManifest(ctx context.Context, arch string) (releaseManifest, er
 // runReleaseUpdate implements the release-channel forms of
 // -update (`-update`, `-update -arm64`, `-update -x86`): check
 // the manifest for arch, and only when it names a newer version
-// download, verify, and install it.
-func runReleaseUpdate(target, arch string, stdout, stderr io.Writer) int {
+// download, verify, and install it. With dev=true it pulls the
+// latest -dev tagged release instead of the main channel.
+func runReleaseUpdate(target, arch string, stdout, stderr io.Writer, dev bool) int {
 	machine, ok := elfMachineForArch(arch)
 	if !ok {
 		fmt.Fprintf(stderr, "EveSynapse doesn't publish builds for %q computers. Nothing was changed.\n", arch)
@@ -361,7 +417,7 @@ func runReleaseUpdate(target, arch string, stdout, stderr io.Writer) int {
 	current := Version()
 	fmt.Fprintf(stdout, "Checking for updates… you're on %s.\n", current)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	m, err := fetchReleaseManifest(ctx, arch)
+	m, err := fetchReleaseManifest(ctx, arch, dev)
 	cancel()
 	if err != nil {
 		fmt.Fprintf(stderr, "Couldn't check for updates: %v\nNothing was changed.\n", err)
@@ -415,18 +471,29 @@ func RunUpdate(args []string, stdout, stderr io.Writer) int {
 
 func runUpdate(target string, args []string, stdout, stderr io.Writer) int {
 	// Release-channel forms first: no argument (this computer's
-	// own kind) or a single arch flag. Everything else keeps the
-	// original explicit-address form below.
+	// own kind) or a single arch flag. The -dev flag pulls from
+	// the dev branch releases (tags ending in -dev). Everything
+	// else keeps the original explicit-address form below.
+	dev := false
+	filtered := args[:0]
+	for _, a := range args {
+		if a == "-dev" {
+			dev = true
+			continue
+		}
+		filtered = append(filtered, a)
+	}
+	args = filtered
 	if len(args) == 0 {
-		return runReleaseUpdate(target, ownReleaseArch(), stdout, stderr)
+		return runReleaseUpdate(target, ownReleaseArch(), stdout, stderr, dev)
 	}
 	if len(args) == 1 {
 		if arch := parseArchArg(args[0]); arch != "" {
-			return runReleaseUpdate(target, arch, stdout, stderr)
+			return runReleaseUpdate(target, arch, stdout, stderr, dev)
 		}
 	}
 	if len(args) > 2 {
-		fmt.Fprintln(stderr, "Usage: evesynapse -update [-arm64|-x86] or evesynapse -update <download address> [checksum]")
+		fmt.Fprintln(stderr, "Usage: evesynapse -update [-dev] [-arm64|-x86] or evesynapse -update <download address> [checksum]")
 		return 2
 	}
 	source := args[0]

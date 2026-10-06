@@ -66,7 +66,8 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage:")
 	fmt.Fprintln(w, "  evesynapse                          run the web app")
 	fmt.Fprintln(w, "  evesynapse -version                 print the version and exit")
-	fmt.Fprintln(w, "  evesynapse -update -arm64           update to the latest release for this computer (-x86 on Intel/AMD)")
+	fmt.Fprintln(w, "  evesynapse -update -arm64           update to the latest release for this computer (-x86 on Intel/AMD)
+  evesynapse -update -dev             update to the latest dev-branch release")
 	fmt.Fprintln(w, "  evesynapse -update <url> [checksum] install a downloaded update and restart")
 	fmt.Fprintln(w, "  evesynapse -refresh                 refresh all cached data on next start (app must be stopped)")
 }

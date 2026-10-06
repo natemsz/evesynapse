@@ -16,7 +16,7 @@
   <thead><tr><th>Category</th><th>Types</th></tr></thead>
   <tbody>
   {{range $v.Categories}}
-    <tr><td><a href="/items/category/{{.ID}}/">{{.Name}}</a></td><td>{{.Types}}</td></tr>
+    <tr><td><a href="/items/category/{{.ID}}/{{if $v.MarketOnly}}?market=1{{end}}">{{.Name}}</a></td><td>{{.Types}}</td></tr>
   {{end}}
   </tbody>
 </table>
@@ -27,15 +27,19 @@
 {{end}}
 
 {{if eq $v.Mode "category"}}
-<p><small><a href="/items/">Item Database</a> › {{$v.Category.Name}}</small></p>
+<p><small><a href="/items/{{if $v.MarketOnly}}?market=1{{end}}">Item Database</a> › {{$v.Category.Name}}</small></p>
 <h2>{{$v.Category.Name}}</h2>
+<form method="get" action="/items/category/{{$v.Category.ID}}/">
+  <label><small><input type="checkbox" name="market" value="1"{{if $v.MarketOnly}} checked{{end}}> Market items only</small></label>
+  <button class="btn" type="submit">Filter</button>
+</form>
 {{if $v.Groups}}
 <div class="tw">
 <table>
   <thead><tr><th>Group</th><th>Types</th></tr></thead>
   <tbody>
   {{range $v.Groups}}
-    <tr><td><a href="/items/group/{{.ID}}/">{{.Name}}</a></td><td>{{.Types}}</td></tr>
+    <tr><td><a href="/items/group/{{.ID}}/{{if $v.MarketOnly}}?market=1{{end}}">{{.Name}}</a></td><td>{{.Types}}</td></tr>
   {{end}}
   </tbody>
 </table>
@@ -72,7 +76,7 @@
 {{end}}
 
 {{if eq $v.Mode "group"}}
-<p><small><a href="/items/">Item Database</a>{{if $v.Category}} › <a href="/items/category/{{$v.Category.ID}}/">{{$v.Category.Name}}</a>{{end}} › {{$v.Group.Name}}</small></p>
+<p><small><a href="/items/{{if $v.MarketOnly}}?market=1{{end}}">Item Database</a>{{if $v.Category}} › <a href="/items/category/{{$v.Category.ID}}/{{if $v.MarketOnly}}?market=1{{end}}">{{$v.Category.Name}}</a>{{end}} › {{$v.Group.Name}}</small></p>
 <h2>{{$v.Group.Name}}</h2>
 <form method="get" action="/items/group/{{$v.Group.ID}}/">
   <input type="search" name="q" value="{{$v.Query}}" placeholder="Filter types in this group">

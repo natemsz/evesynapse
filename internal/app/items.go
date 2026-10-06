@@ -132,15 +132,32 @@ func (app *Application) itemsPageData(r *http.Request) pageData {
 // two share the URL the way the planner shares its plan URLs.
 func (app *Application) handleItems(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	if _, ok := q["q"]; ok || q.Get("category") != "" || q.Get("group") != "" || q.Get("market") != "" {
+	// Issue 22: market=1 alone filters the browse tree; it only
+	// joins a flat search when there's a non-empty query or an
+	// explicit category/group pick.
+	if q.Get("q") != "" || q.Get("category") != "" || q.Get("group") != "" {
 		app.handleItemsSearch(w, r)
 		return
 	}
 	ctx := r.Context()
 	data := app.itemsPageData(r)
 	view := &itemsView{Mode: "categories"}
+	view.MarketOnly = q.Get("market") == "1"
 
-	rows, err := app.queries.ListSDECategoriesWithCounts(ctx)
+	var rows []db.ListSDECategoriesWithCountsFilteredRow
+	var err error
+	if view.MarketOnly {
+		rows, err = app.queries.ListSDECategoriesWithCountsFiltered(ctx, 1)
+	} else {
+		var unfiltered []db.ListSDECategoriesWithCountsRow
+		unfiltered, err = app.queries.ListSDECategoriesWithCounts(ctx)
+		// Normalize to the filtered row type for the shared loop.
+		for _, row := range unfiltered {
+			rows = append(rows, db.ListSDECategoriesWithCountsFilteredRow{
+				CategoryID: row.CategoryID, Name: row.Name, TypeCount: row.TypeCount,
+			})
+		}
+	}
 	if err != nil {
 		log.Printf("items: list categories: %v", err)
 		data.Error = "Item database unavailable right now — check the server log."
@@ -272,13 +289,28 @@ func (app *Application) handleItemsCategory(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	view.Category = &itemCategoryRow{ID: cat.CategoryID, Name: cat.Name}
+	view.MarketOnly = r.URL.Query().Get("market") == "1"
 
-	rows, err := app.queries.ListSDEGroupsInCategory(ctx, categoryID)
-	if err != nil {
-		log.Printf("items: list groups of category %d: %v", categoryID, err)
+	var grows []db.ListSDEGroupsInCategoryFilteredRow
+	var gerr error
+	if view.MarketOnly {
+		grows, gerr = app.queries.ListSDEGroupsInCategoryFiltered(ctx, db.ListSDEGroupsInCategoryFilteredParams{
+			CategoryID: categoryID, MarketOnly: 1,
+		})
+	} else {
+		var unfiltered []db.ListSDEGroupsInCategoryRow
+		unfiltered, gerr = app.queries.ListSDEGroupsInCategory(ctx, categoryID)
+		for _, row := range unfiltered {
+			grows = append(grows, db.ListSDEGroupsInCategoryFilteredRow{
+				GroupID: row.GroupID, Name: row.Name, TypeCount: row.TypeCount,
+			})
+		}
+	}
+	if gerr != nil {
+		log.Printf("items: list groups of category %d: %v", categoryID, gerr)
 		data.Error = "Item database unavailable right now — check the server log."
 	} else {
-		for _, row := range rows {
+		for _, row := range grows {
 			view.Groups = append(view.Groups, itemGroupRow{
 				ID: row.GroupID, Name: row.Name, Types: esi.FormatInt(row.TypeCount),
 			})

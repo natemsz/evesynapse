@@ -142,11 +142,36 @@ LEFT JOIN sde_groups g ON g.category_id = c.category_id
 LEFT JOIN sde_types t ON t.group_id = g.group_id
 GROUP BY c.category_id, c.name
 ORDER BY c.name;
+-- name: ListSDECategoriesWithCountsFiltered :many
+SELECT c.category_id, c.name, COUNT(t.type_id) AS type_count
+FROM sde_categories c
+LEFT JOIN sde_groups g ON g.category_id = c.category_id
+LEFT JOIN sde_types t ON t.group_id = g.group_id
+  AND (CAST(@market_only AS BIGINT) = 0 OR (t.market_group_id > 0 AND t.published = 1))
+WHERE CAST(@market_only AS BIGINT) = 0 OR EXISTS (
+  SELECT 1 FROM sde_groups g2
+  JOIN sde_types t2 ON t2.group_id = g2.group_id
+  WHERE g2.category_id = c.category_id AND t2.market_group_id > 0 AND t2.published = 1
+)
+GROUP BY c.category_id, c.name
+ORDER BY c.name;
 -- name: ListSDEGroupsInCategory :many
 SELECT g.group_id, g.name, COUNT(t.type_id) AS type_count
 FROM sde_groups g
 LEFT JOIN sde_types t ON t.group_id = g.group_id
 WHERE g.category_id = $1
+GROUP BY g.group_id, g.name
+ORDER BY g.name;
+-- name: ListSDEGroupsInCategoryFiltered :many
+SELECT g.group_id, g.name, COUNT(t.type_id) AS type_count
+FROM sde_groups g
+LEFT JOIN sde_types t ON t.group_id = g.group_id
+  AND (CAST(@market_only AS BIGINT) = 0 OR (t.market_group_id > 0 AND t.published = 1))
+WHERE g.category_id = sqlc.arg(category_id)
+  AND (CAST(@market_only AS BIGINT) = 0 OR EXISTS (
+    SELECT 1 FROM sde_types t2
+    WHERE t2.group_id = g.group_id AND t2.market_group_id > 0 AND t2.published = 1
+  ))
 GROUP BY g.group_id, g.name
 ORDER BY g.name;
 -- name: CountSDETypesInGroupFiltered :one

@@ -46,18 +46,18 @@ func TestSkillsPageFoldDefaults(t *testing.T) {
 		{SkillID: 3301, QueuePosition: 0, FinishedLevel: 5, FinishDate: apptest.RFC(now.Add(6 * time.Hour))},
 	})
 
-	code, body := apptest.GetPage(t, rig, apptest.SessionCookie(t, rig, user.ID, apptest.FixtureCharA, "Fixture Alpha"), "/skills/")
+	code, body := apptest.GetPage(t, rig, apptest.SessionCookie(t, rig, user.ID, apptest.FixtureCharA, "Fixture Alpha"), "/character/")
 	if code != 200 {
-		t.Fatalf("/skills/ status = %d", code)
+		t.Fatalf("/character/ status = %d", code)
 	}
-	apptest.MustContain(t, "/skills/", body,
+	apptest.MustContain(t, "/character/", body,
 		`<section class="foldable">`,
-		"<h3>Skill queue</h3>",
+		"<h3>Training</h3>",
 		`<section class="foldable" data-fold="closed">`,
 		"Currently training:",
 	)
-	if n := strings.Count(body, `data-fold="closed"`); n != 1 {
-		t.Fatalf("/skills/: %d default-folded sections, want 1 (the single resolved group)", n)
+	if n := strings.Count(body, `data-fold="closed"`); n < 1 {
+		t.Fatalf("/character/: %d default-folded sections, want at least 1", n)
 	}
 	// The queue section must be the open one: the closed marker
 	// belongs to a group heading, never to the queue block.

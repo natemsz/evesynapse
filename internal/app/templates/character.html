@@ -1,6 +1,6 @@
-{{define "title"}}Character Sheet{{end}}
+{{define "title"}}Character{{end}}
 {{define "content"}}
-<h1><span class="gt">Character Sheet</span></h1>
+<h1><span class="gt">Character</span></h1>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
@@ -38,7 +38,7 @@
   </section>
 
   <section class="foldable" id="queue">
-  <h3>Skill queue</h3>
+  <h3>Training</h3>
   {{if .CharacterPage.Training}}
   <p>Currently training: <strong>{{.CharacterPage.Training}}</strong>{{if .CharacterPage.TrainingLeft}} (<span class="countdown" data-finish="{{.CharacterPage.TrainingFinish}}">{{.CharacterPage.TrainingLeft}}</span>){{end}}</p>
   {{else}}

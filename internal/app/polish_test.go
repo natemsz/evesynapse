@@ -59,7 +59,7 @@ func TestPolishNavAndFavicon(t *testing.T) {
 		`href="/corporations/killmails/"`,
 		`href="/intel/fw/"`,
 		`href="/contracts/"`,
-		`<a class="navlink active" href="/">`,
+		`<a class="navlink active" href="/" data-tip="Home">`,
 		`<span class="nav-label">Home</span>`)
 
 	// Character page: the Character branch is the marked one.

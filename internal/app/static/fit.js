@@ -1077,14 +1077,33 @@
         pendingFlash = { type: "slot", id: typeID };
         moveItemTo(typeID, fam, idx);
       } else if (d.kind === "charge") {
-        // Charge dropped on a weapon slot: set it as that weapon's ammo (Issue 2)
+        // Charge dropped on a weapon slot: validate then set as ammo (Issue 2)
         var slotEl = editor.querySelector('.fit-vslot[data-v-index="' + idx + '"]');
         if (slotEl) {
           var weaponID = parseInt(slotEl.getAttribute("data-fit-vslot") || "0", 10);
           if (weaponID > 0) {
-            state.charges[weaponID] = typeID;
-            pendingFlash = { type: "charge", id: weaponID };
-            simulate();
+            // Validate charge compatibility via the picker API
+            fetch("/fittings/picker.json?family=charge&weapon=" + weaponID, {
+              headers: { "Accept": "application/json" }
+            }).then(function(resp) {
+              return resp.ok ? resp.json() : [];
+            }).then(function(charges) {
+              var valid = charges.some(function(ch) { return ch.id === typeID; });
+              if (valid) {
+                state.charges[weaponID] = typeID;
+                pendingFlash = { type: "charge", id: weaponID };
+                simulate();
+              } else {
+                // Invalid charge for this weapon - flash the slot red
+                slotEl.classList.add("fit-invalid");
+                setTimeout(function() { slotEl.classList.remove("fit-invalid"); }, 1000);
+              }
+            }).catch(function() {
+              // On error, allow it (backend will handle)
+              state.charges[weaponID] = typeID;
+              pendingFlash = { type: "charge", id: weaponID };
+              simulate();
+            });
           }
         }
       } else if (!checkRestricted(typeID, "")) {

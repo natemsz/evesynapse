@@ -1520,7 +1520,7 @@
   // base.html's nav, so a new page joins both or neither.
   var quickJumpPages = [
     { name: "Home", url: "/" },
-    { name: "Character", url: "/character/" },
+    { name: "Overview", url: "/character/" },
     { name: "Characters", url: "/characters/" },
     { name: "Skills", url: "/skills/" },
     { name: "Skill plans", url: "/skills/plans" },
@@ -1538,7 +1538,8 @@
     { name: "Spread scanner", url: "/market/scanner/" },
     { name: "Tradefinder", url: "/market/tradefinder/" },
     { name: "Top stations", url: "/market/leaderboard/" },
-    { name: "Items", url: "/items/" },
+    { name: "Restock planner", url: "/market/restock/" },
+    { name: "Item Browser", url: "/items/" },
     { name: "Wallet", url: "/wallet/" },
     { name: "Orders", url: "/orders/" },
     { name: "Contracts", url: "/contracts/" },

@@ -12,7 +12,7 @@ package app
 //	EVESYNAPSE_LOADTEST=1 go test ./internal/app -run TestLoadWebTier -count=1 -v
 //
 // The ESI side is a canned in-process stub (no network), so the
-// numbers measure handler + template + SQLite cost. The market
+// numbers measure handler + template + Postgres cost. The market
 // item page in production additionally waits on a live book
 // fetch per view; that external wait is not in these figures.
 // Client and server share one process here, so the load
@@ -171,7 +171,7 @@ func (b *lockedLogBuf) lockedCount() int {
 	defer b.mu.Unlock()
 	s := b.buf.String()
 	n := 0
-	for _, needle := range []string{"database is locked", "database table is locked", "SQLITE_BUSY", "sqlite_busy"} {
+	for _, needle := range []string{"database is locked", "database table is locked", "SQLITE_BUSY", "sqlite_busy", "deadlock detected", "could not serialize access"} {
 		n += strings.Count(s, needle)
 	}
 	return n

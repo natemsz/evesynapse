@@ -30,10 +30,7 @@ import (
 var templatesFS embed.FS
 
 // The collapsed Postgres baseline (schema_pg/001): the one-time
-// fold of the 35 SQLite migrations, applied by openDB on a fresh
-// database. The SQLite files stay in schema/ for the rollback
-// binary and the -migrate-pg source reader; new schema changes
-// land as new numbered files here.
+// New schema changes land as new numbered files in schema_pg/.
 
 //go:embed schema_pg/001_baseline.sql
 var pgBaselineSchema string

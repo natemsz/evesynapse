@@ -44,8 +44,6 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return app.RunUpdate(args[1:], stdout, stderr)
 		case "-refresh":
 			return app.RunRefresh(args[1:], app.LoadConfig(), stdout, stderr)
-		case "-migrate-pg":
-			return app.RunMigratePG(args[1:], app.LoadConfig(), stdout, stderr)
 		case "-h", "--help", "-help":
 			printUsage(stdout)
 			return 0

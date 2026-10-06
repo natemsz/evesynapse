@@ -16,7 +16,7 @@ import (
 // to. Unlike the organization pages there is nothing to warm —
 // both render entirely from the local SDE (sde_systems,
 // sde_stations, sde_regions) the importer already maintains, so a
-// render is a couple of SQLite reads and never calls out. An id
+// render is a couple of Postgres reads and never calls out. An id
 // the SDE doesn't know (or a system whose data hasn't imported
 // yet) settles in an honest not-in-the-star-map state rather than
 // an error. Region names render as text: there is no region page.

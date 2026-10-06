@@ -306,7 +306,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// 500 Medium face (only 300/500/700 were declared),
 		// which reads bold.
 		"@font-face {\n  font-family: 'Univers Next Pro';\n  font-style: normal;\n  font-weight: 400;\n  font-display: swap;\n  src: url('/static/fonts/univers-next-pro-regular.woff2') format('woff2');\n}",
-		".branch > summary {\n  font-family: \"Univers Next Pro Condensed\", \"Univers Next Pro\", -apple-system, \"SF Pro Display\", \"Segoe UI\", \"Inter\", sans-serif;\n  font-weight: 500;\n  font-synthesis-weight: none;\n}",
+		".branch > summary,\n.sidenav a.navlink {\n  font-family: \"Univers Next Pro Condensed\", \"Univers Next Pro\", -apple-system, \"SF Pro Display\", \"Segoe UI\", \"Inter\", sans-serif;\n  font-weight: 500;\n  font-synthesis-weight: none;\n}",
 		"header a.navlink, .sidenav a.navlink, .branch .menu a {\n  font-family: \"Univers Next Pro\", -apple-system, \"SF Pro Display\", \"Segoe UI\", \"Inter\", sans-serif;\n  font-weight: 400;\n  font-synthesis-weight: none;\n}",
 		".card > h2:first-child, .card > h3:first-child { margin: -0.85rem -1rem 0.75rem; padding: 0.55rem 1rem; border-radius: 4px 4px 0 0; }",
 		".foldable > h2:first-child, .foldable > h3:first-child { margin: 0 0 0.75rem; padding: 0.45rem 0.65rem; border-radius: 3px; }",
@@ -344,7 +344,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// wordmark's left at a chunkier fixed square size,
 		// pulled slightly into the topbar flex gap so the
 		// gap before the text stays small.
-		".wordmark-glyph {\n  display: inline-block;\n  height: 1.9em;\n  width: auto;\n  vertical-align: -0.35em;\n  margin: 0 0.5em 0 0;\n  transform: rotate(100deg);\n}",
+		".wordmark-glyph {\n  display: inline-block;\n  height: 1.9em;\n  width: auto;\n  vertical-align: -0.35em;\n  margin: 0 1.25rem 0 0;\n  transform: rotate(100deg);\n}",
 		// v0.3.07.008: the phone-bar hamburger floats bare
 		// like the sidebar glyph controls (no resting box on
 		// the same footprint), with the same faint hover wash.

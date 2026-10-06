@@ -13,7 +13,6 @@ import (
 type Config struct {
 	addr            string // listen address
 	databaseURL     string // Postgres connection URL (DATABASE_URL)
-	dbPath          string // legacy SQLite file, read only by -migrate-pg
 	eveClientID     string // EVE SSO application client ID
 	eveClientSecret string // EVE SSO application client secret
 	eveCallbackURL  string // OAuth2 redirect URI registered with CCP
@@ -31,11 +30,6 @@ func (c Config) SSOConfigured() bool {
 
 // Addr returns the configured HTTP listen address.
 func (c Config) Addr() string { return c.addr }
-
-// DBPath returns the configured legacy SQLite database file
-// path. Since the Postgres cutover it is only the -migrate-pg
-// source (read, never written).
-func (c Config) DBPath() string { return c.dbPath }
 
 // DatabaseURL returns the Postgres connection URL the app opens.
 func (c Config) DatabaseURL() string { return c.databaseURL }
@@ -83,7 +77,6 @@ func LoadConfig() Config {
 	return Config{
 		addr:            getenvDefault("ADDR", ":8080"),
 		databaseURL:     getenvDefault("DATABASE_URL", "postgres://evesynapse@localhost:5432/evesynapse?sslmode=disable"),
-		dbPath:          getenvDefault("DB_PATH", "evesynapse.db"),
 		eveClientID:     os.Getenv("EVE_CLIENT_ID"),
 		eveClientSecret: os.Getenv("EVE_CLIENT_SECRET"),
 		eveCallbackURL:  getenvDefault("EVE_CALLBACK_URL", "http://localhost:8080/auth/callback"),

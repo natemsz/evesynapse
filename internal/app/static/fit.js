@@ -789,7 +789,12 @@
       yfClose();
       yourfitsInput.value = "";
       if (it.mine) {
-        window.location.href = "/fittings/?local=" + it.id + "#fit-editor";
+        if (it.isESI) {
+          // ESI fit: negative ID, load via ?esi= parameter
+          window.location.href = "/fittings/?esi=" + (-it.id) + "#fit-editor";
+        } else {
+          window.location.href = "/fittings/?local=" + it.id + "#fit-editor";
+        }
         return;
       }
       fetch("/fittings/fork/", {

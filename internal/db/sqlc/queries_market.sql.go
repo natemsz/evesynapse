@@ -225,6 +225,29 @@ func (q *Queries) GetGuidePricesMeta(ctx context.Context) (GuidePricesMetum, err
 	return i, err
 }
 
+const getIndustryCostIndex = `-- name: GetIndustryCostIndex :one
+SELECT solar_system_id, activity, cost_index, fetched_at
+FROM industry_cost_indices
+WHERE solar_system_id = $1 AND activity = $2
+`
+
+type GetIndustryCostIndexParams struct {
+	SolarSystemID int64  `json:"solar_system_id"`
+	Activity      string `json:"activity"`
+}
+
+func (q *Queries) GetIndustryCostIndex(ctx context.Context, arg GetIndustryCostIndexParams) (IndustryCostIndex, error) {
+	row := q.db.QueryRowContext(ctx, getIndustryCostIndex, arg.SolarSystemID, arg.Activity)
+	var i IndustryCostIndex
+	err := row.Scan(
+		&i.SolarSystemID,
+		&i.Activity,
+		&i.CostIndex,
+		&i.FetchedAt,
+	)
+	return i, err
+}
+
 const getMarketFetchState = `-- name: GetMarketFetchState :one
 SELECT kind, state, detail, attempted_at
 FROM market_fetch_state
@@ -318,6 +341,32 @@ func (q *Queries) GetMarketSweepState(ctx context.Context, regionID int64) (Mark
 		&i.PagesTotal,
 		&i.StartedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getMarketTypePrice = `-- name: GetMarketTypePrice :one
+SELECT region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetched_at
+FROM market_type_prices
+WHERE region_id = $1 AND type_id = $2
+`
+
+type GetMarketTypePriceParams struct {
+	RegionID int64 `json:"region_id"`
+	TypeID   int64 `json:"type_id"`
+}
+
+func (q *Queries) GetMarketTypePrice(ctx context.Context, arg GetMarketTypePriceParams) (MarketTypePrice, error) {
+	row := q.db.QueryRowContext(ctx, getMarketTypePrice, arg.RegionID, arg.TypeID)
+	var i MarketTypePrice
+	err := row.Scan(
+		&i.RegionID,
+		&i.TypeID,
+		&i.BuyPrice,
+		&i.SellPrice,
+		&i.BuyVolume,
+		&i.SellVolume,
+		&i.FetchedAt,
 	)
 	return i, err
 }
@@ -908,6 +957,40 @@ func (q *Queries) ListGuidePrices(ctx context.Context) ([]GuidePrice, error) {
 	return items, nil
 }
 
+const listIndustryCostIndices = `-- name: ListIndustryCostIndices :many
+SELECT solar_system_id, activity, cost_index, fetched_at
+FROM industry_cost_indices
+ORDER BY activity, cost_index ASC
+`
+
+func (q *Queries) ListIndustryCostIndices(ctx context.Context) ([]IndustryCostIndex, error) {
+	rows, err := q.db.QueryContext(ctx, listIndustryCostIndices)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IndustryCostIndex
+	for rows.Next() {
+		var i IndustryCostIndex
+		if err := rows.Scan(
+			&i.SolarSystemID,
+			&i.Activity,
+			&i.CostIndex,
+			&i.FetchedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMarketAvgDailyVolumes = `-- name: ListMarketAvgDailyVolumes :many
 SELECT h.type_id AS type_id, CAST(AVG(h.volume) AS DOUBLE PRECISION) AS avg_daily_volume
 FROM market_history h
@@ -1433,6 +1516,48 @@ func (q *Queries) ListMarketSweepTypeOrders(ctx context.Context, arg ListMarketS
 	return items, nil
 }
 
+const listMarketTypePricesForTypes = `-- name: ListMarketTypePricesForTypes :many
+SELECT region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetched_at
+FROM market_type_prices
+WHERE region_id = $1 AND type_id = ANY($2::bigint[])
+`
+
+type ListMarketTypePricesForTypesParams struct {
+	RegionID int64   `json:"region_id"`
+	Column2  []int64 `json:"column_2"`
+}
+
+func (q *Queries) ListMarketTypePricesForTypes(ctx context.Context, arg ListMarketTypePricesForTypesParams) ([]MarketTypePrice, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketTypePricesForTypes, arg.RegionID, pq.Array(arg.Column2))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketTypePrice
+	for rows.Next() {
+		var i MarketTypePrice
+		if err := rows.Scan(
+			&i.RegionID,
+			&i.TypeID,
+			&i.BuyPrice,
+			&i.SellPrice,
+			&i.BuyVolume,
+			&i.SellVolume,
+			&i.FetchedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOpenOrderLifecycleByCharacter = `-- name: ListOpenOrderLifecycleByCharacter :many
 SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
 FROM order_lifecycle
@@ -1829,6 +1954,47 @@ func (q *Queries) ListScannerOpportunities(ctx context.Context, arg ListScannerO
 			&i.BuyVolume,
 			&i.DailyVolume,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStaleMarketTypePrices = `-- name: ListStaleMarketTypePrices :many
+SELECT region_id, type_id
+FROM market_type_prices
+WHERE fetched_at < now() - ($1::int * INTERVAL '1 second')
+ORDER BY fetched_at ASC
+LIMIT $2
+`
+
+type ListStaleMarketTypePricesParams struct {
+	Column1 int32 `json:"column_1"`
+	Limit   int32 `json:"limit"`
+}
+
+type ListStaleMarketTypePricesRow struct {
+	RegionID int64 `json:"region_id"`
+	TypeID   int64 `json:"type_id"`
+}
+
+func (q *Queries) ListStaleMarketTypePrices(ctx context.Context, arg ListStaleMarketTypePricesParams) ([]ListStaleMarketTypePricesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listStaleMarketTypePrices, arg.Column1, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListStaleMarketTypePricesRow
+	for rows.Next() {
+		var i ListStaleMarketTypePricesRow
+		if err := rows.Scan(&i.RegionID, &i.TypeID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -2365,6 +2531,26 @@ func (q *Queries) UpsertGuidePricesMeta(ctx context.Context, arg UpsertGuidePric
 	return err
 }
 
+const upsertIndustryCostIndex = `-- name: UpsertIndustryCostIndex :exec
+INSERT INTO industry_cost_indices (solar_system_id, activity, cost_index, fetched_at)
+VALUES ($1, $2, $3, now())
+ON CONFLICT (solar_system_id, activity) DO UPDATE SET
+    cost_index = excluded.cost_index,
+    fetched_at = excluded.fetched_at
+`
+
+type UpsertIndustryCostIndexParams struct {
+	SolarSystemID int64   `json:"solar_system_id"`
+	Activity      string  `json:"activity"`
+	CostIndex     float64 `json:"cost_index"`
+}
+
+// v0.3.33: industry cost indices per (system, activity).
+func (q *Queries) UpsertIndustryCostIndex(ctx context.Context, arg UpsertIndustryCostIndexParams) error {
+	_, err := q.db.ExecContext(ctx, upsertIndustryCostIndex, arg.SolarSystemID, arg.Activity, arg.CostIndex)
+	return err
+}
+
 const upsertMarketFetchState = `-- name: UpsertMarketFetchState :exec
 INSERT INTO market_fetch_state (kind, state, detail, attempted_at)
 VALUES ($1, $2, $3, $4)
@@ -2629,6 +2815,40 @@ func (q *Queries) UpsertMarketStationStat(ctx context.Context, arg UpsertMarketS
 		arg.SellVolume,
 		arg.BuyVolume,
 		arg.UpdatedAt,
+	)
+	return err
+}
+
+const upsertMarketTypePrice = `-- name: UpsertMarketTypePrice :exec
+INSERT INTO market_type_prices (region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetched_at)
+VALUES ($1, $2, $3, $4, $5, $6, now())
+ON CONFLICT (region_id, type_id) DO UPDATE SET
+    buy_price   = excluded.buy_price,
+    sell_price  = excluded.sell_price,
+    buy_volume  = excluded.buy_volume,
+    sell_volume = excluded.sell_volume,
+    fetched_at  = excluded.fetched_at
+`
+
+type UpsertMarketTypePriceParams struct {
+	RegionID   int64   `json:"region_id"`
+	TypeID     int64   `json:"type_id"`
+	BuyPrice   float64 `json:"buy_price"`
+	SellPrice  float64 `json:"sell_price"`
+	BuyVolume  int64   `json:"buy_volume"`
+	SellVolume int64   `json:"sell_volume"`
+}
+
+// v0.3.33: per-type market price TTL cache. The worker refreshes
+// only rows older than the TTL; pages read cache-only.
+func (q *Queries) UpsertMarketTypePrice(ctx context.Context, arg UpsertMarketTypePriceParams) error {
+	_, err := q.db.ExecContext(ctx, upsertMarketTypePrice,
+		arg.RegionID,
+		arg.TypeID,
+		arg.BuyPrice,
+		arg.SellPrice,
+		arg.BuyVolume,
+		arg.SellVolume,
 	)
 	return err
 }

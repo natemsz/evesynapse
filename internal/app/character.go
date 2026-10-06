@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -127,9 +128,13 @@ func humanDuration(d time.Duration) string {
 
 // jumpCloneView is one jump clone line of the Character page.
 type jumpCloneView struct {
-	Name     string       // pilot-given clone name, "" when unnamed
-	Location string       // resolved location title
-	Implants []implantRow // implants in slot order; empty = no implants
+	CloneID     int64        // ESI jump_clone_id, targets rename posts
+	Num         int          // 1-based position ("Jump Clone 1")
+	Name        string       // ESI clone name, "" when unnamed
+	CustomName  string       // pilot-given name from clone_names, "" when none
+	DisplayName string       // CustomName, else Name, else "Jump Clone N"
+	Location    string       // resolved location title
+	Implants    []implantRow // implants in slot order; empty = no implants
 }
 
 // implantRow is one active-implant line; Slot is 1-based (EVE
@@ -198,17 +203,30 @@ type characterView struct {
 	WalletKnown bool
 	ISK         string
 
-	// Skills + queue snapshots (the rest of the old home sheet).
-	SkillsKnown    bool
-	TotalSP        string
-	UnallocatedSP  string
-	Skills         []skillRow
-	SkillsShown    int
-	SkillsCount    int
-	QueueKnown     bool
-	Training       string // "Skill V — finishes …", "" = not training
-	TrainingFinish string // raw finish, drives the live countdown
-	TrainingLeft   string
+	// Skills + queue snapshots: the full skill sheet now lives
+	// here (the standalone /skills/ page redirects). Groups are
+	// per-category, heaviest skill first; the queue carries the
+	// training/queued state for the 5-box level indicators.
+	SkillsKnown     bool
+	TotalSP         string
+	UnallocatedSP   string
+	SkillsCount     int
+	LevelVCount     int
+	SkillGroups     []skillGroupSection
+	QueueKnown      bool
+	Training        string // "Skill V — finishes …", "" = not training
+	TrainingFinish  string // raw finish, drives the live countdown
+	TrainingLeft    string
+	TrainingSkillID int64 // skill currently training, 0 when idle
+	TrainingLevel   int   // level currently training
+	Queue           []skillQueueRow
+	CompletesAt     string // finish time of the last queue entry
+
+	// Browse (skill catalog from the SDE graph, with plan
+	// quick-add forms); BrowseWarming marks the pre-import state.
+	Browse        []browseSkillGroup
+	BrowseWarming bool
+	Plans         []skillPlanSummary
 
 	// Planetary industry summary (Phase 2): colony count plus
 	// the soonest extractor expiry, from the colonies + layout
@@ -256,6 +274,8 @@ func (app *Application) handleCharacter(w http.ResponseWriter, r *http.Request) 
 // snapshot cache. A section whose snapshot can't be produced stays
 // dimmed; the rest render.
 func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, view *characterView) {
+	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+
 	// Status.
 	var online esi.Online
 	if err := app.esi.GetCached(ctx, ch, esi.SnapOnline, &online); err != nil {
@@ -360,10 +380,34 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 		view.ClonesKnown = true
 		view.HomeLocation = app.locationTitle(ctx, clones.HomeLocation.LocationID, clones.HomeLocation.LocationType)
 		view.LastCloneJump = formatFinish(clones.LastCloneJumpDate)
-		for _, jc := range clones.JumpClones {
+		// Pilot-given clone names (ESI has no naming API).
+		customNames := map[int64]string{}
+		if userID != 0 {
+			if rows, err := app.queries.ListCloneNames(ctx, db.ListCloneNamesParams{UserID: userID, CharacterID: ch.CharacterID}); err != nil {
+				log.Printf("character: clone names for character %d: %v", ch.CharacterID, err)
+			} else {
+				for _, r := range rows {
+					customNames[r.CloneID] = r.CustomName
+				}
+			}
+		}
+		for i, jc := range clones.JumpClones {
 			jcv := jumpCloneView{
+				CloneID:  jc.JumpCloneID,
+				Num:      i + 1,
 				Name:     jc.Name,
 				Location: app.locationTitle(ctx, jc.LocationID, jc.LocationType),
+			}
+			if cn, ok := customNames[jc.JumpCloneID]; ok && cn != "" {
+				jcv.CustomName = cn
+			}
+			switch {
+			case jcv.CustomName != "":
+				jcv.DisplayName = jcv.CustomName
+			case jcv.Name != "":
+				jcv.DisplayName = jcv.Name
+			default:
+				jcv.DisplayName = fmt.Sprintf("Jump Clone %d", jcv.Num)
 			}
 			for i, id := range jc.Implants {
 				jcv.Implants = append(jcv.Implants, implantRow{Slot: i + 1, Name: implantName(id), TypeID: id})
@@ -412,70 +456,85 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 		view.ISK = esi.FormatISK(balance)
 	}
 
-	// Skills: totals plus the heaviest 25, same shape the old
-	// home sheet showed.
+	// Skills: the full sheet (per-category groups) now lives on
+	// this page; the builders in skills.go do the heavy lifting
+	// against a throwaway skillsView, and this block copies the
+	// results onto the character view.
 	var skills esi.Skills
+	trainedByID := map[int64]int{}
 	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapSkills, &skills) {
+		sv := &skillsView{CharacterName: ch.Name, CharacterID: ch.CharacterID}
+		app.fillSkillSections(ctx, sv, skills)
 		view.SkillsKnown = true
-		view.TotalSP = esi.FormatInt(skills.TotalSP)
-		if skills.UnallocatedSP > 0 {
-			view.UnallocatedSP = esi.FormatInt(skills.UnallocatedSP)
-		}
-		view.SkillsCount = len(skills.Skills)
-		ids := esi.SortedSkillIDs(skills.Skills)
-		shown := ids
-		if len(shown) > 25 {
-			shown = shown[:25]
-		}
-		names := app.esi.CachedTypeNames(ctx, shown)
-		byID := make(map[int64]esi.Skill, len(skills.Skills))
+		view.TotalSP = sv.TotalSP
+		view.UnallocatedSP = sv.UnallocatedSP
+		view.SkillsCount = sv.SkillsKnown
+		view.LevelVCount = sv.LevelVCount
+		view.SkillGroups = sv.Groups
 		for _, s := range skills.Skills {
-			byID[s.SkillID] = s
+			trainedByID[s.SkillID] = s.TrainedSkillLevel
 		}
-		for _, id := range shown {
-			s := byID[id]
-			name, ok := names[id]
-			if !ok {
-				name = fmt.Sprintf("Type #%d", id)
-			}
-			view.Skills = append(view.Skills, skillRow{
-				Name:    name,
-				TypeID:  id,
-				Trained: esi.RomanLevel(s.TrainedSkillLevel),
-				Active:  esi.RomanLevel(s.ActiveSkillLevel),
-				SP:      esi.FormatInt(s.SkillpointsInSkill),
-			})
+		// Browse catalog (plan quick-add) rides along when the
+		// user is known.
+		if userID != 0 {
+			bv := &skillsView{CharacterName: ch.Name, CharacterID: ch.CharacterID}
+			app.fillBrowse(ctx, bv, ch, skills, userID)
+			view.Browse = bv.Browse
+			view.BrowseWarming = bv.BrowseWarming
+			view.Plans = bv.Plans
 		}
-		view.SkillsShown = len(view.Skills)
 	}
 
-	// Queue: the currently-training line (position 0). An empty
-	// queue is a valid state: QueueKnown true, Training "".
+	// Queue: the full table plus the currently-training line
+	// (position 0). An empty queue is a valid state: QueueKnown
+	// true, Training "". Rows are enriched with trained levels
+	// and training/queued state for the 5-box indicators, and the
+	// matching group rows get the same markers.
 	var queue esi.Skillqueue
 	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapSkillqueue, &queue) {
 		view.QueueKnown = true
+		qv := &skillsView{}
+		app.fillQueue(ctx, qv, queue)
+		view.Queue = qv.Queue
+		view.Training = qv.Training
+		view.CompletesAt = qv.CompletesAt
+		queued := map[int64]int{}
+		for i := range view.Queue {
+			row := &view.Queue[i]
+			row.TrainedLvl = trainedByID[row.SkillID]
+			if row.Num == 1 {
+				row.State = "training"
+				view.TrainingSkillID = row.SkillID
+				view.TrainingLevel = row.LevelNum
+			} else {
+				row.State = "queued"
+			}
+			queued[row.SkillID] = row.LevelNum
+		}
+		for gi := range view.SkillGroups {
+			for si := range view.SkillGroups[gi].Skills {
+				sr := &view.SkillGroups[gi].Skills[si]
+				switch {
+				case sr.TypeID == view.TrainingSkillID && view.TrainingSkillID != 0:
+					sr.NextState = "training"
+					sr.NextLvl = view.TrainingLevel
+				case queued[sr.TypeID] > 0:
+					sr.NextState = "queued"
+					sr.NextLvl = queued[sr.TypeID]
+				}
+			}
+		}
 		for _, entry := range queue {
 			if entry.QueuePosition != 0 {
 				continue
 			}
-			name := app.esi.CachedTypeName(ctx, entry.SkillID)
-			if name == "" {
-				name = fmt.Sprintf("Type #%d", entry.SkillID)
-			}
-			finish := entry.FinishDate
 			if t, err := time.Parse(time.RFC3339, entry.FinishDate); err == nil {
-				finish = t.UTC().Format("2006-01-02 15:04 UTC")
 				view.TrainingFinish = t.UTC().Format(time.RFC3339)
 				if left := time.Until(t); left > 0 {
 					view.TrainingLeft = "in " + humanDuration(left)
 				} else {
 					view.TrainingLeft = "done"
 				}
-			}
-			if finish != "" {
-				view.Training = fmt.Sprintf("%s %s — finishes %s", name, esi.RomanLevel(entry.FinishedLevel), finish)
-			} else {
-				view.Training = fmt.Sprintf("%s %s", name, esi.RomanLevel(entry.FinishedLevel))
 			}
 			break
 		}
@@ -533,4 +592,59 @@ func (app *Application) typeNameOrID(ctx context.Context, id int64) string {
 	// payload; on a page that becomes a current-page want.
 	app.notePageWantFromContext(ctx, pageWantTypeDescription, id)
 	return fmt.Sprintf("Type #%d", id)
+}
+
+// ---------------------------------------------------------------------------
+// Clone renaming: ESI exposes no custom clone names, so the sheet
+// stores pilot-given labels in clone_names (keyed by the ESI
+// jump_clone_id). An empty name clears the stored label.
+// ---------------------------------------------------------------------------
+
+// handleCloneRename stores or clears a pilot-given name for one of
+// the signed-in user's jump clones, then returns to the character
+// sheet's clones section.
+func (app *Application) handleCloneRename(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	if err := r.ParseForm(); err != nil || userID == 0 {
+		http.Redirect(w, r, "/character/", http.StatusSeeOther)
+		return
+	}
+	characterID, _ := strconv.ParseInt(r.FormValue("character"), 10, 64)
+	cloneID, _ := strconv.ParseInt(r.FormValue("clone"), 10, 64)
+	name := strings.TrimSpace(r.FormValue("name"))
+	if len([]rune(name)) > 60 {
+		name = string([]rune(name)[:60])
+	}
+
+	// The clone must belong to a character this user owns.
+	owned := false
+	if characters, err := app.queries.ListCharactersByUser(ctx, userID); err == nil {
+		for _, ch := range characters {
+			if ch.CharacterID == characterID {
+				owned = true
+				break
+			}
+		}
+	} else {
+		log.Printf("character: rename clone list characters for user %d: %v", userID, err)
+	}
+	back := fmt.Sprintf("/character/?character=%d#clones", characterID)
+	if !owned || characterID == 0 || cloneID == 0 {
+		http.Redirect(w, r, back, http.StatusSeeOther)
+		return
+	}
+
+	if name == "" {
+		if err := app.queries.DeleteCloneName(ctx, db.DeleteCloneNameParams{
+			UserID: userID, CharacterID: characterID, CloneID: cloneID,
+		}); err != nil {
+			log.Printf("character: delete clone name: %v", err)
+		}
+	} else if err := app.queries.UpsertCloneName(ctx, db.UpsertCloneNameParams{
+		UserID: userID, CharacterID: characterID, CloneID: cloneID, CustomName: name,
+	}); err != nil {
+		log.Printf("character: upsert clone name: %v", err)
+	}
+	http.Redirect(w, r, back, http.StatusSeeOther)
 }

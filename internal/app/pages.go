@@ -128,6 +128,13 @@ type skillRow struct {
 	Trained string // trained level, roman
 	Active  string // active level, roman
 	SP      string // formatted
+	// TrainedLvl is the numeric trained level (0-5) driving the
+	// in-game 5-box level indicator. NextLvl/NextState mark the
+	// level currently training ("training") or sitting in the
+	// queue ("queued"); NextState is "" when neither applies.
+	TrainedLvl int
+	NextLvl    int
+	NextState  string
 }
 
 // adminSnapshotRow is one line of the admin snapshots overview.

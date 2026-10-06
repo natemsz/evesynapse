@@ -2,13 +2,10 @@ package app
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"sort"
-	"strconv"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -55,6 +52,7 @@ type browseSkillRow struct {
 	Name      string
 	Rank      string // "2x"
 	Trained   string // roman level, "—" when untrained
+	TrainedLvl int   // numeric trained level, 0 when untrained
 	SP        string // formatted SP in skill, "" when untrained
 	Primary   string // attribute name
 	Secondary string
@@ -75,97 +73,25 @@ type skillQueueRow struct {
 	SkillID  int64
 	Level    string // roman level the entry completes
 	Finishes string // UTC timestamp, "" when ESI gives none
+	// LevelNum is the numeric finished level; TrainedLvl the
+	// numeric trained level (0 when the skill is untrained);
+	// State is "training" for the position-0 entry and "queued"
+	// for the rest, driving the 5-box level indicator.
+	LevelNum   int
+	TrainedLvl int
+	State      string
 }
 
-// handleSkills renders the full Skill Sheet for one of the
-// signed-in user's characters (switchable via ?character=). All
-// data comes through the snapshot cache (skills + skillqueue),
-// and every name is resolved from local caches only — the worker
-// pre-warms snapshots and names, so this page never waits on ESI
-// name lookups.
+// handleSkills used to render the standalone Skill Sheet. The
+// sheet now lives on the unified character page (/character/),
+// so this route redirects there, preserving an explicit
+// ?character= pick.
 func (app *Application) handleSkills(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
+	target := "/character/"
+	if cid := r.URL.Query().Get("character"); cid != "" {
+		target = "/character/?character=" + cid
 	}
-
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
-	if userID == 0 {
-		// Dev-login sessions carry no user; nothing to show.
-		app.render(ctx, w, http.StatusOK, "skills.html", data)
-		return
-	}
-
-	characters, err := app.queries.ListCharactersByUser(ctx, userID)
-	if err != nil {
-		log.Printf("skills: list characters for user %d: %v", userID, err)
-		data.Error = "Could not load skill data; check the server log."
-		app.render(ctx, w, http.StatusOK, "skills.html", data)
-		return
-	}
-	if len(characters) == 0 {
-		app.render(ctx, w, http.StatusOK, "skills.html", data)
-		return
-	}
-
-	// Active character: an explicit ?character= the user owns wins,
-	// then the session character, then the first linked character.
-	active := characters[0]
-	pick := func(id int64) bool {
-		for _, ch := range characters {
-			if ch.CharacterID == id {
-				active = ch
-				return true
-			}
-		}
-		return false
-	}
-	if want, _ := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64); want != 0 && pick(want) {
-		// An explicit pick becomes the session's acting
-		// character (see pickCharacter in character.go).
-		app.sessions.Put(ctx, sessionCharacterID, int(active.CharacterID))
-		app.sessions.Put(ctx, sessionCharacterName, active.Name)
-	} else if sid := int64(app.sessions.GetInt(ctx, sessionCharacterID)); sid == 0 || !pick(sid) {
-		active = characters[0]
-	}
-	for _, ch := range characters {
-		data.SkillsChars = append(data.SkillsChars, assetCharLink{
-			ID:     ch.CharacterID,
-			Name:   ch.Name,
-			Active: ch.CharacterID == active.CharacterID,
-		})
-	}
-
-	view := &skillsView{CharacterName: active.Name, CharacterID: active.CharacterID}
-	data.Skills = view
-
-	var skills esi.Skills
-	if err := app.esi.GetCached(ctx, active, esi.SnapSkills, &skills); err != nil {
-		log.Printf("skills: load skills for character %d: %v", active.CharacterID, err)
-		// No snapshot row at all = cold start: the worker is still
-		// importing this character, which the Sync page shows live.
-		if _, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: active.CharacterID, Kind: esi.SnapSkills}); errors.Is(serr, sql.ErrNoRows) {
-			view.Warming = true
-		}
-		app.render(ctx, w, http.StatusOK, "skills.html", data)
-		return
-	}
-	view.Loaded = true
-
-	// The queue degrades on its own: a failed fetch leaves the
-	// skills sections intact with an empty queue block.
-	var queue esi.Skillqueue
-	if err := app.esi.GetCached(ctx, active, esi.SnapSkillqueue, &queue); err != nil {
-		log.Printf("skills: load queue for character %d: %v", active.CharacterID, err)
-	} else {
-		app.fillQueue(ctx, view, queue)
-	}
-
-	app.fillSkillSections(ctx, view, skills)
-	app.fillBrowse(ctx, view, active, skills, userID)
-	app.render(ctx, w, http.StatusOK, "skills.html", data)
+	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
 // fillBrowse loads the SDE skill catalog (grouped, with the
@@ -220,6 +146,7 @@ func (app *Application) fillBrowse(ctx context.Context, view *skillsView, ch db.
 		}
 		if s, ok := trained[row.TypeID]; ok {
 			brow.Trained = esi.RomanLevel(s.TrainedSkillLevel)
+			brow.TrainedLvl = s.TrainedSkillLevel
 			brow.SP = esi.FormatInt(s.SkillpointsInSkill)
 		}
 		groups[len(groups)-1].Skills = append(groups[len(groups)-1].Skills, brow)
@@ -268,6 +195,7 @@ func (app *Application) fillQueue(ctx context.Context, view *skillsView, queue e
 			Skill:    nameFor(entry.SkillID),
 			SkillID:  entry.SkillID,
 			Level:    esi.RomanLevel(entry.FinishedLevel),
+			LevelNum: entry.FinishedLevel,
 			Finishes: formatFinish(entry.FinishDate),
 		})
 		if entry.QueuePosition == 0 && view.Training == "" {
@@ -366,11 +294,12 @@ func (app *Application) fillSkillSections(ctx context.Context, view *skillsView,
 		sec.sp += s.SkillpointsInSkill
 		sec.rows = append(sec.rows, workingRow{
 			row: skillRow{
-				Name:    skillName,
-				TypeID:  s.SkillID,
-				Trained: esi.RomanLevel(s.TrainedSkillLevel),
-				Active:  esi.RomanLevel(s.ActiveSkillLevel),
-				SP:      esi.FormatInt(s.SkillpointsInSkill),
+				Name:       skillName,
+				TypeID:     s.SkillID,
+				Trained:    esi.RomanLevel(s.TrainedSkillLevel),
+				Active:     esi.RomanLevel(s.ActiveSkillLevel),
+				SP:         esi.FormatInt(s.SkillpointsInSkill),
+				TrainedLvl: s.TrainedSkillLevel,
 			},
 			sp: s.SkillpointsInSkill,
 		})

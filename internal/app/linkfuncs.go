@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"html/template"
+	"strings"
 )
 
 // =====================================================================
@@ -162,6 +163,54 @@ func placeLink(ref placeRef) template.HTML {
 	return template.HTML(html.EscapeString(ref.Name))
 }
 
+// skillLevel renders the in-game 5-box skill level indicator:
+// five small squares, filled for trained levels (gold when the
+// skill is fully trained to V), blue-pulsing for the level
+// currently training, darker blue for queued levels, dark for
+// untrained. trained is 0-5, next is the training/queued level
+// (0 when none), state is "training", "queued", or "".
+func skillLevel(trained, next int, state string) template.HTML {
+	if trained < 0 {
+		trained = 0
+	}
+	if trained > 5 {
+		trained = 5
+	}
+	label := fmt.Sprintf("Level %d of 5", trained)
+	switch state {
+	case "training":
+		if next >= 1 && next <= 5 {
+			label += fmt.Sprintf(", training level %d", next)
+		}
+	case "queued":
+		if next >= 1 && next <= 5 {
+			label += fmt.Sprintf(", level %d queued", next)
+		}
+	}
+	var b strings.Builder
+	b.WriteString(`<span class="lvl" role="img" aria-label="`)
+	b.WriteString(html.EscapeString(label))
+	b.WriteString(`">`)
+	for i := 1; i <= 5; i++ {
+		cls := ""
+		switch {
+		case state == "training" && i == next:
+			cls = ` class="training"`
+		case state == "queued" && i == next:
+			cls = ` class="queued"`
+		case i <= trained:
+			if trained >= 5 {
+				cls = ` class="on max"`
+			} else {
+				cls = ` class="on"`
+			}
+		}
+		b.WriteString("<i" + cls + "></i>")
+	}
+	b.WriteString(`</span>`)
+	return template.HTML(b.String())
+}
+
 // linkFuncMap is the template function set carrying the link
 // policy; pages.go registers it for every render.
 func linkFuncMap() template.FuncMap {
@@ -176,5 +225,6 @@ func linkFuncMap() template.FuncMap {
 		"stationLink":   stationLink,
 		"structureLink": structureLink,
 		"placeLink":     placeLink,
+		"skillLevel":    skillLevel,
 	}
 }

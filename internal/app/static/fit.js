@@ -695,6 +695,7 @@
       markDirty();
       simulate();
       syncUndoButtons();
+      shipSearch.close();
     }
   });
   var modSearch = makeSuggester(modInput, modList, {

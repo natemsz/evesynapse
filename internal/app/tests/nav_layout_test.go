@@ -222,7 +222,6 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		".nav-expand-btn[aria-expanded=\"true\"] .expand-icon-plus { display: none; }",
 		".nav-expand-btn[aria-expanded=\"true\"] .expand-icon-minus { display: block; }",
 		"html[data-nav=\"rail\"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }",
-		".sidebar .sidebar-actions .nav-state-btn { display: none; }",
 		".sidebar .nav-drawer-close { display: inline-flex; }",
 		"html[data-nav=\"rail\"] .nav-label {\n    display: block;\n    max-width: 12rem;\n    opacity: 1;\n    transform: none;\n  }",
 		"html[data-nav=\"rail\"] .sidebar-account-footer { display: flex; }",

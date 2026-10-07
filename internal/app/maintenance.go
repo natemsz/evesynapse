@@ -30,10 +30,11 @@ package app
 //       saved layouts, collected history) is never touched.
 //
 // The restart hand-off runs through a pidfile the server writes
-// next to its own executable: the updater signals that PID and
-// the service manager (Restart=always) brings the new build up.
-// No systemctl call is attempted — the updater deliberately runs
-// without the privileges that would need.
+// in its runtime directory (or, started by hand, next to its own
+// executable): the updater signals that PID — after checking the
+// process really is this program — and the service manager
+// (Restart=always) brings the new build up. No systemctl call is
+// attempted.
 // ---------------------------------------------------------------------------
 
 import (
@@ -68,34 +69,112 @@ func Version() string { return appVersion }
 // restarts) the running server.
 // ---------------------------------------------------------------------------
 
-// serverPidfileName sits next to the executable so it works no
-// matter which directory the service is started from.
 const serverPidfileName = "evesynapse.pid"
 
-// serverPidfilePath resolves <executable dir>/evesynapse.pid.
-func serverPidfilePath() (string, error) {
-	exe, err := os.Executable()
-	if err != nil {
-		return "", err
+// serverRuntimeDir is the server's own writable directory under
+// the service unit (RuntimeDirectory=evesynapse). The install
+// directory and the program in it belong to root, so the service
+// account cannot write there — which is the point: root runs that
+// program for `evesynapse -update`, so the account the server runs
+// as must never be able to replace it.
+const serverRuntimeDir = "/run/evesynapse"
+
+// serverPidfileCandidates lists where the server's pidfile may
+// live, most preferred first: the runtime directory systemd hands
+// the service ($RUNTIME_DIRECTORY), that directory's fixed address
+// (how a maintenance run, which has no such variable, finds it),
+// and next to the executable — where it has always been, and still
+// is for a server started by hand or under an older unit.
+func serverPidfileCandidates(exeDir string) []string {
+	var dirs []string
+	// systemd passes a list when a unit declares several runtime
+	// directories; this unit declares one.
+	if rt := filepath.SplitList(os.Getenv("RUNTIME_DIRECTORY")); len(rt) > 0 {
+		dirs = append(dirs, rt[0])
 	}
-	return filepath.Join(filepath.Dir(exe), serverPidfileName), nil
+	dirs = append(dirs, serverRuntimeDir, exeDir)
+	var paths []string
+	seen := map[string]bool{}
+	for _, dir := range dirs {
+		path := filepath.Join(dir, serverPidfileName)
+		if !seen[path] {
+			seen[path] = true
+			paths = append(paths, path)
+		}
+	}
+	return paths
 }
 
-// StartServerPidfile records the server's PID next to the
-// executable and returns the pidfile path ("" when the location
-// isn't writable — the server keeps running either way; only the
+// StartServerPidfile records the server's PID in the first
+// pidfile location it can write and returns that path ("" when
+// none is writable — the server keeps running either way; only the
 // self-restart hand-off loses its grip). Called once at startup.
 func StartServerPidfile() string {
-	path, err := serverPidfilePath()
+	exe, err := os.Executable()
 	if err != nil {
 		log.Printf("evesynapse: pidfile: %v (self-restart unavailable)", err)
 		return ""
 	}
-	if err := os.WriteFile(path, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o644); err != nil {
-		log.Printf("evesynapse: pidfile: write %s: %v (self-restart unavailable)", path, err)
-		return ""
+	return writeServerPidfile(serverPidfileCandidates(filepath.Dir(exe)))
+}
+
+func writeServerPidfile(candidates []string) string {
+	var lastErr error
+	for _, path := range candidates {
+		if err := os.WriteFile(path, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o644); err != nil {
+			lastErr = err
+			continue
+		}
+		return path
 	}
-	return path
+	log.Printf("evesynapse: pidfile: no writable location (%v); self-restart unavailable", lastErr)
+	return ""
+}
+
+// findLiveServer looks through the pidfile locations for one that
+// names a running server, returning its PID and the pidfile that
+// named it.
+func findLiveServer(candidates []string) (pid int, pidfile string, ok bool) {
+	for _, path := range candidates {
+		if pid, ok := liveServerPID(path); ok {
+			return pid, path, true
+		}
+	}
+	return 0, "", false
+}
+
+// serverProcessCheck reports whether pid is running the program
+// installed at target. The pidfile is written by the service
+// account while an update runs as root, so its contents are a
+// claim to check, not an instruction: root only ever signals a
+// process that really is this program. A var so tests, whose
+// stand-in "server" is a sleep process, can swap it out.
+var serverProcessCheck = pidRunsProgram
+
+// pidRunsProgram compares /proc/<pid>/exe with target. A program
+// file replaced under a running process reads back with a
+// " (deleted)" suffix, which is exactly the state right after an
+// update's swap. Where /proc is not available (anything but
+// Linux) there is nothing to compare, and the pidfile is taken at
+// its word as before.
+func pidRunsProgram(pid int, target string) bool {
+	exe, err := os.Readlink(filepath.Join("/proc", strconv.Itoa(pid), "exe"))
+	if err != nil {
+		if _, statErr := os.Stat("/proc/self/exe"); statErr != nil {
+			return true // no /proc here
+		}
+		return false
+	}
+	exe = strings.TrimSuffix(exe, " (deleted)")
+	if exe == target {
+		return true
+	}
+	// The same file reached by another name (a symlinked install
+	// directory).
+	if resolved, err := filepath.EvalSymlinks(target); err == nil && exe == resolved {
+		return true
+	}
+	return false
 }
 
 // RemoveServerPidfile clears the pidfile StartServerPidfile
@@ -607,9 +686,12 @@ func installUpdate(target, source, wantHash string, wantMachine uint16, stdout, 
 	syncDir(dir)
 	relabelExecutable(target)
 
-	pidfile := filepath.Join(dir, serverPidfileName)
-	if pid, ok := liveServerPID(pidfile); ok {
+	if pid, pidfile, ok := findLiveServer(serverPidfileCandidates(dir)); ok {
 		fmt.Fprintln(stdout, "Update installed.")
+		if !serverProcessCheck(pid, target) {
+			fmt.Fprintf(stdout, "The pidfile %s names process %d, which isn't EveSynapse, so nothing was signalled. Restart EveSynapse yourself to start the new version (sudo systemctl restart evesynapse).\n", pidfile, pid)
+			return 0
+		}
 		if signalServerRestart(pid, pidfile, updateRestartWait) {
 			fmt.Fprintln(stdout, "EveSynapse is restarting on the new version.")
 		} else {
@@ -761,12 +843,18 @@ func RunRefresh(args []string, cfg Config, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "Usage: evesynapse -refresh")
 		return 2
 	}
-	pidfile, err := serverPidfilePath()
+	pidfile := ""
+	exe, err := os.Executable()
 	if err != nil {
 		// Without a resolvable pidfile there is no live-server
 		// check to make; say so and carry on rather than fail.
 		fmt.Fprintln(stdout, "(Couldn't check whether EveSynapse is running — continuing anyway.)")
-		pidfile = ""
+	} else if pid, live, ok := findLiveServer(serverPidfileCandidates(filepath.Dir(exe))); ok && serverProcessCheck(pid, exe) {
+		// Hand runRefresh the pidfile that names a running server,
+		// so it refuses; with none found there is nothing to check.
+		// A stale pidfile whose PID now belongs to some other
+		// program does not count.
+		pidfile = live
 	}
 	return runRefresh(cfg, pidfile, stdout, stderr)
 }

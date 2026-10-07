@@ -211,12 +211,20 @@ registration for sign-in ("EVE SSO flow" below). Then:
    `evesynapse` user and `/opt/evesynapse`, installs and starts
    PostgreSQL if it's missing and creates the app's database
    (role `evesynapse`, database `evesynapse`, with a generated
-   password written into `/opt/evesynapse/.env` as `DATABASE_URL`;
-   the file is chmod 600), installs the systemd service (ordered
-   after `postgresql.service`), and links `evesynapse` into `/usr/bin` so you
+   password written into `/opt/evesynapse/.env` as `DATABASE_URL`),
+   installs the systemd service (ordered after
+   `postgresql.service`), and links `evesynapse` into `/usr/bin` so you
    can run it without typing the full path. It never overwrites
    an existing `.env` (it only appends a `DATABASE_URL` that
-   isn't there yet). Installing from a fork or from a build you
+   isn't there yet).
+
+   The program, `/opt/evesynapse` and `.env` belong to root; the
+   service account can read them but not change them, and the
+   unit runs it sandboxed with `/run/evesynapse` as its only
+   writable directory. Updates run as root, so the account the
+   server runs as must not be able to replace what root runs.
+   If you installed before this layout, run the script once more
+   to move to it. Installing from a fork or from a build you
    made yourself works too:
 
    > **Why `/usr/bin`?** Updating always runs under `sudo`, and

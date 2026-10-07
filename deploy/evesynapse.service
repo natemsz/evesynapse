@@ -1,19 +1,23 @@
 # EveSynapse service unit.
 #
-# TWO NOTES vs. the SQLite-era unit: Restart=always (so the
-# binary's self-update mode `evesynapse -update` can restart the
-# app onto the new build: the updater swaps the program file in
-# place, asks the running server to stop, and this unit brings
-# it straight back up on the new version — an explicit
-# `systemctl stop evesynapse` still stays stopped), and the
-# Postgres ordering below: since the v0.3.26 cutover the app
-# reads its data from the local PostgreSQL service, so it must
-# start after PostgreSQL (and stop before it: shutdown ordering
-# follows After= in reverse). StartLimitBurst keeps a broken
-# build from restart-looping forever: after 5 starts in a minute
-# the unit gives up and waits for a human.
+# Restart=always is what lets the binary's self-update mode
+# (`evesynapse -update`) restart the app onto a new build: the
+# updater swaps the program file in place, asks the running server
+# to stop, and this unit brings it straight back up on the new
+# version — an explicit `systemctl stop evesynapse` still stays
+# stopped. StartLimitBurst keeps a broken build from
+# restart-looping forever: after 5 starts in a minute the unit
+# gives up and waits for a human.
 #
-# Apply once on the box:
+# The app reads its data from the local PostgreSQL service, so it
+# starts after PostgreSQL (and stops before it: shutdown ordering
+# follows After= in reverse).
+#
+# The install directory and the program in it belong to root (see
+# deploy/setup.sh), because root runs that program for updates. The
+# server's one writable place is the runtime directory below.
+#
+# Apply once on the box (deploy/setup.sh does this for you):
 #   sudo cp deploy/evesynapse.service /etc/systemd/system/evesynapse.service
 #   sudo systemctl daemon-reload
 
@@ -32,6 +36,11 @@ EnvironmentFile=/opt/evesynapse/.env
 ExecStart=/opt/evesynapse/evesynapse
 Restart=always
 RestartSec=2
+
+# /run/evesynapse: created for the server at start, removed at
+# stop. Its pidfile lives here.
+RuntimeDirectory=evesynapse
+RuntimeDirectoryMode=0755
 
 [Install]
 WantedBy=multi-user.target

@@ -79,6 +79,7 @@ func schemaSteps() []schemaStep {
 			`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'clone_names'`},
 		// From here on the record alone decides: no probes.
 		{7, "user_foreign_keys", pgUserForeignKeysSchema, ""},
+		{8, "snapshot_etags", pgSnapshotETagsSchema, ""},
 	}
 }
 

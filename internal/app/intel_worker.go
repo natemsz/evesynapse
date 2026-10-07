@@ -59,7 +59,7 @@ func (app *Application) refreshIntel(ctx context.Context, budget *warmBudget) (s
 			logging.Errorf("worker: intel: read global snapshot %s: %v", kind, err)
 		}
 
-		if _, err := app.esi.FetchAndStoreGlobalSnapshot(ctx, kind); err != nil {
+		if err := app.esi.FetchAndStoreGlobalSnapshot(ctx, kind); err != nil {
 			if errors.Is(err, esi.ErrErrorLimit) {
 				logging.Warnf("worker: intel: ESI error limit hit refreshing %s; backing off until next cycle", kind)
 				return stored, names, true

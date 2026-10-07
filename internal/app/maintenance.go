@@ -937,8 +937,11 @@ func expireCaches(conn *sql.DB) ([]string, error) {
 	expiries := []cacheExpiry{
 		{
 			label: "Character data (skills, wallets, assets, mail, contracts…)",
-			sql:   `UPDATE character_snapshots SET fetched_at = $1, cached_until = $2`,
-			args:  []any{cacheEpoch, cacheEpoch},
+			// The ETag goes too: with it, the next fetch would only
+			// ask ESI whether the copy is current and keep it. A
+			// refresh is for downloading everything again.
+			sql:  `UPDATE character_snapshots SET fetched_at = $1, cached_until = $2, etag = ''`,
+			args: []any{cacheEpoch, cacheEpoch},
 		},
 		{
 			label: "Character profiles",
@@ -947,7 +950,7 @@ func expireCaches(conn *sql.DB) ([]string, error) {
 		},
 		{
 			label: "Public data (incursions, faction warfare…)",
-			sql:   `UPDATE global_snapshots SET fetched_at = $1, cached_until = $2`,
+			sql:   `UPDATE global_snapshots SET fetched_at = $1, cached_until = $2, etag = ''`,
 			args:  []any{cacheEpoch, cacheEpoch},
 		},
 		{

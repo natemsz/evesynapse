@@ -130,7 +130,7 @@ func (app *Application) fetchCorpKind(ctx context.Context, ch db.Character, corp
 		}
 	}
 
-	if _, err := app.esi.FetchAndStoreCorpSnapshot(ctx, ch, corpID, kind); err != nil {
+	if err := app.esi.FetchAndStoreCorpSnapshot(ctx, ch, corpID, kind); err != nil {
 		switch {
 		case errors.Is(err, esi.ErrErrorLimit):
 			logging.Warnf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)

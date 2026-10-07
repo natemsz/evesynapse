@@ -75,6 +75,12 @@ var pgCloneNamesSchema string
 //go:embed schema_pg/007_user_foreign_keys.sql
 var pgUserForeignKeysSchema string
 
+// Step 008: the ETag each snapshot was stored with, so a refresh
+// can ask ESI whether it changed instead of downloading it again.
+//
+//go:embed schema_pg/008_snapshot_etags.sql
+var pgSnapshotETagsSchema string
+
 //go:embed static
 var staticFS embed.FS
 

@@ -94,7 +94,7 @@ func (app *Application) fetchCommsKind(ctx context.Context, ch db.Character, kin
 	if !allowance.take() {
 		return corpFetchSkipped
 	}
-	if _, err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
+	if err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
 		switch {
 		case errors.Is(err, esi.ErrErrorLimit):
 			logging.Warnf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)
@@ -157,7 +157,7 @@ func (app *Application) warmMailBodies(ctx context.Context, ch db.Character, all
 		if !allowance.take() {
 			break
 		}
-		if _, err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
+		if err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
 			if errors.Is(err, esi.ErrErrorLimit) {
 				return fetched, true
 			}
@@ -202,7 +202,7 @@ func (app *Application) warmCalendarDetails(ctx context.Context, ch db.Character
 			if !allowance.take() {
 				return fetched, false
 			}
-			if _, err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
+			if err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
 				if errors.Is(err, esi.ErrErrorLimit) {
 					return fetched, true
 				}

@@ -273,7 +273,7 @@ func (q *Queries) GetContractDetail(ctx context.Context, contractID int64) (Cont
 }
 
 const getGlobalSnapshot = `-- name: GetGlobalSnapshot :one
-SELECT kind, payload, fetched_at, cached_until FROM global_snapshots
+SELECT kind, payload, fetched_at, cached_until, etag FROM global_snapshots
 WHERE kind = $1
 `
 
@@ -290,6 +290,7 @@ func (q *Queries) GetGlobalSnapshot(ctx context.Context, kind string) (GlobalSna
 		&i.Payload,
 		&i.FetchedAt,
 		&i.CachedUntil,
+		&i.Etag,
 	)
 	return i, err
 }
@@ -407,7 +408,7 @@ func (q *Queries) GetSkillPlan(ctx context.Context, arg GetSkillPlanParams) (Ski
 }
 
 const getSnapshot = `-- name: GetSnapshot :one
-SELECT character_id, kind, payload, fetched_at, cached_until FROM character_snapshots
+SELECT character_id, kind, payload, fetched_at, cached_until, etag FROM character_snapshots
 WHERE character_id = $1 AND kind = $2
 `
 
@@ -425,8 +426,28 @@ func (q *Queries) GetSnapshot(ctx context.Context, arg GetSnapshotParams) (Chara
 		&i.Payload,
 		&i.FetchedAt,
 		&i.CachedUntil,
+		&i.Etag,
 	)
 	return i, err
+}
+
+const getSnapshotETag = `-- name: GetSnapshotETag :one
+SELECT etag FROM character_snapshots
+WHERE character_id = $1 AND kind = $2
+`
+
+type GetSnapshotETagParams struct {
+	CharacterID int64  `json:"character_id"`
+	Kind        string `json:"kind"`
+}
+
+// The ETag a snapshot was stored with (” when it has none), read
+// without its payload: all a conditional refresh needs to send.
+func (q *Queries) GetSnapshotETag(ctx context.Context, arg GetSnapshotETagParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, getSnapshotETag, arg.CharacterID, arg.Kind)
+	var etag string
+	err := row.Scan(&etag)
+	return etag, err
 }
 
 const getSnapshotFetchState = `-- name: GetSnapshotFetchState :one
@@ -825,7 +846,7 @@ func (q *Queries) ListCorporationIDsByUser(ctx context.Context, userID int64) ([
 }
 
 const listGlobalSnapshots = `-- name: ListGlobalSnapshots :many
-SELECT kind, payload, fetched_at, cached_until FROM global_snapshots
+SELECT kind, payload, fetched_at, cached_until, etag FROM global_snapshots
 ORDER BY kind
 `
 
@@ -843,6 +864,7 @@ func (q *Queries) ListGlobalSnapshots(ctx context.Context) ([]GlobalSnapshot, er
 			&i.Payload,
 			&i.FetchedAt,
 			&i.CachedUntil,
+			&i.Etag,
 		); err != nil {
 			return nil, err
 		}
@@ -1197,8 +1219,47 @@ func (q *Queries) ListSnapshotFetchStatesByCharacter(ctx context.Context, charac
 	return items, nil
 }
 
+const listSnapshotMetaByCharacter = `-- name: ListSnapshotMetaByCharacter :many
+SELECT kind, fetched_at, cached_until FROM character_snapshots
+WHERE character_id = $1
+ORDER BY kind
+`
+
+type ListSnapshotMetaByCharacterRow struct {
+	Kind        string         `json:"kind"`
+	FetchedAt   string         `json:"fetched_at"`
+	CachedUntil sql.NullString `json:"cached_until"`
+}
+
+// A character's stored snapshots without their payloads: which kinds
+// exist and how fresh each is. The payloads (a whole asset list, a
+// mailbox) are by far the bulk of the table, and the readers that
+// only order, count or check freshness have no use for them.
+func (q *Queries) ListSnapshotMetaByCharacter(ctx context.Context, characterID int64) ([]ListSnapshotMetaByCharacterRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSnapshotMetaByCharacter, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSnapshotMetaByCharacterRow
+	for rows.Next() {
+		var i ListSnapshotMetaByCharacterRow
+		if err := rows.Scan(&i.Kind, &i.FetchedAt, &i.CachedUntil); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSnapshotsByCharacter = `-- name: ListSnapshotsByCharacter :many
-SELECT character_id, kind, payload, fetched_at, cached_until FROM character_snapshots
+SELECT character_id, kind, payload, fetched_at, cached_until, etag FROM character_snapshots
 WHERE character_id = $1
 ORDER BY kind
 `
@@ -1218,6 +1279,7 @@ func (q *Queries) ListSnapshotsByCharacter(ctx context.Context, characterID int6
 			&i.Payload,
 			&i.FetchedAt,
 			&i.CachedUntil,
+			&i.Etag,
 		); err != nil {
 			return nil, err
 		}
@@ -1233,7 +1295,7 @@ func (q *Queries) ListSnapshotsByCharacter(ctx context.Context, characterID int6
 }
 
 const listSnapshotsByKind = `-- name: ListSnapshotsByKind :many
-SELECT character_id, kind, payload, fetched_at, cached_until FROM character_snapshots
+SELECT character_id, kind, payload, fetched_at, cached_until, etag FROM character_snapshots
 WHERE kind = $1
 ORDER BY character_id
 `
@@ -1253,6 +1315,7 @@ func (q *Queries) ListSnapshotsByKind(ctx context.Context, kind string) ([]Chara
 			&i.Payload,
 			&i.FetchedAt,
 			&i.CachedUntil,
+			&i.Etag,
 		); err != nil {
 			return nil, err
 		}
@@ -1280,15 +1343,23 @@ type ListSnapshotsForUserParams struct {
 	Kinds  []string `json:"kinds"`
 }
 
-func (q *Queries) ListSnapshotsForUser(ctx context.Context, arg ListSnapshotsForUserParams) ([]CharacterSnapshot, error) {
+type ListSnapshotsForUserRow struct {
+	CharacterID int64          `json:"character_id"`
+	Kind        string         `json:"kind"`
+	Payload     string         `json:"payload"`
+	FetchedAt   string         `json:"fetched_at"`
+	CachedUntil sql.NullString `json:"cached_until"`
+}
+
+func (q *Queries) ListSnapshotsForUser(ctx context.Context, arg ListSnapshotsForUserParams) ([]ListSnapshotsForUserRow, error) {
 	rows, err := q.db.QueryContext(ctx, listSnapshotsForUser, arg.UserID, pq.Array(arg.Kinds))
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []CharacterSnapshot
+	var items []ListSnapshotsForUserRow
 	for rows.Next() {
-		var i CharacterSnapshot
+		var i ListSnapshotsForUserRow
 		if err := rows.Scan(
 			&i.CharacterID,
 			&i.Kind,
@@ -1653,6 +1724,55 @@ func (q *Queries) SetUserHomeLayout(ctx context.Context, arg SetUserHomeLayoutPa
 	return err
 }
 
+const touchGlobalSnapshot = `-- name: TouchGlobalSnapshot :execrows
+UPDATE global_snapshots
+SET fetched_at = $1, cached_until = $2
+WHERE kind = $3
+`
+
+type TouchGlobalSnapshotParams struct {
+	FetchedAt   string `json:"fetched_at"`
+	CachedUntil string `json:"cached_until"`
+	Kind        string `json:"kind"`
+}
+
+// ESI answered "not modified": only the bookkeeping moves.
+func (q *Queries) TouchGlobalSnapshot(ctx context.Context, arg TouchGlobalSnapshotParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, touchGlobalSnapshot, arg.FetchedAt, arg.CachedUntil, arg.Kind)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const touchSnapshot = `-- name: TouchSnapshot :execrows
+UPDATE character_snapshots
+SET fetched_at = $1, cached_until = $2
+WHERE character_id = $3 AND kind = $4
+`
+
+type TouchSnapshotParams struct {
+	FetchedAt   string         `json:"fetched_at"`
+	CachedUntil sql.NullString `json:"cached_until"`
+	CharacterID int64          `json:"character_id"`
+	Kind        string         `json:"kind"`
+}
+
+// ESI answered "not modified": the stored payload is still current,
+// so only the bookkeeping beside it moves.
+func (q *Queries) TouchSnapshot(ctx context.Context, arg TouchSnapshotParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, touchSnapshot,
+		arg.FetchedAt,
+		arg.CachedUntil,
+		arg.CharacterID,
+		arg.Kind,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const updateCharacterTokens = `-- name: UpdateCharacterTokens :exec
 UPDATE characters
 SET access_token = $1, refresh_token = $2, token_expiry = $3, updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
@@ -1876,12 +1996,13 @@ func (q *Queries) UpsertContractDetail(ctx context.Context, arg UpsertContractDe
 }
 
 const upsertGlobalSnapshot = `-- name: UpsertGlobalSnapshot :exec
-INSERT INTO global_snapshots (kind, payload, fetched_at, cached_until)
-VALUES ($1, $2, $3, $4)
+INSERT INTO global_snapshots (kind, payload, fetched_at, cached_until, etag)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (kind) DO UPDATE SET
     payload      = excluded.payload,
     fetched_at   = excluded.fetched_at,
-    cached_until = excluded.cached_until
+    cached_until = excluded.cached_until,
+    etag         = excluded.etag
 `
 
 type UpsertGlobalSnapshotParams struct {
@@ -1889,6 +2010,7 @@ type UpsertGlobalSnapshotParams struct {
 	Payload     string `json:"payload"`
 	FetchedAt   string `json:"fetched_at"`
 	CachedUntil string `json:"cached_until"`
+	Etag        string `json:"etag"`
 }
 
 func (q *Queries) UpsertGlobalSnapshot(ctx context.Context, arg UpsertGlobalSnapshotParams) error {
@@ -1897,6 +2019,7 @@ func (q *Queries) UpsertGlobalSnapshot(ctx context.Context, arg UpsertGlobalSnap
 		arg.Payload,
 		arg.FetchedAt,
 		arg.CachedUntil,
+		arg.Etag,
 	)
 	return err
 }
@@ -1957,12 +2080,13 @@ func (q *Queries) UpsertSkillPlanItem(ctx context.Context, arg UpsertSkillPlanIt
 }
 
 const upsertSnapshot = `-- name: UpsertSnapshot :exec
-INSERT INTO character_snapshots (character_id, kind, payload, fetched_at, cached_until)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO character_snapshots (character_id, kind, payload, fetched_at, cached_until, etag)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (character_id, kind) DO UPDATE SET
     payload      = excluded.payload,
     fetched_at   = excluded.fetched_at,
-    cached_until = excluded.cached_until
+    cached_until = excluded.cached_until,
+    etag         = excluded.etag
 `
 
 type UpsertSnapshotParams struct {
@@ -1971,6 +2095,7 @@ type UpsertSnapshotParams struct {
 	Payload     string         `json:"payload"`
 	FetchedAt   string         `json:"fetched_at"`
 	CachedUntil sql.NullString `json:"cached_until"`
+	Etag        string         `json:"etag"`
 }
 
 func (q *Queries) UpsertSnapshot(ctx context.Context, arg UpsertSnapshotParams) error {
@@ -1980,6 +2105,7 @@ func (q *Queries) UpsertSnapshot(ctx context.Context, arg UpsertSnapshotParams) 
 		arg.Payload,
 		arg.FetchedAt,
 		arg.CachedUntil,
+		arg.Etag,
 	)
 	return err
 }

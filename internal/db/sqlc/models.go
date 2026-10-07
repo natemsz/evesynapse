@@ -46,6 +46,7 @@ type CharacterSnapshot struct {
 	Payload     string         `json:"payload"`
 	FetchedAt   string         `json:"fetched_at"`
 	CachedUntil sql.NullString `json:"cached_until"`
+	Etag        string         `json:"etag"`
 }
 
 type CloneName struct {
@@ -76,6 +77,7 @@ type GlobalSnapshot struct {
 	Payload     string `json:"payload"`
 	FetchedAt   string `json:"fetched_at"`
 	CachedUntil string `json:"cached_until"`
+	Etag        string `json:"etag"`
 }
 
 type GuidePrice struct {

@@ -497,6 +497,16 @@ fresh snapshots without calling ESI; on fetch failure a stale
 snapshot is served instead of an error. ESI's error-limit statuses
 (420/429) are treated as a hard back-off signal.
 
+Refreshes are conditional where they can be. A dataset that comes
+in one response is stored with the `ETag` ESI sent, and the next
+refresh offers it back (`If-None-Match`). When nothing has changed
+ESI answers `304 Not Modified` with no body: the stored payload
+stays as it is and only its cache window is renewed. Datasets
+spread over several pages (assets, contracts, blueprints, …) have
+an ETag per page and none for the whole, so they are downloaded in
+full each time. `evesynapse -refresh` clears the stored ETags, so
+everything really is downloaded again.
+
 Name resolution is split in two tiers. Page renders resolve type,
 group and place names from local data only — the in-process maps,
 the SDE static-data tables (below), and the `type_names` fallback

@@ -286,7 +286,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 			if !allowance.take() {
 				break
 			}
-			if _, err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
+			if err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
 				failed++
 				if errors.Is(err, esi.ErrErrorLimit) {
 					logging.Warnf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)
@@ -612,7 +612,7 @@ func (app *Application) orderByDue(ctx context.Context, characters []db.Characte
 // earliest cached_until across every stored snapshot, pulled to
 // the zero time when any core kind has never been fetched.
 func (app *Application) characterDueKey(ctx context.Context, ch db.Character) time.Time {
-	snaps, err := app.listSnapshotMeta(ctx, ch.CharacterID)
+	snaps, err := app.queries.ListSnapshotMetaByCharacter(ctx, ch.CharacterID)
 	if err != nil {
 		return time.Time{} // unreadable state: treat as due now
 	}

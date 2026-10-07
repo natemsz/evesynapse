@@ -358,7 +358,7 @@ func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	// Snapshot cache overview: per character, which ESI kinds are
 	// cached and when each expires.
 	for _, ch := range data.Characters {
-		snaps, err := app.listSnapshotMeta(ctx, ch.CharacterID)
+		snaps, err := app.queries.ListSnapshotMetaByCharacter(ctx, ch.CharacterID)
 		if err != nil {
 			logging.Errorf("admin: list snapshots for character %d: %v", ch.CharacterID, err)
 			continue

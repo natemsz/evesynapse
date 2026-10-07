@@ -1406,17 +1406,25 @@ func (c *Client) Get(ctx context.Context, accessToken, path string, out any) err
 // header. Token values are never logged; errors carry the method,
 // path and status only.
 func (c *Client) request(ctx context.Context, method, accessToken, path string, payload any, want ...int) ([]byte, http.Header, error) {
+	body, header, _, err := c.send(ctx, method, accessToken, path, payload, "", want...)
+	return body, header, err
+}
+
+// send is request with two additions for conditional fetches: it
+// sends ifNoneMatch (when not empty) as If-None-Match, and it
+// reports which of the wanted statuses came back.
+func (c *Client) send(ctx context.Context, method, accessToken, path string, payload any, ifNoneMatch string, want ...int) (body []byte, header http.Header, status int, err error) {
 	var reqBody io.Reader
 	if payload != nil {
 		raw, err := json.Marshal(payload)
 		if err != nil {
-			return nil, nil, fmt.Errorf("ESI %s %s: encode: %w", method, path, err)
+			return nil, nil, 0, fmt.Errorf("ESI %s %s: encode: %w", method, path, err)
 		}
 		reqBody = bytes.NewReader(raw)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, baseURL+path, reqBody)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", c.userAgent())
@@ -1426,25 +1434,61 @@ func (c *Client) request(ctx context.Context, method, accessToken, path string, 
 	if accessToken != "" {
 		req.Header.Set("Authorization", "Bearer "+accessToken)
 	}
+	if ifNoneMatch != "" {
+		req.Header.Set("If-None-Match", ifNoneMatch)
+	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, nil, fmt.Errorf("ESI %s %s: %w", method, path, err)
+		return nil, nil, 0, fmt.Errorf("ESI %s %s: %w", method, path, err)
 	}
 	defer resp.Body.Close()
 	c.trackErrorBudget(resp.Header)
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	body, err = io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
-		return nil, nil, fmt.Errorf("ESI %s %s: read body: %w", method, path, err)
+		return nil, nil, 0, fmt.Errorf("ESI %s %s: read body: %w", method, path, err)
 	}
 	if resp.StatusCode == 420 || resp.StatusCode == http.StatusTooManyRequests {
-		return nil, resp.Header, fmt.Errorf("ESI %s %s: status %d: %w", method, path, resp.StatusCode, ErrErrorLimit)
+		return nil, resp.Header, resp.StatusCode, fmt.Errorf("ESI %s %s: status %d: %w", method, path, resp.StatusCode, ErrErrorLimit)
 	}
 	for _, code := range want {
 		if resp.StatusCode == code {
-			return body, resp.Header, nil
+			return body, resp.Header, resp.StatusCode, nil
 		}
 	}
-	return nil, resp.Header, &StatusError{Method: method, Path: path, Code: resp.StatusCode}
+	return nil, resp.Header, resp.StatusCode, &StatusError{Method: method, Path: path, Code: resp.StatusCode}
+}
+
+// fetchIfChanged GETs path, offering ESI the ETag of the copy
+// already stored (etag; "" when there is none, which makes this an
+// ordinary fetch). When that copy is still current ESI answers 304
+// Not Modified with no body and notModified is true: the caller
+// keeps what it has and only renews its cache window from the
+// headers. A 304 is not an error and does not count against the
+// error limit.
+func (c *Client) fetchIfChanged(ctx context.Context, accessToken, path, etag string) (body []byte, header http.Header, notModified bool, err error) {
+	want := []int{http.StatusOK}
+	if etag != "" {
+		want = append(want, http.StatusNotModified)
+	}
+	body, header, status, err := c.send(ctx, http.MethodGet, accessToken, path, nil, etag, want...)
+	if err != nil {
+		return nil, header, false, err
+	}
+	if status == http.StatusNotModified {
+		return nil, header, true, nil
+	}
+	return body, header, false, nil
+}
+
+// cacheWindowEnd is when a response stops being current: its
+// Expires header, or five minutes from now when ESI sent none.
+func cacheWindowEnd(header http.Header) time.Time {
+	if exp := header.Get("Expires"); exp != "" {
+		if t, err := http.ParseTime(exp); err == nil {
+			return t
+		}
+	}
+	return time.Now().Add(5 * time.Minute)
 }
 
 // FetchRaw GETs path from ESI and returns the raw body and response
@@ -1638,29 +1682,53 @@ func snapshotPath(characterID int64, kind string) string {
 // SnapshotFresh reports whether the snapshot's cached_until is still in
 // the future. A missing/unparseable expiry counts as stale.
 func SnapshotFresh(snap db.CharacterSnapshot) bool {
-	if !snap.CachedUntil.Valid || snap.CachedUntil.String == "" {
+	return CacheWindowOpen(snap.CachedUntil)
+}
+
+// CacheWindowOpen reports whether a stored cached_until is still in
+// the future. It is SnapshotFresh for readers that hold only a
+// snapshot's bookkeeping, not the snapshot.
+func CacheWindowOpen(cachedUntil sql.NullString) bool {
+	if !cachedUntil.Valid || cachedUntil.String == "" {
 		return false
 	}
-	until, err := time.Parse(time.RFC3339, snap.CachedUntil.String)
+	until, err := time.Parse(time.RFC3339, cachedUntil.String)
 	return err == nil && time.Now().Before(until)
 }
 
 // FetchAndStoreSnapshot fetches the kind's ESI path with a valid token
 // and stores the raw payload, honoring the response Expires header as
 // cached_until (fallback: now + 5 minutes when ESI doesn't send one).
-func (c *Client) FetchAndStoreSnapshot(ctx context.Context, ch db.Character, kind string) ([]byte, error) {
+//
+// A dataset that comes in one response is fetched conditionally:
+// ESI is offered the ETag the stored copy came with, and when
+// nothing has changed it answers 304 with no body. The payload then
+// stays as it is and only its cache window is renewed. Datasets
+// that span several pages are downloaded in full, as before.
+func (c *Client) FetchAndStoreSnapshot(ctx context.Context, ch db.Character, kind string) error {
+	_, _, err := c.refreshSnapshot(ctx, ch, kind, true)
+	return err
+}
+
+// refreshSnapshot is FetchAndStoreSnapshot for callers that want
+// the outcome: the fresh payload, or notModified when ESI said the
+// stored one is still current (the payload is then not returned;
+// the caller already has it or does not need it). conditional false
+// forces a full download — for a stored copy that turned out to be
+// unusable, which a 304 would only confirm.
+func (c *Client) refreshSnapshot(ctx context.Context, ch db.Character, kind string, conditional bool) (body []byte, notModified bool, err error) {
 	path := snapshotPath(ch.CharacterID, kind)
 	if path == "" {
-		return nil, fmt.Errorf("unknown snapshot kind %q", kind)
+		return nil, false, fmt.Errorf("unknown snapshot kind %q", kind)
 	}
 
 	token, err := c.tokens(ctx, ch)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	var body []byte
 	var header http.Header
+	singleResponse := false
 	switch kind {
 	case SnapAssets, SnapContracts, SnapBlueprints, SnapMining, SnapContacts:
 		// Paginated; the stored snapshot is the merged array so
@@ -1673,30 +1741,74 @@ func (c *Client) FetchAndStoreSnapshot(ctx context.Context, ch db.Character, kin
 		// Steps backward via from_id; bounded recent window.
 		body, header, err = c.fetchTxnsWindow(ctx, token, path)
 	default:
-		body, header, err = c.FetchRaw(ctx, token, path)
+		singleResponse = true
+		etag := ""
+		if conditional {
+			etag = c.storedSnapshotETag(ctx, ch.CharacterID, kind)
+		}
+		body, header, notModified, err = c.fetchIfChanged(ctx, token, path, etag)
 	}
 	if err != nil {
-		return nil, err
-	}
-
-	cachedUntil := time.Now().Add(5 * time.Minute)
-	if exp := header.Get("Expires"); exp != "" {
-		if t, perr := http.ParseTime(exp); perr == nil {
-			cachedUntil = t
-		}
+		return nil, false, err
 	}
 
 	now := time.Now().UTC()
+	cachedUntil := cacheWindowEnd(header).UTC()
+	if notModified {
+		if err := c.keepSnapshot(ctx, ch.CharacterID, kind, now, cachedUntil); err != nil {
+			return nil, false, err
+		}
+		return nil, true, nil
+	}
+
+	// Only a single-response dataset has one ETag that stands for
+	// all of it; a merged multi-page payload is stored without.
+	etag := ""
+	if singleResponse {
+		etag = header.Get("ETag")
+	}
 	if err := c.queries.UpsertSnapshot(ctx, db.UpsertSnapshotParams{
 		CharacterID: ch.CharacterID,
 		Kind:        kind,
 		Payload:     string(body),
 		FetchedAt:   now.Format(time.RFC3339),
-		CachedUntil: sql.NullString{String: cachedUntil.UTC().Format(time.RFC3339), Valid: true},
+		CachedUntil: sql.NullString{String: cachedUntil.Format(time.RFC3339), Valid: true},
+		Etag:        etag,
 	}); err != nil {
-		return nil, fmt.Errorf("store %s snapshot for character %d: %w", kind, ch.CharacterID, err)
+		return nil, false, fmt.Errorf("store %s snapshot for character %d: %w", kind, ch.CharacterID, err)
 	}
-	return body, nil
+	return body, false, nil
+}
+
+// storedSnapshotETag is the ETag the stored snapshot came with, or
+// "" when there is no snapshot, it has none, or it cannot be read
+// — every one of which simply means "fetch it in full".
+func (c *Client) storedSnapshotETag(ctx context.Context, characterID int64, kind string) string {
+	etag, err := c.queries.GetSnapshotETag(ctx, db.GetSnapshotETagParams{CharacterID: characterID, Kind: kind})
+	if err != nil {
+		return ""
+	}
+	return etag
+}
+
+// keepSnapshot renews the cache window of a snapshot ESI reported
+// unchanged, leaving its payload and ETag as they are.
+func (c *Client) keepSnapshot(ctx context.Context, characterID int64, kind string, now, cachedUntil time.Time) error {
+	n, err := c.queries.TouchSnapshot(ctx, db.TouchSnapshotParams{
+		FetchedAt:   now.Format(time.RFC3339),
+		CachedUntil: sql.NullString{String: cachedUntil.Format(time.RFC3339), Valid: true},
+		CharacterID: characterID,
+		Kind:        kind,
+	})
+	if err != nil {
+		return fmt.Errorf("renew %s snapshot for character %d: %w", kind, characterID, err)
+	}
+	if n == 0 {
+		// The row went away between the request and the answer (the
+		// character was unlinked). There is nothing to renew.
+		return fmt.Errorf("renew %s snapshot for character %d: the snapshot is gone", kind, characterID)
+	}
+	return nil
 }
 
 // corpSnapshotPath maps a corporation snapshot kind to its ESI
@@ -1757,46 +1869,52 @@ func parseDivisionKind(kind, prefix string) (int64, bool) {
 // see the SnapCorp* kind comments). A 403 comes back as a
 // StatusError (see IsForbidden): the caller records the missing
 // in-game role and leaves the cache untouched.
-func (c *Client) FetchAndStoreCorpSnapshot(ctx context.Context, ch db.Character, corporationID int64, kind string) ([]byte, error) {
+func (c *Client) FetchAndStoreCorpSnapshot(ctx context.Context, ch db.Character, corporationID int64, kind string) error {
 	path, paginated, known := corpSnapshotPath(corporationID, kind)
 	if !known {
-		return nil, fmt.Errorf("unknown corp snapshot kind %q", kind)
+		return fmt.Errorf("unknown corp snapshot kind %q", kind)
 	}
 
 	token, err := c.tokens(ctx, ch)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
+	// Single-response datasets are fetched conditionally, like the
+	// character ones (see FetchAndStoreSnapshot).
 	var body []byte
 	var header http.Header
+	notModified := false
 	if paginated {
 		body, header, err = c.fetchAllPages(ctx, token, path)
 	} else {
-		body, header, err = c.FetchRaw(ctx, token, path)
+		body, header, notModified, err = c.fetchIfChanged(ctx, token, path, c.storedSnapshotETag(ctx, ch.CharacterID, kind))
 	}
 	if err != nil {
-		return nil, err
-	}
-
-	cachedUntil := time.Now().Add(5 * time.Minute)
-	if exp := header.Get("Expires"); exp != "" {
-		if t, perr := http.ParseTime(exp); perr == nil {
-			cachedUntil = t
-		}
+		return err
 	}
 
 	now := time.Now().UTC()
+	cachedUntil := cacheWindowEnd(header).UTC()
+	if notModified {
+		return c.keepSnapshot(ctx, ch.CharacterID, kind, now, cachedUntil)
+	}
+
+	etag := ""
+	if !paginated {
+		etag = header.Get("ETag")
+	}
 	if err := c.queries.UpsertSnapshot(ctx, db.UpsertSnapshotParams{
 		CharacterID: ch.CharacterID,
 		Kind:        kind,
 		Payload:     string(body),
 		FetchedAt:   now.Format(time.RFC3339),
-		CachedUntil: sql.NullString{String: cachedUntil.UTC().Format(time.RFC3339), Valid: true},
+		CachedUntil: sql.NullString{String: cachedUntil.Format(time.RFC3339), Valid: true},
+		Etag:        etag,
 	}); err != nil {
-		return nil, fmt.Errorf("store %s snapshot for character %d: %w", kind, ch.CharacterID, err)
+		return fmt.Errorf("store %s snapshot for character %d: %w", kind, ch.CharacterID, err)
 	}
-	return body, nil
+	return nil
 }
 
 // FetchCorpAssetNames resolves player-given names for corporation
@@ -2015,15 +2133,19 @@ func (c *Client) GetCached(ctx context.Context, ch db.Character, kind string, ou
 		logging.Errorf("esi: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
 	}
 
+	// A stored copy that does not decode is unusable: it has to be
+	// downloaded again in full, not merely confirmed as unchanged.
+	storedUsable := haveSnap
 	if haveSnap && SnapshotFresh(snap) {
 		if err := json.Unmarshal([]byte(snap.Payload), out); err == nil {
 			return nil
 		} else {
 			logging.Warnf("esi: decode cached %s for character %d: %v (refetching)", kind, ch.CharacterID, err)
+			storedUsable = false
 		}
 	}
 
-	body, err := c.FetchAndStoreSnapshot(ctx, ch, kind)
+	body, notModified, err := c.refreshSnapshot(ctx, ch, kind, storedUsable)
 	if err != nil {
 		if haveSnap {
 			logging.Warnf("esi: %s fetch for character %d failed (%v); serving stale snapshot", kind, ch.CharacterID, err)
@@ -2032,6 +2154,10 @@ func (c *Client) GetCached(ctx context.Context, ch db.Character, kind string, ou
 			}
 		}
 		return err
+	}
+	if notModified {
+		// ESI confirmed the copy read above is still current.
+		body = []byte(snap.Payload)
 	}
 	if err := json.Unmarshal(body, out); err != nil {
 		return fmt.Errorf("ESI %s for character %d: decode: %w", kind, ch.CharacterID, err)
@@ -2083,34 +2209,52 @@ func GlobalSnapshotFresh(snap db.GlobalSnapshot) bool {
 // Expires header as cached_until (fallback: now + 5 minutes when
 // ESI doesn't send one). It mirrors FetchAndStoreSnapshot's
 // bookkeeping for the per-character store.
-func (c *Client) FetchAndStoreGlobalSnapshot(ctx context.Context, kind string) ([]byte, error) {
+//
+// Like the character datasets, it is fetched conditionally: when
+// ESI answers that the stored copy (by its ETag) is still current,
+// only the cache window is renewed.
+func (c *Client) FetchAndStoreGlobalSnapshot(ctx context.Context, kind string) error {
 	path := globalSnapshotPath(kind)
 	if path == "" {
-		return nil, fmt.Errorf("unknown global snapshot kind %q", kind)
+		return fmt.Errorf("unknown global snapshot kind %q", kind)
 	}
 
-	body, header, err := c.FetchRaw(ctx, "", path)
+	etag := ""
+	if stored, err := c.queries.GetGlobalSnapshot(ctx, kind); err == nil {
+		etag = stored.Etag
+	}
+	body, header, notModified, err := c.fetchIfChanged(ctx, "", path, etag)
 	if err != nil {
-		return nil, err
-	}
-
-	cachedUntil := time.Now().Add(5 * time.Minute)
-	if exp := header.Get("Expires"); exp != "" {
-		if t, perr := http.ParseTime(exp); perr == nil {
-			cachedUntil = t
-		}
+		return err
 	}
 
 	now := time.Now().UTC()
+	cachedUntil := cacheWindowEnd(header).UTC()
+	if notModified {
+		n, err := c.queries.TouchGlobalSnapshot(ctx, db.TouchGlobalSnapshotParams{
+			FetchedAt:   now.Format(time.RFC3339),
+			CachedUntil: cachedUntil.Format(time.RFC3339),
+			Kind:        kind,
+		})
+		if err != nil {
+			return fmt.Errorf("renew global snapshot %s: %w", kind, err)
+		}
+		if n == 0 {
+			return fmt.Errorf("renew global snapshot %s: the snapshot is gone", kind)
+		}
+		return nil
+	}
+
 	if err := c.queries.UpsertGlobalSnapshot(ctx, db.UpsertGlobalSnapshotParams{
 		Kind:        kind,
 		Payload:     string(body),
 		FetchedAt:   now.Format(time.RFC3339),
-		CachedUntil: cachedUntil.UTC().Format(time.RFC3339),
+		CachedUntil: cachedUntil.Format(time.RFC3339),
+		Etag:        header.Get("ETag"),
 	}); err != nil {
-		return nil, fmt.Errorf("store global snapshot %s: %w", kind, err)
+		return fmt.Errorf("store global snapshot %s: %w", kind, err)
 	}
-	return body, nil
+	return nil
 }
 
 // ---------------------------------------------------------------------------

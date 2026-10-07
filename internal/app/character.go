@@ -557,7 +557,7 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 			esi.SnapProfile: true, esi.SnapWallet: true, esi.SnapSkills: true,
 			esi.SnapSkillqueue: true,
 		}
-		if snaps, err := app.listSnapshotMeta(ctx, ch.CharacterID); err == nil {
+		if snaps, err := app.queries.ListSnapshotMetaByCharacter(ctx, ch.CharacterID); err == nil {
 			any := false
 			for _, snap := range snaps {
 				if sectionKinds[snap.Kind] {

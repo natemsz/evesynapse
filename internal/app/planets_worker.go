@@ -132,7 +132,7 @@ func (app *Application) fetchPlanetsKind(ctx context.Context, ch db.Character, a
 	if !allowance.take() {
 		return corpFetchSkipped
 	}
-	if _, err := app.esi.FetchAndStoreSnapshot(ctx, ch, esi.SnapPlanets); err != nil {
+	if err := app.esi.FetchAndStoreSnapshot(ctx, ch, esi.SnapPlanets); err != nil {
 		switch {
 		case errors.Is(err, esi.ErrErrorLimit):
 			logging.Warnf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", esi.SnapPlanets, ch.CharacterID)
@@ -199,7 +199,7 @@ func (app *Application) warmPlanetLayouts(ctx context.Context, ch db.Character, 
 		if !allowance.take() {
 			break
 		}
-		if _, err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
+		if err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
 			switch {
 			case errors.Is(err, esi.ErrErrorLimit):
 				return fetched, true

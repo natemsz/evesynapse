@@ -2000,7 +2000,7 @@ func (app *Application) handleFitSaveToEVE(w http.ResponseWriter, r *http.Reques
 
 	// Refresh the cached fittings so the new fit shows up in the
 	// list without waiting for the next worker cycle.
-	if _, ferr := app.esi.FetchAndStoreSnapshot(ctx, ch, esi.SnapFittings); ferr != nil {
+	if ferr := app.esi.FetchAndStoreSnapshot(ctx, ch, esi.SnapFittings); ferr != nil {
 		logging.Errorf("fittings save-to-eve: refetch fittings for character %d: %v", req.CharacterID, ferr)
 	}
 	writeFitJSON(w, map[string]any{

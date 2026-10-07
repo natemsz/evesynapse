@@ -795,10 +795,10 @@ result.
 ## Look & feel
 
 The UI echoes the 2013 EveSynapse theme — the original planet/nebula
-wallpaper (served from `/static/bg.jpg`), teal-blue accents
-(`#326b8c`), translucent dark panels over the art — rebuilt with a
+wallpaper, teal-blue accents have been changed to molten-ember reminiscent of the Dominion expansion from 2009, one which holds special meaning to us as it is the year our characters were born.
+(`#326b8c`), translucent dark nav and header panels over the art — rebuilt with a
 single dependency-free stylesheet (`internal/app/static/style.css`): no Bootstrap,
-no jQuery, no external fonts, responsive down to phone widths.
+no jQuery, it's not 2013 anymore :), no external fonts, responsive down to phone widths.
 
 ## Dev login
 
@@ -851,14 +851,6 @@ Regenerate query code after editing `internal/db/query/` with:
 make gen   # sqlc generate
 ```
 
-### Installs still on SQLite
-
-Releases before v0.3.26 stored their data in SQLite. The one-time
-`-migrate-pg` mode that copied a SQLite database into Postgres was
-removed in v0.3.37 together with the SQLite driver. An install
-that is still on SQLite has to make that move with a v0.3.36
-release first, and can update normally from there.
-
 ## Token encryption
 
 Each linked character's EVE access and refresh tokens are stored
@@ -875,8 +867,7 @@ each bound to its character and column:
 openssl rand -hex 32    # put the output in .env as TOKEN_ENCRYPTION_KEY=...
 ```
 
-The setup script generates a key for new installs. On an
-existing install, add the line and restart: tokens already
+The setup script generates a key for new installs. add the line and restart: tokens already
 stored are encrypted in place at that start.
 
 Two things to know before switching it on:
@@ -905,47 +896,3 @@ psql evesynapse < evesynapse-2026-10-05.sql   # into a fresh database
 
 The generated SQL file plus `/opt/evesynapse/.env` is a complete
 backup of an install.
-
-## Status / next steps
-
-- [x] Wire EVE SSO: redirect, `/auth/callback`, JWT verification,
-      token persistence
-- [x] Character sheet on the home page (identity, wallet, skills,
-      skill queue) via cached ESI snapshots
-- [x] Token refresh + worker-driven ESI caching honoring `cached_until`
-- [x] 2013 look & feel (original wallpaper, dark panels, teal accents)
-- [x] Assets page: every stack grouped by location, worker-refreshed
-      (scope already requested at login)
-- [x] Market page: type search, guide prices and regional order
-      books via public ESI (no scope needed)
-- [x] Skill sheet page: every skill grouped by category, full
-      queue, per-group totals (from the cached snapshots)
-- [x] Cache-only renders: pages resolve names locally while the
-      worker pre-warms snapshots + names; Sync page shows progress
-- [x] Login requests the read ESI scope set plus the four scopes
-      the write features need (60 in all; see "EVE SSO flow")
-- [x] Import CCP SDE into local tables (types/groups/categories/
-      stations/systems/regions) as the primary name source for the
-      market and character pages
-- [x] Multiple characters per account (link more while signed in)
-- [x] Module sweep cluster 1 (character): location/ship/online on
-      the home sheet with a live training countdown, Character page
-      (status, fatigue, implants, clones), Fittings page, Killmails
-      page with worker-warmed immutable details
-- [x] Module sweep cluster 2 (corporation): members + member
-      tracking, wallets with per-division journal/transactions,
-      orders, assets (with singleton names), structures, and corp
-      killmails sharing cluster 1's store and rendering — all
-      snapshot-cached with role-missing (403) states recorded
-      instead of retried
-- [x] Module sweep cluster 3 (economy): Wallet page (balance,
-      bounded journal + transaction windows), Orders page (open +
-      recent history), Contracts page (couriers routed, item lists
-      warmed into a detail store like killmail details), Industry
-      page (jobs incl. completed, blueprint library with BPO/BPC
-      semantics, mining ledger)
-- [x] Module sweep cluster 4 (intel): Wars, Incursions and
-      Faction Warfare pages over a worker-warmed global public-data
-      store (no token needed; war details bounded like killmail
-      details), plus a Tranquility players-online line on Home —
-      renders stay cache-only throughout

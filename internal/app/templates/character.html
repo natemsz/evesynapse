@@ -51,19 +51,14 @@
   {{end}}
 
   {{if .CharacterPage.PIKnown}}
-  <div class="panel">
   <h3>Planetary industry</h3>
   <p><small>{{.CharacterPage.PIColonies}} colon{{if eq .CharacterPage.PIColonies 1}}y{{else}}ies{{end}}{{if .CharacterPage.PIExpired}} · {{.CharacterPage.PIExpired}} extractor{{if ne .CharacterPage.PIExpired 1}}s{{end}} expired{{end}}{{if .CharacterPage.PISoonest}} · next extractor expiry {{.CharacterPage.PISoonest}}{{if .CharacterPage.PISoonestIn}} ({{.CharacterPage.PISoonestIn}}){{end}}{{end}} — <a href="/planets/?character={{.CharacterPage.CharacterID}}">view colonies</a></small></p>
-  </div>
   {{else if .CharacterPage.PINotEnabled}}
-  <div class="panel">
   <h3>Planetary industry</h3>
   <p><small>Not enabled for this character — <a href="/planets/?character={{.CharacterPage.CharacterID}}">re-link to enable</a>.</small></p>
-  </div>
   {{end}}
 
   {{if .CharacterPage.OnlineKnown}}
-  <div class="panel">
   <h3>Status</h3>
   <div class="tw">
   <table>
@@ -75,11 +70,9 @@
     </tbody>
   </table>
   </div>
-  </div>
   {{end}}
 
   {{if .CharacterPage.LocationKnown}}
-  <div class="panel">
   <h3>Location</h3>
   <div class="tw">
   <table>
@@ -89,11 +82,9 @@
     </tbody>
   </table>
   </div>
-  </div>
   {{end}}
 
   {{if .CharacterPage.ShipKnown}}
-  <div class="panel">
   <h3>Ship</h3>
   <div class="tw">
   <table>
@@ -102,11 +93,9 @@
     </tbody>
   </table>
   </div>
-  </div>
   {{end}}
 
   {{if .CharacterPage.FatigueKnown}}
-  <div class="panel">
   <h3>Jump fatigue</h3>
   <div class="tw">
   <table>
@@ -116,11 +105,9 @@
     </tbody>
   </table>
   </div>
-  </div>
   {{end}}
 
   {{if .CharacterPage.ImplantsKnown}}
-  <div class="panel">
   <h3>Active implants</h3>
   {{if .CharacterPage.Implants}}
   <div class="tw">
@@ -136,7 +123,6 @@
   {{else}}
   <p><small>No implants plugged in.</small></p>
   {{end}}
-  </div>
   {{end}}
 
   {{if .CharacterPage.ClonesKnown}}

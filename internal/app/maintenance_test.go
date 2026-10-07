@@ -13,18 +13,18 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"evesynapse/internal/pgtest"
+	"evesynapse/internal/pidfile"
+	"evesynapse/internal/pidfile/pidfiletest"
 	"evesynapse/internal/store"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 )
 
 // fakeELF builds a minimal ELF-looking payload: real magic and
@@ -58,31 +58,6 @@ func ownELFMachine(t *testing.T) uint16 {
 	t.Helper()
 	own, _ := ownAndOtherELFMachine(t)
 	return own
-}
-
-// startSleep spawns a disposable process whose only job is to be
-// a live, signal-able PID for pidfile tests.
-func startSleep(t *testing.T) *exec.Cmd {
-	t.Helper()
-	cmd := exec.Command("sleep", "60")
-	if err := cmd.Start(); err != nil {
-		t.Skipf("sleep unavailable: %v", err)
-	}
-	// One goroutine reaps the process the moment it dies, whoever
-	// kills it. An unreaped child lingers as a zombie that still
-	// answers signal-0 — exactly why the real deployment relies on
-	// the service manager reaping promptly — and waiting on the
-	// same Cmd from two places is a data race.
-	reaped := make(chan struct{})
-	go func() {
-		_ = cmd.Wait()
-		close(reaped)
-	}()
-	t.Cleanup(func() {
-		_ = cmd.Process.Kill()
-		<-reaped
-	})
-	return cmd
 }
 
 func writeTestFile(t *testing.T, path string, data []byte, perm os.FileMode) {
@@ -647,9 +622,9 @@ func sha256FileHexBytes(b []byte) (string, error) {
 // sleep process, which the real check rightly refuses to signal.
 func trustPidfiles(t *testing.T) {
 	t.Helper()
-	old := serverProcessCheck
-	serverProcessCheck = func(int, string) bool { return true }
-	t.Cleanup(func() { serverProcessCheck = old })
+	old := pidfile.ProcessCheck
+	pidfile.ProcessCheck = func(int, string) bool { return true }
+	t.Cleanup(func() { pidfile.ProcessCheck = old })
 }
 
 // TestRunUpdateNeverSignalsAForeignProcess: the pidfile is written
@@ -660,7 +635,7 @@ func TestRunUpdateNeverSignalsAForeignProcess(t *testing.T) {
 	if _, err := os.Stat("/proc/self/exe"); err != nil {
 		t.Skip("no /proc here: a process's program can't be checked on this system")
 	}
-	sleeper := startSleep(t)
+	sleeper := pidfiletest.StartSleep(t)
 	fresh := fakeELF(ownELFMachine(t), updateMinBytes+100)
 	sum, err := sha256FileHexBytes(fresh)
 	if err != nil {
@@ -674,7 +649,7 @@ func TestRunUpdateNeverSignalsAForeignProcess(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "evesynapse")
 	writeTestFile(t, target, []byte("old build"), 0o755)
-	writeTestFile(t, filepath.Join(dir, serverPidfileName),
+	writeTestFile(t, filepath.Join(dir, pidfile.Name),
 		[]byte(strconv.Itoa(sleeper.Process.Pid)+"\n"), 0o644)
 
 	var out, errOut bytes.Buffer
@@ -684,7 +659,7 @@ func TestRunUpdateNeverSignalsAForeignProcess(t *testing.T) {
 	if !strings.Contains(out.String(), "isn't EveSynapse") {
 		t.Fatalf("output %q missing the not-our-process note", out.String())
 	}
-	if !processAlive(sleeper.Process.Pid) {
+	if !pidfile.Alive(sleeper.Process.Pid) {
 		t.Fatal("the update signalled a process that is not EveSynapse")
 	}
 	got, err := os.ReadFile(target)
@@ -696,88 +671,9 @@ func TestRunUpdateNeverSignalsAForeignProcess(t *testing.T) {
 	}
 }
 
-func TestPidRunsProgram(t *testing.T) {
-	if _, err := os.Stat("/proc/self/exe"); err != nil {
-		t.Skip("no /proc here: a process's program can't be checked on this system")
-	}
-	exe, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !pidRunsProgram(os.Getpid(), exe) {
-		t.Fatalf("pidRunsProgram(self, %q) = false", exe)
-	}
-	if pidRunsProgram(os.Getpid(), filepath.Join(t.TempDir(), "evesynapse")) {
-		t.Fatal("pidRunsProgram matched this process against a program it isn't running")
-	}
-}
-
-// TestServerPidfileLocations: under the service unit the pidfile
-// goes to the runtime directory, because the install directory
-// belongs to root; started by hand it still lands beside the
-// executable.
-func TestServerPidfileLocations(t *testing.T) {
-	exeDir := t.TempDir()
-	runtimeDir := t.TempDir()
-
-	t.Setenv("RUNTIME_DIRECTORY", runtimeDir)
-	want := []string{
-		filepath.Join(runtimeDir, serverPidfileName),
-		filepath.Join(serverRuntimeDir, serverPidfileName),
-		filepath.Join(exeDir, serverPidfileName),
-	}
-	got := serverPidfileCandidates(exeDir)
-	if strings.Join(got, "|") != strings.Join(want, "|") {
-		t.Fatalf("candidates under the unit = %q, want %q", got, want)
-	}
-	if path := writeServerPidfile(got); path != want[0] {
-		t.Fatalf("pidfile written to %q, want the runtime directory %q", path, want[0])
-	}
-	if pid, ok := readPidfile(want[0]); !ok || pid != os.Getpid() {
-		t.Fatalf("runtime pidfile holds %d, %v; want own pid", pid, ok)
-	}
-
-	// No runtime directory (started by hand, or an older unit):
-	// the first location is not writable, the next one is used.
-	t.Setenv("RUNTIME_DIRECTORY", "")
-	beside := filepath.Join(exeDir, serverPidfileName)
-	fallback := []string{filepath.Join(t.TempDir(), "missing", serverPidfileName), beside}
-	if path := writeServerPidfile(fallback); path != beside {
-		t.Fatalf("pidfile written to %q, want %q beside the executable", path, beside)
-	}
-	if path := writeServerPidfile(fallback[:1]); path != "" {
-		t.Fatalf("pidfile reported at %q with no writable location", path)
-	}
-}
-
-// TestFindLiveServer: a maintenance run finds the live server in
-// whichever pidfile location names one, skipping locations that
-// are missing or stale, and reports which pidfile it was.
-func TestFindLiveServer(t *testing.T) {
-	dir := t.TempDir()
-	missing := filepath.Join(dir, "missing", serverPidfileName)
-	stale := filepath.Join(dir, "stale-"+serverPidfileName)
-	live := filepath.Join(dir, serverPidfileName)
-	writeTestFile(t, stale, []byte("not a pid\n"), 0o644)
-
-	if _, _, ok := findLiveServer([]string{missing, stale}); ok {
-		t.Fatal("findLiveServer found a server with no live pidfile")
-	}
-
-	sleeper := startSleep(t)
-	writeTestFile(t, live, []byte(strconv.Itoa(sleeper.Process.Pid)+"\n"), 0o644)
-	if !processAlive(sleeper.Process.Pid) {
-		t.Skip("this system can't probe whether a process is alive")
-	}
-	pid, pidfile, ok := findLiveServer([]string{missing, stale, live})
-	if !ok || pid != sleeper.Process.Pid || pidfile != live {
-		t.Fatalf("findLiveServer = %d, %q, %v; want the sleeper via %q", pid, pidfile, ok, live)
-	}
-}
-
 func TestRunUpdateRestartsRunningServer(t *testing.T) {
 	trustPidfiles(t)
-	sleeper := startSleep(t)
+	sleeper := pidfiletest.StartSleep(t)
 	fresh := fakeELF(ownELFMachine(t), updateMinBytes+100)
 	sum, err := sha256FileHexBytes(fresh)
 	if err != nil {
@@ -791,7 +687,7 @@ func TestRunUpdateRestartsRunningServer(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "evesynapse")
 	writeTestFile(t, target, []byte("old build"), 0o755)
-	writeTestFile(t, filepath.Join(dir, serverPidfileName),
+	writeTestFile(t, filepath.Join(dir, pidfile.Name),
 		[]byte(strconv.Itoa(sleeper.Process.Pid)+"\n"), 0o644)
 
 	var out, errOut bytes.Buffer
@@ -801,75 +697,8 @@ func TestRunUpdateRestartsRunningServer(t *testing.T) {
 	if !strings.Contains(out.String(), "restarting on the new version") {
 		t.Fatalf("output %q missing restart confirmation", out.String())
 	}
-	if processAlive(sleeper.Process.Pid) {
+	if pidfile.Alive(sleeper.Process.Pid) {
 		t.Fatal("the 'server' process is still alive after the restart hand-off")
-	}
-}
-
-func TestPidfileLifecycle(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, serverPidfileName)
-
-	// Absent pidfile: nothing live, nothing to remove.
-	if _, ok := liveServerPID(path); ok {
-		t.Fatal("liveServerPID true with no pidfile")
-	}
-	RemoveServerPidfile(path)
-
-	// Own PID: readable, but a maintenance run never counts
-	// itself as the server, and RemoveServerPidfile clears it.
-	writeTestFile(t, path, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o644)
-	if pid, ok := readPidfile(path); !ok || pid != os.Getpid() {
-		t.Fatalf("readPidfile = %d, %v; want own pid", pid, ok)
-	}
-	if _, ok := liveServerPID(path); ok {
-		t.Fatal("liveServerPID counted this process as the server")
-	}
-	RemoveServerPidfile(path)
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Fatal("RemoveServerPidfile left its own pidfile behind")
-	}
-
-	// Someone else's PID: removal must not touch it, and a live
-	// one reads as the server.
-	sleeper := startSleep(t)
-	writeTestFile(t, path, []byte(strconv.Itoa(sleeper.Process.Pid)+"\n"), 0o644)
-	RemoveServerPidfile(path)
-	if _, err := os.Stat(path); err != nil {
-		t.Fatal("RemoveServerPidfile removed another process's pidfile")
-	}
-	if pid, ok := liveServerPID(path); !ok || pid != sleeper.Process.Pid {
-		t.Fatalf("liveServerPID = %d, %v; want the sleeper", pid, ok)
-	}
-
-	// Garbage and dead PIDs read as "no server".
-	writeTestFile(t, path, []byte("not a pid\n"), 0o644)
-	if _, ok := liveServerPID(path); ok {
-		t.Fatal("liveServerPID true for a garbage pidfile")
-	}
-}
-
-func TestSignalServerRestartTimeout(t *testing.T) {
-	// A process that ignores SIGTERM never stops; the watcher
-	// must give up within its timeout rather than hang the update.
-	cmd := exec.Command("sh", "-c", "trap '' TERM; sleep 60")
-	if err := cmd.Start(); err != nil {
-		t.Skipf("sh unavailable: %v", err)
-	}
-	defer func() {
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-	}()
-	dir := t.TempDir()
-	pidfile := filepath.Join(dir, serverPidfileName)
-	writeTestFile(t, pidfile, []byte(strconv.Itoa(cmd.Process.Pid)+"\n"), 0o644)
-
-	start := time.Now()
-	if signalServerRestart(cmd.Process.Pid, pidfile, 1500*time.Millisecond) {
-		t.Fatal("signalServerRestart reported success for a process that ignored SIGTERM")
-	}
-	if elapsed := time.Since(start); elapsed > 5*time.Second {
-		t.Fatalf("signalServerRestart took %v with a 1.5s timeout", elapsed)
 	}
 }
 
@@ -969,7 +798,7 @@ func TestRefreshExpiresCachesKeepsEarnedData(t *testing.T) {
 	var out, errOut bytes.Buffer
 	// No pidfile anywhere near the fake executable path: run with
 	// a path that doesn't exist so no live-server check fires.
-	if code := runRefresh(cfg, filepath.Join(t.TempDir(), serverPidfileName), &out, &errOut); code != 0 {
+	if code := runRefresh(cfg, filepath.Join(t.TempDir(), pidfile.Name), &out, &errOut); code != 0 {
 		t.Fatalf("runRefresh code %d, stderr %q", code, errOut.String())
 	}
 	if !strings.Contains(out.String(), "were not touched") {
@@ -1080,12 +909,12 @@ func TestRefreshRefusesWhileServerRuns(t *testing.T) {
 	dsn, conn := seedRefreshDB(t)
 	conn.Close()
 
-	sleeper := startSleep(t)
-	pidfile := filepath.Join(t.TempDir(), serverPidfileName)
-	writeTestFile(t, pidfile, []byte(strconv.Itoa(sleeper.Process.Pid)+"\n"), 0o644)
+	sleeper := pidfiletest.StartSleep(t)
+	pidPath := filepath.Join(t.TempDir(), pidfile.Name)
+	writeTestFile(t, pidPath, []byte(strconv.Itoa(sleeper.Process.Pid)+"\n"), 0o644)
 
 	var out, errOut bytes.Buffer
-	if code := runRefresh(Config{databaseURL: dsn}, pidfile, &out, &errOut); code != 1 {
+	if code := runRefresh(Config{databaseURL: dsn}, pidPath, &out, &errOut); code != 1 {
 		t.Fatalf("runRefresh code %d, want refusal (1); stderr %q", code, errOut.String())
 	}
 	if !strings.Contains(errOut.String(), "still running") {

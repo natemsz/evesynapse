@@ -34,6 +34,7 @@ import (
 
 	"evesynapse/internal/app"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/pidfile"
 )
 
 func main() {
@@ -90,8 +91,8 @@ func serve() int {
 	}
 	defer application.Close()
 
-	pidfile := app.StartServerPidfile()
-	defer app.RemoveServerPidfile(pidfile)
+	pidPath := pidfile.Start()
+	defer pidfile.Remove(pidPath)
 
 	srv := app.NewHTTPServer(cfg.Addr(), application.Handler())
 

@@ -92,8 +92,8 @@ func writeTestFile(t *testing.T, path string, data []byte, perm os.FileMode) {
 }
 
 func TestVersionMatchesRelease(t *testing.T) {
-	if got := Version(); got != "v0.3.38.001" {
-		t.Fatalf("Version() = %q, want v0.3.38.001", got)
+	if got := Version(); got != "v0.3.39.001" {
+		t.Fatalf("Version() = %q, want v0.3.39.001", got)
 	}
 }
 
@@ -134,12 +134,11 @@ func TestCompareVersions(t *testing.T) {
 		{"0.3.17.10", "0.3.17.2", 1},
 		// A -dev suffix is not part of the number: the numbers
 		// decide first, and on a tie the plain release is newer.
-		{"0.3.38.002-dev", "0.3.38.001-dev", 1},
-		{"0.3.38.001-dev", "0.3.38.002-dev", -1},
-		{"0.3.38.001-dev", "0.3.38.001-dev", 0},
-		{"0.3.39.001-dev", "0.3.38.001", 1},
-		{"0.3.38.001-dev", "0.3.38.001", -1},
-		{"0.3.38.001", "v0.3.38.001-dev", 1},
+		{"0.3.38.002-dev", "0.3.39.001-dev", -1},
+		{"0.3.39.001-dev", "0.3.38.002-dev", 1},
+		{"0.3.39.001-dev", "0.3.39.001-dev", 0},
+		{"0.3.39.001-dev", "0.3.39.001", -1},
+		{"0.3.39.001", "v0.3.39.001-dev", 1},
 	}
 	for _, tc := range cases {
 		if got := compareVersions(tc.a, tc.b); got != tc.want {

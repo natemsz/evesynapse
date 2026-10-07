@@ -110,6 +110,7 @@ type Application struct {
 	stopWorker context.CancelFunc
 	workerDone chan struct{}
 	workerCtx  context.Context // the worker's context, captured in New for background jobs (SDE import)
+	startedAt  time.Time       // when New built this application; /healthz measures a worker that never ran from here
 
 	// tokenMu serializes access-token refreshes: CCP rotates refresh
 	// tokens on every refresh, so two concurrent refreshes on the same
@@ -237,6 +238,7 @@ func New(cfg Config) (*Application, error) {
 	app.stopWorker = stopWorker
 	app.workerCtx = workerCtx
 	app.workerDone = make(chan struct{})
+	app.startedAt = time.Now()
 	go func() {
 		defer close(app.workerDone)
 		app.runWorker(workerCtx)
@@ -314,7 +316,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/layout", app.handleHomeLayout)
 		r.Post("/widget-config", app.handleWidgetConfig)
 	})
-	r.Get("/healthz", handleHealthz)
+	r.Get("/healthz", app.handleHealthz)
 	r.Get("/favicon.ico", handleFavicon)
 
 	// Embedded static assets (stylesheet, scripts, fonts, the 2013
@@ -556,12 +558,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	})
 
 	return r
-}
-
-func handleHealthz(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ok\n"))
 }
 
 // handleFavicon serves the app icon. Browsers request

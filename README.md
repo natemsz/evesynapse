@@ -168,7 +168,8 @@ environment win). Then open <http://localhost:8080>:
   (systems held, pilots, kills and victory points) and the most
   contested front-line systems with occupier/owner factions
   (requires login; public ESI)
-- `/healthz` — plain `ok`
+- `/healthz` — `ok` (200) when the database answers and the background
+  worker is running; 503 with one line per problem otherwise
 - `/dev-login` — dev-only fake sign-in, registered **only** when
   `DEV_LOGIN=1` (see below)
 

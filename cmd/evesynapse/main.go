@@ -89,11 +89,7 @@ func serve() int {
 	pidfile := app.StartServerPidfile()
 	defer app.RemoveServerPidfile(pidfile)
 
-	srv := &http.Server{
-		Addr:              cfg.Addr(),
-		Handler:           application.Handler(),
-		ReadHeaderTimeout: 5 * time.Second,
-	}
+	srv := app.NewHTTPServer(cfg.Addr(), application.Handler())
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

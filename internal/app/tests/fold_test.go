@@ -53,7 +53,7 @@ func TestSkillsPageFoldDefaults(t *testing.T) {
 	apptest.MustContain(t, "/character/", body,
 		`<section class="card foldable`,
 		"<h3>Training</h3>",
-		`<section class="foldable" data-fold="closed">`,
+		`<section class="card foldable" data-fold="closed">`,
 		"Currently training:",
 	)
 	if n := strings.Count(body, `data-fold="closed"`); n < 1 {

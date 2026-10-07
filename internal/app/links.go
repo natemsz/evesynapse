@@ -149,6 +149,11 @@ func (app *Application) resolveSignInUser(ctx context.Context, sessionUserID, ch
 	case err == nil && !ownerHashChanged(existing.OwnerHash, ownerHash):
 		return existing.UserID, nil
 	case err == nil || errors.Is(err, sql.ErrNoRows):
+		// The one place an account comes into being, and so the one
+		// place the sign-up policy applies (signup.go).
+		if err := app.mayCreateAccount(ctx, characterID); err != nil {
+			return 0, err
+		}
 		user, err := app.queries.CreateUser(ctx)
 		if err != nil {
 			return 0, err

@@ -187,6 +187,7 @@ gaps; real environment variables win over the file):
 | `SESSION_KEY` | no | — | Reserved for cookie signing hardening |
 | `TOKEN_ENCRYPTION_KEY` | no | — | Encrypts the EVE tokens stored in the database (see "Token encryption") |
 | `EVE_ADMIN_CHARACTER_IDS` | no | — | Comma-separated EVE character IDs whose accounts may open the Admin and Sync pages. Any character linked to an account makes that whole account an admin's. Empty = nobody |
+| `EVE_ALLOWED_CHARACTER_IDS`, `EVE_ALLOWED_CORPORATION_IDS`, `EVE_ALLOWED_ALLIANCE_IDS` | no | — | Limit who may create an account (see "Who can sign up"). All empty = anyone who can sign in with EVE |
 | `EVESYNAPSE_UPDATE_REPO` | no | `natemsz/evesynapse` | GitHub repo (owner/repo) the updater checks |
 | `EVE_SDE_BASE_URL` | no | Fuzzwork's dump | Base URL of the SDE CSV dump the importer downloads |
 | `DEV_LOGIN` | no | — | Dev build only: `1` registers the `/dev-login` route |
@@ -253,6 +254,35 @@ registration for sign-in ("EVE SSO flow" below). Then:
 
 Updating afterwards is one command — see "Updating" below.
 
+
+## Who can sign up
+
+Out of the box, anyone who can reach the site and sign in with
+EVE gets an account, and the worker then keeps every character
+they link in sync. To limit an instance to the people it is meant
+for, list them in `.env` (comma-separated EVE IDs; any mix):
+
+```sh
+EVE_ALLOWED_CHARACTER_IDS=90000001,90000002
+EVE_ALLOWED_CORPORATION_IDS=98000001
+EVE_ALLOWED_ALLIANCE_IDS=99000001
+```
+
+A new account then needs a character that is listed itself or
+whose corporation or alliance is (checked against EVE's public
+API at sign-in). Characters in `EVE_ADMIN_CHARACTER_IDS` are
+always allowed. Everyone else is turned away at sign-in with a
+message, and no account is created.
+
+The lists decide who may *join*:
+
+- someone who already has an account can still link more
+  characters to it, including alts outside the lists;
+- accounts created before the lists were set keep working.
+
+A list that is set but cannot be read (a typo, a stray
+separator) stops the app at startup rather than silently
+allowing everyone.
 ## HTTPS
 
 EveSynapse itself speaks plain HTTP. On anything but your own

@@ -251,6 +251,10 @@ func friendlyLoginError(code string) string {
 		return "You signed in at EVE, but saving your character failed here. Please try again."
 	case "unconfigured":
 		return "EVE SSO is not configured on this server yet."
+	case "notallowed":
+		return "This EveSynapse is limited to particular characters, corporations or alliances, and that character isn't among them. If you already have an account here, sign in with a character linked to it."
+	case "allowcheck":
+		return "EveSynapse couldn't check whether that character may sign up here, because EVE's API didn't answer. Please try again in a minute."
 	default:
 		return ""
 	}

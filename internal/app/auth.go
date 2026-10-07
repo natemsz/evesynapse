@@ -282,8 +282,17 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 	// never inherit the previous owner's account).
 	userID, err := app.resolveSignInUser(ctx, int64(app.sessions.GetInt(ctx, sessionUserID)), characterID, ownerHash)
 	if err != nil {
-		log.Printf("sso callback: resolve account for character %d: %v", characterID, err)
-		fail("save")
+		switch {
+		case errors.Is(err, errSignUpNotAllowed):
+			log.Printf("sso callback: character %d (%s) is not on this instance's sign-up lists; no account created", characterID, characterName)
+			fail("notallowed")
+		case errors.Is(err, errSignUpUnverified):
+			log.Printf("sso callback: sign-up check for character %d: %v", characterID, err)
+			fail("allowcheck")
+		default:
+			log.Printf("sso callback: resolve account for character %d: %v", characterID, err)
+			fail("save")
+		}
 		return
 	}
 

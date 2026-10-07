@@ -184,6 +184,15 @@ func New(cfg Config) (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
+	if cfg.signUp.err != nil {
+		return nil, cfg.signUp.err
+	}
+	if p := cfg.signUp; p.restricted() {
+		log.Printf("evesynapse: new accounts are limited to %d listed character(s), %d corporation(s) and %d alliance(s)",
+			len(p.characterIDs), len(p.corporationIDs), len(p.allianceIDs))
+	} else {
+		log.Printf("evesynapse: new accounts are open to anyone who can sign in with EVE (EVE_ALLOWED_*_IDS limits that)")
+	}
 
 	dbConn, pool, err := openDB(context.Background(), cfg.databaseURL)
 	if err != nil {

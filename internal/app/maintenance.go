@@ -59,6 +59,7 @@ import (
 	"syscall"
 	"time"
 
+	"evesynapse/internal/dotenv"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/store"
 )
@@ -321,7 +322,7 @@ func releaseChannelBase() string {
 // same settings the service runs with. Values already in the
 // real environment win.
 func loadInstallEnv(target string) {
-	loadDotEnv(filepath.Join(filepath.Dir(target), ".env"))
+	dotenv.Load(filepath.Join(filepath.Dir(target), ".env"))
 }
 
 // releaseManifest is the per-arch pointer published with each

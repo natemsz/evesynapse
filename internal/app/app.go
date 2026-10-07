@@ -30,50 +30,48 @@ import (
 //go:embed templates/*.html
 var templatesFS embed.FS
 
-// The collapsed Postgres baseline (schema_pg/001): the one-time
-// New schema changes land as new numbered files in schema_pg/.
+// The schema, one embedded file per step. db.go lists them in
+// order (schemaSteps) and applies whichever a database is missing,
+// each in one transaction, recording it in schema_migrations. A
+// new schema change is the next numbered file in schema_pg/, an
+// embed here, and a line there.
 
+// Step 001: the whole schema as of the move to Postgres.
+//
 //go:embed schema_pg/001_baseline.sql
 var pgBaselineSchema string
 
-// Schema step 002 (station leaderboard): applied by openDB
-// wherever the table is absent, so fresh installs get it right
-// after the baseline and existing installs on their next boot.
-
+// Step 002: the station leaderboard.
+//
 //go:embed schema_pg/002_station_leaderboard.sql
 var pgStationLeaderboardSchema string
 
-// Schema step 003 (fitting metadata: is_public / is_draft on
-// local_fittings): applied by openDB wherever the is_public column
-// is absent, so fresh installs get it right after the baseline and
-// existing installs on their next boot.
-
+// Step 003: fitting metadata (is_public / is_draft on
+// local_fittings).
+//
 //go:embed schema_pg/003_fit_metadata.sql
 var pgFitMetadataSchema string
 
-// Schema step 004 (v0.3.33: per-type market price TTL cache and
-// industry cost index tracking): applied by openDB wherever the
-// market_type_prices table is absent.
-
+// Step 004 (v0.3.33): per-type market price TTL cache and industry
+// cost index tracking.
+//
 //go:embed schema_pg/004_price_cache_costindex.sql
 var pgPriceCacheSchema string
 
-// Schema step 005 (v0.3.34: restock planner targets): applied by
-// openDB wherever the restock_targets table is absent.
-
+// Step 005 (v0.3.34): restock planner targets.
+//
 //go:embed schema_pg/005_restock.sql
 var pgRestockSchema string
 
-// Schema step 006 (v0.3.35: custom jump-clone names): applied by
-// openDB wherever the clone_names table is absent.
-
+// Step 006 (v0.3.35): custom jump-clone names.
+//
 //go:embed schema_pg/006_clone_names.sql
 var pgCloneNamesSchema string
 
-// Schema step 007 (foreign keys to users on the four per-user
-// tables that lacked one). The first step applied purely by the
-// schema_migrations record (db.go): no probe.
-
+// Step 007: foreign keys to users on the four per-user tables that
+// lacked one. The first step applied purely by its record; steps
+// 001–006 also carry a probe, for databases older than the record.
+//
 //go:embed schema_pg/007_user_foreign_keys.sql
 var pgUserForeignKeysSchema string
 

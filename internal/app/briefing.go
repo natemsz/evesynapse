@@ -368,7 +368,7 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 			if dryN > 0 {
 				add(briefingKey(b.ch.CharacterID, "pi-dry"), briefingExtractorDry, dryAt,
 					template.HTML(fmt.Sprintf("%s — an extractor on %s runs dry in %s. <a href=\"/planets/?character=%d\">Colonies</a>",
-						prefix, dryPlanet, humanDuration(time.Until(dryAt)), b.ch.CharacterID)))
+						prefix, template.HTMLEscapeString(dryPlanet), humanDuration(time.Until(dryAt)), b.ch.CharacterID)))
 			}
 		}
 

@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
@@ -108,6 +109,11 @@ type Application struct {
 	// stored token could invalidate each other.
 	tokenMu sync.Mutex
 
+	// tokens seals and opens the EVE SSO tokens stored in the
+	// characters table (tokencrypt.go). Without a
+	// TOKEN_ENCRYPTION_KEY it stores them as they are.
+	tokens *tokenBox
+
 	// fetchMu serializes the market-history, pilot-record, and
 	// type-detail fetch passes between the minute cycle and the
 	// urgent want drain, so the two never fetch the same queue row
@@ -174,18 +180,27 @@ type Application struct {
 // background worker and the one-shot SSO reachability probe.
 // Call Close to stop the worker and release the database.
 func New(cfg Config) (*Application, error) {
-
-	dbConn, pool, err := openDB(context.Background(), cfg.databaseURL)
+	tokens, err := newTokenBox(cfg.tokenKey)
 	if err != nil {
 		return nil, err
 	}
+	if cfg.signUp.err != nil {
+		return nil, cfg.signUp.err
+	}
+	if p := cfg.signUp; p.restricted() {
+		log.Printf("evesynapse: new accounts are limited to %d listed character(s), %d corporation(s) and %d alliance(s)",
+			len(p.characterIDs), len(p.corporationIDs), len(p.allianceIDs))
+	} else {
+		log.Printf("evesynapse: new accounts are open to anyone who can sign in with EVE (EVE_ALLOWED_*_IDS limits that)")
+	}
 
-	sessionManager := scs.New()
-	sessionManager.Store = pgxstore.New(pool)
-	sessionManager.Lifetime = sessionLifetime
-	sessionManager.Cookie.Name = "evesynapse_session"
-	// TODO(https): set Cookie.Secure = true once served over TLS.
-	sessionManager.Cookie.Secure = false
+	dbConn, pool, err := openDB(context.Background(), cfg.databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("open the database: %w", err)
+	}
+
+	sessionManager := newSessionManager(pgxstore.New(pool), cfg)
+	warnIfServedInTheClear(cfg)
 
 	app := &Application{
 		cfg:           cfg,
@@ -198,8 +213,17 @@ func New(cfg Config) (*Application, error) {
 		prices:        make(map[int64]esi.MarketPrice),
 		priorityChars: make(map[int64]bool),
 		pageWants:     make(map[string]map[string]pageWant),
+		tokens:        tokens,
 	}
 	app.esi = esi.New(loginHTTPClient, app.queries, app.validAccessToken)
+
+	// Before anything reads a token: check the stored ones open
+	// with the configured key, and encrypt any that predate it.
+	if err := app.prepareStoredTokens(context.Background()); err != nil {
+		dbConn.Close()
+		pool.Close()
+		return nil, err
+	}
 
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	app.stopWorker = stopWorker
@@ -267,6 +291,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r := chi.NewRouter()
 	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)
+	r.Use(app.securityHeaders)
+	r.Use(app.crossOriginGuard())
 	r.Use(app.sessions.LoadAndSave)
 	r.Use(app.slideSession)
 	r.Use(app.pageWantScopeMiddleware)
@@ -294,7 +320,9 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	}
 	r.Get("/auth/eve", app.handleEVELogin)
 	r.Get("/auth/callback", app.handleEVECallback)
-	r.Get("/auth/logout", app.handleSignOut)
+	// Signing out changes state, so it is a POST: a link or an image
+	// tag on another page cannot sign the visitor out.
+	r.Post("/auth/logout", app.handleSignOut)
 
 	// Route hooks (dev entrypoint only) mount here.
 	for _, hook := range hooks {
@@ -560,19 +588,35 @@ func (app *Application) requireAuth(next http.Handler) http.Handler {
 	})
 }
 
-// isAdmin reports whether the request's session belongs to an admin
-// character (Issues 23/24): authenticated AND the EVE SSO character
-// ID is in EVE_ADMIN_CHARACTER_IDS.
+// isAdmin reports whether the request's session belongs to an
+// administrator's account (Issues 23/24): authenticated, and one of
+// the characters linked to the account is listed in
+// EVE_ADMIN_CHARACTER_IDS. It is the account that is admin, not
+// whichever of its characters is selected at the moment: choosing
+// an alt in the header switcher must not make the Admin and Sync
+// pages disappear.
 func (app *Application) isAdmin(ctx context.Context) bool {
-	if !app.sessions.GetBool(ctx, sessionAuthenticated) {
+	if len(app.cfg.adminCharIDs) == 0 || !app.sessions.GetBool(ctx, sessionAuthenticated) {
 		return false
 	}
-	cid := int64(app.sessions.GetInt(ctx, sessionCharacterID))
-	return cid != 0 && app.cfg.IsAdminCharacter(cid)
+	return app.adminAmong(app.sessionCharacters(ctx))
 }
 
-// requireAdmin gates debugging/dev pages (Admin, Sync) on admin
-// character identity, not just login. Non-admins get 403.
+// adminAmong reports whether any of an account's characters is an
+// administrator. A character flagged owner_changed does not count:
+// it changed EVE accounts and nobody has confirmed control of it
+// since.
+func (app *Application) adminAmong(characters []db.Character) bool {
+	for _, ch := range characters {
+		if ch.LinkState != linkStateOwnerChanged && app.cfg.IsAdminCharacter(ch.CharacterID) {
+			return true
+		}
+	}
+	return false
+}
+
+// requireAdmin gates debugging/dev pages (Admin, Sync) on an admin
+// account, not just login. Non-admins get 403.
 func (app *Application) requireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !app.isAdmin(r.Context()) {

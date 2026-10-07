@@ -14,7 +14,7 @@ import (
 type pageData struct {
 	Version           string // footer product version ("v0.3.00.002"); filled by render
 	LoggedIn          bool
-	IsAdmin           bool   // session character is in EVE_ADMIN_CHARACTER_IDS; filled by render
+	IsAdmin           bool   // one of the account's characters is in EVE_ADMIN_CHARACTER_IDS; filled by render
 	CharacterName     string
 	SSOConfigured     bool
 	AutoRefresh       bool   // base.html emits a meta-refresh (Sync page)
@@ -200,11 +200,16 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 	if data.SyncStatus == "" {
 		data.SyncStatus = app.syncStatusString(ctx)
 	}
-	if !data.IsAdmin {
-		data.IsAdmin = app.isAdmin(ctx)
-	}
-	if data.LoggedIn && data.Switcher == nil {
-		data.Switcher = app.switcherEntries(ctx)
+	// One read of the account's characters serves both the header
+	// switcher and the admin check behind the Admin/Sync nav links.
+	if data.LoggedIn && (data.Switcher == nil || !data.IsAdmin) {
+		characters := app.sessionCharacters(ctx)
+		if data.Switcher == nil {
+			data.Switcher = app.switcherEntriesFor(ctx, characters)
+		}
+		if !data.IsAdmin {
+			data.IsAdmin = app.adminAmong(characters)
+		}
 	}
 	if data.LoggedIn && data.ViewerChars == nil {
 		data.ViewerChars = make(map[int64]bool, len(data.Switcher))
@@ -246,6 +251,10 @@ func friendlyLoginError(code string) string {
 		return "You signed in at EVE, but saving your character failed here. Please try again."
 	case "unconfigured":
 		return "EVE SSO is not configured on this server yet."
+	case "notallowed":
+		return "This EveSynapse is limited to particular characters, corporations or alliances, and that character isn't among them. If you already have an account here, sign in with a character linked to it."
+	case "allowcheck":
+		return "EveSynapse couldn't check whether that character may sign up here, because EVE's API didn't answer. Please try again in a minute."
 	default:
 		return ""
 	}

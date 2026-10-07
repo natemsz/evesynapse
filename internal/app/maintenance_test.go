@@ -36,6 +36,29 @@ func fakeELF(machine uint16, size int) []byte {
 	return b
 }
 
+// ownAndOtherELFMachine returns the ELF machine kind of the
+// computer running the tests — what the explicit-source update
+// form expects of a build, since it installs one this computer can
+// run — and a kind it is not.
+func ownAndOtherELFMachine(t *testing.T) (own, other uint16) {
+	t.Helper()
+	own, ok := elfMachineForArch(ownReleaseArch())
+	if !ok {
+		t.Skipf("EveSynapse publishes no build for %s", ownReleaseArch())
+	}
+	other = elfMachineAArch64
+	if own == elfMachineAArch64 {
+		other = elfMachineAMD64
+	}
+	return own, other
+}
+
+func ownELFMachine(t *testing.T) uint16 {
+	t.Helper()
+	own, _ := ownAndOtherELFMachine(t)
+	return own
+}
+
 // startSleep spawns a disposable process whose only job is to be
 // a live, signal-able PID for pidfile tests.
 func startSleep(t *testing.T) *exec.Cmd {
@@ -421,6 +444,26 @@ func TestRunUpdateUsageErrors(t *testing.T) {
 	if code := runUpdate(target, []string{"x", "not-a-checksum"}, &out, &errOut); code != 2 {
 		t.Fatalf("malformed checksum: code %d, want 2", code)
 	}
+
+	// A download address with no checksum is refused before
+	// anything is fetched: this runs as root and replaces the
+	// program root runs, so a network download is only installed
+	// against a checksum the operator supplies.
+	var fetched atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fetched.Store(true)
+	}))
+	defer srv.Close()
+	errOut.Reset()
+	if code := runUpdate(target, []string{srv.URL + "/evesynapse"}, &out, &errOut); code != 2 {
+		t.Fatalf("download address without a checksum: code %d, want 2", code)
+	}
+	if !strings.Contains(errOut.String(), "needs the checksum") {
+		t.Fatalf("stderr %q does not ask for the checksum", errOut.String())
+	}
+	if fetched.Load() {
+		t.Fatal("the address was fetched although no checksum was given")
+	}
 }
 
 func TestRunUpdateFromLocalFile(t *testing.T) {
@@ -432,7 +475,7 @@ func TestRunUpdateFromLocalFile(t *testing.T) {
 		filepath.Join(dir, "download"),
 		"file://" + filepath.Join(dir, "download"),
 	} {
-		fresh := fakeELF(elfMachineAArch64, updateMinBytes+100)
+		fresh := fakeELF(ownELFMachine(t), updateMinBytes+100)
 		writeTestFile(t, filepath.Join(dir, "download"), fresh, 0o644)
 		writeTestFile(t, target, []byte("old build"), 0o755)
 
@@ -461,8 +504,9 @@ func TestRunUpdateFromLocalFile(t *testing.T) {
 }
 
 func TestRunUpdateRejectsBadDownloads(t *testing.T) {
-	valid := fakeELF(elfMachineAArch64, updateMinBytes+100)
-	wrongArch := fakeELF(62, updateMinBytes+100)
+	own, other := ownAndOtherELFMachine(t)
+	valid := fakeELF(own, updateMinBytes+100)
+	wrongArch := fakeELF(other, updateMinBytes+100)
 
 	cases := []struct {
 		name    string
@@ -474,21 +518,21 @@ func TestRunUpdateRejectsBadDownloads(t *testing.T) {
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				http.NotFound(w, r)
 			},
-			args: func(url string) []string { return []string{url} },
+			args: func(url string) []string { return []string{url, strings.Repeat("0", 64)} },
 		},
 		{
 			name: "wrong architecture",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				_, _ = w.Write(wrongArch)
 			},
-			args: func(url string) []string { return []string{url} },
+			args: func(url string) []string { return []string{url, strings.Repeat("0", 64)} },
 		},
 		{
 			name: "truncated (too small)",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				_, _ = w.Write([]byte("tiny"))
 			},
-			args: func(url string) []string { return []string{url} },
+			args: func(url string) []string { return []string{url, strings.Repeat("0", 64)} },
 		},
 		{
 			name: "checksum mismatch",
@@ -505,7 +549,7 @@ func TestRunUpdateRejectsBadDownloads(t *testing.T) {
 				w.Header().Set("Content-Length", strconv.Itoa(updateMaxBytes+1))
 				w.WriteHeader(http.StatusOK)
 			},
-			args: func(url string) []string { return []string{url} },
+			args: func(url string) []string { return []string{url, strings.Repeat("0", 64)} },
 		},
 	}
 	for _, tc := range cases {
@@ -541,7 +585,7 @@ func TestRunUpdateRejectsBadDownloads(t *testing.T) {
 }
 
 func TestRunUpdateHTTPRedirectAndChecksum(t *testing.T) {
-	fresh := fakeELF(elfMachineAArch64, updateMinBytes+100)
+	fresh := fakeELF(ownELFMachine(t), updateMinBytes+100)
 	sum, err := sha256FileHexBytes(fresh)
 	if err != nil {
 		t.Fatal(err)
@@ -588,9 +632,147 @@ func sha256FileHexBytes(b []byte) (string, error) {
 	return sha256FileHex(path)
 }
 
-func TestRunUpdateRestartsRunningServer(t *testing.T) {
+// trustPidfiles makes the restart hand-off take a pidfile at its
+// word for one test. The stand-in "server" in these tests is a
+// sleep process, which the real check rightly refuses to signal.
+func trustPidfiles(t *testing.T) {
+	t.Helper()
+	old := serverProcessCheck
+	serverProcessCheck = func(int, string) bool { return true }
+	t.Cleanup(func() { serverProcessCheck = old })
+}
+
+// TestRunUpdateNeverSignalsAForeignProcess: the pidfile is written
+// by the service account and read by an update running as root, so
+// a pidfile naming some other program must not get that program
+// signalled. The update itself still lands.
+func TestRunUpdateNeverSignalsAForeignProcess(t *testing.T) {
+	if _, err := os.Stat("/proc/self/exe"); err != nil {
+		t.Skip("no /proc here: a process's program can't be checked on this system")
+	}
 	sleeper := startSleep(t)
-	fresh := fakeELF(elfMachineAArch64, updateMinBytes+100)
+	fresh := fakeELF(ownELFMachine(t), updateMinBytes+100)
+	sum, err := sha256FileHexBytes(fresh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(fresh)
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	target := filepath.Join(dir, "evesynapse")
+	writeTestFile(t, target, []byte("old build"), 0o755)
+	writeTestFile(t, filepath.Join(dir, serverPidfileName),
+		[]byte(strconv.Itoa(sleeper.Process.Pid)+"\n"), 0o644)
+
+	var out, errOut bytes.Buffer
+	if code := runUpdate(target, []string{srv.URL, sum}, &out, &errOut); code != 0 {
+		t.Fatalf("code %d, stderr %q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "isn't EveSynapse") {
+		t.Fatalf("output %q missing the not-our-process note", out.String())
+	}
+	if !processAlive(sleeper.Process.Pid) {
+		t.Fatal("the update signalled a process that is not EveSynapse")
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, fresh) {
+		t.Fatal("the update did not install")
+	}
+}
+
+func TestPidRunsProgram(t *testing.T) {
+	if _, err := os.Stat("/proc/self/exe"); err != nil {
+		t.Skip("no /proc here: a process's program can't be checked on this system")
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !pidRunsProgram(os.Getpid(), exe) {
+		t.Fatalf("pidRunsProgram(self, %q) = false", exe)
+	}
+	if pidRunsProgram(os.Getpid(), filepath.Join(t.TempDir(), "evesynapse")) {
+		t.Fatal("pidRunsProgram matched this process against a program it isn't running")
+	}
+}
+
+// TestServerPidfileLocations: under the service unit the pidfile
+// goes to the runtime directory, because the install directory
+// belongs to root; started by hand it still lands beside the
+// executable.
+func TestServerPidfileLocations(t *testing.T) {
+	exeDir := t.TempDir()
+	runtimeDir := t.TempDir()
+
+	t.Setenv("RUNTIME_DIRECTORY", runtimeDir)
+	want := []string{
+		filepath.Join(runtimeDir, serverPidfileName),
+		filepath.Join(serverRuntimeDir, serverPidfileName),
+		filepath.Join(exeDir, serverPidfileName),
+	}
+	got := serverPidfileCandidates(exeDir)
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("candidates under the unit = %q, want %q", got, want)
+	}
+	if path := writeServerPidfile(got); path != want[0] {
+		t.Fatalf("pidfile written to %q, want the runtime directory %q", path, want[0])
+	}
+	if pid, ok := readPidfile(want[0]); !ok || pid != os.Getpid() {
+		t.Fatalf("runtime pidfile holds %d, %v; want own pid", pid, ok)
+	}
+
+	// No runtime directory (started by hand, or an older unit):
+	// the first location is not writable, the next one is used.
+	t.Setenv("RUNTIME_DIRECTORY", "")
+	beside := filepath.Join(exeDir, serverPidfileName)
+	fallback := []string{filepath.Join(t.TempDir(), "missing", serverPidfileName), beside}
+	if path := writeServerPidfile(fallback); path != beside {
+		t.Fatalf("pidfile written to %q, want %q beside the executable", path, beside)
+	}
+	if path := writeServerPidfile(fallback[:1]); path != "" {
+		t.Fatalf("pidfile reported at %q with no writable location", path)
+	}
+}
+
+// TestFindLiveServer: a maintenance run finds the live server in
+// whichever pidfile location names one, skipping locations that
+// are missing or stale, and reports which pidfile it was.
+func TestFindLiveServer(t *testing.T) {
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "missing", serverPidfileName)
+	stale := filepath.Join(dir, "stale-"+serverPidfileName)
+	live := filepath.Join(dir, serverPidfileName)
+	writeTestFile(t, stale, []byte("not a pid\n"), 0o644)
+
+	if _, _, ok := findLiveServer([]string{missing, stale}); ok {
+		t.Fatal("findLiveServer found a server with no live pidfile")
+	}
+
+	sleeper := startSleep(t)
+	writeTestFile(t, live, []byte(strconv.Itoa(sleeper.Process.Pid)+"\n"), 0o644)
+	if !processAlive(sleeper.Process.Pid) {
+		t.Skip("this system can't probe whether a process is alive")
+	}
+	pid, pidfile, ok := findLiveServer([]string{missing, stale, live})
+	if !ok || pid != sleeper.Process.Pid || pidfile != live {
+		t.Fatalf("findLiveServer = %d, %q, %v; want the sleeper via %q", pid, pidfile, ok, live)
+	}
+}
+
+func TestRunUpdateRestartsRunningServer(t *testing.T) {
+	trustPidfiles(t)
+	sleeper := startSleep(t)
+	fresh := fakeELF(ownELFMachine(t), updateMinBytes+100)
+	sum, err := sha256FileHexBytes(fresh)
+	if err != nil {
+		t.Fatal(err)
+	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(fresh)
 	}))
@@ -608,7 +790,7 @@ func TestRunUpdateRestartsRunningServer(t *testing.T) {
 	go func() { _ = sleeper.Wait() }()
 
 	var out, errOut bytes.Buffer
-	if code := runUpdate(target, []string{srv.URL}, &out, &errOut); code != 0 {
+	if code := runUpdate(target, []string{srv.URL, sum}, &out, &errOut); code != 0 {
 		t.Fatalf("code %d, stderr %q", code, errOut.String())
 	}
 	if !strings.Contains(out.String(), "restarting on the new version") {

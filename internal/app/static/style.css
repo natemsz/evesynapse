@@ -1362,6 +1362,17 @@ html[data-theme="dark"] .theme-icon-sun { display: block; }
   margin-top: 0.45rem;
   color: var(--success);
 }
+/* Sign-out is a form button (it changes state, so it is a POST),
+   dressed as the nav link it replaced. The form itself takes no
+   box of its own in the footer's column. */
+.sidebar-signout-form { display: contents; }
+button.sidebar-signout {
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  line-height: inherit;
+  text-align: left;
+}
 html[data-nav="rail"] .sidebar-inner { overflow: visible; }
 html[data-nav="rail"] .sidebar-account { display: none; }
 html[data-nav="rail"] .sidebar-account-footer { display: flex; }

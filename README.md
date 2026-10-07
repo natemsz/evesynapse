@@ -139,7 +139,7 @@ environment win). Then open <http://localhost:8080>:
   an in-game role — see the caching section below.
 - `/auth/eve` — starts EVE SSO login (also "Link another character")
 - `/auth/callback` — OAuth2 callback (see SSO flow below)
-- `/auth/logout` — destroys the session
+- `/auth/logout` — destroys the session (POST; the sidebar's Sign out button)
 - `/admin/` — users, linked characters, worker status (requires login)
 - `/assets/` — asset browser: every stack grouped by location for the
   signed-in user's characters (requires login; `esi-assets.read_assets.v1`)
@@ -185,6 +185,9 @@ gaps; real environment variables win over the file):
 | `DATABASE_URL` | yes | `postgres://evesynapse@localhost:5432/evesynapse?sslmode=disable` | PostgreSQL connection URL |
 | `ADDR` | no | `:8080` | HTTP listen address |
 | `SESSION_KEY` | no | — | Reserved for cookie signing hardening |
+| `TOKEN_ENCRYPTION_KEY` | no | — | Encrypts the EVE tokens stored in the database (see "Token encryption") |
+| `EVE_ADMIN_CHARACTER_IDS` | no | — | Comma-separated EVE character IDs whose accounts may open the Admin and Sync pages. Any character linked to an account makes that whole account an admin's. Empty = nobody |
+| `EVE_ALLOWED_CHARACTER_IDS`, `EVE_ALLOWED_CORPORATION_IDS`, `EVE_ALLOWED_ALLIANCE_IDS` | no | — | Limit who may create an account (see "Who can sign up"). All empty = anyone who can sign in with EVE |
 | `EVESYNAPSE_UPDATE_REPO` | no | `natemsz/evesynapse` | GitHub repo (owner/repo) the updater checks |
 | `EVE_SDE_BASE_URL` | no | Fuzzwork's dump | Base URL of the SDE CSV dump the importer downloads |
 | `DEV_LOGIN` | no | — | Dev build only: `1` registers the `/dev-login` route |
@@ -211,12 +214,20 @@ registration for sign-in ("EVE SSO flow" below). Then:
    `evesynapse` user and `/opt/evesynapse`, installs and starts
    PostgreSQL if it's missing and creates the app's database
    (role `evesynapse`, database `evesynapse`, with a generated
-   password written into `/opt/evesynapse/.env` as `DATABASE_URL`;
-   the file is chmod 600), installs the systemd service (ordered
-   after `postgresql.service`), and links `evesynapse` into `/usr/bin` so you
+   password written into `/opt/evesynapse/.env` as `DATABASE_URL`),
+   installs the systemd service (ordered after
+   `postgresql.service`), and links `evesynapse` into `/usr/bin` so you
    can run it without typing the full path. It never overwrites
    an existing `.env` (it only appends a `DATABASE_URL` that
-   isn't there yet). Installing from a fork or from a build you
+   isn't there yet).
+
+   The program, `/opt/evesynapse` and `.env` belong to root; the
+   service account can read them but not change them, and the
+   unit runs it sandboxed with `/run/evesynapse` as its only
+   writable directory. Updates run as root, so the account the
+   server runs as must not be able to replace what root runs.
+   If you installed before this layout, run the script once more
+   to move to it. Installing from a fork or from a build you
    made yourself works too:
 
    > **Why `/usr/bin`?** Updating always runs under `sudo`, and
@@ -242,6 +253,67 @@ registration for sign-in ("EVE SSO flow" below). Then:
    Open the address you configured and sign in with EVE.
 
 Updating afterwards is one command — see "Updating" below.
+
+
+## Who can sign up
+
+Out of the box, anyone who can reach the site and sign in with
+EVE gets an account, and the worker then keeps every character
+they link in sync. To limit an instance to the people it is meant
+for, list them in `.env` (comma-separated EVE IDs; any mix):
+
+```sh
+EVE_ALLOWED_CHARACTER_IDS=90000001,90000002
+EVE_ALLOWED_CORPORATION_IDS=98000001
+EVE_ALLOWED_ALLIANCE_IDS=99000001
+```
+
+A new account then needs a character that is listed itself or
+whose corporation or alliance is (checked against EVE's public
+API at sign-in). Characters in `EVE_ADMIN_CHARACTER_IDS` are
+always allowed. Everyone else is turned away at sign-in with a
+message, and no account is created.
+
+The lists decide who may *join*:
+
+- someone who already has an account can still link more
+  characters to it, including alts outside the lists;
+- accounts created before the lists were set keep working.
+
+A list that is set but cannot be read (a typo, a stray
+separator) stops the app at startup rather than silently
+allowing everyone.
+## HTTPS
+
+EveSynapse itself speaks plain HTTP. On anything but your own
+machine, put a reverse proxy that terminates TLS in front of it,
+so sign-in cookies and character data never cross the network
+unencrypted. With [Caddy](https://caddyserver.com), which obtains
+and renews the certificate itself, the whole configuration is:
+
+```
+eve.example.org {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+Then, in `/opt/evesynapse/.env`:
+
+```sh
+ADDR=127.0.0.1:8080                                    # only the proxy can reach the app
+EVE_CALLBACK_URL=https://eve.example.org/auth/callback # and the same URL at developers.eveonline.com
+```
+
+The app reads its public address from `EVE_CALLBACK_URL`. When
+that is an `https://` address it marks the session cookie
+`Secure` and sends `Strict-Transport-Security`; when it is plain
+`http://` on anything other than localhost it logs a warning at
+startup.
+
+Every response also carries `X-Content-Type-Options`,
+`X-Frame-Options`, `Referrer-Policy` and a
+`Content-Security-Policy`, and state-changing requests coming
+from another site are refused.
 
 ## Build from source
 
@@ -287,11 +359,12 @@ verifies it against the published checksum and checks it's built
 for the right kind of computer, swaps it into place, restarts the
 running server onto it, and reports the new version number.
 
-There's also a manual form that installs from a specific address
-(or local file), with an optional checksum:
+There's also a manual form that installs a specific build: from an
+address, with the checksum published for it, or from a local file:
 
 ```sh
-sudo /opt/evesynapse/evesynapse -update <url|file> [sha256]
+sudo /opt/evesynapse/evesynapse -update <url> <sha256>
+sudo /opt/evesynapse/evesynapse -update <file> [sha256]
 ```
 
 ### Updating from your own fork
@@ -319,7 +392,8 @@ evesynapse -version                 print the version and exit
 evesynapse -update                  update to the latest release (right build for this machine)
 evesynapse -update -arm64           update, fetching the ARM build
 evesynapse -update -amd64           update, fetching the Intel/AMD build (-x86, -x64 also work)
-evesynapse -update <url|file> [sha256]   install a specific build manually
+evesynapse -update <url> <sha256>   install a specific build from an address (checksum required)
+evesynapse -update <file> [sha256]  install a build from a local file
 evesynapse -refresh                 mark all cached data stale (run while the app is stopped)
 evesynapse -h                       show this list
 ```
@@ -565,6 +639,41 @@ Re-running into a non-empty target is refused unless `-force`
 is given (which truncates the target tables and re-copies).
 Rollback is the previous binary plus the untouched SQLite file
 and the old `.env`.
+
+## Token encryption
+
+Each linked character's EVE access and refresh tokens are stored
+in the `characters` table. A refresh token is a standing
+credential, so anyone holding a copy of the database could read
+that character's data and use the write scopes the app requests
+(sending mail, saving fittings).
+
+Set `TOKEN_ENCRYPTION_KEY` to any random value of at least 32
+characters and both tokens are stored encrypted (AES-256-GCM),
+each bound to its character and column:
+
+```sh
+openssl rand -hex 32    # put the output in .env as TOKEN_ENCRYPTION_KEY=...
+```
+
+The setup script generates a key for new installs. On an
+existing install, add the line and restart: tokens already
+stored are encrypted in place at that start.
+
+Two things to know before switching it on:
+
+- **Keep the key.** It lives in `.env`, not in the database, so
+  back the two up together. If the key is changed or removed the
+  app refuses to start rather than run with tokens it cannot
+  read; the error explains how to clear the stored tokens if the
+  key is truly lost, after which every character signs in once
+  more.
+- **Don't go back to a build from before token encryption.** It
+  would present the encrypted values to CCP as tokens, be
+  refused, and mark every character as needing a fresh sign-in.
+
+Without a key, tokens are stored unencrypted as before and the
+app logs a warning at startup.
 
 ## Backups
 

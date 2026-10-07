@@ -60,12 +60,29 @@ func portraitURL(characterID int64, size int) string {
 // fallback the per-character pages use. A nil result (signed out,
 // dev session, no characters, DB trouble) hides the switcher.
 func (app *Application) switcherEntries(ctx context.Context) []switcherEntry {
+	return app.switcherEntriesFor(ctx, app.sessionCharacters(ctx))
+}
+
+// sessionCharacters lists the characters linked to the signed-in
+// account (nil when signed out, on a dev session, or on DB
+// trouble). render reads it once for both the switcher and the
+// admin check.
+func (app *Application) sessionCharacters(ctx context.Context) []db.Character {
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
 	if userID == 0 {
 		return nil
 	}
 	characters, err := app.queries.ListCharactersByUser(ctx, userID)
-	if err != nil || len(characters) == 0 {
+	if err != nil {
+		return nil
+	}
+	return characters
+}
+
+// switcherEntriesFor builds the switcher model from an account's
+// characters.
+func (app *Application) switcherEntriesFor(ctx context.Context, characters []db.Character) []switcherEntry {
+	if len(characters) == 0 {
 		return nil
 	}
 	acting := app.actingCharacterID(ctx, characters)

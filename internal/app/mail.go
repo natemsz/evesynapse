@@ -252,12 +252,70 @@ var mailDropWithContents = map[string]bool{
 	"meta": true, "base": true, "source": true, "track": true,
 }
 
+// mailVoidTags are the allowed tags that never have contents or a
+// close tag.
+var mailVoidTags = map[string]bool{"br": true, "hr": true}
+
+// mailMaxDepth caps how deeply the output nests. Real mail and
+// bios never come close; a body built to nest thousands deep is
+// flattened past this point instead of being passed to the browser.
+const mailMaxDepth = 64
+
 // sanitizeMailHTML reduces a raw mail body to safe display HTML.
+// It also serves the other player- and CCP-written HTML the app
+// shows: pilot bios, corporation descriptions, item descriptions.
+//
+// The output is always well-formed on its own. Every tag written is
+// closed again — by its own close tag, by the close of an element
+// around it, or at the end — and a close tag with nothing open to
+// match is dropped. A hostile body therefore cannot close the
+// page's own containers and draw outside the box it is shown in.
 func sanitizeMailHTML(raw string) template.HTML {
 	var out strings.Builder
-	// droppedAnchors counts <a> open tags swallowed for a bad
-	// href, so their close tags are swallowed with them.
-	droppedAnchors := 0
+
+	// open is the stack of elements currently open in the output.
+	// An entry that was not written (an <a> whose href was unusable,
+	// or anything nested past mailMaxDepth) still takes its place,
+	// so that its close tag is swallowed with it.
+	type openTag struct {
+		name    string
+		written bool
+	}
+	var open []openTag
+	openTagAs := func(name, markup string, write bool) {
+		if len(open) >= mailMaxDepth {
+			write = false
+		}
+		if write {
+			out.WriteString(markup)
+		}
+		open = append(open, openTag{name: name, written: write})
+	}
+	closeDownTo := func(depth int) {
+		for len(open) > depth {
+			top := open[len(open)-1]
+			open = open[:len(open)-1]
+			if top.written {
+				out.WriteString("</" + top.name + ">")
+			}
+		}
+	}
+	// closeTag closes the nearest open element of that name, and
+	// with it anything left open inside it. No such element: the
+	// close tag is a stray and is dropped.
+	closeTag := func(name string) {
+		for depth := len(open) - 1; depth >= 0; depth-- {
+			if open[depth].name == name {
+				closeDownTo(depth)
+				return
+			}
+		}
+	}
+	finish := func() template.HTML {
+		closeDownTo(0)
+		return template.HTML(out.String())
+	}
+
 	i := 0
 	for i < len(raw) {
 		lt := strings.IndexByte(raw[i:], '<')
@@ -275,7 +333,7 @@ func sanitizeMailHTML(raw string) template.HTML {
 			// comment swallows the rest.
 			end := strings.Index(rest[4:], "-->")
 			if end < 0 {
-				return template.HTML(out.String())
+				return finish()
 			}
 			i += 4 + end + 3
 			continue
@@ -283,7 +341,7 @@ func sanitizeMailHTML(raw string) template.HTML {
 			// Doctypes / processing instructions: skip to '>'.
 			end := strings.IndexByte(rest, '>')
 			if end < 0 {
-				return template.HTML(out.String())
+				return finish()
 			}
 			i += end + 1
 			continue
@@ -320,12 +378,8 @@ func sanitizeMailHTML(raw string) template.HTML {
 		i = end + 1
 
 		if closing {
-			if name == "a" && droppedAnchors > 0 {
-				droppedAnchors--
-				continue
-			}
-			if mailAllowedTags[name] && name != "br" && name != "hr" {
-				out.WriteString("</" + name + ">")
+			if mailAllowedTags[name] && !mailVoidTags[name] {
+				closeTag(name)
 			}
 			continue
 		}
@@ -335,11 +389,11 @@ func sanitizeMailHTML(raw string) template.HTML {
 			}
 			closeIdx := indexMailCloseTag(raw, i, name)
 			if closeIdx < 0 {
-				return template.HTML(out.String()) // rest is swallowed content
+				return finish() // rest is swallowed content
 			}
 			gt := strings.IndexByte(raw[closeIdx:], '>')
 			if gt < 0 {
-				return template.HTML(out.String())
+				return finish()
 			}
 			i = closeIdx + gt + 1
 			continue
@@ -347,24 +401,19 @@ func sanitizeMailHTML(raw string) template.HTML {
 		if !mailAllowedTags[name] {
 			continue // unknown tag: drop the tag, keep its text
 		}
-		switch name {
-		case "br":
-			out.WriteString("<br>")
-		case "hr":
-			out.WriteString("<hr>")
-		case "a":
-			if href, ok := mailHref(attrs); ok {
-				out.WriteString(`<a href="` + html.EscapeString(href) + `" rel="nofollow noopener noreferrer" target="_blank">`)
-			} else {
-				// An unusable href leaves the link text bare;
-				// remember to swallow its close tag too.
-				droppedAnchors++
-			}
-		default:
+		switch {
+		case mailVoidTags[name]:
 			out.WriteString("<" + name + ">")
+		case name == "a":
+			// An unusable href leaves the link text bare; the
+			// unwritten entry swallows its close tag too.
+			href, ok := mailHref(attrs)
+			openTagAs("a", `<a href="`+html.EscapeString(href)+`" rel="nofollow noopener noreferrer" target="_blank">`, ok)
+		default:
+			openTagAs(name, "<"+name+">", true)
 		}
 	}
-	return template.HTML(out.String())
+	return finish()
 }
 
 // writeMailText appends a text run: entities decoded, then

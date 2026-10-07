@@ -511,11 +511,16 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	})
 
 	r.Route("/sync", func(r chi.Router) {
-		r.Use(app.requireAdmin)
-		r.Get("/", app.handleSync)
-		r.Get("/page-status", app.handlePageSyncStatus)
-		r.Post("/warm", app.handleSyncWarm)
-		r.Post("/sde", app.handleSyncSDE)
+		// The banner indicator's poll runs on every signed-in
+		// page (app.js), so it is gated on login only; the handler
+		// reads nothing but the caller's own pending wants.
+		r.With(app.requireAuth).Get("/page-status", app.handlePageSyncStatus)
+		r.Group(func(r chi.Router) {
+			r.Use(app.requireAdmin)
+			r.Get("/", app.handleSync)
+			r.Post("/warm", app.handleSyncWarm)
+			r.Post("/sde", app.handleSyncSDE)
+		})
 	})
 
 	return r

@@ -31,6 +31,9 @@ This project is dedicated to EVE Online, its pilots and its developers — the g
 - `cmd/evesynapse-dev/` — dev entrypoint: identical wiring plus the
   dev-only routes (`/dev-login`). Local testing only — never deploy
   this binary.
+- `cmd/releasesign/` — the maintainer's tool for release signing:
+  makes the release key, signs the update manifests in the release
+  job, checks a signature by hand. Never deployed either
 - `internal/app/` — the application: config + `.env` loader
   (`config.go`), EVE SSO auth/sessions/JWT verification (`auth.go`),
   account linking and the sign-up policy (`links.go`, `signup.go`),
@@ -71,9 +74,13 @@ This project is dedicated to EVE Online, its pilots and its developers — the g
 - `internal/markethistory/` — figures and the SVG chart computed
   from a type's stored daily price history. Pure
 - `internal/selfupdate/` — `evesynapse -update`: the release channel,
-  downloading, verifying and swapping in a new build, and handing
-  over to the running server. It is told the running version and
-  knows nothing else about the application
+  checking a release's signature, downloading, verifying and swapping
+  in a new build, and handing over to the running server. It is told
+  the running version and knows nothing else about the application
+- `internal/releasesig/` — the signature on a release: how an update
+  manifest is signed and how the updater checks one, plus
+  `trusted_keys.pem`, the public keys compiled into every build
+  ("Release signing" below)
 - `internal/pidfile/` — the server's pidfile: written at start-up,
   read by `-update` to restart the server and by `-refresh` to refuse
   while it is running (`pidfile/pidfiletest` is test support)
@@ -237,9 +244,12 @@ registration for sign-in ("EVE SSO flow" below). Then:
    sudo bash deploy/setup.sh
    ```
 
-   It downloads the latest build for your machine and verifies it
-   against the checksum published with the release, creates the
-   `evesynapse` user and `/opt/evesynapse`, installs and starts
+   It downloads the latest build for your machine, checks the
+   release's signature and verifies the build against the checksum
+   in its signed manifest ("Release signing" below; on a machine
+   whose OpenSSL is older than 3.0 it can check only the checksum,
+   and says so), creates the `evesynapse` user and
+   `/opt/evesynapse`, installs and starts
    PostgreSQL if it's missing and creates the app's database
    (role `evesynapse`, database `evesynapse`, with a generated
    password written into `/opt/evesynapse/.env` as `DATABASE_URL`),
@@ -270,6 +280,10 @@ registration for sign-in ("EVE SSO flow" below). Then:
    sudo EVESYNAPSE_UPDATE_REPO=you/evesynapse bash deploy/setup.sh
    sudo EVESYNAPSE_BINARY=/path/to/evesynapse bash deploy/setup.sh
    ```
+
+   Run the fork form from a checkout of the fork: the script checks
+   the release against the release key in the checkout it is run
+   from, and a fork's releases are signed with the fork's own key.
 
 3. **Fill in `/opt/evesynapse/.env`** with your EVE app's client
    ID, secret, and callback URL, then start it:
@@ -369,8 +383,9 @@ sudo EVESYNAPSE_BINARY=$PWD/bin/evesynapse bash deploy/setup.sh
 Builds are published automatically: every push to `main` runs the
 test suite in CI and, when `internal/app/version.txt` names a
 version that has no release yet, publishes a GitHub release with
-builds for ARM64 and AMD64 plus a small manifest per build (the
-version and its SHA-256 checksum).
+builds for ARM64 and AMD64 plus, for each build, a small manifest
+(the version and the build's SHA-256 checksum) and that manifest's
+signature.
 
 A release is one edit: `internal/app/version.txt`. Nothing else in
 the repository repeats the version, and the tests read it from that
@@ -386,18 +401,15 @@ sudo /opt/evesynapse/evesynapse -update -arm64   # ARM build explicitly
 sudo /opt/evesynapse/evesynapse -update -amd64   # Intel/AMD build (-x86 and -x64 also work)
 ```
 
-The updater asks the latest release what version it carries and
-compares it with its own. If they're the same, it just says so
+The updater first checks the latest release's signature, and refuses
+a release that is not signed with the project's release key ("Release
+signing" below). Then it asks the release what version it carries
+and compares it with its own. If they're the same, it just says so
 and stops. If the release is newer, it downloads that build,
-verifies it against the published checksum and checks it's built
-for the right kind of computer, swaps it into place, restarts the
-running server onto it, and reports the new version number.
-
-The checksum comes from the manifest published in the same release
-as the build. It protects against a damaged or cut-short download.
-It is not a signature: releases are not signed, so the check does
-not prove who published a build, only that the download matches what
-the release says it should be.
+verifies it against the checksum in the signed manifest and checks
+it's built for the right kind of computer, swaps it into place,
+restarts the running server onto it, and reports the new version
+number.
 
 There's also a manual form that installs a specific build: from an
 address, with the checksum published for it, or from a local file:
@@ -406,6 +418,9 @@ address, with the checksum published for it, or from a local file:
 sudo /opt/evesynapse/evesynapse -update <url> <sha256>
 sudo /opt/evesynapse/evesynapse -update <file> [sha256]
 ```
+
+The manual form checks what you give it and no signature: it is
+your own word for that build.
 
 ### Development builds
 
@@ -419,6 +434,97 @@ sudo /opt/evesynapse/evesynapse -update -dev
 
 A plain `-update` from a development build goes back to the
 latest release once that release's number catches up.
+
+### Release signing
+
+Every release is signed, and the updater installs nothing that is
+not.
+
+- **What is signed.** Each build's manifest, `latest-<arch>.json`:
+  the version, the kind of computer, and the build's SHA-256. Its
+  signature is published beside it as `latest-<arch>.json.sig`.
+  Because the checksum is inside what is signed, the signature
+  covers every byte of the build.
+- **With what.** An Ed25519 key. Its private half exists only as the
+  repository's `RELEASE_SIGNING_KEY` Actions secret, which the
+  release job signs with. Its public half is
+  `internal/releasesig/trusted_keys.pem`, compiled into every build.
+- **What the updater does with it.** It fetches the manifest and the
+  signature, checks the signature against the keys it was built
+  with, and only then reads the manifest. A release that is
+  unsigned, signed with another key, or changed after signing is
+  refused and nothing is downloaded. An older release offered again
+  is still genuinely signed, and is turned down by the version
+  comparison instead.
+- **What it proves, and what it does not.** That the release was
+  published by this repository's release job. Someone who can
+  replace the files of a release, but cannot run that job with the
+  secret, can no longer get a build installed. It is no protection
+  against someone who controls the repository itself, since they
+  control what the job signs.
+
+To check a release by hand, with nothing but OpenSSL 3:
+
+```sh
+base64 -d latest-arm64.json.sig > sig.bin
+openssl pkeyutl -verify -pubin -inkey internal/releasesig/trusted_keys.pem \
+    -rawin -in latest-arm64.json -sigfile sig.bin
+sha256sum evesynapse-arm64   # must be the "sha256" in latest-arm64.json
+```
+
+(`go run ./cmd/releasesign verify latest-arm64.json` makes the first
+check exactly as the updater does. OpenSSL reads only the first key
+in `trusted_keys.pem`.)
+
+**Making the key.** Once, from the repository root, signed in to
+`gh`:
+
+```sh
+go run ./cmd/releasesign keygen -- gh secret set RELEASE_SIGNING_KEY
+```
+
+It makes the key pair, hands the private half to `gh secret set` on
+its standard input without printing or saving it, and only when that
+has worked adds the public half to `trusted_keys.pem`. Commit that
+file. Add `-out <file>` to keep a copy of the private half as well.
+That is a trade: a copy is one more place the key can leak from, and
+without one, losing the secret means the manual update described
+under "If the key is lost".
+
+The release job fails, and publishes nothing, when the secret is
+missing or is not the other half of a key in `trusted_keys.pem`.
+
+**Replacing the key.** An install only trusts the keys of the build
+it is running, so the new key has to reach installs in a release
+signed with the old one:
+
+1. `go run ./cmd/releasesign keygen -add -out ~/new-release-key.pem`
+   adds the new public key beside the old, and writes the new private
+   half outside the repository. Commit `trusted_keys.pem` and publish
+   a release. It is still signed with the old key, and its updater
+   trusts both.
+2. Once installs have had time to take that release, switch the
+   secret, `gh secret set RELEASE_SIGNING_KEY < ~/new-release-key.pem`,
+   then delete that file or move it somewhere offline.
+3. Later, delete the old key's block from `trusted_keys.pem`.
+
+An install that skipped the release from step 1 needs the manual
+update below. If you kept a copy of the old private half you can
+avoid even that: put both keys in the secret for a while (one PEM
+block after the other) and every release carries both signatures,
+which an install knowing either key accepts. If the private half may
+have leaked, replace it the same way without waiting.
+
+**If the key is lost** (the secret deleted, and no copy kept), make
+a new one (delete the old block from `trusted_keys.pem`, then
+`keygen` as above) and publish a release. Existing installs cannot
+verify it, because the only key they trust is the lost one. Each
+needs one manual update, with the address and checksum from the
+release page, and updates normally from then on:
+
+```sh
+sudo evesynapse -update https://github.com/natemsz/evesynapse/releases/download/v<version>/evesynapse-arm64 <sha256>
+```
 
 ### Updating from your own fork
 
@@ -436,6 +542,16 @@ in the fork (GitHub turns them off on new forks): the workflow
 is already in the repo under `.github/workflows/`, and once it's
 allowed to run, your pushes get tested, built, and released
 exactly like the mainline ones.
+
+A fork signs its releases with its own key. In the fork, delete the
+mainline key's block from `internal/releasesig/trusted_keys.pem`,
+run the `keygen` command under "Release signing", and commit the
+file; until the fork has a key its release job fails rather than
+publish unsigned builds. It follows that the setting above only
+moves an install that is already running a build of the fork: a
+mainline build refuses the fork's releases, since they are not
+signed with the key it trusts. Install the fork's build first (its
+setup script does that), and it updates from the fork from then on.
 
 ## Command-line modes
 

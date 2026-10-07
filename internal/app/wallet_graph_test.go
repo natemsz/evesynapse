@@ -22,7 +22,7 @@ func seedWalletSample(t *testing.T, q *db.Queries, userID, characterID int64, da
 	if err := q.UpsertWalletHistorySample(context.Background(), db.UpsertWalletHistorySampleParams{
 		UserID: userID, CharacterID: characterID, Day: day,
 		Balance: balance, NetWorth: netWorth,
-		SampledAt: mustTime(day + "T12:00:00Z"),
+		SampledAt: day + "T12:00:00Z",
 	}); err != nil {
 		t.Fatalf("seed wallet sample %s: %v", day, err)
 	}
@@ -47,8 +47,8 @@ func TestBuildBalanceSeriesJournalOnly(t *testing.T) {
 
 func TestBuildBalanceSeriesSamplerOnly(t *testing.T) {
 	samples := []db.WalletHistory{
-		{Day: "2026-03-01", Balance: 50, SampledAt: mustTime("2026-03-01T09:00:00Z")},
-		{Day: "2026-03-02", Balance: 75, SampledAt: mustTime("2026-03-02T09:00:00Z")},
+		{Day: "2026-03-01", Balance: 50, SampledAt: "2026-03-01T09:00:00Z"},
+		{Day: "2026-03-02", Balance: 75, SampledAt: "2026-03-02T09:00:00Z"},
 	}
 	points := buildBalanceSeries(nil, samples, nil)
 	if len(points) != 2 || points[0].Balance != 50 || points[1].Balance != 75 {
@@ -62,8 +62,8 @@ func TestBuildBalanceSeriesSamplerOnly(t *testing.T) {
 // fetch time.
 func TestBuildBalanceSeriesMergedSeam(t *testing.T) {
 	samples := []db.WalletHistory{
-		{Day: "2026-02-01", Balance: 10, SampledAt: mustTime("2026-02-01T09:00:00Z")},
-		{Day: "2026-03-02", Balance: 999, SampledAt: mustTime("2026-03-02T09:00:00Z")}, // inside window: dropped
+		{Day: "2026-02-01", Balance: 10, SampledAt: "2026-02-01T09:00:00Z"},
+		{Day: "2026-03-02", Balance: 999, SampledAt: "2026-03-02T09:00:00Z"}, // inside window: dropped
 	}
 	journal := esi.WalletJournal{
 		{ID: 1, Date: "2026-03-01T10:00:00Z", Balance: 100},
@@ -114,6 +114,22 @@ func TestBuildBalanceChartStates(t *testing.T) {
 	flat, ok := buildBalanceChart([]balancePoint{at(1, 100), at(2, 100)})
 	if !ok || flat.Dots[0].Y != flat.Dots[1].Y {
 		t.Fatalf("flat series: ok=%v dots=%+v", ok, flat.Dots)
+	}
+	// Microscopically different values (floating-point summation
+	// residue across thousands of assets) draw flat too, not as
+	// phantom peaks stretched across the full chart height.
+	epsFlat, ok := buildBalanceChart([]balancePoint{
+		at(1, 158842302202.96),
+		at(2, 158842302202.96002),
+		at(3, 158842302202.95999),
+	})
+	if !ok {
+		t.Fatal("epsilon-flat series did not chart")
+	}
+	for i := 1; i < len(epsFlat.Dots); i++ {
+		if epsFlat.Dots[i].Y != epsFlat.Dots[0].Y {
+			t.Fatalf("epsilon-flat series not flat: dots=%+v", epsFlat.Dots)
+		}
 	}
 }
 

@@ -40,8 +40,11 @@ This project is dedicated to EVE Online, its pilots and its developers — the g
   page handlers and view models
   (`pages.go`, `assets.go`, `skills.go`, `corporation.go`,
   `market.go`, `sync.go`, `character.go`, `fittings.go`,
-  `killmails.go`, `intel.go`), the background worker (`worker.go`,
-  plus `intel_worker.go` for the public-data pass), the
+  `killmails.go`, `intel.go`), the background worker (`worker.go`
+  runs the cycle; each `*_worker.go` file is the fetching behind one
+  group of pages, and `name_harvest.go` collects the names a cycle
+  has to resolve), what pages and the worker both read
+  (`snapshots.go`, `market_book.go`), the
   SDE static-data importer (`sde.go`), static assets and their
   caching (`static.go`), the health check (`health.go`), and the
   self-maintenance modes (`maintenance.go`: `-version`, `-update`,
@@ -59,6 +62,14 @@ This project is dedicated to EVE Online, its pilots and its developers — the g
   arithmetic that turns a ship, its modules, skills and charges into
   the fit's statistics. Pure over the static data it loads; the
   fitting pages in `internal/app` are its only caller
+- `internal/skillplan/` — skill-plan arithmetic: SP per level,
+  training speed, ordering targets with their prerequisites, the
+  remap advisor. Pure; the skill pages supply the skill graph
+- `internal/buildplan/` — the industry build planner's engine: the
+  tree of everything a product needs, the manufacturing formulae,
+  what is already held, and the price of the rest. Pure
+- `internal/markethistory/` — figures and the SVG chart computed
+  from a type's stored daily price history. Pure
 - `internal/pgtest/` — test-only embedded-Postgres provisioning
   (a fresh database per test; `go test ./...` needs no external
   database). A package whose tests use it needs a `TestMain` that

@@ -61,7 +61,7 @@ func (app *Application) linkVerifiedCharacter(ctx context.Context, in linkCharac
 	switch {
 	case err == nil:
 		result.Moved = existing.UserID != in.UserID
-		result.OwnerChanged = existing.OwnerHash != "" && in.OwnerHash != "" && existing.OwnerHash != in.OwnerHash
+		result.OwnerChanged = ownerHashChanged(existing.OwnerHash, in.OwnerHash)
 	case errors.Is(err, sql.ErrNoRows):
 		// First time this character has ever signed in.
 	default:
@@ -76,9 +76,14 @@ func (app *Application) linkVerifiedCharacter(ctx context.Context, in linkCharac
 		ownerHash = existing.OwnerHash
 	}
 
+	// An owner change on a character that stays on its account is
+	// flagged and parked until a second sign-in confirms it. One
+	// that is moving to another account at the same moment needs no
+	// second look: the new owner has just proven control and the
+	// character has left the account it could not be trusted on.
 	state := linkStateOK
 	var stateAt sql.NullString
-	if result.OwnerChanged {
+	if result.OwnerChanged && !result.Moved {
 		state = linkStateOwnerChanged
 		stateAt = sql.NullString{String: time.Now().UTC().Format(time.RFC3339), Valid: true}
 	}
@@ -103,23 +108,40 @@ func (app *Application) linkVerifiedCharacter(ctx context.Context, in linkCharac
 	return result, nil
 }
 
+// ownerHashChanged reports whether a verified sign-in's owner hash
+// proves the character sits on a different EVE account than the
+// one it was linked from. Either side being unknown ("") proves
+// nothing.
+func ownerHashChanged(stored, verified string) bool {
+	return stored != "" && verified != "" && stored != verified
+}
+
 // resolveSignInUser decides which EveSynapse account a verified SSO
 // sign-in lands on. A session that already holds an account keeps it
 // ("link another character" reuses the same path). A fresh session
 // adopts the account the character is already linked to: an expired
 // session must never split a returning user's pilots onto a
 // brand-new account that holds only the character they happened to
-// sign in with. Only a character that has never signed in creates a
-// new account.
-func (app *Application) resolveSignInUser(ctx context.Context, sessionUserID, characterID int64) (int64, error) {
+// sign in with. A character that has never signed in creates a new
+// account.
+//
+// The one exception to adopting is a character that changed EVE
+// accounts since it was linked (ownerHash is the sign-in's verified
+// owner hash). Whoever signs it in now is not the person who built
+// the account it sits on, and adopting would hand that person the
+// previous owner's whole account — every other character linked to
+// it, their data and their tokens. The new owner gets a fresh
+// account instead, and linkVerifiedCharacter moves the character
+// onto it.
+func (app *Application) resolveSignInUser(ctx context.Context, sessionUserID, characterID int64, ownerHash string) (int64, error) {
 	if sessionUserID != 0 {
 		return sessionUserID, nil
 	}
 	existing, err := app.queries.GetCharacter(ctx, characterID)
 	switch {
-	case err == nil:
+	case err == nil && !ownerHashChanged(existing.OwnerHash, ownerHash):
 		return existing.UserID, nil
-	case errors.Is(err, sql.ErrNoRows):
+	case err == nil || errors.Is(err, sql.ErrNoRows):
 		user, err := app.queries.CreateUser(ctx)
 		if err != nil {
 			return 0, err

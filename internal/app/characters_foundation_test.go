@@ -463,12 +463,16 @@ func TestResolveSignInUser(t *testing.T) {
 	linkFor(t, app, userA.ID, fixtureCharA, "hash-one")
 
 	// Fresh session, returning character: adopt A, do not mint.
-	got, err := app.resolveSignInUser(ctx, 0, fixtureCharA)
-	if err != nil {
-		t.Fatalf("resolve returning: %v", err)
-	}
-	if got != userA.ID {
-		t.Fatalf("resolve returning: got user %d, want %d", got, userA.ID)
+	// A sign-in whose token carries no owner hash proves nothing
+	// about a transfer and adopts A all the same.
+	for _, hash := range []string{"hash-one", ""} {
+		got, err := app.resolveSignInUser(ctx, 0, fixtureCharA, hash)
+		if err != nil {
+			t.Fatalf("resolve returning (hash %q): %v", hash, err)
+		}
+		if got != userA.ID {
+			t.Fatalf("resolve returning (hash %q): got user %d, want %d", hash, got, userA.ID)
+		}
 	}
 
 	// Held session account wins (link-another-character path).
@@ -476,7 +480,7 @@ func TestResolveSignInUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create user B: %v", err)
 	}
-	got, err = app.resolveSignInUser(ctx, userB.ID, fixtureCharA)
+	got, err := app.resolveSignInUser(ctx, userB.ID, fixtureCharA, "hash-one")
 	if err != nil {
 		t.Fatalf("resolve with session account: %v", err)
 	}
@@ -485,12 +489,74 @@ func TestResolveSignInUser(t *testing.T) {
 	}
 
 	// First-ever character: a new account appears.
-	got, err = app.resolveSignInUser(ctx, 0, fixtureCharB)
+	got, err = app.resolveSignInUser(ctx, 0, fixtureCharB, "hash-other")
 	if err != nil {
 		t.Fatalf("resolve first-ever: %v", err)
 	}
 	if got == 0 || got == userA.ID || got == userB.ID {
 		t.Fatalf("resolve first-ever: got user %d, want a fresh account", got)
+	}
+}
+
+// TestTransferredCharacterNeverInheritsTheAccount: a character that
+// changed EVE accounts (sold, traded) signs in from a fresh session.
+// Its new owner must not land on the account the previous owner
+// built — that would hand over every other character linked there.
+// They get a fresh account, the character moves onto it healthy, and
+// the previous owner's account keeps everything else.
+func TestTransferredCharacterNeverInheritsTheAccount(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+
+	seller, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create seller account: %v", err)
+	}
+	linkFor(t, app, seller.ID, fixtureCharA, "seller-hash") // the character that gets sold
+	linkFor(t, app, seller.ID, fixtureCharB, "seller-hash") // one the seller keeps
+
+	// The buyer signs the character in from a fresh session.
+	buyerID, err := app.resolveSignInUser(ctx, 0, fixtureCharA, "buyer-hash")
+	if err != nil {
+		t.Fatalf("resolve transferred character: %v", err)
+	}
+	if buyerID == 0 || buyerID == seller.ID {
+		t.Fatalf("transferred character resolved to user %d; the seller's account is %d and must not be adopted", buyerID, seller.ID)
+	}
+	res := linkFor(t, app, buyerID, fixtureCharA, "buyer-hash")
+	if !res.Moved || !res.OwnerChanged {
+		t.Fatalf("transfer link: got %+v, want moved and owner-changed", res)
+	}
+
+	sold, err := q.GetCharacter(ctx, fixtureCharA)
+	if err != nil {
+		t.Fatalf("get transferred character: %v", err)
+	}
+	if sold.UserID != buyerID || sold.OwnerHash != "buyer-hash" {
+		t.Fatalf("transferred character stored on user %d with hash %q", sold.UserID, sold.OwnerHash)
+	}
+	// Nothing left to re-verify: the new owner just proved control
+	// and the character has left the old account.
+	if sold.LinkState != linkStateOK {
+		t.Fatalf("transferred character state %q, want %q", sold.LinkState, linkStateOK)
+	}
+
+	// The buyer's account holds that one character; the seller's
+	// keeps the other.
+	if chars, _ := q.ListCharactersByUser(ctx, buyerID); len(chars) != 1 || chars[0].CharacterID != fixtureCharA {
+		t.Fatalf("buyer's account holds %+v, want only the transferred character", chars)
+	}
+	if chars, _ := q.ListCharactersByUser(ctx, seller.ID); len(chars) != 1 || chars[0].CharacterID != fixtureCharB {
+		t.Fatalf("seller's account holds %+v, want only the character they kept", chars)
+	}
+
+	// The buyer coming back later lands on their own account.
+	again, err := app.resolveSignInUser(ctx, 0, fixtureCharA, "buyer-hash")
+	if err != nil {
+		t.Fatalf("resolve returning buyer: %v", err)
+	}
+	if again != buyerID {
+		t.Fatalf("returning buyer resolved to user %d, want %d", again, buyerID)
 	}
 }
 

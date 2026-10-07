@@ -277,8 +277,10 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 	// Land on the account this sign-in belongs to: the session's
 	// account when it holds one ("link another character"), else
 	// the account the character is already linked to, else a fresh
-	// account for a first-ever sign-in.
-	userID, err := app.resolveSignInUser(ctx, int64(app.sessions.GetInt(ctx, sessionUserID)), characterID)
+	// account — for a first-ever sign-in, and for a character that
+	// changed EVE accounts since it was linked (its new owner must
+	// never inherit the previous owner's account).
+	userID, err := app.resolveSignInUser(ctx, int64(app.sessions.GetInt(ctx, sessionUserID)), characterID, ownerHash)
 	if err != nil {
 		log.Printf("sso callback: resolve account for character %d: %v", characterID, err)
 		fail("save")
@@ -304,11 +306,13 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 		fail("save")
 		return
 	}
-	if result.Moved {
-		log.Printf("sso: character %d moved to user %d (already linked elsewhere; fresh sign-in wins)", characterID, userID)
-	}
-	if result.OwnerChanged {
+	switch {
+	case result.OwnerChanged && result.Moved:
+		log.Printf("sso: character %d changed EVE accounts since it was linked; moved off its previous account to user %d", characterID, userID)
+	case result.OwnerChanged:
 		log.Printf("sso: character %d owner hash changed since the link was verified; flagged for re-verification", characterID)
+	case result.Moved:
+		log.Printf("sso: character %d moved to user %d (already linked elsewhere; fresh sign-in wins)", characterID, userID)
 	}
 
 	log.Printf("sso: signed in character %d (%s) on user %d", characterID, characterName, userID)

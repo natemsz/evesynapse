@@ -134,10 +134,9 @@ func TestCompareVersions(t *testing.T) {
 		{"0.3.17.10", "0.3.17.2", 1},
 		// A -dev suffix is not part of the number: the numbers
 		// decide first, and on a tie the plain release is newer.
-		{"0.3.38.002-dev", "0.3.39.001-dev", 1},
-		{"0.3.39.001-dev", "0.3.38.002-dev", -1},
+		{"0.3.38.002-dev", "0.3.39.001-dev", -1},
+		{"0.3.39.001-dev", "0.3.38.002-dev", 1},
 		{"0.3.39.001-dev", "0.3.39.001-dev", 0},
-		{"0.3.39.001-dev", "0.3.39.001", 1},
 		{"0.3.39.001-dev", "0.3.39.001", -1},
 		{"0.3.39.001", "v0.3.39.001-dev", 1},
 	}

@@ -36,8 +36,8 @@ This project is dedicated to EVE Online, its pilots and its developers — the g
   account linking and the sign-up policy (`links.go`, `signup.go`),
   token refresh and encryption at rest (`refresh.go`,
   `tokencrypt.go`), cookie, header and cross-site protections
-  (`httpsec.go`), the application struct, router and schema
-  migrations (`app.go`, `db.go`), page handlers and view models
+  (`httpsec.go`), the application struct and router (`app.go`),
+  page handlers and view models
   (`pages.go`, `assets.go`, `skills.go`, `corporation.go`,
   `market.go`, `sync.go`, `character.go`, `fittings.go`,
   `killmails.go`, `intel.go`), the background worker (`worker.go`,
@@ -51,8 +51,10 @@ This project is dedicated to EVE Online, its pilots and its developers — the g
 - `internal/app/static/` — embedded assets: the 2013 wallpaper
   (`bg.jpg`) and the dependency-free stylesheet (`style.css`), served
   at `/static/`
-- `internal/app/schema_pg/` — the Postgres schema as numbered steps
-  (sqlc input), embedded and applied at startup
+- `internal/store/` — the database: opens Postgres and brings the
+  schema up to date at startup (`store.go`, `schema.go`). The schema
+  itself is the numbered steps in `internal/store/schema_pg/`, which
+  are also sqlc's input
 - `internal/pgtest/` — test-only embedded-Postgres provisioning
   (a fresh database per test; `go test ./...` needs no external
   database)
@@ -664,10 +666,10 @@ exists only to back the scs `pgxstore` session store (sessions
 live in the `sessions` table the baseline creates).
 
 The schema is a series of numbered steps in
-`internal/app/schema_pg/`: `001_baseline.sql` is the whole schema
+`internal/store/schema_pg/`: `001_baseline.sql` is the whole schema
 as of the move to Postgres (BIGINT/DOUBLE PRECISION keep the
 generated Go models' int64/float64 types), and each later file is
-one change. At startup `openDB` applies whichever steps a database
+one change. At startup `store.Open` applies whichever steps a database
 is missing, in order. Each step runs in a single transaction
 together with its row in the `schema_migrations` table, so a step
 lands completely or not at all, and that table is the record of
@@ -684,8 +686,8 @@ instant. Those three steps rewrite the tables they touch, so the
 first start after upgrading past them takes as long as copying
 those tables once; the snapshot table is by far the largest.
 
-To change the schema, add the next numbered file, embed it in
-`app.go`, and add one line to `schemaSteps` in `db.go`.
+To change the schema, add the next numbered file, then embed it and
+add one line to `schemaSteps`, both in `internal/store/schema.go`.
 Regenerate query code after editing `internal/db/query/` with:
 
 ```sh

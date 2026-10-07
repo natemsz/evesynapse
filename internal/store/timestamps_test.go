@@ -1,4 +1,4 @@
-package app
+package store
 
 // Tests for the steps that turned the TEXT time columns into
 // timestamptz (009 onwards): an install from before them, holding
@@ -18,7 +18,7 @@ import (
 
 // openBeforeSchemaStep opens a fresh database with the schema brought
 // up to, but not including, the given step: an install that has yet
-// to run it. The handle is a plain one; openDB would finish the job.
+// to run it. The handle is a plain one; Open would finish the job.
 func openBeforeSchemaStep(t *testing.T, dsn string, version int) *sql.DB {
 	t.Helper()
 	ctx := context.Background()
@@ -132,9 +132,9 @@ func checkTimeColumns(t *testing.T, conn *sql.DB, columns []timeColumn) {
 // column is a timestamptz, nullable exactly where "never" is a
 // possible answer.
 func TestSchemaTimeColumnTypes(t *testing.T) {
-	conn, pool, err := openDB(context.Background(), pgtest.FreshDSN(t))
+	conn, pool, err := Open(context.Background(), pgtest.FreshDSN(t))
 	if err != nil {
-		t.Fatalf("openDB: %v", err)
+		t.Fatalf("Open: %v", err)
 	}
 	defer pool.Close()
 	defer conn.Close()
@@ -207,7 +207,7 @@ func TestSchemaTimestampStepKeepsStoredTimes(t *testing.T) {
 	}
 	old.Close()
 
-	conn, pool, err := openDB(ctx, dsn)
+	conn, pool, err := Open(ctx, dsn)
 	if err != nil {
 		t.Fatalf("upgrade: %v", err)
 	}
@@ -367,7 +367,7 @@ func TestSchemaMarketTimestampStepKeepsStoredTimes(t *testing.T) {
 	}
 	old.Close()
 
-	conn, pool, err := openDB(ctx, dsn)
+	conn, pool, err := Open(ctx, dsn)
 	if err != nil {
 		t.Fatalf("upgrade: %v", err)
 	}
@@ -575,7 +575,7 @@ func TestSchemaRecordTimestampStepKeepsStoredTimes(t *testing.T) {
 	}
 	old.Close()
 
-	conn, pool, err := openDB(ctx, dsn)
+	conn, pool, err := Open(ctx, dsn)
 	if err != nil {
 		t.Fatalf("upgrade: %v", err)
 	}
@@ -721,9 +721,9 @@ func TestSchemaRecordTimestampStepKeepsStoredTimes(t *testing.T) {
 // so every page prints EVE time without having to ask for it.
 func TestStoredTimesReadBackInUTC(t *testing.T) {
 	ctx := context.Background()
-	conn, pool, err := openDB(ctx, pgtest.FreshDSN(t))
+	conn, pool, err := Open(ctx, pgtest.FreshDSN(t))
 	if err != nil {
-		t.Fatalf("openDB: %v", err)
+		t.Fatalf("Open: %v", err)
 	}
 	defer pool.Close()
 	defer conn.Close()

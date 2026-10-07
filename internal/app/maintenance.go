@@ -60,6 +60,7 @@ import (
 	"time"
 
 	"evesynapse/internal/logging"
+	"evesynapse/internal/store"
 )
 
 // Version returns the rendered product version ("v0.3.39.001"),
@@ -892,7 +893,7 @@ func runRefresh(cfg Config, pidfile string, stdout, stderr io.Writer) int {
 			return 1
 		}
 	}
-	conn, pool, err := openDB(context.Background(), cfg.databaseURL)
+	conn, pool, err := store.Open(context.Background(), cfg.databaseURL)
 	if err != nil {
 		fmt.Fprintf(stderr, "Couldn't open the EveSynapse database: %v\n", err)
 		return 1

@@ -22,6 +22,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/pgtest"
+	"evesynapse/internal/store"
 )
 
 // structureAttemptTransport answers /universe/structures/{id}/
@@ -77,9 +78,9 @@ func (s *structureAttemptTransport) attemptOrder() []int64 {
 // apart.
 func buildStructureTestApp(t *testing.T, transport http.RoundTripper) (*Application, *db.Queries) {
 	t.Helper()
-	conn, pool, err := openDB(context.Background(), pgtest.FreshDSN(t))
+	conn, pool, err := store.Open(context.Background(), pgtest.FreshDSN(t))
 	if err != nil {
-		t.Fatalf("openDB: %v", err)
+		t.Fatalf("store.Open: %v", err)
 	}
 	t.Cleanup(func() { conn.Close(); pool.Close() })
 	queries := db.New(conn)

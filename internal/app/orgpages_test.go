@@ -21,6 +21,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/pgtest"
+	"evesynapse/internal/store"
 )
 
 // ---------------------------------------------------------------------------
@@ -411,9 +412,9 @@ func TestMigration026Reopen(t *testing.T) {
 	ctx := context.Background()
 	dsn := pgtest.FreshDSN(t)
 	for i := 0; i < 2; i++ {
-		conn, pool, err := openDB(context.Background(), dsn)
+		conn, pool, err := store.Open(context.Background(), dsn)
 		if err != nil {
-			t.Fatalf("openDB (pass %d): %v", i, err)
+			t.Fatalf("store.Open (pass %d): %v", i, err)
 		}
 		q := db.New(conn)
 		if err := q.UpsertCorporationWant(ctx, 98000001); err != nil {

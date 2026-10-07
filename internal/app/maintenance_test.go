@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"evesynapse/internal/pgtest"
+	"evesynapse/internal/store"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -885,7 +886,7 @@ const testFreshStamp = "2026-10-04T00:00:00Z"
 func seedRefreshDB(t *testing.T) (string, *sql.DB) {
 	t.Helper()
 	dsn := pgtest.FreshDSN(t)
-	conn, pool, err := openDB(context.Background(), dsn)
+	conn, pool, err := store.Open(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -975,7 +976,7 @@ func TestRefreshExpiresCachesKeepsEarnedData(t *testing.T) {
 		t.Fatalf("output %q missing the earned-data note", out.String())
 	}
 
-	conn2, pool2, err := openDB(context.Background(), dsn)
+	conn2, pool2, err := store.Open(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("reopen db: %v", err)
 	}
@@ -1092,7 +1093,7 @@ func TestRefreshRefusesWhileServerRuns(t *testing.T) {
 	}
 
 	// The refusal happened before the database was touched.
-	conn2, pool2, err := openDB(context.Background(), dsn)
+	conn2, pool2, err := store.Open(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("reopen db: %v", err)
 	}
@@ -1111,7 +1112,7 @@ func TestRefreshMissingDatabase(t *testing.T) {
 	if code := runRefresh(Config{databaseURL: missing}, "", &out, &errOut); code != 1 {
 		t.Fatalf("runRefresh code %d, want 1", code)
 	}
-	if _, _, err := openDB(context.Background(), missing); err == nil {
+	if _, _, err := store.Open(context.Background(), missing); err == nil {
 		t.Fatal("runRefresh created a database where none existed")
 	}
 }

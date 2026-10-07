@@ -22,6 +22,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/pgtest"
+	"evesynapse/internal/store"
 )
 
 // seedWidgetOrders plants open orders for one character.
@@ -456,7 +457,7 @@ func TestGuidePricesWorkerRefresh(t *testing.T) {
 func TestMigrations020And021Reopen(t *testing.T) {
 	dsn := pgtest.FreshDSN(t)
 	for i := 0; i < 2; i++ {
-		conn, pool, err := openDB(context.Background(), dsn)
+		conn, pool, err := store.Open(context.Background(), dsn)
 		if err != nil {
 			t.Fatalf("open %d: %v", i, err)
 		}

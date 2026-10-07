@@ -25,6 +25,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/pgtest"
+	"evesynapse/internal/store"
 )
 
 // doReq drives the router and returns status, body, and any
@@ -421,11 +422,11 @@ func TestTokenDeadClassificationAndWorkerSkip(t *testing.T) {
 }
 
 // TestMigration009Reopen proves the schema bootstrap is
-// idempotent: a second openDB over the same database applies
+// idempotent: a second store.Open over the same database applies
 // nothing twice.
 func TestMigration009Reopen(t *testing.T) {
 	dsn := pgtest.FreshDSN(t)
-	conn, pool, err := openDB(context.Background(), dsn)
+	conn, pool, err := store.Open(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("first open: %v", err)
 	}
@@ -438,7 +439,7 @@ func TestMigration009Reopen(t *testing.T) {
 	}
 	conn.Close()
 	pool.Close()
-	conn, pool, err = openDB(context.Background(), dsn)
+	conn, pool, err = store.Open(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("second open: %v", err)
 	}

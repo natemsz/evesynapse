@@ -3,7 +3,7 @@
 // the live box runs), started lazily on the first FreshDSN call,
 // so `go test ./...` self-provisions with no external database
 // and CI needs no service. Each test gets its own empty database
-// on that server; the app's openDB applies the schema on first
+// on that server; the app's store.Open applies the schema on first
 // open, exactly like a fresh install.
 package pgtest
 

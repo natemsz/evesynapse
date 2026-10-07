@@ -1,6 +1,6 @@
-package app
+package store
 
-// Tests for the schema bootstrap (db.go): every step is recorded
+// Tests for the schema bootstrap (schema.go): every step is recorded
 // in schema_migrations, a database from before that record existed
 // is adopted without re-running anything, and a step that fails
 // leaves nothing behind.
@@ -39,7 +39,7 @@ func TestSchemaStepsRecordedOnce(t *testing.T) {
 	dsn := pgtest.FreshDSN(t)
 	want := len(schemaSteps())
 	for pass := 1; pass <= 2; pass++ {
-		conn, pool, err := openDB(context.Background(), dsn)
+		conn, pool, err := Open(context.Background(), dsn)
 		if err != nil {
 			t.Fatalf("open %d: %v", pass, err)
 		}
@@ -60,7 +60,7 @@ func TestSchemaStepsRecordedOnce(t *testing.T) {
 // actually missing.
 func TestSchemaAdoptsDatabaseWithoutRecord(t *testing.T) {
 	dsn := pgtest.FreshDSN(t)
-	conn, pool, err := openDB(context.Background(), dsn)
+	conn, pool, err := Open(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("first open: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestSchemaAdoptsDatabaseWithoutRecord(t *testing.T) {
 	conn.Close()
 	pool.Close()
 
-	conn, pool, err = openDB(context.Background(), dsn)
+	conn, pool, err = Open(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("reopen without a record: %v", err)
 	}
@@ -95,9 +95,9 @@ func TestSchemaAdoptsDatabaseWithoutRecord(t *testing.T) {
 // one.
 func TestSchemaStepIsAtomic(t *testing.T) {
 	ctx := context.Background()
-	conn, pool, err := openDB(ctx, pgtest.FreshDSN(t))
+	conn, pool, err := Open(ctx, pgtest.FreshDSN(t))
 	if err != nil {
-		t.Fatalf("openDB: %v", err)
+		t.Fatalf("Open: %v", err)
 	}
 	defer pool.Close()
 	defer conn.Close()
@@ -166,9 +166,9 @@ func rowsForUser(t *testing.T, conn *sql.DB, table string, userID int64) int {
 // that exists, and goes when that user does.
 func TestSchemaUserForeignKeys(t *testing.T) {
 	ctx := context.Background()
-	conn, pool, err := openDB(ctx, pgtest.FreshDSN(t))
+	conn, pool, err := Open(ctx, pgtest.FreshDSN(t))
 	if err != nil {
-		t.Fatalf("openDB: %v", err)
+		t.Fatalf("Open: %v", err)
 	}
 	defer pool.Close()
 	defer conn.Close()
@@ -202,7 +202,7 @@ func TestSchemaUserForeignKeys(t *testing.T) {
 func TestSchemaForeignKeyStepCleansUpOnUpgrade(t *testing.T) {
 	ctx := context.Background()
 	dsn := pgtest.FreshDSN(t)
-	conn, pool, err := openDB(ctx, dsn)
+	conn, pool, err := Open(ctx, dsn)
 	if err != nil {
 		t.Fatalf("first open: %v", err)
 	}
@@ -230,7 +230,7 @@ func TestSchemaForeignKeyStepCleansUpOnUpgrade(t *testing.T) {
 	conn.Close()
 	pool.Close()
 
-	conn, pool, err = openDB(ctx, dsn)
+	conn, pool, err = Open(ctx, dsn)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}

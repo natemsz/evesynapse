@@ -33,6 +33,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/pgtest"
+	"evesynapse/internal/store"
 )
 
 const (
@@ -61,9 +62,9 @@ func (s *countingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 // goroutine — tests drive the worker functions directly).
 func buildCorpTestApp(t *testing.T, transport http.RoundTripper) (*Application, *sql.DB, *db.Queries) {
 	t.Helper()
-	conn, pool, err := openDB(context.Background(), pgtest.FreshDSN(t))
+	conn, pool, err := store.Open(context.Background(), pgtest.FreshDSN(t))
 	if err != nil {
-		t.Fatalf("openDB: %v", err)
+		t.Fatalf("store.Open: %v", err)
 	}
 	t.Cleanup(func() { conn.Close(); pool.Close() })
 	queries := db.New(conn)

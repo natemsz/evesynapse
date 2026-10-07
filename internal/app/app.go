@@ -1,6 +1,7 @@
 // Package app is the EveSynapse web application: configuration,
-// EVE SSO auth and sessions, the HTTP routes and page handlers, the
-// background refresh worker, and DB bootstrap. The two entrypoints
+// EVE SSO auth and sessions, the HTTP routes and page handlers, and
+// the background refresh worker. The database and its schema are
+// the store package's. The two entrypoints
 // (cmd/evesynapse for release, cmd/evesynapse-dev for local dev)
 // only wire configuration into New and serve Handler.
 package app
@@ -25,74 +26,11 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/store"
 )
 
 //go:embed templates/*.html
 var templatesFS embed.FS
-
-// The schema, one embedded file per step. db.go lists them in
-// order (schemaSteps) and applies whichever a database is missing,
-// each in one transaction, recording it in schema_migrations. A
-// new schema change is the next numbered file in schema_pg/, an
-// embed here, and a line there.
-
-// Step 001: the whole schema as of the move to Postgres.
-//
-//go:embed schema_pg/001_baseline.sql
-var pgBaselineSchema string
-
-// Step 002: the station leaderboard.
-//
-//go:embed schema_pg/002_station_leaderboard.sql
-var pgStationLeaderboardSchema string
-
-// Step 003: fitting metadata (is_public / is_draft on
-// local_fittings).
-//
-//go:embed schema_pg/003_fit_metadata.sql
-var pgFitMetadataSchema string
-
-// Step 004 (v0.3.33): per-type market price TTL cache and industry
-// cost index tracking.
-//
-//go:embed schema_pg/004_price_cache_costindex.sql
-var pgPriceCacheSchema string
-
-// Step 005 (v0.3.34): restock planner targets.
-//
-//go:embed schema_pg/005_restock.sql
-var pgRestockSchema string
-
-// Step 006 (v0.3.35): custom jump-clone names.
-//
-//go:embed schema_pg/006_clone_names.sql
-var pgCloneNamesSchema string
-
-// Step 007: foreign keys to users on the four per-user tables that
-// lacked one. The first step applied purely by its record; steps
-// 001–006 also carry a probe, for databases older than the record.
-//
-//go:embed schema_pg/007_user_foreign_keys.sql
-var pgUserForeignKeysSchema string
-
-// Step 008: the ETag each snapshot was stored with, so a refresh
-// can ask ESI whether it changed instead of downloading it again.
-//
-//go:embed schema_pg/008_snapshot_etags.sql
-var pgSnapshotETagsSchema string
-
-// Steps 009–011: every time kept as TEXT becomes a timestamptz, one
-// group of tables per step (accounts and snapshots; the market; the
-// record and name caches).
-//
-//go:embed schema_pg/009_timestamps_accounts_snapshots.sql
-var pgTimestampsAccountsSchema string
-
-//go:embed schema_pg/010_timestamps_market.sql
-var pgTimestampsMarketSchema string
-
-//go:embed schema_pg/011_timestamps_records.sql
-var pgTimestampsRecordsSchema string
 
 //go:embed static
 var staticFS embed.FS
@@ -219,7 +157,7 @@ func New(cfg Config) (*Application, error) {
 		logging.Infof("evesynapse: new accounts are open to anyone who can sign in with EVE (EVE_ALLOWED_*_IDS limits that)")
 	}
 
-	dbConn, pool, err := openDB(context.Background(), cfg.databaseURL)
+	dbConn, pool, err := store.Open(context.Background(), cfg.databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("open the database: %w", err)
 	}

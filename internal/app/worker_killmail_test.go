@@ -18,6 +18,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/pgtest"
+	"evesynapse/internal/store"
 )
 
 // stubTransport answers every request with the configured status
@@ -45,9 +46,9 @@ func (s *stubTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 // snapshot lists n refs with no stored details.
 func seedKillmailCharacter(t *testing.T, transport http.RoundTripper, n int) (*Application, db.Character) {
 	t.Helper()
-	conn, pool, err := openDB(context.Background(), pgtest.FreshDSN(t))
+	conn, pool, err := store.Open(context.Background(), pgtest.FreshDSN(t))
 	if err != nil {
-		t.Fatalf("openDB: %v", err)
+		t.Fatalf("store.Open: %v", err)
 	}
 	t.Cleanup(func() { conn.Close(); pool.Close() })
 	queries := db.New(conn)

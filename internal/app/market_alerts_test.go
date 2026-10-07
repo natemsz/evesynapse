@@ -596,7 +596,7 @@ func TestMigration013Reopen(t *testing.T) {
 	transport := &countingTransport{}
 	_, conn, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
-	// The schema guard already ran once via openDB; every 013
+	// The schema guard already ran once via store.Open; every 013
 	// table answers queries on a fresh database.
 	if _, err := q.ListAllWatchlistEntries(ctx); err != nil {
 		t.Fatalf("watchlist on fresh DB: %v", err)

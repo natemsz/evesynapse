@@ -22,6 +22,7 @@ import (
 
 	"evesynapse/internal/esi"
 	"evesynapse/internal/pgtest"
+	"evesynapse/internal/store"
 )
 
 // ---------------------------------------------------------------------------
@@ -529,7 +530,7 @@ func TestPlannerRendersFromLocalData(t *testing.T) {
 // idempotent on reopen, like every schema before it.
 func TestMigration011Reopen(t *testing.T) {
 	dsn := pgtest.FreshDSN(t)
-	conn, pool, err := openDB(context.Background(), dsn)
+	conn, pool, err := store.Open(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("first open: %v", err)
 	}
@@ -542,7 +543,7 @@ func TestMigration011Reopen(t *testing.T) {
 	}
 	conn.Close()
 	pool.Close()
-	conn, pool, err = openDB(context.Background(), dsn)
+	conn, pool, err = store.Open(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("second open: %v", err)
 	}

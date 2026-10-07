@@ -18,6 +18,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/pgtest"
+	"evesynapse/internal/store"
 )
 
 // seedOverviewCharacter links one character to the user, tagged.
@@ -735,7 +736,7 @@ func TestCharacterSheetFromSnapshots(t *testing.T) {
 // idempotent, like every schema before it.
 func TestMigration010Reopen(t *testing.T) {
 	dsn := pgtest.FreshDSN(t)
-	conn, pool, err := openDB(context.Background(), dsn)
+	conn, pool, err := store.Open(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("first open: %v", err)
 	}
@@ -748,7 +749,7 @@ func TestMigration010Reopen(t *testing.T) {
 	}
 	conn.Close()
 	pool.Close()
-	conn, pool, err = openDB(context.Background(), dsn)
+	conn, pool, err = store.Open(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("second open: %v", err)
 	}

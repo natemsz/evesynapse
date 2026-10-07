@@ -28,6 +28,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/pgtest"
+	"evesynapse/internal/store"
 )
 
 // ---------------------------------------------------------------------------
@@ -522,7 +523,7 @@ func TestMigration012Reopen(t *testing.T) {
 	// same database applies nothing twice (and nothing breaks).
 	ctx := context.Background()
 	dsn := pgtest.FreshDSN(t)
-	conn, pool, err := openDB(ctx, dsn)
+	conn, pool, err := store.Open(ctx, dsn)
 	if err != nil {
 		t.Fatalf("first open: %v", err)
 	}
@@ -532,7 +533,7 @@ func TestMigration012Reopen(t *testing.T) {
 	}
 	conn.Close()
 	pool.Close()
-	conn, pool, err = openDB(ctx, dsn)
+	conn, pool, err = store.Open(ctx, dsn)
 	if err != nil {
 		t.Fatalf("second open: %v", err)
 	}

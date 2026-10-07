@@ -91,7 +91,7 @@ jobs:
   release:
     # Only what passed the tests is built, and pull requests never
     # publish.
-    needs: test
+    needs: [test, race]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:

@@ -323,8 +323,10 @@ func TestTrustedKeysFile(t *testing.T) {
 	if err != nil || len(got) != len(keys) {
 		t.Fatalf("Trusted() = %d keys, %v; want the %d in the file", len(got), err, len(keys))
 	}
+	// A build without a key refuses every update, and the release job
+	// cannot sign for it.
 	if len(keys) == 0 {
-		return // no release key has been made yet
+		t.Fatal("trusted_keys.pem holds no release key. Make one with:\n    go run ./cmd/releasesign keygen -- gh secret set RELEASE_SIGNING_KEY\nand commit the change it makes to this file.")
 	}
 	// Trusted hands out a copy: a caller cannot change what the next
 	// caller is given.

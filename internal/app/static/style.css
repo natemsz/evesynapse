@@ -475,7 +475,7 @@ h3 + .tw > table, h3 + table {
    button in its heading and folds independently; sections listed
    data-fold="closed" in markup start folded once JS loads (skill
    categories), and stay plain visible content without JS. */
-.foldable { position: relative; }
+.foldable { position: relative; margin-bottom: 1.25rem; }
 .foldable.has-fold > h2:first-child, .foldable.has-fold > h3:first-child { padding-right: 2.2rem; position: relative; }
 
 /* --- buttons --- */

@@ -35,6 +35,7 @@ import (
 	"evesynapse/internal/app"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/pidfile"
+	"evesynapse/internal/selfupdate"
 )
 
 func main() {
@@ -48,7 +49,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stdout, app.Version())
 			return 0
 		case "-update":
-			return app.RunUpdate(args[1:], stdout, stderr)
+			return selfupdate.Run(app.Version(), args[1:], stdout, stderr)
 		case "-refresh":
 			return app.RunRefresh(args[1:], app.LoadConfig(), stdout, stderr)
 		case "-h", "--help", "-help":

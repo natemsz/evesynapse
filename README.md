@@ -47,8 +47,8 @@ This project is dedicated to EVE Online, its pilots and its developers — the g
   (`snapshots.go`, `market_book.go`), the
   SDE static-data importer (`sde.go`), static assets and their
   caching (`static.go`), the health check (`health.go`), and the
-  self-maintenance modes (`maintenance.go`: `-version`, `-update`,
-  `-refresh`)
+  two maintenance modes that need the application (`maintenance.go`:
+  `-version` and `-refresh`)
 - `internal/app/templates/` — embedded html/templates (`base.html`
   layout)
 - `internal/app/static/` — embedded assets: the 2013 wallpaper
@@ -70,6 +70,15 @@ This project is dedicated to EVE Online, its pilots and its developers — the g
   what is already held, and the price of the rest. Pure
 - `internal/markethistory/` — figures and the SVG chart computed
   from a type's stored daily price history. Pure
+- `internal/selfupdate/` — `evesynapse -update`: the release channel,
+  downloading, verifying and swapping in a new build, and handing
+  over to the running server. It is told the running version and
+  knows nothing else about the application
+- `internal/pidfile/` — the server's pidfile: written at start-up,
+  read by `-update` to restart the server and by `-refresh` to refuse
+  while it is running (`pidfile/pidfiletest` is test support)
+- `internal/dotenv/` — the `.env` loader the server and the updater
+  both use
 - `internal/pgtest/` — test-only embedded-Postgres provisioning
   (a fresh database per test; `go test ./...` needs no external
   database). A package whose tests use it needs a `TestMain` that
@@ -363,6 +372,10 @@ version that has no release yet, publishes a GitHub release with
 builds for ARM64 and AMD64 plus a small manifest per build (the
 version and its SHA-256 checksum).
 
+A release is one edit: `internal/app/version.txt`. Nothing else in
+the repository repeats the version, and the tests read it from that
+file, so there are no version numbers in tests to keep in step.
+
 To update a running install, run the updater. With no flag it
 automatically picks the build that matches the machine it's
 running on:
@@ -379,6 +392,12 @@ and stops. If the release is newer, it downloads that build,
 verifies it against the published checksum and checks it's built
 for the right kind of computer, swaps it into place, restarts the
 running server onto it, and reports the new version number.
+
+The checksum comes from the manifest published in the same release
+as the build. It protects against a damaged or cut-short download.
+It is not a signature: releases are not signed, so the check does
+not prove who published a build, only that the download matches what
+the release says it should be.
 
 There's also a manual form that installs a specific build: from an
 address, with the checksum published for it, or from a local file:

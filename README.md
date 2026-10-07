@@ -2,11 +2,16 @@
 
 Modernization of the 2013 Django EveSynapse: an EVE Online companion (character sheets, market, fitting, intel, industry, etc) rebuilt in Go on CCP's ESI API with EVE SSO login, replacing the retired XML API and key/vCode auth.
 
-Developed by Nate Sanchez (natemsz / IGN: Burzrujat) with love in the hopes it might be useful.
+Developed by Nate (natemsz / IGN: Burzrujat) with love in the hopes it might be useful.
 
 EveSynapse is based on the 2013 project originally developed by natemsz, element, and j0ker (Rest in peace Matt. See you on the other side of the Eve Gate)
 
 This project is dedicated to EVE Online, its pilots and its developers — the game and community that I have loved for over two decades.
+
+Contact: admin@synap6.io
+
+## AI
+- AI is used in this project purely for security auditing, hardening, and performance improvements and to assist with simplifying repetitive tasks. This is a human project and a labor of love. 
 
 ## Stack
 

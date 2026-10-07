@@ -469,6 +469,12 @@ h3 + .tw > table, h3 + table {
 .panel.folded > *:not(h1),
 .card.folded > *:not(:first-child),
 .foldable.folded > *:not(:first-child) { display: none; }
+/* Folded headers sit tight: no bottom border, no bottom margin
+   (matches the unfolded header-to-data tightness). */
+.foldable.folded > h2:first-child, .foldable.folded > h3:first-child {
+  border-bottom-width: 0;
+  margin-bottom: 0;
+}
 
 /* .foldable sections: the h2/h3 blocks inside a multi-section page
    panel (Character, Skills, Industry…). Each carries its own fold

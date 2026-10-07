@@ -87,14 +87,14 @@ type GuidePrice struct {
 }
 
 type GuidePriceWant struct {
-	ID       int64  `json:"id"`
-	WantedAt string `json:"wanted_at"`
+	ID       int64     `json:"id"`
+	WantedAt time.Time `json:"wanted_at"`
 }
 
 type GuidePricesMetum struct {
-	ID          int64  `json:"id"`
-	FetchedAt   string `json:"fetched_at"`
-	CachedUntil string `json:"cached_until"`
+	ID          int64     `json:"id"`
+	FetchedAt   time.Time `json:"fetched_at"`
+	CachedUntil time.Time `json:"cached_until"`
 }
 
 type IndustryCostIndex struct {
@@ -130,10 +130,10 @@ type LocalFitting struct {
 }
 
 type MarketFetchState struct {
-	Kind        string `json:"kind"`
-	State       string `json:"state"`
-	Detail      string `json:"detail"`
-	AttemptedAt string `json:"attempted_at"`
+	Kind        string    `json:"kind"`
+	State       string    `json:"state"`
+	Detail      string    `json:"detail"`
+	AttemptedAt time.Time `json:"attempted_at"`
 }
 
 type MarketHistory struct {
@@ -148,26 +148,26 @@ type MarketHistory struct {
 }
 
 type MarketHistoryWant struct {
-	RegionID        int64  `json:"region_id"`
-	TypeID          int64  `json:"type_id"`
-	LastRequestedAt string `json:"last_requested_at"`
+	RegionID        int64     `json:"region_id"`
+	TypeID          int64     `json:"type_id"`
+	LastRequestedAt time.Time `json:"last_requested_at"`
 }
 
 type MarketRegionStat struct {
-	RegionID       int64   `json:"region_id"`
-	TypeID         int64   `json:"type_id"`
-	BestSell       float64 `json:"best_sell"`
-	TypicalSell    float64 `json:"typical_sell"`
-	SellBand       float64 `json:"sell_band"`
-	BestBuy        float64 `json:"best_buy"`
-	TypicalBuy     float64 `json:"typical_buy"`
-	BuyBand        float64 `json:"buy_band"`
-	SellOrders     int64   `json:"sell_orders"`
-	BuyOrders      int64   `json:"buy_orders"`
-	SellVolume     int64   `json:"sell_volume"`
-	BuyVolume      int64   `json:"buy_volume"`
-	UpdatedAt      string  `json:"updated_at"`
-	AvgDailyVolume float64 `json:"avg_daily_volume"`
+	RegionID       int64     `json:"region_id"`
+	TypeID         int64     `json:"type_id"`
+	BestSell       float64   `json:"best_sell"`
+	TypicalSell    float64   `json:"typical_sell"`
+	SellBand       float64   `json:"sell_band"`
+	BestBuy        float64   `json:"best_buy"`
+	TypicalBuy     float64   `json:"typical_buy"`
+	BuyBand        float64   `json:"buy_band"`
+	SellOrders     int64     `json:"sell_orders"`
+	BuyOrders      int64     `json:"buy_orders"`
+	SellVolume     int64     `json:"sell_volume"`
+	BuyVolume      int64     `json:"buy_volume"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	AvgDailyVolume float64   `json:"avg_daily_volume"`
 }
 
 type MarketRegionStatsDaily struct {
@@ -187,26 +187,26 @@ type MarketRegionStatsDaily struct {
 }
 
 type MarketStationLeaderboard struct {
-	RegionID   int64   `json:"region_id"`
-	LocationID int64   `json:"location_id"`
-	SellOrders int64   `json:"sell_orders"`
-	BuyOrders  int64   `json:"buy_orders"`
-	SellValue  float64 `json:"sell_value"`
-	BuyValue   float64 `json:"buy_value"`
-	UpdatedAt  string  `json:"updated_at"`
+	RegionID   int64     `json:"region_id"`
+	LocationID int64     `json:"location_id"`
+	SellOrders int64     `json:"sell_orders"`
+	BuyOrders  int64     `json:"buy_orders"`
+	SellValue  float64   `json:"sell_value"`
+	BuyValue   float64   `json:"buy_value"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type MarketStationStat struct {
-	LocationID int64   `json:"location_id"`
-	RegionID   int64   `json:"region_id"`
-	TypeID     int64   `json:"type_id"`
-	BestSell   float64 `json:"best_sell"`
-	BestBuy    float64 `json:"best_buy"`
-	SellOrders int64   `json:"sell_orders"`
-	BuyOrders  int64   `json:"buy_orders"`
-	SellVolume int64   `json:"sell_volume"`
-	BuyVolume  int64   `json:"buy_volume"`
-	UpdatedAt  string  `json:"updated_at"`
+	LocationID int64     `json:"location_id"`
+	RegionID   int64     `json:"region_id"`
+	TypeID     int64     `json:"type_id"`
+	BestSell   float64   `json:"best_sell"`
+	BestBuy    float64   `json:"best_buy"`
+	SellOrders int64     `json:"sell_orders"`
+	BuyOrders  int64     `json:"buy_orders"`
+	SellVolume int64     `json:"sell_volume"`
+	BuyVolume  int64     `json:"buy_volume"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type MarketSweepOrder struct {
@@ -219,11 +219,11 @@ type MarketSweepOrder struct {
 }
 
 type MarketSweepState struct {
-	RegionID   int64  `json:"region_id"`
-	NextPage   int64  `json:"next_page"`
-	PagesTotal int64  `json:"pages_total"`
-	StartedAt  string `json:"started_at"`
-	UpdatedAt  string `json:"updated_at"`
+	RegionID   int64     `json:"region_id"`
+	NextPage   int64     `json:"next_page"`
+	PagesTotal int64     `json:"pages_total"`
+	StartedAt  time.Time `json:"started_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type MarketTypePrice struct {
@@ -237,24 +237,24 @@ type MarketTypePrice struct {
 }
 
 type MarketWatchlist struct {
-	UserID       int64   `json:"user_id"`
-	TypeID       int64   `json:"type_id"`
-	RegionID     int64   `json:"region_id"`
-	ThresholdPct float64 `json:"threshold_pct"`
-	CreatedAt    string  `json:"created_at"`
+	UserID       int64     `json:"user_id"`
+	TypeID       int64     `json:"type_id"`
+	RegionID     int64     `json:"region_id"`
+	ThresholdPct float64   `json:"threshold_pct"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 type OrderHealth struct {
-	CharacterID int64   `json:"character_id"`
-	OrderID     int64   `json:"order_id"`
-	TypeID      int64   `json:"type_id"`
-	RegionID    int64   `json:"region_id"`
-	LocationID  int64   `json:"location_id"`
-	MyPrice     float64 `json:"my_price"`
-	StationBest float64 `json:"station_best"`
-	RegionBest  float64 `json:"region_best"`
-	Status      string  `json:"status"`
-	ComputedAt  string  `json:"computed_at"`
+	CharacterID int64     `json:"character_id"`
+	OrderID     int64     `json:"order_id"`
+	TypeID      int64     `json:"type_id"`
+	RegionID    int64     `json:"region_id"`
+	LocationID  int64     `json:"location_id"`
+	MyPrice     float64   `json:"my_price"`
+	StationBest float64   `json:"station_best"`
+	RegionBest  float64   `json:"region_best"`
+	Status      string    `json:"status"`
+	ComputedAt  time.Time `json:"computed_at"`
 }
 
 type OrderLifecycle struct {
@@ -268,9 +268,9 @@ type OrderLifecycle struct {
 	ListedPrice      float64       `json:"listed_price"`
 	VolumeTotal      int64         `json:"volume_total"`
 	VolumeRemainLast int64         `json:"volume_remain_last"`
-	FirstSeenAt      string        `json:"first_seen_at"`
-	LastSeenAt       string        `json:"last_seen_at"`
-	ClosedAt         string        `json:"closed_at"`
+	FirstSeenAt      time.Time     `json:"first_seen_at"`
+	LastSeenAt       time.Time     `json:"last_seen_at"`
+	ClosedAt         sql.NullTime  `json:"closed_at"`
 	CloseKind        string        `json:"close_kind"`
 	OutbidEvents     int64         `json:"outbid_events"`
 	BeatenNow        int64         `json:"beaten_now"`

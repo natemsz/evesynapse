@@ -506,8 +506,7 @@ func (app *Application) briefingMarketLines(ctx context.Context, bundles []*char
 				string(charLink(viewer, id, names[id])),
 				n, pluralSuffix(n),
 				string(itemLink(ex.TypeID, app.typeNameOrID(ctx, ex.TypeID)))))
-			at, _ := parseRFC3339(ex.ComputedAt)
-			lines = append(lines, briefingLine{html: string(line), Rank: briefingUndercut, At: at})
+			lines = append(lines, briefingLine{html: string(line), Rank: briefingUndercut, At: ex.ComputedAt})
 		}
 	}
 

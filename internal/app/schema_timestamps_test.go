@@ -73,6 +73,25 @@ var accountTimeColumns = []timeColumn{
 	{"local_fittings", "updated_at", false},
 }
 
+// marketTimeColumns are the columns step 010 converts.
+var marketTimeColumns = []timeColumn{
+	{"guide_prices_meta", "fetched_at", false},
+	{"guide_prices_meta", "cached_until", false},
+	{"guide_price_wants", "wanted_at", false},
+	{"market_history_wants", "last_requested_at", false},
+	{"market_fetch_state", "attempted_at", false},
+	{"market_watchlist", "created_at", false},
+	{"order_health", "computed_at", false},
+	{"order_lifecycle", "first_seen_at", false},
+	{"order_lifecycle", "last_seen_at", false},
+	{"order_lifecycle", "closed_at", true},
+	{"market_region_stats", "updated_at", false},
+	{"market_station_stats", "updated_at", false},
+	{"market_sweep_state", "started_at", false},
+	{"market_sweep_state", "updated_at", false},
+	{"market_station_leaderboard", "updated_at", false},
+}
+
 func checkTimeColumns(t *testing.T, conn *sql.DB, columns []timeColumn) {
 	t.Helper()
 	for _, col := range columns {
@@ -106,6 +125,7 @@ func TestSchemaTimeColumnTypes(t *testing.T) {
 	defer pool.Close()
 	defer conn.Close()
 	checkTimeColumns(t, conn, accountTimeColumns)
+	checkTimeColumns(t, conn, marketTimeColumns)
 }
 
 // TestSchemaTimestampStepKeepsStoredTimes: an install from before
@@ -268,6 +288,201 @@ func TestSchemaTimestampStepKeepsStoredTimes(t *testing.T) {
 	if age := time.Since(created.CreatedAt); age.Abs() > time.Minute {
 		t.Errorf("a new user's created_at is %s, want now", rfc3339(created.CreatedAt))
 	}
+}
+
+// TestSchemaMarketTimestampStepKeepsStoredTimes: the same upgrade
+// for the market tables (step 010). The one column that could say
+// "never" is an order's closed_at: an open order held an empty
+// string there and holds NULL now, and everything that picked open
+// or closed orders by that still picks the same ones, in the same
+// order.
+func TestSchemaMarketTimestampStepKeepsStoredTimes(t *testing.T) {
+	ctx := context.Background()
+	dsn := pgtest.FreshDSN(t)
+	old := openBeforeSchemaStep(t, dsn, 10)
+
+	for _, stmt := range []string{
+		`INSERT INTO users (id) VALUES (101)`,
+		`INSERT INTO characters (character_id, user_id, name) VALUES (90000001, 101, 'Alpha')`,
+		// Order 1 is still open, 2 closed first, 3 closed last.
+		`INSERT INTO order_lifecycle (character_id, order_id, type_id, location_id, region_id, first_seen_at, last_seen_at, closed_at, close_kind) VALUES
+		   (90000001, 1, 34, 60003760, 10000002, '2026-09-29T00:00:00Z', '2026-10-01T00:00:00Z', '', ''),
+		   (90000001, 2, 34, 60003760, 10000002, '2026-09-20T00:00:00Z', '2026-09-21T00:00:00Z', '2026-09-21T06:00:00Z', 'filled'),
+		   (90000001, 3, 34, 60003760, 10000002, '2026-09-25T00:00:00Z', '2026-09-28T00:00:00Z', '2026-09-28T12:00:00Z', 'ended')`,
+		`INSERT INTO guide_prices_meta (id, fetched_at, cached_until) VALUES
+		   (1, '2026-10-01T12:00:00Z', '2026-10-01T13:00:00Z')`,
+		`INSERT INTO market_fetch_state (kind, state, attempted_at) VALUES
+		   ('history_10000002_34', 'ok', '2026-10-01T12:00:00Z')`,
+		`INSERT INTO market_history_wants (region_id, type_id, last_requested_at) VALUES
+		   (10000002, 34, '2026-10-01T12:00:00Z')`,
+		`INSERT INTO market_watchlist (user_id, type_id, region_id, created_at) VALUES
+		   (101, 34, 10000002, '2026-08-01T00:00:00Z')`,
+		`INSERT INTO market_region_stats (region_id, type_id, updated_at) VALUES
+		   (10000002, 34, '2026-10-01T12:30:00Z'),
+		   (10000002, 35, '2026-10-01T12:45:00Z')`,
+		`INSERT INTO market_sweep_state (region_id, started_at, updated_at) VALUES
+		   (10000002, '2026-10-01T12:00:00Z', '2026-10-01T12:10:00Z')`,
+	} {
+		if _, err := old.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed the old schema: %v\n%s", err, stmt)
+		}
+	}
+	old.Close()
+
+	conn, pool, err := openDB(ctx, dsn)
+	if err != nil {
+		t.Fatalf("upgrade: %v", err)
+	}
+	defer pool.Close()
+	defer conn.Close()
+	q := db.New(conn)
+	checkTimeColumns(t, conn, marketTimeColumns)
+
+	same := func(what string, got time.Time, want string) {
+		t.Helper()
+		if !got.Equal(mustTime(want)) {
+			t.Errorf("%s = %s, want %s", what, rfc3339(got), want)
+		}
+	}
+
+	open, err := q.GetOrderLifecycle(ctx, db.GetOrderLifecycleParams{CharacterID: 90000001, OrderID: 1})
+	if err != nil {
+		t.Fatalf("read the open order: %v", err)
+	}
+	if open.ClosedAt.Valid {
+		t.Errorf("the open order reads as closed at %s", rfc3339(open.ClosedAt.Time))
+	}
+	same("open order first_seen_at", open.FirstSeenAt, "2026-09-29T00:00:00Z")
+	same("open order last_seen_at", open.LastSeenAt, "2026-10-01T00:00:00Z")
+	closed, err := q.GetOrderLifecycle(ctx, db.GetOrderLifecycleParams{CharacterID: 90000001, OrderID: 2})
+	if err != nil {
+		t.Fatalf("read a closed order: %v", err)
+	}
+	if !closed.ClosedAt.Valid {
+		t.Fatal("a closed order reads as open")
+	}
+	same("closed order closed_at", closed.ClosedAt.Time, "2026-09-21T06:00:00Z")
+
+	orderIDs := func(rows []db.OrderLifecycle) []int64 {
+		ids := make([]int64, len(rows))
+		for i, row := range rows {
+			ids[i] = row.OrderID
+		}
+		return ids
+	}
+	wantIDs := func(what string, got []int64, want ...int64) {
+		t.Helper()
+		if len(got) != len(want) {
+			t.Errorf("%s: orders %v, want %v", what, got, want)
+			return
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Errorf("%s: orders %v, want %v", what, got, want)
+				return
+			}
+		}
+	}
+	stillOpen, err := q.ListOpenOrderLifecycleByCharacter(ctx, 90000001)
+	if err != nil {
+		t.Fatalf("list open orders: %v", err)
+	}
+	wantIDs("open orders", orderIDs(stillOpen), 1)
+	done, err := q.ListClosedOrderLifecycleByCharacter(ctx, db.ListClosedOrderLifecycleByCharacterParams{CharacterID: 90000001, RowLimit: 10})
+	if err != nil {
+		t.Fatalf("list closed orders: %v", err)
+	}
+	wantIDs("closed orders, newest first", orderIDs(done), 3, 2)
+	// Newest close first, the open order after every closed one —
+	// where '' used to sort.
+	all, err := q.ListOrderLifecycleByUser(ctx, 101)
+	if err != nil {
+		t.Fatalf("list a user's orders: %v", err)
+	}
+	wantIDs("a user's orders", orderIDs(all), 3, 2, 1)
+
+	// Closing only ever touches an open order, and pruning only a
+	// closed one older than the cutoff.
+	reclose := db.CloseOrderLifecycleParams{
+		ClosedAt: mustTime("2026-10-05T00:00:00Z"), CloseKind: "ended", CharacterID: 90000001, OrderID: 2,
+	}
+	if err := q.CloseOrderLifecycle(ctx, reclose); err != nil {
+		t.Fatalf("close an already closed order: %v", err)
+	}
+	if again, err := q.GetOrderLifecycle(ctx, db.GetOrderLifecycleParams{CharacterID: 90000001, OrderID: 2}); err != nil {
+		t.Fatalf("re-read the closed order: %v", err)
+	} else {
+		same("an already closed order's closed_at", again.ClosedAt.Time, "2026-09-21T06:00:00Z")
+	}
+	if err := q.PruneOldOrderLifecycle(ctx, db.PruneOldOrderLifecycleParams{
+		ClosedBefore: mustTime("2026-09-25T00:00:00Z"), RowLimit: 10,
+	}); err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	left, err := q.ListOrderLifecycleByUser(ctx, 101)
+	if err != nil {
+		t.Fatalf("list after the prune: %v", err)
+	}
+	wantIDs("orders after pruning those closed before the 25th", orderIDs(left), 3, 1)
+
+	meta, err := q.GetGuidePricesMeta(ctx)
+	if err != nil {
+		t.Fatalf("read the price guide's bookkeeping: %v", err)
+	}
+	same("price guide fetched_at", meta.FetchedAt, "2026-10-01T12:00:00Z")
+	same("price guide cached_until", meta.CachedUntil, "2026-10-01T13:00:00Z")
+
+	state, err := q.GetMarketFetchState(ctx, "history_10000002_34")
+	if err != nil {
+		t.Fatalf("read market fetch state: %v", err)
+	}
+	same("market fetch attempted_at", state.AttemptedAt, "2026-10-01T12:00:00Z")
+
+	// A cutoff is compared as a time now, not as text.
+	for cutoff, want := range map[string]int{"2026-10-01T12:00:00Z": 1, "2026-10-01T12:00:01Z": 0} {
+		wants, err := q.ListMarketHistoryWants(ctx, mustTime(cutoff))
+		if err != nil {
+			t.Fatalf("list history wants since %s: %v", cutoff, err)
+		}
+		if len(wants) != want {
+			t.Errorf("%d history want(s) since %s, want %d", len(wants), cutoff, want)
+		}
+	}
+
+	entry, err := q.GetWatchlistEntry(ctx, db.GetWatchlistEntryParams{UserID: 101, TypeID: 34, RegionID: 10000002})
+	if err != nil {
+		t.Fatalf("read watchlist entry: %v", err)
+	}
+	same("watchlist created_at", entry.CreatedAt, "2026-08-01T00:00:00Z")
+
+	// The newest write in a region is still found, as a time.
+	stats, err := q.GetMarketRegionStatsStamp(ctx, 10000002)
+	if err != nil {
+		t.Fatalf("read the region's newest stat: %v", err)
+	}
+	if newest, ok := stats.Stamp.(time.Time); !ok {
+		t.Errorf("the region's newest stat came back as %T, want a time", stats.Stamp)
+	} else {
+		same("region's newest stat", newest, "2026-10-01T12:45:00Z")
+	}
+	if stats.RowCount != 2 {
+		t.Errorf("%d region stats, want 2", stats.RowCount)
+	}
+	// And with no rows at all there is no stamp, not an error.
+	none, err := q.GetMarketRegionStatsStamp(ctx, 10000043)
+	if err != nil {
+		t.Fatalf("read the newest stat of a region with none: %v", err)
+	}
+	if none.Stamp != nil || none.RowCount != 0 {
+		t.Errorf("a region with no stats reports %v over %d rows", none.Stamp, none.RowCount)
+	}
+
+	sweep, err := q.GetMarketSweepState(ctx, 10000002)
+	if err != nil {
+		t.Fatalf("read sweep state: %v", err)
+	}
+	same("sweep started_at", sweep.StartedAt, "2026-10-01T12:00:00Z")
+	same("sweep updated_at", sweep.UpdatedAt, "2026-10-01T12:10:00Z")
 }
 
 // TestStoredTimesReadBackInUTC: whatever zone the machine or the

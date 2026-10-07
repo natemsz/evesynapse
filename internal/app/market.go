@@ -462,7 +462,7 @@ func (app *Application) recentHistoryRows(ctx context.Context, regionID, typeID 
 // only writes rows — the urgent drain and the cycle do the
 // fetching, never this.
 func (app *Application) noteSearchHistoryWants(ctx context.Context, regionID int64, matches []marketMatch) {
-	stamp := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 	noted := 0
 	for _, m := range matches {
 		if noted >= maxSearchPrefetchWants {
@@ -472,7 +472,7 @@ func (app *Application) noteSearchHistoryWants(ctx context.Context, regionID int
 			continue
 		}
 		if err := app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
-			RegionID: regionID, TypeID: m.ID, LastRequestedAt: stamp,
+			RegionID: regionID, TypeID: m.ID, LastRequestedAt: now,
 		}); err != nil {
 			logging.Errorf("market: prefetch want for type %d in region %d: %v", m.ID, regionID, err)
 			continue
@@ -505,7 +505,7 @@ func (app *Application) attachHistory(ctx context.Context, item *marketItem, typ
 		}
 		if err := app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
 			RegionID: regionID, TypeID: typeID,
-			LastRequestedAt: time.Now().UTC().Format(time.RFC3339),
+			LastRequestedAt: time.Now().UTC(),
 		}); err != nil {
 			logging.Errorf("market: record history want for type %d in region %d: %v", typeID, regionID, err)
 		}
@@ -1071,7 +1071,7 @@ func (app *Application) handleMarketWatch(w http.ResponseWriter, r *http.Request
 					if err := app.queries.UpsertWatchlistEntry(ctx, db.UpsertWatchlistEntryParams{
 						UserID: userID, TypeID: typeID, RegionID: regionID,
 						ThresholdPct: threshold,
-						CreatedAt:    time.Now().UTC().Format(time.RFC3339),
+						CreatedAt:    time.Now().UTC(),
 					}); err != nil {
 						logging.Errorf("market: watch upsert type %d for user %d: %v", typeID, userID, err)
 					}

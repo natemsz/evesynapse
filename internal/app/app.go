@@ -88,6 +88,9 @@ var pgSnapshotETagsSchema string
 //go:embed schema_pg/009_timestamps_accounts_snapshots.sql
 var pgTimestampsAccountsSchema string
 
+//go:embed schema_pg/010_timestamps_market.sql
+var pgTimestampsMarketSchema string
+
 //go:embed static
 var staticFS embed.FS
 
@@ -171,7 +174,7 @@ type Application struct {
 	// only when a refresh has landed.
 	storedPricesMu    sync.Mutex
 	storedPricesCache map[int64]esi.MarketPrice
-	storedPricesStamp string
+	storedPricesStamp time.Time
 
 	// Character IDs flagged for first-in-line warm-up on the next
 	// worker cycle (fresh SSO logins, Sync-page re-warm requests).

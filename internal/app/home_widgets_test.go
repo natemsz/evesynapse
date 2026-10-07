@@ -286,7 +286,7 @@ func TestWatchlistWidgetHome(t *testing.T) {
 	}
 	if err := q.UpsertWatchlistEntry(ctx, db.UpsertWatchlistEntryParams{
 		UserID: user.ID, TypeID: 35, RegionID: 10000002,
-		ThresholdPct: 5, CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		ThresholdPct: 5, CreatedAt: time.Now().UTC(),
 	}); err != nil {
 		t.Fatalf("seed watch: %v", err)
 	}
@@ -354,7 +354,7 @@ func TestNetWorthGuidePrices(t *testing.T) {
 		t.Fatalf("seed guide price: %v", err)
 	}
 	if err := q.UpsertGuidePricesMeta(ctx, db.UpsertGuidePricesMetaParams{
-		FetchedAt: time.Now().UTC().Format(time.RFC3339), CachedUntil: "2999-01-01T00:00:00Z",
+		FetchedAt: time.Now().UTC(), CachedUntil: mustTime("2999-01-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed guide meta: %v", err)
 	}

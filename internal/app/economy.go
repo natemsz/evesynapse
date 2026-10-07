@@ -435,17 +435,13 @@ func (app *Application) buildOrderLifecycle(ctx context.Context, characterID int
 	var filledDurations []time.Duration
 	for _, row := range rows {
 		summary.OutbidEvents += row.OutbidEvents
-		if row.ClosedAt == "" {
+		if !row.ClosedAt.Valid {
 			continue
 		}
 		if row.CloseKind == "filled" {
 			summary.Filled++
-			if first, err1 := time.Parse(time.RFC3339, row.FirstSeenAt); err1 == nil {
-				if closed, err2 := time.Parse(time.RFC3339, row.ClosedAt); err2 == nil {
-					if d := closed.Sub(first); d >= 0 {
-						filledDurations = append(filledDurations, d)
-					}
-				}
+			if d := row.ClosedAt.Time.Sub(row.FirstSeenAt); d >= 0 {
+				filledDurations = append(filledDurations, d)
 			}
 		} else {
 			summary.Ended++
@@ -461,13 +457,13 @@ func (app *Application) buildOrderLifecycle(ctx context.Context, characterID int
 	// Newest closed first, capped.
 	var closed []db.OrderLifecycle
 	for _, row := range rows {
-		if row.ClosedAt != "" {
+		if row.ClosedAt.Valid {
 			closed = append(closed, row)
 		}
 	}
 	sort.Slice(closed, func(i, j int) bool {
-		if closed[i].ClosedAt != closed[j].ClosedAt {
-			return closed[i].ClosedAt > closed[j].ClosedAt
+		if !closed[i].ClosedAt.Time.Equal(closed[j].ClosedAt.Time) {
+			return closed[i].ClosedAt.Time.After(closed[j].ClosedAt.Time)
 		}
 		return closed[i].OrderID > closed[j].OrderID
 	})
@@ -488,12 +484,7 @@ func (app *Application) buildOrderLifecycle(ctx context.Context, characterID int
 		if row.CloseKind == "filled" {
 			outcome = "Filled"
 		}
-		durText := ""
-		if first, err1 := time.Parse(time.RFC3339, row.FirstSeenAt); err1 == nil {
-			if closedAt, err2 := time.Parse(time.RFC3339, row.ClosedAt); err2 == nil {
-				durText = formatOpenDuration(closedAt.Sub(first))
-			}
-		}
+		durText := formatOpenDuration(row.ClosedAt.Time.Sub(row.FirstSeenAt))
 		out = append(out, orderLifecycleRow{
 			Item:         app.typeNameOrID(ctx, row.TypeID),
 			TypeID:       row.TypeID,

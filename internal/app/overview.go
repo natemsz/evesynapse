@@ -1122,14 +1122,13 @@ func (app *Application) attentionMarketItems(ctx context.Context, bundles []*cha
 		default:
 			for _, h := range undercut {
 				text, _ := orderHealthText(h.MyPrice, h.Status, h.StationBest, h.RegionBest)
-				at, _ := parseRFC3339(h.ComputedAt)
 				items = append(items, attentionItem{
 					Char: charNames[h.CharacterID],
 					Text: fmt.Sprintf("%s — %s sell order: %s.",
 						charNames[h.CharacterID], app.typeNameOrID(ctx, h.TypeID), lowerFirst(text)),
 					Link: "/market/",
 					Rank: attentionUndercut,
-					At:   at,
+					At:   h.ComputedAt,
 				})
 			}
 		}

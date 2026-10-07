@@ -145,7 +145,7 @@ func (app *Application) advanceRegionSweep(ctx context.Context, regionID int64, 
 		if !app.marketFetchDue(ctx, regionSweepKind(regionID), regionSweepGate) {
 			return out
 		}
-		now := time.Now().UTC().Format(time.RFC3339)
+		now := time.Now().UTC()
 		if err := app.queries.InsertMarketSweepState(ctx, db.InsertMarketSweepStateParams{
 			RegionID: regionID, StartedAt: now, UpdatedAt: now,
 		}); err != nil {
@@ -245,7 +245,7 @@ func (app *Application) stageSweepPage(ctx context.Context, state db.MarketSweep
 	}
 	if err := qtx.UpdateMarketSweepState(ctx, db.UpdateMarketSweepStateParams{
 		NextPage: state.NextPage, PagesTotal: state.PagesTotal,
-		UpdatedAt: time.Now().UTC().Format(time.RFC3339), RegionID: state.RegionID,
+		UpdatedAt: time.Now().UTC(), RegionID: state.RegionID,
 	}); err != nil {
 		return err
 	}
@@ -304,7 +304,6 @@ func (app *Application) fetchRegionBookPage(ctx context.Context, regionID int64,
 // of recomputing it per render.
 func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (typeCount, stationCount int, err error) {
 	now := time.Now().UTC()
-	updatedAt := now.Format(time.RFC3339)
 	day := now.Format("2006-01-02")
 
 	// Region grain: one type at a time, its staged prices fed
@@ -462,7 +461,7 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 			SellOrders: st.sellOrders, BuyOrders: st.buyOrders,
 			SellVolume: st.sellVolume, BuyVolume: st.buyVolume,
 			AvgDailyVolume: avgDailyVolume[typeID],
-			UpdatedAt:      updatedAt,
+			UpdatedAt:      now,
 		}); err != nil {
 			return 0, 0, err
 		}
@@ -483,7 +482,7 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 			BestSell: sacc.BestSell, BestBuy: sacc.BestBuy,
 			SellOrders: sacc.SellOrders, BuyOrders: sacc.BuyOrders,
 			SellVolume: sacc.SellVolume, BuyVolume: sacc.BuyVolume,
-			UpdatedAt: updatedAt,
+			UpdatedAt: now,
 		}); err != nil {
 			return 0, 0, err
 		}
@@ -503,7 +502,7 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 			RegionID: regionID, LocationID: loc,
 			SellOrders: acc.sellOrders, BuyOrders: acc.buyOrders,
 			SellValue: acc.sellValue, BuyValue: acc.buyValue,
-			UpdatedAt: updatedAt,
+			UpdatedAt: now,
 		}); err != nil {
 			return 0, 0, err
 		}
@@ -564,13 +563,9 @@ func (app *Application) attachRegionStats(ctx context.Context, item *marketItem)
 	}
 }
 
-// statsAgeText renders an RFC3339 stamp as a short end-user age
-// for the regions strip ("just now", "12 minutes ago").
-func statsAgeText(rfc string) string {
-	at, err := time.Parse(time.RFC3339, rfc)
-	if err != nil {
-		return ""
-	}
+// statsAgeText renders a time as a short end-user age for the
+// regions strip ("just now", "12 minutes ago").
+func statsAgeText(at time.Time) string {
 	d := time.Since(at)
 	switch {
 	case d < 90*time.Second:

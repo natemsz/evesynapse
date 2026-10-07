@@ -338,7 +338,7 @@ func TestHistoryWantsDrainPriority(t *testing.T) {
 	}
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
 
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 	// A viewed-item want (5001), a watchlist entry (5002), and an
 	// open order for 5003.
 	if err := q.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
@@ -375,7 +375,7 @@ func TestHistoryFailedFirstWantDoesNotStarveOthers(t *testing.T) {
 	}
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 	for _, id := range []int64{5001, 5002} {
 		if err := q.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
 			RegionID: 10000002, TypeID: id, LastRequestedAt: now,

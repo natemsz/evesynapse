@@ -212,7 +212,7 @@ func (app *Application) historyCandidates(ctx context.Context) ([]marketKey, err
 	}
 
 	wants, err := app.queries.ListMarketHistoryWants(ctx,
-		time.Now().UTC().Add(-historyWantMaxAge).Format(time.RFC3339))
+		time.Now().UTC().Add(-historyWantMaxAge))
 	if err != nil {
 		return nil, err
 	}
@@ -491,7 +491,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 	// on conflict); listed price and remaining volume follow the
 	// newest observation. Previous beaten state is remembered so
 	// the book pass below can count transitions, not polls.
-	lifecycleNow := time.Now().UTC().Format(time.RFC3339)
+	lifecycleNow := time.Now().UTC()
 	type lifecycleKey struct {
 		characterID int64
 		orderID     int64
@@ -502,7 +502,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 		for orderID, o := range allOpen {
 			key := lifecycleKey{characterID: characterID, orderID: orderID}
 			if existing, err := app.queries.GetOrderLifecycle(ctx, db.GetOrderLifecycleParams{CharacterID: characterID, OrderID: orderID}); err == nil {
-				if existing.ClosedAt != "" {
+				if existing.ClosedAt.Valid {
 					continue // already closed history; never resurrect
 				}
 				prevBeaten[key] = existing.BeatenNow
@@ -579,7 +579,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 			}
 			app.noteStructureIDs(ctx, ids...)
 		}
-		now := time.Now().UTC().Format(time.RFC3339)
+		now := time.Now().UTC()
 		for _, ref := range groups[key] {
 			status, stationBest, regionBest := computeOrderHealth(ref.order, sells)
 			if err := app.queries.UpsertOrderHealth(ctx, db.UpsertOrderHealthParams{
@@ -677,10 +677,9 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 
 	// Prune closed rows past the 365-day retention, bounded per
 	// cycle so a first cleanup never stalls the pass.
-	cutoff := time.Now().UTC().Add(-365 * 24 * time.Hour).Format(time.RFC3339)
 	if err := app.queries.PruneOldOrderLifecycle(ctx, db.PruneOldOrderLifecycleParams{
-		ClosedAt: cutoff,
-		RowLimit: lifecyclePrunePerCycle,
+		ClosedBefore: time.Now().UTC().Add(-365 * 24 * time.Hour),
+		RowLimit:     lifecyclePrunePerCycle,
 	}); err != nil {
 		logging.Errorf("worker: order lifecycle: prune: %v", err)
 	}
@@ -762,14 +761,10 @@ func (app *Application) marketFetchDue(ctx context.Context, kind string, gate ti
 	if err != nil {
 		return true // no record (or unreadable): try
 	}
-	attempted, err := time.Parse(time.RFC3339, state.AttemptedAt)
-	if err != nil {
-		return true
-	}
 	if state.State == fetchStateError {
-		return time.Since(attempted) >= marketFetchErrorGate
+		return time.Since(state.AttemptedAt) >= marketFetchErrorGate
 	}
-	return time.Since(attempted) >= gate
+	return time.Since(state.AttemptedAt) >= gate
 }
 
 // marketFetchFailureState classifies a failed market fetch: a
@@ -790,7 +785,7 @@ func marketFetchFailureState(err error) string {
 func (app *Application) recordMarketFetch(ctx context.Context, kind, state, detail string) {
 	if err := app.queries.UpsertMarketFetchState(ctx, db.UpsertMarketFetchStateParams{
 		Kind: kind, State: state, Detail: detail,
-		AttemptedAt: time.Now().UTC().Format(time.RFC3339),
+		AttemptedAt: time.Now().UTC(),
 	}); err != nil {
 		logging.Errorf("worker: market fetch-state %s: %v", kind, err)
 	}

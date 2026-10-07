@@ -128,7 +128,7 @@ func (app *Application) notePageWant(ctx context.Context, kind pageWantKind, id 
 		if regionID > 0 {
 			if err := app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
 				RegionID: regionID, TypeID: id,
-				LastRequestedAt: time.Now().UTC().Format(time.RFC3339),
+				LastRequestedAt: time.Now().UTC(),
 			}); err != nil {
 				logging.Errorf("pagewant: note history want for type %d in region %d: %v", id, regionID, err)
 			}
@@ -151,7 +151,7 @@ func (app *Application) notePageWant(ctx context.Context, kind pageWantKind, id 
 		// shared by every viewer, so one note covers them all;
 		// the urgent drain answers it with a guide refresh when
 		// ESI's cache window allows.
-		if err := app.queries.NoteGuidePriceWant(ctx, time.Now().UTC().Format(time.RFC3339)); err != nil {
+		if err := app.queries.NoteGuidePriceWant(ctx, time.Now().UTC()); err != nil {
 			logging.Errorf("pagewant: note guide price want: %v", err)
 		}
 	}

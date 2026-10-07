@@ -161,11 +161,9 @@ func (app *Application) buildScannerView(ctx context.Context, q map[string][]str
 		return view // no sweep yet: still-gathering state
 	}
 	view.HasData = true
-	if latest, ok := stampRow.Stamp.(string); ok && latest != "" {
+	if latest, ok := stampRow.Stamp.(time.Time); ok {
 		view.Age = statsAgeText(latest)
-		if at, perr := time.Parse(time.RFC3339, latest); perr == nil {
-			view.AsOf = "Prices as of " + at.Format("Jan 2, 3:04 PM")
-		}
+		view.AsOf = "Prices as of " + latest.UTC().Format("Jan 2, 3:04 PM")
 	}
 
 	typeNames := make(map[int64]string)

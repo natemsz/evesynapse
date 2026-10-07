@@ -44,7 +44,7 @@ func (app *Application) storedGuidePrices(ctx context.Context) map[int64]esi.Mar
 	}
 	app.storedPricesMu.Lock()
 	defer app.storedPricesMu.Unlock()
-	if app.storedPricesCache != nil && app.storedPricesStamp == meta.FetchedAt {
+	if app.storedPricesCache != nil && app.storedPricesStamp.Equal(meta.FetchedAt) {
 		return app.storedPricesCache
 	}
 	rows, err := app.queries.ListGuidePrices(ctx)
@@ -89,10 +89,8 @@ func (app *Application) valuationPrices(ctx context.Context) map[int64]esi.Marke
 // whether ESI's error limit stopped it.
 func (app *Application) refreshGuidePrices(ctx context.Context) (stored bool, limited bool) {
 	now := time.Now()
-	if meta, ok := app.guideMeta(ctx); ok && meta.CachedUntil != "" {
-		if until, err := time.Parse(time.RFC3339, meta.CachedUntil); err == nil && now.Before(until) {
-			return false, false // still inside ESI's cache window
-		}
+	if meta, ok := app.guideMeta(ctx); ok && now.Before(meta.CachedUntil) {
+		return false, false // still inside ESI's cache window
 	}
 
 	body, header, err := app.esi.FetchRaw(ctx, "", "/markets/prices/")
@@ -143,8 +141,8 @@ func (app *Application) refreshGuidePrices(ctx context.Context) (stored bool, li
 		}
 	}
 	if err := qtx.UpsertGuidePricesMeta(ctx, db.UpsertGuidePricesMetaParams{
-		FetchedAt:   now.UTC().Format(time.RFC3339),
-		CachedUntil: cachedUntil.UTC().Format(time.RFC3339),
+		FetchedAt:   now.UTC(),
+		CachedUntil: cachedUntil.UTC(),
 	}); err != nil {
 		logging.Errorf("worker: guide prices: store meta: %v", err)
 		return false, false

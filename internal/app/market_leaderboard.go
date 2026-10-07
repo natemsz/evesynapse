@@ -125,10 +125,8 @@ func (app *Application) buildLeaderboardView(ctx context.Context, q url.Values) 
 	stamp, err := app.queries.GetMarketStationLeaderboardStamp(ctx, view.RegionID)
 	if err != nil {
 		logging.Errorf("leaderboard: stamp for region %d: %v", view.RegionID, err)
-	} else if at, perr := time.Parse(time.RFC3339, stamp); perr != nil {
-		logging.Warnf("leaderboard: unparseable stamp %q", stamp)
-	} else {
-		view.AsOf = "Figures last gathered " + at.Format("Jan 2, 3:04 PM")
+	} else if at, ok := stamp.(time.Time); ok {
+		view.AsOf = "Figures last gathered " + at.UTC().Format("Jan 2, 3:04 PM")
 	}
 	view.HasData = true
 	sort.Slice(view.Rows, func(i, j int) bool {

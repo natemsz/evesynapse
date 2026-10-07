@@ -124,7 +124,7 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 		return true
 	}
 
-	wants, err := app.queries.ListMarketHistoryWants(ctx, now.Add(-historyWantMaxAge).Format(time.RFC3339))
+	wants, err := app.queries.ListMarketHistoryWants(ctx, now.Add(-historyWantMaxAge))
 	if err != nil {
 		logging.Errorf("worker: urgent drain: list history wants: %v", err)
 	} else {

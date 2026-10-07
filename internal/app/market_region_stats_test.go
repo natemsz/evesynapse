@@ -72,7 +72,7 @@ func markRegionFresh(t *testing.T, q *db.Queries, regionID int64) {
 	t.Helper()
 	if err := q.UpsertMarketFetchState(context.Background(), db.UpsertMarketFetchStateParams{
 		Kind: regionSweepKind(regionID), State: fetchStateOK,
-		AttemptedAt: time.Now().UTC().Format(time.RFC3339),
+		AttemptedAt: time.Now().UTC(),
 	}); err != nil {
 		t.Fatalf("mark region %d fresh: %v", regionID, err)
 	}
@@ -148,7 +148,7 @@ func TestRegionSweepStoresStatsAndCleansVanished(t *testing.T) {
 	if row.BuyOrders != 2 || row.BuyVolume != 110 {
 		t.Fatalf("type 34 buy depth: %d orders / %d volume, want 2/110", row.BuyOrders, row.BuyVolume)
 	}
-	if row.UpdatedAt == "" {
+	if row.UpdatedAt.IsZero() {
 		t.Fatal("type 34 stats carry no updated_at")
 	}
 
@@ -178,7 +178,7 @@ func TestRegionSweepStoresStatsAndCleansVanished(t *testing.T) {
 	}
 	if err := q.UpsertMarketFetchState(ctx, db.UpsertMarketFetchStateParams{
 		Kind: regionSweepKind(10000002), State: fetchStateOK,
-		AttemptedAt: time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339),
+		AttemptedAt: time.Now().Add(-2 * time.Hour).UTC(),
 	}); err != nil {
 		t.Fatalf("age sweep record: %v", err)
 	}
@@ -330,10 +330,10 @@ func TestAttachRegionStatsZeroOutbound(t *testing.T) {
 	for _, seed := range []db.UpsertMarketRegionStatParams{
 		{RegionID: 10000002, TypeID: 34, BestSell: 5, TypicalSell: 6, SellBand: 7,
 			BestBuy: 4, TypicalBuy: 3.5, BuyBand: 3, SellOrders: 3, BuyOrders: 2,
-			SellVolume: 600, BuyVolume: 110, UpdatedAt: now.Add(-12 * time.Minute).Format(time.RFC3339)},
+			SellVolume: 600, BuyVolume: 110, UpdatedAt: now.Add(-12 * time.Minute)},
 		{RegionID: 10000042, TypeID: 34, BestSell: 9, TypicalSell: 10.25, SellBand: 11,
 			BestBuy: 8, TypicalBuy: 8.5, BuyBand: 8, SellOrders: 1, BuyOrders: 1,
-			SellVolume: 5, BuyVolume: 5, UpdatedAt: now.Add(-3 * time.Hour).Format(time.RFC3339)},
+			SellVolume: 5, BuyVolume: 5, UpdatedAt: now.Add(-3 * time.Hour)},
 	} {
 		if err := q.UpsertMarketRegionStat(ctx, seed); err != nil {
 			t.Fatalf("seed stats: %v", err)
@@ -384,10 +384,10 @@ func TestRibbonRendersStoredStats(t *testing.T) {
 	for _, seed := range []db.UpsertMarketRegionStatParams{
 		{RegionID: 10000002, TypeID: 34, BestSell: 5, TypicalSell: 6, SellBand: 7,
 			BestBuy: 4, TypicalBuy: 3.5, BuyBand: 3, SellOrders: 3, BuyOrders: 2,
-			SellVolume: 600, BuyVolume: 110, UpdatedAt: now.Add(-12 * time.Minute).Format(time.RFC3339)},
+			SellVolume: 600, BuyVolume: 110, UpdatedAt: now.Add(-12 * time.Minute)},
 		{RegionID: 10000042, TypeID: 34, BestSell: 9, TypicalSell: 10.25, SellBand: 11,
 			BestBuy: 8, TypicalBuy: 8.5, BuyBand: 8, SellOrders: 1, BuyOrders: 1,
-			SellVolume: 5, BuyVolume: 5, UpdatedAt: now.Add(-3 * time.Hour).Format(time.RFC3339)},
+			SellVolume: 5, BuyVolume: 5, UpdatedAt: now.Add(-3 * time.Hour)},
 	} {
 		if err := q.UpsertMarketRegionStat(ctx, seed); err != nil {
 			t.Fatalf("seed stats: %v", err)

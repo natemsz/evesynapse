@@ -99,6 +99,7 @@ func schemaSteps() []schemaStep {
 		{7, "user_foreign_keys", pgUserForeignKeysSchema, ""},
 		{8, "snapshot_etags", pgSnapshotETagsSchema, ""},
 		{9, "timestamps_accounts_snapshots", pgTimestampsAccountsSchema, ""},
+		{10, "timestamps_market", pgTimestampsMarketSchema, ""},
 	}
 }
 

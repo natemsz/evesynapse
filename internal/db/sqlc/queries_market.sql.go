@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/lib/pq"
 )
@@ -23,15 +24,15 @@ func (q *Queries) ClearGuidePriceWant(ctx context.Context) error {
 
 const closeOrderLifecycle = `-- name: CloseOrderLifecycle :exec
 UPDATE order_lifecycle
-SET closed_at = $1, close_kind = $2, beaten_now = 0
-WHERE character_id = $3 AND order_id = $4 AND closed_at = ''
+SET closed_at = $1::timestamptz, close_kind = $2, beaten_now = 0
+WHERE character_id = $3 AND order_id = $4 AND closed_at IS NULL
 `
 
 type CloseOrderLifecycleParams struct {
-	ClosedAt    string `json:"closed_at"`
-	CloseKind   string `json:"close_kind"`
-	CharacterID int64  `json:"character_id"`
-	OrderID     int64  `json:"order_id"`
+	ClosedAt    time.Time `json:"closed_at"`
+	CloseKind   string    `json:"close_kind"`
+	CharacterID int64     `json:"character_id"`
+	OrderID     int64     `json:"order_id"`
 }
 
 func (q *Queries) CloseOrderLifecycle(ctx context.Context, arg CloseOrderLifecycleParams) error {
@@ -301,14 +302,14 @@ func (q *Queries) GetMarketRegionStatsStamp(ctx context.Context, regionID int64)
 }
 
 const getMarketStationLeaderboardStamp = `-- name: GetMarketStationLeaderboardStamp :one
-SELECT CAST(COALESCE(MAX(updated_at), '') AS TEXT) AS stamp
+SELECT MAX(updated_at) AS stamp
 FROM market_station_leaderboard
 WHERE ($1::bigint = 0 OR region_id = $1::bigint)
 `
 
-func (q *Queries) GetMarketStationLeaderboardStamp(ctx context.Context, dollar_1 int64) (string, error) {
+func (q *Queries) GetMarketStationLeaderboardStamp(ctx context.Context, dollar_1 int64) (interface{}, error) {
 	row := q.db.QueryRowContext(ctx, getMarketStationLeaderboardStamp, dollar_1)
-	var stamp string
+	var stamp interface{}
 	err := row.Scan(&stamp)
 	return stamp, err
 }
@@ -627,9 +628,9 @@ VALUES ($1, 1, 0, $2, $3)
 `
 
 type InsertMarketSweepStateParams struct {
-	RegionID  int64  `json:"region_id"`
-	StartedAt string `json:"started_at"`
-	UpdatedAt string `json:"updated_at"`
+	RegionID  int64     `json:"region_id"`
+	StartedAt time.Time `json:"started_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 func (q *Queries) InsertMarketSweepState(ctx context.Context, arg InsertMarketSweepStateParams) error {
@@ -811,7 +812,7 @@ func (q *Queries) ListCheapestSellStations(ctx context.Context, arg ListCheapest
 const listClosedOrderLifecycleByCharacter = `-- name: ListClosedOrderLifecycleByCharacter :many
 SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
 FROM order_lifecycle
-WHERE character_id = $1 AND closed_at != ''
+WHERE character_id = $1 AND closed_at IS NOT NULL
 ORDER BY closed_at DESC, order_id DESC
 LIMIT $2::bigint
 `
@@ -1111,7 +1112,7 @@ WHERE last_requested_at >= $1
 ORDER BY region_id, type_id
 `
 
-func (q *Queries) ListMarketHistoryWants(ctx context.Context, lastRequestedAt string) ([]MarketHistoryWant, error) {
+func (q *Queries) ListMarketHistoryWants(ctx context.Context, lastRequestedAt time.Time) ([]MarketHistoryWant, error) {
 	rows, err := q.db.QueryContext(ctx, listMarketHistoryWants, lastRequestedAt)
 	if err != nil {
 		return nil, err
@@ -1576,7 +1577,7 @@ func (q *Queries) ListMarketTypePricesForTypes(ctx context.Context, arg ListMark
 const listOpenOrderLifecycleByCharacter = `-- name: ListOpenOrderLifecycleByCharacter :many
 SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
 FROM order_lifecycle
-WHERE character_id = $1 AND closed_at = ''
+WHERE character_id = $1 AND closed_at IS NULL
 ORDER BY order_id
 `
 
@@ -1755,7 +1756,7 @@ SELECT ol.id, ol.character_id, ol.order_id, ol.type_id, ol.location_id, ol.regio
 FROM order_lifecycle ol
 JOIN characters c ON c.character_id = ol.character_id
 WHERE c.user_id = $1
-ORDER BY ol.closed_at DESC, ol.first_seen_at DESC, ol.order_id DESC
+ORDER BY ol.closed_at DESC NULLS LAST, ol.first_seen_at DESC, ol.order_id DESC
 `
 
 func (q *Queries) ListOrderLifecycleByUser(ctx context.Context, userID int64) ([]OrderLifecycle, error) {
@@ -2125,13 +2126,13 @@ LIMIT $7::bigint
 `
 
 type ListTradefinderRoutesParams struct {
-	DestRegion     int64   `json:"dest_region"`
-	OriginRegion   int64   `json:"origin_region"`
-	IncludeLowball int64   `json:"include_lowball"`
-	MinMargin      float64 `json:"min_margin"`
-	MinVolume      int64   `json:"min_volume"`
-	Cutoff         string  `json:"cutoff"`
-	RowCap         int64   `json:"row_cap"`
+	DestRegion     int64     `json:"dest_region"`
+	OriginRegion   int64     `json:"origin_region"`
+	IncludeLowball int64     `json:"include_lowball"`
+	MinMargin      float64   `json:"min_margin"`
+	MinVolume      int64     `json:"min_volume"`
+	Cutoff         time.Time `json:"cutoff"`
+	RowCap         int64     `json:"row_cap"`
 }
 
 type ListTradefinderRoutesRow struct {
@@ -2240,7 +2241,7 @@ ON CONFLICT (id) DO UPDATE SET
 // viewer -- noted at render time, answered by the worker's
 // urgent drain with a guide refresh when ESI's window allows.
 // ---------------------------------------------------------------------
-func (q *Queries) NoteGuidePriceWant(ctx context.Context, wantedAt string) error {
+func (q *Queries) NoteGuidePriceWant(ctx context.Context, wantedAt time.Time) error {
 	_, err := q.db.ExecContext(ctx, noteGuidePriceWant, wantedAt)
 	return err
 }
@@ -2249,19 +2250,19 @@ const pruneOldOrderLifecycle = `-- name: PruneOldOrderLifecycle :exec
 DELETE FROM order_lifecycle
 WHERE id IN (
     SELECT ol.id FROM order_lifecycle AS ol
-    WHERE ol.closed_at != '' AND ol.closed_at < $1
+    WHERE ol.closed_at < $1::timestamptz
     ORDER BY ol.closed_at
     LIMIT $2::bigint
 )
 `
 
 type PruneOldOrderLifecycleParams struct {
-	ClosedAt string `json:"closed_at"`
-	RowLimit int64  `json:"row_limit"`
+	ClosedBefore time.Time `json:"closed_before"`
+	RowLimit     int64     `json:"row_limit"`
 }
 
 func (q *Queries) PruneOldOrderLifecycle(ctx context.Context, arg PruneOldOrderLifecycleParams) error {
-	_, err := q.db.ExecContext(ctx, pruneOldOrderLifecycle, arg.ClosedAt, arg.RowLimit)
+	_, err := q.db.ExecContext(ctx, pruneOldOrderLifecycle, arg.ClosedBefore, arg.RowLimit)
 	return err
 }
 
@@ -2484,10 +2485,10 @@ WHERE region_id = $4
 `
 
 type UpdateMarketSweepStateParams struct {
-	NextPage   int64  `json:"next_page"`
-	PagesTotal int64  `json:"pages_total"`
-	UpdatedAt  string `json:"updated_at"`
-	RegionID   int64  `json:"region_id"`
+	NextPage   int64     `json:"next_page"`
+	PagesTotal int64     `json:"pages_total"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	RegionID   int64     `json:"region_id"`
 }
 
 func (q *Queries) UpdateMarketSweepState(ctx context.Context, arg UpdateMarketSweepStateParams) error {
@@ -2503,7 +2504,7 @@ func (q *Queries) UpdateMarketSweepState(ctx context.Context, arg UpdateMarketSw
 const updateOrderLifecycleBeaten = `-- name: UpdateOrderLifecycleBeaten :exec
 UPDATE order_lifecycle
 SET beaten_now = $1, outbid_events = $2
-WHERE character_id = $3 AND order_id = $4 AND closed_at = ''
+WHERE character_id = $3 AND order_id = $4 AND closed_at IS NULL
 `
 
 type UpdateOrderLifecycleBeatenParams struct {
@@ -2573,8 +2574,8 @@ ON CONFLICT (id) DO UPDATE SET
 `
 
 type UpsertGuidePricesMetaParams struct {
-	FetchedAt   string `json:"fetched_at"`
-	CachedUntil string `json:"cached_until"`
+	FetchedAt   time.Time `json:"fetched_at"`
+	CachedUntil time.Time `json:"cached_until"`
 }
 
 func (q *Queries) UpsertGuidePricesMeta(ctx context.Context, arg UpsertGuidePricesMetaParams) error {
@@ -2612,10 +2613,10 @@ ON CONFLICT (kind) DO UPDATE SET
 `
 
 type UpsertMarketFetchStateParams struct {
-	Kind        string `json:"kind"`
-	State       string `json:"state"`
-	Detail      string `json:"detail"`
-	AttemptedAt string `json:"attempted_at"`
+	Kind        string    `json:"kind"`
+	State       string    `json:"state"`
+	Detail      string    `json:"detail"`
+	AttemptedAt time.Time `json:"attempted_at"`
 }
 
 func (q *Queries) UpsertMarketFetchState(ctx context.Context, arg UpsertMarketFetchStateParams) error {
@@ -2677,9 +2678,9 @@ ON CONFLICT (region_id, type_id) DO UPDATE SET
 `
 
 type UpsertMarketHistoryWantParams struct {
-	RegionID        int64  `json:"region_id"`
-	TypeID          int64  `json:"type_id"`
-	LastRequestedAt string `json:"last_requested_at"`
+	RegionID        int64     `json:"region_id"`
+	TypeID          int64     `json:"type_id"`
+	LastRequestedAt time.Time `json:"last_requested_at"`
 }
 
 func (q *Queries) UpsertMarketHistoryWant(ctx context.Context, arg UpsertMarketHistoryWantParams) error {
@@ -2706,20 +2707,20 @@ ON CONFLICT (region_id, type_id) DO UPDATE SET
 `
 
 type UpsertMarketRegionStatParams struct {
-	RegionID       int64   `json:"region_id"`
-	TypeID         int64   `json:"type_id"`
-	BestSell       float64 `json:"best_sell"`
-	TypicalSell    float64 `json:"typical_sell"`
-	SellBand       float64 `json:"sell_band"`
-	BestBuy        float64 `json:"best_buy"`
-	TypicalBuy     float64 `json:"typical_buy"`
-	BuyBand        float64 `json:"buy_band"`
-	SellOrders     int64   `json:"sell_orders"`
-	BuyOrders      int64   `json:"buy_orders"`
-	SellVolume     int64   `json:"sell_volume"`
-	BuyVolume      int64   `json:"buy_volume"`
-	AvgDailyVolume float64 `json:"avg_daily_volume"`
-	UpdatedAt      string  `json:"updated_at"`
+	RegionID       int64     `json:"region_id"`
+	TypeID         int64     `json:"type_id"`
+	BestSell       float64   `json:"best_sell"`
+	TypicalSell    float64   `json:"typical_sell"`
+	SellBand       float64   `json:"sell_band"`
+	BestBuy        float64   `json:"best_buy"`
+	TypicalBuy     float64   `json:"typical_buy"`
+	BuyBand        float64   `json:"buy_band"`
+	SellOrders     int64     `json:"sell_orders"`
+	BuyOrders      int64     `json:"buy_orders"`
+	SellVolume     int64     `json:"sell_volume"`
+	BuyVolume      int64     `json:"buy_volume"`
+	AvgDailyVolume float64   `json:"avg_daily_volume"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 func (q *Queries) UpsertMarketRegionStat(ctx context.Context, arg UpsertMarketRegionStatParams) error {
@@ -2805,13 +2806,13 @@ ON CONFLICT (region_id, location_id) DO UPDATE SET
 `
 
 type UpsertMarketStationLeaderboardParams struct {
-	RegionID   int64   `json:"region_id"`
-	LocationID int64   `json:"location_id"`
-	SellOrders int64   `json:"sell_orders"`
-	BuyOrders  int64   `json:"buy_orders"`
-	SellValue  float64 `json:"sell_value"`
-	BuyValue   float64 `json:"buy_value"`
-	UpdatedAt  string  `json:"updated_at"`
+	RegionID   int64     `json:"region_id"`
+	LocationID int64     `json:"location_id"`
+	SellOrders int64     `json:"sell_orders"`
+	BuyOrders  int64     `json:"buy_orders"`
+	SellValue  float64   `json:"sell_value"`
+	BuyValue   float64   `json:"buy_value"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 func (q *Queries) UpsertMarketStationLeaderboard(ctx context.Context, arg UpsertMarketStationLeaderboardParams) error {
@@ -2842,16 +2843,16 @@ ON CONFLICT (location_id, type_id) DO UPDATE SET
 `
 
 type UpsertMarketStationStatParams struct {
-	LocationID int64   `json:"location_id"`
-	RegionID   int64   `json:"region_id"`
-	TypeID     int64   `json:"type_id"`
-	BestSell   float64 `json:"best_sell"`
-	BestBuy    float64 `json:"best_buy"`
-	SellOrders int64   `json:"sell_orders"`
-	BuyOrders  int64   `json:"buy_orders"`
-	SellVolume int64   `json:"sell_volume"`
-	BuyVolume  int64   `json:"buy_volume"`
-	UpdatedAt  string  `json:"updated_at"`
+	LocationID int64     `json:"location_id"`
+	RegionID   int64     `json:"region_id"`
+	TypeID     int64     `json:"type_id"`
+	BestSell   float64   `json:"best_sell"`
+	BestBuy    float64   `json:"best_buy"`
+	SellOrders int64     `json:"sell_orders"`
+	BuyOrders  int64     `json:"buy_orders"`
+	SellVolume int64     `json:"sell_volume"`
+	BuyVolume  int64     `json:"buy_volume"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 func (q *Queries) UpsertMarketStationStat(ctx context.Context, arg UpsertMarketStationStatParams) error {
@@ -2919,16 +2920,16 @@ ON CONFLICT (character_id, order_id) DO UPDATE SET
 `
 
 type UpsertOrderHealthParams struct {
-	CharacterID int64   `json:"character_id"`
-	OrderID     int64   `json:"order_id"`
-	TypeID      int64   `json:"type_id"`
-	RegionID    int64   `json:"region_id"`
-	LocationID  int64   `json:"location_id"`
-	MyPrice     float64 `json:"my_price"`
-	StationBest float64 `json:"station_best"`
-	RegionBest  float64 `json:"region_best"`
-	Status      string  `json:"status"`
-	ComputedAt  string  `json:"computed_at"`
+	CharacterID int64     `json:"character_id"`
+	OrderID     int64     `json:"order_id"`
+	TypeID      int64     `json:"type_id"`
+	RegionID    int64     `json:"region_id"`
+	LocationID  int64     `json:"location_id"`
+	MyPrice     float64   `json:"my_price"`
+	StationBest float64   `json:"station_best"`
+	RegionBest  float64   `json:"region_best"`
+	Status      string    `json:"status"`
+	ComputedAt  time.Time `json:"computed_at"`
 }
 
 func (q *Queries) UpsertOrderHealth(ctx context.Context, arg UpsertOrderHealthParams) error {
@@ -2949,7 +2950,7 @@ func (q *Queries) UpsertOrderHealth(ctx context.Context, arg UpsertOrderHealthPa
 
 const upsertOrderLifecycle = `-- name: UpsertOrderLifecycle :exec
 INSERT INTO order_lifecycle (character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, '', '', 0, 0)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULL, '', 0, 0)
 ON CONFLICT (character_id, order_id) DO UPDATE SET
     type_id            = excluded.type_id,
     location_id        = excluded.location_id,
@@ -2962,17 +2963,17 @@ ON CONFLICT (character_id, order_id) DO UPDATE SET
 `
 
 type UpsertOrderLifecycleParams struct {
-	CharacterID      int64   `json:"character_id"`
-	OrderID          int64   `json:"order_id"`
-	TypeID           int64   `json:"type_id"`
-	LocationID       int64   `json:"location_id"`
-	RegionID         int64   `json:"region_id"`
-	IsBuyOrder       int64   `json:"is_buy_order"`
-	ListedPrice      float64 `json:"listed_price"`
-	VolumeTotal      int64   `json:"volume_total"`
-	VolumeRemainLast int64   `json:"volume_remain_last"`
-	FirstSeenAt      string  `json:"first_seen_at"`
-	LastSeenAt       string  `json:"last_seen_at"`
+	CharacterID      int64     `json:"character_id"`
+	OrderID          int64     `json:"order_id"`
+	TypeID           int64     `json:"type_id"`
+	LocationID       int64     `json:"location_id"`
+	RegionID         int64     `json:"region_id"`
+	IsBuyOrder       int64     `json:"is_buy_order"`
+	ListedPrice      float64   `json:"listed_price"`
+	VolumeTotal      int64     `json:"volume_total"`
+	VolumeRemainLast int64     `json:"volume_remain_last"`
+	FirstSeenAt      time.Time `json:"first_seen_at"`
+	LastSeenAt       time.Time `json:"last_seen_at"`
 }
 
 func (q *Queries) UpsertOrderLifecycle(ctx context.Context, arg UpsertOrderLifecycleParams) error {
@@ -3077,11 +3078,11 @@ ON CONFLICT (user_id, type_id, region_id) DO UPDATE SET
 `
 
 type UpsertWatchlistEntryParams struct {
-	UserID       int64   `json:"user_id"`
-	TypeID       int64   `json:"type_id"`
-	RegionID     int64   `json:"region_id"`
-	ThresholdPct float64 `json:"threshold_pct"`
-	CreatedAt    string  `json:"created_at"`
+	UserID       int64     `json:"user_id"`
+	TypeID       int64     `json:"type_id"`
+	RegionID     int64     `json:"region_id"`
+	ThresholdPct float64   `json:"threshold_pct"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 func (q *Queries) UpsertWatchlistEntry(ctx context.Context, arg UpsertWatchlistEntryParams) error {

@@ -234,7 +234,7 @@ func TestMarketWorkerHistoryDrainAndGate(t *testing.T) {
 	for i := int64(0); i < 12; i++ {
 		if err := q.UpsertWatchlistEntry(ctx, db.UpsertWatchlistEntryParams{
 			UserID: user.ID, TypeID: 1000 + i, RegionID: 10000002,
-			ThresholdPct: 5, CreatedAt: time.Now().UTC().Format(time.RFC3339),
+			ThresholdPct: 5, CreatedAt: time.Now().UTC(),
 		}); err != nil {
 			t.Fatalf("seed watchlist: %v", err)
 		}
@@ -287,7 +287,7 @@ func TestMarketWorkerHistoryErrorLimit(t *testing.T) {
 	}
 	if err := q.UpsertWatchlistEntry(ctx, db.UpsertWatchlistEntryParams{
 		UserID: user.ID, TypeID: 34, RegionID: 10000002,
-		ThresholdPct: 5, CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		ThresholdPct: 5, CreatedAt: time.Now().UTC(),
 	}); err != nil {
 		t.Fatalf("seed watchlist: %v", err)
 	}
@@ -403,13 +403,12 @@ func seedMarketSignals(t *testing.T, app *Application, q *db.Queries, userID int
 		t.Fatalf("seed type name: %v", err)
 	}
 	now := time.Now().UTC()
-	stamp := now.Format(time.RFC3339)
 	for i := 0; i < undercutOrders; i++ {
 		if err := q.UpsertOrderHealth(ctx, db.UpsertOrderHealthParams{
 			CharacterID: fixtureCharA, OrderID: int64(700 + i), TypeID: 34,
 			RegionID: 10000002, LocationID: 60003760, MyPrice: 10,
 			StationBest: 9.5, RegionBest: 9.5, Status: "undercut_station",
-			ComputedAt: stamp,
+			ComputedAt: now,
 		}); err != nil {
 			t.Fatalf("seed health: %v", err)
 		}
@@ -429,7 +428,7 @@ func seedMarketSignals(t *testing.T, app *Application, q *db.Queries, userID int
 	}
 	if err := q.UpsertWatchlistEntry(ctx, db.UpsertWatchlistEntryParams{
 		UserID: userID, TypeID: 34, RegionID: 10000002,
-		ThresholdPct: 5, CreatedAt: stamp,
+		ThresholdPct: 5, CreatedAt: now,
 	}); err != nil {
 		t.Fatalf("seed watchlist: %v", err)
 	}
@@ -570,7 +569,7 @@ func TestMarketItemPageChartAndWant(t *testing.T) {
 		t.Fatalf("item page: status %d", code)
 	}
 	mustContain(t, "/market/?type=34 (no history)", body, "This one's queued")
-	wants, err := q.ListMarketHistoryWants(ctx, "")
+	wants, err := q.ListMarketHistoryWants(ctx, time.Time{})
 	if err != nil || len(wants) != 1 || wants[0].TypeID != 34 {
 		t.Fatalf("wants after view: %v err=%v, want one row for type 34", wants, err)
 	}
@@ -587,7 +586,7 @@ func TestMarketItemPageChartAndWant(t *testing.T) {
 	if strings.Contains(body, "This one's queued") {
 		t.Fatal("item page with history still shows the loading state")
 	}
-	wants, err = q.ListMarketHistoryWants(ctx, "")
+	wants, err = q.ListMarketHistoryWants(ctx, time.Time{})
 	if err != nil || len(wants) != 1 {
 		t.Fatalf("wants after charted view: %v err=%v, want the original single want", wants, err)
 	}
@@ -602,7 +601,7 @@ func TestMigration013Reopen(t *testing.T) {
 	if _, err := q.ListAllWatchlistEntries(ctx); err != nil {
 		t.Fatalf("watchlist on fresh DB: %v", err)
 	}
-	if _, err := q.ListMarketHistoryWants(ctx, ""); err != nil {
+	if _, err := q.ListMarketHistoryWants(ctx, time.Time{}); err != nil {
 		t.Fatalf("wants on fresh DB: %v", err)
 	}
 	if _, err := q.ListOrderHealthByUser(ctx, 1); err != nil {

@@ -79,14 +79,14 @@ func TestHistoryCandidatesCoverageTiers(t *testing.T) {
 
 	// Tier 1: a fresh want.
 	if err := q.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
-		RegionID: forge, TypeID: 1008, LastRequestedAt: time.Now().UTC().Format(time.RFC3339),
+		RegionID: forge, TypeID: 1008, LastRequestedAt: time.Now().UTC(),
 	}); err != nil {
 		t.Fatalf("seed want: %v", err)
 	}
 	// Tier 2: a watchlist pair in its own region.
 	if err := q.UpsertWatchlistEntry(ctx, db.UpsertWatchlistEntryParams{
 		UserID: user.ID, TypeID: 1007, RegionID: 10000030, ThresholdPct: 5,
-		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		CreatedAt: time.Now().UTC(),
 	}); err != nil {
 		t.Fatalf("seed watchlist: %v", err)
 	}
@@ -257,7 +257,7 @@ func TestMarketSearchPrefetchEnqueuesWants(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("search page: status %d", code)
 	}
-	wants, err := q.ListMarketHistoryWants(ctx, "")
+	wants, err := q.ListMarketHistoryWants(ctx, time.Time{})
 	if err != nil {
 		t.Fatalf("list wants: %v", err)
 	}
@@ -379,7 +379,7 @@ func TestUrgentDrainFetchesAndGates(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, stub)
 	ctx := context.Background()
 	if err := q.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
-		RegionID: forge, TypeID: 34, LastRequestedAt: time.Now().UTC().Format(time.RFC3339),
+		RegionID: forge, TypeID: 34, LastRequestedAt: time.Now().UTC(),
 	}); err != nil {
 		t.Fatalf("seed want: %v", err)
 	}
@@ -401,7 +401,7 @@ func TestUrgentDrainErrorLimitBacksOff(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, stub)
 	ctx := context.Background()
 	if err := q.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
-		RegionID: forge, TypeID: 34, LastRequestedAt: time.Now().UTC().Format(time.RFC3339),
+		RegionID: forge, TypeID: 34, LastRequestedAt: time.Now().UTC(),
 	}); err != nil {
 		t.Fatalf("seed want: %v", err)
 	}

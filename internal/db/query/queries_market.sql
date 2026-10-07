@@ -542,7 +542,7 @@ FROM order_lifecycle
 WHERE character_id = $1 AND order_id = $2;
 -- name: UpsertOrderLifecycle :exec
 INSERT INTO order_lifecycle (character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, '', '', 0, 0)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULL, '', 0, 0)
 ON CONFLICT (character_id, order_id) DO UPDATE SET
     type_id            = excluded.type_id,
     location_id        = excluded.location_id,
@@ -555,11 +555,11 @@ ON CONFLICT (character_id, order_id) DO UPDATE SET
 -- name: UpdateOrderLifecycleBeaten :exec
 UPDATE order_lifecycle
 SET beaten_now = $1, outbid_events = $2
-WHERE character_id = $3 AND order_id = $4 AND closed_at = '';
+WHERE character_id = $3 AND order_id = $4 AND closed_at IS NULL;
 -- name: CloseOrderLifecycle :exec
 UPDATE order_lifecycle
-SET closed_at = $1, close_kind = $2, beaten_now = 0
-WHERE character_id = $3 AND order_id = $4 AND closed_at = '';
+SET closed_at = sqlc.arg(closed_at)::timestamptz, close_kind = sqlc.arg(close_kind), beaten_now = 0
+WHERE character_id = sqlc.arg(character_id) AND order_id = sqlc.arg(order_id) AND closed_at IS NULL;
 -- name: ListOrderLifecycleByCharacter :many
 SELECT *
 FROM order_lifecycle
@@ -568,25 +568,25 @@ ORDER BY first_seen_at DESC, order_id DESC;
 -- name: ListOpenOrderLifecycleByCharacter :many
 SELECT *
 FROM order_lifecycle
-WHERE character_id = $1 AND closed_at = ''
+WHERE character_id = $1 AND closed_at IS NULL
 ORDER BY order_id;
 -- name: ListOrderLifecycleByUser :many
 SELECT ol.*
 FROM order_lifecycle ol
 JOIN characters c ON c.character_id = ol.character_id
 WHERE c.user_id = $1
-ORDER BY ol.closed_at DESC, ol.first_seen_at DESC, ol.order_id DESC;
+ORDER BY ol.closed_at DESC NULLS LAST, ol.first_seen_at DESC, ol.order_id DESC;
 -- name: ListClosedOrderLifecycleByCharacter :many
 SELECT *
 FROM order_lifecycle
-WHERE character_id = $1 AND closed_at != ''
+WHERE character_id = $1 AND closed_at IS NOT NULL
 ORDER BY closed_at DESC, order_id DESC
 LIMIT sqlc.arg(row_limit)::bigint;
 -- name: PruneOldOrderLifecycle :exec
 DELETE FROM order_lifecycle
 WHERE id IN (
     SELECT ol.id FROM order_lifecycle AS ol
-    WHERE ol.closed_at != '' AND ol.closed_at < $1
+    WHERE ol.closed_at < sqlc.arg(closed_before)::timestamptz
     ORDER BY ol.closed_at
     LIMIT sqlc.arg(row_limit)::bigint
 );
@@ -677,7 +677,7 @@ FROM market_station_leaderboard
 WHERE ($1::bigint = 0 OR region_id = $1::bigint)
 ORDER BY region_id, location_id;
 -- name: GetMarketStationLeaderboardStamp :one
-SELECT CAST(COALESCE(MAX(updated_at), '') AS TEXT) AS stamp
+SELECT MAX(updated_at) AS stamp
 FROM market_station_leaderboard
 WHERE ($1::bigint = 0 OR region_id = $1::bigint);
 

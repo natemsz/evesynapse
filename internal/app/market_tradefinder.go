@@ -224,15 +224,11 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 	}
 	view.OriginHasData = originStats.RowCount > 0
 	view.DestHasData = destStats.RowCount > 0
-	if s, ok := originStats.Stamp.(string); ok {
-		if at, perr := time.Parse(time.RFC3339, s); perr == nil {
-			view.OriginAsOf = "figures last gathered " + at.Format("Jan 2, 3:04 PM")
-		}
+	if at, ok := originStats.Stamp.(time.Time); ok {
+		view.OriginAsOf = "figures last gathered " + at.UTC().Format("Jan 2, 3:04 PM")
 	}
-	if s, ok := destStats.Stamp.(string); ok {
-		if at, perr := time.Parse(time.RFC3339, s); perr == nil {
-			view.DestAsOf = "figures last gathered " + at.Format("Jan 2, 3:04 PM")
-		}
+	if at, ok := destStats.Stamp.(time.Time); ok {
+		view.DestAsOf = "figures last gathered " + at.UTC().Format("Jan 2, 3:04 PM")
 	}
 	if !view.HasData() || view.SameRegion {
 		return view // still-gathering state, or the same-region empty case
@@ -266,7 +262,7 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 		IncludeLowball: lowballParam,
 		MinMargin:      minMargin,
 		MinVolume:      minVolume,
-		Cutoff:         time.Now().UTC().Add(-tradefinderMaxStatAge).Format(time.RFC3339),
+		Cutoff:         time.Now().UTC().Add(-tradefinderMaxStatAge),
 		RowCap:         int64(tradefinderRowCap),
 	})
 	if err != nil {

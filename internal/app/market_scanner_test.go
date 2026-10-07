@@ -27,7 +27,7 @@ func seedScannerVolume(t *testing.T, q *db.Queries, regionID, typeID int64, avgD
 	ctx := context.Background()
 	if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
 		RegionID: regionID, TypeID: typeID, AvgDailyVolume: avgDailyVolume,
-		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+		UpdatedAt: time.Now().UTC(),
 	}); err != nil {
 		t.Fatalf("seed region volume type %d: %v", typeID, err)
 	}
@@ -93,7 +93,7 @@ func TestStationSweepStoresAndCleansVanished(t *testing.T) {
 	}
 	if err := q.UpsertMarketFetchState(ctx, db.UpsertMarketFetchStateParams{
 		Kind: regionSweepKind(10000002), State: fetchStateOK,
-		AttemptedAt: time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339),
+		AttemptedAt: time.Now().Add(-2 * time.Hour).UTC(),
 	}); err != nil {
 		t.Fatalf("age sweep record: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestScannerMathFiltersSortAndCap(t *testing.T) {
 	transport := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 	const stationA = int64(60003760)
 
 	for _, stmt := range []string{
@@ -212,7 +212,7 @@ func TestScannerPageRendersStoredRowsZeroOutbound(t *testing.T) {
 	if err := q.UpsertMarketStationStat(ctx, db.UpsertMarketStationStatParams{
 		LocationID: 60003760, RegionID: 10000002, TypeID: 34,
 		BestSell: 10, BestBuy: 4, SellOrders: 1, BuyOrders: 1,
-		SellVolume: 100, BuyVolume: 50, UpdatedAt: now.Format(time.RFC3339),
+		SellVolume: 100, BuyVolume: 50, UpdatedAt: now,
 	}); err != nil {
 		t.Fatalf("seed station stat: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestScannerPageRendersStoredRowsZeroOutbound(t *testing.T) {
 	if err := q.UpsertMarketStationStat(ctx, db.UpsertMarketStationStatParams{
 		LocationID: 1022734985671, RegionID: 10000002, TypeID: 34,
 		BestSell: 12, BestBuy: 4, SellOrders: 1, BuyOrders: 1,
-		SellVolume: 100, BuyVolume: 50, UpdatedAt: now.Format(time.RFC3339),
+		SellVolume: 100, BuyVolume: 50, UpdatedAt: now,
 	}); err != nil {
 		t.Fatalf("seed structure stat: %v", err)
 	}
@@ -281,7 +281,7 @@ func TestScannerProfitRankingAndCapInSQL(t *testing.T) {
 	transport := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 	const stationA = int64(60003760)
 
 	for _, stmt := range []string{

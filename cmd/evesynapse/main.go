@@ -81,7 +81,7 @@ func serve() int {
 
 	application, err := app.New(cfg)
 	if err != nil {
-		log.Printf("open db: %v", err)
+		log.Printf("evesynapse: cannot start: %v", err)
 		return 1
 	}
 	defer application.Close()

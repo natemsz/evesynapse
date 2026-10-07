@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
@@ -108,6 +109,11 @@ type Application struct {
 	// stored token could invalidate each other.
 	tokenMu sync.Mutex
 
+	// tokens seals and opens the EVE SSO tokens stored in the
+	// characters table (tokencrypt.go). Without a
+	// TOKEN_ENCRYPTION_KEY it stores them as they are.
+	tokens *tokenBox
+
 	// fetchMu serializes the market-history, pilot-record, and
 	// type-detail fetch passes between the minute cycle and the
 	// urgent want drain, so the two never fetch the same queue row
@@ -174,10 +180,14 @@ type Application struct {
 // background worker and the one-shot SSO reachability probe.
 // Call Close to stop the worker and release the database.
 func New(cfg Config) (*Application, error) {
+	tokens, err := newTokenBox(cfg.tokenKey)
+	if err != nil {
+		return nil, err
+	}
 
 	dbConn, pool, err := openDB(context.Background(), cfg.databaseURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open the database: %w", err)
 	}
 
 	sessionManager := scs.New()
@@ -198,8 +208,17 @@ func New(cfg Config) (*Application, error) {
 		prices:        make(map[int64]esi.MarketPrice),
 		priorityChars: make(map[int64]bool),
 		pageWants:     make(map[string]map[string]pageWant),
+		tokens:        tokens,
 	}
 	app.esi = esi.New(loginHTTPClient, app.queries, app.validAccessToken)
+
+	// Before anything reads a token: check the stored ones open
+	// with the configured key, and encrypt any that predate it.
+	if err := app.prepareStoredTokens(context.Background()); err != nil {
+		dbConn.Close()
+		pool.Close()
+		return nil, err
+	}
 
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	app.stopWorker = stopWorker

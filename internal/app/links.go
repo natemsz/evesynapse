@@ -88,6 +88,13 @@ func (app *Application) linkVerifiedCharacter(ctx context.Context, in linkCharac
 		stateAt = sql.NullString{String: time.Now().UTC().Format(time.RFC3339), Valid: true}
 	}
 
+	// The tokens are stored sealed when a TOKEN_ENCRYPTION_KEY is
+	// configured (tokencrypt.go), as they arrived otherwise.
+	accessToken, refreshToken, err := app.tokens.sealTokens(in.CharacterID, in.AccessToken, in.RefreshToken)
+	if err != nil {
+		return result, err
+	}
+
 	// CachedUntil stays NULL: ESI caching is per-endpoint, while
 	// this column models the (single) character-sheet cache; the
 	// worker's snapshot rows carry the real expiries.
@@ -95,8 +102,8 @@ func (app *Application) linkVerifiedCharacter(ctx context.Context, in linkCharac
 		CharacterID:  in.CharacterID,
 		UserID:       in.UserID,
 		Name:         in.Name,
-		AccessToken:  in.AccessToken,
-		RefreshToken: in.RefreshToken,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
 		TokenExpiry:  in.TokenExpiry,
 		Scopes:       in.Scopes,
 		OwnerHash:    ownerHash,

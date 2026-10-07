@@ -185,6 +185,7 @@ gaps; real environment variables win over the file):
 | `DATABASE_URL` | yes | `postgres://evesynapse@localhost:5432/evesynapse?sslmode=disable` | PostgreSQL connection URL |
 | `ADDR` | no | `:8080` | HTTP listen address |
 | `SESSION_KEY` | no | — | Reserved for cookie signing hardening |
+| `TOKEN_ENCRYPTION_KEY` | no | — | Encrypts the EVE tokens stored in the database (see "Token encryption") |
 | `EVESYNAPSE_UPDATE_REPO` | no | `natemsz/evesynapse` | GitHub repo (owner/repo) the updater checks |
 | `EVE_SDE_BASE_URL` | no | Fuzzwork's dump | Base URL of the SDE CSV dump the importer downloads |
 | `DEV_LOGIN` | no | — | Dev build only: `1` registers the `/dev-login` route |
@@ -573,6 +574,41 @@ Re-running into a non-empty target is refused unless `-force`
 is given (which truncates the target tables and re-copies).
 Rollback is the previous binary plus the untouched SQLite file
 and the old `.env`.
+
+## Token encryption
+
+Each linked character's EVE access and refresh tokens are stored
+in the `characters` table. A refresh token is a standing
+credential, so anyone holding a copy of the database could read
+that character's data and use the write scopes the app requests
+(sending mail, saving fittings).
+
+Set `TOKEN_ENCRYPTION_KEY` to any random value of at least 32
+characters and both tokens are stored encrypted (AES-256-GCM),
+each bound to its character and column:
+
+```sh
+openssl rand -hex 32    # put the output in .env as TOKEN_ENCRYPTION_KEY=...
+```
+
+The setup script generates a key for new installs. On an
+existing install, add the line and restart: tokens already
+stored are encrypted in place at that start.
+
+Two things to know before switching it on:
+
+- **Keep the key.** It lives in `.env`, not in the database, so
+  back the two up together. If the key is changed or removed the
+  app refuses to start rather than run with tokens it cannot
+  read; the error explains how to clear the stored tokens if the
+  key is truly lost, after which every character signs in once
+  more.
+- **Don't go back to a build from before token encryption.** It
+  would present the encrypted values to CCP as tokens, be
+  refused, and mark every character as needing a fresh sign-in.
+
+Without a key, tokens are stored unencrypted as before and the
+app logs a warning at startup.
 
 ## Backups
 

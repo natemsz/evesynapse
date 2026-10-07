@@ -40,10 +40,19 @@ func (app *Application) validAccessToken(ctx context.Context, ch db.Character) (
 		ch = fresh
 	}
 
-	if expiry, ok := parseTokenExpiry(ch.TokenExpiry); ok && time.Until(expiry) > tokenRefreshWindow {
-		return ch.AccessToken, nil
+	// The stored pair is sealed when a TOKEN_ENCRYPTION_KEY is
+	// configured (tokencrypt.go). A pair that does not open is a
+	// configuration problem, not a dead login: it is reported and
+	// retried, never parked.
+	accessToken, storedRefresh, err := app.tokens.openTokens(ch)
+	if err != nil {
+		return "", fmt.Errorf("character %d: %w", ch.CharacterID, err)
 	}
-	if ch.RefreshToken == "" {
+
+	if expiry, ok := parseTokenExpiry(ch.TokenExpiry); ok && time.Until(expiry) > tokenRefreshWindow {
+		return accessToken, nil
+	}
+	if storedRefresh == "" {
 		return "", fmt.Errorf("character %d: no refresh token stored", ch.CharacterID)
 	}
 
@@ -51,7 +60,7 @@ func (app *Application) validAccessToken(ctx context.Context, ch db.Character) (
 	// answers with a fresh access token and a rotated refresh token.
 	ctx = context.WithValue(ctx, oauth2.HTTPClient, loginHTTPClient)
 	stale := &oauth2.Token{
-		RefreshToken: ch.RefreshToken,
+		RefreshToken: storedRefresh,
 		Expiry:       time.Now().Add(-time.Hour),
 	}
 	tok, err := eveOAuthConfig(app.cfg).TokenSource(ctx, stale).Token()
@@ -74,11 +83,15 @@ func (app *Application) validAccessToken(ctx context.Context, ch db.Character) (
 	if refreshToken == "" {
 		// CCP always rotates, but never store an empty token over a
 		// good one if a response ever omits it.
-		refreshToken = ch.RefreshToken
+		refreshToken = storedRefresh
+	}
+	sealedAccess, sealedRefresh, err := app.tokens.sealTokens(ch.CharacterID, tok.AccessToken, refreshToken)
+	if err != nil {
+		return "", fmt.Errorf("character %d: seal refreshed tokens: %w", ch.CharacterID, err)
 	}
 	if err := app.queries.UpdateCharacterTokens(ctx, db.UpdateCharacterTokensParams{
-		AccessToken:  tok.AccessToken,
-		RefreshToken: refreshToken,
+		AccessToken:  sealedAccess,
+		RefreshToken: sealedRefresh,
 		TokenExpiry:  sql.NullString{String: expiry, Valid: expiry != ""},
 		CharacterID:  ch.CharacterID,
 	}); err != nil {

@@ -20,6 +20,7 @@ type Config struct {
 	devLogin        bool   // DEV_LOGIN=1: register the /dev-login route
 	sdeBaseURL      string // EVE SDE CSV dump base URL (Fuzzwork by default)
 	adminCharIDs    map[int64]bool // EVE_ADMIN_CHARACTER_IDS (comma-separated)
+	tokenKey        string         // TOKEN_ENCRYPTION_KEY: encrypts stored EVE tokens ("" = stored as they are)
 }
 
 // SSOConfigured reports whether EVE SSO can run: it needs both the
@@ -84,6 +85,7 @@ func LoadConfig() Config {
 		devLogin:        os.Getenv("DEV_LOGIN") == "1",
 		sdeBaseURL:      getenvDefault("EVE_SDE_BASE_URL", defaultSDEBaseURL),
 		adminCharIDs:    parseAdminCharIDs(os.Getenv("EVE_ADMIN_CHARACTER_IDS")),
+		tokenKey:        os.Getenv("TOKEN_ENCRYPTION_KEY"),
 	}
 }
 

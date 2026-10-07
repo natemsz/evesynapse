@@ -4,11 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"log"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -70,7 +70,7 @@ func (app *Application) sampleWalletHistory(ctx context.Context, ch db.Character
 		NetWorth:    netWorth,
 		SampledAt:   now.UTC().Format(time.RFC3339),
 	}); err != nil {
-		log.Printf("worker: wallet history sample for character %d: %v", ch.CharacterID, err)
+		logging.Errorf("worker: wallet history sample for character %d: %v", ch.CharacterID, err)
 	}
 }
 

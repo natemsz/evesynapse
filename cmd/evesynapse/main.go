@@ -26,7 +26,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -34,6 +33,7 @@ import (
 	"time"
 
 	"evesynapse/internal/app"
+	"evesynapse/internal/logging"
 )
 
 func main() {
@@ -78,10 +78,14 @@ func printUsage(w io.Writer) {
 // then Close stops the worker and releases the database.
 func serve() int {
 	cfg := app.LoadConfig()
+	if err := cfg.SetupLogging(); err != nil {
+		fmt.Fprintln(os.Stderr, "evesynapse:", err)
+		return 2
+	}
 
 	application, err := app.New(cfg)
 	if err != nil {
-		log.Printf("evesynapse: cannot start: %v", err)
+		logging.Errorf("evesynapse: cannot start: %v", err)
 		return 1
 	}
 	defer application.Close()
@@ -97,22 +101,22 @@ func serve() int {
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
 
-	log.Printf("evesynapse: listening on %s (db: %s, EVE SSO configured: %t)",
+	logging.Infof("evesynapse: listening on %s (db: %s, EVE SSO configured: %t)",
 		cfg.Addr(), cfg.DatabaseLabel(), cfg.SSOConfigured())
 
 	select {
 	case err := <-errCh:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("evesynapse: server: %v", err)
+			logging.Errorf("evesynapse: server: %v", err)
 			return 1
 		}
 		return 0
 	case <-ctx.Done():
-		log.Printf("evesynapse: shutting down")
+		logging.Infof("evesynapse: shutting down")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
-			log.Printf("evesynapse: shutdown: %v", err)
+			logging.Errorf("evesynapse: shutdown: %v", err)
 		}
 		return 0
 	}

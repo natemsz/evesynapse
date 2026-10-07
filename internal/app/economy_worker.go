@@ -5,12 +5,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log"
 	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -68,7 +68,7 @@ func (app *Application) fetchCharKind(ctx context.Context, ch db.Character, kind
 	case serr == nil && esi.SnapshotFresh(snap):
 		return corpFetchSkipped
 	case serr != nil && !errors.Is(serr, sql.ErrNoRows):
-		log.Printf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
+		logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
 	}
 
 	// A recorded 403 (stale-scope login) backs this kind off
@@ -84,15 +84,15 @@ func (app *Application) fetchCharKind(ctx context.Context, ch db.Character, kind
 	if _, err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
 		switch {
 		case errors.Is(err, esi.ErrErrorLimit):
-			log.Printf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)
+			logging.Warnf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)
 			return corpFetchLimited
 		case esi.IsForbidden(err):
 			detail := forbiddenDetailPrefix + " — this character's login predates the current scope list; sign in again to re-grant scopes."
 			app.recordCorpFetchState(ctx, ch.CharacterID, kind, fetchStateError, detail)
-			log.Printf("worker: %s for character %d refused by ESI (403); recorded as a stale-scope login", kind, ch.CharacterID)
+			logging.Infof("worker: %s for character %d refused by ESI (403); recorded as a stale-scope login", kind, ch.CharacterID)
 			return corpFetchFailed
 		default:
-			log.Printf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
+			logging.Errorf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
 			app.recordCorpFetchState(ctx, ch.CharacterID, kind, fetchStateError, err.Error())
 			return corpFetchFailed
 		}
@@ -125,7 +125,7 @@ func (app *Application) warmContractItems(ctx context.Context, ch db.Character) 
 	}
 	var contracts esi.Contracts
 	if err := json.Unmarshal([]byte(snap.Payload), &contracts); err != nil {
-		log.Printf("worker: warm contract items for character %d: decode contracts: %v", ch.CharacterID, err)
+		logging.Errorf("worker: warm contract items for character %d: decode contracts: %v", ch.CharacterID, err)
 		return 0, false
 	}
 
@@ -139,7 +139,7 @@ func (app *Application) warmContractItems(ctx context.Context, ch db.Character) 
 		if _, err := app.queries.GetContractDetail(ctx, c.ContractID); err == nil {
 			continue // already stored (by any character's list)
 		} else if !errors.Is(err, sql.ErrNoRows) {
-			log.Printf("worker: warm contract items for character %d: read detail %d: %v", ch.CharacterID, c.ContractID, err)
+			logging.Errorf("worker: warm contract items for character %d: read detail %d: %v", ch.CharacterID, c.ContractID, err)
 			continue
 		}
 
@@ -149,7 +149,7 @@ func (app *Application) warmContractItems(ctx context.Context, ch db.Character) 
 				return fetched, true
 			}
 			if ctx.Err() == nil {
-				log.Printf("worker: contract items %d for character %d: %v", c.ContractID, ch.CharacterID, err)
+				logging.Errorf("worker: contract items %d for character %d: %v", c.ContractID, ch.CharacterID, err)
 			}
 			continue
 		}
@@ -159,7 +159,7 @@ func (app *Application) warmContractItems(ctx context.Context, ch db.Character) 
 			Payload:     string(body),
 			FetchedAt:   time.Now().UTC().Format(time.RFC3339),
 		}); err != nil {
-			log.Printf("worker: store contract items %d for character %d: %v", c.ContractID, ch.CharacterID, err)
+			logging.Errorf("worker: store contract items %d for character %d: %v", c.ContractID, ch.CharacterID, err)
 			continue
 		}
 		fetched++

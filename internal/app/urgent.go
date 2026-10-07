@@ -2,10 +2,10 @@ package app
 
 import (
 	"context"
-	"log"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -64,7 +64,7 @@ func (app *Application) urgentDrain(ctx context.Context) {
 		app.urgentMu.Lock()
 		app.urgentHoldUntil = time.Now().Add(urgentErrorBackoff)
 		app.urgentMu.Unlock()
-		log.Printf("worker: urgent drain: ESI error limit; holding nudges for %s", urgentErrorBackoff)
+		logging.Warnf("worker: urgent drain: ESI error limit; holding nudges for %s", urgentErrorBackoff)
 	}
 }
 
@@ -103,7 +103,7 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 		DrainLimit:  urgentPilotsPerNudge,
 	})
 	if err != nil {
-		log.Printf("worker: urgent drain: list pilot drains: %v", err)
+		logging.Errorf("worker: urgent drain: list pilot drains: %v", err)
 	} else {
 		for _, id := range ids {
 			if ctx.Err() != nil {
@@ -126,7 +126,7 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 
 	wants, err := app.queries.ListMarketHistoryWants(ctx, now.Add(-historyWantMaxAge).Format(time.RFC3339))
 	if err != nil {
-		log.Printf("worker: urgent drain: list history wants: %v", err)
+		logging.Errorf("worker: urgent drain: list history wants: %v", err)
 	} else {
 		fetched := 0
 		for _, wn := range wants {
@@ -146,7 +146,7 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 
 	typeIDs, err := app.queries.ListTypeDetailWants(ctx, urgentTypeDetailsPerNudge)
 	if err != nil {
-		log.Printf("worker: urgent drain: list type details: %v", err)
+		logging.Errorf("worker: urgent drain: list type details: %v", err)
 	} else {
 		stamp := now.Format(time.RFC3339)
 		for _, id := range typeIDs {
@@ -186,7 +186,7 @@ func (app *Application) drainGuidePriceWant(ctx context.Context) (limited bool) 
 	}
 	if stored || app.storedGuidePrices(ctx) != nil {
 		if err := app.queries.ClearGuidePriceWant(ctx); err != nil {
-			log.Printf("worker: urgent drain: clear guide price want: %v", err)
+			logging.Errorf("worker: urgent drain: clear guide price want: %v", err)
 		}
 	}
 	return false

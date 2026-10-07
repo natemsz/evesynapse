@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,6 +10,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -251,7 +251,7 @@ func (app *Application) handleCharacter(w http.ResponseWriter, r *http.Request) 
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/character/")
 	if err != nil {
-		log.Printf("character: list characters: %v", err)
+		logging.Errorf("character: list characters: %v", err)
 		data.Error = "Could not load character data; check the server log."
 		app.render(ctx, w, http.StatusOK, "character.html", data)
 		return
@@ -372,7 +372,7 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 		customNames := map[int64]string{}
 		if userID != 0 {
 			if rows, err := app.queries.ListCloneNames(ctx, db.ListCloneNamesParams{UserID: userID, CharacterID: ch.CharacterID}); err != nil {
-				log.Printf("character: clone names for character %d: %v", ch.CharacterID, err)
+				logging.Errorf("character: clone names for character %d: %v", ch.CharacterID, err)
 			} else {
 				for _, r := range rows {
 					customNames[r.CloneID] = r.CustomName
@@ -615,7 +615,7 @@ func (app *Application) handleCloneRename(w http.ResponseWriter, r *http.Request
 			}
 		}
 	} else {
-		log.Printf("character: rename clone list characters for user %d: %v", userID, err)
+		logging.Errorf("character: rename clone list characters for user %d: %v", userID, err)
 	}
 	back := fmt.Sprintf("/character/?character=%d#clones", characterID)
 	if !owned || characterID == 0 || cloneID == 0 {
@@ -627,12 +627,12 @@ func (app *Application) handleCloneRename(w http.ResponseWriter, r *http.Request
 		if err := app.queries.DeleteCloneName(ctx, db.DeleteCloneNameParams{
 			UserID: userID, CharacterID: characterID, CloneID: cloneID,
 		}); err != nil {
-			log.Printf("character: delete clone name: %v", err)
+			logging.Errorf("character: delete clone name: %v", err)
 		}
 	} else if err := app.queries.UpsertCloneName(ctx, db.UpsertCloneNameParams{
 		UserID: userID, CharacterID: characterID, CloneID: cloneID, CustomName: name,
 	}); err != nil {
-		log.Printf("character: upsert clone name: %v", err)
+		logging.Errorf("character: upsert clone name: %v", err)
 	}
 	http.Redirect(w, r, back, http.StatusSeeOther)
 }

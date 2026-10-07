@@ -3,13 +3,13 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -146,7 +146,7 @@ func (app *Application) handleWallet(w http.ResponseWriter, r *http.Request) {
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/wallet/")
 	if err != nil {
-		log.Printf("wallet: list characters: %v", err)
+		logging.Errorf("wallet: list characters: %v", err)
 		data.Error = "Could not load wallet data; check the server log."
 		app.render(ctx, w, http.StatusOK, "wallet.html", data)
 		return
@@ -284,11 +284,11 @@ func (app *Application) harvestJournalParty(ctx context.Context, charIDs map[int
 		charIDs[id] = true
 	case "corporation":
 		if err := app.queries.UpsertCorporationWant(ctx, id); err != nil {
-			log.Printf("worker: note corporation want for journal party %d: %v", id, err)
+			logging.Errorf("worker: note corporation want for journal party %d: %v", id, err)
 		}
 	case "alliance":
 		if err := app.queries.UpsertAllianceWant(ctx, id); err != nil {
-			log.Printf("worker: note alliance want for journal party %d: %v", id, err)
+			logging.Errorf("worker: note alliance want for journal party %d: %v", id, err)
 		}
 	}
 }
@@ -427,7 +427,7 @@ func medianDuration(durations []time.Duration) time.Duration {
 func (app *Application) buildOrderLifecycle(ctx context.Context, characterID int64) (*orderLifecycleSummary, []orderLifecycleRow) {
 	rows, err := app.queries.ListOrderLifecycleByCharacter(ctx, characterID)
 	if err != nil {
-		log.Printf("orders: lifecycle for %d: %v", characterID, err)
+		logging.Errorf("orders: lifecycle for %d: %v", characterID, err)
 		return &orderLifecycleSummary{FillShare: "--", TypicalFill: "--"}, nil
 	}
 	summary := &orderLifecycleSummary{FillShare: "--", TypicalFill: "--"}
@@ -532,7 +532,7 @@ func (app *Application) handleOrders(w http.ResponseWriter, r *http.Request) {
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/orders/")
 	if err != nil {
-		log.Printf("orders: list characters: %v", err)
+		logging.Errorf("orders: list characters: %v", err)
 		data.Error = "Could not load order data; check the server log."
 		app.render(ctx, w, http.StatusOK, "orders.html", data)
 		return
@@ -576,7 +576,7 @@ func (app *Application) handleOrders(w http.ResponseWriter, r *http.Request) {
 		// sell-side check, and closed orders are pruned.
 		health := make(map[int64]db.OrderHealth)
 		if rows, err := app.queries.ListOrderHealthByCharacter(ctx, active.CharacterID); err != nil {
-			log.Printf("orders: list health for character %d: %v", active.CharacterID, err)
+			logging.Errorf("orders: list health for character %d: %v", active.CharacterID, err)
 		} else {
 			for _, h := range rows {
 				health[h.OrderID] = h

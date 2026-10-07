@@ -29,10 +29,10 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/logging"
 )
 
 // tokenCipherPrefix marks a stored token as encrypted. No EVE
@@ -187,7 +187,7 @@ func (app *Application) prepareStoredTokens(ctx context.Context) error {
 
 	if !app.tokens.enabled() {
 		if len(plain) > 0 {
-			log.Printf("evesynapse: WARNING the EVE tokens of %d linked character(s) are stored unencrypted; set TOKEN_ENCRYPTION_KEY to encrypt them at rest (see the README)", len(plain))
+			logging.Warnf("evesynapse: the EVE tokens of %d linked character(s) are stored unencrypted; set TOKEN_ENCRYPTION_KEY to encrypt them at rest (see the README)", len(plain))
 		}
 		return nil
 	}
@@ -211,7 +211,7 @@ func (app *Application) prepareStoredTokens(ctx context.Context) error {
 		}
 	}
 	if len(plain) > 0 {
-		log.Printf("evesynapse: encrypted the stored EVE tokens of %d character(s)", len(plain))
+		logging.Infof("evesynapse: encrypted the stored EVE tokens of %d character(s)", len(plain))
 	}
 	return nil
 }

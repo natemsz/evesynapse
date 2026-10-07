@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"log"
 	"math"
 	"net/http"
 	"sort"
@@ -15,6 +14,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -282,7 +282,7 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 	if typeID, err := strconv.ParseInt(q.Get("type"), 10, 64); err == nil && typeID > 0 {
 		item, err := app.loadMarketItem(ctx, typeID, view.Region)
 		if err != nil {
-			log.Printf("market: load type %d in region %d: %v", typeID, view.Region, err)
+			logging.Errorf("market: load type %d in region %d: %v", typeID, view.Region, err)
 			data.Error = "Market data unavailable right now — please try again shortly."
 		} else {
 			view.Item = item
@@ -333,7 +333,7 @@ func (app *Application) buildMarketBrowse(ctx context.Context, groupID int64, pa
 	if groupID <= 0 || err != nil {
 		rows, err := app.queries.ListSDEMarketGroupsByParent(ctx, 0)
 		if err != nil {
-			log.Printf("market: list top market groups: %v", err)
+			logging.Errorf("market: list top market groups: %v", err)
 			return view
 		}
 		for _, row := range rows {
@@ -366,7 +366,7 @@ func (app *Application) buildMarketBrowse(ctx context.Context, groupID int64, pa
 
 	children, err := app.queries.ListSDEMarketGroupsByParent(ctx, groupID)
 	if err != nil {
-		log.Printf("market: list child groups of %d: %v", groupID, err)
+		logging.Errorf("market: list child groups of %d: %v", groupID, err)
 	} else {
 		for _, row := range children {
 			view.Groups = append(view.Groups, marketBrowseGroupRow(row))
@@ -375,7 +375,7 @@ func (app *Application) buildMarketBrowse(ctx context.Context, groupID int64, pa
 
 	total, err := app.queries.CountSDETypesInMarketGroup(ctx, groupID)
 	if err != nil {
-		log.Printf("market: count types of market group %d: %v", groupID, err)
+		logging.Errorf("market: count types of market group %d: %v", groupID, err)
 	} else {
 		view.TotalTypes = total
 		view.TotalPages = int((total + marketBrowseTypesPerPage - 1) / marketBrowseTypesPerPage)
@@ -396,7 +396,7 @@ func (app *Application) buildMarketBrowse(ctx context.Context, groupID int64, pa
 		RowOffset:     int64((view.Page - 1) * marketBrowseTypesPerPage),
 	})
 	if err != nil {
-		log.Printf("market: list types of market group %d: %v", groupID, err)
+		logging.Errorf("market: list types of market group %d: %v", groupID, err)
 	} else {
 		for _, row := range types {
 			view.Types = append(view.Types, marketBrowseType{ID: row.TypeID, Name: row.Name})
@@ -428,7 +428,7 @@ func (app *Application) recentHistoryRows(ctx context.Context, regionID, typeID 
 		RegionID: regionID, TypeID: typeID, RowLimit: int64(limit),
 	})
 	if err != nil {
-		log.Printf("market: load history for type %d in region %d: %v", typeID, regionID, err)
+		logging.Errorf("market: load history for type %d in region %d: %v", typeID, regionID, err)
 		return nil
 	}
 	// The query returns newest first; chart math wants ascending.
@@ -474,7 +474,7 @@ func (app *Application) noteSearchHistoryWants(ctx context.Context, regionID int
 		if err := app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
 			RegionID: regionID, TypeID: m.ID, LastRequestedAt: stamp,
 		}); err != nil {
-			log.Printf("market: prefetch want for type %d in region %d: %v", m.ID, regionID, err)
+			logging.Errorf("market: prefetch want for type %d in region %d: %v", m.ID, regionID, err)
 			continue
 		}
 		app.notePageWant(ctx, pageWantHistory, m.ID, regionID)
@@ -507,7 +507,7 @@ func (app *Application) attachHistory(ctx context.Context, item *marketItem, typ
 			RegionID: regionID, TypeID: typeID,
 			LastRequestedAt: time.Now().UTC().Format(time.RFC3339),
 		}); err != nil {
-			log.Printf("market: record history want for type %d in region %d: %v", typeID, regionID, err)
+			logging.Errorf("market: record history want for type %d in region %d: %v", typeID, regionID, err)
 		}
 		return
 	}
@@ -564,7 +564,7 @@ func (app *Application) searchTypes(ctx context.Context, query string) []marketM
 
 	var ids esi.UniverseIDs
 	if err := app.esi.PostJSON(ctx, "/universe/ids/", []string{query}, &ids); err != nil {
-		log.Printf("market: exact lookup for %q: %v", query, err)
+		logging.Errorf("market: exact lookup for %q: %v", query, err)
 	} else {
 		for _, hit := range ids.InventoryTypes {
 			if hit.ID <= 0 || hit.Name == "" || seen[hit.ID] {
@@ -573,14 +573,14 @@ func (app *Application) searchTypes(ctx context.Context, query string) []marketM
 			seen[hit.ID] = true
 			matches = append(matches, marketMatch{ID: hit.ID, Name: hit.Name})
 			if err := app.queries.UpsertTypeName(ctx, db.UpsertTypeNameParams{TypeID: hit.ID, Name: hit.Name}); err != nil {
-				log.Printf("market: persist type name %d: %v", hit.ID, err)
+				logging.Errorf("market: persist type name %d: %v", hit.ID, err)
 			}
 		}
 	}
 
 	rows, err := app.queries.SearchSDETypes(ctx, "%"+query+"%")
 	if err != nil {
-		log.Printf("market: local search for %q: %v", query, err)
+		logging.Errorf("market: local search for %q: %v", query, err)
 		return matches
 	}
 	for _, row := range rows {
@@ -608,7 +608,7 @@ func (app *Application) marketPrices(ctx context.Context) (map[int64]esi.MarketP
 	body, header, err := app.esi.FetchRaw(ctx, "", "/markets/prices/")
 	if err != nil {
 		if len(app.prices) > 0 {
-			log.Printf("market: refresh prices failed (%v); serving stale cache", err)
+			logging.Warnf("market: refresh prices failed (%v); serving stale cache", err)
 			return app.prices, nil
 		}
 		return nil, err
@@ -913,7 +913,7 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 	view := &watchlistView{Query: watchQuery}
 	if len(watchQuery) >= 2 {
 		if rows, err := app.queries.SuggestSDETypes(ctx, watchQuery); err != nil {
-			log.Printf("market: watch search %q: %v", watchQuery, err)
+			logging.Errorf("market: watch search %q: %v", watchQuery, err)
 		} else {
 			for _, row := range rows {
 				view.Matches = append(view.Matches, marketMatch{ID: row.TypeID, Name: row.Name})
@@ -925,7 +925,7 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 	}
 	entries, err := app.queries.ListWatchlistByUser(ctx, userID)
 	if err != nil {
-		log.Printf("market: list watchlist for user %d: %v", userID, err)
+		logging.Errorf("market: list watchlist for user %d: %v", userID, err)
 		return view
 	}
 	for _, e := range entries {
@@ -965,12 +965,12 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 func (app *Application) buildYourOrders(ctx context.Context, userID int64) []yourOrderRow {
 	chars, err := app.queries.ListCharactersByUser(ctx, userID)
 	if err != nil {
-		log.Printf("market: your orders: list characters for user %d: %v", userID, err)
+		logging.Errorf("market: your orders: list characters for user %d: %v", userID, err)
 		return nil
 	}
 	health := make(map[int64]db.OrderHealth)
 	if rows, err := app.queries.ListOrderHealthByUser(ctx, userID); err != nil {
-		log.Printf("market: your orders: list health for user %d: %v", userID, err)
+		logging.Errorf("market: your orders: list health for user %d: %v", userID, err)
 	} else {
 		for _, h := range rows {
 			health[h.OrderID] = h
@@ -1073,7 +1073,7 @@ func (app *Application) handleMarketWatch(w http.ResponseWriter, r *http.Request
 						ThresholdPct: threshold,
 						CreatedAt:    time.Now().UTC().Format(time.RFC3339),
 					}); err != nil {
-						log.Printf("market: watch upsert type %d for user %d: %v", typeID, userID, err)
+						logging.Errorf("market: watch upsert type %d for user %d: %v", typeID, userID, err)
 					}
 				}
 			case "remove":
@@ -1081,7 +1081,7 @@ func (app *Application) handleMarketWatch(w http.ResponseWriter, r *http.Request
 					if err := app.queries.DeleteWatchlistEntry(ctx, db.DeleteWatchlistEntryParams{
 						UserID: userID, TypeID: typeID, RegionID: regionID,
 					}); err != nil {
-						log.Printf("market: watch remove type %d for user %d: %v", typeID, userID, err)
+						logging.Errorf("market: watch remove type %d for user %d: %v", typeID, userID, err)
 					}
 				}
 			}

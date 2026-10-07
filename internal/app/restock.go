@@ -2,13 +2,13 @@ package app
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -61,7 +61,7 @@ func (app *Application) buildRestockView(ctx context.Context, r *http.Request) *
 
 	targets, err := app.queries.ListRestockTargets(ctx, userID)
 	if err != nil {
-		log.Printf("restock: list targets for user %d: %v", userID, err)
+		logging.Errorf("restock: list targets for user %d: %v", userID, err)
 		return view
 	}
 	if len(targets) == 0 {
@@ -150,7 +150,7 @@ func (app *Application) handleRestockSave(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		log.Printf("restock: parse save form: %v", err)
+		logging.Errorf("restock: parse save form: %v", err)
 		http.Redirect(w, r, "/market/restock/", http.StatusSeeOther)
 		return
 	}
@@ -167,7 +167,7 @@ func (app *Application) handleRestockSave(w http.ResponseWriter, r *http.Request
 		TargetQty:    targetQty,
 		MinMarginPct: marginPct,
 	}); err != nil {
-		log.Printf("restock: upsert target user %d type %d: %v", userID, typeID, err)
+		logging.Errorf("restock: upsert target user %d type %d: %v", userID, typeID, err)
 	}
 	http.Redirect(w, r, "/market/restock/", http.StatusSeeOther)
 }
@@ -189,7 +189,7 @@ func (app *Application) handleRestockDelete(w http.ResponseWriter, r *http.Reque
 			UserID: userID,
 			TypeID: typeID,
 		}); err != nil {
-			log.Printf("restock: delete target user %d type %d: %v", userID, typeID, err)
+			logging.Errorf("restock: delete target user %d type %d: %v", userID, typeID, err)
 		}
 	}
 	http.Redirect(w, r, "/market/restock/", http.StatusSeeOther)

@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -11,6 +10,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -137,7 +137,7 @@ func (app *Application) handleCharacters(w http.ResponseWriter, r *http.Request)
 
 	characters, err := app.queries.ListCharactersByUser(ctx, userID)
 	if err != nil {
-		log.Printf("characters: list for user %d: %v", userID, err)
+		logging.Errorf("characters: list for user %d: %v", userID, err)
 		data.Error = "Could not load your characters; check the server log."
 		app.render(ctx, w, http.StatusOK, "characters.html", data)
 		return
@@ -266,7 +266,7 @@ func (app *Application) handleCharacterTags(w http.ResponseWriter, r *http.Reque
 			CharacterID: characterID,
 			UserID:      userID,
 		}); err != nil {
-			log.Printf("characters: set tags for character %d: %v", characterID, err)
+			logging.Errorf("characters: set tags for character %d: %v", characterID, err)
 		}
 	}
 	http.Redirect(w, r, "/characters/", http.StatusSeeOther)
@@ -311,11 +311,11 @@ func (app *Application) handleCharacterUnlink(w http.ResponseWriter, r *http.Req
 		CharacterID: characterID,
 		UserID:      userID,
 	}); err != nil {
-		log.Printf("characters: unlink character %d for user %d: %v", characterID, userID, err)
+		logging.Errorf("characters: unlink character %d for user %d: %v", characterID, userID, err)
 		http.Redirect(w, r, "/characters/", http.StatusSeeOther)
 		return
 	}
-	log.Printf("characters: user %d unlinked character %d (tokens and snapshots deleted)", userID, characterID)
+	logging.Infof("characters: user %d unlinked character %d (tokens and snapshots deleted)", userID, characterID)
 
 	// Acting-character fallback: only when the removed character
 	// was the session's pick.

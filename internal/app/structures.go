@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"sort"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -77,7 +77,7 @@ func (app *Application) noteStructureIDs(ctx context.Context, ids ...int64) {
 			continue
 		}
 		if err := app.queries.UpsertStructureSeen(ctx, id); err != nil {
-			log.Printf("structures: note structure %d: %v", id, err)
+			logging.Errorf("structures: note structure %d: %v", id, err)
 		}
 	}
 }
@@ -110,7 +110,7 @@ func (app *Application) storeStructureName(ctx context.Context, structureID int6
 	if err := app.queries.SetStructureName(ctx, db.SetStructureNameParams{
 		StructureID: structureID, Name: name, State: state, ResolvedAt: stamp, Source: source,
 	}); err != nil {
-		log.Printf("worker: structures: store %s name for %d: %v", source, structureID, err)
+		logging.Errorf("worker: structures: store %s name for %d: %v", source, structureID, err)
 		return false
 	}
 	return true
@@ -130,7 +130,7 @@ func (app *Application) corpStructureIndex(ctx context.Context) corpStructureInd
 	idx := corpStructureIndex{names: map[int64]string{}, owner: map[int64]int64{}}
 	snaps, err := app.queries.ListSnapshotsByKind(ctx, esi.SnapCorpStructures)
 	if err != nil {
-		log.Printf("worker: structures: list corp structure snapshots: %v", err)
+		logging.Errorf("worker: structures: list corp structure snapshots: %v", err)
 		return idx
 	}
 	for _, snap := range snaps {
@@ -195,7 +195,7 @@ func (app *Application) resolveStructureNames(ctx context.Context, characters []
 		ResolutionLimit: maxStructureResolutionsPerCycle,
 	})
 	if err != nil {
-		log.Printf("worker: structures: list resolutions: %v", err)
+		logging.Errorf("worker: structures: list resolutions: %v", err)
 		return 0, false
 	}
 	if len(ids) == 0 {
@@ -228,7 +228,7 @@ idsLoop:
 			info, err := app.esi.FetchStructure(ctx, ch, id)
 			if err != nil {
 				if errors.Is(err, esi.ErrErrorLimit) {
-					log.Printf("worker: structures: ESI error limit hit resolving structure %d; backing off until next cycle", id)
+					logging.Warnf("worker: structures: ESI error limit hit resolving structure %d; backing off until next cycle", id)
 					return resolved, true
 				}
 				if code, has := esi.StatusCode(err); has && (code == 403 || code == 404) {
@@ -238,7 +238,7 @@ idsLoop:
 					negatives++
 					continue
 				}
-				log.Printf("worker: structures: resolve structure %d via character %d: %v", id, ch.CharacterID, err)
+				logging.Errorf("worker: structures: resolve structure %d via character %d: %v", id, ch.CharacterID, err)
 				continue
 			}
 			if info.Name == "" {
@@ -292,7 +292,7 @@ func (app *Application) persistStructureContexts(ctx context.Context, structures
 			TypeID:             s.TypeID,
 			UpdatedAt:          stamp,
 		}); err != nil {
-			log.Printf("structures: persist context for %d: %v", s.StructureID, err)
+			logging.Errorf("structures: persist context for %d: %v", s.StructureID, err)
 		}
 		if s.Name != "" {
 			if app.storeStructureName(ctx, s.StructureID, s.Name, esi.StructureResolved, esi.StructureSourceCorp, stamp) {

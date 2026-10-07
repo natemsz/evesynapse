@@ -11,7 +11,6 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -25,6 +24,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 //go:embed templates/*.html
@@ -194,10 +194,10 @@ func New(cfg Config) (*Application, error) {
 		return nil, cfg.signUp.err
 	}
 	if p := cfg.signUp; p.restricted() {
-		log.Printf("evesynapse: new accounts are limited to %d listed character(s), %d corporation(s) and %d alliance(s)",
+		logging.Infof("evesynapse: new accounts are limited to %d listed character(s), %d corporation(s) and %d alliance(s)",
 			len(p.characterIDs), len(p.corporationIDs), len(p.allianceIDs))
 	} else {
-		log.Printf("evesynapse: new accounts are open to anyone who can sign in with EVE (EVE_ALLOWED_*_IDS limits that)")
+		logging.Infof("evesynapse: new accounts are open to anyone who can sign in with EVE (EVE_ALLOWED_*_IDS limits that)")
 	}
 
 	dbConn, pool, err := openDB(context.Background(), cfg.databaseURL)
@@ -254,11 +254,11 @@ func New(cfg Config) (*Application, error) {
 		}
 		resp, err := loginHTTPClient.Do(req)
 		if err != nil {
-			log.Printf("evesynapse: WARNING EVE SSO discovery not reachable: %v", err)
+			logging.Warnf("evesynapse: EVE SSO discovery not reachable: %v", err)
 			return
 		}
 		defer resp.Body.Close()
-		log.Printf("evesynapse: EVE SSO discovery reachable (HTTP %d)", resp.StatusCode)
+		logging.Infof("evesynapse: EVE SSO discovery reachable (HTTP %d)", resp.StatusCode)
 	}()
 
 	return app, nil
@@ -628,12 +628,18 @@ func (app *Application) requireAdmin(next http.Handler) http.Handler {
 // requestLogger logs method, path, status and duration. The query string
 // is deliberately never logged: /auth/callback carries an OAuth
 // authorization code and error details that don't belong in logs.
+// A request the server itself failed (5xx) is logged as an error;
+// every other request, refusals included, is routine.
 func requestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 		next.ServeHTTP(ww, r)
-		log.Printf("%s %s -> %d (%s)", r.Method, r.URL.Path, ww.Status(),
+		logf := logging.Infof
+		if ww.Status() >= http.StatusInternalServerError {
+			logf = logging.Errorf
+		}
+		logf("%s %s -> %d (%s)", r.Method, r.URL.Path, ww.Status(),
 			time.Since(start).Round(time.Millisecond))
 	})
 }

@@ -29,7 +29,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"sort"
 	"strconv"
 	"sync"
@@ -38,6 +37,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 const (
@@ -149,13 +149,13 @@ func (app *Application) advanceRegionSweep(ctx context.Context, regionID int64, 
 		if err := app.queries.InsertMarketSweepState(ctx, db.InsertMarketSweepStateParams{
 			RegionID: regionID, StartedAt: now, UpdatedAt: now,
 		}); err != nil {
-			log.Printf("worker: region sweep: start %s: %v", marketRegionLabel(regionID), err)
+			logging.Errorf("worker: region sweep: start %s: %v", marketRegionLabel(regionID), err)
 			return out
 		}
 		state = db.MarketSweepState{RegionID: regionID, NextPage: 1, StartedAt: now, UpdatedAt: now}
-		log.Printf("worker: region sweep: starting %s (%d)", marketRegionLabel(regionID), regionID)
+		logging.Infof("worker: region sweep: starting %s (%d)", marketRegionLabel(regionID), regionID)
 	case err != nil:
-		log.Printf("worker: region sweep: read %s sweep state: %v", marketRegionLabel(regionID), err)
+		logging.Errorf("worker: region sweep: read %s sweep state: %v", marketRegionLabel(regionID), err)
 		return out
 	}
 
@@ -178,14 +178,14 @@ func (app *Application) advanceRegionSweep(ctx context.Context, regionID int64, 
 		if err != nil {
 			if errors.Is(err, esi.ErrErrorLimit) {
 				limitHit.Store(true)
-				log.Printf("worker: region sweep: %s cut short by ESI error limit on page %d", marketRegionLabel(regionID), state.NextPage)
+				logging.Warnf("worker: region sweep: %s cut short by ESI error limit on page %d", marketRegionLabel(regionID), state.NextPage)
 				out.limited = true
 				return out
 			}
 			// Transient failure: the staged pages and the
 			// cursor stay put, and this page is retried next
 			// cycle; nothing was stored.
-			log.Printf("worker: region sweep: %s page %d unavailable: %v", marketRegionLabel(regionID), state.NextPage, err)
+			logging.Warnf("worker: region sweep: %s page %d unavailable: %v", marketRegionLabel(regionID), state.NextPage, err)
 			break
 		}
 		if int64(totalPages) > state.PagesTotal {
@@ -193,7 +193,7 @@ func (app *Application) advanceRegionSweep(ctx context.Context, regionID int64, 
 		}
 		state.NextPage++
 		if err := app.stageSweepPage(ctx, state, orders); err != nil {
-			log.Printf("worker: region sweep: stage %s page %d: %v", marketRegionLabel(regionID), state.NextPage-1, err)
+			logging.Errorf("worker: region sweep: stage %s page %d: %v", marketRegionLabel(regionID), state.NextPage-1, err)
 			break
 		}
 		out.pages++
@@ -201,7 +201,7 @@ func (app *Application) advanceRegionSweep(ctx context.Context, regionID int64, 
 			break
 		}
 		if state.NextPage > maxRegionSweepPagesTotal {
-			log.Printf("worker: region sweep: %s passed the %d-page safety stop; storing what was read", marketRegionLabel(regionID), maxRegionSweepPagesTotal)
+			logging.Warnf("worker: region sweep: %s passed the %d-page safety stop; storing what was read", marketRegionLabel(regionID), maxRegionSweepPagesTotal)
 			break
 		}
 	}
@@ -259,10 +259,10 @@ func (app *Application) stageSweepPage(ctx context.Context, state db.MarketSweep
 func (app *Application) completeRegionSweep(ctx context.Context, state db.MarketSweepState) {
 	types, stations, err := app.storeRegionSweep(ctx, state.RegionID)
 	if err != nil {
-		log.Printf("worker: region sweep: store %s: %v", marketRegionLabel(state.RegionID), err)
+		logging.Errorf("worker: region sweep: store %s: %v", marketRegionLabel(state.RegionID), err)
 		return
 	}
-	log.Printf("worker: region sweep: %s done: %d types, %d station rows over %d pages", marketRegionLabel(state.RegionID), types, stations, state.NextPage-1)
+	logging.Infof("worker: region sweep: %s done: %d types, %d station rows over %d pages", marketRegionLabel(state.RegionID), types, stations, state.NextPage-1)
 }
 
 // fetchRegionBookPage reads one page of a region's whole book
@@ -537,7 +537,7 @@ func (app *Application) attachRegionStats(ctx context.Context, item *marketItem)
 	}
 	byRegion := make(map[int64]db.MarketRegionStat)
 	if rows, err := app.queries.ListMarketRegionStatsByType(ctx, item.TypeID); err != nil {
-		log.Printf("market: region stats for type %d: %v", item.TypeID, err)
+		logging.Errorf("market: region stats for type %d: %v", item.TypeID, err)
 	} else {
 		for _, row := range rows {
 			byRegion[row.RegionID] = row

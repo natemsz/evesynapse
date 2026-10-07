@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"log"
 	"net/http"
 	"regexp"
 	"sort"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // corpView is one corporation block on the Corporation page. All
@@ -71,7 +71,7 @@ func (app *Application) corporation(ctx context.Context, corpID int64) (corpView
 	view, expiresAt, err := app.fetchCorporation(ctx, corpID)
 	if err != nil {
 		if ok {
-			log.Printf("corporations: refresh corporation %d failed (%v); serving stale entry", corpID, err)
+			logging.Warnf("corporations: refresh corporation %d failed (%v); serving stale entry", corpID, err)
 			return entry.view, nil
 		}
 		return corpView{}, err
@@ -124,7 +124,7 @@ func (app *Application) fetchCorporation(ctx context.Context, corpID int64) (cor
 		if err := app.esi.Get(ctx, "", fmt.Sprintf("/characters/%d/", corp.CEOID), &ceo); err == nil {
 			view.CEOName = ceo.Name
 		} else {
-			log.Printf("corporations: CEO lookup for corporation %d: %v", corpID, err)
+			logging.Errorf("corporations: CEO lookup for corporation %d: %v", corpID, err)
 		}
 	}
 
@@ -138,7 +138,7 @@ func (app *Application) fetchCorporation(ctx context.Context, corpID int64) (cor
 				view.Alliance = ally.Name
 			}
 		} else {
-			log.Printf("corporations: alliance lookup %d for corporation %d: %v", corp.AllianceID, corpID, err)
+			logging.Errorf("corporations: alliance lookup %d for corporation %d: %v", corp.AllianceID, corpID, err)
 		}
 	}
 
@@ -147,7 +147,7 @@ func (app *Application) fetchCorporation(ctx context.Context, corpID int64) (cor
 		if err := app.esi.Get(ctx, "", fmt.Sprintf("/universe/stations/%d/", corp.HomeStationID), &station); err == nil {
 			view.HomeStation = station.Name
 		} else {
-			log.Printf("corporations: station lookup %d for corporation %d: %v", corp.HomeStationID, corpID, err)
+			logging.Errorf("corporations: station lookup %d for corporation %d: %v", corp.HomeStationID, corpID, err)
 		}
 	}
 
@@ -192,7 +192,7 @@ func (app *Application) handleCorporations(w http.ResponseWriter, r *http.Reques
 
 	characters, err := app.queries.ListCharactersByUser(ctx, userID)
 	if err != nil {
-		log.Printf("corporations: list characters for user %d: %v", userID, err)
+		logging.Errorf("corporations: list characters for user %d: %v", userID, err)
 		data.Error = "Could not load corporation data; check the server log."
 		app.render(ctx, w, http.StatusOK, "corporations.html", data)
 		return
@@ -223,7 +223,7 @@ func (app *Application) handleCorporations(w http.ResponseWriter, r *http.Reques
 	for corpID, chars := range byCorp {
 		view, err := app.corporation(ctx, corpID)
 		if err != nil {
-			log.Printf("corporations: build corporation %d: %v", corpID, err)
+			logging.Errorf("corporations: build corporation %d: %v", corpID, err)
 			continue
 		}
 		sort.Slice(chars, func(i, j int) bool { return chars[i].Name < chars[j].Name })

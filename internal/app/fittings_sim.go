@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"math"
 	"net/http"
 	"regexp"
@@ -16,6 +15,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -838,7 +838,7 @@ func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotI
 	typeIDs = append(typeIDs, implantIDs...)
 	snap, err := loadFitSnapshot(ctx, app.queries, typeIDs)
 	if err != nil {
-		log.Printf("fittings sim: load snapshot for ship %d: %v", doc.ShipTypeID, err)
+		logging.Errorf("fittings sim: load snapshot for ship %d: %v", doc.ShipTypeID, err)
 		view.DataNote = "Something went wrong reading the ship data — check the server log."
 		return view
 	}
@@ -1088,7 +1088,7 @@ func fitBuildGroups(res *fitResult, doc *fitDoc, snap *fitSnapshot, familyOf map
 func (app *Application) fitChargeCandidates(ctx context.Context, weaponTypeID int64) []db.ListFitChargeTypesRow {
 	attrs, err := app.queries.ListSDETypeAttributes(ctx, weaponTypeID)
 	if err != nil {
-		log.Printf("fittings sim: weapon %d attributes: %v", weaponTypeID, err)
+		logging.Errorf("fittings sim: weapon %d attributes: %v", weaponTypeID, err)
 		return nil
 	}
 	var groups []int64
@@ -1112,7 +1112,7 @@ func (app *Application) fitChargeCandidates(ctx context.Context, weaponTypeID in
 		GroupIds: groups, ChargeSize: size,
 	})
 	if err != nil {
-		log.Printf("fittings sim: charge candidates for %d: %v", weaponTypeID, err)
+		logging.Errorf("fittings sim: charge candidates for %d: %v", weaponTypeID, err)
 		return nil
 	}
 	return rows
@@ -1496,7 +1496,7 @@ func (app *Application) fitPilotLabel(ctx context.Context, userID, pilotID int64
 	}
 	chars, err := app.queries.ListCharactersByUser(ctx, userID)
 	if err != nil {
-		log.Printf("fittings sim: list characters for user %d: %v", userID, err)
+		logging.Errorf("fittings sim: list characters for user %d: %v", userID, err)
 		return "", false
 	}
 	for _, ch := range chars {
@@ -1540,7 +1540,7 @@ func (app *Application) handleFitPickerJSON(w http.ResponseWriter, r *http.Reque
 		for round := 0; round < 4 && len(pending) > 0; round++ {
 			batch, err := app.queries.ListSDERequirementsByTypes(ctx, pending)
 			if err != nil {
-				log.Printf("fittings picker: requirements: %v", err)
+				logging.Errorf("fittings picker: requirements: %v", err)
 				return rows
 			}
 			var next []int64
@@ -1600,7 +1600,7 @@ func (app *Application) handleFitPickerJSON(w http.ResponseWriter, r *http.Reque
 			EffectID: effectID, Q: query, Lim: lim, Meta: meta,
 		})
 		if err != nil {
-			log.Printf("fittings picker: family %s: %v", family, err)
+			logging.Errorf("fittings picker: family %s: %v", family, err)
 			return nil
 		}
 		out := make([]suggestItem, 0, len(rows))
@@ -1621,7 +1621,7 @@ func (app *Application) handleFitPickerJSON(w http.ResponseWriter, r *http.Reque
 				out = append(out, suggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "ship"})
 			}
 		} else {
-			log.Printf("fittings picker: ships: %v", err)
+			logging.Errorf("fittings picker: ships: %v", err)
 		}
 		for _, sk := range slotKinds {
 			out = append(out, querySlotFamily(sk.family, sk.kind, sk.lim)...)
@@ -1631,12 +1631,12 @@ func (app *Application) handleFitPickerJSON(w http.ResponseWriter, r *http.Reque
 				out = append(out, suggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "drone"})
 			}
 		} else {
-			log.Printf("fittings picker: drones: %v", err)
+			logging.Errorf("fittings picker: drones: %v", err)
 		}
 	case family == "ship":
 		rows, err := app.queries.SuggestSDEShips(ctx, db.SuggestSDEShipsParams{Q: query, Lim: 12})
 		if err != nil {
-			log.Printf("fittings picker: ships: %v", err)
+			logging.Errorf("fittings picker: ships: %v", err)
 			break
 		}
 		for _, row := range rows {
@@ -1645,7 +1645,7 @@ func (app *Application) handleFitPickerJSON(w http.ResponseWriter, r *http.Reque
 	case family == fitFamilyDrone:
 		rows, err := app.queries.ListFitDroneTypes(ctx, db.ListFitDroneTypesParams{Q: query, Lim: 25, Meta: meta})
 		if err != nil {
-			log.Printf("fittings picker: drones: %v", err)
+			logging.Errorf("fittings picker: drones: %v", err)
 			break
 		}
 		for _, row := range rows {
@@ -1762,7 +1762,7 @@ func (app *Application) handleFitSave(w http.ResponseWriter, r *http.Request) {
 			Name: name, ShipTypeID: req.Fit.ShipTypeID, ItemsJson: string(raw),
 			IsPublic: isPublic, IsDraft: isDraft, UpdatedAt: now, ID: id, UserID: userID,
 		}); err != nil {
-			log.Printf("fittings save: update %d: %v", id, err)
+			logging.Errorf("fittings save: update %d: %v", id, err)
 			http.Error(w, "That fitting couldn't be saved.", http.StatusInternalServerError)
 			return
 		}
@@ -1774,7 +1774,7 @@ func (app *Application) handleFitSave(w http.ResponseWriter, r *http.Request) {
 			Name: name, ShipTypeID: req.Fit.ShipTypeID, ItemsJson: string(raw),
 			IsPublic: false, IsDraft: true, UpdatedAt: now, ID: id, UserID: userID,
 		}); err != nil {
-			log.Printf("fittings save: update draft %d: %v", id, err)
+			logging.Errorf("fittings save: update draft %d: %v", id, err)
 			http.Error(w, "That fitting couldn't be saved.", http.StatusInternalServerError)
 			return
 		}
@@ -1790,7 +1790,7 @@ func (app *Application) handleFitSave(w http.ResponseWriter, r *http.Request) {
 			CreatedAt: now, UpdatedAt: now,
 		})
 		if err != nil {
-			log.Printf("fittings save: create: %v", err)
+			logging.Errorf("fittings save: create: %v", err)
 			http.Error(w, "That fitting couldn't be saved.", http.StatusInternalServerError)
 			return
 		}
@@ -1958,7 +1958,7 @@ func (app *Application) handleFitSaveToEVE(w http.ResponseWriter, r *http.Reques
 
 	snap, err := loadFitSnapshot(ctx, app.queries, fitDocTypeIDs(&req.fitDoc))
 	if err != nil {
-		log.Printf("fittings save-to-eve: snapshot: %v", err)
+		logging.Errorf("fittings save-to-eve: snapshot: %v", err)
 		fail("Could not read the module data; try again.", false)
 		return
 	}
@@ -1979,7 +1979,7 @@ func (app *Application) handleFitSaveToEVE(w http.ResponseWriter, r *http.Reques
 	}
 	token, err := app.validAccessToken(ctx, ch)
 	if err != nil {
-		log.Printf("fittings save-to-eve: token for character %d: %v", req.CharacterID, err)
+		logging.Errorf("fittings save-to-eve: token for character %d: %v", req.CharacterID, err)
 		fail("Could not reach EVE for "+charName+". Sign in again if it keeps failing.", true)
 		return
 	}
@@ -1993,7 +1993,7 @@ func (app *Application) handleFitSaveToEVE(w http.ResponseWriter, r *http.Reques
 			fail(charName+" was linked before EveSynapse asked for fitting write access — sign in again to grant it, then save once more.", true)
 			return
 		}
-		log.Printf("fittings save-to-eve: ESI POST %s: %v", path, err)
+		logging.Errorf("fittings save-to-eve: ESI POST %s: %v", path, err)
 		fail("EVE refused the fitting ("+esiSaveToEVEHint(err)+").", false)
 		return
 	}
@@ -2001,7 +2001,7 @@ func (app *Application) handleFitSaveToEVE(w http.ResponseWriter, r *http.Reques
 	// Refresh the cached fittings so the new fit shows up in the
 	// list without waiting for the next worker cycle.
 	if _, ferr := app.esi.FetchAndStoreSnapshot(ctx, ch, esi.SnapFittings); ferr != nil {
-		log.Printf("fittings save-to-eve: refetch fittings for character %d: %v", req.CharacterID, ferr)
+		logging.Errorf("fittings save-to-eve: refetch fittings for character %d: %v", req.CharacterID, ferr)
 	}
 	writeFitJSON(w, map[string]any{
 		"ok": true, "fittingId": created.FittingID, "name": name, "characterId": req.CharacterID,
@@ -2019,7 +2019,7 @@ func (app *Application) handleFitDelete(w http.ResponseWriter, r *http.Request) 
 	if err := r.ParseForm(); err == nil {
 		if id, perr := strconv.ParseInt(r.FormValue("id"), 10, 64); perr == nil && id > 0 {
 			if err := app.queries.DeleteLocalFitting(ctx, db.DeleteLocalFittingParams{ID: id, UserID: userID}); err != nil {
-				log.Printf("fittings delete: %d: %v", id, err)
+				logging.Errorf("fittings delete: %d: %v", id, err)
 			}
 		}
 	}
@@ -2056,7 +2056,7 @@ func (app *Application) handleFitMineJSON(w http.ResponseWriter, r *http.Request
 	}
 	rows, err := app.queries.SearchLocalFittings(ctx, db.SearchLocalFittingsParams{UserID: userID, Q: q})
 	if err != nil {
-		log.Printf("fittings mine search: %v", err)
+		logging.Errorf("fittings mine search: %v", err)
 		http.Error(w, "That search couldn't run.", http.StatusInternalServerError)
 		return
 	}
@@ -2090,7 +2090,7 @@ func (app *Application) handleFitMineJSON(w http.ResponseWriter, r *http.Request
 	if r.URL.Query().Get("community") == "1" {
 		pub, err := app.queries.SearchPublicFittings(ctx, db.SearchPublicFittingsParams{UserID: userID, Q: q})
 		if err != nil {
-			log.Printf("fittings community search: %v", err)
+			logging.Errorf("fittings community search: %v", err)
 		} else {
 			for _, row := range pub {
 				author := ""
@@ -2170,7 +2170,7 @@ func (app *Application) handleFitFork(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
-		log.Printf("fittings fork %d: %v", req.ID, err)
+		logging.Errorf("fittings fork %d: %v", req.ID, err)
 		http.Error(w, "That fit couldn't be copied.", http.StatusInternalServerError)
 		return
 	}
@@ -2304,7 +2304,7 @@ func (app *Application) attachFitEditor(ctx context.Context, r *http.Request, da
 func (app *Application) listLocalFitEntries(ctx context.Context, userID int64) []localFitEntry {
 	rows, err := app.queries.ListLocalFittings(ctx, userID)
 	if err != nil {
-		log.Printf("fittings: list local fits: %v", err)
+		logging.Errorf("fittings: list local fits: %v", err)
 		return nil
 	}
 	shipIDs := make([]int64, 0, len(rows))

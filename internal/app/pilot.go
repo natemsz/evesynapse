@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -15,6 +14,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -170,11 +170,11 @@ func (app *Application) loadPilotView(ctx context.Context, id int64) *pilotView 
 		} else {
 			// Corrupt payload: requeue rather than strand the
 			// page on the loading state forever.
-			log.Printf("pilot: unreadable payload for %d; requeueing", id)
+			logging.Warnf("pilot: unreadable payload for %d; requeueing", id)
 			if serr := app.queries.SetPilotRecord(ctx, db.SetPilotRecordParams{
 				CharacterID: id, Payload: "", State: pilotStatePending, FetchedAt: "",
 			}); serr != nil {
-				log.Printf("pilot: requeue %d: %v", id, serr)
+				logging.Errorf("pilot: requeue %d: %v", id, serr)
 			}
 		}
 	case err == nil && rec.State == pilotStateMissing:
@@ -183,7 +183,7 @@ func (app *Application) loadPilotView(ctx context.Context, id int64) *pilotView 
 		// No record yet, a pending one, or a read error: (re)note
 		// the want so the worker fills it on a coming cycle.
 		if qerr := app.queries.UpsertPilotWant(ctx, id); qerr != nil {
-			log.Printf("pilot: note want for %d: %v", id, qerr)
+			logging.Errorf("pilot: note want for %d: %v", id, qerr)
 		}
 	}
 
@@ -261,7 +261,7 @@ func (app *Application) refreshPilotRecords(ctx context.Context, allowance *fetc
 		DrainLimit:  maxPilotDrainsPerCycle,
 	})
 	if err != nil {
-		log.Printf("worker: pilot records: list drains: %v", err)
+		logging.Errorf("worker: pilot records: list drains: %v", err)
 		return 0, false
 	}
 	for _, id := range ids {
@@ -304,7 +304,7 @@ func (app *Application) drainPilotNameWants(ctx context.Context, allowance *fetc
 		Now: stamp, Lim: maxPilotNameResolutions,
 	})
 	if err != nil {
-		log.Printf("worker: pilot name wants: list due: %v", err)
+		logging.Errorf("worker: pilot name wants: list due: %v", err)
 		return 0, false
 	}
 	for _, want := range wants {
@@ -314,7 +314,7 @@ func (app *Application) drainPilotNameWants(ctx context.Context, allowance *fetc
 		var ids esi.UniverseIDs
 		err := app.esi.PostJSON(ctx, "/universe/ids/", []string{want.DisplayName}, &ids)
 		if errors.Is(err, esi.ErrErrorLimit) {
-			log.Printf("worker: pilot name wants: ESI error limit resolving %q; backing off", want.DisplayName)
+			logging.Warnf("worker: pilot name wants: ESI error limit resolving %q; backing off", want.DisplayName)
 			return resolved, true
 		}
 		if err != nil {
@@ -322,7 +322,7 @@ func (app *Application) drainPilotNameWants(ctx context.Context, allowance *fetc
 				if serr := app.queries.SetPilotNameWantMissing(ctx, db.SetPilotNameWantMissingParams{
 					ResolvedAt: stamp, NormalizedName: want.NormalizedName,
 				}); serr != nil {
-					log.Printf("worker: pilot name wants: settle miss %q: %v", want.DisplayName, serr)
+					logging.Errorf("worker: pilot name wants: settle miss %q: %v", want.DisplayName, serr)
 					continue
 				}
 				resolved++
@@ -333,9 +333,9 @@ func (app *Application) drainPilotNameWants(ctx context.Context, allowance *fetc
 				NextTryAt:      now.Add(pilotNameWantRetryDelay).Format(time.RFC3339),
 				NormalizedName: want.NormalizedName,
 			}); serr != nil {
-				log.Printf("worker: pilot name wants: record error %q: %v", want.DisplayName, serr)
+				logging.Errorf("worker: pilot name wants: record error %q: %v", want.DisplayName, serr)
 			}
-			log.Printf("worker: pilot name wants: resolve %q: %v", want.DisplayName, err)
+			logging.Errorf("worker: pilot name wants: resolve %q: %v", want.DisplayName, err)
 			continue
 		}
 		var match *esi.UniverseIDEntry
@@ -349,7 +349,7 @@ func (app *Application) drainPilotNameWants(ctx context.Context, allowance *fetc
 			if serr := app.queries.SetPilotNameWantMissing(ctx, db.SetPilotNameWantMissingParams{
 				ResolvedAt: stamp, NormalizedName: want.NormalizedName,
 			}); serr != nil {
-				log.Printf("worker: pilot name wants: settle miss %q: %v", want.DisplayName, serr)
+				logging.Errorf("worker: pilot name wants: settle miss %q: %v", want.DisplayName, serr)
 				continue
 			}
 			resolved++
@@ -357,13 +357,13 @@ func (app *Application) drainPilotNameWants(ctx context.Context, allowance *fetc
 		}
 		app.esi.StoreCharacterName(match.ID, match.Name)
 		if qerr := app.queries.UpsertPilotWant(ctx, match.ID); qerr != nil {
-			log.Printf("worker: pilot name wants: queue pilot %d for %q: %v", match.ID, want.DisplayName, qerr)
+			logging.Errorf("worker: pilot name wants: queue pilot %d for %q: %v", match.ID, want.DisplayName, qerr)
 			continue
 		}
 		if serr := app.queries.SetPilotNameWantReady(ctx, db.SetPilotNameWantReadyParams{
 			CharacterID: match.ID, ResolvedAt: stamp, NormalizedName: want.NormalizedName,
 		}); serr != nil {
-			log.Printf("worker: pilot name wants: settle %q: %v", want.DisplayName, serr)
+			logging.Errorf("worker: pilot name wants: settle %q: %v", want.DisplayName, serr)
 			continue
 		}
 		resolved++
@@ -383,19 +383,19 @@ func (app *Application) drainPilotRecord(ctx context.Context, id int64, allowanc
 	var profile esi.Character
 	if err := app.esi.Get(ctx, "", fmt.Sprintf("/characters/%d/", id), &profile); err != nil {
 		if errors.Is(err, esi.ErrErrorLimit) {
-			log.Printf("worker: pilot records: ESI error limit hit resolving pilot %d; backing off until next cycle", id)
+			logging.Warnf("worker: pilot records: ESI error limit hit resolving pilot %d; backing off until next cycle", id)
 			return false, true
 		}
 		if code, has := esi.StatusCode(err); has && code == http.StatusNotFound {
 			if serr := app.queries.SetPilotRecord(ctx, db.SetPilotRecordParams{
 				CharacterID: id, Payload: "", State: pilotStateMissing, FetchedAt: stamp,
 			}); serr != nil {
-				log.Printf("worker: pilot records: record miss for %d: %v", id, serr)
+				logging.Errorf("worker: pilot records: record miss for %d: %v", id, serr)
 				return false, false
 			}
 			return true, false
 		}
-		log.Printf("worker: pilot records: fetch profile %d: %v", id, err)
+		logging.Errorf("worker: pilot records: fetch profile %d: %v", id, err)
 		return false, false
 	}
 	app.esi.StoreCharacterName(id, profile.Name)
@@ -406,12 +406,12 @@ func (app *Application) drainPilotRecord(ctx context.Context, id int64, allowanc
 	history := esi.CorpHistory{}
 	if err := app.esi.Get(ctx, "", fmt.Sprintf("/characters/%d/corporationhistory/", id), &history); err != nil {
 		if errors.Is(err, esi.ErrErrorLimit) {
-			log.Printf("worker: pilot records: ESI error limit hit fetching history for %d; backing off until next cycle", id)
+			logging.Warnf("worker: pilot records: ESI error limit hit fetching history for %d; backing off until next cycle", id)
 			return false, true
 		}
 		// History failing is not fatal to the record: store the
 		// profile with whatever history we could not get as empty.
-		log.Printf("worker: pilot records: fetch history %d: %v (storing profile only)", id, err)
+		logging.Warnf("worker: pilot records: fetch history %d: %v (storing profile only)", id, err)
 		history = esi.CorpHistory{}
 	}
 
@@ -425,7 +425,7 @@ func (app *Application) drainPilotRecord(ctx context.Context, id int64, allowanc
 			if errors.Is(err, esi.ErrErrorLimit) {
 				return false, true
 			}
-			log.Printf("worker: pilot records: fetch corp %d for pilot %d: %v", profile.CorporationID, id, err)
+			logging.Errorf("worker: pilot records: fetch corp %d for pilot %d: %v", profile.CorporationID, id, err)
 		} else {
 			payload.Corp = corp
 			app.esi.StoreCorpName(profile.CorporationID, corp.Name)
@@ -437,7 +437,7 @@ func (app *Application) drainPilotRecord(ctx context.Context, id int64, allowanc
 			if errors.Is(err, esi.ErrErrorLimit) {
 				return false, true
 			}
-			log.Printf("worker: pilot records: fetch alliance %d for pilot %d: %v", profile.AllianceID, id, err)
+			logging.Errorf("worker: pilot records: fetch alliance %d for pilot %d: %v", profile.AllianceID, id, err)
 		} else {
 			payload.Alliance = alliance
 			app.esi.StoreAllianceName(profile.AllianceID, alliance.Name)
@@ -449,7 +449,7 @@ func (app *Application) drainPilotRecord(ctx context.Context, id int64, allowanc
 			if errors.Is(err, esi.ErrErrorLimit) {
 				return false, true
 			}
-			log.Printf("worker: pilot records: fetch factions for pilot %d: %v", id, err)
+			logging.Errorf("worker: pilot records: fetch factions for pilot %d: %v", id, err)
 		} else {
 			for _, f := range factions {
 				if f.FactionID == profile.FactionID {
@@ -481,7 +481,7 @@ func (app *Application) drainPilotRecord(ctx context.Context, id int64, allowanc
 				if errors.Is(err, esi.ErrErrorLimit) {
 					return false, true
 				}
-				log.Printf("worker: pilot records: fetch history corp %d for pilot %d: %v", stint.CorporationID, id, err)
+				logging.Errorf("worker: pilot records: fetch history corp %d for pilot %d: %v", stint.CorporationID, id, err)
 			} else {
 				row.CorpName = corp.Name
 				app.esi.StoreCorpName(stint.CorporationID, corp.Name)
@@ -492,13 +492,13 @@ func (app *Application) drainPilotRecord(ctx context.Context, id int64, allowanc
 
 	encoded, err := json.Marshal(payload)
 	if err != nil {
-		log.Printf("worker: pilot records: encode payload for %d: %v", id, err)
+		logging.Errorf("worker: pilot records: encode payload for %d: %v", id, err)
 		return false, false
 	}
 	if err := app.queries.SetPilotRecord(ctx, db.SetPilotRecordParams{
 		CharacterID: id, Payload: string(encoded), State: pilotStateReady, FetchedAt: stamp,
 	}); err != nil {
-		log.Printf("worker: pilot records: store record for %d: %v", id, err)
+		logging.Errorf("worker: pilot records: store record for %d: %v", id, err)
 		return false, false
 	}
 	return true, false
@@ -516,7 +516,7 @@ func (app *Application) refreshTypeDetails(ctx context.Context, allowance *fetch
 	stamp := time.Now().UTC().Format(time.RFC3339)
 	ids, err := app.queries.ListTypeDetailWants(ctx, maxTypeDetailsPerCycle)
 	if err != nil {
-		log.Printf("worker: type details: list wants: %v", err)
+		logging.Errorf("worker: type details: list wants: %v", err)
 		return 0, false
 	}
 	for _, id := range ids {
@@ -546,24 +546,24 @@ func (app *Application) fetchOneTypeDetail(ctx context.Context, id int64, stamp 
 		if serr := app.queries.SetTypeDetail(ctx, db.SetTypeDetailParams{
 			TypeID: id, Description: t.Description, FetchedAt: stamp,
 		}); serr != nil {
-			log.Printf("worker: type details: store %d: %v", id, serr)
+			logging.Errorf("worker: type details: store %d: %v", id, serr)
 			return false, false
 		}
 		return true, false
 	case errors.Is(err, esi.ErrErrorLimit):
-		log.Printf("worker: type details: ESI error limit hit fetching type %d; backing off", id)
+		logging.Warnf("worker: type details: ESI error limit hit fetching type %d; backing off", id)
 		return false, true
 	default:
 		if code, has := esi.StatusCode(err); has && code == http.StatusNotFound {
 			if serr := app.queries.SetTypeDetail(ctx, db.SetTypeDetailParams{
 				TypeID: id, Description: "", FetchedAt: stamp,
 			}); serr != nil {
-				log.Printf("worker: type details: settle miss %d: %v", id, serr)
+				logging.Errorf("worker: type details: settle miss %d: %v", id, serr)
 				return false, false
 			}
 			return true, false
 		}
-		log.Printf("worker: type details: fetch type %d: %v", id, err)
+		logging.Errorf("worker: type details: fetch type %d: %v", id, err)
 		return false, false
 	}
 }
@@ -598,7 +598,7 @@ func loadSnapshot[T any](app *Application, ctx context.Context, characterID int6
 func (app *Application) notePilotOrbit(ctx context.Context) {
 	characters, err := app.queries.ListAllCharacters(ctx)
 	if err != nil {
-		log.Printf("worker: pilot orbit: list characters: %v", err)
+		logging.Errorf("worker: pilot orbit: list characters: %v", err)
 		return
 	}
 	own := make(map[int64]bool, len(characters))
@@ -608,7 +608,7 @@ func (app *Application) notePilotOrbit(ctx context.Context) {
 	have := make(map[int64]bool)
 	recorded, err := app.queries.ListPilotRecordIDs(ctx)
 	if err != nil {
-		log.Printf("worker: pilot orbit: list records: %v", err)
+		logging.Errorf("worker: pilot orbit: list records: %v", err)
 		return
 	}
 	for _, id := range recorded {
@@ -633,13 +633,13 @@ func (app *Application) notePilotOrbit(ctx context.Context) {
 			break
 		}
 		if err := app.queries.InsertPilotOrbitWant(ctx, id); err != nil {
-			log.Printf("worker: pilot orbit: note %d: %v", id, err)
+			logging.Errorf("worker: pilot orbit: note %d: %v", id, err)
 			continue
 		}
 		noted++
 	}
 	if noted > 0 {
-		log.Printf("worker: pilot orbit: noted %d new counterparty records", noted)
+		logging.Infof("worker: pilot orbit: noted %d new counterparty records", noted)
 	}
 }
 

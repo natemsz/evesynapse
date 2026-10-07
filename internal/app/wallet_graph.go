@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"sort"
 	"strings"
@@ -12,6 +11,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -314,7 +314,7 @@ func (app *Application) attachWalletGraph(ctx context.Context, userID, character
 	if rows, err := app.queries.ListWalletHistorySamples(ctx, db.ListWalletHistorySamplesParams{
 		UserID: userID, CharacterID: characterID,
 	}); err != nil {
-		log.Printf("wallet graph: samples for character %d: %v", characterID, err)
+		logging.Errorf("wallet graph: samples for character %d: %v", characterID, err)
 	} else {
 		samples = rows
 	}
@@ -369,7 +369,7 @@ func (app *Application) attachWalletGraph(ctx context.Context, userID, character
 func (app *Application) attachNetWorthHistory(ctx context.Context, w *netWorthWidget, userID int64) {
 	rows, err := app.queries.ListUserWalletHistory(ctx, userID)
 	if err != nil {
-		log.Printf("net worth history for user %d: %v", userID, err)
+		logging.Errorf("net worth history for user %d: %v", userID, err)
 		return
 	}
 	points := netWorthHistoryPoints(rows)

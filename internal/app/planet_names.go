@@ -3,12 +3,12 @@ package app
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -48,7 +48,7 @@ func (app *Application) notePlanetIDs(ctx context.Context, ids ...int64) {
 			continue
 		}
 		if err := app.queries.UpsertPlanetSeen(ctx, id); err != nil {
-			log.Printf("planets: note planet %d: %v", id, err)
+			logging.Errorf("planets: note planet %d: %v", id, err)
 		}
 	}
 }
@@ -68,7 +68,7 @@ func (app *Application) resolvePlanetNames(ctx context.Context, allowance *fetch
 		ResolutionLimit: maxPlanetResolutionsPerCycle,
 	})
 	if err != nil {
-		log.Printf("worker: planets: list resolutions: %v", err)
+		logging.Errorf("worker: planets: list resolutions: %v", err)
 		return 0, false
 	}
 	stamp := now.Format(time.RFC3339)
@@ -82,7 +82,7 @@ func (app *Application) resolvePlanetNames(ctx context.Context, allowance *fetch
 			if serr := app.queries.SetPlanetName(ctx, db.SetPlanetNameParams{
 				PlanetID: id, Name: name, State: esi.PlanetResolved, ResolvedAt: stamp,
 			}); serr != nil {
-				log.Printf("worker: planets: persist cached name for %d: %v", id, serr)
+				logging.Errorf("worker: planets: persist cached name for %d: %v", id, serr)
 			} else {
 				resolved++
 			}
@@ -94,7 +94,7 @@ func (app *Application) resolvePlanetNames(ctx context.Context, allowance *fetch
 		planet, err := app.esi.FetchPlanet(ctx, id)
 		if err != nil {
 			if errors.Is(err, esi.ErrErrorLimit) {
-				log.Printf("worker: planets: ESI error limit hit resolving planet %d; backing off until next cycle", id)
+				logging.Warnf("worker: planets: ESI error limit hit resolving planet %d; backing off until next cycle", id)
 				return resolved, true
 			}
 			if code, has := esi.StatusCode(err); has && code == http.StatusNotFound {
@@ -103,11 +103,11 @@ func (app *Application) resolvePlanetNames(ctx context.Context, allowance *fetch
 				if serr := app.queries.SetPlanetName(ctx, db.SetPlanetNameParams{
 					PlanetID: id, Name: "", State: esi.PlanetMissing, ResolvedAt: stamp,
 				}); serr != nil {
-					log.Printf("worker: planets: record miss for %d: %v", id, serr)
+					logging.Errorf("worker: planets: record miss for %d: %v", id, serr)
 				}
 				continue
 			}
-			log.Printf("worker: planets: resolve planet %d: %v", id, err)
+			logging.Errorf("worker: planets: resolve planet %d: %v", id, err)
 			continue
 		}
 		if planet.Name == "" {
@@ -116,7 +116,7 @@ func (app *Application) resolvePlanetNames(ctx context.Context, allowance *fetch
 		if serr := app.queries.SetPlanetName(ctx, db.SetPlanetNameParams{
 			PlanetID: id, Name: planet.Name, State: esi.PlanetResolved, ResolvedAt: stamp,
 		}); serr != nil {
-			log.Printf("worker: planets: store name for %d: %v", id, serr)
+			logging.Errorf("worker: planets: store name for %d: %v", id, serr)
 			continue
 		}
 		app.esi.StorePlanetName(id, planet.Name)

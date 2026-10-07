@@ -5,12 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"sort"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -97,7 +97,7 @@ func (app *Application) refreshCorpSnapshotsFor(ctx context.Context, ch db.Chara
 			// corporation changed, restart against the new one.
 			if kind == esi.SnapCorpMembers && mayRetryMembers {
 				if newID, ok := app.refreshCorpMapping(ctx, ch); ok && newID != corpID {
-					log.Printf("worker: character %d moved from corporation %d to %d; restarting corporation pass", ch.CharacterID, corpID, newID)
+					logging.Infof("worker: character %d moved from corporation %d to %d; restarting corporation pass", ch.CharacterID, corpID, newID)
 					return refreshed + app.refreshCorpSnapshotsFor(ctx, ch, newID, false)
 				}
 			}
@@ -118,7 +118,7 @@ func (app *Application) fetchCorpKind(ctx context.Context, ch db.Character, corp
 	case serr == nil && esi.SnapshotFresh(snap):
 		return corpFetchSkipped
 	case serr != nil && !errors.Is(serr, sql.ErrNoRows):
-		log.Printf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
+		logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
 	}
 
 	// A recorded role refusal backs this kind off instead of
@@ -133,7 +133,7 @@ func (app *Application) fetchCorpKind(ctx context.Context, ch db.Character, corp
 	if _, err := app.esi.FetchAndStoreCorpSnapshot(ctx, ch, corpID, kind); err != nil {
 		switch {
 		case errors.Is(err, esi.ErrErrorLimit):
-			log.Printf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)
+			logging.Warnf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)
 			return corpFetchLimited
 		case esi.IsForbidden(err):
 			role := corpKindRole(kind)
@@ -141,10 +141,10 @@ func (app *Application) fetchCorpKind(ctx context.Context, ch db.Character, corp
 				role = "corporation membership"
 			}
 			app.recordCorpFetchState(ctx, ch.CharacterID, kind, fetchStateRoleMissing, corpKindRole(kind))
-			log.Printf("worker: %s for character %d refused by ESI (403); recorded as needing the %s role in-game", kind, ch.CharacterID, role)
+			logging.Infof("worker: %s for character %d refused by ESI (403); recorded as needing the %s role in-game", kind, ch.CharacterID, role)
 			return corpFetchRoleMissing
 		default:
-			log.Printf("worker: refresh %s for corporation %d (character %d): %v", kind, corpID, ch.CharacterID, err)
+			logging.Errorf("worker: refresh %s for corporation %d (character %d): %v", kind, corpID, ch.CharacterID, err)
 			app.recordCorpFetchState(ctx, ch.CharacterID, kind, fetchStateError, err.Error())
 			return corpFetchFailed
 		}
@@ -163,7 +163,7 @@ func (app *Application) recordCorpFetchState(ctx context.Context, characterID in
 		Detail:      detail,
 		AttemptedAt: time.Now().UTC().Format(time.RFC3339),
 	}); err != nil {
-		log.Printf("worker: record fetch state %s/%s for character %d: %v", kind, state, characterID, err)
+		logging.Errorf("worker: record fetch state %s/%s for character %d: %v", kind, state, characterID, err)
 	}
 }
 
@@ -184,7 +184,7 @@ func (app *Application) corpIDForCharacter(ctx context.Context, ch db.Character)
 		return row.CorporationID, true
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
-		log.Printf("worker: read corporation mapping for character %d: %v", ch.CharacterID, err)
+		logging.Errorf("worker: read corporation mapping for character %d: %v", ch.CharacterID, err)
 	}
 	return app.refreshCorpMapping(ctx, ch)
 }
@@ -196,7 +196,7 @@ func (app *Application) refreshCorpMapping(ctx context.Context, ch db.Character)
 	var pub esi.Character
 	if err := app.esi.Get(ctx, "", fmt.Sprintf("/characters/%d/", ch.CharacterID), &pub); err != nil {
 		if !errors.Is(err, esi.ErrErrorLimit) && ctx.Err() == nil {
-			log.Printf("worker: resolve corporation for character %d: %v", ch.CharacterID, err)
+			logging.Errorf("worker: resolve corporation for character %d: %v", ch.CharacterID, err)
 		}
 		return 0, false
 	}
@@ -208,7 +208,7 @@ func (app *Application) refreshCorpMapping(ctx context.Context, ch db.Character)
 		CorporationID: pub.CorporationID,
 		UpdatedAt:     time.Now().UTC().Format(time.RFC3339),
 	}); err != nil {
-		log.Printf("worker: store corporation mapping for character %d: %v", ch.CharacterID, err)
+		logging.Errorf("worker: store corporation mapping for character %d: %v", ch.CharacterID, err)
 	}
 	return pub.CorporationID, true
 }
@@ -272,7 +272,7 @@ func (app *Application) warmCorpAssetNames(ctx context.Context, ch db.Character,
 		if _, err := app.queries.GetItemName(ctx, it.ItemID); err == nil {
 			continue // already named
 		} else if !errors.Is(err, sql.ErrNoRows) {
-			log.Printf("worker: read item name %d: %v", it.ItemID, err)
+			logging.Errorf("worker: read item name %d: %v", it.ItemID, err)
 			continue
 		}
 		missing = append(missing, it.ItemID)
@@ -290,11 +290,11 @@ func (app *Application) warmCorpAssetNames(ctx context.Context, ch db.Character,
 		switch {
 		case esi.IsForbidden(err):
 			app.recordCorpFetchState(ctx, ch.CharacterID, corpAssetNamesKind, fetchStateRoleMissing, corpKindRole(esi.SnapCorpAssets))
-			log.Printf("worker: corp asset names for corporation %d refused by ESI (403); needs the %s role in-game", corpID, corpKindRole(esi.SnapCorpAssets))
+			logging.Infof("worker: corp asset names for corporation %d refused by ESI (403); needs the %s role in-game", corpID, corpKindRole(esi.SnapCorpAssets))
 		case errors.Is(err, esi.ErrErrorLimit):
-			log.Printf("worker: ESI error limit hit warming corp asset names for corporation %d", corpID)
+			logging.Warnf("worker: ESI error limit hit warming corp asset names for corporation %d", corpID)
 		default:
-			log.Printf("worker: corp asset names for corporation %d: %v", corpID, err)
+			logging.Errorf("worker: corp asset names for corporation %d: %v", corpID, err)
 			app.recordCorpFetchState(ctx, ch.CharacterID, corpAssetNamesKind, fetchStateError, err.Error())
 		}
 		return
@@ -307,13 +307,13 @@ func (app *Application) warmCorpAssetNames(ctx context.Context, ch db.Character,
 			continue // CCP's placeholder for an unnamed item
 		}
 		if err := app.queries.UpsertItemName(ctx, db.UpsertItemNameParams{ItemID: n.ItemID, Name: n.Name}); err != nil {
-			log.Printf("worker: store item name %d: %v", n.ItemID, err)
+			logging.Errorf("worker: store item name %d: %v", n.ItemID, err)
 			continue
 		}
 		stored++
 	}
 	if stored > 0 {
-		log.Printf("worker: stored %d corp asset name(s) for corporation %d", stored, corpID)
+		logging.Infof("worker: stored %d corp asset name(s) for corporation %d", stored, corpID)
 	}
 }
 

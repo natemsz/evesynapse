@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -125,7 +125,7 @@ func (app *Application) ordersConfigFor(ctx context.Context, userID int64) order
 	})
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
-			log.Printf("home: widget config for user %d: %v", userID, err)
+			logging.Errorf("home: widget config for user %d: %v", userID, err)
 		}
 		return defaultOrdersWidgetConfig()
 	}
@@ -136,7 +136,7 @@ func (app *Application) ordersConfigFor(ctx context.Context, userID int64) order
 func (app *Application) saveOrdersConfig(ctx context.Context, userID int64, cfg ordersWidgetConfig) {
 	blob, err := json.Marshal(cfg)
 	if err != nil {
-		log.Printf("home: encode widget config for user %d: %v", userID, err)
+		logging.Errorf("home: encode widget config for user %d: %v", userID, err)
 		return
 	}
 	if err := app.queries.UpsertWidgetConfig(ctx, db.UpsertWidgetConfigParams{
@@ -145,7 +145,7 @@ func (app *Application) saveOrdersConfig(ctx context.Context, userID int64, cfg 
 		Config:    string(blob),
 		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
 	}); err != nil {
-		log.Printf("home: save widget config for user %d: %v", userID, err)
+		logging.Errorf("home: save widget config for user %d: %v", userID, err)
 	}
 }
 
@@ -203,7 +203,7 @@ func (app *Application) handleWidgetConfig(w http.ResponseWriter, r *http.Reques
 			// characters and unused tags degrade to "all".
 			chars, cerr := app.queries.ListCharactersByUser(ctx, userID)
 			if cerr != nil {
-				log.Printf("home: widget config: list characters for user %d: %v", userID, cerr)
+				logging.Errorf("home: widget config: list characters for user %d: %v", userID, cerr)
 			} else {
 				switch cfg.ScopeType {
 				case scopeCharacter:

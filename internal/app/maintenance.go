@@ -48,7 +48,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -59,6 +58,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"evesynapse/internal/logging"
 )
 
 // Version returns the rendered product version ("v0.3.38.001"),
@@ -113,7 +114,7 @@ func serverPidfileCandidates(exeDir string) []string {
 func StartServerPidfile() string {
 	exe, err := os.Executable()
 	if err != nil {
-		log.Printf("evesynapse: pidfile: %v (self-restart unavailable)", err)
+		logging.Warnf("evesynapse: pidfile: %v (self-restart unavailable)", err)
 		return ""
 	}
 	return writeServerPidfile(serverPidfileCandidates(filepath.Dir(exe)))
@@ -128,7 +129,7 @@ func writeServerPidfile(candidates []string) string {
 		}
 		return path
 	}
-	log.Printf("evesynapse: pidfile: no writable location (%v); self-restart unavailable", lastErr)
+	logging.Warnf("evesynapse: pidfile: no writable location (%v); self-restart unavailable", lastErr)
 	return ""
 }
 

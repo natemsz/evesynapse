@@ -13,7 +13,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"sort"
@@ -21,6 +20,7 @@ import (
 	"time"
 
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // leaderboardRowCap is the most stations the leaderboard
@@ -99,7 +99,7 @@ func (app *Application) buildLeaderboardView(ctx context.Context, q url.Values) 
 
 	rows, err := app.queries.ListMarketStationLeaderboard(ctx, view.RegionID)
 	if err != nil {
-		log.Printf("leaderboard: list rows for region %d: %v", view.RegionID, err)
+		logging.Errorf("leaderboard: list rows for region %d: %v", view.RegionID, err)
 		return view
 	}
 	stationMemo := make(map[int64]placeRef)
@@ -124,9 +124,9 @@ func (app *Application) buildLeaderboardView(ctx context.Context, q url.Values) 
 	}
 	stamp, err := app.queries.GetMarketStationLeaderboardStamp(ctx, view.RegionID)
 	if err != nil {
-		log.Printf("leaderboard: stamp for region %d: %v", view.RegionID, err)
+		logging.Errorf("leaderboard: stamp for region %d: %v", view.RegionID, err)
 	} else if at, perr := time.Parse(time.RFC3339, stamp); perr != nil {
-		log.Printf("leaderboard: unparseable stamp %q", stamp)
+		logging.Warnf("leaderboard: unparseable stamp %q", stamp)
 	} else {
 		view.AsOf = "Figures last gathered " + at.Format("Jan 2, 3:04 PM")
 	}

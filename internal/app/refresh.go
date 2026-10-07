@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // tokenRefreshWindow: refresh the access token when it expires within
@@ -97,7 +97,7 @@ func (app *Application) validAccessToken(ctx context.Context, ch db.Character) (
 	}); err != nil {
 		return "", fmt.Errorf("character %d: persist refreshed tokens: %w", ch.CharacterID, err)
 	}
-	log.Printf("sso: refreshed access token for character %d", ch.CharacterID)
+	logging.Infof("sso: refreshed access token for character %d", ch.CharacterID)
 	return tok.AccessToken, nil
 }
 

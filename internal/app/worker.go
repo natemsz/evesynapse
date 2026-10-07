@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -16,6 +15,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -35,7 +35,7 @@ import (
 // only sees a panic from the deferred function's own frame).
 func recoverWorkerPanic(what string) {
 	if r := recover(); r != nil {
-		log.Printf("worker: PANIC in %s (recovered; it retries on its next tick): %v\n%s", what, r, debug.Stack())
+		logging.Errorf("worker: PANIC in %s (recovered; it retries on its next tick): %v\n%s", what, r, debug.Stack())
 	}
 }
 
@@ -52,7 +52,7 @@ func runGuarded(what string, pass func()) {
 func (app *Application) guardedCycle(ctx context.Context, cycle func(context.Context)) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("worker: PANIC in refresh cycle (recovered; the next cycle retries): %v\n%s", r, debug.Stack())
+			logging.Errorf("worker: PANIC in refresh cycle (recovered; the next cycle retries): %v\n%s", r, debug.Stack())
 			app.updateWorkerStatus(func(s *workerStatus) {
 				s.Warming = false
 				s.Summary = "cycle stopped by an internal error — see the server log"
@@ -140,7 +140,7 @@ func (app *Application) workerStatusText() string {
 // The same goroutine also hosts the hourly SDE maintenance tick
 // (first import + weekly update check; sde.go).
 func (app *Application) runWorker(ctx context.Context) {
-	log.Printf("worker: started")
+	logging.Infof("worker: started")
 
 	// The two loops below run beside the minute cycle. runWorker
 	// waits for them on the way out, so when it returns the whole
@@ -168,7 +168,7 @@ func (app *Application) runWorker(ctx context.Context) {
 	}()
 	defer func() {
 		children.Wait()
-		log.Printf("worker: stopped")
+		logging.Infof("worker: stopped")
 	}()
 
 	cycle := time.NewTicker(time.Minute)
@@ -187,7 +187,7 @@ func (app *Application) runWorker(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-heartbeat.C:
-			log.Printf("worker: alive")
+			logging.Infof("worker: alive")
 		case <-sdeTick.C:
 			runGuarded("SDE maintenance", func() { app.sdeMaintenance(ctx) })
 		case <-cycle.C:
@@ -205,7 +205,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 
 	characters, err := app.queries.ListAllCharacters(ctx)
 	if err != nil {
-		log.Printf("worker: list characters: %v", err)
+		logging.Errorf("worker: list characters: %v", err)
 		app.updateWorkerStatus(func(s *workerStatus) {
 			s.Warming = false
 			s.Summary = "could not list characters"
@@ -246,7 +246,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	if stored, gLimited := app.refreshGuidePrices(ctx); stored {
 		refreshed++
 	} else if gLimited {
-		log.Printf("worker: ESI error limit hit refreshing guide prices; backing off until next cycle")
+		logging.Warnf("worker: ESI error limit hit refreshing guide prices; backing off until next cycle")
 		limited = true
 	}
 
@@ -269,7 +269,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		// (A definitive rejection parks the character inside
 		// validAccessToken — see links.go.)
 		if _, err := app.validAccessToken(ctx, ch); err != nil {
-			log.Printf("worker: token for character %d unusable: %v", ch.CharacterID, err)
+			logging.Warnf("worker: token for character %d unusable: %v", ch.CharacterID, err)
 			failed++
 			continue
 		}
@@ -280,7 +280,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 			case serr == nil && esi.SnapshotFresh(snap):
 				continue // still inside ESI's cache window
 			case serr != nil && !errors.Is(serr, sql.ErrNoRows):
-				log.Printf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
+				logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
 			}
 
 			if !allowance.take() {
@@ -289,7 +289,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 			if _, err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
 				failed++
 				if errors.Is(err, esi.ErrErrorLimit) {
-					log.Printf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)
+					logging.Warnf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)
 					limited = true
 				} else {
 					if isDefinitiveTokenFailure(err) {
@@ -297,9 +297,9 @@ func (app *Application) refreshCycle(ctx context.Context) {
 						// park the character rather than failing
 						// the same way every cycle.
 						app.markCharacterTokenDead(ctx, ch.CharacterID)
-						log.Printf("worker: character %d token rejected refreshing %s; parked until re-login", ch.CharacterID, kind)
+						logging.Warnf("worker: character %d token rejected refreshing %s; parked until re-login", ch.CharacterID, kind)
 					} else {
-						log.Printf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
+						logging.Errorf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
 					}
 				}
 				break // don't keep pushing this character this cycle
@@ -317,7 +317,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 			warmed, ltd := app.warmKillmailDetails(ctx, ch)
 			refreshed += warmed
 			if ltd {
-				log.Printf("worker: ESI error limit hit warming killmail details for character %d; backing off until next cycle", ch.CharacterID)
+				logging.Warnf("worker: ESI error limit hit warming killmail details for character %d; backing off until next cycle", ch.CharacterID)
 				limited = true
 			}
 		}
@@ -331,7 +331,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 			warmed, ltd := app.warmCorpKillmailDetails(ctx, ch)
 			refreshed += warmed
 			if ltd {
-				log.Printf("worker: ESI error limit hit warming corp killmail details for character %d; backing off until next cycle", ch.CharacterID)
+				logging.Warnf("worker: ESI error limit hit warming corp killmail details for character %d; backing off until next cycle", ch.CharacterID)
 				limited = true
 			}
 		}
@@ -344,7 +344,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 			warmed, ltd := app.warmContractItems(ctx, ch)
 			refreshed += warmed
 			if ltd {
-				log.Printf("worker: ESI error limit hit warming contract items for character %d; backing off until next cycle", ch.CharacterID)
+				logging.Warnf("worker: ESI error limit hit warming contract items for character %d; backing off until next cycle", ch.CharacterID)
 				limited = true
 			}
 		}
@@ -359,7 +359,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 			warmed, ltd := app.refreshPlanetarySnapshots(ctx, ch, allowance)
 			refreshed += warmed
 			if ltd {
-				log.Printf("worker: ESI error limit hit refreshing planetary industry for character %d; backing off until next cycle", ch.CharacterID)
+				logging.Warnf("worker: ESI error limit hit refreshing planetary industry for character %d; backing off until next cycle", ch.CharacterID)
 				limited = true
 			}
 		}
@@ -367,7 +367,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 			warmed, ltd := app.refreshCommsSnapshots(ctx, ch, allowance)
 			refreshed += warmed
 			if ltd {
-				log.Printf("worker: ESI error limit hit refreshing mail/calendar/contacts for character %d; backing off until next cycle", ch.CharacterID)
+				logging.Warnf("worker: ESI error limit hit refreshing mail/calendar/contacts for character %d; backing off until next cycle", ch.CharacterID)
 				limited = true
 			}
 		}
@@ -390,7 +390,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		mStored, mLimited := app.refreshMarketData(ctx, characters)
 		refreshed += mStored
 		if mLimited {
-			log.Printf("worker: ESI error limit hit refreshing market data; backing off until next cycle")
+			logging.Warnf("worker: ESI error limit hit refreshing market data; backing off until next cycle")
 			limited = true
 		}
 	}
@@ -401,7 +401,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		sResolved, sLimited := app.resolveStructureNames(ctx, characters, allowance)
 		refreshed += sResolved
 		if sLimited {
-			log.Printf("worker: ESI error limit hit resolving structure names; backing off until next cycle")
+			logging.Warnf("worker: ESI error limit hit resolving structure names; backing off until next cycle")
 			limited = true
 		}
 	}
@@ -412,7 +412,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		plResolved, plLimited := app.resolvePlanetNames(ctx, allowance)
 		refreshed += plResolved
 		if plLimited {
-			log.Printf("worker: ESI error limit hit resolving planet names; backing off until next cycle")
+			logging.Warnf("worker: ESI error limit hit resolving planet names; backing off until next cycle")
 			limited = true
 		}
 	}
@@ -427,7 +427,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		nResolved, nLimited := app.refreshPilotNameWants(ctx, allowance)
 		refreshed += nResolved
 		if nLimited {
-			log.Printf("worker: ESI error limit hit resolving pilot names; backing off until next cycle")
+			logging.Warnf("worker: ESI error limit hit resolving pilot names; backing off until next cycle")
 			limited = true
 		}
 	}
@@ -436,7 +436,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		pDrained, pLimited := app.refreshPilotRecords(ctx, allowance)
 		refreshed += pDrained
 		if pLimited {
-			log.Printf("worker: ESI error limit hit draining pilot records; backing off until next cycle")
+			logging.Warnf("worker: ESI error limit hit draining pilot records; backing off until next cycle")
 			limited = true
 		}
 	}
@@ -447,7 +447,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		cDrained, cLimited := app.refreshCorporationRecords(ctx, allowance)
 		refreshed += cDrained
 		if cLimited {
-			log.Printf("worker: ESI error limit hit draining corporation records; backing off until next cycle")
+			logging.Warnf("worker: ESI error limit hit draining corporation records; backing off until next cycle")
 			limited = true
 		}
 	}
@@ -455,7 +455,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		aDrained, aLimited := app.refreshAllianceRecords(ctx, allowance)
 		refreshed += aDrained
 		if aLimited {
-			log.Printf("worker: ESI error limit hit draining alliance records; backing off until next cycle")
+			logging.Warnf("worker: ESI error limit hit draining alliance records; backing off until next cycle")
 			limited = true
 		}
 	}
@@ -463,7 +463,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		tDrained, tLimited := app.refreshTypeDetails(ctx, allowance)
 		refreshed += tDrained
 		if tLimited {
-			log.Printf("worker: ESI error limit hit draining type details; backing off until next cycle")
+			logging.Warnf("worker: ESI error limit hit draining type details; backing off until next cycle")
 			limited = true
 		}
 	}
@@ -482,7 +482,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 			}
 			namesResolved += app.warmCharacterNames(ctx, ch, budget)
 			if budget.errorLimited() {
-				log.Printf("worker: ESI error limit hit during name warm-up; resuming next cycle")
+				logging.Warnf("worker: ESI error limit hit during name warm-up; resuming next cycle")
 				limited = true
 				break
 			}
@@ -501,7 +501,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		refreshed += iStored
 		namesResolved += iNames
 		if iLimited {
-			log.Printf("worker: ESI error limit hit refreshing intel; backing off until next cycle")
+			logging.Warnf("worker: ESI error limit hit refreshing intel; backing off until next cycle")
 			limited = true
 		}
 	}
@@ -514,7 +514,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	})
 
 	if refreshed > 0 || failed > 0 || namesResolved > 0 {
-		log.Printf("worker: cycle done: %s", summary)
+		logging.Infof("worker: cycle done: %s", summary)
 	}
 }
 
@@ -775,7 +775,7 @@ func guardedWarm(ctx context.Context, id int64, work func(context.Context, int64
 func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character, budget *warmBudget) int {
 	snaps, err := app.queries.ListSnapshotsByCharacter(ctx, ch.CharacterID)
 	if err != nil {
-		log.Printf("worker: warm names for character %d: list snapshots: %v", ch.CharacterID, err)
+		logging.Errorf("worker: warm names for character %d: list snapshots: %v", ch.CharacterID, err)
 		return 0
 	}
 
@@ -790,7 +790,7 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 		case esi.SnapSkills:
 			var skills esi.Skills
 			if err := json.Unmarshal([]byte(snap.Payload), &skills); err != nil {
-				log.Printf("worker: warm names for character %d: decode skills snapshot: %v", ch.CharacterID, err)
+				logging.Errorf("worker: warm names for character %d: decode skills snapshot: %v", ch.CharacterID, err)
 				continue
 			}
 			for _, s := range skills.Skills {
@@ -799,7 +799,7 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 		case esi.SnapAssets:
 			var items []esi.Asset
 			if err := json.Unmarshal([]byte(snap.Payload), &items); err != nil {
-				log.Printf("worker: warm names for character %d: decode assets snapshot: %v", ch.CharacterID, err)
+				logging.Errorf("worker: warm names for character %d: decode assets snapshot: %v", ch.CharacterID, err)
 				continue
 			}
 			for _, it := range items {
@@ -815,7 +815,7 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 			// The roster's names resolve through the same cache.
 			var members esi.CorpMembers
 			if err := json.Unmarshal([]byte(snap.Payload), &members); err != nil {
-				log.Printf("worker: warm names for character %d: decode corp members snapshot: %v", ch.CharacterID, err)
+				logging.Errorf("worker: warm names for character %d: decode corp members snapshot: %v", ch.CharacterID, err)
 				continue
 			}
 			for _, id := range members {
@@ -826,7 +826,7 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 		case esi.SnapCorpMemberTracking:
 			var tracking esi.CorpMemberTrackings
 			if err := json.Unmarshal([]byte(snap.Payload), &tracking); err != nil {
-				log.Printf("worker: warm names for character %d: decode corp membertracking snapshot: %v", ch.CharacterID, err)
+				logging.Errorf("worker: warm names for character %d: decode corp membertracking snapshot: %v", ch.CharacterID, err)
 				continue
 			}
 			for _, t := range tracking {
@@ -841,7 +841,7 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 			// Same payload shape as character assets.
 			var items []esi.Asset
 			if err := json.Unmarshal([]byte(snap.Payload), &items); err != nil {
-				log.Printf("worker: warm names for character %d: decode corp assets snapshot: %v", ch.CharacterID, err)
+				logging.Errorf("worker: warm names for character %d: decode corp assets snapshot: %v", ch.CharacterID, err)
 				continue
 			}
 			for _, it := range items {
@@ -856,7 +856,7 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 		case esi.SnapCorpOrders:
 			var orders esi.CorpOrders
 			if err := json.Unmarshal([]byte(snap.Payload), &orders); err != nil {
-				log.Printf("worker: warm names for character %d: decode corp orders snapshot: %v", ch.CharacterID, err)
+				logging.Errorf("worker: warm names for character %d: decode corp orders snapshot: %v", ch.CharacterID, err)
 				continue
 			}
 			for _, o := range orders {
@@ -865,7 +865,7 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 		case esi.SnapCorpStructures:
 			var structures esi.CorpStructures
 			if err := json.Unmarshal([]byte(snap.Payload), &structures); err != nil {
-				log.Printf("worker: warm names for character %d: decode corp structures snapshot: %v", ch.CharacterID, err)
+				logging.Errorf("worker: warm names for character %d: decode corp structures snapshot: %v", ch.CharacterID, err)
 				continue
 			}
 			// Owner/system/type facts ride along into the
@@ -1215,7 +1215,7 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 	// list can label people instead of raw IDs. (Corp rosters and
 	// tracking rows harvested above feed the same set.)
 	if rows, err := app.queries.ListKillmailDetailsByCharacter(ctx, ch.CharacterID); err != nil {
-		log.Printf("worker: warm names for character %d: list killmail details: %v", ch.CharacterID, err)
+		logging.Errorf("worker: warm names for character %d: list killmail details: %v", ch.CharacterID, err)
 	} else {
 		for _, row := range rows {
 			var km esi.Killmail
@@ -1257,7 +1257,7 @@ func (app *Application) fetchTypeForWarm(ctx context.Context, budget *warmBudget
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
 		} else if ctx.Err() == nil {
-			log.Printf("worker: warm type %d: %v", id, err)
+			logging.Errorf("worker: warm type %d: %v", id, err)
 		}
 		return esi.Type{}, false
 	}
@@ -1288,7 +1288,7 @@ func (app *Application) warmGroupName(ctx context.Context, budget *warmBudget, i
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
 		} else if ctx.Err() == nil {
-			log.Printf("worker: warm group %d: %v", id, err)
+			logging.Errorf("worker: warm group %d: %v", id, err)
 		}
 		return false
 	}
@@ -1305,7 +1305,7 @@ func (app *Application) warmPlaceName(ctx context.Context, budget *warmBudget, p
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
 		} else if ctx.Err() == nil {
-			log.Printf("worker: warm place %s: %v", path, err)
+			logging.Errorf("worker: warm place %s: %v", path, err)
 		}
 		return false
 	}
@@ -1325,7 +1325,7 @@ func (app *Application) warmCharacterName(ctx context.Context, budget *warmBudge
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
 		} else if ctx.Err() == nil {
-			log.Printf("worker: warm character %d: %v", id, err)
+			logging.Errorf("worker: warm character %d: %v", id, err)
 		}
 		return false
 	}
@@ -1342,7 +1342,7 @@ func (app *Application) warmPlanetName(ctx context.Context, budget *warmBudget, 
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
 		} else if ctx.Err() == nil {
-			log.Printf("worker: warm planet %d: %v", id, err)
+			logging.Errorf("worker: warm planet %d: %v", id, err)
 		}
 		return false
 	}
@@ -1354,7 +1354,7 @@ func (app *Application) warmPlanetName(ctx context.Context, budget *warmBudget, 
 		PlanetID: id, Name: planet.Name, State: esi.PlanetResolved,
 		ResolvedAt: time.Now().UTC().Format(time.RFC3339),
 	}); err != nil {
-		log.Printf("worker: persist planet name %d: %v", id, err)
+		logging.Errorf("worker: persist planet name %d: %v", id, err)
 	}
 	return true
 }
@@ -1367,7 +1367,7 @@ func (app *Application) warmSchematic(ctx context.Context, budget *warmBudget, i
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
 		} else if ctx.Err() == nil {
-			log.Printf("worker: warm schematic %d: %v", id, err)
+			logging.Errorf("worker: warm schematic %d: %v", id, err)
 		}
 		return false
 	}
@@ -1407,7 +1407,7 @@ func (app *Application) warmKillmailDetailsFor(ctx context.Context, ch db.Charac
 	}
 	var refs []esi.KillmailRef
 	if err := json.Unmarshal([]byte(snap.Payload), &refs); err != nil {
-		log.Printf("worker: warm killmail details for character %d: decode recent list: %v", ch.CharacterID, err)
+		logging.Errorf("worker: warm killmail details for character %d: decode recent list: %v", ch.CharacterID, err)
 		return 0, false
 	}
 
@@ -1421,7 +1421,7 @@ func (app *Application) warmKillmailDetailsFor(ctx context.Context, ch db.Charac
 		if _, err := app.queries.GetKillmailDetail(ctx, ref.KillmailID); err == nil {
 			continue // already stored (by any character's list)
 		} else if !errors.Is(err, sql.ErrNoRows) {
-			log.Printf("worker: warm killmail details for character %d: read detail %d: %v", ch.CharacterID, ref.KillmailID, err)
+			logging.Errorf("worker: warm killmail details for character %d: read detail %d: %v", ch.CharacterID, ref.KillmailID, err)
 			continue
 		}
 
@@ -1431,7 +1431,7 @@ func (app *Application) warmKillmailDetailsFor(ctx context.Context, ch db.Charac
 				return fetched, true
 			}
 			if ctx.Err() == nil {
-				log.Printf("worker: killmail detail %d for character %d: %v", ref.KillmailID, ch.CharacterID, err)
+				logging.Errorf("worker: killmail detail %d for character %d: %v", ref.KillmailID, ch.CharacterID, err)
 			}
 			continue
 		}
@@ -1442,7 +1442,7 @@ func (app *Application) warmKillmailDetailsFor(ctx context.Context, ch db.Charac
 			Payload:     string(body),
 			FetchedAt:   time.Now().UTC().Format(time.RFC3339),
 		}); err != nil {
-			log.Printf("worker: store killmail detail %d for character %d: %v", ref.KillmailID, ch.CharacterID, err)
+			logging.Errorf("worker: store killmail detail %d for character %d: %v", ref.KillmailID, ch.CharacterID, err)
 			continue
 		}
 		fetched++

@@ -8,6 +8,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"evesynapse/internal/logging"
 )
 
 // Config holds runtime configuration. Everything comes from the
@@ -25,6 +27,8 @@ type Config struct {
 	tokenKey        string         // TOKEN_ENCRYPTION_KEY: encrypts stored EVE tokens ("" = stored as they are)
 	signUp          signUpPolicy   // EVE_ALLOWED_*_IDS: who may create an account (empty = anyone)
 	esiContact      string         // ESI_CONTACT: how CCP can reach the operator, sent in the User-Agent
+	logLevel        string         // LOG_LEVEL: debug, info (default), warn or error
+	logFormat       string         // LOG_FORMAT: text (default) or json
 }
 
 // SSOConfigured reports whether EVE SSO can run: it needs both the
@@ -125,6 +129,8 @@ func LoadConfig() Config {
 		tokenKey:        os.Getenv("TOKEN_ENCRYPTION_KEY"),
 		signUp:          loadSignUpPolicy(os.Getenv),
 		esiContact:      os.Getenv("ESI_CONTACT"),
+		logLevel:        os.Getenv("LOG_LEVEL"),
+		logFormat:       os.Getenv("LOG_FORMAT"),
 	}
 }
 
@@ -283,4 +289,12 @@ func getenvDefault(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// SetupLogging applies LOG_LEVEL and LOG_FORMAT to the process. The
+// entrypoints call it once, before anything is logged; an unknown
+// level or format is an error rather than a silent fallback, so a
+// typo cannot leave the log quieter or louder than intended.
+func (c Config) SetupLogging() error {
+	return logging.Setup(c.logLevel, c.logFormat, os.Stderr)
 }

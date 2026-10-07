@@ -2,12 +2,12 @@ package app
 
 import (
 	"bytes"
-	"log"
 	"math"
 	"net/http"
 	"strconv"
 
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -31,13 +31,13 @@ import (
 func (app *Application) renderFragment(w http.ResponseWriter, page, define string, data any) {
 	ts, err := parsedTemplate(&fragmentTemplates, "fragment", page, "templates/balancechart.html", "templates/charselector.html")
 	if err != nil {
-		log.Printf("parse fragment template %s: %v", page, err)
+		logging.Errorf("parse fragment template %s: %v", page, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 	buf := new(bytes.Buffer)
 	if err := ts.ExecuteTemplate(buf, define, data); err != nil {
-		log.Printf("execute fragment %s/%s: %v", page, define, err)
+		logging.Errorf("execute fragment %s/%s: %v", page, define, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}

@@ -7,10 +7,11 @@ package app
 // ---------------------------------------------------------------------------
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/alexedwards/scs/v2"
+
+	"evesynapse/internal/logging"
 )
 
 // newSessionManager builds the session manager the app runs on.
@@ -37,7 +38,7 @@ func warnIfServedInTheClear(cfg Config) {
 		return
 	}
 	if origin := cfg.publicOrigin(); origin != "" {
-		log.Printf("evesynapse: WARNING %s is plain http: sign-in cookies and character data travel unencrypted. Serve the app over HTTPS (see \"HTTPS\" in the README) and set EVE_CALLBACK_URL to the https address", origin)
+		logging.Warnf("evesynapse: %s is plain http: sign-in cookies and character data travel unencrypted. Serve the app over HTTPS (see \"HTTPS\" in the README) and set EVE_CALLBACK_URL to the https address", origin)
 	}
 }
 
@@ -100,7 +101,7 @@ func (app *Application) crossOriginGuard() func(http.Handler) http.Handler {
 	// address is same-origin by definition, so it is always allowed.
 	if origin := app.cfg.publicOrigin(); origin != "" {
 		if err := guard.AddTrustedOrigin(origin); err != nil {
-			log.Printf("evesynapse: cross-origin guard: cannot trust %q: %v", origin, err)
+			logging.Errorf("evesynapse: cross-origin guard: cannot trust %q: %v", origin, err)
 		}
 	}
 	return guard.Handler

@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -49,7 +49,7 @@ func (app *Application) storedGuidePrices(ctx context.Context) map[int64]esi.Mar
 	}
 	rows, err := app.queries.ListGuidePrices(ctx)
 	if err != nil {
-		log.Printf("prices: load stored guide: %v", err)
+		logging.Errorf("prices: load stored guide: %v", err)
 		return app.storedPricesCache // nil on first failure: honest "none"
 	}
 	if len(rows) == 0 {
@@ -101,13 +101,13 @@ func (app *Application) refreshGuidePrices(ctx context.Context) (stored bool, li
 			return false, true
 		}
 		if ctx.Err() == nil {
-			log.Printf("worker: guide prices: %v", err)
+			logging.Errorf("worker: guide prices: %v", err)
 		}
 		return false, false
 	}
 	var rows []esi.MarketPrice
 	if err := json.Unmarshal(body, &rows); err != nil {
-		log.Printf("worker: guide prices: decode: %v", err)
+		logging.Errorf("worker: guide prices: decode: %v", err)
 		return false, false
 	}
 
@@ -120,13 +120,13 @@ func (app *Application) refreshGuidePrices(ctx context.Context) (stored bool, li
 
 	tx, err := app.db.BeginTx(ctx, nil)
 	if err != nil {
-		log.Printf("worker: guide prices: begin tx: %v", err)
+		logging.Errorf("worker: guide prices: begin tx: %v", err)
 		return false, false
 	}
 	defer tx.Rollback()
 	qtx := app.queries.WithTx(tx)
 	if err := qtx.DeleteGuidePrices(ctx); err != nil {
-		log.Printf("worker: guide prices: clear: %v", err)
+		logging.Errorf("worker: guide prices: clear: %v", err)
 		return false, false
 	}
 	for _, row := range rows {
@@ -138,7 +138,7 @@ func (app *Application) refreshGuidePrices(ctx context.Context) (stored bool, li
 			AdjustedPrice: row.AdjustedPrice,
 			AveragePrice:  row.AveragePrice,
 		}); err != nil {
-			log.Printf("worker: guide prices: store type %d: %v", row.TypeID, err)
+			logging.Errorf("worker: guide prices: store type %d: %v", row.TypeID, err)
 			return false, false
 		}
 	}
@@ -146,11 +146,11 @@ func (app *Application) refreshGuidePrices(ctx context.Context) (stored bool, li
 		FetchedAt:   now.UTC().Format(time.RFC3339),
 		CachedUntil: cachedUntil.UTC().Format(time.RFC3339),
 	}); err != nil {
-		log.Printf("worker: guide prices: store meta: %v", err)
+		logging.Errorf("worker: guide prices: store meta: %v", err)
 		return false, false
 	}
 	if err := tx.Commit(); err != nil {
-		log.Printf("worker: guide prices: commit: %v", err)
+		logging.Errorf("worker: guide prices: commit: %v", err)
 		return false, false
 	}
 
@@ -165,7 +165,7 @@ func (app *Application) refreshGuidePrices(ctx context.Context) (stored bool, li
 	app.pricesExpiry = cachedUntil
 	app.pricesMu.Unlock()
 
-	log.Printf("worker: guide prices stored (%d types, fresh until %s)",
+	logging.Infof("worker: guide prices stored (%d types, fresh until %s)",
 		len(rows), cachedUntil.UTC().Format(time.RFC3339))
 	return true, false
 }

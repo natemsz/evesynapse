@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -14,6 +13,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -397,7 +397,7 @@ func (app *Application) loadCharSnaps(ctx context.Context, userID int64, chars [
 		// A store failure degrades the whole overview to
 		// character shells (name/tags) plus warming notes,
 		// never to an error page.
-		log.Printf("home: list snapshots for user %d: %v", userID, err)
+		logging.Errorf("home: list snapshots for user %d: %v", userID, err)
 		return out
 	}
 	for _, row := range rows {
@@ -426,7 +426,7 @@ func (app *Application) loadCharSnaps(ctx context.Context, userID int64, chars [
 	if needLayouts {
 		layoutRows, err := app.queries.ListPlanetLayoutsForUser(ctx, userID)
 		if err != nil {
-			log.Printf("home: list planet layouts for user %d: %v", userID, err)
+			logging.Errorf("home: list planet layouts for user %d: %v", userID, err)
 		} else {
 			for _, row := range layoutRows {
 				b := bundles[row.CharacterID]
@@ -1104,7 +1104,7 @@ func (app *Application) attentionMarketItems(ctx context.Context, bundles []*cha
 	var items []attentionItem
 	health, err := app.queries.ListOrderHealthByUser(ctx, userID)
 	if err != nil {
-		log.Printf("home: attention: list order health for user %d: %v", userID, err)
+		logging.Errorf("home: attention: list order health for user %d: %v", userID, err)
 	} else {
 		var undercut []db.OrderHealth
 		for _, h := range health {
@@ -1137,7 +1137,7 @@ func (app *Application) attentionMarketItems(ctx context.Context, bundles []*cha
 
 	entries, err := app.queries.ListWatchlistByUser(ctx, userID)
 	if err != nil {
-		log.Printf("home: attention: list watchlist for user %d: %v", userID, err)
+		logging.Errorf("home: attention: list watchlist for user %d: %v", userID, err)
 		return items
 	}
 	for _, e := range entries {
@@ -1534,7 +1534,7 @@ func (app *Application) marketHealthLine(ctx context.Context, userID int64) stri
 				parts = append(parts, fmt.Sprintf("%d %s undercut", undercut, noun))
 			}
 		} else {
-			log.Printf("home: market widget: list order health for user %d: %v", userID, err)
+			logging.Errorf("home: market widget: list order health for user %d: %v", userID, err)
 		}
 		if entries, err := app.queries.ListWatchlistByUser(ctx, userID); err == nil {
 			moving := 0
@@ -1548,7 +1548,7 @@ func (app *Application) marketHealthLine(ctx context.Context, userID int64) stri
 				parts = append(parts, fmt.Sprintf("watchlist: %d moving", moving))
 			}
 		} else {
-			log.Printf("home: market widget: list watchlist for user %d: %v", userID, err)
+			logging.Errorf("home: market widget: list watchlist for user %d: %v", userID, err)
 		}
 	}
 	return strings.Join(parts, " · ")
@@ -1683,7 +1683,7 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 
 	chars, err := app.queries.ListCharactersByUser(ctx, userID)
 	if err != nil {
-		log.Printf("home: list characters for user %d: %v", userID, err)
+		logging.Errorf("home: list characters for user %d: %v", userID, err)
 		view.LoadFailed = true
 		return view
 	}
@@ -1816,7 +1816,7 @@ func (app *Application) saveHomeLayout(ctx context.Context, userID int64, layout
 		ID:         userID,
 	})
 	if err != nil {
-		log.Printf("home: save layout for user %d: %v", userID, err)
+		logging.Errorf("home: save layout for user %d: %v", userID, err)
 	}
 }
 

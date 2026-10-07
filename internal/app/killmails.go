@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -72,7 +72,7 @@ func (app *Application) handleKillmails(w http.ResponseWriter, r *http.Request) 
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/killmails/")
 	if err != nil {
-		log.Printf("killmails: list characters: %v", err)
+		logging.Errorf("killmails: list characters: %v", err)
 		data.Error = "Could not load killmail data; check the server log."
 		app.render(ctx, w, http.StatusOK, "killmails.html", data)
 		return
@@ -93,7 +93,7 @@ func (app *Application) handleKillmails(w http.ResponseWriter, r *http.Request) 
 
 	var refs []esi.KillmailRef
 	if err := app.esi.GetCached(ctx, active, esi.SnapKillmails, &refs); err != nil {
-		log.Printf("killmails: load recent list for character %d: %v", active.CharacterID, err)
+		logging.Errorf("killmails: load recent list for character %d: %v", active.CharacterID, err)
 		// No snapshot row at all = cold start: the worker is still
 		// importing this character, which the Sync page shows live.
 		if _, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: active.CharacterID, Kind: esi.SnapKillmails}); errors.Is(serr, sql.ErrNoRows) {
@@ -159,13 +159,13 @@ func (app *Application) killmailRow(ctx context.Context, viewer killmailViewer, 
 	stored, err := app.queries.GetKillmailDetail(ctx, ref.KillmailID)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
-			log.Printf("killmails: read detail %d: %v", ref.KillmailID, err)
+			logging.Errorf("killmails: read detail %d: %v", ref.KillmailID, err)
 		}
 		return row
 	}
 	var km esi.Killmail
 	if err := json.Unmarshal([]byte(stored.Payload), &km); err != nil {
-		log.Printf("killmails: decode detail %d: %v", ref.KillmailID, err)
+		logging.Errorf("killmails: decode detail %d: %v", ref.KillmailID, err)
 		return row
 	}
 	row.Warming = false

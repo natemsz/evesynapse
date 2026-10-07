@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -11,6 +10,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -193,7 +193,7 @@ func (app *Application) handlePlanets(w http.ResponseWriter, r *http.Request) {
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/planets/")
 	if err != nil {
-		log.Printf("planets: list characters: %v", err)
+		logging.Errorf("planets: list characters: %v", err)
 		data.Error = "Could not load planetary industry data; check the server log."
 		app.render(ctx, w, http.StatusOK, "planets.html", data)
 		return

@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -131,7 +131,7 @@ func (app *Application) warmMarketHistory(ctx context.Context, allowance *fetchB
 
 	candidates, err := app.historyCandidates(ctx)
 	if err != nil {
-		log.Printf("worker: market history: collect candidates: %v", err)
+		logging.Errorf("worker: market history: collect candidates: %v", err)
 		return 0, false
 	}
 	app.noteCoverageTypeDetails(ctx, candidates)
@@ -167,10 +167,10 @@ func (app *Application) fetchAndStoreHistory(ctx context.Context, key marketKey)
 	rows, err := app.fetchMarketHistory(ctx, key)
 	if err != nil {
 		if errors.Is(err, esi.ErrErrorLimit) {
-			log.Printf("worker: market history: ESI error limit hit fetching %s; backing off", kind)
+			logging.Warnf("worker: market history: ESI error limit hit fetching %s; backing off", kind)
 			return false, true
 		}
-		log.Printf("worker: market history: fetch %s: %v", kind, err)
+		logging.Errorf("worker: market history: fetch %s: %v", kind, err)
 		app.recordMarketFetch(ctx, kind, marketFetchFailureState(err), err.Error())
 		return false, false
 	}
@@ -185,7 +185,7 @@ func (app *Application) fetchAndStoreHistory(ctx context.Context, key marketKey)
 			Volume:     row.Volume,
 			OrderCount: row.OrderCount,
 		}); err != nil {
-			log.Printf("worker: market history: store %s day %s: %v", kind, row.Date, err)
+			logging.Errorf("worker: market history: store %s day %s: %v", kind, row.Date, err)
 		}
 	}
 	app.recordMarketFetch(ctx, kind, fetchStateOK, "")
@@ -299,7 +299,7 @@ func (app *Application) liquidCoreTypeIDs(ctx context.Context) []int64 {
 		CoreLimit: liquidCoreSize,
 	})
 	if err != nil {
-		log.Printf("worker: market history: liquid core ranking: %v", err)
+		logging.Errorf("worker: market history: liquid core ranking: %v", err)
 	} else {
 		for _, r := range rows {
 			add(r.TypeID)
@@ -308,7 +308,7 @@ func (app *Application) liquidCoreTypeIDs(ctx context.Context) []int64 {
 	if len(out) < liquidCoreSize {
 		payloads, err := app.queries.ListRecentKillmailDetails(ctx, liquidCoreKillmailScan)
 		if err != nil {
-			log.Printf("worker: market history: killmail core supplement: %v", err)
+			logging.Errorf("worker: market history: killmail core supplement: %v", err)
 			return out
 		}
 		for _, payload := range payloads {
@@ -343,7 +343,7 @@ func (app *Application) orbitForgeTypeIDs(ctx context.Context) map[int64]bool {
 	}
 	bpProduct := make(map[int64]int64)
 	if rows, err := app.queries.ListSDEBlueprintProducts(ctx); err != nil {
-		log.Printf("worker: market history: orbit blueprint products: %v", err)
+		logging.Errorf("worker: market history: orbit blueprint products: %v", err)
 	} else {
 		for _, r := range rows {
 			bpProduct[r.BlueprintTypeID] = r.ProductTypeID
@@ -351,7 +351,7 @@ func (app *Application) orbitForgeTypeIDs(ctx context.Context) map[int64]bool {
 	}
 	characters, err := app.queries.ListAllCharacters(ctx)
 	if err != nil {
-		log.Printf("worker: market history: orbit characters: %v", err)
+		logging.Errorf("worker: market history: orbit characters: %v", err)
 		return out
 	}
 	for _, ch := range characters {
@@ -382,7 +382,7 @@ func (app *Application) orbitForgeTypeIDs(ctx context.Context) map[int64]bool {
 		}
 		detailIDs, err := app.queries.ListContractDetailIDsByCharacter(ctx, ch.CharacterID)
 		if err != nil {
-			log.Printf("worker: market history: orbit contract ids %d: %v", ch.CharacterID, err)
+			logging.Errorf("worker: market history: orbit contract ids %d: %v", ch.CharacterID, err)
 			continue
 		}
 		for _, contractID := range detailIDs {
@@ -419,7 +419,7 @@ func (app *Application) noteCoverageTypeDetails(ctx context.Context, candidates 
 		}
 		seen[key.TypeID] = true
 		if err := app.queries.UpsertTypeDetailWant(ctx, key.TypeID); err != nil {
-			log.Printf("worker: market history: note type detail %d: %v", key.TypeID, err)
+			logging.Errorf("worker: market history: note type detail %d: %v", key.TypeID, err)
 			continue
 		}
 		noted++
@@ -467,7 +467,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 			// No orders snapshot yet: drop any stale health so
 			// the pages never show yesterday's verdict.
 			if err := app.queries.DeleteOrderHealthForCharacter(ctx, ch.CharacterID); err != nil {
-				log.Printf("worker: order health: clear %d: %v", ch.CharacterID, err)
+				logging.Errorf("worker: order health: clear %d: %v", ch.CharacterID, err)
 			}
 			continue
 		}
@@ -528,7 +528,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 				FirstSeenAt:      lifecycleNow,
 				LastSeenAt:       lifecycleNow,
 			}); err != nil {
-				log.Printf("worker: order lifecycle: upsert %d/%d: %v", characterID, orderID, err)
+				logging.Errorf("worker: order lifecycle: upsert %d/%d: %v", characterID, orderID, err)
 			}
 		}
 	}
@@ -559,10 +559,10 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 		sells, _, _, err := app.fetchOrderBook(ctx, key.RegionID, key.TypeID)
 		if err != nil {
 			if errors.Is(err, esi.ErrErrorLimit) {
-				log.Printf("worker: order health: ESI error limit hit reading book %s; backing off until next cycle", kind)
+				logging.Warnf("worker: order health: ESI error limit hit reading book %s; backing off until next cycle", kind)
 				return stored, true
 			}
-			log.Printf("worker: order health: book %s: %v", kind, err)
+			logging.Errorf("worker: order health: book %s: %v", kind, err)
 			app.recordMarketFetch(ctx, kind, marketFetchFailureState(err), err.Error())
 			continue
 		}
@@ -594,7 +594,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 				Status:      status,
 				ComputedAt:  now,
 			}); err != nil {
-				log.Printf("worker: order health: store order %d: %v", ref.order.OrderID, err)
+				logging.Errorf("worker: order health: store order %d: %v", ref.order.OrderID, err)
 			}
 			// P4 beaten tracking: only a station-level undercut
 			// counts as beaten -- someone cheaper at the order's
@@ -619,7 +619,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 					CharacterID:  ref.char.CharacterID,
 					OrderID:      ref.order.OrderID,
 				}); err != nil {
-					log.Printf("worker: order lifecycle: beaten %d/%d: %v", ref.char.CharacterID, ref.order.OrderID, err)
+					logging.Errorf("worker: order lifecycle: beaten %d/%d: %v", ref.char.CharacterID, ref.order.OrderID, err)
 				} else {
 					prevBeaten[lkey] = beaten
 					prevOutbid[lkey] = outbid
@@ -633,7 +633,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 	for characterID, open := range openByChar {
 		rows, err := app.queries.ListOrderHealthByCharacter(ctx, characterID)
 		if err != nil {
-			log.Printf("worker: order health: list for %d: %v", characterID, err)
+			logging.Errorf("worker: order health: list for %d: %v", characterID, err)
 			continue
 		}
 		for _, row := range rows {
@@ -641,7 +641,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 				if err := app.queries.DeleteOrderHealthEntry(ctx, db.DeleteOrderHealthEntryParams{
 					CharacterID: characterID, OrderID: row.OrderID,
 				}); err != nil {
-					log.Printf("worker: order health: prune order %d: %v", row.OrderID, err)
+					logging.Errorf("worker: order health: prune order %d: %v", row.OrderID, err)
 				}
 			}
 		}
@@ -653,7 +653,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 	for characterID, allOpen := range allOpenByChar {
 		openRows, err := app.queries.ListOpenOrderLifecycleByCharacter(ctx, characterID)
 		if err != nil {
-			log.Printf("worker: order lifecycle: list open %d: %v", characterID, err)
+			logging.Errorf("worker: order lifecycle: list open %d: %v", characterID, err)
 			continue
 		}
 		for _, row := range openRows {
@@ -670,7 +670,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 				CharacterID: characterID,
 				OrderID:     row.OrderID,
 			}); err != nil {
-				log.Printf("worker: order lifecycle: close %d/%d: %v", characterID, row.OrderID, err)
+				logging.Errorf("worker: order lifecycle: close %d/%d: %v", characterID, row.OrderID, err)
 			}
 		}
 	}
@@ -682,7 +682,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 		ClosedAt: cutoff,
 		RowLimit: lifecyclePrunePerCycle,
 	}); err != nil {
-		log.Printf("worker: order lifecycle: prune: %v", err)
+		logging.Errorf("worker: order lifecycle: prune: %v", err)
 	}
 	return stored, false
 }
@@ -792,6 +792,6 @@ func (app *Application) recordMarketFetch(ctx context.Context, kind, state, deta
 		Kind: kind, State: state, Detail: detail,
 		AttemptedAt: time.Now().UTC().Format(time.RFC3339),
 	}); err != nil {
-		log.Printf("worker: market fetch-state %s: %v", kind, err)
+		logging.Errorf("worker: market fetch-state %s: %v", kind, err)
 	}
 }

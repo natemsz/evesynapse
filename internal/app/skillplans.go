@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -12,6 +11,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -66,7 +66,7 @@ func (g *sdeSkillGraph) Requirements(typeID int64) []skillRequirement {
 	}
 	dbRows, err := g.app.queries.ListSDERequirementsByType(g.ctx, typeID)
 	if err != nil {
-		log.Printf("skill plans: requirements for type %d: %v", typeID, err)
+		logging.Errorf("skill plans: requirements for type %d: %v", typeID, err)
 		g.reqs[typeID] = nil
 		return nil
 	}
@@ -268,7 +268,7 @@ func (app *Application) handleSkillPlans(w http.ResponseWriter, r *http.Request)
 	}
 	_, active, links, err := app.pickCharacter(ctx, r, "/skills/plans")
 	if err != nil {
-		log.Printf("skill plans: list characters: %v", err)
+		logging.Errorf("skill plans: list characters: %v", err)
 		data.Error = "Could not load skill plans; check the server log."
 		app.render(ctx, w, http.StatusOK, "skillplans.html", data)
 		return
@@ -284,7 +284,7 @@ func (app *Application) handleSkillPlans(w http.ResponseWriter, r *http.Request)
 
 	if n, err := app.queries.CountSDESkillMeta(ctx); err != nil || n == 0 {
 		if err != nil {
-			log.Printf("skill plans: count skill meta: %v", err)
+			logging.Errorf("skill plans: count skill meta: %v", err)
 		}
 		view.GraphWarming = true
 		app.render(ctx, w, http.StatusOK, "skillplans.html", data)
@@ -293,7 +293,7 @@ func (app *Application) handleSkillPlans(w http.ResponseWriter, r *http.Request)
 
 	plans, err := app.queries.ListSkillPlans(ctx, db.ListSkillPlansParams{UserID: userID, CharacterID: active.CharacterID})
 	if err != nil {
-		log.Printf("skill plans: list for character %d: %v", active.CharacterID, err)
+		logging.Errorf("skill plans: list for character %d: %v", active.CharacterID, err)
 		data.Error = "Could not load skill plans; check the server log."
 		app.render(ctx, w, http.StatusOK, "skillplans.html", data)
 		return
@@ -301,7 +301,7 @@ func (app *Application) handleSkillPlans(w http.ResponseWriter, r *http.Request)
 	for _, p := range plans {
 		items, err := app.queries.ListSkillPlanItems(ctx, p.ID)
 		if err != nil {
-			log.Printf("skill plans: items for plan %d: %v", p.ID, err)
+			logging.Errorf("skill plans: items for plan %d: %v", p.ID, err)
 			continue
 		}
 		view.Plans = append(view.Plans, skillPlanSummary{
@@ -330,7 +330,7 @@ func (app *Application) handleSkillPlans(w http.ResponseWriter, r *http.Request)
 	if view.SearchQuery != "" && selected != nil {
 		hits, err := app.queries.SearchSDESkills(ctx, db.SearchSDESkillsParams{Lower: view.SearchQuery, Lower_2: view.SearchQuery})
 		if err != nil {
-			log.Printf("skill plans: search %q: %v", view.SearchQuery, err)
+			logging.Errorf("skill plans: search %q: %v", view.SearchQuery, err)
 		}
 		for _, hit := range hits {
 			view.SearchResults = append(view.SearchResults, skillSearchRow{
@@ -349,7 +349,7 @@ func (app *Application) buildPlanDetail(ctx context.Context, ch db.Character, pl
 
 	items, err := app.queries.ListSkillPlanItems(ctx, plan.ID)
 	if err != nil {
-		log.Printf("skill plans: items for plan %d: %v", plan.ID, err)
+		logging.Errorf("skill plans: items for plan %d: %v", plan.ID, err)
 		return detail
 	}
 
@@ -514,7 +514,7 @@ func (app *Application) handleSkillPlanCreate(w http.ResponseWriter, r *http.Req
 		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
 	})
 	if err != nil {
-		log.Printf("skill plans: create for character %d: %v", characterID, err)
+		logging.Errorf("skill plans: create for character %d: %v", characterID, err)
 		http.Redirect(w, r, "/skills/plans/", http.StatusSeeOther)
 		return
 	}
@@ -589,14 +589,14 @@ func (app *Application) handleSkillPlanItemAdd(w http.ResponseWriter, r *http.Re
 
 	pos, err := app.queries.NextSkillPlanPosition(ctx, planID)
 	if err != nil {
-		log.Printf("skill plans: next position for plan %d: %v", planID, err)
+		logging.Errorf("skill plans: next position for plan %d: %v", planID, err)
 		skillPlansRedirect(w, r, characterID, planID)
 		return
 	}
 	if err := app.queries.UpsertSkillPlanItem(ctx, db.UpsertSkillPlanItemParams{
 		PlanID: planID, SkillTypeID: skillID, TargetLevel: int64(level), Position: pos,
 	}); err != nil {
-		log.Printf("skill plans: add skill %d to plan %d: %v", skillID, planID, err)
+		logging.Errorf("skill plans: add skill %d to plan %d: %v", skillID, planID, err)
 	}
 	if r.FormValue("return") == "character" {
 		http.Redirect(w, r, fmt.Sprintf("/character/?character=%d#browse", characterID), http.StatusSeeOther)
@@ -617,7 +617,7 @@ func (app *Application) handleSkillPlanItemRemove(w http.ResponseWriter, r *http
 	skillID, _ := strconv.ParseInt(r.FormValue("skill"), 10, 64)
 	if _, ok := app.ownedPlan(ctx, userID, characterID, planID); ok && skillID > 0 {
 		if err := app.queries.DeleteSkillPlanItem(ctx, db.DeleteSkillPlanItemParams{PlanID: planID, SkillTypeID: skillID}); err != nil {
-			log.Printf("skill plans: remove skill %d from plan %d: %v", skillID, planID, err)
+			logging.Errorf("skill plans: remove skill %d from plan %d: %v", skillID, planID, err)
 		}
 	}
 	skillPlansRedirect(w, r, characterID, planID)
@@ -679,7 +679,7 @@ func (app *Application) handleSkillPlanDelete(w http.ResponseWriter, r *http.Req
 	planID, _ := strconv.ParseInt(r.FormValue("plan"), 10, 64)
 	if _, ok := app.ownedPlan(ctx, userID, characterID, planID); ok {
 		if err := app.queries.DeleteSkillPlan(ctx, db.DeleteSkillPlanParams{ID: planID, UserID: userID}); err != nil {
-			log.Printf("skill plans: delete plan %d: %v", planID, err)
+			logging.Errorf("skill plans: delete plan %d: %v", planID, err)
 		}
 	}
 	skillPlansRedirect(w, r, characterID, 0)
@@ -771,7 +771,7 @@ func (app *Application) handleSkillPlanFromTemplate(w http.ResponseWriter, r *ht
 	}
 	rows, err := app.queries.ListSDETypesByNames(ctx, magic14Skills)
 	if err != nil {
-		log.Printf("skill plans: magic 14 name lookup: %v", err)
+		logging.Errorf("skill plans: magic 14 name lookup: %v", err)
 		skillPlansRedirect(w, r, characterID, 0)
 		return
 	}
@@ -784,11 +784,11 @@ func (app *Application) handleSkillPlanFromTemplate(w http.ResponseWriter, r *ht
 	for _, name := range magic14Skills {
 		id, ok := byName[name]
 		if !ok {
-			log.Printf("skill plans: magic 14 skill %q not found in SDE types (wiki: %s)", name, magic14Source)
+			logging.Warnf("skill plans: magic 14 skill %q not found in SDE types (wiki: %s)", name, magic14Source)
 			continue
 		}
 		if _, isSkill := graph.Meta(id); !isSkill {
-			log.Printf("skill plans: magic 14 skill %q (type %d) has no skill meta", name, id)
+			logging.Warnf("skill plans: magic 14 skill %q (type %d) has no skill meta", name, id)
 			continue
 		}
 		targets = append(targets, planTarget{SkillID: id, Level: 5, Intent: len(targets)})
@@ -800,7 +800,7 @@ func (app *Application) handleSkillPlanFromTemplate(w http.ResponseWriter, r *ht
 	name := app.uniquePlanName(ctx, userID, characterID, "Magic 14")
 	planID, err := app.createPlanWithItems(ctx, userID, characterID, name, targets)
 	if err != nil {
-		log.Printf("skill plans: create magic 14 for character %d: %v", characterID, err)
+		logging.Errorf("skill plans: create magic 14 for character %d: %v", characterID, err)
 		skillPlansRedirect(w, r, characterID, 0)
 		return
 	}
@@ -899,7 +899,7 @@ func (app *Application) handleSkillPlanFitPreview(w http.ResponseWriter, r *http
 	_, active, links, err := app.pickCharacter(ctx, r, "/skills/plans/fit")
 	if err != nil || links == nil {
 		if err != nil {
-			log.Printf("skill plans: fit preview characters: %v", err)
+			logging.Errorf("skill plans: fit preview characters: %v", err)
 			data.Error = "Could not load fittings; check the server log."
 		}
 		app.render(ctx, w, http.StatusOK, "skillplans.html", data)
@@ -973,7 +973,7 @@ func (app *Application) handleSkillPlanFromFit(w http.ResponseWriter, r *http.Re
 	name := app.uniquePlanName(ctx, userID, characterID, "Fit: "+base)
 	planID, err := app.createPlanWithItems(ctx, userID, characterID, name, kept)
 	if err != nil {
-		log.Printf("skill plans: create from fit %d for character %d: %v", fittingID, characterID, err)
+		logging.Errorf("skill plans: create from fit %d for character %d: %v", fittingID, characterID, err)
 		skillPlansRedirect(w, r, characterID, 0)
 		return
 	}

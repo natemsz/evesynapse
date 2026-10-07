@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"html/template"
-	"log"
 	"sort"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -104,7 +104,7 @@ func (app *Application) briefingWindowStart(ctx context.Context, userID int64, n
 	start := now.Add(-briefingFirstWindow)
 	raw, err := app.queries.GetUserBriefingAnchor(ctx, userID)
 	if err != nil {
-		log.Printf("home: briefing anchor for user %d: %v", userID, err)
+		logging.Errorf("home: briefing anchor for user %d: %v", userID, err)
 		return start
 	}
 	if anchor, ok := parseRFC3339(raw); ok && anchor.Before(now) {
@@ -133,7 +133,7 @@ const briefingAnchorStep = time.Minute
 func (app *Application) advanceBriefingAnchor(ctx context.Context, userID int64, now time.Time) {
 	raw, err := app.queries.GetUserBriefingAnchor(ctx, userID)
 	if err != nil {
-		log.Printf("home: briefing anchor for user %d: %v", userID, err)
+		logging.Errorf("home: briefing anchor for user %d: %v", userID, err)
 		return
 	}
 	if anchor, ok := parseRFC3339(raw); ok && !anchor.Before(now.Add(-briefingAnchorStep)) {
@@ -147,7 +147,7 @@ func (app *Application) advanceBriefingAnchor(ctx context.Context, userID int64,
 		LastBriefingAt: now.UTC().Format(time.RFC3339),
 		ID:             userID,
 	}); err != nil {
-		log.Printf("home: advance briefing anchor for user %d: %v", userID, err)
+		logging.Errorf("home: advance briefing anchor for user %d: %v", userID, err)
 	}
 }
 
@@ -481,7 +481,7 @@ func (app *Application) briefingMarketLines(ctx context.Context, bundles []*char
 
 	health, err := app.queries.ListOrderHealthByUser(ctx, userID)
 	if err != nil {
-		log.Printf("home: briefing: list order health for user %d: %v", userID, err)
+		logging.Errorf("home: briefing: list order health for user %d: %v", userID, err)
 	} else {
 		perChar := map[int64]int{}
 		example := map[int64]db.OrderHealth{}
@@ -513,7 +513,7 @@ func (app *Application) briefingMarketLines(ctx context.Context, bundles []*char
 
 	entries, err := app.queries.ListWatchlistByUser(ctx, userID)
 	if err != nil {
-		log.Printf("home: briefing: list watchlist for user %d: %v", userID, err)
+		logging.Errorf("home: briefing: list watchlist for user %d: %v", userID, err)
 		return lines
 	}
 	for _, e := range entries {

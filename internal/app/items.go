@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"html/template"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -11,6 +10,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -157,7 +157,7 @@ func (app *Application) handleItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err != nil {
-		log.Printf("items: list categories: %v", err)
+		logging.Errorf("items: list categories: %v", err)
 		data.Error = "Item database unavailable right now — check the server log."
 	} else {
 		for _, row := range rows {
@@ -210,7 +210,7 @@ func (app *Application) handleItemsSearch(w http.ResponseWriter, r *http.Request
 			view.Categories = append(view.Categories, itemCategoryRow{ID: row.CategoryID, Name: row.Name})
 		}
 	} else {
-		log.Printf("items: search categories: %v", err)
+		logging.Errorf("items: search categories: %v", err)
 	}
 	if view.CategoryID > 0 {
 		if rows, err := app.queries.ListSDEGroupsInCategory(ctx, view.CategoryID); err == nil {
@@ -218,7 +218,7 @@ func (app *Application) handleItemsSearch(w http.ResponseWriter, r *http.Request
 				view.Groups = append(view.Groups, itemGroupRow{ID: row.GroupID, Name: row.Name})
 			}
 		} else {
-			log.Printf("items: search groups of category %d: %v", view.CategoryID, err)
+			logging.Errorf("items: search groups of category %d: %v", view.CategoryID, err)
 		}
 	}
 
@@ -230,7 +230,7 @@ func (app *Application) handleItemsSearch(w http.ResponseWriter, r *http.Request
 		Q: view.SearchQuery, MarketOnly: marketOnly, CategoryID: view.CategoryID, GroupID: view.GroupID,
 	})
 	if err != nil {
-		log.Printf("items: count search %q: %v", view.SearchQuery, err)
+		logging.Errorf("items: count search %q: %v", view.SearchQuery, err)
 		data.Error = "Item database unavailable right now — check the server log."
 		data.Items = view
 		app.render(ctx, w, http.StatusOK, "items.html", data)
@@ -254,7 +254,7 @@ func (app *Application) handleItemsSearch(w http.ResponseWriter, r *http.Request
 		Lim: itemsTypesPerPage, Off: int64((view.Page - 1) * itemsTypesPerPage),
 	})
 	if err != nil {
-		log.Printf("items: search %q: %v", view.SearchQuery, err)
+		logging.Errorf("items: search %q: %v", view.SearchQuery, err)
 		data.Error = "Item database unavailable right now — check the server log."
 	} else {
 		for _, row := range rows {
@@ -303,7 +303,7 @@ func (app *Application) handleItemsCategory(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	if gerr != nil {
-		log.Printf("items: list groups of category %d: %v", categoryID, gerr)
+		logging.Errorf("items: list groups of category %d: %v", categoryID, gerr)
 		data.Error = "Item database unavailable right now — check the server log."
 	} else {
 		for _, row := range grows {
@@ -352,7 +352,7 @@ func (app *Application) handleItemsGroup(w http.ResponseWriter, r *http.Request)
 	total, err := app.queries.CountSDETypesInGroupFiltered(ctx,
 		db.CountSDETypesInGroupFilteredParams{GroupID: groupID, Lower: view.Query, MarketOnly: marketOnly})
 	if err != nil {
-		log.Printf("items: count types of group %d: %v", groupID, err)
+		logging.Errorf("items: count types of group %d: %v", groupID, err)
 		data.Error = "Item database unavailable right now — check the server log."
 		data.Items = view
 		app.render(ctx, w, http.StatusOK, "items.html", data)
@@ -380,7 +380,7 @@ func (app *Application) handleItemsGroup(w http.ResponseWriter, r *http.Request)
 			RowOffset:  int64((view.Page - 1) * itemsTypesPerPage),
 		})
 	if err != nil {
-		log.Printf("items: list types of group %d: %v", groupID, err)
+		logging.Errorf("items: list types of group %d: %v", groupID, err)
 		data.Error = "Item database unavailable right now — check the server log."
 	} else {
 		for _, row := range rows {
@@ -439,7 +439,7 @@ func (app *Application) itemDescription(ctx context.Context, typeID int64) (stri
 		return "empty", ""
 	default:
 		if qerr := app.queries.UpsertTypeDetailWant(ctx, typeID); qerr != nil {
-			log.Printf("items: note type detail want for %d: %v", typeID, qerr)
+			logging.Errorf("items: note type detail want for %d: %v", typeID, qerr)
 		}
 		return "pending", ""
 	}
@@ -517,7 +517,7 @@ func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	} else {
-		log.Printf("items: list blueprints using %d: %v", typeID, uerr)
+		logging.Errorf("items: list blueprints using %d: %v", typeID, uerr)
 	}
 
 	view.TypeDetail = detail

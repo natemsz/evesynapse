@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"sort"
@@ -15,6 +14,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -150,7 +150,7 @@ func (app *Application) handlePlanner(w http.ResponseWriter, r *http.Request) {
 
 	count, err := app.queries.CountSDEBlueprints(ctx)
 	if err != nil {
-		log.Printf("planner: count blueprints: %v", err)
+		logging.Errorf("planner: count blueprints: %v", err)
 		data.Error = "Could not load planner data; check the server log."
 		app.render(ctx, w, http.StatusOK, "planner.html", data)
 		return
@@ -167,7 +167,7 @@ func (app *Application) handlePlanner(w http.ResponseWriter, r *http.Request) {
 		view.Searched = true
 		hits, err := app.queries.SearchManufacturableProducts(ctx, view.Query)
 		if err != nil {
-			log.Printf("planner: search %q: %v", view.Query, err)
+			logging.Errorf("planner: search %q: %v", view.Query, err)
 			data.Error = "Search failed; check the server log."
 		}
 		for _, hit := range hits {
@@ -281,7 +281,7 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 		return nil, "That item has no manufacturing blueprint in the local data, so it can't be planned."
 	}
 	if err != nil {
-		log.Printf("planner: build plan for product %d: %v", productID, err)
+		logging.Errorf("planner: build plan for product %d: %v", productID, err)
 		return nil, "That plan couldn't be computed; check the server log."
 	}
 	if res.TooLarge {
@@ -505,7 +505,7 @@ func (s *sdePlannerSource) BlueprintForProduct(productTypeID int64) (*plannerBlu
 	row, err := s.app.queries.GetSDEBlueprintForProduct(s.ctx, productTypeID)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
-			log.Printf("planner: blueprint for product %d: %v", productTypeID, err)
+			logging.Errorf("planner: blueprint for product %d: %v", productTypeID, err)
 		}
 		s.none[productTypeID] = true
 		return nil, false
@@ -522,14 +522,14 @@ func (s *sdePlannerSource) BlueprintForProduct(productTypeID int64) (*plannerBlu
 			bp.Materials = append(bp.Materials, plannerMaterial{TypeID: m.MaterialTypeID, Quantity: m.Quantity})
 		}
 	} else {
-		log.Printf("planner: materials for blueprint %d: %v", row.BlueprintTypeID, err)
+		logging.Errorf("planner: materials for blueprint %d: %v", row.BlueprintTypeID, err)
 	}
 	if skills, err := s.app.queries.ListSDEBlueprintSkills(s.ctx, row.BlueprintTypeID); err == nil {
 		for _, sk := range skills {
 			bp.Skills = append(bp.Skills, plannerSkillReq{TypeID: sk.SkillTypeID, Level: sk.Level})
 		}
 	} else {
-		log.Printf("planner: skills for blueprint %d: %v", row.BlueprintTypeID, err)
+		logging.Errorf("planner: skills for blueprint %d: %v", row.BlueprintTypeID, err)
 	}
 	s.memo[productTypeID] = bp
 	return bp, true
@@ -545,7 +545,7 @@ func (app *Application) plannerAccountChars(ctx context.Context) []db.Character 
 	}
 	chars, err := app.queries.ListCharactersByUser(ctx, userID)
 	if err != nil {
-		log.Printf("planner: list characters for user %d: %v", userID, err)
+		logging.Errorf("planner: list characters for user %d: %v", userID, err)
 		return nil
 	}
 	return chars

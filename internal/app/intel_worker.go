@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -56,15 +56,15 @@ func (app *Application) refreshIntel(ctx context.Context, budget *warmBudget) (s
 		if snap, err := app.queries.GetGlobalSnapshot(ctx, kind); err == nil && esi.GlobalSnapshotFresh(snap) {
 			continue // still inside ESI's cache window
 		} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			log.Printf("worker: intel: read global snapshot %s: %v", kind, err)
+			logging.Errorf("worker: intel: read global snapshot %s: %v", kind, err)
 		}
 
 		if _, err := app.esi.FetchAndStoreGlobalSnapshot(ctx, kind); err != nil {
 			if errors.Is(err, esi.ErrErrorLimit) {
-				log.Printf("worker: intel: ESI error limit hit refreshing %s; backing off until next cycle", kind)
+				logging.Warnf("worker: intel: ESI error limit hit refreshing %s; backing off until next cycle", kind)
 				return stored, names, true
 			}
-			log.Printf("worker: intel: refresh %s: %v", kind, err)
+			logging.Errorf("worker: intel: refresh %s: %v", kind, err)
 			continue
 		}
 		stored++
@@ -110,7 +110,7 @@ func (app *Application) warmWarDetails(ctx context.Context, list esi.WarList) (f
 		need := false
 		if row, err := app.queries.GetWarDetail(ctx, warID); err != nil {
 			if !errors.Is(err, sql.ErrNoRows) {
-				log.Printf("worker: intel: read war detail %d: %v", warID, err)
+				logging.Errorf("worker: intel: read war detail %d: %v", warID, err)
 				continue
 			}
 			need = true
@@ -134,7 +134,7 @@ func (app *Application) warmWarDetails(ctx context.Context, list esi.WarList) (f
 				return fetched, true
 			}
 			if ctx.Err() == nil {
-				log.Printf("worker: intel: war detail %d: %v", warID, err)
+				logging.Errorf("worker: intel: war detail %d: %v", warID, err)
 			}
 			continue
 		}
@@ -143,7 +143,7 @@ func (app *Application) warmWarDetails(ctx context.Context, list esi.WarList) (f
 			Payload:   string(body),
 			FetchedAt: time.Now().UTC().Format(time.RFC3339),
 		}); err != nil {
-			log.Printf("worker: intel: store war detail %d: %v", warID, err)
+			logging.Errorf("worker: intel: store war detail %d: %v", warID, err)
 			continue
 		}
 		fetched++
@@ -247,7 +247,7 @@ func (app *Application) warmCorpName(ctx context.Context, budget *warmBudget, id
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
 		} else if ctx.Err() == nil {
-			log.Printf("worker: intel: warm corporation %d: %v", id, err)
+			logging.Errorf("worker: intel: warm corporation %d: %v", id, err)
 		}
 		return false
 	}
@@ -264,7 +264,7 @@ func (app *Application) warmAllianceName(ctx context.Context, budget *warmBudget
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
 		} else if ctx.Err() == nil {
-			log.Printf("worker: intel: warm alliance %d: %v", id, err)
+			logging.Errorf("worker: intel: warm alliance %d: %v", id, err)
 		}
 		return false
 	}
@@ -281,7 +281,7 @@ func (app *Application) warmConstellationName(ctx context.Context, budget *warmB
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
 		} else if ctx.Err() == nil {
-			log.Printf("worker: intel: warm constellation %d: %v", id, err)
+			logging.Errorf("worker: intel: warm constellation %d: %v", id, err)
 		}
 		return false
 	}

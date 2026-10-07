@@ -189,6 +189,8 @@ gaps; real environment variables win over the file):
 | `EVESYNAPSE_UPDATE_REPO` | no | `natemsz/evesynapse` | GitHub repo (owner/repo) the updater checks |
 | `EVE_SDE_BASE_URL` | no | Fuzzwork's dump | Base URL of the SDE CSV dump the importer downloads |
 | `ESI_CONTACT` | no | — | How CCP can reach whoever runs this instance (an email address, a Discord handle, a character name). Sent in the User-Agent of every ESI request, as CCP asks of third-party apps |
+| `LOG_LEVEL` | no | `info` | Least severe kind of log line written: `debug`, `info`, `warn` or `error` (see "Logging") |
+| `LOG_FORMAT` | no | `text` | `text` for the classic line, `json` for one object per line |
 | `DEV_LOGIN` | no | — | Dev build only: `1` registers the `/dev-login` route |
 
 ## Install
@@ -570,6 +572,33 @@ plus a heartbeat every 10 minutes. The current status (last run,
 summary, cumulative names resolved) shows on the Admin and Sync
 pages.
 
+
+## Logging
+
+Every log line carries a level:
+
+- **ERROR**: something failed that should not have (a query, a
+  decode, a store, a template, a recovered panic, a request the
+  server answered with a 5xx).
+- **WARN**: something went wrong in a way the app expects and
+  handles (ESI asking it to back off, stale data served because a
+  refresh failed, a sign-in that did not complete, a setting worth
+  changing).
+- **INFO**: what the app is doing (starting and stopping, sign-ins,
+  worker cycle summaries, imports, requests).
+
+`LOG_LEVEL` sets the least severe kind that is written. The
+default, `info`, writes everything, as before; `warn` leaves only
+the lines that may need attention. `LOG_FORMAT=json` writes one
+JSON object per line (`time`, `level`, `msg`) for a log collector;
+the default is the plain line:
+
+```
+2026/10/07 12:00:00 WARN worker: ESI error limit hit refreshing intel; backing off until next cycle
+```
+
+Under systemd, `journalctl -u evesynapse -g ' (WARN|ERROR) '` shows
+only those lines without changing what is logged.
 ## Performance principles
 
 EveSynapse is built to stay lightweight, lean, fast, and efficient at

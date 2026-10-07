@@ -3,13 +3,13 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // skillsView is the Skill Sheet page body for one character.
@@ -103,14 +103,14 @@ func (app *Application) handleSkills(w http.ResponseWriter, r *http.Request) {
 func (app *Application) fillBrowse(ctx context.Context, view *skillsView, ch db.Character, skills esi.Skills, userID int64) {
 	if n, err := app.queries.CountSDESkillMeta(ctx); err != nil || n == 0 {
 		if err != nil {
-			log.Printf("skills: count skill meta: %v", err)
+			logging.Errorf("skills: count skill meta: %v", err)
 		}
 		view.BrowseWarming = true
 		return
 	}
 	catalog, err := app.queries.ListSDESkillCatalog(ctx)
 	if err != nil {
-		log.Printf("skills: skill catalog: %v", err)
+		logging.Errorf("skills: skill catalog: %v", err)
 		view.BrowseWarming = true
 		return
 	}
@@ -129,7 +129,7 @@ func (app *Application) fillBrowse(ctx context.Context, view *skillsView, ch db.
 			prereqCounts[r.TypeID]++
 		}
 	} else {
-		log.Printf("skills: catalog requirements: %v", err)
+		logging.Errorf("skills: catalog requirements: %v", err)
 	}
 
 	var groups []browseSkillGroup
@@ -157,7 +157,7 @@ func (app *Application) fillBrowse(ctx context.Context, view *skillsView, ch db.
 
 	plans, err := app.queries.ListSkillPlans(ctx, db.ListSkillPlansParams{UserID: userID, CharacterID: ch.CharacterID})
 	if err != nil {
-		log.Printf("skills: plans for character %d: %v", ch.CharacterID, err)
+		logging.Errorf("skills: plans for character %d: %v", ch.CharacterID, err)
 		return
 	}
 	for _, p := range plans {

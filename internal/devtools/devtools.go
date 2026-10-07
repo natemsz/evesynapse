@@ -6,12 +6,12 @@
 package devtools
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 
 	"evesynapse/internal/app"
+	"evesynapse/internal/logging"
 )
 
 // Register mounts the dev-only routes on the application's router.
@@ -36,7 +36,7 @@ func Register(r chi.Router, a *app.Application) {
 		return
 	}
 	// LOUD ON PURPOSE: same warning the old inline route printed.
-	log.Printf("WARNING: DEV_LOGIN=1 — /dev-login is ENABLED. Never run like this in production.")
+	logging.Warnf("DEV_LOGIN=1 — /dev-login is ENABLED. Never run like this in production.")
 	r.Get("/dev-login", func(w http.ResponseWriter, r *http.Request) {
 		app.DevSignIn(r.Context(), a)
 		http.Redirect(w, r, "/", http.StatusSeeOther)

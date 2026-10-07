@@ -3,12 +3,12 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"time"
 
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -105,7 +105,7 @@ func (app *Application) handleIndustry(w http.ResponseWriter, r *http.Request) {
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/industry/")
 	if err != nil {
-		log.Printf("industry: list characters: %v", err)
+		logging.Errorf("industry: list characters: %v", err)
 		data.Error = "Could not load industry data; check the server log."
 		app.render(ctx, w, http.StatusOK, "industry.html", data)
 		return

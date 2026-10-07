@@ -32,7 +32,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -41,6 +40,7 @@ import (
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/logging"
 )
 
 // ESI is at https://esi.evetech.net; every request carries a
@@ -2012,21 +2012,21 @@ func (c *Client) GetCached(ctx context.Context, ch db.Character, kind string, ou
 	snap, serr := c.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: kind})
 	haveSnap := serr == nil
 	if serr != nil && !errors.Is(serr, sql.ErrNoRows) {
-		log.Printf("esi: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
+		logging.Errorf("esi: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
 	}
 
 	if haveSnap && SnapshotFresh(snap) {
 		if err := json.Unmarshal([]byte(snap.Payload), out); err == nil {
 			return nil
 		} else {
-			log.Printf("esi: decode cached %s for character %d: %v (refetching)", kind, ch.CharacterID, err)
+			logging.Warnf("esi: decode cached %s for character %d: %v (refetching)", kind, ch.CharacterID, err)
 		}
 	}
 
 	body, err := c.FetchAndStoreSnapshot(ctx, ch, kind)
 	if err != nil {
 		if haveSnap {
-			log.Printf("esi: %s fetch for character %d failed (%v); serving stale snapshot", kind, ch.CharacterID, err)
+			logging.Warnf("esi: %s fetch for character %d failed (%v); serving stale snapshot", kind, ch.CharacterID, err)
 			if derr := json.Unmarshal([]byte(snap.Payload), out); derr == nil {
 				return nil
 			}
@@ -2203,7 +2203,7 @@ func (c *Client) ResolveTypeNames(ctx context.Context, ids []int64) map[int64]st
 		lookups++
 		var t Type
 		if err := c.Get(ctx, "", fmt.Sprintf("/universe/types/%d/", id), &t); err != nil {
-			log.Printf("esi: type name lookup %d: %v", id, err)
+			logging.Errorf("esi: type name lookup %d: %v", id, err)
 			continue
 		}
 		if t.Name == "" {
@@ -2224,7 +2224,7 @@ func (c *Client) StoreTypeName(ctx context.Context, id int64, t Type) {
 		c.typeNames[id] = t.Name
 		c.typeNamesMu.Unlock()
 		if err := c.queries.UpsertTypeName(ctx, db.UpsertTypeNameParams{TypeID: id, Name: t.Name}); err != nil {
-			log.Printf("esi: persist type name %d: %v", id, err)
+			logging.Errorf("esi: persist type name %d: %v", id, err)
 		}
 	}
 	if t.GroupID > 0 {
@@ -2346,7 +2346,7 @@ func (c *Client) ResolveTypeGroups(ctx context.Context, ids []int64) map[int64]i
 		lookups++
 		var t Type
 		if err := c.Get(ctx, "", fmt.Sprintf("/universe/types/%d/", id), &t); err != nil {
-			log.Printf("esi: type group lookup %d: %v", id, err)
+			logging.Errorf("esi: type group lookup %d: %v", id, err)
 			continue
 		}
 		if t.GroupID <= 0 {
@@ -2404,7 +2404,7 @@ func (c *Client) ResolveGroupNames(ctx context.Context, ids []int64) map[int64]s
 		lookups++
 		var g Group
 		if err := c.Get(ctx, "", fmt.Sprintf("/universe/groups/%d/", id), &g); err != nil {
-			log.Printf("skills: group name lookup %d: %v", id, err)
+			logging.Errorf("skills: group name lookup %d: %v", id, err)
 			continue
 		}
 		if g.Name == "" {
@@ -2446,7 +2446,7 @@ func (c *Client) PlaceName(ctx context.Context, path string, id int64, fallback 
 
 	var place Station
 	if err := c.Get(ctx, "", path, &place); err != nil {
-		log.Printf("assets: place lookup %s: %v", path, err)
+		logging.Errorf("assets: place lookup %s: %v", path, err)
 		return fallback
 	}
 	if place.Name == "" {

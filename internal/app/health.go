@@ -7,10 +7,11 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"evesynapse/internal/logging"
 )
 
 // workerStallAfter is how long the worker may go without starting
@@ -46,7 +47,7 @@ func (app *Application) healthProblems(ctx context.Context) []string {
 	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	if err := app.db.PingContext(pingCtx); err != nil {
-		log.Printf("healthz: database: %v", err)
+		logging.Errorf("healthz: database: %v", err)
 		problems = append(problems, "database: unreachable")
 	}
 
@@ -58,7 +59,7 @@ func (app *Application) healthProblems(ctx context.Context) []string {
 			last = app.startedAt
 		}
 		if idle := time.Since(last); idle > workerStallAfter {
-			log.Printf("healthz: worker: no cycle has started for %s", idle.Round(time.Second))
+			logging.Errorf("healthz: worker: no cycle has started for %s", idle.Round(time.Second))
 			problems = append(problems, "worker: stalled")
 		}
 	}

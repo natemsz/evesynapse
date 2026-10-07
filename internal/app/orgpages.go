@@ -6,13 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -209,11 +209,11 @@ func (app *Application) loadCorporationView(ctx context.Context, id int64) *corp
 		} else {
 			// Corrupt payload: requeue rather than strand the
 			// page on the loading state forever.
-			log.Printf("corporation: unreadable payload for %d; requeueing", id)
+			logging.Warnf("corporation: unreadable payload for %d; requeueing", id)
 			if serr := app.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
 				CorporationID: id, Payload: "", State: orgStatePending, FetchedAt: "",
 			}); serr != nil {
-				log.Printf("corporation: requeue %d: %v", id, serr)
+				logging.Errorf("corporation: requeue %d: %v", id, serr)
 			}
 		}
 	case err == nil && rec.State == orgStateMissing:
@@ -222,7 +222,7 @@ func (app *Application) loadCorporationView(ctx context.Context, id int64) *corp
 		// No record yet, a pending one, or a read error: (re)note
 		// the want so the worker fills it on a coming cycle.
 		if qerr := app.queries.UpsertCorporationWant(ctx, id); qerr != nil {
-			log.Printf("corporation: note want for %d: %v", id, qerr)
+			logging.Errorf("corporation: note want for %d: %v", id, qerr)
 		}
 	}
 
@@ -309,18 +309,18 @@ func (app *Application) loadAllianceView(ctx context.Context, id int64) *allianc
 		if built, ok := app.buildAllianceView(ctx, id, rec.Payload); ok {
 			view = built
 		} else {
-			log.Printf("alliance: unreadable payload for %d; requeueing", id)
+			logging.Warnf("alliance: unreadable payload for %d; requeueing", id)
 			if serr := app.queries.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
 				AllianceID: id, Payload: "", State: orgStatePending, FetchedAt: "",
 			}); serr != nil {
-				log.Printf("alliance: requeue %d: %v", id, serr)
+				logging.Errorf("alliance: requeue %d: %v", id, serr)
 			}
 		}
 	case err == nil && rec.State == orgStateMissing:
 		view.State = "missing"
 	default:
 		if qerr := app.queries.UpsertAllianceWant(ctx, id); qerr != nil {
-			log.Printf("alliance: note want for %d: %v", id, qerr)
+			logging.Errorf("alliance: note want for %d: %v", id, qerr)
 		}
 	}
 
@@ -501,7 +501,7 @@ func (app *Application) drainCorporationPass(ctx context.Context, allowance *fet
 		DrainLimit:  int64(limit),
 	})
 	if err != nil {
-		log.Printf("worker: corporation records: list drains: %v", err)
+		logging.Errorf("worker: corporation records: list drains: %v", err)
 		return 0, false
 	}
 	for _, id := range ids {
@@ -526,7 +526,7 @@ func (app *Application) drainAlliancePass(ctx context.Context, allowance *fetchB
 		DrainLimit:  int64(limit),
 	})
 	if err != nil {
-		log.Printf("worker: alliance records: list drains: %v", err)
+		logging.Errorf("worker: alliance records: list drains: %v", err)
 		return 0, false
 	}
 	for _, id := range ids {
@@ -556,19 +556,19 @@ func (app *Application) drainCorporationRecord(ctx context.Context, id int64, al
 	var corp esi.Corporation
 	if err := app.esi.Get(ctx, "", fmt.Sprintf("/corporations/%d/", id), &corp); err != nil {
 		if errors.Is(err, esi.ErrErrorLimit) {
-			log.Printf("worker: corporation records: ESI error limit hit resolving corporation %d; backing off until next cycle", id)
+			logging.Warnf("worker: corporation records: ESI error limit hit resolving corporation %d; backing off until next cycle", id)
 			return false, true
 		}
 		if code, has := esi.StatusCode(err); has && code == http.StatusNotFound {
 			if serr := app.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
 				CorporationID: id, Payload: "", State: orgStateMissing, FetchedAt: stamp,
 			}); serr != nil {
-				log.Printf("worker: corporation records: record miss for %d: %v", id, serr)
+				logging.Errorf("worker: corporation records: record miss for %d: %v", id, serr)
 				return false, false
 			}
 			return true, false
 		}
-		log.Printf("worker: corporation records: fetch corporation %d: %v", id, err)
+		logging.Errorf("worker: corporation records: fetch corporation %d: %v", id, err)
 		return false, false
 	}
 	app.esi.StoreCorpName(id, corp.Name)
@@ -583,7 +583,7 @@ func (app *Application) drainCorporationRecord(ctx context.Context, id int64, al
 			if errors.Is(err, esi.ErrErrorLimit) {
 				return false, true
 			}
-			log.Printf("worker: corporation records: fetch alliance %d for corporation %d: %v", corp.AllianceID, id, err)
+			logging.Errorf("worker: corporation records: fetch alliance %d for corporation %d: %v", corp.AllianceID, id, err)
 		} else {
 			payload.Alliance = alliance
 			app.esi.StoreAllianceName(corp.AllianceID, alliance.Name)
@@ -592,13 +592,13 @@ func (app *Application) drainCorporationRecord(ctx context.Context, id int64, al
 
 	encoded, err := json.Marshal(payload)
 	if err != nil {
-		log.Printf("worker: corporation records: encode payload for %d: %v", id, err)
+		logging.Errorf("worker: corporation records: encode payload for %d: %v", id, err)
 		return false, false
 	}
 	if err := app.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
 		CorporationID: id, Payload: string(encoded), State: orgStateReady, FetchedAt: stamp,
 	}); err != nil {
-		log.Printf("worker: corporation records: store record for %d: %v", id, err)
+		logging.Errorf("worker: corporation records: store record for %d: %v", id, err)
 		return false, false
 	}
 	return true, false
@@ -618,19 +618,19 @@ func (app *Application) drainAllianceRecord(ctx context.Context, id int64, allow
 	var alliance esi.Alliance
 	if err := app.esi.Get(ctx, "", fmt.Sprintf("/alliances/%d/", id), &alliance); err != nil {
 		if errors.Is(err, esi.ErrErrorLimit) {
-			log.Printf("worker: alliance records: ESI error limit hit resolving alliance %d; backing off until next cycle", id)
+			logging.Warnf("worker: alliance records: ESI error limit hit resolving alliance %d; backing off until next cycle", id)
 			return false, true
 		}
 		if code, has := esi.StatusCode(err); has && code == http.StatusNotFound {
 			if serr := app.queries.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
 				AllianceID: id, Payload: "", State: orgStateMissing, FetchedAt: stamp,
 			}); serr != nil {
-				log.Printf("worker: alliance records: record miss for %d: %v", id, serr)
+				logging.Errorf("worker: alliance records: record miss for %d: %v", id, serr)
 				return false, false
 			}
 			return true, false
 		}
-		log.Printf("worker: alliance records: fetch alliance %d: %v", id, err)
+		logging.Errorf("worker: alliance records: fetch alliance %d: %v", id, err)
 		return false, false
 	}
 	app.esi.StoreAllianceName(id, alliance.Name)
@@ -645,7 +645,7 @@ func (app *Application) drainAllianceRecord(ctx context.Context, id int64, allow
 			}
 			// The member list failing is not fatal to the record:
 			// store the profile with an empty list.
-			log.Printf("worker: alliance records: fetch member corporations for %d: %v (storing profile only)", id, err)
+			logging.Warnf("worker: alliance records: fetch member corporations for %d: %v (storing profile only)", id, err)
 		} else {
 			nameFetches := 0
 			for _, corpID := range corpIDs {
@@ -659,7 +659,7 @@ func (app *Application) drainAllianceRecord(ctx context.Context, id int64, allow
 						if errors.Is(err, esi.ErrErrorLimit) {
 							return false, true
 						}
-						log.Printf("worker: alliance records: fetch member corporation %d for alliance %d: %v", corpID, id, err)
+						logging.Errorf("worker: alliance records: fetch member corporation %d for alliance %d: %v", corpID, id, err)
 					} else {
 						member.Name = corp.Name
 						app.esi.StoreCorpName(corpID, corp.Name)
@@ -672,13 +672,13 @@ func (app *Application) drainAllianceRecord(ctx context.Context, id int64, allow
 
 	encoded, err := json.Marshal(payload)
 	if err != nil {
-		log.Printf("worker: alliance records: encode payload for %d: %v", id, err)
+		logging.Errorf("worker: alliance records: encode payload for %d: %v", id, err)
 		return false, false
 	}
 	if err := app.queries.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
 		AllianceID: id, Payload: string(encoded), State: orgStateReady, FetchedAt: stamp,
 	}); err != nil {
-		log.Printf("worker: alliance records: store record for %d: %v", id, err)
+		logging.Errorf("worker: alliance records: store record for %d: %v", id, err)
 		return false, false
 	}
 	return true, false

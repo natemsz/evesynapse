@@ -4,12 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log"
 	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -79,7 +79,7 @@ func (app *Application) fetchCommsKind(ctx context.Context, ch db.Character, kin
 	case serr == nil && esi.SnapshotFresh(snap):
 		return corpFetchSkipped
 	case serr != nil && !errors.Is(serr, sql.ErrNoRows):
-		log.Printf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
+		logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
 	}
 
 	// A recorded 403 backs the kind off instead of retrying
@@ -97,15 +97,15 @@ func (app *Application) fetchCommsKind(ctx context.Context, ch db.Character, kin
 	if _, err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
 		switch {
 		case errors.Is(err, esi.ErrErrorLimit):
-			log.Printf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)
+			logging.Warnf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)
 			return corpFetchLimited
 		case esi.IsForbidden(err):
 			detail := forbiddenDetailPrefix + " — this character's login predates the current scope list; sign in again to re-grant scopes."
 			app.recordCorpFetchState(ctx, ch.CharacterID, kind, fetchStateError, detail)
-			log.Printf("worker: %s for character %d refused by ESI (403); recorded as a stale-scope login", kind, ch.CharacterID)
+			logging.Infof("worker: %s for character %d refused by ESI (403); recorded as a stale-scope login", kind, ch.CharacterID)
 			return corpFetchFailed
 		default:
-			log.Printf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
+			logging.Errorf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
 			app.recordCorpFetchState(ctx, ch.CharacterID, kind, fetchStateError, err.Error())
 			return corpFetchFailed
 		}
@@ -150,7 +150,7 @@ func (app *Application) warmMailBodies(ctx context.Context, ch db.Character, all
 		if _, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: kind}); err == nil {
 			continue // immutable: already stored
 		} else if !errors.Is(err, sql.ErrNoRows) {
-			log.Printf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, err)
+			logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, err)
 			continue
 		}
 
@@ -162,7 +162,7 @@ func (app *Application) warmMailBodies(ctx context.Context, ch db.Character, all
 				return fetched, true
 			}
 			if ctx.Err() == nil {
-				log.Printf("worker: mail body %d for character %d: %v", h.MailID, ch.CharacterID, err)
+				logging.Errorf("worker: mail body %d for character %d: %v", h.MailID, ch.CharacterID, err)
 			}
 			continue
 		}
@@ -196,7 +196,7 @@ func (app *Application) warmCalendarDetails(ctx context.Context, ch db.Character
 			case serr == nil && esi.SnapshotFresh(snap):
 				continue
 			case serr != nil && !errors.Is(serr, sql.ErrNoRows):
-				log.Printf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
+				logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
 				continue
 			}
 			if !allowance.take() {
@@ -207,7 +207,7 @@ func (app *Application) warmCalendarDetails(ctx context.Context, ch db.Character
 					return fetched, true
 				}
 				if ctx.Err() == nil {
-					log.Printf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
+					logging.Errorf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
 				}
 				continue
 			}

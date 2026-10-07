@@ -3,12 +3,12 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
 
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -49,7 +49,7 @@ func (app *Application) handleContacts(w http.ResponseWriter, r *http.Request) {
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/contacts/")
 	if err != nil {
-		log.Printf("contacts: list characters: %v", err)
+		logging.Errorf("contacts: list characters: %v", err)
 		data.Error = "Could not load contacts; check the server log."
 		app.render(ctx, w, http.StatusOK, "contacts.html", data)
 		return

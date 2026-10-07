@@ -4,12 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log"
 	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -114,7 +114,7 @@ func (app *Application) fetchPlanetsKind(ctx context.Context, ch db.Character, a
 	case serr == nil && esi.SnapshotFresh(snap):
 		return corpFetchSkipped
 	case serr != nil && !errors.Is(serr, sql.ErrNoRows):
-		log.Printf("worker: read %s snapshot for character %d: %v", esi.SnapPlanets, ch.CharacterID, serr)
+		logging.Errorf("worker: read %s snapshot for character %d: %v", esi.SnapPlanets, ch.CharacterID, serr)
 	}
 
 	// A recorded scope refusal backs the kind off — unless the
@@ -135,16 +135,16 @@ func (app *Application) fetchPlanetsKind(ctx context.Context, ch db.Character, a
 	if _, err := app.esi.FetchAndStoreSnapshot(ctx, ch, esi.SnapPlanets); err != nil {
 		switch {
 		case errors.Is(err, esi.ErrErrorLimit):
-			log.Printf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", esi.SnapPlanets, ch.CharacterID)
+			logging.Warnf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", esi.SnapPlanets, ch.CharacterID)
 			return corpFetchLimited
 		case piScopeRefusal(err):
 			code, _ := esi.StatusCode(err)
 			detail := piScopeDetail + " — sign in again to re-link and grant the planetary scope."
 			app.recordCorpFetchState(ctx, ch.CharacterID, esi.SnapPlanets, fetchStateError, detail)
-			log.Printf("worker: %s for character %d refused by ESI (%d); planetary scope not granted on this login", esi.SnapPlanets, ch.CharacterID, code)
+			logging.Infof("worker: %s for character %d refused by ESI (%d); planetary scope not granted on this login", esi.SnapPlanets, ch.CharacterID, code)
 			return corpFetchFailed
 		default:
-			log.Printf("worker: refresh %s for character %d: %v", esi.SnapPlanets, ch.CharacterID, err)
+			logging.Errorf("worker: refresh %s for character %d: %v", esi.SnapPlanets, ch.CharacterID, err)
 			app.recordCorpFetchState(ctx, ch.CharacterID, esi.SnapPlanets, fetchStateError, err.Error())
 			return corpFetchFailed
 		}
@@ -180,7 +180,7 @@ func (app *Application) warmPlanetLayouts(ctx context.Context, ch db.Character, 
 		case serr == nil && esi.SnapshotFresh(snap):
 			continue
 		case serr != nil && !errors.Is(serr, sql.ErrNoRows):
-			log.Printf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
+			logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
 			continue
 		}
 
@@ -207,10 +207,10 @@ func (app *Application) warmPlanetLayouts(ctx context.Context, ch db.Character, 
 				code, _ := esi.StatusCode(err)
 				detail := piScopeDetail + " — sign in again to re-link and grant the planetary scope."
 				app.recordCorpFetchState(ctx, ch.CharacterID, kind, fetchStateError, detail)
-				log.Printf("worker: %s for character %d refused by ESI (%d); planetary scope not granted on this login", kind, ch.CharacterID, code)
+				logging.Infof("worker: %s for character %d refused by ESI (%d); planetary scope not granted on this login", kind, ch.CharacterID, code)
 			default:
 				if ctx.Err() == nil {
-					log.Printf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
+					logging.Errorf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
 				}
 				app.recordCorpFetchState(ctx, ch.CharacterID, kind, fetchStateError, err.Error())
 			}

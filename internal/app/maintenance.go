@@ -334,30 +334,34 @@ func versionParts(v string) []int {
 	return parts
 }
 
-// fetchReleaseManifest downloads and parses the manifest for
-// arch from the release channel.
-// latestDevManifestURL queries the GitHub API for releases and
-// returns the manifest asset URL of the newest tag ending in -dev.
-func latestDevManifestURL(ctx context.Context, arch string) (string, error) {
+// releaseAPIBaseURL is the GitHub API root the dev channel lists
+// releases from. A var so tests can point it at a local server.
+var releaseAPIBaseURL = "https://api.github.com"
+
+// latestDevRelease queries the GitHub API for releases and returns
+// the manifest and binary asset URLs of the newest tag ending in
+// -dev. Both come from that one release, so the checksum in the
+// manifest always describes the binary downloaded beside it.
+func latestDevRelease(ctx context.Context, arch string) (manifestURL, binaryURL string, err error) {
 	repo := "natemsz/evesynapse"
 	if r := strings.Trim(strings.TrimSpace(os.Getenv("EVESYNAPSE_UPDATE_REPO")), "/"); r != "" {
 		repo = r
 	}
-	apiURL := "https://api.github.com/repos/" + repo + "/releases?per_page=20"
+	apiURL := releaseAPIBaseURL + "/repos/" + repo + "/releases?per_page=20"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	req.Header.Set("User-Agent", "EveSynapse-Updater")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("the update server answered %s", resp.Status)
+		return "", "", fmt.Errorf("the update server answered %s", resp.Status)
 	}
 	var releases []struct {
 		TagName string `json:"tag_name"`
@@ -367,58 +371,72 @@ func latestDevManifestURL(ctx context.Context, arch string) (string, error) {
 		} `json:"assets"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&releases); err != nil {
-		return "", errors.New("the update information couldn't be read")
+		return "", "", errors.New("the update information couldn't be read")
 	}
-	want := "latest-" + arch + ".json"
+	wantManifest := "latest-" + arch + ".json"
+	wantBinary := "evesynapse-" + arch
 	for _, rel := range releases {
 		if !strings.HasSuffix(rel.TagName, "-dev") {
 			continue
 		}
 		for _, a := range rel.Assets {
-			if a.Name == want {
-				return a.BrowserDownloadURL, nil
+			switch a.Name {
+			case wantManifest:
+				manifestURL = a.BrowserDownloadURL
+			case wantBinary:
+				binaryURL = a.BrowserDownloadURL
 			}
 		}
-		return "", fmt.Errorf("dev release %s has no %s asset", rel.TagName, want)
+		if manifestURL == "" {
+			return "", "", fmt.Errorf("dev release %s has no %s asset", rel.TagName, wantManifest)
+		}
+		if binaryURL == "" {
+			return "", "", fmt.Errorf("dev release %s has no %s asset", rel.TagName, wantBinary)
+		}
+		return manifestURL, binaryURL, nil
 	}
-	return "", errors.New("no dev releases found")
+	return "", "", errors.New("no dev releases found")
 }
 
-func fetchReleaseManifest(ctx context.Context, arch string, dev bool) (releaseManifest, error) {
+// fetchReleaseManifest downloads and parses the manifest for arch
+// from the release channel (the dev channel when dev is set), and
+// returns it with the address of the binary it describes.
+func fetchReleaseManifest(ctx context.Context, arch string, dev bool) (releaseManifest, string, error) {
 	var m releaseManifest
-	u := releaseChannelBase() + "/latest-" + arch + ".json"
+	manifestURL := releaseChannelBase() + "/latest-" + arch + ".json"
+	binaryURL := releaseChannelBase() + "/evesynapse-" + arch
 	if dev {
-		devURL, err := latestDevManifestURL(ctx, arch)
+		var err error
+		manifestURL, binaryURL, err = latestDevRelease(ctx, arch)
 		if err != nil {
-			return m, err
+			return m, "", err
 		}
-		u = devURL
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, manifestURL, nil)
 	if err != nil {
-		return m, err
+		return m, "", err
 	}
 	req.Header.Set("User-Agent", "EveSynapse-Updater")
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return m, err
+		return m, "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return m, fmt.Errorf("the update server answered %s", resp.Status)
+		return m, "", fmt.Errorf("the update server answered %s", resp.Status)
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&m); err != nil {
-		return m, errors.New("the update information couldn't be read")
+		return m, "", errors.New("the update information couldn't be read")
 	}
 	m.SHA256 = strings.ToLower(strings.TrimSpace(m.SHA256))
 	if _, err := hex.DecodeString(m.SHA256); err != nil || len(m.SHA256) != sha256.Size*2 {
-		return m, errors.New("the update information couldn't be read")
+		return m, "", errors.New("the update information couldn't be read")
 	}
 	if strings.TrimSpace(m.Version) == "" {
-		return m, errors.New("the update information couldn't be read")
+		return m, "", errors.New("the update information couldn't be read")
 	}
-	return m, nil
+	return m, binaryURL, nil
 }
 
 // runReleaseUpdate implements the release-channel forms of
@@ -436,7 +454,7 @@ func runReleaseUpdate(target, arch string, stdout, stderr io.Writer, dev bool) i
 	current := Version()
 	fmt.Fprintf(stdout, "Checking for updates… you're on %s.\n", current)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	m, err := fetchReleaseManifest(ctx, arch, dev)
+	m, source, err := fetchReleaseManifest(ctx, arch, dev)
 	cancel()
 	if err != nil {
 		fmt.Fprintf(stderr, "Couldn't check for updates: %v\nNothing was changed.\n", err)
@@ -456,7 +474,6 @@ func runReleaseUpdate(target, arch string, stdout, stderr io.Writer, dev bool) i
 		return 0
 	}
 	fmt.Fprintf(stdout, "A new version is available: %s.\n", latest)
-	source := releaseChannelBase() + "/evesynapse-" + arch
 	if code := installUpdate(target, source, m.SHA256, machine, stdout, stderr); code != 0 {
 		return code
 	}

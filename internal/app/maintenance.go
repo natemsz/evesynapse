@@ -280,7 +280,11 @@ func elfMachineForArch(arch string) (uint16, bool) {
 
 // compareVersions orders dotted numeric versions: -1 when a is
 // the older, 0 when equal, +1 when a is the newer. A leading
-// "v" is ignored and missing parts count as 0.
+// "v" is ignored and missing parts count as 0. A development
+// build's suffix ("0.3.38.001-dev") is not part of the number:
+// the numbers are compared first, and when they tie the plain
+// release is the newer of the two — a dev build leads up to the
+// release that carries its number.
 func compareVersions(a, b string) int {
 	pa, pb := versionParts(a), versionParts(b)
 	for i := 0; i < len(pa) || i < len(pb); i++ {
@@ -298,11 +302,26 @@ func compareVersions(a, b string) int {
 			return 1
 		}
 	}
+	switch preA, preB := versionIsPrerelease(a), versionIsPrerelease(b); {
+	case preA && !preB:
+		return -1
+	case !preA && preB:
+		return 1
+	}
 	return 0
+}
+
+// versionIsPrerelease reports whether v names a development
+// build: anything carrying a "-suffix" after its number.
+func versionIsPrerelease(v string) bool {
+	return strings.Contains(strings.TrimSpace(v), "-")
 }
 
 func versionParts(v string) []int {
 	v = strings.TrimPrefix(strings.TrimSpace(v), "v")
+	if i := strings.IndexByte(v, '-'); i >= 0 {
+		v = v[:i] // the suffix is weighed by compareVersions, not here
+	}
 	fields := strings.Split(v, ".")
 	parts := make([]int, len(fields))
 	for i, f := range fields {
@@ -424,6 +443,14 @@ func runReleaseUpdate(target, arch string, stdout, stderr io.Writer, dev bool) i
 		return 1
 	}
 	latest := "v" + strings.TrimPrefix(m.Version, "v")
+	// The release channel only ever installs releases. Should a
+	// development build be published as the latest release by
+	// mistake, it is left alone here rather than installed onto a
+	// production box; -update -dev is the way to follow those.
+	if !dev && versionIsPrerelease(m.Version) {
+		fmt.Fprintf(stdout, "The newest published build (%s) is a development build, which a plain -update doesn't install. You're staying on %s.\n", latest, current)
+		return 0
+	}
 	if compareVersions(m.Version, current) <= 0 {
 		fmt.Fprintf(stdout, "You're up to date — %s is the latest version.\n", current)
 		return 0

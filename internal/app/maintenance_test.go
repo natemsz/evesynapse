@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -98,6 +99,14 @@ func TestCompareVersions(t *testing.T) {
 		{"0.3.17", "0.3.17.0", 0},
 		{"0.3.17.2", "0.3.17.10", -1}, // numeric, not lexical
 		{"0.3.17.10", "0.3.17.2", 1},
+		// A -dev suffix is not part of the number: the numbers
+		// decide first, and on a tie the plain release is newer.
+		{"0.3.38.002-dev", "0.3.38.001-dev", 1},
+		{"0.3.38.001-dev", "0.3.38.002-dev", -1},
+		{"0.3.38.001-dev", "0.3.38.001-dev", 0},
+		{"0.3.39.001-dev", "0.3.38.001", 1},
+		{"0.3.38.001-dev", "0.3.38.001", -1},
+		{"0.3.38.001", "v0.3.38.001-dev", 1},
 	}
 	for _, tc := range cases {
 		if got := compareVersions(tc.a, tc.b); got != tc.want {
@@ -235,6 +244,51 @@ func TestReleaseUpdateX86Alias(t *testing.T) {
 	}
 	if !bytes.Equal(got, fresh) {
 		t.Fatal("target not replaced by the x86 release download")
+	}
+}
+
+// TestReleaseUpdateLeavesDevBuildsAlone: a development build that
+// ends up published as the latest release is never installed by a
+// plain -update, whatever its number — nothing is even downloaded.
+func TestReleaseUpdateLeavesDevBuildsAlone(t *testing.T) {
+	fresh := fakeELF(elfMachineAArch64, updateMinBytes+100)
+	sum, err := sha256FileHexBytes(fresh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var downloads atomic.Int64
+	mux := http.NewServeMux()
+	mux.HandleFunc("/latest-arm64.json", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"version":"9.9.9.9-dev","arch":"arm64","sha256":%q}`, sum)
+	})
+	mux.HandleFunc("/evesynapse-arm64", func(w http.ResponseWriter, r *http.Request) {
+		downloads.Add(1)
+		_, _ = w.Write(fresh)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	withReleaseBase(t, srv.URL)
+
+	dir := t.TempDir()
+	target := filepath.Join(dir, "evesynapse")
+	writeTestFile(t, target, []byte("old build"), 0o755)
+
+	var out, errOut bytes.Buffer
+	if code := runUpdate(target, []string{"-arm64"}, &out, &errOut); code != 0 {
+		t.Fatalf("code %d, stderr %q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "development build") {
+		t.Fatalf("output %q missing the development-build note", out.String())
+	}
+	if got := downloads.Load(); got != 0 {
+		t.Fatalf("the development build was downloaded %d time(s), want 0", got)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "old build" {
+		t.Fatal("a plain -update installed a development build")
 	}
 }
 

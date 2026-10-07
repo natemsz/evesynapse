@@ -2,7 +2,7 @@ name: build-and-release
 
 on:
   push:
-    branches: [main]
+    branches: [main, evesynapse-dev]
   workflow_dispatch:
 
 permissions:
@@ -49,17 +49,34 @@ jobs:
             printf '{"version":"%s","arch":"%s","sha256":"%s"}\n' "${{ steps.ver.outputs.version }}" "$a" "$sha" > "latest-$a.json"
           done
 
+      # A version carrying a suffix (0.3.38.001-dev) is a development
+      # build: it is published as a prerelease, which GitHub never
+      # serves as "latest" — the address `evesynapse -update` reads —
+      # and is reached with `evesynapse -update -dev` instead. Plain
+      # versions are releases and are only ever published from main,
+      # so another branch can't claim a release's tag first.
       - name: Publish the release (once per version)
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          tag="v${{ steps.ver.outputs.version }}"
+          tag="v$VERSION"
+          channel_flag=""
+          how="evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers)"
+          if [ "$VERSION" != "${VERSION%%-*}" ]; then
+            channel_flag="--prerelease"
+            how="evesynapse -update -dev"
+          elif [ "$GITHUB_REF_NAME" != "main" ]; then
+            echo "Not publishing: $GITHUB_REF_NAME carries the plain version $VERSION, and plain versions are released from main only. Give this branch a suffixed version (for example $VERSION-dev) to publish development builds."
+            exit 0
+          fi
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release $tag already exists; leaving it as it is."
           else
             gh release create "$tag" \
               dist/evesynapse-arm64 dist/evesynapse-amd64 \
               dist/latest-arm64.json dist/latest-amd64.json \
+              $channel_flag \
               --title "EveSynapse $tag" \
-              --notes "Automated build of EveSynapse $tag. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers)."
+              --notes "Automated build of EveSynapse $tag. Update with: $how."
           fi

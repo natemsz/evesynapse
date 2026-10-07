@@ -2,9 +2,6 @@
 
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
-
 | Version | Supported          |
 | -------- | ------------------ |
 | > 0.3.3x | :white_check_mark: |
@@ -12,4 +9,6 @@ currently being supported with security updates.
 
 ## Reporting a Vulnerability
 
-Contact: nate@synap6.io
+Contact: admin@synap6.io
+
+General questions: nate@synap6.io

@@ -712,7 +712,7 @@ footer {
   padding: 1.4rem 1rem 1.6rem;
   margin-top: 2rem;
 }
-footer .version { color: #6b5844; }
+footer .version { color: var(--muted); }
 footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
 
 /* --- small screens --- */

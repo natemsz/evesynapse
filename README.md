@@ -61,7 +61,9 @@ This project is dedicated to EVE Online, its pilots and its developers — the g
   fitting pages in `internal/app` are its only caller
 - `internal/pgtest/` — test-only embedded-Postgres provisioning
   (a fresh database per test; `go test ./...` needs no external
-  database)
+  database). A package whose tests use it needs a `TestMain` that
+  calls `pgtest.TestMain`, which stops the server when the tests
+  finish; without one pgtest refuses to start a server
 - `internal/esi/` — the ESI client: HTTP layer, per-character
   snapshot cache, and the two-tier type/group/place name resolution
   (network tier + cache-only render tier). Never imports

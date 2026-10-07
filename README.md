@@ -10,7 +10,7 @@ This project is dedicated to EVE Online, the game and community that I have love
 
 Contact: nate@synap6.io or in-game 'Burzrujat'
 
-## AI
+## AI Use Disclosure and Policy
 - AI is used in this project purely for security auditing, hardening, and performance improvements and to assist with simplifying repetitive tasks. This is a human project built for humans, and a labor of love. 
 
 ## Stack

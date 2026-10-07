@@ -292,6 +292,9 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(app.securityHeaders)
+	// Pages, the stylesheet and the scripts are text and compress to
+	// a fraction of their size; fonts and images are left alone.
+	r.Use(middleware.Compress(5))
 	r.Use(app.crossOriginGuard())
 	r.Use(app.sessions.LoadAndSave)
 	r.Use(app.slideSession)
@@ -306,17 +309,10 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Get("/healthz", handleHealthz)
 	r.Get("/favicon.ico", handleFavicon)
 
-	// Embedded static assets (2013 wallpaper, stylesheet).
-	// Font files never change at a given URL, so they cache
-	// forever; everything else revalidates normally.
-	if sub, err := fs.Sub(staticFS, "static"); err == nil {
-		fileServer := http.FileServer(http.FS(sub))
-		r.Handle("/static/*", http.StripPrefix("/static", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			if strings.HasPrefix(req.URL.Path, "/fonts/") {
-				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-			}
-			fileServer.ServeHTTP(w, req)
-		})))
+	// Embedded static assets (stylesheet, scripts, fonts, the 2013
+	// wallpaper); static.go has the caching rules.
+	if assets, err := staticHandler(); err == nil {
+		r.Handle("/static/*", assets)
 	}
 	r.Get("/auth/eve", app.handleEVELogin)
 	r.Get("/auth/callback", app.handleEVECallback)

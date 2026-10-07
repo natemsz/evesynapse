@@ -20,7 +20,7 @@
   </div>
   <div id="fit-esi-list">
   {{range .Fittings.Fittings}}
-  <section class="foldable" data-fold="closed" data-fit-name="{{.Name}}" data-fit-ship="{{.ShipType}}">
+  <section class="card foldable" data-fold="closed" data-fit-name="{{.Name}}" data-fit-ship="{{.ShipType}}">
   <h3>{{.Name}}</h3>
   <p><small>{{itemLink .ShipTypeID .ShipType}}</small></p>
   <p><a href="/skills/plans/fit?character={{$.Fittings.CharacterID}}&fitting={{.FittingID}}">Training plan for this fit</a> · <a href="/fittings/?character={{$.Fittings.CharacterID}}&esi={{.FittingID}}#fit-editor">View stats</a></p>

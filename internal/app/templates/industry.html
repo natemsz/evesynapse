@@ -9,7 +9,7 @@
 {{if .Industry}}
 <h2>{{.Industry.CharacterName}}</h2>
 
-<section class="foldable">
+<section class="card foldable">
 <h3>Jobs</h3>
 {{if .Industry.Jobs.Note}}
 <p><small>{{.Industry.Jobs.Note}}</small></p>
@@ -32,7 +32,7 @@
 {{end}}
 </section>
 
-<section class="foldable">
+<section class="card foldable">
 <h3>Blueprints</h3>
 {{if .Industry.Blueprints.Note}}
 <p><small>{{.Industry.Blueprints.Note}}</small></p>
@@ -86,7 +86,7 @@
 {{end}}
 </section>
 
-<section class="foldable" data-fold="never">
+<section class="card foldable" data-fold="never">
 <h3>Mining ledger</h3>
 {{if .Industry.Mining.Note}}
 <p><small>{{.Industry.Mining.Note}}</small></p>

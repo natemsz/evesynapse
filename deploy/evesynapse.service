@@ -42,5 +42,31 @@ RestartSec=2
 RuntimeDirectory=evesynapse
 RuntimeDirectoryMode=0755
 
+# Sandbox. The server reads its program and its .env, talks to
+# PostgreSQL and to CCP over the network, and needs nothing else:
+# no way to gain privileges, a read-only view of the system, no
+# home directories or devices, a /tmp of its own. A systemd too old
+# to know one of these logs a warning and ignores it.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+
 [Install]
 WantedBy=multi-user.target

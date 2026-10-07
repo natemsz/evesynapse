@@ -276,6 +276,21 @@ func (app *Application) handleCharacter(w http.ResponseWriter, r *http.Request) 
 func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, view *characterView) {
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
 
+	app.fillCharacterStatus(ctx, ch, view)
+	app.fillCharacterLocation(ctx, ch, view)
+	app.fillCharacterShip(ctx, ch, view)
+	app.fillCharacterFatigue(ctx, ch, view)
+	app.fillCharacterImplantsAndClones(ctx, ch, view, userID)
+	app.fillCharacterIdentity(ctx, ch, view)
+	app.fillCharacterWallet(ctx, ch, view)
+	trainedByID := app.fillCharacterSkills(ctx, ch, view, userID)
+	app.fillCharacterQueue(ctx, ch, view, trainedByID)
+	app.fillCharacterPI(ctx, ch, view)
+	app.fillCharacterLoaded(ctx, ch, view)
+}
+
+// fillCharacterStatus: online state and login history.
+func (app *Application) fillCharacterStatus(ctx context.Context, ch db.Character, view *characterView) {
 	// Status.
 	var online esi.Online
 	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapOnline, &online) {
@@ -285,7 +300,11 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 		view.LastLogout = formatFinish(online.LastLogout)
 		view.Logins = esi.FormatInt(online.Logins)
 	}
+}
 
+// fillCharacterLocation: the system the character is in and where
+// they are docked.
+func (app *Application) fillCharacterLocation(ctx context.Context, ch db.Character, view *characterView) {
 	// Location.
 	var loc esi.Location
 	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapLocation, &loc) {
@@ -305,7 +324,10 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 			view.DockedRef = app.linkPlace(ctx, loc.StructureID, view.DockedAt)
 		}
 	}
+}
 
+// fillCharacterShip: the ship being flown.
+func (app *Application) fillCharacterShip(ctx context.Context, ch db.Character, view *characterView) {
 	// Ship.
 	var ship esi.Ship
 	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapShip, &ship) {
@@ -314,7 +336,10 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 		view.ShipTypeID = ship.ShipTypeID
 		view.ShipName = ship.ShipName
 	}
+}
 
+// fillCharacterFatigue: jump fatigue and when it clears.
+func (app *Application) fillCharacterFatigue(ctx context.Context, ch db.Character, view *characterView) {
 	// Jump fatigue.
 	var fatigue esi.Fatigue
 	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapFatigue, &fatigue) {
@@ -329,7 +354,11 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 			}
 		}
 	}
+}
 
+// fillCharacterImplantsAndClones: the active implants and the jump
+// clones with theirs. userID picks whose clone names to show.
+func (app *Application) fillCharacterImplantsAndClones(ctx context.Context, ch db.Character, view *characterView, userID int64) {
 	// Implants and clones feed one name-resolution pass so implant
 	// names come from a single cache lookup.
 	var implants esi.Implants
@@ -403,7 +432,10 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 			view.JumpClones = append(view.JumpClones, jcv)
 		}
 	}
+}
 
+// fillCharacterIdentity: birthday, security status and corporation.
+func (app *Application) fillCharacterIdentity(ctx context.Context, ch db.Character, view *characterView) {
 	// Identity: the profile snapshot the worker now warms (Phase
 	// 1B) — name/birthday/security/corporation. This is the block
 	// the old home sheet fetched live at render; it is a plain
@@ -436,14 +468,22 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 			}
 		}
 	}
+}
 
+// fillCharacterWallet: the wallet balance.
+func (app *Application) fillCharacterWallet(ctx context.Context, ch db.Character, view *characterView) {
 	// Wallet.
 	var balance float64
 	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapWallet, &balance) {
 		view.WalletKnown = true
 		view.ISK = esi.FormatISK(balance)
 	}
+}
 
+// fillCharacterSkills: the skill sheet and, for a signed-in user, the
+// browse catalog. It returns each trained skill's level, which the
+// queue section marks its rows with.
+func (app *Application) fillCharacterSkills(ctx context.Context, ch db.Character, view *characterView, userID int64) map[int64]int {
 	// Skills: the full sheet (per-category groups) now lives on
 	// this page; the builders in skills.go do the heavy lifting
 	// against a throwaway skillsView, and this block copies the
@@ -472,7 +512,11 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 			view.Plans = bv.Plans
 		}
 	}
+	return trainedByID
+}
 
+// fillCharacterQueue: the skill queue and what is training now.
+func (app *Application) fillCharacterQueue(ctx context.Context, ch db.Character, view *characterView, trainedByID map[int64]int) {
 	// Queue: the full table plus the currently-training line
 	// (position 0). An empty queue is a valid state: QueueKnown
 	// true, Training "". Rows are enriched with trained levels
@@ -527,7 +571,10 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 			break
 		}
 	}
+}
 
+// fillCharacterPI: the planetary industry summary.
+func (app *Application) fillCharacterPI(ctx context.Context, ch db.Character, view *characterView) {
 	// Planetary industry summary: colonies + soonest extractor
 	// expiry from the PI snapshots (worker-warmed; the section
 	// links to the full colonies page).
@@ -542,7 +589,12 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 			view.PISoonestIn = "in " + humanDuration(left)
 		}
 	}
+}
 
+// fillCharacterLoaded: whether any section produced data and, when
+// none did, whether that is because the worker is still warming
+// this character.
+func (app *Application) fillCharacterLoaded(ctx context.Context, ch db.Character, view *characterView) {
 	view.Loaded = view.OnlineKnown || view.LocationKnown || view.ShipKnown ||
 		view.FatigueKnown || view.ImplantsKnown || view.ClonesKnown ||
 		view.IdentityKnown || view.WalletKnown || view.SkillsKnown || view.QueueKnown ||

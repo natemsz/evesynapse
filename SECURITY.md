@@ -9,6 +9,5 @@
 
 ## Reporting a Vulnerability
 
-Contact: admin@synap6.io
-
-General questions: nate@synap6.io
+Vulnerabilities: admin@synap6.io
+General questions and concerns: nate@synap6.io

@@ -28,6 +28,7 @@
 
 {{if eq $v.Mode "category"}}
 <p><small><a href="/items/{{if $v.MarketOnly}}?market=1{{end}}">Item Database</a> › {{$v.Category.Name}}</small></p>
+<div class="card">
 <h2>{{$v.Category.Name}}</h2>
 <form method="get" action="/items/category/{{$v.Category.ID}}/">
   <label><small><input type="checkbox" name="market" value="1"{{if $v.MarketOnly}} checked{{end}}> Market items only</small></label>
@@ -47,6 +48,7 @@
 {{else}}
 <p><small>No groups in this category.</small></p>
 {{end}}
+</div>
 {{end}}
 
 {{if eq $v.Mode "search"}}
@@ -77,6 +79,7 @@
 
 {{if eq $v.Mode "group"}}
 <p><small><a href="/items/{{if $v.MarketOnly}}?market=1{{end}}">Item Database</a>{{if $v.Category}} › <a href="/items/category/{{$v.Category.ID}}/{{if $v.MarketOnly}}?market=1{{end}}">{{$v.Category.Name}}</a>{{end}} › {{$v.Group.Name}}</small></p>
+<div class="card">
 <h2>{{$v.Group.Name}}</h2>
 <form method="get" action="/items/group/{{$v.Group.ID}}/">
   <input type="search" name="q" value="{{$v.Query}}" placeholder="Filter types in this group">
@@ -100,11 +103,13 @@
 {{else}}
 <p><small>No types{{if $v.Query}} matching "{{$v.Query}}"{{end}} in this group.</small></p>
 {{end}}
+</div>
 {{end}}
 
 {{if eq $v.Mode "type"}}
 {{$d := $v.TypeDetail}}
 <p><small><a href="/items/">Item Database</a>{{if $d.Category}} › <a href="/items/category/{{$d.Category.ID}}/">{{$d.Category.Name}}</a>{{end}}{{if $d.Group}} › <a href="/items/group/{{$d.Group.ID}}/">{{$d.Group.Name}}</a>{{end}}</small></p>
+<div class="card">
 <h2>{{$d.Name}}</h2>
 
 <div class="tw">
@@ -125,8 +130,10 @@
 </p>
 
 {{template "type-description" $d}}
+</div>
 
 {{if $d.UsedIn}}
+<div class="card">
 <h3>Used in</h3>
 <div class="tw">
 <table>
@@ -137,6 +144,7 @@
   {{end}}
   </tbody>
 </table>
+</div>
 </div>
 {{end}}
 {{end}}

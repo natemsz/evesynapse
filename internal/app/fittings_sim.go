@@ -2078,7 +2078,7 @@ func (app *Application) handleFitMineJSON(w http.ResponseWriter, r *http.Request
 					if strings.Contains(strings.ToLower(f.Name), qLower) {
 						shipName := app.typeNameOrID(ctx, f.ShipTypeID)
 						out = append(out, fitMineRow{
-							ID: -f.FittingID, // negative ID marks ESI fit
+							ID:   -f.FittingID, // negative ID marks ESI fit
 							Name: f.Name, ShipName: shipName,
 							Mine: true, IsESI: true,
 						})

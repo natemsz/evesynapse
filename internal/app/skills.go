@@ -48,15 +48,15 @@ type browseSkillGroup struct {
 
 // browseSkillRow is one catalog skill with the character's state.
 type browseSkillRow struct {
-	TypeID    int64
-	Name      string
-	Rank      string // "2x"
-	Trained   string // roman level, "—" when untrained
-	TrainedLvl int   // numeric trained level, 0 when untrained
-	SP        string // formatted SP in skill, "" when untrained
-	Primary   string // attribute name
-	Secondary string
-	Prereqs   int // direct prerequisite skills
+	TypeID     int64
+	Name       string
+	Rank       string // "2x"
+	Trained    string // roman level, "—" when untrained
+	TrainedLvl int    // numeric trained level, 0 when untrained
+	SP         string // formatted SP in skill, "" when untrained
+	Primary    string // attribute name
+	Secondary  string
+	Prereqs    int // direct prerequisite skills
 }
 
 // skillGroupSection is one skill-category block of the sheet.
@@ -194,7 +194,7 @@ func (app *Application) fillQueue(ctx context.Context, view *skillsView, queue e
 	for i, entry := range sorted {
 		view.Queue = append(view.Queue, skillQueueRow{
 			Num:      i + 1,
-			Skill:   nameFor(entry.SkillID),
+			Skill:    nameFor(entry.SkillID),
 			SkillID:  entry.SkillID,
 			Level:    esi.RomanLevel(entry.FinishedLevel),
 			LevelNum: entry.FinishedLevel,

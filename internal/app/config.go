@@ -14,14 +14,14 @@ import (
 // environment (after loadDotEnv has had a chance to fill gaps from a
 // local .env); secrets are never hardcoded or logged.
 type Config struct {
-	addr            string // listen address
-	databaseURL     string // Postgres connection URL (DATABASE_URL)
-	eveClientID     string // EVE SSO application client ID
-	eveClientSecret string // EVE SSO application client secret
-	eveCallbackURL  string // OAuth2 redirect URI registered with CCP
-	sessionKey      string // reserved for cookie signing hardening
-	devLogin        bool   // DEV_LOGIN=1: register the /dev-login route
-	sdeBaseURL      string // EVE SDE CSV dump base URL (Fuzzwork by default)
+	addr            string         // listen address
+	databaseURL     string         // Postgres connection URL (DATABASE_URL)
+	eveClientID     string         // EVE SSO application client ID
+	eveClientSecret string         // EVE SSO application client secret
+	eveCallbackURL  string         // OAuth2 redirect URI registered with CCP
+	sessionKey      string         // reserved for cookie signing hardening
+	devLogin        bool           // DEV_LOGIN=1: register the /dev-login route
+	sdeBaseURL      string         // EVE SDE CSV dump base URL (Fuzzwork by default)
 	adminCharIDs    map[int64]bool // EVE_ADMIN_CHARACTER_IDS (comma-separated)
 	tokenKey        string         // TOKEN_ENCRYPTION_KEY: encrypts stored EVE tokens ("" = stored as they are)
 	signUp          signUpPolicy   // EVE_ALLOWED_*_IDS: who may create an account (empty = anyone)

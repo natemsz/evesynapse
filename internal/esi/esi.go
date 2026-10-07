@@ -338,7 +338,7 @@ type Client struct {
 	// X-Esi-Error-Limit-Reset from every response. Updated
 	// atomically on each request; workers check ErrorBudgetLow()
 	// before spending budget instead of discovering 420s.
-	errBudgetMu    sync.RWMutex
+	errBudgetMu     sync.RWMutex
 	errBudgetRemain int
 	errBudgetReset  int64 // unix seconds when the budget resets
 }
@@ -1503,6 +1503,7 @@ func (c *Client) PostJSONAuthed(ctx context.Context, accessToken, path string, p
 	}
 	return nil
 }
+
 // PutJSONAuthed is the PUT counterpart of PostJSONAuthed (Issue 26:
 // PUT /characters/{id}/mail/{mail_id}/ to mark mail read). Non-200
 // statuses are errors; a 403 surfaces as StatusError so callers can
@@ -1534,7 +1535,6 @@ func (c *Client) PutJSONAuthed(ctx context.Context, accessToken, path string, pa
 	}
 	return nil
 }
-
 
 // postJSON is PostJSON with an optional Bearer token (sent only
 // when non-empty; token values are never logged).

@@ -1,12 +1,16 @@
-package app
+// Package fit is the fitting simulator's stat engine: given a ship,
+// what is fitted to it, the pilot's skill levels and the charges
+// loaded, it works out the fit's statistics. The app's fitting pages
+// are its only caller. It knows nothing about pages, sessions or ESI.
+package fit
 
 // ---------------------------------------------------------------------------
 // Fitting simulator stat engine (schema 029, v0.3.21).
 //
-// computeFit takes a ship, a set of fitted items (modules, rigs,
+// Compute takes a ship, a set of fitted items (modules, rigs,
 // drones with quantities), a skill level per skill type, and a
 // charge choice per weapon type, loads the dogma data for those
-// types from the SDE tables (loadFitSnapshot), and computes the
+// types from the SDE tables (LoadSnapshot), and computes the
 // headline fit statistics: resources, capacitor, DPS by source,
 // EHP, repair rates, mobility and targeting.
 //
@@ -82,7 +86,7 @@ package app
 // categories outside {0 passive, 1 active, 4 online} — except 5 =
 // overload, which binds for overheated modules — and charge/group
 // shapes that target nothing listed here are skipped and reported
-// in fitResult.Unmodeled, never silently dropped. A heatable
+// in Result.Unmodeled, never silently dropped. A heatable
 // module that simply isn't overheated skips its overload effects
 // silently: that's a fitting choice, not a modeling gap.
 //
@@ -121,151 +125,151 @@ import (
 // Dogma attribute IDs the engine reads (dgmAttributeTypes names
 // verified against the live dump 2026-10-04).
 const (
-	fitAttrMass               = 4
-	fitAttrCapacitorNeed      = 6
-	fitAttrHP                 = 9
-	fitAttrPowerOutput        = 11
-	fitAttrLowSlots           = 12
-	fitAttrMedSlots           = 13
-	fitAttrHiSlots            = 14
-	fitAttrSpeedFactor        = 20
-	fitAttrPower              = 30
-	fitAttrMaxVelocity        = 37
-	fitAttrCapacity           = 38
-	fitAttrCPUOutput          = 48
-	fitAttrCPU                = 50
-	fitAttrSpeed              = 51
-	fitAttrCapacitorRecharge  = 55
-	fitAttrDamageMultiplier   = 64
-	fitAttrShieldBonus        = 68
-	fitAttrAgility            = 70
-	fitAttrDuration           = 73
-	fitAttrMaxTargetRange     = 76
-	fitAttrStructureDamageAmt = 83
-	fitAttrArmorDamageAmount  = 84
-	fitAttrLauncherSlotsLeft  = 101
-	fitAttrTurretSlotsLeft    = 102
-	fitAttrResonanceEM        = 113 // generic (hull) EM resonance
-	fitAttrResonanceExplosive = 111
-	fitAttrResonanceKinetic   = 109
-	fitAttrResonanceThermal   = 110
-	fitAttrDamageEM           = 114
-	fitAttrDamageExplosive    = 116
-	fitAttrDamageKinetic      = 117
-	fitAttrDamageThermal      = 118
-	fitAttrMaxLockedTargets   = 192
-	fitAttrScanRadar          = 208
-	fitAttrScanLadar          = 209
-	fitAttrScanMagnetometric  = 210
-	fitAttrScanGravimetric    = 211
-	fitAttrMissileDamageMult  = 212
-	fitAttrShieldCapacity     = 263
-	fitAttrArmorHP            = 265
-	fitAttrArmorEM            = 267
-	fitAttrArmorExplosive     = 268
-	fitAttrArmorKinetic       = 269
-	fitAttrArmorThermal       = 270
-	fitAttrShieldEM           = 271
-	fitAttrShieldExplosive    = 272
-	fitAttrShieldKinetic      = 273
-	fitAttrShieldThermal      = 274
-	fitAttrSkillLevel         = 280
-	fitAttrDroneCapacity      = 283
-	fitAttrCapacitorCapacity  = 482
-	fitAttrShieldRechargeRate = 479
-	fitAttrSignatureRadius    = 552
-	fitAttrScanResolution     = 564
-	fitAttrSpeedBoostFactor   = 567
-	fitAttrMassAddition       = 796
-	fitAttrUpgradeCapacity    = 1132
-	fitAttrRigSlots           = 1137
-	fitAttrUpgradeCost        = 1153
-	fitAttrDroneBandwidth     = 1271
-	fitAttrDroneBandwidthUsed = 1272
-	fitAttrDronesSkill        = 3436
+	AttrMass               = 4
+	AttrCapacitorNeed      = 6
+	AttrHP                 = 9
+	AttrPowerOutput        = 11
+	AttrLowSlots           = 12
+	AttrMedSlots           = 13
+	AttrHiSlots            = 14
+	AttrSpeedFactor        = 20
+	AttrPower              = 30
+	AttrMaxVelocity        = 37
+	AttrCapacity           = 38
+	AttrCPUOutput          = 48
+	AttrCPU                = 50
+	AttrSpeed              = 51
+	AttrCapacitorRecharge  = 55
+	AttrDamageMultiplier   = 64
+	AttrShieldBonus        = 68
+	AttrAgility            = 70
+	AttrDuration           = 73
+	AttrMaxTargetRange     = 76
+	AttrStructureDamageAmt = 83
+	AttrArmorDamageAmount  = 84
+	AttrLauncherSlotsLeft  = 101
+	AttrTurretSlotsLeft    = 102
+	AttrResonanceEM        = 113 // generic (hull) EM resonance
+	AttrResonanceExplosive = 111
+	AttrResonanceKinetic   = 109
+	AttrResonanceThermal   = 110
+	AttrDamageEM           = 114
+	AttrDamageExplosive    = 116
+	AttrDamageKinetic      = 117
+	AttrDamageThermal      = 118
+	AttrMaxLockedTargets   = 192
+	AttrScanRadar          = 208
+	AttrScanLadar          = 209
+	AttrScanMagnetometric  = 210
+	AttrScanGravimetric    = 211
+	AttrMissileDamageMult  = 212
+	AttrShieldCapacity     = 263
+	AttrArmorHP            = 265
+	AttrArmorEM            = 267
+	AttrArmorExplosive     = 268
+	AttrArmorKinetic       = 269
+	AttrArmorThermal       = 270
+	AttrShieldEM           = 271
+	AttrShieldExplosive    = 272
+	AttrShieldKinetic      = 273
+	AttrShieldThermal      = 274
+	AttrSkillLevel         = 280
+	AttrDroneCapacity      = 283
+	AttrCapacitorCapacity  = 482
+	AttrShieldRechargeRate = 479
+	AttrSignatureRadius    = 552
+	AttrScanResolution     = 564
+	AttrSpeedBoostFactor   = 567
+	AttrMassAddition       = 796
+	AttrUpgradeCapacity    = 1132
+	AttrRigSlots           = 1137
+	AttrUpgradeCost        = 1153
+	AttrDroneBandwidth     = 1271
+	AttrDroneBandwidthUsed = 1272
+	AttrDronesSkill        = 3436
 	// T3 subsystem slot/hardpoint grants (dgmAttributeTypes,
 	// verified against the live dump 2026-10-05): subsystems
 	// carry these as plain attributes; the dump's slotModifier
 	// effect (3774) has no dogma modifiers, so the grants sum
 	// directly instead of flowing through the modifier machinery.
-	fitAttrTurretHardPointModifier   = 1368
-	fitAttrLauncherHardPointModifier = 1369
-	fitAttrHiSlotModifier            = 1374
-	fitAttrMedSlotModifier           = 1375
-	fitAttrLowSlotModifier           = 1376
+	AttrTurretHardPointModifier   = 1368
+	AttrLauncherHardPointModifier = 1369
+	AttrHiSlotModifier            = 1374
+	AttrMedSlotModifier           = 1375
+	AttrLowSlotModifier           = 1376
 	// Ship-restriction attributes (dgmAttributeTypes, verified
 	// against the live dump 2026-10-05): a module carrying any of
 	// these may only be fitted when the hull matches one of the
 	// named ship groups or types. Siege modules point at group
 	// 485 (Dreadnought) via canFitShipGroup01; bastion at
 	// marauders, triage at carriers, same shape.
-	fitAttrCanFitShipGroup01 = 1298
-	fitAttrCanFitShipGroup04 = 1301
-	fitAttrCanFitShipType1   = 1302
-	fitAttrCanFitShipType4   = 1305
+	AttrCanFitShipGroup01 = 1298
+	AttrCanFitShipGroup04 = 1301
+	AttrCanFitShipType1   = 1302
+	AttrCanFitShipType4   = 1305
 	// Cap-warfare amounts (dgmAttributeTypes): neutralizers drain
 	// via energyNeutralizerAmount (97); nosferatu via
 	// powerTransferAmount (90), which remote capacitor
 	// transmitters (group 67) share — group 68 is the nosferatu
 	// group, so the engine only counts 68 as offensive drain.
-	fitAttrEnergyNeutralizerAmount = 97
-	fitAttrPowerTransferAmount     = 90
-	fitGroupRemoteCapTransmitter   = 67
-	fitGroupNosferatu              = 68
+	AttrEnergyNeutralizerAmount = 97
+	AttrPowerTransferAmount     = 90
+	groupRemoteCapTransmitter   = 67
+	groupNosferatu              = 68
 )
 
 // Slot / fitting effect IDs (dgmEffects names verified live).
 const (
-	fitEffectLoPower        = 11
-	fitEffectHiPower        = 12
-	fitEffectMedPower       = 13
-	fitEffectLauncherFitted = 40
-	fitEffectTurretFitted   = 42
-	fitEffectRigSlot        = 2663
-	fitEffectSubsystemSlot  = 3772
+	EffectLoPower        = 11
+	EffectHiPower        = 12
+	EffectMedPower       = 13
+	EffectLauncherFitted = 40
+	EffectTurretFitted   = 42
+	EffectRigSlot        = 2663
+	EffectSubsystemSlot  = 3772
 )
 
 // Effect categories (dgmEffects): 5 is the overload/heat
 // category — the one heating a module engages.
-const fitCatOverload = 5
+const catOverload = 5
 
-// Module states: the values fitItemInput.State and
-// fitDocItem.States carry. pyfa/eos semantics —
+// Module states: the values ItemInput.State carries, and a saved
+// fit stores per module. pyfa/eos semantics —
 //   - offline:    fitted but contributes nothing (no CPU/PG, no effects)
 //   - online:     powered; passive + online-category effects apply,
 //     active effects don't, nothing cycles
 //   - active:     cycling; passive + online + active effects apply
 //   - overheated: active plus the module's overload effects
 const (
-	fitStateOnline     = "online"
-	fitStateActive     = "active"
-	fitStateOffline    = "offline"
-	fitStateOverheated = "overheated"
+	StateOnline     = "online"
+	StateActive     = "active"
+	StateOffline    = "offline"
+	StateOverheated = "overheated"
 )
 
 // Dogma operation codes (see the header comment for evidence).
 const (
-	fitOpPreAssign   = -1
-	fitOpPreMultiply = 0
-	fitOpPreDivide   = 1
-	fitOpModAdd      = 2
-	fitOpModSub      = 3
-	fitOpPostMult    = 4
-	fitOpPostDivide  = 5
-	fitOpPostPercent = 6
-	fitOpPostAssign  = 7
+	opPreAssign   = -1
+	opPreMultiply = 0
+	opPreDivide   = 1
+	opModAdd      = 2
+	opModSub      = 3
+	opPostMult    = 4
+	opPostDivide  = 5
+	opPostPercent = 6
+	opPostAssign  = 7
 )
 
-// fitAttrMeta is one dgmAttributeTypes row reduced to what the
+// AttrMeta is one dgmAttributeTypes row reduced to what the
 // engine needs: stacking behaviour and the default value an
 // attribute carries when no type row sets it.
-type fitAttrMeta struct {
+type AttrMeta struct {
 	Stackable bool
 	Default   float64
 }
 
-// fitModifier is one decoded dgmEffects modifier.
-type fitModifier struct {
+// Modifier is one decoded dgmEffects modifier.
+type Modifier struct {
 	Domain        string
 	Func          string
 	ModifiedAttr  int64
@@ -275,48 +279,48 @@ type fitModifier struct {
 	SkillTypeID   int64
 }
 
-// fitEffect is one modifier-bearing effect.
-type fitEffect struct {
+// Effect is one modifier-bearing effect.
+type Effect struct {
 	Name      string
 	Category  int64
-	Modifiers []fitModifier
+	Modifiers []Modifier
 }
 
-// fitSkillReq is one (type requires skill at level) row.
-type fitSkillReq struct {
+// SkillReq is one (type requires skill at level) row.
+type SkillReq struct {
 	SkillTypeID int64
 	Level       int64
 }
 
-// fitPhysics is one sde_type_physics row.
-type fitPhysics struct {
+// Physics is one sde_type_physics row.
+type Physics struct {
 	Mass     float64
 	Volume   float64
 	Capacity float64
 }
 
-// fitSnapshot is the engine's read-only view of the dogma data
+// Snapshot is the engine's read-only view of the dogma data
 // for a closed set of types (ship, items, charges, and every
 // skill reachable from their requirements/effect selectors).
-type fitSnapshot struct {
-	attrs        map[int64]map[int64]float64 // type -> attribute -> base value
-	physics      map[int64]fitPhysics
-	groups       map[int64]int64 // type -> invGroups group ID
-	meta         map[int64]fitAttrMeta
-	effects      map[int64]*fitEffect // only modifier-bearing effects
-	typeEffects  map[int64][]int64    // type -> effect IDs (sorted)
-	requirements map[int64][]fitSkillReq
+type Snapshot struct {
+	Attrs        map[int64]map[int64]float64 // type -> attribute -> base value
+	Physics      map[int64]Physics
+	Groups       map[int64]int64 // type -> invGroups group ID
+	Meta         map[int64]AttrMeta
+	Effects      map[int64]*Effect // only modifier-bearing effects
+	TypeEffects  map[int64][]int64 // type -> effect IDs (sorted)
+	Requirements map[int64][]SkillReq
 }
 
 // attrDefault returns the value an attribute starts from when a
 // type carries no row for it (dgmAttributeTypes defaultValue,
 // with hard floors for the multiplicative identities).
-func (snap *fitSnapshot) attrDefault(attr int64) float64 {
-	if m, ok := snap.meta[attr]; ok {
+func (snap *Snapshot) attrDefault(attr int64) float64 {
+	if m, ok := snap.Meta[attr]; ok {
 		return m.Default
 	}
 	switch attr {
-	case fitAttrDamageMultiplier, fitAttrMissileDamageMult:
+	case AttrDamageMultiplier, AttrMissileDamageMult:
 		return 1
 	}
 	return 0
@@ -326,8 +330,8 @@ func (snap *fitSnapshot) attrDefault(attr int64) float64 {
 // stacking-penalty group (dgmAttributeTypes stackable flag; an
 // unknown attribute is treated as stackable so penalties never
 // apply on missing data).
-func (snap *fitSnapshot) stackable(attr int64) bool {
-	if m, ok := snap.meta[attr]; ok {
+func (snap *Snapshot) stackable(attr int64) bool {
+	if m, ok := snap.Meta[attr]; ok {
 		return m.Stackable
 	}
 	return true
@@ -335,8 +339,8 @@ func (snap *fitSnapshot) stackable(attr int64) bool {
 
 // requiresSkill reports whether a type's requirement rows name
 // the given skill.
-func (snap *fitSnapshot) requiresSkill(typeID, skillTypeID int64) bool {
-	for _, r := range snap.requirements[typeID] {
+func (snap *Snapshot) requiresSkill(typeID, skillTypeID int64) bool {
+	for _, r := range snap.Requirements[typeID] {
 		if r.SkillTypeID == skillTypeID {
 			return true
 		}
@@ -344,9 +348,9 @@ func (snap *fitSnapshot) requiresSkill(typeID, skillTypeID int64) bool {
 	return false
 }
 
-// hasEffect reports whether a type carries the given effect.
-func (snap *fitSnapshot) hasEffect(typeID, effectID int64) bool {
-	for _, id := range snap.typeEffects[typeID] {
+// HasEffect reports whether a type carries the given effect.
+func (snap *Snapshot) HasEffect(typeID, effectID int64) bool {
+	for _, id := range snap.TypeEffects[typeID] {
 		if id == effectID {
 			return true
 		}
@@ -354,18 +358,18 @@ func (snap *fitSnapshot) hasEffect(typeID, effectID int64) bool {
 	return false
 }
 
-// fitTypeEffectCats lists the effect categories a type carries.
-func (snap *fitSnapshot) fitTypeEffectCats(typeID int64) map[int64]bool {
+// typeEffectCats lists the effect categories a type carries.
+func (snap *Snapshot) typeEffectCats(typeID int64) map[int64]bool {
 	out := make(map[int64]bool)
-	for _, eid := range snap.typeEffects[typeID] {
-		if eff := snap.effects[eid]; eff != nil {
+	for _, eid := range snap.TypeEffects[typeID] {
+		if eff := snap.Effects[eid]; eff != nil {
 			out[eff.Category] = true
 		}
 	}
 	return out
 }
 
-// fitModuleValidStates lists the states a fitted module may take,
+// ModuleValidStates lists the states a fitted module may take,
 // derived from SDE data, never per-module hardcoding: rigs,
 // subsystems, drones and cargo have no states; a module is
 // activatable with an active-category effect — or as a weapon
@@ -373,49 +377,49 @@ func (snap *fitSnapshot) fitTypeEffectCats(typeID int64) map[int64]bool {
 // cycle via F1 in-game); overheatable only with an
 // overload-category effect on top of that (heat is applied to a
 // cycling module).
-func fitModuleValidStates(snap *fitSnapshot, typeID int64) []string {
-	if snap.hasEffect(typeID, fitEffectRigSlot) || snap.hasEffect(typeID, fitEffectSubsystemSlot) {
+func ModuleValidStates(snap *Snapshot, typeID int64) []string {
+	if snap.HasEffect(typeID, EffectRigSlot) || snap.HasEffect(typeID, EffectSubsystemSlot) {
 		return nil
 	}
-	if snap.attrs[typeID][fitAttrDroneBandwidthUsed] > 0 {
+	if snap.Attrs[typeID][AttrDroneBandwidthUsed] > 0 {
 		return nil
 	}
-	cats := snap.fitTypeEffectCats(typeID)
+	cats := snap.typeEffectCats(typeID)
 	if len(cats) == 0 {
 		return nil
 	}
 	activatable := cats[1] ||
-		snap.hasEffect(typeID, fitEffectTurretFitted) ||
-		snap.hasEffect(typeID, fitEffectLauncherFitted)
-	states := []string{fitStateOffline, fitStateOnline}
+		snap.HasEffect(typeID, EffectTurretFitted) ||
+		snap.HasEffect(typeID, EffectLauncherFitted)
+	states := []string{StateOffline, StateOnline}
 	if activatable {
-		states = append(states, fitStateActive)
-		if cats[fitCatOverload] {
-			states = append(states, fitStateOverheated)
+		states = append(states, StateActive)
+		if cats[catOverload] {
+			states = append(states, StateOverheated)
 		}
 	}
 	return states
 }
 
-// fitDefaultModuleState is the state a fresh module takes: active
+// defaultModuleState is the state a fresh module takes: active
 // when it can cycle, online otherwise. This preserves the
 // engine's historical behavior (everything online and cycling)
 // for fits that predate states.
-func fitDefaultModuleState(snap *fitSnapshot, typeID int64) string {
-	cats := snap.fitTypeEffectCats(typeID)
+func defaultModuleState(snap *Snapshot, typeID int64) string {
+	cats := snap.typeEffectCats(typeID)
 	if cats[1] ||
-		snap.hasEffect(typeID, fitEffectTurretFitted) ||
-		snap.hasEffect(typeID, fitEffectLauncherFitted) {
-		return fitStateActive
+		snap.HasEffect(typeID, EffectTurretFitted) ||
+		snap.HasEffect(typeID, EffectLauncherFitted) {
+		return StateActive
 	}
-	return fitStateOnline
+	return StateOnline
 }
 
-// fitNormalizeModuleState resolves "" to the type default and
+// NormalizeModuleState resolves "" to the type default and
 // demotes states the type cannot take (stale docs, bad input) to
 // the default. Non-state kinds get "".
-func fitNormalizeModuleState(snap *fitSnapshot, typeID int64, state string) string {
-	valid := fitModuleValidStates(snap, typeID)
+func NormalizeModuleState(snap *Snapshot, typeID int64, state string) string {
+	valid := ModuleValidStates(snap, typeID)
 	if len(valid) == 0 {
 		return ""
 	}
@@ -424,48 +428,48 @@ func fitNormalizeModuleState(snap *fitSnapshot, typeID int64, state string) stri
 			return state
 		}
 	}
-	return fitDefaultModuleState(snap, typeID)
+	return defaultModuleState(snap, typeID)
 }
 
-// fitSourceCategories lists the effect categories that bind for
+// sourceCategories lists the effect categories that bind for
 // one entity under its module state (pyfa semantics): offline
 // modules bind nothing; online skips active and overload;
 // active adds the active category; overheated adds overload.
-func fitSourceCategories(e *fitEntity) map[int64]bool {
-	if e.kind != fitEntModule {
+func sourceCategories(e *entity) map[int64]bool {
+	if e.kind != entModule {
 		return map[int64]bool{0: true, 1: true, 4: true}
 	}
 	switch e.state {
-	case fitStateOffline:
+	case StateOffline:
 		return nil
-	case fitStateOnline:
+	case StateOnline:
 		return map[int64]bool{0: true, 4: true}
-	case fitStateOverheated:
-		return map[int64]bool{0: true, 1: true, 4: true, fitCatOverload: true}
+	case StateOverheated:
+		return map[int64]bool{0: true, 1: true, 4: true, catOverload: true}
 	default:
 		return map[int64]bool{0: true, 1: true, 4: true}
 	}
 }
 
-// fitStateAttrKey keys per-(type, state) attribute maps.
-func fitStateAttrKey(typeID int64, state string) string {
+// StateAttrKey keys per-(type, state) attribute maps.
+func StateAttrKey(typeID int64, state string) string {
 	return strconv.FormatInt(typeID, 10) + "\x00" + state
 }
 
-// loadFitSnapshot loads the dogma rows for the given types and
+// LoadSnapshot loads the dogma rows for the given types and
 // closes over the skills they touch: requirements (recursive)
 // and skill selectors in any carried effect's modifiers. The
 // extra rounds discover skill types so their own attributes and
 // effects are present when the engine runs.
-func loadFitSnapshot(ctx context.Context, q *db.Queries, typeIDs []int64) (*fitSnapshot, error) {
-	snap := &fitSnapshot{
-		attrs:        make(map[int64]map[int64]float64),
-		physics:      make(map[int64]fitPhysics),
-		groups:       make(map[int64]int64),
-		meta:         make(map[int64]fitAttrMeta),
-		effects:      make(map[int64]*fitEffect),
-		typeEffects:  make(map[int64][]int64),
-		requirements: make(map[int64][]fitSkillReq),
+func LoadSnapshot(ctx context.Context, q *db.Queries, typeIDs []int64) (*Snapshot, error) {
+	snap := &Snapshot{
+		Attrs:        make(map[int64]map[int64]float64),
+		Physics:      make(map[int64]Physics),
+		Groups:       make(map[int64]int64),
+		Meta:         make(map[int64]AttrMeta),
+		Effects:      make(map[int64]*Effect),
+		TypeEffects:  make(map[int64][]int64),
+		Requirements: make(map[int64][]SkillReq),
 	}
 
 	loadedTypes := make(map[int64]bool)
@@ -489,10 +493,10 @@ func loadFitSnapshot(ctx context.Context, q *db.Queries, typeIDs []int64) (*fitS
 			return nil, fmt.Errorf("load type attributes: %w", err)
 		}
 		for _, r := range attrRows {
-			m := snap.attrs[r.TypeID]
+			m := snap.Attrs[r.TypeID]
 			if m == nil {
 				m = make(map[int64]float64)
-				snap.attrs[r.TypeID] = m
+				snap.Attrs[r.TypeID] = m
 			}
 			m[r.AttributeID] = r.Value
 		}
@@ -501,36 +505,36 @@ func loadFitSnapshot(ctx context.Context, q *db.Queries, typeIDs []int64) (*fitS
 			return nil, fmt.Errorf("load type physics: %w", err)
 		}
 		for _, r := range physRows {
-			snap.physics[r.TypeID] = fitPhysics{Mass: r.Mass, Volume: r.Volume, Capacity: r.Capacity}
+			snap.Physics[r.TypeID] = Physics{Mass: r.Mass, Volume: r.Volume, Capacity: r.Capacity}
 		}
 		groupRows, err := q.ListSDETypeGroupsByIDs(ctx, fresh)
 		if err != nil {
 			return nil, fmt.Errorf("load type groups: %w", err)
 		}
 		for _, r := range groupRows {
-			snap.groups[r.TypeID] = r.GroupID
+			snap.Groups[r.TypeID] = r.GroupID
 		}
 		effectLinks, err := q.ListSDETypeEffectsByIDs(ctx, fresh)
 		if err != nil {
 			return nil, fmt.Errorf("load type effects: %w", err)
 		}
 		for _, r := range effectLinks {
-			snap.typeEffects[r.TypeID] = append(snap.typeEffects[r.TypeID], r.EffectID)
+			snap.TypeEffects[r.TypeID] = append(snap.TypeEffects[r.TypeID], r.EffectID)
 		}
 		reqRows, err := q.ListSDERequirementsByTypes(ctx, fresh)
 		if err != nil {
 			return nil, fmt.Errorf("load requirements: %w", err)
 		}
 		for _, r := range reqRows {
-			snap.requirements[r.TypeID] = append(snap.requirements[r.TypeID],
-				fitSkillReq{SkillTypeID: r.SkillTypeID, Level: r.Level})
+			snap.Requirements[r.TypeID] = append(snap.Requirements[r.TypeID],
+				SkillReq{SkillTypeID: r.SkillTypeID, Level: r.Level})
 		}
 
 		// Effects carried by the fresh types (only ones the
 		// importer stored, i.e. carrying modifiers).
 		var newEffects []int64
 		for _, id := range fresh {
-			for _, eid := range snap.typeEffects[id] {
+			for _, eid := range snap.TypeEffects[id] {
 				if !loadedEffects[eid] {
 					loadedEffects[eid] = true
 					newEffects = append(newEffects, eid)
@@ -544,19 +548,19 @@ func loadFitSnapshot(ctx context.Context, q *db.Queries, typeIDs []int64) (*fitS
 				return nil, fmt.Errorf("load effects: %w", err)
 			}
 			for _, r := range effectRows {
-				snap.effects[r.EffectID] = &fitEffect{Name: r.Name, Category: r.Category}
+				snap.Effects[r.EffectID] = &Effect{Name: r.Name, Category: r.Category}
 			}
 			modRows, err := q.ListSDEEffectModifiersByIDs(ctx, newEffects)
 			if err != nil {
 				return nil, fmt.Errorf("load effect modifiers: %w", err)
 			}
 			for _, r := range modRows {
-				eff := snap.effects[r.EffectID]
+				eff := snap.Effects[r.EffectID]
 				if eff == nil {
-					eff = &fitEffect{}
-					snap.effects[r.EffectID] = eff
+					eff = &Effect{}
+					snap.Effects[r.EffectID] = eff
 				}
-				eff.Modifiers = append(eff.Modifiers, fitModifier{
+				eff.Modifiers = append(eff.Modifiers, Modifier{
 					Domain:        r.Domain,
 					Func:          r.Func,
 					ModifiedAttr:  r.ModifiedAttr,
@@ -571,11 +575,11 @@ func loadFitSnapshot(ctx context.Context, q *db.Queries, typeIDs []int64) (*fitS
 		// Attribute metadata for everything seen so far.
 		var attrIDs []int64
 		for _, id := range fresh {
-			for attr := range snap.attrs[id] {
+			for attr := range snap.Attrs[id] {
 				attrIDs = append(attrIDs, attr)
 			}
 		}
-		for _, eff := range snap.effects {
+		for _, eff := range snap.Effects {
 			for _, m := range eff.Modifiers {
 				attrIDs = append(attrIDs, m.ModifiedAttr, m.ModifyingAttr)
 			}
@@ -587,7 +591,7 @@ func loadFitSnapshot(ctx context.Context, q *db.Queries, typeIDs []int64) (*fitS
 				return nil, fmt.Errorf("load attribute types: %w", err)
 			}
 			for _, r := range metaRows {
-				snap.meta[r.AttributeID] = fitAttrMeta{
+				snap.Meta[r.AttributeID] = AttrMeta{
 					Stackable: r.Stackable != 0,
 					Default:   r.DefaultValue,
 				}
@@ -598,13 +602,13 @@ func loadFitSnapshot(ctx context.Context, q *db.Queries, typeIDs []int64) (*fitS
 		// modifier selectors anywhere in the loaded effects.
 		var next []int64
 		for _, id := range fresh {
-			for _, r := range snap.requirements[id] {
+			for _, r := range snap.Requirements[id] {
 				if !loadedTypes[r.SkillTypeID] {
 					next = append(next, r.SkillTypeID)
 				}
 			}
 		}
-		for _, eff := range snap.effects {
+		for _, eff := range snap.Effects {
 			for _, m := range eff.Modifiers {
 				if m.SkillTypeID != 0 && !loadedTypes[m.SkillTypeID] {
 					next = append(next, m.SkillTypeID)
@@ -614,7 +618,7 @@ func loadFitSnapshot(ctx context.Context, q *db.Queries, typeIDs []int64) (*fitS
 		pending = dedupeSortedIDs(next)
 	}
 
-	for _, ids := range snap.typeEffects {
+	for _, ids := range snap.TypeEffects {
 		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	}
 	return snap, nil
@@ -635,23 +639,23 @@ func dedupeSortedIDs(ids []int64) []int64 {
 	return out
 }
 
-// fitAllVSkillLevels returns the "All V" skill map for a fit:
+// AllVSkillLevels returns the "All V" skill map for a fit:
 // every skill reachable from the ship's and items' requirements
 // (recursively) and from effect skill selectors, at level 5.
-func fitAllVSkillLevels(snap *fitSnapshot, shipTypeID int64, itemTypeIDs []int64) map[int64]int {
+func AllVSkillLevels(snap *Snapshot, shipTypeID int64, itemTypeIDs []int64) map[int64]int {
 	skills := make(map[int64]bool)
 	queue := append([]int64{shipTypeID}, itemTypeIDs...)
 	for len(queue) > 0 {
 		typeID := queue[0]
 		queue = queue[1:]
-		for _, r := range snap.requirements[typeID] {
+		for _, r := range snap.Requirements[typeID] {
 			if !skills[r.SkillTypeID] {
 				skills[r.SkillTypeID] = true
 				queue = append(queue, r.SkillTypeID)
 			}
 		}
-		for _, eid := range snap.typeEffects[typeID] {
-			if eff := snap.effects[eid]; eff != nil {
+		for _, eid := range snap.TypeEffects[typeID] {
+			if eff := snap.Effects[eid]; eff != nil {
 				for _, m := range eff.Modifiers {
 					if m.SkillTypeID != 0 && !skills[m.SkillTypeID] {
 						skills[m.SkillTypeID] = true
@@ -672,18 +676,18 @@ func fitAllVSkillLevels(snap *fitSnapshot, shipTypeID int64, itemTypeIDs []int64
 // Engine.
 // ---------------------------------------------------------------------------
 
-// fitItemInput is one fitted item line: a type, how many of
+// ItemInput is one fitted item line: a type, how many of
 // it the fit carries (drones especially), and — for modules —
 // the module state ("", online/active/offline/overheated; ""
 // resolves to the type's default).
-type fitItemInput struct {
+type ItemInput struct {
 	TypeID   int64
 	Quantity int
 	State    string
 }
 
-// fitEHPProfile is effective HP against a damage profile.
-type fitEHPProfile struct {
+// EHPProfile is effective HP against a damage profile.
+type EHPProfile struct {
 	Omni      float64
 	EM        float64
 	Thermal   float64
@@ -691,9 +695,9 @@ type fitEHPProfile struct {
 	Explosive float64
 }
 
-// fitResult is the computed fit. Floats are raw dogma units
+// Result is the computed fit. Floats are raw dogma units
 // (times in seconds, capacitor in GJ); counts are integers.
-type fitResult struct {
+type Result struct {
 	ShipTypeID int64
 
 	PowergridUsed float64
@@ -754,10 +758,10 @@ type fitResult struct {
 	ArmorHP  float64
 	HullHP   float64
 
-	ShieldEHP fitEHPProfile
-	ArmorEHP  fitEHPProfile
-	HullEHP   fitEHPProfile
-	EHP       fitEHPProfile
+	ShieldEHP EHPProfile
+	ArmorEHP  EHPProfile
+	HullEHP   EHPProfile
+	EHP       EHPProfile
 
 	ShieldRegenPeak float64 // HP/s at the recharge curve's peak
 	ShieldBoostRate float64 // HP/s from fitted shield boosters
@@ -783,7 +787,7 @@ type fitResult struct {
 	ItemAttrs map[int64]map[int64]float64
 	// StateAttrs holds per-(type, state) attributes for module
 	// entities whose state isn't the default, keyed by
-	// fitStateAttrKey — so a tooltip can show an overheated
+	// StateAttrKey — so a tooltip can show an overheated
 	// module's heated numbers rather than its resting ones.
 	StateAttrs map[string]map[int64]float64
 
@@ -795,42 +799,42 @@ type fitResult struct {
 	// Restricted lists fitted modules whose canFitShip*
 	// attributes forbid the current hull. The engine flags them
 	// as fit errors; it does not silently drop them.
-	Restricted []fitRestriction
+	Restricted []Restriction
 }
 
-// fitRestriction is one ship-restricted module on an
+// Restriction is one ship-restricted module on an
 // incompatible hull: the module type plus the ship groups/types
 // it may be fitted to.
-type fitRestriction struct {
+type Restriction struct {
 	TypeID    int64
 	NeedGroup []int64
 	NeedType  []int64
 }
 
-// fitEntityKind classifies one computation entity.
-type fitEntityKind int
+// entityKind classifies one computation entity.
+type entityKind int
 
 const (
-	fitEntShip fitEntityKind = iota
-	fitEntChar
-	fitEntSkill
-	fitEntModule
-	fitEntRig
-	fitEntSubsystem
-	fitEntDrone
-	fitEntMissile
-	fitEntCharge
-	fitEntImplant
+	entShip entityKind = iota
+	entChar
+	entSkill
+	entModule
+	entRig
+	entSubsystem
+	entDrone
+	entMissile
+	entCharge
+	entImplant
 )
 
-// fitEntity is one thing whose attributes get computed: the ship,
+// entity is one thing whose attributes get computed: the ship,
 // the character pseudo-item, a trained skill, or one fitted type
 // (counted Instances times where identity matters). Modules with
 // different states fold into separate entities (state is part of
 // the fold key); other kinds ignore it.
-type fitEntity struct {
+type entity struct {
 	key       string
-	kind      fitEntityKind
+	kind      entityKind
 	typeID    int64
 	instances int
 	state     string // module state, "" for other kinds
@@ -842,23 +846,23 @@ type fitEntity struct {
 // engaged: everything but modules always is; a module only when
 // active or overheated. Empty state (no SDE effects to derive
 // states from) preserves the historical behavior: cycling.
-func (e *fitEntity) cycling() bool {
-	if e.kind != fitEntModule {
+func (e *entity) cycling() bool {
+	if e.kind != entModule {
 		return true
 	}
-	return e.state == "" || e.state == fitStateActive || e.state == fitStateOverheated
+	return e.state == "" || e.state == StateActive || e.state == StateOverheated
 }
 
 // online reports whether passive/online-category effects apply:
 // everything but modules always; a module unless offline.
-func (e *fitEntity) online() bool {
-	if e.kind != fitEntModule {
+func (e *entity) online() bool {
+	if e.kind != entModule {
 		return true
 	}
-	return e.state != fitStateOffline
+	return e.state != StateOffline
 }
 
-func (e *fitEntity) get(snap *fitSnapshot, attr int64) float64 {
+func (e *entity) get(snap *Snapshot, attr int64) float64 {
 	if v, ok := e.calc[attr]; ok {
 		return v
 	}
@@ -868,21 +872,21 @@ func (e *fitEntity) get(snap *fitSnapshot, attr int64) float64 {
 	return snap.attrDefault(attr)
 }
 
-// fitApplication is one (source effect modifier -> target entity)
+// application is one (source effect modifier -> target entity)
 // binding.
-type fitApplication struct {
-	source   *fitEntity
-	target   *fitEntity
+type application struct {
+	source   *entity
+	target   *entity
 	effectID int64
-	mod      fitModifier
+	mod      Modifier
 }
 
 // penaltySubject reports whether this application sits in the
 // stacking-penalty group for its attribute: multiplicative op,
 // non-stackable attribute, fitted-module source.
-func (app fitApplication) penaltySubject(snap *fitSnapshot) bool {
+func (app application) penaltySubject(snap *Snapshot) bool {
 	switch app.mod.Operation {
-	case fitOpPostMult, fitOpPostDivide, fitOpPostPercent:
+	case opPostMult, opPostDivide, opPostPercent:
 	default:
 		return false
 	}
@@ -890,7 +894,7 @@ func (app fitApplication) penaltySubject(snap *fitSnapshot) bool {
 		return false
 	}
 	switch app.source.kind {
-	case fitEntModule, fitEntRig, fitEntSubsystem:
+	case entModule, entRig, entSubsystem:
 		return true
 	}
 	return false
@@ -899,14 +903,14 @@ func (app fitApplication) penaltySubject(snap *fitSnapshot) bool {
 // impact ranks a multiplicative modifier for penalty ordering:
 // larger = stronger effect on the value. Multipliers are
 // compared as plain ratios (pyfa eos sorts by |factor - 1|).
-func fitImpact(op int64, v float64) float64 {
+func impact(op int64, v float64) float64 {
 	var factor float64
 	switch op {
-	case fitOpPostMult:
+	case opPostMult:
 		factor = v
-	case fitOpPostDivide:
+	case opPostDivide:
 		factor = 1 / v
-	case fitOpPostPercent:
+	case opPostPercent:
 		factor = 1 + v/100
 	default:
 		return 0
@@ -917,17 +921,17 @@ func fitImpact(op int64, v float64) float64 {
 	return math.Abs(factor - 1)
 }
 
-// fitMultFactor converts one multiplicative application into its
+// multFactor converts one multiplicative application into its
 // equivalent multiplier on the target attribute.
-func fitMultFactor(op int64, v float64) float64 {
+func multFactor(op int64, v float64) float64 {
 	switch op {
-	case fitOpPostMult:
+	case opPostMult:
 		return v
-	case fitOpPostDivide:
+	case opPostDivide:
 		if v != 0 {
 			return 1 / v
 		}
-	case fitOpPostPercent:
+	case opPostPercent:
 		return 1 + v/100
 	}
 	return 1
@@ -935,7 +939,7 @@ func fitMultFactor(op int64, v float64) float64 {
 
 // stackingEffectiveness is the penalty factor for the n-th
 // (0-based) penalized modifier on one attribute.
-func fitStackingEffectiveness(rank int) float64 {
+func stackingEffectiveness(rank int) float64 {
 	if rank <= 0 {
 		return 1
 	}
@@ -953,7 +957,7 @@ func fitStackingEffectiveness(rank int) float64 {
 // impact descending and damped independently. The caller passes
 // the base value explicitly: fold passes always recompute from
 // base, never from an earlier pass result.
-func foldAttribute(snap *fitSnapshot, target *fitEntity, base float64, apps []fitApplication) float64 {
+func foldAttribute(snap *Snapshot, target *entity, base float64, apps []application) float64 {
 	value := base
 
 	applyStage := func(ops ...int64) {
@@ -972,69 +976,69 @@ func foldAttribute(snap *fitSnapshot, target *fitEntity, base float64, apps []fi
 			}
 			raw := app.source.get(snap, app.mod.ModifyingAttr)
 			switch op {
-			case fitOpPreAssign, fitOpPostAssign:
+			case opPreAssign, opPostAssign:
 				value = raw
-			case fitOpPreMultiply:
+			case opPreMultiply:
 				value *= raw
-			case fitOpPreDivide:
+			case opPreDivide:
 				if raw != 0 {
 					value /= raw
 				}
-			case fitOpModAdd:
+			case opModAdd:
 				value += raw
-			case fitOpModSub:
+			case opModSub:
 				value -= raw
 			}
 		}
 	}
 
-	applyStage(fitOpPreAssign)
-	applyStage(fitOpPreMultiply)
-	applyStage(fitOpPreDivide)
-	applyStage(fitOpModAdd, fitOpModSub)
+	applyStage(opPreAssign)
+	applyStage(opPreMultiply)
+	applyStage(opPreDivide)
+	applyStage(opModAdd, opModSub)
 
 	// Multiplicative stages (PostMultiply, PostDivide,
 	// PostPercent): convert to plain multipliers, apply
 	// non-penalized ones fully, then the penalized chains.
-	var bonuses, penalties []fitMultEntry
+	var bonuses, penalties []multEntry
 	for i := range apps {
 		app := &apps[i]
 		op := app.mod.Operation
-		if op != fitOpPostMult && op != fitOpPostDivide && op != fitOpPostPercent {
+		if op != opPostMult && op != opPostDivide && op != opPostPercent {
 			continue
 		}
 		v := app.source.get(snap, app.mod.ModifyingAttr)
-		factor := fitMultFactor(op, v)
+		factor := multFactor(op, v)
 		if !app.penaltySubject(snap) {
 			value *= factor
 			continue
 		}
-		entry := fitMultEntry{factor: factor, impact: fitImpact(op, v)}
+		entry := multEntry{factor: factor, impact: impact(op, v)}
 		if factor >= 1 {
 			bonuses = append(bonuses, entry)
 		} else {
 			penalties = append(penalties, entry)
 		}
 	}
-	for _, chain := range [][]fitMultEntry{bonuses, penalties} {
+	for _, chain := range [][]multEntry{bonuses, penalties} {
 		sort.SliceStable(chain, func(i, j int) bool { return chain[i].impact > chain[j].impact })
 		for rank, entry := range chain {
-			value *= 1 + (entry.factor-1)*fitStackingEffectiveness(rank)
+			value *= 1 + (entry.factor-1)*stackingEffectiveness(rank)
 		}
 	}
 
-	applyStage(fitOpPostAssign)
+	applyStage(opPostAssign)
 	return value
 }
 
-// fitMultEntry is one penalty-subject multiplicative modifier
+// multEntry is one penalty-subject multiplicative modifier
 // reduced to a plain multiplier plus its ordering impact.
-type fitMultEntry struct {
+type multEntry struct {
 	factor float64
 	impact float64
 }
 
-// computeFit runs the stat engine over one fit. charges maps a
+// Compute runs the stat engine over one fit. charges maps a
 // weapon's type ID to its loaded charge type ID. Skill levels
 // are clamped to 0..5; absent skills are untrained. implants are
 // the active clone's implant type IDs: they become char-located
@@ -1045,8 +1049,8 @@ type fitMultEntry struct {
 // pirate set totals are documented unpenalized (a full
 // High-grade Snake set is +24.73% velocity, which only the
 // unpenalized product reproduces).
-func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, levels map[int64]int, charges map[int64]int64, implants []int64) *fitResult {
-	res := &fitResult{
+func Compute(snap *Snapshot, shipTypeID int64, items []ItemInput, levels map[int64]int, charges map[int64]int64, implants []int64) *Result {
+	res := &Result{
 		ShipTypeID: shipTypeID,
 		ItemAttrs:  make(map[int64]map[int64]float64),
 		StateAttrs: make(map[string]map[int64]float64),
@@ -1055,51 +1059,51 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 	noteUnmodeled := func(s string) { unmodeled[s] = true }
 
 	// --- Entities -------------------------------------------------
-	shipBase := cloneAttrMap(snap.attrs[shipTypeID])
-	if phys, ok := snap.physics[shipTypeID]; ok && phys.Mass > 0 {
-		if _, has := shipBase[fitAttrMass]; !has {
-			shipBase[fitAttrMass] = phys.Mass
+	shipBase := cloneAttrMap(snap.Attrs[shipTypeID])
+	if phys, ok := snap.Physics[shipTypeID]; ok && phys.Mass > 0 {
+		if _, has := shipBase[AttrMass]; !has {
+			shipBase[AttrMass] = phys.Mass
 		}
 	}
-	ship := &fitEntity{key: "ship", kind: fitEntShip, typeID: shipTypeID, instances: 1, base: shipBase, calc: map[int64]float64{}}
-	charEnt := &fitEntity{key: "char", kind: fitEntChar, base: map[int64]float64{}, calc: map[int64]float64{}}
+	ship := &entity{key: "ship", kind: entShip, typeID: shipTypeID, instances: 1, base: shipBase, calc: map[int64]float64{}}
+	charEnt := &entity{key: "char", kind: entChar, base: map[int64]float64{}, calc: map[int64]float64{}}
 
-	entities := []*fitEntity{ship, charEnt}
-	byType := map[int64]*fitEntity{shipTypeID: ship}
-	skillEnts := make(map[int64]*fitEntity)
+	entities := []*entity{ship, charEnt}
+	byType := map[int64]*entity{shipTypeID: ship}
+	skillEnts := make(map[int64]*entity)
 
 	// Module/rig/drone entities per fitted type (instances fold
 	// duplicates of the same type into one entity with a count).
 	// Modules fold by (type, state): two identical modules in
 	// different states are separate entities so each binds only
 	// the effect categories its state allows.
-	var fitted []*fitEntity // modules, rigs, subsystems, drones
-	fittedByType := make(map[int64][]*fitEntity)
+	var fitted []*entity // modules, rigs, subsystems, drones
+	fittedByType := make(map[int64][]*entity)
 	for _, it := range items {
 		if it.TypeID == shipTypeID {
 			continue
 		}
 		qty := it.Quantity
-		kind := fitEntModule
+		kind := entModule
 		switch {
-		case snap.hasEffect(it.TypeID, fitEffectRigSlot):
-			kind = fitEntRig
-		case snap.hasEffect(it.TypeID, fitEffectSubsystemSlot):
-			kind = fitEntSubsystem
-		case snap.attrs[it.TypeID][fitAttrDroneBandwidthUsed] > 0:
-			kind = fitEntDrone
+		case snap.HasEffect(it.TypeID, EffectRigSlot):
+			kind = entRig
+		case snap.HasEffect(it.TypeID, EffectSubsystemSlot):
+			kind = entSubsystem
+		case snap.Attrs[it.TypeID][AttrDroneBandwidthUsed] > 0:
+			kind = entDrone
 		}
 		if qty <= 0 {
 			qty = 1
-			if kind == fitEntDrone {
+			if kind == entDrone {
 				qty = 0 // a drone line with no count carries nothing
 			}
 		}
 		state := ""
-		if kind == fitEntModule {
-			state = fitNormalizeModuleState(snap, it.TypeID, it.State)
+		if kind == entModule {
+			state = NormalizeModuleState(snap, it.TypeID, it.State)
 		}
-		var ent *fitEntity
+		var ent *entity
 		for _, e := range fittedByType[it.TypeID] {
 			if e.state == state {
 				ent = e
@@ -1110,13 +1114,13 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 			ent.instances += qty
 			continue
 		}
-		ent = &fitEntity{
+		ent = &entity{
 			key:       fmt.Sprintf("fit:%d:%s", it.TypeID, state),
 			kind:      kind,
 			typeID:    it.TypeID,
 			instances: qty,
 			state:     state,
-			base:      cloneAttrMap(snap.attrs[it.TypeID]),
+			base:      cloneAttrMap(snap.Attrs[it.TypeID]),
 			calc:      map[int64]float64{},
 		}
 		fittedByType[it.TypeID] = append(fittedByType[it.TypeID], ent)
@@ -1130,7 +1134,7 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 	// only modeled when at least one weapon of its type is
 	// cycling — a loaded charge in an offline or inactive weapon
 	// does nothing (the doc still remembers it).
-	weaponCharge := make(map[int64]*fitEntity) // weapon type -> charge/missile entity
+	weaponCharge := make(map[int64]*entity) // weapon type -> charge/missile entity
 	for weaponType, chargeType := range charges {
 		ents := fittedByType[weaponType]
 		if len(ents) == 0 || chargeType == 0 {
@@ -1146,16 +1150,16 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 		if !cycling {
 			continue
 		}
-		kind := fitEntCharge
-		if snap.hasEffect(weaponType, fitEffectLauncherFitted) {
-			kind = fitEntMissile
+		kind := entCharge
+		if snap.HasEffect(weaponType, EffectLauncherFitted) {
+			kind = entMissile
 		}
-		ent := &fitEntity{
+		ent := &entity{
 			key:       fmt.Sprintf("charge:%d", chargeType),
 			kind:      kind,
 			typeID:    chargeType,
 			instances: 1,
-			base:      cloneAttrMap(snap.attrs[chargeType]),
+			base:      cloneAttrMap(snap.Attrs[chargeType]),
 			calc:      map[int64]float64{},
 		}
 		weaponCharge[weaponType] = ent
@@ -1171,11 +1175,11 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 		if lvl > 5 {
 			lvl = 5
 		}
-		base := cloneAttrMap(snap.attrs[skillID])
-		base[fitAttrSkillLevel] = float64(lvl)
-		ent := &fitEntity{
+		base := cloneAttrMap(snap.Attrs[skillID])
+		base[AttrSkillLevel] = float64(lvl)
+		ent := &entity{
 			key:       fmt.Sprintf("skill:%d", skillID),
-			kind:      fitEntSkill,
+			kind:      entSkill,
 			typeID:    skillID,
 			instances: 1,
 			base:      base,
@@ -1188,19 +1192,19 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 
 	// Implants as char-located pseudo-items (one entity per
 	// implant type; slots are unique so instances stays 1).
-	var implantEnts []*fitEntity
+	var implantEnts []*entity
 	seenImplant := make(map[int64]bool)
 	for _, implantID := range implants {
 		if implantID <= 0 || implantID == shipTypeID || seenImplant[implantID] {
 			continue
 		}
 		seenImplant[implantID] = true
-		ent := &fitEntity{
+		ent := &entity{
 			key:       fmt.Sprintf("implant:%d", implantID),
-			kind:      fitEntImplant,
+			kind:      entImplant,
 			typeID:    implantID,
 			instances: 1,
-			base:      cloneAttrMap(snap.attrs[implantID]),
+			base:      cloneAttrMap(snap.Attrs[implantID]),
 			calc:      map[int64]float64{},
 		}
 		implantEnts = append(implantEnts, ent)
@@ -1211,9 +1215,9 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 	// --- Ship restrictions -----------------------------------------
 	// Modules carrying canFitShipGroup*/canFitShipType* may only
 	// fly on the named hulls. Flag violations as fit errors.
-	shipGroup := snap.groups[shipTypeID]
+	shipGroup := snap.Groups[shipTypeID]
 	for _, ent := range fitted {
-		if r := fitRestrictionFor(snap, shipTypeID, shipGroup, ent.typeID); r != nil {
+		if r := restrictionFor(snap, shipTypeID, shipGroup, ent.typeID); r != nil {
 			res.Restricted = append(res.Restricted, *r)
 		}
 	}
@@ -1222,27 +1226,27 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 	// atShip are the entities sitting at the ship's location for
 	// Location* selectors: fitted equipment plus launched-craft
 	// types (drones, missiles).
-	atShip := make([]*fitEntity, 0, len(fitted)+len(weaponCharge))
+	atShip := make([]*entity, 0, len(fitted)+len(weaponCharge))
 	atShip = append(atShip, fitted...)
 	for _, ent := range weaponCharge {
 		atShip = append(atShip, ent)
 	}
-	var drones []*fitEntity
+	var drones []*entity
 	for _, ent := range fitted {
-		if ent.kind == fitEntDrone {
+		if ent.kind == entDrone {
 			drones = append(drones, ent)
 		}
 	}
 
-	var apps []fitApplication
-	bind := func(source *fitEntity, effectID int64, eff *fitEffect, m fitModifier) {
-		if m.ModifiedAttr == fitAttrSkillLevel {
+	var apps []application
+	bind := func(source *entity, effectID int64, eff *Effect, m Modifier) {
+		if m.ModifiedAttr == AttrSkillLevel {
 			return // skill levels are engine inputs
 		}
-		targets := func(list ...*fitEntity) {
+		targets := func(list ...*entity) {
 			for _, t := range list {
 				if t != nil {
-					apps = append(apps, fitApplication{source: source, target: t, effectID: effectID, mod: m})
+					apps = append(apps, application{source: source, target: t, effectID: effectID, mod: m})
 				}
 			}
 		}
@@ -1258,7 +1262,7 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 				targets(source)
 			case "otherID":
 				// A charge modifier reaching its host weapon.
-				if source.kind == fitEntCharge || source.kind == fitEntMissile {
+				if source.kind == entCharge || source.kind == entMissile {
 					for weaponType, ent := range weaponCharge {
 						if ent == source {
 							targets(fittedByType[weaponType]...)
@@ -1275,7 +1279,7 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 			case "shipID":
 				for _, t := range atShip {
 					switch t.kind {
-					case fitEntModule, fitEntRig, fitEntSubsystem:
+					case entModule, entRig, entSubsystem:
 						targets(t)
 					}
 				}
@@ -1293,10 +1297,10 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 			switch m.Domain {
 			case "shipID":
 				for _, t := range atShip {
-					if t.kind == fitEntCharge {
+					if t.kind == entCharge {
 						continue // contained in its weapon, not at the ship
 					}
-					if snap.groups[t.typeID] == m.GroupID && m.GroupID != 0 {
+					if snap.Groups[t.typeID] == m.GroupID && m.GroupID != 0 {
 						targets(t)
 					}
 				}
@@ -1309,7 +1313,7 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 				// e.g. 802 implantSetSerpentis -> 315
 				// velocityBonus, operator 0 = pre-multiply).
 				for _, t := range implantEnts {
-					if snap.groups[t.typeID] == m.GroupID && m.GroupID != 0 {
+					if snap.Groups[t.typeID] == m.GroupID && m.GroupID != 0 {
 						targets(t)
 					}
 				}
@@ -1323,7 +1327,7 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 				return
 			}
 			for _, t := range atShip {
-				if t.kind == fitEntCharge {
+				if t.kind == entCharge {
 					continue
 				}
 				if m.SkillTypeID != 0 && snap.requiresSkill(t.typeID, m.SkillTypeID) {
@@ -1347,7 +1351,7 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 
 	// Sources in a fixed order (ship, char, skills by type,
 	// fitted items, charges) so PreAssign outcomes are stable.
-	sources := make([]*fitEntity, 0, len(entities))
+	sources := make([]*entity, 0, len(entities))
 	sources = append(sources, ship)
 	skillIDs := make([]int64, 0, len(skillEnts))
 	for id := range skillEnts {
@@ -1368,12 +1372,12 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 		// semantics): an offline module binds nothing, an
 		// online-but-inactive one skips active and overload,
 		// overheated adds the overload category.
-		allowed := fitSourceCategories(source)
+		allowed := sourceCategories(source)
 		if allowed == nil {
 			continue
 		}
-		for _, effectID := range snap.typeEffects[source.typeID] {
-			eff := snap.effects[effectID]
+		for _, effectID := range snap.TypeEffects[source.typeID] {
+			eff := snap.Effects[effectID]
 			if eff == nil {
 				continue // carries no modifiers; nothing to apply
 			}
@@ -1382,7 +1386,7 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 				// a fitting choice, not a modeling gap — skip
 				// silently so the heat note only fires for
 				// genuinely unmodeled categories.
-				if eff.Category == fitCatOverload && source.kind == fitEntModule {
+				if eff.Category == catOverload && source.kind == entModule {
 					continue
 				}
 				noteUnmodeled(fmt.Sprintf("effect %d %s: category %d skipped (overload/system/target mechanics not modeled)", effectID, eff.Name, eff.Category))
@@ -1392,7 +1396,7 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 				// Instances of the same fitted type bind once per
 				// instance so stacking penalties see each copy.
 				n := 1
-				if source.kind == fitEntModule || source.kind == fitEntRig || source.kind == fitEntSubsystem {
+				if source.kind == entModule || source.kind == entRig || source.kind == entSubsystem {
 					n = source.instances
 					if n < 1 {
 						n = 1
@@ -1410,10 +1414,10 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 	// from base a few times so cross-entity chains converge
 	// (skill -> ship bonus attribute -> module percent).
 	type appKey struct {
-		target *fitEntity
+		target *entity
 		attr   int64
 	}
-	grouped := make(map[appKey][]fitApplication)
+	grouped := make(map[appKey][]application)
 	for _, app := range apps {
 		k := appKey{app.target, app.mod.ModifiedAttr}
 		grouped[k] = append(grouped[k], app)
@@ -1430,15 +1434,15 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 
 	res.ShipAttrs = finalAttrs(snap, ship)
 	for _, ent := range entities {
-		if ent == ship || ent.kind == fitEntSkill || ent == charEnt {
+		if ent == ship || ent.kind == entSkill || ent == charEnt {
 			continue
 		}
 		fa := finalAttrs(snap, ent)
 		if _, ok := res.ItemAttrs[ent.typeID]; !ok {
 			res.ItemAttrs[ent.typeID] = fa
 		}
-		if ent.kind == fitEntModule && ent.state != "" {
-			res.StateAttrs[fitStateAttrKey(ent.typeID, ent.state)] = fa
+		if ent.kind == entModule && ent.state != "" {
+			res.StateAttrs[StateAttrKey(ent.typeID, ent.state)] = fa
 		}
 	}
 
@@ -1448,72 +1452,72 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 	// Resources. Offline modules are fitted but dark: no PG,
 	// no CPU, no effects.
 	for _, ent := range fitted {
-		if ent.kind == fitEntDrone || !ent.online() {
+		if ent.kind == entDrone || !ent.online() {
 			continue
 		}
-		res.PowergridUsed += ent.get(snap, fitAttrPower) * float64(maxInt(ent.instances, 1))
-		res.CPUUsed += ent.get(snap, fitAttrCPU) * float64(maxInt(ent.instances, 1))
+		res.PowergridUsed += ent.get(snap, AttrPower) * float64(maxInt(ent.instances, 1))
+		res.CPUUsed += ent.get(snap, AttrCPU) * float64(maxInt(ent.instances, 1))
 	}
-	res.PowergridMax = sg(fitAttrPowerOutput)
-	res.CPUMax = sg(fitAttrCPUOutput)
+	res.PowergridMax = sg(AttrPowerOutput)
+	res.CPUMax = sg(AttrCPUOutput)
 
 	// Slots and hardpoints.
-	res.HighSlots = int(sg(fitAttrHiSlots))
-	res.MediumSlots = int(sg(fitAttrMedSlots))
-	res.LowSlots = int(sg(fitAttrLowSlots))
-	res.RigSlots = int(sg(fitAttrRigSlots))
-	res.TurretHardpoints = int(sg(fitAttrTurretSlotsLeft))
-	res.LauncherHardpoints = int(sg(fitAttrLauncherSlotsLeft))
+	res.HighSlots = int(sg(AttrHiSlots))
+	res.MediumSlots = int(sg(AttrMedSlots))
+	res.LowSlots = int(sg(AttrLowSlots))
+	res.RigSlots = int(sg(AttrRigSlots))
+	res.TurretHardpoints = int(sg(AttrTurretSlotsLeft))
+	res.LauncherHardpoints = int(sg(AttrLauncherSlotsLeft))
 	// T3 strategic cruisers: the hull has no slots of its own;
 	// fitted subsystems grant them through the *SlotModifier
 	// attributes above (plain data, summed directly).
 	for _, ent := range fitted {
-		if ent.kind != fitEntSubsystem {
+		if ent.kind != entSubsystem {
 			continue
 		}
 		n := float64(maxInt(ent.instances, 1))
-		res.HighSlots += int(ent.base[fitAttrHiSlotModifier] * n)
-		res.MediumSlots += int(ent.base[fitAttrMedSlotModifier] * n)
-		res.LowSlots += int(ent.base[fitAttrLowSlotModifier] * n)
-		res.TurretHardpoints += int(ent.base[fitAttrTurretHardPointModifier] * n)
-		res.LauncherHardpoints += int(ent.base[fitAttrLauncherHardPointModifier] * n)
+		res.HighSlots += int(ent.base[AttrHiSlotModifier] * n)
+		res.MediumSlots += int(ent.base[AttrMedSlotModifier] * n)
+		res.LowSlots += int(ent.base[AttrLowSlotModifier] * n)
+		res.TurretHardpoints += int(ent.base[AttrTurretHardPointModifier] * n)
+		res.LauncherHardpoints += int(ent.base[AttrLauncherHardPointModifier] * n)
 	}
 	for _, ent := range fitted {
 		n := maxInt(ent.instances, 1)
 		switch {
-		case ent.kind == fitEntRig:
+		case ent.kind == entRig:
 			res.RigSlotsUsed += n
-			res.CalibrationUsed += ent.get(snap, fitAttrUpgradeCost) * float64(n)
-		case ent.kind == fitEntModule:
+			res.CalibrationUsed += ent.get(snap, AttrUpgradeCost) * float64(n)
+		case ent.kind == entModule:
 			switch {
-			case snap.hasEffect(ent.typeID, fitEffectHiPower):
+			case snap.HasEffect(ent.typeID, EffectHiPower):
 				res.HighSlotsUsed += n
-			case snap.hasEffect(ent.typeID, fitEffectMedPower):
+			case snap.HasEffect(ent.typeID, EffectMedPower):
 				res.MediumSlotsUsed += n
-			case snap.hasEffect(ent.typeID, fitEffectLoPower):
+			case snap.HasEffect(ent.typeID, EffectLoPower):
 				res.LowSlotsUsed += n
 			}
-			if snap.hasEffect(ent.typeID, fitEffectTurretFitted) {
+			if snap.HasEffect(ent.typeID, EffectTurretFitted) {
 				res.TurretHardpointsUsed += n
 			}
-			if snap.hasEffect(ent.typeID, fitEffectLauncherFitted) {
+			if snap.HasEffect(ent.typeID, EffectLauncherFitted) {
 				res.LauncherHardpointsUsed += n
 			}
 		}
 	}
-	res.CalibrationMax = sg(fitAttrUpgradeCapacity)
+	res.CalibrationMax = sg(AttrUpgradeCapacity)
 
 	// Capacitor.
-	res.CapacitorCapacity = sg(fitAttrCapacitorCapacity)
-	capRechargeSecs := sg(fitAttrCapacitorRecharge) / 1000
+	res.CapacitorCapacity = sg(AttrCapacitorCapacity)
+	capRechargeSecs := sg(AttrCapacitorRecharge) / 1000
 	if res.CapacitorCapacity > 0 && capRechargeSecs > 0 {
 		res.CapacitorPeakRecharge = 2.5 * res.CapacitorCapacity / capRechargeSecs
 	}
 	for _, ent := range fitted {
-		if ent.kind == fitEntDrone || !ent.cycling() {
+		if ent.kind == entDrone || !ent.cycling() {
 			continue
 		}
-		need := ent.get(snap, fitAttrCapacitorNeed)
+		need := ent.get(snap, AttrCapacitorNeed)
 		cycle := cycleSeconds(ent, snap)
 		if need > 0 && cycle > 0 {
 			res.CapacitorDraw += need / cycle * float64(maxInt(ent.instances, 1))
@@ -1534,9 +1538,9 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 	}
 
 	// Offense.
-	var damageAttrs = []int64{fitAttrDamageEM, fitAttrDamageExplosive, fitAttrDamageKinetic, fitAttrDamageThermal}
+	var damageAttrs = []int64{AttrDamageEM, AttrDamageExplosive, AttrDamageKinetic, AttrDamageThermal}
 	for _, ent := range fitted {
-		if ent.kind != fitEntModule {
+		if ent.kind != entModule {
 			continue
 		}
 		// Offline or inactive modules neither deal damage nor
@@ -1548,14 +1552,14 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 		cycle := cycleSeconds(ent, snap)
 		// Capacitor warfare drains even where damage doesn't
 		// apply, so count it before the cycle gate.
-		if amt := ent.get(snap, fitAttrEnergyNeutralizerAmount); amt > 0 {
+		if amt := ent.get(snap, AttrEnergyNeutralizerAmount); amt > 0 {
 			res.NeutDrainPerCycle += n * amt
 			if cycle > 0 {
 				res.NeutDrainPerSec += n * amt / cycle
 			}
 		}
-		if amt := ent.get(snap, fitAttrPowerTransferAmount); amt > 0 &&
-			snap.groups[ent.typeID] == fitGroupNosferatu {
+		if amt := ent.get(snap, AttrPowerTransferAmount); amt > 0 &&
+			snap.Groups[ent.typeID] == groupNosferatu {
 			res.NosDrainPerCycle += n * amt
 			if cycle > 0 {
 				res.NosDrainPerSec += n * amt / cycle
@@ -1566,7 +1570,7 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 		}
 		charge := weaponCharge[ent.typeID]
 		switch {
-		case snap.hasEffect(ent.typeID, fitEffectTurretFitted):
+		case snap.HasEffect(ent.typeID, EffectTurretFitted):
 			if charge == nil {
 				noteUnmodeled(fmt.Sprintf("turret type %d has no charge selected; damage not counted", ent.typeID))
 				continue
@@ -1575,10 +1579,10 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 			for _, a := range damageAttrs {
 				volley += charge.get(snap, a)
 			}
-			volley *= ent.get(snap, fitAttrDamageMultiplier)
+			volley *= ent.get(snap, AttrDamageMultiplier)
 			res.TurretVolley += n * volley
 			res.TurretDPS += n * volley / cycle
-		case snap.hasEffect(ent.typeID, fitEffectLauncherFitted):
+		case snap.HasEffect(ent.typeID, EffectLauncherFitted):
 			if charge == nil {
 				noteUnmodeled(fmt.Sprintf("launcher type %d has no missile selected; damage not counted", ent.typeID))
 				continue
@@ -1587,8 +1591,8 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 			for _, a := range damageAttrs {
 				volley += charge.get(snap, a)
 			}
-			volley *= charge.get(snap, fitAttrDamageMultiplier)
-			volley *= charEnt.get(snap, fitAttrMissileDamageMult)
+			volley *= charge.get(snap, AttrDamageMultiplier)
+			volley *= charEnt.get(snap, AttrMissileDamageMult)
 			res.MissileVolley += n * volley
 			res.MissileDPS += n * volley / cycle
 		}
@@ -1596,17 +1600,17 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 
 	// Drones: carried count, then active count limited by the
 	// ship's bandwidth and the pilot's drone control count.
-	res.DroneBandwidth = sg(fitAttrDroneBandwidth)
-	res.DroneBayCapacity = sg(fitAttrDroneCapacity)
-	maxActive := levels[fitAttrDronesSkill]
+	res.DroneBandwidth = sg(AttrDroneBandwidth)
+	res.DroneBayCapacity = sg(AttrDroneCapacity)
+	maxActive := levels[AttrDronesSkill]
 	var activeBudget = maxActive
 	for _, ent := range drones {
 		carried := ent.instances
 		res.DronesFitted += carried
-		if phys, ok := snap.physics[ent.typeID]; ok {
+		if phys, ok := snap.Physics[ent.typeID]; ok {
 			res.DroneBayUsed += phys.Volume * float64(carried)
 		}
-		perDroneBW := ent.get(snap, fitAttrDroneBandwidthUsed)
+		perDroneBW := ent.get(snap, AttrDroneBandwidthUsed)
 		fly := carried
 		if perDroneBW > 0 && res.DroneBandwidth > 0 {
 			if maxByBW := int(res.DroneBandwidth / perDroneBW); fly > maxByBW {
@@ -1628,7 +1632,7 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 			for _, a := range damageAttrs {
 				volley += ent.get(snap, a)
 			}
-			volley *= ent.get(snap, fitAttrDamageMultiplier)
+			volley *= ent.get(snap, AttrDamageMultiplier)
 			res.DroneVolley += float64(fly) * volley
 			res.DroneDPS += float64(fly) * volley / cycle
 		}
@@ -1637,28 +1641,28 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 	res.Volley = res.TurretVolley + res.MissileVolley + res.DroneVolley
 
 	// Tank.
-	res.ShieldHP = sg(fitAttrShieldCapacity)
-	res.ArmorHP = sg(fitAttrArmorHP)
-	res.HullHP = sg(fitAttrHP)
+	res.ShieldHP = sg(AttrShieldCapacity)
+	res.ArmorHP = sg(AttrArmorHP)
+	res.HullHP = sg(AttrHP)
 	res.ShieldEHP = layerEHP(res.ShieldHP,
-		sg(fitAttrShieldEM), sg(fitAttrShieldThermal), sg(fitAttrShieldKinetic), sg(fitAttrShieldExplosive))
+		sg(AttrShieldEM), sg(AttrShieldThermal), sg(AttrShieldKinetic), sg(AttrShieldExplosive))
 	res.ArmorEHP = layerEHP(res.ArmorHP,
-		sg(fitAttrArmorEM), sg(fitAttrArmorThermal), sg(fitAttrArmorKinetic), sg(fitAttrArmorExplosive))
+		sg(AttrArmorEM), sg(AttrArmorThermal), sg(AttrArmorKinetic), sg(AttrArmorExplosive))
 	res.HullEHP = layerEHP(res.HullHP,
-		sg(fitAttrResonanceEM), sg(fitAttrResonanceThermal), sg(fitAttrResonanceKinetic), sg(fitAttrResonanceExplosive))
-	res.EHP = fitEHPProfile{
+		sg(AttrResonanceEM), sg(AttrResonanceThermal), sg(AttrResonanceKinetic), sg(AttrResonanceExplosive))
+	res.EHP = EHPProfile{
 		Omni:      res.ShieldEHP.Omni + res.ArmorEHP.Omni + res.HullEHP.Omni,
 		EM:        res.ShieldEHP.EM + res.ArmorEHP.EM + res.HullEHP.EM,
 		Thermal:   res.ShieldEHP.Thermal + res.ArmorEHP.Thermal + res.HullEHP.Thermal,
 		Kinetic:   res.ShieldEHP.Kinetic + res.ArmorEHP.Kinetic + res.HullEHP.Kinetic,
 		Explosive: res.ShieldEHP.Explosive + res.ArmorEHP.Explosive + res.HullEHP.Explosive,
 	}
-	shieldRechargeSecs := sg(fitAttrShieldRechargeRate) / 1000
+	shieldRechargeSecs := sg(AttrShieldRechargeRate) / 1000
 	if res.ShieldHP > 0 && shieldRechargeSecs > 0 {
 		res.ShieldRegenPeak = 2.5 * res.ShieldHP / shieldRechargeSecs
 	}
 	for _, ent := range fitted {
-		if ent.kind != fitEntModule || ent.instances < 1 || !ent.cycling() {
+		if ent.kind != entModule || ent.instances < 1 || !ent.cycling() {
 			continue
 		}
 		cycle := cycleSeconds(ent, snap)
@@ -1666,42 +1670,42 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 			continue
 		}
 		n := float64(ent.instances)
-		if amt := ent.get(snap, fitAttrShieldBonus); amt > 0 {
+		if amt := ent.get(snap, AttrShieldBonus); amt > 0 {
 			res.ShieldBoostRate += n * amt / cycle
 		}
-		if amt := ent.get(snap, fitAttrArmorDamageAmount); amt > 0 {
+		if amt := ent.get(snap, AttrArmorDamageAmount); amt > 0 {
 			res.ArmorRepairRate += n * amt / cycle
 		}
-		if amt := ent.get(snap, fitAttrStructureDamageAmt); amt > 0 {
+		if amt := ent.get(snap, AttrStructureDamageAmt); amt > 0 {
 			res.HullRepairRate += n * amt / cycle
 		}
 	}
 
 	// Mobility and targeting.
-	res.Mass = sg(fitAttrMass)
-	res.Velocity = sg(fitAttrMaxVelocity)
+	res.Mass = sg(AttrMass)
+	res.Velocity = sg(AttrMaxVelocity)
 	for _, ent := range fitted {
-		if ent.kind != fitEntModule || !ent.cycling() {
+		if ent.kind != entModule || !ent.cycling() {
 			continue
 		}
-		thrust := ent.get(snap, fitAttrSpeedBoostFactor)
-		factor := ent.get(snap, fitAttrSpeedFactor)
+		thrust := ent.get(snap, AttrSpeedBoostFactor)
+		factor := ent.get(snap, AttrSpeedFactor)
 		if thrust > 0 && factor != 0 && res.Mass > 0 {
 			res.Velocity *= 1 + (factor/100)*(thrust/res.Mass)
 		}
 	}
-	if agility := sg(fitAttrAgility); res.Mass > 0 && agility > 0 {
+	if agility := sg(AttrAgility); res.Mass > 0 && agility > 0 {
 		res.AlignSeconds = res.Mass * agility * math.Log(4) / 1e6
 	}
-	res.SignatureRadius = sg(fitAttrSignatureRadius)
-	res.MaxTargetRange = sg(fitAttrMaxTargetRange)
-	res.ScanResolution = sg(fitAttrScanResolution)
-	res.SensorStrength = math.Max(math.Max(sg(fitAttrScanRadar), sg(fitAttrScanLadar)),
-		math.Max(sg(fitAttrScanMagnetometric), sg(fitAttrScanGravimetric)))
-	res.MaxLockedTargets = sg(fitAttrMaxLockedTargets)
-	res.CargoCapacity = sg(fitAttrCapacity)
+	res.SignatureRadius = sg(AttrSignatureRadius)
+	res.MaxTargetRange = sg(AttrMaxTargetRange)
+	res.ScanResolution = sg(AttrScanResolution)
+	res.SensorStrength = math.Max(math.Max(sg(AttrScanRadar), sg(AttrScanLadar)),
+		math.Max(sg(AttrScanMagnetometric), sg(AttrScanGravimetric)))
+	res.MaxLockedTargets = sg(AttrMaxLockedTargets)
+	res.CargoCapacity = sg(AttrCapacity)
 	if res.CargoCapacity == 0 {
-		if phys, ok := snap.physics[shipTypeID]; ok {
+		if phys, ok := snap.Physics[shipTypeID]; ok {
 			res.CargoCapacity = phys.Capacity
 		}
 	}
@@ -1724,7 +1728,7 @@ func cloneAttrMap(in map[int64]float64) map[int64]float64 {
 }
 
 // finalAttrs returns base + computed attributes for an entity.
-func finalAttrs(snap *fitSnapshot, e *fitEntity) map[int64]float64 {
+func finalAttrs(snap *Snapshot, e *entity) map[int64]float64 {
 	out := cloneAttrMap(e.base)
 	for attr := range e.calc {
 		out[attr] = e.get(snap, attr)
@@ -1732,23 +1736,23 @@ func finalAttrs(snap *fitSnapshot, e *fitEntity) map[int64]float64 {
 	return out
 }
 
-// fitRestrictionFor returns the restriction for a module on the
+// restrictionFor returns the restriction for a module on the
 // given hull, or nil when the module fits. A module is
 // restricted when it carries any canFitShipGroup01-04
 // (1298-1301) or canFitShipType1-4 (1302-1305) attribute; it is
 // allowed when the hull's type or group matches any named one.
-func fitRestrictionFor(snap *fitSnapshot, shipTypeID, shipGroup, moduleTypeID int64) *fitRestriction {
-	attrs := snap.attrs[moduleTypeID]
+func restrictionFor(snap *Snapshot, shipTypeID, shipGroup, moduleTypeID int64) *Restriction {
+	attrs := snap.Attrs[moduleTypeID]
 	if attrs == nil {
 		return nil
 	}
-	r := &fitRestriction{TypeID: moduleTypeID}
-	for a := int64(fitAttrCanFitShipGroup01); a <= int64(fitAttrCanFitShipGroup04); a++ {
+	r := &Restriction{TypeID: moduleTypeID}
+	for a := int64(AttrCanFitShipGroup01); a <= int64(AttrCanFitShipGroup04); a++ {
 		if g := int64(attrs[a]); g > 0 {
 			r.NeedGroup = append(r.NeedGroup, g)
 		}
 	}
-	for a := int64(fitAttrCanFitShipType1); a <= int64(fitAttrCanFitShipType4); a++ {
+	for a := int64(AttrCanFitShipType1); a <= int64(AttrCanFitShipType4); a++ {
 		if t := int64(attrs[a]); t > 0 {
 			r.NeedType = append(r.NeedType, t)
 		}
@@ -1771,11 +1775,11 @@ func fitRestrictionFor(snap *fitSnapshot, shipTypeID, shipGroup, moduleTypeID in
 
 // cycleSeconds is an item's activation cycle in seconds:
 // duration (73) wins, speed (51) is the weapon/drone fallback.
-func cycleSeconds(e *fitEntity, snap *fitSnapshot) float64 {
-	if d := e.get(snap, fitAttrDuration); d > 0 {
+func cycleSeconds(e *entity, snap *Snapshot) float64 {
+	if d := e.get(snap, AttrDuration); d > 0 {
 		return d / 1000
 	}
-	if s := e.get(snap, fitAttrSpeed); s > 0 {
+	if s := e.get(snap, AttrSpeed); s > 0 {
 		return s / 1000
 	}
 	return 0
@@ -1785,7 +1789,7 @@ func cycleSeconds(e *fitEntity, snap *fitSnapshot) float64 {
 // hit points and resonances (EM, thermal, kinetic, explosive
 // order). Omni uses the mean resonance; a resonance of 0 or
 // less makes that profile immune (infinite EHP).
-func layerEHP(hp float64, em, thermal, kinetic, explosive float64) fitEHPProfile {
+func layerEHP(hp float64, em, thermal, kinetic, explosive float64) EHPProfile {
 	resist := func(r float64) float64 {
 		if r <= 0 {
 			return math.Inf(1)
@@ -1793,7 +1797,7 @@ func layerEHP(hp float64, em, thermal, kinetic, explosive float64) fitEHPProfile
 		return hp / r
 	}
 	mean := (em + thermal + kinetic + explosive) / 4
-	return fitEHPProfile{
+	return EHPProfile{
 		Omni:      resist(mean),
 		EM:        resist(em),
 		Thermal:   resist(thermal),

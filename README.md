@@ -55,6 +55,10 @@ This project is dedicated to EVE Online, its pilots and its developers — the g
   schema up to date at startup (`store.go`, `schema.go`). The schema
   itself is the numbered steps in `internal/store/schema_pg/`, which
   are also sqlc's input
+- `internal/fit/` — the fitting simulator's stat engine: the dogma
+  arithmetic that turns a ship, its modules, skills and charges into
+  the fit's statistics. Pure over the static data it loads; the
+  fitting pages in `internal/app` are its only caller
 - `internal/pgtest/` — test-only embedded-Postgres provisioning
   (a fresh database per test; `go test ./...` needs no external
   database)

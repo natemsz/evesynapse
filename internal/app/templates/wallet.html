@@ -11,13 +11,13 @@
 {{if .Wallet.BalanceOK}}<p>Balance: <strong>{{.Wallet.Balance}} ISK</strong></p>{{end}}
 
 {{if .Wallet.Graph}}
-<section class="foldable">
+<section class="card foldable">
 <h3>Balance history</h3>
 {{template "wallet-graph" .Wallet.Graph}}
 </section>
 {{end}}
 
-<section class="foldable">
+<section class="card foldable">
 <h3>Recent journal</h3>
 {{if .Wallet.Journal.Note}}
 <p><small>{{.Wallet.Journal.Note}}</small></p>
@@ -40,7 +40,7 @@
 {{end}}
 </section>
 
-<section class="foldable">
+<section class="card foldable">
 <h3>Recent transactions</h3>
 {{if .Wallet.Txns.Note}}
 <p><small>{{.Wallet.Txns.Note}}</small></p>

@@ -15,7 +15,7 @@
 
 {{if .FitPreview}}
 {{with .FitPreview}}
-<section class="foldable">
+<section class="card foldable">
 <h3>Training plan for “{{.FitName}}”</h3>
 <p><small>{{itemLink .ShipTypeID .ShipName}} · {{.ToTrain}} skill(s) to train · {{.AlreadyMet}} already covered{{if .MissingData}} · {{.MissingData}} without training data (left out){{end}}</small></p>
 <div class="tw">
@@ -38,7 +38,7 @@
 {{end}}
 {{end}}
 
-<section class="foldable">
+<section class="card foldable">
 <h3>Your plans</h3>
 {{if .Plans}}
 <ul>
@@ -66,7 +66,7 @@
 
 {{if .Plan}}
 {{with .Plan}}
-<section class="foldable">
+<section class="card foldable">
 <h3>{{.Name}}</h3>
 
 {{if .AttrsNote}}<p><small>{{.AttrsNote}}</small></p>{{end}}

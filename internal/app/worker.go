@@ -233,9 +233,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	eligible = app.orderByDue(ctx, eligible)
 	eligible = orderByPriority(eligible, app.takePriorityCharacters())
 
-	var refreshed, failed, deferred int
-	limited := false
-	allowance := &fetchBudget{left: maxFetchesPerCycle}
+	c := &cycleState{app: app, allowance: &fetchBudget{left: maxFetchesPerCycle}}
 
 	// The market guide (v0.3.04): one public call mirrors into
 	// the stored table on ESI's cache window, ahead of the
@@ -243,10 +241,10 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// and the daily sampler below — always has prices to work
 	// with. Fresh tables cost nothing here.
 	if stored, gLimited := app.refreshGuidePrices(ctx); stored {
-		refreshed++
+		c.refreshed++
 	} else if gLimited {
 		logging.Warnf("worker: ESI error limit hit refreshing guide prices; backing off until next cycle")
-		limited = true
+		c.limited = true
 	}
 
 	for i, ch := range eligible {
@@ -254,167 +252,209 @@ func (app *Application) refreshCycle(ctx context.Context) {
 			app.updateWorkerStatus(func(s *workerStatus) { s.Warming = false })
 			return
 		}
-		if allowance.exhausted() {
+		if c.allowance.exhausted() {
 			// The cycle's work budget is spent; the rest keep
 			// their place in the due order for the next cycle
 			// instead of one giant pass over every character.
-			deferred = len(eligible) - i
+			c.deferred = len(eligible) - i
 			break
 		}
-
-		// Ensure the token is usable before touching snapshots; a
-		// revoked refresh token means this character needs a fresh
-		// login, and fetching would only fail three more times.
-		// (A definitive rejection parks the character inside
-		// validAccessToken — see links.go.)
-		if _, err := app.validAccessToken(ctx, ch); err != nil {
-			logging.Warnf("worker: token for character %d unusable: %v", ch.CharacterID, err)
-			failed++
-			continue
+		if !c.refreshCharacter(ctx, ch) {
+			continue // its token is unusable: on to the next one
 		}
-
-		for _, kind := range coreSnapshotKinds {
-			snap, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: kind})
-			switch {
-			case serr == nil && esi.SnapshotFresh(snap):
-				continue // still inside ESI's cache window
-			case serr != nil && !errors.Is(serr, sql.ErrNoRows):
-				logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
-			}
-
-			if !allowance.take() {
-				break
-			}
-			if err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
-				failed++
-				if errors.Is(err, esi.ErrErrorLimit) {
-					logging.Warnf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)
-					limited = true
-				} else {
-					if isDefinitiveTokenFailure(err) {
-						// The access token itself was rejected:
-						// park the character rather than failing
-						// the same way every cycle.
-						app.markCharacterTokenDead(ctx, ch.CharacterID)
-						logging.Warnf("worker: character %d token rejected refreshing %s; parked until re-login", ch.CharacterID, kind)
-					} else {
-						logging.Errorf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
-					}
-				}
-				break // don't keep pushing this character this cycle
-			}
-			refreshed++
-		}
-
-		// Killmail details behind the recent list: immutable once
-		// posted, so each missing detail is fetched once and kept.
-		// Bounded per character per cycle (warmKillmailDetails).
-		// The sub-passes below keep their own per-character caps
-		// and freshness gates; the cycle budget only stops new
-		// characters from starting once it is spent.
-		if !limited && !allowance.exhausted() {
-			warmed, ltd := app.warmKillmailDetails(ctx, ch)
-			refreshed += warmed
-			if ltd {
-				logging.Warnf("worker: ESI error limit hit warming killmail details for character %d; backing off until next cycle", ch.CharacterID)
-				limited = true
-			}
-		}
-
-		// Corporation datasets: the corp_* snapshots behind the
-		// corporation subpages, plus the details behind the corp's
-		// recent killmail list (corp_worker.go). 403 role refusals
-		// are recorded state there, not failures.
-		if !limited && !allowance.exhausted() {
-			refreshed += app.refreshCorpSnapshots(ctx, ch)
-			warmed, ltd := app.warmCorpKillmailDetails(ctx, ch)
-			refreshed += warmed
-			if ltd {
-				logging.Warnf("worker: ESI error limit hit warming corp killmail details for character %d; backing off until next cycle", ch.CharacterID)
-				limited = true
-			}
-		}
-
-		// Economy datasets (cluster 3): the wallet/orders/
-		// contracts/industry snapshots, plus the contract item
-		// lists behind the contracts snapshot (economy_worker.go).
-		if !limited && !allowance.exhausted() {
-			refreshed += app.refreshEconomySnapshots(ctx, ch)
-			warmed, ltd := app.warmContractItems(ctx, ch)
-			refreshed += warmed
-			if ltd {
-				logging.Warnf("worker: ESI error limit hit warming contract items for character %d; backing off until next cycle", ch.CharacterID)
-				limited = true
-			}
-		}
-
-		// Phase 2 datasets: planetary industry (colonies +
-		// layouts, planets_worker.go) and mail/calendar/contacts
-		// (list kinds + bodies + event details, comms_worker.go).
-		// Both passes spend from the cycle's shared fetch
-		// allowance, so they compose with the core pass's budget
-		// instead of adding an unbounded tail.
-		if !limited && !allowance.exhausted() {
-			warmed, ltd := app.refreshPlanetarySnapshots(ctx, ch, allowance)
-			refreshed += warmed
-			if ltd {
-				logging.Warnf("worker: ESI error limit hit refreshing planetary industry for character %d; backing off until next cycle", ch.CharacterID)
-				limited = true
-			}
-		}
-		if !limited && !allowance.exhausted() {
-			warmed, ltd := app.refreshCommsSnapshots(ctx, ch, allowance)
-			refreshed += warmed
-			if ltd {
-				logging.Warnf("worker: ESI error limit hit refreshing mail/calendar/contacts for character %d; backing off until next cycle", ch.CharacterID)
-				limited = true
-			}
-		}
-
-		// Daily wallet history (schema 019): record today from
-		// the snapshots just stored. Pure local reads — no fetch
-		// budget spent, no extra ESI calls.
-		app.sampleWalletHistory(ctx, ch, time.Now())
-
-		if limited {
+		if c.limited {
 			break
 		}
 	}
+
+	c.refreshPublicData(ctx, characters)
+	c.warmNames(ctx, characters)
+
+	summary := cycleSummary(c.refreshed, c.namesResolved, c.failed, c.limited, parked, c.deferred)
+	app.updateWorkerStatus(func(s *workerStatus) {
+		s.Warming = false
+		s.Summary = summary
+		s.NamesResolvedTotal += c.namesResolved
+	})
+
+	if c.refreshed > 0 || c.failed > 0 || c.namesResolved > 0 {
+		logging.Infof("worker: cycle done: %s", summary)
+	}
+}
+
+// cycleState is one refresh cycle while it runs: what it has done so far
+// and what it may still spend. Its methods are the cycle's passes.
+type cycleState struct {
+	app *Application
+
+	refreshed     int // datasets fetched and stored
+	namesResolved int // names added to the local caches
+	failed        int // fetches that failed, and characters with no usable token
+	deferred      int // characters left for the next cycle
+
+	// limited is set once ESI says to back off (its error limit).
+	// Nothing more is fetched in this cycle after that.
+	limited bool
+	// allowance is the cycle's shared fetch budget.
+	allowance *fetchBudget
+}
+
+// pass runs one piece of the cycle, unless ESI has already said to
+// back off. What it stored is counted, and if it is where the
+// back-off came from that is logged (what names the pass in the log
+// line) and the cycle stops fetching.
+func (c *cycleState) pass(what string, run func() (stored int, limited bool)) {
+	if c.limited {
+		return
+	}
+	stored, limited := run()
+	c.refreshed += stored
+	if limited {
+		logging.Warnf("worker: ESI error limit hit %s; backing off until next cycle", what)
+		c.limited = true
+	}
+}
+
+// characterPass is pass for one character's further datasets. Those
+// keep their own per-character caps and freshness gates; on top of
+// that they hold back once the cycle's fetch allowance is spent, so
+// a spent budget stops new work rather than cutting a pass short.
+func (c *cycleState) characterPass(what string, ch db.Character, run func() (stored int, limited bool)) {
+	if c.allowance.exhausted() {
+		return
+	}
+	c.pass(fmt.Sprintf("%s for character %d", what, ch.CharacterID), run)
+}
+
+// refreshCharacter brings one character up to date: the core
+// snapshots first, then the datasets behind the other pages. It
+// reports false when the character's token is unusable and nothing
+// was attempted.
+func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool {
+	app := c.app
+
+	// Ensure the token is usable before touching snapshots; a
+	// revoked refresh token means this character needs a fresh
+	// login, and fetching would only fail three more times.
+	// (A definitive rejection parks the character inside
+	// validAccessToken — see links.go.)
+	if _, err := app.validAccessToken(ctx, ch); err != nil {
+		logging.Warnf("worker: token for character %d unusable: %v", ch.CharacterID, err)
+		c.failed++
+		return false
+	}
+
+	c.refreshCoreSnapshots(ctx, ch)
+
+	// Killmail details behind the recent list: immutable once
+	// posted, so each missing detail is fetched once and kept.
+	// Bounded per character per cycle (warmKillmailDetails).
+	c.characterPass("warming killmail details", ch, func() (int, bool) {
+		return app.warmKillmailDetails(ctx, ch)
+	})
+
+	// Corporation datasets: the corp_* snapshots behind the
+	// corporation subpages, plus the details behind the corp's
+	// recent killmail list (corp_worker.go). 403 role refusals
+	// are recorded state there, not failures.
+	c.characterPass("warming corp killmail details", ch, func() (int, bool) {
+		stored := app.refreshCorpSnapshots(ctx, ch)
+		warmed, limited := app.warmCorpKillmailDetails(ctx, ch)
+		return stored + warmed, limited
+	})
+
+	// Economy datasets (cluster 3): the wallet/orders/
+	// contracts/industry snapshots, plus the contract item
+	// lists behind the contracts snapshot (economy_worker.go).
+	c.characterPass("warming contract items", ch, func() (int, bool) {
+		stored := app.refreshEconomySnapshots(ctx, ch)
+		warmed, limited := app.warmContractItems(ctx, ch)
+		return stored + warmed, limited
+	})
+
+	// Phase 2 datasets: planetary industry (colonies +
+	// layouts, planets_worker.go) and mail/calendar/contacts
+	// (list kinds + bodies + event details, comms_worker.go).
+	// Both passes spend from the cycle's shared fetch
+	// allowance, so they compose with the core pass's budget
+	// instead of adding an unbounded tail.
+	c.characterPass("refreshing planetary industry", ch, func() (int, bool) {
+		return app.refreshPlanetarySnapshots(ctx, ch, c.allowance)
+	})
+	c.characterPass("refreshing mail/calendar/contacts", ch, func() (int, bool) {
+		return app.refreshCommsSnapshots(ctx, ch, c.allowance)
+	})
+
+	// Daily wallet history (schema 019): record today from
+	// the snapshots just stored. Pure local reads — no fetch
+	// budget spent, no extra ESI calls.
+	app.sampleWalletHistory(ctx, ch, time.Now())
+	return true
+}
+
+// refreshCoreSnapshots fetches the character's core datasets whose
+// ESI cache window has closed, stopping at the first failure.
+func (c *cycleState) refreshCoreSnapshots(ctx context.Context, ch db.Character) {
+	app := c.app
+	for _, kind := range coreSnapshotKinds {
+		snap, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: kind})
+		switch {
+		case serr == nil && esi.SnapshotFresh(snap):
+			continue // still inside ESI's cache window
+		case serr != nil && !errors.Is(serr, sql.ErrNoRows):
+			logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
+		}
+
+		if !c.allowance.take() {
+			break
+		}
+		if err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
+			c.failed++
+			if errors.Is(err, esi.ErrErrorLimit) {
+				logging.Warnf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)
+				c.limited = true
+			} else {
+				if isDefinitiveTokenFailure(err) {
+					// The access token itself was rejected:
+					// park the character rather than failing
+					// the same way every cycle.
+					app.markCharacterTokenDead(ctx, ch.CharacterID)
+					logging.Warnf("worker: character %d token rejected refreshing %s; parked until re-login", ch.CharacterID, kind)
+				} else {
+					logging.Errorf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
+				}
+			}
+			break // don't keep pushing this character this cycle
+		}
+		c.refreshed++
+	}
+}
+
+// refreshPublicData runs the passes that are not about one
+// character: market data, the name queues, and the public records
+// pages have asked for.
+func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Character) {
+	app := c.app
 
 	// Market pass (Phase 5): price-history warming for
 	// watchlists/wants/order types, and per-order health from
 	// regional books. Public data, spending from its own lane
 	// (refreshMarketData owns the market allowance).
-	if !limited {
-		mStored, mLimited := app.refreshMarketData(ctx, characters)
-		refreshed += mStored
-		if mLimited {
-			logging.Warnf("worker: ESI error limit hit refreshing market data; backing off until next cycle")
-			limited = true
-		}
-	}
+	c.pass("refreshing market data", func() (int, bool) {
+		return app.refreshMarketData(ctx, characters)
+	})
 
 	// Structure names: resolve the due slice of the structure
 	// queue across every scoped character (structures.go).
-	if !limited {
-		sResolved, sLimited := app.resolveStructureNames(ctx, characters, allowance)
-		refreshed += sResolved
-		if sLimited {
-			logging.Warnf("worker: ESI error limit hit resolving structure names; backing off until next cycle")
-			limited = true
-		}
-	}
+	c.pass("resolving structure names", func() (int, bool) {
+		return app.resolveStructureNames(ctx, characters, c.allowance)
+	})
 
 	// Planet names: resolve the due slice of the planet queue
 	// (public endpoint, no token — planet_names.go).
-	if !limited {
-		plResolved, plLimited := app.resolvePlanetNames(ctx, allowance)
-		refreshed += plResolved
-		if plLimited {
-			logging.Warnf("worker: ESI error limit hit resolving planet names; backing off until next cycle")
-			limited = true
-		}
-	}
+	c.pass("resolving planet names", func() (int, bool) {
+		return app.resolvePlanetNames(ctx, c.allowance)
+	})
 
 	// Public records: resolve any pilot names the topbar search
 	// is waiting on, note the counterparty orbit (everyone the
@@ -422,70 +462,50 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// fill the pilot queue (strangers viewed on /pilot/) and the
 	// item-description wants the item details page notes. Public
 	// endpoints, same cycle allowance.
-	if !limited {
-		nResolved, nLimited := app.refreshPilotNameWants(ctx, allowance)
-		refreshed += nResolved
-		if nLimited {
-			logging.Warnf("worker: ESI error limit hit resolving pilot names; backing off until next cycle")
-			limited = true
-		}
-	}
+	c.pass("resolving pilot names", func() (int, bool) {
+		return app.refreshPilotNameWants(ctx, c.allowance)
+	})
 	app.notePilotOrbit(ctx)
-	if !limited {
-		pDrained, pLimited := app.refreshPilotRecords(ctx, allowance)
-		refreshed += pDrained
-		if pLimited {
-			logging.Warnf("worker: ESI error limit hit draining pilot records; backing off until next cycle")
-			limited = true
-		}
-	}
+	c.pass("draining pilot records", func() (int, bool) {
+		return app.refreshPilotRecords(ctx, c.allowance)
+	})
 	// Public organization records (v0.3.12): corporations and
 	// alliances someone followed a name to. Public endpoints,
 	// same cycle allowance.
-	if !limited {
-		cDrained, cLimited := app.refreshCorporationRecords(ctx, allowance)
-		refreshed += cDrained
-		if cLimited {
-			logging.Warnf("worker: ESI error limit hit draining corporation records; backing off until next cycle")
-			limited = true
-		}
-	}
-	if !limited {
-		aDrained, aLimited := app.refreshAllianceRecords(ctx, allowance)
-		refreshed += aDrained
-		if aLimited {
-			logging.Warnf("worker: ESI error limit hit draining alliance records; backing off until next cycle")
-			limited = true
-		}
-	}
-	if !limited {
-		tDrained, tLimited := app.refreshTypeDetails(ctx, allowance)
-		refreshed += tDrained
-		if tLimited {
-			logging.Warnf("worker: ESI error limit hit draining type details; backing off until next cycle")
-			limited = true
-		}
-	}
+	c.pass("draining corporation records", func() (int, bool) {
+		return app.refreshCorporationRecords(ctx, c.allowance)
+	})
+	c.pass("draining alliance records", func() (int, bool) {
+		return app.refreshAllianceRecords(ctx, c.allowance)
+	})
+	c.pass("draining type details", func() (int, bool) {
+		return app.refreshTypeDetails(ctx, c.allowance)
+	})
+}
+
+// warmNames resolves whatever names the local caches still lack,
+// then spends what is left of the lookup budget on public intel.
+func (c *cycleState) warmNames(ctx context.Context, characters []db.Character) {
+	app := c.app
 
 	// Name warm-up: resolve whatever the local caches still lack —
 	// type names (persisted in type_names), type→group links, group
 	// names, station/system names — from the characters' latest
 	// snapshots, so renders resolve from memory/DB only. Bounded
 	// per cycle; whatever doesn't fit converges over later cycles.
-	namesResolved := 0
 	budget := &warmBudget{left: maxWarmLookupsPerCycle}
-	if !limited {
+	if !c.limited {
 		for _, ch := range characters {
 			if ctx.Err() != nil {
 				break
 			}
-			namesResolved += app.warmCharacterNames(ctx, ch, budget)
+			c.namesResolved += app.warmCharacterNames(ctx, ch, budget)
 			if budget.errorLimited() {
 				logging.Warnf("worker: ESI error limit hit during name warm-up; resuming next cycle")
-				limited = true
+				c.limited = true
 				break
 			}
-			if allowance.exhausted() {
+			if c.allowance.exhausted() {
 				break
 			}
 		}
@@ -495,25 +515,14 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// public name caches, spending whatever of the cycle's lookup
 	// budget the character pass left. Runs with zero characters
 	// linked too — none of it needs a token.
-	if !limited {
+	if !c.limited {
 		iStored, iNames, iLimited := app.refreshIntel(ctx, budget)
-		refreshed += iStored
-		namesResolved += iNames
+		c.refreshed += iStored
+		c.namesResolved += iNames
 		if iLimited {
 			logging.Warnf("worker: ESI error limit hit refreshing intel; backing off until next cycle")
-			limited = true
+			c.limited = true
 		}
-	}
-
-	summary := cycleSummary(refreshed, namesResolved, failed, limited, parked, deferred)
-	app.updateWorkerStatus(func(s *workerStatus) {
-		s.Warming = false
-		s.Summary = summary
-		s.NamesResolvedTotal += namesResolved
-	})
-
-	if refreshed > 0 || failed > 0 || namesResolved > 0 {
-		logging.Infof("worker: cycle done: %s", summary)
 	}
 }
 

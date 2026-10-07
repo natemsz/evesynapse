@@ -311,7 +311,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		".branch > summary,\n.sidenav a.navlink {\n  font-family: \"Univers Next Pro Condensed\", \"Univers Next Pro\", -apple-system, \"SF Pro Display\", \"Segoe UI\", \"Inter\", sans-serif;\n  font-weight: 500;\n  font-synthesis-weight: none;\n}",
 		"header a.navlink, .sidenav a.navlink, .branch .menu a {\n  font-family: \"Univers Next Pro\", -apple-system, \"SF Pro Display\", \"Segoe UI\", \"Inter\", sans-serif;\n  font-weight: 400;\n  font-synthesis-weight: none;\n}",
 		".card > h2:first-child, .card > h3:first-child { margin: -0.85rem -1rem 0.75rem; padding: 0.55rem 1rem; border-radius: 4px 4px 0 0; }",
-		".foldable > h2:first-child, .foldable > h3:first-child { margin: 0 0 0.75rem; padding: 0.45rem 0.65rem; border-radius: 3px; }",
+		".foldable > h2:first-child, .foldable > h3:first-child { margin: 0 0 0.15rem; padding: 0.45rem 0.65rem; border-radius: 3px; }",
 		// v0.3.07.010 drawer refinement: on small screens the
 		// open drawer does NOT blur the page beneath it — the
 		// scrim stays a plain dark veil and the drawer keeps
@@ -346,7 +346,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// wordmark's left at a chunkier fixed square size,
 		// pulled slightly into the topbar flex gap so the
 		// gap before the text stays small.
-		".wordmark-glyph {\n  display: inline-block;\n  height: 1.35em;\n  width: auto;\n  margin: 0 0.8rem 0 0;\n  flex-shrink: 0;\n}",
+		".wordmark-glyph {\n  display: inline-block;\n  height: 1.35em;\n  width: auto;\n  margin: 0 0.55rem 0 0;\n  flex-shrink: 0;\n}",
 		// v0.3.07.008: the phone-bar hamburger floats bare
 		// like the sidebar glyph controls (no resting box on
 		// the same footprint), with the same faint hover wash.

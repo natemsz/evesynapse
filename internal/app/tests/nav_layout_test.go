@@ -54,7 +54,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`stroke="url(#brand-glyph-gradient)"`,
 		`fill="url(#brand-glyph-gradient)"`,
 		`<path d="M8.3 22.1L12.7 18.4M8.3 25.9L12.7 29.6M17.3 29.6L21.1 26.4M26.9 21.6L30.7 18.4M35.3 18.4L39.7 22.1M39.7 25.9L35.3 29.6"/>`,
-		`<circle cx="24" cy="24" r="3.8"/>`,
+		`<circle cx="24" cy="24" r="3.8" fill="#ffffff"/>`,
 		`<a class="wordmark topbar-wordmark" href="/" aria-label="EveSynapse home"><svg class="wordmark-glyph"`,
 		`data-nav-category="pilot"`,
 		`data-nav-category="corporation"`,

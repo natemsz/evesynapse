@@ -612,7 +612,7 @@ func (app *Application) orderByDue(ctx context.Context, characters []db.Characte
 // earliest cached_until across every stored snapshot, pulled to
 // the zero time when any core kind has never been fetched.
 func (app *Application) characterDueKey(ctx context.Context, ch db.Character) time.Time {
-	snaps, err := app.queries.ListSnapshotsByCharacter(ctx, ch.CharacterID)
+	snaps, err := app.listSnapshotMeta(ctx, ch.CharacterID)
 	if err != nil {
 		return time.Time{} // unreadable state: treat as due now
 	}

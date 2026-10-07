@@ -206,11 +206,11 @@ func (app *Application) managedCharacterRow(ctx context.Context, ch db.Character
 	// scope, so colonies stay dark until a fresh sign-in.
 	row.PINotEnabled = app.piNotEnabled(ctx, ch)
 
-	snaps, err := app.queries.ListSnapshotsByCharacter(ctx, ch.CharacterID)
+	snaps, err := app.listSnapshotMeta(ctx, ch.CharacterID)
 	if err == nil {
 		row.Snapshots = len(snaps)
 		for _, snap := range snaps {
-			if esi.SnapshotFresh(snap) {
+			if snap.fresh() {
 				row.Fresh++
 			}
 			if snap.FetchedAt > row.Newest || row.Newest == "—" {

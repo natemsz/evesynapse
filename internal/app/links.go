@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -189,4 +190,15 @@ func (app *Application) markCharacterTokenDead(ctx context.Context, characterID 
 // owner_changed characters wait for a fresh sign-in.
 func characterSyncs(ch db.Character) bool {
 	return ch.LinkState == "" || ch.LinkState == linkStateOK
+}
+
+// characterHasScope reports whether the character's granted scope
+// set (characters.scopes, space-joined at sign-in) includes scope.
+func characterHasScope(ch db.Character, scope string) bool {
+	for _, s := range strings.Fields(ch.Scopes) {
+		if s == scope {
+			return true
+		}
+	}
+	return false
 }

@@ -266,33 +266,6 @@ func (app *Application) journalParty(ctx context.Context, id int64, kind string)
 	}
 }
 
-// harvestJournalParty routes one journal counterparty into the
-// name pipeline its party_type names: characters join the
-// character-name harvest, corporations and alliances note org
-// record wants so their names resolve through the org endpoints
-// -- never the character endpoint, which could only 404 on them.
-// A party with no recorded type is left alone here; the render
-// paths still resolve it on demand (journalParty). Called from
-// the worker harvests, so the corp/alliance notes are plain
-// queue writes, like a page noting a want.
-func (app *Application) harvestJournalParty(ctx context.Context, charIDs map[int64]bool, id int64, partyType string) {
-	if id <= 0 {
-		return
-	}
-	switch partyType {
-	case "character":
-		charIDs[id] = true
-	case "corporation":
-		if err := app.queries.UpsertCorporationWant(ctx, id); err != nil {
-			logging.Errorf("worker: note corporation want for journal party %d: %v", id, err)
-		}
-	case "alliance":
-		if err := app.queries.UpsertAllianceWant(ctx, id); err != nil {
-			logging.Errorf("worker: note alliance want for journal party %d: %v", id, err)
-		}
-	}
-}
-
 // txnCounterparty resolves a market-transaction counterparty (no
 // kind travels with transactions): a resolved character name
 // means character, a resolved corporation name means

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/http"
 	"strings"
 	"time"
 
@@ -49,17 +50,6 @@ const piScopeDetail = "Planetary industry is not enabled for this character"
 // the cap is headroom, not a schedule.
 const maxPlanetLayoutsPerCycle = 8
 
-// characterHasScope reports whether the character's granted scope
-// set (characters.scopes, space-joined at sign-in) includes scope.
-func characterHasScope(ch db.Character, scope string) bool {
-	for _, s := range strings.Fields(ch.Scopes) {
-		if s == scope {
-			return true
-		}
-	}
-	return false
-}
-
 // piScopeRefusal reports whether an ESI failure on a planetary
 // endpoint means "this login never granted the planetary scope"
 // rather than a broken token or a transient error. CCP answers
@@ -74,19 +64,6 @@ func piScopeRefusal(err error) bool {
 	}
 	code, ok := esi.StatusCode(err)
 	return ok && code == 401
-}
-
-// piNotEnabled reports whether PI is dark for this character
-// because its login predates the planetary scope: a recorded
-// colonies refusal stands and the granted scopes still lack the
-// scope. A character that re-linked (scope present) is never
-// flagged — the worker retries within the cycle.
-func (app *Application) piNotEnabled(ctx context.Context, ch db.Character) bool {
-	if characterHasScope(ch, planetScope) {
-		return false
-	}
-	state, detail, found := app.corpKindState(ctx, ch.CharacterID, esi.SnapPlanets)
-	return found && state == fetchStateError && strings.HasPrefix(detail, piScopeDetail)
 }
 
 // refreshPlanetarySnapshots runs the PI pass for one character and
@@ -219,4 +196,75 @@ func (app *Application) warmPlanetLayouts(ctx context.Context, ch db.Character, 
 		fetched++
 	}
 	return fetched, false
+}
+
+// resolvePlanetNames drains the due slice of the planet queue:
+// pending ids first, then stale renames and stale misses. The
+// endpoint is public, so no character or scope is involved; each
+// lookup spends from the cycle allowance and a 420/429 stops the
+// pass (limited) like every other worker pass. A name the
+// per-character warm pass already holds in-process is persisted
+// without spending a fetch.
+func (app *Application) resolvePlanetNames(ctx context.Context, allowance *fetchBudget) (resolved int, limited bool) {
+	now := time.Now().UTC()
+	ids, err := app.queries.ListPlanetResolutions(ctx, db.ListPlanetResolutionsParams{
+		ResolvedCutoff:  now.Add(-planetRenameWindow),
+		MissingCutoff:   now.Add(-planetMissingWindow),
+		ResolutionLimit: maxPlanetResolutionsPerCycle,
+	})
+	if err != nil {
+		logging.Errorf("worker: planets: list resolutions: %v", err)
+		return 0, false
+	}
+	for _, id := range ids {
+		if ctx.Err() != nil {
+			break
+		}
+		// Already warm in-process (the colonies harvest beat
+		// this pass to it): persist, no fetch spent.
+		if name, ok := app.esi.CachedPlanetName(ctx, id); ok && name != "" {
+			if serr := app.queries.SetPlanetName(ctx, db.SetPlanetNameParams{
+				PlanetID: id, Name: name, State: esi.PlanetResolved, ResolvedAt: timeSet(now),
+			}); serr != nil {
+				logging.Errorf("worker: planets: persist cached name for %d: %v", id, serr)
+			} else {
+				resolved++
+			}
+			continue
+		}
+		if !allowance.take() {
+			break
+		}
+		planet, err := app.esi.FetchPlanet(ctx, id)
+		if err != nil {
+			if errors.Is(err, esi.ErrErrorLimit) {
+				logging.Warnf("worker: planets: ESI error limit hit resolving planet %d; backing off until next cycle", id)
+				return resolved, true
+			}
+			if code, has := esi.StatusCode(err); has && code == http.StatusNotFound {
+				// Not a planet: remember the answer so this id
+				// isn't re-asked every cycle.
+				if serr := app.queries.SetPlanetName(ctx, db.SetPlanetNameParams{
+					PlanetID: id, Name: "", State: esi.PlanetMissing, ResolvedAt: timeSet(now),
+				}); serr != nil {
+					logging.Errorf("worker: planets: record miss for %d: %v", id, serr)
+				}
+				continue
+			}
+			logging.Errorf("worker: planets: resolve planet %d: %v", id, err)
+			continue
+		}
+		if planet.Name == "" {
+			continue
+		}
+		if serr := app.queries.SetPlanetName(ctx, db.SetPlanetNameParams{
+			PlanetID: id, Name: planet.Name, State: esi.PlanetResolved, ResolvedAt: timeSet(now),
+		}); serr != nil {
+			logging.Errorf("worker: planets: store name for %d: %v", id, serr)
+			continue
+		}
+		app.esi.StorePlanetName(id, planet.Name)
+		resolved++
+	}
+	return resolved, false
 }

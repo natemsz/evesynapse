@@ -732,20 +732,6 @@ func computeOrderHealth(o esi.CharOrder, sells []esi.MarketOrder) (status string
 	}
 }
 
-// loadOrdersSnapshot decodes one character's open-orders
-// snapshot; ok=false when none exists or it will not decode.
-func (app *Application) loadOrdersSnapshot(ctx context.Context, characterID int64) ([]esi.CharOrder, bool) {
-	snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: characterID, Kind: esi.SnapOrders})
-	if err != nil {
-		return nil, false
-	}
-	var orders []esi.CharOrder
-	if err := json.Unmarshal([]byte(snap.Payload), &orders); err != nil {
-		return nil, false
-	}
-	return orders, true
-}
-
 // marketFetchKind names one row of market_fetch_state.
 func marketFetchKind(prefix string, key marketKey) string {
 	return fmt.Sprintf("%s_%d_%d", prefix, key.RegionID, key.TypeID)
@@ -789,4 +775,93 @@ func (app *Application) recordMarketFetch(ctx context.Context, kind, state, deta
 	}); err != nil {
 		logging.Errorf("worker: market fetch-state %s: %v", kind, err)
 	}
+}
+
+// refreshGuidePrices mirrors GET /markets/prices/ into the
+// guide_prices table. One public call; ESI's Expires header is
+// the only cadence (an hour's fallback when it is missing), so
+// a fresh table is never refetched early. The rows replace the
+// previous set wholesale inside one transaction, and the live
+// in-memory guide is refreshed from the same payload so the
+// Market page shares it. Reports whether it stored, and
+// whether ESI's error limit stopped it.
+func (app *Application) refreshGuidePrices(ctx context.Context) (stored bool, limited bool) {
+	now := time.Now()
+	if meta, ok := app.guideMeta(ctx); ok && now.Before(meta.CachedUntil) {
+		return false, false // still inside ESI's cache window
+	}
+
+	body, header, err := app.esi.FetchRaw(ctx, "", "/markets/prices/")
+	if err != nil {
+		if errors.Is(err, esi.ErrErrorLimit) {
+			return false, true
+		}
+		if ctx.Err() == nil {
+			logging.Errorf("worker: guide prices: %v", err)
+		}
+		return false, false
+	}
+	var rows []esi.MarketPrice
+	if err := json.Unmarshal(body, &rows); err != nil {
+		logging.Errorf("worker: guide prices: decode: %v", err)
+		return false, false
+	}
+
+	cachedUntil := now.Add(time.Hour)
+	if exp := header.Get("Expires"); exp != "" {
+		if t, perr := http.ParseTime(exp); perr == nil {
+			cachedUntil = t
+		}
+	}
+
+	tx, err := app.db.BeginTx(ctx, nil)
+	if err != nil {
+		logging.Errorf("worker: guide prices: begin tx: %v", err)
+		return false, false
+	}
+	defer tx.Rollback()
+	qtx := app.queries.WithTx(tx)
+	if err := qtx.DeleteGuidePrices(ctx); err != nil {
+		logging.Errorf("worker: guide prices: clear: %v", err)
+		return false, false
+	}
+	for _, row := range rows {
+		if row.TypeID <= 0 {
+			continue
+		}
+		if err := qtx.UpsertGuidePrice(ctx, db.UpsertGuidePriceParams{
+			TypeID:        row.TypeID,
+			AdjustedPrice: row.AdjustedPrice,
+			AveragePrice:  row.AveragePrice,
+		}); err != nil {
+			logging.Errorf("worker: guide prices: store type %d: %v", row.TypeID, err)
+			return false, false
+		}
+	}
+	if err := qtx.UpsertGuidePricesMeta(ctx, db.UpsertGuidePricesMetaParams{
+		FetchedAt:   now.UTC(),
+		CachedUntil: cachedUntil.UTC(),
+	}); err != nil {
+		logging.Errorf("worker: guide prices: store meta: %v", err)
+		return false, false
+	}
+	if err := tx.Commit(); err != nil {
+		logging.Errorf("worker: guide prices: commit: %v", err)
+		return false, false
+	}
+
+	// The same payload refreshes the live guide the Market page
+	// reads, so both copies agree until the next window.
+	prices := make(map[int64]esi.MarketPrice, len(rows))
+	for _, row := range rows {
+		prices[row.TypeID] = row
+	}
+	app.pricesMu.Lock()
+	app.prices = prices
+	app.pricesExpiry = cachedUntil
+	app.pricesMu.Unlock()
+
+	logging.Infof("worker: guide prices stored (%d types, fresh until %s)",
+		len(rows), cachedUntil.UTC().Format(time.RFC3339))
+	return true, false
 }

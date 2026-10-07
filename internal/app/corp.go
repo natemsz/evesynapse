@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -124,20 +123,6 @@ func walletDivisionLabel(division int64) string {
 // ---------------------------------------------------------------------------
 // Handler-side loaders: snapshot rows and fetch state, DB only.
 // ---------------------------------------------------------------------------
-
-// loadCorpSnapshot decodes the stored snapshot payload for
-// (character, kind) into out. It reports false when there is no
-// snapshot row or the payload doesn't decode — callers then render
-// the warming/role states. It never touches the network, unlike
-// esi.GetCached (which refetches stale snapshots); the worker keeps
-// these snapshots warm.
-func (app *Application) loadCorpSnapshot(ctx context.Context, characterID int64, kind string, out any) bool {
-	snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: characterID, Kind: kind})
-	if err != nil {
-		return false
-	}
-	return json.Unmarshal([]byte(snap.Payload), out) == nil
-}
 
 // corpKindState returns the recorded fetch outcome for
 // (character, kind): state ("ok"/"role_missing"/"error") plus its

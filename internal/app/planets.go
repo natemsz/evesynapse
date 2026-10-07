@@ -335,3 +335,16 @@ func displayPlanetType(raw string) string {
 	}
 	return strings.ToUpper(raw[:1]) + raw[1:]
 }
+
+// piNotEnabled reports whether PI is dark for this character
+// because its login predates the planetary scope: a recorded
+// colonies refusal stands and the granted scopes still lack the
+// scope. A character that re-linked (scope present) is never
+// flagged — the worker retries within the cycle.
+func (app *Application) piNotEnabled(ctx context.Context, ch db.Character) bool {
+	if characterHasScope(ch, planetScope) {
+		return false
+	}
+	state, detail, found := app.corpKindState(ctx, ch.CharacterID, esi.SnapPlanets)
+	return found && state == fetchStateError && strings.HasPrefix(detail, piScopeDetail)
+}

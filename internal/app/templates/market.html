@@ -50,7 +50,7 @@
   </div>
   {{end}}
 
-  <section class="card foldable">
+  <section class="foldable">
   <h3>Price history — {{$item.RegionName}}</h3>
   {{template "history-section" $item}}
   {{if $item.Watched}}
@@ -84,13 +84,13 @@
   </section>
 
   {{if $item.Trader}}
-  <section class="card foldable">
+  <section class="foldable">
   <h3>Trading snapshot — {{$item.RegionName}}</h3>
   {{template "trader-section" $item}}
   </section>
   {{end}}
 
-  <section class="card foldable">
+  <section class="foldable">
   <h3>Sell orders — {{$item.RegionName}}</h3>
   <div class="tw">
   <table>
@@ -107,7 +107,7 @@
   <p><small>Showing top {{len $item.Sells}} · {{$item.SellOrders}} sell orders · {{$item.SellVolume}} total volume</small></p>
   </section>
 
-  <section class="card foldable">
+  <section class="foldable">
   <h3>Buy orders — {{$item.RegionName}}</h3>
   <div class="tw">
   <table>
@@ -126,7 +126,7 @@
 
   {{if $item.Truncated}}<p><small>Order book truncated — only the first 20 pages were read, so best prices are best-within-those.</small></p>{{end}}
 {{else if .Market.Matches}}
-  <section class="card foldable">
+  <section class="foldable">
   <h3>Matches</h3>
   <p>{{range $i, $m := .Market.Matches}}{{if $i}} · {{end}}<a href="/market/?type={{$m.ID}}&region={{$.Market.Region}}">{{$m.Name}}</a>{{end}}</p>
   </section>
@@ -240,7 +240,7 @@
 {{end}}
 
 {{if .Market.YourOrders}}
-<section class="card foldable">
+<section class="foldable">
 <h3>Your orders</h3>
 <div class="tw">
 <table>

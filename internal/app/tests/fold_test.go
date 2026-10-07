@@ -51,9 +51,9 @@ func TestSkillsPageFoldDefaults(t *testing.T) {
 		t.Fatalf("/character/ status = %d", code)
 	}
 	apptest.MustContain(t, "/character/", body,
-		`<section class="card foldable`,
+		`<section class="foldable`,
 		"<h3>Training</h3>",
-		`<section class="card foldable" data-fold="closed">`,
+		`<section class="foldable" data-fold="closed">`,
 		"Currently training:",
 	)
 	if n := strings.Count(body, `data-fold="closed"`); n < 1 {
@@ -105,11 +105,11 @@ func TestCharacterSheetFoldSections(t *testing.T) {
 		t.Fatalf("/character/ status = %d", code)
 	}
 	apptest.MustContain(t, "/character/", body,
-		`<section class="card foldable`,
+		`<section class="foldable`,
 		"<h3>Training</h3>",
 		"<h3>Skills</h3>",
 	)
-	if n := strings.Count(body, `<section class="card foldable`); n < 2 {
+	if n := strings.Count(body, `<section class="foldable`); n < 2 {
 		t.Fatalf("/character/: %d foldable sections, want at least 2 (training, skills)", n)
 	}
 	// Skill groups, browse catalog, and clones default to folded (merged from

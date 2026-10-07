@@ -9,7 +9,7 @@
 {{if .Orders}}
 <h2>{{.Orders.CharacterName}}</h2>
 
-<section class="card foldable">
+<section class="foldable">
 <h3>Open orders</h3>
 {{if .Orders.Open.Note}}
 <p><small>{{.Orders.Open.Note}}</small></p>
@@ -31,7 +31,7 @@
 {{end}}
 </section>
 
-<section class="card foldable">
+<section class="foldable">
 <h3>Recent history</h3>
 {{if .Orders.History.Note}}
 <p><small>{{.Orders.History.Note}}</small></p>
@@ -54,7 +54,7 @@
 {{end}}
 </section>
 
-<section class="card foldable">
+<section class="foldable">
 <h3>Your order history</h3>
 {{if .Orders.LifecycleSummary}}
 <p><small>Orders tracked: {{.Orders.LifecycleSummary.Tracked}} &middot; Filled completely: {{.Orders.LifecycleSummary.FillShare}} &middot; Typical time to fill: {{.Orders.LifecycleSummary.TypicalFill}} &middot; Times beaten at your station: {{.Orders.LifecycleSummary.OutbidEvents}}</small></p>

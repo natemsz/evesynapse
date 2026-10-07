@@ -15,7 +15,7 @@
 <p><small>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</small></p>
 {{else if .Planets.Rows}}
 {{range .Planets.Rows}}
-<section class="card foldable">
+<section class="foldable">
 <h3>{{.Planet}} <small>· {{placeLink .SystemRef}} · {{.Type}} · command center upgrades {{.Upgrade}} · {{.Pins}} pins{{if .Updated}} · updated {{.Updated}}{{end}}</small></h3>
 {{if .LayoutWarming}}
 <p><small>Colony layout still warming up.</small></p>

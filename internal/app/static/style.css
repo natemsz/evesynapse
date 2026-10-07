@@ -228,7 +228,7 @@ header .topbar {
 .wordmark {
   display: inline-block;
   font-family: 'VT323', monospace;
-  font-size: 1.1rem;
+  font-size: 1.2rem;
   font-weight: 400;
   letter-spacing: 0.12em;
   background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);
@@ -1463,7 +1463,7 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
 .topbar { min-height: 3.75rem; }
 .wordmark-glyph {
   display: inline-block;
-  height: 1.35em;
+  height: 1.5rem;
   width: auto;
   margin: 0 0.55rem 0 0;
   flex-shrink: 0;
@@ -1473,7 +1473,7 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
   align-items: center;
 }
 .topbar-wordmark > span {
-  transform: translateY(-0.06em);
+  transform: translateY(0);
 }
 .wordmark .wm-eve {
   background: none;

@@ -139,7 +139,7 @@ environment win). Then open <http://localhost:8080>:
   an in-game role — see the caching section below.
 - `/auth/eve` — starts EVE SSO login (also "Link another character")
 - `/auth/callback` — OAuth2 callback (see SSO flow below)
-- `/auth/logout` — destroys the session
+- `/auth/logout` — destroys the session (POST; the sidebar's Sign out button)
 - `/admin/` — users, linked characters, worker status (requires login)
 - `/assets/` — asset browser: every stack grouped by location for the
   signed-in user's characters (requires login; `esi-assets.read_assets.v1`)
@@ -251,6 +251,38 @@ registration for sign-in ("EVE SSO flow" below). Then:
    Open the address you configured and sign in with EVE.
 
 Updating afterwards is one command — see "Updating" below.
+
+## HTTPS
+
+EveSynapse itself speaks plain HTTP. On anything but your own
+machine, put a reverse proxy that terminates TLS in front of it,
+so sign-in cookies and character data never cross the network
+unencrypted. With [Caddy](https://caddyserver.com), which obtains
+and renews the certificate itself, the whole configuration is:
+
+```
+eve.example.org {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+Then, in `/opt/evesynapse/.env`:
+
+```sh
+ADDR=127.0.0.1:8080                                    # only the proxy can reach the app
+EVE_CALLBACK_URL=https://eve.example.org/auth/callback # and the same URL at developers.eveonline.com
+```
+
+The app reads its public address from `EVE_CALLBACK_URL`. When
+that is an `https://` address it marks the session cookie
+`Secure` and sends `Strict-Transport-Security`; when it is plain
+`http://` on anything other than localhost it logs a warning at
+startup.
+
+Every response also carries `X-Content-Type-Options`,
+`X-Frame-Options`, `Referrer-Policy` and a
+`Content-Security-Policy`, and state-changing requests coming
+from another site are refused.
 
 ## Build from source
 

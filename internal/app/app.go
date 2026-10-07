@@ -190,12 +190,8 @@ func New(cfg Config) (*Application, error) {
 		return nil, fmt.Errorf("open the database: %w", err)
 	}
 
-	sessionManager := scs.New()
-	sessionManager.Store = pgxstore.New(pool)
-	sessionManager.Lifetime = sessionLifetime
-	sessionManager.Cookie.Name = "evesynapse_session"
-	// TODO(https): set Cookie.Secure = true once served over TLS.
-	sessionManager.Cookie.Secure = false
+	sessionManager := newSessionManager(pgxstore.New(pool), cfg)
+	warnIfServedInTheClear(cfg)
 
 	app := &Application{
 		cfg:           cfg,
@@ -286,6 +282,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r := chi.NewRouter()
 	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)
+	r.Use(app.securityHeaders)
+	r.Use(app.crossOriginGuard())
 	r.Use(app.sessions.LoadAndSave)
 	r.Use(app.slideSession)
 	r.Use(app.pageWantScopeMiddleware)
@@ -313,7 +311,9 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	}
 	r.Get("/auth/eve", app.handleEVELogin)
 	r.Get("/auth/callback", app.handleEVECallback)
-	r.Get("/auth/logout", app.handleSignOut)
+	// Signing out changes state, so it is a POST: a link or an image
+	// tag on another page cannot sign the visitor out.
+	r.Post("/auth/logout", app.handleSignOut)
 
 	// Route hooks (dev entrypoint only) mount here.
 	for _, hook := range hooks {

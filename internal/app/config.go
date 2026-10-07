@@ -3,6 +3,8 @@ package app
 import (
 	"bufio"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"strings"
 )
@@ -52,6 +54,40 @@ func (c Config) DatabaseLabel() string {
 		return "postgres://" + rest
 	}
 	return "postgres"
+}
+
+// publicOrigin returns the scheme://host[:port] the site is served
+// at. The one place the operator states the site's public address
+// is EVE_CALLBACK_URL — it has to match what is registered with
+// CCP character for character — so that is where it is read from.
+// "" when the URL cannot be read as an http(s) address.
+func (c Config) publicOrigin() string {
+	u, err := url.Parse(c.eveCallbackURL)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
+}
+
+// servedOverTLS reports whether the site's public address is https.
+func (c Config) servedOverTLS() bool {
+	return strings.HasPrefix(c.publicOrigin(), "https://")
+}
+
+// publicHostIsLocal reports whether the site's public address is
+// this machine itself (local development), where plain http never
+// leaves it.
+func (c Config) publicHostIsLocal() bool {
+	u, err := url.Parse(c.eveCallbackURL)
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // defaultSDEBaseURL is Fuzzwork's community SDE conversion, CSV

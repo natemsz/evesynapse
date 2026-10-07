@@ -75,7 +75,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`<div class="topbar-character">`,
 		`<span class="topbar-character-name">`,
 		`<details class="branch switcher topbar-switcher">`,
-		`<a class="navlink sidebar-signout" href="/auth/logout">`,
+		`<form class="sidebar-signout-form" method="post" action="/auth/logout"><button class="navlink sidebar-signout" type="submit">`,
 		`id="topbar-q"`,
 		`<svg class="search-glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round"><circle cx="10.8" cy="10.8" r="6.2"/><path d="M15.2 15.2 20.4 20.4"/></g></svg>`,
 		`id="topbar-suggest"`,
@@ -156,8 +156,8 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	if strings.Contains(aside, "sidebar-wordmark") || strings.Contains(aside, "EVESYNAPSE") {
 		t.Error("sidebar still carries the wordmark")
 	}
-	if !strings.Contains(aside, `class="navlink sidebar-signout" href="/auth/logout"`) {
-		t.Error("sidebar is missing its bottom sign-out link")
+	if !strings.Contains(aside, `action="/auth/logout"><button class="navlink sidebar-signout" type="submit">`) {
+		t.Error("sidebar is missing its bottom sign-out button")
 	}
 	topbarStart := strings.Index(body, `<nav class="topbar">`)
 	if topbarStart < 0 {

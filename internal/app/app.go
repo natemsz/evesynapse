@@ -30,45 +30,50 @@ import (
 //go:embed templates/*.html
 var templatesFS embed.FS
 
-// The collapsed Postgres baseline (schema_pg/001): the one-time
-// New schema changes land as new numbered files in schema_pg/.
+// The schema, one embedded file per step. db.go lists them in
+// order (schemaSteps) and applies whichever a database is missing,
+// each in one transaction, recording it in schema_migrations. A
+// new schema change is the next numbered file in schema_pg/, an
+// embed here, and a line there.
 
+// Step 001: the whole schema as of the move to Postgres.
+//
 //go:embed schema_pg/001_baseline.sql
 var pgBaselineSchema string
 
-// Schema step 002 (station leaderboard): applied by openDB
-// wherever the table is absent, so fresh installs get it right
-// after the baseline and existing installs on their next boot.
-
+// Step 002: the station leaderboard.
+//
 //go:embed schema_pg/002_station_leaderboard.sql
 var pgStationLeaderboardSchema string
 
-// Schema step 003 (fitting metadata: is_public / is_draft on
-// local_fittings): applied by openDB wherever the is_public column
-// is absent, so fresh installs get it right after the baseline and
-// existing installs on their next boot.
-
+// Step 003: fitting metadata (is_public / is_draft on
+// local_fittings).
+//
 //go:embed schema_pg/003_fit_metadata.sql
 var pgFitMetadataSchema string
 
-// Schema step 004 (v0.3.33: per-type market price TTL cache and
-// industry cost index tracking): applied by openDB wherever the
-// market_type_prices table is absent.
-
+// Step 004 (v0.3.33): per-type market price TTL cache and industry
+// cost index tracking.
+//
 //go:embed schema_pg/004_price_cache_costindex.sql
 var pgPriceCacheSchema string
 
-// Schema step 005 (v0.3.34: restock planner targets): applied by
-// openDB wherever the restock_targets table is absent.
-
+// Step 005 (v0.3.34): restock planner targets.
+//
 //go:embed schema_pg/005_restock.sql
 var pgRestockSchema string
 
-// Schema step 006 (v0.3.35: custom jump-clone names): applied by
-// openDB wherever the clone_names table is absent.
-
+// Step 006 (v0.3.35): custom jump-clone names.
+//
 //go:embed schema_pg/006_clone_names.sql
 var pgCloneNamesSchema string
+
+// Step 007: foreign keys to users on the four per-user tables that
+// lacked one. The first step applied purely by its record; steps
+// 001–006 also carry a probe, for databases older than the record.
+//
+//go:embed schema_pg/007_user_foreign_keys.sql
+var pgUserForeignKeysSchema string
 
 //go:embed static
 var staticFS embed.FS
@@ -103,6 +108,7 @@ type Application struct {
 	stopWorker context.CancelFunc
 	workerDone chan struct{}
 	workerCtx  context.Context // the worker's context, captured in New for background jobs (SDE import)
+	startedAt  time.Time       // when New built this application; /healthz measures a worker that never ran from here
 
 	// tokenMu serializes access-token refreshes: CCP rotates refresh
 	// tokens on every refresh, so two concurrent refreshes on the same
@@ -216,6 +222,7 @@ func New(cfg Config) (*Application, error) {
 		tokens:        tokens,
 	}
 	app.esi = esi.New(loginHTTPClient, app.queries, app.validAccessToken)
+	app.esi.SetUserAgent(cfg.esiUserAgent())
 
 	// Before anything reads a token: check the stored ones open
 	// with the configured key, and encrypt any that predate it.
@@ -229,6 +236,7 @@ func New(cfg Config) (*Application, error) {
 	app.stopWorker = stopWorker
 	app.workerCtx = workerCtx
 	app.workerDone = make(chan struct{})
+	app.startedAt = time.Now()
 	go func() {
 		defer close(app.workerDone)
 		app.runWorker(workerCtx)
@@ -292,6 +300,9 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(app.securityHeaders)
+	// Pages, the stylesheet and the scripts are text and compress to
+	// a fraction of their size; fonts and images are left alone.
+	r.Use(middleware.Compress(5))
 	r.Use(app.crossOriginGuard())
 	r.Use(app.sessions.LoadAndSave)
 	r.Use(app.slideSession)
@@ -303,20 +314,13 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/layout", app.handleHomeLayout)
 		r.Post("/widget-config", app.handleWidgetConfig)
 	})
-	r.Get("/healthz", handleHealthz)
+	r.Get("/healthz", app.handleHealthz)
 	r.Get("/favicon.ico", handleFavicon)
 
-	// Embedded static assets (2013 wallpaper, stylesheet).
-	// Font files never change at a given URL, so they cache
-	// forever; everything else revalidates normally.
-	if sub, err := fs.Sub(staticFS, "static"); err == nil {
-		fileServer := http.FileServer(http.FS(sub))
-		r.Handle("/static/*", http.StripPrefix("/static", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			if strings.HasPrefix(req.URL.Path, "/fonts/") {
-				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-			}
-			fileServer.ServeHTTP(w, req)
-		})))
+	// Embedded static assets (stylesheet, scripts, fonts, the 2013
+	// wallpaper); static.go has the caching rules.
+	if assets, err := staticHandler(); err == nil {
+		r.Handle("/static/*", assets)
 	}
 	r.Get("/auth/eve", app.handleEVELogin)
 	r.Get("/auth/callback", app.handleEVECallback)
@@ -552,12 +556,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	})
 
 	return r
-}
-
-func handleHealthz(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ok\n"))
 }
 
 // handleFavicon serves the app icon. Browsers request

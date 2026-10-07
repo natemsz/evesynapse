@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"sync"
 
 	db "evesynapse/internal/db/sqlc"
 )
@@ -13,6 +14,7 @@ import (
 // pageData is the view model shared by the templates.
 type pageData struct {
 	Version           string // footer product version ("v0.3.00.002"); filled by render
+	AssetVersion      string // cache-busting token on stylesheet/script URLs (static.go); filled by render
 	LoggedIn          bool
 	IsAdmin           bool // one of the account's characters is in EVE_ADMIN_CHARACTER_IDS; filled by render
 	CharacterName     string
@@ -185,9 +187,39 @@ func sectionForPage(page string) string {
 	return ""
 }
 
+// Parsed template sets, one per page file. The templates are
+// embedded in the binary and cannot change while it runs, so each
+// set is parsed once, on first use, and shared by every request
+// after that (a parsed set is safe to execute from many requests
+// at once). They used to be parsed on every render: base.html plus
+// the page, each request, for an identical result.
+var (
+	pageTemplates     sync.Map // page file -> *template.Template: base layout + partials + page
+	fragmentTemplates sync.Map // page file -> *template.Template: partials + page (live-region fragments)
+)
+
+// parsedTemplate returns the cached set for page, parsing it (with
+// the shared files first) the first time it is asked for.
+func parsedTemplate(cache *sync.Map, name, page string, shared ...string) (*template.Template, error) {
+	if ts, ok := cache.Load(page); ok {
+		return ts.(*template.Template), nil
+	}
+	files := append(append([]string{}, shared...), "templates/"+page)
+	ts, err := template.New(name).Funcs(linkFuncMap()).ParseFS(templatesFS, files...)
+	if err != nil {
+		return nil, err
+	}
+	// Two first requests may both parse; one result is kept.
+	kept, _ := cache.LoadOrStore(page, ts)
+	return kept.(*template.Template), nil
+}
+
 func (app *Application) render(ctx context.Context, w http.ResponseWriter, status int, page string, data pageData) {
 	if data.Version == "" {
 		data.Version = appVersion
+	}
+	if data.AssetVersion == "" {
+		data.AssetVersion = staticAssetVersion()
 	}
 	if data.Section == "" {
 		data.Section = sectionForPage(page)
@@ -217,7 +249,7 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 			data.ViewerChars[entry.ID] = true
 		}
 	}
-	ts, err := template.New("base").Funcs(linkFuncMap()).ParseFS(templatesFS, "templates/base.html", "templates/balancechart.html", "templates/charselector.html", "templates/"+page)
+	ts, err := parsedTemplate(&pageTemplates, "base", page, "templates/base.html", "templates/balancechart.html", "templates/charselector.html")
 	if err != nil {
 		log.Printf("parse template %s: %v", page, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -326,7 +358,7 @@ func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	// Snapshot cache overview: per character, which ESI kinds are
 	// cached and when each expires.
 	for _, ch := range data.Characters {
-		snaps, err := app.queries.ListSnapshotsByCharacter(ctx, ch.CharacterID)
+		snaps, err := app.listSnapshotMeta(ctx, ch.CharacterID)
 		if err != nil {
 			log.Printf("admin: list snapshots for character %d: %v", ch.CharacterID, err)
 			continue

@@ -141,3 +141,110 @@ CREATE TABLE schema_atomic_probe (id BIGINT PRIMARY KEY);`,
 		t.Fatalf("repaired step recorded %d times, want 1", recorded)
 	}
 }
+
+// userOwnedTables are the per-user tables step 007 ties to users.
+var userOwnedTables = []struct {
+	name   string
+	insert string // inserts one row for user $1
+}{
+	{"local_fittings", `INSERT INTO local_fittings (user_id, name) VALUES ($1, 'fit')`},
+	{"restock_targets", `INSERT INTO restock_targets (user_id, type_id) VALUES ($1, 34)`},
+	{"clone_names", `INSERT INTO clone_names (user_id, character_id, clone_id) VALUES ($1, 90000001, 1)`},
+	{"wallet_history", `INSERT INTO wallet_history (user_id, character_id, day, balance, sampled_at) VALUES ($1, 0, '2026-10-01', 0, '2026-10-01T00:00:00Z')`},
+}
+
+func rowsForUser(t *testing.T, conn *sql.DB, table string, userID int64) int {
+	t.Helper()
+	var n int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM `+table+` WHERE user_id = $1`, userID).Scan(&n); err != nil {
+		t.Fatalf("count %s rows: %v", table, err)
+	}
+	return n
+}
+
+// TestSchemaUserForeignKeys: a row in a per-user table needs a user
+// that exists, and goes when that user does.
+func TestSchemaUserForeignKeys(t *testing.T) {
+	ctx := context.Background()
+	conn, pool, err := openDB(ctx, pgtest.FreshDSN(t))
+	if err != nil {
+		t.Fatalf("openDB: %v", err)
+	}
+	defer pool.Close()
+	defer conn.Close()
+
+	const nobody = int64(424242)
+	var userID int64
+	if err := conn.QueryRow(`INSERT INTO users DEFAULT VALUES RETURNING id`).Scan(&userID); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	for _, table := range userOwnedTables {
+		if _, err := conn.Exec(table.insert, nobody); err == nil {
+			t.Errorf("%s accepted a row for a user that does not exist", table.name)
+		}
+		if _, err := conn.Exec(table.insert, userID); err != nil {
+			t.Fatalf("%s: insert for a real user: %v", table.name, err)
+		}
+	}
+	if _, err := conn.Exec(`DELETE FROM users WHERE id = $1`, userID); err != nil {
+		t.Fatalf("delete user: %v", err)
+	}
+	for _, table := range userOwnedTables {
+		if n := rowsForUser(t, conn, table.name, userID); n != 0 {
+			t.Errorf("%s kept %d row(s) of a deleted user", table.name, n)
+		}
+	}
+}
+
+// TestSchemaForeignKeyStepCleansUpOnUpgrade: a database from before
+// step 007 may hold rows whose user is gone. The step removes those,
+// keeps everything else, and leaves the constraint in place.
+func TestSchemaForeignKeyStepCleansUpOnUpgrade(t *testing.T) {
+	ctx := context.Background()
+	dsn := pgtest.FreshDSN(t)
+	conn, pool, err := openDB(ctx, dsn)
+	if err != nil {
+		t.Fatalf("first open: %v", err)
+	}
+	// Rewind to before the step: no constraints, no record of it.
+	for _, table := range userOwnedTables {
+		if _, err := conn.Exec(`ALTER TABLE ` + table.name + ` DROP CONSTRAINT ` + table.name + `_user_id_fkey`); err != nil {
+			t.Fatalf("drop %s constraint: %v", table.name, err)
+		}
+	}
+	if _, err := conn.Exec(`DELETE FROM schema_migrations WHERE version = 7`); err != nil {
+		t.Fatalf("forget step 7: %v", err)
+	}
+	const nobody = int64(424242)
+	var userID int64
+	if err := conn.QueryRow(`INSERT INTO users DEFAULT VALUES RETURNING id`).Scan(&userID); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	for _, table := range userOwnedTables {
+		for _, owner := range []int64{nobody, userID} {
+			if _, err := conn.Exec(table.insert, owner); err != nil {
+				t.Fatalf("%s: seed row for user %d: %v", table.name, owner, err)
+			}
+		}
+	}
+	conn.Close()
+	pool.Close()
+
+	conn, pool, err = openDB(ctx, dsn)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer pool.Close()
+	defer conn.Close()
+	for _, table := range userOwnedTables {
+		if n := rowsForUser(t, conn, table.name, nobody); n != 0 {
+			t.Errorf("%s still holds %d row(s) of a user that does not exist", table.name, n)
+		}
+		if n := rowsForUser(t, conn, table.name, userID); n != 1 {
+			t.Errorf("%s holds %d row(s) of the real user, want 1", table.name, n)
+		}
+		if _, err := conn.Exec(table.insert, nobody); err == nil {
+			t.Errorf("%s accepted an ownerless row after the step", table.name)
+		}
+	}
+}

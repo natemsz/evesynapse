@@ -19,12 +19,12 @@ type Config struct {
 	eveClientID     string         // EVE SSO application client ID
 	eveClientSecret string         // EVE SSO application client secret
 	eveCallbackURL  string         // OAuth2 redirect URI registered with CCP
-	sessionKey      string         // reserved for cookie signing hardening
 	devLogin        bool           // DEV_LOGIN=1: register the /dev-login route
 	sdeBaseURL      string         // EVE SDE CSV dump base URL (Fuzzwork by default)
 	adminCharIDs    map[int64]bool // EVE_ADMIN_CHARACTER_IDS (comma-separated)
 	tokenKey        string         // TOKEN_ENCRYPTION_KEY: encrypts stored EVE tokens ("" = stored as they are)
 	signUp          signUpPolicy   // EVE_ALLOWED_*_IDS: who may create an account (empty = anyone)
+	esiContact      string         // ESI_CONTACT: how CCP can reach the operator, sent in the User-Agent
 }
 
 // SSOConfigured reports whether EVE SSO can run: it needs both the
@@ -119,13 +119,38 @@ func LoadConfig() Config {
 		eveClientID:     os.Getenv("EVE_CLIENT_ID"),
 		eveClientSecret: os.Getenv("EVE_CLIENT_SECRET"),
 		eveCallbackURL:  getenvDefault("EVE_CALLBACK_URL", "http://localhost:8080/auth/callback"),
-		sessionKey:      os.Getenv("SESSION_KEY"),
 		devLogin:        os.Getenv("DEV_LOGIN") == "1",
 		sdeBaseURL:      getenvDefault("EVE_SDE_BASE_URL", defaultSDEBaseURL),
 		adminCharIDs:    parseAdminCharIDs(os.Getenv("EVE_ADMIN_CHARACTER_IDS")),
 		tokenKey:        os.Getenv("TOKEN_ENCRYPTION_KEY"),
 		signUp:          loadSignUpPolicy(os.Getenv),
+		esiContact:      os.Getenv("ESI_CONTACT"),
 	}
+}
+
+// esiUserAgent builds the User-Agent every ESI request carries:
+// the product and its version, where the code lives, and — when
+// the operator set ESI_CONTACT — how to reach whoever runs this
+// instance. CCP asks for exactly that, so that a client causing
+// trouble gets a message rather than a block.
+func (c Config) esiUserAgent() string {
+	ua := "EveSynapse/" + strings.TrimPrefix(appVersion, "v") + " (+https://github.com/natemsz/evesynapse"
+	// A header value cannot carry control characters; anything of
+	// the sort in the setting becomes a space rather than breaking
+	// every request.
+	contact := strings.TrimSpace(strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return ' '
+		}
+		return r
+	}, c.esiContact))
+	if len(contact) > 120 {
+		contact = contact[:120]
+	}
+	if contact != "" {
+		ua += "; " + contact
+	}
+	return ua + ")"
 }
 
 // signUpPolicy is who may create an account on this instance. All

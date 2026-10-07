@@ -29,14 +29,23 @@ var (
 	port      int
 	startErr  error
 	dbSeq     atomic.Int64
+	// runtimeDir is where the embedded server unpacks its binaries
+	// and keeps its data for this test process.
+	runtimeDir string
 )
 
 // TestMain is the shared TestMain body for packages that use
-// FreshDSN: run the tests, then stop the embedded server.
+// FreshDSN: run the tests, then stop the embedded server and remove
+// its runtime directory. Left behind, each test run kept a copy of
+// the unpacked server (about 150 MB) in the system
+// temp directory.
 func TestMain(m *testing.M) int {
 	code := m.Run()
 	if server != nil {
 		_ = server.Stop()
+	}
+	if runtimeDir != "" {
+		_ = os.RemoveAll(runtimeDir)
 	}
 	return code
 }
@@ -86,6 +95,8 @@ func startServer(t *testing.T) string {
 		port = ln.Addr().(*net.TCPAddr).Port
 		_ = ln.Close()
 
+		runtimeDir = filepath.Join(os.TempDir(), fmt.Sprintf("evesynapse-pgtest-%d", os.Getpid()))
+
 		// First start downloads the Postgres binaries; a
 		// transient fetch failure (CI runners share egress
 		// addresses that Maven Central sometimes throttles)
@@ -97,7 +108,7 @@ func startServer(t *testing.T) string {
 				Version(embeddedpostgres.V16).
 				Port(uint32(port)).
 				Database("postgres").
-				RuntimePath(filepath.Join(os.TempDir(), fmt.Sprintf("evesynapse-pgtest-%d", os.Getpid())))
+				RuntimePath(runtimeDir)
 			candidate := embeddedpostgres.NewDatabase(cfg)
 			if err := candidate.Start(); err != nil {
 				lastErr = err

@@ -692,11 +692,13 @@ func (app *Application) handleMailSend(w http.ResponseWriter, r *http.Request) {
 		"recipients":    []map[string]any{{"recipient_id": recipientID, "recipient_type": recipientType}},
 		"subject":       subject,
 	}
-	var sent struct {
-		MailID int64 `json:"mail_id"`
-	}
+	// ESI answers a sent mail with 201 and the new mail's ID as a
+	// bare number. Nothing here needs the ID, so the answer is not
+	// decoded at all: reading it as an object — as this once did —
+	// fails on the number and reports a mail that was in fact sent
+	// as refused, inviting a second, duplicate send.
 	path := fmt.Sprintf("/characters/%d/mail/", charID)
-	if err := app.esi.PostJSONAuthed(ctx, token, path, payload, &sent); err != nil {
+	if err := app.esi.PostJSONAuthed(ctx, token, path, payload, nil); err != nil {
 		var se *esi.StatusError
 		if errors.As(err, &se) && se.Code == http.StatusForbidden {
 			fail(ch.Name + " was linked before EveSynapse asked for mail send access — sign in again to grant it.")

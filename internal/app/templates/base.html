@@ -10,7 +10,7 @@
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="preload" as="font" type="font/woff2" href="/static/fonts/shentox-regular.woff2" crossorigin>
 <link rel="preload" as="font" type="font/woff2" href="/static/fonts/univers-next-pro-medium-condensed.woff2" crossorigin>
-<link rel="stylesheet" href="/static/style.css?v={{.Version}}">
+<link rel="stylesheet" href="/static/style.css?v={{.AssetVersion}}">
 </head>
 <body>
 <input class="nav-drawer-checkbox" type="checkbox" id="nav-drawer-toggle" autocomplete="off" tabindex="-1" aria-hidden="true">
@@ -165,8 +165,8 @@
   <p class="version"><span>Powered by EveSynapse {{.Version}} 🏓 by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a></span><span>ESI + EVE SSO</span><span>Not affiliated with CCP Games</span>{{if .SyncStatus}}<span class="sync-status" title="ESI and data sync health">{{.SyncStatus}}</span>{{end}}</p>
 </footer>
 </div>
-<script src="/static/app.js?v={{.Version}}" defer></script>
-<script src="/static/fit.js?v={{.Version}}" defer></script>
+<script src="/static/app.js?v={{.AssetVersion}}" defer></script>
+{{if eq .Section "fitting"}}<script src="/static/fit.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if .LoggedIn}}
 <div class="quickjump" id="quickjump" hidden>
   <div class="quickjump-panel" role="dialog" aria-modal="true" aria-label="Quick jump">

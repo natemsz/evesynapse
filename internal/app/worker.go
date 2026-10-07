@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"runtime/debug"
 	"sort"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -777,388 +776,118 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 		return 0
 	}
 
-	typeIDs := make(map[int64]bool)
-	placeKinds := make(map[int64]string) // location id -> "station"|"solar_system"
-	charIDs := make(map[int64]bool)      // character names (killmail people + corp rosters)
-	planetIDs := make(map[int64]bool)    // planet names (colony planets)
-	schematicIDs := make(map[int64]bool) // PI schematic names + cycle times
-	structureIDs := make(map[int64]bool) // structure ids for the name queue
+	// What the snapshots refer to (name_harvest.go).
+	harvest := &nameHarvest{app: app, characterID: ch.CharacterID, wants: newNameWants()}
 	for _, snap := range snaps {
-		switch snap.Kind {
-		case esi.SnapSkills:
-			var skills esi.Skills
-			if err := json.Unmarshal([]byte(snap.Payload), &skills); err != nil {
-				logging.Errorf("worker: warm names for character %d: decode skills snapshot: %v", ch.CharacterID, err)
-				continue
-			}
-			for _, s := range skills.Skills {
-				typeIDs[s.SkillID] = true
-			}
-		case esi.SnapAssets:
-			var items []esi.Asset
-			if err := json.Unmarshal([]byte(snap.Payload), &items); err != nil {
-				logging.Errorf("worker: warm names for character %d: decode assets snapshot: %v", ch.CharacterID, err)
-				continue
-			}
-			for _, it := range items {
-				typeIDs[it.TypeID] = true
-				if it.LocationType == "station" || it.LocationType == "solar_system" {
-					placeKinds[it.LocationID] = it.LocationType
-				}
-				if it.LocationType == "structure" {
-					structureIDs[it.LocationID] = true
-				}
-			}
-		case esi.SnapCorpMembers:
-			// The roster's names resolve through the same cache.
-			var members esi.CorpMembers
-			if err := json.Unmarshal([]byte(snap.Payload), &members); err != nil {
-				logging.Errorf("worker: warm names for character %d: decode corp members snapshot: %v", ch.CharacterID, err)
-				continue
-			}
-			for _, id := range members {
-				if id > 0 {
-					charIDs[id] = true
-				}
-			}
-		case esi.SnapCorpMemberTracking:
-			var tracking esi.CorpMemberTrackings
-			if err := json.Unmarshal([]byte(snap.Payload), &tracking); err != nil {
-				logging.Errorf("worker: warm names for character %d: decode corp membertracking snapshot: %v", ch.CharacterID, err)
-				continue
-			}
-			for _, t := range tracking {
-				if t.CharacterID > 0 {
-					charIDs[t.CharacterID] = true
-				}
-				if t.ShipTypeID > 0 {
-					typeIDs[t.ShipTypeID] = true
-				}
-			}
-		case esi.SnapCorpAssets:
-			// Same payload shape as character assets.
-			var items []esi.Asset
-			if err := json.Unmarshal([]byte(snap.Payload), &items); err != nil {
-				logging.Errorf("worker: warm names for character %d: decode corp assets snapshot: %v", ch.CharacterID, err)
-				continue
-			}
-			for _, it := range items {
-				typeIDs[it.TypeID] = true
-				if it.LocationType == "station" || it.LocationType == "solar_system" {
-					placeKinds[it.LocationID] = it.LocationType
-				}
-				if it.LocationType == "structure" {
-					structureIDs[it.LocationID] = true
-				}
-			}
-		case esi.SnapCorpOrders:
-			var orders esi.CorpOrders
-			if err := json.Unmarshal([]byte(snap.Payload), &orders); err != nil {
-				logging.Errorf("worker: warm names for character %d: decode corp orders snapshot: %v", ch.CharacterID, err)
-				continue
-			}
-			for _, o := range orders {
-				typeIDs[o.TypeID] = true
-			}
-		case esi.SnapCorpStructures:
-			var structures esi.CorpStructures
-			if err := json.Unmarshal([]byte(snap.Payload), &structures); err != nil {
-				logging.Errorf("worker: warm names for character %d: decode corp structures snapshot: %v", ch.CharacterID, err)
-				continue
-			}
-			// Owner/system/type facts ride along into the
-			// structure_context store behind the structure page.
-			app.persistStructureContexts(ctx, structures)
-			for _, s := range structures {
-				if s.TypeID > 0 {
-					typeIDs[s.TypeID] = true
-				}
-				// The corp's own structures arrive already named:
-				// seed the structure-name cache for free (tier 2,
-				// provenance 'corp' — ESI truth, below only the
-				// per-structure lookup itself).
-				if s.Name != "" {
-					if _, ok := app.esi.CachedStructureName(ctx, s.StructureID); !ok {
-						if app.storeStructureName(ctx, s.StructureID, s.Name,
-							esi.StructureResolved, esi.StructureSourceCorp, time.Now().UTC()) {
-							app.esi.StoreStructureName(s.StructureID, s.Name)
-						}
-					}
-				}
-			}
-		case esi.SnapWalletJournal:
-			// Journal parties route by ESI's party_type (see
-			// harvestJournalParty): characters join the
-			// character-name harvest; corporations and alliances
-			// note org wants instead of 404ing the character
-			// endpoint every cycle.
-			var journal esi.WalletJournal
-			if err := json.Unmarshal([]byte(snap.Payload), &journal); err == nil {
-				for _, e := range journal {
-					app.harvestJournalParty(ctx, charIDs, e.FirstPartyID, e.FirstPartyType)
-					app.harvestJournalParty(ctx, charIDs, e.SecondPartyID, e.SecondPartyType)
-				}
-			}
-		case esi.SnapWalletTxns:
-			var txns esi.WalletTransactions
-			if err := json.Unmarshal([]byte(snap.Payload), &txns); err == nil {
-				for _, t := range txns {
-					if t.TypeID > 0 {
-						typeIDs[t.TypeID] = true
-					}
-					if t.ClientID >= 90_000_000 {
-						charIDs[t.ClientID] = true
-					}
-				}
-			}
-		case esi.SnapOrders:
-			var orders esi.CharOrders
-			if err := json.Unmarshal([]byte(snap.Payload), &orders); err == nil {
-				for _, o := range orders {
-					if o.TypeID > 0 {
-						typeIDs[o.TypeID] = true
-					}
-					if isStructureID(o.LocationID) {
-						structureIDs[o.LocationID] = true
-					}
-				}
-			}
-		case esi.SnapOrdersHistory:
-			var history esi.CharOrderHistory
-			if err := json.Unmarshal([]byte(snap.Payload), &history); err == nil {
-				for _, o := range history {
-					if o.TypeID > 0 {
-						typeIDs[o.TypeID] = true
-					}
-				}
-			}
-		case esi.SnapContracts:
-			var contracts esi.Contracts
-			if err := json.Unmarshal([]byte(snap.Payload), &contracts); err == nil {
-				for _, c := range contracts {
-					for _, id := range []int64{c.IssuerID, c.AssigneeID, c.AcceptorID} {
-						if id >= 90_000_000 {
-							charIDs[id] = true
-						}
-					}
-				}
-			}
-		case esi.SnapIndustryJobs:
-			var jobs esi.IndustryJobs
-			if err := json.Unmarshal([]byte(snap.Payload), &jobs); err == nil {
-				for _, j := range jobs {
-					if j.BlueprintTypeID > 0 {
-						typeIDs[j.BlueprintTypeID] = true
-					}
-					if j.ProductTypeID > 0 {
-						typeIDs[j.ProductTypeID] = true
-					}
-					if isStructureID(j.FacilityID) {
-						structureIDs[j.FacilityID] = true
-					}
-				}
-			}
-		case esi.SnapBlueprints:
-			var blueprints esi.Blueprints
-			if err := json.Unmarshal([]byte(snap.Payload), &blueprints); err == nil {
-				for _, bp := range blueprints {
-					if bp.TypeID > 0 {
-						typeIDs[bp.TypeID] = true
-					}
-				}
-			}
-		case esi.SnapMining:
-			var ledger esi.MiningLedger
-			if err := json.Unmarshal([]byte(snap.Payload), &ledger); err == nil {
-				for _, m := range ledger {
-					if m.TypeID > 0 {
-						typeIDs[m.TypeID] = true
-					}
-				}
-			}
-		case esi.SnapPlanets:
-			// Colony planets resolve through the place-name
-			// cache (their names come from /universe/planets/);
-			// their systems ride the station/system pass.
-			var colonies esi.Colonies
-			if err := json.Unmarshal([]byte(snap.Payload), &colonies); err == nil {
-				for _, c := range colonies {
-					if c.PlanetID > 0 {
-						planetIDs[c.PlanetID] = true
-					}
-					if c.SolarSystemID > 0 {
-						placeKinds[c.SolarSystemID] = "solar_system"
-					}
-				}
-			}
-		case esi.SnapMail:
-			// Senders and character recipients resolve through
-			// the character-name cache (senders are characters
-			// by construction; recipients by their recorded kind).
-			var headers esi.MailHeaders
-			if err := json.Unmarshal([]byte(snap.Payload), &headers); err == nil {
-				for _, h := range headers {
-					if h.From >= 90_000_000 {
-						charIDs[h.From] = true
-					}
-					for _, rcpt := range h.Recipients {
-						if rcpt.RecipientType == "character" && rcpt.RecipientID >= 90_000_000 {
-							charIDs[rcpt.RecipientID] = true
-						}
-					}
-				}
-			}
-		case esi.SnapContacts:
-			// Contact kind is explicit in the payload, so the
-			// >= 90M harvest rule does not apply: pre-90M
-			// character contacts (the oldest pilots) warm their
-			// names here too.
-			var contacts esi.Contacts
-			if err := json.Unmarshal([]byte(snap.Payload), &contacts); err == nil {
-				for _, c := range contacts {
-					if c.ContactType == "character" && c.ContactID > 0 {
-						charIDs[c.ContactID] = true
-					}
-				}
-			}
-		default:
-			// Per-division wallet ledgers: transaction clients
-			// carry no kind, so they keep the >= 90M harvest
-			// threshold and the client's negative cache bounds a
-			// wrong guess; journal parties route by ESI's
-			// party_type like the character-side journal.
-			if strings.HasPrefix(snap.Kind, esi.SnapCorpTxnsPrefix) {
-				var txns esi.CorpWalletTransactions
-				if err := json.Unmarshal([]byte(snap.Payload), &txns); err == nil {
-					for _, t := range txns {
-						if t.ClientID >= 90_000_000 {
-							charIDs[t.ClientID] = true
-						}
-					}
-				}
-			}
-			if strings.HasPrefix(snap.Kind, esi.SnapCorpJournalPrefix) {
-				var journal esi.CorpJournal
-				if err := json.Unmarshal([]byte(snap.Payload), &journal); err == nil {
-					for _, e := range journal {
-						app.harvestJournalParty(ctx, charIDs, e.FirstPartyID, e.FirstPartyType)
-						app.harvestJournalParty(ctx, charIDs, e.SecondPartyID, e.SecondPartyType)
-					}
-				}
-			}
-			// Colony layouts (suffix-keyed snapshots): pin and
-			// product types resolve through the type caches,
-			// factory schematics through the schematic cache.
-			if strings.HasPrefix(snap.Kind, esi.SnapPlanetLayoutPrefix) {
-				var layout esi.PlanetLayout
-				if err := json.Unmarshal([]byte(snap.Payload), &layout); err == nil {
-					for _, pin := range layout.Pins {
-						if pin.TypeID > 0 {
-							typeIDs[pin.TypeID] = true
-						}
-						if pin.ExtractorDetails != nil && pin.ExtractorDetails.ProductTypeID > 0 {
-							typeIDs[pin.ExtractorDetails.ProductTypeID] = true
-						}
-						if pin.FactoryDetails != nil && pin.FactoryDetails.SchematicID > 0 {
-							schematicIDs[pin.FactoryDetails.SchematicID] = true
-						}
-						if pin.SchematicID > 0 {
-							schematicIDs[pin.SchematicID] = true
-						}
-					}
-				}
-			}
-			// Calendar event details: a character owner resolves
-			// through the character-name cache (attendees resolve
-			// the same way from their own snapshots below — the
-			// attendee list payloads carry character ids only).
-			if strings.HasPrefix(snap.Kind, esi.SnapCalendarAttPrefix) {
-				var attendees esi.CalendarAttendees
-				if err := json.Unmarshal([]byte(snap.Payload), &attendees); err == nil {
-					for _, a := range attendees {
-						if a.CharacterID >= 90_000_000 {
-							charIDs[a.CharacterID] = true
-						}
-					}
-				}
-			}
-		}
+		harvest.snapshot(ctx, snap)
 	}
+	wants := harvest.wants
+
 	// Structure ids met in this character's snapshots join the
 	// background resolution queue (structures.go). A plain queue
-	// note, no fetches — resolution runs once per cycle below.
-	if len(structureIDs) > 0 {
-		ids := make([]int64, 0, len(structureIDs))
-		for id := range structureIDs {
+	// note, no fetches — resolution runs once per cycle.
+	if len(wants.structures) > 0 {
+		ids := make([]int64, 0, len(wants.structures))
+		for id := range wants.structures {
 			ids = append(ids, id)
 		}
 		app.noteStructureIDs(ctx, ids...)
 	}
 
-	// With no skills/assets yet, the type/group/place passes below
-	// simply no-op on empty ID sets; the killmail character-name
-	// pass at the end may still have work to do.
-	ids := sortedInt64Keys(typeIDs)
+	// With no skills/assets yet, the type/group/place passes
+	// simply no-op on empty ID sets; the character-name pass at
+	// the end may still have work to do.
+	typeIDs := sortedInt64Keys(wants.types)
 
+	// One pass per kind of name, each resolving what the local
+	// caches still lack. They run in this order and stop as soon
+	// as the cycle's budget is spent or ESI says to back off.
+	passes := []func() int{
+		func() int { return app.warmMissingTypeNames(ctx, typeIDs, budget) },
+		func() int { return app.warmMissingTypeGroups(ctx, typeIDs, budget) },
+		func() int { return app.warmMissingGroupNames(ctx, typeIDs, budget) },
+		func() int { return app.warmMissingPlaceNames(ctx, wants.places, budget) },
+		func() int { return app.warmMissingPlanetNames(ctx, wants.planets, budget) },
+		func() int { return app.warmMissingSchematics(ctx, wants.schematics, budget) },
+		func() int {
+			// The killmail details are only read once this pass is
+			// reached: no point loading them for a pass that will
+			// not run. (Corp rosters and the other snapshots
+			// harvested above feed the same set.)
+			harvest.killmailPeople(ctx)
+			return app.warmMissingCharacterNames(ctx, wants.characters, budget)
+		},
+	}
 	resolved := 0
+	for _, pass := range passes {
+		resolved += pass()
+		if budget.stopped() {
+			break
+		}
+	}
+	return resolved
+}
 
-	// Type names (persisted in type_names).
-	haveNames := app.esi.CachedTypeNames(ctx, ids)
+// warmMissingTypeNames resolves the type names not yet persisted in
+// type_names.
+func (app *Application) warmMissingTypeNames(ctx context.Context, typeIDs []int64, budget *warmBudget) int {
+	have := app.esi.CachedTypeNames(ctx, typeIDs)
 	var missing []int64
-	for _, id := range ids {
-		if _, ok := haveNames[id]; !ok {
+	for _, id := range typeIDs {
+		if _, ok := have[id]; !ok {
 			missing = append(missing, id)
 		}
 	}
-	resolved += app.runWarmPool(ctx, missing, budget, func(ctx context.Context, id int64) bool {
+	return app.runWarmPool(ctx, missing, budget, func(ctx context.Context, id int64) bool {
 		return app.warmTypeName(ctx, budget, id)
 	})
-	if budget.stopped() {
-		return resolved
-	}
+}
 
-	// Type → group links (skill-sheet grouping). Fetching a type to
-	// learn its group also refreshes its name when one is present.
-	haveGroups := app.esi.CachedTypeGroups(ctx, ids)
-	var missingGroups []int64
-	for _, id := range ids {
-		if _, ok := haveGroups[id]; !ok {
-			missingGroups = append(missingGroups, id)
+// warmMissingTypeGroups resolves type → group links (skill-sheet
+// grouping). Fetching a type to learn its group also refreshes its
+// name when one is present.
+func (app *Application) warmMissingTypeGroups(ctx context.Context, typeIDs []int64, budget *warmBudget) int {
+	have := app.esi.CachedTypeGroups(ctx, typeIDs)
+	var missing []int64
+	for _, id := range typeIDs {
+		if _, ok := have[id]; !ok {
+			missing = append(missing, id)
 		}
 	}
-	resolved += app.runWarmPool(ctx, missingGroups, budget, func(ctx context.Context, id int64) bool {
+	return app.runWarmPool(ctx, missing, budget, func(ctx context.Context, id int64) bool {
 		return app.warmTypeGroup(ctx, budget, id)
 	})
-	if budget.stopped() {
-		return resolved
-	}
+}
 
-	// Group names for every group those types belong to.
+// warmMissingGroupNames resolves the name of every group those
+// types belong to.
+func (app *Application) warmMissingGroupNames(ctx context.Context, typeIDs []int64, budget *warmBudget) int {
 	groupIDs := make(map[int64]bool)
-	for _, gid := range app.esi.CachedTypeGroups(ctx, ids) {
+	for _, gid := range app.esi.CachedTypeGroups(ctx, typeIDs) {
 		if gid > 0 {
 			groupIDs[gid] = true
 		}
 	}
 	gids := sortedInt64Keys(groupIDs)
-	haveGroupNames := app.esi.CachedGroupNames(ctx, gids)
-	var missingGroupNames []int64
+	have := app.esi.CachedGroupNames(ctx, gids)
+	var missing []int64
 	for _, gid := range gids {
-		if _, ok := haveGroupNames[gid]; !ok {
-			missingGroupNames = append(missingGroupNames, gid)
+		if _, ok := have[gid]; !ok {
+			missing = append(missing, gid)
 		}
 	}
-	resolved += app.runWarmPool(ctx, missingGroupNames, budget, func(ctx context.Context, id int64) bool {
+	return app.runWarmPool(ctx, missing, budget, func(ctx context.Context, id int64) bool {
 		return app.warmGroupName(ctx, budget, id)
 	})
-	if budget.stopped() {
-		return resolved
-	}
+}
 
-	// Station / solar-system names for asset locations.
-	pathByID := make(map[int64]string, len(placeKinds))
-	var missingPlaces []int64
-	for id, kind := range placeKinds {
+// warmMissingPlaceNames resolves station and solar-system names
+// (asset locations, colony systems). places maps each id to
+// "station" or "solar_system".
+func (app *Application) warmMissingPlaceNames(ctx context.Context, places map[int64]string, budget *warmBudget) int {
+	pathByID := make(map[int64]string, len(places))
+	var missing []int64
+	for id, kind := range places {
 		if _, ok := app.esi.CachedPlaceName(ctx, id); ok {
 			continue
 		}
@@ -1167,84 +896,61 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 			dir = "systems"
 		}
 		pathByID[id] = fmt.Sprintf("/universe/%s/%d/", dir, id)
-		missingPlaces = append(missingPlaces, id)
+		missing = append(missing, id)
 	}
-	sort.Slice(missingPlaces, func(i, j int) bool { return missingPlaces[i] < missingPlaces[j] })
-	resolved += app.runWarmPool(ctx, missingPlaces, budget, func(ctx context.Context, id int64) bool {
+	sort.Slice(missing, func(i, j int) bool { return missing[i] < missing[j] })
+	return app.runWarmPool(ctx, missing, budget, func(ctx context.Context, id int64) bool {
 		return app.warmPlaceName(ctx, budget, pathByID[id], id)
 	})
-	if budget.stopped() {
-		return resolved
-	}
+}
 
-	// Planet names for the character's colonies (the place cache
-	// carries them; the network tier is /universe/planets/).
-	var missingPlanets []int64
+// warmMissingPlanetNames resolves the names of the character's
+// colony planets (the place cache carries them; the network tier
+// is /universe/planets/).
+func (app *Application) warmMissingPlanetNames(ctx context.Context, planetIDs map[int64]bool, budget *warmBudget) int {
+	var missing []int64
 	for _, id := range sortedInt64Keys(planetIDs) {
 		if _, ok := app.esi.CachedPlaceName(ctx, id); ok {
 			continue
 		}
-		missingPlanets = append(missingPlanets, id)
+		missing = append(missing, id)
 	}
-	resolved += app.runWarmPool(ctx, missingPlanets, budget, func(ctx context.Context, id int64) bool {
+	return app.runWarmPool(ctx, missing, budget, func(ctx context.Context, id int64) bool {
 		return app.warmPlanetName(ctx, budget, id)
 	})
-	if budget.stopped() {
-		return resolved
-	}
+}
 
-	// PI schematics for the colony layouts' factory pins.
-	var missingSchematics []int64
+// warmMissingSchematics resolves the PI schematics behind the
+// colony layouts' factory pins.
+func (app *Application) warmMissingSchematics(ctx context.Context, schematicIDs map[int64]bool, budget *warmBudget) int {
+	var missing []int64
 	for _, id := range sortedInt64Keys(schematicIDs) {
 		if _, ok := app.esi.CachedSchematic(id); ok {
 			continue
 		}
-		missingSchematics = append(missingSchematics, id)
+		missing = append(missing, id)
 	}
-	resolved += app.runWarmPool(ctx, missingSchematics, budget, func(ctx context.Context, id int64) bool {
+	return app.runWarmPool(ctx, missing, budget, func(ctx context.Context, id int64) bool {
 		return app.warmSchematic(ctx, budget, id)
 	})
-	if budget.stopped() {
-		return resolved
-	}
+}
 
-	// Character names from this character's stored killmail
-	// details: victims and final-blow attackers, so the killmail
-	// list can label people instead of raw IDs. (Corp rosters and
-	// tracking rows harvested above feed the same set.)
-	if rows, err := app.queries.ListKillmailDetailsByCharacter(ctx, ch.CharacterID); err != nil {
-		logging.Errorf("worker: warm names for character %d: list killmail details: %v", ch.CharacterID, err)
-	} else {
-		for _, row := range rows {
-			var km esi.Killmail
-			if err := json.Unmarshal([]byte(row.Payload), &km); err != nil {
-				continue // undecodable payload: nothing to derive
-			}
-			if km.Victim.CharacterID > 0 {
-				charIDs[km.Victim.CharacterID] = true
-			}
-			for _, a := range km.Attackers {
-				if a.FinalBlow && a.CharacterID > 0 {
-					charIDs[a.CharacterID] = true
-				}
-			}
-		}
-	}
-	var missingChars []int64
-	for _, id := range sortedInt64Keys(charIDs) {
+// warmMissingCharacterNames resolves the names of the people the
+// snapshots and killmails mention.
+func (app *Application) warmMissingCharacterNames(ctx context.Context, characterIDs map[int64]bool, budget *warmBudget) int {
+	var missing []int64
+	for _, id := range sortedInt64Keys(characterIDs) {
 		if _, ok := app.esi.CachedCharacterName(id); ok {
 			continue
 		}
 		if app.esi.CharacterNameMissed(id) {
 			continue // ESI already said this ID is not a character
 		}
-		missingChars = append(missingChars, id)
+		missing = append(missing, id)
 	}
-	resolved += app.runWarmPool(ctx, missingChars, budget, func(ctx context.Context, id int64) bool {
+	return app.runWarmPool(ctx, missing, budget, func(ctx context.Context, id int64) bool {
 		return app.warmCharacterName(ctx, budget, id)
 	})
-
-	return resolved
 }
 
 // fetchTypeForWarm GETs one type for the warm-up pass, translating

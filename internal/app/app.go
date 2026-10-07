@@ -216,6 +216,7 @@ func New(cfg Config) (*Application, error) {
 		tokens:        tokens,
 	}
 	app.esi = esi.New(loginHTTPClient, app.queries, app.validAccessToken)
+	app.esi.SetUserAgent(cfg.esiUserAgent())
 
 	// Before anything reads a token: check the stored ones open
 	// with the configured key, and encrypt any that predate it.

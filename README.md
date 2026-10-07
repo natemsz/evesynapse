@@ -190,6 +190,7 @@ gaps; real environment variables win over the file):
 | `EVE_ALLOWED_CHARACTER_IDS`, `EVE_ALLOWED_CORPORATION_IDS`, `EVE_ALLOWED_ALLIANCE_IDS` | no | — | Limit who may create an account (see "Who can sign up"). All empty = anyone who can sign in with EVE |
 | `EVESYNAPSE_UPDATE_REPO` | no | `natemsz/evesynapse` | GitHub repo (owner/repo) the updater checks |
 | `EVE_SDE_BASE_URL` | no | Fuzzwork's dump | Base URL of the SDE CSV dump the importer downloads |
+| `ESI_CONTACT` | no | — | How CCP can reach whoever runs this instance (an email address, a Discord handle, a character name). Sent in the User-Agent of every ESI request, as CCP asks of third-party apps |
 | `DEV_LOGIN` | no | — | Dev build only: `1` registers the `/dev-login` route |
 | `DB_PATH` | no | `evesynapse.db` | Legacy SQLite file; read only by the one-time `-migrate-pg` move (see "Upgrading from a SQLite-era install") |
 

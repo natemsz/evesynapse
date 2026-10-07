@@ -47,9 +47,29 @@ import (
 // descriptive User-Agent (CCP asks third parties to identify
 // themselves).
 const (
-	baseURL   = "https://esi.evetech.net"
-	userAgent = "EveSynapse/0.2 (dev)"
+	baseURL = "https://esi.evetech.net"
+	// defaultUserAgent identifies a client nobody told its build
+	// (tests, mostly). The app sets the real one with SetUserAgent.
+	defaultUserAgent = "EveSynapse (+https://github.com/natemsz/evesynapse)"
 )
+
+// SetUserAgent sets the User-Agent sent with every ESI request.
+// CCP asks third-party applications to say what they are and how
+// to reach whoever runs them, so that a misbehaving client gets a
+// message rather than a block. Call it once, before the client is
+// used.
+func (c *Client) SetUserAgent(ua string) {
+	if ua = strings.TrimSpace(ua); ua != "" {
+		c.ua = ua
+	}
+}
+
+func (c *Client) userAgent() string {
+	if c.ua != "" {
+		return c.ua
+	}
+	return defaultUserAgent
+}
 
 // Snapshot kinds stored in character_snapshots.
 const (
@@ -264,6 +284,7 @@ type Client struct {
 	http    *http.Client
 	queries *db.Queries
 	tokens  TokenFunc
+	ua      string // User-Agent; see SetUserAgent
 
 	// In-process cache of EVE type ID → name (backed by the
 	// type_names table).
@@ -1375,41 +1396,67 @@ func (c *Client) Get(ctx context.Context, accessToken, path string, out any) err
 	return nil
 }
 
-// FetchRaw GETs path from ESI and returns the raw body and response
-// headers (Expires drives snapshot bookkeeping). Non-200 statuses are
-// errors; 420/429 wrap ErrErrorLimit.
-func (c *Client) FetchRaw(ctx context.Context, accessToken, path string) ([]byte, http.Header, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+path, nil)
+// request is the one place an ESI request is made. Every helper
+// below goes through it, so they all identify themselves to CCP
+// the same way, all feed the error budget, and all read ESI's
+// answers the same way: 420/429 wrap ErrErrorLimit, a status
+// outside want is a StatusError, anything else is the body.
+//
+// payload nil sends no body; accessToken "" sends no Authorization
+// header. Token values are never logged; errors carry the method,
+// path and status only.
+func (c *Client) request(ctx context.Context, method, accessToken, path string, payload any, want ...int) ([]byte, http.Header, error) {
+	var reqBody io.Reader
+	if payload != nil {
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			return nil, nil, fmt.Errorf("ESI %s %s: encode: %w", method, path, err)
+		}
+		reqBody = bytes.NewReader(raw)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, baseURL+path, reqBody)
 	if err != nil {
 		return nil, nil, err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("User-Agent", c.userAgent())
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	if accessToken != "" {
 		req.Header.Set("Authorization", "Bearer "+accessToken)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, nil, fmt.Errorf("ESI GET %s: %w", path, err)
+		return nil, nil, fmt.Errorf("ESI %s %s: %w", method, path, err)
 	}
 	defer resp.Body.Close()
 	c.trackErrorBudget(resp.Header)
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
-		return nil, nil, fmt.Errorf("ESI GET %s: read body: %w", path, err)
+		return nil, nil, fmt.Errorf("ESI %s %s: read body: %w", method, path, err)
 	}
 	if resp.StatusCode == 420 || resp.StatusCode == http.StatusTooManyRequests {
-		return nil, resp.Header, fmt.Errorf("ESI GET %s: status %d: %w", path, resp.StatusCode, ErrErrorLimit)
+		return nil, resp.Header, fmt.Errorf("ESI %s %s: status %d: %w", method, path, resp.StatusCode, ErrErrorLimit)
 	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, resp.Header, &StatusError{Method: http.MethodGet, Path: path, Code: resp.StatusCode}
+	for _, code := range want {
+		if resp.StatusCode == code {
+			return body, resp.Header, nil
+		}
 	}
-	return body, resp.Header, nil
+	return nil, resp.Header, &StatusError{Method: method, Path: path, Code: resp.StatusCode}
+}
+
+// FetchRaw GETs path from ESI and returns the raw body and response
+// headers (Expires drives snapshot bookkeeping). Non-200 statuses are
+// errors; 420/429 wrap ErrErrorLimit.
+func (c *Client) FetchRaw(ctx context.Context, accessToken, path string) ([]byte, http.Header, error) {
+	return c.request(ctx, http.MethodGet, accessToken, path, nil, http.StatusOK)
 }
 
 // trackErrorBudget records ESI's X-Esi-Error-Limit-Remain/Reset
-// headers (v0.3.33). Called on every response from FetchRaw and
-// postJSON; workers consult ErrorBudgetLow before spending budget.
+// headers (v0.3.33). Called on every response, in request;
+// workers consult ErrorBudgetLow before spending budget.
 func (c *Client) trackErrorBudget(h http.Header) {
 	remainStr := h.Get("X-Esi-Error-Limit-Remain")
 	resetStr := h.Get("X-Esi-Error-Limit-Reset")
@@ -1455,121 +1502,53 @@ func (c *Client) ErrorBudgetStatus() (remain int, resetUnix int64) {
 	return c.errBudgetRemain, c.errBudgetReset
 }
 
-// PostJSON POSTs payload as JSON to ESI and decodes the response
-// into out, following FetchRaw's conventions (User-Agent header,
-// 420/429 wrapped as ErrErrorLimit, other non-200 statuses as
-// StatusError). Used by POST /universe/ids/ for exact name → ID
-// resolution; no auth token — the endpoint is public.
+// PostJSON POSTs payload as JSON to a public ESI endpoint and
+// decodes the 200 response into out. Used by POST /universe/ids/
+// for exact name → ID resolution and POST /characters/affiliation/;
+// no token — the endpoints are public.
 func (c *Client) PostJSON(ctx context.Context, path string, payload any, out any) error {
-	return c.postJSON(ctx, "", path, payload, out)
-}
-
-// PostJSONAuthed is postJSON with a required bearer token: the
-// authenticated-write path (currently only POST
-// /characters/{id}/fittings/). Non-201 statuses are errors; a 403
-// surfaces as StatusError so callers can tell a missing scope from a
-// bad payload. Token values are never logged.
-func (c *Client) PostJSONAuthed(ctx context.Context, accessToken, path string, payload any, out any) error {
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("ESI POST %s: encode: %w", path, err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+path, bytes.NewReader(raw))
+	body, _, err := c.request(ctx, http.MethodPost, "", path, payload, http.StatusOK)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	resp, err := c.http.Do(req)
+	return decodeESI(http.MethodPost, path, body, out)
+}
+
+// PostJSONAuthed is the authenticated-write path: POST with a
+// bearer token to an endpoint that answers 201 Created (saving a
+// fitting, sending a mail). A 403 surfaces as StatusError so
+// callers can tell a missing scope from a bad payload.
+//
+// The response is decoded into out; pass nil when the caller has
+// no use for it. What a 201 carries differs by endpoint — an object
+// for a new fitting, a bare number for a new mail — and a caller
+// that does not need it should not fail on its shape.
+func (c *Client) PostJSONAuthed(ctx context.Context, accessToken, path string, payload any, out any) error {
+	body, _, err := c.request(ctx, http.MethodPost, accessToken, path, payload, http.StatusCreated)
 	if err != nil {
-		return fmt.Errorf("ESI POST %s: %w", path, err)
+		return err
 	}
-	defer resp.Body.Close()
-	c.trackErrorBudget(resp.Header)
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	if err != nil {
-		return fmt.Errorf("ESI POST %s: read body: %w", path, err)
-	}
-	if resp.StatusCode == 420 || resp.StatusCode == http.StatusTooManyRequests {
-		return fmt.Errorf("ESI POST %s: status %d: %w", path, resp.StatusCode, ErrErrorLimit)
-	}
-	if resp.StatusCode != http.StatusCreated {
-		return &StatusError{Method: http.MethodPost, Path: path, Code: resp.StatusCode}
-	}
-	if err := json.Unmarshal(body, out); err != nil {
-		return fmt.Errorf("ESI POST %s: decode: %w", path, err)
-	}
-	return nil
+	return decodeESI(http.MethodPost, path, body, out)
 }
 
 // PutJSONAuthed is the PUT counterpart of PostJSONAuthed (Issue 26:
-// PUT /characters/{id}/mail/{mail_id}/ to mark mail read). Non-200
-// statuses are errors; a 403 surfaces as StatusError so callers can
-// tell a missing scope from a bad payload. Token values are never logged.
+// PUT /characters/{id}/mail/{mail_id}/ to mark mail read). Any 2xx
+// is success; a 403 surfaces as StatusError so callers can tell a
+// missing scope from a bad payload.
 func (c *Client) PutJSONAuthed(ctx context.Context, accessToken, path string, payload any) error {
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("ESI PUT %s: encode: %w", path, err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, baseURL+path, bytes.NewReader(raw))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return fmt.Errorf("ESI PUT %s: %w", path, err)
-	}
-	defer resp.Body.Close()
-	c.trackErrorBudget(resp.Header)
-	if resp.StatusCode == 420 || resp.StatusCode == http.StatusTooManyRequests {
-		return fmt.Errorf("ESI PUT %s: status %d: %w", path, resp.StatusCode, ErrErrorLimit)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return &StatusError{Method: http.MethodPut, Path: path, Code: resp.StatusCode}
-	}
-	return nil
+	_, _, err := c.request(ctx, http.MethodPut, accessToken, path, payload,
+		http.StatusOK, http.StatusCreated, http.StatusAccepted, http.StatusNoContent)
+	return err
 }
 
-// postJSON is PostJSON with an optional Bearer token (sent only
-// when non-empty; token values are never logged).
-func (c *Client) postJSON(ctx context.Context, accessToken, path string, payload any, out any) error {
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("ESI POST %s: encode: %w", path, err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+path, bytes.NewReader(raw))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", userAgent)
-	if accessToken != "" {
-		req.Header.Set("Authorization", "Bearer "+accessToken)
-	}
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return fmt.Errorf("ESI POST %s: %w", path, err)
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	if err != nil {
-		return fmt.Errorf("ESI POST %s: read body: %w", path, err)
-	}
-	if resp.StatusCode == 420 || resp.StatusCode == http.StatusTooManyRequests {
-		return fmt.Errorf("ESI POST %s: status %d: %w", path, resp.StatusCode, ErrErrorLimit)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return &StatusError{Method: http.MethodPost, Path: path, Code: resp.StatusCode}
+// decodeESI unmarshals a response body into out (nil: the caller
+// does not want it).
+func decodeESI(method, path string, body []byte, out any) error {
+	if out == nil {
+		return nil
 	}
 	if err := json.Unmarshal(body, out); err != nil {
-		return fmt.Errorf("ESI POST %s: decode: %w", path, err)
+		return fmt.Errorf("ESI %s %s: decode: %w", method, path, err)
 	}
 	return nil
 }
@@ -1832,7 +1811,11 @@ func (c *Client) FetchCorpAssetNames(ctx context.Context, ch db.Character, corpo
 	}
 	var out []AssetName
 	path := fmt.Sprintf("/corporations/%d/assets/names/", corporationID)
-	if err := c.postJSON(ctx, token, path, itemIDs, &out); err != nil {
+	body, _, err := c.request(ctx, http.MethodPost, token, path, itemIDs, http.StatusOK)
+	if err != nil {
+		return nil, err
+	}
+	if err := decodeESI(http.MethodPost, path, body, &out); err != nil {
 		return nil, err
 	}
 	return out, nil

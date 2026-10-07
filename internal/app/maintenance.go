@@ -15,10 +15,11 @@ package app
 //       place, and restart onto it (the -update form below).
 //       With no flag the binary's own kind is used.
 //
-//   evesynapse -update <url|file> [sha256]
+//   evesynapse -update <url> <sha256>  /  -update <file> [sha256]
 //       Download a new build from an explicit address, verify it
 //       really is an EveSynapse program for this kind of
-//       computer (ELF, optionally checksum-matched), swap it
+//       computer (ELF, and matching the checksum, which a
+//       network address must come with), swap it
 //       into place, and ask the running server to restart onto
 //       it. The running process keeps its old inode during the
 //       swap, so an update can never corrupt a copy that is
@@ -616,7 +617,7 @@ func runUpdate(target string, args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	if len(args) > 2 {
-		fmt.Fprintln(stderr, "Usage: evesynapse -update [-dev] [-arm64|-x86] or evesynapse -update <download address> [checksum]")
+		fmt.Fprintln(stderr, "Usage: evesynapse -update [-dev] [-arm64|-x86] or evesynapse -update <download address> <checksum> or evesynapse -update <file> [checksum]")
 		return 2
 	}
 	source := args[0]
@@ -628,8 +629,32 @@ func runUpdate(target string, args []string, stdout, stderr io.Writer) int {
 			return 2
 		}
 	}
+	// This runs as root and replaces the program root runs, so a
+	// build fetched over the network is only ever installed against
+	// a checksum the operator supplies: without one, whatever the
+	// address answered with — over plain http, whatever anyone on
+	// the path answered with — would be installed. A file already
+	// on this computer is the operator's own and needs none.
+	if updateSourceIsRemote(source) && wantHash == "" {
+		fmt.Fprintln(stderr, "A download address needs the checksum published with that build, so the download can be checked before it is installed:\n  evesynapse -update <download address> <sha256>\nNothing was changed.")
+		return 2
+	}
+	// The build has to be one this computer can run: the same kind
+	// as the program doing the updating.
+	machine, ok := elfMachineForArch(ownReleaseArch())
+	if !ok {
+		fmt.Fprintf(stderr, "EveSynapse doesn't publish builds for %q computers. Nothing was changed.\n", ownReleaseArch())
+		return 2
+	}
 
-	return installUpdate(target, source, wantHash, elfMachineAArch64, stdout, stderr)
+	return installUpdate(target, source, wantHash, machine, stdout, stderr)
+}
+
+// updateSourceIsRemote reports whether an explicit update source
+// is a network address rather than a file on this computer.
+func updateSourceIsRemote(source string) bool {
+	u, err := url.Parse(source)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https")
 }
 
 // installUpdate downloads source, verifies it (size, ELF

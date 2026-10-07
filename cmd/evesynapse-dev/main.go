@@ -60,7 +60,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage:")
 	fmt.Fprintln(w, "  evesynapse-dev                          run the web app (with dev routes)")
 	fmt.Fprintln(w, "  evesynapse-dev -version                 print the version and exit")
-	fmt.Fprintln(w, "  evesynapse-dev -update <url> [checksum] install a downloaded update and restart")
+	fmt.Fprintln(w, "  evesynapse-dev -update <url> <checksum> install a downloaded update and restart (a local file needs no checksum)")
 	fmt.Fprintln(w, "  evesynapse-dev -refresh                 refresh all cached data on next start (app must be stopped)")
 }
 

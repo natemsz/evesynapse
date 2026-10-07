@@ -36,6 +36,29 @@ func fakeELF(machine uint16, size int) []byte {
 	return b
 }
 
+// ownAndOtherELFMachine returns the ELF machine kind of the
+// computer running the tests — what the explicit-source update
+// form expects of a build, since it installs one this computer can
+// run — and a kind it is not.
+func ownAndOtherELFMachine(t *testing.T) (own, other uint16) {
+	t.Helper()
+	own, ok := elfMachineForArch(ownReleaseArch())
+	if !ok {
+		t.Skipf("EveSynapse publishes no build for %s", ownReleaseArch())
+	}
+	other = elfMachineAArch64
+	if own == elfMachineAArch64 {
+		other = elfMachineAMD64
+	}
+	return own, other
+}
+
+func ownELFMachine(t *testing.T) uint16 {
+	t.Helper()
+	own, _ := ownAndOtherELFMachine(t)
+	return own
+}
+
 // startSleep spawns a disposable process whose only job is to be
 // a live, signal-able PID for pidfile tests.
 func startSleep(t *testing.T) *exec.Cmd {
@@ -421,6 +444,26 @@ func TestRunUpdateUsageErrors(t *testing.T) {
 	if code := runUpdate(target, []string{"x", "not-a-checksum"}, &out, &errOut); code != 2 {
 		t.Fatalf("malformed checksum: code %d, want 2", code)
 	}
+
+	// A download address with no checksum is refused before
+	// anything is fetched: this runs as root and replaces the
+	// program root runs, so a network download is only installed
+	// against a checksum the operator supplies.
+	var fetched atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fetched.Store(true)
+	}))
+	defer srv.Close()
+	errOut.Reset()
+	if code := runUpdate(target, []string{srv.URL + "/evesynapse"}, &out, &errOut); code != 2 {
+		t.Fatalf("download address without a checksum: code %d, want 2", code)
+	}
+	if !strings.Contains(errOut.String(), "needs the checksum") {
+		t.Fatalf("stderr %q does not ask for the checksum", errOut.String())
+	}
+	if fetched.Load() {
+		t.Fatal("the address was fetched although no checksum was given")
+	}
 }
 
 func TestRunUpdateFromLocalFile(t *testing.T) {
@@ -432,7 +475,7 @@ func TestRunUpdateFromLocalFile(t *testing.T) {
 		filepath.Join(dir, "download"),
 		"file://" + filepath.Join(dir, "download"),
 	} {
-		fresh := fakeELF(elfMachineAArch64, updateMinBytes+100)
+		fresh := fakeELF(ownELFMachine(t), updateMinBytes+100)
 		writeTestFile(t, filepath.Join(dir, "download"), fresh, 0o644)
 		writeTestFile(t, target, []byte("old build"), 0o755)
 
@@ -461,8 +504,9 @@ func TestRunUpdateFromLocalFile(t *testing.T) {
 }
 
 func TestRunUpdateRejectsBadDownloads(t *testing.T) {
-	valid := fakeELF(elfMachineAArch64, updateMinBytes+100)
-	wrongArch := fakeELF(62, updateMinBytes+100)
+	own, other := ownAndOtherELFMachine(t)
+	valid := fakeELF(own, updateMinBytes+100)
+	wrongArch := fakeELF(other, updateMinBytes+100)
 
 	cases := []struct {
 		name    string
@@ -474,21 +518,21 @@ func TestRunUpdateRejectsBadDownloads(t *testing.T) {
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				http.NotFound(w, r)
 			},
-			args: func(url string) []string { return []string{url} },
+			args: func(url string) []string { return []string{url, strings.Repeat("0", 64)} },
 		},
 		{
 			name: "wrong architecture",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				_, _ = w.Write(wrongArch)
 			},
-			args: func(url string) []string { return []string{url} },
+			args: func(url string) []string { return []string{url, strings.Repeat("0", 64)} },
 		},
 		{
 			name: "truncated (too small)",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				_, _ = w.Write([]byte("tiny"))
 			},
-			args: func(url string) []string { return []string{url} },
+			args: func(url string) []string { return []string{url, strings.Repeat("0", 64)} },
 		},
 		{
 			name: "checksum mismatch",
@@ -505,7 +549,7 @@ func TestRunUpdateRejectsBadDownloads(t *testing.T) {
 				w.Header().Set("Content-Length", strconv.Itoa(updateMaxBytes+1))
 				w.WriteHeader(http.StatusOK)
 			},
-			args: func(url string) []string { return []string{url} },
+			args: func(url string) []string { return []string{url, strings.Repeat("0", 64)} },
 		},
 	}
 	for _, tc := range cases {
@@ -541,7 +585,7 @@ func TestRunUpdateRejectsBadDownloads(t *testing.T) {
 }
 
 func TestRunUpdateHTTPRedirectAndChecksum(t *testing.T) {
-	fresh := fakeELF(elfMachineAArch64, updateMinBytes+100)
+	fresh := fakeELF(ownELFMachine(t), updateMinBytes+100)
 	sum, err := sha256FileHexBytes(fresh)
 	if err != nil {
 		t.Fatal(err)
@@ -607,7 +651,11 @@ func TestRunUpdateNeverSignalsAForeignProcess(t *testing.T) {
 		t.Skip("no /proc here: a process's program can't be checked on this system")
 	}
 	sleeper := startSleep(t)
-	fresh := fakeELF(elfMachineAArch64, updateMinBytes+100)
+	fresh := fakeELF(ownELFMachine(t), updateMinBytes+100)
+	sum, err := sha256FileHexBytes(fresh)
+	if err != nil {
+		t.Fatal(err)
+	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(fresh)
 	}))
@@ -620,7 +668,7 @@ func TestRunUpdateNeverSignalsAForeignProcess(t *testing.T) {
 		[]byte(strconv.Itoa(sleeper.Process.Pid)+"\n"), 0o644)
 
 	var out, errOut bytes.Buffer
-	if code := runUpdate(target, []string{srv.URL}, &out, &errOut); code != 0 {
+	if code := runUpdate(target, []string{srv.URL, sum}, &out, &errOut); code != 0 {
 		t.Fatalf("code %d, stderr %q", code, errOut.String())
 	}
 	if !strings.Contains(out.String(), "isn't EveSynapse") {
@@ -720,7 +768,11 @@ func TestFindLiveServer(t *testing.T) {
 func TestRunUpdateRestartsRunningServer(t *testing.T) {
 	trustPidfiles(t)
 	sleeper := startSleep(t)
-	fresh := fakeELF(elfMachineAArch64, updateMinBytes+100)
+	fresh := fakeELF(ownELFMachine(t), updateMinBytes+100)
+	sum, err := sha256FileHexBytes(fresh)
+	if err != nil {
+		t.Fatal(err)
+	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(fresh)
 	}))
@@ -738,7 +790,7 @@ func TestRunUpdateRestartsRunningServer(t *testing.T) {
 	go func() { _ = sleeper.Wait() }()
 
 	var out, errOut bytes.Buffer
-	if code := runUpdate(target, []string{srv.URL}, &out, &errOut); code != 0 {
+	if code := runUpdate(target, []string{srv.URL, sum}, &out, &errOut); code != 0 {
 		t.Fatalf("code %d, stderr %q", code, errOut.String())
 	}
 	if !strings.Contains(out.String(), "restarting on the new version") {

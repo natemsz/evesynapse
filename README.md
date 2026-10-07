@@ -359,11 +359,12 @@ verifies it against the published checksum and checks it's built
 for the right kind of computer, swaps it into place, restarts the
 running server onto it, and reports the new version number.
 
-There's also a manual form that installs from a specific address
-(or local file), with an optional checksum:
+There's also a manual form that installs a specific build: from an
+address, with the checksum published for it, or from a local file:
 
 ```sh
-sudo /opt/evesynapse/evesynapse -update <url|file> [sha256]
+sudo /opt/evesynapse/evesynapse -update <url> <sha256>
+sudo /opt/evesynapse/evesynapse -update <file> [sha256]
 ```
 
 ### Updating from your own fork
@@ -391,7 +392,8 @@ evesynapse -version                 print the version and exit
 evesynapse -update                  update to the latest release (right build for this machine)
 evesynapse -update -arm64           update, fetching the ARM build
 evesynapse -update -amd64           update, fetching the Intel/AMD build (-x86, -x64 also work)
-evesynapse -update <url|file> [sha256]   install a specific build manually
+evesynapse -update <url> <sha256>   install a specific build from an address (checksum required)
+evesynapse -update <file> [sha256]  install a build from a local file
 evesynapse -refresh                 mark all cached data stale (run while the app is stopped)
 evesynapse -h                       show this list
 ```

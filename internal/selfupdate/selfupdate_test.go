@@ -7,13 +7,22 @@ package selfupdate
 // None of these depends on which release the repository is at: the
 // updater is told the running version, and the tests tell it
 // testVersion. A release bump has nothing to edit here.
+//
+// Nor on the real release key, whose private half only the release
+// job holds: a test that needs a signed release makes a key of its
+// own and has the updater trust that one (trustTestKey).
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"evesynapse/internal/pidfile"
 	"evesynapse/internal/pidfile/pidfiletest"
+	"evesynapse/internal/releasesig"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -149,12 +158,57 @@ func withReleaseBase(t *testing.T, url string) {
 	t.Cleanup(func() { releaseBaseURL = old })
 }
 
+// trustTestKey has the updater under test trust a key made for this
+// test, in place of the release keys compiled into the build, and
+// returns the half that signs.
+func trustTestKey(t *testing.T) ed25519.PrivateKey {
+	t.Helper()
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate a key: %v", err)
+	}
+	withTrustedKeys(t, func() ([]ed25519.PublicKey, error) { return []ed25519.PublicKey{pub}, nil })
+	return priv
+}
+
+// withTrustedKeys stands in for the build's release keys for the
+// duration of one test.
+func withTrustedKeys(t *testing.T, keys func() ([]ed25519.PublicKey, error)) {
+	t.Helper()
+	old := trustedReleaseKeys
+	trustedReleaseKeys = keys
+	t.Cleanup(func() { trustedReleaseKeys = old })
+}
+
+// manifestJSON is a release manifest exactly as the release job
+// writes one.
+func manifestJSON(version, arch, sum string) string {
+	return fmt.Sprintf(`{"version":%q,"arch":%q,"sha256":%q}`+"\n", version, arch, sum)
+}
+
+// signedBy is the signature file the release job publishes beside a
+// manifest: what `releasesign sign` writes for it.
+func signedBy(key ed25519.PrivateKey, manifest string) []byte {
+	return releasesig.Sign([]ed25519.PrivateKey{key}, []byte(manifest))
+}
+
+// serve answers path with body.
+func serve(mux *http.ServeMux, path string, body []byte) {
+	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write(body) })
+}
+
+// publish serves a manifest at path and its signature by key beside
+// it, the way a release carries the two.
+func publish(mux *http.ServeMux, path, manifest string, key ed25519.PrivateKey) {
+	serve(mux, path, []byte(manifest))
+	serve(mux, path+releasesig.SigSuffix, signedBy(key, manifest))
+}
+
 func TestReleaseUpdateUpToDate(t *testing.T) {
+	key := trustTestKey(t)
 	bare := strings.TrimPrefix(testVersion, "v")
 	mux := http.NewServeMux()
-	mux.HandleFunc("/latest-arm64.json", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, `{"version":%q,"arch":"arm64","sha256":%q}`, bare, strings.Repeat("0", 64))
-	})
+	publish(mux, "/latest-arm64.json", manifestJSON(bare, "arm64", strings.Repeat("0", 64)), key)
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 	withReleaseBase(t, srv.URL)
@@ -180,18 +234,15 @@ func TestReleaseUpdateUpToDate(t *testing.T) {
 }
 
 func TestReleaseUpdateInstallsNewer(t *testing.T) {
+	key := trustTestKey(t)
 	fresh := fakeELF(elfMachineAArch64, updateMinBytes+100)
 	sum, err := sha256FileHexBytes(fresh)
 	if err != nil {
 		t.Fatal(err)
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/latest-arm64.json", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, `{"version":"9.9.9.9","arch":"arm64","sha256":%q}`, sum)
-	})
-	mux.HandleFunc("/evesynapse-arm64", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write(fresh)
-	})
+	publish(mux, "/latest-arm64.json", manifestJSON("9.9.9.9", "arm64", sum), key)
+	serve(mux, "/evesynapse-arm64", fresh)
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 	withReleaseBase(t, srv.URL)
@@ -210,6 +261,14 @@ func TestReleaseUpdateInstallsNewer(t *testing.T) {
 	if !strings.Contains(out.String(), "now on v9.9.9.9") {
 		t.Fatalf("output %q missing the new-version readout", out.String())
 	}
+	// Both checks are reported, the signature before anything is
+	// downloaded and the checksum after.
+	signature := strings.Index(out.String(), "Release signature verified.")
+	download := strings.Index(out.String(), "Downloading the update")
+	checksum := strings.Index(out.String(), "Download verified against its checksum.")
+	if signature < 0 || download < signature || checksum < download {
+		t.Fatalf("output %q: want the signature reported, then the download, then the checksum", out.String())
+	}
 	got, err := os.ReadFile(target)
 	if err != nil {
 		t.Fatal(err)
@@ -220,18 +279,15 @@ func TestReleaseUpdateInstallsNewer(t *testing.T) {
 }
 
 func TestReleaseUpdateX86Alias(t *testing.T) {
+	key := trustTestKey(t)
 	fresh := fakeELF(elfMachineAMD64, updateMinBytes+100)
 	sum, err := sha256FileHexBytes(fresh)
 	if err != nil {
 		t.Fatal(err)
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/latest-amd64.json", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, `{"version":"9.9.9.9","arch":"amd64","sha256":%q}`, sum)
-	})
-	mux.HandleFunc("/evesynapse-amd64", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write(fresh)
-	})
+	publish(mux, "/latest-amd64.json", manifestJSON("9.9.9.9", "amd64", sum), key)
+	serve(mux, "/evesynapse-amd64", fresh)
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 	withReleaseBase(t, srv.URL)
@@ -257,6 +313,7 @@ func TestReleaseUpdateX86Alias(t *testing.T) {
 // ends up published as the latest release is never installed by a
 // plain -update, whatever its number — nothing is even downloaded.
 func TestReleaseUpdateLeavesDevBuildsAlone(t *testing.T) {
+	key := trustTestKey(t)
 	fresh := fakeELF(elfMachineAArch64, updateMinBytes+100)
 	sum, err := sha256FileHexBytes(fresh)
 	if err != nil {
@@ -264,9 +321,7 @@ func TestReleaseUpdateLeavesDevBuildsAlone(t *testing.T) {
 	}
 	var downloads atomic.Int64
 	mux := http.NewServeMux()
-	mux.HandleFunc("/latest-arm64.json", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, `{"version":"9.9.9.9-dev","arch":"arm64","sha256":%q}`, sum)
-	})
+	publish(mux, "/latest-arm64.json", manifestJSON("9.9.9.9-dev", "arm64", sum), key)
 	mux.HandleFunc("/evesynapse-arm64", func(w http.ResponseWriter, r *http.Request) {
 		downloads.Add(1)
 		_, _ = w.Write(fresh)
@@ -307,12 +362,35 @@ func withReleaseAPI(t *testing.T, url string) {
 	t.Cleanup(func() { releaseAPIBaseURL = old })
 }
 
+// devListing is the GitHub release listing, newest first: a plain
+// release, then the development release the -dev channel is after.
+// Each asset is served by the test server under the given prefix
+// ("" for the plain release, "/dev" for the development one). The
+// development release's signature is left out of its assets when
+// devSigned is false.
+func devListing(base string, devSigned bool) string {
+	assets := func(prefix string, signed bool) string {
+		names := []string{"latest-arm64.json", "evesynapse-arm64"}
+		if signed {
+			names = append(names, "latest-arm64.json"+releasesig.SigSuffix)
+		}
+		var list []string
+		for _, name := range names {
+			list = append(list, fmt.Sprintf(`{"name":%q,"browser_download_url":%q}`, name, base+prefix+"/"+name))
+		}
+		return strings.Join(list, ",")
+	}
+	return fmt.Sprintf(`[{"tag_name":"v9.9.9.8","assets":[%s]},{"tag_name":"v9.9.9.9-dev","assets":[%s]}]`,
+		assets("", true), assets("/dev", devSigned))
+}
+
 // TestDevUpdateInstallsTheDevReleasesOwnBinary: -update -dev takes
-// the manifest and the binary from the same -dev release. The
-// release channel's "latest" binary is a different build here, so
-// downloading from there — what -dev first did — could only ever
-// fail the dev manifest's checksum.
+// the manifest, its signature and the binary from the same -dev
+// release. The release channel's "latest" binary is a different
+// build here, so downloading from there — what -dev first did —
+// could only ever fail the dev manifest's checksum.
 func TestDevUpdateInstallsTheDevReleasesOwnBinary(t *testing.T) {
+	key := trustTestKey(t)
 	devBuild := fakeELF(elfMachineAArch64, updateMinBytes+100)
 	releaseBuild := fakeELF(elfMachineAArch64, updateMinBytes+200)
 	sum, err := sha256FileHexBytes(devBuild)
@@ -321,33 +399,14 @@ func TestDevUpdateInstallsTheDevReleasesOwnBinary(t *testing.T) {
 	}
 	var srv *httptest.Server
 	mux := http.NewServeMux()
-	// The release listing, newest first: a plain release, then the
-	// dev build the -dev channel is after.
 	mux.HandleFunc("/repos/natemsz/evesynapse/releases", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, `[
-			{"tag_name":"v9.9.9.8","assets":[
-				{"name":"latest-arm64.json","browser_download_url":%q},
-				{"name":"evesynapse-arm64","browser_download_url":%q}]},
-			{"tag_name":"v9.9.9.9-dev","assets":[
-				{"name":"latest-arm64.json","browser_download_url":%q},
-				{"name":"evesynapse-arm64","browser_download_url":%q}]}
-		]`,
-			srv.URL+"/latest-arm64.json", srv.URL+"/evesynapse-arm64",
-			srv.URL+"/dev/latest-arm64.json", srv.URL+"/dev/evesynapse-arm64")
+		_, _ = io.WriteString(w, devListing(srv.URL, true))
 	})
-	mux.HandleFunc("/dev/latest-arm64.json", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, `{"version":"9.9.9.9-dev","arch":"arm64","sha256":%q}`, sum)
-	})
-	mux.HandleFunc("/dev/evesynapse-arm64", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write(devBuild)
-	})
+	publish(mux, "/dev/latest-arm64.json", manifestJSON("9.9.9.9-dev", "arm64", sum), key)
+	serve(mux, "/dev/evesynapse-arm64", devBuild)
 	// The release channel's own files: another build entirely.
-	mux.HandleFunc("/latest-arm64.json", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, `{"version":"9.9.9.8","arch":"arm64","sha256":%q}`, strings.Repeat("0", 64))
-	})
-	mux.HandleFunc("/evesynapse-arm64", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write(releaseBuild)
-	})
+	publish(mux, "/latest-arm64.json", manifestJSON("9.9.9.8", "arm64", strings.Repeat("0", 64)), key)
+	serve(mux, "/evesynapse-arm64", releaseBuild)
 	srv = httptest.NewServer(mux)
 	defer srv.Close()
 	withReleaseBase(t, srv.URL)
@@ -386,6 +445,463 @@ func TestReleaseUpdateServerDown(t *testing.T) {
 	}
 	if !strings.Contains(errOut.String(), "Couldn't check for updates") {
 		t.Fatalf("stderr %q missing the check failure", errOut.String())
+	}
+}
+
+// newerRelease is the makings of a release that would install: a
+// build newer than testVersion for ARM, and the manifest that names
+// it. The tests below publish it with something wrong and check the
+// updater leaves the installed program alone.
+type newerRelease struct {
+	build    []byte
+	sum      string
+	manifest string
+}
+
+func makeNewerRelease(t *testing.T, size int) newerRelease {
+	t.Helper()
+	build := fakeELF(elfMachineAArch64, updateMinBytes+size)
+	sum, err := sha256FileHexBytes(build)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return newerRelease{build: build, sum: sum, manifest: manifestJSON("9.9.9.9", "arm64", sum)}
+}
+
+// countedBuild serves a build at path and counts how often it is
+// fetched, so a test can tell that a refused release was never even
+// downloaded.
+func countedBuild(mux *http.ServeMux, path string, build []byte) *atomic.Int64 {
+	var downloads atomic.Int64
+	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+		downloads.Add(1)
+		_, _ = w.Write(build)
+	})
+	return &downloads
+}
+
+// attemptUpdate runs `-update` with args against a release channel
+// served by mux, over an installed program whose contents are "old
+// build", and fails the test if the attempt changed that program or
+// left a download behind. It is for attempts that must not install.
+func attemptUpdate(t *testing.T, mux *http.ServeMux, args ...string) (code int, stdout, stderr string) {
+	t.Helper()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	withReleaseBase(t, srv.URL)
+	withReleaseAPI(t, srv.URL)
+	t.Setenv("EVESYNAPSE_UPDATE_REPO", "")
+
+	dir := t.TempDir()
+	target := filepath.Join(dir, "evesynapse")
+	writeTestFile(t, target, []byte("old build"), 0o755)
+
+	var out, errOut bytes.Buffer
+	code = runUpdate(testVersion, target, args, &out, &errOut)
+
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "old build" {
+		t.Fatalf("the installed program was replaced; stdout %q, stderr %q", out.String(), errOut.String())
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".evesynapse.update-") {
+			t.Fatalf("a download was left behind: %s", e.Name())
+		}
+	}
+	return code, out.String(), errOut.String()
+}
+
+// TestReleaseUpdateRefusesWhatItCannotVerify: every case is a release
+// that would install — a newer version, a build matching the
+// checksum in its manifest — except that the manifest cannot be shown
+// to come from the release key. None is installed, and none is even
+// downloaded: the refusal comes before the build is fetched.
+func TestReleaseUpdateRefusesWhatItCannotVerify(t *testing.T) {
+	genuine := makeNewerRelease(t, 100)
+	// What someone who can replace a release's files would put there:
+	// a build of their own, and a manifest to match it.
+	forged := makeNewerRelease(t, 300)
+	page := []byte("<!DOCTYPE html><html><body>Not Found</body></html>")
+
+	cases := []struct {
+		name string
+		// publish puts a release on the channel. key is the half of the
+		// trusted key that signs; stranger is a key nobody trusts.
+		publish func(mux *http.ServeMux, key, stranger ed25519.PrivateKey) (served newerRelease)
+		want    string
+	}{
+		{
+			name: "not signed",
+			publish: func(mux *http.ServeMux, key, stranger ed25519.PrivateKey) newerRelease {
+				serve(mux, "/latest-arm64.json", []byte(forged.manifest))
+				return forged
+			},
+			want: "isn't signed",
+		},
+		{
+			name: "signed with a key this build does not trust",
+			publish: func(mux *http.ServeMux, key, stranger ed25519.PrivateKey) newerRelease {
+				publish(mux, "/latest-arm64.json", forged.manifest, stranger)
+				return forged
+			},
+			want: "doesn't check out",
+		},
+		{
+			// The genuine release's signature, kept, with the manifest
+			// beside it swapped for one naming another build.
+			name: "the build swapped under a genuine signature",
+			publish: func(mux *http.ServeMux, key, stranger ed25519.PrivateKey) newerRelease {
+				serve(mux, "/latest-arm64.json", []byte(forged.manifest))
+				serve(mux, "/latest-arm64.json"+releasesig.SigSuffix, signedBy(key, genuine.manifest))
+				return forged
+			},
+			want: "doesn't check out",
+		},
+		{
+			name: "the version raised after signing",
+			publish: func(mux *http.ServeMux, key, stranger ed25519.PrivateKey) newerRelease {
+				older := manifestJSON("1.0.0.0", "arm64", genuine.sum)
+				serve(mux, "/latest-arm64.json", []byte(strings.Replace(older, "1.0.0.0", "9.9.9.9", 1)))
+				serve(mux, "/latest-arm64.json"+releasesig.SigSuffix, signedBy(key, older))
+				return genuine
+			},
+			want: "doesn't check out",
+		},
+		{
+			name: "one byte added to the manifest after signing",
+			publish: func(mux *http.ServeMux, key, stranger ed25519.PrivateKey) newerRelease {
+				serve(mux, "/latest-arm64.json", []byte(genuine.manifest+" "))
+				serve(mux, "/latest-arm64.json"+releasesig.SigSuffix, signedBy(key, genuine.manifest))
+				return genuine
+			},
+			want: "doesn't check out",
+		},
+		{
+			name: "an error page where the signature should be",
+			publish: func(mux *http.ServeMux, key, stranger ed25519.PrivateKey) newerRelease {
+				serve(mux, "/latest-arm64.json", []byte(genuine.manifest))
+				serve(mux, "/latest-arm64.json"+releasesig.SigSuffix, page)
+				return genuine
+			},
+			want: "doesn't check out",
+		},
+		{
+			name: "an empty signature file",
+			publish: func(mux *http.ServeMux, key, stranger ed25519.PrivateKey) newerRelease {
+				serve(mux, "/latest-arm64.json", []byte(genuine.manifest))
+				serve(mux, "/latest-arm64.json"+releasesig.SigSuffix, nil)
+				return genuine
+			},
+			want: "doesn't check out",
+		},
+		{
+			// An unsigned manifest is not believed about anything,
+			// including that there is nothing newer to install.
+			name: "not signed, and naming the version already installed",
+			publish: func(mux *http.ServeMux, key, stranger ed25519.PrivateKey) newerRelease {
+				serve(mux, "/latest-arm64.json", []byte(manifestJSON(strings.TrimPrefix(testVersion, "v"), "arm64", genuine.sum)))
+				return genuine
+			},
+			want: "isn't signed",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			key := trustTestKey(t)
+			_, stranger, err := ed25519.GenerateKey(rand.Reader)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mux := http.NewServeMux()
+			served := tc.publish(mux, key, stranger)
+			downloads := countedBuild(mux, "/evesynapse-arm64", served.build)
+
+			code, stdout, stderr := attemptUpdate(t, mux, "-arm64")
+			if code != 1 {
+				t.Fatalf("code %d, want 1; stdout %q", code, stdout)
+			}
+			if !strings.Contains(stderr, "Update refused") || !strings.Contains(stderr, tc.want) || !strings.Contains(stderr, "Nothing was changed") {
+				t.Fatalf("stderr %q, want a refusal saying the release %s, and that nothing was changed", stderr, tc.want)
+			}
+			if strings.Contains(stdout, "up to date") || strings.Contains(stdout, "A new version is available") {
+				t.Fatalf("stdout %q acts on what an unverified manifest says", stdout)
+			}
+			if got := downloads.Load(); got != 0 {
+				t.Fatalf("the build was downloaded %d time(s) although the release was refused, want 0", got)
+			}
+		})
+	}
+}
+
+// TestReleaseUpdateRefusesWithoutAReleaseKey: a build with no usable
+// release key has nothing to check a release against, so it installs
+// none, however well signed, and says how a build can still be
+// installed by hand.
+func TestReleaseUpdateRefusesWithoutAReleaseKey(t *testing.T) {
+	release := makeNewerRelease(t, 100)
+	// Each case is what the build finds when it looks for its release
+	// keys; signer is the key the release on offer was signed with.
+	for name, keys := range map[string]func(signer ed25519.PublicKey) ([]ed25519.PublicKey, error){
+		"no release key in the build": func(ed25519.PublicKey) ([]ed25519.PublicKey, error) {
+			return nil, nil
+		},
+		"release keys that cannot be read": func(ed25519.PublicKey) ([]ed25519.PublicKey, error) {
+			return nil, errors.New("damaged")
+		},
+		// A key file that is partly readable is not trusted in part.
+		"the right key, returned along with a failure": func(signer ed25519.PublicKey) ([]ed25519.PublicKey, error) {
+			return []ed25519.PublicKey{signer}, errors.New("damaged")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			pub, priv, err := ed25519.GenerateKey(rand.Reader)
+			if err != nil {
+				t.Fatal(err)
+			}
+			withTrustedKeys(t, func() ([]ed25519.PublicKey, error) { return keys(pub) })
+			mux := http.NewServeMux()
+			publish(mux, "/latest-arm64.json", release.manifest, priv)
+			downloads := countedBuild(mux, "/evesynapse-arm64", release.build)
+
+			code, stdout, stderr := attemptUpdate(t, mux, "-arm64")
+			if code != 1 {
+				t.Fatalf("code %d, want 1; stdout %q", code, stdout)
+			}
+			if !strings.Contains(stderr, "Update refused") || !strings.Contains(stderr, "without a usable release key") {
+				t.Fatalf("stderr %q, want a refusal for want of a release key", stderr)
+			}
+			if !strings.Contains(stderr, "-update <download address> <sha256>") {
+				t.Fatalf("stderr %q does not say how to install a build by hand", stderr)
+			}
+			if got := downloads.Load(); got != 0 {
+				t.Fatalf("the build was downloaded %d time(s), want 0", got)
+			}
+		})
+	}
+}
+
+// TestReleaseUpdateNeverGoesBackwards: an older release is as
+// genuinely signed as the newest. The signature alone would let
+// whoever controls the channel hand an install a build with known
+// flaws; the version, which the signature covers, is what stops it.
+func TestReleaseUpdateNeverGoesBackwards(t *testing.T) {
+	key := trustTestKey(t)
+	older := makeNewerRelease(t, 100)
+	older.manifest = manifestJSON("1.4.2.002", "arm64", older.sum) // just behind testVersion
+	mux := http.NewServeMux()
+	publish(mux, "/latest-arm64.json", older.manifest, key)
+	downloads := countedBuild(mux, "/evesynapse-arm64", older.build)
+
+	code, stdout, stderr := attemptUpdate(t, mux, "-arm64")
+	if code != 0 {
+		t.Fatalf("code %d, stderr %q", code, stderr)
+	}
+	if !strings.Contains(stdout, "up to date") {
+		t.Fatalf("stdout %q missing the up-to-date note", stdout)
+	}
+	if got := downloads.Load(); got != 0 {
+		t.Fatalf("an older release was downloaded %d time(s), want 0", got)
+	}
+}
+
+// TestReleaseUpdateRefusesAnotherKindsManifest: the ARM release is
+// genuine and signed, and it is served where the Intel/AMD one
+// belongs. The signature covers the kind of computer, so it is not
+// taken for the release that was asked for.
+func TestReleaseUpdateRefusesAnotherKindsManifest(t *testing.T) {
+	key := trustTestKey(t)
+	arm := makeNewerRelease(t, 100)
+	mux := http.NewServeMux()
+	publish(mux, "/latest-amd64.json", arm.manifest, key)
+	downloads := countedBuild(mux, "/evesynapse-amd64", arm.build)
+
+	code, stdout, stderr := attemptUpdate(t, mux, "-x86")
+	if code != 1 {
+		t.Fatalf("code %d, want 1; stdout %q", code, stdout)
+	}
+	if !strings.Contains(stderr, `for "arm64" computers, not "amd64"`) {
+		t.Fatalf("stderr %q does not say the manifest is for another kind of computer", stderr)
+	}
+	if got := downloads.Load(); got != 0 {
+		t.Fatalf("the build was downloaded %d time(s), want 0", got)
+	}
+}
+
+// TestReleaseUpdateDuringAKeyReplacement: while a key is being
+// replaced a release carries two signatures, and an updater installs
+// it as long as it trusts either key; once the old key is retired, an
+// updater that lists both still installs what the new one signs.
+func TestReleaseUpdateDuringAKeyReplacement(t *testing.T) {
+	oldPub, oldPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newPub, newPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release := makeNewerRelease(t, 100)
+	bothSign := releasesig.Sign([]ed25519.PrivateKey{oldPriv, newPriv}, []byte(release.manifest))
+	newSigns := releasesig.Sign([]ed25519.PrivateKey{newPriv}, []byte(release.manifest))
+
+	cases := []struct {
+		name    string
+		trusted []ed25519.PublicKey
+		sig     []byte
+		install bool
+	}{
+		{"an updater from before the replacement, a release signed with both", []ed25519.PublicKey{oldPub}, bothSign, true},
+		{"an updater that knows both keys, a release signed with both", []ed25519.PublicKey{oldPub, newPub}, bothSign, true},
+		{"an updater that knows both keys, a release signed with the new one", []ed25519.PublicKey{oldPub, newPub}, newSigns, true},
+		{"an updater that knows only the new key, a release signed with it", []ed25519.PublicKey{newPub}, newSigns, true},
+		{"an updater from before the replacement, a release signed with the new key only", []ed25519.PublicKey{oldPub}, newSigns, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			withTrustedKeys(t, func() ([]ed25519.PublicKey, error) { return tc.trusted, nil })
+			mux := http.NewServeMux()
+			serve(mux, "/latest-arm64.json", []byte(release.manifest))
+			serve(mux, "/latest-arm64.json"+releasesig.SigSuffix, tc.sig)
+			downloads := countedBuild(mux, "/evesynapse-arm64", release.build)
+
+			if !tc.install {
+				code, _, stderr := attemptUpdate(t, mux, "-arm64")
+				if code != 1 || !strings.Contains(stderr, "Update refused") || downloads.Load() != 0 {
+					t.Fatalf("code %d, %d download(s), stderr %q; want a refusal and no download", code, downloads.Load(), stderr)
+				}
+				return
+			}
+			srv := httptest.NewServer(mux)
+			defer srv.Close()
+			withReleaseBase(t, srv.URL)
+			target := filepath.Join(t.TempDir(), "evesynapse")
+			writeTestFile(t, target, []byte("old build"), 0o755)
+			var out, errOut bytes.Buffer
+			if code := runUpdate(testVersion, target, []string{"-arm64"}, &out, &errOut); code != 0 {
+				t.Fatalf("code %d, stderr %q", code, errOut.String())
+			}
+			got, err := os.ReadFile(target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got, release.build) {
+				t.Fatal("the release was not installed")
+			}
+		})
+	}
+}
+
+// TestReleaseUpdateSignatureThatCannotBeFetched: a signature the
+// server fails to hand over is a check that could not be made, not a
+// release that is unsigned. Either way nothing is installed, but the
+// operator is told to expect better from trying again.
+func TestReleaseUpdateSignatureThatCannotBeFetched(t *testing.T) {
+	release := makeNewerRelease(t, 100)
+	for name, handler := range map[string]http.HandlerFunc{
+		"the server fails": func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "try later", http.StatusServiceUnavailable)
+		},
+		"something far too large to be a signature": func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write(bytes.Repeat([]byte("A"), releasesig.MaxSigBytes+1))
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			trustTestKey(t)
+			mux := http.NewServeMux()
+			serve(mux, "/latest-arm64.json", []byte(release.manifest))
+			mux.HandleFunc("/latest-arm64.json"+releasesig.SigSuffix, handler)
+			downloads := countedBuild(mux, "/evesynapse-arm64", release.build)
+
+			code, stdout, stderr := attemptUpdate(t, mux, "-arm64")
+			if code != 1 {
+				t.Fatalf("code %d, want 1; stdout %q", code, stdout)
+			}
+			if !strings.Contains(stderr, "Couldn't check for updates") || strings.Contains(stderr, "Update refused") {
+				t.Fatalf("stderr %q, want a failed check rather than a refusal", stderr)
+			}
+			if got := downloads.Load(); got != 0 {
+				t.Fatalf("the build was downloaded %d time(s), want 0", got)
+			}
+		})
+	}
+}
+
+// TestDevUpdateRefusesWhatItCannotVerify: the development channel is
+// held to the same rule as the release channel.
+func TestDevUpdateRefusesWhatItCannotVerify(t *testing.T) {
+	dev := makeNewerRelease(t, 100)
+	dev.manifest = manifestJSON("9.9.9.9-dev", "arm64", dev.sum)
+
+	cases := []struct {
+		name    string
+		listed  bool // whether the release lists a signature among its files
+		publish func(mux *http.ServeMux, key, stranger ed25519.PrivateKey)
+		want    string
+	}{
+		{
+			name:   "a development release with no signature among its files",
+			listed: false,
+			publish: func(mux *http.ServeMux, key, stranger ed25519.PrivateKey) {
+				// The signature exists on the server, but the release
+				// does not list it: only a release's own files count.
+				publish(mux, "/dev/latest-arm64.json", dev.manifest, key)
+			},
+			want: "v9.9.9.9-dev) isn't signed",
+		},
+		{
+			name:   "a development release signed with a key this build does not trust",
+			listed: true,
+			publish: func(mux *http.ServeMux, key, stranger ed25519.PrivateKey) {
+				publish(mux, "/dev/latest-arm64.json", dev.manifest, stranger)
+			},
+			want: "doesn't check out",
+		},
+		{
+			// The plain release's signature is genuine, and it is not
+			// the development manifest's.
+			name:   "a development release carrying the plain release's signature",
+			listed: true,
+			publish: func(mux *http.ServeMux, key, stranger ed25519.PrivateKey) {
+				serve(mux, "/dev/latest-arm64.json", []byte(dev.manifest))
+				serve(mux, "/dev/latest-arm64.json"+releasesig.SigSuffix, signedBy(key, manifestJSON("9.9.9.8", "arm64", dev.sum)))
+			},
+			want: "doesn't check out",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			key := trustTestKey(t)
+			_, stranger, err := ed25519.GenerateKey(rand.Reader)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mux := http.NewServeMux()
+			mux.HandleFunc("/repos/natemsz/evesynapse/releases", func(w http.ResponseWriter, r *http.Request) {
+				_, _ = io.WriteString(w, devListing("http://"+r.Host, tc.listed))
+			})
+			tc.publish(mux, key, stranger)
+			downloads := countedBuild(mux, "/dev/evesynapse-arm64", dev.build)
+			// The plain release beside it is in perfect order.
+			publish(mux, "/latest-arm64.json", manifestJSON("9.9.9.8", "arm64", dev.sum), key)
+
+			code, stdout, stderr := attemptUpdate(t, mux, "-dev", "-arm64")
+			if code != 1 {
+				t.Fatalf("code %d, want 1; stdout %q", code, stdout)
+			}
+			if !strings.Contains(stderr, "Update refused") || !strings.Contains(stderr, tc.want) {
+				t.Fatalf("stderr %q, want a refusal containing %q", stderr, tc.want)
+			}
+			if got := downloads.Load(); got != 0 {
+				t.Fatalf("the development build was downloaded %d time(s), want 0", got)
+			}
+		})
 	}
 }
 

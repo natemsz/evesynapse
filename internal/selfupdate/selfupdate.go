@@ -3,9 +3,10 @@
 //
 //	evesynapse -update [-arm64|-x86]
 //	    Check the release channel for a newer build of this
-//	    computer's kind, and when there is one download it, verify
-//	    it against the published checksum, swap it into place, and
-//	    restart onto it. With no flag the binary's own kind is used.
+//	    computer's kind, and when there is one whose signature
+//	    checks out download it, verify it against the checksum the
+//	    signed manifest names, swap it into place, and restart onto
+//	    it. With no flag the binary's own kind is used.
 //
 //	evesynapse -update -dev [-arm64|-x86]
 //	    The same, from the newest development release.
@@ -24,16 +25,21 @@
 // really is this program, and the service manager (Restart=always)
 // brings the new build up. No systemctl call is attempted.
 //
-// What "verify" means for the release channel: the build's checksum
-// is compared with the one in the manifest published beside it in
-// the same release. That catches a damaged or truncated download. It
-// is not a signature and does not prove who published the release.
+// What "verify" means for the release channel: the release's
+// manifest has to carry a signature made with a release key this
+// build was compiled with (package releasesig), and the build has to
+// match the checksum that signed manifest names. A release that is
+// not signed, or is signed with any other key, is refused before
+// anything in it is read. The explicit forms are the operator's own
+// word for a build: they check what the operator gives them, and no
+// signature.
 //
 // The package knows nothing about the application: Run is told the
 // running version rather than looking it up.
 package selfupdate
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
@@ -54,6 +60,7 @@ import (
 
 	"evesynapse/internal/dotenv"
 	"evesynapse/internal/pidfile"
+	"evesynapse/internal/releasesig"
 )
 
 // ---------------------------------------------------------------------------
@@ -81,9 +88,10 @@ const (
 // ---------------------------------------------------------------------------
 // The release channel: CI publishes every build as a GitHub
 // release carrying a tiny manifest per CPU kind — the version it
-// names and the checksum of the binary beside it. The updater
-// reads its kind's manifest, compares versions, and downloads
-// only when the release is newer.
+// names and the checksum of the binary beside it — and that
+// manifest's signature. The updater reads its kind's manifest,
+// checks the signature, compares versions, and downloads only
+// when the release is newer.
 // ---------------------------------------------------------------------------
 
 const (
@@ -215,10 +223,11 @@ func versionParts(v string) []int {
 var releaseAPIBaseURL = "https://api.github.com"
 
 // latestDevRelease queries the GitHub API for releases and returns
-// the manifest and binary asset URLs of the newest tag ending in
-// -dev. Both come from that one release, so the checksum in the
-// manifest always describes the binary downloaded beside it.
-func latestDevRelease(ctx context.Context, arch string) (manifestURL, binaryURL string, err error) {
+// the manifest, signature and binary asset URLs of the newest tag
+// ending in -dev. All three come from that one release, so the
+// signature is the manifest's own and the checksum in the manifest
+// always describes the binary downloaded beside it.
+func latestDevRelease(ctx context.Context, arch string) (manifestURL, sigURL, binaryURL string, err error) {
 	repo := "natemsz/evesynapse"
 	if r := strings.Trim(strings.TrimSpace(os.Getenv("EVESYNAPSE_UPDATE_REPO")), "/"); r != "" {
 		repo = r
@@ -226,18 +235,18 @@ func latestDevRelease(ctx context.Context, arch string) (manifestURL, binaryURL 
 	apiURL := releaseAPIBaseURL + "/repos/" + repo + "/releases?per_page=20"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	req.Header.Set("User-Agent", "EveSynapse-Updater")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("the update server answered %s", resp.Status)
+		return "", "", "", fmt.Errorf("the update server answered %s", resp.Status)
 	}
 	var releases []struct {
 		TagName string `json:"tag_name"`
@@ -247,9 +256,10 @@ func latestDevRelease(ctx context.Context, arch string) (manifestURL, binaryURL 
 		} `json:"assets"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&releases); err != nil {
-		return "", "", errors.New("the update information couldn't be read")
+		return "", "", "", errors.New("the update information couldn't be read")
 	}
 	wantManifest := "latest-" + arch + ".json"
+	wantSig := wantManifest + releasesig.SigSuffix
 	wantBinary := "evesynapse-" + arch
 	for _, rel := range releases {
 		if !strings.HasSuffix(rel.TagName, "-dev") {
@@ -259,50 +269,126 @@ func latestDevRelease(ctx context.Context, arch string) (manifestURL, binaryURL 
 			switch a.Name {
 			case wantManifest:
 				manifestURL = a.BrowserDownloadURL
+			case wantSig:
+				sigURL = a.BrowserDownloadURL
 			case wantBinary:
 				binaryURL = a.BrowserDownloadURL
 			}
 		}
 		if manifestURL == "" {
-			return "", "", fmt.Errorf("dev release %s has no %s asset", rel.TagName, wantManifest)
+			return "", "", "", fmt.Errorf("dev release %s has no %s asset", rel.TagName, wantManifest)
 		}
 		if binaryURL == "" {
-			return "", "", fmt.Errorf("dev release %s has no %s asset", rel.TagName, wantBinary)
+			return "", "", "", fmt.Errorf("dev release %s has no %s asset", rel.TagName, wantBinary)
 		}
-		return manifestURL, binaryURL, nil
+		if sigURL == "" {
+			return "", "", "", &refusal{fmt.Sprintf("the newest development release (%s) isn't signed, so there is no way to tell it from a forgery.", rel.TagName)}
+		}
+		return manifestURL, sigURL, binaryURL, nil
 	}
-	return "", "", errors.New("no dev releases found")
+	return "", "", "", errors.New("no dev releases found")
 }
 
-// fetchReleaseManifest downloads and parses the manifest for arch
-// from the release channel (the dev channel when dev is set), and
-// returns it with the address of the binary it describes.
-func fetchReleaseManifest(ctx context.Context, arch string, dev bool) (releaseManifest, string, error) {
-	var m releaseManifest
-	manifestURL := releaseChannelBase() + "/latest-" + arch + ".json"
-	binaryURL := releaseChannelBase() + "/evesynapse-" + arch
-	if dev {
-		var err error
-		manifestURL, binaryURL, err = latestDevRelease(ctx, arch)
-		if err != nil {
-			return m, "", err
-		}
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, manifestURL, nil)
+// trustedReleaseKeys is the set of keys a release has to be signed
+// with: the ones compiled into this build. A var so tests can stand
+// in a key of their own.
+var trustedReleaseKeys = releasesig.Trusted
+
+// refusal is a release the updater will not install because it
+// cannot be shown to be genuine. It is reported apart from a check
+// that merely failed: nothing was wrong with the connection, and
+// trying again will not help.
+type refusal struct{ why string }
+
+func (r *refusal) Error() string { return r.why }
+
+// releaseStatusError is an answer other than 200 for one of a
+// release's files.
+type releaseStatusError struct {
+	code   int
+	status string
+}
+
+func (e *releaseStatusError) Error() string { return "the update server answered " + e.status }
+
+// fetchReleaseFile downloads one of a release's small files, a
+// manifest or its signature, into memory. Anything over limit bytes
+// is not one of those and is not read.
+func fetchReleaseFile(ctx context.Context, fileURL string, limit int64) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fileURL, nil)
 	if err != nil {
-		return m, "", err
+		return nil, err
 	}
 	req.Header.Set("User-Agent", "EveSynapse-Updater")
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return m, "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return m, "", fmt.Errorf("the update server answered %s", resp.Status)
+		return nil, &releaseStatusError{code: resp.StatusCode, status: resp.Status}
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&m); err != nil {
+	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > limit {
+		return nil, errors.New("the update information couldn't be read")
+	}
+	return body, nil
+}
+
+// verifyReleaseSignature fetches the signature published beside a
+// manifest and checks it against the release keys this build trusts.
+// The error is a *refusal when the release is not signed, or not by
+// one of those keys.
+func verifyReleaseSignature(ctx context.Context, manifest []byte, sigURL string) error {
+	keys, err := trustedReleaseKeys()
+	if err != nil || len(keys) == 0 {
+		return &refusal{"this copy of EveSynapse was built without a usable release key, so it can't tell a genuine release from a forgery. To install a build you trust yourself: evesynapse -update <download address> <sha256>"}
+	}
+	sig, err := fetchReleaseFile(ctx, sigURL, releasesig.MaxSigBytes)
+	var status *releaseStatusError
+	if errors.As(err, &status) && status.code == http.StatusNotFound {
+		return &refusal{"the newest release isn't signed, so there is no way to tell it from a forgery."}
+	}
+	if err != nil {
+		return err
+	}
+	if err := releasesig.Verify(keys, manifest, sig); err != nil {
+		return &refusal{"the newest release's signature doesn't check out: it was not signed with a release key this copy of EveSynapse trusts, or it was changed after it was signed."}
+	}
+	return nil
+}
+
+// fetchReleaseManifest downloads the manifest for arch from the
+// release channel (the dev channel when dev is set), checks its
+// signature, and returns it parsed with the address of the binary
+// it describes.
+func fetchReleaseManifest(ctx context.Context, arch string, dev bool) (releaseManifest, string, error) {
+	var m releaseManifest
+	manifestURL := releaseChannelBase() + "/latest-" + arch + ".json"
+	sigURL := manifestURL + releasesig.SigSuffix
+	binaryURL := releaseChannelBase() + "/evesynapse-" + arch
+	if dev {
+		var err error
+		manifestURL, sigURL, binaryURL, err = latestDevRelease(ctx, arch)
+		if err != nil {
+			return m, "", err
+		}
+	}
+	raw, err := fetchReleaseFile(ctx, manifestURL, releasesig.MaxManifestBytes)
+	if err != nil {
+		return m, "", err
+	}
+	if err := verifyReleaseSignature(ctx, raw, sigURL); err != nil {
+		return m, "", err
+	}
+	// Only now is the manifest read. Nothing in it is acted on, or
+	// even parsed, before its signature has been checked, and what is
+	// parsed is the very bytes that were signed.
+	if err := json.NewDecoder(bytes.NewReader(raw)).Decode(&m); err != nil {
 		return m, "", errors.New("the update information couldn't be read")
 	}
 	m.SHA256 = strings.ToLower(strings.TrimSpace(m.SHA256))
@@ -312,14 +398,20 @@ func fetchReleaseManifest(ctx context.Context, arch string, dev bool) (releaseMa
 	if strings.TrimSpace(m.Version) == "" {
 		return m, "", errors.New("the update information couldn't be read")
 	}
+	// The signature covers the kind of computer too, so a genuine
+	// manifest for another kind is not accepted in this one's place.
+	if m.Arch != arch {
+		return m, "", fmt.Errorf("the update information is for %q computers, not %q", m.Arch, arch)
+	}
 	return m, binaryURL, nil
 }
 
 // runReleaseUpdate implements the release-channel forms of
 // -update (`-update`, `-update -arm64`, `-update -x86`): check
-// the manifest for arch, and only when it names a newer version
-// download, verify, and install it. With dev=true it pulls the
-// latest -dev tagged release instead of the main channel.
+// the manifest for arch and its signature, and only when it is
+// genuine and names a newer version download, verify, and install
+// it. With dev=true it pulls the latest -dev tagged release
+// instead of the main channel.
 func runReleaseUpdate(current, target, arch string, stdout, stderr io.Writer, dev bool) int {
 	machine, ok := elfMachineForArch(arch)
 	if !ok {
@@ -332,6 +424,11 @@ func runReleaseUpdate(current, target, arch string, stdout, stderr io.Writer, de
 	m, source, err := fetchReleaseManifest(ctx, arch, dev)
 	cancel()
 	if err != nil {
+		var refused *refusal
+		if errors.As(err, &refused) {
+			fmt.Fprintf(stderr, "Update refused: %s\nNothing was changed.\n", refused.why)
+			return 1
+		}
 		fmt.Fprintf(stderr, "Couldn't check for updates: %v\nNothing was changed.\n", err)
 		return 1
 	}
@@ -349,6 +446,7 @@ func runReleaseUpdate(current, target, arch string, stdout, stderr io.Writer, de
 		return 0
 	}
 	fmt.Fprintf(stdout, "A new version is available: %s.\n", latest)
+	fmt.Fprintln(stdout, "Release signature verified.")
 	if code := installUpdate(target, source, m.SHA256, machine, stdout, stderr); code != 0 {
 		return code
 	}

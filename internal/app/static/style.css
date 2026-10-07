@@ -192,7 +192,7 @@ h2, h3 {
   display: inline-block;
 }
 h2 { font-size: 1.04rem; }
-h3 { font-size: 0.88rem; margin: 1.4rem 0 0.4rem; }
+h3 { font-size: 0.88rem; margin: 1.4rem 0 0.15rem; }
 
 small { color: var(--muted); }
 
@@ -414,9 +414,9 @@ main {
   background: var(--panel-head);
   border-radius: inherit;
 }
-.panel > h2, .panel > h3 { margin: 1.1rem 0 0.65rem; padding: 0.45rem 0.65rem; border-radius: 3px; }
+.panel > h2, .panel > h3 { margin: 1.1rem 0 0.15rem; padding: 0.45rem 0.65rem; border-radius: 3px; }
 .card > h2:first-child, .card > h3:first-child { margin: -0.85rem -1rem 0.75rem; padding: 0.55rem 1rem; border-radius: 4px 4px 0 0; }
-.foldable > h2:first-child, .foldable > h3:first-child { margin: 0 0 0.35rem; padding: 0.45rem 0.65rem; border-radius: 3px; }
+.foldable > h2:first-child, .foldable > h3:first-child { margin: 0 0 0.15rem; padding: 0.45rem 0.65rem; border-radius: 3px; }
 /* v0.3.07.014: module titles paint solid. The .012 band
    leaned on the h2/h3 gradient-text clip above, and on at
    least one phone Chrome build the clip does not paint
@@ -501,7 +501,7 @@ main {
 table {
   border-collapse: collapse;
   width: 100%;
-  margin: 0.5rem 0 1.25rem;
+  margin: 0 0 1.25rem;
   border: 1px solid #060606;
 }
 th, td {

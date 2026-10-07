@@ -70,6 +70,13 @@ var pgRestockSchema string
 //go:embed schema_pg/006_clone_names.sql
 var pgCloneNamesSchema string
 
+// Schema step 007 (foreign keys to users on the four per-user
+// tables that lacked one). The first step applied purely by the
+// schema_migrations record (db.go): no probe.
+
+//go:embed schema_pg/007_user_foreign_keys.sql
+var pgUserForeignKeysSchema string
+
 //go:embed static
 var staticFS embed.FS
 

@@ -221,8 +221,8 @@ header nav {
   align-items: center;
 }
 header .topbar {
-  padding-top: 0.5rem;
-  padding-bottom: 0.05rem;
+  padding-top: 0.275rem;
+  padding-bottom: 0.275rem;
   gap: 1rem;
 }
 .wordmark {
@@ -1460,12 +1460,15 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
   display: inline-block;
   height: 1.35em;
   width: auto;
-  margin: 0 0.8rem 0 0;
+  margin: 0 0.55rem 0 0;
   flex-shrink: 0;
 }
 .topbar-wordmark {
   display: inline-flex;
   align-items: center;
+}
+.topbar-wordmark > span {
+  transform: translateY(-0.06em);
 }
 .topbar-character {
   display: flex;

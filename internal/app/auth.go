@@ -355,7 +355,7 @@ func (app *Application) handleSignOut(w http.ResponseWriter, r *http.Request) {
 // lives in internal/devtools and is only registered by the dev
 // entrypoint (cmd/evesynapse-dev); the release binary never
 // registers it.
-func (app *Application) DevLoginEnabled() bool {
+func DevLoginEnabled(app *Application) bool {
 	return app.cfg.devLogin
 }
 
@@ -364,7 +364,13 @@ func (app *Application) DevLoginEnabled() bool {
 // (see internal/devtools), which hands a signed-in session to
 // anyone who asks — NEVER enable it on a deployment anyone else
 // can reach.
-func (app *Application) DevSignIn(ctx context.Context) {
+//
+// This is a plain function, not a method of Application, on
+// purpose. The templates reach types by reflection, so the linker
+// keeps every exported method of Application in every binary; a
+// function that nothing in the release build calls is dropped. As
+// a function, none of this is in the release binary at all.
+func DevSignIn(ctx context.Context, app *Application) {
 	app.sessions.Put(ctx, sessionAuthenticated, true)
 	app.sessions.Put(ctx, sessionCharacterName, "Dev Capsuleer (stub)")
 }

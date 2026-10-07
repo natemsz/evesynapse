@@ -10,6 +10,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/skillplan"
 )
 
 // skillsView is the Skill Sheet page body for one character.
@@ -142,8 +143,8 @@ func (app *Application) fillBrowse(ctx context.Context, view *skillsView, ch db.
 			Name:      row.Name,
 			Rank:      formatRank(row.Rank),
 			Trained:   "—",
-			Primary:   attributeName(row.PrimaryAttr),
-			Secondary: attributeName(row.SecondaryAttr),
+			Primary:   skillplan.AttributeName(row.PrimaryAttr),
+			Secondary: skillplan.AttributeName(row.SecondaryAttr),
 			Prereqs:   prereqCounts[row.TypeID],
 		}
 		if s, ok := trained[row.TypeID]; ok {

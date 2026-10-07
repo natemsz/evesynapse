@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +11,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/skillplan"
 )
 
 // ---------------------------------------------------------------------------
@@ -23,44 +23,44 @@ import (
 // the snapshot table only).
 // ---------------------------------------------------------------------------
 
-// sdeSkillGraph is the handler-side skillGraph: SDE table reads,
+// sdeSkillGraph is the handler-side skillplan.Graph: SDE table reads,
 // memoized per render (plan expansion revisits the same skills).
 type sdeSkillGraph struct {
 	app  *Application
 	ctx  context.Context
-	meta map[int64]skillMeta
+	meta map[int64]skillplan.SkillMeta
 	miss map[int64]bool
-	reqs map[int64][]skillRequirement
+	reqs map[int64][]skillplan.Requirement
 }
 
 func newSDESkillGraph(app *Application, ctx context.Context) *sdeSkillGraph {
 	return &sdeSkillGraph{
 		app:  app,
 		ctx:  ctx,
-		meta: make(map[int64]skillMeta),
+		meta: make(map[int64]skillplan.SkillMeta),
 		miss: make(map[int64]bool),
-		reqs: make(map[int64][]skillRequirement),
+		reqs: make(map[int64][]skillplan.Requirement),
 	}
 }
 
-func (g *sdeSkillGraph) Meta(skillID int64) (skillMeta, bool) {
+func (g *sdeSkillGraph) Meta(skillID int64) (skillplan.SkillMeta, bool) {
 	if m, ok := g.meta[skillID]; ok {
 		return m, true
 	}
 	if g.miss[skillID] {
-		return skillMeta{}, false
+		return skillplan.SkillMeta{}, false
 	}
 	row, err := g.app.queries.GetSDESkillMeta(g.ctx, skillID)
 	if err != nil {
 		g.miss[skillID] = true
-		return skillMeta{}, false
+		return skillplan.SkillMeta{}, false
 	}
-	m := skillMeta{Rank: row.Rank, Primary: row.PrimaryAttr, Secondary: row.SecondaryAttr}
+	m := skillplan.SkillMeta{Rank: row.Rank, Primary: row.PrimaryAttr, Secondary: row.SecondaryAttr}
 	g.meta[skillID] = m
 	return m, true
 }
 
-func (g *sdeSkillGraph) Requirements(typeID int64) []skillRequirement {
+func (g *sdeSkillGraph) Requirements(typeID int64) []skillplan.Requirement {
 	if rows, ok := g.reqs[typeID]; ok {
 		return rows
 	}
@@ -70,9 +70,9 @@ func (g *sdeSkillGraph) Requirements(typeID int64) []skillRequirement {
 		g.reqs[typeID] = nil
 		return nil
 	}
-	rows := make([]skillRequirement, 0, len(dbRows))
+	rows := make([]skillplan.Requirement, 0, len(dbRows))
 	for _, r := range dbRows {
-		rows = append(rows, skillRequirement{SkillID: r.SkillTypeID, Level: int(r.Level)})
+		rows = append(rows, skillplan.Requirement{SkillID: r.SkillTypeID, Level: int(r.Level)})
 	}
 	g.reqs[typeID] = rows
 	return rows
@@ -81,8 +81,8 @@ func (g *sdeSkillGraph) Requirements(typeID int64) []skillRequirement {
 // loadCharTraining assembles the engine's character input from the
 // snapshots. loaded=false when the skills snapshot isn't there yet
 // (the worker is still warming this character).
-func (app *Application) loadCharTraining(ctx context.Context, characterID int64) (charTraining, esi.Attributes, bool) {
-	ct := charTraining{
+func (app *Application) loadCharTraining(ctx context.Context, characterID int64) (skillplan.CharTraining, esi.Attributes, bool) {
+	ct := skillplan.CharTraining{
 		SP:       make(map[int64]int64),
 		QueuedTo: make(map[int64]int),
 	}
@@ -114,13 +114,13 @@ func (app *Application) loadCharTraining(ctx context.Context, characterID int64)
 	return ct, attrs, true
 }
 
-// attrsOrFlat converts the ESI attributes payload into an attrSet,
+// attrsOrFlat converts the ESI attributes payload into a skillplan.AttrSet,
 // reporting whether a real snapshot backed it.
-func attrsOrFlat(raw esi.Attributes, loaded bool) (attrSet, bool) {
+func attrsOrFlat(raw esi.Attributes, loaded bool) (skillplan.AttrSet, bool) {
 	if !loaded || (raw.Charisma == 0 && raw.Intelligence == 0 && raw.Memory == 0 && raw.Perception == 0 && raw.Willpower == 0) {
-		return flatAttrSet, false
+		return skillplan.FlatAttrSet, false
 	}
-	return attrSet{
+	return skillplan.AttrSet{
 		Charisma:     raw.Charisma,
 		Intelligence: raw.Intelligence,
 		Memory:       raw.Memory,
@@ -357,16 +357,16 @@ func (app *Application) buildPlanDetail(ctx context.Context, ch db.Character, pl
 	ct, rawAttrs, skillsLoaded := app.loadCharTraining(ctx, ch.CharacterID)
 	attrs, attrsKnown := attrsOrFlat(rawAttrs, skillsLoaded && app.characterAttrsLoaded(ctx, ch.CharacterID))
 
-	targets := make([]planTarget, 0, len(items))
+	targets := make([]skillplan.Target, 0, len(items))
 	for _, item := range items {
-		targets = append(targets, planTarget{
+		targets = append(targets, skillplan.Target{
 			SkillID: item.SkillTypeID,
 			Level:   int(item.TargetLevel),
 			Intent:  int(item.Position),
 		})
 	}
 
-	outcome := computePlan(graph, targets, ct, attrs, time.Now())
+	outcome := skillplan.Compute(graph, targets, ct, attrs, time.Now())
 	if !skillsLoaded {
 		// Without the skills snapshot every step would read as
 		// from-scratch; say so instead of presenting fiction.
@@ -428,7 +428,7 @@ func (app *Application) buildPlanDetail(ctx context.Context, ch db.Character, pl
 	if attrsKnown {
 		detail.AttrsLine = fmt.Sprintf("Your attributes — Charisma %d · Intelligence %d · Memory %d · Perception %d · Willpower %d",
 			attrs.Charisma, attrs.Intelligence, attrs.Memory, attrs.Perception, attrs.Willpower)
-		advice := adviseRemap(graph, outcome.Steps, attrs)
+		advice := skillplan.AdviseRemap(graph, outcome.Steps, attrs)
 		rv := &remapView{
 			CurrentLine: spreadLine(advice.Current),
 			BestLine:    spreadLine(advice.Best),
@@ -453,7 +453,7 @@ func (app *Application) buildPlanDetail(ctx context.Context, ch db.Character, pl
 }
 
 // spreadLine renders one attribute spread compactly.
-func spreadLine(a attrSet) string {
+func spreadLine(a skillplan.AttrSet) string {
 	return fmt.Sprintf("Cha %d · Int %d · Mem %d · Per %d · Wil %d",
 		a.Charisma, a.Intelligence, a.Memory, a.Perception, a.Willpower)
 }
@@ -573,7 +573,7 @@ func (app *Application) handleSkillPlanItemAdd(w http.ResponseWriter, r *http.Re
 		}
 	}
 	// If adding level N, ensure all lower levels are in the plan
-	// (trained levels are handled by computePlan)
+	// (trained levels are handled by skillplan.Compute)
 	if level > maxPlannedLevel+1 {
 		// Auto-add the missing intermediate levels
 		for l := maxPlannedLevel + 1; l < level; l++ {
@@ -714,7 +714,7 @@ var magic14Skills = []string{
 const magic14Source = "https://wiki.eveuniversity.org/The_Magic_14"
 
 // createPlanWithItems makes a plan and fills it, returning its ID.
-func (app *Application) createPlanWithItems(ctx context.Context, userID, characterID int64, name string, targets []planTarget) (int64, error) {
+func (app *Application) createPlanWithItems(ctx context.Context, userID, characterID int64, name string, targets []skillplan.Target) (int64, error) {
 	plan, err := app.queries.CreateSkillPlan(ctx, db.CreateSkillPlanParams{
 		UserID:      userID,
 		CharacterID: characterID,
@@ -780,7 +780,7 @@ func (app *Application) handleSkillPlanFromTemplate(w http.ResponseWriter, r *ht
 		byName[row.Name] = row.TypeID
 	}
 	graph := newSDESkillGraph(app, ctx)
-	targets := make([]planTarget, 0, len(magic14Skills))
+	targets := make([]skillplan.Target, 0, len(magic14Skills))
 	for _, name := range magic14Skills {
 		id, ok := byName[name]
 		if !ok {
@@ -791,7 +791,7 @@ func (app *Application) handleSkillPlanFromTemplate(w http.ResponseWriter, r *ht
 			logging.Warnf("skill plans: magic 14 skill %q (type %d) has no skill meta", name, id)
 			continue
 		}
-		targets = append(targets, planTarget{SkillID: id, Level: 5, Intent: len(targets)})
+		targets = append(targets, skillplan.Target{SkillID: id, Level: 5, Intent: len(targets)})
 	}
 	if len(targets) == 0 {
 		skillPlansRedirect(w, r, characterID, 0)
@@ -831,7 +831,7 @@ func (app *Application) loadFitting(ctx context.Context, characterID, fittingID 
 
 // fitClosureTargets computes a fitting's skill closure plus the
 // per-skill status against the character (for the preview).
-func (app *Application) fitClosureTargets(ctx context.Context, ch db.Character, fit esi.Fitting) (targets []planTarget, preview *fitPreview) {
+func (app *Application) fitClosureTargets(ctx context.Context, ch db.Character, fit esi.Fitting) (targets []skillplan.Target, preview *fitPreview) {
 	graph := newSDESkillGraph(app, ctx)
 	typeIDs := []int64{fit.ShipTypeID}
 	seen := map[int64]bool{fit.ShipTypeID: true}
@@ -841,7 +841,7 @@ func (app *Application) fitClosureTargets(ctx context.Context, ch db.Character, 
 			typeIDs = append(typeIDs, item.TypeID)
 		}
 	}
-	targets = fitSkillClosure(graph, typeIDs)
+	targets = skillplan.FitSkillClosure(graph, typeIDs)
 
 	ct, _, _ := app.loadCharTraining(ctx, ch.CharacterID)
 	names := app.typeNames(ctx, append(typeIDs, func() []int64 {
@@ -866,7 +866,7 @@ func (app *Application) fitClosureTargets(ctx context.Context, ch db.Character, 
 			row.Status = "no data"
 			preview.MissingData++
 		default:
-			trained := levelForSP(meta.Rank, ct.SP[t.SkillID])
+			trained := skillplan.LevelForSP(meta.Rank, ct.SP[t.SkillID])
 			switch {
 			case trained >= t.Level:
 				row.Status = "trained"
@@ -978,11 +978,4 @@ func (app *Application) handleSkillPlanFromFit(w http.ResponseWriter, r *http.Re
 		return
 	}
 	skillPlansRedirect(w, r, characterID, planID)
-}
-
-// sortedTargets is a tiny deterministic-order helper for tests.
-func sortedTargets(targets []planTarget) []planTarget {
-	out := append([]planTarget(nil), targets...)
-	sort.Slice(out, func(i, j int) bool { return out[i].SkillID < out[j].SkillID })
-	return out
 }

@@ -1,4 +1,10 @@
-package app
+// Package skillplan is the arithmetic behind skill plans: how many
+// skill points a level takes, how fast a character trains, the order
+// a set of targets has to be trained in once prerequisites are
+// added, and which attribute remap would shorten it. It is pure: the
+// pages hand it a skill graph and a character's state and it does no
+// I/O of its own.
+package skillplan
 
 import (
 	"math"
@@ -25,35 +31,35 @@ import (
 // Dogma character-attribute IDs (dgmAttributeTypes 164-168), the
 // values sde_skill_meta's primary/secondary columns hold.
 const (
-	attrCharisma     = 164
-	attrIntelligence = 165
-	attrMemory       = 166
-	attrPerception   = 167
-	attrWillpower    = 168
+	AttrCharisma     = 164
+	AttrIntelligence = 165
+	AttrMemory       = 166
+	AttrPerception   = 167
+	AttrWillpower    = 168
 )
 
-// attributeName names a dogma attribute ID for display.
-func attributeName(id int64) string {
+// AttributeName names a dogma attribute ID for display.
+func AttributeName(id int64) string {
 	switch id {
-	case attrCharisma:
+	case AttrCharisma:
 		return "Charisma"
-	case attrIntelligence:
+	case AttrIntelligence:
 		return "Intelligence"
-	case attrMemory:
+	case AttrMemory:
 		return "Memory"
-	case attrPerception:
+	case AttrPerception:
 		return "Perception"
-	case attrWillpower:
+	case AttrWillpower:
 		return "Willpower"
 	}
 	return "—"
 }
 
-// attributeIDs lists the five training attributes in canonical order.
-var attributeIDs = []int64{attrCharisma, attrIntelligence, attrMemory, attrPerception, attrWillpower}
+// AttributeIDs lists the five training attributes in canonical order.
+var AttributeIDs = []int64{AttrCharisma, AttrIntelligence, AttrMemory, AttrPerception, AttrWillpower}
 
-// attrSet is a character's five training attribute values.
-type attrSet struct {
+// AttrSet is a character's five training attribute values.
+type AttrSet struct {
 	Charisma     int
 	Intelligence int
 	Memory       int
@@ -61,67 +67,67 @@ type attrSet struct {
 	Willpower    int
 }
 
-// flatAttrSet is the honest fallback while the attributes snapshot
+// FlatAttrSet is the honest fallback while the attributes snapshot
 // is still warming: EVE's unmodified spread is 20 across the board.
-var flatAttrSet = attrSet{Charisma: 20, Intelligence: 20, Memory: 20, Perception: 20, Willpower: 20}
+var FlatAttrSet = AttrSet{Charisma: 20, Intelligence: 20, Memory: 20, Perception: 20, Willpower: 20}
 
-func (a attrSet) value(id int64) int {
+func (a AttrSet) value(id int64) int {
 	switch id {
-	case attrCharisma:
+	case AttrCharisma:
 		return a.Charisma
-	case attrIntelligence:
+	case AttrIntelligence:
 		return a.Intelligence
-	case attrMemory:
+	case AttrMemory:
 		return a.Memory
-	case attrPerception:
+	case AttrPerception:
 		return a.Perception
-	case attrWillpower:
+	case AttrWillpower:
 		return a.Willpower
 	}
 	return 0
 }
 
-func (a attrSet) with(id int64, v int) attrSet {
+func (a AttrSet) with(id int64, v int) AttrSet {
 	switch id {
-	case attrCharisma:
+	case AttrCharisma:
 		a.Charisma = v
-	case attrIntelligence:
+	case AttrIntelligence:
 		a.Intelligence = v
-	case attrMemory:
+	case AttrMemory:
 		a.Memory = v
-	case attrPerception:
+	case AttrPerception:
 		a.Perception = v
-	case attrWillpower:
+	case AttrWillpower:
 		a.Willpower = v
 	}
 	return a
 }
 
-// skillMeta is one skill's training profile from sde_skill_meta.
-type skillMeta struct {
+// SkillMeta is one skill's training profile from sde_skill_meta.
+type SkillMeta struct {
 	Rank      float64
 	Primary   int64 // dogma attribute ID
 	Secondary int64
 }
 
-// skillRequirement is one required-skill row: to use/train the
+// Requirement is one required-skill row: to use/train the
 // type, SkillID must be trained to Level.
-type skillRequirement struct {
+type Requirement struct {
 	SkillID int64
 	Level   int
 }
 
-// skillGraph supplies the plan engine's static data. The handler
+// Graph supplies the plan engine's static data. The handler
 // backs it with the SDE tables (memoized per render); tests serve
 // fixtures from maps.
-type skillGraph interface {
-	Meta(skillID int64) (skillMeta, bool)
-	Requirements(typeID int64) []skillRequirement
+type Graph interface {
+	Meta(skillID int64) (SkillMeta, bool)
+	Requirements(typeID int64) []Requirement
 }
 
-// spForLevel is the cumulative SP at which level completes for a
+// SPForLevel is the cumulative SP at which level completes for a
 // skill of the given rank (level 0 = 0 SP).
-func spForLevel(rank float64, level int) int64 {
+func SPForLevel(rank float64, level int) int64 {
 	if level <= 0 {
 		return 0
 	}
@@ -134,11 +140,11 @@ func spForLevel(rank float64, level int) int64 {
 	return int64(math.Round(250 * rank * math.Pow(2, 2.5*float64(level-1))))
 }
 
-// levelForSP is the highest completed level for sp in a skill.
-func levelForSP(rank float64, sp int64) int {
+// LevelForSP is the highest completed level for sp in a skill.
+func LevelForSP(rank float64, sp int64) int {
 	level := 0
 	for l := 1; l <= 5; l++ {
-		if sp >= spForLevel(rank, l) {
+		if sp >= SPForLevel(rank, l) {
 			level = l
 		}
 	}
@@ -146,12 +152,12 @@ func levelForSP(rank float64, sp int64) int {
 }
 
 // spPerMinute is the training speed of one skill under attrs.
-func spPerMinute(meta skillMeta, attrs attrSet) float64 {
+func spPerMinute(meta SkillMeta, attrs AttrSet) float64 {
 	return float64(attrs.value(meta.Primary)) + float64(attrs.value(meta.Secondary))/2
 }
 
 // trainSeconds is how long spRemaining takes to train in one skill.
-func trainSeconds(meta skillMeta, attrs attrSet, spRemaining int64) float64 {
+func trainSeconds(meta SkillMeta, attrs AttrSet, spRemaining int64) float64 {
 	rate := spPerMinute(meta, attrs)
 	if rate <= 0 || spRemaining <= 0 {
 		return 0
@@ -163,30 +169,30 @@ func trainSeconds(meta skillMeta, attrs attrSet, spRemaining int64) float64 {
 // Plan computation.
 // ---------------------------------------------------------------------------
 
-// charTraining is the character-side input: current SP per skill,
+// CharTraining is the character-side input: current SP per skill,
 // the level each skill reaches when the live queue drains, when
 // that happens, and the unallocated-SP total (reported, never
 // silently spent).
-type charTraining struct {
+type CharTraining struct {
 	SP          map[int64]int64
 	QueuedTo    map[int64]int // skill → highest level the queue completes
 	QueueEnd    time.Time     // zero when the queue is empty or already past
 	Unallocated int64
 }
 
-// planTarget is one skill the user wants at a level; Intent is the
+// Target is one skill the user wants at a level; Intent is the
 // plan item's position (lower = asked for earlier). PrereqOf (set
 // during expansion) records which direct target pulled a skill in.
-type planTarget struct {
+type Target struct {
 	SkillID int64
 	Level   int
 	Intent  int
 }
 
-// planStep is one trainable chunk of a computed plan: from the
+// Step is one trainable chunk of a computed plan: from the
 // character's effective position after the queue drains to the
 // target level.
-type planStep struct {
+type Step struct {
 	SkillID     int64
 	FromLevel   int
 	ToLevel     int
@@ -196,29 +202,29 @@ type planStep struct {
 	Prereq      bool      // pulled in as a prerequisite, not a direct target
 }
 
-// droppedTarget is a plan entry the computation nets out, with the
+// DroppedTarget is a plan entry the computation nets out, with the
 // reason a user would recognize.
-type droppedTarget struct {
+type DroppedTarget struct {
 	SkillID int64
 	Level   int
 	Reason  string // "already trained" | "already in queue"
 	Intent  int
 }
 
-// planOutcome is a computed plan: ordered steps plus totals.
+// Outcome is a computed plan: ordered steps plus totals.
 // Unknown lists skills with no SDE meta (cannot be timed) that
 // expansion met along the way — handlers surface them rather than
 // inventing numbers.
-type planOutcome struct {
-	Steps       []planStep
-	Dropped     []droppedTarget
+type Outcome struct {
+	Steps       []Step
+	Dropped     []DroppedTarget
 	Unknown     []int64
 	TotalSP     int64
 	TotalSecond float64
 	StartsAt    time.Time // when plan training can begin (queue end, or now)
 }
 
-// computePlan expands targets against the graph and times the
+// Compute expands targets against the graph and times the
 // result. Expansion rules:
 //   - a skill's own prerequisites (at their required levels) are
 //     pulled in recursively before the skill itself;
@@ -229,12 +235,12 @@ type planOutcome struct {
 //     intent order of the target that pulled each skill in;
 //   - training times assume the plan starts when the current
 //     queue finishes (StartsAt), which the UI states openly.
-func computePlan(g skillGraph, targets []planTarget, char charTraining, attrs attrSet, now time.Time) planOutcome {
+func Compute(g Graph, targets []Target, char CharTraining, attrs AttrSet, now time.Time) Outcome {
 	startsAt := now
 	if char.QueueEnd.After(now) {
 		startsAt = char.QueueEnd
 	}
-	out := planOutcome{StartsAt: startsAt}
+	out := Outcome{StartsAt: startsAt}
 
 	// Desired levels with expansion. want maps skill → (level,
 	// intent of the earliest target that needs it).
@@ -345,7 +351,7 @@ func computePlan(g skillGraph, targets []planTarget, char charTraining, attrs at
 			out.Unknown = append(out.Unknown, skillID)
 			continue
 		}
-		targetSP := spForLevel(meta.Rank, w.level)
+		targetSP := SPForLevel(meta.Rank, w.level)
 
 		// Effective trained state: snapshot SP, raised to the
 		// queued completion when the queue gets further — the
@@ -353,16 +359,16 @@ func computePlan(g skillGraph, targets []planTarget, char charTraining, attrs at
 		// Partial SP (mid-level progress) counts through the SP.
 		basisSP := char.SP[skillID]
 		queuedTo := char.QueuedTo[skillID]
-		if q := spForLevel(meta.Rank, queuedTo); q > basisSP {
+		if q := SPForLevel(meta.Rank, queuedTo); q > basisSP {
 			basisSP = q
 		}
 		if basisSP >= targetSP {
 			if w.direct {
 				reason := "already trained"
-				if queuedTo >= w.level && spForLevel(meta.Rank, queuedTo) > char.SP[skillID] {
+				if queuedTo >= w.level && SPForLevel(meta.Rank, queuedTo) > char.SP[skillID] {
 					reason = "already in queue"
 				}
-				out.Dropped = append(out.Dropped, droppedTarget{
+				out.Dropped = append(out.Dropped, DroppedTarget{
 					SkillID: skillID, Level: w.level, Reason: reason, Intent: w.intent,
 				})
 			}
@@ -371,9 +377,9 @@ func computePlan(g skillGraph, targets []planTarget, char charTraining, attrs at
 
 		seconds := trainSeconds(meta, attrs, targetSP-basisSP)
 		cursor = cursor.Add(time.Duration(seconds * float64(time.Second)))
-		out.Steps = append(out.Steps, planStep{
+		out.Steps = append(out.Steps, Step{
 			SkillID:     skillID,
-			FromLevel:   levelForSP(meta.Rank, basisSP),
+			FromLevel:   LevelForSP(meta.Rank, basisSP),
 			ToLevel:     w.level,
 			SPRemaining: targetSP - basisSP,
 			Seconds:     seconds,
@@ -396,24 +402,24 @@ func computePlan(g skillGraph, targets []planTarget, char charTraining, attrs at
 // of the 14 points between them.
 // ---------------------------------------------------------------------------
 
-// remapAdvice is the advisor's answer: the best spread found, what
+// RemapAdvice is the advisor's answer: the best spread found, what
 // the plan takes under it vs under the current attributes, and
 // whether a remap is even available to report honestly.
-type remapAdvice struct {
-	Current     attrSet
-	Best        attrSet
+type RemapAdvice struct {
+	Current     AttrSet
+	Best        AttrSet
 	PrimaryID   int64
 	SecondaryID int64
 	BestSeconds float64
 	CurSeconds  float64
 }
 
-// adviseRemap finds the fastest legal remap for steps. With no
+// AdviseRemap finds the fastest legal remap for steps. With no
 // steps the current spread is returned unmodified.
-func adviseRemap(g skillGraph, steps []planStep, current attrSet) remapAdvice {
-	advice := remapAdvice{Current: current, Best: current}
+func AdviseRemap(g Graph, steps []Step, current AttrSet) RemapAdvice {
+	advice := RemapAdvice{Current: current, Best: current}
 	// Time of the same SP under any candidate spread.
-	timeUnder := func(attrs attrSet) float64 {
+	timeUnder := func(attrs AttrSet) float64 {
 		total := 0.0
 		for _, s := range steps {
 			meta, ok := g.Meta(s.SkillID)
@@ -429,15 +435,15 @@ func adviseRemap(g skillGraph, steps []planStep, current attrSet) remapAdvice {
 	if len(steps) == 0 {
 		return advice
 	}
-	for _, p := range attributeIDs {
-		for _, s := range attributeIDs {
+	for _, p := range AttributeIDs {
+		for _, s := range AttributeIDs {
 			if s == p {
 				continue
 			}
 			// x points to primary, the rest to secondary; both
 			// must stay within 17..27.
 			for x := 4; x <= 10; x++ {
-				candidate := attrSet{Charisma: 17, Intelligence: 17, Memory: 17, Perception: 17, Willpower: 17}
+				candidate := AttrSet{Charisma: 17, Intelligence: 17, Memory: 17, Perception: 17, Willpower: 17}
 				candidate = candidate.with(p, 17+x).with(s, 17+(14-x))
 				if secs := timeUnder(candidate); secs < advice.BestSeconds {
 					advice.BestSeconds = secs
@@ -455,13 +461,13 @@ func adviseRemap(g skillGraph, steps []planStep, current attrSet) remapAdvice {
 // Fit requirements closure.
 // ---------------------------------------------------------------------------
 
-// fitSkillClosure resolves what a character must have trained to
+// FitSkillClosure resolves what a character must have trained to
 // use a set of types (a fitting's ship + modules): every type's
 // required skills at their levels, expanded through the skills'
 // own prerequisites, each at the maximum level anyone needs.
 // The result is in plan-engine order (prerequisites first),
 // ready to become plan items.
-func fitSkillClosure(g skillGraph, typeIDs []int64) []planTarget {
+func FitSkillClosure(g Graph, typeIDs []int64) []Target {
 	required := make(map[int64]int)
 	var require func(typeID int64, stack map[int64]bool)
 	require = func(typeID int64, stack map[int64]bool) {
@@ -481,7 +487,7 @@ func fitSkillClosure(g skillGraph, typeIDs []int64) []planTarget {
 		require(id, make(map[int64]bool))
 	}
 
-	// Topo-order like the plan engine: reuse computePlan's
+	// Topo-order like the plan engine: reuse Compute's
 	// expansion ordering by feeding empty training state and
 	// taking its ordered wants — simpler: run the expansion sort
 	// directly over the requirement edges.
@@ -502,11 +508,11 @@ func fitSkillClosure(g skillGraph, typeIDs []int64) []planTarget {
 		}
 	}
 	sort.Slice(ready, func(i, j int) bool { return ready[i] < ready[j] })
-	var targets []planTarget
+	var targets []Target
 	for len(ready) > 0 {
 		id := ready[0]
 		ready = ready[1:]
-		targets = append(targets, planTarget{SkillID: id, Level: required[id], Intent: len(targets)})
+		targets = append(targets, Target{SkillID: id, Level: required[id], Intent: len(targets)})
 		for _, dep := range dependents[id] {
 			indegree[dep]--
 			if indegree[dep] == 0 {
@@ -528,7 +534,7 @@ func fitSkillClosure(g skillGraph, typeIDs []int64) []planTarget {
 		}
 		sort.Slice(rest, func(i, j int) bool { return rest[i] < rest[j] })
 		for _, id := range rest {
-			targets = append(targets, planTarget{SkillID: id, Level: required[id], Intent: len(targets)})
+			targets = append(targets, Target{SkillID: id, Level: required[id], Intent: len(targets)})
 		}
 	}
 	return targets

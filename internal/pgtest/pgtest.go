@@ -32,14 +32,23 @@ var (
 	// runtimeDir is where the embedded server unpacks its binaries
 	// and keeps its data for this test process.
 	runtimeDir string
+	// managed is set once TestMain is running the package's tests,
+	// which is what guarantees the server gets stopped afterwards.
+	managed atomic.Bool
 )
 
 // TestMain is the shared TestMain body for packages that use
 // FreshDSN: run the tests, then stop the embedded server and remove
 // its runtime directory. Left behind, each test run kept a copy of
 // the unpacked server (about 150 MB) in the system
-// temp directory.
+// temp directory, and the server itself kept running.
+//
+// Every package whose tests call FreshDSN or DSNFor needs a
+// TestMain that calls this one (see internal/app/main_test.go).
+// Without it nothing would stop the server, so those calls refuse
+// to start one.
 func TestMain(m *testing.M) int {
+	managed.Store(true)
 	code := m.Run()
 	if server != nil {
 		_ = server.Stop()
@@ -86,6 +95,9 @@ func DSNFor(t *testing.T, name string) string {
 
 func startServer(t *testing.T) string {
 	t.Helper()
+	if !managed.Load() {
+		t.Fatalf("pgtest: this package has no TestMain calling pgtest.TestMain, so the embedded Postgres it starts would be left running. Add one: see internal/app/main_test.go.")
+	}
 	startOnce.Do(func() {
 		ln, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {

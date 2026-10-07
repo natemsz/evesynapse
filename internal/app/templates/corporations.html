@@ -5,7 +5,7 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{range .Corps}}
-  <section class="card foldable">
+  <section class="foldable">
   <h2>{{corpLink .ID .Name}} [{{.Ticker}}]</h2>
   <p><img class="portrait" src="{{.LogoURL}}" alt="Logo of {{.Name}}" width="128" height="128"></p>
   <div class="tw">

@@ -30,7 +30,7 @@
   </table>
   </div>
 
-  <section class="card foldable">
+  <section class="foldable">
   <h3>{{if eq .CorpWallets.Division 1}}Master Wallet{{else}}Division {{.CorpWallets.Division}}{{end}} — recent journal</h3>
   {{if .CorpWallets.LedgerNote}}
   <p><small>{{.CorpWallets.LedgerNote}}</small></p>
@@ -51,7 +51,7 @@
   {{end}}
   </section>
 
-  <section class="card foldable">
+  <section class="foldable">
   <h3>{{if eq .CorpWallets.Division 1}}Master Wallet{{else}}Division {{.CorpWallets.Division}}{{end}} — recent transactions</h3>
   {{if .CorpWallets.Txns}}
   <div class="tw">

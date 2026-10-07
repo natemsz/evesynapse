@@ -27,7 +27,7 @@
   {{end}}
 
   {{if .CharacterPage.SkillsKnown}}
-  <section class="card foldable" id="queue">
+  <section class="foldable" id="queue">
   <h3>Training</h3>
   {{if .CharacterPage.Training}}
   <p>Currently training: <strong>{{.CharacterPage.Training}}</strong>{{if .CharacterPage.TrainingLeft}} (<span class="countdown" data-finish="{{.CharacterPage.TrainingFinish}}">{{.CharacterPage.TrainingLeft}}</span>){{end}}</p>
@@ -51,17 +51,14 @@
   {{end}}
 
   {{if .CharacterPage.PIKnown}}
-  <div class="card">
   <h3>Planetary industry</h3>
   <p><small>{{.CharacterPage.PIColonies}} colon{{if eq .CharacterPage.PIColonies 1}}y{{else}}ies{{end}}{{if .CharacterPage.PIExpired}} · {{.CharacterPage.PIExpired}} extractor{{if ne .CharacterPage.PIExpired 1}}s{{end}} expired{{end}}{{if .CharacterPage.PISoonest}} · next extractor expiry {{.CharacterPage.PISoonest}}{{if .CharacterPage.PISoonestIn}} ({{.CharacterPage.PISoonestIn}}){{end}}{{end}} — <a href="/planets/?character={{.CharacterPage.CharacterID}}">view colonies</a></small></p>
   {{else if .CharacterPage.PINotEnabled}}
   <h3>Planetary industry</h3>
   <p><small>Not enabled for this character — <a href="/planets/?character={{.CharacterPage.CharacterID}}">re-link to enable</a>.</small></p>
-  </div>
   {{end}}
 
   {{if .CharacterPage.OnlineKnown}}
-  <div class="card">
   <h3>Status</h3>
   <div class="tw">
   <table>
@@ -73,11 +70,9 @@
     </tbody>
   </table>
   </div>
-  </div>
   {{end}}
 
   {{if .CharacterPage.LocationKnown}}
-  <div class="card">
   <h3>Location</h3>
   <div class="tw">
   <table>
@@ -87,11 +82,9 @@
     </tbody>
   </table>
   </div>
-  </div>
   {{end}}
 
   {{if .CharacterPage.ShipKnown}}
-  <div class="card">
   <h3>Ship</h3>
   <div class="tw">
   <table>
@@ -100,11 +93,9 @@
     </tbody>
   </table>
   </div>
-  </div>
   {{end}}
 
   {{if .CharacterPage.FatigueKnown}}
-  <div class="card">
   <h3>Jump fatigue</h3>
   <div class="tw">
   <table>
@@ -114,11 +105,9 @@
     </tbody>
   </table>
   </div>
-  </div>
   {{end}}
 
   {{if .CharacterPage.ImplantsKnown}}
-  <div class="card">
   <h3>Active implants</h3>
   {{if .CharacterPage.Implants}}
   <div class="tw">
@@ -134,11 +123,10 @@
   {{else}}
   <p><small>No implants plugged in.</small></p>
   {{end}}
-  </div>
   {{end}}
 
   {{if .CharacterPage.ClonesKnown}}
-  <section class="card foldable" id="clones">
+  <section class="foldable" id="clones">
   <h3>Clones ({{len .CharacterPage.JumpClones}})</h3>
   <div class="tw">
   <table>
@@ -150,7 +138,7 @@
   </div>
   {{if .CharacterPage.JumpClones}}
   {{range .CharacterPage.JumpClones}}
-  <section class="card foldable" data-fold="closed">
+  <section class="foldable" data-fold="closed">
   <h3>{{.DisplayName}} <small>· {{.Location}}{{if .Implants}} · {{len .Implants}} implant{{if ne (len .Implants) 1}}s{{end}}{{end}}</small></h3>
   <p><small>
     {{if .CustomName}}Named &ldquo;{{.CustomName}}&rdquo;{{else if .Name}}ESI name &ldquo;{{.Name}}&rdquo;{{else}}Unnamed{{end}} ·
@@ -187,11 +175,11 @@
   {{end}}
 
   {{if .CharacterPage.SkillsKnown}}
-  <section class="card foldable" id="skills">
+  <section class="foldable" id="skills">
   <h3>Skills</h3>
   <p>Total SP: <strong>{{.CharacterPage.TotalSP}}</strong>{{if .CharacterPage.UnallocatedSP}} · {{.CharacterPage.UnallocatedSP}} unallocated{{end}} · {{.CharacterPage.SkillsCount}} skills known · {{.CharacterPage.LevelVCount}} at level V</p>
   {{range .CharacterPage.SkillGroups}}
-  <section class="card foldable" data-fold="closed">
+  <section class="foldable" data-fold="closed">
   <h3>{{.Name}}</h3>
   <div class="tw">
   <table>
@@ -207,14 +195,14 @@
   </section>
   {{end}}
 
-  <section class="card foldable" id="browse" data-fold="closed">
+  <section class="foldable" id="browse" data-fold="closed">
   <h3>Browse skills</h3>
   {{if .CharacterPage.BrowseWarming}}
   <p><small>Skill data is still loading — the full catalog appears once the static-data import lands. Watch the <a href="/sync/">Sync page</a>.</small></p>
   {{else}}
   {{if not .CharacterPage.Plans}}<p><small><a href="/skills/plans?character={{.CharacterPage.CharacterID}}">Create a skill plan</a> to add skills straight from this catalog.</small></p>{{end}}
   {{range .CharacterPage.Browse}}
-  <section class="card foldable" data-fold="closed">
+  <section class="foldable" data-fold="closed">
   <h3>{{.Name}}</h3>
   <div class="tw">
   <table>

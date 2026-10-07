@@ -5,9 +5,12 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	_ "github.com/jackc/pgx/v5/stdlib" // pgx as a database/sql driver, registers as "pgx"
+	"github.com/jackc/pgx/v5/stdlib" // pgx as a database/sql driver
 )
 
 // openDB opens Postgres at dsn and returns the two handles the app
@@ -24,11 +27,12 @@ func openDB(ctx context.Context, dsn string) (*sql.DB, *pgxpool.Pool, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	conn, err := sql.Open("pgx", dsn)
+	cfg, err := pgx.ParseConfig(dsn)
 	if err != nil {
 		pool.Close()
 		return nil, nil, err
 	}
+	conn := stdlib.OpenDB(*cfg, stdlib.OptionAfterConnect(readTimesInUTC))
 	conn.SetMaxOpenConns(20)
 	if err := conn.PingContext(ctx); err != nil {
 		conn.Close()
@@ -41,6 +45,20 @@ func openDB(ctx context.Context, dsn string) (*sql.DB, *pgxpool.Pool, error) {
 		return nil, nil, err
 	}
 	return conn, pool, nil
+}
+
+// readTimesInUTC runs on every new connection and makes each
+// timestamptz it reads come back in UTC. Left alone the driver hands
+// times back in the machine's own zone, so a page would print one
+// thing on a UTC server and another on a laptop. EVE runs on UTC and
+// so does everything here; the instant itself is the same either way.
+func readTimesInUTC(_ context.Context, c *pgx.Conn) error {
+	c.TypeMap().RegisterType(&pgtype.Type{
+		Name:  "timestamptz",
+		OID:   pgtype.TimestamptzOID,
+		Codec: &pgtype.TimestamptzCodec{ScanLocation: time.UTC},
+	})
+	return nil
 }
 
 // schemaStep is one numbered file in schema_pg. Steps apply in
@@ -80,6 +98,7 @@ func schemaSteps() []schemaStep {
 		// From here on the record alone decides: no probes.
 		{7, "user_foreign_keys", pgUserForeignKeysSchema, ""},
 		{8, "snapshot_etags", pgSnapshotETagsSchema, ""},
+		{9, "timestamps_accounts_snapshots", pgTimestampsAccountsSchema, ""},
 	}
 }
 

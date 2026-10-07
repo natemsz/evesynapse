@@ -119,7 +119,7 @@ func (app *Application) warmWarDetails(ctx context.Context, list esi.WarList) (f
 			if err := json.Unmarshal([]byte(row.Payload), &war); err != nil {
 				need = true // undecodable payload: replace it
 			} else if war.Finished == "" {
-				if fetchedAt, perr := time.Parse(time.RFC3339, row.FetchedAt); perr != nil || time.Since(fetchedAt) > warDetailMaxAge {
+				if time.Since(row.FetchedAt) > warDetailMaxAge {
 					need = true // still running; counters move
 				}
 			}
@@ -141,7 +141,7 @@ func (app *Application) warmWarDetails(ctx context.Context, list esi.WarList) (f
 		if err := app.queries.UpsertWarDetail(ctx, db.UpsertWarDetailParams{
 			WarID:     warID,
 			Payload:   string(body),
-			FetchedAt: time.Now().UTC().Format(time.RFC3339),
+			FetchedAt: time.Now().UTC(),
 		}); err != nil {
 			logging.Errorf("worker: intel: store war detail %d: %v", warID, err)
 			continue

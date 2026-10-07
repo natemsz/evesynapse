@@ -76,7 +76,7 @@ func (app *Application) fetchCharKind(ctx context.Context, ch db.Character, kind
 	// the record in the meantime.
 	if state, err := app.queries.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: ch.CharacterID, Kind: kind}); err == nil &&
 		state.State == fetchStateError && strings.HasPrefix(state.Detail, forbiddenDetailPrefix) {
-		if attempted, perr := time.Parse(time.RFC3339, state.AttemptedAt); perr == nil && time.Since(attempted) < roleMissingBackoff {
+		if time.Since(state.AttemptedAt) < roleMissingBackoff {
 			return corpFetchSkipped
 		}
 	}
@@ -157,7 +157,7 @@ func (app *Application) warmContractItems(ctx context.Context, ch db.Character) 
 			ContractID:  c.ContractID,
 			CharacterID: ch.CharacterID,
 			Payload:     string(body),
-			FetchedAt:   time.Now().UTC().Format(time.RFC3339),
+			FetchedAt:   time.Now().UTC(),
 		}); err != nil {
 			logging.Errorf("worker: store contract items %d for character %d: %v", c.ContractID, ch.CharacterID, err)
 			continue

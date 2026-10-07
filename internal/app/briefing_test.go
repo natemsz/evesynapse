@@ -10,6 +10,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -181,7 +182,7 @@ func TestBriefingWindowAnchorSemantics(t *testing.T) {
 	})
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 
-	anchor := func() string {
+	anchor := func() sql.NullTime {
 		t.Helper()
 		raw, err := q.GetUserBriefingAnchor(ctx, user.ID)
 		if err != nil {
@@ -189,8 +190,8 @@ func TestBriefingWindowAnchorSemantics(t *testing.T) {
 		}
 		return raw
 	}
-	if got := anchor(); got != "" {
-		t.Fatalf("anchor before first render = %q, want empty", got)
+	if got := anchor(); got.Valid {
+		t.Fatalf("anchor before first render = %v, want unset", got.Time)
 	}
 
 	// First visit: the 24h window shows the recent expiry only,
@@ -199,9 +200,8 @@ func TestBriefingWindowAnchorSemantics(t *testing.T) {
 	section := briefingSection(t, body)
 	mustContain(t, "briefing first visit", section, "1 market order expired since you last looked")
 	first := anchor()
-	firstAt, ok := parseRFC3339(first)
-	if !ok || time.Since(firstAt) > 5*time.Minute {
-		t.Fatalf("anchor after first render = %q, want ~now", first)
+	if !first.Valid || time.Since(first.Time) > 5*time.Minute {
+		t.Fatalf("anchor after first render = %v, want ~now", first.Time)
 	}
 
 	// Second look a moment later: the 1h-old expiry is now behind
@@ -214,7 +214,7 @@ func TestBriefingWindowAnchorSemantics(t *testing.T) {
 
 	// 7-day bound: an anchor 30 days old only reaches back a week.
 	if err := q.SetUserBriefingAnchor(ctx, db.SetUserBriefingAnchorParams{
-		LastBriefingAt: rfc(now.Add(-30 * 24 * time.Hour)), ID: user.ID,
+		LastBriefingAt: timeSet(now.Add(-30 * 24 * time.Hour)), ID: user.ID,
 	}); err != nil {
 		t.Fatalf("set anchor: %v", err)
 	}
@@ -259,8 +259,8 @@ func TestBriefingAnchorUntouchedWhenModuleRemoved(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read anchor: %v", err)
 	}
-	if raw != "" {
-		t.Errorf("anchor = %q after a render without the module, want untouched", raw)
+	if raw.Valid {
+		t.Errorf("anchor = %v after a render without the module, want untouched", raw.Time)
 	}
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("home render made %d outbound calls, want 0", got)
@@ -409,7 +409,7 @@ func TestBriefingAnchorWriteSkippedWhenFresh(t *testing.T) {
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 
-	readAnchor := func() string {
+	readAnchor := func() sql.NullTime {
 		t.Helper()
 		raw, err := q.GetUserBriefingAnchor(ctx, user.ID)
 		if err != nil {
@@ -419,11 +419,11 @@ func TestBriefingAnchorWriteSkippedWhenFresh(t *testing.T) {
 	}
 
 	// An anchor half a minute old is already inside the step: a
-	// repeat home render must leave the stored value untouched
-	// byte for byte -- proof the render performed no write.
-	fresh := now.Add(-30 * time.Second).Format(time.RFC3339)
+	// repeat home render must leave the stored value exactly as
+	// it was -- proof the render performed no write.
+	fresh := now.Add(-30 * time.Second).Truncate(time.Second)
 	if err := q.SetUserBriefingAnchor(ctx, db.SetUserBriefingAnchorParams{
-		LastBriefingAt: fresh, ID: user.ID,
+		LastBriefingAt: timeSet(fresh), ID: user.ID,
 	}); err != nil {
 		t.Fatalf("seed anchor: %v", err)
 	}
@@ -431,14 +431,14 @@ func TestBriefingAnchorWriteSkippedWhenFresh(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
-	if got := readAnchor(); got != fresh {
-		t.Fatalf("anchor after repeat render = %q, want untouched %q", got, fresh)
+	if got := readAnchor(); !got.Valid || !got.Time.Equal(fresh) {
+		t.Fatalf("anchor after repeat render = %v, want untouched %v", got.Time, fresh)
 	}
 
 	// An anchor older than the step still advances to ~now.
-	stale := now.Add(-2 * time.Hour).Format(time.RFC3339)
+	stale := now.Add(-2 * time.Hour).Truncate(time.Second)
 	if err := q.SetUserBriefingAnchor(ctx, db.SetUserBriefingAnchorParams{
-		LastBriefingAt: stale, ID: user.ID,
+		LastBriefingAt: timeSet(stale), ID: user.ID,
 	}); err != nil {
 		t.Fatalf("seed stale anchor: %v", err)
 	}
@@ -447,9 +447,8 @@ func TestBriefingAnchorWriteSkippedWhenFresh(t *testing.T) {
 		t.Fatalf("GET / after stale anchor: status %d", code)
 	}
 	got := readAnchor()
-	at, ok := parseRFC3339(got)
-	if !ok || got == stale || time.Since(at) > 5*time.Minute {
-		t.Fatalf("anchor after stale render = %q, want advanced to ~now", got)
+	if !got.Valid || got.Time.Equal(stale) || time.Since(got.Time) > 5*time.Minute {
+		t.Fatalf("anchor after stale render = %v, want advanced to ~now", got.Time)
 	}
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("home renders made %d outbound calls, want 0", got)

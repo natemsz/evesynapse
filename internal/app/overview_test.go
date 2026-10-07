@@ -8,7 +8,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -110,7 +109,7 @@ func TestHomeOverviewMultiChar(t *testing.T) {
 	_ = dead
 	if err := q.SetCharacterLinkState(ctx, db.SetCharacterLinkStateParams{
 		LinkState:   linkStateTokenDead,
-		LinkStateAt: sql.NullString{String: rfc(now.Add(-2 * time.Hour)), Valid: true},
+		LinkStateAt: timeSet(now.Add(-2 * time.Hour)),
 		CharacterID: 90000003,
 	}); err != nil {
 		t.Fatalf("park charlie: %v", err)

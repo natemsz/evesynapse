@@ -86,7 +86,7 @@ func (app *Application) fetchCommsKind(ctx context.Context, ch db.Character, kin
 	// every minute (same rule as the economy cluster).
 	if state, err := app.queries.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: ch.CharacterID, Kind: kind}); err == nil &&
 		state.State == fetchStateError && strings.HasPrefix(state.Detail, forbiddenDetailPrefix) {
-		if attempted, perr := time.Parse(time.RFC3339, state.AttemptedAt); perr == nil && time.Since(attempted) < roleMissingBackoff {
+		if time.Since(state.AttemptedAt) < roleMissingBackoff {
 			return corpFetchSkipped
 		}
 	}

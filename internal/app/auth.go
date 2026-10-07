@@ -297,10 +297,6 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	expiry := ""
-	if !token.Expiry.IsZero() {
-		expiry = token.Expiry.UTC().Format(time.RFC3339)
-	}
 	result, err := app.linkVerifiedCharacter(ctx, linkCharacterInput{
 		UserID:       userID,
 		CharacterID:  characterID,
@@ -309,7 +305,7 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 		OwnerHash:    ownerHash,
 		AccessToken:  token.AccessToken,
 		RefreshToken: token.RefreshToken,
-		TokenExpiry:  sql.NullString{String: expiry, Valid: expiry != ""},
+		TokenExpiry:  sql.NullTime{Time: token.Expiry.UTC(), Valid: !token.Expiry.IsZero()},
 	})
 	if err != nil {
 		logging.Errorf("sso callback: store character %d: %v", characterID, err)

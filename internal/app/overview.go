@@ -358,9 +358,9 @@ type charSnaps struct {
 	orderHistKnown bool
 	orderHist      esi.CharOrderHistory
 
-	// fetched records each snapshot's fetch timestamp (RFC3339)
-	// so widgets can date their data ("as of").
-	fetched map[string]string
+	// fetched records when each snapshot was fetched, so widgets
+	// can date their data ("as of").
+	fetched map[string]time.Time
 }
 
 // loadCharSnaps reads the snapshots of every linked character in
@@ -406,7 +406,7 @@ func (app *Application) loadCharSnaps(ctx context.Context, userID int64, chars [
 			continue
 		}
 		if b.fetched == nil {
-			b.fetched = map[string]string{}
+			b.fetched = map[string]time.Time{}
 		}
 		b.fetched[row.Kind] = row.FetchedAt
 		b.decode(row.Kind, row.Payload)
@@ -1202,7 +1202,7 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 
 	// The estimate is only as fresh as its stalest input.
 	noteAsOf := func(b *charSnaps, kind string) {
-		if t, ok := parseRFC3339(b.fetched[kind]); ok {
+		if t, ok := b.fetched[kind]; ok {
 			if asOf.IsZero() || t.Before(asOf) {
 				asOf = t
 			}

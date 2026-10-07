@@ -175,8 +175,8 @@ func (app *Application) structureResolverCandidates(ctx context.Context, charact
 		if iMatch != jMatch {
 			return iMatch
 		}
-		if out[i].UpdatedAt != out[j].UpdatedAt {
-			return out[i].UpdatedAt > out[j].UpdatedAt
+		if !out[i].UpdatedAt.Equal(out[j].UpdatedAt) {
+			return out[i].UpdatedAt.After(out[j].UpdatedAt)
 		}
 		return out[i].CharacterID < out[j].CharacterID
 	})

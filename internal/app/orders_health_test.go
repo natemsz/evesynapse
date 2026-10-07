@@ -110,7 +110,7 @@ func TestCorpOrdersHealthAndLocation(t *testing.T) {
 	seedCharacter(t, q, user.ID, fixtureCharB, "Second Pilot")
 	for _, m := range []struct{ charID, corpID int64 }{{fixtureCharA, fixtureCorpA}, {fixtureCharB, fixtureCorpA}} {
 		if err := q.UpsertCharacterCorporation(ctx, db.UpsertCharacterCorporationParams{
-			CharacterID: m.charID, CorporationID: m.corpID, UpdatedAt: now.Format(time.RFC3339),
+			CharacterID: m.charID, CorporationID: m.corpID, UpdatedAt: now,
 		}); err != nil {
 			t.Fatalf("seed mapping: %v", err)
 		}
@@ -210,7 +210,7 @@ func TestKillViewNotesGuidePriceWant(t *testing.T) {
 	}
 	if err := q.UpsertKillmailDetail(ctx, db.UpsertKillmailDetailParams{
 		KillmailID: 7001, CharacterID: fixtureCharA, Hash: "fixture",
-		Payload: string(raw), FetchedAt: "2026-01-01T00:00:00Z",
+		Payload: string(raw), FetchedAt: mustTime("2026-01-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed killmail detail: %v", err)
 	}

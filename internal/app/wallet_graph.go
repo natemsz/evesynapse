@@ -64,17 +64,15 @@ func buildBalanceSeries(journal esi.WalletJournal, samples []db.WalletHistory, n
 	if len(journalPts) > 0 {
 		windowStart := journalPts[0].At
 		for _, s := range samples {
-			p, ok := samplePoint(s)
-			if !ok || !p.At.Before(windowStart) {
+			p := samplePoint(s)
+			if !p.At.Before(windowStart) {
 				continue
 			}
 			points = append(points, p)
 		}
 	} else {
 		for _, s := range samples {
-			if p, ok := samplePoint(s); ok {
-				points = append(points, p)
-			}
+			points = append(points, samplePoint(s))
 		}
 	}
 	points = append(points, journalPts...)
@@ -103,18 +101,10 @@ func buildBalanceSeries(journal esi.WalletJournal, samples []db.WalletHistory, n
 	return points
 }
 
-// samplePoint turns one daily history row into a series point.
-// The row's sampled_at (when the value was last written that
-// day) is the honest timestamp; the calendar day at midnight is
-// the fallback.
-func samplePoint(s db.WalletHistory) (balancePoint, bool) {
-	if t, err := time.Parse(time.RFC3339, s.SampledAt); err == nil {
-		return balancePoint{At: t, Balance: s.Balance}, true
-	}
-	if t, err := time.Parse(historyDateLayout, s.Day); err == nil {
-		return balancePoint{At: t, Balance: s.Balance}, true
-	}
-	return balancePoint{}, false
+// samplePoint turns one daily history row into a series point,
+// dated when the value was last written that day.
+func samplePoint(s db.WalletHistory) balancePoint {
+	return balancePoint{At: s.SampledAt, Balance: s.Balance}
 }
 
 // netWorthHistoryPoints sums the sampler's net-worth column
@@ -325,9 +315,7 @@ func (app *Application) attachWalletGraph(ctx context.Context, userID, character
 	}); err == nil {
 		var bal float64
 		if json.Unmarshal([]byte(snap.Payload), &bal) == nil {
-			if t, perr := time.Parse(time.RFC3339, snap.FetchedAt); perr == nil {
-				now = &balancePoint{At: t, Balance: bal}
-			}
+			now = &balancePoint{At: snap.FetchedAt, Balance: bal}
 		}
 	}
 

@@ -6,7 +6,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"net/http"
 	"strings"
 	"testing"
@@ -58,7 +57,7 @@ func TestAdminBelongsToTheAccount(t *testing.T) {
 	// re-verified, no longer makes its account an admin's.
 	if err := q.SetCharacterLinkState(ctx, db.SetCharacterLinkStateParams{
 		LinkState:   linkStateOwnerChanged,
-		LinkStateAt: sql.NullString{String: "2026-10-01T00:00:00Z", Valid: true},
+		LinkStateAt: mustNullTime("2026-10-01T00:00:00Z"),
 		CharacterID: fixtureCharA,
 	}); err != nil {
 		t.Fatalf("flag owner change: %v", err)

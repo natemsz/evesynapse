@@ -433,7 +433,7 @@ func TestKillmailAndWalletLinks(t *testing.T) {
 		}
 		if err := q.UpsertKillmailDetail(ctx, db.UpsertKillmailDetailParams{
 			KillmailID: km.KillmailID, CharacterID: fixtureCharA, Hash: "fixture",
-			Payload: string(raw), FetchedAt: "2026-01-01T00:00:00Z",
+			Payload: string(raw), FetchedAt: mustTime("2026-01-01T00:00:00Z"),
 		}); err != nil {
 			t.Fatalf("seed killmail detail %d: %v", km.KillmailID, err)
 		}

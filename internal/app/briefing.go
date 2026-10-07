@@ -102,13 +102,13 @@ func briefingKey(charID int64, rule string) string {
 // most 7 days back however old the anchor is.
 func (app *Application) briefingWindowStart(ctx context.Context, userID int64, now time.Time) time.Time {
 	start := now.Add(-briefingFirstWindow)
-	raw, err := app.queries.GetUserBriefingAnchor(ctx, userID)
+	anchor, err := app.queries.GetUserBriefingAnchor(ctx, userID)
 	if err != nil {
 		logging.Errorf("home: briefing anchor for user %d: %v", userID, err)
 		return start
 	}
-	if anchor, ok := parseRFC3339(raw); ok && anchor.Before(now) {
-		start = anchor
+	if anchor.Valid && anchor.Time.Before(now) {
+		start = anchor.Time
 	}
 	if start.Before(now.Add(-briefingMaxWindow)) {
 		start = now.Add(-briefingMaxWindow)
@@ -127,16 +127,16 @@ const briefingAnchorStep = time.Minute
 
 // advanceBriefingAnchor moves the account's window anchor, but
 // only when the stored anchor would actually move: at least a
-// full briefingAnchorStep behind this render (or unreadable,
-// which includes first-run). Only a normal home render that
+// full briefingAnchorStep behind this render (or never set, as
+// on the first run). Only a normal home render that
 // included the module calls this.
 func (app *Application) advanceBriefingAnchor(ctx context.Context, userID int64, now time.Time) {
-	raw, err := app.queries.GetUserBriefingAnchor(ctx, userID)
+	anchor, err := app.queries.GetUserBriefingAnchor(ctx, userID)
 	if err != nil {
 		logging.Errorf("home: briefing anchor for user %d: %v", userID, err)
 		return
 	}
-	if anchor, ok := parseRFC3339(raw); ok && !anchor.Before(now.Add(-briefingAnchorStep)) {
+	if anchor.Valid && !anchor.Time.Before(now.Add(-briefingAnchorStep)) {
 		// The stored anchor already sits within a step of this
 		// render (or ahead of it, under clock skew): advancing
 		// it would change nothing the digest can show, so skip
@@ -144,7 +144,7 @@ func (app *Application) advanceBriefingAnchor(ctx context.Context, userID int64,
 		return
 	}
 	if err := app.queries.SetUserBriefingAnchor(ctx, db.SetUserBriefingAnchorParams{
-		LastBriefingAt: now.UTC().Format(time.RFC3339),
+		LastBriefingAt: timeSet(now.UTC()),
 		ID:             userID,
 	}); err != nil {
 		logging.Errorf("home: advance briefing anchor for user %d: %v", userID, err)

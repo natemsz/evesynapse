@@ -143,7 +143,7 @@ func (app *Application) saveOrdersConfig(ctx context.Context, userID int64, cfg 
 		UserID:    userID,
 		WidgetID:  widgetMarket,
 		Config:    string(blob),
-		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+		UpdatedAt: time.Now().UTC(),
 	}); err != nil {
 		logging.Errorf("home: save widget config for user %d: %v", userID, err)
 	}

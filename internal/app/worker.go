@@ -620,13 +620,11 @@ func (app *Application) characterDueKey(ctx context.Context, ch db.Character) ti
 	var earliest time.Time
 	for _, snap := range snaps {
 		seen[snap.Kind] = true
-		if !snap.CachedUntil.Valid || snap.CachedUntil.String == "" {
+		if !snap.CachedUntil.Valid {
 			continue
 		}
-		if until, err := time.Parse(time.RFC3339, snap.CachedUntil.String); err == nil {
-			if earliest.IsZero() || until.Before(earliest) {
-				earliest = until
-			}
+		if until := snap.CachedUntil.Time; earliest.IsZero() || until.Before(earliest) {
+			earliest = until
 		}
 	}
 	for _, kind := range coreSnapshotKinds {
@@ -1440,7 +1438,7 @@ func (app *Application) warmKillmailDetailsFor(ctx context.Context, ch db.Charac
 			CharacterID: ch.CharacterID,
 			Hash:        ref.KillmailHash,
 			Payload:     string(body),
-			FetchedAt:   time.Now().UTC().Format(time.RFC3339),
+			FetchedAt:   time.Now().UTC(),
 		}); err != nil {
 			logging.Errorf("worker: store killmail detail %d for character %d: %v", ref.KillmailID, ch.CharacterID, err)
 			continue

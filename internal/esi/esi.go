@@ -1680,7 +1680,7 @@ func snapshotPath(characterID int64, kind string) string {
 }
 
 // SnapshotFresh reports whether the snapshot's cached_until is still in
-// the future. A missing/unparseable expiry counts as stale.
+// the future. A missing expiry counts as stale.
 func SnapshotFresh(snap db.CharacterSnapshot) bool {
 	return CacheWindowOpen(snap.CachedUntil)
 }
@@ -1688,12 +1688,8 @@ func SnapshotFresh(snap db.CharacterSnapshot) bool {
 // CacheWindowOpen reports whether a stored cached_until is still in
 // the future. It is SnapshotFresh for readers that hold only a
 // snapshot's bookkeeping, not the snapshot.
-func CacheWindowOpen(cachedUntil sql.NullString) bool {
-	if !cachedUntil.Valid || cachedUntil.String == "" {
-		return false
-	}
-	until, err := time.Parse(time.RFC3339, cachedUntil.String)
-	return err == nil && time.Now().Before(until)
+func CacheWindowOpen(cachedUntil sql.NullTime) bool {
+	return cachedUntil.Valid && time.Now().Before(cachedUntil.Time)
 }
 
 // FetchAndStoreSnapshot fetches the kind's ESI path with a valid token
@@ -1771,8 +1767,8 @@ func (c *Client) refreshSnapshot(ctx context.Context, ch db.Character, kind stri
 		CharacterID: ch.CharacterID,
 		Kind:        kind,
 		Payload:     string(body),
-		FetchedAt:   now.Format(time.RFC3339),
-		CachedUntil: sql.NullString{String: cachedUntil.Format(time.RFC3339), Valid: true},
+		FetchedAt:   now,
+		CachedUntil: sql.NullTime{Time: cachedUntil, Valid: true},
 		Etag:        etag,
 	}); err != nil {
 		return nil, false, fmt.Errorf("store %s snapshot for character %d: %w", kind, ch.CharacterID, err)
@@ -1795,8 +1791,8 @@ func (c *Client) storedSnapshotETag(ctx context.Context, characterID int64, kind
 // unchanged, leaving its payload and ETag as they are.
 func (c *Client) keepSnapshot(ctx context.Context, characterID int64, kind string, now, cachedUntil time.Time) error {
 	n, err := c.queries.TouchSnapshot(ctx, db.TouchSnapshotParams{
-		FetchedAt:   now.Format(time.RFC3339),
-		CachedUntil: sql.NullString{String: cachedUntil.Format(time.RFC3339), Valid: true},
+		FetchedAt:   now,
+		CachedUntil: sql.NullTime{Time: cachedUntil, Valid: true},
 		CharacterID: characterID,
 		Kind:        kind,
 	})
@@ -1908,8 +1904,8 @@ func (c *Client) FetchAndStoreCorpSnapshot(ctx context.Context, ch db.Character,
 		CharacterID: ch.CharacterID,
 		Kind:        kind,
 		Payload:     string(body),
-		FetchedAt:   now.Format(time.RFC3339),
-		CachedUntil: sql.NullString{String: cachedUntil.Format(time.RFC3339), Valid: true},
+		FetchedAt:   now,
+		CachedUntil: sql.NullTime{Time: cachedUntil, Valid: true},
 		Etag:        etag,
 	}); err != nil {
 		return fmt.Errorf("store %s snapshot for character %d: %w", kind, ch.CharacterID, err)
@@ -2194,14 +2190,9 @@ func globalSnapshotPath(kind string) string {
 }
 
 // GlobalSnapshotFresh reports whether the stored global payload
-// is still inside its ESI cache window. A missing/unparseable
-// expiry counts as stale — same rule as SnapshotFresh.
+// is still inside its ESI cache window.
 func GlobalSnapshotFresh(snap db.GlobalSnapshot) bool {
-	if snap.CachedUntil == "" {
-		return false
-	}
-	until, err := time.Parse(time.RFC3339, snap.CachedUntil)
-	return err == nil && time.Now().Before(until)
+	return time.Now().Before(snap.CachedUntil)
 }
 
 // FetchAndStoreGlobalSnapshot fetches the kind's public ESI path
@@ -2232,8 +2223,8 @@ func (c *Client) FetchAndStoreGlobalSnapshot(ctx context.Context, kind string) e
 	cachedUntil := cacheWindowEnd(header).UTC()
 	if notModified {
 		n, err := c.queries.TouchGlobalSnapshot(ctx, db.TouchGlobalSnapshotParams{
-			FetchedAt:   now.Format(time.RFC3339),
-			CachedUntil: cachedUntil.Format(time.RFC3339),
+			FetchedAt:   now,
+			CachedUntil: cachedUntil,
 			Kind:        kind,
 		})
 		if err != nil {
@@ -2248,8 +2239,8 @@ func (c *Client) FetchAndStoreGlobalSnapshot(ctx context.Context, kind string) e
 	if err := c.queries.UpsertGlobalSnapshot(ctx, db.UpsertGlobalSnapshotParams{
 		Kind:        kind,
 		Payload:     string(body),
-		FetchedAt:   now.Format(time.RFC3339),
-		CachedUntil: cachedUntil.Format(time.RFC3339),
+		FetchedAt:   now,
+		CachedUntil: cachedUntil,
 		Etag:        header.Get("ETag"),
 	}); err != nil {
 		return fmt.Errorf("store global snapshot %s: %w", kind, err)

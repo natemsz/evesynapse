@@ -1740,7 +1740,7 @@ func (app *Application) handleFitSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "That fitting couldn't be saved.", http.StatusBadRequest)
 		return
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 
 	id := req.ID
 	isDraft := false
@@ -1796,7 +1796,7 @@ func (app *Application) handleFitSave(w http.ResponseWriter, r *http.Request) {
 		}
 		id = row.ID
 	}
-	writeFitJSON(w, map[string]any{"id": id, "savedAt": now, "isDraft": isDraft})
+	writeFitJSON(w, map[string]any{"id": id, "savedAt": rfc3339(now), "isDraft": isDraft})
 }
 
 // writeFitJSON answers a fitting-editor JSON endpoint.
@@ -2163,7 +2163,7 @@ func (app *Application) handleFitFork(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "That fit couldn't be copied.", http.StatusInternalServerError)
 		return
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 	row, err := app.queries.CreateLocalFitting(ctx, db.CreateLocalFittingParams{
 		UserID: userID, Name: doc.Name, ShipTypeID: doc.ShipTypeID,
 		ItemsJson: string(raw), IsPublic: false, IsDraft: true,
@@ -2326,7 +2326,7 @@ func (app *Application) listLocalFitEntries(ctx context.Context, userID int64) [
 			ShipName:    shipName,
 			Description: stored.Description,
 			Tags:        stored.Tags,
-			Updated:     row.UpdatedAt,
+			Updated:     rfc3339(row.UpdatedAt),
 			IsPublic:    row.IsPublic,
 			IsDraft:     row.IsDraft,
 		})

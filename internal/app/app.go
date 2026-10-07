@@ -81,6 +81,13 @@ var pgUserForeignKeysSchema string
 //go:embed schema_pg/008_snapshot_etags.sql
 var pgSnapshotETagsSchema string
 
+// Steps 009–011: every time kept as TEXT becomes a timestamptz, one
+// group of tables per step (accounts and snapshots; the market; the
+// record and name caches).
+//
+//go:embed schema_pg/009_timestamps_accounts_snapshots.sql
+var pgTimestampsAccountsSchema string
+
 //go:embed static
 var staticFS embed.FS
 

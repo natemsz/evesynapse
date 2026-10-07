@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
@@ -187,7 +188,7 @@ func (app *Application) managedCharacterRow(ctx context.Context, ch db.Character
 		row.StateLabel = "Linked"
 	}
 	if ch.LinkStateAt.Valid {
-		row.Since = ch.LinkStateAt.String
+		row.Since = rfc3339(ch.LinkStateAt.Time)
 	}
 
 	if mapping, err := app.queries.GetCharacterCorporation(ctx, ch.CharacterID); err == nil {
@@ -209,13 +210,17 @@ func (app *Application) managedCharacterRow(ctx context.Context, ch db.Character
 	snaps, err := app.queries.ListSnapshotMetaByCharacter(ctx, ch.CharacterID)
 	if err == nil {
 		row.Snapshots = len(snaps)
+		var newest time.Time
 		for _, snap := range snaps {
 			if esi.CacheWindowOpen(snap.CachedUntil) {
 				row.Fresh++
 			}
-			if snap.FetchedAt > row.Newest || row.Newest == "—" {
-				row.Newest = snap.FetchedAt
+			if snap.FetchedAt.After(newest) {
+				newest = snap.FetchedAt
 			}
+		}
+		if !newest.IsZero() {
+			row.Newest = rfc3339(newest)
 		}
 	}
 	return row

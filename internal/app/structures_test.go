@@ -111,7 +111,7 @@ func scopedCharacter(t *testing.T, q *db.Queries, userID, characterID int64, nam
 	t.Helper()
 	ch := seedCharacter(t, q, userID, characterID, name)
 	ch.Scopes = "esi-universe.read_structures.v1"
-	ch.UpdatedAt = updatedAt
+	ch.UpdatedAt = mustTime(updatedAt)
 	return ch
 }
 
@@ -261,7 +261,7 @@ func TestStructureCorpMateAttemptedFirst(t *testing.T) {
 		characterID, corporationID int64
 	}{{fixtureCharA, 999000}, {fixtureCharB, 777000}} {
 		if err := q.UpsertCharacterCorporation(ctx, db.UpsertCharacterCorporationParams{
-			CharacterID: cc.characterID, CorporationID: cc.corporationID, UpdatedAt: "2026-01-01T00:00:00Z",
+			CharacterID: cc.characterID, CorporationID: cc.corporationID, UpdatedAt: mustTime("2026-01-01T00:00:00Z"),
 		}); err != nil {
 			t.Fatalf("seed character corp: %v", err)
 		}

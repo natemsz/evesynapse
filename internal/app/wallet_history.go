@@ -48,10 +48,8 @@ func (app *Application) sampleWalletHistory(ctx context.Context, ch db.Character
 	}); err == nil {
 		// Already recorded from this exact wallet snapshot:
 		// nothing newer exists to write.
-		if sampledAt, perr := time.Parse(time.RFC3339, existing.SampledAt); perr == nil {
-			if fetchedAt, ferr := time.Parse(time.RFC3339, snap.FetchedAt); ferr == nil && !fetchedAt.After(sampledAt) {
-				return
-			}
+		if !snap.FetchedAt.After(existing.SampledAt) {
+			return
 		}
 	}
 
@@ -68,7 +66,7 @@ func (app *Application) sampleWalletHistory(ctx context.Context, ch db.Character
 		Day:         day,
 		Balance:     balance,
 		NetWorth:    netWorth,
-		SampledAt:   now.UTC().Format(time.RFC3339),
+		SampledAt:   now.UTC(),
 	}); err != nil {
 		logging.Errorf("worker: wallet history sample for character %d: %v", ch.CharacterID, err)
 	}

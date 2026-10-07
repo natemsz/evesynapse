@@ -138,10 +138,8 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 		for _, kind := range syncDisplayKinds() {
 			row := syncSnapshotRow{Kind: kind, State: "Missing", FetchedAt: "—", CachedUntil: "—"}
 			if snap, ok := byKind[kind]; ok {
-				row.FetchedAt = snap.FetchedAt
-				if snap.CachedUntil.Valid && snap.CachedUntil.String != "" {
-					row.CachedUntil = snap.CachedUntil.String
-				}
+				row.FetchedAt = rfc3339(snap.FetchedAt)
+				row.CachedUntil = rfc3339Or(snap.CachedUntil, "—")
 				if esi.SnapshotFresh(snap) {
 					row.State = "Fresh"
 				} else {
@@ -228,8 +226,8 @@ func (app *Application) loadGlobalView(ctx context.Context) []syncSnapshotRow {
 	for _, kind := range globalKindOrder {
 		row := syncSnapshotRow{Kind: kind, State: "Missing", FetchedAt: "—", CachedUntil: "—"}
 		if snap, ok := byKind[kind]; ok {
-			row.FetchedAt = snap.FetchedAt
-			row.CachedUntil = snap.CachedUntil
+			row.FetchedAt = rfc3339(snap.FetchedAt)
+			row.CachedUntil = rfc3339(snap.CachedUntil)
 			if esi.GlobalSnapshotFresh(snap) {
 				row.State = "Fresh"
 			} else {

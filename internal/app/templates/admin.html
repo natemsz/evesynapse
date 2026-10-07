@@ -12,7 +12,7 @@
   <thead><tr><th>ID</th><th>Created</th></tr></thead>
   <tbody>
   {{range .Users}}
-    <tr><td>{{.ID}}</td><td>{{.CreatedAt}}</td></tr>
+    <tr><td>{{.ID}}</td><td>{{rfc3339 .CreatedAt}}</td></tr>
   {{else}}
     <tr><td colspan="2">No users yet.</td></tr>
   {{end}}
@@ -32,9 +32,9 @@
       <td>{{.Name}}</td>
       <td>{{.CharacterID}}</td>
       <td>{{.UserID}}</td>
-      <td>{{if .TokenExpiry.Valid}}{{.TokenExpiry.String}}{{else}}—{{end}}</td>
+      <td>{{if .TokenExpiry.Valid}}{{rfc3339 .TokenExpiry.Time}}{{else}}—{{end}}</td>
       <td>{{.Scopes}}</td>
-      <td>{{if .CachedUntil.Valid}}{{.CachedUntil.String}}{{else}}—{{end}}</td>
+      <td>{{if .CachedUntil.Valid}}{{rfc3339 .CachedUntil.Time}}{{else}}—{{end}}</td>
     </tr>
   {{else}}
     <tr><td colspan="6">No characters linked yet.</td></tr>

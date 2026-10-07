@@ -123,7 +123,7 @@ func (app *Application) fetchPlanetsKind(ctx context.Context, ch db.Character, a
 	if !characterHasScope(ch, planetScope) {
 		if state, err := app.queries.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: ch.CharacterID, Kind: esi.SnapPlanets}); err == nil &&
 			state.State == fetchStateError && strings.HasPrefix(state.Detail, piScopeDetail) {
-			if attempted, perr := time.Parse(time.RFC3339, state.AttemptedAt); perr == nil && time.Since(attempted) < roleMissingBackoff {
+			if time.Since(state.AttemptedAt) < roleMissingBackoff {
 				return corpFetchSkipped
 			}
 		}
@@ -190,7 +190,7 @@ func (app *Application) warmPlanetLayouts(ctx context.Context, ch db.Character, 
 		if !hasScope {
 			if state, err := app.queries.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: ch.CharacterID, Kind: kind}); err == nil &&
 				state.State == fetchStateError && strings.HasPrefix(state.Detail, piScopeDetail) {
-				if attempted, perr := time.Parse(time.RFC3339, state.AttemptedAt); perr == nil && time.Since(attempted) < roleMissingBackoff {
+				if time.Since(state.AttemptedAt) < roleMissingBackoff {
 					continue
 				}
 			}

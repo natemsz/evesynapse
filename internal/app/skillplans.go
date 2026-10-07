@@ -511,7 +511,7 @@ func (app *Application) handleSkillPlanCreate(w http.ResponseWriter, r *http.Req
 		UserID:      userID,
 		CharacterID: characterID,
 		Name:        name,
-		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+		CreatedAt:   time.Now().UTC(),
 	})
 	if err != nil {
 		logging.Errorf("skill plans: create for character %d: %v", characterID, err)
@@ -719,7 +719,7 @@ func (app *Application) createPlanWithItems(ctx context.Context, userID, charact
 		UserID:      userID,
 		CharacterID: characterID,
 		Name:        name,
-		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+		CreatedAt:   time.Now().UTC(),
 	})
 	if err != nil {
 		return 0, err

@@ -364,16 +364,12 @@ func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		for _, snap := range snaps {
-			until := "—"
-			if snap.CachedUntil.Valid && snap.CachedUntil.String != "" {
-				until = snap.CachedUntil.String
-			}
 			data.Snapshots = append(data.Snapshots, adminSnapshotRow{
 				CharacterID:   ch.CharacterID,
 				CharacterName: ch.Name,
 				Kind:          snap.Kind,
-				FetchedAt:     snap.FetchedAt,
-				CachedUntil:   until,
+				FetchedAt:     rfc3339(snap.FetchedAt),
+				CachedUntil:   rfc3339Or(snap.CachedUntil, "—"),
 			})
 		}
 	}

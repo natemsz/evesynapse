@@ -7,7 +7,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"io"
 	"net/http"
 	"strings"
@@ -116,8 +115,8 @@ func TestSnapshotRefreshIsConditional(t *testing.T) {
 	if first.Payload != `{"skills":[],"total_sp":100}` || first.Etag != `"v1"` {
 		t.Fatalf("stored payload %q with ETag %q", first.Payload, first.Etag)
 	}
-	if first.CachedUntil.String != soon.UTC().Format(time.RFC3339) {
-		t.Fatalf("cached_until %q, want the response's Expires %q", first.CachedUntil.String, soon.UTC().Format(time.RFC3339))
+	if !first.CachedUntil.Valid || !first.CachedUntil.Time.Equal(soon) {
+		t.Fatalf("cached_until %v, want the response's Expires %v", first.CachedUntil.Time, soon)
 	}
 
 	// Unchanged at ESI: the stored ETag is offered, ESI answers 304,
@@ -133,8 +132,8 @@ func TestSnapshotRefreshIsConditional(t *testing.T) {
 	if kept.Payload != first.Payload || kept.Etag != first.Etag {
 		t.Fatalf("a 304 changed the stored copy: payload %q, ETag %q", kept.Payload, kept.Etag)
 	}
-	if kept.CachedUntil.String != later.UTC().Format(time.RFC3339) {
-		t.Fatalf("after a 304 cached_until is %q, want it renewed to %q", kept.CachedUntil.String, later.UTC().Format(time.RFC3339))
+	if !kept.CachedUntil.Valid || !kept.CachedUntil.Time.Equal(later) {
+		t.Fatalf("after a 304 cached_until is %v, want it renewed to %v", kept.CachedUntil.Time, later)
 	}
 	if !esi.SnapshotFresh(kept) {
 		t.Fatal("a snapshot ESI just confirmed does not read as fresh")
@@ -191,8 +190,8 @@ func TestGetCachedUsesTheStoredCopyOnNotModified(t *testing.T) {
 		CharacterID: fixtureCharA,
 		Kind:        esi.SnapSkills,
 		Payload:     `this is not json`,
-		FetchedAt:   "2026-01-01T00:00:00Z",
-		CachedUntil: sql.NullString{String: "2999-01-01T00:00:00Z", Valid: true},
+		FetchedAt:   mustTime("2026-01-01T00:00:00Z"),
+		CachedUntil: mustNullTime("2999-01-01T00:00:00Z"),
 		Etag:        `"v1"`,
 	}); err != nil {
 		t.Fatalf("store an undecodable copy: %v", err)
@@ -266,8 +265,8 @@ func TestGlobalSnapshotRefreshIsConditional(t *testing.T) {
 	if snap.Payload != `[{"faction_id":500001,"pilots":10}]` || snap.Etag != `"fw-1"` {
 		t.Fatalf("a 304 changed the stored copy: %q with ETag %q", snap.Payload, snap.Etag)
 	}
-	if snap.CachedUntil != later.UTC().Format(time.RFC3339) {
-		t.Fatalf("after a 304 cached_until is %q, want %q", snap.CachedUntil, later.UTC().Format(time.RFC3339))
+	if !snap.CachedUntil.Equal(later) {
+		t.Fatalf("after a 304 cached_until is %v, want %v", snap.CachedUntil, later)
 	}
 }
 

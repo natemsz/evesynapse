@@ -125,7 +125,7 @@ func (app *Application) fetchCorpKind(ctx context.Context, ch db.Character, corp
 	// retrying every minute; the pages keep showing the role
 	// state from the record in the meantime.
 	if state, err := app.queries.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: ch.CharacterID, Kind: kind}); err == nil && state.State == fetchStateRoleMissing {
-		if attempted, perr := time.Parse(time.RFC3339, state.AttemptedAt); perr == nil && time.Since(attempted) < roleMissingBackoff {
+		if time.Since(state.AttemptedAt) < roleMissingBackoff {
 			return corpFetchSkipped
 		}
 	}
@@ -161,7 +161,7 @@ func (app *Application) recordCorpFetchState(ctx context.Context, characterID in
 		Kind:        kind,
 		State:       state,
 		Detail:      detail,
-		AttemptedAt: time.Now().UTC().Format(time.RFC3339),
+		AttemptedAt: time.Now().UTC(),
 	}); err != nil {
 		logging.Errorf("worker: record fetch state %s/%s for character %d: %v", kind, state, characterID, err)
 	}
@@ -175,7 +175,7 @@ func (app *Application) recordCorpFetchState(ctx context.Context, characterID in
 func (app *Application) corpIDForCharacter(ctx context.Context, ch db.Character) (int64, bool) {
 	row, err := app.queries.GetCharacterCorporation(ctx, ch.CharacterID)
 	if err == nil {
-		if updated, perr := time.Parse(time.RFC3339, row.UpdatedAt); perr == nil && time.Since(updated) < corpMappingMaxAge {
+		if time.Since(row.UpdatedAt) < corpMappingMaxAge {
 			return row.CorporationID, true
 		}
 		if newID, ok := app.refreshCorpMapping(ctx, ch); ok {
@@ -206,7 +206,7 @@ func (app *Application) refreshCorpMapping(ctx context.Context, ch db.Character)
 	if err := app.queries.UpsertCharacterCorporation(ctx, db.UpsertCharacterCorporationParams{
 		CharacterID:   ch.CharacterID,
 		CorporationID: pub.CorporationID,
-		UpdatedAt:     time.Now().UTC().Format(time.RFC3339),
+		UpdatedAt:     time.Now().UTC(),
 	}); err != nil {
 		logging.Errorf("worker: store corporation mapping for character %d: %v", ch.CharacterID, err)
 	}
@@ -257,7 +257,7 @@ func (app *Application) warmCorpAssetNames(ctx context.Context, ch db.Character,
 	// the failure log to one line per backoff window.
 	if state, err := app.queries.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: ch.CharacterID, Kind: corpAssetNamesKind}); err == nil &&
 		(state.State == fetchStateRoleMissing || state.State == fetchStateError) {
-		if attempted, perr := time.Parse(time.RFC3339, state.AttemptedAt); perr == nil && time.Since(attempted) < roleMissingBackoff {
+		if time.Since(state.AttemptedAt) < roleMissingBackoff {
 			return
 		}
 	}

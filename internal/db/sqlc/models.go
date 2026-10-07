@@ -18,35 +18,35 @@ type AllianceRecord struct {
 }
 
 type Character struct {
-	CharacterID  int64          `json:"character_id"`
-	UserID       int64          `json:"user_id"`
-	Name         string         `json:"name"`
-	AccessToken  string         `json:"access_token"`
-	RefreshToken string         `json:"refresh_token"`
-	TokenExpiry  sql.NullString `json:"token_expiry"`
-	Scopes       string         `json:"scopes"`
-	CachedUntil  sql.NullString `json:"cached_until"`
-	CreatedAt    string         `json:"created_at"`
-	UpdatedAt    string         `json:"updated_at"`
-	OwnerHash    string         `json:"owner_hash"`
-	Tags         string         `json:"tags"`
-	LinkState    string         `json:"link_state"`
-	LinkStateAt  sql.NullString `json:"link_state_at"`
+	CharacterID  int64        `json:"character_id"`
+	UserID       int64        `json:"user_id"`
+	Name         string       `json:"name"`
+	AccessToken  string       `json:"access_token"`
+	RefreshToken string       `json:"refresh_token"`
+	TokenExpiry  sql.NullTime `json:"token_expiry"`
+	Scopes       string       `json:"scopes"`
+	CachedUntil  sql.NullTime `json:"cached_until"`
+	CreatedAt    time.Time    `json:"created_at"`
+	UpdatedAt    time.Time    `json:"updated_at"`
+	OwnerHash    string       `json:"owner_hash"`
+	Tags         string       `json:"tags"`
+	LinkState    string       `json:"link_state"`
+	LinkStateAt  sql.NullTime `json:"link_state_at"`
 }
 
 type CharacterCorporation struct {
-	CharacterID   int64  `json:"character_id"`
-	CorporationID int64  `json:"corporation_id"`
-	UpdatedAt     string `json:"updated_at"`
+	CharacterID   int64     `json:"character_id"`
+	CorporationID int64     `json:"corporation_id"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 type CharacterSnapshot struct {
-	CharacterID int64          `json:"character_id"`
-	Kind        string         `json:"kind"`
-	Payload     string         `json:"payload"`
-	FetchedAt   string         `json:"fetched_at"`
-	CachedUntil sql.NullString `json:"cached_until"`
-	Etag        string         `json:"etag"`
+	CharacterID int64        `json:"character_id"`
+	Kind        string       `json:"kind"`
+	Payload     string       `json:"payload"`
+	FetchedAt   time.Time    `json:"fetched_at"`
+	CachedUntil sql.NullTime `json:"cached_until"`
+	Etag        string       `json:"etag"`
 }
 
 type CloneName struct {
@@ -58,10 +58,10 @@ type CloneName struct {
 }
 
 type ContractDetail struct {
-	ContractID  int64  `json:"contract_id"`
-	CharacterID int64  `json:"character_id"`
-	Payload     string `json:"payload"`
-	FetchedAt   string `json:"fetched_at"`
+	ContractID  int64     `json:"contract_id"`
+	CharacterID int64     `json:"character_id"`
+	Payload     string    `json:"payload"`
+	FetchedAt   time.Time `json:"fetched_at"`
 }
 
 type CorporationRecord struct {
@@ -73,11 +73,11 @@ type CorporationRecord struct {
 }
 
 type GlobalSnapshot struct {
-	Kind        string `json:"kind"`
-	Payload     string `json:"payload"`
-	FetchedAt   string `json:"fetched_at"`
-	CachedUntil string `json:"cached_until"`
-	Etag        string `json:"etag"`
+	Kind        string    `json:"kind"`
+	Payload     string    `json:"payload"`
+	FetchedAt   time.Time `json:"fetched_at"`
+	CachedUntil time.Time `json:"cached_until"`
+	Etag        string    `json:"etag"`
 }
 
 type GuidePrice struct {
@@ -110,23 +110,23 @@ type ItemName struct {
 }
 
 type KillmailDetail struct {
-	KillmailID  int64  `json:"killmail_id"`
-	CharacterID int64  `json:"character_id"`
-	Hash        string `json:"hash"`
-	Payload     string `json:"payload"`
-	FetchedAt   string `json:"fetched_at"`
+	KillmailID  int64     `json:"killmail_id"`
+	CharacterID int64     `json:"character_id"`
+	Hash        string    `json:"hash"`
+	Payload     string    `json:"payload"`
+	FetchedAt   time.Time `json:"fetched_at"`
 }
 
 type LocalFitting struct {
-	ID         int64  `json:"id"`
-	UserID     int64  `json:"user_id"`
-	Name       string `json:"name"`
-	ShipTypeID int64  `json:"ship_type_id"`
-	ItemsJson  string `json:"items_json"`
-	CreatedAt  string `json:"created_at"`
-	UpdatedAt  string `json:"updated_at"`
-	IsPublic   bool   `json:"is_public"`
-	IsDraft    bool   `json:"is_draft"`
+	ID         int64     `json:"id"`
+	UserID     int64     `json:"user_id"`
+	Name       string    `json:"name"`
+	ShipTypeID int64     `json:"ship_type_id"`
+	ItemsJson  string    `json:"items_json"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	IsPublic   bool      `json:"is_public"`
+	IsDraft    bool      `json:"is_draft"`
 }
 
 type MarketFetchState struct {
@@ -446,11 +446,11 @@ type Session struct {
 }
 
 type SkillPlan struct {
-	ID          int64  `json:"id"`
-	UserID      int64  `json:"user_id"`
-	CharacterID int64  `json:"character_id"`
-	Name        string `json:"name"`
-	CreatedAt   string `json:"created_at"`
+	ID          int64     `json:"id"`
+	UserID      int64     `json:"user_id"`
+	CharacterID int64     `json:"character_id"`
+	Name        string    `json:"name"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type SkillPlanItem struct {
@@ -461,11 +461,11 @@ type SkillPlanItem struct {
 }
 
 type SnapshotFetchState struct {
-	CharacterID int64  `json:"character_id"`
-	Kind        string `json:"kind"`
-	State       string `json:"state"`
-	Detail      string `json:"detail"`
-	AttemptedAt string `json:"attempted_at"`
+	CharacterID int64     `json:"character_id"`
+	Kind        string    `json:"kind"`
+	State       string    `json:"state"`
+	Detail      string    `json:"detail"`
+	AttemptedAt time.Time `json:"attempted_at"`
 }
 
 type StructureContext struct {
@@ -496,10 +496,10 @@ type TypeName struct {
 }
 
 type User struct {
-	ID             int64  `json:"id"`
-	CreatedAt      string `json:"created_at"`
-	HomeLayout     string `json:"home_layout"`
-	LastBriefingAt string `json:"last_briefing_at"`
+	ID             int64        `json:"id"`
+	CreatedAt      time.Time    `json:"created_at"`
+	HomeLayout     string       `json:"home_layout"`
+	LastBriefingAt sql.NullTime `json:"last_briefing_at"`
 }
 
 type WalletHistory struct {
@@ -508,18 +508,18 @@ type WalletHistory struct {
 	Day         string          `json:"day"`
 	Balance     float64         `json:"balance"`
 	NetWorth    sql.NullFloat64 `json:"net_worth"`
-	SampledAt   string          `json:"sampled_at"`
+	SampledAt   time.Time       `json:"sampled_at"`
 }
 
 type WarDetail struct {
-	WarID     int64  `json:"war_id"`
-	Payload   string `json:"payload"`
-	FetchedAt string `json:"fetched_at"`
+	WarID     int64     `json:"war_id"`
+	Payload   string    `json:"payload"`
+	FetchedAt time.Time `json:"fetched_at"`
 }
 
 type WidgetConfig struct {
-	UserID    int64  `json:"user_id"`
-	WidgetID  string `json:"widget_id"`
-	Config    string `json:"config"`
-	UpdatedAt string `json:"updated_at"`
+	UserID    int64     `json:"user_id"`
+	WidgetID  string    `json:"widget_id"`
+	Config    string    `json:"config"`
+	UpdatedAt time.Time `json:"updated_at"`
 }

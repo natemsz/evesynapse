@@ -24,15 +24,15 @@ func TestSnapshotMetaMatchesTheFullRows(t *testing.T) {
 
 	// Fresh, stale, and one with no expiry recorded at all.
 	seedSnapshot(t, q, fixtureCharA, esi.SnapSkills, `{"skills":[]}`)
-	for kind, until := range map[string]sql.NullString{
-		esi.SnapWallet: {String: "2000-01-01T00:00:00Z", Valid: true},
+	for kind, until := range map[string]sql.NullTime{
+		esi.SnapWallet: mustNullTime("2000-01-01T00:00:00Z"),
 		esi.SnapAssets: {},
 	} {
 		if err := q.UpsertSnapshot(ctx, db.UpsertSnapshotParams{
 			CharacterID: fixtureCharA,
 			Kind:        kind,
 			Payload:     `[]`,
-			FetchedAt:   "2026-01-01T00:00:00Z",
+			FetchedAt:   mustTime("2026-01-01T00:00:00Z"),
 			CachedUntil: until,
 		}); err != nil {
 			t.Fatalf("seed %s: %v", kind, err)

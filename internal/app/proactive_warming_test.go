@@ -118,7 +118,7 @@ func TestHistoryCandidatesCoverageTiers(t *testing.T) {
 	}
 	itemsJSON, _ := json.Marshal([]esi.ContractItem{{RecordID: 1, TypeID: 1009}})
 	if err := q.UpsertContractDetail(ctx, db.UpsertContractDetailParams{
-		ContractID: 777, CharacterID: fixtureCharA, Payload: string(itemsJSON), FetchedAt: "2026-01-01T00:00:00Z",
+		ContractID: 777, CharacterID: fixtureCharA, Payload: string(itemsJSON), FetchedAt: mustTime("2026-01-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed contract detail: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestLiquidCoreKillmailSupplement(t *testing.T) {
 	payload, _ := json.Marshal(km)
 	if err := q.UpsertKillmailDetail(ctx, db.UpsertKillmailDetailParams{
 		KillmailID: 42, CharacterID: fixtureCharA, Hash: "h", Payload: string(payload),
-		FetchedAt: "2026-10-02T00:00:00Z",
+		FetchedAt: mustTime("2026-10-02T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed killmail detail: %v", err)
 	}
@@ -317,7 +317,7 @@ func TestPilotOrbitDerivationAndPriority(t *testing.T) {
 	payload, _ := json.Marshal(km)
 	if err := q.UpsertKillmailDetail(ctx, db.UpsertKillmailDetailParams{
 		KillmailID: 7, CharacterID: fixtureCharA, Hash: "h", Payload: string(payload),
-		FetchedAt: "2026-10-02T00:00:00Z",
+		FetchedAt: mustTime("2026-10-02T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed killmail detail: %v", err)
 	}

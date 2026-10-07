@@ -95,6 +95,10 @@ func MustContain(t *testing.T, path, body string, wants ...string) {
 // carry it (UTC, RFC3339).
 func RFC(t time.Time) string { return t.UTC().Format(time.RFC3339) }
 
+// farFuture is when the fixture tokens and snapshots run out: never,
+// as far as a test is concerned.
+var farFuture = time.Date(2999, 1, 1, 0, 0, 0, 0, time.UTC)
+
 // SeedCharacter stores one linked character row.
 func SeedCharacter(t *testing.T, q *db.Queries, userID, characterID int64, name string) db.Character {
 	t.Helper()
@@ -104,7 +108,7 @@ func SeedCharacter(t *testing.T, q *db.Queries, userID, characterID int64, name 
 		Name:         name,
 		AccessToken:  "fixture",
 		RefreshToken: "fixture",
-		TokenExpiry:  sql.NullString{String: "2999-01-01T00:00:00Z", Valid: true},
+		TokenExpiry:  sql.NullTime{Time: farFuture, Valid: true},
 		LinkState:    "ok",
 	})
 	if err != nil {
@@ -131,8 +135,8 @@ func SeedSnapshot(t *testing.T, q *db.Queries, characterID int64, kind string, p
 		CharacterID: characterID,
 		Kind:        kind,
 		Payload:     raw,
-		FetchedAt:   "2026-01-01T00:00:00Z",
-		CachedUntil: sql.NullString{String: "2999-01-01T00:00:00Z", Valid: true},
+		FetchedAt:   time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		CachedUntil: sql.NullTime{Time: farFuture, Valid: true},
 	}); err != nil {
 		t.Fatalf("seed snapshot %s: %v", kind, err)
 	}

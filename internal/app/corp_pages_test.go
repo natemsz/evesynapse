@@ -118,8 +118,8 @@ func seedSnapshot(t *testing.T, q *db.Queries, characterID int64, kind string, p
 		CharacterID: characterID,
 		Kind:        kind,
 		Payload:     raw,
-		FetchedAt:   "2026-01-01T00:00:00Z",
-		CachedUntil: sql.NullString{String: "2999-01-01T00:00:00Z", Valid: true},
+		FetchedAt:   mustTime("2026-01-01T00:00:00Z"),
+		CachedUntil: mustNullTime("2999-01-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed snapshot %s: %v", kind, err)
 	}
@@ -133,7 +133,7 @@ func seedCharacter(t *testing.T, q *db.Queries, userID, characterID int64, name 
 		Name:         name,
 		AccessToken:  "fixture",
 		RefreshToken: "fixture",
-		TokenExpiry:  sql.NullString{String: "2999-01-01T00:00:00Z", Valid: true},
+		TokenExpiry:  mustNullTime("2999-01-01T00:00:00Z"),
 		LinkState:    "ok",
 	})
 	if err != nil {
@@ -214,7 +214,7 @@ func TestCorpPagesRenderFromSnapshots(t *testing.T) {
 		if err := q.UpsertCharacterCorporation(ctx, db.UpsertCharacterCorporationParams{
 			CharacterID:   m.charID,
 			CorporationID: m.corpID,
-			UpdatedAt:     now.Format(time.RFC3339),
+			UpdatedAt:     now,
 		}); err != nil {
 			t.Fatalf("seed mapping: %v", err)
 		}
@@ -287,7 +287,7 @@ func TestCorpPagesRenderFromSnapshots(t *testing.T) {
 			CharacterID: fixtureCharA,
 			Hash:        "fixture",
 			Payload:     string(raw),
-			FetchedAt:   "2026-01-01T00:00:00Z",
+			FetchedAt:   mustTime("2026-01-01T00:00:00Z"),
 		}); err != nil {
 			t.Fatalf("seed killmail detail %d: %v", km.KillmailID, err)
 		}
@@ -317,7 +317,7 @@ func TestCorpPagesRenderFromSnapshots(t *testing.T) {
 			Kind:        kind,
 			State:       fetchStateRoleMissing,
 			Detail:      detail,
-			AttemptedAt: now.Format(time.RFC3339),
+			AttemptedAt: now,
 		}); err != nil {
 			t.Fatalf("seed fetch state %s: %v", kind, err)
 		}

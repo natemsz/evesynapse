@@ -1,6 +1,6 @@
 -- name: CreateUser :one
 INSERT INTO users (created_at)
-VALUES (to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS'))
+VALUES (now())
 RETURNING *;
 -- name: GetUser :one
 SELECT * FROM users
@@ -15,7 +15,7 @@ INSERT INTO characters (
     $1, $2, $3,
     $4, $5, $6,
     $7, $8, $9, $10, $11,
-    to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+    now()
 )
 ON CONFLICT (character_id) DO UPDATE SET
     user_id       = excluded.user_id,
@@ -42,11 +42,11 @@ DELETE FROM characters
 WHERE character_id = $1 AND user_id = $2;
 -- name: SetCharacterTags :exec
 UPDATE characters
-SET tags = $1, updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+SET tags = $1, updated_at = now()
 WHERE character_id = $2 AND user_id = $3;
 -- name: SetCharacterLinkState :exec
 UPDATE characters
-SET link_state = $1, link_state_at = $2, updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+SET link_state = $1, link_state_at = $2, updated_at = now()
 WHERE character_id = $3;
 -- name: ListUsers :many
 SELECT * FROM users
@@ -56,7 +56,7 @@ SELECT * FROM characters
 ORDER BY user_id, name;
 -- name: UpdateCharacterTokens :exec
 UPDATE characters
-SET access_token = $1, refresh_token = $2, token_expiry = $3, updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+SET access_token = $1, refresh_token = $2, token_expiry = $3, updated_at = now()
 WHERE character_id = $4;
 -- name: GetSnapshot :one
 SELECT * FROM character_snapshots

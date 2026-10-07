@@ -579,19 +579,35 @@ func (app *Application) requireAuth(next http.Handler) http.Handler {
 	})
 }
 
-// isAdmin reports whether the request's session belongs to an admin
-// character (Issues 23/24): authenticated AND the EVE SSO character
-// ID is in EVE_ADMIN_CHARACTER_IDS.
+// isAdmin reports whether the request's session belongs to an
+// administrator's account (Issues 23/24): authenticated, and one of
+// the characters linked to the account is listed in
+// EVE_ADMIN_CHARACTER_IDS. It is the account that is admin, not
+// whichever of its characters is selected at the moment: choosing
+// an alt in the header switcher must not make the Admin and Sync
+// pages disappear.
 func (app *Application) isAdmin(ctx context.Context) bool {
-	if !app.sessions.GetBool(ctx, sessionAuthenticated) {
+	if len(app.cfg.adminCharIDs) == 0 || !app.sessions.GetBool(ctx, sessionAuthenticated) {
 		return false
 	}
-	cid := int64(app.sessions.GetInt(ctx, sessionCharacterID))
-	return cid != 0 && app.cfg.IsAdminCharacter(cid)
+	return app.adminAmong(app.sessionCharacters(ctx))
 }
 
-// requireAdmin gates debugging/dev pages (Admin, Sync) on admin
-// character identity, not just login. Non-admins get 403.
+// adminAmong reports whether any of an account's characters is an
+// administrator. A character flagged owner_changed does not count:
+// it changed EVE accounts and nobody has confirmed control of it
+// since.
+func (app *Application) adminAmong(characters []db.Character) bool {
+	for _, ch := range characters {
+		if ch.LinkState != linkStateOwnerChanged && app.cfg.IsAdminCharacter(ch.CharacterID) {
+			return true
+		}
+	}
+	return false
+}
+
+// requireAdmin gates debugging/dev pages (Admin, Sync) on an admin
+// account, not just login. Non-admins get 403.
 func (app *Application) requireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !app.isAdmin(r.Context()) {

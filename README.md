@@ -186,6 +186,7 @@ gaps; real environment variables win over the file):
 | `ADDR` | no | `:8080` | HTTP listen address |
 | `SESSION_KEY` | no | — | Reserved for cookie signing hardening |
 | `TOKEN_ENCRYPTION_KEY` | no | — | Encrypts the EVE tokens stored in the database (see "Token encryption") |
+| `EVE_ADMIN_CHARACTER_IDS` | no | — | Comma-separated EVE character IDs whose accounts may open the Admin and Sync pages. Any character linked to an account makes that whole account an admin's. Empty = nobody |
 | `EVESYNAPSE_UPDATE_REPO` | no | `natemsz/evesynapse` | GitHub repo (owner/repo) the updater checks |
 | `EVE_SDE_BASE_URL` | no | Fuzzwork's dump | Base URL of the SDE CSV dump the importer downloads |
 | `DEV_LOGIN` | no | — | Dev build only: `1` registers the `/dev-login` route |

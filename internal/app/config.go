@@ -19,7 +19,6 @@ type Config struct {
 	eveClientID     string         // EVE SSO application client ID
 	eveClientSecret string         // EVE SSO application client secret
 	eveCallbackURL  string         // OAuth2 redirect URI registered with CCP
-	sessionKey      string         // reserved for cookie signing hardening
 	devLogin        bool           // DEV_LOGIN=1: register the /dev-login route
 	sdeBaseURL      string         // EVE SDE CSV dump base URL (Fuzzwork by default)
 	adminCharIDs    map[int64]bool // EVE_ADMIN_CHARACTER_IDS (comma-separated)
@@ -120,7 +119,6 @@ func LoadConfig() Config {
 		eveClientID:     os.Getenv("EVE_CLIENT_ID"),
 		eveClientSecret: os.Getenv("EVE_CLIENT_SECRET"),
 		eveCallbackURL:  getenvDefault("EVE_CALLBACK_URL", "http://localhost:8080/auth/callback"),
-		sessionKey:      os.Getenv("SESSION_KEY"),
 		devLogin:        os.Getenv("DEV_LOGIN") == "1",
 		sdeBaseURL:      getenvDefault("EVE_SDE_BASE_URL", defaultSDEBaseURL),
 		adminCharIDs:    parseAdminCharIDs(os.Getenv("EVE_ADMIN_CHARACTER_IDS")),

@@ -16,9 +16,6 @@ This project is dedicated to EVE Online, its pilots and its developers — the g
 - **PostgreSQL 16** — the app's database, reached through
   **pgx/v5** (sqlc generates `database/sql` code over the pgx
   stdlib driver; a pgxpool backs the session store)
-- **modernc.org/sqlite** — pure-Go SQLite driver (no cgo), kept
-  only so the one-time `-migrate-pg` move can read a SQLite-era
-  database file
 - **sqlc** — type-safe Go generated from hand-written SQL
 - **golang.org/x/oauth2** — EVE SSO authorization-code flow
 - **github.com/golang-jwt/jwt/v5** — SSO access-token verification
@@ -36,25 +33,26 @@ This project is dedicated to EVE Online, its pilots and its developers — the g
   this binary.
 - `internal/app/` — the application: config + `.env` loader
   (`config.go`), EVE SSO auth/sessions/JWT verification (`auth.go`),
-  token refresh (`refresh.go`), the application struct, router and DB
-  bootstrap (`app.go`, `db.go`), page handlers and view models
+  account linking and the sign-up policy (`links.go`, `signup.go`),
+  token refresh and encryption at rest (`refresh.go`,
+  `tokencrypt.go`), cookie, header and cross-site protections
+  (`httpsec.go`), the application struct, router and schema
+  migrations (`app.go`, `db.go`), page handlers and view models
   (`pages.go`, `assets.go`, `skills.go`, `corporation.go`,
   `market.go`, `sync.go`, `character.go`, `fittings.go`,
   `killmails.go`, `intel.go`), the background worker (`worker.go`,
   plus `intel_worker.go` for the public-data pass), the
-  SDE static-data importer (`sde.go`), and the self-maintenance
-  modes (`maintenance.go`: `-version`, `-update`, `-refresh`;
-  `migratepg.go`: the one-time `-migrate-pg` cutover)
+  SDE static-data importer (`sde.go`), static assets and their
+  caching (`static.go`), the health check (`health.go`), and the
+  self-maintenance modes (`maintenance.go`: `-version`, `-update`,
+  `-refresh`)
 - `internal/app/templates/` — embedded html/templates (`base.html`
   layout)
 - `internal/app/static/` — embedded assets: the 2013 wallpaper
   (`bg.jpg`) and the dependency-free stylesheet (`style.css`), served
   at `/static/`
-- `internal/app/schema_pg/` — the Postgres schema (sqlc input;
-  `001_baseline.sql`), embedded for DB bootstrap
-- `internal/app/schema/` — the original SQLite migrations
-  (001–035), kept for the rollback binary and the `-migrate-pg`
-  source reader
+- `internal/app/schema_pg/` — the Postgres schema as numbered steps
+  (sqlc input), embedded and applied at startup
 - `internal/pgtest/` — test-only embedded-Postgres provisioning
   (a fresh database per test; `go test ./...` needs no external
   database)
@@ -140,7 +138,7 @@ environment win). Then open <http://localhost:8080>:
 - `/auth/eve` — starts EVE SSO login (also "Link another character")
 - `/auth/callback` — OAuth2 callback (see SSO flow below)
 - `/auth/logout` — destroys the session (POST; the sidebar's Sign out button)
-- `/admin/` — users, linked characters, worker status (requires login)
+- `/admin/` — users, linked characters, worker status (requires an admin account; see `EVE_ADMIN_CHARACTER_IDS`)
 - `/assets/` — asset browser: every stack grouped by location for the
   signed-in user's characters (requires login; `esi-assets.read_assets.v1`)
 - `/market/` — market browser: item search (local name cache + exact
@@ -155,7 +153,7 @@ environment win). Then open <http://localhost:8080>:
   freshness and type-name coverage, with re-warm buttons, plus the
   SDE static-data block (row counts, import state, update check);
   the page auto-refreshes so an import can be watched as it lands
-  (requires login)
+  (requires an admin account)
 - `/intel/wars/` — current wars from the public war list and
   worker-warmed war details: aggressor/defender names, state,
   kill records, open-for-allies/mutual badges, and a flag on wars
@@ -185,7 +183,6 @@ gaps; real environment variables win over the file):
 | `EVE_CALLBACK_URL` | yes | `http://localhost:8080/auth/callback` | OAuth2 redirect URI; must match the callback registered at developers.eveonline.com character-for-character |
 | `DATABASE_URL` | yes | `postgres://evesynapse@localhost:5432/evesynapse?sslmode=disable` | PostgreSQL connection URL |
 | `ADDR` | no | `:8080` | HTTP listen address |
-| `SESSION_KEY` | no | — | Reserved for cookie signing hardening |
 | `TOKEN_ENCRYPTION_KEY` | no | — | Encrypts the EVE tokens stored in the database (see "Token encryption") |
 | `EVE_ADMIN_CHARACTER_IDS` | no | — | Comma-separated EVE character IDs whose accounts may open the Admin and Sync pages. Any character linked to an account makes that whole account an admin's. Empty = nobody |
 | `EVE_ALLOWED_CHARACTER_IDS`, `EVE_ALLOWED_CORPORATION_IDS`, `EVE_ALLOWED_ALLIANCE_IDS` | no | — | Limit who may create an account (see "Who can sign up"). All empty = anyone who can sign in with EVE |
@@ -193,7 +190,6 @@ gaps; real environment variables win over the file):
 | `EVE_SDE_BASE_URL` | no | Fuzzwork's dump | Base URL of the SDE CSV dump the importer downloads |
 | `ESI_CONTACT` | no | — | How CCP can reach whoever runs this instance (an email address, a Discord handle, a character name). Sent in the User-Agent of every ESI request, as CCP asks of third-party apps |
 | `DEV_LOGIN` | no | — | Dev build only: `1` registers the `/dev-login` route |
-| `DB_PATH` | no | `evesynapse.db` | Legacy SQLite file; read only by the one-time `-migrate-pg` move (see "Upgrading from a SQLite-era install") |
 
 ## Install
 
@@ -328,6 +324,8 @@ make assets        # decode the fonts and wallpaper
 make build         # bin/evesynapse for this machine
 make build-arm64   # bin/evesynapse-arm64
 make build-amd64   # bin/evesynapse-amd64
+make test          # the test suite (starts its own embedded PostgreSQL)
+make check         # what CI checks: gofmt, go vet, tests under the race detector
 ```
 
 Install your build with:
@@ -369,6 +367,19 @@ sudo /opt/evesynapse/evesynapse -update <url> <sha256>
 sudo /opt/evesynapse/evesynapse -update <file> [sha256]
 ```
 
+### Development builds
+
+Builds from the `evesynapse-dev` branch carry a version ending in
+`-dev` and are published as prereleases, which a plain `-update`
+never installs. To follow them on a test box:
+
+```sh
+sudo /opt/evesynapse/evesynapse -update -dev
+```
+
+A plain `-update` from a development build goes back to the
+latest release once that release's number catches up.
+
 ### Updating from your own fork
 
 By default the updater checks the mainline repo's releases. To
@@ -394,6 +405,7 @@ evesynapse -version                 print the version and exit
 evesynapse -update                  update to the latest release (right build for this machine)
 evesynapse -update -arm64           update, fetching the ARM build
 evesynapse -update -amd64           update, fetching the Intel/AMD build (-x86, -x64 also work)
+evesynapse -update -dev             update to the newest development build
 evesynapse -update <url> <sha256>   install a specific build from an address (checksum required)
 evesynapse -update <file> [sha256]  install a build from a local file
 evesynapse -refresh                 mark all cached data stale (run while the app is stopped)
@@ -406,17 +418,23 @@ evesynapse -h                       show this list
    callback URL from `EVE_CALLBACK_URL`, and put the issued client ID
    and secret in `.env`.
 2. **Login**: `GET /auth/eve` stores a random `state` in the session
-   and redirects to `login.eveonline.com` requesting the full
-   read-only ESI scope set (63 scopes from the OAuth2 catalog in
-   CCP's ESI OpenAPI document; every mutating scope — names
-   containing `write_`, `send_`, `respond_`, `organize_`, `manage_`
-   or `open_window` — is excluded). The one-time subset the app
-   originally requested (`esi-skills.read_skills.v1`,
-   `esi-skills.read_skillqueue.v1`,
-   `esi-wallet.read_character_wallet.v1`,
-   `esi-assets.read_assets.v1`) is contained in that set; characters
-   linked before the expansion keep their granted scopes until
-   re-linked.
+   and redirects to `login.eveonline.com` requesting 60 scopes (the
+   list is `eveScopes` in `internal/app/auth.go`): the read scopes
+   from the OAuth2 catalog in CCP's ESI OpenAPI document, plus four
+   that are not read-only, each for one feature:
+
+   | Scope | What the app does with it |
+   |---|---|
+   | `esi-fittings.write_fittings.v1` | "Save to EVE" in the fitting editor |
+   | `esi-mail.send_mail.v1` | sending mail from the compose page |
+   | `esi-mail.organize_mail.v1` | marking a mail as read |
+   | `esi-planets.manage_planets.v1` | reading colonies; CCP publishes no read scope for planetary industry, and the app only ever reads |
+
+   Everything else that can change something in the game (contacts,
+   fleets, calendar responses, waypoints, opening in-game windows) is
+   not requested. Characters linked before a scope was added keep the
+   scopes they granted until they sign in again; the feature that
+   needs the missing scope says so.
 3. **Callback**: `GET /auth/callback` verifies the `state`
    (constant-time, single-use), exchanges the authorization code for
    tokens, then verifies the access-token JWT: RS256 signature against
@@ -448,17 +466,16 @@ Refreshes are serialized process-wide and the character row is
 re-read first, so a rotated refresh token is never replayed.
 
 ESI responses for skills, skill queue, wallet and assets are cached as raw
-JSON in `character_snapshots` (schema
-`internal/app/schema/002_snapshots.sql`), keyed by
+JSON in `character_snapshots`, keyed by
 (character, kind) with the response's `Expires` header stored as
 `cached_until` (5-minute fallback when ESI sends none). The module
 sweep caches the character live-state endpoints the same way
 (location, ship, online, clones, implants, fittings, fatigue and the
 recent-killmails list). Killmail *details* are different: they are
 immutable, so the worker warms them once per killmail into the
-`killmail_details` store (schema `004_module_sweep.sql`, at most 10
+`killmail_details` store (at most 10
 per character per cycle) and pages read the store only. Corporation
-datasets (module sweep cluster 2, schema `005_corp.sql`) ride the
+datasets (module sweep cluster 2) ride the
 same snapshot table as `corp_*` kinds, fetched with each viewing
 character's token against that character's corporation — so pages
 follow the selected character's corp, and character/corporation ID
@@ -487,8 +504,8 @@ worker's warm-up pass fills it in. The interactive Market lookup
 is the one exception: it may make a single name fetch for an item
 nobody has cached yet.
 
-The Intel cluster (module sweep cluster 4, schema
-`007_intel.sql`) is public ESI data — wars, incursions, faction
+The Intel cluster (module sweep cluster 4) is public ESI data —
+wars, incursions, faction
 warfare and Tranquility status — so it doesn't ride the
 per-character snapshot table. The worker keeps it in a small
 global store instead: `global_snapshots` (one raw payload per
@@ -507,7 +524,7 @@ linked, since none of it needs a token.
 
 Item, skill, group, station and system names come primarily from a
 local copy of CCP's static data export (the SDE), stored in the
-`sde_*` tables (schema `internal/app/schema/003_sde.sql`): types,
+`sde_*` tables: types,
 groups, categories, NPC stations, solar systems and regions. The
 ESI drip-feed caches remain only as fallback for anything the SDE
 lacks — notably player-structure names, which aren't in the dump.
@@ -601,46 +618,39 @@ server logs a loud warning at boot when it is on.
 
 The app runs on PostgreSQL 16 (the live deployment is 16.15;
 tests self-provision an embedded Postgres 16, so CI needs no
-database service). `openDB` connects with `DATABASE_URL` and, on
-a database where the EveSynapse tables are absent, applies the
-collapsed baseline in `internal/app/schema_pg/001_baseline.sql`
-— the one-time fold of the 35 SQLite migrations into a single
-Postgres schema (BIGINT/DOUBLE PRECISION keep the generated Go
-models' int64/float64 types; timestamps stay app-written RFC3339
-TEXT). Every query and the hand-rolled importer ride a
-`database/sql` handle over the pgx/v5 stdlib driver; a pgxpool
+database service). Every query and the hand-rolled importer ride
+a `database/sql` handle over the pgx/v5 stdlib driver; a pgxpool
 exists only to back the scs `pgxstore` session store (sessions
-live in the `sessions` table the baseline creates). Future
-schema changes land as new numbered files in `schema_pg/`.
+live in the `sessions` table the baseline creates).
+
+The schema is a series of numbered steps in
+`internal/app/schema_pg/`: `001_baseline.sql` is the whole schema
+as of the move to Postgres (BIGINT/DOUBLE PRECISION keep the
+generated Go models' int64/float64 types; timestamps stay
+app-written RFC3339 TEXT), and each later file is one change. At
+startup `openDB` applies whichever steps a database is missing,
+in order. Each step runs in a single transaction together with
+its row in the `schema_migrations` table, so a step lands
+completely or not at all, and that table is the record of what
+has been applied. A database from before the table existed is
+adopted on first start: its existing steps are recorded, not run
+again.
+
+To change the schema, add the next numbered file, embed it in
+`app.go`, and add one line to `schemaSteps` in `db.go`.
 Regenerate query code after editing `internal/db/query/` with:
 
 ```sh
 make gen   # sqlc generate
 ```
 
-### Upgrading from a SQLite-era install
+### Installs still on SQLite
 
-The binary carries a one-time migration mode for installs that
-still run on SQLite (pre-v0.3.26):
-
-```sh
-sudo systemctl stop evesynapse
-sudo /opt/evesynapse/evesynapse -update   # install the new build
-sudo bash deploy/setup.sh                  # provisions Postgres + appends DATABASE_URL to .env
-sudo /opt/evesynapse/evesynapse -migrate-pg
-sudo systemctl start evesynapse
-```
-
-`-migrate-pg` reads the SQLite file named by `DB_PATH`
-(read-only; it is never written), creates/verifies the Postgres
-schema, copies every table in foreign-key-safe order, rewinds
-the identity sequences, and verifies per-table row counts plus
-a refresh-token spot check before it declares success. Sessions
-are not migrated: everyone signs in once on the new build.
-Re-running into a non-empty target is refused unless `-force`
-is given (which truncates the target tables and re-copies).
-Rollback is the previous binary plus the untouched SQLite file
-and the old `.env`.
+Releases before v0.3.26 stored their data in SQLite. The one-time
+`-migrate-pg` mode that copied a SQLite database into Postgres was
+removed in v0.3.37 together with the SQLite driver. An install
+that is still on SQLite has to make that move with a v0.3.36
+release first, and can update normally from there.
 
 ## Token encryption
 
@@ -705,8 +715,8 @@ backup of an install.
       queue, per-group totals (from the cached snapshots)
 - [x] Cache-only renders: pages resolve names locally while the
       worker pre-warms snapshots + names; Sync page shows progress
-- [x] Login requests the full read-only ESI scope set (63 scopes;
-      mutating scopes excluded), matching the developer-portal app
+- [x] Login requests the read ESI scope set plus the four scopes
+      the write features need (60 in all; see "EVE SSO flow")
 - [x] Import CCP SDE into local tables (types/groups/categories/
       stations/systems/regions) as the primary name source for the
       market and character pages

@@ -227,9 +227,10 @@ header .topbar {
 }
 .wordmark {
   display: inline-block;
-  font-size: 0.86rem;
-  font-weight: 600;
-  letter-spacing: 0.28em;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.6rem;
+  font-weight: 400;
+  letter-spacing: 0.18em;
   background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -722,7 +723,7 @@ footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
   .panel > h1:first-child { margin: -1rem -0.9rem 1rem; padding: 0.55rem 0.9rem; }
   header nav { padding-left: 0.6rem; padding-right: 0.6rem; }
   header .mainnav { gap: 0.15rem; }
-  .wordmark { letter-spacing: 0.18em; font-size: 0.79rem; }
+  .wordmark { letter-spacing: 0.14em; font-size: 0.55rem; }
   /* On narrow screens an open branch drops as a full-width bar
      beneath the header instead of a floating dropdown: the branch
      stops being the menu's positioning context, so the menu spans

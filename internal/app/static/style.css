@@ -1470,6 +1470,12 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
 .topbar-wordmark > span {
   transform: translateY(-0.06em);
 }
+.wordmark .wm-eve {
+  background: none;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  color: #ffffff;
+}
 .topbar-character {
   display: flex;
   align-items: center;

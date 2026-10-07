@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -14,6 +13,8 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
+	"evesynapse/internal/markethistory"
 )
 
 // ---------------------------------------------------------------------------
@@ -358,9 +359,9 @@ type charSnaps struct {
 	orderHistKnown bool
 	orderHist      esi.CharOrderHistory
 
-	// fetched records each snapshot's fetch timestamp (RFC3339)
-	// so widgets can date their data ("as of").
-	fetched map[string]string
+	// fetched records when each snapshot was fetched, so widgets
+	// can date their data ("as of").
+	fetched map[string]time.Time
 }
 
 // loadCharSnaps reads the snapshots of every linked character in
@@ -397,7 +398,7 @@ func (app *Application) loadCharSnaps(ctx context.Context, userID int64, chars [
 		// A store failure degrades the whole overview to
 		// character shells (name/tags) plus warming notes,
 		// never to an error page.
-		log.Printf("home: list snapshots for user %d: %v", userID, err)
+		logging.Errorf("home: list snapshots for user %d: %v", userID, err)
 		return out
 	}
 	for _, row := range rows {
@@ -406,7 +407,7 @@ func (app *Application) loadCharSnaps(ctx context.Context, userID int64, chars [
 			continue
 		}
 		if b.fetched == nil {
-			b.fetched = map[string]string{}
+			b.fetched = map[string]time.Time{}
 		}
 		b.fetched[row.Kind] = row.FetchedAt
 		b.decode(row.Kind, row.Payload)
@@ -426,7 +427,7 @@ func (app *Application) loadCharSnaps(ctx context.Context, userID int64, chars [
 	if needLayouts {
 		layoutRows, err := app.queries.ListPlanetLayoutsForUser(ctx, userID)
 		if err != nil {
-			log.Printf("home: list planet layouts for user %d: %v", userID, err)
+			logging.Errorf("home: list planet layouts for user %d: %v", userID, err)
 		} else {
 			for _, row := range layoutRows {
 				b := bundles[row.CharacterID]
@@ -1104,7 +1105,7 @@ func (app *Application) attentionMarketItems(ctx context.Context, bundles []*cha
 	var items []attentionItem
 	health, err := app.queries.ListOrderHealthByUser(ctx, userID)
 	if err != nil {
-		log.Printf("home: attention: list order health for user %d: %v", userID, err)
+		logging.Errorf("home: attention: list order health for user %d: %v", userID, err)
 	} else {
 		var undercut []db.OrderHealth
 		for _, h := range health {
@@ -1122,14 +1123,13 @@ func (app *Application) attentionMarketItems(ctx context.Context, bundles []*cha
 		default:
 			for _, h := range undercut {
 				text, _ := orderHealthText(h.MyPrice, h.Status, h.StationBest, h.RegionBest)
-				at, _ := parseRFC3339(h.ComputedAt)
 				items = append(items, attentionItem{
 					Char: charNames[h.CharacterID],
 					Text: fmt.Sprintf("%s — %s sell order: %s.",
 						charNames[h.CharacterID], app.typeNameOrID(ctx, h.TypeID), lowerFirst(text)),
 					Link: "/market/",
 					Rank: attentionUndercut,
-					At:   at,
+					At:   h.ComputedAt,
 				})
 			}
 		}
@@ -1137,18 +1137,18 @@ func (app *Application) attentionMarketItems(ctx context.Context, bundles []*cha
 
 	entries, err := app.queries.ListWatchlistByUser(ctx, userID)
 	if err != nil {
-		log.Printf("home: attention: list watchlist for user %d: %v", userID, err)
+		logging.Errorf("home: attention: list watchlist for user %d: %v", userID, err)
 		return items
 	}
 	for _, e := range entries {
-		rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, historyChartRows)
-		pct, ok := historyChangePct(rows, 7)
+		rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, markethistory.ChartRows)
+		pct, ok := markethistory.ChangePct(rows, 7)
 		if !ok || absFloat(pct) < e.ThresholdPct {
 			continue
 		}
 		items = append(items, attentionItem{
 			Text: fmt.Sprintf("%s %s over 7 days in %s.",
-				app.typeNameOrID(ctx, e.TypeID), changeDirection(pct),
+				app.typeNameOrID(ctx, e.TypeID), markethistory.ChangeDirection(pct),
 				app.marketRegionLabel(ctx, e.RegionID)),
 			Link: "/market/",
 			Rank: attentionMarketMove,
@@ -1202,7 +1202,7 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 
 	// The estimate is only as fresh as its stalest input.
 	noteAsOf := func(b *charSnaps, kind string) {
-		if t, ok := parseRFC3339(b.fetched[kind]); ok {
+		if t, ok := b.fetched[kind]; ok {
 			if asOf.IsZero() || t.Before(asOf) {
 				asOf = t
 			}
@@ -1534,13 +1534,13 @@ func (app *Application) marketHealthLine(ctx context.Context, userID int64) stri
 				parts = append(parts, fmt.Sprintf("%d %s undercut", undercut, noun))
 			}
 		} else {
-			log.Printf("home: market widget: list order health for user %d: %v", userID, err)
+			logging.Errorf("home: market widget: list order health for user %d: %v", userID, err)
 		}
 		if entries, err := app.queries.ListWatchlistByUser(ctx, userID); err == nil {
 			moving := 0
 			for _, e := range entries {
-				rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, historyChartRows)
-				if pct, ok := historyChangePct(rows, 7); ok && absFloat(pct) >= e.ThresholdPct {
+				rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, markethistory.ChartRows)
+				if pct, ok := markethistory.ChangePct(rows, 7); ok && absFloat(pct) >= e.ThresholdPct {
 					moving++
 				}
 			}
@@ -1548,7 +1548,7 @@ func (app *Application) marketHealthLine(ctx context.Context, userID int64) stri
 				parts = append(parts, fmt.Sprintf("watchlist: %d moving", moving))
 			}
 		} else {
-			log.Printf("home: market widget: list watchlist for user %d: %v", userID, err)
+			logging.Errorf("home: market widget: list watchlist for user %d: %v", userID, err)
 		}
 	}
 	return strings.Join(parts, " · ")
@@ -1683,7 +1683,7 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 
 	chars, err := app.queries.ListCharactersByUser(ctx, userID)
 	if err != nil {
-		log.Printf("home: list characters for user %d: %v", userID, err)
+		logging.Errorf("home: list characters for user %d: %v", userID, err)
 		view.LoadFailed = true
 		return view
 	}
@@ -1816,7 +1816,7 @@ func (app *Application) saveHomeLayout(ctx context.Context, userID int64, layout
 		ID:         userID,
 	})
 	if err != nil {
-		log.Printf("home: save layout for user %d: %v", userID, err)
+		logging.Errorf("home: save layout for user %d: %v", userID, err)
 	}
 }
 

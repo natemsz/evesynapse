@@ -296,7 +296,7 @@ func TestPlanetsWorkerAndScopeRefusal(t *testing.T) {
 		Name:         "Fixture Ceo",
 		AccessToken:  "fixture",
 		RefreshToken: "fixture",
-		TokenExpiry:  sql.NullString{String: "2999-01-01T00:00:00Z", Valid: true},
+		TokenExpiry:  mustNullTime("2999-01-01T00:00:00Z"),
 		Scopes:       "esi-planets.manage_planets.v1 esi-mail.read_mail.v1",
 		LinkState:    "ok",
 	}); err != nil {
@@ -457,8 +457,8 @@ func TestMailCalendarContactsRender(t *testing.T) {
 	if err := q.UpsertGlobalSnapshot(ctx, db.UpsertGlobalSnapshotParams{
 		Kind:        esi.GlobalFactions,
 		Payload:     `[{"faction_id":500001,"name":"Caldari State","corporation_id":1000006}]`,
-		FetchedAt:   "2026-01-01T00:00:00Z",
-		CachedUntil: "2999-01-01T00:00:00Z",
+		FetchedAt:   mustTime("2026-01-01T00:00:00Z"),
+		CachedUntil: mustTime("2999-01-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed factions: %v", err)
 	}

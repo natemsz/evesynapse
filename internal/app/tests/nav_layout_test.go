@@ -51,8 +51,8 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`<defs><linearGradient id="brand-glyph-gradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd27a"/><stop offset=".52" stop-color="#ff6a1a"/><stop offset="1" stop-color="#d63c14"/></linearGradient></defs>`,
 		`stroke="url(#brand-glyph-gradient)"`,
 		`fill="url(#brand-glyph-gradient)"`,
-		`<path d="M29.5 15.9L26.4 12.2M20.8 11.6L19.1 13.0M18.7 18.6L20.5 20.6M27.1 27.6L29.1 29.7M28.8 35.2L27.0 36.6M21.4 36.0L18.3 32.1"/>`,
-		`<circle cx="31.82" cy="18.76" r="2.7"/>`,
+		`<path d="M8.3 22.1L12.7 18.4M8.3 25.9L12.7 29.6M17.3 29.6L21.1 26.4M26.9 21.6L30.7 18.4M35.3 18.4L39.7 22.1M39.7 25.9L35.3 29.6"/>`,
+		`<circle cx="24" cy="24" r="3.8"/>`,
 		`<a class="wordmark topbar-wordmark" href="/" aria-label="EveSynapse home"><svg class="wordmark-glyph"`,
 		`data-nav-category="pilot"`,
 		`data-nav-category="corporation"`,
@@ -459,8 +459,9 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	for _, want := range []string{
 		`viewBox="0 0 48 48"`,
 		`<rect width="48" height="48" rx="10" fill="#0d0503"/>`,
-		`<circle cx="31.82" cy="18.76" r="2.7"/>`,
-		`<circle cx="16.01" cy="29.23" r="2.7"/>`,
+		`<circle cx="24" cy="24" r="3.8"/>`,
+		`<circle cx="6" cy="24" r="3.0"/>`,
+		`<circle cx="42" cy="24" r="3.0"/>`,
 	} {
 		if !strings.Contains(fav, want) {
 			t.Errorf("favicon.svg missing %q", want)

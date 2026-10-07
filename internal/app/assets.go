@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -14,6 +13,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // assetCharLink is one entry of the Assets page character switcher.
@@ -80,7 +80,7 @@ func (app *Application) handleAssets(w http.ResponseWriter, r *http.Request) {
 
 	characters, err := app.queries.ListCharactersByUser(ctx, userID)
 	if err != nil {
-		log.Printf("assets: list characters for user %d: %v", userID, err)
+		logging.Errorf("assets: list characters for user %d: %v", userID, err)
 		data.Error = "Could not load asset data; check the server log."
 		app.render(ctx, w, http.StatusOK, "assets.html", data)
 		return
@@ -131,7 +131,7 @@ func (app *Application) handleAssets(w http.ResponseWriter, r *http.Request) {
 
 	var items []esi.Asset
 	if err := app.esi.GetCached(ctx, active, esi.SnapAssets, &items); err != nil {
-		log.Printf("assets: load for character %d: %v", active.CharacterID, err)
+		logging.Errorf("assets: load for character %d: %v", active.CharacterID, err)
 		// No snapshot row at all = cold start: the worker is still
 		// importing this character, which the Sync page shows live.
 		if _, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: active.CharacterID, Kind: esi.SnapAssets}); errors.Is(serr, sql.ErrNoRows) {
@@ -341,12 +341,12 @@ func (app *Application) searchAssets(ctx context.Context, characters []db.Charac
 			continue
 		}
 		if serr != nil {
-			log.Printf("assets search: read snapshot for character %d: %v", ch.CharacterID, serr)
+			logging.Errorf("assets search: read snapshot for character %d: %v", ch.CharacterID, serr)
 			continue
 		}
 		var items []esi.Asset
 		if err := json.Unmarshal([]byte(snap.Payload), &items); err != nil {
-			log.Printf("assets search: decode snapshot for character %d: %v", ch.CharacterID, err)
+			logging.Errorf("assets search: decode snapshot for character %d: %v", ch.CharacterID, err)
 			continue
 		}
 		found := app.searchCharacterAssets(ctx, items, needle)

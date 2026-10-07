@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // tokenRefreshWindow: refresh the access token when it expires within
@@ -49,7 +49,7 @@ func (app *Application) validAccessToken(ctx context.Context, ch db.Character) (
 		return "", fmt.Errorf("character %d: %w", ch.CharacterID, err)
 	}
 
-	if expiry, ok := parseTokenExpiry(ch.TokenExpiry); ok && time.Until(expiry) > tokenRefreshWindow {
+	if ch.TokenExpiry.Valid && time.Until(ch.TokenExpiry.Time) > tokenRefreshWindow {
 		return accessToken, nil
 	}
 	if storedRefresh == "" {
@@ -75,10 +75,6 @@ func (app *Application) validAccessToken(ctx context.Context, ch db.Character) (
 		return "", fmt.Errorf("character %d: token refresh failed: %w", ch.CharacterID, err)
 	}
 
-	expiry := ""
-	if !tok.Expiry.IsZero() {
-		expiry = tok.Expiry.UTC().Format(time.RFC3339)
-	}
 	refreshToken := tok.RefreshToken
 	if refreshToken == "" {
 		// CCP always rotates, but never store an empty token over a
@@ -92,26 +88,13 @@ func (app *Application) validAccessToken(ctx context.Context, ch db.Character) (
 	if err := app.queries.UpdateCharacterTokens(ctx, db.UpdateCharacterTokensParams{
 		AccessToken:  sealedAccess,
 		RefreshToken: sealedRefresh,
-		TokenExpiry:  sql.NullString{String: expiry, Valid: expiry != ""},
+		TokenExpiry:  sql.NullTime{Time: tok.Expiry.UTC(), Valid: !tok.Expiry.IsZero()},
 		CharacterID:  ch.CharacterID,
 	}); err != nil {
 		return "", fmt.Errorf("character %d: persist refreshed tokens: %w", ch.CharacterID, err)
 	}
-	log.Printf("sso: refreshed access token for character %d", ch.CharacterID)
+	logging.Infof("sso: refreshed access token for character %d", ch.CharacterID)
 	return tok.AccessToken, nil
-}
-
-// parseTokenExpiry decodes the stored RFC3339 token_expiry, reporting
-// false when it is absent or malformed (treat as expired).
-func parseTokenExpiry(v sql.NullString) (time.Time, bool) {
-	if !v.Valid || v.String == "" {
-		return time.Time{}, false
-	}
-	t, err := time.Parse(time.RFC3339, v.String)
-	if err != nil {
-		return time.Time{}, false
-	}
-	return t, true
 }
 
 // isDefinitiveTokenFailure reports whether a token-refresh or ESI

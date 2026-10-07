@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"sort"
 	"strings"
@@ -12,6 +11,8 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
+	"evesynapse/internal/markethistory"
 )
 
 // ---------------------------------------------------------------------------
@@ -64,17 +65,15 @@ func buildBalanceSeries(journal esi.WalletJournal, samples []db.WalletHistory, n
 	if len(journalPts) > 0 {
 		windowStart := journalPts[0].At
 		for _, s := range samples {
-			p, ok := samplePoint(s)
-			if !ok || !p.At.Before(windowStart) {
+			p := samplePoint(s)
+			if !p.At.Before(windowStart) {
 				continue
 			}
 			points = append(points, p)
 		}
 	} else {
 		for _, s := range samples {
-			if p, ok := samplePoint(s); ok {
-				points = append(points, p)
-			}
+			points = append(points, samplePoint(s))
 		}
 	}
 	points = append(points, journalPts...)
@@ -103,18 +102,10 @@ func buildBalanceSeries(journal esi.WalletJournal, samples []db.WalletHistory, n
 	return points
 }
 
-// samplePoint turns one daily history row into a series point.
-// The row's sampled_at (when the value was last written that
-// day) is the honest timestamp; the calendar day at midnight is
-// the fallback.
-func samplePoint(s db.WalletHistory) (balancePoint, bool) {
-	if t, err := time.Parse(time.RFC3339, s.SampledAt); err == nil {
-		return balancePoint{At: t, Balance: s.Balance}, true
-	}
-	if t, err := time.Parse(historyDateLayout, s.Day); err == nil {
-		return balancePoint{At: t, Balance: s.Balance}, true
-	}
-	return balancePoint{}, false
+// samplePoint turns one daily history row into a series point,
+// dated when the value was last written that day.
+func samplePoint(s db.WalletHistory) balancePoint {
+	return balancePoint{At: s.SampledAt, Balance: s.Balance}
 }
 
 // netWorthHistoryPoints sums the sampler's net-worth column
@@ -137,7 +128,7 @@ func netWorthHistoryPoints(rows []db.WalletHistory) []balancePoint {
 	sort.Strings(days)
 	points := make([]balancePoint, 0, len(days))
 	for _, d := range days {
-		t, err := time.Parse(historyDateLayout, d)
+		t, err := time.Parse(markethistory.DateLayout, d)
 		if err != nil {
 			continue
 		}
@@ -166,8 +157,8 @@ type balanceChart struct {
 	Label     string // svg aria-label, set by the caller
 	Points    string // polyline points for the balance line
 	Dots      []balanceDot
-	Ticks     []chartAxisTick
-	DateTicks []chartDateTick
+	Ticks     []markethistory.AxisTick
+	DateTicks []markethistory.DateTick
 	From      string // oldest date label
 	To        string // newest date label
 }
@@ -186,9 +177,9 @@ func buildBalanceChart(points []balancePoint) (balanceChart, bool) {
 	if len(points) < 2 {
 		return balanceChart{}, false
 	}
-	chart := balanceChart{Width: chartWidth, Height: chartHeight, Label: "Balance over time"}
-	plotH := chartHeight - chartPadTop - chartPadBottom
-	priceTop := chartPadTop
+	chart := balanceChart{Width: markethistory.ChartWidth, Height: markethistory.ChartHeight, Label: "Balance over time"}
+	plotH := markethistory.ChartHeight - markethistory.ChartPadTop - markethistory.ChartPadBottom
+	priceTop := markethistory.ChartPadTop
 	priceBottom := priceTop + plotH
 
 	minB, maxB := math.Inf(1), math.Inf(-1)
@@ -209,15 +200,15 @@ func buildBalanceChart(points []balancePoint) (balanceChart, bool) {
 		}
 		maxB, minB = maxB+pad, minB-pad
 	}
-	tick := func(value float64, y int, class string) chartAxisTick {
-		return chartAxisTick{
-			Label:  formatCompactAxisNumber(value) + " ISK",
+	tick := func(value float64, y int, class string) markethistory.AxisTick {
+		return markethistory.AxisTick{
+			Label:  markethistory.FormatCompactAxisNumber(value) + " ISK",
 			Y:      y,
 			LabelY: y + 3,
 			Class:  class,
 		}
 	}
-	chart.Ticks = []chartAxisTick{
+	chart.Ticks = []markethistory.AxisTick{
 		tick(maxB, priceTop, ""),
 		tick((minB+maxB)/2, priceTop+plotH/2, "tick-mid"),
 		tick(minB, priceBottom, ""),
@@ -237,9 +228,9 @@ func buildBalanceChart(points []balancePoint) (balanceChart, bool) {
 
 	x := func(i int) int {
 		if len(kept) == 1 {
-			return chartWidth / 2
+			return markethistory.ChartWidth / 2
 		}
-		return i * (chartWidth - 1) / (len(kept) - 1)
+		return i * (markethistory.ChartWidth - 1) / (len(kept) - 1)
 	}
 	y := func(b float64) int {
 		frac := (b - minB) / (maxB - minB)
@@ -250,7 +241,7 @@ func buildBalanceChart(points []balancePoint) (balanceChart, bool) {
 		px, py := x(i), y(p.Balance)
 		chart.Dots = append(chart.Dots, balanceDot{
 			X: px, Y: py,
-			Date:    p.At.Format(historyDateLayout),
+			Date:    p.At.Format(markethistory.DateLayout),
 			Balance: esi.FormatISK(p.Balance),
 			Title: fmt.Sprintf("%s UTC: balance %s ISK",
 				p.At.Format("2006-01-02 15:04"), esi.FormatISK(p.Balance)),
@@ -260,18 +251,18 @@ func buildBalanceChart(points []balancePoint) (balanceChart, bool) {
 	if len(pts) > 1 {
 		chart.Points = strings.Join(pts, " ")
 	}
-	chart.From = points[0].At.Format(historyDateLayout)
-	chart.To = points[len(points)-1].At.Format(historyDateLayout)
-	chart.DateTicks = []chartDateTick{
+	chart.From = points[0].At.Format(markethistory.DateLayout)
+	chart.To = points[len(points)-1].At.Format(markethistory.DateLayout)
+	chart.DateTicks = []markethistory.DateTick{
 		{Label: chart.From, X: x(0), Anchor: "start"},
 	}
 	if len(kept) > 2 {
 		mid := len(kept) / 2
-		chart.DateTicks = append(chart.DateTicks, chartDateTick{
-			Label: kept[mid].At.Format(historyDateLayout), X: x(mid), Anchor: "middle", Class: "tick-mid",
+		chart.DateTicks = append(chart.DateTicks, markethistory.DateTick{
+			Label: kept[mid].At.Format(markethistory.DateLayout), X: x(mid), Anchor: "middle", Class: "tick-mid",
 		})
 	}
-	chart.DateTicks = append(chart.DateTicks, chartDateTick{
+	chart.DateTicks = append(chart.DateTicks, markethistory.DateTick{
 		Label: chart.To, X: x(len(kept) - 1), Anchor: "end",
 	})
 	return chart, true
@@ -314,7 +305,7 @@ func (app *Application) attachWalletGraph(ctx context.Context, userID, character
 	if rows, err := app.queries.ListWalletHistorySamples(ctx, db.ListWalletHistorySamplesParams{
 		UserID: userID, CharacterID: characterID,
 	}); err != nil {
-		log.Printf("wallet graph: samples for character %d: %v", characterID, err)
+		logging.Errorf("wallet graph: samples for character %d: %v", characterID, err)
 	} else {
 		samples = rows
 	}
@@ -325,9 +316,7 @@ func (app *Application) attachWalletGraph(ctx context.Context, userID, character
 	}); err == nil {
 		var bal float64
 		if json.Unmarshal([]byte(snap.Payload), &bal) == nil {
-			if t, perr := time.Parse(time.RFC3339, snap.FetchedAt); perr == nil {
-				now = &balancePoint{At: t, Balance: bal}
-			}
+			now = &balancePoint{At: snap.FetchedAt, Balance: bal}
 		}
 	}
 
@@ -369,7 +358,7 @@ func (app *Application) attachWalletGraph(ctx context.Context, userID, character
 func (app *Application) attachNetWorthHistory(ctx context.Context, w *netWorthWidget, userID int64) {
 	rows, err := app.queries.ListUserWalletHistory(ctx, userID)
 	if err != nil {
-		log.Printf("net worth history for user %d: %v", userID, err)
+		logging.Errorf("net worth history for user %d: %v", userID, err)
 		return
 	}
 	points := netWorthHistoryPoints(rows)

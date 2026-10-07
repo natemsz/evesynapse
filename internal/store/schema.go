@@ -1,47 +1,76 @@
-package app
+package store
 
 import (
 	"context"
 	"database/sql"
+	_ "embed" // the schema steps below
 	"fmt"
 	"strings"
-
-	"github.com/jackc/pgx/v5/pgxpool"
-	_ "github.com/jackc/pgx/v5/stdlib" // pgx as a database/sql driver, registers as "pgx"
 )
 
-// openDB opens Postgres at dsn and returns the two handles the app
-// runs on: a database/sql DB over the pgx stdlib driver (every
-// sqlc query and every hand-rolled statement rides it) and a
-// pgxpool that exists only to back the scs session store
-// (pgxstore). It then brings the schema up to date (migrateSchema):
-// a fresh database gets the collapsed Postgres baseline
-// (schema_pg/001_baseline.sql) and every later numbered step, so a
-// fresh install comes up with the full schema on first boot, and an
-// existing install gains whichever steps it is missing.
-func openDB(ctx context.Context, dsn string) (*sql.DB, *pgxpool.Pool, error) {
-	pool, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		return nil, nil, err
-	}
-	conn, err := sql.Open("pgx", dsn)
-	if err != nil {
-		pool.Close()
-		return nil, nil, err
-	}
-	conn.SetMaxOpenConns(20)
-	if err := conn.PingContext(ctx); err != nil {
-		conn.Close()
-		pool.Close()
-		return nil, nil, err
-	}
-	if err := migrateSchema(ctx, conn); err != nil {
-		conn.Close()
-		pool.Close()
-		return nil, nil, err
-	}
-	return conn, pool, nil
-}
+// The schema, one embedded file per step. schemaSteps lists them in
+// order and migrateSchema applies whichever a database is missing,
+// each in one transaction, recording it in schema_migrations. A new
+// schema change is the next numbered file in schema_pg/, an embed
+// here, and a line in schemaSteps.
+
+// Step 001: the whole schema as of the move to Postgres.
+//
+//go:embed schema_pg/001_baseline.sql
+var pgBaselineSchema string
+
+// Step 002: the station leaderboard.
+//
+//go:embed schema_pg/002_station_leaderboard.sql
+var pgStationLeaderboardSchema string
+
+// Step 003: fitting metadata (is_public / is_draft on
+// local_fittings).
+//
+//go:embed schema_pg/003_fit_metadata.sql
+var pgFitMetadataSchema string
+
+// Step 004 (v0.3.33): per-type market price TTL cache and industry
+// cost index tracking.
+//
+//go:embed schema_pg/004_price_cache_costindex.sql
+var pgPriceCacheSchema string
+
+// Step 005 (v0.3.34): restock planner targets.
+//
+//go:embed schema_pg/005_restock.sql
+var pgRestockSchema string
+
+// Step 006 (v0.3.35): custom jump-clone names.
+//
+//go:embed schema_pg/006_clone_names.sql
+var pgCloneNamesSchema string
+
+// Step 007: foreign keys to users on the four per-user tables that
+// lacked one. The first step applied purely by its record; steps
+// 001–006 also carry a probe, for databases older than the record.
+//
+//go:embed schema_pg/007_user_foreign_keys.sql
+var pgUserForeignKeysSchema string
+
+// Step 008: the ETag each snapshot was stored with, so a refresh
+// can ask ESI whether it changed instead of downloading it again.
+//
+//go:embed schema_pg/008_snapshot_etags.sql
+var pgSnapshotETagsSchema string
+
+// Steps 009–011: every time kept as TEXT becomes a timestamptz, one
+// group of tables per step (accounts and snapshots; the market; the
+// record and name caches).
+//
+//go:embed schema_pg/009_timestamps_accounts_snapshots.sql
+var pgTimestampsAccountsSchema string
+
+//go:embed schema_pg/010_timestamps_market.sql
+var pgTimestampsMarketSchema string
+
+//go:embed schema_pg/011_timestamps_records.sql
+var pgTimestampsRecordsSchema string
 
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
@@ -59,8 +88,8 @@ type schemaStep struct {
 }
 
 // schemaSteps lists every schema step in order. A new schema
-// change is a new numbered file in schema_pg, an embed for it in
-// app.go, and one line here (no probe).
+// change is a new numbered file in schema_pg, an embed for it
+// above, and one line here (no probe).
 func schemaSteps() []schemaStep {
 	return []schemaStep{
 		// The baseline carries the sessions table too (pgxstore
@@ -79,6 +108,10 @@ func schemaSteps() []schemaStep {
 			`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'clone_names'`},
 		// From here on the record alone decides: no probes.
 		{7, "user_foreign_keys", pgUserForeignKeysSchema, ""},
+		{8, "snapshot_etags", pgSnapshotETagsSchema, ""},
+		{9, "timestamps_accounts_snapshots", pgTimestampsAccountsSchema, ""},
+		{10, "timestamps_market", pgTimestampsMarketSchema, ""},
+		{11, "timestamps_records", pgTimestampsRecordsSchema, ""},
 	}
 }
 

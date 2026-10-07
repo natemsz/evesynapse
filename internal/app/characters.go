@@ -3,14 +3,15 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -137,7 +138,7 @@ func (app *Application) handleCharacters(w http.ResponseWriter, r *http.Request)
 
 	characters, err := app.queries.ListCharactersByUser(ctx, userID)
 	if err != nil {
-		log.Printf("characters: list for user %d: %v", userID, err)
+		logging.Errorf("characters: list for user %d: %v", userID, err)
 		data.Error = "Could not load your characters; check the server log."
 		app.render(ctx, w, http.StatusOK, "characters.html", data)
 		return
@@ -187,7 +188,7 @@ func (app *Application) managedCharacterRow(ctx context.Context, ch db.Character
 		row.StateLabel = "Linked"
 	}
 	if ch.LinkStateAt.Valid {
-		row.Since = ch.LinkStateAt.String
+		row.Since = rfc3339(ch.LinkStateAt.Time)
 	}
 
 	if mapping, err := app.queries.GetCharacterCorporation(ctx, ch.CharacterID); err == nil {
@@ -206,16 +207,20 @@ func (app *Application) managedCharacterRow(ctx context.Context, ch db.Character
 	// scope, so colonies stay dark until a fresh sign-in.
 	row.PINotEnabled = app.piNotEnabled(ctx, ch)
 
-	snaps, err := app.listSnapshotMeta(ctx, ch.CharacterID)
+	snaps, err := app.queries.ListSnapshotMetaByCharacter(ctx, ch.CharacterID)
 	if err == nil {
 		row.Snapshots = len(snaps)
+		var newest time.Time
 		for _, snap := range snaps {
-			if snap.fresh() {
+			if esi.CacheWindowOpen(snap.CachedUntil) {
 				row.Fresh++
 			}
-			if snap.FetchedAt > row.Newest || row.Newest == "—" {
-				row.Newest = snap.FetchedAt
+			if snap.FetchedAt.After(newest) {
+				newest = snap.FetchedAt
 			}
+		}
+		if !newest.IsZero() {
+			row.Newest = rfc3339(newest)
 		}
 	}
 	return row
@@ -266,7 +271,7 @@ func (app *Application) handleCharacterTags(w http.ResponseWriter, r *http.Reque
 			CharacterID: characterID,
 			UserID:      userID,
 		}); err != nil {
-			log.Printf("characters: set tags for character %d: %v", characterID, err)
+			logging.Errorf("characters: set tags for character %d: %v", characterID, err)
 		}
 	}
 	http.Redirect(w, r, "/characters/", http.StatusSeeOther)
@@ -311,11 +316,11 @@ func (app *Application) handleCharacterUnlink(w http.ResponseWriter, r *http.Req
 		CharacterID: characterID,
 		UserID:      userID,
 	}); err != nil {
-		log.Printf("characters: unlink character %d for user %d: %v", characterID, userID, err)
+		logging.Errorf("characters: unlink character %d for user %d: %v", characterID, userID, err)
 		http.Redirect(w, r, "/characters/", http.StatusSeeOther)
 		return
 	}
-	log.Printf("characters: user %d unlinked character %d (tokens and snapshots deleted)", userID, characterID)
+	logging.Infof("characters: user %d unlinked character %d (tokens and snapshots deleted)", userID, characterID)
 
 	// Acting-character fallback: only when the removed character
 	// was the session's pick.

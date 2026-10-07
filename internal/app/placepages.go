@@ -5,9 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
+
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -95,7 +96,7 @@ func (app *Application) loadSystemView(ctx context.Context, id int64) *systemPag
 	sys, err := app.queries.GetSDESystem(ctx, id)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
-			log.Printf("system page: read system %d: %v", id, err)
+			logging.Errorf("system page: read system %d: %v", id, err)
 		}
 		return view
 	}
@@ -110,7 +111,7 @@ func (app *Application) loadSystemView(ctx context.Context, id int64) *systemPag
 
 	stations, serr := app.queries.ListSDEStationsBySystem(ctx, id)
 	if serr != nil {
-		log.Printf("system page: list stations for system %d: %v", id, serr)
+		logging.Errorf("system page: list stations for system %d: %v", id, serr)
 		return view
 	}
 	for _, st := range stations {
@@ -128,7 +129,7 @@ func (app *Application) loadStationView(ctx context.Context, id int64) *stationP
 	st, err := app.queries.GetSDEStation(ctx, id)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
-			log.Printf("station page: read station %d: %v", id, err)
+			logging.Errorf("station page: read station %d: %v", id, err)
 		}
 		return view
 	}

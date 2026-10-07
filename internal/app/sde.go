@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"runtime/debug"
 	"sort"
@@ -19,6 +18,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -137,7 +137,7 @@ func (app *Application) sdeOpEnd() {
 // transaction, so a run that died leaves the previous data intact.
 func (app *Application) recoverSDEPanic(op string) {
 	if r := recover(); r != nil {
-		log.Printf("sde: PANIC in %s (recovered): %v\n%s", op, r, debug.Stack())
+		logging.Errorf("sde: PANIC in %s (recovered): %v\n%s", op, r, debug.Stack())
 		app.updateSDEStatus(func(s *sdeStatus) {
 			s.LastError = "internal error during " + op + " — see the server log"
 		})
@@ -154,9 +154,9 @@ func (app *Application) startSDEImport(reason string) bool {
 	go func() {
 		defer app.sdeOpEnd()
 		defer app.recoverSDEPanic("import")
-		log.Printf("sde: import starting (%s) from %s", reason, app.cfg.SDEBaseURL())
+		logging.Infof("sde: import starting (%s) from %s", reason, app.cfg.SDEBaseURL())
 		if err := app.importSDE(app.workerCtx); err != nil {
-			log.Printf("sde: import failed: %v", err)
+			logging.Errorf("sde: import failed: %v", err)
 			app.updateSDEStatus(func(s *sdeStatus) { s.LastError = err.Error() })
 			return
 		}
@@ -180,25 +180,25 @@ func (app *Application) startSDECheck(reason string) bool {
 
 		changed, err := app.sdeRemoteChanged(ctx)
 		if err != nil {
-			log.Printf("sde: update check failed (%s): %v", reason, err)
+			logging.Errorf("sde: update check failed (%s): %v", reason, err)
 			app.updateSDEStatus(func(s *sdeStatus) { s.LastError = err.Error() })
 			return
 		}
 		now := time.Now().UTC().Format(time.RFC3339)
 		if err := app.queries.UpsertSDEMeta(ctx, db.UpsertSDEMetaParams{Key: "last_check_at", Value: now}); err != nil {
-			log.Printf("sde: record check time: %v", err)
+			logging.Errorf("sde: record check time: %v", err)
 		}
 		if !changed {
-			log.Printf("sde: static data up to date (checked %s)", reason)
+			logging.Infof("sde: static data up to date (checked %s)", reason)
 			app.updateSDEStatus(func(s *sdeStatus) {
 				s.LastError = ""
 				s.Message = "Up to date — remote dump unchanged (checked " + now + ")"
 			})
 			return
 		}
-		log.Printf("sde: remote dump changed; importing (%s)", reason)
+		logging.Infof("sde: remote dump changed; importing (%s)", reason)
 		if err := app.importSDE(ctx); err != nil {
-			log.Printf("sde: import failed: %v", err)
+			logging.Errorf("sde: import failed: %v", err)
 			app.updateSDEStatus(func(s *sdeStatus) { s.LastError = err.Error() })
 			return
 		}
@@ -213,11 +213,11 @@ func (app *Application) startSDECheck(reason string) bool {
 func (app *Application) sdeMaintenance(ctx context.Context) {
 	count, err := app.queries.CountSDETypes(ctx)
 	if err != nil {
-		log.Printf("sde: maintenance: count types: %v", err)
+		logging.Errorf("sde: maintenance: count types: %v", err)
 		return
 	}
 	if count == 0 {
-		log.Printf("sde: no static data yet — starting initial import")
+		logging.Infof("sde: no static data yet — starting initial import")
 		app.startSDEImport("initial")
 		return
 	}
@@ -231,7 +231,7 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 	// the marker when it lands). Retries on later ticks while an
 	// import keeps failing.
 	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "7" {
-		log.Printf("sde: static data predates current columns — re-importing to backfill")
+		logging.Infof("sde: static data predates current columns — re-importing to backfill")
 		app.startSDEImport("schema-029 backfill")
 		return
 	}
@@ -239,12 +239,12 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 	// tables were cleared by hand) refills here rather than
 	// waiting for the weekly tick.
 	if n, err := app.queries.CountSDEBlueprints(ctx); err == nil && n == 0 {
-		log.Printf("sde: planner tables empty — importing industry data")
+		logging.Infof("sde: planner tables empty — importing industry data")
 		app.startSDEImport("planner backfill")
 		return
 	}
 	if n, err := app.queries.CountSDESkillMeta(ctx); err == nil && n == 0 {
-		log.Printf("sde: skill graph tables empty — importing dogma data")
+		logging.Infof("sde: skill graph tables empty — importing dogma data")
 		app.startSDEImport("skill graph backfill")
 		return
 	}
@@ -366,7 +366,7 @@ func (app *Application) importSDE(ctx context.Context) error {
 	// absence or a parse hiccup must not fail an otherwise good
 	// import — the planner just shows no required skills.
 	if marker, err := app.fetchAndParseSDEFile(ctx, base, sdeSkillsFileName, parsed); err != nil {
-		log.Printf("sde: optional %s unavailable, continuing without it: %v", sdeSkillsFileName, err)
+		logging.Warnf("sde: optional %s unavailable, continuing without it: %v", sdeSkillsFileName, err)
 	} else {
 		parsed.markers[sdeSkillsFileName] = marker
 	}
@@ -405,7 +405,7 @@ func (app *Application) importSDE(ctx context.Context) error {
 	}
 
 	msg := fmt.Sprintf("Imported %s rows from %s", esi.FormatInt(total), base)
-	log.Printf("sde: %s", msg)
+	logging.Infof("sde: %s", msg)
 	app.updateSDEStatus(func(s *sdeStatus) { s.Message = msg })
 	return nil
 }
@@ -1702,7 +1702,7 @@ func (app *Application) loadSDEView(ctx context.Context) *sdeView {
 	for _, c := range counts {
 		n, err := c.fn(ctx)
 		if err != nil {
-			log.Printf("sync: count SDE %s: %v", c.name, err)
+			logging.Errorf("sync: count SDE %s: %v", c.name, err)
 			n = 0
 		}
 		view.Tables = append(view.Tables, sdeTableCount{Name: c.name, Rows: esi.FormatInt(n)})

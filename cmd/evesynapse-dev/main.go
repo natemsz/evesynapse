@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -28,6 +27,9 @@ import (
 
 	"evesynapse/internal/app"
 	"evesynapse/internal/devtools"
+	"evesynapse/internal/logging"
+	"evesynapse/internal/pidfile"
+	"evesynapse/internal/selfupdate"
 )
 
 func main() {
@@ -41,7 +43,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stdout, app.Version())
 			return 0
 		case "-update":
-			return app.RunUpdate(args[1:], stdout, stderr)
+			return selfupdate.Run(app.Version(), args[1:], stdout, stderr)
 		case "-refresh":
 			return app.RunRefresh(args[1:], app.LoadConfig(), stdout, stderr)
 		case "-h", "--help", "-help":
@@ -69,16 +71,20 @@ func printUsage(w io.Writer) {
 // the self-restart hand-off.
 func serve() int {
 	cfg := app.LoadConfig()
+	if err := cfg.SetupLogging(); err != nil {
+		fmt.Fprintln(os.Stderr, "evesynapse:", err)
+		return 2
+	}
 
 	application, err := app.New(cfg)
 	if err != nil {
-		log.Printf("evesynapse: cannot start: %v", err)
+		logging.Errorf("evesynapse: cannot start: %v", err)
 		return 1
 	}
 	defer application.Close()
 
-	pidfile := app.StartServerPidfile()
-	defer app.RemoveServerPidfile(pidfile)
+	pidPath := pidfile.Start()
+	defer pidfile.Remove(pidPath)
 
 	srv := app.NewHTTPServer(cfg.Addr(), application.Handler(devtools.Register))
 
@@ -88,22 +94,22 @@ func serve() int {
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
 
-	log.Printf("evesynapse-dev: listening on %s (db: %s, EVE SSO configured: %t)",
+	logging.Infof("evesynapse-dev: listening on %s (db: %s, EVE SSO configured: %t)",
 		cfg.Addr(), cfg.DatabaseLabel(), cfg.SSOConfigured())
 
 	select {
 	case err := <-errCh:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("evesynapse-dev: server: %v", err)
+			logging.Errorf("evesynapse-dev: server: %v", err)
 			return 1
 		}
 		return 0
 	case <-ctx.Done():
-		log.Printf("evesynapse-dev: shutting down")
+		logging.Infof("evesynapse-dev: shutting down")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
-			log.Printf("evesynapse-dev: shutdown: %v", err)
+			logging.Errorf("evesynapse-dev: shutdown: %v", err)
 		}
 		return 0
 	}

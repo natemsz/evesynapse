@@ -47,7 +47,7 @@ func TestMarketFetchDueGates(t *testing.T) {
 	for _, c := range cases {
 		if err := q.UpsertMarketFetchState(ctx, db.UpsertMarketFetchStateParams{
 			Kind: c.kind, State: c.state,
-			AttemptedAt: time.Now().UTC().Add(-c.ago).Format(time.RFC3339),
+			AttemptedAt: time.Now().UTC().Add(-c.ago),
 		}); err != nil {
 			t.Fatalf("seed %s: %v", c.kind, err)
 		}

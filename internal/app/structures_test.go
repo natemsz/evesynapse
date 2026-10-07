@@ -22,6 +22,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/pgtest"
+	"evesynapse/internal/store"
 )
 
 // structureAttemptTransport answers /universe/structures/{id}/
@@ -77,9 +78,9 @@ func (s *structureAttemptTransport) attemptOrder() []int64 {
 // apart.
 func buildStructureTestApp(t *testing.T, transport http.RoundTripper) (*Application, *db.Queries) {
 	t.Helper()
-	conn, pool, err := openDB(context.Background(), pgtest.FreshDSN(t))
+	conn, pool, err := store.Open(context.Background(), pgtest.FreshDSN(t))
 	if err != nil {
-		t.Fatalf("openDB: %v", err)
+		t.Fatalf("store.Open: %v", err)
 	}
 	t.Cleanup(func() { conn.Close(); pool.Close() })
 	queries := db.New(conn)
@@ -111,7 +112,7 @@ func scopedCharacter(t *testing.T, q *db.Queries, userID, characterID int64, nam
 	t.Helper()
 	ch := seedCharacter(t, q, userID, characterID, name)
 	ch.Scopes = "esi-universe.read_structures.v1"
-	ch.UpdatedAt = updatedAt
+	ch.UpdatedAt = mustTime(updatedAt)
 	return ch
 }
 
@@ -261,7 +262,7 @@ func TestStructureCorpMateAttemptedFirst(t *testing.T) {
 		characterID, corporationID int64
 	}{{fixtureCharA, 999000}, {fixtureCharB, 777000}} {
 		if err := q.UpsertCharacterCorporation(ctx, db.UpsertCharacterCorporationParams{
-			CharacterID: cc.characterID, CorporationID: cc.corporationID, UpdatedAt: "2026-01-01T00:00:00Z",
+			CharacterID: cc.characterID, CorporationID: cc.corporationID, UpdatedAt: mustTime("2026-01-01T00:00:00Z"),
 		}); err != nil {
 			t.Fatalf("seed character corp: %v", err)
 		}
@@ -287,13 +288,13 @@ func TestStructureProvenancePrecedence(t *testing.T) {
 	app, q := buildStructureTestApp(t, &structureAttemptTransport{})
 	ctx := context.Background()
 	const structureID = int64(1044752365771)
-	stamp := time.Now().UTC().Format(time.RFC3339)
+	stamp := time.Now().UTC()
 
 	seed := func(name, source string) {
 		t.Helper()
 		if err := q.SetStructureName(ctx, db.SetStructureNameParams{
 			StructureID: structureID, Name: name, State: esi.StructureResolved,
-			ResolvedAt: stamp, Source: source,
+			ResolvedAt: timeSet(stamp), Source: source,
 		}); err != nil {
 			t.Fatalf("seed %s: %v", source, err)
 		}

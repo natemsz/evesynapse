@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"html/template"
-	"log"
 	"net/http"
 	"sync"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/logging"
 )
 
 // pageData is the view model shared by the templates.
@@ -251,14 +251,14 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 	}
 	ts, err := parsedTemplate(&pageTemplates, "base", page, "templates/base.html", "templates/balancechart.html", "templates/charselector.html")
 	if err != nil {
-		log.Printf("parse template %s: %v", page, err)
+		logging.Errorf("parse template %s: %v", page, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
 	buf := new(bytes.Buffer)
 	if err := ts.ExecuteTemplate(buf, "base", data); err != nil {
-		log.Printf("execute template %s: %v", page, err)
+		logging.Errorf("execute template %s: %v", page, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -341,7 +341,7 @@ func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 
 	users, err := app.queries.ListUsers(ctx)
 	if err != nil {
-		log.Printf("admin: list users: %v", err)
+		logging.Errorf("admin: list users: %v", err)
 		data.Error = "Could not load admin data; check the server log."
 	} else {
 		data.Users = users
@@ -349,7 +349,7 @@ func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 
 	characters, err := app.queries.ListAllCharacters(ctx)
 	if err != nil {
-		log.Printf("admin: list characters: %v", err)
+		logging.Errorf("admin: list characters: %v", err)
 		data.Error = "Could not load admin data; check the server log."
 	} else {
 		data.Characters = characters
@@ -358,22 +358,18 @@ func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	// Snapshot cache overview: per character, which ESI kinds are
 	// cached and when each expires.
 	for _, ch := range data.Characters {
-		snaps, err := app.listSnapshotMeta(ctx, ch.CharacterID)
+		snaps, err := app.queries.ListSnapshotMetaByCharacter(ctx, ch.CharacterID)
 		if err != nil {
-			log.Printf("admin: list snapshots for character %d: %v", ch.CharacterID, err)
+			logging.Errorf("admin: list snapshots for character %d: %v", ch.CharacterID, err)
 			continue
 		}
 		for _, snap := range snaps {
-			until := "—"
-			if snap.CachedUntil.Valid && snap.CachedUntil.String != "" {
-				until = snap.CachedUntil.String
-			}
 			data.Snapshots = append(data.Snapshots, adminSnapshotRow{
 				CharacterID:   ch.CharacterID,
 				CharacterName: ch.Name,
 				Kind:          snap.Kind,
-				FetchedAt:     snap.FetchedAt,
-				CachedUntil:   until,
+				FetchedAt:     rfc3339(snap.FetchedAt),
+				CachedUntil:   rfc3339Or(snap.CachedUntil, "—"),
 			})
 		}
 	}

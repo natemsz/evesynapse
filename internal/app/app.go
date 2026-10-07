@@ -1,6 +1,7 @@
 // Package app is the EveSynapse web application: configuration,
-// EVE SSO auth and sessions, the HTTP routes and page handlers, the
-// background refresh worker, and DB bootstrap. The two entrypoints
+// EVE SSO auth and sessions, the HTTP routes and page handlers, and
+// the background refresh worker. The database and its schema are
+// the store package's. The two entrypoints
 // (cmd/evesynapse for release, cmd/evesynapse-dev for local dev)
 // only wire configuration into New and serve Handler.
 package app
@@ -11,7 +12,6 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -25,55 +25,12 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
+	"evesynapse/internal/store"
 )
 
 //go:embed templates/*.html
 var templatesFS embed.FS
-
-// The schema, one embedded file per step. db.go lists them in
-// order (schemaSteps) and applies whichever a database is missing,
-// each in one transaction, recording it in schema_migrations. A
-// new schema change is the next numbered file in schema_pg/, an
-// embed here, and a line there.
-
-// Step 001: the whole schema as of the move to Postgres.
-//
-//go:embed schema_pg/001_baseline.sql
-var pgBaselineSchema string
-
-// Step 002: the station leaderboard.
-//
-//go:embed schema_pg/002_station_leaderboard.sql
-var pgStationLeaderboardSchema string
-
-// Step 003: fitting metadata (is_public / is_draft on
-// local_fittings).
-//
-//go:embed schema_pg/003_fit_metadata.sql
-var pgFitMetadataSchema string
-
-// Step 004 (v0.3.33): per-type market price TTL cache and industry
-// cost index tracking.
-//
-//go:embed schema_pg/004_price_cache_costindex.sql
-var pgPriceCacheSchema string
-
-// Step 005 (v0.3.34): restock planner targets.
-//
-//go:embed schema_pg/005_restock.sql
-var pgRestockSchema string
-
-// Step 006 (v0.3.35): custom jump-clone names.
-//
-//go:embed schema_pg/006_clone_names.sql
-var pgCloneNamesSchema string
-
-// Step 007: foreign keys to users on the four per-user tables that
-// lacked one. The first step applied purely by its record; steps
-// 001–006 also carry a probe, for databases older than the record.
-//
-//go:embed schema_pg/007_user_foreign_keys.sql
-var pgUserForeignKeysSchema string
 
 //go:embed static
 var staticFS embed.FS
@@ -158,7 +115,7 @@ type Application struct {
 	// only when a refresh has landed.
 	storedPricesMu    sync.Mutex
 	storedPricesCache map[int64]esi.MarketPrice
-	storedPricesStamp string
+	storedPricesStamp time.Time
 
 	// Character IDs flagged for first-in-line warm-up on the next
 	// worker cycle (fresh SSO logins, Sync-page re-warm requests).
@@ -194,13 +151,13 @@ func New(cfg Config) (*Application, error) {
 		return nil, cfg.signUp.err
 	}
 	if p := cfg.signUp; p.restricted() {
-		log.Printf("evesynapse: new accounts are limited to %d listed character(s), %d corporation(s) and %d alliance(s)",
+		logging.Infof("evesynapse: new accounts are limited to %d listed character(s), %d corporation(s) and %d alliance(s)",
 			len(p.characterIDs), len(p.corporationIDs), len(p.allianceIDs))
 	} else {
-		log.Printf("evesynapse: new accounts are open to anyone who can sign in with EVE (EVE_ALLOWED_*_IDS limits that)")
+		logging.Infof("evesynapse: new accounts are open to anyone who can sign in with EVE (EVE_ALLOWED_*_IDS limits that)")
 	}
 
-	dbConn, pool, err := openDB(context.Background(), cfg.databaseURL)
+	dbConn, pool, err := store.Open(context.Background(), cfg.databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("open the database: %w", err)
 	}
@@ -254,11 +211,11 @@ func New(cfg Config) (*Application, error) {
 		}
 		resp, err := loginHTTPClient.Do(req)
 		if err != nil {
-			log.Printf("evesynapse: WARNING EVE SSO discovery not reachable: %v", err)
+			logging.Warnf("evesynapse: EVE SSO discovery not reachable: %v", err)
 			return
 		}
 		defer resp.Body.Close()
-		log.Printf("evesynapse: EVE SSO discovery reachable (HTTP %d)", resp.StatusCode)
+		logging.Infof("evesynapse: EVE SSO discovery reachable (HTTP %d)", resp.StatusCode)
 	}()
 
 	return app, nil
@@ -628,12 +585,18 @@ func (app *Application) requireAdmin(next http.Handler) http.Handler {
 // requestLogger logs method, path, status and duration. The query string
 // is deliberately never logged: /auth/callback carries an OAuth
 // authorization code and error details that don't belong in logs.
+// A request the server itself failed (5xx) is logged as an error;
+// every other request, refusals included, is routine.
 func requestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 		next.ServeHTTP(ww, r)
-		log.Printf("%s %s -> %d (%s)", r.Method, r.URL.Path, ww.Status(),
+		logf := logging.Infof
+		if ww.Status() >= http.StatusInternalServerError {
+			logf = logging.Errorf
+		}
+		logf("%s %s -> %d (%s)", r.Method, r.URL.Path, ww.Status(),
 			time.Since(start).Round(time.Millisecond))
 	})
 }

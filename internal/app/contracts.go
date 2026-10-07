@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -86,7 +86,7 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/contracts/")
 	if err != nil {
-		log.Printf("contracts: list characters: %v", err)
+		logging.Errorf("contracts: list characters: %v", err)
 		data.Error = "Could not load contract data; check the server log."
 		app.render(ctx, w, http.StatusOK, "contracts.html", data)
 		return
@@ -160,7 +160,7 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 		// contracts mainly; other types carry lists too).
 		items, ok, err := app.loadContractItems(ctx, c.ContractID)
 		if err != nil {
-			log.Printf("contracts: read items for contract %d: %v", c.ContractID, err)
+			logging.Errorf("contracts: read items for contract %d: %v", c.ContractID, err)
 		}
 		switch {
 		case ok:

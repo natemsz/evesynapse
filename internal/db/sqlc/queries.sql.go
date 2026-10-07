@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/lib/pq"
 )
@@ -30,26 +31,26 @@ RETURNING id, user_id, name, ship_type_id, items_json, is_public, is_draft, crea
 `
 
 type CreateLocalFittingParams struct {
-	UserID     int64  `json:"user_id"`
-	Name       string `json:"name"`
-	ShipTypeID int64  `json:"ship_type_id"`
-	ItemsJson  string `json:"items_json"`
-	IsPublic   bool   `json:"is_public"`
-	IsDraft    bool   `json:"is_draft"`
-	CreatedAt  string `json:"created_at"`
-	UpdatedAt  string `json:"updated_at"`
+	UserID     int64     `json:"user_id"`
+	Name       string    `json:"name"`
+	ShipTypeID int64     `json:"ship_type_id"`
+	ItemsJson  string    `json:"items_json"`
+	IsPublic   bool      `json:"is_public"`
+	IsDraft    bool      `json:"is_draft"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type CreateLocalFittingRow struct {
-	ID         int64  `json:"id"`
-	UserID     int64  `json:"user_id"`
-	Name       string `json:"name"`
-	ShipTypeID int64  `json:"ship_type_id"`
-	ItemsJson  string `json:"items_json"`
-	IsPublic   bool   `json:"is_public"`
-	IsDraft    bool   `json:"is_draft"`
-	CreatedAt  string `json:"created_at"`
-	UpdatedAt  string `json:"updated_at"`
+	ID         int64     `json:"id"`
+	UserID     int64     `json:"user_id"`
+	Name       string    `json:"name"`
+	ShipTypeID int64     `json:"ship_type_id"`
+	ItemsJson  string    `json:"items_json"`
+	IsPublic   bool      `json:"is_public"`
+	IsDraft    bool      `json:"is_draft"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // ---------------------------------------------------------------------
@@ -90,10 +91,10 @@ RETURNING id, user_id, character_id, name, created_at
 `
 
 type CreateSkillPlanParams struct {
-	UserID      int64  `json:"user_id"`
-	CharacterID int64  `json:"character_id"`
-	Name        string `json:"name"`
-	CreatedAt   string `json:"created_at"`
+	UserID      int64     `json:"user_id"`
+	CharacterID int64     `json:"character_id"`
+	Name        string    `json:"name"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // ---------------------------------------------------------------------
@@ -122,7 +123,7 @@ func (q *Queries) CreateSkillPlan(ctx context.Context, arg CreateSkillPlanParams
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (created_at)
-VALUES (to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS'))
+VALUES (now())
 RETURNING id, created_at, home_layout, last_briefing_at
 `
 
@@ -273,7 +274,7 @@ func (q *Queries) GetContractDetail(ctx context.Context, contractID int64) (Cont
 }
 
 const getGlobalSnapshot = `-- name: GetGlobalSnapshot :one
-SELECT kind, payload, fetched_at, cached_until FROM global_snapshots
+SELECT kind, payload, fetched_at, cached_until, etag FROM global_snapshots
 WHERE kind = $1
 `
 
@@ -290,6 +291,7 @@ func (q *Queries) GetGlobalSnapshot(ctx context.Context, kind string) (GlobalSna
 		&i.Payload,
 		&i.FetchedAt,
 		&i.CachedUntil,
+		&i.Etag,
 	)
 	return i, err
 }
@@ -323,15 +325,15 @@ type GetLocalFittingParams struct {
 }
 
 type GetLocalFittingRow struct {
-	ID         int64  `json:"id"`
-	UserID     int64  `json:"user_id"`
-	Name       string `json:"name"`
-	ShipTypeID int64  `json:"ship_type_id"`
-	ItemsJson  string `json:"items_json"`
-	IsPublic   bool   `json:"is_public"`
-	IsDraft    bool   `json:"is_draft"`
-	CreatedAt  string `json:"created_at"`
-	UpdatedAt  string `json:"updated_at"`
+	ID         int64     `json:"id"`
+	UserID     int64     `json:"user_id"`
+	Name       string    `json:"name"`
+	ShipTypeID int64     `json:"ship_type_id"`
+	ItemsJson  string    `json:"items_json"`
+	IsPublic   bool      `json:"is_public"`
+	IsDraft    bool      `json:"is_draft"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 func (q *Queries) GetLocalFitting(ctx context.Context, arg GetLocalFittingParams) (GetLocalFittingRow, error) {
@@ -364,7 +366,7 @@ type GetPublicFittingRow struct {
 	Name       string      `json:"name"`
 	ShipTypeID int64       `json:"ship_type_id"`
 	ItemsJson  string      `json:"items_json"`
-	UpdatedAt  string      `json:"updated_at"`
+	UpdatedAt  time.Time   `json:"updated_at"`
 	AuthorName interface{} `json:"author_name"`
 }
 
@@ -407,7 +409,7 @@ func (q *Queries) GetSkillPlan(ctx context.Context, arg GetSkillPlanParams) (Ski
 }
 
 const getSnapshot = `-- name: GetSnapshot :one
-SELECT character_id, kind, payload, fetched_at, cached_until FROM character_snapshots
+SELECT character_id, kind, payload, fetched_at, cached_until, etag FROM character_snapshots
 WHERE character_id = $1 AND kind = $2
 `
 
@@ -425,8 +427,28 @@ func (q *Queries) GetSnapshot(ctx context.Context, arg GetSnapshotParams) (Chara
 		&i.Payload,
 		&i.FetchedAt,
 		&i.CachedUntil,
+		&i.Etag,
 	)
 	return i, err
+}
+
+const getSnapshotETag = `-- name: GetSnapshotETag :one
+SELECT etag FROM character_snapshots
+WHERE character_id = $1 AND kind = $2
+`
+
+type GetSnapshotETagParams struct {
+	CharacterID int64  `json:"character_id"`
+	Kind        string `json:"kind"`
+}
+
+// The ETag a snapshot was stored with (” when it has none), read
+// without its payload: all a conditional refresh needs to send.
+func (q *Queries) GetSnapshotETag(ctx context.Context, arg GetSnapshotETagParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, getSnapshotETag, arg.CharacterID, arg.Kind)
+	var etag string
+	err := row.Scan(&etag)
+	return etag, err
 }
 
 const getSnapshotFetchState = `-- name: GetSnapshotFetchState :one
@@ -480,9 +502,9 @@ WHERE id = $1
 `
 
 // Phase 6 (schema 017): the Briefing module's window anchor.
-func (q *Queries) GetUserBriefingAnchor(ctx context.Context, id int64) (string, error) {
+func (q *Queries) GetUserBriefingAnchor(ctx context.Context, id int64) (sql.NullTime, error) {
 	row := q.db.QueryRowContext(ctx, getUserBriefingAnchor, id)
-	var last_briefing_at string
+	var last_briefing_at sql.NullTime
 	err := row.Scan(&last_briefing_at)
 	return last_briefing_at, err
 }
@@ -495,15 +517,15 @@ LIMIT 1
 `
 
 type GetUserDraftFittingRow struct {
-	ID         int64  `json:"id"`
-	UserID     int64  `json:"user_id"`
-	Name       string `json:"name"`
-	ShipTypeID int64  `json:"ship_type_id"`
-	ItemsJson  string `json:"items_json"`
-	IsPublic   bool   `json:"is_public"`
-	IsDraft    bool   `json:"is_draft"`
-	CreatedAt  string `json:"created_at"`
-	UpdatedAt  string `json:"updated_at"`
+	ID         int64     `json:"id"`
+	UserID     int64     `json:"user_id"`
+	Name       string    `json:"name"`
+	ShipTypeID int64     `json:"ship_type_id"`
+	ItemsJson  string    `json:"items_json"`
+	IsPublic   bool      `json:"is_public"`
+	IsDraft    bool      `json:"is_draft"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 func (q *Queries) GetUserDraftFitting(ctx context.Context, userID int64) (GetUserDraftFittingRow, error) {
@@ -825,7 +847,7 @@ func (q *Queries) ListCorporationIDsByUser(ctx context.Context, userID int64) ([
 }
 
 const listGlobalSnapshots = `-- name: ListGlobalSnapshots :many
-SELECT kind, payload, fetched_at, cached_until FROM global_snapshots
+SELECT kind, payload, fetched_at, cached_until, etag FROM global_snapshots
 ORDER BY kind
 `
 
@@ -843,6 +865,7 @@ func (q *Queries) ListGlobalSnapshots(ctx context.Context) ([]GlobalSnapshot, er
 			&i.Payload,
 			&i.FetchedAt,
 			&i.CachedUntil,
+			&i.Etag,
 		); err != nil {
 			return nil, err
 		}
@@ -972,15 +995,15 @@ LIMIT 100
 `
 
 type ListLocalFittingsRow struct {
-	ID         int64  `json:"id"`
-	UserID     int64  `json:"user_id"`
-	Name       string `json:"name"`
-	ShipTypeID int64  `json:"ship_type_id"`
-	ItemsJson  string `json:"items_json"`
-	IsPublic   bool   `json:"is_public"`
-	IsDraft    bool   `json:"is_draft"`
-	CreatedAt  string `json:"created_at"`
-	UpdatedAt  string `json:"updated_at"`
+	ID         int64     `json:"id"`
+	UserID     int64     `json:"user_id"`
+	Name       string    `json:"name"`
+	ShipTypeID int64     `json:"ship_type_id"`
+	ItemsJson  string    `json:"items_json"`
+	IsPublic   bool      `json:"is_public"`
+	IsDraft    bool      `json:"is_draft"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 func (q *Queries) ListLocalFittings(ctx context.Context, userID int64) ([]ListLocalFittingsRow, error) {
@@ -1025,10 +1048,10 @@ ORDER BY s.character_id, s.kind
 `
 
 type ListPlanetLayoutsForUserRow struct {
-	CharacterID int64  `json:"character_id"`
-	Kind        string `json:"kind"`
-	Payload     string `json:"payload"`
-	FetchedAt   string `json:"fetched_at"`
+	CharacterID int64     `json:"character_id"`
+	Kind        string    `json:"kind"`
+	Payload     string    `json:"payload"`
+	FetchedAt   time.Time `json:"fetched_at"`
 }
 
 func (q *Queries) ListPlanetLayoutsForUser(ctx context.Context, userID int64) ([]ListPlanetLayoutsForUserRow, error) {
@@ -1197,8 +1220,47 @@ func (q *Queries) ListSnapshotFetchStatesByCharacter(ctx context.Context, charac
 	return items, nil
 }
 
+const listSnapshotMetaByCharacter = `-- name: ListSnapshotMetaByCharacter :many
+SELECT kind, fetched_at, cached_until FROM character_snapshots
+WHERE character_id = $1
+ORDER BY kind
+`
+
+type ListSnapshotMetaByCharacterRow struct {
+	Kind        string       `json:"kind"`
+	FetchedAt   time.Time    `json:"fetched_at"`
+	CachedUntil sql.NullTime `json:"cached_until"`
+}
+
+// A character's stored snapshots without their payloads: which kinds
+// exist and how fresh each is. The payloads (a whole asset list, a
+// mailbox) are by far the bulk of the table, and the readers that
+// only order, count or check freshness have no use for them.
+func (q *Queries) ListSnapshotMetaByCharacter(ctx context.Context, characterID int64) ([]ListSnapshotMetaByCharacterRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSnapshotMetaByCharacter, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSnapshotMetaByCharacterRow
+	for rows.Next() {
+		var i ListSnapshotMetaByCharacterRow
+		if err := rows.Scan(&i.Kind, &i.FetchedAt, &i.CachedUntil); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSnapshotsByCharacter = `-- name: ListSnapshotsByCharacter :many
-SELECT character_id, kind, payload, fetched_at, cached_until FROM character_snapshots
+SELECT character_id, kind, payload, fetched_at, cached_until, etag FROM character_snapshots
 WHERE character_id = $1
 ORDER BY kind
 `
@@ -1218,6 +1280,7 @@ func (q *Queries) ListSnapshotsByCharacter(ctx context.Context, characterID int6
 			&i.Payload,
 			&i.FetchedAt,
 			&i.CachedUntil,
+			&i.Etag,
 		); err != nil {
 			return nil, err
 		}
@@ -1233,7 +1296,7 @@ func (q *Queries) ListSnapshotsByCharacter(ctx context.Context, characterID int6
 }
 
 const listSnapshotsByKind = `-- name: ListSnapshotsByKind :many
-SELECT character_id, kind, payload, fetched_at, cached_until FROM character_snapshots
+SELECT character_id, kind, payload, fetched_at, cached_until, etag FROM character_snapshots
 WHERE kind = $1
 ORDER BY character_id
 `
@@ -1253,6 +1316,7 @@ func (q *Queries) ListSnapshotsByKind(ctx context.Context, kind string) ([]Chara
 			&i.Payload,
 			&i.FetchedAt,
 			&i.CachedUntil,
+			&i.Etag,
 		); err != nil {
 			return nil, err
 		}
@@ -1280,15 +1344,23 @@ type ListSnapshotsForUserParams struct {
 	Kinds  []string `json:"kinds"`
 }
 
-func (q *Queries) ListSnapshotsForUser(ctx context.Context, arg ListSnapshotsForUserParams) ([]CharacterSnapshot, error) {
+type ListSnapshotsForUserRow struct {
+	CharacterID int64        `json:"character_id"`
+	Kind        string       `json:"kind"`
+	Payload     string       `json:"payload"`
+	FetchedAt   time.Time    `json:"fetched_at"`
+	CachedUntil sql.NullTime `json:"cached_until"`
+}
+
+func (q *Queries) ListSnapshotsForUser(ctx context.Context, arg ListSnapshotsForUserParams) ([]ListSnapshotsForUserRow, error) {
 	rows, err := q.db.QueryContext(ctx, listSnapshotsForUser, arg.UserID, pq.Array(arg.Kinds))
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []CharacterSnapshot
+	var items []ListSnapshotsForUserRow
 	for rows.Next() {
-		var i CharacterSnapshot
+		var i ListSnapshotsForUserRow
 		if err := rows.Scan(
 			&i.CharacterID,
 			&i.Kind,
@@ -1483,16 +1555,16 @@ type SearchLocalFittingsParams struct {
 }
 
 type SearchLocalFittingsRow struct {
-	ID         int64  `json:"id"`
-	UserID     int64  `json:"user_id"`
-	Name       string `json:"name"`
-	ShipTypeID int64  `json:"ship_type_id"`
-	ItemsJson  string `json:"items_json"`
-	IsPublic   bool   `json:"is_public"`
-	IsDraft    bool   `json:"is_draft"`
-	CreatedAt  string `json:"created_at"`
-	UpdatedAt  string `json:"updated_at"`
-	ShipName   string `json:"ship_name"`
+	ID         int64     `json:"id"`
+	UserID     int64     `json:"user_id"`
+	Name       string    `json:"name"`
+	ShipTypeID int64     `json:"ship_type_id"`
+	ItemsJson  string    `json:"items_json"`
+	IsPublic   bool      `json:"is_public"`
+	IsDraft    bool      `json:"is_draft"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	ShipName   string    `json:"ship_name"`
 }
 
 func (q *Queries) SearchLocalFittings(ctx context.Context, arg SearchLocalFittingsParams) ([]SearchLocalFittingsRow, error) {
@@ -1551,7 +1623,7 @@ type SearchPublicFittingsRow struct {
 	Name       string      `json:"name"`
 	ShipTypeID int64       `json:"ship_type_id"`
 	ItemsJson  string      `json:"items_json"`
-	UpdatedAt  string      `json:"updated_at"`
+	UpdatedAt  time.Time   `json:"updated_at"`
 	ShipName   string      `json:"ship_name"`
 	AuthorName interface{} `json:"author_name"`
 }
@@ -1589,14 +1661,14 @@ func (q *Queries) SearchPublicFittings(ctx context.Context, arg SearchPublicFitt
 
 const setCharacterLinkState = `-- name: SetCharacterLinkState :exec
 UPDATE characters
-SET link_state = $1, link_state_at = $2, updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+SET link_state = $1, link_state_at = $2, updated_at = now()
 WHERE character_id = $3
 `
 
 type SetCharacterLinkStateParams struct {
-	LinkState   string         `json:"link_state"`
-	LinkStateAt sql.NullString `json:"link_state_at"`
-	CharacterID int64          `json:"character_id"`
+	LinkState   string       `json:"link_state"`
+	LinkStateAt sql.NullTime `json:"link_state_at"`
+	CharacterID int64        `json:"character_id"`
 }
 
 func (q *Queries) SetCharacterLinkState(ctx context.Context, arg SetCharacterLinkStateParams) error {
@@ -1606,7 +1678,7 @@ func (q *Queries) SetCharacterLinkState(ctx context.Context, arg SetCharacterLin
 
 const setCharacterTags = `-- name: SetCharacterTags :exec
 UPDATE characters
-SET tags = $1, updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+SET tags = $1, updated_at = now()
 WHERE character_id = $2 AND user_id = $3
 `
 
@@ -1628,8 +1700,8 @@ WHERE id = $2
 `
 
 type SetUserBriefingAnchorParams struct {
-	LastBriefingAt string `json:"last_briefing_at"`
-	ID             int64  `json:"id"`
+	LastBriefingAt sql.NullTime `json:"last_briefing_at"`
+	ID             int64        `json:"id"`
 }
 
 func (q *Queries) SetUserBriefingAnchor(ctx context.Context, arg SetUserBriefingAnchorParams) error {
@@ -1653,17 +1725,66 @@ func (q *Queries) SetUserHomeLayout(ctx context.Context, arg SetUserHomeLayoutPa
 	return err
 }
 
+const touchGlobalSnapshot = `-- name: TouchGlobalSnapshot :execrows
+UPDATE global_snapshots
+SET fetched_at = $1, cached_until = $2
+WHERE kind = $3
+`
+
+type TouchGlobalSnapshotParams struct {
+	FetchedAt   time.Time `json:"fetched_at"`
+	CachedUntil time.Time `json:"cached_until"`
+	Kind        string    `json:"kind"`
+}
+
+// ESI answered "not modified": only the bookkeeping moves.
+func (q *Queries) TouchGlobalSnapshot(ctx context.Context, arg TouchGlobalSnapshotParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, touchGlobalSnapshot, arg.FetchedAt, arg.CachedUntil, arg.Kind)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const touchSnapshot = `-- name: TouchSnapshot :execrows
+UPDATE character_snapshots
+SET fetched_at = $1, cached_until = $2
+WHERE character_id = $3 AND kind = $4
+`
+
+type TouchSnapshotParams struct {
+	FetchedAt   time.Time    `json:"fetched_at"`
+	CachedUntil sql.NullTime `json:"cached_until"`
+	CharacterID int64        `json:"character_id"`
+	Kind        string       `json:"kind"`
+}
+
+// ESI answered "not modified": the stored payload is still current,
+// so only the bookkeeping beside it moves.
+func (q *Queries) TouchSnapshot(ctx context.Context, arg TouchSnapshotParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, touchSnapshot,
+		arg.FetchedAt,
+		arg.CachedUntil,
+		arg.CharacterID,
+		arg.Kind,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const updateCharacterTokens = `-- name: UpdateCharacterTokens :exec
 UPDATE characters
-SET access_token = $1, refresh_token = $2, token_expiry = $3, updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+SET access_token = $1, refresh_token = $2, token_expiry = $3, updated_at = now()
 WHERE character_id = $4
 `
 
 type UpdateCharacterTokensParams struct {
-	AccessToken  string         `json:"access_token"`
-	RefreshToken string         `json:"refresh_token"`
-	TokenExpiry  sql.NullString `json:"token_expiry"`
-	CharacterID  int64          `json:"character_id"`
+	AccessToken  string       `json:"access_token"`
+	RefreshToken string       `json:"refresh_token"`
+	TokenExpiry  sql.NullTime `json:"token_expiry"`
+	CharacterID  int64        `json:"character_id"`
 }
 
 func (q *Queries) UpdateCharacterTokens(ctx context.Context, arg UpdateCharacterTokensParams) error {
@@ -1683,14 +1804,14 @@ WHERE id = $7 AND user_id = $8
 `
 
 type UpdateLocalFittingParams struct {
-	Name       string `json:"name"`
-	ShipTypeID int64  `json:"ship_type_id"`
-	ItemsJson  string `json:"items_json"`
-	IsPublic   bool   `json:"is_public"`
-	IsDraft    bool   `json:"is_draft"`
-	UpdatedAt  string `json:"updated_at"`
-	ID         int64  `json:"id"`
-	UserID     int64  `json:"user_id"`
+	Name       string    `json:"name"`
+	ShipTypeID int64     `json:"ship_type_id"`
+	ItemsJson  string    `json:"items_json"`
+	IsPublic   bool      `json:"is_public"`
+	IsDraft    bool      `json:"is_draft"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	ID         int64     `json:"id"`
+	UserID     int64     `json:"user_id"`
 }
 
 func (q *Queries) UpdateLocalFitting(ctx context.Context, arg UpdateLocalFittingParams) error {
@@ -1732,7 +1853,7 @@ INSERT INTO characters (
     $1, $2, $3,
     $4, $5, $6,
     $7, $8, $9, $10, $11,
-    to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+    now()
 )
 ON CONFLICT (character_id) DO UPDATE SET
     user_id       = excluded.user_id,
@@ -1750,17 +1871,17 @@ RETURNING character_id, user_id, name, access_token, refresh_token, token_expiry
 `
 
 type UpsertCharacterParams struct {
-	CharacterID  int64          `json:"character_id"`
-	UserID       int64          `json:"user_id"`
-	Name         string         `json:"name"`
-	AccessToken  string         `json:"access_token"`
-	RefreshToken string         `json:"refresh_token"`
-	TokenExpiry  sql.NullString `json:"token_expiry"`
-	Scopes       string         `json:"scopes"`
-	CachedUntil  sql.NullString `json:"cached_until"`
-	OwnerHash    string         `json:"owner_hash"`
-	LinkState    string         `json:"link_state"`
-	LinkStateAt  sql.NullString `json:"link_state_at"`
+	CharacterID  int64        `json:"character_id"`
+	UserID       int64        `json:"user_id"`
+	Name         string       `json:"name"`
+	AccessToken  string       `json:"access_token"`
+	RefreshToken string       `json:"refresh_token"`
+	TokenExpiry  sql.NullTime `json:"token_expiry"`
+	Scopes       string       `json:"scopes"`
+	CachedUntil  sql.NullTime `json:"cached_until"`
+	OwnerHash    string       `json:"owner_hash"`
+	LinkState    string       `json:"link_state"`
+	LinkStateAt  sql.NullTime `json:"link_state_at"`
 }
 
 func (q *Queries) UpsertCharacter(ctx context.Context, arg UpsertCharacterParams) (Character, error) {
@@ -1806,9 +1927,9 @@ ON CONFLICT (character_id) DO UPDATE SET
 `
 
 type UpsertCharacterCorporationParams struct {
-	CharacterID   int64  `json:"character_id"`
-	CorporationID int64  `json:"corporation_id"`
-	UpdatedAt     string `json:"updated_at"`
+	CharacterID   int64     `json:"character_id"`
+	CorporationID int64     `json:"corporation_id"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 func (q *Queries) UpsertCharacterCorporation(ctx context.Context, arg UpsertCharacterCorporationParams) error {
@@ -1859,10 +1980,10 @@ ON CONFLICT (contract_id) DO UPDATE SET
 `
 
 type UpsertContractDetailParams struct {
-	ContractID  int64  `json:"contract_id"`
-	CharacterID int64  `json:"character_id"`
-	Payload     string `json:"payload"`
-	FetchedAt   string `json:"fetched_at"`
+	ContractID  int64     `json:"contract_id"`
+	CharacterID int64     `json:"character_id"`
+	Payload     string    `json:"payload"`
+	FetchedAt   time.Time `json:"fetched_at"`
 }
 
 func (q *Queries) UpsertContractDetail(ctx context.Context, arg UpsertContractDetailParams) error {
@@ -1876,19 +1997,21 @@ func (q *Queries) UpsertContractDetail(ctx context.Context, arg UpsertContractDe
 }
 
 const upsertGlobalSnapshot = `-- name: UpsertGlobalSnapshot :exec
-INSERT INTO global_snapshots (kind, payload, fetched_at, cached_until)
-VALUES ($1, $2, $3, $4)
+INSERT INTO global_snapshots (kind, payload, fetched_at, cached_until, etag)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (kind) DO UPDATE SET
     payload      = excluded.payload,
     fetched_at   = excluded.fetched_at,
-    cached_until = excluded.cached_until
+    cached_until = excluded.cached_until,
+    etag         = excluded.etag
 `
 
 type UpsertGlobalSnapshotParams struct {
-	Kind        string `json:"kind"`
-	Payload     string `json:"payload"`
-	FetchedAt   string `json:"fetched_at"`
-	CachedUntil string `json:"cached_until"`
+	Kind        string    `json:"kind"`
+	Payload     string    `json:"payload"`
+	FetchedAt   time.Time `json:"fetched_at"`
+	CachedUntil time.Time `json:"cached_until"`
+	Etag        string    `json:"etag"`
 }
 
 func (q *Queries) UpsertGlobalSnapshot(ctx context.Context, arg UpsertGlobalSnapshotParams) error {
@@ -1897,6 +2020,7 @@ func (q *Queries) UpsertGlobalSnapshot(ctx context.Context, arg UpsertGlobalSnap
 		arg.Payload,
 		arg.FetchedAt,
 		arg.CachedUntil,
+		arg.Etag,
 	)
 	return err
 }
@@ -1912,11 +2036,11 @@ ON CONFLICT (killmail_id) DO UPDATE SET
 `
 
 type UpsertKillmailDetailParams struct {
-	KillmailID  int64  `json:"killmail_id"`
-	CharacterID int64  `json:"character_id"`
-	Hash        string `json:"hash"`
-	Payload     string `json:"payload"`
-	FetchedAt   string `json:"fetched_at"`
+	KillmailID  int64     `json:"killmail_id"`
+	CharacterID int64     `json:"character_id"`
+	Hash        string    `json:"hash"`
+	Payload     string    `json:"payload"`
+	FetchedAt   time.Time `json:"fetched_at"`
 }
 
 func (q *Queries) UpsertKillmailDetail(ctx context.Context, arg UpsertKillmailDetailParams) error {
@@ -1957,20 +2081,22 @@ func (q *Queries) UpsertSkillPlanItem(ctx context.Context, arg UpsertSkillPlanIt
 }
 
 const upsertSnapshot = `-- name: UpsertSnapshot :exec
-INSERT INTO character_snapshots (character_id, kind, payload, fetched_at, cached_until)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO character_snapshots (character_id, kind, payload, fetched_at, cached_until, etag)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (character_id, kind) DO UPDATE SET
     payload      = excluded.payload,
     fetched_at   = excluded.fetched_at,
-    cached_until = excluded.cached_until
+    cached_until = excluded.cached_until,
+    etag         = excluded.etag
 `
 
 type UpsertSnapshotParams struct {
-	CharacterID int64          `json:"character_id"`
-	Kind        string         `json:"kind"`
-	Payload     string         `json:"payload"`
-	FetchedAt   string         `json:"fetched_at"`
-	CachedUntil sql.NullString `json:"cached_until"`
+	CharacterID int64        `json:"character_id"`
+	Kind        string       `json:"kind"`
+	Payload     string       `json:"payload"`
+	FetchedAt   time.Time    `json:"fetched_at"`
+	CachedUntil sql.NullTime `json:"cached_until"`
+	Etag        string       `json:"etag"`
 }
 
 func (q *Queries) UpsertSnapshot(ctx context.Context, arg UpsertSnapshotParams) error {
@@ -1980,6 +2106,7 @@ func (q *Queries) UpsertSnapshot(ctx context.Context, arg UpsertSnapshotParams) 
 		arg.Payload,
 		arg.FetchedAt,
 		arg.CachedUntil,
+		arg.Etag,
 	)
 	return err
 }
@@ -1994,11 +2121,11 @@ ON CONFLICT (character_id, kind) DO UPDATE SET
 `
 
 type UpsertSnapshotFetchStateParams struct {
-	CharacterID int64  `json:"character_id"`
-	Kind        string `json:"kind"`
-	State       string `json:"state"`
-	Detail      string `json:"detail"`
-	AttemptedAt string `json:"attempted_at"`
+	CharacterID int64     `json:"character_id"`
+	Kind        string    `json:"kind"`
+	State       string    `json:"state"`
+	Detail      string    `json:"detail"`
+	AttemptedAt time.Time `json:"attempted_at"`
 }
 
 func (q *Queries) UpsertSnapshotFetchState(ctx context.Context, arg UpsertSnapshotFetchStateParams) error {
@@ -2027,7 +2154,7 @@ type UpsertWalletHistorySampleParams struct {
 	Day         string          `json:"day"`
 	Balance     float64         `json:"balance"`
 	NetWorth    sql.NullFloat64 `json:"net_worth"`
-	SampledAt   string          `json:"sampled_at"`
+	SampledAt   time.Time       `json:"sampled_at"`
 }
 
 func (q *Queries) UpsertWalletHistorySample(ctx context.Context, arg UpsertWalletHistorySampleParams) error {
@@ -2051,9 +2178,9 @@ ON CONFLICT (war_id) DO UPDATE SET
 `
 
 type UpsertWarDetailParams struct {
-	WarID     int64  `json:"war_id"`
-	Payload   string `json:"payload"`
-	FetchedAt string `json:"fetched_at"`
+	WarID     int64     `json:"war_id"`
+	Payload   string    `json:"payload"`
+	FetchedAt time.Time `json:"fetched_at"`
 }
 
 func (q *Queries) UpsertWarDetail(ctx context.Context, arg UpsertWarDetailParams) error {
@@ -2070,10 +2197,10 @@ ON CONFLICT (user_id, widget_id) DO UPDATE SET
 `
 
 type UpsertWidgetConfigParams struct {
-	UserID    int64  `json:"user_id"`
-	WidgetID  string `json:"widget_id"`
-	Config    string `json:"config"`
-	UpdatedAt string `json:"updated_at"`
+	UserID    int64     `json:"user_id"`
+	WidgetID  string    `json:"widget_id"`
+	Config    string    `json:"config"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 func (q *Queries) UpsertWidgetConfig(ctx context.Context, arg UpsertWidgetConfigParams) error {

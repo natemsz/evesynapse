@@ -77,7 +77,7 @@ func TestOrderLifecycleUpsertAndFillProgression(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lifecycle after pass 1: %v", err)
 	}
-	if row.VolumeRemainLast != 1000 || row.VolumeTotal != 1000 || row.ListedPrice != 5.5 || row.ClosedAt != "" || row.FirstSeenAt == "" {
+	if row.VolumeRemainLast != 1000 || row.VolumeTotal != 1000 || row.ListedPrice != 5.5 || row.ClosedAt.Valid || row.FirstSeenAt.IsZero() {
 		t.Fatalf("pass 1 row: %+v", row)
 	}
 	firstSeen := row.FirstSeenAt
@@ -93,11 +93,11 @@ func TestOrderLifecycleUpsertAndFillProgression(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lifecycle after pass 2: %v", err)
 	}
-	if row.VolumeRemainLast != 600 || row.ListedPrice != 5.4 || row.FirstSeenAt != firstSeen || row.ClosedAt != "" {
-		t.Fatalf("pass 2 row: %+v (firstSeen was %q)", row, firstSeen)
+	if row.VolumeRemainLast != 600 || row.ListedPrice != 5.4 || !row.FirstSeenAt.Equal(firstSeen) || row.ClosedAt.Valid {
+		t.Fatalf("pass 2 row: %+v (firstSeen was %v)", row, firstSeen)
 	}
-	if row.LastSeenAt < firstSeen {
-		t.Fatalf("lastSeen %q before firstSeen %q", row.LastSeenAt, firstSeen)
+	if row.LastSeenAt.Before(firstSeen) {
+		t.Fatalf("lastSeen %v before firstSeen %v", row.LastSeenAt, firstSeen)
 	}
 }
 
@@ -125,7 +125,7 @@ func TestOrderLifecycleCloseAsFilled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lifecycle at zero remain: %v", err)
 	}
-	if row.ClosedAt != "" {
+	if row.ClosedAt.Valid {
 		t.Fatalf("order closed while still in snapshot: %+v", row)
 	}
 
@@ -135,7 +135,7 @@ func TestOrderLifecycleCloseAsFilled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lifecycle after vanish: %v", err)
 	}
-	if row.ClosedAt == "" || row.CloseKind != "filled" {
+	if !row.ClosedAt.Valid || row.CloseKind != "filled" {
 		t.Fatalf("want filled close, got %+v", row)
 	}
 }
@@ -170,7 +170,7 @@ func TestOrderLifecycleCloseAsEnded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buy lifecycle after vanish: %v", err)
 	}
-	if row.ClosedAt == "" || row.CloseKind != "ended" {
+	if !row.ClosedAt.Valid || row.CloseKind != "ended" {
 		t.Fatalf("want ended close, got %+v", row)
 	}
 }
@@ -260,8 +260,8 @@ func TestOrderLifecyclePruneBound(t *testing.T) {
 	_ = ch
 
 	now := time.Now().UTC()
-	old := now.AddDate(-2, 0, 0).Format(time.RFC3339) // >365 days ago
-	recent := now.AddDate(0, -1, 0).Format(time.RFC3339)
+	old := now.AddDate(-2, 0, 0) // >365 days ago
+	recent := now.AddDate(0, -1, 0)
 	// 600 old closed rows + 5 recent closed rows, written directly.
 	for i := 0; i < 605; i++ {
 		orderID := int64(10000 + i)
@@ -376,7 +376,7 @@ func TestOrdersPageLifecycleRender(t *testing.T) {
 			CharacterID: fixtureCharA, OrderID: s.orderID, TypeID: s.typeID,
 			LocationID: 60003760, RegionID: 10000002, IsBuyOrder: s.isBuy,
 			ListedPrice: s.price, VolumeTotal: s.total, VolumeRemainLast: s.remain,
-			FirstSeenAt: s.first, LastSeenAt: s.closed,
+			FirstSeenAt: mustTime(s.first), LastSeenAt: mustTime(s.closed),
 		}); err != nil {
 			t.Fatalf("seed lifecycle %d: %v", s.orderID, err)
 		}
@@ -385,7 +385,7 @@ func TestOrdersPageLifecycleRender(t *testing.T) {
 			t.Fatalf("seed outbid %d: %v", s.orderID, err)
 		}
 		if err := q.CloseOrderLifecycle(ctx, db.CloseOrderLifecycleParams{
-			ClosedAt: s.closed, CloseKind: s.kind, CharacterID: fixtureCharA, OrderID: s.orderID,
+			ClosedAt: mustTime(s.closed), CloseKind: s.kind, CharacterID: fixtureCharA, OrderID: s.orderID,
 		}); err != nil {
 			t.Fatalf("close lifecycle %d: %v", s.orderID, err)
 		}
@@ -395,7 +395,7 @@ func TestOrdersPageLifecycleRender(t *testing.T) {
 		CharacterID: fixtureCharA, OrderID: 14, TypeID: 34,
 		LocationID: 60003760, RegionID: 10000002, IsBuyOrder: 0,
 		ListedPrice: 6.0, VolumeTotal: 100, VolumeRemainLast: 100,
-		FirstSeenAt: now.Format(time.RFC3339), LastSeenAt: now.Format(time.RFC3339),
+		FirstSeenAt: now, LastSeenAt: now,
 	}); err != nil {
 		t.Fatalf("seed open lifecycle: %v", err)
 	}
@@ -404,12 +404,12 @@ func TestOrdersPageLifecycleRender(t *testing.T) {
 		CharacterID: fixtureCharB, OrderID: 99, TypeID: 34,
 		LocationID: 60003760, RegionID: 10000002, IsBuyOrder: 0,
 		ListedPrice: 9.9, VolumeTotal: 10, VolumeRemainLast: 0,
-		FirstSeenAt: "2026-09-29T00:00:00Z", LastSeenAt: "2026-09-30T00:00:00Z",
+		FirstSeenAt: mustTime("2026-09-29T00:00:00Z"), LastSeenAt: mustTime("2026-09-30T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed other lifecycle: %v", err)
 	}
 	if err := q.CloseOrderLifecycle(ctx, db.CloseOrderLifecycleParams{
-		ClosedAt: "2026-09-30T00:00:00Z", CloseKind: "filled", CharacterID: fixtureCharB, OrderID: 99,
+		ClosedAt: mustTime("2026-09-30T00:00:00Z"), CloseKind: "filled", CharacterID: fixtureCharB, OrderID: 99,
 	}); err != nil {
 		t.Fatalf("close other lifecycle: %v", err)
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,6 +11,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -114,12 +114,12 @@ func (app *Application) notePageWant(ctx context.Context, kind pageWantKind, id 
 	switch kind {
 	case pageWantCharacter, pageWantPilot:
 		if err := app.queries.UpsertPilotWant(ctx, id); err != nil {
-			log.Printf("pagewant: note pilot want for %d: %v", id, err)
+			logging.Errorf("pagewant: note pilot want for %d: %v", id, err)
 		}
 	case pageWantTypeDescription:
 		if _, settled := app.descriptionState(ctx, id); !settled {
 			if err := app.queries.UpsertTypeDetailWant(ctx, id); err != nil {
-				log.Printf("pagewant: note type detail want for %d: %v", id, err)
+				logging.Errorf("pagewant: note type detail want for %d: %v", id, err)
 			}
 		}
 	case pageWantStructure:
@@ -128,18 +128,18 @@ func (app *Application) notePageWant(ctx context.Context, kind pageWantKind, id 
 		if regionID > 0 {
 			if err := app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
 				RegionID: regionID, TypeID: id,
-				LastRequestedAt: time.Now().UTC().Format(time.RFC3339),
+				LastRequestedAt: time.Now().UTC(),
 			}); err != nil {
-				log.Printf("pagewant: note history want for type %d in region %d: %v", id, regionID, err)
+				logging.Errorf("pagewant: note history want for type %d in region %d: %v", id, regionID, err)
 			}
 		}
 	case pageWantCorporation:
 		if err := app.queries.UpsertCorporationWant(ctx, id); err != nil {
-			log.Printf("pagewant: note corporation want for %d: %v", id, err)
+			logging.Errorf("pagewant: note corporation want for %d: %v", id, err)
 		}
 	case pageWantAlliance:
 		if err := app.queries.UpsertAllianceWant(ctx, id); err != nil {
-			log.Printf("pagewant: note alliance want for %d: %v", id, err)
+			logging.Errorf("pagewant: note alliance want for %d: %v", id, err)
 		}
 	case pageWantPlace:
 		// No dedicated queue exists for place labels yet; they are
@@ -151,8 +151,8 @@ func (app *Application) notePageWant(ctx context.Context, kind pageWantKind, id 
 		// shared by every viewer, so one note covers them all;
 		// the urgent drain answers it with a guide refresh when
 		// ESI's cache window allows.
-		if err := app.queries.NoteGuidePriceWant(ctx, time.Now().UTC().Format(time.RFC3339)); err != nil {
-			log.Printf("pagewant: note guide price want: %v", err)
+		if err := app.queries.NoteGuidePriceWant(ctx, time.Now().UTC()); err != nil {
+			logging.Errorf("pagewant: note guide price want: %v", err)
 		}
 	}
 

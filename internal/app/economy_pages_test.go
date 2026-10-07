@@ -16,7 +16,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -81,7 +80,7 @@ func TestEconomyPagesRenderFromSnapshots(t *testing.T) {
 		ContractID:  555,
 		CharacterID: fixtureCharA,
 		Payload:     `[{"record_id":1,"type_id":34,"quantity":100,"raw_quantity":100,"is_included":true,"is_singleton":false},{"record_id":2,"type_id":990001,"quantity":1,"raw_quantity":-1,"is_included":true,"is_singleton":true}]`,
-		FetchedAt:   "2026-01-01T00:00:00Z",
+		FetchedAt:   mustTime("2026-01-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed contract detail: %v", err)
 	}
@@ -108,7 +107,7 @@ func TestEconomyPagesRenderFromSnapshots(t *testing.T) {
 		Kind:        esi.SnapWalletJournal,
 		State:       fetchStateError,
 		Detail:      forbiddenDetailPrefix + " — this character's login predates the current scope list; sign in again to re-grant scopes.",
-		AttemptedAt: now.Format(time.RFC3339),
+		AttemptedAt: now,
 	}); err != nil {
 		t.Fatalf("seed fetch state: %v", err)
 	}
@@ -324,8 +323,8 @@ func TestRefreshEconomySnapshots(t *testing.T) {
 			CharacterID: fixtureCharA,
 			Kind:        kind,
 			Payload:     `[]`,
-			FetchedAt:   "2026-01-01T00:00:00Z",
-			CachedUntil: sql.NullString{String: "2026-01-01T00:00:00Z", Valid: true},
+			FetchedAt:   mustTime("2026-01-01T00:00:00Z"),
+			CachedUntil: mustNullTime("2026-01-01T00:00:00Z"),
 		}); err != nil {
 			t.Fatalf("stale snapshot %s: %v", kind, err)
 		}

@@ -167,8 +167,8 @@ ON CONFLICT (structure_id) DO UPDATE SET
 SELECT structure_id
 FROM structure_names
 WHERE state = 'pending'
-   OR (state = 'resolved' AND resolved_at < sqlc.arg(resolved_cutoff))
-   OR (state = 'missing' AND resolved_at < sqlc.arg(missing_cutoff))
+   OR (state = 'resolved' AND (resolved_at IS NULL OR resolved_at < sqlc.arg(resolved_cutoff)::timestamptz))
+   OR (state = 'missing' AND (resolved_at IS NULL OR resolved_at < sqlc.arg(missing_cutoff)::timestamptz))
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, structure_id
 LIMIT sqlc.arg(resolution_limit)::bigint;
 
@@ -219,8 +219,8 @@ ON CONFLICT (planet_id) DO UPDATE SET
 SELECT planet_id
 FROM planet_names
 WHERE state = 'pending'
-   OR (state = 'resolved' AND resolved_at < sqlc.arg(resolved_cutoff))
-   OR (state = 'missing' AND resolved_at < sqlc.arg(missing_cutoff))
+   OR (state = 'resolved' AND (resolved_at IS NULL OR resolved_at < sqlc.arg(resolved_cutoff)::timestamptz))
+   OR (state = 'missing' AND (resolved_at IS NULL OR resolved_at < sqlc.arg(missing_cutoff)::timestamptz))
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, planet_id
 LIMIT sqlc.arg(resolution_limit)::bigint;
 
@@ -229,7 +229,7 @@ LIMIT sqlc.arg(resolution_limit)::bigint;
 -- Pending rows are always due; ready rows re-check once their
 -- fetched_at passes the stale cutoff; missing rows (ESI 404)
 -- settle for good. The item details page enqueues type
--- descriptions the same way: a type_details row with an empty
+-- descriptions the same way: a type_details row with no
 -- fetched_at is a want.
 -- ---------------------------------------------------------------------
 -- name: GetPilotRecord :one
@@ -258,8 +258,8 @@ ON CONFLICT (character_id) DO UPDATE SET
 SELECT character_id
 FROM pilot_records
 WHERE state = 'pending'
-   OR (state = 'ready' AND fetched_at < sqlc.arg(stale_cutoff))
-ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at
+   OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < sqlc.arg(stale_cutoff)::timestamptz))
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at NULLS FIRST
 LIMIT sqlc.arg(drain_limit)::bigint;
 
 -- ---------------------------------------------------------------------
@@ -287,8 +287,8 @@ ON CONFLICT (corporation_id) DO UPDATE SET
 SELECT corporation_id
 FROM corporation_records
 WHERE state = 'pending'
-   OR (state = 'ready' AND fetched_at < sqlc.arg(stale_cutoff))
-ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at
+   OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < sqlc.arg(stale_cutoff)::timestamptz))
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at NULLS FIRST
 LIMIT sqlc.arg(drain_limit)::bigint;
 -- name: GetAllianceRecord :one
 SELECT alliance_id, payload, state, fetched_at, priority
@@ -309,8 +309,8 @@ ON CONFLICT (alliance_id) DO UPDATE SET
 SELECT alliance_id
 FROM alliance_records
 WHERE state = 'pending'
-   OR (state = 'ready' AND fetched_at < sqlc.arg(stale_cutoff))
-ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at
+   OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < sqlc.arg(stale_cutoff)::timestamptz))
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at NULLS FIRST
 LIMIT sqlc.arg(drain_limit)::bigint;
 
 -- Pilot name-resolution wants (schema 022): a topbar search for
@@ -330,16 +330,16 @@ ON CONFLICT DO NOTHING;
 SELECT normalized_name, display_name, state, character_id, requested_at, resolved_at, next_try_at, attempts
 FROM pilot_name_wants
 WHERE (state = 'pending' OR state = 'error')
-  AND (next_try_at = '' OR next_try_at <= sqlc.arg(now))
+  AND (next_try_at IS NULL OR next_try_at <= sqlc.arg(now)::timestamptz)
 ORDER BY requested_at
 LIMIT sqlc.arg(lim)::bigint;
 -- name: SetPilotNameWantReady :exec
 UPDATE pilot_name_wants
-SET state = 'ready', character_id = $1, resolved_at = $2, next_try_at = ''
+SET state = 'ready', character_id = $1, resolved_at = $2, next_try_at = NULL
 WHERE normalized_name = $3;
 -- name: SetPilotNameWantMissing :exec
 UPDATE pilot_name_wants
-SET state = 'missing', resolved_at = $1, next_try_at = ''
+SET state = 'missing', resolved_at = $1, next_try_at = NULL
 WHERE normalized_name = $2;
 -- name: SetPilotNameWantError :exec
 UPDATE pilot_name_wants
@@ -484,12 +484,11 @@ FROM market_region_stats WHERE region_id = $1;
 -- The tradefinder's routes, computed and ranked in SQL: one
 -- bounded read of at most tradefinderRowCap rows instead of
 -- pulling both regions' stored stats into Go. Mirrors the old
--- Go filter exactly: fresh figures on both sides (3-day rule,
--- compared as RFC3339 text), a real typical buy and sell,
--- margin above zero, the lowball opt-out, the margin-% floor,
--- the sold-per-day floor, and the movable size as the least of
--- what trades, the origin's open buy volume, and the
--- destination's open sell volume.
+-- Go filter exactly: fresh figures on both sides (3-day rule), a
+-- real typical buy and sell, margin above zero, the lowball
+-- opt-out, the margin-% floor, the sold-per-day floor, and the
+-- movable size as the least of what trades, the origin's open buy
+-- volume, and the destination's open sell volume.
 SELECT type_id, origin_typical_buy, dest_typical_sell, dest_daily_volume,
        origin_buy_volume, dest_sell_volume
 FROM (
@@ -542,7 +541,7 @@ FROM order_lifecycle
 WHERE character_id = $1 AND order_id = $2;
 -- name: UpsertOrderLifecycle :exec
 INSERT INTO order_lifecycle (character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, '', '', 0, 0)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULL, '', 0, 0)
 ON CONFLICT (character_id, order_id) DO UPDATE SET
     type_id            = excluded.type_id,
     location_id        = excluded.location_id,
@@ -555,11 +554,11 @@ ON CONFLICT (character_id, order_id) DO UPDATE SET
 -- name: UpdateOrderLifecycleBeaten :exec
 UPDATE order_lifecycle
 SET beaten_now = $1, outbid_events = $2
-WHERE character_id = $3 AND order_id = $4 AND closed_at = '';
+WHERE character_id = $3 AND order_id = $4 AND closed_at IS NULL;
 -- name: CloseOrderLifecycle :exec
 UPDATE order_lifecycle
-SET closed_at = $1, close_kind = $2, beaten_now = 0
-WHERE character_id = $3 AND order_id = $4 AND closed_at = '';
+SET closed_at = sqlc.arg(closed_at)::timestamptz, close_kind = sqlc.arg(close_kind), beaten_now = 0
+WHERE character_id = sqlc.arg(character_id) AND order_id = sqlc.arg(order_id) AND closed_at IS NULL;
 -- name: ListOrderLifecycleByCharacter :many
 SELECT *
 FROM order_lifecycle
@@ -568,25 +567,25 @@ ORDER BY first_seen_at DESC, order_id DESC;
 -- name: ListOpenOrderLifecycleByCharacter :many
 SELECT *
 FROM order_lifecycle
-WHERE character_id = $1 AND closed_at = ''
+WHERE character_id = $1 AND closed_at IS NULL
 ORDER BY order_id;
 -- name: ListOrderLifecycleByUser :many
 SELECT ol.*
 FROM order_lifecycle ol
 JOIN characters c ON c.character_id = ol.character_id
 WHERE c.user_id = $1
-ORDER BY ol.closed_at DESC, ol.first_seen_at DESC, ol.order_id DESC;
+ORDER BY ol.closed_at DESC NULLS LAST, ol.first_seen_at DESC, ol.order_id DESC;
 -- name: ListClosedOrderLifecycleByCharacter :many
 SELECT *
 FROM order_lifecycle
-WHERE character_id = $1 AND closed_at != ''
+WHERE character_id = $1 AND closed_at IS NOT NULL
 ORDER BY closed_at DESC, order_id DESC
 LIMIT sqlc.arg(row_limit)::bigint;
 -- name: PruneOldOrderLifecycle :exec
 DELETE FROM order_lifecycle
 WHERE id IN (
     SELECT ol.id FROM order_lifecycle AS ol
-    WHERE ol.closed_at != '' AND ol.closed_at < $1
+    WHERE ol.closed_at < sqlc.arg(closed_before)::timestamptz
     ORDER BY ol.closed_at
     LIMIT sqlc.arg(row_limit)::bigint
 );
@@ -677,7 +676,7 @@ FROM market_station_leaderboard
 WHERE ($1::bigint = 0 OR region_id = $1::bigint)
 ORDER BY region_id, location_id;
 -- name: GetMarketStationLeaderboardStamp :one
-SELECT CAST(COALESCE(MAX(updated_at), '') AS TEXT) AS stamp
+SELECT MAX(updated_at) AS stamp
 FROM market_station_leaderboard
 WHERE ($1::bigint = 0 OR region_id = $1::bigint);
 

@@ -2,13 +2,9 @@ package app
 
 import (
 	"context"
-	"errors"
-	"log"
-	"net/http"
 	"time"
 
-	db "evesynapse/internal/db/sqlc"
-	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -23,6 +19,9 @@ import (
 // hygiene, not a schedule); a 404 negative-caches for 7 days —
 // colony planet ids always exist, so a 404 means a bad id, and
 // the honest fallback stays until it ages out.
+//
+// This file is the queue note pages make. resolvePlanetNames is with
+// the rest of the planetary worker code, in planets_worker.go.
 // ---------------------------------------------------------------------------
 
 const (
@@ -48,79 +47,7 @@ func (app *Application) notePlanetIDs(ctx context.Context, ids ...int64) {
 			continue
 		}
 		if err := app.queries.UpsertPlanetSeen(ctx, id); err != nil {
-			log.Printf("planets: note planet %d: %v", id, err)
+			logging.Errorf("planets: note planet %d: %v", id, err)
 		}
 	}
-}
-
-// resolvePlanetNames drains the due slice of the planet queue:
-// pending ids first, then stale renames and stale misses. The
-// endpoint is public, so no character or scope is involved; each
-// lookup spends from the cycle allowance and a 420/429 stops the
-// pass (limited) like every other worker pass. A name the
-// per-character warm pass already holds in-process is persisted
-// without spending a fetch.
-func (app *Application) resolvePlanetNames(ctx context.Context, allowance *fetchBudget) (resolved int, limited bool) {
-	now := time.Now().UTC()
-	ids, err := app.queries.ListPlanetResolutions(ctx, db.ListPlanetResolutionsParams{
-		ResolvedCutoff:  now.Add(-planetRenameWindow).Format(time.RFC3339),
-		MissingCutoff:   now.Add(-planetMissingWindow).Format(time.RFC3339),
-		ResolutionLimit: maxPlanetResolutionsPerCycle,
-	})
-	if err != nil {
-		log.Printf("worker: planets: list resolutions: %v", err)
-		return 0, false
-	}
-	stamp := now.Format(time.RFC3339)
-	for _, id := range ids {
-		if ctx.Err() != nil {
-			break
-		}
-		// Already warm in-process (the colonies harvest beat
-		// this pass to it): persist, no fetch spent.
-		if name, ok := app.esi.CachedPlanetName(ctx, id); ok && name != "" {
-			if serr := app.queries.SetPlanetName(ctx, db.SetPlanetNameParams{
-				PlanetID: id, Name: name, State: esi.PlanetResolved, ResolvedAt: stamp,
-			}); serr != nil {
-				log.Printf("worker: planets: persist cached name for %d: %v", id, serr)
-			} else {
-				resolved++
-			}
-			continue
-		}
-		if !allowance.take() {
-			break
-		}
-		planet, err := app.esi.FetchPlanet(ctx, id)
-		if err != nil {
-			if errors.Is(err, esi.ErrErrorLimit) {
-				log.Printf("worker: planets: ESI error limit hit resolving planet %d; backing off until next cycle", id)
-				return resolved, true
-			}
-			if code, has := esi.StatusCode(err); has && code == http.StatusNotFound {
-				// Not a planet: remember the answer so this id
-				// isn't re-asked every cycle.
-				if serr := app.queries.SetPlanetName(ctx, db.SetPlanetNameParams{
-					PlanetID: id, Name: "", State: esi.PlanetMissing, ResolvedAt: stamp,
-				}); serr != nil {
-					log.Printf("worker: planets: record miss for %d: %v", id, serr)
-				}
-				continue
-			}
-			log.Printf("worker: planets: resolve planet %d: %v", id, err)
-			continue
-		}
-		if planet.Name == "" {
-			continue
-		}
-		if serr := app.queries.SetPlanetName(ctx, db.SetPlanetNameParams{
-			PlanetID: id, Name: planet.Name, State: esi.PlanetResolved, ResolvedAt: stamp,
-		}); serr != nil {
-			log.Printf("worker: planets: store name for %d: %v", id, serr)
-			continue
-		}
-		app.esi.StorePlanetName(id, planet.Name)
-		resolved++
-	}
-	return resolved, false
 }

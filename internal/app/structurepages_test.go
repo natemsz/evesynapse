@@ -62,7 +62,7 @@ func seedStructureContext(t *testing.T, app *Application, q *db.Queries) {
 		OwnerCorporationID: fixtureStructureCorp,
 		SystemID:           30000142,
 		TypeID:             35834,
-		UpdatedAt:          time.Now().UTC().Format(time.RFC3339),
+		UpdatedAt:          time.Now().UTC(),
 	}); err != nil {
 		t.Fatalf("seed structure context: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestStructurePageStates(t *testing.T) {
 	// still linked, poller disarmed.
 	if err := q.SetStructureName(ctx, db.SetStructureNameParams{
 		StructureID: fixtureStructureID, Name: "Corp Home", State: esi.StructureResolved,
-		ResolvedAt: time.Now().UTC().Format(time.RFC3339), Source: esi.StructureSourceCorp,
+		ResolvedAt: timeSet(time.Now().UTC()), Source: esi.StructureSourceCorp,
 	}); err != nil {
 		t.Fatalf("seed resolved name: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestStructurePageNamedWithoutContextAndMissing(t *testing.T) {
 	const namedID = int64(1044752366001)
 	if err := q.SetStructureName(ctx, db.SetStructureNameParams{
 		StructureID: namedID, Name: "Lonely Rock", State: esi.StructureResolved,
-		ResolvedAt: time.Now().UTC().Format(time.RFC3339), Source: esi.StructureSourceESI,
+		ResolvedAt: timeSet(time.Now().UTC()), Source: esi.StructureSourceESI,
 	}); err != nil {
 		t.Fatalf("seed resolved name: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestStructurePageNamedWithoutContextAndMissing(t *testing.T) {
 	const missingID = int64(1044752366002)
 	if err := q.SetStructureName(ctx, db.SetStructureNameParams{
 		StructureID: missingID, Name: "", State: esi.StructureMissing,
-		ResolvedAt: time.Now().UTC().Format(time.RFC3339), Source: esi.StructureSourceESI,
+		ResolvedAt: timeSet(time.Now().UTC()), Source: esi.StructureSourceESI,
 	}); err != nil {
 		t.Fatalf("seed missing name: %v", err)
 	}
@@ -242,10 +242,10 @@ func TestPersistStructureContexts(t *testing.T) {
 	// Provenance: an ESI-resolved name is never demoted by a
 	// later corp-list write (nor is the corp name lost when it is
 	// the same structure re-persisted under ESI truth).
-	stamp := time.Now().UTC().Format(time.RFC3339)
+	stamp := time.Now().UTC()
 	if err := q.SetStructureName(ctx, db.SetStructureNameParams{
 		StructureID: fixtureStructureID, Name: "ESI Truth", State: esi.StructureResolved,
-		ResolvedAt: stamp, Source: esi.StructureSourceESI,
+		ResolvedAt: timeSet(stamp), Source: esi.StructureSourceESI,
 	}); err != nil {
 		t.Fatalf("seed esi name: %v", err)
 	}
@@ -306,7 +306,7 @@ func TestStructureLinksOnAssetsAndCharacter(t *testing.T) {
 	// Resolved: both surfaces link the name to the structure page.
 	if err := q.SetStructureName(ctx, db.SetStructureNameParams{
 		StructureID: fixtureStructureID, Name: "Corp Home", State: esi.StructureResolved,
-		ResolvedAt: time.Now().UTC().Format(time.RFC3339), Source: esi.StructureSourceCorp,
+		ResolvedAt: timeSet(time.Now().UTC()), Source: esi.StructureSourceCorp,
 	}); err != nil {
 		t.Fatalf("seed resolved name: %v", err)
 	}

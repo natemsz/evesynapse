@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"evesynapse/internal/esi"
+	"evesynapse/internal/fit"
 )
 
 const (
@@ -306,7 +307,7 @@ func TestFitLocalSaveListDelete(t *testing.T) {
 // slot on arcs around the ship, filled circles carrying modules,
 // positions inside the box with highs on top and lows below.
 func TestFitBuildVisual(t *testing.T) {
-	res := &fitResult{HighSlots: 3, MediumSlots: 3, LowSlots: 2, RigSlots: 3}
+	res := &fit.Result{HighSlots: 3, MediumSlots: 3, LowSlots: 2, RigSlots: 3}
 	doc := &fitDoc{ShipTypeID: fitShipID, Items: []fitDocItem{
 		{TypeID: fitBlasterID, Qty: 2},
 		{TypeID: fitPlateID, Qty: 1},
@@ -402,12 +403,12 @@ func TestFitVisualMetaName(t *testing.T) {
 // rides the slot for the badge and the tooltip.
 func TestFitBuildVisualTooltips(t *testing.T) {
 	const gunID = int64(3001)
-	res := &fitResult{
+	res := &fit.Result{
 		HighSlots: 3,
 		ItemAttrs: map[int64]map[int64]float64{
 			// Effective (post-dogma) CPU differs from the raw 15:
 			// the tooltip must show the effective figure.
-			gunID: {fitAttrCPU: 12, fitAttrPower: 10, fitAttrDamageMultiplier: 5},
+			gunID: {fit.AttrCPU: 12, fit.AttrPower: 10, fit.AttrDamageMultiplier: 5},
 		},
 	}
 	doc := &fitDoc{
@@ -415,9 +416,9 @@ func TestFitBuildVisualTooltips(t *testing.T) {
 		Items:      []fitDocItem{{TypeID: gunID, Qty: 1}},
 		Charges:    map[int64]int64{gunID: 4001},
 	}
-	snap := &fitSnapshot{
-		attrs: map[int64]map[int64]float64{
-			gunID: {fitAttrCPU: 15, fitAttrPower: 10, 1692: 2},
+	snap := &fit.Snapshot{
+		Attrs: map[int64]map[int64]float64{
+			gunID: {fit.AttrCPU: 15, fit.AttrPower: 10, 1692: 2},
 			4001:  {},
 		},
 	}

@@ -25,6 +25,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/pgtest"
+	"evesynapse/internal/store"
 )
 
 // doReq drives the router and returns status, body, and any
@@ -59,7 +60,7 @@ func linkFor(t *testing.T, app *Application, userID, characterID int64, ownerHas
 		OwnerHash:    ownerHash,
 		AccessToken:  "fixture",
 		RefreshToken: "fixture",
-		TokenExpiry:  sql.NullString{String: "2999-01-01T00:00:00Z", Valid: true},
+		TokenExpiry:  mustNullTime("2999-01-01T00:00:00Z"),
 	})
 	if err != nil {
 		t.Fatalf("link character %d: %v", characterID, err)
@@ -155,7 +156,7 @@ func TestCharactersPageSwitcherAndTags(t *testing.T) {
 	seedCharacter(t, q, user.ID, fixtureCharB, "Second Pilot")
 	if err := q.SetCharacterLinkState(ctx, db.SetCharacterLinkStateParams{
 		LinkState:   linkStateTokenDead,
-		LinkStateAt: sql.NullString{String: "2026-10-03T00:00:00Z", Valid: true},
+		LinkStateAt: mustNullTime("2026-10-03T00:00:00Z"),
 		CharacterID: fixtureCharB,
 	}); err != nil {
 		t.Fatalf("park character B: %v", err)
@@ -390,7 +391,7 @@ func TestTokenDeadClassificationAndWorkerSkip(t *testing.T) {
 	// An owner_changed flag is stronger and is not overwritten.
 	if err := q.SetCharacterLinkState(ctx, db.SetCharacterLinkStateParams{
 		LinkState:   linkStateOwnerChanged,
-		LinkStateAt: sql.NullString{String: "2026-10-03T00:00:00Z", Valid: true},
+		LinkStateAt: mustNullTime("2026-10-03T00:00:00Z"),
 		CharacterID: fixtureCharA,
 	}); err != nil {
 		t.Fatalf("flag owner change: %v", err)
@@ -402,7 +403,7 @@ func TestTokenDeadClassificationAndWorkerSkip(t *testing.T) {
 	}
 	if err := q.SetCharacterLinkState(ctx, db.SetCharacterLinkStateParams{
 		LinkState:   linkStateOK,
-		LinkStateAt: sql.NullString{},
+		LinkStateAt: sql.NullTime{},
 		CharacterID: fixtureCharA,
 	}); err != nil {
 		t.Fatalf("restore healthy: %v", err)
@@ -421,11 +422,11 @@ func TestTokenDeadClassificationAndWorkerSkip(t *testing.T) {
 }
 
 // TestMigration009Reopen proves the schema bootstrap is
-// idempotent: a second openDB over the same database applies
+// idempotent: a second store.Open over the same database applies
 // nothing twice.
 func TestMigration009Reopen(t *testing.T) {
 	dsn := pgtest.FreshDSN(t)
-	conn, pool, err := openDB(context.Background(), dsn)
+	conn, pool, err := store.Open(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("first open: %v", err)
 	}
@@ -438,7 +439,7 @@ func TestMigration009Reopen(t *testing.T) {
 	}
 	conn.Close()
 	pool.Close()
-	conn, pool, err = openDB(context.Background(), dsn)
+	conn, pool, err = store.Open(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("second open: %v", err)
 	}

@@ -5,13 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"strings"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -92,7 +92,7 @@ func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 
 	characters, active, links, err := app.pickCharacter(ctx, r, "/fittings/")
 	if err != nil {
-		log.Printf("fittings: list characters: %v", err)
+		logging.Errorf("fittings: list characters: %v", err)
 		data.Error = "Could not load fitting data; check the server log."
 		app.render(ctx, w, http.StatusOK, "fittings.html", data)
 		return
@@ -109,7 +109,7 @@ func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 	// just means the link won't resolve.
 	var fittings esi.Fittings
 	if err := app.esi.GetCached(ctx, active, esi.SnapFittings, &fittings); err != nil {
-		log.Printf("fittings: load for character %d: %v", active.CharacterID, err)
+		logging.Errorf("fittings: load for character %d: %v", active.CharacterID, err)
 	}
 	app.attachFitEditor(ctx, r, &data, characters, active, fittings)
 	app.render(ctx, w, http.StatusOK, "fittings.html", data)
@@ -129,7 +129,7 @@ func (app *Application) handleFittingsSaved(w http.ResponseWriter, r *http.Reque
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/fittings/saved/")
 	if err != nil {
-		log.Printf("fittings: list characters: %v", err)
+		logging.Errorf("fittings: list characters: %v", err)
 		data.Error = "Could not load fitting data; check the server log."
 		app.render(ctx, w, http.StatusOK, "fittings_saved.html", data)
 		return
@@ -145,7 +145,7 @@ func (app *Application) handleFittingsSaved(w http.ResponseWriter, r *http.Reque
 
 	var fittings esi.Fittings
 	if err := app.esi.GetCached(ctx, active, esi.SnapFittings, &fittings); err != nil {
-		log.Printf("fittings: load for character %d: %v", active.CharacterID, err)
+		logging.Errorf("fittings: load for character %d: %v", active.CharacterID, err)
 		// No snapshot row at all = cold start: the worker is still
 		// importing this character, which the Sync page shows live.
 		if _, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: active.CharacterID, Kind: esi.SnapFittings}); errors.Is(serr, sql.ErrNoRows) {

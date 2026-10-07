@@ -8,7 +8,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -19,6 +18,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/pgtest"
+	"evesynapse/internal/store"
 )
 
 // seedOverviewCharacter links one character to the user, tagged.
@@ -110,7 +110,7 @@ func TestHomeOverviewMultiChar(t *testing.T) {
 	_ = dead
 	if err := q.SetCharacterLinkState(ctx, db.SetCharacterLinkStateParams{
 		LinkState:   linkStateTokenDead,
-		LinkStateAt: sql.NullString{String: rfc(now.Add(-2 * time.Hour)), Valid: true},
+		LinkStateAt: timeSet(now.Add(-2 * time.Hour)),
 		CharacterID: 90000003,
 	}); err != nil {
 		t.Fatalf("park charlie: %v", err)
@@ -736,7 +736,7 @@ func TestCharacterSheetFromSnapshots(t *testing.T) {
 // idempotent, like every schema before it.
 func TestMigration010Reopen(t *testing.T) {
 	dsn := pgtest.FreshDSN(t)
-	conn, pool, err := openDB(context.Background(), dsn)
+	conn, pool, err := store.Open(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("first open: %v", err)
 	}
@@ -749,7 +749,7 @@ func TestMigration010Reopen(t *testing.T) {
 	}
 	conn.Close()
 	pool.Close()
-	conn, pool, err = openDB(context.Background(), dsn)
+	conn, pool, err = store.Open(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("second open: %v", err)
 	}

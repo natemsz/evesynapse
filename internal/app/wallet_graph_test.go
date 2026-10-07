@@ -22,7 +22,7 @@ func seedWalletSample(t *testing.T, q *db.Queries, userID, characterID int64, da
 	if err := q.UpsertWalletHistorySample(context.Background(), db.UpsertWalletHistorySampleParams{
 		UserID: userID, CharacterID: characterID, Day: day,
 		Balance: balance, NetWorth: netWorth,
-		SampledAt: day + "T12:00:00Z",
+		SampledAt: mustTime(day + "T12:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed wallet sample %s: %v", day, err)
 	}
@@ -47,8 +47,8 @@ func TestBuildBalanceSeriesJournalOnly(t *testing.T) {
 
 func TestBuildBalanceSeriesSamplerOnly(t *testing.T) {
 	samples := []db.WalletHistory{
-		{Day: "2026-03-01", Balance: 50, SampledAt: "2026-03-01T09:00:00Z"},
-		{Day: "2026-03-02", Balance: 75, SampledAt: "2026-03-02T09:00:00Z"},
+		{Day: "2026-03-01", Balance: 50, SampledAt: mustTime("2026-03-01T09:00:00Z")},
+		{Day: "2026-03-02", Balance: 75, SampledAt: mustTime("2026-03-02T09:00:00Z")},
 	}
 	points := buildBalanceSeries(nil, samples, nil)
 	if len(points) != 2 || points[0].Balance != 50 || points[1].Balance != 75 {
@@ -62,8 +62,8 @@ func TestBuildBalanceSeriesSamplerOnly(t *testing.T) {
 // fetch time.
 func TestBuildBalanceSeriesMergedSeam(t *testing.T) {
 	samples := []db.WalletHistory{
-		{Day: "2026-02-01", Balance: 10, SampledAt: "2026-02-01T09:00:00Z"},
-		{Day: "2026-03-02", Balance: 999, SampledAt: "2026-03-02T09:00:00Z"}, // inside window: dropped
+		{Day: "2026-02-01", Balance: 10, SampledAt: mustTime("2026-02-01T09:00:00Z")},
+		{Day: "2026-03-02", Balance: 999, SampledAt: mustTime("2026-03-02T09:00:00Z")}, // inside window: dropped
 	}
 	journal := esi.WalletJournal{
 		{ID: 1, Date: "2026-03-01T10:00:00Z", Balance: 100},

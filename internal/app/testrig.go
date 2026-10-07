@@ -21,6 +21,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/store"
 )
 
 // TestRig is an opaque fixture Application for black-box tests.
@@ -31,7 +32,7 @@ type TestRig struct {
 // NewTestRig builds a fixture Application over the fresh
 // database at dsn, with ESI served by transport.
 func NewTestRig(dsn string, transport http.RoundTripper) (*TestRig, error) {
-	conn, pool, err := openDB(context.Background(), dsn)
+	conn, pool, err := store.Open(context.Background(), dsn)
 	if err != nil {
 		return nil, err
 	}

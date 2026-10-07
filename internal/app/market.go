@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"log"
 	"math"
 	"net/http"
 	"sort"
@@ -15,6 +14,8 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
+	"evesynapse/internal/markethistory"
 )
 
 // ---------------------------------------------------------------------------
@@ -39,12 +40,6 @@ var marketRegions = []marketRegionOption{
 }
 
 const defaultMarketRegion = int64(10000002)
-
-// maxOrderPages caps the order-book pagination so a mega-traded
-// type in The Forge can't fan out into hundreds of requests; the
-// page notes when the cap bites (best prices are then best-within-
-// the-pages-read, not global).
-const maxOrderPages = 20
 
 // topMarketOrders is how many orders per side the tables show.
 const topMarketOrders = 5
@@ -118,24 +113,24 @@ type marketItem struct {
 	SellBand    string
 	TypicalBuy  string
 	BuyBand     string
-	Trader      *traderStats // trading snapshot; set by attachHistory
+	Trader      *markethistory.TraderStats // trading snapshot; set by attachHistory
 
 	// Phase 5 price history (cache-only, from stored rows).
 	// HistoryState is computed by attachHistory from the stored
-	// rows plus the fetch-state record: historyStatePending (no
-	// rows yet, fetch not settled), historyStateEmpty (worker
-	// fetched, ESI had no trades), historyStateFew (a few rows —
-	// summary only, no chart), or historyStateChart (enough rows
+	// rows plus the fetch-state record: markethistory.StatePending (no
+	// rows yet, fetch not settled), markethistory.StateEmpty (worker
+	// fetched, ESI had no trades), markethistory.StateFew (a few rows —
+	// summary only, no chart), or markethistory.StateChart (enough rows
 	// for the chart). The template renders a deliberate body for
 	// every state; there is no blank state.
 	HistoryState   string
 	HistoryPending bool // true only in the pending state
-	Chart          *priceChart
-	Stats          *historyStats
+	Chart          *markethistory.PriceChart
+	Stats          *markethistory.Stats
 	Change7        string // "+8.2%", "" when not computable
 	Change30       string
 	// HistoryLastDay is the newest recorded trade day, set when it
-	// is older than historyStaleAfterDays so the section can say
+	// is older than markethistory.StaleAfterDays so the section can say
 	// when trading stopped instead of implying the chart is
 	// current.
 	HistoryLastDay string
@@ -282,7 +277,7 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 	if typeID, err := strconv.ParseInt(q.Get("type"), 10, 64); err == nil && typeID > 0 {
 		item, err := app.loadMarketItem(ctx, typeID, view.Region)
 		if err != nil {
-			log.Printf("market: load type %d in region %d: %v", typeID, view.Region, err)
+			logging.Errorf("market: load type %d in region %d: %v", typeID, view.Region, err)
 			data.Error = "Market data unavailable right now — please try again shortly."
 		} else {
 			view.Item = item
@@ -333,7 +328,7 @@ func (app *Application) buildMarketBrowse(ctx context.Context, groupID int64, pa
 	if groupID <= 0 || err != nil {
 		rows, err := app.queries.ListSDEMarketGroupsByParent(ctx, 0)
 		if err != nil {
-			log.Printf("market: list top market groups: %v", err)
+			logging.Errorf("market: list top market groups: %v", err)
 			return view
 		}
 		for _, row := range rows {
@@ -366,7 +361,7 @@ func (app *Application) buildMarketBrowse(ctx context.Context, groupID int64, pa
 
 	children, err := app.queries.ListSDEMarketGroupsByParent(ctx, groupID)
 	if err != nil {
-		log.Printf("market: list child groups of %d: %v", groupID, err)
+		logging.Errorf("market: list child groups of %d: %v", groupID, err)
 	} else {
 		for _, row := range children {
 			view.Groups = append(view.Groups, marketBrowseGroupRow(row))
@@ -375,7 +370,7 @@ func (app *Application) buildMarketBrowse(ctx context.Context, groupID int64, pa
 
 	total, err := app.queries.CountSDETypesInMarketGroup(ctx, groupID)
 	if err != nil {
-		log.Printf("market: count types of market group %d: %v", groupID, err)
+		logging.Errorf("market: count types of market group %d: %v", groupID, err)
 	} else {
 		view.TotalTypes = total
 		view.TotalPages = int((total + marketBrowseTypesPerPage - 1) / marketBrowseTypesPerPage)
@@ -396,7 +391,7 @@ func (app *Application) buildMarketBrowse(ctx context.Context, groupID int64, pa
 		RowOffset:     int64((view.Page - 1) * marketBrowseTypesPerPage),
 	})
 	if err != nil {
-		log.Printf("market: list types of market group %d: %v", groupID, err)
+		logging.Errorf("market: list types of market group %d: %v", groupID, err)
 	} else {
 		for _, row := range types {
 			view.Types = append(view.Types, marketBrowseType{ID: row.TypeID, Name: row.Name})
@@ -428,7 +423,7 @@ func (app *Application) recentHistoryRows(ctx context.Context, regionID, typeID 
 		RegionID: regionID, TypeID: typeID, RowLimit: int64(limit),
 	})
 	if err != nil {
-		log.Printf("market: load history for type %d in region %d: %v", typeID, regionID, err)
+		logging.Errorf("market: load history for type %d in region %d: %v", typeID, regionID, err)
 		return nil
 	}
 	// The query returns newest first; chart math wants ascending.
@@ -462,7 +457,7 @@ func (app *Application) recentHistoryRows(ctx context.Context, regionID, typeID 
 // only writes rows — the urgent drain and the cycle do the
 // fetching, never this.
 func (app *Application) noteSearchHistoryWants(ctx context.Context, regionID int64, matches []marketMatch) {
-	stamp := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 	noted := 0
 	for _, m := range matches {
 		if noted >= maxSearchPrefetchWants {
@@ -472,9 +467,9 @@ func (app *Application) noteSearchHistoryWants(ctx context.Context, regionID int
 			continue
 		}
 		if err := app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
-			RegionID: regionID, TypeID: m.ID, LastRequestedAt: stamp,
+			RegionID: regionID, TypeID: m.ID, LastRequestedAt: now,
 		}); err != nil {
-			log.Printf("market: prefetch want for type %d in region %d: %v", m.ID, regionID, err)
+			logging.Errorf("market: prefetch want for type %d in region %d: %v", m.ID, regionID, err)
 			continue
 		}
 		app.notePageWant(ctx, pageWantHistory, m.ID, regionID)
@@ -484,30 +479,30 @@ func (app *Application) noteSearchHistoryWants(ctx context.Context, regionID int
 
 // the user asked about this type either way.
 func (app *Application) attachHistory(ctx context.Context, item *marketItem, typeID, regionID, userID int64) {
-	rows := app.recentHistoryRows(ctx, regionID, typeID, historyChartRows)
+	rows := app.recentHistoryRows(ctx, regionID, typeID, markethistory.ChartRows)
 	if item != nil {
 		// The trading snapshot rides on whatever rows exist
 		// (possibly none yet) plus the book's bests; missing
 		// figures render as dashes, never invented numbers.
-		item.Trader = buildTraderStats(rows, item.BestSellRaw, item.BestBuyRaw)
+		item.Trader = markethistory.BuildTraderStats(rows, item.BestSellRaw, item.BestBuyRaw)
 	}
 	if len(rows) == 0 {
 		if item != nil {
-			item.HistoryState = historyStatePending
+			item.HistoryState = markethistory.StatePending
 			item.HistoryPending = true
 		}
 		if app.historyFetchSettled(ctx, regionID, typeID) {
 			if item != nil {
-				item.HistoryState = historyStateEmpty
+				item.HistoryState = markethistory.StateEmpty
 				item.HistoryPending = false
 			}
 			return
 		}
 		if err := app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
 			RegionID: regionID, TypeID: typeID,
-			LastRequestedAt: time.Now().UTC().Format(time.RFC3339),
+			LastRequestedAt: time.Now().UTC(),
 		}); err != nil {
-			log.Printf("market: record history want for type %d in region %d: %v", typeID, regionID, err)
+			logging.Errorf("market: record history want for type %d in region %d: %v", typeID, regionID, err)
 		}
 		return
 	}
@@ -515,26 +510,26 @@ func (app *Application) attachHistory(ctx context.Context, item *marketItem, typ
 		return
 	}
 	if len(rows) == 1 {
-		item.HistoryState = historyStateFew
+		item.HistoryState = markethistory.StateFew
 	} else {
-		item.HistoryState = historyStateChart
-		if chart, ok := buildPriceChart(rows); ok {
+		item.HistoryState = markethistory.StateChart
+		if chart, ok := markethistory.BuildPriceChart(rows); ok {
 			c := chart
 			item.Chart = &c
 		}
 	}
-	if stats, ok := summarizeHistory(rows); ok {
+	if stats, ok := markethistory.Summarize(rows); ok {
 		item.Stats = &stats
 	}
-	if newest, err := time.Parse(historyDateLayout, rows[len(rows)-1].Date); err == nil &&
-		time.Since(newest) > historyStaleAfterDays*24*time.Hour {
+	if newest, err := time.Parse(markethistory.DateLayout, rows[len(rows)-1].Date); err == nil &&
+		time.Since(newest) > markethistory.StaleAfterDays*24*time.Hour {
 		item.HistoryLastDay = rows[len(rows)-1].Date
 	}
-	if pct, ok := historyChangePct(rows, 7); ok {
-		item.Change7 = formatChangePct(pct)
+	if pct, ok := markethistory.ChangePct(rows, 7); ok {
+		item.Change7 = markethistory.FormatChangePct(pct)
 	}
-	if pct, ok := historyChangePct(rows, 30); ok {
-		item.Change30 = formatChangePct(pct)
+	if pct, ok := markethistory.ChangePct(rows, 30); ok {
+		item.Change30 = markethistory.FormatChangePct(pct)
 	}
 	if userID > 0 {
 		if entry, err := app.queries.GetWatchlistEntry(ctx, db.GetWatchlistEntryParams{
@@ -564,7 +559,7 @@ func (app *Application) searchTypes(ctx context.Context, query string) []marketM
 
 	var ids esi.UniverseIDs
 	if err := app.esi.PostJSON(ctx, "/universe/ids/", []string{query}, &ids); err != nil {
-		log.Printf("market: exact lookup for %q: %v", query, err)
+		logging.Errorf("market: exact lookup for %q: %v", query, err)
 	} else {
 		for _, hit := range ids.InventoryTypes {
 			if hit.ID <= 0 || hit.Name == "" || seen[hit.ID] {
@@ -573,14 +568,14 @@ func (app *Application) searchTypes(ctx context.Context, query string) []marketM
 			seen[hit.ID] = true
 			matches = append(matches, marketMatch{ID: hit.ID, Name: hit.Name})
 			if err := app.queries.UpsertTypeName(ctx, db.UpsertTypeNameParams{TypeID: hit.ID, Name: hit.Name}); err != nil {
-				log.Printf("market: persist type name %d: %v", hit.ID, err)
+				logging.Errorf("market: persist type name %d: %v", hit.ID, err)
 			}
 		}
 	}
 
 	rows, err := app.queries.SearchSDETypes(ctx, "%"+query+"%")
 	if err != nil {
-		log.Printf("market: local search for %q: %v", query, err)
+		logging.Errorf("market: local search for %q: %v", query, err)
 		return matches
 	}
 	for _, row := range rows {
@@ -608,7 +603,7 @@ func (app *Application) marketPrices(ctx context.Context) (map[int64]esi.MarketP
 	body, header, err := app.esi.FetchRaw(ctx, "", "/markets/prices/")
 	if err != nil {
 		if len(app.prices) > 0 {
-			log.Printf("market: refresh prices failed (%v); serving stale cache", err)
+			logging.Warnf("market: refresh prices failed (%v); serving stale cache", err)
 			return app.prices, nil
 		}
 		return nil, err
@@ -644,105 +639,6 @@ func (app *Application) cachedPrices() map[int64]esi.MarketPrice {
 		return nil
 	}
 	return app.prices
-}
-
-// fetchOrderBook reads one region's orders for a type, following
-// X-Pages up to maxOrderPages. Split into sides, unsorted.
-func (app *Application) fetchOrderBook(ctx context.Context, regionID, typeID int64) (sells, buys []esi.MarketOrder, truncated bool, err error) {
-	path := fmt.Sprintf("/markets/%d/orders/?type_id=%d&order_type=all", regionID, typeID)
-
-	var all []esi.MarketOrder
-	totalPages := 1
-	for page := 1; page <= totalPages && page <= maxOrderPages; page++ {
-		body, header, ferr := app.esi.FetchRaw(ctx, "", fmt.Sprintf("%s&page=%d", path, page))
-		if ferr != nil {
-			return nil, nil, false, ferr
-		}
-		if page == 1 {
-			if xp := header.Get("X-Pages"); xp != "" {
-				if n, aerr := strconv.Atoi(xp); aerr == nil && n > 1 {
-					totalPages = n
-				}
-			}
-			truncated = totalPages > maxOrderPages
-		}
-		var orders []esi.MarketOrder
-		if derr := json.Unmarshal(body, &orders); derr != nil {
-			return nil, nil, false, fmt.Errorf("market: decode orders page %d: %w", page, derr)
-		}
-		all = append(all, orders...)
-	}
-
-	for _, o := range all {
-		if o.IsBuyOrder {
-			buys = append(buys, o)
-		} else {
-			sells = append(sells, o)
-		}
-	}
-	return sells, buys, truncated, nil
-}
-
-// bookStats summarizes one side of a regional order book so the
-// item page can quote prices a lone joke order cannot poison:
-// the median (typical) order and the band the bulk of orders sit
-// in. Prices are per order row — each order counts once,
-// whatever its volume.
-type bookStats struct {
-	Median float64 // typical order price
-	Low90  float64 // 9 in 10 orders are at or above this
-	High90 float64 // 9 in 10 orders are at or below this
-}
-
-// summarizeBook computes bookStats over one side's orders. ok is
-// false for an empty side.
-func summarizeBook(orders []esi.MarketOrder) (bookStats, bool) {
-	if len(orders) == 0 {
-		return bookStats{}, false
-	}
-	prices := make([]float64, len(orders))
-	for i, o := range orders {
-		prices[i] = o.Price
-	}
-	return summarizePrices(prices), true
-}
-
-// summarizePrices is the shared core of summarizeBook: the same
-// median / 9-in-10 math over one side's raw order prices, for
-// callers that stream a book page by page and never hold whole
-// orders (the region sweep, market_region_stats.go). prices is
-// sorted in place.
-func summarizePrices(prices []float64) bookStats {
-	sort.Float64s(prices)
-	return bookStats{
-		Median: medianPrice(prices),
-		Low90:  pricePercentileNR(prices, 10),
-		High90: pricePercentileNR(prices, 90),
-	}
-}
-
-// medianPrice is the middle of ascending prices, averaging the
-// two middle values on an even count.
-func medianPrice(sorted []float64) float64 {
-	n := len(sorted)
-	if n%2 == 1 {
-		return sorted[n/2]
-	}
-	return (sorted[n/2-1] + sorted[n/2]) / 2
-}
-
-// pricePercentileNR returns the nearest-rank p-th percentile of
-// ascending prices: the smallest price at least p% of orders are
-// at or below, so a "9 in 10 orders" label is exactly true.
-func pricePercentileNR(sorted []float64, p float64) float64 {
-	idx := int(math.Ceil(p/100*float64(len(sorted)))) - 1
-	if idx < 0 {
-		idx = 0
-	}
-	if idx >= len(sorted) {
-		idx = len(sorted) - 1
-	}
-	return sorted[idx]
 }
 
 // loadMarketItem builds the item view for (type, region): guide
@@ -913,7 +809,7 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 	view := &watchlistView{Query: watchQuery}
 	if len(watchQuery) >= 2 {
 		if rows, err := app.queries.SuggestSDETypes(ctx, watchQuery); err != nil {
-			log.Printf("market: watch search %q: %v", watchQuery, err)
+			logging.Errorf("market: watch search %q: %v", watchQuery, err)
 		} else {
 			for _, row := range rows {
 				view.Matches = append(view.Matches, marketMatch{ID: row.TypeID, Name: row.Name})
@@ -925,7 +821,7 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 	}
 	entries, err := app.queries.ListWatchlistByUser(ctx, userID)
 	if err != nil {
-		log.Printf("market: list watchlist for user %d: %v", userID, err)
+		logging.Errorf("market: list watchlist for user %d: %v", userID, err)
 		return view
 	}
 	for _, e := range entries {
@@ -939,19 +835,19 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 			Change30:  "—",
 			Threshold: fmt.Sprintf("%g", e.ThresholdPct),
 		}
-		rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, historyChartRows)
+		rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, markethistory.ChartRows)
 		if len(rows) > 0 {
 			row.Current = esi.FormatISK(rows[len(rows)-1].Average)
 		}
-		if pct, ok := historyChangePct(rows, 7); ok {
-			row.Change7 = formatChangePct(pct)
+		if pct, ok := markethistory.ChangePct(rows, 7); ok {
+			row.Change7 = markethistory.FormatChangePct(pct)
 			if math.Abs(pct) >= e.ThresholdPct {
 				row.Moving = true
-				row.MoveText = changeDirection(pct) + " over 7 days"
+				row.MoveText = markethistory.ChangeDirection(pct) + " over 7 days"
 			}
 		}
-		if pct, ok := historyChangePct(rows, 30); ok {
-			row.Change30 = formatChangePct(pct)
+		if pct, ok := markethistory.ChangePct(rows, 30); ok {
+			row.Change30 = markethistory.FormatChangePct(pct)
 		}
 		view.Rows = append(view.Rows, row)
 	}
@@ -965,12 +861,12 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 func (app *Application) buildYourOrders(ctx context.Context, userID int64) []yourOrderRow {
 	chars, err := app.queries.ListCharactersByUser(ctx, userID)
 	if err != nil {
-		log.Printf("market: your orders: list characters for user %d: %v", userID, err)
+		logging.Errorf("market: your orders: list characters for user %d: %v", userID, err)
 		return nil
 	}
 	health := make(map[int64]db.OrderHealth)
 	if rows, err := app.queries.ListOrderHealthByUser(ctx, userID); err != nil {
-		log.Printf("market: your orders: list health for user %d: %v", userID, err)
+		logging.Errorf("market: your orders: list health for user %d: %v", userID, err)
 	} else {
 		for _, h := range rows {
 			health[h.OrderID] = h
@@ -1071,9 +967,9 @@ func (app *Application) handleMarketWatch(w http.ResponseWriter, r *http.Request
 					if err := app.queries.UpsertWatchlistEntry(ctx, db.UpsertWatchlistEntryParams{
 						UserID: userID, TypeID: typeID, RegionID: regionID,
 						ThresholdPct: threshold,
-						CreatedAt:    time.Now().UTC().Format(time.RFC3339),
+						CreatedAt:    time.Now().UTC(),
 					}); err != nil {
-						log.Printf("market: watch upsert type %d for user %d: %v", typeID, userID, err)
+						logging.Errorf("market: watch upsert type %d for user %d: %v", typeID, userID, err)
 					}
 				}
 			case "remove":
@@ -1081,7 +977,7 @@ func (app *Application) handleMarketWatch(w http.ResponseWriter, r *http.Request
 					if err := app.queries.DeleteWatchlistEntry(ctx, db.DeleteWatchlistEntryParams{
 						UserID: userID, TypeID: typeID, RegionID: regionID,
 					}); err != nil {
-						log.Printf("market: watch remove type %d for user %d: %v", typeID, userID, err)
+						logging.Errorf("market: watch remove type %d for user %d: %v", typeID, userID, err)
 					}
 				}
 			}

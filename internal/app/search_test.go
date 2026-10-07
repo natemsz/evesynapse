@@ -320,7 +320,7 @@ func TestTopbarSearch(t *testing.T) {
 	}
 	if err := q.SetPilotRecord(ctx, db.SetPilotRecordParams{
 		CharacterID: fixtureMember, Payload: string(payload),
-		State: pilotStateReady, FetchedAt: "2026-10-01T00:00:00Z",
+		State: pilotStateReady, FetchedAt: mustNullTime("2026-10-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed pilot record: %v", err)
 	}
@@ -330,7 +330,7 @@ func TestTopbarSearch(t *testing.T) {
 	}
 	if err := q.SetPilotRecord(ctx, db.SetPilotRecordParams{
 		CharacterID: fixtureCharA, Payload: string(ownPayload),
-		State: pilotStateReady, FetchedAt: "2026-10-01T00:00:00Z",
+		State: pilotStateReady, FetchedAt: mustNullTime("2026-10-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed own pilot record: %v", err)
 	}
@@ -433,8 +433,8 @@ func TestWalletHistorySamplerOneRowPerDay(t *testing.T) {
 	// the day, now carrying the fresher number.
 	if err := q.UpsertSnapshot(ctx, db.UpsertSnapshotParams{
 		CharacterID: fixtureCharA, Kind: esi.SnapWallet,
-		Payload: "2000.25", FetchedAt: "2026-10-03T13:00:00Z",
-		CachedUntil: sql.NullString{String: "2999-01-01T00:00:00Z", Valid: true},
+		Payload: "2000.25", FetchedAt: mustTime("2026-10-03T13:00:00Z"),
+		CachedUntil: mustNullTime("2999-01-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("refetch wallet: %v", err)
 	}
@@ -454,8 +454,8 @@ func TestWalletHistorySamplerOneRowPerDay(t *testing.T) {
 	seedSnapshot(t, q, fixtureCharA, esi.SnapOrders, []esi.CharOrder{{IsBuyOrder: true, Escrow: 50.5}})
 	if err := q.UpsertSnapshot(ctx, db.UpsertSnapshotParams{
 		CharacterID: fixtureCharA, Kind: esi.SnapWallet,
-		Payload: "2000.25", FetchedAt: "2026-10-03T15:00:00Z",
-		CachedUntil: sql.NullString{String: "2999-01-01T00:00:00Z", Valid: true},
+		Payload: "2000.25", FetchedAt: mustTime("2026-10-03T15:00:00Z"),
+		CachedUntil: mustNullTime("2999-01-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("refetch wallet again: %v", err)
 	}

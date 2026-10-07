@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"math/big"
 	"net/http"
 	"strconv"
@@ -21,6 +20,8 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/oauth2"
+
+	"evesynapse/internal/logging"
 )
 
 // Session keys. Values stored via scs are gob-encoded; keep them typed
@@ -52,7 +53,7 @@ func (app *Application) slideSession(next http.Handler) http.Handler {
 			if deadline := app.sessions.Deadline(ctx); !deadline.IsZero() &&
 				time.Until(deadline) < app.sessions.Lifetime-24*time.Hour {
 				if err := app.sessions.RenewToken(ctx); err != nil {
-					log.Printf("session: sliding renewal: %v", err)
+					logging.Errorf("session: sliding renewal: %v", err)
 				}
 			}
 		}
@@ -199,7 +200,7 @@ func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 
 	state, err := newOAuthState()
 	if err != nil {
-		log.Printf("sso: generate state: %v", err)
+		logging.Errorf("sso: generate state: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -233,7 +234,7 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 	// CCP-side failure (e.g. the player clicked Cancel: error=
 	// access_denied). Only the error code is logged, never the code.
 	if cerr := q.Get("error"); cerr != "" {
-		log.Printf("sso callback: CCP returned error=%s", cerr)
+		logging.Warnf("sso callback: CCP returned error=%s", cerr)
 		fail("denied")
 		return
 	}
@@ -247,21 +248,21 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 	app.sessions.Remove(ctx, sessionOAuthState)
 	got := q.Get("state")
 	if want == "" || got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {
-		log.Printf("sso callback: state mismatch")
+		logging.Warnf("sso callback: state mismatch")
 		fail("state")
 		return
 	}
 
 	code := q.Get("code")
 	if code == "" {
-		log.Printf("sso callback: missing authorization code")
+		logging.Warnf("sso callback: missing authorization code")
 		fail("denied")
 		return
 	}
 
 	token, err := eveOAuthConfig(app.cfg).Exchange(ctx, code)
 	if err != nil {
-		log.Printf("sso callback: token exchange failed: %v", err)
+		logging.Warnf("sso callback: token exchange failed: %v", err)
 		fail("exchange")
 		return
 	}
@@ -269,7 +270,7 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 
 	characterID, characterName, grantedScopes, ownerHash, err := app.verifyAccessToken(ctx, token.AccessToken)
 	if err != nil {
-		log.Printf("sso callback: access token verification failed: %v", err)
+		logging.Warnf("sso callback: access token verification failed: %v", err)
 		fail("verify")
 		return
 	}
@@ -284,22 +285,18 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		switch {
 		case errors.Is(err, errSignUpNotAllowed):
-			log.Printf("sso callback: character %d (%s) is not on this instance's sign-up lists; no account created", characterID, characterName)
+			logging.Infof("sso callback: character %d (%s) is not on this instance's sign-up lists; no account created", characterID, characterName)
 			fail("notallowed")
 		case errors.Is(err, errSignUpUnverified):
-			log.Printf("sso callback: sign-up check for character %d: %v", characterID, err)
+			logging.Warnf("sso callback: sign-up check for character %d: %v", characterID, err)
 			fail("allowcheck")
 		default:
-			log.Printf("sso callback: resolve account for character %d: %v", characterID, err)
+			logging.Errorf("sso callback: resolve account for character %d: %v", characterID, err)
 			fail("save")
 		}
 		return
 	}
 
-	expiry := ""
-	if !token.Expiry.IsZero() {
-		expiry = token.Expiry.UTC().Format(time.RFC3339)
-	}
 	result, err := app.linkVerifiedCharacter(ctx, linkCharacterInput{
 		UserID:       userID,
 		CharacterID:  characterID,
@@ -308,23 +305,23 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 		OwnerHash:    ownerHash,
 		AccessToken:  token.AccessToken,
 		RefreshToken: token.RefreshToken,
-		TokenExpiry:  sql.NullString{String: expiry, Valid: expiry != ""},
+		TokenExpiry:  sql.NullTime{Time: token.Expiry.UTC(), Valid: !token.Expiry.IsZero()},
 	})
 	if err != nil {
-		log.Printf("sso callback: store character %d: %v", characterID, err)
+		logging.Errorf("sso callback: store character %d: %v", characterID, err)
 		fail("save")
 		return
 	}
 	switch {
 	case result.OwnerChanged && result.Moved:
-		log.Printf("sso: character %d changed EVE accounts since it was linked; moved off its previous account to user %d", characterID, userID)
+		logging.Warnf("sso: character %d changed EVE accounts since it was linked; moved off its previous account to user %d", characterID, userID)
 	case result.OwnerChanged:
-		log.Printf("sso: character %d owner hash changed since the link was verified; flagged for re-verification", characterID)
+		logging.Warnf("sso: character %d owner hash changed since the link was verified; flagged for re-verification", characterID)
 	case result.Moved:
-		log.Printf("sso: character %d moved to user %d (already linked elsewhere; fresh sign-in wins)", characterID, userID)
+		logging.Infof("sso: character %d moved to user %d (already linked elsewhere; fresh sign-in wins)", characterID, userID)
 	}
 
-	log.Printf("sso: signed in character %d (%s) on user %d", characterID, characterName, userID)
+	logging.Infof("sso: signed in character %d (%s) on user %d", characterID, characterName, userID)
 
 	// Warm this character first on the next worker cycle so its
 	// pages are ready moments after login, not minutes later.
@@ -332,7 +329,7 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 
 	// Rotate the session token on privilege change, then sign in.
 	if err := app.sessions.RenewToken(ctx); err != nil {
-		log.Printf("sso callback: renew session token: %v", err)
+		logging.Errorf("sso callback: renew session token: %v", err)
 	}
 	app.sessions.Put(ctx, sessionAuthenticated, true)
 	app.sessions.Put(ctx, sessionUserID, int(userID))
@@ -345,7 +342,7 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 // handleSignOut destroys the session server-side and expires the cookie.
 func (app *Application) handleSignOut(w http.ResponseWriter, r *http.Request) {
 	if err := app.sessions.Destroy(r.Context()); err != nil {
-		log.Printf("sign out: destroy session: %v", err)
+		logging.Errorf("sign out: destroy session: %v", err)
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

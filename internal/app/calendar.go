@@ -1,13 +1,13 @@
 package app
 
 import (
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
 	"time"
 
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -64,7 +64,7 @@ func (app *Application) handleCalendar(w http.ResponseWriter, r *http.Request) {
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/calendar/")
 	if err != nil {
-		log.Printf("calendar: list characters: %v", err)
+		logging.Errorf("calendar: list characters: %v", err)
 		data.Error = "Could not load calendar events; check the server log."
 		app.render(ctx, w, http.StatusOK, "calendar.html", data)
 		return

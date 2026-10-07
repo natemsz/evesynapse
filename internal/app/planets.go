@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -11,6 +10,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -193,7 +193,7 @@ func (app *Application) handlePlanets(w http.ResponseWriter, r *http.Request) {
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/planets/")
 	if err != nil {
-		log.Printf("planets: list characters: %v", err)
+		logging.Errorf("planets: list characters: %v", err)
 		data.Error = "Could not load planetary industry data; check the server log."
 		app.render(ctx, w, http.StatusOK, "planets.html", data)
 		return
@@ -334,4 +334,17 @@ func displayPlanetType(raw string) string {
 		return ""
 	}
 	return strings.ToUpper(raw[:1]) + raw[1:]
+}
+
+// piNotEnabled reports whether PI is dark for this character
+// because its login predates the planetary scope: a recorded
+// colonies refusal stands and the granted scopes still lack the
+// scope. A character that re-linked (scope present) is never
+// flagged — the worker retries within the cycle.
+func (app *Application) piNotEnabled(ctx context.Context, ch db.Character) bool {
+	if characterHasScope(ch, planetScope) {
+		return false
+	}
+	state, detail, found := app.corpKindState(ctx, ch.CharacterID, esi.SnapPlanets)
+	return found && state == fetchStateError && strings.HasPrefix(detail, piScopeDetail)
 }

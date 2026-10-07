@@ -2,17 +2,17 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -28,6 +28,9 @@ import (
 // state that live-fills through the same never-give-up poller as
 // the pilot page. Ready records go stale after a week and refresh
 // in the background; an ESI 404 settles as 'missing'.
+//
+// This file is the pages. The worker's side (draining the two
+// queues) is org_worker.go.
 // ---------------------------------------------------------------------------
 
 // Organization record states (corporation_records / alliance_records).
@@ -209,11 +212,11 @@ func (app *Application) loadCorporationView(ctx context.Context, id int64) *corp
 		} else {
 			// Corrupt payload: requeue rather than strand the
 			// page on the loading state forever.
-			log.Printf("corporation: unreadable payload for %d; requeueing", id)
+			logging.Warnf("corporation: unreadable payload for %d; requeueing", id)
 			if serr := app.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
-				CorporationID: id, Payload: "", State: orgStatePending, FetchedAt: "",
+				CorporationID: id, Payload: "", State: orgStatePending, FetchedAt: sql.NullTime{},
 			}); serr != nil {
-				log.Printf("corporation: requeue %d: %v", id, serr)
+				logging.Errorf("corporation: requeue %d: %v", id, serr)
 			}
 		}
 	case err == nil && rec.State == orgStateMissing:
@@ -222,7 +225,7 @@ func (app *Application) loadCorporationView(ctx context.Context, id int64) *corp
 		// No record yet, a pending one, or a read error: (re)note
 		// the want so the worker fills it on a coming cycle.
 		if qerr := app.queries.UpsertCorporationWant(ctx, id); qerr != nil {
-			log.Printf("corporation: note want for %d: %v", id, qerr)
+			logging.Errorf("corporation: note want for %d: %v", id, qerr)
 		}
 	}
 
@@ -309,18 +312,18 @@ func (app *Application) loadAllianceView(ctx context.Context, id int64) *allianc
 		if built, ok := app.buildAllianceView(ctx, id, rec.Payload); ok {
 			view = built
 		} else {
-			log.Printf("alliance: unreadable payload for %d; requeueing", id)
+			logging.Warnf("alliance: unreadable payload for %d; requeueing", id)
 			if serr := app.queries.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
-				AllianceID: id, Payload: "", State: orgStatePending, FetchedAt: "",
+				AllianceID: id, Payload: "", State: orgStatePending, FetchedAt: sql.NullTime{},
 			}); serr != nil {
-				log.Printf("alliance: requeue %d: %v", id, serr)
+				logging.Errorf("alliance: requeue %d: %v", id, serr)
 			}
 		}
 	case err == nil && rec.State == orgStateMissing:
 		view.State = "missing"
 	default:
 		if qerr := app.queries.UpsertAllianceWant(ctx, id); qerr != nil {
-			log.Printf("alliance: note want for %d: %v", id, qerr)
+			logging.Errorf("alliance: note want for %d: %v", id, qerr)
 		}
 	}
 
@@ -473,213 +476,4 @@ func (app *Application) resolvedPlaceName(ctx context.Context, id int64) (string
 		return "", true
 	}
 	return "", false
-}
-
-// refreshCorporationRecords drains the corporation queue inside
-// the cycle budget: 'pending' rows first, then ready rows gone
-// stale. Called from refreshCycle.
-func (app *Application) refreshCorporationRecords(ctx context.Context, allowance *fetchBudget) (drained int, limited bool) {
-	app.fetchMu.Lock()
-	defer app.fetchMu.Unlock()
-	return app.drainCorporationPass(ctx, allowance, maxOrgDrainsPerCycle, time.Now().UTC())
-}
-
-// refreshAllianceRecords is refreshCorporationRecords for the
-// alliance queue.
-func (app *Application) refreshAllianceRecords(ctx context.Context, allowance *fetchBudget) (drained int, limited bool) {
-	app.fetchMu.Lock()
-	defer app.fetchMu.Unlock()
-	return app.drainAlliancePass(ctx, allowance, maxOrgDrainsPerCycle, time.Now().UTC())
-}
-
-// drainCorporationPass fills up to limit due corporation records.
-// Callers hold the shared fetch lock (the cycle wrappers above,
-// the urgent drain).
-func (app *Application) drainCorporationPass(ctx context.Context, allowance *fetchBudget, limit int, now time.Time) (drained int, limited bool) {
-	ids, err := app.queries.ListCorporationDrains(ctx, db.ListCorporationDrainsParams{
-		StaleCutoff: now.Add(-orgStaleAfter).Format(time.RFC3339),
-		DrainLimit:  int64(limit),
-	})
-	if err != nil {
-		log.Printf("worker: corporation records: list drains: %v", err)
-		return 0, false
-	}
-	for _, id := range ids {
-		if ctx.Err() != nil {
-			break
-		}
-		settled, ltd := app.drainCorporationRecord(ctx, id, allowance, now)
-		if ltd {
-			return drained, true
-		}
-		if settled {
-			drained++
-		}
-	}
-	return drained, false
-}
-
-// drainAlliancePass is drainCorporationPass for alliances.
-func (app *Application) drainAlliancePass(ctx context.Context, allowance *fetchBudget, limit int, now time.Time) (drained int, limited bool) {
-	ids, err := app.queries.ListAllianceDrains(ctx, db.ListAllianceDrainsParams{
-		StaleCutoff: now.Add(-orgStaleAfter).Format(time.RFC3339),
-		DrainLimit:  int64(limit),
-	})
-	if err != nil {
-		log.Printf("worker: alliance records: list drains: %v", err)
-		return 0, false
-	}
-	for _, id := range ids {
-		if ctx.Err() != nil {
-			break
-		}
-		settled, ltd := app.drainAllianceRecord(ctx, id, allowance, now)
-		if ltd {
-			return drained, true
-		}
-		if settled {
-			drained++
-		}
-	}
-	return drained, false
-}
-
-// drainCorporationRecord assembles and stores one corporation's
-// public record from ESI's public endpoints (no token involved
-// anywhere). A 404 settles the record as 'missing'.
-func (app *Application) drainCorporationRecord(ctx context.Context, id int64, allowance *fetchBudget, now time.Time) (settled bool, limited bool) {
-	stamp := now.Format(time.RFC3339)
-
-	if !allowance.take() {
-		return false, false
-	}
-	var corp esi.Corporation
-	if err := app.esi.Get(ctx, "", fmt.Sprintf("/corporations/%d/", id), &corp); err != nil {
-		if errors.Is(err, esi.ErrErrorLimit) {
-			log.Printf("worker: corporation records: ESI error limit hit resolving corporation %d; backing off until next cycle", id)
-			return false, true
-		}
-		if code, has := esi.StatusCode(err); has && code == http.StatusNotFound {
-			if serr := app.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
-				CorporationID: id, Payload: "", State: orgStateMissing, FetchedAt: stamp,
-			}); serr != nil {
-				log.Printf("worker: corporation records: record miss for %d: %v", id, serr)
-				return false, false
-			}
-			return true, false
-		}
-		log.Printf("worker: corporation records: fetch corporation %d: %v", id, err)
-		return false, false
-	}
-	app.esi.StoreCorpName(id, corp.Name)
-
-	payload := corporationRecordPayload{Corp: corp}
-
-	// The alliance's name + ticker ride along so the corporation
-	// page (and every corp line elsewhere) never chases them.
-	if corp.AllianceID > 0 && allowance.take() {
-		var alliance esi.Alliance
-		if err := app.esi.Get(ctx, "", fmt.Sprintf("/alliances/%d/", corp.AllianceID), &alliance); err != nil {
-			if errors.Is(err, esi.ErrErrorLimit) {
-				return false, true
-			}
-			log.Printf("worker: corporation records: fetch alliance %d for corporation %d: %v", corp.AllianceID, id, err)
-		} else {
-			payload.Alliance = alliance
-			app.esi.StoreAllianceName(corp.AllianceID, alliance.Name)
-		}
-	}
-
-	encoded, err := json.Marshal(payload)
-	if err != nil {
-		log.Printf("worker: corporation records: encode payload for %d: %v", id, err)
-		return false, false
-	}
-	if err := app.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
-		CorporationID: id, Payload: string(encoded), State: orgStateReady, FetchedAt: stamp,
-	}); err != nil {
-		log.Printf("worker: corporation records: store record for %d: %v", id, err)
-		return false, false
-	}
-	return true, false
-}
-
-// drainAllianceRecord assembles and stores one alliance's public
-// record: the profile plus the member-corporation list, with as
-// many member names baked in as the pass budget allows (the rest
-// resolve through the corporation queue, like pilot employment
-// histories). A 404 settles the record as 'missing'.
-func (app *Application) drainAllianceRecord(ctx context.Context, id int64, allowance *fetchBudget, now time.Time) (settled bool, limited bool) {
-	stamp := now.Format(time.RFC3339)
-
-	if !allowance.take() {
-		return false, false
-	}
-	var alliance esi.Alliance
-	if err := app.esi.Get(ctx, "", fmt.Sprintf("/alliances/%d/", id), &alliance); err != nil {
-		if errors.Is(err, esi.ErrErrorLimit) {
-			log.Printf("worker: alliance records: ESI error limit hit resolving alliance %d; backing off until next cycle", id)
-			return false, true
-		}
-		if code, has := esi.StatusCode(err); has && code == http.StatusNotFound {
-			if serr := app.queries.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
-				AllianceID: id, Payload: "", State: orgStateMissing, FetchedAt: stamp,
-			}); serr != nil {
-				log.Printf("worker: alliance records: record miss for %d: %v", id, serr)
-				return false, false
-			}
-			return true, false
-		}
-		log.Printf("worker: alliance records: fetch alliance %d: %v", id, err)
-		return false, false
-	}
-	app.esi.StoreAllianceName(id, alliance.Name)
-
-	payload := allianceRecordPayload{Alliance: alliance}
-
-	if allowance.take() {
-		var corpIDs []int64
-		if err := app.esi.Get(ctx, "", fmt.Sprintf("/alliances/%d/corporations/", id), &corpIDs); err != nil {
-			if errors.Is(err, esi.ErrErrorLimit) {
-				return false, true
-			}
-			// The member list failing is not fatal to the record:
-			// store the profile with an empty list.
-			log.Printf("worker: alliance records: fetch member corporations for %d: %v (storing profile only)", id, err)
-		} else {
-			nameFetches := 0
-			for _, corpID := range corpIDs {
-				member := allianceMemberCorp{ID: corpID}
-				if name, ok := app.esi.CachedCorpName(corpID); ok && name != "" {
-					member.Name = name
-				} else if nameFetches < maxAllianceMemberNamesPerDrain && allowance.take() {
-					nameFetches++
-					var corp esi.Corporation
-					if err := app.esi.Get(ctx, "", fmt.Sprintf("/corporations/%d/", corpID), &corp); err != nil {
-						if errors.Is(err, esi.ErrErrorLimit) {
-							return false, true
-						}
-						log.Printf("worker: alliance records: fetch member corporation %d for alliance %d: %v", corpID, id, err)
-					} else {
-						member.Name = corp.Name
-						app.esi.StoreCorpName(corpID, corp.Name)
-					}
-				}
-				payload.Corporations = append(payload.Corporations, member)
-			}
-		}
-	}
-
-	encoded, err := json.Marshal(payload)
-	if err != nil {
-		log.Printf("worker: alliance records: encode payload for %d: %v", id, err)
-		return false, false
-	}
-	if err := app.queries.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
-		AllianceID: id, Payload: string(encoded), State: orgStateReady, FetchedAt: stamp,
-	}); err != nil {
-		log.Printf("worker: alliance records: store record for %d: %v", id, err)
-		return false, false
-	}
-	return true, false
 }

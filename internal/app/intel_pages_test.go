@@ -49,8 +49,8 @@ func seedGlobalSnapshot(t *testing.T, q *db.Queries, kind string, payload any) {
 	if err := q.UpsertGlobalSnapshot(context.Background(), db.UpsertGlobalSnapshotParams{
 		Kind:        kind,
 		Payload:     raw,
-		FetchedAt:   "2026-01-01T00:00:00Z",
-		CachedUntil: "2999-01-01T00:00:00Z",
+		FetchedAt:   mustTime("2026-01-01T00:00:00Z"),
+		CachedUntil: mustTime("2999-01-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed global snapshot %s: %v", kind, err)
 	}
@@ -71,7 +71,7 @@ func TestIntelPagesRenderFromStore(t *testing.T) {
 	if err := q.UpsertCharacterCorporation(ctx, db.UpsertCharacterCorporationParams{
 		CharacterID:   fixtureCharA,
 		CorporationID: fixtureCorpA,
-		UpdatedAt:     now.Format(time.RFC3339),
+		UpdatedAt:     now,
 	}); err != nil {
 		t.Fatalf("seed mapping: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestIntelPagesRenderFromStore(t *testing.T) {
 		if err := q.UpsertWarDetail(ctx, db.UpsertWarDetailParams{
 			WarID:     war.ID,
 			Payload:   string(raw),
-			FetchedAt: "2026-01-01T00:00:00Z",
+			FetchedAt: mustTime("2026-01-01T00:00:00Z"),
 		}); err != nil {
 			t.Fatalf("seed war detail %d: %v", war.ID, err)
 		}
@@ -351,7 +351,7 @@ func TestRefreshIntel(t *testing.T) {
 	if err := q.UpsertWarDetail(ctx, db.UpsertWarDetailParams{
 		WarID:     9002,
 		Payload:   row.Payload,
-		FetchedAt: time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339),
+		FetchedAt: time.Now().Add(-2 * time.Hour).UTC(),
 	}); err != nil {
 		t.Fatalf("age war detail 9002: %v", err)
 	}
@@ -386,7 +386,7 @@ func TestUserCorporationIDsAreScopedToTheUser(t *testing.T) {
 	}
 	seedCharacter(t, q, userA.ID, fixtureCharA, "Fixture Alpha")
 	seedCharacter(t, q, userB.ID, fixtureCharB, "Fixture Beta")
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 	if err := q.UpsertCharacterCorporation(ctx, db.UpsertCharacterCorporationParams{
 		CharacterID: fixtureCharA, CorporationID: 98000001, UpdatedAt: now,
 	}); err != nil {

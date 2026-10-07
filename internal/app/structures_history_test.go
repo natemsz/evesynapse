@@ -17,6 +17,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/markethistory"
 )
 
 // defectTransport routes the endpoints the defect tests exercise
@@ -121,7 +122,7 @@ func TestStructureRenderZeroOutbound(t *testing.T) {
 	const structureID = int64(1044752365771)
 	if err := q.SetStructureName(ctx, db.SetStructureNameParams{
 		StructureID: structureID, Name: "Jita Holding", State: esi.StructureResolved, Source: esi.StructureSourceESI,
-		ResolvedAt: time.Now().UTC().Format(time.RFC3339),
+		ResolvedAt: timeSet(time.Now().UTC()),
 	}); err != nil {
 		t.Fatalf("seed structure name: %v", err)
 	}
@@ -167,9 +168,9 @@ func TestStructureResolutionNegativeCache(t *testing.T) {
 		t.Fatalf("fresh negative was re-asked: calls %d → %d", calls, transport.callCount())
 	}
 	// After 24h it is due again.
-	stale := time.Now().UTC().Add(-25 * time.Hour).Format(time.RFC3339)
+	stale := time.Now().UTC().Add(-25 * time.Hour)
 	if err := q.SetStructureName(ctx, db.SetStructureNameParams{
-		StructureID: structureID, Name: "", State: esi.StructureMissing, Source: esi.StructureSourceESI, ResolvedAt: stale,
+		StructureID: structureID, Name: "", State: esi.StructureMissing, Source: esi.StructureSourceESI, ResolvedAt: timeSet(stale),
 	}); err != nil {
 		t.Fatalf("backdate miss: %v", err)
 	}
@@ -199,9 +200,9 @@ func TestStructureResolutionRenameRefreshAndScopeGate(t *testing.T) {
 
 	// A rename-aged entry (31 days) re-resolves once the scope is
 	// present.
-	stale := time.Now().UTC().Add(-31 * 24 * time.Hour).Format(time.RFC3339)
+	stale := time.Now().UTC().Add(-31 * 24 * time.Hour)
 	if err := q.SetStructureName(ctx, db.SetStructureNameParams{
-		StructureID: structureID, Name: "Old Name", State: esi.StructureResolved, Source: esi.StructureSourceESI, ResolvedAt: stale,
+		StructureID: structureID, Name: "Old Name", State: esi.StructureResolved, Source: esi.StructureSourceESI, ResolvedAt: timeSet(stale),
 	}); err != nil {
 		t.Fatalf("seed stale name: %v", err)
 	}
@@ -338,7 +339,7 @@ func TestHistoryWantsDrainPriority(t *testing.T) {
 	}
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
 
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 	// A viewed-item want (5001), a watchlist entry (5002), and an
 	// open order for 5003.
 	if err := q.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
@@ -375,7 +376,7 @@ func TestHistoryFailedFirstWantDoesNotStarveOthers(t *testing.T) {
 	}
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 	for _, id := range []int64{5001, 5002} {
 		if err := q.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
 			RegionID: 10000002, TypeID: id, LastRequestedAt: now,
@@ -466,7 +467,7 @@ func TestHistoryFewRowsSummaryAndStaleChart(t *testing.T) {
 
 	seed := func(daysAgo int, avg float64) {
 		t.Helper()
-		day := now.AddDate(0, 0, -daysAgo).Format(historyDateLayout)
+		day := now.AddDate(0, 0, -daysAgo).Format(markethistory.DateLayout)
 		if err := q.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
 			RegionID: 10000002, TypeID: 34, Date: day, Average: avg,
 			Highest: avg, Lowest: avg, Volume: 5000, OrderCount: 90,
@@ -505,7 +506,7 @@ func TestHistoryFewRowsSummaryAndStaleChart(t *testing.T) {
 		ago int
 		avg float64
 	}{{120, 20.0}, {150, 19.0}} {
-		day := now.AddDate(0, 0, -d.ago).Format(historyDateLayout)
+		day := now.AddDate(0, 0, -d.ago).Format(markethistory.DateLayout)
 		if err := q.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
 			RegionID: 10000002, TypeID: 35, Date: day, Average: d.avg,
 			Highest: d.avg, Lowest: d.avg, Volume: 5000, OrderCount: 90,
@@ -515,7 +516,7 @@ func TestHistoryFewRowsSummaryAndStaleChart(t *testing.T) {
 	}
 	_, body = getPage(t, app, cookie, "/market/?type=35")
 	mustContain(t, "/market/?type=35 (stale)", body,
-		`class="pchart"`, "Last trades "+now.AddDate(0, 0, -120).Format(historyDateLayout))
+		`class="pchart"`, "Last trades "+now.AddDate(0, 0, -120).Format(markethistory.DateLayout))
 }
 
 func TestHistoryChartRowWindow(t *testing.T) {
@@ -524,7 +525,7 @@ func TestHistoryChartRowWindow(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 	for i := 0; i < 100; i++ {
-		day := now.AddDate(0, 0, -i).Format(historyDateLayout)
+		day := now.AddDate(0, 0, -i).Format(markethistory.DateLayout)
 		if err := q.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
 			RegionID: 10000002, TypeID: 34, Date: day, Average: 10,
 			Highest: 10, Lowest: 10, Volume: 100, OrderCount: 5,
@@ -532,13 +533,13 @@ func TestHistoryChartRowWindow(t *testing.T) {
 			t.Fatalf("seed row %d: %v", i, err)
 		}
 	}
-	rows := app.recentHistoryRows(ctx, 10000002, 34, historyChartRows)
-	if len(rows) != historyChartRows {
-		t.Fatalf("window: %d rows, want %d", len(rows), historyChartRows)
+	rows := app.recentHistoryRows(ctx, 10000002, 34, markethistory.ChartRows)
+	if len(rows) != markethistory.ChartRows {
+		t.Fatalf("window: %d rows, want %d", len(rows), markethistory.ChartRows)
 	}
-	oldest := now.AddDate(0, 0, -(historyChartRows - 1)).Format(historyDateLayout)
-	if rows[0].Date != oldest || rows[len(rows)-1].Date != now.Format(historyDateLayout) {
-		t.Fatalf("window span: %s → %s, want %s → %s", rows[0].Date, rows[len(rows)-1].Date, oldest, now.Format(historyDateLayout))
+	oldest := now.AddDate(0, 0, -(markethistory.ChartRows - 1)).Format(markethistory.DateLayout)
+	if rows[0].Date != oldest || rows[len(rows)-1].Date != now.Format(markethistory.DateLayout) {
+		t.Fatalf("window span: %s → %s, want %s → %s", rows[0].Date, rows[len(rows)-1].Date, oldest, now.Format(markethistory.DateLayout))
 	}
 	// Ascending for the chart math.
 	for i := 1; i < len(rows); i++ {
@@ -558,7 +559,7 @@ func TestHistorySectionNeverBlank(t *testing.T) {
 
 	item := &marketItem{TypeID: 34, RegionID: 10000002, RegionName: "The Forge"}
 	app.attachHistory(ctx, item, 34, 10000002, 0)
-	if item.HistoryState != historyStatePending || !item.HistoryPending {
+	if item.HistoryState != markethistory.StatePending || !item.HistoryPending {
 		t.Fatalf("cold state: %q pending=%v, want pending", item.HistoryState, item.HistoryPending)
 	}
 
@@ -566,7 +567,7 @@ func TestHistorySectionNeverBlank(t *testing.T) {
 	app.recordMarketFetch(ctx, "history_10000002_34", fetchStateOK, "")
 	item = &marketItem{TypeID: 34, RegionID: 10000002, RegionName: "The Forge"}
 	app.attachHistory(ctx, item, 34, 10000002, 0)
-	if item.HistoryState != historyStateEmpty {
+	if item.HistoryState != markethistory.StateEmpty {
 		t.Fatalf("settled state: %q, want empty", item.HistoryState)
 	}
 
@@ -574,13 +575,13 @@ func TestHistorySectionNeverBlank(t *testing.T) {
 	app.recordMarketFetch(ctx, "history_10000002_34", fetchStateError, "boom")
 	item = &marketItem{TypeID: 34, RegionID: 10000002, RegionName: "The Forge"}
 	app.attachHistory(ctx, item, 34, 10000002, 0)
-	if item.HistoryState != historyStatePending {
+	if item.HistoryState != markethistory.StatePending {
 		t.Fatalf("errored state: %q, want pending", item.HistoryState)
 	}
 
 	// Two recent rows chart.
 	for i := 1; i >= 0; i-- {
-		day := now.AddDate(0, 0, -i).Format(historyDateLayout)
+		day := now.AddDate(0, 0, -i).Format(markethistory.DateLayout)
 		if err := q.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
 			RegionID: 10000002, TypeID: 34, Date: day, Average: 10,
 			Highest: 10, Lowest: 10, Volume: 100, OrderCount: 5,
@@ -590,7 +591,7 @@ func TestHistorySectionNeverBlank(t *testing.T) {
 	}
 	item = &marketItem{TypeID: 34, RegionID: 10000002, RegionName: "The Forge"}
 	app.attachHistory(ctx, item, 34, 10000002, 0)
-	if item.HistoryState != historyStateChart || item.Chart == nil {
+	if item.HistoryState != markethistory.StateChart || item.Chart == nil {
 		t.Fatalf("chart state: %q chart=%v, want chart", item.HistoryState, item.Chart != nil)
 	}
 	if item.HistoryLastDay != "" {

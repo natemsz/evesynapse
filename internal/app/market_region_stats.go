@@ -29,7 +29,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"sort"
 	"strconv"
 	"sync"
@@ -38,6 +37,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 const (
@@ -145,17 +145,17 @@ func (app *Application) advanceRegionSweep(ctx context.Context, regionID int64, 
 		if !app.marketFetchDue(ctx, regionSweepKind(regionID), regionSweepGate) {
 			return out
 		}
-		now := time.Now().UTC().Format(time.RFC3339)
+		now := time.Now().UTC()
 		if err := app.queries.InsertMarketSweepState(ctx, db.InsertMarketSweepStateParams{
 			RegionID: regionID, StartedAt: now, UpdatedAt: now,
 		}); err != nil {
-			log.Printf("worker: region sweep: start %s: %v", marketRegionLabel(regionID), err)
+			logging.Errorf("worker: region sweep: start %s: %v", marketRegionLabel(regionID), err)
 			return out
 		}
 		state = db.MarketSweepState{RegionID: regionID, NextPage: 1, StartedAt: now, UpdatedAt: now}
-		log.Printf("worker: region sweep: starting %s (%d)", marketRegionLabel(regionID), regionID)
+		logging.Infof("worker: region sweep: starting %s (%d)", marketRegionLabel(regionID), regionID)
 	case err != nil:
-		log.Printf("worker: region sweep: read %s sweep state: %v", marketRegionLabel(regionID), err)
+		logging.Errorf("worker: region sweep: read %s sweep state: %v", marketRegionLabel(regionID), err)
 		return out
 	}
 
@@ -178,14 +178,14 @@ func (app *Application) advanceRegionSweep(ctx context.Context, regionID int64, 
 		if err != nil {
 			if errors.Is(err, esi.ErrErrorLimit) {
 				limitHit.Store(true)
-				log.Printf("worker: region sweep: %s cut short by ESI error limit on page %d", marketRegionLabel(regionID), state.NextPage)
+				logging.Warnf("worker: region sweep: %s cut short by ESI error limit on page %d", marketRegionLabel(regionID), state.NextPage)
 				out.limited = true
 				return out
 			}
 			// Transient failure: the staged pages and the
 			// cursor stay put, and this page is retried next
 			// cycle; nothing was stored.
-			log.Printf("worker: region sweep: %s page %d unavailable: %v", marketRegionLabel(regionID), state.NextPage, err)
+			logging.Warnf("worker: region sweep: %s page %d unavailable: %v", marketRegionLabel(regionID), state.NextPage, err)
 			break
 		}
 		if int64(totalPages) > state.PagesTotal {
@@ -193,7 +193,7 @@ func (app *Application) advanceRegionSweep(ctx context.Context, regionID int64, 
 		}
 		state.NextPage++
 		if err := app.stageSweepPage(ctx, state, orders); err != nil {
-			log.Printf("worker: region sweep: stage %s page %d: %v", marketRegionLabel(regionID), state.NextPage-1, err)
+			logging.Errorf("worker: region sweep: stage %s page %d: %v", marketRegionLabel(regionID), state.NextPage-1, err)
 			break
 		}
 		out.pages++
@@ -201,7 +201,7 @@ func (app *Application) advanceRegionSweep(ctx context.Context, regionID int64, 
 			break
 		}
 		if state.NextPage > maxRegionSweepPagesTotal {
-			log.Printf("worker: region sweep: %s passed the %d-page safety stop; storing what was read", marketRegionLabel(regionID), maxRegionSweepPagesTotal)
+			logging.Warnf("worker: region sweep: %s passed the %d-page safety stop; storing what was read", marketRegionLabel(regionID), maxRegionSweepPagesTotal)
 			break
 		}
 	}
@@ -245,7 +245,7 @@ func (app *Application) stageSweepPage(ctx context.Context, state db.MarketSweep
 	}
 	if err := qtx.UpdateMarketSweepState(ctx, db.UpdateMarketSweepStateParams{
 		NextPage: state.NextPage, PagesTotal: state.PagesTotal,
-		UpdatedAt: time.Now().UTC().Format(time.RFC3339), RegionID: state.RegionID,
+		UpdatedAt: time.Now().UTC(), RegionID: state.RegionID,
 	}); err != nil {
 		return err
 	}
@@ -259,10 +259,10 @@ func (app *Application) stageSweepPage(ctx context.Context, state db.MarketSweep
 func (app *Application) completeRegionSweep(ctx context.Context, state db.MarketSweepState) {
 	types, stations, err := app.storeRegionSweep(ctx, state.RegionID)
 	if err != nil {
-		log.Printf("worker: region sweep: store %s: %v", marketRegionLabel(state.RegionID), err)
+		logging.Errorf("worker: region sweep: store %s: %v", marketRegionLabel(state.RegionID), err)
 		return
 	}
-	log.Printf("worker: region sweep: %s done: %d types, %d station rows over %d pages", marketRegionLabel(state.RegionID), types, stations, state.NextPage-1)
+	logging.Infof("worker: region sweep: %s done: %d types, %d station rows over %d pages", marketRegionLabel(state.RegionID), types, stations, state.NextPage-1)
 }
 
 // fetchRegionBookPage reads one page of a region's whole book
@@ -304,7 +304,6 @@ func (app *Application) fetchRegionBookPage(ctx context.Context, regionID int64,
 // of recomputing it per render.
 func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (typeCount, stationCount int, err error) {
 	now := time.Now().UTC()
-	updatedAt := now.Format(time.RFC3339)
 	day := now.Format("2006-01-02")
 
 	// Region grain: one type at a time, its staged prices fed
@@ -462,7 +461,7 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 			SellOrders: st.sellOrders, BuyOrders: st.buyOrders,
 			SellVolume: st.sellVolume, BuyVolume: st.buyVolume,
 			AvgDailyVolume: avgDailyVolume[typeID],
-			UpdatedAt:      updatedAt,
+			UpdatedAt:      now,
 		}); err != nil {
 			return 0, 0, err
 		}
@@ -483,7 +482,7 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 			BestSell: sacc.BestSell, BestBuy: sacc.BestBuy,
 			SellOrders: sacc.SellOrders, BuyOrders: sacc.BuyOrders,
 			SellVolume: sacc.SellVolume, BuyVolume: sacc.BuyVolume,
-			UpdatedAt: updatedAt,
+			UpdatedAt: now,
 		}); err != nil {
 			return 0, 0, err
 		}
@@ -503,7 +502,7 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 			RegionID: regionID, LocationID: loc,
 			SellOrders: acc.sellOrders, BuyOrders: acc.buyOrders,
 			SellValue: acc.sellValue, BuyValue: acc.buyValue,
-			UpdatedAt: updatedAt,
+			UpdatedAt: now,
 		}); err != nil {
 			return 0, 0, err
 		}
@@ -513,79 +512,6 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 	}
 	app.recordMarketFetch(ctx, regionSweepKind(regionID), fetchStateOK, "")
 	return len(typeIDs), len(stationKeys), nil
-}
-
-// marketRegionStatRow is one hub row of the item page's regions
-// strip, built from stored sweep stats only.
-type marketRegionStatRow struct {
-	RegionID    int64
-	RegionName  string
-	Active      bool   // the region the page is currently showing
-	HasData     bool   // a sweep has covered this type in this region
-	TypicalSell string // esi.FormatISK, "" when no sell orders
-	TypicalBuy  string // esi.FormatISK, "" when no buy orders
-	Age         string // "12 minutes ago", "" when HasData is false
-}
-
-// attachRegionStats fills an item view's hub-regions strip from
-// market_region_stats. Pure database read -- the strip never
-// triggers a fetch; regions the worker has not swept yet render
-// as "no data yet".
-func (app *Application) attachRegionStats(ctx context.Context, item *marketItem) {
-	if item == nil {
-		return
-	}
-	byRegion := make(map[int64]db.MarketRegionStat)
-	if rows, err := app.queries.ListMarketRegionStatsByType(ctx, item.TypeID); err != nil {
-		log.Printf("market: region stats for type %d: %v", item.TypeID, err)
-	} else {
-		for _, row := range rows {
-			byRegion[row.RegionID] = row
-		}
-	}
-	item.RegionStats = item.RegionStats[:0]
-	for _, region := range marketRegions {
-		row := marketRegionStatRow{
-			RegionID:   region.ID,
-			RegionName: region.Name,
-			Active:     region.ID == item.RegionID,
-		}
-		if stat, ok := byRegion[region.ID]; ok {
-			row.HasData = true
-			if stat.TypicalSell > 0 {
-				row.TypicalSell = esi.FormatISK(stat.TypicalSell)
-			}
-			if stat.TypicalBuy > 0 {
-				row.TypicalBuy = esi.FormatISK(stat.TypicalBuy)
-			}
-			row.Age = statsAgeText(stat.UpdatedAt)
-		}
-		item.RegionStats = append(item.RegionStats, row)
-	}
-}
-
-// statsAgeText renders an RFC3339 stamp as a short end-user age
-// for the regions strip ("just now", "12 minutes ago").
-func statsAgeText(rfc string) string {
-	at, err := time.Parse(time.RFC3339, rfc)
-	if err != nil {
-		return ""
-	}
-	d := time.Since(at)
-	switch {
-	case d < 90*time.Second:
-		return "just now"
-	case d < time.Hour:
-		return fmt.Sprintf("%d minutes ago", int(d.Minutes()))
-	case d < 48*time.Hour:
-		if h := int(d.Hours()); h == 1 {
-			return "1 hour ago"
-		} else {
-			return fmt.Sprintf("%d hours ago", h)
-		}
-	default:
-		return fmt.Sprintf("%d days ago", int(d.Hours()/24))
-	}
 }
 
 // marketRegionLabel names a region for logs; hub IDs resolve to

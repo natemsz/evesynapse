@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -30,7 +31,7 @@ type linkCharacterInput struct {
 	OwnerHash    string // JWT `owner` claim; "" when CCP sent none
 	AccessToken  string
 	RefreshToken string
-	TokenExpiry  sql.NullString
+	TokenExpiry  sql.NullTime
 }
 
 // linkResult reports the policy decisions linkVerifiedCharacter
@@ -82,10 +83,10 @@ func (app *Application) linkVerifiedCharacter(ctx context.Context, in linkCharac
 	// second look: the new owner has just proven control and the
 	// character has left the account it could not be trusted on.
 	state := linkStateOK
-	var stateAt sql.NullString
+	var stateAt sql.NullTime
 	if result.OwnerChanged && !result.Moved {
 		state = linkStateOwnerChanged
-		stateAt = sql.NullString{String: time.Now().UTC().Format(time.RFC3339), Valid: true}
+		stateAt = timeSet(time.Now().UTC())
 	}
 
 	// The tokens are stored sealed when a TOKEN_ENCRYPTION_KEY is
@@ -175,10 +176,9 @@ func (app *Application) markCharacterTokenDead(ctx context.Context, characterID 
 	if err != nil || ch.LinkState != linkStateOK {
 		return
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
 	if err := app.queries.SetCharacterLinkState(ctx, db.SetCharacterLinkStateParams{
 		LinkState:   linkStateTokenDead,
-		LinkStateAt: sql.NullString{String: now, Valid: true},
+		LinkStateAt: timeSet(time.Now().UTC()),
 		CharacterID: characterID,
 	}); err != nil {
 		return
@@ -190,4 +190,15 @@ func (app *Application) markCharacterTokenDead(ctx context.Context, characterID 
 // owner_changed characters wait for a fresh sign-in.
 func characterSyncs(ch db.Character) bool {
 	return ch.LinkState == "" || ch.LinkState == linkStateOK
+}
+
+// characterHasScope reports whether the character's granted scope
+// set (characters.scopes, space-joined at sign-in) includes scope.
+func characterHasScope(ch db.Character, scope string) bool {
+	for _, s := range strings.Fields(ch.Scopes) {
+		if s == scope {
+			return true
+		}
+	}
+	return false
 }

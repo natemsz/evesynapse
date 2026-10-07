@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"sort"
 	"strings"
 
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -30,18 +30,6 @@ import (
 var globalKindOrder = []string{
 	esi.GlobalStatus, esi.GlobalWars, esi.GlobalIncursions,
 	esi.GlobalFWSystems, esi.GlobalFWStats, esi.GlobalFactions,
-}
-
-// loadGlobalSnapshot decodes a stored global payload into out. It
-// reports false when there is no row or the payload doesn't
-// decode. DB only — unlike esi.GetCached it never refetches; the
-// worker keeps the global store warm.
-func (app *Application) loadGlobalSnapshot(ctx context.Context, kind string, out any) bool {
-	snap, err := app.queries.GetGlobalSnapshot(ctx, kind)
-	if err != nil {
-		return false
-	}
-	return json.Unmarshal([]byte(snap.Payload), out) == nil
 }
 
 // factionNames builds the faction ID → name map from the stored
@@ -80,7 +68,7 @@ func factionDisplay(names map[int64]string, id int64) string {
 func (app *Application) userCorporationIDs(ctx context.Context, userID int64) map[int64]bool {
 	ids, err := app.queries.ListCorporationIDsByUser(ctx, userID)
 	if err != nil {
-		log.Printf("intel: list user corporations: %v", err)
+		logging.Errorf("intel: list user corporations: %v", err)
 		return nil
 	}
 	out := make(map[int64]bool, len(ids))
@@ -184,7 +172,7 @@ func (app *Application) warRow(ctx context.Context, warID int64, yourCorps map[i
 	}
 	var war esi.War
 	if err := json.Unmarshal([]byte(stored.Payload), &war); err != nil {
-		log.Printf("intel: decode war detail %d: %v", warID, err)
+		logging.Errorf("intel: decode war detail %d: %v", warID, err)
 		return row
 	}
 	row.Warming = false

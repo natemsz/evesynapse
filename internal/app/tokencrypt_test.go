@@ -8,7 +8,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"io"
 	"net/http"
@@ -154,7 +153,7 @@ func TestTokensAreStoredSealedAndUsedOpened(t *testing.T) {
 		OwnerHash:    "hash-one",
 		AccessToken:  "access-one",
 		RefreshToken: "refresh-one",
-		TokenExpiry:  sql.NullString{String: "2999-01-01T00:00:00Z", Valid: true},
+		TokenExpiry:  mustNullTime("2999-01-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("link: %v", err)
 	}
@@ -186,7 +185,7 @@ func TestTokensAreStoredSealedAndUsedOpened(t *testing.T) {
 	if err := q.UpdateCharacterTokens(ctx, db.UpdateCharacterTokensParams{
 		AccessToken:  row.AccessToken,
 		RefreshToken: row.RefreshToken,
-		TokenExpiry:  sql.NullString{String: "2000-01-01T00:00:00Z", Valid: true},
+		TokenExpiry:  mustNullTime("2000-01-01T00:00:00Z"),
 		CharacterID:  fixtureCharA,
 	}); err != nil {
 		t.Fatalf("expire token: %v", err)

@@ -4,12 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log"
+	"net/http"
 	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -49,17 +50,6 @@ const piScopeDetail = "Planetary industry is not enabled for this character"
 // the cap is headroom, not a schedule.
 const maxPlanetLayoutsPerCycle = 8
 
-// characterHasScope reports whether the character's granted scope
-// set (characters.scopes, space-joined at sign-in) includes scope.
-func characterHasScope(ch db.Character, scope string) bool {
-	for _, s := range strings.Fields(ch.Scopes) {
-		if s == scope {
-			return true
-		}
-	}
-	return false
-}
-
 // piScopeRefusal reports whether an ESI failure on a planetary
 // endpoint means "this login never granted the planetary scope"
 // rather than a broken token or a transient error. CCP answers
@@ -74,19 +64,6 @@ func piScopeRefusal(err error) bool {
 	}
 	code, ok := esi.StatusCode(err)
 	return ok && code == 401
-}
-
-// piNotEnabled reports whether PI is dark for this character
-// because its login predates the planetary scope: a recorded
-// colonies refusal stands and the granted scopes still lack the
-// scope. A character that re-linked (scope present) is never
-// flagged — the worker retries within the cycle.
-func (app *Application) piNotEnabled(ctx context.Context, ch db.Character) bool {
-	if characterHasScope(ch, planetScope) {
-		return false
-	}
-	state, detail, found := app.corpKindState(ctx, ch.CharacterID, esi.SnapPlanets)
-	return found && state == fetchStateError && strings.HasPrefix(detail, piScopeDetail)
 }
 
 // refreshPlanetarySnapshots runs the PI pass for one character and
@@ -114,7 +91,7 @@ func (app *Application) fetchPlanetsKind(ctx context.Context, ch db.Character, a
 	case serr == nil && esi.SnapshotFresh(snap):
 		return corpFetchSkipped
 	case serr != nil && !errors.Is(serr, sql.ErrNoRows):
-		log.Printf("worker: read %s snapshot for character %d: %v", esi.SnapPlanets, ch.CharacterID, serr)
+		logging.Errorf("worker: read %s snapshot for character %d: %v", esi.SnapPlanets, ch.CharacterID, serr)
 	}
 
 	// A recorded scope refusal backs the kind off — unless the
@@ -123,7 +100,7 @@ func (app *Application) fetchPlanetsKind(ctx context.Context, ch db.Character, a
 	if !characterHasScope(ch, planetScope) {
 		if state, err := app.queries.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: ch.CharacterID, Kind: esi.SnapPlanets}); err == nil &&
 			state.State == fetchStateError && strings.HasPrefix(state.Detail, piScopeDetail) {
-			if attempted, perr := time.Parse(time.RFC3339, state.AttemptedAt); perr == nil && time.Since(attempted) < roleMissingBackoff {
+			if time.Since(state.AttemptedAt) < roleMissingBackoff {
 				return corpFetchSkipped
 			}
 		}
@@ -132,19 +109,19 @@ func (app *Application) fetchPlanetsKind(ctx context.Context, ch db.Character, a
 	if !allowance.take() {
 		return corpFetchSkipped
 	}
-	if _, err := app.esi.FetchAndStoreSnapshot(ctx, ch, esi.SnapPlanets); err != nil {
+	if err := app.esi.FetchAndStoreSnapshot(ctx, ch, esi.SnapPlanets); err != nil {
 		switch {
 		case errors.Is(err, esi.ErrErrorLimit):
-			log.Printf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", esi.SnapPlanets, ch.CharacterID)
+			logging.Warnf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", esi.SnapPlanets, ch.CharacterID)
 			return corpFetchLimited
 		case piScopeRefusal(err):
 			code, _ := esi.StatusCode(err)
 			detail := piScopeDetail + " — sign in again to re-link and grant the planetary scope."
 			app.recordCorpFetchState(ctx, ch.CharacterID, esi.SnapPlanets, fetchStateError, detail)
-			log.Printf("worker: %s for character %d refused by ESI (%d); planetary scope not granted on this login", esi.SnapPlanets, ch.CharacterID, code)
+			logging.Infof("worker: %s for character %d refused by ESI (%d); planetary scope not granted on this login", esi.SnapPlanets, ch.CharacterID, code)
 			return corpFetchFailed
 		default:
-			log.Printf("worker: refresh %s for character %d: %v", esi.SnapPlanets, ch.CharacterID, err)
+			logging.Errorf("worker: refresh %s for character %d: %v", esi.SnapPlanets, ch.CharacterID, err)
 			app.recordCorpFetchState(ctx, ch.CharacterID, esi.SnapPlanets, fetchStateError, err.Error())
 			return corpFetchFailed
 		}
@@ -180,7 +157,7 @@ func (app *Application) warmPlanetLayouts(ctx context.Context, ch db.Character, 
 		case serr == nil && esi.SnapshotFresh(snap):
 			continue
 		case serr != nil && !errors.Is(serr, sql.ErrNoRows):
-			log.Printf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
+			logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
 			continue
 		}
 
@@ -190,7 +167,7 @@ func (app *Application) warmPlanetLayouts(ctx context.Context, ch db.Character, 
 		if !hasScope {
 			if state, err := app.queries.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: ch.CharacterID, Kind: kind}); err == nil &&
 				state.State == fetchStateError && strings.HasPrefix(state.Detail, piScopeDetail) {
-				if attempted, perr := time.Parse(time.RFC3339, state.AttemptedAt); perr == nil && time.Since(attempted) < roleMissingBackoff {
+				if time.Since(state.AttemptedAt) < roleMissingBackoff {
 					continue
 				}
 			}
@@ -199,7 +176,7 @@ func (app *Application) warmPlanetLayouts(ctx context.Context, ch db.Character, 
 		if !allowance.take() {
 			break
 		}
-		if _, err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
+		if err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
 			switch {
 			case errors.Is(err, esi.ErrErrorLimit):
 				return fetched, true
@@ -207,10 +184,10 @@ func (app *Application) warmPlanetLayouts(ctx context.Context, ch db.Character, 
 				code, _ := esi.StatusCode(err)
 				detail := piScopeDetail + " — sign in again to re-link and grant the planetary scope."
 				app.recordCorpFetchState(ctx, ch.CharacterID, kind, fetchStateError, detail)
-				log.Printf("worker: %s for character %d refused by ESI (%d); planetary scope not granted on this login", kind, ch.CharacterID, code)
+				logging.Infof("worker: %s for character %d refused by ESI (%d); planetary scope not granted on this login", kind, ch.CharacterID, code)
 			default:
 				if ctx.Err() == nil {
-					log.Printf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
+					logging.Errorf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
 				}
 				app.recordCorpFetchState(ctx, ch.CharacterID, kind, fetchStateError, err.Error())
 			}
@@ -219,4 +196,75 @@ func (app *Application) warmPlanetLayouts(ctx context.Context, ch db.Character, 
 		fetched++
 	}
 	return fetched, false
+}
+
+// resolvePlanetNames drains the due slice of the planet queue:
+// pending ids first, then stale renames and stale misses. The
+// endpoint is public, so no character or scope is involved; each
+// lookup spends from the cycle allowance and a 420/429 stops the
+// pass (limited) like every other worker pass. A name the
+// per-character warm pass already holds in-process is persisted
+// without spending a fetch.
+func (app *Application) resolvePlanetNames(ctx context.Context, allowance *fetchBudget) (resolved int, limited bool) {
+	now := time.Now().UTC()
+	ids, err := app.queries.ListPlanetResolutions(ctx, db.ListPlanetResolutionsParams{
+		ResolvedCutoff:  now.Add(-planetRenameWindow),
+		MissingCutoff:   now.Add(-planetMissingWindow),
+		ResolutionLimit: maxPlanetResolutionsPerCycle,
+	})
+	if err != nil {
+		logging.Errorf("worker: planets: list resolutions: %v", err)
+		return 0, false
+	}
+	for _, id := range ids {
+		if ctx.Err() != nil {
+			break
+		}
+		// Already warm in-process (the colonies harvest beat
+		// this pass to it): persist, no fetch spent.
+		if name, ok := app.esi.CachedPlanetName(ctx, id); ok && name != "" {
+			if serr := app.queries.SetPlanetName(ctx, db.SetPlanetNameParams{
+				PlanetID: id, Name: name, State: esi.PlanetResolved, ResolvedAt: timeSet(now),
+			}); serr != nil {
+				logging.Errorf("worker: planets: persist cached name for %d: %v", id, serr)
+			} else {
+				resolved++
+			}
+			continue
+		}
+		if !allowance.take() {
+			break
+		}
+		planet, err := app.esi.FetchPlanet(ctx, id)
+		if err != nil {
+			if errors.Is(err, esi.ErrErrorLimit) {
+				logging.Warnf("worker: planets: ESI error limit hit resolving planet %d; backing off until next cycle", id)
+				return resolved, true
+			}
+			if code, has := esi.StatusCode(err); has && code == http.StatusNotFound {
+				// Not a planet: remember the answer so this id
+				// isn't re-asked every cycle.
+				if serr := app.queries.SetPlanetName(ctx, db.SetPlanetNameParams{
+					PlanetID: id, Name: "", State: esi.PlanetMissing, ResolvedAt: timeSet(now),
+				}); serr != nil {
+					logging.Errorf("worker: planets: record miss for %d: %v", id, serr)
+				}
+				continue
+			}
+			logging.Errorf("worker: planets: resolve planet %d: %v", id, err)
+			continue
+		}
+		if planet.Name == "" {
+			continue
+		}
+		if serr := app.queries.SetPlanetName(ctx, db.SetPlanetNameParams{
+			PlanetID: id, Name: planet.Name, State: esi.PlanetResolved, ResolvedAt: timeSet(now),
+		}); serr != nil {
+			logging.Errorf("worker: planets: store name for %d: %v", id, serr)
+			continue
+		}
+		app.esi.StorePlanetName(id, planet.Name)
+		resolved++
+	}
+	return resolved, false
 }

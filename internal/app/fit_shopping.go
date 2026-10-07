@@ -3,7 +3,6 @@ package app
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -11,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@ func (app *Application) handleFitShopping(w http.ResponseWriter, r *http.Request
 		UserID: userID,
 	})
 	if err != nil {
-		log.Printf("fit shopping: load fit %s: %v", fitID, err)
+		logging.Errorf("fit shopping: load fit %s: %v", fitID, err)
 		data.Error = "Could not load fit."
 		app.render(ctx, w, http.StatusOK, "fit_shopping.html", data)
 		return
@@ -77,7 +77,7 @@ func (app *Application) handleFitShopping(w http.ResponseWriter, r *http.Request
 
 	var doc fitDoc
 	if err := json.Unmarshal([]byte(itemsJSON), &doc); err != nil {
-		log.Printf("fit shopping: parse fit %s: %v", fitID, err)
+		logging.Errorf("fit shopping: parse fit %s: %v", fitID, err)
 		data.Error = "Could not parse fit."
 		app.render(ctx, w, http.StatusOK, "fit_shopping.html", data)
 		return

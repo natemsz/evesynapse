@@ -42,7 +42,7 @@ func seedTradefinderFixture(t *testing.T, app *Application) {
 	}
 }
 
-func tfRegionStat(regionID, typeID int64, typicalBuy, typicalSell float64, buyVolume, sellVolume int64, avgDailyVolume float64, stamp string) db.UpsertMarketRegionStatParams {
+func tfRegionStat(regionID, typeID int64, typicalBuy, typicalSell float64, buyVolume, sellVolume int64, avgDailyVolume float64, stamp time.Time) db.UpsertMarketRegionStatParams {
 	return db.UpsertMarketRegionStatParams{
 		RegionID: regionID, TypeID: typeID,
 		BestSell: typicalSell, TypicalSell: typicalSell, SellBand: typicalSell,
@@ -59,8 +59,8 @@ func TestTradefinderMathFreshnessFiltersAndHints(t *testing.T) {
 	seedTradefinderFixture(t, app)
 
 	nowT := time.Now().UTC()
-	now := nowT.Format(time.RFC3339)
-	stale := nowT.Add(-4 * 24 * time.Hour).Format(time.RFC3339)
+	now := nowT
+	stale := nowT.Add(-4 * 24 * time.Hour)
 
 	// Type 34: margin 10-4=6, 150%; units min(20/day, origin buy
 	// 50, dest sell 100) = 20 -> 120/day. The headline route.
@@ -176,7 +176,7 @@ func TestTradefinderCap(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
 	seedTradefinderFixture(t, app)
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 	conn := app.db
 	for i := int64(0); i < 105; i++ {
 		typeID := int64(1000 + i)
@@ -209,7 +209,7 @@ func TestTradefinderPageRendersStoredRowsZeroOutbound(t *testing.T) {
 	}
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
 	seedTradefinderFixture(t, app)
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfOrigin, 34, 4, 0, 50, 0, 0, now)); err != nil {
 		t.Fatalf("seed origin stat: %v", err)
 	}
@@ -259,7 +259,7 @@ func TestTradefinderLowballRoutesOptIn(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
 	seedTradefinderFixture(t, app)
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 
 	// Type 40 is not in the SDE fixture; the stats are what the
 	// view judges, but the name keeps the row readable.
@@ -376,7 +376,7 @@ func TestTradefinderPageEmptyStates(t *testing.T) {
 	// Both regions swept, but nothing clears the filters: the
 	// distinct no-routes state.
 	seedTradefinderFixture(t, app)
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfOrigin, 34, 100, 0, 50, 0, 0, now)); err != nil {
 		t.Fatalf("seed origin stat: %v", err)
 	}
@@ -404,7 +404,7 @@ func TestTradefinderMarginRankingAndCapInSQL(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
 	seedTradefinderFixture(t, app)
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 	conn := app.db
 
 	// 105 qualifying pairs with strictly increasing margin:

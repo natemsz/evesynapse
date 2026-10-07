@@ -31,31 +31,66 @@ This project is dedicated to EVE Online, its pilots and its developers — the g
 - `cmd/evesynapse-dev/` — dev entrypoint: identical wiring plus the
   dev-only routes (`/dev-login`). Local testing only — never deploy
   this binary.
+- `cmd/releasesign/` — the maintainer's tool for release signing:
+  makes the release key, signs the update manifests in the release
+  job, checks a signature by hand. Never deployed either
 - `internal/app/` — the application: config + `.env` loader
   (`config.go`), EVE SSO auth/sessions/JWT verification (`auth.go`),
   account linking and the sign-up policy (`links.go`, `signup.go`),
   token refresh and encryption at rest (`refresh.go`,
   `tokencrypt.go`), cookie, header and cross-site protections
-  (`httpsec.go`), the application struct, router and schema
-  migrations (`app.go`, `db.go`), page handlers and view models
+  (`httpsec.go`), the application struct and router (`app.go`),
+  page handlers and view models
   (`pages.go`, `assets.go`, `skills.go`, `corporation.go`,
   `market.go`, `sync.go`, `character.go`, `fittings.go`,
-  `killmails.go`, `intel.go`), the background worker (`worker.go`,
-  plus `intel_worker.go` for the public-data pass), the
+  `killmails.go`, `intel.go`), the background worker (`worker.go`
+  runs the cycle; each `*_worker.go` file is the fetching behind one
+  group of pages, and `name_harvest.go` collects the names a cycle
+  has to resolve), what pages and the worker both read
+  (`snapshots.go`, `market_book.go`), the
   SDE static-data importer (`sde.go`), static assets and their
   caching (`static.go`), the health check (`health.go`), and the
-  self-maintenance modes (`maintenance.go`: `-version`, `-update`,
-  `-refresh`)
+  two maintenance modes that need the application (`maintenance.go`:
+  `-version` and `-refresh`)
 - `internal/app/templates/` — embedded html/templates (`base.html`
   layout)
 - `internal/app/static/` — embedded assets: the 2013 wallpaper
   (`bg.jpg`) and the dependency-free stylesheet (`style.css`), served
   at `/static/`
-- `internal/app/schema_pg/` — the Postgres schema as numbered steps
-  (sqlc input), embedded and applied at startup
+- `internal/store/` — the database: opens Postgres and brings the
+  schema up to date at startup (`store.go`, `schema.go`). The schema
+  itself is the numbered steps in `internal/store/schema_pg/`, which
+  are also sqlc's input
+- `internal/fit/` — the fitting simulator's stat engine: the dogma
+  arithmetic that turns a ship, its modules, skills and charges into
+  the fit's statistics. Pure over the static data it loads; the
+  fitting pages in `internal/app` are its only caller
+- `internal/skillplan/` — skill-plan arithmetic: SP per level,
+  training speed, ordering targets with their prerequisites, the
+  remap advisor. Pure; the skill pages supply the skill graph
+- `internal/buildplan/` — the industry build planner's engine: the
+  tree of everything a product needs, the manufacturing formulae,
+  what is already held, and the price of the rest. Pure
+- `internal/markethistory/` — figures and the SVG chart computed
+  from a type's stored daily price history. Pure
+- `internal/selfupdate/` — `evesynapse -update`: the release channel,
+  checking a release's signature, downloading, verifying and swapping
+  in a new build, and handing over to the running server. It is told
+  the running version and knows nothing else about the application
+- `internal/releasesig/` — the signature on a release: how an update
+  manifest is signed and how the updater checks one, plus
+  `trusted_keys.pem`, the public keys compiled into every build
+  ("Release signing" below)
+- `internal/pidfile/` — the server's pidfile: written at start-up,
+  read by `-update` to restart the server and by `-refresh` to refuse
+  while it is running (`pidfile/pidfiletest` is test support)
+- `internal/dotenv/` — the `.env` loader the server and the updater
+  both use
 - `internal/pgtest/` — test-only embedded-Postgres provisioning
   (a fresh database per test; `go test ./...` needs no external
-  database)
+  database). A package whose tests use it needs a `TestMain` that
+  calls `pgtest.TestMain`, which stops the server when the tests
+  finish; without one pgtest refuses to start a server
 - `internal/esi/` — the ESI client: HTTP layer, per-character
   snapshot cache, and the two-tier type/group/place name resolution
   (network tier + cache-only render tier). Never imports
@@ -189,6 +224,8 @@ gaps; real environment variables win over the file):
 | `EVESYNAPSE_UPDATE_REPO` | no | `natemsz/evesynapse` | GitHub repo (owner/repo) the updater checks |
 | `EVE_SDE_BASE_URL` | no | Fuzzwork's dump | Base URL of the SDE CSV dump the importer downloads |
 | `ESI_CONTACT` | no | — | How CCP can reach whoever runs this instance (an email address, a Discord handle, a character name). Sent in the User-Agent of every ESI request, as CCP asks of third-party apps |
+| `LOG_LEVEL` | no | `info` | Least severe kind of log line written: `debug`, `info`, `warn` or `error` (see "Logging") |
+| `LOG_FORMAT` | no | `text` | `text` for the classic line, `json` for one object per line |
 | `DEV_LOGIN` | no | — | Dev build only: `1` registers the `/dev-login` route |
 
 ## Install
@@ -207,9 +244,12 @@ registration for sign-in ("EVE SSO flow" below). Then:
    sudo bash deploy/setup.sh
    ```
 
-   It downloads the latest build for your machine and verifies it
-   against the checksum published with the release, creates the
-   `evesynapse` user and `/opt/evesynapse`, installs and starts
+   It downloads the latest build for your machine, checks the
+   release's signature and verifies the build against the checksum
+   in its signed manifest ("Release signing" below; on a machine
+   whose OpenSSL is older than 3.0 it can check only the checksum,
+   and says so), creates the `evesynapse` user and
+   `/opt/evesynapse`, installs and starts
    PostgreSQL if it's missing and creates the app's database
    (role `evesynapse`, database `evesynapse`, with a generated
    password written into `/opt/evesynapse/.env` as `DATABASE_URL`),
@@ -240,6 +280,10 @@ registration for sign-in ("EVE SSO flow" below). Then:
    sudo EVESYNAPSE_UPDATE_REPO=you/evesynapse bash deploy/setup.sh
    sudo EVESYNAPSE_BINARY=/path/to/evesynapse bash deploy/setup.sh
    ```
+
+   Run the fork form from a checkout of the fork: the script checks
+   the release against the release key in the checkout it is run
+   from, and a fork's releases are signed with the fork's own key.
 
 3. **Fill in `/opt/evesynapse/.env`** with your EVE app's client
    ID, secret, and callback URL, then start it:
@@ -339,8 +383,13 @@ sudo EVESYNAPSE_BINARY=$PWD/bin/evesynapse bash deploy/setup.sh
 Builds are published automatically: every push to `main` runs the
 test suite in CI and, when `internal/app/version.txt` names a
 version that has no release yet, publishes a GitHub release with
-builds for ARM64 and AMD64 plus a small manifest per build (the
-version and its SHA-256 checksum).
+builds for ARM64 and AMD64 plus, for each build, a small manifest
+(the version and the build's SHA-256 checksum) and that manifest's
+signature.
+
+A release is one edit: `internal/app/version.txt`. Nothing else in
+the repository repeats the version, and the tests read it from that
+file, so there are no version numbers in tests to keep in step.
 
 To update a running install, run the updater. With no flag it
 automatically picks the build that matches the machine it's
@@ -352,12 +401,15 @@ sudo /opt/evesynapse/evesynapse -update -arm64   # ARM build explicitly
 sudo /opt/evesynapse/evesynapse -update -amd64   # Intel/AMD build (-x86 and -x64 also work)
 ```
 
-The updater asks the latest release what version it carries and
-compares it with its own. If they're the same, it just says so
+The updater first checks the latest release's signature, and refuses
+a release that is not signed with the project's release key ("Release
+signing" below). Then it asks the release what version it carries
+and compares it with its own. If they're the same, it just says so
 and stops. If the release is newer, it downloads that build,
-verifies it against the published checksum and checks it's built
-for the right kind of computer, swaps it into place, restarts the
-running server onto it, and reports the new version number.
+verifies it against the checksum in the signed manifest and checks
+it's built for the right kind of computer, swaps it into place,
+restarts the running server onto it, and reports the new version
+number.
 
 There's also a manual form that installs a specific build: from an
 address, with the checksum published for it, or from a local file:
@@ -366,6 +418,9 @@ address, with the checksum published for it, or from a local file:
 sudo /opt/evesynapse/evesynapse -update <url> <sha256>
 sudo /opt/evesynapse/evesynapse -update <file> [sha256]
 ```
+
+The manual form checks what you give it and no signature: it is
+your own word for that build.
 
 ### Development builds
 
@@ -379,6 +434,97 @@ sudo /opt/evesynapse/evesynapse -update -dev
 
 A plain `-update` from a development build goes back to the
 latest release once that release's number catches up.
+
+### Release signing
+
+Every release is signed, and the updater installs nothing that is
+not.
+
+- **What is signed.** Each build's manifest, `latest-<arch>.json`:
+  the version, the kind of computer, and the build's SHA-256. Its
+  signature is published beside it as `latest-<arch>.json.sig`.
+  Because the checksum is inside what is signed, the signature
+  covers every byte of the build.
+- **With what.** An Ed25519 key. Its private half exists only as the
+  repository's `RELEASE_SIGNING_KEY` Actions secret, which the
+  release job signs with. Its public half is
+  `internal/releasesig/trusted_keys.pem`, compiled into every build.
+- **What the updater does with it.** It fetches the manifest and the
+  signature, checks the signature against the keys it was built
+  with, and only then reads the manifest. A release that is
+  unsigned, signed with another key, or changed after signing is
+  refused and nothing is downloaded. An older release offered again
+  is still genuinely signed, and is turned down by the version
+  comparison instead.
+- **What it proves, and what it does not.** That the release was
+  published by this repository's release job. Someone who can
+  replace the files of a release, but cannot run that job with the
+  secret, can no longer get a build installed. It is no protection
+  against someone who controls the repository itself, since they
+  control what the job signs.
+
+To check a release by hand, with nothing but OpenSSL 3:
+
+```sh
+base64 -d latest-arm64.json.sig > sig.bin
+openssl pkeyutl -verify -pubin -inkey internal/releasesig/trusted_keys.pem \
+    -rawin -in latest-arm64.json -sigfile sig.bin
+sha256sum evesynapse-arm64   # must be the "sha256" in latest-arm64.json
+```
+
+(`go run ./cmd/releasesign verify latest-arm64.json` makes the first
+check exactly as the updater does. OpenSSL reads only the first key
+in `trusted_keys.pem`.)
+
+**Making the key.** Once, from the repository root, signed in to
+`gh`:
+
+```sh
+go run ./cmd/releasesign keygen -- gh secret set RELEASE_SIGNING_KEY
+```
+
+It makes the key pair, hands the private half to `gh secret set` on
+its standard input without printing or saving it, and only when that
+has worked adds the public half to `trusted_keys.pem`. Commit that
+file. Add `-out <file>` to keep a copy of the private half as well.
+That is a trade: a copy is one more place the key can leak from, and
+without one, losing the secret means the manual update described
+under "If the key is lost".
+
+The release job fails, and publishes nothing, when the secret is
+missing or is not the other half of a key in `trusted_keys.pem`.
+
+**Replacing the key.** An install only trusts the keys of the build
+it is running, so the new key has to reach installs in a release
+signed with the old one:
+
+1. `go run ./cmd/releasesign keygen -add -out ~/new-release-key.pem`
+   adds the new public key beside the old, and writes the new private
+   half outside the repository. Commit `trusted_keys.pem` and publish
+   a release. It is still signed with the old key, and its updater
+   trusts both.
+2. Once installs have had time to take that release, switch the
+   secret, `gh secret set RELEASE_SIGNING_KEY < ~/new-release-key.pem`,
+   then delete that file or move it somewhere offline.
+3. Later, delete the old key's block from `trusted_keys.pem`.
+
+An install that skipped the release from step 1 needs the manual
+update below. If you kept a copy of the old private half you can
+avoid even that: put both keys in the secret for a while (one PEM
+block after the other) and every release carries both signatures,
+which an install knowing either key accepts. If the private half may
+have leaked, replace it the same way without waiting.
+
+**If the key is lost** (the secret deleted, and no copy kept), make
+a new one (delete the old block from `trusted_keys.pem`, then
+`keygen` as above) and publish a release. Existing installs cannot
+verify it, because the only key they trust is the lost one. Each
+needs one manual update, with the address and checksum from the
+release page, and updates normally from then on:
+
+```sh
+sudo evesynapse -update https://github.com/natemsz/evesynapse/releases/download/v<version>/evesynapse-arm64 <sha256>
+```
 
 ### Updating from your own fork
 
@@ -396,6 +542,16 @@ in the fork (GitHub turns them off on new forks): the workflow
 is already in the repo under `.github/workflows/`, and once it's
 allowed to run, your pushes get tested, built, and released
 exactly like the mainline ones.
+
+A fork signs its releases with its own key. In the fork, delete the
+mainline key's block from `internal/releasesig/trusted_keys.pem`,
+run the `keygen` command under "Release signing", and commit the
+file; until the fork has a key its release job fails rather than
+publish unsigned builds. It follows that the setting above only
+moves an install that is already running a build of the fork: a
+mainline build refuses the fork's releases, since they are not
+signed with the key it trusts. Install the fork's build first (its
+setup script does that), and it updates from the fork from then on.
 
 ## Command-line modes
 
@@ -495,6 +651,16 @@ fresh snapshots without calling ESI; on fetch failure a stale
 snapshot is served instead of an error. ESI's error-limit statuses
 (420/429) are treated as a hard back-off signal.
 
+Refreshes are conditional where they can be. A dataset that comes
+in one response is stored with the `ETag` ESI sent, and the next
+refresh offers it back (`If-None-Match`). When nothing has changed
+ESI answers `304 Not Modified` with no body: the stored payload
+stays as it is and only its cache window is renewed. Datasets
+spread over several pages (assets, contracts, blueprints, …) have
+an ETag per page and none for the whole, so they are downloaded in
+full each time. `evesynapse -refresh` clears the stored ETags, so
+everything really is downloaded again.
+
 Name resolution is split in two tiers. Page renders resolve type,
 group and place names from local data only — the in-process maps,
 the SDE static-data tables (below), and the `type_names` fallback
@@ -570,6 +736,33 @@ plus a heartbeat every 10 minutes. The current status (last run,
 summary, cumulative names resolved) shows on the Admin and Sync
 pages.
 
+
+## Logging
+
+Every log line carries a level:
+
+- **ERROR**: something failed that should not have (a query, a
+  decode, a store, a template, a recovered panic, a request the
+  server answered with a 5xx).
+- **WARN**: something went wrong in a way the app expects and
+  handles (ESI asking it to back off, stale data served because a
+  refresh failed, a sign-in that did not complete, a setting worth
+  changing).
+- **INFO**: what the app is doing (starting and stopping, sign-ins,
+  worker cycle summaries, imports, requests).
+
+`LOG_LEVEL` sets the least severe kind that is written. The
+default, `info`, writes everything, as before; `warn` leaves only
+the lines that may need attention. `LOG_FORMAT=json` writes one
+JSON object per line (`time`, `level`, `msg`) for a log collector;
+the default is the plain line:
+
+```
+2026/10/07 12:00:00 WARN worker: ESI error limit hit refreshing intel; backing off until next cycle
+```
+
+Under systemd, `journalctl -u evesynapse -g ' (WARN|ERROR) '` shows
+only those lines without changing what is logged.
 ## Performance principles
 
 EveSynapse is built to stay lightweight, lean, fast, and efficient at
@@ -625,20 +818,28 @@ exists only to back the scs `pgxstore` session store (sessions
 live in the `sessions` table the baseline creates).
 
 The schema is a series of numbered steps in
-`internal/app/schema_pg/`: `001_baseline.sql` is the whole schema
+`internal/store/schema_pg/`: `001_baseline.sql` is the whole schema
 as of the move to Postgres (BIGINT/DOUBLE PRECISION keep the
-generated Go models' int64/float64 types; timestamps stay
-app-written RFC3339 TEXT), and each later file is one change. At
-startup `openDB` applies whichever steps a database is missing,
-in order. Each step runs in a single transaction together with
-its row in the `schema_migrations` table, so a step lands
-completely or not at all, and that table is the record of what
-has been applied. A database from before the table existed is
+generated Go models' int64/float64 types), and each later file is
+one change. At startup `store.Open` applies whichever steps a database
+is missing, in order. Each step runs in a single transaction
+together with its row in the `schema_migrations` table, so a step
+lands completely or not at all, and that table is the record of
+what has been applied. A database from before the table existed is
 adopted on first start: its existing steps are recorded, not run
 again.
 
-To change the schema, add the next numbered file, embed it in
-`app.go`, and add one line to `schemaSteps` in `db.go`.
+Times are `timestamptz` columns and `time.Time` (or `sql.NullTime`
+where "never" is a possible answer) in the code; a connection
+always hands them back in UTC, whatever zone the machine is in.
+The baseline kept them as RFC 3339 text, and steps 009–011 convert
+those columns, carrying every stored value over as the same
+instant. Those three steps rewrite the tables they touch, so the
+first start after upgrading past them takes as long as copying
+those tables once; the snapshot table is by far the largest.
+
+To change the schema, add the next numbered file, then embed it and
+add one line to `schemaSteps`, both in `internal/store/schema.go`.
 Regenerate query code after editing `internal/db/query/` with:
 
 ```sh

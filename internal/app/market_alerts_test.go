@@ -20,6 +20,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/markethistory"
 )
 
 func histRow(date string, avg float64) db.MarketHistory {
@@ -46,7 +47,7 @@ func TestHistoryChangePct(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, ok := historyChangePct(tc.rows, tc.days)
+			got, ok := markethistory.ChangePct(tc.rows, tc.days)
 			if ok != tc.ok {
 				t.Fatalf("ok: got %v, want %v (pct %v)", ok, tc.ok, got)
 			}
@@ -58,14 +59,14 @@ func TestHistoryChangePct(t *testing.T) {
 }
 
 func TestBuildPriceChart(t *testing.T) {
-	if _, ok := buildPriceChart(nil); ok {
+	if _, ok := markethistory.BuildPriceChart(nil); ok {
 		t.Fatal("empty rows: got ok, want false")
 	}
 
 	flat := []db.MarketHistory{
 		histRow("2026-09-29", 10), histRow("2026-09-30", 10), histRow("2026-10-01", 10),
 	}
-	chart, ok := buildPriceChart(flat)
+	chart, ok := markethistory.BuildPriceChart(flat)
 	if !ok {
 		t.Fatal("flat: chart not built")
 	}
@@ -86,14 +87,14 @@ func TestBuildPriceChart(t *testing.T) {
 	}
 
 	rising := []db.MarketHistory{histRow("2026-09-30", 5), histRow("2026-10-01", 15)}
-	chart, _ = buildPriceChart(rising)
+	chart, _ = markethistory.BuildPriceChart(rising)
 	if chart.Dots[0].Y != chart.BaseY || chart.Dots[1].Y != chart.TopY {
 		t.Fatalf("rising: dots at (%d, %d), want (%d, %d)",
 			chart.Dots[0].Y, chart.Dots[1].Y, chart.BaseY, chart.TopY)
 	}
 
 	single := []db.MarketHistory{histRow("2026-10-01", 42)}
-	chart, ok = buildPriceChart(single)
+	chart, ok = markethistory.BuildPriceChart(single)
 	if !ok || chart.Points != "" || len(chart.Dots) != 1 {
 		t.Fatalf("single: ok=%v points=%q dots=%d, want a lone dot", ok, chart.Points, len(chart.Dots))
 	}
@@ -102,7 +103,7 @@ func TestBuildPriceChart(t *testing.T) {
 		{RegionID: 10000002, TypeID: 34, Date: "2026-09-30", Average: 5},
 		{RegionID: 10000002, TypeID: 34, Date: "2026-10-01", Average: 6},
 	}
-	chart, _ = buildPriceChart(noVolume)
+	chart, _ = markethistory.BuildPriceChart(noVolume)
 	if len(chart.Bars) != 0 {
 		t.Fatalf("zero volume: got %d bars, want 0", len(chart.Bars))
 	}
@@ -234,7 +235,7 @@ func TestMarketWorkerHistoryDrainAndGate(t *testing.T) {
 	for i := int64(0); i < 12; i++ {
 		if err := q.UpsertWatchlistEntry(ctx, db.UpsertWatchlistEntryParams{
 			UserID: user.ID, TypeID: 1000 + i, RegionID: 10000002,
-			ThresholdPct: 5, CreatedAt: time.Now().UTC().Format(time.RFC3339),
+			ThresholdPct: 5, CreatedAt: time.Now().UTC(),
 		}); err != nil {
 			t.Fatalf("seed watchlist: %v", err)
 		}
@@ -287,7 +288,7 @@ func TestMarketWorkerHistoryErrorLimit(t *testing.T) {
 	}
 	if err := q.UpsertWatchlistEntry(ctx, db.UpsertWatchlistEntryParams{
 		UserID: user.ID, TypeID: 34, RegionID: 10000002,
-		ThresholdPct: 5, CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		ThresholdPct: 5, CreatedAt: time.Now().UTC(),
 	}); err != nil {
 		t.Fatalf("seed watchlist: %v", err)
 	}
@@ -403,13 +404,12 @@ func seedMarketSignals(t *testing.T, app *Application, q *db.Queries, userID int
 		t.Fatalf("seed type name: %v", err)
 	}
 	now := time.Now().UTC()
-	stamp := now.Format(time.RFC3339)
 	for i := 0; i < undercutOrders; i++ {
 		if err := q.UpsertOrderHealth(ctx, db.UpsertOrderHealthParams{
 			CharacterID: fixtureCharA, OrderID: int64(700 + i), TypeID: 34,
 			RegionID: 10000002, LocationID: 60003760, MyPrice: 10,
 			StationBest: 9.5, RegionBest: 9.5, Status: "undercut_station",
-			ComputedAt: stamp,
+			ComputedAt: now,
 		}); err != nil {
 			t.Fatalf("seed health: %v", err)
 		}
@@ -419,7 +419,7 @@ func seedMarketSignals(t *testing.T, app *Application, q *db.Queries, userID int
 		ago int
 		avg float64
 	}{{7, 10.0}, {3, 10.4}, {0, 10.8}} {
-		day := now.AddDate(0, 0, -d.ago).Format(historyDateLayout)
+		day := now.AddDate(0, 0, -d.ago).Format(markethistory.DateLayout)
 		if err := q.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
 			RegionID: 10000002, TypeID: 34, Date: day, Average: d.avg,
 			Highest: d.avg, Lowest: d.avg, Volume: 5000, OrderCount: 90,
@@ -429,7 +429,7 @@ func seedMarketSignals(t *testing.T, app *Application, q *db.Queries, userID int
 	}
 	if err := q.UpsertWatchlistEntry(ctx, db.UpsertWatchlistEntryParams{
 		UserID: userID, TypeID: 34, RegionID: 10000002,
-		ThresholdPct: 5, CreatedAt: stamp,
+		ThresholdPct: 5, CreatedAt: now,
 	}); err != nil {
 		t.Fatalf("seed watchlist: %v", err)
 	}
@@ -570,7 +570,7 @@ func TestMarketItemPageChartAndWant(t *testing.T) {
 		t.Fatalf("item page: status %d", code)
 	}
 	mustContain(t, "/market/?type=34 (no history)", body, "This one's queued")
-	wants, err := q.ListMarketHistoryWants(ctx, "")
+	wants, err := q.ListMarketHistoryWants(ctx, time.Time{})
 	if err != nil || len(wants) != 1 || wants[0].TypeID != 34 {
 		t.Fatalf("wants after view: %v err=%v, want one row for type 34", wants, err)
 	}
@@ -587,7 +587,7 @@ func TestMarketItemPageChartAndWant(t *testing.T) {
 	if strings.Contains(body, "This one's queued") {
 		t.Fatal("item page with history still shows the loading state")
 	}
-	wants, err = q.ListMarketHistoryWants(ctx, "")
+	wants, err = q.ListMarketHistoryWants(ctx, time.Time{})
 	if err != nil || len(wants) != 1 {
 		t.Fatalf("wants after charted view: %v err=%v, want the original single want", wants, err)
 	}
@@ -597,12 +597,12 @@ func TestMigration013Reopen(t *testing.T) {
 	transport := &countingTransport{}
 	_, conn, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
-	// The schema guard already ran once via openDB; every 013
+	// The schema guard already ran once via store.Open; every 013
 	// table answers queries on a fresh database.
 	if _, err := q.ListAllWatchlistEntries(ctx); err != nil {
 		t.Fatalf("watchlist on fresh DB: %v", err)
 	}
-	if _, err := q.ListMarketHistoryWants(ctx, ""); err != nil {
+	if _, err := q.ListMarketHistoryWants(ctx, time.Time{}); err != nil {
 		t.Fatalf("wants on fresh DB: %v", err)
 	}
 	if _, err := q.ListOrderHealthByUser(ctx, 1); err != nil {

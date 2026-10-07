@@ -6,16 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"runtime/debug"
 	"sort"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -35,7 +34,7 @@ import (
 // only sees a panic from the deferred function's own frame).
 func recoverWorkerPanic(what string) {
 	if r := recover(); r != nil {
-		log.Printf("worker: PANIC in %s (recovered; it retries on its next tick): %v\n%s", what, r, debug.Stack())
+		logging.Errorf("worker: PANIC in %s (recovered; it retries on its next tick): %v\n%s", what, r, debug.Stack())
 	}
 }
 
@@ -52,7 +51,7 @@ func runGuarded(what string, pass func()) {
 func (app *Application) guardedCycle(ctx context.Context, cycle func(context.Context)) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("worker: PANIC in refresh cycle (recovered; the next cycle retries): %v\n%s", r, debug.Stack())
+			logging.Errorf("worker: PANIC in refresh cycle (recovered; the next cycle retries): %v\n%s", r, debug.Stack())
 			app.updateWorkerStatus(func(s *workerStatus) {
 				s.Warming = false
 				s.Summary = "cycle stopped by an internal error — see the server log"
@@ -140,7 +139,7 @@ func (app *Application) workerStatusText() string {
 // The same goroutine also hosts the hourly SDE maintenance tick
 // (first import + weekly update check; sde.go).
 func (app *Application) runWorker(ctx context.Context) {
-	log.Printf("worker: started")
+	logging.Infof("worker: started")
 
 	// The two loops below run beside the minute cycle. runWorker
 	// waits for them on the way out, so when it returns the whole
@@ -168,7 +167,7 @@ func (app *Application) runWorker(ctx context.Context) {
 	}()
 	defer func() {
 		children.Wait()
-		log.Printf("worker: stopped")
+		logging.Infof("worker: stopped")
 	}()
 
 	cycle := time.NewTicker(time.Minute)
@@ -187,7 +186,7 @@ func (app *Application) runWorker(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-heartbeat.C:
-			log.Printf("worker: alive")
+			logging.Infof("worker: alive")
 		case <-sdeTick.C:
 			runGuarded("SDE maintenance", func() { app.sdeMaintenance(ctx) })
 		case <-cycle.C:
@@ -205,7 +204,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 
 	characters, err := app.queries.ListAllCharacters(ctx)
 	if err != nil {
-		log.Printf("worker: list characters: %v", err)
+		logging.Errorf("worker: list characters: %v", err)
 		app.updateWorkerStatus(func(s *workerStatus) {
 			s.Warming = false
 			s.Summary = "could not list characters"
@@ -234,9 +233,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	eligible = app.orderByDue(ctx, eligible)
 	eligible = orderByPriority(eligible, app.takePriorityCharacters())
 
-	var refreshed, failed, deferred int
-	limited := false
-	allowance := &fetchBudget{left: maxFetchesPerCycle}
+	c := &cycleState{app: app, allowance: &fetchBudget{left: maxFetchesPerCycle}}
 
 	// The market guide (v0.3.04): one public call mirrors into
 	// the stored table on ESI's cache window, ahead of the
@@ -244,10 +241,10 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// and the daily sampler below — always has prices to work
 	// with. Fresh tables cost nothing here.
 	if stored, gLimited := app.refreshGuidePrices(ctx); stored {
-		refreshed++
+		c.refreshed++
 	} else if gLimited {
-		log.Printf("worker: ESI error limit hit refreshing guide prices; backing off until next cycle")
-		limited = true
+		logging.Warnf("worker: ESI error limit hit refreshing guide prices; backing off until next cycle")
+		c.limited = true
 	}
 
 	for i, ch := range eligible {
@@ -255,167 +252,209 @@ func (app *Application) refreshCycle(ctx context.Context) {
 			app.updateWorkerStatus(func(s *workerStatus) { s.Warming = false })
 			return
 		}
-		if allowance.exhausted() {
+		if c.allowance.exhausted() {
 			// The cycle's work budget is spent; the rest keep
 			// their place in the due order for the next cycle
 			// instead of one giant pass over every character.
-			deferred = len(eligible) - i
+			c.deferred = len(eligible) - i
 			break
 		}
-
-		// Ensure the token is usable before touching snapshots; a
-		// revoked refresh token means this character needs a fresh
-		// login, and fetching would only fail three more times.
-		// (A definitive rejection parks the character inside
-		// validAccessToken — see links.go.)
-		if _, err := app.validAccessToken(ctx, ch); err != nil {
-			log.Printf("worker: token for character %d unusable: %v", ch.CharacterID, err)
-			failed++
-			continue
+		if !c.refreshCharacter(ctx, ch) {
+			continue // its token is unusable: on to the next one
 		}
-
-		for _, kind := range coreSnapshotKinds {
-			snap, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: kind})
-			switch {
-			case serr == nil && esi.SnapshotFresh(snap):
-				continue // still inside ESI's cache window
-			case serr != nil && !errors.Is(serr, sql.ErrNoRows):
-				log.Printf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
-			}
-
-			if !allowance.take() {
-				break
-			}
-			if _, err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
-				failed++
-				if errors.Is(err, esi.ErrErrorLimit) {
-					log.Printf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)
-					limited = true
-				} else {
-					if isDefinitiveTokenFailure(err) {
-						// The access token itself was rejected:
-						// park the character rather than failing
-						// the same way every cycle.
-						app.markCharacterTokenDead(ctx, ch.CharacterID)
-						log.Printf("worker: character %d token rejected refreshing %s; parked until re-login", ch.CharacterID, kind)
-					} else {
-						log.Printf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
-					}
-				}
-				break // don't keep pushing this character this cycle
-			}
-			refreshed++
-		}
-
-		// Killmail details behind the recent list: immutable once
-		// posted, so each missing detail is fetched once and kept.
-		// Bounded per character per cycle (warmKillmailDetails).
-		// The sub-passes below keep their own per-character caps
-		// and freshness gates; the cycle budget only stops new
-		// characters from starting once it is spent.
-		if !limited && !allowance.exhausted() {
-			warmed, ltd := app.warmKillmailDetails(ctx, ch)
-			refreshed += warmed
-			if ltd {
-				log.Printf("worker: ESI error limit hit warming killmail details for character %d; backing off until next cycle", ch.CharacterID)
-				limited = true
-			}
-		}
-
-		// Corporation datasets: the corp_* snapshots behind the
-		// corporation subpages, plus the details behind the corp's
-		// recent killmail list (corp_worker.go). 403 role refusals
-		// are recorded state there, not failures.
-		if !limited && !allowance.exhausted() {
-			refreshed += app.refreshCorpSnapshots(ctx, ch)
-			warmed, ltd := app.warmCorpKillmailDetails(ctx, ch)
-			refreshed += warmed
-			if ltd {
-				log.Printf("worker: ESI error limit hit warming corp killmail details for character %d; backing off until next cycle", ch.CharacterID)
-				limited = true
-			}
-		}
-
-		// Economy datasets (cluster 3): the wallet/orders/
-		// contracts/industry snapshots, plus the contract item
-		// lists behind the contracts snapshot (economy_worker.go).
-		if !limited && !allowance.exhausted() {
-			refreshed += app.refreshEconomySnapshots(ctx, ch)
-			warmed, ltd := app.warmContractItems(ctx, ch)
-			refreshed += warmed
-			if ltd {
-				log.Printf("worker: ESI error limit hit warming contract items for character %d; backing off until next cycle", ch.CharacterID)
-				limited = true
-			}
-		}
-
-		// Phase 2 datasets: planetary industry (colonies +
-		// layouts, planets_worker.go) and mail/calendar/contacts
-		// (list kinds + bodies + event details, comms_worker.go).
-		// Both passes spend from the cycle's shared fetch
-		// allowance, so they compose with the core pass's budget
-		// instead of adding an unbounded tail.
-		if !limited && !allowance.exhausted() {
-			warmed, ltd := app.refreshPlanetarySnapshots(ctx, ch, allowance)
-			refreshed += warmed
-			if ltd {
-				log.Printf("worker: ESI error limit hit refreshing planetary industry for character %d; backing off until next cycle", ch.CharacterID)
-				limited = true
-			}
-		}
-		if !limited && !allowance.exhausted() {
-			warmed, ltd := app.refreshCommsSnapshots(ctx, ch, allowance)
-			refreshed += warmed
-			if ltd {
-				log.Printf("worker: ESI error limit hit refreshing mail/calendar/contacts for character %d; backing off until next cycle", ch.CharacterID)
-				limited = true
-			}
-		}
-
-		// Daily wallet history (schema 019): record today from
-		// the snapshots just stored. Pure local reads — no fetch
-		// budget spent, no extra ESI calls.
-		app.sampleWalletHistory(ctx, ch, time.Now())
-
-		if limited {
+		if c.limited {
 			break
 		}
 	}
+
+	c.refreshPublicData(ctx, characters)
+	c.warmNames(ctx, characters)
+
+	summary := cycleSummary(c.refreshed, c.namesResolved, c.failed, c.limited, parked, c.deferred)
+	app.updateWorkerStatus(func(s *workerStatus) {
+		s.Warming = false
+		s.Summary = summary
+		s.NamesResolvedTotal += c.namesResolved
+	})
+
+	if c.refreshed > 0 || c.failed > 0 || c.namesResolved > 0 {
+		logging.Infof("worker: cycle done: %s", summary)
+	}
+}
+
+// cycleState is one refresh cycle while it runs: what it has done so far
+// and what it may still spend. Its methods are the cycle's passes.
+type cycleState struct {
+	app *Application
+
+	refreshed     int // datasets fetched and stored
+	namesResolved int // names added to the local caches
+	failed        int // fetches that failed, and characters with no usable token
+	deferred      int // characters left for the next cycle
+
+	// limited is set once ESI says to back off (its error limit).
+	// Nothing more is fetched in this cycle after that.
+	limited bool
+	// allowance is the cycle's shared fetch budget.
+	allowance *fetchBudget
+}
+
+// pass runs one piece of the cycle, unless ESI has already said to
+// back off. What it stored is counted, and if it is where the
+// back-off came from that is logged (what names the pass in the log
+// line) and the cycle stops fetching.
+func (c *cycleState) pass(what string, run func() (stored int, limited bool)) {
+	if c.limited {
+		return
+	}
+	stored, limited := run()
+	c.refreshed += stored
+	if limited {
+		logging.Warnf("worker: ESI error limit hit %s; backing off until next cycle", what)
+		c.limited = true
+	}
+}
+
+// characterPass is pass for one character's further datasets. Those
+// keep their own per-character caps and freshness gates; on top of
+// that they hold back once the cycle's fetch allowance is spent, so
+// a spent budget stops new work rather than cutting a pass short.
+func (c *cycleState) characterPass(what string, ch db.Character, run func() (stored int, limited bool)) {
+	if c.allowance.exhausted() {
+		return
+	}
+	c.pass(fmt.Sprintf("%s for character %d", what, ch.CharacterID), run)
+}
+
+// refreshCharacter brings one character up to date: the core
+// snapshots first, then the datasets behind the other pages. It
+// reports false when the character's token is unusable and nothing
+// was attempted.
+func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool {
+	app := c.app
+
+	// Ensure the token is usable before touching snapshots; a
+	// revoked refresh token means this character needs a fresh
+	// login, and fetching would only fail three more times.
+	// (A definitive rejection parks the character inside
+	// validAccessToken — see links.go.)
+	if _, err := app.validAccessToken(ctx, ch); err != nil {
+		logging.Warnf("worker: token for character %d unusable: %v", ch.CharacterID, err)
+		c.failed++
+		return false
+	}
+
+	c.refreshCoreSnapshots(ctx, ch)
+
+	// Killmail details behind the recent list: immutable once
+	// posted, so each missing detail is fetched once and kept.
+	// Bounded per character per cycle (warmKillmailDetails).
+	c.characterPass("warming killmail details", ch, func() (int, bool) {
+		return app.warmKillmailDetails(ctx, ch)
+	})
+
+	// Corporation datasets: the corp_* snapshots behind the
+	// corporation subpages, plus the details behind the corp's
+	// recent killmail list (corp_worker.go). 403 role refusals
+	// are recorded state there, not failures.
+	c.characterPass("warming corp killmail details", ch, func() (int, bool) {
+		stored := app.refreshCorpSnapshots(ctx, ch)
+		warmed, limited := app.warmCorpKillmailDetails(ctx, ch)
+		return stored + warmed, limited
+	})
+
+	// Economy datasets (cluster 3): the wallet/orders/
+	// contracts/industry snapshots, plus the contract item
+	// lists behind the contracts snapshot (economy_worker.go).
+	c.characterPass("warming contract items", ch, func() (int, bool) {
+		stored := app.refreshEconomySnapshots(ctx, ch)
+		warmed, limited := app.warmContractItems(ctx, ch)
+		return stored + warmed, limited
+	})
+
+	// Phase 2 datasets: planetary industry (colonies +
+	// layouts, planets_worker.go) and mail/calendar/contacts
+	// (list kinds + bodies + event details, comms_worker.go).
+	// Both passes spend from the cycle's shared fetch
+	// allowance, so they compose with the core pass's budget
+	// instead of adding an unbounded tail.
+	c.characterPass("refreshing planetary industry", ch, func() (int, bool) {
+		return app.refreshPlanetarySnapshots(ctx, ch, c.allowance)
+	})
+	c.characterPass("refreshing mail/calendar/contacts", ch, func() (int, bool) {
+		return app.refreshCommsSnapshots(ctx, ch, c.allowance)
+	})
+
+	// Daily wallet history (schema 019): record today from
+	// the snapshots just stored. Pure local reads — no fetch
+	// budget spent, no extra ESI calls.
+	app.sampleWalletHistory(ctx, ch, time.Now())
+	return true
+}
+
+// refreshCoreSnapshots fetches the character's core datasets whose
+// ESI cache window has closed, stopping at the first failure.
+func (c *cycleState) refreshCoreSnapshots(ctx context.Context, ch db.Character) {
+	app := c.app
+	for _, kind := range coreSnapshotKinds {
+		snap, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: kind})
+		switch {
+		case serr == nil && esi.SnapshotFresh(snap):
+			continue // still inside ESI's cache window
+		case serr != nil && !errors.Is(serr, sql.ErrNoRows):
+			logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
+		}
+
+		if !c.allowance.take() {
+			break
+		}
+		if err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
+			c.failed++
+			if errors.Is(err, esi.ErrErrorLimit) {
+				logging.Warnf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)
+				c.limited = true
+			} else {
+				if isDefinitiveTokenFailure(err) {
+					// The access token itself was rejected:
+					// park the character rather than failing
+					// the same way every cycle.
+					app.markCharacterTokenDead(ctx, ch.CharacterID)
+					logging.Warnf("worker: character %d token rejected refreshing %s; parked until re-login", ch.CharacterID, kind)
+				} else {
+					logging.Errorf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
+				}
+			}
+			break // don't keep pushing this character this cycle
+		}
+		c.refreshed++
+	}
+}
+
+// refreshPublicData runs the passes that are not about one
+// character: market data, the name queues, and the public records
+// pages have asked for.
+func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Character) {
+	app := c.app
 
 	// Market pass (Phase 5): price-history warming for
 	// watchlists/wants/order types, and per-order health from
 	// regional books. Public data, spending from its own lane
 	// (refreshMarketData owns the market allowance).
-	if !limited {
-		mStored, mLimited := app.refreshMarketData(ctx, characters)
-		refreshed += mStored
-		if mLimited {
-			log.Printf("worker: ESI error limit hit refreshing market data; backing off until next cycle")
-			limited = true
-		}
-	}
+	c.pass("refreshing market data", func() (int, bool) {
+		return app.refreshMarketData(ctx, characters)
+	})
 
 	// Structure names: resolve the due slice of the structure
 	// queue across every scoped character (structures.go).
-	if !limited {
-		sResolved, sLimited := app.resolveStructureNames(ctx, characters, allowance)
-		refreshed += sResolved
-		if sLimited {
-			log.Printf("worker: ESI error limit hit resolving structure names; backing off until next cycle")
-			limited = true
-		}
-	}
+	c.pass("resolving structure names", func() (int, bool) {
+		return app.resolveStructureNames(ctx, characters, c.allowance)
+	})
 
 	// Planet names: resolve the due slice of the planet queue
 	// (public endpoint, no token — planet_names.go).
-	if !limited {
-		plResolved, plLimited := app.resolvePlanetNames(ctx, allowance)
-		refreshed += plResolved
-		if plLimited {
-			log.Printf("worker: ESI error limit hit resolving planet names; backing off until next cycle")
-			limited = true
-		}
-	}
+	c.pass("resolving planet names", func() (int, bool) {
+		return app.resolvePlanetNames(ctx, c.allowance)
+	})
 
 	// Public records: resolve any pilot names the topbar search
 	// is waiting on, note the counterparty orbit (everyone the
@@ -423,70 +462,50 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// fill the pilot queue (strangers viewed on /pilot/) and the
 	// item-description wants the item details page notes. Public
 	// endpoints, same cycle allowance.
-	if !limited {
-		nResolved, nLimited := app.refreshPilotNameWants(ctx, allowance)
-		refreshed += nResolved
-		if nLimited {
-			log.Printf("worker: ESI error limit hit resolving pilot names; backing off until next cycle")
-			limited = true
-		}
-	}
+	c.pass("resolving pilot names", func() (int, bool) {
+		return app.refreshPilotNameWants(ctx, c.allowance)
+	})
 	app.notePilotOrbit(ctx)
-	if !limited {
-		pDrained, pLimited := app.refreshPilotRecords(ctx, allowance)
-		refreshed += pDrained
-		if pLimited {
-			log.Printf("worker: ESI error limit hit draining pilot records; backing off until next cycle")
-			limited = true
-		}
-	}
+	c.pass("draining pilot records", func() (int, bool) {
+		return app.refreshPilotRecords(ctx, c.allowance)
+	})
 	// Public organization records (v0.3.12): corporations and
 	// alliances someone followed a name to. Public endpoints,
 	// same cycle allowance.
-	if !limited {
-		cDrained, cLimited := app.refreshCorporationRecords(ctx, allowance)
-		refreshed += cDrained
-		if cLimited {
-			log.Printf("worker: ESI error limit hit draining corporation records; backing off until next cycle")
-			limited = true
-		}
-	}
-	if !limited {
-		aDrained, aLimited := app.refreshAllianceRecords(ctx, allowance)
-		refreshed += aDrained
-		if aLimited {
-			log.Printf("worker: ESI error limit hit draining alliance records; backing off until next cycle")
-			limited = true
-		}
-	}
-	if !limited {
-		tDrained, tLimited := app.refreshTypeDetails(ctx, allowance)
-		refreshed += tDrained
-		if tLimited {
-			log.Printf("worker: ESI error limit hit draining type details; backing off until next cycle")
-			limited = true
-		}
-	}
+	c.pass("draining corporation records", func() (int, bool) {
+		return app.refreshCorporationRecords(ctx, c.allowance)
+	})
+	c.pass("draining alliance records", func() (int, bool) {
+		return app.refreshAllianceRecords(ctx, c.allowance)
+	})
+	c.pass("draining type details", func() (int, bool) {
+		return app.refreshTypeDetails(ctx, c.allowance)
+	})
+}
+
+// warmNames resolves whatever names the local caches still lack,
+// then spends what is left of the lookup budget on public intel.
+func (c *cycleState) warmNames(ctx context.Context, characters []db.Character) {
+	app := c.app
 
 	// Name warm-up: resolve whatever the local caches still lack —
 	// type names (persisted in type_names), type→group links, group
 	// names, station/system names — from the characters' latest
 	// snapshots, so renders resolve from memory/DB only. Bounded
 	// per cycle; whatever doesn't fit converges over later cycles.
-	namesResolved := 0
 	budget := &warmBudget{left: maxWarmLookupsPerCycle}
-	if !limited {
+	if !c.limited {
 		for _, ch := range characters {
 			if ctx.Err() != nil {
 				break
 			}
-			namesResolved += app.warmCharacterNames(ctx, ch, budget)
+			c.namesResolved += app.warmCharacterNames(ctx, ch, budget)
 			if budget.errorLimited() {
-				log.Printf("worker: ESI error limit hit during name warm-up; resuming next cycle")
-				limited = true
+				logging.Warnf("worker: ESI error limit hit during name warm-up; resuming next cycle")
+				c.limited = true
 				break
 			}
-			if allowance.exhausted() {
+			if c.allowance.exhausted() {
 				break
 			}
 		}
@@ -496,25 +515,14 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// public name caches, spending whatever of the cycle's lookup
 	// budget the character pass left. Runs with zero characters
 	// linked too — none of it needs a token.
-	if !limited {
+	if !c.limited {
 		iStored, iNames, iLimited := app.refreshIntel(ctx, budget)
-		refreshed += iStored
-		namesResolved += iNames
+		c.refreshed += iStored
+		c.namesResolved += iNames
 		if iLimited {
-			log.Printf("worker: ESI error limit hit refreshing intel; backing off until next cycle")
-			limited = true
+			logging.Warnf("worker: ESI error limit hit refreshing intel; backing off until next cycle")
+			c.limited = true
 		}
-	}
-
-	summary := cycleSummary(refreshed, namesResolved, failed, limited, parked, deferred)
-	app.updateWorkerStatus(func(s *workerStatus) {
-		s.Warming = false
-		s.Summary = summary
-		s.NamesResolvedTotal += namesResolved
-	})
-
-	if refreshed > 0 || failed > 0 || namesResolved > 0 {
-		log.Printf("worker: cycle done: %s", summary)
 	}
 }
 
@@ -612,7 +620,7 @@ func (app *Application) orderByDue(ctx context.Context, characters []db.Characte
 // earliest cached_until across every stored snapshot, pulled to
 // the zero time when any core kind has never been fetched.
 func (app *Application) characterDueKey(ctx context.Context, ch db.Character) time.Time {
-	snaps, err := app.listSnapshotMeta(ctx, ch.CharacterID)
+	snaps, err := app.queries.ListSnapshotMetaByCharacter(ctx, ch.CharacterID)
 	if err != nil {
 		return time.Time{} // unreadable state: treat as due now
 	}
@@ -620,13 +628,11 @@ func (app *Application) characterDueKey(ctx context.Context, ch db.Character) ti
 	var earliest time.Time
 	for _, snap := range snaps {
 		seen[snap.Kind] = true
-		if !snap.CachedUntil.Valid || snap.CachedUntil.String == "" {
+		if !snap.CachedUntil.Valid {
 			continue
 		}
-		if until, err := time.Parse(time.RFC3339, snap.CachedUntil.String); err == nil {
-			if earliest.IsZero() || until.Before(earliest) {
-				earliest = until
-			}
+		if until := snap.CachedUntil.Time; earliest.IsZero() || until.Before(earliest) {
+			earliest = until
 		}
 	}
 	for _, kind := range coreSnapshotKinds {
@@ -775,392 +781,122 @@ func guardedWarm(ctx context.Context, id int64, work func(context.Context, int64
 func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character, budget *warmBudget) int {
 	snaps, err := app.queries.ListSnapshotsByCharacter(ctx, ch.CharacterID)
 	if err != nil {
-		log.Printf("worker: warm names for character %d: list snapshots: %v", ch.CharacterID, err)
+		logging.Errorf("worker: warm names for character %d: list snapshots: %v", ch.CharacterID, err)
 		return 0
 	}
 
-	typeIDs := make(map[int64]bool)
-	placeKinds := make(map[int64]string) // location id -> "station"|"solar_system"
-	charIDs := make(map[int64]bool)      // character names (killmail people + corp rosters)
-	planetIDs := make(map[int64]bool)    // planet names (colony planets)
-	schematicIDs := make(map[int64]bool) // PI schematic names + cycle times
-	structureIDs := make(map[int64]bool) // structure ids for the name queue
+	// What the snapshots refer to (name_harvest.go).
+	harvest := &nameHarvest{app: app, characterID: ch.CharacterID, wants: newNameWants()}
 	for _, snap := range snaps {
-		switch snap.Kind {
-		case esi.SnapSkills:
-			var skills esi.Skills
-			if err := json.Unmarshal([]byte(snap.Payload), &skills); err != nil {
-				log.Printf("worker: warm names for character %d: decode skills snapshot: %v", ch.CharacterID, err)
-				continue
-			}
-			for _, s := range skills.Skills {
-				typeIDs[s.SkillID] = true
-			}
-		case esi.SnapAssets:
-			var items []esi.Asset
-			if err := json.Unmarshal([]byte(snap.Payload), &items); err != nil {
-				log.Printf("worker: warm names for character %d: decode assets snapshot: %v", ch.CharacterID, err)
-				continue
-			}
-			for _, it := range items {
-				typeIDs[it.TypeID] = true
-				if it.LocationType == "station" || it.LocationType == "solar_system" {
-					placeKinds[it.LocationID] = it.LocationType
-				}
-				if it.LocationType == "structure" {
-					structureIDs[it.LocationID] = true
-				}
-			}
-		case esi.SnapCorpMembers:
-			// The roster's names resolve through the same cache.
-			var members esi.CorpMembers
-			if err := json.Unmarshal([]byte(snap.Payload), &members); err != nil {
-				log.Printf("worker: warm names for character %d: decode corp members snapshot: %v", ch.CharacterID, err)
-				continue
-			}
-			for _, id := range members {
-				if id > 0 {
-					charIDs[id] = true
-				}
-			}
-		case esi.SnapCorpMemberTracking:
-			var tracking esi.CorpMemberTrackings
-			if err := json.Unmarshal([]byte(snap.Payload), &tracking); err != nil {
-				log.Printf("worker: warm names for character %d: decode corp membertracking snapshot: %v", ch.CharacterID, err)
-				continue
-			}
-			for _, t := range tracking {
-				if t.CharacterID > 0 {
-					charIDs[t.CharacterID] = true
-				}
-				if t.ShipTypeID > 0 {
-					typeIDs[t.ShipTypeID] = true
-				}
-			}
-		case esi.SnapCorpAssets:
-			// Same payload shape as character assets.
-			var items []esi.Asset
-			if err := json.Unmarshal([]byte(snap.Payload), &items); err != nil {
-				log.Printf("worker: warm names for character %d: decode corp assets snapshot: %v", ch.CharacterID, err)
-				continue
-			}
-			for _, it := range items {
-				typeIDs[it.TypeID] = true
-				if it.LocationType == "station" || it.LocationType == "solar_system" {
-					placeKinds[it.LocationID] = it.LocationType
-				}
-				if it.LocationType == "structure" {
-					structureIDs[it.LocationID] = true
-				}
-			}
-		case esi.SnapCorpOrders:
-			var orders esi.CorpOrders
-			if err := json.Unmarshal([]byte(snap.Payload), &orders); err != nil {
-				log.Printf("worker: warm names for character %d: decode corp orders snapshot: %v", ch.CharacterID, err)
-				continue
-			}
-			for _, o := range orders {
-				typeIDs[o.TypeID] = true
-			}
-		case esi.SnapCorpStructures:
-			var structures esi.CorpStructures
-			if err := json.Unmarshal([]byte(snap.Payload), &structures); err != nil {
-				log.Printf("worker: warm names for character %d: decode corp structures snapshot: %v", ch.CharacterID, err)
-				continue
-			}
-			// Owner/system/type facts ride along into the
-			// structure_context store behind the structure page.
-			app.persistStructureContexts(ctx, structures)
-			for _, s := range structures {
-				if s.TypeID > 0 {
-					typeIDs[s.TypeID] = true
-				}
-				// The corp's own structures arrive already named:
-				// seed the structure-name cache for free (tier 2,
-				// provenance 'corp' — ESI truth, below only the
-				// per-structure lookup itself).
-				if s.Name != "" {
-					if _, ok := app.esi.CachedStructureName(ctx, s.StructureID); !ok {
-						if app.storeStructureName(ctx, s.StructureID, s.Name,
-							esi.StructureResolved, esi.StructureSourceCorp, time.Now().UTC().Format(time.RFC3339)) {
-							app.esi.StoreStructureName(s.StructureID, s.Name)
-						}
-					}
-				}
-			}
-		case esi.SnapWalletJournal:
-			// Journal parties route by ESI's party_type (see
-			// harvestJournalParty): characters join the
-			// character-name harvest; corporations and alliances
-			// note org wants instead of 404ing the character
-			// endpoint every cycle.
-			var journal esi.WalletJournal
-			if err := json.Unmarshal([]byte(snap.Payload), &journal); err == nil {
-				for _, e := range journal {
-					app.harvestJournalParty(ctx, charIDs, e.FirstPartyID, e.FirstPartyType)
-					app.harvestJournalParty(ctx, charIDs, e.SecondPartyID, e.SecondPartyType)
-				}
-			}
-		case esi.SnapWalletTxns:
-			var txns esi.WalletTransactions
-			if err := json.Unmarshal([]byte(snap.Payload), &txns); err == nil {
-				for _, t := range txns {
-					if t.TypeID > 0 {
-						typeIDs[t.TypeID] = true
-					}
-					if t.ClientID >= 90_000_000 {
-						charIDs[t.ClientID] = true
-					}
-				}
-			}
-		case esi.SnapOrders:
-			var orders esi.CharOrders
-			if err := json.Unmarshal([]byte(snap.Payload), &orders); err == nil {
-				for _, o := range orders {
-					if o.TypeID > 0 {
-						typeIDs[o.TypeID] = true
-					}
-					if isStructureID(o.LocationID) {
-						structureIDs[o.LocationID] = true
-					}
-				}
-			}
-		case esi.SnapOrdersHistory:
-			var history esi.CharOrderHistory
-			if err := json.Unmarshal([]byte(snap.Payload), &history); err == nil {
-				for _, o := range history {
-					if o.TypeID > 0 {
-						typeIDs[o.TypeID] = true
-					}
-				}
-			}
-		case esi.SnapContracts:
-			var contracts esi.Contracts
-			if err := json.Unmarshal([]byte(snap.Payload), &contracts); err == nil {
-				for _, c := range contracts {
-					for _, id := range []int64{c.IssuerID, c.AssigneeID, c.AcceptorID} {
-						if id >= 90_000_000 {
-							charIDs[id] = true
-						}
-					}
-				}
-			}
-		case esi.SnapIndustryJobs:
-			var jobs esi.IndustryJobs
-			if err := json.Unmarshal([]byte(snap.Payload), &jobs); err == nil {
-				for _, j := range jobs {
-					if j.BlueprintTypeID > 0 {
-						typeIDs[j.BlueprintTypeID] = true
-					}
-					if j.ProductTypeID > 0 {
-						typeIDs[j.ProductTypeID] = true
-					}
-					if isStructureID(j.FacilityID) {
-						structureIDs[j.FacilityID] = true
-					}
-				}
-			}
-		case esi.SnapBlueprints:
-			var blueprints esi.Blueprints
-			if err := json.Unmarshal([]byte(snap.Payload), &blueprints); err == nil {
-				for _, bp := range blueprints {
-					if bp.TypeID > 0 {
-						typeIDs[bp.TypeID] = true
-					}
-				}
-			}
-		case esi.SnapMining:
-			var ledger esi.MiningLedger
-			if err := json.Unmarshal([]byte(snap.Payload), &ledger); err == nil {
-				for _, m := range ledger {
-					if m.TypeID > 0 {
-						typeIDs[m.TypeID] = true
-					}
-				}
-			}
-		case esi.SnapPlanets:
-			// Colony planets resolve through the place-name
-			// cache (their names come from /universe/planets/);
-			// their systems ride the station/system pass.
-			var colonies esi.Colonies
-			if err := json.Unmarshal([]byte(snap.Payload), &colonies); err == nil {
-				for _, c := range colonies {
-					if c.PlanetID > 0 {
-						planetIDs[c.PlanetID] = true
-					}
-					if c.SolarSystemID > 0 {
-						placeKinds[c.SolarSystemID] = "solar_system"
-					}
-				}
-			}
-		case esi.SnapMail:
-			// Senders and character recipients resolve through
-			// the character-name cache (senders are characters
-			// by construction; recipients by their recorded kind).
-			var headers esi.MailHeaders
-			if err := json.Unmarshal([]byte(snap.Payload), &headers); err == nil {
-				for _, h := range headers {
-					if h.From >= 90_000_000 {
-						charIDs[h.From] = true
-					}
-					for _, rcpt := range h.Recipients {
-						if rcpt.RecipientType == "character" && rcpt.RecipientID >= 90_000_000 {
-							charIDs[rcpt.RecipientID] = true
-						}
-					}
-				}
-			}
-		case esi.SnapContacts:
-			// Contact kind is explicit in the payload, so the
-			// >= 90M harvest rule does not apply: pre-90M
-			// character contacts (the oldest pilots) warm their
-			// names here too.
-			var contacts esi.Contacts
-			if err := json.Unmarshal([]byte(snap.Payload), &contacts); err == nil {
-				for _, c := range contacts {
-					if c.ContactType == "character" && c.ContactID > 0 {
-						charIDs[c.ContactID] = true
-					}
-				}
-			}
-		default:
-			// Per-division wallet ledgers: transaction clients
-			// carry no kind, so they keep the >= 90M harvest
-			// threshold and the client's negative cache bounds a
-			// wrong guess; journal parties route by ESI's
-			// party_type like the character-side journal.
-			if strings.HasPrefix(snap.Kind, esi.SnapCorpTxnsPrefix) {
-				var txns esi.CorpWalletTransactions
-				if err := json.Unmarshal([]byte(snap.Payload), &txns); err == nil {
-					for _, t := range txns {
-						if t.ClientID >= 90_000_000 {
-							charIDs[t.ClientID] = true
-						}
-					}
-				}
-			}
-			if strings.HasPrefix(snap.Kind, esi.SnapCorpJournalPrefix) {
-				var journal esi.CorpJournal
-				if err := json.Unmarshal([]byte(snap.Payload), &journal); err == nil {
-					for _, e := range journal {
-						app.harvestJournalParty(ctx, charIDs, e.FirstPartyID, e.FirstPartyType)
-						app.harvestJournalParty(ctx, charIDs, e.SecondPartyID, e.SecondPartyType)
-					}
-				}
-			}
-			// Colony layouts (suffix-keyed snapshots): pin and
-			// product types resolve through the type caches,
-			// factory schematics through the schematic cache.
-			if strings.HasPrefix(snap.Kind, esi.SnapPlanetLayoutPrefix) {
-				var layout esi.PlanetLayout
-				if err := json.Unmarshal([]byte(snap.Payload), &layout); err == nil {
-					for _, pin := range layout.Pins {
-						if pin.TypeID > 0 {
-							typeIDs[pin.TypeID] = true
-						}
-						if pin.ExtractorDetails != nil && pin.ExtractorDetails.ProductTypeID > 0 {
-							typeIDs[pin.ExtractorDetails.ProductTypeID] = true
-						}
-						if pin.FactoryDetails != nil && pin.FactoryDetails.SchematicID > 0 {
-							schematicIDs[pin.FactoryDetails.SchematicID] = true
-						}
-						if pin.SchematicID > 0 {
-							schematicIDs[pin.SchematicID] = true
-						}
-					}
-				}
-			}
-			// Calendar event details: a character owner resolves
-			// through the character-name cache (attendees resolve
-			// the same way from their own snapshots below — the
-			// attendee list payloads carry character ids only).
-			if strings.HasPrefix(snap.Kind, esi.SnapCalendarAttPrefix) {
-				var attendees esi.CalendarAttendees
-				if err := json.Unmarshal([]byte(snap.Payload), &attendees); err == nil {
-					for _, a := range attendees {
-						if a.CharacterID >= 90_000_000 {
-							charIDs[a.CharacterID] = true
-						}
-					}
-				}
-			}
-		}
+		harvest.snapshot(ctx, snap)
 	}
+	wants := harvest.wants
+
 	// Structure ids met in this character's snapshots join the
 	// background resolution queue (structures.go). A plain queue
-	// note, no fetches — resolution runs once per cycle below.
-	if len(structureIDs) > 0 {
-		ids := make([]int64, 0, len(structureIDs))
-		for id := range structureIDs {
+	// note, no fetches — resolution runs once per cycle.
+	if len(wants.structures) > 0 {
+		ids := make([]int64, 0, len(wants.structures))
+		for id := range wants.structures {
 			ids = append(ids, id)
 		}
 		app.noteStructureIDs(ctx, ids...)
 	}
 
-	// With no skills/assets yet, the type/group/place passes below
-	// simply no-op on empty ID sets; the killmail character-name
-	// pass at the end may still have work to do.
-	ids := sortedInt64Keys(typeIDs)
+	// With no skills/assets yet, the type/group/place passes
+	// simply no-op on empty ID sets; the character-name pass at
+	// the end may still have work to do.
+	typeIDs := sortedInt64Keys(wants.types)
 
+	// One pass per kind of name, each resolving what the local
+	// caches still lack. They run in this order and stop as soon
+	// as the cycle's budget is spent or ESI says to back off.
+	passes := []func() int{
+		func() int { return app.warmMissingTypeNames(ctx, typeIDs, budget) },
+		func() int { return app.warmMissingTypeGroups(ctx, typeIDs, budget) },
+		func() int { return app.warmMissingGroupNames(ctx, typeIDs, budget) },
+		func() int { return app.warmMissingPlaceNames(ctx, wants.places, budget) },
+		func() int { return app.warmMissingPlanetNames(ctx, wants.planets, budget) },
+		func() int { return app.warmMissingSchematics(ctx, wants.schematics, budget) },
+		func() int {
+			// The killmail details are only read once this pass is
+			// reached: no point loading them for a pass that will
+			// not run. (Corp rosters and the other snapshots
+			// harvested above feed the same set.)
+			harvest.killmailPeople(ctx)
+			return app.warmMissingCharacterNames(ctx, wants.characters, budget)
+		},
+	}
 	resolved := 0
+	for _, pass := range passes {
+		resolved += pass()
+		if budget.stopped() {
+			break
+		}
+	}
+	return resolved
+}
 
-	// Type names (persisted in type_names).
-	haveNames := app.esi.CachedTypeNames(ctx, ids)
+// warmMissingTypeNames resolves the type names not yet persisted in
+// type_names.
+func (app *Application) warmMissingTypeNames(ctx context.Context, typeIDs []int64, budget *warmBudget) int {
+	have := app.esi.CachedTypeNames(ctx, typeIDs)
 	var missing []int64
-	for _, id := range ids {
-		if _, ok := haveNames[id]; !ok {
+	for _, id := range typeIDs {
+		if _, ok := have[id]; !ok {
 			missing = append(missing, id)
 		}
 	}
-	resolved += app.runWarmPool(ctx, missing, budget, func(ctx context.Context, id int64) bool {
+	return app.runWarmPool(ctx, missing, budget, func(ctx context.Context, id int64) bool {
 		return app.warmTypeName(ctx, budget, id)
 	})
-	if budget.stopped() {
-		return resolved
-	}
+}
 
-	// Type → group links (skill-sheet grouping). Fetching a type to
-	// learn its group also refreshes its name when one is present.
-	haveGroups := app.esi.CachedTypeGroups(ctx, ids)
-	var missingGroups []int64
-	for _, id := range ids {
-		if _, ok := haveGroups[id]; !ok {
-			missingGroups = append(missingGroups, id)
+// warmMissingTypeGroups resolves type → group links (skill-sheet
+// grouping). Fetching a type to learn its group also refreshes its
+// name when one is present.
+func (app *Application) warmMissingTypeGroups(ctx context.Context, typeIDs []int64, budget *warmBudget) int {
+	have := app.esi.CachedTypeGroups(ctx, typeIDs)
+	var missing []int64
+	for _, id := range typeIDs {
+		if _, ok := have[id]; !ok {
+			missing = append(missing, id)
 		}
 	}
-	resolved += app.runWarmPool(ctx, missingGroups, budget, func(ctx context.Context, id int64) bool {
+	return app.runWarmPool(ctx, missing, budget, func(ctx context.Context, id int64) bool {
 		return app.warmTypeGroup(ctx, budget, id)
 	})
-	if budget.stopped() {
-		return resolved
-	}
+}
 
-	// Group names for every group those types belong to.
+// warmMissingGroupNames resolves the name of every group those
+// types belong to.
+func (app *Application) warmMissingGroupNames(ctx context.Context, typeIDs []int64, budget *warmBudget) int {
 	groupIDs := make(map[int64]bool)
-	for _, gid := range app.esi.CachedTypeGroups(ctx, ids) {
+	for _, gid := range app.esi.CachedTypeGroups(ctx, typeIDs) {
 		if gid > 0 {
 			groupIDs[gid] = true
 		}
 	}
 	gids := sortedInt64Keys(groupIDs)
-	haveGroupNames := app.esi.CachedGroupNames(ctx, gids)
-	var missingGroupNames []int64
+	have := app.esi.CachedGroupNames(ctx, gids)
+	var missing []int64
 	for _, gid := range gids {
-		if _, ok := haveGroupNames[gid]; !ok {
-			missingGroupNames = append(missingGroupNames, gid)
+		if _, ok := have[gid]; !ok {
+			missing = append(missing, gid)
 		}
 	}
-	resolved += app.runWarmPool(ctx, missingGroupNames, budget, func(ctx context.Context, id int64) bool {
+	return app.runWarmPool(ctx, missing, budget, func(ctx context.Context, id int64) bool {
 		return app.warmGroupName(ctx, budget, id)
 	})
-	if budget.stopped() {
-		return resolved
-	}
+}
 
-	// Station / solar-system names for asset locations.
-	pathByID := make(map[int64]string, len(placeKinds))
-	var missingPlaces []int64
-	for id, kind := range placeKinds {
+// warmMissingPlaceNames resolves station and solar-system names
+// (asset locations, colony systems). places maps each id to
+// "station" or "solar_system".
+func (app *Application) warmMissingPlaceNames(ctx context.Context, places map[int64]string, budget *warmBudget) int {
+	pathByID := make(map[int64]string, len(places))
+	var missing []int64
+	for id, kind := range places {
 		if _, ok := app.esi.CachedPlaceName(ctx, id); ok {
 			continue
 		}
@@ -1169,84 +905,61 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 			dir = "systems"
 		}
 		pathByID[id] = fmt.Sprintf("/universe/%s/%d/", dir, id)
-		missingPlaces = append(missingPlaces, id)
+		missing = append(missing, id)
 	}
-	sort.Slice(missingPlaces, func(i, j int) bool { return missingPlaces[i] < missingPlaces[j] })
-	resolved += app.runWarmPool(ctx, missingPlaces, budget, func(ctx context.Context, id int64) bool {
+	sort.Slice(missing, func(i, j int) bool { return missing[i] < missing[j] })
+	return app.runWarmPool(ctx, missing, budget, func(ctx context.Context, id int64) bool {
 		return app.warmPlaceName(ctx, budget, pathByID[id], id)
 	})
-	if budget.stopped() {
-		return resolved
-	}
+}
 
-	// Planet names for the character's colonies (the place cache
-	// carries them; the network tier is /universe/planets/).
-	var missingPlanets []int64
+// warmMissingPlanetNames resolves the names of the character's
+// colony planets (the place cache carries them; the network tier
+// is /universe/planets/).
+func (app *Application) warmMissingPlanetNames(ctx context.Context, planetIDs map[int64]bool, budget *warmBudget) int {
+	var missing []int64
 	for _, id := range sortedInt64Keys(planetIDs) {
 		if _, ok := app.esi.CachedPlaceName(ctx, id); ok {
 			continue
 		}
-		missingPlanets = append(missingPlanets, id)
+		missing = append(missing, id)
 	}
-	resolved += app.runWarmPool(ctx, missingPlanets, budget, func(ctx context.Context, id int64) bool {
+	return app.runWarmPool(ctx, missing, budget, func(ctx context.Context, id int64) bool {
 		return app.warmPlanetName(ctx, budget, id)
 	})
-	if budget.stopped() {
-		return resolved
-	}
+}
 
-	// PI schematics for the colony layouts' factory pins.
-	var missingSchematics []int64
+// warmMissingSchematics resolves the PI schematics behind the
+// colony layouts' factory pins.
+func (app *Application) warmMissingSchematics(ctx context.Context, schematicIDs map[int64]bool, budget *warmBudget) int {
+	var missing []int64
 	for _, id := range sortedInt64Keys(schematicIDs) {
 		if _, ok := app.esi.CachedSchematic(id); ok {
 			continue
 		}
-		missingSchematics = append(missingSchematics, id)
+		missing = append(missing, id)
 	}
-	resolved += app.runWarmPool(ctx, missingSchematics, budget, func(ctx context.Context, id int64) bool {
+	return app.runWarmPool(ctx, missing, budget, func(ctx context.Context, id int64) bool {
 		return app.warmSchematic(ctx, budget, id)
 	})
-	if budget.stopped() {
-		return resolved
-	}
+}
 
-	// Character names from this character's stored killmail
-	// details: victims and final-blow attackers, so the killmail
-	// list can label people instead of raw IDs. (Corp rosters and
-	// tracking rows harvested above feed the same set.)
-	if rows, err := app.queries.ListKillmailDetailsByCharacter(ctx, ch.CharacterID); err != nil {
-		log.Printf("worker: warm names for character %d: list killmail details: %v", ch.CharacterID, err)
-	} else {
-		for _, row := range rows {
-			var km esi.Killmail
-			if err := json.Unmarshal([]byte(row.Payload), &km); err != nil {
-				continue // undecodable payload: nothing to derive
-			}
-			if km.Victim.CharacterID > 0 {
-				charIDs[km.Victim.CharacterID] = true
-			}
-			for _, a := range km.Attackers {
-				if a.FinalBlow && a.CharacterID > 0 {
-					charIDs[a.CharacterID] = true
-				}
-			}
-		}
-	}
-	var missingChars []int64
-	for _, id := range sortedInt64Keys(charIDs) {
+// warmMissingCharacterNames resolves the names of the people the
+// snapshots and killmails mention.
+func (app *Application) warmMissingCharacterNames(ctx context.Context, characterIDs map[int64]bool, budget *warmBudget) int {
+	var missing []int64
+	for _, id := range sortedInt64Keys(characterIDs) {
 		if _, ok := app.esi.CachedCharacterName(id); ok {
 			continue
 		}
 		if app.esi.CharacterNameMissed(id) {
 			continue // ESI already said this ID is not a character
 		}
-		missingChars = append(missingChars, id)
+		missing = append(missing, id)
 	}
-	resolved += app.runWarmPool(ctx, missingChars, budget, func(ctx context.Context, id int64) bool {
+	return app.runWarmPool(ctx, missing, budget, func(ctx context.Context, id int64) bool {
 		return app.warmCharacterName(ctx, budget, id)
 	})
-
-	return resolved
 }
 
 // fetchTypeForWarm GETs one type for the warm-up pass, translating
@@ -1257,7 +970,7 @@ func (app *Application) fetchTypeForWarm(ctx context.Context, budget *warmBudget
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
 		} else if ctx.Err() == nil {
-			log.Printf("worker: warm type %d: %v", id, err)
+			logging.Errorf("worker: warm type %d: %v", id, err)
 		}
 		return esi.Type{}, false
 	}
@@ -1288,7 +1001,7 @@ func (app *Application) warmGroupName(ctx context.Context, budget *warmBudget, i
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
 		} else if ctx.Err() == nil {
-			log.Printf("worker: warm group %d: %v", id, err)
+			logging.Errorf("worker: warm group %d: %v", id, err)
 		}
 		return false
 	}
@@ -1305,7 +1018,7 @@ func (app *Application) warmPlaceName(ctx context.Context, budget *warmBudget, p
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
 		} else if ctx.Err() == nil {
-			log.Printf("worker: warm place %s: %v", path, err)
+			logging.Errorf("worker: warm place %s: %v", path, err)
 		}
 		return false
 	}
@@ -1325,7 +1038,7 @@ func (app *Application) warmCharacterName(ctx context.Context, budget *warmBudge
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
 		} else if ctx.Err() == nil {
-			log.Printf("worker: warm character %d: %v", id, err)
+			logging.Errorf("worker: warm character %d: %v", id, err)
 		}
 		return false
 	}
@@ -1342,7 +1055,7 @@ func (app *Application) warmPlanetName(ctx context.Context, budget *warmBudget, 
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
 		} else if ctx.Err() == nil {
-			log.Printf("worker: warm planet %d: %v", id, err)
+			logging.Errorf("worker: warm planet %d: %v", id, err)
 		}
 		return false
 	}
@@ -1352,9 +1065,9 @@ func (app *Application) warmPlanetName(ctx context.Context, budget *warmBudget, 
 	app.esi.StorePlaceName(id, planet.Name)
 	if err := app.queries.SetPlanetName(ctx, db.SetPlanetNameParams{
 		PlanetID: id, Name: planet.Name, State: esi.PlanetResolved,
-		ResolvedAt: time.Now().UTC().Format(time.RFC3339),
+		ResolvedAt: timeSet(time.Now().UTC()),
 	}); err != nil {
-		log.Printf("worker: persist planet name %d: %v", id, err)
+		logging.Errorf("worker: persist planet name %d: %v", id, err)
 	}
 	return true
 }
@@ -1367,7 +1080,7 @@ func (app *Application) warmSchematic(ctx context.Context, budget *warmBudget, i
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
 		} else if ctx.Err() == nil {
-			log.Printf("worker: warm schematic %d: %v", id, err)
+			logging.Errorf("worker: warm schematic %d: %v", id, err)
 		}
 		return false
 	}
@@ -1407,7 +1120,7 @@ func (app *Application) warmKillmailDetailsFor(ctx context.Context, ch db.Charac
 	}
 	var refs []esi.KillmailRef
 	if err := json.Unmarshal([]byte(snap.Payload), &refs); err != nil {
-		log.Printf("worker: warm killmail details for character %d: decode recent list: %v", ch.CharacterID, err)
+		logging.Errorf("worker: warm killmail details for character %d: decode recent list: %v", ch.CharacterID, err)
 		return 0, false
 	}
 
@@ -1421,7 +1134,7 @@ func (app *Application) warmKillmailDetailsFor(ctx context.Context, ch db.Charac
 		if _, err := app.queries.GetKillmailDetail(ctx, ref.KillmailID); err == nil {
 			continue // already stored (by any character's list)
 		} else if !errors.Is(err, sql.ErrNoRows) {
-			log.Printf("worker: warm killmail details for character %d: read detail %d: %v", ch.CharacterID, ref.KillmailID, err)
+			logging.Errorf("worker: warm killmail details for character %d: read detail %d: %v", ch.CharacterID, ref.KillmailID, err)
 			continue
 		}
 
@@ -1431,7 +1144,7 @@ func (app *Application) warmKillmailDetailsFor(ctx context.Context, ch db.Charac
 				return fetched, true
 			}
 			if ctx.Err() == nil {
-				log.Printf("worker: killmail detail %d for character %d: %v", ref.KillmailID, ch.CharacterID, err)
+				logging.Errorf("worker: killmail detail %d for character %d: %v", ref.KillmailID, ch.CharacterID, err)
 			}
 			continue
 		}
@@ -1440,9 +1153,9 @@ func (app *Application) warmKillmailDetailsFor(ctx context.Context, ch db.Charac
 			CharacterID: ch.CharacterID,
 			Hash:        ref.KillmailHash,
 			Payload:     string(body),
-			FetchedAt:   time.Now().UTC().Format(time.RFC3339),
+			FetchedAt:   time.Now().UTC(),
 		}); err != nil {
-			log.Printf("worker: store killmail detail %d for character %d: %v", ref.KillmailID, ch.CharacterID, err)
+			logging.Errorf("worker: store killmail detail %d for character %d: %v", ref.KillmailID, ch.CharacterID, err)
 			continue
 		}
 		fetched++

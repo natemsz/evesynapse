@@ -3,13 +3,13 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -146,7 +146,7 @@ func (app *Application) handleWallet(w http.ResponseWriter, r *http.Request) {
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/wallet/")
 	if err != nil {
-		log.Printf("wallet: list characters: %v", err)
+		logging.Errorf("wallet: list characters: %v", err)
 		data.Error = "Could not load wallet data; check the server log."
 		app.render(ctx, w, http.StatusOK, "wallet.html", data)
 		return
@@ -263,33 +263,6 @@ func (app *Application) journalParty(ctx context.Context, id int64, kind string)
 		return app.displayCharacter(ctx, id), ""
 	default:
 		return app.displayCharacter(ctx, id), ""
-	}
-}
-
-// harvestJournalParty routes one journal counterparty into the
-// name pipeline its party_type names: characters join the
-// character-name harvest, corporations and alliances note org
-// record wants so their names resolve through the org endpoints
-// -- never the character endpoint, which could only 404 on them.
-// A party with no recorded type is left alone here; the render
-// paths still resolve it on demand (journalParty). Called from
-// the worker harvests, so the corp/alliance notes are plain
-// queue writes, like a page noting a want.
-func (app *Application) harvestJournalParty(ctx context.Context, charIDs map[int64]bool, id int64, partyType string) {
-	if id <= 0 {
-		return
-	}
-	switch partyType {
-	case "character":
-		charIDs[id] = true
-	case "corporation":
-		if err := app.queries.UpsertCorporationWant(ctx, id); err != nil {
-			log.Printf("worker: note corporation want for journal party %d: %v", id, err)
-		}
-	case "alliance":
-		if err := app.queries.UpsertAllianceWant(ctx, id); err != nil {
-			log.Printf("worker: note alliance want for journal party %d: %v", id, err)
-		}
 	}
 }
 
@@ -427,7 +400,7 @@ func medianDuration(durations []time.Duration) time.Duration {
 func (app *Application) buildOrderLifecycle(ctx context.Context, characterID int64) (*orderLifecycleSummary, []orderLifecycleRow) {
 	rows, err := app.queries.ListOrderLifecycleByCharacter(ctx, characterID)
 	if err != nil {
-		log.Printf("orders: lifecycle for %d: %v", characterID, err)
+		logging.Errorf("orders: lifecycle for %d: %v", characterID, err)
 		return &orderLifecycleSummary{FillShare: "--", TypicalFill: "--"}, nil
 	}
 	summary := &orderLifecycleSummary{FillShare: "--", TypicalFill: "--"}
@@ -435,17 +408,13 @@ func (app *Application) buildOrderLifecycle(ctx context.Context, characterID int
 	var filledDurations []time.Duration
 	for _, row := range rows {
 		summary.OutbidEvents += row.OutbidEvents
-		if row.ClosedAt == "" {
+		if !row.ClosedAt.Valid {
 			continue
 		}
 		if row.CloseKind == "filled" {
 			summary.Filled++
-			if first, err1 := time.Parse(time.RFC3339, row.FirstSeenAt); err1 == nil {
-				if closed, err2 := time.Parse(time.RFC3339, row.ClosedAt); err2 == nil {
-					if d := closed.Sub(first); d >= 0 {
-						filledDurations = append(filledDurations, d)
-					}
-				}
+			if d := row.ClosedAt.Time.Sub(row.FirstSeenAt); d >= 0 {
+				filledDurations = append(filledDurations, d)
 			}
 		} else {
 			summary.Ended++
@@ -461,13 +430,13 @@ func (app *Application) buildOrderLifecycle(ctx context.Context, characterID int
 	// Newest closed first, capped.
 	var closed []db.OrderLifecycle
 	for _, row := range rows {
-		if row.ClosedAt != "" {
+		if row.ClosedAt.Valid {
 			closed = append(closed, row)
 		}
 	}
 	sort.Slice(closed, func(i, j int) bool {
-		if closed[i].ClosedAt != closed[j].ClosedAt {
-			return closed[i].ClosedAt > closed[j].ClosedAt
+		if !closed[i].ClosedAt.Time.Equal(closed[j].ClosedAt.Time) {
+			return closed[i].ClosedAt.Time.After(closed[j].ClosedAt.Time)
 		}
 		return closed[i].OrderID > closed[j].OrderID
 	})
@@ -488,12 +457,7 @@ func (app *Application) buildOrderLifecycle(ctx context.Context, characterID int
 		if row.CloseKind == "filled" {
 			outcome = "Filled"
 		}
-		durText := ""
-		if first, err1 := time.Parse(time.RFC3339, row.FirstSeenAt); err1 == nil {
-			if closedAt, err2 := time.Parse(time.RFC3339, row.ClosedAt); err2 == nil {
-				durText = formatOpenDuration(closedAt.Sub(first))
-			}
-		}
+		durText := formatOpenDuration(row.ClosedAt.Time.Sub(row.FirstSeenAt))
 		out = append(out, orderLifecycleRow{
 			Item:         app.typeNameOrID(ctx, row.TypeID),
 			TypeID:       row.TypeID,
@@ -532,7 +496,7 @@ func (app *Application) handleOrders(w http.ResponseWriter, r *http.Request) {
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/orders/")
 	if err != nil {
-		log.Printf("orders: list characters: %v", err)
+		logging.Errorf("orders: list characters: %v", err)
 		data.Error = "Could not load order data; check the server log."
 		app.render(ctx, w, http.StatusOK, "orders.html", data)
 		return
@@ -576,7 +540,7 @@ func (app *Application) handleOrders(w http.ResponseWriter, r *http.Request) {
 		// sell-side check, and closed orders are pruned.
 		health := make(map[int64]db.OrderHealth)
 		if rows, err := app.queries.ListOrderHealthByCharacter(ctx, active.CharacterID); err != nil {
-			log.Printf("orders: list health for character %d: %v", active.CharacterID, err)
+			logging.Errorf("orders: list health for character %d: %v", active.CharacterID, err)
 		} else {
 			for _, h := range rows {
 				health[h.OrderID] = h

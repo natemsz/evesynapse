@@ -22,6 +22,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/pgtest"
+	"evesynapse/internal/store"
 )
 
 // ---------------------------------------------------------------------------
@@ -274,9 +275,9 @@ func TestMigration015Reopen(t *testing.T) {
 	ctx := context.Background()
 	dsn := pgtest.FreshDSN(t)
 	for i := 0; i < 2; i++ {
-		conn, pool, err := openDB(context.Background(), dsn)
+		conn, pool, err := store.Open(context.Background(), dsn)
 		if err != nil {
-			t.Fatalf("openDB (pass %d): %v", i, err)
+			t.Fatalf("store.Open (pass %d): %v", i, err)
 		}
 		q := db.New(conn)
 		if err := q.UpsertPilotWant(ctx, 93300001); err != nil {
@@ -433,7 +434,7 @@ func TestKillmailAndWalletLinks(t *testing.T) {
 		}
 		if err := q.UpsertKillmailDetail(ctx, db.UpsertKillmailDetailParams{
 			KillmailID: km.KillmailID, CharacterID: fixtureCharA, Hash: "fixture",
-			Payload: string(raw), FetchedAt: "2026-01-01T00:00:00Z",
+			Payload: string(raw), FetchedAt: mustTime("2026-01-01T00:00:00Z"),
 		}); err != nil {
 			t.Fatalf("seed killmail detail %d: %v", km.KillmailID, err)
 		}

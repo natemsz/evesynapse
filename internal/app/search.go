@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -14,6 +13,7 @@ import (
 	"unicode"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -80,7 +80,7 @@ func (app *Application) suggestTypes(ctx context.Context, q, pool string, limit 
 		Q: q, Pool: pool, Lim: limit,
 	})
 	if err != nil {
-		log.Printf("search: suggest %q (pool %s): %v", q, pool, err)
+		logging.Errorf("search: suggest %q (pool %s): %v", q, pool, err)
 		return out
 	}
 	for _, row := range rows {
@@ -216,7 +216,7 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 		ownHitCount = len(charHits)
 		hits = append(hits, charHits...)
 	} else {
-		log.Printf("search: list characters for user %d: %v", userID, err)
+		logging.Errorf("search: list characters for user %d: %v", userID, err)
 	}
 
 	itemHits := []searchHit{}
@@ -260,7 +260,7 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 		}
 		hits = append(hits, corpHits...)
 	} else {
-		log.Printf("search: corporation records for %q: %v", q, err)
+		logging.Errorf("search: corporation records for %q: %v", q, err)
 	}
 
 	if rows, err := app.queries.SearchAllianceRecordsByName(ctx, q); err == nil {
@@ -287,7 +287,7 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 		}
 		hits = append(hits, allianceHits...)
 	} else {
-		log.Printf("search: alliance records for %q: %v", q, err)
+		logging.Errorf("search: alliance records for %q: %v", q, err)
 	}
 
 	pilotHitCount := 0
@@ -319,7 +319,7 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 		pilotHitCount = len(pilotHits)
 		hits = append(hits, pilotHits...)
 	} else {
-		log.Printf("search: pilot records for %q: %v", q, err)
+		logging.Errorf("search: pilot records for %q: %v", q, err)
 	}
 
 	// No local character of either kind matched: if the query
@@ -415,16 +415,16 @@ func (app *Application) notePilotNameSearch(ctx context.Context, q string, itemH
 		}
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
-		log.Printf("search: read pilot name want %q: %v", normalized, err)
+		logging.Errorf("search: read pilot name want %q: %v", normalized, err)
 		return false
 	}
 	display := strings.Join(strings.Fields(q), " ")
 	if qerr := app.queries.UpsertPilotNameWant(ctx, db.UpsertPilotNameWantParams{
 		NormalizedName: normalized,
 		DisplayName:    display,
-		RequestedAt:    time.Now().UTC().Format(time.RFC3339),
+		RequestedAt:    time.Now().UTC(),
 	}); qerr != nil {
-		log.Printf("search: note pilot name want %q: %v", normalized, qerr)
+		logging.Errorf("search: note pilot name want %q: %v", normalized, qerr)
 		return false
 	}
 	return true

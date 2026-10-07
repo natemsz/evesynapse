@@ -7,7 +7,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,6 +18,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/pgtest"
+	"evesynapse/internal/store"
 )
 
 // stubTransport answers every request with the configured status
@@ -46,9 +46,9 @@ func (s *stubTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 // snapshot lists n refs with no stored details.
 func seedKillmailCharacter(t *testing.T, transport http.RoundTripper, n int) (*Application, db.Character) {
 	t.Helper()
-	conn, pool, err := openDB(context.Background(), pgtest.FreshDSN(t))
+	conn, pool, err := store.Open(context.Background(), pgtest.FreshDSN(t))
 	if err != nil {
-		t.Fatalf("openDB: %v", err)
+		t.Fatalf("store.Open: %v", err)
 	}
 	t.Cleanup(func() { conn.Close(); pool.Close() })
 	queries := db.New(conn)
@@ -64,7 +64,7 @@ func seedKillmailCharacter(t *testing.T, transport http.RoundTripper, n int) (*A
 		Name:         "Fixture Pilot",
 		AccessToken:  "fixture",
 		RefreshToken: "fixture",
-		TokenExpiry:  sql.NullString{String: "2999-01-01T00:00:00Z", Valid: true},
+		TokenExpiry:  mustNullTime("2999-01-01T00:00:00Z"),
 		LinkState:    "ok",
 	})
 	if err != nil {
@@ -83,8 +83,8 @@ func seedKillmailCharacter(t *testing.T, transport http.RoundTripper, n int) (*A
 		CharacterID: ch.CharacterID,
 		Kind:        esi.SnapKillmails,
 		Payload:     string(payload),
-		FetchedAt:   "2026-01-01T00:00:00Z",
-		CachedUntil: sql.NullString{String: "2999-01-01T00:00:00Z", Valid: true},
+		FetchedAt:   mustTime("2026-01-01T00:00:00Z"),
+		CachedUntil: mustNullTime("2999-01-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("upsert snapshot: %v", err)
 	}

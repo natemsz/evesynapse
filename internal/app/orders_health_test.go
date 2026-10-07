@@ -56,12 +56,11 @@ func TestOrdersPageOrderHealth(t *testing.T) {
 	seedSnapshot(t, q, fixtureCharA, esi.SnapOrdersHistory, []esi.CharOrderHistoryEntry{
 		{CharOrder: esi.CharOrder{OrderID: 704, TypeID: 34, LocationID: 60003760, RegionID: 10000002, Price: 5.5, VolumeTotal: 1000, VolumeRemain: 400, Issued: now.AddDate(0, 0, -40).Format(time.RFC3339)}, State: "expired"},
 	})
-	stamp := now.Format(time.RFC3339)
 	for _, h := range []db.UpsertOrderHealthParams{
 		{CharacterID: fixtureCharA, OrderID: 700, TypeID: 587, RegionID: 10000002, LocationID: 60003760,
-			MyPrice: 1000000, StationBest: 990000, RegionBest: 990000, Status: "undercut_station", ComputedAt: stamp},
+			MyPrice: 1000000, StationBest: 990000, RegionBest: 990000, Status: "undercut_station", ComputedAt: now},
 		{CharacterID: fixtureCharA, OrderID: 701, TypeID: 34, RegionID: 10000002, LocationID: 60003760,
-			MyPrice: 5.5, StationBest: 5.5, RegionBest: 5.5, Status: "best", ComputedAt: stamp},
+			MyPrice: 5.5, StationBest: 5.5, RegionBest: 5.5, Status: "best", ComputedAt: now},
 	} {
 		if err := q.UpsertOrderHealth(ctx, h); err != nil {
 			t.Fatalf("seed health: %v", err)
@@ -110,7 +109,7 @@ func TestCorpOrdersHealthAndLocation(t *testing.T) {
 	seedCharacter(t, q, user.ID, fixtureCharB, "Second Pilot")
 	for _, m := range []struct{ charID, corpID int64 }{{fixtureCharA, fixtureCorpA}, {fixtureCharB, fixtureCorpA}} {
 		if err := q.UpsertCharacterCorporation(ctx, db.UpsertCharacterCorporationParams{
-			CharacterID: m.charID, CorporationID: m.corpID, UpdatedAt: now.Format(time.RFC3339),
+			CharacterID: m.charID, CorporationID: m.corpID, UpdatedAt: now,
 		}); err != nil {
 			t.Fatalf("seed mapping: %v", err)
 		}
@@ -140,7 +139,7 @@ func TestCorpOrdersHealthAndLocation(t *testing.T) {
 	if err := q.UpsertOrderHealth(ctx, db.UpsertOrderHealthParams{
 		CharacterID: fixtureCharA, OrderID: 800, TypeID: 587, RegionID: 10000002, LocationID: 60003760,
 		MyPrice: 1000000, StationBest: 990000, RegionBest: 990000, Status: "undercut_station",
-		ComputedAt: now.Format(time.RFC3339),
+		ComputedAt: now,
 	}); err != nil {
 		t.Fatalf("seed health: %v", err)
 	}
@@ -210,7 +209,7 @@ func TestKillViewNotesGuidePriceWant(t *testing.T) {
 	}
 	if err := q.UpsertKillmailDetail(ctx, db.UpsertKillmailDetailParams{
 		KillmailID: 7001, CharacterID: fixtureCharA, Hash: "fixture",
-		Payload: string(raw), FetchedAt: "2026-01-01T00:00:00Z",
+		Payload: string(raw), FetchedAt: mustTime("2026-01-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed killmail detail: %v", err)
 	}
@@ -243,7 +242,7 @@ func TestKillViewNotesGuidePriceWant(t *testing.T) {
 		t.Fatalf("seed guide price: %v", err)
 	}
 	if err := q.UpsertGuidePricesMeta(ctx, db.UpsertGuidePricesMetaParams{
-		FetchedAt: now.Format(time.RFC3339), CachedUntil: "2999-01-01T00:00:00Z",
+		FetchedAt: now, CachedUntil: mustTime("2999-01-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed guide meta: %v", err)
 	}
@@ -265,7 +264,7 @@ func TestUrgentDrainAnswersGuidePriceWant(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
 
-	if err := q.NoteGuidePriceWant(ctx, time.Now().UTC().Format(time.RFC3339)); err != nil {
+	if err := q.NoteGuidePriceWant(ctx, time.Now().UTC()); err != nil {
 		t.Fatalf("note want: %v", err)
 	}
 	app.drainUrgentWants(ctx)

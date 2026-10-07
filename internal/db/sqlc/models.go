@@ -10,42 +10,43 @@ import (
 )
 
 type AllianceRecord struct {
-	AllianceID int64  `json:"alliance_id"`
-	Payload    string `json:"payload"`
-	State      string `json:"state"`
-	FetchedAt  string `json:"fetched_at"`
-	Priority   int64  `json:"priority"`
+	AllianceID int64        `json:"alliance_id"`
+	Payload    string       `json:"payload"`
+	State      string       `json:"state"`
+	FetchedAt  sql.NullTime `json:"fetched_at"`
+	Priority   int64        `json:"priority"`
 }
 
 type Character struct {
-	CharacterID  int64          `json:"character_id"`
-	UserID       int64          `json:"user_id"`
-	Name         string         `json:"name"`
-	AccessToken  string         `json:"access_token"`
-	RefreshToken string         `json:"refresh_token"`
-	TokenExpiry  sql.NullString `json:"token_expiry"`
-	Scopes       string         `json:"scopes"`
-	CachedUntil  sql.NullString `json:"cached_until"`
-	CreatedAt    string         `json:"created_at"`
-	UpdatedAt    string         `json:"updated_at"`
-	OwnerHash    string         `json:"owner_hash"`
-	Tags         string         `json:"tags"`
-	LinkState    string         `json:"link_state"`
-	LinkStateAt  sql.NullString `json:"link_state_at"`
+	CharacterID  int64        `json:"character_id"`
+	UserID       int64        `json:"user_id"`
+	Name         string       `json:"name"`
+	AccessToken  string       `json:"access_token"`
+	RefreshToken string       `json:"refresh_token"`
+	TokenExpiry  sql.NullTime `json:"token_expiry"`
+	Scopes       string       `json:"scopes"`
+	CachedUntil  sql.NullTime `json:"cached_until"`
+	CreatedAt    time.Time    `json:"created_at"`
+	UpdatedAt    time.Time    `json:"updated_at"`
+	OwnerHash    string       `json:"owner_hash"`
+	Tags         string       `json:"tags"`
+	LinkState    string       `json:"link_state"`
+	LinkStateAt  sql.NullTime `json:"link_state_at"`
 }
 
 type CharacterCorporation struct {
-	CharacterID   int64  `json:"character_id"`
-	CorporationID int64  `json:"corporation_id"`
-	UpdatedAt     string `json:"updated_at"`
+	CharacterID   int64     `json:"character_id"`
+	CorporationID int64     `json:"corporation_id"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 type CharacterSnapshot struct {
-	CharacterID int64          `json:"character_id"`
-	Kind        string         `json:"kind"`
-	Payload     string         `json:"payload"`
-	FetchedAt   string         `json:"fetched_at"`
-	CachedUntil sql.NullString `json:"cached_until"`
+	CharacterID int64        `json:"character_id"`
+	Kind        string       `json:"kind"`
+	Payload     string       `json:"payload"`
+	FetchedAt   time.Time    `json:"fetched_at"`
+	CachedUntil sql.NullTime `json:"cached_until"`
+	Etag        string       `json:"etag"`
 }
 
 type CloneName struct {
@@ -57,25 +58,26 @@ type CloneName struct {
 }
 
 type ContractDetail struct {
-	ContractID  int64  `json:"contract_id"`
-	CharacterID int64  `json:"character_id"`
-	Payload     string `json:"payload"`
-	FetchedAt   string `json:"fetched_at"`
+	ContractID  int64     `json:"contract_id"`
+	CharacterID int64     `json:"character_id"`
+	Payload     string    `json:"payload"`
+	FetchedAt   time.Time `json:"fetched_at"`
 }
 
 type CorporationRecord struct {
-	CorporationID int64  `json:"corporation_id"`
-	Payload       string `json:"payload"`
-	State         string `json:"state"`
-	FetchedAt     string `json:"fetched_at"`
-	Priority      int64  `json:"priority"`
+	CorporationID int64        `json:"corporation_id"`
+	Payload       string       `json:"payload"`
+	State         string       `json:"state"`
+	FetchedAt     sql.NullTime `json:"fetched_at"`
+	Priority      int64        `json:"priority"`
 }
 
 type GlobalSnapshot struct {
-	Kind        string `json:"kind"`
-	Payload     string `json:"payload"`
-	FetchedAt   string `json:"fetched_at"`
-	CachedUntil string `json:"cached_until"`
+	Kind        string    `json:"kind"`
+	Payload     string    `json:"payload"`
+	FetchedAt   time.Time `json:"fetched_at"`
+	CachedUntil time.Time `json:"cached_until"`
+	Etag        string    `json:"etag"`
 }
 
 type GuidePrice struct {
@@ -85,14 +87,14 @@ type GuidePrice struct {
 }
 
 type GuidePriceWant struct {
-	ID       int64  `json:"id"`
-	WantedAt string `json:"wanted_at"`
+	ID       int64     `json:"id"`
+	WantedAt time.Time `json:"wanted_at"`
 }
 
 type GuidePricesMetum struct {
-	ID          int64  `json:"id"`
-	FetchedAt   string `json:"fetched_at"`
-	CachedUntil string `json:"cached_until"`
+	ID          int64     `json:"id"`
+	FetchedAt   time.Time `json:"fetched_at"`
+	CachedUntil time.Time `json:"cached_until"`
 }
 
 type IndustryCostIndex struct {
@@ -108,30 +110,30 @@ type ItemName struct {
 }
 
 type KillmailDetail struct {
-	KillmailID  int64  `json:"killmail_id"`
-	CharacterID int64  `json:"character_id"`
-	Hash        string `json:"hash"`
-	Payload     string `json:"payload"`
-	FetchedAt   string `json:"fetched_at"`
+	KillmailID  int64     `json:"killmail_id"`
+	CharacterID int64     `json:"character_id"`
+	Hash        string    `json:"hash"`
+	Payload     string    `json:"payload"`
+	FetchedAt   time.Time `json:"fetched_at"`
 }
 
 type LocalFitting struct {
-	ID         int64  `json:"id"`
-	UserID     int64  `json:"user_id"`
-	Name       string `json:"name"`
-	ShipTypeID int64  `json:"ship_type_id"`
-	ItemsJson  string `json:"items_json"`
-	CreatedAt  string `json:"created_at"`
-	UpdatedAt  string `json:"updated_at"`
-	IsPublic   bool   `json:"is_public"`
-	IsDraft    bool   `json:"is_draft"`
+	ID         int64     `json:"id"`
+	UserID     int64     `json:"user_id"`
+	Name       string    `json:"name"`
+	ShipTypeID int64     `json:"ship_type_id"`
+	ItemsJson  string    `json:"items_json"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	IsPublic   bool      `json:"is_public"`
+	IsDraft    bool      `json:"is_draft"`
 }
 
 type MarketFetchState struct {
-	Kind        string `json:"kind"`
-	State       string `json:"state"`
-	Detail      string `json:"detail"`
-	AttemptedAt string `json:"attempted_at"`
+	Kind        string    `json:"kind"`
+	State       string    `json:"state"`
+	Detail      string    `json:"detail"`
+	AttemptedAt time.Time `json:"attempted_at"`
 }
 
 type MarketHistory struct {
@@ -146,26 +148,26 @@ type MarketHistory struct {
 }
 
 type MarketHistoryWant struct {
-	RegionID        int64  `json:"region_id"`
-	TypeID          int64  `json:"type_id"`
-	LastRequestedAt string `json:"last_requested_at"`
+	RegionID        int64     `json:"region_id"`
+	TypeID          int64     `json:"type_id"`
+	LastRequestedAt time.Time `json:"last_requested_at"`
 }
 
 type MarketRegionStat struct {
-	RegionID       int64   `json:"region_id"`
-	TypeID         int64   `json:"type_id"`
-	BestSell       float64 `json:"best_sell"`
-	TypicalSell    float64 `json:"typical_sell"`
-	SellBand       float64 `json:"sell_band"`
-	BestBuy        float64 `json:"best_buy"`
-	TypicalBuy     float64 `json:"typical_buy"`
-	BuyBand        float64 `json:"buy_band"`
-	SellOrders     int64   `json:"sell_orders"`
-	BuyOrders      int64   `json:"buy_orders"`
-	SellVolume     int64   `json:"sell_volume"`
-	BuyVolume      int64   `json:"buy_volume"`
-	UpdatedAt      string  `json:"updated_at"`
-	AvgDailyVolume float64 `json:"avg_daily_volume"`
+	RegionID       int64     `json:"region_id"`
+	TypeID         int64     `json:"type_id"`
+	BestSell       float64   `json:"best_sell"`
+	TypicalSell    float64   `json:"typical_sell"`
+	SellBand       float64   `json:"sell_band"`
+	BestBuy        float64   `json:"best_buy"`
+	TypicalBuy     float64   `json:"typical_buy"`
+	BuyBand        float64   `json:"buy_band"`
+	SellOrders     int64     `json:"sell_orders"`
+	BuyOrders      int64     `json:"buy_orders"`
+	SellVolume     int64     `json:"sell_volume"`
+	BuyVolume      int64     `json:"buy_volume"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	AvgDailyVolume float64   `json:"avg_daily_volume"`
 }
 
 type MarketRegionStatsDaily struct {
@@ -185,26 +187,26 @@ type MarketRegionStatsDaily struct {
 }
 
 type MarketStationLeaderboard struct {
-	RegionID   int64   `json:"region_id"`
-	LocationID int64   `json:"location_id"`
-	SellOrders int64   `json:"sell_orders"`
-	BuyOrders  int64   `json:"buy_orders"`
-	SellValue  float64 `json:"sell_value"`
-	BuyValue   float64 `json:"buy_value"`
-	UpdatedAt  string  `json:"updated_at"`
+	RegionID   int64     `json:"region_id"`
+	LocationID int64     `json:"location_id"`
+	SellOrders int64     `json:"sell_orders"`
+	BuyOrders  int64     `json:"buy_orders"`
+	SellValue  float64   `json:"sell_value"`
+	BuyValue   float64   `json:"buy_value"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type MarketStationStat struct {
-	LocationID int64   `json:"location_id"`
-	RegionID   int64   `json:"region_id"`
-	TypeID     int64   `json:"type_id"`
-	BestSell   float64 `json:"best_sell"`
-	BestBuy    float64 `json:"best_buy"`
-	SellOrders int64   `json:"sell_orders"`
-	BuyOrders  int64   `json:"buy_orders"`
-	SellVolume int64   `json:"sell_volume"`
-	BuyVolume  int64   `json:"buy_volume"`
-	UpdatedAt  string  `json:"updated_at"`
+	LocationID int64     `json:"location_id"`
+	RegionID   int64     `json:"region_id"`
+	TypeID     int64     `json:"type_id"`
+	BestSell   float64   `json:"best_sell"`
+	BestBuy    float64   `json:"best_buy"`
+	SellOrders int64     `json:"sell_orders"`
+	BuyOrders  int64     `json:"buy_orders"`
+	SellVolume int64     `json:"sell_volume"`
+	BuyVolume  int64     `json:"buy_volume"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type MarketSweepOrder struct {
@@ -217,11 +219,11 @@ type MarketSweepOrder struct {
 }
 
 type MarketSweepState struct {
-	RegionID   int64  `json:"region_id"`
-	NextPage   int64  `json:"next_page"`
-	PagesTotal int64  `json:"pages_total"`
-	StartedAt  string `json:"started_at"`
-	UpdatedAt  string `json:"updated_at"`
+	RegionID   int64     `json:"region_id"`
+	NextPage   int64     `json:"next_page"`
+	PagesTotal int64     `json:"pages_total"`
+	StartedAt  time.Time `json:"started_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type MarketTypePrice struct {
@@ -235,24 +237,24 @@ type MarketTypePrice struct {
 }
 
 type MarketWatchlist struct {
-	UserID       int64   `json:"user_id"`
-	TypeID       int64   `json:"type_id"`
-	RegionID     int64   `json:"region_id"`
-	ThresholdPct float64 `json:"threshold_pct"`
-	CreatedAt    string  `json:"created_at"`
+	UserID       int64     `json:"user_id"`
+	TypeID       int64     `json:"type_id"`
+	RegionID     int64     `json:"region_id"`
+	ThresholdPct float64   `json:"threshold_pct"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 type OrderHealth struct {
-	CharacterID int64   `json:"character_id"`
-	OrderID     int64   `json:"order_id"`
-	TypeID      int64   `json:"type_id"`
-	RegionID    int64   `json:"region_id"`
-	LocationID  int64   `json:"location_id"`
-	MyPrice     float64 `json:"my_price"`
-	StationBest float64 `json:"station_best"`
-	RegionBest  float64 `json:"region_best"`
-	Status      string  `json:"status"`
-	ComputedAt  string  `json:"computed_at"`
+	CharacterID int64     `json:"character_id"`
+	OrderID     int64     `json:"order_id"`
+	TypeID      int64     `json:"type_id"`
+	RegionID    int64     `json:"region_id"`
+	LocationID  int64     `json:"location_id"`
+	MyPrice     float64   `json:"my_price"`
+	StationBest float64   `json:"station_best"`
+	RegionBest  float64   `json:"region_best"`
+	Status      string    `json:"status"`
+	ComputedAt  time.Time `json:"computed_at"`
 }
 
 type OrderLifecycle struct {
@@ -266,38 +268,38 @@ type OrderLifecycle struct {
 	ListedPrice      float64       `json:"listed_price"`
 	VolumeTotal      int64         `json:"volume_total"`
 	VolumeRemainLast int64         `json:"volume_remain_last"`
-	FirstSeenAt      string        `json:"first_seen_at"`
-	LastSeenAt       string        `json:"last_seen_at"`
-	ClosedAt         string        `json:"closed_at"`
+	FirstSeenAt      time.Time     `json:"first_seen_at"`
+	LastSeenAt       time.Time     `json:"last_seen_at"`
+	ClosedAt         sql.NullTime  `json:"closed_at"`
 	CloseKind        string        `json:"close_kind"`
 	OutbidEvents     int64         `json:"outbid_events"`
 	BeatenNow        int64         `json:"beaten_now"`
 }
 
 type PilotNameWant struct {
-	NormalizedName string `json:"normalized_name"`
-	DisplayName    string `json:"display_name"`
-	State          string `json:"state"`
-	CharacterID    int64  `json:"character_id"`
-	RequestedAt    string `json:"requested_at"`
-	ResolvedAt     string `json:"resolved_at"`
-	NextTryAt      string `json:"next_try_at"`
-	Attempts       int64  `json:"attempts"`
+	NormalizedName string       `json:"normalized_name"`
+	DisplayName    string       `json:"display_name"`
+	State          string       `json:"state"`
+	CharacterID    int64        `json:"character_id"`
+	RequestedAt    time.Time    `json:"requested_at"`
+	ResolvedAt     sql.NullTime `json:"resolved_at"`
+	NextTryAt      sql.NullTime `json:"next_try_at"`
+	Attempts       int64        `json:"attempts"`
 }
 
 type PilotRecord struct {
-	CharacterID int64  `json:"character_id"`
-	Payload     string `json:"payload"`
-	State       string `json:"state"`
-	FetchedAt   string `json:"fetched_at"`
-	Priority    int64  `json:"priority"`
+	CharacterID int64        `json:"character_id"`
+	Payload     string       `json:"payload"`
+	State       string       `json:"state"`
+	FetchedAt   sql.NullTime `json:"fetched_at"`
+	Priority    int64        `json:"priority"`
 }
 
 type PlanetName struct {
-	PlanetID   int64  `json:"planet_id"`
-	Name       string `json:"name"`
-	State      string `json:"state"`
-	ResolvedAt string `json:"resolved_at"`
+	PlanetID   int64        `json:"planet_id"`
+	Name       string       `json:"name"`
+	State      string       `json:"state"`
+	ResolvedAt sql.NullTime `json:"resolved_at"`
 }
 
 type RestockTarget struct {
@@ -444,11 +446,11 @@ type Session struct {
 }
 
 type SkillPlan struct {
-	ID          int64  `json:"id"`
-	UserID      int64  `json:"user_id"`
-	CharacterID int64  `json:"character_id"`
-	Name        string `json:"name"`
-	CreatedAt   string `json:"created_at"`
+	ID          int64     `json:"id"`
+	UserID      int64     `json:"user_id"`
+	CharacterID int64     `json:"character_id"`
+	Name        string    `json:"name"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type SkillPlanItem struct {
@@ -459,33 +461,33 @@ type SkillPlanItem struct {
 }
 
 type SnapshotFetchState struct {
-	CharacterID int64  `json:"character_id"`
-	Kind        string `json:"kind"`
-	State       string `json:"state"`
-	Detail      string `json:"detail"`
-	AttemptedAt string `json:"attempted_at"`
+	CharacterID int64     `json:"character_id"`
+	Kind        string    `json:"kind"`
+	State       string    `json:"state"`
+	Detail      string    `json:"detail"`
+	AttemptedAt time.Time `json:"attempted_at"`
 }
 
 type StructureContext struct {
-	StructureID        int64  `json:"structure_id"`
-	OwnerCorporationID int64  `json:"owner_corporation_id"`
-	SystemID           int64  `json:"system_id"`
-	TypeID             int64  `json:"type_id"`
-	UpdatedAt          string `json:"updated_at"`
+	StructureID        int64     `json:"structure_id"`
+	OwnerCorporationID int64     `json:"owner_corporation_id"`
+	SystemID           int64     `json:"system_id"`
+	TypeID             int64     `json:"type_id"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 type StructureName struct {
-	StructureID int64  `json:"structure_id"`
-	Name        string `json:"name"`
-	State       string `json:"state"`
-	ResolvedAt  string `json:"resolved_at"`
-	Source      string `json:"source"`
+	StructureID int64        `json:"structure_id"`
+	Name        string       `json:"name"`
+	State       string       `json:"state"`
+	ResolvedAt  sql.NullTime `json:"resolved_at"`
+	Source      string       `json:"source"`
 }
 
 type TypeDetail struct {
-	TypeID      int64  `json:"type_id"`
-	Description string `json:"description"`
-	FetchedAt   string `json:"fetched_at"`
+	TypeID      int64        `json:"type_id"`
+	Description string       `json:"description"`
+	FetchedAt   sql.NullTime `json:"fetched_at"`
 }
 
 type TypeName struct {
@@ -494,10 +496,10 @@ type TypeName struct {
 }
 
 type User struct {
-	ID             int64  `json:"id"`
-	CreatedAt      string `json:"created_at"`
-	HomeLayout     string `json:"home_layout"`
-	LastBriefingAt string `json:"last_briefing_at"`
+	ID             int64        `json:"id"`
+	CreatedAt      time.Time    `json:"created_at"`
+	HomeLayout     string       `json:"home_layout"`
+	LastBriefingAt sql.NullTime `json:"last_briefing_at"`
 }
 
 type WalletHistory struct {
@@ -506,18 +508,18 @@ type WalletHistory struct {
 	Day         string          `json:"day"`
 	Balance     float64         `json:"balance"`
 	NetWorth    sql.NullFloat64 `json:"net_worth"`
-	SampledAt   string          `json:"sampled_at"`
+	SampledAt   time.Time       `json:"sampled_at"`
 }
 
 type WarDetail struct {
-	WarID     int64  `json:"war_id"`
-	Payload   string `json:"payload"`
-	FetchedAt string `json:"fetched_at"`
+	WarID     int64     `json:"war_id"`
+	Payload   string    `json:"payload"`
+	FetchedAt time.Time `json:"fetched_at"`
 }
 
 type WidgetConfig struct {
-	UserID    int64  `json:"user_id"`
-	WidgetID  string `json:"widget_id"`
-	Config    string `json:"config"`
-	UpdatedAt string `json:"updated_at"`
+	UserID    int64     `json:"user_id"`
+	WidgetID  string    `json:"widget_id"`
+	Config    string    `json:"config"`
+	UpdatedAt time.Time `json:"updated_at"`
 }

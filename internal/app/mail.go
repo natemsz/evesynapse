@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"html"
 	"html/template"
-	"log"
 	"net/http"
 	"net/url"
 	"sort"
@@ -14,6 +13,7 @@ import (
 	"strings"
 
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -89,7 +89,7 @@ func (app *Application) handleMail(w http.ResponseWriter, r *http.Request) {
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/mail/")
 	if err != nil {
-		log.Printf("mail: list characters: %v", err)
+		logging.Errorf("mail: list characters: %v", err)
 		data.Error = "Could not load mail; check the server log."
 		app.render(ctx, w, http.StatusOK, "mail.html", data)
 		return
@@ -534,7 +534,7 @@ func (app *Application) handleMailMarkRead(w http.ResponseWriter, r *http.Reques
 	}
 	token, err := app.validAccessToken(ctx, ch)
 	if err != nil {
-		log.Printf("mail mark-read: token for character %d: %v", charID, err)
+		logging.Errorf("mail mark-read: token for character %d: %v", charID, err)
 		http.Error(w, "Could not reach EVE. Sign in again if it keeps failing.", http.StatusBadGateway)
 		return
 	}
@@ -545,7 +545,7 @@ func (app *Application) handleMailMarkRead(w http.ResponseWriter, r *http.Reques
 			http.Error(w, ch.Name+" was linked before EveSynapse asked for mail organize access — sign in again to grant it.", http.StatusForbidden)
 			return
 		}
-		log.Printf("mail mark-read: ESI PUT %s: %v", path, err)
+		logging.Errorf("mail mark-read: ESI PUT %s: %v", path, err)
 		http.Error(w, "EVE refused the update.", http.StatusBadGateway)
 		return
 	}
@@ -578,7 +578,7 @@ func (app *Application) handleMailCompose(w http.ResponseWriter, r *http.Request
 	}
 	_, active, links, err := app.pickCharacter(ctx, r, "/mail/compose/")
 	if err != nil {
-		log.Printf("mail compose: list characters: %v", err)
+		logging.Errorf("mail compose: list characters: %v", err)
 		data.Error = "Could not load characters; check the server log."
 		app.render(ctx, w, http.StatusOK, "compose.html", data)
 		return
@@ -660,7 +660,7 @@ func (app *Application) handleMailSend(w http.ResponseWriter, r *http.Request) {
 	// Resolve the recipient name to an ID + type.
 	var res mailRecipientResolution
 	if err := app.esi.PostJSON(ctx, "/universe/ids/", []string{toName}, &res); err != nil {
-		log.Printf("mail send: resolve %q: %v", toName, err)
+		logging.Errorf("mail send: resolve %q: %v", toName, err)
 		fail("Could not resolve recipient " + toName + ". Check the spelling.")
 		return
 	}
@@ -680,7 +680,7 @@ func (app *Application) handleMailSend(w http.ResponseWriter, r *http.Request) {
 
 	token, err := app.validAccessToken(ctx, ch)
 	if err != nil {
-		log.Printf("mail send: token for character %d: %v", charID, err)
+		logging.Errorf("mail send: token for character %d: %v", charID, err)
 		fail("Could not reach EVE. Sign in again if it keeps failing.")
 		return
 	}
@@ -704,7 +704,7 @@ func (app *Application) handleMailSend(w http.ResponseWriter, r *http.Request) {
 			fail(ch.Name + " was linked before EveSynapse asked for mail send access — sign in again to grant it.")
 			return
 		}
-		log.Printf("mail send: ESI POST %s: %v", path, err)
+		logging.Errorf("mail send: ESI POST %s: %v", path, err)
 		fail("EVE refused the mail. Check the recipient and try again.")
 		return
 	}

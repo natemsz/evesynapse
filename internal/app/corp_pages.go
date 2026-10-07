@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -11,6 +10,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ func (app *Application) handleCorpMembers(w http.ResponseWriter, r *http.Request
 
 	sel, ok, err := app.pickCorpPage(ctx, r)
 	if err != nil {
-		log.Printf("corp members: pick character: %v", err)
+		logging.Errorf("corp members: pick character: %v", err)
 		data.Error = "Could not load corporation data; check the server log."
 		app.render(ctx, w, http.StatusOK, "corp_members.html", data)
 		return
@@ -194,7 +194,7 @@ func (app *Application) handleCorpWallets(w http.ResponseWriter, r *http.Request
 
 	sel, ok, err := app.pickCorpPage(ctx, r)
 	if err != nil {
-		log.Printf("corp wallets: pick character: %v", err)
+		logging.Errorf("corp wallets: pick character: %v", err)
 		data.Error = "Could not load corporation data; check the server log."
 		app.render(ctx, w, http.StatusOK, "corp_wallets.html", data)
 		return
@@ -339,7 +339,7 @@ func (app *Application) handleCorpOrders(w http.ResponseWriter, r *http.Request)
 
 	sel, ok, err := app.pickCorpPage(ctx, r)
 	if err != nil {
-		log.Printf("corp orders: pick character: %v", err)
+		logging.Errorf("corp orders: pick character: %v", err)
 		data.Error = "Could not load corporation data; check the server log."
 		app.render(ctx, w, http.StatusOK, "corp_orders.html", data)
 		return
@@ -388,14 +388,14 @@ func (app *Application) handleCorpOrders(w http.ResponseWriter, r *http.Request)
 	ownChars := make(map[int64]bool)
 	if userID > 0 {
 		if rows, err := app.queries.ListOrderHealthByUser(ctx, userID); err != nil {
-			log.Printf("corp orders: list health for user %d: %v", userID, err)
+			logging.Errorf("corp orders: list health for user %d: %v", userID, err)
 		} else {
 			for _, h := range rows {
 				health[h.OrderID] = h
 			}
 		}
 		if chars, err := app.queries.ListCharactersByUser(ctx, userID); err != nil {
-			log.Printf("corp orders: list characters for user %d: %v", userID, err)
+			logging.Errorf("corp orders: list characters for user %d: %v", userID, err)
 		} else {
 			for _, ch := range chars {
 				ownChars[ch.CharacterID] = true
@@ -473,7 +473,7 @@ func (app *Application) handleCorpAssets(w http.ResponseWriter, r *http.Request)
 
 	sel, ok, err := app.pickCorpPage(ctx, r)
 	if err != nil {
-		log.Printf("corp assets: pick character: %v", err)
+		logging.Errorf("corp assets: pick character: %v", err)
 		data.Error = "Could not load corporation data; check the server log."
 		app.render(ctx, w, http.StatusOK, "corp_assets.html", data)
 		return
@@ -509,7 +509,7 @@ func (app *Application) handleCorpAssets(w http.ResponseWriter, r *http.Request)
 			itemIDs = append(itemIDs, it.ItemID)
 		}
 		if rows, err := app.queries.ListItemNamesByIDs(ctx, itemIDs); err != nil {
-			log.Printf("corp assets: list item names: %v", err)
+			logging.Errorf("corp assets: list item names: %v", err)
 		} else {
 			for _, row := range rows {
 				overrides[row.ItemID] = row.Name
@@ -559,7 +559,7 @@ func (app *Application) handleCorpStructures(w http.ResponseWriter, r *http.Requ
 
 	sel, ok, err := app.pickCorpPage(ctx, r)
 	if err != nil {
-		log.Printf("corp structures: pick character: %v", err)
+		logging.Errorf("corp structures: pick character: %v", err)
 		data.Error = "Could not load corporation data; check the server log."
 		app.render(ctx, w, http.StatusOK, "corp_structures.html", data)
 		return
@@ -648,7 +648,7 @@ func (app *Application) handleCorpKillmails(w http.ResponseWriter, r *http.Reque
 
 	sel, ok, err := app.pickCorpPage(ctx, r)
 	if err != nil {
-		log.Printf("corp killmails: pick character: %v", err)
+		logging.Errorf("corp killmails: pick character: %v", err)
 		data.Error = "Could not load killmail data; check the server log."
 		app.render(ctx, w, http.StatusOK, "killmails.html", data)
 		return

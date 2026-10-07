@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"math"
 	"net/http"
 	"regexp"
@@ -16,6 +15,8 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/fit"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -23,7 +24,7 @@ import (
 //
 // The browser keeps a small fit document (ship, item lines, charge
 // choices) and posts it to /fittings/simulate/ on every change; the
-// server runs the dogma engine (fitengine.go) over local SDE rows
+// server runs the dogma engine (the fit package) over local SDE rows
 // and returns the whole workbench as an HTML fragment. Everything
 // here reads local tables and snapshots only -- no handler in this
 // file ever reaches the network, and the tests pin that with the
@@ -50,11 +51,11 @@ const (
 
 // fitSlotEffectByFamily maps picker families to their slot effect.
 var fitSlotEffectByFamily = map[string]int64{
-	fitFamilyHigh:      fitEffectHiPower,
-	fitFamilyMedium:    fitEffectMedPower,
-	fitFamilyLow:       fitEffectLoPower,
-	fitFamilyRig:       fitEffectRigSlot,
-	fitFamilySubsystem: fitEffectSubsystemSlot,
+	fitFamilyHigh:      fit.EffectHiPower,
+	fitFamilyMedium:    fit.EffectMedPower,
+	fitFamilyLow:       fit.EffectLoPower,
+	fitFamilyRig:       fit.EffectRigSlot,
+	fitFamilySubsystem: fit.EffectSubsystemSlot,
 }
 
 // Dogma attributes the charge picker reads off a weapon: the five
@@ -132,7 +133,7 @@ func sanitizeFitDoc(doc *fitDoc) {
 		allDefault := true
 		for j, s := range it.States {
 			switch s {
-			case "", fitStateOnline, fitStateActive, fitStateOffline, fitStateOverheated:
+			case "", fit.StateOnline, fit.StateActive, fit.StateOffline, fit.StateOverheated:
 			default:
 				it.States[j] = ""
 				s = ""
@@ -165,19 +166,19 @@ func sanitizeFitDoc(doc *fitDoc) {
 // fitSlotFamilyOf classifies one type into an editor family using
 // the engine snapshot (slot effects first, in the engine's own
 // order, then the drone bandwidth draw).
-func fitSlotFamilyOf(snap *fitSnapshot, typeID int64) string {
+func fitSlotFamilyOf(snap *fit.Snapshot, typeID int64) string {
 	switch {
-	case snap.hasEffect(typeID, fitEffectRigSlot):
+	case snap.HasEffect(typeID, fit.EffectRigSlot):
 		return fitFamilyRig
-	case snap.hasEffect(typeID, fitEffectSubsystemSlot):
+	case snap.HasEffect(typeID, fit.EffectSubsystemSlot):
 		return fitFamilySubsystem
-	case snap.attrs[typeID][fitAttrDroneBandwidthUsed] > 0:
+	case snap.Attrs[typeID][fit.AttrDroneBandwidthUsed] > 0:
 		return fitFamilyDrone
-	case snap.hasEffect(typeID, fitEffectHiPower):
+	case snap.HasEffect(typeID, fit.EffectHiPower):
 		return fitFamilyHigh
-	case snap.hasEffect(typeID, fitEffectMedPower):
+	case snap.HasEffect(typeID, fit.EffectMedPower):
 		return fitFamilyMedium
-	case snap.hasEffect(typeID, fitEffectLoPower):
+	case snap.HasEffect(typeID, fit.EffectLoPower):
 		return fitFamilyLow
 	}
 	return fitFamilyCargo
@@ -374,9 +375,9 @@ const fitMetaGroupID = 1692
 // meta level is a property of the type itself, never modified by
 // skills or bonuses, so it comes from the raw snapshot, not the
 // effective attribute map. Returns "" when unknown.
-func fitVisualMetaOf(snap *fitSnapshot, eff map[int64]float64, typeID int64) string {
+func fitVisualMetaOf(snap *fit.Snapshot, eff map[int64]float64, typeID int64) string {
 	if snap != nil {
-		if a := snap.attrs[typeID]; a != nil {
+		if a := snap.Attrs[typeID]; a != nil {
 			if g, ok := a[fitMetaGroupID]; ok && g != 0 {
 				return fitVisualMetaName(int(g))
 			}
@@ -396,7 +397,7 @@ func fitVisualMetaOf(snap *fitSnapshot, eff map[int64]float64, typeID int64) str
 // the ship render. Positions are precomputed here so the template
 // stays declarative. snap may be nil (tests); then the tooltip
 // figures stay empty.
-func fitBuildVisual(res *fitResult, doc *fitDoc, snap *fitSnapshot, familyOf map[int64]string, nameOf func(int64) string, supportsSubsystems bool) *fitVisualView {
+func fitBuildVisual(res *fit.Result, doc *fitDoc, snap *fit.Snapshot, familyOf map[int64]string, nameOf func(int64) string, supportsSubsystems bool) *fitVisualView {
 	v := &fitVisualView{ShipID: doc.ShipTypeID, ShipName: nameOf(doc.ShipTypeID)}
 	maxOf := map[string]int{
 		fitFamilyHigh:   res.HighSlots,
@@ -425,7 +426,7 @@ func fitBuildVisual(res *fitResult, doc *fitDoc, snap *fitSnapshot, familyOf map
 				st = it.States[i]
 			}
 			if snap != nil {
-				st = fitNormalizeModuleState(snap, it.TypeID, st)
+				st = fit.NormalizeModuleState(snap, it.TypeID, st)
 			}
 			fitted[fam] = append(fitted[fam], fitPlacedModule{TypeID: it.TypeID, State: st, Ordinal: ordinals[it.TypeID]})
 			ordinals[it.TypeID]++
@@ -465,7 +466,7 @@ func fitBuildVisual(res *fitResult, doc *fitDoc, snap *fitSnapshot, familyOf map
 				s.State = pm.State
 				s.TipKey = fmt.Sprintf("%d:%d", pm.TypeID, pm.Ordinal)
 				if snap != nil {
-					if vs := fitModuleValidStates(snap, pm.TypeID); len(vs) > 0 {
+					if vs := fit.ModuleValidStates(snap, pm.TypeID); len(vs) > 0 {
 						s.ValidStates = vs
 						s.StatesCSV = strings.Join(vs, ",")
 					}
@@ -477,25 +478,25 @@ func fitBuildVisual(res *fitResult, doc *fitDoc, snap *fitSnapshot, familyOf map
 				// numbers (an overheated module shows heated).
 				eff := res.ItemAttrs[pm.TypeID]
 				if pm.State != "" {
-					if sa := res.StateAttrs[fitStateAttrKey(pm.TypeID, pm.State)]; sa != nil {
+					if sa := res.StateAttrs[fit.StateAttrKey(pm.TypeID, pm.State)]; sa != nil {
 						eff = sa
 					}
 				}
 				if eff == nil && snap != nil {
-					eff = snap.attrs[pm.TypeID]
+					eff = snap.Attrs[pm.TypeID]
 				}
 				if eff != nil {
-					if cpu := eff[fitAttrCPU]; cpu > 0 {
+					if cpu := eff[fit.AttrCPU]; cpu > 0 {
 						s.CPU = fitVisualNum(cpu) + " tf"
 					}
-					if pg := eff[fitAttrPower]; pg > 0 {
+					if pg := eff[fit.AttrPower]; pg > 0 {
 						s.PG = fitVisualNum(pg) + " MW"
 					}
 					s.Meta = fitVisualMetaOf(snap, eff, pm.TypeID)
 					// Headline effective stat (post-dogma): web
 					// strength and similar speedFactor bonuses
 					// show the skill-scaled value, not base.
-					if sf := eff[fitAttrSpeedFactor]; sf != 0 {
+					if sf := eff[fit.AttrSpeedFactor]; sf != 0 {
 						if sf < 0 {
 							s.Stat = "Strength " + fitVisualNum(-sf) + "%"
 						} else {
@@ -736,13 +737,13 @@ func fitDocTypeIDs(doc *fitDoc) []int64 {
 // skills load from their stored snapshot. The second return is a
 // note when the pilot's skill snapshot hasn't landed yet. The
 // caller owns pilot labeling and ownership checks.
-func (app *Application) fitPilotLevels(ctx context.Context, pilotID int64, snap *fitSnapshot, doc *fitDoc) (map[int64]int, string) {
+func (app *Application) fitPilotLevels(ctx context.Context, pilotID int64, snap *fit.Snapshot, doc *fitDoc) (map[int64]int, string) {
 	if pilotID == 0 {
 		itemIDs := make([]int64, 0, len(doc.Items))
 		for _, it := range doc.Items {
 			itemIDs = append(itemIDs, it.TypeID)
 		}
-		return fitAllVSkillLevels(snap, doc.ShipTypeID, itemIDs), ""
+		return fit.AllVSkillLevels(snap, doc.ShipTypeID, itemIDs), ""
 	}
 	var skills esi.Skills
 	if !app.loadCorpSnapshot(ctx, pilotID, esi.SnapSkills, &skills) {
@@ -811,8 +812,8 @@ func (app *Application) fitPilotImplants(ctx context.Context, pilotID, cloneID i
 // subsystems. The four subsystem slots are a class rule, not a
 // hull attribute, so the data-driven signal is the ship's SDE
 // group: Strategic Cruiser. No hull list.
-func (app *Application) shipSupportsSubsystems(ctx context.Context, snap *fitSnapshot, shipTypeID int64) bool {
-	gid, ok := snap.groups[shipTypeID]
+func (app *Application) shipSupportsSubsystems(ctx context.Context, snap *fit.Snapshot, shipTypeID int64) bool {
+	gid, ok := snap.Groups[shipTypeID]
 	if !ok || gid == 0 {
 		return false
 	}
@@ -836,13 +837,13 @@ func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotI
 	view.ImplantNote = implantNote
 	typeIDs := fitDocTypeIDs(doc)
 	typeIDs = append(typeIDs, implantIDs...)
-	snap, err := loadFitSnapshot(ctx, app.queries, typeIDs)
+	snap, err := fit.LoadSnapshot(ctx, app.queries, typeIDs)
 	if err != nil {
-		log.Printf("fittings sim: load snapshot for ship %d: %v", doc.ShipTypeID, err)
+		logging.Errorf("fittings sim: load snapshot for ship %d: %v", doc.ShipTypeID, err)
 		view.DataNote = "Something went wrong reading the ship data — check the server log."
 		return view
 	}
-	if len(snap.attrs[doc.ShipTypeID]) == 0 {
+	if len(snap.Attrs[doc.ShipTypeID]) == 0 {
 		view.DataNote = "The ship and module data is still downloading — give it a little while and try again."
 		return view
 	}
@@ -860,7 +861,7 @@ func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotI
 	// identical modules in different states simulate as separate
 	// engine inputs so each binds only its state's categories.
 	familyOf := make(map[int64]string, len(doc.Items))
-	engineItems := make([]fitItemInput, 0, len(doc.Items))
+	engineItems := make([]fit.ItemInput, 0, len(doc.Items))
 	for _, it := range doc.Items {
 		fam := fitSlotFamilyOf(snap, it.TypeID)
 		familyOf[it.TypeID] = fam
@@ -880,10 +881,10 @@ func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotI
 			byState[st]++
 		}
 		for _, st := range order {
-			engineItems = append(engineItems, fitItemInput{TypeID: it.TypeID, Quantity: byState[st], State: st})
+			engineItems = append(engineItems, fit.ItemInput{TypeID: it.TypeID, Quantity: byState[st], State: st})
 		}
 	}
-	res := computeFit(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, implantIDs)
+	res := fit.Compute(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, implantIDs)
 
 	// Names for everything the fragment prints.
 	names := app.esi.CachedTypeNames(ctx, typeIDs)
@@ -915,9 +916,9 @@ func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotI
 	return view
 }
 
-// fitRestrictionLabel renders a fitRestriction's requirement in
+// fitRestrictionLabel renders a fit.Restriction's requirement in
 // plain language: "Dreadnoughts", "the Rorqual", or "X or Y".
-func (app *Application) fitRestrictionLabel(ctx context.Context, r fitRestriction) string {
+func (app *Application) fitRestrictionLabel(ctx context.Context, r fit.Restriction) string {
 	var parts []string
 	if len(r.NeedGroup) > 0 {
 		gids := make([]int64, 0, len(r.NeedGroup))
@@ -943,7 +944,7 @@ func (app *Application) fitRestrictionLabel(ctx context.Context, r fitRestrictio
 
 // fitRestrictedJSON builds the client-side restriction map:
 // module type ID -> requirement label.
-func (app *Application) fitRestrictedJSON(ctx context.Context, rs []fitRestriction, nameOf func(int64) string) string {
+func (app *Application) fitRestrictedJSON(ctx context.Context, rs []fit.Restriction, nameOf func(int64) string) string {
 	if len(rs) == 0 {
 		return "{}"
 	}
@@ -957,17 +958,17 @@ func (app *Application) fitRestrictedJSON(ctx context.Context, rs []fitRestricti
 
 // engineItemsAll returns engine inputs plus charge types, for
 // requirement gathering (ammo skills count too).
-func engineItemsAll(engineItems []fitItemInput, doc *fitDoc) []fitItemInput {
-	out := append([]fitItemInput{}, engineItems...)
+func engineItemsAll(engineItems []fit.ItemInput, doc *fitDoc) []fit.ItemInput {
+	out := append([]fit.ItemInput{}, engineItems...)
 	for _, charge := range doc.Charges {
-		out = append(out, fitItemInput{TypeID: charge, Quantity: 1})
+		out = append(out, fit.ItemInput{TypeID: charge, Quantity: 1})
 	}
 	return out
 }
 
 // fitMissingList names the missing skills for a real pilot (the
 // All-V view never misses anything).
-func fitMissingList(ctx context.Context, app *Application, snap *fitSnapshot, doc *fitDoc, engineItems []fitItemInput, levels map[int64]int, pilotID int64) []fitMissingSkill {
+func fitMissingList(ctx context.Context, app *Application, snap *fit.Snapshot, doc *fitDoc, engineItems []fit.ItemInput, levels map[int64]int, pilotID int64) []fitMissingSkill {
 	if pilotID == 0 {
 		return nil
 	}
@@ -984,7 +985,7 @@ func fitMissingList(ctx context.Context, app *Application, snap *fitSnapshot, do
 			continue
 		}
 		seenType[typeID] = true
-		for _, req := range snap.requirements[typeID] {
+		for _, req := range snap.Requirements[typeID] {
 			if need[req.SkillTypeID] < req.Level {
 				need[req.SkillTypeID] = req.Level
 			}
@@ -1015,7 +1016,7 @@ func fitMissingList(ctx context.Context, app *Application, snap *fitSnapshot, do
 
 // fitBuildGroups shapes the slot grid from the engine result and
 // the document's own lines.
-func fitBuildGroups(res *fitResult, doc *fitDoc, snap *fitSnapshot, familyOf map[int64]string, nameOf func(int64) string, supportsSubsystems bool) []fitSlotGroup {
+func fitBuildGroups(res *fit.Result, doc *fitDoc, snap *fit.Snapshot, familyOf map[int64]string, nameOf func(int64) string, supportsSubsystems bool) []fitSlotGroup {
 	chips := map[string][]fitSlotChip{}
 	for _, it := range doc.Items {
 		fam := familyOf[it.TypeID]
@@ -1028,7 +1029,7 @@ func fitBuildGroups(res *fitResult, doc *fitDoc, snap *fitSnapshot, familyOf map
 				s = it.States[i]
 			}
 			if snap != nil {
-				s = fitNormalizeModuleState(snap, it.TypeID, s)
+				s = fit.NormalizeModuleState(snap, it.TypeID, s)
 			}
 			if i == 0 {
 				st = s
@@ -1088,7 +1089,7 @@ func fitBuildGroups(res *fitResult, doc *fitDoc, snap *fitSnapshot, familyOf map
 func (app *Application) fitChargeCandidates(ctx context.Context, weaponTypeID int64) []db.ListFitChargeTypesRow {
 	attrs, err := app.queries.ListSDETypeAttributes(ctx, weaponTypeID)
 	if err != nil {
-		log.Printf("fittings sim: weapon %d attributes: %v", weaponTypeID, err)
+		logging.Errorf("fittings sim: weapon %d attributes: %v", weaponTypeID, err)
 		return nil
 	}
 	var groups []int64
@@ -1112,14 +1113,14 @@ func (app *Application) fitChargeCandidates(ctx context.Context, weaponTypeID in
 		GroupIds: groups, ChargeSize: size,
 	})
 	if err != nil {
-		log.Printf("fittings sim: charge candidates for %d: %v", weaponTypeID, err)
+		logging.Errorf("fittings sim: charge candidates for %d: %v", weaponTypeID, err)
 		return nil
 	}
 	return rows
 }
 
 // fitBuildChargeSets builds the per-weapon ammunition pickers.
-func (app *Application) fitBuildChargeSets(ctx context.Context, doc *fitDoc, snap *fitSnapshot, nameOf func(int64) string) []fitChargeSet {
+func (app *Application) fitBuildChargeSets(ctx context.Context, doc *fitDoc, snap *fit.Snapshot, nameOf func(int64) string) []fitChargeSet {
 	var sets []fitChargeSet
 	seen := map[int64]bool{}
 	for _, it := range doc.Items {
@@ -1127,7 +1128,7 @@ func (app *Application) fitBuildChargeSets(ctx context.Context, doc *fitDoc, sna
 			continue
 		}
 		seen[it.TypeID] = true
-		if !snap.hasEffect(it.TypeID, fitEffectTurretFitted) && !snap.hasEffect(it.TypeID, fitEffectLauncherFitted) {
+		if !snap.HasEffect(it.TypeID, fit.EffectTurretFitted) && !snap.HasEffect(it.TypeID, fit.EffectLauncherFitted) {
 			continue
 		}
 		set := fitChargeSet{WeaponID: it.TypeID, WeaponName: nameOf(it.TypeID)}
@@ -1293,7 +1294,7 @@ func fitBar(label string, used, max float64) fitBarRow {
 }
 
 // fitBuildStats preformats the pyfa-vocabulary stat panel.
-func fitBuildStats(res *fitResult) *fitStatsView {
+func fitBuildStats(res *fit.Result) *fitStatsView {
 	st := &fitStatsView{}
 	st.Powergrid = fitBar("Powergrid", res.PowergridUsed, res.PowergridMax)
 	st.Powergrid.Used += " MW"
@@ -1350,8 +1351,8 @@ func fitBuildStats(res *fitResult) *fitStatsView {
 	// Hull resists ride the generic resonance attributes in the
 	// engine's ShipAttrs; the layer row uses EHP only for resists.
 	st.Tank = append(st.Tank, fitResistRow{Layer: "Hull", HP: fitFmt0(res.HullHP),
-		EM: fitResist(res.ShipAttrs[fitAttrResonanceEM]), Thermal: fitResist(res.ShipAttrs[fitAttrResonanceThermal]),
-		Kinetic: fitResist(res.ShipAttrs[fitAttrResonanceKinetic]), Explosive: fitResist(res.ShipAttrs[fitAttrResonanceExplosive]),
+		EM: fitResist(res.ShipAttrs[fit.AttrResonanceEM]), Thermal: fitResist(res.ShipAttrs[fit.AttrResonanceThermal]),
+		Kinetic: fitResist(res.ShipAttrs[fit.AttrResonanceKinetic]), Explosive: fitResist(res.ShipAttrs[fit.AttrResonanceExplosive]),
 		EHP: fitEHPText(res.HullEHP.Omni)})
 	st.EHPOmni = fitEHPText(res.EHP.Omni)
 
@@ -1394,25 +1395,25 @@ func fitBuildStats(res *fitResult) *fitStatsView {
 // resistOf reads a layer resonance back out of the computed
 // ship attributes (shield when shield=true, armor otherwise);
 // kind: 0 EM, 1 thermal, 2 kinetic, 3 explosive.
-func resistOf(res *fitResult, kind int, shield bool) float64 {
+func resistOf(res *fit.Result, kind int, shield bool) float64 {
 	attrs := res.ShipAttrs
 	switch {
 	case shield && kind == 0:
-		return attrs[fitAttrShieldEM]
+		return attrs[fit.AttrShieldEM]
 	case shield && kind == 1:
-		return attrs[fitAttrShieldThermal]
+		return attrs[fit.AttrShieldThermal]
 	case shield && kind == 2:
-		return attrs[fitAttrShieldKinetic]
+		return attrs[fit.AttrShieldKinetic]
 	case shield && kind == 3:
-		return attrs[fitAttrShieldExplosive]
+		return attrs[fit.AttrShieldExplosive]
 	case !shield && kind == 0:
-		return attrs[fitAttrArmorEM]
+		return attrs[fit.AttrArmorEM]
 	case !shield && kind == 1:
-		return attrs[fitAttrArmorThermal]
+		return attrs[fit.AttrArmorThermal]
 	case !shield && kind == 2:
-		return attrs[fitAttrArmorKinetic]
+		return attrs[fit.AttrArmorKinetic]
 	default:
-		return attrs[fitAttrArmorExplosive]
+		return attrs[fit.AttrArmorExplosive]
 	}
 }
 
@@ -1496,7 +1497,7 @@ func (app *Application) fitPilotLabel(ctx context.Context, userID, pilotID int64
 	}
 	chars, err := app.queries.ListCharactersByUser(ctx, userID)
 	if err != nil {
-		log.Printf("fittings sim: list characters for user %d: %v", userID, err)
+		logging.Errorf("fittings sim: list characters for user %d: %v", userID, err)
 		return "", false
 	}
 	for _, ch := range chars {
@@ -1540,7 +1541,7 @@ func (app *Application) handleFitPickerJSON(w http.ResponseWriter, r *http.Reque
 		for round := 0; round < 4 && len(pending) > 0; round++ {
 			batch, err := app.queries.ListSDERequirementsByTypes(ctx, pending)
 			if err != nil {
-				log.Printf("fittings picker: requirements: %v", err)
+				logging.Errorf("fittings picker: requirements: %v", err)
 				return rows
 			}
 			var next []int64
@@ -1588,11 +1589,11 @@ func (app *Application) handleFitPickerJSON(w http.ResponseWriter, r *http.Reque
 		kind   string
 		lim    int64
 	}{
-		{fitFamilyHigh, fitEffectHiPower, "high", 8},
-		{fitFamilyMedium, fitEffectMedPower, "medium", 8},
-		{fitFamilyLow, fitEffectLoPower, "low", 8},
-		{fitFamilyRig, fitEffectRigSlot, "rig", 6},
-		{fitFamilySubsystem, fitEffectSubsystemSlot, "subsystem", 6},
+		{fitFamilyHigh, fit.EffectHiPower, "high", 8},
+		{fitFamilyMedium, fit.EffectMedPower, "medium", 8},
+		{fitFamilyLow, fit.EffectLoPower, "low", 8},
+		{fitFamilyRig, fit.EffectRigSlot, "rig", 6},
+		{fitFamilySubsystem, fit.EffectSubsystemSlot, "subsystem", 6},
 	}
 	querySlotFamily := func(family, kind string, lim int64) []suggestItem {
 		effectID := fitSlotEffectByFamily[family]
@@ -1600,7 +1601,7 @@ func (app *Application) handleFitPickerJSON(w http.ResponseWriter, r *http.Reque
 			EffectID: effectID, Q: query, Lim: lim, Meta: meta,
 		})
 		if err != nil {
-			log.Printf("fittings picker: family %s: %v", family, err)
+			logging.Errorf("fittings picker: family %s: %v", family, err)
 			return nil
 		}
 		out := make([]suggestItem, 0, len(rows))
@@ -1621,7 +1622,7 @@ func (app *Application) handleFitPickerJSON(w http.ResponseWriter, r *http.Reque
 				out = append(out, suggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "ship"})
 			}
 		} else {
-			log.Printf("fittings picker: ships: %v", err)
+			logging.Errorf("fittings picker: ships: %v", err)
 		}
 		for _, sk := range slotKinds {
 			out = append(out, querySlotFamily(sk.family, sk.kind, sk.lim)...)
@@ -1631,12 +1632,12 @@ func (app *Application) handleFitPickerJSON(w http.ResponseWriter, r *http.Reque
 				out = append(out, suggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "drone"})
 			}
 		} else {
-			log.Printf("fittings picker: drones: %v", err)
+			logging.Errorf("fittings picker: drones: %v", err)
 		}
 	case family == "ship":
 		rows, err := app.queries.SuggestSDEShips(ctx, db.SuggestSDEShipsParams{Q: query, Lim: 12})
 		if err != nil {
-			log.Printf("fittings picker: ships: %v", err)
+			logging.Errorf("fittings picker: ships: %v", err)
 			break
 		}
 		for _, row := range rows {
@@ -1645,7 +1646,7 @@ func (app *Application) handleFitPickerJSON(w http.ResponseWriter, r *http.Reque
 	case family == fitFamilyDrone:
 		rows, err := app.queries.ListFitDroneTypes(ctx, db.ListFitDroneTypesParams{Q: query, Lim: 25, Meta: meta})
 		if err != nil {
-			log.Printf("fittings picker: drones: %v", err)
+			logging.Errorf("fittings picker: drones: %v", err)
 			break
 		}
 		for _, row := range rows {
@@ -1740,7 +1741,7 @@ func (app *Application) handleFitSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "That fitting couldn't be saved.", http.StatusBadRequest)
 		return
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 
 	id := req.ID
 	isDraft := false
@@ -1762,7 +1763,7 @@ func (app *Application) handleFitSave(w http.ResponseWriter, r *http.Request) {
 			Name: name, ShipTypeID: req.Fit.ShipTypeID, ItemsJson: string(raw),
 			IsPublic: isPublic, IsDraft: isDraft, UpdatedAt: now, ID: id, UserID: userID,
 		}); err != nil {
-			log.Printf("fittings save: update %d: %v", id, err)
+			logging.Errorf("fittings save: update %d: %v", id, err)
 			http.Error(w, "That fitting couldn't be saved.", http.StatusInternalServerError)
 			return
 		}
@@ -1774,7 +1775,7 @@ func (app *Application) handleFitSave(w http.ResponseWriter, r *http.Request) {
 			Name: name, ShipTypeID: req.Fit.ShipTypeID, ItemsJson: string(raw),
 			IsPublic: false, IsDraft: true, UpdatedAt: now, ID: id, UserID: userID,
 		}); err != nil {
-			log.Printf("fittings save: update draft %d: %v", id, err)
+			logging.Errorf("fittings save: update draft %d: %v", id, err)
 			http.Error(w, "That fitting couldn't be saved.", http.StatusInternalServerError)
 			return
 		}
@@ -1790,13 +1791,13 @@ func (app *Application) handleFitSave(w http.ResponseWriter, r *http.Request) {
 			CreatedAt: now, UpdatedAt: now,
 		})
 		if err != nil {
-			log.Printf("fittings save: create: %v", err)
+			logging.Errorf("fittings save: create: %v", err)
 			http.Error(w, "That fitting couldn't be saved.", http.StatusInternalServerError)
 			return
 		}
 		id = row.ID
 	}
-	writeFitJSON(w, map[string]any{"id": id, "savedAt": now, "isDraft": isDraft})
+	writeFitJSON(w, map[string]any{"id": id, "savedAt": rfc3339(now), "isDraft": isDraft})
 }
 
 // writeFitJSON answers a fitting-editor JSON endpoint.
@@ -1956,9 +1957,9 @@ func (app *Application) handleFitSaveToEVE(w http.ResponseWriter, r *http.Reques
 		name = "Unnamed fit"
 	}
 
-	snap, err := loadFitSnapshot(ctx, app.queries, fitDocTypeIDs(&req.fitDoc))
+	snap, err := fit.LoadSnapshot(ctx, app.queries, fitDocTypeIDs(&req.fitDoc))
 	if err != nil {
-		log.Printf("fittings save-to-eve: snapshot: %v", err)
+		logging.Errorf("fittings save-to-eve: snapshot: %v", err)
 		fail("Could not read the module data; try again.", false)
 		return
 	}
@@ -1979,7 +1980,7 @@ func (app *Application) handleFitSaveToEVE(w http.ResponseWriter, r *http.Reques
 	}
 	token, err := app.validAccessToken(ctx, ch)
 	if err != nil {
-		log.Printf("fittings save-to-eve: token for character %d: %v", req.CharacterID, err)
+		logging.Errorf("fittings save-to-eve: token for character %d: %v", req.CharacterID, err)
 		fail("Could not reach EVE for "+charName+". Sign in again if it keeps failing.", true)
 		return
 	}
@@ -1993,15 +1994,15 @@ func (app *Application) handleFitSaveToEVE(w http.ResponseWriter, r *http.Reques
 			fail(charName+" was linked before EveSynapse asked for fitting write access — sign in again to grant it, then save once more.", true)
 			return
 		}
-		log.Printf("fittings save-to-eve: ESI POST %s: %v", path, err)
+		logging.Errorf("fittings save-to-eve: ESI POST %s: %v", path, err)
 		fail("EVE refused the fitting ("+esiSaveToEVEHint(err)+").", false)
 		return
 	}
 
 	// Refresh the cached fittings so the new fit shows up in the
 	// list without waiting for the next worker cycle.
-	if _, ferr := app.esi.FetchAndStoreSnapshot(ctx, ch, esi.SnapFittings); ferr != nil {
-		log.Printf("fittings save-to-eve: refetch fittings for character %d: %v", req.CharacterID, ferr)
+	if ferr := app.esi.FetchAndStoreSnapshot(ctx, ch, esi.SnapFittings); ferr != nil {
+		logging.Errorf("fittings save-to-eve: refetch fittings for character %d: %v", req.CharacterID, ferr)
 	}
 	writeFitJSON(w, map[string]any{
 		"ok": true, "fittingId": created.FittingID, "name": name, "characterId": req.CharacterID,
@@ -2019,7 +2020,7 @@ func (app *Application) handleFitDelete(w http.ResponseWriter, r *http.Request) 
 	if err := r.ParseForm(); err == nil {
 		if id, perr := strconv.ParseInt(r.FormValue("id"), 10, 64); perr == nil && id > 0 {
 			if err := app.queries.DeleteLocalFitting(ctx, db.DeleteLocalFittingParams{ID: id, UserID: userID}); err != nil {
-				log.Printf("fittings delete: %d: %v", id, err)
+				logging.Errorf("fittings delete: %d: %v", id, err)
 			}
 		}
 	}
@@ -2056,7 +2057,7 @@ func (app *Application) handleFitMineJSON(w http.ResponseWriter, r *http.Request
 	}
 	rows, err := app.queries.SearchLocalFittings(ctx, db.SearchLocalFittingsParams{UserID: userID, Q: q})
 	if err != nil {
-		log.Printf("fittings mine search: %v", err)
+		logging.Errorf("fittings mine search: %v", err)
 		http.Error(w, "That search couldn't run.", http.StatusInternalServerError)
 		return
 	}
@@ -2090,7 +2091,7 @@ func (app *Application) handleFitMineJSON(w http.ResponseWriter, r *http.Request
 	if r.URL.Query().Get("community") == "1" {
 		pub, err := app.queries.SearchPublicFittings(ctx, db.SearchPublicFittingsParams{UserID: userID, Q: q})
 		if err != nil {
-			log.Printf("fittings community search: %v", err)
+			logging.Errorf("fittings community search: %v", err)
 		} else {
 			for _, row := range pub {
 				author := ""
@@ -2163,14 +2164,14 @@ func (app *Application) handleFitFork(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "That fit couldn't be copied.", http.StatusInternalServerError)
 		return
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 	row, err := app.queries.CreateLocalFitting(ctx, db.CreateLocalFittingParams{
 		UserID: userID, Name: doc.Name, ShipTypeID: doc.ShipTypeID,
 		ItemsJson: string(raw), IsPublic: false, IsDraft: true,
 		CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
-		log.Printf("fittings fork %d: %v", req.ID, err)
+		logging.Errorf("fittings fork %d: %v", req.ID, err)
 		http.Error(w, "That fit couldn't be copied.", http.StatusInternalServerError)
 		return
 	}
@@ -2304,7 +2305,7 @@ func (app *Application) attachFitEditor(ctx context.Context, r *http.Request, da
 func (app *Application) listLocalFitEntries(ctx context.Context, userID int64) []localFitEntry {
 	rows, err := app.queries.ListLocalFittings(ctx, userID)
 	if err != nil {
-		log.Printf("fittings: list local fits: %v", err)
+		logging.Errorf("fittings: list local fits: %v", err)
 		return nil
 	}
 	shipIDs := make([]int64, 0, len(rows))
@@ -2326,7 +2327,7 @@ func (app *Application) listLocalFitEntries(ctx context.Context, userID int64) [
 			ShipName:    shipName,
 			Description: stored.Description,
 			Tags:        stored.Tags,
-			Updated:     row.UpdatedAt,
+			Updated:     rfc3339(row.UpdatedAt),
 			IsPublic:    row.IsPublic,
 			IsDraft:     row.IsDraft,
 		})
@@ -2354,7 +2355,7 @@ func (app *Application) fitDocFromESI(ctx context.Context, f esi.Fitting) *fitDo
 		return doc
 	}
 
-	snap, err := loadFitSnapshot(ctx, app.queries, fitDocTypeIDs(doc))
+	snap, err := fit.LoadSnapshot(ctx, app.queries, fitDocTypeIDs(doc))
 	if err != nil {
 		return doc
 	}
@@ -2364,7 +2365,7 @@ func (app *Application) fitDocFromESI(ctx context.Context, f esi.Fitting) *fitDo
 		if seenWeapon[it.TypeID] {
 			continue
 		}
-		if snap.hasEffect(it.TypeID, fitEffectTurretFitted) || snap.hasEffect(it.TypeID, fitEffectLauncherFitted) {
+		if snap.HasEffect(it.TypeID, fit.EffectTurretFitted) || snap.HasEffect(it.TypeID, fit.EffectLauncherFitted) {
 			seenWeapon[it.TypeID] = true
 			weapons = append(weapons, it.TypeID)
 		}
@@ -2503,7 +2504,7 @@ func (app *Application) formatEFT(ctx context.Context, doc *fitDoc) string {
 	// Classification needs the dogma snapshot; without it, keep
 	// the document order in one block rather than failing.
 	familyOf := map[int64]string{}
-	if snap, err := loadFitSnapshot(ctx, app.queries, fitDocTypeIDs(doc)); err == nil {
+	if snap, err := fit.LoadSnapshot(ctx, app.queries, fitDocTypeIDs(doc)); err == nil {
 		for _, it := range doc.Items {
 			familyOf[it.TypeID] = fitSlotFamilyOf(snap, it.TypeID)
 		}

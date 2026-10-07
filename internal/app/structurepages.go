@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -105,7 +105,7 @@ func (app *Application) loadStructureView(ctx context.Context, id int64) *struct
 		view.OwnerCorpID = sc.OwnerCorporationID
 		view.SystemID = sc.SystemID
 	} else if !errors.Is(err, sql.ErrNoRows) {
-		log.Printf("structure page: read context for %d: %v", id, err)
+		logging.Errorf("structure page: read context for %d: %v", id, err)
 	}
 	if view.TypeID > 0 {
 		view.TypeName = app.typeNameOrID(ctx, view.TypeID)

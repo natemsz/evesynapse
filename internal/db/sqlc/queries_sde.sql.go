@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/lib/pq"
 )
@@ -1853,7 +1854,7 @@ func (q *Queries) ListSDETypesInMarketGroupPaged(ctx context.Context, arg ListSD
 const listTypeDetailWants = `-- name: ListTypeDetailWants :many
 SELECT type_id
 FROM type_details
-WHERE fetched_at = ''
+WHERE fetched_at IS NULL
 ORDER BY type_id
 LIMIT $1::bigint
 `
@@ -2269,9 +2270,9 @@ ON CONFLICT (type_id) DO UPDATE SET
 `
 
 type SetTypeDetailParams struct {
-	TypeID      int64  `json:"type_id"`
-	Description string `json:"description"`
-	FetchedAt   string `json:"fetched_at"`
+	TypeID      int64        `json:"type_id"`
+	Description string       `json:"description"`
+	FetchedAt   sql.NullTime `json:"fetched_at"`
 }
 
 func (q *Queries) SetTypeDetail(ctx context.Context, arg SetTypeDetailParams) error {

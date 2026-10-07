@@ -1,6 +1,6 @@
 -- name: CreateUser :one
 INSERT INTO users (created_at)
-VALUES (to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS'))
+VALUES (now())
 RETURNING *;
 -- name: GetUser :one
 SELECT * FROM users
@@ -15,7 +15,7 @@ INSERT INTO characters (
     $1, $2, $3,
     $4, $5, $6,
     $7, $8, $9, $10, $11,
-    to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+    now()
 )
 ON CONFLICT (character_id) DO UPDATE SET
     user_id       = excluded.user_id,
@@ -42,11 +42,11 @@ DELETE FROM characters
 WHERE character_id = $1 AND user_id = $2;
 -- name: SetCharacterTags :exec
 UPDATE characters
-SET tags = $1, updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+SET tags = $1, updated_at = now()
 WHERE character_id = $2 AND user_id = $3;
 -- name: SetCharacterLinkState :exec
 UPDATE characters
-SET link_state = $1, link_state_at = $2, updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+SET link_state = $1, link_state_at = $2, updated_at = now()
 WHERE character_id = $3;
 -- name: ListUsers :many
 SELECT * FROM users
@@ -56,20 +56,40 @@ SELECT * FROM characters
 ORDER BY user_id, name;
 -- name: UpdateCharacterTokens :exec
 UPDATE characters
-SET access_token = $1, refresh_token = $2, token_expiry = $3, updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+SET access_token = $1, refresh_token = $2, token_expiry = $3, updated_at = now()
 WHERE character_id = $4;
 -- name: GetSnapshot :one
 SELECT * FROM character_snapshots
 WHERE character_id = $1 AND kind = $2;
 -- name: UpsertSnapshot :exec
-INSERT INTO character_snapshots (character_id, kind, payload, fetched_at, cached_until)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO character_snapshots (character_id, kind, payload, fetched_at, cached_until, etag)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (character_id, kind) DO UPDATE SET
     payload      = excluded.payload,
     fetched_at   = excluded.fetched_at,
-    cached_until = excluded.cached_until;
+    cached_until = excluded.cached_until,
+    etag         = excluded.etag;
+-- name: GetSnapshotETag :one
+-- The ETag a snapshot was stored with ('' when it has none), read
+-- without its payload: all a conditional refresh needs to send.
+SELECT etag FROM character_snapshots
+WHERE character_id = $1 AND kind = $2;
+-- name: TouchSnapshot :execrows
+-- ESI answered "not modified": the stored payload is still current,
+-- so only the bookkeeping beside it moves.
+UPDATE character_snapshots
+SET fetched_at = $1, cached_until = $2
+WHERE character_id = $3 AND kind = $4;
 -- name: ListSnapshotsByCharacter :many
 SELECT * FROM character_snapshots
+WHERE character_id = $1
+ORDER BY kind;
+-- name: ListSnapshotMetaByCharacter :many
+-- A character's stored snapshots without their payloads: which kinds
+-- exist and how fresh each is. The payloads (a whole asset list, a
+-- mailbox) are by far the bulk of the table, and the readers that
+-- only order, count or check freshness have no use for them.
+SELECT kind, fetched_at, cached_until FROM character_snapshots
 WHERE character_id = $1
 ORDER BY kind;
 -- name: ListSnapshotsByKind :many
@@ -179,12 +199,18 @@ ORDER BY cc.corporation_id;
 SELECT * FROM global_snapshots
 WHERE kind = $1;
 -- name: UpsertGlobalSnapshot :exec
-INSERT INTO global_snapshots (kind, payload, fetched_at, cached_until)
-VALUES ($1, $2, $3, $4)
+INSERT INTO global_snapshots (kind, payload, fetched_at, cached_until, etag)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (kind) DO UPDATE SET
     payload      = excluded.payload,
     fetched_at   = excluded.fetched_at,
-    cached_until = excluded.cached_until;
+    cached_until = excluded.cached_until,
+    etag         = excluded.etag;
+-- name: TouchGlobalSnapshot :execrows
+-- ESI answered "not modified": only the bookkeeping moves.
+UPDATE global_snapshots
+SET fetched_at = $1, cached_until = $2
+WHERE kind = $3;
 -- name: ListGlobalSnapshots :many
 SELECT * FROM global_snapshots
 ORDER BY kind;

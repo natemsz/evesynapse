@@ -226,5 +226,7 @@ func linkFuncMap() template.FuncMap {
 		"structureLink": structureLink,
 		"placeLink":     placeLink,
 		"skillLevel":    skillLevel,
+		// Not a link: how a stored time is written out (timestamps.go).
+		"rfc3339": rfc3339,
 	}
 }

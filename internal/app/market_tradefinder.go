@@ -36,7 +36,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -45,6 +44,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // tradefinderRowCap caps how many routes one render lists. The
@@ -214,25 +214,21 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 
 	originStats, err := app.queries.GetMarketRegionStatsStamp(ctx, originID)
 	if err != nil {
-		log.Printf("tradefinder: region stats stamp for origin %d: %v", originID, err)
+		logging.Errorf("tradefinder: region stats stamp for origin %d: %v", originID, err)
 		return view
 	}
 	destStats, err := app.queries.GetMarketRegionStatsStamp(ctx, destID)
 	if err != nil {
-		log.Printf("tradefinder: region stats stamp for destination %d: %v", destID, err)
+		logging.Errorf("tradefinder: region stats stamp for destination %d: %v", destID, err)
 		return view
 	}
 	view.OriginHasData = originStats.RowCount > 0
 	view.DestHasData = destStats.RowCount > 0
-	if s, ok := originStats.Stamp.(string); ok {
-		if at, perr := time.Parse(time.RFC3339, s); perr == nil {
-			view.OriginAsOf = "figures last gathered " + at.Format("Jan 2, 3:04 PM")
-		}
+	if at, ok := originStats.Stamp.(time.Time); ok {
+		view.OriginAsOf = "figures last gathered " + at.UTC().Format("Jan 2, 3:04 PM")
 	}
-	if s, ok := destStats.Stamp.(string); ok {
-		if at, perr := time.Parse(time.RFC3339, s); perr == nil {
-			view.DestAsOf = "figures last gathered " + at.Format("Jan 2, 3:04 PM")
-		}
+	if at, ok := destStats.Stamp.(time.Time); ok {
+		view.DestAsOf = "figures last gathered " + at.UTC().Format("Jan 2, 3:04 PM")
 	}
 	if !view.HasData() || view.SameRegion {
 		return view // still-gathering state, or the same-region empty case
@@ -266,11 +262,11 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 		IncludeLowball: lowballParam,
 		MinMargin:      minMargin,
 		MinVolume:      minVolume,
-		Cutoff:         time.Now().UTC().Add(-tradefinderMaxStatAge).Format(time.RFC3339),
+		Cutoff:         time.Now().UTC().Add(-tradefinderMaxStatAge),
 		RowCap:         int64(tradefinderRowCap),
 	})
 	if err != nil {
-		log.Printf("tradefinder: list routes %d -> %d: %v", originID, destID, err)
+		logging.Errorf("tradefinder: list routes %d -> %d: %v", originID, destID, err)
 		return view
 	}
 
@@ -285,14 +281,14 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 			typeIDs = append(typeIDs, r.TypeID)
 		}
 		if hints, herr := app.queries.ListCheapestSellStations(ctx, db.ListCheapestSellStationsParams{RegionID: originID, TypeIds: typeIDs}); herr != nil {
-			log.Printf("tradefinder: cheapest-sell hints for region %d: %v", originID, herr)
+			logging.Errorf("tradefinder: cheapest-sell hints for region %d: %v", originID, herr)
 		} else {
 			for _, h := range hints {
 				originCheapest[h.TypeID] = h
 			}
 		}
 		if hints, herr := app.queries.ListBestBuyStations(ctx, db.ListBestBuyStationsParams{RegionID: destID, TypeIds: typeIDs}); herr != nil {
-			log.Printf("tradefinder: best-buy hints for region %d: %v", destID, herr)
+			logging.Errorf("tradefinder: best-buy hints for region %d: %v", destID, herr)
 		} else {
 			for _, h := range hints {
 				destBestBuy[h.TypeID] = h

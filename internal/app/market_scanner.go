@@ -14,7 +14,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -23,6 +22,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
 )
 
 // scannerRowCap caps how many opportunities one render lists.
@@ -154,18 +154,16 @@ func (app *Application) buildScannerView(ctx context.Context, q map[string][]str
 	// all means the sweep hasn't covered this region yet.
 	stampRow, err := app.queries.GetMarketStationStatsStamp(ctx, regionID)
 	if err != nil {
-		log.Printf("scanner: station stats stamp for region %d: %v", regionID, err)
+		logging.Errorf("scanner: station stats stamp for region %d: %v", regionID, err)
 		return view
 	}
 	if stampRow.RowCount == 0 {
 		return view // no sweep yet: still-gathering state
 	}
 	view.HasData = true
-	if latest, ok := stampRow.Stamp.(string); ok && latest != "" {
+	if latest, ok := stampRow.Stamp.(time.Time); ok {
 		view.Age = statsAgeText(latest)
-		if at, perr := time.Parse(time.RFC3339, latest); perr == nil {
-			view.AsOf = "Prices as of " + at.Format("Jan 2, 3:04 PM")
-		}
+		view.AsOf = "Prices as of " + latest.UTC().Format("Jan 2, 3:04 PM")
 	}
 
 	typeNames := make(map[int64]string)
@@ -192,7 +190,7 @@ func (app *Application) buildScannerView(ctx context.Context, q map[string][]str
 		RowCap:    int64(scannerRowCap),
 	})
 	if err != nil {
-		log.Printf("scanner: list opportunities for region %d: %v", regionID, err)
+		logging.Errorf("scanner: list opportunities for region %d: %v", regionID, err)
 		return view
 	}
 	stationMemo := make(map[int64]placeRef)

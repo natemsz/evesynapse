@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # EveSynapse installer / first-time setup.
 #
-# Downloads the latest release build for this machine (verified
-# against the checksum published with it), installs it into
+# Downloads the latest release build for this machine (a signed
+# release, and the build verified against the checksum its signed
+# manifest names), installs it into
 # /opt/evesynapse, installs the systemd service, provisions the
 # local PostgreSQL the app runs on (role + database + a
 # generated password written into .env), and links `evesynapse`
@@ -16,6 +17,10 @@
 #   sudo bash deploy/setup.sh
 #   sudo EVESYNAPSE_UPDATE_REPO=you/evesynapse bash deploy/setup.sh   # install from your fork
 #   sudo EVESYNAPSE_BINARY=./bin/evesynapse bash deploy/setup.sh      # install a build you made
+#
+# A release is checked against the release key in the checkout this
+# script is run from (internal/releasesig/trusted_keys.pem), so to
+# install from a fork, run the fork's copy of this script.
 set -euo pipefail
 
 REPO="${EVESYNAPSE_UPDATE_REPO:-natemsz/evesynapse}"
@@ -42,7 +47,65 @@ REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-# --- 1. Get the binary, verified against its published checksum ---
+# --- Release signatures ---
+# A release's manifest (its version and the checksum of the build) is
+# signed with the project's release key, and `evesynapse -update`
+# installs nothing that is not. A first install is held to the same
+# rule here wherever this machine can check: that takes an OpenSSL
+# that verifies Ed25519 signatures (3.0 or newer). On a machine
+# without one the script says so and goes by the checksum alone.
+# Whether the check is made depends only on this machine, never on
+# what the release serves, so a tampered release cannot switch it off.
+
+# can_check_signatures: does this machine's openssl verify a known
+# good Ed25519 signature? (The one in RFC 8032, section 7.1, test 2:
+# that key's signature over the single byte "r".)
+can_check_signatures() {
+  command -v openssl >/dev/null && command -v base64 >/dev/null || return 1
+  local d="$TMP/sigprobe"
+  mkdir -p "$d"
+  printf '%s\n' '-----BEGIN PUBLIC KEY-----' \
+    'MCowBQYDK2VwAyEAPUAXw+hDiVqStwqnTRt+vJyYLM8uxJaMwM1V8Sr0Zgw=' \
+    '-----END PUBLIC KEY-----' > "$d/key.pem"
+  printf 'r' > "$d/msg"
+  printf '%s' 'kqAJqfDUyrhyDoILX2QlQKKye1QWUD+Ps3YiI+vbadoIWsHkPhWZbkWPNhPQ8R2MOHsurrQwKu6wDSkWErsMAA==' \
+    | base64 -d > "$d/sig" 2>/dev/null || return 1
+  openssl pkeyutl -verify -pubin -inkey "$d/key.pem" -rawin -in "$d/msg" -sigfile "$d/sig" >/dev/null 2>&1
+}
+
+# verify_release_signature MANIFEST SIGFILE KEYSFILE: succeeds when a
+# line of SIGFILE is a valid signature over MANIFEST's exact bytes by
+# one of the public keys in KEYSFILE. Either file may hold more than
+# one (while a key is being replaced); one good pair is enough.
+verify_release_signature() {
+  local manifest="$1" sigfile="$2" keys="$3" d line key n=0
+  d="$(mktemp -d "$TMP/sigcheck.XXXXXX")" || return 1
+  # One file per public key: the lines of each PEM block, and nothing
+  # of the commentary around them.
+  awk -v d="$d" '
+    { sub(/\r$/, "") }
+    /^-----BEGIN PUBLIC KEY-----$/ { n++; inside = 1 }
+    inside { print > (d "/key-" n ".pem") }
+    /^-----END PUBLIC KEY-----$/ { inside = 0 }
+  ' "$keys"
+  ls "$d"/key-*.pem >/dev/null 2>&1 || return 1
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="$(printf '%s' "$line" | tr -d '[:space:]')"
+    [ -n "$line" ] || continue
+    n=$((n + 1))
+    printf '%s' "$line" | base64 -d > "$d/sig-$n" 2>/dev/null || continue
+    for key in "$d"/key-*.pem; do
+      # (</dev/null: nothing in this loop may read the signature file
+      # the loop itself is reading.)
+      if openssl pkeyutl -verify -pubin -inkey "$key" -rawin -in "$manifest" -sigfile "$d/sig-$n" </dev/null >/dev/null 2>&1; then
+        return 0
+      fi
+    done
+  done < "$sigfile"
+  return 1
+}
+
+# --- 1. Get the binary: a signed release, verified against its checksum ---
 if [ -n "${EVESYNAPSE_BINARY:-}" ]; then
   [ -f "$EVESYNAPSE_BINARY" ] || die "EVESYNAPSE_BINARY=$EVESYNAPSE_BINARY does not exist"
   cp "$EVESYNAPSE_BINARY" "$TMP/evesynapse"
@@ -51,6 +114,27 @@ else
   BASE="https://github.com/$REPO/releases/latest/download"
   echo "Downloading the latest $ARCH build from $REPO..."
   curl -fsSL "$BASE/latest-$ARCH.json" -o "$TMP/manifest.json" || die "could not reach the latest release of $REPO"
+  # The signature is checked before anything in the manifest is read
+  # and before the build is downloaded.
+  if can_check_signatures; then
+    KEYS="$REPO_ROOT/internal/releasesig/trusted_keys.pem"
+    if [ ! -f "$KEYS" ]; then
+      # Run on its own, outside a checkout: take the key from the repo.
+      KEYS="$TMP/trusted_keys.pem"
+      curl -fsSL "https://raw.githubusercontent.com/$REPO/main/internal/releasesig/trusted_keys.pem" -o "$KEYS" \
+        || die "could not fetch the release key of $REPO, so its release cannot be checked; not installing"
+    fi
+    grep -q '^-----BEGIN PUBLIC KEY-----' "$KEYS" \
+      || die "$KEYS holds no release key, so the release cannot be checked; not installing"
+    curl -fsSL "$BASE/latest-$ARCH.json.sig" -o "$TMP/manifest.json.sig" \
+      || die "the latest release of $REPO is not signed (or its signature could not be fetched); not installing"
+    verify_release_signature "$TMP/manifest.json" "$TMP/manifest.json.sig" "$KEYS" \
+      || die "the latest release of $REPO is not signed with the release key in $KEYS; not installing. (To install from a fork, run the fork's own copy of this script.)"
+    echo "The release's signature checks out."
+  else
+    echo "NOTE: this machine's OpenSSL cannot check Ed25519 signatures (that takes OpenSSL 3.0 or newer),"
+    echo "      so the release's signature is NOT checked here, only the build's checksum."
+  fi
   VERSION="$(sed -n 's/.*"version":"\([^"]*\)".*/\1/p' "$TMP/manifest.json")"
   SHA="$(sed -n 's/.*"sha256":"\([0-9a-f]*\)".*/\1/p' "$TMP/manifest.json")"
   [ -n "$SHA" ] || die "the latest release of $REPO has no readable checksum; not installing"

@@ -2734,7 +2734,7 @@ html[data-theme="light"] tbody tr.yours td { background-color: #f3e3bd; }
   max-width: 24rem;
   margin: 0.5rem 0;
 }
-.charselector-input {
+input.charselector-input {
   width: 100%;
   background: var(--input-bg);
   border: 1px solid #2a2a2a;
@@ -2748,7 +2748,7 @@ html[data-theme="light"] tbody tr.yours td { background-color: #f3e3bd; }
   background-position: 0.55rem center;
   background-size: 1rem 1rem;
 }
-.charselector-input:focus {
+input.charselector-input:focus {
   border-color: var(--accent);
   outline: none;
   box-shadow: 0 0 8px rgba(255, 106, 26, 0.35);
@@ -2789,7 +2789,7 @@ html[data-theme="light"] tbody tr.yours td { background-color: #f3e3bd; }
   color: var(--muted);
   margin-left: 0.4rem;
 }
-html[data-theme="light"] .charselector-input,
+html[data-theme="light"] input.charselector-input,
 html[data-theme="light"] .charselector-dropdown {
   border-color: #d8cdb8;
 }

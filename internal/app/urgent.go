@@ -45,7 +45,7 @@ func (app *Application) runUrgentDrain(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			app.urgentDrain(ctx)
+			runGuarded("urgent drain", func() { app.urgentDrain(ctx) })
 		}
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -128,6 +129,21 @@ func (app *Application) sdeOpEnd() {
 	})
 }
 
+// recoverSDEPanic is the deferred guard on the background SDE
+// operations (see the panic-containment note in worker.go): a
+// panic there is logged with its stack and recorded as the
+// operation's failure, so the Sync page shows it and the process
+// keeps serving. The import replaces its tables in one
+// transaction, so a run that died leaves the previous data intact.
+func (app *Application) recoverSDEPanic(op string) {
+	if r := recover(); r != nil {
+		log.Printf("sde: PANIC in %s (recovered): %v\n%s", op, r, debug.Stack())
+		app.updateSDEStatus(func(s *sdeStatus) {
+			s.LastError = "internal error during " + op + " — see the server log"
+		})
+	}
+}
+
 // startSDEImport launches a full import in the background (false
 // when one is already running). Used for the first-boot import,
 // when the sde_* tables are still empty.
@@ -137,6 +153,7 @@ func (app *Application) startSDEImport(reason string) bool {
 	}
 	go func() {
 		defer app.sdeOpEnd()
+		defer app.recoverSDEPanic("import")
 		log.Printf("sde: import starting (%s) from %s", reason, app.cfg.SDEBaseURL())
 		if err := app.importSDE(app.workerCtx); err != nil {
 			log.Printf("sde: import failed: %v", err)
@@ -158,6 +175,7 @@ func (app *Application) startSDECheck(reason string) bool {
 	}
 	go func() {
 		defer app.sdeOpEnd()
+		defer app.recoverSDEPanic("update check")
 		ctx := app.workerCtx
 
 		changed, err := app.sdeRemoteChanged(ctx)

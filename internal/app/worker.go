@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -16,6 +17,50 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 )
+
+// ---------------------------------------------------------------------------
+// Panic containment. The HTTP recoverer only covers request
+// handlers; a panic on any worker goroutine — a payload shape ESI
+// never sent before, a nil the code didn't expect — would end the
+// whole process and take the site down with it. Every worker
+// goroutine and pass therefore runs under one of the guards
+// below: the panic is logged with its stack and the work is
+// simply retried on its next tick. Worker code releases its locks
+// and transactions with defer, so a recovered pass leaves nothing
+// held.
+// ---------------------------------------------------------------------------
+
+// recoverWorkerPanic is the deferred guard itself; what names the
+// work for the log line. It must be deferred directly (recover
+// only sees a panic from the deferred function's own frame).
+func recoverWorkerPanic(what string) {
+	if r := recover(); r != nil {
+		log.Printf("worker: PANIC in %s (recovered; it retries on its next tick): %v\n%s", what, r, debug.Stack())
+	}
+}
+
+// runGuarded runs one worker pass under recoverWorkerPanic.
+func runGuarded(what string, pass func()) {
+	defer recoverWorkerPanic(what)
+	pass()
+}
+
+// guardedCycle runs one minute-cycle pass under the guard and,
+// when the pass panicked, clears the "warming" flag it left set so
+// the Sync and Admin pages say what happened instead of showing a
+// cycle that never ends.
+func (app *Application) guardedCycle(ctx context.Context, cycle func(context.Context)) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("worker: PANIC in refresh cycle (recovered; the next cycle retries): %v\n%s", r, debug.Stack())
+			app.updateWorkerStatus(func(s *workerStatus) {
+				s.Warming = false
+				s.Summary = "cycle stopped by an internal error — see the server log"
+			})
+		}
+	}()
+	cycle(ctx)
+}
 
 // workerStatus is the worker's user-visible heartbeat: when the last
 // cycle ran, what it did, and how many names it has resolved since
@@ -111,7 +156,7 @@ func (app *Application) runWorker(ctx context.Context) {
 	// snapshot refreshes.
 	go func() {
 		defer children.Done()
-		app.sdeMaintenance(ctx)
+		runGuarded("SDE maintenance", func() { app.sdeMaintenance(ctx) })
 	}()
 
 	// The urgent want drain polls the want queues every few
@@ -135,7 +180,7 @@ func (app *Application) runWorker(ctx context.Context) {
 
 	// First pass right away so a cold start doesn't wait a minute for
 	// fresh data.
-	app.refreshCycle(ctx)
+	app.guardedCycle(ctx, app.refreshCycle)
 
 	for {
 		select {
@@ -144,9 +189,9 @@ func (app *Application) runWorker(ctx context.Context) {
 		case <-heartbeat.C:
 			log.Printf("worker: alive")
 		case <-sdeTick.C:
-			app.sdeMaintenance(ctx)
+			runGuarded("SDE maintenance", func() { app.sdeMaintenance(ctx) })
 		case <-cycle.C:
-			app.refreshCycle(ctx)
+			app.guardedCycle(ctx, app.refreshCycle)
 		}
 	}
 }
@@ -696,7 +741,7 @@ func (app *Application) runWarmPool(ctx context.Context, ids []int64, budget *wa
 				if !budget.take() {
 					continue
 				}
-				if work(ctx, id) {
+				if guardedWarm(ctx, id, work) {
 					resolved.Add(1)
 				}
 			}
@@ -713,6 +758,15 @@ feed:
 	close(jobs)
 	wg.Wait()
 	return int(resolved.Load())
+}
+
+// guardedWarm runs one pool item under the worker panic guard. The
+// guard sits per item, not per goroutine: a pool goroutine that
+// died would stop draining jobs and leave the feeder blocked. A
+// panicking item counts as unresolved.
+func guardedWarm(ctx context.Context, id int64, work func(context.Context, int64) bool) (resolved bool) {
+	defer recoverWorkerPanic("name warm-up")
+	return work(ctx, id)
 }
 
 // warmCharacterNames resolves every name the local caches still lack

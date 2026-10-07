@@ -139,7 +139,39 @@ jobs:
       # and is reached with `evesynapse -update -dev` instead. Plain
       # versions are releases and are only ever published from main,
       # so another branch can't claim a release's tag first.
-      - name: Publish the release (once per version)
+      - name: Decide whether this push publishes a release (once per version)
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          tag="v$VERSION"
+          publish=true
+          if [ "$VERSION" = "${VERSION%%-*}" ] && [ "$GITHUB_REF_NAME" != "main" ]; then
+            echo "Not publishing: $GITHUB_REF_NAME carries the plain version $VERSION, and plain versions are released from main only. Give this branch a suffixed version (for example $VERSION-dev) to publish development builds."
+            publish=false
+          elif gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; leaving it as it is."
+            publish=false
+          fi
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+
+      # Only a signed release is published. `evesynapse -update`
+      # installs nothing whose manifest is not signed by a release
+      # key compiled into it, so each manifest is signed here with
+      # that key's private half, the RELEASE_SIGNING_KEY secret. The
+      # step fails, and nothing is published, when the secret is
+      # missing or is not the other half of a key listed in
+      # internal/releasesig/trusted_keys.pem. It runs only when there
+      # is a release to publish: the key signs nothing else.
+      - name: Sign the update manifests
+        if: steps.plan.outputs.publish == 'true'
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: go run ./cmd/releasesign sign dist/latest-arm64.json dist/latest-amd64.json
+
+      - name: Publish the release
+        if: steps.plan.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.ver.outputs.version }}
@@ -150,17 +182,11 @@ jobs:
           if [ "$VERSION" != "${VERSION%%-*}" ]; then
             channel_flag="--prerelease"
             how="evesynapse -update -dev"
-          elif [ "$GITHUB_REF_NAME" != "main" ]; then
-            echo "Not publishing: $GITHUB_REF_NAME carries the plain version $VERSION, and plain versions are released from main only. Give this branch a suffixed version (for example $VERSION-dev) to publish development builds."
-            exit 0
           fi
-          if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release $tag already exists; leaving it as it is."
-          else
-            gh release create "$tag" \
-              dist/evesynapse-arm64 dist/evesynapse-amd64 \
-              dist/latest-arm64.json dist/latest-amd64.json \
-              $channel_flag \
-              --title "EveSynapse $tag" \
-              --notes "Automated build of EveSynapse $tag. Update with: $how."
-          fi
+          gh release create "$tag" \
+            dist/evesynapse-arm64 dist/evesynapse-amd64 \
+            dist/latest-arm64.json dist/latest-amd64.json \
+            dist/latest-arm64.json.sig dist/latest-amd64.json.sig \
+            $channel_flag \
+            --title "EveSynapse $tag" \
+            --notes "Automated build of EveSynapse $tag. Update with: $how."

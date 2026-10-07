@@ -10,7 +10,7 @@
   {{if .Skills.Loaded}}
   <p>Total SP: <strong>{{.Skills.TotalSP}}</strong>{{if .Skills.UnallocatedSP}} · {{.Skills.UnallocatedSP}} unallocated{{end}} · {{.Skills.SkillsKnown}} skills known · {{.Skills.LevelVCount}} at level V</p>
 
-  <section class="card foldable">
+  <section class="foldable">
   <h3>Skill queue</h3>
   {{if .Skills.Training}}
   <p>Currently training: <strong>{{.Skills.Training}}</strong></p>
@@ -33,7 +33,7 @@
   </section>
 
   {{range .Skills.Groups}}
-  <section class="card foldable" data-fold="closed">
+  <section class="foldable" data-fold="closed">
   <h3>{{.Name}}</h3>
   <div class="tw">
   <table>
@@ -55,7 +55,7 @@
   {{else}}
   {{if not .Skills.Plans}}<p><small><a href="/skills/plans?character={{.Skills.CharacterID}}">Create a skill plan</a> to add skills straight from this catalog.</small></p>{{end}}
   {{range .Skills.Browse}}
-  <section class="card foldable" data-fold="closed">
+  <section class="foldable" data-fold="closed">
   <h3>{{.Name}}</h3>
   <div class="tw">
   <table>

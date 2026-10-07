@@ -10,7 +10,6 @@
 {{else}}
 
 <div class="foldable" data-fold="never">
-<div class="card">
 <h3>Find something to build</h3>
 <form method="get" action="/planner/">
   <p>
@@ -31,13 +30,11 @@
 {{end}}
 {{end}}
 </div>
-</div>
 
 {{if .Planner.Notice}}<p>{{.Planner.Notice}}</p>{{end}}
 
 {{with .Planner.Plan}}
 <div class="foldable" data-fold="never">
-<div class="card">
 <h3>{{.ProductName}}</h3>
 <p><small>From <strong>{{.BlueprintName}}</strong> — builds {{.ProducedLine}}.{{if .MaxRunNote}} {{.MaxRunNote}}.{{end}} · <a href="#" id="csv-export">Export CSV</a></small></p>
 <script>document.getElementById('csv-export').href = window.location.pathname + window.location.search + (window.location.search ? '&' : '?') + 'format=csv';</script>
@@ -90,10 +87,8 @@
 </table>
 </div>
 </div>
-</div>
 
 <div class="foldable" data-fold="never">
-<div class="card">
 <h3>Totals</h3>
 <table>
   <tbody>
@@ -106,11 +101,9 @@
 </table>
 <p><small>{{.PricesNote}}</small></p>
 </div>
-</div>
 
 {{with .Verdict}}
 <div class="foldable" data-fold="never">
-<div class="card">
 <h3>{{.Heading}}</h3>
 <table>
   <tbody>
@@ -122,18 +115,15 @@
 </table>
 {{if .Note}}<p><small>{{.Note}}</small></p>{{end}}
 </div>
-</div>
 {{end}}
 
 {{if .Shopping}}
 <div class="foldable" data-fold="never">
-<div class="card">
 <h3>Shopping list</h3>
 <ul>
 {{range .Shopping}}<li><a href="{{.URL}}">{{.Name}}</a> — {{.Need}}{{if .UnitPrice}} × {{.UnitPrice}}{{if .LineCost}} = {{.LineCost}}{{end}}{{end}}</li>{{end}}
 </ul>
 {{if .ShoppingTotal}}<p><small>Total: {{.ShoppingTotal}}</small></p>{{end}}
-</div>
 </div>
 {{end}}
 

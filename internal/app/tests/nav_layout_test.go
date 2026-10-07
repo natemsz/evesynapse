@@ -47,7 +47,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`id="nav-drawer-toggle" autocomplete="off"`,
 		`<button type="button" class="nav-reopen" id="nav-reopen"`,
 		`<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">`,
-		`<svg class="wordmark-glyph" viewBox="11.8 5.1 24.2 38" aria-hidden="true">`,
+		`<svg class="wordmark-glyph" viewBox="0 10 48 28" aria-hidden="true">`,
 		`<defs><linearGradient id="brand-glyph-gradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd27a"/><stop offset=".52" stop-color="#ff6a1a"/><stop offset="1" stop-color="#d63c14"/></linearGradient></defs>`,
 		`stroke="url(#brand-glyph-gradient)"`,
 		`fill="url(#brand-glyph-gradient)"`,
@@ -344,7 +344,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// wordmark's left at a chunkier fixed square size,
 		// pulled slightly into the topbar flex gap so the
 		// gap before the text stays small.
-		".wordmark-glyph {\n  display: inline-block;\n  height: 1.9em;\n  width: auto;\n  vertical-align: -0.35em;\n  margin: 0 1.25rem 0 0;\n  transform: rotate(100deg);\n}",
+		".wordmark-glyph {\n  display: inline-block;\n  height: 1.9em;\n  width: auto;\n  vertical-align: -0.35em;\n  margin: 0 1.25rem 0 0;\n}",
 		// v0.3.07.008: the phone-bar hamburger floats bare
 		// like the sidebar glyph controls (no resting box on
 		// the same footprint), with the same faint hover wash.

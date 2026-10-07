@@ -1,0 +1,5 @@
+# Text files are LF in the working tree on every platform. gofmt,
+# the embedded templates and SQL, and the shell scripts all expect
+# LF; without this, Git for Windows checks them out as CRLF and
+# `gofmt -l` reports every Go file.
+* text=auto eol=lf

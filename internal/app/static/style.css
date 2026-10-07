@@ -526,7 +526,7 @@ thead th {
   background: var(--panel-head);
   color: var(--accent);
   text-shadow: 1px -1px 0 #000;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid #262626;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   font-size: 0.7rem;
@@ -544,7 +544,7 @@ tbody tr:hover td { background: var(--row-hover); }
   position: sticky;
   left: 0;
   z-index: 1;
-  border-right: 1px solid #000;
+  border-right: 1px solid #262626;
 }
 .tw thead th:first-child { background: var(--panel-head); z-index: 2; }
 .tw tbody td:first-child, .tw tbody th:first-child { background: var(--row); }
@@ -576,13 +576,16 @@ img.portrait {
 }
 
 .isk {
-  font-family: "Univers Next Pro", "Inter", sans-serif;
+  font-family: "Shentox", "Univers Next Pro", "Inter", sans-serif;
   font-weight: 300;
+  letter-spacing: 0.01em;
+  color: var(--text-bright);
+}
+/* Larger display numerals only on the home page widgets. */
+.home-grid .isk {
   /* Just under the 1.1rem panel title: the balance reads as a
      display numeral without out-shouting the page header. */
   font-size: 1.05rem;
-  letter-spacing: 0.01em;
-  color: var(--text-bright);
 }
 
 .corp-desc { white-space: pre-line; }

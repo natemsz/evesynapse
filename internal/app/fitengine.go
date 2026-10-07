@@ -1357,12 +1357,8 @@ func computeFit(snap *fitSnapshot, shipTypeID int64, items []fitItemInput, level
 	for _, id := range skillIDs {
 		sources = append(sources, skillEnts[id])
 	}
-	for _, ent := range implantEnts {
-		sources = append(sources, ent)
-	}
-	for _, ent := range fitted {
-		sources = append(sources, ent)
-	}
+	sources = append(sources, implantEnts...)
+	sources = append(sources, fitted...)
 	for _, ent := range weaponCharge {
 		sources = append(sources, ent)
 	}

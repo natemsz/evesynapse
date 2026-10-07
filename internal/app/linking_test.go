@@ -63,13 +63,12 @@ func TestLinkHelpers(t *testing.T) {
 
 // pilotStub serves ESI's public pilot endpoints from fixtures.
 type pilotStub struct {
-	profile     string // 404 when empty
-	history     string
-	corps       map[int64]string // corporation id -> corporation payload
-	types       map[int64]string // type id -> type payload
-	factions    string
-	calls       int
-	profileHits map[string]int
+	profile  string // 404 when empty
+	history  string
+	corps    map[int64]string // corporation id -> corporation payload
+	types    map[int64]string // type id -> type payload
+	factions string
+	calls    int
 }
 
 func (s *pilotStub) respond(status int, body string) *http.Response {

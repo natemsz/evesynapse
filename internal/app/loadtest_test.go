@@ -177,12 +177,6 @@ func (b *lockedLogBuf) lockedCount() int {
 	return n
 }
 
-func (b *lockedLogBuf) len() int {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.Len()
-}
-
 // topPrefixes summarizes the buffer's most frequent log-line
 // prefixes (timestamp stripped), so the report can show which
 // handlers were logging failures under load.

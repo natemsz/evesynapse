@@ -371,13 +371,6 @@ func (app *Application) handleCharacterLabelFragment(w http.ResponseWriter, r *h
 	}
 }
 
-// pendingCharacterLabel renders the in-page live region a row
-// shows while a character's name is on its way: never blank, the
-// honest "#<id>" plus what is happening to it.
-func pendingCharacterLabel(id int64) string {
-	return fmt.Sprintf(`<span data-live-region data-poll-url="/labels/character-fragment?id=%d" data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for Character #%d…</span>`, id, id)
-}
-
 // handleCorporationLabelFragment swaps one pending corporation
 // label for its resolved, linked name. Cache-only, like the
 // character fragment: the page that rendered the label already

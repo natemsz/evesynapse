@@ -710,12 +710,6 @@ func (b *warmBudget) errorLimited() bool {
 	return b.limited
 }
 
-func (b *warmBudget) exhausted() bool {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.left <= 0
-}
-
 // runWarmPool runs work over ids with a small goroutine pool,
 // stopping early when the budget runs out or ESI answers with its
 // error-limit status. It returns how many ids work resolved.

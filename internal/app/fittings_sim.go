@@ -2299,6 +2299,8 @@ func (app *Application) attachFitEditor(ctx context.Context, r *http.Request, da
 // listLocalFitEntries builds the your-fits list: the user's saved
 // fits, newest first, with ship names and the description/tags
 // stored inside each fit document.
+//
+//lint:ignore U1000 nothing calls it since the editor stopped embedding the list; kept for the dedicated list consumers (see attachFitEditor's note)
 func (app *Application) listLocalFitEntries(ctx context.Context, userID int64) []localFitEntry {
 	rows, err := app.queries.ListLocalFittings(ctx, userID)
 	if err != nil {

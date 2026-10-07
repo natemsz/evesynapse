@@ -101,14 +101,14 @@ func structureSourceRank(source string) int {
 // storeStructureName records a resolution outcome, respecting
 // provenance: an existing resolved name from a better-trusted
 // source is kept. Reports whether the row was written.
-func (app *Application) storeStructureName(ctx context.Context, structureID int64, name, state, source, stamp string) bool {
+func (app *Application) storeStructureName(ctx context.Context, structureID int64, name, state, source string, at time.Time) bool {
 	if existing, err := app.queries.GetStructureName(ctx, structureID); err == nil &&
 		existing.State == esi.StructureResolved &&
 		structureSourceRank(existing.Source) > structureSourceRank(source) {
 		return false
 	}
 	if err := app.queries.SetStructureName(ctx, db.SetStructureNameParams{
-		StructureID: structureID, Name: name, State: state, ResolvedAt: stamp, Source: source,
+		StructureID: structureID, Name: name, State: state, ResolvedAt: timeSet(at), Source: source,
 	}); err != nil {
 		logging.Errorf("worker: structures: store %s name for %d: %v", source, structureID, err)
 		return false
@@ -190,8 +190,8 @@ func (app *Application) structureResolverCandidates(ctx context.Context, charact
 func (app *Application) resolveStructureNames(ctx context.Context, characters []db.Character, allowance *fetchBudget) (resolved int, limited bool) {
 	now := time.Now().UTC()
 	ids, err := app.queries.ListStructureResolutions(ctx, db.ListStructureResolutionsParams{
-		ResolvedCutoff:  now.Add(-structureRenameWindow).Format(time.RFC3339),
-		MissingCutoff:   now.Add(-structureMissingWindow).Format(time.RFC3339),
+		ResolvedCutoff:  now.Add(-structureRenameWindow),
+		MissingCutoff:   now.Add(-structureMissingWindow),
 		ResolutionLimit: maxStructureResolutionsPerCycle,
 	})
 	if err != nil {
@@ -202,7 +202,6 @@ func (app *Application) resolveStructureNames(ctx context.Context, characters []
 		return 0, false
 	}
 	corpIdx := app.corpStructureIndex(ctx)
-	stamp := now.Format(time.RFC3339)
 idsLoop:
 	for _, id := range ids {
 		if ctx.Err() != nil {
@@ -211,7 +210,7 @@ idsLoop:
 		// Tier 2: the corporation structure list already names
 		// this one — no per-structure ESI call needed.
 		if name, ok := corpIdx.names[id]; ok {
-			if app.storeStructureName(ctx, id, name, esi.StructureResolved, esi.StructureSourceCorp, stamp) {
+			if app.storeStructureName(ctx, id, name, esi.StructureResolved, esi.StructureSourceCorp, now) {
 				app.esi.StoreStructureName(id, name)
 				resolved++
 			}
@@ -245,7 +244,7 @@ idsLoop:
 				negatives++
 				continue
 			}
-			if app.storeStructureName(ctx, id, info.Name, esi.StructureResolved, esi.StructureSourceESI, stamp) {
+			if app.storeStructureName(ctx, id, info.Name, esi.StructureResolved, esi.StructureSourceESI, now) {
 				app.esi.StoreStructureName(id, info.Name)
 				resolved++
 			}
@@ -256,7 +255,7 @@ idsLoop:
 		// so this id isn't re-asked for a day. A pass interrupted
 		// by transient errors leaves the row pending instead.
 		if len(candidates) > 0 && negatives == len(candidates) {
-			app.storeStructureName(ctx, id, "", esi.StructureMissing, esi.StructureSourceESI, stamp)
+			app.storeStructureName(ctx, id, "", esi.StructureMissing, esi.StructureSourceESI, now)
 		}
 	}
 	return resolved, false
@@ -280,7 +279,7 @@ func (app *Application) resolvedStructureTitle(ctx context.Context, structureID 
 // the worker's name-warming pass); best-effort per entry, like
 // every other queue note.
 func (app *Application) persistStructureContexts(ctx context.Context, structures esi.CorpStructures) {
-	stamp := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 	for _, s := range structures {
 		if s.StructureID <= 0 {
 			continue
@@ -290,12 +289,12 @@ func (app *Application) persistStructureContexts(ctx context.Context, structures
 			OwnerCorporationID: s.CorporationID,
 			SystemID:           s.SystemID,
 			TypeID:             s.TypeID,
-			UpdatedAt:          stamp,
+			UpdatedAt:          now,
 		}); err != nil {
 			logging.Errorf("structures: persist context for %d: %v", s.StructureID, err)
 		}
 		if s.Name != "" {
-			if app.storeStructureName(ctx, s.StructureID, s.Name, esi.StructureResolved, esi.StructureSourceCorp, stamp) {
+			if app.storeStructureName(ctx, s.StructureID, s.Name, esi.StructureResolved, esi.StructureSourceCorp, now) {
 				app.esi.StoreStructureName(s.StructureID, s.Name)
 			}
 		}

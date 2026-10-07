@@ -121,7 +121,7 @@ func TestStructureRenderZeroOutbound(t *testing.T) {
 	const structureID = int64(1044752365771)
 	if err := q.SetStructureName(ctx, db.SetStructureNameParams{
 		StructureID: structureID, Name: "Jita Holding", State: esi.StructureResolved, Source: esi.StructureSourceESI,
-		ResolvedAt: time.Now().UTC().Format(time.RFC3339),
+		ResolvedAt: timeSet(time.Now().UTC()),
 	}); err != nil {
 		t.Fatalf("seed structure name: %v", err)
 	}
@@ -167,9 +167,9 @@ func TestStructureResolutionNegativeCache(t *testing.T) {
 		t.Fatalf("fresh negative was re-asked: calls %d → %d", calls, transport.callCount())
 	}
 	// After 24h it is due again.
-	stale := time.Now().UTC().Add(-25 * time.Hour).Format(time.RFC3339)
+	stale := time.Now().UTC().Add(-25 * time.Hour)
 	if err := q.SetStructureName(ctx, db.SetStructureNameParams{
-		StructureID: structureID, Name: "", State: esi.StructureMissing, Source: esi.StructureSourceESI, ResolvedAt: stale,
+		StructureID: structureID, Name: "", State: esi.StructureMissing, Source: esi.StructureSourceESI, ResolvedAt: timeSet(stale),
 	}); err != nil {
 		t.Fatalf("backdate miss: %v", err)
 	}
@@ -199,9 +199,9 @@ func TestStructureResolutionRenameRefreshAndScopeGate(t *testing.T) {
 
 	// A rename-aged entry (31 days) re-resolves once the scope is
 	// present.
-	stale := time.Now().UTC().Add(-31 * 24 * time.Hour).Format(time.RFC3339)
+	stale := time.Now().UTC().Add(-31 * 24 * time.Hour)
 	if err := q.SetStructureName(ctx, db.SetStructureNameParams{
-		StructureID: structureID, Name: "Old Name", State: esi.StructureResolved, Source: esi.StructureSourceESI, ResolvedAt: stale,
+		StructureID: structureID, Name: "Old Name", State: esi.StructureResolved, Source: esi.StructureSourceESI, ResolvedAt: timeSet(stale),
 	}); err != nil {
 		t.Fatalf("seed stale name: %v", err)
 	}

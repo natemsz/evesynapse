@@ -422,7 +422,7 @@ func (app *Application) notePilotNameSearch(ctx context.Context, q string, itemH
 	if qerr := app.queries.UpsertPilotNameWant(ctx, db.UpsertPilotNameWantParams{
 		NormalizedName: normalized,
 		DisplayName:    display,
-		RequestedAt:    time.Now().UTC().Format(time.RFC3339),
+		RequestedAt:    time.Now().UTC(),
 	}); qerr != nil {
 		logging.Errorf("search: note pilot name want %q: %v", normalized, qerr)
 		return false

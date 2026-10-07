@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -172,7 +173,7 @@ func (app *Application) loadPilotView(ctx context.Context, id int64) *pilotView 
 			// page on the loading state forever.
 			logging.Warnf("pilot: unreadable payload for %d; requeueing", id)
 			if serr := app.queries.SetPilotRecord(ctx, db.SetPilotRecordParams{
-				CharacterID: id, Payload: "", State: pilotStatePending, FetchedAt: "",
+				CharacterID: id, Payload: "", State: pilotStatePending, FetchedAt: sql.NullTime{},
 			}); serr != nil {
 				logging.Errorf("pilot: requeue %d: %v", id, serr)
 			}
@@ -257,7 +258,7 @@ func (app *Application) refreshPilotRecords(ctx context.Context, allowance *fetc
 
 	now := time.Now().UTC()
 	ids, err := app.queries.ListPilotDrains(ctx, db.ListPilotDrainsParams{
-		StaleCutoff: now.Add(-pilotStaleAfter).Format(time.RFC3339),
+		StaleCutoff: now.Add(-pilotStaleAfter),
 		DrainLimit:  maxPilotDrainsPerCycle,
 	})
 	if err != nil {
@@ -299,9 +300,8 @@ func (app *Application) refreshPilotNameWants(ctx context.Context, allowance *fe
 // already hold the shared fetch lock (the urgent drain).
 func (app *Application) drainPilotNameWants(ctx context.Context, allowance *fetchBudget) (resolved int, limited bool) {
 	now := time.Now().UTC()
-	stamp := now.Format(time.RFC3339)
 	wants, err := app.queries.ListDuePilotNameWants(ctx, db.ListDuePilotNameWantsParams{
-		Now: stamp, Lim: maxPilotNameResolutions,
+		Now: now, Lim: maxPilotNameResolutions,
 	})
 	if err != nil {
 		logging.Errorf("worker: pilot name wants: list due: %v", err)
@@ -320,7 +320,7 @@ func (app *Application) drainPilotNameWants(ctx context.Context, allowance *fetc
 		if err != nil {
 			if code, has := esi.StatusCode(err); has && (code == http.StatusBadRequest || code == http.StatusNotFound) {
 				if serr := app.queries.SetPilotNameWantMissing(ctx, db.SetPilotNameWantMissingParams{
-					ResolvedAt: stamp, NormalizedName: want.NormalizedName,
+					ResolvedAt: timeSet(now), NormalizedName: want.NormalizedName,
 				}); serr != nil {
 					logging.Errorf("worker: pilot name wants: settle miss %q: %v", want.DisplayName, serr)
 					continue
@@ -329,8 +329,8 @@ func (app *Application) drainPilotNameWants(ctx context.Context, allowance *fetc
 				continue
 			}
 			if serr := app.queries.SetPilotNameWantError(ctx, db.SetPilotNameWantErrorParams{
-				ResolvedAt:     stamp,
-				NextTryAt:      now.Add(pilotNameWantRetryDelay).Format(time.RFC3339),
+				ResolvedAt:     timeSet(now),
+				NextTryAt:      timeSet(now.Add(pilotNameWantRetryDelay)),
 				NormalizedName: want.NormalizedName,
 			}); serr != nil {
 				logging.Errorf("worker: pilot name wants: record error %q: %v", want.DisplayName, serr)
@@ -347,7 +347,7 @@ func (app *Application) drainPilotNameWants(ctx context.Context, allowance *fetc
 		}
 		if match == nil {
 			if serr := app.queries.SetPilotNameWantMissing(ctx, db.SetPilotNameWantMissingParams{
-				ResolvedAt: stamp, NormalizedName: want.NormalizedName,
+				ResolvedAt: timeSet(now), NormalizedName: want.NormalizedName,
 			}); serr != nil {
 				logging.Errorf("worker: pilot name wants: settle miss %q: %v", want.DisplayName, serr)
 				continue
@@ -361,7 +361,7 @@ func (app *Application) drainPilotNameWants(ctx context.Context, allowance *fetc
 			continue
 		}
 		if serr := app.queries.SetPilotNameWantReady(ctx, db.SetPilotNameWantReadyParams{
-			CharacterID: match.ID, ResolvedAt: stamp, NormalizedName: want.NormalizedName,
+			CharacterID: match.ID, ResolvedAt: timeSet(now), NormalizedName: want.NormalizedName,
 		}); serr != nil {
 			logging.Errorf("worker: pilot name wants: settle %q: %v", want.DisplayName, serr)
 			continue
@@ -375,7 +375,6 @@ func (app *Application) drainPilotNameWants(ctx context.Context, allowance *fetc
 // from ESI's public endpoints (no token involved anywhere). A 404
 // on the profile settles the record as 'missing'.
 func (app *Application) drainPilotRecord(ctx context.Context, id int64, allowance *fetchBudget, now time.Time) (settled bool, limited bool) {
-	stamp := now.Format(time.RFC3339)
 
 	if !allowance.take() {
 		return false, false
@@ -388,7 +387,7 @@ func (app *Application) drainPilotRecord(ctx context.Context, id int64, allowanc
 		}
 		if code, has := esi.StatusCode(err); has && code == http.StatusNotFound {
 			if serr := app.queries.SetPilotRecord(ctx, db.SetPilotRecordParams{
-				CharacterID: id, Payload: "", State: pilotStateMissing, FetchedAt: stamp,
+				CharacterID: id, Payload: "", State: pilotStateMissing, FetchedAt: timeSet(now),
 			}); serr != nil {
 				logging.Errorf("worker: pilot records: record miss for %d: %v", id, serr)
 				return false, false
@@ -496,7 +495,7 @@ func (app *Application) drainPilotRecord(ctx context.Context, id int64, allowanc
 		return false, false
 	}
 	if err := app.queries.SetPilotRecord(ctx, db.SetPilotRecordParams{
-		CharacterID: id, Payload: string(encoded), State: pilotStateReady, FetchedAt: stamp,
+		CharacterID: id, Payload: string(encoded), State: pilotStateReady, FetchedAt: timeSet(now),
 	}); err != nil {
 		logging.Errorf("worker: pilot records: store record for %d: %v", id, err)
 		return false, false
@@ -513,7 +512,7 @@ func (app *Application) refreshTypeDetails(ctx context.Context, allowance *fetch
 	app.fetchMu.Lock()
 	defer app.fetchMu.Unlock()
 
-	stamp := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 	ids, err := app.queries.ListTypeDetailWants(ctx, maxTypeDetailsPerCycle)
 	if err != nil {
 		logging.Errorf("worker: type details: list wants: %v", err)
@@ -523,7 +522,7 @@ func (app *Application) refreshTypeDetails(ctx context.Context, allowance *fetch
 		if ctx.Err() != nil || !allowance.take() {
 			break
 		}
-		settled, limited := app.fetchOneTypeDetail(ctx, id, stamp)
+		settled, limited := app.fetchOneTypeDetail(ctx, id, now)
 		if settled {
 			drained++
 		}
@@ -538,13 +537,13 @@ func (app *Application) refreshTypeDetails(ctx context.Context, allowance *fetch
 // stores its description. A type ESI no longer knows settles
 // with an empty description so the page stops asking. limited
 // reports ESI's stop signal.
-func (app *Application) fetchOneTypeDetail(ctx context.Context, id int64, stamp string) (settled, limited bool) {
+func (app *Application) fetchOneTypeDetail(ctx context.Context, id int64, now time.Time) (settled, limited bool) {
 	var t esi.Type
 	err := app.esi.Get(ctx, "", fmt.Sprintf("/universe/types/%d/", id), &t)
 	switch {
 	case err == nil:
 		if serr := app.queries.SetTypeDetail(ctx, db.SetTypeDetailParams{
-			TypeID: id, Description: t.Description, FetchedAt: stamp,
+			TypeID: id, Description: t.Description, FetchedAt: timeSet(now),
 		}); serr != nil {
 			logging.Errorf("worker: type details: store %d: %v", id, serr)
 			return false, false
@@ -556,7 +555,7 @@ func (app *Application) fetchOneTypeDetail(ctx context.Context, id int64, stamp 
 	default:
 		if code, has := esi.StatusCode(err); has && code == http.StatusNotFound {
 			if serr := app.queries.SetTypeDetail(ctx, db.SetTypeDetailParams{
-				TypeID: id, Description: "", FetchedAt: stamp,
+				TypeID: id, Description: "", FetchedAt: timeSet(now),
 			}); serr != nil {
 				logging.Errorf("worker: type details: settle miss %d: %v", id, serr)
 				return false, false

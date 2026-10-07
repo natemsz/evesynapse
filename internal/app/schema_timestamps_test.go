@@ -92,6 +92,20 @@ var marketTimeColumns = []timeColumn{
 	{"market_station_leaderboard", "updated_at", false},
 }
 
+// recordTimeColumns are the columns step 011 converts.
+var recordTimeColumns = []timeColumn{
+	{"structure_names", "resolved_at", true},
+	{"structure_context", "updated_at", false},
+	{"planet_names", "resolved_at", true},
+	{"pilot_records", "fetched_at", true},
+	{"corporation_records", "fetched_at", true},
+	{"alliance_records", "fetched_at", true},
+	{"pilot_name_wants", "requested_at", false},
+	{"pilot_name_wants", "resolved_at", true},
+	{"pilot_name_wants", "next_try_at", true},
+	{"type_details", "fetched_at", true},
+}
+
 func checkTimeColumns(t *testing.T, conn *sql.DB, columns []timeColumn) {
 	t.Helper()
 	for _, col := range columns {
@@ -126,6 +140,30 @@ func TestSchemaTimeColumnTypes(t *testing.T) {
 	defer conn.Close()
 	checkTimeColumns(t, conn, accountTimeColumns)
 	checkTimeColumns(t, conn, marketTimeColumns)
+	checkTimeColumns(t, conn, recordTimeColumns)
+
+	// And none was missed: nothing named like a time is still text.
+	// (The calendar days the market history and wallet history are
+	// keyed by are dates, not times, and are named accordingly.)
+	rows, err := conn.Query(
+		`SELECT table_name, column_name FROM information_schema.columns
+		 WHERE table_schema = 'public' AND data_type = 'text'
+		   AND (column_name LIKE '%\_at' OR column_name LIKE '%\_until' OR column_name LIKE '%\_expiry')
+		 ORDER BY table_name, column_name`)
+	if err != nil {
+		t.Fatalf("list text columns: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var table, column string
+		if err := rows.Scan(&table, &column); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		t.Errorf("%s.%s is named like a time but is still text", table, column)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("list text columns: %v", err)
+	}
 }
 
 // TestSchemaTimestampStepKeepsStoredTimes: an install from before
@@ -483,6 +521,199 @@ func TestSchemaMarketTimestampStepKeepsStoredTimes(t *testing.T) {
 	}
 	same("sweep started_at", sweep.StartedAt, "2026-10-01T12:00:00Z")
 	same("sweep updated_at", sweep.UpdatedAt, "2026-10-01T12:10:00Z")
+}
+
+// TestSchemaRecordTimestampStepKeepsStoredTimes: the same upgrade
+// for the name and record caches (step 011). Most of these rows
+// exist before they are filled in, so "not yet" is the common case
+// here: it was an empty string and is NULL now, and each queue still
+// hands the worker the same rows in the same order.
+func TestSchemaRecordTimestampStepKeepsStoredTimes(t *testing.T) {
+	ctx := context.Background()
+	dsn := pgtest.FreshDSN(t)
+	old := openBeforeSchemaStep(t, dsn, 11)
+
+	for _, stmt := range []string{
+		// Structures: one waiting, one resolved long ago, one resolved
+		// just now, one found missing long ago.
+		`INSERT INTO structure_names (structure_id) VALUES (1001)`,
+		`INSERT INTO structure_names (structure_id, name, state, resolved_at) VALUES
+		   (1002, 'Old Keep', 'resolved', '2026-01-01T00:00:00Z'),
+		   (1003, 'New Keep', 'resolved', '2026-10-01T00:00:00Z'),
+		   (1004, '', 'missing', '2026-01-01T00:00:00Z')`,
+		`INSERT INTO structure_context (structure_id, owner_corporation_id, updated_at) VALUES
+		   (1002, 98000001, '2026-09-30T08:00:00Z')`,
+		`INSERT INTO planet_names (planet_id) VALUES (2001)`,
+		`INSERT INTO planet_names (planet_id, name, state, resolved_at) VALUES
+		   (2002, 'Jita IV', 'resolved', '2026-09-30T08:00:00Z')`,
+		// Pilots: two waiting (one asked for by a page), two ready
+		// (one stale, one fresh), one settled as missing.
+		`INSERT INTO pilot_records (character_id, priority) VALUES (3001, 0), (3002, 1)`,
+		`INSERT INTO pilot_records (character_id, payload, state, fetched_at) VALUES
+		   (3003, '{}', 'ready', '2026-01-01T00:00:00Z'),
+		   (3004, '{}', 'ready', '2026-10-01T00:00:00Z'),
+		   (3005, '', 'missing', '2026-01-01T00:00:00Z')`,
+		`INSERT INTO corporation_records (corporation_id) VALUES (4001)`,
+		`INSERT INTO corporation_records (corporation_id, payload, state, fetched_at) VALUES
+		   (4002, '{}', 'ready', '2026-01-01T00:00:00Z')`,
+		`INSERT INTO alliance_records (alliance_id) VALUES (5001)`,
+		// Name lookups: one new, one that failed and may retry now,
+		// one that failed and has to wait.
+		`INSERT INTO pilot_name_wants (normalized_name, display_name, state, requested_at) VALUES
+		   ('new pilot', 'New Pilot', 'pending', '2026-10-01T10:00:00Z')`,
+		`INSERT INTO pilot_name_wants (normalized_name, display_name, state, requested_at, resolved_at, next_try_at, attempts) VALUES
+		   ('retry pilot', 'Retry Pilot', 'error', '2026-10-01T09:00:00Z', '2026-10-01T09:01:00Z', '2026-10-01T09:31:00Z', 1),
+		   ('wait pilot', 'Wait Pilot', 'error', '2026-10-01T08:00:00Z', '2026-10-01T11:59:00Z', '2026-10-01T12:29:00Z', 1)`,
+		// Item descriptions: one asked for, one answered.
+		`INSERT INTO type_details (type_id) VALUES (34)`,
+		`INSERT INTO type_details (type_id, description, fetched_at) VALUES
+		   (35, 'A mineral.', '2026-09-30T08:00:00Z')`,
+	} {
+		if _, err := old.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed the old schema: %v\n%s", err, stmt)
+		}
+	}
+	old.Close()
+
+	conn, pool, err := openDB(ctx, dsn)
+	if err != nil {
+		t.Fatalf("upgrade: %v", err)
+	}
+	defer pool.Close()
+	defer conn.Close()
+	q := db.New(conn)
+	checkTimeColumns(t, conn, recordTimeColumns)
+
+	sameOrNever := func(what string, got sql.NullTime, want string) {
+		t.Helper()
+		if got := rfc3339Or(got, ""); got != want {
+			t.Errorf("%s = %q, want %q", what, got, want)
+		}
+	}
+	wantIDs := func(what string, got []int64, want ...int64) {
+		t.Helper()
+		if len(got) != len(want) {
+			t.Errorf("%s: %v, want %v", what, got, want)
+			return
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Errorf("%s: %v, want %v", what, got, want)
+				return
+			}
+		}
+	}
+	// "Now" for the queues: every cutoff below is taken from it.
+	now := mustTime("2026-10-01T12:00:00Z")
+
+	waiting, err := q.GetStructureName(ctx, 1001)
+	if err != nil {
+		t.Fatalf("read the waiting structure: %v", err)
+	}
+	sameOrNever("waiting structure resolved_at", waiting.ResolvedAt, "")
+	named, err := q.GetStructureName(ctx, 1002)
+	if err != nil {
+		t.Fatalf("read the named structure: %v", err)
+	}
+	sameOrNever("named structure resolved_at", named.ResolvedAt, "2026-01-01T00:00:00Z")
+	// Waiting first, then what is past its re-check window; the one
+	// resolved today is left alone.
+	structures, err := q.ListStructureResolutions(ctx, db.ListStructureResolutionsParams{
+		ResolvedCutoff:  now.Add(-30 * 24 * time.Hour),
+		MissingCutoff:   now.Add(-24 * time.Hour),
+		ResolutionLimit: 10,
+	})
+	if err != nil {
+		t.Fatalf("list structures to resolve: %v", err)
+	}
+	wantIDs("structures to resolve", structures, 1001, 1002, 1004)
+	context1002, err := q.GetStructureContext(ctx, 1002)
+	if err != nil {
+		t.Fatalf("read structure context: %v", err)
+	}
+	if got := rfc3339(context1002.UpdatedAt); got != "2026-09-30T08:00:00Z" {
+		t.Errorf("structure context updated_at = %s", got)
+	}
+
+	planet, err := q.GetPlanetName(ctx, 2001)
+	if err != nil {
+		t.Fatalf("read the waiting planet: %v", err)
+	}
+	sameOrNever("waiting planet resolved_at", planet.ResolvedAt, "")
+	planets, err := q.ListPlanetResolutions(ctx, db.ListPlanetResolutionsParams{
+		ResolvedCutoff:  now.Add(-30 * 24 * time.Hour),
+		MissingCutoff:   now.Add(-24 * time.Hour),
+		ResolutionLimit: 10,
+	})
+	if err != nil {
+		t.Fatalf("list planets to resolve: %v", err)
+	}
+	wantIDs("planets to resolve", planets, 2001)
+
+	pending, err := q.GetPilotRecord(ctx, 3001)
+	if err != nil {
+		t.Fatalf("read the waiting pilot: %v", err)
+	}
+	sameOrNever("waiting pilot fetched_at", pending.FetchedAt, "")
+	ready, err := q.GetPilotRecord(ctx, 3004)
+	if err != nil {
+		t.Fatalf("read the ready pilot: %v", err)
+	}
+	sameOrNever("ready pilot fetched_at", ready.FetchedAt, "2026-10-01T00:00:00Z")
+	// Waiting rows first (the page's own request ahead of the rest),
+	// then the stale record. Fresh and settled ones are not due.
+	pilots, err := q.ListPilotDrains(ctx, db.ListPilotDrainsParams{StaleCutoff: now.Add(-7 * 24 * time.Hour), DrainLimit: 10})
+	if err != nil {
+		t.Fatalf("list pilots to fetch: %v", err)
+	}
+	wantIDs("pilots to fetch", pilots, 3002, 3001, 3003)
+	corps, err := q.ListCorporationDrains(ctx, db.ListCorporationDrainsParams{StaleCutoff: now.Add(-7 * 24 * time.Hour), DrainLimit: 10})
+	if err != nil {
+		t.Fatalf("list corporations to fetch: %v", err)
+	}
+	wantIDs("corporations to fetch", corps, 4001, 4002)
+	alliances, err := q.ListAllianceDrains(ctx, db.ListAllianceDrainsParams{StaleCutoff: now.Add(-7 * 24 * time.Hour), DrainLimit: 10})
+	if err != nil {
+		t.Fatalf("list alliances to fetch: %v", err)
+	}
+	wantIDs("alliances to fetch", alliances, 5001)
+
+	// Oldest request first; the lookup still waiting out its retry
+	// delay is not offered.
+	due, err := q.ListDuePilotNameWants(ctx, db.ListDuePilotNameWantsParams{Now: now, Lim: 10})
+	if err != nil {
+		t.Fatalf("list due name lookups: %v", err)
+	}
+	if len(due) != 2 || due[0].NormalizedName != "retry pilot" || due[1].NormalizedName != "new pilot" {
+		t.Errorf("due name lookups: %+v, want retry pilot then new pilot", due)
+	} else {
+		sameOrNever("retry lookup next_try_at", due[0].NextTryAt, "2026-10-01T09:31:00Z")
+		sameOrNever("new lookup resolved_at", due[1].ResolvedAt, "")
+		sameOrNever("new lookup next_try_at", due[1].NextTryAt, "")
+	}
+	// Settling a lookup clears its retry time again.
+	if err := q.SetPilotNameWantMissing(ctx, db.SetPilotNameWantMissingParams{
+		ResolvedAt: timeSet(now), NormalizedName: "retry pilot",
+	}); err != nil {
+		t.Fatalf("settle a lookup: %v", err)
+	}
+	settled, err := q.GetPilotNameWant(ctx, "retry pilot")
+	if err != nil {
+		t.Fatalf("re-read the settled lookup: %v", err)
+	}
+	sameOrNever("settled lookup resolved_at", settled.ResolvedAt, "2026-10-01T12:00:00Z")
+	sameOrNever("settled lookup next_try_at", settled.NextTryAt, "")
+
+	wanted, err := q.ListTypeDetailWants(ctx, 10)
+	if err != nil {
+		t.Fatalf("list wanted item descriptions: %v", err)
+	}
+	wantIDs("wanted item descriptions", wanted, 34)
+	answered, err := q.GetTypeDetail(ctx, 35)
+	if err != nil {
+		t.Fatalf("read an answered item description: %v", err)
+	}
+	sameOrNever("answered description fetched_at", answered.FetchedAt, "2026-09-30T08:00:00Z")
 }
 
 // TestStoredTimesReadBackInUTC: whatever zone the machine or the

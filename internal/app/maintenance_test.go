@@ -911,7 +911,7 @@ func seedRefreshDB(t *testing.T) (string, *sql.DB) {
 		`INSERT INTO pilot_records (character_id, payload, state, fetched_at)
 		 VALUES (778, '', 'missing', '` + testFreshStamp + `')`,
 		`INSERT INTO pilot_records (character_id, payload, state, fetched_at)
-		 VALUES (779, '', 'pending', '')`,
+		 VALUES (779, '', 'pending', NULL)`,
 		`INSERT INTO type_details (type_id, description, fetched_at)
 		 VALUES (34, 'A mineral.', '` + testFreshStamp + `')`,
 		`INSERT INTO structure_names (structure_id, name, state, resolved_at)
@@ -919,7 +919,7 @@ func seedRefreshDB(t *testing.T) (string, *sql.DB) {
 		`INSERT INTO structure_names (structure_id, name, state, resolved_at)
 		 VALUES (60000002, '', 'missing', '` + testFreshStamp + `')`,
 		`INSERT INTO structure_names (structure_id, name, state, resolved_at)
-		 VALUES (60000003, '', 'pending', '')`,
+		 VALUES (60000003, '', 'pending', NULL)`,
 		`INSERT INTO sde_meta (key, value) VALUES ('sde_import_version', '6')`,
 		// Earned data: must survive untouched.
 		`INSERT INTO wallet_history (user_id, character_id, day, balance, net_worth, sampled_at)
@@ -950,6 +950,17 @@ func queryString(t *testing.T, conn *sql.DB, query string, args ...any) string {
 	return v
 }
 
+// queryStamp reads one time column the way the app prints a time
+// (RFC 3339, UTC), with "" for one that was never set.
+func queryStamp(t *testing.T, conn *sql.DB, query string, args ...any) string {
+	t.Helper()
+	var v sql.NullTime
+	if err := conn.QueryRow(query, args...).Scan(&v); err != nil {
+		t.Fatalf("query %q: %v", query, err)
+	}
+	return rfc3339Or(v, "")
+}
+
 func TestRefreshExpiresCachesKeepsEarnedData(t *testing.T) {
 	dsn, conn := seedRefreshDB(t)
 	conn.Close()
@@ -973,52 +984,52 @@ func TestRefreshExpiresCachesKeepsEarnedData(t *testing.T) {
 	defer pool2.Close()
 
 	// Every consulted cache rewound to the epoch.
-	if got := queryString(t, conn2, `SELECT cached_until FROM character_snapshots WHERE character_id = 9001`); got != cacheEpoch {
+	if got := queryStamp(t, conn2, `SELECT cached_until FROM character_snapshots WHERE character_id = 9001`); got != rfc3339(cacheEpoch) {
 		t.Fatalf("character_snapshots.cached_until = %q, want epoch", got)
 	}
-	if got := queryString(t, conn2, `SELECT fetched_at FROM character_snapshots WHERE character_id = 9001`); got != cacheEpoch {
+	if got := queryStamp(t, conn2, `SELECT fetched_at FROM character_snapshots WHERE character_id = 9001`); got != rfc3339(cacheEpoch) {
 		t.Fatalf("character_snapshots.fetched_at = %q, want epoch", got)
 	}
-	if got := queryString(t, conn2, `SELECT cached_until FROM characters WHERE character_id = 9001`); got != cacheEpoch {
+	if got := queryStamp(t, conn2, `SELECT cached_until FROM characters WHERE character_id = 9001`); got != rfc3339(cacheEpoch) {
 		t.Fatalf("characters.cached_until = %q, want epoch", got)
 	}
-	if got := queryString(t, conn2, `SELECT cached_until FROM global_snapshots WHERE kind = 'incursions'`); got != cacheEpoch {
+	if got := queryStamp(t, conn2, `SELECT cached_until FROM global_snapshots WHERE kind = 'incursions'`); got != rfc3339(cacheEpoch) {
 		t.Fatalf("global_snapshots.cached_until = %q, want epoch", got)
 	}
-	if got := queryString(t, conn2, `SELECT cached_until FROM guide_prices_meta WHERE id = 1`); got != cacheEpoch {
+	if got := queryStamp(t, conn2, `SELECT cached_until FROM guide_prices_meta WHERE id = 1`); got != rfc3339(cacheEpoch) {
 		t.Fatalf("guide_prices_meta.cached_until = %q, want epoch", got)
 	}
-	if got := queryString(t, conn2, `SELECT attempted_at FROM snapshot_fetch_state WHERE character_id = 9001`); got != cacheEpoch {
+	if got := queryStamp(t, conn2, `SELECT attempted_at FROM snapshot_fetch_state WHERE character_id = 9001`); got != rfc3339(cacheEpoch) {
 		t.Fatalf("snapshot_fetch_state.attempted_at = %q, want epoch", got)
 	}
-	if got := queryString(t, conn2, `SELECT attempted_at FROM market_fetch_state WHERE kind = 'history_10000002_34'`); got != cacheEpoch {
+	if got := queryStamp(t, conn2, `SELECT attempted_at FROM market_fetch_state WHERE kind = 'history_10000002_34'`); got != rfc3339(cacheEpoch) {
 		t.Fatalf("market_fetch_state.attempted_at = %q, want epoch", got)
 	}
 	// Pilot records: ready rewound, missing settled, pending queued — as they were.
-	if got := queryString(t, conn2, `SELECT fetched_at FROM pilot_records WHERE character_id = 777`); got != cacheEpoch {
+	if got := queryStamp(t, conn2, `SELECT fetched_at FROM pilot_records WHERE character_id = 777`); got != rfc3339(cacheEpoch) {
 		t.Fatalf("pilot ready fetched_at = %q, want epoch", got)
 	}
-	if got := queryString(t, conn2, `SELECT fetched_at FROM pilot_records WHERE character_id = 778`); got != testFreshStamp {
+	if got := queryStamp(t, conn2, `SELECT fetched_at FROM pilot_records WHERE character_id = 778`); got != testFreshStamp {
 		t.Fatalf("pilot missing fetched_at = %q, want untouched", got)
 	}
-	if got := queryString(t, conn2, `SELECT fetched_at FROM pilot_records WHERE character_id = 779`); got != "" {
+	if got := queryStamp(t, conn2, `SELECT fetched_at FROM pilot_records WHERE character_id = 779`); got != "" {
 		t.Fatalf("pilot pending fetched_at = %q, want untouched empty", got)
 	}
 	// Type descriptions re-asked (empty stamp), text preserved meanwhile.
-	if got := queryString(t, conn2, `SELECT fetched_at FROM type_details WHERE type_id = 34`); got != "" {
+	if got := queryStamp(t, conn2, `SELECT fetched_at FROM type_details WHERE type_id = 34`); got != "" {
 		t.Fatalf("type_details.fetched_at = %q, want empty (re-ask)", got)
 	}
 	if got := queryString(t, conn2, `SELECT description FROM type_details WHERE type_id = 34`); got != "A mineral." {
 		t.Fatalf("type_details.description = %q, want preserved", got)
 	}
 	// Structure names: settled rows rewound, pending row as it was, names kept.
-	if got := queryString(t, conn2, `SELECT resolved_at FROM structure_names WHERE structure_id = 60000001`); got != cacheEpoch {
+	if got := queryStamp(t, conn2, `SELECT resolved_at FROM structure_names WHERE structure_id = 60000001`); got != rfc3339(cacheEpoch) {
 		t.Fatalf("structure resolved resolved_at = %q, want epoch", got)
 	}
-	if got := queryString(t, conn2, `SELECT resolved_at FROM structure_names WHERE structure_id = 60000002`); got != cacheEpoch {
+	if got := queryStamp(t, conn2, `SELECT resolved_at FROM structure_names WHERE structure_id = 60000002`); got != rfc3339(cacheEpoch) {
 		t.Fatalf("structure missing resolved_at = %q, want epoch", got)
 	}
-	if got := queryString(t, conn2, `SELECT resolved_at FROM structure_names WHERE structure_id = 60000003`); got != "" {
+	if got := queryStamp(t, conn2, `SELECT resolved_at FROM structure_names WHERE structure_id = 60000003`); got != "" {
 		t.Fatalf("structure pending resolved_at = %q, want untouched empty", got)
 	}
 	if got := queryString(t, conn2, `SELECT name FROM structure_names WHERE structure_id = 60000001`); got != "Jita IV-4" {
@@ -1088,7 +1099,7 @@ func TestRefreshRefusesWhileServerRuns(t *testing.T) {
 	}
 	defer conn2.Close()
 	defer pool2.Close()
-	if got := queryString(t, conn2, `SELECT cached_until FROM character_snapshots WHERE character_id = 9001`); got != testFreshStamp {
+	if got := queryStamp(t, conn2, `SELECT cached_until FROM character_snapshots WHERE character_id = 9001`); got != testFreshStamp {
 		t.Fatalf("cache stamp = %q after refusal, want untouched fresh stamp", got)
 	}
 }

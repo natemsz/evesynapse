@@ -10,11 +10,11 @@ import (
 )
 
 type AllianceRecord struct {
-	AllianceID int64  `json:"alliance_id"`
-	Payload    string `json:"payload"`
-	State      string `json:"state"`
-	FetchedAt  string `json:"fetched_at"`
-	Priority   int64  `json:"priority"`
+	AllianceID int64        `json:"alliance_id"`
+	Payload    string       `json:"payload"`
+	State      string       `json:"state"`
+	FetchedAt  sql.NullTime `json:"fetched_at"`
+	Priority   int64        `json:"priority"`
 }
 
 type Character struct {
@@ -65,11 +65,11 @@ type ContractDetail struct {
 }
 
 type CorporationRecord struct {
-	CorporationID int64  `json:"corporation_id"`
-	Payload       string `json:"payload"`
-	State         string `json:"state"`
-	FetchedAt     string `json:"fetched_at"`
-	Priority      int64  `json:"priority"`
+	CorporationID int64        `json:"corporation_id"`
+	Payload       string       `json:"payload"`
+	State         string       `json:"state"`
+	FetchedAt     sql.NullTime `json:"fetched_at"`
+	Priority      int64        `json:"priority"`
 }
 
 type GlobalSnapshot struct {
@@ -277,29 +277,29 @@ type OrderLifecycle struct {
 }
 
 type PilotNameWant struct {
-	NormalizedName string `json:"normalized_name"`
-	DisplayName    string `json:"display_name"`
-	State          string `json:"state"`
-	CharacterID    int64  `json:"character_id"`
-	RequestedAt    string `json:"requested_at"`
-	ResolvedAt     string `json:"resolved_at"`
-	NextTryAt      string `json:"next_try_at"`
-	Attempts       int64  `json:"attempts"`
+	NormalizedName string       `json:"normalized_name"`
+	DisplayName    string       `json:"display_name"`
+	State          string       `json:"state"`
+	CharacterID    int64        `json:"character_id"`
+	RequestedAt    time.Time    `json:"requested_at"`
+	ResolvedAt     sql.NullTime `json:"resolved_at"`
+	NextTryAt      sql.NullTime `json:"next_try_at"`
+	Attempts       int64        `json:"attempts"`
 }
 
 type PilotRecord struct {
-	CharacterID int64  `json:"character_id"`
-	Payload     string `json:"payload"`
-	State       string `json:"state"`
-	FetchedAt   string `json:"fetched_at"`
-	Priority    int64  `json:"priority"`
+	CharacterID int64        `json:"character_id"`
+	Payload     string       `json:"payload"`
+	State       string       `json:"state"`
+	FetchedAt   sql.NullTime `json:"fetched_at"`
+	Priority    int64        `json:"priority"`
 }
 
 type PlanetName struct {
-	PlanetID   int64  `json:"planet_id"`
-	Name       string `json:"name"`
-	State      string `json:"state"`
-	ResolvedAt string `json:"resolved_at"`
+	PlanetID   int64        `json:"planet_id"`
+	Name       string       `json:"name"`
+	State      string       `json:"state"`
+	ResolvedAt sql.NullTime `json:"resolved_at"`
 }
 
 type RestockTarget struct {
@@ -469,25 +469,25 @@ type SnapshotFetchState struct {
 }
 
 type StructureContext struct {
-	StructureID        int64  `json:"structure_id"`
-	OwnerCorporationID int64  `json:"owner_corporation_id"`
-	SystemID           int64  `json:"system_id"`
-	TypeID             int64  `json:"type_id"`
-	UpdatedAt          string `json:"updated_at"`
+	StructureID        int64     `json:"structure_id"`
+	OwnerCorporationID int64     `json:"owner_corporation_id"`
+	SystemID           int64     `json:"system_id"`
+	TypeID             int64     `json:"type_id"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 type StructureName struct {
-	StructureID int64  `json:"structure_id"`
-	Name        string `json:"name"`
-	State       string `json:"state"`
-	ResolvedAt  string `json:"resolved_at"`
-	Source      string `json:"source"`
+	StructureID int64        `json:"structure_id"`
+	Name        string       `json:"name"`
+	State       string       `json:"state"`
+	ResolvedAt  sql.NullTime `json:"resolved_at"`
+	Source      string       `json:"source"`
 }
 
 type TypeDetail struct {
-	TypeID      int64  `json:"type_id"`
-	Description string `json:"description"`
-	FetchedAt   string `json:"fetched_at"`
+	TypeID      int64        `json:"type_id"`
+	Description string       `json:"description"`
+	FetchedAt   sql.NullTime `json:"fetched_at"`
 }
 
 type TypeName struct {

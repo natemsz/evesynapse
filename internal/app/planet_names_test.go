@@ -208,7 +208,7 @@ func TestPlanetRenderFallbackThenName(t *testing.T) {
 	// The worker's answer lands in the durable cache...
 	if err := q.SetPlanetName(ctx, db.SetPlanetNameParams{
 		PlanetID: 40152063, Name: "Jita IV", State: esi.PlanetResolved,
-		ResolvedAt: now.UTC().Format(time.RFC3339),
+		ResolvedAt: timeSet(now.UTC()),
 	}); err != nil {
 		t.Fatalf("seed resolved planet: %v", err)
 	}
@@ -268,7 +268,7 @@ func TestPlanetAttentionLineResolves(t *testing.T) {
 
 	if err := q.SetPlanetName(ctx, db.SetPlanetNameParams{
 		PlanetID: 40152063, Name: "Jita IV", State: esi.PlanetResolved,
-		ResolvedAt: now.UTC().Format(time.RFC3339),
+		ResolvedAt: timeSet(now.UTC()),
 	}); err != nil {
 		t.Fatalf("seed resolved planet: %v", err)
 	}

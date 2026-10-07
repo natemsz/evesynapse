@@ -411,7 +411,7 @@ func (app *Application) descriptionState(ctx context.Context, typeID int64) (sta
 		return "ready", true
 	}
 	td, err := app.queries.GetTypeDetail(ctx, typeID)
-	if err == nil && td.FetchedAt != "" {
+	if err == nil && td.FetchedAt.Valid {
 		if td.Description != "" {
 			return "ready", true
 		}
@@ -433,9 +433,9 @@ func (app *Application) itemDescription(ctx context.Context, typeID int64) (stri
 	}
 	td, err := app.queries.GetTypeDetail(ctx, typeID)
 	switch {
-	case err == nil && td.FetchedAt != "" && td.Description != "":
+	case err == nil && td.FetchedAt.Valid && td.Description != "":
 		return "ready", sanitizeMailHTML(td.Description)
-	case err == nil && td.FetchedAt != "":
+	case err == nil && td.FetchedAt.Valid:
 		return "empty", ""
 	default:
 		if qerr := app.queries.UpsertTypeDetailWant(ctx, typeID); qerr != nil {

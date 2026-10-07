@@ -357,7 +357,7 @@ func TestPilotOrbitDerivationAndPriority(t *testing.T) {
 		t.Fatalf("viewed want: %v", err)
 	}
 	ids, err := q.ListPilotDrains(ctx, db.ListPilotDrainsParams{
-		StaleCutoff: time.Now().UTC().Add(-pilotStaleAfter).Format(time.RFC3339),
+		StaleCutoff: time.Now().UTC().Add(-pilotStaleAfter),
 		DrainLimit:  5,
 	})
 	if err != nil {
@@ -513,7 +513,7 @@ func TestLiveRegionFragments(t *testing.T) {
 	ready, _ := json.Marshal(pilotPayload{Profile: esi.Character{Name: "Fixture Stranger", SecurityStatus: 0.5}})
 	if err := q.SetPilotRecord(ctx, db.SetPilotRecordParams{
 		CharacterID: 93300077, Payload: string(ready), State: pilotStateReady,
-		FetchedAt: time.Now().UTC().Format(time.RFC3339),
+		FetchedAt: timeSet(time.Now().UTC()),
 	}); err != nil {
 		t.Fatalf("seed pilot record: %v", err)
 	}

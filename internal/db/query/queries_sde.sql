@@ -360,7 +360,7 @@ ON CONFLICT (type_id) DO UPDATE SET
 -- name: ListTypeDetailWants :many
 SELECT type_id
 FROM type_details
-WHERE fetched_at = ''
+WHERE fetched_at IS NULL
 ORDER BY type_id
 LIMIT sqlc.arg(row_limit)::bigint;
 -- name: ListSDEBlueprintsUsingMaterial :many

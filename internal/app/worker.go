@@ -880,7 +880,7 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 				if s.Name != "" {
 					if _, ok := app.esi.CachedStructureName(ctx, s.StructureID); !ok {
 						if app.storeStructureName(ctx, s.StructureID, s.Name,
-							esi.StructureResolved, esi.StructureSourceCorp, time.Now().UTC().Format(time.RFC3339)) {
+							esi.StructureResolved, esi.StructureSourceCorp, time.Now().UTC()) {
 							app.esi.StoreStructureName(s.StructureID, s.Name)
 						}
 					}
@@ -1350,7 +1350,7 @@ func (app *Application) warmPlanetName(ctx context.Context, budget *warmBudget, 
 	app.esi.StorePlaceName(id, planet.Name)
 	if err := app.queries.SetPlanetName(ctx, db.SetPlanetNameParams{
 		PlanetID: id, Name: planet.Name, State: esi.PlanetResolved,
-		ResolvedAt: time.Now().UTC().Format(time.RFC3339),
+		ResolvedAt: timeSet(time.Now().UTC()),
 	}); err != nil {
 		logging.Errorf("worker: persist planet name %d: %v", id, err)
 	}

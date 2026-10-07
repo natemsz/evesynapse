@@ -77,7 +77,7 @@ func TestTopbarSearchUnwarmedPilotNameWant(t *testing.T) {
 	// pilot record landed. The same search now offers the pilot.
 	strangerID := int64(93300077)
 	if err := q.SetPilotNameWantReady(ctx, db.SetPilotNameWantReadyParams{
-		CharacterID: strangerID, ResolvedAt: "2026-10-04T00:00:00Z", NormalizedName: "unwarmed stranger",
+		CharacterID: strangerID, ResolvedAt: mustNullTime("2026-10-04T00:00:00Z"), NormalizedName: "unwarmed stranger",
 	}); err != nil {
 		t.Fatalf("settle name want: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestTopbarSearchUnwarmedPilotNameWant(t *testing.T) {
 	}
 	if err := q.SetPilotRecord(ctx, db.SetPilotRecordParams{
 		CharacterID: strangerID, Payload: string(payload),
-		State: pilotStateReady, FetchedAt: "2026-10-04T00:00:00Z",
+		State: pilotStateReady, FetchedAt: mustNullTime("2026-10-04T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("store pilot record: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestPilotNameWantResolutionQueuesPilotRecord(t *testing.T) {
 		if err := q.UpsertPilotNameWant(ctx, db.UpsertPilotNameWantParams{
 			NormalizedName: normalizePilotName(display),
 			DisplayName:    display,
-			RequestedAt:    "2026-10-04T00:00:00Z",
+			RequestedAt:    mustTime("2026-10-04T00:00:00Z"),
 		}); err != nil {
 			t.Fatalf("note want %q: %v", display, err)
 		}

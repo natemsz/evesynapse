@@ -91,6 +91,9 @@ var pgTimestampsAccountsSchema string
 //go:embed schema_pg/010_timestamps_market.sql
 var pgTimestampsMarketSchema string
 
+//go:embed schema_pg/011_timestamps_records.sql
+var pgTimestampsRecordsSchema string
+
 //go:embed static
 var staticFS embed.FS
 

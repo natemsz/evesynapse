@@ -63,15 +63,14 @@ func (app *Application) notePlanetIDs(ctx context.Context, ids ...int64) {
 func (app *Application) resolvePlanetNames(ctx context.Context, allowance *fetchBudget) (resolved int, limited bool) {
 	now := time.Now().UTC()
 	ids, err := app.queries.ListPlanetResolutions(ctx, db.ListPlanetResolutionsParams{
-		ResolvedCutoff:  now.Add(-planetRenameWindow).Format(time.RFC3339),
-		MissingCutoff:   now.Add(-planetMissingWindow).Format(time.RFC3339),
+		ResolvedCutoff:  now.Add(-planetRenameWindow),
+		MissingCutoff:   now.Add(-planetMissingWindow),
 		ResolutionLimit: maxPlanetResolutionsPerCycle,
 	})
 	if err != nil {
 		logging.Errorf("worker: planets: list resolutions: %v", err)
 		return 0, false
 	}
-	stamp := now.Format(time.RFC3339)
 	for _, id := range ids {
 		if ctx.Err() != nil {
 			break
@@ -80,7 +79,7 @@ func (app *Application) resolvePlanetNames(ctx context.Context, allowance *fetch
 		// this pass to it): persist, no fetch spent.
 		if name, ok := app.esi.CachedPlanetName(ctx, id); ok && name != "" {
 			if serr := app.queries.SetPlanetName(ctx, db.SetPlanetNameParams{
-				PlanetID: id, Name: name, State: esi.PlanetResolved, ResolvedAt: stamp,
+				PlanetID: id, Name: name, State: esi.PlanetResolved, ResolvedAt: timeSet(now),
 			}); serr != nil {
 				logging.Errorf("worker: planets: persist cached name for %d: %v", id, serr)
 			} else {
@@ -101,7 +100,7 @@ func (app *Application) resolvePlanetNames(ctx context.Context, allowance *fetch
 				// Not a planet: remember the answer so this id
 				// isn't re-asked every cycle.
 				if serr := app.queries.SetPlanetName(ctx, db.SetPlanetNameParams{
-					PlanetID: id, Name: "", State: esi.PlanetMissing, ResolvedAt: stamp,
+					PlanetID: id, Name: "", State: esi.PlanetMissing, ResolvedAt: timeSet(now),
 				}); serr != nil {
 					logging.Errorf("worker: planets: record miss for %d: %v", id, serr)
 				}
@@ -114,7 +113,7 @@ func (app *Application) resolvePlanetNames(ctx context.Context, allowance *fetch
 			continue
 		}
 		if serr := app.queries.SetPlanetName(ctx, db.SetPlanetNameParams{
-			PlanetID: id, Name: planet.Name, State: esi.PlanetResolved, ResolvedAt: stamp,
+			PlanetID: id, Name: planet.Name, State: esi.PlanetResolved, ResolvedAt: timeSet(now),
 		}); serr != nil {
 			logging.Errorf("worker: planets: store name for %d: %v", id, serr)
 			continue

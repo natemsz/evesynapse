@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	"github.com/lib/pq"
@@ -462,10 +463,10 @@ WHERE character_id = $1
 `
 
 type GetPilotRecordRow struct {
-	CharacterID int64  `json:"character_id"`
-	Payload     string `json:"payload"`
-	State       string `json:"state"`
-	FetchedAt   string `json:"fetched_at"`
+	CharacterID int64        `json:"character_id"`
+	Payload     string       `json:"payload"`
+	State       string       `json:"state"`
+	FetchedAt   sql.NullTime `json:"fetched_at"`
 }
 
 // ---------------------------------------------------------------------
@@ -473,7 +474,7 @@ type GetPilotRecordRow struct {
 // Pending rows are always due; ready rows re-check once their
 // fetched_at passes the stale cutoff; missing rows (ESI 404)
 // settle for good. The item details page enqueues type
-// descriptions the same way: a type_details row with an empty
+// descriptions the same way: a type_details row with no
 // fetched_at is a want.
 // ---------------------------------------------------------------------
 func (q *Queries) GetPilotRecord(ctx context.Context, characterID int64) (GetPilotRecordRow, error) {
@@ -688,14 +689,14 @@ const listAllianceDrains = `-- name: ListAllianceDrains :many
 SELECT alliance_id
 FROM alliance_records
 WHERE state = 'pending'
-   OR (state = 'ready' AND fetched_at < $1)
-ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at
+   OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < $1::timestamptz))
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at NULLS FIRST
 LIMIT $2::bigint
 `
 
 type ListAllianceDrainsParams struct {
-	StaleCutoff string `json:"stale_cutoff"`
-	DrainLimit  int64  `json:"drain_limit"`
+	StaleCutoff time.Time `json:"stale_cutoff"`
+	DrainLimit  int64     `json:"drain_limit"`
 }
 
 func (q *Queries) ListAllianceDrains(ctx context.Context, arg ListAllianceDrainsParams) ([]int64, error) {
@@ -866,14 +867,14 @@ const listCorporationDrains = `-- name: ListCorporationDrains :many
 SELECT corporation_id
 FROM corporation_records
 WHERE state = 'pending'
-   OR (state = 'ready' AND fetched_at < $1)
-ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at
+   OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < $1::timestamptz))
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at NULLS FIRST
 LIMIT $2::bigint
 `
 
 type ListCorporationDrainsParams struct {
-	StaleCutoff string `json:"stale_cutoff"`
-	DrainLimit  int64  `json:"drain_limit"`
+	StaleCutoff time.Time `json:"stale_cutoff"`
+	DrainLimit  int64     `json:"drain_limit"`
 }
 
 func (q *Queries) ListCorporationDrains(ctx context.Context, arg ListCorporationDrainsParams) ([]int64, error) {
@@ -903,14 +904,14 @@ const listDuePilotNameWants = `-- name: ListDuePilotNameWants :many
 SELECT normalized_name, display_name, state, character_id, requested_at, resolved_at, next_try_at, attempts
 FROM pilot_name_wants
 WHERE (state = 'pending' OR state = 'error')
-  AND (next_try_at = '' OR next_try_at <= $1)
+  AND (next_try_at IS NULL OR next_try_at <= $1::timestamptz)
 ORDER BY requested_at
 LIMIT $2::bigint
 `
 
 type ListDuePilotNameWantsParams struct {
-	Now string `json:"now"`
-	Lim int64  `json:"lim"`
+	Now time.Time `json:"now"`
+	Lim int64     `json:"lim"`
 }
 
 func (q *Queries) ListDuePilotNameWants(ctx context.Context, arg ListDuePilotNameWantsParams) ([]PilotNameWant, error) {
@@ -1803,14 +1804,14 @@ const listPilotDrains = `-- name: ListPilotDrains :many
 SELECT character_id
 FROM pilot_records
 WHERE state = 'pending'
-   OR (state = 'ready' AND fetched_at < $1)
-ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at
+   OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < $1::timestamptz))
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at NULLS FIRST
 LIMIT $2::bigint
 `
 
 type ListPilotDrainsParams struct {
-	StaleCutoff string `json:"stale_cutoff"`
-	DrainLimit  int64  `json:"drain_limit"`
+	StaleCutoff time.Time `json:"stale_cutoff"`
+	DrainLimit  int64     `json:"drain_limit"`
 }
 
 func (q *Queries) ListPilotDrains(ctx context.Context, arg ListPilotDrainsParams) ([]int64, error) {
@@ -1868,16 +1869,16 @@ const listPlanetResolutions = `-- name: ListPlanetResolutions :many
 SELECT planet_id
 FROM planet_names
 WHERE state = 'pending'
-   OR (state = 'resolved' AND resolved_at < $1)
-   OR (state = 'missing' AND resolved_at < $2)
+   OR (state = 'resolved' AND (resolved_at IS NULL OR resolved_at < $1::timestamptz))
+   OR (state = 'missing' AND (resolved_at IS NULL OR resolved_at < $2::timestamptz))
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, planet_id
 LIMIT $3::bigint
 `
 
 type ListPlanetResolutionsParams struct {
-	ResolvedCutoff  string `json:"resolved_cutoff"`
-	MissingCutoff   string `json:"missing_cutoff"`
-	ResolutionLimit int64  `json:"resolution_limit"`
+	ResolvedCutoff  time.Time `json:"resolved_cutoff"`
+	MissingCutoff   time.Time `json:"missing_cutoff"`
+	ResolutionLimit int64     `json:"resolution_limit"`
 }
 
 func (q *Queries) ListPlanetResolutions(ctx context.Context, arg ListPlanetResolutionsParams) ([]int64, error) {
@@ -2064,16 +2065,16 @@ const listStructureResolutions = `-- name: ListStructureResolutions :many
 SELECT structure_id
 FROM structure_names
 WHERE state = 'pending'
-   OR (state = 'resolved' AND resolved_at < $1)
-   OR (state = 'missing' AND resolved_at < $2)
+   OR (state = 'resolved' AND (resolved_at IS NULL OR resolved_at < $1::timestamptz))
+   OR (state = 'missing' AND (resolved_at IS NULL OR resolved_at < $2::timestamptz))
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, structure_id
 LIMIT $3::bigint
 `
 
 type ListStructureResolutionsParams struct {
-	ResolvedCutoff  string `json:"resolved_cutoff"`
-	MissingCutoff   string `json:"missing_cutoff"`
-	ResolutionLimit int64  `json:"resolution_limit"`
+	ResolvedCutoff  time.Time `json:"resolved_cutoff"`
+	MissingCutoff   time.Time `json:"missing_cutoff"`
+	ResolutionLimit int64     `json:"resolution_limit"`
 }
 
 func (q *Queries) ListStructureResolutions(ctx context.Context, arg ListStructureResolutionsParams) ([]int64, error) {
@@ -2147,12 +2148,11 @@ type ListTradefinderRoutesRow struct {
 // The tradefinder's routes, computed and ranked in SQL: one
 // bounded read of at most tradefinderRowCap rows instead of
 // pulling both regions' stored stats into Go. Mirrors the old
-// Go filter exactly: fresh figures on both sides (3-day rule,
-// compared as RFC3339 text), a real typical buy and sell,
-// margin above zero, the lowball opt-out, the margin-% floor,
-// the sold-per-day floor, and the movable size as the least of
-// what trades, the origin's open buy volume, and the
-// destination's open sell volume.
+// Go filter exactly: fresh figures on both sides (3-day rule), a
+// real typical buy and sell, margin above zero, the lowball
+// opt-out, the margin-% floor, the sold-per-day floor, and the
+// movable size as the least of what trades, the origin's open buy
+// volume, and the destination's open sell volume.
 func (q *Queries) ListTradefinderRoutes(ctx context.Context, arg ListTradefinderRoutesParams) ([]ListTradefinderRoutesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listTradefinderRoutes,
 		arg.DestRegion,
@@ -2276,10 +2276,10 @@ ON CONFLICT (alliance_id) DO UPDATE SET
 `
 
 type SetAllianceRecordParams struct {
-	AllianceID int64  `json:"alliance_id"`
-	Payload    string `json:"payload"`
-	State      string `json:"state"`
-	FetchedAt  string `json:"fetched_at"`
+	AllianceID int64        `json:"alliance_id"`
+	Payload    string       `json:"payload"`
+	State      string       `json:"state"`
+	FetchedAt  sql.NullTime `json:"fetched_at"`
 }
 
 func (q *Queries) SetAllianceRecord(ctx context.Context, arg SetAllianceRecordParams) error {
@@ -2302,10 +2302,10 @@ ON CONFLICT (corporation_id) DO UPDATE SET
 `
 
 type SetCorporationRecordParams struct {
-	CorporationID int64  `json:"corporation_id"`
-	Payload       string `json:"payload"`
-	State         string `json:"state"`
-	FetchedAt     string `json:"fetched_at"`
+	CorporationID int64        `json:"corporation_id"`
+	Payload       string       `json:"payload"`
+	State         string       `json:"state"`
+	FetchedAt     sql.NullTime `json:"fetched_at"`
 }
 
 func (q *Queries) SetCorporationRecord(ctx context.Context, arg SetCorporationRecordParams) error {
@@ -2325,9 +2325,9 @@ WHERE normalized_name = $3
 `
 
 type SetPilotNameWantErrorParams struct {
-	ResolvedAt     string `json:"resolved_at"`
-	NextTryAt      string `json:"next_try_at"`
-	NormalizedName string `json:"normalized_name"`
+	ResolvedAt     sql.NullTime `json:"resolved_at"`
+	NextTryAt      sql.NullTime `json:"next_try_at"`
+	NormalizedName string       `json:"normalized_name"`
 }
 
 func (q *Queries) SetPilotNameWantError(ctx context.Context, arg SetPilotNameWantErrorParams) error {
@@ -2337,13 +2337,13 @@ func (q *Queries) SetPilotNameWantError(ctx context.Context, arg SetPilotNameWan
 
 const setPilotNameWantMissing = `-- name: SetPilotNameWantMissing :exec
 UPDATE pilot_name_wants
-SET state = 'missing', resolved_at = $1, next_try_at = ''
+SET state = 'missing', resolved_at = $1, next_try_at = NULL
 WHERE normalized_name = $2
 `
 
 type SetPilotNameWantMissingParams struct {
-	ResolvedAt     string `json:"resolved_at"`
-	NormalizedName string `json:"normalized_name"`
+	ResolvedAt     sql.NullTime `json:"resolved_at"`
+	NormalizedName string       `json:"normalized_name"`
 }
 
 func (q *Queries) SetPilotNameWantMissing(ctx context.Context, arg SetPilotNameWantMissingParams) error {
@@ -2353,14 +2353,14 @@ func (q *Queries) SetPilotNameWantMissing(ctx context.Context, arg SetPilotNameW
 
 const setPilotNameWantReady = `-- name: SetPilotNameWantReady :exec
 UPDATE pilot_name_wants
-SET state = 'ready', character_id = $1, resolved_at = $2, next_try_at = ''
+SET state = 'ready', character_id = $1, resolved_at = $2, next_try_at = NULL
 WHERE normalized_name = $3
 `
 
 type SetPilotNameWantReadyParams struct {
-	CharacterID    int64  `json:"character_id"`
-	ResolvedAt     string `json:"resolved_at"`
-	NormalizedName string `json:"normalized_name"`
+	CharacterID    int64        `json:"character_id"`
+	ResolvedAt     sql.NullTime `json:"resolved_at"`
+	NormalizedName string       `json:"normalized_name"`
 }
 
 func (q *Queries) SetPilotNameWantReady(ctx context.Context, arg SetPilotNameWantReadyParams) error {
@@ -2378,10 +2378,10 @@ ON CONFLICT (character_id) DO UPDATE SET
 `
 
 type SetPilotRecordParams struct {
-	CharacterID int64  `json:"character_id"`
-	Payload     string `json:"payload"`
-	State       string `json:"state"`
-	FetchedAt   string `json:"fetched_at"`
+	CharacterID int64        `json:"character_id"`
+	Payload     string       `json:"payload"`
+	State       string       `json:"state"`
+	FetchedAt   sql.NullTime `json:"fetched_at"`
 }
 
 func (q *Queries) SetPilotRecord(ctx context.Context, arg SetPilotRecordParams) error {
@@ -2404,10 +2404,10 @@ ON CONFLICT (planet_id) DO UPDATE SET
 `
 
 type SetPlanetNameParams struct {
-	PlanetID   int64  `json:"planet_id"`
-	Name       string `json:"name"`
-	State      string `json:"state"`
-	ResolvedAt string `json:"resolved_at"`
+	PlanetID   int64        `json:"planet_id"`
+	Name       string       `json:"name"`
+	State      string       `json:"state"`
+	ResolvedAt sql.NullTime `json:"resolved_at"`
 }
 
 func (q *Queries) SetPlanetName(ctx context.Context, arg SetPlanetNameParams) error {
@@ -2431,11 +2431,11 @@ ON CONFLICT (structure_id) DO UPDATE SET
 `
 
 type SetStructureContextParams struct {
-	StructureID        int64  `json:"structure_id"`
-	OwnerCorporationID int64  `json:"owner_corporation_id"`
-	SystemID           int64  `json:"system_id"`
-	TypeID             int64  `json:"type_id"`
-	UpdatedAt          string `json:"updated_at"`
+	StructureID        int64     `json:"structure_id"`
+	OwnerCorporationID int64     `json:"owner_corporation_id"`
+	SystemID           int64     `json:"system_id"`
+	TypeID             int64     `json:"type_id"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 func (q *Queries) SetStructureContext(ctx context.Context, arg SetStructureContextParams) error {
@@ -2460,11 +2460,11 @@ ON CONFLICT (structure_id) DO UPDATE SET
 `
 
 type SetStructureNameParams struct {
-	StructureID int64  `json:"structure_id"`
-	Name        string `json:"name"`
-	State       string `json:"state"`
-	ResolvedAt  string `json:"resolved_at"`
-	Source      string `json:"source"`
+	StructureID int64        `json:"structure_id"`
+	Name        string       `json:"name"`
+	State       string       `json:"state"`
+	ResolvedAt  sql.NullTime `json:"resolved_at"`
+	Source      string       `json:"source"`
 }
 
 func (q *Queries) SetStructureName(ctx context.Context, arg SetStructureNameParams) error {
@@ -3000,9 +3000,9 @@ ON CONFLICT DO NOTHING
 `
 
 type UpsertPilotNameWantParams struct {
-	NormalizedName string `json:"normalized_name"`
-	DisplayName    string `json:"display_name"`
-	RequestedAt    string `json:"requested_at"`
+	NormalizedName string    `json:"normalized_name"`
+	DisplayName    string    `json:"display_name"`
+	RequestedAt    time.Time `json:"requested_at"`
 }
 
 func (q *Queries) UpsertPilotNameWant(ctx context.Context, arg UpsertPilotNameWantParams) error {

@@ -287,13 +287,13 @@ func TestStructureProvenancePrecedence(t *testing.T) {
 	app, q := buildStructureTestApp(t, &structureAttemptTransport{})
 	ctx := context.Background()
 	const structureID = int64(1044752365771)
-	stamp := time.Now().UTC().Format(time.RFC3339)
+	stamp := time.Now().UTC()
 
 	seed := func(name, source string) {
 		t.Helper()
 		if err := q.SetStructureName(ctx, db.SetStructureNameParams{
 			StructureID: structureID, Name: name, State: esi.StructureResolved,
-			ResolvedAt: stamp, Source: source,
+			ResolvedAt: timeSet(stamp), Source: source,
 		}); err != nil {
 			t.Fatalf("seed %s: %v", source, err)
 		}

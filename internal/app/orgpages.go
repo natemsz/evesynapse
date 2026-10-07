@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -211,7 +212,7 @@ func (app *Application) loadCorporationView(ctx context.Context, id int64) *corp
 			// page on the loading state forever.
 			logging.Warnf("corporation: unreadable payload for %d; requeueing", id)
 			if serr := app.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
-				CorporationID: id, Payload: "", State: orgStatePending, FetchedAt: "",
+				CorporationID: id, Payload: "", State: orgStatePending, FetchedAt: sql.NullTime{},
 			}); serr != nil {
 				logging.Errorf("corporation: requeue %d: %v", id, serr)
 			}
@@ -311,7 +312,7 @@ func (app *Application) loadAllianceView(ctx context.Context, id int64) *allianc
 		} else {
 			logging.Warnf("alliance: unreadable payload for %d; requeueing", id)
 			if serr := app.queries.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
-				AllianceID: id, Payload: "", State: orgStatePending, FetchedAt: "",
+				AllianceID: id, Payload: "", State: orgStatePending, FetchedAt: sql.NullTime{},
 			}); serr != nil {
 				logging.Errorf("alliance: requeue %d: %v", id, serr)
 			}
@@ -497,7 +498,7 @@ func (app *Application) refreshAllianceRecords(ctx context.Context, allowance *f
 // the urgent drain).
 func (app *Application) drainCorporationPass(ctx context.Context, allowance *fetchBudget, limit int, now time.Time) (drained int, limited bool) {
 	ids, err := app.queries.ListCorporationDrains(ctx, db.ListCorporationDrainsParams{
-		StaleCutoff: now.Add(-orgStaleAfter).Format(time.RFC3339),
+		StaleCutoff: now.Add(-orgStaleAfter),
 		DrainLimit:  int64(limit),
 	})
 	if err != nil {
@@ -522,7 +523,7 @@ func (app *Application) drainCorporationPass(ctx context.Context, allowance *fet
 // drainAlliancePass is drainCorporationPass for alliances.
 func (app *Application) drainAlliancePass(ctx context.Context, allowance *fetchBudget, limit int, now time.Time) (drained int, limited bool) {
 	ids, err := app.queries.ListAllianceDrains(ctx, db.ListAllianceDrainsParams{
-		StaleCutoff: now.Add(-orgStaleAfter).Format(time.RFC3339),
+		StaleCutoff: now.Add(-orgStaleAfter),
 		DrainLimit:  int64(limit),
 	})
 	if err != nil {
@@ -548,7 +549,6 @@ func (app *Application) drainAlliancePass(ctx context.Context, allowance *fetchB
 // public record from ESI's public endpoints (no token involved
 // anywhere). A 404 settles the record as 'missing'.
 func (app *Application) drainCorporationRecord(ctx context.Context, id int64, allowance *fetchBudget, now time.Time) (settled bool, limited bool) {
-	stamp := now.Format(time.RFC3339)
 
 	if !allowance.take() {
 		return false, false
@@ -561,7 +561,7 @@ func (app *Application) drainCorporationRecord(ctx context.Context, id int64, al
 		}
 		if code, has := esi.StatusCode(err); has && code == http.StatusNotFound {
 			if serr := app.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
-				CorporationID: id, Payload: "", State: orgStateMissing, FetchedAt: stamp,
+				CorporationID: id, Payload: "", State: orgStateMissing, FetchedAt: timeSet(now),
 			}); serr != nil {
 				logging.Errorf("worker: corporation records: record miss for %d: %v", id, serr)
 				return false, false
@@ -596,7 +596,7 @@ func (app *Application) drainCorporationRecord(ctx context.Context, id int64, al
 		return false, false
 	}
 	if err := app.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
-		CorporationID: id, Payload: string(encoded), State: orgStateReady, FetchedAt: stamp,
+		CorporationID: id, Payload: string(encoded), State: orgStateReady, FetchedAt: timeSet(now),
 	}); err != nil {
 		logging.Errorf("worker: corporation records: store record for %d: %v", id, err)
 		return false, false
@@ -610,7 +610,6 @@ func (app *Application) drainCorporationRecord(ctx context.Context, id int64, al
 // resolve through the corporation queue, like pilot employment
 // histories). A 404 settles the record as 'missing'.
 func (app *Application) drainAllianceRecord(ctx context.Context, id int64, allowance *fetchBudget, now time.Time) (settled bool, limited bool) {
-	stamp := now.Format(time.RFC3339)
 
 	if !allowance.take() {
 		return false, false
@@ -623,7 +622,7 @@ func (app *Application) drainAllianceRecord(ctx context.Context, id int64, allow
 		}
 		if code, has := esi.StatusCode(err); has && code == http.StatusNotFound {
 			if serr := app.queries.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
-				AllianceID: id, Payload: "", State: orgStateMissing, FetchedAt: stamp,
+				AllianceID: id, Payload: "", State: orgStateMissing, FetchedAt: timeSet(now),
 			}); serr != nil {
 				logging.Errorf("worker: alliance records: record miss for %d: %v", id, serr)
 				return false, false
@@ -676,7 +675,7 @@ func (app *Application) drainAllianceRecord(ctx context.Context, id int64, allow
 		return false, false
 	}
 	if err := app.queries.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
-		AllianceID: id, Payload: string(encoded), State: orgStateReady, FetchedAt: stamp,
+		AllianceID: id, Payload: string(encoded), State: orgStateReady, FetchedAt: timeSet(now),
 	}); err != nil {
 		logging.Errorf("worker: alliance records: store record for %d: %v", id, err)
 		return false, false

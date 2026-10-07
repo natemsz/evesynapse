@@ -353,7 +353,7 @@ func TestPilotPageLinksToOrgPages(t *testing.T) {
 		t.Fatalf("marshal pilot payload: %v", err)
 	}
 	if err := q.SetPilotRecord(ctx, db.SetPilotRecordParams{
-		CharacterID: fixtureMember, Payload: string(raw), State: pilotStateReady, FetchedAt: "2999-01-01T00:00:00Z",
+		CharacterID: fixtureMember, Payload: string(raw), State: pilotStateReady, FetchedAt: mustNullTime("2999-01-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed pilot record: %v", err)
 	}
@@ -510,7 +510,7 @@ func TestOrgLabelLiveRegions(t *testing.T) {
 	if err := q.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
 		CorporationID: 98000077,
 		Payload:       `{"corp":{"name":"Late Corp","ticker":"LATE","member_count":3,"ceo_id":1,"tax_rate":0.1},"alliance":{}}`,
-		State:         orgStateReady, FetchedAt: "2026-01-01T00:00:00Z",
+		State:         orgStateReady, FetchedAt: mustNullTime("2026-01-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed corporation record: %v", err)
 	}
@@ -536,7 +536,7 @@ func TestOrgLabelLiveRegions(t *testing.T) {
 	// A settled miss stops the polling: the alliance that does
 	// not exist renders its plain fallback as ready.
 	if err := q.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
-		AllianceID: 99000099, Payload: "", State: orgStateMissing, FetchedAt: "2026-01-01T00:00:00Z",
+		AllianceID: 99000099, Payload: "", State: orgStateMissing, FetchedAt: mustNullTime("2026-01-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed missing alliance: %v", err)
 	}

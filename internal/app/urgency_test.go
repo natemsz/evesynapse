@@ -32,7 +32,7 @@ func settlePilotName(t *testing.T, q *db.Queries, characterID int64, name string
 	payload := `{"profile":{"name":"` + name + `"}}`
 	if err := q.SetPilotRecord(context.Background(), db.SetPilotRecordParams{
 		CharacterID: characterID, Payload: payload, State: pilotStateReady,
-		FetchedAt: time.Now().UTC().Format(time.RFC3339),
+		FetchedAt: timeSet(time.Now().UTC()),
 	}); err != nil {
 		t.Fatalf("set pilot record %d: %v", characterID, err)
 	}
@@ -212,14 +212,14 @@ func TestSDEDescriptionLocalFirstAndFallback(t *testing.T) {
 	_, body = getPage(t, app, cookie, "/items/type/35/")
 	mustContain(t, "/items/type/35/", body, "This description is queued")
 	td, err := q.GetTypeDetail(ctx, 35)
-	if err != nil || td.FetchedAt != "" {
+	if err != nil || td.FetchedAt.Valid {
 		t.Fatalf("fallback want: td=%+v err=%v, want unfilled want row", td, err)
 	}
 
 	// The fallback lands; the page serves it.
 	if err := q.SetTypeDetail(ctx, db.SetTypeDetailParams{
 		TypeID: 35, Description: "Text from the fallback fetch.",
-		FetchedAt: time.Now().UTC().Format(time.RFC3339),
+		FetchedAt: timeSet(time.Now().UTC()),
 	}); err != nil {
 		t.Fatalf("set type detail: %v", err)
 	}

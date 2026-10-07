@@ -320,7 +320,7 @@ func TestTopbarSearch(t *testing.T) {
 	}
 	if err := q.SetPilotRecord(ctx, db.SetPilotRecordParams{
 		CharacterID: fixtureMember, Payload: string(payload),
-		State: pilotStateReady, FetchedAt: "2026-10-01T00:00:00Z",
+		State: pilotStateReady, FetchedAt: mustNullTime("2026-10-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed pilot record: %v", err)
 	}
@@ -330,7 +330,7 @@ func TestTopbarSearch(t *testing.T) {
 	}
 	if err := q.SetPilotRecord(ctx, db.SetPilotRecordParams{
 		CharacterID: fixtureCharA, Payload: string(ownPayload),
-		State: pilotStateReady, FetchedAt: "2026-10-01T00:00:00Z",
+		State: pilotStateReady, FetchedAt: mustNullTime("2026-10-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed own pilot record: %v", err)
 	}

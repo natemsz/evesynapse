@@ -41,7 +41,7 @@ func TestTopbarSearchIncludesOrganizations(t *testing.T) {
 	}
 	if err := q.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
 		CorporationID: fixtureCorpA, Payload: string(corpPayload),
-		State: orgStateReady, FetchedAt: "2026-10-01T00:00:00Z",
+		State: orgStateReady, FetchedAt: mustNullTime("2026-10-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed corporation record: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestTopbarSearchIncludesOrganizations(t *testing.T) {
 	}
 	if err := q.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
 		AllianceID: 99000001, Payload: string(alliancePayload),
-		State: orgStateReady, FetchedAt: "2026-10-01T00:00:00Z",
+		State: orgStateReady, FetchedAt: mustNullTime("2026-10-01T00:00:00Z"),
 	}); err != nil {
 		t.Fatalf("seed alliance record: %v", err)
 	}

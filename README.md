@@ -666,15 +666,23 @@ live in the `sessions` table the baseline creates).
 The schema is a series of numbered steps in
 `internal/app/schema_pg/`: `001_baseline.sql` is the whole schema
 as of the move to Postgres (BIGINT/DOUBLE PRECISION keep the
-generated Go models' int64/float64 types; timestamps stay
-app-written RFC3339 TEXT), and each later file is one change. At
-startup `openDB` applies whichever steps a database is missing,
-in order. Each step runs in a single transaction together with
-its row in the `schema_migrations` table, so a step lands
-completely or not at all, and that table is the record of what
-has been applied. A database from before the table existed is
+generated Go models' int64/float64 types), and each later file is
+one change. At startup `openDB` applies whichever steps a database
+is missing, in order. Each step runs in a single transaction
+together with its row in the `schema_migrations` table, so a step
+lands completely or not at all, and that table is the record of
+what has been applied. A database from before the table existed is
 adopted on first start: its existing steps are recorded, not run
 again.
+
+Times are `timestamptz` columns and `time.Time` (or `sql.NullTime`
+where "never" is a possible answer) in the code; a connection
+always hands them back in UTC, whatever zone the machine is in.
+The baseline kept them as RFC 3339 text, and steps 009–011 convert
+those columns, carrying every stored value over as the same
+instant. Those three steps rewrite the tables they touch, so the
+first start after upgrading past them takes as long as copying
+those tables once; the snapshot table is by far the largest.
 
 To change the schema, add the next numbered file, embed it in
 `app.go`, and add one line to `schemaSteps` in `db.go`.

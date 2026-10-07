@@ -99,7 +99,7 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 		return true
 	}
 	ids, err := app.queries.ListPilotDrains(ctx, db.ListPilotDrainsParams{
-		StaleCutoff: now.Add(-pilotStaleAfter).Format(time.RFC3339),
+		StaleCutoff: now.Add(-pilotStaleAfter),
 		DrainLimit:  urgentPilotsPerNudge,
 	})
 	if err != nil {
@@ -148,12 +148,11 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 	if err != nil {
 		logging.Errorf("worker: urgent drain: list type details: %v", err)
 	} else {
-		stamp := now.Format(time.RFC3339)
 		for _, id := range typeIDs {
 			if ctx.Err() != nil {
 				break
 			}
-			if _, ltd := app.fetchOneTypeDetail(ctx, id, stamp); ltd {
+			if _, ltd := app.fetchOneTypeDetail(ctx, id, now); ltd {
 				return true
 			}
 		}

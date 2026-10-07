@@ -856,9 +856,9 @@ func relabelExecutable(path string) {
 // -refresh: mark every cached download out of date.
 // ---------------------------------------------------------------------------
 
-// cacheEpoch is the timestamp every cache is rewound to: any
-// freshness check in the app reads it as "as old as it gets".
-const cacheEpoch = "1970-01-01T00:00:00Z"
+// cacheEpoch is the time every cache is rewound to: any freshness
+// check in the app reads it as "as old as it gets".
+var cacheEpoch = time.Unix(0, 0).UTC()
 
 // RunRefresh implements `evesynapse -refresh` (cfg detected the
 // same way the server detects it). It refuses to run while the
@@ -983,11 +983,11 @@ func expireCaches(conn *sql.DB) ([]string, error) {
 			args:  []any{cacheEpoch},
 		},
 		{
-			// An empty fetched_at is exactly how the item page
+			// A missing fetched_at is exactly how the item page
 			// asks for a description, so clearing it re-asks for
 			// every description the ESI fallback ever supplied.
 			label: "Item descriptions",
-			sql:   `UPDATE type_details SET fetched_at = '' WHERE fetched_at != ''`,
+			sql:   `UPDATE type_details SET fetched_at = NULL WHERE fetched_at IS NOT NULL`,
 		},
 		{
 			// Resolved names re-check after 30 days, missing ones

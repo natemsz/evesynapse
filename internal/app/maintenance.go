@@ -61,7 +61,7 @@ import (
 	"time"
 )
 
-// Version returns the rendered product version ("v0.3.38.001"),
+// Version returns the rendered product version ("v0.3.39.001"),
 // the same string the page footer shows.
 func Version() string { return appVersion }
 
@@ -361,7 +361,7 @@ func elfMachineForArch(arch string) (uint16, bool) {
 // compareVersions orders dotted numeric versions: -1 when a is
 // the older, 0 when equal, +1 when a is the newer. A leading
 // "v" is ignored and missing parts count as 0. A development
-// build's suffix ("0.3.38.001-dev") is not part of the number:
+// build's suffix ("0.3.39.001-dev") is not part of the number:
 // the numbers are compared first, and when they tie the plain
 // release is the newer of the two — a dev build leads up to the
 // release that carries its number.

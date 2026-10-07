@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"evesynapse/internal/buildplan"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -254,7 +255,7 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 		}
 	}
 
-	src := &sdePlannerSource{app: app, ctx: ctx, memo: make(map[int64]*plannerBlueprint), none: make(map[int64]bool)}
+	src := &sdePlannerSource{app: app, ctx: ctx, memo: make(map[int64]*buildplan.Blueprint), none: make(map[int64]bool)}
 
 	// "Judge as" scoping: the account's characters are the
 	// universe of scopes (one character, or everyone carrying a
@@ -270,14 +271,14 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 	owned, stock := scoped.Owned, scoped.Stock
 	prices := app.valuationPrices(ctx)
 
-	res, err := buildPlan(src, productID, plannerInput{
+	res, err := buildplan.Build(src, productID, buildplan.Input{
 		Runs:       runs,
 		MEOverride: overrides,
 		Owned:      owned,
 		Stock:      stock,
 		Prices:     prices,
 	})
-	if errors.Is(err, errPlannerNotManufacturable) {
+	if errors.Is(err, buildplan.ErrNotManufacturable) {
 		return nil, "That item has no manufacturing blueprint in the local data, so it can't be planned."
 	}
 	if err != nil {
@@ -291,7 +292,7 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 	// Names for everything on screen: tree items, shopping items,
 	// blueprints, skills.
 	ids := []int64{productID}
-	walkPlan(res.Root, func(n *planNode) {
+	buildplan.Walk(res.Root, func(n *buildplan.Node) {
 		ids = append(ids, n.TypeID)
 		if n.Blueprint != nil {
 			ids = append(ids, n.Blueprint.BlueprintTypeID)
@@ -317,7 +318,7 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 	}
 	if rootBP != nil {
 		view.BlueprintName = nameOf(rootBP.BlueprintTypeID)
-		perRun := quantityPerRun(rootBP)
+		perRun := buildplan.QuantityPerRun(rootBP)
 		if perRun > 1 {
 			view.ProducedLine = fmt.Sprintf("%s units (%s runs × %s per run)",
 				esi.FormatInt(root.ProducedQty), esi.FormatInt(root.Runs), esi.FormatInt(perRun))
@@ -344,7 +345,7 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 
 	// Flatten the tree; collect the ME inputs once per blueprint.
 	seenME := make(map[int64]bool)
-	walkPlan(root, func(n *planNode) {
+	buildplan.Walk(root, func(n *buildplan.Node) {
 		view.Rows = append(view.Rows, planRow(n, nameOf))
 		if n.Blueprint != nil && !seenME[n.Blueprint.BlueprintTypeID] {
 			seenME[n.Blueprint.BlueprintTypeID] = true
@@ -384,7 +385,7 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 		view.ShoppingTotal = isk(buyTotal)
 	}
 
-	if p, ok := unitPrice(prices, productID); ok {
+	if p, ok := buildplan.UnitPrice(prices, productID); ok {
 		value := p * float64(root.ProducedQty)
 		view.ProductValue = isk(value)
 		if root.CostComplete && res.UnpricedLines == 0 && value > 0 {
@@ -409,7 +410,7 @@ func isk(f float64) string {
 }
 
 // planRow shapes one engine node for the tree table.
-func planRow(n *planNode, nameOf func(int64) string) planRowView {
+func planRow(n *buildplan.Node, nameOf func(int64) string) planRowView {
 	row := planRowView{
 		Pad:  n.Depth * 18,
 		Name: nameOf(n.TypeID),
@@ -491,11 +492,11 @@ func planRow(n *planNode, nameOf func(int64) string) planRowView {
 type sdePlannerSource struct {
 	app  *Application
 	ctx  context.Context
-	memo map[int64]*plannerBlueprint
+	memo map[int64]*buildplan.Blueprint
 	none map[int64]bool
 }
 
-func (s *sdePlannerSource) BlueprintForProduct(productTypeID int64) (*plannerBlueprint, bool) {
+func (s *sdePlannerSource) BlueprintForProduct(productTypeID int64) (*buildplan.Blueprint, bool) {
 	if bp, ok := s.memo[productTypeID]; ok {
 		return bp, true
 	}
@@ -510,7 +511,7 @@ func (s *sdePlannerSource) BlueprintForProduct(productTypeID int64) (*plannerBlu
 		s.none[productTypeID] = true
 		return nil, false
 	}
-	bp := &plannerBlueprint{
+	bp := &buildplan.Blueprint{
 		BlueprintTypeID:    row.BlueprintTypeID,
 		ProductTypeID:      row.ProductTypeID,
 		ProductQuantity:    row.ProductQuantity,
@@ -519,14 +520,14 @@ func (s *sdePlannerSource) BlueprintForProduct(productTypeID int64) (*plannerBlu
 	}
 	if mats, err := s.app.queries.ListSDEBlueprintMaterials(s.ctx, row.BlueprintTypeID); err == nil {
 		for _, m := range mats {
-			bp.Materials = append(bp.Materials, plannerMaterial{TypeID: m.MaterialTypeID, Quantity: m.Quantity})
+			bp.Materials = append(bp.Materials, buildplan.Material{TypeID: m.MaterialTypeID, Quantity: m.Quantity})
 		}
 	} else {
 		logging.Errorf("planner: materials for blueprint %d: %v", row.BlueprintTypeID, err)
 	}
 	if skills, err := s.app.queries.ListSDEBlueprintSkills(s.ctx, row.BlueprintTypeID); err == nil {
 		for _, sk := range skills {
-			bp.Skills = append(bp.Skills, plannerSkillReq{TypeID: sk.SkillTypeID, Level: sk.Level})
+			bp.Skills = append(bp.Skills, buildplan.SkillReq{TypeID: sk.SkillTypeID, Level: sk.Level})
 		}
 	} else {
 		logging.Errorf("planner: skills for blueprint %d: %v", row.BlueprintTypeID, err)
@@ -556,7 +557,7 @@ func (app *Application) plannerAccountChars(ctx context.Context) []db.Character 
 // how many of them have hangar data at all (honesty), and each
 // character's trained skills where a snapshot exists.
 type plannerScopeData struct {
-	Owned        map[int64]ownedBlueprint
+	Owned        map[int64]buildplan.OwnedBlueprint
 	Stock        map[int64]int64
 	AssetsLoaded int // characters whose assets snapshot was present
 	Skills       map[int64]map[int64]int
@@ -568,7 +569,7 @@ type plannerScopeData struct {
 // general view, one character or one tag's members when judged.
 func (app *Application) plannerInputsForChars(ctx context.Context, chars []db.Character) plannerScopeData {
 	data := plannerScopeData{
-		Owned:  make(map[int64]ownedBlueprint),
+		Owned:  make(map[int64]buildplan.OwnedBlueprint),
 		Stock:  make(map[int64]int64),
 		Skills: make(map[int64]map[int64]int),
 	}
@@ -627,7 +628,7 @@ func (app *Application) plannerInputsForChars(ctx context.Context, chars []db.Ch
 		}
 	}
 	for typeID, b := range best {
-		data.Owned[typeID] = ownedBlueprint{ME: b.me, TE: b.te}
+		data.Owned[typeID] = buildplan.OwnedBlueprint{ME: b.me, TE: b.te}
 	}
 	return data
 }
@@ -718,9 +719,9 @@ func scopeStockNote(scope judgeScope, data plannerScopeData) string {
 
 // requiredSkillLevels collects the highest required level per
 // skill across every blueprint the plan actually builds.
-func requiredSkillLevels(root *planNode) map[int64]int64 {
+func requiredSkillLevels(root *buildplan.Node) map[int64]int64 {
 	reqs := make(map[int64]int64)
-	walkPlan(root, func(n *planNode) {
+	buildplan.Walk(root, func(n *buildplan.Node) {
 		if n.Blueprint == nil {
 			return
 		}
@@ -817,7 +818,7 @@ func judgeSkills(scope judgeScope, data plannerScopeData, reqs map[int64]int64, 
 // cost after stock against the expected sell value of what
 // comes out. Unknown prices stay unknown — the verdict says so
 // instead of pricing missing inputs at zero.
-func planVerdictFor(res *planResult, prices map[int64]esi.MarketPrice, productID int64, label string) *planVerdict {
+func planVerdictFor(res *buildplan.Result, prices map[int64]esi.MarketPrice, productID int64, label string) *planVerdict {
 	root := res.Root
 	verdict := &planVerdict{Heading: "Worth making — judged as " + label}
 	var notes []string
@@ -830,7 +831,7 @@ func planVerdictFor(res *planResult, prices map[int64]esi.MarketPrice, productID
 		notes = append(notes, fmt.Sprintf("Prices incomplete — %d shopping items have no price yet, so a profit figure would be a guess.", res.UnpricedLines))
 	}
 
-	if p, ok := unitPrice(prices, productID); ok {
+	if p, ok := buildplan.UnitPrice(prices, productID); ok {
 		value := p * float64(root.ProducedQty)
 		verdict.SellValue = isk(value)
 		if costKnown && value > 0 {

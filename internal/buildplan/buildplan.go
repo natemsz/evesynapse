@@ -1,4 +1,10 @@
-package app
+// Package buildplan is the industry build planner's engine: it expands
+// a product into the tree of everything needed to build it, applies
+// the EVE manufacturing formulae at each step, nets off what the
+// pilot already holds, and prices what is left to buy. It is pure:
+// the planner page supplies the recipes, blueprints, stock and
+// prices, and it does no I/O of its own.
+package buildplan
 
 import (
 	"errors"
@@ -25,71 +31,71 @@ import (
 //   - job time: ceil(baseSeconds × runs × (1 − TE/100)).
 // ---------------------------------------------------------------------------
 
-// plannerNodeCap bounds one expansion; past it the plan reports
+// nodeCap bounds one expansion; past it the plan reports
 // "too large" instead of grinding.
-const plannerNodeCap = 2000
+const nodeCap = 2000
 
-// plannerMaxDepth stops absurd nesting even below the node cap
+// maxDepth stops absurd nesting even below the node cap
 // (real EVE chains are a handful of levels deep).
-const plannerMaxDepth = 32
+const maxDepth = 32
 
-// errPlannerNotManufacturable marks a root product with no
+// ErrNotManufacturable marks a root product with no
 // manufacturing blueprint in the local SDE.
-var errPlannerNotManufacturable = errors.New("product has no manufacturing blueprint")
+var ErrNotManufacturable = errors.New("product has no manufacturing blueprint")
 
-// plannerBlueprint is one manufacturable product's recipe: the
+// Blueprint is one manufacturable product's recipe: the
 // schema-011 blueprint row plus its materials and required skills.
-type plannerBlueprint struct {
+type Blueprint struct {
 	BlueprintTypeID    int64
 	ProductTypeID      int64
 	ProductQuantity    int64 // units produced per run, >= 1
 	MaxProductionLimit int64
 	TimeSeconds        int64 // base seconds per run, before TE
-	Materials          []plannerMaterial
-	Skills             []plannerSkillReq
+	Materials          []Material
+	Skills             []SkillReq
 }
 
-// plannerMaterial is one per-run input of a blueprint.
-type plannerMaterial struct {
+// Material is one per-run input of a blueprint.
+type Material struct {
 	TypeID   int64
 	Quantity int64 // base units per run, before ME
 }
 
-// plannerSkillReq is one manufacturing skill requirement.
-type plannerSkillReq struct {
+// SkillReq is one manufacturing skill requirement.
+type SkillReq struct {
 	TypeID int64
 	Level  int64
 }
 
-// plannerSource supplies blueprints by product type. The handler's
+// Source supplies blueprints by product type. The handler's
 // source reads the SDE tables with a per-render memo; tests serve
 // fixtures from a map.
-type plannerSource interface {
-	BlueprintForProduct(productTypeID int64) (*plannerBlueprint, bool)
+type Source interface {
+	BlueprintForProduct(productTypeID int64) (*Blueprint, bool)
 }
 
-// ownedBlueprint is the best owned copy of one blueprint type: ME
+// OwnedBlueprint is the best owned copy of one blueprint type: ME
 // and TE percentages as ESI reports them (ME 0-10, TE 0-20).
-type ownedBlueprint struct {
+type OwnedBlueprint struct {
 	ME int
 	TE int
 }
 
-// plannerInput is everything buildPlan needs besides the recipe
+// Input is everything Build needs besides the recipe
 // source. Stock is the aggregate on-hand per type across the
-// user's characters; buildPlan copies it before allocating (the
+// user's characters; Build copies it before allocating (the
 // caller's map is never mutated).
-type plannerInput struct {
+type Input struct {
 	Runs       int64
 	MEOverride map[int64]int // blueprint type ID → ME 0-10
-	Owned      map[int64]ownedBlueprint
+	Owned      map[int64]OwnedBlueprint
 	Stock      map[int64]int64
 	Prices     map[int64]esi.MarketPrice // market-guide cache; nil = no prices at all
 }
 
-// planNode is one node of the expansion tree: an item the plan
+// Node is one node of the expansion tree: an item the plan
 // needs, either built (Blueprint set) or bought (a leaf).
-type planNode struct {
+type Node struct {
 	TypeID      int64
 	Depth       int
 	BasePerRun  int64 // per-run qty in the consuming blueprint (0 for the root)
@@ -97,10 +103,10 @@ type planNode struct {
 	Have        int64 // allocated from stock (0 for the root)
 	Shortfall   int64 // RequiredQty − Have (leaf: to buy; build: to produce)
 
-	Blueprint   *plannerBlueprint // nil → buy leaf
-	Runs        int64             // build runs (build nodes)
-	ProducedQty int64             // Runs × units per run (build nodes)
-	SurplusQty  int64             // ProducedQty − Shortfall
+	Blueprint   *Blueprint // nil → buy leaf
+	Runs        int64      // build runs (build nodes)
+	ProducedQty int64      // Runs × units per run (build nodes)
+	SurplusQty  int64      // ProducedQty − Shortfall
 	ME          int
 	TE          int
 	MESource    string // "override" | "owned" | "assumed"
@@ -124,12 +130,12 @@ type planNode struct {
 	BvBDelta      float64
 	BvBApplicable bool
 
-	Children []*planNode
+	Children []*Node
 }
 
-// planShopLine is one aggregated shopping-list entry: a leaf type
+// ShopLine is one aggregated shopping-list entry: a leaf type
 // the plan still has to buy, summed across the whole tree.
-type planShopLine struct {
+type ShopLine struct {
 	TypeID     int64
 	Quantity   int64
 	UnitPrice  float64
@@ -137,20 +143,20 @@ type planShopLine struct {
 	LineCost   float64
 }
 
-// planResult is a finished expansion plus its totals.
-type planResult struct {
-	Root          *planNode
+// Result is a finished expansion plus its totals.
+type Result struct {
+	Root          *Node
 	TooLarge      bool
 	TotalSeconds  int64 // sum of every build node's job time (sequential)
-	Shopping      []planShopLine
+	Shopping      []ShopLine
 	UnpricedLines int // shopping lines with no price data
 }
 
-// materialForRuns is the EVE material formula: the runs-adjusted,
+// MaterialForRuns is the EVE material formula: the runs-adjusted,
 // ME-discounted quantity for one material of one blueprint,
 // integers throughout (ceil via +99). The base-1 floor keeps a
 // 1-per-run material from ever discounting below one per run.
-func materialForRuns(baseQty, runs int64, me int) int64 {
+func MaterialForRuns(baseQty, runs int64, me int) int64 {
 	if baseQty <= 0 || runs <= 0 {
 		return 0
 	}
@@ -167,8 +173,8 @@ func materialForRuns(baseQty, runs int64, me int) int64 {
 	return need
 }
 
-// jobSeconds is the EVE job-time formula for one build node.
-func jobSeconds(baseSeconds, runs int64, te int) int64 {
+// JobSeconds is the EVE job-time formula for one build node.
+func JobSeconds(baseSeconds, runs int64, te int) int64 {
 	if baseSeconds <= 0 || runs <= 0 {
 		return 0
 	}
@@ -181,11 +187,11 @@ func jobSeconds(baseSeconds, runs int64, te int) int64 {
 	return (baseSeconds*runs*int64(100-te) + 99) / 100
 }
 
-// unitPrice picks the market-guide price for one type: the average
+// UnitPrice picks the market-guide price for one type: the average
 // price when usable, the adjusted price behind it. ok=false when
 // the cache has nothing usable — callers say "no price data" and
 // never price at an invented zero.
-func unitPrice(prices map[int64]esi.MarketPrice, typeID int64) (price float64, ok bool) {
+func UnitPrice(prices map[int64]esi.MarketPrice, typeID int64) (price float64, ok bool) {
 	p, hit := prices[typeID]
 	if !hit {
 		return 0, false
@@ -199,20 +205,20 @@ func unitPrice(prices map[int64]esi.MarketPrice, typeID int64) (price float64, o
 	return 0, false
 }
 
-// buildPlan expands the recipe for rootProductTypeID into a full
+// Build expands the recipe for rootProductTypeID into a full
 // plan. Allocation walks the tree pre-order (a node's own stock is
 // claimed before its children are planned, materials in type-ID
 // order), so a shared stockpile is never promised twice.
-func buildPlan(src plannerSource, rootProductTypeID int64, in plannerInput) (*planResult, error) {
+func Build(src Source, rootProductTypeID int64, in Input) (*Result, error) {
 	rootBP, ok := src.BlueprintForProduct(rootProductTypeID)
 	if !ok || rootBP == nil {
-		return nil, errPlannerNotManufacturable
+		return nil, ErrNotManufacturable
 	}
 	runs := in.Runs
 	if runs < 1 {
 		runs = 1
 	}
-	b := &planBuilder{
+	b := &builder{
 		src:       src,
 		overrides: in.MEOverride,
 		owned:     in.Owned,
@@ -225,8 +231,8 @@ func buildPlan(src plannerSource, rootProductTypeID int64, in plannerInput) (*pl
 		}
 	}
 
-	res := &planResult{}
-	root := b.expand(rootProductTypeID, rootBP, 0, 0, runs*quantityPerRun(rootBP), true, nil)
+	res := &Result{}
+	root := b.expand(rootProductTypeID, rootBP, 0, 0, runs*QuantityPerRun(rootBP), true, nil)
 	res.Root = root
 	if b.tooLarge {
 		res.TooLarge = true
@@ -235,21 +241,21 @@ func buildPlan(src plannerSource, rootProductTypeID int64, in plannerInput) (*pl
 
 	// Totals + shopping aggregator: one walk collects job time
 	// and the per-type buy sums.
-	shop := make(map[int64]*planShopLine)
+	shop := make(map[int64]*ShopLine)
 	res.TotalSeconds = 0
-	walkPlan(root, func(n *planNode) {
+	Walk(root, func(n *Node) {
 		res.TotalSeconds += n.TimeSeconds
 		if n.Blueprint == nil && n.Shortfall > 0 {
 			line, ok := shop[n.TypeID]
 			if !ok {
-				line = &planShopLine{TypeID: n.TypeID, PriceKnown: true}
+				line = &ShopLine{TypeID: n.TypeID, PriceKnown: true}
 				shop[n.TypeID] = line
 			}
 			line.Quantity += n.Shortfall
 		}
 	})
 	for _, line := range shop {
-		if p, ok := unitPrice(in.Prices, line.TypeID); ok {
+		if p, ok := UnitPrice(in.Prices, line.TypeID); ok {
 			line.UnitPrice = p
 			line.LineCost = p * float64(line.Quantity)
 		} else {
@@ -262,30 +268,30 @@ func buildPlan(src plannerSource, rootProductTypeID int64, in plannerInput) (*pl
 	return res, nil
 }
 
-// walkPlan visits every node pre-order.
-func walkPlan(n *planNode, fn func(*planNode)) {
+// Walk visits every node pre-order.
+func Walk(n *Node, fn func(*Node)) {
 	if n == nil {
 		return
 	}
 	fn(n)
 	for _, c := range n.Children {
-		walkPlan(c, fn)
+		Walk(c, fn)
 	}
 }
 
-// quantityPerRun is a blueprint's units per run, defensive minimum 1.
-func quantityPerRun(bp *plannerBlueprint) int64 {
+// QuantityPerRun is a blueprint's units per run, defensive minimum 1.
+func QuantityPerRun(bp *Blueprint) int64 {
 	if bp == nil || bp.ProductQuantity < 1 {
 		return 1
 	}
 	return bp.ProductQuantity
 }
 
-// planBuilder carries one expansion's mutable state.
-type planBuilder struct {
-	src       plannerSource
+// builder carries one expansion's mutable state.
+type builder struct {
+	src       Source
 	overrides map[int64]int
-	owned     map[int64]ownedBlueprint
+	owned     map[int64]OwnedBlueprint
 	stock     map[int64]int64 // remaining on-hand per type
 	prices    map[int64]esi.MarketPrice
 	nodes     int
@@ -297,7 +303,7 @@ type planBuilder struct {
 // unresearched blueprint (ME 0 / TE 0, "assumed"). An override over
 // an owned copy keeps the copy's TE — it is the same physical
 // blueprint, only hand-tuned.
-func (b *planBuilder) resolveME(bp *plannerBlueprint) (me, te int, source string) {
+func (b *builder) resolveME(bp *Blueprint) (me, te int, source string) {
 	source = "assumed"
 	if ob, ok := b.owned[bp.BlueprintTypeID]; ok {
 		me, te, source = ob.ME, ob.TE, "owned"
@@ -324,8 +330,8 @@ func (b *planBuilder) resolveME(bp *plannerBlueprint) (me, te int, source string
 // bp is the type's blueprint when already resolved by the caller
 // (nil = resolve here); path holds the ancestor product types for
 // the cycle guard. Stock is claimed before children are planned.
-func (b *planBuilder) expand(typeID int64, bp *plannerBlueprint, depth int, basePerRun, requiredQty int64, isRoot bool, path map[int64]bool) *planNode {
-	node := &planNode{
+func (b *builder) expand(typeID int64, bp *Blueprint, depth int, basePerRun, requiredQty int64, isRoot bool, path map[int64]bool) *Node {
+	node := &Node{
 		TypeID:       typeID,
 		Depth:        depth,
 		BasePerRun:   basePerRun,
@@ -333,7 +339,7 @@ func (b *planBuilder) expand(typeID int64, bp *plannerBlueprint, depth int, base
 		CostComplete: true,
 	}
 	b.nodes++
-	if b.nodes > plannerNodeCap {
+	if b.nodes > nodeCap {
 		b.tooLarge = true
 		return node
 	}
@@ -361,8 +367,8 @@ func (b *planBuilder) expand(typeID int64, bp *plannerBlueprint, depth int, base
 	// Leaf outcomes: no blueprint, fully covered by stock, a
 	// cycle back to an ancestor, or the depth safety cap. A leaf
 	// prices its shortfall at the market guide.
-	leaf := func() *planNode {
-		if p, ok := unitPrice(b.prices, typeID); ok {
+	leaf := func() *Node {
+		if p, ok := UnitPrice(b.prices, typeID); ok {
 			node.UnitPrice = p
 			node.PriceKnown = true
 			node.LineCost = p * float64(node.Shortfall)
@@ -386,7 +392,7 @@ func (b *planBuilder) expand(typeID int64, bp *plannerBlueprint, depth int, base
 	case path[typeID]:
 		node.Cycle = true
 		return leaf()
-	case depth >= plannerMaxDepth:
+	case depth >= maxDepth:
 		node.DepthCapped = true
 		return leaf()
 	}
@@ -394,11 +400,11 @@ func (b *planBuilder) expand(typeID int64, bp *plannerBlueprint, depth int, base
 	// Build node.
 	node.Blueprint = bp
 	node.ME, node.TE, node.MESource = b.resolveME(bp)
-	perRun := quantityPerRun(bp)
+	perRun := QuantityPerRun(bp)
 	node.Runs = (node.Shortfall + perRun - 1) / perRun
 	node.ProducedQty = node.Runs * perRun
 	node.SurplusQty = node.ProducedQty - node.Shortfall
-	node.TimeSeconds = jobSeconds(bp.TimeSeconds, node.Runs, node.TE)
+	node.TimeSeconds = JobSeconds(bp.TimeSeconds, node.Runs, node.TE)
 
 	childPath := path
 	if depth == 0 || path == nil {
@@ -409,10 +415,10 @@ func (b *planBuilder) expand(typeID int64, bp *plannerBlueprint, depth int, base
 	}
 	childPath[typeID] = true
 
-	mats := append([]plannerMaterial(nil), bp.Materials...)
+	mats := append([]Material(nil), bp.Materials...)
 	sort.Slice(mats, func(i, j int) bool { return mats[i].TypeID < mats[j].TypeID })
 	for _, m := range mats {
-		need := materialForRuns(m.Quantity, node.Runs, node.ME)
+		need := MaterialForRuns(m.Quantity, node.Runs, node.ME)
 		child := b.expand(m.TypeID, nil, depth+1, m.Quantity, need, false, childPath)
 		node.Children = append(node.Children, child)
 		node.LineCost += child.LineCost
@@ -427,7 +433,7 @@ func (b *planBuilder) expand(typeID int64, bp *plannerBlueprint, depth int, base
 	// material cost (LineCost); BuyCost is market price for the
 	// shortfall. Delta positive = building saves money.
 	node.BuildCost = node.LineCost
-	if p, ok := unitPrice(b.prices, typeID); ok {
+	if p, ok := UnitPrice(b.prices, typeID); ok {
 		node.UnitPrice = p
 		node.PriceKnown = true
 		node.BuyCost = p * float64(node.Shortfall)

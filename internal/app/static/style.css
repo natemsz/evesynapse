@@ -1617,10 +1617,19 @@ tbody tr.yours td { background-color: #2a2015; }
   .nav-hamburger { display: inline-flex; }
   html.js[data-nav="hidden"] .nav-reopen { display: none; }
   .topbar {
+    display: flex;
+    align-items: center;
     flex-wrap: nowrap;
     gap: 0.5rem;
     min-height: 3.2rem;
     padding: 0.45rem 0.6rem;
+  }
+  .nav-hamburger {
+    align-self: center;
+    margin: 0;
+  }
+  .topbar-wordmark {
+    align-self: center;
   }
   .topbar-wordmark {
     display: inline-flex;

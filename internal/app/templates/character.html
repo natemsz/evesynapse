@@ -12,6 +12,7 @@
   {{if .CharacterPage.IdentityKnown}}
   <div class="panel">
   <h2><img class="portrait" src="{{.CharacterPage.PortraitURL}}" alt="">{{.CharacterPage.CharacterName}}</h2>
+  </div>
   <div class="tw">
   <table>
     <tbody>
@@ -22,7 +23,6 @@
       {{if .CharacterPage.SkillsKnown}}<tr><th>Skill points</th><td><strong>{{.CharacterPage.TotalSP}}</strong>{{if .CharacterPage.UnallocatedSP}} · {{.CharacterPage.UnallocatedSP}} unallocated{{end}} · {{.CharacterPage.SkillsCount}} skills · {{.CharacterPage.LevelVCount}} at V</td></tr>{{end}}
     </tbody>
   </table>
-  </div>
   </div>
   {{end}}
 

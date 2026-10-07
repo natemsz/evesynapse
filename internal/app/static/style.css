@@ -1457,12 +1457,15 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
 .topbar { min-height: 3.75rem; }
 .wordmark-glyph {
   display: inline-block;
-  height: 1.9em;
+  height: 1.35em;
   width: auto;
-  vertical-align: -0.35em;
-  margin: 0 1.25rem 0 0;
+  margin: 0 0.8rem 0 0;
+  flex-shrink: 0;
 }
-.topbar-wordmark { display: inline-block; }
+.topbar-wordmark {
+  display: inline-flex;
+  align-items: center;
+}
 .topbar-character {
   display: flex;
   align-items: center;
@@ -1619,7 +1622,8 @@ tbody tr.yours td { background-color: #2a2015; }
     padding: 0.45rem 0.6rem;
   }
   .topbar-wordmark {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
     font-size: 0.78rem;
     letter-spacing: 0.14em;
   }

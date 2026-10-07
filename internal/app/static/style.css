@@ -227,10 +227,10 @@ header .topbar {
 }
 .wordmark {
   display: inline-block;
-  font-family: 'Press Start 2P', monospace;
-  font-size: 0.6rem;
+  font-family: 'VT323', monospace;
+  font-size: 1.1rem;
   font-weight: 400;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.12em;
   background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);
   -webkit-background-clip: text;
   background-clip: text;

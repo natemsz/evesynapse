@@ -54,9 +54,9 @@ func warnIfServedInTheClear(cfg Config) {
 // would let script-src drop it.
 const contentSecurityPolicy = "default-src 'self'; " +
 	"script-src 'self' 'unsafe-inline'; " +
-	"style-src 'self' 'unsafe-inline'; " +
+	"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
 	"img-src 'self' data: https://images.evetech.net; " +
-	"font-src 'self'; " +
+	"font-src 'self' https://fonts.gstatic.com; " +
 	"connect-src 'self'; " +
 	"object-src 'none'; " +
 	"base-uri 'self'; " +

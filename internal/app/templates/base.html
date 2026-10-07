@@ -8,6 +8,13 @@
 <title>{{template "title" .}} · EveSynapse</title>
 {{if .AutoRefresh}}<meta http-equiv="refresh" content="5">{{end}}
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<meta name="theme-color" content="#0d0503">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="EveSynapse">
 <link rel="preload" as="font" type="font/woff2" href="/static/fonts/shentox-regular.woff2" crossorigin>
 <link rel="preload" as="font" type="font/woff2" href="/static/fonts/univers-next-pro-medium-condensed.woff2" crossorigin>
 <link rel="stylesheet" href="/static/style.css?v={{.AssetVersion}}">

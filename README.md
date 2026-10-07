@@ -606,7 +606,8 @@ no jQuery, no external fonts, responsive down to phone widths.
 
 The dev build (`cmd/evesynapse-dev`, `make build-dev`) registers
 `/dev-login` when started with `DEV_LOGIN=1`: it flips the session to
-signed-in without EVE SSO so the admin can be exercised locally. The
+signed-in without EVE SSO so the signed-in pages can be exercised
+locally (it is never an admin: the dev session has no account). The
 handler lives in `internal/devtools` and is only wired into the dev
 entrypoint — the release binary (`cmd/evesynapse`) doesn't contain
 the code, and `DEV_LOGIN=1` has no effect on it. `/dev-login` hands

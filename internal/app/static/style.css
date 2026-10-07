@@ -435,6 +435,11 @@ main {
   -webkit-text-fill-color: currentColor;
 }
 .card table { margin-bottom: 0.5rem; }
+/* Section headers carry the bottom border; a table directly
+   beneath one drops its top border to avoid a double line. */
+h3 + .tw > table, h3 + table {
+  border-top: none;
+}
 .card.has-fold > h2:first-child, .card.has-fold > h3:first-child { padding-right: 2.2rem; position: relative; }
 
 /* --- collapsible panels (JS-enhanced; open and inert without) --- */

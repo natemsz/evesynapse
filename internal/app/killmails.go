@@ -216,17 +216,3 @@ func (app *Application) killmailRow(ctx context.Context, viewer killmailViewer, 
 	}
 	return row
 }
-
-// characterDisplay renders a killmail participant: the worker-
-// warmed name when cached, an honest "Character #<id>" otherwise,
-// and "NPC" for the character-less victims/attackers CCP reports
-// with ID 0. Cache-only: renders never wait on ESI for names.
-func characterDisplay(client *esi.Client, characterID int64) string {
-	if characterID <= 0 {
-		return "NPC"
-	}
-	if name, ok := client.CachedCharacterName(characterID); ok {
-		return name
-	}
-	return fmt.Sprintf("Character #%d", characterID)
-}

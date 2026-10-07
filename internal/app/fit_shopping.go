@@ -22,12 +22,12 @@ import (
 // ---------------------------------------------------------------------------
 
 type shoppingLine struct {
-	TypeID    int64
-	Name      string
-	URL       string
-	Quantity  int64
-	UnitPrice string
-	LineCost  string
+	TypeID     int64
+	Name       string
+	URL        string
+	Quantity   int64
+	UnitPrice  string
+	LineCost   string
 	PriceKnown bool
 }
 

@@ -36,8 +36,8 @@ type restockRow struct {
 }
 
 type restockView struct {
-	Rows     []restockRow
-	HasData  bool
+	Rows      []restockRow
+	HasData   bool
 	TotalCost string
 }
 
@@ -162,9 +162,9 @@ func (app *Application) handleRestockSave(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := app.queries.UpsertRestockTarget(ctx, db.UpsertRestockTargetParams{
-		UserID:      userID,
-		TypeID:      typeID,
-		TargetQty:   targetQty,
+		UserID:       userID,
+		TypeID:       typeID,
+		TargetQty:    targetQty,
 		MinMarginPct: marginPct,
 	}); err != nil {
 		log.Printf("restock: upsert target user %d type %d: %v", userID, typeID, err)

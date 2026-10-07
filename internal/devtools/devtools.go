@@ -29,13 +29,13 @@ import (
 // !!! /dev-login hands a signed-in session to anyone who asks.
 // NEVER enable it on a deployment anyone else can reach. !!!
 func Register(r chi.Router, a *app.Application) {
-	if !a.DevLoginEnabled() {
+	if !app.DevLoginEnabled(a) {
 		return
 	}
 	// LOUD ON PURPOSE: same warning the old inline route printed.
 	log.Printf("WARNING: DEV_LOGIN=1 — /dev-login is ENABLED. Never run like this in production.")
 	r.Get("/dev-login", func(w http.ResponseWriter, r *http.Request) {
-		a.DevSignIn(r.Context())
+		app.DevSignIn(r.Context(), a)
 		http.Redirect(w, r, "/admin/", http.StatusSeeOther)
 	})
 }

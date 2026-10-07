@@ -21,10 +21,6 @@ import (
 // historyDateLayout is the ESI history day format.
 const historyDateLayout = "2006-01-02"
 
-// historyChartDays is the chart window: the last 90 days of daily
-// aggregates.
-const historyChartDays = 90
-
 // historyChartRows is how many recent stored rows a history read
 // loads: the newest rows by date, not a calendar span, so a
 // sparse item's whole recorded history stays visible instead of

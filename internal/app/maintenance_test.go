@@ -67,9 +67,19 @@ func startSleep(t *testing.T) *exec.Cmd {
 	if err := cmd.Start(); err != nil {
 		t.Skipf("sleep unavailable: %v", err)
 	}
+	// One goroutine reaps the process the moment it dies, whoever
+	// kills it. An unreaped child lingers as a zombie that still
+	// answers signal-0 — exactly why the real deployment relies on
+	// the service manager reaping promptly — and waiting on the
+	// same Cmd from two places is a data race.
+	reaped := make(chan struct{})
+	go func() {
+		_ = cmd.Wait()
+		close(reaped)
+	}()
 	t.Cleanup(func() {
 		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
+		<-reaped
 	})
 	return cmd
 }
@@ -783,11 +793,6 @@ func TestRunUpdateRestartsRunningServer(t *testing.T) {
 	writeTestFile(t, target, []byte("old build"), 0o755)
 	writeTestFile(t, filepath.Join(dir, serverPidfileName),
 		[]byte(strconv.Itoa(sleeper.Process.Pid)+"\n"), 0o644)
-
-	// Reap the sleeper as it dies: an unreaped child lingers as
-	// a zombie that still answers signal-0, exactly why the real
-	// deployment relies on the service manager reaping promptly.
-	go func() { _ = sleeper.Wait() }()
 
 	var out, errOut bytes.Buffer
 	if code := runUpdate(target, []string{srv.URL, sum}, &out, &errOut); code != 0 {

@@ -119,9 +119,9 @@ type planNode struct {
 	// BuildCost (positive = building is cheaper). BvBApplicable
 	// is false for blueprint-type products (ESI lists BPO prices,
 	// not BPC contract prices — the EVE-Nexus guard).
-	BuildCost    float64
-	BuyCost      float64
-	BvBDelta     float64
+	BuildCost     float64
+	BuyCost       float64
+	BvBDelta      float64
 	BvBApplicable bool
 
 	Children []*planNode

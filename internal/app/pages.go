@@ -14,7 +14,7 @@ import (
 type pageData struct {
 	Version           string // footer product version ("v0.3.00.002"); filled by render
 	LoggedIn          bool
-	IsAdmin           bool   // one of the account's characters is in EVE_ADMIN_CHARACTER_IDS; filled by render
+	IsAdmin           bool // one of the account's characters is in EVE_ADMIN_CHARACTER_IDS; filled by render
 	CharacterName     string
 	SSOConfigured     bool
 	AutoRefresh       bool   // base.html emits a meta-refresh (Sync page)

@@ -153,9 +153,7 @@ func (app *Application) handleItems(w http.ResponseWriter, r *http.Request) {
 		unfiltered, err = app.queries.ListSDECategoriesWithCounts(ctx)
 		// Normalize to the filtered row type for the shared loop.
 		for _, row := range unfiltered {
-			rows = append(rows, db.ListSDECategoriesWithCountsFilteredRow{
-				CategoryID: row.CategoryID, Name: row.Name, TypeCount: row.TypeCount,
-			})
+			rows = append(rows, db.ListSDECategoriesWithCountsFilteredRow(row))
 		}
 	}
 	if err != nil {
@@ -301,9 +299,7 @@ func (app *Application) handleItemsCategory(w http.ResponseWriter, r *http.Reque
 		var unfiltered []db.ListSDEGroupsInCategoryRow
 		unfiltered, gerr = app.queries.ListSDEGroupsInCategory(ctx, categoryID)
 		for _, row := range unfiltered {
-			grows = append(grows, db.ListSDEGroupsInCategoryFilteredRow{
-				GroupID: row.GroupID, Name: row.Name, TypeCount: row.TypeCount,
-			})
+			grows = append(grows, db.ListSDEGroupsInCategoryFilteredRow(row))
 		}
 	}
 	if gerr != nil {

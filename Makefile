@@ -1,9 +1,20 @@
 # EveSynapse — dev tasks
 
-.PHONY: build build-arm64 build-amd64 build-dev run tidy gen clean assets
+.PHONY: build build-arm64 build-amd64 build-dev run tidy gen clean assets test fmt check
 
 build: ## Compile the release server into ./bin/evesynapse
 	go build -o bin/evesynapse ./cmd/evesynapse
+
+test: ## Run the test suite (it starts its own embedded PostgreSQL)
+	go test ./...
+
+fmt: ## Format the Go sources
+	gofmt -w cmd internal
+
+check: ## Everything CI checks: formatting, vet, and the tests under the race detector
+	@unformatted="$$(gofmt -l cmd internal)"; if [ -n "$$unformatted" ]; then echo "These files are not gofmt-formatted (run: make fmt):"; echo "$$unformatted"; exit 1; fi
+	go vet ./...
+	go test -race ./...
 
 build-arm64: ## Cross-compile the release server for linux/arm64 (ARM servers)
 	GOOS=linux GOARCH=arm64 go build -o bin/evesynapse-arm64 ./cmd/evesynapse

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -13,11 +14,11 @@ import (
 // runs on: a database/sql DB over the pgx stdlib driver (every
 // sqlc query and every hand-rolled statement rides it) and a
 // pgxpool that exists only to back the scs session store
-// (pgxstore). On a database where the EveSynapse tables are
-// absent it applies the collapsed Postgres baseline
-// (schema_pg/001_baseline.sql), so a fresh install comes up with the
-// full schema on first boot. Later schema changes land as new
-// numbered files in schema_pg applied by this same guarded path.
+// (pgxstore). It then brings the schema up to date (migrateSchema):
+// a fresh database gets the collapsed Postgres baseline
+// (schema_pg/001_baseline.sql) and every later numbered step, so a
+// fresh install comes up with the full schema on first boot, and an
+// existing install gains whichever steps it is missing.
 func openDB(ctx context.Context, dsn string) (*sql.DB, *pgxpool.Pool, error) {
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
@@ -34,123 +35,130 @@ func openDB(ctx context.Context, dsn string) (*sql.DB, *pgxpool.Pool, error) {
 		pool.Close()
 		return nil, nil, err
 	}
-	// Sessions are the store's own table now (pgxstore does not
-	// create it); the baseline carries its DDL, so a fresh
-	// database gets it with everything else below.
-	var usersTables int
-	if err := conn.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users'`,
-	).Scan(&usersTables); err != nil {
+	if err := migrateSchema(ctx, conn); err != nil {
 		conn.Close()
 		pool.Close()
 		return nil, nil, err
-	}
-	if usersTables == 0 {
-		if err := applySchema(conn, pgBaselineSchema); err != nil {
-			conn.Close()
-			pool.Close()
-			return nil, nil, err
-		}
-	}
-	// Schema step 002 (station leaderboard) rides the same
-	// guarded path: fresh installs get it right after the
-	// baseline above, existing installs gain it on their next
-	// boot, and a database that already has it is left alone.
-	var leaderboardTables int
-	if err := conn.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'market_station_leaderboard'`,
-	).Scan(&leaderboardTables); err != nil {
-		conn.Close()
-		pool.Close()
-		return nil, nil, err
-	}
-	if leaderboardTables == 0 {
-		if err := applySchema(conn, pgStationLeaderboardSchema); err != nil {
-			conn.Close()
-			pool.Close()
-			return nil, nil, err
-		}
-	}
-	// Schema step 003 (fitting metadata) rides the same guarded
-	// path, probed on the is_public column: fresh installs get it
-	// right after the baseline above, existing installs gain it on
-	// their next boot, and a database that already has it is left
-	// alone.
-	var fitMetaCols int
-	if err := conn.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'local_fittings' AND column_name = 'is_public'`,
-	).Scan(&fitMetaCols); err != nil {
-		conn.Close()
-		pool.Close()
-		return nil, nil, err
-	}
-	if fitMetaCols == 0 {
-		if err := applySchema(conn, pgFitMetadataSchema); err != nil {
-			conn.Close()
-			pool.Close()
-			return nil, nil, err
-		}
-	}
-	// Schema step 004 (v0.3.33: per-type price TTL cache + industry
-	// cost indices) rides the same guarded path, probed on the
-	// market_type_prices table.
-	var priceCacheTables int
-	if err := conn.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'market_type_prices'`,
-	).Scan(&priceCacheTables); err != nil {
-		conn.Close()
-		pool.Close()
-		return nil, nil, err
-	}
-	if priceCacheTables == 0 {
-		if err := applySchema(conn, pgPriceCacheSchema); err != nil {
-			conn.Close()
-			pool.Close()
-			return nil, nil, err
-		}
-	}
-	// Schema step 005 (v0.3.34: restock planner targets) rides the
-	// same guarded path, probed on the restock_targets table.
-	var restockTables int
-	if err := conn.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'restock_targets'`,
-	).Scan(&restockTables); err != nil {
-		conn.Close()
-		pool.Close()
-		return nil, nil, err
-	}
-	if restockTables == 0 {
-		if err := applySchema(conn, pgRestockSchema); err != nil {
-			conn.Close()
-			pool.Close()
-			return nil, nil, err
-		}
-	}
-	// Schema step 006 (v0.3.35: custom jump-clone names) rides the
-	// same guarded path, probed on the clone_names table.
-	var cloneNameTables int
-	if err := conn.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'clone_names'`,
-	).Scan(&cloneNameTables); err != nil {
-		conn.Close()
-		pool.Close()
-		return nil, nil, err
-	}
-	if cloneNameTables == 0 {
-		if err := applySchema(conn, pgCloneNamesSchema); err != nil {
-			conn.Close()
-			pool.Close()
-			return nil, nil, err
-		}
 	}
 	return conn, pool, nil
 }
 
-// applySchema applies a schema script one statement at a time
-// (the pgx stdlib driver Exec handles one statement at a time).
+// schemaStep is one numbered file in schema_pg. Steps apply in
+// version order, each exactly once per database; schema_migrations
+// records which ones have landed.
+type schemaStep struct {
+	version int
+	name    string
+	script  string
+	// legacyProbe counts the objects the step creates. It exists
+	// for databases that predate schema_migrations: a step whose
+	// objects are already there is recorded as applied instead of
+	// being run again. Steps added from here on leave it empty —
+	// the record alone decides.
+	legacyProbe string
+}
+
+// schemaSteps lists every schema step in order. A new schema
+// change is a new numbered file in schema_pg, an embed for it in
+// app.go, and one line here (no probe).
+func schemaSteps() []schemaStep {
+	return []schemaStep{
+		// The baseline carries the sessions table too (pgxstore
+		// does not create it).
+		{1, "baseline", pgBaselineSchema,
+			`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users'`},
+		{2, "station_leaderboard", pgStationLeaderboardSchema,
+			`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'market_station_leaderboard'`},
+		{3, "fit_metadata", pgFitMetadataSchema,
+			`SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'local_fittings' AND column_name = 'is_public'`},
+		{4, "price_cache_costindex", pgPriceCacheSchema,
+			`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'market_type_prices'`},
+		{5, "restock", pgRestockSchema,
+			`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'restock_targets'`},
+		{6, "clone_names", pgCloneNamesSchema,
+			`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'clone_names'`},
+	}
+}
+
+// schemaMigrationsDDL is the record of applied steps. It lives
+// here rather than in schema_pg because it has to exist before any
+// step can be recorded.
+const schemaMigrationsDDL = `CREATE TABLE IF NOT EXISTS schema_migrations (
+	version    INTEGER PRIMARY KEY,
+	name       TEXT NOT NULL,
+	applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+)`
+
+// migrateSchema applies every schema step the database is missing,
+// in order.
+func migrateSchema(ctx context.Context, conn *sql.DB) error {
+	if _, err := conn.ExecContext(ctx, schemaMigrationsDDL); err != nil {
+		return fmt.Errorf("schema: create schema_migrations: %w", err)
+	}
+	for _, step := range schemaSteps() {
+		if err := applySchemaStep(ctx, conn, step); err != nil {
+			return fmt.Errorf("schema step %03d (%s): %w", step.version, step.name, err)
+		}
+	}
+	return nil
+}
+
+// applySchemaStep lands one step atomically: its statements and
+// its schema_migrations row commit together or not at all (DDL is
+// transactional in Postgres). A step that fails halfway therefore
+// leaves nothing behind for the next boot to mistake for a
+// finished schema — it simply runs again. The advisory lock keeps
+// two processes starting at the same moment (the server and a
+// maintenance run) from applying the same step twice; it is
+// released with the transaction.
+func applySchemaStep(ctx context.Context, conn *sql.DB, step schemaStep) error {
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() // no-op once committed
+
+	// 1165387091 is "EveS" in ASCII (0x45766553): an arbitrary
+	// key this app alone takes.
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(1165387091)`); err != nil {
+		return err
+	}
+	var recorded int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM schema_migrations WHERE version = $1`, step.version,
+	).Scan(&recorded); err != nil {
+		return err
+	}
+	if recorded > 0 {
+		return tx.Commit()
+	}
+
+	present := 0
+	if step.legacyProbe != "" {
+		if err := tx.QueryRowContext(ctx, step.legacyProbe).Scan(&present); err != nil {
+			return err
+		}
+	}
+	if present == 0 {
+		for _, stmt := range splitSchemaStatements(step.script) {
+			if _, err := tx.ExecContext(ctx, stmt); err != nil {
+				return err
+			}
+		}
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO schema_migrations (version, name) VALUES ($1, $2)`, step.version, step.name,
+	); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// splitSchemaStatements cuts a schema script into its statements
+// (the pgx stdlib driver executes one statement at a time).
 // Full-line -- comments are stripped first: they may contain ";"
 // and would otherwise break the naive split.
-func applySchema(conn *sql.DB, script string) error {
+func splitSchemaStatements(script string) []string {
 	var kept []string
 	for _, line := range strings.Split(script, "\n") {
 		if strings.HasPrefix(strings.TrimSpace(line), "--") {
@@ -158,14 +166,13 @@ func applySchema(conn *sql.DB, script string) error {
 		}
 		kept = append(kept, line)
 	}
+	var stmts []string
 	for _, stmt := range strings.Split(strings.Join(kept, "\n"), ";") {
 		stmt = strings.TrimSpace(stmt)
 		if stmt == "" {
 			continue
 		}
-		if _, err := conn.Exec(stmt); err != nil {
-			return err
-		}
+		stmts = append(stmts, stmt)
 	}
-	return nil
+	return stmts
 }

@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -98,6 +99,14 @@ func TestCompareVersions(t *testing.T) {
 		{"0.3.17", "0.3.17.0", 0},
 		{"0.3.17.2", "0.3.17.10", -1}, // numeric, not lexical
 		{"0.3.17.10", "0.3.17.2", 1},
+		// A -dev suffix is not part of the number: the numbers
+		// decide first, and on a tie the plain release is newer.
+		{"0.3.38.002-dev", "0.3.38.001-dev", 1},
+		{"0.3.38.001-dev", "0.3.38.002-dev", -1},
+		{"0.3.38.001-dev", "0.3.38.001-dev", 0},
+		{"0.3.39.001-dev", "0.3.38.001", 1},
+		{"0.3.38.001-dev", "0.3.38.001", -1},
+		{"0.3.38.001", "v0.3.38.001-dev", 1},
 	}
 	for _, tc := range cases {
 		if got := compareVersions(tc.a, tc.b); got != tc.want {
@@ -235,6 +244,127 @@ func TestReleaseUpdateX86Alias(t *testing.T) {
 	}
 	if !bytes.Equal(got, fresh) {
 		t.Fatal("target not replaced by the x86 release download")
+	}
+}
+
+// TestReleaseUpdateLeavesDevBuildsAlone: a development build that
+// ends up published as the latest release is never installed by a
+// plain -update, whatever its number — nothing is even downloaded.
+func TestReleaseUpdateLeavesDevBuildsAlone(t *testing.T) {
+	fresh := fakeELF(elfMachineAArch64, updateMinBytes+100)
+	sum, err := sha256FileHexBytes(fresh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var downloads atomic.Int64
+	mux := http.NewServeMux()
+	mux.HandleFunc("/latest-arm64.json", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"version":"9.9.9.9-dev","arch":"arm64","sha256":%q}`, sum)
+	})
+	mux.HandleFunc("/evesynapse-arm64", func(w http.ResponseWriter, r *http.Request) {
+		downloads.Add(1)
+		_, _ = w.Write(fresh)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	withReleaseBase(t, srv.URL)
+
+	dir := t.TempDir()
+	target := filepath.Join(dir, "evesynapse")
+	writeTestFile(t, target, []byte("old build"), 0o755)
+
+	var out, errOut bytes.Buffer
+	if code := runUpdate(target, []string{"-arm64"}, &out, &errOut); code != 0 {
+		t.Fatalf("code %d, stderr %q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "development build") {
+		t.Fatalf("output %q missing the development-build note", out.String())
+	}
+	if got := downloads.Load(); got != 0 {
+		t.Fatalf("the development build was downloaded %d time(s), want 0", got)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "old build" {
+		t.Fatal("a plain -update installed a development build")
+	}
+}
+
+// withReleaseAPI points the dev channel's release listing at a
+// test server for the duration of one test.
+func withReleaseAPI(t *testing.T, url string) {
+	t.Helper()
+	old := releaseAPIBaseURL
+	releaseAPIBaseURL = url
+	t.Cleanup(func() { releaseAPIBaseURL = old })
+}
+
+// TestDevUpdateInstallsTheDevReleasesOwnBinary: -update -dev takes
+// the manifest and the binary from the same -dev release. The
+// release channel's "latest" binary is a different build here, so
+// downloading from there — what -dev first did — could only ever
+// fail the dev manifest's checksum.
+func TestDevUpdateInstallsTheDevReleasesOwnBinary(t *testing.T) {
+	devBuild := fakeELF(elfMachineAArch64, updateMinBytes+100)
+	releaseBuild := fakeELF(elfMachineAArch64, updateMinBytes+200)
+	sum, err := sha256FileHexBytes(devBuild)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var srv *httptest.Server
+	mux := http.NewServeMux()
+	// The release listing, newest first: a plain release, then the
+	// dev build the -dev channel is after.
+	mux.HandleFunc("/repos/natemsz/evesynapse/releases", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `[
+			{"tag_name":"v9.9.9.8","assets":[
+				{"name":"latest-arm64.json","browser_download_url":%q},
+				{"name":"evesynapse-arm64","browser_download_url":%q}]},
+			{"tag_name":"v9.9.9.9-dev","assets":[
+				{"name":"latest-arm64.json","browser_download_url":%q},
+				{"name":"evesynapse-arm64","browser_download_url":%q}]}
+		]`,
+			srv.URL+"/latest-arm64.json", srv.URL+"/evesynapse-arm64",
+			srv.URL+"/dev/latest-arm64.json", srv.URL+"/dev/evesynapse-arm64")
+	})
+	mux.HandleFunc("/dev/latest-arm64.json", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"version":"9.9.9.9-dev","arch":"arm64","sha256":%q}`, sum)
+	})
+	mux.HandleFunc("/dev/evesynapse-arm64", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(devBuild)
+	})
+	// The release channel's own files: another build entirely.
+	mux.HandleFunc("/latest-arm64.json", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"version":"9.9.9.8","arch":"arm64","sha256":%q}`, strings.Repeat("0", 64))
+	})
+	mux.HandleFunc("/evesynapse-arm64", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(releaseBuild)
+	})
+	srv = httptest.NewServer(mux)
+	defer srv.Close()
+	withReleaseBase(t, srv.URL)
+	withReleaseAPI(t, srv.URL)
+	t.Setenv("EVESYNAPSE_UPDATE_REPO", "")
+
+	dir := t.TempDir()
+	target := filepath.Join(dir, "evesynapse")
+	writeTestFile(t, target, []byte("old build"), 0o755)
+
+	var out, errOut bytes.Buffer
+	if code := runUpdate(target, []string{"-dev", "-arm64"}, &out, &errOut); code != 0 {
+		t.Fatalf("code %d, stdout %q, stderr %q", code, out.String(), errOut.String())
+	}
+	if !strings.Contains(out.String(), "A new version is available: v9.9.9.9-dev") {
+		t.Fatalf("output %q missing the new-version note", out.String())
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, devBuild) {
+		t.Fatal("target not replaced by the dev release's own binary")
 	}
 }
 

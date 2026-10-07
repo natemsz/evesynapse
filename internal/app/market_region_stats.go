@@ -113,6 +113,7 @@ func (app *Application) sweepRegionStats(ctx context.Context, allowance *fetchBu
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			defer recoverWorkerPanic("region sweep")
 			outcomes[i] = app.advanceRegionSweep(ctx, region.ID, allowance, &limitHit)
 		}()
 	}

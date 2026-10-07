@@ -231,7 +231,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// the wide top bar, the active character block sits at
 		// its right edge, and both leave the phone bar (the
 		// drawer keeps the character block and sign-out).
-		".topbar-wordmark { display: inline-block; }",
+		".topbar-wordmark {\n  display: inline-flex;\n  align-items: center;\n}",
 		".topbar-character {\n  display: flex;",
 		".topbar-character { display: none; }",
 		".sidebar-account.has-character .sidebar-character { display: none; }",
@@ -346,7 +346,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// wordmark's left at a chunkier fixed square size,
 		// pulled slightly into the topbar flex gap so the
 		// gap before the text stays small.
-		".wordmark-glyph {\\n  display: inline-block;\\n  height: 1.35em;\\n  width: auto;\\n  margin: 0 0.8rem 0 0;\\n  flex-shrink: 0;\\n}",,
+		".wordmark-glyph {\n  display: inline-block;\n  height: 1.35em;\n  width: auto;\n  margin: 0 0.8rem 0 0;\n  flex-shrink: 0;\n}",
 		// v0.3.07.008: the phone-bar hamburger floats bare
 		// like the sidebar glyph controls (no resting box on
 		// the same footprint), with the same faint hover wash.

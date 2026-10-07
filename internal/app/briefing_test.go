@@ -378,7 +378,7 @@ func TestBriefingFontPreloadAndFooter(t *testing.T) {
 		`<link rel="preload" as="font" type="font/woff2" href="/static/fonts/shentox-regular.woff2" crossorigin>`,
 		`<link rel="preload" as="font" type="font/woff2" href="/static/fonts/univers-next-pro-medium-condensed.woff2" crossorigin>`,
 		`<link rel="stylesheet" href="/static/style.css?v=`+staticAssetVersion()+`">`,
-		`Powered by EveSynapse v0.3.39.001 🏓 by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>`,
+		`Powered by EveSynapse `+appVersion+` 🏓 by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>`,
 	)
 
 	// The font file itself rides the immutable cache header.

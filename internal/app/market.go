@@ -15,6 +15,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/markethistory"
 )
 
 // ---------------------------------------------------------------------------
@@ -118,24 +119,24 @@ type marketItem struct {
 	SellBand    string
 	TypicalBuy  string
 	BuyBand     string
-	Trader      *traderStats // trading snapshot; set by attachHistory
+	Trader      *markethistory.TraderStats // trading snapshot; set by attachHistory
 
 	// Phase 5 price history (cache-only, from stored rows).
 	// HistoryState is computed by attachHistory from the stored
-	// rows plus the fetch-state record: historyStatePending (no
-	// rows yet, fetch not settled), historyStateEmpty (worker
-	// fetched, ESI had no trades), historyStateFew (a few rows —
-	// summary only, no chart), or historyStateChart (enough rows
+	// rows plus the fetch-state record: markethistory.StatePending (no
+	// rows yet, fetch not settled), markethistory.StateEmpty (worker
+	// fetched, ESI had no trades), markethistory.StateFew (a few rows —
+	// summary only, no chart), or markethistory.StateChart (enough rows
 	// for the chart). The template renders a deliberate body for
 	// every state; there is no blank state.
 	HistoryState   string
 	HistoryPending bool // true only in the pending state
-	Chart          *priceChart
-	Stats          *historyStats
+	Chart          *markethistory.PriceChart
+	Stats          *markethistory.Stats
 	Change7        string // "+8.2%", "" when not computable
 	Change30       string
 	// HistoryLastDay is the newest recorded trade day, set when it
-	// is older than historyStaleAfterDays so the section can say
+	// is older than markethistory.StaleAfterDays so the section can say
 	// when trading stopped instead of implying the chart is
 	// current.
 	HistoryLastDay string
@@ -484,21 +485,21 @@ func (app *Application) noteSearchHistoryWants(ctx context.Context, regionID int
 
 // the user asked about this type either way.
 func (app *Application) attachHistory(ctx context.Context, item *marketItem, typeID, regionID, userID int64) {
-	rows := app.recentHistoryRows(ctx, regionID, typeID, historyChartRows)
+	rows := app.recentHistoryRows(ctx, regionID, typeID, markethistory.ChartRows)
 	if item != nil {
 		// The trading snapshot rides on whatever rows exist
 		// (possibly none yet) plus the book's bests; missing
 		// figures render as dashes, never invented numbers.
-		item.Trader = buildTraderStats(rows, item.BestSellRaw, item.BestBuyRaw)
+		item.Trader = markethistory.BuildTraderStats(rows, item.BestSellRaw, item.BestBuyRaw)
 	}
 	if len(rows) == 0 {
 		if item != nil {
-			item.HistoryState = historyStatePending
+			item.HistoryState = markethistory.StatePending
 			item.HistoryPending = true
 		}
 		if app.historyFetchSettled(ctx, regionID, typeID) {
 			if item != nil {
-				item.HistoryState = historyStateEmpty
+				item.HistoryState = markethistory.StateEmpty
 				item.HistoryPending = false
 			}
 			return
@@ -515,26 +516,26 @@ func (app *Application) attachHistory(ctx context.Context, item *marketItem, typ
 		return
 	}
 	if len(rows) == 1 {
-		item.HistoryState = historyStateFew
+		item.HistoryState = markethistory.StateFew
 	} else {
-		item.HistoryState = historyStateChart
-		if chart, ok := buildPriceChart(rows); ok {
+		item.HistoryState = markethistory.StateChart
+		if chart, ok := markethistory.BuildPriceChart(rows); ok {
 			c := chart
 			item.Chart = &c
 		}
 	}
-	if stats, ok := summarizeHistory(rows); ok {
+	if stats, ok := markethistory.Summarize(rows); ok {
 		item.Stats = &stats
 	}
-	if newest, err := time.Parse(historyDateLayout, rows[len(rows)-1].Date); err == nil &&
-		time.Since(newest) > historyStaleAfterDays*24*time.Hour {
+	if newest, err := time.Parse(markethistory.DateLayout, rows[len(rows)-1].Date); err == nil &&
+		time.Since(newest) > markethistory.StaleAfterDays*24*time.Hour {
 		item.HistoryLastDay = rows[len(rows)-1].Date
 	}
-	if pct, ok := historyChangePct(rows, 7); ok {
-		item.Change7 = formatChangePct(pct)
+	if pct, ok := markethistory.ChangePct(rows, 7); ok {
+		item.Change7 = markethistory.FormatChangePct(pct)
 	}
-	if pct, ok := historyChangePct(rows, 30); ok {
-		item.Change30 = formatChangePct(pct)
+	if pct, ok := markethistory.ChangePct(rows, 30); ok {
+		item.Change30 = markethistory.FormatChangePct(pct)
 	}
 	if userID > 0 {
 		if entry, err := app.queries.GetWatchlistEntry(ctx, db.GetWatchlistEntryParams{
@@ -939,19 +940,19 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 			Change30:  "—",
 			Threshold: fmt.Sprintf("%g", e.ThresholdPct),
 		}
-		rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, historyChartRows)
+		rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, markethistory.ChartRows)
 		if len(rows) > 0 {
 			row.Current = esi.FormatISK(rows[len(rows)-1].Average)
 		}
-		if pct, ok := historyChangePct(rows, 7); ok {
-			row.Change7 = formatChangePct(pct)
+		if pct, ok := markethistory.ChangePct(rows, 7); ok {
+			row.Change7 = markethistory.FormatChangePct(pct)
 			if math.Abs(pct) >= e.ThresholdPct {
 				row.Moving = true
-				row.MoveText = changeDirection(pct) + " over 7 days"
+				row.MoveText = markethistory.ChangeDirection(pct) + " over 7 days"
 			}
 		}
-		if pct, ok := historyChangePct(rows, 30); ok {
-			row.Change30 = formatChangePct(pct)
+		if pct, ok := markethistory.ChangePct(rows, 30); ok {
+			row.Change30 = markethistory.FormatChangePct(pct)
 		}
 		view.Rows = append(view.Rows, row)
 	}

@@ -18,6 +18,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/markethistory"
 )
 
 // ---------------------------------------------------------------------------
@@ -34,7 +35,7 @@ func TestBuildPriceChartCarriesDayData(t *testing.T) {
 		tradeRow("2026-10-01", 10.5, 11.5, 9.5, 100000),
 		tradeRow("2026-10-02", 10.2, 11.2, 9.2, 90000),
 	}
-	chart, ok := buildPriceChart(rows)
+	chart, ok := markethistory.BuildPriceChart(rows)
 	if !ok {
 		t.Fatal("chart: ok=false with rows")
 	}
@@ -43,7 +44,7 @@ func TestBuildPriceChartCarriesDayData(t *testing.T) {
 	}
 	last := chart.Dots[2]
 	if last.Date != "2026-10-02" || last.Average != "10.20" || last.Highest != "11.20" || last.Lowest != "9.20" || last.Volume != "90,000" {
-		t.Fatalf("dot day data: %+v", last.chartDay)
+		t.Fatalf("dot day data: %+v", last.Day)
 	}
 	if !strings.Contains(last.Title, "2026-10-02") || !strings.Contains(last.Title, "10.20") {
 		t.Fatalf("dot title: %q", last.Title)
@@ -78,15 +79,15 @@ func TestBuildPriceChartCarriesDayData(t *testing.T) {
 		t.Fatalf("recent: %+v", chart.Recent)
 	}
 
-	// The recent table caps at recentChartDays.
+	// The recent table caps at markethistory.RecentChartDays.
 	var many []db.MarketHistory
 	base := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 	for i := 0; i < 30; i++ {
-		many = append(many, tradeRow(base.AddDate(0, 0, i).Format(historyDateLayout), float64(100+i), 0, 0, 100))
+		many = append(many, tradeRow(base.AddDate(0, 0, i).Format(markethistory.DateLayout), float64(100+i), 0, 0, 100))
 	}
-	chart, _ = buildPriceChart(many)
-	if len(chart.Recent) != recentChartDays {
-		t.Fatalf("recent cap: got %d, want %d", len(chart.Recent), recentChartDays)
+	chart, _ = markethistory.BuildPriceChart(many)
+	if len(chart.Recent) != markethistory.RecentChartDays {
+		t.Fatalf("recent cap: got %d, want %d", len(chart.Recent), markethistory.RecentChartDays)
 	}
 	if chart.Recent[0].Date != "2026-08-30" {
 		t.Fatalf("recent newest: %q, want 2026-08-30", chart.Recent[0].Date)
@@ -98,9 +99,9 @@ func TestTraderStatsWindowsAndMargin(t *testing.T) {
 	base := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	for i := 0; i < 40; i++ {
 		avg := float64(100 + i)
-		rows = append(rows, tradeRow(base.AddDate(0, 0, i).Format(historyDateLayout), avg, avg+1, avg-1, 2000))
+		rows = append(rows, tradeRow(base.AddDate(0, 0, i).Format(markethistory.DateLayout), avg, avg+1, avg-1, 2000))
 	}
-	stats := buildTraderStats(rows, 110, 100)
+	stats := markethistory.BuildTraderStats(rows, 110, 100)
 	if stats.Avg7 != "136.00" { // mean of 133..139
 		t.Fatalf("Avg7: %q, want 136.00", stats.Avg7)
 	}
@@ -119,7 +120,7 @@ func TestTraderStatsWindowsAndMargin(t *testing.T) {
 		tradeRow("2026-09-01", 50, 0, 0, 700),
 		tradeRow("2026-10-01", 100, 0, 0, 300),
 	}
-	stats = buildTraderStats(sparse, 0, 0)
+	stats = markethistory.BuildTraderStats(sparse, 0, 0)
 	if stats.Avg7 != "100.00" || stats.Avg30 != "100.00" || stats.AvgVol7 != "300" {
 		t.Fatalf("sparse stats: %+v", stats)
 	}
@@ -128,7 +129,7 @@ func TestTraderStatsWindowsAndMargin(t *testing.T) {
 	}
 
 	// No rows: nothing invented; a one-sided book gives no margin.
-	stats = buildTraderStats(nil, 110, 0)
+	stats = markethistory.BuildTraderStats(nil, 110, 0)
 	if stats.Avg7 != "" || stats.Avg30 != "" || stats.AvgVol7 != "" || stats.MarginPct != "" {
 		t.Fatalf("empty stats invented figures: %+v", stats)
 	}
@@ -152,7 +153,7 @@ func TestMarketItemChartMarkupAndSnapshot(t *testing.T) {
 	today := time.Now().UTC()
 	for i := 0; i < 20; i++ {
 		avg := float64(100 + i)
-		day := today.AddDate(0, 0, i-19).Format(historyDateLayout)
+		day := today.AddDate(0, 0, i-19).Format(markethistory.DateLayout)
 		if err := q.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
 			RegionID: 10000002, TypeID: 34, Date: day, Average: avg,
 			Highest: avg + 5, Lowest: avg - 5, Volume: 1000, OrderCount: 90,
@@ -162,7 +163,7 @@ func TestMarketItemChartMarkupAndSnapshot(t *testing.T) {
 	}
 
 	_, body := getPage(t, app, cookie, "/market/?type=34")
-	newest := today.Format(historyDateLayout)
+	newest := today.Format(markethistory.DateLayout)
 	mustContain(t, "/market/?type=34 (interactive chart)", body,
 		`<circle class="cdot"`,
 		`data-chart-scrub="true"`,

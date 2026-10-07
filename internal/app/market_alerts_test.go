@@ -20,6 +20,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/markethistory"
 )
 
 func histRow(date string, avg float64) db.MarketHistory {
@@ -46,7 +47,7 @@ func TestHistoryChangePct(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, ok := historyChangePct(tc.rows, tc.days)
+			got, ok := markethistory.ChangePct(tc.rows, tc.days)
 			if ok != tc.ok {
 				t.Fatalf("ok: got %v, want %v (pct %v)", ok, tc.ok, got)
 			}
@@ -58,14 +59,14 @@ func TestHistoryChangePct(t *testing.T) {
 }
 
 func TestBuildPriceChart(t *testing.T) {
-	if _, ok := buildPriceChart(nil); ok {
+	if _, ok := markethistory.BuildPriceChart(nil); ok {
 		t.Fatal("empty rows: got ok, want false")
 	}
 
 	flat := []db.MarketHistory{
 		histRow("2026-09-29", 10), histRow("2026-09-30", 10), histRow("2026-10-01", 10),
 	}
-	chart, ok := buildPriceChart(flat)
+	chart, ok := markethistory.BuildPriceChart(flat)
 	if !ok {
 		t.Fatal("flat: chart not built")
 	}
@@ -86,14 +87,14 @@ func TestBuildPriceChart(t *testing.T) {
 	}
 
 	rising := []db.MarketHistory{histRow("2026-09-30", 5), histRow("2026-10-01", 15)}
-	chart, _ = buildPriceChart(rising)
+	chart, _ = markethistory.BuildPriceChart(rising)
 	if chart.Dots[0].Y != chart.BaseY || chart.Dots[1].Y != chart.TopY {
 		t.Fatalf("rising: dots at (%d, %d), want (%d, %d)",
 			chart.Dots[0].Y, chart.Dots[1].Y, chart.BaseY, chart.TopY)
 	}
 
 	single := []db.MarketHistory{histRow("2026-10-01", 42)}
-	chart, ok = buildPriceChart(single)
+	chart, ok = markethistory.BuildPriceChart(single)
 	if !ok || chart.Points != "" || len(chart.Dots) != 1 {
 		t.Fatalf("single: ok=%v points=%q dots=%d, want a lone dot", ok, chart.Points, len(chart.Dots))
 	}
@@ -102,7 +103,7 @@ func TestBuildPriceChart(t *testing.T) {
 		{RegionID: 10000002, TypeID: 34, Date: "2026-09-30", Average: 5},
 		{RegionID: 10000002, TypeID: 34, Date: "2026-10-01", Average: 6},
 	}
-	chart, _ = buildPriceChart(noVolume)
+	chart, _ = markethistory.BuildPriceChart(noVolume)
 	if len(chart.Bars) != 0 {
 		t.Fatalf("zero volume: got %d bars, want 0", len(chart.Bars))
 	}
@@ -418,7 +419,7 @@ func seedMarketSignals(t *testing.T, app *Application, q *db.Queries, userID int
 		ago int
 		avg float64
 	}{{7, 10.0}, {3, 10.4}, {0, 10.8}} {
-		day := now.AddDate(0, 0, -d.ago).Format(historyDateLayout)
+		day := now.AddDate(0, 0, -d.ago).Format(markethistory.DateLayout)
 		if err := q.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
 			RegionID: 10000002, TypeID: 34, Date: day, Average: d.avg,
 			Highest: d.avg, Lowest: d.avg, Volume: 5000, OrderCount: 90,

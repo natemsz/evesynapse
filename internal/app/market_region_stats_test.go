@@ -19,6 +19,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/markethistory"
 )
 
 // regionBookTransport serves a mutable whole-region book the way
@@ -475,8 +476,8 @@ func TestRegionSweepStoresAvgDailyVolume(t *testing.T) {
 		t.Fatalf("type 36 avg daily volume: %v, want 0 (no recorded history)", got)
 	}
 	// The stored figure must be the render-time window's figure:
-	// historyWindow over the same rows agrees exactly.
-	_, want, ok := historyWindow(app.recentHistoryRows(ctx, 10000002, 34, historyChartRows), 7)
+	// markethistory.Window over the same rows agrees exactly.
+	_, want, ok := markethistory.Window(app.recentHistoryRows(ctx, 10000002, 34, markethistory.ChartRows), 7)
 	if !ok {
 		t.Fatal("history window empty for seeded type 34")
 	}

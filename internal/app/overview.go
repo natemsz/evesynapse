@@ -14,6 +14,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/markethistory"
 )
 
 // ---------------------------------------------------------------------------
@@ -1140,14 +1141,14 @@ func (app *Application) attentionMarketItems(ctx context.Context, bundles []*cha
 		return items
 	}
 	for _, e := range entries {
-		rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, historyChartRows)
-		pct, ok := historyChangePct(rows, 7)
+		rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, markethistory.ChartRows)
+		pct, ok := markethistory.ChangePct(rows, 7)
 		if !ok || absFloat(pct) < e.ThresholdPct {
 			continue
 		}
 		items = append(items, attentionItem{
 			Text: fmt.Sprintf("%s %s over 7 days in %s.",
-				app.typeNameOrID(ctx, e.TypeID), changeDirection(pct),
+				app.typeNameOrID(ctx, e.TypeID), markethistory.ChangeDirection(pct),
 				app.marketRegionLabel(ctx, e.RegionID)),
 			Link: "/market/",
 			Rank: attentionMarketMove,
@@ -1538,8 +1539,8 @@ func (app *Application) marketHealthLine(ctx context.Context, userID int64) stri
 		if entries, err := app.queries.ListWatchlistByUser(ctx, userID); err == nil {
 			moving := 0
 			for _, e := range entries {
-				rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, historyChartRows)
-				if pct, ok := historyChangePct(rows, 7); ok && absFloat(pct) >= e.ThresholdPct {
+				rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, markethistory.ChartRows)
+				if pct, ok := markethistory.ChangePct(rows, 7); ok && absFloat(pct) >= e.ThresholdPct {
 					moving++
 				}
 			}

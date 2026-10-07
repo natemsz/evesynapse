@@ -10,6 +10,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/markethistory"
 )
 
 // ---------------------------------------------------------------------------
@@ -516,16 +517,16 @@ func (app *Application) briefingMarketLines(ctx context.Context, bundles []*char
 		return lines
 	}
 	for _, e := range entries {
-		rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, historyChartRows)
-		pct, ok := historyChangePct(rows, 7)
+		rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, markethistory.ChartRows)
+		pct, ok := markethistory.ChangePct(rows, 7)
 		if !ok || absFloat(pct) < e.ThresholdPct {
 			continue
 		}
 		line := template.HTML(fmt.Sprintf("%s moved %s over 7 days in %s — past your %s watch. <a href=\"/market/\">Watchlist</a>",
 			string(itemLink(e.TypeID, app.typeNameOrID(ctx, e.TypeID))),
-			changeDirection(pct),
+			markethistory.ChangeDirection(pct),
 			template.HTMLEscapeString(app.marketRegionLabel(ctx, e.RegionID)),
-			formatChangePct(e.ThresholdPct)))
+			markethistory.FormatChangePct(e.ThresholdPct)))
 		lines = append(lines, briefingLine{html: string(line), Rank: briefingWatchMove})
 	}
 	return lines

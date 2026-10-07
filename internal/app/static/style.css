@@ -526,7 +526,7 @@ thead th {
   background: var(--panel-head);
   color: var(--accent);
   text-shadow: 1px -1px 0 #000;
-  border-bottom: 1px solid #262626;
+  border-bottom: 1px solid #000;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   font-size: 0.7rem;
@@ -544,7 +544,7 @@ tbody tr:hover td { background: var(--row-hover); }
   position: sticky;
   left: 0;
   z-index: 1;
-  border-right: 1px solid #262626;
+  border-right: 1px solid #000;
 }
 .tw thead th:first-child { background: var(--panel-head); z-index: 2; }
 .tw tbody td:first-child, .tw tbody th:first-child { background: var(--row); }

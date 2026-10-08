@@ -1,0 +1,35 @@
+{{define "title"}}Notifications{{end}}
+{{define "content"}}
+<h1><span class="gt">Notifications</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{with .Notifications}}
+{{if .Rows}}
+{{if .Unread}}
+<form method="post" action="/notifications/read">
+  <button type="submit">Mark all read</button>
+  <small>{{.Unread}} unread</small>
+</form>
+{{end}}
+<div class="tw">
+<table class="notify-table">
+  <thead>
+    <tr><th>What</th><th>Kind</th><th>When</th></tr>
+  </thead>
+  <tbody>
+    {{range .Rows}}
+    <tr{{if .Unread}} class="notify-unread"{{end}}>
+      <td><a href="{{.URL}}">{{.Title}}</a>{{if .Unread}} <small>new</small>{{end}}</td>
+      <td>{{.Kind}}</td>
+      <td>{{.When}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p><small>Nothing yet. Notifications appear here as things happen: a skill finishes, mail arrives, an extractor stops.</small></p>
+{{end}}
+{{end}}
+{{end}}

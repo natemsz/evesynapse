@@ -3187,3 +3187,78 @@ html[data-theme="light"] .plan-btn { border-color: #b8ad96; }
 .plan-item.is-confirming .plan-open, .plan-item.is-confirming > .plan-btn { display: none; }
 html[data-theme="light"] .plan-list { border-color: #b8ad96; }
 html[data-theme="light"] .plan-item { border-top-color: #d9d2c2; }
+
+/* --- notifications: the top-bar icon and its short list ---
+   A <details>, so it opens and closes with no script. The icon is
+   dim until something is unread; the count sits on its corner. */
+.notify { position: relative; flex: none; }
+.notify > summary {
+  list-style: none;
+  cursor: pointer;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 3px;
+}
+.notify > summary::-webkit-details-marker { display: none; }
+.notify > summary:hover, .notify[open] > summary { background: rgba(255, 106, 26, 0.12); }
+.notify > summary:focus-visible { outline: none; box-shadow: 0 0 8px rgba(255, 106, 26, 0.55); }
+.notify-icon { width: 1.3rem; height: 1.3rem; opacity: 0.5; }
+.notify.has-unread .notify-icon { opacity: 1; }
+.notify-dot { fill: #ff3b1f; }
+.notify-count {
+  position: absolute;
+  top: 0;
+  right: 0;
+  box-sizing: border-box;
+  min-width: 1rem;
+  padding: 0 0.2rem;
+  border-radius: 999px;
+  background: #d63c14;
+  color: #fff;
+  font-size: 0.68rem;
+  line-height: 1rem;
+  text-align: center;
+}
+.notify-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+  width: min(22rem, calc(100vw - 2rem));
+  padding: 0.35rem;
+  background: var(--panel);
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.7);
+}
+.notify-menu form { margin: 0; }
+.notify-row {
+  display: block;
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.notify-row:hover, .notify-row:focus-visible { background: var(--row-hover); outline: none; }
+.notify-row-label { display: block; color: var(--accent); }
+.notify-row-latest {
+  display: block;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notify-empty { margin: 0; padding: 0.45rem 0.55rem; color: var(--muted); }
+.notify-all { display: block; margin-top: 0.25rem; padding: 0.45rem 0.55rem; border-top: 1px solid #1c1c1c; }
+tr.notify-unread td:first-child a { font-weight: 700; }
+html[data-theme="light"] .notify-menu { border-color: #d8cdb8; box-shadow: 0 6px 22px rgba(60, 40, 10, 0.25); }
+html[data-theme="light"] .notify-all { border-top-color: #e4dac6; }

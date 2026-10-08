@@ -244,6 +244,23 @@ type MarketWatchlist struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+type Notification struct {
+	ID          int64        `json:"id"`
+	UserID      int64        `json:"user_id"`
+	CharacterID int64        `json:"character_id"`
+	Kind        string       `json:"kind"`
+	Title       string       `json:"title"`
+	Url         string       `json:"url"`
+	CreatedAt   time.Time    `json:"created_at"`
+	ReadAt      sql.NullTime `json:"read_at"`
+}
+
+type NotificationSeen struct {
+	UserID   int64     `json:"user_id"`
+	EventKey string    `json:"event_key"`
+	SeenAt   time.Time `json:"seen_at"`
+}
+
 type OrderHealth struct {
 	CharacterID int64     `json:"character_id"`
 	OrderID     int64     `json:"order_id"`

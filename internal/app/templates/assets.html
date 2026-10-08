@@ -1,6 +1,6 @@
 {{define "title"}}Assets{{end}}
 {{define "asset-rows"}}{{range .}}
-        <tr><td>{{itemLink .TypeID .Name}}{{if .Where}} <small>in {{.Where}}</small>{{end}}</td><td>{{.Quantity}}</td><td>{{.Note}}</td></tr>
+        <tr><td>{{itemLink .TypeID .Name}}{{if .TypeName}} <small>{{.TypeName}}</small>{{end}}{{if .Where}} <small>in {{.Where}}</small>{{end}}</td><td>{{.Quantity}}</td><td>{{.Note}}</td></tr>
         {{if .Children}}<tr class="asset-inside"><td colspan="3">
           <details>
             <summary>{{.Inside}} {{if eq .Inside 1}}stack{{else}}stacks{{end}} inside {{.Name}}</summary>

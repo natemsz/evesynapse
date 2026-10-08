@@ -8,6 +8,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -220,4 +221,111 @@ func TestAssetNestingSurvivesBadData(t *testing.T) {
 			t.Fatalf("GET %s = %d", path, code)
 		}
 	}
+}
+
+// assetNamesESI stands in for ESI's asset-names call: it records the
+// item ids it is asked about and answers with the names it was given.
+type assetNamesESI struct {
+	status int
+	answer string
+	asked  [][]int64
+}
+
+func (s *assetNamesESI) RoundTrip(req *http.Request) (*http.Response, error) {
+	respond := func(code int, body string) (*http.Response, error) {
+		return &http.Response{StatusCode: code, Header: http.Header{"Content-Type": {"application/json"}},
+			Body: io.NopCloser(strings.NewReader(body))}, nil
+	}
+	if req.Method != http.MethodPost || !strings.HasSuffix(req.URL.Path, "/characters/90000001/assets/names/") {
+		return respond(http.StatusNotFound, `{"error":"unexpected `+req.Method+" "+req.URL.Path+`"}`)
+	}
+	var ids []int64
+	if err := json.NewDecoder(req.Body).Decode(&ids); err != nil {
+		return respond(http.StatusBadRequest, `{"error":"bad body"}`)
+	}
+	s.asked = append(s.asked, ids)
+	return respond(s.status, s.answer)
+}
+
+// TestShipsShowTheNamesTheirOwnersGaveThem: the worker asks ESI for
+// the names of ships and of anything with contents, once, and the
+// page, the search and the suggestions use them.
+func TestShipsShowTheNamesTheirOwnersGaveThem(t *testing.T) {
+	names := &assetNamesESI{status: http.StatusOK, answer: `[{"item_id":100,"name":"Zoom Zoom"},{"item_id":102,"name":"None"}]`}
+	app, _, q := buildCorpTestApp(t, names)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &assetsFixture{app: app, q: q, userID: user.ID, ch: seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")}
+	seedNestedAssets(t, f)
+	if _, err := app.db.ExecContext(ctx, `INSERT INTO sde_groups (group_id, name, category_id) VALUES (963, 'Strategic Cruiser', 6), (340, 'Secure Cargo Container', 2), (18, 'Mineral', 4), (385, 'Heavy Missile', 8)`); err != nil {
+		t.Fatalf("seed groups: %v", err)
+	}
+
+	// Asked about: the Loki (a ship) and the container (it has
+	// something inside). Not the ammunition or the Tritanium.
+	stored, limited := app.warmCharacterAssetNames(ctx, f.ch)
+	if stored != 1 || limited {
+		t.Fatalf("stored %d name(s), limited=%v; want 1 (the container has none)", stored, limited)
+	}
+	if len(names.asked) != 1 || len(names.asked[0]) != 2 || names.asked[0][0] != 100 || names.asked[0][1] != 102 {
+		t.Fatalf("asked ESI about %v, want one call for items 100 and 102", names.asked)
+	}
+	// Nothing new to name: no second call.
+	if app.warmCharacterAssetNames(ctx, f.ch); len(names.asked) != 1 {
+		t.Fatalf("asked again with nothing new: %v", names.asked)
+	}
+
+	cookie := sessionCookie(t, app, f.userID, f.ch.CharacterID, f.ch.Name)
+	_, body := getPage(t, app, cookie, "/assets/?character=90000001")
+	mustContain(t, "/assets/", body,
+		">Zoom Zoom</a> <small>Loki</small>",
+		"<summary>3 stacks inside Zoom Zoom</summary>",
+		// The unnamed container keeps its type name.
+		"<summary>1 stack inside Small Secure Container</summary>")
+
+	// Searching by the given name finds the ship; a hit inside it
+	// says so by that name.
+	_, body = getPage(t, app, cookie, "/assets/?q=zoom")
+	mustContain(t, "search zoom", body, "1 stack matching “zoom”", ">Zoom Zoom</a> <small>Loki</small>")
+	_, body = getPage(t, app, cookie, "/assets/?q=trit&only=1")
+	mustContain(t, "search trit", body, "<small>in Zoom Zoom › Small Secure Container</small>")
+
+	_, body = getPage(t, app, cookie, "/assets/suggest?q=zoo")
+	var rows []suggestItem
+	if err := json.Unmarshal([]byte(body), &rows); err != nil || len(rows) != 1 || rows[0].Name != "Zoom Zoom" || rows[0].Label != "Loki · Fixture Ceo" {
+		t.Fatalf("suggest zoo: %+v (%v)", rows, err)
+	}
+	// Searching by type still finds it.
+	_, body = getPage(t, app, cookie, "/assets/?q=loki&only=1")
+	mustContain(t, "search loki", body, ">Zoom Zoom</a> <small>Loki</small>")
+}
+
+// TestAssetNamesBackOffAfterAFailure: ESI refusing the names call is
+// recorded, and the worker does not ask again a minute later.
+func TestAssetNamesBackOffAfterAFailure(t *testing.T) {
+	names := &assetNamesESI{status: http.StatusNotFound, answer: `{"error":"Invalid IDs in the request"}`}
+	app, _, q := buildCorpTestApp(t, names)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &assetsFixture{app: app, q: q, userID: user.ID, ch: seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")}
+	seedNestedAssets(t, f)
+
+	for i := 0; i < 3; i++ {
+		if stored, _ := app.warmCharacterAssetNames(ctx, f.ch); stored != 0 {
+			t.Fatalf("stored %d name(s) from a refused call", stored)
+		}
+	}
+	if len(names.asked) != 1 {
+		t.Fatalf("ESI was asked %d times after refusing; want once, then a wait", len(names.asked))
+	}
+	// The page is unaffected: type names, as before.
+	cookie := sessionCookie(t, app, f.userID, f.ch.CharacterID, f.ch.Name)
+	_, body := getPage(t, app, cookie, "/assets/?character=90000001")
+	mustContain(t, "/assets/", body, "<summary>3 stacks inside Loki</summary>")
 }

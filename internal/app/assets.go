@@ -37,6 +37,9 @@ type assetRow struct {
 	Children   []assetRow
 	Inside     int
 	MoreInside int
+	// TypeName is what kind of thing it is, set when Name is the name
+	// its owner gave it ("Zoom Zoom", a Loki).
+	TypeName string
 	// Where names what a search hit is inside, outermost first
 	// ("Loki › Small Secure Container"); empty when it sits
 	// directly in the place.

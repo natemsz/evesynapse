@@ -37,6 +37,7 @@ type assetIndex struct {
 	byID     map[int64]esi.Asset
 	children map[int64][]esi.Asset // an asset's id -> the assets directly inside it
 	names    map[int64]string      // type id -> name, as far as local data knows
+	given    map[int64]string      // an asset's id -> the name its owner gave it (ships, containers)
 }
 
 func (app *Application) newAssetIndex(ctx context.Context, items []esi.Asset) *assetIndex {
@@ -55,6 +56,26 @@ func (app *Application) newAssetIndex(ctx context.Context, items []esi.Asset) *a
 		}
 	}
 	ix.names = app.esi.CachedTypeNames(ctx, typeIDs)
+	// Player-given names, where the worker has fetched them
+	// (assets_names_worker.go). Only singletons can have one.
+	ix.given = map[int64]string{}
+	var singles []int64
+	for _, it := range items {
+		if it.IsSingleton {
+			singles = append(singles, it.ItemID)
+		}
+	}
+	if len(singles) > 0 {
+		if rows, err := app.queries.ListItemNamesByIDs(ctx, singles); err != nil {
+			logging.Errorf("assets: list item names: %v", err)
+		} else {
+			for _, row := range rows {
+				if row.Name != "" {
+					ix.given[row.ItemID] = row.Name
+				}
+			}
+		}
+	}
 	// Types no local tier can name yet become current-page wants on a
 	// page render (a no-op elsewhere).
 	seen := make(map[int64]bool, len(typeIDs))
@@ -74,6 +95,15 @@ func (ix *assetIndex) nameOf(typeID int64) string {
 		return n
 	}
 	return fmt.Sprintf("Type #%d", typeID)
+}
+
+// label is how an asset is named on the page: the name its owner gave
+// it when there is one (with its type beside it), else its type.
+func (ix *assetIndex) label(it esi.Asset) (name, typeName string) {
+	if given := ix.given[it.ItemID]; given != "" {
+		return given, ix.nameOf(it.TypeID)
+	}
+	return ix.nameOf(it.TypeID), ""
 }
 
 // topLevel reports whether an asset sits directly in a place, not
@@ -147,11 +177,11 @@ func (ix *assetIndex) rows(list []esi.Asset, depth int) (rows []assetRow, more i
 	}
 	for _, it := range sorted {
 		row := assetRow{
-			Name:     ix.nameOf(it.TypeID),
 			TypeID:   it.TypeID,
 			Quantity: esi.FormatInt(it.Quantity),
 			Note:     assetNote(it),
 		}
+		row.Name, row.TypeName = ix.label(it)
 		if kids := ix.children[it.ItemID]; len(kids) > 0 && depth+1 < assetNestMax {
 			row.Inside = ix.inside(it, depth)
 			row.Children, row.MoreInside = ix.rows(kids, depth+1)
@@ -215,13 +245,17 @@ func (app *Application) searchNestedAssets(ctx context.Context, items []esi.Asse
 	locType := map[int64]string{}
 	stacks := 0
 	for _, it := range items {
-		if !strings.Contains(strings.ToLower(ix.nameOf(it.TypeID)), needle) {
+		// A hit is a match on what the thing is or on what its owner
+		// called it.
+		if !strings.Contains(strings.ToLower(ix.nameOf(it.TypeID)), needle) &&
+			!strings.Contains(strings.ToLower(ix.given[it.ItemID]), needle) {
 			continue
 		}
 		locID, kind, containers := ix.place(it)
 		names := make([]string, 0, len(containers))
 		for _, c := range containers {
-			names = append(names, ix.nameOf(c.TypeID))
+			name, _ := ix.label(c)
+			names = append(names, name)
 		}
 		byLoc[locID] = append(byLoc[locID], found{it: it, where: strings.Join(names, " › ")})
 		if _, ok := locType[locID]; !ok {
@@ -252,13 +286,14 @@ func (app *Application) searchNestedAssets(ctx context.Context, items []esi.Asse
 			hits = hits[:maxAssetRowsPerLocation]
 		}
 		for _, h := range hits {
-			loc.Items = append(loc.Items, assetRow{
-				Name:     ix.nameOf(h.it.TypeID),
+			row := assetRow{
 				TypeID:   h.it.TypeID,
 				Quantity: esi.FormatInt(h.it.Quantity),
 				Note:     assetNote(h.it),
 				Where:    h.where,
-			})
+			}
+			row.Name, row.TypeName = ix.label(h.it)
+			loc.Items = append(loc.Items, row)
 		}
 		locations = append(locations, loc)
 	}
@@ -307,6 +342,9 @@ func (app *Application) suggestOwnedAssets(ctx context.Context, characters []db.
 	}
 	owners := map[int64][]string{} // type id -> the characters holding it, in account order
 	var typeIDs []int64
+	// Singletons, for the names their owners gave them.
+	var singles []int64
+	singleType, singleOwner := map[int64]int64{}, map[int64]string{}
 	for _, ch := range characters {
 		items, ok := app.characterAssets(ctx, ch)
 		if !ok {
@@ -314,6 +352,10 @@ func (app *Application) suggestOwnedAssets(ctx context.Context, characters []db.
 		}
 		has := map[int64]bool{}
 		for _, it := range items {
+			if it.IsSingleton {
+				singles = append(singles, it.ItemID)
+				singleType[it.ItemID], singleOwner[it.ItemID] = it.TypeID, ch.Name
+			}
 			if has[it.TypeID] {
 				continue
 			}
@@ -347,8 +389,26 @@ func (app *Application) suggestOwnedAssets(ctx context.Context, characters []db.
 		}
 		return matches[i].name < matches[j].name
 	})
-	if len(matches) > assetSuggestLimit {
-		matches = matches[:assetSuggestLimit]
+	// A ship or container by the name its owner gave it leads the
+	// list: someone typing "zoom" means their Zoom Zoom.
+	if len(singles) > 0 {
+		if rows, err := app.queries.ListItemNamesByIDs(ctx, singles); err == nil {
+			sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
+			for _, row := range rows {
+				if row.Name == "" || !strings.Contains(strings.ToLower(row.Name), needle) || len(out) >= assetSuggestLimit {
+					continue
+				}
+				typeID := singleType[row.ItemID]
+				label := singleOwner[row.ItemID]
+				if typeName, ok := names[typeID]; ok {
+					label = typeName + " · " + label
+				}
+				out = append(out, suggestItem{ID: typeID, Name: row.Name, Label: label})
+			}
+		}
+	}
+	if room := assetSuggestLimit - len(out); len(matches) > room {
+		matches = matches[:room]
 	}
 	for _, m := range matches {
 		label := owners[m.id][0]

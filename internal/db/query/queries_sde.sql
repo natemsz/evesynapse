@@ -492,3 +492,10 @@ SELECT type_id, name FROM sde_types
 WHERE lower(name) = lower($1)
 ORDER BY published DESC, market_group_id DESC, type_id
 LIMIT 1;
+
+-- Which of these types are ships (category 6): the assets a player
+-- names. Used to decide whose names are worth asking ESI for.
+-- name: ListSDEShipTypeIDs :many
+SELECT t.type_id FROM sde_types t
+JOIN sde_groups g ON g.group_id = t.group_id
+WHERE g.category_id = 6 AND t.type_id = ANY(sqlc.arg(type_ids)::bigint[]);

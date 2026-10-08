@@ -2058,6 +2058,28 @@ func (c *Client) FetchCorpAssetNames(ctx context.Context, ch db.Character, corpo
 	return out, nil
 }
 
+// FetchCharacterAssetNames resolves player-given names for a
+// character's own asset items (ships, renamed containers) via
+// POST /characters/{id}/assets/names/. ESI accepts at most 1,000 item
+// IDs per call and rejects the whole batch when one of them is not
+// the character's.
+func (c *Client) FetchCharacterAssetNames(ctx context.Context, ch db.Character, itemIDs []int64) ([]AssetName, error) {
+	token, err := c.tokens(ctx, ch)
+	if err != nil {
+		return nil, err
+	}
+	var out []AssetName
+	path := fmt.Sprintf("/characters/%d/assets/names/", ch.CharacterID)
+	body, _, err := c.request(ctx, http.MethodPost, token, path, itemIDs, http.StatusOK)
+	if err != nil {
+		return nil, err
+	}
+	if err := decodeESI(http.MethodPost, path, body, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // fetchAllPages GETs every page of a paginated ESI endpoint (page
 // count from the X-Pages header of the first response) and returns
 // the entries merged into a single JSON array, plus the first

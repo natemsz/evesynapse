@@ -9,6 +9,16 @@
   font-display: swap;
   src: url('/static/fonts/shentox-regular.woff2') format('woff2');
 }
+/* The wordmark. SemiBold only: it is the one weight the page uses, and
+   block (not swap) keeps the brand from flashing in a fallback face, the
+   file being preloaded and cached for a year. */
+@font-face {
+  font-family: 'Pixelify Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+  src: url('/static/fonts/pixelify-sans-semibold.ttf') format('truetype');
+}
 @font-face {
   font-family: 'Univers Next Pro';
   font-style: normal;
@@ -218,11 +228,11 @@ h3 { font-size: 0.88rem; margin: 1.4rem 0 0.15rem; }
    unsupported — and in forced-colors mode, where the OS replaces
    backgrounds outright. */
 @supports not (background-clip: text) {
-  h2, h3, .wm-syn { background: none; color: var(--text-bright); -webkit-text-fill-color: currentColor; }
+  h2, h3 { background: none; color: var(--text-bright); -webkit-text-fill-color: currentColor; }
 }
 @media (forced-colors: active) {
-  h2, h3, .wm-syn { background: none; color: CanvasText; text-shadow: none; -webkit-text-fill-color: currentColor; }
-  .wordmark, .wm-eve, .wordmark:hover .wm-syn { color: CanvasText; }
+  h2, h3 { background: none; color: CanvasText; text-shadow: none; -webkit-text-fill-color: currentColor; }
+  .wordmark, .wm-eve, .wm-syn span, .wordmark:hover .wm-syn span { color: CanvasText; }
 }
 
 small { color: var(--muted); }
@@ -256,34 +266,37 @@ header .topbar {
   padding-bottom: 0.275rem;
   gap: 1rem;
 }
+/* Pixelify Sans is drawn on an 8-pixel em: at 1rem (16px) and 1.5rem
+   (24px) every design pixel is a whole number of screen pixels (2 and 3)
+   and the 0.125em letter-spacing is exactly one design pixel, so the
+   letters stay crisp. The phone sizes below use 1rem for that reason. */
 .wordmark {
   display: inline-block;
-  font-family: 'VT323', monospace;
+  font-family: 'Pixelify Sans', monospace;
   font-size: 1.5rem;
-  font-weight: 400;
-  letter-spacing: 0.12em;
+  font-weight: 600;
+  letter-spacing: 0.125em;
   color: var(--text-bright);
 }
-/* The gradient is painted on the SYNAPSE span alone. It used to sit
-   on the whole link, with a transparent fill, and WebKit drops that
-   clipped paint for text inside a child that has its own layer (the
-   transformed span), so SYNAPSE vanished in Safari while EVE, which
-   has a solid colour, stayed. It also meant the gradient showed
-   through under the white EVE. Clipping an element's own text works
-   everywhere, and EVE is outside it. */
-.wm-syn {
-  background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-}
+/* SYNAPSE fades from gold to ember one letter at a time, each letter a
+   solid colour. It used to be one gradient clipped to the text
+   (background-clip: text), and a clipped gradient is painted as a mask:
+   at the header's small size the letters came out a pixel shorter than
+   the solid white EVE beside them, which on a pixel font is plainly
+   visible, and WebKit dropped the clipped paint altogether under a
+   transformed ancestor. Solid text goes through the same path as EVE, so
+   the two words are the same size in every browser. The seven colours are
+   the old gradient (#ffd27a, #ff6a1a at the middle, #d63c14) sampled at
+   each letter's centre. */
+.wm-syn > span:nth-child(1) { color: #ffc36c; }
+.wm-syn > span:nth-child(2) { color: #ffa551; }
+.wm-syn > span:nth-child(3) { color: #ff8835; }
+.wm-syn > span:nth-child(4) { color: #ff6a1a; }
+.wm-syn > span:nth-child(5) { color: #f35d18; }
+.wm-syn > span:nth-child(6) { color: #e85017; }
+.wm-syn > span:nth-child(7) { color: #dc4315; }
 .wordmark:hover { text-decoration: none; }
-.wordmark:hover .wm-syn {
-  background: none;
-  color: var(--text-bright);
-  -webkit-text-fill-color: currentColor;
-}
+.wordmark:hover .wm-syn > span { color: var(--text-bright); }
 header .who {
   margin-left: auto;
   color: var(--muted-2);
@@ -816,7 +829,7 @@ footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
   .panel > h1:first-child { margin: -1rem -0.9rem 1rem; padding: 0.55rem 0.9rem; }
   header nav { padding-left: 0.6rem; padding-right: 0.6rem; }
   header .mainnav { gap: 0.15rem; }
-  .wordmark { letter-spacing: 0.1em; font-size: 1.2rem; }
+  .wordmark { letter-spacing: 0.125em; font-size: 1rem; }
   /* On narrow screens an open branch drops as a full-width bar
      beneath the header instead of a floating dropdown: the branch
      stops being the menu's positioning context, so the menu spans
@@ -1810,8 +1823,8 @@ tbody tr.yours td { background-color: #2a2015; }
   .topbar-wordmark {
     display: inline-flex;
     align-items: center;
-    font-size: 1.2rem;
-    letter-spacing: 0.1em;
+    font-size: 1rem;
+    letter-spacing: 0.125em;
   }
   /* Phones and the narrow drawer layout: a smaller logo and tighter
      spacing around it, so the wordmark text can be a readable size
@@ -1894,7 +1907,7 @@ tbody tr.yours td { background-color: #2a2015; }
   }
   .fleet-tools { gap: 0.4rem; }
   .fleet-tools input[type="search"] { width: 100%; }
-  .topbar-wordmark { letter-spacing: 0.1em; }
+  .topbar-wordmark { letter-spacing: 0.125em; }
   /* A keyboard-shortcut chip does nothing on a touch screen; the room
      goes to the search box. */
   .quickjump-btn { display: none; }

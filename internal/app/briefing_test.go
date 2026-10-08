@@ -377,6 +377,7 @@ func TestBriefingFontPreloadAndFooter(t *testing.T) {
 	mustContain(t, "home head", body,
 		`<link rel="preload" as="font" type="font/woff2" href="/static/fonts/shentox-regular.woff2" crossorigin>`,
 		`<link rel="preload" as="font" type="font/woff2" href="/static/fonts/univers-next-pro-medium-condensed.woff2" crossorigin>`,
+		`<link rel="preload" as="font" type="font/ttf" href="/static/fonts/pixelify-sans-semibold.ttf" crossorigin>`,
 		`<link rel="stylesheet" href="/static/style.css?v=`+staticAssetVersion()+`">`,
 		`Powered by EveSynapse `+appVersion+` 🏓 by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>`,
 	)

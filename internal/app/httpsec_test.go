@@ -104,6 +104,13 @@ func TestSecurityHeaders(t *testing.T) {
 	if strings.Contains(csp, "unsafe-inline") {
 		t.Errorf("Content-Security-Policy %q contains 'unsafe-inline'", csp)
 	}
+	// Every font is served by the app (the wordmark's too), so no
+	// third party is allowed to supply styles or fonts.
+	for _, banned := range []string{"googleapis", "gstatic"} {
+		if strings.Contains(csp, banned) {
+			t.Errorf("Content-Security-Policy %q still allows %s", csp, banned)
+		}
+	}
 	// HSTS only makes sense, and is only sent, on an https site.
 	if got := h.Get("Strict-Transport-Security"); got != "" {
 		t.Errorf("Strict-Transport-Security = %q on a site with no https address", got)

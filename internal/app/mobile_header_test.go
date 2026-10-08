@@ -7,8 +7,8 @@ import (
 )
 
 // TestWordmarkSizeAndPhoneHeader pins the header's proportions: the
-// EVESYNAPSE text is big enough next to the logo (VT323 is a pixel
-// font with a small cap height, so the sizes are generous), and on
+// EVESYNAPSE text is big enough next to the logo (Pixelify Sans, drawn on
+// an 8-pixel em, at whole-pixel sizes: 1.5rem wide, 1rem on phones), and on
 // phones the logo shrinks and the keyboard-shortcut chip goes so the
 // search box keeps room.
 func TestWordmarkSizeAndPhoneHeader(t *testing.T) {
@@ -18,10 +18,10 @@ func TestWordmarkSizeAndPhoneHeader(t *testing.T) {
 	}
 	css := string(raw)
 	for _, want := range []string{
-		// Wide: 1.5rem text (it was 1.2rem, 0.78rem on phones).
-		".wordmark {\n  display: inline-block;\n  font-family: 'VT323', monospace;\n  font-size: 1.5rem;",
-		// Phones and the drawer layout: readable text, smaller logo, tighter gap.
-		".topbar-wordmark {\n    display: inline-flex;\n    align-items: center;\n    font-size: 1.2rem;",
+		// Wide: 1.5rem text (3 screen pixels per design pixel).
+		".wordmark {\n  display: inline-block;\n  font-family: 'Pixelify Sans', monospace;\n  font-size: 1.5rem;",
+		// Phones and the drawer layout: 1rem text (2 per design pixel), smaller logo, tighter gap.
+		".topbar-wordmark {\n    display: inline-flex;\n    align-items: center;\n    font-size: 1rem;",
 		".wordmark-glyph { height: 1.2rem; margin-right: 0.5rem; }",
 		".topbar-wordmark > span { padding-left: 0.5rem; }",
 		// The shortcut chip does nothing on a touch screen.

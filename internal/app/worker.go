@@ -396,13 +396,20 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 // ESI cache window has closed, stopping at the first failure.
 func (c *cycleState) refreshCoreSnapshots(ctx context.Context, ch db.Character) {
 	app := c.app
+	// One meta read (no payloads) for the whole freshness pass:
+	// the payloads are the bulk of the table, and freshness only
+	// needs cached_until.
+	meta, merr := app.queries.ListSnapshotMetaByCharacter(ctx, ch.CharacterID)
+	if merr != nil {
+		logging.Errorf("worker: read snapshot freshness for character %d: %v", ch.CharacterID, merr)
+	}
+	fresh := make(map[string]bool, len(meta))
+	for _, snap := range meta {
+		fresh[snap.Kind] = esi.CacheWindowOpen(snap.CachedUntil)
+	}
 	for _, kind := range coreSnapshotKinds {
-		snap, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: kind})
-		switch {
-		case serr == nil && esi.SnapshotFresh(snap):
+		if fresh[kind] {
 			continue // still inside ESI's cache window
-		case serr != nil && !errors.Is(serr, sql.ErrNoRows):
-			logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
 		}
 
 		if !c.allowance.take() {

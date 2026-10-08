@@ -115,8 +115,12 @@
 
   testBtn.addEventListener('click', function () {
     testBtn.disabled = true;
-    post('/notifications/push/test').then(function () {
-      say('Test sent. It should appear in a moment.');
+    registration.pushManager.getSubscription().then(function (sub) {
+      return post('/notifications/push/test', sub ? { endpoint: sub.endpoint } : {});
+    }).then(function (res) {
+      return res.text();
+    }).then(function (answer) {
+      say('Test sent' + (answer ? ': ' + answer : '') + '. If nothing appears within a minute, this device is hiding it: check the system2019s notification settings for this browser, and Do Not Disturb.');
     }).catch(function (err) {
       say('The test could not be sent: ' + err.message);
     }).then(function () { testBtn.disabled = false; });

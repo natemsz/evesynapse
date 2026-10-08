@@ -30,7 +30,7 @@
 <p><small><a href="/items/{{if $v.MarketOnly}}?market=1{{end}}">Item Database</a> › {{$v.Category.Name}}</small></p>
 <h2>{{$v.Category.Name}}</h2>
 <form method="get" action="/items/category/{{$v.Category.ID}}/">
-  <label><small><input type="checkbox" name="market" value="1"{{if $v.MarketOnly}} checked{{end}}> Market items only</small></label>
+  <label><small><input type="checkbox" name="market" value="1" data-autosubmit{{if $v.MarketOnly}} checked{{end}}> Market items only</small></label>
   <button class="btn" type="submit">Filter</button>
 </form>
 {{if $v.Groups}}
@@ -52,21 +52,22 @@
 {{if eq $v.Mode "search"}}
 {{template "items-search-form" $v}}
 {{if $v.SearchResults}}
+{{range $v.SearchSections}}
+<h3 class="item-section">{{if .CategoryID}}<a href="/items/category/{{.CategoryID}}/{{if $v.MarketOnly}}?market=1{{end}}">{{.CategoryName}}</a>{{else}}<small>No category</small>{{end}}{{if .GroupID}} › <a href="/items/group/{{.GroupID}}/{{if $v.MarketOnly}}?market=1{{end}}">{{.GroupName}}</a>{{end}}</h3>
 <div class="tw">
 <table>
-  <thead><tr><th>Item</th><th>Group</th><th>Category</th><th>Market</th></tr></thead>
+  <thead><tr><th>Item</th><th>Market</th></tr></thead>
   <tbody>
-  {{range $v.SearchResults}}
+  {{range .Rows}}
     <tr>
       <td>{{itemLink .ID .Name}}</td>
-      <td>{{if .GroupID}}<a href="/items/group/{{.GroupID}}/">{{.GroupName}}</a>{{else}}<small>—</small>{{end}}</td>
-      <td>{{if .CategoryID}}<a href="/items/category/{{.CategoryID}}/">{{.CategoryName}}</a>{{else}}<small>—</small>{{end}}</td>
       <td>{{if .OnMarket}}<small>on market</small>{{else}}<small>—</small>{{end}}</td>
     </tr>
   {{end}}
   </tbody>
 </table>
 </div>
+{{end}}
 <p><small>{{$v.TotalTypes}} items{{if $v.SearchQuery}} matching "{{$v.SearchQuery}}"{{end}}{{if $v.MarketOnly}} on the market{{end}} · page {{$v.Page}} of {{$v.TotalPages}}</small>
 {{if $v.HasPrev}} · <a href="/items/?q={{$v.SearchQuery}}{{if $v.MarketOnly}}&market=1{{end}}{{if $v.CategoryID}}&category={{$v.CategoryID}}{{end}}{{if $v.GroupID}}&group={{$v.GroupID}}{{end}}&page={{$v.PrevPage}}">← Prev</a>{{end}}
 {{if $v.HasNext}} · <a href="/items/?q={{$v.SearchQuery}}{{if $v.MarketOnly}}&market=1{{end}}{{if $v.CategoryID}}&category={{$v.CategoryID}}{{end}}{{if $v.GroupID}}&group={{$v.GroupID}}{{end}}&page={{$v.NextPage}}">Next →</a>{{end}}</p>
@@ -80,7 +81,7 @@
 <h2>{{$v.Group.Name}}</h2>
 <form method="get" action="/items/group/{{$v.Group.ID}}/">
   <input type="search" name="q" value="{{$v.Query}}" placeholder="Filter types in this group">
-  <label><small><input type="checkbox" name="market" value="1"{{if $v.MarketOnly}} checked{{end}}> Market items only</small></label>
+  <label><small><input type="checkbox" name="market" value="1" data-autosubmit{{if $v.MarketOnly}} checked{{end}}> Market items only</small></label>
   <button class="btn" type="submit">Filter</button>
 </form>
 {{if $v.Types}}
@@ -155,14 +156,14 @@
     <input type="search" name="q" id="items-q" value="{{.SearchQuery}}" placeholder="Search every item by name" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="items-suggest" aria-autocomplete="list">
     <ul class="suggest" id="items-suggest" role="listbox" hidden></ul>
   </span>
-  <label><small><input type="checkbox" name="market" value="1"{{if .MarketOnly}} checked{{end}}> Market items only</small></label>
+  <label><small><input type="checkbox" name="market" value="1" data-autosubmit{{if .MarketOnly}} checked{{end}}> Market items only</small></label>
   <label><small>Category
-    <select name="category">
+    <select name="category" data-autosubmit>
       <option value="">All categories</option>
       {{range .Categories}}<option value="{{.ID}}"{{if eq .ID $.CategoryID}} selected{{end}}>{{.Name}}</option>{{end}}
     </select></small></label>
   {{if .CategoryID}}<label><small>Group
-    <select name="group">
+    <select name="group" data-autosubmit>
       <option value="">All groups</option>
       {{range .Groups}}<option value="{{.ID}}"{{if eq .ID $.GroupID}} selected{{end}}>{{.Name}}</option>{{end}}
     </select></small></label>{{end}}

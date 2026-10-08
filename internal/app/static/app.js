@@ -2204,3 +2204,53 @@
     }).observe(document.body, { childList: true, subtree: true });
   }
 })();
+
+// The notification list in the top bar: it closes on a click or tap
+// anywhere else and on Escape, and opens and closes with the
+// navigation's motion (the CSS transition on .notify.is-open). The
+// <details> works without this; this only adds the closing and the
+// motion.
+(function () {
+  "use strict";
+  var menu = document.getElementById("notify-menu");
+  if (!menu) return;
+  var summary = menu.querySelector("summary");
+  var closing = null;
+  // As long as the transition in style.css, or no wait at all for a
+  // reader who asked for less motion.
+  var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var motion = still ? 0 : 180;
+
+  function open() {
+    window.clearTimeout(closing);
+    closing = null;
+    menu.open = true;
+    // Reading the width makes the browser lay the list out in its
+    // starting state first, so the transition has something to run
+    // from.
+    void menu.offsetWidth;
+    menu.classList.add("is-open");
+  }
+
+  function close() {
+    if (!menu.open || closing) return;
+    menu.classList.remove("is-open");
+    closing = window.setTimeout(function () {
+      closing = null;
+      menu.open = false;
+    }, motion);
+  }
+
+  summary.addEventListener("click", function (ev) {
+    ev.preventDefault();
+    if (menu.open && !closing) { close(); } else { open(); }
+  });
+  document.addEventListener("click", function (ev) {
+    if (!menu.contains(ev.target)) close();
+  });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Escape" || !menu.open) return;
+    close();
+    summary.focus();
+  });
+})();

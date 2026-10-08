@@ -112,23 +112,44 @@
     say('Could not set up notifications in this browser: ' + err.message);
   });
 
+  function subscribe(message) {
+    say('Subscribing this browser…');
+    return within(registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: keyBytes(key)
+    }), 45000, message).then(function (sub) {
+      return post('/notifications/push/subscribe', sub.toJSON()).then(refresh, function (err) {
+        // The server did not take it: do not leave the browser
+        // subscribed to something nothing will send to.
+        return sub.unsubscribe().then(function () { throw err; });
+      });
+    });
+  }
+
+  var noAnswer = 'the browser’s push service did not answer. Check the connection and try again.';
+  var noPrompt = 'this app did not ask for permission and could not subscribe. Allow notifications for it in the device’s settings (on Android: Settings, Apps, then EveSynapse or the browser it was installed from, Notifications), close the app fully, and try again.';
+
   enableBtn.addEventListener('click', function () {
     if (!registration) { return; }
     enableBtn.disabled = true;
     say('Waiting for you to allow notifications…');
-    within(askPermission(), 60000,
-      'no permission prompt was answered. If none appeared, allow notifications for EveSynapse in the device’s settings (on Android: Settings, Apps, EveSynapse or your browser, Notifications), then come back here.'
-    ).then(function (permission) {
-      if (permission !== 'granted') { return refresh(); }
-      say('Subscribing this browser…');
-      return within(registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: keyBytes(key)
-      }), 30000, 'the browser’s push service did not answer. Check the connection and try again.').then(function (sub) {
-        return post('/notifications/push/subscribe', sub.toJSON()).then(refresh, function (err) {
-          // The server did not take it: do not leave the browser
-          // subscribed to something nothing will send to.
-          return sub.unsubscribe().then(function () { throw err; });
+    // An installed app on Android can leave the permission question
+    // unanswered for ever, with no prompt on screen. So after a short
+    // wait an unanswered question is not the end: subscribing asks
+    // for permission itself where it is still needed, and where the
+    // device's settings already allow notifications it simply works.
+    // If that fails too, a prompt may only be slow to be answered, so
+    // the wait for it goes on to a minute before giving up.
+    var asked = askPermission();
+    within(asked, 8000, 'unanswered').then(null, function () {
+      return 'unanswered';
+    }).then(function (permission) {
+      if (permission === 'denied' || permission === 'default') { return refresh(); }
+      if (permission === 'granted') { return subscribe(noAnswer); }
+      return subscribe(noPrompt).then(null, function () {
+        say('Waiting for you to allow notifications…');
+        return within(asked, 52000, noPrompt).then(function (later) {
+          return later === 'granted' ? subscribe(noAnswer) : refresh();
         });
       });
     }).catch(function (err) {

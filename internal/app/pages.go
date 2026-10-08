@@ -20,6 +20,7 @@ type pageData struct {
 	CharacterName     string
 	SSOConfigured     bool
 	AutoRefresh       bool   // Sync page: app.js reloads on a timer (noscript meta-refresh fallback)
+	NavState          string // saved nav layout ("rail" or "hidden") from the cookie; base.html puts it on <html>; filled by render
 	Error             string // friendly, user-safe banner (never internals)
 	Section           string // top-nav branch key (base.html); filled by render from the page when empty
 	NavPage           string // template file rendered, for marking the exact nav link; filled by render
@@ -223,6 +224,9 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 	}
 	if data.Section == "" {
 		data.Section = sectionForPage(page)
+	}
+	if data.NavState == "" {
+		data.NavState = navStateFrom(ctx)
 	}
 	if data.NavPage == "" {
 		data.NavPage = page

@@ -1,10 +1,10 @@
 {{define "base"}}<!DOCTYPE html>
-<html lang="en">
+<html lang="en"{{if .NavState}} data-nav="{{.NavState}}"{{end}}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<script src="/static/boot.js?v={{.AssetVersion}}"></script>
+<script src="/static/boot.js?v={{.AssetVersion}}" data-cfasync="false"></script>
 <title>{{template "title" .}} · EveSynapse</title>
 {{if .AutoRefresh}}<noscript><meta http-equiv="refresh" content="5"></noscript>{{end}}
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v={{.AssetVersion}}">

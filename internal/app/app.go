@@ -261,6 +261,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(app.securityHeaders)
+	r.Use(navStateMiddleware)
 	// Pages, the stylesheet and the scripts are text and compress to
 	// a fraction of their size; fonts and images are left alone.
 	r.Use(middleware.Compress(5))

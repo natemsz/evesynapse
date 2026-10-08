@@ -111,7 +111,7 @@ func TestPagesLinkVersionedAssets(t *testing.T) {
 		`src="/static/app.js?v=`+version+`"`,
 		// The head bootstrap (sync, before first paint), the
 		// versioned icons, and the skip link travel on every page.
-		`<script src="/static/boot.js?v=`+version+`"></script>`,
+		`<script src="/static/boot.js?v=`+version+`" data-cfasync="false"></script>`,
 		`href="/static/favicon.svg?v=`+version+`"`,
 		`href="/static/manifest.webmanifest?v=`+version+`"`,
 		`href="/static/icon-192.png?v=`+version+`"`,

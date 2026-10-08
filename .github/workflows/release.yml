@@ -81,8 +81,19 @@ jobs:
       - name: Decode the embedded assets (fonts, wallpaper)
         run: make assets
 
+      # staticcheck is built here against the newest golang.org/x/tools
+      # rather than run with "go run …@latest", which builds it against
+      # the x/tools its own release pinned. That pinned copy cannot read
+      # the packages a newer Go compiles (Go 1.27.2: "export data
+      # version 5 is greater than maximum supported version 4"), and
+      # then staticcheck stops before it has looked at any code.
       - name: staticcheck
-        run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+        run: |
+          build="$(mktemp -d)"
+          (cd "$build" && go mod init staticcheck-build \
+            && go get honnef.co/go/tools/cmd/staticcheck@latest golang.org/x/tools@latest \
+            && go build -o staticcheck honnef.co/go/tools/cmd/staticcheck)
+          "$build/staticcheck" ./...
 
       - name: govulncheck
         if: always()

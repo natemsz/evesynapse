@@ -9,6 +9,30 @@
 {{if .Calendar}}
 <h2>{{.Calendar.CharacterName}}</h2>
 
+{{with .Calendar.Month}}
+<div class="cal-head">
+  <a class="btn" href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{.Prev}}" aria-label="Previous month">‹</a>
+  <strong class="cal-title">{{.Title}}</strong>
+  <a class="btn" href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{.Next}}" aria-label="Next month">›</a>
+  {{if $.Calendar.CanCreate}}<a class="btn cal-new" href="/ops/new">New op</a>{{end}}
+</div>
+<div class="cal-wrap">
+<table class="cal">
+  <thead><tr>{{range .Weekdays}}<th>{{.}}</th>{{end}}</tr></thead>
+  <tbody>
+  {{range .Weeks}}<tr>
+    {{range .}}<td class="cal-day{{if not .InMonth}} cal-out{{end}}{{if .Today}} cal-today{{end}}">
+      <span class="cal-num">{{.Day}}</span>{{if $.Calendar.CanCreate}}<a class="cal-add" href="/ops/new?date={{.Date}}" aria-label="New op on {{.Date}}" title="New op on {{.Date}}">+</a>{{end}}
+      {{range .Entries}}<a class="cal-entry cal-{{.Kind}}{{if .Cancelled}} cal-cancelled{{end}}" href="{{.URL}}"><span class="cal-time">{{.Time}}</span> {{.Title}}{{if .Mine}} <small>{{.Mine}}</small>{{end}}</a>
+      {{end}}
+    </td>{{end}}
+  </tr>{{end}}
+  </tbody>
+</table>
+</div>
+<p><small>Times are EVE time. <span class="cal-key cal-op">Ops</span> are your corporation's, planned here and open to sign up to. <span class="cal-key cal-event">Events</span> come from the in-game calendar.</small></p>
+{{end}}
+
 {{if .Calendar.Detail}}
 <section class="foldable">
 {{if .Calendar.Detail.Warming}}

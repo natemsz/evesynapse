@@ -261,6 +261,32 @@ type NotificationSeen struct {
 	SeenAt   time.Time `json:"seen_at"`
 }
 
+type Op struct {
+	ID                 int64        `json:"id"`
+	CorporationID      int64        `json:"corporation_id"`
+	Title              string       `json:"title"`
+	Description        string       `json:"description"`
+	StartsAt           time.Time    `json:"starts_at"`
+	DurationMinutes    int64        `json:"duration_minutes"`
+	Doctrine           string       `json:"doctrine"`
+	FormUp             string       `json:"form_up"`
+	FcCharacterID      int64        `json:"fc_character_id"`
+	CreatedByCharacter int64        `json:"created_by_character"`
+	CreatedAt          time.Time    `json:"created_at"`
+	CancelledAt        sql.NullTime `json:"cancelled_at"`
+}
+
+type OpSignup struct {
+	OpID        int64     `json:"op_id"`
+	CharacterID int64     `json:"character_id"`
+	UserID      int64     `json:"user_id"`
+	Response    string    `json:"response"`
+	Ship        string    `json:"ship"`
+	FleetRole   string    `json:"fleet_role"`
+	Note        string    `json:"note"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 type OrderHealth struct {
 	CharacterID int64     `json:"character_id"`
 	OrderID     int64     `json:"order_id"`

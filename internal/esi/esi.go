@@ -156,6 +156,11 @@ const (
 	SnapCalendarAttPrefix   = "calendar_attendees_"
 	SnapContacts            = "contacts"
 
+	// The corporation roles the character holds (Director and the
+	// rest). The ops calendar reads them to decide who may create
+	// an op.
+	SnapCorpRoles = "corp_roles"
+
 	// Phase 4 (skill plans): the character's five attributes,
 	// warmed alongside the skills snapshots — the plan engine
 	// times every step against these, so the plans pages must
@@ -833,6 +838,12 @@ type CorpStructure struct {
 // CorpStructures is GET /corporations/{id}/structures/ (all pages
 // merged).
 type CorpStructures []CorpStructure
+
+// CharacterRoles is GET /characters/{id}/roles/: the corporation
+// roles a character holds. Only the corporation-wide list is read.
+type CharacterRoles struct {
+	Roles []string `json:"roles"`
+}
 
 // AssetName is one entry of POST /corporations/{id}/assets/names/:
 // the player-given name of a singleton item (a fitted ship, a
@@ -1751,6 +1762,8 @@ func snapshotPath(characterID int64, kind string) string {
 		return fmt.Sprintf("/characters/%d/implants/", characterID)
 	case SnapFittings:
 		return fmt.Sprintf("/characters/%d/fittings/", characterID)
+	case SnapCorpRoles:
+		return fmt.Sprintf("/characters/%d/roles/", characterID)
 	case SnapFatigue:
 		return fmt.Sprintf("/characters/%d/fatigue/", characterID)
 	case SnapKillmails:

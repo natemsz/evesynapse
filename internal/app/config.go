@@ -18,6 +18,11 @@ import (
 // environment (after dotenv.Load has had a chance to fill gaps from a
 // local .env); secrets are never hardcoded or logged.
 type Config struct {
+	// opsManagerRoles are the in-game corporation roles that may
+	// create and change ops (ops.go). OPS_MANAGER_ROLES, comma
+	// separated; Director when unset.
+	opsManagerRoles []string
+
 	// Browser push (notify_push.go): the server's VAPID key pair and
 	// a contact address for the push services. All unset means push
 	// is off.
@@ -147,6 +152,7 @@ func LoadConfig() (Config, error) {
 		pushPublicKey:   os.Getenv("VAPID_PUBLIC_KEY"),
 		pushPrivateKey:  os.Getenv("VAPID_PRIVATE_KEY"),
 		pushSubject:     os.Getenv("VAPID_SUBJECT"),
+		opsManagerRoles: parseRoleList(os.Getenv("OPS_MANAGER_ROLES")),
 	}, nil
 }
 
@@ -303,4 +309,50 @@ func getenvDefault(key, def string) string {
 // typo cannot leave the log quieter or louder than intended.
 func (c Config) SetupLogging() error {
 	return logging.Setup(c.logLevel, c.logFormat, os.Stderr)
+}
+
+// defaultOpsManagerRole is who may manage ops when OPS_MANAGER_ROLES
+// is not set.
+const defaultOpsManagerRole = "Director"
+
+// parseRoleList reads a comma-separated list of in-game corporation
+// role names ("Director,Personnel_Manager"); empty means the default.
+func parseRoleList(raw string) []string {
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		if role := strings.TrimSpace(part); role != "" {
+			out = append(out, role)
+		}
+	}
+	if len(out) == 0 {
+		out = []string{defaultOpsManagerRole}
+	}
+	return out
+}
+
+// holdsOpsManagerRole reports whether one of a character's roles is a
+// manager role. Role names are compared as ESI writes them, ignoring
+// case.
+func (c Config) holdsOpsManagerRole(roles []string) bool {
+	managers := c.opsManagerRoles
+	if len(managers) == 0 {
+		managers = []string{defaultOpsManagerRole}
+	}
+	for _, role := range roles {
+		for _, want := range managers {
+			if strings.EqualFold(role, want) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// opsManagerRolesText names the manager roles for a message.
+func (c Config) opsManagerRolesText() string {
+	managers := c.opsManagerRoles
+	if len(managers) == 0 {
+		managers = []string{defaultOpsManagerRole}
+	}
+	return strings.ReplaceAll(strings.Join(managers, " or "), "_", " ")
 }

@@ -1,0 +1,29 @@
+{{define "title"}}Attendance{{end}}
+{{define "content"}}
+<h1><span class="gt">Attendance</span></h1>
+<p><small>How many ops each pilot was on. Counted from the fleets themselves where EveSynapse could read them, and from a manager's marking where it could not.</small></p>
+
+{{with .PAPs}}
+{{range .Corps}}
+<h2>{{.Name}}</h2>
+{{if .Rows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Pilot</th><th>Last 30 days</th><th>Last 90 days</th><th>Last op</th></tr></thead>
+  <tbody>
+  {{range .Rows}}
+    <tr><td>{{charLink $.ViewerChars .CharacterID .Name}}</td><td>{{.Recent}}</td><td>{{.Total}}</td><td>{{.LastOp}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p><small>No attendance recorded in the last 90 days.</small></p>
+{{end}}
+{{else}}
+<p><small>None of your characters is in a corporation EveSynapse knows yet.</small></p>
+{{end}}
+{{end}}
+
+<p><a href="/calendar/">Back to the calendar</a></p>
+{{end}}

@@ -50,8 +50,24 @@ func (q *Queries) CreateOp(ctx context.Context, arg CreateOpParams) (int64, erro
 	return id, err
 }
 
+const deleteManualAttendanceExcept = `-- name: DeleteManualAttendanceExcept :exec
+DELETE FROM op_attendance
+WHERE op_id = $1 AND source = 'manual'
+  AND NOT (character_id = ANY($2::bigint[]))
+`
+
+type DeleteManualAttendanceExceptParams struct {
+	OpID    int64   `json:"op_id"`
+	KeepIds []int64 `json:"keep_ids"`
+}
+
+func (q *Queries) DeleteManualAttendanceExcept(ctx context.Context, arg DeleteManualAttendanceExceptParams) error {
+	_, err := q.db.ExecContext(ctx, deleteManualAttendanceExcept, arg.OpID, pq.Array(arg.KeepIds))
+	return err
+}
+
 const getOp = `-- name: GetOp :one
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at FROM ops WHERE id = $1
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at FROM ops WHERE id = $1
 `
 
 func (q *Queries) GetOp(ctx context.Context, id int64) (Op, error) {
@@ -70,8 +86,28 @@ func (q *Queries) GetOp(ctx context.Context, id int64) (Op, error) {
 		&i.CreatedByCharacter,
 		&i.CreatedAt,
 		&i.CancelledAt,
+		&i.CaptureStatus,
+		&i.CaptureCheckedAt,
 	)
 	return i, err
+}
+
+const insertManualAttendance = `-- name: InsertManualAttendance :exec
+INSERT INTO op_attendance (op_id, character_id, source, first_seen_at, last_seen_at)
+VALUES ($1, $2, 'manual', $3, $3)
+ON CONFLICT (op_id, character_id) DO NOTHING
+`
+
+type InsertManualAttendanceParams struct {
+	OpID        int64     `json:"op_id"`
+	CharacterID int64     `json:"character_id"`
+	SeenAt      time.Time `json:"seen_at"`
+}
+
+// Marked by hand. Never touches a row the fleet reported.
+func (q *Queries) InsertManualAttendance(ctx context.Context, arg InsertManualAttendanceParams) error {
+	_, err := q.db.ExecContext(ctx, insertManualAttendance, arg.OpID, arg.CharacterID, arg.SeenAt)
+	return err
 }
 
 const listCharacterCorporationsByUser = `-- name: ListCharacterCorporationsByUser :many
@@ -104,6 +140,97 @@ func (q *Queries) ListCharacterCorporationsByUser(ctx context.Context, userID in
 	for rows.Next() {
 		var i ListCharacterCorporationsByUserRow
 		if err := rows.Scan(&i.CharacterID, &i.Name, &i.CorporationID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCorporationPAPs = `-- name: ListCorporationPAPs :many
+SELECT a.character_id,
+       COUNT(*)::bigint AS total,
+       COUNT(*) FILTER (WHERE o.starts_at >= $1)::bigint AS recent,
+       MAX(o.starts_at)::timestamptz AS last_op
+FROM op_attendance a
+JOIN ops o ON o.id = a.op_id
+WHERE o.corporation_id = $2
+  AND o.cancelled_at IS NULL
+  AND o.starts_at >= $3
+GROUP BY a.character_id
+ORDER BY total DESC, a.character_id
+`
+
+type ListCorporationPAPsParams struct {
+	RecentSince   time.Time `json:"recent_since"`
+	CorporationID int64     `json:"corporation_id"`
+	Since         time.Time `json:"since"`
+}
+
+type ListCorporationPAPsRow struct {
+	CharacterID int64     `json:"character_id"`
+	Total       int64     `json:"total"`
+	Recent      int64     `json:"recent"`
+	LastOp      time.Time `json:"last_op"`
+}
+
+// Attendance counts for a corporation's ops since a date, per
+// character: the PAP table.
+func (q *Queries) ListCorporationPAPs(ctx context.Context, arg ListCorporationPAPsParams) ([]ListCorporationPAPsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCorporationPAPs, arg.RecentSince, arg.CorporationID, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCorporationPAPsRow
+	for rows.Next() {
+		var i ListCorporationPAPsRow
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.Total,
+			&i.Recent,
+			&i.LastOp,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpAttendance = `-- name: ListOpAttendance :many
+SELECT op_id, character_id, ship_type_id, source, first_seen_at, last_seen_at FROM op_attendance WHERE op_id = $1 ORDER BY character_id
+`
+
+func (q *Queries) ListOpAttendance(ctx context.Context, opID int64) ([]OpAttendance, error) {
+	rows, err := q.db.QueryContext(ctx, listOpAttendance, opID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OpAttendance
+	for rows.Next() {
+		var i OpAttendance
+		if err := rows.Scan(
+			&i.OpID,
+			&i.CharacterID,
+			&i.ShipTypeID,
+			&i.Source,
+			&i.FirstSeenAt,
+			&i.LastSeenAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -194,7 +321,7 @@ func (q *Queries) ListOpSignupsForOps(ctx context.Context, opIds []int64) ([]Lis
 }
 
 const listOpsForCorporationsBetween = `-- name: ListOpsForCorporationsBetween :many
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at FROM ops
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at FROM ops
 WHERE corporation_id = ANY($1::bigint[])
   AND starts_at >= $2 AND starts_at < $3
 ORDER BY starts_at, id
@@ -228,6 +355,66 @@ func (q *Queries) ListOpsForCorporationsBetween(ctx context.Context, arg ListOps
 			&i.CreatedByCharacter,
 			&i.CreatedAt,
 			&i.CancelledAt,
+			&i.CaptureStatus,
+			&i.CaptureCheckedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpsToCapture = `-- name: ListOpsToCapture :many
+
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at FROM ops
+WHERE cancelled_at IS NULL
+  AND fc_character_id <> 0
+  AND starts_at <= $1
+  AND starts_at + (duration_minutes * interval '1 minute') >= $2
+ORDER BY starts_at, id
+`
+
+type ListOpsToCaptureParams struct {
+	StartsBefore time.Time `json:"starts_before"`
+	EndsAfter    time.Time `json:"ends_after"`
+}
+
+// ---------------------------------------------------------------------
+// Attendance (schema 015).
+// ---------------------------------------------------------------------
+// Ops whose fleet may be up right now: not cancelled, and inside the
+// window from a little before the start to a little after the end.
+func (q *Queries) ListOpsToCapture(ctx context.Context, arg ListOpsToCaptureParams) ([]Op, error) {
+	rows, err := q.db.QueryContext(ctx, listOpsToCapture, arg.StartsBefore, arg.EndsAfter)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Op
+	for rows.Next() {
+		var i Op
+		if err := rows.Scan(
+			&i.ID,
+			&i.CorporationID,
+			&i.Title,
+			&i.Description,
+			&i.StartsAt,
+			&i.DurationMinutes,
+			&i.Doctrine,
+			&i.FormUp,
+			&i.FcCharacterID,
+			&i.CreatedByCharacter,
+			&i.CreatedAt,
+			&i.CancelledAt,
+			&i.CaptureStatus,
+			&i.CaptureCheckedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -253,6 +440,22 @@ type SetOpCancelledParams struct {
 
 func (q *Queries) SetOpCancelled(ctx context.Context, arg SetOpCancelledParams) error {
 	_, err := q.db.ExecContext(ctx, setOpCancelled, arg.CancelledAt, arg.ID)
+	return err
+}
+
+const setOpCaptureStatus = `-- name: SetOpCaptureStatus :exec
+UPDATE ops SET capture_status = $1, capture_checked_at = $2
+WHERE id = $3
+`
+
+type SetOpCaptureStatusParams struct {
+	CaptureStatus string       `json:"capture_status"`
+	CheckedAt     sql.NullTime `json:"checked_at"`
+	ID            int64        `json:"id"`
+}
+
+func (q *Queries) SetOpCaptureStatus(ctx context.Context, arg SetOpCaptureStatusParams) error {
+	_, err := q.db.ExecContext(ctx, setOpCaptureStatus, arg.CaptureStatus, arg.CheckedAt, arg.ID)
 	return err
 }
 
@@ -289,6 +492,34 @@ func (q *Queries) UpdateOp(ctx context.Context, arg UpdateOpParams) error {
 		arg.FormUp,
 		arg.FcCharacterID,
 		arg.ID,
+	)
+	return err
+}
+
+const upsertFleetAttendance = `-- name: UpsertFleetAttendance :exec
+INSERT INTO op_attendance (op_id, character_id, ship_type_id, source, first_seen_at, last_seen_at)
+VALUES ($1, $2, $3, 'fleet', $4, $4)
+ON CONFLICT (op_id, character_id) DO UPDATE SET
+    ship_type_id = excluded.ship_type_id,
+    source       = 'fleet',
+    last_seen_at = excluded.last_seen_at
+`
+
+type UpsertFleetAttendanceParams struct {
+	OpID        int64     `json:"op_id"`
+	CharacterID int64     `json:"character_id"`
+	ShipTypeID  int64     `json:"ship_type_id"`
+	SeenAt      time.Time `json:"seen_at"`
+}
+
+// Seen in the fleet. A character already marked by hand becomes a
+// fleet sighting: the fleet is the better witness.
+func (q *Queries) UpsertFleetAttendance(ctx context.Context, arg UpsertFleetAttendanceParams) error {
+	_, err := q.db.ExecContext(ctx, upsertFleetAttendance,
+		arg.OpID,
+		arg.CharacterID,
+		arg.ShipTypeID,
+		arg.SeenAt,
 	)
 	return err
 }

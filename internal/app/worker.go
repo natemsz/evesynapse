@@ -267,6 +267,12 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		}
 	}
 
+	// Ops in progress: record who is in each one's fleet
+	// (ops_attendance.go). No call is made unless an op is running.
+	c.pass("recording op attendance", func() (int, bool) {
+		return app.captureOpAttendance(ctx, time.Now())
+	})
+
 	c.refreshPublicData(ctx, characters)
 	c.warmNames(ctx, characters)
 

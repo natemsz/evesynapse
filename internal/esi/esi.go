@@ -839,6 +839,24 @@ type CorpStructure struct {
 // merged).
 type CorpStructures []CorpStructure
 
+// CharacterFleet is GET /characters/{id}/fleet/: the fleet a
+// character is in right now. ESI answers 404 when it is in none.
+type CharacterFleet struct {
+	FleetID     int64  `json:"fleet_id"`
+	FleetBossID int64  `json:"fleet_boss_id"`
+	Role        string `json:"role"`
+}
+
+// FleetMember is one entry of GET /fleets/{id}/members/, which only
+// the fleet's boss may read.
+type FleetMember struct {
+	CharacterID   int64  `json:"character_id"`
+	ShipTypeID    int64  `json:"ship_type_id"`
+	SolarSystemID int64  `json:"solar_system_id"`
+	Role          string `json:"role"`
+	JoinTime      string `json:"join_time"`
+}
+
 // CharacterRoles is GET /characters/{id}/roles/: the corporation
 // roles a character holds. Only the corporation-wide list is read.
 type CharacterRoles struct {

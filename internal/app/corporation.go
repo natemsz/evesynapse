@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"evesynapse/internal/esi"
@@ -54,6 +55,10 @@ type corpCacheEntry struct {
 	view      corpView
 	expiresAt time.Time
 }
+
+// corporationsPageConcurrency is how many corporations the Corporation
+// page builds at once.
+const corporationsPageConcurrency = 4
 
 // corpCall is one in-flight corporation refresh. Readers arriving
 // while it runs wait on it instead of each firing their own ESI
@@ -158,39 +163,55 @@ func (app *Application) fetchCorporation(ctx context.Context, corpID int64) (cor
 		view.Founded = corp.DateFounded[:10]
 	}
 
+	// The three name lookups are independent of one another, so they
+	// run together: the page waits for the slowest, not their sum.
+	var wg sync.WaitGroup
 	if corp.CEOID > 0 {
 		view.CEOID = corp.CEOID
 		view.CEOPortraitURL = fmt.Sprintf("https://images.evetech.net/characters/%d/portrait?size=64", corp.CEOID)
-		var ceo esi.Character
-		if err := app.esi.Get(ctx, "", fmt.Sprintf("/characters/%d/", corp.CEOID), &ceo); err == nil {
-			view.CEOName = ceo.Name
-		} else {
-			logging.Errorf("corporations: CEO lookup for corporation %d: %v", corpID, err)
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			var ceo esi.Character
+			if err := app.esi.Get(ctx, "", fmt.Sprintf("/characters/%d/", corp.CEOID), &ceo); err == nil {
+				view.CEOName = ceo.Name
+			} else {
+				logging.Errorf("corporations: CEO lookup for corporation %d: %v", corpID, err)
+			}
+		}()
 	}
 
 	if corp.AllianceID > 0 {
 		view.AllianceID = corp.AllianceID
-		var ally esi.Alliance
-		if err := app.esi.Get(ctx, "", fmt.Sprintf("/alliances/%d/", corp.AllianceID), &ally); err == nil {
-			if ally.Ticker != "" {
-				view.Alliance = fmt.Sprintf("%s [%s]", ally.Name, ally.Ticker)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			var ally esi.Alliance
+			if err := app.esi.Get(ctx, "", fmt.Sprintf("/alliances/%d/", corp.AllianceID), &ally); err == nil {
+				if ally.Ticker != "" {
+					view.Alliance = fmt.Sprintf("%s [%s]", ally.Name, ally.Ticker)
+				} else {
+					view.Alliance = ally.Name
+				}
 			} else {
-				view.Alliance = ally.Name
+				logging.Errorf("corporations: alliance lookup %d for corporation %d: %v", corp.AllianceID, corpID, err)
 			}
-		} else {
-			logging.Errorf("corporations: alliance lookup %d for corporation %d: %v", corp.AllianceID, corpID, err)
-		}
+		}()
 	}
 
 	if corp.HomeStationID > 0 {
-		var station esi.Station
-		if err := app.esi.Get(ctx, "", fmt.Sprintf("/universe/stations/%d/", corp.HomeStationID), &station); err == nil {
-			view.HomeStation = station.Name
-		} else {
-			logging.Errorf("corporations: station lookup %d for corporation %d: %v", corp.HomeStationID, corpID, err)
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			var station esi.Station
+			if err := app.esi.Get(ctx, "", fmt.Sprintf("/universe/stations/%d/", corp.HomeStationID), &station); err == nil {
+				view.HomeStation = station.Name
+			} else {
+				logging.Errorf("corporations: station lookup %d for corporation %d: %v", corp.HomeStationID, corpID, err)
+			}
+		}()
 	}
+	wg.Wait()
 
 	return view, expiresAt, nil
 }
@@ -261,12 +282,41 @@ func (app *Application) handleCorporations(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	// Build the corporations together. Each build is a few public ESI
+	// lookups on a cold or expired cache entry, and going through them
+	// one corporation at a time made the page's time the sum of all of
+	// them; a handful at once makes it about the slowest one. The cap
+	// keeps one page load from flooding ESI for a user with many
+	// corporations.
+	type built struct {
+		view corpView
+		err  error
+	}
+	results := make(map[int64]built, len(byCorp))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	slots := make(chan struct{}, corporationsPageConcurrency)
+	for corpID := range byCorp {
+		wg.Add(1)
+		go func(corpID int64) {
+			defer wg.Done()
+			slots <- struct{}{}
+			defer func() { <-slots }()
+			view, err := app.corporation(ctx, corpID)
+			mu.Lock()
+			results[corpID] = built{view: view, err: err}
+			mu.Unlock()
+		}(corpID)
+	}
+	wg.Wait()
+
 	for corpID, chars := range byCorp {
-		view, err := app.corporation(ctx, corpID)
-		if err != nil {
-			logging.Errorf("corporations: build corporation %d: %v", corpID, err)
+		res := results[corpID]
+		if res.err != nil {
+			logging.Errorf("corporations: build corporation %d: %v", corpID, res.err)
 			continue
 		}
+		view := res.view
 		sort.Slice(chars, func(i, j int) bool { return chars[i].Name < chars[j].Name })
 		view.Characters = chars
 		view.LinkCharacterID = linkChar[corpID]

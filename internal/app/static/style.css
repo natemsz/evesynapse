@@ -994,6 +994,10 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
 @media (prefers-reduced-motion: reduce) {
   .card.drag-settle { transition: none; }
 }
+/* The × and the resize toggle live in the card heading, like the
+   fold button, and centre on it the same way (top 50% and a
+   half-height lift), so all three line up whatever height the
+   heading has. */
 .cardremove {
   position: absolute;
   top: 50%;
@@ -1011,10 +1015,6 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
   border: 1px solid #4a2408;
   border-radius: 3px;
   cursor: pointer;
-/* The × and the resize toggle live in the card heading, like the
-   fold button, and centre on it the same way (top 50% and a
-   half-height lift), so all three line up whatever height the
-   heading has. */
 }
 .cardremove:hover { color: var(--text-bright); border-color: var(--danger); }
 /* The half/full resize toggle sits left of the × on flex
@@ -1420,6 +1420,12 @@ html[data-theme="dark"] .theme-icon-sun { display: block; }
 }
 .sidebar-account .branch .menu { margin-left: 0; }
 .sidebar-account.has-character .sidebar-character { display: none; }
+/* With a signed-in character the block is empty on wide screens
+   (the character lives in the top bar), so it draws no rule and
+   takes no share of the free space: it used to leave a line
+   floating mid-sidebar and push the footer off the bottom. The
+   phone drawer shows the block again (see its media query). */
+.sidebar-account.has-character { margin-top: 0; padding: 0; border-top: 0; }
 .sidebar-signout {
   display: inline-flex;
   margin-top: 0.45rem;
@@ -1522,12 +1528,44 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
   display: inline-block;
   height: 1.5rem;
   width: auto;
-  margin: 0 0.55rem 0 0;
+  margin: 0 0.75rem 0 0;
   flex-shrink: 0;
 }
 .topbar-wordmark {
   display: inline-flex;
   align-items: center;
+}
+/* A slim ember divider between the logo and the wordmark text: the
+   same 1px rule, colour and height as the one beside the character
+   portrait, centred on the bar. */
+.topbar-wordmark > span {
+  position: relative;
+  padding-left: 0.75rem;
+}
+.topbar-wordmark > span::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 1px;
+  height: 2.25rem;
+  transform: translateY(-50%);
+  background: rgba(255, 106, 26, 0.25);
+}
+/* The logo's centre sits on the same vertical axis as the nav icons
+   below it. The axis is where the icons are, which depends on the
+   nav state: expanded = the sidebar's 0.55rem padding + the link's
+   0.55rem padding + half of the 1.35rem icon; icon-only = the middle
+   of the 5rem rail (less its 1px edge). The logo is 1.5rem tall and
+   48:28 wide, so half its width is 0.75rem * 48 / 28; the top bar
+   pads 1rem on the left. Phones (drawer) and a hidden nav keep the
+   plain padding. */
+:root { --nav-axis: 1.775rem; }
+html[data-nav="rail"] { --nav-axis: calc(2.5rem - 0.5px); }
+@media (min-width: 861px) {
+  html:not([data-nav="hidden"]) .topbar-wordmark {
+    margin-left: calc(var(--nav-axis) - 0.75rem * 48 / 28 - 1rem);
+  }
 }
 .wordmark .wm-eve {
   color: #ffffff;
@@ -1652,6 +1690,7 @@ tbody tr.yours td { background-color: #2a2015; }
   }
   html[data-nav="rail"] .sidebar-account { display: block; }
   .sidebar-account.has-character .sidebar-character { display: block; }
+  .sidebar-account.has-character { margin-top: auto; padding: 0.75rem 0.35rem 0; border-top: 1px solid #262626; }
   html[data-nav="rail"] .sidebar-brand { justify-content: flex-start; padding-right: 0.35rem; padding-left: 0.35rem; }
   html[data-nav="rail"] .sidebar-actions { margin-left: auto; }
   html[data-nav="rail"] .sidenav a.navlink,

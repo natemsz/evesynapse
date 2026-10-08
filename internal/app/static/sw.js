@@ -39,7 +39,7 @@ self.addEventListener('push', function (event) {
   var options = {
     body: data.body || '',
     icon: '/static/icon-192.png',
-    badge: '/static/icon-192.png',
+    badge: '/static/badge-96.png',
     data: { url: data.url || '/notifications/' }
   };
   if (data.tag) {

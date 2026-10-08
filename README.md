@@ -41,10 +41,12 @@ Contact: nate@synap6.io or in-game 'Burzrujat'
 - `cmd/releasesign/` — the maintainer's tool for release signing:
   makes the release key, signs the update manifests in the release
   job, checks a signature by hand. Never deployed either
-- `cmd/mkicons/` — draws every icon from the one logo file. To change
-  the logo, replace `internal/app/static/logo.svg` and run
-  `go run ./cmd/mkicons`: it rewrites the favicon (SVG and ICO) and the
-  four PNG icons beside it. The page header shows `logo.svg` itself
+- `cmd/mkicons/` — draws the raster icons from the logo's SVG files in
+  `internal/app/static/`: `logo.svg` (the mark, shown in the page
+  header), `icon.svg` (the app icon) and `favicon.svg` (the simplified
+  small one). To change the logo, replace those and run
+  `go run ./cmd/mkicons`: it rewrites `favicon.ico`, the four PNG app
+  icons and the notification badge beside them
 - `internal/app/` — the application: config + `.env` loader
   (`config.go`), EVE SSO auth/sessions/JWT verification (`auth.go`),
   account linking and the sign-up policy (`links.go`, `signup.go`),

@@ -391,6 +391,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleSkills)
 		r.Get("/plans", app.handleSkillPlans)
+		r.Get("/plans/", app.handleSkillPlans) // old links and bookmarks carry the slash
 		r.Get("/plans/fit", app.handleSkillPlanFitPreview)
 		r.Post("/plans/create", app.handleSkillPlanCreate)
 		r.Post("/plans/item-add", app.handleSkillPlanItemAdd)

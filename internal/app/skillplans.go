@@ -472,7 +472,7 @@ func formatRank(rank float64) string {
 // ---------------------------------------------------------------------------
 
 func skillPlansRedirect(w http.ResponseWriter, r *http.Request, characterID, planID int64) {
-	url := fmt.Sprintf("/skills/plans/?character=%d", characterID)
+	url := fmt.Sprintf("/skills/plans?character=%d", characterID)
 	if planID > 0 {
 		url += fmt.Sprintf("&plan=%d", planID)
 	}
@@ -492,7 +492,7 @@ func (app *Application) handleSkillPlanCreate(w http.ResponseWriter, r *http.Req
 	ctx := r.Context()
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
 	if err := r.ParseForm(); err != nil || userID == 0 {
-		http.Redirect(w, r, "/skills/plans/", http.StatusSeeOther)
+		http.Redirect(w, r, "/skills/plans", http.StatusSeeOther)
 		return
 	}
 	characterID, _ := strconv.ParseInt(r.FormValue("character"), 10, 64)
@@ -504,7 +504,7 @@ func (app *Application) handleSkillPlanCreate(w http.ResponseWriter, r *http.Req
 		name = name[:80]
 	}
 	if !app.userOwnsCharacter(ctx, userID, characterID) {
-		http.Redirect(w, r, "/skills/plans/", http.StatusSeeOther)
+		http.Redirect(w, r, "/skills/plans", http.StatusSeeOther)
 		return
 	}
 	plan, err := app.queries.CreateSkillPlan(ctx, db.CreateSkillPlanParams{
@@ -515,7 +515,7 @@ func (app *Application) handleSkillPlanCreate(w http.ResponseWriter, r *http.Req
 	})
 	if err != nil {
 		logging.Errorf("skill plans: create for character %d: %v", characterID, err)
-		http.Redirect(w, r, "/skills/plans/", http.StatusSeeOther)
+		http.Redirect(w, r, "/skills/plans", http.StatusSeeOther)
 		return
 	}
 	skillPlansRedirect(w, r, characterID, plan.ID)
@@ -540,7 +540,7 @@ func (app *Application) handleSkillPlanItemAdd(w http.ResponseWriter, r *http.Re
 	ctx := r.Context()
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
 	if err := r.ParseForm(); err != nil || userID == 0 {
-		http.Redirect(w, r, "/skills/plans/", http.StatusSeeOther)
+		http.Redirect(w, r, "/skills/plans", http.StatusSeeOther)
 		return
 	}
 	characterID, _ := strconv.ParseInt(r.FormValue("character"), 10, 64)
@@ -609,7 +609,7 @@ func (app *Application) handleSkillPlanItemRemove(w http.ResponseWriter, r *http
 	ctx := r.Context()
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
 	if err := r.ParseForm(); err != nil || userID == 0 {
-		http.Redirect(w, r, "/skills/plans/", http.StatusSeeOther)
+		http.Redirect(w, r, "/skills/plans", http.StatusSeeOther)
 		return
 	}
 	characterID, _ := strconv.ParseInt(r.FormValue("character"), 10, 64)
@@ -627,7 +627,7 @@ func (app *Application) handleSkillPlanItemMove(w http.ResponseWriter, r *http.R
 	ctx := r.Context()
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
 	if err := r.ParseForm(); err != nil || userID == 0 {
-		http.Redirect(w, r, "/skills/plans/", http.StatusSeeOther)
+		http.Redirect(w, r, "/skills/plans", http.StatusSeeOther)
 		return
 	}
 	characterID, _ := strconv.ParseInt(r.FormValue("character"), 10, 64)
@@ -672,7 +672,7 @@ func (app *Application) handleSkillPlanDelete(w http.ResponseWriter, r *http.Req
 	ctx := r.Context()
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
 	if err := r.ParseForm(); err != nil || userID == 0 {
-		http.Redirect(w, r, "/skills/plans/", http.StatusSeeOther)
+		http.Redirect(w, r, "/skills/plans", http.StatusSeeOther)
 		return
 	}
 	characterID, _ := strconv.ParseInt(r.FormValue("character"), 10, 64)
@@ -760,7 +760,7 @@ func (app *Application) handleSkillPlanFromTemplate(w http.ResponseWriter, r *ht
 	ctx := r.Context()
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
 	if err := r.ParseForm(); err != nil || userID == 0 {
-		http.Redirect(w, r, "/skills/plans/", http.StatusSeeOther)
+		http.Redirect(w, r, "/skills/plans", http.StatusSeeOther)
 		return
 	}
 	characterID, _ := strconv.ParseInt(r.FormValue("character"), 10, 64)

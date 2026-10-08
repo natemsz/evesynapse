@@ -166,8 +166,19 @@ func elfMachineForArch(arch string) (uint16, bool) {
 
 // compareVersions orders dotted numeric versions: -1 when a is
 // the older, 0 when equal, +1 when a is the newer. A leading
-// "v" is ignored and missing parts count as 0. A development
-// build's suffix ("1.4.2.001-dev") is not part of the number:
+// "v" is ignored and missing parts count as 0.
+//
+// Versions are major.feature.fix ("1.4.2"), each part a plain number
+// with no leading zeros. Releases up to 0.4.01.003 were written with
+// four zero-padded parts; those still have to be ordered correctly,
+// because an install on one of them compares it with the release it
+// is offered. Each part is read as a number, so padding makes no
+// difference ("0.4.01.003" is 0.4.1.3) and a three-part version is
+// compared with a four-part one part by part, the missing fourth
+// counting as 0. An install on 0.4.01.003 therefore takes 0.4.2,
+// 0.5.0 or 1.0.0 as newer, and would refuse 0.4.1, which is 0.4.1.0.
+//
+// A development build's suffix ("1.4.2-dev") is not part of the number:
 // the numbers are compared first, and when they tie the plain
 // release is the newer of the two — a dev build leads up to the
 // release that carries its number.

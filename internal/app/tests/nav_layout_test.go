@@ -223,7 +223,11 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		".nav-expand-btn[aria-expanded=\"true\"] .expand-icon-plus { display: none; }",
 		".nav-expand-btn[aria-expanded=\"true\"] .expand-icon-minus { display: block; }",
 		"html[data-nav=\"rail\"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }",
-		".sidebar .nav-drawer-close { display: inline-flex; }",
+		// The drawer has one close control (the collapse and hide toggles
+		// stay on the wide sidebar), in the first row beneath the top bar.
+		"html.js .sidebar .nav-state-btn { display: none; }",
+		".sidebar .nav-drawer-close {\n    display: inline-flex;\n    position: absolute;",
+		"top: 3.7rem;\n    right: 0.9rem;",
 		"html[data-nav=\"rail\"] .nav-label {\n    display: block;\n    max-width: 12rem;\n    opacity: 1;\n    transform: none;\n  }",
 		"html[data-nav=\"rail\"] .sidebar-account-footer { display: flex; }",
 		"html[data-nav=\"rail\"] .sidebar .branch .menu {\n    position: static;",

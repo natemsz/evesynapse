@@ -255,7 +255,7 @@ header .topbar {
 .wordmark {
   display: inline-block;
   font-family: 'VT323', monospace;
-  font-size: 1.2rem;
+  font-size: 1.5rem;
   font-weight: 400;
   letter-spacing: 0.12em;
   color: var(--text-bright);
@@ -811,7 +811,7 @@ footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
   .panel > h1:first-child { margin: -1rem -0.9rem 1rem; padding: 0.55rem 0.9rem; }
   header nav { padding-left: 0.6rem; padding-right: 0.6rem; }
   header .mainnav { gap: 0.15rem; }
-  .wordmark { letter-spacing: 0.14em; font-size: 0.55rem; }
+  .wordmark { letter-spacing: 0.1em; font-size: 1.2rem; }
   /* On narrow screens an open branch drops as a full-width bar
      beneath the header instead of a floating dropdown: the branch
      stops being the menu's positioning context, so the menu spans
@@ -1716,7 +1716,21 @@ tbody tr.yours td { background-color: #2a2015; }
      list: the wide-screen rail/hidden choices never leak in,
      the state toggles make way for a real close control, and
      branch menus open inline instead of as rail flyouts. */
-  .sidebar .nav-drawer-close { display: inline-flex; }
+  /* The drawer has exactly one close control. The collapse-to-icons
+     and hide toggles belong to the wide sidebar: shown here they were
+     a second × (hide) next to the drawer's own, and a collapse arrow
+     that does nothing useful. The top bar overlays the drawer's first
+     3.7rem (the padding above), so the close sits in the first row
+     beneath it, at the row's right end, with expand-all to its left. */
+  html.js .sidebar .nav-state-btn { display: none; }
+  .sidebar .nav-drawer-close {
+    display: inline-flex;
+    position: absolute;
+    top: 3.7rem;
+    right: 0.9rem;
+    z-index: 2;
+  }
+  .sidebar-brand { padding-right: 2.8rem; }
   html[data-nav="rail"] .sidebar .nav-expand-btn { display: inline-flex; }
   html[data-nav="rail"] .sidebar-inner { overflow-y: auto; }
   html[data-nav="rail"] .nav-label {
@@ -1775,9 +1789,14 @@ tbody tr.yours td { background-color: #2a2015; }
   .topbar-wordmark {
     display: inline-flex;
     align-items: center;
-    font-size: 0.78rem;
-    letter-spacing: 0.14em;
+    font-size: 1.2rem;
+    letter-spacing: 0.1em;
   }
+  /* Phones and the narrow drawer layout: a smaller logo and tighter
+     spacing around it, so the wordmark text can be a readable size
+     and the search box still gets room. */
+  .wordmark-glyph { height: 1.2rem; margin-right: 0.5rem; }
+  .topbar-wordmark > span { padding-left: 0.5rem; }
   .topbar-character { display: none; }
   .topbar > .topsearch { order: 3; }
   .topbar > .page-sync { order: 4; }
@@ -1845,6 +1864,9 @@ tbody tr.yours td { background-color: #2a2015; }
   .fleet-tools { gap: 0.4rem; }
   .fleet-tools input[type="search"] { width: 100%; }
   .topbar-wordmark { letter-spacing: 0.1em; }
+  /* A keyboard-shortcut chip does nothing on a touch screen; the room
+     goes to the search box. */
+  .quickjump-btn { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   body,

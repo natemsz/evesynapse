@@ -1,18 +1,38 @@
 {{define "title"}}Assets{{end}}
+{{define "asset-rows"}}{{range .}}
+        <tr><td>{{itemLink .TypeID .Name}}{{if .Where}} <small>in {{.Where}}</small>{{end}}</td><td>{{.Quantity}}</td><td>{{.Note}}</td></tr>
+        {{if .Children}}<tr class="asset-inside"><td colspan="3">
+          <details>
+            <summary>{{.Inside}} {{if eq .Inside 1}}stack{{else}}stacks{{end}} inside {{.Name}}</summary>
+            <table>
+              <tbody>{{template "asset-rows" .Children}}
+              </tbody>
+            </table>
+            {{if .MoreInside}}<p><small>+ {{.MoreInside}} more {{if eq .MoreInside 1}}stack{{else}}stacks{{end}} directly inside</small></p>{{end}}
+          </details>
+        </td></tr>{{end}}
+{{end}}{{end}}
 {{define "content"}}
 <h1><span class="gt">Assets</span></h1>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{template "charselector" .AssetsChars}}
-<form method="get" action="/assets/">
-<p><label>Find an item on any of your characters <input type="search" name="q"{{if .AssetsSearch}} value="{{.AssetsSearch.Query}}"{{end}} placeholder="e.g. Rifter"></label> <button type="submit">Search</button>{{if .AssetsSearch}} <a href="/assets/">Clear search</a>{{end}}</p>
+<form method="get" action="/assets/" id="assets-search">
+  <span class="searchwrap">
+    <input type="search" name="q" id="assets-q"{{if .AssetsSearch}} value="{{.AssetsSearch.Query}}"{{end}} placeholder="Find an item you own, e.g. Rifter" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="assets-suggest" aria-autocomplete="list" aria-label="Find an item on your characters">
+    <ul class="suggest" id="assets-suggest" role="listbox" hidden></ul>
+  </span>
+  <button type="submit">Search</button>
+  <label class="assets-only"><input type="checkbox" name="only" value="1" id="assets-only"{{if and .AssetsSearch .AssetsSearch.Only}} checked{{end}}> Only {{range .AssetsChars}}{{if .Active}}{{.Name}}{{end}}{{end}}</label>
+  {{if .AssetsSearch}}<a href="/assets/">Clear search</a>{{end}}
 </form>
+<p><small>The search covers every character on your account unless you tick the box.</small></p>
 
 {{if .AssetsSearch}}
   {{$v := .AssetsSearch}}
   {{if $v.Results}}
-  <p><small>{{$v.TotalStacks}} stacks matching “{{$v.Query}}” across {{len $v.Results}} {{if eq (len $v.Results) 1}}character{{else}}characters{{end}}</small></p>
+  <p><small>{{$v.TotalStacks}} {{if eq $v.TotalStacks 1}}stack{{else}}stacks{{end}} matching “{{$v.Query}}”{{if $v.Only}} on this character{{else}} across {{len $v.Results}} {{if eq (len $v.Results) 1}}character{{else}}characters{{end}}{{end}}</small></p>
   {{range $v.Results}}
     <h2><a href="/assets/?character={{.CharacterID}}">{{.CharacterName}}</a></h2>
     {{range .Locations}}
@@ -21,10 +41,7 @@
     <div class="tw">
     <table>
       <thead><tr><th>Item</th><th>Quantity</th><th>Note</th></tr></thead>
-      <tbody>
-      {{range .Items}}
-        <tr><td>{{itemLink .TypeID .Name}}</td><td>{{.Quantity}}</td><td>{{.Note}}</td></tr>
-      {{end}}
+      <tbody>{{template "asset-rows" .Items}}
       </tbody>
     </table>
     </div>
@@ -33,7 +50,7 @@
     {{end}}
   {{end}}
   {{else}}
-  <p>No stacks matching “{{$v.Query}}” on any character.</p>
+  <p>No stacks matching “{{$v.Query}}” {{if $v.Only}}on this character{{else}}on any character{{end}}.</p>
   {{end}}
   {{if $v.Syncing}}<p><small>Not included yet — still waiting on a first sync for {{range $i, $n := $v.Syncing}}{{if $i}}, {{end}}{{$n}}{{end}}.</small></p>{{end}}
 {{else if .Assets}}
@@ -41,14 +58,11 @@
   <p><small>{{.Assets.Stacks}} stacks · {{.Assets.TotalItems}} items · {{len .Assets.Locations}} locations</small></p>
   {{range .Assets.Locations}}
     <section class="foldable" data-fold="closed">
-    <h3>{{placeLink .Loc}}</h3>
+    <h3>{{placeLink .Loc}} <small>· {{.Stacks}} {{if eq .Stacks 1}}stack{{else}}stacks{{end}}</small></h3>
     <div class="tw">
     <table>
       <thead><tr><th>Item</th><th>Quantity</th><th>Note</th></tr></thead>
-      <tbody>
-      {{range .Items}}
-        <tr><td>{{itemLink .TypeID .Name}}</td><td>{{.Quantity}}</td><td>{{.Note}}</td></tr>
-      {{end}}
+      <tbody>{{template "asset-rows" .Items}}
       </tbody>
     </table>
     </div>

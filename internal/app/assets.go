@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -30,6 +29,18 @@ type assetRow struct {
 	TypeID   int64
 	Quantity string // thousands-separated
 	Note     string // "BPC", "singleton", or ""
+
+	// Children are the stacks directly inside this one (a ship's
+	// cargo, a container's contents), Inside how many stacks it holds
+	// at any depth, MoreInside how many of its direct ones were left
+	// out by the per-level cap. Character Assets page only.
+	Children   []assetRow
+	Inside     int
+	MoreInside int
+	// Where names what a search hit is inside, outermost first
+	// ("Loki › Small Secure Container"); empty when it sits
+	// directly in the place.
+	Where string
 }
 
 // assetLocation is one location block: its resolved title plus the
@@ -39,6 +50,7 @@ type assetLocation struct {
 	Loc        placeRef // Title classified for the link policy
 	Items      []assetRow
 	MoreStacks int // stacks hidden past the per-location cap
+	Stacks     int // every stack in the place, nested ones included (character page)
 }
 
 // assetsView is the Assets page body for one character. Loaded is
@@ -121,7 +133,13 @@ func (app *Application) handleAssets(w http.ResponseWriter, r *http.Request) {
 	// A ?q= search runs across every linked character instead of
 	// rendering one character's hangars.
 	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
-		data.AssetsSearch = app.searchAssets(ctx, characters, q)
+		// "Only <character>" narrows the search to the acting one.
+		searched, only := characters, r.URL.Query().Get("only") == "1"
+		if only {
+			searched = []db.Character{active}
+		}
+		data.AssetsSearch = app.searchAssets(ctx, searched, q)
+		data.AssetsSearch.Only = only
 		app.render(ctx, w, http.StatusOK, "assets.html", data)
 		return
 	}
@@ -146,20 +164,15 @@ func (app *Application) handleAssets(w http.ResponseWriter, r *http.Request) {
 	for _, it := range items {
 		view.TotalItems += it.Quantity
 	}
-	view.Locations = app.buildAssetLocations(ctx, items)
+	view.Locations = app.buildNestedAssetLocations(ctx, items)
 
 	app.render(ctx, w, http.StatusOK, "assets.html", data)
 }
 
-// buildAssetLocations groups asset stacks by location, resolves
+// buildAssetLocationsWith groups asset stacks by location, resolves
 // type and location names, and sorts biggest-first at both levels.
-func (app *Application) buildAssetLocations(ctx context.Context, items []esi.Asset) []assetLocation {
-	return app.buildAssetLocationsWith(ctx, items, nil, nil)
-}
-
-// buildAssetLocationsWith is buildAssetLocations with two
-// corporation-cluster additions, both nil for the character page
-// (byte-identical behavior there):
+// It is the corporation assets page's flat layout (the character
+// page nests instead: assets_tree.go), with two additions for it:
 //   - extraTitles names locations from outside the place cache —
 //     the corp's own structures, which the corp assets endpoint
 //     reports as location_type "item"/"other" with no structure
@@ -319,6 +332,7 @@ type assetSearchChar struct {
 // silently absent from the answer.
 type assetsSearchView struct {
 	Query       string
+	Only        bool // the search was narrowed to the acting character
 	Results     []assetSearchChar
 	TotalStacks int
 	Syncing     []string
@@ -335,21 +349,12 @@ func (app *Application) searchAssets(ctx context.Context, characters []db.Charac
 	view := &assetsSearchView{Query: query}
 	needle := strings.ToLower(query)
 	for _, ch := range characters {
-		snap, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: esi.SnapAssets})
-		if errors.Is(serr, sql.ErrNoRows) {
+		items, ok := app.characterAssets(ctx, ch)
+		if !ok {
 			view.Syncing = append(view.Syncing, ch.Name)
 			continue
 		}
-		if serr != nil {
-			logging.Errorf("assets search: read snapshot for character %d: %v", ch.CharacterID, serr)
-			continue
-		}
-		var items []esi.Asset
-		if err := json.Unmarshal([]byte(snap.Payload), &items); err != nil {
-			logging.Errorf("assets search: decode snapshot for character %d: %v", ch.CharacterID, err)
-			continue
-		}
-		found := app.searchCharacterAssets(ctx, items, needle)
+		found := app.searchNestedAssets(ctx, items, needle)
 		if found == nil {
 			continue
 		}
@@ -365,80 +370,4 @@ func (app *Application) searchAssets(ctx context.Context, characters []db.Charac
 		return view.Results[i].CharacterName < view.Results[j].CharacterName
 	})
 	return view
-}
-
-// searchCharacterAssets groups one character's stacks whose item
-// name contains needle by location — same titles, same ordering,
-// same per-location cap as the full Assets page, so a search
-// result reads like the page it points to. Returns nil when
-// nothing matches. Name resolution covers the character's whole
-// hangar (not just the matches) so "Inside: <container>" labels
-// resolve the same way they do on the Assets page.
-func (app *Application) searchCharacterAssets(ctx context.Context, items []esi.Asset, needle string) *assetSearchChar {
-	typeIDs := make([]int64, 0, len(items))
-	itemType := make(map[int64]int64, len(items))
-	for _, it := range items {
-		typeIDs = append(typeIDs, it.TypeID)
-		itemType[it.ItemID] = it.TypeID
-	}
-	names := app.esi.CachedTypeNames(ctx, typeIDs)
-	nameOf := func(typeID int64) string {
-		if n, ok := names[typeID]; ok {
-			return n
-		}
-		return fmt.Sprintf("Type #%d", typeID)
-	}
-
-	byLoc := make(map[int64][]esi.Asset)
-	locType := make(map[int64]string)
-	stacks := 0
-	for _, it := range items {
-		if !strings.Contains(strings.ToLower(nameOf(it.TypeID)), needle) {
-			continue
-		}
-		byLoc[it.LocationID] = append(byLoc[it.LocationID], it)
-		if _, ok := locType[it.LocationID]; !ok {
-			locType[it.LocationID] = it.LocationType
-		}
-		stacks++
-	}
-	if stacks == 0 {
-		return nil
-	}
-
-	locations := make([]assetLocation, 0, len(byLoc))
-	placeMemo := make(map[int64]placeRef)
-	for locID, entries := range byLoc {
-		loc := assetLocation{Title: app.assetLocationTitle(ctx, locID, locType[locID], itemType, nameOf, nil)}
-		loc.Loc = app.linkPlaceMemo(ctx, placeMemo, locID, loc.Title)
-		sorted := append([]esi.Asset(nil), entries...)
-		sort.Slice(sorted, func(i, j int) bool {
-			if sorted[i].Quantity != sorted[j].Quantity {
-				return sorted[i].Quantity > sorted[j].Quantity
-			}
-			return nameOf(sorted[i].TypeID) < nameOf(sorted[j].TypeID)
-		})
-		if len(sorted) > maxAssetRowsPerLocation {
-			loc.MoreStacks = len(sorted) - maxAssetRowsPerLocation
-			sorted = sorted[:maxAssetRowsPerLocation]
-		}
-		for _, it := range sorted {
-			loc.Items = append(loc.Items, assetRow{
-				Name:     nameOf(it.TypeID),
-				TypeID:   it.TypeID,
-				Quantity: esi.FormatInt(it.Quantity),
-				Note:     assetNote(it),
-			})
-		}
-		locations = append(locations, loc)
-	}
-	sort.Slice(locations, func(i, j int) bool {
-		ti := len(locations[i].Items) + locations[i].MoreStacks
-		tj := len(locations[j].Items) + locations[j].MoreStacks
-		if ti != tj {
-			return ti > tj
-		}
-		return locations[i].Title < locations[j].Title
-	})
-	return &assetSearchChar{Locations: locations, Stacks: stacks}
 }

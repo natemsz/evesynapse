@@ -1259,6 +1259,49 @@ func (q *Queries) ListSnapshotMetaByCharacter(ctx context.Context, characterID i
 	return items, nil
 }
 
+const listSnapshotMetaForCharacters = `-- name: ListSnapshotMetaForCharacters :many
+SELECT character_id, kind, fetched_at, cached_until FROM character_snapshots
+WHERE character_id = ANY($1::bigint[])
+ORDER BY character_id, kind
+`
+
+type ListSnapshotMetaForCharactersRow struct {
+	CharacterID int64        `json:"character_id"`
+	Kind        string       `json:"kind"`
+	FetchedAt   time.Time    `json:"fetched_at"`
+	CachedUntil sql.NullTime `json:"cached_until"`
+}
+
+// Snapshot freshness for many characters at once: the worker's
+// overdue ordering over one query instead of one per character.
+func (q *Queries) ListSnapshotMetaForCharacters(ctx context.Context, characterIds []int64) ([]ListSnapshotMetaForCharactersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSnapshotMetaForCharacters, pq.Array(characterIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSnapshotMetaForCharactersRow
+	for rows.Next() {
+		var i ListSnapshotMetaForCharactersRow
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.Kind,
+			&i.FetchedAt,
+			&i.CachedUntil,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSnapshotsByCharacter = `-- name: ListSnapshotsByCharacter :many
 SELECT character_id, kind, payload, fetched_at, cached_until, etag FROM character_snapshots
 WHERE character_id = $1

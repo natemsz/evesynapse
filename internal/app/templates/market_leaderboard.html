@@ -25,7 +25,6 @@
 
 {{if $s.HasData}}
 <p><small>{{if $s.AsOf}}{{$s.AsOf}} · {{end}}Showing up to 100 stations, busiest first. · <a href="#" id="csv-export">Export CSV</a></small></p>
-<script>document.getElementById('csv-export').href = window.location.pathname + window.location.search + (window.location.search ? '&' : '?') + 'format=csv';</script>
 
 <div class="tw">
 <table>

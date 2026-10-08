@@ -165,7 +165,7 @@ func TestIntelPagesRenderFromStore(t *testing.T) {
 	}
 	mustContain(t, "/intel/incursions/", body,
 		"Kimotoro", "Jita", "Perimeter", "Established", "Sansha&#39;s Nation",
-		"73%", "width:73%", "final-encounter boss")
+		"73%", `data-w="73"`, "final-encounter boss")
 
 	code, body = getPage(t, app, cookie, "/intel/fw/")
 	if code != http.StatusOK {

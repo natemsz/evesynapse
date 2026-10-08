@@ -39,7 +39,7 @@
 {{else if .Industry.Blueprints.Warming}}
 <p><small>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</small></p>
 {{else if .Industry.BlueprintRows}}
-<p><input type="search" id="bp-search" placeholder="Search blueprints..." aria-label="Search blueprints"></p>
+<p><input type="search" id="bp-search" placeholder="Search blueprints..." aria-label="Search blueprints" data-table-filter="bp-table" data-row-class="bp-row" data-header-class="bp-cat-header"></p>
 <div class="tw">
 <table id="bp-table">
   <thead><tr><th>Blueprint</th><th>Produces</th><th>Category</th><th>Kind</th><th>ME</th><th>TE</th><th>Runs</th><th>Location</th></tr></thead>
@@ -55,31 +55,6 @@
   </tbody>
 </table>
 </div>
-<script>
-(function() {
-  var input = document.getElementById('bp-search');
-  if (!input) return;
-  input.addEventListener('input', function() {
-    var q = input.value.toLowerCase();
-    var rows = document.querySelectorAll('#bp-table .bp-row');
-    var headers = document.querySelectorAll('#bp-table .bp-cat-header');
-    rows.forEach(function(r) {
-      var match = !q || r.getAttribute('data-search').toLowerCase().indexOf(q) >= 0;
-      r.style.display = match ? '' : 'none';
-    });
-    // Hide category headers with no visible rows
-    headers.forEach(function(h) {
-      var next = h.nextElementSibling;
-      var hasVisible = false;
-      while (next && !next.classList.contains('bp-cat-header')) {
-        if (next.style.display !== 'none') { hasVisible = true; break; }
-        next = next.nextElementSibling;
-      }
-      h.style.display = hasVisible ? '' : 'none';
-    });
-  });
-})();
-</script>
 {{if .Industry.BlueprintsCut}}<p><small>+ {{.Industry.BlueprintsCut}} more blueprints in this snapshot.</small></p>{{end}}
 {{else}}
 <p><small>No blueprints in the latest snapshot.</small></p>
@@ -93,7 +68,7 @@
 {{else if .Industry.Mining.Warming}}
 <p><small>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</small></p>
 {{else if .Industry.MiningRows}}
-<p><input type="search" id="mining-search" placeholder="Search mining ledger..." aria-label="Search mining ledger"></p>
+<p><input type="search" id="mining-search" placeholder="Search mining ledger..." aria-label="Search mining ledger" data-table-filter="mining-table" data-row-class="mining-row"></p>
 <div class="tw">
 <table id="mining-table">
   <thead><tr><th>Date</th><th>Ore</th><th>Quantity</th><th>System</th></tr></thead>
@@ -104,19 +79,6 @@
   </tbody>
 </table>
 </div>
-<script>
-(function() {
-  var input = document.getElementById('mining-search');
-  if (!input) return;
-  input.addEventListener('input', function() {
-    var q = input.value.toLowerCase();
-    document.querySelectorAll('#mining-table .mining-row').forEach(function(r) {
-      var match = !q || r.getAttribute('data-search').toLowerCase().indexOf(q) >= 0;
-      r.style.display = match ? '' : 'none';
-    });
-  });
-})();
-</script>
 {{if .Industry.MiningCut}}<p><small>+ {{.Industry.MiningCut}} older entries in this snapshot.</small></p>{{end}}
 {{else}}
 <p><small>No mining entries in the latest snapshot.</small></p>

@@ -30,7 +30,7 @@
 </table>
 </div>
 <div class="mailbody">{{.Body}}</div>
-<p><form method="post" action="/mail/read/" style="display:inline">
+<p><form method="post" action="/mail/read/" class="inline-form">
   <input type="hidden" name="character" value="{{$.Mail.CharacterID}}">
   <input type="hidden" name="mail" value="{{$.Mail.DetailID}}">
   <button class="btn" type="submit">Mark as read</button>

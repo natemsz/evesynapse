@@ -25,7 +25,6 @@
 
 {{if $s.HasData}}
 <p><small>{{$s.AsOf}}{{if $s.Age}} ({{$s.Age}}){{end}} · Region: <strong>{{$s.RegionName}}</strong> · Showing up to 100 opportunities, best estimated daily profit first. · <a href="#" id="csv-export">Export CSV</a></small></p>
-<script>document.getElementById('csv-export').href = window.location.pathname + window.location.search + (window.location.search ? '&' : '?') + 'format=csv';</script>
 
 {{if $s.Rows}}
 <div class="tw">

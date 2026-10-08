@@ -141,6 +141,21 @@ body::before {
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--success); text-decoration: underline; }
 
+/* Skip link: the first tab stop jumps past the nav sidebar to the
+   page. Visually hidden until focused. */
+.skip-link {
+  position: absolute;
+  top: -3rem;
+  left: 0.5rem;
+  z-index: 100;
+  background: var(--panel, #141414);
+  color: var(--text-bright);
+  padding: 0.5rem 0.9rem;
+  border-radius: 3px;
+  transition: top 0.12s ease;
+}
+.skip-link:focus { top: 0.5rem; color: var(--text-bright); }
+
 /* Headers, wordmark, nav category labels, buttons, badges,
    and table headers ride the Condensed cut of Univers Next
    Pro in Medium (500): it stays legible packed tight in
@@ -2874,4 +2889,16 @@ html[data-theme="light"] .lvl i.queued { background: #7fa3c4; border-color: #5f8
 .clone-rename input[type="text"] {
   width: 14rem;
   max-width: 60vw;
+}
+
+/* --- small utilities that replaced inline style attributes ---
+   The Content-Security-Policy allows no style="…", so these live
+   here; per-row numbers (a bar's width, a slot's position, an
+   indent) ride data-* attributes that app.js applies. */
+form.inline-form { display: inline; }
+.meter { background: #241407; height: 8px; max-width: 420px; }
+.meter > span {
+  display: block;
+  height: 8px;
+  background: linear-gradient(90deg, #ffd27a, #ff6a1a 55%, #d63c14);
 }

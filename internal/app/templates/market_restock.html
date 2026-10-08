@@ -37,7 +37,7 @@
       <td>{{.UnitPrice}}</td>
       <td>{{.EstCost}}</td>
       <td>
-        <form method="post" action="/market/restock/delete/" style="display:inline">
+        <form method="post" action="/market/restock/delete/" class="inline-form">
           <input type="hidden" name="type_id" value="{{.TypeID}}">
           <button class="btn btn-danger" type="submit" title="Remove target">×</button>
         </form>

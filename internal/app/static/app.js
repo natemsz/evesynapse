@@ -1861,4 +1861,142 @@
       }
     });
   });
+
+  // --- CSV export links ---------------------------------------
+  // Market/planner pages carry an "Export CSV" link whose href is
+  // the current URL plus format=csv, set here (one shared place;
+  // the pages used to repeat it as inline scripts, which the
+  // content security policy no longer allows).
+  var csvExportLink = document.getElementById("csv-export");
+  if (csvExportLink) {
+    csvExportLink.href = window.location.pathname + window.location.search +
+      (window.location.search ? "&" : "?") + "format=csv";
+  }
+
+  // --- Client-side table filters ------------------------------
+  // Industry search boxes filter their table's rows by a
+  // data-search attribute (moved here from inline scripts, same
+  // behavior):
+  //   <input data-table-filter="bp-table" data-row-class="bp-row"
+  //          data-header-class="bp-cat-header">
+  // Rows whose data-search misses hide; category headers with no
+  // visible rows hide with them. data-header-class is optional.
+  var tableFilterBoxes = document.querySelectorAll("input[data-table-filter]");
+  for (var filterIndex = 0; filterIndex < tableFilterBoxes.length; filterIndex++) {
+    (function (filterInput) {
+      var table = document.getElementById(filterInput.getAttribute("data-table-filter"));
+      if (!table) return;
+      var rowClass = filterInput.getAttribute("data-row-class") || "";
+      if (!rowClass) return;
+      var headerClass = filterInput.getAttribute("data-header-class") || "";
+      filterInput.addEventListener("input", function () {
+        var q = filterInput.value.toLowerCase();
+        table.querySelectorAll("." + rowClass).forEach(function (r) {
+          var match = !q || (r.getAttribute("data-search") || "").toLowerCase().indexOf(q) >= 0;
+          r.style.display = match ? "" : "none";
+        });
+        if (!headerClass) return;
+        table.querySelectorAll("." + headerClass).forEach(function (h) {
+          var next = h.nextElementSibling;
+          var hasVisible = false;
+          while (next && !next.classList.contains(headerClass)) {
+            if (next.style.display !== "none") { hasVisible = true; break; }
+            next = next.nextElementSibling;
+          }
+          h.style.display = hasVisible ? "" : "none";
+        });
+      });
+    })(tableFilterBoxes[filterIndex]);
+  }
+
+  // --- Auto-refresh pages -------------------------------------
+  // The Sync page reloads itself every few seconds
+  // (body[data-autorefresh]); with JavaScript off, a <noscript>
+  // meta-refresh does the same. The reload waits out typing in a
+  // field and hidden tabs, and never runs for readers who asked
+  // for reduced motion — they get the page as it loaded, plus the
+  // Sync page's own manual controls.
+  var autoRefreshSeconds = parseInt(document.body.getAttribute("data-autorefresh") || "", 10);
+  if (autoRefreshSeconds > 0 &&
+      !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)) {
+    (function scheduleRefresh() {
+      window.setTimeout(function () {
+        var active = document.activeElement;
+        var typing = active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName || "");
+        if (!typing && !document.hidden) {
+          window.location.reload();
+          return;
+        }
+        scheduleRefresh();
+      }, autoRefreshSeconds * 1000);
+    })();
+  }
+
+  // --- Buttons that navigate -----------------------------------
+  // <button data-href="/path"> goes to that path on click: what an
+  // inline click handler on the button used to do, which the content
+  // security policy no longer allows. Only same-site paths count.
+  document.addEventListener("click", function (ev) {
+    var button = ev.target && ev.target.closest ? ev.target.closest("button[data-href]") : null;
+    if (!button) return;
+    var href = button.getAttribute("data-href") || "";
+    if (href.charAt(0) === "/" && href.charAt(1) !== "/") window.location.href = href;
+  });
+
+  // --- Data-driven geometry ------------------------------------
+  // The content security policy forbids inline style attributes, so
+  // the numbers the server used to write into inline styles ride
+  // data-* attributes instead, and are applied here through the
+  // CSSOM (which the policy allows):
+  //   data-w         fill width of a bar, percent
+  //   data-left      absolute position from the left, percent
+  //   data-top       absolute position from the top, percent
+  //   data-rot       rotation in degrees; an element with data-rot
+  //                  (the fitting separators) is also centered on
+  //                  its left/top point, i.e.
+  //                  transform: translate(-50%,-50%) rotate(<n>deg)
+  //   data-pad-left  left padding (indent), px
+  // applyGeometry is the rule for one element; the code below only
+  // finds elements: at load, and again for markup injected later
+  // (fit.js swaps whole server-rendered fragments into the page).
+  // A missing, empty, or non-numeric value sets nothing (never
+  // "NaNpx"). Widths clamp to 0–100: a bar over capacity arrives as
+  // e.g. 123.4 and its track hides the overflow anyway. Positions
+  // pass through as sent, as the inline styles did.
+  function geometryNumber(el, name) {
+    var raw = el.getAttribute(name);
+    if (raw === null || raw.trim() === "") return null;
+    var n = Number(raw);
+    return isFinite(n) ? n : null;
+  }
+
+  function applyGeometry(el) {
+    var w = geometryNumber(el, "data-w");
+    if (w !== null) el.style.width = Math.min(Math.max(w, 0), 100) + "%";
+    var left = geometryNumber(el, "data-left");
+    if (left !== null) el.style.left = left + "%";
+    var top = geometryNumber(el, "data-top");
+    if (top !== null) el.style.top = top + "%";
+    var rot = geometryNumber(el, "data-rot");
+    if (rot !== null) el.style.transform = "translate(-50%,-50%) rotate(" + rot + "deg)";
+    var pad = geometryNumber(el, "data-pad-left");
+    if (pad !== null && pad >= 0) el.style.paddingLeft = pad + "px";
+  }
+
+  var GEOMETRY_SELECTOR = "[data-w],[data-left],[data-top],[data-rot],[data-pad-left]";
+
+  function applyDataGeometry(root) {
+    if (!root || root.nodeType !== 1) return;
+    if (root.matches(GEOMETRY_SELECTOR)) applyGeometry(root);
+    root.querySelectorAll(GEOMETRY_SELECTOR).forEach(applyGeometry);
+  }
+
+  applyDataGeometry(document.body);
+  if (window.MutationObserver) {
+    new MutationObserver(function (records) {
+      records.forEach(function (record) {
+        record.addedNodes.forEach(applyDataGeometry);
+      });
+    }).observe(document.body, { childList: true, subtree: true });
+  }
 })();

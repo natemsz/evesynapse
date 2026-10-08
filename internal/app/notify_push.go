@@ -246,15 +246,27 @@ func (app *Application) pushTestOne(ctx context.Context, w http.ResponseWriter, 
 			http.Error(w, "this browser's push service ("+host+") no longer knows this browser. Turn notifications off and on again here.", http.StatusBadGateway)
 		case !res.OK():
 			logging.Warnf("push: test to subscription %d: push service answered %d", row.ID, res.Status)
-			http.Error(w, fmt.Sprintf("this browser's push service (%s) refused the message with HTTP %d", host, res.Status), http.StatusBadGateway)
+			http.Error(w, fmt.Sprintf("this browser's push service (%s) refused the message with HTTP %d%s", host, res.Status, pushDetail(res)), http.StatusBadGateway)
 		default:
 			_ = app.queries.MarkPushSubscriptionOK(ctx, db.MarkPushSubscriptionOKParams{At: timeSet(time.Now().UTC()), ID: row.ID})
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			fmt.Fprintf(w, "%s accepted the message (HTTP %d)", host, res.Status)
+			if res.Detail != "" {
+				fmt.Fprintf(w, " [%s]", res.Detail)
+			}
 		}
 		return
 	}
 	http.Error(w, "the server has no record of this browser. Turn notifications off and on again here.", http.StatusNotFound)
+}
+
+// pushDetail is a push service's own account of a delivery, for the
+// test's answer.
+func pushDetail(res webpush.Result) string {
+	if res.Detail == "" {
+		return ""
+	}
+	return " [" + res.Detail + "]"
 }
 
 // pushMessage is what the service worker is handed (sw.js reads these

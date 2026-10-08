@@ -150,6 +150,11 @@ func netWorthHistoryPoints(rows []db.WalletHistory) []balancePoint {
 // Stride sampling keeps the first, the last, and the shape.
 const walletChartMaxDots = 240
 
+// balanceChartInset keeps the first and last points off the SVG's edge:
+// a point drawn exactly on it loses half its dot (and its scrub target) to
+// the clip. The plot spans the width less this on each side.
+const balanceChartInset = 4
+
 // balanceChart is a fully-computed, template-ready SVG chart.
 type balanceChart struct {
 	Width     int
@@ -260,7 +265,7 @@ func buildBalanceChart(points []balancePoint) (balanceChart, bool) {
 		if len(kept) == 1 {
 			return markethistory.ChartWidth / 2
 		}
-		return i * (markethistory.ChartWidth - 1) / (len(kept) - 1)
+		return balanceChartInset + i*(markethistory.ChartWidth-1-2*balanceChartInset)/(len(kept)-1)
 	}
 	y := func(b float64) int {
 		frac := (b - minB) / (maxB - minB)

@@ -134,7 +134,7 @@ func buildNetWorthChart(days []netWorthDay) (balanceChart, bool) {
 		if len(kept) == 1 {
 			return markethistory.ChartWidth / 2
 		}
-		return i * (markethistory.ChartWidth - 1) / (len(kept) - 1)
+		return balanceChartInset + i*(markethistory.ChartWidth-1-2*balanceChartInset)/(len(kept)-1)
 	}
 	y := func(v float64) int {
 		return bottom - int(math.Round(v/maxTotal*float64(plotH)))

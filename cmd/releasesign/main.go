@@ -31,6 +31,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -209,8 +210,11 @@ func writeNewFile(path string, data []byte) error {
 }
 
 // sign writes the signature file beside each manifest. Every manifest
-// is signed and checked before any file is written, so a failure
-// leaves no partly signed release behind.
+// is signed and checked, and every signature written to a temp file,
+// before any .sig file takes its name, so a failure before the renames
+// leaves no partly signed release behind. The renames themselves are
+// the one step that can still fail partway (a rename error stops at
+// the first and removes the unrenamed temps).
 func (t tool) sign(paths []string) int {
 	if len(paths) == 0 {
 		fmt.Fprint(t.stderr, "releasesign sign: name the manifests to sign.\n\n"+usage)
@@ -262,8 +266,45 @@ func (t tool) sign(paths []string) int {
 		}
 		signatures[i] = sig
 	}
+	// Two-phase commit: every signature lands in a temp file
+	// first, and only when all of them are down do the temps take
+	// their .sig names. A failure anywhere before the renames
+	// leaves no partly signed release behind.
+	temps := make([]string, len(paths))
+	untemp := func() {
+		for _, tmp := range temps {
+			if tmp != "" {
+				_ = os.Remove(tmp)
+			}
+		}
+	}
 	for i, path := range paths {
-		if err := os.WriteFile(path+releasesig.SigSuffix, signatures[i], 0o644); err != nil {
+		tmp, err := os.CreateTemp(filepath.Dir(path), ".releasesign-*.tmp")
+		if err != nil {
+			untemp()
+			fmt.Fprintf(t.stderr, "releasesign sign: %v\nNothing was signed.\n", err)
+			return 1
+		}
+		temps[i] = tmp.Name()
+		_, werr := tmp.Write(signatures[i])
+		cerr := tmp.Close()
+		if werr != nil || cerr != nil {
+			untemp()
+			if werr == nil {
+				werr = cerr
+			}
+			fmt.Fprintf(t.stderr, "releasesign sign: %v\nNothing was signed.\n", werr)
+			return 1
+		}
+		if err := os.Chmod(tmp.Name(), 0o644); err != nil {
+			untemp()
+			fmt.Fprintf(t.stderr, "releasesign sign: %v\nNothing was signed.\n", err)
+			return 1
+		}
+	}
+	for i, path := range paths {
+		if err := os.Rename(temps[i], path+releasesig.SigSuffix); err != nil {
+			untemp()
 			fmt.Fprintf(t.stderr, "releasesign sign: %v\n", err)
 			return 1
 		}

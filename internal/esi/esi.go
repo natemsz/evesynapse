@@ -1413,13 +1413,116 @@ func (c *Client) request(ctx context.Context, method, accessToken, path string, 
 // send is request with two additions for conditional fetches: it
 // sends ifNoneMatch (when not empty) as If-None-Match, and it
 // reports which of the wanted statuses came back.
+//
+// Idempotent reads (GET, HEAD) are retried twice on transport
+// failures and 5xx answers — a transient ESI wobble used to fail
+// the dataset until the next worker cycle. The wait honors ESI's
+// Retry-After header (capped), else backs off 500ms, 1s. Writes
+// are never retried (a repeated POST could send a mail twice),
+// and neither are 420/429: those wrap ErrErrorLimit, and the
+// worker backs off until the next cycle on those by contract.
 func (c *Client) send(ctx context.Context, method, accessToken, path string, payload any, ifNoneMatch string, want ...int) (body []byte, header http.Header, status int, err error) {
-	var reqBody io.Reader
+	var raw []byte
 	if payload != nil {
-		raw, err := json.Marshal(payload)
+		raw, err = json.Marshal(payload)
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("ESI %s %s: encode: %w", method, path, err)
 		}
+	}
+	retryable := method == http.MethodGet || method == http.MethodHead
+	backoffs := sendRetryBackoffs
+	var attempt int
+	for {
+		body, header, status, err = c.sendOnce(ctx, method, accessToken, path, raw, ifNoneMatch, want)
+		if err == nil || !retryable || attempt >= len(backoffs) {
+			return body, header, status, err
+		}
+		wait, ok := retryWait(err, header, backoffs[attempt])
+		if !ok {
+			return body, header, status, err
+		}
+		attempt++
+		select {
+		case <-ctx.Done():
+			return nil, nil, 0, fmt.Errorf("ESI %s %s: %w", method, path, ctx.Err())
+		case <-time.After(wait):
+		}
+	}
+}
+
+// retryWait reports whether a failed read is worth another attempt
+// and how long to wait first: transport failures and 500/502/503/504
+// answers are, anything else (4xx, the error limit, a canceled
+// context) is not. ESI's Retry-After answer, when present, sets the
+// wait (capped); without one the caller's backoff stands.
+func retryWait(err error, header http.Header, backoff time.Duration) (time.Duration, bool) {
+	var se *StatusError
+	if errors.As(err, &se) {
+		switch se.Code {
+		case http.StatusInternalServerError, http.StatusBadGateway,
+			http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		default:
+			return 0, false
+		}
+	} else if !isTransportError(err) {
+		return 0, false
+	}
+	if wait, ok := parseRetryAfter(header.Get("Retry-After")); ok {
+		if wait > maxRetryAfter {
+			wait = maxRetryAfter
+		}
+		return wait, true
+	}
+	return backoff, true
+}
+
+// maxRetryAfter caps the wait ESI can ask for before a retry: the
+// worker cycle has its own deadlines, and a minute-plus sleep on
+// one dataset would stall everything behind it.
+const maxRetryAfter = 10 * time.Second
+
+// sendRetryBackoffs is the wait before each read retry when ESI
+// sends no Retry-After. A var so tests can run retries without
+// sleeping (the suite is sequential, so overriding with a cleanup
+// restore is safe).
+var sendRetryBackoffs = []time.Duration{500 * time.Millisecond, time.Second}
+
+// isTransportError reports whether err came from the HTTP transport
+// itself (dial, TLS, reset) rather than from ESI answering: only
+// then is the attempt known not to have happened.
+func isTransportError(err error) bool {
+	var se *StatusError
+	if errors.As(err, &se) || errors.Is(err, ErrErrorLimit) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	return true
+}
+
+// parseRetryAfter reads a Retry-After header value: seconds, or an
+// HTTP date. It reports false when the value is missing or junk.
+func parseRetryAfter(value string) (time.Duration, bool) {
+	if value == "" {
+		return 0, false
+	}
+	if secs, err := strconv.Atoi(strings.TrimSpace(value)); err == nil && secs >= 0 {
+		return time.Duration(secs) * time.Second, true
+	}
+	if when, err := http.ParseTime(value); err == nil {
+		wait := time.Until(when)
+		if wait < 0 {
+			wait = 0
+		}
+		return wait, true
+	}
+	return 0, false
+}
+
+// sendOnce makes one ESI request and reads its answer the one way:
+// 420/429 wrap ErrErrorLimit, a status outside want is a StatusError,
+// anything else is the body.
+func (c *Client) sendOnce(ctx context.Context, method, accessToken, path string, raw []byte, ifNoneMatch string, want []int) (body []byte, header http.Header, status int, err error) {
+	var reqBody io.Reader
+	if raw != nil {
 		reqBody = bytes.NewReader(raw)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, baseURL+path, reqBody)
@@ -1428,7 +1531,7 @@ func (c *Client) send(ctx context.Context, method, accessToken, path string, pay
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", c.userAgent())
-	if payload != nil {
+	if raw != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	if accessToken != "" {
@@ -1955,11 +2058,20 @@ func (c *Client) fetchAllPages(ctx context.Context, token, path string) ([]byte,
 		return body, header, nil
 	}
 
+	// Each page arrived capped at 8MB, but the merge itself is
+	// capped too: without a total, a runaway page count
+	// (or a lying X-Pages) would balloon memory for one dataset.
+	const maxMergedBytes = 64 << 20
 	merged := []json.RawMessage{}
+	total := 0
 	appendPage := func(b []byte) error {
 		var entries []json.RawMessage
 		if err := json.Unmarshal(b, &entries); err != nil {
 			return fmt.Errorf("ESI GET %s: decode page: %w", path, err)
+		}
+		total += len(b)
+		if total > maxMergedBytes {
+			return fmt.Errorf("ESI GET %s: merged pages exceed %d bytes", path, maxMergedBytes)
 		}
 		merged = append(merged, entries...)
 		return nil
@@ -1968,7 +2080,7 @@ func (c *Client) fetchAllPages(ctx context.Context, token, path string) ([]byte,
 		return nil, nil, err
 	}
 	for page := 2; page <= pages; page++ {
-		b, _, err := c.FetchRaw(ctx, token, fmt.Sprintf("%s?page=%d", path, page))
+		b, _, err := c.FetchRaw(ctx, token, withPageParam(path, page))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1982,6 +2094,16 @@ func (c *Client) fetchAllPages(ctx context.Context, token, path string) ([]byte,
 		return nil, nil, fmt.Errorf("ESI GET %s: merge pages: %w", path, err)
 	}
 	return combined, header, nil
+}
+
+// withPageParam sets the page query parameter on an ESI path,
+// keeping any parameters already there. Appending "?page=" blindly
+// breaks the day a paginated kind carries its own query string.
+func withPageParam(path string, page int) string {
+	if strings.Contains(path, "?") {
+		return path + "&page=" + strconv.Itoa(page)
+	}
+	return path + "?page=" + strconv.Itoa(page)
 }
 
 // ---------------------------------------------------------------------------
@@ -2012,7 +2134,7 @@ func (c *Client) fetchJournalWindow(ctx context.Context, token, path string) ([]
 	for page := 1; page <= maxJournalPages; page++ {
 		p := path
 		if page > 1 {
-			p = fmt.Sprintf("%s?page=%d", path, page)
+			p = withPageParam(path, page)
 		}
 		body, header, err := c.FetchRaw(ctx, token, p)
 		if err != nil {

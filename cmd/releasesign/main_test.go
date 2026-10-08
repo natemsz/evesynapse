@@ -376,6 +376,24 @@ func TestSignThenVerify(t *testing.T) {
 	}
 }
 
+// TestSignLeavesNoTempFiles: the two-phase commit renames every
+// temp signature into its .sig name; none stay behind beside the
+// manifests.
+func TestSignLeavesNoTempFiles(t *testing.T) {
+	tt, _ := keyedTool(t)
+	arm, _ := writeManifests(t)
+	if code := tt.run([]string{"sign", arm}); code != 0 {
+		t.Fatalf("sign: code %d, output %q", code, tt.output())
+	}
+	left, err := filepath.Glob(filepath.Join(filepath.Dir(arm), ".releasesign-*.tmp"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Fatalf("temp signature files left behind: %v", left)
+	}
+}
+
 // TestSignWithTwoKeys: while a key is being replaced the secret holds
 // the old key and the new, and each signs every release.
 func TestSignWithTwoKeys(t *testing.T) {

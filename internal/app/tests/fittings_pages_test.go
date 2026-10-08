@@ -14,6 +14,11 @@ import (
 	"evesynapse/internal/esi"
 )
 
+// readThroughCalls is what one failed read-through costs against the
+// 500-answering stub: the ESI client retries a read twice, so one
+// try plus two retries.
+const readThroughCalls = 3
+
 func TestFittingsPagesSplit(t *testing.T) {
 	transport := &apptest.CountingTransport{}
 	rig := apptest.Build(t, transport)
@@ -78,18 +83,19 @@ func TestFittingsPagesSplit(t *testing.T) {
 	// missing snapshot triggers GetCached's single read-through
 	// attempt (pre-existing behavior, shared with the old page);
 	// it fails against the stub transport, so the page shows the
-	// warming copy.
+	// warming copy. The stub answers 500, which the ESI client
+	// retries twice for reads: one read-through is three requests.
 	before := transport.Calls.Load()
 	code, body = apptest.GetPage(t, rig, cookie, "/fittings/saved/?character=90000002")
 	if code != 200 {
 		t.Fatalf("saved-fits warming status = %d", code)
 	}
 	apptest.MustContain(t, "/fittings/saved/?character=90000002", body, "Still warming up")
-	if got := transport.Calls.Load() - before; got != 1 {
-		t.Errorf("warming page made %d outbound calls, want 1 (the read-through)", got)
+	if got := transport.Calls.Load() - before; got != readThroughCalls {
+		t.Errorf("warming page made %d outbound calls, want %d (the read-through: one try, two read retries)", got, readThroughCalls)
 	}
 
-	if transport.Calls.Load() != 1 {
-		t.Errorf("fittings pages made %d outbound calls, want 1 (warming read-through only)", transport.Calls.Load())
+	if transport.Calls.Load() != readThroughCalls {
+		t.Errorf("fittings pages made %d outbound calls, want %d (warming read-through only)", transport.Calls.Load(), readThroughCalls)
 	}
 }

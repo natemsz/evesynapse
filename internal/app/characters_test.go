@@ -332,9 +332,13 @@ func (s *pathTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	s.mu.Lock()
 	s.paths = append(s.paths, req.URL.Path)
 	s.mu.Unlock()
+	// Retry-After: 0 keeps the client's read retries from
+	// sleeping: the answer stays a 500 either way.
+	header := make(http.Header)
+	header.Set("Retry-After", "0")
 	return &http.Response{
 		StatusCode: http.StatusInternalServerError,
-		Header:     make(http.Header),
+		Header:     header,
 		Body:       io.NopCloser(strings.NewReader(`{"error":"fixture"}`)),
 	}, nil
 }

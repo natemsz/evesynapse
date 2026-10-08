@@ -144,7 +144,7 @@ jobs:
             printf '{"version":"%s","arch":"%s","sha256":"%s"}\n' "$VERSION" "$a" "$sha" > "latest-$a.json"
           done
 
-      # A version carrying a suffix (1.4.2-dev) is a development
+      # A version carrying a suffix (0.4.1.4-dev) is a development
       # build: it is published as a prerelease, which GitHub never
       # serves as "latest" — the address `evesynapse -update` reads —
       # and is reached with `evesynapse -update -dev` instead. Plain

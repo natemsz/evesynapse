@@ -487,6 +487,16 @@ A release is one edit: `internal/app/version.txt`. Nothing else in
 the repository repeats the version, and the tests read it from that
 file, so there are no version numbers in tests to keep in step.
 
+Versions are `major.feature.fix`, each part a plain number with no
+leading zeros: `1.4.2`, then `1.4.3` for a fix or a small addition,
+`1.5.0` for a feature, `2.0.0` for a major version. A development
+build adds a suffix (`1.5.0-dev`). Releases up to `0.4.01.003` were
+numbered with four zero-padded parts. The updater reads every part as
+a number and compares part by part, so installs on the old numbering
+update to the new one as long as the new number is higher that way:
+from `0.4.01.003` (0.4.1.3) to `0.4.2`, `0.5.0` or `1.0.0`, but not
+to `0.4.1`. A test fails if `version.txt` is ever set below that.
+
 To update a running install, run the updater. With no flag it
 automatically picks the build that matches the machine it's
 running on:

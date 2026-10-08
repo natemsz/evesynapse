@@ -11,20 +11,25 @@ import (
 	"testing"
 )
 
-// versionShape is what version.txt has to hold: dotted numbers, with
-// an optional suffix for a development build ("1.2.3.004",
-// "1.2.3.004-dev").
-var versionShape = regexp.MustCompile(`^\d+(\.\d+){1,3}(-[A-Za-z0-9.]+)?$`)
+// versionShape is what version.txt has to hold: major.feature.fix,
+// each a plain number with no leading zeros, with an optional suffix
+// for a development build ("1.4.2", "1.4.2-dev").
+var versionShape = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[A-Za-z0-9.]+)?$`)
+
+// lastPaddedVersion is the last release numbered the old way, with
+// four zero-padded parts. version.txt may still hold it; the next
+// change to that file has to be a major.feature.fix number.
+const lastPaddedVersion = "0.4.01.003"
 
 // TestVersionShape pins what counts as a version, since the check on
 // version.txt is only as good as this pattern.
 func TestVersionShape(t *testing.T) {
-	for _, ok := range []string{"0.3.39.001", "0.3.38.002-dev", "1.2", "10.20.30.400", "1.2.3-rc.1"} {
+	for _, ok := range []string{"0.5.0", "1.4.2", "10.20.300", "1.4.2-dev", "1.4.2-rc.1"} {
 		if !versionShape.MatchString(ok) {
 			t.Errorf("%q should be accepted as a version", ok)
 		}
 	}
-	for _, bad := range []string{"", "v0.3.39.001", "0.3.39.001 ", "1", "1.2.3.4.5", "1..2", "one.two", "ddd", "1.2.3-"} {
+	for _, bad := range []string{"", "v1.4.2", "1.4.2 ", "1", "1.4", "1.4.2.1", "0.4.01.003", "1.04.2", "01.4.2", "1.4.02", "1..2", "one.two.three", "ddd", "1.4.2-"} {
 		if versionShape.MatchString(bad) {
 			t.Errorf("%q should not be accepted as a version", bad)
 		}
@@ -37,8 +42,8 @@ func TestVersionFileAndFooter(t *testing.T) {
 	// else. What is checked is that the file holds something shaped
 	// like a version and that everything else reads it from there.
 	file := strings.TrimSpace(versionFile)
-	if !versionShape.MatchString(file) {
-		t.Fatalf("version.txt = %q, want a version like 1.2.3.004 (optionally with a suffix such as -dev)", file)
+	if file != lastPaddedVersion && !versionShape.MatchString(file) {
+		t.Fatalf("version.txt = %q, want major.feature.fix with no leading zeros, like 1.4.2 (optionally with a suffix such as -dev)", file)
 	}
 	if appVersion != "v"+file {
 		t.Fatalf("appVersion = %q, want v%s, the contents of version.txt", appVersion, file)

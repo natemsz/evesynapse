@@ -98,6 +98,9 @@
 }
 
 :root {
+  /* The height of a button and of a text, search or number field, so
+     that a row of them lines up. */
+  --control-h: 1.9rem;
   color-scheme: dark;
   /* v0.3.30: --text lightened a notch (#f5ead9 -> #faf3e6) for LCD
      readability; the ember palette is untouched. The extra text-tone
@@ -235,7 +238,11 @@ h3 { font-size: 0.88rem; margin: 1.4rem 0 0.15rem; }
   .wordmark, .wm-eve, .wm-syn span, .wordmark:hover .wm-syn span { color: CanvasText; }
 }
 
-small { color: var(--muted); }
+/* Secondary text: quieter in colour, but nearly the size of the text
+   around it. The browser's own "smaller" put it under 11px on a 13px
+   page, which was too small to read. The footer keeps the old size. */
+small { color: var(--muted); font-size: 0.95em; }
+footer small { font-size: smaller; }
 
 /* --- top bar --- */
 header {
@@ -391,6 +398,9 @@ main {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 2px 14px rgba(0, 0, 0, 0.55);
   padding: 1.25rem 1.25rem 1.5rem;
 }
+/* The Market page's category browser sits inside the page's panel. It
+   is a section of that panel, not a second framed box inside it. */
+.panel.market-browse { background: none; border: 0; box-shadow: none; padding: 0; }
 .panel > h1:first-child {
   /* The bar spans the full panel width by design; the gradient
      rides the title text (an inline span), so the ramp is scoped
@@ -554,8 +564,13 @@ h3 + .tw > table, h3 + table {
    specificity of their own and anything more specific wins. */
 .btn,
 :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])) {
-  display: inline-block;
-  padding: 0.42rem 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: var(--control-h);
+  padding: 0.2rem 0.85rem;
+  line-height: 1.2;
   color: #2a1302;
   background: linear-gradient(to bottom, #ffb84d, #ff6a1a 55%, #e04e12) padding-box,
     linear-gradient(135deg, #ffd27a, #ff6a1a 50%, #a12808) border-box;
@@ -609,7 +624,7 @@ table {
 th, td {
   padding: 0.4rem 0.6rem;
   text-align: left;
-  border-top: 1px solid #222222;
+  border-top: 1px solid #141414;
   border-bottom: 1px solid #060606;
   vertical-align: middle;
 }
@@ -617,7 +632,7 @@ thead th {
   background: var(--panel-head);
   color: var(--accent);
   text-shadow: 1px -1px 0 #000;
-  border-bottom: 1px solid #262626;
+  border-bottom: 1px solid #141414;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   font-size: 0.7rem;
@@ -635,7 +650,7 @@ tbody tr:hover td { background: var(--row-hover); }
   position: sticky;
   left: 0;
   z-index: 1;
-  border-right: 1px solid #262626;
+  border-right: 1px solid #141414;
 }
 .tw thead th:first-child { background: var(--panel-head); z-index: 2; }
 .tw tbody td:first-child, .tw tbody th:first-child { background: var(--row); }
@@ -683,18 +698,22 @@ img.portrait {
 .corp-desc { white-space: pre-line; }
 
 /* --- form inputs + market search suggestions --- */
-input[type="text"], input[type="search"] {
+/* Text, search and number fields share one look and one height with
+   the buttons beside them (--control-h). */
+input[type="text"], input[type="search"], input[type="number"] {
   background: var(--input-bg);
   border: 1px solid #2a2a2a;
   border-radius: 3px;
   color: var(--text);
-  padding: 0.42rem 0.6rem;
+  box-sizing: border-box;
+  min-height: var(--control-h);
+  padding: 0.2rem 0.6rem;
   font: inherit;
 }
-html[data-theme="light"] input[type="text"], html[data-theme="light"] input[type="search"] {
+html[data-theme="light"] input[type="text"], html[data-theme="light"] input[type="search"], html[data-theme="light"] input[type="number"] {
   border-color: #d8cdb8;
 }
-input[type="text"]:focus, input[type="search"]:focus {
+input[type="text"]:focus, input[type="search"]:focus, input[type="number"]:focus {
   border-color: var(--accent);
   outline: none;
   box-shadow: 0 0 8px rgba(255, 106, 26, 0.35);

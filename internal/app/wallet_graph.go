@@ -150,6 +150,11 @@ func netWorthHistoryPoints(rows []db.WalletHistory) []balancePoint {
 // Stride sampling keeps the first, the last, and the shape.
 const walletChartMaxDots = 240
 
+// balanceChartInset keeps the first and last points off the SVG's edge:
+// a point drawn exactly on it loses half its dot (and its scrub target) to
+// the clip. The plot spans the width less this on each side.
+const balanceChartInset = 4
+
 // balanceChart is a fully-computed, template-ready SVG chart.
 type balanceChart struct {
 	Width     int
@@ -161,6 +166,28 @@ type balanceChart struct {
 	DateTicks []markethistory.DateTick
 	From      string // oldest date label
 	To        string // newest date label
+
+	// Stacked charts (the Net worth history) draw filled bands under
+	// the line and name them in a legend of their own.
+	Stacked    bool
+	Bands      []balanceBand
+	Legend     []chartLegendItem
+	LegendNote string
+}
+
+// balanceBand is one filled polygon of a stacked chart.
+type balanceBand struct {
+	Label   string
+	Fill    string // colour
+	Opacity string
+	Points  string // polygon points
+}
+
+// chartLegendItem is one swatch and its name (Class picks the swatch
+// colour in the stylesheet).
+type chartLegendItem struct {
+	Class string
+	Label string
 }
 
 type balanceDot struct {
@@ -168,6 +195,10 @@ type balanceDot struct {
 	Date    string // "2006-01-02", the tooltip's date line
 	Balance string // esi.FormatISK
 	Title   string // "<date time>: balance X ISK"
+
+	// Stacked charts also break the day down (formatted ISK).
+	ISK    string
+	Assets string
 }
 
 // buildBalanceChart turns an ascending series into SVG
@@ -234,7 +265,7 @@ func buildBalanceChart(points []balancePoint) (balanceChart, bool) {
 		if len(kept) == 1 {
 			return markethistory.ChartWidth / 2
 		}
-		return i * (markethistory.ChartWidth - 1) / (len(kept) - 1)
+		return balanceChartInset + i*(markethistory.ChartWidth-1-2*balanceChartInset)/(len(kept)-1)
 	}
 	y := func(b float64) int {
 		frac := (b - minB) / (maxB - minB)
@@ -368,11 +399,10 @@ func (app *Application) attachNetWorthHistory(ctx context.Context, w *netWorthWi
 		logging.Errorf("net worth history for user %d: %v", userID, err)
 		return
 	}
-	points := netWorthHistoryPoints(rows)
-	if len(points) >= 2 {
-		if chart, ok := buildBalanceChart(points); ok {
+	days := netWorthBreakdownDays(rows)
+	if len(days) >= 2 {
+		if chart, ok := buildNetWorthChart(days); ok {
 			c := chart
-			c.Label = "Net worth over time"
 			w.History = &c
 		}
 		return

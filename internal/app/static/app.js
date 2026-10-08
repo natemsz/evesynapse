@@ -1035,10 +1035,15 @@
     date.textContent = dot.getAttribute("data-date");
     tip.appendChild(date);
     var rows = [];
-    // Balance charts carry one figure; market history dots
-    // carry the full day. Render whichever the dot brought.
+    // Balance charts carry one figure; the Net worth chart breaks
+    // its total into ISK and assets; market history dots carry the
+    // full day. Render whichever the dot brought.
     var balance = dot.getAttribute("data-balance");
-    if (balance) {
+    if (dot.getAttribute("data-isk") !== null) {
+      rows.push(["ISK", dot.getAttribute("data-isk") + " ISK"]);
+      rows.push(["Assets & orders", dot.getAttribute("data-assets") + " ISK"]);
+      rows.push(["Total", balance + " ISK"]);
+    } else if (balance) {
       rows.push(["Balance", balance + " ISK"]);
     }
     if (dot.getAttribute("data-avg")) {

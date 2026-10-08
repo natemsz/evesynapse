@@ -973,6 +973,11 @@ html[data-theme="light"] .widget-scope select {
 }
 .legend-price { height: 2px; background: #ffb84d; }
 .legend-volume { background: #d63c14; }
+/* Net worth chart: the two bands and the total line, in the colours the
+   chart draws them in (see networth_chart.go). */
+.legend-isk { background: #ffb84d; opacity: 0.9; }
+.legend-assets { background: #ff6a1a; opacity: 0.9; }
+.legend-total { height: 2px; background: #ffd27a; }
 .legend-note { margin-left: auto; color: #9d8668; }
 .pchart text {
   font-family: "Univers Next Pro Condensed", "Univers Next Pro", sans-serif;

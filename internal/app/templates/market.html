@@ -280,7 +280,7 @@
     {{range $c.Bars}}<rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" fill="#d63c14" fill-opacity="0.55"><title>{{.Title}}</title></rect>{{end}}
     {{if $c.Points}}<polyline points="{{$c.Points}}" fill="none" stroke="#ffb84d" stroke-width="1.5"/>{{end}}
     {{range $c.Dots}}<circle cx="{{.X}}" cy="{{.Y}}" r="1.6" fill="#ffb84d"/>{{end}}
-    {{range $c.Dots}}<circle class="cdot" cx="{{.X}}" cy="{{.Y}}" r="9" tabindex="0" aria-label="{{.Title}}" data-date="{{.Date}}" data-avg="{{.Average}}" data-high="{{.Highest}}" data-low="{{.Lowest}}" data-vol="{{.Volume}}"><title>{{.Title}}</title></circle>{{end}}
+    {{range $c.Dots}}<circle class="cdot" cx="{{.X}}" cy="{{.Y}}" r="9" tabindex="0" aria-label="{{.Title}}" data-date="{{.Date}}" data-avg="{{.Average}}" data-high="{{.Highest}}" data-low="{{.Lowest}}" data-vol="{{.Volume}}"></circle>{{end}}
     {{range $c.PriceTicks}}<text class="chart-axis-label price-axis {{.Class}}" x="2" y="{{.LabelY}}">{{.Label}}</text>{{end}}
     {{range $c.VolumeTicks}}<text class="chart-axis-label volume-axis {{.Class}}" x="{{$c.Width}}" y="{{.LabelY}}">{{.Label}}</text>{{end}}
     {{range $c.DateTicks}}<text class="chart-axis-label chart-date-tick {{.Class}}" x="{{.X}}" y="{{$c.Height}}" text-anchor="{{.Anchor}}">{{.Label}}</text>{{end}}

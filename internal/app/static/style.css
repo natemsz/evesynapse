@@ -3289,6 +3289,7 @@ html[data-theme="light"] .notify-all { border-top-color: #e4dac6; }
 .cal-head { display: flex; align-items: center; gap: 0.5rem; margin: 0.75rem 0 0.5rem; }
 .cal-title { min-width: 9rem; text-align: center; font-size: 1.05rem; }
 .cal-new { margin-left: auto; }
+.cal-head > .cal-paps:nth-child(4) { margin-left: auto; }
 .cal-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 table.cal { table-layout: fixed; min-width: 44rem; margin-bottom: 0.5rem; }
 table.cal th { text-align: center; }
@@ -3344,3 +3345,6 @@ input[type="datetime-local"]:focus, .op-form select:focus, .op-signup select:foc
   box-shadow: 0 0 8px rgba(255, 106, 26, 0.35);
 }
 html[data-theme="light"] input[type="datetime-local"], html[data-theme="light"] .op-form select, html[data-theme="light"] .op-signup select, html[data-theme="light"] .op-form textarea { border-color: #d8cdb8; }
+.cal-paps { margin-left: 0.5rem; }
+.cal-new + .cal-paps { margin-left: 0; }
+.op-ticks label { display: flex; align-items: center; gap: 0.4rem; margin: 0.15rem 0; }

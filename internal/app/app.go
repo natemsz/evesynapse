@@ -374,10 +374,12 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(app.requireAuth)
 		r.Get("/new", app.handleOpNew)
 		r.Post("/save", app.handleOpSave)
+		r.Get("/paps", app.handleOpPAPs)
 		r.Get("/{opID}", app.handleOp)
 		r.Get("/{opID}/edit", app.handleOpEdit)
 		r.Post("/{opID}/signup", app.handleOpSignup)
 		r.Post("/{opID}/cancel", app.handleOpCancel)
+		r.Post("/{opID}/attendance", app.handleOpAttendance)
 	})
 
 	r.Route("/contacts", func(r chi.Router) {

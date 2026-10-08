@@ -87,6 +87,39 @@
 </div>
 {{end}}
 
-<p><a href="/calendar/">Back to the calendar</a></p>
+{{with .Attendance}}
+<h2>Attendance <small>· {{len .Rows}}</small></h2>
+<p><small>{{.Capture}}</small></p>
+{{if .Rows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Pilot</th><th>Ship</th><th>Recorded</th></tr></thead>
+  <tbody>
+  {{range .Rows}}
+    <tr><td>{{charLink $.ViewerChars .CharacterID .Name}}</td><td>{{if .ShipTypeID}}{{itemLink .ShipTypeID .Ship}}{{end}}</td><td>{{if .ByHand}}by hand{{else}}from the fleet{{end}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+{{if .CanMark}}
+<section class="foldable"{{if .Capturing}} data-fold="closed"{{end}}>
+<h3>Mark attendance by hand</h3>
+<p><small>{{if .Capturing}}Not needed while the fleet is being read; here in case someone was missed.{{else}}Tick who was there. Pilots recorded from the fleet stay as they are.{{end}}</small></p>
+{{if .Ticks}}
+<form method="post" action="/ops/{{$.Op.ID}}/attendance" class="op-ticks">
+  {{range .Ticks}}
+  <label><input type="checkbox" name="present" value="{{.CharacterID}}"{{if .Present}} checked{{end}}{{if .FromFleet}} disabled{{end}}> {{.Name}}{{if .FromFleet}} <small>from the fleet</small>{{end}}</label>
+  {{end}}
+  <p><button type="submit">Save attendance</button></p>
+</form>
+{{else}}
+<p><small>Nobody signed up to this op, so there is nobody to tick yet. Pilots can still sign up while it runs.</small></p>
+{{end}}
+</section>
+{{end}}
+{{end}}
+
+<p><a href="/calendar/">Back to the calendar</a> · <a href="/ops/paps">Attendance totals</a></p>
 {{end}}
 {{end}}

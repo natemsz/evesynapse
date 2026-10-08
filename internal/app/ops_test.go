@@ -9,6 +9,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -395,5 +396,225 @@ func TestOpsManagerRoleIsConfigurable(t *testing.T) {
 	}
 	if got := parseRoleList(""); len(got) != 1 || got[0] != "Director" {
 		t.Fatalf("an empty setting gave %q", got)
+	}
+}
+
+// fleetESI stands in for ESI's two fleet calls: the fleet a character
+// is in, and that fleet's members. It records every path asked for.
+type fleetESI struct {
+	fleetStatus   int
+	fleet         string
+	membersStatus int
+	members       string
+	asked         []string
+}
+
+func (s *fleetESI) RoundTrip(req *http.Request) (*http.Response, error) {
+	respond := func(code int, body string) (*http.Response, error) {
+		return &http.Response{StatusCode: code, Header: http.Header{"Content-Type": {"application/json"}},
+			Body: io.NopCloser(strings.NewReader(body))}, nil
+	}
+	s.asked = append(s.asked, req.URL.Path)
+	switch {
+	case strings.HasSuffix(req.URL.Path, "/characters/90000001/fleet/"):
+		return respond(s.fleetStatus, s.fleet)
+	case strings.HasSuffix(req.URL.Path, "/fleets/777/members/"):
+		return respond(s.membersStatus, s.members)
+	}
+	return respond(http.StatusNotFound, `{"error":"unexpected `+req.URL.Path+`"}`)
+}
+
+// newFleetFixture is the ops fixture over a stand-in ESI, with the
+// director granted fleet access.
+func newFleetFixture(t *testing.T, fleet *fleetESI) *opsFixture {
+	t.Helper()
+	app, _, q := buildCorpTestApp(t, fleet)
+	ctx := context.Background()
+	f := &opsFixture{t: t, app: app, q: q, ctx: ctx}
+	account := func(charID int64, name string, corp int64, roles ...string) (int64, *http.Cookie) {
+		user, err := q.CreateUser(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.join(user.ID, charID, name, corp, roles...)
+		return user.ID, sessionCookie(t, app, user.ID, charID, name)
+	}
+	f.directorUser, f.director = account(fixtureCharA, "Fixture Ceo", opsCorp, "Director")
+	_, f.member = account(opsCharC, "Fixture Member", opsCorp)
+	_, f.other = account(opsCharD, "Fixture Outsider", opsOtherCorp, "Director")
+	f.grantFleet(fixtureCharA, true)
+	return f
+}
+
+func (f *opsFixture) grantFleet(charID int64, granted bool) {
+	f.t.Helper()
+	scopes := "esi-characters.read_corporation_roles.v1"
+	if granted {
+		scopes += " " + fleetScope
+	}
+	if _, err := f.app.db.ExecContext(f.ctx, `UPDATE characters SET scopes = $1 WHERE character_id = $2`, scopes, charID); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+func (f *opsFixture) attendance(id int64) map[int64]string {
+	f.t.Helper()
+	rows, err := f.q.ListOpAttendance(f.ctx, id)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	out := map[int64]string{}
+	for _, row := range rows {
+		out[row.CharacterID] = row.Source
+	}
+	return out
+}
+
+const fleetOfThree = `[{"character_id":90000001,"ship_type_id":29990},{"character_id":90000003,"ship_type_id":11987},{"character_id":95000001,"ship_type_id":587}]`
+
+func TestOpAttendanceIsCapturedFromTheFleet(t *testing.T) {
+	fleet := &fleetESI{
+		fleetStatus: http.StatusOK, fleet: `{"fleet_id":777,"fleet_boss_id":90000001,"role":"fleet_commander"}`,
+		membersStatus: http.StatusOK, members: fleetOfThree,
+	}
+	f := newFleetFixture(t, fleet)
+	now := time.Now().UTC()
+
+	// An op tomorrow: nothing is asked of ESI today.
+	tomorrow := f.create(now.Add(24*time.Hour).Truncate(time.Minute), "Tomorrow")
+	if stored, limited := f.app.captureOpAttendance(f.ctx, now); stored != 0 || limited || len(fleet.asked) != 0 {
+		t.Fatalf("with no op running: %d recorded, ESI asked %v", stored, fleet.asked)
+	}
+	_, _, body := f.get(f.director, opURL(tomorrow))
+	mustContain(t, "op not started", body, "Attendance will be recorded from Fixture Ceo&#39;s fleet while the op runs.")
+	if strings.Contains(body, "Mark attendance by hand") {
+		t.Fatal("hand-marking is offered before the op has started")
+	}
+
+	// An op running now: the fleet's three members are recorded,
+	// whether or not they use EveSynapse or signed up.
+	id := f.create(now.Add(-10*time.Minute).Truncate(time.Minute), "Running")
+	if stored, limited := f.app.captureOpAttendance(f.ctx, now); stored != 3 || limited {
+		t.Fatalf("recorded %d, limited=%v; want the fleet's 3", stored, limited)
+	}
+	got := f.attendance(id)
+	if len(got) != 3 || got[fixtureCharA] != attendanceFleet || got[opsCharC] != attendanceFleet || got[95000001] != attendanceFleet {
+		t.Fatalf("attendance %v, want the three fleet members", got)
+	}
+	if len(f.attendance(tomorrow)) != 0 {
+		t.Fatal("tomorrow's op was given today's fleet")
+	}
+	_, _, body = f.get(f.director, opURL(id))
+	mustContain(t, "running op", body,
+		"<h2>Attendance <small>· 3</small></h2>",
+		"Attendance is being recorded from Fixture Ceo&#39;s fleet: 3 so far.",
+		"<td>from the fleet</td>")
+
+	// Someone leaves the fleet: they were there, and stay recorded.
+	fleet.members = `[{"character_id":90000001,"ship_type_id":29990}]`
+	f.app.captureOpAttendance(f.ctx, now.Add(time.Minute))
+	if got := f.attendance(id); len(got) != 3 {
+		t.Fatalf("after a pilot left the fleet, attendance is %v; they were there and should stay", got)
+	}
+
+	// The totals page counts it, for members of the corporation only.
+	_, _, body = f.get(f.member, "/ops/paps")
+	mustContain(t, "/ops/paps", body, "Fixture Member</a></td><td>1</td><td>1</td>")
+	if _, _, body = f.get(f.other, "/ops/paps"); strings.Contains(body, "Fixture Member") {
+		t.Fatal("another corporation's attendance is shown to an outsider")
+	}
+}
+
+// TestOpAttendanceFallsBackToMarkingByHand: each reason the fleet
+// cannot be read is recorded and said, and a manager can then mark
+// who was there.
+func TestOpAttendanceFallsBackToMarkingByHand(t *testing.T) {
+	fleet := &fleetESI{fleetStatus: http.StatusNotFound, fleet: `{"error":"Character is not in a fleet"}`}
+	f := newFleetFixture(t, fleet)
+	now := time.Now().UTC()
+	id := f.create(now.Add(-10*time.Minute).Truncate(time.Minute), "Running")
+	status := func() string {
+		t.Helper()
+		op, err := f.q.GetOp(f.ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return op.CaptureStatus
+	}
+
+	// Not in a fleet.
+	f.app.captureOpAttendance(f.ctx, now)
+	if status() != captureNoFleet {
+		t.Fatalf("status %q, want %q", status(), captureNoFleet)
+	}
+	_, _, body := f.get(f.director, opURL(id))
+	mustContain(t, "no fleet", body, "Fixture Ceo was not in a fleet when last checked", "Mark attendance by hand")
+
+	// In a fleet, but not its boss: its members are not asked for.
+	fleet.fleetStatus, fleet.fleet, fleet.asked = http.StatusOK, `{"fleet_id":777,"fleet_boss_id":95000009}`, nil
+	f.app.captureOpAttendance(f.ctx, now)
+	if status() != captureNotBoss || len(fleet.asked) != 1 {
+		t.Fatalf("status %q after asking %v; want %q and only the fleet lookup", status(), fleet.asked, captureNotBoss)
+	}
+	// Boss when asked, not by the time the members were read.
+	fleet.fleet, fleet.membersStatus, fleet.members = `{"fleet_id":777,"fleet_boss_id":90000001}`, http.StatusForbidden, `{"error":"forbidden"}`
+	f.app.captureOpAttendance(f.ctx, now)
+	if status() != captureNotBoss {
+		t.Fatalf("status %q, want %q", status(), captureNotBoss)
+	}
+
+	// Fleet access not granted: ESI is not asked at all.
+	f.grantFleet(fixtureCharA, false)
+	fleet.asked = nil
+	f.app.captureOpAttendance(f.ctx, now)
+	if status() != captureNoScope || len(fleet.asked) != 0 {
+		t.Fatalf("status %q after asking %v; want %q and no call", status(), fleet.asked, captureNoScope)
+	}
+	_, _, body = f.get(f.director, opURL(id))
+	mustContain(t, "no scope", body, "Fixture Ceo has not granted fleet access")
+	if len(f.attendance(id)) != 0 {
+		t.Fatalf("attendance recorded with no fleet readable: %v", f.attendance(id))
+	}
+
+	// Marking by hand. Only the manager, and only pilots on the
+	// sign-up list. (An op in progress still takes sign-ups.)
+	f.post(f.member, opURL(id)+"/signup", url.Values{"character": {fmt.Sprint(opsCharC)}, "response": {"yes"}, "ship": {"Guardian"}})
+	if rows, _ := f.q.ListOpSignups(f.ctx, id); len(rows) != 1 {
+		t.Fatalf("%d sign-up(s) on the running op, want 1", len(rows))
+	}
+	f.post(f.member, opURL(id)+"/attendance", url.Values{"present": {fmt.Sprint(opsCharC)}})
+	if len(f.attendance(id)) != 0 {
+		t.Fatal("a member without the role marked attendance")
+	}
+	f.post(f.director, opURL(id)+"/attendance", url.Values{"present": {fmt.Sprint(opsCharC), "95000001", "junk"}})
+	if got := f.attendance(id); len(got) != 1 || got[opsCharC] != attendanceManual {
+		t.Fatalf("after marking: %v, want only the signed-up pilot, by hand", got)
+	}
+	_, _, body = f.get(f.director, opURL(id))
+	mustContain(t, "marked", body, "<td>by hand</td>", `name="present" value="90000003" checked>`)
+
+	// The fleet turns up after all and reports the same pilot: the
+	// fleet's word replaces the hand mark, and saving the hand list
+	// with nobody ticked cannot remove it.
+	f.grantFleet(fixtureCharA, true)
+	fleet.fleetStatus, fleet.fleet = http.StatusOK, `{"fleet_id":777,"fleet_boss_id":90000001}`
+	fleet.membersStatus, fleet.members = http.StatusOK, `[{"character_id":90000003,"ship_type_id":11987}]`
+	f.app.captureOpAttendance(f.ctx, now)
+	if got := f.attendance(id); got[opsCharC] != attendanceFleet {
+		t.Fatalf("after the fleet reported the pilot: %v", got)
+	}
+	f.post(f.director, opURL(id)+"/attendance", url.Values{})
+	if got := f.attendance(id); got[opsCharC] != attendanceFleet {
+		t.Fatalf("an empty hand list removed what the fleet reported: %v", got)
+	}
+	_, _, body = f.get(f.director, opURL(id))
+	mustContain(t, "fleet after hand", body, `value="90000003" checked disabled> Fixture Member <small>from the fleet</small>`)
+
+	// Before an op starts there is nothing to mark.
+	later := f.create(now.Add(3*time.Hour).Truncate(time.Minute), "Later")
+	f.post(f.member, opURL(later)+"/signup", url.Values{"character": {fmt.Sprint(opsCharC)}, "response": {"yes"}})
+	f.post(f.director, opURL(later)+"/attendance", url.Values{"present": {fmt.Sprint(opsCharC)}})
+	if len(f.attendance(later)) != 0 {
+		t.Fatal("attendance was marked on an op that has not started")
 	}
 }

@@ -368,6 +368,10 @@ type opView struct {
 	MyRole     string
 	MyNote     string
 	Roles      []string
+
+	// Attendance: who was there, and how that is known
+	// (ops_attendance.go).
+	Attendance *opAttendance
 }
 
 func (app *Application) handleOp(w http.ResponseWriter, r *http.Request) {
@@ -441,6 +445,8 @@ func (app *Application) handleOp(w http.ResponseWriter, r *http.Request) {
 			view.RoleCounts = append(view.RoleCounts, opRoleCount{Role: role, Count: counts[role]})
 		}
 	}
+
+	view.Attendance = app.opAttendanceFor(ctx, op, signups, view.CanManage, time.Now())
 
 	app.render(ctx, w, http.StatusOK, "op.html", pageData{
 		LoggedIn:      true,

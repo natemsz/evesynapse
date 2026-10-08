@@ -274,6 +274,17 @@ type Op struct {
 	CreatedByCharacter int64        `json:"created_by_character"`
 	CreatedAt          time.Time    `json:"created_at"`
 	CancelledAt        sql.NullTime `json:"cancelled_at"`
+	CaptureStatus      string       `json:"capture_status"`
+	CaptureCheckedAt   sql.NullTime `json:"capture_checked_at"`
+}
+
+type OpAttendance struct {
+	OpID        int64     `json:"op_id"`
+	CharacterID int64     `json:"character_id"`
+	ShipTypeID  int64     `json:"ship_type_id"`
+	Source      string    `json:"source"`
+	FirstSeenAt time.Time `json:"first_seen_at"`
+	LastSeenAt  time.Time `json:"last_seen_at"`
 }
 
 type OpSignup struct {

@@ -108,6 +108,7 @@ type pageData struct {
 	// changes one.
 	Op     *opView
 	OpForm *opFormView
+	PAPs   *papsView // the attendance table (/ops/paps)
 
 	// Public pilot page (/pilot/): a stranger's public record.
 	Pilot *pilotView
@@ -178,7 +179,7 @@ func sectionForPage(page string) string {
 		return "home"
 	case "character.html", "characters.html", "skills.html", "skillplans.html",
 		"mail.html", "calendar.html", "contacts.html", "pilot.html", "assets.html",
-		"killmails.html", "notifications.html", "notification_settings.html", "op.html", "op_form.html":
+		"killmails.html", "notifications.html", "notification_settings.html", "op.html", "op_form.html", "op_paps.html":
 		return "pilot"
 	case "fittings.html", "fittings_saved.html", "fit_shopping.html":
 		return "fitting"

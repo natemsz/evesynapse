@@ -57,9 +57,6 @@ const (
 	// structureMissingWindow is how long a 403/404 answer is
 	// trusted before the worker re-asks.
 	structureMissingWindow = 24 * time.Hour
-	// structureScope is the read scope the authenticated
-	// structure lookup needs.
-	structureScope = "esi-universe.read_structures.v1"
 )
 
 // isStructureID reports whether a bare location id is in the

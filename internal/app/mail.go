@@ -511,15 +511,6 @@ func mailHref(attrs string) (string, bool) {
 	return "", false
 }
 
-// The ESI scopes the two mail actions need. A character linked before
-// they were requested never granted them, and ESI answers 403 for it;
-// the stored scope list says so up front, so the page can name the
-// fix instead of failing after the reader has typed a message.
-const (
-	mailSendScope     = "esi-mail.send_mail.v1"
-	mailOrganizeScope = "esi-mail.organize_mail.v1"
-)
-
 // mailRelinkNotice is what a reader is told when a character lacks the
 // scope an action needs.
 func mailRelinkNotice(name, what string) string {

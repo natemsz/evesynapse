@@ -15,6 +15,9 @@
 <p><a href="/mail/?character={{$c.CharacterID}}">Back to the inbox</a> · <a href="/mail/compose/?character={{$c.CharacterID}}">Write another</a></p>
 {{else}}
 {{if $c.Error}}<p class="err">{{$c.Error}}</p>{{end}}
+{{if $c.NeedsRelink}}
+<p><a class="btn" href="/auth/eve">Sign in again</a> <small>to let EveSynapse send mail as {{$c.CharacterName}}. Reading mail is unaffected.</small></p>
+{{else}}
 <form method="post" action="/mail/send/">
   <input type="hidden" name="character" value="{{$c.CharacterID}}">
   <p><label>To (character, corporation, or alliance name)<br>
@@ -30,6 +33,7 @@
   <a href="/mail/?character={{$c.CharacterID}}">Cancel</a></p>
 </form>
 <p><small>Sending mail costs a small in-game fee. The recipient name must match exactly.</small></p>
+{{end}}
 {{end}}
 {{else}}
 <p>No character to send from yet — link a character first.</p>

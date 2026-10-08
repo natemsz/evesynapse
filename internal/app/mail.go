@@ -77,6 +77,7 @@ type mailView struct {
 	Detail        *mailDetail
 	DetailID      int64 // open mail's ID, for the mark-as-read form
 	DetailWarming bool  // body snapshot has not warmed yet
+	CanMarkRead   bool  // the character granted mail-organize access (esi-mail.organize_mail.v1)
 }
 
 func (app *Application) handleMail(w http.ResponseWriter, r *http.Request) {
@@ -157,6 +158,7 @@ func (app *Application) handleMail(w http.ResponseWriter, r *http.Request) {
 	if mailID > 0 {
 		view.Selected = true
 		view.DetailID = mailID
+		view.CanMarkRead = characterHasScope(active, mailOrganizeScope)
 		var mail esi.Mail
 		if app.loadCorpSnapshot(ctx, active.CharacterID, esi.MailBodyKind(mailID), &mail) {
 			detail := &mailDetail{
@@ -509,6 +511,21 @@ func mailHref(attrs string) (string, bool) {
 	return "", false
 }
 
+// The ESI scopes the two mail actions need. A character linked before
+// they were requested never granted them, and ESI answers 403 for it;
+// the stored scope list says so up front, so the page can name the
+// fix instead of failing after the reader has typed a message.
+const (
+	mailSendScope     = "esi-mail.send_mail.v1"
+	mailOrganizeScope = "esi-mail.organize_mail.v1"
+)
+
+// mailRelinkNotice is what a reader is told when a character lacks the
+// scope an action needs.
+func mailRelinkNotice(name, what string) string {
+	return name + " was linked before EveSynapse asked for permission to " + what + " — sign in again to grant it."
+}
+
 // handleMailMarkRead serves POST /mail/read/ (Issue 26): mark one
 // mail read in-game via PUT /characters/{id}/mail/{mail_id}/,
 // which needs the esi-mail.organize_mail.v1 scope. A 403 means
@@ -532,6 +549,10 @@ func (app *Application) handleMailMarkRead(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
+	if !characterHasScope(ch, mailOrganizeScope) {
+		http.Error(w, mailRelinkNotice(ch.Name, "mark mail read"), http.StatusForbidden)
+		return
+	}
 	token, err := app.validAccessToken(ctx, ch)
 	if err != nil {
 		logging.Errorf("mail mark-read: token for character %d: %v", charID, err)
@@ -546,9 +567,13 @@ func (app *Application) handleMailMarkRead(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		logging.Errorf("mail mark-read: ESI PUT %s: %v", path, err)
-		http.Error(w, "EVE refused the update.", http.StatusBadGateway)
+		http.Error(w, "EVE refused the update"+esiRefusalDetail(err)+".", http.StatusBadGateway)
 		return
 	}
+	// ESI took it. The page renders from stored copies of the mail
+	// list and label counts, so record the change there too, or the
+	// mail keeps showing as unread until the worker's next refresh.
+	app.markMailReadLocally(ctx, charID, mailID)
 	// Success: back to the mail view.
 	http.Redirect(w, r, fmt.Sprintf("/mail/?character=%d&mail=%d", charID, mailID), http.StatusSeeOther)
 }
@@ -566,6 +591,7 @@ type mailComposeView struct {
 	Body          string // sticky body on error
 	Error         string // send failure, user-safe
 	Sent          bool   // just sent: show confirmation
+	NeedsRelink   bool   // the character never granted send-mail access; the form is replaced by a re-link prompt
 }
 
 // handleMailCompose serves GET /mail/compose/: the compose form.
@@ -591,6 +617,7 @@ func (app *Application) handleMailCompose(w http.ResponseWriter, r *http.Request
 	data.MailCompose = &mailComposeView{
 		CharacterID:   active.CharacterID,
 		CharacterName: active.Name,
+		NeedsRelink:   !characterHasScope(active, mailSendScope),
 	}
 	app.render(ctx, w, http.StatusOK, "compose.html", data)
 }
@@ -642,6 +669,11 @@ func (app *Application) handleMailSend(w http.ResponseWriter, r *http.Request) {
 	ch, err := app.queries.GetCharacter(ctx, charID)
 	if err != nil || ch.UserID != userID {
 		fail("That character isn't one of yours.")
+		return
+	}
+	if !characterHasScope(ch, mailSendScope) {
+		view.NeedsRelink = true
+		fail(mailRelinkNotice(ch.Name, "send mail"))
 		return
 	}
 	if toName == "" {
@@ -705,7 +737,7 @@ func (app *Application) handleMailSend(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		logging.Errorf("mail send: ESI POST %s: %v", path, err)
-		fail("EVE refused the mail. Check the recipient and try again.")
+		fail("EVE refused the mail" + esiRefusalDetail(err) + ". Check the recipient and try again.")
 		return
 	}
 	view.Sent = true

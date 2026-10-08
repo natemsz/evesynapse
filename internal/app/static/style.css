@@ -169,19 +169,23 @@ a:hover { color: var(--success); text-decoration: underline; }
 h1, h2, h3, h4, .wordmark, .btn, thead th, .badge,
 :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])),
 .branch > summary,
-.sidenav a.navlink {
+.sidenav a.navlink,
+.sidebar-account-footer .navlink {
   font-family: "Univers Next Pro Condensed", "Univers Next Pro", -apple-system, "SF Pro Display", "Segoe UI", "Inter", sans-serif;
   font-weight: 500;
   font-synthesis-weight: none;
 }
-/* Nav menu links: the entries under the category headers
-   plus the standalone top-level rows (Home, Sync, Admin).
+/* Nav menu links: the entries under the category headers.
    Non-condensed Univers at Regular weight; sizes, colors,
    and hover/active treatments stay as they were. Regular
    (400) replaced Light 300 here once the true Regular face
    was embedded — before that, a 400 request resolved to
-   the 500 Medium face, which reads bold. */
-header a.navlink, .sidenav a.navlink, .branch .menu a {
+   the 500 Medium face, which reads bold. The standalone
+   top-level rows (Home, Sync, Admin) are deliberately not in
+   this rule: they sit level with the category headers and take
+   their condensed medium cut, so every row of the menu reads
+   in one face. */
+header a.navlink, .branch .menu a {
   font-family: "Univers Next Pro", -apple-system, "SF Pro Display", "Segoe UI", "Inter", sans-serif;
   font-weight: 400;
   font-synthesis-weight: none;
@@ -1499,37 +1503,53 @@ html[data-nav="rail"] .sidebar .branch > summary {
   padding-right: 0.25rem;
   padding-left: 0.25rem;
 }
-/* Rail-mode icon tooltips: hovering an icon for 2s reveals the
-   category name in a floating label to the right of the rail. */
-html[data-nav="rail"] .sidenav [data-tip] {
-  position: relative;
-}
-html[data-nav="rail"] .sidenav [data-tip]::after {
-  content: attr(data-tip);
-  position: absolute;
-  left: calc(100% + 0.75rem);
-  top: 50%;
-  transform: translateY(-50%);
-  padding: 0.35rem 0.7rem;
-  border-radius: 0.4rem;
-  background: rgba(20, 16, 12, 0.95);
-  border: 1px solid rgba(255, 210, 122, 0.35);
-  color: #ffd27a;
-  font-size: 0.85rem;
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.15s ease, visibility 0.15s;
-  transition-delay: 2s;
-  z-index: 100;
-}
-html[data-nav="rail"] .sidenav [data-tip]:hover::after {
-  opacity: 1;
-  visibility: visible;
-}
-html[data-nav="rail"] .sidenav [data-tip]:not(:hover)::after {
-  transition-delay: 0s;
+/* Rail-mode icon tooltips: pointing at an icon reveals its name in a
+   themed label to the right of the rail, after a short beat so one
+   sweeping across the column does not flicker through every name.
+   (The labels used to wait 2s, and the category icons never showed
+   one at all: the tooltip drew on ::after, which the rail hides on
+   categories to drop their caret. ::before is free.) The browser's
+   own title tooltip is not used on these, so only this one shows. */
+@media (min-width: 861px) and (hover: hover) {
+  html[data-nav="rail"] .sidenav [data-tip],
+  html[data-nav="rail"] .sidebar-account-footer [data-tip] {
+    position: relative;
+  }
+  html[data-nav="rail"] .sidenav [data-tip]::before,
+  html[data-nav="rail"] .sidebar-account-footer [data-tip]::before {
+    content: attr(data-tip);
+    position: absolute;
+    left: calc(100% + 0.75rem);
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 0.35rem 0.7rem;
+    border-radius: 0.4rem;
+    background: rgba(20, 16, 12, 0.95);
+    border: 1px solid rgba(255, 210, 122, 0.35);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+    color: #ffd27a;
+    font-size: 0.85rem;
+    letter-spacing: 0.04em;
+    text-transform: none;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.12s ease, visibility 0.12s;
+    z-index: 100;
+  }
+  html[data-nav="rail"] .sidenav [data-tip]:hover::before,
+  html[data-nav="rail"] .sidenav [data-tip]:focus-visible::before,
+  html[data-nav="rail"] .sidebar-account-footer [data-tip]:hover::before,
+  html[data-nav="rail"] .sidebar-account-footer [data-tip]:focus-visible::before {
+    opacity: 1;
+    visibility: visible;
+    transition-delay: 0.2s;
+  }
+  /* A category whose flyout is open already shows its name in the flyout. */
+  html[data-nav="rail"] .sidenav details[open] > summary[data-tip]::before {
+    display: none;
+  }
 }
 html[data-nav="rail"] .sidebar .branch > summary::after { display: none; }
 html[data-nav="rail"] .sidebar .branch .menu {

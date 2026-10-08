@@ -23,14 +23,3 @@ try {
     document.documentElement.setAttribute("data-theme", savedTheme);
   }
 } catch (e) {}
-
-// The wordmark font (VT323) loads asynchronously: a
-// render-blocking stylesheet link for one heading font is not
-// worth delaying first paint, and font-display=swap swaps it in
-// when it lands. The preconnects in base.html cover the fetch.
-try {
-  var vt323 = document.createElement("link");
-  vt323.rel = "stylesheet";
-  vt323.href = "https://fonts.googleapis.com/css2?family=VT323&display=swap";
-  document.head.appendChild(vt323);
-} catch (e) {}

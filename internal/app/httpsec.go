@@ -43,10 +43,10 @@ func warnIfServedInTheClear(cfg Config) {
 }
 
 // contentSecurityPolicy limits what a page may load and where it
-// may send data: everything comes from the app itself, plus images
-// from CCP's image server (portraits, logos, item icons) and the
-// wordmark font from Google Fonts. Pages can not be framed, cannot
-// post forms elsewhere, and cannot have their base address moved.
+// may send data: everything comes from the app itself (fonts
+// included), plus images from CCP's image server (portraits, logos,
+// item icons). Pages can not be framed, cannot post forms elsewhere,
+// and cannot have their base address moved.
 //
 // No inline scripts, styles, or event handlers anywhere: every
 // script is a versioned file under /static/ (boot.js, app.js,
@@ -56,9 +56,9 @@ func warnIfServedInTheClear(cfg Config) {
 // attribute added to a template will silently not run.
 const contentSecurityPolicy = "default-src 'self'; " +
 	"script-src 'self'; " +
-	"style-src 'self' https://fonts.googleapis.com; " +
+	"style-src 'self'; " +
 	"img-src 'self' data: https://images.evetech.net; " +
-	"font-src 'self' https://fonts.gstatic.com; " +
+	"font-src 'self'; " +
 	"connect-src 'self'; " +
 	"object-src 'none'; " +
 	"base-uri 'self'; " +

@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -184,8 +185,12 @@ func (app *Application) handlePushUnsubscribe(w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// handlePushTest sends a test message to the account's browsers, so
-// the user can see that it arrives.
+// handlePushTest sends a test message, so the user can see that it
+// arrives. The settings page names the browser it was clicked in, and
+// then only that browser is sent to and what its push service said
+// is reported: with several browsers subscribed, one taking the
+// message must not hide another refusing it. With no browser named,
+// every browser of the account is sent to.
 func (app *Application) handlePushTest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
@@ -193,14 +198,63 @@ func (app *Application) handlePushTest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "browser push is not set up on this server", http.StatusServiceUnavailable)
 		return
 	}
-	sent := app.pushToUser(ctx, userID, []pushMessage{{
-		Title: "EveSynapse", Body: "Browser notifications are working.", URL: "/notifications/settings", Tag: "test",
-	}})
-	if sent == 0 {
+	test := pushMessage{Title: "EveSynapse", Body: "Browser notifications are working.", URL: "/notifications/settings", Tag: "test"}
+	if posted, err := readPushSubscription(r); err == nil && posted.Endpoint != "" {
+		app.pushTestOne(ctx, w, userID, posted.Endpoint, test)
+		return
+	}
+	if app.pushToUser(ctx, userID, []pushMessage{test}) == 0 {
 		http.Error(w, "no browser took the test message", http.StatusBadGateway)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// pushTestOne sends the test to the one subscription of the account
+// with this endpoint and answers with what happened.
+func (app *Application) pushTestOne(ctx context.Context, w http.ResponseWriter, userID int64, endpoint string, test pushMessage) {
+	subs, err := app.queries.ListPushSubscriptionsByUser(ctx, userID)
+	if err != nil {
+		logging.Errorf("push: list subscriptions for user %d: %v", userID, err)
+		http.Error(w, "could not read this account's browsers", http.StatusInternalServerError)
+		return
+	}
+	for _, row := range subs {
+		if row.Endpoint != endpoint {
+			continue
+		}
+		sub, err := webpush.ParseSubscription(row.Endpoint, row.P256dh, row.Auth)
+		if err != nil {
+			break
+		}
+		payload, _ := json.Marshal(test)
+		client := app.pushClient
+		if client == nil {
+			client = &http.Client{Timeout: 10 * time.Second}
+		}
+		host := endpoint
+		if u, perr := url.Parse(endpoint); perr == nil {
+			host = u.Hostname()
+		}
+		res, err := webpush.Send(ctx, client, app.push, sub, payload, pushTTL)
+		switch {
+		case err != nil:
+			logging.Warnf("push: test to subscription %d: %v", row.ID, err)
+			http.Error(w, "this browser's push service ("+host+") could not be reached", http.StatusBadGateway)
+		case res.Gone:
+			_ = app.queries.DeletePushSubscriptionByID(ctx, row.ID)
+			http.Error(w, "this browser's push service ("+host+") no longer knows this browser. Turn notifications off and on again here.", http.StatusBadGateway)
+		case !res.OK():
+			logging.Warnf("push: test to subscription %d: push service answered %d", row.ID, res.Status)
+			http.Error(w, fmt.Sprintf("this browser's push service (%s) refused the message with HTTP %d", host, res.Status), http.StatusBadGateway)
+		default:
+			_ = app.queries.MarkPushSubscriptionOK(ctx, db.MarkPushSubscriptionOKParams{At: timeSet(time.Now().UTC()), ID: row.ID})
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			fmt.Fprintf(w, "%s accepted the message (HTTP %d)", host, res.Status)
+		}
+		return
+	}
+	http.Error(w, "the server has no record of this browser. Turn notifications off and on again here.", http.StatusNotFound)
 }
 
 // pushMessage is what the service worker is handed (sw.js reads these

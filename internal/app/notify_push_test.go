@@ -342,3 +342,42 @@ func TestPushMessagesFor(t *testing.T) {
 		t.Fatalf("a burst gave %+v, want one summary", got)
 	}
 }
+
+// TestPushTestNamesTheBrowser: clicked in a browser, the test goes to
+// that browser alone and says what its push service answered, so one
+// browser taking the message cannot hide another refusing it.
+func TestPushTestNamesTheBrowser(t *testing.T) {
+	f := newNotifyFixture(t)
+	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+	service := f.enablePush()
+	const edge = "https://wns2-by3p.notify.windows.com/w/?token=abc"
+	for _, endpoint := range []string{fcm + "chrome", edge} {
+		if code, msg := f.postJSON(cookie, "/notifications/push/subscribe", browserSubscription(t, endpoint)); code != http.StatusNoContent {
+			t.Fatalf("subscribe %s: %d %q", endpoint, code, msg)
+		}
+	}
+	named, _ := json.Marshal(map[string]string{"endpoint": edge})
+
+	code, msg := f.postJSON(cookie, "/notifications/push/test", string(named))
+	if code != http.StatusOK || !strings.Contains(msg, "wns2-by3p.notify.windows.com accepted the message (HTTP 201)") || service.count() != 1 {
+		t.Fatalf("test to one browser: %d %q, %d push(es); want that browser alone", code, msg, service.count())
+	}
+
+	service.status = http.StatusForbidden
+	code, msg = f.postJSON(cookie, "/notifications/push/test", string(named))
+	if code != http.StatusBadGateway || !strings.Contains(msg, "wns2-by3p.notify.windows.com) refused the message with HTTP 403") {
+		t.Fatalf("refused test: %d %q", code, msg)
+	}
+	if f.devices(f.userID) != 2 {
+		t.Fatal("a refused test dropped a browser")
+	}
+
+	service.status = http.StatusGone
+	if code, msg = f.postJSON(cookie, "/notifications/push/test", string(named)); code != http.StatusBadGateway || !strings.Contains(msg, "Turn notifications off and on again") || f.devices(f.userID) != 1 {
+		t.Fatalf("gone: %d %q, %d browser(s) left", code, msg, f.devices(f.userID))
+	}
+	// A browser the server has no record of is told so.
+	if code, msg = f.postJSON(cookie, "/notifications/push/test", string(named)); code != http.StatusNotFound || !strings.Contains(msg, "no record of this browser") {
+		t.Fatalf("unknown browser: %d %q", code, msg)
+	}
+}

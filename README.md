@@ -13,7 +13,7 @@ While there is a hosted version (https://evesynapse.app) you are welcome to inst
 Contact: nate@synap6.io or in-game 'Burzrujat'
 
 ## AI Use Disclosure and Policy
-- AI is used in this project purely for security auditing, hardening, and performance improvements and to assist with simplifying repetitive tasks. This is a human project built for humans, and a labor of love. 
+- AI is used in this project purely for security auditing, hardening, and performance improvements and to assist with simplifying repetitive tasks. This is a human-built project built for other humans, and a labor of love. 
 
 ## Stack
 

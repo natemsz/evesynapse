@@ -75,3 +75,34 @@ func characterModuleStates(ch db.Character) map[string]moduleStatus {
 	}
 	return out
 }
+
+// lockedNotice is the view model for the "locked-notice" template
+// partial: what a locked or limited module is missing and what
+// granting it adds.
+type lockedNotice struct {
+	Locked        bool // required scopes are missing (otherwise only optional ones)
+	Heading       string
+	Scopes        []scopeUse // the missing scopes whose Unlocks text is listed
+	CharacterName string
+	RelinkURL     string
+}
+
+// notice builds the partial's view model for module m on character
+// name, or nil when the module is fully enabled and there is nothing
+// to say. A locked module lists its missing required scopes; a limited
+// one lists the optional scopes that would light up more of it.
+func (st moduleStatus) notice(m moduleDef, name string) *lockedNotice {
+	n := &lockedNotice{CharacterName: name, RelinkURL: "/auth/eve"}
+	switch st.State {
+	case moduleLocked:
+		n.Locked = true
+		n.Heading = m.Title + " is locked for this character."
+		n.Scopes = st.MissingRequired
+	case moduleLimited:
+		n.Heading = m.Title + " is limited for this character."
+		n.Scopes = st.MissingOptional
+	default:
+		return nil
+	}
+	return n
+}

@@ -1,0 +1,11 @@
+{{define "locked-notice"}}
+{{if .}}
+<div class="locked-notice{{if .Locked}} locked{{else}} limited{{end}}" role="note">
+  <p><strong>{{.Heading}}</strong></p>
+  <ul>
+    {{range .Scopes}}<li>{{.Unlocks}}</li>{{end}}
+  </ul>
+  <p><a class="btn" href="{{.RelinkURL}}">Sign in again</a> <small>to approve {{if .Locked}}the missing access{{else}}the extra access{{end}} for {{.CharacterName}}.</small></p>
+</div>
+{{end}}
+{{end}}

@@ -134,3 +134,35 @@ func relinkScopes(granted string, m moduleDef) []string {
 	}
 	return out
 }
+
+// snapshotModule returns the manifest module that reads snapshot kind,
+// if any. Kinds no module lists (the profile, say) return false.
+func snapshotModule(kind string) (moduleDef, bool) {
+	for _, m := range moduleManifest {
+		for _, k := range m.Snapshots {
+			if k == kind {
+				return m, true
+			}
+		}
+	}
+	return moduleDef{}, false
+}
+
+// kindLockedOut reports whether the character granted none of the
+// scopes of the module that reads kind, so a fetch could only be
+// refused. A module with some of its scopes is not locked out: the
+// manifest does not say which scope gates which kind, and a kind
+// fetched under a partial grant may still succeed. Kinds with no
+// scoped owner are never locked out.
+func kindLockedOut(granted map[string]bool, kind string) bool {
+	m, ok := snapshotModule(kind)
+	if !ok || len(m.Scopes) == 0 {
+		return false
+	}
+	for _, s := range m.Scopes {
+		if granted[s.Scope] {
+			return false
+		}
+	}
+	return true
+}

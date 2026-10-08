@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
 )
 
 func TestModuleStatusFor(t *testing.T) {
@@ -111,5 +112,33 @@ func TestRelinkScopesKeepsExistingGrants(t *testing.T) {
 func TestRelinkURL(t *testing.T) {
 	if got, want := relinkURL("mail", 42), "/auth/eve?character=42&module=mail"; got != want {
 		t.Errorf("relinkURL = %q, want %q", got, want)
+	}
+}
+
+func TestKindLockedOut(t *testing.T) {
+	const walletScope = "esi-wallet.read_character_wallet.v1"
+	if !kindLockedOut(scopeSet(""), esi.SnapWallet) {
+		t.Error("wallet kind should be locked out with no grants")
+	}
+	if kindLockedOut(scopeSet(walletScope), esi.SnapWallet) {
+		t.Error("wallet kind must not be locked out once its scope is granted")
+	}
+	// Skills has two required scopes; one granted keeps every skills
+	// kind fetchable, since the manifest does not map scope to kind.
+	if kindLockedOut(scopeSet("esi-skills.read_skills.v1"), esi.SnapSkillqueue) {
+		t.Error("a partly granted module must not be locked out")
+	}
+	// The profile belongs to no module and is always fetched.
+	if kindLockedOut(scopeSet(""), esi.SnapProfile) {
+		t.Error("an unowned kind must never be locked out")
+	}
+}
+
+func TestEveryCoreKindIsFetchedWithFullGrant(t *testing.T) {
+	granted := scopeSet(strings.Join(eveScopes, " "))
+	for _, kind := range coreSnapshotKinds {
+		if kindLockedOut(granted, kind) {
+			t.Errorf("core kind %q is locked out with every scope granted", kind)
+		}
 	}
 }

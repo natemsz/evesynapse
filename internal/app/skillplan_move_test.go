@@ -246,3 +246,71 @@ func TestAddingAPlannedSkillNeverLowersIt(t *testing.T) {
 		t.Fatalf("plan holds %+v, want Gamma raised to 5", items)
 	}
 }
+
+// TestPlanPickerListsSearchesAndDeletes: every saved plan is listed with
+// what is left to train in it, the picker's search narrows the list (the
+// no-JavaScript form), the plan chosen is the one open, and a plan can
+// be deleted from the list — through the page's own confirmation without
+// JavaScript — leaving the others alone.
+func TestPlanPickerListsSearchesAndDeletes(t *testing.T) {
+	f := newPlanFixture(t)
+	const char = "90000001"
+	beta := f.newPlan("Road to Beta")
+	f.follow("/skills/plans/item-add", url.Values{"character": {char}, "plan": {beta}, "skill": {"1002"}, "level": {"1"}})
+	gamma := f.newPlan("Gunnery basics")
+	f.follow("/skills/plans/item-add", url.Values{"character": {char}, "plan": {gamma}, "skill": {"1003"}, "level": {"3"}})
+	f.newPlan("Empty idea")
+
+	get := func(path string) string {
+		t.Helper()
+		rec := f.do(http.MethodGet, path, nil, nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s = %d", path, rec.Code)
+		}
+		return rec.Body.String()
+	}
+	names := func(body string) []string {
+		var out []string
+		for _, m := range regexp.MustCompile(`<span class="plan-name">([^<]*)</span>`).FindAllStringSubmatch(body, -1) {
+			out = append(out, m[1])
+		}
+		return out
+	}
+
+	body := get("/skills/plans?character=" + char + "&plan=" + gamma)
+	mustContain(t, "plan picker", body,
+		"Your plans", "(3)", `data-plan-filter`, "Road to Beta", "Gunnery basics", "Empty idea",
+		"1 skill(s) · ", " left", "0 skill(s) · empty",
+		`class="plan-item is-current" data-name="Gunnery basics"`, `aria-current="page"`,
+		`aria-label="Delete the plan Road to Beta"`)
+	if got := names(body); !reflect.DeepEqual(got, []string{"Road to Beta", "Gunnery basics", "Empty idea"}) {
+		t.Errorf("plans listed = %v", got)
+	}
+
+	// The search with no JavaScript: ?pq= narrows the list, case-insensitively.
+	body = get("/skills/plans?character=" + char + "&plan=" + gamma + "&pq=ROAD")
+	if got := names(body); !reflect.DeepEqual(got, []string{"Road to Beta"}) {
+		t.Errorf("plans for pq=ROAD = %v, want just Road to Beta", got)
+	}
+	mustContain(t, "narrowed picker", body, "(3)", `value="ROAD"`)
+	body = get("/skills/plans?character=" + char + "&plan=" + gamma + "&pq=zzz")
+	mustContain(t, "no match", body, "No plan matches that search.")
+	if strings.Contains(body, `<p class="plan-none" hidden>`) {
+		t.Error("the no-match message is hidden when nothing matches")
+	}
+
+	// Delete without JavaScript: the link opens the plan with its own confirmation.
+	body = get("/skills/plans?character=" + char + "&plan=" + beta + "&confirm=delete")
+	mustContain(t, "delete confirmation", body, "Delete the plan “Road to Beta”?")
+	code, _, landed := f.follow("/skills/plans/delete", url.Values{"character": {char}, "plan": {beta}})
+	if code != http.StatusOK {
+		t.Fatalf("delete landed on %s with %d", landed, code)
+	}
+	var left []string
+	for _, p := range f.planIDs(fixtureCharA) {
+		left = append(left, p.Name)
+	}
+	if !reflect.DeepEqual(left, []string{"Gunnery basics", "Empty idea"}) {
+		t.Errorf("plans after delete = %v, want the other two", left)
+	}
+}

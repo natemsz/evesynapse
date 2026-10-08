@@ -38,14 +38,38 @@
 {{end}}
 {{end}}
 
-<section class="foldable">
-<h3>Your plans</h3>
-{{if .Plans}}
-<ul>
+<section class="foldable plan-picker" data-plan-picker>
+<h3>Your plans{{if .PlanTotal}} <small>({{.PlanTotal}})</small>{{end}}</h3>
+{{if .PlanTotal}}
+{{if gt .PlanTotal 1}}
+<form method="get" action="/skills/plans" class="plan-find" role="search">
+  <input type="hidden" name="character" value="{{.CharacterID}}">
+  {{if .Plan}}<input type="hidden" name="plan" value="{{.Plan.ID}}">{{end}}
+  <span class="searchwrap">
+    <input type="search" name="pq" value="{{.PlanQuery}}" placeholder="Search your plans" aria-label="Search your plans" autocomplete="off" data-plan-filter>
+  </span>
+  <button type="submit">Search</button>
+</form>
+{{end}}
+<ul class="plan-list" data-plan-list>
 {{range .Plans}}
-  <li>{{if and $.SkillPlans.Plan (eq .ID $.SkillPlans.Plan.ID)}}<strong>{{.Name}}</strong>{{else}}<a href="/skills/plans?character={{$.SkillPlans.CharacterID}}&plan={{.ID}}">{{.Name}}</a>{{end}} <small>({{.Items}} skill(s))</small></li>
+  <li class="plan-item{{if .Selected}} is-current{{end}}" data-name="{{.Name}}">
+    <a class="plan-open" href="/skills/plans?character={{$.SkillPlans.CharacterID}}&plan={{.ID}}"{{if .Selected}} aria-current="page"{{end}}>
+      <span class="plan-name">{{.Name}}</span>
+      <small class="plan-meta">{{.Items}} skill(s){{if .Left}} · {{.Left}}{{end}}</small>
+    </a>
+    <a class="plan-btn plan-btn-danger" href="/skills/plans?character={{$.SkillPlans.CharacterID}}&plan={{.ID}}&confirm=delete" data-plan-delete aria-label="Delete the plan {{.Name}}" title="Delete this plan"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></a>
+    <form method="post" action="/skills/plans/delete" class="plan-confirm" hidden>
+      <input type="hidden" name="character" value="{{$.SkillPlans.CharacterID}}">
+      <input type="hidden" name="plan" value="{{.ID}}">
+      <span>Delete “{{.Name}}”?</span>
+      <button type="submit" class="btn btn-danger">Delete</button>
+      <button type="button" class="btn" data-plan-keep>Keep</button>
+    </form>
+  </li>
 {{end}}
 </ul>
+<p class="plan-none"{{if .Plans}} hidden{{end}}><small>No plan matches that search.</small></p>
 {{else}}
 <p><small>No plans yet for this character.</small></p>
 {{end}}
@@ -91,8 +115,6 @@
   <input type="hidden" name="plan" value="{{.ID}}">
   <p>Delete the plan “{{.Name}}”? This cannot be undone. <button type="submit" class="btn btn-danger">Delete plan</button> <a href="/skills/plans?character={{$.CharacterID}}&plan={{.ID}}">Keep it</a></p>
 </form>
-{{else}}
-<p><small><a href="/skills/plans?character={{$.CharacterID}}&plan={{.ID}}&confirm=delete">Delete this plan</a></small></p>
 {{end}}
 
 <form method="get" action="/skills/plans" class="plan-add">

@@ -161,7 +161,13 @@ type skillPlanSummary struct {
 	Name      string
 	Items     int
 	Character int64
+	Selected  bool   // the plan open in the editor
+	Left      string // "19h 8m left", "all trained" or "empty": what reviewing the list needs
 }
+
+// planListTimedMax is how many plans the picker times: each one is a full
+// computation, so a very long list shows counts only past this.
+const planListTimedMax = 25
 
 // skillPlanRow is one row of the unified planner: one skill, in the order
 // it will train. The skills the user put in the plan carry the move and
@@ -191,6 +197,8 @@ type skillPlansView struct {
 	CharacterName string
 	GraphWarming  bool // SDE skill graph not imported yet
 	Plans         []skillPlanSummary
+	PlanQuery     string           // the picker's search, when the page was loaded with one
+	PlanTotal     int              // plans the character has, before the search narrows the list
 	Plan          *skillPlanDetail // selected plan, nil when none selected
 	FitPreview    *fitPreview      // plan-from-fit preview state
 	SearchQuery   string
@@ -313,13 +321,13 @@ func (app *Application) handleSkillPlans(w http.ResponseWriter, r *http.Request)
 		app.render(ctx, w, http.StatusOK, "skillplans.html", data)
 		return
 	}
+	all := make([]skillPlanSummary, 0, len(plans))
 	for _, p := range plans {
 		items, err := app.queries.ListSkillPlanItems(ctx, p.ID)
 		if err != nil {
 			logging.Errorf("skill plans: items for plan %d: %v", p.ID, err)
-			continue
 		}
-		view.Plans = append(view.Plans, skillPlanSummary{
+		all = append(all, skillPlanSummary{
 			ID: p.ID, Name: p.Name, Items: len(items), Character: p.CharacterID,
 		})
 	}
@@ -338,6 +346,29 @@ func (app *Application) handleSkillPlans(w http.ResponseWriter, r *http.Request)
 	}
 	if selected != nil {
 		view.Plan = app.buildPlanDetail(ctx, active, *selected, r.URL.Query().Get("confirm") == "delete")
+	}
+
+	// The picker: every plan with what is left to train in it, narrowed by
+	// its search (?pq=) when the page is loaded without JavaScript; with
+	// it the same search filters the list as it is typed.
+	for i := range all {
+		p := &all[i]
+		p.Selected = selected != nil && p.ID == selected.ID
+		switch {
+		case p.Items == 0:
+			p.Left = "empty"
+		case p.Selected:
+			p.Left = planLeft(view.Plan)
+		case i < planListTimedMax:
+			p.Left = planLeft(app.buildPlanDetail(ctx, active, plans[i], false))
+		}
+	}
+	view.PlanTotal = len(all)
+	view.PlanQuery = strings.TrimSpace(r.URL.Query().Get("pq"))
+	for _, p := range all {
+		if view.PlanQuery == "" || strings.Contains(strings.ToLower(p.Name), strings.ToLower(view.PlanQuery)) {
+			view.Plans = append(view.Plans, p)
+		}
 	}
 
 	// Editor skill search (only meaningful with a plan selected).
@@ -368,6 +399,19 @@ func (app *Application) handleSkillPlans(w http.ResponseWriter, r *http.Request)
 	}
 
 	app.render(ctx, w, http.StatusOK, "skillplans.html", data)
+}
+
+// planLeft says what is left in a computed plan, for the picker's list.
+func planLeft(d *skillPlanDetail) string {
+	switch {
+	case d == nil:
+		return ""
+	case d.TotalTime != "":
+		return d.TotalTime + " left"
+	case d.Count > 0 && len(d.Rows) == 0:
+		return "all trained"
+	}
+	return ""
 }
 
 // buildPlanDetail computes one plan against the character's

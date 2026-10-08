@@ -7,10 +7,11 @@
 <script src="/static/boot.js?v={{.AssetVersion}}" data-cfasync="false"></script>
 <title>{{template "title" .}} · EveSynapse</title>
 {{if .AutoRefresh}}<noscript><meta http-equiv="refresh" content="5"></noscript>{{end}}
-<link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v={{.AssetVersion}}">
+<link rel="icon" href="/static/favicon.ico?v={{.AssetVersion}}" sizes="48x48">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v={{.AssetVersion}}" sizes="any">
 <link rel="manifest" href="/static/manifest.webmanifest?v={{.AssetVersion}}">
 <meta name="theme-color" content="#0d0503">
-<link rel="apple-touch-icon" href="/static/icon-192.png?v={{.AssetVersion}}">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png?v={{.AssetVersion}}">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">

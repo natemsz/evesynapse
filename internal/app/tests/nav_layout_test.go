@@ -465,7 +465,9 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	for _, want := range []string{
 		`viewBox="0 0 48 48"`,
 		`<rect width="48" height="48" rx="10" fill="#0d0503"/>`,
-		`<circle cx="24" cy="24" r="3.8"/>`,
+		// The centre node is white, as in the header logo (see
+		// TestIconsMatchTheHeaderLogo).
+		`<circle cx="24" cy="24" r="3.8" fill="#ffffff"/>`,
 		`<circle cx="6" cy="24" r="3.0"/>`,
 		`<circle cx="42" cy="24" r="3.0"/>`,
 	} {

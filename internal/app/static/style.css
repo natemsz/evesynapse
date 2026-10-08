@@ -1881,6 +1881,16 @@ tbody tr.yours td { background-color: #2a2015; }
   .grid.home-grid > .span6 { grid-column: span 1; }
   .grid { gap: 0.65rem; }
   .card { padding: 0.75rem 0.8rem 0.9rem; }
+  /* The module title bleeds out to the card's edges with negative
+     margins equal to the card's padding. They are sized for the
+     wide padding (0.85rem top, 1rem sides); with the phone padding
+     above they overshot the card by 0.1rem and 0.2rem and painted
+     over its border, so the titles looked borderless. */
+  .card > h2:first-child, .card > h3:first-child {
+    margin: -0.75rem -0.8rem 0.75rem;
+    padding-left: 0.8rem;
+    padding-right: 0.8rem;
+  }
   .fleet-tools { gap: 0.4rem; }
   .fleet-tools input[type="search"] { width: 100%; }
   .topbar-wordmark { letter-spacing: 0.1em; }

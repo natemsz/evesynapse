@@ -32,3 +32,24 @@ func TestWordmarkSizeAndPhoneHeader(t *testing.T) {
 		}
 	}
 }
+
+// TestPhoneCardTitlesMatchTheCardPadding: a card's title bleeds to the
+// card's edges with negative margins equal to the card's padding. When
+// the phone breakpoint shrinks the padding, the margins must shrink
+// with it, or the title overshoots the card and paints over its
+// border (3.2px each side and 1.6px on top at 375px, measured).
+func TestPhoneCardTitlesMatchTheCardPadding(t *testing.T) {
+	raw, err := fs.ReadFile(staticFS, "static/style.css")
+	if err != nil {
+		t.Fatalf("read style.css: %v", err)
+	}
+	css := string(raw)
+	for _, want := range []string{
+		".card { padding: 0.75rem 0.8rem 0.9rem; }",
+		".card > h2:first-child, .card > h3:first-child {\n    margin: -0.75rem -0.8rem 0.75rem;",
+	} {
+		if !strings.Contains(css, want) {
+			t.Errorf("style.css missing %q", want)
+		}
+	}
+}

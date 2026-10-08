@@ -167,6 +167,7 @@ a:hover { color: var(--success); text-decoration: underline; }
    (next rule), opening up against the condensed
    category labels. Body text keeps the Shentox stack. */
 h1, h2, h3, h4, .wordmark, .btn, thead th, .badge,
+:where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])),
 .branch > summary,
 .sidenav a.navlink {
   font-family: "Univers Next Pro Condensed", "Univers Next Pro", -apple-system, "SF Pro Display", "Segoe UI", "Inter", sans-serif;
@@ -526,8 +527,16 @@ h3 + .tw > table, h3 + table {
 .foldable { position: relative; margin-bottom: 1.25rem; }
 .foldable.has-fold > h2:first-child, .foldable.has-fold > h3:first-child { padding-right: 2.2rem; position: relative; }
 
-/* --- buttons --- */
-.btn {
+/* --- buttons ---
+   One look for every button: the ember gradient of the ship-fit
+   tool. A button that carries a class of its own (the fold, drag,
+   nav and fit-tool controls) keeps the styling that class gives
+   it; any plain <button> or submit/button <input> with no class at
+   all falls back to this one instead of the browser default. The
+   plain ones are matched through :where(), so they have no
+   specificity of their own and anything more specific wins. */
+.btn,
+:where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])) {
   display: inline-block;
   padding: 0.42rem 0.85rem;
   color: #2a1302;
@@ -538,15 +547,38 @@ h3 + .tw > table, h3 + table {
   text-shadow: 0 1px 0 rgba(255, 214, 150, 0.35);
   cursor: pointer;
 }
-.btn:hover {
+.btn:hover,
+:where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])):hover:not(:disabled) {
   background: linear-gradient(to bottom, #ff6a1a, #d63c14 60%, #a12808) padding-box,
     linear-gradient(135deg, #ffd27a, #ff6a1a 50%, #a12808) border-box;
   color: var(--text-bright);
   text-decoration: none;
 }
-.btn:focus-visible, a:focus-visible {
+.btn:focus-visible, a:focus-visible,
+:where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])):focus-visible {
   outline: none;
   box-shadow: 0 0 8px rgba(255, 106, 26, 0.55);
+}
+/* Destructive actions (remove a target, delete a plan): the same ember
+   button in the theme's red, so they read as different at a glance. */
+.btn.btn-danger {
+  color: #fff3ec;
+  background: linear-gradient(to bottom, #e8664a, #c62f10 55%, #8f1d06) padding-box,
+    linear-gradient(135deg, #ffb09a, #c62f10 50%, #6b1604) border-box;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+.btn.btn-danger:hover:not(:disabled) {
+  background: linear-gradient(to bottom, #c62f10, #a02208 60%, #6b1604) padding-box,
+    linear-gradient(135deg, #ffb09a, #c62f10 50%, #6b1604) border-box;
+  color: #fff3ec;
+}
+/* A button that cannot be pressed right now (a move-up on the first
+   row, say) reads as inert: dimmed, flat, no pointer. */
+.btn:disabled, .btn[aria-disabled="true"],
+:where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])):disabled {
+  opacity: 0.4;
+  filter: saturate(0.5);
+  cursor: not-allowed;
 }
 
 /* --- tables --- */
@@ -2720,7 +2752,8 @@ html[data-theme="light"] .cardspan,
 html[data-theme="light"] .modal-close,
 html[data-theme="light"] .quickjump-btn { background: #fffdf9; border-color: #d3c7ae; }
 /* The ember gradient button keeps its dark paint in light mode. */
-html[data-theme="light"] .btn:hover { color: #fff6e6; }
+html[data-theme="light"] .btn:hover,
+html[data-theme="light"] :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])):hover:not(:disabled) { color: #fff6e6; }
 /* Tables. */
 html[data-theme="light"] table { border-color: #d9cfba; }
 html[data-theme="light"] th,

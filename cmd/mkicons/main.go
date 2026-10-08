@@ -1,24 +1,33 @@
-// Command mkicons draws every icon from the one logo file, so that
-// changing the logo is replacing internal/app/static/logo.svg and
-// running this:
+// Command mkicons draws every raster icon from the logo's SVG files,
+// so that changing the logo is replacing those files and running this:
 //
 //	go run ./cmd/mkicons
 //
-// From logo.svg it writes, beside it:
+// Three drawings live in internal/app/static and are served as they
+// are:
 //
-//	favicon.svg            the logo on the app's dark rounded square
-//	favicon.ico            the same at 16, 32 and 48 pixels
-//	icon-192.png           the installable app's icons
+//	logo.svg     the mark alone, shown in the page header
+//	icon.svg     the mark on its rounded tile: the app icon
+//	favicon.svg  the simplified tile that stays legible at 16 pixels
+//
+// From icon.svg and favicon.svg it writes, beside them:
+//
+//	favicon.ico            16 and 32 pixels from favicon.svg, 48 from icon.svg
+//	icon-192.png           the installable app's icons, corners clear
 //	icon-512.png
-//	icon-maskable-512.png  with the wider margin a masked icon needs
-//	apple-touch-icon.png   180 pixels
+//	icon-maskable-512.png  the tile to every edge, the mark kept inside
+//	                       the middle that a mask never crops
+//	apple-touch-icon.png   180 pixels, the tile to every edge (iOS
+//	                       rounds the corners itself)
+//	badge-96.png           the mark alone in white on nothing: the small
+//	                       monochrome picture a phone shows beside a
+//	                       notification
 //
-// The page header shows logo.svg itself.
-//
-// It reads the kind of SVG a logo export is: filled <path> elements
-// whose data uses the absolute M, L, C and Z commands, and <circle>
-// elements, each with a plain hex fill. It says so and stops if the
-// file uses anything else; it does not guess. It is never deployed.
+// It reads the kind of SVG these files are: a 64-unit viewBox holding
+// <rect>, <path> (absolute M, L, C and Z) and <circle> elements, each
+// filled with a plain hex colour or a <linearGradient>. It says so and
+// stops if a file uses anything else; it does not guess. It is never
+// deployed.
 package main
 
 import (
@@ -37,27 +46,59 @@ import (
 	"strings"
 )
 
-// background is the app's dark tile colour (the manifest's
-// background_color and theme_color).
-var background = color.RGBA{0x0d, 0x05, 0x03, 0xff}
-
-// point is a position in the logo's own coordinates.
+// point is a position in the drawing's own coordinates.
 type point struct{ x, y float64 }
+
+type rgb struct{ r, g, b float64 }
+
+// gradient is a <linearGradient> in the default units: its line runs
+// between two points of the filled shape's own bounding box.
+type gradient struct {
+	from, to point
+	offsets  []float64
+	colors   []rgb
+}
+
+// at is the gradient's colour at t along its line.
+func (g *gradient) at(t float64) rgb {
+	if t <= g.offsets[0] {
+		return g.colors[0]
+	}
+	for i := 1; i < len(g.offsets); i++ {
+		if t <= g.offsets[i] {
+			a, b := g.colors[i-1], g.colors[i]
+			f := (t - g.offsets[i-1]) / (g.offsets[i] - g.offsets[i-1])
+			return rgb{a.r + (b.r-a.r)*f, a.g + (b.g-a.g)*f, a.b + (b.b-a.b)*f}
+		}
+	}
+	return g.colors[len(g.colors)-1]
+}
 
 // shape is one filled outline: closed loops of straight segments
 // (curves already flattened), filled by the even-odd rule.
 type shape struct {
-	fill  color.RGBA
+	fill  rgb
+	grad  *gradient // set: the fill is this gradient, not fill
 	loops [][]point
+	// tile: this is the <rect> behind the mark.
+	tile bool
 }
 
-// logo is the parsed drawing and its viewBox.
-type logo struct {
+// drawing is a parsed SVG file and its viewBox.
+type drawing struct {
 	width, height float64
 	shapes        []shape
-	// markup is the drawing's own elements, as written, for embedding
-	// in favicon.svg.
-	markup string
+}
+
+// variant is one way of drawing a file.
+type variant struct {
+	// square draws the tile to every edge instead of with its rounded
+	// corners.
+	square bool
+	// mark scales everything but the tile about the centre.
+	mark float64
+	// badge leaves the tile out and draws the mark in white.
+	badge bool
 }
 
 func main() {
@@ -72,102 +113,199 @@ func main() {
 }
 
 func run(dir string) error {
-	raw, err := os.ReadFile(filepath.Join(dir, "logo.svg"))
+	read := func(name string) (*drawing, error) {
+		raw, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			return nil, err
+		}
+		d, err := parseDrawing(string(raw))
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", name, err)
+		}
+		return d, nil
+	}
+	icon, err := read("icon.svg")
 	if err != nil {
 		return err
 	}
-	lg, err := parseLogo(string(raw))
+	favicon, err := read("favicon.svg")
 	if err != nil {
-		return fmt.Errorf("logo.svg: %w", err)
+		return err
 	}
-	// How much of the tile's height the logo takes. A masked icon may
-	// be cropped to a circle, so its logo stays inside the middle.
-	const plain, masked = 0.74, 0.54
 
-	pngs := map[string][]byte{}
+	plain := variant{mark: 1}
+	files := map[string][]byte{}
 	for _, out := range []struct {
 		name string
+		from *drawing
 		size int
-		fill float64
+		how  variant
 	}{
-		{"icon-192.png", 192, plain},
-		{"icon-512.png", 512, plain},
-		{"icon-maskable-512.png", 512, masked},
-		{"apple-touch-icon.png", 180, plain},
+		{"icon-192.png", icon, 192, plain},
+		{"icon-512.png", icon, 512, plain},
+		// A mask may crop to a circle four fifths of the icon across.
+		{"icon-maskable-512.png", icon, 512, variant{square: true, mark: 0.8}},
+		{"apple-touch-icon.png", icon, 180, variant{square: true, mark: 1}},
+		{"badge-96.png", favicon, 96, variant{badge: true, mark: 1.25}},
 	} {
-		data, err := encodePNG(lg.render(out.size, out.fill))
+		data, err := encodePNG(out.from.render(out.size, out.how))
 		if err != nil {
 			return err
 		}
-		pngs[out.name] = data
+		files[out.name] = data
 	}
 	var ico [][]byte
-	for _, size := range []int{16, 32, 48} {
-		data, err := encodePNG(lg.render(size, 0.86))
+	for _, entry := range []struct {
+		from *drawing
+		size int
+	}{{favicon, 16}, {favicon, 32}, {icon, 48}} {
+		data, err := encodePNG(entry.from.render(entry.size, plain))
 		if err != nil {
 			return err
 		}
 		ico = append(ico, data)
 	}
-	pngs["favicon.ico"] = encodeICO([]int{16, 32, 48}, ico)
-	pngs["favicon.svg"] = []byte(lg.faviconSVG(0.74))
+	files["favicon.ico"] = encodeICO([]int{16, 32, 48}, ico)
 
-	names := make([]string, 0, len(pngs))
-	for name := range pngs {
+	names := make([]string, 0, len(files))
+	for name := range files {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		if err := os.WriteFile(filepath.Join(dir, name), pngs[name], 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, name), files[name], 0o644); err != nil {
 			return err
 		}
-		fmt.Printf("wrote %s (%d bytes)\n", filepath.Join(dir, name), len(pngs[name]))
+		fmt.Printf("wrote %s (%d bytes)\n", filepath.Join(dir, name), len(files[name]))
 	}
 	return nil
 }
 
 var (
-	viewBoxRe = regexp.MustCompile(`viewBox="\s*0[ ,]+0[ ,]+([0-9.]+)[ ,]+([0-9.]+)\s*"`)
-	elementRe = regexp.MustCompile(`(?s)<(path|circle)\b([^>]*?)/>`)
-	otherRe   = regexp.MustCompile(`<(rect|ellipse|polygon|polyline|line|g|use|text|image|linearGradient|radialGradient|mask|clipPath|filter|style)\b`)
-	attrRe    = regexp.MustCompile(`([a-zA-Z-]+)="([^"]*)"`)
-	numberRe  = regexp.MustCompile(`[-+]?(?:[0-9]*\.[0-9]+|[0-9]+)(?:[eE][-+]?[0-9]+)?`)
-	hexRe     = regexp.MustCompile(`^#([0-9a-fA-F]{6})$`)
+	viewBoxRe  = regexp.MustCompile(`viewBox="\s*0[ ,]+0[ ,]+([0-9.]+)[ ,]+([0-9.]+)\s*"`)
+	elementRe  = regexp.MustCompile(`(?s)<(rect|path|circle)\b([^>]*?)/>`)
+	gradientRe = regexp.MustCompile(`(?s)<linearGradient\b([^>]*)>(.*?)</linearGradient>`)
+	stopRe     = regexp.MustCompile(`(?s)<stop\b([^>]*?)/>`)
+	otherRe    = regexp.MustCompile(`<(ellipse|polygon|polyline|line|g|use|text|image|radialGradient|mask|clipPath|filter|style)\b`)
+	attrRe     = regexp.MustCompile(`([a-zA-Z0-9-]+)="([^"]*)"`)
+	numberRe   = regexp.MustCompile(`[-+]?(?:[0-9]*\.[0-9]+|[0-9]+)(?:[eE][-+]?[0-9]+)?`)
+	hexRe      = regexp.MustCompile(`^#([0-9a-fA-F]{6})$`)
+	urlRe      = regexp.MustCompile(`^url\(#([^)]+)\)$`)
 )
 
-func parseLogo(svg string) (*logo, error) {
+func attributes(raw string) map[string]string {
+	attrs := map[string]string{}
+	for _, a := range attrRe.FindAllStringSubmatch(raw, -1) {
+		attrs[a[1]] = a[2]
+	}
+	return attrs
+}
+
+func hexColor(s string) (rgb, bool) {
+	hex := hexRe.FindStringSubmatch(s)
+	if hex == nil {
+		return rgb{}, false
+	}
+	v, _ := strconv.ParseUint(hex[1], 16, 32)
+	return rgb{float64(v >> 16 & 0xff), float64(v >> 8 & 0xff), float64(v & 0xff)}, true
+}
+
+// number reads an attribute that may be absent (then it is fallback).
+func number(attrs map[string]string, name string, fallback float64) (float64, error) {
+	raw, has := attrs[name]
+	if !has {
+		return fallback, nil
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%s=%q is not a number", name, raw)
+	}
+	return v, nil
+}
+
+func parseGradients(svg string) (map[string]*gradient, error) {
+	out := map[string]*gradient{}
+	for _, m := range gradientRe.FindAllStringSubmatch(svg, -1) {
+		attrs := attributes(m[1])
+		for _, unsupported := range []string{"gradientUnits", "gradientTransform", "spreadMethod", "href"} {
+			if _, has := attrs[unsupported]; has {
+				return nil, fmt.Errorf("a <linearGradient> has a %s attribute, which this tool does not draw", unsupported)
+			}
+		}
+		g := &gradient{}
+		var err error
+		coords := []struct {
+			name     string
+			into     *float64
+			fallback float64
+		}{{"x1", &g.from.x, 0}, {"y1", &g.from.y, 0}, {"x2", &g.to.x, 1}, {"y2", &g.to.y, 0}}
+		for _, c := range coords {
+			if *c.into, err = number(attrs, c.name, c.fallback); err != nil {
+				return nil, fmt.Errorf("a <linearGradient>: %w", err)
+			}
+		}
+		for _, s := range stopRe.FindAllStringSubmatch(m[2], -1) {
+			stop := attributes(s[1])
+			if _, has := stop["stop-opacity"]; has {
+				return nil, fmt.Errorf("a gradient stop has a stop-opacity, which this tool does not draw")
+			}
+			offset, err := number(stop, "offset", 0)
+			if err != nil {
+				return nil, fmt.Errorf("a gradient stop: %w", err)
+			}
+			c, ok := hexColor(stop["stop-color"])
+			if !ok {
+				return nil, fmt.Errorf(`a gradient stop has stop-color=%q; a plain colour like "#ff6a1a" is needed`, stop["stop-color"])
+			}
+			g.offsets = append(g.offsets, offset)
+			g.colors = append(g.colors, c)
+		}
+		if len(g.colors) == 0 || !sort.Float64sAreSorted(g.offsets) {
+			return nil, fmt.Errorf("a <linearGradient> needs stops in rising order")
+		}
+		out[attrs["id"]] = g
+	}
+	return out, nil
+}
+
+func parseDrawing(svg string) (*drawing, error) {
 	box := viewBoxRe.FindStringSubmatch(svg)
 	if box == nil {
 		return nil, fmt.Errorf(`no viewBox="0 0 W H"`)
 	}
-	lg := &logo{}
-	lg.width, _ = strconv.ParseFloat(box[1], 64)
-	lg.height, _ = strconv.ParseFloat(box[2], 64)
-	if lg.width <= 0 || lg.height <= 0 {
-		return nil, fmt.Errorf("an empty viewBox")
+	d := &drawing{}
+	d.width, _ = strconv.ParseFloat(box[1], 64)
+	d.height, _ = strconv.ParseFloat(box[2], 64)
+	if d.width <= 0 || d.width != d.height {
+		return nil, fmt.Errorf("the viewBox is %vx%v; a square one is needed", d.width, d.height)
 	}
 	if other := otherRe.FindStringSubmatch(svg); other != nil {
-		return nil, fmt.Errorf("it uses <%s>; this tool draws only filled <path> and <circle> elements", other[1])
+		return nil, fmt.Errorf("it uses <%s>; this tool draws only <rect>, <path> and <circle> with plain or linear-gradient fills", other[1])
 	}
-	var markup []string
+	gradients, err := parseGradients(svg)
+	if err != nil {
+		return nil, err
+	}
 	for _, el := range elementRe.FindAllStringSubmatch(svg, -1) {
-		attrs := map[string]string{}
-		for _, a := range attrRe.FindAllStringSubmatch(el[2], -1) {
-			attrs[a[1]] = a[2]
-		}
+		attrs := attributes(el[2])
 		for _, unsupported := range []string{"transform", "stroke", "style", "opacity", "fill-opacity"} {
 			if _, has := attrs[unsupported]; has {
 				return nil, fmt.Errorf("a <%s> has a %s attribute, which this tool does not draw", el[1], unsupported)
 			}
 		}
-		hex := hexRe.FindStringSubmatch(attrs["fill"])
-		if hex == nil {
-			return nil, fmt.Errorf(`a <%s> has fill=%q; a plain colour like "#F87A2D" is needed`, el[1], attrs["fill"])
+		sh := shape{tile: el[1] == "rect"}
+		if ref := urlRe.FindStringSubmatch(attrs["fill"]); ref != nil {
+			if sh.grad = gradients[ref[1]]; sh.grad == nil {
+				return nil, fmt.Errorf("a <%s> is filled with %q, which is not a <linearGradient> in the file", el[1], attrs["fill"])
+			}
+		} else if c, ok := hexColor(attrs["fill"]); ok {
+			sh.fill = c
+		} else {
+			return nil, fmt.Errorf(`a <%s> has fill=%q; a plain colour like "#ff6a1a" or a linear gradient is needed`, el[1], attrs["fill"])
 		}
-		rgb, _ := strconv.ParseUint(hex[1], 16, 32)
-		sh := shape{fill: color.RGBA{uint8(rgb >> 16), uint8(rgb >> 8), uint8(rgb), 0xff}}
-		var err error
 		switch el[1] {
+		case "rect":
+			sh.loops, err = rectLoop(attrs)
 		case "path":
 			sh.loops, err = parsePath(attrs["d"])
 		case "circle":
@@ -176,14 +314,46 @@ func parseLogo(svg string) (*logo, error) {
 		if err != nil {
 			return nil, err
 		}
-		lg.shapes = append(lg.shapes, sh)
-		markup = append(markup, strings.TrimSpace(el[0]))
+		d.shapes = append(d.shapes, sh)
 	}
-	if len(lg.shapes) == 0 {
-		return nil, fmt.Errorf("no <path> or <circle> found")
+	if len(d.shapes) == 0 {
+		return nil, fmt.Errorf("no <rect>, <path> or <circle> found")
 	}
-	lg.markup = strings.Join(markup, "")
-	return lg, nil
+	return d, nil
+}
+
+// rectLoop is a rectangle, its corners rounded by rx.
+func rectLoop(attrs map[string]string) ([][]point, error) {
+	var x, y, w, h, rx float64
+	var err error
+	for _, a := range []struct {
+		name string
+		into *float64
+	}{{"x", &x}, {"y", &y}, {"width", &w}, {"height", &h}, {"rx", &rx}} {
+		if *a.into, err = number(attrs, a.name, 0); err != nil {
+			return nil, fmt.Errorf("a <rect>: %w", err)
+		}
+	}
+	if w <= 0 || h <= 0 {
+		return nil, fmt.Errorf("a <rect> needs a width and a height")
+	}
+	rx = math.Min(rx, math.Min(w, h)/2)
+	if rx <= 0 {
+		return [][]point{{{x, y}, {x + w, y}, {x + w, y + h}, {x, y + h}}}, nil
+	}
+	const pieces = 24
+	var loop []point
+	// Each corner's centre, and the angle its arc starts at.
+	for _, c := range []struct{ cx, cy, start float64 }{
+		{x + w - rx, y + rx, -math.Pi / 2}, {x + w - rx, y + h - rx, 0},
+		{x + rx, y + h - rx, math.Pi / 2}, {x + rx, y + rx, math.Pi},
+	} {
+		for i := 0; i <= pieces; i++ {
+			a := c.start + math.Pi/2*float64(i)/pieces
+			loop = append(loop, point{c.cx + rx*math.Cos(a), c.cy + rx*math.Sin(a)})
+		}
+	}
+	return [][]point{loop}, nil
 }
 
 // parsePath reads path data made of absolute M, L, C and Z commands
@@ -285,41 +455,77 @@ func circleLoop(attrs map[string]string) ([][]point, error) {
 	return [][]point{loop}, nil
 }
 
-// placement is how the logo sits in a square tile: scaled so its
-// height is fill of the tile's, and centred.
-func (lg *logo) placement(tile, fill float64) (scale, dx, dy float64) {
-	scale = tile * fill / math.Max(lg.width, lg.height)
-	return scale, (tile - lg.width*scale) / 2, (tile - lg.height*scale) / 2
+// bounds is the box around a shape's loops.
+func bounds(loops [][]point) (min, max point) {
+	min = point{math.Inf(1), math.Inf(1)}
+	max = point{math.Inf(-1), math.Inf(-1)}
+	for _, loop := range loops {
+		for _, p := range loop {
+			min.x, min.y = math.Min(min.x, p.x), math.Min(min.y, p.y)
+			max.x, max.y = math.Max(max.x, p.x), math.Max(max.y, p.y)
+		}
+	}
+	return min, max
 }
 
-// render draws the logo on a square dark tile, size pixels a side.
-// Each pixel is sampled on a 4x4 grid, so edges come out smooth.
-func (lg *logo) render(size int, fill float64) *image.RGBA {
+// render draws the file size pixels a side, on nothing: what no
+// shape covers stays clear. Each pixel is sampled on a 4x4 grid, so
+// edges come out smooth.
+func (d *drawing) render(size int, how variant) *image.NRGBA {
 	const sub = 4
-	img := image.NewRGBA(image.Rect(0, 0, size, size))
-	scale, dx, dy := lg.placement(float64(size), fill)
-
-	type rgb struct{ r, g, b float64 }
+	scale := float64(size) / d.width
+	centre := d.width / 2
 	n := size * size
+	// Colour and coverage so far, colour weighted by coverage.
 	acc := make([]rgb, n)
-	for i := range acc {
-		acc[i] = rgb{float64(background.R), float64(background.G), float64(background.B)}
-	}
+	alpha := make([]float64, n)
 	weight := 1.0 / (sub * sub)
-	for _, sh := range lg.shapes {
+
+	for _, sh := range d.shapes {
+		if sh.tile && how.badge {
+			continue
+		}
+		loops := sh.loops
+		switch {
+		case sh.tile && how.square:
+			loops = [][]point{{{0, 0}, {d.width, 0}, {d.width, d.height}, {0, d.height}}}
+		case !sh.tile && how.mark != 1:
+			loops = make([][]point, len(sh.loops))
+			for i, loop := range sh.loops {
+				for _, p := range loop {
+					loops[i] = append(loops[i], point{centre + (p.x-centre)*how.mark, centre + (p.y-centre)*how.mark})
+				}
+			}
+		}
+		lo, hi := bounds(loops)
+		paint := func(x, y float64) rgb {
+			if how.badge {
+				return rgb{255, 255, 255}
+			}
+			if sh.grad == nil {
+				return sh.fill
+			}
+			// The pixel's place in the shape's box, then how far along
+			// the gradient's line that is.
+			px, py := (x/scale-lo.x)/(hi.x-lo.x), (y/scale-lo.y)/(hi.y-lo.y)
+			g := sh.grad
+			vx, vy := g.to.x-g.from.x, g.to.y-g.from.y
+			return g.at(((px-g.from.x)*vx + (py-g.from.y)*vy) / (vx*vx + vy*vy))
+		}
+
 		cover := make([]float64, n)
 		var xs []float64
 		for row := 0; row < size*sub; row++ {
 			y := (float64(row) + 0.5) / sub
 			xs = xs[:0]
-			for _, loop := range sh.loops {
+			for _, loop := range loops {
 				for i := range loop {
 					a, b := loop[i], loop[(i+1)%len(loop)]
-					ay, by := a.y*scale+dy, b.y*scale+dy
+					ay, by := a.y*scale, b.y*scale
 					if (ay <= y) == (by <= y) {
 						continue // the edge does not cross this row
 					}
-					ax, bx := a.x*scale+dx, b.x*scale+dx
+					ax, bx := a.x*scale, b.x*scale
 					xs = append(xs, ax+(y-ay)*(bx-ax)/(by-ay))
 				}
 			}
@@ -346,23 +552,24 @@ func (lg *logo) render(size int, fill float64) *image.RGBA {
 			if c > 1 {
 				c = 1
 			}
-			acc[i].r += (float64(sh.fill.R) - acc[i].r) * c
-			acc[i].g += (float64(sh.fill.G) - acc[i].g) * c
-			acc[i].b += (float64(sh.fill.B) - acc[i].b) * c
+			// This shape over what is there already.
+			p := paint(float64(i%size)+0.5, float64(i/size)+0.5)
+			acc[i].r = p.r*c + acc[i].r*(1-c)
+			acc[i].g = p.g*c + acc[i].g*(1-c)
+			acc[i].b = p.b*c + acc[i].b*(1-c)
+			alpha[i] = c + alpha[i]*(1-c)
 		}
 	}
-	for i, c := range acc {
-		img.SetRGBA(i%size, i/size, color.RGBA{uint8(c.r + 0.5), uint8(c.g + 0.5), uint8(c.b + 0.5), 0xff})
+
+	img := image.NewNRGBA(image.Rect(0, 0, size, size))
+	for i, a := range alpha {
+		if a <= 0 {
+			continue
+		}
+		c := acc[i]
+		img.SetNRGBA(i%size, i/size, color.NRGBA{uint8(c.r/a + 0.5), uint8(c.g/a + 0.5), uint8(c.b/a + 0.5), uint8(a*255 + 0.5)})
 	}
 	return img
-}
-
-// faviconSVG is the logo on the app's rounded dark tile, as SVG.
-func (lg *logo) faviconSVG(fill float64) string {
-	const tile = 48
-	scale, dx, dy := lg.placement(tile, fill)
-	return fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d"><rect width="%d" height="%d" rx="10" fill="#0d0503"/><g transform="translate(%.4f %.4f) scale(%.6f)">%s</g></svg>`+"\n",
-		tile, tile, tile, tile, dx, dy, scale, lg.markup)
 }
 
 func encodePNG(img image.Image) ([]byte, error) {

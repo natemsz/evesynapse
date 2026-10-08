@@ -175,7 +175,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		t.Errorf("wordmark at %d, glyph at %d in topbar; want the glyph inside the wordmark link", wordmarkAt, sGlyphAt)
 	}
 	// (SYNAPSE is one span per letter: each gets its own solid colour.)
-	if !strings.Contains(topbar, " alt=\"\" width=\"454\" height=\"500\"><span><span class=\"wm-eve\">EVE</span><span class=\"wm-syn\"><span>S</span><span>Y</span><span>N</span><span>A</span><span>P</span><span>S</span><span>E</span></span></span></a>") {
+	if !strings.Contains(topbar, " alt=\"\" width=\"64\" height=\"64\"><span><span class=\"wm-eve\">EVE</span><span class=\"wm-syn\"><span>S</span><span>Y</span><span>N</span><span>A</span><span>P</span><span>S</span><span>E</span></span></span></a>") {
 		t.Error("glyph does not lead the full EVESYNAPSE wordmark")
 	}
 
@@ -456,11 +456,11 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	}
 	fav := frec.Body.String()
 	for _, want := range []string{
-		`viewBox="0 0 48 48"`,
-		`<rect width="48" height="48" rx="10" fill="#0d0503"/>`,
-		// The logo itself is drawn from logo.svg (see
-		// TestIconsAreDrawnFromTheLogo): its white centre is there.
-		`fill="#FFFFFF"/>`,
+		// The simplified shard on its orange tile (static/favicon.svg,
+		// served as supplied).
+		`viewBox="0 0 64 64"`,
+		`<rect width="64" height="64" rx="12" fill="url(#esf-tile)"/>`,
+		`fill="#1a0904"/>`,
 	} {
 		if !strings.Contains(fav, want) {
 			t.Errorf("favicon.svg missing %q", want)

@@ -36,9 +36,6 @@ import (
 // cycle.
 // ---------------------------------------------------------------------------
 
-// planetScope is the only SSO scope gating the colony GETs.
-const planetScope = "esi-planets.manage_planets.v1"
-
 // piScopeDetail is the user-safe fetch-state detail recorded when
 // ESI refuses the colonies endpoint for want of the scope. Pages
 // show it (plus the consent-screen wording) as the "not enabled"

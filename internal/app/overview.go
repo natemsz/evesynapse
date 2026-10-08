@@ -73,19 +73,20 @@ type widgetDef struct {
 	Title       string
 	Description string
 	Size        string // widgetSizeFull | widgetSizeFlex
+	Module      string // id of the moduleManifest entry that powers it
 }
 
 var homeWidgetCatalog = []widgetDef{
-	{widgetBriefing, "Briefing", "What changed since you last looked, and what needs you in the next day.", widgetSizeFlex},
-	{widgetFleet, "Fleet overview", "Every linked character at a glance: where they are, what they're flying, what they're training.", widgetSizeFull},
-	{widgetAttention, "Needs attention", "Characters that need you: re-links, idle queues, finished jobs, expiring orders, waiting contracts.", widgetSizeFull},
-	{widgetNetWorth, "Net worth", "Wallets, assets and open-order escrow across all characters, at market prices. An estimate.", widgetSizeFlex},
-	{widgetIndustry, "Industry", "Active industry jobs across characters, soonest delivery first.", widgetSizeFlex},
-	{widgetPI, "Planetary industry", "Colonies across your characters: extractor timers, expired heads, and the next planet needing a visit.", widgetSizeFlex},
-	{widgetMarket, "Market", "Open orders across characters: counts, sell/buy value, orders expiring soonest.", widgetSizeFlex},
-	{widgetWatchlist, "Market watchlist", "The items you're watching: latest prices, 7- and 30-day moves, and a flag when one crosses your alert line.", widgetSizeFlex},
-	{widgetSkills, "Skills", "The next skill finishes across the fleet, plus who isn't training.", widgetSizeFlex},
-	{widgetServer, "Tranquility", "Server status: players online.", widgetSizeFlex},
+	{widgetBriefing, "Briefing", "What changed since you last looked, and what needs you in the next day.", widgetSizeFlex, "briefing"},
+	{widgetFleet, "Fleet overview", "Every linked character at a glance: where they are, what they're flying, what they're training.", widgetSizeFull, "fleet"},
+	{widgetAttention, "Needs attention", "Characters that need you: re-links, idle queues, finished jobs, expiring orders, waiting contracts.", widgetSizeFull, "attention"},
+	{widgetNetWorth, "Net worth", "Wallets, assets and open-order escrow across all characters, at market prices. An estimate.", widgetSizeFlex, "networth"},
+	{widgetIndustry, "Industry", "Active industry jobs across characters, soonest delivery first.", widgetSizeFlex, "industry"},
+	{widgetPI, "Planetary industry", "Colonies across your characters: extractor timers, expired heads, and the next planet needing a visit.", widgetSizeFlex, "planets"},
+	{widgetMarket, "Market", "Open orders across characters: counts, sell/buy value, orders expiring soonest.", widgetSizeFlex, "market"},
+	{widgetWatchlist, "Market watchlist", "The items you're watching: latest prices, 7- and 30-day moves, and a flag when one crosses your alert line.", widgetSizeFlex, "market_public"},
+	{widgetSkills, "Skills", "The next skill finishes across the fleet, plus who isn't training.", widgetSizeFlex, "skills"},
+	{widgetServer, "Tranquility", "Server status: players online.", widgetSizeFlex, "server"},
 }
 
 // defaultHomeLayout is what accounts with no saved layout get:

@@ -228,3 +228,28 @@ func TestSignOutIsAPost(t *testing.T) {
 		t.Fatalf("after sign-out: /characters/ status %d, want the 303 home", code)
 	}
 }
+
+// TestContentSecurityPolicyAllowsCloudflare: the scripts Cloudflare
+// adds to pages are allowed by name, its inline ones through a nonce
+// that is different on every response, and nothing wider than that.
+func TestContentSecurityPolicyAllowsCloudflare(t *testing.T) {
+	a, b := scriptNonce(), scriptNonce()
+	if a == b || len(a) < 20 {
+		t.Fatalf("nonces %q and %q: want two different values of at least 128 bits", a, b)
+	}
+	csp := contentSecurityPolicy(a)
+	for _, want := range []string{
+		"script-src 'self' 'nonce-" + a + "' https://static.cloudflareinsights.com https://ajax.cloudflare.com; ",
+		"connect-src 'self' https://cloudflareinsights.com; ",
+		"style-src 'self'; ",
+	} {
+		if !strings.Contains(csp, want) {
+			t.Errorf("Content-Security-Policy %q is missing %q", csp, want)
+		}
+	}
+	for _, banned := range []string{"unsafe-inline", "unsafe-eval", "*", "http://"} {
+		if strings.Contains(csp, banned) {
+			t.Errorf("Content-Security-Policy %q contains %q", csp, banned)
+		}
+	}
+}

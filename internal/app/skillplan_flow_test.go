@@ -98,8 +98,8 @@ func (f *planFixture) planIDs(characterID int64) []db.SkillPlan {
 // TestSkillPlanActionsLandOnARealPage: every plan action does its work
 // and then redirects; the redirect must go to a page that exists. They
 // used to go to /skills/plans/ (with a slash) while the route is
-// /skills/plans, so creating a plan, moving a skill, deleting a plan or
-// adding the Magic 14 template all ended on a 404 after succeeding.
+// /skills/plans, so creating a plan, moving a skill or deleting a plan all ended on a
+// 404 after succeeding.
 func TestSkillPlanActionsLandOnARealPage(t *testing.T) {
 	f := newPlanFixture(t)
 	const char = "90000001"
@@ -132,11 +132,6 @@ func TestSkillPlanActionsLandOnARealPage(t *testing.T) {
 	code, _, landed = f.follow("/skills/plans/item-remove", url.Values{"character": {char}, "plan": {plan}, "skill": {"1003"}})
 	expect("item-remove", code, landed)
 
-	// Magic 14: this fixture has none of its skills, so it creates nothing,
-	// but it must still land on the planner.
-	code, _, landed = f.follow("/skills/plans/from-template", url.Values{"character": {char}, "template": {"magic14"}})
-	expect("from-template", code, landed)
-
 	code, _, landed = f.follow("/skills/plans/delete", url.Values{"character": {char}, "plan": {plan}})
 	expect("delete", code, landed)
 	if n := len(f.planIDs(fixtureCharA)); n != 0 {
@@ -152,93 +147,34 @@ func TestSkillPlanActionsLandOnARealPage(t *testing.T) {
 	}
 }
 
-// seedMagicSkills adds three of the Magic 14 skills to the fixture's SDE
-// (rank 1, group 300) and trains the character to V in the first two:
-// CPU Management and Power Grid Management are done, Mechanics is not.
-func (f *planFixture) seedMagicSkills() {
-	f.t.Helper()
-	ctx := context.Background()
-	for _, stmt := range []string{
-		`INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES
-			(3301, 'CPU Management', 300, 0, 1), (3302, 'Power Grid Management', 300, 0, 1), (3303, 'Mechanics', 300, 0, 1)`,
-		`INSERT INTO sde_skill_meta (type_id, rank, primary_attr, secondary_attr) VALUES
-			(3301, 1, 165, 166), (3302, 1, 165, 166), (3303, 1, 165, 166)`,
-	} {
-		if _, err := f.app.db.ExecContext(ctx, stmt); err != nil {
-			f.t.Fatalf("seed magic skills: %v", err)
-		}
-	}
-	// Level V of a rank-1 skill is 250 * 2^(2.5*4) = 256,000 SP.
-	seedSnapshot(f.t, f.q, fixtureCharA, esi.SnapSkills, esi.Skills{
-		TotalSP: 513414,
-		Skills: []esi.Skill{
-			{SkillID: 1001, SkillpointsInSkill: 1414, ActiveSkillLevel: 2, TrainedSkillLevel: 2},
-			{SkillID: 3301, SkillpointsInSkill: 256000, ActiveSkillLevel: 5, TrainedSkillLevel: 5},
-			{SkillID: 3302, SkillpointsInSkill: 256000, ActiveSkillLevel: 5, TrainedSkillLevel: 5},
-		},
-	})
-}
-
 // TestPlansLeaveOutSkillsAlreadyTrained: a plan is for what is left to
-// learn. The Magic 14 template skips the skills the character already
-// has at V (and says which), makes no plan at all when everything is
-// trained, and a single skill the character already has at that level is
-// refused instead of added.
+// learn. A skill the character already has at that level is refused
+// instead of added, and a higher level needs no rows for the levels
+// already trained.
 func TestPlansLeaveOutSkillsAlreadyTrained(t *testing.T) {
 	f := newPlanFixture(t)
-	f.seedMagicSkills()
 	const char = "90000001"
 
-	// Magic 14: Mechanics is the only one of the three still to train.
-	code, body, landed := f.follow("/skills/plans/from-template", url.Values{"character": {char}, "template": {"magic14"}})
-	if code != http.StatusOK {
-		t.Fatalf("from-template landed on %s with %d", landed, code)
+	if code, _, landed := f.follow("/skills/plans/create", url.Values{"character": {char}, "name": {"Leftovers"}}); code != http.StatusOK {
+		t.Fatalf("create landed on %s with %d", landed, code)
 	}
 	plans := f.planIDs(fixtureCharA)
 	if len(plans) != 1 {
 		t.Fatalf("%d plans, want 1", len(plans))
 	}
-	items, _ := f.q.ListSkillPlanItems(context.Background(), plans[0].ID)
-	if len(items) != 1 || items[0].SkillTypeID != 3303 {
-		t.Fatalf("Magic 14 plan holds %+v, want only Mechanics (3303): the trained skills stay out", items)
-	}
-	mustContain(t, landed, body,
-		"without the 2 skill(s) already trained to V", "CPU Management V", "Power Grid Management V")
-	// The notice is shown once.
-	_, again := f.do(http.MethodGet, landed, nil, nil).Code, f.do(http.MethodGet, landed, nil, nil).Body.String()
-	if strings.Contains(again, "already trained to V") {
-		t.Error("the one-time notice was shown a second time")
-	}
 
-	// Everything trained: no plan is made, and the page says why.
-	seedSnapshot(t, f.q, fixtureCharA, esi.SnapSkills, esi.Skills{
-		Skills: []esi.Skill{
-			{SkillID: 3301, SkillpointsInSkill: 256000, ActiveSkillLevel: 5, TrainedSkillLevel: 5},
-			{SkillID: 3302, SkillpointsInSkill: 256000, ActiveSkillLevel: 5, TrainedSkillLevel: 5},
-			{SkillID: 3303, SkillpointsInSkill: 256000, ActiveSkillLevel: 5, TrainedSkillLevel: 5},
-		},
-	})
-	code, body, landed = f.follow("/skills/plans/from-template", url.Values{"character": {char}, "template": {"magic14"}})
-	if code != http.StatusOK {
-		t.Fatalf("from-template (all trained) landed on %s with %d", landed, code)
-	}
-	if n := len(f.planIDs(fixtureCharA)); n != 1 {
-		t.Errorf("%d plans after an all-trained template, want still 1", n)
-	}
-	mustContain(t, landed, body, "has already trained all 3 Magic 14 skills to V")
-
-	// A single skill: Alpha is trained to II, so Alpha II is refused and
-	// Alpha III is accepted (and needs no row for the levels below it).
+	// Alpha is trained to II, so Alpha II is refused and Alpha III is
+	// accepted (and needs no row for the levels below it).
 	seedSnapshot(t, f.q, fixtureCharA, esi.SnapSkills, esi.Skills{
 		Skills: []esi.Skill{{SkillID: 1001, SkillpointsInSkill: 1414, ActiveSkillLevel: 2, TrainedSkillLevel: 2}},
 	})
 	plan := fmt.Sprint(plans[0].ID)
-	code, body, landed = f.follow("/skills/plans/item-add", url.Values{"character": {char}, "plan": {plan}, "skill": {"1001"}, "level": {"2"}})
+	code, body, landed := f.follow("/skills/plans/item-add", url.Values{"character": {char}, "plan": {plan}, "skill": {"1001"}, "level": {"2"}})
 	if code != http.StatusOK {
 		t.Fatalf("item-add (trained) landed on %s with %d", landed, code)
 	}
 	mustContain(t, landed, body, "Alpha Skill is already trained to II on this character")
-	items, _ = f.q.ListSkillPlanItems(context.Background(), plans[0].ID)
+	items, _ := f.q.ListSkillPlanItems(context.Background(), plans[0].ID)
 	for _, it := range items {
 		if it.SkillTypeID == 1001 {
 			t.Fatalf("a skill already trained to II was added at level %d", it.TargetLevel)

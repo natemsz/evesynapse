@@ -7,6 +7,8 @@ package app
 // ---------------------------------------------------------------------------
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"net/http"
 
 	"github.com/alexedwards/scs/v2"
@@ -54,16 +56,44 @@ func warnIfServedInTheClear(cfg Config) {
 // those files — so neither script-src nor style-src needs
 // 'unsafe-inline'. Keep it that way: an inline <script> or style
 // attribute added to a template will silently not run.
-const contentSecurityPolicy = "default-src 'self'; " +
-	"script-src 'self'; " +
-	"style-src 'self'; " +
-	"img-src 'self' data: https://images.evetech.net; " +
-	"font-src 'self'; " +
-	"connect-src 'self'; " +
-	"object-src 'none'; " +
-	"base-uri 'self'; " +
-	"form-action 'self'; " +
-	"frame-ancestors 'none'"
+//
+// Cloudflare, when the site is served through it, adds scripts of
+// its own to pages on the way out, and the policy has to let them
+// run or the browser blocks them:
+//
+//   - its analytics beacon, from static.cloudflareinsights.com, which
+//     reports to cloudflareinsights.com;
+//   - Rocket Loader, from ajax.cloudflare.com;
+//   - small inline scripts (bot checks, challenge pages). Those
+//     carry no address to allow, so each response names a one-time
+//     nonce. Cloudflare reads it from this header and stamps its
+//     inline scripts with it; nothing else knows the value, so an
+//     injected script still cannot run. The app's own pages never
+//     use the nonce.
+//
+// Its other scripts live under /cdn-cgi/ on the site's own address
+// and are already covered by 'self'. Allowing these hosts trusts
+// Cloudflare with no more than it has anyway: it sits in front of
+// the site and can rewrite any page.
+func contentSecurityPolicy(nonce string) string {
+	return "default-src 'self'; " +
+		"script-src 'self' 'nonce-" + nonce + "' https://static.cloudflareinsights.com https://ajax.cloudflare.com; " +
+		"style-src 'self'; " +
+		"img-src 'self' data: https://images.evetech.net; " +
+		"font-src 'self'; " +
+		"connect-src 'self' https://cloudflareinsights.com; " +
+		"object-src 'none'; " +
+		"base-uri 'self'; " +
+		"form-action 'self'; " +
+		"frame-ancestors 'none'"
+}
+
+// scriptNonce is a fresh random value for one response's policy.
+func scriptNonce() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:]) // crypto/rand.Read does not fail
+	return base64.RawStdEncoding.EncodeToString(b[:])
+}
 
 // securityHeaders sets the response headers that harden every
 // page: no MIME sniffing, no framing, no referrer leaking to other
@@ -77,7 +107,7 @@ func (app *Application) securityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "same-origin")
-		h.Set("Content-Security-Policy", contentSecurityPolicy)
+		h.Set("Content-Security-Policy", contentSecurityPolicy(scriptNonce()))
 		if hsts {
 			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}

@@ -317,15 +317,6 @@ func TestSkillPlanPagesAndCRUD(t *testing.T) {
 		t.Fatalf("fit plan items = %v, err %v", items, err)
 	}
 
-	// Magic 14 template (names absent from this fixture SDE —
-	// it must create nothing rather than crash).
-	code, _ = post("/skills/plans/from-template", url.Values{
-		"character": {"90000001"}, "template": {"magic14"},
-	})
-	if code != 200 && code != 303 {
-		t.Fatalf("POST from-template = %d", code)
-	}
-
 	if got := transport.calls.Load(); got != 0 {
 		t.Errorf("outbound calls = %d, want 0", got)
 	}

@@ -19,7 +19,11 @@ func TestBareButtonsShareTheEmberStyle(t *testing.T) {
 	css := string(raw)
 	const bare = `:where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class]))`
 	for _, want := range []string{
-		".btn,\n" + bare + " {\n  display: inline-block;",
+		".btn,\n" + bare + " {\n  display: inline-flex;",
+		// Buttons and fields share one height, so a row of them lines up.
+		"  min-height: var(--control-h);\n  padding: 0.2rem 0.85rem;",
+		`input[type="text"], input[type="search"], input[type="number"] {`,
+		"--control-h: 1.9rem;",
 		bare + ":hover:not(:disabled) {",
 		bare + ":focus-visible {",
 		bare + ":disabled {\n  opacity: 0.4;",

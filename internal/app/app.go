@@ -398,7 +398,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/plans/item-remove", app.handleSkillPlanItemRemove)
 		r.Post("/plans/item-move", app.handleSkillPlanItemMove)
 		r.Post("/plans/delete", app.handleSkillPlanDelete)
-		r.Post("/plans/from-template", app.handleSkillPlanFromTemplate)
 		r.Post("/plans/from-fit", app.handleSkillPlanFromFit)
 	})
 

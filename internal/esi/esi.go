@@ -2058,11 +2058,20 @@ func (c *Client) fetchAllPages(ctx context.Context, token, path string) ([]byte,
 		return body, header, nil
 	}
 
+	// Each page arrived capped at 8MB, but the merge itself is
+	// capped too: without a total, a runaway page count
+	// (or a lying X-Pages) would balloon memory for one dataset.
+	const maxMergedBytes = 64 << 20
 	merged := []json.RawMessage{}
+	total := 0
 	appendPage := func(b []byte) error {
 		var entries []json.RawMessage
 		if err := json.Unmarshal(b, &entries); err != nil {
 			return fmt.Errorf("ESI GET %s: decode page: %w", path, err)
+		}
+		total += len(b)
+		if total > maxMergedBytes {
+			return fmt.Errorf("ESI GET %s: merged pages exceed %d bytes", path, maxMergedBytes)
 		}
 		merged = append(merged, entries...)
 		return nil
@@ -2071,7 +2080,7 @@ func (c *Client) fetchAllPages(ctx context.Context, token, path string) ([]byte,
 		return nil, nil, err
 	}
 	for page := 2; page <= pages; page++ {
-		b, _, err := c.FetchRaw(ctx, token, fmt.Sprintf("%s?page=%d", path, page))
+		b, _, err := c.FetchRaw(ctx, token, withPageParam(path, page))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -2085,6 +2094,16 @@ func (c *Client) fetchAllPages(ctx context.Context, token, path string) ([]byte,
 		return nil, nil, fmt.Errorf("ESI GET %s: merge pages: %w", path, err)
 	}
 	return combined, header, nil
+}
+
+// withPageParam sets the page query parameter on an ESI path,
+// keeping any parameters already there. Appending "?page=" blindly
+// breaks the day a paginated kind carries its own query string.
+func withPageParam(path string, page int) string {
+	if strings.Contains(path, "?") {
+		return path + "&page=" + strconv.Itoa(page)
+	}
+	return path + "?page=" + strconv.Itoa(page)
 }
 
 // ---------------------------------------------------------------------------
@@ -2115,7 +2134,7 @@ func (c *Client) fetchJournalWindow(ctx context.Context, token, path string) ([]
 	for page := 1; page <= maxJournalPages; page++ {
 		p := path
 		if page > 1 {
-			p = fmt.Sprintf("%s?page=%d", path, page)
+			p = withPageParam(path, page)
 		}
 		body, header, err := c.FetchRaw(ctx, token, p)
 		if err != nil {

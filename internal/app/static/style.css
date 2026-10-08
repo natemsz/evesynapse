@@ -208,6 +208,17 @@ h2, h3 {
 }
 h2 { font-size: 1.04rem; }
 h3 { font-size: 0.88rem; margin: 1.4rem 0 0.15rem; }
+/* Gradient text needs solid fallbacks: transparent fill over a
+   clipped background is invisible where background-clip:text is
+   unsupported — and in forced-colors mode, where the OS replaces
+   backgrounds outright. */
+@supports not (background-clip: text) {
+  h2, h3, .wordmark { background: none; color: var(--text-bright); }
+}
+@media (forced-colors: active) {
+  h2, h3, .wordmark { background: none; color: CanvasText; text-shadow: none; }
+  .wordmark:hover { color: CanvasText; }
+}
 
 small { color: var(--muted); }
 
@@ -2536,7 +2547,9 @@ html[data-theme="light"] {
   color-scheme: light;
   --text: #2a241d;
   --text-bright: #20180e;
-  --accent: #ff6a1a;
+  /* Deep ember, not the dark theme's neon: #ff6a1a on #f4f1ea is
+     ~2.5:1 (unreadable links); this is ~4.9:1, past AA's 4.5. */
+  --accent: #b0490a;
   --success: #a86f14;   /* positive = deep gold, never green */
   --danger: #b02a0d;
   --gold: #9e6410;

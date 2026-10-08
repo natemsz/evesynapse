@@ -29,6 +29,13 @@ import (
 // in pilot.html, type-description in items.html) with the same
 // link helpers the full pages use.
 func (app *Application) renderFragment(w http.ResponseWriter, page, define string, data any) {
+	app.renderFragmentStatus(w, http.StatusOK, page, define, data)
+}
+
+// renderFragmentStatus is renderFragment with a status of the caller's
+// choosing (the planner answers a refused move with a 409 and the editor
+// carrying the reason).
+func (app *Application) renderFragmentStatus(w http.ResponseWriter, status int, page, define string, data any) {
 	ts, err := parsedTemplate(&fragmentTemplates, "fragment", page, "templates/balancechart.html", "templates/charselector.html")
 	if err != nil {
 		logging.Errorf("parse fragment template %s: %v", page, err)
@@ -43,7 +50,7 @@ func (app *Application) renderFragment(w http.ResponseWriter, page, define strin
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(status)
 	_, _ = buf.WriteTo(w)
 }
 

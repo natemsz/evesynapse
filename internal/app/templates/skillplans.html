@@ -75,18 +75,25 @@
 {{end}}
 {{end}}
 
-{{/* The unified planner: one table in training order. Rendered whole on
-     the page and on its own (the fragment) when a move or remove is made
-     in place. Dot is the page's skillPlansView. */}}
+{{/* The unified planner. plan-editor is the whole plan section on the page;
+     plan-body, its table and totals, is also rendered on its own (the
+     fragment) when a move or remove is made in place, so the search box
+     and results above it stay as they are. Dot is the page's
+     skillPlansView in both. */}}
 {{define "plan-editor"}}
 {{with .Plan}}
 <section class="foldable plan-editor" id="plan-editor" data-plan-editor data-character="{{$.CharacterID}}" data-plan="{{.ID}}">
 <h3>{{.Name}}</h3>
 
-<p class="plan-summary"><small>{{.Count}} skill(s) in this plan{{if .TotalSP}} · {{.TotalSP}} SP · {{.TotalTime}} to train{{end}}</small></p>
-{{if .StartsNote}}<p><small>{{.StartsNote}}</small></p>{{end}}
-{{if .AttrsNote}}<p><small>{{.AttrsNote}}</small></p>{{end}}
-{{if .AttrsLine}}<p><small>{{.AttrsLine}}</small></p>{{end}}
+{{if .ConfirmDelete}}
+<form method="post" action="/skills/plans/delete">
+  <input type="hidden" name="character" value="{{$.CharacterID}}">
+  <input type="hidden" name="plan" value="{{.ID}}">
+  <p>Delete the plan “{{.Name}}”? This cannot be undone. <button type="submit" class="btn btn-danger">Delete plan</button> <a href="/skills/plans?character={{$.CharacterID}}&plan={{.ID}}">Keep it</a></p>
+</form>
+{{else}}
+<p><small><a href="/skills/plans?character={{$.CharacterID}}&plan={{.ID}}&confirm=delete">Delete this plan</a></small></p>
+{{end}}
 
 <form method="get" action="/skills/plans" class="plan-add">
   <input type="hidden" name="character" value="{{$.CharacterID}}">
@@ -129,6 +136,20 @@
 </div>
 {{end}}
 
+<div class="plan-live" role="status" aria-live="polite"></div>
+{{template "plan-body" $}}
+</section>
+{{end}}
+{{end}}
+
+{{define "plan-body"}}
+{{with .Plan}}
+<div id="plan-body" data-plan-body data-message="{{$.Message}}" tabindex="-1">
+<p class="plan-summary"><small>{{.Count}} skill(s) in this plan{{if .TotalSP}} · {{.TotalSP}} SP · {{.TotalTime}} to train{{end}}</small></p>
+{{if .StartsNote}}<p><small>{{.StartsNote}}</small></p>{{end}}
+{{if .AttrsNote}}<p><small>{{.AttrsNote}}</small></p>{{end}}
+{{if .AttrsLine}}<p><small>{{.AttrsLine}}</small></p>{{end}}
+
 {{if .Rows}}
 <div class="tw">
 <table class="plan-table">
@@ -143,8 +164,8 @@
           <input type="hidden" name="character" value="{{$.CharacterID}}">
           <input type="hidden" name="plan" value="{{$.Plan.ID}}">
           <input type="hidden" name="skill" value="{{.SkillID}}">
-          <button type="submit" name="dir" value="up" class="plan-btn" aria-label="Move {{.Skill}} earlier"{{if .CanUp}} title="Move earlier"{{else}} disabled title="{{.UpWhy}}"{{end}}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 10.5L8 6l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-          <button type="submit" name="dir" value="down" class="plan-btn" aria-label="Move {{.Skill}} later"{{if .CanDown}} title="Move later"{{else}} disabled title="{{.DownWhy}}"{{end}}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 5.5L8 10l4.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <button type="submit" name="dir" value="up" class="plan-btn" aria-label="Move {{.Skill}} earlier"{{if .CanUp}} title="Move earlier"{{else}} aria-disabled="true" title="Cannot move earlier: {{.UpWhy}}"{{end}}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 10.5L8 6l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <button type="submit" name="dir" value="down" class="plan-btn" aria-label="Move {{.Skill}} later"{{if .CanDown}} title="Move later"{{else}} aria-disabled="true" title="Cannot move later: {{.DownWhy}}"{{end}}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 5.5L8 10l4.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         </form>
         {{end}}
       </td>
@@ -200,16 +221,6 @@
 <h4>Remap advisor</h4>
 <p><small>Current spread ({{.Remap.CurrentLine}}) trains this plan in {{.Remap.CurrentTime}}.{{if .Remap.Saving}} A remap to {{.Remap.BestLine}} would take {{.Remap.BestTime}} — saving {{.Remap.Saving}}.{{else}} Your current spread is already the fastest for this plan.{{end}}{{if .Remap.BonusNote}} {{.Remap.BonusNote}}.{{end}}</small></p>
 {{end}}
-
-{{if .ConfirmDelete}}
-<form method="post" action="/skills/plans/delete">
-  <input type="hidden" name="character" value="{{$.CharacterID}}">
-  <input type="hidden" name="plan" value="{{.ID}}">
-  <p>Delete the plan “{{.Name}}”? This cannot be undone. <button type="submit" class="btn btn-danger">Delete plan</button> <a href="/skills/plans?character={{$.CharacterID}}&plan={{.ID}}">Keep it</a></p>
-</form>
-{{else}}
-<p><small><a href="/skills/plans?character={{$.CharacterID}}&plan={{.ID}}&confirm=delete">Delete this plan</a></small></p>
-{{end}}
-</section>
+</div>
 {{end}}
 {{end}}

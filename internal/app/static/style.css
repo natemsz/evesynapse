@@ -3108,8 +3108,11 @@ html[data-theme="light"] .lvl i.plan { background: linear-gradient(to bottom, #f
   cursor: pointer;
 }
 .plan-btn svg { width: 1rem; height: 1rem; }
-.plan-btn:hover:not(:disabled) { color: var(--text-bright); border-color: var(--accent); background: var(--row-hover); }
+.plan-btn:hover:not(:disabled):not([aria-disabled="true"]) { color: var(--text-bright); border-color: var(--accent); background: var(--row-hover); }
 .plan-btn:focus-visible { outline: none; box-shadow: 0 0 8px rgba(255, 106, 26, 0.55); border-color: var(--accent); }
-.plan-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.plan-btn:disabled, .plan-btn[aria-disabled="true"] { opacity: 0.35; cursor: not-allowed; }
 .plan-btn-danger:hover:not(:disabled) { color: #fff3ec; border-color: var(--danger); background: #5a1a0c; }
 html[data-theme="light"] .plan-btn { border-color: #b8ad96; }
+.plan-live:empty { display: none; }
+.plan-live .notice { margin: 0.4rem 0; }
+#plan-body:focus { outline: none; }

@@ -1972,6 +1972,78 @@
     if (href.charAt(0) === "/" && href.charAt(1) !== "/") window.location.href = href;
   });
 
+  // --- Skill planner: move and remove in place -------------------
+  // A move or remove button in the plan table posts its form with
+  // fetch and swaps the returned table (#plan-body) into the page, so
+  // the search box, results and scroll position stay where they are.
+  // The server answers with the reason in data-message when it refuses
+  // a move (a prerequisite is in the way); that is read out through the
+  // status region above the table. Without JavaScript the same forms
+  // post normally and come back to the page with the reason flashed.
+  document.addEventListener("submit", function (ev) {
+    var form = ev.target;
+    if (!window.fetch || !form || !form.matches || !form.matches(".plan-move-form, .plan-remove-form")) return;
+    var editor = form.closest("[data-plan-editor]");
+    var body = form.closest("[data-plan-body]");
+    if (!editor || !body) return;
+    ev.preventDefault();
+
+    var data = new URLSearchParams(new FormData(form));
+    var dir = ev.submitter && ev.submitter.name === "dir" ? ev.submitter.value : "";
+    if (dir) data.set("dir", dir);
+    var row = form.closest("tr");
+    var skill = row ? row.getAttribute("data-skill") : "";
+    var removing = form.classList.contains("plan-remove-form");
+
+    window.fetch(form.action, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "X-Requested-With": "XMLHttpRequest",
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: data.toString()
+    }).then(function (resp) {
+      return resp.text();
+    }).then(function (html) {
+      var probe = document.createElement("div");
+      probe.innerHTML = html;
+      var fresh = probe.querySelector("[data-plan-body]");
+      if (!fresh) {
+        // Not the table (signed out, an error): let the page show it.
+        window.location.reload();
+        return;
+      }
+      var live = editor.querySelector(".plan-live");
+      var message = fresh.getAttribute("data-message") || "";
+      if (live) {
+        live.textContent = "";
+        if (message) {
+          var note = document.createElement("p");
+          note.className = "notice";
+          note.textContent = message;
+          live.appendChild(note);
+        }
+      }
+      body.replaceWith(fresh);
+      // Keep the keyboard where it was: the same button on the same
+      // skill, else the other move button; after a remove, the table.
+      var target = null;
+      if (!removing && skill) {
+        var next = fresh.querySelector("tr[data-skill='" + skill + "']");
+        if (next) {
+          target = next.querySelector("button[name='dir'][value='" + dir + "']:not([aria-disabled='true'])") ||
+            next.querySelector("button[name='dir']:not([aria-disabled='true'])") ||
+            next.querySelector("button[name='dir']");
+        }
+      }
+      (target || fresh).focus();
+    }).catch(function () {
+      // The request itself failed: fall back to the plain post.
+      form.submit();
+    });
+  });
+
   // --- Data-driven geometry ------------------------------------
   // The content security policy forbids inline style attributes, so
   // the numbers the server used to write into inline styles ride

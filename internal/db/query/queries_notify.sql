@@ -65,3 +65,37 @@ WHERE user_id = sqlc.arg(user_id) AND kind = sqlc.arg(kind) AND read_at IS NULL;
 DELETE FROM notifications
 WHERE (read_at IS NOT NULL AND read_at < sqlc.arg(read_before))
    OR created_at < sqlc.arg(created_before);
+
+-- ---------------------------------------------------------------------
+-- Browser push subscriptions (schema 013).
+-- ---------------------------------------------------------------------
+
+-- name: UpsertPushSubscription :exec
+INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, created_at)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (endpoint) DO UPDATE SET
+    user_id  = excluded.user_id,
+    p256dh   = excluded.p256dh,
+    auth     = excluded.auth,
+    failures = 0;
+
+-- name: ListPushSubscriptionsByUser :many
+SELECT id, user_id, endpoint, p256dh, auth, created_at, last_ok_at, failures FROM push_subscriptions
+WHERE user_id = $1
+ORDER BY id;
+
+-- name: CountPushSubscriptionsByUser :one
+SELECT COUNT(*)::bigint FROM push_subscriptions WHERE user_id = $1;
+
+-- name: DeletePushSubscription :exec
+DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = $2;
+
+-- name: DeletePushSubscriptionByID :exec
+DELETE FROM push_subscriptions WHERE id = $1;
+
+-- name: MarkPushSubscriptionOK :exec
+UPDATE push_subscriptions SET last_ok_at = sqlc.arg(at), failures = 0 WHERE id = sqlc.arg(id);
+
+-- name: MarkPushSubscriptionFailed :one
+UPDATE push_subscriptions SET failures = failures + 1 WHERE id = $1
+RETURNING failures;

@@ -229,6 +229,12 @@ func notifyTarget(url string) string {
 // notifySettingsView is the /notifications/settings page.
 type notifySettingsView struct {
 	Rows []notifySettingRow
+	// Browser push: whether this server offers it, the key a browser
+	// needs to subscribe, and how many browsers the account has
+	// subscribed so far.
+	PushConfigured bool
+	PushKey        string
+	PushDevices    int64
 }
 
 type notifySettingRow struct {
@@ -280,9 +286,16 @@ func (app *Application) handleNotificationSettings(w http.ResponseWriter, r *htt
 		SSOConfigured: app.cfg.SSOConfigured(),
 	}
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
-	data.NotifySettings = &notifySettingsView{
+	view := &notifySettingsView{
 		Rows: notifySettingRows(app.notifyPrefsFor(ctx, userID), app.sessionCharacters(ctx)),
 	}
+	if app.push != nil {
+		view.PushConfigured, view.PushKey = true, app.push.PublicKey
+		if n, err := app.queries.CountPushSubscriptionsByUser(ctx, userID); err == nil {
+			view.PushDevices = n
+		}
+	}
+	data.NotifySettings = view
 	app.render(ctx, w, http.StatusOK, "notification_settings.html", data)
 }
 

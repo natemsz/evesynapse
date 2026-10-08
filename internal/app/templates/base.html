@@ -186,6 +186,7 @@
 </div>
 <script src="/static/app.js?v={{.AssetVersion}}" defer></script>
 {{if eq .Section "fitting"}}<script src="/static/fit.js?v={{.AssetVersion}}" defer></script>{{end}}
+{{if .NotifySettings}}<script src="/static/push.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if .LoggedIn}}
 <div class="quickjump" id="quickjump" hidden>
   <div class="quickjump-panel" role="dialog" aria-modal="true" aria-label="Quick jump">

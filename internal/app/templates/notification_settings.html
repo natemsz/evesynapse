@@ -27,6 +27,20 @@
 <button type="submit">Save</button>
 </form>
 
+<h2>Browser notifications</h2>
+{{if .PushConfigured}}
+<p><small>Get the same notifications from your browser while no EveSynapse tab is open. This is per browser: turn it on in each one you want it in. What you switched off above stays off here too.</small></p>
+<div id="push-panel" data-vapid-key="{{.PushKey}}">
+  <p id="push-status" role="status">Checking this browser…</p>
+  <button type="button" class="btn" id="push-enable" hidden>Turn on in this browser</button>
+  <button type="button" class="btn" id="push-disable" hidden>Turn off in this browser</button>
+  <button type="button" class="btn" id="push-test" hidden>Send a test</button>
+</div>
+<p><small>{{if .PushDevices}}{{.PushDevices}} browser{{if ne .PushDevices 1}}s{{end}} on this account receive{{if eq .PushDevices 1}}s{{end}} notifications.{{else}}No browser on this account receives notifications yet.{{end}}</small></p>
+{{else}}
+<p><small>Browser notifications are not set up on this server. Notifications still show in the top bar.</small></p>
+{{end}}
+
 <p><a href="/notifications/">Back to notifications</a></p>
 {{end}}
 {{end}}

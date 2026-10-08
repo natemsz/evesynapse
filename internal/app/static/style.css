@@ -3263,3 +3263,9 @@ html[data-theme="light"] .plan-item { border-top-color: #d9d2c2; }
 tr.notify-unread td:first-child a { font-weight: 700; }
 html[data-theme="light"] .notify-menu { border-color: #d8cdb8; box-shadow: 0 6px 22px rgba(60, 40, 10, 0.25); }
 html[data-theme="light"] .notify-all { border-top-color: #e4dac6; }
+#push-panel { margin: 0 0 0.75rem; }
+/* The buttons are shown and hidden by push.js with the hidden
+   attribute, which .btn's own display would otherwise override. */
+#push-panel [hidden] { display: none; }
+#push-panel .btn + .btn { margin-left: 0.4rem; }
+#push-status { margin: 0 0 0.6rem; }

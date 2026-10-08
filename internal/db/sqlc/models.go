@@ -319,6 +319,17 @@ type PlanetName struct {
 	ResolvedAt sql.NullTime `json:"resolved_at"`
 }
 
+type PushSubscription struct {
+	ID        int64        `json:"id"`
+	UserID    int64        `json:"user_id"`
+	Endpoint  string       `json:"endpoint"`
+	P256dh    string       `json:"p256dh"`
+	Auth      string       `json:"auth"`
+	CreatedAt time.Time    `json:"created_at"`
+	LastOkAt  sql.NullTime `json:"last_ok_at"`
+	Failures  int64        `json:"failures"`
+}
+
 type RestockTarget struct {
 	UserID       int64     `json:"user_id"`
 	TypeID       int64     `json:"type_id"`

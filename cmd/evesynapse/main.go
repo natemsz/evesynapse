@@ -15,6 +15,8 @@
 //	evesynapse -update <url> <sha256>  download, verify, and install
 //	                                   a new build, restarting the
 //	                                   running server onto it
+//	evesynapse -push-keys              print a new key pair for browser
+//	                                   push, as lines to add to .env
 //	evesynapse -refresh                mark all cached data out of
 //	                                   date so the next start fetches
 //	                                   fresh copies (server stopped)
@@ -57,6 +59,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 				return 2
 			}
 			return app.RunRefresh(args[1:], cfg, stdout, stderr)
+		case "-push-keys":
+			return app.RunPushKeys(stdout, stderr)
 		case "-h", "--help", "-help":
 			printUsage(stdout)
 			return 0
@@ -77,6 +81,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  evesynapse -update -dev             update to the latest dev-branch release")
 	fmt.Fprintln(w, "  evesynapse -update <url> <checksum> install a downloaded update and restart (a local file needs no checksum)")
 	fmt.Fprintln(w, "  evesynapse -refresh                 refresh all cached data on next start (app must be stopped)")
+	fmt.Fprintln(w, "  evesynapse -push-keys               print a new key pair for browser push, as lines for .env")
 }
 
 // serve runs the web app until a termination signal (SIGTERM from

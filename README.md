@@ -233,6 +233,8 @@ gaps; real environment variables win over the file):
 | `ESI_CONTACT` | no | — | How CCP can reach whoever runs this instance (an email address, a Discord handle, a character name). Sent in the User-Agent of every ESI request, as CCP asks of third-party apps |
 | `LOG_LEVEL` | no | `info` | Least severe kind of log line written: `debug`, `info`, `warn` or `error` (see "Logging") |
 | `LOG_FORMAT` | no | `text` | `text` for the classic line, `json` for one object per line |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | no | — | The key pair that turns on browser push notifications. Make one with `evesynapse -push-keys`. Unset, notifications show in the top bar only |
+| `VAPID_SUBJECT` | no | the site's address | A contact address (`mailto:` or `https:`) the browsers' push services may use to reach the operator |
 | `DEV_LOGIN` | no | — | Dev build only: `1` registers the `/dev-login` route |
 
 ## Install
@@ -572,6 +574,7 @@ evesynapse -update -dev             update to the newest development build
 evesynapse -update <url> <sha256>   install a specific build from an address (checksum required)
 evesynapse -update <file> [sha256]  install a build from a local file
 evesynapse -refresh                 mark all cached data stale (run while the app is stopped)
+evesynapse -push-keys               print a new key pair for browser push, as lines for .env
 evesynapse -h                       show this list
 ```
 

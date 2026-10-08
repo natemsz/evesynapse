@@ -51,6 +51,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 				return 2
 			}
 			return app.RunRefresh(args[1:], cfg, stdout, stderr)
+		case "-push-keys":
+			return app.RunPushKeys(stdout, stderr)
 		case "-h", "--help", "-help":
 			printUsage(stdout)
 			return 0
@@ -69,6 +71,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  evesynapse-dev -version                 print the version and exit")
 	fmt.Fprintln(w, "  evesynapse-dev -update <url> <checksum> install a downloaded update and restart (a local file needs no checksum)")
 	fmt.Fprintln(w, "  evesynapse-dev -refresh                 refresh all cached data on next start (app must be stopped)")
+	fmt.Fprintln(w, "  evesynapse-dev -push-keys               print a new key pair for browser push, as lines for .env")
 }
 
 // serve mirrors the release entrypoint's serve, plus the dev

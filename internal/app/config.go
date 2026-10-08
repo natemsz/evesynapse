@@ -18,6 +18,11 @@ import (
 // environment (after dotenv.Load has had a chance to fill gaps from a
 // local .env); secrets are never hardcoded or logged.
 type Config struct {
+	// Browser push (notify_push.go): the server's VAPID key pair and
+	// a contact address for the push services. All unset means push
+	// is off.
+	pushPublicKey, pushPrivateKey, pushSubject string
+
 	addr            string         // listen address
 	databaseURL     string         // Postgres connection URL (DATABASE_URL)
 	eveClientID     string         // EVE SSO application client ID
@@ -139,6 +144,9 @@ func LoadConfig() (Config, error) {
 		esiContact:      os.Getenv("ESI_CONTACT"),
 		logLevel:        os.Getenv("LOG_LEVEL"),
 		logFormat:       os.Getenv("LOG_FORMAT"),
+		pushPublicKey:   os.Getenv("VAPID_PUBLIC_KEY"),
+		pushPrivateKey:  os.Getenv("VAPID_PRIVATE_KEY"),
+		pushSubject:     os.Getenv("VAPID_SUBJECT"),
 	}, nil
 }
 

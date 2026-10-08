@@ -27,6 +27,7 @@ import (
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/store"
+	"evesynapse/internal/webpush"
 )
 
 //go:embed templates/*.html
@@ -55,6 +56,12 @@ type Application struct {
 	// esi is the ESI client: HTTP access, the snapshot cache, and
 	// the type/group/place name-resolution caches.
 	esi *esi.Client
+
+	// push is the server's identity to browser push services; nil
+	// when no VAPID key pair is configured, which turns push off.
+	// pushClient is the HTTP client sends go through (tests swap it).
+	push       *webpush.VAPID
+	pushClient *http.Client
 
 	// db, pool, and stopWorker/workerDone are the resources Close
 	// releases: it cancels the worker, waits for workerDone to
@@ -170,6 +177,7 @@ func New(cfg Config) (*Application, error) {
 
 	app := &Application{
 		cfg:           cfg,
+		push:          pushConfigFromEnv(cfg),
 		sessions:      sessionManager,
 		queries:       db.New(dbConn),
 		jwks:          &jwksCache{},
@@ -278,6 +286,9 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	})
 	r.Get("/healthz", app.handleHealthz)
 	r.Get("/favicon.ico", handleFavicon)
+	// The push service worker, from the root so it can act for the
+	// whole site (notify_push.go).
+	r.Get("/sw.js", handleServiceWorker)
 
 	// Embedded static assets (stylesheet, scripts, fonts, the 2013
 	// wallpaper); static.go has the caching rules. A failure here
@@ -336,6 +347,20 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/read/", app.handleMailMarkRead)
 		r.Get("/compose/", app.handleMailCompose)
 		r.Post("/send/", app.handleMailSend)
+	})
+
+	// Notifications (notify_pages.go): the list, and the two actions
+	// that change what is unread.
+	r.Route("/notifications", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleNotifications)
+		r.Post("/read", app.handleNotificationsRead)
+		r.Post("/open", app.handleNotificationsOpen)
+		r.Get("/settings", app.handleNotificationSettings)
+		r.Post("/settings", app.handleNotificationSettingsSave)
+		r.Post("/push/subscribe", app.handlePushSubscribe)
+		r.Post("/push/unsubscribe", app.handlePushUnsubscribe)
+		r.Post("/push/test", app.handlePushTest)
 	})
 
 	r.Route("/calendar", func(r chi.Router) {

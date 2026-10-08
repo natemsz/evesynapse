@@ -94,6 +94,16 @@ type pageData struct {
 	// Filled by render from Switcher; handlers never set it.
 	ViewerChars map[int64]bool
 
+	// Notify is the top-bar notifications icon and its short list
+	// (notify_pages.go). Filled by render; handlers never set it.
+	Notify *notifyBadge
+
+	// Notifications is the /notifications/ page.
+	Notifications *notificationsView
+
+	// NotifySettings is the /notifications/settings page.
+	NotifySettings *notifySettingsView
+
 	// Public pilot page (/pilot/): a stranger's public record.
 	Pilot *pilotView
 
@@ -163,7 +173,7 @@ func sectionForPage(page string) string {
 		return "home"
 	case "character.html", "characters.html", "skills.html", "skillplans.html",
 		"mail.html", "calendar.html", "contacts.html", "pilot.html", "assets.html",
-		"killmails.html":
+		"killmails.html", "notifications.html", "notification_settings.html":
 		return "pilot"
 	case "fittings.html", "fittings_saved.html", "fit_shopping.html":
 		return "fitting"
@@ -250,6 +260,9 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 		if !data.IsAdmin {
 			data.IsAdmin = app.adminAmong(characters)
 		}
+	}
+	if data.LoggedIn && data.Notify == nil {
+		data.Notify = app.notifyBadgeFor(ctx, int64(app.sessions.GetInt(ctx, sessionUserID)))
 	}
 	if data.LoggedIn && data.ViewerChars == nil {
 		data.ViewerChars = make(map[int64]bool, len(data.Switcher))

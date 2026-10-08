@@ -72,6 +72,12 @@ var pgTimestampsMarketSchema string
 //go:embed schema_pg/011_timestamps_records.sql
 var pgTimestampsRecordsSchema string
 
+//go:embed schema_pg/012_notifications.sql
+var pgNotificationsSchema string
+
+//go:embed schema_pg/013_push_subscriptions.sql
+var pgPushSubscriptionsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -112,6 +118,8 @@ func schemaSteps() []schemaStep {
 		{9, "timestamps_accounts_snapshots", pgTimestampsAccountsSchema, ""},
 		{10, "timestamps_market", pgTimestampsMarketSchema, ""},
 		{11, "timestamps_records", pgTimestampsRecordsSchema, ""},
+		{12, "notifications", pgNotificationsSchema, ""},
+		{13, "push_subscriptions", pgPushSubscriptionsSchema, ""},
 	}
 }
 

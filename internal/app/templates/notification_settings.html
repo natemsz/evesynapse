@@ -1,0 +1,46 @@
+{{define "title"}}Notification settings{{end}}
+{{define "content"}}
+<h1><span class="gt">Notification settings</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{with .NotifySettings}}
+<p><small>Choose what EveSynapse tells you about. Notifications show in the top bar; a kind you switch off is not shown, and switching it back on starts from then, not from what you missed.</small></p>
+
+<form method="post" action="/notifications/settings">
+<div class="tw">
+<table class="notify-settings">
+  <thead>
+    <tr><th>Notify me about</th><th>Works for</th></tr>
+  </thead>
+  <tbody>
+    {{range .Rows}}
+    <tr>
+      <td><label><input type="checkbox" name="kind" value="{{.ID}}"{{if .On}} checked{{end}}> {{.Title}}</label></td>
+      <td>{{if .Coverage}}{{.Coverage}}{{else}}Your account{{end}}{{range .Missing}}
+        <br><small>{{.Name}} has not granted this. <a href="{{.RelinkURL}}">Sign in again</a> to add it.</small>{{end}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+</div>
+<button type="submit">Save</button>
+</form>
+
+<h2>Browser notifications</h2>
+{{if .PushConfigured}}
+<p><small>Get the same notifications from your browser while no EveSynapse tab is open. This is per browser: turn it on in each one you want it in. What you switched off above stays off here too.</small></p>
+<div id="push-panel" data-vapid-key="{{.PushKey}}">
+  <p id="push-status" role="status">Checking this browser…</p>
+  <button type="button" class="btn" id="push-enable" hidden>Turn on in this browser</button>
+  <button type="button" class="btn" id="push-disable" hidden>Turn off in this browser</button>
+  <button type="button" class="btn" id="push-test" hidden>Send a test</button>
+</div>
+<p><small>{{if .PushDevices}}{{.PushDevices}} browser{{if ne .PushDevices 1}}s{{end}} on this account receive{{if eq .PushDevices 1}}s{{end}} notifications.{{else}}No browser on this account receives notifications yet.{{end}}</small></p>
+{{else}}
+<p><small>Browser notifications are not set up on this server. Notifications still show in the top bar.</small></p>
+{{end}}
+
+<p><a href="/notifications/">Back to notifications</a></p>
+{{end}}
+{{end}}

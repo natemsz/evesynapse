@@ -270,6 +270,15 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	c.refreshPublicData(ctx, characters)
 	c.warmNames(ctx, characters)
 
+	// Last, with everything this cycle fetched already stored: turn
+	// what is newly true into notifications (notify.go). Local data
+	// only, so it runs whether or not ESI was reachable.
+	runGuarded("notifications", func() {
+		if n := app.notifyPass(ctx, characters, time.Now()); n > 0 {
+			logging.Infof("worker: %d new notification(s)", n)
+		}
+	})
+
 	summary := cycleSummary(c.refreshed, c.namesResolved, c.failed, c.limited, parked, c.deferred)
 	app.updateWorkerStatus(func(s *workerStatus) {
 		s.Warming = false

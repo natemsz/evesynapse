@@ -31,7 +31,6 @@
 
 {{if $s.HasData}}
 <p><small>{{$s.OriginName}} {{$s.OriginAsOf}} · {{$s.DestName}} {{$s.DestAsOf}} · Figures older than 3 days are left out. Showing up to 100 routes, best estimated daily profit first. · <a href="#" id="csv-export">Export CSV</a></small></p>
-<script>document.getElementById('csv-export').href = window.location.pathname + window.location.search + (window.location.search ? '&' : '?') + 'format=csv';</script>
 
 {{if $s.SameRegion}}
 <p>Pick two different regions — buying and selling in the same region is what the <a href="/market/scanner/">Spread scanner</a> is for.</p>

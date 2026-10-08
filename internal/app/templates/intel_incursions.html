@@ -25,7 +25,7 @@
       <tr><th>State</th><td>{{.State}}{{if .Boss}} · final-encounter boss is up{{end}}</td></tr>
       <tr><th>Faction</th><td>{{.FactionName}}</td></tr>
       <tr><th>Influence</th><td>{{.InfluencePct}}%
-        <div style="background:#241407; height:8px; max-width:420px;"><div style="background:linear-gradient(90deg,#ffd27a,#ff6a1a 55%,#d63c14); height:8px; width:{{.InfluencePct}}%;"></div></div>
+        <div class="meter"><span data-w="{{.InfluencePct}}"></span></div>
       </td></tr>
       <tr><th>Affected systems</th><td>{{range $i, $s := .Systems}}{{if $i}}, {{end}}{{placeLink $s}}{{end}}</td></tr>
     </tbody>

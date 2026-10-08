@@ -19,7 +19,7 @@ type pageData struct {
 	IsAdmin           bool // one of the account's characters is in EVE_ADMIN_CHARACTER_IDS; filled by render
 	CharacterName     string
 	SSOConfigured     bool
-	AutoRefresh       bool   // base.html emits a meta-refresh (Sync page)
+	AutoRefresh       bool   // Sync page: app.js reloads on a timer (noscript meta-refresh fallback)
 	Error             string // friendly, user-safe banner (never internals)
 	Section           string // top-nav branch key (base.html); filled by render from the page when empty
 	NavPage           string // template file rendered, for marking the exact nav link; filled by render

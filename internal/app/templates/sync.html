@@ -81,7 +81,7 @@
 </table>
 </div>
 <p>Names resolved {{.NamesResolved}} of {{.NamesTotal}} ({{.NamesPercent}}%)</p>
-<div style="background:#241407; height:8px; max-width:420px;"><div style="background:linear-gradient(90deg,#ffd27a,#ff6a1a 55%,#d63c14); height:8px; width:{{.NamesPercent}}%;"></div></div>
+<div class="meter"><span data-w="{{.NamesPercent}}"></span></div>
 <p>
   <form method="post" action="/sync/warm?character={{.ID}}"><button class="btn" type="submit">Re-warm now</button></form>
 </p>

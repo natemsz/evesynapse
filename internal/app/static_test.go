@@ -40,6 +40,22 @@ func TestStaticAssetCaching(t *testing.T) {
 	}
 	plainSize := rec.Body.Len()
 
+	// The head bootstrap serves versioned and immutable, like the
+	// other scripts, and carries the nav/theme first-paint code
+	// that used to be inline in every page.
+	rec = get("/static/boot.js?v="+version, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("versioned boot script: status %d", rec.Code)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != cacheForever {
+		t.Errorf("versioned boot script Cache-Control = %q, want %q", got, cacheForever)
+	}
+	for _, want := range []string{"evesynapse-nav", "evesynapse-theme", "VT323"} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("boot.js is missing %q", want)
+		}
+	}
+
 	// Without the current version the file is revalidated, and has
 	// an ETag to revalidate against.
 	for _, path := range []string{"/static/style.css", "/static/style.css?v=an-older-build", "/static/app.js", "/static/favicon.svg"} {
@@ -92,9 +108,39 @@ func TestPagesLinkVersionedAssets(t *testing.T) {
 	_, body := getPage(t, app, cookie, "/characters/")
 	mustContain(t, "/characters/", body,
 		`href="/static/style.css?v=`+version+`"`,
-		`src="/static/app.js?v=`+version+`"`)
+		`src="/static/app.js?v=`+version+`"`,
+		// The head bootstrap (sync, before first paint), the
+		// versioned icons, and the skip link travel on every page.
+		`<script src="/static/boot.js?v=`+version+`"></script>`,
+		`href="/static/favicon.svg?v=`+version+`"`,
+		`href="/static/manifest.webmanifest?v=`+version+`"`,
+		`href="/static/icon-192.png?v=`+version+`"`,
+		`<a class="skip-link" href="#main-content">`,
+		`<main id="main-content">`)
 	if strings.Contains(body, "/static/fit.js") {
 		t.Error("/characters/ loads the fitting script")
+	}
+	// No inline scripts or style attributes anywhere: the CSP
+	// allows none, so a regression here would silently not run.
+	// Every script tag must load an external /static/ file.
+	for _, forbidden := range []string{"<script>", "style=\"", "onclick="} {
+		if strings.Contains(body, forbidden) {
+			t.Errorf("/characters/ contains forbidden inline code %q", forbidden)
+		}
+	}
+	rest := body
+	for {
+		i := strings.Index(rest, "<script ")
+		if i < 0 {
+			break
+		}
+		tag := rest[i:]
+		end := strings.Index(tag, ">")
+		if end < 0 || !strings.Contains(tag[:end], `src="/static/`) {
+			t.Errorf("/characters/ has a script tag that is not an external /static/ file: %.80q", tag)
+			break
+		}
+		rest = rest[i+len("<script "):]
 	}
 
 	// The fitting pages get it.

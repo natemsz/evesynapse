@@ -141,6 +141,21 @@ body::before {
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--success); text-decoration: underline; }
 
+/* Skip link: the first tab stop jumps past the nav sidebar to the
+   page. Visually hidden until focused. */
+.skip-link {
+  position: absolute;
+  top: -3rem;
+  left: 0.5rem;
+  z-index: 100;
+  background: var(--panel, #141414);
+  color: var(--text-bright);
+  padding: 0.5rem 0.9rem;
+  border-radius: 3px;
+  transition: top 0.12s ease;
+}
+.skip-link:focus { top: 0.5rem; color: var(--text-bright); }
+
 /* Headers, wordmark, nav category labels, buttons, badges,
    and table headers ride the Condensed cut of Univers Next
    Pro in Medium (500): it stays legible packed tight in
@@ -193,6 +208,17 @@ h2, h3 {
 }
 h2 { font-size: 1.04rem; }
 h3 { font-size: 0.88rem; margin: 1.4rem 0 0.15rem; }
+/* Gradient text needs solid fallbacks: transparent fill over a
+   clipped background is invisible where background-clip:text is
+   unsupported — and in forced-colors mode, where the OS replaces
+   backgrounds outright. */
+@supports not (background-clip: text) {
+  h2, h3, .wordmark { background: none; color: var(--text-bright); }
+}
+@media (forced-colors: active) {
+  h2, h3, .wordmark { background: none; color: CanvasText; text-shadow: none; }
+  .wordmark:hover { color: CanvasText; }
+}
 
 small { color: var(--muted); }
 
@@ -2521,7 +2547,9 @@ html[data-theme="light"] {
   color-scheme: light;
   --text: #2a241d;
   --text-bright: #20180e;
-  --accent: #ff6a1a;
+  /* Deep ember, not the dark theme's neon: #ff6a1a on #f4f1ea is
+     ~2.5:1 (unreadable links); this is ~4.9:1, past AA's 4.5. */
+  --accent: #b0490a;
   --success: #a86f14;   /* positive = deep gold, never green */
   --danger: #b02a0d;
   --gold: #9e6410;
@@ -2874,4 +2902,16 @@ html[data-theme="light"] .lvl i.queued { background: #7fa3c4; border-color: #5f8
 .clone-rename input[type="text"] {
   width: 14rem;
   max-width: 60vw;
+}
+
+/* --- small utilities that replaced inline style attributes ---
+   The Content-Security-Policy allows no style="…", so these live
+   here; per-row numbers (a bar's width, a slot's position, an
+   indent) ride data-* attributes that app.js applies. */
+form.inline-form { display: inline; }
+.meter { background: #241407; height: 8px; max-width: 420px; }
+.meter > span {
+  display: block;
+  height: 8px;
+  background: linear-gradient(90deg, #ffd27a, #ff6a1a 55%, #d63c14);
 }

@@ -39,7 +39,7 @@
     <ul class="suggest" id="fit-yourfits-suggest" role="listbox" hidden></ul>
   </span>
   <label class="fit-check"><input type="checkbox" id="fit-community"> Include community fits</label>
-  <button type="button" class="btn" id="fit-loadouts-btn" onclick="location.href='/fittings/saved/'">Ship Loadouts</button>
+  <button type="button" class="btn" id="fit-loadouts-btn" data-href="/fittings/saved/">Ship Loadouts</button>
 </div>
 <p><small>Fits you save live in EveSynapse. Your EVE account's fittings are only ever read, never changed — except when you press Save to EVE.</small></p>
 {{if .FitEditor.Notes}}
@@ -136,13 +136,13 @@
     <button type="button" class="fit-vhist" data-fit-redo title="Redo" aria-label="Redo" disabled>↪</button>
   </div>
   {{range .Visual.Labels}}
-  <div class="fit-vlabel" style="left:{{printf "%.1f" .X}}%;top:{{printf "%.1f" .Y}}%" aria-hidden="true">{{.Text}}</div>
+  <div class="fit-vlabel" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" aria-hidden="true">{{.Text}}</div>
   {{end}}
   {{range .Visual.Separators}}
-  <div class="fit-vsep" style="left:{{printf "%.1f" .X}}%;top:{{printf "%.1f" .Y}}%;transform:translate(-50%,-50%) rotate({{printf "%.0f" .Rot}}deg)" aria-hidden="true"></div>
+  <div class="fit-vsep" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" data-rot="{{printf "%.0f" .Rot}}" aria-hidden="true"></div>
   {{end}}
   {{range .Visual.Slots}}
-  <button type="button" class="fit-vslot{{if .Filled}} filled{{end}}{{if .State}} st-{{.State}}{{end}}" style="left:{{printf "%.1f" .X}}%;top:{{printf "%.1f" .Y}}%"{{if .Filled}} data-fit-vslot="{{.TypeID}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" data-tip-key="{{.TipKey}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}}" data-tip-meta="{{.Meta}}" data-tip-cpu="{{.CPU}}" data-tip-pg="{{.PG}}" data-tip-stat="{{.Stat}}"{{if .State}} data-tip-state="{{.State}}"{{end}}{{if .StatesCSV}} data-tip-states="{{.StatesCSV}}"{{end}}{{if .ChargeName}} data-tip-charge="Loaded: {{.ChargeName}}"{{end}}{{else}}data-fit-add="{{.GroupKey}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" title="Add {{.GroupLabel}}"{{end}}>
+  <button type="button" class="fit-vslot{{if .Filled}} filled{{end}}{{if .State}} st-{{.State}}{{end}}" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}"{{if .Filled}} data-fit-vslot="{{.TypeID}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" data-tip-key="{{.TipKey}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}}" data-tip-meta="{{.Meta}}" data-tip-cpu="{{.CPU}}" data-tip-pg="{{.PG}}" data-tip-stat="{{.Stat}}"{{if .State}} data-tip-state="{{.State}}"{{end}}{{if .StatesCSV}} data-tip-states="{{.StatesCSV}}"{{end}}{{if .ChargeName}} data-tip-charge="Loaded: {{.ChargeName}}"{{end}}{{else}}data-fit-add="{{.GroupKey}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" title="Add {{.GroupLabel}}"{{end}}>
     {{if .Filled}}<img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{if .ChargeID}}<span class="fit-vammo" data-fit-ammo="{{.TypeID}}" title="Loaded: {{.ChargeName}} — change ammunition"><img src="https://images.evetech.net/types/{{.ChargeID}}/icon?size=32" alt="{{.ChargeName}}" draggable="false"></span>{{end}}{{else}}<span aria-hidden="true">+</span>{{end}}
   </button>
   {{end}}
@@ -207,12 +207,12 @@
     </div>
     <div class="fit-bar-row{{if .Powergrid.Over}} over{{else}} good{{end}}">
       <span class="fit-bar-label">Powergrid</span>
-      <span class="fit-bar"><span style="width:{{printf "%.1f" .Powergrid.Pct}}%"></span></span>
+      <span class="fit-bar"><span data-w="{{printf "%.1f" .Powergrid.Pct}}"></span></span>
       <span class="fit-bar-nums">{{.Powergrid.Used}} of {{.Powergrid.Max}} ({{.Powergrid.Left}} left)</span>
     </div>
     <div class="fit-bar-row{{if .CPU.Over}} over{{else}} good{{end}}">
       <span class="fit-bar-label">CPU</span>
-      <span class="fit-bar"><span style="width:{{printf "%.1f" .CPU.Pct}}%"></span></span>
+      <span class="fit-bar"><span data-w="{{printf "%.1f" .CPU.Pct}}"></span></span>
       <span class="fit-bar-nums">{{.CPU.Used}} of {{.CPU.Max}} ({{.CPU.Left}} left)</span>
     </div>
     <div class="tw">

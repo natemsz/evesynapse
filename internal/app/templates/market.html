@@ -187,7 +187,7 @@
 </form>
 {{if $wl.Matches}}
 <p>{{range $i, $m := $wl.Matches}}{{if $i}} · {{end}}{{$m.Name}}
-  <form method="post" action="/market/watch" style="display:inline">
+  <form method="post" action="/market/watch" class="inline-form">
     <input type="hidden" name="action" value="add">
     <input type="hidden" name="type" value="{{$m.ID}}">
     <input type="hidden" name="region" value="{{$.Market.Region}}">

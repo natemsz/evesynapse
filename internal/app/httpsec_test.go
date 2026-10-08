@@ -84,6 +84,8 @@ func TestSecurityHeaders(t *testing.T) {
 	csp := h.Get("Content-Security-Policy")
 	for _, want := range []string{
 		"default-src 'self'",
+		"script-src 'self'",
+		"style-src 'self'",
 		"img-src 'self' data: https://images.evetech.net",
 		"frame-ancestors 'none'",
 		"form-action 'self'",
@@ -93,6 +95,14 @@ func TestSecurityHeaders(t *testing.T) {
 		if !strings.Contains(csp, want) {
 			t.Errorf("Content-Security-Policy %q is missing %q", csp, want)
 		}
+	}
+	// Every script is a versioned file under /static/ and no
+	// template carries inline scripts, style attributes, or event
+	// handlers, so the policy needs no 'unsafe-inline' anywhere.
+	// An inline block added back to a template must trip this
+	// test, not slide by.
+	if strings.Contains(csp, "unsafe-inline") {
+		t.Errorf("Content-Security-Policy %q contains 'unsafe-inline'", csp)
 	}
 	// HSTS only makes sense, and is only sent, on an https site.
 	if got := h.Get("Strict-Transport-Security"); got != "" {

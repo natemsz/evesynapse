@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<script>try{document.documentElement.classList.add("js");var savedNav=window.localStorage.getItem("evesynapse-nav");if(savedNav==="rail"||savedNav==="hidden"||savedNav==="expanded"){document.documentElement.setAttribute("data-nav",savedNav);}var savedTheme=window.localStorage.getItem("evesynapse-theme");if(savedTheme==="light"||savedTheme==="dark"){document.documentElement.setAttribute("data-theme",savedTheme);}}catch(e){}</script>
+<script src="/static/boot.js?v={{.AssetVersion}}"></script>
 <title>{{template "title" .}} · EveSynapse</title>
-{{if .AutoRefresh}}<meta http-equiv="refresh" content="5">{{end}}
-<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-<link rel="manifest" href="/static/manifest.webmanifest">
+{{if .AutoRefresh}}<noscript><meta http-equiv="refresh" content="5"></noscript>{{end}}
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v={{.AssetVersion}}">
+<link rel="manifest" href="/static/manifest.webmanifest?v={{.AssetVersion}}">
 <meta name="theme-color" content="#0d0503">
-<link rel="apple-touch-icon" href="/static/icon-192.png">
+<link rel="apple-touch-icon" href="/static/icon-192.png?v={{.AssetVersion}}">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -19,10 +19,10 @@
 <link rel="preload" as="font" type="font/woff2" href="/static/fonts/univers-next-pro-medium-condensed.woff2" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
 <link rel="stylesheet" href="/static/style.css?v={{.AssetVersion}}">
 </head>
-<body>
+<body{{if .AutoRefresh}} data-autorefresh="5"{{end}}>
+<a class="skip-link" href="#main-content">Skip to main content</a>
 <input class="nav-drawer-checkbox" type="checkbox" id="nav-drawer-toggle" autocomplete="off" tabindex="-1" aria-hidden="true">
 <aside class="sidebar" id="site-nav">
   <div class="sidebar-inner">
@@ -164,7 +164,7 @@
   </nav>
 </header>
 <div class="page-shell">
-<main>
+<main id="main-content">
   <div class="panel">
 {{template "content" .}}
   </div>

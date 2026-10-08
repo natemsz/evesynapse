@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	db "evesynapse/internal/db/sqlc"
@@ -44,9 +45,20 @@ func TestSyncNameCoverageFromBatchedLookups(t *testing.T) {
 	}
 
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+
+	// The page reloads on a timer driven by app.js
+	// (data-autorefresh), pausable and reduced-motion aware; only
+	// readers without JavaScript get the meta-refresh. The old
+	// always-on meta-refresh yanked focus and scroll mid-read.
 	code, body := getPage(t, app, cookie, "/sync/")
 	if code != http.StatusOK {
 		t.Fatalf("sync page: status %d", code)
+	}
+	mustContain(t, "/sync/", body,
+		`<body data-autorefresh="5">`,
+		`<noscript><meta http-equiv="refresh" content="5"></noscript>`)
+	if got := strings.Count(body, `http-equiv="refresh"`); got != 1 {
+		t.Fatalf("/sync/ refreshes %d times in markup, want the one noscript fallback", got)
 	}
 	mustContain(t, "/sync/", body, "Names resolved 2 of 4 (50%)")
 	if got := transport.calls.Load(); got != 0 {

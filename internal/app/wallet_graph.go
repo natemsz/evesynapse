@@ -161,6 +161,28 @@ type balanceChart struct {
 	DateTicks []markethistory.DateTick
 	From      string // oldest date label
 	To        string // newest date label
+
+	// Stacked charts (the Net worth history) draw filled bands under
+	// the line and name them in a legend of their own.
+	Stacked    bool
+	Bands      []balanceBand
+	Legend     []chartLegendItem
+	LegendNote string
+}
+
+// balanceBand is one filled polygon of a stacked chart.
+type balanceBand struct {
+	Label   string
+	Fill    string // colour
+	Opacity string
+	Points  string // polygon points
+}
+
+// chartLegendItem is one swatch and its name (Class picks the swatch
+// colour in the stylesheet).
+type chartLegendItem struct {
+	Class string
+	Label string
 }
 
 type balanceDot struct {
@@ -168,6 +190,10 @@ type balanceDot struct {
 	Date    string // "2006-01-02", the tooltip's date line
 	Balance string // esi.FormatISK
 	Title   string // "<date time>: balance X ISK"
+
+	// Stacked charts also break the day down (formatted ISK).
+	ISK    string
+	Assets string
 }
 
 // buildBalanceChart turns an ascending series into SVG
@@ -368,11 +394,10 @@ func (app *Application) attachNetWorthHistory(ctx context.Context, w *netWorthWi
 		logging.Errorf("net worth history for user %d: %v", userID, err)
 		return
 	}
-	points := netWorthHistoryPoints(rows)
-	if len(points) >= 2 {
-		if chart, ok := buildBalanceChart(points); ok {
+	days := netWorthBreakdownDays(rows)
+	if len(days) >= 2 {
+		if chart, ok := buildNetWorthChart(days); ok {
 			c := chart
-			c.Label = "Net worth over time"
 			w.History = &c
 		}
 		return

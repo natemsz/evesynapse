@@ -238,7 +238,7 @@ func TestAttachNetWorthHistory(t *testing.T) {
 	if w.History == nil || w.HistoryBuilding {
 		t.Fatalf("two days: history=%v building=%v, want chart + no building note", w.History != nil, w.HistoryBuilding)
 	}
-	if w.History.Label != "Net worth over time" {
+	if w.History.Label != "Net worth over time, split into ISK and assets" {
 		t.Fatalf("chart label = %q", w.History.Label)
 	}
 	if got := transport.calls.Load(); got != 0 {

@@ -275,8 +275,16 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Get("/favicon.ico", handleFavicon)
 
 	// Embedded static assets (stylesheet, scripts, fonts, the 2013
-	// wallpaper); static.go has the caching rules.
-	if assets, err := staticHandler(); err == nil {
+	// wallpaper); static.go has the caching rules. A failure here
+	// is loud and fail-closed (503 on /static/*): silently
+	// skipping the route served every page unstyled with no
+	// signal anywhere.
+	if assets, err := staticHandler(); err != nil {
+		logging.Errorf("evesynapse: static assets unavailable: %v", err)
+		r.Handle("/static/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "static assets unavailable", http.StatusServiceUnavailable)
+		}))
+	} else {
 		r.Handle("/static/*", assets)
 	}
 	r.Get("/auth/eve", app.handleEVELogin)

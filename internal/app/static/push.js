@@ -72,7 +72,40 @@
     });
   }
 
-  navigator.serviceWorker.register('/sw.js').then(function (reg) {
+  // within gives up on a step that never answers, so a button cannot
+  // hang: the wait ends with message as the error.
+  function within(promise, ms, message) {
+    return new Promise(function (resolve, reject) {
+      var timer = setTimeout(function () { reject(new Error(message)); }, ms);
+      promise.then(function (value) { clearTimeout(timer); resolve(value); },
+        function (err) { clearTimeout(timer); reject(err); });
+    });
+  }
+
+  // askPermission raises the browser's prompt, unless the answer is
+  // already known. Older browsers take a callback instead of returning
+  // a promise; both are handled.
+  function askPermission() {
+    if (Notification.permission !== 'default') {
+      return Promise.resolve(Notification.permission);
+    }
+    return new Promise(function (resolve, reject) {
+      var answered;
+      try {
+        answered = Notification.requestPermission(resolve);
+      } catch (err) {
+        reject(err);
+        return;
+      }
+      if (answered && typeof answered.then === 'function') { answered.then(resolve, reject); }
+    });
+  }
+
+  // The registration is used once its worker is active: subscribing
+  // against one that is still installing does not complete.
+  navigator.serviceWorker.register('/sw.js').then(function () {
+    return within(navigator.serviceWorker.ready, 20000, 'the notification worker did not start');
+  }).then(function (reg) {
     registration = reg;
     return refresh();
   }).catch(function (err) {
@@ -82,12 +115,16 @@
   enableBtn.addEventListener('click', function () {
     if (!registration) { return; }
     enableBtn.disabled = true;
-    Notification.requestPermission().then(function (permission) {
+    say('Waiting for you to allow notifications…');
+    within(askPermission(), 60000,
+      'no permission prompt was answered. If none appeared, allow notifications for EveSynapse in the device’s settings (on Android: Settings, Apps, EveSynapse or your browser, Notifications), then come back here.'
+    ).then(function (permission) {
       if (permission !== 'granted') { return refresh(); }
-      return registration.pushManager.subscribe({
+      say('Subscribing this browser…');
+      return within(registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: keyBytes(key)
-      }).then(function (sub) {
+      }), 30000, 'the browser’s push service did not answer. Check the connection and try again.').then(function (sub) {
         return post('/notifications/push/subscribe', sub.toJSON()).then(refresh, function (err) {
           // The server did not take it: do not leave the browser
           // subscribed to something nothing will send to.
@@ -113,16 +150,35 @@
     }).then(function () { disableBtn.disabled = false; });
   });
 
+  // The worker reports a test it received (sw.js), which tells apart
+  // the two ways a test can fail to appear: the message never reached
+  // this browser, or it did and the notification was not shown.
+  var testReport = null;
+  navigator.serviceWorker.addEventListener('message', function (event) {
+    if (event.data && event.data.pushTest && testReport) { testReport(event.data); }
+  });
+
   testBtn.addEventListener('click', function () {
     testBtn.disabled = true;
+    var arrived = new Promise(function (resolve) { testReport = resolve; });
     registration.pushManager.getSubscription().then(function (sub) {
       return post('/notifications/push/test', sub ? { endpoint: sub.endpoint } : {});
     }).then(function (res) {
       return res.text();
     }).then(function (answer) {
-      say('Test sent' + (answer ? ': ' + answer : '') + '. If nothing appears within a minute, this device is hiding it: check the system2019s notification settings for this browser, and Do Not Disturb.');
+      var sent = 'Test sent' + (answer ? ': ' + answer : '') + '. ';
+      say(sent + 'Waiting for it to reach this browser…');
+      return within(arrived, 30000, 'timeout').then(function (report) {
+        if (report.pushTest === 'shown') {
+          say(sent + 'It reached this browser, and the browser accepted the notification. If you did not see it, the system is hiding it: check its notification settings for this browser, and Do Not Disturb.');
+        } else {
+          say(sent + 'It reached this browser, but the browser refused to show it: ' + report.reason);
+        }
+      }, function () {
+        say(sent + 'It has not reached this browser after 30 seconds. The push service took it, so the browser is not collecting its messages: restart the browser, and check it is allowed to run in the background.');
+      });
     }).catch(function (err) {
       say('The test could not be sent: ' + err.message);
-    }).then(function () { testBtn.disabled = false; });
+    }).then(function () { testReport = null; testBtn.disabled = false; });
   });
 })();

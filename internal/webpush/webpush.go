@@ -274,6 +274,10 @@ type Result struct {
 	// Gone: the subscription no longer exists (the browser dropped
 	// it, or the user revoked permission). It should be deleted.
 	Gone bool
+	// Detail is what the push service said about delivery beyond the
+	// status, where it says anything: Microsoft's answers 201 to a
+	// message it then drops, and only its X-WNS-* headers tell.
+	Detail string
 }
 
 // OK reports whether the push service took the message.
@@ -309,9 +313,19 @@ func Send(ctx context.Context, client *http.Client, v *VAPID, sub Subscription, 
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	var detail []string
+	for _, name := range []string{"X-WNS-Status", "X-WNS-NotificationStatus", "X-WNS-DeviceConnectionStatus", "X-WNS-Error-Description"} {
+		if v := resp.Header.Get(name); v != "" {
+			if len(v) > 200 {
+				v = v[:200]
+			}
+			detail = append(detail, name+": "+v)
+		}
+	}
 	return Result{
 		Status: resp.StatusCode,
 		Gone:   resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone,
+		Detail: strings.Join(detail, "; "),
 	}, nil
 }
 

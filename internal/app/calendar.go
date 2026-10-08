@@ -16,9 +16,8 @@ import (
 // (calendar_month.go, ops.go), then the upcoming in-game events
 // (ESI's next 50 chronological summaries) with a detail block —
 // text, owner, duration, attendees — rendered cache-only from
-// the worker-warmed calendar snapshots. Read-only: responding to
-// events needs esi-calendar.respond_calendar_events.v1, which the
-// app deliberately never requested.
+// the worker-warmed calendar snapshots. An open event can be
+// answered from the page (calendar_respond.go).
 // ---------------------------------------------------------------------------
 
 type calendarRow struct {
@@ -46,6 +45,12 @@ type calendarDetail struct {
 	Text        string // plain text; template-escaped at render
 	Attendees   []calendarAttendeeRow
 	Warming     bool // detail snapshot not yet warmed
+	// Answering the event: its id, the choices with the current one
+	// marked, and whether the character granted the scope for it.
+	EventID    int64
+	Answers    []calendarAnswer
+	CanRespond bool
+	RelinkURL  string
 }
 
 type calendarView struct {
@@ -115,7 +120,18 @@ func (app *Application) handleCalendar(w http.ResponseWriter, r *http.Request) {
 
 	// An open event renders its detail under the list.
 	if eventID, _ := strconv.ParseInt(r.URL.Query().Get("event"), 10, 64); eventID > 0 {
-		detail := &calendarDetail{}
+		detail := &calendarDetail{
+			EventID:    eventID,
+			CanRespond: characterHasScope(active, calendarRespondScope),
+			RelinkURL:  relinkURL("calendar", active.CharacterID),
+		}
+		current := ""
+		for _, ev := range events {
+			if ev.EventID == eventID {
+				current = ev.EventResponse
+			}
+		}
+		detail.Answers = calendarAnswers(current)
 		var ev esi.CalendarEvent
 		if app.loadCorpSnapshot(ctx, active.CharacterID, esi.CalendarEventKind(eventID), &ev) {
 			detail.Title = ev.Title

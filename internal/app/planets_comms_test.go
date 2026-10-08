@@ -56,9 +56,9 @@ func TestPhase2Scopes(t *testing.T) {
 		if s == "esi-mail.send_mail.v1" {
 			foundSendMail = true
 		}
-		for _, banned := range []string{"respond_calendar_events", "write_contacts", "write_fleet", "open_window", "write_waypoint"} {
+		for _, banned := range []string{"write_contacts", "write_fleet", "open_window", "write_waypoint"} {
 			if strings.Contains(s, banned) {
-				t.Errorf("eveScopes must stay read-only for calendar/contacts/fleet, found %q", s)
+				t.Errorf("eveScopes must stay read-only for contacts/fleet, found %q", s)
 			}
 		}
 	}

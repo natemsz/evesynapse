@@ -31,10 +31,11 @@ const (
 // Scopes that features check individually (a missing one shows a
 // re-link notice rather than a dead page).
 const (
-	mailSendScope     = "esi-mail.send_mail.v1"
-	mailOrganizeScope = "esi-mail.organize_mail.v1"
-	planetScope       = "esi-planets.manage_planets.v1"
-	structureScope    = "esi-universe.read_structures.v1"
+	mailSendScope        = "esi-mail.send_mail.v1"
+	mailOrganizeScope    = "esi-mail.organize_mail.v1"
+	calendarRespondScope = "esi-calendar.respond_calendar_events.v1"
+	planetScope          = "esi-planets.manage_planets.v1"
+	structureScope       = "esi-universe.read_structures.v1"
 )
 
 // scopeUse is one scope a module wants. Required scopes are what the
@@ -119,6 +120,7 @@ var moduleManifest = []moduleDef{
 	{ID: "calendar", Title: "Calendar", Layer: layerCharacter,
 		Scopes: []scopeUse{
 			req("esi-calendar.read_calendar_events.v1", "Upcoming events and attendees."),
+			opt(calendarRespondScope, "Accept or decline events."),
 		},
 		Snapshots: []string{esi.SnapCalendar, esi.SnapCalendarEventPrefix, esi.SnapCalendarAttPrefix}},
 	{ID: "contacts", Title: "Contacts", Layer: layerCharacter,

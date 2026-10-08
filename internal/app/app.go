@@ -366,6 +366,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/calendar", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleCalendar)
+		r.Post("/respond", app.handleCalendarRespond)
 	})
 
 	// Ops (ops.go): EveSynapse's own calendar entries and the

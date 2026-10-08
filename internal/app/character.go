@@ -54,9 +54,9 @@ func (app *Application) pickCharacter(ctx context.Context, r *http.Request, path
 		// An explicit pick becomes the session's acting
 		// character, so the header switcher and every other
 		// page agree on who is being viewed.
-		app.sessions.Put(ctx, sessionCharacterID, int(active.CharacterID))
+		putSessionCharID(app.sessions, ctx, active.CharacterID)
 		app.sessions.Put(ctx, sessionCharacterName, active.Name)
-	} else if sid := int64(app.sessions.GetInt(ctx, sessionCharacterID)); sid == 0 || !pick(sid) {
+	} else if sid := sessionCharID(app.sessions, ctx); sid == 0 || !pick(sid) {
 		active = characters[0]
 	}
 

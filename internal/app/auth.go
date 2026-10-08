@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/alexedwards/scs/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/oauth2"
 
@@ -25,7 +26,8 @@ import (
 )
 
 // Session keys. Values stored via scs are gob-encoded; keep them typed
-// consistently (ints for IDs so GetInt works).
+// consistently (ints for the small local user IDs so GetInt works;
+// the acting character ID goes through the int64 helpers below).
 const (
 	sessionAuthenticated = "authenticated"
 	sessionUserID        = "user_id"
@@ -33,6 +35,30 @@ const (
 	sessionCharacterName = "character_name"
 	sessionOAuthState    = "oauth_state"
 )
+
+// sessionCharID reads the session's acting character ID. EVE IDs
+// reach past 32 bits, so they are stored as int64
+// (putSessionCharID); the int case serves sessions written before
+// that, which age out within sessionLifetime.
+func sessionCharID(sm *scs.SessionManager, ctx context.Context) int64 {
+	switch v := sm.Get(ctx, sessionCharacterID).(type) {
+	case int64:
+		return v
+	case int:
+		return int64(v)
+	case int32:
+		return int64(v)
+	default:
+		return 0
+	}
+}
+
+// putSessionCharID stores the session's acting character ID as an
+// int64: int(CharacterID) truncates EVE IDs on 32-bit platforms,
+// corrupting which character the session acts as.
+func putSessionCharID(sm *scs.SessionManager, ctx context.Context, id int64) {
+	sm.Put(ctx, sessionCharacterID, id)
+}
 
 // sessionLifetime is how long a sign-in lasts. The session slides
 // (see slideSession), so the 30 days only run out after a month
@@ -63,7 +89,9 @@ func (app *Application) slideSession(next http.Handler) http.Handler {
 
 // https://login.eveonline.com/.well-known/oauth-authorization-server
 const (
-	eveIssuer       = "https://login.eveonline.com" // required `iss` claim
+	eveIssuer       = "https://login.eveonline.com" // required `iss` claim (URI form)
+	eveIssuerHost   = "login.eveonline.com"         // required `iss` claim (bare-host form)
+	eveAudience     = "EVE Online"                  // required `aud` member, beside the client_id
 	eveDiscoveryURL = "https://login.eveonline.com/.well-known/oauth-authorization-server"
 )
 
@@ -260,7 +288,11 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	token, err := eveOAuthConfig(app.cfg).Exchange(ctx, code)
+	// The exchange runs on the shared SSO client (10s timeout),
+	// like the refresh path: the default client would wait forever
+	// on a hung CCP.
+	exchangeCtx := context.WithValue(ctx, oauth2.HTTPClient, loginHTTPClient)
+	token, err := eveOAuthConfig(app.cfg).Exchange(exchangeCtx, code)
 	if err != nil {
 		logging.Warnf("sso callback: token exchange failed: %v", err)
 		fail("exchange")
@@ -333,7 +365,7 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 	}
 	app.sessions.Put(ctx, sessionAuthenticated, true)
 	app.sessions.Put(ctx, sessionUserID, int(userID))
-	app.sessions.Put(ctx, sessionCharacterID, int(characterID))
+	putSessionCharID(app.sessions, ctx, characterID)
 	app.sessions.Put(ctx, sessionCharacterName, characterName)
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -503,6 +535,8 @@ func publicKeyFromJWK(nB64, eB64 string) (*rsa.PublicKey, error) {
 
 // verifyAccessToken validates an EVE SSO access token (RS256 JWT)
 // against CCP's JWKS and extracts the character it belongs to. It
+// makes the four checks the ESI docs require of an EVE JWT:
+// signature (RS256, pinned kid), issuer, expiry, and audience. It
 // returns the character ID, the character name from the `name` claim,
 // the granted scopes (from the `scp` claim, falling back to the
 // requested scopes), and the character owner hash from the `owner`
@@ -523,9 +557,30 @@ func (app *Application) verifyAccessToken(ctx context.Context, accessToken strin
 		return 0, "", "", "", err
 	}
 
+	// The issuer is the SSO host, bare or as a URI: CCP sends
+	// either form, and both name the same login server.
 	iss, err := claims.GetIssuer()
-	if err != nil || iss != eveIssuer {
+	if err != nil || (iss != eveIssuer && iss != eveIssuerHost) {
 		return 0, "", "", "", fmt.Errorf("unexpected issuer %q", iss)
+	}
+
+	// Expiry is checked explicitly rather than trusted to the JWT
+	// library's defaults: an access token without a valid expiry
+	// is not a token this app accepts.
+	exp, err := claims.GetExpirationTime()
+	if err != nil || exp == nil || !time.Now().Before(exp.Time) {
+		return 0, "", "", "", errors.New("token is expired or has no expiry")
+	}
+
+	// The audience must name this app (its client_id) and EVE
+	// Online: a token minted for another client is not ours to
+	// accept, even signed by the same keys.
+	aud, err := claims.GetAudience()
+	if err != nil {
+		return 0, "", "", "", fmt.Errorf("read aud claim: %w", err)
+	}
+	if !audContains(aud, app.cfg.eveClientID) || !audContains(aud, eveAudience) {
+		return 0, "", "", "", errors.New("token audience is not this application")
 	}
 
 	sub, err := claims.GetSubject()
@@ -560,4 +615,19 @@ func (app *Application) verifyAccessToken(ctx context.Context, accessToken strin
 		}
 	}
 	return characterID, characterName, scopes, ownerHash, nil
+}
+
+// audContains reports whether want is one of the token's audiences.
+// An empty want never matches: with no client_id configured there
+// is no audience this app may accept.
+func audContains(aud jwt.ClaimStrings, want string) bool {
+	if want == "" {
+		return false
+	}
+	for _, a := range aud {
+		if a == want {
+			return true
+		}
+	}
+	return false
 }

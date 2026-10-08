@@ -105,9 +105,9 @@ func (app *Application) handleAssets(w http.ResponseWriter, r *http.Request) {
 	if want, _ := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64); want != 0 && pick(want) {
 		// An explicit pick becomes the session's acting
 		// character (see pickCharacter in character.go).
-		app.sessions.Put(ctx, sessionCharacterID, int(active.CharacterID))
+		putSessionCharID(app.sessions, ctx, active.CharacterID)
 		app.sessions.Put(ctx, sessionCharacterName, active.Name)
-	} else if sid := int64(app.sessions.GetInt(ctx, sessionCharacterID)); sid == 0 || !pick(sid) {
+	} else if sid := sessionCharID(app.sessions, ctx); sid == 0 || !pick(sid) {
 		active = characters[0]
 	}
 	for _, ch := range characters {

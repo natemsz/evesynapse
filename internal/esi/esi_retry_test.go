@@ -187,3 +187,30 @@ func TestRetryWaitCapsRetryAfter(t *testing.T) {
 		t.Fatalf("retryWait with Retry-After 3600 = %v, %v; want %v, true", wait, ok, maxRetryAfter)
 	}
 }
+
+// TestStatusErrorCarriesESIText: an error answer's "error" text rides
+// on the StatusError (shown to readers on refused writes and kept in
+// the log line), while an answer with no JSON error text leaves the
+// message in its plain form.
+func TestStatusErrorCarriesESIText(t *testing.T) {
+	fastRetries(t)
+	transport := &scriptedTransport{steps: []scriptedStep{
+		{status: http.StatusBadRequest, body: `{"error":"recipient is not a valid mail target"}`},
+	}}
+	c := New(&http.Client{Transport: transport}, nil, nil)
+	_, _, _, err := c.send(context.Background(), http.MethodPost, "tok", "/characters/1/mail/", map[string]int{"x": 1}, "", http.StatusCreated)
+	var se *StatusError
+	if !errors.As(err, &se) || se.Code != http.StatusBadRequest || se.Detail != "recipient is not a valid mail target" {
+		t.Fatalf("err = %v (%#v), want a 400 StatusError carrying ESI's text", err, se)
+	}
+	if want := "ESI POST /characters/1/mail/: status 400: recipient is not a valid mail target"; err.Error() != want {
+		t.Fatalf("Error() = %q, want %q", err.Error(), want)
+	}
+
+	plain := &scriptedTransport{steps: []scriptedStep{{status: http.StatusNotFound, body: `<html>nope</html>`}}}
+	c2 := New(&http.Client{Transport: plain}, nil, nil)
+	_, _, _, err = c2.send(context.Background(), http.MethodGet, "", "/x/", nil, "", http.StatusOK)
+	if want := "ESI GET /x/: status 404"; err == nil || err.Error() != want {
+		t.Fatalf("non-JSON error answer: %v, want %q", err, want)
+	}
+}

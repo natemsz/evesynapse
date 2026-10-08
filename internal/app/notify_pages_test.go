@@ -207,3 +207,68 @@ func TestNotifyTargetStaysOnTheSite(t *testing.T) {
 		}
 	}
 }
+
+// TestNotificationSettings: one switch per kind, saved with the
+// other per-user settings, and honoured by the worker's next pass.
+// Beside each kind the page says how many characters can produce it.
+func TestNotificationSettings(t *testing.T) {
+	f := newNotifyFixture(t)
+	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+	// A second character that has granted mail but not killmails.
+	alt := seedCharacter(t, f.q, f.userID, fixtureCharB, "Fixture Alt")
+	if _, err := f.app.db.ExecContext(f.ctx, `UPDATE characters SET scopes = $1 WHERE character_id = $2`,
+		"esi-mail.read_mail.v1", alt.CharacterID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.app.db.ExecContext(f.ctx, `UPDATE characters SET scopes = $1 WHERE character_id = $2`,
+		"esi-mail.read_mail.v1 esi-killmails.read_killmails.v1", f.ch.CharacterID); err != nil {
+		t.Fatal(err)
+	}
+
+	code, body := getPage(t, f.app, cookie, "/notifications/settings")
+	if code != http.StatusOK {
+		t.Fatalf("GET settings = %d", code)
+	}
+	// Everything is on to begin with.
+	for _, kind := range notifyKinds {
+		mustContain(t, "/notifications/settings", body,
+			`<input type="checkbox" name="kind" value="`+kind.ID+`" checked> `+kind.Title)
+	}
+	mustContain(t, "/notifications/settings", body,
+		"2 of 2 characters", // mail: both
+		"1 of 2 characters", // killmails: the alt has not granted it
+		"Fixture Alt has not granted this.",
+		"Your account") // the watch list needs no character
+	if !strings.Contains(body, `/auth/eve?`) && !strings.Contains(body, "Sign in again") {
+		t.Fatal("no way offered to grant the missing access")
+	}
+
+	// Switch off mail and killmails: the form sends the ones left on.
+	var keep []string
+	for _, kind := range notifyKinds {
+		if kind.ID != notifyMail && kind.ID != notifyKillmail {
+			keep = append(keep, kind.ID)
+		}
+	}
+	if code, where := f.post(cookie, "/notifications/settings", url.Values{"kind": append(keep, "no-such-kind")}); code != http.StatusSeeOther || where != "/notifications/settings" {
+		t.Fatalf("save: %d to %q", code, where)
+	}
+	prefs := f.app.notifyPrefsFor(f.ctx, f.userID)
+	if len(prefs.Off) != 2 || !prefs.off(notifyMail) || !prefs.off(notifyKillmail) {
+		t.Fatalf("stored settings switch off %q, want mail and killmail", prefs.Off)
+	}
+	_, body = getPage(t, f.app, cookie, "/notifications/settings")
+	mustContain(t, "/notifications/settings", body,
+		"Notification settings saved.",
+		`<input type="checkbox" name="kind" value="mail"> New mail`,
+		`<input type="checkbox" name="kind" value="skill" checked> Skill complete`)
+
+	// Another account's settings are its own.
+	other, err := f.q.CreateUser(f.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := f.app.notifyPrefsFor(f.ctx, other.ID); len(p.Off) != 0 {
+		t.Fatalf("a second account inherited settings: %q", p.Off)
+	}
+}

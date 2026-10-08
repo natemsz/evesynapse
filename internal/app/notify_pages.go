@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -216,4 +217,105 @@ func notifyTarget(url string) string {
 		return url
 	}
 	return "/notifications/"
+}
+
+// ---------------------------------------------------------------------------
+// Settings: which kinds the account wants. One switch per kind, and
+// beside each how many of the account's characters can produce it,
+// since a kind reads a module's data and a character that has not
+// granted that module's scopes has none.
+// ---------------------------------------------------------------------------
+
+// notifySettingsView is the /notifications/settings page.
+type notifySettingsView struct {
+	Rows []notifySettingRow
+}
+
+type notifySettingRow struct {
+	ID       string
+	Title    string
+	On       bool
+	Coverage string // "3 of 5 characters", or "" where no character is needed
+	// Missing are the characters that have not granted the access
+	// this kind reads, each with the sign-in that asks for just that.
+	Missing []notifyMissingCharacter
+}
+
+type notifyMissingCharacter struct {
+	Name      string
+	RelinkURL string
+}
+
+// notifySettingRows builds the page's rows from the stored settings
+// and the account's characters.
+func notifySettingRows(prefs notifyPrefs, characters []db.Character) []notifySettingRow {
+	rows := make([]notifySettingRow, 0, len(notifyKinds))
+	for _, kind := range notifyKinds {
+		row := notifySettingRow{ID: kind.ID, Title: kind.Title, On: !prefs.off(kind.ID)}
+		if module, ok := moduleByID(kind.Module); ok && module.Layer != layerPublic && len(characters) > 0 {
+			ready := 0
+			for _, ch := range characters {
+				if module.statusFor(scopeSet(ch.Scopes)).State == moduleLocked {
+					row.Missing = append(row.Missing, notifyMissingCharacter{Name: ch.Name, RelinkURL: relinkURL(module.ID, ch.CharacterID)})
+					continue
+				}
+				ready++
+			}
+			noun := "characters"
+			if len(characters) == 1 {
+				noun = "character"
+			}
+			row.Coverage = fmt.Sprintf("%d of %d %s", ready, len(characters), noun)
+		}
+		rows = append(rows, row)
+	}
+	return rows
+}
+
+func (app *Application) handleNotificationSettings(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	data := pageData{
+		LoggedIn:      true,
+		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
+		SSOConfigured: app.cfg.SSOConfigured(),
+	}
+	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	data.NotifySettings = &notifySettingsView{
+		Rows: notifySettingRows(app.notifyPrefsFor(ctx, userID), app.sessionCharacters(ctx)),
+	}
+	app.render(ctx, w, http.StatusOK, "notification_settings.html", data)
+}
+
+// handleNotificationSettingsSave stores which kinds are on. The form
+// sends the kinds that are ticked; every other kind is off.
+func (app *Application) handleNotificationSettingsSave(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	if err := r.ParseForm(); err != nil || userID == 0 {
+		http.Redirect(w, r, "/notifications/settings", http.StatusSeeOther)
+		return
+	}
+	on := map[string]bool{}
+	for _, id := range r.Form["kind"] {
+		on[id] = true
+	}
+	var prefs notifyPrefs
+	for _, kind := range notifyKinds {
+		if !on[kind.ID] {
+			prefs.Off = append(prefs.Off, kind.ID)
+		}
+	}
+	blob, err := json.Marshal(prefs)
+	if err == nil {
+		err = app.queries.UpsertWidgetConfig(ctx, db.UpsertWidgetConfigParams{
+			UserID: userID, WidgetID: notifyConfigID, Config: string(blob), UpdatedAt: time.Now().UTC(),
+		})
+	}
+	if err != nil {
+		logging.Errorf("notifications: save settings for user %d: %v", userID, err)
+		app.flash(ctx, "The settings could not be saved; check the server log.")
+	} else {
+		app.flash(ctx, "Notification settings saved.")
+	}
+	http.Redirect(w, r, "/notifications/settings", http.StatusSeeOther)
 }

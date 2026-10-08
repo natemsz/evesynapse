@@ -2,6 +2,8 @@
 {{define "content"}}
 <h1><span class="gt">Notifications</span></h1>
 
+<p><a href="/notifications/settings">Notification settings</a></p>
+
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{with .Notifications}}

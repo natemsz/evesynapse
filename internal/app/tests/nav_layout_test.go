@@ -77,7 +77,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`<div class="topbar-character">`,
 		`<span class="topbar-character-name">`,
 		`<details class="branch switcher topbar-switcher">`,
-		`<form class="sidebar-signout-form" method="post" action="/auth/logout"><button class="navlink sidebar-signout" type="submit">`,
+		`<form class="sidebar-signout-form" method="post" action="/auth/logout"><button class="navlink sidebar-signout" type="submit" data-tip="Sign out">`,
 		`id="topbar-q"`,
 		`<svg class="search-glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round"><circle cx="10.8" cy="10.8" r="6.2"/><path d="M15.2 15.2 20.4 20.4"/></g></svg>`,
 		`id="topbar-suggest"`,
@@ -158,7 +158,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	if strings.Contains(aside, "sidebar-wordmark") || strings.Contains(aside, "EVESYNAPSE") {
 		t.Error("sidebar still carries the wordmark")
 	}
-	if !strings.Contains(aside, `action="/auth/logout"><button class="navlink sidebar-signout" type="submit">`) {
+	if !strings.Contains(aside, `action="/auth/logout"><button class="navlink sidebar-signout" type="submit" data-tip="Sign out">`) {
 		t.Error("sidebar is missing its bottom sign-out button")
 	}
 	topbarStart := strings.Index(body, `<nav class="topbar">`)
@@ -312,8 +312,8 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		// 500 Medium face (only 300/500/700 were declared),
 		// which reads bold.
 		"@font-face {\n  font-family: 'Univers Next Pro';\n  font-style: normal;\n  font-weight: 400;\n  font-display: swap;\n  src: url('/static/fonts/univers-next-pro-regular.woff2') format('woff2');\n}",
-		".branch > summary,\n.sidenav a.navlink {\n  font-family: \"Univers Next Pro Condensed\", \"Univers Next Pro\", -apple-system, \"SF Pro Display\", \"Segoe UI\", \"Inter\", sans-serif;\n  font-weight: 500;\n  font-synthesis-weight: none;\n}",
-		"header a.navlink, .sidenav a.navlink, .branch .menu a {\n  font-family: \"Univers Next Pro\", -apple-system, \"SF Pro Display\", \"Segoe UI\", \"Inter\", sans-serif;\n  font-weight: 400;\n  font-synthesis-weight: none;\n}",
+		".branch > summary,\n.sidenav a.navlink,\n.sidebar-account-footer .navlink {\n  font-family: \"Univers Next Pro Condensed\", \"Univers Next Pro\", -apple-system, \"SF Pro Display\", \"Segoe UI\", \"Inter\", sans-serif;\n  font-weight: 500;\n  font-synthesis-weight: none;\n}",
+		"header a.navlink, .branch .menu a {\n  font-family: \"Univers Next Pro\", -apple-system, \"SF Pro Display\", \"Segoe UI\", \"Inter\", sans-serif;\n  font-weight: 400;\n  font-synthesis-weight: none;\n}",
 		".card > h2:first-child, .card > h3:first-child { margin: -0.85rem -1rem 0.75rem; padding: 0.55rem 1rem; border-radius: 4px 4px 0 0; }",
 		".foldable > h2:first-child, .foldable > h3:first-child { margin: 0 0 0.15rem; padding: 0.45rem 0.65rem; border-radius: 3px; }",
 		// v0.3.07.010 drawer refinement: on small screens the

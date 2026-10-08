@@ -155,7 +155,7 @@ func TestPagesLinkVersionedAssets(t *testing.T) {
 }
 
 func TestTemplatesAreParsedOnce(t *testing.T) {
-	shared := []string{"templates/base.html", "templates/balancechart.html", "templates/charselector.html"}
+	shared := []string{"templates/base.html", "templates/balancechart.html", "templates/charselector.html", "templates/locked.html"}
 	first, err := parsedTemplate(&pageTemplates, "base", "home.html", shared...)
 	if err != nil {
 		t.Fatalf("parse home.html: %v", err)

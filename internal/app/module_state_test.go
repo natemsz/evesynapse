@@ -1,0 +1,144 @@
+package app
+
+import (
+	"strings"
+	"testing"
+
+	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
+)
+
+func TestModuleStatusFor(t *testing.T) {
+	mail, _ := moduleByID("mail")
+	cases := []struct {
+		name    string
+		granted []string
+		state   moduleState
+		missReq int
+		missOpt int
+	}{
+		{"none", nil, moduleLocked, 1, 2},
+		{"required only", []string{"esi-mail.read_mail.v1"}, moduleLimited, 0, 2},
+		{"one optional", []string{"esi-mail.read_mail.v1", mailSendScope}, moduleLimited, 0, 1},
+		{"all", []string{"esi-mail.read_mail.v1", mailSendScope, mailOrganizeScope}, moduleEnabled, 0, 0},
+		{"optional without required", []string{mailSendScope, mailOrganizeScope}, moduleLocked, 1, 0},
+	}
+	for _, c := range cases {
+		st := mail.statusFor(scopeSet(strings.Join(c.granted, " ")))
+		if st.State != c.state || len(st.MissingRequired) != c.missReq || len(st.MissingOptional) != c.missOpt {
+			t.Errorf("%s: got %s req=%d opt=%d, want %s req=%d opt=%d", c.name,
+				st.State, len(st.MissingRequired), len(st.MissingOptional), c.state, c.missReq, c.missOpt)
+		}
+	}
+}
+
+func TestPublicAndDerivedModulesAreAlwaysEnabled(t *testing.T) {
+	states := characterModuleStates(db.Character{})
+	for _, m := range moduleManifest {
+		if m.Layer == layerPublic || m.Layer == layerDerived {
+			if states[m.ID].State != moduleEnabled {
+				t.Errorf("%s module %q = %s, want enabled", m.Layer, m.ID, states[m.ID].State)
+			}
+		}
+	}
+}
+
+func TestCharacterModuleStatesFromGrantedScopes(t *testing.T) {
+	ch := db.Character{Scopes: strings.Join(eveScopes, " ")}
+	for id, st := range characterModuleStates(ch) {
+		if st.State != moduleEnabled {
+			t.Errorf("full grant: module %q = %s", id, st.State)
+		}
+	}
+	none := characterModuleStates(db.Character{})
+	if none["skills"].State != moduleLocked {
+		t.Errorf("no grant: skills = %s, want locked", none["skills"].State)
+	}
+}
+
+func TestModuleStatusNotice(t *testing.T) {
+	mail, _ := moduleByID("mail")
+	if n := mail.statusFor(scopeSet(strings.Join(eveScopes, " "))).notice(mail, 42, "Pilot"); n != nil {
+		t.Errorf("enabled module produced a notice: %+v", n)
+	}
+	locked := mail.statusFor(scopeSet("")).notice(mail, 42, "Pilot")
+	if locked == nil || !locked.Locked || len(locked.Scopes) != 1 {
+		t.Fatalf("locked notice = %+v, want Locked with the one required scope", locked)
+	}
+	limited := mail.statusFor(scopeSet("esi-mail.read_mail.v1")).notice(mail, 42, "Pilot")
+	if limited == nil || limited.Locked || len(limited.Scopes) != 2 {
+		t.Fatalf("limited notice = %+v, want not Locked with two optional scopes", limited)
+	}
+}
+
+func TestLockedNoticeTemplate(t *testing.T) {
+	mail, _ := moduleByID("mail")
+	ts, err := parsedTemplate(&fragmentTemplates, "fragment", "locked.html", "templates/locked.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var b strings.Builder
+	n := mail.statusFor(scopeSet("")).notice(mail, 42, "Pilot One")
+	if err := ts.ExecuteTemplate(&b, "locked-notice", n); err != nil {
+		t.Fatal(err)
+	}
+	out := b.String()
+	for _, want := range []string{"Mail is locked", "Inbox, labels, mailing lists and bodies.", "Pilot One", `href="/auth/eve?character=42&amp;module=mail"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("rendered notice missing %q:\n%s", want, out)
+		}
+	}
+	b.Reset()
+	if err := ts.ExecuteTemplate(&b, "locked-notice", (*lockedNotice)(nil)); err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(b.String()) != "" {
+		t.Errorf("nil notice rendered %q, want nothing", b.String())
+	}
+}
+
+func TestRelinkScopesKeepsExistingGrants(t *testing.T) {
+	mail, _ := moduleByID("mail")
+	got := relinkScopes("esi-skills.read_skills.v1 esi-mail.read_mail.v1", mail)
+	want := []string{"esi-skills.read_skills.v1", "esi-mail.read_mail.v1", mailOrganizeScope, mailSendScope}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("relinkScopes = %v, want %v", got, want)
+	}
+	if again := relinkScopes(strings.Join(got, " "), mail); len(again) != len(got) {
+		t.Errorf("relinkScopes is not idempotent: %v then %v", got, again)
+	}
+}
+
+func TestRelinkURL(t *testing.T) {
+	if got, want := relinkURL("mail", 42), "/auth/eve?character=42&module=mail"; got != want {
+		t.Errorf("relinkURL = %q, want %q", got, want)
+	}
+}
+
+func TestKindLockedOut(t *testing.T) {
+	const walletScope = "esi-wallet.read_character_wallet.v1"
+	if !kindLockedOut(scopeSet(""), esi.SnapWallet) {
+		t.Error("wallet kind should be locked out with no grants")
+	}
+	if kindLockedOut(scopeSet(walletScope), esi.SnapWallet) {
+		t.Error("wallet kind must not be locked out once its scope is granted")
+	}
+	// Skills has two required scopes; one granted keeps every skills
+	// kind fetchable, since the manifest does not map scope to kind.
+	if kindLockedOut(scopeSet("esi-skills.read_skills.v1"), esi.SnapSkillqueue) {
+		t.Error("a partly granted module must not be locked out")
+	}
+	// The profile belongs to no module and is always fetched.
+	if kindLockedOut(scopeSet(""), esi.SnapProfile) {
+		t.Error("an unowned kind must never be locked out")
+	}
+}
+
+func TestEveryCoreKindIsFetchedWithFullGrant(t *testing.T) {
+	granted := scopeSet(strings.Join(eveScopes, " "))
+	for _, kind := range coreSnapshotKinds {
+		if kindLockedOut(granted, kind) {
+			t.Errorf("core kind %q is locked out with every scope granted", kind)
+		}
+	}
+}

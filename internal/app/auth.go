@@ -232,8 +232,40 @@ func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+	cfg := eveOAuthConfig(app.cfg)
+	// A targeted re-link (?module=&character=) asks for the module's
+	// missing scopes on top of the character's existing grants.
+	if id := r.URL.Query().Get("module"); id != "" {
+		scopes, ok := app.relinkScopesFor(r, id)
+		if !ok {
+			http.Error(w, "Unknown module or character", http.StatusBadRequest)
+			return
+		}
+		cfg.Scopes = scopes
+	}
 	app.sessions.Put(r.Context(), sessionOAuthState, state)
-	http.Redirect(w, r, eveOAuthConfig(app.cfg).AuthCodeURL(state), http.StatusFound)
+	http.Redirect(w, r, cfg.AuthCodeURL(state), http.StatusFound)
+}
+
+// relinkScopesFor resolves a targeted re-link request: the module must
+// be in the manifest and the character must be linked to the session's
+// account. ok is false otherwise, so one cannot probe other accounts'
+// characters.
+func (app *Application) relinkScopesFor(r *http.Request, moduleID string) (scopes []string, ok bool) {
+	m, found := moduleByID(moduleID)
+	if !found || len(m.Scopes) == 0 {
+		return nil, false
+	}
+	characterID, err := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64)
+	if err != nil {
+		return nil, false
+	}
+	for _, ch := range app.sessionCharacters(r.Context()) {
+		if ch.CharacterID == characterID {
+			return relinkScopes(ch.Scopes, m), true
+		}
+	}
+	return nil, false
 }
 
 // newOAuthState returns 32 random bytes hex-encoded (64 chars).

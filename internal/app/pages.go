@@ -257,7 +257,7 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 			data.ViewerChars[entry.ID] = true
 		}
 	}
-	ts, err := parsedTemplate(&pageTemplates, "base", page, "templates/base.html", "templates/balancechart.html", "templates/charselector.html")
+	ts, err := parsedTemplate(&pageTemplates, "base", page, "templates/base.html", "templates/balancechart.html", "templates/charselector.html", "templates/locked.html")
 	if err != nil {
 		logging.Errorf("parse template %s: %v", page, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)

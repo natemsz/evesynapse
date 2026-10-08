@@ -36,7 +36,7 @@ func (app *Application) renderFragment(w http.ResponseWriter, page, define strin
 // choosing (the planner answers a refused move with a 409 and the editor
 // carrying the reason).
 func (app *Application) renderFragmentStatus(w http.ResponseWriter, status int, page, define string, data any) {
-	ts, err := parsedTemplate(&fragmentTemplates, "fragment", page, "templates/balancechart.html", "templates/charselector.html")
+	ts, err := parsedTemplate(&fragmentTemplates, "fragment", page, "templates/balancechart.html", "templates/charselector.html", "templates/locked.html")
 	if err != nil {
 		logging.Errorf("parse fragment template %s: %v", page, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)

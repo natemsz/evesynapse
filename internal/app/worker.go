@@ -407,9 +407,17 @@ func (c *cycleState) refreshCoreSnapshots(ctx context.Context, ch db.Character) 
 	for _, snap := range meta {
 		fresh[snap.Kind] = esi.CacheWindowOpen(snap.CachedUntil)
 	}
+	granted := scopeSet(ch.Scopes)
 	for _, kind := range coreSnapshotKinds {
 		if fresh[kind] {
 			continue // still inside ESI's cache window
+		}
+		// A character that granted none of the owning module's scopes
+		// can only be refused; skipping spares the fetch and keeps
+		// one locked kind from ending the pass for the rest. A row with no
+		// recorded scopes is unknown, not locked, and fetches as before.
+		if len(granted) > 0 && kindLockedOut(granted, kind) {
+			continue
 		}
 
 		if !c.allowance.take() {

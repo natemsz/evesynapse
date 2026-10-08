@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"html/template"
 	"net/http"
 	"strconv"
 	"strings"
@@ -161,25 +162,26 @@ type skillPlanSummary struct {
 	Character int64
 }
 
-// skillPlanStepRow is one computed step of the plan editor.
-type skillPlanStepRow struct {
-	Skill   string
-	SkillID int64
-	FromTo  string // "III → V"
-	SP      string
-	Time    string
-	Finish  string // RFC3339 UTC
-	Prereq  bool
-}
-
-// skillPlanItemRow is one editor row: the user's entries in intent
-// order (computation re-sorts; this is what reorder edits).
-type skillPlanItemRow struct {
-	SkillID int64
-	Skill   string
-	Level   string // roman
-	CanUp   bool
-	CanDown bool
+// skillPlanRow is one row of the unified planner: one skill, in the order
+// it will train. The skills the user put in the plan carry the move and
+// remove controls; the prerequisites the plan pulls in are shown in their
+// place in the order, without controls, with what needs them.
+type skillPlanRow struct {
+	SkillID  int64
+	Skill    string
+	Direct   bool          // a skill in the plan (movable, removable); false = pulled in as a prerequisite
+	NeededBy string        // for a prerequisite: "for Beta Skill"
+	Covered  bool          // already trained to the target (left out of the timing)
+	Squares  template.HTML // the five level boxes: trained, planned, empty
+	FromTo   string        // "III → V"
+	SP       string
+	Time     string
+	Finish   string // UTC
+	Note     string // "in queue", "already trained"
+	CanUp    bool   // a move up is allowed (and would change the order)
+	CanDown  bool
+	UpWhy    string // when CanUp is false: why (a prerequisite blocks it, or it is first)
+	DownWhy  string
 }
 
 // skillPlansView is the /skills/plans page body.
@@ -198,9 +200,9 @@ type skillPlansView struct {
 type skillPlanDetail struct {
 	ID              int64
 	Name            string
-	Items           []skillPlanItemRow
-	Steps           []skillPlanStepRow
-	Dropped         []string // "Gunnery V — already in queue"
+	Rows            []skillPlanRow // the plan in training order, prerequisites included
+	Covered         []skillPlanRow // plan skills already trained or queued to their target
+	Count           int            // skills in the plan
 	Unknown         []string
 	TotalSP         string
 	TotalTime       string
@@ -227,6 +229,15 @@ type skillSearchRow struct {
 	SkillID int64
 	Name    string
 	Rank    string
+	Squares template.HTML // the character's trained level
+	Levels  []levelOption // the levels still worth planning; empty when trained to V
+}
+
+// levelOption is one entry of a target-level picker.
+type levelOption struct {
+	Value    int
+	Roman    string
+	Selected bool
 }
 
 // fitPreview is the plan-from-fit preview: the closure checklist
@@ -332,10 +343,23 @@ func (app *Application) handleSkillPlans(w http.ResponseWriter, r *http.Request)
 		if err != nil {
 			logging.Errorf("skill plans: search %q: %v", view.SearchQuery, err)
 		}
+		searchGraph := newSDESkillGraph(app, ctx)
+		ct, _, trainingLoaded := app.loadCharTraining(ctx, active.CharacterID)
 		for _, hit := range hits {
-			view.SearchResults = append(view.SearchResults, skillSearchRow{
+			trained := 0
+			if trainingLoaded {
+				trained = trainedLevel(searchGraph, ct, hit.TypeID)
+			}
+			row := skillSearchRow{
 				SkillID: hit.TypeID, Name: hit.Name, Rank: formatRank(hit.Rank),
-			})
+				Squares: planLevels(trained, trained),
+			}
+			// Only the levels above what is trained: those are what a plan
+			// is for. V is the usual goal, so it starts selected.
+			for l := trained + 1; l <= 5; l++ {
+				row.Levels = append(row.Levels, levelOption{Value: l, Roman: esi.RomanLevel(l), Selected: l == 5})
+			}
+			view.SearchResults = append(view.SearchResults, row)
 		}
 	}
 
@@ -387,29 +411,80 @@ func (app *Application) buildPlanDetail(ctx context.Context, ch db.Character, pl
 	ids = append(ids, outcome.Unknown...)
 	names := app.typeNames(ctx, ids)
 
-	for i, item := range items {
-		detail.Items = append(detail.Items, skillPlanItemRow{
-			SkillID: item.SkillTypeID,
-			Skill:   nameOrID(names, item.SkillTypeID),
-			Level:   esi.RomanLevel(int(item.TargetLevel)),
-			CanUp:   i > 0,
-			CanDown: i < len(items)-1,
-		})
+	detail.Count = len(items)
+
+	// What each plan skill needs (transitively): which prerequisite row is
+	// for which skill, and which moves a prerequisite rules out.
+	needs := make(map[int64]map[int64]bool, len(items))
+	neededBy := make(map[int64][]string)
+	for _, item := range items {
+		needs[item.SkillTypeID] = prerequisiteClosure(graph, item.SkillTypeID)
 	}
+	for _, item := range items {
+		for pre := range needs[item.SkillTypeID] {
+			neededBy[pre] = append(neededBy[pre], nameOrID(names, item.SkillTypeID))
+		}
+	}
+
+	// The plan's own skills, in the order they train: each one's
+	// neighbours are what a move up or down trades places with.
+	var order []int64
 	for _, s := range outcome.Steps {
-		detail.Steps = append(detail.Steps, skillPlanStepRow{
-			Skill:   nameOrID(names, s.SkillID),
+		if !s.Prereq {
+			order = append(order, s.SkillID)
+		}
+	}
+	slot := make(map[int64]int, len(order))
+	for i, id := range order {
+		slot[id] = i
+	}
+
+	for _, s := range outcome.Steps {
+		row := skillPlanRow{
 			SkillID: s.SkillID,
+			Skill:   nameOrID(names, s.SkillID),
+			Direct:  !s.Prereq,
+			Squares: planLevels(s.FromLevel, s.ToLevel),
 			FromTo:  fmt.Sprintf("%s → %s", esi.RomanLevel(s.FromLevel), esi.RomanLevel(s.ToLevel)),
 			SP:      esi.FormatInt(s.SPRemaining),
 			Time:    humanDuration(time.Duration(s.Seconds * float64(time.Second))),
 			Finish:  s.Finish.UTC().Format("2006-01-02 15:04 UTC"),
-			Prereq:  s.Prereq,
-		})
+		}
+		if s.Prereq {
+			row.NeededBy = neededByText(neededBy[s.SkillID])
+		} else {
+			i := slot[s.SkillID]
+			switch {
+			case i == 0:
+				row.UpWhy = "It is already first."
+			case needs[s.SkillID][order[i-1]]:
+				row.UpWhy = fmt.Sprintf("%s has to be trained before it.", nameOrID(names, order[i-1]))
+			default:
+				row.CanUp = true
+			}
+			switch {
+			case i == len(order)-1:
+				row.DownWhy = "It is already last."
+			case needs[order[i+1]][s.SkillID]:
+				row.DownWhy = fmt.Sprintf("%s needs it first.", nameOrID(names, order[i+1]))
+			default:
+				row.CanDown = true
+			}
+		}
+		detail.Rows = append(detail.Rows, row)
 	}
+	// Plan skills the character already has to their target: no timing,
+	// full boxes, and still removable.
 	for _, d := range outcome.Dropped {
-		detail.Dropped = append(detail.Dropped,
-			fmt.Sprintf("%s %s — %s", nameOrID(names, d.SkillID), esi.RomanLevel(d.Level), d.Reason))
+		detail.Covered = append(detail.Covered, skillPlanRow{
+			SkillID: d.SkillID,
+			Skill:   nameOrID(names, d.SkillID),
+			Direct:  true,
+			Covered: true,
+			Squares: planLevels(d.Level, d.Level),
+			FromTo:  esi.RomanLevel(d.Level),
+			Note:    d.Reason,
+		})
 	}
 	for _, id := range outcome.Unknown {
 		detail.Unknown = append(detail.Unknown, nameOrID(names, id))
@@ -1053,4 +1128,71 @@ func (app *Application) untrainedTargets(ctx context.Context, characterID int64,
 		kept = append(kept, t)
 	}
 	return kept, skipped, true
+}
+
+// prerequisiteClosure is every skill a skill needs, directly or through
+// other skills (not the skill itself). A requirement cycle in the data
+// ends the walk instead of looping.
+func prerequisiteClosure(graph skillplan.Graph, skillID int64) map[int64]bool {
+	out := make(map[int64]bool)
+	var walk func(id int64)
+	walk = func(id int64) {
+		for _, req := range graph.Requirements(id) {
+			if req.SkillID == skillID || out[req.SkillID] {
+				continue
+			}
+			out[req.SkillID] = true
+			walk(req.SkillID)
+		}
+	}
+	walk(skillID)
+	return out
+}
+
+// neededByText says what a prerequisite row is for: "for Beta Skill",
+// or "for Beta Skill, Gamma Skill +2".
+func neededByText(names []string) string {
+	switch {
+	case len(names) == 0:
+		return ""
+	case len(names) <= 2:
+		return "for " + strings.Join(names, ", ")
+	default:
+		return fmt.Sprintf("for %s +%d", strings.Join(names[:2], ", "), len(names)-2)
+	}
+}
+
+// planLevels draws the five level boxes of a plan row: filled for the
+// levels already trained (or in the queue), shaded in the ember accent
+// for the levels this plan trains, empty beyond. from and to are the
+// plan step's first untrained level minus one and its target.
+func planLevels(from, to int) template.HTML {
+	if from < 0 {
+		from = 0
+	}
+	if to > 5 {
+		to = 5
+	}
+	label := fmt.Sprintf("Trained to level %d", from)
+	if to > from {
+		label += fmt.Sprintf(", plan trains it to level %d", to)
+	}
+	var b strings.Builder
+	b.WriteString(`<span class="lvl lvl-plan" role="img" aria-label="`)
+	b.WriteString(label)
+	b.WriteString(`">`)
+	for i := 1; i <= 5; i++ {
+		switch {
+		case i <= from && from >= 5:
+			b.WriteString(`<i class="on max"></i>`)
+		case i <= from:
+			b.WriteString(`<i class="on"></i>`)
+		case i <= to:
+			b.WriteString(`<i class="plan"></i>`)
+		default:
+			b.WriteString(`<i></i>`)
+		}
+	}
+	b.WriteString(`</span>`)
+	return template.HTML(b.String())
 }

@@ -3061,3 +3061,55 @@ form.inline-form { display: inline; }
   height: 8px;
   background: linear-gradient(90deg, #ffd27a, #ff6a1a 55%, #d63c14);
 }
+
+/* --- skill planner ---
+   The levels a plan trains are shaded in the ember accent beside the
+   levels already trained (white, gold at V), so a row reads as
+   "here is where you are, here is where this plan takes you". */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.lvl i.plan {
+  background: linear-gradient(to bottom, #ffb84d, #ff6a1a 60%, #d63c14);
+  border-color: #ff9a4a;
+}
+html[data-theme="light"] .lvl i.plan { background: linear-gradient(to bottom, #f2a04a, #d9640f); border-color: #b0490a; }
+
+.plan-add { margin: 0.6rem 0; }
+.plan-table .plan-move, .plan-table .plan-remove { width: 1%; white-space: nowrap; }
+.plan-table .plan-move form, .plan-table .plan-remove form { display: inline-flex; gap: 0.25rem; margin: 0; }
+.plan-table .plan-level { white-space: nowrap; }
+.plan-table .plan-level small { margin-left: 0.35rem; color: var(--muted); }
+.plan-for { color: var(--note); margin-left: 0.25rem; }
+.plan-prereq td { color: var(--muted-2); }
+.plan-prereq td:nth-child(2) { padding-left: 1.4rem; }
+.plan-covered td { color: var(--muted); }
+.plan-covered td:nth-child(2) { padding-left: 0; }
+
+/* The move and remove controls: small square themed buttons with an
+   icon, not the default browser button. */
+.plan-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  color: var(--muted-2);
+  background: var(--input-bg);
+  border: 1px solid #3a2a1a;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.plan-btn svg { width: 1rem; height: 1rem; }
+.plan-btn:hover:not(:disabled) { color: var(--text-bright); border-color: var(--accent); background: var(--row-hover); }
+.plan-btn:focus-visible { outline: none; box-shadow: 0 0 8px rgba(255, 106, 26, 0.55); border-color: var(--accent); }
+.plan-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.plan-btn-danger:hover:not(:disabled) { color: #fff3ec; border-color: var(--danger); background: #5a1a0c; }
+html[data-theme="light"] .plan-btn { border-color: #b8ad96; }

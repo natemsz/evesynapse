@@ -282,7 +282,9 @@ func TestSkillPlanPagesAndCRUD(t *testing.T) {
 		t.Fatalf("GET /skills/plans = %d", code)
 	}
 	mustContain(t, "plan editor", body,
-		"Road to Beta", "Alpha Skill", "(prerequisite)", "Beta Skill", "Training order", "Total:")
+		"Road to Beta", "Alpha Skill", `class="plan-prereq"`, "for Beta Skill", "Beta Skill", "in training order", "Total:",
+		// the level boxes the plan trains, drawn like the character page's
+		`class="lvl lvl-plan"`, `<i class="plan">`)
 
 	// Fit preview + create.
 	code, body = getPage(t, app, cookie, "/skills/plans/fit?character=90000001&fitting=42")

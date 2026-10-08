@@ -57,14 +57,14 @@ func TestCharacterModuleStatesFromGrantedScopes(t *testing.T) {
 
 func TestModuleStatusNotice(t *testing.T) {
 	mail, _ := moduleByID("mail")
-	if n := mail.statusFor(scopeSet(strings.Join(eveScopes, " "))).notice(mail, "Pilot"); n != nil {
+	if n := mail.statusFor(scopeSet(strings.Join(eveScopes, " "))).notice(mail, 42, "Pilot"); n != nil {
 		t.Errorf("enabled module produced a notice: %+v", n)
 	}
-	locked := mail.statusFor(scopeSet("")).notice(mail, "Pilot")
+	locked := mail.statusFor(scopeSet("")).notice(mail, 42, "Pilot")
 	if locked == nil || !locked.Locked || len(locked.Scopes) != 1 {
 		t.Fatalf("locked notice = %+v, want Locked with the one required scope", locked)
 	}
-	limited := mail.statusFor(scopeSet("esi-mail.read_mail.v1")).notice(mail, "Pilot")
+	limited := mail.statusFor(scopeSet("esi-mail.read_mail.v1")).notice(mail, 42, "Pilot")
 	if limited == nil || limited.Locked || len(limited.Scopes) != 2 {
 		t.Fatalf("limited notice = %+v, want not Locked with two optional scopes", limited)
 	}
@@ -77,12 +77,12 @@ func TestLockedNoticeTemplate(t *testing.T) {
 		t.Fatal(err)
 	}
 	var b strings.Builder
-	n := mail.statusFor(scopeSet("")).notice(mail, "Pilot One")
+	n := mail.statusFor(scopeSet("")).notice(mail, 42, "Pilot One")
 	if err := ts.ExecuteTemplate(&b, "locked-notice", n); err != nil {
 		t.Fatal(err)
 	}
 	out := b.String()
-	for _, want := range []string{"Mail is locked", "Inbox, labels, mailing lists and bodies.", "Pilot One", `href="/auth/eve"`} {
+	for _, want := range []string{"Mail is locked", "Inbox, labels, mailing lists and bodies.", "Pilot One", `href="/auth/eve?character=42&amp;module=mail"`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("rendered notice missing %q:\n%s", want, out)
 		}
@@ -93,5 +93,23 @@ func TestLockedNoticeTemplate(t *testing.T) {
 	}
 	if strings.TrimSpace(b.String()) != "" {
 		t.Errorf("nil notice rendered %q, want nothing", b.String())
+	}
+}
+
+func TestRelinkScopesKeepsExistingGrants(t *testing.T) {
+	mail, _ := moduleByID("mail")
+	got := relinkScopes("esi-skills.read_skills.v1 esi-mail.read_mail.v1", mail)
+	want := []string{"esi-skills.read_skills.v1", "esi-mail.read_mail.v1", mailOrganizeScope, mailSendScope}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("relinkScopes = %v, want %v", got, want)
+	}
+	if again := relinkScopes(strings.Join(got, " "), mail); len(again) != len(got) {
+		t.Errorf("relinkScopes is not idempotent: %v then %v", got, again)
+	}
+}
+
+func TestRelinkURL(t *testing.T) {
+	if got, want := relinkURL("mail", 42), "/auth/eve?character=42&module=mail"; got != want {
+		t.Errorf("relinkURL = %q, want %q", got, want)
 	}
 }

@@ -1,6 +1,8 @@
 package app
 
 import (
+	"net/url"
+	"strconv"
 	"strings"
 
 	db "evesynapse/internal/db/sqlc"
@@ -91,8 +93,8 @@ type lockedNotice struct {
 // name, or nil when the module is fully enabled and there is nothing
 // to say. A locked module lists its missing required scopes; a limited
 // one lists the optional scopes that would light up more of it.
-func (st moduleStatus) notice(m moduleDef, name string) *lockedNotice {
-	n := &lockedNotice{CharacterName: name, RelinkURL: "/auth/eve"}
+func (st moduleStatus) notice(m moduleDef, characterID int64, name string) *lockedNotice {
+	n := &lockedNotice{CharacterName: name, RelinkURL: relinkURL(m.ID, characterID)}
 	switch st.State {
 	case moduleLocked:
 		n.Locked = true
@@ -105,4 +107,30 @@ func (st moduleStatus) notice(m moduleDef, name string) *lockedNotice {
 		return nil
 	}
 	return n
+}
+
+// relinkURL is the sign-in link that asks for just module id's scopes
+// on top of what the character already granted.
+func relinkURL(moduleID string, characterID int64) string {
+	q := url.Values{}
+	q.Set("module", moduleID)
+	q.Set("character", strconv.FormatInt(characterID, 10))
+	return "/auth/eve?" + q.Encode()
+}
+
+// relinkScopes is the scope list for a targeted re-link: every scope
+// the character already granted, then the module's own scopes that it
+// has not. The new token's scope claim replaces the stored grant, so
+// the request has to carry the old grants along or the re-link would
+// quietly revoke other modules.
+func relinkScopes(granted string, m moduleDef) []string {
+	have := scopeSet(granted)
+	out := strings.Fields(granted)
+	for _, s := range m.Scopes {
+		if !have[s.Scope] {
+			out = append(out, s.Scope)
+			have[s.Scope] = true
+		}
+	}
+	return out
 }

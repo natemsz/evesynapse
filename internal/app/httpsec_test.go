@@ -99,8 +99,8 @@ func TestSecurityHeaders(t *testing.T) {
 		t.Errorf("Strict-Transport-Security = %q on a site with no https address", got)
 	}
 	app.cfg.eveCallbackURL = "https://eve.example.org/auth/callback"
-	if got := get().Get("Strict-Transport-Security"); !strings.HasPrefix(got, "max-age=") {
-		t.Errorf("Strict-Transport-Security = %q on an https site, want a max-age", got)
+	if got, want := get().Get("Strict-Transport-Security"), "max-age=31536000; includeSubDomains"; got != want {
+		t.Errorf("Strict-Transport-Security = %q on an https site, want %q", got, want)
 	}
 }
 

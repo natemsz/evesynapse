@@ -13,40 +13,6 @@ import (
 	"github.com/lib/pq"
 )
 
-const countUnreadNotificationsByKind = `-- name: CountUnreadNotificationsByKind :many
-SELECT kind, COUNT(*)::bigint AS unread FROM notifications
-WHERE user_id = $1 AND read_at IS NULL
-GROUP BY kind
-`
-
-type CountUnreadNotificationsByKindRow struct {
-	Kind   string `json:"kind"`
-	Unread int64  `json:"unread"`
-}
-
-func (q *Queries) CountUnreadNotificationsByKind(ctx context.Context, userID int64) ([]CountUnreadNotificationsByKindRow, error) {
-	rows, err := q.db.QueryContext(ctx, countUnreadNotificationsByKind, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []CountUnreadNotificationsByKindRow
-	for rows.Next() {
-		var i CountUnreadNotificationsByKindRow
-		if err := rows.Scan(&i.Kind, &i.Unread); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const forgetNotificationSeenExcept = `-- name: ForgetNotificationSeenExcept :exec
 DELETE FROM notification_seen
 WHERE user_id = $1
@@ -182,6 +148,51 @@ func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsPa
 			&i.Url,
 			&i.CreatedAt,
 			&i.ReadAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUnreadNotificationSummary = `-- name: ListUnreadNotificationSummary :many
+SELECT DISTINCT ON (kind) kind, title, url,
+       (COUNT(*) OVER (PARTITION BY kind))::bigint AS unread
+FROM notifications
+WHERE user_id = $1 AND read_at IS NULL
+ORDER BY kind, id DESC
+`
+
+type ListUnreadNotificationSummaryRow struct {
+	Kind   string `json:"kind"`
+	Title  string `json:"title"`
+	Url    string `json:"url"`
+	Unread int64  `json:"unread"`
+}
+
+// One row per kind with something unread: how many, and the newest
+// one's text and address. This is the top-bar icon's whole read.
+func (q *Queries) ListUnreadNotificationSummary(ctx context.Context, userID int64) ([]ListUnreadNotificationSummaryRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUnreadNotificationSummary, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUnreadNotificationSummaryRow
+	for rows.Next() {
+		var i ListUnreadNotificationSummaryRow
+		if err := rows.Scan(
+			&i.Kind,
+			&i.Title,
+			&i.Url,
+			&i.Unread,
 		); err != nil {
 			return nil, err
 		}

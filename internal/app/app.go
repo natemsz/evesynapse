@@ -337,6 +337,15 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/send/", app.handleMailSend)
 	})
 
+	// Notifications (notify_pages.go): the list, and the two actions
+	// that change what is unread.
+	r.Route("/notifications", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleNotifications)
+		r.Post("/read", app.handleNotificationsRead)
+		r.Post("/open", app.handleNotificationsOpen)
+	})
+
 	r.Route("/calendar", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleCalendar)

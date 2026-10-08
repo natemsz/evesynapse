@@ -36,10 +36,14 @@ INSERT INTO notifications (user_id, character_id, kind, title, url, created_at)
 VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id;
 
--- name: CountUnreadNotificationsByKind :many
-SELECT kind, COUNT(*)::bigint AS unread FROM notifications
+-- One row per kind with something unread: how many, and the newest
+-- one's text and address. This is the top-bar icon's whole read.
+-- name: ListUnreadNotificationSummary :many
+SELECT DISTINCT ON (kind) kind, title, url,
+       (COUNT(*) OVER (PARTITION BY kind))::bigint AS unread
+FROM notifications
 WHERE user_id = $1 AND read_at IS NULL
-GROUP BY kind;
+ORDER BY kind, id DESC;
 
 -- name: ListNotifications :many
 SELECT id, user_id, character_id, kind, title, url, created_at, read_at FROM notifications

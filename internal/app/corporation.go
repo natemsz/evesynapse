@@ -55,32 +55,73 @@ type corpCacheEntry struct {
 	expiresAt time.Time
 }
 
+// corpCall is one in-flight corporation refresh. Readers arriving
+// while it runs wait on it instead of each firing their own ESI
+// request — singleflight, hand-rolled for this one call site, so
+// x/sync stays out of go.mod.
+type corpCall struct {
+	done      chan struct{}
+	view      corpView
+	expiresAt time.Time
+	err       error
+}
+
 // corporation returns the corpView for a corporation, serving the
 // in-memory cache while it's inside ESI's cache window. A failed
 // refresh falls back to the stale entry when one exists; with no
-// entry at all the error propagates to the caller.
+// entry at all the error propagates to the caller. Concurrent
+// readers of an expired entry share one refresh.
 func (app *Application) corporation(ctx context.Context, corpID int64) (corpView, error) {
 	app.corpMu.Lock()
 	entry, ok := app.corpCache[corpID]
-	app.corpMu.Unlock()
-
 	if ok && time.Now().Before(entry.expiresAt) {
+		app.corpMu.Unlock()
 		return entry.view, nil
 	}
-
-	view, expiresAt, err := app.fetchCorporation(ctx, corpID)
-	if err != nil {
-		if ok {
-			logging.Warnf("corporations: refresh corporation %d failed (%v); serving stale entry", corpID, err)
-			return entry.view, nil
-		}
-		return corpView{}, err
+	if app.corpCalls == nil {
+		app.corpCalls = make(map[int64]*corpCall)
 	}
+	if call, waiting := app.corpCalls[corpID]; waiting {
+		app.corpMu.Unlock()
+		select {
+		case <-call.done:
+		case <-ctx.Done():
+			if ok {
+				return entry.view, nil
+			}
+			return corpView{}, ctx.Err()
+		}
+		if call.err != nil {
+			if ok {
+				logging.Warnf("corporations: refresh corporation %d failed (%v); serving stale entry", corpID, call.err)
+				return entry.view, nil
+			}
+			return corpView{}, call.err
+		}
+		return call.view, nil
+	}
+	call := &corpCall{done: make(chan struct{})}
+	app.corpCalls[corpID] = call
+	app.corpMu.Unlock()
+
+	call.view, call.expiresAt, call.err = app.fetchCorporation(ctx, corpID)
 
 	app.corpMu.Lock()
-	app.corpCache[corpID] = corpCacheEntry{view: view, expiresAt: expiresAt}
+	delete(app.corpCalls, corpID)
+	if call.err == nil {
+		app.corpCache[corpID] = corpCacheEntry{view: call.view, expiresAt: call.expiresAt}
+	}
 	app.corpMu.Unlock()
-	return view, nil
+	close(call.done)
+
+	if call.err != nil {
+		if ok {
+			logging.Warnf("corporations: refresh corporation %d failed (%v); serving stale entry", corpID, call.err)
+			return entry.view, nil
+		}
+		return corpView{}, call.err
+	}
+	return call.view, nil
 }
 
 // fetchCorporation builds a corpView from public ESI endpoints.

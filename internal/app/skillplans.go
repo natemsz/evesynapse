@@ -17,8 +17,8 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Skill plans (Phase 4): the /skills/plans pages, plan CRUD, the
-// Magic 14 template, plan-from-fit, and the data loaders the skill
+// Skill plans (Phase 4): the /skills/plans pages, plan CRUD,
+// plan-from-fit, and the data loaders the skill
 // pages share. Everything renders from local state — the schema-012
 // SDE graph and the worker-warmed skills/skillqueue/attributes
 // snapshots — so no handler ever calls ESI (loadCorpSnapshot reads
@@ -940,34 +940,6 @@ func (app *Application) handleSkillPlanDelete(w http.ResponseWriter, r *http.Req
 	skillPlansRedirect(w, r, characterID, 0)
 }
 
-// ---------------------------------------------------------------------------
-// Magic 14 template. The 14 fundamental skills every ship benefits
-// from, all trained to level 5, as published by EVE University:
-// https://wiki.eveuniversity.org/The_Magic_14 (fetched 2026-10-03).
-// Names resolve to type IDs through sde_types at creation time —
-// if the wiki ever renames one, the missing name is reported, not
-// silently planned around.
-// ---------------------------------------------------------------------------
-
-var magic14Skills = []string{
-	"CPU Management",
-	"Power Grid Management",
-	"Capacitor Management",
-	"Capacitor Systems Operation",
-	"Mechanics",
-	"Hull Upgrades",
-	"Shield Management",
-	"Shield Operation",
-	"Long Range Targeting",
-	"Signature Analysis",
-	"Navigation",
-	"Evasive Maneuvering",
-	"Warp Drive Operation",
-	"Spaceship Command",
-}
-
-const magic14Source = "https://wiki.eveuniversity.org/The_Magic_14"
-
 // createPlanWithItems makes a plan and fills it, returning its ID.
 func (app *Application) createPlanWithItems(ctx context.Context, userID, characterID int64, name string, targets []skillplan.Target) (int64, error) {
 	plan, err := app.queries.CreateSkillPlan(ctx, db.CreateSkillPlanParams{
@@ -990,7 +962,7 @@ func (app *Application) createPlanWithItems(ctx context.Context, userID, charact
 }
 
 // uniquePlanName finds a free plan name for the character by
-// numbering duplicates ("Magic 14", "Magic 14 (2)", …).
+// numbering duplicates ("Loki", "Loki (2)", …).
 func (app *Application) uniquePlanName(ctx context.Context, userID, characterID int64, base string) string {
 	plans, err := app.queries.ListSkillPlans(ctx, db.ListSkillPlansParams{UserID: userID, CharacterID: characterID})
 	if err != nil {
@@ -1009,69 +981,6 @@ func (app *Application) uniquePlanName(ctx context.Context, userID, characterID 
 			return candidate
 		}
 	}
-}
-
-func (app *Application) handleSkillPlanFromTemplate(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
-	if err := r.ParseForm(); err != nil || userID == 0 {
-		http.Redirect(w, r, "/skills/plans", http.StatusSeeOther)
-		return
-	}
-	characterID, _ := strconv.ParseInt(r.FormValue("character"), 10, 64)
-	template := r.FormValue("template")
-	if template != "magic14" || !app.userOwnsCharacter(ctx, userID, characterID) {
-		skillPlansRedirect(w, r, characterID, 0)
-		return
-	}
-	rows, err := app.queries.ListSDETypesByNames(ctx, magic14Skills)
-	if err != nil {
-		logging.Errorf("skill plans: magic 14 name lookup: %v", err)
-		skillPlansRedirect(w, r, characterID, 0)
-		return
-	}
-	byName := make(map[string]int64, len(rows))
-	for _, row := range rows {
-		byName[row.Name] = row.TypeID
-	}
-	graph := newSDESkillGraph(app, ctx)
-	targets := make([]skillplan.Target, 0, len(magic14Skills))
-	for _, name := range magic14Skills {
-		id, ok := byName[name]
-		if !ok {
-			logging.Warnf("skill plans: magic 14 skill %q not found in SDE types (wiki: %s)", name, magic14Source)
-			continue
-		}
-		if _, isSkill := graph.Meta(id); !isSkill {
-			logging.Warnf("skill plans: magic 14 skill %q (type %d) has no skill meta", name, id)
-			continue
-		}
-		targets = append(targets, skillplan.Target{SkillID: id, Level: 5, Intent: len(targets)})
-	}
-	if len(targets) == 0 {
-		skillPlansRedirect(w, r, characterID, 0)
-		return
-	}
-	// A plan is what is left to learn: skills the character has already
-	// trained to V stay out of it.
-	total := len(targets)
-	targets, skipped, _ := app.untrainedTargets(ctx, characterID, graph, targets)
-	if len(targets) == 0 {
-		app.flash(ctx, fmt.Sprintf("This character has already trained all %d Magic 14 skills to V, so there is nothing to plan.", total))
-		skillPlansRedirect(w, r, characterID, 0)
-		return
-	}
-	if len(skipped) > 0 {
-		app.flash(ctx, fmt.Sprintf("Magic 14 plan created without the %d skill(s) already trained to V: %s.", len(skipped), strings.Join(skipped, ", ")))
-	}
-	name := app.uniquePlanName(ctx, userID, characterID, "Magic 14")
-	planID, err := app.createPlanWithItems(ctx, userID, characterID, name, targets)
-	if err != nil {
-		logging.Errorf("skill plans: create magic 14 for character %d: %v", characterID, err)
-		skillPlansRedirect(w, r, characterID, 0)
-		return
-	}
-	skillPlansRedirect(w, r, characterID, planID)
 }
 
 // ---------------------------------------------------------------------------

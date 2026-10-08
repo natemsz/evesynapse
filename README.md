@@ -237,7 +237,7 @@ gaps; real environment variables win over the file):
 | `ESI_CONTACT` | no | — | How CCP can reach whoever runs this instance (an email address, a Discord handle, a character name). Sent in the User-Agent of every ESI request, as CCP asks of third-party apps |
 | `LOG_LEVEL` | no | `info` | Least severe kind of log line written: `debug`, `info`, `warn` or `error` (see "Logging") |
 | `LOG_FORMAT` | no | `text` | `text` for the classic line, `json` for one object per line |
-| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | no | — | The key pair that turns on browser push notifications. Make one with `evesynapse -push-keys`. Unset, notifications show in the top bar only |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | no | — | The key pair that turns on browser push notifications (see "Notifications and browser push"). Make one with `evesynapse -push-keys`. Unset, notifications show in the top bar only |
 | `VAPID_SUBJECT` | no | the site's address | A contact address (`mailto:` or `https:`) the browsers' push services may use to reach the operator |
 | `OPS_MANAGER_ROLES` | no | `Director` | The in-game corporation roles whose holders may create, change and cancel ops on the calendar, comma separated and spelled as ESI spells them (`Director,Personnel_Manager`) |
 | `DEV_LOGIN` | no | — | Dev build only: `1` registers the `/dev-login` route |
@@ -339,6 +339,86 @@ The lists decide who may *join*:
 A list that is set but cannot be read (a typo, a stray
 separator) stops the app at startup rather than silently
 allowing everyone.
+
+## Notifications and browser push
+
+EveSynapse tells you when something happens to your characters:
+a skill finishes, new mail, a new calendar event, a new killmail,
+planetary extractors stopping, an industry job finishing, and
+watch list alerts. They show under the bell in the top bar with
+no setup at all. Each kind can be switched off under
+**bell → Settings** (`/notifications/settings`).
+
+Browser push delivers the same notifications while no EveSynapse
+tab is open, including to a phone with the site installed to its
+home screen. It is off until the server has a key pair, and each
+browser has to be switched on by hand. Nothing asks for
+permission on its own: not opening the site, and not installing
+it as an app.
+
+### Turn push on for the server (once)
+
+1. On the server, make a key pair:
+
+   ```sh
+   evesynapse -push-keys
+   ```
+
+   It prints three lines starting `VAPID_PUBLIC_KEY=`,
+   `VAPID_PRIVATE_KEY=` and `VAPID_SUBJECT=`. Nothing is saved
+   anywhere; the lines are only printed.
+
+2. Paste those three lines into the server's `.env`
+   (`/opt/evesynapse/.env` on an install made by the setup
+   script), and change `VAPID_SUBJECT` to an address you can be
+   reached at, such as `mailto:you@example.org`.
+
+3. Restart:
+
+   ```sh
+   sudo systemctl restart evesynapse
+   ```
+
+Keep the private key secret, and do not replace the pair later:
+every browser that switched push on would have to do it again.
+The site has to be served over https (see "HTTPS").
+
+### Turn push on in a browser (each browser, each device)
+
+1. Sign in, click the bell, then **Settings**.
+2. Under **Browser notifications**, click **Turn on in this
+   browser**, and choose **Allow** when the browser asks.
+3. Click **Send a test**. A notification reading "Browser
+   notifications are working." should appear within a few
+   seconds.
+
+On an iPhone or iPad, first add EveSynapse to the Home Screen
+(Share → Add to Home Screen) and do these steps in the app that
+opens from there; Safari does not offer push to an ordinary tab.
+
+### If it does not work
+
+| What you see | What it means |
+|--------------|---------------|
+| "Browser notifications are not set up on this server." | The server did not find a usable key pair. Check the three lines are in the `.env` the service reads and that it was restarted. A pair that is set but wrong is reported in the log as `browser push is off` |
+| "This browser cannot receive push notifications." | The browser has no push support. On iOS, open the installed app, not a Safari tab |
+| "Notifications from this site are blocked in this browser." | Permission was refused earlier. Allow notifications for the site in the browser's site settings, then reload the page |
+| "The test could not be sent: no browser took the test message" | The push service refused the message. The reason is in the server log (`journalctl -u evesynapse`), on a line starting `push:` |
+| The test says sent, but nothing appears | The operating system is hiding it: check its notification settings for the browser, and Do Not Disturb / Focus |
+
+### What does and does not notify
+
+- Notifications are worked out after each background sync, so
+  one arrives some minutes after the thing happened in-game,
+  not at that instant.
+- The first sync of a character only records what is already
+  there. Mail that was in the inbox before then is not announced.
+- Mail a character sends to itself is not announced, and neither
+  is mail already read.
+- A kind switched off in Settings is switched off for push too.
+- When more than three things happen at once, push sends a single
+  message with a count instead of one each.
+
 ## HTTPS
 
 EveSynapse itself speaks plain HTTP. On anything but your own

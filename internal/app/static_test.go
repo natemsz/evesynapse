@@ -114,7 +114,8 @@ func TestPagesLinkVersionedAssets(t *testing.T) {
 		`<script src="/static/boot.js?v=`+version+`" data-cfasync="false"></script>`,
 		`href="/static/favicon.svg?v=`+version+`"`,
 		`href="/static/manifest.webmanifest?v=`+version+`"`,
-		`href="/static/icon-192.png?v=`+version+`"`,
+		`href="/static/apple-touch-icon.png?v=`+version+`"`,
+		`href="/static/favicon.ico?v=`+version+`" sizes="48x48"`,
 		`<a class="skip-link" href="#main-content">`,
 		`<main id="main-content">`)
 	if strings.Contains(body, "/static/fit.js") {

@@ -528,19 +528,21 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	return r
 }
 
-// handleFavicon serves the app icon. Browsers request
-// /favicon.ico by default even though the icon is SVG (the modern
-// format, also linked from base.html as /static/favicon.svg);
-// serving the SVG here with its real content type keeps the
-// request from 404ing in the logs.
+// handleFavicon serves the app icon as a real .ico (16, 32 and 48px
+// PNG images inside), which is what browsers that ignore SVG icons
+// (Safari, older Edge, feed readers, link previews) and the default
+// /favicon.ico request expect. The same drawing, as SVG, is linked from
+// base.html as /static/favicon.svg for the browsers that use it.
+// The cache is a day, not a week: when the logo changes, a favicon
+// should not linger.
 func handleFavicon(w http.ResponseWriter, r *http.Request) {
-	icon, err := fs.ReadFile(staticFS, "static/favicon.svg")
+	icon, err := fs.ReadFile(staticFS, "static/favicon.ico")
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	w.Header().Set("Content-Type", "image/svg+xml")
-	w.Header().Set("Cache-Control", "public, max-age=604800")
+	w.Header().Set("Content-Type", "image/x-icon")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
 	_, _ = w.Write(icon)
 }
 

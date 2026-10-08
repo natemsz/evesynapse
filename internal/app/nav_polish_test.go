@@ -84,11 +84,12 @@ func TestPolishNavAndFavicon(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /favicon.ico: status %d", rec.Code)
 	}
-	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "image/svg+xml") {
-		t.Errorf("favicon content type %q, want image/svg+xml", ct)
+	if ct := rec.Header().Get("Content-Type"); ct != "image/x-icon" {
+		t.Errorf("favicon content type %q, want image/x-icon", ct)
 	}
-	if !strings.Contains(rec.Body.String(), "<svg") {
-		t.Error("favicon body is not the SVG icon")
+	// An ICO starts 00 00 01 00 (reserved, type 1 = icon), then the image count.
+	if body := rec.Body.Bytes(); len(body) < 6 || body[0] != 0 || body[1] != 0 || body[2] != 1 || body[3] != 0 {
+		t.Error("favicon body is not an ICO file")
 	}
 
 	if got := transport.calls.Load(); got != 0 {

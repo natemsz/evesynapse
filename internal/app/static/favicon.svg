@@ -1,14 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ffd27a"/>
-      <stop offset=".52" stop-color="#ff6a1a"/>
-      <stop offset="1" stop-color="#d63c14"/>
-    </linearGradient>
-  </defs>
-  <rect width="48" height="48" rx="10" fill="#0d0503"/>
-  <g transform="translate(0,6)">
-  <g fill="none" stroke="url(#g)" stroke-width="2.2" stroke-linecap="round"><path d="M8.3 22.1L12.7 18.4M8.3 25.9L12.7 29.6M17.3 29.6L21.1 26.4M26.9 21.6L30.7 18.4M35.3 18.4L39.7 22.1M39.7 25.9L35.3 29.6"/></g>
-  <g fill="url(#g)"><circle cx="6" cy="24" r="3.0"/><circle cx="15" cy="16.5" r="3.0"/><circle cx="15" cy="31.5" r="3.0"/><circle cx="24" cy="24" r="3.8"/><circle cx="33" cy="16.5" r="3.0"/><circle cx="42" cy="24" r="3.0"/><circle cx="33" cy="31.5" r="3.0"/></g>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="#0d0503"/><g transform="translate(24 24) scale(0.9) translate(-24 -24)"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd27a"/><stop offset=".52" stop-color="#ff6a1a"/><stop offset="1" stop-color="#d63c14"/></linearGradient></defs><g fill="none" stroke="url(#g)" stroke-width="2.6" stroke-linecap="round"><path d="M8.3 22.1L12.7 18.4M8.3 25.9L12.7 29.6M17.3 29.6L21.1 26.4M26.9 21.6L30.7 18.4M35.3 18.4L39.7 22.1M39.7 25.9L35.3 29.6"/></g><g fill="none" stroke="#ffffff" stroke-width="0.9" stroke-linecap="round" opacity="0.9"><path d="M17.3 18.4L21.1 21.6M26.9 26.4L30.7 29.6"/></g><g fill="url(#g)"><circle cx="6" cy="24" r="3.0"/><circle cx="15" cy="16.5" r="3.0"/><circle cx="15" cy="31.5" r="3.0"/><circle cx="33" cy="16.5" r="3.0"/><circle cx="42" cy="24" r="3.0"/><circle cx="33" cy="31.5" r="3.0"/></g><circle cx="24" cy="24" r="3.8" fill="#ffffff"/></g></svg>

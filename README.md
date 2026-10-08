@@ -881,6 +881,12 @@ Two things to know before switching it on:
 - **Don't go back to a build from before token encryption.** It
   would present the encrypted values to CCP as tokens, be
   refused, and mark every character as needing a fresh sign-in.
+- **Upgrading the format is one way.** Tokens sealed by earlier
+  builds (`enc:v1:`, a single SHA-256 of the key) still open, and
+  the first start of this build re-seals them as `enc:v2:` (a
+  proper key derivation, HKDF). A build from before that change
+  cannot read `enc:v2:` values, so take a database backup
+  before upgrading if you might roll back.
 
 Without a key, tokens are stored unencrypted as before and the
 app logs a warning at startup.

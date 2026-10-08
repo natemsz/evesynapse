@@ -8,6 +8,11 @@ package app
 
 import (
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"io"
 	"net/http"
@@ -41,8 +46,12 @@ func TestTokenBoxSealAndOpen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seal: %v", err)
 	}
-	if !tokenIsEncrypted(sealed) || strings.Contains(sealed, token) {
-		t.Fatalf("sealed form %q is not an encrypted value", sealed)
+	// New seals wear the current envelope.
+	if !strings.HasPrefix(sealed, tokenCipherV2Prefix) || strings.Contains(sealed, token) {
+		t.Fatalf("sealed form %q is not a v2 encrypted value", sealed)
+	}
+	if !tokenIsEncrypted(sealed) {
+		t.Fatalf("sealed form %q is not recognized as encrypted", sealed)
 	}
 	// A fresh nonce every time: the same token never stores the
 	// same way twice.
@@ -269,5 +278,97 @@ func TestPrepareStoredTokens(t *testing.T) {
 		if !strings.Contains(err.Error(), "TOKEN_ENCRYPTION_KEY") {
 			t.Fatalf("%s: error %q does not point at TOKEN_ENCRYPTION_KEY", name, err)
 		}
+	}
+}
+
+// sealV1TestOnly replays the retired v1 envelope (AES-GCM under one
+// SHA-256 of the secret) so the compatibility path has something
+// old to open. It mirrors the pre-HKDF seal exactly: same label,
+// same AAD, same v1 prefix.
+func sealV1TestOnly(t *testing.T, secret, plain string, characterID int64, field string) string {
+	t.Helper()
+	key := sha256.Sum256([]byte("evesynapse/token-encryption/v1\x00" + secret))
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonce := make([]byte, aead.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		t.Fatal(err)
+	}
+	sealed := aead.Seal(nonce, nonce, []byte(plain), tokenAAD(characterID, field))
+	return tokenCipherPrefix + base64.RawStdEncoding.EncodeToString(sealed)
+}
+
+// TestTokenBoxOpensV1: rows sealed before the HKDF switch still
+// open with the same key, and the boot pass re-seals them as v2.
+func TestTokenBoxOpensV1(t *testing.T) {
+	box := mustTokenBox(t, testTokenKey)
+	old := sealV1TestOnly(t, testTokenKey, "old-refresh-token", 42, tokenFieldRefresh)
+	if !tokenIsEncrypted(old) || tokenSealedCurrent(old) {
+		t.Fatalf("v1 value %q is not recognized as sealed-but-retired", old)
+	}
+	plain, err := box.open(old, 42, tokenFieldRefresh)
+	if err != nil || plain != "old-refresh-token" {
+		t.Fatalf("v1 value opens to %q, %v; want old-refresh-token", plain, err)
+	}
+	// The wrong character still does not open it.
+	if _, err := box.open(old, 43, tokenFieldRefresh); err == nil {
+		t.Fatal("v1 value opened under another character ID")
+	}
+}
+
+// TestPrepareStoredTokensUpgradesV1: a v1-sealed row comes out of
+// the boot pass as v2, opening to the same tokens.
+func TestPrepareStoredTokensUpgradesV1(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	app.tokens = mustTokenBox(t, testTokenKey)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	oldAccess := sealV1TestOnly(t, testTokenKey, "access-one", fixtureCharA, tokenFieldAccess)
+	oldRefresh := sealV1TestOnly(t, testTokenKey, "refresh-one", fixtureCharA, tokenFieldRefresh)
+	if err := q.UpdateCharacterTokens(ctx, db.UpdateCharacterTokensParams{
+		AccessToken:  oldAccess,
+		RefreshToken: oldRefresh,
+		TokenExpiry:  mustNullTime("2999-01-01T00:00:00Z"),
+		CharacterID:  fixtureCharA,
+	}); err != nil {
+		t.Fatalf("store v1 tokens: %v", err)
+	}
+
+	if err := app.prepareStoredTokens(ctx); err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+	row, _ := q.GetCharacter(ctx, fixtureCharA)
+	if !tokenSealedCurrent(row.AccessToken) || !tokenSealedCurrent(row.RefreshToken) {
+		t.Fatalf("after prepare the tokens are %q / %q; want both v2", row.AccessToken, row.RefreshToken)
+	}
+	access, refresh, err := app.tokens.openTokens(row)
+	if err != nil || access != "access-one" || refresh != "refresh-one" {
+		t.Fatalf("upgraded pair opens to %q / %q, %v", access, refresh, err)
+	}
+}
+
+// TestTokenV2KeyPinned: a v2 value sealed once, by hand, still opens.
+// The HKDF salt and label are part of the stored format; changing
+// either (or the hash) would strand every v2 row, and this fails
+// first. Do not regenerate the constant to make the test pass.
+func TestTokenV2KeyPinned(t *testing.T) {
+	const pinned = "enc:v2:9piEryQnw3NC+cL8Mdf+lPoloWQSfbP4p3DzyZoSUmODVGM/TMb9KQf2H/SMnYp3"
+	box := mustTokenBox(t, testTokenKey)
+	got, err := box.open(pinned, 42, tokenFieldRefresh)
+	if err != nil || got != "pinned-refresh-token" {
+		t.Fatalf("pinned v2 value opens to %q, %v; want pinned-refresh-token", got, err)
+	}
+	if _, err := box.open(pinned, 43, tokenFieldRefresh); err == nil {
+		t.Fatal("pinned v2 value opened under another character ID")
 	}
 }

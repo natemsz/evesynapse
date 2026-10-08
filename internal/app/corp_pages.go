@@ -176,7 +176,9 @@ type corpWalletsView struct {
 	JournalCut int // entries hidden past the display cap
 	Txns       []corpTxnRow
 	TxnsCut    int
-	LedgerNote string // why journal/transactions are absent ("" when shown)
+	LedgerNote string        // why journal/transactions are absent ("" when shown)
+	Graph      *balanceChart // the division's balance over time; nil when there is nothing to draw
+	GraphNote  string        // why Graph is absent ("" when it is drawn)
 }
 
 // maxLedgerRows caps the journal/transaction tables; the snapshot
@@ -266,6 +268,22 @@ func (app *Application) handleCorpWallets(w http.ResponseWriter, r *http.Request
 		}
 	default:
 		view.LedgerNote = "This division's journal is still warming up."
+	}
+
+	// The division's balance over time, from the same journal plus the
+	// current balance; when there is no journal to draw from, the graph
+	// section says why in the ledger's own words.
+	if journalState.Loaded {
+		var balanceAt time.Time
+		if snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{
+			CharacterID: sel.Active.CharacterID, Kind: esi.SnapCorpWallets,
+		}); err == nil {
+			balanceAt = snap.FetchedAt
+		}
+		balance, balanceKnown := balances[division]
+		view.Graph, view.GraphNote = corpWalletGraph(journal, balance, balanceKnown, balanceAt)
+	} else {
+		view.GraphNote = view.LedgerNote
 	}
 
 	if txnsState.Loaded {

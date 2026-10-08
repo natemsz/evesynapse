@@ -31,6 +31,16 @@
   </div>
 
   <section class="foldable">
+  <h3>{{if eq .CorpWallets.Division 1}}Master Wallet{{else}}Division {{.CorpWallets.Division}}{{end}} — balance over time</h3>
+  {{if .CorpWallets.Graph}}
+  {{template "balance-chart" .CorpWallets.Graph}}
+  <p><small>Balance from {{.CorpWallets.Graph.From}} to {{.CorpWallets.Graph.To}} — every journal entry in this division's latest snapshot, ending at its current balance. ESI keeps about a month of a corporation wallet's journal, so that is how far back the line goes.</small></p>
+  {{else if .CorpWallets.GraphNote}}
+  <p><small>{{.CorpWallets.GraphNote}}</small></p>
+  {{end}}
+  </section>
+
+  <section class="foldable">
   <h3>{{if eq .CorpWallets.Division 1}}Master Wallet{{else}}Division {{.CorpWallets.Division}}{{end}} — recent journal</h3>
   {{if .CorpWallets.LedgerNote}}
   <p><small>{{.CorpWallets.LedgerNote}}</small></p>

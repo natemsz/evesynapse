@@ -190,24 +190,149 @@ func applySchemaStep(ctx context.Context, conn *sql.DB, step schemaStep) error {
 }
 
 // splitSchemaStatements cuts a schema script into its statements
-// (the pgx stdlib driver executes one statement at a time).
-// Full-line -- comments are stripped first: they may contain ";"
-// and would otherwise break the naive split.
+// (the pgx stdlib driver executes one statement at a time). The
+// split is lexically aware: semicolons inside string literals,
+// quoted identifiers, comments, and dollar-quoted function bodies
+// do not end a statement, and comments are stripped. The old
+// splitter cut on every ";" outside full-line comments, so the
+// first migration with a literal ';' or a plpgsql body would have
+// failed boot.
 func splitSchemaStatements(script string) []string {
-	var kept []string
-	for _, line := range strings.Split(script, "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), "--") {
-			continue
-		}
-		kept = append(kept, line)
-	}
 	var stmts []string
-	for _, stmt := range strings.Split(strings.Join(kept, "\n"), ";") {
-		stmt = strings.TrimSpace(stmt)
-		if stmt == "" {
+	var cur strings.Builder
+	flush := func() {
+		if stmt := strings.TrimSpace(cur.String()); stmt != "" {
+			stmts = append(stmts, stmt)
+		}
+		cur.Reset()
+	}
+	i, n := 0, len(script)
+	for i < n {
+		c := script[i]
+		switch {
+		case c == ';':
+			flush()
+			i++
+		case c == '\'':
+			i = copyQuoted(&cur, script, i, '\'', isEscapeStringPrefix(script, i))
+		case c == '"':
+			i = copyQuoted(&cur, script, i, '"', false)
+		case c == '-' && i+1 < n && script[i+1] == '-':
+			// Line comment to the end of the line; the newline that
+			// ends it is not skipped, so the tokens around it cannot fuse.
+			j := i + 2
+			for j < n && script[j] != '\n' {
+				j++
+			}
+			i = j
+		case c == '/' && i+1 < n && script[i+1] == '*':
+			// Block comment, which nests in Postgres; a space
+			// stays behind for the same reason as above.
+			depth := 1
+			j := i + 2
+			for j < n && depth > 0 {
+				if script[j] == '/' && j+1 < n && script[j+1] == '*' {
+					depth++
+					j += 2
+				} else if script[j] == '*' && j+1 < n && script[j+1] == '/' {
+					depth--
+					j += 2
+				} else {
+					j++
+				}
+			}
+			cur.WriteByte(' ')
+			i = j
+		case c == '$':
+			if end, ok := scanDollarQuote(script, i); ok {
+				cur.WriteString(script[i:end])
+				i = end
+			} else {
+				cur.WriteByte(c) // a $1 parameter, not a quote
+				i++
+			}
+		default:
+			cur.WriteByte(c)
+			i++
+		}
+	}
+	flush()
+	return stmts
+}
+
+// copyQuoted copies a '- or "-quoted span starting at script[i]
+// (the opening quote) into cur and returns the index past it. A
+// doubled quote is an escaped quote; with escapes (E'...' strings)
+// a backslash escapes the next byte too. An unterminated span
+// copies to the end and lets Postgres report the error.
+func copyQuoted(cur *strings.Builder, script string, i int, quote byte, escapes bool) int {
+	j, n := i+1, len(script)
+	for j < n {
+		if escapes && script[j] == '\\' {
+			j += 2
 			continue
 		}
-		stmts = append(stmts, stmt)
+		if script[j] == quote {
+			if j+1 < n && script[j+1] == quote {
+				j += 2
+				continue
+			}
+			j++
+			break
+		}
+		j++
 	}
-	return stmts
+	if j > n {
+		j = n
+	}
+	cur.WriteString(script[i:j])
+	return j
+}
+
+// isEscapeStringPrefix reports whether the quote at script[i] opens
+// an E'...' escape string: an E immediately before it that is not
+// itself part of a longer identifier.
+func isEscapeStringPrefix(script string, i int) bool {
+	if i == 0 || (script[i-1] != 'e' && script[i-1] != 'E') {
+		return false
+	}
+	if i >= 2 && isIdentByte(script[i-2]) {
+		return false
+	}
+	return true
+}
+
+func isIdentByte(c byte) bool {
+	return c == '_' || c == '$' ||
+		(c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+// scanDollarQuote matches the dollar-quoted body starting at
+// script[i] (the opening $) and returns the index past its closing
+// tag. It reports false when the $ opens no quote (a $1 parameter)
+// or the body never closes (copied literally; Postgres reports it).
+func scanDollarQuote(script string, i int) (int, bool) {
+	j, n := i+1, len(script)
+	if j < n && script[j] >= '0' && script[j] <= '9' {
+		return 0, false // $1: a parameter (tags never start with a digit)
+	}
+	for j < n && script[j] != '$' {
+		if !isDollarTagByte(script[j]) {
+			return 0, false
+		}
+		j++
+	}
+	if j >= n {
+		return 0, false
+	}
+	tag := script[i : j+1]
+	end := strings.Index(script[j+1:], tag)
+	if end < 0 {
+		return 0, false
+	}
+	return j + 1 + end + len(tag), true
+}
+
+func isDollarTagByte(c byte) bool {
+	return c == '_' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }

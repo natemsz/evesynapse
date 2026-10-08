@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -187,7 +188,7 @@ func (app *Application) handlePushUnsubscribe(w http.ResponseWriter, r *http.Req
 
 // handlePushTest sends a test message, so the user can see that it
 // arrives. The settings page names the browser it was clicked in, and
-// then only that browser is sent to and what its push service said
+// then only that browser is sent to and a refusal by its push service
 // is reported: with several browsers subscribed, one taking the
 // message must not hide another refusing it. With no browser named,
 // every browser of the account is sent to.
@@ -247,13 +248,14 @@ func (app *Application) pushTestOne(ctx context.Context, w http.ResponseWriter, 
 		case !res.OK():
 			logging.Warnf("push: test to subscription %d: push service answered %d", row.ID, res.Status)
 			http.Error(w, fmt.Sprintf("this browser's push service (%s) refused the message with HTTP %d%s", host, res.Status, pushDetail(res)), http.StatusBadGateway)
+		case strings.Contains(strings.ToLower(res.Detail), "dropped"):
+			// Microsoft's service answers 201 to a message it then
+			// drops, and says so only in its headers.
+			logging.Warnf("push: test to subscription %d: accepted with HTTP %d, then dropped (%s)", row.ID, res.Status, res.Detail)
+			http.Error(w, "this browser's push service ("+host+") took the message and then dropped it"+pushDetail(res), http.StatusBadGateway)
 		default:
 			_ = app.queries.MarkPushSubscriptionOK(ctx, db.MarkPushSubscriptionOKParams{At: timeSet(time.Now().UTC()), ID: row.ID})
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			fmt.Fprintf(w, "%s accepted the message (HTTP %d)", host, res.Status)
-			if res.Detail != "" {
-				fmt.Fprintf(w, " [%s]", res.Detail)
-			}
+			w.WriteHeader(http.StatusNoContent)
 		}
 		return
 	}

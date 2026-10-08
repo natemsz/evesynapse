@@ -101,6 +101,9 @@ type pageData struct {
 	// Notifications is the /notifications/ page.
 	Notifications *notificationsView
 
+	// NotifySettings is the /notifications/settings page.
+	NotifySettings *notifySettingsView
+
 	// Public pilot page (/pilot/): a stranger's public record.
 	Pilot *pilotView
 
@@ -170,7 +173,7 @@ func sectionForPage(page string) string {
 		return "home"
 	case "character.html", "characters.html", "skills.html", "skillplans.html",
 		"mail.html", "calendar.html", "contacts.html", "pilot.html", "assets.html",
-		"killmails.html", "notifications.html":
+		"killmails.html", "notifications.html", "notification_settings.html":
 		return "pilot"
 	case "fittings.html", "fittings_saved.html", "fit_shopping.html":
 		return "fitting"

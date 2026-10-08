@@ -151,7 +151,7 @@
       <div class="notify-menu">
         {{range .Rows}}<form method="post" action="/notifications/open"><input type="hidden" name="kind" value="{{.Kind}}"><button type="submit" class="notify-row"><span class="notify-row-label">{{.Label}}</span><span class="notify-row-latest">{{.Latest}}</span></button></form>
         {{else}}<p class="notify-empty">Nothing new.</p>
-        {{end}}<a class="notify-all" href="/notifications/">All notifications</a>
+        {{end}}<a class="notify-all" href="/notifications/">All notifications</a><a class="notify-all" href="/notifications/settings">Settings</a>
       </div>
     </details>{{end}}
     <div class="topbar-character">

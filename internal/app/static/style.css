@@ -3240,6 +3240,7 @@ html[data-theme="light"] .plan-item { border-top-color: #d9d2c2; }
 }
 .notify-empty { margin: 0; padding: 0.45rem 0.55rem; color: var(--muted); }
 .notify-all { display: block; margin-top: 0.25rem; padding: 0.45rem 0.55rem; border-top: 1px solid #1c1c1c; }
+.notify-all + .notify-all { margin-top: 0; border-top: 0; padding-top: 0; }
 tr.notify-unread td:first-child a { font-weight: 700; }
 html[data-theme="light"] .notify-menu { border-color: #d8cdb8; box-shadow: 0 6px 22px rgba(60, 40, 10, 0.25); }
 html[data-theme="light"] .notify-all { border-top-color: #e4dac6; }

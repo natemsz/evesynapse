@@ -344,6 +344,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/", app.handleNotifications)
 		r.Post("/read", app.handleNotificationsRead)
 		r.Post("/open", app.handleNotificationsOpen)
+		r.Get("/settings", app.handleNotificationSettings)
+		r.Post("/settings", app.handleNotificationSettingsSave)
 	})
 
 	r.Route("/calendar", func(r chi.Router) {

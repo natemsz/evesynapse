@@ -1616,7 +1616,7 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
 .topbar { min-height: 3.75rem; }
 .wordmark-glyph {
   display: inline-block;
-  height: 1.5rem;
+  height: 1.75rem;
   width: auto;
   margin: 0 0.75rem 0 0;
   flex-shrink: 0;
@@ -1646,15 +1646,21 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
    below it. The axis is where the icons are, which depends on the
    nav state: expanded = the sidebar's 0.55rem padding + the link's
    0.55rem padding + half of the 1.35rem icon; icon-only = the middle
-   of the 5rem rail (less its 1px edge). The logo is 1.5rem tall and
-   48:28 wide, so half its width is 0.75rem * 48 / 28; the top bar
-   pads 1rem on the left. Phones (drawer) and a hidden nav keep the
-   plain padding. */
+   of the 5rem rail (less its 1px edge). The logo is a 1.75rem square,
+   so half its width is 0.875rem; the top bar pads 1rem on the left.
+   Icon-only, the divider after the logo also stands exactly on the
+   rail's right edge (the 1px border that ends at 5rem), so the two
+   lines meet: the logo's right side is at the axis + 0.875rem, and
+   its margin covers the rest of the way. Phones (drawer) and a
+   hidden nav keep the plain padding. */
 :root { --nav-axis: 1.775rem; }
 html[data-nav="rail"] { --nav-axis: calc(2.5rem - 0.5px); }
 @media (min-width: 861px) {
   html:not([data-nav="hidden"]) .topbar-wordmark {
-    margin-left: calc(var(--nav-axis) - 0.75rem * 48 / 28 - 1rem);
+    margin-left: calc(var(--nav-axis) - 0.875rem - 1rem);
+  }
+  html[data-nav="rail"] .wordmark-glyph {
+    margin-right: calc(5rem - 1px - var(--nav-axis) - 0.875rem);
   }
 }
 .wordmark .wm-eve {

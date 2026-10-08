@@ -52,3 +52,49 @@ func TestOrderByDuePrefersUnfetched(t *testing.T) {
 
 // TestRouteJournalParty: counterparties sort by party_type —
 // characters to the name harvest, orgs to the flush sets — and an
+// characters to the name harvest, orgs to the flush sets — and an
+// untyped party is left alone.
+func TestRouteJournalParty(t *testing.T) {
+	chars, corps, alliances := map[int64]bool{}, map[int64]bool{}, map[int64]bool{}
+	routeJournalParty(chars, corps, alliances, 90000001, "character")
+	routeJournalParty(chars, corps, alliances, 2000001, "corporation")
+	routeJournalParty(chars, corps, alliances, 3000001, "alliance")
+	routeJournalParty(chars, corps, alliances, 4000001, "")
+	routeJournalParty(chars, corps, alliances, 0, "character")
+	routeJournalParty(chars, corps, alliances, -5, "corporation")
+	if !chars[90000001] || len(chars) != 1 {
+		t.Fatalf("characters = %v", chars)
+	}
+	if !corps[2000001] || len(corps) != 1 {
+		t.Fatalf("corporations = %v", corps)
+	}
+	if !alliances[3000001] || len(alliances) != 1 {
+		t.Fatalf("alliances = %v", alliances)
+	}
+}
+
+// TestFlushOrgWants: one flush notes every collected ID, dedupes
+// repeats, and leaves existing rows' richer state alone (the
+// priority floor, not a reset).
+func TestFlushOrgWants(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+
+	app.flushOrgWants(ctx, map[int64]bool{2000001: true, 2000002: true}, map[int64]bool{3000001: true})
+	for _, id := range []int64{2000001, 2000002} {
+		rec, err := q.GetCorporationRecord(ctx, id)
+		if err != nil {
+			t.Fatalf("corporation %d not noted: %v", id, err)
+		}
+		if rec.Priority != 1 {
+			t.Fatalf("corporation %d priority = %d, want 1", id, rec.Priority)
+		}
+	}
+	if _, err := q.GetAllianceRecord(ctx, 3000001); err != nil {
+		t.Fatalf("alliance 3000001 not noted: %v", err)
+	}
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("flush made %d ESI calls, want 0 (queue writes only)", got)
+	}
+}

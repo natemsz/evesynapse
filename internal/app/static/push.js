@@ -163,10 +163,8 @@
     var arrived = new Promise(function (resolve) { testReport = resolve; });
     registration.pushManager.getSubscription().then(function (sub) {
       return post('/notifications/push/test', sub ? { endpoint: sub.endpoint } : {});
-    }).then(function (res) {
-      return res.text();
-    }).then(function (answer) {
-      var sent = 'Test sent' + (answer ? ': ' + answer : '') + '. ';
+    }).then(function () {
+      var sent = 'Test sent. ';
       say(sent + 'Waiting for it to reach this browser…');
       return within(arrived, 30000, 'timeout').then(function (report) {
         if (report.pushTest === 'shown') {

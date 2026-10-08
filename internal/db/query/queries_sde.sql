@@ -232,7 +232,7 @@ WHERE strpos(lower(t.name), lower(@q)) > 0
         SELECT 1 FROM sde_blueprints b WHERE b.product_type_id = t.type_id))
   AND (CAST(@pool AS TEXT) != 'skills' OR EXISTS (
         SELECT 1 FROM sde_skill_meta m WHERE m.type_id = t.type_id))
-ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
+ORDER BY CASE WHEN strpos(lower(t.name), lower(@q)) = 1 THEN 0 ELSE 1 END, t.name
 LIMIT @lim::bigint;
 
 -- Pilot-name search for the top banner: ready records whose
@@ -453,7 +453,7 @@ FROM sde_types t
 JOIN sde_groups g ON g.group_id = t.group_id
 WHERE g.category_id = 6 AND t.published = 1
   AND strpos(lower(t.name), lower(@q)) > 0
-ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
+ORDER BY CASE WHEN strpos(lower(t.name), lower(@q)) = 1 THEN 0 ELSE 1 END, t.name
 LIMIT @lim::bigint;
 -- name: ListFitSlotTypes :many
 SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
@@ -464,7 +464,7 @@ LEFT JOIN sde_type_attributes meta ON meta.type_id = t.type_id AND meta.attribut
 WHERE t.published = 1 AND t.market_group_id > 0
   AND (@q = '' OR strpos(lower(t.name), lower(@q)) > 0)
   AND (@meta::bigint = 0 OR (@meta::bigint = 1 AND (meta.value IS NULL OR meta.value = 1)) OR (@meta::bigint > 1 AND meta.value = @meta::bigint))
-ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
+ORDER BY CASE WHEN strpos(lower(t.name), lower(@q)) = 1 THEN 0 ELSE 1 END, t.name
 LIMIT @lim::bigint;
 -- name: ListFitDroneTypes :many
 SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
@@ -475,7 +475,7 @@ LEFT JOIN sde_type_attributes meta ON meta.type_id = t.type_id AND meta.attribut
 WHERE t.published = 1 AND t.market_group_id > 0
   AND (@q = '' OR strpos(lower(t.name), lower(@q)) > 0)
   AND (@meta::bigint = 0 OR (@meta::bigint = 1 AND (meta.value IS NULL OR meta.value = 1)) OR (@meta::bigint > 1 AND meta.value = @meta::bigint))
-ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
+ORDER BY CASE WHEN strpos(lower(t.name), lower(@q)) = 1 THEN 0 ELSE 1 END, t.name
 LIMIT @lim::bigint;
 -- name: ListFitChargeTypes :many
 SELECT t.type_id, t.name

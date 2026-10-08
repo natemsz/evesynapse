@@ -599,17 +599,16 @@ JOIN sde_type_attributes a ON a.type_id = t.type_id AND a.attribute_id = 1272 AN
 LEFT JOIN sde_groups g ON g.group_id = t.group_id
 LEFT JOIN sde_type_attributes meta ON meta.type_id = t.type_id AND meta.attribute_id = 1692
 WHERE t.published = 1 AND t.market_group_id > 0
-  AND ($2 = '' OR strpos(lower(t.name), lower($2)) > 0)
-  AND ($3::bigint = 0 OR ($3::bigint = 1 AND (meta.value IS NULL OR meta.value = 1)) OR ($3::bigint > 1 AND meta.value = $3::bigint))
+  AND ($1 = '' OR strpos(lower(t.name), lower($1)) > 0)
+  AND ($2::bigint = 0 OR ($2::bigint = 1 AND (meta.value IS NULL OR meta.value = 1)) OR ($2::bigint > 1 AND meta.value = $2::bigint))
 ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
-LIMIT $4::bigint
+LIMIT $3::bigint
 `
 
 type ListFitDroneTypesParams struct {
-	Lower string      `json:"lower"`
-	Q     interface{} `json:"q"`
-	Meta  int64       `json:"meta"`
-	Lim   int64       `json:"lim"`
+	Q    interface{} `json:"q"`
+	Meta int64       `json:"meta"`
+	Lim  int64       `json:"lim"`
 }
 
 type ListFitDroneTypesRow struct {
@@ -619,12 +618,7 @@ type ListFitDroneTypesRow struct {
 }
 
 func (q *Queries) ListFitDroneTypes(ctx context.Context, arg ListFitDroneTypesParams) ([]ListFitDroneTypesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFitDroneTypes,
-		arg.Lower,
-		arg.Q,
-		arg.Meta,
-		arg.Lim,
-	)
+	rows, err := q.db.QueryContext(ctx, listFitDroneTypes, arg.Q, arg.Meta, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -649,18 +643,17 @@ func (q *Queries) ListFitDroneTypes(ctx context.Context, arg ListFitDroneTypesPa
 const listFitSlotTypes = `-- name: ListFitSlotTypes :many
 SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
 FROM sde_types t
-JOIN sde_type_effects te ON te.type_id = t.type_id AND te.effect_id = $2
+JOIN sde_type_effects te ON te.type_id = t.type_id AND te.effect_id = $1
 LEFT JOIN sde_groups g ON g.group_id = t.group_id
 LEFT JOIN sde_type_attributes meta ON meta.type_id = t.type_id AND meta.attribute_id = 1692
 WHERE t.published = 1 AND t.market_group_id > 0
-  AND ($3 = '' OR strpos(lower(t.name), lower($3)) > 0)
-  AND ($4::bigint = 0 OR ($4::bigint = 1 AND (meta.value IS NULL OR meta.value = 1)) OR ($4::bigint > 1 AND meta.value = $4::bigint))
-ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
-LIMIT $5::bigint
+  AND ($2 = '' OR strpos(lower(t.name), lower($2)) > 0)
+  AND ($3::bigint = 0 OR ($3::bigint = 1 AND (meta.value IS NULL OR meta.value = 1)) OR ($3::bigint > 1 AND meta.value = $3::bigint))
+ORDER BY CASE WHEN strpos(lower(t.name), lower($2)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT $4::bigint
 `
 
 type ListFitSlotTypesParams struct {
-	Lower    string      `json:"lower"`
 	EffectID int64       `json:"effect_id"`
 	Q        interface{} `json:"q"`
 	Meta     int64       `json:"meta"`
@@ -675,7 +668,6 @@ type ListFitSlotTypesRow struct {
 
 func (q *Queries) ListFitSlotTypes(ctx context.Context, arg ListFitSlotTypesParams) ([]ListFitSlotTypesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listFitSlotTypes,
-		arg.Lower,
 		arg.EffectID,
 		arg.Q,
 		arg.Meta,
@@ -2289,15 +2281,14 @@ SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
 FROM sde_types t
 JOIN sde_groups g ON g.group_id = t.group_id
 WHERE g.category_id = 6 AND t.published = 1
-  AND strpos(lower(t.name), lower($2)) > 0
+  AND strpos(lower(t.name), lower($1)) > 0
 ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
-LIMIT $3::bigint
+LIMIT $2::bigint
 `
 
 type SuggestSDEShipsParams struct {
-	Lower string `json:"lower"`
-	Q     string `json:"q"`
-	Lim   int64  `json:"lim"`
+	Q   string `json:"q"`
+	Lim int64  `json:"lim"`
 }
 
 type SuggestSDEShipsRow struct {
@@ -2315,7 +2306,7 @@ type SuggestSDEShipsRow struct {
 // the shared suggestion feed.
 // ---------------------------------------------------------------------
 func (q *Queries) SuggestSDEShips(ctx context.Context, arg SuggestSDEShipsParams) ([]SuggestSDEShipsRow, error) {
-	rows, err := q.db.QueryContext(ctx, suggestSDEShips, arg.Lower, arg.Q, arg.Lim)
+	rows, err := q.db.QueryContext(ctx, suggestSDEShips, arg.Q, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -2380,21 +2371,20 @@ SELECT t.type_id, t.name,
 FROM sde_types t
 LEFT JOIN sde_groups g ON g.group_id = t.group_id
 LEFT JOIN sde_categories c ON c.category_id = g.category_id
-WHERE strpos(lower(t.name), lower($2)) > 0
+WHERE strpos(lower(t.name), lower($1)) > 0
   AND t.published = 1 AND t.market_group_id > 0
-  AND (CAST($3 AS TEXT) != 'planner' OR EXISTS (
+  AND (CAST($2 AS TEXT) != 'planner' OR EXISTS (
         SELECT 1 FROM sde_blueprints b WHERE b.product_type_id = t.type_id))
-  AND (CAST($3 AS TEXT) != 'skills' OR EXISTS (
+  AND (CAST($2 AS TEXT) != 'skills' OR EXISTS (
         SELECT 1 FROM sde_skill_meta m WHERE m.type_id = t.type_id))
 ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
-LIMIT $4::bigint
+LIMIT $3::bigint
 `
 
 type SuggestSDETypesSharedParams struct {
-	Lower string `json:"lower"`
-	Q     string `json:"q"`
-	Pool  string `json:"pool"`
-	Lim   int64  `json:"lim"`
+	Q    string `json:"q"`
+	Pool string `json:"pool"`
+	Lim  int64  `json:"lim"`
 }
 
 type SuggestSDETypesSharedRow struct {
@@ -2405,12 +2395,7 @@ type SuggestSDETypesSharedRow struct {
 }
 
 func (q *Queries) SuggestSDETypesShared(ctx context.Context, arg SuggestSDETypesSharedParams) ([]SuggestSDETypesSharedRow, error) {
-	rows, err := q.db.QueryContext(ctx, suggestSDETypesShared,
-		arg.Lower,
-		arg.Q,
-		arg.Pool,
-		arg.Lim,
-	)
+	rows, err := q.db.QueryContext(ctx, suggestSDETypesShared, arg.Q, arg.Pool, arg.Lim)
 	if err != nil {
 		return nil, err
 	}

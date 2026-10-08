@@ -67,7 +67,7 @@ func TestMailSend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
-	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	grantScopes(t, q, user.ID, fixtureCharA, "Fixture Alpha", mailSendScope)
 	stranger, err := q.CreateUser(ctx)
 	if err != nil {
 		t.Fatalf("create second user: %v", err)

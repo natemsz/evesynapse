@@ -247,9 +247,13 @@ type StatusError struct {
 	Method string // "GET" or "POST"
 	Path   string
 	Code   int
+	Detail string // the "error" text ESI sent with the status, when it sent one
 }
 
 func (e *StatusError) Error() string {
+	if e.Detail != "" {
+		return fmt.Sprintf("ESI %s %s: status %d: %s", e.Method, e.Path, e.Code, e.Detail)
+	}
 	return fmt.Sprintf("ESI %s %s: status %d", e.Method, e.Path, e.Code)
 }
 
@@ -1558,7 +1562,23 @@ func (c *Client) sendOnce(ctx context.Context, method, accessToken, path string,
 			return body, resp.Header, resp.StatusCode, nil
 		}
 	}
-	return nil, resp.Header, resp.StatusCode, &StatusError{Method: method, Path: path, Code: resp.StatusCode}
+	return nil, resp.Header, resp.StatusCode, &StatusError{Method: method, Path: path, Code: resp.StatusCode, Detail: esiErrorDetail(body)}
+}
+
+// esiErrorDetail pulls the human-readable "error" text out of an ESI
+// error body ({"error": "..."}), shortened, or "" when there is none.
+func esiErrorDetail(body []byte) string {
+	var e struct {
+		Error string `json:"error"`
+	}
+	if json.Unmarshal(body, &e) != nil {
+		return ""
+	}
+	detail := strings.TrimSpace(e.Error)
+	if r := []rune(detail); len(r) > 200 {
+		detail = string(r[:200]) + "…"
+	}
+	return detail
 }
 
 // fetchIfChanged GETs path, offering ESI the ETag of the copy

@@ -44,8 +44,27 @@ self.addEventListener('push', function (event) {
   };
   if (data.tag) {
     options.tag = data.tag;
+    // A message that replaces one still on screen (the same tag) is
+    // otherwise swapped in silently, with no banner and no sound.
+    options.renotify = true;
   }
-  event.waitUntil(self.registration.showNotification(data.title || 'EveSynapse', options));
+  var shown = self.registration.showNotification(data.title || 'EveSynapse', options);
+  if (data.tag !== 'test') {
+    event.waitUntil(shown);
+    return;
+  }
+  // The test from the settings page: tell any open EveSynapse page
+  // that the message arrived here and whether the browser took the
+  // notification, so the page can say which half failed.
+  event.waitUntil(shown.then(function () {
+    return { pushTest: 'shown' };
+  }, function (err) {
+    return { pushTest: 'failed', reason: String((err && err.message) || err) };
+  }).then(function (report) {
+    return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (windows) {
+      windows.forEach(function (win) { win.postMessage(report); });
+    });
+  }));
 });
 
 self.addEventListener('notificationclick', function (event) {

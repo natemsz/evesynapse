@@ -120,7 +120,7 @@ body {
      composites one dedicated background surface. */
   background: #0d0503;
   color: var(--text);
-  font-family: "Univers Next Pro", "UniversNextPro330BasicLightLatin", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: "Shentox", "Univers Next Pro", "UniversNextPro330BasicLightLatin", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 400;
   font-size: 13px;
   line-height: 1.4;
@@ -213,11 +213,11 @@ h3 { font-size: 0.88rem; margin: 1.4rem 0 0.15rem; }
    unsupported — and in forced-colors mode, where the OS replaces
    backgrounds outright. */
 @supports not (background-clip: text) {
-  h2, h3, .wordmark { background: none; color: var(--text-bright); }
+  h2, h3, .wm-syn { background: none; color: var(--text-bright); -webkit-text-fill-color: currentColor; }
 }
 @media (forced-colors: active) {
-  h2, h3, .wordmark { background: none; color: CanvasText; text-shadow: none; }
-  .wordmark:hover { color: CanvasText; }
+  h2, h3, .wm-syn { background: none; color: CanvasText; text-shadow: none; -webkit-text-fill-color: currentColor; }
+  .wordmark, .wm-eve, .wordmark:hover .wm-syn { color: CanvasText; }
 }
 
 small { color: var(--muted); }
@@ -257,12 +257,28 @@ header .topbar {
   font-size: 1.2rem;
   font-weight: 400;
   letter-spacing: 0.12em;
+  color: var(--text-bright);
+}
+/* The gradient is painted on the SYNAPSE span alone. It used to sit
+   on the whole link, with a transparent fill, and WebKit drops that
+   clipped paint for text inside a child that has its own layer (the
+   transformed span), so SYNAPSE vanished in Safari while EVE, which
+   has a solid colour, stayed. It also meant the gradient showed
+   through under the white EVE. Clipping an element's own text works
+   everywhere, and EVE is outside it. */
+.wm-syn {
   background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  -webkit-text-fill-color: transparent;
 }
-.wordmark:hover { color: var(--text-bright); text-decoration: none; }
+.wordmark:hover { text-decoration: none; }
+.wordmark:hover .wm-syn {
+  background: none;
+  color: var(--text-bright);
+  -webkit-text-fill-color: currentColor;
+}
 header .who {
   margin-left: auto;
   color: var(--muted-2);
@@ -978,9 +994,14 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
 @media (prefers-reduced-motion: reduce) {
   .card.drag-settle { transition: none; }
 }
+/* The × and the resize toggle live in the card heading, like the
+   fold button, and centre on it the same way (top 50% and a
+   half-height lift), so all three line up whatever height the
+   heading has. */
 .cardremove {
   position: absolute;
-  top: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
   right: 2.6rem;
   z-index: 2;
   width: 1.7rem;
@@ -1000,7 +1021,8 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
    modules; the heading leaves room for all three controls. */
 .cardspan {
   position: absolute;
-  top: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
   right: 4.5rem;
   z-index: 2;
   width: 1.7rem;
@@ -1017,7 +1039,7 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
 }
 .cardspan:hover { color: var(--text-bright); border-color: var(--accent); }
 .cardspan[aria-pressed="true"] { color: var(--text-bright); border-color: var(--accent); }
-.home-custom.has-controls .card > h2:first-child, .home-custom.has-controls .card > h3:first-child { padding-right: 4.6rem; }
+.home-custom.has-controls .card > h2:first-child, .home-custom.has-controls .card > h3:first-child { padding-right: 4.6rem; position: relative; }
 .home-custom.has-controls .card.has-spanbtn > h2:first-child, .home-custom.has-controls .card.has-spanbtn > h3:first-child { padding-right: 6.6rem; }
 
 /* Add-module pop-up: solid Dominion panel over a dimmed page,
@@ -1398,6 +1420,12 @@ html[data-theme="dark"] .theme-icon-sun { display: block; }
 }
 .sidebar-account .branch .menu { margin-left: 0; }
 .sidebar-account.has-character .sidebar-character { display: none; }
+/* With a signed-in character the block is empty on wide screens
+   (the character lives in the top bar), so it draws no rule and
+   takes no share of the free space: it used to leave a line
+   floating mid-sidebar and push the footer off the bottom. The
+   phone drawer shows the block again (see its media query). */
+.sidebar-account.has-character { margin-top: 0; padding: 0; border-top: 0; }
 .sidebar-signout {
   display: inline-flex;
   margin-top: 0.45rem;
@@ -1500,20 +1528,46 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
   display: inline-block;
   height: 1.5rem;
   width: auto;
-  margin: 0 0.55rem 0 0;
+  margin: 0 0.75rem 0 0;
   flex-shrink: 0;
 }
 .topbar-wordmark {
   display: inline-flex;
   align-items: center;
 }
+/* A slim ember divider between the logo and the wordmark text: the
+   same 1px rule, colour and height as the one beside the character
+   portrait, centred on the bar. */
 .topbar-wordmark > span {
-  transform: translateY(0);
+  position: relative;
+  padding-left: 0.75rem;
+}
+.topbar-wordmark > span::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 1px;
+  height: 2.25rem;
+  transform: translateY(-50%);
+  background: rgba(255, 106, 26, 0.25);
+}
+/* The logo's centre sits on the same vertical axis as the nav icons
+   below it. The axis is where the icons are, which depends on the
+   nav state: expanded = the sidebar's 0.55rem padding + the link's
+   0.55rem padding + half of the 1.35rem icon; icon-only = the middle
+   of the 5rem rail (less its 1px edge). The logo is 1.5rem tall and
+   48:28 wide, so half its width is 0.75rem * 48 / 28; the top bar
+   pads 1rem on the left. Phones (drawer) and a hidden nav keep the
+   plain padding. */
+:root { --nav-axis: 1.775rem; }
+html[data-nav="rail"] { --nav-axis: calc(2.5rem - 0.5px); }
+@media (min-width: 861px) {
+  html:not([data-nav="hidden"]) .topbar-wordmark {
+    margin-left: calc(var(--nav-axis) - 0.75rem * 48 / 28 - 1rem);
+  }
 }
 .wordmark .wm-eve {
-  background: none;
-  -webkit-background-clip: border-box;
-  background-clip: border-box;
   color: #ffffff;
 }
 .topbar-character {
@@ -1636,6 +1690,7 @@ tbody tr.yours td { background-color: #2a2015; }
   }
   html[data-nav="rail"] .sidebar-account { display: block; }
   .sidebar-account.has-character .sidebar-character { display: block; }
+  .sidebar-account.has-character { margin-top: auto; padding: 0.75rem 0.35rem 0; border-top: 1px solid #262626; }
   html[data-nav="rail"] .sidebar-brand { justify-content: flex-start; padding-right: 0.35rem; padding-left: 0.35rem; }
   html[data-nav="rail"] .sidebar-actions { margin-left: auto; }
   html[data-nav="rail"] .sidenav a.navlink,

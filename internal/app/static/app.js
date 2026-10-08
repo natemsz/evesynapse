@@ -284,7 +284,7 @@
             flipSiblings(function () { respan(null, null); });
           });
         });
-        card.appendChild(spanBtn);
+        heading.appendChild(spanBtn);
       }
 
       var remove = document.createElement("button");
@@ -305,7 +305,7 @@
           }
         });
       });
-      card.appendChild(remove);
+      heading.appendChild(remove);
     }
 
     // --- dragging ---------------------------------------------
@@ -1301,6 +1301,11 @@
     try {
       window.localStorage.setItem(storageKey, state);
     } catch (e) { /* private mode: this page still works */ }
+    // Also in a cookie, so the server renders the saved layout on
+    // the next page load and it never paints expanded first (see
+    // navstate.go). Without storage, a cookie alone still keeps it.
+    document.cookie = storageKey + "=" + state + "; path=/; max-age=31536000; samesite=lax" +
+      (window.location.protocol === "https:" ? "; secure" : "");
   }
   function allCategoriesOpen() {
     if (!categoryBranches.length) {

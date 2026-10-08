@@ -9,6 +9,14 @@ try {
   var savedNav = window.localStorage.getItem("evesynapse-nav");
   if (savedNav === "rail" || savedNav === "hidden" || savedNav === "expanded") {
     document.documentElement.setAttribute("data-nav", savedNav);
+    // The server renders the saved layout from a cookie (navstate.go),
+    // so the page arrives right even when this script runs late.
+    // Readers whose choice predates the cookie get it written here.
+    var navCookie = document.cookie.match(/(?:^|; )evesynapse-nav=([^;]*)/);
+    if (!navCookie || navCookie[1] !== savedNav) {
+      document.cookie = "evesynapse-nav=" + savedNav + "; path=/; max-age=31536000; samesite=lax" +
+        (window.location.protocol === "https:" ? "; secure" : "");
+    }
   }
   var savedTheme = window.localStorage.getItem("evesynapse-theme");
   if (savedTheme === "light" || savedTheme === "dark") {

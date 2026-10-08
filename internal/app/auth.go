@@ -101,7 +101,7 @@ const (
 // (GET https://esi.evetech.net/meta/openapi.json →
 // components.securitySchemes), minus every mutating scope — anything
 // whose name contains write_, send_, respond_, organize_, manage_ or
-// open_window (5 scopes excluded: respond_calendar_events,
+// open_window (4 scopes excluded:
 // write_contacts, write_fleet,
 // open_window, write_waypoint; esi-planets.manage_planets.v1
 // is the one deliberate manage exception — see below). The user's
@@ -130,6 +130,11 @@ var eveScopes = []string{
 	"esi-assets.read_assets.v1",
 	"esi-assets.read_corporation_assets.v1",
 	"esi-calendar.read_calendar_events.v1",
+	// Answering in-game events from the calendar page needs
+	// respond_calendar_events (PUT
+	// /characters/{id}/calendar/{event_id}/). Characters linked
+	// before this scope was added are offered a sign-in instead.
+	"esi-calendar.respond_calendar_events.v1",
 	"esi-characters.read_agents_research.v1",
 	"esi-characters.read_blueprints.v1",
 	"esi-characters.read_contacts.v1",

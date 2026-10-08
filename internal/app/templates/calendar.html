@@ -66,7 +66,20 @@
 {{end}}
 {{end}}
 {{end}}
-<p><a href="/calendar/?character={{$.Calendar.CharacterID}}">Back to upcoming events</a></p>
+{{with .Calendar.Detail}}
+{{if .CanRespond}}
+<form method="post" action="/calendar/respond" class="op-signup">
+  <input type="hidden" name="character" value="{{$.Calendar.CharacterID}}">
+  <input type="hidden" name="event" value="{{.EventID}}">
+  <input type="hidden" name="month" value="{{$.Calendar.Month.Month}}">
+  <p class="op-answers">{{range .Answers}}<label><input type="radio" name="response" value="{{.Value}}"{{if .Selected}} checked{{end}} required> {{.Label}}</label>{{end}}</p>
+  <p><button type="submit">Send answer</button> <small>Answers as {{$.Calendar.CharacterName}}, in-game.</small></p>
+</form>
+{{else}}
+<p><a class="btn" href="{{.RelinkURL}}">Sign in again to answer events</a> <small>{{$.Calendar.CharacterName}} was linked before EveSynapse asked for permission to answer calendar events.</small></p>
+{{end}}
+{{end}}
+<p><a href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{$.Calendar.Month.Month}}">Back to upcoming events</a></p>
 </section>
 {{end}}
 
@@ -85,7 +98,7 @@
   </tbody>
 </table>
 </div>
-<p><small>Upcoming events. EveSynapse only reads your calendar — responses happen in-game.</small></p>
+<p><small>Upcoming events. Open one to answer it.</small></p>
 {{else}}
 <p><small>No upcoming events in the latest snapshot.</small></p>
 {{end}}

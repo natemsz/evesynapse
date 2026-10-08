@@ -559,14 +559,29 @@ func (app *Application) handleSkillPlanItemAdd(w http.ResponseWriter, r *http.Re
 	}
 	// Only real skills can enter a plan (the browser/editor search
 	// only offers them; a crafted POST gets the same answer).
-	if _, ok := newSDESkillGraph(app, ctx).Meta(skillID); !ok {
+	addGraph := newSDESkillGraph(app, ctx)
+	if _, ok := addGraph.Meta(skillID); !ok {
+		skillPlansRedirect(w, r, characterID, planID)
+		return
+	}
+	// A skill the character has already trained to this level is done:
+	// it does not go in a plan, and the lower levels it would need are
+	// done too.
+	trained := 0
+	if ct, _, loaded := app.loadCharTraining(ctx, characterID); loaded {
+		trained = trainedLevel(addGraph, ct, skillID)
+	}
+	if level <= trained {
+		names := app.typeNames(ctx, []int64{skillID})
+		app.flash(ctx, fmt.Sprintf("%s is already trained to %s on this character, so it is not added. Pick a higher level to plan.",
+			nameOrID(names, skillID), esi.RomanLevel(trained)))
 		skillPlansRedirect(w, r, characterID, planID)
 		return
 	}
 	// Enforce level ordering (Issue 5): can't add level N without levels 1..N-1 in plan
 	// Get existing plan items for this skill
 	existingItems, _ := app.queries.ListSkillPlanItems(ctx, planID)
-	maxPlannedLevel := 0
+	maxPlannedLevel := trained // trained levels need no plan row
 	for _, item := range existingItems {
 		if item.SkillTypeID == skillID && int(item.TargetLevel) > maxPlannedLevel {
 			maxPlannedLevel = int(item.TargetLevel)
@@ -797,6 +812,18 @@ func (app *Application) handleSkillPlanFromTemplate(w http.ResponseWriter, r *ht
 		skillPlansRedirect(w, r, characterID, 0)
 		return
 	}
+	// A plan is what is left to learn: skills the character has already
+	// trained to V stay out of it.
+	total := len(targets)
+	targets, skipped, _ := app.untrainedTargets(ctx, characterID, graph, targets)
+	if len(targets) == 0 {
+		app.flash(ctx, fmt.Sprintf("This character has already trained all %d Magic 14 skills to V, so there is nothing to plan.", total))
+		skillPlansRedirect(w, r, characterID, 0)
+		return
+	}
+	if len(skipped) > 0 {
+		app.flash(ctx, fmt.Sprintf("Magic 14 plan created without the %d skill(s) already trained to V: %s.", len(skipped), strings.Join(skipped, ", ")))
+	}
 	name := app.uniquePlanName(ctx, userID, characterID, "Magic 14")
 	planID, err := app.createPlanWithItems(ctx, userID, characterID, name, targets)
 	if err != nil {
@@ -966,6 +993,18 @@ func (app *Application) handleSkillPlanFromFit(w http.ResponseWriter, r *http.Re
 			kept = append(kept, t)
 		}
 	}
+	// Skills the character has already trained to the level the fit
+	// needs are done; the plan holds only what is left.
+	fitTotal := len(kept)
+	kept, skipped, _ := app.untrainedTargets(ctx, characterID, graph, kept)
+	if len(kept) == 0 && fitTotal > 0 {
+		app.flash(ctx, "This character already has every skill this fit needs, so there is nothing to plan.")
+		skillPlansRedirect(w, r, characterID, 0)
+		return
+	}
+	if len(skipped) > 0 {
+		app.flash(ctx, fmt.Sprintf("Plan created without the %d skill(s) already trained: %s.", len(skipped), strings.Join(skipped, ", ")))
+	}
 	base := strings.TrimSpace(fit.Name)
 	if base == "" {
 		base = preview.ShipName
@@ -978,4 +1017,40 @@ func (app *Application) handleSkillPlanFromFit(w http.ResponseWriter, r *http.Re
 		return
 	}
 	skillPlansRedirect(w, r, characterID, planID)
+}
+
+// trainedLevel is the level the character has trained a skill to: from
+// its trained skill points and rank, not counting queued levels. 0 when
+// it is untrained or the skill has no data.
+func trainedLevel(graph skillplan.Graph, ct skillplan.CharTraining, skillID int64) int {
+	meta, ok := graph.Meta(skillID)
+	if !ok {
+		return 0
+	}
+	return skillplan.LevelForSP(meta.Rank, ct.SP[skillID])
+}
+
+// untrainedTargets drops the targets the character has already trained
+// to (or past): a plan is for what is left to learn, and a skill that is
+// done does not belong in one. skipped says what was left out, as
+// "Name level" strings. With no skills snapshot yet there is nothing to
+// compare against, so every target stays and known is false.
+func (app *Application) untrainedTargets(ctx context.Context, characterID int64, graph skillplan.Graph, targets []skillplan.Target) (kept []skillplan.Target, skipped []string, known bool) {
+	ct, _, loaded := app.loadCharTraining(ctx, characterID)
+	if !loaded {
+		return targets, nil, false
+	}
+	ids := make([]int64, 0, len(targets))
+	for _, t := range targets {
+		ids = append(ids, t.SkillID)
+	}
+	names := app.typeNames(ctx, ids)
+	for _, t := range targets {
+		if trainedLevel(graph, ct, t.SkillID) >= t.Level {
+			skipped = append(skipped, fmt.Sprintf("%s %s", nameOrID(names, t.SkillID), esi.RomanLevel(t.Level)))
+			continue
+		}
+		kept = append(kept, t)
+	}
+	return kept, skipped, true
 }

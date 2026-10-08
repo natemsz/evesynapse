@@ -639,7 +639,8 @@ tbody tr:hover td { background: var(--row-hover); }
   padding: 0.6rem 0.85rem;
   box-shadow: rgba(0, 0, 0, 0.425) 0 1px 0, rgba(255, 255, 255, 0.08) 0 1px 0 inset;
 }
-.ok {
+.ok,
+.notice {
   background: rgba(255, 184, 77, 0.14);
   border: 1px solid var(--success);
   border-radius: 4px;

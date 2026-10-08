@@ -28,6 +28,7 @@ import (
 type fakePushService struct {
 	mu     sync.Mutex
 	status int
+	header http.Header // sent back with every answer
 	sent   []*http.Request
 }
 
@@ -36,7 +37,7 @@ func (p *fakePushService) RoundTrip(req *http.Request) (*http.Response, error) {
 	defer p.mu.Unlock()
 	_, _ = io.Copy(io.Discard, req.Body)
 	p.sent = append(p.sent, req)
-	return &http.Response{StatusCode: p.status, Body: io.NopCloser(strings.NewReader("")), Header: http.Header{}}, nil
+	return &http.Response{StatusCode: p.status, Body: io.NopCloser(strings.NewReader("")), Header: p.header.Clone()}, nil
 }
 
 func (p *fakePushService) count() int {
@@ -362,6 +363,14 @@ func TestPushTestNamesTheBrowser(t *testing.T) {
 	if code != http.StatusOK || !strings.Contains(msg, "wns2-by3p.notify.windows.com accepted the message (HTTP 201)") || service.count() != 1 {
 		t.Fatalf("test to one browser: %d %q, %d push(es); want that browser alone", code, msg, service.count())
 	}
+
+	// Microsoft answers 201 to a message it then drops; what it says
+	// about that is passed on.
+	service.header = http.Header{"X-Wns-Status": {"dropped"}, "X-Wns-Deviceconnectionstatus": {"disconnected"}}
+	if _, msg = f.postJSON(cookie, "/notifications/push/test", string(named)); !strings.Contains(msg, "(HTTP 201) [X-WNS-Status: dropped; X-WNS-DeviceConnectionStatus: disconnected]") {
+		t.Fatalf("a dropped message: %q", msg)
+	}
+	service.header = nil
 
 	service.status = http.StatusForbidden
 	code, msg = f.postJSON(cookie, "/notifications/push/test", string(named))

@@ -284,7 +284,7 @@
             flipSiblings(function () { respan(null, null); });
           });
         });
-        card.appendChild(spanBtn);
+        heading.appendChild(spanBtn);
       }
 
       var remove = document.createElement("button");
@@ -305,7 +305,7 @@
           }
         });
       });
-      card.appendChild(remove);
+      heading.appendChild(remove);
     }
 
     // --- dragging ---------------------------------------------

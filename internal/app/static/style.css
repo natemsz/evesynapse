@@ -120,7 +120,7 @@ body {
      composites one dedicated background surface. */
   background: #0d0503;
   color: var(--text);
-  font-family: "Univers Next Pro", "UniversNextPro330BasicLightLatin", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: "Shentox", "Univers Next Pro", "UniversNextPro330BasicLightLatin", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 400;
   font-size: 13px;
   line-height: 1.4;
@@ -980,7 +980,8 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
 }
 .cardremove {
   position: absolute;
-  top: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
   right: 2.6rem;
   z-index: 2;
   width: 1.7rem;
@@ -994,13 +995,18 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
   border: 1px solid #4a2408;
   border-radius: 3px;
   cursor: pointer;
+/* The × and the resize toggle live in the card heading, like the
+   fold button, and centre on it the same way (top 50% and a
+   half-height lift), so all three line up whatever height the
+   heading has. */
 }
 .cardremove:hover { color: var(--text-bright); border-color: var(--danger); }
 /* The half/full resize toggle sits left of the × on flex
    modules; the heading leaves room for all three controls. */
 .cardspan {
   position: absolute;
-  top: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
   right: 4.5rem;
   z-index: 2;
   width: 1.7rem;
@@ -1017,7 +1023,7 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
 }
 .cardspan:hover { color: var(--text-bright); border-color: var(--accent); }
 .cardspan[aria-pressed="true"] { color: var(--text-bright); border-color: var(--accent); }
-.home-custom.has-controls .card > h2:first-child, .home-custom.has-controls .card > h3:first-child { padding-right: 4.6rem; }
+.home-custom.has-controls .card > h2:first-child, .home-custom.has-controls .card > h3:first-child { padding-right: 4.6rem; position: relative; }
 .home-custom.has-controls .card.has-spanbtn > h2:first-child, .home-custom.has-controls .card.has-spanbtn > h3:first-child { padding-right: 6.6rem; }
 
 /* Add-module pop-up: solid Dominion panel over a dimmed page,

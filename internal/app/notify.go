@@ -551,5 +551,9 @@ func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db
 	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("commit: %w", err)
 	}
+	// Saved; now the same news goes to any browser the account has
+	// subscribed (notify_push.go). A failed send loses nothing: the
+	// notification is already in the top bar.
+	app.pushToUser(ctx, userID, pushMessagesFor(announce))
 	return len(announce), nil
 }

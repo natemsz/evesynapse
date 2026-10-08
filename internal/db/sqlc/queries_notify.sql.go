@@ -13,6 +13,40 @@ import (
 	"github.com/lib/pq"
 )
 
+const countPushSubscriptionsByUser = `-- name: CountPushSubscriptionsByUser :one
+SELECT COUNT(*)::bigint FROM push_subscriptions WHERE user_id = $1
+`
+
+func (q *Queries) CountPushSubscriptionsByUser(ctx context.Context, userID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPushSubscriptionsByUser, userID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const deletePushSubscription = `-- name: DeletePushSubscription :exec
+DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = $2
+`
+
+type DeletePushSubscriptionParams struct {
+	UserID   int64  `json:"user_id"`
+	Endpoint string `json:"endpoint"`
+}
+
+func (q *Queries) DeletePushSubscription(ctx context.Context, arg DeletePushSubscriptionParams) error {
+	_, err := q.db.ExecContext(ctx, deletePushSubscription, arg.UserID, arg.Endpoint)
+	return err
+}
+
+const deletePushSubscriptionByID = `-- name: DeletePushSubscriptionByID :exec
+DELETE FROM push_subscriptions WHERE id = $1
+`
+
+func (q *Queries) DeletePushSubscriptionByID(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deletePushSubscriptionByID, id)
+	return err
+}
+
 const forgetNotificationSeenExcept = `-- name: ForgetNotificationSeenExcept :exec
 DELETE FROM notification_seen
 WHERE user_id = $1
@@ -162,6 +196,44 @@ func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsPa
 	return items, nil
 }
 
+const listPushSubscriptionsByUser = `-- name: ListPushSubscriptionsByUser :many
+SELECT id, user_id, endpoint, p256dh, auth, created_at, last_ok_at, failures FROM push_subscriptions
+WHERE user_id = $1
+ORDER BY id
+`
+
+func (q *Queries) ListPushSubscriptionsByUser(ctx context.Context, userID int64) ([]PushSubscription, error) {
+	rows, err := q.db.QueryContext(ctx, listPushSubscriptionsByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PushSubscription
+	for rows.Next() {
+		var i PushSubscription
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Endpoint,
+			&i.P256dh,
+			&i.Auth,
+			&i.CreatedAt,
+			&i.LastOkAt,
+			&i.Failures,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUnreadNotificationSummary = `-- name: ListUnreadNotificationSummary :many
 SELECT DISTINCT ON (kind) kind, title, url,
        (COUNT(*) OVER (PARTITION BY kind))::bigint AS unread
@@ -238,6 +310,32 @@ func (q *Queries) MarkNotificationsReadByKind(ctx context.Context, arg MarkNotif
 	return err
 }
 
+const markPushSubscriptionFailed = `-- name: MarkPushSubscriptionFailed :one
+UPDATE push_subscriptions SET failures = failures + 1 WHERE id = $1
+RETURNING failures
+`
+
+func (q *Queries) MarkPushSubscriptionFailed(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, markPushSubscriptionFailed, id)
+	var failures int64
+	err := row.Scan(&failures)
+	return failures, err
+}
+
+const markPushSubscriptionOK = `-- name: MarkPushSubscriptionOK :exec
+UPDATE push_subscriptions SET last_ok_at = $1, failures = 0 WHERE id = $2
+`
+
+type MarkPushSubscriptionOKParams struct {
+	At sql.NullTime `json:"at"`
+	ID int64        `json:"id"`
+}
+
+func (q *Queries) MarkPushSubscriptionOK(ctx context.Context, arg MarkPushSubscriptionOKParams) error {
+	_, err := q.db.ExecContext(ctx, markPushSubscriptionOK, arg.At, arg.ID)
+	return err
+}
+
 const pruneNotificationSeen = `-- name: PruneNotificationSeen :exec
 DELETE FROM notification_seen WHERE seen_at < $1
 `
@@ -286,6 +384,39 @@ func (q *Queries) TouchNotificationSeen(ctx context.Context, arg TouchNotificati
 		arg.UserID,
 		pq.Array(arg.EventKeys),
 		arg.StaleBefore,
+	)
+	return err
+}
+
+const upsertPushSubscription = `-- name: UpsertPushSubscription :exec
+
+INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, created_at)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (endpoint) DO UPDATE SET
+    user_id  = excluded.user_id,
+    p256dh   = excluded.p256dh,
+    auth     = excluded.auth,
+    failures = 0
+`
+
+type UpsertPushSubscriptionParams struct {
+	UserID    int64     `json:"user_id"`
+	Endpoint  string    `json:"endpoint"`
+	P256dh    string    `json:"p256dh"`
+	Auth      string    `json:"auth"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// ---------------------------------------------------------------------
+// Browser push subscriptions (schema 013).
+// ---------------------------------------------------------------------
+func (q *Queries) UpsertPushSubscription(ctx context.Context, arg UpsertPushSubscriptionParams) error {
+	_, err := q.db.ExecContext(ctx, upsertPushSubscription,
+		arg.UserID,
+		arg.Endpoint,
+		arg.P256dh,
+		arg.Auth,
+		arg.CreatedAt,
 	)
 	return err
 }

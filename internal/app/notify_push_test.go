@@ -360,14 +360,20 @@ func TestPushTestNamesTheBrowser(t *testing.T) {
 	named, _ := json.Marshal(map[string]string{"endpoint": edge})
 
 	code, msg := f.postJSON(cookie, "/notifications/push/test", string(named))
-	if code != http.StatusOK || !strings.Contains(msg, "wns2-by3p.notify.windows.com accepted the message (HTTP 201)") || service.count() != 1 {
+	if code != http.StatusNoContent || msg != "" || service.count() != 1 {
 		t.Fatalf("test to one browser: %d %q, %d push(es); want that browser alone", code, msg, service.count())
+	}
+
+	// What it says about a message it kept is not shown.
+	service.header = http.Header{"X-Wns-Status": {"received"}}
+	if code, msg = f.postJSON(cookie, "/notifications/push/test", string(named)); code != http.StatusNoContent || msg != "" {
+		t.Fatalf("a received message: %d %q, want a plain success", code, msg)
 	}
 
 	// Microsoft answers 201 to a message it then drops; what it says
 	// about that is passed on.
 	service.header = http.Header{"X-Wns-Status": {"dropped"}, "X-Wns-Deviceconnectionstatus": {"disconnected"}}
-	if _, msg = f.postJSON(cookie, "/notifications/push/test", string(named)); !strings.Contains(msg, "(HTTP 201) [X-WNS-Status: dropped; X-WNS-DeviceConnectionStatus: disconnected]") {
+	if _, msg = f.postJSON(cookie, "/notifications/push/test", string(named)); !strings.Contains(msg, "took the message and then dropped it [X-WNS-Status: dropped; X-WNS-DeviceConnectionStatus: disconnected]") {
 		t.Fatalf("a dropped message: %q", msg)
 	}
 	service.header = nil

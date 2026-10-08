@@ -1424,8 +1424,12 @@ html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
    first paint, so no flash of both icons). */
 /* Theme toggle icons: CSS is the single source of truth (v0.3.32.007).
    Dark is the default: show sun (click to go light), hide moon.
-   In light mode: show moon (click to go dark), hide sun. */
-.theme-icon-moon { display: none; }
+   In light mode: show moon (click to go dark), hide sun.
+   The default rule names the html element so that it outranks
+   ".nav-icon svg { display: block }" above: as a bare class it lost
+   to that rule, and a visitor who had never picked a theme (no
+   data-theme attribute yet) saw both icons until the first click. */
+html:not([data-theme="light"]) .theme-icon-moon { display: none; }
 html[data-theme="light"] .theme-icon-sun { display: none; }
 html[data-theme="light"] .theme-icon-moon { display: block; }
 html[data-theme="dark"] .theme-icon-moon { display: none; }

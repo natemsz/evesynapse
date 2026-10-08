@@ -10,29 +10,34 @@ import (
 	"testing"
 )
 
-// TestIconsMatchTheHeaderLogo: the favicon and the PWA icons are drawn
-// from the logo in the page header, not from an older copy of it. The
-// header's path data and its white centre node and inner links must
-// appear in favicon.svg, and the rendered PNGs must show that white
-// centre node (the earlier icons drew the centre in the orange gradient
-// and had no inner links).
-func TestIconsMatchTheHeaderLogo(t *testing.T) {
+// TestIconsAreDrawnFromTheLogo: there is one logo, static/logo.svg.
+// The page header shows that file, favicon.svg embeds its shapes
+// unchanged, and the PNG icons are pictures of it (cmd/mkicons draws
+// them all). A logo replaced without re-running mkicons fails here.
+func TestIconsAreDrawnFromTheLogo(t *testing.T) {
 	tpl, err := fs.ReadFile(templatesFS, "templates/base.html")
 	if err != nil {
 		t.Fatal(err)
 	}
-	glyph := regexp.MustCompile(`(?s)<svg class="wordmark-glyph".*?</svg>`).FindString(string(tpl))
-	if glyph == "" {
-		t.Fatal("header logo not found in base.html")
+	if !strings.Contains(string(tpl), `<img class="wordmark-glyph" src="/static/logo.svg?v={{.AssetVersion}}"`) {
+		t.Fatal("the page header does not show static/logo.svg")
+	}
+	logo, err := fs.ReadFile(staticFS, "static/logo.svg")
+	if err != nil {
+		t.Fatal(err)
 	}
 	svg, err := fs.ReadFile(staticFS, "static/favicon.svg")
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Every path and circle of the header logo, by its geometry.
-	for _, shape := range regexp.MustCompile(`<path d="[^"]+"/>|<circle [^>]+/>`).FindAllString(glyph, -1) {
-		if !strings.Contains(string(svg), shape) {
-			t.Errorf("favicon.svg does not draw %s from the header logo", shape)
+	shapes := regexp.MustCompile(`(?s)<(?:path|circle)\b[^>]*/>`).FindAllString(string(logo), -1)
+	if len(shapes) == 0 {
+		t.Fatal("logo.svg has no shapes")
+	}
+	// Every shape of the logo, exactly as the logo file has it.
+	for _, shape := range shapes {
+		if !strings.Contains(string(svg), strings.TrimSpace(shape)) {
+			t.Errorf("favicon.svg does not draw this shape of logo.svg (run: go run ./cmd/mkicons): %.80s…", shape)
 		}
 	}
 

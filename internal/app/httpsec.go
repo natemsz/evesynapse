@@ -44,17 +44,19 @@ func warnIfServedInTheClear(cfg Config) {
 
 // contentSecurityPolicy limits what a page may load and where it
 // may send data: everything comes from the app itself, plus images
-// from CCP's image server (portraits, logos, item icons). Pages can
-// not be framed, cannot post forms elsewhere, and cannot have their
-// base address moved.
+// from CCP's image server (portraits, logos, item icons) and the
+// wordmark font from Google Fonts. Pages can not be framed, cannot
+// post forms elsewhere, and cannot have their base address moved.
 //
-// Scripts and styles still allow inline use ('unsafe-inline'): a
-// handful of templates carry inline script blocks, and several use
-// style attributes. Moving those scripts into the static files
-// would let script-src drop it.
+// No inline scripts, styles, or event handlers anywhere: every
+// script is a versioned file under /static/ (boot.js, app.js,
+// fit.js), and styling is the stylesheet plus CSSOM writes from
+// those files — so neither script-src nor style-src needs
+// 'unsafe-inline'. Keep it that way: an inline <script> or style
+// attribute added to a template will silently not run.
 const contentSecurityPolicy = "default-src 'self'; " +
-	"script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; " +
-	"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+	"script-src 'self'; " +
+	"style-src 'self' https://fonts.googleapis.com; " +
 	"img-src 'self' data: https://images.evetech.net; " +
 	"font-src 'self' https://fonts.gstatic.com; " +
 	"connect-src 'self'; " +

@@ -78,7 +78,7 @@ func (r *TestRig) SessionCookie(userID, characterID int64, name string) (*http.C
 	}
 	sessions.Put(ctx, sessionAuthenticated, true)
 	sessions.Put(ctx, sessionUserID, int(userID))
-	sessions.Put(ctx, sessionCharacterID, int(characterID))
+	putSessionCharID(sessions, ctx, characterID)
 	sessions.Put(ctx, sessionCharacterName, name)
 	token, _, err := sessions.Commit(ctx)
 	if err != nil {

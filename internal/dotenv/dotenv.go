@@ -5,24 +5,38 @@ package dotenv
 
 import (
 	"bufio"
+	"errors"
+	"fmt"
 	"os"
 	"strings"
 )
+
+// dotenvMaxLine is the longest .env line accepted: far past the
+// scanner's 64KB default, so a long key or URL never silently
+// truncates the file mid-line and drops the rest of it.
+const dotenvMaxLine = 1 << 20
 
 // Load is a small hand-rolled .env loader. Format: KEY=VALUE per
 // line, blank lines and #-comments skipped, an optional leading
 // "export " tolerated, optional surrounding quotes stripped. A key
 // already present in the real environment always wins — the file only
 // fills in gaps. A file that is not there is not an error:
-// configuration then comes from the environment only.
-func Load(path string) {
+// configuration then comes from the environment only. Anything else
+// that goes wrong (unreadable file, I/O failure, an over-long
+// line) is an error: silently running on defaults has pointed the
+// app at the wrong database before.
+func Load(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
-		return // no .env file: configuration comes from the environment only
+		if errors.Is(err, os.ErrNotExist) {
+			return nil // no .env file: configuration comes from the environment only
+		}
+		return fmt.Errorf("open %s: %w", path, err)
 	}
 	defer f.Close()
 
 	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 64*1024), dotenvMaxLine)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -49,4 +63,8 @@ func Load(path string) {
 		}
 		_ = os.Setenv(key, value)
 	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	return nil
 }

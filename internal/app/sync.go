@@ -276,7 +276,20 @@ func (app *Application) handleSyncWarm(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			logging.Errorf("sync: warm: list characters for user %d: %v", userID, err)
 		} else {
-			want, _ := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64)
+			raw := r.URL.Query().Get("character")
+			want, err := strconv.ParseInt(raw, 10, 64)
+			switch {
+			case raw == "":
+				// No parameter: warm every linked character.
+				want = 0
+			case err != nil || want <= 0:
+				// Garbage in the parameter warms nothing: the old
+				// code ignored the parse error, so want stayed 0
+				// and "?character=abc" warmed everything.
+				logging.Warnf("sync: warm: ignoring invalid character parameter %q", raw)
+				http.Redirect(w, r, "/sync/", http.StatusSeeOther)
+				return
+			}
 			for _, ch := range characters {
 				if want == 0 || ch.CharacterID == want {
 					app.markCharacterPriority(ch.CharacterID)

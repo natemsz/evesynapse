@@ -2070,7 +2070,7 @@ func (app *Application) handleFitMineJSON(w http.ResponseWriter, r *http.Request
 	}
 	// ESI fittings for the active character (Issue 1)
 	// These are the in-game fittings from the character's ESI snapshot.
-	if charID := int64(app.sessions.GetInt(ctx, sessionCharacterID)); charID != 0 {
+	if charID := sessionCharID(app.sessions, ctx); charID != 0 {
 		if char, err := app.queries.GetCharacter(ctx, charID); err == nil {
 			var fittings esi.Fittings
 			if err := app.esi.GetCached(ctx, char, esi.SnapFittings, &fittings); err == nil {

@@ -152,7 +152,7 @@ func sessionCookie(t *testing.T, app *Application, userID, characterID int64, na
 	}
 	app.sessions.Put(ctx, sessionAuthenticated, true)
 	app.sessions.Put(ctx, sessionUserID, int(userID))
-	app.sessions.Put(ctx, sessionCharacterID, int(characterID))
+	putSessionCharID(app.sessions, ctx, characterID)
 	app.sessions.Put(ctx, sessionCharacterName, name)
 	token, _, err := app.sessions.Commit(ctx)
 	if err != nil {

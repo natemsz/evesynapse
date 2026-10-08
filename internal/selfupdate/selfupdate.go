@@ -121,9 +121,11 @@ func releaseChannelBase() string {
 // loadInstallEnv fills in configuration from the .env file
 // beside the installed binary, so a hand-run `-update` sees the
 // same settings the service runs with. Values already in the
-// real environment win.
-func loadInstallEnv(target string) {
-	dotenv.Load(filepath.Join(filepath.Dir(target), ".env"))
+// real environment win. A file that exists but cannot be read is
+// an error: it may carry the update channel, and updating from
+// the wrong channel is worse than not updating.
+func loadInstallEnv(target string) error {
+	return dotenv.Load(filepath.Join(filepath.Dir(target), ".env"))
 }
 
 // releaseManifest is the per-arch pointer published with each
@@ -418,7 +420,10 @@ func runReleaseUpdate(current, target, arch string, stdout, stderr io.Writer, de
 		fmt.Fprintf(stderr, "EveSynapse doesn't publish builds for %q computers. Nothing was changed.\n", arch)
 		return 2
 	}
-	loadInstallEnv(target)
+	if err := loadInstallEnv(target); err != nil {
+		fmt.Fprintf(stderr, "Couldn't read the install's .env file: %v\nNothing was changed.\n", err)
+		return 1
+	}
 	fmt.Fprintf(stdout, "Checking for updates… you're on %s.\n", current)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	m, source, err := fetchReleaseManifest(ctx, arch, dev)

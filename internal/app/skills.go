@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"time"
 
@@ -92,7 +93,7 @@ type skillQueueRow struct {
 func (app *Application) handleSkills(w http.ResponseWriter, r *http.Request) {
 	target := "/character/"
 	if cid := r.URL.Query().Get("character"); cid != "" {
-		target = "/character/?character=" + cid
+		target = "/character/?character=" + url.QueryEscape(cid)
 	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
 }

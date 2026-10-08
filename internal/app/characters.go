@@ -105,7 +105,7 @@ func (app *Application) switcherEntriesFor(ctx context.Context, characters []db.
 // against the account's linked characters: the session pick when
 // still linked, else the first linked character (0 when none).
 func (app *Application) actingCharacterID(ctx context.Context, characters []db.Character) int64 {
-	if sid := int64(app.sessions.GetInt(ctx, sessionCharacterID)); sid != 0 {
+	if sid := sessionCharID(app.sessions, ctx); sid != 0 {
 		for _, ch := range characters {
 			if ch.CharacterID == sid {
 				return sid
@@ -235,7 +235,7 @@ func (app *Application) handleCharacterSwitch(w http.ResponseWriter, r *http.Req
 	characterID, _ := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64)
 	if userID != 0 && characterID != 0 {
 		if ch, err := app.queries.GetCharacter(ctx, characterID); err == nil && ch.UserID == userID {
-			app.sessions.Put(ctx, sessionCharacterID, int(characterID))
+			putSessionCharID(app.sessions, ctx, characterID)
 			app.sessions.Put(ctx, sessionCharacterName, ch.Name)
 		}
 	}
@@ -324,13 +324,13 @@ func (app *Application) handleCharacterUnlink(w http.ResponseWriter, r *http.Req
 
 	// Acting-character fallback: only when the removed character
 	// was the session's pick.
-	if int64(app.sessions.GetInt(ctx, sessionCharacterID)) == characterID {
+	if sessionCharID(app.sessions, ctx) == characterID {
 		remaining, err := app.queries.ListCharactersByUser(ctx, userID)
 		if err == nil && len(remaining) > 0 {
-			app.sessions.Put(ctx, sessionCharacterID, int(remaining[0].CharacterID))
+			putSessionCharID(app.sessions, ctx, remaining[0].CharacterID)
 			app.sessions.Put(ctx, sessionCharacterName, remaining[0].Name)
 		} else {
-			app.sessions.Put(ctx, sessionCharacterID, 0)
+			putSessionCharID(app.sessions, ctx, 0)
 			app.sessions.Put(ctx, sessionCharacterName, "")
 		}
 	}

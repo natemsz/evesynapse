@@ -639,7 +639,8 @@ tbody tr:hover td { background: var(--row-hover); }
   padding: 0.6rem 0.85rem;
   box-shadow: rgba(0, 0, 0, 0.425) 0 1px 0, rgba(255, 255, 255, 0.08) 0 1px 0 inset;
 }
-.ok {
+.ok,
+.notice {
   background: rgba(255, 184, 77, 0.14);
   border: 1px solid var(--success);
   border-radius: 4px;
@@ -3060,3 +3061,97 @@ form.inline-form { display: inline; }
   height: 8px;
   background: linear-gradient(90deg, #ffd27a, #ff6a1a 55%, #d63c14);
 }
+
+/* --- skill planner ---
+   The levels a plan trains are shaded in the ember accent beside the
+   levels already trained (white, gold at V), so a row reads as
+   "here is where you are, here is where this plan takes you". */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.lvl i.plan {
+  background: linear-gradient(to bottom, #ffb84d, #ff6a1a 60%, #d63c14);
+  border-color: #ff9a4a;
+}
+html[data-theme="light"] .lvl i.plan { background: linear-gradient(to bottom, #f2a04a, #d9640f); border-color: #b0490a; }
+
+.plan-add { margin: 0.6rem 0; }
+.plan-table .plan-move, .plan-table .plan-remove { width: 1%; white-space: nowrap; }
+.plan-table .plan-move form, .plan-table .plan-remove form { display: inline-flex; gap: 0.25rem; margin: 0; }
+.plan-table .plan-level { white-space: nowrap; }
+.plan-table .plan-level small { margin-left: 0.35rem; color: var(--muted); }
+.plan-for { color: var(--note); margin-left: 0.25rem; }
+.plan-prereq td { color: var(--muted-2); }
+.plan-prereq td:nth-child(2) { padding-left: 1.4rem; }
+.plan-covered td { color: var(--muted); }
+.plan-covered td:nth-child(2) { padding-left: 0; }
+
+/* The move and remove controls: small square themed buttons with an
+   icon, not the default browser button. */
+.plan-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  color: var(--muted-2);
+  background: var(--input-bg);
+  border: 1px solid #3a2a1a;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.plan-btn svg { width: 1rem; height: 1rem; }
+.plan-btn:hover:not(:disabled):not([aria-disabled="true"]) { color: var(--text-bright); border-color: var(--accent); background: var(--row-hover); }
+.plan-btn:focus-visible { outline: none; box-shadow: 0 0 8px rgba(255, 106, 26, 0.55); border-color: var(--accent); }
+.plan-btn:disabled, .plan-btn[aria-disabled="true"] { opacity: 0.35; cursor: not-allowed; }
+.plan-btn-danger:hover:not(:disabled) { color: #fff3ec; border-color: var(--danger); background: #5a1a0c; }
+html[data-theme="light"] .plan-btn { border-color: #b8ad96; }
+.plan-live:empty { display: none; }
+.plan-live .notice { margin: 0.4rem 0; }
+#plan-body:focus { outline: none; }
+
+/* The plan picker: every saved plan as a row you can open, with what is
+   left to train in it; the search above narrows the list as you type. */
+.plan-find { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.4rem 0 0.7rem; }
+.plan-find .searchwrap { flex: 1 1 14rem; max-width: 24rem; }
+.plan-list { list-style: none; margin: 0 0 0.9rem; padding: 0; border: 1px solid #060606; background: var(--row); }
+.plan-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.3rem 0.5rem 0.3rem 0.7rem;
+  border-top: 1px solid #222222;
+}
+.plan-item:first-child { border-top: 0; }
+.plan-item:nth-child(even) { background: var(--row-alt); }
+.plan-item:hover { background: var(--row-hover); }
+.plan-item.is-current { box-shadow: inset 3px 0 0 var(--accent); }
+.plan-item[hidden], .plan-confirm[hidden], .plan-none[hidden] { display: none; }
+.plan-open {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.7rem;
+  color: var(--text);
+  padding: 0.15rem 0;
+}
+.plan-open:hover { color: var(--text-bright); text-decoration: none; }
+.plan-item.is-current .plan-name { color: var(--accent); }
+.plan-name { overflow-wrap: anywhere; }
+.plan-meta { color: var(--muted); }
+.plan-open:focus-visible { outline: none; box-shadow: 0 0 8px rgba(255, 106, 26, 0.55); }
+/* Asking "delete this plan?" takes the row over: the question and its
+   two buttons stand where the plan's name was. */
+.plan-confirm { flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0; }
+.plan-item.is-confirming .plan-open, .plan-item.is-confirming > .plan-btn { display: none; }
+html[data-theme="light"] .plan-list { border-color: #b8ad96; }
+html[data-theme="light"] .plan-item { border-top-color: #d9d2c2; }

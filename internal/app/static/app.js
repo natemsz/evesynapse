@@ -1972,6 +1972,164 @@
     if (href.charAt(0) === "/" && href.charAt(1) !== "/") window.location.href = href;
   });
 
+  // --- Skill planner: move and remove in place -------------------
+  // A move or remove button in the plan table posts its form with
+  // fetch and swaps the returned table (#plan-body) into the page, so
+  // the search box, results and scroll position stay where they are.
+  // The server answers with the reason in data-message when it refuses
+  // a move (a prerequisite is in the way); that is read out through the
+  // status region above the table. Without JavaScript the same forms
+  // post normally and come back to the page with the reason flashed.
+  document.addEventListener("submit", function (ev) {
+    var form = ev.target;
+    if (!window.fetch || !form || !form.matches || !form.matches(".plan-move-form, .plan-remove-form")) return;
+    var editor = form.closest("[data-plan-editor]");
+    var body = form.closest("[data-plan-body]");
+    if (!editor || !body) return;
+    ev.preventDefault();
+
+    var data = new URLSearchParams(new FormData(form));
+    var dir = ev.submitter && ev.submitter.name === "dir" ? ev.submitter.value : "";
+    if (dir) data.set("dir", dir);
+    var row = form.closest("tr");
+    var skill = row ? row.getAttribute("data-skill") : "";
+    var removing = form.classList.contains("plan-remove-form");
+
+    window.fetch(form.action, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "X-Requested-With": "XMLHttpRequest",
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: data.toString()
+    }).then(function (resp) {
+      return resp.text();
+    }).then(function (html) {
+      var probe = document.createElement("div");
+      probe.innerHTML = html;
+      var fresh = probe.querySelector("[data-plan-body]");
+      if (!fresh) {
+        // Not the table (signed out, an error): let the page show it.
+        window.location.reload();
+        return;
+      }
+      var live = editor.querySelector(".plan-live");
+      var message = fresh.getAttribute("data-message") || "";
+      if (live) {
+        live.textContent = "";
+        if (message) {
+          var note = document.createElement("p");
+          note.className = "notice";
+          note.textContent = message;
+          live.appendChild(note);
+        }
+      }
+      body.replaceWith(fresh);
+      // Keep the keyboard where it was: the same button on the same
+      // skill, else the other move button; after a remove, the table.
+      var target = null;
+      if (!removing && skill) {
+        var next = fresh.querySelector("tr[data-skill='" + skill + "']");
+        if (next) {
+          target = next.querySelector("button[name='dir'][value='" + dir + "']:not([aria-disabled='true'])") ||
+            next.querySelector("button[name='dir']:not([aria-disabled='true'])") ||
+            next.querySelector("button[name='dir']");
+        }
+      }
+      (target || fresh).focus();
+    }).catch(function () {
+      // The request itself failed: fall back to the plain post.
+      form.submit();
+    });
+  });
+
+  // --- Skill planner: find and delete saved plans ----------------
+  // The search above the list of plans narrows it as you type (Enter
+  // opens the first match, the arrow keys walk the list, Escape clears
+  // it); without JavaScript the same search is a form that reloads the
+  // page with ?pq=. The delete button on a row asks in place — the row
+  // turns into "Delete this plan? [Delete] [Keep]" — where a plain link
+  // goes to the page's own confirmation.
+  (function () {
+    var picker = document.querySelector("[data-plan-picker]");
+    if (!picker) return;
+    var input = picker.querySelector("[data-plan-filter]");
+    var items = Array.prototype.slice.call(picker.querySelectorAll(".plan-item"));
+    var none = picker.querySelector(".plan-none");
+
+    function shown() {
+      return items.filter(function (li) { return !li.hidden; });
+    }
+    function filter() {
+      var q = input.value.trim().toLowerCase();
+      items.forEach(function (li) {
+        li.hidden = q !== "" && (li.getAttribute("data-name") || "").toLowerCase().indexOf(q) === -1;
+      });
+      if (none) none.hidden = shown().length > 0;
+    }
+    function openLink(li) {
+      return li.querySelector(".plan-open");
+    }
+
+    if (input) {
+      input.addEventListener("input", filter);
+      input.addEventListener("keydown", function (ev) {
+        var rows = shown();
+        if (ev.key === "ArrowDown" && rows.length) {
+          ev.preventDefault();
+          openLink(rows[0]).focus();
+        } else if (ev.key === "Escape" && input.value !== "") {
+          ev.preventDefault();
+          input.value = "";
+          filter();
+        } else if (ev.key === "Enter" && input.value.trim() !== "" && rows.length) {
+          ev.preventDefault();
+          window.location.href = openLink(rows[0]).href;
+        }
+      });
+      if (input.value !== "") filter();
+    }
+
+    picker.addEventListener("keydown", function (ev) {
+      var link = ev.target && ev.target.closest ? ev.target.closest(".plan-open") : null;
+      if (link && (ev.key === "ArrowDown" || ev.key === "ArrowUp")) {
+        var rows = shown();
+        var at = rows.indexOf(link.closest(".plan-item"));
+        var next = rows[at + (ev.key === "ArrowDown" ? 1 : -1)];
+        ev.preventDefault();
+        if (next) openLink(next).focus();
+        else if (ev.key === "ArrowUp" && input) input.focus();
+      } else if (ev.key === "Escape" && ev.target.closest && ev.target.closest(".plan-confirm")) {
+        var keep = ev.target.closest(".plan-item").querySelector("[data-plan-keep]");
+        if (keep) keep.click();
+      }
+    });
+
+    picker.addEventListener("click", function (ev) {
+      var target = ev.target && ev.target.closest ? ev.target : null;
+      if (!target) return;
+      var del = target.closest("[data-plan-delete]");
+      if (del) {
+        var row = del.closest(".plan-item");
+        var form = row && row.querySelector(".plan-confirm");
+        if (!form) return;
+        ev.preventDefault();
+        row.classList.add("is-confirming");
+        form.hidden = false;
+        form.querySelector("button[type='submit']").focus();
+        return;
+      }
+      var keepBtn = target.closest("[data-plan-keep]");
+      if (keepBtn) {
+        var li = keepBtn.closest(".plan-item");
+        li.classList.remove("is-confirming");
+        li.querySelector(".plan-confirm").hidden = true;
+        li.querySelector("[data-plan-delete]").focus();
+      }
+    });
+  })();
+
   // --- Data-driven geometry ------------------------------------
   // The content security policy forbids inline style attributes, so
   // the numbers the server used to write into inline styles ride

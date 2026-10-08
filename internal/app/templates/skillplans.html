@@ -38,14 +38,38 @@
 {{end}}
 {{end}}
 
-<section class="foldable">
-<h3>Your plans</h3>
-{{if .Plans}}
-<ul>
+<section class="foldable plan-picker" data-plan-picker>
+<h3>Your plans{{if .PlanTotal}} <small>({{.PlanTotal}})</small>{{end}}</h3>
+{{if .PlanTotal}}
+{{if gt .PlanTotal 1}}
+<form method="get" action="/skills/plans" class="plan-find" role="search">
+  <input type="hidden" name="character" value="{{.CharacterID}}">
+  {{if .Plan}}<input type="hidden" name="plan" value="{{.Plan.ID}}">{{end}}
+  <span class="searchwrap">
+    <input type="search" name="pq" value="{{.PlanQuery}}" placeholder="Search your plans" aria-label="Search your plans" autocomplete="off" data-plan-filter>
+  </span>
+  <button type="submit">Search</button>
+</form>
+{{end}}
+<ul class="plan-list" data-plan-list>
 {{range .Plans}}
-  <li>{{if and $.SkillPlans.Plan (eq .ID $.SkillPlans.Plan.ID)}}<strong>{{.Name}}</strong>{{else}}<a href="/skills/plans?character={{$.SkillPlans.CharacterID}}&plan={{.ID}}">{{.Name}}</a>{{end}} <small>({{.Items}} skill targets)</small></li>
+  <li class="plan-item{{if .Selected}} is-current{{end}}" data-name="{{.Name}}">
+    <a class="plan-open" href="/skills/plans?character={{$.SkillPlans.CharacterID}}&plan={{.ID}}"{{if .Selected}} aria-current="page"{{end}}>
+      <span class="plan-name">{{.Name}}</span>
+      <small class="plan-meta">{{.Items}} skill(s){{if .Left}} · {{.Left}}{{end}}</small>
+    </a>
+    <a class="plan-btn plan-btn-danger" href="/skills/plans?character={{$.SkillPlans.CharacterID}}&plan={{.ID}}&confirm=delete" data-plan-delete aria-label="Delete the plan {{.Name}}" title="Delete this plan"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></a>
+    <form method="post" action="/skills/plans/delete" class="plan-confirm" hidden>
+      <input type="hidden" name="character" value="{{$.SkillPlans.CharacterID}}">
+      <input type="hidden" name="plan" value="{{.ID}}">
+      <span>Delete “{{.Name}}”?</span>
+      <button type="submit" class="btn btn-danger">Delete</button>
+      <button type="button" class="btn" data-plan-keep>Keep</button>
+    </form>
+  </li>
 {{end}}
 </ul>
+<p class="plan-none"{{if .Plans}} hidden{{end}}><small>No plan matches that search.</small></p>
 {{else}}
 <p><small>No plans yet for this character.</small></p>
 {{end}}
@@ -65,74 +89,67 @@
 </section>
 
 {{if .Plan}}
-{{with .Plan}}
-<section class="foldable">
-<h3>{{.Name}}</h3>
-
-{{if .AttrsNote}}<p><small>{{.AttrsNote}}</small></p>{{end}}
-{{if .AttrsLine}}<p><small>{{.AttrsLine}}</small></p>{{end}}
-
-{{if .Items}}
-<div class="tw">
-<table>
-  <thead><tr><th>Skill</th><th>Target</th><th></th></tr></thead>
-  <tbody>
-  {{range .Items}}
-    <tr>
-      <td>{{itemLink .SkillID .Skill}}</td>
-      <td>{{.Level}}</td>
-      <td>
-        <form method="post" action="/skills/plans/item-move">
-          <input type="hidden" name="character" value="{{$.SkillPlans.CharacterID}}">
-          <input type="hidden" name="plan" value="{{$.SkillPlans.Plan.ID}}">
-          <input type="hidden" name="skill" value="{{.SkillID}}">
-          <button type="submit" name="dir" value="up"{{if not .CanUp}} disabled{{end}}>↑</button>
-          <button type="submit" name="dir" value="down"{{if not .CanDown}} disabled{{end}}>↓</button>
-        </form>
-        <form method="post" action="/skills/plans/item-remove">
-          <input type="hidden" name="character" value="{{$.SkillPlans.CharacterID}}">
-          <input type="hidden" name="plan" value="{{$.SkillPlans.Plan.ID}}">
-          <input type="hidden" name="skill" value="{{.SkillID}}">
-          <button type="submit">Remove</button>
-        </form>
-      </td>
-    </tr>
-  {{end}}
-  </tbody>
-</table>
-</div>
-{{else}}
-<p><small>This plan is empty — add skills below, or browse the <a href="/character/?character={{$.SkillPlans.CharacterID}}">skill catalog</a>.</small></p>
+{{template "plan-editor" .}}
 {{end}}
 
-<form method="get" action="/skills/plans">
-  <input type="hidden" name="character" value="{{$.SkillPlans.CharacterID}}">
+{{end}}
+{{end}}
+{{else}}
+  <p>No skill plans to show yet — link a character first.</p>
+{{end}}
+{{end}}
+
+{{/* The unified planner. plan-editor is the whole plan section on the page;
+     plan-body, its table and totals, is also rendered on its own (the
+     fragment) when a move or remove is made in place, so the search box
+     and results above it stay as they are. Dot is the page's
+     skillPlansView in both. */}}
+{{define "plan-editor"}}
+{{with .Plan}}
+<section class="foldable plan-editor" id="plan-editor" data-plan-editor data-character="{{$.CharacterID}}" data-plan="{{.ID}}">
+<h3>{{.Name}}</h3>
+
+{{if .ConfirmDelete}}
+<form method="post" action="/skills/plans/delete">
+  <input type="hidden" name="character" value="{{$.CharacterID}}">
+  <input type="hidden" name="plan" value="{{.ID}}">
+  <p>Delete the plan “{{.Name}}”? This cannot be undone. <button type="submit" class="btn btn-danger">Delete plan</button> <a href="/skills/plans?character={{$.CharacterID}}&plan={{.ID}}">Keep it</a></p>
+</form>
+{{end}}
+
+<form method="get" action="/skills/plans" class="plan-add">
+  <input type="hidden" name="character" value="{{$.CharacterID}}">
   <input type="hidden" name="plan" value="{{.ID}}">
   <label>Add skill
     <span class="searchwrap">
-      <input type="search" name="q" id="skill-q" value="{{$.SkillPlans.SearchQuery}}" placeholder="Skill name" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="skill-suggest" aria-autocomplete="list">
+      <input type="search" name="q" id="skill-q" value="{{$.SearchQuery}}" placeholder="Skill name" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="skill-suggest" aria-autocomplete="list">
       <ul class="suggest" id="skill-suggest" role="listbox" hidden></ul>
     </span>
   </label>
   <button type="submit">Search</button>
 </form>
-{{if $.SkillPlans.SearchResults}}
+{{if $.SearchResults}}
 <div class="tw">
 <table>
   <thead><tr><th>Skill</th><th>Rank</th><th>Target</th><th></th></tr></thead>
   <tbody>
-  {{range $.SkillPlans.SearchResults}}
+  {{range $.SearchResults}}
     <tr>
       <td>{{itemLink .SkillID .Name}}</td>
       <td>{{.Rank}}</td>
       <td colspan="2">
+        {{if .Levels}}
         <form method="post" action="/skills/plans/item-add">
-          <input type="hidden" name="character" value="{{$.SkillPlans.CharacterID}}">
-          <input type="hidden" name="plan" value="{{$.SkillPlans.Plan.ID}}">
+          <input type="hidden" name="character" value="{{$.CharacterID}}">
+          <input type="hidden" name="plan" value="{{$.Plan.ID}}">
           <input type="hidden" name="skill" value="{{.SkillID}}">
-          <select name="level"><option value="1">I</option><option value="2">II</option><option value="3">III</option><option value="4">IV</option><option value="5" selected>V</option></select>
+          {{.Squares}}
+          <select name="level" aria-label="Target level">{{range .Levels}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Roman}}</option>{{end}}</select>
           <button type="submit">Add</button>
         </form>
+        {{else}}
+        {{.Squares}} <small>already trained to V</small>
+        {{end}}
       </td>
     </tr>
   {{end}}
@@ -141,26 +158,83 @@
 </div>
 {{end}}
 
-{{if .Steps}}
-<h4>Training order</h4>
+<div class="plan-live" role="status" aria-live="polite"></div>
+{{template "plan-body" $}}
+</section>
+{{end}}
+{{end}}
+
+{{define "plan-body"}}
+{{with .Plan}}
+<div id="plan-body" data-plan-body data-message="{{$.Message}}" tabindex="-1">
+<p class="plan-summary"><small>{{.Count}} skill(s) in this plan{{if .TotalSP}} · {{.TotalSP}} SP · {{.TotalTime}} to train{{end}}</small></p>
 {{if .StartsNote}}<p><small>{{.StartsNote}}</small></p>{{end}}
+{{if .AttrsNote}}<p><small>{{.AttrsNote}}</small></p>{{end}}
+{{if .AttrsLine}}<p><small>{{.AttrsLine}}</small></p>{{end}}
+
+{{if .Rows}}
 <div class="tw">
-<table>
-  <thead><tr><th>Skill</th><th>Levels</th><th>SP</th><th>Time</th><th>Finishes</th></tr></thead>
+<table class="plan-table">
+  <caption class="visually-hidden">{{.Name}}, in training order</caption>
+  <thead><tr><th class="plan-move"><span class="visually-hidden">Move</span></th><th>Skill</th><th>Level</th><th>SP</th><th>Time</th><th>Finishes</th><th class="plan-remove"><span class="visually-hidden">Remove</span></th></tr></thead>
   <tbody>
-  {{range .Steps}}
-    <tr><td>{{itemLink .SkillID .Skill}}{{if .Prereq}} <small>(prerequisite)</small>{{end}}</td><td>{{.FromTo}}</td><td>{{.SP}}</td><td>{{.Time}}</td><td>{{.Finish}}</td></tr>
+  {{range .Rows}}
+    <tr{{if not .Direct}} class="plan-prereq"{{end}} data-skill="{{.SkillID}}">
+      <td class="plan-move">
+        {{if .Direct}}
+        <form method="post" action="/skills/plans/item-move" class="plan-move-form">
+          <input type="hidden" name="character" value="{{$.CharacterID}}">
+          <input type="hidden" name="plan" value="{{$.Plan.ID}}">
+          <input type="hidden" name="skill" value="{{.SkillID}}">
+          <button type="submit" name="dir" value="up" class="plan-btn" aria-label="Move {{.Skill}} earlier"{{if .CanUp}} title="Move earlier"{{else}} aria-disabled="true" title="Cannot move earlier: {{.UpWhy}}"{{end}}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 10.5L8 6l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <button type="submit" name="dir" value="down" class="plan-btn" aria-label="Move {{.Skill}} later"{{if .CanDown}} title="Move later"{{else}} aria-disabled="true" title="Cannot move later: {{.DownWhy}}"{{end}}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 5.5L8 10l4.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </form>
+        {{end}}
+      </td>
+      <td>{{itemLink .SkillID .Skill}}{{if .NeededBy}} <small class="plan-for">{{.NeededBy}}</small>{{end}}</td>
+      <td class="plan-level">{{.Squares}} <small>{{.FromTo}}</small></td>
+      <td>{{.SP}}</td>
+      <td>{{.Time}}</td>
+      <td>{{.Finish}}</td>
+      <td class="plan-remove">
+        {{if .Direct}}
+        <form method="post" action="/skills/plans/item-remove" class="plan-remove-form">
+          <input type="hidden" name="character" value="{{$.CharacterID}}">
+          <input type="hidden" name="plan" value="{{$.Plan.ID}}">
+          <input type="hidden" name="skill" value="{{.SkillID}}">
+          <button type="submit" class="plan-btn plan-btn-danger" aria-label="Remove {{.Skill}} from the plan" title="Remove from the plan"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+        </form>
+        {{end}}
+      </td>
+    </tr>
+  {{end}}
+  {{range .Covered}}
+    <tr class="plan-covered" data-skill="{{.SkillID}}">
+      <td class="plan-move"></td>
+      <td>{{itemLink .SkillID .Skill}} <small class="plan-for">{{.Note}}</small></td>
+      <td class="plan-level">{{.Squares}} <small>{{.FromTo}}</small></td>
+      <td colspan="3"><small>nothing left to train</small></td>
+      <td class="plan-remove">
+        <form method="post" action="/skills/plans/item-remove" class="plan-remove-form">
+          <input type="hidden" name="character" value="{{$.CharacterID}}">
+          <input type="hidden" name="plan" value="{{$.Plan.ID}}">
+          <input type="hidden" name="skill" value="{{.SkillID}}">
+          <button type="submit" class="plan-btn plan-btn-danger" aria-label="Remove {{.Skill}} from the plan" title="Remove from the plan"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+        </form>
+      </td>
+    </tr>
   {{end}}
   </tbody>
 </table>
 </div>
-<p><strong>Total:</strong> {{.TotalSP}} SP · {{.TotalTime}}</p>
+{{if .TotalSP}}<p><strong>Total:</strong> {{.TotalSP}} SP · {{.TotalTime}}</p>{{end}}
 {{if .UnallocatedNote}}<p><small>{{.UnallocatedNote}}</small></p>{{end}}
+{{else if .Covered}}
+<p><small>Everything in this plan is already trained.</small></p>
+{{else}}
+<p><small>This plan is empty — add skills above, or browse the <a href="/character/?character={{$.CharacterID}}">skill catalog</a>.</small></p>
 {{end}}
 
-{{if .Dropped}}
-<p><small>Already covered: {{range $i, $d := .Dropped}}{{if $i}} · {{end}}{{$d}}{{end}}</small></p>
-{{end}}
 {{if .Unknown}}
 <p><small>No training data for: {{range $i, $u := .Unknown}}{{if $i}}, {{end}}{{$u}}{{end}}</small></p>
 {{end}}
@@ -169,23 +243,6 @@
 <h4>Remap advisor</h4>
 <p><small>Current spread ({{.Remap.CurrentLine}}) trains this plan in {{.Remap.CurrentTime}}.{{if .Remap.Saving}} A remap to {{.Remap.BestLine}} would take {{.Remap.BestTime}} — saving {{.Remap.Saving}}.{{else}} Your current spread is already the fastest for this plan.{{end}}{{if .Remap.BonusNote}} {{.Remap.BonusNote}}.{{end}}</small></p>
 {{end}}
-
-{{if .ConfirmDelete}}
-<form method="post" action="/skills/plans/delete">
-  <input type="hidden" name="character" value="{{$.SkillPlans.CharacterID}}">
-  <input type="hidden" name="plan" value="{{.ID}}">
-  <p>Delete the plan “{{.Name}}”? This cannot be undone. <button type="submit">Delete plan</button> <a href="/skills/plans?character={{$.SkillPlans.CharacterID}}&plan={{.ID}}">Keep it</a></p>
-</form>
-{{else}}
-<p><small><a href="/skills/plans?character={{$.SkillPlans.CharacterID}}&plan={{.ID}}&confirm=delete">Delete this plan</a></small></p>
-{{end}}
-</section>
-{{end}}
-{{end}}
-
-{{end}}
-{{end}}
-{{else}}
-  <p>No skill plans to show yet — link a character first.</p>
+</div>
 {{end}}
 {{end}}

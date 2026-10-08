@@ -49,6 +49,9 @@ func TestLinkHelpers(t *testing.T) {
 		{"kill no id", killCharLink(viewer, 0, "NPC"), `NPC`},
 		{"zkill kill", zkillKillLink(7001), `<a href="https://zkillboard.com/kill/7001/" target="_blank" rel="noopener noreferrer">View on zKillboard</a>`},
 		{"zkill kill none", zkillKillLink(0), ``},
+		{"dotlan system", dotlanSystemLink("Old Man Star"), `<a href="https://evemaps.dotlan.net/system/Old_Man_Star" target="_blank" rel="noopener noreferrer">Dotlan</a>`},
+		{"dotlan region", dotlanRegionLink("The Forge"), `<a href="https://evemaps.dotlan.net/map/The_Forge" target="_blank" rel="noopener noreferrer">Dotlan</a>`},
+		{"dotlan no name", dotlanSystemLink(""), ``},
 		{"name escaped", itemLink(item, `<b>"x"</b>`), `<a href="/items/type/34/">&lt;b&gt;&#34;x&#34;&lt;/b&gt;</a>`},
 	}
 	for _, c := range cases {

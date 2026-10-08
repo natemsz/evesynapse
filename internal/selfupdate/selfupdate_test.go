@@ -122,28 +122,26 @@ func TestCompareVersions(t *testing.T) {
 		a, b string
 		want int
 	}{
-		// major.feature.fix, each part a plain number.
-		{"1.4.2", "1.4.1", 1},
-		{"1.4.2", "1.5.0", -1},
-		{"2.0.0", "1.99.99", 1},
-		{"1.4.10", "1.4.9", 1}, // numeric, not lexical
-		{"1.10.0", "1.9.9", 1},
-		{"v1.4.2", "1.4.2", 0},
-		{"1.4.2-dev", "1.4.2", -1},
-		{"1.4.2", "1.4.1-dev", 1},
-		// From the last zero-padded four-part release to the first
-		// three-part ones: an install still on the old numbering has
-		// to see the new releases as newer.
-		{"0.4.2", "0.4.01.003", 1},
-		{"0.5.0", "0.4.01.003", 1},
-		{"1.0.0", "0.4.01.003", 1},
-		{"0.4.01.003", "0.5.0", -1},
-		{"0.5.0-dev", "0.4.01.003", 1},
-		// And what it would refuse: the same three numbers without
-		// the fourth are an older version, not the same one.
-		{"0.4.1", "0.4.01.003", -1},
+		// stable.major.feature.fix, each part a plain number.
+		{"0.4.1.5", "0.4.1.4", 1},
+		{"0.4.1.4", "0.4.2.0", -1},
+		{"0.5.0.0", "0.4.9.9", 1},
+		{"1.0.0.0", "0.99.99.99", 1},
+		{"0.4.1.10", "0.4.1.9", 1}, // numeric, not lexical
+		{"0.4.10.0", "0.4.9.9", 1},
+		{"v0.4.1.4", "0.4.1.4", 0},
+		{"0.4.1.4-dev", "0.4.1.4", -1},
+		{"0.4.1.4", "0.4.1.3-dev", 1},
+		// From the last zero-padded release to the unpadded ones: an
+		// install still on the padded numbering has to see the new
+		// releases as newer, and the padding itself changes nothing.
+		{"0.4.1.4", "0.4.01.003", 1},
+		{"0.4.2.0", "0.4.01.003", 1},
+		{"1.0.0.0", "0.4.01.003", 1},
+		{"0.4.01.003", "0.4.1.4", -1},
+		{"0.4.1.4-dev", "0.4.01.003", 1},
 		{"0.4.01.003", "0.4.1.3", 0},
-		// The old numbering, as before.
+		// The padded numbering, as before.
 		{"0.3.17.1", "0.3.16.9", 1},
 		{"0.3.16.9", "0.3.17.1", -1},
 		{"0.3.17.001", "0.3.17.1", 0},
@@ -169,15 +167,15 @@ func TestCompareVersions(t *testing.T) {
 	}
 }
 
-// lastPaddedRelease is the last release numbered the old way, with
-// four zero-padded parts. Installs on it, and on anything before it,
+// lastPaddedRelease is the last release numbered with zero-padded
+// parts. Installs on it, and on anything before it,
 // decide for themselves whether a release is newer.
 const lastPaddedRelease = "0.4.01.003"
 
 // TestVersionFileIsNotOlderThanTheLastPaddedRelease: whatever
 // version.txt is changed to, the installs still on the old numbering
-// must see it as an update. A number such as 0.4.1 reads as older than
-// 0.4.01.003 to them, and they would never move.
+// must see it as an update. A number below 0.4.1.3, part by part,
+// reads as older to them, and they would never move.
 func TestVersionFileIsNotOlderThanTheLastPaddedRelease(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "app", "version.txt"))
 	if err != nil {
@@ -185,7 +183,7 @@ func TestVersionFileIsNotOlderThanTheLastPaddedRelease(t *testing.T) {
 	}
 	version := strings.TrimSpace(string(raw))
 	if compareVersions(version, lastPaddedRelease) < 0 {
-		t.Fatalf("version.txt is %s, which an install on %s takes for an older version and will not update to; the number has to be above 0.4.1.3 part by part (0.4.2, 0.5.0, 1.0.0, ...)", version, lastPaddedRelease)
+		t.Fatalf("version.txt is %s, which an install on %s takes for an older version and will not update to; the number has to be above 0.4.1.3 part by part (0.4.1.4, 0.4.2.0, 0.5.0.0, ...)", version, lastPaddedRelease)
 	}
 }
 

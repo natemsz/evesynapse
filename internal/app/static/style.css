@@ -3188,6 +3188,19 @@ html[data-theme="light"] .plan-btn { border-color: #b8ad96; }
 html[data-theme="light"] .plan-list { border-color: #b8ad96; }
 html[data-theme="light"] .plan-item { border-top-color: #d9d2c2; }
 
+/* --- assets: what is inside a ship or container ---
+   The contents open beneath their container's row, indented, in a
+   table of their own that follows the same columns. */
+#assets-search { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0 0 0.35rem; }
+.assets-only { display: inline-flex; align-items: center; gap: 0.35rem; }
+tr.asset-inside > td { padding: 0 0 0 1.25rem; border-top: 0; }
+tr.asset-inside details { margin: 0; }
+tr.asset-inside summary { cursor: pointer; padding: 0.3rem 0.6rem; color: var(--muted); }
+tr.asset-inside summary:hover { color: var(--text); }
+tr.asset-inside table { margin: 0; border: 0; border-left: 2px solid #2a1a0c; }
+tr.asset-inside p { margin: 0.25rem 0.6rem 0.5rem; }
+html[data-theme="light"] tr.asset-inside table { border-left-color: #d8cdb8; }
+
 /* --- notifications: the top-bar icon and its short list ---
    A <details>, so it opens and closes with no script. The icon is
    dim until something is unread; the count sits on its corner. */

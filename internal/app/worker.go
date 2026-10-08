@@ -394,6 +394,13 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 		return app.refreshCommsSnapshots(ctx, ch, c.allowance)
 	})
 
+	// The names players gave their ships and containers, for the
+	// Assets page (assets_names_worker.go). At most one call per
+	// character per cycle, and usually none.
+	c.characterPass("warming asset names", ch, func() (int, bool) {
+		return app.warmCharacterAssetNames(ctx, ch)
+	})
+
 	// Daily wallet history (schema 019): record today from
 	// the snapshots just stored. Pure local reads — no fetch
 	// budget spent, no extra ESI calls.

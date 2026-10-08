@@ -1312,6 +1312,37 @@ func (q *Queries) ListSDERequirementsByTypes(ctx context.Context, typeIds []int6
 	return items, nil
 }
 
+const listSDEShipTypeIDs = `-- name: ListSDEShipTypeIDs :many
+SELECT t.type_id FROM sde_types t
+JOIN sde_groups g ON g.group_id = t.group_id
+WHERE g.category_id = 6 AND t.type_id = ANY($1::bigint[])
+`
+
+// Which of these types are ships (category 6): the assets a player
+// names. Used to decide whose names are worth asking ESI for.
+func (q *Queries) ListSDEShipTypeIDs(ctx context.Context, typeIds []int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listSDEShipTypeIDs, pq.Array(typeIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var type_id int64
+		if err := rows.Scan(&type_id); err != nil {
+			return nil, err
+		}
+		items = append(items, type_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDESkillCatalog = `-- name: ListSDESkillCatalog :many
 SELECT m.type_id, t.name, g.name AS group_name, m.rank, m.primary_attr, m.secondary_attr
 FROM sde_skill_meta m

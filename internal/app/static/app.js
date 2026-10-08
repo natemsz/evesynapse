@@ -849,6 +849,23 @@
       });
   })();
 
+  // Assets: suggestions come from what the account actually owns
+  // (each says whose it is), narrowed to the acting character when
+  // the box is ticked. A pick fills the box and runs the search.
+  (function () {
+    var only = document.getElementById("assets-only");
+    attachSuggest(
+      document.getElementById("assets-q"),
+      document.getElementById("assets-suggest"),
+      function (q) {
+        return "/assets/suggest?q=" + encodeURIComponent(q) + (only && only.checked ? "&only=1" : "");
+      },
+      function (it, input) {
+        input.value = it.name;
+        if (input.form) input.form.submit();
+      });
+  })();
+
   // Watchlist finder: a pick fills the box with the exact name
   // and runs the same find the button would.
   (function () {

@@ -333,6 +333,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/assets", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleAssets)
+		r.Get("/suggest", app.handleAssetsSuggest)
 	})
 
 	r.Route("/planets", func(r chi.Router) {

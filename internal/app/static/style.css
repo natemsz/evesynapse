@@ -3354,3 +3354,38 @@ html[data-theme="light"] input[type="datetime-local"], html[data-theme="light"] 
 .cal-paps { margin-left: 0.5rem; }
 .cal-new + .cal-paps { margin-left: 0; }
 .op-ticks label { display: flex; align-items: center; gap: 0.4rem; margin: 0.15rem 0; }
+
+/* The notification list opens and closes with the navigation's own
+   motion: 180ms ease-out, fading as it settles into place (the same
+   timing and quarter-rem travel as the nav labels). app.js adds
+   .is-open a frame after the <details> opens and takes it away before
+   closing, so both directions are animated; without script the list
+   simply appears. */
+html.js .notify-menu {
+  opacity: 0;
+  transform: translateY(-0.25rem);
+  transition: opacity 140ms ease-out, transform 180ms ease-out;
+}
+html.js .notify.is-open .notify-menu {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  html.js .notify-menu { transition: none; }
+}
+/* Phones: the icon sits near the left of the bar there, so a list
+   hung from the icon's right edge ran off the left of the screen.
+   The list hangs from the bar itself instead, edge to edge, and
+   scrolls if it is taller than the screen. */
+@media (max-width: 860px) {
+  .notify { position: static; }
+  .notify-menu {
+    left: 0.5rem;
+    right: 0.5rem;
+    top: calc(100% + 6px);
+    width: auto;
+    max-height: calc(100vh - 5rem);
+    max-height: calc(100dvh - 5rem);
+    overflow-y: auto;
+  }
+}

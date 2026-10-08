@@ -232,7 +232,7 @@ type Bar struct {
 
 // FormatCompactAxisNumber renders an axis value in the short
 // form a dense chart can carry: 950 stays 950, 12,345 becomes
-// 12K, 3,400,000 becomes 3.4M. It labels scales only — the exact
+// 12.3K, 3,400,000 becomes 3.4M. It labels scales only — the exact
 // figures stay in the tooltips and the recent-days table.
 func FormatCompactAxisNumber(v float64) string {
 	if math.IsNaN(v) || math.IsInf(v, 0) {

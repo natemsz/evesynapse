@@ -1937,6 +1937,25 @@
     })();
   }
 
+
+  // --- Filters that apply as they change -----------------------
+  // A control marked data-autosubmit (the Item Database's "Market
+  // items only" box and its category and group pickers) submits its
+  // form the moment it changes, so a filter applies at once and the
+  // result keeps its Category › Group layout; the form's own button
+  // stays for readers without JavaScript. Picking a different
+  // category clears the group first: the old group would otherwise
+  // pull the category back.
+  document.addEventListener("change", function (ev) {
+    var control = ev.target && ev.target.closest ? ev.target.closest("[data-autosubmit]") : null;
+    if (!control || !control.form) return;
+    if (control.name === "category" && control.form.elements.group) {
+      control.form.elements.group.value = "";
+    }
+    if (control.form.requestSubmit) control.form.requestSubmit();
+    else control.form.submit();
+  });
+
   // --- Buttons that navigate -----------------------------------
   // <button data-href="/path"> goes to that path on click: what an
   // inline click handler on the button used to do, which the content

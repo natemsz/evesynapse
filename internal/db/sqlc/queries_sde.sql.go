@@ -2156,16 +2156,16 @@ SELECT t.type_id, t.name, t.group_id, t.market_group_id, t.published,
 FROM sde_types t
 LEFT JOIN sde_groups g ON g.group_id = t.group_id
 LEFT JOIN sde_categories c ON c.category_id = g.category_id
-WHERE strpos(lower(t.name), lower($2)) > 0
-  AND (CAST($3 AS BIGINT) = 0 OR (t.market_group_id > 0 AND t.published = 1))
-  AND (CAST($4 AS BIGINT) = 0 OR g.category_id = $4)
-  AND (CAST($5 AS BIGINT) = 0 OR t.group_id = $5)
-ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
-LIMIT $7::bigint OFFSET $6::bigint
+WHERE strpos(lower(t.name), lower($1)) > 0
+  AND (CAST($2 AS BIGINT) = 0 OR (t.market_group_id > 0 AND t.published = 1))
+  AND (CAST($3 AS BIGINT) = 0 OR g.category_id = $3)
+  AND (CAST($4 AS BIGINT) = 0 OR t.group_id = $4)
+ORDER BY COALESCE(c.name, ''), COALESCE(g.name, ''),
+         CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT $6::bigint OFFSET $5::bigint
 `
 
 type SearchSDETypesFilteredParams struct {
-	Lower      string `json:"lower"`
 	Q          string `json:"q"`
 	MarketOnly int64  `json:"market_only"`
 	CategoryID int64  `json:"category_id"`
@@ -2191,9 +2191,13 @@ type SearchSDETypesFilteredRow struct {
 // All local SDE reads; the market-only predicate is the same
 // marketable+published pair everywhere it appears.
 // ---------------------------------------------------------------------
+// Category and group first, so a page of results reads as the browse
+// tree does (consecutive rows share a heading); within a group, names
+// that start with the query come before names that merely contain it.
+// (The relevance term names @q: a raw $1 here became a second, never-set
+// parameter, so every name counted as a prefix match and the term did nothing.)
 func (q *Queries) SearchSDETypesFiltered(ctx context.Context, arg SearchSDETypesFilteredParams) ([]SearchSDETypesFilteredRow, error) {
 	rows, err := q.db.QueryContext(ctx, searchSDETypesFiltered,
-		arg.Lower,
 		arg.Q,
 		arg.MarketOnly,
 		arg.CategoryID,

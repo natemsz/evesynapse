@@ -55,6 +55,35 @@ type itemSearchRow struct {
 	OnMarket     bool
 }
 
+// itemSearchSection is one Category › Group heading with the matching
+// items under it, so search and filter results keep the browse tree's
+// organisation instead of reading as one flat list.
+type itemSearchSection struct {
+	CategoryID   int64
+	CategoryName string
+	GroupID      int64
+	GroupName    string
+	Rows         []itemSearchRow
+}
+
+// groupSearchRows folds rows that arrive ordered by category and group
+// (SearchSDETypesFiltered) into sections: a new section starts whenever
+// the group changes. Rows with no group share one section.
+func groupSearchRows(rows []itemSearchRow) []itemSearchSection {
+	var sections []itemSearchSection
+	for _, row := range rows {
+		if n := len(sections); n == 0 || sections[n-1].GroupID != row.GroupID || sections[n-1].CategoryID != row.CategoryID {
+			sections = append(sections, itemSearchSection{
+				CategoryID: row.CategoryID, CategoryName: row.CategoryName,
+				GroupID: row.GroupID, GroupName: row.GroupName,
+			})
+		}
+		n := len(sections) - 1
+		sections[n].Rows = append(sections[n].Rows, row)
+	}
+	return sections
+}
+
 // itemsView is the Item Database page body: exactly one of the
 // levels (or the global search) is populated per render.
 type itemsView struct {
@@ -79,11 +108,12 @@ type itemsView struct {
 	// Global search state (Mode "search", also the group page's
 	// market-only toggle): shareable through GET parameters,
 	// exactly like the planner's plan URLs.
-	SearchQuery   string
-	MarketOnly    bool
-	CategoryID    int64
-	GroupID       int64
-	SearchResults []itemSearchRow
+	SearchQuery    string
+	MarketOnly     bool
+	CategoryID     int64
+	GroupID        int64
+	SearchResults  []itemSearchRow
+	SearchSections []itemSearchSection // SearchResults folded under their Category › Group headings
 
 	// TypeDetail is the Mode "type" body: one item's details
 	// page, the target of every item link in the app.
@@ -265,6 +295,7 @@ func (app *Application) handleItemsSearch(w http.ResponseWriter, r *http.Request
 				OnMarket: row.MarketGroupID > 0,
 			})
 		}
+		view.SearchSections = groupSearchRows(view.SearchResults)
 	}
 	data.Items = view
 	app.render(ctx, w, http.StatusOK, "items.html", data)

@@ -203,7 +203,13 @@ WHERE strpos(lower(t.name), lower(@q)) > 0
   AND (CAST(@market_only AS BIGINT) = 0 OR (t.market_group_id > 0 AND t.published = 1))
   AND (CAST(@category_id AS BIGINT) = 0 OR g.category_id = @category_id)
   AND (CAST(@group_id AS BIGINT) = 0 OR t.group_id = @group_id)
-ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.name
+-- Category and group first, so a page of results reads as the browse
+-- tree does (consecutive rows share a heading); within a group, names
+-- that start with the query come before names that merely contain it.
+-- (The relevance term names @q: a raw $1 here became a second, never-set
+-- parameter, so every name counted as a prefix match and the term did nothing.)
+ORDER BY COALESCE(c.name, ''), COALESCE(g.name, ''),
+         CASE WHEN strpos(lower(t.name), lower(@q)) = 1 THEN 0 ELSE 1 END, t.name
 LIMIT @lim::bigint OFFSET @off::bigint;
 -- name: CountSDETypesFiltered :one
 SELECT COUNT(*)

@@ -22,6 +22,14 @@ func TestParseAdminCharIDs(t *testing.T) {
 		t.Fatalf("expected 2 valid IDs, got %v", set)
 	}
 
+	// A numeric prefix with trailing junk is not an ID: the old
+	// Sscanf %d parse read "123abc" as 123 and granted the wrong
+	// character.
+	set = parseAdminCharIDs("123abc, 45xyz, 0x12, +77")
+	if len(set) != 0 {
+		t.Fatalf("expected no IDs from %q, got %v", "123abc, 45xyz, 0x12, +77", set)
+	}
+
 	// Empty input: nobody is admin.
 	if len(parseAdminCharIDs("")) != 0 {
 		t.Fatal("empty input should yield empty set")

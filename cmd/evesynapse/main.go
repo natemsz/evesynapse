@@ -51,7 +51,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 		case "-update":
 			return selfupdate.Run(app.Version(), args[1:], stdout, stderr)
 		case "-refresh":
-			return app.RunRefresh(args[1:], app.LoadConfig(), stdout, stderr)
+			cfg, err := app.LoadConfig()
+			if err != nil {
+				fmt.Fprintln(stderr, "evesynapse:", err)
+				return 2
+			}
+			return app.RunRefresh(args[1:], cfg, stdout, stderr)
 		case "-h", "--help", "-help":
 			printUsage(stdout)
 			return 0
@@ -79,7 +84,11 @@ func printUsage(w io.Writer) {
 // server error, then shuts down gracefully: HTTP drains first,
 // then Close stops the worker and releases the database.
 func serve() int {
-	cfg := app.LoadConfig()
+	cfg, err := app.LoadConfig()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "evesynapse:", err)
+		return 2
+	}
 	if err := cfg.SetupLogging(); err != nil {
 		fmt.Fprintln(os.Stderr, "evesynapse:", err)
 		return 2

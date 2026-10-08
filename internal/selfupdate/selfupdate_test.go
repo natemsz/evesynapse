@@ -94,9 +94,26 @@ func TestLoadInstallEnv(t *testing.T) {
 		[]byte("EVESYNAPSE_UPDATE_REPO=someone/evesynapse\n"), 0o600)
 	t.Setenv("EVESYNAPSE_UPDATE_REPO", "")
 	os.Unsetenv("EVESYNAPSE_UPDATE_REPO")
-	loadInstallEnv(filepath.Join(dir, "evesynapse"))
+	if err := loadInstallEnv(filepath.Join(dir, "evesynapse")); err != nil {
+		t.Fatalf("loadInstallEnv: %v", err)
+	}
 	if got := os.Getenv("EVESYNAPSE_UPDATE_REPO"); got != "someone/evesynapse" {
 		t.Fatalf("EVESYNAPSE_UPDATE_REPO = %q after loadInstallEnv", got)
+	}
+}
+
+// TestLoadInstallEnvUnreadable: an install .env that exists but
+// cannot be read is an error — it may carry the update channel,
+// and updating from the wrong channel is worse than not
+// updating. A directory in place of the file reads as one on
+// every platform.
+func TestLoadInstallEnvUnreadable(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, ".env"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := loadInstallEnv(filepath.Join(dir, "evesynapse")); err == nil {
+		t.Fatal("loadInstallEnv over an unreadable .env succeeded, want an error")
 	}
 }
 

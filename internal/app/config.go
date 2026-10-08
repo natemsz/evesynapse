@@ -1,10 +1,12 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -114,9 +116,15 @@ func (c Config) SDEBaseURL() string {
 	return base
 }
 
-// loadConfig loads ./.env (if present) and then reads the environment.
-func LoadConfig() Config {
-	dotenv.Load(".env")
+// LoadConfig loads the .env file (if present) and then reads the
+// environment. A .env that exists but cannot be read is an error,
+// not a silent fall back to defaults: the defaults point at a
+// development database, and the wrong database is worse than no
+// start at all.
+func LoadConfig() (Config, error) {
+	if err := loadEnvFile(); err != nil {
+		return Config{}, err
+	}
 	return Config{
 		addr:            getenvDefault("ADDR", ":8080"),
 		databaseURL:     getenvDefault("DATABASE_URL", "postgres://evesynapse@localhost:5432/evesynapse?sslmode=disable"),
@@ -131,7 +139,32 @@ func LoadConfig() Config {
 		esiContact:      os.Getenv("ESI_CONTACT"),
 		logLevel:        os.Getenv("LOG_LEVEL"),
 		logFormat:       os.Getenv("LOG_FORMAT"),
+	}, nil
+}
+
+// loadEnvFile loads ./.env when the process started beside one,
+// else the .env beside the binary. Services start away from their
+// checkout (WorkingDirectory=/, or the binary's own directory),
+// and reading only the working directory has pointed -refresh at
+// the default database. The working directory wins when both
+// exist, so `go run` from a checkout keeps working (its binary
+// lives in a build cache with no .env beside it). Neither file
+// existing is fine: configuration then comes from the environment.
+func loadEnvFile() error {
+	if _, err := os.Stat(".env"); err == nil {
+		return dotenv.Load(".env")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf(".env: %w", err)
 	}
+	exe, err := os.Executable()
+	if err != nil {
+		return nil // no install directory to look beside
+	}
+	installEnv := filepath.Join(filepath.Dir(exe), ".env")
+	if _, err := os.Stat(installEnv); err != nil {
+		return nil // neither directory has one: environment only
+	}
+	return dotenv.Load(installEnv)
 }
 
 // esiUserAgent builds the User-Agent every ESI request carries:
@@ -227,8 +260,14 @@ func parseAdminCharIDs(raw string) map[int64]bool {
 		if part == "" {
 			continue
 		}
-		var id int64
-		if _, err := fmt.Sscanf(part, "%d", &id); err != nil || id <= 0 {
+		// Strict whole-string parse: Sscanf's %d accepts "123abc"
+		// as 123, silently granting (or denying) the wrong ID, and
+		// ParseInt takes a leading "+", so digits only.
+		if strings.IndexFunc(part, func(r rune) bool { return r < '0' || r > '9' }) >= 0 {
+			continue
+		}
+		id, err := strconv.ParseInt(part, 10, 64)
+		if err != nil || id <= 0 {
 			continue
 		}
 		out[id] = true

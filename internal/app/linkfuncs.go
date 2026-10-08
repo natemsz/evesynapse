@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"html/template"
+	"net/url"
 	"strings"
 )
 
@@ -124,6 +125,25 @@ func stationLink(stationID int64, name string) template.HTML {
 	return template.HTML(fmt.Sprintf(`<a href="/station/?station=%d">%s</a>`, stationID, html.EscapeString(name)))
 }
 
+// dotlanSystemLink and dotlanRegionLink render an external link to
+// the place's Dotlan map page (EVE names use underscores for spaces
+// there). Empty when the name is unresolved.
+func dotlanSystemLink(name string) template.HTML {
+	return dotlanLink("system", name, "Dotlan")
+}
+
+func dotlanRegionLink(name string) template.HTML {
+	return dotlanLink("map", name, "Dotlan")
+}
+
+func dotlanLink(kind, name, label string) template.HTML {
+	if name == "" {
+		return ""
+	}
+	path := url.PathEscape(strings.ReplaceAll(name, " ", "_"))
+	return template.HTML(fmt.Sprintf(`<a href="https://evemaps.dotlan.net/%s/%s" target="_blank" rel="noopener noreferrer">%s</a>`, kind, path, label))
+}
+
 // structureLink renders a player structure's resolved name as a
 // link to the structure page. Plain text when either side is
 // missing — callers pass the id only once resolution has landed,
@@ -225,6 +245,8 @@ func linkFuncMap() template.FuncMap {
 		"stationLink":   stationLink,
 		"structureLink": structureLink,
 		"placeLink":     placeLink,
+		"dotlanSystem":  dotlanSystemLink,
+		"dotlanRegion":  dotlanRegionLink,
 		"skillLevel":    skillLevel,
 		// Not a link: how a stored time is written out (timestamps.go).
 		"rfc3339": rfc3339,

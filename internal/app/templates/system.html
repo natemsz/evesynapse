@@ -6,12 +6,13 @@
 <p><small>That system isn't in the local star map yet — it will appear once the star map data covers it.</small></p>
 {{else}}
 <h1><span class="gt">{{.System.Name}}</span></h1>
+<p><small>{{dotlanSystem .System.Name}}</small></p>
 
 <div class="tw">
 <table>
   <tbody>
     <tr><th>Security status</th><td>{{.System.Security}}</td></tr>
-    {{if .System.Region}}<tr><th>Region</th><td>{{.System.Region}}</td></tr>{{end}}
+    {{if .System.Region}}<tr><th>Region</th><td>{{.System.Region}} · {{dotlanRegion .System.Region}}</td></tr>{{end}}
   </tbody>
 </table>
 </div>

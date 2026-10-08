@@ -368,6 +368,18 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/", app.handleCalendar)
 	})
 
+	// Ops (ops.go): EveSynapse's own calendar entries and the
+	// sign-ups to them.
+	r.Route("/ops", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/new", app.handleOpNew)
+		r.Post("/save", app.handleOpSave)
+		r.Get("/{opID}", app.handleOp)
+		r.Get("/{opID}/edit", app.handleOpEdit)
+		r.Post("/{opID}/signup", app.handleOpSignup)
+		r.Post("/{opID}/cancel", app.handleOpCancel)
+	})
+
 	r.Route("/contacts", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleContacts)

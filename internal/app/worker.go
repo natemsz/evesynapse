@@ -594,6 +594,7 @@ var coreSnapshotKinds = []string{
 	esi.SnapProfile, esi.SnapSkills, esi.SnapSkillqueue, esi.SnapAttributes, esi.SnapWallet, esi.SnapAssets,
 	esi.SnapLocation, esi.SnapShip, esi.SnapOnline, esi.SnapClones,
 	esi.SnapImplants, esi.SnapFittings, esi.SnapFatigue, esi.SnapKillmails,
+	esi.SnapCorpRoles,
 }
 
 // maxFetchesPerCycle bounds snapshot fetches in the main character

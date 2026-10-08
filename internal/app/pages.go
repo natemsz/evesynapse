@@ -104,6 +104,11 @@ type pageData struct {
 	// NotifySettings is the /notifications/settings page.
 	NotifySettings *notifySettingsView
 
+	// Ops (ops.go): one op's page, and the form that creates or
+	// changes one.
+	Op     *opView
+	OpForm *opFormView
+
 	// Public pilot page (/pilot/): a stranger's public record.
 	Pilot *pilotView
 
@@ -173,7 +178,7 @@ func sectionForPage(page string) string {
 		return "home"
 	case "character.html", "characters.html", "skills.html", "skillplans.html",
 		"mail.html", "calendar.html", "contacts.html", "pilot.html", "assets.html",
-		"killmails.html", "notifications.html", "notification_settings.html":
+		"killmails.html", "notifications.html", "notification_settings.html", "op.html", "op_form.html":
 		return "pilot"
 	case "fittings.html", "fittings_saved.html", "fit_shopping.html":
 		return "fitting"

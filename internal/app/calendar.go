@@ -11,7 +11,9 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Calendar page (/calendar/): the character's upcoming events
+// Calendar page (/calendar/): a month grid holding the character's
+// in-game events and the corporations' ops together
+// (calendar_month.go, ops.go), then the upcoming in-game events
 // (ESI's next 50 chronological summaries) with a detail block —
 // text, owner, duration, attendees — rendered cache-only from
 // the worker-warmed calendar snapshots. Read-only: responding to
@@ -52,6 +54,11 @@ type calendarView struct {
 	Events        econSectionState
 	Rows          []calendarRow
 	Detail        *calendarDetail
+	// Month is the grid of the month being looked at, holding the
+	// character's in-game events and the corporations' ops together
+	// (calendar_month.go). CanCreate: the account may create ops.
+	Month     *calMonth
+	CanCreate bool
 }
 
 func (app *Application) handleCalendar(w http.ResponseWriter, r *http.Request) {
@@ -93,6 +100,17 @@ func (app *Application) handleCalendar(w http.ResponseWriter, r *http.Request) {
 				Important: ev.Importance > 0,
 			})
 		}
+	}
+
+	// The month grid: in-game events and ops in one view.
+	{
+		userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+		members := app.opMembers(ctx, userID)
+		now := time.Now()
+		month := parseCalMonth(r.URL.Query().Get("month"), now)
+		from, to := calGridRange(month)
+		view.Month = buildCalMonth(month, now, app.calendarEntries(ctx, userID, members, active, events, from, to, month.Format(calMonthLayout)))
+		view.CanCreate = len(opCorps(members, true)) > 0
 	}
 
 	// An open event renders its detail under the list.

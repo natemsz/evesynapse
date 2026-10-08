@@ -176,13 +176,17 @@ var moduleManifest = []moduleDef{
 			opt("esi-characters.read_loyalty.v1", "Loyalty points."),
 			opt("esi-characters.read_fw_stats.v1", "Faction Warfare stats."),
 		}},
+	{ID: "corp_roles", Title: "Corporation roles", Layer: layerCharacter,
+		Scopes: []scopeUse{
+			req("esi-characters.read_corporation_roles.v1", "The corporation roles held, which decide who may create ops."),
+		},
+		Snapshots: []string{esi.SnapCorpRoles}},
 	{ID: "character_record", Title: "Character record", Layer: layerCharacter,
 		Scopes: []scopeUse{
 			req("esi-characters.read_notifications.v1", "In-game notifications."),
 			opt("esi-characters.read_medals.v1", "Medals."),
 			opt("esi-characters.read_titles.v1", "Corporation titles held."),
 			opt("esi-characters.read_agents_research.v1", "Agent research points."),
-			opt("esi-characters.read_corporation_roles.v1", "Corporation roles held."),
 			opt("esi.activity.char:read", "Character activity."),
 			opt("esi.cosmetic.char:read", "Cosmetic unlocks."),
 		}},

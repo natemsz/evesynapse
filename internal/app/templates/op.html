@@ -1,0 +1,92 @@
+{{define "title"}}{{.Op.Title}}{{end}}
+{{define "content"}}
+{{with .Op}}
+<h1><span class="gt">{{.Title}}</span></h1>
+
+{{if .Cancelled}}<p class="err">This op was cancelled.</p>{{end}}
+
+<div class="tw">
+<table>
+  <tbody>
+    <tr><th>When</th><td>{{.When}}</td></tr>
+    <tr><th>Length</th><td>{{.Length}}</td></tr>
+    <tr><th>Corporation</th><td>{{.Corporation}}</td></tr>
+    <tr><th>Fleet commander</th><td>{{charLink $.ViewerChars .FCID .FC}}</td></tr>
+    {{if .Doctrine}}<tr><th>Doctrine</th><td>{{.Doctrine}}</td></tr>{{end}}
+    {{if .FormUp}}<tr><th>Form up</th><td>{{.FormUp}}</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+{{if .Description}}<p class="op-description">{{.Description}}</p>{{end}}
+
+{{if .CanManage}}
+<form method="post" action="/ops/{{.ID}}/cancel" class="op-manage">
+  <a class="btn" href="/ops/{{.ID}}/edit">Change</a>
+  {{if .Cancelled}}<button type="submit">Bring it back</button>{{else}}<button type="submit" class="btn btn-danger">Cancel op</button>{{end}}
+</form>
+{{end}}
+
+<h2>Your sign-up</h2>
+{{if .Cancelled}}
+<p><small>Sign-ups are closed: the op was cancelled.</small></p>
+{{else if .Over}}
+<p><small>Sign-ups are closed: the op is over.</small></p>
+{{else}}
+<form method="post" action="/ops/{{.ID}}/signup" class="op-signup">
+  <p><label>Character <select name="character">{{range .Characters}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label></p>
+  <p class="op-answers">
+    <label><input type="radio" name="response" value="yes"{{if or (eq .Mine "yes") (not .Mine)}} checked{{end}}> Coming</label>
+    <label><input type="radio" name="response" value="maybe"{{if eq .Mine "maybe"}} checked{{end}}> Maybe</label>
+    <label><input type="radio" name="response" value="no"{{if eq .Mine "no"}} checked{{end}}> Not coming</label>
+  </p>
+  <p><label>Ship <input type="text" name="ship" value="{{.MyShip}}" maxlength="120" placeholder="e.g. Loki"></label>
+     <label>Role <select name="fleet_role"><option value="">—</option>{{range .Roles}}<option value="{{.}}"{{if eq . $.Op.MyRole}} selected{{end}}>{{.}}</option>{{end}}</select></label></p>
+  <p><label>Note <input type="text" name="note" value="{{.MyNote}}" maxlength="120" placeholder="e.g. 20 minutes late"></label></p>
+  <p><button type="submit">{{if .Mine}}Update sign-up{{else}}Sign up{{end}}</button>{{if .Mine}} <small>This character has answered: {{.Mine}}.</small>{{end}}</p>
+</form>
+{{end}}
+
+<h2>Coming <small>· {{len .Yes}}</small></h2>
+{{if .RoleCounts}}<p><small>{{range $i, $c := .RoleCounts}}{{if $i}} · {{end}}{{$c.Count}} {{$c.Role}}{{end}}</small></p>{{end}}
+{{if .Yes}}<div class="tw">
+<table>
+  <thead><tr><th>Pilot</th><th>Ship</th><th>Role</th><th>Note</th></tr></thead>
+  <tbody>
+  {{range .Yes}}
+    <tr><td>{{charLink $.ViewerChars .CharacterID .Name}}</td><td>{{.Ship}}</td><td>{{.Role}}</td><td>{{.Note}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>{{else}}<p><small>Nobody yet.</small></p>{{end}}
+
+{{if .Maybe}}
+<h2>Maybe <small>· {{len .Maybe}}</small></h2>
+<div class="tw">
+<table>
+  <thead><tr><th>Pilot</th><th>Ship</th><th>Role</th><th>Note</th></tr></thead>
+  <tbody>
+  {{range .Maybe}}
+    <tr><td>{{charLink $.ViewerChars .CharacterID .Name}}</td><td>{{.Ship}}</td><td>{{.Role}}</td><td>{{.Note}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+{{if .No}}
+<h2>Not coming <small>· {{len .No}}</small></h2>
+<div class="tw">
+<table>
+  <thead><tr><th>Pilot</th><th>Ship</th><th>Role</th><th>Note</th></tr></thead>
+  <tbody>
+  {{range .No}}
+    <tr><td>{{charLink $.ViewerChars .CharacterID .Name}}</td><td>{{.Ship}}</td><td>{{.Role}}</td><td>{{.Note}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+<p><a href="/calendar/">Back to the calendar</a></p>
+{{end}}
+{{end}}

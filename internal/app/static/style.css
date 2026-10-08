@@ -213,11 +213,11 @@ h3 { font-size: 0.88rem; margin: 1.4rem 0 0.15rem; }
    unsupported — and in forced-colors mode, where the OS replaces
    backgrounds outright. */
 @supports not (background-clip: text) {
-  h2, h3, .wordmark { background: none; color: var(--text-bright); }
+  h2, h3, .wm-syn { background: none; color: var(--text-bright); -webkit-text-fill-color: currentColor; }
 }
 @media (forced-colors: active) {
-  h2, h3, .wordmark { background: none; color: CanvasText; text-shadow: none; }
-  .wordmark:hover { color: CanvasText; }
+  h2, h3, .wm-syn { background: none; color: CanvasText; text-shadow: none; -webkit-text-fill-color: currentColor; }
+  .wordmark, .wm-eve, .wordmark:hover .wm-syn { color: CanvasText; }
 }
 
 small { color: var(--muted); }
@@ -257,12 +257,28 @@ header .topbar {
   font-size: 1.2rem;
   font-weight: 400;
   letter-spacing: 0.12em;
+  color: var(--text-bright);
+}
+/* The gradient is painted on the SYNAPSE span alone. It used to sit
+   on the whole link, with a transparent fill, and WebKit drops that
+   clipped paint for text inside a child that has its own layer (the
+   transformed span), so SYNAPSE vanished in Safari while EVE, which
+   has a solid colour, stayed. It also meant the gradient showed
+   through under the white EVE. Clipping an element's own text works
+   everywhere, and EVE is outside it. */
+.wm-syn {
   background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  -webkit-text-fill-color: transparent;
 }
-.wordmark:hover { color: var(--text-bright); text-decoration: none; }
+.wordmark:hover { text-decoration: none; }
+.wordmark:hover .wm-syn {
+  background: none;
+  color: var(--text-bright);
+  -webkit-text-fill-color: currentColor;
+}
 header .who {
   margin-left: auto;
   color: var(--muted-2);
@@ -1513,13 +1529,7 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
   display: inline-flex;
   align-items: center;
 }
-.topbar-wordmark > span {
-  transform: translateY(0);
-}
 .wordmark .wm-eve {
-  background: none;
-  -webkit-background-clip: border-box;
-  background-clip: border-box;
   color: #ffffff;
 }
 .topbar-character {

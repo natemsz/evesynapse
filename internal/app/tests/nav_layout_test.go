@@ -182,7 +182,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	if wordmarkAt < 0 || sGlyphAt < 0 || sGlyphAt < wordmarkAt {
 		t.Errorf("wordmark at %d, glyph at %d in topbar; want the glyph inside the wordmark link", wordmarkAt, sGlyphAt)
 	}
-	if !strings.Contains(topbar, "</svg><span><span class=\"wm-eve\">EVE</span>SYNAPSE</span></a>") {
+	if !strings.Contains(topbar, "</svg><span><span class=\"wm-eve\">EVE</span><span class=\"wm-syn\">SYNAPSE</span></span></a>") {
 		t.Error("glyph does not lead the full EVESYNAPSE wordmark")
 	}
 

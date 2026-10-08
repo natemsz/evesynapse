@@ -276,6 +276,13 @@ WHERE corporation_id = $1;
 INSERT INTO corporation_records (corporation_id, priority)
 VALUES ($1, 1)
 ON CONFLICT (corporation_id) DO UPDATE SET priority = GREATEST(corporation_records.priority, 1);
+-- name: UpsertCorporationWants :exec
+-- Many corporation wants in one statement: a journal harvest
+-- meets the same parties over and over, and noting each in its
+-- own round trip is the N+1 the flush in name_harvest.go avoids.
+INSERT INTO corporation_records (corporation_id, priority)
+SELECT unnest(sqlc.arg(corporation_ids)::bigint[]), 1
+ON CONFLICT (corporation_id) DO UPDATE SET priority = GREATEST(corporation_records.priority, 1);
 -- name: SetCorporationRecord :exec
 INSERT INTO corporation_records (corporation_id, payload, state, fetched_at)
 VALUES ($1, $2, $3, $4)
@@ -297,6 +304,12 @@ WHERE alliance_id = $1;
 -- name: UpsertAllianceWant :exec
 INSERT INTO alliance_records (alliance_id, priority)
 VALUES ($1, 1)
+ON CONFLICT (alliance_id) DO UPDATE SET priority = GREATEST(alliance_records.priority, 1);
+-- name: UpsertAllianceWants :exec
+-- Many alliance wants in one statement: the alliance half of
+-- UpsertCorporationWants (see above).
+INSERT INTO alliance_records (alliance_id, priority)
+SELECT unnest(sqlc.arg(alliance_ids)::bigint[]), 1
 ON CONFLICT (alliance_id) DO UPDATE SET priority = GREATEST(alliance_records.priority, 1);
 -- name: SetAllianceRecord :exec
 INSERT INTO alliance_records (alliance_id, payload, state, fetched_at)

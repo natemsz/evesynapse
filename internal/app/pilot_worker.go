@@ -358,10 +358,11 @@ func (app *Application) pilotCounterpartyIDs(ctx context.Context, characterID in
 			out[id] = true
 		}
 	}
+	corps, alliances := map[int64]bool{}, map[int64]bool{}
 	if journal, ok := loadSnapshot[esi.WalletJournal](app, ctx, characterID, esi.SnapWalletJournal); ok {
 		for _, e := range journal {
-			app.harvestJournalParty(ctx, out, e.FirstPartyID, e.FirstPartyType)
-			app.harvestJournalParty(ctx, out, e.SecondPartyID, e.SecondPartyType)
+			routeJournalParty(out, corps, alliances, e.FirstPartyID, e.FirstPartyType)
+			routeJournalParty(out, corps, alliances, e.SecondPartyID, e.SecondPartyType)
 		}
 	}
 	if txns, ok := loadSnapshot[esi.WalletTransactions](app, ctx, characterID, esi.SnapWalletTxns); ok {
@@ -401,8 +402,8 @@ func (app *Application) pilotCounterpartyIDs(ctx context.Context, characterID in
 	for division := int64(1); division <= 7; division++ {
 		if journal, ok := loadSnapshot[esi.CorpJournal](app, ctx, characterID, esi.CorpJournalKind(division)); ok {
 			for _, e := range journal {
-				app.harvestJournalParty(ctx, out, e.FirstPartyID, e.FirstPartyType)
-				app.harvestJournalParty(ctx, out, e.SecondPartyID, e.SecondPartyType)
+				routeJournalParty(out, corps, alliances, e.FirstPartyID, e.FirstPartyType)
+				routeJournalParty(out, corps, alliances, e.SecondPartyID, e.SecondPartyType)
 			}
 		}
 		if txns, ok := loadSnapshot[esi.CorpWalletTransactions](app, ctx, characterID, esi.CorpTxnsKind(division)); ok {
@@ -411,4 +412,5 @@ func (app *Application) pilotCounterpartyIDs(ctx context.Context, characterID in
 			}
 		}
 	}
+	app.flushOrgWants(ctx, corps, alliances)
 }

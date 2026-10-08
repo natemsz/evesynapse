@@ -216,7 +216,7 @@ func (h *nameHarvest) corpStructures(ctx context.Context, payload string) {
 }
 
 // walletJournal: journal parties route by ESI's party_type (see
-// harvestJournalParty): characters join the character-name
+// routeJournalParty): characters join the character-name
 // harvest; corporations and alliances note org wants instead of
 // 404ing the character endpoint every cycle.
 func (h *nameHarvest) walletJournal(ctx context.Context, payload string) {
@@ -224,10 +224,12 @@ func (h *nameHarvest) walletJournal(ctx context.Context, payload string) {
 	if !h.decode(payload, &journal) {
 		return
 	}
+	corps, alliances := map[int64]bool{}, map[int64]bool{}
 	for _, e := range journal {
-		h.app.harvestJournalParty(ctx, h.wants.characters, e.FirstPartyID, e.FirstPartyType)
-		h.app.harvestJournalParty(ctx, h.wants.characters, e.SecondPartyID, e.SecondPartyType)
+		routeJournalParty(h.wants.characters, corps, alliances, e.FirstPartyID, e.FirstPartyType)
+		routeJournalParty(h.wants.characters, corps, alliances, e.SecondPartyID, e.SecondPartyType)
 	}
+	h.app.flushOrgWants(ctx, corps, alliances)
 }
 
 func (h *nameHarvest) walletTransactions(payload string) {
@@ -403,10 +405,12 @@ func (h *nameHarvest) corpWalletJournal(ctx context.Context, payload string) {
 	if !h.decode(payload, &journal) {
 		return
 	}
+	corps, alliances := map[int64]bool{}, map[int64]bool{}
 	for _, e := range journal {
-		h.app.harvestJournalParty(ctx, h.wants.characters, e.FirstPartyID, e.FirstPartyType)
-		h.app.harvestJournalParty(ctx, h.wants.characters, e.SecondPartyID, e.SecondPartyType)
+		routeJournalParty(h.wants.characters, corps, alliances, e.FirstPartyID, e.FirstPartyType)
+		routeJournalParty(h.wants.characters, corps, alliances, e.SecondPartyID, e.SecondPartyType)
 	}
+	h.app.flushOrgWants(ctx, corps, alliances)
 }
 
 // planetLayout reads one colony's layout: pin and product types
@@ -473,16 +477,14 @@ func (h *nameHarvest) killmailPeople(ctx context.Context) {
 	}
 }
 
-// harvestJournalParty routes one journal counterparty into the
-// name pipeline its party_type names: characters join the
-// character-name harvest, corporations and alliances note org
-// record wants so their names resolve through the org endpoints
-// -- never the character endpoint, which could only 404 on them.
-// A party with no recorded type is left alone here; the render
-// paths still resolve it on demand (journalParty). Called from
-// the worker harvests, so the corp/alliance notes are plain
-// queue writes, like a page noting a want.
-func (app *Application) harvestJournalParty(ctx context.Context, charIDs map[int64]bool, id int64, partyType string) {
+// routeJournalParty sorts one journal counterparty into the
+// collection its party_type names: characters join the
+// character-name harvest, corporations and alliances accumulate
+// for flushOrgWants so their names resolve through the org
+// endpoints -- never the character endpoint, which could only 404
+// on them. A party with no recorded type is left alone here; the
+// render paths still resolve it on demand (journalParty).
+func routeJournalParty(charIDs, corpIDs, allianceIDs map[int64]bool, id int64, partyType string) {
 	if id <= 0 {
 		return
 	}
@@ -490,12 +492,25 @@ func (app *Application) harvestJournalParty(ctx context.Context, charIDs map[int
 	case "character":
 		charIDs[id] = true
 	case "corporation":
-		if err := app.queries.UpsertCorporationWant(ctx, id); err != nil {
-			logging.Errorf("worker: note corporation want for journal party %d: %v", id, err)
-		}
+		corpIDs[id] = true
 	case "alliance":
-		if err := app.queries.UpsertAllianceWant(ctx, id); err != nil {
-			logging.Errorf("worker: note alliance want for journal party %d: %v", id, err)
+		allianceIDs[id] = true
+	}
+}
+
+// flushOrgWants notes the corporation and alliance IDs a harvest
+// collected, in one batched upsert per table no matter how many
+// parties the journals named. Called from the worker harvests, so
+// the notes are plain queue writes, like a page noting a want.
+func (app *Application) flushOrgWants(ctx context.Context, corpIDs, allianceIDs map[int64]bool) {
+	if len(corpIDs) > 0 {
+		if err := app.queries.UpsertCorporationWants(ctx, sortedInt64Keys(corpIDs)); err != nil {
+			logging.Errorf("worker: note corporation wants: %v", err)
+		}
+	}
+	if len(allianceIDs) > 0 {
+		if err := app.queries.UpsertAllianceWants(ctx, sortedInt64Keys(allianceIDs)); err != nil {
+			logging.Errorf("worker: note alliance wants: %v", err)
 		}
 	}
 }

@@ -92,6 +92,12 @@ ORDER BY kind;
 SELECT kind, fetched_at, cached_until FROM character_snapshots
 WHERE character_id = $1
 ORDER BY kind;
+-- name: ListSnapshotMetaForCharacters :many
+-- Snapshot freshness for many characters at once: the worker's
+-- overdue ordering over one query instead of one per character.
+SELECT character_id, kind, fetched_at, cached_until FROM character_snapshots
+WHERE character_id = ANY(sqlc.arg(character_ids)::bigint[])
+ORDER BY character_id, kind;
 -- name: ListSnapshotsByKind :many
 SELECT * FROM character_snapshots
 WHERE kind = $1

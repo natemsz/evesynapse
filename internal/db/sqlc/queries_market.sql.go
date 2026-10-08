@@ -2535,6 +2535,19 @@ func (q *Queries) UpsertAllianceWant(ctx context.Context, allianceID int64) erro
 	return err
 }
 
+const upsertAllianceWants = `-- name: UpsertAllianceWants :exec
+INSERT INTO alliance_records (alliance_id, priority)
+SELECT unnest($1::bigint[]), 1
+ON CONFLICT (alliance_id) DO UPDATE SET priority = GREATEST(alliance_records.priority, 1)
+`
+
+// Many alliance wants in one statement: the alliance half of
+// UpsertCorporationWants (see above).
+func (q *Queries) UpsertAllianceWants(ctx context.Context, allianceIds []int64) error {
+	_, err := q.db.ExecContext(ctx, upsertAllianceWants, pq.Array(allianceIds))
+	return err
+}
+
 const upsertCorporationWant = `-- name: UpsertCorporationWant :exec
 INSERT INTO corporation_records (corporation_id, priority)
 VALUES ($1, 1)
@@ -2543,6 +2556,20 @@ ON CONFLICT (corporation_id) DO UPDATE SET priority = GREATEST(corporation_recor
 
 func (q *Queries) UpsertCorporationWant(ctx context.Context, corporationID int64) error {
 	_, err := q.db.ExecContext(ctx, upsertCorporationWant, corporationID)
+	return err
+}
+
+const upsertCorporationWants = `-- name: UpsertCorporationWants :exec
+INSERT INTO corporation_records (corporation_id, priority)
+SELECT unnest($1::bigint[]), 1
+ON CONFLICT (corporation_id) DO UPDATE SET priority = GREATEST(corporation_records.priority, 1)
+`
+
+// Many corporation wants in one statement: a journal harvest
+// meets the same parties over and over, and noting each in its
+// own round trip is the N+1 the flush in name_harvest.go avoids.
+func (q *Queries) UpsertCorporationWants(ctx context.Context, corporationIds []int64) error {
+	_, err := q.db.ExecContext(ctx, upsertCorporationWants, pq.Array(corporationIds))
 	return err
 }
 

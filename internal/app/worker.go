@@ -396,13 +396,20 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 // ESI cache window has closed, stopping at the first failure.
 func (c *cycleState) refreshCoreSnapshots(ctx context.Context, ch db.Character) {
 	app := c.app
+	// One meta read (no payloads) for the whole freshness pass:
+	// the payloads are the bulk of the table, and freshness only
+	// needs cached_until.
+	meta, merr := app.queries.ListSnapshotMetaByCharacter(ctx, ch.CharacterID)
+	if merr != nil {
+		logging.Errorf("worker: read snapshot freshness for character %d: %v", ch.CharacterID, merr)
+	}
+	fresh := make(map[string]bool, len(meta))
+	for _, snap := range meta {
+		fresh[snap.Kind] = esi.CacheWindowOpen(snap.CachedUntil)
+	}
 	for _, kind := range coreSnapshotKinds {
-		snap, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: kind})
-		switch {
-		case serr == nil && esi.SnapshotFresh(snap):
+		if fresh[kind] {
 			continue // still inside ESI's cache window
-		case serr != nil && !errors.Is(serr, sql.ErrNoRows):
-			logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
 		}
 
 		if !c.allowance.take() {
@@ -603,27 +610,43 @@ func (b *fetchBudget) exhausted() bool {
 // character's due key is the earliest cached_until among the core
 // snapshot kinds (a kind with no snapshot yet is due immediately,
 // key zero). The sort is stable, so callers can layer the
-// priority-flag ordering on top.
+// priority-flag ordering on top. Freshness for every character
+// comes from one batched query, not one per character.
 func (app *Application) orderByDue(ctx context.Context, characters []db.Character) []db.Character {
-	due := make(map[int64]time.Time, len(characters))
-	for _, ch := range characters {
-		due[ch.CharacterID] = app.characterDueKey(ctx, ch)
-	}
 	out := append([]db.Character(nil), characters...)
+	if len(out) == 0 {
+		return out
+	}
+	ids := make([]int64, 0, len(out))
+	for _, ch := range out {
+		ids = append(ids, ch.CharacterID)
+	}
+	metas, err := app.queries.ListSnapshotMetaForCharacters(ctx, ids)
+	if err != nil {
+		// Unreadable state: every character is equally due, so
+		// the given order stands.
+		logging.Errorf("worker: order characters by overdue: %v", err)
+		return out
+	}
+	byChar := make(map[int64][]db.ListSnapshotMetaForCharactersRow, len(out))
+	for _, meta := range metas {
+		byChar[meta.CharacterID] = append(byChar[meta.CharacterID], meta)
+	}
+	due := make(map[int64]time.Time, len(out))
+	for _, ch := range out {
+		due[ch.CharacterID] = dueKeyFromMeta(byChar[ch.CharacterID])
+	}
 	sort.SliceStable(out, func(i, j int) bool {
 		return due[out[i].CharacterID].Before(due[out[j].CharacterID])
 	})
 	return out
 }
 
-// characterDueKey computes a character's most-overdue moment: the
-// earliest cached_until across every stored snapshot, pulled to
-// the zero time when any core kind has never been fetched.
-func (app *Application) characterDueKey(ctx context.Context, ch db.Character) time.Time {
-	snaps, err := app.queries.ListSnapshotMetaByCharacter(ctx, ch.CharacterID)
-	if err != nil {
-		return time.Time{} // unreadable state: treat as due now
-	}
+// dueKeyFromMeta computes a character's most-overdue moment from
+// its snapshot freshness rows: the earliest cached_until across
+// every stored snapshot, pulled to the zero time when any core
+// kind has never been fetched.
+func dueKeyFromMeta(snaps []db.ListSnapshotMetaForCharactersRow) time.Time {
 	seen := make(map[string]bool, len(snaps))
 	var earliest time.Time
 	for _, snap := range snaps {

@@ -49,13 +49,8 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`<link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=`,
 		`<link rel="manifest" href="/static/manifest.webmanifest?v=`,
 		`<meta name="theme-color" content="#0d0503">`,
-		`<svg class="wordmark-glyph" viewBox="0 10 48 28" aria-hidden="true">`,
-		`<defs><linearGradient id="brand-glyph-gradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd27a"/><stop offset=".52" stop-color="#ff6a1a"/><stop offset="1" stop-color="#d63c14"/></linearGradient></defs>`,
-		`stroke="url(#brand-glyph-gradient)"`,
-		`fill="url(#brand-glyph-gradient)"`,
-		`<path d="M8.3 22.1L12.7 18.4M8.3 25.9L12.7 29.6M17.3 29.6L21.1 26.4M26.9 21.6L30.7 18.4M35.3 18.4L39.7 22.1M39.7 25.9L35.3 29.6"/>`,
-		`<circle cx="24" cy="24" r="3.8" fill="#ffffff"/>`,
-		`<a class="wordmark topbar-wordmark" href="/" aria-label="EveSynapse home"><svg class="wordmark-glyph"`,
+		// The header logo is the logo file itself, as an image.
+		`<a class="wordmark topbar-wordmark" href="/" aria-label="EveSynapse home"><img class="wordmark-glyph" src="/static/logo.svg?v=`,
 		`data-nav-category="pilot"`,
 		`data-nav-category="corporation"`,
 		`<span class="nav-label">Pilot</span>`,
@@ -90,16 +85,13 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	}
 	// Every category and sidebar control icon is drawn SVG
 	// painted from the shared nav gradient, and the retired
-	// text glyphs stay retired. The page carries exactly two
-	// gradient definitions: the shared horizontal nav def and
-	// the brand mark's own diagonal def (the approved mock's
-	// ramp — the .007 build painted the mark from the nav
-	// def and the nodes landed in the wrong colors), each with
-	// a unique id.
-	if n := strings.Count(body, "<linearGradient"); n != 2 {
-		t.Errorf("page carries %d linearGradient definitions, want 2 (nav + brand defs)", n)
+	// text glyphs stay retired. The page carries exactly one
+	// gradient definition, the shared nav one. (The logo is an
+	// image file now and brings no definition of its own.)
+	if n := strings.Count(body, "<linearGradient"); n != 1 {
+		t.Errorf("page carries %d linearGradient definitions, want 1 (the nav def)", n)
 	}
-	for _, id := range []string{`id="nav-glyph-gradient"`, `id="brand-glyph-gradient"`} {
+	for _, id := range []string{`id="nav-glyph-gradient"`} {
 		if n := strings.Count(body, id); n != 1 {
 			t.Errorf("page carries %d %q definitions, want exactly 1", n, id)
 		}
@@ -169,7 +161,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	if topbarEnd < 0 {
 		t.Fatal("topbar markup not closed")
 	}
-	if !strings.Contains(body[topbarStart:topbarStart+topbarEnd], `<a class="wordmark topbar-wordmark" href="/" aria-label="EveSynapse home"><svg class="wordmark-glyph"`) {
+	if !strings.Contains(body[topbarStart:topbarStart+topbarEnd], `<a class="wordmark topbar-wordmark" href="/" aria-label="EveSynapse home"><img class="wordmark-glyph"`) {
 		t.Error("topbar is missing the wordmark")
 	}
 	// Branding: the wordmark is the node-and-spoke glyph
@@ -178,12 +170,12 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	// the horizontal def).
 	topbar := body[topbarStart : topbarStart+topbarEnd]
 	wordmarkAt := strings.Index(topbar, `<a class="wordmark topbar-wordmark"`)
-	sGlyphAt := strings.Index(topbar, `<svg class="wordmark-glyph"`)
+	sGlyphAt := strings.Index(topbar, `<img class="wordmark-glyph"`)
 	if wordmarkAt < 0 || sGlyphAt < 0 || sGlyphAt < wordmarkAt {
 		t.Errorf("wordmark at %d, glyph at %d in topbar; want the glyph inside the wordmark link", wordmarkAt, sGlyphAt)
 	}
 	// (SYNAPSE is one span per letter: each gets its own solid colour.)
-	if !strings.Contains(topbar, "</svg><span><span class=\"wm-eve\">EVE</span><span class=\"wm-syn\"><span>S</span><span>Y</span><span>N</span><span>A</span><span>P</span><span>S</span><span>E</span></span></span></a>") {
+	if !strings.Contains(topbar, " alt=\"\" width=\"454\" height=\"500\"><span><span class=\"wm-eve\">EVE</span><span class=\"wm-syn\"><span>S</span><span>Y</span><span>N</span><span>A</span><span>P</span><span>S</span><span>E</span></span></span></a>") {
 		t.Error("glyph does not lead the full EVESYNAPSE wordmark")
 	}
 
@@ -466,11 +458,9 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	for _, want := range []string{
 		`viewBox="0 0 48 48"`,
 		`<rect width="48" height="48" rx="10" fill="#0d0503"/>`,
-		// The centre node is white, as in the header logo (see
-		// TestIconsMatchTheHeaderLogo).
-		`<circle cx="24" cy="24" r="3.8" fill="#ffffff"/>`,
-		`<circle cx="6" cy="24" r="3.0"/>`,
-		`<circle cx="42" cy="24" r="3.0"/>`,
+		// The logo itself is drawn from logo.svg (see
+		// TestIconsAreDrawnFromTheLogo): its white centre is there.
+		`fill="#FFFFFF"/>`,
 	} {
 		if !strings.Contains(fav, want) {
 			t.Errorf("favicon.svg missing %q", want)

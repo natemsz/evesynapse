@@ -72,10 +72,15 @@ func (s *historyStatusTransport) RoundTrip(req *http.Request) (*http.Response, e
 	if c, ok := s.byType[typeID]; ok {
 		code = c
 	}
+	// Retry-After: 0 keeps the client's read retries from
+	// sleeping on the 500 case: the answer stays a 500 either way.
 	return &http.Response{
 		StatusCode: code,
-		Header:     http.Header{"Content-Type": []string{"application/json"}},
-		Body:       io.NopCloser(strings.NewReader(`[]`)),
+		Header: http.Header{
+			"Content-Type": []string{"application/json"},
+			"Retry-After":  []string{"0"},
+		},
+		Body: io.NopCloser(strings.NewReader(`[]`)),
 	}, nil
 }
 

@@ -33,7 +33,8 @@ const (
 	FixtureMember = int64(93300001)
 )
 
-// CountingTransport fails every request and counts calls;
+// CountingTransport fails every request and counts calls (the 500
+// carries Retry-After: 0, so the client's read retries do not sleep);
 // handlers must never reach it.
 type CountingTransport struct{ Calls atomic.Int64 }
 
@@ -41,7 +42,7 @@ func (s *CountingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	s.Calls.Add(1)
 	return &http.Response{
 		StatusCode: http.StatusInternalServerError,
-		Header:     make(http.Header),
+		Header:     http.Header{"Retry-After": []string{"0"}},
 		Body:       io.NopCloser(strings.NewReader(`{"error":"must not be called"}`)),
 	}, nil
 }

@@ -70,8 +70,12 @@ func (s *pagedBookTransport) RoundTrip(req *http.Request) (*http.Response, error
 	pages := s.books[regionID]
 	s.mu.Unlock()
 	if status > 0 {
+		// Retry-After: 0 keeps the client's read retries from
+		// sleeping on an injected 500: the failure stands either way.
+		failed := header.Clone()
+		failed.Set("Retry-After", "0")
 		return &http.Response{
-			StatusCode: status, Header: header,
+			StatusCode: status, Header: failed,
 			Body: io.NopCloser(strings.NewReader(`{"error":"injected failure"}`)),
 		}, nil
 	}

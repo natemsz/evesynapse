@@ -427,6 +427,14 @@ opens from there; Safari does not offer push to an ordinary tab.
 - Notifications are worked out after each background sync, so
   one arrives some minutes after the thing happened in-game,
   not at that instant.
+- How soon depends on whether anyone has the site open. A character
+  somebody is looking at is synced every minute. An account nobody
+  has had open for a day is synced every 30 minutes, so its mail and
+  killmails are announced up to that much later. Things that come
+  with the clock and need no sync (a skill or an industry job
+  finishing, an extractor running out) are checked for at least
+  every 5 minutes, and new ops and op reminders every minute, for
+  everyone.
 - The first sync of a character only records what is already
   there. Mail that was in the inbox before then is not announced.
 - Mail a character sends to itself is not announced, and neither

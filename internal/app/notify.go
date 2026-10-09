@@ -477,6 +477,12 @@ var notifyPrunedAt atomic.Int64
 // notifyPass runs after a refresh cycle: for every account with
 // characters, turn what is newly true into notifications.
 func (app *Application) notifyPass(ctx context.Context, characters []db.Character, now time.Time) (created int) {
+	return app.notifyAccounts(ctx, characters, now, nil)
+}
+
+// notifyAccounts is the pass itself. quiet, when given, says which
+// accounts need only their ops looked at this time (notify_quiet.go).
+func (app *Application) notifyAccounts(ctx context.Context, characters []db.Character, now time.Time, quiet func(userID int64, chars []db.Character) bool) (created int) {
 	byUser := map[int64][]db.Character{}
 	var order []int64
 	for _, ch := range characters {
@@ -489,9 +495,11 @@ func (app *Application) notifyPass(ctx context.Context, characters []db.Characte
 		if ctx.Err() != nil {
 			return created
 		}
-		n, err := app.notifyUser(ctx, userID, byUser[userID], now)
+		opsOnly := quiet != nil && quiet(userID, byUser[userID])
+		n, err := app.notifyUser(ctx, userID, byUser[userID], now, opsOnly)
 		if err != nil {
 			logging.Errorf("notify: user %d: %v", userID, err)
+			app.notifyQuiet.forget(userID)
 			continue
 		}
 		created += n
@@ -513,9 +521,18 @@ func (app *Application) notifyPass(ctx context.Context, characters []db.Characte
 // notifyUser handles one account. Recording the keys as seen and
 // creating the notifications happen in one transaction: an event is
 // never announced twice because one half was saved without the other.
-func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db.Character, now time.Time) (int, error) {
-	bundles := app.loadCharSnaps(ctx, userID, chars, []string{widgetBriefing})
-	c := app.collectNotifyEvents(ctx, userID, bundles, now)
+//
+// opsOnly leaves the account's stored data unread and looks only at
+// ops (new ones, and reminders, which go by the clock). Each kind of
+// event keeps its own baseline and its own keys, so a pass that looks
+// at fewer sources neither announces nor forgets anything on behalf
+// of the ones it skipped.
+func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db.Character, now time.Time, opsOnly bool) (int, error) {
+	c := newNotifyCollector()
+	if !opsOnly {
+		bundles := app.loadCharSnaps(ctx, userID, chars, []string{widgetBriefing})
+		c = app.collectNotifyEvents(ctx, userID, bundles, now)
+	}
 	prefs := app.notifyPrefsFor(ctx, userID)
 	app.notifyOpEvents(ctx, c, userID, prefs, now)
 	if len(c.sources) == 0 {

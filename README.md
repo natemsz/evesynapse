@@ -494,6 +494,7 @@ opens from there; Safari does not offer push to an ordinary tab.
 |--------------|---------------|
 | "Browser notifications are not set up on this server." | The server did not find a usable key pair. Check the three lines are in the `.env` the service reads and that it was restarted. A pair that is set but wrong is reported in the log as `browser push is off` |
 | "This browser cannot receive push notifications." | The browser has no push support. On iOS, open the installed app, not a Safari tab |
+| "…the address is not a known browser push service (it is at …)" | The browser subscribed with a push service this server does not send to. The server only sends to the services browsers are known to use (Google's, Mozilla's, Microsoft's and Apple's), so that nobody can make it send requests to an address of their choosing. The message names the host: report it, with the browser, so it can be added |
 | "Notifications from this site are blocked in this browser." | Permission was refused earlier. Allow notifications for the site in the browser's site settings, then reload the page |
 | "The test could not be sent: no browser took the test message" | The push service refused the message. The reason is in the server log (`journalctl -u evesynapse`), on a line starting `push:` |
 | The test says sent, but nothing appears | The operating system is hiding it: check its notification settings for the browser, and Do Not Disturb / Focus |

@@ -140,6 +140,10 @@ func (app *Application) handlePushSubscribe(w http.ResponseWriter, r *http.Reque
 	// the browsers' push services, and the keys real ones.
 	sub, err := webpush.ParseSubscription(posted.Endpoint, posted.Keys.P256dh, posted.Keys.Auth)
 	if err != nil {
+		// Said in the log too: a browser using a push service this
+		// server does not know is something its operator can only
+		// learn of here.
+		logging.Warnf("push: refused a subscription from user %d at %s: %v", userID, webpush.EndpointHost(posted.Endpoint), err)
 		http.Error(w, "not a push subscription: "+err.Error(), http.StatusBadRequest)
 		return
 	}

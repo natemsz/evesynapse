@@ -63,7 +63,7 @@ type Subscription struct {
 func ParseSubscription(endpoint, p256dh, auth string) (Subscription, error) {
 	sub := Subscription{Endpoint: endpoint}
 	if !AllowedEndpoint(endpoint) {
-		return sub, errors.New("the address is not a known browser push service")
+		return sub, errors.New("the address is not a known browser push service (it is at " + EndpointHost(endpoint) + ")")
 	}
 	var err error
 	if sub.P256dh, err = decodeB64(p256dh); err != nil {
@@ -84,8 +84,17 @@ func ParseSubscription(endpoint, p256dh, auth string) (Subscription, error) {
 // pushHosts are the push services browsers use: Chrome and Edge
 // (FCM), Firefox (Mozilla), Edge on Windows (WNS) and Safari (Apple).
 // An entry beginning with a dot matches any host ending in it.
+//
+// jmt17.google.com is FCM under another name: Chrome hands some
+// browsers a subscription there instead of at fcm.googleapis.com.
+//
+// The list is what keeps a signed-in account from having this server
+// send requests to an address of its choosing, so a host goes on it
+// by name, once a browser is known to use it. A refusal names the
+// host (EndpointHost) so that a new one can be recognised.
 var pushHosts = []string{
 	"fcm.googleapis.com",
+	"jmt17.google.com",
 	"updates.push.services.mozilla.com",
 	".notify.windows.com",
 	".push.apple.com",
@@ -109,6 +118,30 @@ func AllowedEndpoint(raw string) bool {
 		}
 	}
 	return false
+}
+
+// EndpointHost is the host of a push address, for saying which one was
+// refused: lower case, at most 80 characters, and only what a host name
+// is made of, since it is shown back and written to the log. "nowhere
+// readable" when there is none.
+func EndpointHost(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "nowhere readable"
+	}
+	var b strings.Builder
+	for _, r := range strings.ToLower(u.Hostname()) {
+		if b.Len() == 80 {
+			break
+		}
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '.' || r == '-' {
+			b.WriteRune(r)
+		}
+	}
+	if b.Len() == 0 {
+		return "nowhere readable"
+	}
+	return b.String()
 }
 
 // Encrypt returns the request body for plaintext: the aes128gcm

@@ -285,6 +285,18 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		}
 	})
 
+	// Discord, where a bot is set up (discord_notify.go,
+	// discord_roles.go): new ops to their channels, and roles brought
+	// in line with what was just synced.
+	runGuarded("discord", func() {
+		if n := app.discordAnnounceOps(ctx, time.Now()); n > 0 {
+			logging.Infof("worker: %d op(s) posted to Discord", n)
+		}
+		if n := app.discordSyncRoles(ctx, time.Now()); n > 0 {
+			logging.Infof("worker: Discord roles changed for %d account(s)", n)
+		}
+	})
+
 	summary := cycleSummary(c.refreshed, c.namesResolved, c.failed, c.limited, parked, c.deferred)
 	app.updateWorkerStatus(func(s *workerStatus) {
 		s.Warming = false

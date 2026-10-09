@@ -33,6 +33,20 @@ type Config struct {
 	// does not ask, and the icon changes on page loads only.
 	notifyPoll int
 
+	// Discord (discord_link.go). The client id and secret run the
+	// "Connect Discord" sign-in; the bot token and server id let the
+	// bot message and give roles in that one server. Each pair works
+	// without the other, and with none set Discord is off.
+	discordClientID, discordClientSecret string
+	discordBotToken, discordGuildID      string
+	// discordOpsChannels: corporation id -> the channel new ops are
+	// posted in (0 is the channel for every other corporation).
+	// discordRoleLinked is given to every connected account, and
+	// discordCorpRoles: corporation id -> the role its members get.
+	discordOpsChannels map[int64]string
+	discordRoleLinked  string
+	discordCorpRoles   map[int64]string
+
 	addr            string         // listen address
 	databaseURL     string         // Postgres connection URL (DATABASE_URL)
 	eveClientID     string         // EVE SSO application client ID
@@ -145,24 +159,31 @@ func LoadConfig() (Config, error) {
 		logging.Warnf("evesynapse: NOTIFY_POLL_SECONDS=%q is not a whole number of seconds; using %d", os.Getenv("NOTIFY_POLL_SECONDS"), notifyPoll)
 	}
 	return Config{
-		notifyPoll:      notifyPoll,
-		addr:            getenvDefault("ADDR", ":8080"),
-		databaseURL:     getenvDefault("DATABASE_URL", "postgres://evesynapse@localhost:5432/evesynapse?sslmode=disable"),
-		eveClientID:     os.Getenv("EVE_CLIENT_ID"),
-		eveClientSecret: os.Getenv("EVE_CLIENT_SECRET"),
-		eveCallbackURL:  getenvDefault("EVE_CALLBACK_URL", "http://localhost:8080/auth/callback"),
-		devLogin:        os.Getenv("DEV_LOGIN") == "1",
-		sdeBaseURL:      getenvDefault("EVE_SDE_BASE_URL", defaultSDEBaseURL),
-		adminCharIDs:    parseAdminCharIDs(os.Getenv("EVE_ADMIN_CHARACTER_IDS")),
-		tokenKey:        os.Getenv("TOKEN_ENCRYPTION_KEY"),
-		signUp:          loadSignUpPolicy(os.Getenv),
-		esiContact:      os.Getenv("ESI_CONTACT"),
-		logLevel:        os.Getenv("LOG_LEVEL"),
-		logFormat:       os.Getenv("LOG_FORMAT"),
-		pushPublicKey:   os.Getenv("VAPID_PUBLIC_KEY"),
-		pushPrivateKey:  os.Getenv("VAPID_PRIVATE_KEY"),
-		pushSubject:     os.Getenv("VAPID_SUBJECT"),
-		opsManagerRoles: parseRoleList(os.Getenv("OPS_MANAGER_ROLES")),
+		notifyPoll:          notifyPoll,
+		discordClientID:     os.Getenv("DISCORD_CLIENT_ID"),
+		discordClientSecret: os.Getenv("DISCORD_CLIENT_SECRET"),
+		discordBotToken:     os.Getenv("DISCORD_BOT_TOKEN"),
+		discordGuildID:      strings.TrimSpace(os.Getenv("DISCORD_GUILD_ID")),
+		discordOpsChannels:  discordIDMap("DISCORD_OPS_CHANNELS", os.Getenv("DISCORD_OPS_CHANNELS")),
+		discordRoleLinked:   discordIDValue("DISCORD_ROLE_LINKED", os.Getenv("DISCORD_ROLE_LINKED")),
+		discordCorpRoles:    discordIDMap("DISCORD_ROLE_CORPS", os.Getenv("DISCORD_ROLE_CORPS")),
+		addr:                getenvDefault("ADDR", ":8080"),
+		databaseURL:         getenvDefault("DATABASE_URL", "postgres://evesynapse@localhost:5432/evesynapse?sslmode=disable"),
+		eveClientID:         os.Getenv("EVE_CLIENT_ID"),
+		eveClientSecret:     os.Getenv("EVE_CLIENT_SECRET"),
+		eveCallbackURL:      getenvDefault("EVE_CALLBACK_URL", "http://localhost:8080/auth/callback"),
+		devLogin:            os.Getenv("DEV_LOGIN") == "1",
+		sdeBaseURL:          getenvDefault("EVE_SDE_BASE_URL", defaultSDEBaseURL),
+		adminCharIDs:        parseAdminCharIDs(os.Getenv("EVE_ADMIN_CHARACTER_IDS")),
+		tokenKey:            os.Getenv("TOKEN_ENCRYPTION_KEY"),
+		signUp:              loadSignUpPolicy(os.Getenv),
+		esiContact:          os.Getenv("ESI_CONTACT"),
+		logLevel:            os.Getenv("LOG_LEVEL"),
+		logFormat:           os.Getenv("LOG_FORMAT"),
+		pushPublicKey:       os.Getenv("VAPID_PUBLIC_KEY"),
+		pushPrivateKey:      os.Getenv("VAPID_PRIVATE_KEY"),
+		pushSubject:         os.Getenv("VAPID_SUBJECT"),
+		opsManagerRoles:     parseRoleList(os.Getenv("OPS_MANAGER_ROLES")),
 	}, nil
 }
 

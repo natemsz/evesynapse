@@ -67,7 +67,7 @@ func (q *Queries) DeleteManualAttendanceExcept(ctx context.Context, arg DeleteMa
 }
 
 const getOp = `-- name: GetOp :one
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at FROM ops WHERE id = $1
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at FROM ops WHERE id = $1
 `
 
 func (q *Queries) GetOp(ctx context.Context, id int64) (Op, error) {
@@ -88,6 +88,7 @@ func (q *Queries) GetOp(ctx context.Context, id int64) (Op, error) {
 		&i.CancelledAt,
 		&i.CaptureStatus,
 		&i.CaptureCheckedAt,
+		&i.DiscordAnnouncedAt,
 	)
 	return i, err
 }
@@ -321,7 +322,7 @@ func (q *Queries) ListOpSignupsForOps(ctx context.Context, opIds []int64) ([]Lis
 }
 
 const listOpsForCorporationsBetween = `-- name: ListOpsForCorporationsBetween :many
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at FROM ops
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at FROM ops
 WHERE corporation_id = ANY($1::bigint[])
   AND starts_at >= $2 AND starts_at < $3
 ORDER BY starts_at, id
@@ -357,6 +358,7 @@ func (q *Queries) ListOpsForCorporationsBetween(ctx context.Context, arg ListOps
 			&i.CancelledAt,
 			&i.CaptureStatus,
 			&i.CaptureCheckedAt,
+			&i.DiscordAnnouncedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -373,7 +375,7 @@ func (q *Queries) ListOpsForCorporationsBetween(ctx context.Context, arg ListOps
 
 const listOpsToCapture = `-- name: ListOpsToCapture :many
 
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at FROM ops
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at FROM ops
 WHERE cancelled_at IS NULL
   AND fc_character_id <> 0
   AND starts_at <= $1
@@ -415,6 +417,7 @@ func (q *Queries) ListOpsToCapture(ctx context.Context, arg ListOpsToCapturePara
 			&i.CancelledAt,
 			&i.CaptureStatus,
 			&i.CaptureCheckedAt,
+			&i.DiscordAnnouncedAt,
 		); err != nil {
 			return nil, err
 		}

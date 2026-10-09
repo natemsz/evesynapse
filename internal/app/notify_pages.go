@@ -241,6 +241,8 @@ type notifySettingsView struct {
 	PushConfigured bool
 	PushKey        string
 	PushDevices    int64
+	// Discord: what this server offers and what the account has done.
+	Discord discordSettingsView
 }
 
 type notifySettingRow struct {
@@ -255,6 +257,16 @@ type notifySettingRow struct {
 	// Minutes is the choice of lead for the op reminder, with the
 	// current one marked; nil for every other kind.
 	Minutes []notifyMinutesOption
+}
+
+// discordSettingsView is the Discord part of the settings page.
+type discordSettingsView struct {
+	CanLink bool // "Connect Discord" is offered
+	HasBot  bool // the bot can message and give roles
+	Linked  bool
+	Name    string // the connected account
+	DM      bool   // notifications go to it as direct messages
+	Roles   bool   // the server gives roles from EVE data
 }
 
 // notifyMinutesOption is one lead the op reminder can be set to.
@@ -363,6 +375,11 @@ func (app *Application) handleNotificationSettings(w http.ResponseWriter, r *htt
 		if n, err := app.queries.CountPushSubscriptionsByUser(ctx, userID); err == nil {
 			view.PushDevices = n
 		}
+	}
+	view.Discord = discordSettingsView{CanLink: app.discordCanLink(), HasBot: app.discordHasBot()}
+	view.Discord.Roles = view.Discord.HasBot && len(app.discordManagedRoles()) > 0
+	if link, linked := app.discordLinkFor(r, userID); linked {
+		view.Discord.Linked, view.Discord.Name, view.Discord.DM = true, link.Username, link.DmNotifications
 	}
 	data.NotifySettings = view
 	app.render(ctx, w, http.StatusOK, "notification_settings.html", data)

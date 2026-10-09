@@ -11,12 +11,38 @@ import (
 	"time"
 )
 
+const countLinkedCharactersByUser = `-- name: CountLinkedCharactersByUser :one
+SELECT count(*) FROM characters WHERE user_id = $1 AND link_state = 'ok'
+`
+
+// Characters of an account whose link to EVE is in good standing.
+func (q *Queries) CountLinkedCharactersByUser(ctx context.Context, userID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countLinkedCharactersByUser, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteDiscordLink = `-- name: DeleteDiscordLink :exec
 DELETE FROM discord_links WHERE user_id = $1
 `
 
 func (q *Queries) DeleteDiscordLink(ctx context.Context, userID int64) error {
 	_, err := q.db.ExecContext(ctx, deleteDiscordLink, userID)
+	return err
+}
+
+const deleteDiscordRoleGrant = `-- name: DeleteDiscordRoleGrant :exec
+DELETE FROM discord_role_grants WHERE discord_id = $1 AND guild_id = $2
+`
+
+type DeleteDiscordRoleGrantParams struct {
+	DiscordID string `json:"discord_id"`
+	GuildID   string `json:"guild_id"`
+}
+
+func (q *Queries) DeleteDiscordRoleGrant(ctx context.Context, arg DeleteDiscordRoleGrantParams) error {
+	_, err := q.db.ExecContext(ctx, deleteDiscordRoleGrant, arg.DiscordID, arg.GuildID)
 	return err
 }
 
@@ -185,6 +211,44 @@ func (q *Queries) ListOpsToAnnounceOnDiscord(ctx context.Context, arg ListOpsToA
 	return items, nil
 }
 
+const listOrphanDiscordRoleGrants = `-- name: ListOrphanDiscordRoleGrants :many
+SELECT g.discord_id, g.guild_id, g.roles, g.updated_at FROM discord_role_grants g
+WHERE NOT EXISTS (SELECT 1 FROM discord_links l WHERE l.discord_id = g.discord_id)
+ORDER BY g.updated_at
+LIMIT $1
+`
+
+// Roles given to a Discord account that no EveSynapse account is
+// connected to any more: the account was deleted, disconnected
+// Discord, or connected a different Discord account.
+func (q *Queries) ListOrphanDiscordRoleGrants(ctx context.Context, maxRows int32) ([]DiscordRoleGrant, error) {
+	rows, err := q.db.QueryContext(ctx, listOrphanDiscordRoleGrants, maxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DiscordRoleGrant
+	for rows.Next() {
+		var i DiscordRoleGrant
+		if err := rows.Scan(
+			&i.DiscordID,
+			&i.GuildID,
+			&i.Roles,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setDiscordDMNotifications = `-- name: SetDiscordDMNotifications :exec
 UPDATE discord_links SET dm_notifications = $1 WHERE user_id = $2
 `
@@ -255,6 +319,29 @@ func (q *Queries) UpsertDiscordLink(ctx context.Context, arg UpsertDiscordLinkPa
 		arg.DiscordID,
 		arg.Username,
 		arg.LinkedAt,
+	)
+	return err
+}
+
+const upsertDiscordRoleGrant = `-- name: UpsertDiscordRoleGrant :exec
+INSERT INTO discord_role_grants (discord_id, guild_id, roles, updated_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (discord_id, guild_id) DO UPDATE SET roles = excluded.roles, updated_at = excluded.updated_at
+`
+
+type UpsertDiscordRoleGrantParams struct {
+	DiscordID string    `json:"discord_id"`
+	GuildID   string    `json:"guild_id"`
+	Roles     string    `json:"roles"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (q *Queries) UpsertDiscordRoleGrant(ctx context.Context, arg UpsertDiscordRoleGrantParams) error {
+	_, err := q.db.ExecContext(ctx, upsertDiscordRoleGrant,
+		arg.DiscordID,
+		arg.GuildID,
+		arg.Roles,
+		arg.UpdatedAt,
 	)
 	return err
 }

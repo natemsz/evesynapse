@@ -19,13 +19,14 @@ import (
 // sign-in code belongs to, which roles each member of the server
 // holds, and records every message and role change the bot makes.
 type fakeDiscord struct {
-	mu       sync.Mutex
-	codes    map[string]string   // sign-in code -> account id
-	members  map[string][]string // account id -> roles held; absent: not in the server
-	refuseDM bool
-	messages []string // "channel: text"
-	changes  []string // "PUT user role" / "DELETE user role"
-	calls    int
+	mu          sync.Mutex
+	codes       map[string]string   // sign-in code -> account id
+	members     map[string][]string // account id -> roles held; absent: not in the server
+	refuseDM    bool
+	failMembers bool     // looking a member up fails outright
+	messages    []string // "channel: text"
+	changes     []string // "PUT user role" / "DELETE user role"
+	calls       int
 }
 
 func (d *fakeDiscord) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -64,6 +65,9 @@ func (d *fakeDiscord) RoundTrip(req *http.Request) (*http.Response, error) {
 		d.messages = append(d.messages, parts[1]+": "+strings.ReplaceAll(text, `\n`, " | "))
 		return respond(200, `{"id":"1"}`)
 	case len(parts) == 4 && parts[0] == "guilds" && parts[2] == "members":
+		if d.failMembers {
+			return respond(500, `{"message":"Internal Server Error"}`)
+		}
 		roles, in := d.members[parts[3]]
 		if !in {
 			return respond(404, `{"message":"Unknown Member"}`)
@@ -376,14 +380,22 @@ func TestDiscordRoles(t *testing.T) {
 		t.Fatalf("after moving corporation: %s, want %s", got, want)
 	}
 
-	// The character's link to EVE goes bad: it no longer earns the
-	// corporation's role. Connected is still connected.
+	// The character's link to EVE goes bad: it earns nothing any more,
+	// and with no working character left the account does not even
+	// keep the role for being connected.
 	if _, err := f.app.db.ExecContext(f.ctx, `UPDATE characters SET link_state = 'revoked' WHERE character_id = $1`, f.ch.CharacterID); err != nil {
 		t.Fatal(err)
 	}
 	f.app.discordSyncRoles(f.ctx, now.Add(7*time.Hour+3*time.Minute))
-	if got, want := held(), discordRoleLinked+","+discordRoleMod; got != want {
-		t.Fatalf("with the character's link revoked: %s, want %s", got, want)
+	if got := held(); got != discordRoleMod {
+		t.Fatalf("with the only character's link revoked: %s, want only the moderator's role", got)
+	}
+	if _, err := f.app.db.ExecContext(f.ctx, `UPDATE characters SET link_state = 'ok' WHERE character_id = $1`, f.ch.CharacterID); err != nil {
+		t.Fatal(err)
+	}
+	f.app.discordSyncRoles(f.ctx, now.Add(7*time.Hour+210*time.Second))
+	if got, want := held(), discordRoleLinked+","+discordRoleOther+","+discordRoleMod; got != want {
+		t.Fatalf("with the link working again: %s, want %s", got, want)
 	}
 
 	// A role taken away by hand comes back at the periodic check.
@@ -393,7 +405,7 @@ func TestDiscordRoles(t *testing.T) {
 		t.Fatalf("checked again too soon: %s", got)
 	}
 	f.app.discordSyncRoles(f.ctx, now.Add(14*time.Hour))
-	if got, want := held(), discordRoleLinked+","+discordRoleMod; got != want {
+	if got, want := held(), discordRoleLinked+","+discordRoleOther+","+discordRoleMod; got != want {
 		t.Fatalf("after the periodic check: %s, want %s", got, want)
 	}
 
@@ -406,6 +418,75 @@ func TestDiscordRoles(t *testing.T) {
 		if strings.HasSuffix(change, discordRoleMod) {
 			t.Fatalf("the bot touched a role that is not its own: %s", change)
 		}
+	}
+}
+
+// TestDiscordRolesAreTakenBackWhenTheAccountGoes: what the bot gave is
+// taken back when the EveSynapse account is deleted, however that was
+// done, and when it connects a different Discord account. If Discord
+// cannot be reached at that moment it is tried again, not forgotten.
+func TestDiscordRolesAreTakenBackWhenTheAccountGoes(t *testing.T) {
+	f := newNotifyFixture(t)
+	fake := f.enableDiscord()
+	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+	cookie, _ = f.connect(cookie, "alice")
+	f.joinCorp(f.ch.CharacterID, discordCorp)
+	held := func(id string) string {
+		fake.mu.Lock()
+		defer fake.mu.Unlock()
+		roles := append([]string(nil), fake.members[id]...)
+		sortStrings(roles)
+		return strings.Join(roles, ",")
+	}
+	now := notifyT0
+	fake.members[discordAlice] = []string{discordRoleMod}
+	fake.members[discordBob] = nil
+	f.app.discordSyncRoles(f.ctx, now)
+	if got, want := held(discordAlice), discordRoleLinked+","+discordRoleCorp+","+discordRoleMod; got != want {
+		t.Fatalf("to begin with: %s, want %s", got, want)
+	}
+
+	// The same account connects a different Discord account: the
+	// first one loses what it was given, the second gains it.
+	cookie, _ = f.connect(cookie, "bob")
+	f.app.discordSyncRoles(f.ctx, now.Add(time.Minute))
+	if got := held(discordAlice); got != discordRoleMod {
+		t.Fatalf("the Discord account that was swapped out still holds %s", got)
+	}
+	if got, want := held(discordBob), discordRoleLinked+","+discordRoleCorp; got != want {
+		t.Fatalf("the Discord account swapped in holds %s, want %s", got, want)
+	}
+
+	// The EveSynapse account is deleted outright, behind the app's
+	// back, while Discord is refusing the bot. Nothing is forgotten.
+	if _, err := f.app.db.ExecContext(f.ctx, `DELETE FROM users WHERE id = $1`, f.userID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.q.GetDiscordLink(f.ctx, f.userID); err == nil {
+		t.Fatal("the link outlived the account")
+	}
+	member := fake.members[discordBob]
+	fake.mu.Lock()
+	delete(fake.members, discordBob) // the member cannot be looked up: tried again later
+	fake.failMembers = true
+	fake.mu.Unlock()
+	f.app.discordSyncRoles(f.ctx, now.Add(2*time.Minute))
+	fake.mu.Lock()
+	fake.members[discordBob], fake.failMembers = member, false
+	fake.mu.Unlock()
+	if got := held(discordBob); got == "" {
+		t.Fatal("the test did not leave the roles in place while Discord was failing")
+	}
+	if n := f.app.discordSyncRoles(f.ctx, now.Add(3*time.Minute)); n != 1 {
+		t.Fatalf("after the account was deleted: %d change(s), want the roles taken back", n)
+	}
+	if got := held(discordBob); got != "" {
+		t.Fatalf("a deleted account's Discord member still holds %s", got)
+	}
+	// And then there is nothing left to do.
+	calls := fake.calls
+	if n := f.app.discordSyncRoles(f.ctx, now.Add(4*time.Minute)); n != 0 || fake.calls != calls {
+		t.Fatalf("with nothing left to take back: %d change(s), %d call(s)", n, fake.calls-calls)
 	}
 }
 

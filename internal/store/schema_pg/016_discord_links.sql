@@ -28,3 +28,17 @@ CREATE TABLE IF NOT EXISTS discord_links (
 -- discord_announced_at records that it was (or that it was looked at
 -- and there was nowhere to post it).
 ALTER TABLE ops ADD COLUMN IF NOT EXISTS discord_announced_at timestamptz;
+
+-- What the bot has given, kept apart from the accounts on purpose.
+-- A row here does not go away when an EveSynapse account does (there
+-- is no foreign key to users), so however an account or its Discord
+-- link disappears, the worker still knows which Discord member holds
+-- which roles and takes them back. roles is the set given (sorted
+-- ids, comma separated).
+CREATE TABLE IF NOT EXISTS discord_role_grants (
+    discord_id TEXT NOT NULL,
+    guild_id   TEXT NOT NULL,
+    roles      TEXT NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (discord_id, guild_id)
+);

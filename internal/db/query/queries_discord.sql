@@ -59,3 +59,24 @@ FROM characters c
 JOIN character_corporations cc ON cc.character_id = c.character_id
 WHERE c.user_id = $1 AND c.link_state = 'ok'
 ORDER BY cc.corporation_id;
+
+-- Characters of an account whose link to EVE is in good standing.
+-- name: CountLinkedCharactersByUser :one
+SELECT count(*) FROM characters WHERE user_id = $1 AND link_state = 'ok';
+
+-- name: UpsertDiscordRoleGrant :exec
+INSERT INTO discord_role_grants (discord_id, guild_id, roles, updated_at)
+VALUES (sqlc.arg(discord_id), sqlc.arg(guild_id), sqlc.arg(roles), sqlc.arg(updated_at))
+ON CONFLICT (discord_id, guild_id) DO UPDATE SET roles = excluded.roles, updated_at = excluded.updated_at;
+
+-- name: DeleteDiscordRoleGrant :exec
+DELETE FROM discord_role_grants WHERE discord_id = sqlc.arg(discord_id) AND guild_id = sqlc.arg(guild_id);
+
+-- Roles given to a Discord account that no EveSynapse account is
+-- connected to any more: the account was deleted, disconnected
+-- Discord, or connected a different Discord account.
+-- name: ListOrphanDiscordRoleGrants :many
+SELECT g.* FROM discord_role_grants g
+WHERE NOT EXISTS (SELECT 1 FROM discord_links l WHERE l.discord_id = g.discord_id)
+ORDER BY g.updated_at
+LIMIT sqlc.arg(max_rows);

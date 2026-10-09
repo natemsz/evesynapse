@@ -82,6 +82,13 @@ type DiscordLink struct {
 	RolesSyncedAt   sql.NullTime `json:"roles_synced_at"`
 }
 
+type DiscordRoleGrant struct {
+	DiscordID string    `json:"discord_id"`
+	GuildID   string    `json:"guild_id"`
+	Roles     string    `json:"roles"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type GlobalSnapshot struct {
 	Kind        string    `json:"kind"`
 	Payload     string    `json:"payload"`

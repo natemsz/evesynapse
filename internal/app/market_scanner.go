@@ -1,15 +1,11 @@
 package app
 
-// P2 spread scanner (Element43 parity plan): the station-trading
-// screen. It reads only stored rows -- the worker's per-station
-// book statistics (market_station_stats, schema 032, filled by
-// the same whole-region sweeps as the P1 region stats) plus the
-// sweeps' stored 7-day average traded volume per type (schema
-// 035) -- and never calls out. Rendering is a couple of tiny
-// bounded reads: the filter math, profit estimate, and ranking
-// all happen in one SQL query capped at scannerRowCap rows, so
-// a page load costs the same whether the region holds ten
-// thousand or a hundred thousand stored rows.
+// Spread scanner: the station-trading screen. It reads only stored rows
+// — the per-station book statistics (market_station_stats) and the
+// stored 7-day average traded volume per type, both filled by the
+// whole-region sweeps. The filter math, profit estimate and ranking
+// happen in one SQL query capped at scannerRowCap rows, so a page load
+// costs the same however many rows a region holds.
 
 import (
 	"context"
@@ -62,7 +58,7 @@ type scannerView struct {
 // handleMarketScanner renders the spread scanner from stored
 // rows only. Filters ride the query string (region, minvol,
 // minspread) so a view is shareable and a reload is free. No
-// sweep state means the honest still-gathering state; the page
+// sweep state means the still-gathering state; the page
 // never triggers a fetch.
 func (app *Application) handleMarketScanner(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

@@ -481,8 +481,8 @@ func TestHistoryFewRowsSummaryAndStaleChart(t *testing.T) {
 	_, body := getPage(t, app, cookie, "/market/?type=34")
 	mustContain(t, "/market/?type=34 (one row)", body,
 		"Only 1 day of recorded trades in The Forge")
-	// (v0.3.07.003: the nav carries inline SVG icons, so the
-	// no-chart check scopes to the chart container itself.)
+	// The nav carries inline SVG icons, so the no-chart check scopes
+	// to the chart container itself.
 	if strings.Contains(body, `class="pchart"`) {
 		t.Fatal("one-row page drew a chart")
 	}

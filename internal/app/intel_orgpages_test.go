@@ -1,7 +1,7 @@
 package app
 
 // Hermetic tests for the corporation & alliance destination
-// pages (v0.3.12): the link helpers, the page states, the worker
+// pages: the link helpers, the page states, the worker
 // drains behind the organization queues, and the swept surfaces
 // (pilot page, contacts) that now link organization names. Same
 // two-layer approach as the pilot suite: renders run against a
@@ -430,7 +430,7 @@ func TestMigration026Reopen(t *testing.T) {
 	}
 }
 
-// TestOrgLabelLiveRegions (v0.3.20.002): names the organization
+// TestOrgLabelLiveRegions: names the organization
 // pages reference but have not cached yet — a corporation's CEO,
 // an alliance's creator and member corporations, a home station —
 // render a live "Loading name…" region that polls its label

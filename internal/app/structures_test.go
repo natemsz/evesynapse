@@ -1,6 +1,6 @@
 package app
 
-// v0.3.08 structure-resolution tiers: multi-character attempts
+// Structure-resolution tiers: multi-character attempts
 // (first success wins, one character's 403 never poisons the
 // cache), the corporation-structure tier, and provenance
 // precedence (ESI truth outranks lower-trust sources).
@@ -94,6 +94,7 @@ func buildStructureTestApp(t *testing.T, transport http.RoundTripper) (*Applicat
 		func(_ context.Context, ch db.Character) (string, error) {
 			return fmt.Sprintf("tok-%d", ch.CharacterID), nil
 		})
+	client.RetryBackoffs = []time.Duration{0, 0} // retry, but do not sleep
 
 	app := &Application{
 		cfg:           Config{workerTiersOff: true},

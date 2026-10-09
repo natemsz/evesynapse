@@ -9,13 +9,12 @@ import (
 )
 
 // The worker refreshes several characters at once. Each character is
-// still worked through by one goroutine from start to finish, in the
-// order it always was, so nothing about one character's pass changed;
-// what changed is that one slow answer from ESI no longer holds up
-// everybody behind it. Everything a character's pass stores is keyed by
-// that character, and what the passes share (the fetch allowance, the
-// ESI client, the name caches) was already safe to use from several
-// goroutines, because pages fetch alongside the worker.
+// worked through by one goroutine from start to finish, in due order,
+// so one slow answer from ESI does not hold up everybody behind it.
+// Everything a character's pass stores is keyed by that character, and
+// what the passes share (the fetch allowance, the ESI client, the name
+// caches) was already safe to use from several goroutines, because
+// pages fetch alongside the worker.
 
 // Bounds on WORKER_LANES, and what it is when unset. ESI's rate limits
 // are per character, so lanes do not add up against one budget; what

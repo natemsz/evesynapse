@@ -6,16 +6,13 @@ import (
 	"evesynapse/internal/esi"
 )
 
-// corpWalletGraph builds the balance-over-time chart for one corporation
-// wallet division from data the page already holds: the division's
-// journal (every entry carries the balance after it) and the division's
+// corpWalletGraph builds the balance-over-time chart for one
+// corporation wallet division from data the page already holds: the
+// division's journal (every entry carries the balance after it) and the
 // current balance as the last point, dated when the wallet snapshot was
-// fetched. It is the character wallet page's chart over a corporation
-// division. There is no daily history behind a corporation wallet, so the
-// line covers the journal window ESI keeps (about a month), and the note
-// says so rather than implying more. Nothing is invented: with fewer than
-// two points the chart is left out and the note says the history is
-// still building.
+// fetched. The line covers the journal window ESI keeps (about a
+// month), and the note says so. With fewer than two points the chart is
+// left out.
 func corpWalletGraph(journal esi.CorpJournal, balance float64, balanceKnown bool, balanceAt time.Time) (*balanceChart, string) {
 	asWallet := make(esi.WalletJournal, 0, len(journal))
 	for _, e := range journal {

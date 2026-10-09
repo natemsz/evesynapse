@@ -21,8 +21,7 @@ import (
 //	GET /dev-login — flip the session "authenticated" flag without
 //	EVE SSO, so the signed-in pages can be exercised locally. It
 //	lands on the home page: the dev session has no account, so it
-//	is never an admin, and the Admin page it used to land on has
-//	answered it with 403 since admin became a matter of character.
+//	is never an admin.
 //
 // The route is registered ONLY when the config has DEV_LOGIN=1;
 // otherwise Register is a no-op. The sign-in itself is delegated
@@ -35,7 +34,7 @@ func Register(r chi.Router, a *app.Application) {
 	if !app.DevLoginEnabled(a) {
 		return
 	}
-	// LOUD ON PURPOSE: same warning the old inline route printed.
+	// Loud on purpose.
 	logging.Warnf("DEV_LOGIN=1 — /dev-login is ENABLED. Never run like this in production.")
 	r.Get("/dev-login", func(w http.ResponseWriter, r *http.Request) {
 		app.DevSignIn(r.Context(), a)

@@ -172,7 +172,7 @@ fi
 command -v restorecon >/dev/null && restorecon "$INSTALL_DIR/evesynapse" || true
 echo "Installed the program to $INSTALL_DIR/evesynapse (run it as plain \`evesynapse\`)."
 
-# --- 2b. PostgreSQL (the app's database since v0.3.26) ---
+# --- 2b. PostgreSQL (the app's database) ---
 # Install + initialize + enable PostgreSQL when it's missing,
 # then make sure the evesynapse role and database exist. The
 # role's password is generated once and written to .env below

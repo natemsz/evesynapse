@@ -16,15 +16,12 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Wallet graphs (v0.3.09): balance-over-time from data the app
-// already stores — the wallet journal's running balances for the
-// recent window and the daily wallet-history samples (schema
-// 019) for the longer tail — plus an account net-worth history
-// summed from the same samples. Everything here is a pure
-// function over stored rows or a cache-only handler: no ESI
-// call ever leaves this file's readers, and the chart axes
-// start at the earliest real point. Nothing is fabricated — a
-// thin history says it is building instead of drawing a lie.
+// Wallet graphs: balance over time from data the app already stores —
+// the wallet journal's running balances for the recent window and the
+// daily wallet-history samples for the longer tail — plus an account
+// net-worth history summed from the same samples. Pure functions over
+// stored rows and cache-only handlers. A thin history says it is
+// building.
 // ---------------------------------------------------------------------------
 
 // balancePoint is one (time, balance) observation. The chart
@@ -392,7 +389,7 @@ func (app *Application) attachWalletGraph(ctx context.Context, userID, character
 
 // attachNetWorthHistory fills the home Net worth module's
 // history from the user's sampler rows: a chart once two daily
-// totals exist, the honest "building" state before that.
+// totals exist, the "building" state before that.
 func (app *Application) attachNetWorthHistory(ctx context.Context, w *netWorthWidget, userID int64) {
 	rows, err := app.queries.ListUserWalletHistory(ctx, userID)
 	if err != nil {

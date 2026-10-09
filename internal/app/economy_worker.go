@@ -14,7 +14,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Economy worker pass (module sweep, cluster 3): keeps every
+// Economy worker pass: keeps every
 // economy snapshot warm for one character and warms contract item
 // lists into contract_details.
 //

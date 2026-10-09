@@ -34,7 +34,7 @@ type skillsView struct {
 	CompletesAt   string // finish time of the last queue entry, "" when queue empty
 	Groups        []skillGroupSection
 
-	// Browse (Phase 4): the full skill catalog from the SDE
+	// Browse: the full skill catalog from the SDE
 	// graph, with plan quick-add forms. BrowseWarming marks the
 	// pre-import state; BrowseGroups stay empty then.
 	Browse        []browseSkillGroup
@@ -86,10 +86,9 @@ type skillQueueRow struct {
 	State      string
 }
 
-// handleSkills used to render the standalone Skill Sheet. The
-// sheet now lives on the unified character page (/character/),
-// so this route redirects there, preserving an explicit
-// ?character= pick.
+// handleSkills redirects to the unified character page (/character/),
+// which carries the skill sheet, preserving an explicit ?character=
+// pick.
 func (app *Application) handleSkills(w http.ResponseWriter, r *http.Request) {
 	target := "/character/"
 	if cid := r.URL.Query().Get("character"); cid != "" {
@@ -100,7 +99,7 @@ func (app *Application) handleSkills(w http.ResponseWriter, r *http.Request) {
 
 // fillBrowse loads the SDE skill catalog (grouped, with the
 // character's trained state) plus the character's plans for the
-// quick-add forms. A missing SDE skill graph renders the honest
+// quick-add forms. A missing SDE skill graph renders the
 // warming state instead of an empty catalog.
 func (app *Application) fillBrowse(ctx context.Context, view *skillsView, ch db.Character, skills esi.Skills, userID int64) {
 	if n, err := app.queries.CountSDESkillMeta(ctx); err != nil || n == 0 {

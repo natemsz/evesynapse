@@ -17,7 +17,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Skill plans (Phase 4): the /skills/plans pages, plan CRUD,
+// Skill plans: the /skills/plans pages, plan CRUD,
 // plan-from-fit, and the data loaders the skill
 // pages share. Everything renders from local state — the schema-012
 // SDE graph and the worker-warmed skills/skillqueue/attributes

@@ -17,15 +17,12 @@ import (
 	"github.com/jackc/pgx/v5/stdlib" // pgx as a database/sql driver
 )
 
-// Open opens Postgres at dsn and returns the two handles the app
-// runs on: a database/sql DB over the pgx stdlib driver (every
-// sqlc query and every hand-rolled statement rides it) and a
-// pgxpool that exists only to back the scs session store
-// (pgxstore). It then brings the schema up to date (migrateSchema):
-// a fresh database gets the collapsed Postgres baseline
-// (schema_pg/001_baseline.sql) and every later numbered step, so a
-// fresh install comes up with the full schema on first boot, and an
-// existing install gains whichever steps it is missing.
+// Open opens Postgres at dsn and returns the two handles the app runs
+// on: a database/sql DB over the pgx stdlib driver (every query rides
+// it) and a pgxpool that only backs the scs session store. It then
+// brings the schema up to date (migrateSchema): a fresh database gets
+// the baseline and every later numbered step, and an existing install
+// gains whichever steps it is missing.
 func Open(ctx context.Context, dsn string) (*sql.DB, *pgxpool.Pool, error) {
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {

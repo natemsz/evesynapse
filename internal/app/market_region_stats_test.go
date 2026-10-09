@@ -1,6 +1,6 @@
 package app
 
-// P1 region stats platform tests: the whole-region sweep
+// Region stats platform tests: the whole-region sweep
 // (aggregation from paged fixtures, incremental page budget,
 // cadence gate, vanished-type cleanup, daily upsert), and the
 // item page regions ribbon proven to render from stored rows

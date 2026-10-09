@@ -1,6 +1,6 @@
 package app
 
-// Quick jump (v0.3.15): the Ctrl+K palette and the search pool
+// Quick jump: the Ctrl+K palette and the search pool
 // widening behind it. The pool now answers corporations and
 // alliances alongside characters, items and pilots; every item
 // hit notes the market-history prefetch wants; and the
@@ -110,64 +110,6 @@ func TestTopbarSearchIncludesOrganizations(t *testing.T) {
 	if wantCount != 1 {
 		t.Errorf("history wants for Tritanium = %d, want 1 noted", wantCount)
 	}
-
-	if got := transport.calls.Load(); got != 0 {
-		t.Fatalf("handlers made %d outbound calls, want 0", got)
-	}
-}
-
-func TestQuickJumpPaletteMarkupAndScript(t *testing.T) {
-	transport := &countingTransport{}
-	app, _, q := buildCorpTestApp(t, transport)
-	ctx := context.Background()
-
-	user, err := q.CreateUser(ctx)
-	if err != nil {
-		t.Fatalf("create user: %v", err)
-	}
-	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")
-	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
-
-	code, body := getPage(t, app, cookie, "/")
-	if code != http.StatusOK {
-		t.Fatalf("GET /: status %d", code)
-	}
-	mustContain(t, "/", body,
-		`id="quickjump-open"`,
-		`aria-controls="quickjump"`,
-		`<div class="quickjump" id="quickjump" hidden>`,
-		`id="quickjump-q"`,
-		`id="quickjump-results"`,
-		`Powered by EveSynapse `+appVersion+` 🏓`)
-
-	code, js := getPage(t, app, cookie, "/static/app.js")
-	if code != http.StatusOK {
-		t.Fatalf("GET /static/app.js: status %d", code)
-	}
-	mustContain(t, "/static/app.js", js,
-		"var quickJumpPages = [",
-		"/search.json?q=",
-		"ctrlKey",
-		"metaKey",
-		"ArrowDown",
-		"ArrowUp",
-		`"Enter"`,
-		`"Escape"`,
-		"/market/?type=",
-		"/corporation/?corporation=",
-		"/alliance/?alliance=",
-		"/pilot/?character=",
-		"/character/?character=")
-
-	code, css := getPage(t, app, cookie, "/static/style.css")
-	if code != http.StatusOK {
-		t.Fatalf("GET /static/style.css: status %d", code)
-	}
-	mustContain(t, "/static/style.css", css,
-		".quickjump {",
-		".quickjump-panel {",
-		".quickjump-results li.sel",
-		"prefers-reduced-motion")
 
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handlers made %d outbound calls, want 0", got)

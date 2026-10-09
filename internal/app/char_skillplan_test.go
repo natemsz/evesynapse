@@ -1,6 +1,6 @@
 package app
 
-// Hermetic tests for Phase 4 (skill plans):
+// Hermetic tests for skill plans:
 //
 //   - Importer: dgmTypeAttributes parses with the skill-relevant
 //     attribute filter; real rows copied from the live dump (Gunnery
@@ -13,7 +13,7 @@ package app
 //     fit-requirement closure.
 //   - Pages: /skills/ browse + /skills/plans render with zero
 //     outbound calls (counting transport), plan CRUD round-trips,
-//     plan-from-fit create, and honest warm states.
+//     plan-from-fit create, and warm states.
 
 import (
 	"context"
@@ -333,7 +333,7 @@ func TestSkillPlanWarmStates(t *testing.T) {
 	seedCharacter(t, q, user.ID, fixtureCharA, "Cold Character")
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Cold Character")
 
-	// No SDE graph at all: honest loading state.
+	// No SDE graph at all: loading state.
 	code, body := getPage(t, app, cookie, "/skills/plans?character=90000001")
 	if code != 200 {
 		t.Fatalf("GET /skills/plans = %d", code)

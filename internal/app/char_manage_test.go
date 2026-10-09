@@ -1,6 +1,6 @@
 package app
 
-// Hermetic tests for the Phase 1A multi-character foundation:
+// Hermetic tests for the multi-character foundation:
 // the SSO link policy (create / move / owner-hash flagging), the
 // character management page (tags, unlink guardrails, acting
 // fallback), the header switcher, and token-dead parking in the

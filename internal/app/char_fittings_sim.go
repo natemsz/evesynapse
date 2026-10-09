@@ -20,7 +20,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Fitting simulator UI (v0.3.21): the editor on the Fittings page.
+// Fitting simulator UI: the editor on the Fittings page.
 //
 // The browser keeps a small fit document (ship, item lines, charge
 // choices) and posts it to /fittings/simulate/ on every change; the
@@ -752,15 +752,13 @@ func (app *Application) fitPilotLevels(ctx context.Context, pilotID int64, snap 
 	return briefingSkillLevels(skills), ""
 }
 
-// fitPilotImplants resolves the simulate request's implant set:
-// pilotID 0 (All V) is a theorycrafting view with no character,
-// so no implants. cloneID 0 is the active clone; otherwise the
-// matching jump clone's implants. Clone labels fall back to
-// "Jump clone #<last-4-digits-of-id>" when ESI carries no custom
-// name (EVE doesn't let players name jump clones). Snapshots
-// come from the worker-warmed rows (never per-render fetches).
-// The second return is the effective clone ID (unknown IDs fall
-// back to active); the note covers warming and re-login states.
+// fitPilotImplants resolves the simulate request's implant set. pilotID
+// 0 (All V) has no character and so no implants; cloneID 0 is the
+// active clone, otherwise the matching jump clone. Clone labels fall
+// back to "Jump clone #<last 4 digits>" when ESI carries no name. Reads
+// worker-warmed snapshots only. The second return is the effective
+// clone ID (unknown IDs fall back to active); the note covers warming
+// and re-login states.
 func (app *Application) fitPilotImplants(ctx context.Context, pilotID, cloneID int64) (ids []int64, effectiveClone int64, clones []fitCloneOption, note string) {
 	if pilotID == 0 {
 		return nil, 0, nil, ""
@@ -2068,7 +2066,7 @@ func (app *Application) handleFitMineJSON(w http.ResponseWriter, r *http.Request
 			Mine: true, IsPublic: row.IsPublic, IsDraft: row.IsDraft,
 		})
 	}
-	// ESI fittings for the active character (Issue 1)
+	// ESI fittings for the active character
 	// These are the in-game fittings from the character's ESI snapshot.
 	if charID := sessionCharID(app.sessions, ctx); charID != 0 {
 		if char, err := app.queries.GetCharacter(ctx, charID); err == nil {
@@ -2289,11 +2287,11 @@ func (app *Application) attachFitEditor(ctx context.Context, r *http.Request, da
 	editor.Description = doc.Description
 	editor.TagsList = doc.Tags
 	editor.Tags = strings.Join(doc.Tags, ", ")
-	// The editor no longer embeds the your-fits list (the search
-	// bar above loads fits through /fittings/mine.json), so the
-	// whole fits table is not pulled for this page. LocalFits stays
-	// on the view for API compatibility; listLocalFitEntries remains
-	// for the dedicated list consumers.
+	// The editor does not embed the your-fits list (the search bar
+	// above loads fits through /fittings/mine.json), so the whole fits
+	// table is not pulled for this page. LocalFits stays on the view
+	// for API compatibility; listLocalFitEntries remains for the
+	// dedicated list consumers.
 	data.FitEditor = editor
 }
 

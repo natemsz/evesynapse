@@ -62,8 +62,8 @@ func (a *activityLog) remember(userID int64, at time.Time) {
 }
 
 // loadActivity reads when every account was last seen, at start-up.
-// Unreadable, the log starts empty as it used to: every account is
-// dormant until it is next seen, and none is asleep.
+// Unreadable, the log starts empty: every account is dormant until it
+// is next seen, and none is asleep.
 func (app *Application) loadActivity(ctx context.Context) {
 	rows, err := app.queries.ListUsersLastSeen(ctx)
 	if err != nil {

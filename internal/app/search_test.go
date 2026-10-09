@@ -168,7 +168,7 @@ func TestSharedSuggestPools(t *testing.T) {
 		return m
 	}
 
-	// Every pool shares the tradeable floor now (v0.3.04):
+	// Every pool shares the tradeable floor now:
 	// published with a market group — the skill type carries a
 	// market group too (skill books trade), so it clears the
 	// floor in the broad pools.

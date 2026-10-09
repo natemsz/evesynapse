@@ -1,6 +1,6 @@
 package app
 
-// Hermetic tests for v0.3.04: per-widget configuration (schema
+// Hermetic tests for per-widget configuration (schema
 // 020), the orders widget's character/tag scope and merge modes,
 // the Home watchlist module, the stored market guide (schema
 // 021) behind always-on asset valuation, and the guide-price
@@ -316,7 +316,7 @@ func TestWatchlistWidgetHome(t *testing.T) {
 
 // TestNetWorthGuidePrices: with only the worker-stored guide
 // present (no Market visit, cold in-memory cache) the Net worth
-// card shows a real assets number with honest coverage — never
+// card shows a real assets number with coverage — never
 // "prices not loaded yet" — and the daily sampler's net worth
 // rides the same fallback.
 func TestNetWorthGuidePrices(t *testing.T) {

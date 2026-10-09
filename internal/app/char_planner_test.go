@@ -1,6 +1,6 @@
 package app
 
-// Hermetic tests for Phase 3 (industry build planner):
+// Hermetic tests for industry build planner:
 //
 //   - Importer: the five Fuzzwork industry files parse with the
 //     manufacturing-activity filter and join into blueprint rows.

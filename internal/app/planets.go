@@ -14,17 +14,15 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Planetary industry page (/planets/): per-character colonies from
-// the worker-warmed colonies + layout snapshots, cache-only like
-// every other page.
+// Planetary industry page (/planets/): per-character colonies from the
+// worker-warmed colonies and layout snapshots.
 //
-// Staleness honesty: extractor expiry, cycle time, quantity per
-// cycle and head counts are fixed at pin install in ESI and safe
-// to count down from. Stored contents amounts and last_cycle_start
-// are only recalculated when the colony is viewed in the game
-// client, so they are never shown — the page footnotes why. A
-// character whose login predates the planetary scope sees the
-// recorded "not enabled — re-link" state, never a warming loop.
+// Extractor expiry, cycle time, quantity per cycle and head counts are
+// fixed at pin install in ESI and safe to count down from. Stored
+// contents amounts and last_cycle_start are only recalculated when the
+// colony is viewed in the game client, so they are never shown; the
+// page footnotes why. A character whose login predates the planetary
+// scope sees the recorded "not enabled — re-link" state.
 // ---------------------------------------------------------------------------
 
 // extractorInfo is one extractor pin distilled for display and
@@ -122,7 +120,7 @@ func (app *Application) characterPISummary(ctx context.Context, ch db.Character)
 
 // planetDisplayName renders a colony planet: the resolved name
 // when the cache has one (in-process place cache, then the
-// durable planet_names table), the honest id fallback until
+// durable planet_names table), the id fallback until
 // then. An unresolved id is noted as a want so the worker
 // resolves it in the background; the page never waits on it.
 // Every PI surface — colonies page, home widget, attention and

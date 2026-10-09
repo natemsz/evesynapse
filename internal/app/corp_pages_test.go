@@ -1,7 +1,6 @@
 package app
 
-// Hermetic tests for the corporation cluster (module sweep,
-// cluster 2). Two layers:
+// Hermetic tests for the corporation cluster. Two layers:
 //
 //   - Render tests: seeded corp_* snapshots, killmail_details rows
 //     and snapshot_fetch_state records drive the real chi router
@@ -76,6 +75,7 @@ func buildCorpTestApp(t *testing.T, transport http.RoundTripper) (*Application, 
 
 	client := esi.New(&http.Client{Transport: transport}, queries,
 		func(context.Context, db.Character) (string, error) { return "fixture", nil })
+	client.RetryBackoffs = []time.Duration{0, 0} // retry, but do not sleep
 
 	app := &Application{
 		cfg:           Config{adminCharIDs: map[int64]bool{}, workerTiersOff: true},

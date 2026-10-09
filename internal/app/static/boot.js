@@ -1,9 +1,7 @@
 // EveSynapse head bootstrap: a plain <script> in <head>, not
 // deferred, so it runs before first paint and a saved nav state or
-// theme applies without flashing the default first. (It used to be
-// an inline block; the content security policy no longer allows
-// those.) Keep it dependency-free and tiny: every byte here delays
-// first paint.
+// theme applies without flashing the default first. Keep it
+// dependency-free and tiny: every byte here delays first paint.
 try {
   document.documentElement.classList.add("js");
   var savedNav = window.localStorage.getItem("evesynapse-nav");

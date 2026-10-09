@@ -12,7 +12,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Restock planner (v0.3.34, EVE-Nexus pattern #6).
+// Restock planner.
 //
 // Target stock levels per item. For each target the page shows what's
 // currently listed (open sell orders), the shortfall against target,

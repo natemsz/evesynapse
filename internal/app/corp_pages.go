@@ -14,13 +14,11 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Corporation subpages: members + tracking, wallets, orders,
-// assets, structures, killmails. Every page follows the selected
-// character's corporation (like Assets/Skills follow the selected
-// character) and renders from the worker-warmed corporation
-// snapshots and local tables only — no handler here touches ESI.
-// Role-gated datasets render their recorded "needs the role"
-// state instead of warming forever.
+// Corporation subpages: members + tracking, wallets, orders, assets,
+// structures, killmails. Each follows the selected character's
+// corporation and renders from the worker-warmed corporation snapshots
+// and local tables only. Role-gated datasets render their recorded
+// "needs the role" state.
 // ---------------------------------------------------------------------------
 
 // humanizeEnum renders an ESI snake_case enum readably
@@ -380,15 +378,13 @@ func (app *Application) handleCorpOrders(w http.ResponseWriter, r *http.Request)
 		return name
 	}
 
-	// Order health reaches corporation orders too: an order a
-	// synced character placed for the corp sits in that
-	// character's order snapshot under the same order id, so the
-	// worker's health rows cover it keyed (issuer, order). A
-	// verdict shows when one matches; a sell order placed by one
-	// of the account's own characters without a verdict yet gets
-	// the same not-checked line as everywhere else. Orders from
-	// issuers the app doesn't sync stay blank — promising a
-	// check that never runs would be a lie.
+	// Order health reaches corporation orders too: an order a synced
+	// character placed for the corp sits in that character's order
+	// snapshot under the same order id, so the worker's health rows
+	// cover it keyed (issuer, order). A sell order placed by one of the
+	// account's own characters without a verdict yet gets the
+	// not-checked line; orders from issuers the app does not sync stay
+	// blank.
 	userID := app.userID(ctx)
 	health := make(map[int64]db.OrderHealth)
 	ownChars := make(map[int64]bool)

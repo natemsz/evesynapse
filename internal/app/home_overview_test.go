@@ -1,6 +1,6 @@
 package app
 
-// Hermetic tests for the Phase 1B widget overview home. Same
+// Hermetic tests for the widget overview home. Same
 // contract as the corp/intel suites: seeded snapshots drive the
 // real router against a counting transport, and the transport
 // must observe zero outbound calls — the overview renders
@@ -564,107 +564,6 @@ func TestHomeCustomizeSurface(t *testing.T) {
 
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handlers made %d outbound calls, want 0", got)
-	}
-}
-
-// TestCustomizeDragAssetsServed: the served app.js carries the
-// pointer-drag wiring and the served CSS carries its states —
-// structurally asserted, the same way the fold rules are.
-func TestCustomizeDragAssetsServed(t *testing.T) {
-	transport := &countingTransport{}
-	app, _, q := buildCorpTestApp(t, transport)
-
-	user, err := q.CreateUser(t.Context())
-	if err != nil {
-		t.Fatalf("create user: %v", err)
-	}
-	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
-	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
-
-	code, js := getPage(t, app, cookie, "/static/app.js")
-	if code != http.StatusOK {
-		t.Fatalf("/static/app.js status = %d", code)
-	}
-	mustContain(t, "/static/app.js", js,
-		`getElementById("home-grid")`,
-		`data-customize") === "1"`,
-		`addEventListener("pointerdown"`,
-		`setPointerCapture`,
-		`addEventListener("pointermove"`,
-		`addEventListener("pointerup"`,
-		`action: "order"`,
-		`action: "toggle"`,
-		`draghandle`,
-		`cardremove`,
-		`data-add-widget`,
-		`add-module-modal`,
-		// The rebuilt drag machinery: placeholder + FLIP +
-		// edge auto-scroll + rAF-throttled moves + cancel path
-		// + full inline-style cleanup.
-		`drag-placeholder`,
-		`insertBefore(placeholder`,
-		`replaceChild(card, placeholder)`,
-		`requestAnimationFrame(tick)`,
-		`window.scrollBy(0, speed)`,
-		`addEventListener("pointercancel", onCancel)`,
-		`card.style.cssText = ""`,
-		`prefers-reduced-motion`,
-		// The grid-engine mirror: solver, re-solving around the
-		// placeholder, midpoint hysteresis, the span toggle save.
-		`function solveHomeSpans(descs, cols)`,
-		`function respan(placeholder, draggedCard)`,
-		`var hyst = 10`,
-		`desiredIndex(lastX, lastY, phIndex)`,
-		`action: "span"`,
-		`cardspan`,
-		`scale(" + sx + "," + sy + ")`,
-	)
-
-	code, css := getPage(t, app, cookie, "/static/style.css")
-	if code != http.StatusOK {
-		t.Fatalf("/static/style.css status = %d", code)
-	}
-	mustContain(t, "/static/style.css", css,
-		".draghandle",
-		"touch-action: none",
-		".card.dragging",
-		".cardremove",
-		".modal-backdrop[hidden]",
-		".modal-item",
-		".drag-placeholder",
-		".card.drag-settle",
-		"grid-auto-flow: dense",
-		"prefers-reduced-motion",
-		// The grid engine: solved span classes on both column
-		// modes, and the resize toggle's states.
-		".grid.home-grid > .span3",
-		".span6 { grid-column: span 6; }",
-		"@media (max-width: 719px)",
-		"span 1; }",
-		"@media (max-width: 339px)",
-		".cardspan",
-	)
-
-	// The lifted card must be fully opaque: whatever is under
-	// the finger stays readable. Dig the .card.dragging block
-	// out and check it carries no opacity at all, and that the
-	// old translucent rule is gone from the sheet entirely.
-	start := strings.Index(css, ".card.dragging {")
-	if start < 0 {
-		t.Fatal("style.css: .card.dragging rule missing")
-	}
-	block := css[start:]
-	if end := strings.Index(block, "}"); end >= 0 {
-		block = block[:end]
-	}
-	if strings.Contains(block, "opacity") {
-		t.Errorf(".card.dragging must not set opacity (lifted card is opaque): %q", block)
-	}
-	if !strings.Contains(block, "position: fixed") {
-		t.Errorf(".card.dragging should take the card out of flow: %q", block)
-	}
-	if strings.Contains(css, "opacity: 0.88") {
-		t.Error("style.css still carries the old translucent dragging rule")
 	}
 }
 

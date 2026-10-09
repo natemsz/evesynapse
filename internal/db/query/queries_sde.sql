@@ -110,7 +110,7 @@ ON CONFLICT (key) DO UPDATE SET
     value = excluded.value;
 
 -- ---------------------------------------------------------------------
--- Module sweep (schema 004): killmail detail store. The worker warms
+-- Killmail detail store. The worker warms
 -- details from the recent-killmails snapshot; pages only read here.
 -- ---------------------------------------------------------------------
 -- name: GetItemName :one
@@ -269,7 +269,7 @@ ORDER BY alliance_id
 LIMIT 100;
 
 -- ---------------------------------------------------------------------
--- Next-1 rider (schema 019): the daily wallet-history sampler.
+-- The daily wallet-history sampler.
 -- One row per character per day; the upsert keeps the day's
 -- latest values as fresher snapshots land.
 -- ---------------------------------------------------------------------
@@ -304,7 +304,7 @@ ORDER BY CASE WHEN strpos(lower(t.name), lower($1)) = 1 THEN 0 ELSE 1 END, t.nam
 LIMIT 50;
 
 -- ---------------------------------------------------------------------
--- Phase 4 (schema 012): skill graph reads and user skill plans.
+-- Skill graph reads and user skill plans.
 -- The dogma bulk inserts stay hand-rolled in the SDE importer
 -- alongside the other sde_* tables; only reads live here. Plans
 -- are plain CRUD.
@@ -440,7 +440,7 @@ SELECT COUNT(*) FROM sde_effect_modifiers;
 SELECT COUNT(*) FROM sde_type_effects;
 
 -- ---------------------------------------------------------------------
--- Fitting simulator UI (v0.3.21): picker feeds for the fit editor.
+-- Fitting simulator UI: picker feeds for the fit editor.
 -- Slot families come from the module's slot effect (dgmEffects,
 -- verified against the dump 2026-10-04): 11 loPower, 12 hiPower,
 -- 13 medPower, 2663 rigSlot, 3772 subSystem. All reads are local

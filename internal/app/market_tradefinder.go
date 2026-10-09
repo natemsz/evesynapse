@@ -1,6 +1,6 @@
 package app
 
-// P3 Tradefinder (Element43 parity plan): the cross-region route
+// Tradefinder: the cross-region route
 // screen. It reads only stored rows -- the worker's per-(region,
 // type) book statistics (market_region_stats, schema 031) for both
 // ends of the route, the per-(station, type) bests
@@ -25,7 +25,7 @@ package app
 // The origin's open buy volume is how much buying is already posted
 // where the buying happens, and the destination's open sell volume
 // is how much stock is already posted where the selling happens --
-// both are honest "how much room is there" caps next to what
+// both are "how much room is there" caps next to what
 // actually trades each day. A row with any of the three at zero
 // cannot move, so it drops out instead of showing a fantasy number.
 // Figures older than three days on EITHER side are excluded: a
@@ -112,7 +112,7 @@ func (v *tradefinderView) HasData() bool {
 // handleMarketTradefinder renders the tradefinder from stored
 // rows only. Filters ride the query string (origin, destination,
 // minmargin, minvol) so a view is shareable and a reload is free.
-// No sweep state means the honest still-gathering state; the page
+// No sweep state means the still-gathering state; the page
 // never triggers a fetch.
 func (app *Application) handleMarketTradefinder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

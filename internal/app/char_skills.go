@@ -86,10 +86,9 @@ type skillQueueRow struct {
 	State      string
 }
 
-// handleSkills used to render the standalone Skill Sheet. The
-// sheet now lives on the unified character page (/character/),
-// so this route redirects there, preserving an explicit
-// ?character= pick.
+// handleSkills redirects to the unified character page (/character/),
+// which carries the skill sheet, preserving an explicit ?character=
+// pick.
 func (app *Application) handleSkills(w http.ResponseWriter, r *http.Request) {
 	target := "/character/"
 	if cid := r.URL.Query().Get("character"); cid != "" {

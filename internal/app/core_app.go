@@ -253,12 +253,12 @@ func New(cfg Config) (*Application, error) {
 	return app, nil
 }
 
-// Close shuts the application down in dependency order: cancel
-// the worker's context, wait for the worker (and every pass it
-// runs) to fully stop, and only then close the database handle
-// and the session pool. Closing the handle first is what used to
-// flood the log with "sql: database is closed" on every restart:
-// the worker passes still in flight kept querying a dead handle.
+// Close shuts the application down in dependency order: cancel the
+// worker's context, wait for the worker (and every pass it runs) to
+// fully stop, and only then close the database handle and the session
+// pool. Closing the handle first would flood the log with "sql:
+// database is closed": the worker passes still in flight would be
+// querying a dead handle.
 func (app *Application) Close() {
 	if app.stopWorker != nil {
 		app.stopWorker()
@@ -281,9 +281,8 @@ func (app *Application) Close() {
 type RouteHook func(r chi.Router, a *Application)
 
 // Handler builds the application's HTTP handler. Optional hooks run
-// during route setup, exactly where dev-only routes used to be
-// registered inline; production routes are identical with or
-// without hooks.
+// during route setup (the dev-only routes); production routes are
+// identical with or without hooks.
 func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r := chi.NewRouter()
 	r.Use(requestLogger)

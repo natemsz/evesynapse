@@ -2289,11 +2289,11 @@ func (app *Application) attachFitEditor(ctx context.Context, r *http.Request, da
 	editor.Description = doc.Description
 	editor.TagsList = doc.Tags
 	editor.Tags = strings.Join(doc.Tags, ", ")
-	// The editor no longer embeds the your-fits list (the search
-	// bar above loads fits through /fittings/mine.json), so the
-	// whole fits table is not pulled for this page. LocalFits stays
-	// on the view for API compatibility; listLocalFitEntries remains
-	// for the dedicated list consumers.
+	// The editor does not embed the your-fits list (the search bar
+	// above loads fits through /fittings/mine.json), so the whole fits
+	// table is not pulled for this page. LocalFits stays on the view
+	// for API compatibility; listLocalFitEntries remains for the
+	// dedicated list consumers.
 	data.FitEditor = editor
 }
 

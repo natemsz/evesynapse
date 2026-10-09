@@ -237,14 +237,11 @@ func applySchemaStep(ctx context.Context, conn *sql.DB, step schemaStep) error {
 	return tx.Commit()
 }
 
-// splitSchemaStatements cuts a schema script into its statements
-// (the pgx stdlib driver executes one statement at a time). The
-// split is lexically aware: semicolons inside string literals,
-// quoted identifiers, comments, and dollar-quoted function bodies
-// do not end a statement, and comments are stripped. The old
-// splitter cut on every ";" outside full-line comments, so the
-// first migration with a literal ';' or a plpgsql body would have
-// failed boot.
+// splitSchemaStatements cuts a schema script into its statements (the
+// pgx stdlib driver executes one statement at a time). The split is
+// lexically aware: semicolons inside string literals, quoted
+// identifiers, comments, and dollar-quoted function bodies do not end a
+// statement, and comments are stripped.
 func splitSchemaStatements(script string) []string {
 	var stmts []string
 	var cur strings.Builder

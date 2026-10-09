@@ -18,14 +18,13 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// The signed-in Home is no longer a single character
-// sheet — it is the account overview: a customizable set of
-// widgets that read across every linked character. Every widget
-// renders cache-only from worker-warmed snapshots (the same rule
-// as every other page); the old home's live identity fetch is
-// gone — identity now comes from the profile snapshot the worker
-// keeps warm (esi.SnapProfile), and the character sheet itself
-// lives at /character/.
+// The signed-in Home is the account overview: a customizable set of
+// widgets that read across every linked character. Every widget renders
+// cache-only from worker-warmed snapshots (the same rule as every other
+// page); the old home's live identity fetch is gone — identity now
+// comes from the profile snapshot the worker keeps warm
+// (esi.SnapProfile), and the character sheet itself lives at
+// /character/.
 //
 // Layout: which widgets are on, in what order, with a per-user
 // span preference for flexible ones, persisted per account as a

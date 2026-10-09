@@ -79,11 +79,10 @@ const (
 	SnapAssets     = "assets"
 
 	// SnapProfile is the public character record (name, birthday,
-	// security status, corporation) warmed like every other
-	// snapshot so no page ever fetches identity live at render —
-	// the old home sheet used to, which broke the cache-only rule.
-	// The endpoint is public, so the payload needs no token; it is
-	// still stored per character like the other kinds.
+	// security status, corporation) warmed like every other snapshot so
+	// no page ever fetches identity live at render. The endpoint is
+	// public, so the payload needs no token; it is still stored per
+	// character like the other kinds.
 	SnapProfile = "profile"
 
 	// Character: live-state endpoints.
@@ -1455,13 +1454,13 @@ func (c *Client) request(ctx context.Context, method, accessToken, path string, 
 // sends ifNoneMatch (when not empty) as If-None-Match, and it
 // reports which of the wanted statuses came back.
 //
-// Idempotent reads (GET, HEAD) are retried twice on transport
-// failures and 5xx answers — a transient ESI wobble used to fail
-// the dataset until the next worker cycle. The wait honors ESI's
-// Retry-After header (capped), else backs off 500ms, 1s. Writes
-// are never retried (a repeated POST could send a mail twice),
-// and neither are 420/429: those wrap ErrErrorLimit, and the
-// worker backs off until the next cycle on those by contract.
+// Idempotent reads (GET, HEAD) are retried twice on transport failures
+// and 5xx answers, so a transient ESI failure does not cost the dataset
+// a whole worker cycle. The wait honors ESI's Retry-After header
+// (capped), else backs off 500ms, 1s. Writes are never retried (a
+// repeated POST could send a mail twice), and neither are 420/429:
+// those wrap ErrErrorLimit, and the worker backs off until the next
+// cycle on those by contract.
 func (c *Client) send(ctx context.Context, method, accessToken, path string, payload any, ifNoneMatch string, want ...int) (body []byte, header http.Header, status int, err error) {
 	var raw []byte
 	if payload != nil {

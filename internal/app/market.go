@@ -412,12 +412,10 @@ func marketBrowseGroupRow(row db.SdeMarketGroup) marketBrowseGroup {
 	}
 }
 
-// recentHistoryRows loads the most recent `limit` recorded trade
-// rows for a (region, type) in date-ascending order. The window is
-// a row count, not a calendar span: a sparse item's stored trades
-// are never filtered out by an arbitrary cutoff, which used to
-// leave the chart claiming it was loading for rows the worker had
-// already stored.
+// recentHistoryRows loads the most recent `limit` recorded trade rows
+// for a (region, type) in date-ascending order. The window is a row
+// count, not a calendar span: a sparse item's stored trades are never
+// filtered out by an arbitrary cutoff.
 func (app *Application) recentHistoryRows(ctx context.Context, regionID, typeID int64, limit int) []db.MarketHistory {
 	rows, err := app.queries.ListMarketHistory(ctx, db.ListMarketHistoryParams{
 		RegionID: regionID, TypeID: typeID, RowLimit: int64(limit),

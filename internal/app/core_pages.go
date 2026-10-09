@@ -202,12 +202,10 @@ func sectionForPage(page string) string {
 	return ""
 }
 
-// Parsed template sets, one per page file. The templates are
-// embedded in the binary and cannot change while it runs, so each
-// set is parsed once, on first use, and shared by every request
-// after that (a parsed set is safe to execute from many requests
-// at once). They used to be parsed on every render: base.html plus
-// the page, each request, for an identical result.
+// Parsed template sets, one per page file. The templates are embedded
+// in the binary and cannot change while it runs, so each set is parsed
+// once, on first use, and shared by every request after that (a parsed
+// set is safe to execute from many requests at once).
 var (
 	pageTemplates     sync.Map // page file -> *template.Template: base layout + partials + page
 	fragmentTemplates sync.Map // page file -> *template.Template: partials + page (live-region fragments)

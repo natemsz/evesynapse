@@ -20,9 +20,6 @@ import (
 // granted. What the worker is doing and how fresh anyone's data is
 // belongs to the Sync page, and each character here links there.
 //
-// It used to print every account, every character with its full scope
-// list, and every stored dataset of every character: three tables that
-// grew with the site until the page was too long to load or read.
 // ---------------------------------------------------------------------------
 
 // adminNewest is how many of the newest accounts are listed.

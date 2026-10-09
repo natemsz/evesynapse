@@ -188,10 +188,9 @@ type characterView struct {
 	LastCloneJump string
 	JumpClones    []jumpCloneView
 
-	// Identity (profile snapshot): the name/birthday/security/
-	// corporation block the old home sheet fetched live. Since
-	// It comes from the worker-warmed profile snapshot,
-	// so this page — like every other — renders cache-only.
+	// Identity: name, birthday, security and corporation, from the
+	// worker-warmed profile snapshot, so this page — like every other
+	// — renders cache-only.
 	IdentityKnown  bool
 	PortraitURL    string
 	CorpID         int64
@@ -436,12 +435,10 @@ func (app *Application) fillCharacterImplantsAndClones(ctx context.Context, ch d
 
 // fillCharacterIdentity: birthday, security status and corporation.
 func (app *Application) fillCharacterIdentity(ctx context.Context, ch db.Character, view *characterView) {
-	// Identity: the profile snapshot the worker now warms (Phase
-	// 1B) — name/birthday/security/corporation. This is the block
-	// the old home sheet fetched live at render; it is a plain
-	// snapshot read here like everything else. The corporation
-	// name resolves from the cached corp record (warmed by the
-	// worker), falling back to the recorded corp id.
+	// Identity: name, birthday, security and corporation, a plain read
+	// of the worker-warmed profile snapshot. The corporation name
+	// resolves from the cached corp record (warmed by the worker),
+	// falling back to the recorded corp id.
 	var profile esi.Character
 	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapProfile, &profile) {
 		view.IdentityKnown = true

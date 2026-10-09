@@ -1,15 +1,119 @@
 {{define "title"}}Sync{{end}}
 {{define "content"}}
 <h1><span class="gt">Sync</span></h1>
-<p>Background import status: snapshots and name caches are warmed by the worker so pages load instantly. This page refreshes itself every few seconds.</p>
+<p>What the background worker is doing and how fresh the stored data is. Accounts and who they belong to are on <a href="/admin/">Admin</a>. This page refreshes itself every few seconds.</p>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{if .Sync}}
-<p><small>Worker: {{.Sync.WorkerLine}}{{if .Sync.Warming}} — warming in progress…{{end}}</small></p>
+<section class="card spanall">
+<h2>Worker</h2>
+<p>{{.Sync.WorkerLine}}{{if .Sync.Warming}} — a cycle is running now…{{end}}</p>
 {{with .Sync.Timing}}
 {{if .Behind}}<p class="err">{{.Behind}}</p>{{end}}
-<p><small>Last cycle: {{.Last}}{{if .Phases}}<br>Where the time went: {{range $i, $p := .Phases}}{{if $i}}, {{end}}{{$p}}{{end}}{{end}}{{if .Budgets}}<br>ESI budgets, tightest first: {{range $i, $b := .Budgets}}{{if $i}}, {{end}}{{$b}}{{end}}{{end}}{{if .Lately}}<br>{{.Lately}}{{end}}</small></p>
+<div class="stat-grid">
+  <div>
+    <h3>Last cycle</h3>
+    <table class="stat-table">
+      <tbody>
+      {{range .LastRows}}<tr><td>{{.Label}}</td><td>{{.Value}}</td></tr>
+      {{end}}</tbody>
+    </table>
+  </div>
+  {{if .HourRows}}<div>
+    <h3>{{.HourTitle}}</h3>
+    <table class="stat-table">
+      <tbody>
+      {{range .HourRows}}<tr><td>{{.Label}}</td><td>{{.Value}}</td></tr>
+      {{end}}</tbody>
+    </table>
+  </div>{{end}}
+  {{if .PhaseRows}}<div>
+    <h3>Where the time went</h3>
+    <table class="stat-table">
+      <tbody>
+      {{range .PhaseRows}}<tr><td>{{.Label}}</td><td>{{.Value}}</td></tr>
+      {{end}}</tbody>
+    </table>
+  </div>{{end}}
+  {{if .BudgetRows}}<div>
+    <h3>ESI rate limits, tightest first</h3>
+    <table class="stat-table">
+      <thead><tr><th>Group</th><th>Left</th><th>Limit</th></tr></thead>
+      <tbody>
+      {{range .BudgetRows}}<tr><td>{{.Group}}</td><td>{{.Left}}</td><td>{{if .Limit}}{{.Limit}}{{else}}—{{end}}</td></tr>
+      {{end}}</tbody>
+    </table>
+  </div>{{end}}
+</div>
+{{else}}
+<p><small>No cycle has finished yet.</small></p>
+{{end}}
+</section>
+
+<section class="card spanall">
+<h2>Character data</h2>
+<p><small>One character's stored data and how fresh it is. Type a name or a character id; any character on the site can be looked up.</small></p>
+<form method="get" action="/sync/" class="lookup-form">
+  <span class="searchwrap">
+    <input type="search" name="character" id="sync-character-q" value="{{.Sync.Lookup.Query}}" placeholder="Character name or id" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="sync-character-suggest" aria-autocomplete="list" aria-label="Find a character">
+    <ul class="suggest" id="sync-character-suggest" role="listbox" hidden></ul>
+  </span>
+  <button type="submit">Show</button>
+</form>
+{{if .Sync.Lookup.NotFound}}<p class="err">No character is called that, or has that id.</p>{{end}}
+{{if .Sync.Lookup.Matches}}
+<p>More than one character fits. Which one?</p>
+<ul class="lookup-matches">
+  {{range .Sync.Lookup.Matches}}<li><a href="/sync/?character={{.ID}}">{{.Name}}</a> <small>account {{.UserID}}</small></li>
+  {{end}}
+</ul>
+{{if .Sync.Lookup.More}}<p><small>There are more; type more of the name.</small></p>{{end}}
+{{end}}
+
+{{with .Sync.Character}}
+<h3>{{.Name}}</h3>
+<table class="stat-table">
+  <tbody>
+    <tr><td>Character id</td><td>{{.ID}}</td></tr>
+    <tr><td>Account</td><td><a href="/admin/?account={{.UserID}}">{{.UserID}}</a></td></tr>
+    <tr><td>Refreshed as</td><td>{{if .Parked}}not synced: {{.Parked}}{{else}}{{.Tier}}{{end}}</td></tr>
+    <tr><td>Datasets</td><td>{{.Fresh}} fresh, {{.Stale}} stale, {{.Missing}} missing</td></tr>
+  </tbody>
+</table>
+<p>Names resolved {{.NamesResolved}} of {{.NamesTotal}} ({{.NamesPercent}}%)</p>
+<div class="meter"><span data-w="{{.NamesPercent}}"></span></div>
+<div class="tw">
+<table>
+  <thead><tr><th>Data</th><th>State</th><th>Fetched at</th><th>Cached until</th></tr></thead>
+  <tbody>
+  {{range .Snapshots}}
+    <tr><td>{{.Kind}}</td><td>{{.State}}</td><td>{{.FetchedAt}}</td><td>{{.CachedUntil}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<form method="post" action="/sync/warm?character={{.ID}}" class="inline-form"><button class="btn" type="submit">Re-warm {{.Name}} now</button></form>
+{{end}}
+<form method="post" action="/sync/warm" class="inline-form"><button class="btn" type="submit">Re-warm all of my characters</button></form>
+</section>
+
+{{if .Sync.Global}}
+<section class="card spanall">
+<h2>Public data (no login needed)</h2>
+<p><small>Wars, incursions, faction warfare and server status are public ESI data; the worker keeps them warm in a shared store (Intel pages, Home status line).</small></p>
+<div class="tw">
+<table>
+  <thead><tr><th>Data</th><th>State</th><th>Fetched at</th><th>Cached until</th></tr></thead>
+  <tbody>
+  {{range .Sync.Global}}
+    <tr><td>{{.Kind}}</td><td>{{.State}}</td><td>{{.FetchedAt}}</td><td>{{.CachedUntil}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{if .Sync.WarDetails}}<p><small>War detail payloads stored: {{.Sync.WarDetails}}</small></p>{{end}}
+</section>
 {{end}}
 
 {{if .Sync.SDE}}
@@ -42,58 +146,8 @@
   </tbody>
 </table>
 </div>
-<p>
-  <form method="post" action="/sync/sde"><button class="btn" type="submit">Check for SDE update</button></form>
-</p>
+<form method="post" action="/sync/sde"><button class="btn" type="submit">Check for SDE update</button></form>
 </section>
-{{end}}
-
-<div class="grid">
-{{if .Sync.Global}}
-<section class="card spanall">
-<h2>Public data (no login needed)</h2>
-<p><small>Wars, incursions, faction warfare and server status are public ESI data; the worker keeps them warm in a shared store (Intel pages, Home status line).</small></p>
-<div class="tw">
-<table>
-  <thead><tr><th>Data</th><th>State</th><th>Fetched at</th><th>Cached until</th></tr></thead>
-  <tbody>
-  {{range .Sync.Global}}
-    <tr><td>{{.Kind}}</td><td>{{.State}}</td><td>{{.FetchedAt}}</td><td>{{.CachedUntil}}</td></tr>
-  {{end}}
-  </tbody>
-</table>
-</div>
-{{if .Sync.WarDetails}}<p><small>War detail payloads stored: {{.Sync.WarDetails}}</small></p>{{end}}
-</section>
-{{end}}
-
-{{if .Sync.Characters}}
-<p>
-  <form method="post" action="/sync/warm"><button class="btn" type="submit">Re-warm all characters</button></form>
-</p>
-{{range .Sync.Characters}}
-<section class="card spanall">
-<h2>{{.Name}}</h2>
-<div class="tw">
-<table>
-  <thead><tr><th>Data</th><th>State</th><th>Fetched at</th><th>Cached until</th></tr></thead>
-  <tbody>
-  {{range .Snapshots}}
-    <tr><td>{{.Kind}}</td><td>{{.State}}</td><td>{{.FetchedAt}}</td><td>{{.CachedUntil}}</td></tr>
-  {{end}}
-  </tbody>
-</table>
-</div>
-<p>Names resolved {{.NamesResolved}} of {{.NamesTotal}} ({{.NamesPercent}}%)</p>
-<div class="meter"><span data-w="{{.NamesPercent}}"></span></div>
-<p>
-  <form method="post" action="/sync/warm?character={{.ID}}"><button class="btn" type="submit">Re-warm now</button></form>
-</p>
-</section>
-{{end}}
-</div>
-{{else}}
-<p>No characters linked yet — log in with EVE SSO to start warming.</p>
 {{end}}
 {{end}}
 {{end}}

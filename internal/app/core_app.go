@@ -338,6 +338,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/admin", func(r chi.Router) {
 		r.Use(app.requireAdmin)
 		r.Get("/", app.handleAdmin)
+		// What the Sync and Admin search boxes suggest while typing.
+		r.Get("/suggest", app.handleCharacterSuggest)
 	})
 
 	r.Route("/corporations", func(r chi.Router) {

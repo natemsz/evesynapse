@@ -384,7 +384,20 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/servers/add", app.handleDiscordServerAdd)
 		r.Post("/servers/share", app.handleDiscordOpsShare)
 		r.Post("/servers/{guildID}/save", app.handleDiscordServerSave)
+		r.Post("/servers/{guildID}/rules/add", app.handleDiscordRuleAdd)
+		r.Post("/servers/{guildID}/rules/{ruleID}/remove", app.handleDiscordRuleRemove)
 		r.Post("/servers/{guildID}/remove", app.handleDiscordServerForget)
+	})
+
+	// Groups (groups.go): sets of characters the directors of a
+	// corporation or alliance keep by hand.
+	r.Route("/groups", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleGroups)
+		r.Post("/create", app.handleGroupCreate)
+		r.Post("/{groupID}/delete", app.handleGroupDelete)
+		r.Post("/{groupID}/members/add", app.handleGroupMemberAdd)
+		r.Post("/{groupID}/members/remove", app.handleGroupMemberRemove)
 	})
 
 	r.Route("/calendar", func(r chi.Router) {

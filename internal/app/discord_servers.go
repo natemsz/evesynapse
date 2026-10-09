@@ -178,8 +178,9 @@ type discordOwnerView struct {
 type discordServerView struct {
 	GuildID  string
 	Name     string
-	Roles    []discordChoice // for the linked role
-	Members  []discordChoice // for the member role
+	Rules    []discordRuleView  // who gets which role (discord_rules.go)
+	Who      []discordWhoChoice // what a new rule can be about
+	Roles    []discordChoice    // the roles a new rule can give
 	Channels []discordChoice
 	// Unreachable: Discord would not list the server's roles and
 	// channels (the bot was removed from it, or Discord is down).
@@ -202,7 +203,7 @@ type discordShareView struct {
 }
 
 func discordRoleChoices(roles []discord.Role, current string) []discordChoice {
-	out := []discordChoice{{ID: "", Name: "No role", Selected: current == ""}}
+	var out []discordChoice
 	for _, role := range roles {
 		if role.Managed {
 			continue // a bot's or integration's own role: cannot be given
@@ -247,8 +248,9 @@ func (app *Application) handleDiscordServers(w http.ResponseWriter, r *http.Requ
 			if rerr != nil || cerr != nil {
 				sv.Unreachable = true
 			} else {
-				sv.Roles = discordRoleChoices(roles, guild.RoleLinked)
-				sv.Members = discordRoleChoices(roles, guild.RoleMember)
+				sv.Rules = app.discordRuleViews(ctx, guild, roles)
+				sv.Who = app.discordWhoChoices(ctx, owner)
+				sv.Roles = discordRoleChoices(roles, "")
 				sv.Channels = discordChannelChoices(channels, guild.OpsChannel)
 			}
 			ov.Servers = append(ov.Servers, sv)
@@ -351,9 +353,9 @@ func (app *Application) discordGuildFor(r *http.Request, userID int64) (db.Disco
 	return guild, true
 }
 
-// handleDiscordServerSave stores a server's settings. Each role and
-// channel has to be one Discord lists for that very server: an id from
-// another server, or a role that cannot be given, is refused.
+// handleDiscordServerSave stores where a server's new ops are posted.
+// The channel has to be one Discord lists for that very server. (Who
+// gets which role is the server's rules: discord_rules.go.)
 func (app *Application) handleDiscordServerSave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
@@ -366,42 +368,33 @@ func (app *Application) handleDiscordServerSave(w http.ResponseWriter, r *http.R
 		back("That server is not yours to change.")
 		return
 	}
-	roles, rerr := app.discord.GuildRoles(ctx, guild.GuildID)
 	channels, cerr := app.discord.GuildTextChannels(ctx, guild.GuildID)
-	if rerr != nil || cerr != nil {
-		logging.Warnf("discord: read server %s: %v %v", guild.GuildID, rerr, cerr)
-		back("Discord would not list that server's roles and channels. Is the bot still in it?")
+	if cerr != nil {
+		logging.Warnf("discord: read server %s: %v", guild.GuildID, cerr)
+		back("Discord would not list that server's channels. Is the bot still in it?")
 		return
-	}
-	giveable := map[string]bool{"": true}
-	for _, role := range roles {
-		if !role.Managed {
-			giveable[role.ID] = true
-		}
 	}
 	postable := map[string]bool{"": true}
 	for _, ch := range channels {
 		postable[ch.ID] = true
 	}
-	linked, member, channel := r.Form.Get("role_linked"), r.Form.Get("role_member"), r.Form.Get("ops_channel")
-	if !giveable[linked] || !giveable[member] || !postable[channel] {
-		back("One of those is not a role or channel of that server.")
+	channel := r.Form.Get("ops_channel")
+	if !postable[channel] {
+		back("That is not a channel of that server a message can be posted in.")
 		return
 	}
-	if err := app.queries.SetDiscordGuildSettings(ctx, db.SetDiscordGuildSettingsParams{
-		GuildID: guild.GuildID, RoleLinked: linked, RoleMember: member, OpsChannel: channel,
-	}); err != nil {
+	if err := app.queries.SetDiscordGuildOpsChannel(ctx, db.SetDiscordGuildOpsChannelParams{GuildID: guild.GuildID, OpsChannel: channel}); err != nil {
 		logging.Errorf("discord: save server %s: %v", guild.GuildID, err)
 		back("The settings could not be saved; check the server log.")
 		return
 	}
-	logging.Infof("discord: user %d set server %s: linked role %q, member role %q, ops channel %q", userID, guild.GuildID, linked, member, channel)
-	back("Settings saved for " + guild.Name + ". Roles follow within a few minutes.")
+	logging.Infof("discord: user %d set the ops channel of server %s to %q", userID, guild.GuildID, channel)
+	back("Ops channel saved for " + guild.Name + ".")
 }
 
 // handleDiscordServerForget stops the bot acting in a server. The
 // roles it gave there are taken back first, by the worker; until that
-// is done the server is kept, with its settings cleared, so the bot
+// is done the server is kept, with its rules cleared, so the bot
 // still knows what to take back. Then the record is removed and the
 // bot leaves the server.
 func (app *Application) handleDiscordServerForget(w http.ResponseWriter, r *http.Request) {
@@ -416,7 +409,11 @@ func (app *Application) handleDiscordServerForget(w http.ResponseWriter, r *http
 		back("That server is not yours to change.")
 		return
 	}
-	if err := app.queries.SetDiscordGuildSettings(ctx, db.SetDiscordGuildSettingsParams{GuildID: guild.GuildID}); err != nil {
+	err := app.queries.DeleteDiscordRoleRulesForGuild(ctx, guild.GuildID)
+	if err == nil {
+		err = app.queries.SetDiscordGuildOpsChannel(ctx, db.SetDiscordGuildOpsChannelParams{GuildID: guild.GuildID})
+	}
+	if err != nil {
 		logging.Errorf("discord: clear server %s: %v", guild.GuildID, err)
 		back("The server could not be changed; check the server log.")
 		return

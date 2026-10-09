@@ -93,6 +93,9 @@ var pgDiscordServersSchema string
 //go:embed schema_pg/018_discord_dm_status.sql
 var pgDiscordDMStatusSchema string
 
+//go:embed schema_pg/019_discord_role_rules.sql
+var pgDiscordRoleRulesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -140,6 +143,7 @@ func schemaSteps() []schemaStep {
 		{16, "discord_links", pgDiscordLinksSchema, ""},
 		{17, "discord_servers", pgDiscordServersSchema, ""},
 		{18, "discord_dm_status", pgDiscordDMStatusSchema, ""},
+		{19, "discord_role_rules", pgDiscordRoleRulesSchema, ""},
 	}
 }
 

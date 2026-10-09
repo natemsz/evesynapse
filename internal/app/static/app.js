@@ -2349,6 +2349,11 @@
 
     function summarize() {
       var on = boxes.filter(function (box) { return box.checked; }).length;
+      // A list to pick additions from says how many are picked.
+      if (root.getAttribute("data-summary") === "add") {
+        input.placeholder = on ? on + " picked: press Add" : "Add characters…";
+        return;
+      }
       var total = options.length;
       var text = "On for " + on + " of " + total + (total === 1 ? " character" : " characters");
       if (boxes.length < total) {

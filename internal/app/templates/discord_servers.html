@@ -20,13 +20,32 @@
 {{if .Unreachable}}
 <p class="err">Discord would not list this server's roles and channels. If the bot was removed from the server, add it again below, or remove the server here.</p>
 {{else}}
-<form method="post" action="/discord/servers/{{.GuildID}}/save" class="op-form discord-server-form">
-  <p><label>Role for everyone who has connected EveSynapse <select name="role_linked">{{range .Roles}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label></p>
-  <p><label>Role for members of this {{.MemberWord}} <select name="role_member">{{range .Members}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label></p>
-  <p><label>Post new ops in <select name="ops_channel">{{range .Channels}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label></p>
-  <p><button type="submit">Save</button></p>
+<h4>Roles</h4>
+{{if .Rules}}
+<div class="tw">
+<table>
+  <thead><tr><th>Who</th><th>Gets the role</th><th></th></tr></thead>
+  <tbody>
+  {{$guild := .GuildID}}
+  {{range .Rules}}
+    <tr><td>{{.Who}}</td><td>{{.Role}}</td><td><form method="post" action="/discord/servers/{{$guild}}/rules/{{.ID}}/remove" class="inline-form"><button type="submit" class="btn">Remove</button></form></td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p><small>No rules yet: the bot gives no roles here.</small></p>
+{{end}}
+<form method="post" action="/discord/servers/{{.GuildID}}/rules/add" class="op-form discord-server-form">
+  <p><label>Give <select name="who">{{range .Who}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</select></label>
+     <label>the role <select name="role">{{range .Roles}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
+     <button type="submit">Add rule</button></p>
 </form>
-<p><small>The bot can only give roles that sit below its own role in the server's role list. Which channels a role can see is set in Discord, on each channel. Roles are given within a few minutes, and taken away when a member's character leaves or their EveSynapse account or Discord connection goes.</small></p>
+<p><small>Add as many rules as you have roles to give; a member gets every role they qualify for and loses each one when they stop qualifying. The bot can only give roles that sit below its own in the server's role list. Groups are kept on the <a href="/groups/">Groups</a> page. Which channels a role can see is set in Discord, on each channel.</small></p>
+<h4>Ops</h4>
+<form method="post" action="/discord/servers/{{.GuildID}}/save" class="op-form discord-server-form">
+  <p><label>Post new ops in <select name="ops_channel">{{range .Channels}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label> <button type="submit">Save</button></p>
+</form>
 {{end}}
 <form method="post" action="/discord/servers/{{.GuildID}}/remove" class="inline-form"><button type="submit" class="btn btn-danger">Remove this server</button></form>
 </section>
@@ -55,6 +74,6 @@
 {{end}}
 
 {{if not .CanInstall}}<p><small>The Discord bot is not set up on this site.</small></p>{{end}}
-<p><a href="/notifications/settings">Back to notification settings</a></p>
+<p><a href="/groups/">Groups</a> · <a href="/notifications/settings">Back to notification settings</a></p>
 {{end}}
 {{end}}

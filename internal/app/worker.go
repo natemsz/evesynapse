@@ -262,7 +262,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	}
 	clock.mark("ordering", time.Now())
 
-	c := &cycleState{app: app, allowance: &fetchBudget{left: app.fetchesPerCycle()}}
+	c := &cycleState{app: app, allowance: &fetchBudget{left: app.fetchesPerCycle()}, halt: newHalt()}
 
 	// The market guide (v0.3.04): one public call mirrors into
 	// the stored table on ESI's cache window, ahead of the
@@ -276,24 +276,12 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		c.limited = true
 	}
 
-	for i, ch := range eligible {
-		if ctx.Err() != nil {
-			app.updateWorkerStatus(func(s *workerStatus) { s.Warming = false })
-			return
-		}
-		if c.allowance.exhausted() {
-			// The cycle's work budget is spent; the rest keep
-			// their place in the due order for the next cycle
-			// instead of one giant pass over every character.
-			c.deferred = len(eligible) - i
-			break
-		}
-		if !c.refreshCharacter(ctx, ch) {
-			continue // its token is unusable: on to the next one
-		}
-		if c.limited {
-			break
-		}
+	// The character pass, several characters at a time
+	// (worker_lanes.go).
+	c.refreshCharacters(ctx, eligible)
+	if ctx.Err() != nil {
+		app.updateWorkerStatus(func(s *workerStatus) { s.Warming = false })
+		return
 	}
 	clock.mark("characters", time.Now())
 
@@ -364,8 +352,12 @@ type cycleState struct {
 	deferred      int // characters left for the next cycle
 
 	// limited is set once ESI says to back off (its error limit).
-	// Nothing more is fetched in this cycle after that.
+	// Nothing more is fetched in this cycle after that. halt is the
+	// same thing said to every character being refreshed at that
+	// moment, each of which has a cycleState of its own
+	// (worker_lanes.go).
 	limited bool
+	halt    *atomic.Bool
 	// allowance is the cycle's shared fetch budget.
 	allowance *fetchBudget
 	// current is the character being refreshed (0 between characters)
@@ -382,7 +374,7 @@ type cycleState struct {
 // back-off came from that is logged (what names the pass in the log
 // line) and the cycle stops fetching.
 func (c *cycleState) pass(what string, run func() (stored int, limited bool)) {
-	if c.limited || c.characterHeld {
+	if c.stopped() || c.characterHeld {
 		return
 	}
 	stored, limited := run()
@@ -409,6 +401,15 @@ func (c *cycleState) noteLimit(what string) {
 	}
 	logging.Warnf("worker: ESI error limit hit %s; backing off until next cycle", what)
 	c.limited = true
+	if c.halt != nil {
+		c.halt.Store(true)
+	}
+}
+
+// stopped reports whether ESI has said to back off, to this pass or
+// to another character's running beside it.
+func (c *cycleState) stopped() bool {
+	return c.limited || (c.halt != nil && c.halt.Load())
 }
 
 // characterPass is pass for one character's further datasets. Those
@@ -534,7 +535,7 @@ func (c *cycleState) refreshCoreSnapshots(ctx context.Context, ch db.Character, 
 			continue
 		}
 
-		if !c.allowance.take() {
+		if c.stopped() || !c.allowance.take() {
 			break
 		}
 		if err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
@@ -699,8 +700,9 @@ var coreSnapshotKinds = []string{
 // changes it: fetchesPerCycle). It is sized to the worker, not to
 // ESI: ESI budgets each character separately and was nowhere near a
 // limit at 120, while the worker, fetching one at a time at about 0.3
-// seconds each, fits about 180 in its minute with the other passes. With dozens of linked characters the
-// stalest work goes first (due order) and the rest waits for the
+// seconds each, fits about 180 in its minute with the other passes. With more than
+// one lane the default is larger (fetchesPerCycle). With dozens of
+// linked characters the stalest work goes first (due order) and the rest waits for the
 // next one-minute cycle instead of one giant pass; the killmail /
 // corp / economy sub-passes keep their own per-character caps.
 const maxFetchesPerCycle = 180

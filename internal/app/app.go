@@ -79,10 +79,13 @@ type Application struct {
 	workerCtx  context.Context // the worker's context, captured in New for background jobs (SDE import)
 	startedAt  time.Time       // when New built this application; /healthz measures a worker that never ran from here
 
-	// tokenMu serializes access-token refreshes: CCP rotates refresh
-	// tokens on every refresh, so two concurrent refreshes on the same
-	// stored token could invalidate each other.
-	tokenMu sync.Mutex
+	// tokenLocks serializes access-token refreshes one character at a
+	// time: CCP rotates refresh tokens on every refresh, so two
+	// concurrent refreshes on the same stored token could invalidate
+	// each other. Different characters' tokens have nothing to do with
+	// each other, and one character's slow refresh does not hold up
+	// anyone else's.
+	tokenLocks keyedLocks
 
 	// tokens seals and opens the EVE SSO tokens stored in the
 	// characters table (tokencrypt.go). Without a

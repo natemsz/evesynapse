@@ -42,6 +42,11 @@ type Config struct {
 	// (WORKER_FETCHES_PER_CYCLE); 0 means the default.
 	workerFetches int
 
+	// workerLanes is how many characters the worker refreshes at once
+	// (WORKER_LANES, worker_lanes.go). 0, which only a Config not read
+	// from the environment has, means one.
+	workerLanes int
+
 	// Discord (discord_link.go). The client id and secret run the
 	// "Connect Discord" sign-in; the bot token lets the bot message
 	// and give roles in the servers it is added to. With none set
@@ -165,6 +170,7 @@ func LoadConfig() (Config, error) {
 		notifyPoll:          notifyPoll,
 		workerTiersOff:      strings.EqualFold(strings.TrimSpace(os.Getenv("WORKER_TIERS")), "off"),
 		workerFetches:       parseWorkerFetches(os.Getenv("WORKER_FETCHES_PER_CYCLE")),
+		workerLanes:         parseWorkerLanes(os.Getenv("WORKER_LANES")),
 		discordClientID:     os.Getenv("DISCORD_CLIENT_ID"),
 		discordClientSecret: os.Getenv("DISCORD_CLIENT_SECRET"),
 		discordBotToken:     os.Getenv("DISCORD_BOT_TOKEN"),

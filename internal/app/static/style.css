@@ -3380,6 +3380,8 @@ input[type="datetime-local"]:focus, .op-form select:focus, .op-signup select:foc
   box-shadow: 0 0 8px rgba(255, 106, 26, 0.35);
 }
 html[data-theme="light"] input[type="datetime-local"], html[data-theme="light"] .op-form select, html[data-theme="light"] .op-signup select, html[data-theme="light"] .notify-minutes select, html[data-theme="light"] .op-form textarea { border-color: #d8cdb8; }
+.discord-exempt { display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem; margin: 0.3rem 0 0.6rem; }
+.discord-exempt label { display: inline-flex; align-items: center; gap: 0.35rem; }
 .discord-server-form label { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
 .discord-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin: 0 0 0.4rem; }
 .notify-minutes { margin-left: 0.6rem; white-space: nowrap; color: var(--muted); }

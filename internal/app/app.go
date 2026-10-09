@@ -385,6 +385,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/servers/share", app.handleDiscordOpsShare)
 		r.Post("/servers/{guildID}/save", app.handleDiscordServerSave)
 		r.Post("/servers/{guildID}/rules/add", app.handleDiscordRuleAdd)
+		r.Post("/servers/{guildID}/removals", app.handleDiscordKickSave)
+		r.Post("/servers/{guildID}/removals/preview", app.handleDiscordKickPreview)
 		r.Post("/servers/{guildID}/rules/{ruleID}/remove", app.handleDiscordRuleRemove)
 		r.Post("/servers/{guildID}/remove", app.handleDiscordServerForget)
 	})

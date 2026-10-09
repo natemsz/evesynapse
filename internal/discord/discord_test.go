@@ -204,10 +204,10 @@ func TestInstall(t *testing.T) {
 	if q.Get("scope") != "bot identify guilds.join" || q.Get("state") != "state-2" {
 		t.Fatalf("install address %s", u)
 	}
-	// Manage Roles, View Channels, Send Messages, Create Invite:
-	// 1<<28 | 1<<10 | 1<<11 | 1<<0.
-	if q.Get("permissions") != "268438529" {
-		t.Fatalf("the bot asks for permissions %s, want only roles, sending and adding members (268438529)", q.Get("permissions"))
+	// Manage Roles, View Channels, Send Messages, Create Invite, Kick
+	// Members: 1<<28 | 1<<10 | 1<<11 | 1<<0 | 1<<1.
+	if q.Get("permissions") != "268438531" {
+		t.Fatalf("the bot asks for permissions %s, want only roles, sending, adding and removing members (268438531)", q.Get("permissions"))
 	}
 	who, where, err := c.IdentifyInstall(context.Background(), "code")
 	if err != nil || who.ID != user || where.ID != guild || where.Name != "Home" {
@@ -282,6 +282,41 @@ func TestAddMemberAndRefresh(t *testing.T) {
 	f.answers["POST /api/oauth2/token"] = [2]string{"400", `{"message":"invalid_grant"}`}
 	if _, err = c.Refresh(context.Background(), "revoked"); !IsStatus(err, 400) {
 		t.Fatalf("a revoked refresh token: %v", err)
+	}
+}
+
+// TestMembersOwnerAndKick: the member list is read page by page to its
+// end, a list cut short is reported as incomplete, and a removal is a
+// DELETE of that member with the reason for the audit log.
+func TestMembersOwnerAndKick(t *testing.T) {
+	member := func(id string) string {
+		return `{"user":{"id":"` + id + `","username":"u` + id[len(id)-2:] + `"},"roles":["` + role + `"],"joined_at":"2026-01-02T03:04:05.000000+00:00"}`
+	}
+	f := &fake{answers: map[string][2]string{
+		"GET /api/guilds/" + guild + "/members":            {"200", `[` + member(user) + `,{"user":{"id":"777777777777777777","username":"helper","bot":true},"roles":[],"joined_at":"2026-01-02T03:04:05+00:00"}]`},
+		"GET /api/guilds/" + guild:                         {"200", `{"id":"` + guild + `","owner_id":"` + user + `"}`},
+		"DELETE /api/guilds/" + guild + "/members/" + user: {"204", ``},
+	}}
+	c := newClient(f)
+	members, complete, err := c.ListMembers(context.Background(), guild, 5000)
+	if err != nil || !complete || len(members) != 2 || members[0].User.ID != user || !members[1].User.Bot || members[0].JoinedAt.Year() != 2026 {
+		t.Fatalf("members %+v, complete=%v, %v", members, complete, err)
+	}
+	owner, err := c.GuildOwner(context.Background(), guild)
+	if err != nil || owner != user {
+		t.Fatalf("owner %q, %v", owner, err)
+	}
+	if err := c.Kick(context.Background(), guild, user, "left the corporation"); err != nil {
+		t.Fatal(err)
+	}
+	last := f.calls[len(f.calls)-1]
+	if last.Method != "DELETE" || last.Auth != "Bot bot-token" || last.Path != "/api/guilds/"+guild+"/members/"+user {
+		t.Fatalf("the removal: %+v", last)
+	}
+	// Not allowed to read the list (no Server Members intent).
+	f.answers["GET /api/guilds/"+guild+"/members"] = [2]string{"403", `{"message":"Missing Access"}`}
+	if _, _, err = c.ListMembers(context.Background(), guild, 5000); !IsStatus(err, 403) {
+		t.Fatalf("a refused member list: %v", err)
 	}
 }
 

@@ -119,6 +119,28 @@ func (q *Queries) DeleteOrgGroup(ctx context.Context, id int64) error {
 	return err
 }
 
+const getDiscordLinkByDiscordID = `-- name: GetDiscordLinkByDiscordID :one
+SELECT user_id, discord_id, username, linked_at, dm_notifications, dm_problem, dm_problem_at, access_token, refresh_token, token_expiry FROM discord_links WHERE discord_id = $1
+`
+
+func (q *Queries) GetDiscordLinkByDiscordID(ctx context.Context, discordID string) (DiscordLink, error) {
+	row := q.db.QueryRowContext(ctx, getDiscordLinkByDiscordID, discordID)
+	var i DiscordLink
+	err := row.Scan(
+		&i.UserID,
+		&i.DiscordID,
+		&i.Username,
+		&i.LinkedAt,
+		&i.DmNotifications,
+		&i.DmProblem,
+		&i.DmProblemAt,
+		&i.AccessToken,
+		&i.RefreshToken,
+		&i.TokenExpiry,
+	)
+	return i, err
+}
+
 const getOrgGroup = `-- name: GetOrgGroup :one
 SELECT id, owner_kind, owner_id, name, description, created_by, created_at FROM org_groups WHERE id = $1
 `
@@ -506,6 +528,37 @@ type SetDiscordGuildAutoJoinParams struct {
 
 func (q *Queries) SetDiscordGuildAutoJoin(ctx context.Context, arg SetDiscordGuildAutoJoinParams) error {
 	_, err := q.db.ExecContext(ctx, setDiscordGuildAutoJoin, arg.AutoJoin, arg.GuildID)
+	return err
+}
+
+const setDiscordGuildKick = `-- name: SetDiscordGuildKick :exec
+UPDATE discord_guilds
+SET kick_enabled = $1, kick_exempt_roles = $2
+WHERE guild_id = $3
+`
+
+type SetDiscordGuildKickParams struct {
+	KickEnabled     bool   `json:"kick_enabled"`
+	KickExemptRoles string `json:"kick_exempt_roles"`
+	GuildID         string `json:"guild_id"`
+}
+
+func (q *Queries) SetDiscordGuildKick(ctx context.Context, arg SetDiscordGuildKickParams) error {
+	_, err := q.db.ExecContext(ctx, setDiscordGuildKick, arg.KickEnabled, arg.KickExemptRoles, arg.GuildID)
+	return err
+}
+
+const setDiscordGuildKickChecked = `-- name: SetDiscordGuildKickChecked :exec
+UPDATE discord_guilds SET kick_checked_at = $1 WHERE guild_id = $2
+`
+
+type SetDiscordGuildKickCheckedParams struct {
+	KickCheckedAt sql.NullTime `json:"kick_checked_at"`
+	GuildID       string       `json:"guild_id"`
+}
+
+func (q *Queries) SetDiscordGuildKickChecked(ctx context.Context, arg SetDiscordGuildKickCheckedParams) error {
+	_, err := q.db.ExecContext(ctx, setDiscordGuildKickChecked, arg.KickCheckedAt, arg.GuildID)
 	return err
 }
 

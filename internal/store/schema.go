@@ -99,6 +99,9 @@ var pgDiscordRoleRulesSchema string
 //go:embed schema_pg/020_discord_auto_join.sql
 var pgDiscordAutoJoinSchema string
 
+//go:embed schema_pg/021_discord_kick.sql
+var pgDiscordKickSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -148,6 +151,7 @@ func schemaSteps() []schemaStep {
 		{18, "discord_dm_status", pgDiscordDMStatusSchema, ""},
 		{19, "discord_role_rules", pgDiscordRoleRulesSchema, ""},
 		{20, "discord_auto_join", pgDiscordAutoJoinSchema, ""},
+		{21, "discord_kick", pgDiscordKickSchema, ""},
 	}
 }
 

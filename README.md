@@ -451,8 +451,10 @@ or alliance the server belongs to.
 3. Under **OAuth2**, press **Reset Secret** and copy the **Client
    Secret**, and add this redirect, with your site's address:
    `https://your.site/discord/callback`
-4. Under **Bot**, press **Reset Token** and copy the token. No
-   privileged intents are needed; leave them off. Leave **Public Bot**
+4. Under **Bot**, press **Reset Token** and copy the token. Switch on
+   the **Server Members Intent** if any server is to use removals
+   (below): it is what lets the bot read a server's member list. No
+   other privileged intent is needed. Leave **Public Bot**
    on if other corporations and alliances are to add it to their
    servers.
 5. Add to the server's `.env` (`/opt/evesynapse/.env`) and restart
@@ -478,7 +480,8 @@ alliance's. That character's link to EVE has to be working.
    corporation's or alliance's Discord server**, then **Add the bot to
    a server**.
 2. Discord asks which server and shows what the bot may do there: give
-   roles, send messages, and add members. Discord only lets someone who
+   roles, send messages, add members, and kick members (used only if
+   removals are switched on for that server). Discord only lets someone who
    can manage that server add a bot to it.
 3. In that Discord server's **Roles** list, drag the bot's own role
    **above** the roles it is to give. Discord lets a bot manage only
@@ -508,6 +511,19 @@ Each person agrees to it on Discord when they connect ("join servers
 for you"). Untick the box on the server's settings to switch it off. A
 bot that was added before this existed lacks the permission: add it to
 the server again from the site (its settings are kept).
+
+**Removals** (off unless a server's directors switch it on). With it
+on, the bot removes from the server everyone who is owed no role by
+the server's rules: someone whose character left, whose account or
+Discord connection went, and also **anyone who never connected
+EveSynapse**. People are kicked, not banned, a few at a time, and can
+come back with an invite. Never removed: bots, the server's owner,
+anyone in their first 24 hours in the server, and holders of roles the
+directors tick as protected (guests, diplomats). A server with no
+rules removes nobody, and removals cannot be switched on for one.
+Press **Show who would be removed** first: it lists them and changes
+nothing. Each removal is written to EveSynapse's log and to the
+server's own audit log.
 
 **Groups** (`/groups/` on the site) are lists of characters that a
 corporation's or alliance's directors keep by hand: a special interest

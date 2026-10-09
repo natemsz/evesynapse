@@ -35,10 +35,10 @@ type workerTiming struct {
 	Took       time.Duration
 	Characters int // characters eligible for syncing
 	// How many of them are in each tier (worker_tiers.go).
-	Active, Recent, Dormant int
-	Fetches                 int // of the character pass's allowance
-	Budget                  int // that allowance
-	Deferred                int // characters put off to the next cycle
+	Active, Watched, Recent, Dormant int
+	Fetches                          int // of the character pass's allowance
+	Budget                           int // that allowance
+	Deferred                         int // characters put off to the next cycle
 	// Overdue is how far past its cache window the stalest data of
 	// an active account was when the cycle began: what somebody with
 	// the site open was looking at. NeverFetched: some active
@@ -46,10 +46,11 @@ type workerTiming struct {
 	Overdue      time.Duration
 	NeverFetched bool
 	// RateHeld is how many characters were left alone because ESI
-	// rate-limited them, and Headroom the tightest rate-limit budget
-	// ESI reported during the cycle (nil when it reported none).
+	// rate-limited them, and Budgets the rate-limit budgets ESI
+	// reported during the cycle, one per group of routes, the tightest
+	// first (empty when it reported none).
 	RateHeld int
-	Headroom *esi.RateHeadroom
+	Budgets  []esi.RateHeadroom
 	Phases   []phaseTiming
 }
 
@@ -110,9 +111,10 @@ func shortDuration(d time.Duration) string {
 
 // workerTimingView is the Sync page's account of the worker's pace.
 type workerTimingView struct {
-	Last   string   // the last cycle, in a line
-	Phases []string // where its time went, longest first
-	Lately string   // the recent cycles, in a line; "" with fewer than two
+	Last    string   // the last cycle, in a line
+	Phases  []string // where its time went, longest first
+	Budgets []string // ESI's rate-limit budgets seen, the tightest first
+	Lately  string   // the recent cycles, in a line; "" with fewer than two
 	// Behind: the worker is not keeping up, and why, in words.
 	Behind string
 }
@@ -127,7 +129,7 @@ func workerTimingViewFor(s workerStatus) *workerTimingView {
 	v := &workerTimingView{}
 	parts := []string{
 		"took " + shortDuration(t.Took),
-		plural(t.Characters, "character") + fmt.Sprintf(" (%d active, %d recent, %d dormant)", t.Active, t.Recent, t.Dormant),
+		plural(t.Characters, "character") + fmt.Sprintf(" (%d active, %d watched, %d recent, %d dormant)", t.Active, t.Watched, t.Recent, t.Dormant),
 		fmt.Sprintf("%d of %d fetches", t.Fetches, t.Budget),
 	}
 	if t.Deferred > 0 {
@@ -136,16 +138,6 @@ func workerTimingViewFor(s workerStatus) *workerTimingView {
 	if t.RateHeld > 0 {
 		parts = append(parts, plural(t.RateHeld, "character")+" left alone at ESI's request (rate limit)")
 	}
-	if h := t.Headroom; h != nil {
-		left := fmt.Sprintf("tightest ESI budget: %d left", h.Remaining)
-		if h.Limit != "" {
-			left += " of " + h.Limit
-		}
-		if h.Group != "" {
-			left += " (" + h.Group + ")"
-		}
-		parts = append(parts, left)
-	}
 	switch {
 	case t.NeverFetched:
 		parts = append(parts, "some data not fetched yet")
@@ -153,6 +145,19 @@ func workerTimingViewFor(s workerStatus) *workerTimingView {
 		parts = append(parts, "stalest active data "+shortDuration(t.Overdue)+" past its refresh time")
 	}
 	v.Last = strings.Join(parts, " · ")
+
+	// ESI's budgets, the tightest first: which groups of routes are
+	// nearest their limit, which is where to ease off next.
+	for i, b := range t.Budgets {
+		if i == 8 {
+			break
+		}
+		line := fmt.Sprintf("%s %d left", b.Group, b.Remaining)
+		if b.Limit != "" {
+			line += " of " + b.Limit
+		}
+		v.Budgets = append(v.Budgets, line)
+	}
 
 	phases := append([]phaseTiming(nil), t.Phases...)
 	for i := 1; i < len(phases); i++ {

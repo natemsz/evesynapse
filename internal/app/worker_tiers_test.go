@@ -21,6 +21,11 @@ func TestTierHolds(t *testing.T) {
 	if tierFurtherHold(tierActive) != 0 {
 		t.Error("an active account's further datasets are held back")
 	}
+	// An open account's other characters: position kept current enough
+	// for the fleet overview, the rest eased off.
+	if tierHold(tierWatched, esi.SnapLocation) != 2*time.Minute || tierHold(tierWatched, esi.SnapWallet) != 5*time.Minute || tierFurtherHold(tierWatched) != 5*time.Minute {
+		t.Error("the watched tier's holds are not 2 minutes for position and 5 for the rest")
+	}
 	// Position is held longer than the rest, and dormant longer than recent.
 	if !(tierHold(tierRecent, esi.SnapLocation) > tierHold(tierRecent, esi.SnapWallet)) ||
 		!(tierHold(tierDormant, esi.SnapLocation) > tierHold(tierDormant, esi.SnapWallet)) ||
@@ -178,6 +183,34 @@ func TestWorkerWarmsByActivity(t *testing.T) {
 	if app.tierOf(ch, time.Now()) != tierActive {
 		t.Fatal("an account that just made a request is not active")
 	}
+	// Its other character is watched, not active: only the one being
+	// looked at is kept to the second. Opening a page about the alt
+	// makes that one active too. And naming a character in an address
+	// does nothing for an account that does not have the site open.
+	alt := seedCharacter(t, q, user.ID, fixtureCharB, "Fixture Alt")
+	if got := app.tierOf(alt, time.Now()); got != tierWatched {
+		t.Fatalf("the open account's other character is %v, want watched", got)
+	}
+	if code, _ := getPage(t, app, cookie, "/characters/?character=90000002"); code != http.StatusOK {
+		t.Fatalf("GET with ?character=: %d", code)
+	}
+	if got := app.tierOf(alt, time.Now()); got != tierActive {
+		t.Fatalf("a character a page was opened for is %v, want active", got)
+	}
+	stranger, serr := q.CreateUser(ctx)
+	if serr != nil {
+		t.Fatal(serr)
+	}
+	theirs := seedCharacter(t, q, stranger.ID, 90000003, "Fixture Stranger")
+	getPage(t, app, cookie, "/characters/?character=90000003")
+	if got := app.tierOf(theirs, time.Now()); got != tierDormant {
+		t.Fatalf("another account's character, named in somebody else's address, is %v, want dormant", got)
+	}
+	if _, err := conn.ExecContext(ctx, `DELETE FROM characters WHERE character_id IN (90000002, 90000003)`); err != nil {
+		t.Fatal(err)
+	}
+	app.takePriorityCharacters()
+	app.markCharacterPriority(ch.CharacterID)
 	if ids := app.takePriorityCharacters(); len(ids) != 1 || ids[0] != ch.CharacterID {
 		t.Fatalf("a returning account's characters were not put first: %v", ids)
 	}

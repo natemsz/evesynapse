@@ -1,9 +1,12 @@
 package app
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	"evesynapse/internal/esi"
 )
 
 func TestShortDuration(t *testing.T) {
@@ -40,11 +43,11 @@ func TestWorkerTimingView(t *testing.T) {
 	}
 	at := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
 	easy := workerTiming{
-		At: at, Took: 3200 * time.Millisecond, Characters: 14, Active: 3, Recent: 5, Dormant: 6, Fetches: 37, Budget: 120, Overdue: 2 * time.Minute,
+		At: at, Took: 3200 * time.Millisecond, Characters: 14, Active: 1, Watched: 2, Recent: 5, Dormant: 6, Fetches: 37, Budget: 120, Overdue: 2 * time.Minute,
 		Phases: []phaseTiming{{"ordering", 10 * time.Millisecond}, {"characters", 2500 * time.Millisecond}, {"notifications", 600 * time.Millisecond}},
 	}
 	v := workerTimingViewFor(workerStatus{Timing: easy, Recent: []workerTiming{easy}})
-	if want := "took 3.2s · 14 characters (3 active, 5 recent, 6 dormant) · 37 of 120 fetches · stalest active data 2m 0s past its refresh time"; v.Last != want {
+	if want := "took 3.2s · 14 characters (1 active, 2 watched, 5 recent, 6 dormant) · 37 of 120 fetches · stalest active data 2m 0s past its refresh time"; v.Last != want {
 		t.Errorf("last cycle: %q, want %q", v.Last, want)
 	}
 	// Longest first; a part too short to matter is left out.
@@ -82,6 +85,12 @@ func TestWorkerTimingView(t *testing.T) {
 	if !strings.Contains(v.Behind, "longer than the minute") {
 		t.Errorf("a cycle over a minute: behind %q", v.Behind)
 	}
+	// ESI's budgets are listed, tightest first as given.
+	budgeted := easy
+	budgeted.Budgets = []esi.RateHeadroom{{Group: "char-notification", Remaining: 6, Limit: "30/15m"}, {Group: "char-wallet", Remaining: 90, Limit: "150/15m"}}
+	if v = workerTimingViewFor(workerStatus{Timing: budgeted}); strings.Join(v.Budgets, "; ") != "char-notification 6 left of 30/15m; char-wallet 90 left of 150/15m" {
+		t.Errorf("budgets: %q", v.Budgets)
+	}
 	// Data never fetched is said as that, not as a lateness.
 	fresh := workerTiming{At: at, Took: time.Second, Characters: 1, Budget: 120, NeverFetched: true}
 	if v = workerTimingViewFor(workerStatus{Timing: fresh}); !strings.Contains(v.Last, "some data not fetched yet") {
@@ -117,7 +126,7 @@ func TestWorkerCycleIsTimed(t *testing.T) {
 		t.Fatalf("%d fetches counted against an allowance of %d", timing.Fetches, maxFetchesPerCycle)
 	}
 	_, body = getPage(t, f.app, cookie, "/sync/")
-	mustContain(t, "/sync/ after a cycle", body, "Last cycle: took ", "1 character (1 active, 0 recent, 0 dormant) · ", " of 120 fetches")
+	mustContain(t, "/sync/ after a cycle", body, "Last cycle: took ", "1 character (1 active, 0 watched, 0 recent, 0 dormant) · ", fmt.Sprintf(" of %d fetches", maxFetchesPerCycle))
 
 	// Only the recent cycles are kept.
 	for i := 0; i < workerRecentCycles+5; i++ {

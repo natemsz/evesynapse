@@ -9,7 +9,7 @@
 <p><small>Worker: {{.Sync.WorkerLine}}{{if .Sync.Warming}} — warming in progress…{{end}}</small></p>
 {{with .Sync.Timing}}
 {{if .Behind}}<p class="err">{{.Behind}}</p>{{end}}
-<p><small>Last cycle: {{.Last}}{{if .Phases}}<br>Where the time went: {{range $i, $p := .Phases}}{{if $i}}, {{end}}{{$p}}{{end}}{{end}}{{if .Lately}}<br>{{.Lately}}{{end}}</small></p>
+<p><small>Last cycle: {{.Last}}{{if .Phases}}<br>Where the time went: {{range $i, $p := .Phases}}{{if $i}}, {{end}}{{$p}}{{end}}{{end}}{{if .Budgets}}<br>ESI budgets, tightest first: {{range $i, $b := .Budgets}}{{if $i}}, {{end}}{{$b}}{{end}}{{end}}{{if .Lately}}<br>{{.Lately}}{{end}}</small></p>
 {{end}}
 
 {{if .Sync.SDE}}

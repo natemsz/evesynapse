@@ -71,39 +71,88 @@ func TestRateLimitIsOneCharacters(t *testing.T) {
 	}
 }
 
-// TestRateHeadroom: the tightest budget ESI reports is kept until it
-// is read, with the group and character it was for; headers that are
+// TestRateBudgets: the lowest each group's budget was seen at is kept
+// until it is read, with the character it was for, and the groups come
+// back tightest first by share of their limit; headers that are
 // missing or not numbers are ignored.
-func TestRateHeadroom(t *testing.T) {
+func TestRateBudgets(t *testing.T) {
 	transport := &headerTransport{status: http.StatusOK, header: http.Header{}}
 	c := New(&http.Client{Transport: transport}, nil, nil)
+	limit := "150/15m"
 	get := func(character int64, remaining, group string) {
 		transport.header = http.Header{}
 		if remaining != "" {
 			transport.header.Set("X-Ratelimit-Remaining", remaining)
-			transport.header.Set("X-Ratelimit-Limit", "150/15m")
+			transport.header.Set("X-Ratelimit-Limit", limit)
 			transport.header.Set("X-Ratelimit-Group", group)
 		}
 		if _, _, _, err := c.send(WithCharacter(context.Background(), character), http.MethodGet, "", "/x/", nil, "", http.StatusOK); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, ok := c.TakeRateHeadroom(); ok {
-		t.Fatal("headroom reported before any response")
+	if got := c.TakeRateBudgets(); len(got) != 0 {
+		t.Fatal("budgets reported before any response")
 	}
 	get(1, "", "")
 	get(1, "plenty", "char-wallet")
-	if _, ok := c.TakeRateHeadroom(); ok {
-		t.Fatal("headroom reported from responses that stated none")
+	if got := c.TakeRateBudgets(); len(got) != 0 {
+		t.Fatal("budgets reported from responses that stated none")
 	}
 	get(1, "120", "char-wallet")
 	get(2, "37", "char-location")
 	get(3, "90", "char-wallet")
-	tight, ok := c.TakeRateHeadroom()
-	if !ok || tight.Remaining != 37 || tight.CharacterID != 2 || tight.Group != "char-location" || tight.Limit != "150/15m" {
-		t.Fatalf("tightest %+v, ok=%v; want 37 left for character 2 in char-location", tight, ok)
+	// A small group with most of its budget left, and one nearly spent:
+	// what counts is the share left, not the number.
+	limit = "30/15m"
+	get(2, "27", "corp-killmail")
+	get(3, "6", "char-notification")
+	limit = "150/15m"
+	got := c.TakeRateBudgets()
+	var order []string
+	for _, b := range got {
+		order = append(order, b.Group)
 	}
-	if _, ok := c.TakeRateHeadroom(); ok {
-		t.Fatal("headroom was not forgotten once read")
+	if strings.Join(order, ",") != "char-notification,char-location,char-wallet,corp-killmail" {
+		t.Fatalf("groups in order %v; want tightest first by share of limit", order)
+	}
+	if got[1].Remaining != 37 || got[1].CharacterID != 2 || got[1].Limit != "150/15m" {
+		t.Fatalf("char-location: %+v; want 37 left for character 2", got[1])
+	}
+	if got[2].Remaining != 90 || got[2].CharacterID != 3 {
+		t.Fatalf("char-wallet: %+v; want the lowest it was seen at, 90 for character 3", got[2])
+	}
+	if len(c.TakeRateBudgets()) != 0 {
+		t.Fatal("budgets were not forgotten once read")
+	}
+}
+
+// TestLowBudgetEasesOff: a character whose budget in some group is
+// nearly gone is left alone for a minute before ESI has to refuse it;
+// with tokens to spare nobody is held, and a public request running
+// low holds no character.
+func TestLowBudgetEasesOff(t *testing.T) {
+	transport := &headerTransport{status: http.StatusOK, header: http.Header{}}
+	c := New(&http.Client{Transport: transport}, nil, nil)
+	get := func(character int64, remaining string) {
+		transport.header = http.Header{"X-Ratelimit-Remaining": {remaining}, "X-Ratelimit-Limit": {"30/15m"}, "X-Ratelimit-Group": {"corp-killmail"}}
+		if _, _, _, err := c.send(WithCharacter(context.Background(), character), http.MethodGet, "", "/x/", nil, "", http.StatusOK); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now := time.Now()
+	get(1, "27")
+	if !c.RateLimitedUntil(1, now).IsZero() {
+		t.Fatal("a character with most of its budget left is held")
+	}
+	get(2, "4")
+	if wait := c.RateLimitedUntil(2, now).Sub(now); wait < 50*time.Second || wait > 70*time.Second {
+		t.Fatalf("with 4 tokens left: held for %v, want about a minute", wait)
+	}
+	if !c.RateLimitedUntil(1, now).IsZero() {
+		t.Fatal("one character running low held another")
+	}
+	get(0, "2")
+	if !c.RateLimitedUntil(0, now).IsZero() {
+		t.Fatal("a public request running low was held as if it were a character")
 	}
 }

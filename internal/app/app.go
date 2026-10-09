@@ -182,6 +182,9 @@ func New(cfg Config) (*Application, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open the database: %w", err)
 	}
+	if cfg.dbConns > 0 {
+		store.SizePool(dbConn, cfg.dbConns)
+	}
 
 	sessionManager := newSessionManager(pgxstore.New(pool), cfg)
 	warnIfServedInTheClear(cfg)

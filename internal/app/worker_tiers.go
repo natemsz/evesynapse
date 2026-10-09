@@ -24,9 +24,14 @@ import (
 //
 // Now how often a character's data is refreshed follows its account:
 //
-//	active   somebody has the site open (a request in the last ten
-//	         minutes; an open, visible page checks in every half
-//	         minute). Everything as often as ESI allows, as before.
+//	active   the character somebody is looking at: the one selected
+//	         in an account that has the site open (a request in the
+//	         last ten minutes; an open, visible page checks in every
+//	         half minute), or one a page was opened for. Everything
+//	         as often as ESI allows, as before.
+//	watched  the other characters of an account that has the site
+//	         open. Where they are: every 2 minutes, which keeps the
+//	         fleet overview current. The rest: every 5.
 //	recent   seen in the last day. Where the character is and what it
 //	         flies: every 15 minutes. The rest: every 5.
 //	dormant  not seen for a day. Position: every 6 hours. The rest:
@@ -46,6 +51,7 @@ type warmTier int
 
 const (
 	tierActive warmTier = iota
+	tierWatched
 	tierRecent
 	tierDormant
 )
@@ -54,6 +60,8 @@ func (t warmTier) String() string {
 	switch t {
 	case tierActive:
 		return "active"
+	case tierWatched:
+		return "watched"
 	case tierRecent:
 		return "recent"
 	}
@@ -73,6 +81,11 @@ var positionKinds = map[string]bool{esi.SnapLocation: true, esi.SnapShip: true, 
 // for a character in tier. Zero means as often as ESI allows.
 func tierHold(tier warmTier, kind string) time.Duration {
 	switch tier {
+	case tierWatched:
+		if positionKinds[kind] {
+			return 2 * time.Minute
+		}
+		return 5 * time.Minute
 	case tierRecent:
 		if positionKinds[kind] {
 			return 15 * time.Minute
@@ -92,7 +105,7 @@ func tierHold(tier warmTier, kind string) time.Duration {
 // planets, corporation data).
 func tierFurtherHold(tier warmTier) time.Duration {
 	switch tier {
-	case tierRecent:
+	case tierWatched, tierRecent:
 		return 5 * time.Minute
 	case tierDormant:
 		return 30 * time.Minute
@@ -105,6 +118,7 @@ func tierFurtherHold(tier warmTier) time.Duration {
 type activityLog struct {
 	mu      sync.Mutex
 	seen    map[int64]time.Time // account -> last request
+	viewed  map[int64]time.Time // character -> last time a page was about it
 	further map[int64]time.Time // character -> last round of further datasets
 }
 
@@ -134,6 +148,27 @@ func (a *activityLog) tier(userID int64, now time.Time) warmTier {
 	return tierDormant
 }
 
+// noteViewed records that a page was about a character. It reports
+// whether the character was not being looked at until now.
+func (a *activityLog) noteViewed(characterID int64, now time.Time) (fresh bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.viewed == nil {
+		a.viewed = map[int64]time.Time{}
+	}
+	last, known := a.viewed[characterID]
+	a.viewed[characterID] = now
+	return !known || now.Sub(last) > tierActiveWindow
+}
+
+// isViewed reports whether a page was about the character lately.
+func (a *activityLog) isViewed(characterID int64, now time.Time) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	last, known := a.viewed[characterID]
+	return known && now.Sub(last) <= tierActiveWindow
+}
+
 // furtherDue reports whether a character's further datasets are due a
 // round under hold, and furtherDone records that one was made.
 func (a *activityLog) furtherDue(characterID int64, hold time.Duration, now time.Time) bool {
@@ -161,7 +196,15 @@ func (app *Application) tierOf(ch db.Character, now time.Time) warmTier {
 	if app.cfg.workerTiersOff {
 		return tierActive
 	}
-	return app.activity.tier(ch.UserID, now)
+	tier := app.activity.tier(ch.UserID, now)
+	// An account with the site open: only the character being looked
+	// at is kept to the second. An account that is open is the
+	// condition; a character id alone, which anybody can put in an
+	// address, raises nothing.
+	if tier == tierActive && !app.activity.isViewed(ch.CharacterID, now) {
+		return tierWatched
+	}
+	return tier
 }
 
 // trackActivity notes each signed-in request, so that the worker knows
@@ -171,8 +214,20 @@ func (app *Application) trackActivity(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		if userID := int64(app.sessions.GetInt(ctx, sessionUserID)); userID != 0 {
-			if app.activity.noteActivity(userID, time.Now()) && !app.cfg.workerTiersOff {
+			now := time.Now()
+			if app.activity.noteActivity(userID, now) && !app.cfg.workerTiersOff {
 				app.prioritizeAccount(ctx, userID)
+			}
+			// The character being looked at: the one selected in the
+			// session, and the one a page is asked for by address.
+			viewed := []int64{sessionCharID(app.sessions, ctx)}
+			if id, err := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64); err == nil {
+				viewed = append(viewed, id)
+			}
+			for _, id := range viewed {
+				if id > 0 && app.activity.noteViewed(id, now) && !app.cfg.workerTiersOff {
+					app.markCharacterPriority(id)
+				}
 			}
 		}
 		next.ServeHTTP(w, r)

@@ -252,6 +252,8 @@ func (app *Application) refreshCycle(ctx context.Context) {
 			case clock.start.Sub(at) > timing.Overdue:
 				timing.Overdue = clock.start.Sub(at)
 			}
+		case tierWatched:
+			timing.Watched++
 		case tierRecent:
 			timing.Recent++
 		default:
@@ -336,9 +338,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	timing.Took, timing.Phases = time.Since(clock.start), clock.phases
 	timing.Fetches, timing.Deferred = c.allowance.used(app.fetchesPerCycle()), c.deferred
 	timing.RateHeld = c.rateHeld
-	if tight, ok := app.esi.TakeRateHeadroom(); ok {
-		timing.Headroom = &tight
-	}
+	timing.Budgets = app.esi.TakeRateBudgets()
 	app.recordWorkerTiming(timing)
 
 	summary := cycleSummary(c.refreshed, c.namesResolved, c.failed, c.limited, parked, c.deferred)
@@ -696,11 +696,14 @@ var coreSnapshotKinds = []string{
 
 // maxFetchesPerCycle is the default bound on snapshot fetches in the
 // main character pass of one worker cycle (WORKER_FETCHES_PER_CYCLE
-// changes it: fetchesPerCycle). With dozens of linked characters the
+// changes it: fetchesPerCycle). It is sized to the worker, not to
+// ESI: ESI budgets each character separately and was nowhere near a
+// limit at 120, while the worker, fetching one at a time at about 0.3
+// seconds each, fits about 180 in its minute with the other passes. With dozens of linked characters the
 // stalest work goes first (due order) and the rest waits for the
 // next one-minute cycle instead of one giant pass; the killmail /
 // corp / economy sub-passes keep their own per-character caps.
-const maxFetchesPerCycle = 120
+const maxFetchesPerCycle = 180
 
 // fetchBudget is one pass's fetch allowance for one cycle: the
 // character pass and the market pass each hold one, so public

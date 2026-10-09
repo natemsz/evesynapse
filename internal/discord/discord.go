@@ -112,13 +112,15 @@ func IsStatus(err error, status int) bool {
 }
 
 // AuthURL is where to send a user to connect their Discord account.
-// Only "identify" is asked for: the account's id and name.
+// Two things are asked for: "identify", the account's id and name, and
+// "guilds.join", so that the bot may add the account to a server it is
+// in (Discord words it "join servers for you").
 func (c *Client) AuthURL(state string) string {
 	q := url.Values{}
 	q.Set("client_id", c.cfg.ClientID)
 	q.Set("response_type", "code")
 	q.Set("redirect_uri", c.cfg.RedirectURL)
-	q.Set("scope", "identify")
+	q.Set("scope", "identify guilds.join")
 	q.Set("state", state)
 	q.Set("prompt", "consent")
 	return authorizeURL + "?" + q.Encode()
@@ -146,9 +148,11 @@ type Guild struct {
 }
 
 // botPermissions is what the bot asks for when it is added to a
-// server: Manage Roles (1<<28), View Channels (1<<10) and Send
-// Messages (1<<11). Nothing that reads messages or manages channels.
-const botPermissions = 1<<28 | 1<<10 | 1<<11
+// server: Manage Roles (1<<28), View Channels (1<<10), Send Messages
+// (1<<11), and Create Invite (1<<0), which is what Discord requires of
+// a bot that adds members. Nothing that reads messages or manages
+// channels.
+const botPermissions = 1<<28 | 1<<10 | 1<<11 | 1<<0
 
 // InstallURL is where to send someone to add the bot to a server of
 // theirs. Discord only lets a person who may manage a server add a bot
@@ -158,18 +162,26 @@ func (c *Client) InstallURL(state string) string {
 	q.Set("client_id", c.cfg.ClientID)
 	q.Set("response_type", "code")
 	q.Set("redirect_uri", c.cfg.RedirectURL)
-	q.Set("scope", "bot identify")
+	q.Set("scope", "bot identify guilds.join")
 	q.Set("permissions", strconv.Itoa(botPermissions))
 	q.Set("state", state)
 	return authorizeURL + "?" + q.Encode()
 }
 
+// Token is an account's Discord token, as far as it was asked for: it
+// can read the account's name and add the account to servers the bot
+// is in.
+type Token struct {
+	Access  string
+	Refresh string
+	Expiry  time.Time
+}
+
 // Identify finishes a sign-in: it trades the code Discord sent back
-// for a token, reads whose account it is, and returns that. The token
-// is not kept.
-func (c *Client) Identify(ctx context.Context, code string) (User, error) {
-	user, _, err := c.IdentifyInstall(ctx, code)
-	return user, err
+// for a token and reads whose account it is.
+func (c *Client) Identify(ctx context.Context, code string) (User, Token, error) {
+	user, _, token, err := c.identify(ctx, code)
+	return user, token, err
 }
 
 // IdentifyInstall is Identify for a return from InstallURL: it also
@@ -177,64 +189,121 @@ func (c *Client) Identify(ctx context.Context, code string) (User, error) {
 // states it in its answer (never as the browser claims it). The
 // server is empty when the sign-in added the bot nowhere.
 func (c *Client) IdentifyInstall(ctx context.Context, code string) (User, Guild, error) {
-	user, guild, err := c.identify(ctx, code)
+	user, guild, _, err := c.identify(ctx, code)
 	if err == nil && guild.ID != "" && !ValidID(guild.ID) {
 		return User{}, Guild{}, errors.New("discord: the sign-in returned a server with no id")
 	}
 	return user, guild, err
 }
 
-func (c *Client) identify(ctx context.Context, code string) (User, Guild, error) {
+func (c *Client) identify(ctx context.Context, code string) (User, Guild, Token, error) {
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
 	form.Set("code", code)
 	form.Set("redirect_uri", c.cfg.RedirectURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/oauth2/token", strings.NewReader(form.Encode()))
 	if err != nil {
-		return User{}, Guild{}, err
+		return User{}, Guild{}, Token{}, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.SetBasicAuth(c.cfg.ClientID, c.cfg.ClientSecret)
-	var token struct {
-		AccessToken string `json:"access_token"`
-		TokenType   string `json:"token_type"`
-		Guild       Guild  `json:"guild"`
-	}
-	if err := c.do(req, "/oauth2/token", &token); err != nil {
-		return User{}, Guild{}, err
+	var token tokenAnswer
+	if _, err := c.do(req, "/oauth2/token", &token); err != nil {
+		return User{}, Guild{}, Token{}, err
 	}
 	if token.AccessToken == "" {
-		return User{}, Guild{}, errors.New("discord: the sign-in returned no token")
+		return User{}, Guild{}, Token{}, errors.New("discord: the sign-in returned no token")
 	}
 
 	req, err = http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/users/@me", nil)
 	if err != nil {
-		return User{}, Guild{}, err
+		return User{}, Guild{}, Token{}, err
 	}
 	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
 	var user User
-	if err := c.do(req, "/users/@me", &user); err != nil {
-		return User{}, Guild{}, err
+	if _, err := c.do(req, "/users/@me", &user); err != nil {
+		return User{}, Guild{}, Token{}, err
 	}
 	if !ValidID(user.ID) {
-		return User{}, Guild{}, errors.New("discord: the sign-in returned no account id")
+		return User{}, Guild{}, Token{}, errors.New("discord: the sign-in returned no account id")
 	}
-	return user, token.Guild, nil
+	return user, token.Guild, token.token(time.Now()), nil
+}
+
+// tokenAnswer is Discord's answer to a code or a refresh token.
+type tokenAnswer struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int64  `json:"expires_in"`
+	Guild        Guild  `json:"guild"`
+}
+
+func (a tokenAnswer) token(now time.Time) Token {
+	return Token{Access: a.AccessToken, Refresh: a.RefreshToken, Expiry: now.Add(time.Duration(a.ExpiresIn) * time.Second)}
+}
+
+// Refresh trades a refresh token for a new token. Discord answers 400
+// when the account has taken its permission back.
+func (c *Client) Refresh(ctx context.Context, refresh string) (Token, error) {
+	form := url.Values{}
+	form.Set("grant_type", "refresh_token")
+	form.Set("refresh_token", refresh)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/oauth2/token", strings.NewReader(form.Encode()))
+	if err != nil {
+		return Token{}, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth(c.cfg.ClientID, c.cfg.ClientSecret)
+	var answer tokenAnswer
+	if _, err := c.do(req, "/oauth2/token", &answer); err != nil {
+		return Token{}, err
+	}
+	if answer.AccessToken == "" {
+		return Token{}, errors.New("discord: the refresh returned no token")
+	}
+	return answer.token(time.Now()), nil
+}
+
+// AddMember puts an account into a server, with roles, on the
+// strength of the account's own token (it agreed to "join servers for
+// you"). added is false when the account was in the server already,
+// in which case nothing about it is changed.
+func (c *Client) AddMember(ctx context.Context, guildID, userID, userToken string, roles []string) (added bool, err error) {
+	if !ValidID(guildID) || !ValidID(userID) || userToken == "" {
+		return false, errors.New("discord: not a server or user id, or no token")
+	}
+	for _, role := range roles {
+		if !ValidID(role) {
+			return false, errors.New("discord: not a role id")
+		}
+	}
+	if roles == nil {
+		roles = []string{}
+	}
+	status, err := c.botStatus(ctx, http.MethodPut, "/guilds/"+guildID+"/members/"+userID,
+		map[string]any{"access_token": userToken, "roles": roles}, nil)
+	return err == nil && status == http.StatusCreated, err
 }
 
 // bot makes a call as the bot. payload and out may be nil.
 func (c *Client) bot(ctx context.Context, method, path string, payload, out any) error {
+	_, err := c.botStatus(ctx, method, path, payload, out)
+	return err
+}
+
+// botStatus is bot, also reporting which success status came back.
+func (c *Client) botStatus(ctx context.Context, method, path string, payload, out any) (int, error) {
 	var body io.Reader
 	if payload != nil {
 		raw, err := json.Marshal(payload)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		body = bytes.NewReader(raw)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	req.Header.Set("Authorization", "Bot "+c.cfg.BotToken)
 	if payload != nil {
@@ -243,13 +312,13 @@ func (c *Client) bot(ctx context.Context, method, path string, payload, out any)
 	return c.do(req, path, out)
 }
 
-func (c *Client) do(req *http.Request, path string, out any) error {
+func (c *Client) do(req *http.Request, path string, out any) (int, error) {
 	// The form Discord asks of every bot: DiscordBot (url, version).
 	req.Header.Set("User-Agent", "DiscordBot (https://github.com/natemsz/evesynapse, 1)")
 	resp, err := c.http.Do(req)
 	if err != nil {
 		// The error may carry the request's address, never its headers.
-		return fmt.Errorf("discord %s %s: %w", req.Method, path, err)
+		return 0, fmt.Errorf("discord %s %s: %w", req.Method, path, err)
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
@@ -270,15 +339,15 @@ func (c *Client) do(req *http.Request, path string, out any) error {
 				se.RetryAfter = time.Duration(secs * float64(time.Second))
 			}
 		}
-		return se
+		return resp.StatusCode, se
 	}
 	if out == nil || len(raw) == 0 {
-		return nil
+		return resp.StatusCode, nil
 	}
 	if err := json.Unmarshal(raw, out); err != nil {
-		return fmt.Errorf("discord %s %s: decode: %w", req.Method, path, err)
+		return resp.StatusCode, fmt.Errorf("discord %s %s: decode: %w", req.Method, path, err)
 	}
-	return nil
+	return resp.StatusCode, nil
 }
 
 // Message is what the bot posts. Mentions are switched off: whatever

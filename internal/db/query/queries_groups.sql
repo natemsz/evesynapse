@@ -23,6 +23,21 @@ DELETE FROM discord_role_rules WHERE guild_id = $1;
 -- name: DeleteDiscordRoleRulesForGroup :exec
 DELETE FROM discord_role_rules WHERE kind = 'group' AND ref = sqlc.arg(group_ref);
 
+-- name: SetDiscordGuildAutoJoin :exec
+UPDATE discord_guilds SET auto_join = sqlc.arg(auto_join) WHERE guild_id = sqlc.arg(guild_id);
+
+-- The account's Discord token, sealed; empty strings forget it.
+-- name: SetDiscordLinkTokens :exec
+UPDATE discord_links
+SET access_token = sqlc.arg(access_token), refresh_token = sqlc.arg(refresh_token), token_expiry = sqlc.arg(token_expiry)
+WHERE user_id = sqlc.arg(user_id);
+
+-- Forget that an account was looked for in servers and not found, so
+-- that it is looked for again at once (it has just connected, and may
+-- now be added).
+-- name: DeleteDiscordNonMemberGrants :exec
+DELETE FROM discord_role_grants WHERE discord_id = $1 AND NOT is_member AND roles = '';
+
 -- name: SetDiscordGuildOpsChannel :exec
 UPDATE discord_guilds SET ops_channel = sqlc.arg(ops_channel) WHERE guild_id = sqlc.arg(guild_id);
 

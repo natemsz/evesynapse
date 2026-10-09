@@ -27,7 +27,11 @@ type fakeDiscord struct {
 	installs    map[string]string              // sign-in code -> server the bot was added to
 	members     map[string]map[string][]string // server -> account -> roles held; absent: not a member
 	refuseDM    bool
-	failMembers bool     // looking a member up fails outright
+	failMembers bool // looking a member up fails outright
+	noJoin      bool // the bot may not add members
+	revoked     bool // accounts have taken their permission back
+	refreshes   int
+	added       []string // "server user", for members the bot added
 	left        []string // servers the bot was told to leave
 	messages    []string // "channel: text"
 	changes     []string // "PUT server user role" / "DELETE server user role"
@@ -51,6 +55,14 @@ func (d *fakeDiscord) RoundTrip(req *http.Request) (*http.Response, error) {
 	switch {
 	case path == "/oauth2/token":
 		form, _ := url.ParseQuery(raw)
+		if form.Get("grant_type") == "refresh_token" {
+			d.refreshes++
+			code := strings.TrimPrefix(form.Get("refresh_token"), "refresh-for-")
+			if _, ok := d.codes[code]; !ok || d.revoked {
+				return respond(400, `{"message":"invalid_grant"}`)
+			}
+			return respond(200, `{"access_token":"token-for-`+code+`","refresh_token":"refresh-for-`+code+`","expires_in":604800}`)
+		}
 		code := form.Get("code")
 		if _, ok := d.codes[code]; !ok {
 			return respond(400, `{"message":"invalid_grant"}`)
@@ -59,7 +71,7 @@ func (d *fakeDiscord) RoundTrip(req *http.Request) (*http.Response, error) {
 		if id := d.installs[code]; id != "" {
 			guild = `,"guild":{"id":"` + id + `","name":"Server ` + id[len(id)-1:] + `"}`
 		}
-		return respond(200, `{"access_token":"token-for-`+code+`"`+guild+`}`)
+		return respond(200, `{"access_token":"token-for-`+code+`","refresh_token":"refresh-for-`+code+`","expires_in":604800`+guild+`}`)
 	case path == "/users/@me":
 		code := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer token-for-")
 		return respond(200, `{"id":"`+d.codes[code]+`","username":"pilot-`+code+`"}`)
@@ -90,6 +102,27 @@ func (d *fakeDiscord) RoundTrip(req *http.Request) (*http.Response, error) {
 			return respond(403, `{"message":"Missing Access"}`)
 		}
 		return respond(200, `[{"id":"`+discordOpsChannel+`","name":"ops","type":0,"position":1},{"id":"`+discordVoiceChannel+`","name":"Voice","type":2,"position":2}]`)
+	case len(parts) == 4 && parts[0] == "guilds" && parts[2] == "members" && req.Method == http.MethodPut:
+		// Adding a member: only with that account's own token.
+		guild, user := parts[1], parts[3]
+		token := raw[strings.Index(raw, `"access_token":"`)+16:]
+		token = token[:strings.Index(token, `"`)]
+		if d.codes[strings.TrimPrefix(token, "token-for-")] != user {
+			return respond(403, `{"message":"Invalid OAuth2 access token"}`)
+		}
+		if d.noJoin {
+			return respond(403, `{"message":"Missing Permissions"}`)
+		}
+		if _, in := d.members[guild][user]; in {
+			return respond(204, ``)
+		}
+		var roles []string
+		if list := raw[strings.Index(raw, `"roles":[`)+9:]; !strings.HasPrefix(list, "]") {
+			roles = strings.Split(strings.ReplaceAll(list[:strings.Index(list, "]")], `"`, ""), ",")
+		}
+		d.members[guild][user] = roles
+		d.added = append(d.added, guild+" "+user)
+		return respond(201, `{}`)
 	case len(parts) == 4 && parts[0] == "guilds" && parts[2] == "members":
 		if d.failMembers {
 			return respond(500, `{"message":"Internal Server Error"}`)
@@ -258,7 +291,9 @@ func (f *notifyFixture) addRule(cookie *http.Cookie, guild, who, role string) st
 
 // setServer makes a server's rules exactly a role for everyone
 // connected and a role for members (either may be empty), and sets its
-// ops channel, through the page.
+// ops channel, through the page. The form is sent with "add members
+// automatically" unticked, so these tests decide for themselves who is
+// in a server; discord_join_test.go covers the adding.
 func (f *notifyFixture) setServer(cookie *http.Cookie, guild, linked, member, channel string) string {
 	f.t.Helper()
 	if err := f.q.DeleteDiscordRoleRulesForGuild(f.ctx, guild); err != nil {
@@ -290,7 +325,7 @@ func TestDiscordConnect(t *testing.T) {
 	}
 	fake := f.enableDiscord()
 	_, body = getPage(t, f.app, cookie, discordSettingsPath)
-	mustContain(t, "settings before connecting", body, `<a class="btn" href="/discord/connect">Connect Discord</a>`, "Only your Discord name and id are read.")
+	mustContain(t, "settings before connecting", body, `<a class="btn" href="/discord/connect">Connect Discord</a>`, "it can do nothing else with your account")
 
 	// A return nobody started, or with the wrong state, changes nothing.
 	for _, path := range []string{"/discord/callback?code=alice&state=made-up", "/discord/callback?code=alice"} {
@@ -495,7 +530,7 @@ func TestDiscordServersAreSetUpByDirectors(t *testing.T) {
 		return strings.Join(out, " ")
 	}
 	body = f.setServer(cookie, discordCorpGuild, discordRoleLinked, discordRoleMember, discordOpsChannel)
-	mustContain(t, "after saving", body, "Ops channel saved for Server 1.",
+	mustContain(t, "after saving", body, "Settings saved for Server 1.",
 		"<td>Everyone who has connected EveSynapse</td><td>Linked</td>", "<td>Members of the corporation</td><td>Member</td>")
 	want := "linked:=" + discordRoleLinked + " member:=" + discordRoleMember
 	if rules() != want {

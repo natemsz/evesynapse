@@ -478,8 +478,8 @@ alliance's. That character's link to EVE has to be working.
    corporation's or alliance's Discord server**, then **Add the bot to
    a server**.
 2. Discord asks which server and shows what the bot may do there: give
-   roles and send messages. Discord only lets someone who can manage
-   that server add a bot to it.
+   roles, send messages, and add members. Discord only lets someone who
+   can manage that server add a bot to it.
 3. In that Discord server's **Roles** list, drag the bot's own role
    **above** the roles it is to give. Discord lets a bot manage only
    the roles below its own.
@@ -496,6 +496,18 @@ alliance's. That character's link to EVE has to be working.
 
    Then, if wanted, pick the channel new ops are posted in. Roles and
    channels are picked from that server's own.
+
+**Adding members automatically.** Someone with a character in the
+corporation (or alliance) who has connected Discord is put in its
+server by the bot, with their roles, without needing an invite: on the
+worker's next pass after they qualify, whether that came from
+connecting Discord, linking the character, the character joining the
+corporation, or the server being set up. Only people who belong are
+added; a rule that gives a role to "everyone connected" adds nobody.
+Each person agrees to it on Discord when they connect ("join servers
+for you"). Untick the box on the server's settings to switch it off. A
+bot that was added before this existed lacks the permission: add it to
+the server again from the site (its settings are kept).
 
 **Groups** (`/groups/` on the site) are lists of characters that a
 corporation's or alliance's directors keep by hand: a special interest
@@ -521,8 +533,10 @@ press Remove again a few minutes later to finish, and the bot leaves.
 ### What users do
 
 On **bell → Settings**, under **Discord**: **Connect Discord** and
-approve on Discord's page. Roles follow within a few minutes in every
-server they are in that uses EveSynapse; **Check my roles now** does it
+approve on Discord's page, which asks for two things: to see their
+Discord name, and to add them to servers. Within a few minutes they
+are in their corporation's server and have their roles in every server
+that uses EveSynapse; **Check my roles now** does it
 at once, for someone who has just joined a server. To get notifications
 there, tick "Send my notifications to me on Discord" and press **Send a
 test message**; direct messages only arrive for someone who shares a
@@ -556,6 +570,13 @@ the directors' role and leaves the members' one.
   a check of in-game roles.
 - If the bot is kicked from a server by hand, the roles it gave there
   stay until someone removes them: it can no longer act there.
+- To add someone to a server later (when their character joins a
+  corporation, say) EveSynapse keeps the Discord token they granted,
+  sealed with `TOKEN_ENCRYPTION_KEY` like EVE tokens. That token can
+  read their Discord name and add them to servers the bot is in, and
+  nothing else. Someone who connected before this, or who removes
+  EveSynapse under Discord's Authorized Apps, is asked on the settings
+  page to connect again.
 
 
 ## HTTPS

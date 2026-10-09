@@ -270,6 +270,9 @@ type discordSettingsView struct {
 	// anything did.
 	DMProblem string
 	Manages   bool // the account directs a corporation or alliance
+	// Reconnect: the account connected before EveSynapse could add
+	// people to servers, or took that permission back on Discord.
+	Reconnect bool
 }
 
 // notifyMinutesOption is one lead the op reminder can be set to.
@@ -383,6 +386,7 @@ func (app *Application) handleNotificationSettings(w http.ResponseWriter, r *htt
 	view.Discord.Manages = view.Discord.HasBot && len(app.discordManageable(ctx, userID)) > 0
 	if link, linked := app.discordLinkFor(r, userID); linked {
 		view.Discord.Linked, view.Discord.Name, view.Discord.DM = true, link.Username, link.DmNotifications
+		view.Discord.Reconnect = view.Discord.HasBot && link.AccessToken == ""
 		if link.DmNotifications {
 			view.Discord.DMProblem = link.DmProblem
 		}

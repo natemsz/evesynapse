@@ -56,13 +56,13 @@ func newClient(f *fake) *Client {
 	}, &http.Client{Transport: f}, "https://discord.test/api")
 }
 
-func TestAuthURLAsksOnlyForIdentity(t *testing.T) {
+func TestAuthURLAsksForIdentityAndJoining(t *testing.T) {
 	u, err := url.Parse(newClient(&fake{}).AuthURL("state-1"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	q := u.Query()
-	if u.Host != "discord.com" || q.Get("scope") != "identify" || q.Get("state") != "state-1" ||
+	if u.Host != "discord.com" || q.Get("scope") != "identify guilds.join" || q.Get("state") != "state-1" ||
 		q.Get("client_id") != "client" || q.Get("redirect_uri") != "https://eve.example/discord/callback" || q.Get("response_type") != "code" {
 		t.Fatalf("sign-in address %s", u)
 	}
@@ -73,12 +73,15 @@ func TestAuthURLAsksOnlyForIdentity(t *testing.T) {
 
 func TestIdentifyReadsTheAccountAndNothingElse(t *testing.T) {
 	f := &fake{answers: map[string][2]string{
-		"POST /api/oauth2/token": {"200", `{"access_token":"user-token","token_type":"Bearer"}`},
+		"POST /api/oauth2/token": {"200", `{"access_token":"user-token","token_type":"Bearer","refresh_token":"user-refresh","expires_in":604800}`},
 		"GET /api/users/@me":     {"200", `{"id":"` + user + `","username":"pilot","global_name":"Pilot One"}`},
 	}}
-	got, err := newClient(f).Identify(context.Background(), "the-code")
+	got, token, err := newClient(f).Identify(context.Background(), "the-code")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if token.Access != "user-token" || token.Refresh != "user-refresh" || time.Until(token.Expiry) < 6*24*time.Hour {
+		t.Fatalf("token %+v", token)
 	}
 	if got.ID != user || got.DisplayName() != "Pilot One" {
 		t.Fatalf("identified %+v", got)
@@ -97,11 +100,11 @@ func TestIdentifyReadsTheAccountAndNothingElse(t *testing.T) {
 
 	// An account with no id, or a refused code, is an error.
 	f.answers["GET /api/users/@me"] = [2]string{"200", `{"username":"pilot"}`}
-	if _, err := newClient(f).Identify(context.Background(), "c"); err == nil {
+	if _, _, err := newClient(f).Identify(context.Background(), "c"); err == nil {
 		t.Fatal("an account with no id was accepted")
 	}
 	f.answers["POST /api/oauth2/token"] = [2]string{"400", `{"message":"invalid_grant"}`}
-	if _, err := newClient(f).Identify(context.Background(), "c"); !IsStatus(err, 400) {
+	if _, _, err := newClient(f).Identify(context.Background(), "c"); !IsStatus(err, 400) {
 		t.Fatalf("refused code: %v", err)
 	}
 }
@@ -198,12 +201,13 @@ func TestInstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := u.Query()
-	if q.Get("scope") != "bot identify" || q.Get("state") != "state-2" {
+	if q.Get("scope") != "bot identify guilds.join" || q.Get("state") != "state-2" {
 		t.Fatalf("install address %s", u)
 	}
-	// Manage Roles, View Channels, Send Messages: 1<<28 | 1<<10 | 1<<11.
-	if q.Get("permissions") != "268438528" {
-		t.Fatalf("the bot asks for permissions %s, want only roles and sending (268438528)", q.Get("permissions"))
+	// Manage Roles, View Channels, Send Messages, Create Invite:
+	// 1<<28 | 1<<10 | 1<<11 | 1<<0.
+	if q.Get("permissions") != "268438529" {
+		t.Fatalf("the bot asks for permissions %s, want only roles, sending and adding members (268438529)", q.Get("permissions"))
 	}
 	who, where, err := c.IdentifyInstall(context.Background(), "code")
 	if err != nil || who.ID != user || where.ID != guild || where.Name != "Home" {
@@ -233,6 +237,51 @@ func TestGuildRolesAndChannels(t *testing.T) {
 	}
 	if err := c.LeaveGuild(context.Background(), guild); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestAddMemberAndRefresh: adding an account to a server goes out as
+// the bot, carrying the account's own token and the roles to give;
+// 201 is "added" and 204 "was there already". A token is renewed with
+// the application's own credentials.
+func TestAddMemberAndRefresh(t *testing.T) {
+	member := "/api/guilds/" + guild + "/members/" + user
+	f := &fake{answers: map[string][2]string{
+		"PUT " + member:          {"201", `{"user":{"id":"` + user + `"}}`},
+		"POST /api/oauth2/token": {"200", `{"access_token":"new-token","refresh_token":"new-refresh","expires_in":600}`},
+	}}
+	c := newClient(f)
+	added, err := c.AddMember(context.Background(), guild, user, "user-token", []string{role})
+	if err != nil || !added {
+		t.Fatalf("added=%v, %v", added, err)
+	}
+	sent := f.calls[0]
+	if sent.Auth != "Bot bot-token" || !strings.Contains(sent.Body, `"access_token":"user-token"`) || !strings.Contains(sent.Body, `"roles":["`+role+`"]`) {
+		t.Fatalf("the request: %+v", sent)
+	}
+	f.answers["PUT "+member] = [2]string{"204", ``}
+	if added, err = c.AddMember(context.Background(), guild, user, "user-token", nil); err != nil || added {
+		t.Fatalf("someone already in the server: added=%v, %v", added, err)
+	}
+	if !strings.Contains(f.calls[1].Body, `"roles":[]`) {
+		t.Fatalf("no roles should be sent as an empty list: %s", f.calls[1].Body)
+	}
+	before := len(f.calls)
+	if _, err = c.AddMember(context.Background(), guild, user, "", nil); err == nil || len(f.calls) != before {
+		t.Fatal("a member was added with no token")
+	}
+
+	token, err := c.Refresh(context.Background(), "old-refresh")
+	if err != nil || token.Access != "new-token" || token.Refresh != "new-refresh" {
+		t.Fatalf("refreshed %+v, %v", token, err)
+	}
+	form, _ := url.ParseQuery(f.calls[len(f.calls)-1].Body)
+	if form.Get("grant_type") != "refresh_token" || form.Get("refresh_token") != "old-refresh" || !strings.HasPrefix(f.calls[len(f.calls)-1].Auth, "Basic ") {
+		t.Fatalf("the refresh request: %+v", f.calls[len(f.calls)-1])
+	}
+	f.answers["POST /api/oauth2/token"] = [2]string{"400", `{"message":"invalid_grant"}`}
+	if _, err = c.Refresh(context.Background(), "revoked"); !IsStatus(err, 400) {
+		t.Fatalf("a revoked refresh token: %v", err)
 	}
 }
 

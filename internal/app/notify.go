@@ -37,7 +37,7 @@ import (
 //     switching it on later announces only what happens from then on.
 //
 // A notification is a module's news on a delivery channel: each kind
-// names the module (modules.go) whose data it reads, and a character
+// names the module (module_manifest.go) whose data it reads, and a character
 // that has not granted that module's scopes simply has no data to
 // produce events from.
 // ---------------------------------------------------------------------------

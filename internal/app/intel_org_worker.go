@@ -1,7 +1,7 @@
 package app
 
 // The worker's side of the public corporation and alliance pages
-// (orgpages.go): draining the corporation_records and
+// (intel_orgpages.go): draining the corporation_records and
 // alliance_records queues from ESI's public endpoints. Nothing here
 // renders anything.
 

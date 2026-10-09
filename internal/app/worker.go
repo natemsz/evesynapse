@@ -458,7 +458,7 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 	// revoked refresh token means this character needs a fresh
 	// login, and fetching would only fail three more times.
 	// (A definitive rejection parks the character inside
-	// validAccessToken — see links.go.)
+	// validAccessToken — see auth_links.go.)
 	if _, err := app.validAccessToken(ctx, ch); err != nil {
 		logging.Warnf("worker: token for character %d unusable: %v", ch.CharacterID, err)
 		c.failed++
@@ -511,7 +511,7 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 	})
 
 	// The names players gave their ships and containers, for the
-	// Assets page (assets_names_worker.go). At most one call per
+	// Assets page (char_assets_names_worker.go). At most one call per
 	// character per cycle, and usually none.
 	c.characterPass("warming asset names", ch, func() (int, bool) {
 		return app.warmCharacterAssetNames(ctx, ch)
@@ -586,7 +586,7 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 	})
 
 	// Planet names: resolve the due slice of the planet queue
-	// (public endpoint, no token — planet_names.go).
+	// (public endpoint, no token — planets_names.go).
 	c.pass("resolving planet names", func() (int, bool) {
 		return app.resolvePlanetNames(ctx, c.allowance)
 	})
@@ -962,7 +962,7 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 		return 0
 	}
 
-	// What the snapshots refer to (name_harvest.go).
+	// What the snapshots refer to (worker_name_harvest.go).
 	harvest := &nameHarvest{app: app, characterID: ch.CharacterID, wants: newNameWants()}
 	for _, snap := range snaps {
 		harvest.snapshot(ctx, snap)

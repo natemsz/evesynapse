@@ -14,7 +14,7 @@ import (
 // pageData is the view model shared by the templates.
 type pageData struct {
 	Version           string // footer product version ("v0.3.00.002"); filled by render
-	AssetVersion      string // cache-busting token on stylesheet/script URLs (static.go); filled by render
+	AssetVersion      string // cache-busting token on stylesheet/script URLs (core_static.go); filled by render
 	LoggedIn          bool
 	IsAdmin           bool // one of the account's characters is in EVE_ADMIN_CHARACTER_IDS; filled by render
 	CharacterName     string

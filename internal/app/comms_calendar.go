@@ -13,11 +13,11 @@ import (
 // ---------------------------------------------------------------------------
 // Calendar page (/calendar/): a month grid holding the character's
 // in-game events and the corporations' ops together
-// (calendar_month.go, ops.go), then the upcoming in-game events
+// (comms_calendar_month.go, ops.go), then the upcoming in-game events
 // (ESI's next 50 chronological summaries) with a detail block —
 // text, owner, duration, attendees — rendered cache-only from
 // the worker-warmed calendar snapshots. An open event can be
-// answered from the page (calendar_respond.go).
+// answered from the page (comms_calendar_respond.go).
 // ---------------------------------------------------------------------------
 
 type calendarRow struct {
@@ -61,7 +61,7 @@ type calendarView struct {
 	Detail        *calendarDetail
 	// Month is the grid of the month being looked at, holding the
 	// character's in-game events and the corporations' ops together
-	// (calendar_month.go). CanCreate: the account may create ops.
+	// (comms_calendar_month.go). CanCreate: the account may create ops.
 	Month     *calMonth
 	CanCreate bool
 }

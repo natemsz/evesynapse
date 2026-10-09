@@ -90,7 +90,7 @@ func (app *Application) linkVerifiedCharacter(ctx context.Context, in linkCharac
 	}
 
 	// The tokens are stored sealed when a TOKEN_ENCRYPTION_KEY is
-	// configured (tokencrypt.go), as they arrived otherwise.
+	// configured (auth_tokencrypt.go), as they arrived otherwise.
 	accessToken, refreshToken, err := app.tokens.sealTokens(in.CharacterID, in.AccessToken, in.RefreshToken)
 	if err != nil {
 		return result, err
@@ -151,7 +151,7 @@ func (app *Application) resolveSignInUser(ctx context.Context, sessionUserID, ch
 		return existing.UserID, nil
 	case err == nil || errors.Is(err, sql.ErrNoRows):
 		// The one place an account comes into being, and so the one
-		// place the sign-up policy applies (signup.go).
+		// place the sign-up policy applies (auth_signup.go).
 		if err := app.mayCreateAccount(ctx, characterID); err != nil {
 			return 0, err
 		}

@@ -50,23 +50,53 @@ Contact: nate@synap6.io or in-game 'Burzrujat'
   `go run ./cmd/mkicons`: it rewrites `favicon.ico`, the four PNG app
   icons and the notification badge beside them
 - `internal/app/` — the application: config + `.env` loader
-  (`config.go`), EVE SSO auth/sessions/JWT verification (`auth.go`),
-  account linking and the sign-up policy (`links.go`, `signup.go`),
-  token refresh and encryption at rest (`refresh.go`,
-  `tokencrypt.go`), cookie, header and cross-site protections
-  (`httpsec.go`), the application struct and router (`app.go`),
+  (`core_config.go`), EVE SSO auth/sessions/JWT verification (`auth.go`),
+  account linking and the sign-up policy (`auth_links.go`, `auth_signup.go`),
+  token refresh and encryption at rest (`auth_refresh.go`,
+  `auth_tokencrypt.go`), cookie, header and cross-site protections
+  (`core_httpsec.go`), the application struct and router (`core_app.go`),
   page handlers and view models
-  (`pages.go`, `assets.go`, `skills.go`, `corporation.go`,
-  `market.go`, `sync.go`, `character.go`, `fittings.go`,
-  `killmails.go`, `intel.go`), the background worker (`worker.go`
+  (`core_pages.go`, `char_assets.go`, `char_skills.go`, `corp_overview.go`,
+  `market.go`, `sync.go`, `char_pages.go`, `char_fittings.go`,
+  `char_killmails.go`, `intel.go`), the background worker (`worker.go`
   runs the cycle; each `*_worker.go` file is the fetching behind one
-  group of pages, and `name_harvest.go` collects the names a cycle
+  group of pages, and `worker_name_harvest.go` collects the names a cycle
   has to resolve), what pages and the worker both read
-  (`snapshots.go`, `market_book.go`), the
+  (`core_snapshots.go`, `market_book.go`), the
   SDE static-data importer (`sde.go`), static assets and their
-  caching (`static.go`), the health check (`health.go`), and the
-  two maintenance modes that need the application (`maintenance.go`:
+  caching (`core_static.go`), the health check (`core_health.go`), and the
+  two maintenance modes that need the application (`core_maintenance.go`:
   `-version` and `-refresh`)
+  It is one Go package, and a file's name starts with the part of the
+  app it belongs to, so a directory listing groups them. A test file
+  sits beside the code it tests with the same prefix.
+
+  | Prefix | What is in it |
+  | --- | --- |
+  | `core_` | the application itself: start-up, config, routing, page rendering, security headers, static files, health, maintenance |
+  | `auth` | EVE sign-in, sign-up policy, linking characters, token refresh and encryption |
+  | `ui_` | navigation state and the tests that pin layout and styling |
+  | `module_` | which modules an account has, by the scopes it granted |
+  | `home_` | the home page: widgets, briefing, net worth |
+  | `char_` | pages about one character: sheet, skills and plans, assets, fittings, killmails, industry, build planner |
+  | `economy_` | wallet, orders, contracts |
+  | `planets_` | planetary industry |
+  | `comms_` | mail, calendar, contacts |
+  | `corp_` | corporation pages and special-interest groups |
+  | `ops_` | the op calendar and attendance |
+  | `market_` | market pages, scanners, price guide, restock |
+  | `items_` | the item database |
+  | `intel_` | wars, incursions, pilots, corporations, alliances, places |
+  | `structures_` | structures |
+  | `search_` | search |
+  | `sde` | the static-data importer |
+  | `sync` | the Sync page |
+  | `notify_` | notifications and browser push |
+  | `discord_` | the Discord bot |
+  | `worker_` | the background worker: the cycle, tiers, lanes, timing, name warm-up |
+
+  A `*_worker.go` file under another prefix is the fetching behind
+  that group of pages.
 - `internal/app/templates/` — embedded html/templates (`base.html`
   layout)
 - `internal/app/static/` — embedded assets: the 2013 wallpaper
@@ -921,7 +951,7 @@ request logs contain paths only, no query strings.
 ## Token refresh & caching
 
 EVE SSO access tokens live ~20 minutes. `validAccessToken`
-(internal/app/refresh.go) returns the stored token while it has more
+(internal/app/auth_refresh.go) returns the stored token while it has more
 seconds left; otherwise it refreshes against CCP and persists the new
 access token, the **rotated** refresh token, and the new expiry.
 Refreshes are serialized process-wide and the character row is

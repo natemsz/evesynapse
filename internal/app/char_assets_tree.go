@@ -57,7 +57,7 @@ func (app *Application) newAssetIndex(ctx context.Context, items []esi.Asset) *a
 	}
 	ix.names = app.esi.CachedTypeNames(ctx, typeIDs)
 	// Player-given names, where the worker has fetched them
-	// (assets_names_worker.go). Only singletons can have one.
+	// (char_assets_names_worker.go). Only singletons can have one.
 	ix.given = map[int64]string{}
 	var singles []int64
 	for _, it := range items {

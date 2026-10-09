@@ -1,6 +1,6 @@
 package app
 
-// Handler tests for the fitting simulator editor (fittings_sim.go):
+// Handler tests for the fitting simulator editor (char_fittings_sim.go):
 // the simulate endpoint, the picker feeds, EFT round-trips, local
 // save/list/delete, missing skills, and the zero-outbound-call
 // rule across every editor endpoint. The SDE fixtures are a small

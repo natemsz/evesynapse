@@ -119,7 +119,7 @@ func (app *Application) handleAssets(w http.ResponseWriter, r *http.Request) {
 	}
 	if want, _ := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64); want != 0 && pick(want) {
 		// An explicit pick becomes the session's acting
-		// character (see pickCharacter in character.go).
+		// character (see pickCharacter in char_pages.go).
 		putSessionCharID(app.sessions, ctx, active.CharacterID)
 		app.sessions.Put(ctx, sessionCharacterName, active.Name)
 	} else if sid := sessionCharID(app.sessions, ctx); sid == 0 || !pick(sid) {
@@ -175,7 +175,7 @@ func (app *Application) handleAssets(w http.ResponseWriter, r *http.Request) {
 // buildAssetLocationsWith groups asset stacks by location, resolves
 // type and location names, and sorts biggest-first at both levels.
 // It is the corporation assets page's flat layout (the character
-// page nests instead: assets_tree.go), with two additions for it:
+// page nests instead: char_assets_tree.go), with two additions for it:
 //   - extraTitles names locations from outside the place cache —
 //     the corp's own structures, which the corp assets endpoint
 //     reports as location_type "item"/"other" with no structure

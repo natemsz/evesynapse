@@ -9,7 +9,7 @@ try {
   var savedNav = window.localStorage.getItem("evesynapse-nav");
   if (savedNav === "rail" || savedNav === "hidden" || savedNav === "expanded") {
     document.documentElement.setAttribute("data-nav", savedNav);
-    // The server renders the saved layout from a cookie (navstate.go),
+    // The server renders the saved layout from a cookie (ui_navstate.go),
     // so the page arrives right even when this script runs late.
     // Readers whose choice predates the cookie get it written here.
     var navCookie = document.cookie.match(/(?:^|; )evesynapse-nav=([^;]*)/);

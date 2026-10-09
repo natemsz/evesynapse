@@ -1,6 +1,6 @@
 package app
 
-// The worker's side of the public pilot page (pilot.go): draining the
+// The worker's side of the public pilot page (intel_pilot.go): draining the
 // pilot_records queue from ESI's public endpoints, resolving the
 // pilot names the search box is waiting on, and noting a record for
 // everyone the deployment's own data mentions so their page is warm

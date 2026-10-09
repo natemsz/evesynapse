@@ -1,6 +1,6 @@
 package app
 
-// Tests for the sign-up policy (signup.go): who may create an
+// Tests for the sign-up policy (auth_signup.go): who may create an
 // account when EVE_ALLOWED_*_IDS are set, who is never asked, and
 // that a restriction which cannot be read or checked refuses rather
 // than opening the door.

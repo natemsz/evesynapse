@@ -30,7 +30,7 @@ import (
 // in the background; an ESI 404 settles as 'missing'.
 //
 // This file is the pages. The worker's side (draining the two
-// queues) is org_worker.go.
+// queues) is intel_org_worker.go.
 // ---------------------------------------------------------------------------
 
 // Organization record states (corporation_records / alliance_records).

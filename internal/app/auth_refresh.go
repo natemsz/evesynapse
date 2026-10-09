@@ -41,7 +41,7 @@ func (app *Application) validAccessToken(ctx context.Context, ch db.Character) (
 	}
 
 	// The stored pair is sealed when a TOKEN_ENCRYPTION_KEY is
-	// configured (tokencrypt.go). A pair that does not open is a
+	// configured (auth_tokencrypt.go). A pair that does not open is a
 	// configuration problem, not a dead login: it is reported and
 	// retried, never parked.
 	accessToken, storedRefresh, err := app.tokens.openTokens(ch)

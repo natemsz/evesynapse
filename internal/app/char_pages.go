@@ -485,7 +485,7 @@ func (app *Application) fillCharacterWallet(ctx context.Context, ch db.Character
 // queue section marks its rows with.
 func (app *Application) fillCharacterSkills(ctx context.Context, ch db.Character, view *characterView, userID int64) map[int64]int {
 	// Skills: the full sheet (per-category groups) now lives on
-	// this page; the builders in skills.go do the heavy lifting
+	// this page; the builders in char_skills.go do the heavy lifting
 	// against a throwaway skillsView, and this block copies the
 	// results onto the character view.
 	var skills esi.Skills

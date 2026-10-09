@@ -170,7 +170,7 @@
 
     // --- the grid engine, mirrored ----------------------------
     // solveHomeSpans is the exact mirror of the Go solver in
-    // overview.go: walk the order once — a full module, or a
+    // home_overview.go: walk the order once — a full module, or a
     // flex module marked wide, owns its row; a flex module
     // takes half a row and pairs with the next flex module that
     // fits; a flex module left alone in its row stretches full.
@@ -1325,7 +1325,7 @@
     } catch (e) { /* private mode: this page still works */ }
     // Also in a cookie, so the server renders the saved layout on
     // the next page load and it never paints expanded first (see
-    // navstate.go). Without storage, a cookie alone still keeps it.
+    // ui_navstate.go). Without storage, a cookie alone still keeps it.
     document.cookie = storageKey + "=" + state + "; path=/; max-age=31536000; samesite=lax" +
       (window.location.protocol === "https:" ? "; secure" : "");
   }

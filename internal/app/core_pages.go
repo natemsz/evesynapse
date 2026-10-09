@@ -253,7 +253,7 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 	if data.NavPage == "" {
 		data.NavPage = page
 	}
-	// v0.3.33: sync status for the footer. Cheap: ESI error budget
+	// Sync status for the footer. Cheap: ESI error budget
 	// is in-memory; sweep state is a single cached query.
 	if data.SyncStatus == "" {
 		data.SyncStatus = app.syncStatusString(ctx)
@@ -325,7 +325,7 @@ func friendlyLoginError(code string) string {
 }
 
 // syncStatusString returns a short ESI/sweep health string for the
-// footer (v0.3.33, EVE-Nexus pattern). "ESI OK" when the error budget
+// footer. "ESI OK" when the error budget
 // is healthy, "ESI limited" when low, plus sweep activity if a market
 // sweep is running.
 func (app *Application) syncStatusString(ctx context.Context) string {

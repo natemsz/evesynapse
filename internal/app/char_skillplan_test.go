@@ -1,6 +1,6 @@
 package app
 
-// Hermetic tests for Phase 4 (skill plans):
+// Hermetic tests for skill plans:
 //
 //   - Importer: dgmTypeAttributes parses with the skill-relevant
 //     attribute filter; real rows copied from the live dump (Gunnery

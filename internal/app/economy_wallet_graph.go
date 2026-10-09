@@ -16,7 +16,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Wallet graphs (v0.3.09): balance-over-time from data the app
+// Wallet graphs: balance-over-time from data the app
 // already stores — the wallet journal's running balances for the
 // recent window and the daily wallet-history samples (schema
 // 019) for the longer tail — plus an account net-worth history

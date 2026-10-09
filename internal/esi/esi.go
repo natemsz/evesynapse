@@ -86,7 +86,7 @@ const (
 	// still stored per character like the other kinds.
 	SnapProfile = "profile"
 
-	// Module sweep, cluster 1 (character): live-state endpoints.
+	// Character: live-state endpoints.
 	SnapLocation  = "location"
 	SnapShip      = "ship"
 	SnapOnline    = "online"
@@ -96,7 +96,7 @@ const (
 	SnapFatigue   = "fatigue"
 	SnapKillmails = "killmails" // recent list (id+hash pairs); details live in killmail_details
 
-	// Module sweep, cluster 2 (corporation): corporation endpoints,
+	// Corporation: corporation endpoints,
 	// stored per viewing character (the character whose token
 	// fetched them, against that character's corporation) under
 	// corp_* kinds. Journal/transaction kinds are per wallet
@@ -115,7 +115,7 @@ const (
 	SnapCorpJournalPrefix = "corp_journal_"
 	SnapCorpTxnsPrefix    = "corp_txns_"
 
-	// Module sweep, cluster 3 (economy): character economy
+	// Economy: character economy
 	// endpoints. Journal/transactions are bounded recent windows
 	// the worker merges (see fetchJournalWindow/fetchTxnsWindow);
 	// contract *items* are not a snapshot at all — they warm into
@@ -130,14 +130,14 @@ const (
 	SnapBlueprints    = "blueprints"
 	SnapMining        = "mining"
 
-	// Phase 2 (planetary industry): the colonies list, plus one
+	// Planetary industry: the colonies list, plus one
 	// layout snapshot per planet keyed by planet id in the kind
 	// (planet_layout_<planet id>) — the same suffix keying the
 	// corporation wallet divisions use (corp_journal_3).
 	SnapPlanets            = "planets"
 	SnapPlanetLayoutPrefix = "planet_layout_"
 
-	// Phase 2 (mail): the header list (ESI's 50 most recent), the
+	// Mail: the header list (ESI's 50 most recent), the
 	// label set with per-label and total unread counts, the
 	// character's mailing lists, and one body snapshot per mail
 	// keyed by mail id (mail_body_<mail id>). Mail bodies are
@@ -147,7 +147,7 @@ const (
 	SnapMailLists      = "mail_lists"
 	SnapMailBodyPrefix = "mail_body_"
 
-	// Phase 2 (calendar + contacts): event summaries (the next
+	// Calendar + contacts: event summaries (the next
 	// 50 chronological from now), one detail snapshot and one
 	// attendee-list snapshot per event (suffix-keyed like the
 	// planet layouts), and the character's contact list.
@@ -161,7 +161,7 @@ const (
 	// an op.
 	SnapCorpRoles = "corp_roles"
 
-	// Phase 4 (skill plans): the character's five attributes,
+	// Skill plans: the character's five attributes,
 	// warmed alongside the skills snapshots — the plan engine
 	// times every step against these, so the plans pages must
 	// read them from the cache like everything else.
@@ -169,7 +169,7 @@ const (
 )
 
 // Global snapshot kinds stored in global_snapshots (schema 007):
-// the module sweep's Intel cluster. Everything here is public
+// the Intel pages' data. Everything here is public
 // ESI data — no character token — so it lives in a global store
 // rather than the per-character snapshot table. War *details*
 // are not a global snapshot; they warm into the war_details
@@ -364,7 +364,7 @@ type Client struct {
 	structNamesMu sync.RWMutex
 	structNames   map[int64]string
 
-	// ESI error budget (v0.3.33): X-Esi-Error-Limit-Remain and
+	// ESI error budget: X-Esi-Error-Limit-Remain and
 	// X-Esi-Error-Limit-Reset from every response. Updated
 	// atomically on each request; workers check ErrorBudgetLow()
 	// before spending budget instead of discovering 420s.
@@ -594,7 +594,7 @@ type MarketOrder struct {
 }
 
 // ---------------------------------------------------------------------------
-// Module sweep, cluster 1: character live-state payloads.
+// Character live-state payloads.
 // ---------------------------------------------------------------------------
 
 // Location is GET /characters/{id}/location/. station_id and
@@ -717,7 +717,7 @@ type Killmail struct {
 }
 
 // ---------------------------------------------------------------------------
-// Module sweep, cluster 2: corporation payloads. Shapes verified
+// Corporation payloads. Shapes verified
 // against CCP's ESI OpenAPI document (components/schemas
 // CorporationsCorporationId*). Dates are RFC3339 strings, matching
 // the rest of this package.
@@ -880,7 +880,7 @@ type AssetName struct {
 }
 
 // ---------------------------------------------------------------------------
-// Module sweep, cluster 3: character economy payloads. Shapes
+// Character economy payloads. Shapes
 // verified against CCP's ESI OpenAPI document (components/schemas
 // CharactersCharacterId*). Dates are RFC3339 strings.
 // ---------------------------------------------------------------------------
@@ -1066,7 +1066,7 @@ type MiningEntry struct {
 type MiningLedger []MiningEntry
 
 // ---------------------------------------------------------------------------
-// Module sweep, cluster 4: Intel payloads (all public ESI).
+// Intel payloads (all public ESI).
 // Shapes verified against CCP's ESI OpenAPI document
 // (components/schemas WarsWarIdGet, IncursionsGet, FwSystemsGet,
 // FwStatsGet, UniverseFactionsGet, Status,
@@ -1189,7 +1189,7 @@ type Constellation struct {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 2: planetary industry payloads (auth scope
+// Planetary industry payloads (auth scope
 // esi-planets.manage_planets.v1 — the only scope CCP publishes for
 // the two colony GETs). Shapes verified against CCP's ESI OpenAPI
 // document (components/schemas CharactersCharacterIdPlanets*,
@@ -1293,7 +1293,7 @@ type Schematic struct {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 2: mail payloads (auth scope esi-mail.read_mail.v1, the
+// Mail payloads (auth scope esi-mail.read_mail.v1, the
 // only mail scope this app requests — no organize/send).
 // Shapes verified against CCP's ESI OpenAPI document
 // (components/schemas CharactersCharacterIdMail*).
@@ -1359,7 +1359,7 @@ type MailList struct {
 type MailLists []MailList
 
 // ---------------------------------------------------------------------------
-// Phase 2: calendar + contacts payloads (auth scopes
+// Calendar + contacts payloads (auth scopes
 // esi-calendar.read_calendar_events.v1 and
 // esi-characters.read_contacts.v1, both long held). Shapes
 // verified against CCP's ESI OpenAPI document
@@ -1665,7 +1665,7 @@ func (c *Client) FetchRaw(ctx context.Context, accessToken, path string) ([]byte
 }
 
 // trackErrorBudget records ESI's X-Esi-Error-Limit-Remain/Reset
-// headers (v0.3.33). Called on every response, in request;
+// headers. Called on every response, in request;
 // workers consult ErrorBudgetLow before spending budget.
 func (c *Client) trackErrorBudget(h http.Header) {
 	remainStr := h.Get("X-Esi-Error-Limit-Remain")
@@ -2196,7 +2196,7 @@ func withPageParam(path string, page int) string {
 }
 
 // ---------------------------------------------------------------------------
-// Cluster 3 windowed fetches. The wallet journal pages forward via
+// Windowed fetches. The wallet journal pages forward via
 // X-Pages; wallet transactions step backward via from_id. Both are
 // stored as one bounded newest-first window so the snapshot stays
 // small and the page renders from one flat list.

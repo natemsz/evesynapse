@@ -569,7 +569,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/export/", app.handleFitExport)
 		r.Get("/mine.json", app.handleFitMineJSON)
 		r.Post("/fork/", app.handleFitFork)
-		r.Get("/shopping/{id}/", app.handleFitShopping) // v0.3.33: fit → shopping list
+		r.Get("/shopping/{id}/", app.handleFitShopping)
 	})
 
 	r.Route("/killmails", func(r chi.Router) {

@@ -13,7 +13,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Skill plan engine (Phase 4). Pure functions over three inputs the
+// Skill plan engine. Pure functions over three inputs the
 // handlers assemble from local state: the SDE skill graph (schema
 // 012: rank/attributes per skill, required-skill rows per type), a
 // character's trained skills + queue (snapshots), and their current

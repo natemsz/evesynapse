@@ -119,7 +119,7 @@ const (
 // scope was added get a 403 on that endpoint, which the handler
 // reports as "please sign in again" instead of failing silently.
 //
-// One deliberate exception (Phase 2): esi-planets.manage_planets.v1
+// One deliberate exception: esi-planets.manage_planets.v1
 // IS requested. CCP publishes no read scope for planetary industry —
 // manage_planets is the only scope gating the two colony GETs
 // (/characters/{id}/planets and /characters/{id}/planets/{planet_id}),

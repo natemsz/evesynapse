@@ -13,7 +13,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Economy cluster (module sweep, cluster 3): Wallet, Orders,
+// Economy cluster: Wallet, Orders,
 // Contracts, Industry. Like every other page these render from
 // worker-warmed snapshots and local tables only; the handlers
 // below never touch ESI. Each dataset degrades independently: a

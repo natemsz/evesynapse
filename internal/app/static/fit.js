@@ -1,4 +1,4 @@
-// Fitting simulator editor (v0.3.21): the browser keeps the fit
+// Fitting simulator editor: the browser keeps the fit
 // document (ship, items, charge choices) and posts it to
 // /fittings/simulate/ on every change; the server answers with
 // the re-rendered workbench fragment, which swaps in place. The

@@ -14,7 +14,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Shared per-character page plumbing (module sweep). The Character,
+// Shared per-character page plumbing. The Character,
 // Fittings and Killmails pages all switch characters the way Assets
 // and Skills do; the helpers here keep that logic in one place.
 // ---------------------------------------------------------------------------
@@ -190,7 +190,7 @@ type characterView struct {
 
 	// Identity (profile snapshot): the name/birthday/security/
 	// corporation block the old home sheet fetched live. Since
-	// Phase 1B it comes from the worker-warmed profile snapshot,
+	// It comes from the worker-warmed profile snapshot,
 	// so this page — like every other — renders cache-only.
 	IdentityKnown  bool
 	PortraitURL    string
@@ -228,7 +228,7 @@ type characterView struct {
 	BrowseWarming bool
 	Plans         []skillPlanSummary
 
-	// Planetary industry summary (Phase 2): colony count plus
+	// Planetary industry summary: colony count plus
 	// the soonest extractor expiry, from the colonies + layout
 	// snapshots. PINotEnabled marks the recorded scope refusal.
 	PIKnown      bool

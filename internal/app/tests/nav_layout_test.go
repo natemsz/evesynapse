@@ -1,6 +1,6 @@
 package tests
 
-// Layout tests for the v0.3.07 navigation shell and the
+// Layout tests for the navigation shell and the
 // Chrome/Android visual-stability rules. These are markup and
 // stylesheet invariants: the same page must carry the wide
 // sidebar, the small-screen drawer hooks, the dark color-scheme
@@ -201,7 +201,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		".chart-legend",
 		".chart-axis-label",
 		".pchart .tick-mid",
-		// v0.3.07.002 drawer fixes: on small screens the state
+		// Drawer fixes: on small screens the state
 		// toggles hide, a real close control shows, and the
 		// persisted rail presentation is forced back to the
 		// full labeled list (labels, account block, inline
@@ -224,7 +224,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		"html[data-nav=\"rail\"] .nav-label {\n    display: block;\n    max-width: 12rem;\n    opacity: 1;\n    transform: none;\n  }",
 		"html[data-nav=\"rail\"] .sidebar-account-footer { display: flex; }",
 		"html[data-nav=\"rail\"] .sidebar .branch .menu {\n    position: static;",
-		// v0.3.07.002 top-bar cluster: the wordmark is always in
+		// Top-bar cluster: the wordmark is always in
 		// the wide top bar, the active character block sits at
 		// its right edge, and both leave the phone bar (the
 		// drawer keeps the character block and sign-out).
@@ -236,7 +236,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		".sidebar-signout",
 		".topbar > .topsearch { order: 3; }",
 		".topbar > .page-sync { order: 4; }",
-		// v0.3.07.003 wide chrome: the top bar is a fixed
+		// Wide chrome: the top bar is a fixed
 		// full-width strip over everything, and the sidebar
 		// hangs below it (top edge offset by the bar height)
 		// in every sidebar state; phones restore the sticky
@@ -246,13 +246,13 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		"background: linear-gradient(to bottom, rgba(24, 24, 24, 0.9), rgba(11, 11, 11, 0.9));",
 		"-webkit-backdrop-filter: blur(10px);",
 		"backdrop-filter: blur(10px);",
-		// v0.3.07.010: the sidebar wears the top bar's glass
+		// The sidebar wears the top bar's glass
 		// recipe with its own colors kept — #151515 (21,21,21)
 		// into #111111 (17,17,17) at 93% over the same blur.
 		// The rail flyout menus stay solid (no pin changes
 		// there); only the bar itself goes glass.
 		"background: linear-gradient(rgba(21, 21, 21, 0.9), rgba(17, 17, 17, 0.9)) padding-box;\n  -webkit-backdrop-filter: blur(10px);\n  backdrop-filter: blur(10px);",
-		// v0.3.07.011: user toggles between wide nav states
+		// User toggles between wide nav states
 		// glide on the grid track that actually drives the
 		// layout, labels fade as the rail narrows, and hidden
 		// waits for the shrink before it leaves the screen.
@@ -266,15 +266,15 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		"html.nav-motion-ready .nav-label {\n    transition: max-width 180ms ease-out, opacity 140ms ease-out, transform 180ms ease-out;\n  }",
 		"html[data-nav=\"rail\"] .nav-label {\n  max-width: 0;\n  opacity: 0;\n  transform: translateX(-0.25rem);\n}",
 		"@media (prefers-reduced-motion: reduce) {\n  body,\n  .sidebar,\n  .nav-label,\n  .sidenav a.navlink,\n  .sidebar .branch > summary { transition: none !important; }\n}",
-		// v0.3.07.010: shared darker header bands restored —
+		// Shared darker header bands restored —
 		// panel titles, card/module headings, foldable section
 		// headings, and direct panel section headings all sit
 		// on the same solid darker band while the ember ramp
-		// still paints the heading text. v0.3.07.012: the band
+		// still paints the heading text. The band
 		// is a solid ::before behind the heading, never a
 		// layered background on the heading itself — these
 		// pins assert the rendered distinction, not the
-		// intention. v0.3.07.014: the module titles themselves
+		// intention. The module titles themselves
 		// paint solid flare gold — the gradient-text clip
 		// inside these positioned headings does not paint on
 		// every phone browser, and an invisible title is worse
@@ -283,22 +283,22 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		".panel > h2, .panel > h3,\n.card > h2:first-child, .card > h3:first-child,\n.foldable > h2:first-child, .foldable > h3:first-child {\n  display: block;\n  position: relative;\n  z-index: 0;\n  border-bottom: 1px solid #262626;\n}",
 		".panel > h2::before, .panel > h3::before,\n.card > h2:first-child::before, .card > h3:first-child::before,\n.foldable > h2:first-child::before, .foldable > h3:first-child::before {\n  content: \"\";\n  position: absolute;\n  inset: 0;\n  z-index: -1;\n  background: var(--panel-head);\n  border-radius: inherit;\n}",
 		"h2, h3 {\n  background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);\n  -webkit-background-clip: text;\n  background-clip: text;\n  color: transparent;",
-		// v0.3.07.014: module/card/foldable titles are solid —
+		// Module/card/foldable titles are solid —
 		// no clipped ramp, no transparent glyphs on these
 		// headings; the exact-rule pin carries the assertion
 		// (solid --success, clip reset to border-box).
 		".panel > h2, .panel > h3,\n.card > h2:first-child, .card > h3:first-child,\n.foldable > h2:first-child, .foldable > h3:first-child {\n  background: none;\n  -webkit-background-clip: border-box;\n  background-clip: border-box;\n  color: var(--success);\n  -webkit-text-fill-color: currentColor;\n}",
-		// v0.3.07.012: Needs attention rows wear the same
+		// Needs attention rows wear the same
 		// zebra as table rows — same --row/--row-alt cycle
 		// and the same hover fill.
 		".attention li { background: var(--row); padding: 0.35rem 0.5rem; border-bottom: 1px solid #222; }",
 		".attention li:nth-child(even) { background: var(--row-alt); }",
 		".attention li:hover { background: var(--row-hover); }",
-		// v0.3.07.013: nav category labels keep Medium
+		// Nav category labels keep Medium
 		// Condensed; the menu links themselves (dropdown
 		// entries plus the standalone Home/Sync/Admin rows,
 		// sidebar and drawer alike) ride the non-condensed
-		// Univers. v0.3.07.015: the links sit at Regular
+		// Univers. The links sit at Regular
 		// (400), which finally renders true Regular now
 		// that the genuine Regular face is embedded —
 		// before it landed, a 400 request resolved to the
@@ -309,7 +309,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		"header a.navlink, .branch .menu a {\n  font-family: \"Univers Next Pro\", -apple-system, \"SF Pro Display\", \"Segoe UI\", \"Inter\", sans-serif;\n  font-weight: 400;\n  font-synthesis-weight: none;\n}",
 		".card > h2:first-child, .card > h3:first-child { margin: -0.85rem -1rem 0.75rem; padding: 0.55rem 1rem; border-radius: 4px 4px 0 0; }",
 		".foldable > h2:first-child, .foldable > h3:first-child { margin: 0 0 0.15rem; padding: 0.45rem 0.65rem; border-radius: 3px; }",
-		// v0.3.07.010 drawer refinement: on small screens the
+		// Drawer refinement: on small screens the
 		// open drawer does NOT blur the page beneath it — the
 		// scrim stays a plain dark veil and the drawer keeps
 		// the same 93% retained-color paint, crisp over content.
@@ -320,16 +320,16 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		"top: calc(3.75rem + 1px);",
 		"height: calc(100dvh - 3.75rem - 1px);",
 		"header { position: sticky; z-index: 90; }",
-		// v0.3.07.002 expand-all: shown with scripts on, kept in
+		// Expand-all: shown with scripts on, kept in
 		// the drawer even when the persisted rail state applies.
 		".nav-expand-btn",
 		"html.js .nav-expand-btn { display: inline-flex; }",
 		"html[data-nav=\"rail\"] .sidebar .nav-expand-btn { display: inline-flex; }",
-		// v0.3.07.007: the glyph-only controls float bare —
+		// The glyph-only controls float bare —
 		// no resting background or visible border; the labeled
 		// .nav-reopen floats bare with them.
 		".nav-state-btn,\n.nav-reopen,\n.nav-drawer-close,\n.nav-expand-btn {\n  background: transparent;\n  border-color: transparent;\n}",
-		// v0.3.07.005 wide top bar: the wordmark's auto margin
+		// Wide top bar: the wordmark's auto margin
 		// pins the sync/search/character cluster to the right
 		// edge as one group, and the search field carries its
 		// gradient magnifier on extra left padding.
@@ -339,17 +339,17 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		".search-glyph {",
 		"pointer-events: none;",
 		".topsearch input { padding: 0.3rem 0.55rem 0.3rem 2rem; font-size: 0.85rem; }",
-		// v0.3.07.008 branding: the Hub mark rides at the
+		// Branding: the Hub mark rides at the
 		// wordmark's left at a chunkier fixed square size,
 		// pulled slightly into the topbar flex gap so the
 		// gap before the text stays small.
 		".wordmark-glyph {\n  display: inline-block;\n  height: 1.75rem;\n  width: auto;\n  margin: 0 0.75rem 0 0;\n  flex-shrink: 0;\n}",
-		// v0.3.07.008: the phone-bar hamburger floats bare
+		// The phone-bar hamburger floats bare
 		// like the sidebar glyph controls (no resting box on
 		// the same footprint), with the same faint hover wash.
 		"background: transparent;\n  border: 1px solid transparent;\n  border-radius: 3px;\n  cursor: pointer;\n  font-family: \"Univers Next Pro Condensed\", \"Univers Next Pro\", sans-serif;",
 		".nav-hamburger:hover { background: rgba(255, 106, 26, 0.14); }",
-		// v0.3.07.006 rail discipline: closed categories never
+		// Rail discipline: closed categories never
 		// paint a flyout panel, and the active-section pill is
 		// the current page's category alone — a merely open
 		// flyout wears only a faint ember wash, wide screens
@@ -357,7 +357,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		"html[data-nav=\"rail\"] .sidebar .branch:not([open]) > .menu { display: none; }",
 		"html[data-nav=\"rail\"] .sidebar .branch[open]:not(.active) > summary {\n    background: rgba(255, 106, 26, 0.14);\n    box-shadow: none;\n  }",
 		".sidebar .branch.active > summary {\n  color: var(--text-bright);\n  background: #1b1b1b;\n  box-shadow: inset 3px 0 0 var(--accent);\n}",
-		// v0.3.07.006 top-bar divider: a 1px ember rule between
+		// Top-bar divider: a 1px ember rule between
 		// the search field and the character switcher, wide
 		// layout only (the character block is display:none on
 		// phones, and this block never applies there).
@@ -374,15 +374,15 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		".expand-glyph",
 		".hamburger-lines",
 		".nav-hamburger-text",
-		// v0.3.07.009: the sidebar's old fully-solid paint is
-		// gone — the bar is glass now (93% since v0.3.07.010).
+		// The sidebar's old fully-solid paint is
+		// gone — the bar is glass now.
 		"background: linear-gradient(#151515, #111111) padding-box;",
-		// v0.3.07.012: the layered header background that
+		// The layered header background that
 		// filled module header bars with the ember ramp is
 		// gone for good.
 		"background-clip: text, border-box",
 		"linear-gradient(var(--panel-head), var(--panel-head))",
-		// v0.3.07.013: the nav links left the condensed rule —
+		// The nav links left the condensed rule —
 		// the old combined selector cannot come back.
 		"header a.navlink, .sidenav a.navlink, .branch > summary, .branch .menu a",
 	} {
@@ -409,17 +409,17 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		`setAttribute("aria-expanded"`,
 		`matchMedia("(max-width: 860px)")`,
 		`"Escape"`,
-		// v0.3.07.011: motion arms after the restored state
+		// Motion arms after the restored state
 		// has landed, never during the load that restored it.
 		"nav-motion-ready",
 		"requestAnimationFrame",
-		// v0.3.07.006: entering the rail folds every category,
+		// Entering the rail folds every category,
 		// and in the rail one flyout at a time opens.
 		"closeCategoryBranches",
 		"closeCategoryBranches(null);",
 		"closeCategoryBranches(event.target);",
 		"railActive",
-		// v0.3.07.006: the live-fill pollers re-check the
+		// The live-fill pollers re-check the
 		// moment a hidden tab comes back to the front.
 		"visibilitychange",
 		"document.visibilityState",
@@ -433,14 +433,14 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 	}
 	// The live-fill pollers never abandon a page that is still
 	// waiting: no attempt cap may strand pending content behind
-	// a manual refresh (the cold-boot stall of v0.3.07.005).
+	// a manual refresh.
 	for _, gone := range []string{"maxAttempts", "attempts > 40", "attempts > maxAttempts"} {
 		if strings.Contains(js, gone) {
 			t.Errorf("app.js still contains the poller give-up %q", gone)
 		}
 	}
 
-	// v0.3.07.007 branding: the favicon asset itself. The file
+	// Branding: the favicon asset itself. The file
 	// server must hand it out as SVG (Go's mime table covers
 	// .svg in this environment — this pins that it stays true),
 	// carrying The Hub on the page-base backdrop instead of the

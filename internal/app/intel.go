@@ -14,7 +14,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Intel cluster (module sweep, cluster 4): wars, incursions and
+// Intel cluster: wars, incursions and
 // faction warfare, plus the Tranquility status line on Home.
 //
 // Everything here is public ESI data — no character token — so it

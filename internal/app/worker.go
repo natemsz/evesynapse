@@ -282,7 +282,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 
 	c := &cycleState{app: app, allowance: &fetchBudget{left: app.fetchesPerCycle()}, halt: newHalt()}
 
-	// The market guide (v0.3.04): one public call mirrors into
+	// The market guide: one public call mirrors into
 	// the stored table on ESI's cache window, ahead of the
 	// character pass so asset valuation — the net-worth card
 	// and the daily sampler below — always has prices to work
@@ -500,7 +500,7 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 		return stored + warmed, limited
 	})
 
-	// Economy datasets (cluster 3): the wallet/orders/
+	// Economy datasets: the wallet/orders/
 	// contracts/industry snapshots, plus the contract item
 	// lists behind the contracts snapshot (economy_worker.go).
 	c.characterPass("warming contract items", ch, func() (int, bool) {
@@ -509,7 +509,7 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 		return stored + warmed, limited
 	})
 
-	// Phase 2 datasets: planetary industry (colonies +
+	// Datasets: planetary industry (colonies +
 	// layouts, planets_worker.go) and mail/calendar/contacts
 	// (list kinds + bodies + event details, comms_worker.go).
 	// Both passes spend from the cycle's shared fetch
@@ -583,7 +583,7 @@ func (c *cycleState) refreshCoreSnapshots(ctx context.Context, ch db.Character, 
 func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Character) {
 	app := c.app
 
-	// Market pass (Phase 5): price-history warming for
+	// Market pass: price-history warming for
 	// watchlists/wants/order types, and per-order health from
 	// regional books. Public data, spending from its own lane
 	// (refreshMarketData owns the market allowance).
@@ -616,7 +616,7 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 	c.pass("draining pilot records", func() (int, bool) {
 		return app.refreshPilotRecords(ctx, c.allowance)
 	})
-	// Public organization records (v0.3.12): corporations and
+	// Public organization records: corporations and
 	// alliances someone followed a name to. Public endpoints,
 	// same cycle allowance.
 	c.pass("draining corporation records", func() (int, bool) {
@@ -705,7 +705,7 @@ func cycleSummary(refreshed, namesResolved, failed int, limited bool, parked, de
 }
 
 // coreSnapshotKinds are the per-character snapshot kinds the main
-// worker pass keeps warm (the cluster 1 set).
+// worker pass keeps warm (the set).
 var coreSnapshotKinds = []string{
 	esi.SnapProfile, esi.SnapSkills, esi.SnapSkillqueue, esi.SnapAttributes, esi.SnapWallet, esi.SnapAssets,
 	esi.SnapLocation, esi.SnapShip, esi.SnapOnline, esi.SnapClones,

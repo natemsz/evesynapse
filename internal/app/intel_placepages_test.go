@@ -1,7 +1,7 @@
 package app
 
 // Hermetic tests for the solar system & station destination
-// pages (v0.3.13) and the place-name linking sweep: the helpers'
+// pages and the place-name linking sweep: the helpers'
 // policy, the SDE-backed page renders (fields, security
 // formatting, station lists, unknown-id states), and the
 // surfaces that now link system/station names — character

@@ -1,6 +1,6 @@
 package app
 
-// Hermetic tests for the player structure page (v0.3.16) and the
+// Hermetic tests for the player structure page and the
 // structure leg of the name-link policy: the helper's policy, the
 // page states (pending -> named with context, named without
 // context, unknown id, settled-missing), context persistence from

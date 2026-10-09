@@ -1,6 +1,6 @@
 package app
 
-// Hermetic tests for v0.3.06 (market item depth + planner
+// Hermetic tests for (market item depth + planner
 // judging): chart day-data and recent-days geometry as pure
 // functions, the trader snapshot's window math, the item page's
 // interactive markup and snapshot strip rendered against a stub

@@ -5,7 +5,7 @@
 package fit
 
 // ---------------------------------------------------------------------------
-// Fitting simulator stat engine (schema 029, v0.3.21).
+// Fitting simulator stat engine.
 //
 // Compute takes a ship, a set of fitted items (modules, rigs,
 // drones with quantities), a skill level per skill type, and a

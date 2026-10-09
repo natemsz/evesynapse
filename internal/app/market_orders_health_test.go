@@ -1,11 +1,11 @@
 package app
 
-// v0.3.14 consolidation tests: the character Orders page carries
+// Consolidation tests: the character Orders page carries
 // the same order-health verdicts as the Market page's "Your
 // orders" section (and the corporation orders page where the
 // stored rows cover the issuer), killmail values warm on view
 // through the durable guide-price want (schema 027), and the
-// place-link stragglers from the v0.3.13 pass (killmail system
+// place-link stragglers from the pass (killmail system
 // lines, industry locations, intel systems, corp orders
 // locations) link exactly when the SDE knows the place.
 
@@ -280,7 +280,7 @@ func TestUrgentDrainAnswersGuidePriceWant(t *testing.T) {
 	}
 }
 
-// TestPlaceLinkStragglers covers the surfaces the v0.3.13 pass
+// TestPlaceLinkStragglers covers the surfaces the pass
 // left behind: industry job facilities, blueprint locations and
 // mining systems, incursion staging/affected systems, and FW
 // contested systems link when the SDE knows the place and stay

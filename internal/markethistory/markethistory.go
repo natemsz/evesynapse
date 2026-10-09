@@ -19,7 +19,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Phase 5: market price history — ESI's daily aggregates, stored
+// Market price history — ESI's daily aggregates, stored
 // typed in market_history and charted server-side. Everything in
 // this file is a pure function over stored rows: change math,
 // summary stats, and the hand-computed SVG chart (no chart

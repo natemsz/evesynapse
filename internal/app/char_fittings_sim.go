@@ -20,7 +20,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Fitting simulator UI (v0.3.21): the editor on the Fittings page.
+// Fitting simulator UI: the editor on the Fittings page.
 //
 // The browser keeps a small fit document (ship, item lines, charge
 // choices) and posts it to /fittings/simulate/ on every change; the

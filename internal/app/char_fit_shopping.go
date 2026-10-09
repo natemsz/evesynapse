@@ -14,7 +14,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Fit → Shopping List (v0.3.33, EVE-Nexus pattern #7).
+// Fit → Shopping List.
 //
 // Explodes a saved fit into a priced shopping list: ship + modules +
 // charges, aggregated by type, with market prices and a total. This

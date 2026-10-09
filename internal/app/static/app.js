@@ -1826,7 +1826,7 @@
 // prefers-color-scheme media query applies. The button only
 // renders while logged in (see base.html), so everything here
 // is guarded: no button, no work.
-// v0.3.34: simple dark/light toggle (faction themes deferred).
+// Simple dark/light toggle (faction themes deferred).
 (function () {
   "use strict";
   var btn = document.getElementById("theme-toggle");
@@ -1865,7 +1865,7 @@
   });
 })();
 
-// v0.3.32: character selector dropdown with search/filter.
+// Character selector dropdown with search/filter.
 (function() {
   document.querySelectorAll('[data-charselector]').forEach(function(root) {
     var input = root.querySelector('.charselector-input');

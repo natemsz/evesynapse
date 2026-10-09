@@ -78,7 +78,7 @@ type marketOrderRow struct {
 }
 
 // marketItem is the item view: guide prices from /markets/prices/
-// plus the order book for one region. Phase 5 adds the stored
+// plus the order book for one region, the stored
 // price history (chart + changes, from market_history only — the
 // worker fills it) and the watch state for "Watch this item".
 type marketItem struct {
@@ -115,7 +115,7 @@ type marketItem struct {
 	BuyBand     string
 	Trader      *markethistory.TraderStats // trading snapshot; set by attachHistory
 
-	// Phase 5 price history (cache-only, from stored rows).
+	// Price history (cache-only, from stored rows).
 	// HistoryState is computed by attachHistory from the stored
 	// rows plus the fetch-state record: markethistory.StatePending (no
 	// rows yet, fetch not settled), markethistory.StateEmpty (worker

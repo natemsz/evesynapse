@@ -1,6 +1,6 @@
 package app
 
-// Hermetic tests for the economy cluster (module sweep, cluster 3),
+// Hermetic tests for the economy cluster,
 // following corp_pages_test.go's two-layer approach:
 //
 //   - Render tests: seeded economy snapshots + a contract_details

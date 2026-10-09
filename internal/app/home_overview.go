@@ -18,7 +18,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Phase 1B: the signed-in Home is no longer a single character
+// The signed-in Home is no longer a single character
 // sheet — it is the account overview: a customizable set of
 // widgets that read across every linked character. Every widget
 // renders cache-only from worker-warmed snapshots (the same rule
@@ -129,7 +129,7 @@ type homeLayoutItem struct {
 // array is honored — the user turned everything off.
 //
 // Two storage formats load identically: v1, the bare id array
-// (["fleet", ...]) every build up to Phase 2 wrote, and v2, the
+// (["fleet", ...]) older builds wrote, and v2, the
 // object array ([{"id":"fleet"}, {"id":"market","span":"wide"}])
 // written since the grid engine. Each entry is decoded on its
 // own, so a corrupted entry drops out instead of taking the
@@ -336,7 +336,7 @@ type charSnaps struct {
 	assetsKnown bool
 	assets      []esi.Asset
 
-	// Phase 2: planetary industry (colonies list + whichever
+	// Planetary industry (colonies list + whichever
 	// per-planet layouts have warmed) and the mail label set
 	// (the fleet's unread badge reads the total from it).
 	planetsKnown bool
@@ -345,7 +345,7 @@ type charSnaps struct {
 
 	mailLabels *esi.MailLabels
 
-	// Phase 6 (Briefing): trained skills (industry slot math),
+	// Briefing: trained skills (industry slot math),
 	// mail headers (newest unread sender), calendar summaries,
 	// and the closed-orders history (expired-order events).
 	skillsKnown bool
@@ -750,7 +750,7 @@ type watchlistWidget struct {
 }
 
 type marketWidget struct {
-	// Scope controls (v0.3.04 widget config).
+	// Scope controls (widget config).
 	ScopeOptions []marketScopeOption
 	Merge        string // mergeBoth | mergeCombined | mergePerCharacter (render-resolved)
 	ShowMerge    bool   // scope covers >1 character: the merge picker matters
@@ -766,7 +766,7 @@ type marketWidget struct {
 	BuyValue    string
 	Expiring    []marketExpiry
 	PerChar     []marketCharRow
-	Health      string // Phase 5 one-liner: undercuts + watchlist moves, "" when quiet
+	Health      string // One-liner: undercuts + watchlist moves, "" when quiet
 }
 
 type skillFinish struct {
@@ -913,7 +913,7 @@ const (
 	attentionJobReady
 	attentionOrderExpiring
 	attentionContract
-	attentionPI // Phase 2: expired/imminent extractors (appended; order preserved)
+	attentionPI // Expired/imminent extractors (appended; order preserved)
 	attentionUndercut
 	attentionMarketMove
 )
@@ -1028,7 +1028,7 @@ func (app *Application) buildAttention(ctx context.Context, bundles []*charSnaps
 			}
 		}
 
-		// Phase 2: extractors expired or running dry within a
+		// Extractors expired or running dry within a
 		// day, from the warmed colony layouts (expiry fixed at
 		// install time, so the countdown is real).
 		if b.planetsKnown {
@@ -1067,7 +1067,7 @@ func (app *Application) buildAttention(ctx context.Context, bundles []*charSnaps
 		}
 	}
 
-	// Phase 5: market health — undercut sell orders and
+	// Market health — undercut sell orders and
 	// watchlist moves, from the worker's stored verdicts and
 	// price history. Account-level (not per bundle), appended
 	// after the extractor rules.
@@ -1088,7 +1088,7 @@ func (app *Application) buildAttention(ctx context.Context, bundles []*charSnaps
 	return w
 }
 
-// attentionMarketItems builds the Phase 5 Needs-attention lines
+// attentionMarketItems builds the Needs-attention lines
 // for one account: undercut sell orders (one line each, folded
 // into a single summary past three) and watchlist moves past the
 // user's threshold. Everything reads the stored verdicts and
@@ -1492,7 +1492,7 @@ func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps, c
 			w.EmptyOrders = "No open orders across your characters."
 		}
 	}
-	// Phase 5 health line: how many sell orders are undercut and
+	// Health line: how many sell orders are undercut and
 	// how many watched items are moving, from the same stored
 	// verdicts the attention feed reads. Quiet when zero. It is
 	// an account-wide summary, so it only reads under the
@@ -1705,7 +1705,7 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 
 	bundles := app.loadCharSnaps(ctx, userID, chars, layoutIDs(layout))
 
-	// Phase 6: the briefing's "since you last looked" window,
+	// The briefing's "since you last looked" window,
 	// resolved before the widgets build. The anchor only exists
 	// once the module has rendered, so a home without it never
 	// touches the anchor at all.

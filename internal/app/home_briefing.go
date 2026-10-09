@@ -14,7 +14,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Phase 6: the Briefing home module — a since-you-last-looked
+// The Briefing home module — a since-you-last-looked
 // digest computed entirely from cached data. A background worker
 // keeps every snapshot this reads warm, so the facts are already
 // here when the user arrives; the module only reads local tables

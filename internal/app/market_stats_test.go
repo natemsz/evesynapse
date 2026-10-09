@@ -1,6 +1,6 @@
 package app
 
-// Honest prices (v0.3.20): the item page quotes the median and
+// Honest prices: the item page quotes the median and
 // 9-in-10 band of the whole regional book alongside the bests,
 // so one joke order cannot stand in for the market. Unit tests
 // pin the statistics; the page test drives a book with a scam

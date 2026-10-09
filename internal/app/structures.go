@@ -10,7 +10,7 @@ import (
 // ---------------------------------------------------------------------------
 // Player structure names. GET /universe/structures/{id}/ answers
 // 401 without a token and needs esi-universe.read_structures.v1
-// (in eveScopes since the Phase 3 build), so names can only ever
+// (in eveScopes since the build), so names can only ever
 // come from a background lookup — pages must never wait on one.
 // The queue lives in the structure_names table: worker-computed
 // views and the market book view note the structure ids they meet
@@ -21,7 +21,7 @@ import (
 // negative answers negative-cache for 24 hours so private
 // structures aren't re-asked every cycle.
 //
-// Resolution tiers (v0.3.08):
+// Resolution tiers:
 //  1. Multi-character attempts — every linked character whose
 //     login granted the scope may be asked, corp-mates of the
 //     owning corporation first, then most recently active. One

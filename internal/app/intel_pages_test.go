@@ -1,6 +1,6 @@
 package app
 
-// Hermetic tests for the intel cluster (module sweep, cluster 4),
+// Hermetic tests for the intel cluster,
 // following corp_pages_test.go's two-layer approach:
 //
 //   - Render tests: seeded global snapshots, war_details rows and

@@ -1,6 +1,6 @@
 package app
 
-// Hermetic tests for v0.3.04: per-widget configuration (schema
+// Hermetic tests for per-widget configuration (schema
 // 020), the orders widget's character/tag scope and merge modes,
 // the Home watchlist module, the stored market guide (schema
 // 021) behind always-on asset valuation, and the guide-price

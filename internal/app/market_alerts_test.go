@@ -1,6 +1,6 @@
 package app
 
-// Hermetic tests for Phase 5 (market history + alerts): change
+// Hermetic tests for market history + alerts: change
 // math and chart geometry as pure functions, worker warming and
 // health computation against a path-routing stub, watchlist CRUD
 // through the real router, and the two Home consumers (attention

@@ -23,7 +23,7 @@ import (
 // ESI, no token — so handlers keep the zero-outbound-call rule.
 //
 // Suggestion pools pick which slice of the type table a box
-// searches. Every pool shares one floor (v0.3.04): published
+// searches. Every pool shares one floor: published
 // types with a market group — things a player can actually
 // obtain on the market or through contracts. Unpublished and
 // untradeable database rows never surface in a search box; the

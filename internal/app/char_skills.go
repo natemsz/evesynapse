@@ -34,7 +34,7 @@ type skillsView struct {
 	CompletesAt   string // finish time of the last queue entry, "" when queue empty
 	Groups        []skillGroupSection
 
-	// Browse (Phase 4): the full skill catalog from the SDE
+	// Browse: the full skill catalog from the SDE
 	// graph, with plan quick-add forms. BrowseWarming marks the
 	// pre-import state; BrowseGroups stay empty then.
 	Browse        []browseSkillGroup

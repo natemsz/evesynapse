@@ -102,9 +102,8 @@
      that a row of them lines up. */
   --control-h: 1.9rem;
   color-scheme: dark;
-  /* v0.3.30: --text lightened a notch (#f5ead9 -> #faf3e6) for LCD
-     readability; the ember palette is untouched. The extra text-tone
-     variables below exist so the light theme can re-tone them. */
+  /* The extra text-tone variables below exist so the light theme can
+     re-tone them. */
   --text: #faf3e6;
   --text-bright: #fff6e6;
   --accent: #ff6a1a;
@@ -469,7 +468,7 @@ main {
   border-radius: 4px;
   padding: 0.85rem 1rem 1rem;
 }
-/* v0.3.07.012: shared darker header bands, minus the layered
+/* Shared darker header bands, minus the layered
    background trick. v0.3.07.010 layered the ember ramp over
    the band on the heading itself and relied on a two-value
    per-layer background clip to keep the ramp inside the
@@ -510,7 +509,7 @@ main {
 .panel > h2, .panel > h3 { margin: 1.1rem 0 0.15rem; padding: 0.45rem 0.65rem; border-radius: 3px; }
 .card > h2:first-child, .card > h3:first-child { margin: -0.85rem -1rem 0.75rem; padding: 0.55rem 1rem; border-radius: 4px 4px 0 0; }
 .foldable > h2:first-child, .foldable > h3:first-child { margin: 0 0 0.15rem; padding: 0.45rem 0.65rem; border-radius: 3px; }
-/* v0.3.07.014: module titles paint solid. The .012 band
+/* Module titles paint solid. The .012 band
    leaned on the h2/h3 gradient-text clip above, and on at
    least one phone Chrome build the clip does not paint
    inside these positioned headings — the band renders, the
@@ -846,7 +845,7 @@ tbody tr.yours td { background: rgba(255, 184, 77, 0.10); }
 
 /* --- footer --- */
 footer {
-  /* 85% opacity with blur (user spec, matching the top bar and
+  /* 85% opacity with blur (matching the top bar and
      sidebar glass treatment); the 85% paint alone is the no-blur
      fallback. */
   background: rgba(11, 11, 11, 0.85);
@@ -889,7 +888,7 @@ footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
   th, td { padding: 0.35rem 0.45rem; }
 }
 
-/* --- header character switcher + /characters/ page (Phase 1A) ---
+/* --- header character switcher + /characters/ page ---
    The switcher is a nav .branch living in the topbar; its menu
    right-aligns to the bar's edge instead of the left. Portrait
    chips align with the text they label. */
@@ -897,7 +896,7 @@ footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
 .switcher .menu a { display: flex; align-items: center; gap: 0.5rem; }
 .portrait { border-radius: 3px; vertical-align: middle; }
 
-/* --- Phase 1B home overview widgets ---
+/* --- Home overview widgets ---
    The widget grid is the standard .grid/.card vocabulary; only
    the fleet table, attention list and customize rows need their
    own rules. */
@@ -1232,7 +1231,7 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
 }
 .page-sync[hidden] { display: none; }
 
-/* v0.3.07 navigation shell and phone layout. The wallpaper stays
+/* Navigation shell and phone layout. The wallpaper stays
    on the dedicated body::before layer above; navigation lives in
    a left sidebar on wide screens and in an off-canvas drawer on
    small screens. Content panels remain opaque. */
@@ -1273,7 +1272,7 @@ html[data-nav="hidden"] body { grid-template-columns: 0 minmax(0, 1fr); }
   height: calc(100vh - 3.75rem - 1px);
   height: calc(100dvh - 3.75rem - 1px);
   min-width: 0;
-  /* v0.3.07.010: the sidebar takes the top bar's glass
+  /* The sidebar takes the top bar's glass
      treatment (user ask) — same recipe, its own colors kept:
      the #151515 → #111111 paint at 90% over a backdrop blur.
      Rail flyouts and content panels stay solid; the 93% paint
@@ -1289,7 +1288,7 @@ html[data-nav="hidden"] .sidebar {
   overflow: hidden;
   border-right-color: transparent;
 }
-/* v0.3.07.011: wide nav state changes glide instead of
+/* Wide nav state changes glide instead of
    snapping. The head script applies any saved state before
    first paint; app.js adds .nav-motion-ready only after that
    initial layout has had frames to land, so a refresh or
@@ -1351,7 +1350,7 @@ html[data-nav="hidden"] .sidebar {
   cursor: pointer;
   font: inherit;
 }
-/* v0.3.07.007: the glyph-only controls (collapse / hide /
+/* The glyph-only controls (collapse / hide /
    drawer close / expand-all) float bare — gradient sign, no
    resting box. The border stays on the box at full width but
    transparent, so the footprint never shifts. The labeled Menu
@@ -1447,7 +1446,7 @@ html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
 .nav-icon svg[hidden] { display: none; }
 /* Theme toggle icons swap via data-theme (head script sets this before
    first paint, so no flash of both icons). */
-/* Theme toggle icons: CSS is the single source of truth (v0.3.32.007).
+/* Theme toggle icons: CSS is the single source of truth.
    Dark is the default: show sun (click to go light), hide moon.
    In light mode: show moon (click to go dark), hide sun.
    The default rule names the html element so that it outranks
@@ -1728,8 +1727,8 @@ html[data-nav="rail"] { --nav-axis: calc(2.5rem - 0.5px); }
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-/* v0.3.07.008: the phone-bar hamburger floats bare like the
-   sidebar glyph controls (the v0.3.07.007 borderless pass
+/* The phone-bar hamburger floats bare like the
+   sidebar glyph controls (the borderless pass
    covered those; this closes the gap) — no resting box, just
    the gradient three-line icon on the same footprint, with a
    faint hover wash for feedback. */
@@ -1920,7 +1919,7 @@ tbody tr.yours td { background-color: #2a2015; }
   .topbar-wordmark { margin-right: auto; }
   .page-sync { margin-left: 0; }
   .topsearch { flex: 0 1 22rem; }
-  /* v0.3.07.006: a slim ember divider between the search
+  /* A slim ember divider between the search
      field and the character switcher, centred in the 1rem
      gap at roughly 60% of the bar height. */
   .topbar-character { position: relative; }
@@ -1974,7 +1973,7 @@ tbody tr.yours td { background-color: #2a2015; }
   .sidebar .branch > summary { transition: none !important; }
 }
 
-/* --- market category browser (v0.3.10) ------------------------
+/* --- market category browser ------------------------
    Top-level market groups and their subgroups as glyph cards.
    Icons paint from the shared nav gradient; the solid flare
    gold here is the fallback when gradient paint fails, same as
@@ -2017,7 +2016,7 @@ tbody tr.yours td { background-color: #2a2015; }
 }
 .market-group-name { min-width: 0; }
 
-/* --- quick jump palette (v0.3.15) -----------------------------
+/* --- quick jump palette -----------------------------
    Ctrl+K overlay: a solid panel on an opaque surround (the two
    approved glass surfaces stay the only translucent ones). The
    ember ramp paints the panel's top edge and the group heads,
@@ -2124,7 +2123,7 @@ body.quickjump-open { overflow: hidden; }
   .quickjump-btn { margin-left: 0.35rem; }
 }
 
-/* --- fitting simulator (v0.3.21) --- */
+/* --- fitting simulator --- */
 .fit-head {
   display: flex;
   flex-wrap: wrap;
@@ -2708,7 +2707,7 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 #fit-undo:disabled, #fit-redo:disabled { opacity: 0.35; cursor: default; }
 
 /* ============================================================
-   v0.3.30: wide-screen fitting workbench.
+   Wide-screen fitting workbench.
    At >=1100px the workbench becomes a 3-column grid: module
    text lists LEFT, ship ring CENTER, stats panel RIGHT — all at
    the same height so stat changes read in real time without
@@ -2746,7 +2745,7 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 }
 
 /* ============================================================
-   v0.3.30: light theme.
+   Light theme.
    All page theming flows through the :root variables, so the
    light theme is a variable re-skin plus overrides for the
    handful of surfaces painted with hardcoded dark colors.
@@ -2778,7 +2777,7 @@ html[data-theme="light"] {
 html[data-theme="light"] body { background: #f4f1ea; }
 html[data-theme="light"] body::before { display: none; }
 
-/* v0.3.33: Faction themes (EVE-Nexus pattern). Each overrides the
+/* Faction themes. Each overrides the
    accent/gold variables; the base dark palette stays. */
 html[data-theme="amarr"] {
   --accent: #ffd75e;
@@ -2907,7 +2906,7 @@ html[data-theme="light"] .fit-tip-name { color: #fff6e6; }
 html[data-theme="light"] .fit-tip-sub,
 html[data-theme="light"] .fit-tip-stats { color: #b39a7d; }
 
-/* v0.3.31.007: comprehensive light-mode surface overrides — every
+/* Comprehensive light-mode surface overrides — every
    hardcoded dark background gets a light counterpart. */
 html[data-theme="light"] .branch .menu a:hover { background: #f0e7d2; color: #20180e; }
 html[data-theme="light"] .suggest { background: #fdfbf6; border-color: #d9cfba; }
@@ -2932,7 +2931,7 @@ html[data-theme="light"] tbody tr.yours td { background-color: #f3e3bd; }
 
 
 /* ============================================================
-   v0.3.31: theme toggle + sign out footer.
+   Theme toggle + sign out footer.
    Bottom-of-menu icon buttons that stay visible in rail mode.
    ============================================================ */
 .sidebar-account-footer {
@@ -2980,7 +2979,7 @@ html[data-theme="light"] tbody tr.yours td { background-color: #f3e3bd; }
 #install-app[hidden] { display: none; }
 
 /* ============================================================
-   v0.3.32: character selector dropdown.
+   Character selector dropdown.
    Searchable dropdown replacing the horizontal character link list.
    ============================================================ */
 .charselector {
@@ -3052,7 +3051,7 @@ html[data-theme="light"] .charselector-option {
 }
 
 /* ============================================================
-   v0.3.32.004: light-mode sidebar separators.
+   Light-mode sidebar separators.
    The utility/account section borders were hardcoded dark.
    ============================================================ */
 html[data-theme="light"] .sidenav-utility,
@@ -3061,7 +3060,7 @@ html[data-theme="light"] .sidebar-account {
 }
 
 /* ============================================================
-   v0.3.35: in-game 5-box skill level indicators.
+   In-game 5-box skill level indicators.
    Five small squares per skill: filled light for trained levels,
    gold when fully trained to V, blue-pulsing for the level
    currently training, darker blue for queued levels, dark for

@@ -9,7 +9,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// v0.3.04: the stored market guide (schema 021). GET
+// The stored market guide (schema 021). GET
 // /markets/prices/ is one public call covering every type in
 // the game, so the worker keeps it mirrored in the guide_prices
 // table on ESI's own cache window. Asset valuation reads the

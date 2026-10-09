@@ -297,10 +297,7 @@ func (app *Application) handleDiscordServers(w http.ResponseWriter, r *http.Requ
 func (app *Application) handleDiscordServerAdd(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
-	back := func(message string) {
-		app.flash(ctx, message)
-		http.Redirect(w, r, discordServersPath, http.StatusSeeOther)
-	}
+	back := app.flashBack(w, r, discordServersPath)
 	if app.discord == nil || !app.discord.Config().CanInstall() {
 		back("The Discord bot is not set up on this site.")
 		return
@@ -327,10 +324,7 @@ func (app *Application) handleDiscordServerAdd(w http.ResponseWriter, r *http.Re
 // account's right to manage that owner is checked again here.
 func (app *Application) discordFinishInstall(w http.ResponseWriter, r *http.Request, userID int64, ownerKey, code string) {
 	ctx := r.Context()
-	back := func(message string) {
-		app.flash(ctx, message)
-		http.Redirect(w, r, discordServersPath, http.StatusSeeOther)
-	}
+	back := app.flashBack(w, r, discordServersPath)
 	owner, ok := parseDiscordOwner(ownerKey)
 	if !ok || !discordManages(app.discordManageable(ctx, userID), owner) {
 		back("Only a director can add the bot for that corporation or alliance.")
@@ -381,10 +375,7 @@ func (app *Application) discordGuildFor(r *http.Request, userID int64) (db.Disco
 func (app *Application) handleDiscordServerSave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
-	back := func(message string) {
-		app.flash(ctx, message)
-		http.Redirect(w, r, discordServersPath, http.StatusSeeOther)
-	}
+	back := app.flashBack(w, r, discordServersPath)
 	guild, ok := app.discordGuildFor(r, userID)
 	if !ok || r.ParseForm() != nil {
 		back("That server is not yours to change.")
@@ -427,10 +418,7 @@ func (app *Application) handleDiscordServerSave(w http.ResponseWriter, r *http.R
 func (app *Application) handleDiscordServerForget(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
-	back := func(message string) {
-		app.flash(ctx, message)
-		http.Redirect(w, r, discordServersPath, http.StatusSeeOther)
-	}
+	back := app.flashBack(w, r, discordServersPath)
 	guild, ok := app.discordGuildFor(r, userID)
 	if !ok {
 		back("That server is not yours to change.")
@@ -479,10 +467,7 @@ func (app *Application) handleDiscordServerForget(w http.ResponseWriter, r *http
 func (app *Application) handleDiscordOpsShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
-	back := func(message string) {
-		app.flash(ctx, message)
-		http.Redirect(w, r, discordServersPath, http.StatusSeeOther)
-	}
+	back := app.flashBack(w, r, discordServersPath)
 	_ = r.ParseForm()
 	corp, _ := strconv.ParseInt(r.Form.Get("corporation"), 10, 64)
 	if corp <= 0 || !discordManages(app.discordManageable(ctx, userID), discordOwner{ownerCorporation, corp}) {

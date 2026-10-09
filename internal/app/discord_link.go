@@ -86,10 +86,7 @@ func (app *Application) handleDiscordConnect(w http.ResponseWriter, r *http.Requ
 func (app *Application) handleDiscordCallback(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	q := r.URL.Query()
-	back := func(message string) {
-		app.flash(ctx, message)
-		http.Redirect(w, r, discordSettingsPath, http.StatusSeeOther)
-	}
+	back := app.flashBack(w, r, discordSettingsPath)
 	userID := app.userID(ctx)
 
 	// State is single-use: read it, clear it, then constant-time compare.

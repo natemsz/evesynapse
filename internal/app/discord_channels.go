@@ -138,10 +138,7 @@ func (app *Application) discordApplyChannel(ctx context.Context, guildID, channe
 func (app *Application) handleDiscordChannelSave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
-	back := func(message string) {
-		app.flash(ctx, message)
-		http.Redirect(w, r, discordServersPath, http.StatusSeeOther)
-	}
+	back := app.flashBack(w, r, discordServersPath)
 	guild, ok := app.discordGuildFor(r, userID)
 	if !ok || r.ParseForm() != nil {
 		back("That server is not yours to change.")

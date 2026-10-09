@@ -13,7 +13,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Mail / calendar / contacts worker pass (Phase 2): keeps the
+// Mail / calendar / contacts worker pass: keeps the
 // mail header list, label set, mailing lists, calendar summaries
 // and contact list warm for one character, warms mail bodies and
 // calendar event details behind them, all under the worker

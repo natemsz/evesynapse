@@ -18,9 +18,7 @@ import (
 // ---------------------------------------------------------------------------
 // Assets, nested. ESI lists every asset flat, with the id of where it
 // is: a station, a structure, a system, or another asset (the ship or
-// container it is inside). The page used to show each of those as its
-// own block, so a Loki's cargo sat under "Inside: Loki", apart from
-// the station the Loki is docked in.
+// container it is inside).
 //
 // Here every asset is filed under the place its outermost container
 // is in. The Loki is a row of the station's block, and what is inside

@@ -83,10 +83,9 @@ const (
 	discordDMFailed  = "Your last notification could not be sent to Discord. It will be tried again with the next one."
 )
 
-// discordNoteDM records how the last direct message to an account
-// went, so that the person it concerns can see it: a refusal used to
-// be written only to the server's log. A message that goes through
-// clears it.
+// discordNoteDM records how the last direct message to an account went,
+// so that the person it concerns can see it, not only the server's log.
+// A message that goes through clears it.
 func (app *Application) discordNoteDM(ctx context.Context, link db.DiscordLink, err error) {
 	problem := ""
 	switch {

@@ -13,21 +13,16 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Player structure page (/structure/): the destination every
-// resolved structure name now links to -- the last place kind to
-// get one. There is no public ESI record for a structure (the
-// lookup endpoint is authenticated-only and stays in the worker's
-// resolution path), so the page renders what this instance already
-// knows: the resolved name (structure_names, via the tiered
-// resolution in structures.go) and the context corporation
-// structure snapshots reported (structure_context: owning
-// corporation, solar system, structure type). A first visit notes
-// the want and shows the loading state, which live-fills through
-// the same never-give-up poller as the organization pages once the
-// worker lands the name. Nothing is fabricated: a structure nobody
-// can name and no snapshot describes stays honestly pending, and a
-// settled 'missing' answer says the name isn't available rather
-// than inventing one. Renders read stored rows only.
+// Player structure page (/structure/): where every resolved structure
+// name links to. There is no public ESI record for a structure, so the
+// page renders what this instance knows: the resolved name
+// (structure_names, via the tiered resolution in structures.go) and the
+// context that corporation structure snapshots reported
+// (structure_context: owning corporation, solar system, type). A first
+// visit notes the want and shows a loading state that fills itself in
+// once the worker lands the name. A structure nobody can name stays
+// pending, and a settled 'missing' answer says the name is not
+// available. Renders read stored rows only.
 // ---------------------------------------------------------------------------
 
 // structurePageView is the /structure/ page body.

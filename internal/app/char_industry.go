@@ -190,7 +190,7 @@ func (app *Application) fillBlueprints(ctx context.Context, characterID int64, v
 	if !view.Blueprints.Loaded {
 		return
 	}
-	// Blueprint products for categorization (Issue 16)
+	// Blueprint products for categorization
 	bpProducts := map[int64]int64{}
 	if prodRows, err := app.queries.ListSDEBlueprintProducts(ctx); err == nil {
 		for _, pr := range prodRows {
@@ -206,7 +206,7 @@ func (app *Application) fillBlueprints(ctx context.Context, characterID int64, v
 			ME:     fmt.Sprintf("%d%%", bp.MaterialEfficiency),
 			TE:     fmt.Sprintf("%d%%", bp.TimeEfficiency),
 		}
-		// Product info for categorization (Issue 16)
+		// Product info for categorization
 		if productID, ok := bpProducts[bp.TypeID]; ok {
 			row.ProductName = app.typeNameOrID(ctx, productID)
 			// Get product group for categorization

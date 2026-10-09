@@ -1,6 +1,6 @@
 package app
 
-// Hermetic tests for Phase 2 (planetary industry + mail, calendar,
+// Hermetic tests for (planetary industry + mail, calendar,
 // contacts). Same two layers as the earlier clusters:
 //
 //   - Render tests: seeded snapshots drive the real router with a
@@ -178,7 +178,7 @@ func TestPlanetsPagesRenderFromSnapshots(t *testing.T) {
 	}
 }
 
-// phase2StubTransport serves the Phase 2 endpoints for the worker
+// phase2StubTransport serves the endpoints for the worker
 // tests. Planets answer 403 while planetsForbidden is set.
 type phase2StubTransport struct {
 	calls            atomic.Int64

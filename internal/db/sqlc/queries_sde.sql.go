@@ -28,7 +28,7 @@ SELECT COUNT(*) FROM sde_blueprints
 `
 
 // ---------------------------------------------------------------------
-// Next-1 rider (schema 019): the daily wallet-history sampler.
+// The daily wallet-history sampler.
 // One row per character per day; the upsert keeps the day's
 // latest values as fresher snapshots land.
 // ---------------------------------------------------------------------
@@ -121,7 +121,7 @@ SELECT COUNT(*) FROM sde_skill_meta
 `
 
 // ---------------------------------------------------------------------
-// Phase 4 (schema 012): skill graph reads and user skill plans.
+// Skill graph reads and user skill plans.
 // The dogma bulk inserts stay hand-rolled in the SDE importer
 // alongside the other sde_* tables; only reads live here. Plans
 // are plain CRUD.
@@ -254,7 +254,7 @@ WHERE item_id = $1
 `
 
 // ---------------------------------------------------------------------
-// Module sweep (schema 004): killmail detail store. The worker warms
+// Killmail detail store. The worker warms
 // details from the recent-killmails snapshot; pages only read here.
 // ---------------------------------------------------------------------
 func (q *Queries) GetItemName(ctx context.Context, itemID int64) (string, error) {
@@ -2329,7 +2329,7 @@ type SuggestSDEShipsRow struct {
 }
 
 // ---------------------------------------------------------------------
-// Fitting simulator UI (v0.3.21): picker feeds for the fit editor.
+// Fitting simulator UI: picker feeds for the fit editor.
 // Slot families come from the module's slot effect (dgmEffects,
 // verified against the dump 2026-10-04): 11 loPower, 12 hiPower,
 // 13 medPower, 2663 rigSlot, 3772 subSystem. All reads are local

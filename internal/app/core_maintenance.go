@@ -1,7 +1,7 @@
 package app
 
 // ---------------------------------------------------------------------------
-// Self-maintenance modes (v0.3.05): the binary can look after
+// Self-maintenance modes: the binary can look after
 // itself on the box, so keeping EveSynapse current is two short
 // commands instead of a manual binary shuffle.
 //

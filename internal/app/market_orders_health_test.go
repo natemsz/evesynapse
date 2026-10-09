@@ -1,11 +1,11 @@
 package app
 
-// v0.3.14 consolidation tests: the character Orders page carries
+// Consolidation tests: the character Orders page carries
 // the same order-health verdicts as the Market page's "Your
 // orders" section (and the corporation orders page where the
 // stored rows cover the issuer), killmail values warm on view
 // through the durable guide-price want (schema 027), and the
-// place-link stragglers from the v0.3.13 pass (killmail system
+// place-link stragglers from the pass (killmail system
 // lines, industry locations, intel systems, corp orders
 // locations) link exactly when the SDE knows the place.
 
@@ -91,7 +91,7 @@ func TestOrdersPageOrderHealth(t *testing.T) {
 // TestCorpOrdersHealthAndLocation proves the corporation orders
 // page shares the treatment where the stored health rows reach:
 // a verdict for an order placed by a synced character of the
-// account, the honest not-checked line while such an order waits
+// account, the not-checked line while such an order waits
 // for its first check, and silence for orders placed by people
 // the app doesn't sync. Locations link by the place policy.
 func TestCorpOrdersHealthAndLocation(t *testing.T) {
@@ -166,7 +166,7 @@ func TestCorpOrdersHealthAndLocation(t *testing.T) {
 }
 
 // TestKillViewNotesGuidePriceWant renders kill content with no
-// price guide anywhere: the values show the honest dash, the
+// price guide anywhere: the values show the dash, the
 // view leaves the durable guide-price want behind (schema 027),
 // and once the worker-stored guide exists the same render prices
 // the mail — all with zero outbound calls from the handler.
@@ -280,11 +280,11 @@ func TestUrgentDrainAnswersGuidePriceWant(t *testing.T) {
 	}
 }
 
-// TestPlaceLinkStragglers covers the surfaces the v0.3.13 pass
+// TestPlaceLinkStragglers covers the surfaces the pass
 // left behind: industry job facilities, blueprint locations and
 // mining systems, incursion staging/affected systems, and FW
 // contested systems link when the SDE knows the place and stay
-// honest text when it doesn't.
+// text when it doesn't.
 func TestPlaceLinkStragglers(t *testing.T) {
 	transport := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, transport)

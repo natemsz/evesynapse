@@ -418,7 +418,7 @@ func (app *Application) handleAllianceLabelFragment(w http.ResponseWriter, r *ht
 	}
 }
 
-// placeFallbackLabel is the honest unresolved label for a place
+// placeFallbackLabel is the unresolved label for a place
 // id: structures and stations read differently even unresolved.
 func placeFallbackLabel(id int64) string {
 	if isStructureID(id) {

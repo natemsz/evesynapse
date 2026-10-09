@@ -142,6 +142,7 @@ func secondProcessApp(t *testing.T, conn *sql.DB, pool *pgxpool.Pool, transport 
 	sessionManager.Cookie.Name = "evesynapse_session"
 	client := esi.New(&http.Client{Transport: transport}, queries,
 		func(context.Context, db.Character) (string, error) { return "fixture", nil })
+	client.RetryBackoffs = []time.Duration{0, 0} // retry, but do not sleep
 	return &Application{
 		cfg:           Config{workerTiersOff: true},
 		sessions:      sessionManager,

@@ -29,11 +29,10 @@ import (
 // the sde_* tables first (see internal/esi); the ESI drip-feed
 // caches stay as fallback for anything the SDE lacks.
 //
-// The dump layout changed at some point: the CSVs now live under
-// /dump/latest/csv/ as plain .csv (previously /dump/latest/ as
-// .csv.bz2). The downloader copes with both: it tries "<name>.csv"
-// then "<name>.csv.bz2", and sniffs bzip2 magic bytes either way.
-// EVE_SDE_BASE_URL overrides the base for mirrors.
+// The CSVs live under /dump/latest/csv/ as plain .csv; older dumps were
+// /dump/latest/ as .csv.bz2. The downloader copes with both: it tries
+// "<name>.csv" then "<name>.csv.bz2", and sniffs bzip2 magic bytes
+// either way. EVE_SDE_BASE_URL overrides the base for mirrors.
 // ---------------------------------------------------------------------------
 
 // sdeFileNames are the dump tables EveSynapse imports: the base

@@ -15,8 +15,7 @@ import (
 
 // ---------------------------------------------------------------------------
 // Corporation worker pass: keeps every corp_* snapshot warm for one
-// character, keyed by that character's corporation (module sweep,
-// cluster 2).
+// character, keyed by that character's corporation.
 //
 // Corporation endpoints are role-gated in-game: member tracking,
 // assets and corp killmails need Director; orders need Accountant

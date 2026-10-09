@@ -45,8 +45,8 @@ type killmailRow struct {
 }
 
 // killmailsView is the killmails page body; one shape serves both
-// the character view (cluster 1) and the corporation view
-// (cluster 2), which share this page and the killmail_details
+// the character view and the corporation view, which share this
+// page and the killmail_details
 // store — only the kill/loss test differs (see killmailViewer).
 type killmailsView struct {
 	CharacterName string // viewing character (switcher + copy)

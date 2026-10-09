@@ -11,17 +11,13 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Live regions: pending states that fill themselves in. A page
-// rendered while data is still warming carries a live region
-// (data-live-region + data-poll-url + data-poll-state); the
-// served app.js polls the matching fragment endpoint every
-// ~1.5s and swaps the section in when its state leaves the
-// pending one, then stops. No JavaScript keeps today's static
-// copy — the honest pending text and a manual reload.
+// Live regions: pending states that fill themselves in. A page rendered
+// while data is still warming carries a live region (data-live-region +
+// data-poll-url + data-poll-state); app.js polls the fragment endpoint
+// and swaps the section in when its state leaves pending, then stops.
+// Without JavaScript the pending text and a manual reload remain.
 //
-// Every fragment renders strictly from stored rows — the
-// transport never moves — so polling is cheap and the
-// cache-only-render rule holds end to end.
+// Every fragment renders from stored rows only, so polling is cheap.
 // ---------------------------------------------------------------------------
 
 // renderFragment executes one named define from a page template

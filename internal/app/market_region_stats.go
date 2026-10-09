@@ -1,6 +1,6 @@
 package app
 
-// P1 region stats platform (Element43 parity plan): the worker
+// Region stats platform: the worker
 // periodically reads each hub region's WHOLE order book and stores
 // per-type statistics -- best and typical (median) prices and the
 // 9-in-10 bands on both sides, order counts, remaining volumes --
@@ -92,7 +92,7 @@ type regionSweepOutcome struct {
 	limited bool
 }
 
-// sweepRegionStats is the P1 pass, called from refreshMarketData
+// sweepRegionStats is the pass, called from refreshMarketData
 // after the existing history and order-health passes; it spends
 // what is left of the cycle's allowance. Every hub region with a
 // sweep in progress resumes it (whatever the freshness gate
@@ -432,11 +432,10 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 	defer tx.Rollback()
 	qtx := app.queries.WithTx(tx)
 
-	// Sold per day per type, distilled from market_history in
-	// one aggregate pass and stored on the region rows below --
-	// the same 7-day average the scanner and tradefinder used
-	// to recompute per candidate type on every render. Types
-	// with no recorded history are absent here and store 0.
+	// Sold per day per type, distilled from market_history in one
+	// aggregate pass and stored on the region rows below -- the 7-day
+	// average the scanner and tradefinder read. Types with no recorded
+	// history are absent here and store 0.
 	avgRows, err := qtx.ListMarketAvgDailyVolumes(ctx, regionID)
 	if err != nil {
 		return 0, 0, err

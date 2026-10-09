@@ -21,7 +21,7 @@ ON CONFLICT (id) DO UPDATE SET
 
 
 -- ---------------------------------------------------------------------
--- v0.3.14 guide-price wants (schema 027): the durable note a
+-- Guide-price wants (schema 027): the durable note a
 -- kill view leaves when it has no prices to value with. One
 -- singleton row -- the guide is global, so one want covers every
 -- viewer -- noted at render time, answered by the worker's
@@ -40,7 +40,7 @@ DELETE FROM guide_price_wants
 WHERE id = 1;
 
 -- ---------------------------------------------------------------------
--- Phase 3 (schema 011): industry build planner reads. Bulk import
+-- Industry build planner reads. Bulk import
 -- inserts stay hand-rolled in the SDE importer alongside the other
 -- sde_* tables; only reads live here.
 -- ---------------------------------------------------------------------
@@ -358,7 +358,7 @@ WHERE normalized_name = $2;
 UPDATE pilot_name_wants
 SET state = 'error', attempts = attempts + 1, resolved_at = $1, next_try_at = $2
 WHERE normalized_name = $3;
--- P1 region stats (schema 031): worker-written per-(region,
+-- Region stats (schema 031): worker-written per-(region,
 -- type) book statistics. A completed sweep replaces a region's
 -- rows inside one transaction: delete the region, then upsert
 -- the fresh measures type by type. The daily table keeps one
@@ -431,7 +431,7 @@ WHERE region_id = $1 AND type_id = $2
 ORDER BY day;
 
 -- ---------------------------------------------------------------------
--- P2 station stats (schema 032): per-(station, type) book
+-- Station stats (schema 032): per-(station, type) book
 -- statistics written by the same whole-region sweeps as the
 -- region stats above. A completed sweep replaces the region's
 -- station rows inside the sweep transaction: delete the region,
@@ -543,7 +543,7 @@ WHERE region_id = $1 AND type_id = ANY(sqlc.arg(type_ids)::bigint[]) AND best_bu
 ORDER BY type_id, best_buy DESC, location_id;
 
 -- ---------------------------------------------------------------------
--- P4 order lifecycle (schema 033): append-only per-order history
+-- Order lifecycle (schema 033): append-only per-order history
 -- distilled from order snapshots. The worker upserts open orders,
 -- closes rows whose order has left the snapshot, and prunes old
 -- closed rows; the Orders page reads only these rows.
@@ -604,7 +604,7 @@ WHERE id IN (
 );
 
 -- ---------------------------------------------------------------------
--- P1 sweep staging (schema 034): disk-staged whole-region
+-- Sweep staging (schema 034): disk-staged whole-region
 -- sweeps. A market_sweep_state row means a sweep is in progress
 -- for that region and next_page is its resume cursor; each
 -- fetched page's orders land in market_sweep_orders in the same
@@ -652,7 +652,7 @@ GROUP BY location_id, type_id, is_buy_order
 ORDER BY location_id, type_id, is_buy_order;
 
 -- ---------------------------------------------------------------------
--- P5 station leaderboard (schema_pg 002): per-station open-order
+-- Station leaderboard (schema_pg 002): per-station open-order
 -- counts and open ISK value per side, distilled by the same
 -- whole-region sweeps as the stats above. A completed sweep
 -- replaces the region's leaderboard rows inside the sweep
@@ -693,7 +693,7 @@ SELECT MAX(updated_at) AS stamp
 FROM market_station_leaderboard
 WHERE ($1::bigint = 0 OR region_id = $1::bigint);
 
--- v0.3.33: per-type market price TTL cache. The worker refreshes
+-- Per-type market price TTL cache. The worker refreshes
 -- only rows older than the TTL; pages read cache-only.
 -- name: UpsertMarketTypePrice :exec
 INSERT INTO market_type_prices (region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetched_at)
@@ -719,7 +719,7 @@ SELECT region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetch
 FROM market_type_prices
 WHERE region_id = $1 AND type_id = ANY($2::bigint[]);
 
--- v0.3.33: industry cost indices per (system, activity).
+-- Industry cost indices per (system, activity).
 -- name: UpsertIndustryCostIndex :exec
 INSERT INTO industry_cost_indices (solar_system_id, activity, cost_index, fetched_at)
 VALUES ($1, $2, $3, now())
@@ -735,7 +735,7 @@ SELECT solar_system_id, activity, cost_index, fetched_at
 FROM industry_cost_indices
 WHERE solar_system_id = $1 AND activity = $2;
 
--- v0.3.34: restock planner targets.
+-- Restock planner targets.
 -- name: UpsertRestockTarget :exec
 INSERT INTO restock_targets (user_id, type_id, target_qty, min_margin_pct, updated_at)
 VALUES ($1, $2, $3, $4, now())

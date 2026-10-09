@@ -30,18 +30,18 @@ var pgStationLeaderboardSchema string
 //go:embed schema_pg/003_fit_metadata.sql
 var pgFitMetadataSchema string
 
-// Step 004 (v0.3.33): per-type market price TTL cache and industry
+// Step 004: per-type market price TTL cache and industry
 // cost index tracking.
 //
 //go:embed schema_pg/004_price_cache_costindex.sql
 var pgPriceCacheSchema string
 
-// Step 005 (v0.3.34): restock planner targets.
+// Step 005: restock planner targets.
 //
 //go:embed schema_pg/005_restock.sql
 var pgRestockSchema string
 
-// Step 006 (v0.3.35): custom jump-clone names.
+// Step 006: custom jump-clone names.
 //
 //go:embed schema_pg/006_clone_names.sql
 var pgCloneNamesSchema string
@@ -237,14 +237,11 @@ func applySchemaStep(ctx context.Context, conn *sql.DB, step schemaStep) error {
 	return tx.Commit()
 }
 
-// splitSchemaStatements cuts a schema script into its statements
-// (the pgx stdlib driver executes one statement at a time). The
-// split is lexically aware: semicolons inside string literals,
-// quoted identifiers, comments, and dollar-quoted function bodies
-// do not end a statement, and comments are stripped. The old
-// splitter cut on every ";" outside full-line comments, so the
-// first migration with a literal ';' or a plpgsql body would have
-// failed boot.
+// splitSchemaStatements cuts a schema script into its statements (the
+// pgx stdlib driver executes one statement at a time). The split is
+// lexically aware: semicolons inside string literals, quoted
+// identifiers, comments, and dollar-quoted function bodies do not end a
+// statement, and comments are stripped.
 func splitSchemaStatements(script string) []string {
 	var stmts []string
 	var cur strings.Builder

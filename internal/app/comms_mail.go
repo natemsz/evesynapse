@@ -17,16 +17,13 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Mail page (/mail/): the character's 50 most recent headers, label
-// filter, and a body view — all cache-only from the worker-warmed
-// mail snapshots. READ-ONLY by construction: the app requests
-// esi-mail.read_mail.v1 only (organize/send were never requested,
-// see auth.go), so there is nothing to send or delete with.
+// Mail page (/mail/): the character's 50 most recent headers, a label
+// filter and a body view, cache-only from the worker-warmed mail
+// snapshots.
 //
 // Bodies are EVE-flavored HTML and hostile by default: they are
-// rendered only through sanitizeMailHTML, a strict allowlist
-// filter, and external images are dropped with every other
-// non-allowlisted tag.
+// rendered only through sanitizeMailHTML, a strict allowlist filter
+// that drops external images with every other tag not on the list.
 // ---------------------------------------------------------------------------
 
 type mailLabelChip struct {
@@ -183,7 +180,7 @@ func (app *Application) handleMail(w http.ResponseWriter, r *http.Request) {
 
 // mailRecipientDisplay renders one mail recipient by kind:
 // character, corporation, alliance and mailing-list names from
-// the local caches, with honest id fallbacks.
+// the local caches, with id fallbacks.
 func (app *Application) mailRecipientDisplay(ctx context.Context, rcpt esi.MailRecipient, listNames map[int64]string) mailRecipientView {
 	out := mailRecipientView{Kind: rcpt.RecipientType, ID: rcpt.RecipientID}
 	switch rcpt.RecipientType {
@@ -513,7 +510,7 @@ func mailRelinkNotice(name, what string) string {
 	return name + " was linked before EveSynapse asked for permission to " + what + " — sign in again to grant it."
 }
 
-// handleMailMarkRead serves POST /mail/read/ (Issue 26): mark one
+// handleMailMarkRead serves POST /mail/read/: mark one
 // mail read in-game via PUT /characters/{id}/mail/{mail_id}/,
 // which needs the esi-mail.organize_mail.v1 scope. A 403 means
 // the character was linked before that scope existed — reported
@@ -566,7 +563,7 @@ func (app *Application) handleMailMarkRead(w http.ResponseWriter, r *http.Reques
 }
 
 // ---------------------------------------------------------------------------
-// Compose (Issue 27)
+// Compose
 // ---------------------------------------------------------------------------
 
 // mailComposeView is the compose form's view model.

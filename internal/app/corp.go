@@ -244,7 +244,7 @@ func (app *Application) corpStructureNames(ctx context.Context, characterID int6
 // station and system names from the local caches, player
 // structures from the structures snapshot when it named them,
 // then the resolved structure-name cache (structures.go), and
-// honest "#<id>" fallbacks otherwise.
+// "#<id>" fallbacks otherwise.
 func (app *Application) corpLocationTitle(ctx context.Context, locationID int64, structureNames map[int64]string) string {
 	if name, ok := app.esi.CachedPlaceName(ctx, locationID); ok {
 		return name

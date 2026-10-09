@@ -263,15 +263,11 @@ func (app *Application) buildAssetLocationsWith(ctx context.Context, items []esi
 	return locations
 }
 
-// assetLocationTitle turns a (location_id, location_type) pair into
-// a display title. Station and solar-system names come from the
-// local caches (SDE tables first, then the worker-warmed place
-// cache); player structures show the worker-resolved name once it
-// lands (structures.go), and otherwise stay honest "Structure
-// #<id>" unless extraTitles names them
-// (the corporation cluster passes the corp's own structures);
-// items inside another owned item (a ship, a container) are
-// labelled with the parent's type name.
+// assetLocationTitle turns a (location_id, location_type) pair into a
+// display title. Stations and systems come from the local caches; a
+// player structure shows its worker-resolved name, else "Structure
+// #<id>" unless extraTitles names it; an item inside another owned item
+// is labelled with the parent's type name.
 func (app *Application) assetLocationTitle(ctx context.Context, locID int64, locType string, itemType map[int64]int64, nameOf func(int64) string, extraTitles map[int64]string) string {
 	if title, ok := extraTitles[locID]; ok {
 		return title

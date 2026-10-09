@@ -20,11 +20,11 @@ import (
 // while still catching a worker that has stopped coming round.
 const workerStallAfter = 15 * time.Minute
 
-// handleHealthz answers a monitor: 200 "ok" when the app can reach
-// its database and its background worker is running, 503 with one
-// line per problem otherwise. It used to answer "ok" whenever the
-// process was up, which is true of an app that has lost its
-// database and of one whose worker stopped an hour ago.
+// handleHealthz answers a monitor: 200 "ok" when the app can reach its
+// database and its background worker is running, 503 with one line per
+// problem otherwise. The process being up is not enough: that is true
+// of an app that has lost its database and of one whose worker stopped
+// an hour ago.
 //
 // The endpoint is open to anyone, so the answer names what is
 // wrong and no more; the actual error goes to the log.

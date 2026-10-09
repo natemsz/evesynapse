@@ -1,6 +1,6 @@
 package app
 
-// Wallet graphs (v0.3.09): series building from journal +
+// Wallet graphs: series building from journal +
 // sampler + current snapshot, the chart's states, the live-fill
 // fragment, and the home net-worth aggregation — all over
 // stored rows with a transport that must stay silent.

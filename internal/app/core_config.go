@@ -139,9 +139,8 @@ func (c Config) publicHostIsLocal() bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// defaultSDEBaseURL is Fuzzwork's community SDE conversion, CSV
-// tables under /dump/latest/csv/ (verified live 2026-10-02; the
-// dump previously lived directly under /dump/latest/ as .csv.bz2).
+// defaultSDEBaseURL is Fuzzwork's community SDE conversion, CSV tables
+// under /dump/latest/csv/.
 const defaultSDEBaseURL = "https://www.fuzzwork.co.uk/dump/latest/csv/"
 
 // SDEBaseURL returns the base URL the SDE importer downloads the

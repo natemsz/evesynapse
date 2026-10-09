@@ -15,13 +15,11 @@ import (
 // ---------------------------------------------------------------------------
 // Warming by how much anyone is looking. ESI lets a character's
 // location be asked for every five seconds and its wallet every two
-// minutes, and the worker used to ask as often as ESI allowed, for
-// every character, for ever. That is about seven fetches a minute per
-// character, so the cycle's allowance was used up at around fifteen
-// characters, with most of it spent keeping data to the second for
-// accounts nobody had opened in days.
+// minutes, but asking that often for every character is about seven
+// fetches a minute each, most of it spent keeping data to the second
+// for accounts nobody has opened in days.
 //
-// Now how often a character's data is refreshed follows its account:
+// So how often a character's data is refreshed follows its account:
 //
 //	active   the character somebody is looking at: the one selected
 //	         in an account that has the site open (a request in the

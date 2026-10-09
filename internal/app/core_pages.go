@@ -202,12 +202,10 @@ func sectionForPage(page string) string {
 	return ""
 }
 
-// Parsed template sets, one per page file. The templates are
-// embedded in the binary and cannot change while it runs, so each
-// set is parsed once, on first use, and shared by every request
-// after that (a parsed set is safe to execute from many requests
-// at once). They used to be parsed on every render: base.html plus
-// the page, each request, for an identical result.
+// Parsed template sets, one per page file. The templates are embedded
+// in the binary and cannot change while it runs, so each set is parsed
+// once, on first use, and shared by every request after that (a parsed
+// set is safe to execute from many requests at once).
 var (
 	pageTemplates     sync.Map // page file -> *template.Template: base layout + partials + page
 	fragmentTemplates sync.Map // page file -> *template.Template: partials + page (live-region fragments)
@@ -253,7 +251,7 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 	if data.NavPage == "" {
 		data.NavPage = page
 	}
-	// v0.3.33: sync status for the footer. Cheap: ESI error budget
+	// Sync status for the footer. Cheap: ESI error budget
 	// is in-memory; sweep state is a single cached query.
 	if data.SyncStatus == "" {
 		data.SyncStatus = app.syncStatusString(ctx)
@@ -325,7 +323,7 @@ func friendlyLoginError(code string) string {
 }
 
 // syncStatusString returns a short ESI/sweep health string for the
-// footer (v0.3.33, EVE-Nexus pattern). "ESI OK" when the error budget
+// footer. "ESI OK" when the error budget
 // is healthy, "ESI limited" when low, plus sweep activity if a market
 // sweep is running.
 func (app *Application) syncStatusString(ctx context.Context) string {

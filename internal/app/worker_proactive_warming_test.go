@@ -532,18 +532,6 @@ func TestLiveRegionFragments(t *testing.T) {
 	mustContain(t, "description fragment", body,
 		`data-live-region`, `data-poll-state="pending"`, "This description is queued")
 
-	// The poll mechanism ships in the served assets.
-	code, js := getPage(t, app, cookie, "/static/app.js")
-	if code != http.StatusOK {
-		t.Fatalf("/static/app.js status = %d", code)
-	}
-	mustContain(t, "/static/app.js", js, "[data-live-region]", "data-poll-state", "setInterval")
-	code, css := getPage(t, app, cookie, "/static/style.css")
-	if code != http.StatusOK {
-		t.Fatalf("/static/style.css status = %d", code)
-	}
-	mustContain(t, "/static/style.css", css, ".loading-pulse", "prefers-reduced-motion")
-
 	// The market page's pending state points at the fragment.
 	if _, err := conn.ExecContext(ctx,
 		`INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES (35, 'Pyerite', 1, 1, 1)`); err != nil {

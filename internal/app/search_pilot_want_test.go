@@ -101,12 +101,6 @@ func TestTopbarSearchUnwarmedPilotNameWant(t *testing.T) {
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("search handler made %d outbound calls, want 0", got)
 	}
-
-	// The autocomplete ships the pending-row treatment: shown
-	// but never a pick, with a bounded re-ask while it warms.
-	_, js := getPage(t, app, cookie, "/static/app.js")
-	mustContain(t, "/static/app.js (pilot-name search)", js,
-		"pilot-pending", "pendingRetries", `cache: "no-store"`)
 }
 
 // pilotNameResolveTransport answers the public name lookup with

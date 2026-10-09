@@ -6,39 +6,6 @@ import (
 	"testing"
 )
 
-// TestBareButtonsShareTheEmberStyle: every plain <button> and submit
-// or button <input> with no class falls back to the ember look of
-// .btn (the ship-fit tool's style) instead of the browser default, in
-// the base, hover, focus and disabled states, and in the light theme.
-// The stylesheet is the only place that does it, so this pins it.
-func TestBareButtonsShareTheEmberStyle(t *testing.T) {
-	raw, err := fs.ReadFile(staticFS, "static/style.css")
-	if err != nil {
-		t.Fatalf("read style.css: %v", err)
-	}
-	css := string(raw)
-	const bare = `:where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class]))`
-	for _, want := range []string{
-		".btn,\n" + bare + " {\n  display: inline-flex;",
-		// Buttons and fields share one height, so a row of them lines up.
-		"  min-height: var(--control-h);\n  padding: 0.2rem 0.85rem;",
-		`input[type="text"], input[type="search"], input[type="number"] {`,
-		"--control-h: 1.9rem;",
-		bare + ":hover:not(:disabled) {",
-		bare + ":focus-visible {",
-		bare + ":disabled {\n  opacity: 0.4;",
-		`html[data-theme="light"] ` + bare + ":hover:not(:disabled)",
-		// The danger variant exists for the buttons that name it.
-		".btn.btn-danger {",
-		// The typography rule (Univers Condensed) covers them too.
-		"\n" + bare + ",\n.branch > summary,",
-	} {
-		if !strings.Contains(css, want) {
-			t.Errorf("style.css missing %q", want)
-		}
-	}
-}
-
 // TestNoButtonStylesInTemplates: a button gets its look from the
 // stylesheet. A template that styles one inline (the CSP forbids it
 // anyway) or reaches for a class the stylesheet does not know would

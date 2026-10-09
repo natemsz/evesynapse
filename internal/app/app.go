@@ -354,6 +354,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/notifications", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleNotifications)
+		r.Get(strings.TrimPrefix(notifyBadgePath, "/notifications"), app.handleNotifyBadge)
 		r.Post("/read", app.handleNotificationsRead)
 		r.Post("/open", app.handleNotificationsOpen)
 		r.Get("/settings", app.handleNotificationSettings)
@@ -649,8 +650,13 @@ func requestLogger(next http.Handler) http.Handler {
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 		next.ServeHTTP(ww, r)
 		logf := logging.Infof
-		if ww.Status() >= http.StatusInternalServerError {
+		switch {
+		case ww.Status() >= http.StatusInternalServerError:
 			logf = logging.Errorf
+		case r.URL.Path == notifyBadgePath:
+			// Every open page asks this every few seconds; at info
+			// it would bury everything else in the log.
+			logf = logging.Debugf
 		}
 		logf("%s %s -> %d (%s)", r.Method, r.URL.Path, ww.Status(),
 			time.Since(start).Round(time.Millisecond))

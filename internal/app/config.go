@@ -28,6 +28,11 @@ type Config struct {
 	// is off.
 	pushPublicKey, pushPrivateKey, pushSubject string
 
+	// notifyPoll is how often, in seconds, an open page asks whether
+	// its notifications icon has changed (NOTIFY_POLL_SECONDS). 0: it
+	// does not ask, and the icon changes on page loads only.
+	notifyPoll int
+
 	addr            string         // listen address
 	databaseURL     string         // Postgres connection URL (DATABASE_URL)
 	eveClientID     string         // EVE SSO application client ID
@@ -135,7 +140,12 @@ func LoadConfig() (Config, error) {
 	if err := loadEnvFile(); err != nil {
 		return Config{}, err
 	}
+	notifyPoll, ok := parseNotifyPoll(os.Getenv("NOTIFY_POLL_SECONDS"))
+	if !ok {
+		logging.Warnf("evesynapse: NOTIFY_POLL_SECONDS=%q is not a whole number of seconds; using %d", os.Getenv("NOTIFY_POLL_SECONDS"), notifyPoll)
+	}
 	return Config{
+		notifyPoll:      notifyPoll,
 		addr:            getenvDefault("ADDR", ":8080"),
 		databaseURL:     getenvDefault("DATABASE_URL", "postgres://evesynapse@localhost:5432/evesynapse?sslmode=disable"),
 		eveClientID:     os.Getenv("EVE_CLIENT_ID"),

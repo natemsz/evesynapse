@@ -219,8 +219,19 @@ func TestWorkerWarmsByActivity(t *testing.T) {
 	if n := transport.about(ch.CharacterID); n == 0 {
 		t.Fatal("an active character with everything past its cache window was not refreshed")
 	}
-	if timing = app.snapshotWorkerStatus().Timing; timing.Active != 1 || timing.Overdue <= 0 {
-		t.Fatalf("with one active character: %+v; want it counted as active, with its lateness", timing)
+	// It has only just become active: what it had was the dormant
+	// tier's data, held back on purpose, and this cycle refreshed it.
+	// That is not the worker running late.
+	if timing = app.snapshotWorkerStatus().Timing; timing.Active != 1 || timing.Overdue != 0 {
+		t.Fatalf("a character's first active cycle: %+v; want it counted as active and no lateness reported", timing)
+	}
+	// Still active a cycle later with data past its window: that is.
+	if _, err := conn.ExecContext(ctx, `UPDATE character_snapshots SET cached_until = $1 WHERE character_id = $2`, time.Now().Add(-3*time.Minute), ch.CharacterID); err != nil {
+		t.Fatal(err)
+	}
+	app.refreshCycle(ctx)
+	if timing = app.snapshotWorkerStatus().Timing; timing.Active != 1 || timing.Overdue < 3*time.Minute || timing.Overdue > 4*time.Minute {
+		t.Fatalf("an active character three minutes past its window: %+v; want about three minutes of lateness", timing)
 	}
 
 	// Tiers off: a character nobody is looking at is refreshed like
@@ -232,5 +243,22 @@ func TestWorkerWarmsByActivity(t *testing.T) {
 	app.refreshCycle(ctx)
 	if n := transport.about(ch.CharacterID); n == 0 {
 		t.Fatal("with tiers off, an unseen character was not refreshed")
+	}
+}
+
+// TestNoteTier: whether a character was active at the cycle before.
+func TestNoteTier(t *testing.T) {
+	var a activityLog
+	if a.noteTier(1, true) {
+		t.Fatal("a character never seen before was active before")
+	}
+	if !a.noteTier(1, true) {
+		t.Fatal("active last cycle is not remembered")
+	}
+	if a.noteTier(2, false) || a.noteTier(2, true) {
+		t.Fatal("a character that was not active is remembered as active")
+	}
+	if !a.noteTier(1, false) || a.noteTier(1, true) {
+		t.Fatal("leaving the active tier is not remembered")
 	}
 }

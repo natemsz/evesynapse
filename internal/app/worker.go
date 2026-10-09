@@ -245,14 +245,26 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// Lateness is measured where somebody is looking: an active
 	// account's data is meant to be as fresh as ESI allows, and a
 	// dormant one's is held back on purpose.
+	//
+	// And only for a character that was already active in the cycle
+	// before. One that has just become active (its account came back,
+	// or the server has just started) still has the data of the tier
+	// it was in, held back for up to six hours by design, and this
+	// cycle is the one that refreshes it. Counting that as the worker
+	// running late put "5h 53m late" on the Sync page for a worker
+	// that was keeping up.
 	for _, ch := range eligible {
-		switch app.tierOf(ch, clock.start) {
+		tier := app.tierOf(ch, clock.start)
+		wasActive := app.activity.noteTier(ch.CharacterID, tier == tierActive)
+		switch tier {
 		case tierActive:
 			timing.Active++
 			at, known := due[ch.CharacterID]
 			switch {
 			case !known || at.IsZero():
 				timing.NeverFetched = true
+			case !wasActive:
+				// just become active: not lateness (above)
 			case clock.start.Sub(at) > timing.Overdue:
 				timing.Overdue = clock.start.Sub(at)
 			}

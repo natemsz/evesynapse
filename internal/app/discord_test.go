@@ -448,7 +448,7 @@ func TestDiscordRolesAreTakenBackWhenTheAccountGoes(t *testing.T) {
 
 	// The same account connects a different Discord account: the
 	// first one loses what it was given, the second gains it.
-	cookie, _ = f.connect(cookie, "bob")
+	f.connect(cookie, "bob")
 	f.app.discordSyncRoles(f.ctx, now.Add(time.Minute))
 	if got := held(discordAlice); got != discordRoleMod {
 		t.Fatalf("the Discord account that was swapped out still holds %s", got)

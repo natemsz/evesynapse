@@ -108,6 +108,16 @@ type DiscordRoleGrant struct {
 	CheckedAt time.Time `json:"checked_at"`
 }
 
+type DiscordRoleRule struct {
+	ID        int64     `json:"id"`
+	GuildID   string    `json:"guild_id"`
+	Kind      string    `json:"kind"`
+	Ref       string    `json:"ref"`
+	RoleID    string    `json:"role_id"`
+	CreatedBy int64     `json:"created_by"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type GlobalSnapshot struct {
 	Kind        string    `json:"kind"`
 	Payload     string    `json:"payload"`
@@ -365,6 +375,23 @@ type OrderLifecycle struct {
 	CloseKind        string        `json:"close_kind"`
 	OutbidEvents     int64         `json:"outbid_events"`
 	BeatenNow        int64         `json:"beaten_now"`
+}
+
+type OrgGroup struct {
+	ID          int64     `json:"id"`
+	OwnerKind   string    `json:"owner_kind"`
+	OwnerID     int64     `json:"owner_id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedBy   int64     `json:"created_by"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type OrgGroupMember struct {
+	GroupID     int64     `json:"group_id"`
+	CharacterID int64     `json:"character_id"`
+	AddedBy     int64     `json:"added_by"`
+	AddedAt     time.Time `json:"added_at"`
 }
 
 type PilotNameWant struct {

@@ -111,6 +111,9 @@ type pageData struct {
 	// DiscordServers is the /discord/servers page.
 	DiscordServers *discordServersView
 
+	// Groups is the /groups page.
+	Groups *groupsView
+
 	// Ops (ops.go): one op's page, and the form that creates or
 	// changes one.
 	Op     *opView

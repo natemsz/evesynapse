@@ -5,8 +5,7 @@
 <h1><span class="gt">Solar system</span></h1>
 <p><small>That system isn't in the local star map yet — it will appear once the star map data covers it.</small></p>
 {{else}}
-<h1><span class="gt">{{.System.Name}}</span></h1>
-<p><small>{{dotlanSystem .System.Name}}</small></p>
+<h1 class="h-with-action"><span class="gt">{{.System.Name}}</span>{{with dotlanSystemURL .System.Name}}<a class="h-action" href="{{.}}" target="_blank" rel="noopener noreferrer" title="Open {{$.System.Name}} on Dotlan"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4.5h5.5V10"/><path d="M19.5 4.5 11 13"/><path d="M18 14v4.5a1 1 0 0 1-1 1H6.5a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1H11"/></g></svg>Dotlan</a>{{end}}</h1>
 
 <div class="tw">
 <table>

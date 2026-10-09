@@ -483,13 +483,28 @@ alliance's. That character's link to EVE has to be working.
 3. In that Discord server's **Roles** list, drag the bot's own role
    **above** the roles it is to give. Discord lets a bot manage only
    the roles below its own.
-4. Back on the site, choose for that server:
-   - a role for everyone there who has connected EveSynapse,
-   - a role for members of the corporation or alliance,
-   - the channel new ops are posted in.
+4. Back on the site, write that server's **role rules**: "give *these
+   people* *this role*", as many as there are roles to give. A member
+   gets every role they qualify for. "These people" can be:
+   - everyone there who has connected EveSynapse,
+   - members of the corporation or alliance,
+   - (alliance servers) members of one of its corporations,
+   - the CEO,
+   - holders of an in-game corporation role (Director, Accountant,
+     Diplomat, ...),
+   - a **group** the directors keep themselves (below).
 
-   Each is optional, and each is picked from that server's own roles
-   and channels.
+   Then, if wanted, pick the channel new ops are posted in. Roles and
+   channels are picked from that server's own.
+
+**Groups** (`/groups/` on the site) are lists of characters that a
+corporation's or alliance's directors keep by hand: a special interest
+group, the fleet commanders, a logistics wing. A director makes a
+group, ticks the characters in it, and adds a rule giving the group a
+role; the bot does the rest. Only characters linked to EveSynapse that
+are in the corporation (or the alliance) can be put in one. A member
+who leaves the corporation stays on the list but loses the role until
+they are back. Deleting a group removes the rules that used it.
 
 **Which channels a role can open** is set in Discord, the usual way: on
 a channel or category, under Permissions, allow the role and deny
@@ -516,10 +531,12 @@ Discord** removes the link and takes back the roles EveSynapse gave.
 
 ### What the roles mean, and what they do not
 
-The member role is given to a Discord account when the EveSynapse
-account connected to it has a character that the last sync saw in the
-corporation (or in a corporation of the alliance) and whose link to EVE
-still works. It is taken away when that stops being true.
+A role is given to a Discord account when the EveSynapse account
+connected to it has a character, with a link to EVE that still works,
+for which the last sync saw what the rule asks: in the corporation,
+its CEO, holding the in-game role, in the group. It is taken away when
+that stops being true, and each role on its own: losing Director takes
+the directors' role and leaves the members' one.
 
 - **Roles are taken back when the account goes.** Deleting the
   EveSynapse account, disconnecting Discord, connecting a different
@@ -530,8 +547,8 @@ still works. It is taken away when that stops being true.
   confirms it.
 - It follows a change within a sync or two (minutes), not at the
   instant it happens in-game.
-- In a server the bot gives and takes only the roles chosen for that
-  server. Every other role is left as it is.
+- In a server the bot gives and takes only the roles named in that
+  server's rules. Every other role is left as it is.
 - A role removed by hand from someone who still qualifies comes back
   within six hours.
 - It shows that someone controls a character in the corporation. It

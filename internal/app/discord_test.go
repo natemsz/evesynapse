@@ -83,6 +83,7 @@ func (d *fakeDiscord) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 		return respond(200, `[{"id":"`+parts[1]+`","name":"@everyone","position":0},`+
 			`{"id":"`+discordRoleLinked+`","name":"Linked","position":1},{"id":"`+discordRoleMember+`","name":"Member","position":2},`+
+			`{"id":"`+groupRoleCEO+`","name":"CEO","position":1},{"id":"`+groupRoleDirector+`","name":"Director","position":1},{"id":"`+groupRoleLogi+`","name":"Logi","position":1},`+
 			`{"id":"`+discordRoleMod+`","name":"Moderator","position":3},{"id":"`+discordRoleBot+`","name":"EveSynapse","managed":true,"position":4}]`)
 	case len(parts) == 3 && parts[0] == "guilds" && parts[2] == "channels":
 		if _, known := d.members[parts[1]]; !known {
@@ -247,10 +248,29 @@ func (f *notifyFixture) inAlliance(corporationID, allianceID, executor int64) {
 	}
 }
 
-// setServer saves a server's settings through the page.
+// addRule adds one role rule to a server through the page.
+func (f *notifyFixture) addRule(cookie *http.Cookie, guild, who, role string) string {
+	f.t.Helper()
+	f.post(cookie, "/discord/servers/"+guild+"/rules/add", url.Values{"who": {who}, "role": {role}})
+	_, body := getPage(f.t, f.app, cookie, discordServersPath)
+	return body
+}
+
+// setServer makes a server's rules exactly a role for everyone
+// connected and a role for members (either may be empty), and sets its
+// ops channel, through the page.
 func (f *notifyFixture) setServer(cookie *http.Cookie, guild, linked, member, channel string) string {
 	f.t.Helper()
-	f.post(cookie, "/discord/servers/"+guild+"/save", url.Values{"role_linked": {linked}, "role_member": {member}, "ops_channel": {channel}})
+	if err := f.q.DeleteDiscordRoleRulesForGuild(f.ctx, guild); err != nil {
+		f.t.Fatal(err)
+	}
+	if linked != "" {
+		f.addRule(cookie, guild, ruleLinked, linked)
+	}
+	if member != "" {
+		f.addRule(cookie, guild, ruleMember, member)
+	}
+	f.post(cookie, "/discord/servers/"+guild+"/save", url.Values{"ops_channel": {channel}})
 	_, body := getPage(f.t, f.app, cookie, discordServersPath)
 	return body
 }
@@ -439,9 +459,10 @@ func TestDiscordServersAreSetUpByDirectors(t *testing.T) {
 	// names in its own answer.
 	f.joinCorp(f.ch.CharacterID, discordCorp, "Director")
 	cookie, body = f.addServer(cookie, discordCorpOwner, "add-corp")
-	mustContain(t, "after adding", body, "The bot was added to Server 1.", `action="/discord/servers/`+discordCorpGuild+`/save"`,
+	mustContain(t, "after adding", body, "The bot was added to Server 1.", `action="/discord/servers/`+discordCorpGuild+`/rules/add"`,
 		`<option value="`+discordRoleMember+`">Member</option>`, `<option value="`+discordOpsChannel+`">#ops</option>`,
-		"Role for members of this corporation")
+		`<option value="member">Members of the corporation</option>`, `<option value="ceo">CEO</option>`,
+		`<option value="eve_role:Director">In-game role: Director</option>`)
 	if strings.Contains(body, discordRoleBot) {
 		t.Fatal("the bot's own role, which cannot be given, is offered")
 	}
@@ -458,23 +479,55 @@ func TestDiscordServersAreSetUpByDirectors(t *testing.T) {
 		t.Fatalf("%d server(s) after a plain connect, want 1", len(guilds))
 	}
 
-	// Settings: roles and a channel of that server are taken; anything
-	// else is refused and nothing is stored.
+	// Rules: a role of that server that can be given is taken;
+	// anything else is refused and nothing is stored. The same for
+	// the ops channel.
+	rules := func() string {
+		t.Helper()
+		rows, err := f.q.ListDiscordRoleRulesForGuild(f.ctx, discordCorpGuild)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, row := range rows {
+			out = append(out, row.Kind+":"+row.Ref+"="+row.RoleID)
+		}
+		return strings.Join(out, " ")
+	}
 	body = f.setServer(cookie, discordCorpGuild, discordRoleLinked, discordRoleMember, discordOpsChannel)
-	mustContain(t, "after saving", body, "Settings saved for Server 1.", `<option value="`+discordRoleMember+`" selected>Member</option>`)
-	for name, bad := range map[string][3]string{
-		"a role of no server":    {"300000000000000777", discordRoleMember, discordOpsChannel},
-		"the bot's own role":     {discordRoleLinked, discordRoleBot, discordOpsChannel},
-		"a channel of no server": {discordRoleLinked, discordRoleMember, "400000000000000777"},
-		"a voice channel":        {discordRoleLinked, discordRoleMember, discordVoiceChannel},
-		"not an id":              {"@everyone", discordRoleMember, discordOpsChannel},
+	mustContain(t, "after saving", body, "Ops channel saved for Server 1.",
+		"<td>Everyone who has connected EveSynapse</td><td>Linked</td>", "<td>Members of the corporation</td><td>Member</td>")
+	want := "linked:=" + discordRoleLinked + " member:=" + discordRoleMember
+	if rules() != want {
+		t.Fatalf("rules %q, want %q", rules(), want)
+	}
+	for name, bad := range map[string][2]string{
+		"a role of no server":         {ruleLinked, "300000000000000777"},
+		"the bot's own role":          {ruleMember, discordRoleBot},
+		"@everyone":                   {ruleLinked, discordCorpGuild},
+		"not an id":                   {ruleLinked, "@everyone"},
+		"a kind that does not exist":  {"admin", discordRoleMember},
+		"an in-game role made up":     {"eve_role:Emperor", discordRoleMember},
+		"another owner's corporation": {"corp:98000002", discordRoleMember},
+		"a group that does not exist": {"group:999", discordRoleMember},
 	} {
-		if page := f.setServer(cookie, discordCorpGuild, bad[0], bad[1], bad[2]); !strings.Contains(page, "not a role or channel of that server") {
-			t.Errorf("%s was accepted", name)
+		f.addRule(cookie, discordCorpGuild, bad[0], bad[1])
+		if rules() != want {
+			t.Errorf("%s was accepted: rules %q", name, rules())
+			_ = f.q.DeleteDiscordRoleRulesForGuild(f.ctx, discordCorpGuild)
+			f.setServer(cookie, discordCorpGuild, discordRoleLinked, discordRoleMember, discordOpsChannel)
 		}
 	}
-	if guild, _ = f.q.GetDiscordGuild(f.ctx, discordCorpGuild); guild.RoleLinked != discordRoleLinked || guild.RoleMember != discordRoleMember || guild.OpsChannel != discordOpsChannel {
-		t.Fatalf("a refused save changed the settings: %+v", guild)
+	for name, bad := range map[string]string{"a channel of no server": "400000000000000777", "a voice channel": discordVoiceChannel} {
+		f.post(cookie, "/discord/servers/"+discordCorpGuild+"/save", url.Values{"ops_channel": {bad}})
+		if guild, _ = f.q.GetDiscordGuild(f.ctx, discordCorpGuild); guild.OpsChannel != discordOpsChannel {
+			t.Errorf("%s was accepted as the ops channel", name)
+		}
+	}
+	// The same rule twice is one rule.
+	f.addRule(cookie, discordCorpGuild, ruleMember, discordRoleMember)
+	if rules() != want {
+		t.Fatalf("a repeated rule was stored twice: %q", rules())
 	}
 
 	// Somebody else, a director of another corporation, cannot touch it.
@@ -489,10 +542,12 @@ func TestDiscordServersAreSetUpByDirectors(t *testing.T) {
 	if strings.Contains(body, discordCorpGuild) {
 		t.Fatal("another corporation's server is shown to an outsider")
 	}
-	f.post(theirs, "/discord/servers/"+discordCorpGuild+"/save", url.Values{"role_linked": {""}, "role_member": {""}, "ops_channel": {""}})
+	f.post(theirs, "/discord/servers/"+discordCorpGuild+"/save", url.Values{"ops_channel": {""}})
+	f.post(theirs, "/discord/servers/"+discordCorpGuild+"/rules/add", url.Values{"who": {ruleLinked}, "role": {discordRoleMod}})
+	f.post(theirs, "/discord/servers/"+discordCorpGuild+"/rules/1/remove", url.Values{})
 	f.post(theirs, "/discord/servers/"+discordCorpGuild+"/remove", url.Values{})
-	if guild, err = f.q.GetDiscordGuild(f.ctx, discordCorpGuild); err != nil || guild.RoleMember != discordRoleMember {
-		t.Fatalf("an outsider changed the server: %+v, %v", guild, err)
+	if guild, err = f.q.GetDiscordGuild(f.ctx, discordCorpGuild); err != nil || guild.OpsChannel != discordOpsChannel || rules() != want {
+		t.Fatalf("an outsider changed the server: %+v, rules %s, %v", guild, rules(), err)
 	}
 	if code, _ := f.post(theirs, "/discord/servers/add", url.Values{"owner": {discordCorpOwner}}); code != http.StatusSeeOther {
 		t.Fatalf("an outsider's add for the corporation: %d", code)
@@ -508,12 +563,14 @@ func TestDiscordServersAreSetUpByDirectors(t *testing.T) {
 		t.Fatal("a director of a member corporation added an alliance server")
 	}
 	_, body = f.addServer(theirs, discordAllianceOwner, "add-alliance")
-	mustContain(t, "the alliance's server", body, "The bot was added to Server 2.", "Role for members of this alliance")
+	mustContain(t, "the alliance's server", body, "The bot was added to Server 2.", `<option value="member">Members of the alliance</option>`,
+		`<option value="ceo">CEOs of its corporations</option>`, `<option value="corp:98000001">Members of `)
 
 	// A director loses the role: the actions go with it.
 	f.joinCorp(f.ch.CharacterID, discordCorp)
-	f.post(cookie, "/discord/servers/"+discordCorpGuild+"/save", url.Values{"role_linked": {""}, "role_member": {""}, "ops_channel": {""}})
-	if guild, _ = f.q.GetDiscordGuild(f.ctx, discordCorpGuild); guild.RoleMember != discordRoleMember {
+	f.post(cookie, "/discord/servers/"+discordCorpGuild+"/save", url.Values{"ops_channel": {""}})
+	f.post(cookie, "/discord/servers/"+discordCorpGuild+"/rules/add", url.Values{"who": {ruleLinked}, "role": {discordRoleMod}})
+	if guild, _ = f.q.GetDiscordGuild(f.ctx, discordCorpGuild); guild.OpsChannel != discordOpsChannel || rules() != want {
 		t.Fatal("a former director changed the server")
 	}
 }

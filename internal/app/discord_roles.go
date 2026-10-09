@@ -2,34 +2,44 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/discord"
+	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
 // Discord roles from what EveSynapse knows. In each server the bot was
-// added to (discord_servers.go), its directors may name two roles:
+// added to (discord_servers.go), its directors write rules, as many as
+// they have roles to give: "whoever is this gets that role". A member
+// gets every role they qualify for, and loses each one when they stop
+// qualifying for it. Who "this" can be:
 //
-//	the linked role   for anyone there who has connected an EveSynapse
-//	                  account with a character whose link to EVE works
-//	the member role   for those of them with such a character in the
-//	                  server's corporation, or in a corporation of the
-//	                  server's alliance
+//	linked    anyone there who has connected an EveSynapse account
+//	          with a character whose link to EVE works
+//	member    such a character is in the server's corporation, or in
+//	          a corporation of the server's alliance
+//	corp      such a character is in one named corporation
+//	ceo       is the CEO of the corporation (or of one in the alliance)
+//	eve_role  holds an in-game corporation role there (Director,
+//	          Accountant, ...)
+//	group     is in a group the directors keep (groups.go)
 //
-// What a member role rests on, and so how far to trust it: an
-// EveSynapse account holding that Discord account has a character
-// whose link to EVE is in good standing and which the last sync saw in
-// the corporation. It follows a character leaving within a sync or
-// two, not at that instant.
+// What a role rests on, and so how far to trust it: an EveSynapse
+// account holding that Discord account has a character whose link to
+// EVE is in good standing and for which the last sync saw the thing
+// the rule asks. It follows a change within a sync or two, not at that
+// instant.
 //
 // In a server the bot only touches the roles named in that server's
-// settings, and roles it gave there earlier. Every other role a member
+// rules, and roles it gave there earlier. Every other role a member
 // has is left exactly as it is, whoever gave it.
 //
 // Taking back is not left to the account still being there. What the
@@ -49,6 +59,16 @@ const (
 	// since joined the server gets theirs).
 	discordRolesPerPass = 20
 	discordRolesRecheck = 6 * time.Hour
+)
+
+// The kinds of rule (discord_role_rules.kind). Stored: never rename.
+const (
+	ruleLinked  = "linked"
+	ruleMember  = "member"
+	ruleCorp    = "corp"
+	ruleCEO     = "ceo"
+	ruleEVERole = "eve_role"
+	ruleGroup   = "group"
 )
 
 // roleSet gathers role ids without repeats; list returns them sorted.
@@ -78,59 +98,178 @@ func splitRoles(joined string) []string {
 	return strings.Split(joined, ",")
 }
 
-// discordStanding is what an account's working characters amount to:
-// whether it has any, and the corporations and alliances they are in.
+// discordStanding is what an account's working characters amount to.
 type discordStanding struct {
 	working   bool
-	corps     map[int64]bool
+	corps     map[int64]bool            // corporations a character is in
+	alliance  map[int64]int64           // corporation -> its alliance, where known
+	ceoOf     map[int64]bool            // corporations a character is CEO of
+	eveRoles  map[int64]map[string]bool // corporation -> in-game roles held there (lower case)
+	groups    map[int64]bool            // groups a character is in, and still belongs to the owner of
 	alliances map[int64]bool
+}
+
+// corpCEO reports a corporation's CEO from its stored record; 0 when
+// the record has not been fetched.
+func (app *Application) corpCEO(ctx context.Context, corpID int64) int64 {
+	rec, err := app.queries.GetCorporationRecord(ctx, corpID)
+	if err != nil || rec.State != orgStateReady || rec.Payload == "" {
+		return 0
+	}
+	var payload corporationRecordPayload
+	if json.Unmarshal([]byte(rec.Payload), &payload) != nil {
+		return 0
+	}
+	return payload.Corp.CEOID
 }
 
 // discordStandingFor works out an account's standing from stored data.
 // A corporation whose alliance is not known yet counts for itself
 // only.
 func (app *Application) discordStandingFor(ctx context.Context, userID int64) (discordStanding, error) {
-	st := discordStanding{corps: map[int64]bool{}, alliances: map[int64]bool{}}
+	st := discordStanding{
+		corps: map[int64]bool{}, alliance: map[int64]int64{}, alliances: map[int64]bool{},
+		ceoOf: map[int64]bool{}, eveRoles: map[int64]map[string]bool{}, groups: map[int64]bool{},
+	}
 	n, err := app.queries.CountLinkedCharactersByUser(ctx, userID)
 	if err != nil || n == 0 {
 		return st, err
 	}
 	st.working = true
-	corps, err := app.queries.ListLinkedCorporationsByUser(ctx, userID)
+	rows, err := app.queries.ListWorkingCharacterCorporationsByUser(ctx, userID)
 	if err != nil {
 		return st, err
 	}
-	for _, corp := range corps {
-		st.corps[corp] = true
-		if alliance, _ := app.corpAlliance(ctx, corp); alliance != 0 {
-			st.alliances[alliance] = true
+	corpOf := map[int64]int64{} // character -> corporation
+	for _, row := range rows {
+		corp := row.CorporationID
+		if corp == 0 {
+			continue
+		}
+		corpOf[row.CharacterID] = corp
+		if !st.corps[corp] {
+			st.corps[corp] = true
+			if alliance, _ := app.corpAlliance(ctx, corp); alliance != 0 {
+				st.alliance[corp] = alliance
+				st.alliances[alliance] = true
+			}
+		}
+		if app.corpCEO(ctx, corp) == row.CharacterID {
+			st.ceoOf[corp] = true
+		}
+		var roles esi.CharacterRoles
+		if app.loadCorpSnapshot(ctx, row.CharacterID, esi.SnapCorpRoles, &roles) {
+			for _, role := range roles.Roles {
+				if st.eveRoles[corp] == nil {
+					st.eveRoles[corp] = map[string]bool{}
+				}
+				st.eveRoles[corp][strings.ToLower(role)] = true
+			}
+		}
+	}
+	memberships, err := app.queries.ListOrgGroupsByUser(ctx, userID)
+	if err != nil {
+		return st, err
+	}
+	for _, m := range memberships {
+		// A character counts for a group only while it is in the
+		// corporation or alliance the group belongs to.
+		corp := corpOf[m.CharacterID]
+		if corp != 0 && st.within(discordOwner{m.OwnerKind, m.OwnerID}, corp) {
+			st.groups[m.GroupID] = true
 		}
 	}
 	return st, nil
 }
 
-// discordWanted is the roles an account of that standing should hold
-// in a server now, sorted.
-func discordWanted(guild db.DiscordGuild, st discordStanding) []string {
-	set := roleSet{}
-	if !st.working {
-		return set.list()
+// within reports whether a corporation the account has a character in
+// is the owner, or is in the owner alliance.
+func (st discordStanding) within(owner discordOwner, corp int64) bool {
+	if owner.Kind == ownerCorporation {
+		return corp == owner.ID
 	}
-	set.add(guild.RoleLinked)
-	if (guild.OwnerKind == ownerCorporation && st.corps[guild.OwnerID]) ||
-		(guild.OwnerKind == ownerAlliance && st.alliances[guild.OwnerID]) {
-		set.add(guild.RoleMember)
+	return st.alliance[corp] == owner.ID
+}
+
+// meets reports whether the account satisfies one rule of a server
+// belonging to owner.
+func (st discordStanding) meets(owner discordOwner, rule db.DiscordRoleRule) bool {
+	if !st.working {
+		return false
+	}
+	switch rule.Kind {
+	case ruleLinked:
+		return true
+	case ruleMember:
+		for corp := range st.corps {
+			if st.within(owner, corp) {
+				return true
+			}
+		}
+	case ruleCorp:
+		corp, _ := strconv.ParseInt(rule.Ref, 10, 64)
+		return corp != 0 && st.corps[corp] && st.within(owner, corp)
+	case ruleCEO:
+		for corp := range st.ceoOf {
+			if st.within(owner, corp) {
+				return true
+			}
+		}
+	case ruleEVERole:
+		want := strings.ToLower(rule.Ref)
+		for corp, roles := range st.eveRoles {
+			if roles[want] && st.within(owner, corp) {
+				return true
+			}
+		}
+	case ruleGroup:
+		group, _ := strconv.ParseInt(rule.Ref, 10, 64)
+		return st.groups[group]
+	}
+	return false
+}
+
+// discordWanted is the roles an account of that standing should hold
+// in a server now, sorted: every role a rule gives it.
+func discordWanted(guild db.DiscordGuild, rules []db.DiscordRoleRule, st discordStanding) []string {
+	owner := discordOwner{guild.OwnerKind, guild.OwnerID}
+	set := roleSet{}
+	for _, rule := range rules {
+		if st.meets(owner, rule) {
+			set.add(rule.RoleID)
+		}
 	}
 	return set.list()
 }
 
+// ruleRoles lists the roles a server's rules name.
+func ruleRoles(rules []db.DiscordRoleRule) []string {
+	set := roleSet{}
+	for _, rule := range rules {
+		set.add(rule.RoleID)
+	}
+	return set.list()
+}
+
+// discordRulesByGuild loads every server's rules.
+func (app *Application) discordRulesByGuild(ctx context.Context) (map[string][]db.DiscordRoleRule, error) {
+	rules, err := app.queries.ListDiscordRoleRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string][]db.DiscordRoleRule{}
+	for _, rule := range rules {
+		out[rule.GuildID] = append(out[rule.GuildID], rule)
+	}
+	return out, nil
+}
+
 // discordApplyRoles makes one member's roles in a server match wanted,
-// among the roles named in the server's settings and any in also
-// (roles given earlier that may since have left the settings). It
-// reports the set now held, and whether the account is in the server
-// at all.
-func (app *Application) discordApplyRoles(ctx context.Context, guild db.DiscordGuild, discordID string, wanted, also []string) (applied string, member bool, err error) {
-	held, err := app.discord.MemberRoles(ctx, guild.GuildID, discordID)
+// among managed (the roles the server's rules name) and any in also
+// (roles given earlier that may since have left the rules). It reports
+// the set now held, and whether the account is in the server at all.
+func (app *Application) discordApplyRoles(ctx context.Context, guildID, discordID string, wanted, managed, also []string) (applied string, member bool, err error) {
+	held, err := app.discord.MemberRoles(ctx, guildID, discordID)
 	if err != nil {
 		if discord.IsStatus(err, http.StatusNotFound) {
 			return "", false, nil
@@ -142,13 +281,13 @@ func (app *Application) discordApplyRoles(ctx context.Context, guild db.DiscordG
 	want := roleSet{}
 	want.add(wanted...)
 	touch := roleSet{}
-	touch.add(guild.RoleLinked, guild.RoleMember)
+	touch.add(managed...)
 	touch.add(also...)
 	for _, role := range touch.list() {
 		if want[role] == has[role] {
 			continue
 		}
-		if err := app.discord.SetRole(ctx, guild.GuildID, discordID, role, want[role]); err != nil {
+		if err := app.discord.SetRole(ctx, guildID, discordID, role, want[role]); err != nil {
 			return "", true, err
 		}
 	}
@@ -166,8 +305,8 @@ func discordStop(err error) bool {
 // server and writes down what it now holds there. The row is kept even
 // when nothing is held, as the note of when the account was last
 // looked for in that server.
-func (app *Application) discordSyncMember(ctx context.Context, guild db.DiscordGuild, discordID string, wanted []string, had string, now time.Time) (changed bool, err error) {
-	applied, member, err := app.discordApplyRoles(ctx, guild, discordID, wanted, splitRoles(had))
+func (app *Application) discordSyncMember(ctx context.Context, guild db.DiscordGuild, rules []db.DiscordRoleRule, discordID string, wanted []string, had string, now time.Time) (changed bool, err error) {
+	applied, member, err := app.discordApplyRoles(ctx, guild.GuildID, discordID, wanted, ruleRoles(rules), splitRoles(had))
 	if err != nil {
 		return false, err
 	}
@@ -192,6 +331,11 @@ func (app *Application) discordSyncRoles(ctx context.Context, now time.Time) (ch
 	guilds, err := app.queries.ListDiscordGuilds(ctx)
 	if err != nil {
 		logging.Errorf("discord: list servers: %v", err)
+		return 0
+	}
+	rulesBy, err := app.discordRulesByGuild(ctx)
+	if err != nil {
+		logging.Errorf("discord: list role rules: %v", err)
 		return 0
 	}
 	byID := map[string]db.DiscordGuild{}
@@ -224,7 +368,7 @@ func (app *Application) discordSyncRoles(ctx context.Context, now time.Time) (ch
 			continue
 		}
 		budget--
-		if _, _, err := app.discordApplyRoles(ctx, guild, grant.DiscordID, nil, splitRoles(grant.Roles)); err != nil {
+		if _, _, err := app.discordApplyRoles(ctx, guild.GuildID, grant.DiscordID, nil, ruleRoles(rulesBy[guild.GuildID]), splitRoles(grant.Roles)); err != nil {
 			logging.Warnf("discord: take back roles of %s in %s: %v", grant.DiscordID, guild.Name, err)
 			stopped[guild.GuildID] = discordStop(err)
 			continue // kept written down: tried again next pass
@@ -252,6 +396,7 @@ func (app *Application) discordSyncRoles(ctx context.Context, now time.Time) (ch
 		standings[link.UserID] = st
 	}
 	for _, guild := range guilds {
+		rules := rulesBy[guild.GuildID]
 		grants, err := app.queries.ListDiscordRoleGrantsForGuild(ctx, guild.GuildID)
 		if err != nil {
 			logging.Errorf("discord: roles given in %s: %v", guild.Name, err)
@@ -266,7 +411,7 @@ func (app *Application) discordSyncRoles(ctx context.Context, now time.Time) (ch
 			if !known {
 				continue
 			}
-			wanted := discordWanted(guild, st)
+			wanted := discordWanted(guild, rules, st)
 			grant, looked := given[link.DiscordID]
 			target := strings.Join(wanted, ",")
 			switch {
@@ -286,7 +431,7 @@ func (app *Application) discordSyncRoles(ctx context.Context, now time.Time) (ch
 				break
 			}
 			budget--
-			did, err := app.discordSyncMember(ctx, guild, link.DiscordID, wanted, grant.Roles, now)
+			did, err := app.discordSyncMember(ctx, guild, rules, link.DiscordID, wanted, grant.Roles, now)
 			if err != nil {
 				logging.Warnf("discord: roles of user %d in %s: %v", link.UserID, guild.Name, err)
 				stopped[guild.GuildID] = discordStop(err)
@@ -301,10 +446,14 @@ func (app *Application) discordSyncRoles(ctx context.Context, now time.Time) (ch
 }
 
 // discordSyncAccount brings one account's roles up to date in every
-// server at once, whatever was checked when: for the "refresh my
-// roles" button, pressed by someone who has just joined a server.
+// server at once, whatever was checked when: for the "check my roles
+// now" button, pressed by someone who has just joined a server.
 func (app *Application) discordSyncAccount(ctx context.Context, link db.DiscordLink, now time.Time) (servers int, err error) {
 	guilds, err := app.queries.ListDiscordGuilds(ctx)
+	if err != nil {
+		return 0, err
+	}
+	rulesBy, err := app.discordRulesByGuild(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -313,7 +462,8 @@ func (app *Application) discordSyncAccount(ctx context.Context, link db.DiscordL
 		return 0, err
 	}
 	for _, guild := range guilds {
-		wanted := discordWanted(guild, st)
+		rules := rulesBy[guild.GuildID]
+		wanted := discordWanted(guild, rules, st)
 		had := ""
 		if grant, gerr := app.queries.GetDiscordRoleGrant(ctx, db.GetDiscordRoleGrantParams{DiscordID: link.DiscordID, GuildID: guild.GuildID}); gerr == nil {
 			had = grant.Roles
@@ -321,7 +471,7 @@ func (app *Application) discordSyncAccount(ctx context.Context, link db.DiscordL
 		if len(wanted) == 0 && had == "" {
 			continue
 		}
-		if _, err := app.discordSyncMember(ctx, guild, link.DiscordID, wanted, had, now); err != nil {
+		if _, err := app.discordSyncMember(ctx, guild, rules, link.DiscordID, wanted, had, now); err != nil {
 			logging.Warnf("discord: refresh roles of user %d in %s: %v", link.UserID, guild.Name, err)
 			continue
 		}
@@ -351,10 +501,9 @@ func (app *Application) discordDropRoles(ctx context.Context, userID int64) {
 		return
 	}
 	for _, grant := range grants {
-		guild, err := app.queries.GetDiscordGuild(ctx, grant.GuildID)
-		if err == nil && grant.Roles != "" {
-			if _, _, err := app.discordApplyRoles(ctx, guild, link.DiscordID, nil, splitRoles(grant.Roles)); err != nil {
-				logging.Warnf("discord: take back roles of user %d in %s: %v", userID, guild.Name, err)
+		if grant.Roles != "" {
+			if _, _, err := app.discordApplyRoles(ctx, grant.GuildID, link.DiscordID, nil, nil, splitRoles(grant.Roles)); err != nil {
+				logging.Warnf("discord: take back roles of user %d in %s: %v", userID, grant.GuildID, err)
 				continue
 			}
 		}

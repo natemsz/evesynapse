@@ -401,6 +401,29 @@ main {
 /* The Market page's category browser sits inside the page's panel. It
    is a section of that panel, not a second framed box inside it. */
 .panel.market-browse { background: none; border: 0; box-shadow: none; padding: 0; }
+/* The character sheet's name and portrait: a heading on the page, not
+   a framed box of its own. */
+.panel.char-head { background: none; border: 0; box-shadow: none; padding: 0; }
+/* A link that belongs to a page's title sits in the title bar's right
+   corner, drawn like the sidebar's own links (sign out, theme): the
+   brand ramp on a small sign and its word, no box. */
+.panel > h1.h-with-action:first-child { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.h-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: none;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: normal;
+  color: var(--success);
+  text-decoration: none;
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.4rem;
+}
+.h-action:hover { color: var(--text-bright); background: rgba(255, 255, 255, 0.04); text-decoration: none; }
+.h-action svg { width: 1.05em; height: 1.05em; }
 .panel > h1:first-child {
   /* The bar spans the full panel width by design; the gradient
      rides the title text (an inline span), so the ramp is scoped
@@ -1331,9 +1354,11 @@ html[data-nav="hidden"] .sidebar {
 /* v0.3.07.007: the glyph-only controls (collapse / hide /
    drawer close / expand-all) float bare — gradient sign, no
    resting box. The border stays on the box at full width but
-   transparent, so the footprint never shifts; .nav-reopen
-   keeps its labeled button box. */
+   transparent, so the footprint never shifts. The labeled Menu
+   button that brings a hidden navigation back (.nav-reopen) floats
+   bare the same way: its hover tint is its only box. */
 .nav-state-btn,
+.nav-reopen,
 .nav-drawer-close,
 .nav-expand-btn {
   background: transparent;
@@ -1360,7 +1385,7 @@ html.js[data-nav="hidden"] .nav-reopen { display: inline-flex; }
 .nav-expand-btn[aria-expanded="true"] .expand-icon-minus { display: block; }
 #nav-collapse .nav-control-svg { transition: transform 0.15s ease; }
 html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
-.nav-reopen:hover { color: var(--text-bright); border-color: var(--accent); }
+.nav-reopen:hover { color: var(--text-bright); background: rgba(255, 106, 26, 0.14); }
 /* Glyph controls get feedback as a faint wash, not a box. */
 .nav-state-btn:hover,
 .nav-drawer-close:hover,

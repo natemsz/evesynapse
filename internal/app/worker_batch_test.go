@@ -2,9 +2,11 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
 )
 
 // TestOrderByDuePrefersUnfetched: a character with no snapshots is
@@ -96,5 +98,57 @@ func TestFlushOrgWants(t *testing.T) {
 	}
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("flush made %d ESI calls, want 0 (queue writes only)", got)
+	}
+}
+
+// TestDueOrderIgnoresWhatIsNeverRefetched: a character's place in the
+// queue, and the worker's lateness figure, come from the datasets the
+// worker actually refreshes. A week-old mail body, fetched once and
+// never again, does not make its character the most overdue; and a
+// dataset the character has not granted access to is not something it
+// can be late with.
+func TestDueOrderIgnoresWhatIsNeverRefetched(t *testing.T) {
+	at := func(s string) sql.NullTime { return mustNullTime(s) }
+	var all []db.ListSnapshotMetaForCharactersRow
+	for _, kind := range coreSnapshotKinds {
+		all = append(all, db.ListSnapshotMetaForCharactersRow{Kind: kind, CachedUntil: at("2026-10-09T05:00:00Z")})
+	}
+	want := mustNullTime("2026-10-09T05:00:00Z").Time
+
+	// One-off snapshots from days ago change nothing.
+	withOld := append(append([]db.ListSnapshotMetaForCharactersRow(nil), all...),
+		db.ListSnapshotMetaForCharactersRow{Kind: esi.MailBodyKind(12), CachedUntil: at("2026-10-03T09:00:00Z")},
+		db.ListSnapshotMetaForCharactersRow{Kind: esi.CalendarEventKind(7), CachedUntil: at("2026-10-01T00:00:00Z")})
+	if got := dueKeyFromMeta(withOld, nil); !got.Equal(want) {
+		t.Fatalf("with old one-off snapshots: due %v, want %v", got, want)
+	}
+	// A core dataset that is overdue does.
+	late := append([]db.ListSnapshotMetaForCharactersRow(nil), all...)
+	late[2].CachedUntil = at("2026-10-09T04:00:00Z")
+	if got := dueKeyFromMeta(late, nil); !got.Equal(mustNullTime("2026-10-09T04:00:00Z").Time) {
+		t.Fatalf("with one core dataset overdue: due %v", got)
+	}
+	// A core dataset never fetched is most due...
+	missing := all[1:]
+	if got := dueKeyFromMeta(missing, nil); !got.IsZero() {
+		t.Fatalf("with a core dataset never fetched: due %v, want the zero time", got)
+	}
+	// ...unless the character has not granted access to it, when it
+	// never will be fetched and is not counted.
+	granted := scopeSet("esi-skills.read_skills.v1")
+	locked := false
+	var kept []db.ListSnapshotMetaForCharactersRow
+	for _, row := range all {
+		if kindLockedOut(granted, row.Kind) {
+			locked = true
+			continue
+		}
+		kept = append(kept, row)
+	}
+	if !locked {
+		t.Fatal("the test needs a core dataset that one scope alone does not unlock")
+	}
+	if got := dueKeyFromMeta(kept, granted); !got.Equal(want) {
+		t.Fatalf("with only the granted datasets stored: due %v, want %v", got, want)
 	}
 }

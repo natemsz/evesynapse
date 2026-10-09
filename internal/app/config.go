@@ -33,6 +33,11 @@ type Config struct {
 	// does not ask, and the icon changes on page loads only.
 	notifyPoll int
 
+	// workerTiersOff (WORKER_TIERS=off) has the worker refresh every
+	// character as often as ESI allows, whether or not anyone is
+	// looking, as it did before tiers (worker_tiers.go).
+	workerTiersOff bool
+
 	// Discord (discord_link.go). The client id and secret run the
 	// "Connect Discord" sign-in; the bot token lets the bot message
 	// and give roles in the servers it is added to. With none set
@@ -154,6 +159,7 @@ func LoadConfig() (Config, error) {
 	}
 	return Config{
 		notifyPoll:          notifyPoll,
+		workerTiersOff:      strings.EqualFold(strings.TrimSpace(os.Getenv("WORKER_TIERS")), "off"),
 		discordClientID:     os.Getenv("DISCORD_CLIENT_ID"),
 		discordClientSecret: os.Getenv("DISCORD_CLIENT_SECRET"),
 		discordBotToken:     os.Getenv("DISCORD_BOT_TOKEN"),

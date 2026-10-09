@@ -235,14 +235,27 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// (earliest cached_until across the core kinds; a kind with no
 	// snapshot at all counts as due immediately). With dozens of
 	// linked characters the stalest work always goes first.
-	eligible, stalest := app.orderByDueTimed(ctx, eligible)
+	eligible, due := app.orderByDueTimed(ctx, eligible)
 	eligible = orderByPriority(eligible, app.takePriorityCharacters())
 	timing := workerTiming{At: clock.start, Characters: len(eligible), Budget: maxFetchesPerCycle}
-	if len(eligible) > 0 {
-		if stalest.IsZero() {
-			timing.NeverFetched = true
-		} else if late := clock.start.Sub(stalest); late > 0 {
-			timing.Overdue = late
+	// Lateness is measured where somebody is looking: an active
+	// account's data is meant to be as fresh as ESI allows, and a
+	// dormant one's is held back on purpose.
+	for _, ch := range eligible {
+		switch app.tierOf(ch, clock.start) {
+		case tierActive:
+			timing.Active++
+			at, known := due[ch.CharacterID]
+			switch {
+			case !known || at.IsZero():
+				timing.NeverFetched = true
+			case clock.start.Sub(at) > timing.Overdue:
+				timing.Overdue = clock.start.Sub(at)
+			}
+		case tierRecent:
+			timing.Recent++
+		default:
+			timing.Dormant++
 		}
 	}
 	clock.mark("ordering", time.Now())
@@ -387,6 +400,17 @@ func (c *cycleState) characterPass(what string, ch db.Character, run func() (sto
 func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool {
 	app := c.app
 
+	// How often this character's data is refreshed follows how
+	// recently anyone looked at its account (worker_tiers.go). With
+	// nothing due it is left alone, before its token is touched.
+	now := time.Now()
+	tier := app.tierOf(ch, now)
+	fresh, coreDue := c.coreFreshness(ctx, ch, tier, now)
+	further := app.activity.furtherDue(ch.CharacterID, tierFurtherHold(tier), now)
+	if !coreDue && !further {
+		return true
+	}
+
 	// Ensure the token is usable before touching snapshots; a
 	// revoked refresh token means this character needs a fresh
 	// login, and fetching would only fail three more times.
@@ -398,7 +422,11 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 		return false
 	}
 
-	c.refreshCoreSnapshots(ctx, ch)
+	c.refreshCoreSnapshots(ctx, ch, fresh)
+	if !further {
+		return true
+	}
+	app.activity.furtherDone(ch.CharacterID, now)
 
 	// Killmail details behind the recent list: immutable once
 	// posted, so each missing detail is fetched once and kept.
@@ -453,25 +481,14 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 	return true
 }
 
-// refreshCoreSnapshots fetches the character's core datasets whose
-// ESI cache window has closed, stopping at the first failure.
-func (c *cycleState) refreshCoreSnapshots(ctx context.Context, ch db.Character) {
+// refreshCoreSnapshots fetches the character's core datasets that are
+// not fresh (coreFreshness), stopping at the first failure.
+func (c *cycleState) refreshCoreSnapshots(ctx context.Context, ch db.Character, fresh map[string]bool) {
 	app := c.app
-	// One meta read (no payloads) for the whole freshness pass:
-	// the payloads are the bulk of the table, and freshness only
-	// needs cached_until.
-	meta, merr := app.queries.ListSnapshotMetaByCharacter(ctx, ch.CharacterID)
-	if merr != nil {
-		logging.Errorf("worker: read snapshot freshness for character %d: %v", ch.CharacterID, merr)
-	}
-	fresh := make(map[string]bool, len(meta))
-	for _, snap := range meta {
-		fresh[snap.Kind] = esi.CacheWindowOpen(snap.CachedUntil)
-	}
 	granted := scopeSet(ch.Scopes)
 	for _, kind := range coreSnapshotKinds {
 		if fresh[kind] {
-			continue // still inside ESI's cache window
+			continue // inside ESI's cache window, or fetched recently enough for its tier
 		}
 		// A character that granted none of the owning module's scopes
 		// can only be refused; skipping spares the fetch and keeps
@@ -687,14 +704,14 @@ func (app *Application) orderByDue(ctx context.Context, characters []db.Characte
 	return out
 }
 
-// orderByDueTimed is orderByDue, also reporting the stalest
-// character's due moment: the earliest time at which any of its data
-// could have been refreshed. Zero when something has never been
-// fetched, or when freshness could not be read.
-func (app *Application) orderByDueTimed(ctx context.Context, characters []db.Character) (ordered []db.Character, stalest time.Time) {
+// orderByDueTimed is orderByDue, also reporting each character's due
+// moment: the earliest time at which any of its core data could have
+// been refreshed, zero when something has never been fetched. The map
+// is nil when freshness could not be read.
+func (app *Application) orderByDueTimed(ctx context.Context, characters []db.Character) (ordered []db.Character, dueAt map[int64]time.Time) {
 	out := append([]db.Character(nil), characters...)
 	if len(out) == 0 {
-		return out, time.Time{}
+		return out, nil
 	}
 	ids := make([]int64, 0, len(out))
 	for _, ch := range out {
@@ -705,7 +722,7 @@ func (app *Application) orderByDueTimed(ctx context.Context, characters []db.Cha
 		// Unreadable state: every character is equally due, so
 		// the given order stands.
 		logging.Errorf("worker: order characters by overdue: %v", err)
-		return out, time.Time{}
+		return out, nil
 	}
 	byChar := make(map[int64][]db.ListSnapshotMetaForCharactersRow, len(out))
 	for _, meta := range metas {
@@ -718,7 +735,7 @@ func (app *Application) orderByDueTimed(ctx context.Context, characters []db.Cha
 	sort.SliceStable(out, func(i, j int) bool {
 		return due[out[i].CharacterID].Before(due[out[j].CharacterID])
 	})
-	return out, due[out[0].CharacterID]
+	return out, due
 }
 
 // dueKeyFromMeta computes a character's most-overdue moment from

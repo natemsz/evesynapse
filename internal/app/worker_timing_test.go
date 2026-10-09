@@ -40,11 +40,11 @@ func TestWorkerTimingView(t *testing.T) {
 	}
 	at := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
 	easy := workerTiming{
-		At: at, Took: 3200 * time.Millisecond, Characters: 14, Fetches: 37, Budget: 120, Overdue: 2 * time.Minute,
+		At: at, Took: 3200 * time.Millisecond, Characters: 14, Active: 3, Recent: 5, Dormant: 6, Fetches: 37, Budget: 120, Overdue: 2 * time.Minute,
 		Phases: []phaseTiming{{"ordering", 10 * time.Millisecond}, {"characters", 2500 * time.Millisecond}, {"notifications", 600 * time.Millisecond}},
 	}
 	v := workerTimingViewFor(workerStatus{Timing: easy, Recent: []workerTiming{easy}})
-	if want := "took 3.2s · 14 characters · 37 of 120 fetches · stalest data 2m 0s past its refresh time"; v.Last != want {
+	if want := "took 3.2s · 14 characters (3 active, 5 recent, 6 dormant) · 37 of 120 fetches · stalest active data 2m 0s past its refresh time"; v.Last != want {
 		t.Errorf("last cycle: %q, want %q", v.Last, want)
 	}
 	// Longest first; a part too short to matter is left out.
@@ -117,7 +117,7 @@ func TestWorkerCycleIsTimed(t *testing.T) {
 		t.Fatalf("%d fetches counted against an allowance of %d", timing.Fetches, maxFetchesPerCycle)
 	}
 	_, body = getPage(t, f.app, cookie, "/sync/")
-	mustContain(t, "/sync/ after a cycle", body, "Last cycle: took ", "1 character · ", " of 120 fetches")
+	mustContain(t, "/sync/ after a cycle", body, "Last cycle: took ", "1 character (1 active, 0 recent, 0 dormant) · ", " of 120 fetches")
 
 	// Only the recent cycles are kept.
 	for i := 0; i < workerRecentCycles+5; i++ {

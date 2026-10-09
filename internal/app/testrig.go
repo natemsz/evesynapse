@@ -47,7 +47,7 @@ func NewTestRig(dsn string, transport http.RoundTripper) (*TestRig, error) {
 		func(context.Context, db.Character) (string, error) { return "fixture", nil })
 
 	return &TestRig{app: &Application{
-		cfg:           Config{},
+		cfg:           Config{workerTiersOff: true},
 		sessions:      sessionManager,
 		queries:       queries,
 		esi:           client,

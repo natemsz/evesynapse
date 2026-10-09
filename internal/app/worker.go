@@ -69,6 +69,10 @@ type workerStatus struct {
 	Summary            string
 	Warming            bool // a cycle is running right now
 	NamesResolvedTotal int  // cumulative since boot
+	// Timing is the last finished cycle's measurements and Recent the
+	// last hour's worth (worker_timing.go).
+	Timing workerTiming
+	Recent []workerTiming
 }
 
 // markCharacterPriority flags a character for first-in-line warm-up
@@ -197,8 +201,9 @@ func (app *Application) runWorker(ctx context.Context) {
 
 // refreshCycle performs one pass over all characters. See runWorker.
 func (app *Application) refreshCycle(ctx context.Context) {
+	clock := newPhaseClock(time.Now())
 	app.updateWorkerStatus(func(s *workerStatus) {
-		s.LastRunAt = time.Now()
+		s.LastRunAt = clock.start
 		s.Warming = true
 	})
 
@@ -230,8 +235,17 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// (earliest cached_until across the core kinds; a kind with no
 	// snapshot at all counts as due immediately). With dozens of
 	// linked characters the stalest work always goes first.
-	eligible = app.orderByDue(ctx, eligible)
+	eligible, stalest := app.orderByDueTimed(ctx, eligible)
 	eligible = orderByPriority(eligible, app.takePriorityCharacters())
+	timing := workerTiming{At: clock.start, Characters: len(eligible), Budget: maxFetchesPerCycle}
+	if len(eligible) > 0 {
+		if stalest.IsZero() {
+			timing.NeverFetched = true
+		} else if late := clock.start.Sub(stalest); late > 0 {
+			timing.Overdue = late
+		}
+	}
+	clock.mark("ordering", time.Now())
 
 	c := &cycleState{app: app, allowance: &fetchBudget{left: maxFetchesPerCycle}}
 
@@ -266,15 +280,19 @@ func (app *Application) refreshCycle(ctx context.Context) {
 			break
 		}
 	}
+	clock.mark("characters", time.Now())
 
 	// Ops in progress: record who is in each one's fleet
 	// (ops_attendance.go). No call is made unless an op is running.
 	c.pass("recording op attendance", func() (int, bool) {
 		return app.captureOpAttendance(ctx, time.Now())
 	})
+	clock.mark("op attendance", time.Now())
 
 	c.refreshPublicData(ctx, characters)
+	clock.mark("public data", time.Now())
 	c.warmNames(ctx, characters)
+	clock.mark("names", time.Now())
 
 	// Last, with everything this cycle fetched already stored: turn
 	// what is newly true into notifications (notify.go). Local data
@@ -284,6 +302,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 			logging.Infof("worker: %d new notification(s)", n)
 		}
 	})
+	clock.mark("notifications", time.Now())
 
 	// Discord, where a bot is set up (discord_notify.go,
 	// discord_roles.go): new ops to their channels, and roles brought
@@ -299,6 +318,11 @@ func (app *Application) refreshCycle(ctx context.Context) {
 			logging.Infof("worker: %d member(s) removed from Discord servers", n)
 		}
 	})
+
+	clock.mark("discord", time.Now())
+	timing.Took, timing.Phases = time.Since(clock.start), clock.phases
+	timing.Fetches, timing.Deferred = c.allowance.used(maxFetchesPerCycle), c.deferred
+	app.recordWorkerTiming(timing)
 
 	summary := cycleSummary(c.refreshed, c.namesResolved, c.failed, c.limited, parked, c.deferred)
 	app.updateWorkerStatus(func(s *workerStatus) {
@@ -659,9 +683,18 @@ func (b *fetchBudget) exhausted() bool {
 // priority-flag ordering on top. Freshness for every character
 // comes from one batched query, not one per character.
 func (app *Application) orderByDue(ctx context.Context, characters []db.Character) []db.Character {
+	out, _ := app.orderByDueTimed(ctx, characters)
+	return out
+}
+
+// orderByDueTimed is orderByDue, also reporting the stalest
+// character's due moment: the earliest time at which any of its data
+// could have been refreshed. Zero when something has never been
+// fetched, or when freshness could not be read.
+func (app *Application) orderByDueTimed(ctx context.Context, characters []db.Character) (ordered []db.Character, stalest time.Time) {
 	out := append([]db.Character(nil), characters...)
 	if len(out) == 0 {
-		return out
+		return out, time.Time{}
 	}
 	ids := make([]int64, 0, len(out))
 	for _, ch := range out {
@@ -672,7 +705,7 @@ func (app *Application) orderByDue(ctx context.Context, characters []db.Characte
 		// Unreadable state: every character is equally due, so
 		// the given order stands.
 		logging.Errorf("worker: order characters by overdue: %v", err)
-		return out
+		return out, time.Time{}
 	}
 	byChar := make(map[int64][]db.ListSnapshotMetaForCharactersRow, len(out))
 	for _, meta := range metas {
@@ -685,7 +718,7 @@ func (app *Application) orderByDue(ctx context.Context, characters []db.Characte
 	sort.SliceStable(out, func(i, j int) bool {
 		return due[out[i].CharacterID].Before(due[out[j].CharacterID])
 	})
-	return out
+	return out, due[out[0].CharacterID]
 }
 
 // dueKeyFromMeta computes a character's most-overdue moment from

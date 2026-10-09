@@ -54,6 +54,9 @@ type syncCharacterView struct {
 type syncView struct {
 	WorkerLine string
 	Warming    bool // a worker cycle is running right now
+	// Timing: how long the worker's cycles take and how far behind
+	// it is (worker_timing.go); nil before the first has finished.
+	Timing     *workerTimingView
 	Characters []syncCharacterView
 	SDE        *sdeView
 	Global     []syncSnapshotRow // public-data store (intel cluster)
@@ -77,6 +80,7 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 	view := &syncView{
 		WorkerLine: app.workerStatusText(),
 		Warming:    status.Warming,
+		Timing:     workerTimingViewFor(status),
 		SDE:        app.loadSDEView(ctx),
 		Global:     app.loadGlobalView(ctx),
 	}

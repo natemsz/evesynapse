@@ -60,6 +60,8 @@ func TestVersionFileAndFooter(t *testing.T) {
 
 	_, body := getPage(t, app, cookie, "/market/")
 	mustContain(t, "/market/ footer", body, `Powered by EveSynapse `+appVersion+` 🏓 by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>`)
+	_, css := getPage(t, app, cookie, "/static/style.css")
+	mustContain(t, "footer style", css, "footer .version {", "  font-family: 'Pixelify Sans', monospace;", "  word-spacing: 0.175em;")
 	if strings.Contains(body, "0.2.0") {
 		t.Fatal("footer still shows the old hardcoded version")
 	}

@@ -41,11 +41,7 @@ type shoppingView struct {
 
 func (app *Application) handleFitShopping(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
 	fitID := chi.URLParam(r, "id")
 	if fitID == "" {
@@ -61,7 +57,7 @@ func (app *Application) handleFitShopping(w http.ResponseWriter, r *http.Request
 	}
 
 	// Load the fit's items_json. We need the user ID from the session.
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	row, err := app.queries.GetLocalFitting(ctx, db.GetLocalFittingParams{
 		ID:     fitIDNum,
 		UserID: userID,

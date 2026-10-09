@@ -94,7 +94,7 @@ func pageScopeExemptPath(p string) bool {
 func (app *Application) pageWantScopeMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && !pageScopeExemptPath(r.URL.Path) {
-			if userID := int64(app.sessions.GetInt(r.Context(), sessionUserID)); userID != 0 {
+			if userID := app.userID(r.Context()); userID != 0 {
 				scope := fmt.Sprintf("%d|%s", userID, r.URL.RequestURI())
 				r = r.WithContext(withPageScope(r.Context(), scope))
 			}
@@ -321,7 +321,7 @@ func (app *Application) pendingPageWantCount(ctx context.Context, scope string) 
 // enqueues and never fetches.
 func (app *Application) handlePageSyncStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	page := r.URL.Query().Get("page")
 	pending := 0
 	if userID != 0 && page != "" {

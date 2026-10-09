@@ -178,7 +178,7 @@ func (app *Application) discordKickPass(ctx context.Context, now time.Time) (rem
 // removals were on, and changes nothing.
 func (app *Application) handleDiscordKickPreview(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	back := func(message string) {
 		app.flash(ctx, message)
 		http.Redirect(w, r, discordServersPath, http.StatusSeeOther)
@@ -210,7 +210,7 @@ func (app *Application) handleDiscordKickPreview(w http.ResponseWriter, r *http.
 // removals on is refused for a server with no rules.
 func (app *Application) handleDiscordKickSave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	back := func(message string) {
 		app.flash(ctx, message)
 		http.Redirect(w, r, discordServersPath, http.StatusSeeOther)

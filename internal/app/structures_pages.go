@@ -48,11 +48,7 @@ type structurePageView struct {
 // handleStructurePage renders one player structure's local record.
 func (app *Application) handleStructurePage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
 	id, err := strconv.ParseInt(r.URL.Query().Get("structure"), 10, 64)
 	if err != nil || !isStructureID(id) {

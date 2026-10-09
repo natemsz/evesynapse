@@ -188,7 +188,7 @@ func (app *Application) parseRuleWho(ctx context.Context, owner discordOwner, ra
 // Discord lists for that very server and that can be given.
 func (app *Application) handleDiscordRuleAdd(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	back := func(message string) {
 		app.flash(ctx, message)
 		http.Redirect(w, r, discordServersPath, http.StatusSeeOther)
@@ -233,7 +233,7 @@ func (app *Application) handleDiscordRuleAdd(w http.ResponseWriter, r *http.Requ
 // through it loses the role on the worker's next pass.
 func (app *Application) handleDiscordRuleRemove(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	back := func(message string) {
 		app.flash(ctx, message)
 		http.Redirect(w, r, discordServersPath, http.StatusSeeOther)

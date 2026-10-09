@@ -176,7 +176,7 @@ func userTags(chars []db.Character) []string {
 // back to where they were (the `next` field).
 func (app *Application) handleWidgetConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if userID == 0 {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return

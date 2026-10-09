@@ -129,11 +129,7 @@ type warsView struct {
 // list joined with the warmed war details.
 func (app *Application) handleIntelWars(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
 	view := &warsView{}
 	data.IntelWars = view
@@ -152,7 +148,7 @@ func (app *Application) handleIntelWars(w http.ResponseWriter, r *http.Request) 
 		ids = ids[:maxWarsShown]
 	}
 
-	yourCorps := app.userCorporationIDs(ctx, int64(app.sessions.GetInt(ctx, sessionUserID)))
+	yourCorps := app.userCorporationIDs(ctx, app.userID(ctx))
 	for _, id := range ids {
 		view.Rows = append(view.Rows, app.warRow(ctx, id, yourCorps))
 	}
@@ -258,11 +254,7 @@ type incursionsView struct {
 // the factions snapshot.
 func (app *Application) handleIntelIncursions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
 	view := &incursionsView{}
 	data.IntelIncursions = view
@@ -359,11 +351,7 @@ type fwView struct {
 // from /fw/systems/, both from the global store.
 func (app *Application) handleIntelFW(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
 	view := &fwView{}
 	data.IntelFW = view

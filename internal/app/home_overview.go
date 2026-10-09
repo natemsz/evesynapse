@@ -1676,7 +1676,7 @@ func (app *Application) buildPI(ctx context.Context, bundles []*charSnaps) *piWi
 // controls) and adds the catalog state on top.
 func (app *Application) buildHome(ctx context.Context, customize bool) *homeView {
 	view := &homeView{}
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if userID == 0 {
 		// Dev-login sessions carry no user: clean empty state.
 		return view
@@ -1834,7 +1834,7 @@ func (app *Application) saveHomeLayout(ctx context.Context, userID int64, layout
 // navigates under the user's fingers.
 func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if userID == 0 {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return

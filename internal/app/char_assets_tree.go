@@ -425,7 +425,7 @@ func (app *Application) suggestOwnedAssets(ctx context.Context, characters []db.
 // with only=1, the acting character's alone.
 func (app *Application) handleAssetsSuggest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	characters, err := app.queries.ListCharactersByUser(ctx, userID)
 	if err != nil || userID == 0 {
 		writeSuggestJSON(w, nil)

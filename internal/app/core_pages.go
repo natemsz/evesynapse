@@ -270,7 +270,7 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 		}
 	}
 	if data.LoggedIn && data.Notify == nil {
-		data.Notify = app.notifyBadgeFor(ctx, int64(app.sessions.GetInt(ctx, sessionUserID)))
+		data.Notify = app.notifyBadgeFor(ctx, app.userID(ctx))
 	}
 	if data.LoggedIn {
 		data.NotifyPoll = app.cfg.notifyPoll
@@ -360,4 +360,18 @@ func (app *Application) handleHome(w http.ResponseWriter, r *http.Request) {
 		data.ServerStatus = status
 	}
 	app.render(ctx, w, http.StatusOK, "home.html", data)
+}
+
+// page is the data every signed-in page starts from.
+func (app *Application) page(ctx context.Context) pageData {
+	return pageData{
+		LoggedIn:      true,
+		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
+		SSOConfigured: app.cfg.SSOConfigured(),
+	}
+}
+
+// userID is the signed-in account's id; 0 when nobody is signed in.
+func (app *Application) userID(ctx context.Context) int64 {
+	return int64(app.sessions.GetInt(ctx, sessionUserID))
 }

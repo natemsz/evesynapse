@@ -73,11 +73,7 @@ type adminCharacterRow struct {
 // and the account of the character asked for (?q= a name or an id).
 func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 	view := &adminView{}
 	data.Admin = view
 	now := time.Now()

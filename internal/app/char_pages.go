@@ -26,7 +26,7 @@ import (
 // links pointing at path. A nil slice with a nil error means the
 // session carries no user or the user has no characters yet.
 func (app *Application) pickCharacter(ctx context.Context, r *http.Request, path string) ([]db.Character, db.Character, []assetCharLink, error) {
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if userID == 0 {
 		// Dev-login sessions carry no user; nothing to show.
 		return nil, db.Character{}, nil, nil
@@ -243,11 +243,7 @@ type characterView struct {
 // signed-in user's characters (switchable via ?character=).
 func (app *Application) handleCharacter(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/character/")
 	if err != nil {
@@ -274,7 +270,7 @@ func (app *Application) handleCharacter(w http.ResponseWriter, r *http.Request) 
 // snapshot cache. A section whose snapshot can't be produced stays
 // dimmed; the rest render.
 func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, view *characterView) {
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 
 	app.fillCharacterStatus(ctx, ch, view)
 	app.fillCharacterLocation(ctx, ch, view)
@@ -645,7 +641,7 @@ func (app *Application) typeNameOrID(ctx context.Context, id int64) string {
 // sheet's clones section.
 func (app *Application) handleCloneRename(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if err := r.ParseForm(); err != nil || userID == 0 {
 		http.Redirect(w, r, "/character/", http.StatusSeeOther)
 		return

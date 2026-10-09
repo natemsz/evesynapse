@@ -12,7 +12,6 @@ import (
 
 	"evesynapse/internal/dotenv"
 	"evesynapse/internal/logging"
-	"evesynapse/internal/store"
 )
 
 // Config holds runtime configuration. Everything comes from the
@@ -410,20 +409,21 @@ const (
 // parseDBConns reads DB_MAX_CONNS: 0 (use the default) when unset or
 // unreadable, else the number kept in bounds.
 func parseDBConns(raw string) int {
+	return intSetting("DB_MAX_CONNS", raw, minDBConns, mostDBConns, 0)
+}
+
+// intSetting reads a whole-number setting: unset when raw is blank or
+// not a positive whole number (which the log says), else the number
+// kept between lo and hi.
+func intSetting(name, raw string, lo, hi, unset int) int {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return 0
+		return unset
 	}
 	n, err := strconv.Atoi(raw)
 	if err != nil || n <= 0 {
-		logging.Warnf("evesynapse: DB_MAX_CONNS=%q is not a whole number; using %d", raw, store.DefaultPoolSize)
-		return 0
+		logging.Warnf("evesynapse: %s=%q is not a whole number; using the default", name, raw)
+		return unset
 	}
-	if n < minDBConns {
-		return minDBConns
-	}
-	if n > mostDBConns {
-		return mostDBConns
-	}
-	return n
+	return min(max(n, lo), hi)
 }

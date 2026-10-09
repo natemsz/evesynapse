@@ -354,7 +354,7 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 	// account — for a first-ever sign-in, and for a character that
 	// changed EVE accounts since it was linked (its new owner must
 	// never inherit the previous owner's account).
-	userID, err := app.resolveSignInUser(ctx, int64(app.sessions.GetInt(ctx, sessionUserID)), characterID, ownerHash)
+	userID, err := app.resolveSignInUser(ctx, app.userID(ctx), characterID, ownerHash)
 	if err != nil {
 		switch {
 		case errors.Is(err, errSignUpNotAllowed):

@@ -82,11 +82,7 @@ type mailView struct {
 
 func (app *Application) handleMail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/mail/")
 	if err != nil {
@@ -524,7 +520,7 @@ func mailRelinkNotice(name, what string) string {
 // as "sign in again", never silently swallowed.
 func (app *Application) handleMailMarkRead(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
@@ -588,11 +584,7 @@ type mailComposeView struct {
 // handleMailCompose serves GET /mail/compose/: the compose form.
 func (app *Application) handleMailCompose(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 	_, active, links, err := app.pickCharacter(ctx, r, "/mail/compose/")
 	if err != nil {
 		logging.Errorf("mail compose: list characters: %v", err)
@@ -626,7 +618,7 @@ type mailRecipientResolution struct {
 // was linked before the send_mail scope existed.
 func (app *Application) handleMailSend(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
@@ -636,11 +628,7 @@ func (app *Application) handleMailSend(w http.ResponseWriter, r *http.Request) {
 	subject := strings.TrimSpace(r.Form.Get("subject"))
 	body := r.Form.Get("body")
 
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 	_, active, links, err := app.pickCharacter(ctx, r, "/mail/compose/")
 	if err == nil && links != nil {
 		data.MailChars = links

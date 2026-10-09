@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -258,7 +257,7 @@ func (app *Application) tierOf(ch db.Character, now time.Time) warmTier {
 func (app *Application) trackActivity(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		if userID := int64(app.sessions.GetInt(ctx, sessionUserID)); userID != 0 {
+		if userID := app.userID(ctx); userID != 0 {
 			now := time.Now()
 			if app.activity.noteActivity(userID, now) && !app.cfg.workerTiersOff {
 				app.prioritizeAccount(ctx, userID)
@@ -333,22 +332,7 @@ const (
 // parseWorkerFetches reads WORKER_FETCHES_PER_CYCLE: 0 (use the
 // default) when unset or unreadable, else the number kept in bounds.
 func parseWorkerFetches(raw string) int {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return 0
-	}
-	n, err := strconv.Atoi(raw)
-	if err != nil || n <= 0 {
-		logging.Warnf("evesynapse: WORKER_FETCHES_PER_CYCLE=%q is not a whole number; using %d", raw, maxFetchesPerCycle)
-		return 0
-	}
-	if n < minFetchesPerCycle {
-		return minFetchesPerCycle
-	}
-	if n > mostFetchesPerCycle {
-		return mostFetchesPerCycle
-	}
-	return n
+	return intSetting("WORKER_FETCHES_PER_CYCLE", raw, minFetchesPerCycle, mostFetchesPerCycle, 0)
 }
 
 // fetchesPerCycle is the character pass's fetch allowance for a cycle:

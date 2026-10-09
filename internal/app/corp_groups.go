@@ -77,12 +77,8 @@ type groupCandidate struct {
 
 func (app *Application) handleGroups(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	data := app.page(ctx)
+	userID := app.userID(ctx)
 	view := &groupsView{}
 	for _, owner := range app.discordManageable(ctx, userID) {
 		ov := groupOwnerView{Key: owner.key(), Kind: owner.Kind, Name: app.ownerName(ctx, owner)}
@@ -155,7 +151,7 @@ func (app *Application) groupsBack(w http.ResponseWriter, r *http.Request, messa
 
 func (app *Application) handleGroupCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	_ = r.ParseForm()
 	owner, ok := parseDiscordOwner(r.Form.Get("owner"))
 	if !ok || !discordManages(app.discordManageable(ctx, userID), owner) {
@@ -196,7 +192,7 @@ func (app *Application) handleGroupCreate(w http.ResponseWriter, r *http.Request
 // loses it on the worker's next pass.
 func (app *Application) handleGroupDelete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	group, ok := app.groupFor(r, userID)
 	if !ok {
 		app.groupsBack(w, r, "That group is not yours to change.")
@@ -227,7 +223,7 @@ func (app *Application) handleGroupDelete(w http.ResponseWriter, r *http.Request
 // alliance, the group belongs to.
 func (app *Application) handleGroupMemberAdd(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	group, ok := app.groupFor(r, userID)
 	if !ok || r.ParseForm() != nil {
 		app.groupsBack(w, r, "That group is not yours to change.")
@@ -270,7 +266,7 @@ func (app *Application) handleGroupMemberAdd(w http.ResponseWriter, r *http.Requ
 
 func (app *Application) handleGroupMemberRemove(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	group, ok := app.groupFor(r, userID)
 	if !ok || r.ParseForm() != nil {
 		app.groupsBack(w, r, "That group is not yours to change.")

@@ -69,7 +69,7 @@ func (app *Application) switcherEntries(ctx context.Context) []switcherEntry {
 // trouble). render reads it once for both the switcher and the
 // admin check.
 func (app *Application) sessionCharacters(ctx context.Context) []db.Character {
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if userID == 0 {
 		return nil
 	}
@@ -122,13 +122,9 @@ func (app *Application) actingCharacterID(ctx context.Context, characters []db.C
 // freshness, tags, and unlink for every character on the account.
 func (app *Application) handleCharacters(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if userID == 0 {
 		// Dev-login sessions carry no user; nothing to manage.
 		data.CharactersPage = &charactersView{}
@@ -231,7 +227,7 @@ func (app *Application) managedCharacterRow(ctx context.Context, ch db.Character
 // account; the browser returns to the page it came from.
 func (app *Application) handleCharacterSwitch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	characterID, _ := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64)
 	if userID != 0 && characterID != 0 {
 		if ch, err := app.queries.GetCharacter(ctx, characterID); err == nil && ch.UserID == userID {
@@ -254,7 +250,7 @@ func (app *Application) handleCharacterSwitch(w http.ResponseWriter, r *http.Req
 // handleCharacterTags saves one character's free-text tags.
 func (app *Application) handleCharacterTags(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if userID == 0 {
 		http.Redirect(w, r, "/characters/", http.StatusSeeOther)
 		return
@@ -297,7 +293,7 @@ func normalizeTags(raw string) string {
 // or to a clean empty state when it was the last one.
 func (app *Application) handleCharacterUnlink(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if userID == 0 {
 		http.Redirect(w, r, "/characters/", http.StatusSeeOther)
 		return

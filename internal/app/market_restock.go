@@ -43,18 +43,14 @@ type restockView struct {
 
 func (app *Application) handleRestock(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 	data.Restock = app.buildRestockView(ctx, r)
 	app.render(ctx, w, http.StatusOK, "market_restock.html", data)
 }
 
 func (app *Application) buildRestockView(ctx context.Context, r *http.Request) *restockView {
 	view := &restockView{}
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if userID == 0 {
 		return view
 	}
@@ -144,7 +140,7 @@ func (app *Application) restockListedQty(ctx context.Context, r *http.Request) m
 
 func (app *Application) handleRestockSave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if userID == 0 {
 		http.Redirect(w, r, "/market/restock/", http.StatusSeeOther)
 		return
@@ -174,7 +170,7 @@ func (app *Application) handleRestockSave(w http.ResponseWriter, r *http.Request
 
 func (app *Application) handleRestockDelete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if userID == 0 {
 		http.Redirect(w, r, "/market/restock/", http.StatusSeeOther)
 		return

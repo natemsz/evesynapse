@@ -126,7 +126,7 @@ func readPushSubscription(r *http.Request) (pushSubscriptionJSON, error) {
 // signed-in account.
 func (app *Application) handlePushSubscribe(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if app.push == nil {
 		http.Error(w, "browser push is not set up on this server", http.StatusServiceUnavailable)
 		return
@@ -176,7 +176,7 @@ func (app *Application) handlePushSubscribe(w http.ResponseWriter, r *http.Reque
 // handlePushUnsubscribe forgets one of the account's subscriptions.
 func (app *Application) handlePushUnsubscribe(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	posted, err := readPushSubscription(r)
 	if err != nil || userID == 0 || posted.Endpoint == "" {
 		http.Error(w, "not a push subscription", http.StatusBadRequest)
@@ -198,7 +198,7 @@ func (app *Application) handlePushUnsubscribe(w http.ResponseWriter, r *http.Req
 // every browser of the account is sent to.
 func (app *Application) handlePushTest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if app.push == nil || userID == 0 {
 		http.Error(w, "browser push is not set up on this server", http.StatusServiceUnavailable)
 		return

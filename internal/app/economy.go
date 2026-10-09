@@ -138,11 +138,7 @@ type walletView struct {
 
 func (app *Application) handleWallet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/wallet/")
 	if err != nil {
@@ -488,11 +484,7 @@ func (app *Application) orderRegionName(ctx context.Context, cache map[int64]str
 
 func (app *Application) handleOrders(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/orders/")
 	if err != nil {

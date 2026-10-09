@@ -278,13 +278,9 @@ type fitPreviewRow struct {
 
 func (app *Application) handleSkillPlans(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if userID == 0 {
 		app.render(ctx, w, http.StatusOK, "skillplans.html", data)
 		return
@@ -640,7 +636,7 @@ func (app *Application) ownedPlan(ctx context.Context, userID, characterID, plan
 
 func (app *Application) handleSkillPlanCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if err := r.ParseForm(); err != nil || userID == 0 {
 		http.Redirect(w, r, "/skills/plans", http.StatusSeeOther)
 		return
@@ -688,7 +684,7 @@ func (app *Application) userOwnsCharacter(ctx context.Context, userID, character
 
 func (app *Application) handleSkillPlanItemAdd(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if err := r.ParseForm(); err != nil || userID == 0 {
 		http.Redirect(w, r, "/skills/plans", http.StatusSeeOther)
 		return
@@ -775,7 +771,7 @@ type planEditRequest struct {
 // for the in-place caller).
 func (app *Application) planEditFromRequest(w http.ResponseWriter, r *http.Request) (req planEditRequest, ok bool) {
 	ctx := r.Context()
-	req.userID = int64(app.sessions.GetInt(ctx, sessionUserID))
+	req.userID = app.userID(ctx)
 	if err := r.ParseForm(); err != nil || req.userID == 0 {
 		if wantsFragment(r) {
 			http.Error(w, "not signed in", http.StatusUnauthorized)
@@ -925,7 +921,7 @@ func (app *Application) movePlanSkill(ctx context.Context, plan db.SkillPlan, sk
 
 func (app *Application) handleSkillPlanDelete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if err := r.ParseForm(); err != nil || userID == 0 {
 		http.Redirect(w, r, "/skills/plans", http.StatusSeeOther)
 		return
@@ -1062,12 +1058,8 @@ func (app *Application) fitClosureTargets(ctx context.Context, ch db.Character, 
 
 func (app *Application) handleSkillPlanFitPreview(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	data := app.page(ctx)
+	userID := app.userID(ctx)
 	if userID == 0 {
 		app.render(ctx, w, http.StatusOK, "skillplans.html", data)
 		return
@@ -1099,7 +1091,7 @@ func (app *Application) handleSkillPlanFitPreview(w http.ResponseWriter, r *http
 
 func (app *Application) handleSkillPlanFromFit(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if err := r.ParseForm(); err != nil || userID == 0 {
 		http.Redirect(w, r, "/fittings/", http.StatusSeeOther)
 		return

@@ -137,7 +137,7 @@ func (app *Application) discordApplyChannel(ctx context.Context, guildID, channe
 // never claims more than was done.
 func (app *Application) handleDiscordChannelSave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	back := func(message string) {
 		app.flash(ctx, message)
 		http.Redirect(w, r, discordServersPath, http.StatusSeeOther)

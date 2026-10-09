@@ -739,7 +739,7 @@
     }
     modSearch.query();
   }
-  // Drones flow: one search to rule them all. The "+ Add drones"
+  // Drones flow: the "+ Add drones"
   // control focuses the module search with the Drones chip
   // pre-selected; drones are picked from the normal results. When
   // the user clears the search or picks another chip, the previous

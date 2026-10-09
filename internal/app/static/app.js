@@ -1846,9 +1846,8 @@
     } catch (e) { /* private mode: the click still works this visit */ }
   }
   // The theme in effect right now: a manually set attribute
-  // wins; otherwise dark is the default (the app's classic palette).
-  // The OS preference is intentionally ignored — dark is our best face.
-  // Icon visibility is CSS-driven (html[data-theme] selectors); no JS needed.
+  // wins; otherwise dark is the default, whatever the OS prefers.
+  // Icon visibility is CSS-driven (html[data-theme] selectors).
   function effective() {
     var attr = root.getAttribute("data-theme");
     if (attr === "dark" || attr === "light") return attr;
@@ -1915,9 +1914,7 @@
 
   // --- CSV export links ---------------------------------------
   // Market/planner pages carry an "Export CSV" link whose href is
-  // the current URL plus format=csv, set here (one shared place;
-  // the pages used to repeat it as inline scripts, which the
-  // content security policy no longer allows).
+  // the current URL plus format=csv, set here.
   var csvExportLink = document.getElementById("csv-export");
   if (csvExportLink) {
     csvExportLink.href = window.location.pathname + window.location.search +
@@ -1926,8 +1923,7 @@
 
   // --- Client-side table filters ------------------------------
   // Industry search boxes filter their table's rows by a
-  // data-search attribute (moved here from inline scripts, same
-  // behavior):
+  // data-search attribute:
   //   <input data-table-filter="bp-table" data-row-class="bp-row"
   //          data-header-class="bp-cat-header">
   // Rows whose data-search misses hide; category headers with no
@@ -2003,9 +1999,8 @@
   });
 
   // --- Buttons that navigate -----------------------------------
-  // <button data-href="/path"> goes to that path on click: what an
-  // inline click handler on the button used to do, which the content
-  // security policy no longer allows. Only same-site paths count.
+  // <button data-href="/path"> goes to that path on click (the content
+  // security policy allows no inline handlers). Only same-site paths count.
   document.addEventListener("click", function (ev) {
     var button = ev.target && ev.target.closest ? ev.target.closest("button[data-href]") : null;
     if (!button) return;
@@ -2173,9 +2168,8 @@
 
   // --- Data-driven geometry ------------------------------------
   // The content security policy forbids inline style attributes, so
-  // the numbers the server used to write into inline styles ride
-  // data-* attributes instead, and are applied here through the
-  // CSSOM (which the policy allows):
+  // per-element numbers ride data-* attributes and are applied here
+  // through the CSSOM (which the policy allows):
   //   data-w         fill width of a bar, percent
   //   data-left      absolute position from the left, percent
   //   data-top       absolute position from the top, percent

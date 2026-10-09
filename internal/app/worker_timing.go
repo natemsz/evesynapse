@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 )
 
@@ -44,7 +45,12 @@ type workerTiming struct {
 	// character had data that had never been fetched at all.
 	Overdue      time.Duration
 	NeverFetched bool
-	Phases       []phaseTiming
+	// RateHeld is how many characters were left alone because ESI
+	// rate-limited them, and Headroom the tightest rate-limit budget
+	// ESI reported during the cycle (nil when it reported none).
+	RateHeld int
+	Headroom *esi.RateHeadroom
+	Phases   []phaseTiming
 }
 
 // phaseClock times the parts of a cycle, one after another.
@@ -126,6 +132,19 @@ func workerTimingViewFor(s workerStatus) *workerTimingView {
 	}
 	if t.Deferred > 0 {
 		parts = append(parts, fmt.Sprintf("%d put off to the next cycle", t.Deferred))
+	}
+	if t.RateHeld > 0 {
+		parts = append(parts, plural(t.RateHeld, "character")+" left alone at ESI's request (rate limit)")
+	}
+	if h := t.Headroom; h != nil {
+		left := fmt.Sprintf("tightest ESI budget: %d left", h.Remaining)
+		if h.Limit != "" {
+			left += " of " + h.Limit
+		}
+		if h.Group != "" {
+			left += " (" + h.Group + ")"
+		}
+		parts = append(parts, left)
 	}
 	switch {
 	case t.NeverFetched:

@@ -237,7 +237,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// linked characters the stalest work always goes first.
 	eligible, due := app.orderByDueTimed(ctx, eligible)
 	eligible = orderByPriority(eligible, app.takePriorityCharacters())
-	timing := workerTiming{At: clock.start, Characters: len(eligible), Budget: maxFetchesPerCycle}
+	timing := workerTiming{At: clock.start, Characters: len(eligible), Budget: app.fetchesPerCycle()}
 	// Lateness is measured where somebody is looking: an active
 	// account's data is meant to be as fresh as ESI allows, and a
 	// dormant one's is held back on purpose.
@@ -260,7 +260,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	}
 	clock.mark("ordering", time.Now())
 
-	c := &cycleState{app: app, allowance: &fetchBudget{left: maxFetchesPerCycle}}
+	c := &cycleState{app: app, allowance: &fetchBudget{left: app.fetchesPerCycle()}}
 
 	// The market guide (v0.3.04): one public call mirrors into
 	// the stored table on ESI's cache window, ahead of the
@@ -334,7 +334,11 @@ func (app *Application) refreshCycle(ctx context.Context) {
 
 	clock.mark("discord", time.Now())
 	timing.Took, timing.Phases = time.Since(clock.start), clock.phases
-	timing.Fetches, timing.Deferred = c.allowance.used(maxFetchesPerCycle), c.deferred
+	timing.Fetches, timing.Deferred = c.allowance.used(app.fetchesPerCycle()), c.deferred
+	timing.RateHeld = c.rateHeld
+	if tight, ok := app.esi.TakeRateHeadroom(); ok {
+		timing.Headroom = &tight
+	}
 	app.recordWorkerTiming(timing)
 
 	summary := cycleSummary(c.refreshed, c.namesResolved, c.failed, c.limited, parked, c.deferred)
@@ -364,6 +368,13 @@ type cycleState struct {
 	limited bool
 	// allowance is the cycle's shared fetch budget.
 	allowance *fetchBudget
+	// current is the character being refreshed (0 between characters)
+	// and characterHeld that ESI rate-limited it during this cycle, so
+	// its remaining passes are skipped. rateHeld counts characters set
+	// aside for that reason.
+	current       int64
+	characterHeld bool
+	rateHeld      int
 }
 
 // pass runs one piece of the cycle, unless ESI has already said to
@@ -371,15 +382,33 @@ type cycleState struct {
 // back-off came from that is logged (what names the pass in the log
 // line) and the cycle stops fetching.
 func (c *cycleState) pass(what string, run func() (stored int, limited bool)) {
-	if c.limited {
+	if c.limited || c.characterHeld {
 		return
 	}
 	stored, limited := run()
 	c.refreshed += stored
 	if limited {
-		logging.Warnf("worker: ESI error limit hit %s; backing off until next cycle", what)
-		c.limited = true
+		c.noteLimit(what)
 	}
+}
+
+// noteLimit records that ESI refused a request for going over a
+// limit. If the refusal was a rate limit on the character being
+// worked on (a 429: that character's own budget), only that character
+// is set aside, for as long as ESI said; the cycle carries on with the
+// rest. Otherwise it was the application's error limit, and the cycle
+// stops fetching.
+func (c *cycleState) noteLimit(what string) {
+	if c.current != 0 {
+		if until := c.app.esi.RateLimitedUntil(c.current, time.Now()); !until.IsZero() {
+			logging.Warnf("worker: ESI rate limit for character %d %s; leaving it until %s", c.current, what, until.UTC().Format("15:04:05"))
+			c.characterHeld = true
+			c.rateHeld++
+			return
+		}
+	}
+	logging.Warnf("worker: ESI error limit hit %s; backing off until next cycle", what)
+	c.limited = true
 }
 
 // characterPass is pass for one character's further datasets. Those
@@ -399,6 +428,13 @@ func (c *cycleState) characterPass(what string, ch db.Character, run func() (sto
 // was attempted.
 func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool {
 	app := c.app
+	c.current, c.characterHeld = ch.CharacterID, false
+	defer func() { c.current, c.characterHeld = 0, false }()
+	if !app.esi.RateLimitedUntil(ch.CharacterID, time.Now()).IsZero() {
+		c.rateHeld++
+		return true // ESI asked for this character to be left alone for now
+	}
+	ctx = esi.WithCharacter(ctx, ch.CharacterID)
 
 	// How often this character's data is refreshed follows how
 	// recently anyone looked at its account (worker_tiers.go). With
@@ -504,8 +540,7 @@ func (c *cycleState) refreshCoreSnapshots(ctx context.Context, ch db.Character, 
 		if err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
 			c.failed++
 			if errors.Is(err, esi.ErrErrorLimit) {
-				logging.Warnf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)
-				c.limited = true
+				c.noteLimit("refreshing " + kind)
 			} else {
 				if isDefinitiveTokenFailure(err) {
 					// The access token itself was rejected:
@@ -659,8 +694,9 @@ var coreSnapshotKinds = []string{
 	esi.SnapCorpRoles,
 }
 
-// maxFetchesPerCycle bounds snapshot fetches in the main character
-// pass of one worker cycle. With dozens of linked characters the
+// maxFetchesPerCycle is the default bound on snapshot fetches in the
+// main character pass of one worker cycle (WORKER_FETCHES_PER_CYCLE
+// changes it: fetchesPerCycle). With dozens of linked characters the
 // stalest work goes first (due order) and the rest waits for the
 // next one-minute cycle instead of one giant pass; the killmail /
 // corp / economy sub-passes keep their own per-character caps.

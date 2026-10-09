@@ -459,6 +459,75 @@ type Channel struct {
 	Position int    `json:"position"`
 }
 
+// GuildChannels lists every channel of a server whose access can be
+// set: text (0), voice (2), category (4), announcement (5), stage (13)
+// and forum (15) channels, in the server's own order.
+func (c *Client) GuildChannels(ctx context.Context, guildID string) ([]Channel, error) {
+	if !ValidID(guildID) {
+		return nil, errors.New("discord: not a server id")
+	}
+	var channels []Channel
+	if err := c.bot(ctx, http.MethodGet, "/guilds/"+guildID+"/channels", nil, &channels); err != nil {
+		return nil, err
+	}
+	out := channels[:0]
+	for _, ch := range channels {
+		switch ch.Type {
+		case 0, 2, 4, 5, 13, 15:
+			out = append(out, ch)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Position < out[j].Position })
+	return out, nil
+}
+
+// BotUserID reports the bot's own account id.
+func (c *Client) BotUserID(ctx context.Context) (string, error) {
+	var me User
+	if err := c.bot(ctx, http.MethodGet, "/users/@me", nil, &me); err != nil {
+		return "", err
+	}
+	if !ValidID(me.ID) {
+		return "", errors.New("discord: the bot has no account id")
+	}
+	return me.ID, nil
+}
+
+// The permissions a channel rule deals in: seeing the channel (1<<10)
+// and, for a voice channel, connecting to it (1<<20). Granting or
+// denying the pair opens or shuts a channel of any kind.
+const channelOpen = 1<<10 | 1<<20
+
+// Whom a channel permission is for.
+const (
+	ForRole   = 0
+	ForMember = 1
+)
+
+// AllowChannel lets a role or a member open a channel, DenyChannel
+// shuts it to them, and ClearChannel removes whatever was set for
+// them there, leaving them with the server's general permissions.
+// Discord lets a bot do this with Manage Roles, and only for
+// permissions the bot holds itself.
+func (c *Client) AllowChannel(ctx context.Context, channelID, targetID string, kind int) error {
+	return c.channelPermission(ctx, http.MethodPut, channelID, targetID, map[string]any{"allow": strconv.Itoa(channelOpen), "deny": "0", "type": kind})
+}
+
+func (c *Client) DenyChannel(ctx context.Context, channelID, targetID string, kind int) error {
+	return c.channelPermission(ctx, http.MethodPut, channelID, targetID, map[string]any{"allow": "0", "deny": strconv.Itoa(channelOpen), "type": kind})
+}
+
+func (c *Client) ClearChannel(ctx context.Context, channelID, targetID string) error {
+	return c.channelPermission(ctx, http.MethodDelete, channelID, targetID, nil)
+}
+
+func (c *Client) channelPermission(ctx context.Context, method, channelID, targetID string, payload any) error {
+	if !ValidID(channelID) || !ValidID(targetID) {
+		return errors.New("discord: not a channel, role or member id")
+	}
+	return c.bot(ctx, method, "/channels/"+channelID+"/permissions/"+targetID, payload, nil)
+}
+
 // GuildTextChannels lists the channels of a server a message can be
 // posted in: text (0) and announcement (5) channels.
 func (c *Client) GuildTextChannels(ctx context.Context, guildID string) ([]Channel, error) {

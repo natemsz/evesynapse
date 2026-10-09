@@ -65,6 +65,20 @@ func (q *Queries) CreateOrgGroup(ctx context.Context, arg CreateOrgGroupParams) 
 	return id, err
 }
 
+const deleteDiscordChannelAccessForChannel = `-- name: DeleteDiscordChannelAccessForChannel :exec
+DELETE FROM discord_channel_access WHERE guild_id = $1 AND channel_id = $2
+`
+
+type DeleteDiscordChannelAccessForChannelParams struct {
+	GuildID   string `json:"guild_id"`
+	ChannelID string `json:"channel_id"`
+}
+
+func (q *Queries) DeleteDiscordChannelAccessForChannel(ctx context.Context, arg DeleteDiscordChannelAccessForChannelParams) error {
+	_, err := q.db.ExecContext(ctx, deleteDiscordChannelAccessForChannel, arg.GuildID, arg.ChannelID)
+	return err
+}
+
 const deleteDiscordNonMemberGrants = `-- name: DeleteDiscordNonMemberGrants :exec
 DELETE FROM discord_role_grants WHERE discord_id = $1 AND NOT is_member AND roles = ''
 `
@@ -160,6 +174,31 @@ func (q *Queries) GetOrgGroup(ctx context.Context, id int64) (OrgGroup, error) {
 	return i, err
 }
 
+const insertDiscordChannelAccess = `-- name: InsertDiscordChannelAccess :exec
+INSERT INTO discord_channel_access (guild_id, channel_id, role_id, set_by, set_at)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT DO NOTHING
+`
+
+type InsertDiscordChannelAccessParams struct {
+	GuildID   string    `json:"guild_id"`
+	ChannelID string    `json:"channel_id"`
+	RoleID    string    `json:"role_id"`
+	SetBy     int64     `json:"set_by"`
+	SetAt     time.Time `json:"set_at"`
+}
+
+func (q *Queries) InsertDiscordChannelAccess(ctx context.Context, arg InsertDiscordChannelAccessParams) error {
+	_, err := q.db.ExecContext(ctx, insertDiscordChannelAccess,
+		arg.GuildID,
+		arg.ChannelID,
+		arg.RoleID,
+		arg.SetBy,
+		arg.SetAt,
+	)
+	return err
+}
+
 const insertDiscordRoleRule = `-- name: InsertDiscordRoleRule :exec
 INSERT INTO discord_role_rules (guild_id, kind, ref, role_id, created_by, created_at)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -213,6 +252,41 @@ func (q *Queries) ListCharactersInCorporations(ctx context.Context, corporationI
 	for rows.Next() {
 		var i ListCharactersInCorporationsRow
 		if err := rows.Scan(&i.CharacterID, &i.Name, &i.CorporationID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDiscordChannelAccess = `-- name: ListDiscordChannelAccess :many
+
+SELECT guild_id, channel_id, role_id, set_by, set_at FROM discord_channel_access WHERE guild_id = $1 ORDER BY channel_id, role_id
+`
+
+// Channel access (schema 022).
+func (q *Queries) ListDiscordChannelAccess(ctx context.Context, guildID string) ([]DiscordChannelAccess, error) {
+	rows, err := q.db.QueryContext(ctx, listDiscordChannelAccess, guildID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DiscordChannelAccess
+	for rows.Next() {
+		var i DiscordChannelAccess
+		if err := rows.Scan(
+			&i.GuildID,
+			&i.ChannelID,
+			&i.RoleID,
+			&i.SetBy,
+			&i.SetAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

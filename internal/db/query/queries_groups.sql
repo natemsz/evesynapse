@@ -49,6 +49,19 @@ UPDATE discord_guilds SET kick_checked_at = sqlc.arg(kick_checked_at) WHERE guil
 -- name: GetDiscordLinkByDiscordID :one
 SELECT * FROM discord_links WHERE discord_id = $1;
 
+-- Channel access (schema 022).
+
+-- name: ListDiscordChannelAccess :many
+SELECT * FROM discord_channel_access WHERE guild_id = $1 ORDER BY channel_id, role_id;
+
+-- name: DeleteDiscordChannelAccessForChannel :exec
+DELETE FROM discord_channel_access WHERE guild_id = sqlc.arg(guild_id) AND channel_id = sqlc.arg(channel_id);
+
+-- name: InsertDiscordChannelAccess :exec
+INSERT INTO discord_channel_access (guild_id, channel_id, role_id, set_by, set_at)
+VALUES (sqlc.arg(guild_id), sqlc.arg(channel_id), sqlc.arg(role_id), sqlc.arg(set_by), sqlc.arg(set_at))
+ON CONFLICT DO NOTHING;
+
 -- name: SetDiscordGuildOpsChannel :exec
 UPDATE discord_guilds SET ops_channel = sqlc.arg(ops_channel) WHERE guild_id = sqlc.arg(guild_id);
 

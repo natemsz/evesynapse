@@ -371,6 +371,10 @@ type Client struct {
 	errBudgetMu     sync.RWMutex
 	errBudgetRemain int
 	errBudgetReset  int64 // unix seconds when the budget resets
+
+	// rates is what is known of ESI's per-character rate limits
+	// (ratelimit.go).
+	rates rateLimits
 }
 
 // New builds a Client. httpClient performs every ESI request (the
@@ -1579,11 +1583,17 @@ func (c *Client) sendOnce(ctx context.Context, method, accessToken, path string,
 	}
 	defer resp.Body.Close()
 	c.trackErrorBudget(resp.Header)
+	c.trackRateHeaders(characterFrom(ctx), resp.Header, time.Now())
 	body, err = io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
 		return nil, nil, 0, fmt.Errorf("ESI %s %s: read body: %w", method, path, err)
 	}
-	if resp.StatusCode == 420 || resp.StatusCode == http.StatusTooManyRequests {
+	if resp.StatusCode == http.StatusTooManyRequests {
+		// One character's budget, not everybody's (ratelimit.go).
+		c.noteRateLimited(characterFrom(ctx), resp.Header, time.Now())
+		return nil, resp.Header, resp.StatusCode, fmt.Errorf("ESI %s %s: status %d: %w (%w)", method, path, resp.StatusCode, ErrErrorLimit, ErrRateLimited)
+	}
+	if resp.StatusCode == 420 {
 		return nil, resp.Header, resp.StatusCode, fmt.Errorf("ESI %s %s: status %d: %w", method, path, resp.StatusCode, ErrErrorLimit)
 	}
 	for _, code := range want {

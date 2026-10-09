@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -219,4 +221,39 @@ func (c *cycleState) coreFreshness(ctx context.Context, ch db.Character, tier wa
 		return fresh, true
 	}
 	return fresh, false
+}
+
+// Bounds on WORKER_FETCHES_PER_CYCLE.
+const (
+	minFetchesPerCycle  = 20
+	mostFetchesPerCycle = 2000
+)
+
+// parseWorkerFetches reads WORKER_FETCHES_PER_CYCLE: 0 (use the
+// default) when unset or unreadable, else the number kept in bounds.
+func parseWorkerFetches(raw string) int {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		logging.Warnf("evesynapse: WORKER_FETCHES_PER_CYCLE=%q is not a whole number; using %d", raw, maxFetchesPerCycle)
+		return 0
+	}
+	if n < minFetchesPerCycle {
+		return minFetchesPerCycle
+	}
+	if n > mostFetchesPerCycle {
+		return mostFetchesPerCycle
+	}
+	return n
+}
+
+// fetchesPerCycle is the character pass's fetch allowance for a cycle.
+func (app *Application) fetchesPerCycle() int {
+	if app.cfg.workerFetches > 0 {
+		return app.cfg.workerFetches
+	}
+	return maxFetchesPerCycle
 }

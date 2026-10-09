@@ -38,6 +38,10 @@ type Config struct {
 	// looking, as it did before tiers (worker_tiers.go).
 	workerTiersOff bool
 
+	// workerFetches is the worker's fetch allowance for one cycle
+	// (WORKER_FETCHES_PER_CYCLE); 0 means the default.
+	workerFetches int
+
 	// Discord (discord_link.go). The client id and secret run the
 	// "Connect Discord" sign-in; the bot token lets the bot message
 	// and give roles in the servers it is added to. With none set
@@ -160,6 +164,7 @@ func LoadConfig() (Config, error) {
 	return Config{
 		notifyPoll:          notifyPoll,
 		workerTiersOff:      strings.EqualFold(strings.TrimSpace(os.Getenv("WORKER_TIERS")), "off"),
+		workerFetches:       parseWorkerFetches(os.Getenv("WORKER_FETCHES_PER_CYCLE")),
 		discordClientID:     os.Getenv("DISCORD_CLIENT_ID"),
 		discordClientSecret: os.Getenv("DISCORD_CLIENT_SECRET"),
 		discordBotToken:     os.Getenv("DISCORD_BOT_TOKEN"),

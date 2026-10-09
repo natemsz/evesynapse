@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/http"
 	"strconv"
 	"strings"
@@ -345,81 +346,56 @@ func (app *Application) viewerCharSet(ctx context.Context) map[int64]bool {
 	return set
 }
 
-// handleCharacterLabelFragment swaps one pending character label
-// for its resolved, linked name. Cache-only: it reads the same
-// local tiers as the page and never enqueues — the page that
-// rendered the label already left the want. A settled "no such
-// character" answer renders the plain fallback as ready, so the
-// polling stops instead of spinning forever.
+// labelFragment answers a pending name label's poll: the linked name
+// once it is known, the plain fallback once it is known there is none
+// (so the polling stops), and the loading line until then. Cache-only:
+// the page that rendered the label already left the want.
+func labelFragment(w http.ResponseWriter, r *http.Request, fallback func(id int64) string,
+	resolve func(id int64) (name string, settled bool), link func(id int64, name string) template.HTML) {
+	id, err := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
+	if err != nil || id <= 0 {
+		http.Error(w, "bad label fragment request", http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	name, settled := resolve(id)
+	switch {
+	case settled && name != "":
+		fmt.Fprintf(w, `<span data-poll-state="ready">%s</span>`, link(id, name))
+	case settled:
+		fmt.Fprintf(w, `<span data-poll-state="ready">%s</span>`, fallback(id))
+	default:
+		fmt.Fprintf(w, `<span data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for %s…</span>`, fallback(id))
+	}
+}
+
+// numbered is the fallback label for an id with no name: "Character #123".
+func numbered(kind string) func(int64) string {
+	return func(id int64) string { return fmt.Sprintf("%s #%d", kind, id) }
+}
+
 func (app *Application) handleCharacterLabelFragment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	id, err := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
-	if err != nil || id <= 0 {
-		http.Error(w, "bad label fragment request", http.StatusBadRequest)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	name, settled := app.resolvedCharacterName(ctx, id)
-	switch {
-	case settled && name != "":
-		fmt.Fprintf(w, `<span data-poll-state="ready">%s</span>`, charLink(app.viewerCharSet(ctx), id, name))
-	case settled:
-		fmt.Fprintf(w, `<span data-poll-state="ready">Character #%d</span>`, id)
-	default:
-		fmt.Fprintf(w, `<span data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for Character #%d…</span>`, id)
-	}
+	labelFragment(w, r, numbered("Character"),
+		func(id int64) (string, bool) { return app.resolvedCharacterName(ctx, id) },
+		func(id int64, name string) template.HTML { return charLink(app.viewerCharSet(ctx), id, name) })
 }
 
-// handleCorporationLabelFragment swaps one pending corporation
-// label for its resolved, linked name. Cache-only, like the
-// character fragment: the page that rendered the label already
-// left the want, and a settled "no such corporation" renders the
-// plain fallback as ready so polling stops.
 func (app *Application) handleCorporationLabelFragment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	id, err := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
-	if err != nil || id <= 0 {
-		http.Error(w, "bad label fragment request", http.StatusBadRequest)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	name, settled := app.resolvedCorpName(ctx, id)
-	switch {
-	case settled && name != "":
-		fmt.Fprintf(w, `<span data-poll-state="ready">%s</span>`, corpLink(id, name))
-	case settled:
-		fmt.Fprintf(w, `<span data-poll-state="ready">Corporation #%d</span>`, id)
-	default:
-		fmt.Fprintf(w, `<span data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for Corporation #%d…</span>`, id)
-	}
+	labelFragment(w, r, numbered("Corporation"),
+		func(id int64) (string, bool) { return app.resolvedCorpName(ctx, id) }, corpLink)
 }
 
-// handleAllianceLabelFragment is handleCorporationLabelFragment
-// for alliances.
 func (app *Application) handleAllianceLabelFragment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	id, err := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
-	if err != nil || id <= 0 {
-		http.Error(w, "bad label fragment request", http.StatusBadRequest)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	name, settled := app.resolvedAllianceName(ctx, id)
-	switch {
-	case settled && name != "":
-		fmt.Fprintf(w, `<span data-poll-state="ready">%s</span>`, allianceLink(id, name))
-	case settled:
-		fmt.Fprintf(w, `<span data-poll-state="ready">Alliance #%d</span>`, id)
-	default:
-		fmt.Fprintf(w, `<span data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for Alliance #%d…</span>`, id)
-	}
+	labelFragment(w, r, numbered("Alliance"),
+		func(id int64) (string, bool) { return app.resolvedAllianceName(ctx, id) }, allianceLink)
 }
 
-// placeFallbackLabel is the honest unresolved label for a place
-// id: structures and stations read differently even unresolved.
+// placeFallbackLabel is the unresolved label for a place id:
+// structures and stations read differently even unresolved.
 func placeFallbackLabel(id int64) string {
 	if isStructureID(id) {
 		return fmt.Sprintf("Structure #%d", id)
@@ -427,26 +403,9 @@ func placeFallbackLabel(id int64) string {
 	return fmt.Sprintf("Station #%d", id)
 }
 
-// handlePlaceLabelFragment swaps one pending place label (a
-// home station, say) for its resolved, linked name once the
-// worker lands it. Cache-only; a settled miss renders the plain
-// fallback as ready so polling stops.
 func (app *Application) handlePlaceLabelFragment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	id, err := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
-	if err != nil || id <= 0 {
-		http.Error(w, "bad label fragment request", http.StatusBadRequest)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	name, settled := app.resolvedPlaceName(ctx, id)
-	switch {
-	case settled && name != "":
-		fmt.Fprintf(w, `<span data-poll-state="ready">%s</span>`, placeLink(app.linkPlace(ctx, id, name)))
-	case settled:
-		fmt.Fprintf(w, `<span data-poll-state="ready">%s</span>`, placeFallbackLabel(id))
-	default:
-		fmt.Fprintf(w, `<span data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for %s…</span>`, placeFallbackLabel(id))
-	}
+	labelFragment(w, r, placeFallbackLabel,
+		func(id int64) (string, bool) { return app.resolvedPlaceName(ctx, id) },
+		func(id int64, name string) template.HTML { return placeLink(app.linkPlace(ctx, id, name)) })
 }

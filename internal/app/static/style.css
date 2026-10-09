@@ -3443,6 +3443,27 @@ html.js .topbar-switcher.is-open .menu {
   }
 }
 
+/* --- Sync and Admin: figures and lookups ---
+   Figures sit in small two-column tables (what it is, its value),
+   several side by side where there is room and stacked where there is
+   not. The lookup is the standard search box with its suggestions. */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 0.25rem 1.5rem;
+  align-items: start;
+}
+.stat-grid h3 { margin: 0.6rem 0 0.35rem; }
+table.stat-table { margin-bottom: 0.9rem; }
+table.stat-table td:first-child { width: 45%; color: var(--muted); }
+table.stat-table td { vertical-align: top; }
+.lookup-form { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.4rem 0 0.9rem; }
+.lookup-form .searchwrap { flex: 1 1 16rem; max-width: 28rem; width: auto; }
+.lookup-form .searchwrap input { width: 100%; }
+.lookup-matches { margin: 0 0 0.9rem; padding-left: 1.2rem; }
+.lookup-matches li { margin: 0.15rem 0; }
+.scope-details summary { cursor: pointer; white-space: nowrap; }
+.scope-list { margin: 0.3rem 0 0; padding-left: 1.1rem; font-size: 0.85em; color: var(--muted); }
 /* "Connect Discord": Discord's own colour and mark, so the button is
    recognised for what it leads to before it is read. Everything else
    about it is the standard button. */

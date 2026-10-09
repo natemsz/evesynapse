@@ -218,7 +218,12 @@ environment win). Then open <http://localhost:8080>:
 - `/auth/eve` — starts EVE SSO login (also "Link another character")
 - `/auth/callback` — OAuth2 callback (see SSO flow below)
 - `/auth/logout` — destroys the session (POST; the sidebar's Sign out button)
-- `/admin/` — users, linked characters, worker status (requires an admin account; see `EVE_ADMIN_CHARACTER_IDS`)
+- `/admin/` — accounts and the characters linked to them: totals, the
+  newest accounts, and one account looked up by any of its characters
+  (a search box that suggests as you type), with each character's
+  sign-in state and what it granted. Nothing about data freshness:
+  that is the Sync page (requires an admin account; see
+  `EVE_ADMIN_CHARACTER_IDS`)
 - `/assets/` — asset browser: every stack grouped by location for the
   signed-in user's characters (requires login; `esi-assets.read_assets.v1`)
 - `/market/` — market browser: item search (local name cache + exact
@@ -229,11 +234,15 @@ environment win). Then open <http://localhost:8080>:
   the complete training queue, and every known skill grouped by
   category with per-group SP subtotals (requires login;
   `esi-skills.read_skills.v1` + `esi-skills.read_skillqueue.v1`)
-- `/sync/` — sync status: worker state, per-character snapshot
-  freshness and type-name coverage, with re-warm buttons, plus the
-  SDE static-data block (row counts, import state, update check);
-  the page auto-refreshes so an import can be watched as it lands
-  (requires an admin account)
+- `/sync/` — the worker and the data: the last cycle and the last
+  hour of cycles in figures (time, fetches against the allowance,
+  characters by tier, where the time went, ESI's rate-limit budgets),
+  the shared public data, the SDE static-data block (row counts,
+  import state, update check), and one character's snapshot freshness
+  and type-name coverage with a re-warm button. The character is the
+  reader's own until another is looked up by name or id; no page
+  prints every character. It auto-refreshes so an import can be
+  watched as it lands (requires an admin account)
 - `/intel/wars/` — current wars from the public war list and
   worker-warmed war details: aggressor/defender names, state,
   kill records, open-for-allies/mutual badges, and a flag on wars
@@ -277,7 +286,7 @@ gaps; real environment variables win over the file):
 | `NOTIFY_POLL_SECONDS` | no | `30` | How often, in seconds, an open page checks whether its notifications icon has changed, so new notifications show without a reload. `0` turns the checks off; other values are kept between 5 and 3600. Takes effect on restart |
 | `WORKER_TIERS` | no | on | How often a character's data is refreshed follows its account: as often as ESI allows for the character someone has open, every 5 minutes (position every 2) for that account's other characters, every 5 to 15 minutes for an account seen in the last day, every 30 minutes (position every 6 hours) for one not seen for a day, and every 2 hours for one not seen for a week that has no browser subscribed to push and no Discord account linked. `off` refreshes everything as often as ESI allows for everyone, which uses up the worker's allowance at around fifteen characters |
 | `WORKER_FETCHES_PER_CYCLE` | no | 120 per lane (`480`) | How many ESI fetches the worker's character pass may make in one one-minute cycle, for the whole server (kept between 20 and 2000). Raise it when the Sync page shows the allowance used up and characters put off. One lane gets through about 200 fetches in a minute, so more than about 200 per lane makes a cycle run past its minute |
-| `WORKER_LANES` | no | `4` | How many characters the worker refreshes at the same time (1 to 16). Each character is still fetched one request after another, so ESI's per-character rate limits are unaffected; `1` is the worker as it was, one character at a time. More lanes mean more database connections in use at once: with more than 8, raise `DB_MAX_CONNS` to about two and a half per lane (40 for 16 lanes), which still fits PostgreSQL's default of 100. The Sync page's "fetches: average … a cycle" beside "characters on average" shows what the characters actually cost, which is what to size this and the allowance by |
+| `WORKER_LANES` | no | `4` | How many characters the worker refreshes at the same time (1 to 16). Each character is still fetched one request after another, so ESI's per-character rate limits are unaffected; `1` is the worker as it was, one character at a time. More lanes mean more database connections in use at once: with more than 8, raise `DB_MAX_CONNS` to about two and a half per lane (40 for 16 lanes), which still fits PostgreSQL's default of 100. The Sync page's "Fetches a cycle" beside "Characters on average" shows what the characters actually cost, which is what to size this and the allowance by |
 | `DB_MAX_CONNS` | no | `20` | How many database connections the app may hold open (5 to 500). The session store keeps a few more of its own (at most 4, or one per CPU core if that is more). Raise it together with PostgreSQL's `max_connections` (100 unless changed), which must stay above the two added together; more than a few dozen is rarely useful on one machine |
 | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | no | — | A Discord application's id and secret: turns on "Connect Discord" (see "Discord") |
 | `DISCORD_BOT_TOKEN` | no | — | That application's bot: lets it be added to Discord servers, where it gives roles and sends messages. What it does in each server is set on the site by that server's directors, not here |

@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"sync"
 
-	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
 )
 
@@ -77,10 +76,7 @@ type pageData struct {
 	SkillsChars       []assetCharLink
 	SkillPlans        *skillPlansView
 	Sync              *syncView
-	Users             []db.User
-	Characters        []db.Character
-	Snapshots         []adminSnapshotRow
-	WorkerStatus      string
+	Admin             *adminView
 
 	// Header character switcher (base.html): every character
 	// linked to the signed-in account, the acting one marked.
@@ -169,15 +165,6 @@ type skillRow struct {
 	NextState  string
 }
 
-// adminSnapshotRow is one line of the admin snapshots overview.
-type adminSnapshotRow struct {
-	CharacterID   int64
-	CharacterName string
-	Kind          string
-	FetchedAt     string
-	CachedUntil   string // "—" when unset
-}
-
 // sectionForPage maps a template file to the top-nav branch that
 // contains it (see templates/base.html). Handlers whose page lives
 // in a different branch than its template suggests — the corp
@@ -225,6 +212,11 @@ var (
 	pageTemplates     sync.Map // page file -> *template.Template: base layout + partials + page
 	fragmentTemplates sync.Map // page file -> *template.Template: partials + page (live-region fragments)
 )
+
+// pageSharedTemplates are the files every full page is parsed with:
+// the layout and the partials any page may use. One list, so that
+// nothing else parsing a page into the same cache can leave one out.
+var pageSharedTemplates = []string{"templates/base.html", "templates/notifybell.html", "templates/balancechart.html", "templates/charselector.html", "templates/locked.html"}
 
 // parsedTemplate returns the cached set for page, parsing it (with
 // the shared files first) the first time it is asked for.
@@ -289,7 +281,7 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 			data.ViewerChars[entry.ID] = true
 		}
 	}
-	ts, err := parsedTemplate(&pageTemplates, "base", page, "templates/base.html", "templates/notifybell.html", "templates/balancechart.html", "templates/charselector.html", "templates/locked.html")
+	ts, err := parsedTemplate(&pageTemplates, "base", page, pageSharedTemplates...)
 	if err != nil {
 		logging.Errorf("parse template %s: %v", page, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -368,51 +360,4 @@ func (app *Application) handleHome(w http.ResponseWriter, r *http.Request) {
 		data.ServerStatus = status
 	}
 	app.render(ctx, w, http.StatusOK, "home.html", data)
-}
-
-func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-		WorkerStatus:  app.workerStatusText(),
-	}
-
-	users, err := app.queries.ListUsers(ctx)
-	if err != nil {
-		logging.Errorf("admin: list users: %v", err)
-		data.Error = "Could not load admin data; check the server log."
-	} else {
-		data.Users = users
-	}
-
-	characters, err := app.queries.ListAllCharacters(ctx)
-	if err != nil {
-		logging.Errorf("admin: list characters: %v", err)
-		data.Error = "Could not load admin data; check the server log."
-	} else {
-		data.Characters = characters
-	}
-
-	// Snapshot cache overview: per character, which ESI kinds are
-	// cached and when each expires.
-	for _, ch := range data.Characters {
-		snaps, err := app.queries.ListSnapshotMetaByCharacter(ctx, ch.CharacterID)
-		if err != nil {
-			logging.Errorf("admin: list snapshots for character %d: %v", ch.CharacterID, err)
-			continue
-		}
-		for _, snap := range snaps {
-			data.Snapshots = append(data.Snapshots, adminSnapshotRow{
-				CharacterID:   ch.CharacterID,
-				CharacterName: ch.Name,
-				Kind:          snap.Kind,
-				FetchedAt:     rfc3339(snap.FetchedAt),
-				CachedUntil:   rfc3339Or(snap.CachedUntil, "—"),
-			})
-		}
-	}
-
-	app.render(ctx, w, http.StatusOK, "admin.html", data)
 }

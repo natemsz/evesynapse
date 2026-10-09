@@ -117,7 +117,7 @@ func TestWorkerCycleIsTimed(t *testing.T) {
 	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
 
 	_, body := getPage(t, f.app, cookie, "/sync/")
-	if strings.Contains(body, "Last cycle:") {
+	if strings.Contains(body, "<h3>Last cycle</h3>") {
 		t.Fatal("the Sync page shows a cycle before one has run")
 	}
 
@@ -137,7 +137,7 @@ func TestWorkerCycleIsTimed(t *testing.T) {
 		t.Fatalf("%d fetches counted against an allowance of %d", timing.Fetches, maxFetchesPerCycle)
 	}
 	_, body = getPage(t, f.app, cookie, "/sync/")
-	mustContain(t, "/sync/ after a cycle", body, "Last cycle: took ", "1 character (1 active, 0 watched, 0 recent, 0 dormant) · ", fmt.Sprintf(" of %d fetches", maxFetchesPerCycle))
+	mustContain(t, "/sync/ after a cycle", body, "<h3>Last cycle</h3>", "<tr><td>Took</td><td>", "<tr><td>Characters</td><td>1: 1 active, 0 watched, 0 recent, 0 dormant</td></tr>", fmt.Sprintf(" of %d allowed</td>", maxFetchesPerCycle))
 
 	// Only the recent cycles are kept.
 	for i := 0; i < workerRecentCycles+5; i++ {

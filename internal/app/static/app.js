@@ -868,6 +868,21 @@
       });
   })();
 
+  // Sync and Admin (administrators): find one character among all of
+  // them. A pick goes straight to that character's data, or to the
+  // account it belongs to; typing a name and pressing Enter does the
+  // same through the plain form.
+  attachSuggest(
+    document.getElementById("sync-character-q"),
+    document.getElementById("sync-character-suggest"),
+    suggestURL("/admin/suggest", null),
+    function (it) { window.location.href = "/sync/?character=" + encodeURIComponent(it.id); });
+  attachSuggest(
+    document.getElementById("admin-q"),
+    document.getElementById("admin-suggest"),
+    suggestURL("/admin/suggest", null),
+    function (it) { window.location.href = "/admin/?q=" + encodeURIComponent(it.id); });
+
   // Watchlist finder: a pick fills the box with the exact name
   // and runs the same find the button would.
   (function () {

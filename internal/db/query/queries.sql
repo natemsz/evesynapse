@@ -441,3 +441,34 @@ SELECT id, last_seen_at FROM users;
 SELECT user_id FROM push_subscriptions
 UNION
 SELECT user_id FROM discord_links;
+
+-- name: FindCharacters :many
+-- The Sync and Admin pages' character lookup: names containing the
+-- text (its LIKE wildcards already escaped by the caller), or the
+-- character with exactly that id. An exact name first, then names
+-- that start with the text, then the rest, each alphabetically.
+SELECT character_id, name, user_id FROM characters
+WHERE name ILIKE '%' || sqlc.arg(pattern)::text || '%'
+   OR character_id::text = sqlc.arg(exact)::text
+ORDER BY (lower(name) = lower(sqlc.arg(exact)::text)) DESC,
+         (name ILIKE sqlc.arg(pattern)::text || '%') DESC,
+         lower(name), character_id
+LIMIT sqlc.arg(row_limit)::bigint;
+
+-- name: AdminTotals :one
+-- The Admin page's headline counts, without reading a row of either
+-- table into the page.
+SELECT
+    (SELECT count(*) FROM users)::bigint AS accounts,
+    (SELECT count(*) FROM users WHERE last_seen_at > sqlc.arg(day_ago)::timestamptz)::bigint AS seen_today,
+    (SELECT count(*) FROM users WHERE last_seen_at > sqlc.arg(week_ago)::timestamptz)::bigint AS seen_this_week,
+    (SELECT count(*) FROM characters)::bigint AS characters,
+    (SELECT count(*) FROM characters WHERE link_state NOT IN ('', 'ok'))::bigint AS parked;
+
+-- name: ListNewestUsers :many
+-- The most recently created accounts, with how many characters each has.
+SELECT u.id, u.created_at, u.last_seen_at,
+       (SELECT count(*) FROM characters c WHERE c.user_id = u.id)::bigint AS characters
+FROM users u
+ORDER BY u.id DESC
+LIMIT sqlc.arg(row_limit)::bigint;

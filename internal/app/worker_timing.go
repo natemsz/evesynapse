@@ -111,11 +111,29 @@ func shortDuration(d time.Duration) string {
 }
 
 // workerTimingView is the Sync page's account of the worker's pace.
+// statRow is one figure on the Sync page: what it is, and its value.
+type statRow struct{ Label, Value string }
+
+// budgetRow is one of ESI's rate-limit groups as last seen.
+type budgetRow struct {
+	Group string
+	Left  int
+	Limit string // "150/15m"; "" when ESI did not say
+}
+
 type workerTimingView struct {
 	Last    string   // the last cycle, in a line
 	Phases  []string // where its time went, longest first
 	Budgets []string // ESI's rate-limit budgets seen, the tightest first
 	Lately  string   // the recent cycles, in a line; "" with fewer than two
+
+	// The same figures a row each, which is how the Sync page lays
+	// them out; the lines above are what the log and the tests read.
+	LastRows   []statRow
+	PhaseRows  []statRow
+	BudgetRows []budgetRow
+	HourTitle  string // "Last 60 cycles"; "" with fewer than two
+	HourRows   []statRow
 	// Behind: the worker is not keeping up, and why, in words.
 	Behind string
 }
@@ -150,6 +168,23 @@ func workerTimingViewFor(s workerStatus) *workerTimingView {
 		parts = append(parts, "stalest active data "+shortDuration(t.Overdue)+" past its refresh time")
 	}
 	v.Last = strings.Join(parts, " · ")
+	v.LastRows = []statRow{
+		{"Took", shortDuration(t.Took)},
+		{"Characters", strconv.Itoa(t.Characters) + ": " + tiers},
+		{"Fetches", fmt.Sprintf("%d of %d allowed", t.Fetches, t.Budget)},
+	}
+	if t.Deferred > 0 {
+		v.LastRows = append(v.LastRows, statRow{"Put off to the next cycle", plural(t.Deferred, "character")})
+	}
+	if t.RateHeld > 0 {
+		v.LastRows = append(v.LastRows, statRow{"Left alone at ESI's request", plural(t.RateHeld, "character") + " (rate limit)"})
+	}
+	switch {
+	case t.NeverFetched:
+		v.LastRows = append(v.LastRows, statRow{"Stalest active data", "some not fetched yet"})
+	case t.Overdue > 0:
+		v.LastRows = append(v.LastRows, statRow{"Stalest active data", shortDuration(t.Overdue) + " past its refresh time"})
+	}
 
 	// ESI's budgets, the tightest first: which groups of routes are
 	// nearest their limit, which is where to ease off next.
@@ -162,6 +197,7 @@ func workerTimingViewFor(s workerStatus) *workerTimingView {
 			line += " of " + b.Limit
 		}
 		v.Budgets = append(v.Budgets, line)
+		v.BudgetRows = append(v.BudgetRows, budgetRow{Group: b.Group, Left: b.Remaining, Limit: b.Limit})
 	}
 
 	phases := append([]phaseTiming(nil), t.Phases...)
@@ -173,6 +209,7 @@ func workerTimingViewFor(s workerStatus) *workerTimingView {
 	for _, p := range phases {
 		if p.Took >= 50*time.Millisecond {
 			v.Phases = append(v.Phases, p.Name+" "+shortDuration(p.Took))
+			v.PhaseRows = append(v.PhaseRows, statRow{p.Name, shortDuration(p.Took)})
 		}
 	}
 
@@ -225,6 +262,26 @@ func workerTimingViewFor(s workerStatus) *workerTimingView {
 			lately = append(lately, "stalest data up to "+shortDuration(worst)+" late")
 		}
 		v.Lately = strings.Join(lately, " · ")
+
+		v.HourTitle = fmt.Sprintf("Last %d cycles", n)
+		mixRow := fmt.Sprintf("%s active, %s watched, %s recent, %s dormant", mean(active), mean(watched), mean(recent), mean(dormant))
+		if asleep > 0 {
+			mixRow += ", " + mean(asleep) + " asleep"
+		}
+		v.HourRows = []statRow{
+			{"Cycle time", "average " + shortDuration(total/time.Duration(n)) + ", longest " + shortDuration(longest)},
+			{"Fetches a cycle", fmt.Sprintf("average %s, most %d", mean(fetches), most)},
+			{"Characters on average", mixRow},
+		}
+		if spent > 0 {
+			v.HourRows = append(v.HourRows, statRow{"Allowance used up", "in " + plural(spent, "cycle")})
+		}
+		if deferred > 0 {
+			v.HourRows = append(v.HourRows, statRow{"Characters put off", "in " + plural(deferred, "cycle")})
+		}
+		if worst > 0 {
+			v.HourRows = append(v.HourRows, statRow{"Stalest active data", "up to " + shortDuration(worst) + " late"})
+		}
 
 		// Not keeping up: most recent cycles ran out of allowance or
 		// put characters off. One such cycle is a busy minute; most

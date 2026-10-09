@@ -13,6 +13,43 @@ import (
 	"github.com/lib/pq"
 )
 
+const adminTotals = `-- name: AdminTotals :one
+SELECT
+    (SELECT count(*) FROM users)::bigint AS accounts,
+    (SELECT count(*) FROM users WHERE last_seen_at > $1::timestamptz)::bigint AS seen_today,
+    (SELECT count(*) FROM users WHERE last_seen_at > $2::timestamptz)::bigint AS seen_this_week,
+    (SELECT count(*) FROM characters)::bigint AS characters,
+    (SELECT count(*) FROM characters WHERE link_state NOT IN ('', 'ok'))::bigint AS parked
+`
+
+type AdminTotalsParams struct {
+	DayAgo  time.Time `json:"day_ago"`
+	WeekAgo time.Time `json:"week_ago"`
+}
+
+type AdminTotalsRow struct {
+	Accounts     int64 `json:"accounts"`
+	SeenToday    int64 `json:"seen_today"`
+	SeenThisWeek int64 `json:"seen_this_week"`
+	Characters   int64 `json:"characters"`
+	Parked       int64 `json:"parked"`
+}
+
+// The Admin page's headline counts, without reading a row of either
+// table into the page.
+func (q *Queries) AdminTotals(ctx context.Context, arg AdminTotalsParams) (AdminTotalsRow, error) {
+	row := q.db.QueryRowContext(ctx, adminTotals, arg.DayAgo, arg.WeekAgo)
+	var i AdminTotalsRow
+	err := row.Scan(
+		&i.Accounts,
+		&i.SeenToday,
+		&i.SeenThisWeek,
+		&i.Characters,
+		&i.Parked,
+	)
+	return i, err
+}
+
 const countWarDetails = `-- name: CountWarDetails :one
 SELECT COUNT(*) FROM war_details
 `
@@ -211,6 +248,55 @@ type DeleteSkillPlanItemParams struct {
 func (q *Queries) DeleteSkillPlanItem(ctx context.Context, arg DeleteSkillPlanItemParams) error {
 	_, err := q.db.ExecContext(ctx, deleteSkillPlanItem, arg.PlanID, arg.SkillTypeID)
 	return err
+}
+
+const findCharacters = `-- name: FindCharacters :many
+SELECT character_id, name, user_id FROM characters
+WHERE name ILIKE '%' || $1::text || '%'
+   OR character_id::text = $2::text
+ORDER BY (lower(name) = lower($2::text)) DESC,
+         (name ILIKE $1::text || '%') DESC,
+         lower(name), character_id
+LIMIT $3::bigint
+`
+
+type FindCharactersParams struct {
+	Pattern  string `json:"pattern"`
+	Exact    string `json:"exact"`
+	RowLimit int64  `json:"row_limit"`
+}
+
+type FindCharactersRow struct {
+	CharacterID int64  `json:"character_id"`
+	Name        string `json:"name"`
+	UserID      int64  `json:"user_id"`
+}
+
+// The Sync and Admin pages' character lookup: names containing the
+// text (its LIKE wildcards already escaped by the caller), or the
+// character with exactly that id. An exact name first, then names
+// that start with the text, then the rest, each alphabetically.
+func (q *Queries) FindCharacters(ctx context.Context, arg FindCharactersParams) ([]FindCharactersRow, error) {
+	rows, err := q.db.QueryContext(ctx, findCharacters, arg.Pattern, arg.Exact, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FindCharactersRow
+	for rows.Next() {
+		var i FindCharactersRow
+		if err := rows.Scan(&i.CharacterID, &i.Name, &i.UserID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getCharacter = `-- name: GetCharacter :one
@@ -1027,6 +1113,50 @@ func (q *Queries) ListLocalFittings(ctx context.Context, userID int64) ([]ListLo
 			&i.IsDraft,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listNewestUsers = `-- name: ListNewestUsers :many
+SELECT u.id, u.created_at, u.last_seen_at,
+       (SELECT count(*) FROM characters c WHERE c.user_id = u.id)::bigint AS characters
+FROM users u
+ORDER BY u.id DESC
+LIMIT $1::bigint
+`
+
+type ListNewestUsersRow struct {
+	ID         int64     `json:"id"`
+	CreatedAt  time.Time `json:"created_at"`
+	LastSeenAt time.Time `json:"last_seen_at"`
+	Characters int64     `json:"characters"`
+}
+
+// The most recently created accounts, with how many characters each has.
+func (q *Queries) ListNewestUsers(ctx context.Context, rowLimit int64) ([]ListNewestUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listNewestUsers, rowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListNewestUsersRow
+	for rows.Next() {
+		var i ListNewestUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.LastSeenAt,
+			&i.Characters,
 		); err != nil {
 			return nil, err
 		}

@@ -1,80 +1,100 @@
 {{define "title"}}Admin{{end}}
 {{define "content"}}
 <h1><span class="gt">Admin</span></h1>
-<p>Accounts, linked characters, and background-job status.</p>
+<p>Accounts and the characters linked to them. What the background worker is doing, and how fresh anyone's data is, are on <a href="/sync/">Sync</a>.</p>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-<section class="foldable">
-<h2>Users</h2>
-<div class="tw">
-<table>
-  <thead><tr><th>ID</th><th>Created</th></tr></thead>
-  <tbody>
-  {{range .Users}}
-    <tr><td>{{.ID}}</td><td>{{rfc3339 .CreatedAt}}</td></tr>
-  {{else}}
-    <tr><td colspan="2">No users yet.</td></tr>
+{{with .Admin}}
+<section class="card spanall">
+<h2>Overview</h2>
+<div class="stat-grid">
+  <div>
+    <h3>Accounts</h3>
+    <table class="stat-table">
+      <tbody>
+        <tr><td>Accounts</td><td>{{.Accounts}}</td></tr>
+        <tr><td>Seen in the last day</td><td>{{.SeenToday}}</td></tr>
+        <tr><td>Seen in the last week</td><td>{{.SeenThisWeek}}</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div>
+    <h3>Characters</h3>
+    <table class="stat-table">
+      <tbody>
+        <tr><td>Linked characters</td><td>{{.Characters}}</td></tr>
+        <tr><td>Not syncing (have to sign in again)</td><td>{{if .AnyParked}}<strong>{{.Parked}}</strong>{{else}}{{.Parked}}{{end}}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<section class="card spanall">
+<h2>Find an account</h2>
+<p><small>Type a character's name or id to see the account it belongs to.</small></p>
+<form method="get" action="/admin/" class="lookup-form">
+  <span class="searchwrap">
+    <input type="search" name="q" id="admin-q" value="{{.Lookup.Query}}" placeholder="Character name or id" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="admin-suggest" aria-autocomplete="list" aria-label="Find an account by one of its characters">
+    <ul class="suggest" id="admin-suggest" role="listbox" hidden></ul>
+  </span>
+  <button type="submit">Find</button>
+</form>
+{{if .Lookup.NotFound}}<p class="err">No character is called that, or has that id.</p>{{end}}
+{{if .NoAccount}}<p class="err">No account has that id.</p>{{end}}
+{{if .Lookup.Matches}}
+<p>More than one character fits. Which one?</p>
+<ul class="lookup-matches">
+  {{range .Lookup.Matches}}<li><a href="/admin/?q={{.ID}}">{{.Name}}</a> <small>account {{.UserID}}</small></li>
   {{end}}
+</ul>
+{{if .Lookup.More}}<p><small>There are more; type more of the name.</small></p>{{end}}
+{{end}}
+
+{{with .Account}}
+<h3>Account {{.ID}}</h3>
+<table class="stat-table">
+  <tbody>
+    <tr><td>Created</td><td>{{.Created}}</td></tr>
+    <tr><td>Last seen</td><td>{{.LastSeen}} <small>(recorded at most once an hour)</small></td></tr>
+    <tr><td>Characters</td><td>{{len .Characters}}</td></tr>
   </tbody>
 </table>
-</div>
-
-</section>
-<section class="foldable">
-<h2>Characters</h2>
 <div class="tw">
 <table>
-  <thead><tr><th>Name</th><th>Character ID</th><th>User</th><th>Token expiry</th><th>Scopes</th><th>Cached until</th></tr></thead>
+  <thead><tr><th>Character</th><th>Character id</th><th>Syncing</th><th>Token expires</th><th>Granted</th><th>Data</th></tr></thead>
   <tbody>
   {{range .Characters}}
     <tr>
-      <td>{{.Name}}</td>
-      <td>{{.CharacterID}}</td>
-      <td>{{.UserID}}</td>
-      <td>{{if .TokenExpiry.Valid}}{{rfc3339 .TokenExpiry.Time}}{{else}}—{{end}}</td>
-      <td>{{.Scopes}}</td>
-      <td>{{if .CachedUntil.Valid}}{{rfc3339 .CachedUntil.Time}}{{else}}—{{end}}</td>
+      <td>{{if .Found}}<strong>{{.Name}}</strong>{{else}}{{.Name}}{{end}}</td>
+      <td>{{.ID}}</td>
+      <td>{{if .Parked}}No: {{.Parked}}{{else}}{{.Tier}}{{end}}</td>
+      <td>{{.TokenExpiry}}</td>
+      <td>{{if .Scopes}}<details class="scope-details"><summary>{{len .Scopes}} scope{{if ne (len .Scopes) 1}}s{{end}}</summary><ul class="scope-list">{{range .Scopes}}<li>{{.}}</li>{{end}}</ul></details>{{else}}none recorded{{end}}</td>
+      <td><a href="/sync/?character={{.ID}}">Sync</a></td>
     </tr>
-  {{else}}
-    <tr><td colspan="6">No characters linked yet.</td></tr>
   {{end}}
   </tbody>
 </table>
 </div>
-
+{{end}}
 </section>
-<section class="foldable">
-<h2>Snapshot cache</h2>
+
+<section class="card spanall">
+<h2>Newest accounts</h2>
 <div class="tw">
 <table>
-  <thead><tr><th>Character</th><th>Character ID</th><th>Kind</th><th>Fetched at</th><th>Cached until</th></tr></thead>
+  <thead><tr><th>Account</th><th>Created</th><th>Last seen</th><th>Characters</th></tr></thead>
   <tbody>
-  {{range .Snapshots}}
-    <tr>
-      <td>{{.CharacterName}}</td>
-      <td>{{.CharacterID}}</td>
-      <td>{{.Kind}}</td>
-      <td>{{.FetchedAt}}</td>
-      <td>{{.CachedUntil}}</td>
-    </tr>
+  {{range .Newest}}
+    <tr><td><a href="/admin/?account={{.ID}}">{{.ID}}</a></td><td>{{.Created}}</td><td>{{.LastSeen}}</td><td>{{.Characters}}</td></tr>
   {{else}}
-    <tr><td colspan="5">No snapshots cached yet.</td></tr>
+    <tr><td colspan="4">No accounts yet.</td></tr>
   {{end}}
   </tbody>
 </table>
 </div>
-
 </section>
-<section class="foldable">
-<h2>Background jobs</h2>
-<div class="tw">
-<table>
-  <thead><tr><th>Job</th><th>Status</th></tr></thead>
-  <tbody>
-    <tr><td>ESI refresh worker</td><td>{{.WorkerStatus}}</td></tr>
-  </tbody>
-</table>
-</div>
-</section>
+{{end}}
 {{end}}

@@ -314,6 +314,32 @@ registration for sign-in ("EVE SSO flow" below). Then:
    an existing `.env` (it only appends a `DATABASE_URL` that
    isn't there yet).
 
+   It also sets PostgreSQL's memory for the machine it is on.
+   PostgreSQL ships with 128 MB of cache whatever the machine has,
+   so on anything with 2 GB of RAM or more the script raises three
+   settings, sized from the RAM it finds:
+
+   | Setting | Set to | Example: 4 GB | 8 GB | 24 GB |
+   | --- | --- | --- | --- | --- |
+   | `shared_buffers` | an eighth of the RAM, at most 2 GB | 475 MB | 975 MB | 2 GB |
+   | `effective_cache_size` | two thirds of the RAM (a planning hint; it reserves nothing) | 2.5 GB | 5.2 GB | 15.9 GB |
+   | `shared_preload_libraries` | `pg_prewarm`, which reloads the cache after a restart | | | |
+
+   A setting is changed only while it is still as PostgreSQL shipped
+   it and nobody has set it with `ALTER SYSTEM`, so a value you chose
+   is never replaced and running the script again changes nothing. A
+   machine with under 2 GB is left alone, and so is a database on
+   another machine. On a first install PostgreSQL is restarted to
+   apply them; if it does not come back, the script takes them out
+   again and starts it as it was. With EveSynapse already running the
+   script does not restart anything: it prints the command, because
+   the restart drops the site's connections for a few seconds.
+   `EVESYNAPSE_TUNE_POSTGRES=0` skips the whole step:
+
+   ```sh
+   sudo EVESYNAPSE_TUNE_POSTGRES=0 bash deploy/setup.sh
+   ```
+
    The program, `/opt/evesynapse` and `.env` belong to root; the
    service account can read them but not change them, and the
    unit runs it sandboxed with `/run/evesynapse` as its only

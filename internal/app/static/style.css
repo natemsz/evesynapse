@@ -3339,7 +3339,7 @@ td.cal-day:hover .cal-add, .cal-add:focus-visible { opacity: 1; }
 
 /* The fields the op forms add take the look and height of the others.
    Scoped to these forms: the fitting tool's dropdowns keep their own. */
-input[type="datetime-local"], .op-form select, .op-signup select, .op-form textarea {
+input[type="datetime-local"], .op-form select, .op-signup select, .notify-minutes select, .op-form textarea {
   background: var(--input-bg);
   border: 1px solid #2a2a2a;
   border-radius: 3px;
@@ -3349,12 +3349,14 @@ input[type="datetime-local"], .op-form select, .op-signup select, .op-form texta
   padding: 0.2rem 0.6rem;
   font: inherit;
 }
-input[type="datetime-local"]:focus, .op-form select:focus, .op-signup select:focus, .op-form textarea:focus {
+input[type="datetime-local"]:focus, .op-form select:focus, .op-signup select:focus, .notify-minutes select:focus, .op-form textarea:focus {
   border-color: var(--accent);
   outline: none;
   box-shadow: 0 0 8px rgba(255, 106, 26, 0.35);
 }
-html[data-theme="light"] input[type="datetime-local"], html[data-theme="light"] .op-form select, html[data-theme="light"] .op-signup select, html[data-theme="light"] .op-form textarea { border-color: #d8cdb8; }
+html[data-theme="light"] input[type="datetime-local"], html[data-theme="light"] .op-form select, html[data-theme="light"] .op-signup select, html[data-theme="light"] .notify-minutes select, html[data-theme="light"] .op-form textarea { border-color: #d8cdb8; }
+.notify-minutes { margin-left: 0.6rem; white-space: nowrap; color: var(--muted); }
+.notify-minutes select { margin-right: 0.3rem; }
 .cal-paps { margin-left: 0.5rem; }
 .cal-new + .cal-paps { margin-left: 0; }
 .op-ticks label { display: flex; align-items: center; gap: 0.4rem; margin: 0.15rem 0; }

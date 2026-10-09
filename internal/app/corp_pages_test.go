@@ -1,7 +1,6 @@
 package app
 
-// Hermetic tests for the corporation cluster (module sweep,
-// cluster 2). Two layers:
+// Hermetic tests for the corporation cluster. Two layers:
 //
 //   - Render tests: seeded corp_* snapshots, killmail_details rows
 //     and snapshot_fetch_state records drive the real chi router

@@ -16,7 +16,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Wallet graphs (v0.3.09): balance-over-time from data the app
+// Wallet graphs: balance-over-time from data the app
 // already stores — the wallet journal's running balances for the
 // recent window and the daily wallet-history samples (schema
 // 019) for the longer tail — plus an account net-worth history
@@ -392,7 +392,7 @@ func (app *Application) attachWalletGraph(ctx context.Context, userID, character
 
 // attachNetWorthHistory fills the home Net worth module's
 // history from the user's sampler rows: a chart once two daily
-// totals exist, the honest "building" state before that.
+// totals exist, the "building" state before that.
 func (app *Application) attachNetWorthHistory(ctx context.Context, w *netWorthWidget, userID int64) {
 	rows, err := app.queries.ListUserWalletHistory(ctx, userID)
 	if err != nil {

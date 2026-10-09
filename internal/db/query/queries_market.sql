@@ -21,7 +21,7 @@ ON CONFLICT (id) DO UPDATE SET
 
 
 -- ---------------------------------------------------------------------
--- v0.3.14 guide-price wants (schema 027): the durable note a
+-- Guide-price wants (schema 027): the durable note a
 -- kill view leaves when it has no prices to value with. One
 -- singleton row -- the guide is global, so one want covers every
 -- viewer -- noted at render time, answered by the worker's
@@ -40,7 +40,7 @@ DELETE FROM guide_price_wants
 WHERE id = 1;
 
 -- ---------------------------------------------------------------------
--- Phase 3 (schema 011): industry build planner reads. Bulk import
+-- Industry build planner reads. Bulk import
 -- inserts stay hand-rolled in the SDE importer alongside the other
 -- sde_* tables; only reads live here.
 -- ---------------------------------------------------------------------
@@ -693,7 +693,7 @@ SELECT MAX(updated_at) AS stamp
 FROM market_station_leaderboard
 WHERE ($1::bigint = 0 OR region_id = $1::bigint);
 
--- v0.3.33: per-type market price TTL cache. The worker refreshes
+-- Per-type market price TTL cache. The worker refreshes
 -- only rows older than the TTL; pages read cache-only.
 -- name: UpsertMarketTypePrice :exec
 INSERT INTO market_type_prices (region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetched_at)
@@ -719,7 +719,7 @@ SELECT region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetch
 FROM market_type_prices
 WHERE region_id = $1 AND type_id = ANY($2::bigint[]);
 
--- v0.3.33: industry cost indices per (system, activity).
+-- Industry cost indices per (system, activity).
 -- name: UpsertIndustryCostIndex :exec
 INSERT INTO industry_cost_indices (solar_system_id, activity, cost_index, fetched_at)
 VALUES ($1, $2, $3, now())
@@ -735,7 +735,7 @@ SELECT solar_system_id, activity, cost_index, fetched_at
 FROM industry_cost_indices
 WHERE solar_system_id = $1 AND activity = $2;
 
--- v0.3.34: restock planner targets.
+-- Restock planner targets.
 -- name: UpsertRestockTarget :exec
 INSERT INTO restock_targets (user_id, type_id, target_qty, min_margin_pct, updated_at)
 VALUES ($1, $2, $3, $4, now())

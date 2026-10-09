@@ -9,9 +9,8 @@
   font-display: swap;
   src: url('/static/fonts/shentox-regular.woff2') format('woff2');
 }
-/* The wordmark. SemiBold only: it is the one weight the page uses, and
-   block (not swap) keeps the brand from flashing in a fallback face, the
-   file being preloaded and cached for a year. */
+/* The wordmark face. font-display: block keeps the brand from flashing
+   in a fallback face; the file is preloaded. */
 @font-face {
   font-family: 'Pixelify Sans';
   font-style: normal;
@@ -102,9 +101,8 @@
      that a row of them lines up. */
   --control-h: 1.9rem;
   color-scheme: dark;
-  /* v0.3.30: --text lightened a notch (#f5ead9 -> #faf3e6) for LCD
-     readability; the ember palette is untouched. The extra text-tone
-     variables below exist so the light theme can re-tone them. */
+  /* The extra text-tone variables below exist so the light theme can
+     re-tone them. */
   --text: #faf3e6;
   --text-bright: #fff6e6;
   --accent: #ff6a1a;
@@ -128,9 +126,8 @@ html, body { min-height: 100%; }
 
 body {
   margin: 0;
-  /* The 2013 wallpaper at full strength behind the near-black
-     containers, painted by the fixed layer below so the browser
-     composites one dedicated background surface. */
+  /* The wallpaper is painted by the fixed layer below, so the browser
+     composites one background surface. */
   background: #0d0503;
   color: var(--text);
   font-family: "Shentox", "Univers Next Pro", "UniversNextPro330BasicLightLatin", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
@@ -169,16 +166,10 @@ a:hover { color: var(--success); text-decoration: underline; }
 }
 .skip-link:focus { top: 0.5rem; color: var(--text-bright); }
 
-/* Headers, wordmark, nav category labels, buttons, badges,
-   and table headers ride the Condensed cut of Univers Next
-   Pro in Medium (500): it stays legible packed tight in
-   dense tables and nav rows. The wordmark alone keeps Bold
-   Condensed (600) — at letterspaced caps the Medium reads
-   too light for the brand mark. Synthetic emboldening is
-   disabled so nothing renders faux-bold. The nav menu links
-   themselves ride the non-condensed cut at Regular weight
-   (next rule), opening up against the condensed
-   category labels. Body text keeps the Shentox stack. */
+/* Headers, nav category labels, buttons, badges and table headers use
+   Univers Next Pro Condensed Medium (500); the wordmark keeps Bold
+   Condensed (600). Synthetic bold is off. Nav links use the
+   non-condensed cut (next rule); body text keeps the Shentox stack. */
 h1, h2, h3, h4, .wordmark, .btn, thead th, .badge,
 :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])),
 .branch > summary,
@@ -188,16 +179,9 @@ h1, h2, h3, h4, .wordmark, .btn, thead th, .badge,
   font-weight: 500;
   font-synthesis-weight: none;
 }
-/* Nav menu links: the entries under the category headers.
-   Non-condensed Univers at Regular weight; sizes, colors,
-   and hover/active treatments stay as they were. Regular
-   (400) replaced Light 300 here once the true Regular face
-   was embedded — before that, a 400 request resolved to
-   the 500 Medium face, which reads bold. The standalone
-   top-level rows (Home, Sync, Admin) are deliberately not in
-   this rule: they sit level with the category headers and take
-   their condensed medium cut, so every row of the menu reads
-   in one face. */
+/* Nav menu links: non-condensed Univers at Regular (400). The
+   standalone top-level rows (Home, Sync, Admin) are not in this rule:
+   they take the category headers' condensed cut. */
 header a.navlink, .branch .menu a {
   font-family: "Univers Next Pro", -apple-system, "SF Pro Display", "Segoe UI", "Inter", sans-serif;
   font-weight: 400;
@@ -217,19 +201,15 @@ h2, h3 {
   background-clip: text;
   color: transparent;
   text-shadow: none;
-  /* Inline-block so the gradient maps across the heading's own
-     text width, not the full container: a short word like
-     "Wallet" now gets the whole gold→orange→ember sweep instead
-     of only the leftmost gold slice. Headings here are always
-     standalone blocks, so nothing flows up beside them. */
+  /* Inline-block so the gradient maps across the heading's own text
+     width, not the full container. */
   display: inline-block;
 }
 h2 { font-size: 1.04rem; }
 h3 { font-size: 0.88rem; margin: 1.4rem 0 0.15rem; }
-/* Gradient text needs solid fallbacks: transparent fill over a
-   clipped background is invisible where background-clip:text is
-   unsupported — and in forced-colors mode, where the OS replaces
-   backgrounds outright. */
+/* Gradient text needs a solid fallback: where background-clip: text is
+   unsupported, and in forced-colors mode, a transparent fill would be
+   invisible. */
 @supports not (background-clip: text) {
   h2, h3 { background: none; color: var(--text-bright); -webkit-text-fill-color: currentColor; }
 }
@@ -238,9 +218,8 @@ h3 { font-size: 0.88rem; margin: 1.4rem 0 0.15rem; }
   .wordmark, .wm-eve, .wm-syn span, .wordmark:hover .wm-syn span { color: CanvasText; }
 }
 
-/* Secondary text: quieter in colour, but nearly the size of the text
-   around it. The browser's own "smaller" put it under 11px on a 13px
-   page, which was too small to read. The footer keeps the old size. */
+/* Secondary text: quieter in colour, nearly the size of the text around
+   it (the browser's own "smaller" is under 11px here). */
 small { color: var(--muted); font-size: 0.95em; }
 footer small { font-size: smaller; }
 
@@ -249,11 +228,8 @@ header {
   position: sticky;
   top: 0;
   z-index: 10;
-  /* One of the app's two glass surfaces (user override:
-     this bar and, since v0.3.07.009, the sidebar): the bar
-     paint at 90% over a backdrop blur, so what scrolls
-     beneath reads frosted. Bar content stays opaque; the
-     90% paint alone is the no-blur fallback. */
+  /* Glass: the bar paint at 90% over a backdrop blur. The paint alone
+     is the no-blur fallback. */
   background: linear-gradient(to bottom, rgba(24, 24, 24, 0.9), rgba(11, 11, 11, 0.9));
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
@@ -285,16 +261,10 @@ header .topbar {
   letter-spacing: 0.125em;
   color: var(--text-bright);
 }
-/* SYNAPSE fades from gold to ember one letter at a time, each letter a
-   solid colour. It used to be one gradient clipped to the text
-   (background-clip: text), and a clipped gradient is painted as a mask:
-   at the header's small size the letters came out a pixel shorter than
-   the solid white EVE beside them, which on a pixel font is plainly
-   visible, and WebKit dropped the clipped paint altogether under a
-   transformed ancestor. Solid text goes through the same path as EVE, so
-   the two words are the same size in every browser. The seven colours are
-   the old gradient (#ffd27a, #ff6a1a at the middle, #d63c14) sampled at
-   each letter's centre. */
+/* SYNAPSE fades from gold to ember one solid colour per letter. A
+   gradient clipped to the text is painted as a mask, which came out a
+   pixel short beside the solid EVE and vanished in WebKit under a
+   transformed ancestor. */
 .wm-syn > span:nth-child(1) { color: #ffc36c; }
 .wm-syn > span:nth-child(2) { color: #ffa551; }
 .wm-syn > span:nth-child(3) { color: #ff8835; }
@@ -311,10 +281,8 @@ header .who {
   text-align: right;
 }
 
-/* --- primary nav: a short row of category branches. Each branch
-   is a <details> so it opens by tap with no JavaScript; the branch
-   holding the current page is marked via the .active class (the
-   render pipeline derives it from the page being served). --- */
+/* --- primary nav --- Each branch is a <details>, so it opens with no
+   JavaScript; .active marks the branch holding the current page. */
 header .mainnav {
   padding-top: 0.1rem;
   padding-bottom: 0.45rem;
@@ -381,9 +349,7 @@ header a.navlink.utility { font-size: 0.9em; color: var(--muted); }
 .branch .menu a.active { color: var(--gold); background: rgba(255, 106, 26, 0.18); }
 
 /* --- layout + panels --- */
-/* Fluid width: the container runs nearly the full viewport on
-   wide screens (1560px cap) instead of the old fixed 1100px
-   column, and simply fills narrow ones. */
+/* Fluid width, capped at 1560px. */
 html, body { overflow-x: clip; }
 main {
   max-width: 1560px;
@@ -398,15 +364,10 @@ main {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 2px 14px rgba(0, 0, 0, 0.55);
   padding: 1.25rem 1.25rem 1.5rem;
 }
-/* The Market page's category browser sits inside the page's panel. It
-   is a section of that panel, not a second framed box inside it. */
 .panel.market-browse { background: none; border: 0; box-shadow: none; padding: 0; }
-/* The character sheet's name and portrait: a heading on the page, not
-   a framed box of its own. */
 .panel.char-head { background: none; border: 0; box-shadow: none; padding: 0; }
 /* A link that belongs to a page's title sits in the title bar's right
-   corner, drawn like the sidebar's own links (sign out, theme): the
-   brand ramp on a small sign and its word, no box. */
+   corner, drawn like the sidebar's links. */
 .panel > h1.h-with-action:first-child { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .h-action {
   display: inline-flex;
@@ -425,11 +386,9 @@ main {
 .h-action:hover { color: var(--text-bright); background: rgba(255, 255, 255, 0.04); text-decoration: none; }
 .h-action svg { width: 1.05em; height: 1.05em; }
 .panel > h1:first-child {
-  /* The bar spans the full panel width by design; the gradient
-     rides the title text (an inline span), so the ramp is scoped
-     to the text itself and reads the same on "Sync" as on a long
-     station name. Without the span (it is emitted by every page
-     template) the title simply renders in the plain text color. */
+  /* The gradient rides the title text (an inline span every page
+     template emits), so it reads the same on a short title as a long
+     one. */
   text-shadow: none;
   background: var(--panel-head);
   margin: -1.25rem -1.25rem 1rem;
@@ -440,9 +399,6 @@ main {
   letter-spacing: 0.06em;
   font-size: 1.1rem;
 }
-/* One gradient everywhere: gold at 0%, mid orange at 50%, ember
-   at 100%, always relative to the text's own width — on the
-   wordmark, on h2/h3 (inline-block), and here on the title span. */
 .panel > h1:first-child > .gt {
   background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);
   -webkit-background-clip: text;
@@ -451,9 +407,8 @@ main {
 }
 
 /* --- responsive widget grid + cards (Home, Sync, Intel) --- */
-/* Sibling widgets flow into as many ~350px columns as the width
-   allows and stack to one column on narrow screens, so wide
-   monitors spend width on content instead of empty margins. */
+/* Widgets flow into as many ~350px columns as fit, one column on narrow
+   screens. */
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(350px, 100%), 1fr));
@@ -469,17 +424,9 @@ main {
   border-radius: 4px;
   padding: 0.85rem 1rem 1rem;
 }
-/* v0.3.07.012: shared darker header bands, minus the layered
-   background trick. v0.3.07.010 layered the ember ramp over
-   the band on the heading itself and relied on a two-value
-   per-layer background clip to keep the ramp inside the
-   glyphs; where that clip does not hold, the
-   ramp paints the whole bar and the transparent heading text
-   vanishes into it. Now the band is a solid ::before behind
-   the heading, and the ramp reaches the glyphs only through
-   the plain single-layer gradient-text rule on h2/h3 above —
-   the same configuration the rest of the app already uses.
-   Table headers keep their own rule. */
+/* Darker header bands: a solid ::before behind the heading. Layering
+   the ramp over the band on the heading itself hid the text wherever
+   the per-layer background clip did not hold. */
 .panel > h2, .panel > h3,
 .card > h2:first-child, .card > h3:first-child,
 .foldable > h2:first-child, .foldable > h3:first-child {
@@ -510,14 +457,9 @@ main {
 .panel > h2, .panel > h3 { margin: 1.1rem 0 0.15rem; padding: 0.45rem 0.65rem; border-radius: 3px; }
 .card > h2:first-child, .card > h3:first-child { margin: -0.85rem -1rem 0.75rem; padding: 0.55rem 1rem; border-radius: 4px 4px 0 0; }
 .foldable > h2:first-child, .foldable > h3:first-child { margin: 0 0 0.15rem; padding: 0.45rem 0.65rem; border-radius: 3px; }
-/* v0.3.07.014: module titles paint solid. The .012 band
-   leaned on the h2/h3 gradient-text clip above, and on at
-   least one phone Chrome build the clip does not paint
-   inside these positioned headings — the band renders, the
-   title does not. So the module/card/foldable titles take
-   the palette's solid flare gold (the @supports fallback
-   color) with no clipped background at all; page titles
-   keep the gradient text. */
+/* Module, card and foldable titles are solid gold, not gradient text:
+   on at least one phone Chrome build the text clip does not paint
+   inside these positioned headings. Page titles keep the gradient. */
 .panel > h2, .panel > h3,
 .card > h2:first-child, .card > h3:first-child,
 .foldable > h2:first-child, .foldable > h3:first-child {
@@ -562,29 +504,20 @@ h3 + .tw > table, h3 + table {
 .panel.folded > *:not(h1),
 .card.folded > *:not(:first-child),
 .foldable.folded > *:not(:first-child) { display: none; }
-/* Folded headers sit tight: no bottom border, no bottom margin
-   (matches the unfolded header-to-data tightness). */
 .foldable.folded > h2:first-child, .foldable.folded > h3:first-child {
   border-bottom-width: 0;
   margin-bottom: 0;
 }
 
-/* .foldable sections: the h2/h3 blocks inside a multi-section page
-   panel (Character, Skills, Industry…). Each carries its own fold
-   button in its heading and folds independently; sections listed
-   data-fold="closed" in markup start folded once JS loads (skill
-   categories), and stay plain visible content without JS. */
+/* .foldable sections fold independently by the button in their heading;
+   data-fold="closed" starts one folded once JS loads. Without JS they
+   are plain visible content. */
 .foldable { position: relative; margin-bottom: 1.25rem; }
 .foldable.has-fold > h2:first-child, .foldable.has-fold > h3:first-child { padding-right: 2.2rem; position: relative; }
 
-/* --- buttons ---
-   One look for every button: the ember gradient of the ship-fit
-   tool. A button that carries a class of its own (the fold, drag,
-   nav and fit-tool controls) keeps the styling that class gives
-   it; any plain <button> or submit/button <input> with no class at
-   all falls back to this one instead of the browser default. The
-   plain ones are matched through :where(), so they have no
-   specificity of their own and anything more specific wins. */
+/* --- buttons --- A plain <button> or submit/button <input> with no
+   class gets this look through :where(), which adds no specificity, so
+   a button with a class of its own keeps that class's styling. */
 .btn,
 :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])) {
   display: inline-flex;
@@ -614,8 +547,7 @@ h3 + .tw > table, h3 + table {
   outline: none;
   box-shadow: 0 0 8px rgba(255, 106, 26, 0.55);
 }
-/* Destructive actions (remove a target, delete a plan): the same ember
-   button in the theme's red, so they read as different at a glance. */
+/* Destructive actions: the same button in the theme's red. */
 .btn.btn-danger {
   color: #fff3ec;
   background: linear-gradient(to bottom, #e8664a, #c62f10 55%, #8f1d06) padding-box,
@@ -627,8 +559,6 @@ h3 + .tw > table, h3 + table {
     linear-gradient(135deg, #ffb09a, #c62f10 50%, #6b1604) border-box;
   color: #fff3ec;
 }
-/* A button that cannot be pressed right now (a move-up on the first
-   row, say) reads as inert: dimmed, flat, no pointer. */
 .btn:disabled, .btn[aria-disabled="true"],
 :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])):disabled {
   opacity: 0.4;
@@ -665,10 +595,9 @@ tbody tr { background: var(--row); }
 tbody tr:nth-child(even) { background: var(--row-alt); }
 tbody tr:hover td { background: var(--row-hover); }
 
-/* Portable tables: inside their .tw scroll container, the first
-   column stays pinned while the rest slides beneath it — the row
-   identity is never lost on a narrow screen. Backgrounds are
-   restated per-cell (a pinned cell can't rely on the row's). */
+/* Inside a .tw scroll container the first column stays pinned.
+   Backgrounds are restated per cell: a pinned cell cannot rely on the
+   row's. */
 .tw th:first-child, .tw td:first-child {
   position: sticky;
   left: 0;
@@ -711,18 +640,15 @@ img.portrait {
   letter-spacing: 0.01em;
   color: var(--text-bright);
 }
-/* Larger display numerals only on the home page widgets. */
 .home-grid .isk {
-  /* Just under the 1.1rem panel title: the balance reads as a
-     display numeral without out-shouting the page header. */
   font-size: 1.05rem;
 }
 
 .corp-desc { white-space: pre-line; }
 
 /* --- form inputs + market search suggestions --- */
-/* Text, search and number fields share one look and one height with
-   the buttons beside them (--control-h). */
+/* Fields share one look and one height (--control-h) with the buttons
+   beside them. */
 input[type="text"], input[type="search"], input[type="number"] {
   background: var(--input-bg);
   border: 1px solid #2a2a2a;
@@ -785,13 +711,12 @@ input[type="text"]:focus, input[type="search"]:focus, input[type="number"]:focus
   text-overflow: ellipsis;
 }
 
-/* --- top banner global search: a quiet box between the wordmark
-   and the sign-in line; it yields width first on small screens. --- */
+/* --- top bar search --- */
 .topsearch { margin: 0; }
 .searchwrap.topsearch-wrap { width: min(20rem, 34vw); }
 .topsearch input { padding: 0.3rem 0.55rem 0.3rem 2rem; font-size: 0.85rem; }
-/* Gradient magnifier parked at the search field's left edge;
-   the input's extra left padding keeps text clear of it. */
+/* The magnifier sits at the field's left edge; the input's left padding
+   keeps text clear of it. */
 .search-glyph {
   position: absolute;
   left: 0.55rem;
@@ -846,9 +771,8 @@ tbody tr.yours td { background: rgba(255, 184, 77, 0.10); }
 
 /* --- footer --- */
 footer {
-  /* 85% opacity with blur (user spec, matching the top bar and
-     sidebar glass treatment); the 85% paint alone is the no-blur
-     fallback. */
+  /* Glass, as on the top bar and sidebar; the paint alone is the
+     no-blur fallback. */
   background: rgba(11, 11, 11, 0.85);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
@@ -882,14 +806,11 @@ footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
   header nav { padding-left: 0.6rem; padding-right: 0.6rem; }
   header .mainnav { gap: 0.15rem; }
   .wordmark { letter-spacing: 0.125em; font-size: 1rem; }
-  /* On narrow screens an open branch drops as a full-width bar
-     beneath the header instead of a floating dropdown: the branch
-     stops being the menu's positioning context, so the menu spans
-     the header (its nearest positioned ancestor). */
+  /* On narrow screens an open branch is a full-width bar beneath the
+     header: the branch stops being the menu's positioning context, so
+     the menu spans the header. */
   .branch { position: static; }
   .branch .menu { left: 0; right: 0; top: 100%; min-width: 0; }
-  /* Bigger, unmistakable tap targets on small screens, and the
-     open branch reads as a pressed tab rather than a color shift. */
   .topbar { flex-wrap: wrap; }
   header a.navlink, .branch > summary { padding: 0.5rem 0.65rem; }
   .branch .menu { padding: 0.4rem; }
@@ -899,18 +820,14 @@ footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
   th, td { padding: 0.35rem 0.45rem; }
 }
 
-/* --- header character switcher + /characters/ page (Phase 1A) ---
-   The switcher is a nav .branch living in the topbar; its menu
-   right-aligns to the bar's edge instead of the left. Portrait
-   chips align with the text they label. */
+/* --- header character switcher + /characters/ page --- The switcher is
+   a nav .branch in the top bar; its menu aligns to the bar's right
+   edge. */
 .switcher .menu { left: auto; right: 0; min-width: 15rem; }
 .switcher .menu a { display: flex; align-items: center; gap: 0.5rem; }
 .portrait { border-radius: 3px; vertical-align: middle; }
 
-/* --- Phase 1B home overview widgets ---
-   The widget grid is the standard .grid/.card vocabulary; only
-   the fleet table, attention list and customize rows need their
-   own rules. */
+/* --- Home overview widgets --- */
 .home-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 .fleet-tools { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
 .fleet-tools input[type="search"] { background: var(--row); color: var(--text); border: 1px solid #333; padding: 0.4rem 0.6rem; border-radius: 3px; }
@@ -927,9 +844,8 @@ footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
 .cust-actions form { margin: 0; }
 .cust-actions button, .cust-row > form button { font: inherit; cursor: pointer; }
 
-/* --- widget settings (orders scope): a quiet inline form at the
-   top of the card. Selects follow the input palette; the button
-   is the no-JS path (app.js submits on change). --- */
+/* --- widget settings --- The button is the no-JS path (app.js submits
+   on change). */
 .widget-scope { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; margin: 0 0 0.5rem; }
 .widget-scope select {
   background: var(--input-bg);
@@ -944,11 +860,9 @@ html[data-theme="light"] .widget-scope select {
 }
 .widget-scope select:focus { border-color: var(--accent); outline: none; }
 
-/* --- home customize mode: drag handles, × removal, add-module
-   pop-up. All three controls are inserted by app.js on the
-   customize view only; the raw markup carries the plain
-   add/remove + move forms (in the noscript module list), so
-   nothing here is load-bearing without JavaScript. --- */
+/* --- home customize mode --- The drag handles, × and add-module
+   pop-up are inserted by app.js; without it the noscript module list
+   carries plain forms. */
 .home-actions form { margin: 0; }
 .draghandle {
   touch-action: none;
@@ -966,9 +880,7 @@ html[data-theme="light"] .widget-scope select {
   margin-right: 0.45rem;
 }
 .draghandle:active { cursor: grabbing; }
-/* The lifted card: fully opaque in its real panel colors, fixed
-   to the viewport at its true size, ember glow and a deep
-   shadow. Nothing behind it can bleed through. */
+/* The lifted card: opaque, fixed to the viewport at its true size. */
 .card.dragging {
   position: fixed;
   margin: 0;
@@ -979,23 +891,19 @@ html[data-theme="light"] .widget-scope select {
   box-shadow: 0 16px 38px rgba(0, 0, 0, 0.72), 0 0 14px rgba(255, 106, 26, 0.55);
   transform: scale(1.01);
 }
-/* Drop settle: the card glides from the pointer into its solved
-   slot — position, and size when the solver gives it a different
-   span there — then JS swaps it into the DOM. */
+/* Drop settle: the card glides into its solved slot, then JS swaps it
+   into the DOM. */
 .card.drag-settle { transition: left 170ms ease, top 170ms ease, width 170ms ease, height 170ms ease, transform 170ms ease; }
-/* The placeholder holds the dragged card's slot for the whole
-   drag, wearing the span class the solver assigns the card at
-   the hovered position and the card's own height — so the grid
-   underneath is always the solved final layout, never collapsed. */
+/* The placeholder holds the dragged card's slot, with the span class
+   and height the solver gives the card there, so the grid underneath is
+   always the solved layout. */
 .drag-placeholder {
   background: rgba(255, 106, 26, 0.08);
   border: 1px dashed #6b3410;
   box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.45);
 }
-/* The home grid engine: the server solves every module's column
-   span (see solveHomeSpans) and the CSS only applies it. Six
-   columns on desktop; cards in a row stretch to equal height,
-   content top-aligned by block flow. */
+/* The home grid: the server solves each module's column span
+   (solveHomeSpans) and the CSS only applies it. Six columns on desktop. */
 .grid.home-grid {
   grid-template-columns: repeat(6, minmax(0, 1fr));
   align-items: stretch;
@@ -1004,14 +912,13 @@ html[data-theme="light"] .widget-scope select {
 .grid.home-grid > .span3 { grid-column: span 3; }
 .grid.home-grid > .span6 { grid-column: span 6; }
 .grid.home-grid > .card { min-width: 0; }
-/* Phones: two columns — wide modules own a row, flex modules
-   pair two-up, a lone flex module stretches across both. */
+/* Phones: two columns. */
 @media (max-width: 719px) {
   .grid.home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grid.home-grid > .span3 { grid-column: span 1; }
   .grid.home-grid > .span6 { grid-column: span 2; }
 }
-/* Very small screens: a single column, everything full width. */
+/* Very small screens: one column. */
 @media (max-width: 339px) {
   .grid.home-grid { grid-template-columns: minmax(0, 1fr); }
   .grid.home-grid > .span3, .grid.home-grid > .span6 { grid-column: span 1; }
@@ -1043,8 +950,7 @@ html[data-theme="light"] .widget-scope select {
 }
 .legend-price { height: 2px; background: #ffb84d; }
 .legend-volume { background: #d63c14; }
-/* Net worth chart: the two bands and the total line, in the colours the
-   chart draws them in (see home_networth_chart.go). */
+/* Net worth chart colours (see home_networth_chart.go). */
 .legend-isk { background: #ffb84d; opacity: 0.9; }
 .legend-assets { background: #ff6a1a; opacity: 0.9; }
 .legend-total { height: 2px; background: #ffd27a; }
@@ -1101,10 +1007,8 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
 @media (prefers-reduced-motion: reduce) {
   .card.drag-settle { transition: none; }
 }
-/* The × and the resize toggle live in the card heading, like the
-   fold button, and centre on it the same way (top 50% and a
-   half-height lift), so all three line up whatever height the
-   heading has. */
+/* The × and the resize toggle centre on the card heading like the fold
+   button, so all three line up at any heading height. */
 .cardremove {
   position: absolute;
   top: 50%;
@@ -1124,8 +1028,6 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
   cursor: pointer;
 }
 .cardremove:hover { color: var(--text-bright); border-color: var(--danger); }
-/* The half/full resize toggle sits left of the × on flex
-   modules; the heading leaves room for all three controls. */
 .cardspan {
   position: absolute;
   top: 50%;
@@ -1149,9 +1051,7 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
 .home-custom.has-controls .card > h2:first-child, .home-custom.has-controls .card > h3:first-child { padding-right: 4.6rem; position: relative; }
 .home-custom.has-controls .card.has-spanbtn > h2:first-child, .home-custom.has-controls .card.has-spanbtn > h3:first-child { padding-right: 6.6rem; }
 
-/* Add-module pop-up: solid Dominion panel over a dimmed page,
-   dismissed by its close button, a tap on the backdrop, or
-   Escape (wired in app.js). */
+/* Add-module pop-up; closing is wired in app.js. */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -1209,8 +1109,7 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
 .modal-item small { display: block; margin-top: 0.15rem; }
 .modal-empty { margin: 0.5rem 0 0; }
 
-/* Live-region loading indicator: an ember ring while a section
-   fills itself in. Reduced motion leaves the ring still. */
+/* Live-region loading ring. Reduced motion leaves it still. */
 .loading-pulse {
   display: inline-block;
   width: 13px;
@@ -1229,10 +1128,8 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
   .loading-pulse { animation: none; }
 }
 
-/* Top-banner page-sync indicator: shows only while this page
-   still has data on the way (the count of names, descriptions,
-   or history the page asked for). It says nothing about
-   background sync — that lives on the Sync page. */
+/* Page-sync indicator: shown only while this page still has data on the
+   way. Background sync is the Sync page's. */
 .page-sync {
   display: inline-flex;
   align-items: center;
@@ -1242,15 +1139,10 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
 }
 .page-sync[hidden] { display: none; }
 
-/* v0.3.07 navigation shell and phone layout. The wallpaper stays
-   on the dedicated body::before layer above; navigation lives in
-   a left sidebar on wide screens and in an off-canvas drawer on
-   small screens. Content panels remain opaque. */
-/* Wide screens: the top bar is a fixed full-width strip across
-   the very top (wordmark in its left corner, cluster at the
-   right), and the sidebar hangs below it — its top edge offset
-   by the bar height in expanded, rail, and hidden states alike,
-   so the bar never moves, resizes, or gets covered. */
+/* --- navigation shell --- A left sidebar on wide screens, an
+   off-canvas drawer on small ones. */
+/* Wide screens: the top bar is fixed across the top and the sidebar
+   hangs below it, offset by the bar's height in every nav state. */
 body {
   display: grid;
   grid-template-columns: 15.5rem minmax(0, 1fr);
@@ -1283,11 +1175,8 @@ html[data-nav="hidden"] body { grid-template-columns: 0 minmax(0, 1fr); }
   height: calc(100vh - 3.75rem - 1px);
   height: calc(100dvh - 3.75rem - 1px);
   min-width: 0;
-  /* v0.3.07.010: the sidebar takes the top bar's glass
-     treatment (user ask) — same recipe, its own colors kept:
-     the #151515 → #111111 paint at 90% over a backdrop blur.
-     Rail flyouts and content panels stay solid; the 93% paint
-     alone is the no-blur fallback. */
+  /* Glass, as on the top bar. Rail flyouts and content panels stay
+     solid. */
   background: linear-gradient(rgba(21, 21, 21, 0.9), rgba(17, 17, 17, 0.9)) padding-box;
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
@@ -1299,12 +1188,9 @@ html[data-nav="hidden"] .sidebar {
   overflow: hidden;
   border-right-color: transparent;
 }
-/* v0.3.07.011: wide nav state changes glide instead of
-   snapping. The head script applies any saved state before
-   first paint; app.js adds .nav-motion-ready only after that
-   initial layout has had frames to land, so a refresh or
-   navigation into a saved rail/hidden state never sweeps in.
-   The drawer below already slides on its own transform. */
+/* Nav state changes glide. app.js adds .nav-motion-ready only after the
+   saved state has been laid out, so a page load into a saved rail or
+   hidden state does not animate. */
 @media (min-width: 861px) {
   html.nav-motion-ready body {
     transition: grid-template-columns 180ms ease-out;
@@ -1361,12 +1247,8 @@ html[data-nav="hidden"] .sidebar {
   cursor: pointer;
   font: inherit;
 }
-/* v0.3.07.007: the glyph-only controls (collapse / hide /
-   drawer close / expand-all) float bare — gradient sign, no
-   resting box. The border stays on the box at full width but
-   transparent, so the footprint never shifts. The labeled Menu
-   button that brings a hidden navigation back (.nav-reopen) floats
-   bare the same way: its hover tint is its only box. */
+/* Glyph-only controls and the Menu button have no resting box. The
+   border stays, transparent, so the footprint never shifts. */
 .nav-state-btn,
 .nav-reopen,
 .nav-drawer-close,
@@ -1377,10 +1259,8 @@ html[data-nav="hidden"] .sidebar {
 html.js .nav-state-btn { display: inline-flex; }
 html.js .nav-expand-btn { display: inline-flex; }
 html.js[data-nav="hidden"] .nav-reopen { display: inline-flex; }
-/* Expand-all uses drawn SVG signs inside the same family box
-   as its chevron / close siblings — plus while any category is
-   closed, minus once all are open (the script keeps
-   aria-expanded truthful, including hand-toggled categories). */
+/* Expand-all: plus while any category is closed, minus once all are
+   open (app.js keeps aria-expanded true to it). */
 .nav-control-svg {
   display: block;
   flex: none;
@@ -1396,7 +1276,6 @@ html.js[data-nav="hidden"] .nav-reopen { display: inline-flex; }
 #nav-collapse .nav-control-svg { transition: transform 0.15s ease; }
 html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
 .nav-reopen:hover { color: var(--text-bright); background: rgba(255, 106, 26, 0.14); }
-/* Glyph controls get feedback as a faint wash, not a box. */
 .nav-state-btn:hover,
 .nav-drawer-close:hover,
 .nav-expand-btn:hover {
@@ -1443,9 +1322,8 @@ html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
   line-height: 1;
   text-align: center;
 }
-/* Every category icon is drawn in the same slot and painted
-   with the brand ramp from the shared gradient def; the ember
-   fill/stroke here is the fallback if gradient paint fails. */
+/* Category icons are painted with the shared gradient def; the
+   fill/stroke here is the fallback. */
 .nav-icon svg {
   display: block;
   width: 1.05em;
@@ -1455,22 +1333,15 @@ html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
   stroke: #ffb84d;
 }
 .nav-icon svg[hidden] { display: none; }
-/* Theme toggle icons swap via data-theme (head script sets this before
-   first paint, so no flash of both icons). */
-/* Theme toggle icons: CSS is the single source of truth (v0.3.32.007).
-   Dark is the default: show sun (click to go light), hide moon.
-   In light mode: show moon (click to go dark), hide sun.
-   The default rule names the html element so that it outranks
-   ".nav-icon svg { display: block }" above: as a bare class it lost
-   to that rule, and a visitor who had never picked a theme (no
-   data-theme attribute yet) saw both icons until the first click. */
+/* Theme toggle icons: dark shows the sun, light shows the moon. The
+   default rule names the html element so it outranks ".nav-icon svg {
+   display: block }"; as a bare class it lost, and both icons showed
+   until a theme was picked. */
 html:not([data-theme="light"]) .theme-icon-moon { display: none; }
 html[data-theme="light"] .theme-icon-sun { display: none; }
 html[data-theme="light"] .theme-icon-moon { display: block; }
 html[data-theme="dark"] .theme-icon-moon { display: none; }
 html[data-theme="dark"] .theme-icon-sun { display: block; }
-/* On the ember active pill the icons get a slightly brighter
-   sweep so they never go muddy. */
 .sidebar .branch.active > summary .nav-icon svg,
 .sidenav a.navlink.active .nav-icon svg {
   filter: brightness(1.15);
@@ -1533,20 +1404,17 @@ html[data-theme="dark"] .theme-icon-sun { display: block; }
 }
 .sidebar-account .branch .menu { margin-left: 0; }
 .sidebar-account.has-character .sidebar-character { display: none; }
-/* With a signed-in character the block is empty on wide screens
-   (the character lives in the top bar), so it draws no rule and
-   takes no share of the free space: it used to leave a line
-   floating mid-sidebar and push the footer off the bottom. The
-   phone drawer shows the block again (see its media query). */
+/* With a signed-in character this block is empty on wide screens (the
+   character is in the top bar), so it draws no rule and takes no space.
+   The phone drawer shows it again. */
 .sidebar-account.has-character { margin-top: 0; padding: 0; border-top: 0; }
 .sidebar-signout {
   display: inline-flex;
   margin-top: 0.45rem;
   color: var(--success);
 }
-/* Sign-out is a form button (it changes state, so it is a POST),
-   dressed as the nav link it replaced. The form itself takes no
-   box of its own in the footer's column. */
+/* Sign-out is a form button (a POST) dressed as a nav link; the form
+   takes no box of its own. */
 .sidebar-signout-form { display: contents; }
 button.sidebar-signout {
   background: transparent;
@@ -1575,13 +1443,8 @@ html[data-nav="rail"] .sidebar .branch > summary {
   padding-right: 0.25rem;
   padding-left: 0.25rem;
 }
-/* Rail-mode icon tooltips: pointing at an icon reveals its name in a
-   themed label to the right of the rail, after a short beat so one
-   sweeping across the column does not flicker through every name.
-   (The labels used to wait 2s, and the category icons never showed
-   one at all: the tooltip drew on ::after, which the rail hides on
-   categories to drop their caret. ::before is free.) The browser's
-   own title tooltip is not used on these, so only this one shows. */
+/* Rail-mode icon tooltips, shown after a short beat. Drawn on ::before:
+   the rail hides ::after on categories to drop their caret. */
 @media (min-width: 861px) and (hover: hover) {
   html[data-nav="rail"] .sidenav [data-tip],
   html[data-nav="rail"] .sidebar-account-footer [data-tip] {
@@ -1637,13 +1500,9 @@ html[data-nav="rail"] .sidebar .branch .menu {
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
 }
 html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
-/* Rail flyout discipline: a closed category never paints a
-   panel, and the active-section pill (dark fill, ember left
-   bar) belongs to the current page's category alone. A merely
-   open flyout gets a faint ember wash instead, so a rail full
-   of categories left open in the wide sidebar stops looking
-   like every section is current at once. Wide screens only —
-   the drawer below keeps its expanded-style presentation. */
+/* In the rail a closed category paints no panel, and only the current
+   page's category gets the active pill; an open flyout gets a faint
+   wash. Wide screens only. */
 @media (min-width: 861px) {
   html[data-nav="rail"] .sidebar .branch:not([open]) > .menu { display: none; }
   html[data-nav="rail"] .sidebar .branch[open]:not(.active) > summary {
@@ -1664,9 +1523,7 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
   display: inline-flex;
   align-items: center;
 }
-/* A slim ember divider between the logo and the wordmark text: the
-   same 1px rule, colour and height as the one beside the character
-   portrait, centred on the bar. */
+/* A 1px divider between the logo and the wordmark text. */
 .topbar-wordmark > span {
   position: relative;
   padding-left: 0.75rem;
@@ -1681,17 +1538,11 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
   transform: translateY(-50%);
   background: rgba(255, 106, 26, 0.25);
 }
-/* The logo's centre sits on the same vertical axis as the nav icons
-   below it. The axis is where the icons are, which depends on the
-   nav state: expanded = the sidebar's 0.55rem padding + the link's
-   0.55rem padding + half of the 1.35rem icon; icon-only = the middle
-   of the 5rem rail (less its 1px edge). The logo is a 1.75rem square,
-   so half its width is 0.875rem; the top bar pads 1rem on the left.
-   Icon-only, the divider after the logo also stands exactly on the
-   rail's right edge (the 1px border that ends at 5rem), so the two
-   lines meet: the logo's right side is at the axis + 0.875rem, and
-   its margin covers the rest of the way. Phones (drawer) and a
-   hidden nav keep the plain padding. */
+/* The logo's centre sits on the nav icons' vertical axis, which moves
+   with the nav state: expanded = the sidebar's and the link's 0.55rem
+   paddings + half the 1.35rem icon; icon-only = the middle of the 5rem
+   rail. Icon-only, the divider after the logo also lands on the rail's
+   right edge. Phones and a hidden nav keep the plain padding. */
 :root { --nav-axis: 1.775rem; }
 html[data-nav="rail"] { --nav-axis: calc(2.5rem - 0.5px); }
 @media (min-width: 861px) {
@@ -1738,11 +1589,8 @@ html[data-nav="rail"] { --nav-axis: calc(2.5rem - 0.5px); }
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-/* v0.3.07.008: the phone-bar hamburger floats bare like the
-   sidebar glyph controls (the v0.3.07.007 borderless pass
-   covered those; this closes the gap) — no resting box, just
-   the gradient three-line icon on the same footprint, with a
-   faint hover wash for feedback. */
+/* The phone-bar hamburger has no resting box, like the sidebar glyph
+   controls. */
 .nav-hamburger:hover { background: rgba(255, 106, 26, 0.14); }
 .topsearch { flex: 0 1 22rem; margin-left: 0; }
 .searchwrap.topsearch-wrap { flex: 1 1 auto; width: 100%; }
@@ -1786,8 +1634,7 @@ tbody tr.yours td { background-color: #2a2015; }
     pointer-events: auto;
   }
   header { position: sticky; z-index: 90; }
-  /* Drawer form: no backdrop blur over the page underneath
-     (the 93% retained-color paint stays near-solid + crisp). */
+  /* Drawer: no backdrop blur over the page underneath. */
   .sidebar {
     position: fixed;
     top: 0;
@@ -1810,16 +1657,11 @@ tbody tr.yours td { background-color: #2a2015; }
     transition-delay: 0s;
   }
   .sidebar-inner { padding-top: 3.7rem; }
-  /* In drawer mode the navigation is always the full labeled
-     list: the wide-screen rail/hidden choices never leak in,
-     the state toggles make way for a real close control, and
-     branch menus open inline instead of as rail flyouts. */
-  /* The drawer has exactly one close control. The collapse-to-icons
-     and hide toggles belong to the wide sidebar: shown here they were
-     a second × (hide) next to the drawer's own, and a collapse arrow
-     that does nothing useful. The top bar overlays the drawer's first
-     3.7rem (the padding above), so the close sits in the first row
-     beneath it, at the row's right end, with expand-all to its left. */
+  /* In drawer mode the navigation is always the full labeled list, and
+     branch menus open inline. */
+  /* The drawer has one close control; the wide sidebar's collapse and
+     hide toggles are hidden here. The top bar overlays the drawer's
+     first 3.7rem, so the close sits in the first row beneath it. */
   html.js .sidebar .nav-state-btn { display: none; }
   .sidebar .nav-drawer-close {
     display: inline-flex;
@@ -1890,9 +1732,7 @@ tbody tr.yours td { background-color: #2a2015; }
     font-size: 1rem;
     letter-spacing: 0.125em;
   }
-  /* Phones and the narrow drawer layout: a smaller logo and tighter
-     spacing around it, so the wordmark text can be a readable size
-     and the search box still gets room. */
+  /* Phones and the drawer layout: a smaller logo, tighter spacing. */
   .wordmark-glyph { height: 1.2rem; margin-right: 0.5rem; }
   .topbar-wordmark > span { padding-left: 0.5rem; }
   .topbar-character { display: none; }
@@ -1921,18 +1761,15 @@ tbody tr.yours td { background-color: #2a2015; }
   main { margin: 0.65rem auto; padding: 0 0.6rem; }
   footer { padding: 0 0.6rem 1rem; }
 }
-/* Wide top bar: the wordmark holds the left corner and the
-   page-sync indicator, search and character selector ride the
-   right edge as one group with even gaps. Pushing from the
-   wordmark (rendered on every page) keeps the group pinned
-   whether or not the indicator happens to be showing. */
+/* Wide top bar: wordmark at the left, the indicator, search and
+   character selector as one group at the right. The push comes from the
+   wordmark so the group stays put whether or not the indicator is
+   showing. */
 @media (min-width: 861px) {
   .topbar-wordmark { margin-right: auto; }
   .page-sync { margin-left: 0; }
   .topsearch { flex: 0 1 22rem; }
-  /* v0.3.07.006: a slim ember divider between the search
-     field and the character switcher, centred in the 1rem
-     gap at roughly 60% of the bar height. */
+  /* A 1px divider between the search field and the character switcher. */
   .topbar-character { position: relative; }
   .topbar-character::before {
     content: "";
@@ -1959,11 +1796,8 @@ tbody tr.yours td { background-color: #2a2015; }
   .grid.home-grid > .span6 { grid-column: span 1; }
   .grid { gap: 0.65rem; }
   .card { padding: 0.75rem 0.8rem 0.9rem; }
-  /* The module title bleeds out to the card's edges with negative
-     margins equal to the card's padding. They are sized for the
-     wide padding (0.85rem top, 1rem sides); with the phone padding
-     above they overshot the card by 0.1rem and 0.2rem and painted
-     over its border, so the titles looked borderless. */
+  /* The module title bleeds to the card's edges with negative margins
+     equal to the card's padding; these match the phone padding above. */
   .card > h2:first-child, .card > h3:first-child {
     margin: -0.75rem -0.8rem 0.75rem;
     padding-left: 0.8rem;
@@ -1984,11 +1818,8 @@ tbody tr.yours td { background-color: #2a2015; }
   .sidebar .branch > summary { transition: none !important; }
 }
 
-/* --- market category browser (v0.3.10) ------------------------
-   Top-level market groups and their subgroups as glyph cards.
-   Icons paint from the shared nav gradient; the solid flare
-   gold here is the fallback when gradient paint fails, same as
-   the nav icon set. */
+/* --- market category browser --- The solid gold is the fallback when
+   gradient paint fails. */
 .market-crumbs { margin: 0 0 0.4rem; }
 .market-group-grid {
   display: grid;
@@ -2027,11 +1858,8 @@ tbody tr.yours td { background-color: #2a2015; }
 }
 .market-group-name { min-width: 0; }
 
-/* --- quick jump palette (v0.3.15) -----------------------------
-   Ctrl+K overlay: a solid panel on an opaque surround (the two
-   approved glass surfaces stay the only translucent ones). The
-   ember ramp paints the panel's top edge and the group heads,
-   matching the nav icon family. */
+/* --- quick jump palette --- Ctrl+K overlay: a solid panel on an opaque
+   surround. */
 .quickjump-btn {
   flex: none;
   margin-left: 0.5rem;
@@ -2134,7 +1962,7 @@ body.quickjump-open { overflow: hidden; }
   .quickjump-btn { margin-left: 0.35rem; }
 }
 
-/* --- fitting simulator (v0.3.21) --- */
+/* --- fitting simulator --- */
 .fit-head {
   display: flex;
   flex-wrap: wrap;
@@ -2253,8 +2081,7 @@ html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge 
 .fit-missing > h4 { margin: 0 0 0.4rem; color: var(--danger); }
 .fit-missing ul { margin: 0; padding-left: 1.2rem; }
 /* Visual fitting: ship render with module slots on arcs around it. */
-/* The workbench is the tooltip's positioning context: tooltips
-   anchor to slot icons inside it, never the page header. */
+/* The workbench is the tooltips' positioning context. */
 .fit-wb { position: relative; }
 .fit-visual {
   position: relative;
@@ -2264,7 +2091,6 @@ html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge 
   user-select: none;
   -webkit-user-select: none;
 }
-/* Distinct outer border ring around the whole display, ember. */
 .fit-vring-outer {
   position: absolute;
   left: 50%;
@@ -2277,7 +2103,6 @@ html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge 
   box-shadow: 0 0 18px rgba(255, 106, 26, 0.35), inset 0 0 24px rgba(255, 106, 26, 0.10);
   pointer-events: none;
 }
-/* Bordered per-group arc segments behind the slot ring. */
 .fit-vsegs {
   position: absolute;
   inset: 0;
@@ -2290,7 +2115,6 @@ html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge 
   stroke: rgba(255, 140, 40, 0.55);
   stroke-width: 0.7;
 }
-/* Undo/redo ride the visual's top-right corner, always at hand. */
 .fit-vhistory {
   position: absolute;
   top: 0.45rem;
@@ -2314,8 +2138,6 @@ html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge 
 }
 .fit-vhist:hover:not(:disabled) { border-color: var(--success); color: var(--gold); }
 .fit-vhist:disabled { opacity: 0.3; cursor: default; box-shadow: none; }
-/* The ship is the centerpiece: circular showcase, ember gradient
-   ring and glow — not a square thumbnail. */
 .fit-vship {
   position: absolute;
   left: 50%;
@@ -2337,7 +2159,6 @@ html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge 
   object-fit: cover;
   background: #0a0a0a;
 }
-/* Faint ember ring anchoring the slot circles. */
 .fit-vring {
   position: absolute;
   left: 50%;
@@ -2349,7 +2170,6 @@ html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge 
   border-radius: 50%;
   pointer-events: none;
 }
-/* Ember divider ticks between slot groups, radial on the ring. */
 .fit-vsep {
   position: absolute;
   width: 3px;
@@ -2359,7 +2179,6 @@ html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge 
   box-shadow: 0 0 7px rgba(255, 106, 26, 0.6);
   pointer-events: none;
 }
-/* In-ring group captions, ember gradient text like the titles. */
 .fit-vlabel {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -2396,9 +2215,8 @@ html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge 
 .fit-vslot.filled { border-style: solid; border-color: #6b5a43; }
 .fit-vslot.filled:hover { border-color: var(--accent); }
 .fit-vslot.filled img { width: 84%; height: 84%; border-radius: 50%; pointer-events: none; }
-/* Module states: in-game language. Offline modules go dark and
-   desaturated; online-but-inactive dims slightly; overheated
-   carries an ember glow (never green). */
+/* Module states: offline is dark and desaturated, inactive dims
+   slightly, overheated glows ember. */
 .fit-vslot.st-offline { opacity: 0.55; }
 .fit-vslot.st-offline img { filter: grayscale(1) brightness(0.55); }
 .fit-vslot.st-online img { filter: brightness(0.78); }
@@ -2409,13 +2227,12 @@ html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge 
   box-shadow: 0 0 12px rgba(255, 106, 26, 0.75), inset 0 0 8px rgba(255, 106, 26, 0.35);
   pointer-events: none;
 }
-/* Chip state visuals echo the slot ring. */
 .fit-chip.st-offline { opacity: 0.55; }
 .fit-chip.st-offline .fit-chip-name { filter: grayscale(1); }
 .fit-chip.st-online { opacity: 0.85; }
 .fit-chip.st-overheated { border-color: #ff6a1a; box-shadow: 0 0 8px rgba(255, 106, 26, 0.45); }
-/* Loaded-charge badge: small icon tucked into the slot's corner.
-   Tap it to jump to the weapon's ammunition select. */
+/* Loaded-charge badge in the slot's corner; a tap jumps to the
+   ammunition select. */
 .fit-vslot .fit-vammo {
   position: absolute;
   right: -3px;
@@ -2431,8 +2248,7 @@ html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge 
   padding: 0;
 }
 .fit-vslot .fit-vammo img { width: 100%; height: 100%; pointer-events: none; }
-/* No silent taps: every add/remove flashes its target ember so the
-   eye catches it within a frame of the re-render. */
+/* Every add/remove flashes its target. */
 @keyframes fit-flash {
   0% { box-shadow: 0 0 0 3px rgba(255, 184, 77, 0.95), 0 0 20px rgba(255, 106, 26, 0.85); }
   100% { box-shadow: 0 0 0 0 rgba(255, 184, 77, 0), 0 0 0 rgba(255, 106, 26, 0); }
@@ -2446,17 +2262,14 @@ select.flash { animation: fit-flash 0.7s ease-out; }
   box-shadow: 0 0 10px rgba(255, 184, 77, 0.6);
 }
 .fit-vslot.drag-src { opacity: 0.35; }
-/* Drag highlight: slots the dragged module could fit in glow
-   ember/gold; the rest stay dim. Cleared on drop/dragend. */
+/* Drag highlight: slots the dragged module fits glow; cleared on drop. */
 .fit-vslot.drop-valid {
   border-color: var(--success);
   border-style: solid;
   box-shadow: 0 0 12px rgba(255, 184, 77, 0.55);
 }
 .fit-vslot.drop-dim { opacity: 0.3; }
-/* Module quick-look tooltip: name, slot, meta, CPU/PG. Shown on
-   hover (desktop) or tap (mobile); never navigates. Positioned by
-   JS just outside the slot, away from the ship. */
+/* Module quick-look tooltip, positioned by JS just outside the slot. */
 .fit-tip {
   position: absolute;
   z-index: 60;
@@ -2484,8 +2297,6 @@ select.flash { animation: fit-flash 0.7s ease-out; }
   padding: 0.1rem 0.3rem;
 }
 .fit-tip-x:hover { color: var(--text); }
-/* Tooltip module-state row: only the states this module can
-   take, current one highlighted in ember. */
 .fit-tip-states { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.4rem; }
 .fit-tip-state {
   background: #1c1c1c; border: 1px solid #3a3a3a; border-radius: 3px;
@@ -2540,8 +2351,7 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 }
 .fit-drag-ghost img { width: 88%; height: 88%; border-radius: 50%; }
 .fit-picker-hint { color: var(--muted); font-size: 0.8rem; }
-/* Module search: its own prominent input, sticky above the
-   workbench so it stays visible while fitting. */
+/* Module search: sticky above the workbench. */
 .fit-modsearch {
   position: sticky;
   top: 4.25rem;
@@ -2717,28 +2527,19 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 }
 #fit-undo:disabled, #fit-redo:disabled { opacity: 0.35; cursor: default; }
 
-/* ============================================================
-   v0.3.30: wide-screen fitting workbench.
-   At >=1100px the workbench becomes a 3-column grid: module
-   text lists LEFT, ship ring CENTER, stats panel RIGHT — all at
-   the same height so stat changes read in real time without
-   scrolling. .fit-cols flattens via display:contents so its
-   children (.fit-slots, .fit-stats) become direct grid items
-   alongside .fit-visual. When no ship is picked (.fit-visual
-   absent), .fit-slots and .fit-stats take columns 1 and 3.
-   Below 1100px the stacked layout is untouched.
-   ============================================================ */
+/* --- wide-screen fitting workbench --- At >=1100px a 3-column grid:
+   module lists, ship ring, stats. .fit-cols flattens via display:
+   contents so its children join the grid; with no ship picked, the
+   lists and stats take columns 1 and 3. */
 @media (min-width: 1100px) {
   .fit-wb {
     display: grid;
-    /* Issue 18: the module lists column is capped so it can't hog
-       horizontal space and push the stats panel far right; the ship
-       and stats share whatever remains. */
+    /* The module lists column is capped so it cannot push the stats
+       panel far right. */
     grid-template-columns: minmax(15rem, 22rem) minmax(20rem, 1.35fr) minmax(17rem, 1fr);
     gap: 1.25rem;
     align-items: start;
   }
-  /* Flatten the wrapper so its children join the grid. */
   .fit-wb > .fit-cols { display: contents; }
   .fit-wb > .fit-visual {
     grid-column: 2;
@@ -2750,27 +2551,20 @@ select.flash { animation: fit-flash 0.7s ease-out; }
   }
   .fit-wb > .fit-cols > .fit-slots { grid-column: 1; grid-row: 1; }
   .fit-wb > .fit-cols > .fit-stats { grid-column: 3; grid-row: 1; }
-  /* No ship picked yet: no empty middle column — the stats
-     panel stretches over columns 2-3. */
+  /* No ship picked: the stats panel spans columns 2-3. */
   .fit-wb:not(:has(> .fit-visual)) > .fit-cols > .fit-stats { grid-column: 2 / 4; }
 }
 
-/* ============================================================
-   v0.3.30: light theme.
-   All page theming flows through the :root variables, so the
-   light theme is a variable re-skin plus overrides for the
-   handful of surfaces painted with hardcoded dark colors.
-   Ember/gold accents are kept; positive states stay gold —
-   never green. The explicit toggle (documentElement[data-theme])
-   wins; with no explicit choice the OS prefers-color-scheme
-   decides (media query below).
-   ============================================================ */
+/* --- light theme --- A re-skin of the :root variables plus overrides
+   for surfaces painted with hardcoded dark colours. The toggle
+   (data-theme) wins; with no choice made the OS preference decides
+   (media query below). */
 html[data-theme="light"] {
   color-scheme: light;
   --text: #2a241d;
   --text-bright: #20180e;
-  /* Deep ember, not the dark theme's neon: #ff6a1a on #f4f1ea is
-     ~2.5:1 (unreadable links); this is ~4.9:1, past AA's 4.5. */
+  /* Deep ember: #ff6a1a on #f4f1ea is ~2.5:1; this is ~4.9:1, past AA's
+     4.5. */
   --accent: #b0490a;
   --success: #a86f14;   /* positive = deep gold, never green */
   --danger: #b02a0d;
@@ -2788,7 +2582,7 @@ html[data-theme="light"] {
 html[data-theme="light"] body { background: #f4f1ea; }
 html[data-theme="light"] body::before { display: none; }
 
-/* v0.3.33: Faction themes (EVE-Nexus pattern). Each overrides the
+/* Faction themes. Each overrides the
    accent/gold variables; the base dark palette stays. */
 html[data-theme="amarr"] {
   --accent: #ffd75e;
@@ -2917,8 +2711,7 @@ html[data-theme="light"] .fit-tip-name { color: #fff6e6; }
 html[data-theme="light"] .fit-tip-sub,
 html[data-theme="light"] .fit-tip-stats { color: #b39a7d; }
 
-/* v0.3.31.007: comprehensive light-mode surface overrides — every
-   hardcoded dark background gets a light counterpart. */
+/* Light counterparts for the remaining hardcoded dark backgrounds. */
 html[data-theme="light"] .branch .menu a:hover { background: #f0e7d2; color: #20180e; }
 html[data-theme="light"] .suggest { background: #fdfbf6; border-color: #d9cfba; }
 html[data-theme="light"] .suggest li.sel { background: #f0dfbc; }
@@ -2941,10 +2734,8 @@ html[data-theme="light"] .drag-placeholder { background: #f0e7d2; }
 html[data-theme="light"] tbody tr.yours td { background-color: #f3e3bd; }
 
 
-/* ============================================================
-   v0.3.31: theme toggle + sign out footer.
-   Bottom-of-menu icon buttons that stay visible in rail mode.
-   ============================================================ */
+/* --- theme toggle + sign out footer --- Icon buttons that stay visible
+   in rail mode. */
 .sidebar-account-footer {
   margin-top: auto;
   padding-top: 0.5rem;
@@ -2989,10 +2780,7 @@ html[data-theme="light"] tbody tr.yours td { background-color: #f3e3bd; }
 /* Shown by app.js only once the browser says the site can be installed. */
 #install-app[hidden] { display: none; }
 
-/* ============================================================
-   v0.3.32: character selector dropdown.
-   Searchable dropdown replacing the horizontal character link list.
-   ============================================================ */
+/* --- character selector dropdown --- */
 .charselector {
   position: relative;
   max-width: 24rem;
@@ -3061,22 +2849,15 @@ html[data-theme="light"] .charselector-option {
   border-bottom-color: rgba(0,0,0,0.05);
 }
 
-/* ============================================================
-   v0.3.32.004: light-mode sidebar separators.
-   The utility/account section borders were hardcoded dark.
-   ============================================================ */
+/* --- light-mode sidebar separators --- */
 html[data-theme="light"] .sidenav-utility,
 html[data-theme="light"] .sidebar-account {
   border-top-color: #d9cfba;
 }
 
-/* ============================================================
-   v0.3.35: in-game 5-box skill level indicators.
-   Five small squares per skill: filled light for trained levels,
-   gold when fully trained to V, blue-pulsing for the level
-   currently training, darker blue for queued levels, dark for
-   untrained. No green anywhere.
-   ============================================================ */
+/* --- skill level boxes --- Five squares per skill: light for trained,
+   gold at V, pulsing blue for the level in training, darker blue for
+   queued, dark for untrained. */
 .lvl {
   display: inline-flex;
   gap: 2px;
@@ -3131,10 +2912,9 @@ html[data-theme="light"] .lvl i.queued { background: #7fa3c4; border-color: #5f8
   max-width: 60vw;
 }
 
-/* --- small utilities that replaced inline style attributes ---
-   The Content-Security-Policy allows no style="…", so these live
-   here; per-row numbers (a bar's width, a slot's position, an
-   indent) ride data-* attributes that app.js applies. */
+/* --- utilities that stand in for inline styles --- The
+   Content-Security-Policy allows no style="…"; per-row numbers ride
+   data-* attributes that app.js applies. */
 form.inline-form { display: inline; }
 .meter { background: #241407; height: 8px; max-width: 420px; }
 .meter > span {
@@ -3143,10 +2923,8 @@ form.inline-form { display: inline; }
   background: linear-gradient(90deg, #ffd27a, #ff6a1a 55%, #d63c14);
 }
 
-/* --- skill planner ---
-   The levels a plan trains are shaded in the ember accent beside the
-   levels already trained (white, gold at V), so a row reads as
-   "here is where you are, here is where this plan takes you". */
+/* --- skill planner --- The levels a plan trains are shaded ember
+   beside the levels already trained. */
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -3173,8 +2951,6 @@ html[data-theme="light"] .lvl i.plan { background: linear-gradient(to bottom, #f
 .plan-covered td { color: var(--muted); }
 .plan-covered td:nth-child(2) { padding-left: 0; }
 
-/* The move and remove controls: small square themed buttons with an
-   icon, not the default browser button. */
 .plan-btn {
   display: inline-flex;
   align-items: center;
@@ -3198,8 +2974,7 @@ html[data-theme="light"] .plan-btn { border-color: #b8ad96; }
 .plan-live .notice { margin: 0.4rem 0; }
 #plan-body:focus { outline: none; }
 
-/* The plan picker: every saved plan as a row you can open, with what is
-   left to train in it; the search above narrows the list as you type. */
+/* The plan picker: saved plans as rows, narrowed by the search above. */
 .plan-find { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.4rem 0 0.7rem; }
 .plan-find .searchwrap { flex: 1 1 14rem; max-width: 24rem; }
 .plan-list { list-style: none; margin: 0 0 0.9rem; padding: 0; border: 1px solid #060606; background: var(--row); }
@@ -3230,16 +3005,14 @@ html[data-theme="light"] .plan-btn { border-color: #b8ad96; }
 .plan-name { overflow-wrap: anywhere; }
 .plan-meta { color: var(--muted); }
 .plan-open:focus-visible { outline: none; box-shadow: 0 0 8px rgba(255, 106, 26, 0.55); }
-/* Asking "delete this plan?" takes the row over: the question and its
-   two buttons stand where the plan's name was. */
+/* The delete confirmation takes the row over. */
 .plan-confirm { flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0; }
 .plan-item.is-confirming .plan-open, .plan-item.is-confirming > .plan-btn { display: none; }
 html[data-theme="light"] .plan-list { border-color: #b8ad96; }
 html[data-theme="light"] .plan-item { border-top-color: #d9d2c2; }
 
-/* --- assets: what is inside a ship or container ---
-   The contents open beneath their container's row, indented, in a
-   table of their own that follows the same columns. */
+/* --- assets: what is inside a ship or container --- Contents open
+   beneath the container's row, indented. */
 #assets-search { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0 0 0.35rem; }
 .assets-only { display: inline-flex; align-items: center; gap: 0.35rem; }
 tr.asset-inside > td { padding: 0 0 0 1.25rem; border-top: 0; }
@@ -3250,9 +3023,8 @@ tr.asset-inside table { margin: 0; border: 0; border-left: 2px solid #2a1a0c; }
 tr.asset-inside p { margin: 0.25rem 0.6rem 0.5rem; }
 html[data-theme="light"] tr.asset-inside table { border-left-color: #d8cdb8; }
 
-/* --- notifications: the top-bar icon and its short list ---
-   A <details>, so it opens and closes with no script. The icon is
-   dim until something is unread; the count sits on its corner. */
+/* --- notifications: the top-bar icon and its list --- A <details>, so
+   it opens with no script. */
 .notify { position: relative; flex: none; }
 .notify > summary {
   list-style: none;
@@ -3332,9 +3104,8 @@ html[data-theme="light"] .notify-all { border-top-color: #e4dac6; }
 #push-panel .btn + .btn { margin-left: 0.4rem; }
 #push-status { margin: 0 0 0.6rem; }
 
-/* --- calendar: the month grid, and the op pages ---
-   One grid for both kinds of entry. Ops (the corporation's, planned
-   here) carry the ember edge; in-game events a quieter one. */
+/* --- calendar: the month grid, and the op pages --- Ops carry the
+   ember edge; in-game events a quieter one. */
 .cal-head { display: flex; align-items: center; gap: 0.5rem; margin: 0.75rem 0 0.5rem; }
 .cal-title { min-width: 9rem; text-align: center; font-size: 1.05rem; }
 .cal-new { margin-left: auto; }
@@ -3376,8 +3147,8 @@ td.cal-day:hover .cal-add, .cal-add:focus-visible { opacity: 1; }
 .op-manage { display: flex; gap: 0.5rem; margin: 0.5rem 0 1rem; }
 .op-answers label { margin-right: 1rem; }
 
-/* The fields the op forms add take the look and height of the others.
-   Scoped to these forms: the fitting tool's dropdowns keep their own. */
+/* Scoped to the op forms: the fitting tool's dropdowns keep their own
+   look. */
 input[type="datetime-local"], .op-form select, .op-signup select, .notify-minutes select, .op-form textarea {
   background: var(--input-bg);
   border: 1px solid #2a2a2a;
@@ -3404,12 +3175,9 @@ html[data-theme="light"] input[type="datetime-local"], html[data-theme="light"] 
 .cal-new + .cal-paps { margin-left: 0; }
 .op-ticks label { display: flex; align-items: center; gap: 0.4rem; margin: 0.15rem 0; }
 
-/* The notification list opens and closes with the navigation's own
-   motion: 180ms ease-out, fading as it settles into place (the same
-   timing and quarter-rem travel as the nav labels). app.js adds
-   .is-open a frame after the <details> opens and takes it away before
-   closing, so both directions are animated; without script the list
-   simply appears. */
+/* The list opens and closes with the nav's motion. app.js adds .is-open
+   a frame after the <details> opens and removes it before closing;
+   without script the list simply appears. */
 html.js .notify-menu {
   opacity: 0;
   transform: translateY(-0.25rem);
@@ -3422,8 +3190,7 @@ html.js .notify.is-open .notify-menu {
 @media (prefers-reduced-motion: reduce) {
   html.js .notify-menu { transition: none; }
 }
-/* The character switcher in the top bar opens and closes the same way
-   (app.js adds and removes .is-open on it). */
+/* The character switcher opens and closes the same way. */
 html.js .topbar-switcher .menu {
   opacity: 0;
   transform: translateY(-0.25rem);
@@ -3436,10 +3203,8 @@ html.js .topbar-switcher.is-open .menu {
 @media (prefers-reduced-motion: reduce) {
   html.js .topbar-switcher .menu { transition: none; }
 }
-/* Phones: the icon sits near the left of the bar there, so a list
-   hung from the icon's right edge ran off the left of the screen.
-   The list hangs from the bar itself instead, edge to edge, and
-   scrolls if it is taller than the screen. */
+/* Phones: the list hangs from the bar, edge to edge, and scrolls if
+   taller than the screen. */
 @media (max-width: 860px) {
   .notify { position: static; }
   .notify-menu {
@@ -3453,10 +3218,7 @@ html.js .topbar-switcher.is-open .menu {
   }
 }
 
-/* --- Sync and Admin: figures and lookups ---
-   Figures sit in small two-column tables (what it is, its value),
-   several side by side where there is room and stacked where there is
-   not. The lookup is the standard search box with its suggestions. */
+/* --- Sync and Admin: figures and lookups --- */
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
@@ -3474,9 +3236,7 @@ table.stat-table td { vertical-align: top; }
 .lookup-matches li { margin: 0.15rem 0; }
 .scope-details summary { cursor: pointer; white-space: nowrap; }
 .scope-list { margin: 0.3rem 0 0; padding-left: 1.1rem; font-size: 0.85em; color: var(--muted); }
-/* "Connect Discord": Discord's own colour and mark, so the button is
-   recognised for what it leads to before it is read. Everything else
-   about it is the standard button. */
+/* "Connect Discord": Discord's colour and mark on the standard button. */
 .btn.btn-discord {
   gap: 0.5rem;
   white-space: nowrap;
@@ -3493,12 +3253,9 @@ table.stat-table td { vertical-align: top; }
 html[data-theme="light"] .btn.btn-discord,
 html[data-theme="light"] .btn.btn-discord:hover { color: #fff; }
 
-/* --- notification settings: a kind's characters ---
-   The character selector's look (charselector), holding a tick box
-   per character instead of links: the field shows how many
-   characters the kind is on for and filters the list as you type.
-   app.js opens and filters it; without script the list is simply
-   shown in full under the field's place. */
+/* --- notification settings: a kind's characters --- The charselector
+   look with a tick box per character. Without script the list is shown
+   in full. */
 .tw.notify-settings-wrap { overflow: visible; }
 table.notify-settings td { vertical-align: middle; }
 .checkselector { margin: 0; max-width: 22rem; }
@@ -3515,11 +3272,8 @@ html:not(.js) .checkselector .charselector-dropdown[hidden] {
   max-height: none;
   box-shadow: none;
 }
-/* Phones: the table does not fit side by side, and it cannot scroll
-   sideways (its wrapper has to let the character lists hang out of
-   it). So each kind becomes a block: its tick box, and under it the
-   characters it is on for, both the full width. The column headings
-   go; "On for 8 of 8 characters" says what the second one was. */
+/* Phones: the table cannot scroll sideways (its wrapper lets the
+   character lists hang out of it), so each kind becomes a block. */
 @media (max-width: 860px) {
   table.notify-settings,
   table.notify-settings tbody,

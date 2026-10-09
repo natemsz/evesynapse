@@ -1,6 +1,6 @@
 package app
 
-// Hermetic tests for the Phase 6 Briefing home module: seeded
+// Hermetic tests for the Briefing home module: seeded
 // snapshots drive the real router against a counting transport —
 // the digest renders cache-only (zero outbound calls), its lines
 // fire and stay quiet on the rule fixtures, the cap and the

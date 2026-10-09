@@ -9,13 +9,12 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// v0.3.04: the stored market guide (schema 021). GET
-// /markets/prices/ is one public call covering every type in
-// the game, so the worker keeps it mirrored in the guide_prices
-// table on ESI's own cache window. Asset valuation reads the
-// table through here — it no longer depends on someone having
-// visited the Market page first (the in-memory copy the Market
-// page fetches live still wins when present: freshest first).
+// The stored market guide (schema 021). GET /markets/prices/ is one
+// public call covering every type in the game, so the worker keeps it
+// mirrored in the guide_prices table on ESI's own cache window. Asset
+// valuation reads the table through here — it does not depend on
+// someone having visited the Market page first (the in-memory copy the
+// Market page fetches live still wins when present: freshest first).
 //
 // This file is the reading side. The worker's refresh
 // (refreshGuidePrices) is in market_worker.go.
@@ -49,7 +48,7 @@ func (app *Application) storedGuidePrices(ctx context.Context) map[int64]esi.Mar
 	rows, err := app.queries.ListGuidePrices(ctx)
 	if err != nil {
 		logging.Errorf("prices: load stored guide: %v", err)
-		return app.storedPricesCache // nil on first failure: honest "none"
+		return app.storedPricesCache // nil on first failure: "none"
 	}
 	if len(rows) == 0 {
 		app.storedPricesCache, app.storedPricesStamp = nil, meta.FetchedAt

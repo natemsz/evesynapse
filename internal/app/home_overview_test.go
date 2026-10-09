@@ -1,6 +1,6 @@
 package app
 
-// Hermetic tests for the Phase 1B widget overview home. Same
+// Hermetic tests for the widget overview home. Same
 // contract as the corp/intel suites: seeded snapshots drive the
 // real router against a counting transport, and the transport
 // must observe zero outbound calls — the overview renders

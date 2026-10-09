@@ -119,7 +119,7 @@ const (
 // scope was added get a 403 on that endpoint, which the handler
 // reports as "please sign in again" instead of failing silently.
 //
-// One deliberate exception (Phase 2): esi-planets.manage_planets.v1
+// One deliberate exception: esi-planets.manage_planets.v1
 // IS requested. CCP publishes no read scope for planetary industry —
 // manage_planets is the only scope gating the two colony GETs
 // (/characters/{id}/planets and /characters/{id}/planets/{planet_id}),
@@ -180,11 +180,11 @@ var eveScopes = []string{
 	"esi-location.read_online.v1",
 	"esi-location.read_ship_type.v1",
 	"esi-mail.read_mail.v1",
-	// Issue 26: marking mail read needs organize_mail (PUT
+	// Marking mail read needs organize_mail (PUT
 	// /characters/{id}/mail/{mail_id}/). Characters linked before
 	// this scope was added get a 403, reported as "sign in again".
 	"esi-mail.organize_mail.v1",
-	// Issue 27: composing/sending mail needs send_mail (POST
+	// Composing/sending mail needs send_mail (POST
 	// /characters/{id}/mail/). Same re-link note as above.
 	"esi-mail.send_mail.v1",
 	"esi-markets.read_character_orders.v1",

@@ -123,7 +123,7 @@ type planRowView struct {
 	Time       string
 	UnitPrice  string
 	LineCost   string
-	BvB        string // v0.3.33: buy-vs-build delta ("Build saves 1.2M" / "Buy saves 500K")
+	BvB        string // Buy-vs-build delta ("Build saves 1.2M" / "Buy saves 500K")
 	Note       string // surplus / cycle / covered-by-stock notes
 	SkillsLine string
 }
@@ -456,7 +456,7 @@ func planRow(n *buildplan.Node, nameOf func(int64) string) planRowView {
 		} else {
 			row.LineCost = "partial"
 		}
-		// v0.3.33: per-node buy-vs-build delta.
+		// Per-node buy-vs-build delta.
 		if n.BvBApplicable && n.PriceKnown {
 			if n.BvBDelta > 0 {
 				row.BvB = "Build saves " + isk(n.BvBDelta)
@@ -694,7 +694,7 @@ func resolveJudgeScope(raw string, chars []db.Character) (judgeScope, []judgeOpt
 }
 
 // scopeStockNote says whose hangars the plan netted against,
-// including the honest version when the data isn't in yet.
+// including the version when the data isn't in yet.
 func scopeStockNote(scope judgeScope, data plannerScopeData) string {
 	switch scope.Kind {
 	case "char":

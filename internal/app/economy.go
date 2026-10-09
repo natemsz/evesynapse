@@ -13,7 +13,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Economy cluster (module sweep, cluster 3): Wallet, Orders,
+// Economy cluster: Wallet, Orders,
 // Contracts, Industry. Like every other page these render from
 // worker-warmed snapshots and local tables only; the handlers
 // below never touch ESI. Each dataset degrades independently: a
@@ -67,7 +67,7 @@ func orderRangeLabel(r string) string {
 
 // econLocationTitle renders an order/transaction/contract
 // location: NPC station and system names from the local caches,
-// then the worker-resolved structure name, then an honest
+// then the worker-resolved structure name, then a
 // "#<id>".
 func (app *Application) econLocationTitle(ctx context.Context, locationID int64) string {
 	if name, ok := app.esi.CachedPlaceName(ctx, locationID); ok {

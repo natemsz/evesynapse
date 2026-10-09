@@ -14,7 +14,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Shared per-character page plumbing (module sweep). The Character,
+// Shared per-character page plumbing. The Character,
 // Fittings and Killmails pages all switch characters the way Assets
 // and Skills do; the helpers here keep that logic in one place.
 // ---------------------------------------------------------------------------
@@ -74,7 +74,7 @@ func (app *Application) pickCharacter(ctx context.Context, r *http.Request, path
 
 // locationTitle renders a station, structure, or solar-system
 // location the way the character pages show it: the SDE/cache name
-// when known, an honest "#<id>" fallback otherwise. Player
+// when known, a "#<id>" fallback otherwise. Player
 // structures show the name the worker resolved for them once it
 // lands (structures.go); until then the same "#<id>" fallback.
 func (app *Application) locationTitle(ctx context.Context, id int64, locType string) string {
@@ -188,10 +188,9 @@ type characterView struct {
 	LastCloneJump string
 	JumpClones    []jumpCloneView
 
-	// Identity (profile snapshot): the name/birthday/security/
-	// corporation block the old home sheet fetched live. Since
-	// Phase 1B it comes from the worker-warmed profile snapshot,
-	// so this page — like every other — renders cache-only.
+	// Identity: name, birthday, security and corporation, from the
+	// worker-warmed profile snapshot, so this page — like every other
+	// — renders cache-only.
 	IdentityKnown  bool
 	PortraitURL    string
 	CorpID         int64
@@ -228,7 +227,7 @@ type characterView struct {
 	BrowseWarming bool
 	Plans         []skillPlanSummary
 
-	// Planetary industry summary (Phase 2): colony count plus
+	// Planetary industry summary: colony count plus
 	// the soonest extractor expiry, from the colonies + layout
 	// snapshots. PINotEnabled marks the recorded scope refusal.
 	PIKnown      bool
@@ -436,12 +435,10 @@ func (app *Application) fillCharacterImplantsAndClones(ctx context.Context, ch d
 
 // fillCharacterIdentity: birthday, security status and corporation.
 func (app *Application) fillCharacterIdentity(ctx context.Context, ch db.Character, view *characterView) {
-	// Identity: the profile snapshot the worker now warms (Phase
-	// 1B) — name/birthday/security/corporation. This is the block
-	// the old home sheet fetched live at render; it is a plain
-	// snapshot read here like everything else. The corporation
-	// name resolves from the cached corp record (warmed by the
-	// worker), falling back to the recorded corp id.
+	// Identity: name, birthday, security and corporation, a plain read
+	// of the worker-warmed profile snapshot. The corporation name
+	// resolves from the cached corp record (warmed by the worker),
+	// falling back to the recorded corp id.
 	var profile esi.Character
 	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapProfile, &profile) {
 		view.IdentityKnown = true
@@ -623,7 +620,7 @@ func (app *Application) fillCharacterLoaded(ctx context.Context, ch db.Character
 }
 
 // typeNameOrID resolves one type ID from the local caches, falling
-// back to the honest "Type #<id>" placeholder.
+// back to the "Type #<id>" placeholder.
 func (app *Application) typeNameOrID(ctx context.Context, id int64) string {
 	if name := app.esi.CachedTypeName(ctx, id); name != "" {
 		return name

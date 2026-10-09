@@ -1,6 +1,6 @@
 package app
 
-// Hermetic tests for the v0.3.10 market category tree:
+// Hermetic tests for the market category tree:
 //
 //   - invMarketGroups parsing (parent/child via both parent
 //     column spellings, root normalization, icon/hasTypes ride-

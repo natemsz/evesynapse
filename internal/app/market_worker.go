@@ -15,8 +15,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Market worker pass (Phase 5, coverage reworked by the proactive-
-// warming build): keeps market_history warm for a maintained
+// Market worker pass: keeps market_history warm for a maintained
 // coverage set, warmed before anyone clicks, and computes
 // per-order health from regional order books. Everything here is
 // public ESI — no character token. It spends from the market

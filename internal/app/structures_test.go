@@ -1,6 +1,6 @@
 package app
 
-// v0.3.08 structure-resolution tiers: multi-character attempts
+// Structure-resolution tiers: multi-character attempts
 // (first success wins, one character's 403 never poisons the
 // cache), the corporation-structure tier, and provenance
 // precedence (ESI truth outranks lower-trust sources).

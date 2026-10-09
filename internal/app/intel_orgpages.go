@@ -412,7 +412,7 @@ func (app *Application) corpNamePending(ctx context.Context, corpID int64) bool 
 // corpDisplayName resolves a corporation's display name from the
 // local tiers — the in-process cache, then a ready organization
 // record — noting a viewed-priority want while it is unresolved
-// so the name (and its page) warm in the background. The honest
+// so the name (and its page) warm in the background. The
 // "Corporation #<id>" fallback is the answer until then. Shared
 // by every surface that renders a corporation name.
 func (app *Application) corpDisplayName(ctx context.Context, corpID int64) string {

@@ -13,9 +13,8 @@ import (
 
 // ---------------------------------------------------------------------------
 // Finding one character among all of them. The Sync and Admin pages
-// used to print every character in full, which is fine for nine and
-// useless for five hundred. Both now show one character (or account)
-// at a time, found through a search box that suggests as you type.
+// show one character (or account) at a time, found through a search box
+// that suggests as you type.
 //
 // Both pages are for administrators only, so the lookup covers every
 // character on the site, not just the reader's own.

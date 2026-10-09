@@ -1,11 +1,7 @@
 // Package logging gives every log line a level.
 //
-// The application used to write everything through log.Printf, so
-// a refused sign-in, a routine "cycle done" and a database error
-// all looked alike, and the only way to quieten the log was to
-// stop reading it. Call sites now say what kind of line they are
-// writing — Errorf, Warnf, Infof, Debugf — and LOG_LEVEL decides
-// which kinds are written.
+// Call sites say what kind of line they are writing — Errorf, Warnf,
+// Infof, Debugf — and LOG_LEVEL decides which kinds are written.
 //
 // What the levels mean here:
 //

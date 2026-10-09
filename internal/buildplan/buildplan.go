@@ -14,7 +14,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Industry build planner (Phase 3): BOM expansion over the local
+// Industry build planner: BOM expansion over the local
 // SDE industry tables (schema 011), priced from the market guide
 // cache and measured against the user's owned blueprints and
 // stockpiles. The engine below is pure — it reads no database and
@@ -119,12 +119,12 @@ type Node struct {
 	LineCost     float64 // leaf: Shortfall × unit price; build: rolled-up buy cost beneath
 	CostComplete bool    // false when some price beneath is unknown
 
-	// v0.3.33: per-node buy-vs-build (EVE-Nexus pattern). BuildCost
+	// Per-node buy-vs-build. BuildCost
 	// is the recursive build cost (materials + job costs);
 	// BuyCost is Shortfall × unit price; BvBDelta = BuyCost −
 	// BuildCost (positive = building is cheaper). BvBApplicable
 	// is false for blueprint-type products (ESI lists BPO prices,
-	// not BPC contract prices — the EVE-Nexus guard).
+	// not BPC contract prices).
 	BuildCost     float64
 	BuyCost       float64
 	BvBDelta      float64
@@ -373,8 +373,8 @@ func (b *builder) expand(typeID int64, bp *Blueprint, depth int, basePerRun, req
 			node.PriceKnown = true
 			node.LineCost = p * float64(node.Shortfall)
 			node.BuyCost = node.LineCost
-			// v0.3.33: leaves can't be built; BvB not applicable.
-			// The blueprint guard (EVE-Nexus): if this leaf IS a
+			// Leaves can't be built; BvB not applicable.
+			// The blueprint guard: if this leaf IS a
 			// blueprint type, market prices are BPO not BPC — BvB
 			// would be meaningless, so mark inapplicable.
 			node.BvBApplicable = false
@@ -429,7 +429,7 @@ func (b *builder) expand(typeID int64, bp *Blueprint, depth int, basePerRun, req
 			break
 		}
 	}
-	// v0.3.33: per-node buy-vs-build. BuildCost is the rolled-up
+	// Per-node buy-vs-build. BuildCost is the rolled-up
 	// material cost (LineCost); BuyCost is market price for the
 	// shortfall. Delta positive = building saves money.
 	node.BuildCost = node.LineCost
@@ -438,7 +438,7 @@ func (b *builder) expand(typeID int64, bp *Blueprint, depth int, basePerRun, req
 		node.PriceKnown = true
 		node.BuyCost = p * float64(node.Shortfall)
 		node.BvBDelta = node.BuyCost - node.BuildCost
-		// The EVE-Nexus guard: blueprint-type products are excluded
+		// The blueprint guard: blueprint-type products are excluded
 		// from BvB (ESI lists BPO prices, not BPC contract prices).
 		// A product with a blueprint is not itself a blueprint, so
 		// BvB applies here; the guard matters for leaf materials

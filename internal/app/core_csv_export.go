@@ -1,7 +1,6 @@
 package app
 
-// CSV export for market tables (EVE-Nexus pattern #10: grid
-// density — CSV/TSV export). Handlers check ?format=csv and
+// CSV export for market tables. Handlers check ?format=csv and
 // call serveCSV with the same rows they already built for the
 // HTML view; no recomputation, just reformatting.
 

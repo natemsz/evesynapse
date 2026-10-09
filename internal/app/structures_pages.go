@@ -25,7 +25,7 @@ import (
 // the want and shows the loading state, which live-fills through
 // the same never-give-up poller as the organization pages once the
 // worker lands the name. Nothing is fabricated: a structure nobody
-// can name and no snapshot describes stays honestly pending, and a
+// can name and no snapshot describes stays pending, and a
 // settled 'missing' answer says the name isn't available rather
 // than inventing one. Renders read stored rows only.
 // ---------------------------------------------------------------------------

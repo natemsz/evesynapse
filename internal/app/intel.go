@@ -14,7 +14,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Intel cluster (module sweep, cluster 4): wars, incursions and
+// Intel cluster: wars, incursions and
 // faction warfare, plus the Tranquility status line on Home.
 //
 // Everything here is public ESI data — no character token — so it
@@ -50,7 +50,7 @@ func (app *Application) factionNames(ctx context.Context) map[int64]string {
 }
 
 // factionDisplay renders a faction ID: the name when the factions
-// snapshot has landed, an honest fallback otherwise.
+// snapshot has landed, a fallback otherwise.
 func factionDisplay(names map[int64]string, id int64) string {
 	if name, ok := names[id]; ok {
 		return name
@@ -80,7 +80,7 @@ func (app *Application) userCorporationIDs(ctx context.Context, userID int64) ma
 
 // orgDisplay renders a war party as a link to its public page:
 // alliance names to the alliance page, corporation names to the
-// corporation page, honest "#<id>" labels while a name is still
+// corporation page, "#<id>" labels while a name is still
 // warming. Never networks.
 func (app *Application) orgDisplay(ctx context.Context, corporationID, allianceID int64) template.HTML {
 	if allianceID > 0 {

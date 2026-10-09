@@ -122,7 +122,7 @@ func (app *Application) characterPISummary(ctx context.Context, ch db.Character)
 
 // planetDisplayName renders a colony planet: the resolved name
 // when the cache has one (in-process place cache, then the
-// durable planet_names table), the honest id fallback until
+// durable planet_names table), the id fallback until
 // then. An unresolved id is noted as a want so the worker
 // resolves it in the background; the page never waits on it.
 // Every PI surface — colonies page, home widget, attention and

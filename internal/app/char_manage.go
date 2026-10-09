@@ -15,7 +15,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Character management + header switcher (Phase 1A). One account can
+// Character management + header switcher. One account can
 // link dozens of characters; these are the tools to run that fleet:
 // the /characters/ page (link health, tags, unlink) and the topbar
 // switcher that chooses which character the per-character pages
@@ -202,7 +202,7 @@ func (app *Application) managedCharacterRow(ctx context.Context, ch db.Character
 		}
 	}
 
-	// Planetary industry enablement (Phase 2): the link itself
+	// Planetary industry enablement: the link itself
 	// is healthy, but its scope grant predates the planetary
 	// scope, so colonies stay dark until a fresh sign-in.
 	row.PINotEnabled = app.piNotEnabled(ctx, ch)

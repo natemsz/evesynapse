@@ -17,7 +17,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// v0.3.04: per-widget configuration (schema 020). The home
+// Per-widget configuration (schema 020). The home
 // layout decides which widgets show and in what order; this
 // decides what a widget does. Config is one JSON object per
 // (user, widget id), owned by the widget: it survives layout

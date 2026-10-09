@@ -162,7 +162,7 @@ func (app *Application) itemsPageData(r *http.Request) pageData {
 // two share the URL the way the planner shares its plan URLs.
 func (app *Application) handleItems(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	// Issue 22: market=1 alone filters the browse tree; it only
+	// Market=1 alone filters the browse tree; it only
 	// joins a flat search when there's a non-empty query or an
 	// explicit category/group pick.
 	if q.Get("q") != "" || q.Get("category") != "" || q.Get("group") != "" {
@@ -481,7 +481,7 @@ func (app *Application) itemDescription(ctx context.Context, typeID int64) (stri
 // market watchlists, skill names…). Identity and "used in" facts
 // are local SDE reads; the description comes from the type_details
 // warm queue (public ESI type payloads), so a first visit notes
-// the want and shows an honest filling-in state. Onward links:
+// the want and shows a filling-in state. Onward links:
 // orders & price history on the Market page, and the Industry
 // planner when the item can be built.
 func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {

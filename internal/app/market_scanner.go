@@ -62,7 +62,7 @@ type scannerView struct {
 // handleMarketScanner renders the spread scanner from stored
 // rows only. Filters ride the query string (region, minvol,
 // minspread) so a view is shareable and a reload is free. No
-// sweep state means the honest still-gathering state; the page
+// sweep state means the still-gathering state; the page
 // never triggers a fetch.
 func (app *Application) handleMarketScanner(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

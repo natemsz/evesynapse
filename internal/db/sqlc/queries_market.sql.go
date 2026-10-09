@@ -2235,7 +2235,7 @@ ON CONFLICT (id) DO UPDATE SET
 `
 
 // ---------------------------------------------------------------------
-// v0.3.14 guide-price wants (schema 027): the durable note a
+// Guide-price wants (schema 027): the durable note a
 // kill view leaves when it has no prices to value with. One
 // singleton row -- the guide is global, so one want covers every
 // viewer -- noted at render time, answered by the worker's
@@ -2624,7 +2624,7 @@ type UpsertIndustryCostIndexParams struct {
 	CostIndex     float64 `json:"cost_index"`
 }
 
-// v0.3.33: industry cost indices per (system, activity).
+// Industry cost indices per (system, activity).
 func (q *Queries) UpsertIndustryCostIndex(ctx context.Context, arg UpsertIndustryCostIndexParams) error {
 	_, err := q.db.ExecContext(ctx, upsertIndustryCostIndex, arg.SolarSystemID, arg.Activity, arg.CostIndex)
 	return err
@@ -2679,7 +2679,7 @@ type UpsertMarketHistoryParams struct {
 }
 
 // ---------------------------------------------------------------------
-// Phase 3 (schema 011): industry build planner reads. Bulk import
+// Industry build planner reads. Bulk import
 // inserts stay hand-rolled in the SDE importer alongside the other
 // sde_* tables; only reads live here.
 // ---------------------------------------------------------------------
@@ -2918,7 +2918,7 @@ type UpsertMarketTypePriceParams struct {
 	SellVolume int64   `json:"sell_volume"`
 }
 
-// v0.3.33: per-type market price TTL cache. The worker refreshes
+// Per-type market price TTL cache. The worker refreshes
 // only rows older than the TTL; pages read cache-only.
 func (q *Queries) UpsertMarketTypePrice(ctx context.Context, arg UpsertMarketTypePriceParams) error {
 	_, err := q.db.ExecContext(ctx, upsertMarketTypePrice,
@@ -3075,7 +3075,7 @@ type UpsertRestockTargetParams struct {
 	MinMarginPct float64 `json:"min_margin_pct"`
 }
 
-// v0.3.34: restock planner targets.
+// Restock planner targets.
 func (q *Queries) UpsertRestockTarget(ctx context.Context, arg UpsertRestockTargetParams) error {
 	_, err := q.db.ExecContext(ctx, upsertRestockTarget,
 		arg.UserID,

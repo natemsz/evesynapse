@@ -19,7 +19,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Phase 5: market price history — ESI's daily aggregates, stored
+// Market price history — ESI's daily aggregates, stored
 // typed in market_history and charted server-side. Everything in
 // this file is a pure function over stored rows: change math,
 // summary stats, and the hand-computed SVG chart (no chart
@@ -439,7 +439,7 @@ func barWidth(n int) int {
 // when both sides exist. Everything derives from stored data —
 // the only live inputs are the best buy/sell the item view
 // already fetched — and whatever can't be computed renders as
-// an honest dash, never an invented number.
+// a dash, never an invented number.
 // ---------------------------------------------------------------------------
 
 // TraderStats is the item view's trading snapshot, display-ready.

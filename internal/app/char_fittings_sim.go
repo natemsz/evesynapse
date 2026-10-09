@@ -20,7 +20,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Fitting simulator UI (v0.3.21): the editor on the Fittings page.
+// Fitting simulator UI: the editor on the Fittings page.
 //
 // The browser keeps a small fit document (ship, item lines, charge
 // choices) and posts it to /fittings/simulate/ on every change; the
@@ -2068,7 +2068,7 @@ func (app *Application) handleFitMineJSON(w http.ResponseWriter, r *http.Request
 			Mine: true, IsPublic: row.IsPublic, IsDraft: row.IsDraft,
 		})
 	}
-	// ESI fittings for the active character (Issue 1)
+	// ESI fittings for the active character
 	// These are the in-game fittings from the character's ESI snapshot.
 	if charID := sessionCharID(app.sessions, ctx); charID != 0 {
 		if char, err := app.queries.GetCharacter(ctx, charID); err == nil {
@@ -2289,11 +2289,11 @@ func (app *Application) attachFitEditor(ctx context.Context, r *http.Request, da
 	editor.Description = doc.Description
 	editor.TagsList = doc.Tags
 	editor.Tags = strings.Join(doc.Tags, ", ")
-	// The editor no longer embeds the your-fits list (the search
-	// bar above loads fits through /fittings/mine.json), so the
-	// whole fits table is not pulled for this page. LocalFits stays
-	// on the view for API compatibility; listLocalFitEntries remains
-	// for the dedicated list consumers.
+	// The editor does not embed the your-fits list (the search bar
+	// above loads fits through /fittings/mine.json), so the whole fits
+	// table is not pulled for this page. LocalFits stays on the view
+	// for API compatibility; listLocalFitEntries remains for the
+	// dedicated list consumers.
 	data.FitEditor = editor
 }
 

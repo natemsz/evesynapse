@@ -432,11 +432,10 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 	defer tx.Rollback()
 	qtx := app.queries.WithTx(tx)
 
-	// Sold per day per type, distilled from market_history in
-	// one aggregate pass and stored on the region rows below --
-	// the same 7-day average the scanner and tradefinder used
-	// to recompute per candidate type on every render. Types
-	// with no recorded history are absent here and store 0.
+	// Sold per day per type, distilled from market_history in one
+	// aggregate pass and stored on the region rows below -- the 7-day
+	// average the scanner and tradefinder read. Types with no recorded
+	// history are absent here and store 0.
 	avgRows, err := qtx.ListMarketAvgDailyVolumes(ctx, regionID)
 	if err != nil {
 		return 0, 0, err

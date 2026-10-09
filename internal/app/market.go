@@ -78,7 +78,7 @@ type marketOrderRow struct {
 }
 
 // marketItem is the item view: guide prices from /markets/prices/
-// plus the order book for one region. Phase 5 adds the stored
+// plus the order book for one region, the stored
 // price history (chart + changes, from market_history only — the
 // worker fills it) and the watch state for "Watch this item".
 type marketItem struct {
@@ -115,7 +115,7 @@ type marketItem struct {
 	BuyBand     string
 	Trader      *markethistory.TraderStats // trading snapshot; set by attachHistory
 
-	// Phase 5 price history (cache-only, from stored rows).
+	// Price history (cache-only, from stored rows).
 	// HistoryState is computed by attachHistory from the stored
 	// rows plus the fetch-state record: markethistory.StatePending (no
 	// rows yet, fetch not settled), markethistory.StateEmpty (worker
@@ -412,12 +412,10 @@ func marketBrowseGroupRow(row db.SdeMarketGroup) marketBrowseGroup {
 	}
 }
 
-// recentHistoryRows loads the most recent `limit` recorded trade
-// rows for a (region, type) in date-ascending order. The window is
-// a row count, not a calendar span: a sparse item's stored trades
-// are never filtered out by an arbitrary cutoff, which used to
-// leave the chart claiming it was loading for rows the worker had
-// already stored.
+// recentHistoryRows loads the most recent `limit` recorded trade rows
+// for a (region, type) in date-ascending order. The window is a row
+// count, not a calendar span: a sparse item's stored trades are never
+// filtered out by an arbitrary cutoff.
 func (app *Application) recentHistoryRows(ctx context.Context, regionID, typeID int64, limit int) []db.MarketHistory {
 	rows, err := app.queries.ListMarketHistory(ctx, db.ListMarketHistoryParams{
 		RegionID: regionID, TypeID: typeID, RowLimit: int64(limit),
@@ -768,7 +766,7 @@ func (app *Application) orderPlace(ctx context.Context, locationID, systemID int
 // orderLocation renders where an order sits: the NPC station name
 // when the location is one, the solar-system name for system-level
 // orders (and as fallback), and for player structures the name
-// the worker has resolved (structures.go) or an honest
+// the worker has resolved (structures.go) or a
 // "Structure #<id>" until it lands. Station/system names reuse
 // the shared place-name cache. Cache-only: never fetches.
 func (app *Application) orderLocation(ctx context.Context, locationID, systemID int64) string {
@@ -790,7 +788,7 @@ func (app *Application) orderLocation(ctx context.Context, locationID, systemID 
 
 // marketRegionLabel names a region for display: the five trade
 // hubs by their short names, anything else from the SDE region
-// table, and an honest placeholder for ids neither knows.
+// table, and a placeholder for ids neither knows.
 func (app *Application) marketRegionLabel(ctx context.Context, regionID int64) string {
 	if name, ok := marketRegionName(regionID); ok {
 		return name

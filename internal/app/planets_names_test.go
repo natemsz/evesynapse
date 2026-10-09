@@ -1,6 +1,6 @@
 package app
 
-// v0.3.11 planet name resolution: the durable planet_names queue
+// Planet name resolution: the durable planet_names queue
 // behind the PI surfaces. Renders note wants and never fetch;
 // the worker resolves them through the public /universe/planets/
 // endpoint; resolved names stick across restarts, 404s back off

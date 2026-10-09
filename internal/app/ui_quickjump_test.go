@@ -1,6 +1,6 @@
 package app
 
-// Quick jump (v0.3.15): the Ctrl+K palette and the search pool
+// Quick jump: the Ctrl+K palette and the search pool
 // widening behind it. The pool now answers corporations and
 // alliances alongside characters, items and pilots; every item
 // hit notes the market-history prefetch wants; and the

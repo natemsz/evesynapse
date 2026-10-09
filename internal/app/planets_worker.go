@@ -14,12 +14,12 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Planetary-industry worker pass (Phase 2): keeps the colonies
+// Planetary-industry worker pass: keeps the colonies
 // list and one layout snapshot per planet warm for one character,
 // and harvests the pin/schematic/planet names the pages resolve.
 //
 // The colonies endpoint is gated by esi-planets.manage_planets.v1,
-// which the app only started requesting in Phase 2 (CCP publishes
+// which the app did not always request (CCP publishes
 // no read scope for it — see auth.go). A character linked before
 // that gets a refusal: ESI answers 403 for some scope failures and
 // 401 for others (a token lacking the scope is "unauthorized" for

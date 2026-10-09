@@ -135,7 +135,7 @@ ON CONFLICT (killmail_id) DO UPDATE SET
     fetched_at   = excluded.fetched_at;
 
 -- ---------------------------------------------------------------------
--- Module sweep, cluster 3 (schema 006): contract detail store. The
+-- Contract detail store. The
 -- worker warms contract item lists from the contracts snapshot;
 -- pages only read here.
 -- ---------------------------------------------------------------------
@@ -155,7 +155,7 @@ ON CONFLICT (contract_id) DO UPDATE SET
     fetched_at   = excluded.fetched_at;
 
 -- ---------------------------------------------------------------------
--- Module sweep, cluster 2 (schema 005): corporation support.
+-- Corporation support.
 -- Fetch-outcome log (role-missing state), character-to-corporation
 -- map, and player-given item names.
 -- ---------------------------------------------------------------------
@@ -197,7 +197,7 @@ WHERE c.user_id = $1
 ORDER BY cc.corporation_id;
 
 -- ---------------------------------------------------------------------
--- Module sweep, cluster 4 (schema 007): intel public-data store.
+-- Intel public-data store.
 -- Global snapshots are the public-data counterpart of
 -- character_snapshots; war details mirror killmail_details.
 -- ---------------------------------------------------------------------
@@ -233,7 +233,7 @@ ON CONFLICT (war_id) DO UPDATE SET
 SELECT COUNT(*) FROM war_details;
 
 -- ---------------------------------------------------------------------
--- Phase 1B home overview (schema 010): per-account widget layout and
+-- Home overview (schema 010): per-account widget layout and
 -- the one batched snapshot read every widget renders from.
 -- ---------------------------------------------------------------------
 -- name: GetUserHomeLayout :one
@@ -244,7 +244,7 @@ UPDATE users
 SET home_layout = $1
 WHERE id = $2;
 
--- Phase 6 (schema 017): the Briefing module's window anchor.
+-- The Briefing module's window anchor.
 -- name: GetUserBriefingAnchor :one
 SELECT last_briefing_at FROM users
 WHERE id = $1;
@@ -294,7 +294,7 @@ WHERE user_id = $1
 ORDER BY day, character_id;
 
 -- ---------------------------------------------------------------------
--- v0.3.04 widget configuration (schema 020): one JSON blob per
+-- Widget configuration (schema 020): one JSON blob per
 -- (user, widget). The layout (schema 010) owns placement; this
 -- owns behaviour (the orders widget's scope + merge mode first).
 -- ---------------------------------------------------------------------
@@ -313,7 +313,7 @@ WHERE user_id = $1
 ORDER BY widget_id;
 
 -- ---------------------------------------------------------------------
--- v0.3.04 stored market guide (schema 021): the worker mirrors
+-- Stored market guide (schema 021): the worker mirrors
 -- GET /markets/prices/ here wholesale (delete + insert inside
 -- one transaction) so asset valuation never waits on a Market
 -- page visit. Meta is the single bookkeeping row.

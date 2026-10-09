@@ -14,7 +14,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Intel worker pass (module sweep, cluster 4): keeps the global
+// Intel worker pass: keeps the global
 // public-data store warm. Everything here is public ESI — no
 // character token — so unlike the other passes this one runs
 // even with no characters linked (the Home status line works

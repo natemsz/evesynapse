@@ -38,6 +38,17 @@ WHERE user_id = sqlc.arg(user_id);
 -- name: DeleteDiscordNonMemberGrants :exec
 DELETE FROM discord_role_grants WHERE discord_id = $1 AND NOT is_member AND roles = '';
 
+-- name: SetDiscordGuildKick :exec
+UPDATE discord_guilds
+SET kick_enabled = sqlc.arg(kick_enabled), kick_exempt_roles = sqlc.arg(kick_exempt_roles)
+WHERE guild_id = sqlc.arg(guild_id);
+
+-- name: SetDiscordGuildKickChecked :exec
+UPDATE discord_guilds SET kick_checked_at = sqlc.arg(kick_checked_at) WHERE guild_id = sqlc.arg(guild_id);
+
+-- name: GetDiscordLinkByDiscordID :one
+SELECT * FROM discord_links WHERE discord_id = $1;
+
 -- name: SetDiscordGuildOpsChannel :exec
 UPDATE discord_guilds SET ops_channel = sqlc.arg(ops_channel) WHERE guild_id = sqlc.arg(guild_id);
 

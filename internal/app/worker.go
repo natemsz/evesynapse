@@ -295,6 +295,9 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		if n := app.discordSyncRoles(ctx, time.Now()); n > 0 {
 			logging.Infof("worker: Discord roles changed for %d account(s)", n)
 		}
+		if n := app.discordKickPass(ctx, time.Now()); n > 0 {
+			logging.Infof("worker: %d member(s) removed from Discord servers", n)
+		}
 	})
 
 	summary := cycleSummary(c.refreshed, c.namesResolved, c.failed, c.limited, parked, c.deferred)

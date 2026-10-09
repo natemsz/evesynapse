@@ -83,7 +83,7 @@ func (q *Queries) DeleteOtherDiscordLinks(ctx context.Context, arg DeleteOtherDi
 
 const getDiscordGuild = `-- name: GetDiscordGuild :one
 
-SELECT guild_id, name, owner_kind, owner_id, added_by, added_at, role_linked, role_member, ops_channel, auto_join FROM discord_guilds WHERE guild_id = $1
+SELECT guild_id, name, owner_kind, owner_id, added_by, added_at, role_linked, role_member, ops_channel, auto_join, kick_enabled, kick_exempt_roles, kick_checked_at FROM discord_guilds WHERE guild_id = $1
 `
 
 // Servers.
@@ -101,6 +101,9 @@ func (q *Queries) GetDiscordGuild(ctx context.Context, guildID string) (DiscordG
 		&i.RoleMember,
 		&i.OpsChannel,
 		&i.AutoJoin,
+		&i.KickEnabled,
+		&i.KickExemptRoles,
+		&i.KickCheckedAt,
 	)
 	return i, err
 }
@@ -169,7 +172,7 @@ func (q *Queries) GetDiscordRoleGrant(ctx context.Context, arg GetDiscordRoleGra
 }
 
 const listDiscordGuilds = `-- name: ListDiscordGuilds :many
-SELECT guild_id, name, owner_kind, owner_id, added_by, added_at, role_linked, role_member, ops_channel, auto_join FROM discord_guilds ORDER BY name, guild_id
+SELECT guild_id, name, owner_kind, owner_id, added_by, added_at, role_linked, role_member, ops_channel, auto_join, kick_enabled, kick_exempt_roles, kick_checked_at FROM discord_guilds ORDER BY name, guild_id
 `
 
 func (q *Queries) ListDiscordGuilds(ctx context.Context) ([]DiscordGuild, error) {
@@ -192,6 +195,9 @@ func (q *Queries) ListDiscordGuilds(ctx context.Context) ([]DiscordGuild, error)
 			&i.RoleMember,
 			&i.OpsChannel,
 			&i.AutoJoin,
+			&i.KickEnabled,
+			&i.KickExemptRoles,
+			&i.KickCheckedAt,
 		); err != nil {
 			return nil, err
 		}

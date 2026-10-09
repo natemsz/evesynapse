@@ -31,10 +31,15 @@ type fakeDiscord struct {
 	noJoin      bool // the bot may not add members
 	revoked     bool // accounts have taken their permission back
 	refreshes   int
-	added       []string // "server user", for members the bot added
-	left        []string // servers the bot was told to leave
-	messages    []string // "channel: text"
-	changes     []string // "PUT server user role" / "DELETE server user role"
+	added       []string             // "server user", for members the bot added
+	bots        map[string]bool      // accounts that are bots
+	joined      map[string]time.Time // "server user" -> when they joined; long ago if absent
+	owner       string               // the account that owns every server
+	noList      bool                 // the member list may not be read
+	kicked      []string             // "server user", for members the bot removed
+	left        []string             // servers the bot was told to leave
+	messages    []string             // "channel: text"
+	changes     []string             // "PUT server user role" / "DELETE server user role"
 	calls       int
 }
 
@@ -102,6 +107,37 @@ func (d *fakeDiscord) RoundTrip(req *http.Request) (*http.Response, error) {
 			return respond(403, `{"message":"Missing Access"}`)
 		}
 		return respond(200, `[{"id":"`+discordOpsChannel+`","name":"ops","type":0,"position":1},{"id":"`+discordVoiceChannel+`","name":"Voice","type":2,"position":2}]`)
+	case len(parts) == 2 && parts[0] == "guilds":
+		return respond(200, `{"id":"`+parts[1]+`","owner_id":"`+d.owner+`"}`)
+	case len(parts) == 3 && parts[0] == "guilds" && parts[2] == "members":
+		if d.noList {
+			return respond(403, `{"message":"Missing Access"}`)
+		}
+		var ids []string
+		for id := range d.members[parts[1]] {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		var out []string
+		for _, id := range ids {
+			joined, known := d.joined[parts[1]+" "+id]
+			if !known {
+				joined = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+			}
+			bot := ""
+			if d.bots[id] {
+				bot = `,"bot":true`
+			}
+			out = append(out, `{"user":{"id":"`+id+`","username":"name-`+id[len(id)-2:]+`"`+bot+`},"roles":["`+strings.Join(d.members[parts[1]][id], `","`)+`"],"joined_at":"`+joined.Format(time.RFC3339)+`"}`)
+		}
+		return respond(200, `[`+strings.Join(out, ",")+`]`)
+	case len(parts) == 4 && parts[0] == "guilds" && parts[2] == "members" && req.Method == http.MethodDelete:
+		if _, in := d.members[parts[1]][parts[3]]; !in {
+			return respond(404, `{"message":"Unknown Member"}`)
+		}
+		delete(d.members[parts[1]], parts[3])
+		d.kicked = append(d.kicked, parts[1]+" "+parts[3])
+		return respond(204, ``)
 	case len(parts) == 4 && parts[0] == "guilds" && parts[2] == "members" && req.Method == http.MethodPut:
 		// Adding a member: only with that account's own token.
 		guild, user := parts[1], parts[3]
@@ -198,6 +234,9 @@ func (f *notifyFixture) enableDiscord() *fakeDiscord {
 		codes:    map[string]string{"alice": discordAlice, "bob": discordBob, "add-corp": discordAlice, "add-alliance": discordAlice},
 		installs: map[string]string{"add-corp": discordCorpGuild, "add-alliance": discordAllianceGuild},
 		members:  map[string]map[string][]string{discordCorpGuild: {}, discordAllianceGuild: {}},
+		bots:     map[string]bool{},
+		joined:   map[string]time.Time{},
+		owner:    "100000000000000900",
 	}
 	f.app.cfg.eveCallbackURL = "https://eve.example/auth/callback"
 	f.app.discord = discord.New(discord.Config{

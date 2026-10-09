@@ -73,16 +73,19 @@ type CorporationRecord struct {
 }
 
 type DiscordGuild struct {
-	GuildID    string    `json:"guild_id"`
-	Name       string    `json:"name"`
-	OwnerKind  string    `json:"owner_kind"`
-	OwnerID    int64     `json:"owner_id"`
-	AddedBy    int64     `json:"added_by"`
-	AddedAt    time.Time `json:"added_at"`
-	RoleLinked string    `json:"role_linked"`
-	RoleMember string    `json:"role_member"`
-	OpsChannel string    `json:"ops_channel"`
-	AutoJoin   bool      `json:"auto_join"`
+	GuildID         string       `json:"guild_id"`
+	Name            string       `json:"name"`
+	OwnerKind       string       `json:"owner_kind"`
+	OwnerID         int64        `json:"owner_id"`
+	AddedBy         int64        `json:"added_by"`
+	AddedAt         time.Time    `json:"added_at"`
+	RoleLinked      string       `json:"role_linked"`
+	RoleMember      string       `json:"role_member"`
+	OpsChannel      string       `json:"ops_channel"`
+	AutoJoin        bool         `json:"auto_join"`
+	KickEnabled     bool         `json:"kick_enabled"`
+	KickExemptRoles string       `json:"kick_exempt_roles"`
+	KickCheckedAt   sql.NullTime `json:"kick_checked_at"`
 }
 
 type DiscordLink struct {

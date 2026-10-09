@@ -149,10 +149,11 @@ type Guild struct {
 
 // botPermissions is what the bot asks for when it is added to a
 // server: Manage Roles (1<<28), View Channels (1<<10), Send Messages
-// (1<<11), and Create Invite (1<<0), which is what Discord requires of
-// a bot that adds members. Nothing that reads messages or manages
-// channels.
-const botPermissions = 1<<28 | 1<<10 | 1<<11 | 1<<0
+// (1<<11), Create Invite (1<<0), which is what Discord requires of a
+// bot that adds members, and Kick Members (1<<1), used only where a
+// server's directors switch removals on. Nothing that reads messages
+// or manages channels.
+const botPermissions = 1<<28 | 1<<10 | 1<<11 | 1<<0 | 1<<1
 
 // InstallURL is where to send someone to add the bot to a server of
 // theirs. Discord only lets a person who may manage a server add a bot
@@ -476,6 +477,79 @@ func (c *Client) GuildTextChannels(ctx context.Context, guildID string) ([]Chann
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Position < out[j].Position })
 	return out, nil
+}
+
+// Member is one member of a server.
+type Member struct {
+	User struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+		Bot      bool   `json:"bot"`
+	} `json:"user"`
+	Roles    []string  `json:"roles"`
+	JoinedAt time.Time `json:"joined_at"`
+}
+
+// membersPage is how many members Discord hands over at a time.
+const membersPage = 1000
+
+// ListMembers lists a server's members, up to most of them. Discord
+// only answers a bot whose application has the Server Members intent
+// switched on (403 otherwise). complete is false when the server has
+// more members than most, in which case the list is not the whole
+// server and must not be acted on as if it were.
+func (c *Client) ListMembers(ctx context.Context, guildID string, most int) (members []Member, complete bool, err error) {
+	if !ValidID(guildID) {
+		return nil, false, errors.New("discord: not a server id")
+	}
+	after := "0"
+	for {
+		var page []Member
+		path := "/guilds/" + guildID + "/members?limit=" + strconv.Itoa(membersPage) + "&after=" + after
+		if err := c.bot(ctx, http.MethodGet, path, nil, &page); err != nil {
+			return nil, false, err
+		}
+		members = append(members, page...)
+		if len(page) < membersPage {
+			return members, true, nil
+		}
+		if len(members) >= most {
+			return members, false, nil
+		}
+		after = page[len(page)-1].User.ID
+	}
+}
+
+// GuildOwner reports the account that owns a server.
+func (c *Client) GuildOwner(ctx context.Context, guildID string) (string, error) {
+	if !ValidID(guildID) {
+		return "", errors.New("discord: not a server id")
+	}
+	var guild struct {
+		OwnerID string `json:"owner_id"`
+	}
+	if err := c.bot(ctx, http.MethodGet, "/guilds/"+guildID, nil, &guild); err != nil {
+		return "", err
+	}
+	return guild.OwnerID, nil
+}
+
+// Kick removes a member from a server. They can join again; nothing
+// is banned. reason goes to the server's audit log.
+func (c *Client) Kick(ctx context.Context, guildID, userID, reason string) error {
+	if !ValidID(guildID) || !ValidID(userID) {
+		return errors.New("discord: not a server or user id")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/guilds/"+guildID+"/members/"+userID, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bot "+c.cfg.BotToken)
+	if reason != "" {
+		req.Header.Set("X-Audit-Log-Reason", url.PathEscape(reason))
+	}
+	_, err = c.do(req, "/guilds/"+guildID+"/members/"+userID, nil)
+	return err
 }
 
 // LeaveGuild takes the bot out of a server.

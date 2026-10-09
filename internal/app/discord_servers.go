@@ -185,6 +185,10 @@ type discordServerView struct {
 	// AutoJoin: members of the owner who have connected Discord are
 	// added to the server without an invite (discord_join.go).
 	AutoJoin bool
+	// Removals (discord_kick.go): whether members owed no role are
+	// removed, and the roles whose holders never are.
+	Kick   bool
+	Exempt []discordChoice
 	// Unreachable: Discord would not list the server's roles and
 	// channels (the bot was removed from it, or Discord is down).
 	Unreachable bool
@@ -254,6 +258,15 @@ func (app *Application) handleDiscordServers(w http.ResponseWriter, r *http.Requ
 				sv.Rules = app.discordRuleViews(ctx, guild, roles)
 				sv.Who = app.discordWhoChoices(ctx, owner)
 				sv.Roles = discordRoleChoices(roles, "")
+				sv.Kick = guild.KickEnabled
+				exempt := roleSet{}
+				exempt.add(splitRoles(guild.KickExemptRoles)...)
+				for _, role := range roles {
+					if role.Managed {
+						continue // a bot's own role: bots are never removed anyway
+					}
+					sv.Exempt = append(sv.Exempt, discordChoice{ID: role.ID, Name: role.Name, Selected: exempt[role.ID]})
+				}
 				sv.Channels = discordChannelChoices(channels, guild.OpsChannel)
 			}
 			ov.Servers = append(ov.Servers, sv)
@@ -418,6 +431,9 @@ func (app *Application) handleDiscordServerForget(w http.ResponseWriter, r *http
 		return
 	}
 	err := app.queries.DeleteDiscordRoleRulesForGuild(ctx, guild.GuildID)
+	if err == nil {
+		err = app.queries.SetDiscordGuildKick(ctx, db.SetDiscordGuildKickParams{GuildID: guild.GuildID})
+	}
 	if err == nil {
 		err = app.queries.SetDiscordGuildOpsChannel(ctx, db.SetDiscordGuildOpsChannelParams{GuildID: guild.GuildID})
 	}

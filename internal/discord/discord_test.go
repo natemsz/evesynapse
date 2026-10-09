@@ -51,7 +51,7 @@ const (
 
 func newClient(f *fake) *Client {
 	return New(Config{
-		ClientID: "client", ClientSecret: "secret", BotToken: "bot-token", GuildID: guild,
+		ClientID: "client", ClientSecret: "secret", BotToken: "bot-token",
 		RedirectURL: "https://eve.example/discord/callback",
 	}, &http.Client{Transport: f}, "https://discord.test/api")
 }
@@ -154,14 +154,14 @@ func TestRoles(t *testing.T) {
 		"DELETE " + member + "/roles/" + role: {"204", ``},
 	}}
 	c := newClient(f)
-	roles, err := c.MemberRoles(context.Background(), user)
+	roles, err := c.MemberRoles(context.Background(), guild, user)
 	if err != nil || len(roles) != 2 || roles[0] != role {
 		t.Fatalf("roles %v, %v", roles, err)
 	}
-	if err := c.SetRole(context.Background(), user, role, true); err != nil {
+	if err := c.SetRole(context.Background(), guild, user, role, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.SetRole(context.Background(), user, role, false); err != nil {
+	if err := c.SetRole(context.Background(), guild, user, role, false); err != nil {
 		t.Fatal(err)
 	}
 	if got := f.calls[1].Method + " " + f.calls[2].Method; got != "PUT DELETE" {
@@ -169,18 +169,70 @@ func TestRoles(t *testing.T) {
 	}
 	// Not in the server.
 	delete(f.answers, "GET "+member)
-	if _, err := c.MemberRoles(context.Background(), user); !IsStatus(err, 404) {
+	if _, err := c.MemberRoles(context.Background(), guild, user); !IsStatus(err, 404) {
 		t.Fatalf("a user outside the server: %v", err)
 	}
 	// Asked to slow down: how long is passed on.
 	f.answers["GET "+member] = [2]string{"429", `{"message":"You are being rate limited.","retry_after":1.5}`}
-	_, err = c.MemberRoles(context.Background(), user)
+	_, err = c.MemberRoles(context.Background(), guild, user)
 	se, ok := err.(*StatusError)
 	if !ok || se.Status != 429 || se.RetryAfter != 1500*time.Millisecond {
 		t.Fatalf("rate limit: %v", err)
 	}
 	if strings.Contains(se.Error(), "bot-token") {
 		t.Fatal("an error message carries the bot token")
+	}
+}
+
+// TestInstall: adding the bot asks for giving roles and sending
+// messages and nothing more, and which server it was added to is what
+// Discord says in its own answer.
+func TestInstall(t *testing.T) {
+	f := &fake{answers: map[string][2]string{
+		"POST /api/oauth2/token": {"200", `{"access_token":"user-token","guild":{"id":"` + guild + `","name":"Home"}}`},
+		"GET /api/users/@me":     {"200", `{"id":"` + user + `","username":"pilot"}`},
+	}}
+	c := newClient(f)
+	u, err := url.Parse(c.InstallURL("state-2"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := u.Query()
+	if q.Get("scope") != "bot identify" || q.Get("state") != "state-2" {
+		t.Fatalf("install address %s", u)
+	}
+	// Manage Roles, View Channels, Send Messages: 1<<28 | 1<<10 | 1<<11.
+	if q.Get("permissions") != "268438528" {
+		t.Fatalf("the bot asks for permissions %s, want only roles and sending (268438528)", q.Get("permissions"))
+	}
+	who, where, err := c.IdentifyInstall(context.Background(), "code")
+	if err != nil || who.ID != user || where.ID != guild || where.Name != "Home" {
+		t.Fatalf("install identified %+v in %+v, %v", who, where, err)
+	}
+	// A plain sign-in adds the bot nowhere.
+	f.answers["POST /api/oauth2/token"] = [2]string{"200", `{"access_token":"user-token"}`}
+	if _, where, err = c.IdentifyInstall(context.Background(), "code"); err != nil || where.ID != "" {
+		t.Fatalf("a plain sign-in reported server %+v, %v", where, err)
+	}
+}
+
+func TestGuildRolesAndChannels(t *testing.T) {
+	f := &fake{answers: map[string][2]string{
+		"GET /api/guilds/" + guild + "/roles":    {"200", `[{"id":"` + guild + `","name":"@everyone","position":0},{"id":"` + role + `","name":"Member","position":2},{"id":"555555555555555555","name":"Bot","managed":true,"position":5}]`},
+		"GET /api/guilds/" + guild + "/channels": {"200", `[{"id":"666666666666666661","name":"voice","type":2,"position":0},{"id":"666666666666666662","name":"ops","type":0,"position":3},{"id":"666666666666666663","name":"news","type":5,"position":1}]`},
+		"DELETE /api/users/@me/guilds/" + guild:  {"204", ``},
+	}}
+	c := newClient(f)
+	roles, err := c.GuildRoles(context.Background(), guild)
+	if err != nil || len(roles) != 2 || roles[0].Name != "Bot" || !roles[0].Managed || roles[1].ID != role {
+		t.Fatalf("roles %+v, %v; want the two real roles, highest first, without @everyone", roles, err)
+	}
+	channels, err := c.GuildTextChannels(context.Background(), guild)
+	if err != nil || len(channels) != 2 || channels[0].Name != "news" || channels[1].Name != "ops" {
+		t.Fatalf("channels %+v, %v; want the two a message can go in, in order", channels, err)
+	}
+	if err := c.LeaveGuild(context.Background(), guild); err != nil {
+		t.Fatal(err)
 	}
 }
 

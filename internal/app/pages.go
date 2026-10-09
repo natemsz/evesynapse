@@ -108,6 +108,9 @@ type pageData struct {
 	// NotifySettings is the /notifications/settings page.
 	NotifySettings *notifySettingsView
 
+	// DiscordServers is the /discord/servers page.
+	DiscordServers *discordServersView
+
 	// Ops (ops.go): one op's page, and the form that creates or
 	// changes one.
 	Op     *opView

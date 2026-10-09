@@ -21,8 +21,8 @@ import (
 // Discord.
 //
 // The link is what the Discord features hang off: notifications as
-// direct messages (discord_notify.go) and roles in the server
-// (discord_roles.go).
+// direct messages (discord_notify.go) and roles in the servers the
+// bot is in (discord_roles.go, discord_servers.go).
 // ---------------------------------------------------------------------------
 
 // sessionDiscordState holds the sign-in's single-use state value.
@@ -35,17 +35,12 @@ func discordFromConfig(cfg Config) *discord.Client {
 		ClientID:     cfg.discordClientID,
 		ClientSecret: cfg.discordClientSecret,
 		BotToken:     cfg.discordBotToken,
-		GuildID:      cfg.discordGuildID,
 	}
 	if origin := cfg.publicOrigin(); origin != "" {
 		dc.RedirectURL = origin + "/discord/callback"
 	}
 	if !dc.CanLink() && !dc.HasBot() {
 		return nil
-	}
-	if cfg.discordGuildID != "" && !discord.ValidID(cfg.discordGuildID) {
-		logging.Errorf("evesynapse: DISCORD_GUILD_ID=%q is not a Discord server id; the bot is off", cfg.discordGuildID)
-		dc.GuildID = ""
 	}
 	return discord.New(dc, nil, "")
 }
@@ -72,6 +67,7 @@ func (app *Application) discordLinkFor(r *http.Request, userID int64) (db.Discor
 const discordSettingsPath = "/notifications/settings"
 
 func (app *Application) handleDiscordConnect(w http.ResponseWriter, r *http.Request) {
+	app.sessions.Remove(r.Context(), sessionDiscordInstall)
 	if !app.discordCanLink() {
 		app.flash(r.Context(), "Discord is not set up on this server.")
 		http.Redirect(w, r, discordSettingsPath, http.StatusSeeOther)
@@ -99,6 +95,7 @@ func (app *Application) handleDiscordCallback(w http.ResponseWriter, r *http.Req
 	// State is single-use: read it, clear it, then constant-time compare.
 	want := app.sessions.GetString(ctx, sessionDiscordState)
 	app.sessions.Remove(ctx, sessionDiscordState)
+	owner := app.sessions.PopString(ctx, sessionDiscordInstall)
 	got := q.Get("state")
 	if want == "" || got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {
 		logging.Warnf("discord callback: state mismatch")
@@ -119,6 +116,12 @@ func (app *Application) handleDiscordCallback(w http.ResponseWriter, r *http.Req
 	code := q.Get("code")
 	if code == "" {
 		back("Discord was not connected.")
+		return
+	}
+	// A director coming back from adding the bot to a server
+	// (discord_servers.go) lands here too.
+	if owner != "" {
+		app.discordFinishInstall(w, r, userID, owner, code)
 		return
 	}
 	account, err := app.discord.Identify(ctx, code)

@@ -266,7 +266,7 @@ type discordSettingsView struct {
 	Linked  bool
 	Name    string // the connected account
 	DM      bool   // notifications go to it as direct messages
-	Roles   bool   // the server gives roles from EVE data
+	Manages bool   // the account directs a corporation or alliance
 }
 
 // notifyMinutesOption is one lead the op reminder can be set to.
@@ -377,7 +377,7 @@ func (app *Application) handleNotificationSettings(w http.ResponseWriter, r *htt
 		}
 	}
 	view.Discord = discordSettingsView{CanLink: app.discordCanLink(), HasBot: app.discordHasBot()}
-	view.Discord.Roles = view.Discord.HasBot && len(app.discordManagedRoles()) > 0
+	view.Discord.Manages = view.Discord.HasBot && len(app.discordManageable(ctx, userID)) > 0
 	if link, linked := app.discordLinkFor(r, userID); linked {
 		view.Discord.Linked, view.Discord.Name, view.Discord.DM = true, link.Username, link.DmNotifications
 	}

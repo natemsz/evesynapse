@@ -1,10 +1,12 @@
 package app
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -16,16 +18,19 @@ import (
 )
 
 // fakeDiscord stands in for Discord's API. It knows which account a
-// sign-in code belongs to, which roles each member of the server
-// holds, and records every message and role change the bot makes.
+// sign-in code belongs to and which server a bot install was approved
+// for, each server's roles, channels and members, and records every
+// message and role change the bot makes.
 type fakeDiscord struct {
 	mu          sync.Mutex
-	codes       map[string]string   // sign-in code -> account id
-	members     map[string][]string // account id -> roles held; absent: not in the server
+	codes       map[string]string              // sign-in code -> account id
+	installs    map[string]string              // sign-in code -> server the bot was added to
+	members     map[string]map[string][]string // server -> account -> roles held; absent: not a member
 	refuseDM    bool
 	failMembers bool     // looking a member up fails outright
+	left        []string // servers the bot was told to leave
 	messages    []string // "channel: text"
-	changes     []string // "PUT user role" / "DELETE user role"
+	changes     []string // "PUT server user role" / "DELETE server user role"
 	calls       int
 }
 
@@ -46,10 +51,15 @@ func (d *fakeDiscord) RoundTrip(req *http.Request) (*http.Response, error) {
 	switch {
 	case path == "/oauth2/token":
 		form, _ := url.ParseQuery(raw)
-		if _, ok := d.codes[form.Get("code")]; !ok {
+		code := form.Get("code")
+		if _, ok := d.codes[code]; !ok {
 			return respond(400, `{"message":"invalid_grant"}`)
 		}
-		return respond(200, `{"access_token":"token-for-`+form.Get("code")+`"}`)
+		guild := ""
+		if id := d.installs[code]; id != "" {
+			guild = `,"guild":{"id":"` + id + `","name":"Server ` + id[len(id)-1:] + `"}`
+		}
+		return respond(200, `{"access_token":"token-for-`+code+`"`+guild+`}`)
 	case path == "/users/@me":
 		code := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer token-for-")
 		return respond(200, `{"id":"`+d.codes[code]+`","username":"pilot-`+code+`"}`)
@@ -59,25 +69,40 @@ func (d *fakeDiscord) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 		id := raw[strings.Index(raw, `:"`)+2 : strings.LastIndex(raw, `"`)]
 		return respond(200, `{"id":"9`+id[1:]+`"}`) // a conversation id made from the account's
+	case len(parts) == 4 && parts[0] == "users" && parts[2] == "guilds" && req.Method == http.MethodDelete:
+		d.left = append(d.left, parts[3])
+		return respond(204, ``)
 	case len(parts) == 3 && parts[0] == "channels" && parts[2] == "messages":
 		text := raw[strings.Index(raw, `"content":"`)+11:]
 		text = text[:strings.Index(text, `"`)]
 		d.messages = append(d.messages, parts[1]+": "+strings.ReplaceAll(text, `\n`, " | "))
 		return respond(200, `{"id":"1"}`)
+	case len(parts) == 3 && parts[0] == "guilds" && parts[2] == "roles":
+		if _, known := d.members[parts[1]]; !known {
+			return respond(403, `{"message":"Missing Access"}`)
+		}
+		return respond(200, `[{"id":"`+parts[1]+`","name":"@everyone","position":0},`+
+			`{"id":"`+discordRoleLinked+`","name":"Linked","position":1},{"id":"`+discordRoleMember+`","name":"Member","position":2},`+
+			`{"id":"`+discordRoleMod+`","name":"Moderator","position":3},{"id":"`+discordRoleBot+`","name":"EveSynapse","managed":true,"position":4}]`)
+	case len(parts) == 3 && parts[0] == "guilds" && parts[2] == "channels":
+		if _, known := d.members[parts[1]]; !known {
+			return respond(403, `{"message":"Missing Access"}`)
+		}
+		return respond(200, `[{"id":"`+discordOpsChannel+`","name":"ops","type":0,"position":1},{"id":"`+discordVoiceChannel+`","name":"Voice","type":2,"position":2}]`)
 	case len(parts) == 4 && parts[0] == "guilds" && parts[2] == "members":
 		if d.failMembers {
 			return respond(500, `{"message":"Internal Server Error"}`)
 		}
-		roles, in := d.members[parts[3]]
+		roles, in := d.members[parts[1]][parts[3]]
 		if !in {
 			return respond(404, `{"message":"Unknown Member"}`)
 		}
 		return respond(200, `{"roles":["`+strings.Join(roles, `","`)+`"]}`)
 	case len(parts) == 6 && parts[0] == "guilds" && parts[4] == "roles":
-		user, role := parts[3], parts[5]
-		d.changes = append(d.changes, req.Method+" "+user+" "+role)
+		guild, user, role := parts[1], parts[3], parts[5]
+		d.changes = append(d.changes, req.Method+" "+guild+" "+user+" "+role)
 		var kept []string
-		for _, r := range d.members[user] {
+		for _, r := range d.members[guild][user] {
 			if r != role {
 				kept = append(kept, r)
 			}
@@ -85,52 +110,87 @@ func (d *fakeDiscord) RoundTrip(req *http.Request) (*http.Response, error) {
 		if req.Method == http.MethodPut {
 			kept = append(kept, role)
 		}
-		d.members[user] = kept
+		d.members[guild][user] = kept
 		return respond(204, ``)
 	}
 	return respond(404, `{"message":"unexpected `+path+`"}`)
 }
 
+// held lists the roles an account holds in a server, sorted.
+func (d *fakeDiscord) held(guild, user string) string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	roles := append([]string(nil), d.members[guild][user]...)
+	sort.Strings(roles)
+	return strings.Join(roles, ",")
+}
+
+func (d *fakeDiscord) join(guild, user string, roles ...string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.members[guild][user] = roles
+}
+
+func (d *fakeDiscord) asked() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.calls
+}
+
 const (
-	discordGuild      = "200000000000000001"
-	discordAlice      = "100000000000000001"
-	discordBob        = "100000000000000002"
-	discordRoleLinked = "300000000000000001"
-	discordRoleCorp   = "300000000000000002"
-	discordRoleOther  = "300000000000000003" // another corporation's
-	discordRoleMod    = "300000000000000099" // not EveSynapse's to touch
-	discordOpsChannel = "400000000000000001"
-	discordCorp       = int64(98000001)
-	discordOtherCorp  = int64(98000002)
+	discordCorpGuild     = "200000000000000001" // the corporation's server
+	discordAllianceGuild = "200000000000000002" // the alliance's server
+	discordAlice         = "100000000000000001"
+	discordBob           = "100000000000000002"
+	discordRoleLinked    = "300000000000000001"
+	discordRoleMember    = "300000000000000002"
+	discordRoleMod       = "300000000000000098" // a server's own: not EveSynapse's to touch
+	discordRoleBot       = "300000000000000099" // the bot's own: cannot be given
+	discordOpsChannel    = "400000000000000001"
+	discordVoiceChannel  = "400000000000000009"
+	discordCorp          = int64(98000001)
+	discordOtherCorp     = int64(98000002)
+	discordAlliance      = int64(99000001)
+	discordCorpOwner     = "corporation:98000001"
+	discordAllianceOwner = "alliance:99000001"
 )
 
 // enableDiscord gives the fixture's app a Discord client over the
-// stand-in, with the sign-in and the bot both set up.
+// stand-in, with the sign-in and the bot both set up, and two servers
+// the bot can be added to.
 func (f *notifyFixture) enableDiscord() *fakeDiscord {
 	f.t.Helper()
-	fake := &fakeDiscord{codes: map[string]string{"alice": discordAlice, "bob": discordBob}, members: map[string][]string{}}
+	fake := &fakeDiscord{
+		codes:    map[string]string{"alice": discordAlice, "bob": discordBob, "add-corp": discordAlice, "add-alliance": discordAlice},
+		installs: map[string]string{"add-corp": discordCorpGuild, "add-alliance": discordAllianceGuild},
+		members:  map[string]map[string][]string{discordCorpGuild: {}, discordAllianceGuild: {}},
+	}
 	f.app.cfg.eveCallbackURL = "https://eve.example/auth/callback"
-	f.app.cfg.discordRoleLinked = discordRoleLinked
-	f.app.cfg.discordCorpRoles = map[int64]string{discordCorp: discordRoleCorp, discordOtherCorp: discordRoleOther}
-	f.app.cfg.discordOpsChannels = map[int64]string{discordCorp: discordOpsChannel}
 	f.app.discord = discord.New(discord.Config{
-		ClientID: "client", ClientSecret: "secret", BotToken: "bot-token", GuildID: discordGuild,
+		ClientID: "client", ClientSecret: "secret", BotToken: "bot-token",
 		RedirectURL: "https://eve.example/discord/callback",
 	}, &http.Client{Transport: fake}, "https://discord.test/api")
 	return fake
 }
 
-// connect runs the whole "Connect Discord" round trip for a cookie,
-// with the sign-in code Discord would hand back.
-func (f *notifyFixture) connect(cookie *http.Cookie, code string) (*http.Cookie, string) {
+// roundTrip starts a Discord sign-in at start (a GET, or a POST when
+// form is given), follows it to Discord and back with the code Discord
+// would hand over, and returns the cookie and the page landed on.
+func (f *notifyFixture) roundTrip(cookie *http.Cookie, start string, form url.Values, code, landing string) (*http.Cookie, string) {
 	f.t.Helper()
-	req := httptest.NewRequest(http.MethodGet, "/discord/connect", nil)
+	var req *http.Request
+	if form == nil {
+		req = httptest.NewRequest(http.MethodGet, start, nil)
+	} else {
+		req = httptest.NewRequest(http.MethodPost, start, strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
 	req.AddCookie(cookie)
 	rec := httptest.NewRecorder()
 	f.app.Handler().ServeHTTP(rec, req)
 	to, err := url.Parse(rec.Header().Get("Location"))
 	if rec.Code != http.StatusFound || err != nil || to.Host != "discord.com" {
-		f.t.Fatalf("connect: %d to %q", rec.Code, rec.Header().Get("Location"))
+		f.t.Fatalf("%s: %d to %q, want to be sent to Discord", start, rec.Code, rec.Header().Get("Location"))
 	}
 	for _, c := range rec.Result().Cookies() {
 		if c.Name == cookie.Name {
@@ -141,20 +201,58 @@ func (f *notifyFixture) connect(cookie *http.Cookie, code string) (*http.Cookie,
 	back.AddCookie(cookie)
 	rec = httptest.NewRecorder()
 	f.app.Handler().ServeHTTP(rec, back)
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != discordSettingsPath {
-		f.t.Fatalf("callback: %d to %q", rec.Code, rec.Header().Get("Location"))
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != landing {
+		f.t.Fatalf("callback: %d to %q, want %q", rec.Code, rec.Header().Get("Location"), landing)
 	}
-	_, body := getPage(f.t, f.app, cookie, discordSettingsPath)
+	_, body := getPage(f.t, f.app, cookie, landing)
 	return cookie, body
 }
 
-func (f *notifyFixture) joinCorp(characterID, corporationID int64) {
+// connect links the cookie's account to the Discord account behind a
+// sign-in code.
+func (f *notifyFixture) connect(cookie *http.Cookie, code string) (*http.Cookie, string) {
+	f.t.Helper()
+	return f.roundTrip(cookie, "/discord/connect", nil, code, discordSettingsPath)
+}
+
+// addServer adds the bot to the server behind an install code, for an
+// owner ("corporation:98000001").
+func (f *notifyFixture) addServer(cookie *http.Cookie, owner, code string) (*http.Cookie, string) {
+	f.t.Helper()
+	return f.roundTrip(cookie, "/discord/servers/add", url.Values{"owner": {owner}}, code, discordServersPath)
+}
+
+func (f *notifyFixture) joinCorp(characterID, corporationID int64, roles ...string) {
 	f.t.Helper()
 	if err := f.q.UpsertCharacterCorporation(f.ctx, db.UpsertCharacterCorporationParams{
 		CharacterID: characterID, CorporationID: corporationID, UpdatedAt: notifyT0,
 	}); err != nil {
 		f.t.Fatal(err)
 	}
+	seedSnapshot(f.t, f.q, characterID, esi.SnapCorpRoles, esi.CharacterRoles{Roles: roles})
+}
+
+// inAlliance stores what EveSynapse knows of a corporation: that it is
+// in the alliance, and which corporation runs the alliance.
+func (f *notifyFixture) inAlliance(corporationID, allianceID, executor int64) {
+	f.t.Helper()
+	payload, _ := json.Marshal(corporationRecordPayload{
+		Corp:     esi.Corporation{Name: "Corp", AllianceID: allianceID},
+		Alliance: esi.Alliance{Name: "The Alliance", ExecutorCorporationID: executor},
+	})
+	if err := f.q.SetCorporationRecord(f.ctx, db.SetCorporationRecordParams{
+		CorporationID: corporationID, Payload: string(payload), State: orgStateReady, FetchedAt: timeSet(notifyT0),
+	}); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+// setServer saves a server's settings through the page.
+func (f *notifyFixture) setServer(cookie *http.Cookie, guild, linked, member, channel string) string {
+	f.t.Helper()
+	f.post(cookie, "/discord/servers/"+guild+"/save", url.Values{"role_linked": {linked}, "role_member": {member}, "ops_channel": {channel}})
+	_, body := getPage(f.t, f.app, cookie, discordServersPath)
+	return body
 }
 
 // TestDiscordConnect: the sign-in stores the Discord account's id and
@@ -168,7 +266,7 @@ func TestDiscordConnect(t *testing.T) {
 	// Not set up: nothing is offered.
 	_, body := getPage(t, f.app, cookie, discordSettingsPath)
 	if strings.Contains(body, "Connect Discord") {
-		t.Fatal("Discord is offered on a server that has not set it up")
+		t.Fatal("Discord is offered on a site that has not set it up")
 	}
 	fake := f.enableDiscord()
 	_, body = getPage(t, f.app, cookie, discordSettingsPath)
@@ -183,8 +281,8 @@ func TestDiscordConnect(t *testing.T) {
 	if _, err := f.q.GetDiscordLink(f.ctx, f.userID); err == nil {
 		t.Fatal("a return with no matching state linked an account")
 	}
-	if fake.calls != 0 {
-		t.Fatalf("Discord was asked %d time(s) for a return that was refused", fake.calls)
+	if fake.asked() != 0 {
+		t.Fatalf("Discord was asked %d time(s) for a return that was refused", fake.asked())
 	}
 
 	cookie, body = f.connect(cookie, "alice")
@@ -194,7 +292,7 @@ func TestDiscordConnect(t *testing.T) {
 		t.Fatalf("stored link %+v, %v", link, err)
 	}
 
-	// Cancelled on Discord's side, or a code Discord refuses: no change.
+	// A code Discord refuses: no change.
 	if _, page := f.connect(cookie, "nobody"); !strings.Contains(page, "could not confirm the account") {
 		t.Fatal("a refused sign-in code was not reported")
 	}
@@ -239,7 +337,6 @@ func TestDiscordDirectMessages(t *testing.T) {
 	fake := f.enableDiscord()
 	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
 	cookie, _ = f.connect(cookie, "alice")
-	fake.members[discordAlice] = nil
 	mail := func(id int64, subject string, at time.Time) {
 		seedSnapshot(t, f.q, f.ch.CharacterID, esi.SnapMail, esi.MailHeaders{{MailID: id, From: 555, Subject: subject, Timestamp: rfc(at)}})
 	}
@@ -290,12 +387,125 @@ func TestDiscordDirectMessages(t *testing.T) {
 	}
 }
 
-// TestDiscordAnnouncesNewOps: an op is posted once in its
-// corporation's channel; an op with no channel is not asked about
-// again; old ops are not posted when the bot is first turned on.
+// TestDiscordServersAreSetUpByDirectors: only a director can add the
+// bot for a corporation, and only a director of the executor
+// corporation for an alliance; which server it was added to is what
+// Discord says; settings are saved only as roles and channels of that
+// server; and nobody else can change them.
+func TestDiscordServersAreSetUpByDirectors(t *testing.T) {
+	f := newNotifyFixture(t)
+	fake := f.enableDiscord()
+	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+
+	// A member who is not a director is offered nothing and cannot
+	// start the install.
+	f.joinCorp(f.ch.CharacterID, discordCorp)
+	_, body := getPage(t, f.app, cookie, discordServersPath)
+	mustContain(t, "servers page for a member", body, "None of your characters is a director")
+	if code, _ := f.post(cookie, "/discord/servers/add", url.Values{"owner": {discordCorpOwner}}); code != http.StatusSeeOther {
+		t.Fatalf("a member's add: %d, want to be sent back", code)
+	}
+	if fake.asked() != 0 {
+		t.Fatal("Discord was asked on behalf of someone who is not a director")
+	}
+
+	// A director adds the bot. The server recorded is the one Discord
+	// names in its own answer.
+	f.joinCorp(f.ch.CharacterID, discordCorp, "Director")
+	cookie, body = f.addServer(cookie, discordCorpOwner, "add-corp")
+	mustContain(t, "after adding", body, "The bot was added to Server 1.", `action="/discord/servers/`+discordCorpGuild+`/save"`,
+		`<option value="`+discordRoleMember+`">Member</option>`, `<option value="`+discordOpsChannel+`">#ops</option>`,
+		"Role for members of this corporation")
+	if strings.Contains(body, discordRoleBot) {
+		t.Fatal("the bot's own role, which cannot be given, is offered")
+	}
+	if strings.Contains(body, discordVoiceChannel) {
+		t.Fatal("a voice channel is offered for posting ops")
+	}
+	guild, err := f.q.GetDiscordGuild(f.ctx, discordCorpGuild)
+	if err != nil || guild.OwnerKind != ownerCorporation || guild.OwnerID != discordCorp || guild.AddedBy != f.userID {
+		t.Fatalf("stored server %+v, %v", guild, err)
+	}
+	// An ordinary "Connect Discord" return adds no server.
+	cookie, _ = f.connect(cookie, "alice")
+	if guilds, _ := f.q.ListDiscordGuilds(f.ctx); len(guilds) != 1 {
+		t.Fatalf("%d server(s) after a plain connect, want 1", len(guilds))
+	}
+
+	// Settings: roles and a channel of that server are taken; anything
+	// else is refused and nothing is stored.
+	body = f.setServer(cookie, discordCorpGuild, discordRoleLinked, discordRoleMember, discordOpsChannel)
+	mustContain(t, "after saving", body, "Settings saved for Server 1.", `<option value="`+discordRoleMember+`" selected>Member</option>`)
+	for name, bad := range map[string][3]string{
+		"a role of no server":    {"300000000000000777", discordRoleMember, discordOpsChannel},
+		"the bot's own role":     {discordRoleLinked, discordRoleBot, discordOpsChannel},
+		"a channel of no server": {discordRoleLinked, discordRoleMember, "400000000000000777"},
+		"a voice channel":        {discordRoleLinked, discordRoleMember, discordVoiceChannel},
+		"not an id":              {"@everyone", discordRoleMember, discordOpsChannel},
+	} {
+		if page := f.setServer(cookie, discordCorpGuild, bad[0], bad[1], bad[2]); !strings.Contains(page, "not a role or channel of that server") {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+	if guild, _ = f.q.GetDiscordGuild(f.ctx, discordCorpGuild); guild.RoleLinked != discordRoleLinked || guild.RoleMember != discordRoleMember || guild.OpsChannel != discordOpsChannel {
+		t.Fatalf("a refused save changed the settings: %+v", guild)
+	}
+
+	// Somebody else, a director of another corporation, cannot touch it.
+	other, err := f.q.CreateUser(f.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedCharacter(t, f.q, other.ID, fixtureCharB, "Fixture Other")
+	f.joinCorp(fixtureCharB, discordOtherCorp, "Director")
+	theirs := sessionCookie(t, f.app, other.ID, fixtureCharB, "Fixture Other")
+	_, body = getPage(t, f.app, theirs, discordServersPath)
+	if strings.Contains(body, discordCorpGuild) {
+		t.Fatal("another corporation's server is shown to an outsider")
+	}
+	f.post(theirs, "/discord/servers/"+discordCorpGuild+"/save", url.Values{"role_linked": {""}, "role_member": {""}, "ops_channel": {""}})
+	f.post(theirs, "/discord/servers/"+discordCorpGuild+"/remove", url.Values{})
+	if guild, err = f.q.GetDiscordGuild(f.ctx, discordCorpGuild); err != nil || guild.RoleMember != discordRoleMember {
+		t.Fatalf("an outsider changed the server: %+v, %v", guild, err)
+	}
+	if code, _ := f.post(theirs, "/discord/servers/add", url.Values{"owner": {discordCorpOwner}}); code != http.StatusSeeOther {
+		t.Fatalf("an outsider's add for the corporation: %d", code)
+	}
+
+	// An alliance's server: only a director of the executor corporation.
+	f.inAlliance(discordCorp, discordAlliance, discordOtherCorp) // the other corporation runs the alliance
+	f.inAlliance(discordOtherCorp, discordAlliance, discordOtherCorp)
+	if code, _ := f.post(cookie, "/discord/servers/add", url.Values{"owner": {discordAllianceOwner}}); code != http.StatusSeeOther {
+		t.Fatalf("a member corporation's director adding for the alliance: %d, want to be sent back", code)
+	}
+	if guilds, _ := f.q.ListDiscordGuilds(f.ctx); len(guilds) != 1 {
+		t.Fatal("a director of a member corporation added an alliance server")
+	}
+	_, body = f.addServer(theirs, discordAllianceOwner, "add-alliance")
+	mustContain(t, "the alliance's server", body, "The bot was added to Server 2.", "Role for members of this alliance")
+
+	// A director loses the role: the actions go with it.
+	f.joinCorp(f.ch.CharacterID, discordCorp)
+	f.post(cookie, "/discord/servers/"+discordCorpGuild+"/save", url.Values{"role_linked": {""}, "role_member": {""}, "ops_channel": {""}})
+	if guild, _ = f.q.GetDiscordGuild(f.ctx, discordCorpGuild); guild.RoleMember != discordRoleMember {
+		t.Fatal("a former director changed the server")
+	}
+}
+
+// TestDiscordAnnouncesNewOps: an op is posted once in the channel of
+// its corporation's server; in its alliance's server only when the
+// corporation's director has agreed; and old ops are not posted to a
+// server that has just been set up.
 func TestDiscordAnnouncesNewOps(t *testing.T) {
 	f := newNotifyFixture(t)
 	fake := f.enableDiscord()
+	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+	f.joinCorp(f.ch.CharacterID, discordCorp, "Director")
+	f.inAlliance(discordCorp, discordAlliance, discordCorp) // this corporation runs the alliance
+	cookie, _ = f.addServer(cookie, discordCorpOwner, "add-corp")
+	cookie, _ = f.addServer(cookie, discordAllianceOwner, "add-alliance")
+	f.setServer(cookie, discordCorpGuild, "", "", discordOpsChannel)
+	f.setServer(cookie, discordAllianceGuild, "", "", discordOpsChannel)
 	now := notifyT0
 	plan := func(corp int64, title string, created time.Time) int64 {
 		t.Helper()
@@ -310,109 +520,139 @@ func TestDiscordAnnouncesNewOps(t *testing.T) {
 	}
 	op := plan(discordCorp, "Structure @everyone bash", now)
 	plan(discordCorp, "Planned last week", now.Add(-7*24*time.Hour))
-	plan(discordOtherCorp, "No channel for this corporation", now)
+	plan(discordOtherCorp, "A corporation with no server", now)
 
-	if n := f.app.discordAnnounceOps(f.ctx, now.Add(time.Minute)); n != 1 {
-		t.Fatalf("posted %d, want 1: %q", n, fake.messages)
-	}
-	if len(fake.messages) != 1 {
-		t.Fatalf("messages %q", fake.messages)
+	// Not shared with the alliance: the corporation's own server only.
+	if n := f.app.discordAnnounceOps(f.ctx, now.Add(time.Minute)); n != 1 || len(fake.messages) != 1 {
+		t.Fatalf("posted %d, messages %q; want the one op in the corporation's server", n, fake.messages)
 	}
 	mustContain(t, "the post", fake.messages[0],
 		discordOpsChannel+": ", "Structure @everyone bash", "Monday, Oct 12 19:00 EVE time", "Ferox",
 		"https://eve.example"+opURL(op))
-	calls := fake.calls
-	if n := f.app.discordAnnounceOps(f.ctx, now.Add(2*time.Minute)); n != 0 || fake.calls != calls {
-		t.Fatalf("second look posted %d and made %d more call(s)", n, fake.calls-calls)
+	calls := fake.asked()
+	if n := f.app.discordAnnounceOps(f.ctx, now.Add(2*time.Minute)); n != 0 || fake.asked() != calls {
+		t.Fatalf("second look posted %d and made %d more call(s)", n, fake.asked()-calls)
 	}
-	// Nothing set up: nothing happens.
-	f.app.cfg.discordOpsChannels = nil
-	plan(discordCorp, "With no channels set", now)
-	if n := f.app.discordAnnounceOps(f.ctx, now.Add(3*time.Minute)); n != 0 || fake.calls != calls {
-		t.Fatal("posted with no channel configured")
+
+	// The director agrees to share: the next op goes to both.
+	_, body := getPage(t, f.app, cookie, discordServersPath)
+	mustContain(t, "share offered", body, `name="corporation" value="98000001"`)
+	f.post(cookie, "/discord/servers/share", url.Values{"corporation": {"98000001"}, "share": {"1"}})
+	plan(discordCorp, "Shared op", now)
+	if n := f.app.discordAnnounceOps(f.ctx, now.Add(3*time.Minute)); n != 2 {
+		t.Fatalf("a shared op was posted %d time(s), want in both servers", n)
+	}
+	// Only that corporation's director decides it.
+	other, _ := f.q.CreateUser(f.ctx)
+	seedCharacter(t, f.q, other.ID, fixtureCharB, "Fixture Other")
+	f.joinCorp(fixtureCharB, discordOtherCorp, "Director")
+	f.post(sessionCookie(t, f.app, other.ID, fixtureCharB, "Fixture Other"), "/discord/servers/share", url.Values{"corporation": {"98000001"}})
+	if _, err := f.q.GetDiscordOpsShare(f.ctx, discordCorp); err != nil {
+		t.Fatal("an outsider switched off another corporation's sharing")
 	}
 }
 
-// TestDiscordRoles: a connected account gets the role for being
-// connected and the roles of its characters' corporations, loses a
-// corporation's role when its character leaves, and has every role
-// the bot did not give left alone. Discord is only asked when
-// something has changed.
+// TestDiscordRoles: in a server, a connected account gets the linked
+// role, and the member role when a working character of theirs is in
+// the server's corporation or alliance. Roles follow the character,
+// roles the bot did not give are never touched, and Discord is only
+// asked when something has changed.
 func TestDiscordRoles(t *testing.T) {
 	f := newNotifyFixture(t)
 	fake := f.enableDiscord()
 	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+	f.joinCorp(f.ch.CharacterID, discordCorp, "Director")
+	f.inAlliance(discordCorp, discordAlliance, discordCorp)
+	cookie, _ = f.addServer(cookie, discordCorpOwner, "add-corp")
+	cookie, _ = f.addServer(cookie, discordAllianceOwner, "add-alliance")
+	f.setServer(cookie, discordCorpGuild, discordRoleLinked, discordRoleMember, "")
+	f.setServer(cookie, discordAllianceGuild, "", discordRoleMember, "")
 	cookie, _ = f.connect(cookie, "alice")
-	f.joinCorp(f.ch.CharacterID, discordCorp)
-	held := func() string {
-		fake.mu.Lock()
-		defer fake.mu.Unlock()
-		roles := append([]string(nil), fake.members[discordAlice]...)
-		sortStrings(roles)
-		return strings.Join(roles, ",")
-	}
 	now := notifyT0
 
-	// Not in the server yet: nothing to give.
+	// In neither server yet: nothing to give.
 	if n := f.app.discordSyncRoles(f.ctx, now); n != 0 || len(fake.changes) != 0 {
-		t.Fatalf("for a user outside the server: %d changed, %q", n, fake.changes)
+		t.Fatalf("for a user in no server: %d changed, %q", n, fake.changes)
+	}
+	// Looked for, not found, and not looked for again every minute.
+	calls := fake.asked()
+	f.app.discordSyncRoles(f.ctx, now.Add(time.Minute))
+	if fake.asked() != calls {
+		t.Fatalf("someone who is not in the servers cost %d call(s) a pass", fake.asked()-calls)
 	}
 
-	// Joined, already holding a role a moderator gave.
-	fake.members[discordAlice] = []string{discordRoleMod}
-	if n := f.app.discordSyncRoles(f.ctx, now.Add(7*time.Hour)); n != 1 {
-		t.Fatalf("%d account(s) changed, want 1: %q", n, fake.changes)
+	// Joins both, already holding a role a moderator gave. The button
+	// brings the roles at once.
+	fake.join(discordCorpGuild, discordAlice, discordRoleMod)
+	fake.join(discordAllianceGuild, discordAlice)
+	f.post(cookie, "/discord/roles/refresh", url.Values{})
+	if got, want := fake.held(discordCorpGuild, discordAlice), discordRoleLinked+","+discordRoleMember+","+discordRoleMod; got != want {
+		t.Fatalf("in the corporation's server: %s, want %s", got, want)
 	}
-	if got, want := held(), discordRoleLinked+","+discordRoleCorp+","+discordRoleMod; got != want {
-		t.Fatalf("roles held %s, want %s", got, want)
+	if got := fake.held(discordAllianceGuild, discordAlice); got != discordRoleMember {
+		t.Fatalf("in the alliance's server: %s, want the member role only (no linked role is set there)", got)
 	}
 
 	// Nothing changed: Discord is not asked.
-	calls := fake.calls
-	if n := f.app.discordSyncRoles(f.ctx, now.Add(7*time.Hour+time.Minute)); n != 0 || fake.calls != calls {
-		t.Fatalf("an unchanged account cost %d call(s)", fake.calls-calls)
+	calls = fake.asked()
+	if n := f.app.discordSyncRoles(f.ctx, now.Add(2*time.Minute)); n != 0 || fake.asked() != calls {
+		t.Fatalf("an unchanged account cost %d call(s)", fake.asked()-calls)
 	}
 
-	// The character moves corporation: one role goes, another comes.
+	// The character moves to a corporation outside the alliance: the
+	// member roles go, the linked role stays.
 	f.joinCorp(f.ch.CharacterID, discordOtherCorp)
-	f.app.discordSyncRoles(f.ctx, now.Add(7*time.Hour+2*time.Minute))
-	if got, want := held(), discordRoleLinked+","+discordRoleOther+","+discordRoleMod; got != want {
-		t.Fatalf("after moving corporation: %s, want %s", got, want)
+	f.app.discordSyncRoles(f.ctx, now.Add(3*time.Minute))
+	if got, want := fake.held(discordCorpGuild, discordAlice), discordRoleLinked+","+discordRoleMod; got != want {
+		t.Fatalf("after leaving, in the corporation's server: %s, want %s", got, want)
+	}
+	if got := fake.held(discordAllianceGuild, discordAlice); got != "" {
+		t.Fatalf("after leaving, in the alliance's server: %s, want nothing", got)
 	}
 
-	// The character's link to EVE goes bad: it earns nothing any more,
-	// and with no working character left the account does not even
-	// keep the role for being connected.
+	// Back in, then the character's link to EVE goes bad: with no
+	// working character the account earns nothing, not even linked.
+	f.joinCorp(f.ch.CharacterID, discordCorp)
+	f.app.discordSyncRoles(f.ctx, now.Add(4*time.Minute))
 	if _, err := f.app.db.ExecContext(f.ctx, `UPDATE characters SET link_state = 'revoked' WHERE character_id = $1`, f.ch.CharacterID); err != nil {
 		t.Fatal(err)
 	}
-	f.app.discordSyncRoles(f.ctx, now.Add(7*time.Hour+3*time.Minute))
-	if got := held(); got != discordRoleMod {
+	f.app.discordSyncRoles(f.ctx, now.Add(5*time.Minute))
+	if got := fake.held(discordCorpGuild, discordAlice); got != discordRoleMod {
 		t.Fatalf("with the only character's link revoked: %s, want only the moderator's role", got)
 	}
 	if _, err := f.app.db.ExecContext(f.ctx, `UPDATE characters SET link_state = 'ok' WHERE character_id = $1`, f.ch.CharacterID); err != nil {
 		t.Fatal(err)
 	}
-	f.app.discordSyncRoles(f.ctx, now.Add(7*time.Hour+210*time.Second))
-	if got, want := held(), discordRoleLinked+","+discordRoleOther+","+discordRoleMod; got != want {
-		t.Fatalf("with the link working again: %s, want %s", got, want)
-	}
+	f.app.discordSyncRoles(f.ctx, now.Add(6*time.Minute))
 
 	// A role taken away by hand comes back at the periodic check.
-	fake.members[discordAlice] = []string{discordRoleMod}
-	f.app.discordSyncRoles(f.ctx, now.Add(7*time.Hour+4*time.Minute))
-	if got := held(); got != discordRoleMod {
+	fake.join(discordCorpGuild, discordAlice, discordRoleMod)
+	f.app.discordSyncRoles(f.ctx, now.Add(7*time.Minute))
+	if got := fake.held(discordCorpGuild, discordAlice); got != discordRoleMod {
 		t.Fatalf("checked again too soon: %s", got)
 	}
-	f.app.discordSyncRoles(f.ctx, now.Add(14*time.Hour))
-	if got, want := held(), discordRoleLinked+","+discordRoleOther+","+discordRoleMod; got != want {
+	f.app.discordSyncRoles(f.ctx, now.Add(7*time.Hour))
+	if got, want := fake.held(discordCorpGuild, discordAlice), discordRoleLinked+","+discordRoleMember+","+discordRoleMod; got != want {
 		t.Fatalf("after the periodic check: %s, want %s", got, want)
 	}
 
-	// Disconnecting takes back what was given, and only that.
+	// The directors change which role is the member role: the old one
+	// is taken back, although it is no longer in the settings.
+	f.joinCorp(f.ch.CharacterID, discordCorp, "Director")
+	f.setServer(cookie, discordCorpGuild, discordRoleLinked, "", "")
+	f.app.discordSyncRoles(f.ctx, now.Add(7*time.Hour+time.Minute))
+	if got, want := fake.held(discordCorpGuild, discordAlice), discordRoleLinked+","+discordRoleMod; got != want {
+		t.Fatalf("after the member role was unset: %s, want %s", got, want)
+	}
+
+	// Disconnecting takes back what was given, everywhere, and only that.
 	f.post(cookie, "/discord/disconnect", url.Values{})
-	if got := held(); got != discordRoleMod {
+	if got := fake.held(discordCorpGuild, discordAlice); got != discordRoleMod {
 		t.Fatalf("after disconnecting: %s, want only the moderator's role", got)
+	}
+	if got := fake.held(discordAllianceGuild, discordAlice); got != "" {
+		t.Fatalf("after disconnecting, in the alliance's server: %s", got)
 	}
 	for _, change := range fake.changes {
 		if strings.HasSuffix(change, discordRoleMod) {
@@ -429,20 +669,15 @@ func TestDiscordRolesAreTakenBackWhenTheAccountGoes(t *testing.T) {
 	f := newNotifyFixture(t)
 	fake := f.enableDiscord()
 	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+	f.joinCorp(f.ch.CharacterID, discordCorp, "Director")
+	cookie, _ = f.addServer(cookie, discordCorpOwner, "add-corp")
+	f.setServer(cookie, discordCorpGuild, discordRoleLinked, discordRoleMember, "")
 	cookie, _ = f.connect(cookie, "alice")
-	f.joinCorp(f.ch.CharacterID, discordCorp)
-	held := func(id string) string {
-		fake.mu.Lock()
-		defer fake.mu.Unlock()
-		roles := append([]string(nil), fake.members[id]...)
-		sortStrings(roles)
-		return strings.Join(roles, ",")
-	}
 	now := notifyT0
-	fake.members[discordAlice] = []string{discordRoleMod}
-	fake.members[discordBob] = nil
+	fake.join(discordCorpGuild, discordAlice, discordRoleMod)
+	fake.join(discordCorpGuild, discordBob)
 	f.app.discordSyncRoles(f.ctx, now)
-	if got, want := held(discordAlice), discordRoleLinked+","+discordRoleCorp+","+discordRoleMod; got != want {
+	if got, want := fake.held(discordCorpGuild, discordAlice), discordRoleLinked+","+discordRoleMember+","+discordRoleMod; got != want {
 		t.Fatalf("to begin with: %s, want %s", got, want)
 	}
 
@@ -450,66 +685,74 @@ func TestDiscordRolesAreTakenBackWhenTheAccountGoes(t *testing.T) {
 	// first one loses what it was given, the second gains it.
 	f.connect(cookie, "bob")
 	f.app.discordSyncRoles(f.ctx, now.Add(time.Minute))
-	if got := held(discordAlice); got != discordRoleMod {
+	if got := fake.held(discordCorpGuild, discordAlice); got != discordRoleMod {
 		t.Fatalf("the Discord account that was swapped out still holds %s", got)
 	}
-	if got, want := held(discordBob), discordRoleLinked+","+discordRoleCorp; got != want {
+	if got, want := fake.held(discordCorpGuild, discordBob), discordRoleLinked+","+discordRoleMember; got != want {
 		t.Fatalf("the Discord account swapped in holds %s, want %s", got, want)
 	}
 
 	// The EveSynapse account is deleted outright, behind the app's
-	// back, while Discord is refusing the bot. Nothing is forgotten.
+	// back, while Discord is failing. Nothing is forgotten.
 	if _, err := f.app.db.ExecContext(f.ctx, `DELETE FROM users WHERE id = $1`, f.userID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.q.GetDiscordLink(f.ctx, f.userID); err == nil {
 		t.Fatal("the link outlived the account")
 	}
-	member := fake.members[discordBob]
 	fake.mu.Lock()
-	delete(fake.members, discordBob) // the member cannot be looked up: tried again later
 	fake.failMembers = true
 	fake.mu.Unlock()
 	f.app.discordSyncRoles(f.ctx, now.Add(2*time.Minute))
 	fake.mu.Lock()
-	fake.members[discordBob], fake.failMembers = member, false
+	fake.failMembers = false
 	fake.mu.Unlock()
-	if got := held(discordBob); got == "" {
+	if got := fake.held(discordCorpGuild, discordBob); got == "" {
 		t.Fatal("the test did not leave the roles in place while Discord was failing")
 	}
 	if n := f.app.discordSyncRoles(f.ctx, now.Add(3*time.Minute)); n != 1 {
 		t.Fatalf("after the account was deleted: %d change(s), want the roles taken back", n)
 	}
-	if got := held(discordBob); got != "" {
+	if got := fake.held(discordCorpGuild, discordBob); got != "" {
 		t.Fatalf("a deleted account's Discord member still holds %s", got)
 	}
 	// And then there is nothing left to do.
-	calls := fake.calls
-	if n := f.app.discordSyncRoles(f.ctx, now.Add(4*time.Minute)); n != 0 || fake.calls != calls {
-		t.Fatalf("with nothing left to take back: %d change(s), %d call(s)", n, fake.calls-calls)
+	calls := fake.asked()
+	if n := f.app.discordSyncRoles(f.ctx, now.Add(4*time.Minute)); n != 0 || fake.asked() != calls {
+		t.Fatalf("with nothing left to take back: %d change(s), %d call(s)", n, fake.asked()-calls)
 	}
 }
 
-func sortStrings(s []string) {
-	for i := 1; i < len(s); i++ {
-		for j := i; j > 0 && s[j] < s[j-1]; j-- {
-			s[j], s[j-1] = s[j-1], s[j]
-		}
-	}
-}
+// TestDiscordServerRemoval: removing a server first takes back the
+// roles the bot gave there, and only then forgets it and has the bot
+// leave.
+func TestDiscordServerRemoval(t *testing.T) {
+	f := newNotifyFixture(t)
+	fake := f.enableDiscord()
+	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+	f.joinCorp(f.ch.CharacterID, discordCorp, "Director")
+	cookie, _ = f.addServer(cookie, discordCorpOwner, "add-corp")
+	f.setServer(cookie, discordCorpGuild, discordRoleLinked, discordRoleMember, discordOpsChannel)
+	cookie, _ = f.connect(cookie, "alice")
+	fake.join(discordCorpGuild, discordAlice, discordRoleMod)
+	now := notifyT0
+	f.app.discordSyncRoles(f.ctx, now)
 
-func TestDiscordIDSettings(t *testing.T) {
-	got := discordIDMap("TEST", " 98000001=300000000000000002 , *=300000000000000003, nope, 5=abc, =300000000000000004,98000009 = 300000000000000005")
-	want := map[int64]string{98000001: "300000000000000002", 0: "300000000000000003", 98000009: "300000000000000005"}
-	if len(got) != len(want) {
-		t.Fatalf("read %v, want %v", got, want)
+	f.post(cookie, "/discord/servers/"+discordCorpGuild+"/remove", url.Values{})
+	_, body := getPage(t, f.app, cookie, discordServersPath)
+	mustContain(t, "first press", body, "is switched off. The bot is taking back the roles it gave there (1 member(s) to go)")
+	if len(fake.left) != 0 {
+		t.Fatal("the bot left a server while members still held its roles")
 	}
-	for corp, id := range want {
-		if got[corp] != id {
-			t.Errorf("corporation %d: %q, want %q", corp, got[corp], id)
-		}
+	f.app.discordSyncRoles(f.ctx, now.Add(time.Minute))
+	if got := fake.held(discordCorpGuild, discordAlice); got != discordRoleMod {
+		t.Fatalf("after switching off: %s, want only the moderator's role", got)
 	}
-	if discordIDValue("TEST", " 300000000000000001 ") != "300000000000000001" || discordIDValue("TEST", "@everyone") != "" || discordIDValue("TEST", "") != "" {
-		t.Fatal("a single id setting was read wrongly")
+	f.post(cookie, "/discord/servers/"+discordCorpGuild+"/remove", url.Values{})
+	if _, err := f.q.GetDiscordGuild(f.ctx, discordCorpGuild); err == nil {
+		t.Fatal("the server is still recorded after removal")
+	}
+	if len(fake.left) != 1 || fake.left[0] != discordCorpGuild {
+		t.Fatalf("the bot left %q, want the removed server", fake.left)
 	}
 }

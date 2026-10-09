@@ -34,18 +34,12 @@ type Config struct {
 	notifyPoll int
 
 	// Discord (discord_link.go). The client id and secret run the
-	// "Connect Discord" sign-in; the bot token and server id let the
-	// bot message and give roles in that one server. Each pair works
-	// without the other, and with none set Discord is off.
+	// "Connect Discord" sign-in; the bot token lets the bot message
+	// and give roles in the servers it is added to. With none set
+	// Discord is off. What the bot does in each server is not set
+	// here: its directors choose that on the site (discord_servers.go).
 	discordClientID, discordClientSecret string
-	discordBotToken, discordGuildID      string
-	// discordOpsChannels: corporation id -> the channel new ops are
-	// posted in (0 is the channel for every other corporation).
-	// discordRoleLinked is given to every connected account, and
-	// discordCorpRoles: corporation id -> the role its members get.
-	discordOpsChannels map[int64]string
-	discordRoleLinked  string
-	discordCorpRoles   map[int64]string
+	discordBotToken                      string
 
 	addr            string         // listen address
 	databaseURL     string         // Postgres connection URL (DATABASE_URL)
@@ -163,10 +157,6 @@ func LoadConfig() (Config, error) {
 		discordClientID:     os.Getenv("DISCORD_CLIENT_ID"),
 		discordClientSecret: os.Getenv("DISCORD_CLIENT_SECRET"),
 		discordBotToken:     os.Getenv("DISCORD_BOT_TOKEN"),
-		discordGuildID:      strings.TrimSpace(os.Getenv("DISCORD_GUILD_ID")),
-		discordOpsChannels:  discordIDMap("DISCORD_OPS_CHANNELS", os.Getenv("DISCORD_OPS_CHANNELS")),
-		discordRoleLinked:   discordIDValue("DISCORD_ROLE_LINKED", os.Getenv("DISCORD_ROLE_LINKED")),
-		discordCorpRoles:    discordIDMap("DISCORD_ROLE_CORPS", os.Getenv("DISCORD_ROLE_CORPS")),
 		addr:                getenvDefault("ADDR", ":8080"),
 		databaseURL:         getenvDefault("DATABASE_URL", "postgres://evesynapse@localhost:5432/evesynapse?sslmode=disable"),
 		eveClientID:         os.Getenv("EVE_CLIENT_ID"),

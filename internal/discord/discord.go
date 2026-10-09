@@ -8,9 +8,10 @@
 //     account's id and name are read once, and the user's token is
 //     thrown away. Nothing here can act as that user afterwards.
 //
-//   - The bot token acts as the bot, in the one server it has been
-//     invited to: it sends messages and gives or takes roles. It can do
-//     only what that server's settings let the bot's own role do.
+//   - The bot token acts as the bot, in whichever servers it has been
+//     invited to: it sends messages and gives or takes roles. In each
+//     it can do only what that server's settings let the bot's own
+//     role do.
 //
 // Nothing is ever read from a channel: the bot does not connect to
 // Discord's gateway and has no message handler.
@@ -26,6 +27,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -38,13 +40,11 @@ const DefaultBaseURL = "https://discord.com/api/v10"
 const authorizeURL = "https://discord.com/oauth2/authorize"
 
 // Config is what an install is given. Any part may be empty: the
-// sign-in needs the client id and secret, the bot calls the token and
-// the server.
+// sign-in needs the client id and secret, the bot calls the token.
 type Config struct {
 	ClientID     string
 	ClientSecret string
 	BotToken     string
-	GuildID      string // the one server the bot acts in
 	RedirectURL  string // this site's /discord/callback
 }
 
@@ -53,8 +53,12 @@ func (c Config) CanLink() bool {
 	return c.ClientID != "" && c.ClientSecret != "" && c.RedirectURL != ""
 }
 
-// HasBot reports whether the bot can act in a server.
-func (c Config) HasBot() bool { return c.BotToken != "" && c.GuildID != "" }
+// HasBot reports whether the bot can act at all.
+func (c Config) HasBot() bool { return c.BotToken != "" }
+
+// CanInstall reports whether the bot can be added to a server from
+// this site: that takes the sign-in and the bot both.
+func (c Config) CanInstall() bool { return c.CanLink() && c.HasBot() }
 
 // Client talks to Discord.
 type Client struct {
@@ -135,44 +139,87 @@ func (u User) DisplayName() string {
 	return u.Username
 }
 
+// Guild is a Discord server.
+type Guild struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// botPermissions is what the bot asks for when it is added to a
+// server: Manage Roles (1<<28), View Channels (1<<10) and Send
+// Messages (1<<11). Nothing that reads messages or manages channels.
+const botPermissions = 1<<28 | 1<<10 | 1<<11
+
+// InstallURL is where to send someone to add the bot to a server of
+// theirs. Discord only lets a person who may manage a server add a bot
+// to it, and shows them the permissions asked for.
+func (c *Client) InstallURL(state string) string {
+	q := url.Values{}
+	q.Set("client_id", c.cfg.ClientID)
+	q.Set("response_type", "code")
+	q.Set("redirect_uri", c.cfg.RedirectURL)
+	q.Set("scope", "bot identify")
+	q.Set("permissions", strconv.Itoa(botPermissions))
+	q.Set("state", state)
+	return authorizeURL + "?" + q.Encode()
+}
+
 // Identify finishes a sign-in: it trades the code Discord sent back
 // for a token, reads whose account it is, and returns that. The token
 // is not kept.
 func (c *Client) Identify(ctx context.Context, code string) (User, error) {
+	user, _, err := c.IdentifyInstall(ctx, code)
+	return user, err
+}
+
+// IdentifyInstall is Identify for a return from InstallURL: it also
+// reports the server the bot was just added to, as Discord itself
+// states it in its answer (never as the browser claims it). The
+// server is empty when the sign-in added the bot nowhere.
+func (c *Client) IdentifyInstall(ctx context.Context, code string) (User, Guild, error) {
+	user, guild, err := c.identify(ctx, code)
+	if err == nil && guild.ID != "" && !ValidID(guild.ID) {
+		return User{}, Guild{}, errors.New("discord: the sign-in returned a server with no id")
+	}
+	return user, guild, err
+}
+
+func (c *Client) identify(ctx context.Context, code string) (User, Guild, error) {
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
 	form.Set("code", code)
 	form.Set("redirect_uri", c.cfg.RedirectURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/oauth2/token", strings.NewReader(form.Encode()))
 	if err != nil {
-		return User{}, err
+		return User{}, Guild{}, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.SetBasicAuth(c.cfg.ClientID, c.cfg.ClientSecret)
 	var token struct {
 		AccessToken string `json:"access_token"`
 		TokenType   string `json:"token_type"`
+		Guild       Guild  `json:"guild"`
 	}
 	if err := c.do(req, "/oauth2/token", &token); err != nil {
-		return User{}, err
+		return User{}, Guild{}, err
 	}
 	if token.AccessToken == "" {
-		return User{}, errors.New("discord: the sign-in returned no token")
+		return User{}, Guild{}, errors.New("discord: the sign-in returned no token")
 	}
 
 	req, err = http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/users/@me", nil)
 	if err != nil {
-		return User{}, err
+		return User{}, Guild{}, err
 	}
 	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
 	var user User
 	if err := c.do(req, "/users/@me", &user); err != nil {
-		return User{}, err
+		return User{}, Guild{}, err
 	}
 	if !ValidID(user.ID) {
-		return User{}, errors.New("discord: the sign-in returned no account id")
+		return User{}, Guild{}, errors.New("discord: the sign-in returned no account id")
 	}
-	return user, nil
+	return user, token.Guild, nil
 }
 
 // bot makes a call as the bot. payload and out may be nil.
@@ -277,29 +324,94 @@ func (c *Client) SendDM(ctx context.Context, userID string, m Message) error {
 	return c.SendChannel(ctx, channel.ID, m)
 }
 
-// MemberRoles lists the roles a user holds in the bot's server. A
-// user who is not in the server is a 404 (see IsStatus).
-func (c *Client) MemberRoles(ctx context.Context, userID string) ([]string, error) {
-	if !ValidID(userID) || !ValidID(c.cfg.GuildID) {
+// MemberRoles lists the roles a user holds in a server. A user who is
+// not in the server is a 404 (see IsStatus).
+func (c *Client) MemberRoles(ctx context.Context, guildID, userID string) ([]string, error) {
+	if !ValidID(userID) || !ValidID(guildID) {
 		return nil, errors.New("discord: not a user or server id")
 	}
 	var member struct {
 		Roles []string `json:"roles"`
 	}
-	if err := c.bot(ctx, http.MethodGet, "/guilds/"+c.cfg.GuildID+"/members/"+userID, nil, &member); err != nil {
+	if err := c.bot(ctx, http.MethodGet, "/guilds/"+guildID+"/members/"+userID, nil, &member); err != nil {
 		return nil, err
 	}
 	return member.Roles, nil
 }
 
-// SetRole gives a user a role in the bot's server, or takes it away.
-func (c *Client) SetRole(ctx context.Context, userID, roleID string, held bool) error {
-	if !ValidID(userID) || !ValidID(roleID) || !ValidID(c.cfg.GuildID) {
+// SetRole gives a user a role in a server, or takes it away.
+func (c *Client) SetRole(ctx context.Context, guildID, userID, roleID string, held bool) error {
+	if !ValidID(userID) || !ValidID(roleID) || !ValidID(guildID) {
 		return errors.New("discord: not a user, role or server id")
 	}
 	method := http.MethodPut
 	if !held {
 		method = http.MethodDelete
 	}
-	return c.bot(ctx, method, "/guilds/"+c.cfg.GuildID+"/members/"+userID+"/roles/"+roleID, nil, nil)
+	return c.bot(ctx, method, "/guilds/"+guildID+"/members/"+userID+"/roles/"+roleID, nil, nil)
+}
+
+// Role is a role of a server. Managed roles belong to a bot or an
+// integration and cannot be given to members.
+type Role struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Managed  bool   `json:"managed"`
+	Position int    `json:"position"`
+}
+
+// GuildRoles lists a server's roles, highest first, without the
+// @everyone role (whose id is the server's own).
+func (c *Client) GuildRoles(ctx context.Context, guildID string) ([]Role, error) {
+	if !ValidID(guildID) {
+		return nil, errors.New("discord: not a server id")
+	}
+	var roles []Role
+	if err := c.bot(ctx, http.MethodGet, "/guilds/"+guildID+"/roles", nil, &roles); err != nil {
+		return nil, err
+	}
+	out := roles[:0]
+	for _, role := range roles {
+		if role.ID != guildID {
+			out = append(out, role)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Position > out[j].Position })
+	return out, nil
+}
+
+// Channel is a channel of a server.
+type Channel struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Type     int    `json:"type"`
+	Position int    `json:"position"`
+}
+
+// GuildTextChannels lists the channels of a server a message can be
+// posted in: text (0) and announcement (5) channels.
+func (c *Client) GuildTextChannels(ctx context.Context, guildID string) ([]Channel, error) {
+	if !ValidID(guildID) {
+		return nil, errors.New("discord: not a server id")
+	}
+	var channels []Channel
+	if err := c.bot(ctx, http.MethodGet, "/guilds/"+guildID+"/channels", nil, &channels); err != nil {
+		return nil, err
+	}
+	out := channels[:0]
+	for _, ch := range channels {
+		if ch.Type == 0 || ch.Type == 5 {
+			out = append(out, ch)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Position < out[j].Position })
+	return out, nil
+}
+
+// LeaveGuild takes the bot out of a server.
+func (c *Client) LeaveGuild(ctx context.Context, guildID string) error {
+	if !ValidID(guildID) {
+		return errors.New("discord: not a server id")
+	}
+	return c.bot(ctx, http.MethodDelete, "/users/@me/guilds/"+guildID, nil, nil)
 }

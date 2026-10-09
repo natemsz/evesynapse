@@ -20,9 +20,10 @@ import (
 // already decided to say, with the same per-kind and per-character
 // settings.
 //
-// A corporation's channel. A new op is posted once in the channel set
-// for its corporation (DISCORD_OPS_CHANNELS). That is said to a
-// channel, not to an account, so it has its own memory
+// A server's channel. A new op is posted once in the ops channel of
+// each server of its corporation, and of its alliance's server when
+// the corporation agreed to that (discord_servers.go). That is said to
+// a channel, not to an account, so it has its own memory
 // (ops.discord_announced_at) and does not depend on anyone's settings.
 //
 // The bot only ever sends. Nothing is read from Discord.
@@ -74,12 +75,15 @@ func (app *Application) discordToUser(ctx context.Context, userID int64, events 
 	}
 }
 
-// discordAnnounceOps posts the ops planned since the last look to
-// their corporations' channels, each once. An op with no channel set
-// for its corporation is marked as looked at, so it is not asked about
-// again.
+// discordAnnounceOps posts the ops planned since the last look, each
+// once, in every channel set for it. An op with nowhere to go is
+// marked as looked at, so it is not asked about again.
 func (app *Application) discordAnnounceOps(ctx context.Context, now time.Time) (posted int) {
-	if !app.discordHasBot() || len(app.cfg.discordOpsChannels) == 0 {
+	if !app.discordHasBot() {
+		return 0
+	}
+	guilds, err := app.queries.ListDiscordGuilds(ctx)
+	if err != nil || len(guilds) == 0 {
 		return 0
 	}
 	ops, err := app.queries.ListOpsToAnnounceOnDiscord(ctx, db.ListOpsToAnnounceOnDiscordParams{
@@ -93,11 +97,9 @@ func (app *Application) discordAnnounceOps(ctx context.Context, now time.Time) (
 		if ctx.Err() != nil {
 			return posted
 		}
-		channel := app.cfg.discordOpsChannels[op.CorporationID]
-		if channel == "" {
-			channel = app.cfg.discordOpsChannels[0]
-		}
-		if channel != "" {
+		retry := false
+		targets := app.discordOpsChannels(ctx, guilds, op.CorporationID)
+		if len(targets) > 0 {
 			lead := "New op"
 			if name, settled := app.resolvedCorpName(ctx, op.CorporationID); settled && name != "" {
 				lead += " for " + name
@@ -110,18 +112,25 @@ func (app *Application) discordAnnounceOps(ctx context.Context, now time.Time) (
 				text += " · " + op.Doctrine
 			}
 			text += "\nSign up: " + app.siteURL(opURL(op.ID))
-			if err := app.discord.SendChannel(ctx, channel, discord.Message{Content: text}); err != nil {
-				logging.Warnf("discord: announce op %d in channel %s: %v", op.ID, channel, err)
-				if discord.IsStatus(err, http.StatusTooManyRequests) {
+			for _, guild := range targets {
+				err := app.discord.SendChannel(ctx, guild.OpsChannel, discord.Message{Content: text})
+				switch {
+				case err == nil:
+					posted++
+				case discord.IsStatus(err, http.StatusTooManyRequests):
+					logging.Warnf("discord: announce op %d in %s: %v", op.ID, guild.Name, err)
 					return posted // asked to slow down: the rest wait for the next pass
+				case discord.IsStatus(err, http.StatusForbidden), discord.IsStatus(err, http.StatusNotFound):
+					// The bot cannot post there at all: not worth asking every minute.
+					logging.Warnf("discord: announce op %d in %s: %v", op.ID, guild.Name, err)
+				default:
+					logging.Warnf("discord: announce op %d in %s: %v", op.ID, guild.Name, err)
+					retry = true // a passing failure
 				}
-				if !discord.IsStatus(err, http.StatusForbidden) && !discord.IsStatus(err, http.StatusNotFound) {
-					continue // a passing failure: try this op again next pass
-				}
-				// The bot cannot post there at all: do not ask every minute.
-			} else {
-				posted++
 			}
+		}
+		if retry && posted == 0 {
+			continue // nothing got out: try this op again next pass
 		}
 		if err := app.queries.SetOpDiscordAnnounced(ctx, db.SetOpDiscordAnnouncedParams{ID: op.ID, AnnouncedAt: timeSet(now)}); err != nil {
 			logging.Errorf("discord: mark op %d announced: %v", op.ID, err)
@@ -143,6 +152,32 @@ func (app *Application) handleDiscordSettings(w http.ResponseWriter, r *http.Req
 			app.flash(ctx, "The Discord setting could not be saved; check the server log.")
 		} else {
 			app.flash(ctx, "Discord setting saved.")
+		}
+	}
+	http.Redirect(w, r, discordSettingsPath, http.StatusSeeOther)
+}
+
+// handleDiscordRolesRefresh checks the account's roles in every server
+// now, without waiting for the worker's turn: for someone who has just
+// joined a server.
+func (app *Application) handleDiscordRolesRefresh(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	link, linked := app.discordLinkFor(r, userID)
+	switch {
+	case !app.discordHasBot():
+		app.flash(ctx, "The Discord bot is not set up on this site.")
+	case !linked:
+		app.flash(ctx, "Connect a Discord account first.")
+	default:
+		budget, cancel := context.WithTimeout(ctx, discordUserBudget)
+		defer cancel()
+		servers, err := app.discordSyncAccount(budget, link, time.Now().UTC())
+		if err != nil {
+			logging.Errorf("discord: refresh roles of user %d: %v", userID, err)
+			app.flash(ctx, "Your roles could not be checked; the server log has the reason.")
+		} else {
+			app.flash(ctx, fmt.Sprintf("Your Discord roles were checked. Your characters earn roles in %d server(s); you hold them in those you have joined.", servers))
 		}
 	}
 	http.Redirect(w, r, discordSettingsPath, http.StatusSeeOther)

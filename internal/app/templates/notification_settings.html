@@ -5,10 +5,10 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{with .NotifySettings}}
-<p><small>Choose what EveSynapse tells you about. Notifications show in the top bar; a kind you switch off is not shown, and switching it back on starts from then, not from what you missed.</small></p>
+<p><small>Choose what EveSynapse tells you about, and for which of your characters. Notifications show in the top bar; what you switch off is not shown, and switching it back on starts from then, not from what you missed.</small></p>
 
 <form method="post" action="/notifications/settings">
-<div class="tw">
+<div class="tw notify-settings-wrap">
 <table class="notify-settings">
   <thead>
     <tr><th>Notify me about</th><th>Works for</th></tr>
@@ -17,8 +17,15 @@
     {{range .Rows}}
     <tr>
       <td><label><input type="checkbox" name="kind" value="{{.ID}}"{{if .On}} checked{{end}}> {{.Title}}</label></td>
-      <td>{{if .Coverage}}{{.Coverage}}{{else}}Your account{{end}}{{range .Missing}}
-        <br><small>{{.Name}} has not granted this. <a href="{{.RelinkURL}}">Sign in again</a> to add it.</small>{{end}}</td>
+      <td>{{$kind := .ID}}{{if .Characters}}
+        <div class="charselector checkselector" data-checkselector>
+          <input type="text" class="charselector-input" placeholder="{{.Summary}}" autocomplete="off" aria-label="Characters for {{.Title}}: {{.Summary}}. Type to search.">
+          <div class="charselector-dropdown" hidden>
+            {{range .Characters}}{{if .Locked}}<div class="charselector-option checkselector-locked" data-name="{{.Name}}"><span class="charselector-name">{{.Name}}</span> <span class="charselector-tags">no access &middot; <a href="{{.RelinkURL}}">sign in again</a></span></div>
+            {{else}}<label class="charselector-option" data-name="{{.Name}}"><input type="checkbox" name="char.{{$kind}}" value="{{.ID}}"{{if .On}} checked{{end}}> <span class="charselector-name">{{.Name}}</span></label>
+            {{end}}{{end}}
+          </div>
+        </div>{{else}}Your account{{end}}</td>
     </tr>
     {{end}}
   </tbody>

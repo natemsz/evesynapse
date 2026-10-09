@@ -13,14 +13,11 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Economy cluster: Wallet, Orders,
-// Contracts, Industry. Like every other page these render from
-// worker-warmed snapshots and local tables only; the handlers
-// below never touch ESI. Each dataset degrades independently: a
-// section whose snapshot has not landed yet says so (warming), and
-// a recorded fetch failure (e.g. a login that predates today's
-// scope list answering 403) says that instead — never an endless
-// warm-up and never an error page.
+// Economy cluster: Wallet, Orders, Contracts, Industry, rendered from
+// worker-warmed snapshots and local tables only. Each dataset degrades
+// on its own: a section whose snapshot has not landed says so, and a
+// recorded fetch failure (a login that predates today's scope list
+// answering 403, say) says that instead.
 // ---------------------------------------------------------------------------
 
 // econSectionState is the empty-state triage for one economy
@@ -315,13 +312,13 @@ type ordersView struct {
 	History       econSectionState
 	HistoryRows   []orderRow
 	HistoryCut    int
-	// P4 lifecycle (schema 033): stored order history for the
+	// Lifecycle (schema 033): stored order history for the
 	// active character, computed from order_lifecycle rows only.
 	LifecycleSummary *orderLifecycleSummary
 	LifecycleRows    []orderLifecycleRow
 }
 
-// orderLifecycleSummary is the P4 summary strip for one
+// orderLifecycleSummary is the summary strip for one
 // character: how many orders have been tracked, what share of
 // finished orders filled completely, the typical time a filled
 // order stayed open, and how often orders were beaten at their
@@ -335,7 +332,7 @@ type orderLifecycleSummary struct {
 	OutbidEvents int64
 }
 
-// orderLifecycleRow is one closed-order line of the P4 history.
+// orderLifecycleRow is one closed-order line of the history.
 type orderLifecycleRow struct {
 	Item         string
 	TypeID       int64
@@ -592,7 +589,7 @@ func (app *Application) handleOrders(w http.ResponseWriter, r *http.Request) {
 		view.HistoryRows = rows
 	}
 
-	// P4 order history: stored lifecycle rows for the active
+	// Order history: stored lifecycle rows for the active
 	// character (see buildOrderLifecycle -- cache-only).
 	view.LifecycleSummary, view.LifecycleRows = app.buildOrderLifecycle(ctx, active.CharacterID)
 

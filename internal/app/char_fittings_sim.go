@@ -752,15 +752,13 @@ func (app *Application) fitPilotLevels(ctx context.Context, pilotID int64, snap 
 	return briefingSkillLevels(skills), ""
 }
 
-// fitPilotImplants resolves the simulate request's implant set:
-// pilotID 0 (All V) is a theorycrafting view with no character,
-// so no implants. cloneID 0 is the active clone; otherwise the
-// matching jump clone's implants. Clone labels fall back to
-// "Jump clone #<last-4-digits-of-id>" when ESI carries no custom
-// name (EVE doesn't let players name jump clones). Snapshots
-// come from the worker-warmed rows (never per-render fetches).
-// The second return is the effective clone ID (unknown IDs fall
-// back to active); the note covers warming and re-login states.
+// fitPilotImplants resolves the simulate request's implant set. pilotID
+// 0 (All V) has no character and so no implants; cloneID 0 is the
+// active clone, otherwise the matching jump clone. Clone labels fall
+// back to "Jump clone #<last 4 digits>" when ESI carries no name. Reads
+// worker-warmed snapshots only. The second return is the effective
+// clone ID (unknown IDs fall back to active); the note covers warming
+// and re-login states.
 func (app *Application) fitPilotImplants(ctx context.Context, pilotID, cloneID int64) (ids []int64, effectiveClone int64, clones []fitCloneOption, note string) {
 	if pilotID == 0 {
 		return nil, 0, nil, ""

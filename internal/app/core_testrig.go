@@ -1,14 +1,10 @@
 package app
 
 // Test rig: the one exported seam the black-box page tests in
-// internal/app/tests build through. It assembles a fixture
-// Application over a fresh test database (an empty Postgres
-// database minted by internal/pgtest, handed in as a DSN) with
-// a caller-supplied ESI transport (the hermetic mirror of
-// buildCorpTestApp), and exposes only the five operations those
-// tests are allowed: the real router, the query handle, the raw
-// DB, a signed-in session cookie, and Close. No internals leave
-// the package, and no worker goroutine ever starts.
+// internal/app/tests build through. It assembles a fixture Application
+// over a fresh test database with a caller-supplied ESI transport, and
+// exposes only the router, the query handle, the raw DB, a signed-in
+// session cookie and Close. No worker goroutine starts.
 
 import (
 	"context"

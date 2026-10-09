@@ -6,15 +6,11 @@ import (
 )
 
 // navCookie holds the reader's navigation layout (expanded, rail or
-// hidden). The choice has always lived in localStorage, applied by a
-// script in the page head before first paint. A script can be late
-// (a proxy that defers scripts, a slow connection), and then the page
-// paints expanded and snaps to the saved layout. The same choice is
-// now also kept in this cookie, so the server renders
-// <html data-nav="rail"> itself and the page arrives in its saved
-// layout with no script involved. app.js and boot.js write the
-// cookie whenever the layout changes (and once for readers whose
-// choice predates it).
+// hidden). The choice lives in localStorage, applied by a script in the
+// page head before first paint; a late script would paint expanded and
+// then snap to the saved layout. The cookie carries the same choice, so
+// the server renders <html data-nav="rail"> itself. app.js and boot.js
+// write it whenever the layout changes.
 const navCookie = "evesynapse-nav"
 
 type navStateKey struct{}

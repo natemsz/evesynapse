@@ -1,6 +1,6 @@
 package app
 
-// P2 spread scanner tests: station-grain aggregation from a
+// Spread scanner tests: station-grain aggregation from a
 // fixture book, scanner query math, and page renders proven to
 // stay on stored rows with zero outbound calls.
 

@@ -16,21 +16,17 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Public corporation & alliance pages (/corporation/, /alliance/):
-// the destinations every resolved corporation and alliance name
-// now links to. Everything on them is public ESI data, so they
-// follow the public pilot page's posture exactly: the queue
-// tables (schema 026) hold one assembled payload per organization,
-// viewing one without a record notes a 'pending' row at viewed
-// priority, and the worker drains those from ESI's public
-// endpoints inside the cycle budget. Renders read stored rows
-// only — they never fetch — and a first visit shows the loading
-// state that live-fills through the same never-give-up poller as
-// the pilot page. Ready records go stale after a week and refresh
-// in the background; an ESI 404 settles as 'missing'.
+// Public corporation and alliance pages (/corporation/, /alliance/):
+// where every resolved corporation and alliance name links to. They
+// follow the public pilot page: the queue tables hold one assembled
+// payload per organization, viewing one without a record notes a
+// 'pending' row at viewed priority, and the worker drains those from
+// ESI's public endpoints inside the cycle budget. Renders read stored
+// rows only; a first visit shows a loading state that fills itself in.
+// Ready records refresh in the background after a week; an ESI 404
+// settles as 'missing'.
 //
-// This file is the pages. The worker's side (draining the two
-// queues) is intel_org_worker.go.
+// This file is the pages. The worker's side is intel_org_worker.go.
 // ---------------------------------------------------------------------------
 
 // Organization record states (corporation_records / alliance_records).

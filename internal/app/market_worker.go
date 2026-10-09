@@ -112,7 +112,7 @@ func (app *Application) refreshMarketData(ctx context.Context, characters []db.C
 	if ltd {
 		return stored, true
 	}
-	// P1 region stats: advance the whole-region book sweep with
+	// Region stats: advance the whole-region book sweep with
 	// what is left of the cycle's allowance. Additive -- the
 	// passes above are untouched.
 	sPages, ltd := app.sweepRegionStats(ctx, allowance)
@@ -444,7 +444,7 @@ func (app *Application) fetchMarketHistory(ctx context.Context, key marketKey) (
 // orders, so the pass groups by (region, type): one book read
 // settles every order of that type in that region. Health rows
 // for orders that have closed are pruned.
-// The same pass also maintains the P4 order lifecycle ledger
+// The same pass also maintains the order lifecycle ledger
 // (schema 033): every open order in the snapshot is upserted,
 // station-level beatings are counted, vanished orders are closed,
 // and old closed rows are pruned. Lifecycle work rides the
@@ -485,7 +485,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 		allOpenByChar[ch.CharacterID] = allOpen
 	}
 
-	// P4 lifecycle: upsert every open order the snapshot shows.
+	// Lifecycle: upsert every open order the snapshot shows.
 	// first_seen_at is set on insert only (the SQL leaves it alone
 	// on conflict); listed price and remaining volume follow the
 	// newest observation. Previous beaten state is remembered so
@@ -595,7 +595,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 			}); err != nil {
 				logging.Errorf("worker: order health: store order %d: %v", ref.order.OrderID, err)
 			}
-			// P4 beaten tracking: only a station-level undercut
+			// Beaten tracking: only a station-level undercut
 			// counts as beaten -- someone cheaper at the order's
 			// own station. Region-only cheapness
 			// (undercut_region, best_region_cheaper) does not.
@@ -646,7 +646,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 		}
 	}
 
-	// P4 lifecycle: close rows whose order has left the snapshot.
+	// Lifecycle: close rows whose order has left the snapshot.
 	// We only observe fills -- an order that vanishes with stock
 	// left is 'ended', never labelled cancelled vs expired.
 	for characterID, allOpen := range allOpenByChar {

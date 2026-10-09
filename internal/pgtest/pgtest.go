@@ -37,16 +37,13 @@ var (
 	managed atomic.Bool
 )
 
-// TestMain is the shared TestMain body for packages that use
-// FreshDSN: run the tests, then stop the embedded server and remove
-// its runtime directory. Left behind, each test run kept a copy of
-// the unpacked server (about 150 MB) in the system
-// temp directory, and the server itself kept running.
+// TestMain is the shared TestMain body for packages that use FreshDSN:
+// run the tests, then stop the embedded server and remove its runtime
+// directory (about 150 MB unpacked).
 //
-// Every package whose tests call FreshDSN or DSNFor needs a
-// TestMain that calls this one (see internal/app/main_test.go).
-// Without it nothing would stop the server, so those calls refuse
-// to start one.
+// Every package whose tests call FreshDSN or DSNFor needs a TestMain
+// that calls this one (see internal/app/main_test.go). Without it
+// nothing would stop the server, so those calls refuse to start one.
 func TestMain(m *testing.M) int {
 	managed.Store(true)
 	code := m.Run()

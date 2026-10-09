@@ -11,13 +11,11 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Calendar page (/calendar/): a month grid holding the character's
-// in-game events and the corporations' ops together
-// (comms_calendar_month.go, ops.go), then the upcoming in-game events
-// (ESI's next 50 chronological summaries) with a detail block —
-// text, owner, duration, attendees — rendered cache-only from
-// the worker-warmed calendar snapshots. An open event can be
-// answered from the page (comms_calendar_respond.go).
+// Calendar page (/calendar/): a month grid of the character's in-game
+// events and the corporations' ops (comms_calendar_month.go, ops.go),
+// then the upcoming in-game events with a detail block, rendered
+// cache-only from the worker-warmed calendar snapshots. An open event
+// can be answered from the page (comms_calendar_respond.go).
 // ---------------------------------------------------------------------------
 
 type calendarRow struct {

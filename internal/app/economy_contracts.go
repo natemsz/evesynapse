@@ -15,12 +15,10 @@ import (
 
 // ---------------------------------------------------------------------------
 // Contracts page: the character's contracts from the contracts
-// snapshot. Item lists behind item-exchange contracts warm into
-// the contract_details store in the background (schema 006, the
-// killmail detail pattern) — this page reads the store only, so
-// expanding a contract never waits on ESI. Auction bids are not
-// fetched (issuer-only in ESI and rarely wanted); the buyout is
-// shown from the contract row instead.
+// snapshot. Item lists behind item-exchange contracts are warmed into
+// the contract_details store in the background, and this page reads the
+// store only. Auction bids are not fetched (issuer-only in ESI); the
+// buyout is shown from the contract row.
 // ---------------------------------------------------------------------------
 
 // contractItemRow is one warmed item line of a contract.

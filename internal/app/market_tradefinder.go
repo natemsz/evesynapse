@@ -1,6 +1,6 @@
 package app
 
-// P3 Tradefinder (Element43 parity plan): the cross-region route
+// Tradefinder: the cross-region route
 // screen. It reads only stored rows -- the worker's per-(region,
 // type) book statistics (market_region_stats, schema 031) for both
 // ends of the route, the per-(station, type) bests

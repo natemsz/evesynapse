@@ -115,17 +115,13 @@ func (app *Application) securityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-// crossOriginGuard rejects state-changing requests (POST and
-// friends) that a browser sends from another site: the classic
-// cross-site request forgery, where a page elsewhere submits a form
-// to this app using the visitor's session. It is the standard
-// library's check — the browser's own Sec-Fetch-Site header, or
-// Origin compared with Host — and needs no tokens in forms.
-// Requests that carry neither header (scripts, curl, tests) are not
-// browser requests and pass.
-//
-// Until now the only thing standing between another site and the
-// app's POST handlers was the session cookie's SameSite default.
+// crossOriginGuard rejects state-changing requests (POST and friends)
+// that a browser sends from another site: cross-site request forgery,
+// where a page elsewhere submits a form using the visitor's session. It
+// is the standard library's check (the browser's Sec-Fetch-Site header,
+// or Origin compared with Host) and needs no tokens in forms. Requests
+// carrying neither header (scripts, curl, tests) are not browser
+// requests and pass.
 func (app *Application) crossOriginGuard() func(http.Handler) http.Handler {
 	guard := http.NewCrossOriginProtection()
 	// Behind a reverse proxy that rewrites the Host header, the

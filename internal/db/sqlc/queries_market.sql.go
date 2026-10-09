@@ -60,7 +60,7 @@ DELETE FROM market_region_stats
 WHERE region_id = $1
 `
 
-// P1 region stats (schema 031): worker-written per-(region,
+// Region stats (schema 031): worker-written per-(region,
 // type) book statistics. A completed sweep replaces a region's
 // rows inside one transaction: delete the region, then upsert
 // the fresh measures type by type. The daily table keeps one
@@ -86,7 +86,7 @@ WHERE region_id = $1
 `
 
 // ---------------------------------------------------------------------
-// P2 station stats (schema 032): per-(station, type) book
+// Station stats (schema 032): per-(station, type) book
 // statistics written by the same whole-region sweeps as the
 // region stats above. A completed sweep replaces the region's
 // station rows inside the sweep transaction: delete the region,
@@ -341,7 +341,7 @@ WHERE region_id = $1
 `
 
 // ---------------------------------------------------------------------
-// P1 sweep staging (schema 034): disk-staged whole-region
+// Sweep staging (schema 034): disk-staged whole-region
 // sweeps. A market_sweep_state row means a sweep is in progress
 // for that region and next_page is its resume cursor; each
 // fetched page's orders land in market_sweep_orders in the same
@@ -400,7 +400,7 @@ type GetOrderLifecycleParams struct {
 }
 
 // ---------------------------------------------------------------------
-// P4 order lifecycle (schema 033): append-only per-order history
+// Order lifecycle (schema 033): append-only per-order history
 // distilled from order snapshots. The worker upserts open orders,
 // closes rows whose order has left the snapshot, and prunes old
 // closed rows; the Orders page reads only these rows.
@@ -1422,7 +1422,7 @@ type ListMarketSweepStationLeaderboardAggregatesRow struct {
 }
 
 // ---------------------------------------------------------------------
-// P5 station leaderboard (schema_pg 002): per-station open-order
+// Station leaderboard (schema_pg 002): per-station open-order
 // counts and open ISK value per side, distilled by the same
 // whole-region sweeps as the stats above. A completed sweep
 // replaces the region's leaderboard rows inside the sweep

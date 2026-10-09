@@ -14,17 +14,15 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Planetary industry page (/planets/): per-character colonies from
-// the worker-warmed colonies + layout snapshots, cache-only like
-// every other page.
+// Planetary industry page (/planets/): per-character colonies from the
+// worker-warmed colonies and layout snapshots.
 //
-// Staleness honesty: extractor expiry, cycle time, quantity per
-// cycle and head counts are fixed at pin install in ESI and safe
-// to count down from. Stored contents amounts and last_cycle_start
-// are only recalculated when the colony is viewed in the game
-// client, so they are never shown — the page footnotes why. A
-// character whose login predates the planetary scope sees the
-// recorded "not enabled — re-link" state, never a warming loop.
+// Extractor expiry, cycle time, quantity per cycle and head counts are
+// fixed at pin install in ESI and safe to count down from. Stored
+// contents amounts and last_cycle_start are only recalculated when the
+// colony is viewed in the game client, so they are never shown; the
+// page footnotes why. A character whose login predates the planetary
+// scope sees the recorded "not enabled — re-link" state.
 // ---------------------------------------------------------------------------
 
 // extractorInfo is one extractor pin distilled for display and

@@ -14,15 +14,13 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Intel cluster: wars, incursions and
-// faction warfare, plus the Tranquility status line on Home.
+// Intel cluster: wars, incursions and faction warfare, plus the
+// Tranquility status line on Home.
 //
-// Everything here is public ESI data — no character token — so it
-// lives in the global store (global_snapshots + war_details,
-// schema 007) that the worker keeps warm, instead of the
-// per-character snapshot table. Handlers read the store and the
-// local name caches only; renders never touch ESI (the render
-// tests count transport calls and demand zero).
+// All of it is public ESI data, so it lives in the global store
+// (global_snapshots + war_details) that the worker keeps warm, not the
+// per-character snapshot table. Handlers read the store and the local
+// name caches only.
 // ---------------------------------------------------------------------------
 
 // globalKindOrder fixes the global snapshot kinds' display order

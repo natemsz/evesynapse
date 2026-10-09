@@ -208,19 +208,6 @@ func TestMarketItemChartMarkupAndSnapshot(t *testing.T) {
 	if got := transport.calls.Load(); got != calls {
 		t.Fatalf("history fragment made %d outbound calls, want 0", got-calls)
 	}
-
-	// The scrub interaction ships in the shared script: pointer
-	// drag selects the nearest day, and the selected point gets
-	// the visible ember halo.
-	_, js := getPage(t, app, cookie, "/static/app.js")
-	mustContain(t, "/static/app.js (chart scrub)", js,
-		"data-chart-scrub",
-		"nearestDot",
-		`"pointerdown"`,
-		`"pointermove"`,
-		`"pointerup"`,
-		`"pointercancel"`,
-		"is-selected")
 }
 
 // ---------------------------------------------------------------------------

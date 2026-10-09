@@ -445,8 +445,8 @@ notification icon.
 - **iPhone and iPad:** Safari gives a page no way to offer this. Use
   **Share → Add to Home Screen**; push only works from the installed
   app there.
-- **Firefox:** no install on a computer; on Android it is in the
-  browser's menu.
+- **Firefox:** Installs on desktop with working notifications; on Android it is in the
+  browser's menu. Notifications are not properly paired with the apps icon. Uses default Firefox icon.
 
 ### Turn push on for the server (once)
 

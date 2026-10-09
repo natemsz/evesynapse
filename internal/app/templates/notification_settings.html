@@ -48,6 +48,25 @@
 <p><small>Browser notifications are not set up on this server. Notifications still show in the top bar.</small></p>
 {{end}}
 
+{{with .Discord}}{{if or .CanLink .Linked}}
+<h2>Discord</h2>
+{{if .Linked}}
+<p>Connected as <strong>{{.Name}}</strong>.{{if .Roles}} <small>Your roles on the Discord server follow your characters' corporations.</small>{{end}}</p>
+{{if .HasBot}}
+<form method="post" action="/discord/settings" class="discord-form">
+  <label><input type="checkbox" name="dm" value="1"{{if .DM}} checked{{end}}> Send my notifications to me on Discord, as direct messages</label>
+  <button type="submit">Save</button>
+</form>
+<p><small>The same notifications as above, with the same switches. You have to share a server with the bot and allow direct messages from its members.</small></p>
+<form method="post" action="/discord/test" class="inline-form"><button type="submit" class="btn">Send a test message</button></form>
+{{end}}
+<form method="post" action="/discord/disconnect" class="inline-form"><button type="submit" class="btn">Disconnect Discord</button></form>
+{{else}}
+<p><small>Connect your Discord account to get notifications there{{if .Roles}} and the server roles your characters' corporations give{{end}}. Only your Discord name and id are read.</small></p>
+<p><a class="btn" href="/discord/connect">Connect Discord</a></p>
+{{end}}
+{{end}}{{end}}
+
 <p><a href="/notifications/">Back to notifications</a></p>
 {{end}}
 {{end}}

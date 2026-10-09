@@ -84,6 +84,9 @@ var pgOpsSchema string
 //go:embed schema_pg/015_op_attendance.sql
 var pgOpAttendanceSchema string
 
+//go:embed schema_pg/016_discord_links.sql
+var pgDiscordLinksSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -128,6 +131,7 @@ func schemaSteps() []schemaStep {
 		{13, "push_subscriptions", pgPushSubscriptionsSchema, ""},
 		{14, "ops", pgOpsSchema, ""},
 		{15, "op_attendance", pgOpAttendanceSchema, ""},
+		{16, "discord_links", pgDiscordLinksSchema, ""},
 	}
 }
 

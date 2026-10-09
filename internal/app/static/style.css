@@ -3355,6 +3355,7 @@ input[type="datetime-local"]:focus, .op-form select:focus, .op-signup select:foc
   box-shadow: 0 0 8px rgba(255, 106, 26, 0.35);
 }
 html[data-theme="light"] input[type="datetime-local"], html[data-theme="light"] .op-form select, html[data-theme="light"] .op-signup select, html[data-theme="light"] .notify-minutes select, html[data-theme="light"] .op-form textarea { border-color: #d8cdb8; }
+.discord-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin: 0 0 0.4rem; }
 .notify-minutes { margin-left: 0.6rem; white-space: nowrap; color: var(--muted); }
 .notify-minutes select { margin-right: 0.3rem; }
 .cal-paps { margin-left: 0.5rem; }

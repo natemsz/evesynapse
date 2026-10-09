@@ -72,6 +72,16 @@ type CorporationRecord struct {
 	Priority      int64        `json:"priority"`
 }
 
+type DiscordLink struct {
+	UserID          int64        `json:"user_id"`
+	DiscordID       string       `json:"discord_id"`
+	Username        string       `json:"username"`
+	LinkedAt        time.Time    `json:"linked_at"`
+	DmNotifications bool         `json:"dm_notifications"`
+	RolesApplied    string       `json:"roles_applied"`
+	RolesSyncedAt   sql.NullTime `json:"roles_synced_at"`
+}
+
 type GlobalSnapshot struct {
 	Kind        string    `json:"kind"`
 	Payload     string    `json:"payload"`
@@ -276,6 +286,7 @@ type Op struct {
 	CancelledAt        sql.NullTime `json:"cancelled_at"`
 	CaptureStatus      string       `json:"capture_status"`
 	CaptureCheckedAt   sql.NullTime `json:"capture_checked_at"`
+	DiscordAnnouncedAt sql.NullTime `json:"discord_announced_at"`
 }
 
 type OpAttendance struct {

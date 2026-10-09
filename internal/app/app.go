@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/discord"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/store"
@@ -62,6 +63,10 @@ type Application struct {
 	// pushClient is the HTTP client sends go through (tests swap it).
 	push       *webpush.VAPID
 	pushClient *http.Client
+
+	// discord is the Discord client (discord_link.go), nil when the
+	// install has no Discord settings.
+	discord *discord.Client
 
 	// db, pool, and stopWorker/workerDone are the resources Close
 	// releases: it cancels the worker, waits for workerDone to
@@ -178,6 +183,7 @@ func New(cfg Config) (*Application, error) {
 	app := &Application{
 		cfg:           cfg,
 		push:          pushConfigFromEnv(cfg),
+		discord:       discordFromConfig(cfg),
 		sessions:      sessionManager,
 		queries:       db.New(dbConn),
 		jwks:          &jwksCache{},
@@ -362,6 +368,17 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/push/subscribe", app.handlePushSubscribe)
 		r.Post("/push/unsubscribe", app.handlePushUnsubscribe)
 		r.Post("/push/test", app.handlePushTest)
+	})
+
+	// Discord (discord_link.go): connecting an account, and what it
+	// is used for.
+	r.Route("/discord", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/connect", app.handleDiscordConnect)
+		r.Get("/callback", app.handleDiscordCallback)
+		r.Post("/disconnect", app.handleDiscordDisconnect)
+		r.Post("/settings", app.handleDiscordSettings)
+		r.Post("/test", app.handleDiscordTest)
 	})
 
 	r.Route("/calendar", func(r chi.Router) {

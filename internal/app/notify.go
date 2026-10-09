@@ -605,6 +605,7 @@ func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db
 	// subscribed (notify_push.go). A failed send loses nothing: the
 	// notification is already in the top bar.
 	app.pushToUser(ctx, userID, pushMessagesFor(announce))
+	app.discordToUser(ctx, userID, announce)
 	return len(announce), nil
 }
 

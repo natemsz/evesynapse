@@ -664,14 +664,17 @@ func opRecipients(rows []db.ListCharacterCorporationsByUserRow, prefs notifyPref
 // That it is about to start (notifyOpReminder): once the start is
 // within the account's chosen lead and has not passed. The worker
 // looks about once a minute, so the reminder comes within a minute or
-// so of the chosen time. It goes to everyone in the corporation,
-// signed up or not, except an account whose every answer was "not
-// coming". A start that is moved is reminded of again.
+// so of the chosen time. It goes only to an account that signed up to
+// the op as coming or maybe, in the name of the character it signed up
+// with; everyone else in the corporation was already told when the op
+// was planned. Signing up inside the lead brings the reminder at the
+// worker's next look. A start that is moved is reminded of again.
 //
-// Either is said once to the account, in the name of one of its
-// characters in that corporation: the first that has not switched
-// that kind off. With every one of them switched off it is still
-// recorded as seen, so switching back on starts from then.
+// Each is said once to the account. The planning is said in the name
+// of one of its characters in that corporation: the first that has
+// not switched that kind off. With every character concerned switched
+// off, an event is still recorded as seen, so switching back on starts
+// from then.
 func (app *Application) notifyOpEvents(ctx context.Context, c *notifyCollector, userID int64, prefs notifyPrefs, now time.Time) {
 	rows, err := app.queries.ListCharacterCorporationsByUser(ctx, userID)
 	if err != nil {
@@ -698,14 +701,16 @@ func (app *Application) notifyOpEvents(ctx context.Context, c *notifyCollector, 
 		logging.Errorf("notify: ops for user %d: %v", userID, err)
 		return
 	}
-	planned, reminded := opRecipients(rows, prefs, notifyOp), opRecipients(rows, prefs, notifyOpReminder)
+	planned := opRecipients(rows, prefs, notifyOp)
 	plannedSource, remindedSource := map[int64]string{}, map[int64]string{}
 	for _, corp := range corps {
 		plannedSource[corp] = c.source(notifyOp, corp)
 		remindedSource[corp] = c.source(notifyOpReminder, corp)
 	}
 
-	// The ops about to start, and the account's answers to them.
+	// The ops about to start, and which of the account's characters
+	// signed up to each as coming or maybe: the one reminded. Where
+	// several did, one that has not switched reminders off.
 	lead := prefs.reminderLead()
 	var soon []int64
 	for _, op := range ops {
@@ -713,31 +718,22 @@ func (app *Application) notifyOpEvents(ctx context.Context, c *notifyCollector, 
 			soon = append(soon, op.ID)
 		}
 	}
-	declined := map[int64]bool{} // every answer the account gave was "not coming"
+	signedUp := map[int64]int64{} // op -> character
 	if len(soon) > 0 {
 		signups, err := app.queries.ListOpSignupsForOps(ctx, soon)
 		if err != nil {
 			logging.Errorf("notify: sign-ups for user %d: %v", userID, err)
 			return
 		}
-		coming := map[int64]bool{}
 		for _, s := range signups {
-			if s.UserID != userID {
+			if s.UserID != userID || s.Response == opNo {
 				continue
 			}
-			if s.Response == opNo {
-				declined[s.OpID] = true
-			} else {
-				coming[s.OpID] = true
+			current, known := signedUp[s.OpID]
+			if !known || (prefs.offFor(notifyOpReminder, current) && !prefs.offFor(notifyOpReminder, s.CharacterID)) {
+				signedUp[s.OpID] = s.CharacterID
 			}
 		}
-		for id := range coming {
-			delete(declined, id)
-		}
-	}
-	isSoon := map[int64]bool{}
-	for _, id := range soon {
-		isSoon[id] = true
 	}
 
 	for _, op := range ops {
@@ -758,9 +754,9 @@ func (app *Application) notifyOpEvents(ctx context.Context, c *notifyCollector, 
 				URL:   opURL(op.ID),
 			})
 		}
-		if isSoon[op.ID] && !declined[op.ID] {
+		if character, coming := signedUp[op.ID]; coming {
 			c.add(notifyEvent{
-				Kind: notifyOpReminder, CharacterID: reminded[op.CorporationID], Source: remindedSource[op.CorporationID],
+				Kind: notifyOpReminder, CharacterID: character, Source: remindedSource[op.CorporationID],
 				// The start is part of the key: an op that is moved is
 				// reminded of again at its new time.
 				Key:   fmt.Sprintf("opremind|%d|%d", op.ID, op.StartsAt.Unix()),

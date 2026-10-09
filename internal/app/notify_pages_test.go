@@ -455,10 +455,12 @@ func TestNotifyNewOps(t *testing.T) {
 	mustContain(t, "bell", f.badge(cookie, "").Body.String(), "2 new ops")
 }
 
-// TestNotifyOpReminder: an op is announced again when its start is
-// within the lead the account chose, once; not for an account whose
-// answer was "not coming", not for a cancelled op, and again if the
-// start is moved. The lead is chosen on the settings page.
+// TestNotifyOpReminder: an account that signed up to an op, as coming
+// or maybe, is reminded once when its start is within the lead the
+// account chose. Nobody else is: not an account that did not sign up,
+// nor one that answered "not coming". A cancelled op is not reminded
+// of, and a moved one is again. The lead is chosen on the settings
+// page.
 func TestNotifyOpReminder(t *testing.T) {
 	f := newNotifyFixture(t)
 	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
@@ -485,26 +487,43 @@ func TestNotifyOpReminder(t *testing.T) {
 			t.Fatalf("sign-up %q: %d", response, code)
 		}
 	}
-	now := notifyT0 // 12:00
+	// Noon tomorrow, by the real clock: signing up is refused for an op
+	// that is over, and the sign-up page goes by the real time.
+	now := time.Now().UTC().Truncate(24 * time.Hour).Add(36 * time.Hour)
 	start := now.Add(2 * time.Hour)
 
-	// The account's own op (so no "new op"), two hours away. The
+	// The account's own op (so no "new op"), two hours away, and
+	// another at the same time that it does not sign up to. The
 	// default lead is 30 minutes.
 	op := plan("Home defence", start)
+	plan("Not signed up to", start)
 	f.pass(now)
+	if n := f.pass(start.Add(-25 * time.Minute)); n != 0 {
+		t.Fatalf("reminded of ops the account has not signed up to: %q", f.titles())
+	}
+	// Signing up inside the lead brings the reminder at the next look.
+	answer(op, "yes")
+	if n := f.pass(start.Add(-24 * time.Minute)); n != 1 {
+		t.Fatalf("after signing up inside the lead: %d reminder(s) %q, want 1", n, f.titles())
+	}
+
+	// Signed up well ahead: at the lead, and not before.
+	start = start.Add(24 * time.Hour)
+	op = plan("Home defence", start)
+	answer(op, "yes")
 	if n := f.pass(start.Add(-31 * time.Minute)); n != 0 {
 		t.Fatalf("reminded 31 minutes before with a 30 minute lead: %q", f.titles())
 	}
 	if n := f.pass(start.Add(-30 * time.Minute)); n != 1 {
 		t.Fatalf("at 30 minutes before: %d reminder(s) %q, want 1", n, f.titles())
 	}
-	f.wantTitles("the reminder", "starts at 14:00 EVE time: Home defence")
+	f.wantTitles("the reminders", "starts at 14:00 EVE time: Home defence", "starts at 14:00 EVE time: Home defence")
 	rows, err := f.q.ListNotifications(f.ctx, db.ListNotificationsParams{UserID: f.userID, Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rows[0].Kind != notifyOpReminder || rows[0].Url != opURL(op) {
-		t.Fatalf("stored as %+v, want an op reminder linking to the op", rows[0])
+	if rows[0].Kind != notifyOpReminder || rows[0].Url != opURL(op) || rows[0].CharacterID != f.ch.CharacterID {
+		t.Fatalf("stored as %+v, want an op reminder linking to the op, for the character that signed up", rows[0])
 	}
 	// Once, and not after it has started.
 	if n := f.pass(start.Add(-10 * time.Minute)); n != 0 {
@@ -549,11 +568,10 @@ func TestNotifyOpReminder(t *testing.T) {
 	}
 
 	day := moved.Add(24 * time.Hour)
-	second := plan("Roam", day)
+	answer(plan("Roam", day), "maybe")
 	if n := f.pass(day.Add(-119 * time.Minute)); n != 1 {
 		t.Fatalf("with a 2 hour lead, 119 minutes before: %d reminder(s), want 1: %q", n, f.titles())
 	}
-	_ = second
 
 	// "Not coming": no reminder. Changing the answer brings it back.
 	third := plan("Fleet nobody wants", day.Add(24*time.Hour))
@@ -569,6 +587,7 @@ func TestNotifyOpReminder(t *testing.T) {
 
 	// Cancelled: none.
 	fourth := plan("Called off", day.Add(48*time.Hour))
+	answer(fourth, "yes")
 	if err := f.q.SetOpCancelled(f.ctx, db.SetOpCancelledParams{ID: fourth, CancelledAt: timeSet(at)}); err != nil {
 		t.Fatal(err)
 	}
@@ -579,7 +598,7 @@ func TestNotifyOpReminder(t *testing.T) {
 	// Switched off for the character: none.
 	form.Del("char." + notifyOpReminder)
 	f.post(cookie, "/notifications/settings", form)
-	plan("Quiet", day.Add(72*time.Hour))
+	answer(plan("Quiet", day.Add(72*time.Hour)), "yes")
 	if n := f.pass(day.Add(72*time.Hour - time.Hour)); n != 0 {
 		t.Fatalf("reminded a character that switched reminders off: %q", f.titles())
 	}

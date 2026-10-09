@@ -793,6 +793,10 @@ footer .version {
   word-spacing: 0.175em;
   text-wrap: balance;
 }
+footer .version-number {
+  font-family: "Shentox", "Univers Next Pro", "Inter", sans-serif;
+  font-weight: 400;
+}
 
 /* --- small screens --- */
 @media (max-width: 640px) {

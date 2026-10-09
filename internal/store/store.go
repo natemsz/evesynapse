@@ -37,7 +37,7 @@ func Open(ctx context.Context, dsn string) (*sql.DB, *pgxpool.Pool, error) {
 		return nil, nil, err
 	}
 	conn := stdlib.OpenDB(*cfg, stdlib.OptionAfterConnect(readTimesInUTC))
-	conn.SetMaxOpenConns(20)
+	SizePool(conn, DefaultPoolSize)
 	if err := conn.PingContext(ctx); err != nil {
 		conn.Close()
 		pool.Close()
@@ -49,6 +49,23 @@ func Open(ctx context.Context, dsn string) (*sql.DB, *pgxpool.Pool, error) {
 		return nil, nil, err
 	}
 	return conn, pool, nil
+}
+
+// DefaultPoolSize is how many database connections the app keeps
+// unless told otherwise (DB_MAX_CONNS).
+const DefaultPoolSize = 20
+
+// SizePool lets conn hold up to size connections, and lets it keep
+// them. database/sql on its own keeps only two idle connections and
+// closes the rest as they are handed back, so anything doing more
+// than two things at once (the worker's lanes, a busy page) was
+// opening and closing connections all the time. Idle ones are let go
+// after five quiet minutes, so a burst does not hold its connections
+// for good.
+func SizePool(conn *sql.DB, size int) {
+	conn.SetMaxOpenConns(size)
+	conn.SetMaxIdleConns(size)
+	conn.SetConnMaxIdleTime(5 * time.Minute)
 }
 
 // readTimesInUTC runs on every new connection and makes each

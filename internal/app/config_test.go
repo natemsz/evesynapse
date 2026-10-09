@@ -48,3 +48,11 @@ func TestIsAdminCharacter(t *testing.T) {
 		t.Fatal("0 should not be admin")
 	}
 }
+
+func TestParseDBConns(t *testing.T) {
+	for raw, want := range map[string]int{"": 0, " ": 0, "40": 40, " 60 ": 60, "2": minDBConns, "99999": mostDBConns, "plenty": 0, "0": 0, "-4": 0} {
+		if got := parseDBConns(raw); got != want {
+			t.Errorf("parseDBConns(%q) = %d, want %d", raw, got, want)
+		}
+	}
+}

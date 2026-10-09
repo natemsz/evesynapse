@@ -12,6 +12,7 @@ import (
 
 	"evesynapse/internal/dotenv"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/store"
 )
 
 // Config holds runtime configuration. Everything comes from the
@@ -46,6 +47,10 @@ type Config struct {
 	// (WORKER_LANES, worker_lanes.go). 0, which only a Config not read
 	// from the environment has, means one.
 	workerLanes int
+
+	// dbConns is how many database connections the app may hold
+	// (DB_MAX_CONNS); 0 means the store's default.
+	dbConns int
 
 	// Discord (discord_link.go). The client id and secret run the
 	// "Connect Discord" sign-in; the bot token lets the bot message
@@ -171,6 +176,7 @@ func LoadConfig() (Config, error) {
 		workerTiersOff:      strings.EqualFold(strings.TrimSpace(os.Getenv("WORKER_TIERS")), "off"),
 		workerFetches:       parseWorkerFetches(os.Getenv("WORKER_FETCHES_PER_CYCLE")),
 		workerLanes:         parseWorkerLanes(os.Getenv("WORKER_LANES")),
+		dbConns:             parseDBConns(os.Getenv("DB_MAX_CONNS")),
 		discordClientID:     os.Getenv("DISCORD_CLIENT_ID"),
 		discordClientSecret: os.Getenv("DISCORD_CLIENT_SECRET"),
 		discordBotToken:     os.Getenv("DISCORD_BOT_TOKEN"),
@@ -393,4 +399,31 @@ func (c Config) opsManagerRolesText() string {
 		managers = []string{defaultOpsManagerRole}
 	}
 	return strings.ReplaceAll(strings.Join(managers, " or "), "_", " ")
+}
+
+// Bounds on DB_MAX_CONNS.
+const (
+	minDBConns  = 5
+	mostDBConns = 500
+)
+
+// parseDBConns reads DB_MAX_CONNS: 0 (use the default) when unset or
+// unreadable, else the number kept in bounds.
+func parseDBConns(raw string) int {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		logging.Warnf("evesynapse: DB_MAX_CONNS=%q is not a whole number; using %d", raw, store.DefaultPoolSize)
+		return 0
+	}
+	if n < minDBConns {
+		return minDBConns
+	}
+	if n > mostDBConns {
+		return mostDBConns
+	}
+	return n
 }

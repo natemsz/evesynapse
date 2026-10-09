@@ -104,7 +104,7 @@ func TestSystemAndStationPages(t *testing.T) {
 	mustContain(t, "/station/", body, "Jita 4 - Moon 4 - Caldari Navy Assembly Plant",
 		`<a href="/system/?system=30000142">Jita</a>`, "The Forge")
 
-	// Unknown ids: honest not-in-the-star-map states, still 200.
+	// Unknown ids: not-in-the-star-map states, still 200.
 	code, body = getPage(t, app, cookie, "/system/?system=39999999")
 	if code != http.StatusOK {
 		t.Fatalf("GET /system/ unknown: status %d", code)

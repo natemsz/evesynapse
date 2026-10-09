@@ -165,7 +165,7 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		t.Error("topbar is missing the wordmark")
 	}
 	// Branding: the wordmark is the node-and-spoke glyph
-	// followed by the full EVESYNAPSE text (Issue 25), painted
+	// followed by the full EVESYNAPSE text, painted
 	// from its own diagonal gradient def (the nav icons keep
 	// the horizontal def).
 	topbar := body[topbarStart : topbarStart+topbarEnd]

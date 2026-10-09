@@ -187,7 +187,7 @@ func (app *Application) handleMail(w http.ResponseWriter, r *http.Request) {
 
 // mailRecipientDisplay renders one mail recipient by kind:
 // character, corporation, alliance and mailing-list names from
-// the local caches, with honest id fallbacks.
+// the local caches, with id fallbacks.
 func (app *Application) mailRecipientDisplay(ctx context.Context, rcpt esi.MailRecipient, listNames map[int64]string) mailRecipientView {
 	out := mailRecipientView{Kind: rcpt.RecipientType, ID: rcpt.RecipientID}
 	switch rcpt.RecipientType {
@@ -517,7 +517,7 @@ func mailRelinkNotice(name, what string) string {
 	return name + " was linked before EveSynapse asked for permission to " + what + " — sign in again to grant it."
 }
 
-// handleMailMarkRead serves POST /mail/read/ (Issue 26): mark one
+// handleMailMarkRead serves POST /mail/read/: mark one
 // mail read in-game via PUT /characters/{id}/mail/{mail_id}/,
 // which needs the esi-mail.organize_mail.v1 scope. A 403 means
 // the character was linked before that scope existed — reported
@@ -570,7 +570,7 @@ func (app *Application) handleMailMarkRead(w http.ResponseWriter, r *http.Reques
 }
 
 // ---------------------------------------------------------------------------
-// Compose (Issue 27)
+// Compose
 // ---------------------------------------------------------------------------
 
 // mailComposeView is the compose form's view model.

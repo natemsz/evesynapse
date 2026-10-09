@@ -19,7 +19,7 @@ import (
 // sde_stations, sde_regions) the importer already maintains, so a
 // render is a couple of Postgres reads and never calls out. An id
 // the SDE doesn't know (or a system whose data hasn't imported
-// yet) settles in an honest not-in-the-star-map state rather than
+// yet) settles in a not-in-the-star-map state rather than
 // an error. Region names render as text: there is no region page.
 // ---------------------------------------------------------------------------
 

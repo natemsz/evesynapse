@@ -91,7 +91,7 @@ func TestStructurePageStates(t *testing.T) {
 
 	path := fmt.Sprintf("/structure/?structure=%d", fixtureStructureID)
 
-	// Unknown id: the honest loading state, live-region wired,
+	// Unknown id: the loading state, live-region wired,
 	// and the visit itself queued the resolution want.
 	code, body := getPage(t, app, cookie, path)
 	if code != http.StatusOK {
@@ -176,7 +176,7 @@ func TestStructurePageNamedWithoutContextAndMissing(t *testing.T) {
 		t.Error("named-without-context page invented a facts table")
 	}
 
-	// A settled 'missing' answer: the honest unavailable line,
+	// A settled 'missing' answer: the unavailable line,
 	// and no live region (nothing to poll for).
 	const missingID = int64(1044752366002)
 	if err := q.SetStructureName(ctx, db.SetStructureNameParams{
@@ -285,7 +285,7 @@ func TestStructureLinksOnAssetsAndCharacter(t *testing.T) {
 	seedSnapshot(t, q, fixtureCharA, esi.SnapImplants, esi.Implants{})
 	seedSnapshot(t, q, fixtureCharA, esi.SnapClones, esi.Clones{})
 
-	// Unresolved: both surfaces show the honest fallback as text.
+	// Unresolved: both surfaces show the fallback as text.
 	code, body := getPage(t, app, cookie, "/assets/?character=90000001")
 	if code != http.StatusOK {
 		t.Fatalf("GET /assets/: status %d", code)

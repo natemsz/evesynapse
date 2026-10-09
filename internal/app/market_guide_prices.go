@@ -48,7 +48,7 @@ func (app *Application) storedGuidePrices(ctx context.Context) map[int64]esi.Mar
 	rows, err := app.queries.ListGuidePrices(ctx)
 	if err != nil {
 		logging.Errorf("prices: load stored guide: %v", err)
-		return app.storedPricesCache // nil on first failure: honest "none"
+		return app.storedPricesCache // nil on first failure: "none"
 	}
 	if len(rows) == 0 {
 		app.storedPricesCache, app.storedPricesStamp = nil, meta.FetchedAt

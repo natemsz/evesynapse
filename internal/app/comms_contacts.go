@@ -147,7 +147,7 @@ func (app *Application) handleContactNameFragment(w http.ResponseWriter, r *http
 }
 
 // contactDisplayName resolves a contact's name by kind from the
-// local caches, with honest id fallbacks.
+// local caches, with id fallbacks.
 func (app *Application) contactDisplayName(ctx context.Context, c esi.Contact) string {
 	switch c.ContactType {
 	case "character":

@@ -18,7 +18,7 @@ import (
 // re-check after 90 days (they never change; the re-check is
 // hygiene, not a schedule); a 404 negative-caches for 7 days —
 // colony planet ids always exist, so a 404 means a bad id, and
-// the honest fallback stays until it ages out.
+// the fallback stays until it ages out.
 //
 // This file is the queue note pages make. resolvePlanetNames is with
 // the rest of the planetary worker code, in planets_worker.go.

@@ -17,7 +17,7 @@ import (
 // served app.js polls the matching fragment endpoint every
 // ~1.5s and swaps the section in when its state leaves the
 // pending one, then stops. No JavaScript keeps today's static
-// copy — the honest pending text and a manual reload.
+// copy — the pending text and a manual reload.
 //
 // Every fragment renders strictly from stored rows — the
 // transport never moves — so polling is cheap and the

@@ -544,7 +544,7 @@ func (b *charSnaps) decode(kind, payload string) {
 
 // corpName resolves the character's corporation display name:
 // profile's corporation id named by the character's own warmed
-// corp_info snapshot, else the honest id fallback.
+// corp_info snapshot, else the id fallback.
 func (b *charSnaps) corpName() string {
 	if b.profile != nil && b.profile.CorporationID > 0 {
 		if b.corpInfo != nil && b.corpInfo.Name != "" {
@@ -1217,7 +1217,7 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 		}
 		// Assets price off the guide prices. Every stack counts
 		// toward coverage: priced when the guide knows the type,
-		// skipped honestly when it doesn't (the widget says how
+		// skipped when it doesn't (the widget says how
 		// much of the estate the number covers).
 		if b.assetsKnown {
 			assetsSeen = true
@@ -1277,7 +1277,7 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 		w.AsOf = formatFinish(asOf.UTC().Format(time.RFC3339))
 	}
 	// Net worth over time from the daily sampler (schema 019):
-	// a chart once two sampled days exist, an honest "building"
+	// a chart once two sampled days exist, a "building"
 	// note before that. Stored rows only — no fetching here.
 	app.attachNetWorthHistory(ctx, w, userID)
 	return w

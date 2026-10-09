@@ -40,7 +40,7 @@ func eqClasses(a, b []string) bool {
 	return true
 }
 
-// Issue 4 (original): skill trained to 3, levels 4 and 5 queued.
+// Skill trained to 3, levels 4 and 5 queued.
 // The level-5 queue row must show 1-3 trained and 4-5 queued.
 func TestSkillLevelQueuedRowShowsOwnLevelRange(t *testing.T) {
 	got := boxClasses(t, 3, 5, "queued")
@@ -50,7 +50,7 @@ func TestSkillLevelQueuedRowShowsOwnLevelRange(t *testing.T) {
 	}
 }
 
-// Issue 4 (reopen): training Power Grid to V from scratch — five
+// Training Power Grid to V from scratch — five
 // queue rows. Each row must show queued only up to its own level,
 // not all five boxes blue on every row.
 func TestSkillLevelQueuedRowOnlyToOwnLevel(t *testing.T) {

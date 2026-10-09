@@ -74,7 +74,7 @@ func (app *Application) pickCharacter(ctx context.Context, r *http.Request, path
 
 // locationTitle renders a station, structure, or solar-system
 // location the way the character pages show it: the SDE/cache name
-// when known, an honest "#<id>" fallback otherwise. Player
+// when known, a "#<id>" fallback otherwise. Player
 // structures show the name the worker resolved for them once it
 // lands (structures.go); until then the same "#<id>" fallback.
 func (app *Application) locationTitle(ctx context.Context, id int64, locType string) string {
@@ -620,7 +620,7 @@ func (app *Application) fillCharacterLoaded(ctx context.Context, ch db.Character
 }
 
 // typeNameOrID resolves one type ID from the local caches, falling
-// back to the honest "Type #<id>" placeholder.
+// back to the "Type #<id>" placeholder.
 func (app *Application) typeNameOrID(ctx context.Context, id int64) string {
 	if name := app.esi.CachedTypeName(ctx, id); name != "" {
 		return name

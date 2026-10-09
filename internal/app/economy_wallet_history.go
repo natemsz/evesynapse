@@ -35,7 +35,7 @@ func (app *Application) sampleWalletHistory(ctx context.Context, ch db.Character
 		CharacterID: ch.CharacterID, Kind: esi.SnapWallet,
 	})
 	if err != nil {
-		return // no wallet snapshot yet — nothing honest to record
+		return // no wallet snapshot yet — nothing to record
 	}
 	var balance float64
 	if err := json.Unmarshal([]byte(snap.Payload), &balance); err != nil {

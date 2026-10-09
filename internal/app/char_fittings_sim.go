@@ -2068,7 +2068,7 @@ func (app *Application) handleFitMineJSON(w http.ResponseWriter, r *http.Request
 			Mine: true, IsPublic: row.IsPublic, IsDraft: row.IsDraft,
 		})
 	}
-	// ESI fittings for the active character (Issue 1)
+	// ESI fittings for the active character
 	// These are the in-game fittings from the character's ESI snapshot.
 	if charID := sessionCharID(app.sessions, ctx); charID != 0 {
 		if char, err := app.queries.GetCharacter(ctx, charID); err == nil {

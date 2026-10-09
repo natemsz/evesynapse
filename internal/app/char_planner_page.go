@@ -694,7 +694,7 @@ func resolveJudgeScope(raw string, chars []db.Character) (judgeScope, []judgeOpt
 }
 
 // scopeStockNote says whose hangars the plan netted against,
-// including the honest version when the data isn't in yet.
+// including the version when the data isn't in yet.
 func scopeStockNote(scope judgeScope, data plannerScopeData) string {
 	switch scope.Kind {
 	case "char":

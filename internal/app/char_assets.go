@@ -271,7 +271,7 @@ func (app *Application) buildAssetLocationsWith(ctx context.Context, items []esi
 // a display title. Station and solar-system names come from the
 // local caches (SDE tables first, then the worker-warmed place
 // cache); player structures show the worker-resolved name once it
-// lands (structures.go), and otherwise stay honest "Structure
+// lands (structures.go), and otherwise stay "Structure
 // #<id>" unless extraTitles names them
 // (the corporation cluster passes the corp's own structures);
 // items inside another owned item (a ship, a container) are

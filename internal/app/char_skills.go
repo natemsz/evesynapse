@@ -99,7 +99,7 @@ func (app *Application) handleSkills(w http.ResponseWriter, r *http.Request) {
 
 // fillBrowse loads the SDE skill catalog (grouped, with the
 // character's trained state) plus the character's plans for the
-// quick-add forms. A missing SDE skill graph renders the honest
+// quick-add forms. A missing SDE skill graph renders the
 // warming state instead of an empty catalog.
 func (app *Application) fillBrowse(ctx context.Context, view *skillsView, ch db.Character, skills esi.Skills, userID int64) {
 	if n, err := app.queries.CountSDESkillMeta(ctx); err != nil || n == 0 {

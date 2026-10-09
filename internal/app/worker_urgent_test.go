@@ -60,7 +60,7 @@ func TestContactsUnresolvedNamesEnqueueAndLiveFill(t *testing.T) {
 	})
 
 	_, body := getPage(t, app, cookie, "/contacts/?character=90000001")
-	// Non-blank pending state with the honest fallback visible.
+	// Non-blank pending state with the fallback visible.
 	mustContain(t, "/contacts/", body,
 		"Loading name for Character #3018677",
 		"Loading name for Character #3018932",

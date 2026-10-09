@@ -316,7 +316,7 @@ func TestWatchlistWidgetHome(t *testing.T) {
 
 // TestNetWorthGuidePrices: with only the worker-stored guide
 // present (no Market visit, cold in-memory cache) the Net worth
-// card shows a real assets number with honest coverage — never
+// card shows a real assets number with coverage — never
 // "prices not loaded yet" — and the daily sampler's net worth
 // rides the same fallback.
 func TestNetWorthGuidePrices(t *testing.T) {

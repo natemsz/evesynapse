@@ -67,7 +67,7 @@ type AttrSet struct {
 	Willpower    int
 }
 
-// FlatAttrSet is the honest fallback while the attributes snapshot
+// FlatAttrSet is the fallback while the attributes snapshot
 // is still warming: EVE's unmodified spread is 20 across the board.
 var FlatAttrSet = AttrSet{Charisma: 20, Intelligence: 20, Memory: 20, Perception: 20, Willpower: 20}
 
@@ -404,7 +404,7 @@ func Compute(g Graph, targets []Target, char CharTraining, attrs AttrSet, now ti
 
 // RemapAdvice is the advisor's answer: the best spread found, what
 // the plan takes under it vs under the current attributes, and
-// whether a remap is even available to report honestly.
+// whether a remap is even available to report.
 type RemapAdvice struct {
 	Current     AttrSet
 	Best        AttrSet

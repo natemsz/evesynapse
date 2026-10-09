@@ -766,7 +766,7 @@ func (app *Application) orderPlace(ctx context.Context, locationID, systemID int
 // orderLocation renders where an order sits: the NPC station name
 // when the location is one, the solar-system name for system-level
 // orders (and as fallback), and for player structures the name
-// the worker has resolved (structures.go) or an honest
+// the worker has resolved (structures.go) or a
 // "Structure #<id>" until it lands. Station/system names reuse
 // the shared place-name cache. Cache-only: never fetches.
 func (app *Application) orderLocation(ctx context.Context, locationID, systemID int64) string {
@@ -788,7 +788,7 @@ func (app *Application) orderLocation(ctx context.Context, locationID, systemID 
 
 // marketRegionLabel names a region for display: the five trade
 // hubs by their short names, anything else from the SDE region
-// table, and an honest placeholder for ids neither knows.
+// table, and a placeholder for ids neither knows.
 func (app *Application) marketRegionLabel(ctx context.Context, regionID int64) string {
 	if name, ok := marketRegionName(regionID); ok {
 		return name

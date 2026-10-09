@@ -5,7 +5,7 @@ package app
 // so one joke order cannot stand in for the market. Unit tests
 // pin the statistics; the page test drives a book with a scam
 // order at each extreme and asserts the quoted prices ignore
-// them while the bests still report them honestly.
+// them while the bests still report them.
 
 import (
 	"context"

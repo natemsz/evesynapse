@@ -392,7 +392,7 @@ func (app *Application) attachWalletGraph(ctx context.Context, userID, character
 
 // attachNetWorthHistory fills the home Net worth module's
 // history from the user's sampler rows: a chart once two daily
-// totals exist, the honest "building" state before that.
+// totals exist, the "building" state before that.
 func (app *Application) attachNetWorthHistory(ctx context.Context, w *netWorthWidget, userID int64) {
 	rows, err := app.queries.ListUserWalletHistory(ctx, userID)
 	if err != nil {

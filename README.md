@@ -402,6 +402,26 @@ browser has to be switched on by hand. Nothing asks for
 permission on its own: not opening the site, and not installing
 it as an app.
 
+### Install it as an app
+
+The site can be installed to a phone's home screen or a computer's
+desktop, where it opens in its own window and gets its own
+notification icon.
+
+- **Chrome and Edge (Android, Windows, macOS, Linux):** an **Install
+  app** link appears at the foot of the menu, beside Theme, once the
+  browser says the site can be installed. It opens the browser's own
+  install dialog. The link is not there if the app is already
+  installed.
+- **Android:** install from Chrome. An app installed from Samsung
+  Internet has been seen never to ask for notification permission, so
+  push cannot be turned on in it.
+- **iPhone and iPad:** Safari gives a page no way to offer this. Use
+  **Share → Add to Home Screen**; push only works from the installed
+  app there.
+- **Firefox:** no install on a computer; on Android it is in the
+  browser's menu.
+
 ### Turn push on for the server (once)
 
 1. On the server, make a key pair:

@@ -61,7 +61,7 @@ func calendarEventURL(characterID int64, month string, eventID int64) string {
 
 func (app *Application) handleCalendarRespond(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return

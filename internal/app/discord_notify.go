@@ -174,7 +174,7 @@ func (app *Application) discordAnnounceOps(ctx context.Context, now time.Time) (
 // notifications as direct messages.
 func (app *Application) handleDiscordSettings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if err := r.ParseForm(); err == nil && userID != 0 {
 		if err := app.queries.SetDiscordDMNotifications(ctx, db.SetDiscordDMNotificationsParams{
 			UserID: userID, DmNotifications: r.Form.Get("dm") == "1",
@@ -193,7 +193,7 @@ func (app *Application) handleDiscordSettings(w http.ResponseWriter, r *http.Req
 // joined a server.
 func (app *Application) handleDiscordRolesRefresh(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	link, linked := app.discordLinkFor(r, userID)
 	switch {
 	case !app.discordHasBot():
@@ -218,7 +218,7 @@ func (app *Application) handleDiscordRolesRefresh(w http.ResponseWriter, r *http
 // can see that the bot reaches them, and says why when it does not.
 func (app *Application) handleDiscordTest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	link, linked := app.discordLinkFor(r, userID)
 	switch {
 	case !app.discordHasBot():

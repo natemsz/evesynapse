@@ -66,11 +66,7 @@ type calendarView struct {
 
 func (app *Application) handleCalendar(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/calendar/")
 	if err != nil {
@@ -107,7 +103,7 @@ func (app *Application) handleCalendar(w http.ResponseWriter, r *http.Request) {
 
 	// The month grid: in-game events and ops in one view.
 	{
-		userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+		userID := app.userID(ctx)
 		members := app.opMembers(ctx, userID)
 		now := time.Now()
 		month := parseCalMonth(r.URL.Query().Get("month"), now)

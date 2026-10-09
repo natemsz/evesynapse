@@ -41,11 +41,7 @@ type contactsView struct {
 
 func (app *Application) handleContacts(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/contacts/")
 	if err != nil {

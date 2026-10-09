@@ -48,11 +48,7 @@ type leaderboardView struct {
 
 func (app *Application) handleMarketLeaderboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 	view := app.buildLeaderboardView(ctx, r.URL.Query())
 	if wantCSV(r) {
 		serveLeaderboardCSV(w, view)

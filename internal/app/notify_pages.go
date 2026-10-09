@@ -132,12 +132,8 @@ const notificationsPageSize = 100
 
 func (app *Application) handleNotifications(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	data := app.page(ctx)
+	userID := app.userID(ctx)
 	rows, err := app.queries.ListNotifications(ctx, db.ListNotificationsParams{UserID: userID, Limit: notificationsPageSize})
 	if err != nil {
 		logging.Errorf("notifications: list for user %d: %v", userID, err)
@@ -170,7 +166,7 @@ func (app *Application) handleNotifications(w http.ResponseWriter, r *http.Reque
 // all of them, or one kind when the form names it.
 func (app *Application) handleNotificationsRead(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if err := r.ParseForm(); err == nil && userID != 0 {
 		app.markNotificationsRead(ctx, userID, r.FormValue("kind"))
 	}
@@ -183,7 +179,7 @@ func (app *Application) handleNotificationsRead(w http.ResponseWriter, r *http.R
 // what is unread.
 func (app *Application) handleNotificationsOpen(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	target := "/notifications/"
 	if err := r.ParseForm(); err == nil && userID != 0 {
 		if kind, ok := notifyKindByID(r.FormValue("kind")); ok {
@@ -367,12 +363,8 @@ func notifySettingRows(prefs notifyPrefs, characters []db.Character) []notifySet
 
 func (app *Application) handleNotificationSettings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	data := app.page(ctx)
+	userID := app.userID(ctx)
 	view := &notifySettingsView{
 		Rows: notifySettingRows(app.notifyPrefsFor(ctx, userID), app.sessionCharacters(ctx)),
 	}
@@ -402,7 +394,7 @@ func (app *Application) handleNotificationSettings(w http.ResponseWriter, r *htt
 // not come back switched off once it has.
 func (app *Application) handleNotificationSettingsSave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if err := r.ParseForm(); err != nil || userID == 0 {
 		http.Redirect(w, r, "/notifications/settings", http.StatusSeeOther)
 		return
@@ -515,7 +507,7 @@ const notifyBadgeHeader = "X-Notify-Badge"
 // page carries. X-Notify-Unread is the unread count.
 func (app *Application) handleNotifyBadge(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	badge := app.notifyBadgeFor(ctx, userID)
 	ts, err := parsedTemplate(&fragmentTemplates, "notify-bell", "notifybell.html")
 	if err != nil {

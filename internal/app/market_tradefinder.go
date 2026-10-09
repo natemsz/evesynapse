@@ -116,11 +116,7 @@ func (v *tradefinderView) HasData() bool {
 // never triggers a fetch.
 func (app *Application) handleMarketTradefinder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 	view := app.buildTradefinderView(ctx, r.URL.Query())
 	if wantCSV(r) {
 		serveTradefinderCSV(w, view)

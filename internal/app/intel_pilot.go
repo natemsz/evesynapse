@@ -112,11 +112,7 @@ type pilotView struct {
 // viewer's own characters redirects to its full sheet instead.
 func (app *Application) handlePilot(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
 	id, err := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64)
 	if err != nil || id <= 0 {
@@ -140,7 +136,7 @@ func (app *Application) handlePilot(w http.ResponseWriter, r *http.Request) {
 // isOwnCharacter reports whether id is one of the signed-in
 // user's linked characters.
 func (app *Application) isOwnCharacter(ctx context.Context, id int64) bool {
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if userID == 0 {
 		return false
 	}

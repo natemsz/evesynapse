@@ -168,7 +168,7 @@ func (app *Application) opFormFor(ctx context.Context, members []opMember, form 
 
 func (app *Application) handleOpNew(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	members := app.opMembers(ctx, userID)
 	if len(opCorps(members, true)) == 0 {
 		app.flash(ctx, "Creating an op needs a character with the "+app.cfg.opsManagerRolesText()+" role in its corporation.")
@@ -187,7 +187,7 @@ func (app *Application) handleOpNew(w http.ResponseWriter, r *http.Request) {
 
 func (app *Application) handleOpEdit(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	members := app.opMembers(ctx, userID)
 	op, ok := app.opFromURL(w, r, members)
 	if !ok {
@@ -221,7 +221,7 @@ func (app *Application) renderOpForm(w http.ResponseWriter, r *http.Request, for
 // convenience, not the rule.
 func (app *Application) handleOpSave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if err := r.ParseForm(); err != nil || userID == 0 {
 		http.Redirect(w, r, "/calendar/", http.StatusSeeOther)
 		return
@@ -376,7 +376,7 @@ type opView struct {
 
 func (app *Application) handleOp(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	members := app.opMembers(ctx, userID)
 	op, ok := app.opFromURL(w, r, members)
 	if !ok {
@@ -460,7 +460,7 @@ func (app *Application) handleOp(w http.ResponseWriter, r *http.Request) {
 // to be the account's own and in the op's corporation.
 func (app *Application) handleOpSignup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	members := app.opMembers(ctx, userID)
 	op, ok := app.opFromURL(w, r, members)
 	if !ok {
@@ -516,7 +516,7 @@ func (app *Application) handleOpSignup(w http.ResponseWriter, r *http.Request) {
 // who signed up see what happened to it.
 func (app *Application) handleOpCancel(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	members := app.opMembers(ctx, userID)
 	op, ok := app.opFromURL(w, r, members)
 	if !ok {

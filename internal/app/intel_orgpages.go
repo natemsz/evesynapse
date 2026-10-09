@@ -123,11 +123,7 @@ type alliancePageView struct {
 // handleCorporationPage renders one corporation's public record.
 func (app *Application) handleCorporationPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
 	id, err := strconv.ParseInt(r.URL.Query().Get("corporation"), 10, 64)
 	if err != nil || id <= 0 {
@@ -145,11 +141,7 @@ func (app *Application) handleCorporationPage(w http.ResponseWriter, r *http.Req
 // handleAlliancePage renders one alliance's public record.
 func (app *Application) handleAlliancePage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
 	id, err := strconv.ParseInt(r.URL.Query().Get("alliance"), 10, 64)
 	if err != nil || id <= 0 {

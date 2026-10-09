@@ -256,7 +256,7 @@ func (app *Application) opAttendanceFor(ctx context.Context, op db.Op, signups [
 // fleet reported is changed.
 func (app *Application) handleOpAttendance(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	members := app.opMembers(ctx, userID)
 	op, ok := app.opFromURL(w, r, members)
 	if !ok {
@@ -329,7 +329,7 @@ type papsView struct {
 
 func (app *Application) handleOpPAPs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	now := time.Now().UTC()
 	view := &papsView{}
 	for _, corpID := range opCorps(app.opMembers(ctx, userID), false) {

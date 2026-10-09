@@ -82,12 +82,8 @@ type syncView struct {
 // (pageData.AutoRefresh) so an import can be watched as it lands.
 func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-		AutoRefresh:   true,
-	}
+	data := app.page(ctx)
+	data.AutoRefresh = true
 
 	status := app.snapshotWorkerStatus()
 	view := &syncView{
@@ -303,7 +299,7 @@ func (app *Application) handleSyncWarm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if userID := int64(app.sessions.GetInt(ctx, sessionUserID)); userID != 0 {
+	if userID := app.userID(ctx); userID != 0 {
 		characters, err := app.queries.ListCharactersByUser(ctx, userID)
 		if err != nil {
 			logging.Errorf("sync: warm: list characters for user %d: %v", userID, err)

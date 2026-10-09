@@ -2,13 +2,10 @@ package app
 
 import (
 	"context"
-	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 
 	db "evesynapse/internal/db/sqlc"
-	"evesynapse/internal/logging"
 )
 
 // The worker refreshes several characters at once. Each character is
@@ -35,19 +32,7 @@ const fetchesPerLane = 120
 // parseWorkerLanes reads WORKER_LANES: the default when unset or
 // unreadable, else the number kept between 1 and mostWorkerLanes.
 func parseWorkerLanes(raw string) int {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return defaultWorkerLanes
-	}
-	n, err := strconv.Atoi(raw)
-	if err != nil || n <= 0 {
-		logging.Warnf("evesynapse: WORKER_LANES=%q is not a whole number; using %d", raw, defaultWorkerLanes)
-		return defaultWorkerLanes
-	}
-	if n > mostWorkerLanes {
-		return mostWorkerLanes
-	}
-	return n
+	return intSetting("WORKER_LANES", raw, 1, mostWorkerLanes, defaultWorkerLanes)
 }
 
 // workerLanes is how many characters the worker refreshes at once. A

@@ -53,11 +53,7 @@ type corpMembersView struct {
 
 func (app *Application) handleCorpMembers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
 	sel, ok, err := app.pickCorpPage(ctx, r)
 	if err != nil {
@@ -186,11 +182,7 @@ const maxLedgerRows = 100
 
 func (app *Application) handleCorpWallets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
 	sel, ok, err := app.pickCorpPage(ctx, r)
 	if err != nil {
@@ -347,11 +339,7 @@ type corpOrdersView struct {
 
 func (app *Application) handleCorpOrders(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
 	sel, ok, err := app.pickCorpPage(ctx, r)
 	if err != nil {
@@ -397,7 +385,7 @@ func (app *Application) handleCorpOrders(w http.ResponseWriter, r *http.Request)
 	// account's own characters without a verdict yet gets the
 	// not-checked line; orders from issuers the app does not sync stay
 	// blank.
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	health := make(map[int64]db.OrderHealth)
 	ownChars := make(map[int64]bool)
 	if userID > 0 {
@@ -479,11 +467,7 @@ type corpAssetsView struct {
 
 func (app *Application) handleCorpAssets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
 	sel, ok, err := app.pickCorpPage(ctx, r)
 	if err != nil {
@@ -565,11 +549,7 @@ type corpStructuresView struct {
 
 func (app *Application) handleCorpStructures(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
 	sel, ok, err := app.pickCorpPage(ctx, r)
 	if err != nil {

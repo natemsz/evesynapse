@@ -234,12 +234,8 @@ func discordChannelChoices(channels []discord.Channel, current string) []discord
 
 func (app *Application) handleDiscordServers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	data := app.page(ctx)
+	userID := app.userID(ctx)
 	view := &discordServersView{CanInstall: app.discord != nil && app.discord.Config().CanInstall()}
 	owners := app.discordManageable(ctx, userID)
 	guilds, err := app.queries.ListDiscordGuilds(ctx)
@@ -300,7 +296,7 @@ func (app *Application) handleDiscordServers(w http.ResponseWriter, r *http.Requ
 // a server of theirs, remembering whose server it is to be.
 func (app *Application) handleDiscordServerAdd(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	back := func(message string) {
 		app.flash(ctx, message)
 		http.Redirect(w, r, discordServersPath, http.StatusSeeOther)
@@ -384,7 +380,7 @@ func (app *Application) discordGuildFor(r *http.Request, userID int64) (db.Disco
 // gets which role is the server's rules: discord_rules.go.)
 func (app *Application) handleDiscordServerSave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	back := func(message string) {
 		app.flash(ctx, message)
 		http.Redirect(w, r, discordServersPath, http.StatusSeeOther)
@@ -430,7 +426,7 @@ func (app *Application) handleDiscordServerSave(w http.ResponseWriter, r *http.R
 // bot leaves the server.
 func (app *Application) handleDiscordServerForget(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	back := func(message string) {
 		app.flash(ctx, message)
 		http.Redirect(w, r, discordServersPath, http.StatusSeeOther)
@@ -482,7 +478,7 @@ func (app *Application) handleDiscordServerForget(w http.ResponseWriter, r *http
 // decide it.
 func (app *Application) handleDiscordOpsShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	back := func(message string) {
 		app.flash(ctx, message)
 		http.Redirect(w, r, discordServersPath, http.StatusSeeOther)

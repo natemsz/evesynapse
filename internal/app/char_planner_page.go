@@ -141,11 +141,7 @@ const plannerMaxRunsInput = 1000000
 
 func (app *Application) handlePlanner(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 	view := &plannerView{}
 	data.Planner = view
 
@@ -540,7 +536,7 @@ func (s *sdePlannerSource) BlueprintForProduct(productTypeID int64) (*buildplan.
 // the universe the planner's scopes pick from. A dev-login
 // session (no user) simply has none.
 func (app *Application) plannerAccountChars(ctx context.Context) []db.Character {
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if userID == 0 {
 		return nil
 	}

@@ -90,7 +90,7 @@ func (app *Application) handleDiscordCallback(w http.ResponseWriter, r *http.Req
 		app.flash(ctx, message)
 		http.Redirect(w, r, discordSettingsPath, http.StatusSeeOther)
 	}
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 
 	// State is single-use: read it, clear it, then constant-time compare.
 	want := app.sessions.GetString(ctx, sessionDiscordState)
@@ -164,7 +164,7 @@ func (app *Application) handleDiscordCallback(w http.ResponseWriter, r *http.Req
 
 func (app *Application) handleDiscordDisconnect(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if userID != 0 {
 		// The roles EveSynapse gave are taken back first, while the
 		// account they were given to is still known.

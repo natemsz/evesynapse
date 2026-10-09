@@ -239,13 +239,9 @@ func plainTextDescription(s string) string {
 // so this page needs no characters' tokens at all.
 func (app *Application) handleCorporations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if userID == 0 {
 		// Dev-login sessions carry no user; nothing to group.
 		app.render(ctx, w, http.StatusOK, "corporations.html", data)

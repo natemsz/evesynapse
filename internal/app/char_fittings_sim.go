@@ -1448,7 +1448,7 @@ func (app *Application) handleFitSimulate(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 
 	pilotLabel := "All V"
 	if req.Pilot != 0 {
@@ -1469,7 +1469,7 @@ func (app *Application) handleFitSimulate(w http.ResponseWriter, r *http.Request
 // picker changes without a full page load.
 func (app *Application) handleFitClonesJSON(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	pilotID, _ := strconv.ParseInt(r.URL.Query().Get("pilot"), 10, 64)
 	if _, owned := app.fitPilotLabel(ctx, userID, pilotID); !owned {
 		writeFitJSON(w, map[string]any{"ok": false, "error": "That pilot isn't one of your characters."})
@@ -1693,7 +1693,7 @@ func parseFitTags(raw string) []string {
 // the community-fit flag (drafts are never public).
 func (app *Application) handleFitSave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if userID == 0 {
 		http.Error(w, "Sign in before saving a fit.", http.StatusForbidden)
 		return
@@ -1929,7 +1929,7 @@ type fitSaveToEVERequest struct {
 // again", never silently swallowed.
 func (app *Application) handleFitSaveToEVE(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	var req fitSaveToEVERequest
 	body := http.MaxBytesReader(w, r.Body, 256<<10)
 	if err := json.NewDecoder(body).Decode(&req); err != nil {
@@ -2010,7 +2010,7 @@ func (app *Application) handleFitSaveToEVE(w http.ResponseWriter, r *http.Reques
 // handleFitDelete serves POST /fittings/delete/ (form field id).
 func (app *Application) handleFitDelete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if userID == 0 {
 		http.Redirect(w, r, "/fittings/", http.StatusSeeOther)
 		return
@@ -2043,7 +2043,7 @@ type fitMineRow struct {
 // search bar on the fitting screen.
 func (app *Application) handleFitMineJSON(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if userID == 0 {
 		http.Error(w, "Sign in first.", http.StatusForbidden)
 		return
@@ -2115,7 +2115,7 @@ func (app *Application) handleFitMineJSON(w http.ResponseWriter, r *http.Request
 // touched.
 func (app *Application) handleFitFork(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	if userID == 0 {
 		http.Error(w, "Sign in first.", http.StatusForbidden)
 		return
@@ -2219,7 +2219,7 @@ func (app *Application) handleFitExport(w http.ResponseWriter, r *http.Request) 
 // esiFits is the active character's saved EVE fittings (possibly
 // nil), used by the per-fit "View stats" deep link.
 func (app *Application) attachFitEditor(ctx context.Context, r *http.Request, data *pageData, characters []db.Character, active db.Character, esiFits esi.Fittings) {
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	editor := &fitEditorView{}
 	doc := &fitDoc{Charges: map[int64]int64{}}
 

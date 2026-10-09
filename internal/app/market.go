@@ -255,11 +255,7 @@ const marketBrowseTypesPerPage = 100
 // item view for one region. Every figure is public ESI data.
 func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	data := app.page(ctx)
 
 	q := r.URL.Query()
 	view := &marketView{
@@ -272,7 +268,7 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	data.Market = view
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 
 	if typeID, err := strconv.ParseInt(q.Get("type"), 10, 64); err == nil && typeID > 0 {
 		item, err := app.loadMarketItem(ctx, typeID, view.Region)
@@ -937,7 +933,7 @@ func orderHealthText(myPrice float64, status string, stationBest, regionBest flo
 // flicker while 500 would never fire.
 func (app *Application) handleMarketWatch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 	next := "/market/"
 	if err := r.ParseForm(); err == nil {
 		if n := r.Form.Get("next"); strings.HasPrefix(n, "/") && !strings.HasPrefix(n, "//") {

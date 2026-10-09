@@ -195,7 +195,7 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 		_ = json.NewEncoder(w).Encode(hits)
 		return
 	}
-	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	userID := app.userID(ctx)
 
 	ownIDs := map[int64]bool{}
 	ownHitCount := 0

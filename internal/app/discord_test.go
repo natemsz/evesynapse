@@ -22,25 +22,27 @@ import (
 // for, each server's roles, channels and members, and records every
 // message and role change the bot makes.
 type fakeDiscord struct {
-	mu          sync.Mutex
-	codes       map[string]string              // sign-in code -> account id
-	installs    map[string]string              // sign-in code -> server the bot was added to
-	members     map[string]map[string][]string // server -> account -> roles held; absent: not a member
-	refuseDM    bool
-	failMembers bool // looking a member up fails outright
-	noJoin      bool // the bot may not add members
-	revoked     bool // accounts have taken their permission back
-	refreshes   int
-	added       []string             // "server user", for members the bot added
-	bots        map[string]bool      // accounts that are bots
-	joined      map[string]time.Time // "server user" -> when they joined; long ago if absent
-	owner       string               // the account that owns every server
-	noList      bool                 // the member list may not be read
-	kicked      []string             // "server user", for members the bot removed
-	left        []string             // servers the bot was told to leave
-	messages    []string             // "channel: text"
-	changes     []string             // "PUT server user role" / "DELETE server user role"
-	calls       int
+	mu            sync.Mutex
+	codes         map[string]string              // sign-in code -> account id
+	installs      map[string]string              // sign-in code -> server the bot was added to
+	members       map[string]map[string][]string // server -> account -> roles held; absent: not a member
+	refuseDM      bool
+	failMembers   bool // looking a member up fails outright
+	noJoin        bool // the bot may not add members
+	revoked       bool // accounts have taken their permission back
+	refreshes     int
+	added         []string             // "server user", for members the bot added
+	bots          map[string]bool      // accounts that are bots
+	joined        map[string]time.Time // "server user" -> when they joined; long ago if absent
+	owner         string               // the account that owns every server
+	noList        bool                 // the member list may not be read
+	kicked        []string             // "server user", for members the bot removed
+	channelEdits  []string             // "allow|deny|clear channel target", in the order made
+	noChannelEdit bool                 // the bot may not change channels
+	left          []string             // servers the bot was told to leave
+	messages      []string             // "channel: text"
+	changes       []string             // "PUT server user role" / "DELETE server user role"
+	calls         int
 }
 
 func (d *fakeDiscord) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -77,6 +79,21 @@ func (d *fakeDiscord) RoundTrip(req *http.Request) (*http.Response, error) {
 			guild = `,"guild":{"id":"` + id + `","name":"Server ` + id[len(id)-1:] + `"}`
 		}
 		return respond(200, `{"access_token":"token-for-`+code+`","refresh_token":"refresh-for-`+code+`","expires_in":604800`+guild+`}`)
+	case path == "/users/@me" && strings.HasPrefix(req.Header.Get("Authorization"), "Bot "):
+		return respond(200, `{"id":"`+discordBotUser+`","username":"EveSynapse","bot":true}`)
+	case len(parts) == 4 && parts[0] == "channels" && parts[2] == "permissions":
+		if d.noChannelEdit {
+			return respond(403, `{"message":"Missing Permissions"}`)
+		}
+		set := "clear"
+		if req.Method == http.MethodPut {
+			set = "deny"
+			if strings.Contains(raw, `"deny":"0"`) {
+				set = "allow"
+			}
+		}
+		d.channelEdits = append(d.channelEdits, set+" "+parts[1]+" "+parts[3])
+		return respond(204, ``)
 	case path == "/users/@me":
 		code := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer token-for-")
 		return respond(200, `{"id":"`+d.codes[code]+`","username":"pilot-`+code+`"}`)
@@ -218,6 +235,7 @@ const (
 	discordRoleBot       = "300000000000000099" // the bot's own: cannot be given
 	discordOpsChannel    = "400000000000000001"
 	discordVoiceChannel  = "400000000000000009"
+	discordBotUser       = "100000000000000999"
 	discordCorp          = int64(98000001)
 	discordOtherCorp     = int64(98000002)
 	discordAlliance      = int64(99000001)
@@ -540,7 +558,7 @@ func TestDiscordServersAreSetUpByDirectors(t *testing.T) {
 	if strings.Contains(body, discordRoleBot) {
 		t.Fatal("the bot's own role, which cannot be given, is offered")
 	}
-	if strings.Contains(body, discordVoiceChannel) {
+	if strings.Contains(body, `<option value="`+discordVoiceChannel+`">#`) {
 		t.Fatal("a voice channel is offered for posting ops")
 	}
 	guild, err := f.q.GetDiscordGuild(f.ctx, discordCorpGuild)

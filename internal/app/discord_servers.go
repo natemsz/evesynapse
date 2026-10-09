@@ -189,6 +189,10 @@ type discordServerView struct {
 	// removed, and the roles whose holders never are.
 	Kick   bool
 	Exempt []discordChoice
+	// Channel access (discord_channels.go): the channels the bot
+	// keeps private, and what a new one can be picked from.
+	Managed     []discordChannelView
+	AllChannels []discordChoice
 	// Unreachable: Discord would not list the server's roles and
 	// channels (the bot was removed from it, or Discord is down).
 	Unreachable bool
@@ -258,6 +262,12 @@ func (app *Application) handleDiscordServers(w http.ResponseWriter, r *http.Requ
 				sv.Rules = app.discordRuleViews(ctx, guild, roles)
 				sv.Who = app.discordWhoChoices(ctx, owner)
 				sv.Roles = discordRoleChoices(roles, "")
+				if all, aerr := app.discord.GuildChannels(ctx, guild.GuildID); aerr == nil {
+					sv.Managed = app.discordChannelViews(ctx, guild.GuildID, all, roles)
+					for _, ch := range all {
+						sv.AllChannels = append(sv.AllChannels, discordChoice{ID: ch.ID, Name: channelLabel(ch)})
+					}
+				}
 				sv.Kick = guild.KickEnabled
 				exempt := roleSet{}
 				exempt.add(splitRoles(guild.KickExemptRoles)...)

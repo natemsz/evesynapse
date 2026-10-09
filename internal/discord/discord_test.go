@@ -320,6 +320,57 @@ func TestMembersOwnerAndKick(t *testing.T) {
 	}
 }
 
+// TestChannelPermissions: letting a role into a channel and shutting
+// everyone else out are entries on the channel that deal only in
+// seeing it and connecting to it.
+func TestChannelPermissions(t *testing.T) {
+	const channel = "666666666666666662"
+	perm := "/api/channels/" + channel + "/permissions/"
+	f := &fake{answers: map[string][2]string{
+		"PUT " + perm + role:                     {"204", ``},
+		"PUT " + perm + guild:                    {"204", ``},
+		"PUT " + perm + user:                     {"204", ``},
+		"DELETE " + perm + role:                  {"204", ``},
+		"GET /api/users/@me":                     {"200", `{"id":"` + user + `","username":"bot","bot":true}`},
+		"GET /api/guilds/" + guild + "/channels": {"200", `[{"id":"1111111111","name":"general","type":0,"position":2},{"id":"2222222222","name":"Ops","type":4,"position":1},{"id":"3333333333","name":"thread","type":11,"position":0}]`},
+	}}
+	c := newClient(f)
+	if err := c.AllowChannel(context.Background(), channel, role, ForRole); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.DenyChannel(context.Background(), channel, guild, ForRole); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.AllowChannel(context.Background(), channel, user, ForMember); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.ClearChannel(context.Background(), channel, role); err != nil {
+		t.Fatal(err)
+	}
+	// View Channel and Connect: 1<<10 | 1<<20 = 1049600, and nothing else.
+	allow, deny, member := f.calls[0].Body, f.calls[1].Body, f.calls[2].Body
+	if !strings.Contains(allow, `"allow":"1049600"`) || !strings.Contains(allow, `"deny":"0"`) || !strings.Contains(allow, `"type":0`) {
+		t.Fatalf("letting a role in: %s", allow)
+	}
+	if !strings.Contains(deny, `"deny":"1049600"`) || !strings.Contains(deny, `"allow":"0"`) {
+		t.Fatalf("shutting everyone out: %s", deny)
+	}
+	if !strings.Contains(member, `"type":1`) {
+		t.Fatalf("letting a member in: %s", member)
+	}
+	if f.calls[3].Method != "DELETE" {
+		t.Fatalf("clearing: %+v", f.calls[3])
+	}
+	me, err := c.BotUserID(context.Background())
+	if err != nil || me != user || f.calls[4].Auth != "Bot bot-token" {
+		t.Fatalf("the bot's own id: %q, %v", me, err)
+	}
+	channels, err := c.GuildChannels(context.Background(), guild)
+	if err != nil || len(channels) != 2 || channels[0].Name != "Ops" || channels[1].Name != "general" {
+		t.Fatalf("channels %+v, %v; want the category and the text channel, in order, and no thread", channels, err)
+	}
+}
+
 func TestValidID(t *testing.T) {
 	for id, want := range map[string]bool{
 		user: true, "12345": true, "": false, "1234": false, "abc": false, "123/456": false, "../x": false, " 123456": false,

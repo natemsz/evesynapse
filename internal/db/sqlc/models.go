@@ -72,6 +72,14 @@ type CorporationRecord struct {
 	Priority      int64        `json:"priority"`
 }
 
+type DiscordChannelAccess struct {
+	GuildID   string    `json:"guild_id"`
+	ChannelID string    `json:"channel_id"`
+	RoleID    string    `json:"role_id"`
+	SetBy     int64     `json:"set_by"`
+	SetAt     time.Time `json:"set_at"`
+}
+
 type DiscordGuild struct {
 	GuildID         string       `json:"guild_id"`
 	Name            string       `json:"name"`

@@ -41,7 +41,7 @@
      <label>the role <select name="role">{{range .Roles}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
      <button type="submit">Add rule</button></p>
 </form>
-<p><small>Add as many rules as you have roles to give; a member gets every role they qualify for and loses each one when they stop qualifying. The bot can only give roles that sit below its own in the server's role list. Groups are kept on the <a href="/groups/">Groups</a> page. Which channels a role can see is set in Discord, on each channel.</small></p>
+<p><small>Add as many rules as you have roles to give; a member gets every role they qualify for and loses each one when they stop qualifying. The bot can only give roles that sit below its own in the server's role list. Groups are kept on the <a href="/groups/">Groups</a> page. Which channels a role can open is set under Channels, below.</small></p>
 <h4>Members and ops</h4>
 <form method="post" action="/discord/servers/{{.GuildID}}/save" class="op-form discord-server-form">
   <p><label><input type="checkbox" name="auto_join" value="1"{{if .AutoJoin}} checked{{end}}> Add members of the {{.MemberWord}} to this server automatically, once they have connected Discord</label></p>
@@ -49,6 +49,30 @@
   <p><button type="submit">Save</button></p>
 </form>
 <p><small>Only someone with a character in the {{.MemberWord}} is ever added; they agree to it on Discord when they connect. If the bot was added before this was possible, add it to the server again so that it has permission to.</small></p>
+<h4>Channels</h4>
+{{if .Managed}}
+<div class="tw">
+<table>
+  <thead><tr><th>Channel</th><th>Can be opened by</th></tr></thead>
+  <tbody>
+  {{range .Managed}}
+    <tr><td>{{.Name}}</td><td>{{.Roles}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p><small>The bot is not keeping any channel private here.</small></p>
+{{end}}
+<form method="post" action="/discord/servers/{{.GuildID}}/channels" class="op-form">
+  <p><label>Make <select name="channel">{{range .AllChannels}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label> private to:</p>
+  <div class="discord-exempt">
+    {{range .Roles}}<label><input type="checkbox" name="role" value="{{.ID}}"> {{.Name}}</label>
+    {{end}}
+  </div>
+  <p><button type="submit">Save channel</button></p>
+</form>
+<p><small>Pick a channel and tick the roles that may open it: the bot hides it from everyone else. Saving a channel again replaces its list; saving it with nothing ticked stops the bot managing it (it stays hidden until you open it in Discord). A category applies to the channels in it that follow the category's permissions. The bot has to be able to see a channel to change it.</small></p>
 <h4>Removals</h4>
 <form method="post" action="/discord/servers/{{.GuildID}}/removals" class="op-form">
   <p><label><input type="checkbox" name="kick_enabled" value="1"{{if .Kick}} checked{{end}}> Remove from this server anyone who is owed no role by the rules above</label></p>

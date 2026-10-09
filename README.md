@@ -534,10 +534,16 @@ are in the corporation (or the alliance) can be put in one. A member
 who leaves the corporation stays on the list but loses the role until
 they are back. Deleting a group removes the rules that used it.
 
-**Which channels a role can open** is set in Discord, the usual way: on
-a channel or category, under Permissions, allow the role and deny
-@everyone. The bot gives the roles; it has no permission to change
-channels, and does not need it.
+**Which channels a role can open** is set on the same page, under
+**Channels**: pick a channel (or a category, or a voice channel) and
+tick the roles that may open it. The bot then keeps it private to
+those roles: it lets itself in, lets each ticked role in, and hides
+the channel from everyone else. Saving a channel again replaces its
+list. Saving it with nothing ticked stops the bot managing it; the
+channel stays hidden until someone opens it in Discord. The bot only
+touches channels listed there, and it has to be able to see a channel
+to change it. With the role rules this is the whole chain: what
+someone is in EVE gives them a role, and the role opens the channels.
 
 **Ops in an alliance's server.** A corporation's ops are posted in its
 own servers. They are posted in its alliance's server only after a

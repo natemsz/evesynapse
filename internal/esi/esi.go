@@ -375,6 +375,10 @@ type Client struct {
 	// rates is what is known of ESI's per-character rate limits
 	// (ratelimit.go).
 	rates rateLimits
+
+	// changes is which characters have had new data stored
+	// (changed.go).
+	changes changeLog
 }
 
 // New builds a Client. httpClient performs every ESI request (the
@@ -1937,6 +1941,7 @@ func (c *Client) refreshSnapshot(ctx context.Context, ch db.Character, kind stri
 	}); err != nil {
 		return nil, false, fmt.Errorf("store %s snapshot for character %d: %w", kind, ch.CharacterID, err)
 	}
+	c.changes.note(ch.CharacterID)
 	return body, false, nil
 }
 
@@ -2074,6 +2079,7 @@ func (c *Client) FetchAndStoreCorpSnapshot(ctx context.Context, ch db.Character,
 	}); err != nil {
 		return fmt.Errorf("store %s snapshot for character %d: %w", kind, ch.CharacterID, err)
 	}
+	c.changes.note(ch.CharacterID)
 	return nil
 }
 

@@ -31,7 +31,9 @@ func (app *Application) rewriteSnapshot(ctx context.Context, characterID int64, 
 		FetchedAt: snap.FetchedAt, CachedUntil: snap.CachedUntil, Etag: snap.Etag,
 	}); err != nil {
 		logging.Errorf("mail: rewrite %s snapshot for character %d: %v", kind, characterID, err)
+		return
 	}
+	app.esi.NoteCharacterChanged(characterID)
 }
 
 // markMailReadLocally records a mark-as-read that ESI has accepted in

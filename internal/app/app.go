@@ -140,6 +140,7 @@ type Application struct {
 	// activity is when each account was last seen, which sets how
 	// often the worker refreshes its characters (worker_tiers.go).
 	activity      activityLog
+	notifyQuiet   notifyQuietLog // which accounts' data the notification pass has read lately (notify_quiet.go)
 	priorityMu    sync.Mutex
 	priorityChars map[int64]bool
 

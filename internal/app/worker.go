@@ -301,7 +301,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// what is newly true into notifications (notify.go). Local data
 	// only, so it runs whether or not ESI was reachable.
 	runGuarded("notifications", func() {
-		if n := app.notifyPass(ctx, characters, time.Now()); n > 0 {
+		if n := app.notifyCycle(ctx, characters, time.Now()); n > 0 {
 			logging.Infof("worker: %d new notification(s)", n)
 		}
 	})

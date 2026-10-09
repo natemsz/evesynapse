@@ -2453,6 +2453,8 @@
     if (ev.key !== "Escape" || !switcher.open) return;
     close();
     summary.focus();
+  });
+})();
 
 // "Install app" in the sidebar. A browser that can install the site as
 // an app (Chrome and Edge, on Android and on a computer) says so with

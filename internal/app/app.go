@@ -217,6 +217,10 @@ func New(cfg Config) (*Application, error) {
 		return nil, err
 	}
 
+	// When each account was last seen, from before this start
+	// (activity.go).
+	app.loadActivity(context.Background())
+
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	app.stopWorker = stopWorker
 	app.workerCtx = workerCtx

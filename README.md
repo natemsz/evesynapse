@@ -245,7 +245,7 @@ gaps; real environment variables win over the file):
 | `VAPID_SUBJECT` | no | the site's address | A contact address (`mailto:` or `https:`) the browsers' push services may use to reach the operator |
 | `OPS_MANAGER_ROLES` | no | `Director` | The in-game corporation roles whose holders may create, change and cancel ops on the calendar, comma separated and spelled as ESI spells them (`Director,Personnel_Manager`) |
 | `NOTIFY_POLL_SECONDS` | no | `30` | How often, in seconds, an open page checks whether its notifications icon has changed, so new notifications show without a reload. `0` turns the checks off; other values are kept between 5 and 3600. Takes effect on restart |
-| `WORKER_TIERS` | no | on | How often a character's data is refreshed follows its account: as often as ESI allows for the character someone has open, every 5 minutes (position every 2) for that account's other characters, every 5 to 15 minutes for an account seen in the last day, every 30 minutes (position every 6 hours) for one not seen for a day. `off` refreshes everything as often as ESI allows for everyone, which uses up the worker's allowance at around fifteen characters |
+| `WORKER_TIERS` | no | on | How often a character's data is refreshed follows its account: as often as ESI allows for the character someone has open, every 5 minutes (position every 2) for that account's other characters, every 5 to 15 minutes for an account seen in the last day, every 30 minutes (position every 6 hours) for one not seen for a day, and every 2 hours for one not seen for a week that has no browser subscribed to push and no Discord account linked. `off` refreshes everything as often as ESI allows for everyone, which uses up the worker's allowance at around fifteen characters |
 | `WORKER_FETCHES_PER_CYCLE` | no | 120 per lane (`480`) | How many ESI fetches the worker's character pass may make in one one-minute cycle, for the whole server (kept between 20 and 2000). Raise it when the Sync page shows the allowance used up and characters put off. One lane gets through about 200 fetches in a minute, so more than about 200 per lane makes a cycle run past its minute |
 | `WORKER_LANES` | no | `4` | How many characters the worker refreshes at the same time (1 to 16). Each character is still fetched one request after another, so ESI's per-character rate limits are unaffected; `1` is the worker as it was, one character at a time. More lanes mean more database connections in use at once (the pool has 20) |
 | `DB_MAX_CONNS` | no | `20` | How many database connections the app may hold open (5 to 500). The session store keeps a few more of its own (at most 4, or one per CPU core if that is more). Raise it together with PostgreSQL's `max_connections` (100 unless changed), which must stay above the two added together; more than a few dozen is rarely useful on one machine |
@@ -430,7 +430,11 @@ opens from there; Safari does not offer push to an ordinary tab.
 - How soon depends on whether anyone has the site open. A character
   somebody is looking at is synced every minute. An account nobody
   has had open for a day is synced every 30 minutes, so its mail and
-  killmails are announced up to that much later. Things that come
+  killmails are announced up to that much later. An account not
+  opened for a week is synced every 2 hours, but only if it has no
+  browser subscribed to push and no Discord account linked: one
+  that is being told things away from the site is never slowed
+  below the 30 minutes. Things that come
   with the clock and need no sync (a skill or an industry job
   finishing, an extractor running out) are checked for at least
   every 5 minutes, and new ops and op reminders every minute, for

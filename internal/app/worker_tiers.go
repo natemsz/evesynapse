@@ -36,11 +36,18 @@ import (
 //	         flies: every 15 minutes. The rest: every 5.
 //	dormant  not seen for a day. Position: every 6 hours. The rest:
 //	         every 30 minutes, which is what notifications need.
+//	asleep   not seen for a week, and with nowhere for a notification
+//	         to go but the site itself: no browser subscribed to
+//	         push and no Discord account linked. Position: every 6
+//	         hours. The rest: every 2 hours. An account that is
+//	         being told things elsewhere, or has Discord roles to
+//	         keep right, stays dormant however long it is away.
 //
 // An account that comes back is active from its first request, and its
 // characters go to the front of the next cycle, so the stalest it sees
-// is a minute of the old data. Activity is kept in memory: after a
-// restart every account counts as dormant until it is next seen.
+// is a minute of the old data. When an account was last seen is kept
+// in memory and written to its row at most once an hour (activity.go),
+// so a restart remembers it to within the hour.
 //
 // A character with nothing due is skipped before its token is looked
 // at, so a dormant character's token is renewed when its data is, not
@@ -54,6 +61,7 @@ const (
 	tierWatched
 	tierRecent
 	tierDormant
+	tierAsleep
 )
 
 func (t warmTier) String() string {
@@ -64,6 +72,8 @@ func (t warmTier) String() string {
 		return "watched"
 	case tierRecent:
 		return "recent"
+	case tierAsleep:
+		return "asleep"
 	}
 	return "dormant"
 }
@@ -71,6 +81,7 @@ func (t warmTier) String() string {
 const (
 	tierActiveWindow = 10 * time.Minute
 	tierRecentWindow = 24 * time.Hour
+	tierAsleepAfter  = 7 * 24 * time.Hour
 )
 
 // positionKinds are the datasets that say where a character is right
@@ -96,6 +107,11 @@ func tierHold(tier warmTier, kind string) time.Duration {
 			return 6 * time.Hour
 		}
 		return 30 * time.Minute
+	case tierAsleep:
+		if positionKinds[kind] {
+			return 6 * time.Hour
+		}
+		return 2 * time.Hour
 	}
 	return 0
 }
@@ -109,6 +125,8 @@ func tierFurtherHold(tier warmTier) time.Duration {
 		return 5 * time.Minute
 	case tierDormant:
 		return 30 * time.Minute
+	case tierAsleep:
+		return 2 * time.Hour
 	}
 	return 0
 }
@@ -120,6 +138,13 @@ type activityLog struct {
 	seen    map[int64]time.Time // account -> last request
 	viewed  map[int64]time.Time // character -> last time a page was about it
 	further map[int64]time.Time // character -> last round of further datasets
+	saved   map[int64]time.Time // account -> the last-seen time its row holds (activity.go)
+
+	// listening is the accounts whose notifications go somewhere other
+	// than the site, as of the last cycle; unknown until it has been
+	// read, and then everyone counts as listening (activity.go).
+	listening      map[int64]bool
+	listeningKnown bool
 }
 
 // noteActivity records a request by an account. It reports whether the
@@ -144,6 +169,8 @@ func (a *activityLog) tier(userID int64, now time.Time) warmTier {
 		return tierActive
 	case known && now.Sub(last) <= tierRecentWindow:
 		return tierRecent
+	case known && now.Sub(last) > tierAsleepAfter && a.listeningKnown && !a.listening[userID]:
+		return tierAsleep
 	}
 	return tierDormant
 }
@@ -218,6 +245,7 @@ func (app *Application) trackActivity(next http.Handler) http.Handler {
 			if app.activity.noteActivity(userID, now) && !app.cfg.workerTiersOff {
 				app.prioritizeAccount(ctx, userID)
 			}
+			app.saveSeen(ctx, userID, now)
 			// The character being looked at: the one selected in the
 			// session, and the one a page is asked for by address.
 			viewed := []int64{sessionCharID(app.sessions, ctx)}

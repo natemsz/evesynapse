@@ -645,6 +645,7 @@ type User struct {
 	CreatedAt      time.Time    `json:"created_at"`
 	HomeLayout     string       `json:"home_layout"`
 	LastBriefingAt sql.NullTime `json:"last_briefing_at"`
+	LastSeenAt     time.Time    `json:"last_seen_at"`
 }
 
 type WalletHistory struct {

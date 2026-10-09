@@ -139,12 +139,30 @@ type activityLog struct {
 	viewed  map[int64]time.Time // character -> last time a page was about it
 	further map[int64]time.Time // character -> last round of further datasets
 	saved   map[int64]time.Time // account -> the last-seen time its row holds (worker_activity.go)
+	active  map[int64]bool      // character -> was in the active tier at the worker's last cycle
 
 	// listening is the accounts whose notifications go somewhere other
 	// than the site, as of the last cycle; unknown until it has been
 	// read, and then everyone counts as listening (worker_activity.go).
 	listening      map[int64]bool
 	listeningKnown bool
+}
+
+// noteTier records whether a character is in the active tier at this
+// cycle, and reports whether it was at the one before.
+func (a *activityLog) noteTier(characterID int64, active bool) (was bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	was = a.active[characterID]
+	switch {
+	case active && a.active == nil:
+		a.active = map[int64]bool{characterID: true}
+	case active:
+		a.active[characterID] = true
+	default:
+		delete(a.active, characterID)
+	}
+	return was
 }
 
 // noteActivity records a request by an account. It reports whether the

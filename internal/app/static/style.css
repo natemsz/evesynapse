@@ -784,7 +784,6 @@ footer {
   padding: 1.4rem 1rem 1.6rem;
   margin-top: 2rem;
 }
-/* The word gap is widened so "by natemsz" does not read as one word. */
 footer .version {
   color: var(--muted);
   font-family: 'Pixelify Sans', monospace;

@@ -426,3 +426,18 @@ WHERE user_id = $1 AND character_id = $2;
 -- name: DeleteCloneName :exec
 DELETE FROM clone_names
 WHERE user_id = $1 AND character_id = $2 AND clone_id = $3;
+
+-- name: TouchUserSeen :exec
+-- The account was seen (worker_tiers.go writes this at most hourly).
+UPDATE users SET last_seen_at = $2 WHERE id = $1;
+
+-- name: ListUsersLastSeen :many
+SELECT id, last_seen_at FROM users;
+
+-- name: ListUsersBeingNotified :many
+-- Accounts whose notifications go somewhere other than the site: a
+-- browser subscribed to push, or a linked Discord account (which also
+-- has roles to keep right).
+SELECT user_id FROM push_subscriptions
+UNION
+SELECT user_id FROM discord_links;

@@ -124,7 +124,7 @@ func (q *Queries) CreateSkillPlan(ctx context.Context, arg CreateSkillPlanParams
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (created_at)
 VALUES (now())
-RETURNING id, created_at, home_layout, last_briefing_at
+RETURNING id, created_at, home_layout, last_briefing_at, last_seen_at
 `
 
 func (q *Queries) CreateUser(ctx context.Context) (User, error) {
@@ -135,6 +135,7 @@ func (q *Queries) CreateUser(ctx context.Context) (User, error) {
 		&i.CreatedAt,
 		&i.HomeLayout,
 		&i.LastBriefingAt,
+		&i.LastSeenAt,
 	)
 	return i, err
 }
@@ -480,7 +481,7 @@ func (q *Queries) GetSnapshotFetchState(ctx context.Context, arg GetSnapshotFetc
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, created_at, home_layout, last_briefing_at FROM users
+SELECT id, created_at, home_layout, last_briefing_at, last_seen_at FROM users
 WHERE id = $1
 `
 
@@ -492,6 +493,7 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.CreatedAt,
 		&i.HomeLayout,
 		&i.LastBriefingAt,
+		&i.LastSeenAt,
 	)
 	return i, err
 }
@@ -1462,7 +1464,7 @@ func (q *Queries) ListUserWalletHistory(ctx context.Context, userID int64) ([]Wa
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, created_at, home_layout, last_briefing_at FROM users
+SELECT id, created_at, home_layout, last_briefing_at, last_seen_at FROM users
 ORDER BY id
 `
 
@@ -1480,7 +1482,72 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.CreatedAt,
 			&i.HomeLayout,
 			&i.LastBriefingAt,
+			&i.LastSeenAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUsersBeingNotified = `-- name: ListUsersBeingNotified :many
+SELECT user_id FROM push_subscriptions
+UNION
+SELECT user_id FROM discord_links
+`
+
+// Accounts whose notifications go somewhere other than the site: a
+// browser subscribed to push, or a linked Discord account (which also
+// has roles to keep right).
+func (q *Queries) ListUsersBeingNotified(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listUsersBeingNotified)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var user_id int64
+		if err := rows.Scan(&user_id); err != nil {
+			return nil, err
+		}
+		items = append(items, user_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUsersLastSeen = `-- name: ListUsersLastSeen :many
+SELECT id, last_seen_at FROM users
+`
+
+type ListUsersLastSeenRow struct {
+	ID         int64     `json:"id"`
+	LastSeenAt time.Time `json:"last_seen_at"`
+}
+
+func (q *Queries) ListUsersLastSeen(ctx context.Context) ([]ListUsersLastSeenRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUsersLastSeen)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUsersLastSeenRow
+	for rows.Next() {
+		var i ListUsersLastSeenRow
+		if err := rows.Scan(&i.ID, &i.LastSeenAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1815,6 +1882,21 @@ func (q *Queries) TouchSnapshot(ctx context.Context, arg TouchSnapshotParams) (i
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const touchUserSeen = `-- name: TouchUserSeen :exec
+UPDATE users SET last_seen_at = $2 WHERE id = $1
+`
+
+type TouchUserSeenParams struct {
+	ID         int64     `json:"id"`
+	LastSeenAt time.Time `json:"last_seen_at"`
+}
+
+// The account was seen (worker_tiers.go writes this at most hourly).
+func (q *Queries) TouchUserSeen(ctx context.Context, arg TouchUserSeenParams) error {
+	_, err := q.db.ExecContext(ctx, touchUserSeen, arg.ID, arg.LastSeenAt)
+	return err
 }
 
 const updateCharacterTokens = `-- name: UpdateCharacterTokens :exec

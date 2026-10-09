@@ -35,10 +35,10 @@ type workerTiming struct {
 	Took       time.Duration
 	Characters int // characters eligible for syncing
 	// How many of them are in each tier (worker_tiers.go).
-	Active, Watched, Recent, Dormant int
-	Fetches                          int // of the character pass's allowance
-	Budget                           int // that allowance
-	Deferred                         int // characters put off to the next cycle
+	Active, Watched, Recent, Dormant, Asleep int
+	Fetches                                  int // of the character pass's allowance
+	Budget                                   int // that allowance
+	Deferred                                 int // characters put off to the next cycle
 	// Overdue is how far past its cache window the stalest data of
 	// an active account was when the cycle began: what somebody with
 	// the site open was looking at. NeverFetched: some active
@@ -127,9 +127,13 @@ func workerTimingViewFor(s workerStatus) *workerTimingView {
 		return nil
 	}
 	v := &workerTimingView{}
+	tiers := fmt.Sprintf("%d active, %d watched, %d recent, %d dormant", t.Active, t.Watched, t.Recent, t.Dormant)
+	if t.Asleep > 0 {
+		tiers += fmt.Sprintf(", %d asleep", t.Asleep)
+	}
 	parts := []string{
 		"took " + shortDuration(t.Took),
-		plural(t.Characters, "character") + fmt.Sprintf(" (%d active, %d watched, %d recent, %d dormant)", t.Active, t.Watched, t.Recent, t.Dormant),
+		plural(t.Characters, "character") + " (" + tiers + ")",
 		fmt.Sprintf("%d of %d fetches", t.Fetches, t.Budget),
 	}
 	if t.Deferred > 0 {

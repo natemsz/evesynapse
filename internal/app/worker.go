@@ -217,6 +217,10 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		return
 	}
 
+	// Which accounts are being told things somewhere other than the
+	// site: they are never let fall asleep (worker_tiers.go).
+	app.refreshListening(ctx)
+
 	// Parked characters (token_dead, owner_changed) are never
 	// synced until the user signs them in again; they are counted
 	// for the status line but cost no fetches.
@@ -256,6 +260,8 @@ func (app *Application) refreshCycle(ctx context.Context) {
 			timing.Watched++
 		case tierRecent:
 			timing.Recent++
+		case tierAsleep:
+			timing.Asleep++
 		default:
 			timing.Dormant++
 		}

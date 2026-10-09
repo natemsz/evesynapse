@@ -53,7 +53,9 @@
   // --- Nav: Escape folds an open branch back up -----------------
   document.addEventListener("keydown", function (ev) {
     if (ev.key !== "Escape") return;
-    var open = document.querySelectorAll("details.branch[open]");
+    // (The character switcher in the top bar closes itself, with its
+    // motion: see the end of this file.)
+    var open = document.querySelectorAll("details.branch[open]:not(.topbar-switcher)");
     for (var i = 0; i < open.length; i++) open[i].removeAttribute("open");
   });
 
@@ -1581,6 +1583,12 @@
     { name: "Admin", url: "/admin/" }
   ];
 
+  // Sync and Admin are for administrators: the menu only has them for
+  // one (base.html), and the palette offers them on the same terms.
+  // The server refuses the pages to anyone else either way.
+  var adminOnlyPages = { "/sync/": true, "/admin/": true };
+  var isAdmin = !!document.querySelector(".sidenav-utility");
+
   // Result groups, in display order; server hits carry these
   // kinds already, pages are matched locally.
   var quickJumpGroups = [
@@ -1682,6 +1690,7 @@
   function pageHits(q) {
     var out = [];
     for (var i = 0; i < quickJumpPages.length; i++) {
+      if (adminOnlyPages[quickJumpPages[i].url] && !isAdmin) continue;
       if (!q || quickJumpPages[i].name.toLowerCase().indexOf(q) !== -1) {
         out.push({
           kind: "page", name: quickJumpPages[i].name,
@@ -2401,6 +2410,49 @@
     selectors.forEach(function (root) {
       if (!root.contains(ev.target) && root.closeList) root.closeList();
     });
+  });
+})();
+
+// The character switcher in the top bar: like the notification list,
+// it closes on a click or tap anywhere else and on Escape, and opens
+// and closes with the navigation's motion (the CSS transition on
+// .topbar-switcher.is-open). The <details> works without this.
+(function () {
+  "use strict";
+  var switcher = document.querySelector("details.topbar-switcher");
+  if (!switcher) return;
+  var summary = switcher.querySelector("summary");
+  var closing = null;
+  var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var motion = still ? 0 : 180; // as long as the transition in style.css
+
+  function open() {
+    window.clearTimeout(closing);
+    closing = null;
+    switcher.open = true;
+    void switcher.offsetWidth; // lay it out closed first, so there is something to move from
+    switcher.classList.add("is-open");
+  }
+  function close() {
+    if (!switcher.open || closing) return;
+    switcher.classList.remove("is-open");
+    closing = window.setTimeout(function () {
+      closing = null;
+      switcher.open = false;
+    }, motion);
+  }
+
+  summary.addEventListener("click", function (ev) {
+    ev.preventDefault();
+    if (switcher.open && !closing) { close(); } else { open(); }
+  });
+  document.addEventListener("click", function (ev) {
+    if (!switcher.contains(ev.target)) close();
+  });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Escape" || !switcher.open) return;
+    close();
+    summary.focus();
   });
 })();
 

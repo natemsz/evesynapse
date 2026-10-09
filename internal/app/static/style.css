@@ -3412,6 +3412,20 @@ html.js .notify.is-open .notify-menu {
 @media (prefers-reduced-motion: reduce) {
   html.js .notify-menu { transition: none; }
 }
+/* The character switcher in the top bar opens and closes the same way
+   (app.js adds and removes .is-open on it). */
+html.js .topbar-switcher .menu {
+  opacity: 0;
+  transform: translateY(-0.25rem);
+  transition: opacity 140ms ease-out, transform 180ms ease-out;
+}
+html.js .topbar-switcher.is-open .menu {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  html.js .topbar-switcher .menu { transition: none; }
+}
 /* Phones: the icon sits near the left of the bar there, so a list
    hung from the icon's right edge ran off the left of the screen.
    The list hangs from the bar itself instead, edge to edge, and

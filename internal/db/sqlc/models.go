@@ -85,11 +85,13 @@ type DiscordGuild struct {
 }
 
 type DiscordLink struct {
-	UserID          int64     `json:"user_id"`
-	DiscordID       string    `json:"discord_id"`
-	Username        string    `json:"username"`
-	LinkedAt        time.Time `json:"linked_at"`
-	DmNotifications bool      `json:"dm_notifications"`
+	UserID          int64        `json:"user_id"`
+	DiscordID       string       `json:"discord_id"`
+	Username        string       `json:"username"`
+	LinkedAt        time.Time    `json:"linked_at"`
+	DmNotifications bool         `json:"dm_notifications"`
+	DmProblem       string       `json:"dm_problem"`
+	DmProblemAt     sql.NullTime `json:"dm_problem_at"`
 }
 
 type DiscordOpsShare struct {

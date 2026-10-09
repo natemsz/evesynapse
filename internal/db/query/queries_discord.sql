@@ -26,6 +26,13 @@ DELETE FROM discord_links WHERE user_id = $1;
 -- name: SetDiscordDMNotifications :exec
 UPDATE discord_links SET dm_notifications = sqlc.arg(dm_notifications) WHERE user_id = sqlc.arg(user_id);
 
+-- What went wrong with the last direct message, or '' when it went
+-- through.
+-- name: SetDiscordDMProblem :exec
+UPDATE discord_links
+SET dm_problem = sqlc.arg(dm_problem), dm_problem_at = sqlc.arg(dm_problem_at)
+WHERE user_id = sqlc.arg(user_id);
+
 -- name: ListDiscordLinks :many
 SELECT * FROM discord_links ORDER BY user_id;
 

@@ -350,11 +350,27 @@ func TestDiscordDirectMessages(t *testing.T) {
 		t.Fatalf("%d notification(s), messages %q; want one and none", n, fake.messages)
 	}
 
-	if code, _ := f.post(cookie, "/discord/settings", url.Values{"dm": {"1"}}); code != http.StatusSeeOther {
-		t.Fatalf("save: %d", code)
+	// The switch is saved by the page's own Save button, with the rest.
+	settings := func(dm bool) url.Values {
+		form := url.Values{"discord_shown": {"1"}}
+		for _, kind := range notifyKinds {
+			form.Add("kind", kind.ID)
+			if !kind.Account {
+				form.Add("char."+kind.ID, "90000001")
+			}
+		}
+		if dm {
+			form.Set("discord_dm", "1")
+		}
+		return form
 	}
 	_, body := getPage(t, f.app, cookie, discordSettingsPath)
-	mustContain(t, "settings with messages on", body, `name="dm" value="1" checked>`)
+	mustContain(t, "settings before ticking", body, `<input type="checkbox" name="discord_dm" value="1"> Also send these to me on Discord`)
+	if code, _ := f.post(cookie, "/notifications/settings", settings(true)); code != http.StatusSeeOther {
+		t.Fatalf("save: %d", code)
+	}
+	_, body = getPage(t, f.app, cookie, discordSettingsPath)
+	mustContain(t, "settings with messages on", body, `name="discord_dm" value="1" checked>`, "Notifications by direct message are <strong>on</strong>")
 	mail(2, "Fleet tonight", now)
 	f.pass(now.Add(2 * time.Minute))
 	if len(fake.messages) != 1 || !strings.Contains(fake.messages[0], "Fixture Ceo has new mail: Fleet tonight") ||
@@ -371,18 +387,28 @@ func TestDiscordDirectMessages(t *testing.T) {
 	f.post(cookie, "/discord/test", url.Values{})
 	_, body = getPage(t, f.app, cookie, discordSettingsPath)
 	mustContain(t, "refused test", body, "Discord would not deliver the message.")
-	// A refusal loses nothing: the notification is still made.
+	// A refusal loses nothing: the notification is still made. And
+	// the person is told on the settings page, not only the log.
 	mail(3, "While unreachable", now)
 	if n := f.pass(now.Add(3 * time.Minute)); n != 1 {
 		t.Fatalf("with Discord refusing: %d notification(s), want 1", n)
 	}
+	_, body = getPage(t, f.app, cookie, discordSettingsPath)
+	mustContain(t, "after a refused notification", body, `<p class="err">Discord refused to deliver your last notification.`)
+	// The next one that goes through clears it.
+	fake.refuseDM = false
+	mail(5, "Reachable again", now)
+	f.pass(now.Add(210 * time.Second))
+	if _, body = getPage(t, f.app, cookie, discordSettingsPath); strings.Contains(body, "Discord refused to deliver") {
+		t.Fatal("the refusal is still shown after a message went through")
+	}
+	sentSoFar := len(fake.messages)
 
 	// Unticked again.
-	fake.refuseDM = false
-	f.post(cookie, "/discord/settings", url.Values{})
+	f.post(cookie, "/notifications/settings", settings(false))
 	mail(4, "After unticking", now)
 	f.pass(now.Add(4 * time.Minute))
-	if len(fake.messages) != 2 {
+	if len(fake.messages) != sentSoFar {
 		t.Fatalf("a message was sent after unticking: %q", fake.messages)
 	}
 }

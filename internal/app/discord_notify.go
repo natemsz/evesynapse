@@ -70,8 +70,40 @@ func (app *Application) discordToUser(ctx context.Context, userID int64, events 
 		text := msg.Body + "\n" + app.siteURL(msg.URL)
 		if err := app.discord.SendDM(ctx, link.DiscordID, discord.Message{Content: text}); err != nil {
 			logging.Warnf("discord: message to user %d: %v", userID, err)
+			app.discordNoteDM(ctx, link, err)
 			return // this account cannot be reached right now: do not try the rest
 		}
+	}
+	app.discordNoteDM(ctx, link, nil)
+}
+
+// Why a direct message did not arrive, as the settings page says it.
+const (
+	discordDMRefused = "Discord refused to deliver your last notification. In Discord, open the server you share with the bot, then Privacy Settings, and allow direct messages from server members. You also have to be in a server the bot is in."
+	discordDMFailed  = "Your last notification could not be sent to Discord. It will be tried again with the next one."
+)
+
+// discordNoteDM records how the last direct message to an account
+// went, so that the person it concerns can see it: a refusal used to
+// be written only to the server's log. A message that goes through
+// clears it.
+func (app *Application) discordNoteDM(ctx context.Context, link db.DiscordLink, err error) {
+	problem := ""
+	switch {
+	case err == nil:
+	case discord.IsStatus(err, http.StatusForbidden):
+		problem = discordDMRefused
+	default:
+		problem = discordDMFailed
+	}
+	if problem == link.DmProblem {
+		return
+	}
+	// Recorded even if the caller's time has run out.
+	if serr := app.queries.SetDiscordDMProblem(context.WithoutCancel(ctx), db.SetDiscordDMProblemParams{
+		UserID: link.UserID, DmProblem: problem, DmProblemAt: timeSet(time.Now().UTC()),
+	}); serr != nil {
+		logging.Errorf("discord: record message problem of user %d: %v", link.UserID, serr)
 	}
 }
 
@@ -198,11 +230,12 @@ func (app *Application) handleDiscordTest(w http.ResponseWriter, r *http.Request
 		err := app.discord.SendDM(ctx, link.DiscordID, discord.Message{
 			Content: "EveSynapse can reach you here. Notifications you switch on will arrive as messages like this one.\n" + app.siteURL(discordSettingsPath),
 		})
+		app.discordNoteDM(ctx, link, err)
 		switch {
 		case err == nil:
 			app.flash(ctx, "Test message sent to "+link.Username+" on Discord.")
 		case discord.IsStatus(err, http.StatusForbidden):
-			app.flash(ctx, "Discord would not deliver the message. Join the server the bot is in, and allow direct messages from its members (the server's Privacy Settings), then try again.")
+			app.flash(ctx, "Discord would not deliver the message. In Discord, open the server you share with the bot, then Privacy Settings, and allow direct messages from server members; then try again.")
 		default:
 			logging.Warnf("discord: test message to user %d: %v", userID, err)
 			app.flash(ctx, "The test message could not be sent; the server log has the reason.")

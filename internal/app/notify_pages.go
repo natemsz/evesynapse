@@ -266,7 +266,10 @@ type discordSettingsView struct {
 	Linked  bool
 	Name    string // the connected account
 	DM      bool   // notifications go to it as direct messages
-	Manages bool   // the account directs a corporation or alliance
+	// DMProblem is what went wrong with the last direct message, if
+	// anything did.
+	DMProblem string
+	Manages   bool // the account directs a corporation or alliance
 }
 
 // notifyMinutesOption is one lead the op reminder can be set to.
@@ -380,6 +383,9 @@ func (app *Application) handleNotificationSettings(w http.ResponseWriter, r *htt
 	view.Discord.Manages = view.Discord.HasBot && len(app.discordManageable(ctx, userID)) > 0
 	if link, linked := app.discordLinkFor(r, userID); linked {
 		view.Discord.Linked, view.Discord.Name, view.Discord.DM = true, link.Username, link.DmNotifications
+		if link.DmNotifications {
+			view.Discord.DMProblem = link.DmProblem
+		}
 	}
 	data.NotifySettings = view
 	app.render(ctx, w, http.StatusOK, "notification_settings.html", data)
@@ -428,6 +434,14 @@ func (app *Application) handleNotificationSettingsSave(w http.ResponseWriter, r 
 	if err == nil {
 		err = app.queries.UpsertWidgetConfig(ctx, db.UpsertWidgetConfigParams{
 			UserID: userID, WidgetID: notifyConfigID, Config: string(blob), UpdatedAt: time.Now().UTC(),
+		})
+	}
+	// The page's one Save button also carries the Discord switch,
+	// when the page showed it (discord_shown): a box left unticked
+	// sends nothing, so its absence alone would not mean "off".
+	if err == nil && r.Form.Get("discord_shown") == "1" {
+		err = app.queries.SetDiscordDMNotifications(ctx, db.SetDiscordDMNotificationsParams{
+			UserID: userID, DmNotifications: r.Form.Get("discord_dm") == "1",
 		})
 	}
 	if err != nil {

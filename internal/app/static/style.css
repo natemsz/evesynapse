@@ -3464,6 +3464,24 @@ table.stat-table td { vertical-align: top; }
 .lookup-matches li { margin: 0.15rem 0; }
 .scope-details summary { cursor: pointer; white-space: nowrap; }
 .scope-list { margin: 0.3rem 0 0; padding-left: 1.1rem; font-size: 0.85em; color: var(--muted); }
+/* "Connect Discord": Discord's own colour and mark, so the button is
+   recognised for what it leads to before it is read. Everything else
+   about it is the standard button. */
+.btn.btn-discord {
+  gap: 0.5rem;
+  white-space: nowrap;
+  color: #fff;
+  background: #5865f2;
+  border-color: #4752c4;
+  text-shadow: none;
+}
+.btn.btn-discord:hover {
+  color: #fff;
+  background: #4752c4;
+}
+.discord-glyph { flex: none; width: 1.25em; height: 1.25em; }
+html[data-theme="light"] .btn.btn-discord,
+html[data-theme="light"] .btn.btn-discord:hover { color: #fff; }
 
 /* --- notification settings: a kind's characters ---
    The character selector's look (charselector), holding a tick box
@@ -3487,6 +3505,26 @@ html:not(.js) .checkselector .charselector-dropdown[hidden] {
   max-height: none;
   box-shadow: none;
 }
+/* Phones: the table does not fit side by side, and it cannot scroll
+   sideways (its wrapper has to let the character lists hang out of
+   it). So each kind becomes a block: its tick box, and under it the
+   characters it is on for, both the full width. The column headings
+   go; "On for 8 of 8 characters" says what the second one was. */
 @media (max-width: 860px) {
-  .checkselector { max-width: none; min-width: 11rem; }
+  table.notify-settings,
+  table.notify-settings tbody,
+  table.notify-settings tr,
+  table.notify-settings td { display: block; }
+  table.notify-settings thead { display: none; }
+  table.notify-settings tr { padding: 0.55rem 0.6rem; border-bottom: 1px solid #141414; }
+  table.notify-settings tr:last-child { border-bottom: 0; }
+  table.notify-settings td,
+  .tw table.notify-settings td:first-child {
+    position: static;
+    padding: 0.2rem 0;
+    border: 0;
+    white-space: normal;
+  }
+  table.notify-settings .notify-minutes { display: inline-block; margin-top: 0.3rem; }
+  .checkselector { max-width: none; min-width: 0; }
 }

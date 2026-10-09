@@ -382,7 +382,7 @@ func TestDiscordConnect(t *testing.T) {
 	}
 	fake := f.enableDiscord()
 	_, body = getPage(t, f.app, cookie, discordSettingsPath)
-	mustContain(t, "settings before connecting", body, `<a class="btn" href="/discord/connect">Connect Discord</a>`, "it can do nothing else with your account")
+	mustContain(t, "settings before connecting", body, `<a class="btn btn-discord" href="/discord/connect"><svg class="discord-glyph" viewBox="0 0 24 24" aria-hidden="true">`, ` Connect Discord</a>`, "it can do nothing else with your account")
 
 	// A return nobody started, or with the wrong state, changes nothing.
 	for _, path := range []string{"/discord/callback?code=alice&state=made-up", "/discord/callback?code=alice"} {

@@ -134,6 +134,9 @@ type Application struct {
 
 	// Character IDs flagged for first-in-line warm-up on the next
 	// worker cycle (fresh SSO logins, Sync-page re-warm requests).
+	// activity is when each account was last seen, which sets how
+	// often the worker refreshes its characters (worker_tiers.go).
+	activity      activityLog
 	priorityMu    sync.Mutex
 	priorityChars map[int64]bool
 
@@ -282,6 +285,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Use(app.crossOriginGuard())
 	r.Use(app.sessions.LoadAndSave)
 	r.Use(app.slideSession)
+	r.Use(app.trackActivity)
 	r.Use(app.pageWantScopeMiddleware)
 
 	r.Get("/", app.handleHome)

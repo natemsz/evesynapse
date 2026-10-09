@@ -143,7 +143,7 @@ func secondProcessApp(t *testing.T, conn *sql.DB, pool *pgxpool.Pool, transport 
 	client := esi.New(&http.Client{Transport: transport}, queries,
 		func(context.Context, db.Character) (string, error) { return "fixture", nil })
 	return &Application{
-		cfg:           Config{},
+		cfg:           Config{workerTiersOff: true},
 		sessions:      sessionManager,
 		queries:       queries,
 		esi:           client,

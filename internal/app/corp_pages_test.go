@@ -78,7 +78,7 @@ func buildCorpTestApp(t *testing.T, transport http.RoundTripper) (*Application, 
 		func(context.Context, db.Character) (string, error) { return "fixture", nil })
 
 	app := &Application{
-		cfg:           Config{adminCharIDs: map[int64]bool{}},
+		cfg:           Config{adminCharIDs: map[int64]bool{}, workerTiersOff: true},
 		sessions:      sessionManager,
 		queries:       queries,
 		esi:           client,

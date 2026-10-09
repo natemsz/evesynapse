@@ -245,6 +245,7 @@ gaps; real environment variables win over the file):
 | `VAPID_SUBJECT` | no | the site's address | A contact address (`mailto:` or `https:`) the browsers' push services may use to reach the operator |
 | `OPS_MANAGER_ROLES` | no | `Director` | The in-game corporation roles whose holders may create, change and cancel ops on the calendar, comma separated and spelled as ESI spells them (`Director,Personnel_Manager`) |
 | `NOTIFY_POLL_SECONDS` | no | `30` | How often, in seconds, an open page checks whether its notifications icon has changed, so new notifications show without a reload. `0` turns the checks off; other values are kept between 5 and 3600. Takes effect on restart |
+| `WORKER_TIERS` | no | on | How often a character's data is refreshed follows its account: as often as ESI allows while someone has the site open, every 5 to 15 minutes for an account seen in the last day, every 30 minutes (position every 6 hours) for one not seen for a day. `off` refreshes everything as often as ESI allows for everyone, which uses up the worker's allowance at around fifteen characters |
 | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | no | — | A Discord application's id and secret: turns on "Connect Discord" (see "Discord") |
 | `DISCORD_BOT_TOKEN` | no | — | That application's bot: lets it be added to Discord servers, where it gives roles and sends messages. What it does in each server is set on the site by that server's directors, not here |
 | `DEV_LOGIN` | no | — | Dev build only: `1` registers the `/dev-login` route |

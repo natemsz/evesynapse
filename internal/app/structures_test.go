@@ -96,7 +96,7 @@ func buildStructureTestApp(t *testing.T, transport http.RoundTripper) (*Applicat
 		})
 
 	app := &Application{
-		cfg:           Config{},
+		cfg:           Config{workerTiersOff: true},
 		sessions:      sessionManager,
 		queries:       queries,
 		esi:           client,

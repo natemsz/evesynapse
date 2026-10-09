@@ -33,12 +33,14 @@ type workerTiming struct {
 	At         time.Time
 	Took       time.Duration
 	Characters int // characters eligible for syncing
-	Fetches    int // of the character pass's allowance
-	Budget     int // that allowance
-	Deferred   int // characters put off to the next cycle
-	// Overdue is how far past its cache window the stalest
-	// character's data was when the cycle began: what a reader of
-	// that character's pages was looking at. NeverFetched: some
+	// How many of them are in each tier (worker_tiers.go).
+	Active, Recent, Dormant int
+	Fetches                 int // of the character pass's allowance
+	Budget                  int // that allowance
+	Deferred                int // characters put off to the next cycle
+	// Overdue is how far past its cache window the stalest data of
+	// an active account was when the cycle began: what somebody with
+	// the site open was looking at. NeverFetched: some active
 	// character had data that had never been fetched at all.
 	Overdue      time.Duration
 	NeverFetched bool
@@ -119,7 +121,7 @@ func workerTimingViewFor(s workerStatus) *workerTimingView {
 	v := &workerTimingView{}
 	parts := []string{
 		"took " + shortDuration(t.Took),
-		plural(t.Characters, "character"),
+		plural(t.Characters, "character") + fmt.Sprintf(" (%d active, %d recent, %d dormant)", t.Active, t.Recent, t.Dormant),
 		fmt.Sprintf("%d of %d fetches", t.Fetches, t.Budget),
 	}
 	if t.Deferred > 0 {
@@ -129,7 +131,7 @@ func workerTimingViewFor(s workerStatus) *workerTimingView {
 	case t.NeverFetched:
 		parts = append(parts, "some data not fetched yet")
 	case t.Overdue > 0:
-		parts = append(parts, "stalest data "+shortDuration(t.Overdue)+" past its refresh time")
+		parts = append(parts, "stalest active data "+shortDuration(t.Overdue)+" past its refresh time")
 	}
 	v.Last = strings.Join(parts, " · ")
 

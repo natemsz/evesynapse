@@ -28,12 +28,12 @@ const tokenRefreshWindow = 60 * time.Second
 //
 // The character row is re-read first: another caller may have just
 // refreshed, and reusing a rotated-away refresh token would fail.
-// Refreshes are serialized process-wide for the same reason.
+// Refreshes of one character's token are serialized for the same
+// reason; different characters refresh side by side.
 //
 // Token values are never logged; errors carry the character ID only.
 func (app *Application) validAccessToken(ctx context.Context, ch db.Character) (string, error) {
-	app.tokenMu.Lock()
-	defer app.tokenMu.Unlock()
+	defer app.tokenLocks.lock(ch.CharacterID)()
 
 	// Re-read: the row we were handed may predate a recent refresh.
 	if fresh, err := app.queries.GetCharacter(ctx, ch.CharacterID); err == nil {

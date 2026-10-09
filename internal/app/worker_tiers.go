@@ -305,10 +305,15 @@ func parseWorkerFetches(raw string) int {
 	return n
 }
 
-// fetchesPerCycle is the character pass's fetch allowance for a cycle.
+// fetchesPerCycle is the character pass's fetch allowance for a cycle:
+// what was set, or else what the worker's lanes get through in a
+// minute (never less than the one-lane default).
 func (app *Application) fetchesPerCycle() int {
 	if app.cfg.workerFetches > 0 {
 		return app.cfg.workerFetches
+	}
+	if n := app.workerLanes() * fetchesPerLane; n > maxFetchesPerCycle {
+		return n
 	}
 	return maxFetchesPerCycle
 }

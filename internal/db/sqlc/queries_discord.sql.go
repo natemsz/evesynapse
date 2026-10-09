@@ -106,7 +106,7 @@ func (q *Queries) GetDiscordGuild(ctx context.Context, guildID string) (DiscordG
 
 const getDiscordLink = `-- name: GetDiscordLink :one
 
-SELECT user_id, discord_id, username, linked_at, dm_notifications FROM discord_links WHERE user_id = $1
+SELECT user_id, discord_id, username, linked_at, dm_notifications, dm_problem, dm_problem_at FROM discord_links WHERE user_id = $1
 `
 
 // ---------------------------------------------------------------------
@@ -122,6 +122,8 @@ func (q *Queries) GetDiscordLink(ctx context.Context, userID int64) (DiscordLink
 		&i.Username,
 		&i.LinkedAt,
 		&i.DmNotifications,
+		&i.DmProblem,
+		&i.DmProblemAt,
 	)
 	return i, err
 }
@@ -199,7 +201,7 @@ func (q *Queries) ListDiscordGuilds(ctx context.Context) ([]DiscordGuild, error)
 }
 
 const listDiscordLinks = `-- name: ListDiscordLinks :many
-SELECT user_id, discord_id, username, linked_at, dm_notifications FROM discord_links ORDER BY user_id
+SELECT user_id, discord_id, username, linked_at, dm_notifications, dm_problem, dm_problem_at FROM discord_links ORDER BY user_id
 `
 
 func (q *Queries) ListDiscordLinks(ctx context.Context) ([]DiscordLink, error) {
@@ -217,6 +219,8 @@ func (q *Queries) ListDiscordLinks(ctx context.Context) ([]DiscordLink, error) {
 			&i.Username,
 			&i.LinkedAt,
 			&i.DmNotifications,
+			&i.DmProblem,
+			&i.DmProblemAt,
 		); err != nil {
 			return nil, err
 		}
@@ -436,6 +440,25 @@ type SetDiscordDMNotificationsParams struct {
 
 func (q *Queries) SetDiscordDMNotifications(ctx context.Context, arg SetDiscordDMNotificationsParams) error {
 	_, err := q.db.ExecContext(ctx, setDiscordDMNotifications, arg.DmNotifications, arg.UserID)
+	return err
+}
+
+const setDiscordDMProblem = `-- name: SetDiscordDMProblem :exec
+UPDATE discord_links
+SET dm_problem = $1, dm_problem_at = $2
+WHERE user_id = $3
+`
+
+type SetDiscordDMProblemParams struct {
+	DmProblem   string       `json:"dm_problem"`
+	DmProblemAt sql.NullTime `json:"dm_problem_at"`
+	UserID      int64        `json:"user_id"`
+}
+
+// What went wrong with the last direct message, or ” when it went
+// through.
+func (q *Queries) SetDiscordDMProblem(ctx context.Context, arg SetDiscordDMProblemParams) error {
+	_, err := q.db.ExecContext(ctx, setDiscordDMProblem, arg.DmProblem, arg.DmProblemAt, arg.UserID)
 	return err
 }
 

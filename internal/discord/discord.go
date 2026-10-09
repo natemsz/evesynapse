@@ -244,7 +244,8 @@ func (c *Client) bot(ctx context.Context, method, path string, payload, out any)
 }
 
 func (c *Client) do(req *http.Request, path string, out any) error {
-	req.Header.Set("User-Agent", "EveSynapse (https://github.com/natemsz/evesynapse)")
+	// The form Discord asks of every bot: DiscordBot (url, version).
+	req.Header.Set("User-Agent", "DiscordBot (https://github.com/natemsz/evesynapse, 1)")
 	resp, err := c.http.Do(req)
 	if err != nil {
 		// The error may carry the request's address, never its headers.

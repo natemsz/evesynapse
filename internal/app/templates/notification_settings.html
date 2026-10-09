@@ -31,6 +31,10 @@
   </tbody>
 </table>
 </div>
+{{if and .Discord.Linked .Discord.HasBot}}
+<p class="notify-deliver"><input type="hidden" name="discord_shown" value="1"><label><input type="checkbox" name="discord_dm" value="1"{{if .Discord.DM}} checked{{end}}> Also send these to me on Discord, as direct messages <small>({{.Discord.Name}})</small></label></p>
+{{if .Discord.DMProblem}}<p class="err">{{.Discord.DMProblem}}</p>{{end}}
+{{end}}
 <button type="submit">Save</button>
 </form>
 
@@ -53,11 +57,7 @@
 {{if .Linked}}
 <p>Connected as <strong>{{.Name}}</strong>.{{if .HasBot}} <small>In Discord servers that use EveSynapse, your roles follow your characters' corporations.</small>{{end}}</p>
 {{if .HasBot}}
-<form method="post" action="/discord/settings" class="discord-form">
-  <label><input type="checkbox" name="dm" value="1"{{if .DM}} checked{{end}}> Send my notifications to me on Discord, as direct messages</label>
-  <button type="submit">Save</button>
-</form>
-<p><small>The same notifications as above, with the same switches. You have to share a server with the bot and allow direct messages from its members.</small></p>
+<p><small>Notifications by direct message are {{if .DM}}<strong>on</strong>{{else}}<strong>off</strong>{{end}}: the tick box is with the notification settings above, and is saved with them. To receive them you have to share a server with the bot and allow direct messages from its members.</small></p>
 <form method="post" action="/discord/test" class="inline-form"><button type="submit" class="btn">Send a test message</button></form>
 <form method="post" action="/discord/roles/refresh" class="inline-form"><button type="submit" class="btn" title="For when you have just joined a server">Check my roles now</button></form>
 {{end}}

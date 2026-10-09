@@ -1,0 +1,60 @@
+{{define "title"}}Discord servers{{end}}
+{{define "content"}}
+<h1><span class="gt">Discord servers</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{with .DiscordServers}}
+<p><small>The EveSynapse bot can be added to the Discord server of a corporation or an alliance. There it gives roles to members who have connected their Discord account, and posts new ops in a channel. A corporation's servers are set up by its directors, an alliance's by the directors of its executor corporation.</small></p>
+
+{{if not .Owners}}
+<p>None of your characters is a director, so there is nothing for you to set up here. To get your own roles, connect your Discord account under <a href="/notifications/settings">notification settings</a>.</p>
+{{end}}
+
+{{range .Owners}}
+<h2>{{.Name}} <small>· {{.Kind}}</small></h2>
+{{$owner := .}}
+{{range .Servers}}
+<section class="foldable discord-server">
+<h3>{{.Name}}</h3>
+{{if .Unreachable}}
+<p class="err">Discord would not list this server's roles and channels. If the bot was removed from the server, add it again below, or remove the server here.</p>
+{{else}}
+<form method="post" action="/discord/servers/{{.GuildID}}/save" class="op-form discord-server-form">
+  <p><label>Role for everyone who has connected EveSynapse <select name="role_linked">{{range .Roles}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label></p>
+  <p><label>Role for members of this {{.MemberWord}} <select name="role_member">{{range .Members}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label></p>
+  <p><label>Post new ops in <select name="ops_channel">{{range .Channels}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label></p>
+  <p><button type="submit">Save</button></p>
+</form>
+<p><small>The bot can only give roles that sit below its own role in the server's role list. Which channels a role can see is set in Discord, on each channel. Roles are given within a few minutes, and taken away when a member's character leaves or their EveSynapse account or Discord connection goes.</small></p>
+{{end}}
+<form method="post" action="/discord/servers/{{.GuildID}}/remove" class="inline-form"><button type="submit" class="btn btn-danger">Remove this server</button></form>
+</section>
+{{else}}
+<p><small>No server yet.</small></p>
+{{end}}
+{{if $.DiscordServers.CanInstall}}
+<form method="post" action="/discord/servers/add" class="inline-form">
+  <input type="hidden" name="owner" value="{{.Key}}">
+  <button type="submit" class="btn">Add the bot to a server for {{.Name}}</button>
+</form>
+<p><small>Discord will ask which server, and shows what the bot may do there: give roles and send messages. You need permission to manage that server.</small></p>
+{{end}}
+{{end}}
+
+{{if .Shares}}
+<h2>Ops in an alliance's server</h2>
+<p><small>A corporation's ops are posted in its own servers. They are posted in its alliance's server only if you say so here.</small></p>
+{{range .Shares}}
+<form method="post" action="/discord/servers/share" class="discord-form">
+  <input type="hidden" name="corporation" value="{{.CorporationID}}">
+  <label><input type="checkbox" name="share" value="1"{{if .On}} checked{{end}}> Also post {{.Name}}'s new ops in the {{.Alliance}} server</label>
+  <button type="submit">Save</button>
+</form>
+{{end}}
+{{end}}
+
+{{if not .CanInstall}}<p><small>The Discord bot is not set up on this site.</small></p>{{end}}
+<p><a href="/notifications/settings">Back to notification settings</a></p>
+{{end}}
+{{end}}

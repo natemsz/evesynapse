@@ -379,6 +379,12 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/disconnect", app.handleDiscordDisconnect)
 		r.Post("/settings", app.handleDiscordSettings)
 		r.Post("/test", app.handleDiscordTest)
+		r.Post("/roles/refresh", app.handleDiscordRolesRefresh)
+		r.Get("/servers", app.handleDiscordServers)
+		r.Post("/servers/add", app.handleDiscordServerAdd)
+		r.Post("/servers/share", app.handleDiscordOpsShare)
+		r.Post("/servers/{guildID}/save", app.handleDiscordServerSave)
+		r.Post("/servers/{guildID}/remove", app.handleDiscordServerForget)
 	})
 
 	r.Route("/calendar", func(r chi.Router) {

@@ -243,10 +243,8 @@ gaps; real environment variables win over the file):
 | `VAPID_SUBJECT` | no | the site's address | A contact address (`mailto:` or `https:`) the browsers' push services may use to reach the operator |
 | `OPS_MANAGER_ROLES` | no | `Director` | The in-game corporation roles whose holders may create, change and cancel ops on the calendar, comma separated and spelled as ESI spells them (`Director,Personnel_Manager`) |
 | `NOTIFY_POLL_SECONDS` | no | `30` | How often, in seconds, an open page checks whether its notifications icon has changed, so new notifications show without a reload. `0` turns the checks off; other values are kept between 5 and 3600. Takes effect on restart |
-| `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | no | — | A Discord application's credentials: turns on "Connect Discord" (see "Discord") |
-| `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID` | no | — | The application's bot and the one server it acts in: lets EveSynapse send messages and give roles there |
-| `DISCORD_OPS_CHANNELS` | no | — | Where new ops are posted: `corporation id=channel id`, comma separated; `*` for every other corporation |
-| `DISCORD_ROLE_LINKED`, `DISCORD_ROLE_CORPS` | no | — | Roles the bot gives: one for every connected account, and `corporation id=role id` pairs for members of each corporation |
+| `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | no | — | A Discord application's id and secret: turns on "Connect Discord" (see "Discord") |
+| `DISCORD_BOT_TOKEN` | no | — | That application's bot: lets it be added to Discord servers, where it gives roles and sends messages. What it does in each server is set on the site by that server's directors, not here |
 | `DEV_LOGIN` | no | — | Dev build only: `1` registers the `/dev-login` route |
 
 ## Install
@@ -434,85 +432,113 @@ opens from there; Safari does not offer push to an ordinary tab.
 ## Discord
 
 Optional. EveSynapse can connect a user's Discord account to their
-EveSynapse account, send their notifications to them on Discord, post
-new ops in a corporation's channel, and give server roles from what it
-knows about their characters. It only ever sends to Discord; it reads
-nothing from any channel.
+EveSynapse account, send their notifications to them on Discord, and,
+through one bot that can be added to any number of servers, give roles
+there and post new ops in a channel. It only ever sends to Discord; it
+reads nothing from any channel.
 
-There are two halves, and each works without the other:
+What the bot does in a server is not part of this install's settings.
+It is set on the site, per server, by the directors of the corporation
+or alliance the server belongs to.
 
-- **The sign-in** ("Connect Discord") needs a Discord application's
-  client id and secret. It asks Discord for the account's id and name
-  and nothing else, and keeps no Discord token.
-- **The bot** needs that application's bot token and the id of the one
-  server it acts in. It sends the messages and gives the roles.
-
-### Set it up (once)
+### Set the bot up (once, by whoever runs the site)
 
 1. At <https://discord.com/developers/applications>, create an
-   application.
-2. Under **OAuth2**, copy the **Client ID** and **Client Secret**, and
-   add this redirect, with your site's address:
+   application. If Discord asks what it is for, "Build a Bot" is the
+   one; the Social SDK is not used.
+2. On **General Information**, copy the **Application ID**. That is the
+   client id. (The Public Key on that page is not used.)
+3. Under **OAuth2**, press **Reset Secret** and copy the **Client
+   Secret**, and add this redirect, with your site's address:
    `https://your.site/discord/callback`
-3. Under **Bot**, press **Reset Token** and copy the token. No
-   privileged intents are needed; leave them off.
-4. Invite the bot to your server: under **OAuth2 → URL Generator**
-   tick the `bot` scope and the permissions **Send Messages** and, if
-   you want roles, **Manage Roles**. Open the address it gives you and
-   pick the server.
-5. For roles: in the server's **Roles** list, drag the bot's own role
-   **above** every role it is to give. Discord lets a bot manage only
-   the roles below its own.
-6. Turn on Developer Mode in Discord (User Settings → Advanced) so
-   that right-clicking a server, channel or role offers **Copy ID**.
-7. Add to the server's `.env` (`/opt/evesynapse/.env`) and restart
+4. Under **Bot**, press **Reset Token** and copy the token. No
+   privileged intents are needed; leave them off. Leave **Public Bot**
+   on if other corporations and alliances are to add it to their
+   servers.
+5. Add to the server's `.env` (`/opt/evesynapse/.env`) and restart
    (`sudo systemctl restart evesynapse`):
 
    ```sh
-   DISCORD_CLIENT_ID=...
+   DISCORD_CLIENT_ID=<the Application ID>
    DISCORD_CLIENT_SECRET=...
    DISCORD_BOT_TOKEN=...
-   DISCORD_GUILD_ID=<the server's id>
-   # New ops are posted in a corporation's channel: corporation id = channel id.
-   # "*" is the channel for every corporation not listed.
-   DISCORD_OPS_CHANNELS=98000001=<channel id>
-   # A role for every connected account, and one per corporation.
-   DISCORD_ROLE_LINKED=<role id>
-   DISCORD_ROLE_CORPS=98000001=<role id>,98000002=<role id>
    ```
 
-Leave out what you do not want: with no `DISCORD_OPS_CHANNELS` nothing
-is posted in channels, and with no `DISCORD_ROLE_*` no roles are
-touched. Treat the bot token and client secret like passwords.
+Treat the secret and the token like passwords. With only the first two
+set, "Connect Discord" works and there is no bot.
+
+### Add the bot to a server (each corporation or alliance)
+
+Who may: an account with a character that holds the **Director** role
+in the corporation (a CEO does), for that corporation's servers; and a
+Director of the alliance's **executor corporation**, for the
+alliance's. That character's link to EVE has to be working.
+
+1. On the site: **bell → Settings → Discord → Set up your
+   corporation's or alliance's Discord server**, then **Add the bot to
+   a server**.
+2. Discord asks which server and shows what the bot may do there: give
+   roles and send messages. Discord only lets someone who can manage
+   that server add a bot to it.
+3. In that Discord server's **Roles** list, drag the bot's own role
+   **above** the roles it is to give. Discord lets a bot manage only
+   the roles below its own.
+4. Back on the site, choose for that server:
+   - a role for everyone there who has connected EveSynapse,
+   - a role for members of the corporation or alliance,
+   - the channel new ops are posted in.
+
+   Each is optional, and each is picked from that server's own roles
+   and channels.
+
+**Which channels a role can open** is set in Discord, the usual way: on
+a channel or category, under Permissions, allow the role and deny
+@everyone. The bot gives the roles; it has no permission to change
+channels, and does not need it.
+
+**Ops in an alliance's server.** A corporation's ops are posted in its
+own servers. They are posted in its alliance's server only after a
+Director of that corporation ticks the box for it on the same page.
+
+**Removing a server** first takes back the roles the bot gave there;
+press Remove again a few minutes later to finish, and the bot leaves.
 
 ### What users do
 
-On **bell → Settings**, under **Discord**: **Connect Discord**, approve
-on Discord's page, and then, if they want their notifications there,
-tick "Send my notifications to me on Discord" and press **Send a test
-message**. Direct messages only arrive for someone who is in the server
-with the bot and allows messages from its members. **Disconnect
+On **bell → Settings**, under **Discord**: **Connect Discord** and
+approve on Discord's page. Roles follow within a few minutes in every
+server they are in that uses EveSynapse; **Check my roles now** does it
+at once, for someone who has just joined a server. To get notifications
+there, tick "Send my notifications to me on Discord" and press **Send a
+test message**; direct messages only arrive for someone who shares a
+server with the bot and allows messages from its members. **Disconnect
 Discord** removes the link and takes back the roles EveSynapse gave.
 
 ### What the roles mean, and what they do not
 
-A corporation's role is given to a Discord account when the EveSynapse
-account it is connected to has a character that the last sync saw in
-that corporation and whose link to EVE still works. It is taken away
-when that stops being true: the character leaves, its EVE access is
-revoked or expires, or Discord is disconnected.
+The member role is given to a Discord account when the EveSynapse
+account connected to it has a character that the last sync saw in the
+corporation (or in a corporation of the alliance) and whose link to EVE
+still works. It is taken away when that stops being true.
 
+- **Roles are taken back when the account goes.** Deleting the
+  EveSynapse account, disconnecting Discord, connecting a different
+  Discord account, a character leaving, or its EVE access being
+  revoked or expiring all remove them. What the bot gave is recorded
+  against the Discord account itself, so this does not depend on the
+  EveSynapse account still existing, and it is retried until Discord
+  confirms it.
 - It follows a change within a sync or two (minutes), not at the
   instant it happens in-game.
-- The bot gives and takes only the roles named in `DISCORD_ROLE_LINKED`
-  and `DISCORD_ROLE_CORPS`. Every other role is left as it is.
+- In a server the bot gives and takes only the roles chosen for that
+  server. Every other role is left as it is.
 - A role removed by hand from someone who still qualifies comes back
   within six hours.
-- It shows that someone controls a character in the corporation. It is
-  not a check of in-game roles such as Director, and it does not stop
-  a member sharing their Discord account.
-- An EveSynapse account that is deleted outright keeps the roles it
-  had; remove those by hand.
+- It shows that someone controls a character in the corporation. It
+  does not stop a member sharing their Discord account, and it is not
+  a check of in-game roles.
+- If the bot is kicked from a server by hand, the roles it gave there
+  stay until someone removes them: it can no longer act there.
 
 
 ## HTTPS

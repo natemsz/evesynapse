@@ -72,21 +72,38 @@ type CorporationRecord struct {
 	Priority      int64        `json:"priority"`
 }
 
+type DiscordGuild struct {
+	GuildID    string    `json:"guild_id"`
+	Name       string    `json:"name"`
+	OwnerKind  string    `json:"owner_kind"`
+	OwnerID    int64     `json:"owner_id"`
+	AddedBy    int64     `json:"added_by"`
+	AddedAt    time.Time `json:"added_at"`
+	RoleLinked string    `json:"role_linked"`
+	RoleMember string    `json:"role_member"`
+	OpsChannel string    `json:"ops_channel"`
+}
+
 type DiscordLink struct {
-	UserID          int64        `json:"user_id"`
-	DiscordID       string       `json:"discord_id"`
-	Username        string       `json:"username"`
-	LinkedAt        time.Time    `json:"linked_at"`
-	DmNotifications bool         `json:"dm_notifications"`
-	RolesApplied    string       `json:"roles_applied"`
-	RolesSyncedAt   sql.NullTime `json:"roles_synced_at"`
+	UserID          int64     `json:"user_id"`
+	DiscordID       string    `json:"discord_id"`
+	Username        string    `json:"username"`
+	LinkedAt        time.Time `json:"linked_at"`
+	DmNotifications bool      `json:"dm_notifications"`
+}
+
+type DiscordOpsShare struct {
+	CorporationID int64     `json:"corporation_id"`
+	SetBy         int64     `json:"set_by"`
+	SetAt         time.Time `json:"set_at"`
 }
 
 type DiscordRoleGrant struct {
 	DiscordID string    `json:"discord_id"`
 	GuildID   string    `json:"guild_id"`
 	Roles     string    `json:"roles"`
-	UpdatedAt time.Time `json:"updated_at"`
+	IsMember  bool      `json:"is_member"`
+	CheckedAt time.Time `json:"checked_at"`
 }
 
 type GlobalSnapshot struct {

@@ -136,12 +136,22 @@ func dotlanRegionLink(name string) template.HTML {
 	return dotlanLink("map", name, "Dotlan")
 }
 
+// dotlanSystemURL is the address of a system's Dotlan page, for a
+// template that draws the link itself; "" when the name is unresolved.
+func dotlanSystemURL(name string) string { return dotlanURL("system", name) }
+
+func dotlanURL(kind, name string) string {
+	if name == "" {
+		return ""
+	}
+	return "https://evemaps.dotlan.net/" + kind + "/" + url.PathEscape(strings.ReplaceAll(name, " ", "_"))
+}
+
 func dotlanLink(kind, name, label string) template.HTML {
 	if name == "" {
 		return ""
 	}
-	path := url.PathEscape(strings.ReplaceAll(name, " ", "_"))
-	return template.HTML(fmt.Sprintf(`<a href="https://evemaps.dotlan.net/%s/%s" target="_blank" rel="noopener noreferrer">%s</a>`, kind, path, label))
+	return template.HTML(fmt.Sprintf(`<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>`, dotlanURL(kind, name), label))
 }
 
 // structureLink renders a player structure's resolved name as a
@@ -235,19 +245,20 @@ func skillLevel(trained, next int, state string) template.HTML {
 // policy; pages.go registers it for every render.
 func linkFuncMap() template.FuncMap {
 	return template.FuncMap{
-		"itemLink":      itemLink,
-		"charLink":      charLink,
-		"killCharLink":  killCharLink,
-		"zkillKillLink": zkillKillLink,
-		"corpLink":      corpLink,
-		"allianceLink":  allianceLink,
-		"systemLink":    systemLink,
-		"stationLink":   stationLink,
-		"structureLink": structureLink,
-		"placeLink":     placeLink,
-		"dotlanSystem":  dotlanSystemLink,
-		"dotlanRegion":  dotlanRegionLink,
-		"skillLevel":    skillLevel,
+		"itemLink":        itemLink,
+		"charLink":        charLink,
+		"killCharLink":    killCharLink,
+		"zkillKillLink":   zkillKillLink,
+		"corpLink":        corpLink,
+		"allianceLink":    allianceLink,
+		"systemLink":      systemLink,
+		"stationLink":     stationLink,
+		"structureLink":   structureLink,
+		"placeLink":       placeLink,
+		"dotlanSystem":    dotlanSystemLink,
+		"dotlanSystemURL": dotlanSystemURL,
+		"dotlanRegion":    dotlanRegionLink,
+		"skillLevel":      skillLevel,
 		// Not a link: how a stored time is written out (timestamps.go).
 		"rfc3339": rfc3339,
 	}

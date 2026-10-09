@@ -327,8 +327,8 @@ func TestNavigationShellAndVisualStabilityAssets(t *testing.T) {
 		"html[data-nav=\"rail\"] .sidebar .nav-expand-btn { display: inline-flex; }",
 		// v0.3.07.007: the glyph-only controls float bare —
 		// no resting background or visible border; the labeled
-		// .nav-reopen keeps its box.
-		".nav-state-btn,\n.nav-drawer-close,\n.nav-expand-btn {\n  background: transparent;\n  border-color: transparent;\n}",
+		// .nav-reopen floats bare with them.
+		".nav-state-btn,\n.nav-reopen,\n.nav-drawer-close,\n.nav-expand-btn {\n  background: transparent;\n  border-color: transparent;\n}",
 		// v0.3.07.005 wide top bar: the wordmark's auto margin
 		// pins the sync/search/character cluster to the right
 		// edge as one group, and the search field carries its

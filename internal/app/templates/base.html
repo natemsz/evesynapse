@@ -177,7 +177,8 @@
 <footer>
   <p>EVE Online and all associated material are the intellectual property of CCP Games hf and are used with permission.<br>
   No official affiliation or endorsement by CCP Games hf is stated or implied.</p>
-  <p class="version"><span>Powered by EveSynapse {{.Version}} 🏓 by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a></span><span>ESI + EVE SSO</span><span>Not affiliated with CCP Games</span>{{if .SyncStatus}}<span class="sync-status" title="ESI and data sync health">{{.SyncStatus}}</span>{{end}}</p>
+  {{if .SyncStatus}}<p class="sync-status" title="ESI and data sync health">ESI Health: {{.SyncStatus}}</p>{{end}}
+  <p class="version">Powered by EveSynapse {{.Version}} 🏓 by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a></p>
 </footer>
 </div>
 <script src="/static/app.js?v={{.AssetVersion}}" defer></script>

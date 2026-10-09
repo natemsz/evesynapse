@@ -784,18 +784,16 @@ footer {
   padding: 1.4rem 1rem 1.6rem;
   margin-top: 2rem;
 }
-/* Pixelify Sans at 1rem, its smallest crisp size (see .wordmark); the
-   word gap is widened to 6px so "by natemsz" does not read as one word. */
+/* The word gap is widened so "by natemsz" does not read as one word. */
 footer .version {
   color: var(--muted);
   font-family: 'Pixelify Sans', monospace;
   font-weight: 600;
-  font-size: 1rem;
+  font-size: 0.72rem;
   line-height: 1.5;
   word-spacing: 0.175em;
   text-wrap: balance;
 }
-footer .version span + span::before { content: "· "; margin: 0 0.4rem; }
 
 /* --- small screens --- */
 @media (max-width: 640px) {

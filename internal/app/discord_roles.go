@@ -302,16 +302,29 @@ func discordStop(err error) bool {
 }
 
 // discordSyncMember brings one connected account up to date in one
-// server and writes down what it now holds there. The row is kept even
-// when nothing is held, as the note of when the account was last
-// looked for in that server.
-func (app *Application) discordSyncMember(ctx context.Context, guild db.DiscordGuild, rules []db.DiscordRoleRule, discordID string, wanted []string, had string, now time.Time) (changed bool, err error) {
+// server and writes down what it now holds there. An account that
+// belongs to the server's owner and is not in the server is added to
+// it (discord_join.go). The row is kept even when nothing is held, as
+// the note of when the account was last looked for in that server.
+func (app *Application) discordSyncMember(ctx context.Context, guild db.DiscordGuild, rules []db.DiscordRoleRule, link db.DiscordLink, st discordStanding, wanted []string, had string, now time.Time) (changed bool, err error) {
+	discordID := link.DiscordID
 	applied, member, err := app.discordApplyRoles(ctx, guild.GuildID, discordID, wanted, ruleRoles(rules), splitRoles(had))
 	if err != nil {
 		return false, err
 	}
+	if !member {
+		joined, jerr := app.discordJoin(ctx, guild, link, st, wanted, now)
+		switch {
+		case jerr != nil:
+			// Noted, and looked at again at the periodic check: a
+			// server that will not take members is not asked every pass.
+			logging.Warnf("discord: add user %d to %s: %v", link.UserID, guild.Name, jerr)
+		case joined:
+			applied, member = strings.Join(wanted, ","), true
+		}
+	}
 	if err := app.queries.UpsertDiscordRoleGrant(ctx, db.UpsertDiscordRoleGrantParams{
-		DiscordID: discordID, GuildID: guild.GuildID, Roles: applied, IsMember: member, CheckedAt: now,
+		DiscordID: discordID, GuildID: guild.GuildID, Roles: applied, Wanted: strings.Join(wanted, ","), IsMember: member, CheckedAt: now,
 	}); err != nil {
 		logging.Errorf("discord: record roles given to %s in %s: %v", discordID, guild.GuildID, err)
 	}
@@ -417,11 +430,11 @@ func (app *Application) discordSyncRoles(ctx context.Context, now time.Time) (ch
 			switch {
 			case !looked && target == "":
 				continue // nothing given, nothing owed
-			case looked && now.Sub(grant.CheckedAt) < discordRolesRecheck && (target == grant.Roles || !grant.IsMember):
+			case looked && now.Sub(grant.CheckedAt) < discordRolesRecheck && (target == grant.Roles || (!grant.IsMember && target == grant.Wanted)):
 				// As it should be and checked recently; or not in the
-				// server when last looked for, which is not asked again
-				// every minute (the "check my roles now" button is for
-				// someone who has just joined).
+				// server when last looked for and owed the same as then,
+				// which is not asked again every minute (the "check my
+				// roles now" button is for someone who has just joined).
 				continue
 			}
 			if ctx.Err() != nil || budget <= 0 {
@@ -431,7 +444,7 @@ func (app *Application) discordSyncRoles(ctx context.Context, now time.Time) (ch
 				break
 			}
 			budget--
-			did, err := app.discordSyncMember(ctx, guild, rules, link.DiscordID, wanted, grant.Roles, now)
+			did, err := app.discordSyncMember(ctx, guild, rules, link, st, wanted, grant.Roles, now)
 			if err != nil {
 				logging.Warnf("discord: roles of user %d in %s: %v", link.UserID, guild.Name, err)
 				stopped[guild.GuildID] = discordStop(err)
@@ -471,7 +484,7 @@ func (app *Application) discordSyncAccount(ctx context.Context, link db.DiscordL
 		if len(wanted) == 0 && had == "" {
 			continue
 		}
-		if _, err := app.discordSyncMember(ctx, guild, rules, link.DiscordID, wanted, had, now); err != nil {
+		if _, err := app.discordSyncMember(ctx, guild, rules, link, st, wanted, had, now); err != nil {
 			logging.Warnf("discord: refresh roles of user %d in %s: %v", link.UserID, guild.Name, err)
 			continue
 		}

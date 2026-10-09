@@ -96,9 +96,9 @@ DELETE FROM discord_ops_shares WHERE corporation_id = $1;
 SELECT * FROM discord_role_grants WHERE discord_id = sqlc.arg(discord_id) AND guild_id = sqlc.arg(guild_id);
 
 -- name: UpsertDiscordRoleGrant :exec
-INSERT INTO discord_role_grants (discord_id, guild_id, roles, is_member, checked_at)
-VALUES (sqlc.arg(discord_id), sqlc.arg(guild_id), sqlc.arg(roles), sqlc.arg(is_member), sqlc.arg(checked_at))
-ON CONFLICT (discord_id, guild_id) DO UPDATE SET roles = excluded.roles, is_member = excluded.is_member, checked_at = excluded.checked_at;
+INSERT INTO discord_role_grants (discord_id, guild_id, roles, wanted, is_member, checked_at)
+VALUES (sqlc.arg(discord_id), sqlc.arg(guild_id), sqlc.arg(roles), sqlc.arg(wanted), sqlc.arg(is_member), sqlc.arg(checked_at))
+ON CONFLICT (discord_id, guild_id) DO UPDATE SET roles = excluded.roles, wanted = excluded.wanted, is_member = excluded.is_member, checked_at = excluded.checked_at;
 
 -- name: DeleteDiscordRoleGrant :exec
 DELETE FROM discord_role_grants WHERE discord_id = sqlc.arg(discord_id) AND guild_id = sqlc.arg(guild_id);

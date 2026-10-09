@@ -182,6 +182,9 @@ type discordServerView struct {
 	Who      []discordWhoChoice // what a new rule can be about
 	Roles    []discordChoice    // the roles a new rule can give
 	Channels []discordChoice
+	// AutoJoin: members of the owner who have connected Discord are
+	// added to the server without an invite (discord_join.go).
+	AutoJoin bool
 	// Unreachable: Discord would not list the server's roles and
 	// channels (the bot was removed from it, or Discord is down).
 	Unreachable bool
@@ -242,7 +245,7 @@ func (app *Application) handleDiscordServers(w http.ResponseWriter, r *http.Requ
 			if guild.OwnerKind != owner.Kind || guild.OwnerID != owner.ID {
 				continue
 			}
-			sv := discordServerView{GuildID: guild.GuildID, Name: guild.Name, MemberWord: owner.Kind}
+			sv := discordServerView{GuildID: guild.GuildID, Name: guild.Name, MemberWord: owner.Kind, AutoJoin: guild.AutoJoin}
 			roles, rerr := app.discord.GuildRoles(ctx, guild.GuildID)
 			channels, cerr := app.discord.GuildTextChannels(ctx, guild.GuildID)
 			if rerr != nil || cerr != nil {
@@ -383,13 +386,18 @@ func (app *Application) handleDiscordServerSave(w http.ResponseWriter, r *http.R
 		back("That is not a channel of that server a message can be posted in.")
 		return
 	}
+	if err := app.queries.SetDiscordGuildAutoJoin(ctx, db.SetDiscordGuildAutoJoinParams{GuildID: guild.GuildID, AutoJoin: r.Form.Get("auto_join") == "1"}); err != nil {
+		logging.Errorf("discord: save server %s: %v", guild.GuildID, err)
+		back("The settings could not be saved; check the server log.")
+		return
+	}
 	if err := app.queries.SetDiscordGuildOpsChannel(ctx, db.SetDiscordGuildOpsChannelParams{GuildID: guild.GuildID, OpsChannel: channel}); err != nil {
 		logging.Errorf("discord: save server %s: %v", guild.GuildID, err)
 		back("The settings could not be saved; check the server log.")
 		return
 	}
 	logging.Infof("discord: user %d set the ops channel of server %s to %q", userID, guild.GuildID, channel)
-	back("Ops channel saved for " + guild.Name + ".")
+	back("Settings saved for " + guild.Name + ".")
 }
 
 // handleDiscordServerForget stops the bot acting in a server. The

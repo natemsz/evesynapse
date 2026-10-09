@@ -124,7 +124,7 @@ func (app *Application) handleDiscordCallback(w http.ResponseWriter, r *http.Req
 		app.discordFinishInstall(w, r, userID, owner, code)
 		return
 	}
-	account, err := app.discord.Identify(ctx, code)
+	account, token, err := app.discord.Identify(ctx, code)
 	if err != nil {
 		logging.Errorf("discord callback: identify for user %d: %v", userID, err)
 		back("Discord could not confirm the account. Please try again.")
@@ -148,6 +148,16 @@ func (app *Application) handleDiscordCallback(w http.ResponseWriter, r *http.Req
 		logging.Errorf("discord callback: store link for user %d: %v", userID, err)
 		back("The Discord account could not be saved; check the server log.")
 		return
+	}
+	// The token is kept so that the account can be added to its
+	// corporation's servers later too (discord_join.go). Anything
+	// noted about servers it was not in is dropped, so that the next
+	// pass looks again and adds it.
+	if err := app.discordStoreToken(ctx, userID, token); err != nil {
+		logging.Errorf("discord callback: store token of user %d: %v", userID, err)
+	}
+	if err := app.queries.DeleteDiscordNonMemberGrants(ctx, account.ID); err != nil {
+		logging.Errorf("discord callback: forget lookups of user %d: %v", userID, err)
 	}
 	back("Discord connected as " + account.DisplayName() + ".")
 }

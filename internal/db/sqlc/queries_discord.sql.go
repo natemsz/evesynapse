@@ -83,7 +83,7 @@ func (q *Queries) DeleteOtherDiscordLinks(ctx context.Context, arg DeleteOtherDi
 
 const getDiscordGuild = `-- name: GetDiscordGuild :one
 
-SELECT guild_id, name, owner_kind, owner_id, added_by, added_at, role_linked, role_member, ops_channel FROM discord_guilds WHERE guild_id = $1
+SELECT guild_id, name, owner_kind, owner_id, added_by, added_at, role_linked, role_member, ops_channel, auto_join FROM discord_guilds WHERE guild_id = $1
 `
 
 // Servers.
@@ -100,13 +100,14 @@ func (q *Queries) GetDiscordGuild(ctx context.Context, guildID string) (DiscordG
 		&i.RoleLinked,
 		&i.RoleMember,
 		&i.OpsChannel,
+		&i.AutoJoin,
 	)
 	return i, err
 }
 
 const getDiscordLink = `-- name: GetDiscordLink :one
 
-SELECT user_id, discord_id, username, linked_at, dm_notifications, dm_problem, dm_problem_at FROM discord_links WHERE user_id = $1
+SELECT user_id, discord_id, username, linked_at, dm_notifications, dm_problem, dm_problem_at, access_token, refresh_token, token_expiry FROM discord_links WHERE user_id = $1
 `
 
 // ---------------------------------------------------------------------
@@ -124,6 +125,9 @@ func (q *Queries) GetDiscordLink(ctx context.Context, userID int64) (DiscordLink
 		&i.DmNotifications,
 		&i.DmProblem,
 		&i.DmProblemAt,
+		&i.AccessToken,
+		&i.RefreshToken,
+		&i.TokenExpiry,
 	)
 	return i, err
 }
@@ -141,7 +145,7 @@ func (q *Queries) GetDiscordOpsShare(ctx context.Context, corporationID int64) (
 
 const getDiscordRoleGrant = `-- name: GetDiscordRoleGrant :one
 
-SELECT discord_id, guild_id, roles, is_member, checked_at FROM discord_role_grants WHERE discord_id = $1 AND guild_id = $2
+SELECT discord_id, guild_id, roles, is_member, checked_at, wanted FROM discord_role_grants WHERE discord_id = $1 AND guild_id = $2
 `
 
 type GetDiscordRoleGrantParams struct {
@@ -159,12 +163,13 @@ func (q *Queries) GetDiscordRoleGrant(ctx context.Context, arg GetDiscordRoleGra
 		&i.Roles,
 		&i.IsMember,
 		&i.CheckedAt,
+		&i.Wanted,
 	)
 	return i, err
 }
 
 const listDiscordGuilds = `-- name: ListDiscordGuilds :many
-SELECT guild_id, name, owner_kind, owner_id, added_by, added_at, role_linked, role_member, ops_channel FROM discord_guilds ORDER BY name, guild_id
+SELECT guild_id, name, owner_kind, owner_id, added_by, added_at, role_linked, role_member, ops_channel, auto_join FROM discord_guilds ORDER BY name, guild_id
 `
 
 func (q *Queries) ListDiscordGuilds(ctx context.Context) ([]DiscordGuild, error) {
@@ -186,6 +191,7 @@ func (q *Queries) ListDiscordGuilds(ctx context.Context) ([]DiscordGuild, error)
 			&i.RoleLinked,
 			&i.RoleMember,
 			&i.OpsChannel,
+			&i.AutoJoin,
 		); err != nil {
 			return nil, err
 		}
@@ -201,7 +207,7 @@ func (q *Queries) ListDiscordGuilds(ctx context.Context) ([]DiscordGuild, error)
 }
 
 const listDiscordLinks = `-- name: ListDiscordLinks :many
-SELECT user_id, discord_id, username, linked_at, dm_notifications, dm_problem, dm_problem_at FROM discord_links ORDER BY user_id
+SELECT user_id, discord_id, username, linked_at, dm_notifications, dm_problem, dm_problem_at, access_token, refresh_token, token_expiry FROM discord_links ORDER BY user_id
 `
 
 func (q *Queries) ListDiscordLinks(ctx context.Context) ([]DiscordLink, error) {
@@ -221,6 +227,9 @@ func (q *Queries) ListDiscordLinks(ctx context.Context) ([]DiscordLink, error) {
 			&i.DmNotifications,
 			&i.DmProblem,
 			&i.DmProblemAt,
+			&i.AccessToken,
+			&i.RefreshToken,
+			&i.TokenExpiry,
 		); err != nil {
 			return nil, err
 		}
@@ -236,7 +245,7 @@ func (q *Queries) ListDiscordLinks(ctx context.Context) ([]DiscordLink, error) {
 }
 
 const listDiscordRoleGrantsForDiscordID = `-- name: ListDiscordRoleGrantsForDiscordID :many
-SELECT discord_id, guild_id, roles, is_member, checked_at FROM discord_role_grants WHERE discord_id = $1 ORDER BY guild_id
+SELECT discord_id, guild_id, roles, is_member, checked_at, wanted FROM discord_role_grants WHERE discord_id = $1 ORDER BY guild_id
 `
 
 func (q *Queries) ListDiscordRoleGrantsForDiscordID(ctx context.Context, discordID string) ([]DiscordRoleGrant, error) {
@@ -254,6 +263,7 @@ func (q *Queries) ListDiscordRoleGrantsForDiscordID(ctx context.Context, discord
 			&i.Roles,
 			&i.IsMember,
 			&i.CheckedAt,
+			&i.Wanted,
 		); err != nil {
 			return nil, err
 		}
@@ -269,7 +279,7 @@ func (q *Queries) ListDiscordRoleGrantsForDiscordID(ctx context.Context, discord
 }
 
 const listDiscordRoleGrantsForGuild = `-- name: ListDiscordRoleGrantsForGuild :many
-SELECT discord_id, guild_id, roles, is_member, checked_at FROM discord_role_grants WHERE guild_id = $1 ORDER BY discord_id
+SELECT discord_id, guild_id, roles, is_member, checked_at, wanted FROM discord_role_grants WHERE guild_id = $1 ORDER BY discord_id
 `
 
 func (q *Queries) ListDiscordRoleGrantsForGuild(ctx context.Context, guildID string) ([]DiscordRoleGrant, error) {
@@ -287,6 +297,7 @@ func (q *Queries) ListDiscordRoleGrantsForGuild(ctx context.Context, guildID str
 			&i.Roles,
 			&i.IsMember,
 			&i.CheckedAt,
+			&i.Wanted,
 		); err != nil {
 			return nil, err
 		}
@@ -391,7 +402,7 @@ func (q *Queries) ListOpsToAnnounceOnDiscord(ctx context.Context, arg ListOpsToA
 }
 
 const listOrphanDiscordRoleGrants = `-- name: ListOrphanDiscordRoleGrants :many
-SELECT g.discord_id, g.guild_id, g.roles, g.is_member, g.checked_at FROM discord_role_grants g
+SELECT g.discord_id, g.guild_id, g.roles, g.is_member, g.checked_at, g.wanted FROM discord_role_grants g
 WHERE NOT EXISTS (SELECT 1 FROM discord_links l WHERE l.discord_id = g.discord_id)
 ORDER BY g.checked_at
 LIMIT $1
@@ -415,6 +426,7 @@ func (q *Queries) ListOrphanDiscordRoleGrants(ctx context.Context, maxRows int32
 			&i.Roles,
 			&i.IsMember,
 			&i.CheckedAt,
+			&i.Wanted,
 		); err != nil {
 			return nil, err
 		}
@@ -579,15 +591,16 @@ func (q *Queries) UpsertDiscordLink(ctx context.Context, arg UpsertDiscordLinkPa
 }
 
 const upsertDiscordRoleGrant = `-- name: UpsertDiscordRoleGrant :exec
-INSERT INTO discord_role_grants (discord_id, guild_id, roles, is_member, checked_at)
-VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (discord_id, guild_id) DO UPDATE SET roles = excluded.roles, is_member = excluded.is_member, checked_at = excluded.checked_at
+INSERT INTO discord_role_grants (discord_id, guild_id, roles, wanted, is_member, checked_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (discord_id, guild_id) DO UPDATE SET roles = excluded.roles, wanted = excluded.wanted, is_member = excluded.is_member, checked_at = excluded.checked_at
 `
 
 type UpsertDiscordRoleGrantParams struct {
 	DiscordID string    `json:"discord_id"`
 	GuildID   string    `json:"guild_id"`
 	Roles     string    `json:"roles"`
+	Wanted    string    `json:"wanted"`
 	IsMember  bool      `json:"is_member"`
 	CheckedAt time.Time `json:"checked_at"`
 }
@@ -597,6 +610,7 @@ func (q *Queries) UpsertDiscordRoleGrant(ctx context.Context, arg UpsertDiscordR
 		arg.DiscordID,
 		arg.GuildID,
 		arg.Roles,
+		arg.Wanted,
 		arg.IsMember,
 		arg.CheckedAt,
 	)

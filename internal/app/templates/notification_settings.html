@@ -61,9 +61,10 @@
 <form method="post" action="/discord/test" class="inline-form"><button type="submit" class="btn">Send a test message</button></form>
 <form method="post" action="/discord/roles/refresh" class="inline-form"><button type="submit" class="btn" title="For when you have just joined a server">Check my roles now</button></form>
 {{end}}
+{{if .Reconnect}}<p><small>EveSynapse can add you to your corporation's Discord server without an invite, but you connected before it could ask for that. <a href="/discord/connect">Connect Discord again</a> to allow it.</small></p>{{end}}
 <form method="post" action="/discord/disconnect" class="inline-form"><button type="submit" class="btn">Disconnect Discord</button></form>
 {{else}}
-<p><small>Connect your Discord account to get notifications there, and your roles in Discord servers that use EveSynapse. Only your Discord name and id are read.</small></p>
+<p><small>Connect your Discord account to get notifications there, to be added to your corporation's Discord server, and to get your roles in it. Discord will ask you to let EveSynapse see your Discord name and id and add you to servers; it can do nothing else with your account.</small></p>
 <p><a class="btn" href="/discord/connect">Connect Discord</a></p>
 {{end}}
 {{if .Manages}}<p><a href="/discord/servers">Set up your corporation's or alliance's Discord server</a></p>{{end}}

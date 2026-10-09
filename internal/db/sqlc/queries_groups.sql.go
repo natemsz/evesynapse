@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	"github.com/lib/pq"
@@ -62,6 +63,18 @@ func (q *Queries) CreateOrgGroup(ctx context.Context, arg CreateOrgGroupParams) 
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const deleteDiscordNonMemberGrants = `-- name: DeleteDiscordNonMemberGrants :exec
+DELETE FROM discord_role_grants WHERE discord_id = $1 AND NOT is_member AND roles = ''
+`
+
+// Forget that an account was looked for in servers and not found, so
+// that it is looked for again at once (it has just connected, and may
+// now be added).
+func (q *Queries) DeleteDiscordNonMemberGrants(ctx context.Context, discordID string) error {
+	_, err := q.db.ExecContext(ctx, deleteDiscordNonMemberGrants, discordID)
+	return err
 }
 
 const deleteDiscordRoleRule = `-- name: DeleteDiscordRoleRule :exec
@@ -482,6 +495,20 @@ func (q *Queries) RemoveOrgGroupMember(ctx context.Context, arg RemoveOrgGroupMe
 	return err
 }
 
+const setDiscordGuildAutoJoin = `-- name: SetDiscordGuildAutoJoin :exec
+UPDATE discord_guilds SET auto_join = $1 WHERE guild_id = $2
+`
+
+type SetDiscordGuildAutoJoinParams struct {
+	AutoJoin bool   `json:"auto_join"`
+	GuildID  string `json:"guild_id"`
+}
+
+func (q *Queries) SetDiscordGuildAutoJoin(ctx context.Context, arg SetDiscordGuildAutoJoinParams) error {
+	_, err := q.db.ExecContext(ctx, setDiscordGuildAutoJoin, arg.AutoJoin, arg.GuildID)
+	return err
+}
+
 const setDiscordGuildOpsChannel = `-- name: SetDiscordGuildOpsChannel :exec
 UPDATE discord_guilds SET ops_channel = $1 WHERE guild_id = $2
 `
@@ -493,5 +520,29 @@ type SetDiscordGuildOpsChannelParams struct {
 
 func (q *Queries) SetDiscordGuildOpsChannel(ctx context.Context, arg SetDiscordGuildOpsChannelParams) error {
 	_, err := q.db.ExecContext(ctx, setDiscordGuildOpsChannel, arg.OpsChannel, arg.GuildID)
+	return err
+}
+
+const setDiscordLinkTokens = `-- name: SetDiscordLinkTokens :exec
+UPDATE discord_links
+SET access_token = $1, refresh_token = $2, token_expiry = $3
+WHERE user_id = $4
+`
+
+type SetDiscordLinkTokensParams struct {
+	AccessToken  string       `json:"access_token"`
+	RefreshToken string       `json:"refresh_token"`
+	TokenExpiry  sql.NullTime `json:"token_expiry"`
+	UserID       int64        `json:"user_id"`
+}
+
+// The account's Discord token, sealed; empty strings forget it.
+func (q *Queries) SetDiscordLinkTokens(ctx context.Context, arg SetDiscordLinkTokensParams) error {
+	_, err := q.db.ExecContext(ctx, setDiscordLinkTokens,
+		arg.AccessToken,
+		arg.RefreshToken,
+		arg.TokenExpiry,
+		arg.UserID,
+	)
 	return err
 }

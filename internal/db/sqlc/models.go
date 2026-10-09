@@ -82,6 +82,7 @@ type DiscordGuild struct {
 	RoleLinked string    `json:"role_linked"`
 	RoleMember string    `json:"role_member"`
 	OpsChannel string    `json:"ops_channel"`
+	AutoJoin   bool      `json:"auto_join"`
 }
 
 type DiscordLink struct {
@@ -92,6 +93,9 @@ type DiscordLink struct {
 	DmNotifications bool         `json:"dm_notifications"`
 	DmProblem       string       `json:"dm_problem"`
 	DmProblemAt     sql.NullTime `json:"dm_problem_at"`
+	AccessToken     string       `json:"access_token"`
+	RefreshToken    string       `json:"refresh_token"`
+	TokenExpiry     sql.NullTime `json:"token_expiry"`
 }
 
 type DiscordOpsShare struct {
@@ -106,6 +110,7 @@ type DiscordRoleGrant struct {
 	Roles     string    `json:"roles"`
 	IsMember  bool      `json:"is_member"`
 	CheckedAt time.Time `json:"checked_at"`
+	Wanted    string    `json:"wanted"`
 }
 
 type DiscordRoleRule struct {

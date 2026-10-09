@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -178,8 +179,15 @@ func workerTimingViewFor(s workerStatus) *workerTimingView {
 	if n := len(s.Recent); n >= 2 {
 		var total, longest, worst time.Duration
 		spent, deferred := 0, 0
+		fetches, most := 0, 0
+		var active, watched, recent, dormant, asleep int
 		for _, r := range s.Recent {
 			total += r.Took
+			fetches += r.Fetches
+			if r.Fetches > most {
+				most = r.Fetches
+			}
+			active, watched, recent, dormant, asleep = active+r.Active, watched+r.Watched, recent+r.Recent, dormant+r.Dormant, asleep+r.Asleep
 			if r.Took > longest {
 				longest = r.Took
 			}
@@ -196,6 +204,17 @@ func workerTimingViewFor(s workerStatus) *workerTimingView {
 		lately := []string{
 			fmt.Sprintf("last %d cycles: average %s, longest %s", n, shortDuration(total/time.Duration(n)), shortDuration(longest)),
 		}
+		// What the characters cost: the fetches a cycle makes, beside how
+		// many characters were in each tier while it made them. One cycle
+		// says little (a tier's characters come due in bursts); an hour's
+		// average is what to size the allowance by.
+		mean := func(sum int) string { return strconv.FormatFloat(float64(sum)/float64(n), 'f', 1, 64) }
+		lately = append(lately, fmt.Sprintf("fetches: average %s a cycle, most %d", mean(fetches), most))
+		mix := fmt.Sprintf("characters on average: %s active, %s watched, %s recent, %s dormant", mean(active), mean(watched), mean(recent), mean(dormant))
+		if asleep > 0 {
+			mix += ", " + mean(asleep) + " asleep"
+		}
+		lately = append(lately, mix)
 		if spent > 0 {
 			lately = append(lately, fmt.Sprintf("allowance used up in %d", spent))
 		}

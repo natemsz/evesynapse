@@ -70,13 +70,24 @@ func TestWorkerTimingView(t *testing.T) {
 			t.Errorf("last cycle %q is missing %q", v.Last, want)
 		}
 	}
-	for _, want := range []string{"last 10 cycles", "longest 48s", "allowance used up in 9", "characters put off in 9", "up to 3h 0m late"} {
+	// (One cycle of 37 fetches with 1, 2, 5 and 6 characters in the
+	// tiers, and nine of 120 with none counted.)
+	for _, want := range []string{"last 10 cycles", "longest 48s", "allowance used up in 9", "characters put off in 9", "up to 3h 0m late",
+		"fetches: average 111.7 a cycle, most 120", "characters on average: 0.1 active, 0.2 watched, 0.5 recent, 0.6 dormant"} {
 		if !strings.Contains(v.Lately, want) {
 			t.Errorf("lately %q is missing %q", v.Lately, want)
 		}
 	}
 	if !strings.Contains(v.Behind, "not keeping up") || !strings.Contains(v.Behind, "9 of the last 10") {
 		t.Errorf("behind: %q", v.Behind)
+	}
+	if strings.Contains(v.Lately, "asleep") {
+		t.Errorf("lately mentions asleep with none: %q", v.Lately)
+	}
+	sleepy := easy
+	sleepy.Asleep = 3
+	if v = workerTimingViewFor(workerStatus{Timing: sleepy, Recent: []workerTiming{sleepy, easy}}); !strings.Contains(v.Lately, "6.0 dormant, 1.5 asleep") {
+		t.Errorf("lately with asleep characters: %q", v.Lately)
 	}
 
 	// A cycle that outran the minute, without putting anyone off.

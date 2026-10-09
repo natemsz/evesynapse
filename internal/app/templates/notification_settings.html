@@ -16,7 +16,7 @@
   <tbody>
     {{range .Rows}}
     <tr>
-      <td><label><input type="checkbox" name="kind" value="{{.ID}}"{{if .On}} checked{{end}}> {{.Title}}</label></td>
+      <td><label><input type="checkbox" name="kind" value="{{.ID}}"{{if .On}} checked{{end}}> {{.Title}}</label>{{if .Minutes}} <label class="notify-minutes"><select name="op_reminder_minutes" aria-label="How long before an op starts to remind you">{{range .Minutes}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select> before it starts</label>{{end}}</td>
       <td>{{$kind := .ID}}{{if .Characters}}
         <div class="charselector checkselector" data-checkselector>
           <input type="text" class="charselector-input" placeholder="{{.Summary}}" autocomplete="off" aria-label="Characters for {{.Title}}: {{.Summary}}. Type to search.">

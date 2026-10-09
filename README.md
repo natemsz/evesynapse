@@ -347,7 +347,9 @@ allowing everyone.
 
 EveSynapse tells you when something happens to your characters:
 a skill finishes, new mail, a new in-game calendar event, a new op
-planned for one of your corporations, a new killmail, planetary
+planned for one of your corporations, a reminder before an op you
+signed up to starts (10 minutes to 2 hours ahead, your choice), a new
+killmail, planetary
 extractors stopping, an industry job finishing, and watch list
 alerts. They show under the bell in the top bar with no setup at
 all. Under **bell → Settings** (`/notifications/settings`) each kind

@@ -36,14 +36,15 @@ var notifyKindIcons = map[string]bool{notifyMail: true, notifyPI: true}
 // notifyKindWording is how a count of each kind reads in the list:
 // "1 new mail", "3 new mails".
 var notifyKindWording = map[string][2]string{
-	notifyWatch:    {"watch list alert", "watch list alerts"},
-	notifySkill:    {"skill finished", "skills finished"},
-	notifyMail:     {"new mail", "new mails"},
-	notifyCalendar: {"new calendar event", "new calendar events"},
-	notifyKillmail: {"new killmail", "new killmails"},
-	notifyPI:       {"planet with stopped extractors", "planets with stopped extractors"},
-	notifyIndustry: {"industry job finished", "industry jobs finished"},
-	notifyOp:       {"new op", "new ops"},
+	notifyWatch:      {"watch list alert", "watch list alerts"},
+	notifySkill:      {"skill finished", "skills finished"},
+	notifyMail:       {"new mail", "new mails"},
+	notifyCalendar:   {"new calendar event", "new calendar events"},
+	notifyKillmail:   {"new killmail", "new killmails"},
+	notifyPI:         {"planet with stopped extractors", "planets with stopped extractors"},
+	notifyIndustry:   {"industry job finished", "industry jobs finished"},
+	notifyOp:         {"new op", "new ops"},
+	notifyOpReminder: {"op starting soon", "ops starting soon"},
 }
 
 // notifyBadge is the top-bar icon and the summarized list behind it.
@@ -251,6 +252,33 @@ type notifySettingRow struct {
 	// them it is on for ("On for 3 of 5 characters").
 	Characters []notifyCharacterOption
 	Summary    string
+	// Minutes is the choice of lead for the op reminder, with the
+	// current one marked; nil for every other kind.
+	Minutes []notifyMinutesOption
+}
+
+// notifyMinutesOption is one lead the op reminder can be set to.
+type notifyMinutesOption struct {
+	Value    int
+	Label    string // "30 minutes", "2 hours"
+	Selected bool
+}
+
+// notifyMinutesOptions lists the leads, the account's own marked.
+func notifyMinutesOptions(prefs notifyPrefs) []notifyMinutesOption {
+	current := int(prefs.reminderLead() / time.Minute)
+	out := make([]notifyMinutesOption, 0, len(notifyReminderMinutes))
+	for _, n := range notifyReminderMinutes {
+		label := fmt.Sprintf("%d minutes", n)
+		switch {
+		case n == 60:
+			label = "1 hour"
+		case n > 60 && n%60 == 0:
+			label = fmt.Sprintf("%d hours", n/60)
+		}
+		out = append(out, notifyMinutesOption{Value: n, Label: label, Selected: n == current})
+	}
+	return out
 }
 
 // notifyCharacterOption is one character under one kind.
@@ -298,6 +326,9 @@ func notifySettingRows(prefs notifyPrefs, characters []db.Character) []notifySet
 	rows := make([]notifySettingRow, 0, len(notifyKinds))
 	for _, kind := range notifyKinds {
 		row := notifySettingRow{ID: kind.ID, Title: kind.Title, On: !prefs.off(kind.ID)}
+		if kind.ID == notifyOpReminder {
+			row.Minutes = notifyMinutesOptions(prefs)
+		}
 		if !kind.Account && len(characters) > 0 {
 			module, scoped := moduleByID(kind.Module)
 			scoped = scoped && module.Layer != layerPublic
@@ -354,7 +385,10 @@ func (app *Application) handleNotificationSettingsSave(w http.ResponseWriter, r 
 		on[id] = true
 	}
 	before := app.notifyPrefsFor(ctx, userID)
-	prefs := notifyPrefs{OffFor: map[string][]int64{}}
+	prefs := notifyPrefs{OffFor: map[string][]int64{}, OpReminderMinutes: before.OpReminderMinutes}
+	if n, err := strconv.Atoi(r.Form.Get("op_reminder_minutes")); err == nil && validReminderMinutes(n) {
+		prefs.OpReminderMinutes = n
+	}
 	for _, row := range notifySettingRows(before, app.sessionCharacters(ctx)) {
 		if !on[row.ID] {
 			prefs.Off = append(prefs.Off, row.ID)

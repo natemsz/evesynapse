@@ -46,14 +46,15 @@ import (
 // the keys in notification_seen, the user's settings); never rename
 // one.
 const (
-	notifyWatch    = "watch"
-	notifySkill    = "skill"
-	notifyMail     = "mail"
-	notifyCalendar = "calendar"
-	notifyKillmail = "killmail"
-	notifyPI       = "pi"
-	notifyIndustry = "industry"
-	notifyOp       = "op"
+	notifyWatch      = "watch"
+	notifySkill      = "skill"
+	notifyMail       = "mail"
+	notifyCalendar   = "calendar"
+	notifyKillmail   = "killmail"
+	notifyPI         = "pi"
+	notifyIndustry   = "industry"
+	notifyOp         = "op"
+	notifyOpReminder = "op_reminder"
 )
 
 // notifyKind describes one kind of notification.
@@ -78,6 +79,7 @@ var notifyKinds = []notifyKind{
 	// Ops are EveSynapse's own (ops.go): any character sees its
 	// corporation's, with no access to grant.
 	{ID: notifyOp, Title: "New op on the calendar"},
+	{ID: notifyOpReminder, Title: "Op starting soon"},
 	{ID: notifyKillmail, Title: "New killmail", Module: "killmails"},
 	{ID: notifyPI, Title: "Stopped planetary extractors", Module: "planets"},
 	{ID: notifyIndustry, Title: "Industry job complete", Module: "industry"},
@@ -374,6 +376,9 @@ type notifyPrefs struct {
 	// character not listed gets the kind, so one linked later starts
 	// with everything on.
 	OffFor map[string][]int64 `json:"off_for,omitempty"`
+	// OpReminderMinutes is how long before an op starts the account
+	// is reminded of it (notifyOpReminder); 0 means the default.
+	OpReminderMinutes int `json:"op_reminder_minutes,omitempty"`
 }
 
 // parseNotifyPrefs decodes stored settings, keeping only kinds that
@@ -387,6 +392,9 @@ func parseNotifyPrefs(blob string) notifyPrefs {
 		if _, ok := notifyKindByID(id); ok && !prefs.off(id) {
 			prefs.Off = append(prefs.Off, id)
 		}
+	}
+	if validReminderMinutes(raw.OpReminderMinutes) {
+		prefs.OpReminderMinutes = raw.OpReminderMinutes
 	}
 	for id, characters := range raw.OffFor {
 		kind, ok := notifyKindByID(id)
@@ -604,16 +612,69 @@ func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db
 // nobody needs telling about one planned for next year.
 const notifyOpWindow = 90 * 24 * time.Hour
 
+// notifyReminderMinutes are the leads a reminder can be set to, and
+// defaultReminderMinutes the one used until the user picks.
+var notifyReminderMinutes = []int{10, 15, 30, 60, 120}
+
+const defaultReminderMinutes = 30
+
+func validReminderMinutes(n int) bool {
+	for _, allowed := range notifyReminderMinutes {
+		if n == allowed {
+			return true
+		}
+	}
+	return false
+}
+
+// reminderLead is how long before an op starts the account is
+// reminded of it.
+func (p notifyPrefs) reminderLead() time.Duration {
+	if validReminderMinutes(p.OpReminderMinutes) {
+		return time.Duration(p.OpReminderMinutes) * time.Minute
+	}
+	return defaultReminderMinutes * time.Minute
+}
+
+// opRecipients picks, per corporation, the character of the account
+// that is told about its ops under kind: the first that has not
+// switched the kind off, else the first.
+func opRecipients(rows []db.ListCharacterCorporationsByUserRow, prefs notifyPrefs, kind string) map[int64]int64 {
+	recipient := map[int64]int64{}
+	for _, row := range rows {
+		if row.CorporationID == 0 {
+			continue
+		}
+		current, known := recipient[row.CorporationID]
+		if !known || (prefs.offFor(kind, current) && !prefs.offFor(kind, row.CharacterID)) {
+			recipient[row.CorporationID] = row.CharacterID
+		}
+	}
+	return recipient
+}
+
 // notifyOpEvents: ops ahead, planned for a corporation the account
-// has a character in (ops.go). The ops already there when a
+// has a character in (ops.go). Two things are said about one:
+//
+// That it was planned (notifyOp). The ops already there when a
 // corporation's calendar first becomes readable are its baseline. An
 // op the account made itself is not news to it, and neither is one
 // that was cancelled before it was seen.
 //
-// An op is announced once to the account, in the name of one of its
-// characters in that corporation: the first that has not switched
-// these off. With every one of them switched off it is still recorded
-// as seen, so switching back on starts from then.
+// That it is about to start (notifyOpReminder): once the start is
+// within the account's chosen lead and has not passed. The worker
+// looks about once a minute, so the reminder comes within a minute or
+// so of the chosen time. It goes only to an account that signed up to
+// the op as coming or maybe, in the name of the character it signed up
+// with; everyone else in the corporation was already told when the op
+// was planned. Signing up inside the lead brings the reminder at the
+// worker's next look. A start that is moved is reminded of again.
+//
+// Each is said once to the account. The planning is said in the name
+// of one of its characters in that corporation: the first that has
+// not switched that kind off. With every character concerned switched
+// off, an event is still recorded as seen, so switching back on starts
+// from then.
 func (app *Application) notifyOpEvents(ctx context.Context, c *notifyCollector, userID int64, prefs notifyPrefs, now time.Time) {
 	rows, err := app.queries.ListCharacterCorporationsByUser(ctx, userID)
 	if err != nil {
@@ -621,20 +682,13 @@ func (app *Application) notifyOpEvents(ctx context.Context, c *notifyCollector, 
 		return
 	}
 	mine := map[int64]bool{}
-	recipient := map[int64]int64{} // corporation -> the character told
+	seenCorp := map[int64]bool{}
 	var corps []int64
 	for _, row := range rows {
 		mine[row.CharacterID] = true
-		if row.CorporationID == 0 {
-			continue
-		}
-		current, known := recipient[row.CorporationID]
-		switch {
-		case !known:
-			recipient[row.CorporationID] = row.CharacterID
+		if row.CorporationID != 0 && !seenCorp[row.CorporationID] {
+			seenCorp[row.CorporationID] = true
 			corps = append(corps, row.CorporationID)
-		case prefs.offFor(notifyOp, current) && !prefs.offFor(notifyOp, row.CharacterID):
-			recipient[row.CorporationID] = row.CharacterID
 		}
 	}
 	if len(corps) == 0 {
@@ -647,25 +701,68 @@ func (app *Application) notifyOpEvents(ctx context.Context, c *notifyCollector, 
 		logging.Errorf("notify: ops for user %d: %v", userID, err)
 		return
 	}
-	sources := map[int64]string{}
+	planned := opRecipients(rows, prefs, notifyOp)
+	plannedSource, remindedSource := map[int64]string{}, map[int64]string{}
 	for _, corp := range corps {
-		sources[corp] = c.source(notifyOp, corp)
+		plannedSource[corp] = c.source(notifyOp, corp)
+		remindedSource[corp] = c.source(notifyOpReminder, corp)
 	}
+
+	// The ops about to start, and which of the account's characters
+	// signed up to each as coming or maybe: the one reminded. Where
+	// several did, one that has not switched reminders off.
+	lead := prefs.reminderLead()
+	var soon []int64
 	for _, op := range ops {
-		if op.CancelledAt.Valid || mine[op.CreatedByCharacter] {
+		if !op.CancelledAt.Valid && !op.StartsAt.After(now.Add(lead)) {
+			soon = append(soon, op.ID)
+		}
+	}
+	signedUp := map[int64]int64{} // op -> character
+	if len(soon) > 0 {
+		signups, err := app.queries.ListOpSignupsForOps(ctx, soon)
+		if err != nil {
+			logging.Errorf("notify: sign-ups for user %d: %v", userID, err)
+			return
+		}
+		for _, s := range signups {
+			if s.UserID != userID || s.Response == opNo {
+				continue
+			}
+			current, known := signedUp[s.OpID]
+			if !known || (prefs.offFor(notifyOpReminder, current) && !prefs.offFor(notifyOpReminder, s.CharacterID)) {
+				signedUp[s.OpID] = s.CharacterID
+			}
+		}
+	}
+
+	for _, op := range ops {
+		if op.CancelledAt.Valid {
 			continue
 		}
 		// The corporation is named where its name is already known;
 		// a title is stored, so it never carries a placeholder.
-		lead := "New op"
+		corp := ""
 		if name, settled := app.resolvedCorpName(ctx, op.CorporationID); settled && name != "" {
-			lead += " for " + name
+			corp = " for " + name
 		}
-		c.add(notifyEvent{
-			Kind: notifyOp, CharacterID: recipient[op.CorporationID], Source: sources[op.CorporationID],
-			Key:   fmt.Sprintf("op|%d", op.ID),
-			Title: fmt.Sprintf("%s: %s, %s", lead, op.Title, op.StartsAt.UTC().Format("Jan 2 15:04")),
-			URL:   opURL(op.ID),
-		})
+		if !mine[op.CreatedByCharacter] {
+			c.add(notifyEvent{
+				Kind: notifyOp, CharacterID: planned[op.CorporationID], Source: plannedSource[op.CorporationID],
+				Key:   fmt.Sprintf("op|%d", op.ID),
+				Title: fmt.Sprintf("New op%s: %s, %s", corp, op.Title, op.StartsAt.UTC().Format("Jan 2 15:04")),
+				URL:   opURL(op.ID),
+			})
+		}
+		if character, coming := signedUp[op.ID]; coming {
+			c.add(notifyEvent{
+				Kind: notifyOpReminder, CharacterID: character, Source: remindedSource[op.CorporationID],
+				// The start is part of the key: an op that is moved is
+				// reminded of again at its new time.
+				Key:   fmt.Sprintf("opremind|%d|%d", op.ID, op.StartsAt.Unix()),
+				Title: fmt.Sprintf("Op%s starts at %s EVE time: %s", corp, op.StartsAt.UTC().Format("15:04"), op.Title),
+				URL:   opURL(op.ID),
+			})
+		}
 	}
 }

@@ -454,3 +454,155 @@ func TestNotifyNewOps(t *testing.T) {
 	mustContain(t, "settings", body, `value="op" checked> New op on the calendar`, `value="calendar" checked> New in-game calendar event`)
 	mustContain(t, "bell", f.badge(cookie, "").Body.String(), "2 new ops")
 }
+
+// TestNotifyOpReminder: an account that signed up to an op, as coming
+// or maybe, is reminded once when its start is within the lead the
+// account chose. Nobody else is: not an account that did not sign up,
+// nor one that answered "not coming". A cancelled op is not reminded
+// of, and a moved one is again. The lead is chosen on the settings
+// page.
+func TestNotifyOpReminder(t *testing.T) {
+	f := newNotifyFixture(t)
+	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+	const corp = int64(98000001)
+	if err := f.q.UpsertCharacterCorporation(f.ctx, db.UpsertCharacterCorporationParams{
+		CharacterID: f.ch.CharacterID, CorporationID: corp, UpdatedAt: notifyT0,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	plan := func(title string, start time.Time) int64 {
+		t.Helper()
+		id, err := f.q.CreateOp(f.ctx, db.CreateOpParams{
+			CorporationID: corp, Title: title, StartsAt: start, DurationMinutes: 60,
+			FcCharacterID: f.ch.CharacterID, CreatedByCharacter: f.ch.CharacterID, CreatedAt: notifyT0,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	answer := func(op int64, response string) {
+		t.Helper()
+		if code, _ := f.post(cookie, opURL(op)+"/signup", url.Values{"character": {"90000001"}, "response": {response}}); code != http.StatusSeeOther {
+			t.Fatalf("sign-up %q: %d", response, code)
+		}
+	}
+	// Noon tomorrow, by the real clock: signing up is refused for an op
+	// that is over, and the sign-up page goes by the real time.
+	now := time.Now().UTC().Truncate(24 * time.Hour).Add(36 * time.Hour)
+	start := now.Add(2 * time.Hour)
+
+	// The account's own op (so no "new op"), two hours away, and
+	// another at the same time that it does not sign up to. The
+	// default lead is 30 minutes.
+	op := plan("Home defence", start)
+	plan("Not signed up to", start)
+	f.pass(now)
+	if n := f.pass(start.Add(-25 * time.Minute)); n != 0 {
+		t.Fatalf("reminded of ops the account has not signed up to: %q", f.titles())
+	}
+	// Signing up inside the lead brings the reminder at the next look.
+	answer(op, "yes")
+	if n := f.pass(start.Add(-24 * time.Minute)); n != 1 {
+		t.Fatalf("after signing up inside the lead: %d reminder(s) %q, want 1", n, f.titles())
+	}
+
+	// Signed up well ahead: at the lead, and not before.
+	start = start.Add(24 * time.Hour)
+	op = plan("Home defence", start)
+	answer(op, "yes")
+	if n := f.pass(start.Add(-31 * time.Minute)); n != 0 {
+		t.Fatalf("reminded 31 minutes before with a 30 minute lead: %q", f.titles())
+	}
+	if n := f.pass(start.Add(-30 * time.Minute)); n != 1 {
+		t.Fatalf("at 30 minutes before: %d reminder(s) %q, want 1", n, f.titles())
+	}
+	f.wantTitles("the reminders", "starts at 14:00 EVE time: Home defence", "starts at 14:00 EVE time: Home defence")
+	rows, err := f.q.ListNotifications(f.ctx, db.ListNotificationsParams{UserID: f.userID, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows[0].Kind != notifyOpReminder || rows[0].Url != opURL(op) || rows[0].CharacterID != f.ch.CharacterID {
+		t.Fatalf("stored as %+v, want an op reminder linking to the op, for the character that signed up", rows[0])
+	}
+	// Once, and not after it has started.
+	if n := f.pass(start.Add(-10 * time.Minute)); n != 0 {
+		t.Fatalf("reminded twice: %q", f.titles())
+	}
+	if n := f.pass(start.Add(time.Minute)); n != 0 {
+		t.Fatalf("reminded after the start: %q", f.titles())
+	}
+
+	// Moved to a later time: reminded of again, at the new time.
+	moved := start.Add(3 * time.Hour)
+	if _, err := f.app.db.ExecContext(f.ctx, `UPDATE ops SET starts_at = $1 WHERE id = $2`, moved, op); err != nil {
+		t.Fatal(err)
+	}
+	if n := f.pass(moved.Add(-20 * time.Minute)); n != 1 {
+		t.Fatalf("after the op was moved: %d reminder(s), want 1: %q", n, f.titles())
+	}
+
+	// A longer lead, chosen on the settings page.
+	_, body := getPage(t, f.app, cookie, "/notifications/settings")
+	mustContain(t, "settings", body,
+		`value="op_reminder" checked> Op starting soon</label>`,
+		`<select name="op_reminder_minutes"`, `<option value="30" selected>30 minutes</option>`, `<option value="120">2 hours</option>`)
+	form := url.Values{"op_reminder_minutes": {"120"}}
+	for _, kind := range notifyKinds {
+		form.Add("kind", kind.ID)
+		if !kind.Account {
+			form.Add("char."+kind.ID, "90000001")
+		}
+	}
+	f.post(cookie, "/notifications/settings", form)
+	if got := f.app.notifyPrefsFor(f.ctx, f.userID).reminderLead(); got != 2*time.Hour {
+		t.Fatalf("lead after saving 120: %v", got)
+	}
+	_, body = getPage(t, f.app, cookie, "/notifications/settings")
+	mustContain(t, "settings after saving", body, `<option value="120" selected>2 hours</option>`)
+	// A lead that is not offered is not stored.
+	form.Set("op_reminder_minutes", "7")
+	f.post(cookie, "/notifications/settings", form)
+	if got := f.app.notifyPrefsFor(f.ctx, f.userID).reminderLead(); got != 2*time.Hour {
+		t.Fatalf("lead after posting 7: %v, want the 2 hours kept", got)
+	}
+
+	day := moved.Add(24 * time.Hour)
+	answer(plan("Roam", day), "maybe")
+	if n := f.pass(day.Add(-119 * time.Minute)); n != 1 {
+		t.Fatalf("with a 2 hour lead, 119 minutes before: %d reminder(s), want 1: %q", n, f.titles())
+	}
+
+	// "Not coming": no reminder. Changing the answer brings it back.
+	third := plan("Fleet nobody wants", day.Add(24*time.Hour))
+	answer(third, "no")
+	at := day.Add(24*time.Hour - time.Hour)
+	if n := f.pass(at); n != 0 {
+		t.Fatalf("reminded of an op the account said no to: %q", f.titles())
+	}
+	answer(third, "maybe")
+	if n := f.pass(at.Add(time.Minute)); n != 1 {
+		t.Fatalf("after changing the answer to maybe: %d reminder(s), want 1", n)
+	}
+
+	// Cancelled: none.
+	fourth := plan("Called off", day.Add(48*time.Hour))
+	answer(fourth, "yes")
+	if err := f.q.SetOpCancelled(f.ctx, db.SetOpCancelledParams{ID: fourth, CancelledAt: timeSet(at)}); err != nil {
+		t.Fatal(err)
+	}
+	if n := f.pass(day.Add(48*time.Hour - time.Hour)); n != 0 {
+		t.Fatalf("reminded of a cancelled op: %q", f.titles())
+	}
+
+	// Switched off for the character: none.
+	form.Del("char." + notifyOpReminder)
+	f.post(cookie, "/notifications/settings", form)
+	answer(plan("Quiet", day.Add(72*time.Hour)), "yes")
+	if n := f.pass(day.Add(72*time.Hour - time.Hour)); n != 0 {
+		t.Fatalf("reminded a character that switched reminders off: %q", f.titles())
+	}
+	if got := f.calls.calls.Load(); got != 0 {
+		t.Fatalf("the pass asked ESI %d time(s)", got)
+	}
+}

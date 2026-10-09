@@ -53,6 +53,7 @@ const (
 	notifyKillmail = "killmail"
 	notifyPI       = "pi"
 	notifyIndustry = "industry"
+	notifyOp       = "op"
 )
 
 // notifyKind describes one kind of notification.
@@ -63,14 +64,20 @@ type notifyKind struct {
 	// Standing is a state rather than an event: it is announced when
 	// it starts to hold and again if it clears and comes back.
 	Standing bool
+	// Account: the kind belongs to the account, not to one of its
+	// characters, so it cannot be switched per character.
+	Account bool
 }
 
 // notifyKinds is every kind, in the order the settings page lists them.
 var notifyKinds = []notifyKind{
-	{ID: notifyWatch, Title: "Watch list alerts", Module: "market_public", Standing: true},
+	{ID: notifyWatch, Title: "Watch list alerts", Module: "market_public", Standing: true, Account: true},
 	{ID: notifySkill, Title: "Skill complete", Module: "skills"},
 	{ID: notifyMail, Title: "New mail", Module: "mail"},
-	{ID: notifyCalendar, Title: "New calendar event", Module: "calendar"},
+	{ID: notifyCalendar, Title: "New in-game calendar event", Module: "calendar"},
+	// Ops are EveSynapse's own (ops.go): any character sees its
+	// corporation's, with no access to grant.
+	{ID: notifyOp, Title: "New op on the calendar"},
 	{ID: notifyKillmail, Title: "New killmail", Module: "killmails"},
 	{ID: notifyPI, Title: "Stopped planetary extractors", Module: "planets"},
 	{ID: notifyIndustry, Title: "Industry job complete", Module: "industry"},
@@ -363,6 +370,10 @@ const notifyConfigID = "notifications"
 // and any missing or damaged stored value, means every kind is on.
 type notifyPrefs struct {
 	Off []string `json:"off,omitempty"` // kinds switched off
+	// OffFor: per kind, the characters it is switched off for. A
+	// character not listed gets the kind, so one linked later starts
+	// with everything on.
+	OffFor map[string][]int64 `json:"off_for,omitempty"`
 }
 
 // parseNotifyPrefs decodes stored settings, keeping only kinds that
@@ -377,6 +388,20 @@ func parseNotifyPrefs(blob string) notifyPrefs {
 			prefs.Off = append(prefs.Off, id)
 		}
 	}
+	for id, characters := range raw.OffFor {
+		kind, ok := notifyKindByID(id)
+		if !ok || kind.Account {
+			continue
+		}
+		for _, characterID := range characters {
+			if characterID > 0 && !prefs.offFor(id, characterID) {
+				if prefs.OffFor == nil {
+					prefs.OffFor = map[string][]int64{}
+				}
+				prefs.OffFor[id] = append(prefs.OffFor[id], characterID)
+			}
+		}
+	}
 	return prefs
 }
 
@@ -387,6 +412,22 @@ func (p notifyPrefs) off(kind string) bool {
 		}
 	}
 	return false
+}
+
+// offFor reports whether kind is switched off for one character.
+func (p notifyPrefs) offFor(kind string, characterID int64) bool {
+	for _, id := range p.OffFor[kind] {
+		if id == characterID {
+			return true
+		}
+	}
+	return false
+}
+
+// silent reports whether an event is one the user asked not to hear
+// about: its kind is off, or off for its character.
+func (p notifyPrefs) silent(ev notifyEvent) bool {
+	return p.off(ev.Kind) || (ev.CharacterID != 0 && p.offFor(ev.Kind, ev.CharacterID))
 }
 
 // notifyPrefsFor reads an account's settings; a read that fails
@@ -467,6 +508,8 @@ func (app *Application) notifyPass(ctx context.Context, characters []db.Characte
 func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db.Character, now time.Time) (int, error) {
 	bundles := app.loadCharSnaps(ctx, userID, chars, []string{widgetBriefing})
 	c := app.collectNotifyEvents(ctx, userID, bundles, now)
+	prefs := app.notifyPrefsFor(ctx, userID)
+	app.notifyOpEvents(ctx, c, userID, prefs, now)
 	if len(c.sources) == 0 {
 		return 0, nil
 	}
@@ -487,7 +530,6 @@ func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db
 		seen[key] = true
 	}
 
-	prefs := app.notifyPrefsFor(ctx, userID)
 	var record []string
 	var announce []notifyEvent
 	for key := range c.sources {
@@ -500,8 +542,8 @@ func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db
 			continue
 		}
 		record = append(record, ev.Key)
-		if !seen[ev.Source] || prefs.off(ev.Kind) {
-			continue // part of a baseline, or a kind the user switched off
+		if !seen[ev.Source] || prefs.silent(ev) {
+			continue // part of a baseline, or switched off (for this character)
 		}
 		announce = append(announce, ev)
 	}
@@ -556,4 +598,74 @@ func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db
 	// notification is already in the top bar.
 	app.pushToUser(ctx, userID, pushMessagesFor(announce))
 	return len(announce), nil
+}
+
+// notifyOpWindow is how far ahead an op has to start to be announced;
+// nobody needs telling about one planned for next year.
+const notifyOpWindow = 90 * 24 * time.Hour
+
+// notifyOpEvents: ops ahead, planned for a corporation the account
+// has a character in (ops.go). The ops already there when a
+// corporation's calendar first becomes readable are its baseline. An
+// op the account made itself is not news to it, and neither is one
+// that was cancelled before it was seen.
+//
+// An op is announced once to the account, in the name of one of its
+// characters in that corporation: the first that has not switched
+// these off. With every one of them switched off it is still recorded
+// as seen, so switching back on starts from then.
+func (app *Application) notifyOpEvents(ctx context.Context, c *notifyCollector, userID int64, prefs notifyPrefs, now time.Time) {
+	rows, err := app.queries.ListCharacterCorporationsByUser(ctx, userID)
+	if err != nil {
+		logging.Errorf("notify: corporations of user %d: %v", userID, err)
+		return
+	}
+	mine := map[int64]bool{}
+	recipient := map[int64]int64{} // corporation -> the character told
+	var corps []int64
+	for _, row := range rows {
+		mine[row.CharacterID] = true
+		if row.CorporationID == 0 {
+			continue
+		}
+		current, known := recipient[row.CorporationID]
+		switch {
+		case !known:
+			recipient[row.CorporationID] = row.CharacterID
+			corps = append(corps, row.CorporationID)
+		case prefs.offFor(notifyOp, current) && !prefs.offFor(notifyOp, row.CharacterID):
+			recipient[row.CorporationID] = row.CharacterID
+		}
+	}
+	if len(corps) == 0 {
+		return
+	}
+	ops, err := app.queries.ListOpsForCorporationsBetween(ctx, db.ListOpsForCorporationsBetweenParams{
+		CorporationIds: corps, FromTime: now, ToTime: now.Add(notifyOpWindow),
+	})
+	if err != nil {
+		logging.Errorf("notify: ops for user %d: %v", userID, err)
+		return
+	}
+	sources := map[int64]string{}
+	for _, corp := range corps {
+		sources[corp] = c.source(notifyOp, corp)
+	}
+	for _, op := range ops {
+		if op.CancelledAt.Valid || mine[op.CreatedByCharacter] {
+			continue
+		}
+		// The corporation is named where its name is already known;
+		// a title is stored, so it never carries a placeholder.
+		lead := "New op"
+		if name, settled := app.resolvedCorpName(ctx, op.CorporationID); settled && name != "" {
+			lead += " for " + name
+		}
+		c.add(notifyEvent{
+			Kind: notifyOp, CharacterID: recipient[op.CorporationID], Source: sources[op.CorporationID],
+			Key:   fmt.Sprintf("op|%d", op.ID),
+			Title: fmt.Sprintf("%s: %s, %s", lead, op.Title, op.StartsAt.UTC().Format("Jan 2 15:04")),
+			URL:   opURL(op.ID),
+		})
+	}
 }

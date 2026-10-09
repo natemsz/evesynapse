@@ -2328,3 +2328,73 @@
     });
   }
 })();
+
+// Notification settings: under each kind, the characters it is on for
+// (a [data-checkselector]: the character selector's look, with a tick
+// box per character). The field shows the count and filters the list
+// as you type; the list stays open while boxes are ticked and closes
+// on a click elsewhere or Escape. The boxes are ordinary form fields,
+// so saving works the same with or without this.
+(function () {
+  "use strict";
+  var selectors = Array.prototype.slice.call(document.querySelectorAll("[data-checkselector]"));
+  if (!selectors.length) return;
+
+  selectors.forEach(function (root) {
+    var input = root.querySelector(".charselector-input");
+    var dropdown = root.querySelector(".charselector-dropdown");
+    var options = Array.prototype.slice.call(root.querySelectorAll(".charselector-option"));
+    var boxes = Array.prototype.slice.call(root.querySelectorAll('input[type="checkbox"]'));
+    if (!input || !dropdown) return;
+
+    function summarize() {
+      var on = boxes.filter(function (box) { return box.checked; }).length;
+      var total = options.length;
+      var text = "On for " + on + " of " + total + (total === 1 ? " character" : " characters");
+      if (boxes.length < total) {
+        text = boxes.length ? text + " (" + (total - boxes.length) + " without access)"
+          : "No access granted on " + total + (total === 1 ? " character" : " characters");
+      }
+      input.placeholder = text;
+    }
+
+    function filter() {
+      var q = input.value.toLowerCase().trim();
+      options.forEach(function (option) {
+        var name = (option.getAttribute("data-name") || "").toLowerCase();
+        option.hidden = !!q && name.indexOf(q) === -1;
+      });
+    }
+
+    function close() {
+      if (dropdown.hidden) return;
+      dropdown.hidden = true;
+      input.value = "";
+      filter();
+    }
+
+    function open() {
+      // One list at a time.
+      selectors.forEach(function (other) { if (other !== root && other.closeList) other.closeList(); });
+      dropdown.hidden = false;
+    }
+
+    root.closeList = close;
+    input.addEventListener("focus", open);
+    input.addEventListener("click", open);
+    input.addEventListener("input", function () { filter(); dropdown.hidden = false; });
+    root.addEventListener("change", summarize);
+    root.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") { close(); input.blur(); }
+      // Enter in the search field would send the whole form.
+      if (ev.key === "Enter" && ev.target === input) ev.preventDefault();
+    });
+    summarize();
+  });
+
+  document.addEventListener("click", function (ev) {
+    selectors.forEach(function (root) {
+      if (!root.contains(ev.target) && root.closeList) root.closeList();
+    });
+  });
+})();

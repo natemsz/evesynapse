@@ -43,6 +43,7 @@ var notifyKindWording = map[string][2]string{
 	notifyKillmail: {"new killmail", "new killmails"},
 	notifyPI:       {"planet with stopped extractors", "planets with stopped extractors"},
 	notifyIndustry: {"industry job finished", "industry jobs finished"},
+	notifyOp:       {"new op", "new ops"},
 }
 
 // notifyBadge is the top-bar icon and the summarized list behind it.
@@ -242,18 +243,53 @@ type notifySettingsView struct {
 }
 
 type notifySettingRow struct {
-	ID       string
-	Title    string
-	On       bool
-	Coverage string // "3 of 5 characters", or "" where no character is needed
-	// Missing are the characters that have not granted the access
-	// this kind reads, each with the sign-in that asks for just that.
-	Missing []notifyMissingCharacter
+	ID    string
+	Title string
+	On    bool
+	// Characters is who the kind can be switched for, one by one; nil
+	// for a kind that belongs to the account. Summary says how many of
+	// them it is on for ("On for 3 of 5 characters").
+	Characters []notifyCharacterOption
+	Summary    string
 }
 
-type notifyMissingCharacter struct {
-	Name      string
+// notifyCharacterOption is one character under one kind.
+type notifyCharacterOption struct {
+	ID   int64
+	Name string
+	On   bool
+	// Locked: the character has not granted the access this kind
+	// reads, so there is nothing to switch; RelinkURL is the sign-in
+	// that asks for just that.
+	Locked    bool
 	RelinkURL string
+}
+
+// notifyCharactersSummary is the line shown on a kind's character
+// list: how many characters it is on for, out of those that can get
+// it.
+func notifyCharactersSummary(options []notifyCharacterOption) string {
+	on, able := 0, 0
+	for _, o := range options {
+		if o.Locked {
+			continue
+		}
+		able++
+		if o.On {
+			on++
+		}
+	}
+	noun := "characters"
+	if len(options) == 1 {
+		noun = "character"
+	}
+	switch {
+	case able == 0:
+		return fmt.Sprintf("No access granted on %d %s", len(options), noun)
+	case able < len(options):
+		return fmt.Sprintf("On for %d of %d %s (%d without access)", on, len(options), noun, len(options)-able)
+	}
+	return fmt.Sprintf("On for %d of %d %s", on, len(options), noun)
 }
 
 // notifySettingRows builds the page's rows from the stored settings
@@ -262,20 +298,18 @@ func notifySettingRows(prefs notifyPrefs, characters []db.Character) []notifySet
 	rows := make([]notifySettingRow, 0, len(notifyKinds))
 	for _, kind := range notifyKinds {
 		row := notifySettingRow{ID: kind.ID, Title: kind.Title, On: !prefs.off(kind.ID)}
-		if module, ok := moduleByID(kind.Module); ok && module.Layer != layerPublic && len(characters) > 0 {
-			ready := 0
+		if !kind.Account && len(characters) > 0 {
+			module, scoped := moduleByID(kind.Module)
+			scoped = scoped && module.Layer != layerPublic
 			for _, ch := range characters {
-				if module.statusFor(scopeSet(ch.Scopes)).State == moduleLocked {
-					row.Missing = append(row.Missing, notifyMissingCharacter{Name: ch.Name, RelinkURL: relinkURL(module.ID, ch.CharacterID)})
-					continue
+				option := notifyCharacterOption{ID: ch.CharacterID, Name: ch.Name, On: !prefs.offFor(kind.ID, ch.CharacterID)}
+				if scoped && module.statusFor(scopeSet(ch.Scopes)).State == moduleLocked {
+					option.Locked, option.On = true, false
+					option.RelinkURL = relinkURL(module.ID, ch.CharacterID)
 				}
-				ready++
+				row.Characters = append(row.Characters, option)
 			}
-			noun := "characters"
-			if len(characters) == 1 {
-				noun = "character"
-			}
-			row.Coverage = fmt.Sprintf("%d of %d %s", ready, len(characters), noun)
+			row.Summary = notifyCharactersSummary(row.Characters)
 		}
 		rows = append(rows, row)
 	}
@@ -303,8 +337,11 @@ func (app *Application) handleNotificationSettings(w http.ResponseWriter, r *htt
 	app.render(ctx, w, http.StatusOK, "notification_settings.html", data)
 }
 
-// handleNotificationSettingsSave stores which kinds are on. The form
-// sends the kinds that are ticked; every other kind is off.
+// handleNotificationSettingsSave stores the settings. The form sends
+// the kinds that are ticked, and under each kind the characters that
+// are ticked; everything else is off. A character that could not be
+// ticked (it has not granted the access) is left as it was, so it does
+// not come back switched off once it has.
 func (app *Application) handleNotificationSettingsSave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
@@ -316,10 +353,24 @@ func (app *Application) handleNotificationSettingsSave(w http.ResponseWriter, r 
 	for _, id := range r.Form["kind"] {
 		on[id] = true
 	}
-	var prefs notifyPrefs
-	for _, kind := range notifyKinds {
-		if !on[kind.ID] {
-			prefs.Off = append(prefs.Off, kind.ID)
+	before := app.notifyPrefsFor(ctx, userID)
+	prefs := notifyPrefs{OffFor: map[string][]int64{}}
+	for _, row := range notifySettingRows(before, app.sessionCharacters(ctx)) {
+		if !on[row.ID] {
+			prefs.Off = append(prefs.Off, row.ID)
+		}
+		ticked := map[string]bool{}
+		for _, id := range r.Form["char."+row.ID] {
+			ticked[id] = true
+		}
+		for _, option := range row.Characters {
+			off := !ticked[strconv.FormatInt(option.ID, 10)]
+			if option.Locked {
+				off = before.offFor(row.ID, option.ID)
+			}
+			if off {
+				prefs.OffFor[row.ID] = append(prefs.OffFor[row.ID], option.ID)
+			}
 		}
 	}
 	blob, err := json.Marshal(prefs)

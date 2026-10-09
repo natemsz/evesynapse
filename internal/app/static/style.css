@@ -3393,3 +3393,29 @@ html.js .notify.is-open .notify-menu {
     overflow-y: auto;
   }
 }
+
+/* --- notification settings: a kind's characters ---
+   The character selector's look (charselector), holding a tick box
+   per character instead of links: the field shows how many
+   characters the kind is on for and filters the list as you type.
+   app.js opens and filters it; without script the list is simply
+   shown in full under the field's place. */
+.tw.notify-settings-wrap { overflow: visible; }
+table.notify-settings td { vertical-align: middle; }
+.checkselector { margin: 0; max-width: 22rem; }
+.checkselector .charselector-option { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+.checkselector .charselector-option input { flex: none; margin: 0; }
+.checkselector .checkselector-locked { cursor: default; color: var(--muted); flex-wrap: wrap; }
+.checkselector .checkselector-locked:hover { background: none; color: var(--muted); }
+.checkselector input.charselector-input::placeholder { color: var(--text); opacity: 1; }
+.checkselector input.charselector-input:focus::placeholder { color: var(--muted); }
+html:not(.js) .checkselector input.charselector-input { display: none; }
+html:not(.js) .checkselector .charselector-dropdown[hidden] {
+  display: block;
+  position: static;
+  max-height: none;
+  box-shadow: none;
+}
+@media (max-width: 860px) {
+  .checkselector { max-width: none; min-width: 11rem; }
+}

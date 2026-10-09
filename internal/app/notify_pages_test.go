@@ -10,8 +10,10 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
 )
 
 // add stores one notification for the fixture's account.
@@ -210,7 +212,8 @@ func TestNotifyTargetStaysOnTheSite(t *testing.T) {
 
 // TestNotificationSettings: one switch per kind, saved with the
 // other per-user settings, and honoured by the worker's next pass.
-// Beside each kind the page says how many characters can produce it.
+// Beside each kind the page lists the account's characters, each with
+// a switch of its own.
 func TestNotificationSettings(t *testing.T) {
 	f := newNotifyFixture(t)
 	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
@@ -235,9 +238,10 @@ func TestNotificationSettings(t *testing.T) {
 			`<input type="checkbox" name="kind" value="`+kind.ID+`" checked> `+kind.Title)
 	}
 	mustContain(t, "/notifications/settings", body,
-		"2 of 2 characters", // mail: both
-		"1 of 2 characters", // killmails: the alt has not granted it
-		"Fixture Alt has not granted this.",
+		`placeholder="On for 2 of 2 characters"`,                    // mail: both
+		`placeholder="On for 1 of 2 characters (1 without access)"`, // killmails: the alt has not granted it
+		`<input type="checkbox" name="char.mail" value="90000002" checked> <span class="charselector-name">Fixture Alt</span>`,
+		`data-name="Fixture Alt"><span class="charselector-name">Fixture Alt</span> <span class="charselector-tags">no access`,
 		"Your account") // the watch list needs no character
 	if !strings.Contains(body, `/auth/eve?`) && !strings.Contains(body, "Sign in again") {
 		t.Fatal("no way offered to grant the missing access")
@@ -271,4 +275,182 @@ func TestNotificationSettings(t *testing.T) {
 	if p := f.app.notifyPrefsFor(f.ctx, other.ID); len(p.Off) != 0 {
 		t.Fatalf("a second account inherited settings: %q", p.Off)
 	}
+}
+
+// TestNotificationSettingsPerCharacter: under each kind every
+// character has its own switch. A kind switched off for one character
+// stays on for the others; a character that could not be ticked (no
+// access) is left as it was; the worker honours it; and a character
+// linked later starts with everything on.
+func TestNotificationSettingsPerCharacter(t *testing.T) {
+	f := newNotifyFixture(t)
+	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+	alt := seedCharacter(t, f.q, f.userID, fixtureCharB, "Fixture Alt")
+	scopes := func(characterID int64, granted string) {
+		t.Helper()
+		if _, err := f.app.db.ExecContext(f.ctx, `UPDATE characters SET scopes = $1 WHERE character_id = $2`, granted, characterID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	scopes(f.ch.CharacterID, "esi-mail.read_mail.v1 esi-killmails.read_killmails.v1")
+	scopes(alt.CharacterID, "esi-mail.read_mail.v1") // no killmail access
+	a, b := "90000001", "90000002"
+
+	// Every kind on; mail only for the first character. The alt's
+	// killmail box cannot be ticked, so the form does not carry it.
+	form := url.Values{}
+	for _, kind := range notifyKinds {
+		form.Add("kind", kind.ID)
+		if !kind.Account {
+			form.Add("char."+kind.ID, a)
+			if kind.ID != notifyMail && kind.ID != notifyKillmail {
+				form.Add("char."+kind.ID, b)
+			}
+		}
+	}
+	form.Add("char."+notifyMail, "95000009") // not this account's: ignored
+	form.Add("char."+notifyWatch, a)         // an account kind has no characters
+	if code, _ := f.post(cookie, "/notifications/settings", form); code != http.StatusSeeOther {
+		t.Fatalf("save: %d", code)
+	}
+	prefs := f.app.notifyPrefsFor(f.ctx, f.userID)
+	if len(prefs.Off) != 0 {
+		t.Fatalf("kinds switched off: %q, want none", prefs.Off)
+	}
+	if !prefs.offFor(notifyMail, alt.CharacterID) || prefs.offFor(notifyMail, f.ch.CharacterID) {
+		t.Fatalf("mail is off for %v, want the alt only", prefs.OffFor[notifyMail])
+	}
+	if prefs.offFor(notifyKillmail, alt.CharacterID) {
+		t.Fatal("killmails were switched off for a character that could not be ticked")
+	}
+	if len(prefs.OffFor) != 1 {
+		t.Fatalf("stored per-character settings %v, want only mail for the alt", prefs.OffFor)
+	}
+
+	_, body := getPage(t, f.app, cookie, "/notifications/settings")
+	mustContain(t, "settings after saving", body,
+		`placeholder="On for 1 of 2 characters"`,
+		`<input type="checkbox" name="char.mail" value="90000001" checked> <span class="charselector-name">Fixture Ceo</span>`,
+		`<input type="checkbox" name="char.mail" value="90000002"> <span class="charselector-name">Fixture Alt</span>`,
+		`<input type="checkbox" name="kind" value="mail" checked> New mail`)
+
+	// The worker: mail to both characters, announced for one.
+	now := notifyT0
+	seedSnapshot(t, f.q, f.ch.CharacterID, esi.SnapMail, esi.MailHeaders{})
+	seedSnapshot(t, f.q, alt.CharacterID, esi.SnapMail, esi.MailHeaders{})
+	f.pass(now)
+	later := now.Add(10 * time.Minute)
+	seedSnapshot(t, f.q, f.ch.CharacterID, esi.SnapMail, esi.MailHeaders{{MailID: 1, From: 555, Subject: "For the main", Timestamp: rfc(later)}})
+	seedSnapshot(t, f.q, alt.CharacterID, esi.SnapMail, esi.MailHeaders{{MailID: 2, From: 555, Subject: "For the alt", Timestamp: rfc(later)}})
+	f.pass(later)
+	f.wantTitles("mail with the alt switched off", "For the main")
+
+	// Switching the alt back on starts from then, not from the mail
+	// that arrived meanwhile.
+	form.Add("char."+notifyMail, b)
+	f.post(cookie, "/notifications/settings", form)
+	if prefs = f.app.notifyPrefsFor(f.ctx, f.userID); len(prefs.OffFor) != 0 {
+		t.Fatalf("after ticking the alt again: %v", prefs.OffFor)
+	}
+	f.pass(later.Add(10 * time.Minute))
+	f.wantTitles("after switching the alt back on", "For the main")
+
+	// A character linked afterwards has everything on.
+	third := seedCharacter(t, f.q, f.userID, 90000003, "Fixture Third")
+	if f.app.notifyPrefsFor(f.ctx, f.userID).offFor(notifyMail, third.CharacterID) {
+		t.Fatal("a newly linked character started with mail off")
+	}
+}
+
+// TestNotifyNewOps: an op planned for a corporation the account has a
+// character in is announced once, to that character; the ops already
+// on the calendar when it is first read are not news, and neither is
+// an op the account planned itself, a cancelled one, or one for a
+// corporation it has no character in.
+func TestNotifyNewOps(t *testing.T) {
+	f := newNotifyFixture(t)
+	const corp, elsewhere = int64(98000001), int64(98000002)
+	join := func(characterID, corporationID int64) {
+		t.Helper()
+		if err := f.q.UpsertCharacterCorporation(f.ctx, db.UpsertCharacterCorporationParams{
+			CharacterID: characterID, CorporationID: corporationID, UpdatedAt: notifyT0,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	plan := func(corporationID, by int64, title string, start time.Time) int64 {
+		t.Helper()
+		id, err := f.q.CreateOp(f.ctx, db.CreateOpParams{
+			CorporationID: corporationID, Title: title, StartsAt: start, DurationMinutes: 60,
+			FcCharacterID: by, CreatedByCharacter: by, CreatedAt: notifyT0,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	join(f.ch.CharacterID, corp)
+	now := notifyT0
+	const director = int64(95000001) // somebody else in the corporation
+
+	// Already planned when the account's calendar is first read.
+	plan(corp, director, "Planned before", now.Add(48*time.Hour))
+	if n := f.pass(now); n != 0 {
+		t.Fatalf("first pass announced %d, want 0: %q", n, f.titles())
+	}
+
+	later := now.Add(10 * time.Minute)
+	fresh := plan(corp, director, "Structure bash", time.Date(2026, 10, 12, 19, 0, 0, 0, time.UTC))
+	plan(corp, f.ch.CharacterID, "My own op", now.Add(72*time.Hour))
+	plan(elsewhere, director, "Not my corporation", now.Add(72*time.Hour))
+	plan(corp, director, "Long past", now.Add(-24*time.Hour))
+	plan(corp, director, "Next year", now.Add(400*24*time.Hour))
+	cancelled := plan(corp, director, "Called off", now.Add(72*time.Hour))
+	if err := f.q.SetOpCancelled(f.ctx, db.SetOpCancelledParams{ID: cancelled, CancelledAt: timeSet(later)}); err != nil {
+		t.Fatal(err)
+	}
+	if n := f.pass(later); n != 1 {
+		t.Fatalf("announced %d, want the one new op: %q", n, f.titles())
+	}
+	f.wantTitles("a new op", "Structure bash, Oct 12 19:00")
+	rows, err := f.q.ListNotifications(f.ctx, db.ListNotificationsParams{UserID: f.userID, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows[0].Kind != notifyOp || rows[0].Url != opURL(fresh) || rows[0].CharacterID != f.ch.CharacterID {
+		t.Fatalf("stored as %+v, want kind op, the op page, and the character in that corporation", rows[0])
+	}
+	// Once only.
+	if n := f.pass(later.Add(10 * time.Minute)); n != 0 {
+		t.Fatalf("announced again: %q", f.titles())
+	}
+	if got := f.calls.calls.Load(); got != 0 {
+		t.Fatalf("the pass asked ESI %d time(s)", got)
+	}
+
+	// Switched off for the only character in the corporation: quiet,
+	// and still quiet about that op after switching back on.
+	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+	form := url.Values{}
+	for _, kind := range notifyKinds {
+		form.Add("kind", kind.ID)
+		if !kind.Account && kind.ID != notifyOp {
+			form.Add("char."+kind.ID, "90000001")
+		}
+	}
+	f.post(cookie, "/notifications/settings", form)
+	plan(corp, director, "While switched off", now.Add(96*time.Hour))
+	if n := f.pass(later.Add(20 * time.Minute)); n != 0 {
+		t.Fatalf("announced an op for a character that switched ops off: %q", f.titles())
+	}
+	form.Add("char."+notifyOp, "90000001")
+	f.post(cookie, "/notifications/settings", form)
+	plan(corp, director, "After switching on", now.Add(120*time.Hour))
+	f.pass(later.Add(30 * time.Minute))
+	f.wantTitles("ops after switching back on", "Structure bash", "After switching on")
+
+	// The settings page lists it and the bell words it.
+	_, body := getPage(t, f.app, cookie, "/notifications/settings")
+	mustContain(t, "settings", body, `value="op" checked> New op on the calendar`, `value="calendar" checked> New in-game calendar event`)
+	mustContain(t, "bell", f.badge(cookie, "").Body.String(), "2 new ops")
 }

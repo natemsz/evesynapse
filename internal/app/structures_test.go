@@ -94,6 +94,7 @@ func buildStructureTestApp(t *testing.T, transport http.RoundTripper) (*Applicat
 		func(_ context.Context, ch db.Character) (string, error) {
 			return fmt.Sprintf("tok-%d", ch.CharacterID), nil
 		})
+	client.RetryBackoffs = []time.Duration{0, 0} // retry, but do not sleep
 
 	app := &Application{
 		cfg:           Config{workerTiersOff: true},

@@ -45,6 +45,7 @@ func NewTestRig(dsn string, transport http.RoundTripper) (*TestRig, error) {
 
 	client := esi.New(&http.Client{Transport: transport}, queries,
 		func(context.Context, db.Character) (string, error) { return "fixture", nil })
+	client.RetryBackoffs = []time.Duration{0, 0} // retry, but do not sleep
 
 	return &TestRig{app: &Application{
 		cfg:           Config{workerTiersOff: true},

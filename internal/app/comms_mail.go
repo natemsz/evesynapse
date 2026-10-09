@@ -17,16 +17,13 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Mail page (/mail/): the character's 50 most recent headers, label
-// filter, and a body view — all cache-only from the worker-warmed
-// mail snapshots. READ-ONLY by construction: the app requests
-// esi-mail.read_mail.v1 only (organize/send were never requested,
-// see auth.go), so there is nothing to send or delete with.
+// Mail page (/mail/): the character's 50 most recent headers, a label
+// filter and a body view, cache-only from the worker-warmed mail
+// snapshots.
 //
 // Bodies are EVE-flavored HTML and hostile by default: they are
-// rendered only through sanitizeMailHTML, a strict allowlist
-// filter, and external images are dropped with every other
-// non-allowlisted tag.
+// rendered only through sanitizeMailHTML, a strict allowlist filter
+// that drops external images with every other tag not on the list.
 // ---------------------------------------------------------------------------
 
 type mailLabelChip struct {

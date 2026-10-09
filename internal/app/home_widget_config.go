@@ -17,15 +17,11 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Per-widget configuration (schema 020). The home
-// layout decides which widgets show and in what order; this
-// decides what a widget does. Config is one JSON object per
-// (user, widget id), owned by the widget: it survives layout
-// saves, module removal and re-adding, because the widget id is
-// the stable instance identity (a layout holds each id at most
-// once). The orders widget is the first tenant — its scope
-// (all characters / one character / one tag) and merge mode
-// (combined totals, per-character rows, or both).
+// Per-widget configuration. The home layout decides which widgets show
+// and in what order; this decides what a widget does. Config is one
+// JSON object per (user, widget id), so it survives layout saves and a
+// widget being removed and re-added. The orders widget uses it for its
+// scope (all characters / one character / one tag) and merge mode.
 // ---------------------------------------------------------------------------
 
 // Orders-widget scope values.

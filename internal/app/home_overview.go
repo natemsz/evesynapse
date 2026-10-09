@@ -19,19 +19,14 @@ import (
 
 // ---------------------------------------------------------------------------
 // The signed-in Home is the account overview: a customizable set of
-// widgets that read across every linked character. Every widget renders
-// cache-only from worker-warmed snapshots (the same rule as every other
-// page); the old home's live identity fetch is gone — identity now
-// comes from the profile snapshot the worker keeps warm
-// (esi.SnapProfile), and the character sheet itself lives at
-// /character/.
+// widgets that read across every linked character, each rendered
+// cache-only from worker-warmed snapshots. The character sheet itself
+// is at /character/.
 //
-// Layout: which widgets are on, in what order, with a per-user
-// span preference for flexible ones, persisted per account as a
-// JSON array on the user record (schema 010; v2 object entries
-// since the grid engine — v1 id arrays still load). Unknown ids
-// are ignored on load, so a layout saved by a newer build never
-// breaks an older binary.
+// Layout: which widgets are on, in what order, with a per-user span
+// preference for flexible ones, stored per account as a JSON array on
+// the user record. Unknown ids are ignored on load, so a layout saved
+// by a newer build never breaks an older binary.
 // ---------------------------------------------------------------------------
 
 // Widget ids. These strings are persisted in users.home_layout;
@@ -1821,16 +1816,12 @@ func (app *Application) saveHomeLayout(ctx context.Context, userID int64, layout
 }
 
 // handleHomeLayout applies one layout change (POST /home/layout):
-// toggle a widget on/off, move one up/down, flip a flex widget's
-// span preference (action=span, span=auto|wide), reset to the
-// default, or — from a drag on the customize view — accept the
-// whole new order at once (action=order, ids comma-joined; span
-// preferences ride along from the saved layout). Every control
-// is a plain form, so arranging works with no JavaScript; the
-// change saves immediately and bounces back to Customize. The
-// drag/×/span/add-module enhancements POST with X-Requested-With
-// and get a bare 200 instead of the redirect, so the page never
-// navigates under the user's fingers.
+// toggle a widget, move one up or down, flip a flex widget's span
+// (action=span, span=auto|wide), reset to the default, or accept a
+// whole new order from a drag (action=order, ids comma-joined). Every
+// control is a plain form, so arranging works with no JavaScript: the
+// change saves and bounces back to Customize. Requests with
+// X-Requested-With get a bare 200 instead of the redirect.
 func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := int64(app.sessions.GetInt(ctx, sessionUserID))

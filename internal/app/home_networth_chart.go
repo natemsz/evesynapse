@@ -12,15 +12,12 @@ import (
 	"evesynapse/internal/markethistory"
 )
 
-// The Net worth module's history chart shows more than the total. The
-// sampler records, per character and day, the ISK balance and a net
-// worth that adds priced assets and buy-order escrow to it, so each
-// day's total splits into ISK on hand and everything else ("assets and
-// orders"). The chart stacks the two as bands under the total line, on a
-// scale that starts at zero (bands only mean something when their
-// heights are to scale), with a legend and a tooltip that name the
-// parts. Nothing here is estimated: the split is the difference of two
-// stored numbers.
+// The Net worth chart shows more than the total. The sampler records,
+// per character and day, the ISK balance and a net worth that adds
+// priced assets and buy-order escrow, so each day's total splits into
+// ISK on hand and everything else. The chart stacks the two as bands
+// under the total line, on a scale that starts at zero so the bands are
+// to scale.
 
 // Theme colours for the bands and the line: the market chart's gold for
 // ISK, the ember accent for assets, a lighter gold for the total.

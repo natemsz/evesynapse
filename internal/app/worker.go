@@ -247,12 +247,9 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// dormant one's is held back on purpose.
 	//
 	// And only for a character that was already active in the cycle
-	// before. One that has just become active (its account came back,
-	// or the server has just started) still has the data of the tier
-	// it was in, held back for up to six hours by design, and this
-	// cycle is the one that refreshes it. Counting that as the worker
-	// running late put "5h 53m late" on the Sync page for a worker
-	// that was keeping up.
+	// before. One that has just become active still has the data of the
+	// tier it was in, held back for up to six hours by design, and this
+	// cycle is the one that refreshes it.
 	for _, ch := range eligible {
 		tier := app.tierOf(ch, clock.start)
 		wasActive := app.activity.noteTier(ch.CharacterID, tier == tierActive)
@@ -714,15 +711,13 @@ var coreSnapshotKinds = []string{
 }
 
 // maxFetchesPerCycle is the default bound on snapshot fetches in the
-// main character pass of one worker cycle (WORKER_FETCHES_PER_CYCLE
-// changes it: fetchesPerCycle). It is sized to the worker, not to
-// ESI: ESI budgets each character separately and was nowhere near a
-// limit at 120, while the worker, fetching one at a time at about 0.3
-// seconds each, fits about 180 in its minute with the other passes. With more than
-// one lane the default is larger (fetchesPerCycle). With dozens of
-// linked characters the stalest work goes first (due order) and the rest waits for the
-// next one-minute cycle instead of one giant pass; the killmail /
-// corp / economy sub-passes keep their own per-character caps.
+// character pass of one worker cycle with one lane (fetchesPerCycle
+// gives the bound in use). It is sized to the worker, not to ESI, which
+// budgets each character separately: one lane, at about 0.3 seconds a
+// fetch, fits about 180 in its minute beside the other passes. The
+// stalest work goes first (due order) and the rest waits for the next
+// cycle; the killmail, corp and economy sub-passes keep their own
+// per-character caps.
 const maxFetchesPerCycle = 180
 
 // fetchBudget is one pass's fetch allowance for one cycle: the
@@ -797,19 +792,17 @@ func (app *Application) orderByDueTimed(ctx context.Context, characters []db.Cha
 	return out, due
 }
 
-// dueKeyFromMeta computes a character's most-overdue moment from
-// its snapshot freshness rows: the earliest cached_until across the
-// core kinds this pass refreshes, pulled to the zero time when one of
-// them has never been fetched.
+// dueKeyFromMeta computes a character's most-overdue moment from its
+// snapshot freshness rows: the earliest cached_until across the core
+// kinds this pass refreshes, pulled to the zero time when one of them
+// has never been fetched.
 //
 // Only the core kinds count, and only those the character has granted
-// access to (granted; empty means unknown, and everything counts).
-// The table also holds things that are fetched once and never again
-// (a mail's body, one calendar event), and core kinds a character
-// cannot be given (no scope for them). Counting those made a
-// character with a week-old mail body permanently "the most overdue":
-// it went first every cycle whatever state its real data was in, and
-// the worker's lateness figure was the age of that mail.
+// access to (granted; empty means unknown, and everything counts). The
+// table also holds things fetched once and never again (a mail's body,
+// one calendar event) and core kinds a character has no scope for;
+// counting those would make such a character permanently the most
+// overdue.
 func dueKeyFromMeta(snaps []db.ListSnapshotMetaForCharactersRow, granted map[string]bool) time.Time {
 	until := make(map[string]sql.NullTime, len(snaps))
 	seen := make(map[string]bool, len(snaps))

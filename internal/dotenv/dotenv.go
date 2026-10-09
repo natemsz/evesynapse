@@ -16,15 +16,13 @@ import (
 // truncates the file mid-line and drops the rest of it.
 const dotenvMaxLine = 1 << 20
 
-// Load is a small hand-rolled .env loader. Format: KEY=VALUE per
-// line, blank lines and #-comments skipped, an optional leading
-// "export " tolerated, optional surrounding quotes stripped. A key
-// already present in the real environment always wins — the file only
-// fills in gaps. A file that is not there is not an error:
-// configuration then comes from the environment only. Anything else
-// that goes wrong (unreadable file, I/O failure, an over-long
-// line) is an error: silently running on defaults has pointed the
-// app at the wrong database before.
+// Load is a small .env loader. Format: KEY=VALUE per line, blank lines
+// and #-comments skipped, an optional leading "export " tolerated,
+// optional surrounding quotes stripped. A key already in the real
+// environment wins: the file only fills in gaps. A missing file is not
+// an error; anything else that goes wrong (unreadable file, I/O
+// failure, an over-long line) is, because silently running on defaults
+// can point the app at the wrong database.
 func Load(path string) error {
 	f, err := os.Open(path)
 	if err != nil {

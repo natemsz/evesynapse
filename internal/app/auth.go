@@ -431,15 +431,13 @@ func DevLoginEnabled(app *Application) bool {
 
 // DevSignIn marks the session authenticated as the dev stub user,
 // without EVE SSO. Called only by the dev-only /dev-login route
-// (see internal/devtools), which hands a signed-in session to
-// anyone who asks — NEVER enable it on a deployment anyone else
-// can reach.
+// (internal/devtools): never enable it on a deployment anyone else can
+// reach.
 //
-// This is a plain function, not a method of Application, on
-// purpose. The templates reach types by reflection, so the linker
-// keeps every exported method of Application in every binary; a
-// function that nothing in the release build calls is dropped. As
-// a function, none of this is in the release binary at all.
+// A plain function, not a method of Application, on purpose: templates
+// reach types by reflection, so the linker keeps every exported method
+// in every binary, while a function nothing in the release build calls
+// is dropped.
 func DevSignIn(ctx context.Context, app *Application) {
 	app.sessions.Put(ctx, sessionAuthenticated, true)
 	app.sessions.Put(ctx, sessionCharacterName, "Dev Capsuleer (stub)")

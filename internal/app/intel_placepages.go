@@ -12,15 +12,12 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Solar system & station pages (/system/, /station/): the
-// destinations every resolved system and station name now links
-// to. Unlike the organization pages there is nothing to warm —
-// both render entirely from the local SDE (sde_systems,
-// sde_stations, sde_regions) the importer already maintains, so a
-// render is a couple of Postgres reads and never calls out. An id
-// the SDE doesn't know (or a system whose data hasn't imported
-// yet) settles in a not-in-the-star-map state rather than
-// an error. Region names render as text: there is no region page.
+// Solar system and station pages (/system/, /station/): where every
+// resolved system and station name links to. Both render entirely from
+// the local SDE (sde_systems, sde_stations, sde_regions), so there is
+// nothing to warm. An id the SDE does not know settles in a
+// not-in-the-star-map state. Region names render as text: there is no
+// region page.
 // ---------------------------------------------------------------------------
 
 // systemStationLine is one NPC station listed on a system page.
@@ -146,15 +143,11 @@ func (app *Application) loadStationView(ctx context.Context, id int64) *stationP
 	return view
 }
 
-// linkPlace classifies a rendered location title for the name
-// policy: an id the SDE knows as an NPC station links to the
-// station page, one it knows as a solar system links to the
-// system page, and a player structure links to the structure page
-// once the app can render something real for it (a resolved name
-// or stored context) — anything else, containers and ids nobody
-// has resolved yet, stays plain text, so a link never lands on a
-// page that can't render. The title itself is whatever title the
-// caller already resolved (its fallbacks are unchanged).
+// linkPlace classifies a rendered location title for the name policy:
+// an NPC station links to the station page, a solar system to the
+// system page, and a player structure to the structure page once there
+// is a resolved name or stored context to show. Anything else stays
+// plain text, so a link never lands on a page that cannot render.
 // Cache-only.
 func (app *Application) linkPlace(ctx context.Context, locationID int64, title string) placeRef {
 	ref := placeRef{Name: title}

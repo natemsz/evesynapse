@@ -269,7 +269,7 @@ ORDER BY alliance_id
 LIMIT 100;
 
 -- ---------------------------------------------------------------------
--- Next-1 rider (schema 019): the daily wallet-history sampler.
+-- The daily wallet-history sampler.
 -- One row per character per day; the upsert keeps the day's
 -- latest values as fresher snapshots land.
 -- ---------------------------------------------------------------------

@@ -1,14 +1,11 @@
 package app
 
-// P5 station leaderboard (Element43 parity): the discovery
-// surface over the sweeps' per-station totals. A completed
-// region sweep distills one row per station into
-// market_station_leaderboard (market_region_stats.go); this
-// page only ever reads those stored rows and sorts them, so a
-// render costs no ESI traffic and no render-time aggregation.
-// "?sort=orders" ranks by open-order count; the default "value"
-// ranks by ISK on orders. "?region=<id>" filters to one hub
-// region, 0 (or absent) covers all five.
+// Station leaderboard: a completed region sweep distills one row per
+// station into market_station_leaderboard (market_region_stats.go);
+// this page only reads those rows and sorts them. "?sort=orders" ranks
+// by open-order count; the default "value" ranks by ISK on orders.
+// "?region=<id>" filters to one hub region; 0 or absent covers all
+// five.
 
 import (
 	"context"

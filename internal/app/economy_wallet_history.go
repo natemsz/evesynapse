@@ -12,19 +12,14 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Daily wallet history (Next-1 rider, schema 019): the worker
-// writes one row per character per day from the snapshots it
-// already keeps, so balance history exists from the day this
-// ships instead of starting whenever graphs land. No extra ESI
-// calls — the sampler only reads stored snapshot payloads.
+// Daily wallet history: the worker writes one row per character per day
+// from the snapshots it already keeps. No extra ESI calls.
 //
-// A day's row keeps the latest values seen that day: when the
-// wallet snapshot advances, the row is rewritten; when it hasn't,
-// the row is left alone (one cheap lookup per character per
-// cycle). net_worth rides along only when the price guide (live
-// or worker-stored) can value assets the same way the home Net
-// worth widget does; otherwise it stays NULL — "not computed" must
-// never read as zero.
+// A day's row keeps the latest values seen that day: it is rewritten
+// when the wallet snapshot advances and left alone otherwise. net_worth
+// is filled only when the price guide can value assets the way the home
+// Net worth widget does; otherwise it stays NULL, which must never read
+// as zero.
 // ---------------------------------------------------------------------------
 
 // sampleWalletHistory records (or refreshes) today's wallet

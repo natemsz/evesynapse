@@ -713,7 +713,7 @@ func (app *Application) orderByDueTimed(ctx context.Context, characters []db.Cha
 	}
 	due := make(map[int64]time.Time, len(out))
 	for _, ch := range out {
-		due[ch.CharacterID] = dueKeyFromMeta(byChar[ch.CharacterID])
+		due[ch.CharacterID] = dueKeyFromMeta(byChar[ch.CharacterID], scopeSet(ch.Scopes))
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		return due[out[i].CharacterID].Before(due[out[j].CharacterID])
@@ -722,24 +722,35 @@ func (app *Application) orderByDueTimed(ctx context.Context, characters []db.Cha
 }
 
 // dueKeyFromMeta computes a character's most-overdue moment from
-// its snapshot freshness rows: the earliest cached_until across
-// every stored snapshot, pulled to the zero time when any core
-// kind has never been fetched.
-func dueKeyFromMeta(snaps []db.ListSnapshotMetaForCharactersRow) time.Time {
+// its snapshot freshness rows: the earliest cached_until across the
+// core kinds this pass refreshes, pulled to the zero time when one of
+// them has never been fetched.
+//
+// Only the core kinds count, and only those the character has granted
+// access to (granted; empty means unknown, and everything counts).
+// The table also holds things that are fetched once and never again
+// (a mail's body, one calendar event), and core kinds a character
+// cannot be given (no scope for them). Counting those made a
+// character with a week-old mail body permanently "the most overdue":
+// it went first every cycle whatever state its real data was in, and
+// the worker's lateness figure was the age of that mail.
+func dueKeyFromMeta(snaps []db.ListSnapshotMetaForCharactersRow, granted map[string]bool) time.Time {
+	until := make(map[string]sql.NullTime, len(snaps))
 	seen := make(map[string]bool, len(snaps))
-	var earliest time.Time
 	for _, snap := range snaps {
 		seen[snap.Kind] = true
-		if !snap.CachedUntil.Valid {
-			continue
-		}
-		if until := snap.CachedUntil.Time; earliest.IsZero() || until.Before(earliest) {
-			earliest = until
-		}
+		until[snap.Kind] = snap.CachedUntil
 	}
+	var earliest time.Time
 	for _, kind := range coreSnapshotKinds {
+		if len(granted) > 0 && kindLockedOut(granted, kind) {
+			continue // can never be fetched: not something to be late with
+		}
 		if !seen[kind] {
 			return time.Time{} // never fetched: most due
+		}
+		if at := until[kind]; at.Valid && (earliest.IsZero() || at.Time.Before(earliest)) {
+			earliest = at.Time
 		}
 	}
 	return earliest

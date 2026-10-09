@@ -290,6 +290,11 @@ type TokenFunc func(ctx context.Context, ch db.Character) (string, error)
 // names, place names). Construct with New; the zero value is not
 // usable.
 type Client struct {
+	// RetryBackoffs, when set, replaces the waits before read retries
+	// (sendRetryBackoffs). Tests set zeros so a failing stand-in costs
+	// no sleeping.
+	RetryBackoffs []time.Duration
+
 	http    *http.Client
 	queries *db.Queries
 	tokens  TokenFunc
@@ -1472,6 +1477,9 @@ func (c *Client) send(ctx context.Context, method, accessToken, path string, pay
 	}
 	retryable := method == http.MethodGet || method == http.MethodHead
 	backoffs := sendRetryBackoffs
+	if c.RetryBackoffs != nil {
+		backoffs = c.RetryBackoffs
+	}
 	var attempt int
 	for {
 		body, header, status, err = c.sendOnce(ctx, method, accessToken, path, raw, ifNoneMatch, want)

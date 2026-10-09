@@ -1,10 +1,14 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -331,4 +335,93 @@ func (app *Application) handleNotificationSettingsSave(w http.ResponseWriter, r 
 		app.flash(ctx, "Notification settings saved.")
 	}
 	http.Redirect(w, r, "/notifications/settings", http.StatusSeeOther)
+}
+
+// ---------------------------------------------------------------------------
+// The live icon. An open page asks GET /notifications/badge every
+// NOTIFY_POLL_SECONDS (app.js) and swaps the icon's contents in when
+// they have changed, so new notifications show without a reload.
+//
+// It is kept cheap on purpose: the answer is the same one indexed read
+// every page render already makes, a page only asks while it is on
+// screen, and an unchanged icon is answered 304 with no body.
+// ---------------------------------------------------------------------------
+
+const (
+	// defaultNotifyPoll is how often an open page asks, when
+	// NOTIFY_POLL_SECONDS is not set.
+	defaultNotifyPoll = 30
+	// A page never asks more often than minNotifyPoll or less often
+	// than maxNotifyPoll, whatever is configured.
+	minNotifyPoll = 5
+	maxNotifyPoll = 3600
+)
+
+// parseNotifyPoll reads NOTIFY_POLL_SECONDS: whole seconds between an
+// open page's checks. Unset is the default, 0 turns the checks off
+// (the icon then updates on page loads only), and anything else is
+// kept between minNotifyPoll and maxNotifyPoll. ok is false when the
+// value cannot be read; the default is returned then.
+func parseNotifyPoll(raw string) (seconds int, ok bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return defaultNotifyPoll, true
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		return defaultNotifyPoll, false
+	}
+	switch {
+	case n == 0:
+		return 0, true
+	case n < minNotifyPoll:
+		return minNotifyPoll, true
+	case n > maxNotifyPoll:
+		return maxNotifyPoll, true
+	}
+	return n, true
+}
+
+// notifyBadgePath is where an open page asks for the icon's contents.
+const notifyBadgePath = "/notifications/badge"
+
+// notifyBadgeHeader marks the answer as the icon's contents. A page
+// whose session has ended is sent to the sign-in page instead, and
+// must not mistake that page for an icon.
+const notifyBadgeHeader = "X-Notify-Badge"
+
+// handleNotifyBadge serves GET /notifications/badge: the contents of
+// the top-bar icon for the signed-in account, as the same HTML every
+// page carries. X-Notify-Unread is the unread count.
+func (app *Application) handleNotifyBadge(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := int64(app.sessions.GetInt(ctx, sessionUserID))
+	badge := app.notifyBadgeFor(ctx, userID)
+	ts, err := parsedTemplate(&fragmentTemplates, "notify-bell", "notifybell.html")
+	if err != nil {
+		logging.Errorf("notify: parse the badge template: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	var buf bytes.Buffer
+	if err := ts.ExecuteTemplate(&buf, "notify-bell", badge); err != nil {
+		logging.Errorf("notify: render the badge: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	sum := sha256.Sum256(buf.Bytes())
+	etag := `"` + hex.EncodeToString(sum[:8]) + `"`
+	h := w.Header()
+	h.Set(notifyBadgeHeader, "1")
+	h.Set("X-Notify-Unread", strconv.FormatInt(badge.Unread, 10))
+	h.Set("ETag", etag)
+	// It is one account's own state: never stored by anything shared,
+	// and always checked again.
+	h.Set("Cache-Control", "private, no-cache")
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	h.Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(buf.Bytes())
 }

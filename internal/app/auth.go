@@ -72,10 +72,14 @@ const sessionLifetime = 30 * 24 * time.Hour
 // which is why it happens at most once a day rather than on every
 // request. The renewed token's cookie is written by LoadAndSave
 // when it commits the session at the end of the request.
+//
+// The notifications icon's own check (notifyBadgePath) is not the
+// user being active: a page left open asks on a timer, and that must
+// not keep a session alive for ever.
 func (app *Application) slideSession(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		if app.sessions.GetBool(ctx, sessionAuthenticated) {
+		if r.URL.Path != notifyBadgePath && app.sessions.GetBool(ctx, sessionAuthenticated) {
 			if deadline := app.sessions.Deadline(ctx); !deadline.IsZero() &&
 				time.Until(deadline) < app.sessions.Lifetime-24*time.Hour {
 				if err := app.sessions.RenewToken(ctx); err != nil {

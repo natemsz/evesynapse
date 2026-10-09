@@ -242,6 +242,7 @@ gaps; real environment variables win over the file):
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | no | — | The key pair that turns on browser push notifications (see "Notifications and browser push"). Make one with `evesynapse -push-keys`. Unset, notifications show in the top bar only |
 | `VAPID_SUBJECT` | no | the site's address | A contact address (`mailto:` or `https:`) the browsers' push services may use to reach the operator |
 | `OPS_MANAGER_ROLES` | no | `Director` | The in-game corporation roles whose holders may create, change and cancel ops on the calendar, comma separated and spelled as ESI spells them (`Director,Personnel_Manager`) |
+| `NOTIFY_POLL_SECONDS` | no | `30` | How often, in seconds, an open page checks whether its notifications icon has changed, so new notifications show without a reload. `0` turns the checks off; other values are kept between 5 and 3600. Takes effect on restart |
 | `DEV_LOGIN` | no | — | Dev build only: `1` registers the `/dev-login` route |
 
 ## Install

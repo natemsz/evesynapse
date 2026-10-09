@@ -97,6 +97,10 @@ type pageData struct {
 	// Notify is the top-bar notifications icon and its short list
 	// (notify_pages.go). Filled by render; handlers never set it.
 	Notify *notifyBadge
+	// NotifyPoll is how often, in seconds, the page asks whether the
+	// icon has changed (NOTIFY_POLL_SECONDS); 0 means it does not ask.
+	// Filled by render.
+	NotifyPoll int
 
 	// Notifications is the /notifications/ page.
 	Notifications *notificationsView
@@ -270,13 +274,16 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 	if data.LoggedIn && data.Notify == nil {
 		data.Notify = app.notifyBadgeFor(ctx, int64(app.sessions.GetInt(ctx, sessionUserID)))
 	}
+	if data.LoggedIn {
+		data.NotifyPoll = app.cfg.notifyPoll
+	}
 	if data.LoggedIn && data.ViewerChars == nil {
 		data.ViewerChars = make(map[int64]bool, len(data.Switcher))
 		for _, entry := range data.Switcher {
 			data.ViewerChars[entry.ID] = true
 		}
 	}
-	ts, err := parsedTemplate(&pageTemplates, "base", page, "templates/base.html", "templates/balancechart.html", "templates/charselector.html", "templates/locked.html")
+	ts, err := parsedTemplate(&pageTemplates, "base", page, "templates/base.html", "templates/notifybell.html", "templates/balancechart.html", "templates/charselector.html", "templates/locked.html")
 	if err != nil {
 		logging.Errorf("parse template %s: %v", page, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)

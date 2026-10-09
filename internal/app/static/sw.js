@@ -49,8 +49,14 @@ self.addEventListener('push', function (event) {
     options.renotify = true;
   }
   var shown = self.registration.showNotification(data.title || 'EveSynapse', options);
+  // Any open EveSynapse page is told a push arrived, so its
+  // notifications icon can catch up at once instead of at its next
+  // timed check (app.js).
+  var told = self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (windows) {
+    windows.forEach(function (win) { win.postMessage({ push: 'received' }); });
+  });
   if (data.tag !== 'test') {
-    event.waitUntil(shown);
+    event.waitUntil(Promise.all([shown, told]));
     return;
   }
   // The test from the settings page: tell any open EveSynapse page

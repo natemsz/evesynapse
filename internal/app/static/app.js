@@ -2209,12 +2209,21 @@
 // anywhere else and on Escape, and opens and closes with the
 // navigation's motion (the CSS transition on .notify.is-open). The
 // <details> works without this; this only adds the closing and the
-// motion.
+// motion, and keeps the icon up to date while the page is open.
 (function () {
   "use strict";
   var menu = document.getElementById("notify-menu");
   if (!menu) return;
-  var summary = menu.querySelector("summary");
+  var waiting = null; // an update held back while the list is open
+  function show(html, unread) {
+    // The icon is rebuilt, so a reader who had tabbed to it is put
+    // back on it.
+    var focused = document.activeElement && menu.contains(document.activeElement);
+    menu.innerHTML = html;
+    menu.classList.toggle("has-unread", unread > 0);
+    var summary = menu.querySelector("summary");
+    if (focused && summary) summary.focus();
+  }
   var closing = null;
   // As long as the transition in style.css, or no wait at all for a
   // reader who asked for less motion.
@@ -2238,10 +2247,18 @@
     closing = window.setTimeout(function () {
       closing = null;
       menu.open = false;
+      // An update that arrived while the list was open goes in now.
+      if (waiting) {
+        show(waiting.html, waiting.unread);
+        waiting = null;
+      }
     }, motion);
   }
 
-  summary.addEventListener("click", function (ev) {
+  // The icon's contents are replaced when they change (below), so
+  // the click is caught on the <details>, which stays.
+  menu.addEventListener("click", function (ev) {
+    if (!ev.target.closest || !ev.target.closest("summary")) return;
     ev.preventDefault();
     if (menu.open && !closing) { close(); } else { open(); }
   });
@@ -2251,6 +2268,63 @@
   document.addEventListener("keydown", function (ev) {
     if (ev.key !== "Escape" || !menu.open) return;
     close();
-    summary.focus();
+    menu.querySelector("summary").focus();
   });
+
+  // --- The live icon ---------------------------------------------
+  // Every data-poll seconds (NOTIFY_POLL_SECONDS on the server) the
+  // page asks whether the icon has changed, and swaps its contents
+  // in when it has, so a new notification shows without a reload.
+  // It only asks while the page is on screen, checks at once when
+  // the page comes back into view or a push arrives, and leaves the
+  // list alone while it is open under the reader's pointer.
+  var every = parseInt(menu.getAttribute("data-poll"), 10);
+  if (!(every > 0) || !window.fetch) return;
+  var etag = "";
+  var timer = null;
+  var asking = false;
+  var stopped = false;
+  function check() {
+    if (stopped || asking || document.hidden) return;
+    asking = true;
+    var headers = {};
+    if (etag) headers["If-None-Match"] = etag;
+    window.fetch("/notifications/badge", { credentials: "same-origin", headers: headers, cache: "no-store" }).then(function (res) {
+      // Anything that is not the icon (the sign-in page after the
+      // session ended, an error page) ends the checks: the next
+      // page load starts them again.
+      if (res.status !== 304 && !(res.ok && res.headers.get("X-Notify-Badge") === "1")) {
+        stopped = true;
+        return;
+      }
+      if (res.status === 304) return;
+      var unread = parseInt(res.headers.get("X-Notify-Unread"), 10) || 0;
+      var tag = res.headers.get("ETag") || "";
+      return res.text().then(function (html) {
+        etag = tag;
+        if (menu.open) {
+          waiting = { html: html, unread: unread };
+        } else {
+          show(html, unread);
+        }
+      });
+    }).catch(function () {
+      // Offline or a dropped request: try again at the next turn.
+    }).then(function () { asking = false; });
+  }
+
+  function schedule() {
+    window.clearInterval(timer);
+    timer = window.setInterval(check, every * 1000);
+  }
+
+  schedule();
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) { check(); schedule(); }
+  });
+  if (navigator.serviceWorker) {
+    navigator.serviceWorker.addEventListener("message", function (ev) {
+      if (ev.data && ev.data.push === "received") check();
+    });
+  }
 })();

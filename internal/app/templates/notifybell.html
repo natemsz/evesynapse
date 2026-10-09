@@ -1,0 +1,11 @@
+{{/* The inside of the top-bar notifications icon: the icon itself and
+     the short list behind it. A template of its own because it is
+     rendered twice: in every page (base.html), and alone by
+     GET /notifications/badge, which open pages ask for so the icon
+     keeps up without a reload. Its data is a *notifyBadge. */}}
+{{define "notify-bell"}}      <summary aria-label="{{.Label}}" title="{{.Label}}">{{if eq .Icon "mail"}}<svg class="notify-icon" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="6" width="17" height="12" rx="1.5"/><path d="M4 7.2l8 6 8-6"/></g></svg>{{else if eq .Icon "pi"}}<svg class="notify-icon" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="13" r="6.5"/><path d="M5.2 10.6h11.6M4.8 15h12.4"/></g><circle class="notify-dot" cx="18.5" cy="6" r="3"/></svg>{{else}}<svg class="notify-icon" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2h-14Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></g></svg>{{end}}{{if .Unread}}<span class="notify-count" aria-hidden="true">{{.Unread}}</span>{{end}}</summary>
+      <div class="notify-menu">
+        {{range .Rows}}<form method="post" action="/notifications/open"><input type="hidden" name="kind" value="{{.Kind}}"><button type="submit" class="notify-row"><span class="notify-row-label">{{.Label}}</span><span class="notify-row-latest">{{.Latest}}</span></button></form>
+        {{else}}<p class="notify-empty">Nothing new.</p>
+        {{end}}<a class="notify-all" href="/notifications/">All notifications</a><a class="notify-all" href="/notifications/settings">Settings</a>
+      </div>{{end}}

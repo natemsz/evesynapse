@@ -6,17 +6,19 @@
 # manifest names), installs it into
 # /opt/evesynapse, installs the systemd service, provisions the
 # local PostgreSQL the app runs on (role + database + a
-# generated password written into .env), and links `evesynapse`
-# into /usr/bin so the commands stay short. Re-running it is
-# safe: it refreshes the binary and the service unit, provisions
-# database pieces that are still missing, and never overwrites
-# an existing .env (it only appends a DATABASE_URL that isn't
-# there yet).
+# generated password written into .env), sizes that PostgreSQL's
+# memory settings to this machine's RAM (step 3b), and links
+# `evesynapse` into /usr/bin so the commands stay short. Re-running
+# it is safe: it refreshes the binary and the service unit, provisions
+# database pieces that are still missing, leaves alone any PostgreSQL
+# setting somebody has chosen, and never overwrites an existing .env
+# (it only appends a DATABASE_URL that isn't there yet).
 #
 # Usage:
 #   sudo bash deploy/setup.sh
 #   sudo EVESYNAPSE_UPDATE_REPO=you/evesynapse bash deploy/setup.sh   # install from your fork
 #   sudo EVESYNAPSE_BINARY=./bin/evesynapse bash deploy/setup.sh      # install a build you made
+#   sudo EVESYNAPSE_TUNE_POSTGRES=0 bash deploy/setup.sh             # leave PostgreSQL's memory settings alone
 #
 # A release is checked against the release key in the checkout this
 # script is run from (internal/releasesig/trusted_keys.pem), so to
@@ -256,6 +258,158 @@ fi
 # root's to edit, like the program beside it.
 chown "root:$SERVICE_GROUP" "$INSTALL_DIR/.env"
 chmod 640 "$INSTALL_DIR/.env"
+
+# --- 3b. PostgreSQL memory settings ---
+# PostgreSQL ships set up for a machine with almost no memory: 128 MB
+# of its own cache however much RAM there is. On a machine with room,
+# three settings are raised here so the whole EveSynapse database
+# (a few hundred MB) is served from memory:
+#
+#   shared_buffers            an eighth of the RAM, at most 2 GB
+#   effective_cache_size      two thirds of the RAM (a planning hint;
+#                             it reserves nothing)
+#   shared_preload_libraries  pg_prewarm, which reloads what was in the
+#                             cache after a restart
+#
+# Each is changed only while it is still as PostgreSQL shipped it and
+# nobody has set it with ALTER SYSTEM, so a value somebody chose is
+# never replaced, and running this again changes nothing. Only a PostgreSQL on this machine is touched: one
+# reached over the network is its operator's to tune. A machine with
+# under 2 GB of RAM is left alone. EVESYNAPSE_TUNE_POSTGRES=0 skips the
+# whole step.
+#
+# The first and third only take effect when PostgreSQL restarts. With
+# EveSynapse not running (a first install) it is restarted here; with
+# it running, the restart is left to you and the command is printed.
+
+# pg_sql runs the SQL on its standard input as PostgreSQL's superuser
+# and prints bare values.
+pg_sql() { su postgres -c "psql -tAq -v ON_ERROR_STOP=1" 2>/dev/null; }
+
+# pg_memory_plan MEM_MB prints "SHARED_BUFFERS_MB EFFECTIVE_CACHE_MB" for
+# a machine with that much RAM, and fails for one with under 2 GB,
+# which is left as PostgreSQL shipped it. An eighth of the RAM is well
+# under the quarter PostgreSQL's own documentation suggests, because
+# this machine runs EveSynapse too; 2 GB is several times the size of
+# the database, so more would hold nothing.
+pg_memory_plan() {
+  local mem="$1" buffers
+  [ "$mem" -ge 2000 ] || return 1
+  buffers=$((mem / 8))
+  [ "$buffers" -le 2048 ] || buffers=2048
+  echo "$buffers $((mem * 2 / 3))"
+}
+
+# pg_chosen NAME: has somebody (or an earlier run of this script) set
+# NAME with ALTER SYSTEM? That is so from the moment it is written,
+# restarted or not.
+pg_chosen() {
+  echo "SELECT 1 FROM pg_file_settings WHERE name = '$1' AND sourcefile LIKE '%postgresql.auto.conf'" | pg_sql | grep -q 1
+}
+
+tune_postgres() {
+  if [ "${EVESYNAPSE_TUNE_POSTGRES:-1}" = "0" ]; then
+    echo "Leaving PostgreSQL's memory settings alone (EVESYNAPSE_TUNE_POSTGRES=0)."
+    return 0
+  fi
+  command -v psql >/dev/null || return 0
+  if grep -qs '^DATABASE_URL=' "$INSTALL_DIR/.env" \
+    && ! grep -qsE '^DATABASE_URL=[^#]*@(localhost|127\.0\.0\.1|\[::1\])[:/]' "$INSTALL_DIR/.env"; then
+    return 0 # the database is on another machine
+  fi
+  echo 'SELECT 1' | pg_sql >/dev/null || return 0 # no local server this script can administer
+
+  local mem_mb plan buffers_mb cache_mb changed="" data_dir pending
+  echo 'SELECT pg_reload_conf()' | pg_sql >/dev/null || true
+  mem_mb="$(awk '/^MemTotal:/ { print int($2 / 1024) }' /proc/meminfo 2>/dev/null || true)"
+  if [ -z "$mem_mb" ] || ! plan="$(pg_memory_plan "$mem_mb")"; then
+    echo "PostgreSQL's memory settings are left at their defaults (this machine has under 2 GB of RAM)."
+    return 0
+  fi
+  buffers_mb="${plan% *}"
+  cache_mb="${plan#* }"
+
+  # shared_buffers: 16384 pages of 8 kB is the 128 MB every new
+  # PostgreSQL is created with.
+  if ! pg_chosen shared_buffers \
+    && [ "$(echo "SELECT setting FROM pg_settings WHERE name = 'shared_buffers'" | pg_sql)" = "16384" ]; then
+    echo "ALTER SYSTEM SET shared_buffers = '${buffers_mb}MB'" | pg_sql \
+      && changed="$changed shared_buffers=${buffers_mb}MB"
+  fi
+  if ! pg_chosen effective_cache_size \
+    && [ "$(echo "SELECT source FROM pg_settings WHERE name = 'effective_cache_size'" | pg_sql)" = "default" ]; then
+    echo "ALTER SYSTEM SET effective_cache_size = '${cache_mb}MB'" | pg_sql \
+      && changed="$changed effective_cache_size=${cache_mb}MB"
+  fi
+  if ! pg_chosen shared_preload_libraries && [ -z "$(echo 'SHOW shared_preload_libraries' | pg_sql)" ]; then
+    # pg_prewarm comes in PostgreSQL's contrib package. Naming a
+    # library that is not installed would stop PostgreSQL starting, so
+    # it is only named once it is known to be there.
+    if ! echo "SELECT 1 FROM pg_available_extensions WHERE name = 'pg_prewarm'" | pg_sql | grep -q 1; then
+      if command -v dnf >/dev/null && rpm -q postgresql-server >/dev/null 2>&1; then
+        dnf install -y postgresql-contrib >/dev/null 2>&1 || true
+      fi
+    fi
+    if echo "SELECT 1 FROM pg_available_extensions WHERE name = 'pg_prewarm'" | pg_sql | grep -q 1; then
+      echo "ALTER SYSTEM SET shared_preload_libraries = 'pg_prewarm'" | pg_sql \
+        && changed="$changed shared_preload_libraries=pg_prewarm"
+    else
+      echo "NOTE: pg_prewarm is not installed (it is in PostgreSQL's contrib package), so the"
+      echo "      database's cache will not be reloaded after a restart. Everything else works."
+    fi
+  fi
+
+  echo 'SELECT pg_reload_conf()' | pg_sql >/dev/null || true
+  # Is PostgreSQL running with something other than what is now
+  # written down for it? (From this run, or from an earlier one that
+  # left the restart for later.)
+  pending="$(pg_sql <<'SQL' || true
+SELECT count(*) FROM pg_file_settings f
+WHERE f.sourcefile LIKE '%postgresql.auto.conf'
+  AND ((f.name = 'shared_preload_libraries' AND f.setting IS DISTINCT FROM current_setting('shared_preload_libraries'))
+    OR (f.name = 'shared_buffers' AND pg_size_bytes(f.setting) <> (SELECT s.setting::bigint * 8192 FROM pg_settings s WHERE s.name = 'shared_buffers')))
+SQL
+)"
+  if [ -z "$changed" ] && [ "${pending:-0}" = "0" ]; then
+    echo "PostgreSQL's memory settings are already set; nothing changed."
+    return 0
+  fi
+  [ -z "$changed" ] || echo "PostgreSQL memory settings for this machine's ${mem_mb} MB of RAM:$changed"
+  [ "${pending:-0}" != "0" ] || return 0
+
+  if ! command -v systemctl >/dev/null; then
+    echo "NOTE: restart PostgreSQL for those settings to take effect."
+    return 0
+  fi
+  if systemctl is-active --quiet evesynapse; then
+    echo "NOTE: they take effect when PostgreSQL restarts, which drops the site's connections for a"
+    echo "      few seconds. When it suits you:"
+    echo "        sudo systemctl restart postgresql && sudo systemctl restart evesynapse"
+    return 0
+  fi
+  # A PostgreSQL this script did not install may run under another
+  # unit name (postgresql-16, from the PostgreSQL project's own
+  # packages). The settings are written; the restart is its owner's.
+  if ! systemctl cat postgresql >/dev/null 2>&1; then
+    echo "NOTE: restart PostgreSQL for those settings to take effect (its service is not called"
+    echo "      'postgresql' here, so this script leaves that to you)."
+    return 0
+  fi
+  data_dir="$(echo 'SHOW data_directory' | pg_sql || true)"
+  if systemctl restart postgresql >/dev/null 2>&1 && echo 'SELECT 1' | pg_sql >/dev/null; then
+    echo "PostgreSQL restarted with the new settings."
+    return 0
+  fi
+  # It did not come back. Take out what this run put in and start it
+  # as it was: a working database matters more than a tuned one.
+  if [ -n "$data_dir" ] && [ -f "$data_dir/postgresql.auto.conf" ]; then
+    sed -i -E '/^(shared_buffers|effective_cache_size|shared_preload_libraries) *=/d' "$data_dir/postgresql.auto.conf"
+  fi
+  systemctl restart postgresql >/dev/null 2>&1 || die "PostgreSQL did not start with the new memory settings, and did not start again without them; see: journalctl -u postgresql"
+  echo "NOTE: PostgreSQL did not start with the new memory settings, so they were taken out again"
+  echo "      and it is running as before. Run this script with EVESYNAPSE_TUNE_POSTGRES=0 to skip them."
+}
+tune_postgres
 
 # --- 4. systemd service ---
 if command -v systemctl >/dev/null; then

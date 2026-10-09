@@ -2962,7 +2962,8 @@ html[data-theme="light"] tbody tr.yours td { background-color: #f3e3bd; }
   background: rgba(255,255,255,0.04);
   color: var(--text-bright);
 }
-#theme-toggle {
+#theme-toggle,
+#install-app {
   background: transparent;
   border: none;
   border-radius: 0.4rem;
@@ -2974,6 +2975,9 @@ html[data-theme="light"] tbody tr.yours td { background-color: #f3e3bd; }
   text-align: left;
 }
 #theme-toggle:hover { color: var(--text-bright); background: rgba(255,255,255,0.04); }
+#install-app:hover { color: var(--text-bright); background: rgba(255,255,255,0.04); }
+/* Shown by app.js only once the browser says the site can be installed. */
+#install-app[hidden] { display: none; }
 
 /* ============================================================
    v0.3.32: character selector dropdown.

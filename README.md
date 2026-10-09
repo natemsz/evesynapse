@@ -314,6 +314,32 @@ registration for sign-in ("EVE SSO flow" below). Then:
    an existing `.env` (it only appends a `DATABASE_URL` that
    isn't there yet).
 
+   It also sets PostgreSQL's memory for the machine it is on.
+   PostgreSQL ships with 128 MB of cache whatever the machine has,
+   so on anything with 2 GB of RAM or more the script raises three
+   settings, sized from the RAM it finds:
+
+   | Setting | Set to | Example: 4 GB | 8 GB | 24 GB |
+   | --- | --- | --- | --- | --- |
+   | `shared_buffers` | an eighth of the RAM, at most 2 GB | 475 MB | 975 MB | 2 GB |
+   | `effective_cache_size` | two thirds of the RAM (a planning hint; it reserves nothing) | 2.5 GB | 5.2 GB | 15.9 GB |
+   | `shared_preload_libraries` | `pg_prewarm`, which reloads the cache after a restart | | | |
+
+   A setting is changed only while it is still as PostgreSQL shipped
+   it and nobody has set it with `ALTER SYSTEM`, so a value you chose
+   is never replaced and running the script again changes nothing. A
+   machine with under 2 GB is left alone, and so is a database on
+   another machine. On a first install PostgreSQL is restarted to
+   apply them; if it does not come back, the script takes them out
+   again and starts it as it was. With EveSynapse already running the
+   script does not restart anything: it prints the command, because
+   the restart drops the site's connections for a few seconds.
+   `EVESYNAPSE_TUNE_POSTGRES=0` skips the whole step:
+
+   ```sh
+   sudo EVESYNAPSE_TUNE_POSTGRES=0 bash deploy/setup.sh
+   ```
+
    The program, `/opt/evesynapse` and `.env` belong to root; the
    service account can read them but not change them, and the
    unit runs it sandboxed with `/run/evesynapse` as its only
@@ -401,6 +427,26 @@ home screen. It is off until the server has a key pair, and each
 browser has to be switched on by hand. Nothing asks for
 permission on its own: not opening the site, and not installing
 it as an app.
+
+### Install it as an app
+
+The site can be installed to a phone's home screen or a computer's
+desktop, where it opens in its own window and gets its own
+notification icon.
+
+- **Chrome and Edge (Android, Windows, macOS, Linux):** an **Install
+  app** link appears at the foot of the menu, beside Theme, once the
+  browser says the site can be installed. It opens the browser's own
+  install dialog. The link is not there if the app is already
+  installed.
+- **Android:** install from Chrome. An app installed from Samsung
+  Internet has been seen never to ask for notification permission, so
+  push cannot be turned on in it.
+- **iPhone and iPad:** Safari gives a page no way to offer this. Use
+  **Share → Add to Home Screen**; push only works from the installed
+  app there.
+- **Firefox:** no install on a computer; on Android it is in the
+  browser's menu.
 
 ### Turn push on for the server (once)
 

@@ -2453,5 +2453,34 @@
     if (ev.key !== "Escape" || !switcher.open) return;
     close();
     summary.focus();
+
+// "Install app" in the sidebar. A browser that can install the site as
+// an app (Chrome and Edge, on Android and on a computer) says so with
+// a beforeinstallprompt event, and otherwise keeps the offer behind
+// its own menu where few people find it. The event is held, the link
+// is shown, and a click opens the browser's own install dialog.
+// Nothing is offered unasked: the link only sits there until it is
+// clicked. Where there is no such event (Safari, Firefox) or the app
+// is already installed, the link is never shown.
+(function () {
+  "use strict";
+  var btn = document.getElementById("install-app");
+  if (!btn) return;
+  var offer = null;
+  window.addEventListener("beforeinstallprompt", function (e) {
+    e.preventDefault(); // no banner of the browser's own; ours is the link
+    offer = e;
+    btn.hidden = false;
+  });
+  btn.addEventListener("click", function () {
+    if (!offer) return;
+    var held = offer;
+    offer = null; // an offer can be used once; the browser sends another if it is declined
+    btn.hidden = true;
+    held.prompt();
+  });
+  window.addEventListener("appinstalled", function () {
+    offer = null;
+    btn.hidden = true;
   });
 })();

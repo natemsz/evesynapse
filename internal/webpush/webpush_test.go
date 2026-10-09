@@ -171,12 +171,16 @@ func TestAllowedEndpoint(t *testing.T) {
 		"https://web.push.apple.com/abc":                         true,
 		"https://FCM.googleapis.com/fcm/send/abc":                true,
 		"https://fcm.googleapis.com:443/fcm/send/abc":            true,
+		"https://jmt17.google.com/fcm/send/abc":                  true,
 
 		"http://fcm.googleapis.com/fcm/send/abc":       false, // not https
 		"https://fcm.googleapis.com:8443/x":            false,
 		"https://user@fcm.googleapis.com/x":            false,
 		"https://fcm.googleapis.com.evil.example/x":    false,
 		"https://evilfcm.googleapis.com/x":             false,
+		"https://jmt17.google.com.evil.example/x":      false,
+		"https://eviljmt17.google.com/x":               false,
+		"https://www.google.com/x":                     false, // one host of Google's, not all of them
 		"https://notify.windows.com.evil.example/x":    false,
 		"https://evilnotify.windows.com/x":             false,
 		"https://127.0.0.1/x":                          false,
@@ -360,5 +364,26 @@ func TestSend(t *testing.T) {
 	bad.Endpoint = "https://169.254.169.254/latest/meta-data/"
 	if _, err := Send(context.Background(), &http.Client{Transport: service}, v, bad, message, time.Hour); err == nil || service.req != nil {
 		t.Fatalf("Send to a non-push address: err %v, request made: %v", err, service.req != nil)
+	}
+}
+
+// TestRefusalNamesTheHost: a subscription at an address that is not a
+// known push service is refused, and the refusal says which host it
+// was, cleaned of anything that is not part of a host name.
+func TestRefusalNamesTheHost(t *testing.T) {
+	_, err := ParseSubscription("https://Push.Example.NET/send/abc", "", "")
+	if err == nil || err.Error() != "the address is not a known browser push service (it is at push.example.net)" {
+		t.Fatalf("refusal: %v", err)
+	}
+	for raw, want := range map[string]string{
+		"https://jmt17.google.com/fcm/send/abc": "jmt17.google.com",
+		"https://a_b<script>.example/x":         "abscript.example", // only what a host name is made of
+		"":                                      "nowhere readable",
+		"not a url":                             "nowhere readable",
+		"https://" + strings.Repeat("a", 200) + ".example/x": strings.Repeat("a", 80),
+	} {
+		if got := EndpointHost(raw); got != want {
+			t.Errorf("EndpointHost(%q) = %q, want %q", raw, got, want)
+		}
 	}
 }

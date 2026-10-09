@@ -46,7 +46,7 @@ import (
 // An account that comes back is active from its first request, and its
 // characters go to the front of the next cycle, so the stalest it sees
 // is a minute of the old data. When an account was last seen is kept
-// in memory and written to its row at most once an hour (activity.go),
+// in memory and written to its row at most once an hour (worker_activity.go),
 // so a restart remembers it to within the hour.
 //
 // A character with nothing due is skipped before its token is looked
@@ -138,11 +138,11 @@ type activityLog struct {
 	seen    map[int64]time.Time // account -> last request
 	viewed  map[int64]time.Time // character -> last time a page was about it
 	further map[int64]time.Time // character -> last round of further datasets
-	saved   map[int64]time.Time // account -> the last-seen time its row holds (activity.go)
+	saved   map[int64]time.Time // account -> the last-seen time its row holds (worker_activity.go)
 
 	// listening is the accounts whose notifications go somewhere other
 	// than the site, as of the last cycle; unknown until it has been
-	// read, and then everyone counts as listening (activity.go).
+	// read, and then everyone counts as listening (worker_activity.go).
 	listening      map[int64]bool
 	listeningKnown bool
 }

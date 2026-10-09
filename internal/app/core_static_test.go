@@ -1,6 +1,6 @@
 package app
 
-// Tests for how static assets are cached and compressed (static.go),
+// Tests for how static assets are cached and compressed (core_static.go),
 // for which pages load the fitting script, and for the parsed
 // template cache behind every render.
 

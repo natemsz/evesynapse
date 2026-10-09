@@ -1,6 +1,6 @@
 package app
 
-// Tests for token encryption at rest (tokencrypt.go): the box
+// Tests for token encryption at rest (auth_tokencrypt.go): the box
 // itself, the sign-in and refresh paths storing sealed tokens while
 // handing usable ones to callers, and the boot pass that encrypts
 // tokens stored before a key was set and refuses a key that does

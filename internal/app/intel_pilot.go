@@ -36,7 +36,7 @@ import (
 // record meanwhile. An ESI 404 settles as 'missing'.
 //
 // This file is the page. The worker's side (draining the queue,
-// noting who the deployment's data mentions) is pilot_worker.go.
+// noting who the deployment's data mentions) is intel_pilot_worker.go.
 // ---------------------------------------------------------------------------
 
 // Pilot record states (pilot_records.state).

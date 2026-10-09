@@ -88,7 +88,7 @@ type Application struct {
 	tokenLocks keyedLocks
 
 	// tokens seals and opens the EVE SSO tokens stored in the
-	// characters table (tokencrypt.go). Without a
+	// characters table (auth_tokencrypt.go). Without a
 	// TOKEN_ENCRYPTION_KEY it stores them as they are.
 	tokens *tokenBox
 
@@ -106,7 +106,7 @@ type Application struct {
 
 	// In-memory cache of built corporation views, keyed by
 	// corporation ID; each entry expires with the ESI Expires
-	// header of the response it was built from (corporation.go).
+	// header of the response it was built from (corp_overview.go).
 	// corpCalls holds the refreshes currently running, so
 	// concurrent readers of an expired entry share one.
 	corpMu    sync.Mutex
@@ -128,7 +128,7 @@ type Application struct {
 	// restart resumes from the staged cursor.
 	sweepMu sync.Mutex
 
-	// The worker-stored market guide (guide_prices.go), cached
+	// The worker-stored market guide (market_guide_prices.go), cached
 	// in memory under its fetched_at stamp so renders reload
 	// only when a refresh has landed.
 	storedPricesMu    sync.Mutex
@@ -153,7 +153,7 @@ type Application struct {
 	sdeMu sync.Mutex
 	sde   sdeStatus
 
-	// Current-page wants (pagewants.go): what each signed-in page
+	// Current-page wants (worker_pagewants.go): what each signed-in page
 	// is still waiting on, keyed by page scope, so the banner
 	// sync indicator can count it. Guarded by pageWantMu.
 	pageWantMu sync.Mutex
@@ -218,7 +218,7 @@ func New(cfg Config) (*Application, error) {
 	}
 
 	// When each account was last seen, from before this start
-	// (activity.go).
+	// (worker_activity.go).
 	app.loadActivity(context.Background())
 
 	workerCtx, stopWorker := context.WithCancel(context.Background())
@@ -312,7 +312,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Get("/sw.js", handleServiceWorker)
 
 	// Embedded static assets (stylesheet, scripts, fonts, the 2013
-	// wallpaper); static.go has the caching rules. A failure here
+	// wallpaper); core_static.go has the caching rules. A failure here
 	// is loud and fail-closed (503 on /static/*): silently
 	// skipping the route served every page unstyled with no
 	// signal anywhere.
@@ -407,7 +407,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/servers/{guildID}/remove", app.handleDiscordServerForget)
 	})
 
-	// Groups (groups.go): sets of characters the directors of a
+	// Groups (corp_groups.go): sets of characters the directors of a
 	// corporation or alliance keep by hand.
 	r.Route("/groups", func(r chi.Router) {
 		r.Use(app.requireAuth)
@@ -444,7 +444,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/name-fragment", app.handleContactNameFragment)
 	})
 
-	// Generic entity-label live regions (pagewants.go): a pending
+	// Generic entity-label live regions (worker_pagewants.go): a pending
 	// character/structure label anywhere polls its own fragment.
 	r.Route("/labels", func(r chi.Router) {
 		r.Use(app.requireAuth)

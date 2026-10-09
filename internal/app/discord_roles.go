@@ -30,7 +30,7 @@ import (
 //	ceo       is the CEO of the corporation (or of one in the alliance)
 //	eve_role  holds an in-game corporation role there (Director,
 //	          Accountant, ...)
-//	group     is in a group the directors keep (groups.go)
+//	group     is in a group the directors keep (corp_groups.go)
 //
 // What a role rests on, and so how far to trust it: an EveSynapse
 // account holding that Discord account has a character whose link to

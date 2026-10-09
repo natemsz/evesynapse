@@ -35,7 +35,7 @@ import (
 //     their name or the app knows their context; while a structure
 //     is still just "Structure #<id>", its name stays text.
 //
-// The helpers are template functions (registered in pages.go's
+// The helpers are template functions (registered in core_pages.go's
 // render) taking the page's ViewerChars set, so templates phrase
 // every link identically and the policy lives in exactly one place.
 // All of them degrade to plain escaped text when the id is unknown
@@ -242,7 +242,7 @@ func skillLevel(trained, next int, state string) template.HTML {
 }
 
 // linkFuncMap is the template function set carrying the link
-// policy; pages.go registers it for every render.
+// policy; core_pages.go registers it for every render.
 func linkFuncMap() template.FuncMap {
 	return template.FuncMap{
 		"itemLink":        itemLink,
@@ -259,7 +259,7 @@ func linkFuncMap() template.FuncMap {
 		"dotlanSystemURL": dotlanSystemURL,
 		"dotlanRegion":    dotlanRegionLink,
 		"skillLevel":      skillLevel,
-		// Not a link: how a stored time is written out (timestamps.go).
+		// Not a link: how a stored time is written out (core_timestamps.go).
 		"rfc3339": rfc3339,
 	}
 }

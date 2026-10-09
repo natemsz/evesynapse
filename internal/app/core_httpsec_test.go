@@ -1,6 +1,6 @@
 package app
 
-// Tests for the browser-facing protections (httpsec.go): the
+// Tests for the browser-facing protections (core_httpsec.go): the
 // security headers on every response, the session cookie's
 // attributes, the cross-site request guard, and sign-out as a POST.
 

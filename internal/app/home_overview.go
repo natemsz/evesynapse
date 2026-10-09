@@ -1168,7 +1168,7 @@ func lowerFirst(s string) string {
 }
 
 // absFloat is |x| for the attention threshold comparison (keeps
-// overview.go free of a math import it otherwise doesn't need).
+// home_overview.go free of a math import it otherwise doesn't need).
 func absFloat(x float64) float64 {
 	if x < 0 {
 		return -x
@@ -1195,7 +1195,7 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 	var pricedItems, totalItems int
 	var asOf time.Time
 	// Valuation prices: the live guide when a Market visit has
-	// fetched it, else the worker-stored guide (guide_prices.go)
+	// fetched it, else the worker-stored guide (market_guide_prices.go)
 	// — the card always has prices to work with once the worker
 	// has run, instead of waiting on Market activity.
 	prices := app.valuationPrices(ctx)

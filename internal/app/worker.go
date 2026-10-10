@@ -309,6 +309,14 @@ func (app *Application) refreshCycle(ctx context.Context) {
 
 	c.refreshPublicData(ctx, characters)
 	clock.mark("public data", time.Now())
+
+	// What an event in the game makes likely to be opened next, best
+	// worth first, from what is left of the allowance (foresight.go).
+	app.foreseeWars(ctx, time.Now())
+	c.pass("warming ahead of a page view", func() (int, bool) {
+		return app.foresightSpend(ctx, c.allowance, time.Now())
+	})
+	clock.mark("foresight", time.Now())
 	c.warmNames(ctx, characters)
 	clock.mark("names", time.Now())
 

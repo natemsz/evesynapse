@@ -137,12 +137,49 @@ type activityLog struct {
 	further map[int64]time.Time // character -> last round of further datasets
 	saved   map[int64]time.Time // account -> the last-seen time its row holds (worker_activity.go)
 	active  map[int64]bool      // character -> was in the active tier at the worker's last cycle
+	// boosts: a dataset of a character asked for ahead of its tier's
+	// hold, and when it was asked (foresight.go).
+	boosts map[int64]map[string]time.Time
 
 	// listening is the accounts whose notifications go somewhere other
 	// than the site, as of the last cycle; unknown until it has been
 	// read, and then everyone counts as listening (worker_activity.go).
 	listening      map[int64]bool
 	listeningKnown bool
+}
+
+// boostWindow is how long an asked-for dataset stays asked for.
+const boostWindow = 15 * time.Minute
+
+// boost asks for one dataset of a character at the worker's next
+// round, whatever tier its account is in. It is spent by the fetch:
+// only data older than the asking is fetched for it.
+func (a *activityLog) boost(characterID int64, kind string, now time.Time) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.boosts == nil {
+		a.boosts = map[int64]map[string]time.Time{}
+	}
+	if a.boosts[characterID] == nil {
+		a.boosts[characterID] = map[string]time.Time{}
+	}
+	a.boosts[characterID][kind] = now
+}
+
+// boosted reports whether a dataset fetched at fetchedAt is still
+// being asked for.
+func (a *activityLog) boosted(characterID int64, kind string, fetchedAt, now time.Time) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	asked, ok := a.boosts[characterID][kind]
+	if !ok {
+		return false
+	}
+	if now.Sub(asked) > boostWindow || !fetchedAt.Before(asked) {
+		delete(a.boosts[characterID], kind)
+		return false
+	}
+	return true
 }
 
 // noteTier records whether a character is in the active tier at this
@@ -307,7 +344,7 @@ func (c *cycleState) coreFreshness(ctx context.Context, ch db.Character, tier wa
 	for _, snap := range meta {
 		held := false
 		if hold := tierHold(tier, snap.Kind); hold > 0 {
-			held = now.Sub(snap.FetchedAt) < hold
+			held = now.Sub(snap.FetchedAt) < hold && !app.activity.boosted(ch.CharacterID, snap.Kind, snap.FetchedAt, now)
 		}
 		fresh[snap.Kind] = held || esi.CacheWindowOpen(snap.CachedUntil)
 	}

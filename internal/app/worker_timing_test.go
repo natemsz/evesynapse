@@ -130,7 +130,7 @@ func TestWorkerCycleIsTimed(t *testing.T) {
 	for _, p := range timing.Phases {
 		names = append(names, p.Name)
 	}
-	if got := strings.Join(names, ","); got != "ordering,characters,op attendance,public data,names,notifications,discord" {
+	if got := strings.Join(names, ","); got != "ordering,characters,op attendance,public data,foresight,names,notifications,discord" {
 		t.Fatalf("phases %q", got)
 	}
 	if timing.Fetches < 0 || timing.Fetches > maxFetchesPerCycle {

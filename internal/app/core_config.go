@@ -54,6 +54,12 @@ type Config struct {
 	// from the environment has, means one.
 	workerLanes int
 
+	// Foresight (foresight.go): warming on game events. FORESIGHT=off
+	// switches it off; FORESIGHT_FETCHES_PER_CYCLE bounds what it may
+	// spend of a cycle's fetch allowance.
+	foresightOff     bool
+	foresightFetches int
+
 	// dbConns is how many database connections the app may hold
 	// (DB_MAX_CONNS); 0 means the store's default.
 	dbConns int
@@ -181,6 +187,8 @@ func LoadConfig() (Config, error) {
 		workerTiersOff:      strings.EqualFold(strings.TrimSpace(os.Getenv("WORKER_TIERS")), "off"),
 		workerFetches:       parseWorkerFetches(os.Getenv("WORKER_FETCHES_PER_CYCLE")),
 		workerLanes:         parseWorkerLanes(os.Getenv("WORKER_LANES")),
+		foresightOff:        strings.EqualFold(strings.TrimSpace(os.Getenv("FORESIGHT")), "off"),
+		foresightFetches:    parseForesightFetches(os.Getenv("FORESIGHT_FETCHES_PER_CYCLE")),
 		dbConns:             parseDBConns(os.Getenv("DB_MAX_CONNS")),
 		discordClientID:     os.Getenv("DISCORD_CLIENT_ID"),
 		discordClientSecret: os.Getenv("DISCORD_CLIENT_SECRET"),

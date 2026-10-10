@@ -560,7 +560,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 		if books >= maxBookFetchesPerCycle || !allowance.take() {
 			break
 		}
-		sells, _, _, err := app.fetchOrderBook(ctx, key.RegionID, key.TypeID)
+		sells, _, _, err := app.fetchOrderBookFresh(ctx, key, key.RegionID, key.TypeID)
 		if err != nil {
 			if errors.Is(err, esi.ErrErrorLimit) {
 				logging.Warnf("worker: order health: ESI error limit hit reading book %s; backing off until next cycle", kind)

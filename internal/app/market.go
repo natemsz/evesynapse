@@ -271,6 +271,7 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 	userID := app.userID(ctx)
 
 	if typeID, err := strconv.ParseInt(q.Get("type"), 10, 64); err == nil && typeID > 0 {
+		app.foresightOpened(ctx, userID, foresightMarketView(typeID))
 		item, err := app.loadMarketItem(ctx, typeID, view.Region)
 		if err != nil {
 			logging.Errorf("market: load type %d in region %d: %v", typeID, view.Region, err)

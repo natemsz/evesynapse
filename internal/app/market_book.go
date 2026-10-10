@@ -13,9 +13,68 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"sync"
+	"time"
 
 	"evesynapse/internal/esi"
 )
+
+// bookCacheTTL is how long a fetched order book is served again
+// without asking: ESI itself answers from a five-minute cache, so
+// asking sooner returns the same book. That is also what lets a book
+// be warmed ahead of the page that shows it (foresight.go).
+const (
+	bookCacheTTL  = 5 * time.Minute
+	bookCacheMost = 400
+)
+
+type bookEntry struct {
+	sells, buys []esi.MarketOrder
+	truncated   bool
+	pages       int
+	at          time.Time
+}
+
+// bookCache holds the order books fetched lately, in memory.
+type bookCache struct {
+	mu sync.Mutex
+	m  map[marketKey]bookEntry
+}
+
+func (c *bookCache) get(key marketKey, now time.Time) (bookEntry, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e, ok := c.m[key]
+	return e, ok && now.Sub(e.at) < bookCacheTTL
+}
+
+// age reports how long ago a book was fetched and how many pages it
+// took, whether or not it is still served.
+func (c *bookCache) age(key marketKey, now time.Time) (age time.Duration, pages int, held bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e, ok := c.m[key]
+	return now.Sub(e.at), e.pages, ok
+}
+
+func (c *bookCache) put(key marketKey, e bookEntry) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.m == nil {
+		c.m = map[marketKey]bookEntry{}
+	}
+	if len(c.m) >= bookCacheMost {
+		for k, old := range c.m {
+			if e.at.Sub(old.at) >= bookCacheTTL {
+				delete(c.m, k)
+			}
+		}
+		if len(c.m) >= bookCacheMost {
+			c.m = map[marketKey]bookEntry{}
+		}
+	}
+	c.m[key] = e
+}
 
 // maxOrderPages caps the order-book pagination so a mega-traded
 // type in The Forge can't fan out into hundreds of requests; the
@@ -24,8 +83,31 @@ import (
 const maxOrderPages = 20
 
 // fetchOrderBook reads one region's orders for a type, following
-// X-Pages up to maxOrderPages. Split into sides, unsorted.
+// X-Pages up to maxOrderPages. Split into sides, unsorted. A book
+// fetched in the last bookCacheTTL is served from memory.
 func (app *Application) fetchOrderBook(ctx context.Context, regionID, typeID int64) (sells, buys []esi.MarketOrder, truncated bool, err error) {
+	key := marketKey{RegionID: regionID, TypeID: typeID}
+	if held, ok := app.books.get(key, time.Now()); ok {
+		return append([]esi.MarketOrder(nil), held.sells...), append([]esi.MarketOrder(nil), held.buys...), held.truncated, nil
+	}
+	return app.fetchOrderBookFresh(ctx, key, regionID, typeID)
+}
+
+// fetchOrderBookFresh reads the book from ESI even when the memory
+// cache still holds it. The order-health pass uses this: its own
+// market_fetch_state gate already decided a re-read is due, and the
+// memory cache must not shadow that decision. What it fetches is
+// still stored, so pages keep serving it warm.
+func (app *Application) fetchOrderBookFresh(ctx context.Context, key marketKey, regionID, typeID int64) (sells, buys []esi.MarketOrder, truncated bool, err error) {
+	bookPages := 0
+	defer func() {
+		if err == nil {
+			app.books.put(key, bookEntry{
+				sells: append([]esi.MarketOrder(nil), sells...), buys: append([]esi.MarketOrder(nil), buys...),
+				truncated: truncated, pages: bookPages, at: time.Now(),
+			})
+		}
+	}()
 	path := fmt.Sprintf("/markets/%d/orders/?type_id=%d&order_type=all", regionID, typeID)
 
 	var all []esi.MarketOrder
@@ -48,6 +130,7 @@ func (app *Application) fetchOrderBook(ctx context.Context, regionID, typeID int
 			return nil, nil, false, fmt.Errorf("market: decode orders page %d: %w", page, derr)
 		}
 		all = append(all, orders...)
+		bookPages = page
 	}
 
 	for _, o := range all {

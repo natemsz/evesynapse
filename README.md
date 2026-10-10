@@ -487,6 +487,11 @@ gh secret set ANDROID_KEYSTORE_PASSWORD
 openssl x509 -in android-cert.pem -noout -fingerprint -sha256
 ```
 
+Set `ANDROID_KEYSTORE_BASE64` straight from the file, as above. Text
+copied out of a terminal loses the end of a long line, and the build
+then cannot read the key. To paste it into GitHub's website instead,
+put it on the clipboard with `base64 -w0 android.p12 | clip` (Windows).
+
 Keep `android.p12` and its password somewhere safe and out of the
 repository: an app can only be updated by a build signed with the same
 key. The last command prints the fingerprint. Put it, and the package

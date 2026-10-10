@@ -43,6 +43,20 @@ const (
 	suggestPoolAll     = "all"
 )
 
+// normalizeSuggestPool folds an unknown pool to the full feed, so
+// one queue path serves every pool nobody defined. The guess
+// ledger keys on the box, so this is also what keeps a junk pool
+// value from minting orphan boxes whose guesses no keystroke ever
+// replaces.
+func normalizeSuggestPool(pool string) string {
+	switch pool {
+	case suggestPoolMarket, suggestPoolPlanner, suggestPoolSkills, suggestPoolAll:
+		return pool
+	default:
+		return suggestPoolAll
+	}
+}
+
 // suggestDefaultLimit caps one suggestion response; boxes ask
 // for a dozen or fewer so a dropdown stays thumb-sized.
 const suggestDefaultLimit = 12
@@ -72,11 +86,7 @@ func (app *Application) suggestTypes(ctx context.Context, q, pool string, limit 
 	if len(q) < 2 {
 		return out
 	}
-	switch pool {
-	case suggestPoolMarket, suggestPoolPlanner, suggestPoolSkills, suggestPoolAll:
-	default:
-		pool = suggestPoolAll
-	}
+	pool = normalizeSuggestPool(pool)
 	if limit < 1 || limit > 25 {
 		limit = suggestDefaultLimit
 	}
@@ -126,8 +136,9 @@ func (app *Application) handleItemSearchJSON(w http.ResponseWriter, r *http.Requ
 			limit = n
 		}
 	}
-	items := app.suggestTypes(r.Context(), q.Get("q"), q.Get("pool"), limit)
-	app.noteSuggested(r.Context(), app.typingBox(r.Context(), "items:"+q.Get("pool")), q.Get("pool"), items)
+	pool := normalizeSuggestPool(q.Get("pool"))
+	items := app.suggestTypes(r.Context(), q.Get("q"), pool, limit)
+	app.noteSuggested(r.Context(), app.typingBox(r.Context(), "items:"+pool), pool, items)
 	writeSuggestJSON(w, items)
 }
 

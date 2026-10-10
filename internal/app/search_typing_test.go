@@ -413,3 +413,45 @@ func TestGuessHitWindowStale(t *testing.T) {
 		t.Fatal("stale guess marked hit after the window")
 	}
 }
+
+// TestTypingBoxIgnoresUnknownPools: the items feed answers unknown
+// pools from the full feed, and the guess box is the same
+// normalized one — otherwise each junk pool value mints an orphan
+// box whose guesses no keystroke ever replaces.
+func TestTypingBoxIgnoresUnknownPools(t *testing.T) {
+	app, conn, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if _, err := conn.ExecContext(ctx,
+		`INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES (34, 'Tritanium', 18, 2, 1)`); err != nil {
+		t.Fatalf("seed sde type: %v", err)
+	}
+	seedCharacter(t, q, user.ID, 90000100, "Pilot 0")
+	cookie := sessionCookie(t, app, user.ID, 90000100, "Pilot 0")
+
+	for _, pool := range []string{"junk-one", "junk-two"} {
+		code, body := getPage(t, app, cookie, "/items/search.json?q=trit&pool="+pool)
+		if code != http.StatusOK {
+			t.Fatalf("search.json with pool %q: status %d", pool, code)
+		}
+		mustContain(t, "search.json with pool "+pool, body, "Tritanium")
+	}
+
+	// Both keystrokes collapsed into the single normalized box (the
+	// second replacing the first), and no orphan boxes exist.
+	wantBox := fmt.Sprintf("%d|items:all", user.ID)
+	if n := typingLedgerCount(t, conn, wantBox); n != 1 {
+		t.Fatalf("ledger rows for box %q = %d, want 1 (the latest keystroke)", wantBox, n)
+	}
+	var orphans int
+	if err := conn.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM typing_guesses WHERE box LIKE '%junk%'`).Scan(&orphans); err != nil {
+		t.Fatalf("count orphan boxes: %v", err)
+	}
+	if orphans != 0 {
+		t.Errorf("orphan guess boxes for junk pools: %d rows, want 0", orphans)
+	}
+}

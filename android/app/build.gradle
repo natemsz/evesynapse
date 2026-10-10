@@ -1,0 +1,91 @@
+plugins {
+    id 'com.android.application'
+}
+
+// The Android app is a Trusted Web Activity: it has no code of its
+// own, only this description of the site it opens. Another site builds
+// its own with -PtwaHost=example.org -PtwaPackage=org.example.app
+def twaHost = providers.gradleProperty('twaHost').getOrElse('evesynapse.app')
+def twaPackage = providers.gradleProperty('twaPackage').getOrElse('app.evesynapse.twa')
+def twaName = providers.gradleProperty('twaName').getOrElse('EveSynapse')
+def siteColor = '#FF0D0503'
+
+// The app carries the site's version: w.x.y.z becomes the name as it
+// is, and the code with two digits for each part after the first.
+def siteVersion = rootProject.file('../internal/app/version.txt').text.trim()
+def parts = (siteVersion.tokenize('.') + ['0', '0', '0', '0']).take(4).collect { it as int }
+def siteVersionCode = ((parts[0] * 100 + parts[1]) * 100 + parts[2]) * 100 + parts[3]
+
+// Signing: the key store is handed in by the environment, never kept
+// in the repository. Without one only the debug build can be made.
+def keystore = System.getenv('ANDROID_KEYSTORE_FILE')
+
+// The icons are the site's own, copied in at build time.
+def webStatic = rootProject.file('../internal/app/static')
+def webIcons = layout.buildDirectory.dir('generated/webicons/res')
+def copyWebIcons = tasks.register('copyWebIcons', Copy) {
+    into webIcons
+    from(webStatic) { include 'icon-192.png'; rename { 'ic_launcher.png' }; into 'mipmap-xxxhdpi' }
+    from(webStatic) { include 'icon-maskable-512.png'; rename { 'ic_maskable.png' }; into 'drawable-nodpi' }
+    from(webStatic) { include 'icon-512.png'; rename { 'splash.png' }; into 'drawable-nodpi' }
+    from(webStatic) { include 'badge-96.png'; rename { 'ic_notification_icon.png' }; into 'drawable-xxxhdpi' }
+}
+
+android {
+    namespace 'app.evesynapse.twa'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId twaPackage
+        minSdk 23
+        targetSdk 35
+        versionCode Math.max(siteVersionCode, 1)
+        versionName siteVersion
+
+        resValue 'string', 'appName', twaName
+        resValue 'string', 'hostName', twaHost
+        resValue 'string', 'launchUrl', "https://${twaHost}/"
+        resValue 'string', 'providerAuthority', "${twaPackage}.fileprovider"
+        // The app's half of the link the site states in
+        // /.well-known/assetlinks.json.
+        resValue 'string', 'assetStatements',
+            """[{ \\"relation\\": [\\"delegate_permission/common.handle_all_urls\\"], \\"target\\": { \\"namespace\\": \\"web\\", \\"site\\": \\"https://${twaHost}\\" } }]"""
+        resValue 'color', 'siteColor', siteColor
+    }
+
+    signingConfigs {
+        if (keystore) {
+            release {
+                storeFile file(keystore)
+                storeType 'pkcs12'
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS') ?: 'evesynapse'
+                keyPassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (keystore) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        main.res.srcDirs += webIcons.get().asFile
+    }
+}
+
+tasks.named('preBuild') { dependsOn copyWebIcons }
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.6.2'
+}

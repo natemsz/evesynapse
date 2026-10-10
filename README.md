@@ -282,6 +282,7 @@ gaps; real environment variables win over the file):
 | `LOG_FORMAT` | no | `text` | `text` for the classic line, `json` for one object per line |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | no | — | The key pair that turns on browser push notifications (see "Notifications and browser push"). Make one with `evesynapse -push-keys`. Unset, notifications show in the top bar only |
 | `VAPID_SUBJECT` | no | the site's address | A contact address (`mailto:` or `https:`) the browsers' push services may use to reach the operator |
+| `ANDROID_APP_PACKAGE`, `ANDROID_APP_FINGERPRINTS` | no | — | Name the site's Android app (see "The Android app"): its package, and the SHA-256 fingerprints of the certificates it is signed with, comma separated. Unset, the site names no app |
 | `OPS_MANAGER_ROLES` | no | `Director` | The in-game corporation roles whose holders may create, change and cancel ops on the calendar, comma separated and spelled as ESI spells them (`Director,Personnel_Manager`) |
 | `NOTIFY_POLL_SECONDS` | no | `30` | How often, in seconds, an open page checks whether its notifications icon has changed, so new notifications show without a reload. `0` turns the checks off; other values are kept between 5 and 3600. Takes effect on restart |
 | `WORKER_TIERS` | no | on | How often a character's data is refreshed follows its account: as often as ESI allows for the character someone has open, every 5 minutes (position every 2) for that account's other characters, every 5 to 15 minutes for an account seen in the last day, every 30 minutes (position every 6 hours) for one not seen for a day, and every 2 hours for one not seen for a week that has no browser subscribed to push and no Discord account linked. `off` refreshes everything as often as ESI allows for everyone, which uses up the worker's allowance at around fifteen characters |
@@ -456,6 +457,53 @@ notification icon.
   app there.
 - **Firefox:** Installs on desktop with working notifications; on Android it is in the
   browser's menu. Notifications are not properly paired with the apps icon. Uses default Firefox icon.
+
+### The Android app
+
+`android/` is an Android app that opens the site full screen: a
+Trusted Web Activity. It has no code of its own, and it runs in the
+phone's browser (Chrome, or another that supports it), so sign-ins,
+push and everything else behave as they do there. It exists for people
+who would rather install an app than "Add to Home screen", and so the
+site can be put on Google Play.
+
+The "android-wrapper" workflow builds it. Run it from the Actions tab
+and download `evesynapse-android` from the run:
+
+- With no signing key set up it makes a debug build, signed with a
+  throwaway key. That installs and works, but shows the browser's
+  address bar, because the site cannot vouch for a key that changes.
+- With a signing key it makes a release `.apk` (to install directly)
+  and `.aab` (for Google Play).
+
+To set up the signing key, once, in Git Bash or any shell with OpenSSL
+(pick your own password; it is typed twice below):
+
+```bash
+MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 -sha256 -days 10000 -nodes -subj "/CN=EveSynapse" -keyout android-key.pem -out android-cert.pem
+openssl pkcs12 -export -name evesynapse -inkey android-key.pem -in android-cert.pem -out android.p12
+base64 -w0 android.p12 | gh secret set ANDROID_KEYSTORE_BASE64
+gh secret set ANDROID_KEYSTORE_PASSWORD
+openssl x509 -in android-cert.pem -noout -fingerprint -sha256
+```
+
+Keep `android.p12` and its password somewhere safe and out of the
+repository: an app can only be updated by a build signed with the same
+key. The last command prints the fingerprint. Put it, and the package
+name, in the site's `.env` and restart:
+
+```
+ANDROID_APP_PACKAGE=app.evesynapse.twa
+ANDROID_APP_FINGERPRINTS=AB:CD:…
+```
+
+`https://<your site>/.well-known/assetlinks.json` then names the app,
+and the app opens without the address bar. If Google Play signs the
+app for you (Play App Signing), add the fingerprint Play Console shows
+under "App integrity" as well, separated by a comma.
+
+A site other than evesynapse.app builds its own app: run the workflow
+with its host and its own package name.
 
 ### Turn push on for the server (once)
 

@@ -97,6 +97,22 @@ WHERE kind = $1 AND key = $2;
 -- name: DeleteStagingEntry :exec
 DELETE FROM swarm_staging WHERE kind = $1 AND key = $2;
 
+-- Pending organization records someone followed a name to: what a
+-- pull asks peers for before the worker spends ESI calls on it.
+-- name: ListSwarmCorpDemand :many
+SELECT corporation_id
+FROM corporation_records
+WHERE state = 'pending'
+ORDER BY noted_at NULLS FIRST, corporation_id
+LIMIT $1;
+
+-- name: ListSwarmAllianceDemand :many
+SELECT alliance_id
+FROM alliance_records
+WHERE state = 'pending'
+ORDER BY noted_at NULLS FIRST, alliance_id
+LIMIT $1;
+
 -- name: AddSwarmCounter :exec
 INSERT INTO swarm_counters (name, value)
 VALUES ($1, $2)

@@ -144,6 +144,70 @@ func (q *Queries) GetSwarmPeer(ctx context.Context, instanceID string) (SwarmPee
 	return i, err
 }
 
+const listSwarmAllianceDemand = `-- name: ListSwarmAllianceDemand :many
+SELECT alliance_id
+FROM alliance_records
+WHERE state = 'pending'
+ORDER BY noted_at NULLS FIRST, alliance_id
+LIMIT $1
+`
+
+func (q *Queries) ListSwarmAllianceDemand(ctx context.Context, limit int32) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listSwarmAllianceDemand, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var alliance_id int64
+		if err := rows.Scan(&alliance_id); err != nil {
+			return nil, err
+		}
+		items = append(items, alliance_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSwarmCorpDemand = `-- name: ListSwarmCorpDemand :many
+SELECT corporation_id
+FROM corporation_records
+WHERE state = 'pending'
+ORDER BY noted_at NULLS FIRST, corporation_id
+LIMIT $1
+`
+
+// Pending organization records someone followed a name to: what a
+// pull asks peers for before the worker spends ESI calls on it.
+func (q *Queries) ListSwarmCorpDemand(ctx context.Context, limit int32) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listSwarmCorpDemand, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var corporation_id int64
+		if err := rows.Scan(&corporation_id); err != nil {
+			return nil, err
+		}
+		items = append(items, corporation_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSwarmPeers = `-- name: ListSwarmPeers :many
 SELECT instance_id, base_url, public_key, source, approved, excluded,
     exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip

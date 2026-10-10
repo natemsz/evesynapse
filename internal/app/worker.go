@@ -310,6 +310,15 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	c.refreshPublicData(ctx, characters)
 	clock.mark("public data", time.Now())
 
+	// The shared cache across instances (swarm_trust.go): gossip,
+	// demand-driven pulls, and spot checks. Peer traffic spends no
+	// ESI budget; only the spot checks do, from what is left of
+	// the allowance.
+	c.pass("sharing with the swarm", func() (int, bool) {
+		return app.swarmCycle(ctx, c.allowance, characters, time.Now())
+	})
+	clock.mark("swarm", time.Now())
+
 	// What an event in the game makes likely to be opened next, best
 	// worth first, from what is left of the allowance (foresight.go).
 	app.foreseeWars(ctx, time.Now())

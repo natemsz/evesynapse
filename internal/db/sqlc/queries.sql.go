@@ -177,6 +177,15 @@ func (q *Queries) CreateUser(ctx context.Context) (User, error) {
 	return i, err
 }
 
+const deleteAdminOwnersExcept = `-- name: DeleteAdminOwnersExcept :exec
+DELETE FROM admin_owners WHERE NOT (character_id = ANY($1::bigint[]))
+`
+
+func (q *Queries) DeleteAdminOwnersExcept(ctx context.Context, characterIds []int64) error {
+	_, err := q.db.ExecContext(ctx, deleteAdminOwnersExcept, pq.Array(characterIds))
+	return err
+}
+
 const deleteCharacter = `-- name: DeleteCharacter :exec
 DELETE FROM characters
 WHERE character_id = $1 AND user_id = $2
@@ -713,6 +722,53 @@ func (q *Queries) GetWidgetConfig(ctx context.Context, arg GetWidgetConfigParams
 	var config string
 	err := row.Scan(&config)
 	return config, err
+}
+
+const insertAdminOwner = `-- name: InsertAdminOwner :exec
+INSERT INTO admin_owners (character_id, owner_hash) VALUES ($1, $2)
+ON CONFLICT (character_id) DO NOTHING
+`
+
+type InsertAdminOwnerParams struct {
+	CharacterID int64  `json:"character_id"`
+	OwnerHash   string `json:"owner_hash"`
+}
+
+func (q *Queries) InsertAdminOwner(ctx context.Context, arg InsertAdminOwnerParams) error {
+	_, err := q.db.ExecContext(ctx, insertAdminOwner, arg.CharacterID, arg.OwnerHash)
+	return err
+}
+
+const listAdminOwners = `-- name: ListAdminOwners :many
+SELECT character_id, owner_hash FROM admin_owners
+`
+
+type ListAdminOwnersRow struct {
+	CharacterID int64  `json:"character_id"`
+	OwnerHash   string `json:"owner_hash"`
+}
+
+func (q *Queries) ListAdminOwners(ctx context.Context) ([]ListAdminOwnersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAdminOwners)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAdminOwnersRow
+	for rows.Next() {
+		var i ListAdminOwnersRow
+		if err := rows.Scan(&i.CharacterID, &i.OwnerHash); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listAllCharacters = `-- name: ListAllCharacters :many

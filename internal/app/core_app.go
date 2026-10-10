@@ -140,6 +140,7 @@ type Application struct {
 	// activity is when each account was last seen, which sets how
 	// often the worker refreshes its characters (worker_tiers.go).
 	activity      activityLog
+	admins        adminOwners
 	notifyQuiet   notifyQuietLog // which accounts' data the notification pass has read lately (notify_quiet.go)
 	priorityMu    sync.Mutex
 	priorityChars map[int64]bool
@@ -220,6 +221,7 @@ func New(cfg Config) (*Application, error) {
 	// When each account was last seen, from before this start
 	// (worker_activity.go).
 	app.loadActivity(context.Background())
+	app.admins.load(context.Background(), app)
 
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	app.stopWorker = stopWorker
@@ -670,12 +672,10 @@ func (app *Application) isAdmin(ctx context.Context) bool {
 }
 
 // adminAmong reports whether any of an account's characters is an
-// administrator. A character flagged owner_changed does not count:
-// it changed EVE accounts and nobody has confirmed control of it
-// since.
+// administrator (auth_admin.go).
 func (app *Application) adminAmong(characters []db.Character) bool {
 	for _, ch := range characters {
-		if ch.LinkState != linkStateOwnerChanged && app.cfg.IsAdminCharacter(ch.CharacterID) {
+		if app.adminHolds(ch) {
 			return true
 		}
 	}

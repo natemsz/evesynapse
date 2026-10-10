@@ -42,6 +42,7 @@ type adminView struct {
 	Lookup       characterLookupView
 	NoAccount    bool              // ?account= named one that does not exist
 	Account      *adminAccountView // nil until one is found
+	Swarm        *swarmAdminView   // shared cache: settings and members
 }
 
 // adminAccountRow is one line of the newest-accounts list.
@@ -114,6 +115,7 @@ func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 
 	found, lookup := app.lookupCharacter(ctx, r.URL.Query().Get("q"))
 	view.Lookup = lookup
+	view.Swarm = app.loadSwarmAdmin(ctx)
 	var accountID, foundID int64
 	if found != nil {
 		accountID, foundID = found.UserID, found.CharacterID

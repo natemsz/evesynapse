@@ -74,7 +74,10 @@ type syncView struct {
 	Foresight *foresightStats
 	// Serving: whether pages render complete, how old what they
 	// show is, and what viewing costs.
-	Serving    *serveMetricsView
+	Serving *serveMetricsView
+	// Swarm: the shared cache across instances — what it costs
+	// and earns, and who is in it.
+	Swarm      *swarmMetricsView
 	Lookup     characterLookupView
 	Character  *syncCharacterView // nil until one is found
 	SDE        *sdeView
@@ -100,6 +103,7 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 		Timing:      workerTimingViewFor(status),
 		Foresight:   app.foresightStats(ctx, time.Now().UTC()),
 		Serving:     app.serveMetrics(ctx, time.Now().UTC()),
+		Swarm:       app.loadSwarmMetrics(ctx),
 		SDE:         app.loadSDEView(ctx),
 		Global:      app.loadGlobalView(ctx),
 	}

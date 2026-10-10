@@ -98,6 +98,35 @@
 </section>
 {{end}}
 
+{{with .Sync.Swarm}}
+<section class="card spanall">
+<h2>Shared cache</h2>
+{{if .Enabled}}
+<p><small>{{.Status}}. Public data only — market history, type names, corporation and alliance records, player structure names. Every entry is signed by the instance that fetched it and spot-checked against ESI before it is used; entries that fail are discarded and their signer flagged. Trust below half over ten checks excludes a signer on its own.</small></p>
+<table class="stat-table">
+  <tbody>
+  {{range .Rows}}<tr><td>{{.Label}}</td><td>{{.Value}}</td></tr>
+  {{end}}</tbody>
+</table>
+{{if .Peers}}
+<div class="tw">
+<table class="stat-table">
+  <thead><tr><th>Instance</th><th>Trust</th><th>Good</th><th>Bad</th><th>State</th></tr></thead>
+  <tbody>
+  {{range .Peers}}<tr><td>{{.Short}}</td><td>{{.Trust}}</td><td>{{.Good}}</td><td>{{.Bad}}</td><td>{{.State}}</td></tr>
+  {{end}}</tbody>
+</table>
+</div>
+<p><small>Approve, exclude and re-admit instances on <a href="/admin/">Admin</a>.</small></p>
+{{else}}
+<p><small>No other instances heard from yet.</small></p>
+{{end}}
+{{else}}
+<p><small>{{.Status}}</small></p>
+{{end}}
+</section>
+{{end}}
+
 <section class="card spanall">
 <h2>Character data</h2>
 <p><small>One character's stored data and how fresh it is. Type a name or a character id; any character on the site can be looked up.</small></p>

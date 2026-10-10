@@ -89,10 +89,14 @@ func (app *Application) handleSwarmMembers(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	ctx := r.Context()
-	members := []swarmMember{}
-	if origin := app.cfg.publicOrigin(); origin != "" {
-		members = append(members, swarmMember{InstanceID: app.swarmID.id, BaseURL: origin, PublicKey: app.swarmID.publicString()})
-	}
+	// Self first, always: the key is the attestation (it
+	// verifies the list), even when this instance has no
+	// public address configured to advertise beside it.
+	// Callers file the signer under the URL that answered.
+	members := []swarmMember{{
+		InstanceID: app.swarmID.id, BaseURL: app.cfg.publicOrigin(),
+		PublicKey: app.swarmID.publicString(),
+	}}
 	peers, err := app.queries.ListSwarmPeers(ctx)
 	if err != nil {
 		logging.Errorf("swarm: list peers: %v", err)

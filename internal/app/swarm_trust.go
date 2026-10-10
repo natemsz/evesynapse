@@ -23,6 +23,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -198,7 +199,11 @@ func (app *Application) swarmGossip(ctx context.Context, now time.Time) {
 		if c.id != "" && signer != c.id {
 			continue
 		}
-		if err := app.swarmLearnMembers(ctx, members, signer, key, now); err != nil {
+		source := "gossip"
+		if c.id == "" {
+			source = "seed"
+		}
+		if err := app.swarmLearnMembers(ctx, members, signer, key, c.url, source, now); err != nil {
 			logging.Errorf("swarm: learn members via %s: %v", c.url, err)
 			continue
 		}
@@ -268,30 +273,44 @@ func decodeSwarmMembers(payload, signer, key string) ([]swarmMember, string, str
 // the key they arrived with; a changed key for a known ID is
 // kept as-is (rotation goes through the operator: delete the
 // peer row and the next gossip re-pins). Approval follows the
-// mode; exclusion is never touched by gossip.
-func (app *Application) swarmLearnMembers(ctx context.Context, members []swarmMember, signer, signerKey string, now time.Time) error {
-	// The signer introduces itself too: record it under the key
-	// its list verified with.
+// mode; exclusion is never touched by gossip. The contacted
+// signer is recorded under the URL that just answered when its
+// own list does not name it — the dialed URL is known-good, so
+// a lonely seed still introduces itself.
+func (app *Application) swarmLearnMembers(ctx context.Context, members []swarmMember, signer, signerKey, dialURL, source string, now time.Time) error {
 	if signer != "" && signerKey != "" {
 		if peer, err := app.queries.GetSwarmPeer(ctx, signer); err != nil {
-			return err
+			// A signer never heard of is new, not broken:
+			// anything else aborts the whole sighting.
+			if !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
 		} else if peer.PublicKey != signerKey {
 			logging.Warnf("swarm: %s presents a changed key; keeping the pinned one until the operator re-admits it", signer)
 		}
 	}
+	seen := make(map[string]bool, len(members)+1)
+	for _, m := range members {
+		seen[m.InstanceID] = true
+	}
+	if signer != "" && signerKey != "" && !seen[signer] {
+		members = append(members, swarmMember{InstanceID: signer, BaseURL: dialURL, PublicKey: signerKey})
+	}
 	for _, m := range members {
 		if m.InstanceID == "" || m.InstanceID == app.swarmID.id {
 			continue
+		}
+		// The signer's own record may carry no address (no
+		// public origin configured): the URL that just
+		// answered is known-good and files it.
+		if m.InstanceID == signer && m.BaseURL == "" {
+			m.BaseURL = dialURL
 		}
 		if !validSwarmBaseURL(m.BaseURL) {
 			continue
 		}
 		if raw, err := base64.StdEncoding.DecodeString(m.PublicKey); err != nil || len(raw) != 32 {
 			continue
-		}
-		source := "gossip"
-		if m.InstanceID == signer && signerKey != "" {
-			source = "seed"
 		}
 		if err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
 			InstanceID: m.InstanceID, BaseUrl: m.BaseURL, PublicKey: m.PublicKey,

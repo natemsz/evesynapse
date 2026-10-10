@@ -1605,6 +1605,7 @@
     { name: "Corporation Assets", url: "/corporations/assets/" },
     { name: "Corporation Structures", url: "/corporations/structures/" },
     { name: "Corporation Killmails", url: "/corporations/killmails/" },
+    { name: "Ship replacement (SRP)", url: "/srp/" },
     { name: "Discord server", url: "/discord/servers" },
     { name: "Groups", url: "/groups/" },
     { name: "Wars", url: "/intel/wars/" },

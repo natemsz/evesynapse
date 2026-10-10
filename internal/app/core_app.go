@@ -422,6 +422,17 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/{groupID}/members/remove", app.handleGroupMemberRemove)
 	})
 
+	// Ship replacement (corp_srp.go).
+	r.Route("/srp", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleSRP)
+		r.Post("/request", app.handleSRPRequest)
+		r.Post("/paylist", app.handleSRPPayList)
+		r.Post("/settings", app.handleSRPSettings)
+		r.Post("/{id}/decide", app.handleSRPDecide)
+		r.Post("/{id}/withdraw", app.handleSRPWithdraw)
+	})
+
 	r.Route("/calendar", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleCalendar)

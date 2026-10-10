@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 )
@@ -686,37 +687,49 @@ func (app *Application) handleMailSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := app.validAccessToken(ctx, ch)
-	if err != nil {
-		logging.Errorf("mail send: token for character %d: %v", charID, err)
-		fail("Could not reach EVE. Sign in again if it keeps failing.")
-		return
-	}
 	// approved_cost: EVE charges a small fee per recipient; 100k
 	// ISK approved headroom covers any normal mail.
-	payload := map[string]any{
-		"approved_cost": 100000,
-		"body":          body,
-		"recipients":    []map[string]any{{"recipient_id": recipientID, "recipient_type": recipientType}},
-		"subject":       subject,
-	}
-	// ESI answers a sent mail with 201 and the new mail's ID as a
-	// bare number. Nothing here needs the ID, so the answer is not
-	// decoded at all: reading it as an object — as this once did —
-	// fails on the number and reports a mail that was in fact sent
-	// as refused, inviting a second, duplicate send.
-	path := fmt.Sprintf("/characters/%d/mail/", charID)
-	if err := app.esi.PostJSONAuthed(ctx, token, path, payload, nil); err != nil {
+	if err := app.sendEVEMail(ctx, ch, recipientID, recipientType, subject, body, 100000); err != nil {
+		if errors.Is(err, errMailToken) {
+			fail("Could not reach EVE. Sign in again if it keeps failing.")
+			return
+		}
 		var se *esi.StatusError
 		if errors.As(err, &se) && se.Code == http.StatusForbidden {
 			fail(ch.Name + " was linked before EveSynapse asked for mail send access — sign in again to grant it.")
 			return
 		}
-		logging.Errorf("mail send: ESI POST %s: %v", path, err)
+		logging.Errorf("mail send: character %d: %v", charID, err)
 		fail("EVE refused the mail" + esiRefusalDetail(err) + ". Check the recipient and try again.")
 		return
 	}
 	view.Sent = true
 	view.To, view.Subject, view.Body = "", "", ""
 	app.render(ctx, w, http.StatusOK, "compose.html", data)
+}
+
+// errMailToken: the sending character's sign-in could not be used.
+var errMailToken = errors.New("no usable sign-in for the sending character")
+
+// sendEVEMail sends one in-game mail from a character
+// (POST /characters/{id}/mail/). approvedCost is the most ISK EVE may
+// charge the sender for reaching the recipient.
+//
+// ESI answers a sent mail with 201 and the new mail's ID as a bare
+// number. Nothing needs the ID, so the answer is not decoded at all:
+// reading it as an object fails on the number and reports a mail that
+// was in fact sent as refused, inviting a second, duplicate send.
+func (app *Application) sendEVEMail(ctx context.Context, from db.Character, recipientID int64, recipientType, subject, body string, approvedCost int) error {
+	token, err := app.validAccessToken(ctx, from)
+	if err != nil {
+		logging.Errorf("mail send: token for character %d: %v", from.CharacterID, err)
+		return errMailToken
+	}
+	payload := map[string]any{
+		"approved_cost": approvedCost,
+		"body":          body,
+		"recipients":    []map[string]any{{"recipient_id": recipientID, "recipient_type": recipientType}},
+		"subject":       subject,
+	}
+	return app.esi.PostJSONAuthed(ctx, token, fmt.Sprintf("/characters/%d/mail/", from.CharacterID), payload, nil)
 }

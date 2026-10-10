@@ -1,0 +1,141 @@
+{{define "title"}}Ship replacement{{end}}
+{{define "content"}}
+<h1><span class="gt">Ship replacement</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{with .SRP}}
+<p class="lede">Lost a ship on a corporation op? Ask for it to be replaced here. A request names the killmail and the op it happened on, and whoever handles replacement sees whether the fleet recorded you there.</p>
+
+{{if not .Member}}
+<p>None of your characters is in a corporation EveSynapse knows of yet, so there is nothing to claim or handle.</p>
+{{else}}
+
+<form method="post" action="/srp/request" class="op-form setting form-card">
+  <h4>Request a replacement</h4>
+  {{if .Losses}}
+  <div class="form-grid">
+    <label class="field wide"><span class="field-label">Loss</span>
+      <select name="loss" required>{{range .Losses}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</select>
+      <span class="field-hint">Your characters' losses of the last 30 days that happened during an op</span></label>
+    <label class="field wide"><span class="field-label">Note</span>
+      <input type="text" name="note" maxlength="500" placeholder="Optional: anything the handler should know"></label>
+  </div>
+  <div class="form-actions"><button type="submit">Send request</button></div>
+  {{else}}
+  <p class="hint">Nothing to claim: none of your characters has an unclaimed loss during an op in the last 30 days. A loss shows up here once EveSynapse has read its killmail, which needs killmail access on the character that lost the ship.</p>
+  {{end}}
+  {{if .Outside}}<p class="hint">{{.Outside}} other recent loss{{if ne .Outside 1}}es were{{else}} was{{end}} not during an op and cannot be claimed here.</p>{{end}}
+</form>
+
+{{if .Mine}}
+<h2>Your requests</h2>
+<div class="tw">
+<table>
+  <thead><tr><th>Lost</th><th>Pilot</th><th>Ship</th><th>Op</th><th>Estimate</th><th>Answer</th><th></th></tr></thead>
+  <tbody>
+  {{range .Mine}}
+    <tr><td>{{.LostAt}}</td><td>{{.Pilot}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td><a href="{{.OpURL}}">{{.Op}}</a></td><td>{{.Value}}</td>
+      <td>{{if .Open}}<span class="badge wait">OPEN</span>{{else if .Paid}}<span class="badge kill">PAID</span> {{.Payout}}{{else}}<span class="badge loss">DENIED</span>{{end}}{{if .HandlerNote}} <small>{{.HandlerNote}}</small>{{end}}</td>
+      <td>{{if .Open}}<form method="post" action="/srp/{{.ID}}/withdraw" class="inline-form"><button type="submit" class="btn">Withdraw</button></form>{{end}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+{{range .Corps}}
+{{$corp := .}}
+{{if or .Handles .Policy}}
+<h2>{{.Name}}</h2>
+{{if .Policy}}
+<section class="setting">
+  <h4>Replacement policy</h4>
+  <p class="srp-policy">{{.Policy}}</p>
+</section>
+{{end}}
+{{end}}
+
+{{if .Handles}}
+<p class="srp-sum"><span><strong>{{len .Open}}</strong> open{{if .OpenValue}}, estimated at <strong>{{.OpenValue}}</strong>{{end}}</span><span><strong>{{.PaidCount}}</strong> paid in the last 30 days{{if .PaidValue}}: <strong>{{.PaidValue}}</strong>{{end}}</span></p>
+
+{{if .Open}}
+<form method="post" action="/srp/paylist" class="op-form setting form-card">
+  <input type="hidden" name="corporation" value="{{.ID}}">
+  <h4>Pay in game</h4>
+  <p class="hint">EVE has no way for a site to give ISK, so paying is done in game. The pay list is one EVE mail listing every open request: each pilot's name opens their information window, where ISK is given, and each ship opens its kill report.</p>
+  {{if .Mailers}}
+  <div class="form-grid">
+    <label class="field"><span class="field-label">Send it to</span>
+      <select name="character">{{range .Mailers}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
+  </div>
+  <div class="form-actions"><button type="submit">Mail me the pay list</button></div>
+  {{else}}
+  <p class="hint warn-note">None of your characters has granted mail access, so the pay list cannot be sent.</p>
+  {{end}}
+</form>
+
+<div class="settings-grid">
+{{range .Open}}
+<section class="setting">
+  <div class="setting-head"><h4>{{.Pilot}} · {{.Ship}}</h4>{{if .Value}}<span class="field-hint">est. {{.Value}}</span>{{end}}</div>
+  <p class="hint">Lost {{.LostAt}} in {{.System}} on <a href="{{.OpURL}}">{{.Op}}</a>. {{zkillKillLink .KillmailID}}</p>
+  <p class="srp-facts"><span class="badge kill">KILLMAIL</span><span class="badge kill">DURING THE OP</span>{{if .Attended}}<span class="badge kill">ATTENDED</span> {{.Attendance}}{{else}}<span class="badge loss">NOT ON ATTENDANCE</span> The op's attendance does not have this pilot. It can be ticked by hand on the op's page.{{end}}</p>
+  {{if .Note}}<p class="hint">Pilot's note: {{.Note}}</p>{{end}}
+  <form method="post" action="/srp/{{.ID}}/decide" class="op-form">
+    <div class="form-grid">
+      <label class="field"><span class="field-label">Paid, in ISK</span>
+        <input type="text" name="payout" value="{{.Suggested}}" inputmode="decimal" autocomplete="off"></label>
+      <label class="field"><span class="field-label">Note to the pilot</span>
+        <input type="text" name="note" maxlength="500" placeholder="Needed to deny"></label>
+    </div>
+    {{if $corp.Mailers}}<label class="check-row"><input type="checkbox" name="mail" value="1" checked> <span>Tell the pilot by EVE mail when marked paid</span></label>{{end}}
+    <div class="form-actions">
+      <button type="submit" name="action" value="paid">Mark paid</button>
+      <button type="submit" name="action" value="deny" class="btn btn-danger">Deny</button>
+    </div>
+  </form>
+</section>
+{{end}}
+</div>
+{{else}}
+<p class="hint">No open requests.</p>
+{{end}}
+
+{{if .Handled}}
+<h3>Answered</h3>
+<div class="tw">
+<table>
+  <thead><tr><th>Answered</th><th>Pilot</th><th>Ship</th><th>Op</th><th>Answer</th><th>By</th><th></th></tr></thead>
+  <tbody>
+  {{range .Handled}}
+    <tr><td>{{.HandledAt}}</td><td>{{.Pilot}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td><a href="{{.OpURL}}">{{.Op}}</a></td>
+      <td>{{if .Paid}}<span class="badge kill">PAID</span> {{.Payout}}{{else}}<span class="badge loss">DENIED</span>{{end}}{{if .HandlerNote}} <small>{{.HandlerNote}}</small>{{end}}</td>
+      <td>{{.HandledBy}}</td>
+      <td><form method="post" action="/srp/{{.ID}}/decide" class="inline-form"><button type="submit" name="action" value="reopen" class="btn">Open again</button></form></td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+{{end}}
+
+{{if .Directs}}
+<form method="post" action="/srp/settings" class="op-form setting form-card">
+  <input type="hidden" name="corporation" value="{{.ID}}">
+  <div class="setting-head"><h4>Settings for {{.Name}}</h4><a class="btn" href="/groups/">Create groups</a></div>
+  <div class="form-grid">
+    <label class="field wide"><span class="field-label">Who handles requests, besides directors and the CEO</span>
+      <select name="who">{{range .Who}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+      <span class="field-hint">An in-game role, or one of the corporation's groups</span></label>
+    <label class="field wide"><span class="field-label">Policy shown to pilots</span>
+      <textarea name="policy" rows="4" maxlength="2000" placeholder="e.g. Doctrine ships on stratops are replaced in full; everything else at the handler's judgement.">{{.Policy}}</textarea></label>
+  </div>
+  <div class="form-actions"><button type="submit">Save</button></div>
+</form>
+{{end}}
+{{end}}
+
+{{end}}
+{{end}}
+{{end}}

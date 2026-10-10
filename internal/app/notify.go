@@ -55,6 +55,8 @@ const (
 	notifyIndustry   = "industry"
 	notifyOp         = "op"
 	notifyOpReminder = "op_reminder"
+	notifySRPNew     = "srp_new"
+	notifySRPDone    = "srp_done"
 )
 
 // notifyKind describes one kind of notification.
@@ -80,6 +82,9 @@ var notifyKinds = []notifyKind{
 	// corporation's, with no access to grant.
 	{ID: notifyOp, Title: "New op on the calendar"},
 	{ID: notifyOpReminder, Title: "Op starting soon"},
+	// Ship replacement (corp_srp.go) is EveSynapse's own too.
+	{ID: notifySRPNew, Title: "New SRP request to handle", Account: true},
+	{ID: notifySRPDone, Title: "SRP request paid or denied"},
 	{ID: notifyKillmail, Title: "New killmail", Module: "killmails"},
 	{ID: notifyPI, Title: "Stopped planetary extractors", Module: "planets"},
 	{ID: notifyIndustry, Title: "Industry job complete", Module: "industry"},
@@ -535,6 +540,7 @@ func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db
 	}
 	prefs := app.notifyPrefsFor(ctx, userID)
 	app.notifyOpEvents(ctx, c, userID, prefs, now)
+	app.notifySRPEvents(ctx, c, userID, now)
 	if len(c.sources) == 0 {
 		return 0, nil
 	}

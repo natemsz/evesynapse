@@ -70,6 +70,15 @@ type ContractDetail struct {
 	FetchedAt   time.Time `json:"fetched_at"`
 }
 
+type CorpPermission struct {
+	CorporationID int64     `json:"corporation_id"`
+	Permission    string    `json:"permission"`
+	Kind          string    `json:"kind"`
+	Ref           string    `json:"ref"`
+	UpdatedBy     int64     `json:"updated_by"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
 type CorporationRecord struct {
 	CorporationID int64        `json:"corporation_id"`
 	Payload       string       `json:"payload"`
@@ -617,6 +626,33 @@ type SnapshotFetchState struct {
 	State       string    `json:"state"`
 	Detail      string    `json:"detail"`
 	AttemptedAt time.Time `json:"attempted_at"`
+}
+
+type SrpRequest struct {
+	ID            int64        `json:"id"`
+	CorporationID int64        `json:"corporation_id"`
+	OpID          int64        `json:"op_id"`
+	KillmailID    int64        `json:"killmail_id"`
+	KillmailHash  string       `json:"killmail_hash"`
+	CharacterID   int64        `json:"character_id"`
+	UserID        int64        `json:"user_id"`
+	ShipTypeID    int64        `json:"ship_type_id"`
+	SolarSystemID int64        `json:"solar_system_id"`
+	LostAt        time.Time    `json:"lost_at"`
+	LossValue     float64      `json:"loss_value"`
+	Note          string       `json:"note"`
+	Status        string       `json:"status"`
+	Payout        float64      `json:"payout"`
+	HandledBy     int64        `json:"handled_by"`
+	HandlerNote   string       `json:"handler_note"`
+	HandledAt     sql.NullTime `json:"handled_at"`
+	CreatedAt     time.Time    `json:"created_at"`
+}
+
+type SrpSetting struct {
+	CorporationID int64     `json:"corporation_id"`
+	Policy        string    `json:"policy"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 type StructureContext struct {

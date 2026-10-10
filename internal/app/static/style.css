@@ -761,6 +761,7 @@ input[type="search"]:not(.topsearch input),
 }
 .badge.kill { color: var(--gold); border-color: var(--success); background: rgba(255, 184, 77, 0.14); }
 .badge.loss { color: #ffab8f; border-color: var(--danger); background: rgba(120, 26, 6, 0.38); }
+.badge.wait { color: var(--muted); border-color: currentColor; }
 .countdown { font-variant-numeric: tabular-nums; color: var(--accent); }
 
 /* --- intel: wars involving one of the user's corporations --- */
@@ -3377,3 +3378,8 @@ html[data-theme="light"] .setting { border-color: #d8cdb8; background: rgba(0, 0
 html[data-theme="light"] .chip-list label { border-color: #d8cdb8; }
 html[data-theme="light"] .setting-foot, html[data-theme="light"] .row-list li { border-color: #e3d9c6; }
 html[data-theme="light"] .setting h4 { color: var(--accent); }
+.srp-facts { margin: 0 0 0.6rem; }
+.srp-facts .badge { margin-right: 0.35rem; }
+.srp-policy { white-space: pre-wrap; max-width: 62rem; margin: 0; }
+.srp-sum { display: flex; flex-wrap: wrap; gap: 0.4rem 1.5rem; margin: 0 0 0.75rem; color: var(--muted); }
+.srp-sum strong { color: var(--text-bright); }

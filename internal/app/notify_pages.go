@@ -265,7 +265,6 @@ type discordSettingsView struct {
 	// DMProblem is what went wrong with the last direct message, if
 	// anything did.
 	DMProblem string
-	Manages   bool // the account directs a corporation or alliance
 	// Reconnect: the account connected before EveSynapse could add
 	// people to servers, or took that permission back on Discord.
 	Reconnect bool
@@ -375,7 +374,6 @@ func (app *Application) handleNotificationSettings(w http.ResponseWriter, r *htt
 		}
 	}
 	view.Discord = discordSettingsView{CanLink: app.discordCanLink(), HasBot: app.discordHasBot()}
-	view.Discord.Manages = view.Discord.HasBot && len(app.discordManageable(ctx, userID)) > 0
 	if link, linked := app.discordLinkFor(r, userID); linked {
 		view.Discord.Linked, view.Discord.Name, view.Discord.DM = true, link.Username, link.DmNotifications
 		view.Discord.Reconnect = view.Discord.HasBot && link.AccessToken == ""

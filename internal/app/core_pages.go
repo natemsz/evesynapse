@@ -190,7 +190,7 @@ func sectionForPage(page string) string {
 		return "tools"
 	case "corporations.html", "corp_members.html", "corp_wallets.html",
 		"corp_orders.html", "corp_assets.html", "corp_structures.html",
-		"corporation.html", "alliance.html":
+		"corporation.html", "alliance.html", "discord_servers.html", "groups.html":
 		return "corporation"
 	case "intel_wars.html", "intel_incursions.html", "intel_fw.html":
 		return "intel"

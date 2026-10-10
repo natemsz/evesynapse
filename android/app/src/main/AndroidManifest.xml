@@ -55,6 +55,9 @@
             <meta-data
                 android:name="android.support.customtabs.trusted.FALLBACK_STRATEGY"
                 android:value="customtabs" />
+            <meta-data
+                android:name="android.support.customtabs.trusted.DISPLAY_MODE"
+                android:value="@string/displayMode" />
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -33,12 +33,12 @@ def copyWebIcons = tasks.register('copyWebIcons', Copy) {
 
 android {
     namespace 'app.evesynapse.twa'
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         applicationId twaPackage
         minSdk 23
-        targetSdk 35
+        targetSdk 36
         versionCode Math.max(siteVersionCode, 1)
         versionName siteVersion
 

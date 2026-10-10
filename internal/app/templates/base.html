@@ -54,7 +54,7 @@
         <div class="menu">
           <a href="/fittings/"{{if eq .NavPage "fittings.html"}} class="active"{{end}}>Ship Workbench</a>
           <a href="/fittings/saved/"{{if eq .NavPage "fittings_saved.html"}} class="active"{{end}}>Ship Loadouts</a>
-          <a href="/doctrines/fits/"{{if eq .NavPage "fit_library.html"}} class="active"{{end}}>Fit Library</a>
+          <a href="/fittings/public/"{{if eq .NavPage "fittings_public.html"}} class="active"{{end}}>Public Fits</a>
         </div>
       </details>
       <details class="branch{{if eq .Section "industry"}} active{{end}}"{{if and (eq .Section "industry") (ne .NavState "rail")}} open{{end}} data-nav-category="industry">
@@ -89,6 +89,7 @@
           <a href="/corporations/structures/"{{if eq .NavPage "corp_structures.html"}} class="active"{{end}}>Structures</a>
           <a href="/corporations/killmails/"{{if eq .NavPage "killmails.html"}} class="active"{{end}}>Killmails</a>
           <a href="/doctrines/"{{if or (eq .NavPage "doctrines.html") (eq .NavPage "doctrine.html")}} class="active"{{end}}>Doctrines</a>
+          <a href="/doctrines/fits/"{{if eq .NavPage "corp_fits.html"}} class="active"{{end}}>Corporate Fits</a>
           <a href="/srp/"{{if eq .NavPage "srp.html"}} class="active"{{end}}>Ship replacement</a>
           <a href="/discord/servers"{{if eq .NavPage "discord_servers.html"}} class="active"{{end}}>Discord server</a>
           <a href="/groups/"{{if eq .NavPage "groups.html"}} class="active"{{end}}>Groups</a>

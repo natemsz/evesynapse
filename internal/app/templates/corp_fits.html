@@ -1,0 +1,56 @@
+{{define "title"}}Corporate Fits{{end}}
+{{define "content"}}
+<h1><span class="gt">Corporate Fits</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{with .CorpFits}}
+<p class="lede">Every fit in your corporations' <a href="/doctrines/">doctrines</a>, on one page. Each opens in the fitting tool with your own skills.</p>
+
+{{if not .Member}}
+<p>None of your characters is in a corporation EveSynapse knows of yet, so there are no corporate fits to show.</p>
+{{else}}
+
+{{if .For}}<p><strong>Choosing fits for <a href="/doctrines/{{.For.ID}}">{{.For.Name}}</a>.</strong> Each one added is copied into the doctrine.</p>{{end}}
+
+<form method="get" action="/doctrines/fits/" class="op-form lookup-form">
+  {{if .For}}<input type="hidden" name="for" value="{{.For.ID}}">{{end}}
+  <input type="text" name="q" value="{{.Q}}" placeholder="Search by fit, ship, doctrine or category…" aria-label="Search corporate fits" autocomplete="off">
+  <input type="text" name="tag" value="{{.Tag}}" placeholder="Tag" aria-label="Tag" autocomplete="off">
+  {{if .Doctrines}}<select name="doctrine" aria-label="Doctrine"><option value="0">Any doctrine</option>{{range .Doctrines}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select>{{end}}
+  <button type="submit">Search</button>
+  <a href="/doctrines/fits/{{if .For}}?for={{.For.ID}}{{end}}">Clear</a>
+</form>
+
+{{if .Rows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Fit</th><th>Ship</th><th>Part</th><th>Doctrine</th><th>Category</th><th>Tags</th><th></th></tr></thead>
+  <tbody>
+  {{range .Rows}}
+    <tr>
+      <td><a href="/fittings/?doctrine={{.ID}}#fit-editor">{{.Name}}</a></td>
+      <td>{{itemLink .ShipTypeID .Ship}}</td>
+      <td>{{.Role}}</td>
+      <td><a href="{{.DoctrineURL}}">{{.Doctrine}}</a></td>
+      <td>{{.Category}}</td>
+      <td class="tag-row">{{range .Tags}}<a href="/doctrines/fits/?tag={{.}}{{if $.CorpFits.For}}&amp;for={{$.CorpFits.For.ID}}{{end}}">#{{.}}</a> {{end}}</td>
+      <td>{{if $.CorpFits.For}}<form method="post" action="/doctrines/{{$.CorpFits.For.ID}}/fits/add" class="inline-form">
+          <input type="hidden" name="copy" value="{{.ID}}"><input type="hidden" name="next" value="{{$.CorpFits.Self}}">
+          <select name="fleet_role" aria-label="Part in the fleet"><option value="">Part…</option>{{range $.CorpFits.Roles}}<option value="{{.}}">{{.}}</option>{{end}}</select>
+          <button type="submit" class="btn">Add</button></form>{{else}}<a class="btn" href="/fittings/?doctrine={{.ID}}#fit-editor">Open</a>{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else if .Total}}
+<p class="hint">No corporate fit matches.</p>
+{{else}}
+<p class="hint">No corporate fits yet. A fit shows here once it is in one of the corporation's <a href="/doctrines/">doctrines</a>.</p>
+{{end}}
+
+<p class="hint">Looking for fits from outside the corporation? See <a href="/fittings/public/">public fits</a>.</p>
+{{end}}
+{{end}}
+{{end}}

@@ -474,7 +474,7 @@ func (app *Application) handleDoctrineFitAdd(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	path := doctrineURL(d.ID)
-	if next := r.Form.Get("next"); strings.HasPrefix(next, doctrineFitsPath+"?") {
+	if next := r.Form.Get("next"); strings.HasPrefix(next, doctrineFitsPath+"?") || strings.HasPrefix(next, publicFitsPath+"?") {
 		path = next
 	}
 	back := app.flashBack(w, r, path)
@@ -564,62 +564,84 @@ func (app *Application) handleDoctrineSettings(w http.ResponseWriter, r *http.Re
 }
 
 // ---------------------------------------------------------------------------
-// The fit library: every fit an account can read that is not its own
-// private one: the fits of its corporations' doctrines, and the
-// public fits of everyone here.
+// Corporate fits: every fit in the doctrines of the corporations an
+// account has a character in, on one page. Public fits have their own
+// page in the fitting tool (char_fit_public.go).
 // ---------------------------------------------------------------------------
 
-const (
-	doctrineFitsPath = "/doctrines/fits/"
-	fitLibraryPublic = 100 // public fits shown at once
-)
+const doctrineFitsPath = "/doctrines/fits/"
 
-// fitLibraryRow is one fit in the library.
-type fitLibraryRow struct {
-	Name       string
-	Ship       string
-	ShipTypeID int64
-	Tags       []string
-	Role       string
-	From       string // the doctrine, or "Public"
-	FromURL    string
-	By         string // a public fit's author
-	OpenURL    string // opens it in the fitting tool
-	AddField   string // the add form's field for this fit: "public" or "copy"
-	AddID      int64
+// corpFitRow is one doctrine fit on the corporate fits page.
+type corpFitRow struct {
+	ID          int64
+	Name        string
+	Ship        string
+	ShipTypeID  int64
+	Tags        []string
+	Role        string
+	Doctrine    string
+	DoctrineURL string
+	Category    string
 }
 
-type fitLibraryView struct {
-	Q, Tag, Source string
-	DoctrineID     int64
-	Doctrines      []opChoice // the doctrines the account can read, to filter by
-	Rows           []fitLibraryRow
-	More           bool // more public fits match than are shown
-	// For is the doctrine a keeper is choosing fits for, when the
-	// library was opened from one.
+type corpFitsView struct {
+	Member     bool
+	Q, Tag     string
+	DoctrineID int64
+	Doctrines  []opChoice // the doctrines the account can read, to filter by
+	Total      int        // fits before the page's filters
+	Rows       []corpFitRow
+	// For is the doctrine a keeper is choosing fits for, when the page
+	// was opened from one.
 	For   *opChoice
 	Roles []string
 	Self  string // this page's address with its filters, to come back to
 }
 
-func (app *Application) handleFitLibrary(w http.ResponseWriter, r *http.Request) {
+// doctrineChosenFor reads the "for" of an address: the doctrine a
+// keeper is choosing fits for. Nil unless the account keeps it.
+func (app *Application) doctrineChosenFor(ctx context.Context, userID int64, raw string) *opChoice {
+	id, _ := strconv.ParseInt(raw, 10, 64)
+	d, err := app.queries.GetDoctrine(ctx, id)
+	if err != nil {
+		return nil
+	}
+	st, err := app.discordStandingFor(ctx, userID)
+	if err != nil || !app.corpPermits(ctx, st, d.CorporationID, permDoctrines) {
+		return nil
+	}
+	return &opChoice{ID: d.ID, Name: d.Name}
+}
+
+// browseAddress is a fit browser's address with its filters, for the
+// add form to come back to.
+func browseAddress(path string, chosen *opChoice, filters map[string]string) string {
+	query := url.Values{}
+	for key, value := range filters {
+		if value != "" && value != "0" {
+			query.Set(key, value)
+		}
+	}
+	if chosen != nil {
+		query.Set("for", strconv.FormatInt(chosen.ID, 10))
+	}
+	return path + "?" + query.Encode()
+}
+
+func (app *Application) handleCorpFits(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
 	userID := app.userID(ctx)
 	query := r.URL.Query()
-	view := &fitLibraryView{
-		Q: strings.TrimSpace(query.Get("q")), Tag: strings.TrimSpace(query.Get("tag")), Source: query.Get("source"), Roles: opFleetRoles,
-	}
+	view := &corpFitsView{Q: strings.TrimSpace(query.Get("q")), Tag: strings.TrimSpace(query.Get("tag")), Roles: opFleetRoles}
 	view.DoctrineID, _ = strconv.ParseInt(query.Get("doctrine"), 10, 64)
-	if view.Source != "corporation" && view.Source != "public" {
-		view.Source = ""
-	}
-	data.FitLibrary = view
+	data.CorpFits = view
 
 	corps := app.srpCorps(ctx, userID)
+	view.Member = len(corps) > 0
 	doctrines, err := app.queries.ListDoctrinesForCorporations(ctx, corps)
 	if err != nil {
-		logging.Errorf("fit library: doctrines of user %d: %v", userID, err)
+		logging.Errorf("corporate fits: doctrines of user %d: %v", userID, err)
 	}
 	byID := map[int64]db.Doctrine{}
 	ids := make([]int64, 0, len(doctrines))
@@ -628,79 +650,37 @@ func (app *Application) handleFitLibrary(w http.ResponseWriter, r *http.Request)
 		ids = append(ids, d.ID)
 		view.Doctrines = append(view.Doctrines, opChoice{ID: d.ID, Name: d.Name, Selected: d.ID == view.DoctrineID})
 	}
-	forID, _ := strconv.ParseInt(query.Get("for"), 10, 64)
-	if target, known := byID[forID]; known {
-		if st, err := app.discordStandingFor(ctx, userID); err == nil && app.corpPermits(ctx, st, target.CorporationID, permDoctrines) {
-			view.For = &opChoice{ID: target.ID, Name: target.Name}
-		}
+	view.For = app.doctrineChosenFor(ctx, userID, query.Get("for"))
+	view.Self = browseAddress(doctrineFitsPath, view.For, map[string]string{"q": view.Q, "tag": view.Tag, "doctrine": strconv.FormatInt(view.DoctrineID, 10)})
+	if len(ids) == 0 {
+		app.render(ctx, w, http.StatusOK, "corp_fits.html", data)
+		return
 	}
-	self := url.Values{}
-	for key, value := range map[string]string{"q": view.Q, "tag": view.Tag, "source": view.Source} {
-		if value != "" {
-			self.Set(key, value)
-		}
+	fits, err := app.queries.ListDoctrineFits(ctx, ids)
+	if err != nil {
+		logging.Errorf("corporate fits: fits of user %d: %v", userID, err)
 	}
-	if view.DoctrineID != 0 {
-		self.Set("doctrine", strconv.FormatInt(view.DoctrineID, 10))
+	view.Total = len(fits)
+	needle := strings.ToLower(view.Q)
+	for _, fit := range fits {
+		d := byID[fit.DoctrineID]
+		if view.DoctrineID != 0 && d.ID != view.DoctrineID {
+			continue
+		}
+		var doc fitDoc
+		_ = json.Unmarshal([]byte(fit.ItemsJson), &doc)
+		tags := append(doctrineTagList(d.Tags), doc.Tags...)
+		ship := app.typeNameOrID(ctx, fit.ShipTypeID)
+		if view.Tag != "" && !hasTag(tags, view.Tag) {
+			continue
+		}
+		if needle != "" && !strings.Contains(strings.ToLower(fit.Name+"\n"+ship+"\n"+d.Name+"\n"+d.Category), needle) {
+			continue
+		}
+		view.Rows = append(view.Rows, corpFitRow{
+			ID: fit.ID, Name: fit.Name, Ship: ship, ShipTypeID: fit.ShipTypeID, Tags: tags, Role: fit.FleetRole,
+			Doctrine: d.Name, DoctrineURL: doctrineURL(d.ID), Category: d.Category,
+		})
 	}
-	if view.For != nil {
-		self.Set("for", strconv.FormatInt(view.For.ID, 10))
-	}
-	view.Self = doctrineFitsPath + "?" + self.Encode()
-
-	if view.Source != "public" && len(ids) > 0 {
-		fits, err := app.queries.ListDoctrineFits(ctx, ids)
-		if err != nil {
-			logging.Errorf("fit library: doctrine fits of user %d: %v", userID, err)
-		}
-		needle := strings.ToLower(view.Q)
-		for _, fit := range fits {
-			d := byID[fit.DoctrineID]
-			if view.DoctrineID != 0 && d.ID != view.DoctrineID {
-				continue
-			}
-			var doc fitDoc
-			_ = json.Unmarshal([]byte(fit.ItemsJson), &doc)
-			tags := append(doctrineTagList(d.Tags), doc.Tags...)
-			ship := app.typeNameOrID(ctx, fit.ShipTypeID)
-			if view.Tag != "" && !hasTag(tags, view.Tag) {
-				continue
-			}
-			if needle != "" && !strings.Contains(strings.ToLower(fit.Name+"\n"+ship+"\n"+d.Name+"\n"+d.Category), needle) {
-				continue
-			}
-			view.Rows = append(view.Rows, fitLibraryRow{
-				Name: fit.Name, Ship: ship, ShipTypeID: fit.ShipTypeID, Tags: tags, Role: fit.FleetRole,
-				From: d.Name, FromURL: doctrineURL(d.ID),
-				OpenURL:  fmt.Sprintf("/fittings/?doctrine=%d#fit-editor", fit.ID),
-				AddField: "copy", AddID: fit.ID,
-			})
-		}
-	}
-	if view.Source != "corporation" && view.DoctrineID == 0 {
-		rows, err := app.queries.BrowsePublicFittings(ctx, db.BrowsePublicFittingsParams{Q: view.Q, Tag: view.Tag, RowLimit: fitLibraryPublic + 1})
-		if err != nil {
-			logging.Errorf("fit library: public fits: %v", err)
-		}
-		if len(rows) > fitLibraryPublic {
-			rows, view.More = rows[:fitLibraryPublic], true
-		}
-		for _, row := range rows {
-			var doc fitDoc
-			_ = json.Unmarshal([]byte(row.ItemsJson), &doc)
-			ship := row.ShipName
-			if ship == "" {
-				ship = app.typeNameOrID(ctx, row.ShipTypeID)
-			}
-			open := fmt.Sprintf("/fittings/?public=%d#fit-editor", row.ID)
-			if row.UserID == userID {
-				open = fmt.Sprintf("/fittings/?local=%d#fit-editor", row.ID)
-			}
-			view.Rows = append(view.Rows, fitLibraryRow{
-				Name: row.Name, Ship: ship, ShipTypeID: row.ShipTypeID, Tags: doc.Tags,
-				From: "Public", By: row.AuthorName, OpenURL: open, AddField: "public", AddID: row.ID,
-			})
-		}
-	}
-	app.render(ctx, w, http.StatusOK, "fit_library.html", data)
+	app.render(ctx, w, http.StatusOK, "corp_fits.html", data)
 }

@@ -434,11 +434,11 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/{id}/withdraw", app.handleSRPWithdraw)
 	})
 
-	// Doctrines and the fit library (corp_doctrines.go).
+	// Doctrines and their fits (corp_doctrines.go).
 	r.Route("/doctrines", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleDoctrines)
-		r.Get("/fits/", app.handleFitLibrary)
+		r.Get("/fits/", app.handleCorpFits)
 		r.Post("/create", app.handleDoctrineCreate)
 		r.Post("/settings", app.handleDoctrineSettings)
 		r.Get("/{doctrineID}", app.handleDoctrine)
@@ -587,6 +587,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleFittings)
 		r.Get("/saved/", app.handleFittingsSaved)
+		r.Get("/public/", app.handlePublicFits)
 		r.Post("/simulate/", app.handleFitSimulate)
 		r.Get("/clones.json", app.handleFitClonesJSON)
 		r.Get("/picker.json", app.handleFitPickerJSON)

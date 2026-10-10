@@ -56,6 +56,8 @@ type suggestItem struct {
 	Name  string `json:"name"`
 	Label string `json:"label,omitempty"`
 	Kind  string `json:"kind,omitempty"`
+	// URL is where a pick goes, for a box whose suggestions are links.
+	URL string `json:"url,omitempty"`
 }
 
 // suggestTypes runs the shared feed: prefix matches first, then

@@ -1,9 +1,10 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	db "evesynapse/internal/db/sqlc"
@@ -12,60 +13,33 @@ import (
 
 // ---------------------------------------------------------------------------
 // Public fits: the fits anyone here has made public in the fitting
-// tool, on one page, found by name, ship or tag. Each opens in the
-// fitting tool unsaved; saving it there makes a copy.
+// tool, in the fit browser (fit_browser.go). Each opens in the fitting
+// tool unsaved; saving it there makes a copy.
 //
 // A keeper of doctrines who comes here from one (corp_doctrines.go)
 // can copy a public fit into it.
 // ---------------------------------------------------------------------------
 
 const (
-	publicFitsPath  = "/fittings/public/"
+	publicFitsPath = "/fittings/public/"
+	// publicFitsRead is how many public fits, newest first, the page
+	// works from, and publicFitsShown how many it draws at once.
+	publicFitsRead  = 500
 	publicFitsShown = 100
 )
 
-type publicFitRow struct {
-	ID         int64
-	Name       string
-	Ship       string
-	ShipTypeID int64
-	Tags       []string
-	By         string
-	Mine       bool
-	OpenURL    string
-}
-
 type publicFitsView struct {
-	Q, Tag string
-	Rows   []publicFitRow
-	More   bool // more match than are shown
-	// For is the doctrine a keeper is choosing fits for, when the page
-	// was opened from one.
-	For   *opChoice
-	Roles []string
-	Self  string // this page's address with its filters, to come back to
+	Browser *fitBrowserView
 }
 
-func (app *Application) handlePublicFits(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	data := app.page(ctx)
-	userID := app.userID(ctx)
-	query := r.URL.Query()
-	view := &publicFitsView{Q: strings.TrimSpace(query.Get("q")), Tag: strings.TrimSpace(query.Get("tag")), Roles: opFleetRoles}
-	data.PublicFits = view
-	if raw := query.Get("for"); raw != "" {
-		view.For = app.doctrineChosenFor(ctx, userID, raw)
-	}
-	view.Self = browseAddress(publicFitsPath, view.For, map[string]string{"q": view.Q, "tag": view.Tag})
-
-	rows, err := app.queries.BrowsePublicFittings(ctx, db.BrowsePublicFittingsParams{Q: view.Q, Tag: view.Tag, RowLimit: publicFitsShown + 1})
+// publicFitBrowser sets up the browser for the public fits, as an
+// address filters it, and loads the fits.
+func (app *Application) publicFitBrowser(ctx context.Context, userID int64, chosen *opChoice, query url.Values) (*fitBrowser, []fitCard) {
+	rows, err := app.queries.BrowsePublicFittings(ctx, db.BrowsePublicFittingsParams{RowLimit: publicFitsRead})
 	if err != nil {
 		logging.Errorf("public fits: %v", err)
-		data.Error = "Could not load the public fits; check the server log."
 	}
-	if len(rows) > publicFitsShown {
-		rows, view.More = rows[:publicFitsShown], true
-	}
+	cards := make([]fitCard, 0, len(rows))
 	for _, row := range rows {
 		var doc fitDoc
 		_ = json.Unmarshal([]byte(row.ItemsJson), &doc)
@@ -73,14 +47,66 @@ func (app *Application) handlePublicFits(w http.ResponseWriter, r *http.Request)
 		if ship == "" {
 			ship = app.typeNameOrID(ctx, row.ShipTypeID)
 		}
-		fit := publicFitRow{
-			ID: row.ID, Name: row.Name, Ship: ship, ShipTypeID: row.ShipTypeID, Tags: doc.Tags, By: row.AuthorName,
-			Mine: row.UserID == userID, OpenURL: fmt.Sprintf("/fittings/?public=%d#fit-editor", row.ID),
+		card := fitCard{
+			ID: row.ID, Name: row.Name, Ship: ship, ShipTypeID: row.ShipTypeID, By: row.AuthorName, Mine: row.UserID == userID,
+			OpenURL: "/fittings/?public=" + idString(row.ID) + "#fit-editor", AddField: "public", Updated: row.UpdatedAt, tags: doc.Tags,
 		}
-		if fit.Mine {
-			fit.OpenURL = fmt.Sprintf("/fittings/?local=%d#fit-editor", row.ID)
+		if card.Mine {
+			card.OpenURL = "/fittings/?local=" + idString(row.ID) + "#fit-editor"
 		}
-		view.Rows = append(view.Rows, fit)
+		cards = append(cards, card)
 	}
+	app.hullClasses(ctx, cards)
+
+	fixed := url.Values{}
+	if chosen != nil {
+		fixed.Set("for", idString(chosen.ID))
+	}
+	return &fitBrowser{
+		Path: publicFitsPath, Fixed: fixed, Q: strings.TrimSpace(query.Get("q")), Sort: query.Get("sort"),
+		Sorts: []browseSort{
+			{"new", "Newest", func(a, b *fitCard) bool { return a.Updated.After(b.Updated) }},
+			sortFitName, sortFitShip,
+		},
+		Filters: []fitFilter{
+			filterHull(strings.TrimSpace(query.Get("hull"))),
+			filterTag(strings.TrimSpace(query.Get("tag"))),
+			{Key: "by", Title: "By", Value: strings.TrimSpace(query.Get("by")), Most: 10, Of: func(c *fitCard) []string { return []string{c.By} }},
+		},
+	}, cards
+}
+
+func (app *Application) handlePublicFits(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	data := app.page(ctx)
+	userID := app.userID(ctx)
+	chosen := app.doctrineChosenFor(ctx, userID, r.URL.Query().Get("for"))
+	browser, cards := app.publicFitBrowser(ctx, userID, chosen, r.URL.Query())
+	view := browser.run(cards)
+	if len(view.Cards) > publicFitsShown {
+		view.Cards, view.More = view.Cards[:publicFitsShown], true
+	}
+	view.For = chosen
+	view.Placeholder = "Search fits and ships…"
+	view.SuggestURL = "/fittings/public/suggest"
+	if len(browser.Fixed) > 0 {
+		view.SuggestURL += "?" + browser.Fixed.Encode()
+	}
+	view.Empty = `Nobody has made a fit public yet. To share one of yours, tick "Make public" on it in the fitting tool.`
+	data.PublicFits = &publicFitsView{Browser: view}
 	app.render(ctx, w, http.StatusOK, "fittings_public.html", data)
+}
+
+// handlePublicFitSuggest feeds the public fits search box
+// (GET /fittings/public/suggest?q=).
+func (app *Application) handlePublicFitSuggest(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := app.userID(ctx)
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(q) < 2 {
+		writeSuggestJSON(w, nil)
+		return
+	}
+	browser, cards := app.publicFitBrowser(ctx, userID, app.doctrineChosenFor(ctx, userID, r.URL.Query().Get("for")), url.Values{})
+	writeSuggestJSON(w, browser.suggestFits(cards, q))
 }

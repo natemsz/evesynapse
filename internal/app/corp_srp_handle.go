@@ -86,7 +86,7 @@ func (app *Application) srpHandler(r *http.Request, corp int64) (discordStanding
 func (app *Application) handleSRPDecide(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
-	back := app.flashBack(w, r, srpPath)
+	back := app.srpBack(w, r)
 	_ = r.ParseForm()
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	req, err := app.queries.GetSRPRequest(ctx, id)
@@ -194,7 +194,7 @@ func (app *Application) srpMailPaid(ctx context.Context, actor srpActor, req db.
 func (app *Application) handleSRPPayList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
-	back := app.flashBack(w, r, srpPath)
+	back := app.srpBack(w, r)
 	_ = r.ParseForm()
 	corp, _ := strconv.ParseInt(r.Form.Get("corporation"), 10, 64)
 	if _, ok := app.srpHandler(r, corp); !ok {
@@ -251,35 +251,6 @@ func (app *Application) handleSRPPayList(w http.ResponseWriter, r *http.Request)
 	back("The pay list is in " + mailer.Name + "'s EVE mail: " + plural(len(open), "request") + ".")
 }
 
-// handleSRPSettings saves who else handles a corporation's requests,
-// and the policy shown to its pilots (POST /srp/settings). Directors
-// and the CEO only.
-func (app *Application) handleSRPSettings(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	userID := app.userID(ctx)
-	back := app.flashBack(w, r, srpPath)
-	_ = r.ParseForm()
-	corp, _ := strconv.ParseInt(r.Form.Get("corporation"), 10, 64)
-	st, err := app.discordStandingFor(ctx, userID)
-	if err != nil || corp == 0 || !st.directs(corp) {
-		back("Only a director or the CEO of the corporation can change that.")
-		return
-	}
-	if !app.setCorpPermission(ctx, corp, permSRP, r.Form.Get("who"), app.srpActorFor(ctx, userID, corp).CharacterID) {
-		back("Replacement cannot be handed to that; nothing was saved.")
-		return
-	}
-	if err := app.queries.SetSRPSettings(ctx, db.SetSRPSettingsParams{
-		CorporationID: corp, Policy: clip(strings.TrimSpace(r.Form.Get("policy")), srpPolicyMax), UpdatedAt: time.Now().UTC(),
-	}); err != nil {
-		logging.Errorf("srp: settings of corporation %d: %v", corp, err)
-		back("The settings could not be saved; check the server log.")
-		return
-	}
-	logging.Infof("srp: user %d changed the settings of corporation %d", userID, corp)
-	back("Saved.")
-}
-
 // notifySRPEvents: what ship replacement tells an account.
 //
 // A handler is told of each open request in a corporation whose
@@ -330,7 +301,7 @@ func (app *Application) notifySRPEvents(ctx context.Context, c *notifyCollector,
 		c.add(notifyEvent{
 			Kind: notifySRPDone, CharacterID: req.CharacterID, Source: answered,
 			Key:   fmt.Sprintf("srpdone|%d|%s|%d", req.ID, req.Status, req.HandledAt.Time.Unix()),
-			Title: title, URL: srpPath,
+			Title: title, URL: corpAddress(srpPath, req.CorporationID),
 		})
 	}
 
@@ -359,7 +330,7 @@ func (app *Application) notifySRPEvents(ctx context.Context, c *notifyCollector,
 			Kind: notifySRPNew, Source: asked[req.CorporationID],
 			Key:   fmt.Sprintf("srp|%d", req.ID),
 			Title: fmt.Sprintf("SRP request: %s lost a %s", app.srpPilot(ctx, req.CharacterID), app.typeNameOrID(ctx, req.ShipTypeID)),
-			URL:   srpPath,
+			URL:   corpAddress(srpPath, req.CorporationID),
 		})
 	}
 }

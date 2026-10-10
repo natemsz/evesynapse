@@ -50,7 +50,7 @@
         </div>
       </details>
       <details class="branch{{if eq .Section "fitting"}} active{{end}}"{{if and (eq .Section "fitting") (ne .NavState "rail")}} open{{end}} data-nav-category="fitting">
-        <summary data-tip="Fitting"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h7l-5.5 4.5L18.5 21 12 16.5 5.5 21l2-7.5L2 9h7Z"/></g></svg></span><span class="nav-label">Fitting</span></summary>
+        <summary data-tip="Fitting"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg nav-icon-fitting" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.6 14.4 8.2v5l5.8 5.2v1.8l-5.8-1.6-1.2 2.4h-2.4l-1.2-2.4-5.8 1.6v-1.8l5.8-5.2v-5Z"/><path d="M12 8.8v3"/></g></svg></span><span class="nav-label">Fitting</span></summary>
         <div class="menu">
           <a href="/fittings/"{{if eq .NavPage "fittings.html"}} class="active"{{end}}>Ship Workbench</a>
           <a href="/fittings/saved/"{{if eq .NavPage "fittings_saved.html"}} class="active"{{end}}>Ship Loadouts</a>
@@ -93,6 +93,7 @@
           <a href="/srp/"{{if eq .NavPage "srp.html"}} class="active"{{end}}>Ship replacement</a>
           <a href="/discord/servers"{{if eq .NavPage "discord_servers.html"}} class="active"{{end}}>Discord server</a>
           <a href="/groups/"{{if eq .NavPage "groups.html"}} class="active"{{end}}>Groups</a>
+          <a href="/corporations/settings/"{{if eq .NavPage "corp_settings.html"}} class="active"{{end}}>Settings</a>
         </div>
       </details>
       <details class="branch{{if eq .Section "intel"}} active{{end}}"{{if and (eq .Section "intel") (ne .NavState "rail")}} open{{end}} data-nav-category="intel">

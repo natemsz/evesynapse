@@ -5,31 +5,35 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{with .Doctrines}}
-<p class="lede">A doctrine is a set of fits for a kind of fleet. An op can name one, every fit opens in the <a href="/fittings/">fitting tool</a>, and <a href="/doctrines/fits/">corporate fits</a> lists every doctrine's fits on one page.</p>
-
-{{if not .Member}}
-<p>None of your characters is in a corporation EveSynapse knows of yet, so there are no doctrines to show.</p>
+{{if not .Corp}}
+<p>None of your characters is in a player corporation EveSynapse knows of yet, so there are no doctrines to show.</p>
 {{else}}
+{{$corp := .Corp}}
+{{template "corpselector" .CorpOptions}}
+<h2>{{$corp.Name}}</h2>
+<p><small>Doctrines · <a href="/doctrines/fits/?corporation={{$corp.ID}}">Fits</a> · <a href="/srp/?corporation={{$corp.ID}}">Ship replacement</a>{{if $corp.Directs}} · <a href="/corporations/settings/?corporation={{$corp.ID}}">Settings</a>{{end}}</small></p>
 
-<form method="get" action="/doctrines/" class="op-form lookup-form">
-  <input type="text" name="q" value="{{.Q}}" placeholder="Search doctrines, fits and ships…" aria-label="Search doctrines" autocomplete="off">
+<p class="lede">A doctrine is a set of fits for a kind of fleet. An op can name one, and every fit opens in the <a href="/fittings/">fitting tool</a>.</p>
+
+{{if $corp.Total}}
+<form method="get" action="/doctrines/" class="lookup-form">
+  <input type="hidden" name="corporation" value="{{$corp.ID}}">
+  <span class="searchwrap">
+    <input type="search" name="q" id="doctrine-q" value="{{.Q}}" placeholder="Search doctrines, fits and ships…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="doctrine-suggest" aria-autocomplete="list" aria-label="Search doctrines" data-suggest="/doctrines/suggest?corporation={{$corp.ID}}">
+    <ul class="suggest" id="doctrine-suggest" role="listbox" hidden></ul>
+  </span>
   {{if .Categories}}<select name="category" aria-label="Category"><option value="">Any category</option>{{range .Categories}}<option value="{{.}}"{{if eq . $.Doctrines.Category}} selected{{end}}>{{.}}</option>{{end}}</select>{{end}}
   {{if .Tags}}<select name="tag" aria-label="Tag"><option value="">Any tag</option>{{range .Tags}}<option value="{{.}}"{{if eq . $.Doctrines.Tag}} selected{{end}}>{{.}}</option>{{end}}</select>{{end}}
   <button type="submit">Search</button>
-  {{if .Filtered}}<a href="/doctrines/">Clear</a>{{end}}
+  {{if .Filtered}}<a href="/doctrines/?corporation={{$corp.ID}}">Clear</a>{{end}}
 </form>
+{{end}}
 
-{{range .Corps}}
-<div class="owner-head">
-  <h2>{{.Name}}</h2>
-  <a class="btn" href="/doctrines/fits/">Corporate fits</a>
-</div>
-
-{{if .Doctrines}}
+{{if $corp.Doctrines}}
 <div class="settings-grid">
-{{range .Doctrines}}
+{{range $corp.Doctrines}}
 <section class="setting">
-  <div class="setting-head"><h4><a href="/doctrines/{{.ID}}">{{.Name}}</a></h4>{{if .Category}}<a class="badge wait" href="/doctrines/?category={{.Category}}">{{.Category}}</a>{{end}}</div>
+  <div class="setting-head"><h4><a href="/doctrines/{{.ID}}">{{.Name}}</a></h4>{{if .Category}}<a class="badge wait" href="/doctrines/?corporation={{$corp.ID}}&amp;category={{.Category}}">{{.Category}}</a>{{end}}</div>
   {{if .Description}}<p class="hint doctrine-clip">{{.Description}}</p>{{end}}
   {{if .Fits}}
   <ul class="row-list">
@@ -39,25 +43,28 @@
   {{else}}
   <p class="hint">No fits yet.</p>
   {{end}}
-  {{if .Tags}}<p class="tag-row">{{range .Tags}}<a href="/doctrines/?tag={{.}}">#{{.}}</a> {{end}}</p>{{end}}
+  {{if .Tags}}<p class="tag-row">{{range .Tags}}<a href="/doctrines/?corporation={{$corp.ID}}&amp;tag={{.}}">#{{.}}</a> {{end}}</p>{{end}}
 </section>
 {{end}}
 </div>
-{{else if .Total}}
-<p class="hint">No doctrine of this corporation matches.</p>
+{{else if $corp.Total}}
+<p class="hint">No doctrine matches. <a href="/doctrines/?corporation={{$corp.ID}}">Clear the search</a>.</p>
 {{else}}
-<p class="hint">No doctrines yet.{{if not .Manages}} They are kept by the corporation's directors, and whoever they hand it to.{{end}}</p>
+<p class="hint">No doctrines yet.{{if not $corp.Manages}} They are kept by the corporation's directors, and whoever they hand it to.{{end}}</p>
 {{end}}
 
-{{if .Manages}}
+{{if $corp.Manages}}
 <form method="post" action="/doctrines/create" class="op-form setting form-card">
-  <input type="hidden" name="corporation" value="{{.ID}}">
+  <input type="hidden" name="corporation" value="{{$corp.ID}}">
   <h4>New doctrine</h4>
   <div class="form-grid">
     <label class="field"><span class="field-label">Name</span>
       <input type="text" name="name" maxlength="80" required placeholder="e.g. Shield Lokis"></label>
-    <label class="field"><span class="field-label">Category</span>
-      <input type="text" name="category" maxlength="40" placeholder="e.g. Stratop, Roam, Home defence" list="doctrine-categories"></label>
+    <div class="field"><label class="field-label" for="doctrine-category">Category</label>
+      <span class="searchwrap">
+        <input type="search" name="category" id="doctrine-category" maxlength="40" placeholder="e.g. Stratop, Roam, Home defence" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="doctrine-category-suggest" aria-autocomplete="list" data-suggest="/doctrines/suggest?scope=categories&amp;corporation={{$corp.ID}}">
+        <ul class="suggest" id="doctrine-category-suggest" role="listbox" hidden></ul>
+      </span></div>
     <label class="field wide"><span class="field-label">Tags</span>
       <input type="text" name="tags" placeholder="Comma-separated: shield, kiting, t3c">
       <span class="field-hint">What members search by</span></label>
@@ -67,22 +74,6 @@
   <div class="form-actions"><button type="submit">Create doctrine</button><span class="field-hint">Fits are added on the doctrine's own page.</span></div>
 </form>
 {{end}}
-
-{{if .Directs}}
-<form method="post" action="/doctrines/settings" class="op-form setting form-card">
-  <input type="hidden" name="corporation" value="{{.ID}}">
-  <div class="setting-head"><h4>Who keeps {{.Name}}'s doctrines</h4><a class="btn" href="/groups/">Create groups</a></div>
-  <div class="form-grid">
-    <label class="field wide"><span class="field-label">Besides directors and the CEO</span>
-      <select name="who">{{range .Who}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
-      <span class="field-hint">An in-game role, or one of the corporation's groups. Every member can read doctrines.</span></label>
-  </div>
-  <div class="form-actions"><button type="submit">Save</button></div>
-</form>
-{{end}}
-{{end}}
-
-<datalist id="doctrine-categories">{{range .Categories}}<option value="{{.}}">{{end}}</datalist>
 {{end}}
 {{end}}
 {{end}}

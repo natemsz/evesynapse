@@ -99,6 +99,7 @@ type doctrineCard struct {
 	Fits        []doctrineFitView
 }
 
+// doctrineCorpView is the corporation a doctrines page is about.
 type doctrineCorpView struct {
 	ID        int64
 	Name      string
@@ -106,19 +107,18 @@ type doctrineCorpView struct {
 	Directs   bool
 	Total     int // doctrines before the page's filters
 	Doctrines []doctrineCard
-	Who       []permissionChoice
 }
 
-// doctrinesView is the /doctrines/ page.
+// doctrinesView is the /doctrines/ page: one corporation's doctrines.
 type doctrinesView struct {
-	Member     bool
-	Q          string
-	Category   string
-	Tag        string
-	Filtered   bool
-	Categories []string
-	Tags       []string
-	Corps      []doctrineCorpView
+	CorpOptions []corpOption
+	Corp        *doctrineCorpView // nil when the account is in no player corporation
+	Q           string
+	Category    string
+	Tag         string
+	Filtered    bool
+	Categories  []string
+	Tags        []string
 }
 
 // doctrineFitViews turns stored fits into rows, by doctrine.
@@ -172,50 +172,135 @@ func (app *Application) handleDoctrines(w http.ResponseWriter, r *http.Request) 
 	view.Filtered = view.Q != "" || view.Category != "" || view.Tag != ""
 	data.Doctrines = view
 
+	corp, options := app.pickCorporation(ctx, r, app.playerCorps(ctx, userID))
+	if corp == 0 {
+		app.render(ctx, w, http.StatusOK, "doctrines.html", data)
+		return
+	}
 	st, err := app.discordStandingFor(ctx, userID)
 	if err != nil {
 		logging.Errorf("doctrines: standing of user %d: %v", userID, err)
 		data.Error = "Could not load the doctrines; check the server log."
 	}
-	corps := app.srpCorps(ctx, userID)
-	view.Member = len(corps) > 0
-	doctrines, err := app.queries.ListDoctrinesForCorporations(ctx, corps)
+	cv := &doctrineCorpView{ID: corp, Name: app.corpDisplayName(ctx, corp), Directs: st.directs(corp)}
+	cv.Manages = app.corpPermits(ctx, st, corp, permDoctrines)
+	view.CorpOptions, view.Corp = options, cv
+
+	doctrines, err := app.queries.ListDoctrinesForCorporations(ctx, []int64{corp})
 	if err != nil {
-		logging.Errorf("doctrines: list for user %d: %v", userID, err)
+		logging.Errorf("doctrines: list for corporation %d: %v", corp, err)
 	}
 	ids := make([]int64, 0, len(doctrines))
 	for _, d := range doctrines {
 		ids = append(ids, d.ID)
 	}
 	fits := app.doctrineFitViews(ctx, ids)
-
 	categories, tags := map[string]bool{}, map[string]bool{}
-	for _, corp := range corps {
-		cv := doctrineCorpView{ID: corp, Name: app.corpDisplayName(ctx, corp), Directs: st.directs(corp)}
-		cv.Manages = app.corpPermits(ctx, st, corp, permDoctrines)
-		for _, d := range doctrines {
-			if d.CorporationID != corp {
-				continue
-			}
-			cv.Total++
-			card := doctrineCard{ID: d.ID, Name: d.Name, Category: d.Category, Description: d.Description, Tags: doctrineTagList(d.Tags), Fits: fits[d.ID]}
-			if d.Category != "" {
-				categories[d.Category] = true
-			}
-			for _, tag := range card.Tags {
-				tags[tag] = true
-			}
-			if card.matches(view.Q, view.Category, view.Tag) {
-				cv.Doctrines = append(cv.Doctrines, card)
-			}
+	for _, d := range doctrines {
+		cv.Total++
+		card := doctrineCard{ID: d.ID, Name: d.Name, Category: d.Category, Description: d.Description, Tags: doctrineTagList(d.Tags), Fits: fits[d.ID]}
+		if d.Category != "" {
+			categories[d.Category] = true
 		}
-		if cv.Directs {
-			cv.Who = app.permissionChoices(ctx, corp, permDoctrines)
+		for _, tag := range card.Tags {
+			tags[tag] = true
 		}
-		view.Corps = append(view.Corps, cv)
+		if card.matches(view.Q, view.Category, view.Tag) {
+			cv.Doctrines = append(cv.Doctrines, card)
+		}
 	}
 	view.Categories, view.Tags = sortedKeys(categories), sortedKeys(tags)
 	app.render(ctx, w, http.StatusOK, "doctrines.html", data)
+}
+
+// handleDoctrineSuggest feeds the search boxes of the doctrine pages
+// (GET /doctrines/suggest?scope=&corporation=&q=). What it offers
+// depends on the box: doctrines and what they are filed under, a
+// corporation's fits, its categories, or the account's own saved fits.
+// A corporation's names go only to an account with a character in it.
+func (app *Application) handleDoctrineSuggest(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := app.userID(ctx)
+	query := r.URL.Query()
+	q := strings.TrimSpace(query.Get("q"))
+	needle := strings.ToLower(q)
+	var out []suggestItem
+	if len(q) < 2 {
+		writeSuggestJSON(w, out)
+		return
+	}
+	if query.Get("scope") == "myfits" {
+		rows, err := app.queries.SearchLocalFittings(ctx, db.SearchLocalFittingsParams{UserID: userID, Q: q})
+		if err != nil {
+			logging.Errorf("doctrines: suggest saved fits: %v", err)
+		}
+		for _, row := range rows {
+			if !row.IsDraft {
+				out = append(out, suggestItem{ID: row.ID, Name: row.Name, Label: row.ShipName})
+			}
+		}
+		writeSuggestJSON(w, out)
+		return
+	}
+
+	corp, _ := strconv.ParseInt(query.Get("corporation"), 10, 64)
+	inside := false
+	for _, mine := range app.playerCorps(ctx, userID) {
+		inside = inside || mine == corp
+	}
+	if !inside {
+		writeSuggestJSON(w, out)
+		return
+	}
+	if query.Get("scope") == "fits" {
+		browser, cards := app.corpFitBrowser(ctx, corp, app.doctrineChosenFor(ctx, userID, query.Get("for")), url.Values{})
+		writeSuggestJSON(w, browser.suggestFits(cards, q))
+		return
+	}
+
+	doctrines, err := app.queries.ListDoctrinesForCorporations(ctx, []int64{corp})
+	if err != nil {
+		logging.Errorf("doctrines: suggest for corporation %d: %v", corp, err)
+	}
+	seen := map[string]bool{}
+	add := func(name, label, address string) {
+		key := label + "\n" + strings.ToLower(name)
+		if name != "" && !seen[key] && len(out) < suggestBrowseMost && strings.Contains(strings.ToLower(name), needle) {
+			seen[key] = true
+			out = append(out, suggestItem{Name: name, Label: label, URL: address})
+		}
+	}
+	list := corpAddress(doctrinesPath, corp)
+	if query.Get("scope") == "categories" {
+		for _, d := range doctrines {
+			add(d.Category, "Category", "")
+		}
+		writeSuggestJSON(w, out)
+		return
+	}
+	ids := make([]int64, 0, len(doctrines))
+	for _, d := range doctrines {
+		ids = append(ids, d.ID)
+		label := "Doctrine"
+		if d.Category != "" {
+			label = "Doctrine · " + d.Category
+		}
+		add(d.Name, label, doctrineURL(d.ID))
+	}
+	fits := app.doctrineFitViews(ctx, ids)
+	for _, d := range doctrines {
+		for _, fit := range fits[d.ID] {
+			add(fit.Name, "Fit in "+d.Name, doctrineURL(d.ID))
+			add(fit.Ship, "Ship", list+"&q="+url.QueryEscape(fit.Ship))
+		}
+	}
+	for _, d := range doctrines {
+		add(d.Category, "Category", list+"&category="+url.QueryEscape(d.Category))
+		for _, tag := range doctrineTagList(d.Tags) {
+			add(tag, "Tag", list+"&tag="+url.QueryEscape(tag))
+		}
+	}
+	writeSuggestJSON(w, out)
 }
 
 func sortedKeys(set map[string]bool) []string {
@@ -247,9 +332,9 @@ func doctrineFields(r *http.Request) (name, category, description, tags, problem
 func (app *Application) handleDoctrineCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
-	back := app.flashBack(w, r, doctrinesPath)
 	_ = r.ParseForm()
 	corp, _ := strconv.ParseInt(r.Form.Get("corporation"), 10, 64)
+	back := app.flashBack(w, r, corpAddress(doctrinesPath, corp))
 	st, err := app.discordStandingFor(ctx, userID)
 	if err != nil || corp == 0 || !app.corpPermits(ctx, st, corp, permDoctrines) {
 		back("That corporation's doctrines are not yours to keep.")
@@ -300,6 +385,7 @@ type doctrineView struct {
 	doctrineCard
 	TagsText    string
 	Corporation string
+	CorpID      int64
 	Keeps       bool
 	Full        bool // no room for another fit
 	Roles       []string
@@ -318,7 +404,7 @@ func (app *Application) handleDoctrine(w http.ResponseWriter, r *http.Request) {
 	view := &doctrineView{
 		doctrineCard: doctrineCard{ID: d.ID, Name: d.Name, Category: d.Category, Description: d.Description, Tags: doctrineTagList(d.Tags)},
 		TagsText:     strings.Join(doctrineTagList(d.Tags), ", "),
-		Corporation:  app.corpDisplayName(ctx, d.CorporationID), Keeps: keeps, Roles: opFleetRoles,
+		Corporation:  app.corpDisplayName(ctx, d.CorporationID), CorpID: d.CorporationID, Keeps: keeps, Roles: opFleetRoles,
 	}
 	data.Doctrine = view
 	fits, err := app.queries.ListDoctrineFits(ctx, []int64{d.ID})
@@ -397,7 +483,7 @@ func (app *Application) handleDoctrineDelete(w http.ResponseWriter, r *http.Requ
 		logging.Errorf("doctrines: delete %d: %v", d.ID, err)
 	}
 	logging.Infof("doctrines: user %d deleted doctrine %d (%s)", app.userID(ctx), d.ID, d.Name)
-	app.flashBack(w, r, doctrinesPath)("Deleted " + d.Name + ". Ops that named it keep its name.")
+	app.flashBack(w, r, corpAddress(doctrinesPath, d.CorporationID))("Deleted " + d.Name + ". Ops that named it keep its name.")
 }
 
 // doctrineFitSource finds the fit document a keeper is adding: one of
@@ -420,6 +506,16 @@ func (app *Application) doctrineFitSource(r *http.Request) (doc *fitDoc, problem
 			return nil, "That is not one of your saved fits.", 0
 		}
 		return read(row.ItemsJson)
+	}
+	// Typed, not picked from the suggestions: the saved fit of that name.
+	if name := strings.TrimSpace(r.Form.Get("fit_name")); name != "" {
+		rows, _ := app.queries.SearchLocalFittings(ctx, db.SearchLocalFittingsParams{UserID: userID, Q: name})
+		for _, row := range rows {
+			if strings.EqualFold(row.Name, name) && !row.IsDraft {
+				return read(row.ItemsJson)
+			}
+		}
+		return nil, "None of your saved fits is called " + name + ".", 0
 	}
 	if id, _ := strconv.ParseInt(r.Form.Get("public"), 10, 64); id > 0 {
 		row, err := app.queries.GetPublicFitting(ctx, id)
@@ -543,65 +639,29 @@ func (app *Application) handleDoctrineFitRemove(w http.ResponseWriter, r *http.R
 	app.flashBack(w, r, doctrineURL(d.ID))("Fit removed.")
 }
 
-// handleDoctrineSettings saves who else keeps a corporation's
-// doctrines (POST /doctrines/settings). Directors and the CEO only.
-func (app *Application) handleDoctrineSettings(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	userID := app.userID(ctx)
-	back := app.flashBack(w, r, doctrinesPath)
-	_ = r.ParseForm()
-	corp, _ := strconv.ParseInt(r.Form.Get("corporation"), 10, 64)
-	st, err := app.discordStandingFor(ctx, userID)
-	if err != nil || corp == 0 || !st.directs(corp) {
-		back("Only a director or the CEO of the corporation can change that.")
-		return
-	}
-	if !app.setCorpPermission(ctx, corp, permDoctrines, r.Form.Get("who"), app.srpActorFor(ctx, userID, corp).CharacterID) {
-		back("Doctrines cannot be handed to that; nothing was saved.")
-		return
-	}
-	back("Saved.")
-}
-
 // ---------------------------------------------------------------------------
-// Corporate fits: every fit in the doctrines of the corporations an
-// account has a character in, on one page. Public fits have their own
-// page in the fitting tool (char_fit_public.go).
+// Corporate fits: every fit in one corporation's doctrines, in the fit
+// browser (fit_browser.go). Public fits have their own page in the
+// fitting tool (char_fit_public.go).
 // ---------------------------------------------------------------------------
 
 const doctrineFitsPath = "/doctrines/fits/"
 
-// corpFitRow is one doctrine fit on the corporate fits page.
-type corpFitRow struct {
-	ID          int64
-	Name        string
-	Ship        string
-	ShipTypeID  int64
-	Tags        []string
-	Role        string
-	Doctrine    string
-	DoctrineURL string
-	Category    string
-}
-
 type corpFitsView struct {
-	Member     bool
-	Q, Tag     string
-	DoctrineID int64
-	Doctrines  []opChoice // the doctrines the account can read, to filter by
-	Total      int        // fits before the page's filters
-	Rows       []corpFitRow
-	// For is the doctrine a keeper is choosing fits for, when the page
-	// was opened from one.
-	For   *opChoice
-	Roles []string
-	Self  string // this page's address with its filters, to come back to
+	CorpOptions []corpOption
+	CorpID      int64 // 0 when the account is in no player corporation
+	CorpName    string
+	Directs     bool
+	Browser     *fitBrowserView
 }
 
 // doctrineChosenFor reads the "for" of an address: the doctrine a
 // keeper is choosing fits for. Nil unless the account keeps it.
 func (app *Application) doctrineChosenFor(ctx context.Context, userID int64, raw string) *opChoice {
 	id, _ := strconv.ParseInt(raw, 10, 64)
+	if id <= 0 {
+		return nil
+	}
 	d, err := app.queries.GetDoctrine(ctx, id)
 	if err != nil {
 		return nil
@@ -613,74 +673,89 @@ func (app *Application) doctrineChosenFor(ctx context.Context, userID int64, raw
 	return &opChoice{ID: d.ID, Name: d.Name}
 }
 
-// browseAddress is a fit browser's address with its filters, for the
-// add form to come back to.
-func browseAddress(path string, chosen *opChoice, filters map[string]string) string {
-	query := url.Values{}
-	for key, value := range filters {
-		if value != "" && value != "0" {
-			query.Set(key, value)
+// corpFitBrowser sets up the browser for one corporation's fits, as
+// an address filters it, and loads the fits.
+func (app *Application) corpFitBrowser(ctx context.Context, corp int64, chosen *opChoice, query url.Values) (*fitBrowser, []fitCard) {
+	doctrines, err := app.queries.ListDoctrinesForCorporations(ctx, []int64{corp})
+	if err != nil {
+		logging.Errorf("corporate fits: doctrines of corporation %d: %v", corp, err)
+	}
+	byID := map[int64]db.Doctrine{}
+	names := map[string]string{}
+	ids := make([]int64, 0, len(doctrines))
+	for _, d := range doctrines {
+		byID[d.ID] = d
+		names[idString(d.ID)] = d.Name
+		ids = append(ids, d.ID)
+	}
+	var cards []fitCard
+	if len(ids) > 0 {
+		fits, err := app.queries.ListDoctrineFits(ctx, ids)
+		if err != nil {
+			logging.Errorf("corporate fits: fits of corporation %d: %v", corp, err)
 		}
+		for _, fit := range fits {
+			d := byID[fit.DoctrineID]
+			var doc fitDoc
+			_ = json.Unmarshal([]byte(fit.ItemsJson), &doc)
+			tags := doctrineTagList(d.Tags)
+			for _, tag := range doc.Tags {
+				if !hasTag(tags, tag) {
+					tags = append(tags, tag)
+				}
+			}
+			cards = append(cards, fitCard{
+				ID: fit.ID, Name: fit.Name, Ship: app.typeNameOrID(ctx, fit.ShipTypeID), ShipTypeID: fit.ShipTypeID,
+				Role: fit.FleetRole, DoctrineID: d.ID, Doctrine: d.Name, DoctrineURL: doctrineURL(d.ID), Category: d.Category,
+				OpenURL: "/fittings/?doctrine=" + idString(fit.ID) + "#fit-editor", AddField: "copy", Updated: fit.AddedAt, tags: tags,
+			})
+		}
+		app.hullClasses(ctx, cards)
 	}
+
+	fixed := url.Values{"corporation": {idString(corp)}}
 	if chosen != nil {
-		query.Set("for", strconv.FormatInt(chosen.ID, 10))
+		fixed.Set("for", idString(chosen.ID))
 	}
-	return path + "?" + query.Encode()
+	return &fitBrowser{
+		Path: doctrineFitsPath, Fixed: fixed, Q: strings.TrimSpace(query.Get("q")), Sort: query.Get("sort"),
+		Sorts: []browseSort{
+			{"doctrine", "Doctrine", byFold(func(c *fitCard) string { return c.Doctrine })},
+			sortFitName, sortFitShip,
+			{"part", "Part", byFold(func(c *fitCard) string { return c.Role })},
+		},
+		Filters: []fitFilter{
+			{Key: "part", Title: "Part", Value: query.Get("part"), Of: func(c *fitCard) []string { return []string{c.Role} }},
+			{Key: "doctrine", Title: "Doctrine", Value: query.Get("doctrine"), Most: 16,
+				Of: func(c *fitCard) []string { return []string{idString(c.DoctrineID)} }, Label: func(id string) string { return names[id] }},
+			{Key: "category", Title: "Category", Value: strings.TrimSpace(query.Get("category")), Most: 12, Of: func(c *fitCard) []string { return []string{c.Category} }},
+			filterHull(strings.TrimSpace(query.Get("hull"))),
+			filterTag(strings.TrimSpace(query.Get("tag"))),
+		},
+	}, cards
 }
 
 func (app *Application) handleCorpFits(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
 	userID := app.userID(ctx)
-	query := r.URL.Query()
-	view := &corpFitsView{Q: strings.TrimSpace(query.Get("q")), Tag: strings.TrimSpace(query.Get("tag")), Roles: opFleetRoles}
-	view.DoctrineID, _ = strconv.ParseInt(query.Get("doctrine"), 10, 64)
+	view := &corpFitsView{}
 	data.CorpFits = view
-
-	corps := app.srpCorps(ctx, userID)
-	view.Member = len(corps) > 0
-	doctrines, err := app.queries.ListDoctrinesForCorporations(ctx, corps)
-	if err != nil {
-		logging.Errorf("corporate fits: doctrines of user %d: %v", userID, err)
-	}
-	byID := map[int64]db.Doctrine{}
-	ids := make([]int64, 0, len(doctrines))
-	for _, d := range doctrines {
-		byID[d.ID] = d
-		ids = append(ids, d.ID)
-		view.Doctrines = append(view.Doctrines, opChoice{ID: d.ID, Name: d.Name, Selected: d.ID == view.DoctrineID})
-	}
-	view.For = app.doctrineChosenFor(ctx, userID, query.Get("for"))
-	view.Self = browseAddress(doctrineFitsPath, view.For, map[string]string{"q": view.Q, "tag": view.Tag, "doctrine": strconv.FormatInt(view.DoctrineID, 10)})
-	if len(ids) == 0 {
+	corp, options := app.pickCorporation(ctx, r, app.playerCorps(ctx, userID))
+	if corp == 0 {
 		app.render(ctx, w, http.StatusOK, "corp_fits.html", data)
 		return
 	}
-	fits, err := app.queries.ListDoctrineFits(ctx, ids)
-	if err != nil {
-		logging.Errorf("corporate fits: fits of user %d: %v", userID, err)
+	view.CorpOptions, view.CorpID, view.CorpName = options, corp, app.corpDisplayName(ctx, corp)
+	if st, err := app.discordStandingFor(ctx, userID); err == nil {
+		view.Directs = st.directs(corp)
 	}
-	view.Total = len(fits)
-	needle := strings.ToLower(view.Q)
-	for _, fit := range fits {
-		d := byID[fit.DoctrineID]
-		if view.DoctrineID != 0 && d.ID != view.DoctrineID {
-			continue
-		}
-		var doc fitDoc
-		_ = json.Unmarshal([]byte(fit.ItemsJson), &doc)
-		tags := append(doctrineTagList(d.Tags), doc.Tags...)
-		ship := app.typeNameOrID(ctx, fit.ShipTypeID)
-		if view.Tag != "" && !hasTag(tags, view.Tag) {
-			continue
-		}
-		if needle != "" && !strings.Contains(strings.ToLower(fit.Name+"\n"+ship+"\n"+d.Name+"\n"+d.Category), needle) {
-			continue
-		}
-		view.Rows = append(view.Rows, corpFitRow{
-			ID: fit.ID, Name: fit.Name, Ship: ship, ShipTypeID: fit.ShipTypeID, Tags: tags, Role: fit.FleetRole,
-			Doctrine: d.Name, DoctrineURL: doctrineURL(d.ID), Category: d.Category,
-		})
-	}
+	chosen := app.doctrineChosenFor(ctx, userID, r.URL.Query().Get("for"))
+	browser, cards := app.corpFitBrowser(ctx, corp, chosen, r.URL.Query())
+	view.Browser = browser.run(cards)
+	view.Browser.For = chosen
+	view.Browser.Placeholder = "Search fits, ships and doctrines…"
+	view.Browser.SuggestURL = "/doctrines/suggest?scope=fits&" + browser.Fixed.Encode()
+	view.Browser.Empty = "No corporate fits yet. A fit shows here once it is in one of the corporation's doctrines."
 	app.render(ctx, w, http.StatusOK, "corp_fits.html", data)
 }

@@ -163,7 +163,7 @@ func TestSRPHandling(t *testing.T) {
 	}
 
 	_, body := getPage(t, f.app, f.director, srpPath)
-	mustContain(t, "srp page for a director", body, "Fixture Mate", "NOT ON ATTENDANCE", "Mail me the pay list", "Settings for")
+	mustContain(t, "srp page for a director", body, "Fixture Mate", "NOT ON ATTENDANCE", "Mail me the pay list", "corporation settings")
 	if err := f.q.InsertManualAttendance(f.ctx, db.InsertManualAttendanceParams{OpID: f.op, CharacterID: fixtureCharB, SeenAt: now}); err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestSRPHandling(t *testing.T) {
 	// Not a handler: nothing an accountant or the pilot posts counts.
 	f.decide(f.acct, url.Values{"action": {"paid"}, "payout": {"5m"}})
 	f.decide(f.pilot, url.Values{"action": {"paid"}, "payout": {"5m"}})
-	f.post(f.pilot, "/srp/settings", url.Values{"corporation": {"98000001"}, "who": {"eve_role:Accountant"}})
+	f.post(f.pilot, "/corporations/settings/save", url.Values{"corporation": {"98000001"}, "srp_who": {"eve_role:Accountant"}})
 	f.post(f.acct, "/srp/paylist", url.Values{"corporation": {"98000001"}, "character": {"90000004"}})
 	if f.request().Status != srpOpen || len(f.mail.sent()) != 0 {
 		t.Fatal("somebody who does not handle requests answered one, or got the pay list")
@@ -183,8 +183,8 @@ func TestSRPHandling(t *testing.T) {
 	}
 
 	// The director hands it to accountants; one denies, with a reason.
-	f.post(f.director, "/srp/settings", url.Values{"corporation": {"98000001"}, "who": {"member"}, "policy": {"x"}})
-	f.post(f.director, "/srp/settings", url.Values{"corporation": {"98000001"}, "who": {"eve_role:Accountant"}, "policy": {"Doctrine ships only."}})
+	f.post(f.director, "/corporations/settings/save", url.Values{"corporation": {"98000001"}, "srp_who": {"member"}, "srp_policy": {"x"}})
+	f.post(f.director, "/corporations/settings/save", url.Values{"corporation": {"98000001"}, "srp_who": {"eve_role:Accountant"}, "srp_policy": {"Doctrine ships only."}})
 	_, body = getPage(t, f.app, f.pilot, srpPath)
 	mustContain(t, "policy for a pilot", body, "Doctrine ships only.")
 	f.decide(f.acct, url.Values{"action": {"deny"}})

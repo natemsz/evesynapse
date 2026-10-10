@@ -1,0 +1,46 @@
+{{define "title"}}Corporation Settings{{end}}
+{{define "content"}}
+<h1><span class="gt">Corporation Settings</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{with .CorpSettings}}
+{{if not .ID}}
+<p>None of your characters is a director or the CEO of a corporation, so there are no settings for you to change.</p>
+{{else}}
+{{template "corpselector" .CorpOptions}}
+<h2>{{.Name}}</h2>
+<p><small><a href="/doctrines/?corporation={{.ID}}">Doctrines</a> · <a href="/doctrines/fits/?corporation={{.ID}}">Fits</a> · <a href="/srp/?corporation={{.ID}}">Ship replacement</a> · Settings</small></p>
+
+<p class="lede">How {{.Name}} runs on EveSynapse. Directors and the CEO can always do everything here; these settings say who else can.</p>
+
+<form method="post" action="/corporations/settings/save" class="op-form">
+  <input type="hidden" name="corporation" value="{{.ID}}">
+  <div class="settings-grid">
+    <section class="setting">
+      <h4>Ship replacement</h4>
+      <label class="field"><span class="field-label">Who handles requests, besides directors and the CEO</span>
+        <select name="srp_who">{{range .SRPWho}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+        <span class="field-hint">They see every request, mark it paid or deny it</span></label>
+      <label class="field"><span class="field-label">Policy shown to pilots</span>
+        <textarea name="srp_policy" rows="5" maxlength="2000" placeholder="e.g. Doctrine ships on stratops are replaced in full; everything else at the handler's judgement.">{{.SRPPolicy}}</textarea></label>
+    </section>
+
+    <section class="setting">
+      <h4>Doctrines</h4>
+      <label class="field"><span class="field-label">Who keeps doctrines, besides directors and the CEO</span>
+        <select name="doctrines_who">{{range .DoctrinesWho}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+        <span class="field-hint">They make, change and delete doctrines and their fits. Every member can read them.</span></label>
+    </section>
+
+    <section class="setting">
+      <h4>Groups and Discord</h4>
+      <p class="hint">Either setting above can be an in-game role or one of the corporation's groups. Groups, and the corporation's Discord server, have pages of their own.</p>
+      <div class="form-actions"><a class="btn" href="/groups/">Groups</a><a class="btn" href="/discord/servers">Discord server</a></div>
+    </section>
+  </div>
+  <div class="form-actions"><button type="submit">Save settings</button></div>
+</form>
+{{end}}
+{{end}}
+{{end}}

@@ -4,7 +4,7 @@
   <input type="text" class="charselector-input" placeholder="Select corporation..." autocomplete="off" aria-label="Select corporation">
   <div class="charselector-dropdown" hidden>
     {{range .}}
-    <a href="?corporation={{.ID}}" class="charselector-option{{if .Active}} active{{end}}" data-name="{{.Name}}" data-id="{{.ID}}">
+    <a href="?{{.Param}}={{.Value}}" class="charselector-option{{if .Active}} active{{end}}" data-name="{{.Name}}">
       <span class="charselector-name">{{.Name}}</span>
     </a>
     {{end}}

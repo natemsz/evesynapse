@@ -310,7 +310,7 @@ func (f *notifyFixture) connect(cookie *http.Cookie, code string) (*http.Cookie,
 // owner ("corporation:98000001").
 func (f *notifyFixture) addServer(cookie *http.Cookie, owner, code string) (*http.Cookie, string) {
 	f.t.Helper()
-	return f.roundTrip(cookie, "/discord/servers/add", url.Values{"owner": {owner}}, code, discordServersPath)
+	return f.roundTrip(cookie, "/discord/servers/add", url.Values{"owner": {owner}}, code, ownerAddress(discordServersPath, owner))
 }
 
 func (f *notifyFixture) joinCorp(characterID, corporationID int64, roles ...string) {

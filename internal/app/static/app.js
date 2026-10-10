@@ -886,8 +886,8 @@
   // Search boxes that name their own feed (data-suggest): the
   // doctrine pages and the fit browsers. A suggestion that is a
   // link is followed; any other fills the box, and where the box
-  // names a hidden field (data-suggest-target) that takes the id
-  // of what was picked, until the box is typed in again.
+  // names a hidden field (data-suggest-target) that takes what
+  // was picked, until the box is typed in again.
   Array.prototype.forEach.call(document.querySelectorAll("input[data-suggest]"), function (input) {
     var base = input.getAttribute("data-suggest");
     var target = document.getElementById(input.getAttribute("data-suggest-target") || "");
@@ -897,7 +897,7 @@
       function (it, input) {
         if (it.url) { window.location.href = it.url; return; }
         input.value = it.name;
-        if (target) target.value = it.id;
+        if (target) target.value = it.value || it.id;
       });
   });
 

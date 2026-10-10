@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 )
 
@@ -236,7 +237,16 @@ func (app *Application) handleDoctrineSuggest(w http.ResponseWriter, r *http.Req
 		}
 		for _, row := range rows {
 			if !row.IsDraft {
-				out = append(out, suggestItem{ID: row.ID, Name: row.Name, Label: row.ShipName})
+				out = append(out, suggestItem{ID: row.ID, Name: row.Name, Label: row.ShipName + " · saved here", Value: "local:" + idString(row.ID)})
+			}
+		}
+		for _, mine := range app.accountEVEFits(ctx, userID) {
+			ship := app.typeNameOrID(ctx, mine.fit.ShipTypeID)
+			if len(out) < suggestBrowseMost && strings.Contains(strings.ToLower(mine.fit.Name+"\n"+ship), needle) {
+				out = append(out, suggestItem{
+					ID: mine.fit.FittingID, Name: mine.fit.Name, Label: ship + " · in game on " + mine.character.Name,
+					Value: "eve:" + idString(mine.character.CharacterID) + ":" + idString(mine.fit.FittingID),
+				})
 			}
 		}
 		writeSuggestJSON(w, out)
@@ -389,7 +399,6 @@ type doctrineView struct {
 	Keeps       bool
 	Full        bool // no room for another fit
 	Roles       []string
-	MyFits      []opChoice // the keeper's saved fits, to add
 }
 
 func (app *Application) handleDoctrine(w http.ResponseWriter, r *http.Request) {
@@ -424,14 +433,6 @@ func (app *Application) handleDoctrine(w http.ResponseWriter, r *http.Request) {
 		view.Fits = append(view.Fits, fv)
 	}
 	view.Full = len(view.Fits) >= doctrineFitsMost
-	if keeps {
-		mine, _ := app.queries.ListLocalFittings(ctx, app.userID(ctx))
-		for _, fit := range mine {
-			if !fit.IsDraft {
-				view.MyFits = append(view.MyFits, opChoice{ID: fit.ID, Name: fit.Name + " (" + app.typeNameOrID(ctx, fit.ShipTypeID) + ")"})
-			}
-		}
-	}
 	app.render(ctx, w, http.StatusOK, "doctrine.html", data)
 }
 
@@ -507,7 +508,27 @@ func (app *Application) doctrineFitSource(r *http.Request) (doc *fitDoc, problem
 		}
 		return read(row.ItemsJson)
 	}
-	// Typed, not picked from the suggestions: the saved fit of that name.
+	// Picked from the suggestions: a fit saved here, or an in-game fit
+	// of one of the account's characters.
+	if pick := r.Form.Get("pick"); pick != "" {
+		kind, rest, _ := strings.Cut(pick, ":")
+		switch kind {
+		case "local":
+			id, _ := strconv.ParseInt(rest, 10, 64)
+			if row, err := app.queries.GetLocalFitting(ctx, db.GetLocalFittingParams{ID: id, UserID: userID}); err == nil {
+				return read(row.ItemsJson)
+			}
+		case "eve":
+			character, fitting, _ := strings.Cut(rest, ":")
+			for _, mine := range app.accountEVEFits(ctx, userID) {
+				if idString(mine.character.CharacterID) == character && idString(mine.fit.FittingID) == fitting {
+					return app.fitDocFromESI(ctx, mine.fit), "", 0
+				}
+			}
+		}
+		return nil, "That fit is not one of yours any more. Pick it from the list again.", 0
+	}
+	// Typed, not picked: the fit of that name, saved here or in game.
 	if name := strings.TrimSpace(r.Form.Get("fit_name")); name != "" {
 		rows, _ := app.queries.SearchLocalFittings(ctx, db.SearchLocalFittingsParams{UserID: userID, Q: name})
 		for _, row := range rows {
@@ -515,7 +536,12 @@ func (app *Application) doctrineFitSource(r *http.Request) (doc *fitDoc, problem
 				return read(row.ItemsJson)
 			}
 		}
-		return nil, "None of your saved fits is called " + name + ".", 0
+		for _, mine := range app.accountEVEFits(ctx, userID) {
+			if strings.EqualFold(mine.fit.Name, name) {
+				return app.fitDocFromESI(ctx, mine.fit), "", 0
+			}
+		}
+		return nil, "None of your fits is called " + name + ". Pick one from the list.", 0
 	}
 	if id, _ := strconv.ParseInt(r.Form.Get("public"), 10, 64); id > 0 {
 		row, err := app.queries.GetPublicFitting(ctx, id)
@@ -538,6 +564,31 @@ func (app *Application) doctrineFitSource(r *http.Request) (doc *fitDoc, problem
 		return doc, "", len(notes)
 	}
 	return nil, "Pick a fit, or paste one.", 0
+}
+
+// eveFit is one in-game fitting of one of an account's characters.
+type eveFit struct {
+	character db.Character
+	fit       esi.Fitting
+}
+
+// accountEVEFits lists the in-game fittings of an account's
+// characters, from stored data only.
+func (app *Application) accountEVEFits(ctx context.Context, userID int64) []eveFit {
+	characters, err := app.queries.ListCharactersByUser(ctx, userID)
+	if err != nil {
+		return nil
+	}
+	var out []eveFit
+	for _, ch := range characters {
+		var fittings esi.Fittings
+		if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapFittings, &fittings) {
+			for _, fit := range fittings {
+				out = append(out, eveFit{character: ch, fit: fit})
+			}
+		}
+	}
+	return out
 }
 
 // doctrineFitDoc reads a doctrine's fit for an account with a

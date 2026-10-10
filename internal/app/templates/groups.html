@@ -7,11 +7,12 @@
 {{with .Groups}}
 <p class="lede">A group is a list of characters that a corporation's or alliance's directors keep by hand: a special interest group, the fleet commanders, a logistics wing. A <a href="/discord/servers">Discord server's</a> rules can give everyone in a group a role.</p>
 
-{{if not .Owners}}
+{{if not .Owner}}
 <p>None of your characters is a director, so there are no groups for you to keep.</p>
 {{end}}
 
-{{range .Owners}}
+{{template "corpselector" .OwnerOptions}}
+{{with .Owner}}
 {{$owner := .}}
 <h2>{{.Name}} <small>· {{.Kind}}</small></h2>
 
@@ -40,7 +41,7 @@
   <ul class="row-list">
     {{range .Members}}
     <li><span>{{.Name}}{{if .Outside}} <small>no longer in the {{$owner.Kind}}, or not linked: counts for nothing until it is back</small>{{end}}</span>
-      <form method="post" action="/groups/{{$group}}/members/remove" class="inline-form"><input type="hidden" name="character" value="{{.CharacterID}}"><button type="submit" class="btn">Remove</button></form></li>
+      <form method="post" action="/groups/{{$group}}/members/remove" class="inline-form"><input type="hidden" name="owner" value="{{$owner.Key}}"><input type="hidden" name="character" value="{{.CharacterID}}"><button type="submit" class="btn">Remove</button></form></li>
     {{end}}
   </ul>
   {{else}}
@@ -48,6 +49,7 @@
   {{end}}
   {{if .Addable}}
   <form method="post" action="/groups/{{.ID}}/members/add" class="add-row">
+    <input type="hidden" name="owner" value="{{$owner.Key}}">
     <div class="charselector checkselector" data-checkselector data-summary="add">
       <input type="text" class="charselector-input" placeholder="Add characters…" autocomplete="off" aria-label="Characters to add to {{.Name}}. Type to search.">
       <div class="charselector-dropdown" hidden>
@@ -61,7 +63,7 @@
   <p class="hint">Every linked character of the {{$owner.Kind}} is already in this group.</p>
   {{end}}
   <div class="setting-foot">
-    <form method="post" action="/groups/{{.ID}}/delete" class="inline-form"><button type="submit" class="btn btn-danger">Delete this group</button></form>
+    <form method="post" action="/groups/{{.ID}}/delete" class="inline-form"><input type="hidden" name="owner" value="{{$owner.Key}}"><button type="submit" class="btn btn-danger">Delete this group</button></form>
   </div>
 </section>
 {{else}}

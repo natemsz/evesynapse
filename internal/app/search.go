@@ -58,6 +58,8 @@ type suggestItem struct {
 	Kind  string `json:"kind,omitempty"`
 	// URL is where a pick goes, for a box whose suggestions are links.
 	URL string `json:"url,omitempty"`
+	// Value is what a pick stands for, where an id alone does not say.
+	Value string `json:"value,omitempty"`
 }
 
 // suggestTypes runs the shared feed: prefix matches first, then

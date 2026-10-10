@@ -233,6 +233,21 @@ func TestFitToolOpensLibraryFits(t *testing.T) {
 	_, body := getPage(t, app, cookie, doctrineURL(made[0].ID))
 	mustContain(t, "doctrine page", body, "[Fixture Frigate, Pasted Boat]", "Fixture Blaster", "Keep this doctrine")
 
+	// An in-game fit of one of the account's characters is found and added too.
+	seedSnapshot(t, q, fixtureCharA, esi.SnapFittings, esi.Fittings{{
+		FittingID: 42, Name: "Ingame Boat", ShipTypeID: fitShipID,
+		Items: []esi.FittingItem{{TypeID: fitBlasterID, Quantity: 1, Flag: "HiSlot0"}},
+	}})
+	_, suggested := getPage(t, app, cookie, "/doctrines/suggest?scope=myfits&q=ingame")
+	mustContain(t, "in-game fit suggestions", suggested, "Ingame Boat", `"value":"eve:90000001:42"`, "in game on Fixture Ceo")
+	postForm(t, app, cookie, doctrineURL(made[0].ID)+"/fits/add", url.Values{"pick": {"eve:90000002:42"}})
+	postForm(t, app, cookie, doctrineURL(made[0].ID)+"/fits/add", url.Values{"pick": {"eve:90000001:42"}, "fit_name": {"Ingame Boat"}})
+	if all, _ := q.ListDoctrineFits(ctx, []int64{made[0].ID}); len(all) != 2 || all[1].Name != "Ingame Boat" || all[1].ShipTypeID != fitShipID {
+		t.Fatalf("after adding an in-game fit: %+v", all)
+	}
+	_, body = getPage(t, app, cookie, doctrineURL(made[0].ID))
+	mustContain(t, "doctrine page for a keeper with no saved fits", body, "Search your saved and in-game fits")
+
 	author, _ := q.CreateUser(ctx)
 	now := time.Now().UTC()
 	public, err := q.CreateLocalFitting(ctx, db.CreateLocalFittingParams{

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +27,8 @@ type corpOption struct {
 	ID     int64
 	Name   string
 	Active bool
+	// Param and Value are what the option's link sets in the address.
+	Param, Value string
 }
 
 // npcCorporation reports whether an id is one of the game's own
@@ -69,9 +72,46 @@ func (app *Application) pickCorporation(ctx context.Context, r *http.Request, of
 	}
 	options := make([]corpOption, 0, len(offered))
 	for _, corp := range offered {
-		options = append(options, corpOption{ID: corp, Name: app.corpDisplayName(ctx, corp), Active: corp == active})
+		options = append(options, corpOption{ID: corp, Name: app.corpDisplayName(ctx, corp), Active: corp == active, Param: "corporation", Value: strconv.FormatInt(corp, 10)})
 	}
 	return active, options
+}
+
+// pickOwner does the same for the pages that a corporation's or an
+// alliance's directors run (groups, Discord servers): among the owners
+// offered, the one the address names (?owner=), else the corporation
+// the character in use is in, else the first.
+func (app *Application) pickOwner(ctx context.Context, r *http.Request, offered []discordOwner) (discordOwner, []corpOption, bool) {
+	if len(offered) == 0 {
+		return discordOwner{}, nil, false
+	}
+	active := offered[0]
+	if row, err := app.queries.GetCharacterCorporation(ctx, sessionCharID(app.sessions, ctx)); err == nil {
+		if mine := (discordOwner{ownerCorporation, row.CorporationID}); discordManages(offered, mine) {
+			active = mine
+		}
+	}
+	if named, ok := parseDiscordOwner(r.URL.Query().Get("owner")); ok && discordManages(offered, named) {
+		active = named
+	}
+	options := make([]corpOption, 0, len(offered))
+	for _, owner := range offered {
+		name := app.ownerName(ctx, owner)
+		if owner.Kind == ownerAlliance {
+			name += " (alliance)"
+		}
+		options = append(options, corpOption{ID: owner.ID, Name: name, Active: owner == active, Param: "owner", Value: owner.key()})
+	}
+	return active, options, true
+}
+
+// ownerAddress is such a page's address for one owner, named by its
+// key; the plain page where the key is not one.
+func ownerAddress(path, key string) string {
+	if _, ok := parseDiscordOwner(key); !ok {
+		return path
+	}
+	return path + "?owner=" + url.QueryEscape(key)
 }
 
 // corpAddress is a corporation page's address for one corporation.

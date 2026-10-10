@@ -189,7 +189,7 @@ func (app *Application) parseRuleWho(ctx context.Context, owner discordOwner, ra
 func (app *Application) handleDiscordRuleAdd(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
-	back := app.flashBack(w, r, discordServersPath)
+	back := app.discordBack(w, r)
 	guild, ok := app.discordGuildFor(r, userID)
 	if !ok || r.ParseForm() != nil {
 		back("That server is not yours to change.")
@@ -231,7 +231,7 @@ func (app *Application) handleDiscordRuleAdd(w http.ResponseWriter, r *http.Requ
 func (app *Application) handleDiscordRuleRemove(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
-	back := app.flashBack(w, r, discordServersPath)
+	back := app.discordBack(w, r)
 	guild, ok := app.discordGuildFor(r, userID)
 	ruleID, err := strconv.ParseInt(chi.URLParam(r, "ruleID"), 10, 64)
 	if !ok || err != nil {

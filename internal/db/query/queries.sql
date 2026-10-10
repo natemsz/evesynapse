@@ -472,3 +472,13 @@ SELECT u.id, u.created_at, u.last_seen_at,
 FROM users u
 ORDER BY u.id DESC
 LIMIT sqlc.arg(row_limit)::bigint;
+
+-- name: ListAdminOwners :many
+SELECT character_id, owner_hash FROM admin_owners;
+
+-- name: InsertAdminOwner :exec
+INSERT INTO admin_owners (character_id, owner_hash) VALUES ($1, $2)
+ON CONFLICT (character_id) DO NOTHING;
+
+-- name: DeleteAdminOwnersExcept :exec
+DELETE FROM admin_owners WHERE NOT (character_id = ANY(sqlc.arg(character_ids)::bigint[]));

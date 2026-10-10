@@ -38,13 +38,13 @@ var (
 // mayCreateAccount reports whether a sign-in by characterID may
 // create a new account: nil when it may, errSignUpNotAllowed or
 // errSignUpUnverified when it may not.
-func (app *Application) mayCreateAccount(ctx context.Context, characterID int64) error {
+func (app *Application) mayCreateAccount(ctx context.Context, characterID int64, ownerHash string) error {
 	policy := app.cfg.signUp
 	if !policy.restricted() {
 		return nil
 	}
 	// The administrators the operator named are always welcome.
-	if policy.characterIDs[characterID] || app.cfg.IsAdminCharacter(characterID) {
+	if policy.characterIDs[characterID] || app.adminMaySignUp(characterID, ownerHash) {
 		return nil
 	}
 	if len(policy.corporationIDs) == 0 && len(policy.allianceIDs) == 0 {

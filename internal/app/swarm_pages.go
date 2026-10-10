@@ -278,4 +278,3 @@ func (app *Application) handleSwarmAdmit(w http.ResponseWriter, r *http.Request)
 	back("Instance " + shortenSwarmID(id) + " was re-admitted with its trust history intact.")
 }
 
-

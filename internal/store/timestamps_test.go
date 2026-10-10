@@ -478,7 +478,14 @@ func TestSchemaMarketTimestampStepKeepsStoredTimes(t *testing.T) {
 
 	// A cutoff is compared as a time now, not as text.
 	for cutoff, want := range map[string]int{"2026-10-01T12:00:00Z": 1, "2026-10-01T12:00:01Z": 0} {
-		wants, err := q.ListMarketHistoryWants(ctx, mustTime(cutoff))
+		wants, err := q.ListMarketHistoryWants(ctx, db.ListMarketHistoryWantsParams{
+			LastRequestedAt: mustTime(cutoff),
+			// The typing tier (app.wantTyping = 2; the tier numbers
+			// are a stored contract and do not change): this fixture
+			// holds no guesses, so the slice admits everything.
+			TypingPriority: 2,
+			TypingLimit:    12,
+		})
 		if err != nil {
 			t.Fatalf("list history wants since %s: %v", cutoff, err)
 		}
@@ -667,12 +674,26 @@ func TestSchemaRecordTimestampStepKeepsStoredTimes(t *testing.T) {
 		t.Fatalf("list pilots to fetch: %v", err)
 	}
 	wantIDs("pilots to fetch", pilots, 3002, 3001, 3003)
-	corps, err := q.ListCorporationDrains(ctx, db.ListCorporationDrainsParams{StaleCutoff: now.Add(-7 * 24 * time.Hour), DrainLimit: 10})
+	corps, err := q.ListCorporationDrains(ctx, db.ListCorporationDrainsParams{
+		// The typing tier (app.wantTyping = 2; the tier numbers are
+		// a stored contract and do not change): this fixture holds
+		// no guesses, so the slice admits everything.
+		TypingPriority: 2,
+		TypingLimit:    12,
+		StaleCutoff:    now.Add(-7 * 24 * time.Hour),
+		DrainLimit:     10,
+	})
 	if err != nil {
 		t.Fatalf("list corporations to fetch: %v", err)
 	}
 	wantIDs("corporations to fetch", corps, 4001, 4002)
-	alliances, err := q.ListAllianceDrains(ctx, db.ListAllianceDrainsParams{StaleCutoff: now.Add(-7 * 24 * time.Hour), DrainLimit: 10})
+	alliances, err := q.ListAllianceDrains(ctx, db.ListAllianceDrainsParams{
+		// The typing tier, as above: no guesses in this fixture.
+		TypingPriority: 2,
+		TypingLimit:    12,
+		StaleCutoff:    now.Add(-7 * 24 * time.Hour),
+		DrainLimit:     10,
+	})
 	if err != nil {
 		t.Fatalf("list alliances to fetch: %v", err)
 	}
@@ -704,7 +725,14 @@ func TestSchemaRecordTimestampStepKeepsStoredTimes(t *testing.T) {
 	sameOrNever("settled lookup resolved_at", settled.ResolvedAt, "2026-10-01T12:00:00Z")
 	sameOrNever("settled lookup next_try_at", settled.NextTryAt, "")
 
-	wanted, err := q.ListTypeDetailWants(ctx, 10)
+	wanted, err := q.ListTypeDetailWants(ctx, db.ListTypeDetailWantsParams{
+		// The typing tier (app.wantTyping = 2; the tier numbers are
+		// a stored contract and do not change): this fixture holds
+		// no guesses, so the slice admits everything.
+		TypingPriority: 2,
+		TypingLimit:    12,
+		RowLimit:       10,
+	})
 	if err != nil {
 		t.Fatalf("list wanted item descriptions: %v", err)
 	}

@@ -286,7 +286,9 @@ func TestMigration015Reopen(t *testing.T) {
 		if err := q.UpsertPilotWant(ctx, db.UpsertPilotWantParams{CharacterID: 93300001, Priority: wantViewed}); err != nil {
 			t.Fatalf("pilot want (pass %d): %v", i, err)
 		}
-		if err := q.UpsertTypeDetailWant(ctx, 34); err != nil {
+		if err := q.UpsertTypeDetailWant(ctx, db.UpsertTypeDetailWantParams{
+			TypeID: 34, Priority: wantViewed, NotedAt: timeSet(time.Now().UTC()),
+		}); err != nil {
 			t.Fatalf("type want (pass %d): %v", i, err)
 		}
 		if err := conn.Close(); err != nil {

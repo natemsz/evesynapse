@@ -1759,7 +1759,8 @@ tbody tr.yours td { background-color: #2a2015; }
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  main { margin: 0.65rem auto; padding: 0 0.6rem; }
+  main { margin: 0; padding: 0; }
+  .panel { border-left: 0; border-right: 0; border-radius: 0; }
   footer { padding: 0 0.6rem 1rem; }
 }
 /* Wide top bar: wordmark at the left, the indicator, search and

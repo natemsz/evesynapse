@@ -149,6 +149,30 @@ type DiscordRoleRule struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type Doctrine struct {
+	ID            int64     `json:"id"`
+	CorporationID int64     `json:"corporation_id"`
+	Name          string    `json:"name"`
+	Category      string    `json:"category"`
+	Description   string    `json:"description"`
+	Tags          string    `json:"tags"`
+	CreatedBy     int64     `json:"created_by"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+type DoctrineFit struct {
+	ID         int64     `json:"id"`
+	DoctrineID int64     `json:"doctrine_id"`
+	Name       string    `json:"name"`
+	ShipTypeID int64     `json:"ship_type_id"`
+	ItemsJson  string    `json:"items_json"`
+	FleetRole  string    `json:"fleet_role"`
+	Note       string    `json:"note"`
+	AddedBy    int64     `json:"added_by"`
+	AddedAt    time.Time `json:"added_at"`
+}
+
 type GlobalSnapshot struct {
 	Kind        string    `json:"kind"`
 	Payload     string    `json:"payload"`
@@ -354,6 +378,7 @@ type Op struct {
 	CaptureStatus      string       `json:"capture_status"`
 	CaptureCheckedAt   sql.NullTime `json:"capture_checked_at"`
 	DiscordAnnouncedAt sql.NullTime `json:"discord_announced_at"`
+	DoctrineID         int64        `json:"doctrine_id"`
 }
 
 type OpAttendance struct {

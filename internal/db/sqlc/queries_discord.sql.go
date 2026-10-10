@@ -352,7 +352,7 @@ func (q *Queries) ListLinkedCorporationsByUser(ctx context.Context, userID int64
 }
 
 const listOpsToAnnounceOnDiscord = `-- name: ListOpsToAnnounceOnDiscord :many
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at FROM ops
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id FROM ops
 WHERE discord_announced_at IS NULL
   AND cancelled_at IS NULL
   AND starts_at > $1
@@ -393,6 +393,7 @@ func (q *Queries) ListOpsToAnnounceOnDiscord(ctx context.Context, arg ListOpsToA
 			&i.CaptureStatus,
 			&i.CaptureCheckedAt,
 			&i.DiscordAnnouncedAt,
+			&i.DoctrineID,
 		); err != nil {
 			return nil, err
 		}

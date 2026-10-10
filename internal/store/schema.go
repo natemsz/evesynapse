@@ -114,6 +114,9 @@ var pgAdminOwnersSchema string
 //go:embed schema_pg/025_srp.sql
 var pgSRPSchema string
 
+//go:embed schema_pg/026_doctrines.sql
+var pgDoctrinesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -168,6 +171,7 @@ func schemaSteps() []schemaStep {
 		{23, "user_last_seen", pgUserLastSeenSchema, ""},
 		{24, "admin_owners", pgAdminOwnersSchema, ""},
 		{25, "srp", pgSRPSchema, ""},
+		{26, "doctrines", pgDoctrinesSchema, ""},
 	}
 }
 

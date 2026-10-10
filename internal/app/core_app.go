@@ -433,6 +433,20 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/{id}/withdraw", app.handleSRPWithdraw)
 	})
 
+	// Doctrines and the fit library (corp_doctrines.go).
+	r.Route("/doctrines", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleDoctrines)
+		r.Get("/fits/", app.handleFitLibrary)
+		r.Post("/create", app.handleDoctrineCreate)
+		r.Post("/settings", app.handleDoctrineSettings)
+		r.Get("/{doctrineID}", app.handleDoctrine)
+		r.Post("/{doctrineID}/save", app.handleDoctrineSave)
+		r.Post("/{doctrineID}/delete", app.handleDoctrineDelete)
+		r.Post("/{doctrineID}/fits/add", app.handleDoctrineFitAdd)
+		r.Post("/{doctrineID}/fits/{fitID}/remove", app.handleDoctrineFitRemove)
+	})
+
 	r.Route("/calendar", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleCalendar)

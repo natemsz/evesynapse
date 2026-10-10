@@ -12,8 +12,8 @@ WHERE c.user_id = $1
 ORDER BY c.character_id;
 
 -- name: CreateOp :one
-INSERT INTO ops (corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO ops (corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, doctrine_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, sqlc.arg(doctrine_id))
 RETURNING id;
 
 -- name: UpdateOp :exec
@@ -23,6 +23,7 @@ UPDATE ops SET
     starts_at        = sqlc.arg(starts_at),
     duration_minutes = sqlc.arg(duration_minutes),
     doctrine         = sqlc.arg(doctrine),
+    doctrine_id      = sqlc.arg(doctrine_id),
     form_up          = sqlc.arg(form_up),
     fc_character_id  = sqlc.arg(fc_character_id)
 WHERE id = sqlc.arg(id);

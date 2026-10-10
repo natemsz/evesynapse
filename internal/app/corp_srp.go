@@ -196,6 +196,10 @@ type srpRow struct {
 	// says how it knows.
 	Attended   bool
 	Attendance string
+	// Doctrine is the doctrine the op named, if it named one of the
+	// corporation's; DoctrineShip, that the lost hull is in it.
+	Doctrine     string
+	DoctrineShip bool
 }
 
 // srpCorpView is one corporation's part of the page.
@@ -252,6 +256,11 @@ func (app *Application) srpRows(ctx context.Context, requests []db.SrpRequest, o
 			row.HandledBy = app.srpPilot(ctx, req.HandledBy)
 		}
 		if row.Open {
+			if op.DoctrineID != 0 {
+				if in, err := app.queries.DoctrineHasShip(ctx, db.DoctrineHasShipParams{DoctrineID: op.DoctrineID, ShipTypeID: req.ShipTypeID}); err == nil {
+					row.Doctrine, row.DoctrineShip = op.Doctrine, in
+				}
+			}
 			if seen, err := app.queries.GetOpAttendance(ctx, db.GetOpAttendanceParams{OpID: req.OpID, CharacterID: req.CharacterID}); err == nil {
 				row.Attended = true
 				row.Attendance = "Ticked present by hand."

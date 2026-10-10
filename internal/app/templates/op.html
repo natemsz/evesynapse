@@ -12,7 +12,8 @@
     <tr><th>Length</th><td>{{.Length}}</td></tr>
     <tr><th>Corporation</th><td>{{.Corporation}}</td></tr>
     <tr><th>Fleet commander</th><td>{{charLink $.ViewerChars .FCID .FC}}</td></tr>
-    {{if .Doctrine}}<tr><th>Doctrine</th><td>{{.Doctrine}}</td></tr>{{end}}
+    {{if .Doctrine}}<tr><th>Doctrine</th><td>{{if .DoctrineURL}}<a href="{{.DoctrineURL}}">{{.Doctrine}}</a>{{else}}{{.Doctrine}}{{end}}</td></tr>{{end}}
+    {{if .DoctrineFit}}<tr><th>Bring</th><td>{{range $i, $fit := .DoctrineFit}}{{if $i}}, {{end}}<a href="/fittings/?doctrine={{$fit.ID}}#fit-editor">{{$fit.Name}}</a>{{if $fit.Role}} <small>({{$fit.Role}})</small>{{end}}{{end}}</td></tr>{{end}}
     {{if .FormUp}}<tr><th>Form up</th><td>{{.FormUp}}</td></tr>{{end}}
   </tbody>
 </table>
@@ -39,7 +40,7 @@
     <label><input type="radio" name="response" value="maybe"{{if eq .Mine "maybe"}} checked{{end}}> Maybe</label>
     <label><input type="radio" name="response" value="no"{{if eq .Mine "no"}} checked{{end}}> Not coming</label>
   </p>
-  <p><label>Ship <input type="text" name="ship" value="{{.MyShip}}" maxlength="120" placeholder="e.g. Loki"></label>
+  <p><label>Ship <input type="text" name="ship" value="{{.MyShip}}" maxlength="120" placeholder="e.g. Loki"{{if .DoctrineFit}} list="op-doctrine-ships"{{end}}>{{if .DoctrineFit}}<datalist id="op-doctrine-ships">{{range .DoctrineFit}}<option value="{{.Ship}}">{{end}}</datalist>{{end}}</label>
      <label>Role <select name="fleet_role"><option value="">—</option>{{range .Roles}}<option value="{{.}}"{{if eq . $.Op.MyRole}} selected{{end}}>{{.}}</option>{{end}}</select></label></p>
   <p><label>Note <input type="text" name="note" value="{{.MyNote}}" maxlength="120" placeholder="e.g. 20 minutes late"></label></p>
   <p><button type="submit">{{if .Mine}}Update sign-up{{else}}Sign up{{end}}</button>{{if .Mine}} <small>This character has answered: {{.Mine}}.</small>{{end}}</p>

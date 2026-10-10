@@ -113,6 +113,12 @@ type pageData struct {
 	// SRP is the /srp/ page (corp_srp.go).
 	SRP *srpView
 
+	// Doctrines (corp_doctrines.go): the list, one doctrine's page, and
+	// the fit library.
+	Doctrines  *doctrinesView
+	Doctrine   *doctrineView
+	FitLibrary *fitLibraryView
+
 	// Ops (ops.go): one op's page, and the form that creates or
 	// changes one.
 	Op     *opView
@@ -181,7 +187,7 @@ func sectionForPage(page string) string {
 		"mail.html", "calendar.html", "contacts.html", "pilot.html", "assets.html",
 		"killmails.html", "notifications.html", "notification_settings.html", "op.html", "op_form.html", "op_paps.html":
 		return "pilot"
-	case "fittings.html", "fittings_saved.html", "fit_shopping.html":
+	case "fittings.html", "fittings_saved.html", "fit_shopping.html", "fit_library.html":
 		return "fitting"
 	case "industry.html", "planner.html", "planets.html":
 		return "industry"
@@ -193,7 +199,7 @@ func sectionForPage(page string) string {
 		return "tools"
 	case "corporations.html", "corp_members.html", "corp_wallets.html",
 		"corp_orders.html", "corp_assets.html", "corp_structures.html",
-		"corporation.html", "alliance.html", "discord_servers.html", "groups.html", "srp.html":
+		"corporation.html", "alliance.html", "discord_servers.html", "groups.html", "srp.html", "doctrines.html", "doctrine.html":
 		return "corporation"
 	case "intel_wars.html", "intel_incursions.html", "intel_fw.html":
 		return "intel"

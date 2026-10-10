@@ -78,8 +78,34 @@
   </tbody>
 </table>
 </div>
+{{if .Own}}<p><small>This is your own account; it cannot be removed from here.</small></p>
+{{else if .Admin}}<p><small>This account holds an administrator character and cannot be removed while it does.</small></p>
+{{else}}<form method="post" action="/admin/accounts/remove" class="lookup-form">
+  <input type="hidden" name="account" value="{{.ID}}">
+  <label>To remove this account, type its number ({{.ID}}): <input type="text" name="confirm" inputmode="numeric" autocomplete="off" size="8" required></label>
+  <button type="submit" class="btn btn-danger">Remove this account</button>
+</form>
+<p><small>Removing an account deletes its characters' links and tokens, their stored data, and the account's settings, plans and notifications. It cannot be undone. The people behind it can sign in again and start a new account.</small></p>
+{{end}}
 {{end}}
 </section>
+
+{{if .Empty}}<section class="card spanall">
+<h2>Accounts with no characters</h2>
+<p><small>Left behind when every character was unlinked, or by an older build. Open one to remove it.</small></p>
+<div class="tw">
+<table>
+  <thead><tr><th>Account</th><th>Created</th><th>Last seen</th></tr></thead>
+  <tbody>
+  {{range .Empty}}
+    <tr><td><a href="/admin/?account={{.ID}}">{{.ID}}</a></td><td>{{.Created}}</td><td>{{.LastSeen}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{if .EmptyMore}}<p><small>There are more; this lists the first 25.</small></p>{{end}}
+</section>
+{{end}}
 
 <section class="card spanall">
 <h2>Newest accounts</h2>

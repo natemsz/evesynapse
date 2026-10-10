@@ -218,6 +218,75 @@ func TestWorkerFiguresAsRows(t *testing.T) {
 	}
 }
 
+// TestAdminRemovesAnAccount: an administrator can remove another
+// account once its number is typed to confirm; never their own, never
+// one holding an administrator character, and nobody else can at all.
+func TestAdminRemovesAnAccount(t *testing.T) {
+	f := newLookupFixture(t)
+	ctx := context.Background()
+	empty, err := f.q.CreateUser(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := func(n int64) string { return strconv.FormatInt(n, 10) }
+	exists := func(userID int64) bool {
+		_, err := f.q.GetUser(ctx, userID)
+		return err == nil
+	}
+	remove := func(cookie *http.Cookie, account, confirm string) int {
+		t.Helper()
+		return newFormRequest(t, f.app, cookie, "/admin/accounts/remove", url.Values{"account": {account}, "confirm": {confirm}}).Code
+	}
+
+	_, body := getPage(t, f.app, f.cookie, "/admin/")
+	mustContain(t, "/admin/", body, "<h2>Accounts with no characters</h2>", `<a href="/admin/?account=`+id(empty.ID)+`">`)
+	_, body = getPage(t, f.app, f.cookie, "/admin/?account="+id(f.other.ID))
+	mustContain(t, "another account", body, `action="/admin/accounts/remove"`, "Remove this account")
+	_, body = getPage(t, f.app, f.cookie, "/admin/?account="+id(f.admin.ID))
+	if strings.Contains(body, `action="/admin/accounts/remove"`) {
+		t.Fatal("the reader's own account is offered for removal")
+	}
+
+	// Refused: nobody but an administrator, no confirmation, the wrong
+	// one, the reader's own account, and an account holding an admin.
+	asOther := sessionCookie(t, f.app, f.other.ID, fixtureCharB, "Zed Hauler")
+	if code := remove(asOther, id(empty.ID), id(empty.ID)); code != http.StatusForbidden {
+		t.Fatalf("a non-admin removing an account: %d, want 403", code)
+	}
+	remove(f.cookie, id(f.other.ID), "")
+	remove(f.cookie, id(f.other.ID), id(empty.ID))
+	remove(f.cookie, id(f.admin.ID), id(f.admin.ID))
+	grantTestAdmin(f.app, fixtureCharB)
+	remove(f.cookie, id(f.other.ID), id(f.other.ID))
+	delete(f.app.cfg.adminCharIDs, fixtureCharB)
+	if !exists(empty.ID) || !exists(f.other.ID) || !exists(f.admin.ID) {
+		t.Fatal("a refused removal removed an account")
+	}
+
+	// Confirmed: the account goes, and its characters with it.
+	if code := remove(f.cookie, id(f.other.ID), id(f.other.ID)); code != http.StatusSeeOther {
+		t.Fatalf("remove: %d, want a redirect", code)
+	}
+	if exists(f.other.ID) {
+		t.Fatal("the account is still there")
+	}
+	if _, err := f.q.GetCharacter(ctx, fixtureCharB); err == nil {
+		t.Fatal("the removed account's character is still linked")
+	}
+	if !exists(empty.ID) || !exists(f.admin.ID) {
+		t.Fatal("removing one account removed another")
+	}
+	// Someone still signed in to the removed account starts a new one
+	// when they next sign in with EVE.
+	if again, err := f.app.resolveSignInUser(ctx, f.other.ID, fixtureCharB, ""); err != nil || again == f.other.ID || !exists(again) {
+		t.Fatalf("signing in from a removed account's session: account %d, %v", again, err)
+	}
+	remove(f.cookie, id(empty.ID), id(empty.ID))
+	if exists(empty.ID) {
+		t.Fatal("an account with no characters was not removed")
+	}
+}
+
 func TestErrorBudgetWords(t *testing.T) {
 	now := time.Now()
 	for want, got := range map[string]string{

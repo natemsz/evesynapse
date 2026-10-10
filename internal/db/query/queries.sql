@@ -473,6 +473,18 @@ FROM users u
 ORDER BY u.id DESC
 LIMIT sqlc.arg(row_limit)::bigint;
 
+-- name: ListEmptyUsers :many
+-- Accounts with no character linked: left over from an unlink, or from
+-- an older build.
+SELECT u.id, u.created_at, u.last_seen_at FROM users u
+WHERE NOT EXISTS (SELECT 1 FROM characters c WHERE c.user_id = u.id)
+ORDER BY u.id
+LIMIT sqlc.arg(row_limit)::bigint;
+
+-- name: DeleteUser :execrows
+-- Everything the account owns goes with it (ON DELETE CASCADE).
+DELETE FROM users WHERE id = $1;
+
 -- name: ListAdminOwners :many
 SELECT character_id, owner_hash FROM admin_owners;
 

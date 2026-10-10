@@ -51,9 +51,22 @@ jobs:
           if [ -n "$TWA_HOST" ]; then args+=("-PtwaHost=$TWA_HOST"); fi
           if [ -n "$TWA_PACKAGE" ]; then args+=("-PtwaPackage=$TWA_PACKAGE"); fi
           if [ -n "$KEYSTORE_BASE64" ]; then
-            printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.p12"
+            printf '%s' "$KEYSTORE_BASE64" | tr -d ' \r\n' | base64 -d > "$RUNNER_TEMP/release.p12"
             export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/release.p12"
-            gradle "${args[@]}" assembleRelease bundleRelease
+            # Read the key the way the build will, and say plainly what
+            # is wrong with it: Gradle's own message does not.
+            alias="${ANDROID_KEY_ALIAS:-evesynapse}"
+            if ! found="$(keytool -list -keystore "$ANDROID_KEYSTORE_FILE" -storetype PKCS12 -storepass:env ANDROID_KEYSTORE_PASSWORD -alias "$alias" 2>&1)"; then
+              echo "::error::The signing key could not be read: $(printf '%s' "$found" | head -n 2 | tr '\n' ' ')"
+              echo "The key store is $(wc -c < "$ANDROID_KEYSTORE_FILE") bytes and starts with:$(head -c 4 "$ANDROID_KEYSTORE_FILE" | od -An -tx1) (a PKCS12 file starts with 30 82)."
+              echo "It has to be the android.p12 from the README, base64-encoded, with its password in ANDROID_KEYSTORE_PASSWORD and its key named \"$alias\"."
+              exit 1
+            fi
+            if ! printf '%s' "$found" | grep -q PrivateKeyEntry; then
+              echo "::error::The key store has \"$alias\" but no private key under it: it holds only the certificate. Make android.p12 again with both -inkey and -in."
+              exit 1
+            fi
+            gradle "${args[@]}" --stacktrace assembleRelease bundleRelease
             store="$ANDROID_KEYSTORE_FILE"; pass="$ANDROID_KEYSTORE_PASSWORD"; kind="release"
           else
             gradle "${args[@]}" assembleDebug

@@ -129,6 +129,7 @@ var pgTypingGuessesSchema string
 
 // Step 029: foresight targets, moved from 027 after the
 // want-closeness and typing rings claimed 027-028 on main.
+//
 //go:embed schema_pg/029_foresight.sql
 var pgForesightSchema string
 

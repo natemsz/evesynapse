@@ -311,6 +311,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// The push service worker, from the root so it can act for the
 	// whole site (notify_push.go).
 	r.Get("/sw.js", handleServiceWorker)
+	// The statement that names the site's Android app (core_assetlinks.go).
+	r.Get(assetLinksPath, app.handleAssetLinks)
 
 	// Embedded static assets (stylesheet, scripts, fonts, the 2013
 	// wallpaper); core_static.go has the caching rules. A failure here

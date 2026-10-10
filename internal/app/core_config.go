@@ -28,6 +28,13 @@ type Config struct {
 	// is off.
 	pushPublicKey, pushPrivateKey, pushSubject string
 
+	// The Android wrapper (core_assetlinks.go): the app's package and
+	// the fingerprints of the certificates it may be signed with.
+	// ANDROID_APP_PACKAGE and ANDROID_APP_FINGERPRINTS; either unset
+	// means the site names no app.
+	androidPackage      string
+	androidFingerprints []string
+
 	// notifyPoll is how often, in seconds, an open page asks whether
 	// its notifications icon has changed (NOTIFY_POLL_SECONDS). 0: it
 	// does not ask, and the icon changes on page loads only.
@@ -194,6 +201,8 @@ func LoadConfig() (Config, error) {
 		pushPublicKey:       os.Getenv("VAPID_PUBLIC_KEY"),
 		pushPrivateKey:      os.Getenv("VAPID_PRIVATE_KEY"),
 		pushSubject:         os.Getenv("VAPID_SUBJECT"),
+		androidPackage:      strings.TrimSpace(os.Getenv("ANDROID_APP_PACKAGE")),
+		androidFingerprints: parseAndroidFingerprints(os.Getenv("ANDROID_APP_FINGERPRINTS")),
 		opsManagerRoles:     parseRoleList(os.Getenv("OPS_MANAGER_ROLES")),
 	}, nil
 }

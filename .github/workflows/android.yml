@@ -1,0 +1,83 @@
+name: android-wrapper
+
+# Builds the Android app (android/): a Trusted Web Activity that opens
+# the site. Run by hand to make a signed build to install or publish;
+# a pull request that touches the wrapper gets a debug build, so that a
+# broken one is caught before it is merged.
+on:
+  workflow_dispatch:
+    inputs:
+      host:
+        description: The site the app opens (default evesynapse.app)
+        required: false
+      package:
+        description: The app's package name (default app.evesynapse.twa)
+        required: false
+  pull_request:
+    paths:
+      - android/**
+      - .github/workflows/android.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Use the runner's Java 17
+        run: echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          gradle-version: "8.11.1"
+
+      # The signing key is used only for a build somebody asked for by
+      # hand, never for a pull request's.
+      - name: Build
+        working-directory: android
+        env:
+          TWA_HOST: ${{ inputs.host }}
+          TWA_PACKAGE: ${{ inputs.package }}
+          KEYSTORE_BASE64: ${{ github.event_name == 'workflow_dispatch' && secrets.ANDROID_KEYSTORE_BASE64 || '' }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ github.event_name == 'workflow_dispatch' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
+          ANDROID_KEY_ALIAS: ${{ vars.ANDROID_KEY_ALIAS }}
+        run: |
+          args=(--no-daemon)
+          if [ -n "$TWA_HOST" ]; then args+=("-PtwaHost=$TWA_HOST"); fi
+          if [ -n "$TWA_PACKAGE" ]; then args+=("-PtwaPackage=$TWA_PACKAGE"); fi
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.p12"
+            export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/release.p12"
+            gradle "${args[@]}" assembleRelease bundleRelease
+            store="$ANDROID_KEYSTORE_FILE"; pass="$ANDROID_KEYSTORE_PASSWORD"; kind="release"
+          else
+            gradle "${args[@]}" assembleDebug
+            store="$HOME/.android/debug.keystore"; pass="android"; kind="debug (a throwaway key: the app opens the site with the address bar showing)"
+          fi
+          {
+            echo "### Android build: $kind"
+            echo
+            echo "Certificate fingerprint, for the site's ANDROID_APP_FINGERPRINTS:"
+            echo
+            echo '```'
+            keytool -list -v -keystore "$store" -storepass "$pass" 2>/dev/null | grep -m1 'SHA256:' | sed 's/^[[:space:]]*SHA256:[[:space:]]*//'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the key store
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.p12"
+
+      - name: Keep the build
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: evesynapse-android
+          path: |
+            android/app/build/outputs/apk/**/*.apk
+            android/app/build/outputs/bundle/**/*.aab
+          if-no-files-found: error

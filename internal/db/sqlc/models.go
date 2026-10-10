@@ -21,6 +21,7 @@ type AllianceRecord struct {
 	State      string       `json:"state"`
 	FetchedAt  sql.NullTime `json:"fetched_at"`
 	Priority   int64        `json:"priority"`
+	NotedAt    sql.NullTime `json:"noted_at"`
 }
 
 type Character struct {
@@ -85,6 +86,7 @@ type CorporationRecord struct {
 	State         string       `json:"state"`
 	FetchedAt     sql.NullTime `json:"fetched_at"`
 	Priority      int64        `json:"priority"`
+	NotedAt       sql.NullTime `json:"noted_at"`
 }
 
 type DiscordChannelAccess struct {
@@ -467,6 +469,7 @@ type PilotRecord struct {
 	State       string       `json:"state"`
 	FetchedAt   sql.NullTime `json:"fetched_at"`
 	Priority    int64        `json:"priority"`
+	NotedAt     sql.NullTime `json:"noted_at"`
 }
 
 type PlanetName struct {

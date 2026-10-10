@@ -180,9 +180,17 @@ FROM alliance_records
 WHERE alliance_id = $1
 `
 
-func (q *Queries) GetAllianceRecord(ctx context.Context, allianceID int64) (AllianceRecord, error) {
+type GetAllianceRecordRow struct {
+	AllianceID int64        `json:"alliance_id"`
+	Payload    string       `json:"payload"`
+	State      string       `json:"state"`
+	FetchedAt  sql.NullTime `json:"fetched_at"`
+	Priority   int64        `json:"priority"`
+}
+
+func (q *Queries) GetAllianceRecord(ctx context.Context, allianceID int64) (GetAllianceRecordRow, error) {
 	row := q.db.QueryRowContext(ctx, getAllianceRecord, allianceID)
-	var i AllianceRecord
+	var i GetAllianceRecordRow
 	err := row.Scan(
 		&i.AllianceID,
 		&i.Payload,
@@ -199,15 +207,23 @@ FROM corporation_records
 WHERE corporation_id = $1
 `
 
+type GetCorporationRecordRow struct {
+	CorporationID int64        `json:"corporation_id"`
+	Payload       string       `json:"payload"`
+	State         string       `json:"state"`
+	FetchedAt     sql.NullTime `json:"fetched_at"`
+	Priority      int64        `json:"priority"`
+}
+
 // ---------------------------------------------------------------------
 // Public corporation & alliance records (schema 026): the queues
 // behind /corporation/ and /alliance/. Same posture as pilot
 // records: pending rows are always due, ready rows re-check past
 // the stale cutoff, missing rows settle for good.
 // ---------------------------------------------------------------------
-func (q *Queries) GetCorporationRecord(ctx context.Context, corporationID int64) (CorporationRecord, error) {
+func (q *Queries) GetCorporationRecord(ctx context.Context, corporationID int64) (GetCorporationRecordRow, error) {
 	row := q.db.QueryRowContext(ctx, getCorporationRecord, corporationID)
-	var i CorporationRecord
+	var i GetCorporationRecordRow
 	err := row.Scan(
 		&i.CorporationID,
 		&i.Payload,
@@ -640,13 +656,18 @@ func (q *Queries) InsertMarketSweepState(ctx context.Context, arg InsertMarketSw
 }
 
 const insertPilotOrbitWant = `-- name: InsertPilotOrbitWant :exec
-INSERT INTO pilot_records (character_id, priority)
-VALUES ($1, 0)
+INSERT INTO pilot_records (character_id, priority, noted_at)
+VALUES ($1, 1, $2)
 ON CONFLICT DO NOTHING
 `
 
-func (q *Queries) InsertPilotOrbitWant(ctx context.Context, characterID int64) error {
-	_, err := q.db.ExecContext(ctx, insertPilotOrbitWant, characterID)
+type InsertPilotOrbitWantParams struct {
+	CharacterID int64        `json:"character_id"`
+	NotedAt     sql.NullTime `json:"noted_at"`
+}
+
+func (q *Queries) InsertPilotOrbitWant(ctx context.Context, arg InsertPilotOrbitWantParams) error {
+	_, err := q.db.ExecContext(ctx, insertPilotOrbitWant, arg.CharacterID, arg.NotedAt)
 	return err
 }
 
@@ -690,7 +711,7 @@ SELECT alliance_id
 FROM alliance_records
 WHERE state = 'pending'
    OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < $1::timestamptz))
-ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at NULLS FIRST
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, noted_at DESC NULLS LAST, fetched_at NULLS FIRST
 LIMIT $2::bigint
 `
 
@@ -868,7 +889,7 @@ SELECT corporation_id
 FROM corporation_records
 WHERE state = 'pending'
    OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < $1::timestamptz))
-ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at NULLS FIRST
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, noted_at DESC NULLS LAST, fetched_at NULLS FIRST
 LIMIT $2::bigint
 `
 
@@ -1805,7 +1826,7 @@ SELECT character_id
 FROM pilot_records
 WHERE state = 'pending'
    OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < $1::timestamptz))
-ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at NULLS FIRST
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, noted_at DESC NULLS LAST, fetched_at NULLS FIRST
 LIMIT $2::bigint
 `
 
@@ -2525,51 +2546,83 @@ func (q *Queries) UpdateOrderLifecycleBeaten(ctx context.Context, arg UpdateOrde
 }
 
 const upsertAllianceWant = `-- name: UpsertAllianceWant :exec
-INSERT INTO alliance_records (alliance_id, priority)
-VALUES ($1, 1)
-ON CONFLICT (alliance_id) DO UPDATE SET priority = GREATEST(alliance_records.priority, 1)
+INSERT INTO alliance_records (alliance_id, priority, noted_at)
+VALUES ($1, $2, $3)
+ON CONFLICT (alliance_id) DO UPDATE SET
+    priority = GREATEST(alliance_records.priority, excluded.priority),
+    noted_at = excluded.noted_at
 `
 
-func (q *Queries) UpsertAllianceWant(ctx context.Context, allianceID int64) error {
-	_, err := q.db.ExecContext(ctx, upsertAllianceWant, allianceID)
+type UpsertAllianceWantParams struct {
+	AllianceID int64        `json:"alliance_id"`
+	Priority   int64        `json:"priority"`
+	NotedAt    sql.NullTime `json:"noted_at"`
+}
+
+func (q *Queries) UpsertAllianceWant(ctx context.Context, arg UpsertAllianceWantParams) error {
+	_, err := q.db.ExecContext(ctx, upsertAllianceWant, arg.AllianceID, arg.Priority, arg.NotedAt)
 	return err
 }
 
 const upsertAllianceWants = `-- name: UpsertAllianceWants :exec
-INSERT INTO alliance_records (alliance_id, priority)
-SELECT unnest($1::bigint[]), 1
-ON CONFLICT (alliance_id) DO UPDATE SET priority = GREATEST(alliance_records.priority, 1)
+INSERT INTO alliance_records (alliance_id, priority, noted_at)
+SELECT unnest($1::bigint[]), $2::bigint, $3::timestamptz
+ON CONFLICT (alliance_id) DO UPDATE SET
+    priority = GREATEST(alliance_records.priority, excluded.priority),
+    noted_at = excluded.noted_at
 `
+
+type UpsertAllianceWantsParams struct {
+	AllianceIds []int64   `json:"alliance_ids"`
+	Priority    int64     `json:"priority"`
+	NotedAt     time.Time `json:"noted_at"`
+}
 
 // Many alliance wants in one statement: the alliance half of
 // UpsertCorporationWants (see above).
-func (q *Queries) UpsertAllianceWants(ctx context.Context, allianceIds []int64) error {
-	_, err := q.db.ExecContext(ctx, upsertAllianceWants, pq.Array(allianceIds))
+func (q *Queries) UpsertAllianceWants(ctx context.Context, arg UpsertAllianceWantsParams) error {
+	_, err := q.db.ExecContext(ctx, upsertAllianceWants, pq.Array(arg.AllianceIds), arg.Priority, arg.NotedAt)
 	return err
 }
 
 const upsertCorporationWant = `-- name: UpsertCorporationWant :exec
-INSERT INTO corporation_records (corporation_id, priority)
-VALUES ($1, 1)
-ON CONFLICT (corporation_id) DO UPDATE SET priority = GREATEST(corporation_records.priority, 1)
+INSERT INTO corporation_records (corporation_id, priority, noted_at)
+VALUES ($1, $2, $3)
+ON CONFLICT (corporation_id) DO UPDATE SET
+    priority = GREATEST(corporation_records.priority, excluded.priority),
+    noted_at = excluded.noted_at
 `
 
-func (q *Queries) UpsertCorporationWant(ctx context.Context, corporationID int64) error {
-	_, err := q.db.ExecContext(ctx, upsertCorporationWant, corporationID)
+type UpsertCorporationWantParams struct {
+	CorporationID int64        `json:"corporation_id"`
+	Priority      int64        `json:"priority"`
+	NotedAt       sql.NullTime `json:"noted_at"`
+}
+
+func (q *Queries) UpsertCorporationWant(ctx context.Context, arg UpsertCorporationWantParams) error {
+	_, err := q.db.ExecContext(ctx, upsertCorporationWant, arg.CorporationID, arg.Priority, arg.NotedAt)
 	return err
 }
 
 const upsertCorporationWants = `-- name: UpsertCorporationWants :exec
-INSERT INTO corporation_records (corporation_id, priority)
-SELECT unnest($1::bigint[]), 1
-ON CONFLICT (corporation_id) DO UPDATE SET priority = GREATEST(corporation_records.priority, 1)
+INSERT INTO corporation_records (corporation_id, priority, noted_at)
+SELECT unnest($1::bigint[]), $2::bigint, $3::timestamptz
+ON CONFLICT (corporation_id) DO UPDATE SET
+    priority = GREATEST(corporation_records.priority, excluded.priority),
+    noted_at = excluded.noted_at
 `
+
+type UpsertCorporationWantsParams struct {
+	CorporationIds []int64   `json:"corporation_ids"`
+	Priority       int64     `json:"priority"`
+	NotedAt        time.Time `json:"noted_at"`
+}
 
 // Many corporation wants in one statement: a journal harvest
 // meets the same parties over and over, and noting each in its
 // own round trip is the N+1 the flush in name_harvest.go avoids.
-func (q *Queries) UpsertCorporationWants(ctx context.Context, corporationIds []int64) error {
-	_, err := q.db.ExecContext(ctx, upsertCorporationWants, pq.Array(corporationIds))
+func (q *Queries) UpsertCorporationWants(ctx context.Context, arg UpsertCorporationWantsParams) error {
+	_, err := q.db.ExecContext(ctx, upsertCorporationWants, pq.Array(arg.CorporationIds), arg.Priority, arg.NotedAt)
 	return err
 }
 
@@ -3038,13 +3091,25 @@ func (q *Queries) UpsertPilotNameWant(ctx context.Context, arg UpsertPilotNameWa
 }
 
 const upsertPilotWant = `-- name: UpsertPilotWant :exec
-INSERT INTO pilot_records (character_id, priority)
-VALUES ($1, 1)
-ON CONFLICT (character_id) DO UPDATE SET priority = GREATEST(pilot_records.priority, 1)
+INSERT INTO pilot_records (character_id, priority, noted_at)
+VALUES ($1, $2, $3)
+ON CONFLICT (character_id) DO UPDATE SET
+    priority = GREATEST(pilot_records.priority, excluded.priority),
+    noted_at = excluded.noted_at
 `
 
-func (q *Queries) UpsertPilotWant(ctx context.Context, characterID int64) error {
-	_, err := q.db.ExecContext(ctx, upsertPilotWant, characterID)
+type UpsertPilotWantParams struct {
+	CharacterID int64        `json:"character_id"`
+	Priority    int64        `json:"priority"`
+	NotedAt     sql.NullTime `json:"noted_at"`
+}
+
+// A want's priority is how close the record is to somebody (see
+// wantViewed and its fellows in worker_pagewants.go), and noted_at is
+// when it was last asked for. A want that is asked for again keeps
+// the closer of its priorities and takes the later time.
+func (q *Queries) UpsertPilotWant(ctx context.Context, arg UpsertPilotWantParams) error {
+	_, err := q.db.ExecContext(ctx, upsertPilotWant, arg.CharacterID, arg.Priority, arg.NotedAt)
 	return err
 }
 

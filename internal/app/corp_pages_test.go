@@ -84,7 +84,6 @@ func buildCorpTestApp(t *testing.T, transport http.RoundTripper) (*Application, 
 		esi:           client,
 		db:            conn,
 		pool:          pool,
-		corpCache:     make(map[int64]corpCacheEntry),
 		prices:        make(map[int64]esi.MarketPrice),
 		priorityChars: make(map[int64]bool),
 	}

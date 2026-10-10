@@ -56,6 +56,32 @@ const (
 // still loading after a few minutes.
 const pageWantTTL = 3 * time.Minute
 
+// How close a wanted public record is to somebody: the priority of its
+// queue row, and the first thing the drains order by. Among records
+// equally close, the one asked for most lately goes first.
+//
+// Stored (pilot_records.priority and its fellows): the order is what
+// matters, and the numbers do not change.
+const (
+	wantHop    int64 = 0 // one relationship beyond a character's own records: the corporation of somebody it traded with
+	wantOrbit  int64 = 1 // named by a character's own records
+	wantViewed int64 = 2 // on a page somebody has open, or being typed into a search
+)
+
+// wantPilot, wantCorporation and wantAlliance queue a public record at
+// a closeness. Queue writes only: nothing is fetched here.
+func (app *Application) wantPilot(ctx context.Context, id, closeness int64) error {
+	return app.queries.UpsertPilotWant(ctx, db.UpsertPilotWantParams{CharacterID: id, Priority: closeness, NotedAt: timeSet(time.Now().UTC())})
+}
+
+func (app *Application) wantCorporation(ctx context.Context, id, closeness int64) error {
+	return app.queries.UpsertCorporationWant(ctx, db.UpsertCorporationWantParams{CorporationID: id, Priority: closeness, NotedAt: timeSet(time.Now().UTC())})
+}
+
+func (app *Application) wantAlliance(ctx context.Context, id, closeness int64) error {
+	return app.queries.UpsertAllianceWant(ctx, db.UpsertAllianceWantParams{AllianceID: id, Priority: closeness, NotedAt: timeSet(time.Now().UTC())})
+}
+
 type pageWant struct {
 	Kind     pageWantKind
 	ID       int64
@@ -114,7 +140,7 @@ func (app *Application) notePageWant(ctx context.Context, kind pageWantKind, id 
 	}
 	switch kind {
 	case pageWantCharacter, pageWantPilot:
-		if err := app.queries.UpsertPilotWant(ctx, id); err != nil {
+		if err := app.wantPilot(ctx, id, wantViewed); err != nil {
 			logging.Errorf("pagewant: note pilot want for %d: %v", id, err)
 		}
 	case pageWantTypeDescription:
@@ -135,11 +161,11 @@ func (app *Application) notePageWant(ctx context.Context, kind pageWantKind, id 
 			}
 		}
 	case pageWantCorporation:
-		if err := app.queries.UpsertCorporationWant(ctx, id); err != nil {
+		if err := app.wantCorporation(ctx, id, wantViewed); err != nil {
 			logging.Errorf("pagewant: note corporation want for %d: %v", id, err)
 		}
 	case pageWantAlliance:
-		if err := app.queries.UpsertAllianceWant(ctx, id); err != nil {
+		if err := app.wantAlliance(ctx, id, wantViewed); err != nil {
 			logging.Errorf("pagewant: note alliance want for %d: %v", id, err)
 		}
 	case pageWantPlace:

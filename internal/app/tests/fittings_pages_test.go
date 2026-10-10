@@ -14,10 +14,9 @@ import (
 	"evesynapse/internal/esi"
 )
 
-// readThroughCalls is what one failed read-through costs against the
-// 500-answering stub: the ESI client retries a read twice, so one
-// try plus two retries.
-const readThroughCalls = 3
+// A page draws from what is stored and fetches nothing, whether or not
+// the data it wants has landed yet.
+const pageCalls = 0
 
 func TestFittingsPagesSplit(t *testing.T) {
 	transport := &apptest.CountingTransport{}
@@ -79,23 +78,19 @@ func TestFittingsPagesSplit(t *testing.T) {
 		t.Errorf("saved-fits page embeds the simulator")
 	}
 
-	// Warming state: Beta's snapshot hasn't landed yet. The
-	// missing snapshot triggers GetCached's single read-through
-	// attempt (pre-existing behavior, shared with the old page);
-	// it fails against the stub transport, so the page shows the
-	// warming copy. The stub answers 500, which the ESI client
-	// retries twice for reads: one read-through is three requests.
+	// Warming state: Beta's snapshot hasn't landed yet. The page
+	// says so and fetches nothing; the worker brings it in.
 	before := transport.Calls.Load()
 	code, body = apptest.GetPage(t, rig, cookie, "/fittings/saved/?character=90000002")
 	if code != 200 {
 		t.Fatalf("saved-fits warming status = %d", code)
 	}
 	apptest.MustContain(t, "/fittings/saved/?character=90000002", body, "Still warming up")
-	if got := transport.Calls.Load() - before; got != readThroughCalls {
-		t.Errorf("warming page made %d outbound calls, want %d (the read-through: one try, two read retries)", got, readThroughCalls)
+	if got := transport.Calls.Load() - before; got != pageCalls {
+		t.Errorf("warming page made %d outbound calls, want %d", got, pageCalls)
 	}
 
-	if transport.Calls.Load() != readThroughCalls {
-		t.Errorf("fittings pages made %d outbound calls, want %d (warming read-through only)", transport.Calls.Load(), readThroughCalls)
+	if transport.Calls.Load() != pageCalls {
+		t.Errorf("fittings pages made %d outbound calls, want %d", transport.Calls.Load(), pageCalls)
 	}
 }

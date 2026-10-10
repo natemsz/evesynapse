@@ -88,7 +88,7 @@ func (app *Application) handleKillmails(w http.ResponseWriter, r *http.Request) 
 	data.Killmails = view
 
 	var refs []esi.KillmailRef
-	if err := app.esi.GetCached(ctx, active, esi.SnapKillmails, &refs); err != nil {
+	if err := app.storedSnapshot(ctx, active, esi.SnapKillmails, &refs); err != nil {
 		logging.Errorf("killmails: load recent list for character %d: %v", active.CharacterID, err)
 		// No snapshot row at all = cold start: the worker is still
 		// importing this character, which the Sync page shows live.

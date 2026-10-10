@@ -2071,7 +2071,7 @@ func (app *Application) handleFitMineJSON(w http.ResponseWriter, r *http.Request
 	if charID := sessionCharID(app.sessions, ctx); charID != 0 {
 		if char, err := app.queries.GetCharacter(ctx, charID); err == nil {
 			var fittings esi.Fittings
-			if err := app.esi.GetCached(ctx, char, esi.SnapFittings, &fittings); err == nil {
+			if err := app.storedSnapshot(ctx, char, esi.SnapFittings, &fittings); err == nil {
 				qLower := strings.ToLower(q)
 				for _, f := range fittings {
 					if strings.Contains(strings.ToLower(f.Name), qLower) {

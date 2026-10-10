@@ -504,12 +504,12 @@ func routeJournalParty(charIDs, corpIDs, allianceIDs map[int64]bool, id int64, p
 // the notes are plain queue writes, like a page noting a want.
 func (app *Application) flushOrgWants(ctx context.Context, corpIDs, allianceIDs map[int64]bool) {
 	if len(corpIDs) > 0 {
-		if err := app.queries.UpsertCorporationWants(ctx, sortedInt64Keys(corpIDs)); err != nil {
+		if err := app.queries.UpsertCorporationWants(ctx, db.UpsertCorporationWantsParams{CorporationIds: sortedInt64Keys(corpIDs), Priority: wantOrbit, NotedAt: time.Now().UTC()}); err != nil {
 			logging.Errorf("worker: note corporation wants: %v", err)
 		}
 	}
 	if len(allianceIDs) > 0 {
-		if err := app.queries.UpsertAllianceWants(ctx, sortedInt64Keys(allianceIDs)); err != nil {
+		if err := app.queries.UpsertAllianceWants(ctx, db.UpsertAllianceWantsParams{AllianceIds: sortedInt64Keys(allianceIDs), Priority: wantOrbit, NotedAt: time.Now().UTC()}); err != nil {
 			logging.Errorf("worker: note alliance wants: %v", err)
 		}
 	}

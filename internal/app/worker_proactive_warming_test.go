@@ -354,7 +354,7 @@ func TestPilotOrbitDerivationAndPriority(t *testing.T) {
 	if priority != 0 {
 		t.Fatalf("orbit priority = %d, want 0", priority)
 	}
-	if err := q.UpsertPilotWant(ctx, 93300003); err != nil {
+	if err := q.UpsertPilotWant(ctx, db.UpsertPilotWantParams{CharacterID: 93300003, Priority: wantViewed}); err != nil {
 		t.Fatalf("viewed want: %v", err)
 	}
 	ids, err := q.ListPilotDrains(ctx, db.ListPilotDrainsParams{
@@ -566,7 +566,7 @@ func TestMigration016Reopen(t *testing.T) {
 			t.Fatalf("priority column count = %d (pass %d), want 1", cols, i)
 		}
 		q := db.New(conn)
-		if err := q.UpsertPilotWant(ctx, 93300001); err != nil {
+		if err := q.UpsertPilotWant(ctx, db.UpsertPilotWantParams{CharacterID: 93300001, Priority: wantViewed}); err != nil {
 			t.Fatalf("pilot want (pass %d): %v", i, err)
 		}
 		if err := conn.Close(); err != nil {

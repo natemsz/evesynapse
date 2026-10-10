@@ -116,6 +116,12 @@ func (app *Application) drainCorporationRecord(ctx context.Context, id int64, al
 	app.esi.StoreCorpName(id, corp.Name)
 
 	payload := corporationRecordPayload{Corp: corp}
+	// One hop out: the alliance this corporation is in.
+	if corp.AllianceID > 0 {
+		if err := app.wantAlliance(ctx, corp.AllianceID, wantHop); err != nil {
+			logging.Errorf("worker: corporation records: note alliance %d of corporation %d: %v", corp.AllianceID, id, err)
+		}
+	}
 
 	// The alliance's name + ticker ride along so the corporation
 	// page (and every corp line elsewhere) never chases them.

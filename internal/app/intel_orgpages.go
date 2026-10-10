@@ -212,7 +212,7 @@ func (app *Application) loadCorporationView(ctx context.Context, id int64) *corp
 	default:
 		// No record yet, a pending one, or a read error: (re)note
 		// the want so the worker fills it on a coming cycle.
-		if qerr := app.queries.UpsertCorporationWant(ctx, id); qerr != nil {
+		if qerr := app.wantCorporation(ctx, id, wantViewed); qerr != nil {
 			logging.Errorf("corporation: note want for %d: %v", id, qerr)
 		}
 	}
@@ -310,7 +310,7 @@ func (app *Application) loadAllianceView(ctx context.Context, id int64) *allianc
 	case err == nil && rec.State == orgStateMissing:
 		view.State = "missing"
 	default:
-		if qerr := app.queries.UpsertAllianceWant(ctx, id); qerr != nil {
+		if qerr := app.wantAlliance(ctx, id, wantViewed); qerr != nil {
 			logging.Errorf("alliance: note want for %d: %v", id, qerr)
 		}
 	}

@@ -104,7 +104,7 @@ func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 	// against the character's EVE fittings; a missing snapshot
 	// just means the link won't resolve.
 	var fittings esi.Fittings
-	if err := app.esi.GetCached(ctx, active, esi.SnapFittings, &fittings); err != nil {
+	if err := app.storedSnapshot(ctx, active, esi.SnapFittings, &fittings); err != nil {
 		logging.Errorf("fittings: load for character %d: %v", active.CharacterID, err)
 	}
 	app.attachFitEditor(ctx, r, &data, characters, active, fittings)
@@ -136,7 +136,7 @@ func (app *Application) handleFittingsSaved(w http.ResponseWriter, r *http.Reque
 	data.Fittings = view
 
 	var fittings esi.Fittings
-	if err := app.esi.GetCached(ctx, active, esi.SnapFittings, &fittings); err != nil {
+	if err := app.storedSnapshot(ctx, active, esi.SnapFittings, &fittings); err != nil {
 		logging.Errorf("fittings: load for character %d: %v", active.CharacterID, err)
 		// No snapshot row at all = cold start: the worker is still
 		// importing this character, which the Sync page shows live.

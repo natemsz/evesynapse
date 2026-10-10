@@ -126,14 +126,49 @@ func (app *Application) handleItemSearchJSON(w http.ResponseWriter, r *http.Requ
 			limit = n
 		}
 	}
-	writeSuggestJSON(w, app.suggestTypes(r.Context(), q.Get("q"), q.Get("pool"), limit))
+	items := app.suggestTypes(r.Context(), q.Get("q"), q.Get("pool"), limit)
+	app.noteSuggested(r.Context(), q.Get("pool"), items)
+	writeSuggestJSON(w, items)
 }
 
 // handleMarketSuggest serves the Market search box's live
 // suggestions. It predates the shared feed and keeps its exact
 // behaviour (market pool, ten rows, no label) on the shared core.
 func (app *Application) handleMarketSuggest(w http.ResponseWriter, r *http.Request) {
-	writeSuggestJSON(w, app.suggestTypes(r.Context(), r.URL.Query().Get("q"), suggestPoolMarket, 10))
+	items := app.suggestTypes(r.Context(), r.URL.Query().Get("q"), suggestPoolMarket, 10)
+	app.noteSuggested(r.Context(), suggestPoolMarket, items)
+	writeSuggestJSON(w, items)
+}
+
+// suggestedWarmed is how many of a box's suggestions are queued while
+// it is being typed into: the ones at the top, which is where the pick
+// usually is.
+const suggestedWarmed = 4
+
+// noteSuggested queues what the top suggestions' pages will want, so
+// that the one picked is often warm before the pick: a market
+// suggestion's price history in The Forge, an item suggestion's
+// details. Queue writes only; the worker does the fetching.
+func (app *Application) noteSuggested(ctx context.Context, pool string, items []suggestItem) {
+	if len(items) > suggestedWarmed {
+		items = items[:suggestedWarmed]
+	}
+	now := time.Now().UTC()
+	for _, it := range items {
+		if it.ID <= 0 {
+			continue
+		}
+		switch pool {
+		case suggestPoolMarket:
+			if err := app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
+				RegionID: defaultMarketRegion, TypeID: it.ID, LastRequestedAt: now,
+			}); err != nil {
+				logging.Errorf("search: note history want for suggested type %d: %v", it.ID, err)
+			}
+		case suggestPoolAll:
+			app.notePageWant(ctx, pageWantTypeDescription, it.ID, 0)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------

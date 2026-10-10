@@ -129,7 +129,7 @@ func (app *Application) drainPilotNameWants(ctx context.Context, allowance *fetc
 			continue
 		}
 		app.esi.StoreCharacterName(match.ID, match.Name)
-		if qerr := app.queries.UpsertPilotWant(ctx, match.ID); qerr != nil {
+		if qerr := app.wantPilot(ctx, match.ID, wantViewed); qerr != nil {
 			logging.Errorf("worker: pilot name wants: queue pilot %d for %q: %v", match.ID, want.DisplayName, qerr)
 			continue
 		}
@@ -262,6 +262,19 @@ func (app *Application) drainPilotRecord(ctx context.Context, id int64, allowanc
 		payload.History = append(payload.History, row)
 	}
 
+	// One hop out: who this pilot flies for is what a reader of its
+	// page follows next. Queued behind everything closer.
+	if corp := payload.Profile.CorporationID; corp > 0 {
+		if err := app.wantCorporation(ctx, corp, wantHop); err != nil {
+			logging.Errorf("worker: pilot records: note corporation %d of pilot %d: %v", corp, id, err)
+		}
+	}
+	if alliance := payload.Profile.AllianceID; alliance > 0 {
+		if err := app.wantAlliance(ctx, alliance, wantHop); err != nil {
+			logging.Errorf("worker: pilot records: note alliance %d of pilot %d: %v", alliance, id, err)
+		}
+	}
+
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		logging.Errorf("worker: pilot records: encode payload for %d: %v", id, err)
@@ -325,7 +338,7 @@ func (app *Application) notePilotOrbit(ctx context.Context) {
 		if noted >= maxOrbitPilotsPerCycle {
 			break
 		}
-		if err := app.queries.InsertPilotOrbitWant(ctx, id); err != nil {
+		if err := app.queries.InsertPilotOrbitWant(ctx, db.InsertPilotOrbitWantParams{CharacterID: id, NotedAt: timeSet(time.Now().UTC())}); err != nil {
 			logging.Errorf("worker: pilot orbit: note %d: %v", id, err)
 			continue
 		}

@@ -104,15 +104,6 @@ type Application struct {
 	urgentMu        sync.Mutex
 	urgentHoldUntil time.Time
 
-	// In-memory cache of built corporation views, keyed by
-	// corporation ID; each entry expires with the ESI Expires
-	// header of the response it was built from (corp_overview.go).
-	// corpCalls holds the refreshes currently running, so
-	// concurrent readers of an expired entry share one.
-	corpMu    sync.Mutex
-	corpCache map[int64]corpCacheEntry
-	corpCalls map[int64]*corpCall
-
 	// In-memory cache of GET /markets/prices/ keyed by type ID,
 	// refreshed once stale per the response Expires header
 	// (market.go).
@@ -200,8 +191,6 @@ func New(cfg Config) (*Application, error) {
 		jwks:          &jwksCache{},
 		db:            dbConn,
 		pool:          pool,
-		corpCache:     make(map[int64]corpCacheEntry),
-		corpCalls:     make(map[int64]*corpCall),
 		prices:        make(map[int64]esi.MarketPrice),
 		priorityChars: make(map[int64]bool),
 		pageWants:     make(map[string]map[string]pageWant),

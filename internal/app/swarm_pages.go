@@ -277,4 +277,3 @@ func (app *Application) handleSwarmAdmit(w http.ResponseWriter, r *http.Request)
 	logging.Warnf("admin: account %d re-admitted swarm instance %s", app.userID(r.Context()), shortenSwarmID(id))
 	back("Instance " + shortenSwarmID(id) + " was re-admitted with its trust history intact.")
 }
-

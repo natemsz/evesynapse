@@ -72,6 +72,32 @@
 </section>
 {{end}}
 
+{{with .Sync.Serving}}
+<section class="card spanall">
+<h2>Serving pages</h2>
+<p><small>Whether pages render complete, how old what they show is, and what viewing costs in ESI calls.</small></p>
+<table class="stat-table">
+  <tbody>
+    <tr><td>Renders fully loaded at first paint</td><td>{{if .RendersFull}}{{.Renders}}{{else}}—{{end}}</td></tr>
+    <tr><td>Rendered records under an hour old</td><td>{{if .AgeFull}}{{.Age}}{{else}}—{{end}}</td></tr>
+    <tr><td>ESI calls per active pilot per day</td><td>{{if .CallsFull}}{{.Calls}}{{else}}—{{end}}</td></tr>
+  </tbody>
+</table>
+{{if .Guesses}}
+<p>Search-box guesses, same window:</p>
+<div class="tw">
+<table class="stat-table">
+  <thead><tr><th>Guesses</th><th>Queued</th><th>Opened</th><th>Opened, of those queued</th></tr></thead>
+  <tbody>
+  {{range .Guesses}}<tr><td>{{.Kind}}</td><td>{{.Queued}}</td><td>{{.Opened}}</td><td>{{.HitRate}}</td></tr>
+  {{end}}</tbody>
+</table>
+</div>
+{{if .GuessesLine}}<p><small>{{.GuessesLine}}</small></p>{{end}}
+{{end}}
+</section>
+{{end}}
+
 <section class="card spanall">
 <h2>Character data</h2>
 <p><small>One character's stored data and how fresh it is. Type a name or a character id; any character on the site can be looked up.</small></p>

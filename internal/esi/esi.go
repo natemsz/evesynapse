@@ -299,6 +299,13 @@ type Client struct {
 	tokens  TokenFunc
 	ua      string // User-Agent; see SetUserAgent
 
+	// ESI calls in the trailing day, for the Sync page's
+	// calls-per-pilot metric. Buckets by Unix hour; pruned
+	// as new calls land.
+	callsMu     sync.Mutex
+	callsByHour map[int64]int64
+	callsTotal  int64
+
 	// In-process cache of EVE type ID → name (backed by the
 	// type_names table).
 	typeNamesMu sync.RWMutex
@@ -1569,6 +1576,7 @@ func parseRetryAfter(value string) (time.Duration, bool) {
 // 420/429 wrap ErrErrorLimit, a status outside want is a StatusError,
 // anything else is the body.
 func (c *Client) sendOnce(ctx context.Context, method, accessToken, path string, raw []byte, ifNoneMatch string, want []int) (body []byte, header http.Header, status int, err error) {
+	c.noteCall()
 	var reqBody io.Reader
 	if raw != nil {
 		reqBody = bytes.NewReader(raw)

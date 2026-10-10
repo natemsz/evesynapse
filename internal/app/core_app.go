@@ -156,6 +156,16 @@ type Application struct {
 	pageWantMu sync.Mutex
 	pageWants  map[string]map[string]pageWant
 
+	// Page-serve metrics (sync_metrics.go): page renders and the
+	// ages of the records they showed, for the Sync page. Guarded
+	// by serveMu.
+	serveMu       sync.Mutex
+	serveRenders  uint64
+	serveFull     uint64
+	serveViews    uint64
+	serveAgeHour  uint64 // rendered records under an hour old
+	serveAgeOlder uint64 // ... over a day old (the rest fall between)
+
 	// Typing-intent guess sequences (worker_typing.go): one
 	// keystroke's replace-plus-note must land as one step, or two
 	// keystrokes in a box interleave and the older one's guesses

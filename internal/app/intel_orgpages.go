@@ -208,6 +208,7 @@ func (app *Application) loadCorporationView(ctx context.Context, id int64) *corp
 				view.Freshness = freshnessLine(now, rec.FetchedAt.Time,
 					app.fetchReason(ctx, foresightOrgView(targetCorporation, id),
 						string(pageWantCorporation), id, 0, rec.FetchedAt.Time))
+				app.noteServedAge(now.Sub(rec.FetchedAt.Time))
 			}
 		} else {
 			// Corrupt payload: requeue rather than strand the
@@ -316,6 +317,7 @@ func (app *Application) loadAllianceView(ctx context.Context, id int64) *allianc
 				view.Freshness = freshnessLine(now, rec.FetchedAt.Time,
 					app.fetchReason(ctx, foresightOrgView(targetAlliance, id),
 						string(pageWantAlliance), id, 0, rec.FetchedAt.Time))
+				app.noteServedAge(now.Sub(rec.FetchedAt.Time))
 			}
 		} else {
 			logging.Warnf("alliance: unreadable payload for %d; requeueing", id)

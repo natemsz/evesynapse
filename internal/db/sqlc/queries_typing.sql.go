@@ -199,6 +199,45 @@ func (q *Queries) InsertTypingGuess(ctx context.Context, arg InsertTypingGuessPa
 	return err
 }
 
+const listTypingGuessRates = `-- name: ListTypingGuessRates :many
+SELECT kind, COUNT(*) AS queued, COUNT(hit_at) AS opened
+FROM typing_guesses
+WHERE noted_at >= $1
+GROUP BY kind
+ORDER BY kind
+`
+
+type ListTypingGuessRatesRow struct {
+	Kind   string `json:"kind"`
+	Queued int64  `json:"queued"`
+	Opened int64  `json:"opened"`
+}
+
+// Hit rates by guess kind over a window: what the Sync page's
+// guess table shows beside the foresight one.
+func (q *Queries) ListTypingGuessRates(ctx context.Context, notedAt time.Time) ([]ListTypingGuessRatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTypingGuessRates, notedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTypingGuessRatesRow
+	for rows.Next() {
+		var i ListTypingGuessRatesRow
+		if err := rows.Scan(&i.Kind, &i.Queued, &i.Opened); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markTypingGuessHits = `-- name: MarkTypingGuessHits :exec
 UPDATE typing_guesses SET hit_at = $4::timestamptz
 WHERE kind = $1 AND entity_id = $2 AND region_id = $3

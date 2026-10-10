@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -453,5 +454,47 @@ func TestTypingBoxIgnoresUnknownPools(t *testing.T) {
 	}
 	if orphans != 0 {
 		t.Errorf("orphan guess boxes for junk pools: %d rows, want 0", orphans)
+	}
+}
+
+// TestTypingConcurrentKeystrokesDoNotMix: two keystrokes landing
+// in one box at once must read as two whole steps — the ledger
+// ends holding exactly one keystroke's guesses, never a mixture
+// of both.
+func TestTypingConcurrentKeystrokesDoNotMix(t *testing.T) {
+	app, conn, _ := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	box := "7|market"
+	for round := 0; round < 40; round++ {
+		a, b := int64(1000+round*2), int64(1001+round*2)
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			app.noteSuggested(ctx, box, suggestPoolMarket, []suggestItem{{ID: a}})
+		}()
+		go func() {
+			defer wg.Done()
+			app.noteSuggested(ctx, box, suggestPoolMarket, []suggestItem{{ID: b}})
+		}()
+		wg.Wait()
+		rows, err := conn.QueryContext(ctx,
+			`SELECT entity_id FROM typing_guesses WHERE box = $1`, box)
+		if err != nil {
+			t.Fatalf("round %d: read ledger: %v", round, err)
+		}
+		var ids []int64
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				t.Fatalf("round %d: scan ledger: %v", round, err)
+			}
+			ids = append(ids, id)
+		}
+		rows.Close()
+		if len(ids) != 1 || (ids[0] != a && ids[0] != b) {
+			t.Fatalf("round %d: ledger holds %v, want exactly [%d] or [%d]", round, ids, a, b)
+		}
 	}
 }

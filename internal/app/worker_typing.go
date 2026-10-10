@@ -48,7 +48,9 @@ func (app *Application) typingBox(ctx context.Context, name string) string {
 // guessed. Only rows still waiting at the typing ring go: one
 // the pilot opened has been bumped to viewed, and one already
 // holding data is a record now, not a guess. The ledger goes
-// last — the queue deletes read it.
+// last — the queue deletes read it. Callers hold typingMu
+// across the replace-plus-note sequence so two keystroke
+// sequences in one box cannot interleave.
 func (app *Application) replaceTypingGuesses(ctx context.Context, box string) {
 	if err := app.queries.DeleteTypingPilotGuesses(ctx, db.DeleteTypingPilotGuessesParams{Box: box, TypingPriority: wantTyping}); err != nil {
 		logging.Errorf("typing: drop pilot guesses for box %q: %v", box, err)

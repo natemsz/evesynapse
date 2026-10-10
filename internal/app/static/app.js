@@ -1591,6 +1591,8 @@
     { name: "Corporation Assets", url: "/corporations/assets/" },
     { name: "Corporation Structures", url: "/corporations/structures/" },
     { name: "Corporation Killmails", url: "/corporations/killmails/" },
+    { name: "Discord server", url: "/discord/servers" },
+    { name: "Groups", url: "/groups/" },
     { name: "Wars", url: "/intel/wars/" },
     { name: "Incursions", url: "/intel/incursions/" },
     { name: "Faction Warfare", url: "/intel/fw/" },

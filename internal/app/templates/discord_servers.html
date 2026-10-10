@@ -41,6 +41,7 @@
      <label>the role <select name="role">{{range .Roles}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
      <button type="submit">Add rule</button></p>
 </form>
+<p><a class="btn" href="/groups/">Create groups</a> <small>A rule can give a role to everyone in a group you keep by hand.</small></p>
 <p><small>Add as many rules as you have roles to give; a member gets every role they qualify for and loses each one when they stop qualifying. The bot can only give roles that sit below its own in the server's role list. Groups are kept on the <a href="/groups/">Groups</a> page. Which channels a role can open is set under Channels, below.</small></p>
 <h4>Members and ops</h4>
 <form method="post" action="/discord/servers/{{.GuildID}}/save" class="op-form discord-server-form">
@@ -113,6 +114,5 @@
 {{end}}
 
 {{if not .CanInstall}}<p><small>The Discord bot is not set up on this site.</small></p>{{end}}
-<p><a href="/groups/">Groups</a> · <a href="/notifications/settings">Back to notification settings</a></p>
 {{end}}
 {{end}}

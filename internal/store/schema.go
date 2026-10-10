@@ -133,6 +133,14 @@ var pgTypingGuessesSchema string
 //go:embed schema_pg/029_foresight.sql
 var pgForesightSchema string
 
+// Step 030: the shared cache across instances — this instance's
+// identity, the peers it has heard of with their reputation
+// ledger, staged entries waiting on a spot check, and the Sync
+// page's counters.
+//
+//go:embed schema_pg/030_swarm.sql
+var pgSwarmSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -191,6 +199,7 @@ func schemaSteps() []schemaStep {
 		{27, "want_closeness", pgWantClosenessSchema, ""},
 		{28, "typing_guesses", pgTypingGuessesSchema, ""},
 		{29, "foresight", pgForesightSchema, ""},
+		{30, "swarm", pgSwarmSchema, ""},
 	}
 }
 

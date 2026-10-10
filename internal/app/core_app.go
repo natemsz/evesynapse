@@ -186,6 +186,9 @@ func New(cfg Config) (*Application, error) {
 	if cfg.signUp.err != nil {
 		return nil, cfg.signUp.err
 	}
+	if cfg.swarm.err != nil {
+		return nil, cfg.swarm.err
+	}
 	if p := cfg.signUp; p.restricted() {
 		logging.Infof("evesynapse: new accounts are limited to %d listed character(s), %d corporation(s) and %d alliance(s)",
 			len(p.characterIDs), len(p.corporationIDs), len(p.allianceIDs))

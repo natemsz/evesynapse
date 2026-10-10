@@ -9,6 +9,12 @@ import (
 	"time"
 )
 
+type AdminOwner struct {
+	CharacterID int64     `json:"character_id"`
+	OwnerHash   string    `json:"owner_hash"`
+	PinnedAt    time.Time `json:"pinned_at"`
+}
+
 type AllianceRecord struct {
 	AllianceID int64        `json:"alliance_id"`
 	Payload    string       `json:"payload"`

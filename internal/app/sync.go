@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -63,8 +64,9 @@ type syncCharacterView struct {
 // shares, and one character's data found through the search box. It
 // is about data and nothing else; accounts are the Admin page's.
 type syncView struct {
-	WorkerLine string
-	Warming    bool // a worker cycle is running right now
+	WorkerLine  string
+	ErrorBudget string // ESI's app-wide error budget, in words
+	Warming     bool   // a worker cycle is running right now
 	// Timing: how long the worker's cycles take and how far behind
 	// it is (worker_timing.go); nil before the first has finished.
 	Timing     *workerTimingView
@@ -87,11 +89,12 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 
 	status := app.snapshotWorkerStatus()
 	view := &syncView{
-		WorkerLine: app.workerStatusText(),
-		Warming:    status.Warming,
-		Timing:     workerTimingViewFor(status),
-		SDE:        app.loadSDEView(ctx),
-		Global:     app.loadGlobalView(ctx),
+		WorkerLine:  app.workerStatusText(),
+		ErrorBudget: errorBudgetWords(app.esi.ErrorBudgetStatus()),
+		Warming:     status.Warming,
+		Timing:      workerTimingViewFor(status),
+		SDE:         app.loadSDEView(ctx),
+		Global:      app.loadGlobalView(ctx),
 	}
 	if n, err := app.queries.CountWarDetails(ctx); err != nil {
 		logging.Errorf("sync: count war details: %v", err)
@@ -318,4 +321,18 @@ func (app *Application) handleSyncWarm(w http.ResponseWriter, r *http.Request) {
 func (app *Application) handleSyncSDE(w http.ResponseWriter, r *http.Request) {
 	app.startSDECheck("manual")
 	http.Redirect(w, r, "/sync/", http.StatusSeeOther)
+}
+
+// errorBudgetWords says how much of ESI's error budget is left. The
+// budget is for the whole application: once it is spent, ESI refuses
+// every request until it resets.
+func errorBudgetWords(remain int, resetUnix int64) string {
+	left := time.Until(time.Unix(resetUnix, 0))
+	switch {
+	case resetUnix == 0:
+		return "not reported yet"
+	case left <= 0:
+		return "full (the last window has reset)"
+	}
+	return fmt.Sprintf("%d errors left, resets in %ds", remain, int(left.Round(time.Second).Seconds()))
 }

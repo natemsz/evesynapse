@@ -158,7 +158,7 @@ func (app *Application) resolveSignInUser(ctx context.Context, sessionUserID, ch
 	case err == nil || errors.Is(err, sql.ErrNoRows):
 		// The one place an account comes into being, and so the one
 		// place the sign-up policy applies (auth_signup.go).
-		if err := app.mayCreateAccount(ctx, characterID); err != nil {
+		if err := app.mayCreateAccount(ctx, characterID, ownerHash); err != nil {
 			return 0, err
 		}
 		user, err := app.queries.CreateUser(ctx)

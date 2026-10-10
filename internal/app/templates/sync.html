@@ -9,6 +9,7 @@
 <section class="card spanall">
 <h2>Worker</h2>
 <p>{{.Sync.WorkerLine}}{{if .Sync.Warming}} — a cycle is running now…{{end}}</p>
+<p><small>ESI error budget: {{.Sync.ErrorBudget}}</small></p>
 {{with .Sync.Timing}}
 {{if .Behind}}<p class="err">{{.Behind}}</p>{{end}}
 <div class="stat-grid">

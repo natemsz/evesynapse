@@ -68,7 +68,7 @@ func TestSyncShowsOneCharacter(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /sync/: %d", code)
 	}
-	mustContain(t, "/sync/", body, "<h2>Worker</h2>", "<h2>Character data</h2>",
+	mustContain(t, "/sync/", body, "<h2>Worker</h2>", "ESI error budget: not reported yet", "<h2>Character data</h2>",
 		`<input type="search" name="character" id="sync-character-q"`, `<ul class="suggest" id="sync-character-suggest"`,
 		"<h3>Fixture Alpha</h3>", `<a href="/admin/?account=`, "Re-warm Fixture Alpha now")
 	if strings.Contains(body, "Zed Hauler") {
@@ -284,5 +284,18 @@ func TestAdminRemovesAnAccount(t *testing.T) {
 	remove(f.cookie, id(empty.ID), id(empty.ID))
 	if exists(empty.ID) {
 		t.Fatal("an account with no characters was not removed")
+	}
+}
+
+func TestErrorBudgetWords(t *testing.T) {
+	now := time.Now()
+	for want, got := range map[string]string{
+		"not reported yet":                 errorBudgetWords(0, 0),
+		"full (the last window has reset)": errorBudgetWords(40, now.Add(-time.Minute).Unix()),
+		"87 errors left, resets in":        errorBudgetWords(87, now.Add(30*time.Second).Unix()),
+	} {
+		if !strings.HasPrefix(got, want) {
+			t.Errorf("got %q, want it to start %q", got, want)
+		}
 	}
 }

@@ -108,6 +108,9 @@ var pgDiscordChannelAccessSchema string
 //go:embed schema_pg/023_user_last_seen.sql
 var pgUserLastSeenSchema string
 
+//go:embed schema_pg/024_admin_owners.sql
+var pgAdminOwnersSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -160,6 +163,7 @@ func schemaSteps() []schemaStep {
 		{21, "discord_kick", pgDiscordKickSchema, ""},
 		{22, "discord_channel_access", pgDiscordChannelAccessSchema, ""},
 		{23, "user_last_seen", pgUserLastSeenSchema, ""},
+		{24, "admin_owners", pgAdminOwnersSchema, ""},
 	}
 }
 

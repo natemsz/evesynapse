@@ -19,6 +19,7 @@ import (
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
 )
 
 // swarmESISStub serves CCP's public endpoints from fixtures and
@@ -390,6 +391,32 @@ func TestSwarmPairAllowlistWaits(t *testing.T) {
 		if pr.InstanceID == "instance-a" {
 			t.Fatalf("unapproved peer in the pull set")
 		}
+	}
+}
+
+func TestSwarmPairStructureDefersWithoutScope(t *testing.T) {
+	p := newSwarmPair(t, swarmOpen)
+	ctx := context.Background()
+	// A serves a resolved structure name; B links no character
+	// with the structure scope, so the entry waits staged —
+	// never applied blind, never costing ESI.
+	if err := p.a.queries.SetStructureName(ctx, db.SetStructureNameParams{
+		StructureID: 1044752365771, Name: "Holding", State: esi.StructureResolved,
+		ResolvedAt: timeSet(time.Now().UTC()), Source: esi.StructureSourceESI,
+	}); err != nil {
+		t.Fatalf("seed A: %v", err)
+	}
+	p.pinA(t)
+	p.pullStages(t, []swarmPullKey{{Kind: swarmKindStructure, Key: "1044752365771"}})
+	if got := p.spotRuns(t); got != 0 {
+		t.Fatalf("applied %d, want 0 (no scoped character to check against)", got)
+	}
+	staged, err := p.b.queries.ListUncheckedStaging(ctx, 10)
+	if err != nil || len(staged) != 1 {
+		t.Fatalf("staged rows: %d err %v, want the waiting entry", len(staged), err)
+	}
+	if p.stubB.calls != 0 {
+		t.Fatalf("deferred check cost %d ESI calls, want 0", p.stubB.calls)
 	}
 }
 

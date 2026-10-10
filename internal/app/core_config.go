@@ -176,6 +176,7 @@ func LoadConfig() (Config, error) {
 	if !ok {
 		logging.Warnf("evesynapse: NOTIFY_POLL_SECONDS=%q is not a whole number of seconds; using %d", os.Getenv("NOTIFY_POLL_SECONDS"), notifyPoll)
 	}
+	androidPackage, androidFingerprints := androidAppSettings(os.Getenv("ANDROID_APP_PACKAGE"), os.Getenv("ANDROID_APP_FINGERPRINTS"))
 	return Config{
 		notifyPoll:          notifyPoll,
 		workerTiersOff:      strings.EqualFold(strings.TrimSpace(os.Getenv("WORKER_TIERS")), "off"),
@@ -201,8 +202,8 @@ func LoadConfig() (Config, error) {
 		pushPublicKey:       os.Getenv("VAPID_PUBLIC_KEY"),
 		pushPrivateKey:      os.Getenv("VAPID_PRIVATE_KEY"),
 		pushSubject:         os.Getenv("VAPID_SUBJECT"),
-		androidPackage:      strings.TrimSpace(os.Getenv("ANDROID_APP_PACKAGE")),
-		androidFingerprints: parseAndroidFingerprints(os.Getenv("ANDROID_APP_FINGERPRINTS")),
+		androidPackage:      androidPackage,
+		androidFingerprints: androidFingerprints,
 		opsManagerRoles:     parseRoleList(os.Getenv("OPS_MANAGER_ROLES")),
 	}, nil
 }

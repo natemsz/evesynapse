@@ -89,3 +89,22 @@ func (app *Application) handleAssetLinks(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	_, _ = w.Write(body)
 }
+
+// androidAppSettings reads the two settings and says at startup what
+// came of them, so that a statement that is not being served explains
+// itself in the log.
+func androidAppSettings(rawPackage, rawFingerprints string) (string, []string) {
+	pkg := strings.TrimSpace(rawPackage)
+	fingerprints := parseAndroidFingerprints(rawFingerprints)
+	switch {
+	case pkg == "" && strings.TrimSpace(rawFingerprints) == "":
+		// Not set up: nothing to say.
+	case !androidPackageRe.MatchString(pkg):
+		logging.Warnf("evesynapse: ANDROID_APP_PACKAGE=%q is not a package name (like app.evesynapse.twa); the site names no Android app", pkg)
+	case len(fingerprints) == 0:
+		logging.Warnf("evesynapse: ANDROID_APP_PACKAGE is set but ANDROID_APP_FINGERPRINTS holds no SHA-256 fingerprint; the site names no Android app")
+	default:
+		logging.Infof("evesynapse: naming the Android app %s at %s (%d certificate fingerprint(s))", pkg, assetLinksPath, len(fingerprints))
+	}
+	return pkg, fingerprints
+}

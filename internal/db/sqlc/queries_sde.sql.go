@@ -500,9 +500,15 @@ FROM type_details
 WHERE type_id = $1
 `
 
-func (q *Queries) GetTypeDetail(ctx context.Context, typeID int64) (TypeDetail, error) {
+type GetTypeDetailRow struct {
+	TypeID      int64        `json:"type_id"`
+	Description string       `json:"description"`
+	FetchedAt   sql.NullTime `json:"fetched_at"`
+}
+
+func (q *Queries) GetTypeDetail(ctx context.Context, typeID int64) (GetTypeDetailRow, error) {
 	row := q.db.QueryRowContext(ctx, getTypeDetail, typeID)
-	var i TypeDetail
+	var i GetTypeDetailRow
 	err := row.Scan(&i.TypeID, &i.Description, &i.FetchedAt)
 	return i, err
 }
@@ -1876,14 +1882,28 @@ func (q *Queries) ListSDETypesInMarketGroupPaged(ctx context.Context, arg ListSD
 
 const listTypeDetailWants = `-- name: ListTypeDetailWants :many
 SELECT type_id
-FROM type_details
-WHERE fetched_at IS NULL
-ORDER BY type_id
-LIMIT $1::bigint
+FROM (
+    SELECT type_id, priority, noted_at,
+        ROW_NUMBER() OVER (
+            PARTITION BY (priority = $1::bigint)
+            ORDER BY noted_at DESC NULLS LAST
+        ) AS typing_n
+    FROM type_details
+    WHERE fetched_at IS NULL
+) AS wants
+WHERE priority != $1::bigint OR typing_n <= $2::bigint
+ORDER BY priority DESC, noted_at DESC NULLS LAST, type_id
+LIMIT $3::bigint
 `
 
-func (q *Queries) ListTypeDetailWants(ctx context.Context, rowLimit int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listTypeDetailWants, rowLimit)
+type ListTypeDetailWantsParams struct {
+	TypingPriority int64 `json:"typing_priority"`
+	TypingLimit    int64 `json:"typing_limit"`
+	RowLimit       int64 `json:"row_limit"`
+}
+
+func (q *Queries) ListTypeDetailWants(ctx context.Context, arg ListTypeDetailWantsParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listTypeDetailWants, arg.TypingPriority, arg.TypingLimit, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -2523,13 +2543,21 @@ func (q *Queries) UpsertSDEMeta(ctx context.Context, arg UpsertSDEMetaParams) er
 }
 
 const upsertTypeDetailWant = `-- name: UpsertTypeDetailWant :exec
-INSERT INTO type_details (type_id)
-VALUES ($1)
-ON CONFLICT DO NOTHING
+INSERT INTO type_details (type_id, priority, noted_at)
+VALUES ($1, $2, $3)
+ON CONFLICT (type_id) DO UPDATE SET
+    priority = GREATEST(type_details.priority, excluded.priority),
+    noted_at = excluded.noted_at
 `
 
-func (q *Queries) UpsertTypeDetailWant(ctx context.Context, typeID int64) error {
-	_, err := q.db.ExecContext(ctx, upsertTypeDetailWant, typeID)
+type UpsertTypeDetailWantParams struct {
+	TypeID   int64        `json:"type_id"`
+	Priority int64        `json:"priority"`
+	NotedAt  sql.NullTime `json:"noted_at"`
+}
+
+func (q *Queries) UpsertTypeDetailWant(ctx context.Context, arg UpsertTypeDetailWantParams) error {
+	_, err := q.db.ExecContext(ctx, upsertTypeDetailWant, arg.TypeID, arg.Priority, arg.NotedAt)
 	return err
 }
 

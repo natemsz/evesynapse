@@ -26,7 +26,11 @@ func (app *Application) refreshTypeDetails(ctx context.Context, allowance *fetch
 	defer app.fetchMu.Unlock()
 
 	now := time.Now().UTC()
-	ids, err := app.queries.ListTypeDetailWants(ctx, maxTypeDetailsPerCycle)
+	ids, err := app.queries.ListTypeDetailWants(ctx, db.ListTypeDetailWantsParams{
+		TypingPriority: wantTyping,
+		TypingLimit:    int64(app.typingSlice()),
+		RowLimit:       maxTypeDetailsPerCycle,
+	})
 	if err != nil {
 		logging.Errorf("worker: type details: list wants: %v", err)
 		return 0, false

@@ -708,20 +708,35 @@ func (q *Queries) ListAllWatchlistEntries(ctx context.Context) ([]MarketWatchlis
 
 const listAllianceDrains = `-- name: ListAllianceDrains :many
 SELECT alliance_id
-FROM alliance_records
-WHERE state = 'pending'
-   OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < $1::timestamptz))
+FROM (
+    SELECT alliance_id, priority, noted_at, fetched_at, state,
+        ROW_NUMBER() OVER (
+            PARTITION BY (priority = $1::bigint)
+            ORDER BY noted_at DESC NULLS LAST
+        ) AS typing_n
+    FROM alliance_records
+    WHERE state = 'pending'
+       OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < $2::timestamptz))
+) AS drains
+WHERE priority != $1::bigint OR typing_n <= $3::bigint
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, noted_at DESC NULLS LAST, fetched_at NULLS FIRST
-LIMIT $2::bigint
+LIMIT $4::bigint
 `
 
 type ListAllianceDrainsParams struct {
-	StaleCutoff time.Time `json:"stale_cutoff"`
-	DrainLimit  int64     `json:"drain_limit"`
+	TypingPriority int64     `json:"typing_priority"`
+	StaleCutoff    time.Time `json:"stale_cutoff"`
+	TypingLimit    int64     `json:"typing_limit"`
+	DrainLimit     int64     `json:"drain_limit"`
 }
 
 func (q *Queries) ListAllianceDrains(ctx context.Context, arg ListAllianceDrainsParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listAllianceDrains, arg.StaleCutoff, arg.DrainLimit)
+	rows, err := q.db.QueryContext(ctx, listAllianceDrains,
+		arg.TypingPriority,
+		arg.StaleCutoff,
+		arg.TypingLimit,
+		arg.DrainLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -886,20 +901,35 @@ func (q *Queries) ListClosedOrderLifecycleByCharacter(ctx context.Context, arg L
 
 const listCorporationDrains = `-- name: ListCorporationDrains :many
 SELECT corporation_id
-FROM corporation_records
-WHERE state = 'pending'
-   OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < $1::timestamptz))
+FROM (
+    SELECT corporation_id, priority, noted_at, fetched_at, state,
+        ROW_NUMBER() OVER (
+            PARTITION BY (priority = $1::bigint)
+            ORDER BY noted_at DESC NULLS LAST
+        ) AS typing_n
+    FROM corporation_records
+    WHERE state = 'pending'
+       OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < $2::timestamptz))
+) AS drains
+WHERE priority != $1::bigint OR typing_n <= $3::bigint
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, noted_at DESC NULLS LAST, fetched_at NULLS FIRST
-LIMIT $2::bigint
+LIMIT $4::bigint
 `
 
 type ListCorporationDrainsParams struct {
-	StaleCutoff time.Time `json:"stale_cutoff"`
-	DrainLimit  int64     `json:"drain_limit"`
+	TypingPriority int64     `json:"typing_priority"`
+	StaleCutoff    time.Time `json:"stale_cutoff"`
+	TypingLimit    int64     `json:"typing_limit"`
+	DrainLimit     int64     `json:"drain_limit"`
 }
 
 func (q *Queries) ListCorporationDrains(ctx context.Context, arg ListCorporationDrainsParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listCorporationDrains, arg.StaleCutoff, arg.DrainLimit)
+	rows, err := q.db.QueryContext(ctx, listCorporationDrains,
+		arg.TypingPriority,
+		arg.StaleCutoff,
+		arg.TypingLimit,
+		arg.DrainLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1129,20 +1159,40 @@ func (q *Queries) ListMarketHistory(ctx context.Context, arg ListMarketHistoryPa
 
 const listMarketHistoryWants = `-- name: ListMarketHistoryWants :many
 SELECT region_id, type_id, last_requested_at
-FROM market_history_wants
-WHERE last_requested_at >= $1
-ORDER BY region_id, type_id
+FROM (
+    SELECT region_id, type_id, last_requested_at, priority,
+        ROW_NUMBER() OVER (
+            PARTITION BY (priority = $2::bigint)
+            ORDER BY last_requested_at DESC
+        ) AS typing_n
+    FROM market_history_wants
+    WHERE last_requested_at >= $1
+) AS wants
+WHERE priority != $2::bigint OR typing_n <= $3::bigint
+ORDER BY priority DESC, last_requested_at DESC
 `
 
-func (q *Queries) ListMarketHistoryWants(ctx context.Context, lastRequestedAt time.Time) ([]MarketHistoryWant, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketHistoryWants, lastRequestedAt)
+type ListMarketHistoryWantsParams struct {
+	LastRequestedAt time.Time `json:"last_requested_at"`
+	TypingPriority  int64     `json:"typing_priority"`
+	TypingLimit     int64     `json:"typing_limit"`
+}
+
+type ListMarketHistoryWantsRow struct {
+	RegionID        int64     `json:"region_id"`
+	TypeID          int64     `json:"type_id"`
+	LastRequestedAt time.Time `json:"last_requested_at"`
+}
+
+func (q *Queries) ListMarketHistoryWants(ctx context.Context, arg ListMarketHistoryWantsParams) ([]ListMarketHistoryWantsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketHistoryWants, arg.LastRequestedAt, arg.TypingPriority, arg.TypingLimit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []MarketHistoryWant
+	var items []ListMarketHistoryWantsRow
 	for rows.Next() {
-		var i MarketHistoryWant
+		var i ListMarketHistoryWantsRow
 		if err := rows.Scan(&i.RegionID, &i.TypeID, &i.LastRequestedAt); err != nil {
 			return nil, err
 		}
@@ -1823,20 +1873,35 @@ func (q *Queries) ListOrderLifecycleByUser(ctx context.Context, userID int64) ([
 
 const listPilotDrains = `-- name: ListPilotDrains :many
 SELECT character_id
-FROM pilot_records
-WHERE state = 'pending'
-   OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < $1::timestamptz))
+FROM (
+    SELECT character_id, priority, noted_at, fetched_at, state,
+        ROW_NUMBER() OVER (
+            PARTITION BY (priority = $1::bigint)
+            ORDER BY noted_at DESC NULLS LAST
+        ) AS typing_n
+    FROM pilot_records
+    WHERE state = 'pending'
+       OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < $2::timestamptz))
+) AS drains
+WHERE priority != $1::bigint OR typing_n <= $3::bigint
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, noted_at DESC NULLS LAST, fetched_at NULLS FIRST
-LIMIT $2::bigint
+LIMIT $4::bigint
 `
 
 type ListPilotDrainsParams struct {
-	StaleCutoff time.Time `json:"stale_cutoff"`
-	DrainLimit  int64     `json:"drain_limit"`
+	TypingPriority int64     `json:"typing_priority"`
+	StaleCutoff    time.Time `json:"stale_cutoff"`
+	TypingLimit    int64     `json:"typing_limit"`
+	DrainLimit     int64     `json:"drain_limit"`
 }
 
 func (q *Queries) ListPilotDrains(ctx context.Context, arg ListPilotDrainsParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listPilotDrains, arg.StaleCutoff, arg.DrainLimit)
+	rows, err := q.db.QueryContext(ctx, listPilotDrains,
+		arg.TypingPriority,
+		arg.StaleCutoff,
+		arg.TypingLimit,
+		arg.DrainLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -2751,20 +2816,27 @@ func (q *Queries) UpsertMarketHistory(ctx context.Context, arg UpsertMarketHisto
 }
 
 const upsertMarketHistoryWant = `-- name: UpsertMarketHistoryWant :exec
-INSERT INTO market_history_wants (region_id, type_id, last_requested_at)
-VALUES ($1, $2, $3)
+INSERT INTO market_history_wants (region_id, type_id, last_requested_at, priority)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (region_id, type_id) DO UPDATE SET
-    last_requested_at = excluded.last_requested_at
+    last_requested_at = excluded.last_requested_at,
+    priority = GREATEST(market_history_wants.priority, excluded.priority)
 `
 
 type UpsertMarketHistoryWantParams struct {
 	RegionID        int64     `json:"region_id"`
 	TypeID          int64     `json:"type_id"`
 	LastRequestedAt time.Time `json:"last_requested_at"`
+	Priority        int64     `json:"priority"`
 }
 
 func (q *Queries) UpsertMarketHistoryWant(ctx context.Context, arg UpsertMarketHistoryWantParams) error {
-	_, err := q.db.ExecContext(ctx, upsertMarketHistoryWant, arg.RegionID, arg.TypeID, arg.LastRequestedAt)
+	_, err := q.db.ExecContext(ctx, upsertMarketHistoryWant,
+		arg.RegionID,
+		arg.TypeID,
+		arg.LastRequestedAt,
+		arg.Priority,
+	)
 	return err
 }
 

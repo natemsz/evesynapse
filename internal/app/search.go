@@ -127,7 +127,7 @@ func (app *Application) handleItemSearchJSON(w http.ResponseWriter, r *http.Requ
 		}
 	}
 	items := app.suggestTypes(r.Context(), q.Get("q"), q.Get("pool"), limit)
-	app.noteSuggested(r.Context(), q.Get("pool"), items)
+	app.noteSuggested(r.Context(), app.typingBox(r.Context(), "items:"+q.Get("pool")), q.Get("pool"), items)
 	writeSuggestJSON(w, items)
 }
 
@@ -136,7 +136,7 @@ func (app *Application) handleItemSearchJSON(w http.ResponseWriter, r *http.Requ
 // behaviour (market pool, ten rows, no label) on the shared core.
 func (app *Application) handleMarketSuggest(w http.ResponseWriter, r *http.Request) {
 	items := app.suggestTypes(r.Context(), r.URL.Query().Get("q"), suggestPoolMarket, 10)
-	app.noteSuggested(r.Context(), suggestPoolMarket, items)
+	app.noteSuggested(r.Context(), app.typingBox(r.Context(), "market"), suggestPoolMarket, items)
 	writeSuggestJSON(w, items)
 }
 
@@ -148,11 +148,14 @@ const suggestedWarmed = 4
 // noteSuggested queues what the top suggestions' pages will want, so
 // that the one picked is often warm before the pick: a market
 // suggestion's price history in The Forge, an item suggestion's
-// details. Queue writes only; the worker does the fetching.
-func (app *Application) noteSuggested(ctx context.Context, pool string, items []suggestItem) {
+// details. Each keystroke replaces the box's previous guesses, so
+// guesses never accumulate across keystrokes. Queue writes only;
+// the worker does the fetching.
+func (app *Application) noteSuggested(ctx context.Context, box, pool string, items []suggestItem) {
 	if len(items) > suggestedWarmed {
 		items = items[:suggestedWarmed]
 	}
+	app.replaceTypingGuesses(ctx, box)
 	now := time.Now().UTC()
 	for _, it := range items {
 		if it.ID <= 0 {
@@ -160,13 +163,9 @@ func (app *Application) noteSuggested(ctx context.Context, pool string, items []
 		}
 		switch pool {
 		case suggestPoolMarket:
-			if err := app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
-				RegionID: defaultMarketRegion, TypeID: it.ID, LastRequestedAt: now,
-			}); err != nil {
-				logging.Errorf("search: note history want for suggested type %d: %v", it.ID, err)
-			}
-		case suggestPoolAll:
-			app.notePageWant(ctx, pageWantTypeDescription, it.ID, 0)
+			app.noteTypingHistoryGuess(ctx, box, defaultMarketRegion, it.ID, now)
+		default:
+			app.noteTypingDetailGuess(ctx, box, it.ID, now)
 		}
 	}
 }
@@ -266,10 +265,17 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 		hits = append(hits, hit)
 		itemMatches = append(itemMatches, marketMatch{ID: it.ID, Name: it.Name})
 	}
-	// Prefetch, same as the market page: a jump to any of these
-	// items should land on a warming chart, not a cold one.
-	if len(itemMatches) > 0 {
-		app.noteSearchHistoryWants(ctx, defaultMarketRegion, itemMatches)
+	// Guess, same as the search boxes: a jump to any of these
+	// items should land on a warming chart, not a cold one. Each
+	// keystroke replaces the box's previous guesses.
+	box := app.typingBox(ctx, "topbar")
+	app.replaceTypingGuesses(ctx, box)
+	now := time.Now().UTC()
+	for i, m := range itemMatches {
+		if i >= suggestedWarmed {
+			break
+		}
+		app.noteTypingHistoryGuess(ctx, box, defaultMarketRegion, m.ID, now)
 	}
 
 	// Corporations and alliances whose public records have
@@ -298,6 +304,9 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 			corpHits = corpHits[:4]
 		}
 		hits = append(hits, corpHits...)
+		for _, h := range corpHits {
+			app.noteTypingCorporationGuess(ctx, box, h.ID, now)
+		}
 	} else {
 		logging.Errorf("search: corporation records for %q: %v", q, err)
 	}
@@ -325,6 +334,9 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 			allianceHits = allianceHits[:4]
 		}
 		hits = append(hits, allianceHits...)
+		for _, h := range allianceHits {
+			app.noteTypingAllianceGuess(ctx, box, h.ID, now)
+		}
 	} else {
 		logging.Errorf("search: alliance records for %q: %v", q, err)
 	}
@@ -357,6 +369,9 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 		}
 		pilotHitCount = len(pilotHits)
 		hits = append(hits, pilotHits...)
+		for _, h := range pilotHits {
+			app.noteTypingPilotGuess(ctx, box, h.ID, now)
+		}
 	} else {
 		logging.Errorf("search: pilot records for %q: %v", q, err)
 	}

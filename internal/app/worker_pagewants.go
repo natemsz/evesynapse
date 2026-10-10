@@ -65,7 +65,8 @@ const pageWantTTL = 3 * time.Minute
 const (
 	wantHop    int64 = 0 // one relationship beyond a character's own records: the corporation of somebody it traded with
 	wantOrbit  int64 = 1 // named by a character's own records
-	wantViewed int64 = 2 // on a page somebody has open, or being typed into a search
+	wantTyping int64 = 2 // guessed from a search box while it is being typed into
+	wantViewed int64 = 3 // on a page somebody has open
 )
 
 // wantPilot, wantCorporation and wantAlliance queue a public record at
@@ -145,7 +146,9 @@ func (app *Application) notePageWant(ctx context.Context, kind pageWantKind, id 
 		}
 	case pageWantTypeDescription:
 		if _, settled := app.descriptionState(ctx, id); !settled {
-			if err := app.queries.UpsertTypeDetailWant(ctx, id); err != nil {
+			if err := app.queries.UpsertTypeDetailWant(ctx, db.UpsertTypeDetailWantParams{
+				TypeID: id, Priority: wantViewed, NotedAt: timeSet(time.Now().UTC()),
+			}); err != nil {
 				logging.Errorf("pagewant: note type detail want for %d: %v", id, err)
 			}
 		}
@@ -155,7 +158,7 @@ func (app *Application) notePageWant(ctx context.Context, kind pageWantKind, id 
 		if regionID > 0 {
 			if err := app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
 				RegionID: regionID, TypeID: id,
-				LastRequestedAt: time.Now().UTC(),
+				LastRequestedAt: time.Now().UTC(), Priority: wantViewed,
 			}); err != nil {
 				logging.Errorf("pagewant: note history want for type %d in region %d: %v", id, regionID, err)
 			}

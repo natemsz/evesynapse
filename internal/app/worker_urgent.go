@@ -99,8 +99,10 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 		return true
 	}
 	ids, err := app.queries.ListPilotDrains(ctx, db.ListPilotDrainsParams{
-		StaleCutoff: now.Add(-pilotStaleAfter),
-		DrainLimit:  urgentPilotsPerNudge,
+		TypingPriority: wantTyping,
+		StaleCutoff:    now.Add(-pilotStaleAfter),
+		TypingLimit:    int64(app.typingSlice()),
+		DrainLimit:     urgentPilotsPerNudge,
 	})
 	if err != nil {
 		logging.Errorf("worker: urgent drain: list pilot drains: %v", err)
@@ -124,7 +126,11 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 		return true
 	}
 
-	wants, err := app.queries.ListMarketHistoryWants(ctx, now.Add(-historyWantMaxAge))
+	wants, err := app.queries.ListMarketHistoryWants(ctx, db.ListMarketHistoryWantsParams{
+		LastRequestedAt: now.Add(-historyWantMaxAge),
+		TypingPriority:  wantTyping,
+		TypingLimit:     int64(app.typingSlice()),
+	})
 	if err != nil {
 		logging.Errorf("worker: urgent drain: list history wants: %v", err)
 	} else {
@@ -144,7 +150,11 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 		}
 	}
 
-	typeIDs, err := app.queries.ListTypeDetailWants(ctx, urgentTypeDetailsPerNudge)
+	typeIDs, err := app.queries.ListTypeDetailWants(ctx, db.ListTypeDetailWantsParams{
+		TypingPriority: wantTyping,
+		TypingLimit:    int64(app.typingSlice()),
+		RowLimit:       urgentTypeDetailsPerNudge,
+	})
 	if err != nil {
 		logging.Errorf("worker: urgent drain: list type details: %v", err)
 	} else {

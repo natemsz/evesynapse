@@ -31,8 +31,10 @@ func (app *Application) refreshPilotRecords(ctx context.Context, allowance *fetc
 
 	now := time.Now().UTC()
 	ids, err := app.queries.ListPilotDrains(ctx, db.ListPilotDrainsParams{
-		StaleCutoff: now.Add(-pilotStaleAfter),
-		DrainLimit:  maxPilotDrainsPerCycle,
+		TypingPriority: wantTyping,
+		StaleCutoff:    now.Add(-pilotStaleAfter),
+		TypingLimit:    int64(app.typingSlice()),
+		DrainLimit:     maxPilotDrainsPerCycle,
 	})
 	if err != nil {
 		logging.Errorf("worker: pilot records: list drains: %v", err)

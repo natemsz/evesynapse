@@ -359,9 +359,11 @@ SELECT type_id, description, fetched_at
 FROM type_details
 WHERE type_id = $1;
 -- name: UpsertTypeDetailWant :exec
-INSERT INTO type_details (type_id)
-VALUES ($1)
-ON CONFLICT DO NOTHING;
+INSERT INTO type_details (type_id, priority, noted_at)
+VALUES ($1, sqlc.arg(priority), sqlc.arg(noted_at))
+ON CONFLICT (type_id) DO UPDATE SET
+    priority = GREATEST(type_details.priority, excluded.priority),
+    noted_at = excluded.noted_at;
 -- name: SetTypeDetail :exec
 INSERT INTO type_details (type_id, description, fetched_at)
 VALUES ($1, $2, $3)
@@ -370,9 +372,17 @@ ON CONFLICT (type_id) DO UPDATE SET
     fetched_at  = excluded.fetched_at;
 -- name: ListTypeDetailWants :many
 SELECT type_id
-FROM type_details
-WHERE fetched_at IS NULL
-ORDER BY type_id
+FROM (
+    SELECT type_id, priority, noted_at,
+        ROW_NUMBER() OVER (
+            PARTITION BY (priority = sqlc.arg(typing_priority)::bigint)
+            ORDER BY noted_at DESC NULLS LAST
+        ) AS typing_n
+    FROM type_details
+    WHERE fetched_at IS NULL
+) AS wants
+WHERE priority != sqlc.arg(typing_priority)::bigint OR typing_n <= sqlc.arg(typing_limit)::bigint
+ORDER BY priority DESC, noted_at DESC NULLS LAST, type_id
 LIMIT sqlc.arg(row_limit)::bigint;
 -- name: ListSDEBlueprintsUsingMaterial :many
 SELECT b.blueprint_type_id, b.product_type_id, b.product_quantity, m.quantity AS material_quantity

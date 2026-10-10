@@ -32,6 +32,9 @@ func (app *Application) refreshPilotRecords(ctx context.Context, allowance *fetc
 	now := time.Now().UTC()
 	ids, err := app.queries.ListPilotDrains(ctx, db.ListPilotDrainsParams{
 		TypingPriority: wantTyping,
+		TypingAssumed:  typingAssumedHit,
+		TypingWeight:   typingAssumedWeight,
+		TypingSince:    now.Add(-typingLearnWindow),
 		StaleCutoff:    now.Add(-pilotStaleAfter),
 		TypingLimit:    int64(app.typingSlice()),
 		DrainLimit:     maxPilotDrainsPerCycle,

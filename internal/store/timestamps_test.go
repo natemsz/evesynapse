@@ -484,6 +484,9 @@ func TestSchemaMarketTimestampStepKeepsStoredTimes(t *testing.T) {
 			// are a stored contract and do not change): this fixture
 			// holds no guesses, so the slice admits everything.
 			TypingPriority: 2,
+			TypingAssumed:  0.30,
+			TypingWeight:   20.0,
+			TypingSince:    mustTime("2026-09-24T12:00:00Z"),
 			TypingLimit:    12,
 		})
 		if err != nil {
@@ -669,7 +672,14 @@ func TestSchemaRecordTimestampStepKeepsStoredTimes(t *testing.T) {
 	sameOrNever("ready pilot fetched_at", ready.FetchedAt, "2026-10-01T00:00:00Z")
 	// Waiting rows first (the page's own request ahead of the rest),
 	// then the stale record. Fresh and settled ones are not due.
-	pilots, err := q.ListPilotDrains(ctx, db.ListPilotDrainsParams{StaleCutoff: now.Add(-7 * 24 * time.Hour), DrainLimit: 10})
+	pilots, err := q.ListPilotDrains(ctx, db.ListPilotDrainsParams{
+		TypingPriority: 2,
+		TypingAssumed:  0.30,
+		TypingWeight:   20.0,
+		TypingSince:    now.Add(-7 * 24 * time.Hour),
+		StaleCutoff:    now.Add(-7 * 24 * time.Hour),
+		DrainLimit:     10,
+	})
 	if err != nil {
 		t.Fatalf("list pilots to fetch: %v", err)
 	}
@@ -679,6 +689,9 @@ func TestSchemaRecordTimestampStepKeepsStoredTimes(t *testing.T) {
 		// a stored contract and do not change): this fixture holds
 		// no guesses, so the slice admits everything.
 		TypingPriority: 2,
+		TypingAssumed:  0.30,
+		TypingWeight:   20.0,
+		TypingSince:    now.Add(-7 * 24 * time.Hour),
 		TypingLimit:    12,
 		StaleCutoff:    now.Add(-7 * 24 * time.Hour),
 		DrainLimit:     10,
@@ -690,6 +703,9 @@ func TestSchemaRecordTimestampStepKeepsStoredTimes(t *testing.T) {
 	alliances, err := q.ListAllianceDrains(ctx, db.ListAllianceDrainsParams{
 		// The typing tier, as above: no guesses in this fixture.
 		TypingPriority: 2,
+		TypingAssumed:  0.30,
+		TypingWeight:   20.0,
+		TypingSince:    now.Add(-7 * 24 * time.Hour),
 		TypingLimit:    12,
 		StaleCutoff:    now.Add(-7 * 24 * time.Hour),
 		DrainLimit:     10,
@@ -730,6 +746,9 @@ func TestSchemaRecordTimestampStepKeepsStoredTimes(t *testing.T) {
 		// a stored contract and do not change): this fixture holds
 		// no guesses, so the slice admits everything.
 		TypingPriority: 2,
+		TypingAssumed:  0.30,
+		TypingWeight:   20.0,
+		TypingSince:    mustTime("2026-09-24T12:00:00Z"),
 		TypingLimit:    12,
 		RowLimit:       10,
 	})

@@ -210,9 +210,13 @@ func (app *Application) historyCandidates(ctx context.Context) ([]marketKey, err
 		out = append(out, k)
 	}
 
+	now := time.Now().UTC()
 	wants, err := app.queries.ListMarketHistoryWants(ctx, db.ListMarketHistoryWantsParams{
-		LastRequestedAt: time.Now().UTC().Add(-historyWantMaxAge),
+		LastRequestedAt: now.Add(-historyWantMaxAge),
 		TypingPriority:  wantTyping,
+		TypingAssumed:   typingAssumedHit,
+		TypingWeight:    typingAssumedWeight,
+		TypingSince:     now.Add(-typingLearnWindow),
 		TypingLimit:     int64(app.typingSlice()),
 	})
 	if err != nil {

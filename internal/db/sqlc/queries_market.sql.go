@@ -712,27 +712,46 @@ FROM (
     SELECT alliance_id, priority, noted_at, fetched_at, state,
         ROW_NUMBER() OVER (
             PARTITION BY (priority = $1::bigint)
-            ORDER BY noted_at DESC NULLS LAST
+            ORDER BY type_rate DESC NULLS LAST, noted_at DESC NULLS LAST
         ) AS typing_n
-    FROM alliance_records
-    WHERE state = 'pending'
-       OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < $2::timestamptz))
+    FROM (
+        SELECT ar.alliance_id, ar.priority, ar.noted_at, ar.fetched_at, ar.state,
+            ((COUNT(tg.hit_at) + $2::float8 * $3::float8)
+                / (COUNT(tg.entity_id) + $3::float8)) AS type_rate
+        FROM alliance_records ar
+        LEFT JOIN typing_guesses tg
+            ON tg.kind = 'alliance' AND tg.entity_id = ar.alliance_id
+            AND tg.noted_at >= $4::timestamptz
+        WHERE ar.state = 'pending'
+           OR (ar.state = 'ready' AND (ar.fetched_at IS NULL OR ar.fetched_at < $5::timestamptz))
+        GROUP BY ar.alliance_id, ar.priority, ar.noted_at, ar.fetched_at, ar.state
+    ) AS rated
 ) AS drains
-WHERE priority != $1::bigint OR typing_n <= $3::bigint
-ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, noted_at DESC NULLS LAST, fetched_at NULLS FIRST
-LIMIT $4::bigint
+WHERE priority != $1::bigint OR typing_n <= $6::bigint
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC,
+    CASE WHEN priority = $1::bigint THEN typing_n END ASC NULLS LAST,
+    noted_at DESC NULLS LAST, fetched_at NULLS FIRST
+LIMIT $7::bigint
 `
 
 type ListAllianceDrainsParams struct {
 	TypingPriority int64     `json:"typing_priority"`
+	TypingAssumed  float64   `json:"typing_assumed"`
+	TypingWeight   float64   `json:"typing_weight"`
+	TypingSince    time.Time `json:"typing_since"`
 	StaleCutoff    time.Time `json:"stale_cutoff"`
 	TypingLimit    int64     `json:"typing_limit"`
 	DrainLimit     int64     `json:"drain_limit"`
 }
 
+// Typing rows spend their slice highest learned rate first (see
+// ListPilotDrains).
 func (q *Queries) ListAllianceDrains(ctx context.Context, arg ListAllianceDrainsParams) ([]int64, error) {
 	rows, err := q.db.QueryContext(ctx, listAllianceDrains,
 		arg.TypingPriority,
+		arg.TypingAssumed,
+		arg.TypingWeight,
+		arg.TypingSince,
 		arg.StaleCutoff,
 		arg.TypingLimit,
 		arg.DrainLimit,
@@ -905,27 +924,46 @@ FROM (
     SELECT corporation_id, priority, noted_at, fetched_at, state,
         ROW_NUMBER() OVER (
             PARTITION BY (priority = $1::bigint)
-            ORDER BY noted_at DESC NULLS LAST
+            ORDER BY type_rate DESC NULLS LAST, noted_at DESC NULLS LAST
         ) AS typing_n
-    FROM corporation_records
-    WHERE state = 'pending'
-       OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < $2::timestamptz))
+    FROM (
+        SELECT cr.corporation_id, cr.priority, cr.noted_at, cr.fetched_at, cr.state,
+            ((COUNT(tg.hit_at) + $2::float8 * $3::float8)
+                / (COUNT(tg.entity_id) + $3::float8)) AS type_rate
+        FROM corporation_records cr
+        LEFT JOIN typing_guesses tg
+            ON tg.kind = 'corporation' AND tg.entity_id = cr.corporation_id
+            AND tg.noted_at >= $4::timestamptz
+        WHERE cr.state = 'pending'
+           OR (cr.state = 'ready' AND (cr.fetched_at IS NULL OR cr.fetched_at < $5::timestamptz))
+        GROUP BY cr.corporation_id, cr.priority, cr.noted_at, cr.fetched_at, cr.state
+    ) AS rated
 ) AS drains
-WHERE priority != $1::bigint OR typing_n <= $3::bigint
-ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, noted_at DESC NULLS LAST, fetched_at NULLS FIRST
-LIMIT $4::bigint
+WHERE priority != $1::bigint OR typing_n <= $6::bigint
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC,
+    CASE WHEN priority = $1::bigint THEN typing_n END ASC NULLS LAST,
+    noted_at DESC NULLS LAST, fetched_at NULLS FIRST
+LIMIT $7::bigint
 `
 
 type ListCorporationDrainsParams struct {
 	TypingPriority int64     `json:"typing_priority"`
+	TypingAssumed  float64   `json:"typing_assumed"`
+	TypingWeight   float64   `json:"typing_weight"`
+	TypingSince    time.Time `json:"typing_since"`
 	StaleCutoff    time.Time `json:"stale_cutoff"`
 	TypingLimit    int64     `json:"typing_limit"`
 	DrainLimit     int64     `json:"drain_limit"`
 }
 
+// Typing rows spend their slice highest learned rate first (see
+// ListPilotDrains).
 func (q *Queries) ListCorporationDrains(ctx context.Context, arg ListCorporationDrainsParams) ([]int64, error) {
 	rows, err := q.db.QueryContext(ctx, listCorporationDrains,
 		arg.TypingPriority,
+		arg.TypingAssumed,
+		arg.TypingWeight,
+		arg.TypingSince,
 		arg.StaleCutoff,
 		arg.TypingLimit,
 		arg.DrainLimit,
@@ -1163,18 +1201,32 @@ FROM (
     SELECT region_id, type_id, last_requested_at, priority,
         ROW_NUMBER() OVER (
             PARTITION BY (priority = $2::bigint)
-            ORDER BY last_requested_at DESC
+            ORDER BY type_rate DESC NULLS LAST, last_requested_at DESC
         ) AS typing_n
-    FROM market_history_wants
-    WHERE last_requested_at >= $1
+    FROM (
+        SELECT hw.region_id, hw.type_id, hw.last_requested_at, hw.priority,
+            ((COUNT(tg.hit_at) + $3::float8 * $4::float8)
+                / (COUNT(tg.entity_id) + $4::float8)) AS type_rate
+        FROM market_history_wants hw
+        LEFT JOIN typing_guesses tg
+            ON tg.kind = 'market_history' AND tg.entity_id = hw.type_id AND tg.region_id = hw.region_id
+            AND tg.noted_at >= $5::timestamptz
+        WHERE hw.last_requested_at >= $1
+        GROUP BY hw.region_id, hw.type_id, hw.last_requested_at, hw.priority
+    ) AS rated
 ) AS wants
-WHERE priority != $2::bigint OR typing_n <= $3::bigint
-ORDER BY priority DESC, last_requested_at DESC
+WHERE priority != $2::bigint OR typing_n <= $6::bigint
+ORDER BY priority DESC,
+    CASE WHEN priority = $2::bigint THEN typing_n END ASC NULLS LAST,
+    last_requested_at DESC
 `
 
 type ListMarketHistoryWantsParams struct {
 	LastRequestedAt time.Time `json:"last_requested_at"`
 	TypingPriority  int64     `json:"typing_priority"`
+	TypingAssumed   float64   `json:"typing_assumed"`
+	TypingWeight    float64   `json:"typing_weight"`
+	TypingSince     time.Time `json:"typing_since"`
 	TypingLimit     int64     `json:"typing_limit"`
 }
 
@@ -1184,8 +1236,17 @@ type ListMarketHistoryWantsRow struct {
 	LastRequestedAt time.Time `json:"last_requested_at"`
 }
 
+// Typing rows spend their slice highest learned rate first (see
+// ListPilotDrains).
 func (q *Queries) ListMarketHistoryWants(ctx context.Context, arg ListMarketHistoryWantsParams) ([]ListMarketHistoryWantsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketHistoryWants, arg.LastRequestedAt, arg.TypingPriority, arg.TypingLimit)
+	rows, err := q.db.QueryContext(ctx, listMarketHistoryWants,
+		arg.LastRequestedAt,
+		arg.TypingPriority,
+		arg.TypingAssumed,
+		arg.TypingWeight,
+		arg.TypingSince,
+		arg.TypingLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1877,27 +1938,48 @@ FROM (
     SELECT character_id, priority, noted_at, fetched_at, state,
         ROW_NUMBER() OVER (
             PARTITION BY (priority = $1::bigint)
-            ORDER BY noted_at DESC NULLS LAST
+            ORDER BY type_rate DESC NULLS LAST, noted_at DESC NULLS LAST
         ) AS typing_n
-    FROM pilot_records
-    WHERE state = 'pending'
-       OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < $2::timestamptz))
+    FROM (
+        SELECT pr.character_id, pr.priority, pr.noted_at, pr.fetched_at, pr.state,
+            ((COUNT(tg.hit_at) + $2::float8 * $3::float8)
+                / (COUNT(tg.entity_id) + $3::float8)) AS type_rate
+        FROM pilot_records pr
+        LEFT JOIN typing_guesses tg
+            ON tg.kind = 'pilot' AND tg.entity_id = pr.character_id
+            AND tg.noted_at >= $4::timestamptz
+        WHERE pr.state = 'pending'
+           OR (pr.state = 'ready' AND (pr.fetched_at IS NULL OR pr.fetched_at < $5::timestamptz))
+        GROUP BY pr.character_id, pr.priority, pr.noted_at, pr.fetched_at, pr.state
+    ) AS rated
 ) AS drains
-WHERE priority != $1::bigint OR typing_n <= $3::bigint
-ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, noted_at DESC NULLS LAST, fetched_at NULLS FIRST
-LIMIT $4::bigint
+WHERE priority != $1::bigint OR typing_n <= $6::bigint
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC,
+    CASE WHEN priority = $1::bigint THEN typing_n END ASC NULLS LAST,
+    noted_at DESC NULLS LAST, fetched_at NULLS FIRST
+LIMIT $7::bigint
 `
 
 type ListPilotDrainsParams struct {
 	TypingPriority int64     `json:"typing_priority"`
+	TypingAssumed  float64   `json:"typing_assumed"`
+	TypingWeight   float64   `json:"typing_weight"`
+	TypingSince    time.Time `json:"typing_since"`
 	StaleCutoff    time.Time `json:"stale_cutoff"`
 	TypingLimit    int64     `json:"typing_limit"`
 	DrainLimit     int64     `json:"drain_limit"`
 }
 
+// Typing rows spend their slice highest learned rate first: the
+// share of recent guesses for the pilot that were opened, blended
+// with the assumed rate. Recency breaks ties; unknown pilots read
+// at the assumed rate, so a cold start drains newest first.
 func (q *Queries) ListPilotDrains(ctx context.Context, arg ListPilotDrainsParams) ([]int64, error) {
 	rows, err := q.db.QueryContext(ctx, listPilotDrains,
 		arg.TypingPriority,
+		arg.TypingAssumed,
+		arg.TypingWeight,
+		arg.TypingSince,
 		arg.StaleCutoff,
 		arg.TypingLimit,
 		arg.DrainLimit,

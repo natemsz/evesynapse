@@ -261,6 +261,9 @@ func TestMarketSearchPrefetchEnqueuesWants(t *testing.T) {
 	wants, err := q.ListMarketHistoryWants(ctx, db.ListMarketHistoryWantsParams{
 		LastRequestedAt: time.Time{},
 		TypingPriority:  wantTyping,
+		TypingAssumed:   typingAssumedHit,
+		TypingWeight:    typingAssumedWeight,
+		TypingSince:     time.Now().UTC().Add(-typingLearnWindow),
 		TypingLimit:     int64(app.typingSlice()),
 	})
 	if err != nil {
@@ -363,6 +366,9 @@ func TestPilotOrbitDerivationAndPriority(t *testing.T) {
 	}
 	ids, err := q.ListPilotDrains(ctx, db.ListPilotDrainsParams{
 		TypingPriority: wantTyping,
+		TypingAssumed:  typingAssumedHit,
+		TypingWeight:   typingAssumedWeight,
+		TypingSince:    time.Now().UTC().Add(-typingLearnWindow),
 		StaleCutoff:    time.Now().UTC().Add(-pilotStaleAfter),
 		TypingLimit:    int64(app.typingSlice()),
 		DrainLimit:     5,

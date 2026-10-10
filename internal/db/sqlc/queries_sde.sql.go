@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/lib/pq"
 )
@@ -1886,24 +1887,47 @@ FROM (
     SELECT type_id, priority, noted_at,
         ROW_NUMBER() OVER (
             PARTITION BY (priority = $1::bigint)
-            ORDER BY noted_at DESC NULLS LAST
+            ORDER BY type_rate DESC NULLS LAST, noted_at DESC NULLS LAST
         ) AS typing_n
-    FROM type_details
-    WHERE fetched_at IS NULL
+    FROM (
+        SELECT td.type_id, td.priority, td.noted_at,
+            ((COUNT(tg.hit_at) + $2::float8 * $3::float8)
+                / (COUNT(tg.entity_id) + $3::float8)) AS type_rate
+        FROM type_details td
+        LEFT JOIN typing_guesses tg
+            ON tg.kind = 'type_description' AND tg.entity_id = td.type_id
+            AND tg.noted_at >= $4::timestamptz
+        WHERE td.fetched_at IS NULL
+        GROUP BY td.type_id, td.priority, td.noted_at
+    ) AS rated
 ) AS wants
-WHERE priority != $1::bigint OR typing_n <= $2::bigint
-ORDER BY priority DESC, noted_at DESC NULLS LAST, type_id
-LIMIT $3::bigint
+WHERE priority != $1::bigint OR typing_n <= $5::bigint
+ORDER BY priority DESC,
+    CASE WHEN priority = $1::bigint THEN typing_n END ASC NULLS LAST,
+    noted_at DESC NULLS LAST, type_id
+LIMIT $6::bigint
 `
 
 type ListTypeDetailWantsParams struct {
-	TypingPriority int64 `json:"typing_priority"`
-	TypingLimit    int64 `json:"typing_limit"`
-	RowLimit       int64 `json:"row_limit"`
+	TypingPriority int64     `json:"typing_priority"`
+	TypingAssumed  float64   `json:"typing_assumed"`
+	TypingWeight   float64   `json:"typing_weight"`
+	TypingSince    time.Time `json:"typing_since"`
+	TypingLimit    int64     `json:"typing_limit"`
+	RowLimit       int64     `json:"row_limit"`
 }
 
+// Typing rows spend their slice highest learned rate first (see
+// ListPilotDrains in queries_market.sql).
 func (q *Queries) ListTypeDetailWants(ctx context.Context, arg ListTypeDetailWantsParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listTypeDetailWants, arg.TypingPriority, arg.TypingLimit, arg.RowLimit)
+	rows, err := q.db.QueryContext(ctx, listTypeDetailWants,
+		arg.TypingPriority,
+		arg.TypingAssumed,
+		arg.TypingWeight,
+		arg.TypingSince,
+		arg.TypingLimit,
+		arg.RowLimit,
+	)
 	if err != nil {
 		return nil, err
 	}

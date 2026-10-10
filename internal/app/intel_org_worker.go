@@ -41,6 +41,9 @@ func (app *Application) refreshAllianceRecords(ctx context.Context, allowance *f
 func (app *Application) drainCorporationPass(ctx context.Context, allowance *fetchBudget, limit int, now time.Time) (drained int, limited bool) {
 	ids, err := app.queries.ListCorporationDrains(ctx, db.ListCorporationDrainsParams{
 		TypingPriority: wantTyping,
+		TypingAssumed:  typingAssumedHit,
+		TypingWeight:   typingAssumedWeight,
+		TypingSince:    now.Add(-typingLearnWindow),
 		StaleCutoff:    now.Add(-orgStaleAfter),
 		TypingLimit:    int64(app.typingSlice()),
 		DrainLimit:     int64(limit),
@@ -68,6 +71,9 @@ func (app *Application) drainCorporationPass(ctx context.Context, allowance *fet
 func (app *Application) drainAlliancePass(ctx context.Context, allowance *fetchBudget, limit int, now time.Time) (drained int, limited bool) {
 	ids, err := app.queries.ListAllianceDrains(ctx, db.ListAllianceDrainsParams{
 		TypingPriority: wantTyping,
+		TypingAssumed:  typingAssumedHit,
+		TypingWeight:   typingAssumedWeight,
+		TypingSince:    now.Add(-typingLearnWindow),
 		StaleCutoff:    now.Add(-orgStaleAfter),
 		TypingLimit:    int64(app.typingSlice()),
 		DrainLimit:     int64(limit),

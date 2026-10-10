@@ -25,6 +25,14 @@ const (
 	// typingGuessHitWindow is how long after a guess the pick
 	// still counts as its hit (the prefetch tuning signal).
 	typingGuessHitWindow = 10 * time.Minute
+	// typingLearnWindow is how far back the hit rates the drains
+	// order typing rows by reach. typingAssumedHit is the rate an
+	// entity with no record in the window reads at, counting for
+	// typingAssumedWeight guesses, so a cold start drains newest
+	// first and one lucky hit cannot crown an entity.
+	typingLearnWindow   = 7 * 24 * time.Hour
+	typingAssumedHit    = 0.30
+	typingAssumedWeight = 20.0
 )
 
 // typingSlice is one drain's typing-tier budget: a tenth of the

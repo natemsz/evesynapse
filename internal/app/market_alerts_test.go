@@ -573,6 +573,9 @@ func TestMarketItemPageChartAndWant(t *testing.T) {
 	wants, err := q.ListMarketHistoryWants(ctx, db.ListMarketHistoryWantsParams{
 		LastRequestedAt: time.Time{},
 		TypingPriority:  wantTyping,
+		TypingAssumed:   typingAssumedHit,
+		TypingWeight:    typingAssumedWeight,
+		TypingSince:     time.Now().UTC().Add(-typingLearnWindow),
 		TypingLimit:     int64(app.typingSlice()),
 	})
 	if err != nil || len(wants) != 1 || wants[0].TypeID != 34 {
@@ -594,6 +597,9 @@ func TestMarketItemPageChartAndWant(t *testing.T) {
 	wants, err = q.ListMarketHistoryWants(ctx, db.ListMarketHistoryWantsParams{
 		LastRequestedAt: time.Time{},
 		TypingPriority:  wantTyping,
+		TypingAssumed:   typingAssumedHit,
+		TypingWeight:    typingAssumedWeight,
+		TypingSince:     time.Now().UTC().Add(-typingLearnWindow),
 		TypingLimit:     int64(app.typingSlice()),
 	})
 	if err != nil || len(wants) != 1 {
@@ -613,6 +619,9 @@ func TestMigration013Reopen(t *testing.T) {
 	if _, err := q.ListMarketHistoryWants(ctx, db.ListMarketHistoryWantsParams{
 		LastRequestedAt: time.Time{},
 		TypingPriority:  wantTyping,
+		TypingAssumed:   typingAssumedHit,
+		TypingWeight:    typingAssumedWeight,
+		TypingSince:     time.Now().UTC().Add(-typingLearnWindow),
 		TypingLimit:     int64(app.typingSlice()),
 	}); err != nil {
 		t.Fatalf("wants on fresh DB: %v", err)

@@ -371,18 +371,31 @@ ON CONFLICT (type_id) DO UPDATE SET
     description = excluded.description,
     fetched_at  = excluded.fetched_at;
 -- name: ListTypeDetailWants :many
+-- Typing rows spend their slice highest learned rate first (see
+-- ListPilotDrains in queries_market.sql).
 SELECT type_id
 FROM (
     SELECT type_id, priority, noted_at,
         ROW_NUMBER() OVER (
             PARTITION BY (priority = sqlc.arg(typing_priority)::bigint)
-            ORDER BY noted_at DESC NULLS LAST
+            ORDER BY type_rate DESC NULLS LAST, noted_at DESC NULLS LAST
         ) AS typing_n
-    FROM type_details
-    WHERE fetched_at IS NULL
+    FROM (
+        SELECT td.type_id, td.priority, td.noted_at,
+            ((COUNT(tg.hit_at) + sqlc.arg(typing_assumed)::float8 * sqlc.arg(typing_weight)::float8)
+                / (COUNT(tg.entity_id) + sqlc.arg(typing_weight)::float8)) AS type_rate
+        FROM type_details td
+        LEFT JOIN typing_guesses tg
+            ON tg.kind = 'type_description' AND tg.entity_id = td.type_id
+            AND tg.noted_at >= sqlc.arg(typing_since)::timestamptz
+        WHERE td.fetched_at IS NULL
+        GROUP BY td.type_id, td.priority, td.noted_at
+    ) AS rated
 ) AS wants
 WHERE priority != sqlc.arg(typing_priority)::bigint OR typing_n <= sqlc.arg(typing_limit)::bigint
-ORDER BY priority DESC, noted_at DESC NULLS LAST, type_id
+ORDER BY priority DESC,
+    CASE WHEN priority = sqlc.arg(typing_priority)::bigint THEN typing_n END ASC NULLS LAST,
+    noted_at DESC NULLS LAST, type_id
 LIMIT sqlc.arg(row_limit)::bigint;
 -- name: ListSDEBlueprintsUsingMaterial :many
 SELECT b.blueprint_type_id, b.product_type_id, b.product_quantity, m.quantity AS material_quantity

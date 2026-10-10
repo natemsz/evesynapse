@@ -28,6 +28,9 @@ func (app *Application) refreshTypeDetails(ctx context.Context, allowance *fetch
 	now := time.Now().UTC()
 	ids, err := app.queries.ListTypeDetailWants(ctx, db.ListTypeDetailWantsParams{
 		TypingPriority: wantTyping,
+		TypingAssumed:  typingAssumedHit,
+		TypingWeight:   typingAssumedWeight,
+		TypingSince:    now.Add(-typingLearnWindow),
 		TypingLimit:    int64(app.typingSlice()),
 		RowLimit:       maxTypeDetailsPerCycle,
 	})

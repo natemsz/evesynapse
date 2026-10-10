@@ -195,6 +195,9 @@ func TestTypingSliceCapInDrain(t *testing.T) {
 		t.Helper()
 		ids, err := q.ListPilotDrains(ctx, db.ListPilotDrainsParams{
 			TypingPriority: wantTyping,
+			TypingAssumed:  typingAssumedHit,
+			TypingWeight:   typingAssumedWeight,
+			TypingSince:    now.Add(-typingLearnWindow),
 			StaleCutoff:    now.Add(-pilotStaleAfter),
 			TypingLimit:    limit,
 			DrainLimit:     100,
@@ -230,6 +233,9 @@ func TestDrainOrderViewedTypingOrbit(t *testing.T) {
 	seedPilot(93500003, wantViewed, now)
 	ids, err := q.ListPilotDrains(ctx, db.ListPilotDrainsParams{
 		TypingPriority: wantTyping,
+		TypingAssumed:  typingAssumedHit,
+		TypingWeight:   typingAssumedWeight,
+		TypingSince:    now.Add(-typingLearnWindow),
 		StaleCutoff:    now.Add(-pilotStaleAfter),
 		TypingLimit:    int64(app.typingSlice()),
 		DrainLimit:     10,
@@ -260,6 +266,9 @@ func TestDrainOrderViewedTypingOrbit(t *testing.T) {
 	wants, err := q.ListMarketHistoryWants(ctx, db.ListMarketHistoryWantsParams{
 		LastRequestedAt: time.Time{},
 		TypingPriority:  wantTyping,
+		TypingAssumed:   typingAssumedHit,
+		TypingWeight:    typingAssumedWeight,
+		TypingSince:     now.Add(-typingLearnWindow),
 		TypingLimit:     int64(app.typingSlice()),
 	})
 	if err != nil {
@@ -267,6 +276,79 @@ func TestDrainOrderViewedTypingOrbit(t *testing.T) {
 	}
 	if len(wants) != 2 || wants[0].TypeID != 42 || wants[1].TypeID != 41 {
 		t.Fatalf("history drain order = %v, want viewed 42 then typing 41", wants)
+	}
+}
+
+// TestTypingSliceSpendsLearnedRateFirst: when typing rows overflow
+// their slice, the ones pilots actually opened survive — even ahead
+// of newer guesses with no record. Viewed rows still beat every
+// guess whatever the rates say.
+func TestTypingSliceSpendsLearnedRateFirst(t *testing.T) {
+	_, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// Winner: guessed once, opened once — but noted first.
+	if err := q.UpsertPilotWant(ctx, db.UpsertPilotWantParams{
+		CharacterID: 93600001, Priority: wantTyping, NotedAt: timeSet(now.Add(-2 * time.Minute)),
+	}); err != nil {
+		t.Fatalf("seed winner want: %v", err)
+	}
+	if err := q.InsertTypingGuess(ctx, db.InsertTypingGuessParams{
+		Box: "7|market", Kind: string(pageWantPilot), EntityID: 93600001,
+		NotedAt: now.Add(-2 * time.Minute),
+	}); err != nil {
+		t.Fatalf("seed winner guess: %v", err)
+	}
+	if err := q.MarkTypingGuessHits(ctx, db.MarkTypingGuessHitsParams{
+		Kind: string(pageWantPilot), EntityID: 93600001,
+		Now: now, Since: now.Add(-typingGuessHitWindow),
+	}); err != nil {
+		t.Fatalf("mark winner hit: %v", err)
+	}
+	// Loser: guessed once, never opened, noted later.
+	if err := q.UpsertPilotWant(ctx, db.UpsertPilotWantParams{
+		CharacterID: 93600002, Priority: wantTyping, NotedAt: timeSet(now.Add(-time.Minute)),
+	}); err != nil {
+		t.Fatalf("seed loser want: %v", err)
+	}
+	if err := q.InsertTypingGuess(ctx, db.InsertTypingGuessParams{
+		Box: "7|market", Kind: string(pageWantPilot), EntityID: 93600002,
+		NotedAt: now.Add(-time.Minute),
+	}); err != nil {
+		t.Fatalf("seed loser guess: %v", err)
+	}
+
+	drain := func() []int64 {
+		t.Helper()
+		ids, err := q.ListPilotDrains(ctx, db.ListPilotDrainsParams{
+			TypingPriority: wantTyping,
+			TypingAssumed:  typingAssumedHit,
+			TypingWeight:   typingAssumedWeight,
+			TypingSince:    now.Add(-typingLearnWindow),
+			StaleCutoff:    now.Add(-pilotStaleAfter),
+			TypingLimit:    1,
+			DrainLimit:     10,
+		})
+		if err != nil {
+			t.Fatalf("list drains: %v", err)
+		}
+		return ids
+	}
+	// Winner rate (1+0.3*20)/(1+20) beats loser (0+0.3*20)/(1+20):
+	// the older opened guess survives the one-slot slice.
+	if ids := drain(); len(ids) != 1 || ids[0] != 93600001 {
+		t.Fatalf("drain with one slice slot = %v, want [93600001]", ids)
+	}
+
+	// A viewed row still jumps both, learned rates or not.
+	if err := q.UpsertPilotWant(ctx, db.UpsertPilotWantParams{
+		CharacterID: 93600003, Priority: wantViewed, NotedAt: timeSet(now),
+	}); err != nil {
+		t.Fatalf("seed viewed want: %v", err)
+	}
+	if ids := drain(); len(ids) != 2 || ids[0] != 93600003 || ids[1] != 93600001 {
+		t.Fatalf("drain with viewed row = %v, want [93600003 93600001]", ids)
 	}
 }
 

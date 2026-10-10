@@ -70,18 +70,31 @@ ON CONFLICT (region_id, type_id) DO UPDATE SET
     last_requested_at = excluded.last_requested_at,
     priority = GREATEST(market_history_wants.priority, excluded.priority);
 -- name: ListMarketHistoryWants :many
+-- Typing rows spend their slice highest learned rate first (see
+-- ListPilotDrains).
 SELECT region_id, type_id, last_requested_at
 FROM (
     SELECT region_id, type_id, last_requested_at, priority,
         ROW_NUMBER() OVER (
             PARTITION BY (priority = sqlc.arg(typing_priority)::bigint)
-            ORDER BY last_requested_at DESC
+            ORDER BY type_rate DESC NULLS LAST, last_requested_at DESC
         ) AS typing_n
-    FROM market_history_wants
-    WHERE last_requested_at >= $1
+    FROM (
+        SELECT hw.region_id, hw.type_id, hw.last_requested_at, hw.priority,
+            ((COUNT(tg.hit_at) + sqlc.arg(typing_assumed)::float8 * sqlc.arg(typing_weight)::float8)
+                / (COUNT(tg.entity_id) + sqlc.arg(typing_weight)::float8)) AS type_rate
+        FROM market_history_wants hw
+        LEFT JOIN typing_guesses tg
+            ON tg.kind = 'market_history' AND tg.entity_id = hw.type_id AND tg.region_id = hw.region_id
+            AND tg.noted_at >= sqlc.arg(typing_since)::timestamptz
+        WHERE hw.last_requested_at >= $1
+        GROUP BY hw.region_id, hw.type_id, hw.last_requested_at, hw.priority
+    ) AS rated
 ) AS wants
 WHERE priority != sqlc.arg(typing_priority)::bigint OR typing_n <= sqlc.arg(typing_limit)::bigint
-ORDER BY priority DESC, last_requested_at DESC;
+ORDER BY priority DESC,
+    CASE WHEN priority = sqlc.arg(typing_priority)::bigint THEN typing_n END ASC NULLS LAST,
+    last_requested_at DESC;
 -- name: GetMarketFetchState :one
 SELECT kind, state, detail, attempted_at
 FROM market_fetch_state
@@ -270,19 +283,34 @@ ON CONFLICT (character_id) DO UPDATE SET
     state      = excluded.state,
     fetched_at = excluded.fetched_at;
 -- name: ListPilotDrains :many
+-- Typing rows spend their slice highest learned rate first: the
+-- share of recent guesses for the pilot that were opened, blended
+-- with the assumed rate. Recency breaks ties; unknown pilots read
+-- at the assumed rate, so a cold start drains newest first.
 SELECT character_id
 FROM (
     SELECT character_id, priority, noted_at, fetched_at, state,
         ROW_NUMBER() OVER (
             PARTITION BY (priority = sqlc.arg(typing_priority)::bigint)
-            ORDER BY noted_at DESC NULLS LAST
+            ORDER BY type_rate DESC NULLS LAST, noted_at DESC NULLS LAST
         ) AS typing_n
-    FROM pilot_records
-    WHERE state = 'pending'
-       OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < sqlc.arg(stale_cutoff)::timestamptz))
+    FROM (
+        SELECT pr.character_id, pr.priority, pr.noted_at, pr.fetched_at, pr.state,
+            ((COUNT(tg.hit_at) + sqlc.arg(typing_assumed)::float8 * sqlc.arg(typing_weight)::float8)
+                / (COUNT(tg.entity_id) + sqlc.arg(typing_weight)::float8)) AS type_rate
+        FROM pilot_records pr
+        LEFT JOIN typing_guesses tg
+            ON tg.kind = 'pilot' AND tg.entity_id = pr.character_id
+            AND tg.noted_at >= sqlc.arg(typing_since)::timestamptz
+        WHERE pr.state = 'pending'
+           OR (pr.state = 'ready' AND (pr.fetched_at IS NULL OR pr.fetched_at < sqlc.arg(stale_cutoff)::timestamptz))
+        GROUP BY pr.character_id, pr.priority, pr.noted_at, pr.fetched_at, pr.state
+    ) AS rated
 ) AS drains
 WHERE priority != sqlc.arg(typing_priority)::bigint OR typing_n <= sqlc.arg(typing_limit)::bigint
-ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, noted_at DESC NULLS LAST, fetched_at NULLS FIRST
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC,
+    CASE WHEN priority = sqlc.arg(typing_priority)::bigint THEN typing_n END ASC NULLS LAST,
+    noted_at DESC NULLS LAST, fetched_at NULLS FIRST
 LIMIT sqlc.arg(drain_limit)::bigint;
 
 -- ---------------------------------------------------------------------
@@ -318,19 +346,32 @@ ON CONFLICT (corporation_id) DO UPDATE SET
     state      = excluded.state,
     fetched_at = excluded.fetched_at;
 -- name: ListCorporationDrains :many
+-- Typing rows spend their slice highest learned rate first (see
+-- ListPilotDrains).
 SELECT corporation_id
 FROM (
     SELECT corporation_id, priority, noted_at, fetched_at, state,
         ROW_NUMBER() OVER (
             PARTITION BY (priority = sqlc.arg(typing_priority)::bigint)
-            ORDER BY noted_at DESC NULLS LAST
+            ORDER BY type_rate DESC NULLS LAST, noted_at DESC NULLS LAST
         ) AS typing_n
-    FROM corporation_records
-    WHERE state = 'pending'
-       OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < sqlc.arg(stale_cutoff)::timestamptz))
+    FROM (
+        SELECT cr.corporation_id, cr.priority, cr.noted_at, cr.fetched_at, cr.state,
+            ((COUNT(tg.hit_at) + sqlc.arg(typing_assumed)::float8 * sqlc.arg(typing_weight)::float8)
+                / (COUNT(tg.entity_id) + sqlc.arg(typing_weight)::float8)) AS type_rate
+        FROM corporation_records cr
+        LEFT JOIN typing_guesses tg
+            ON tg.kind = 'corporation' AND tg.entity_id = cr.corporation_id
+            AND tg.noted_at >= sqlc.arg(typing_since)::timestamptz
+        WHERE cr.state = 'pending'
+           OR (cr.state = 'ready' AND (cr.fetched_at IS NULL OR cr.fetched_at < sqlc.arg(stale_cutoff)::timestamptz))
+        GROUP BY cr.corporation_id, cr.priority, cr.noted_at, cr.fetched_at, cr.state
+    ) AS rated
 ) AS drains
 WHERE priority != sqlc.arg(typing_priority)::bigint OR typing_n <= sqlc.arg(typing_limit)::bigint
-ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, noted_at DESC NULLS LAST, fetched_at NULLS FIRST
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC,
+    CASE WHEN priority = sqlc.arg(typing_priority)::bigint THEN typing_n END ASC NULLS LAST,
+    noted_at DESC NULLS LAST, fetched_at NULLS FIRST
 LIMIT sqlc.arg(drain_limit)::bigint;
 -- name: GetAllianceRecord :one
 SELECT alliance_id, payload, state, fetched_at, priority
@@ -358,19 +399,32 @@ ON CONFLICT (alliance_id) DO UPDATE SET
     state      = excluded.state,
     fetched_at = excluded.fetched_at;
 -- name: ListAllianceDrains :many
+-- Typing rows spend their slice highest learned rate first (see
+-- ListPilotDrains).
 SELECT alliance_id
 FROM (
     SELECT alliance_id, priority, noted_at, fetched_at, state,
         ROW_NUMBER() OVER (
             PARTITION BY (priority = sqlc.arg(typing_priority)::bigint)
-            ORDER BY noted_at DESC NULLS LAST
+            ORDER BY type_rate DESC NULLS LAST, noted_at DESC NULLS LAST
         ) AS typing_n
-    FROM alliance_records
-    WHERE state = 'pending'
-       OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < sqlc.arg(stale_cutoff)::timestamptz))
+    FROM (
+        SELECT ar.alliance_id, ar.priority, ar.noted_at, ar.fetched_at, ar.state,
+            ((COUNT(tg.hit_at) + sqlc.arg(typing_assumed)::float8 * sqlc.arg(typing_weight)::float8)
+                / (COUNT(tg.entity_id) + sqlc.arg(typing_weight)::float8)) AS type_rate
+        FROM alliance_records ar
+        LEFT JOIN typing_guesses tg
+            ON tg.kind = 'alliance' AND tg.entity_id = ar.alliance_id
+            AND tg.noted_at >= sqlc.arg(typing_since)::timestamptz
+        WHERE ar.state = 'pending'
+           OR (ar.state = 'ready' AND (ar.fetched_at IS NULL OR ar.fetched_at < sqlc.arg(stale_cutoff)::timestamptz))
+        GROUP BY ar.alliance_id, ar.priority, ar.noted_at, ar.fetched_at, ar.state
+    ) AS rated
 ) AS drains
 WHERE priority != sqlc.arg(typing_priority)::bigint OR typing_n <= sqlc.arg(typing_limit)::bigint
-ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, noted_at DESC NULLS LAST, fetched_at NULLS FIRST
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC,
+    CASE WHEN priority = sqlc.arg(typing_priority)::bigint THEN typing_n END ASC NULLS LAST,
+    noted_at DESC NULLS LAST, fetched_at NULLS FIRST
 LIMIT sqlc.arg(drain_limit)::bigint;
 
 -- Pilot name-resolution wants (schema 022): a topbar search for

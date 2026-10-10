@@ -49,6 +49,9 @@ func TestCorporationsOverviewRendersStoredDataWithoutFetching(t *testing.T) {
 	}
 	drains, err := q.ListCorporationDrains(ctx, db.ListCorporationDrainsParams{
 		TypingPriority: wantTyping,
+		TypingAssumed:  typingAssumedHit,
+		TypingWeight:   typingAssumedWeight,
+		TypingSince:    time.Now().UTC().Add(-typingLearnWindow),
 		StaleCutoff:    time.Now().UTC(),
 		TypingLimit:    12,
 		DrainLimit:     100,

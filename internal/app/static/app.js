@@ -1366,6 +1366,12 @@
     expandAllButton.setAttribute("aria-label", allOpen ? "Collapse all navigation categories" : "Expand all navigation categories");
     expandAllButton.setAttribute("title", allOpen ? "Collapse all navigation categories" : "Expand all navigation categories");
   }
+  // The category of the page being shown stays open while the menu
+  // shows its labels.
+  function openActiveCategory() {
+    var active = sidebar ? sidebar.querySelector(".sidenav details.branch.active") : null;
+    if (active) active.open = true;
+  }
   function closeCategoryBranches(except) {
     for (var i = 0; i < categoryBranches.length; i++) {
       if (categoryBranches[i] !== except) {
@@ -1403,6 +1409,7 @@
     }
     if (state === "expanded") {
       root.removeAttribute("data-nav");
+      openActiveCategory();
     } else {
       root.setAttribute("data-nav", state);
     }
@@ -1505,6 +1512,11 @@
     // Entering small screens always starts with the drawer
     // closed; leaving them must not leave it hanging open either.
     closeDrawer(false);
+    if (railActive()) {
+      closeCategoryBranches(null);
+    } else {
+      openActiveCategory();
+    }
     syncNavigationControls();
   }
   if (drawerQuery.addEventListener) {
@@ -1521,8 +1533,10 @@
   // the head script applied, a restored page) starts with
   // every category folded too — no flyout stack waiting under
   // the icons.
-  if (currentState() === "rail") {
+  if (railActive()) {
     closeCategoryBranches(null);
+  } else {
+    openActiveCategory();
   }
   syncNavigationControls();
   // Enable width/visibility transitions only after the

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -38,5 +39,17 @@ func TestNavStateRenderedFromCookie(t *testing.T) {
 	mustContain(t, "hidden cookie", page("hidden"), `<html lang="en" data-nav="hidden">`)
 	for _, plain := range []string{"", "expanded", "bogus", `"><script>`} {
 		mustContain(t, "nav="+plain, page(plain), `<html lang="en">`)
+	}
+
+	// The category of the page being shown is open while the menu shows
+	// its labels, and left folded in the icon rail.
+	const open = `<details class="branch active" open data-nav-category="pilot">`
+	mustContain(t, "expanded menu", page(""), open)
+	mustContain(t, "hidden menu", page("hidden"), open)
+	if rail := page("rail"); strings.Contains(rail, open) || !strings.Contains(rail, `<details class="branch active" data-nav-category="pilot">`) {
+		t.Fatal("the icon rail rendered the current category open")
+	}
+	if n := strings.Count(page(""), `" open data-nav-category=`); n != 1 {
+		t.Fatalf("%d categories rendered open, want only the current one", n)
 	}
 }

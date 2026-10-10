@@ -348,6 +348,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleCorporations)
 		r.Get("/members/", app.handleCorpMembers)
+		r.Post("/members/group", app.handleCorpMembersGroup)
 		r.Get("/wallets/", app.handleCorpWallets)
 		r.Get("/orders/", app.handleCorpOrders)
 		r.Get("/assets/", app.handleCorpAssets)

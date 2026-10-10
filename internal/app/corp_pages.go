@@ -41,6 +41,8 @@ type corpMemberRow struct {
 	Ship       string // current ship type name
 	ShipTypeID int64
 	Location   string // current location title
+	Linked     bool   // linked on EveSynapse, so it can be put in a group
+	Groups     string // the corporation's groups it is in
 }
 
 // corpMembersView is the Corporation Members page body.
@@ -49,6 +51,8 @@ type corpMembersView struct {
 	corpSectionState
 	TrackingNote string // why tracking columns are absent ("" when present)
 	Rows         []corpMemberRow
+	CanGroup     bool // the reader is a director here: may put members in groups
+	Groups       []groupChoice
 }
 
 func (app *Application) handleCorpMembers(w http.ResponseWriter, r *http.Request) {
@@ -117,6 +121,7 @@ func (app *Application) handleCorpMembers(w http.ResponseWriter, r *http.Request
 		view.Rows = append(view.Rows, row)
 	}
 	sort.Slice(view.Rows, func(i, j int) bool { return view.Rows[i].Name < view.Rows[j].Name })
+	app.memberGroups(ctx, app.userID(ctx), view)
 
 	app.render(ctx, w, http.StatusOK, "corp_members.html", data)
 }

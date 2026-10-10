@@ -224,3 +224,47 @@ func sorted(list string) string {
 	}
 	return strings.Join(parts, ",")
 }
+
+// TestMembersListAddsToGroups: on the corporation's members list a
+// director ticks linked members and adds them to a group; a member is
+// offered nothing and can add nobody.
+func TestMembersListAddsToGroups(t *testing.T) {
+	f := newNotifyFixture(t)
+	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+	f.joinCorp(f.ch.CharacterID, discordCorp, "Director")
+	mate, _ := f.q.CreateUser(f.ctx)
+	seedCharacter(t, f.q, mate.ID, fixtureCharB, "Fixture Mate")
+	f.joinCorp(fixtureCharB, discordCorp)
+	const unlinked = 93300002
+	f.app.esi.StoreCharacterName(fixtureCharB, "Fixture Mate")
+	f.app.esi.StoreCharacterName(unlinked, "Member Two")
+	roster := []int64{f.ch.CharacterID, fixtureCharB, unlinked}
+	seedSnapshot(t, f.q, f.ch.CharacterID, esi.SnapCorpMembers, roster)
+	seedSnapshot(t, f.q, fixtureCharB, esi.SnapCorpMembers, roster)
+	f.post(cookie, "/groups/create", url.Values{"owner": {discordCorpOwner}, "name": {"Logistics wing"}})
+	logi := strconv.FormatInt(f.group("Logistics wing"), 10)
+
+	members := "/corporations/members/?character=" + strconv.FormatInt(f.ch.CharacterID, 10)
+	_, body := getPage(t, f.app, cookie, members)
+	mustContain(t, "members list for a director", body,
+		`<option value="`+logi+`">Logistics wing</option>`, `name="character" value="90000002"`, "not on EveSynapse")
+	if strings.Contains(body, `name="character" value="93300002"`) {
+		t.Fatal("a member who is not linked can be ticked")
+	}
+
+	theirs := sessionCookie(t, f.app, mate.ID, fixtureCharB, "Fixture Mate")
+	if _, page := getPage(t, f.app, theirs, "/corporations/members/?character=90000002"); strings.Contains(page, "members/group") {
+		t.Fatal("a member is offered the group controls")
+	}
+	f.post(theirs, "/corporations/members/group", url.Values{"group": {logi}, "character": {"90000002"}})
+	if in, _ := f.q.ListOrgGroupMembers(f.ctx, f.group("Logistics wing")); len(in) != 0 {
+		t.Fatal("a member added somebody to a group")
+	}
+
+	f.post(cookie, "/corporations/members/group", url.Values{"group": {logi}, "character": {"90000002", "93300002"}})
+	if in, _ := f.q.ListOrgGroupMembers(f.ctx, f.group("Logistics wing")); len(in) != 1 || in[0].CharacterID != fixtureCharB {
+		t.Fatalf("group members %+v, want only the linked member", in)
+	}
+	_, body = getPage(t, f.app, cookie, members)
+	mustContain(t, "members list after adding", body, "<td>Logistics wing</td>")
+}

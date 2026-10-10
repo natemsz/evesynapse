@@ -3373,6 +3373,8 @@ html:not(.js) .checkselector .charselector-dropdown[hidden] {
 .add-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin: 0 0 0.5rem; }
 .add-row .charselector { flex: 1 1 12rem; max-width: none; margin: 0; }
 .add-row .check-row { flex: 1 1 16rem; margin: 0; }
+.add-row.member-pick { align-items: flex-end; margin: 0.75rem 0; }
+td .check-row, .op-form td label.check-row { margin: 0; }
 html[data-theme="light"] .setting { border-color: #d8cdb8; background: rgba(0, 0, 0, 0.02); }
 html[data-theme="light"] .chip-list label { border-color: #d8cdb8; }
 html[data-theme="light"] .setting-foot, html[data-theme="light"] .row-list li { border-color: #e3d9c6; }

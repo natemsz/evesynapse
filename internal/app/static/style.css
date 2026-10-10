@@ -3426,3 +3426,12 @@ html[data-theme="light"] .fit-card-ship { border-color: #d8cdb8; background: #f1
   .facet-chips { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; padding-bottom: 0.2rem; }
   .fit-cards { grid-template-columns: 1fr; }
 }
+.doctrine-fits { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr)); column-gap: 1.5rem; }
+.doctrine-fits li, .doctrine-fits li:last-child { border-bottom: 1px solid #1c1c1c; }
+html[data-theme="light"] .doctrine-fits li:last-child { border-color: #e3d9c6; }
+.fit-card .doctrine-eft { grid-column: 1 / -1; margin-top: 0; }
+.fit-esi-controls .searchwrap { flex: 1 1 14rem; max-width: 28rem; width: auto; }
+.fit-card-actions { align-items: center; }
+.fit-card h5 { margin: 0.6rem 0 0.2rem; font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.fit-card-items { list-style: none; margin: 0; padding: 0; }
+.fit-card-items li { padding: 0.1rem 0; overflow-wrap: anywhere; }

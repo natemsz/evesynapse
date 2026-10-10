@@ -41,7 +41,8 @@ const (
 
 // groupsView is the /groups page.
 type groupsView struct {
-	Owners []groupOwnerView
+	OwnerOptions []corpOption
+	Owner        *groupOwnerView // the corporation or alliance the page is about
 }
 
 type groupOwnerView struct {
@@ -81,7 +82,11 @@ func (app *Application) handleGroups(w http.ResponseWriter, r *http.Request) {
 	data := app.page(ctx)
 	userID := app.userID(ctx)
 	view := &groupsView{}
-	for _, owner := range app.discordManageable(ctx, userID) {
+	var shown []discordOwner
+	if owner, options, ok := app.pickOwner(ctx, r, app.discordManageable(ctx, userID)); ok {
+		shown, view.OwnerOptions = []discordOwner{owner}, options
+	}
+	for _, owner := range shown {
 		ov := groupOwnerView{Key: owner.key(), Kind: owner.Kind, Name: app.ownerName(ctx, owner)}
 		corps := app.ownerCorporations(ctx, owner)
 		inside := map[int64]bool{}
@@ -122,7 +127,7 @@ func (app *Application) handleGroups(w http.ResponseWriter, r *http.Request) {
 			}
 			ov.Groups = append(ov.Groups, gv)
 		}
-		view.Owners = append(view.Owners, ov)
+		view.Owner = &ov
 	}
 	data.Groups = view
 	app.render(ctx, w, http.StatusOK, "groups.html", data)
@@ -147,7 +152,8 @@ func (app *Application) groupFor(r *http.Request, userID int64) (db.OrgGroup, bo
 
 func (app *Application) groupsBack(w http.ResponseWriter, r *http.Request, message string) {
 	app.flash(r.Context(), message)
-	http.Redirect(w, r, groupsPath, http.StatusSeeOther)
+	_ = r.ParseForm()
+	http.Redirect(w, r, ownerAddress(groupsPath, r.Form.Get("owner")), http.StatusSeeOther)
 }
 
 func (app *Application) handleGroupCreate(w http.ResponseWriter, r *http.Request) {

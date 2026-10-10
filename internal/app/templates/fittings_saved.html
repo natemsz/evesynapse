@@ -10,7 +10,7 @@
   {{if .Fittings.Loaded}}
   {{if .Fittings.Fittings}}
   <div class="fit-esi-controls">
-    <input type="text" id="fit-esi-q" placeholder="Search by fit or ship name…" autocomplete="off" aria-label="Search fittings">
+    <span class="searchwrap"><input type="search" id="fit-esi-q" placeholder="Search by fit or ship name…" autocomplete="off" aria-label="Search fittings"></span>
     <select id="fit-esi-sort" aria-label="Sort fittings">
       <option value="name-asc">Name A–Z</option>
       <option value="name-desc">Name Z–A</option>
@@ -18,26 +18,29 @@
       <option value="ship-desc">Ship Z–A</option>
     </select>
   </div>
-  <div id="fit-esi-list">
+  <div id="fit-esi-list" class="fit-cards">
   {{range .Fittings.Fittings}}
-  <section class="foldable" data-fold="closed" data-fit-name="{{.Name}}" data-fit-ship="{{.ShipType}}">
-  <h3>{{.Name}}</h3>
-  <p><small>{{itemLink .ShipTypeID .ShipType}}</small></p>
-  <p><a href="/skills/plans/fit?character={{$.Fittings.CharacterID}}&fitting={{.FittingID}}">Training plan for this fit</a> · <a href="/fittings/?character={{$.Fittings.CharacterID}}&esi={{.FittingID}}#fit-editor">View stats</a></p>
-  {{range .Groups}}
-  <h4>{{.Label}}</h4>
-  <div class="tw">
-  <table>
-    <thead><tr><th>Item</th><th>Quantity</th></tr></thead>
-    <tbody>
-    {{range .Items}}
-      <tr><td>{{itemLink .TypeID .Name}}</td><td>{{.Quantity}}</td></tr>
-    {{end}}
-    </tbody>
-  </table>
-  </div>
-  {{end}}
-  </section>
+  <article class="fit-card" data-fit-name="{{.Name}}" data-fit-ship="{{.ShipType}}">
+    {{if .ShipTypeID}}<img class="fit-card-ship" src="https://images.evetech.net/types/{{.ShipTypeID}}/render?size=64" width="64" height="64" alt="" loading="lazy">{{end}}
+    <div class="fit-card-body">
+      <h4><a href="/fittings/?character={{$.Fittings.CharacterID}}&esi={{.FittingID}}#fit-editor">{{.Name}}</a></h4>
+      <p class="fit-card-line">{{itemLink .ShipTypeID .ShipType}}</p>
+    </div>
+    <details class="doctrine-eft">
+      <summary>Modules and cargo</summary>
+      {{range .Groups}}
+      <h5>{{.Label}}</h5>
+      <ul class="fit-card-items">
+        {{range .Items}}<li>{{itemLink .TypeID .Name}} <small>×{{.Quantity}}</small></li>
+        {{end}}
+      </ul>
+      {{end}}
+    </details>
+    <div class="fit-card-actions">
+      <a class="btn" href="/fittings/?character={{$.Fittings.CharacterID}}&esi={{.FittingID}}#fit-editor">Open in fitting tool</a>
+      <a href="/skills/plans/fit?character={{$.Fittings.CharacterID}}&fitting={{.FittingID}}">Training plan for this fit</a>
+    </div>
+  </article>
   {{end}}
   </div>
   {{else}}

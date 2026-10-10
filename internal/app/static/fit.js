@@ -1621,7 +1621,7 @@
 })();
 
 // --- ESI fittings list: client-side search + sort ----------------
-// (lists are small; the foldable sections now start collapsed)
+// (lists are small; each fit is a card)
 (function () {
   var q = document.getElementById("fit-esi-q");
   var sortSel = document.getElementById("fit-esi-sort");
@@ -1629,7 +1629,7 @@
   if (!q || !sortSel || !list) return;
   function apply() {
     var term = q.value.trim().toLowerCase();
-    var secs = Array.prototype.slice.call(list.querySelectorAll(":scope > section.foldable"));
+    var secs = Array.prototype.slice.call(list.querySelectorAll(":scope > [data-fit-name]"));
     secs.forEach(function (s) {
       var name = (s.getAttribute("data-fit-name") || "").toLowerCase();
       var ship = (s.getAttribute("data-fit-ship") || "").toLowerCase();

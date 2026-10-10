@@ -36,7 +36,7 @@
   <div class="setting-head"><h4><a href="/doctrines/{{.ID}}">{{.Name}}</a></h4>{{if .Category}}<a class="badge wait" href="/doctrines/?corporation={{$corp.ID}}&amp;category={{.Category}}">{{.Category}}</a>{{end}}</div>
   {{if .Description}}<p class="hint doctrine-clip">{{.Description}}</p>{{end}}
   {{if .Fits}}
-  <ul class="row-list">
+  <ul class="row-list doctrine-fits">
     {{range .Fits}}<li><span><a href="/fittings/?doctrine={{.ID}}#fit-editor">{{.Name}}</a> <small>{{.Ship}}</small></span>{{if .Role}}<small>{{.Role}}</small>{{end}}</li>
     {{end}}
   </ul>

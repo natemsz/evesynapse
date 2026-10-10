@@ -7,11 +7,12 @@
 {{with .DiscordServers}}
 <p class="lede">The EveSynapse bot can be added to the Discord server of a corporation or an alliance. There it gives roles to members who have connected their Discord account, and posts new ops in a channel. A corporation's servers are set up by its directors, an alliance's by the directors of its executor corporation.</p>
 
-{{if not .Owners}}
+{{if not .Owner}}
 <p>None of your characters is a director, so there is nothing for you to set up here. To get your own roles, connect your Discord account under <a href="/notifications/settings">notification settings</a>.</p>
 {{end}}
 
-{{range .Owners}}
+{{template "corpselector" .OwnerOptions}}
+{{with .Owner}}
 {{$owner := .}}
 <div class="owner-head">
   <h2>{{.Name}} <small>· {{.Kind}}</small></h2>

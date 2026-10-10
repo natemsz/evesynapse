@@ -113,3 +113,39 @@ func TestCorporationPagesShowOneCorporation(t *testing.T) {
 		t.Fatal("corporate fits are not sorted by name")
 	}
 }
+
+// TestOwnerPagesShowOneOwner: the groups and Discord servers pages show
+// one corporation or alliance at a time, and a form sends the account
+// back to the owner it was about.
+func TestOwnerPagesShowOneOwner(t *testing.T) {
+	f := newNotifyFixture(t)
+	director := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+	f.joinCorp(f.ch.CharacterID, discordCorp, "Director")
+	f.inAlliance(discordCorp, 99000001, discordCorp)
+
+	f.post(director, "/groups/create", url.Values{"owner": {discordCorpOwner}, "name": {"Corp logistics"}})
+	code, _ := f.post(director, "/groups/create", url.Values{"owner": {"alliance:99000001"}, "name": {"Alliance scouts"}})
+	if code != 303 {
+		t.Fatalf("creating a group answered %d", code)
+	}
+	getPage(t, f.app, director, groupsPath) // shows the last form's answer once
+	_, body := getPage(t, f.app, director, groupsPath)
+	mustContain(t, "groups, the character's corporation", body, "Corp logistics", "owner=corporation%3a98000001", "owner=alliance%3a99000001")
+	if strings.Contains(body, "Alliance scouts") {
+		t.Fatal("the groups page shows a second owner's groups")
+	}
+	_, body = getPage(t, f.app, director, groupsPath+"?owner=alliance:99000001")
+	if !strings.Contains(body, "Alliance scouts") || strings.Contains(body, "Corp logistics") {
+		t.Fatal("the alliance's groups page is wrong")
+	}
+	if got := ownerAddress(groupsPath, "alliance:99000001"); got != "/groups/?owner=alliance%3A99000001" || ownerAddress(groupsPath, "nonsense") != groupsPath {
+		t.Fatalf("owner address %q", got)
+	}
+
+	_, body = getPage(t, f.app, director, discordServersPath+"?owner=alliance:99000001")
+	mustContain(t, "discord servers, the alliance", body, "owner=corporation%3a98000001", "· alliance")
+	_, body = getPage(t, f.app, director, discordServersPath+"?owner=alliance:99000777")
+	if !strings.Contains(body, "· corporation") {
+		t.Fatal("an owner the account does not manage was not replaced by its own")
+	}
+}

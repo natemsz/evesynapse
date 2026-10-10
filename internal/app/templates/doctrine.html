@@ -9,13 +9,14 @@
 
 <h2>Fits</h2>
 {{if .Fits}}
-<div class="settings-grid">
+<div class="fit-cards">
 {{range .Fits}}
-<section class="setting">
-  <div class="setting-head"><h4>{{.Name}}</h4>{{if .Role}}<span class="badge wait">{{.Role}}</span>{{end}}</div>
-  <p class="hint">{{itemLink .ShipTypeID .Ship}}{{if .Note}} · {{.Note}}{{end}}</p>
-  <div class="form-actions">
-    <a class="btn" href="/fittings/?doctrine={{.ID}}#fit-editor">Open in the fitting tool</a>
+<article class="fit-card">
+  {{if .ShipTypeID}}<img class="fit-card-ship" src="https://images.evetech.net/types/{{.ShipTypeID}}/render?size=64" width="64" height="64" alt="" loading="lazy">{{end}}
+  <div class="fit-card-body">
+    <h4><a href="/fittings/?doctrine={{.ID}}#fit-editor">{{.Name}}</a></h4>
+    <p class="fit-card-line">{{itemLink .ShipTypeID .Ship}}</p>
+    {{if or .Role .Note}}<p class="fit-card-line">{{if .Role}}<span class="badge wait">{{.Role}}</span> {{end}}{{.Note}}</p>{{end}}
   </div>
   {{if .EFT}}
   <details class="doctrine-eft">
@@ -23,12 +24,11 @@
     <pre>{{.EFT}}</pre>
   </details>
   {{end}}
-  {{if $.Doctrine.Keeps}}
-  <div class="setting-foot">
-    <form method="post" action="/doctrines/{{$.Doctrine.ID}}/fits/{{.ID}}/remove" class="inline-form"><button type="submit" class="btn">Remove from the doctrine</button></form>
+  <div class="fit-card-actions">
+    <a class="btn" href="/fittings/?doctrine={{.ID}}#fit-editor">Open in fitting tool</a>
+    {{if $.Doctrine.Keeps}}<form method="post" action="/doctrines/{{$.Doctrine.ID}}/fits/{{.ID}}/remove" class="inline-form"><button type="submit" class="btn">Remove</button></form>{{end}}
   </div>
-  {{end}}
-</section>
+</article>
 {{end}}
 </div>
 <p class="hint">The fitting tool shows a fit's numbers with your own skills and what you still have to train. In game, copy a fit's text and use "Import from clipboard" in the fitting window.</p>
@@ -43,15 +43,14 @@
 {{else}}
 <div class="settings-grid">
 <form method="post" action="/doctrines/{{.ID}}/fits/add" class="op-form setting">
-  <h4>Add one of your saved fits</h4>
-  {{if .MyFits}}
+  <h4>Add one of your fits</h4>
   <div class="field"><label class="field-label" for="doctrine-myfit">Fit</label>
     <span class="searchwrap">
-      <input type="search" name="fit_name" id="doctrine-myfit" required placeholder="Search your saved fits…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="doctrine-myfit-suggest" aria-autocomplete="list" data-suggest="/doctrines/suggest?scope=myfits" data-suggest-target="doctrine-myfit-id">
+      <input type="search" name="fit_name" id="doctrine-myfit" required placeholder="Search your saved and in-game fits…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="doctrine-myfit-suggest" aria-autocomplete="list" data-suggest="/doctrines/suggest?scope=myfits" data-suggest-target="doctrine-myfit-id">
       <ul class="suggest" id="doctrine-myfit-suggest" role="listbox" hidden></ul>
     </span>
-    <input type="hidden" name="fit" id="doctrine-myfit-id" value="">
-    <span class="field-hint">Type a fit's or a ship's name and pick from the list</span></div>
+    <input type="hidden" name="pick" id="doctrine-myfit-id" value="">
+    <span class="field-hint">Fits saved here and your characters' in-game fits. Type a fit's or a ship's name and pick from the list.</span></div>
   <div class="form-grid">
     <label class="field"><span class="field-label">Part in the fleet</span>
       <select name="fleet_role"><option value="">—</option>{{range .Roles}}<option value="{{.}}">{{.}}</option>{{end}}</select></label>
@@ -59,9 +58,6 @@
       <input type="text" name="note" maxlength="200" placeholder="e.g. Mainline, bring 2 sets of scripts"></label>
   </div>
   <div class="form-actions"><button type="submit">Add fit</button></div>
-  {{else}}
-  <p class="hint">You have no saved fits. Build one in the <a href="/fittings/">fitting tool</a>, or paste one beside this.</p>
-  {{end}}
   <p class="hint">The doctrine keeps its own copy: changing or deleting your fit later does not change the doctrine.</p>
 </form>
 

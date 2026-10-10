@@ -1,0 +1,120 @@
+EveSynapse Additional Patent Grant
+Version 1.0, effective [EFFECTIVE DATE]
+
+Grantor: Synap6.io LLC, a [STATE] limited liability company doing business
+as Synap6 ("Synap6").
+
+1. Purpose
+
+   The EveSynapse source code is licensed under the Clear BSD License in the
+   file LICENSE, which grants no patent rights. This document is the only
+   grant of rights under Synap6's Patent Rights. It is separate from, and
+   does not change, the source code license.
+
+   Nothing in this document states that any patent has been granted or that
+   any patent application is pending.
+
+2. Definitions
+
+   "Licensed Methods" means the data synchronization and prioritization
+   methods used in EveSynapse, including:
+
+     (a) building pages and page sections only from locally stored data,
+         while separate background processes retrieve data from
+         rate-limited external services;
+
+     (b) recording data that a page could not show when it was built, and
+         ordering its retrieval ahead of other work because a user is
+         viewing that page;
+
+     (c) ordering retrieval by how close data is to a user, including data
+         the user is viewing, data indicated by the user's search input
+         while the user is typing, data referenced by the user's own
+         records, and data one or more relationships removed from those
+         records, ranked by distance and recency; and
+
+     (d) spending all such retrieval from a shared, bounded budget that
+         slows or stops when the external service signals a rate or error
+         limit.
+
+   "Patent Rights" means all patents and patent applications, in any
+   country, that Synap6 owns or has the right to license now or in the
+   future, to the extent they claim any Licensed Method.
+
+   "Field" means software whose primary purpose is to serve players,
+   corporations or alliances of the video game EVE Online, or to process
+   data from EVE Online or its official interfaces, and that is:
+
+     (i)  EveSynapse as published by Synap6; or
+     (ii) a fork, modified version, or deployed instance of EveSynapse.
+
+   "You" means the person or legal entity exercising rights under this
+   document, and that entity's employees and contractors acting for it.
+
+3. Grant
+
+   Subject to the terms of this document, Synap6 grants You a worldwide,
+   royalty-free, non-exclusive license under the Patent Rights to make,
+   have made, use, run, copy, modify, distribute, offer, and import
+   software that practices the Licensed Methods, solely within the Field.
+
+   This license is personal to You and may not be sold, assigned or
+   sublicensed. Each person who receives EveSynapse, or a fork or instance
+   of it within the Field, receives this grant directly from Synap6.
+
+4. No other rights
+
+   No license is granted, by implication, estoppel or otherwise, for any
+   use of the Licensed Methods outside the Field. This includes using them
+   in software unrelated to EVE Online, whether that software is written
+   from scratch or derived from EveSynapse source code. All rights not
+   expressly granted are reserved by Synap6.
+
+   To request a license outside the Field, contact Synap6 at
+   [LICENSING CONTACT].
+
+5. Duration and revocation
+
+   5.1  This license has no set end date. It remains in effect until it is
+        revoked or terminates under this section.
+
+   5.2  Synap6 may revoke this license, for all licensees or for any
+        individual licensee, by written notice. Notice may be given
+        directly or by publishing a revocation or a revised version of
+        this document in the official EveSynapse repository. Revocation
+        takes effect [90] days after notice is given.
+
+   5.3  Your license terminates automatically, without notice, if:
+
+        (a) You use the Licensed Methods outside the Field; or
+
+        (b) You, or any entity that controls, is controlled by, or is under
+            common control with You, start or join any legal action
+            claiming that EveSynapse, or any software within the Field,
+            infringes a patent, or challenging the validity or
+            enforceability of any of the Patent Rights.
+
+   5.4  Sections 4, 6, 7 and 8 survive revocation or termination.
+
+6. Prior GPL releases
+
+   Versions of EveSynapse released before [RELICENSE DATE] were distributed
+   under the GNU General Public License v3.0. Nothing in this document
+   limits any right a person holds under that license for those versions.
+
+7. Disclaimer and limitation of liability
+
+   THE PATENT RIGHTS ARE LICENSED "AS IS". SYNAP6 MAKES NO REPRESENTATION
+   OR WARRANTY THAT ANY PATENT WILL BE GRANTED, THAT ANY PATENT RIGHT IS
+   VALID OR ENFORCEABLE, OR THAT PRACTICING THE LICENSED METHODS DOES NOT
+   INFRINGE THE RIGHTS OF OTHERS. TO THE EXTENT PERMITTED BY LAW, SYNAP6 IS
+   NOT LIABLE FOR ANY DAMAGES ARISING FROM THIS DOCUMENT OR FROM THE USE OF
+   THE LICENSED METHODS.
+
+8. General
+
+   This document is governed by the laws of the State of [STATE], without
+   regard to its conflict of laws rules. If any provision is held
+   unenforceable, the rest remains in effect. Synap6 may publish revised
+   versions of this document; a revised version applies to You from the
+   date it is published in the official EveSynapse repository.

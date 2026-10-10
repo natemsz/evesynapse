@@ -110,6 +110,9 @@ type pageData struct {
 	// Groups is the /groups page.
 	Groups *groupsView
 
+	// SRP is the /srp/ page (corp_srp.go).
+	SRP *srpView
+
 	// Ops (ops.go): one op's page, and the form that creates or
 	// changes one.
 	Op     *opView
@@ -190,7 +193,7 @@ func sectionForPage(page string) string {
 		return "tools"
 	case "corporations.html", "corp_members.html", "corp_wallets.html",
 		"corp_orders.html", "corp_assets.html", "corp_structures.html",
-		"corporation.html", "alliance.html", "discord_servers.html", "groups.html":
+		"corporation.html", "alliance.html", "discord_servers.html", "groups.html", "srp.html":
 		return "corporation"
 	case "intel_wars.html", "intel_incursions.html", "intel_fw.html":
 		return "intel"

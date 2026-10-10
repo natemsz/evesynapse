@@ -111,6 +111,9 @@ var pgUserLastSeenSchema string
 //go:embed schema_pg/024_admin_owners.sql
 var pgAdminOwnersSchema string
 
+//go:embed schema_pg/025_srp.sql
+var pgSRPSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -164,6 +167,7 @@ func schemaSteps() []schemaStep {
 		{22, "discord_channel_access", pgDiscordChannelAccessSchema, ""},
 		{23, "user_last_seen", pgUserLastSeenSchema, ""},
 		{24, "admin_owners", pgAdminOwnersSchema, ""},
+		{25, "srp", pgSRPSchema, ""},
 	}
 }
 

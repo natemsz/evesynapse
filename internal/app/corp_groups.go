@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -229,6 +230,13 @@ func (app *Application) handleGroupMemberAdd(w http.ResponseWriter, r *http.Requ
 		app.groupsBack(w, r, "That group is not yours to change.")
 		return
 	}
+	app.groupsBack(w, r, app.addToGroup(ctx, userID, group, r.Form["character"]))
+}
+
+// addToGroup puts the characters named in a group and says what
+// happened. Each has to be a linked character in the corporation, or in
+// a corporation of the alliance, the group belongs to.
+func (app *Application) addToGroup(ctx context.Context, userID int64, group db.OrgGroup, characters []string) string {
 	owner := discordOwner{group.OwnerKind, group.OwnerID}
 	allowed := map[int64]bool{}
 	if corps := app.ownerCorporations(ctx, owner); len(corps) > 0 {
@@ -243,7 +251,7 @@ func (app *Application) handleGroupMemberAdd(w http.ResponseWriter, r *http.Requ
 	members, _ := app.queries.ListOrgGroupMembers(ctx, group.ID)
 	room := groupMembersMost - len(members)
 	added := 0
-	for _, raw := range r.Form["character"] {
+	for _, raw := range characters {
 		id, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil || !allowed[id] || added >= room {
 			continue
@@ -257,11 +265,10 @@ func (app *Application) handleGroupMemberAdd(w http.ResponseWriter, r *http.Requ
 		added++
 	}
 	if added == 0 {
-		app.groupsBack(w, r, "Nobody was added. Only characters linked to EveSynapse that are in the "+owner.Kind+" can be.")
-		return
+		return "Nobody was added. Only characters linked to EveSynapse that are in the " + owner.Kind + " can be."
 	}
 	logging.Infof("groups: user %d added %d member(s) to group %d (%s)", userID, added, group.ID, group.Name)
-	app.groupsBack(w, r, strconv.Itoa(added)+" added to "+group.Name+".")
+	return strconv.Itoa(added) + " added to " + group.Name + "."
 }
 
 func (app *Application) handleGroupMemberRemove(w http.ResponseWriter, r *http.Request) {
@@ -280,4 +287,68 @@ func (app *Application) handleGroupMemberRemove(w http.ResponseWriter, r *http.R
 	}
 	logging.Infof("groups: user %d removed character %d from group %d (%s)", userID, id, group.ID, group.Name)
 	app.groupsBack(w, r, "Removed from "+group.Name+".")
+}
+
+// handleCorpMembersGroup adds the members ticked on the corporation's
+// members list to one of its groups (POST /corporations/members/group).
+func (app *Application) handleCorpMembersGroup(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := app.userID(ctx)
+	_ = r.ParseForm()
+	path := "/corporations/members/"
+	if id, err := strconv.ParseInt(r.Form.Get("as"), 10, 64); err == nil && id > 0 {
+		path += "?character=" + strconv.FormatInt(id, 10)
+	}
+	back := app.flashBack(w, r, path)
+	id, _ := strconv.ParseInt(r.Form.Get("group"), 10, 64)
+	group, err := app.queries.GetOrgGroup(ctx, id)
+	if err != nil || !discordManages(app.discordManageable(ctx, userID), discordOwner{group.OwnerKind, group.OwnerID}) {
+		back("That group is not yours to change.")
+		return
+	}
+	if len(r.Form["character"]) == 0 {
+		back("Tick the members to add first.")
+		return
+	}
+	back(app.addToGroup(ctx, userID, group, r.Form["character"]))
+}
+
+// memberGroups fills in what a director needs on the members list to
+// put members in the corporation's groups: the groups, which members
+// are linked here, and which groups each is already in.
+func (app *Application) memberGroups(ctx context.Context, userID int64, view *corpMembersView) {
+	owner := discordOwner{ownerCorporation, view.CorpID}
+	if !discordManages(app.discordManageable(ctx, userID), owner) {
+		return
+	}
+	view.CanGroup = true
+	linked := map[int64]bool{}
+	if rows, err := app.queries.ListCharactersInCorporations(ctx, []int64{view.CorpID}); err == nil {
+		for _, row := range rows {
+			linked[row.CharacterID] = true
+		}
+	}
+	in := map[int64][]string{}
+	groups, err := app.queries.ListOrgGroupsForOwner(ctx, db.ListOrgGroupsForOwnerParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
+	if err != nil {
+		logging.Errorf("groups: groups of %s: %v", owner.key(), err)
+	}
+	for _, group := range groups {
+		view.Groups = append(view.Groups, groupChoice{ID: group.ID, Name: group.Name})
+		members, _ := app.queries.ListOrgGroupMembers(ctx, group.ID)
+		for _, m := range members {
+			in[m.CharacterID] = append(in[m.CharacterID], group.Name)
+		}
+	}
+	for i := range view.Rows {
+		row := &view.Rows[i]
+		row.Linked = linked[row.ID]
+		row.Groups = strings.Join(in[row.ID], ", ")
+	}
+}
+
+// groupChoice is one group in the members list's "add to" picker.
+type groupChoice struct {
+	ID   int64
+	Name string
 }

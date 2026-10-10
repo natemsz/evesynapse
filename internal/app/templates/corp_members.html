@@ -20,6 +20,32 @@
   <p>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</p>
   {{else if .CorpMembers.Loaded}}
   {{if .CorpMembers.TrackingNote}}<p><small>{{.CorpMembers.TrackingNote}}</small></p>{{end}}
+  {{if .CorpMembers.CanGroup}}
+  <form method="post" action="/corporations/members/group" class="op-form">
+  <input type="hidden" name="as" value="{{.CorpMembers.CharacterID}}">
+  {{if .CorpMembers.Groups}}
+  <div class="add-row member-pick">
+    <label class="field"><span class="field-label">Add the ticked members to</span>
+      <select name="group">{{range .CorpMembers.Groups}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
+    <button type="submit">Add to group</button>
+    <a href="/groups/">Manage groups</a>
+  </div>
+  {{else}}
+  <p class="hint">This corporation has no groups yet. <a class="btn" href="/groups/">Create groups</a></p>
+  {{end}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>Member</th><th>Groups</th><th>Joined</th><th>Last login</th><th>Current ship</th><th>Location</th></tr></thead>
+    <tbody>
+    {{range .CorpMembers.Rows}}
+      <tr><td>{{if .Linked}}<label class="check-row"><input type="checkbox" name="character" value="{{.ID}}"> <span>{{charLink $.ViewerChars .ID .Name}}</span></label>{{else}}{{charLink $.ViewerChars .ID .Name}}{{end}}</td><td>{{if .Linked}}{{.Groups}}{{else}}<small>not on EveSynapse</small>{{end}}</td><td>{{.Joined}}</td><td>{{.LastSeen}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td>{{.Location}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  </form>
+  <p class="hint">Only members who have linked their character to EveSynapse can be put in a group. In-game roles cannot be changed from here: EVE's API lets an app read them, not set them.</p>
+  {{else}}
   <div class="tw">
   <table>
     <thead><tr><th>Member</th><th>Joined</th><th>Last login</th><th>Current ship</th><th>Location</th></tr></thead>
@@ -30,6 +56,7 @@
     </tbody>
   </table>
   </div>
+  {{end}}
   <p><small>Login, ship and location columns come from member tracking, which needs the Director role in-game.</small></p>
   {{end}}
 {{else}}

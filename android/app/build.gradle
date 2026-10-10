@@ -8,6 +8,9 @@ plugins {
 def twaHost = providers.gradleProperty('twaHost').getOrElse('evesynapse.app')
 def twaPackage = providers.gradleProperty('twaPackage').getOrElse('app.evesynapse.twa')
 def twaName = providers.gradleProperty('twaName').getOrElse('EveSynapse')
+// Full screen, with Android's own bars (clock, battery, navigation) hidden
+// until swiped in. -PtwaDisplay=default keeps them showing.
+def twaDisplay = providers.gradleProperty('twaDisplay').getOrElse('sticky-immersive')
 def siteColor = '#FF0D0503'
 
 // The app carries the site's version: w.x.y.z becomes the name as it
@@ -44,6 +47,7 @@ android {
 
         resValue 'string', 'appName', twaName
         resValue 'string', 'hostName', twaHost
+        resValue 'string', 'displayMode', twaDisplay
         resValue 'string', 'launchUrl', "https://${twaHost}/"
         resValue 'string', 'providerAuthority', "${twaPackage}.fileprovider"
         // The app's half of the link the site states in

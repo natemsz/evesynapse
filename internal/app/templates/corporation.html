@@ -16,6 +16,7 @@
 {{else}}
 <h1><span class="gt">{{.Name}}{{if .Ticker}} [{{.Ticker}}]{{end}}</span></h1>
 <p><img class="portrait" src="{{.LogoURL}}" alt="" width="128" height="128"></p>
+{{if .Freshness}}<p><small>{{.Freshness}}</small></p>{{end}}
 
 <div class="tw">
 <table>

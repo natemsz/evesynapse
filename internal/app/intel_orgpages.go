@@ -89,6 +89,7 @@ type corporationPageView struct {
 	HasDescription  bool
 	Description     template.HTML // sanitized, same rules as mail bodies
 	ViewerChars     map[int64]bool
+	Freshness       string // "Updated 40s ago, because ...", "" while loading
 }
 
 // allianceMemberView is one member-corporation line.
@@ -118,6 +119,7 @@ type alliancePageView struct {
 	MemberCount        int
 	Members            []allianceMemberView
 	ViewerChars        map[int64]bool
+	Freshness          string // "Updated 40s ago, because ...", "" while loading
 }
 
 // handleCorporationPage renders one corporation's public record.
@@ -201,6 +203,12 @@ func (app *Application) loadCorporationView(ctx context.Context, id int64) *corp
 	case err == nil && rec.State == orgStateReady && rec.Payload != "":
 		if built, ok := app.buildCorporationView(ctx, id, rec.Payload); ok {
 			view = built
+			if rec.FetchedAt.Valid {
+				now := time.Now().UTC()
+				view.Freshness = freshnessLine(now, rec.FetchedAt.Time,
+					app.fetchReason(ctx, foresightOrgView(targetCorporation, id),
+						string(pageWantCorporation), id, 0, rec.FetchedAt.Time))
+			}
 		} else {
 			// Corrupt payload: requeue rather than strand the
 			// page on the loading state forever.
@@ -303,6 +311,12 @@ func (app *Application) loadAllianceView(ctx context.Context, id int64) *allianc
 	case err == nil && rec.State == orgStateReady && rec.Payload != "":
 		if built, ok := app.buildAllianceView(ctx, id, rec.Payload); ok {
 			view = built
+			if rec.FetchedAt.Valid {
+				now := time.Now().UTC()
+				view.Freshness = freshnessLine(now, rec.FetchedAt.Time,
+					app.fetchReason(ctx, foresightOrgView(targetAlliance, id),
+						string(pageWantAlliance), id, 0, rec.FetchedAt.Time))
+			}
 		} else {
 			logging.Warnf("alliance: unreadable payload for %d; requeueing", id)
 			if serr := app.queries.SetAllianceRecord(ctx, db.SetAllianceRecordParams{

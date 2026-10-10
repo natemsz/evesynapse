@@ -25,6 +25,9 @@ import (
 // adminNewest is how many of the newest accounts are listed.
 const adminNewest = 10
 
+// adminEmptyListed is how many accounts with no characters are listed.
+const adminEmptyListed = 25
+
 // adminView is the Admin page body.
 type adminView struct {
 	Accounts     string // counts, formatted
@@ -34,6 +37,8 @@ type adminView struct {
 	Parked       string
 	AnyParked    bool
 	Newest       []adminAccountRow
+	Empty        []adminAccountRow // accounts with no character linked
+	EmptyMore    bool
 	Lookup       characterLookupView
 	NoAccount    bool              // ?account= named one that does not exist
 	Account      *adminAccountView // nil until one is found
@@ -52,6 +57,8 @@ type adminAccountView struct {
 	ID         int64
 	Created    string
 	LastSeen   string
+	Own        bool // the reader's own account
+	Admin      bool // holds an administrator character
 	Characters []adminCharacterRow
 }
 
@@ -94,6 +101,17 @@ func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	// The account to show: the one the character searched for belongs
 	// to, or the one named outright (?account=, which is what the lists
 	// on this page and the Sync page link with).
+	if rows, err := app.queries.ListEmptyUsers(ctx, adminEmptyListed+1); err != nil {
+		logging.Errorf("admin: empty accounts: %v", err)
+	} else {
+		if len(rows) > adminEmptyListed {
+			rows, view.EmptyMore = rows[:adminEmptyListed], true
+		}
+		for _, row := range rows {
+			view.Empty = append(view.Empty, adminAccountRow{ID: row.ID, Created: rfc3339(row.CreatedAt), LastSeen: rfc3339(row.LastSeenAt)})
+		}
+	}
+
 	found, lookup := app.lookupCharacter(ctx, r.URL.Query().Get("q"))
 	view.Lookup = lookup
 	var accountID, foundID int64
@@ -112,7 +130,7 @@ func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 			logging.Errorf("admin: account %d: %v %v", accountID, uerr, cerr)
 			data.Error = "Could not load that account; check the server log."
 		default:
-			account := &adminAccountView{ID: user.ID, Created: rfc3339(user.CreatedAt), LastSeen: rfc3339(user.LastSeenAt)}
+			account := &adminAccountView{ID: user.ID, Created: rfc3339(user.CreatedAt), LastSeen: rfc3339(user.LastSeenAt), Own: user.ID == app.userID(ctx), Admin: app.adminAmong(characters)}
 			for _, ch := range characters {
 				row := adminCharacterRow{
 					ID: ch.CharacterID, Name: ch.Name, Found: ch.CharacterID == foundID,
@@ -129,4 +147,49 @@ func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	app.render(ctx, w, http.StatusOK, "admin.html", data)
+}
+
+// handleAdminAccountRemove deletes one account and everything it owns
+// (POST /admin/accounts/remove). An administrator's request only, and
+// only for an account named twice: in the form, and typed out by hand.
+// Never the administrator's own account, and never one that holds an
+// administrator character.
+func (app *Application) handleAdminAccountRemove(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	back := app.flashBack(w, r, "/admin/")
+	if r.ParseForm() != nil {
+		back("That request could not be read.")
+		return
+	}
+	id, err := strconv.ParseInt(r.Form.Get("account"), 10, 64)
+	if err != nil || id <= 0 || strings.TrimSpace(r.Form.Get("confirm")) != strconv.FormatInt(id, 10) {
+		back("Nothing was removed: type the account's number to confirm.")
+		return
+	}
+	by := app.userID(ctx)
+	if id == by {
+		back("Nothing was removed: that is your own account.")
+		return
+	}
+	characters, err := app.queries.ListCharactersByUser(ctx, id)
+	if err != nil {
+		logging.Errorf("admin: remove account %d: %v", id, err)
+		back("The account could not be read; nothing was removed.")
+		return
+	}
+	if app.adminAmong(characters) {
+		back("Nothing was removed: that account holds an administrator character. Take its id out of EVE_ADMIN_CHARACTER_IDS first.")
+		return
+	}
+	n, err := app.queries.DeleteUser(ctx, id)
+	switch {
+	case err != nil:
+		logging.Errorf("admin: remove account %d: %v", id, err)
+		back("The account could not be removed; check the server log.")
+	case n == 0:
+		back("There is no account with that number.")
+	default:
+		logging.Warnf("admin: account %d removed account %d and its %s", by, id, plural(len(characters), "character"))
+		back("Account " + strconv.FormatInt(id, 10) + " was removed, with its " + plural(len(characters), "character") + " and everything stored for it.")
+	}
 }

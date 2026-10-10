@@ -250,6 +250,19 @@ func (q *Queries) DeleteSkillPlanItem(ctx context.Context, arg DeleteSkillPlanIt
 	return err
 }
 
+const deleteUser = `-- name: DeleteUser :execrows
+DELETE FROM users WHERE id = $1
+`
+
+// Everything the account owns goes with it (ON DELETE CASCADE).
+func (q *Queries) DeleteUser(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteUser, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const findCharacters = `-- name: FindCharacters :many
 SELECT character_id, name, user_id FROM characters
 WHERE name ILIKE '%' || $1::text || '%'
@@ -924,6 +937,44 @@ func (q *Queries) ListCorporationIDsByUser(ctx context.Context, userID int64) ([
 			return nil, err
 		}
 		items = append(items, corporation_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEmptyUsers = `-- name: ListEmptyUsers :many
+SELECT u.id, u.created_at, u.last_seen_at FROM users u
+WHERE NOT EXISTS (SELECT 1 FROM characters c WHERE c.user_id = u.id)
+ORDER BY u.id
+LIMIT $1::bigint
+`
+
+type ListEmptyUsersRow struct {
+	ID         int64     `json:"id"`
+	CreatedAt  time.Time `json:"created_at"`
+	LastSeenAt time.Time `json:"last_seen_at"`
+}
+
+// Accounts with no character linked: left over from an unlink, or from
+// an older build.
+func (q *Queries) ListEmptyUsers(ctx context.Context, rowLimit int64) ([]ListEmptyUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listEmptyUsers, rowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListEmptyUsersRow
+	for rows.Next() {
+		var i ListEmptyUsersRow
+		if err := rows.Scan(&i.ID, &i.CreatedAt, &i.LastSeenAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

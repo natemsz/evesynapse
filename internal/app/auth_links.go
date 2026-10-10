@@ -143,7 +143,13 @@ func ownerHashChanged(stored, verified string) bool {
 // onto it.
 func (app *Application) resolveSignInUser(ctx context.Context, sessionUserID, characterID int64, ownerHash string) (int64, error) {
 	if sessionUserID != 0 {
-		return sessionUserID, nil
+		switch _, err := app.queries.GetUser(ctx, sessionUserID); {
+		case err == nil:
+			return sessionUserID, nil
+		case !errors.Is(err, sql.ErrNoRows):
+			return 0, err
+		}
+		// The session's account has been removed: as a fresh session.
 	}
 	existing, err := app.queries.GetCharacter(ctx, characterID)
 	switch {

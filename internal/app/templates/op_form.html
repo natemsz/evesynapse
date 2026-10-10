@@ -26,8 +26,17 @@
     <label class="field"><span class="field-label">Length</span>
       <input type="number" name="duration" value="{{.Duration}}" min="15" max="1440" step="5" required>
       <span class="field-hint">Minutes</span></label>
+    {{if .Doctrines}}
     <label class="field"><span class="field-label">Doctrine</span>
-      <input type="text" name="doctrine" value="{{.Doctrine}}" maxlength="120" placeholder="e.g. Shield Lokis"></label>
+      <select name="doctrine_id"><option value="0">Not one of the corporation's</option>{{range .Doctrines}}<optgroup label="{{.Corporation}}">{{range .Choices}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</optgroup>{{end}}</select>
+      <span class="field-hint">From the <a href="/doctrines/">doctrine manager</a></span></label>
+    <label class="field"><span class="field-label">Or write it in</span>
+      <input type="text" name="doctrine" value="{{if not .DoctrineID}}{{.Doctrine}}{{end}}" maxlength="120" placeholder="e.g. Shield Lokis"></label>
+    {{else}}
+    <label class="field"><span class="field-label">Doctrine</span>
+      <input type="text" name="doctrine" value="{{.Doctrine}}" maxlength="120" placeholder="e.g. Shield Lokis">
+      <span class="field-hint">Keep fits in the <a href="/doctrines/">doctrine manager</a> to pick one here</span></label>
+    {{end}}
     <label class="field"><span class="field-label">Form up</span>
       <input type="text" name="form_up" value="{{.FormUp}}" maxlength="120" placeholder="e.g. Jita 4-4"></label>
     <label class="field wide"><span class="field-label">Details</span>

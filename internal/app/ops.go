@@ -143,10 +143,19 @@ type opFormView struct {
 	StartsAt    string // opDateTimeLayout
 	Duration    int64
 	Doctrine    string
+	DoctrineID  int64 // one of the corporation's doctrines (corp_doctrines.go), or 0
+	Doctrines   []opDoctrineGroup
 	FormUp      string
 	Corps       []opChoice
 	FCs         []opChoice
 	Errors      []string
+}
+
+// opDoctrineGroup is one corporation's doctrines, as the form offers
+// them.
+type opDoctrineGroup struct {
+	Corporation string
+	Choices     []opChoice
 }
 
 // opFormFor fills the form's choices: the corporations the account
@@ -162,6 +171,18 @@ func (app *Application) opFormFor(ctx context.Context, members []opMember, form 
 	for _, m := range members {
 		if opManages(members, m.CorporationID) {
 			form.FCs = append(form.FCs, opChoice{ID: m.CharacterID, Name: m.Name, Selected: m.CharacterID == fcID})
+		}
+	}
+	doctrines, _ := app.queries.ListDoctrinesForCorporations(ctx, managed)
+	for _, id := range managed {
+		group := opDoctrineGroup{Corporation: app.corpDisplayName(ctx, id)}
+		for _, d := range doctrines {
+			if d.CorporationID == id {
+				group.Choices = append(group.Choices, opChoice{ID: d.ID, Name: d.Name, Selected: d.ID == form.DoctrineID})
+			}
+		}
+		if len(group.Choices) > 0 {
+			form.Doctrines = append(form.Doctrines, group)
 		}
 	}
 }
@@ -200,7 +221,7 @@ func (app *Application) handleOpEdit(w http.ResponseWriter, r *http.Request) {
 	form := &opFormView{
 		ID: op.ID, Title: op.Title, Description: op.Description,
 		StartsAt: op.StartsAt.UTC().Format(opDateTimeLayout), Duration: op.DurationMinutes,
-		Doctrine: op.Doctrine, FormUp: op.FormUp,
+		Doctrine: op.Doctrine, DoctrineID: op.DoctrineID, FormUp: op.FormUp,
 	}
 	app.opFormFor(ctx, members, form, op.CorporationID, op.FcCharacterID)
 	app.renderOpForm(w, r, form)
@@ -240,6 +261,7 @@ func (app *Application) handleOpSave(w http.ResponseWriter, r *http.Request) {
 		Doctrine:    strings.TrimSpace(r.FormValue("doctrine")),
 		FormUp:      strings.TrimSpace(r.FormValue("form_up")),
 	}
+	form.DoctrineID, _ = strconv.ParseInt(r.FormValue("doctrine_id"), 10, 64)
 
 	if id != 0 {
 		op, err := app.queries.GetOp(ctx, id)
@@ -258,6 +280,16 @@ func (app *Application) handleOpSave(w http.ResponseWriter, r *http.Request) {
 	}
 	if !fcOK {
 		form.Errors = append(form.Errors, "Choose the character that will run the fleet: one of yours in that corporation.")
+	}
+	// A doctrine picked from the list gives the op its name; it has to
+	// be one of the op's own corporation.
+	if form.DoctrineID != 0 {
+		if d, err := app.queries.GetDoctrine(ctx, form.DoctrineID); err == nil && d.CorporationID == corpID {
+			form.Doctrine = d.Name
+		} else {
+			form.DoctrineID = 0
+			form.Errors = append(form.Errors, "Choose one of that corporation's doctrines, or write the doctrine in.")
+		}
 	}
 	if form.Title == "" || len(form.Title) > opTitleMax {
 		form.Errors = append(form.Errors, fmt.Sprintf("Give the op a title of up to %d characters.", opTitleMax))
@@ -285,12 +317,12 @@ func (app *Application) handleOpSave(w http.ResponseWriter, r *http.Request) {
 	if id != 0 {
 		err = app.queries.UpdateOp(ctx, db.UpdateOpParams{
 			ID: id, Title: form.Title, Description: form.Description, StartsAt: start, DurationMinutes: duration,
-			Doctrine: form.Doctrine, FormUp: form.FormUp, FcCharacterID: fcID,
+			Doctrine: form.Doctrine, DoctrineID: form.DoctrineID, FormUp: form.FormUp, FcCharacterID: fcID,
 		})
 	} else {
 		id, err = app.queries.CreateOp(ctx, db.CreateOpParams{
 			CorporationID: corpID, Title: form.Title, Description: form.Description, StartsAt: start,
-			DurationMinutes: duration, Doctrine: form.Doctrine, FormUp: form.FormUp, FcCharacterID: fcID,
+			DurationMinutes: duration, Doctrine: form.Doctrine, DoctrineID: form.DoctrineID, FormUp: form.FormUp, FcCharacterID: fcID,
 			CreatedByCharacter: sessionCharID(app.sessions, ctx), CreatedAt: now,
 		})
 	}
@@ -350,6 +382,8 @@ type opView struct {
 	WhenRaw     string // RFC3339, drives the live countdown
 	Length      string
 	Doctrine    string
+	DoctrineURL string            // the doctrine's page, when the op names one that still exists
+	DoctrineFit []doctrineFitView // its fits: what to bring
 	FormUp      string
 	FCID        int64
 	FC          string
@@ -394,6 +428,10 @@ func (app *Application) handleOp(w http.ResponseWriter, r *http.Request) {
 		Over:      opEnd(op).Before(time.Now()),
 		CanManage: opManages(members, op.CorporationID),
 		Roles:     opFleetRoles,
+	}
+	if d, err := app.queries.GetDoctrine(ctx, op.DoctrineID); op.DoctrineID != 0 && err == nil && d.CorporationID == op.CorporationID {
+		view.DoctrineURL = doctrineURL(d.ID)
+		view.DoctrineFit = app.doctrineFitViews(ctx, []int64{d.ID})[d.ID]
 	}
 
 	signups, err := app.queries.ListOpSignups(ctx, op.ID)

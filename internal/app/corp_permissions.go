@@ -21,7 +21,8 @@ import (
 
 // Programmes (corp_permissions.permission). Stored: never rename.
 const (
-	permSRP = "srp"
+	permSRP       = "srp"
+	permDoctrines = "doctrines"
 )
 
 // directs reports whether the account has a director, or the CEO, of

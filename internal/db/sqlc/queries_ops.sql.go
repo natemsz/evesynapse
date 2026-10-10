@@ -14,8 +14,8 @@ import (
 )
 
 const createOp = `-- name: CreateOp :one
-INSERT INTO ops (corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO ops (corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, doctrine_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING id
 `
 
@@ -30,6 +30,7 @@ type CreateOpParams struct {
 	FcCharacterID      int64     `json:"fc_character_id"`
 	CreatedByCharacter int64     `json:"created_by_character"`
 	CreatedAt          time.Time `json:"created_at"`
+	DoctrineID         int64     `json:"doctrine_id"`
 }
 
 func (q *Queries) CreateOp(ctx context.Context, arg CreateOpParams) (int64, error) {
@@ -44,6 +45,7 @@ func (q *Queries) CreateOp(ctx context.Context, arg CreateOpParams) (int64, erro
 		arg.FcCharacterID,
 		arg.CreatedByCharacter,
 		arg.CreatedAt,
+		arg.DoctrineID,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -67,7 +69,7 @@ func (q *Queries) DeleteManualAttendanceExcept(ctx context.Context, arg DeleteMa
 }
 
 const getOp = `-- name: GetOp :one
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at FROM ops WHERE id = $1
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id FROM ops WHERE id = $1
 `
 
 func (q *Queries) GetOp(ctx context.Context, id int64) (Op, error) {
@@ -89,6 +91,7 @@ func (q *Queries) GetOp(ctx context.Context, id int64) (Op, error) {
 		&i.CaptureStatus,
 		&i.CaptureCheckedAt,
 		&i.DiscordAnnouncedAt,
+		&i.DoctrineID,
 	)
 	return i, err
 }
@@ -322,7 +325,7 @@ func (q *Queries) ListOpSignupsForOps(ctx context.Context, opIds []int64) ([]Lis
 }
 
 const listOpsForCorporationsBetween = `-- name: ListOpsForCorporationsBetween :many
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at FROM ops
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id FROM ops
 WHERE corporation_id = ANY($1::bigint[])
   AND starts_at >= $2 AND starts_at < $3
 ORDER BY starts_at, id
@@ -359,6 +362,7 @@ func (q *Queries) ListOpsForCorporationsBetween(ctx context.Context, arg ListOps
 			&i.CaptureStatus,
 			&i.CaptureCheckedAt,
 			&i.DiscordAnnouncedAt,
+			&i.DoctrineID,
 		); err != nil {
 			return nil, err
 		}
@@ -375,7 +379,7 @@ func (q *Queries) ListOpsForCorporationsBetween(ctx context.Context, arg ListOps
 
 const listOpsToCapture = `-- name: ListOpsToCapture :many
 
-SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at FROM ops
+SELECT id, corporation_id, title, description, starts_at, duration_minutes, doctrine, form_up, fc_character_id, created_by_character, created_at, cancelled_at, capture_status, capture_checked_at, discord_announced_at, doctrine_id FROM ops
 WHERE cancelled_at IS NULL
   AND fc_character_id <> 0
   AND starts_at <= $1
@@ -418,6 +422,7 @@ func (q *Queries) ListOpsToCapture(ctx context.Context, arg ListOpsToCapturePara
 			&i.CaptureStatus,
 			&i.CaptureCheckedAt,
 			&i.DiscordAnnouncedAt,
+			&i.DoctrineID,
 		); err != nil {
 			return nil, err
 		}
@@ -469,9 +474,10 @@ UPDATE ops SET
     starts_at        = $3,
     duration_minutes = $4,
     doctrine         = $5,
-    form_up          = $6,
-    fc_character_id  = $7
-WHERE id = $8
+    doctrine_id      = $6,
+    form_up          = $7,
+    fc_character_id  = $8
+WHERE id = $9
 `
 
 type UpdateOpParams struct {
@@ -480,6 +486,7 @@ type UpdateOpParams struct {
 	StartsAt        time.Time `json:"starts_at"`
 	DurationMinutes int64     `json:"duration_minutes"`
 	Doctrine        string    `json:"doctrine"`
+	DoctrineID      int64     `json:"doctrine_id"`
 	FormUp          string    `json:"form_up"`
 	FcCharacterID   int64     `json:"fc_character_id"`
 	ID              int64     `json:"id"`
@@ -492,6 +499,7 @@ func (q *Queries) UpdateOp(ctx context.Context, arg UpdateOpParams) error {
 		arg.StartsAt,
 		arg.DurationMinutes,
 		arg.Doctrine,
+		arg.DoctrineID,
 		arg.FormUp,
 		arg.FcCharacterID,
 		arg.ID,

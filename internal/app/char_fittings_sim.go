@@ -2226,6 +2226,8 @@ func (app *Application) attachFitEditor(ctx context.Context, r *http.Request, da
 	q := r.URL.Query()
 	localID, _ := strconv.ParseInt(q.Get("local"), 10, 64)
 	esiID, _ := strconv.ParseInt(q.Get("esi"), 10, 64)
+	publicID, _ := strconv.ParseInt(q.Get("public"), 10, 64)
+	doctrineFitID, _ := strconv.ParseInt(q.Get("doctrine"), 10, 64)
 	switch {
 	case localID > 0 && userID > 0:
 		if row, err := app.queries.GetLocalFitting(ctx, db.GetLocalFittingParams{ID: localID, UserID: userID}); err == nil {
@@ -2242,6 +2244,19 @@ func (app *Application) attachFitEditor(ctx context.Context, r *http.Request, da
 				doc = app.fitDocFromESI(ctx, f)
 				break
 			}
+		}
+	case publicID > 0:
+		// Somebody's public fit, opened unsaved: saving it makes a copy.
+		if row, err := app.queries.GetPublicFitting(ctx, publicID); err == nil {
+			var stored fitDoc
+			if json.Unmarshal([]byte(row.ItemsJson), &stored) == nil {
+				doc = &stored
+			}
+		}
+	case doctrineFitID > 0 && userID > 0:
+		// A fit of one of the account's corporations' doctrines, likewise.
+		if stored, ok := app.doctrineFitDoc(ctx, userID, doctrineFitID); ok {
+			doc = stored
 		}
 	default:
 		if raw := app.sessions.GetString(ctx, sessionFitStash); raw != "" {

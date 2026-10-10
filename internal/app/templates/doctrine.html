@@ -1,0 +1,103 @@
+{{define "title"}}{{if .Doctrine}}{{.Doctrine.Name}}{{else}}Doctrine{{end}}{{end}}
+{{define "content"}}
+{{with .Doctrine}}
+<h1><span class="gt">{{.Name}}</span></h1>
+
+<p><small><a href="/doctrines/">Doctrines</a> · {{.Corporation}}{{if .Category}} · <a href="/doctrines/?category={{.Category}}">{{.Category}}</a>{{end}}</small></p>
+{{if .Tags}}<p class="tag-row">{{range .Tags}}<a href="/doctrines/?tag={{.}}">#{{.}}</a> {{end}}</p>{{end}}
+{{if .Description}}<p class="op-description">{{.Description}}</p>{{end}}
+
+<h2>Fits</h2>
+{{if .Fits}}
+<div class="settings-grid">
+{{range .Fits}}
+<section class="setting">
+  <div class="setting-head"><h4>{{.Name}}</h4>{{if .Role}}<span class="badge wait">{{.Role}}</span>{{end}}</div>
+  <p class="hint">{{itemLink .ShipTypeID .Ship}}{{if .Note}} · {{.Note}}{{end}}</p>
+  <div class="form-actions">
+    <a class="btn" href="/fittings/?doctrine={{.ID}}#fit-editor">Open in the fitting tool</a>
+  </div>
+  {{if .EFT}}
+  <details class="doctrine-eft">
+    <summary>Fit as text, to import in game</summary>
+    <pre>{{.EFT}}</pre>
+  </details>
+  {{end}}
+  {{if $.Doctrine.Keeps}}
+  <div class="setting-foot">
+    <form method="post" action="/doctrines/{{$.Doctrine.ID}}/fits/{{.ID}}/remove" class="inline-form"><button type="submit" class="btn">Remove from the doctrine</button></form>
+  </div>
+  {{end}}
+</section>
+{{end}}
+</div>
+<p class="hint">The fitting tool shows a fit's numbers with your own skills and what you still have to train. In game, copy a fit's text and use "Import from clipboard" in the fitting window.</p>
+{{else}}
+<p class="hint">No fits in this doctrine yet.</p>
+{{end}}
+
+{{if .Keeps}}
+<h2>Keep this doctrine</h2>
+{{if .Full}}
+<p class="hint warn-note">This doctrine is full. Remove a fit to add another.</p>
+{{else}}
+<div class="settings-grid">
+<form method="post" action="/doctrines/{{.ID}}/fits/add" class="op-form setting">
+  <h4>Add one of your saved fits</h4>
+  {{if .MyFits}}
+  <label class="field"><span class="field-label">Fit</span>
+    <select name="fit">{{range .MyFits}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
+  <div class="form-grid">
+    <label class="field"><span class="field-label">Part in the fleet</span>
+      <select name="fleet_role"><option value="">—</option>{{range .Roles}}<option value="{{.}}">{{.}}</option>{{end}}</select></label>
+    <label class="field"><span class="field-label">Note</span>
+      <input type="text" name="note" maxlength="200" placeholder="e.g. Mainline, bring 2 sets of scripts"></label>
+  </div>
+  <div class="form-actions"><button type="submit">Add fit</button></div>
+  {{else}}
+  <p class="hint">You have no saved fits. Build one in the <a href="/fittings/">fitting tool</a>, or paste one beside this.</p>
+  {{end}}
+  <p class="hint">The doctrine keeps its own copy: changing or deleting your fit later does not change the doctrine.</p>
+</form>
+
+<form method="post" action="/doctrines/{{.ID}}/fits/add" class="op-form setting">
+  <h4>Paste a fit</h4>
+  <label class="field"><span class="field-label">EFT text, as the game and other tools copy it</span>
+    <textarea name="eft" rows="6" required placeholder="[Guardian, Fleet logi]&#10;Damage Control II&#10;…"></textarea></label>
+  <div class="form-grid">
+    <label class="field"><span class="field-label">Part in the fleet</span>
+      <select name="fleet_role"><option value="">—</option>{{range .Roles}}<option value="{{.}}">{{.}}</option>{{end}}</select></label>
+    <label class="field"><span class="field-label">Note</span>
+      <input type="text" name="note" maxlength="200"></label>
+  </div>
+  <div class="form-actions"><button type="submit">Add fit</button></div>
+</form>
+
+<section class="setting">
+  <h4>Add from the fit library</h4>
+  <p class="hint">Pick from everyone's public fits, or copy a fit from another of the corporation's doctrines.</p>
+  <div class="form-actions"><a class="btn" href="/doctrines/fits/?for={{.ID}}">Browse fits to add</a></div>
+</section>
+</div>
+{{end}}
+
+<form method="post" action="/doctrines/{{.ID}}/save" class="op-form setting form-card">
+  <h4>Details</h4>
+  <div class="form-grid">
+    <label class="field"><span class="field-label">Name</span>
+      <input type="text" name="name" value="{{.Name}}" maxlength="80" required></label>
+    <label class="field"><span class="field-label">Category</span>
+      <input type="text" name="category" value="{{.Category}}" maxlength="40"></label>
+    <label class="field wide"><span class="field-label">Tags</span>
+      <input type="text" name="tags" value="{{.TagsText}}" placeholder="Comma-separated"></label>
+    <label class="field wide"><span class="field-label">What it is for</span>
+      <textarea name="description" rows="4" maxlength="2000">{{.Description}}</textarea></label>
+  </div>
+  <div class="form-actions"><button type="submit">Save details</button></div>
+</form>
+<div class="setting-foot">
+  <form method="post" action="/doctrines/{{.ID}}/delete" class="inline-form"><button type="submit" class="btn btn-danger">Delete this doctrine</button></form>
+</div>
+{{end}}
+{{end}}
+{{end}}

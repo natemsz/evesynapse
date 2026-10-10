@@ -173,12 +173,18 @@ func (app *Application) foresightWarm(ctx context.Context, t db.ForesightTarget,
 		app.activity.boost(t.SubjectID, t.Detail, now)
 		return 1, false
 	case targetCorporation:
-		if err := app.queries.UpsertCorporationWant(ctx, t.SubjectID); err != nil {
+		// Foresight names come from the account's own records, so
+		// they queue at the orbit ring, like the name harvest.
+		if err := app.queries.UpsertCorporationWant(ctx, db.UpsertCorporationWantParams{
+			CorporationID: t.SubjectID, Priority: wantOrbit, NotedAt: timeSet(now),
+		}); err != nil {
 			logging.Errorf("foresight: want corporation %d: %v", t.SubjectID, err)
 		}
 		return 1, false
 	case targetAlliance:
-		if err := app.queries.UpsertAllianceWant(ctx, t.SubjectID); err != nil {
+		if err := app.queries.UpsertAllianceWant(ctx, db.UpsertAllianceWantParams{
+			AllianceID: t.SubjectID, Priority: wantOrbit, NotedAt: timeSet(now),
+		}); err != nil {
 			logging.Errorf("foresight: want alliance %d: %v", t.SubjectID, err)
 		}
 		return 1, false

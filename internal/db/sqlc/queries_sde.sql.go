@@ -1905,6 +1905,41 @@ func (q *Queries) ListTypeDetailWants(ctx context.Context, rowLimit int64) ([]in
 	return items, nil
 }
 
+const listTypeGroupNames = `-- name: ListTypeGroupNames :many
+SELECT t.type_id, g.name FROM sde_types t
+JOIN sde_groups g ON g.group_id = t.group_id
+WHERE t.type_id = ANY($1::bigint[])
+`
+
+type ListTypeGroupNamesRow struct {
+	TypeID int64  `json:"type_id"`
+	Name   string `json:"name"`
+}
+
+// The group each of some types is in, by name: a ship's class.
+func (q *Queries) ListTypeGroupNames(ctx context.Context, typeIds []int64) ([]ListTypeGroupNamesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTypeGroupNames, pq.Array(typeIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTypeGroupNamesRow
+	for rows.Next() {
+		var i ListTypeGroupNamesRow
+		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTypeNameIDsByIDs = `-- name: ListTypeNameIDsByIDs :many
 SELECT type_id FROM type_names
 WHERE type_id = ANY($1::bigint[])

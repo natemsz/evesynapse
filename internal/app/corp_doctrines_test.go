@@ -128,7 +128,7 @@ func TestDoctrines(t *testing.T) {
 		"?tag=frigate": {"Public Rifter", "Fleet Guardian"},
 		"?tag=LOGI":    {"Fleet Guardian", "Public Rifter"},
 		"?q=guardian":  {"Fleet Guardian", "Public Rifter"},
-		"?doctrine=" + strconv.FormatInt(d.ID+1000, 10): {"No corporate fit matches", "Fleet Guardian"},
+		"?doctrine=" + strconv.FormatInt(d.ID+1000, 10): {"No fit matches", "fit-editor\">Fleet Guardian"},
 	} {
 		body := browse(member, doctrineFitsPath+query)
 		if !strings.Contains(body, want[0]) || strings.Contains(body, want[1]) {
@@ -176,14 +176,14 @@ func TestDoctrines(t *testing.T) {
 	mustContain(t, "op page", body, `<a href="`+page+`">Shield Lokis</a>`, "Bring", "Fleet Guardian")
 
 	// Handing it on: an accountant keeps doctrines once the director says so.
-	f.post(member, "/doctrines/settings", url.Values{"corporation": {"98000001"}, "who": {"eve_role:Accountant"}})
+	f.post(member, "/corporations/settings/save", url.Values{"corporation": {"98000001"}, "doctrines_who": {"eve_role:Accountant"}})
 	f.post(member, page+"/save", url.Values{"name": {"Hijacked"}})
 	f.post(member, page+"/fits/"+strconv.FormatInt(fits[0].ID, 10)+"/remove", url.Values{})
 	f.post(member, page+"/delete", url.Values{})
 	if kept := f.doctrines(discordCorp); len(kept) != 1 || kept[0].Name != "Shield Lokis" {
 		t.Fatal("a member changed the doctrine, or who keeps it")
 	}
-	f.post(director, "/doctrines/settings", url.Values{"corporation": {"98000001"}, "who": {"eve_role:Accountant"}})
+	f.post(director, "/corporations/settings/save", url.Values{"corporation": {"98000001"}, "doctrines_who": {"eve_role:Accountant"}})
 	f.post(member, page+"/save", url.Values{"name": {"Shield Lokis"}, "category": {"Roam"}})
 	f.post(member, page+"/fits/"+strconv.FormatInt(fits[1].ID, 10)+"/remove", url.Values{})
 	if kept := f.doctrines(discordCorp); kept[0].Category != "Roam" {

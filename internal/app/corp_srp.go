@@ -202,13 +202,13 @@ type srpRow struct {
 	DoctrineShip bool
 }
 
-// srpCorpView is one corporation's part of the page.
+// srpCorpView is the corporation a ship replacement page is about.
 type srpCorpView struct {
 	ID      int64
 	Name    string
 	Policy  string
 	Handles bool // may answer its requests
-	Directs bool // may say who else handles them
+	Directs bool // may change its settings
 
 	Open      []srpRow
 	Handled   []srpRow
@@ -216,16 +216,16 @@ type srpCorpView struct {
 	PaidCount int64
 	PaidValue string
 	Mailers   []opChoice // the account's characters that can send the EVE mail
-	Who       []permissionChoice
 }
 
+// srpView is the /srp/ page: one corporation's ship replacement.
 type srpView struct {
-	Member  bool // the account has a character in a corporation
-	Losses  []srpLossChoice
-	Outside int // recent losses that were not during an op
-	Claimed int // recent losses already asked for
-	Mine    []srpRow
-	Corps   []srpCorpView
+	CorpOptions []corpOption
+	Corp        *srpCorpView // nil when the account is in no player corporation
+	Losses      []srpLossChoice
+	Outside     int // recent losses in the corporation that were not during an op
+	Claimed     int // recent losses already asked for
+	Mine        []srpRow
 }
 
 // srpRows builds the page's rows for a list of requests. Attendance is
@@ -304,64 +304,82 @@ func (app *Application) handleSRP(w http.ResponseWriter, r *http.Request) {
 	view := &srpView{}
 	data.SRP = view
 
+	corp, options := app.pickCorporation(ctx, r, app.playerCorps(ctx, userID))
+	if corp == 0 {
+		app.render(ctx, w, http.StatusOK, "srp.html", data)
+		return
+	}
 	st, err := app.discordStandingFor(ctx, userID)
 	if err != nil {
 		logging.Errorf("srp: standing of user %d: %v", userID, err)
 		data.Error = "Could not load ship replacement; check the server log."
 	}
-	corps := app.srpCorps(ctx, userID)
-	view.Member = len(corps) > 0
+	cv := &srpCorpView{ID: corp, Name: app.corpDisplayName(ctx, corp), Directs: st.directs(corp)}
+	cv.Handles = app.corpPermits(ctx, st, corp, permSRP)
+	view.CorpOptions, view.Corp = options, cv
+	if settings, err := app.queries.GetSRPSettings(ctx, corp); err == nil {
+		cv.Policy = settings.Policy
+	}
 	ops := map[int64]db.Op{}
 
 	characters, _ := app.queries.ListCharactersByUser(ctx, userID)
-	app.srpOffer(ctx, view, characters, now)
+	app.srpOffer(ctx, view, characters, corp, now)
 
-	if mine, err := app.queries.ListSRPRequestsByUser(ctx, db.ListSRPRequestsByUserParams{UserID: userID, RowLimit: srpMineShown}); err != nil {
+	mine, err := app.queries.ListSRPRequestsByUser(ctx, db.ListSRPRequestsByUserParams{UserID: userID, RowLimit: srpMineShown})
+	if err != nil {
 		logging.Errorf("srp: requests of user %d: %v", userID, err)
-	} else {
-		view.Mine = app.srpRows(ctx, mine, ops)
 	}
+	here := mine[:0]
+	for _, req := range mine {
+		if req.CorporationID == corp {
+			here = append(here, req)
+		}
+	}
+	view.Mine = app.srpRows(ctx, here, ops)
 
-	for _, corp := range corps {
-		cv := srpCorpView{ID: corp, Name: app.corpDisplayName(ctx, corp), Directs: st.directs(corp)}
-		cv.Handles = app.corpPermits(ctx, st, corp, permSRP)
-		if settings, err := app.queries.GetSRPSettings(ctx, corp); err == nil {
-			cv.Policy = settings.Policy
+	if cv.Handles {
+		open, err := app.queries.ListOpenSRPRequests(ctx, []int64{corp})
+		if err != nil {
+			logging.Errorf("srp: open requests of corporation %d: %v", corp, err)
 		}
-		if cv.Handles {
-			open, err := app.queries.ListOpenSRPRequests(ctx, []int64{corp})
-			if err != nil {
-				logging.Errorf("srp: open requests of corporation %d: %v", corp, err)
-			}
-			var owed float64
-			for _, req := range open {
-				owed += req.LossValue
-			}
-			cv.Open, cv.OpenValue = app.srpRows(ctx, open, ops), srpISK(owed)
-			handled, _ := app.queries.ListHandledSRPRequests(ctx, db.ListHandledSRPRequestsParams{CorporationID: corp, RowLimit: srpHandledShown})
-			cv.Handled = app.srpRows(ctx, handled, ops)
-			if paid, err := app.queries.SumSRPPaid(ctx, db.SumSRPPaidParams{CorporationID: corp, Since: timeSet(now.AddDate(0, 0, -srpPaidStatDays))}); err == nil {
-				cv.PaidCount, cv.PaidValue = paid.Requests, srpISK(paid.Paid)
-			}
-			for _, ch := range characters {
-				if ch.LinkState == linkStateOK && characterHasScope(ch, mailSendScope) {
-					cv.Mailers = append(cv.Mailers, opChoice{ID: ch.CharacterID, Name: ch.Name})
-				}
+		var owed float64
+		for _, req := range open {
+			owed += req.LossValue
+		}
+		cv.Open, cv.OpenValue = app.srpRows(ctx, open, ops), srpISK(owed)
+		handled, _ := app.queries.ListHandledSRPRequests(ctx, db.ListHandledSRPRequestsParams{CorporationID: corp, RowLimit: srpHandledShown})
+		cv.Handled = app.srpRows(ctx, handled, ops)
+		if paid, err := app.queries.SumSRPPaid(ctx, db.SumSRPPaidParams{CorporationID: corp, Since: timeSet(now.AddDate(0, 0, -srpPaidStatDays))}); err == nil {
+			cv.PaidCount, cv.PaidValue = paid.Requests, srpISK(paid.Paid)
+		}
+		for _, ch := range characters {
+			if ch.LinkState == linkStateOK && characterHasScope(ch, mailSendScope) {
+				cv.Mailers = append(cv.Mailers, opChoice{ID: ch.CharacterID, Name: ch.Name})
 			}
 		}
-		if cv.Directs {
-			cv.Who = app.permissionChoices(ctx, corp, permSRP)
-		}
-		view.Corps = append(view.Corps, cv)
 	}
 	app.render(ctx, w, http.StatusOK, "srp.html", data)
 }
 
-// srpOffer fills in the losses an account can ask about: those that
-// fell inside an op of the corporation the pilot was in, and that
-// nobody has asked about yet.
-func (app *Application) srpOffer(ctx context.Context, view *srpView, characters []db.Character, now time.Time) {
-	losses := app.srpLosses(ctx, characters, now)
+// srpBack answers an SRP form by sending the account back to the
+// corporation's page it was sent from, with a word.
+func (app *Application) srpBack(w http.ResponseWriter, r *http.Request) func(string) {
+	_ = r.ParseForm()
+	corp, _ := strconv.ParseInt(r.Form.Get("corporation"), 10, 64)
+	return app.flashBack(w, r, corpAddress(srpPath, corp))
+}
+
+// srpOffer fills in the losses an account can ask a corporation
+// about: those of a pilot who was in it, that fell inside one of its
+// ops, and that nobody has asked about yet.
+func (app *Application) srpOffer(ctx context.Context, view *srpView, characters []db.Character, corp int64, now time.Time) {
+	all := app.srpLosses(ctx, characters, now)
+	losses := all[:0]
+	for _, loss := range all {
+		if loss.km.Victim.CorporationID == corp {
+			losses = append(losses, loss)
+		}
+	}
 	if len(losses) == 0 {
 		return
 	}
@@ -421,7 +439,7 @@ func (app *Application) srpOffer(ctx context.Context, view *srpView, characters 
 func (app *Application) handleSRPRequest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
-	back := app.flashBack(w, r, srpPath)
+	back := app.srpBack(w, r)
 	_ = r.ParseForm()
 	now := time.Now().UTC()
 	rawKill, rawOp, _ := strings.Cut(r.Form.Get("loss"), ":")
@@ -472,7 +490,7 @@ func (app *Application) handleSRPRequest(w http.ResponseWriter, r *http.Request)
 // (POST /srp/{id}/withdraw).
 func (app *Application) handleSRPWithdraw(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	back := app.flashBack(w, r, srpPath)
+	back := app.srpBack(w, r)
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	n, err := app.queries.WithdrawSRPRequest(ctx, db.WithdrawSRPRequestParams{ID: id, UserID: app.userID(ctx)})
 	if err != nil || n == 0 {

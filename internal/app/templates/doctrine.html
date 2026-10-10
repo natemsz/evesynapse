@@ -3,8 +3,8 @@
 {{with .Doctrine}}
 <h1><span class="gt">{{.Name}}</span></h1>
 
-<p><small><a href="/doctrines/">Doctrines</a> · {{.Corporation}}{{if .Category}} · <a href="/doctrines/?category={{.Category}}">{{.Category}}</a>{{end}}</small></p>
-{{if .Tags}}<p class="tag-row">{{range .Tags}}<a href="/doctrines/?tag={{.}}">#{{.}}</a> {{end}}</p>{{end}}
+<p><small><a href="/doctrines/?corporation={{.CorpID}}">Doctrines</a> · {{.Corporation}}{{if .Category}} · <a href="/doctrines/?corporation={{.CorpID}}&amp;category={{.Category}}">{{.Category}}</a>{{end}}</small></p>
+{{if .Tags}}<p class="tag-row">{{range .Tags}}<a href="/doctrines/?corporation={{$.Doctrine.CorpID}}&amp;tag={{.}}">#{{.}}</a> {{end}}</p>{{end}}
 {{if .Description}}<p class="op-description">{{.Description}}</p>{{end}}
 
 <h2>Fits</h2>
@@ -45,8 +45,13 @@
 <form method="post" action="/doctrines/{{.ID}}/fits/add" class="op-form setting">
   <h4>Add one of your saved fits</h4>
   {{if .MyFits}}
-  <label class="field"><span class="field-label">Fit</span>
-    <select name="fit">{{range .MyFits}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
+  <div class="field"><label class="field-label" for="doctrine-myfit">Fit</label>
+    <span class="searchwrap">
+      <input type="search" name="fit_name" id="doctrine-myfit" required placeholder="Search your saved fits…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="doctrine-myfit-suggest" aria-autocomplete="list" data-suggest="/doctrines/suggest?scope=myfits" data-suggest-target="doctrine-myfit-id">
+      <ul class="suggest" id="doctrine-myfit-suggest" role="listbox" hidden></ul>
+    </span>
+    <input type="hidden" name="fit" id="doctrine-myfit-id" value="">
+    <span class="field-hint">Type a fit's or a ship's name and pick from the list</span></div>
   <div class="form-grid">
     <label class="field"><span class="field-label">Part in the fleet</span>
       <select name="fleet_role"><option value="">—</option>{{range .Roles}}<option value="{{.}}">{{.}}</option>{{end}}</select></label>
@@ -76,7 +81,7 @@
 <section class="setting">
   <h4>Add a fit that is already here</h4>
   <p class="hint">Copy a fit from another of the corporation's doctrines, or one that somebody has made public.</p>
-  <div class="form-actions"><a class="btn" href="/doctrines/fits/?for={{.ID}}">From corporate fits</a><a class="btn" href="/fittings/public/?for={{.ID}}">From public fits</a></div>
+  <div class="form-actions"><a class="btn" href="/doctrines/fits/?corporation={{.CorpID}}&amp;for={{.ID}}">From corporate fits</a><a class="btn" href="/fittings/public/?for={{.ID}}">From public fits</a></div>
 </section>
 </div>
 {{end}}

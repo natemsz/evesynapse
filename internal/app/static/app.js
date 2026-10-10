@@ -883,6 +883,24 @@
     suggestURL("/admin/suggest", null),
     function (it) { window.location.href = "/admin/?q=" + encodeURIComponent(it.id); });
 
+  // Search boxes that name their own feed (data-suggest): the
+  // doctrine pages and the fit browsers. A suggestion that is a
+  // link is followed; any other fills the box, and where the box
+  // names a hidden field (data-suggest-target) that takes the id
+  // of what was picked, until the box is typed in again.
+  Array.prototype.forEach.call(document.querySelectorAll("input[data-suggest]"), function (input) {
+    var base = input.getAttribute("data-suggest");
+    var target = document.getElementById(input.getAttribute("data-suggest-target") || "");
+    if (target) input.addEventListener("input", function () { target.value = ""; });
+    attachSuggest(input, document.getElementById(input.getAttribute("aria-controls")),
+      function (q) { return base + (base.indexOf("?") === -1 ? "?" : "&") + "q=" + encodeURIComponent(q); },
+      function (it, input) {
+        if (it.url) { window.location.href = it.url; return; }
+        input.value = it.name;
+        if (target) target.value = it.id;
+      });
+  });
+
   // Watchlist finder: a pick fills the box with the exact name
   // and runs the same find the button would.
   (function () {
@@ -1611,6 +1629,7 @@
     { name: "Ship replacement (SRP)", url: "/srp/" },
     { name: "Discord server", url: "/discord/servers" },
     { name: "Groups", url: "/groups/" },
+    { name: "Corporation Settings", url: "/corporations/settings/" },
     { name: "Wars", url: "/intel/wars/" },
     { name: "Incursions", url: "/intel/incursions/" },
     { name: "Faction Warfare", url: "/intel/fw/" },

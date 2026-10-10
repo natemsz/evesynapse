@@ -1,0 +1,82 @@
+{{define "corpselector"}}
+{{if gt (len .) 1}}
+<div class="charselector" data-charselector>
+  <input type="text" class="charselector-input" placeholder="Select corporation..." autocomplete="off" aria-label="Select corporation">
+  <div class="charselector-dropdown" hidden>
+    {{range .}}
+    <a href="?corporation={{.ID}}" class="charselector-option{{if .Active}} active{{end}}" data-name="{{.Name}}" data-id="{{.ID}}">
+      <span class="charselector-name">{{.Name}}</span>
+    </a>
+    {{end}}
+  </div>
+</div>
+{{end}}
+{{end}}
+
+{{define "fitbrowser"}}
+{{if .For}}<p class="browse-for"><strong>Choosing fits for <a href="/doctrines/{{.For.ID}}">{{.For.Name}}</a>.</strong> Each one added is copied into the doctrine.</p>{{end}}
+
+{{if .Total}}
+<form method="get" action="{{.Path}}" class="lookup-form">
+  {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">{{end}}
+  <span class="searchwrap">
+    <input type="search" name="q" id="fit-browse-q" value="{{.Q}}" placeholder="{{.Placeholder}}" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-browse-suggest" aria-autocomplete="list" aria-label="Search fits" data-suggest="{{.SuggestURL}}">
+    <ul class="suggest" id="fit-browse-suggest" role="listbox" hidden></ul>
+  </span>
+  <button type="submit">Search</button>
+  {{if or .Q .Active}}<a href="{{.ClearURL}}">Clear all</a>{{end}}
+</form>
+
+{{if or .Facets .Active}}
+<div class="facets">
+  {{if .Active}}
+  <div class="facet"><span class="facet-title">Showing</span>
+    <div class="facet-chips">{{range .Active}}<a class="chip on" href="{{.URL}}" title="Take this filter off">{{.Label}} <span aria-hidden="true">✕</span></a>{{end}}</div>
+  </div>
+  {{end}}
+  {{range .Facets}}
+  <div class="facet"><span class="facet-title">{{.Title}}</span>
+    <div class="facet-chips">{{range .Chips}}<a class="chip{{if .On}} on{{end}}" href="{{.URL}}">{{.Label}} <small>{{.Count}}</small></a>{{end}}</div>
+  </div>
+  {{end}}
+</div>
+{{end}}
+
+<div class="browse-head">
+  <span><strong>{{len .Cards}}</strong> of {{.Total}} fit{{if ne .Total 1}}s{{end}}</span>
+  {{if .Sorts}}<span class="browse-sorts">Sort by {{range .Sorts}}<a class="chip{{if .On}} on{{end}}" href="{{.URL}}">{{.Label}}</a>{{end}}</span>{{end}}
+</div>
+
+{{if .Cards}}
+<div class="fit-cards">
+{{range .Cards}}
+<article class="fit-card">
+  {{if .ShipTypeID}}<img class="fit-card-ship" src="https://images.evetech.net/types/{{.ShipTypeID}}/render?size=64" width="64" height="64" alt="" loading="lazy">{{end}}
+  <div class="fit-card-body">
+    <h4><a href="{{.OpenURL}}">{{.Name}}</a></h4>
+    <p class="fit-card-line">{{itemLink .ShipTypeID .Ship}}{{if .Hull}} <small>{{.Hull}}</small>{{end}}</p>
+    <p class="fit-card-line">{{if .Role}}<span class="badge wait">{{.Role}}</span> {{end}}{{if .Doctrine}}<a href="{{.DoctrineURL}}">{{.Doctrine}}</a>{{if .Category}} <small>{{.Category}}</small>{{end}}{{end}}{{if .Mine}}<small>Yours</small>{{else if .By}}<small>by {{.By}}</small>{{end}}</p>
+    {{if .Tags}}<p class="tag-row">{{range .Tags}}<a href="{{.URL}}">#{{.Label}}</a> {{end}}</p>{{end}}
+  </div>
+  <div class="fit-card-actions">
+    {{if $.For}}
+    <form method="post" action="/doctrines/{{$.For.ID}}/fits/add" class="inline-form">
+      <input type="hidden" name="{{.AddField}}" value="{{.ID}}"><input type="hidden" name="next" value="{{$.Self}}">
+      <select name="fleet_role" aria-label="Part in the fleet"><option value="">Part…</option>{{range $.Roles}}<option value="{{.}}">{{.}}</option>{{end}}</select>
+      <button type="submit">Add</button>
+    </form>
+    {{else}}
+    <a class="btn" href="{{.OpenURL}}">Open in fitting tool</a>
+    {{end}}
+  </div>
+</article>
+{{end}}
+</div>
+{{if .More}}<p class="hint">More fits match than the 100 shown. Narrow the search or pick a filter to see the rest.</p>{{end}}
+{{else}}
+<p class="hint">No fit matches. <a href="{{.ClearURL}}">Clear the search and filters</a>.</p>
+{{end}}
+{{else}}
+<p class="hint">{{.Empty}}</p>
+{{end}}
+{{end}}

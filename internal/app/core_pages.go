@@ -122,6 +122,9 @@ type pageData struct {
 	// PublicFits is the /fittings/public/ page (char_fit_public.go).
 	PublicFits *publicFitsView
 
+	// CorpSettings is the /corporations/settings/ page (corp_select.go).
+	CorpSettings *corpSettingsView
+
 	// Ops (ops.go): one op's page, and the form that creates or
 	// changes one.
 	Op     *opView
@@ -202,7 +205,7 @@ func sectionForPage(page string) string {
 		return "tools"
 	case "corporations.html", "corp_members.html", "corp_wallets.html",
 		"corp_orders.html", "corp_assets.html", "corp_structures.html",
-		"corporation.html", "alliance.html", "discord_servers.html", "groups.html", "srp.html", "doctrines.html", "doctrine.html", "corp_fits.html":
+		"corporation.html", "alliance.html", "discord_servers.html", "groups.html", "srp.html", "doctrines.html", "doctrine.html", "corp_fits.html", "corp_settings.html":
 		return "corporation"
 	case "intel_wars.html", "intel_incursions.html", "intel_fw.html":
 		return "intel"
@@ -226,7 +229,7 @@ var (
 // pageSharedTemplates are the files every full page is parsed with:
 // the layout and the partials any page may use. One list, so that
 // nothing else parsing a page into the same cache can leave one out.
-var pageSharedTemplates = []string{"templates/base.html", "templates/notifybell.html", "templates/balancechart.html", "templates/charselector.html", "templates/locked.html"}
+var pageSharedTemplates = []string{"templates/base.html", "templates/notifybell.html", "templates/balancechart.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/locked.html"}
 
 // parsedTemplate returns the cached set for page, parsing it (with
 // the shared files first) the first time it is asked for.

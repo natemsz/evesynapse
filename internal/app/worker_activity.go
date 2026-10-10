@@ -34,6 +34,14 @@ func (a *activityLog) shouldSave(userID int64, now time.Time) bool {
 	return true
 }
 
+// activePilots counts the characters the worker last tiered as
+// active: the pilots in use, for the calls-per-pilot metric.
+func (a *activityLog) activePilots() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return len(a.active)
+}
+
 // saveSeen writes the account's last-seen time, if it is time to.
 func (app *Application) saveSeen(ctx context.Context, userID int64, now time.Time) {
 	if !app.activity.shouldSave(userID, now) {

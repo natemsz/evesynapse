@@ -5,21 +5,38 @@
 
 {{range .Errors}}<p class="err">{{.}}</p>{{end}}
 
-<form method="post" action="/ops/save" class="op-form">
+<form method="post" action="/ops/save" class="op-form form-card">
   {{if .ID}}<input type="hidden" name="id" value="{{.ID}}">{{end}}
-  <p><label>Title <input type="text" name="title" value="{{.Title}}" maxlength="120" required></label></p>
-  {{if .ID}}
-  {{range .Corps}}{{if .Selected}}<p>Corporation: {{.Name}}<input type="hidden" name="corporation" value="{{.ID}}"></p>{{end}}{{end}}
-  {{else}}
-  <p><label>Corporation <select name="corporation">{{range .Corps}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label></p>
-  {{end}}
-  <p><label>Starts <input type="datetime-local" name="starts_at" value="{{.StartsAt}}" required></label> <small>EVE time (UTC)</small></p>
-  <p><label>Length <input type="number" name="duration" value="{{.Duration}}" min="15" max="1440" step="5" required></label> <small>minutes</small></p>
-  <p><label>Fleet commander <select name="fc">{{range .FCs}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label> <small>the character that will run the fleet</small></p>
-  <p><label>Doctrine <input type="text" name="doctrine" value="{{.Doctrine}}" maxlength="120" placeholder="e.g. Shield Lokis"></label></p>
-  <p><label>Form up <input type="text" name="form_up" value="{{.FormUp}}" maxlength="120" placeholder="e.g. Jita 4-4"></label></p>
-  <p><label>Details<br><textarea name="description" rows="5" maxlength="2000">{{.Description}}</textarea></label></p>
-  <p><button type="submit">{{if .ID}}Save changes{{else}}Create op{{end}}</button> <a href="{{if .ID}}/ops/{{.ID}}{{else}}/calendar/{{end}}">Cancel</a></p>
+  <div class="form-grid">
+    <label class="field wide"><span class="field-label">Title</span>
+      <input type="text" name="title" value="{{.Title}}" maxlength="120" required></label>
+    {{if .ID}}
+    {{range .Corps}}{{if .Selected}}<div class="field"><span class="field-label">Corporation</span>
+      <span class="field-static">{{.Name}}</span><input type="hidden" name="corporation" value="{{.ID}}"></div>{{end}}{{end}}
+    {{else}}
+    <label class="field"><span class="field-label">Corporation</span>
+      <select name="corporation">{{range .Corps}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+    {{end}}
+    <label class="field"><span class="field-label">Fleet commander</span>
+      <select name="fc">{{range .FCs}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select>
+      <span class="field-hint">The character that will run the fleet</span></label>
+    <label class="field"><span class="field-label">Starts</span>
+      <input type="datetime-local" name="starts_at" value="{{.StartsAt}}" required>
+      <span class="field-hint">EVE time (UTC)</span></label>
+    <label class="field"><span class="field-label">Length</span>
+      <input type="number" name="duration" value="{{.Duration}}" min="15" max="1440" step="5" required>
+      <span class="field-hint">Minutes</span></label>
+    <label class="field"><span class="field-label">Doctrine</span>
+      <input type="text" name="doctrine" value="{{.Doctrine}}" maxlength="120" placeholder="e.g. Shield Lokis"></label>
+    <label class="field"><span class="field-label">Form up</span>
+      <input type="text" name="form_up" value="{{.FormUp}}" maxlength="120" placeholder="e.g. Jita 4-4"></label>
+    <label class="field wide"><span class="field-label">Details</span>
+      <textarea name="description" rows="5" maxlength="2000">{{.Description}}</textarea></label>
+  </div>
+  <div class="form-actions">
+    <button type="submit">{{if .ID}}Save changes{{else}}Create op{{end}}</button>
+    <a href="{{if .ID}}/ops/{{.ID}}{{else}}/calendar/{{end}}">Cancel</a>
+  </div>
 </form>
 {{end}}
 {{end}}

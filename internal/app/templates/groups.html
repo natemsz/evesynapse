@@ -5,62 +5,69 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{with .Groups}}
-<p><small>A group is a list of characters that a corporation's or alliance's directors keep by hand: a special interest group, the fleet commanders, a logistics wing. A Discord server's rules can then give everyone in a group a role (<a href="/discord/servers">Discord servers</a>).</small></p>
+<p class="lede">A group is a list of characters that a corporation's or alliance's directors keep by hand: a special interest group, the fleet commanders, a logistics wing. A <a href="/discord/servers">Discord server's</a> rules can give everyone in a group a role.</p>
 
 {{if not .Owners}}
 <p>None of your characters is a director, so there are no groups for you to keep.</p>
 {{end}}
 
 {{range .Owners}}
-<h2>{{.Name}} <small>· {{.Kind}}</small></h2>
 {{$owner := .}}
-{{range .Groups}}
-<section class="foldable group">
-<h3>{{.Name}} <small>· {{len .Members}}</small></h3>
-{{if .Description}}<p><small>{{.Description}}</small></p>{{end}}
-{{if .Members}}
-<div class="tw">
-<table>
-  <thead><tr><th>Character</th><th></th></tr></thead>
-  <tbody>
-  {{$group := .ID}}
-  {{range .Members}}
-    <tr><td>{{.Name}}{{if .Outside}} <small>no longer in the {{$owner.Kind}}, or not linked: counts for nothing until it is back</small>{{end}}</td>
-        <td><form method="post" action="/groups/{{$group}}/members/remove" class="inline-form"><input type="hidden" name="character" value="{{.CharacterID}}"><button type="submit" class="btn">Remove</button></form></td></tr>
-  {{end}}
-  </tbody>
-</table>
-</div>
-{{else}}
-<p><small>Nobody in this group yet.</small></p>
-{{end}}
-{{if .Addable}}
-<form method="post" action="/groups/{{.ID}}/members/add" class="group-add">
-  <div class="charselector checkselector" data-checkselector data-summary="add">
-    <input type="text" class="charselector-input" placeholder="Add characters…" autocomplete="off" aria-label="Characters to add to {{.Name}}. Type to search.">
-    <div class="charselector-dropdown" hidden>
-      {{range .Addable}}<label class="charselector-option" data-name="{{.Name}}"><input type="checkbox" name="character" value="{{.CharacterID}}"> <span class="charselector-name">{{.Name}}</span></label>
-      {{end}}
-    </div>
+<h2>{{.Name}} <small>· {{.Kind}}</small></h2>
+
+<form method="post" action="/groups/create" class="op-form setting">
+  <input type="hidden" name="owner" value="{{.Key}}">
+  <h4>New group</h4>
+  <div class="form-grid">
+    <label class="field"><span class="field-label">Name</span>
+      <input type="text" name="name" maxlength="60" required placeholder="e.g. Logistics wing"></label>
+    <label class="field"><span class="field-label">What it is for</span>
+      <input type="text" name="description" maxlength="200" placeholder="Optional"></label>
   </div>
-  <button type="submit">Add</button>
+  <div class="form-actions">
+    <button type="submit">Create group</button>
+    <span class="field-hint">Only characters linked to EveSynapse and in the {{.Kind}} can be added{{if not .Candidates}}; none are yet{{end}}.</span>
+  </div>
 </form>
-{{else}}
-<p><small>Every linked character of the {{$owner.Kind}} is already in this group.</small></p>
-{{end}}
-<form method="post" action="/groups/{{.ID}}/delete" class="inline-form"><button type="submit" class="btn btn-danger">Delete this group</button></form>
+
+<div class="settings-grid">
+{{range .Groups}}
+<section class="setting group">
+  {{$group := .ID}}
+  <div class="setting-head"><h4>{{.Name}}</h4><span class="field-hint">{{len .Members}} member{{if ne (len .Members) 1}}s{{end}}</span></div>
+  {{if .Description}}<p class="hint">{{.Description}}</p>{{end}}
+  {{if .Members}}
+  <ul class="row-list">
+    {{range .Members}}
+    <li><span>{{.Name}}{{if .Outside}} <small>no longer in the {{$owner.Kind}}, or not linked: counts for nothing until it is back</small>{{end}}</span>
+      <form method="post" action="/groups/{{$group}}/members/remove" class="inline-form"><input type="hidden" name="character" value="{{.CharacterID}}"><button type="submit" class="btn">Remove</button></form></li>
+    {{end}}
+  </ul>
+  {{else}}
+  <p class="hint">Nobody in this group yet.</p>
+  {{end}}
+  {{if .Addable}}
+  <form method="post" action="/groups/{{.ID}}/members/add" class="add-row">
+    <div class="charselector checkselector" data-checkselector data-summary="add">
+      <input type="text" class="charselector-input" placeholder="Add characters…" autocomplete="off" aria-label="Characters to add to {{.Name}}. Type to search.">
+      <div class="charselector-dropdown" hidden>
+        {{range .Addable}}<label class="charselector-option" data-name="{{.Name}}"><input type="checkbox" name="character" value="{{.CharacterID}}"> <span class="charselector-name">{{.Name}}</span></label>
+        {{end}}
+      </div>
+    </div>
+    <button type="submit">Add</button>
+  </form>
+  {{else}}
+  <p class="hint">Every linked character of the {{$owner.Kind}} is already in this group.</p>
+  {{end}}
+  <div class="setting-foot">
+    <form method="post" action="/groups/{{.ID}}/delete" class="inline-form"><button type="submit" class="btn btn-danger">Delete this group</button></form>
+  </div>
 </section>
 {{else}}
-<p><small>No groups yet.</small></p>
+<p class="hint">No groups yet.</p>
 {{end}}
-<form method="post" action="/groups/create" class="op-form group-create">
-  <input type="hidden" name="owner" value="{{.Key}}">
-  <p><label>New group <input type="text" name="name" maxlength="60" required placeholder="e.g. Logistics wing"></label>
-     <label>What it is for <input type="text" name="description" maxlength="200" placeholder="optional"></label>
-     <button type="submit">Make group</button></p>
-</form>
-<p><small>Only characters that are linked to EveSynapse and in the {{.Kind}} can be added{{if not .Candidates}}; none are yet{{end}}.</small></p>
+</div>
 {{end}}
-<p><a href="/discord/servers">Discord servers</a></p>
 {{end}}
 {{end}}

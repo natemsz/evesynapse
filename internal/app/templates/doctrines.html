@@ -5,7 +5,7 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{with .Doctrines}}
-<p class="lede">A doctrine is a set of fits for a kind of fleet. An op can name one, every fit opens in the <a href="/fittings/">fitting tool</a>, and the <a href="/doctrines/fits/">fit library</a> lists them beside everyone's public fits.</p>
+<p class="lede">A doctrine is a set of fits for a kind of fleet. An op can name one, every fit opens in the <a href="/fittings/">fitting tool</a>, and <a href="/doctrines/fits/">corporate fits</a> lists every doctrine's fits on one page.</p>
 
 {{if not .Member}}
 <p>None of your characters is in a corporation EveSynapse knows of yet, so there are no doctrines to show.</p>
@@ -22,7 +22,7 @@
 {{range .Corps}}
 <div class="owner-head">
   <h2>{{.Name}}</h2>
-  <a class="btn" href="/doctrines/fits/?source=corporation">Browse its fits</a>
+  <a class="btn" href="/doctrines/fits/">Corporate fits</a>
 </div>
 
 {{if .Doctrines}}

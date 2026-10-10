@@ -402,6 +402,22 @@ WHERE lf.is_public AND NOT lf.is_draft AND lf.user_id != sqlc.arg(user_id)
   AND (sqlc.arg(q)::text = '' OR lf.name ILIKE '%' || sqlc.arg(q)::text || '%' OR tn.name ILIKE '%' || sqlc.arg(q)::text || '%')
 ORDER BY lf.updated_at DESC, lf.id DESC
 LIMIT 20;
+-- Public fits for the public fits page, an account's own among them. A
+-- tag matches whole, whatever its case.
+-- name: BrowsePublicFittings :many
+SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at,
+       COALESCE(tn.name, '')::text AS ship_name,
+       COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '')::text AS author_name
+FROM local_fittings lf
+LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
+WHERE lf.is_public AND NOT lf.is_draft
+  AND (sqlc.arg(q)::text = '' OR lf.name ILIKE '%' || sqlc.arg(q)::text || '%' OR tn.name ILIKE '%' || sqlc.arg(q)::text || '%')
+  AND (sqlc.arg(tag)::text = '' OR EXISTS (
+        SELECT 1 FROM jsonb_array_elements_text(
+            CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'tags') = 'array' THEN lf.items_json::jsonb -> 'tags' ELSE '[]'::jsonb END) AS t(tag)
+        WHERE lower(t.tag) = lower(sqlc.arg(tag)::text)))
+ORDER BY lf.updated_at DESC, lf.id DESC
+LIMIT sqlc.arg(row_limit)::bigint;
 
 -- ---------------------------------------------------------------------
 -- Market history + alerts (schema 013): daily aggregates, wants,

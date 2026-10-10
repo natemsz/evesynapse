@@ -1,0 +1,45 @@
+{{define "title"}}Public Fits{{end}}
+{{define "content"}}
+<h1><span class="gt">Public Fits</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{with .PublicFits}}
+<p class="lede">The fits people here have made public. Each opens in the <a href="/fittings/">fitting tool</a> with your own skills; saving it there makes your own copy. To share one of yours, tick "Make public" on it in the fitting tool.</p>
+
+{{if .For}}<p><strong>Choosing fits for <a href="/doctrines/{{.For.ID}}">{{.For.Name}}</a>.</strong> Each one added is copied into the doctrine.</p>{{end}}
+
+<form method="get" action="/fittings/public/" class="op-form lookup-form">
+  {{if .For}}<input type="hidden" name="for" value="{{.For.ID}}">{{end}}
+  <input type="text" name="q" value="{{.Q}}" placeholder="Search by fit or ship…" aria-label="Search public fits" autocomplete="off">
+  <input type="text" name="tag" value="{{.Tag}}" placeholder="Tag" aria-label="Tag" autocomplete="off">
+  <button type="submit">Search</button>
+  <a href="/fittings/public/{{if .For}}?for={{.For.ID}}{{end}}">Clear</a>
+</form>
+
+{{if .Rows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Fit</th><th>Ship</th><th>By</th><th>Tags</th><th></th></tr></thead>
+  <tbody>
+  {{range .Rows}}
+    <tr>
+      <td><a href="{{.OpenURL}}">{{.Name}}</a></td>
+      <td>{{itemLink .ShipTypeID .Ship}}</td>
+      <td>{{if .Mine}}You{{else}}{{.By}}{{end}}</td>
+      <td class="tag-row">{{range .Tags}}<a href="/fittings/public/?tag={{.}}{{if $.PublicFits.For}}&amp;for={{$.PublicFits.For.ID}}{{end}}">#{{.}}</a> {{end}}</td>
+      <td>{{if $.PublicFits.For}}<form method="post" action="/doctrines/{{$.PublicFits.For.ID}}/fits/add" class="inline-form">
+          <input type="hidden" name="public" value="{{.ID}}"><input type="hidden" name="next" value="{{$.PublicFits.Self}}">
+          <select name="fleet_role" aria-label="Part in the fleet"><option value="">Part…</option>{{range $.PublicFits.Roles}}<option value="{{.}}">{{.}}</option>{{end}}</select>
+          <button type="submit" class="btn">Add</button></form>{{else}}<a class="btn" href="{{.OpenURL}}">Open</a>{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{if .More}}<p class="hint">More fits match than the 100 shown. Narrow the search to see the rest.</p>{{end}}
+{{else}}
+<p class="hint">No public fit matches.</p>
+{{end}}
+{{end}}
+{{end}}

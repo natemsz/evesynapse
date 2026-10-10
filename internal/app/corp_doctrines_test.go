@@ -38,8 +38,9 @@ func (f *notifyFixture) doctrines(corp int64) []db.Doctrine {
 
 // TestDoctrines: a corporation's doctrines are kept by its directors
 // and whoever they hand it to, read by its members and nobody else;
-// fits are copied in from saved and public fits; an op names one; and
-// the fit library finds fits by tag, doctrine and source.
+// fits are copied in from saved and public fits; an op names one; the
+// corporate fits page lists only doctrine fits and the public fits page
+// only public ones.
 func TestDoctrines(t *testing.T) {
 	f := newNotifyFixture(t)
 	director := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
@@ -113,30 +114,50 @@ func TestDoctrines(t *testing.T) {
 		t.Fatal("a doctrine is listed under a tag it does not have")
 	}
 
-	// The library: the corporation's fits and public ones, by tag, doctrine and source.
-	library := func(cookie *http.Cookie, query string) string {
-		_, body := getPage(t, f.app, cookie, doctrineFitsPath+query)
+	// Corporate fits: the doctrines' fits only, by tag and doctrine, for members only.
+	browse := func(cookie *http.Cookie, address string) string {
+		_, body := getPage(t, f.app, cookie, address)
 		return body
 	}
-	mustContain(t, "library", library(member, ""), "Fleet Guardian", "Public Rifter", "Fixture Stranger")
+	corporate := browse(member, doctrineFitsPath)
+	mustContain(t, "corporate fits", corporate, "Fleet Guardian", "Public Rifter", `<a href="`+page+`">Shield Lokis</a>`)
+	if strings.Contains(corporate, "Fixture Stranger") || strings.Contains(corporate, "Secret Loki") {
+		t.Fatal("corporate fits lists a public fit's author, or a private fit")
+	}
 	for query, want := range map[string][2]string{
-		"?tag=frigate":   {"Public Rifter", "Fleet Guardian"},
-		"?tag=LOGI":      {"Fleet Guardian", "by Fixture Stranger"},
-		"?source=public": {"by Fixture Stranger", "Fleet Guardian"},
-		"?doctrine=" + strconv.FormatInt(d.ID, 10): {"Fleet Guardian", "by Fixture Stranger"},
+		"?tag=frigate": {"Public Rifter", "Fleet Guardian"},
+		"?tag=LOGI":    {"Fleet Guardian", "Public Rifter"},
+		"?q=guardian":  {"Fleet Guardian", "Public Rifter"},
+		"?doctrine=" + strconv.FormatInt(d.ID+1000, 10): {"No corporate fit matches", "Fleet Guardian"},
 	} {
-		body := library(member, query)
+		body := browse(member, doctrineFitsPath+query)
 		if !strings.Contains(body, want[0]) || strings.Contains(body, want[1]) {
-			t.Fatalf("library %s: want %q without %q", query, want[0], want[1])
+			t.Fatalf("corporate fits %s: want %q without %q", query, want[0], want[1])
 		}
 	}
-	if body := library(stranger, ""); strings.Contains(body, "Fleet Guardian") || strings.Contains(body, "Secret Loki") || !strings.Contains(body, "Public Rifter") {
-		t.Fatal("the library shows an outsider a corporation's fit or a private fit, or hides a public one")
+	if body := browse(stranger, doctrineFitsPath); strings.Contains(body, "Fleet Guardian") || strings.Contains(body, "Public Rifter") {
+		t.Fatal("corporate fits shows an outsider another corporation's fits")
 	}
-	if strings.Contains(library(member, "?for="+strconv.FormatInt(d.ID, 10)), "/fits/add") {
+
+	// Public fits: everyone's public fits and nothing else, by name and tag.
+	public0 := browse(member, publicFitsPath)
+	mustContain(t, "public fits", public0, "Public Rifter", "Fixture Stranger", "/fittings/?public="+strconv.FormatInt(public, 10))
+	if strings.Contains(public0, "Fleet Guardian") || strings.Contains(public0, "Secret Loki") || strings.Contains(public0, "Shield Lokis") {
+		t.Fatal("public fits lists a corporate fit, a doctrine, or a private fit")
+	}
+	mustContain(t, "public fits by tag", browse(member, publicFitsPath+"?tag=FRIGATE"), "Public Rifter")
+	if strings.Contains(browse(member, publicFitsPath+"?tag=logi"), "Public Rifter") || strings.Contains(browse(member, publicFitsPath+"?q=loki"), "Public Rifter") {
+		t.Fatal("public fits ignores its filters")
+	}
+	mustContain(t, "public fits for their owner", browse(stranger, publicFitsPath), "Public Rifter", "/fittings/?local="+strconv.FormatInt(public, 10))
+
+	// Only a keeper who came from a doctrine gets the add buttons, on either page.
+	chosen := "?for=" + strconv.FormatInt(d.ID, 10)
+	if strings.Contains(browse(member, doctrineFitsPath+chosen)+browse(member, publicFitsPath+chosen), "/fits/add") {
 		t.Fatal("a member is offered the add-to-doctrine buttons")
 	}
-	mustContain(t, "library for a keeper", library(director, "?for="+strconv.FormatInt(d.ID, 10)), page+"/fits/add", `name="copy"`, `name="public"`)
+	mustContain(t, "corporate fits for a keeper", browse(director, doctrineFitsPath+chosen), page+"/fits/add", `name="copy"`)
+	mustContain(t, "public fits for a keeper", browse(director, publicFitsPath+chosen), page+"/fits/add", `name="public"`)
 
 	// An op names the doctrine; one of another corporation is refused.
 	start := time.Now().UTC().Add(48 * time.Hour).Format(opDateTimeLayout)

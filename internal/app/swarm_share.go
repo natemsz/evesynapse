@@ -268,19 +268,25 @@ func (app *Application) serveSwarmStructure(ctx context.Context, key string) (st
 // spot check. The signature is checked against the signer's
 // pinned key, the payload is strictly decoded into its row
 // shape, and the IDs inside must match the signed key — a valid
-// signature replayed onto another key dies here. Anything that
-// fails is discarded and counted against the signer; nothing
-// touches the real tables at this step.
-func (app *Application) stageSwarmEntry(ctx context.Context, entry swarmSignedEntry, now time.Time) error {
+// signature replayed onto another key dies here. Attribution is
+// split where it belongs: transport faults (unknown signer, bad
+// signature) count against the peer that served the entry, which
+// is the only identity verified so far — counting them against
+// the claimed signer would let a peer frame anyone by naming
+// them. Content lies (a valid signature over a lying payload)
+// count against the signer, whose key proved authorship.
+// Nothing touches the real tables at this step.
+func (app *Application) stageSwarmEntry(ctx context.Context, entry swarmSignedEntry, from string, now time.Time) error {
 	if !validSwarmKind(entry.Kind) || entry.Key == "" {
 		return fmt.Errorf("swarm: stage %s %s: unknown kind", entry.Kind, entry.Key)
 	}
 	peer, err := app.queries.GetSwarmPeer(ctx, entry.Signer)
 	if err != nil {
+		app.countSwarmCheck(ctx, from, false)
 		return fmt.Errorf("swarm: stage %s %s: unknown signer", entry.Kind, entry.Key)
 	}
 	if !verifySwarmEntry(entry, peer.PublicKey) {
-		app.countSwarmCheck(ctx, entry.Signer, false)
+		app.countSwarmCheck(ctx, from, false)
 		return fmt.Errorf("swarm: stage %s %s: signature does not verify", entry.Kind, entry.Key)
 	}
 	if err := checkSwarmPayload(entry.Kind, entry.Key, entry.Payload); err != nil {

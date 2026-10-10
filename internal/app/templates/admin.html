@@ -140,6 +140,7 @@
     <tr><td>{{.Short}}</td><td>{{.URL}}</td><td>{{.Source}}</td><td>{{.Trust}}</td><td>{{.Good}}</td><td>{{.Bad}}</td><td>{{.State}}</td>
     <td>{{if .Excluded}}
       <form method="post" action="/admin/swarm/admit"><input type="hidden" name="instance" value="{{.ID}}"><button type="submit">Re-admit</button></form>
+      <form method="post" action="/admin/swarm/remove"><input type="hidden" name="instance" value="{{.ID}}"><label>Type {{.Short}} to remove: <input type="text" name="confirm" autocomplete="off" size="8" required></label> <button type="submit">Remove</button></form>
     {{else if .Approved}}
       <form method="post" action="/admin/swarm/exclude"><input type="hidden" name="instance" value="{{.ID}}"><button type="submit">Exclude</button></form>
     {{else}}

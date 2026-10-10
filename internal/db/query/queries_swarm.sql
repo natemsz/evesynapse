@@ -63,6 +63,14 @@ UPDATE swarm_peers SET excluded = $2, exclude_note = $3 WHERE instance_id = $1;
 -- name: TouchSwarmPeerGossip :exec
 UPDATE swarm_peers SET last_gossip = $2 WHERE instance_id = $1;
 
+-- Removing a peer forgets everything: address, pinned key,
+-- approval, exclusion, and the ledger. The operator removes a
+-- peer to rotate its key (the next gossip re-pins from scratch)
+-- or to drop a dead instance. Staged entries under its name
+-- stay staged: they still face their own spot checks.
+-- name: DeleteSwarmPeer :exec
+DELETE FROM swarm_peers WHERE instance_id = $1;
+
 -- name: AddSwarmPeerCheck :exec
 UPDATE swarm_peers
 SET good_checks = good_checks + $2, bad_checks = bad_checks + $3

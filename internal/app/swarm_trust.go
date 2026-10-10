@@ -400,7 +400,7 @@ func (app *Application) swarmPull(ctx context.Context, now time.Time) {
 			if entry.Signer != p.InstanceID {
 				continue
 			}
-			if err := app.stageSwarmEntry(ctx, entry, now); err != nil {
+			if err := app.stageSwarmEntry(ctx, entry, p.InstanceID, now); err != nil {
 				logging.Warnf("swarm: pull %s: %v", p.BaseUrl, err)
 			}
 		}

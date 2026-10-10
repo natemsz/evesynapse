@@ -277,3 +277,38 @@ func (app *Application) handleSwarmAdmit(w http.ResponseWriter, r *http.Request)
 	logging.Warnf("admin: account %d re-admitted swarm instance %s", app.userID(r.Context()), shortenSwarmID(id))
 	back("Instance " + shortenSwarmID(id) + " was re-admitted with its trust history intact.")
 }
+
+// handleSwarmRemove forgets one peer entirely (POST
+// /admin/swarm/remove): address, pinned key, approval,
+// exclusion, and the ledger. Removing is how a peer's key is
+// rotated — the next gossip pins the new one from scratch —
+// and how dead instances leave the list. Like account removal
+// it asks twice: the instance in the form, and typed out by
+// hand. Never the instance itself.
+func (app *Application) handleSwarmRemove(w http.ResponseWriter, r *http.Request) {
+	back := app.flashBack(w, r, "/admin/")
+	if r.ParseForm() != nil {
+		back("That request could not be read.")
+		return
+	}
+	id := strings.TrimSpace(r.Form.Get("instance"))
+	if id == "" || strings.TrimSpace(r.Form.Get("confirm")) != shortenSwarmID(id) {
+		back("Nothing was removed: type the instance's short id to confirm.")
+		return
+	}
+	if app.swarmID != nil && id == app.swarmID.id {
+		back("Nothing was removed: that is this instance.")
+		return
+	}
+	if _, err := app.queries.GetSwarmPeer(r.Context(), id); err != nil {
+		back("Nothing was removed: that instance is not known.")
+		return
+	}
+	if err := app.queries.DeleteSwarmPeer(r.Context(), id); err != nil {
+		logging.Errorf("admin: swarm remove %s: %v", id, err)
+		back("The instance could not be removed; check the server log.")
+		return
+	}
+	logging.Warnf("admin: account %d removed swarm instance %s", app.userID(r.Context()), shortenSwarmID(id))
+	back("Instance " + shortenSwarmID(id) + " was removed, with its key and trust history.")
+}

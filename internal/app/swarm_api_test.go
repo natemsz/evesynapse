@@ -160,7 +160,7 @@ func TestSwarmStagingGate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sign: %v", err)
 	}
-	if err := app.stageSwarmEntry(ctx, entry, now); err != nil {
+	if err := app.stageSwarmEntry(ctx, entry, "peer-a", now); err != nil {
 		t.Fatalf("stage good entry: %v", err)
 	}
 	rows, err := app.queries.ListUncheckedStaging(ctx, 10)
@@ -168,7 +168,9 @@ func TestSwarmStagingGate(t *testing.T) {
 		t.Fatalf("staged rows: %d, err %v", len(rows), err)
 	}
 
-	// Unknown signer: no pinned key, no stage.
+	// Unknown signer, served by peer-a: no pinned key, no
+	// stage — and the serving peer is at fault, not the named
+	// stranger (naming someone else must never frame them).
 	other, err := mintSwarmIdentity()
 	if err != nil {
 		t.Fatalf("mint other: %v", err)
@@ -177,36 +179,40 @@ func TestSwarmStagingGate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sign foreign: %v", err)
 	}
-	if err := app.stageSwarmEntry(ctx, foreign, now); err == nil {
+	if err := app.stageSwarmEntry(ctx, foreign, "peer-a", now); err == nil {
 		t.Fatalf("staged an entry from an unknown signer")
 	}
 
-	// Wrong key: another instance's signature under peer-a's name.
+	// Wrong key: another instance's signature under peer-a's
+	// name, served by peer-a — peer-a's ledger takes it.
 	forged, err := signSwarmEntry(other, "peer-a", swarmKindTypeName, "36", `{"type_id":36,"name":"Mexallon"}`, now)
 	if err != nil {
 		t.Fatalf("sign forged: %v", err)
 	}
-	if err := app.stageSwarmEntry(ctx, forged, now); err == nil {
+	if err := app.stageSwarmEntry(ctx, forged, "peer-a", now); err == nil {
 		t.Fatalf("staged a mis-signed entry")
 	}
-	// The forgery counts against peer-a's ledger (its name was
-	// on the entry), the unknown signer counts nothing.
 	got, err := app.queries.GetSwarmPeer(ctx, "peer-a")
 	if err != nil {
 		t.Fatalf("read peer: %v", err)
 	}
-	if got.BadChecks != 1 {
-		t.Fatalf("peer-a bad checks: %d, want 1", got.BadChecks)
+	if got.BadChecks != 2 {
+		t.Fatalf("peer-a bad checks: %d, want 2 (foreign + forged, both served by it)", got.BadChecks)
 	}
 
 	// Valid signature, lying content (payload names another
-	// type): staged nowhere, counted all the same.
+	// type): staged nowhere; the signer proved authorship, so
+	// the signer takes this one.
 	mismatched, err := signSwarmEntry(peer, "peer-a", swarmKindTypeName, "34", `{"type_id":99,"name":"Tritanium"}`, now)
 	if err != nil {
 		t.Fatalf("sign mismatched: %v", err)
 	}
-	if err := app.stageSwarmEntry(ctx, mismatched, now); err == nil {
+	if err := app.stageSwarmEntry(ctx, mismatched, "peer-a", now); err == nil {
 		t.Fatalf("staged a key-mismatched entry")
+	}
+	got, err = app.queries.GetSwarmPeer(ctx, "peer-a")
+	if err != nil || got.BadChecks != 3 {
+		t.Fatalf("peer-a bad checks: %+v err %v, want 3", got, err)
 	}
 	rows, err = app.queries.ListUncheckedStaging(ctx, 10)
 	if err != nil || len(rows) != 1 {

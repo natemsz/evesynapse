@@ -139,7 +139,7 @@ func (p *swarmPair) pullStages(t *testing.T, keys []swarmPullKey) {
 	}
 	now := time.Now().UTC()
 	for _, entry := range entries {
-		if err := p.b.stageSwarmEntry(ctx, entry, now); err != nil {
+		if err := p.b.stageSwarmEntry(ctx, entry, entry.Signer, now); err != nil {
 			t.Fatalf("stage %s %s: %v", entry.Kind, entry.Key, err)
 		}
 	}
@@ -337,7 +337,7 @@ func TestSwarmPairCryptoChecks(t *testing.T) {
 		t.Fatalf("sign: %v", err)
 	}
 	entry.Payload = `{"type_id":34,"name":"Scordite"}`
-	if err := p.b.stageSwarmEntry(context.Background(), entry, now); err == nil {
+	if err := p.b.stageSwarmEntry(context.Background(), entry, "instance-a", now); err == nil {
 		t.Fatalf("staged a tampered entry")
 	}
 	// A replay onto another key fails too: the signature covers
@@ -347,7 +347,7 @@ func TestSwarmPairCryptoChecks(t *testing.T) {
 		t.Fatalf("sign: %v", err)
 	}
 	entry.Key = "35"
-	if err := p.b.stageSwarmEntry(context.Background(), entry, now); err == nil {
+	if err := p.b.stageSwarmEntry(context.Background(), entry, "instance-a", now); err == nil {
 		t.Fatalf("staged a replayed entry")
 	}
 }

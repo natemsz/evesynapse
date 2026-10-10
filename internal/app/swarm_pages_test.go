@@ -82,6 +82,22 @@ func TestSwarmAdminActions(t *testing.T) {
 	if err != nil || peer.Excluded {
 		t.Fatalf("admit: still excluded err=%v", err)
 	}
+	// Removing asks twice: the row, and the short id typed out.
+	// A wrong confirmation removes nothing.
+	wrong := url.Values{"instance": {"peer-action-1"}, "confirm": {"nope"}}
+	if code, _ := postForm(t, app, cookie, "/admin/swarm/remove", wrong); code != http.StatusSeeOther {
+		t.Fatalf("remove wrong confirm: status %d, want 303", code)
+	}
+	if _, err := app.queries.GetSwarmPeer(ctx, "peer-action-1"); err != nil {
+		t.Fatalf("wrong confirm removed the peer: %v", err)
+	}
+	right := url.Values{"instance": {"peer-action-1"}, "confirm": {"peer-act"}}
+	if code, _ := postForm(t, app, cookie, "/admin/swarm/remove", right); code != http.StatusSeeOther {
+		t.Fatalf("remove: status %d, want 303", code)
+	}
+	if _, err := app.queries.GetSwarmPeer(ctx, "peer-action-1"); err == nil {
+		t.Fatalf("remove: peer still known")
+	}
 	// Unknown instances change nothing, loudly.
 	bad := url.Values{"instance": {"peer-nope"}}
 	if code, _ := postForm(t, app, cookie, "/admin/swarm/exclude", bad); code != http.StatusSeeOther {

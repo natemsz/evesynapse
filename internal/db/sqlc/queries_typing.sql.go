@@ -136,6 +136,36 @@ func (q *Queries) GetTypingGuess(ctx context.Context, arg GetTypingGuessParams) 
 	return i, err
 }
 
+const getTypingGuessNotedForEntity = `-- name: GetTypingGuessNotedForEntity :one
+SELECT box
+FROM typing_guesses
+WHERE kind = $1 AND entity_id = $2 AND region_id = $3 AND noted_at <= $4
+ORDER BY noted_at DESC
+LIMIT 1
+`
+
+type GetTypingGuessNotedForEntityParams struct {
+	Kind     string    `json:"kind"`
+	EntityID int64     `json:"entity_id"`
+	RegionID int64     `json:"region_id"`
+	NotedAt  time.Time `json:"noted_at"`
+}
+
+// The latest guess behind an entity's fetch: a row means the page
+// was warmed from a search box. Feeds the freshness line; no row
+// means the fetch was routine or foresight-driven (checked first).
+func (q *Queries) GetTypingGuessNotedForEntity(ctx context.Context, arg GetTypingGuessNotedForEntityParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, getTypingGuessNotedForEntity,
+		arg.Kind,
+		arg.EntityID,
+		arg.RegionID,
+		arg.NotedAt,
+	)
+	var box string
+	err := row.Scan(&box)
+	return box, err
+}
+
 const insertTypingGuess = `-- name: InsertTypingGuess :exec
 
 INSERT INTO typing_guesses (box, kind, entity_id, region_id, noted_at)

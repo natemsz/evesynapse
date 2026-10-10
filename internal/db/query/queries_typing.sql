@@ -53,3 +53,13 @@ WHERE priority = sqlc.arg(typing_priority)::bigint
 DELETE FROM type_details
 WHERE priority = sqlc.arg(typing_priority)::bigint AND fetched_at IS NULL
   AND type_id IN (SELECT entity_id FROM typing_guesses WHERE box = $1 AND kind = 'type_description');
+
+-- The latest guess behind an entity's fetch: a row means the page
+-- was warmed from a search box. Feeds the freshness line; no row
+-- means the fetch was routine or foresight-driven (checked first).
+-- name: GetTypingGuessNotedForEntity :one
+SELECT box
+FROM typing_guesses
+WHERE kind = $1 AND entity_id = $2 AND region_id = $3 AND noted_at <= $4
+ORDER BY noted_at DESC
+LIMIT 1;

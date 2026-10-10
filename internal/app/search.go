@@ -163,6 +163,8 @@ const suggestedWarmed = 4
 // guesses never accumulate across keystrokes. Queue writes only;
 // the worker does the fetching.
 func (app *Application) noteSuggested(ctx context.Context, box, pool string, items []suggestItem) {
+	app.typingMu.Lock()
+	defer app.typingMu.Unlock()
 	if len(items) > suggestedWarmed {
 		items = items[:suggestedWarmed]
 	}
@@ -280,6 +282,10 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 	// items should land on a warming chart, not a cold one. Each
 	// keystroke replaces the box's previous guesses.
 	box := app.typingBox(ctx, "topbar")
+	// One step with the replace: a second keystroke's sequence
+	// waits outside typingMu until this one lands whole.
+	app.typingMu.Lock()
+	defer app.typingMu.Unlock()
 	app.replaceTypingGuesses(ctx, box)
 	now := time.Now().UTC()
 	for i, m := range itemMatches {

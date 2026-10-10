@@ -150,6 +150,13 @@ type Application struct {
 	// sync indicator can count it. Guarded by pageWantMu.
 	pageWantMu sync.Mutex
 	pageWants  map[string]map[string]pageWant
+
+	// Typing-intent guess sequences (worker_typing.go): one
+	// keystroke's replace-plus-note must land as one step, or two
+	// keystrokes in a box interleave and the older one's guesses
+	// survive beside the newer. noteSuggested and the topbar
+	// search hold typingMu across the whole sequence.
+	typingMu sync.Mutex
 }
 
 // New opens the database (applying the embedded baseline schema

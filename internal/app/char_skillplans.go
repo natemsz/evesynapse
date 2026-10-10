@@ -297,6 +297,7 @@ func (app *Application) handleSkillPlans(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	data.SkillsChars = links
+	app.foresightOpened(ctx, userID, foresightSkillsView(active.CharacterID))
 
 	view := &skillPlansView{CharacterID: active.CharacterID, CharacterName: active.Name}
 	data.SkillPlans = view

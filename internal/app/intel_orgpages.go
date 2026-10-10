@@ -132,6 +132,7 @@ func (app *Application) handleCorporationPage(w http.ResponseWriter, r *http.Req
 	}
 
 	app.markGuessHit(ctx, pageWantCorporation, id, 0)
+	app.foresightOpened(ctx, app.userID(ctx), foresightOrgView(targetCorporation, id))
 	data.Corporation = app.loadCorporationView(ctx, id)
 	if data.Corporation != nil && data.Corporation.State == "loading" {
 		app.notePageWant(ctx, pageWantCorporation, id, 0)
@@ -151,6 +152,7 @@ func (app *Application) handleAlliancePage(w http.ResponseWriter, r *http.Reques
 	}
 
 	app.markGuessHit(ctx, pageWantAlliance, id, 0)
+	app.foresightOpened(ctx, app.userID(ctx), foresightOrgView(targetAlliance, id))
 	data.Alliance = app.loadAllianceView(ctx, id)
 	if data.Alliance != nil && data.Alliance.State == "loading" {
 		app.notePageWant(ctx, pageWantAlliance, id, 0)

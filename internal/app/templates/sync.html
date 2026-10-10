@@ -52,6 +52,26 @@
 {{end}}
 </section>
 
+{{with .Sync.Foresight}}
+<section class="card spanall">
+<h2>Warmed ahead</h2>
+{{if .Off}}
+<p><small>Switched off (FORESIGHT=off).</small></p>
+{{else}}
+<p><small>Data fetched because of something that happened in the game, before anyone asked for it, over the last {{.Days}} days. A target is one thing warmed for one page; it counts as opened when the account opened that page while it was still current. Up to {{.PerCycle}} calls a cycle, from what the rest of the cycle leaves.</small></p>
+<div class="tw">
+<table class="stat-table">
+  <thead><tr><th>Event</th><th>Events</th><th>Targets</th><th>ESI calls</th><th>Opened</th><th>Opened, of those settled</th><th>Warm when opened</th><th>Chance in use</th></tr></thead>
+  <tbody>
+  {{range .Rows}}<tr><td>{{.Event}}</td><td>{{.Events}}</td><td>{{.Targets}}</td><td>{{.Calls}}</td><td>{{.Opened}}</td><td>{{.HitRate}}</td><td>{{.Warm}}</td><td>{{.Chance}}</td></tr>
+  {{end}}</tbody>
+</table>
+</div>
+<p><small>{{.Calls}} calls spent, {{.Opened}} targets opened: {{.PerOpened}} calls for each one opened.</small></p>
+{{end}}
+</section>
+{{end}}
+
 <section class="card spanall">
 <h2>Character data</h2>
 <p><small>One character's stored data and how fresh it is. Type a name or a character id; any character on the site can be looked up.</small></p>

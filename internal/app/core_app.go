@@ -130,9 +130,14 @@ type Application struct {
 	// worker cycle (fresh SSO logins, Sync-page re-warm requests).
 	// activity is when each account was last seen, which sets how
 	// often the worker refreshes its characters (worker_tiers.go).
-	activity      activityLog
-	admins        adminOwners
-	notifyQuiet   notifyQuietLog // which accounts' data the notification pass has read lately (notify_quiet.go)
+	activity    activityLog
+	admins      adminOwners
+	notifyQuiet notifyQuietLog // which accounts' data the notification pass has read lately (notify_quiet.go)
+	// foresight is what warming on game events keeps between cycles
+	// (foresight.go), and books the order books fetched lately
+	// (market_book.go).
+	foresight     foresightState
+	books         bookCache
 	priorityMu    sync.Mutex
 	priorityChars map[int64]bool
 

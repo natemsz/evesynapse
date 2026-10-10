@@ -127,6 +127,11 @@ var pgWantClosenessSchema string
 //go:embed schema_pg/028_typing_guesses.sql
 var pgTypingGuessesSchema string
 
+// Step 029: foresight targets, moved from 027 after the
+// want-closeness and typing rings claimed 027-028 on main.
+//go:embed schema_pg/029_foresight.sql
+var pgForesightSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -184,6 +189,7 @@ func schemaSteps() []schemaStep {
 		{26, "doctrines", pgDoctrinesSchema, ""},
 		{27, "want_closeness", pgWantClosenessSchema, ""},
 		{28, "typing_guesses", pgTypingGuessesSchema, ""},
+		{29, "foresight", pgForesightSchema, ""},
 	}
 }
 

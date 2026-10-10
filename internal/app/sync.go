@@ -69,7 +69,9 @@ type syncView struct {
 	Warming     bool   // a worker cycle is running right now
 	// Timing: how long the worker's cycles take and how far behind
 	// it is (worker_timing.go); nil before the first has finished.
-	Timing     *workerTimingView
+	Timing *workerTimingView
+	// Foresight: what warming on game events cost and what came of it.
+	Foresight  *foresightStats
 	Lookup     characterLookupView
 	Character  *syncCharacterView // nil until one is found
 	SDE        *sdeView
@@ -93,6 +95,7 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 		ErrorBudget: errorBudgetWords(app.esi.ErrorBudgetStatus()),
 		Warming:     status.Warming,
 		Timing:      workerTimingViewFor(status),
+		Foresight:   app.foresightStats(ctx, time.Now().UTC()),
 		SDE:         app.loadSDEView(ctx),
 		Global:      app.loadGlobalView(ctx),
 	}

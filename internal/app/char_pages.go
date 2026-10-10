@@ -257,6 +257,7 @@ func (app *Application) handleCharacter(w http.ResponseWriter, r *http.Request) 
 	}
 	data.CharChars = links
 
+	app.foresightOpened(ctx, app.userID(ctx), foresightSkillsView(active.CharacterID))
 	view := &characterView{CharacterID: active.CharacterID, CharacterName: active.Name}
 	view.PortraitURL = portraitURL(active.CharacterID, 128)
 	data.CharacterPage = view

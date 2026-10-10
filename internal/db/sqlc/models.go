@@ -175,6 +175,24 @@ type DoctrineFit struct {
 	AddedAt    time.Time `json:"added_at"`
 }
 
+type ForesightTarget struct {
+	ID          int64        `json:"id"`
+	UserID      int64        `json:"user_id"`
+	CharacterID int64        `json:"character_id"`
+	EventKind   string       `json:"event_kind"`
+	EventKey    string       `json:"event_key"`
+	TargetKind  string       `json:"target_kind"`
+	SubjectID   int64        `json:"subject_id"`
+	RegionID    int64        `json:"region_id"`
+	Detail      string       `json:"detail"`
+	ViewKey     string       `json:"view_key"`
+	CreatedAt   time.Time    `json:"created_at"`
+	ExpiresAt   time.Time    `json:"expires_at"`
+	WarmedAt    sql.NullTime `json:"warmed_at"`
+	Calls       int64        `json:"calls"`
+	OpenedAt    sql.NullTime `json:"opened_at"`
+}
+
 type GlobalSnapshot struct {
 	Kind        string    `json:"kind"`
 	Payload     string    `json:"payload"`

@@ -537,6 +537,7 @@ func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db
 	if !opsOnly {
 		bundles := app.loadCharSnaps(ctx, userID, chars, []string{widgetBriefing})
 		c = app.collectNotifyEvents(ctx, userID, bundles, now)
+		app.foresee(ctx, userID, bundles, now)
 	}
 	prefs := app.notifyPrefsFor(ctx, userID)
 	app.notifyOpEvents(ctx, c, userID, prefs, now)

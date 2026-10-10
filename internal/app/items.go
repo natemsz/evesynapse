@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -469,7 +470,9 @@ func (app *Application) itemDescription(ctx context.Context, typeID int64) (stri
 	case err == nil && td.FetchedAt.Valid:
 		return "empty", ""
 	default:
-		if qerr := app.queries.UpsertTypeDetailWant(ctx, typeID); qerr != nil {
+		if qerr := app.queries.UpsertTypeDetailWant(ctx, db.UpsertTypeDetailWantParams{
+			TypeID: typeID, Priority: wantViewed, NotedAt: timeSet(time.Now().UTC()),
+		}); qerr != nil {
 			logging.Errorf("items: note type detail want for %d: %v", typeID, qerr)
 		}
 		return "pending", ""
@@ -499,6 +502,7 @@ func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/items/", http.StatusSeeOther)
 		return
 	}
+	app.markGuessHit(ctx, pageWantTypeDescription, typeID, 0)
 
 	detail := &itemTypeDetail{
 		ID:       t.TypeID,

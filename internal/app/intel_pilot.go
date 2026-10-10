@@ -126,6 +126,7 @@ func (app *Application) handlePilot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	app.markGuessHit(ctx, pageWantPilot, id, 0)
 	data.Pilot = app.loadPilotView(ctx, id)
 	if data.Pilot != nil && data.Pilot.State == "loading" {
 		app.notePageWant(ctx, pageWantPilot, id, 0)
@@ -179,7 +180,7 @@ func (app *Application) loadPilotView(ctx context.Context, id int64) *pilotView 
 	default:
 		// No record yet, a pending one, or a read error: (re)note
 		// the want so the worker fills it on a coming cycle.
-		if qerr := app.queries.UpsertPilotWant(ctx, id); qerr != nil {
+		if qerr := app.wantPilot(ctx, id, wantViewed); qerr != nil {
 			logging.Errorf("pilot: note want for %d: %v", id, qerr)
 		}
 	}

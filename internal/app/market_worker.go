@@ -210,8 +210,11 @@ func (app *Application) historyCandidates(ctx context.Context) ([]marketKey, err
 		out = append(out, k)
 	}
 
-	wants, err := app.queries.ListMarketHistoryWants(ctx,
-		time.Now().UTC().Add(-historyWantMaxAge))
+	wants, err := app.queries.ListMarketHistoryWants(ctx, db.ListMarketHistoryWantsParams{
+		LastRequestedAt: time.Now().UTC().Add(-historyWantMaxAge),
+		TypingPriority:  wantTyping,
+		TypingLimit:     int64(app.typingSlice()),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -417,7 +420,9 @@ func (app *Application) noteCoverageTypeDetails(ctx context.Context, candidates 
 			continue
 		}
 		seen[key.TypeID] = true
-		if err := app.queries.UpsertTypeDetailWant(ctx, key.TypeID); err != nil {
+		if err := app.queries.UpsertTypeDetailWant(ctx, db.UpsertTypeDetailWantParams{
+			TypeID: key.TypeID, Priority: wantViewed, NotedAt: timeSet(time.Now().UTC()),
+		}); err != nil {
 			logging.Errorf("worker: market history: note type detail %d: %v", key.TypeID, err)
 			continue
 		}

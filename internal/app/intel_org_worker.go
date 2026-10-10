@@ -40,8 +40,10 @@ func (app *Application) refreshAllianceRecords(ctx context.Context, allowance *f
 // the urgent drain).
 func (app *Application) drainCorporationPass(ctx context.Context, allowance *fetchBudget, limit int, now time.Time) (drained int, limited bool) {
 	ids, err := app.queries.ListCorporationDrains(ctx, db.ListCorporationDrainsParams{
-		StaleCutoff: now.Add(-orgStaleAfter),
-		DrainLimit:  int64(limit),
+		TypingPriority: wantTyping,
+		StaleCutoff:    now.Add(-orgStaleAfter),
+		TypingLimit:    int64(app.typingSlice()),
+		DrainLimit:     int64(limit),
 	})
 	if err != nil {
 		logging.Errorf("worker: corporation records: list drains: %v", err)
@@ -65,8 +67,10 @@ func (app *Application) drainCorporationPass(ctx context.Context, allowance *fet
 // drainAlliancePass is drainCorporationPass for alliances.
 func (app *Application) drainAlliancePass(ctx context.Context, allowance *fetchBudget, limit int, now time.Time) (drained int, limited bool) {
 	ids, err := app.queries.ListAllianceDrains(ctx, db.ListAllianceDrainsParams{
-		StaleCutoff: now.Add(-orgStaleAfter),
-		DrainLimit:  int64(limit),
+		TypingPriority: wantTyping,
+		StaleCutoff:    now.Add(-orgStaleAfter),
+		TypingLimit:    int64(app.typingSlice()),
+		DrainLimit:     int64(limit),
 	})
 	if err != nil {
 		logging.Errorf("worker: alliance records: list drains: %v", err)
@@ -116,6 +120,12 @@ func (app *Application) drainCorporationRecord(ctx context.Context, id int64, al
 	app.esi.StoreCorpName(id, corp.Name)
 
 	payload := corporationRecordPayload{Corp: corp}
+	// One hop out: the alliance this corporation is in.
+	if corp.AllianceID > 0 {
+		if err := app.wantAlliance(ctx, corp.AllianceID, wantHop); err != nil {
+			logging.Errorf("worker: corporation records: note alliance %d of corporation %d: %v", corp.AllianceID, id, err)
+		}
+	}
 
 	// The alliance's name + ticker ride along so the corporation
 	// page (and every corp line elsewhere) never chases them.

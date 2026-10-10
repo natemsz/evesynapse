@@ -80,7 +80,7 @@ func TestHistoryCandidatesCoverageTiers(t *testing.T) {
 
 	// Tier 1: a fresh want.
 	if err := q.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
-		RegionID: forge, TypeID: 1008, LastRequestedAt: time.Now().UTC(),
+		RegionID: forge, TypeID: 1008, LastRequestedAt: time.Now().UTC(), Priority: wantViewed,
 	}); err != nil {
 		t.Fatalf("seed want: %v", err)
 	}
@@ -258,7 +258,11 @@ func TestMarketSearchPrefetchEnqueuesWants(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("search page: status %d", code)
 	}
-	wants, err := q.ListMarketHistoryWants(ctx, time.Time{})
+	wants, err := q.ListMarketHistoryWants(ctx, db.ListMarketHistoryWantsParams{
+		LastRequestedAt: time.Time{},
+		TypingPriority:  wantTyping,
+		TypingLimit:     int64(app.typingSlice()),
+	})
 	if err != nil {
 		t.Fatalf("list wants: %v", err)
 	}
@@ -351,15 +355,17 @@ func TestPilotOrbitDerivationAndPriority(t *testing.T) {
 		`SELECT priority FROM pilot_records WHERE character_id = 93300001`).Scan(&priority); err != nil {
 		t.Fatalf("read orbit priority: %v", err)
 	}
-	if priority != 0 {
-		t.Fatalf("orbit priority = %d, want 0", priority)
+	if priority != wantOrbit {
+		t.Fatalf("orbit priority = %d, want %d", priority, wantOrbit)
 	}
-	if err := q.UpsertPilotWant(ctx, 93300003); err != nil {
+	if err := q.UpsertPilotWant(ctx, db.UpsertPilotWantParams{CharacterID: 93300003, Priority: wantViewed}); err != nil {
 		t.Fatalf("viewed want: %v", err)
 	}
 	ids, err := q.ListPilotDrains(ctx, db.ListPilotDrainsParams{
-		StaleCutoff: time.Now().UTC().Add(-pilotStaleAfter),
-		DrainLimit:  5,
+		TypingPriority: wantTyping,
+		StaleCutoff:    time.Now().UTC().Add(-pilotStaleAfter),
+		TypingLimit:    int64(app.typingSlice()),
+		DrainLimit:     5,
 	})
 	if err != nil {
 		t.Fatalf("list drains: %v", err)
@@ -380,7 +386,7 @@ func TestUrgentDrainFetchesAndGates(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, stub)
 	ctx := context.Background()
 	if err := q.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
-		RegionID: forge, TypeID: 34, LastRequestedAt: time.Now().UTC(),
+		RegionID: forge, TypeID: 34, LastRequestedAt: time.Now().UTC(), Priority: wantViewed,
 	}); err != nil {
 		t.Fatalf("seed want: %v", err)
 	}
@@ -402,7 +408,7 @@ func TestUrgentDrainErrorLimitBacksOff(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, stub)
 	ctx := context.Background()
 	if err := q.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
-		RegionID: forge, TypeID: 34, LastRequestedAt: time.Now().UTC(),
+		RegionID: forge, TypeID: 34, LastRequestedAt: time.Now().UTC(), Priority: wantViewed,
 	}); err != nil {
 		t.Fatalf("seed want: %v", err)
 	}
@@ -566,7 +572,7 @@ func TestMigration016Reopen(t *testing.T) {
 			t.Fatalf("priority column count = %d (pass %d), want 1", cols, i)
 		}
 		q := db.New(conn)
-		if err := q.UpsertPilotWant(ctx, 93300001); err != nil {
+		if err := q.UpsertPilotWant(ctx, db.UpsertPilotWantParams{CharacterID: 93300001, Priority: wantViewed}); err != nil {
 			t.Fatalf("pilot want (pass %d): %v", i, err)
 		}
 		if err := conn.Close(); err != nil {

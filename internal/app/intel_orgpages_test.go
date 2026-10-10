@@ -195,7 +195,7 @@ func TestCorporationPageStatesAndDrain(t *testing.T) {
 	mustContain(t, "/corporation/fragment", body, `data-poll-state="ready"`, "Fixture Corp")
 
 	// Unknown corporation id: drain settles 'missing', page says so.
-	if err := q2.UpsertCorporationWant(ctx, 98000999); err != nil {
+	if err := q2.UpsertCorporationWant(ctx, db.UpsertCorporationWantParams{CorporationID: 98000999, Priority: wantViewed}); err != nil {
 		t.Fatalf("enqueue missing corporation: %v", err)
 	}
 	drained, _ = app2.refreshCorporationRecords(ctx, &fetchBudget{left: 120})
@@ -303,7 +303,7 @@ func TestAlliancePageStatesAndDrain(t *testing.T) {
 	mustContain(t, "/alliance/fragment", body, `data-poll-state="ready"`, "Fixture Alliance")
 
 	// Unknown alliance id: drain settles 'missing', page says so.
-	if err := q2.UpsertAllianceWant(ctx, 99000999); err != nil {
+	if err := q2.UpsertAllianceWant(ctx, db.UpsertAllianceWantParams{AllianceID: 99000999, Priority: wantViewed}); err != nil {
 		t.Fatalf("enqueue missing alliance: %v", err)
 	}
 	drained, _ = app2.refreshAllianceRecords(ctx, &fetchBudget{left: 120})
@@ -417,10 +417,10 @@ func TestMigration026Reopen(t *testing.T) {
 			t.Fatalf("store.Open (pass %d): %v", i, err)
 		}
 		q := db.New(conn)
-		if err := q.UpsertCorporationWant(ctx, 98000001); err != nil {
+		if err := q.UpsertCorporationWant(ctx, db.UpsertCorporationWantParams{CorporationID: 98000001, Priority: wantViewed}); err != nil {
 			t.Fatalf("corporation want (pass %d): %v", i, err)
 		}
-		if err := q.UpsertAllianceWant(ctx, 99000001); err != nil {
+		if err := q.UpsertAllianceWant(ctx, db.UpsertAllianceWantParams{AllianceID: 99000001, Priority: wantViewed}); err != nil {
 			t.Fatalf("alliance want (pass %d): %v", i, err)
 		}
 		if err := conn.Close(); err != nil {

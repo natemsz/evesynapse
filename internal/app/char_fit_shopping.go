@@ -102,7 +102,7 @@ func (app *Application) handleFitShopping(w http.ResponseWriter, r *http.Request
 	}
 
 	// Price each line from the market guide cache.
-	priceMap, _ := app.marketPrices(ctx)
+	priceMap := app.valuationPrices(ctx)
 	view := &shoppingView{FitName: fitName, FitID: fitID}
 	var total float64
 	for typeID, qty := range qtyByType {

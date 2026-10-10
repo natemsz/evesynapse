@@ -147,7 +147,7 @@ func (app *Application) handleAssets(w http.ResponseWriter, r *http.Request) {
 	data.Assets = view
 
 	var items []esi.Asset
-	if err := app.esi.GetCached(ctx, active, esi.SnapAssets, &items); err != nil {
+	if err := app.storedSnapshot(ctx, active, esi.SnapAssets, &items); err != nil {
 		logging.Errorf("assets: load for character %d: %v", active.CharacterID, err)
 		// No snapshot row at all = cold start: the worker is still
 		// importing this character, which the Sync page shows live.

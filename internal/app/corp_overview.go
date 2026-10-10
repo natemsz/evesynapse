@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"net/http"
 	"regexp"
 	"sort"
 	"strings"
-	"sync"
-	"time"
+
+	"net/http"
 
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -39,6 +38,9 @@ type corpView struct {
 	// corporation; the template links the corporation subpages
 	// with it (those pages follow the selected character's corp).
 	LinkCharacterID int64
+	// Pending: nothing is stored about the corporation yet. Its
+	// record has been asked for, and the block shows what there is.
+	Pending bool
 }
 
 // corpCharacterRef is one of the user's characters in a
@@ -48,172 +50,67 @@ type corpCharacterRef struct {
 	Name string
 }
 
-// corpCacheEntry is a built corpView (minus the per-user Characters
-// list) plus the moment it goes stale, taken from ESI's Expires
-// header so we poll no faster than CCP allows.
-type corpCacheEntry struct {
-	view      corpView
-	expiresAt time.Time
-}
-
-// corporationsPageConcurrency is how many corporations the Corporation
-// page builds at once.
-const corporationsPageConcurrency = 4
-
-// corpCall is one in-flight corporation refresh. Readers arriving
-// while it runs wait on it instead of each firing their own ESI
-// request — singleflight, hand-rolled for this one call site, so
-// x/sync stays out of go.mod.
-type corpCall struct {
-	done      chan struct{}
-	view      corpView
-	expiresAt time.Time
-	err       error
-}
-
-// corporation returns the corpView for a corporation, serving the
-// in-memory cache while it's inside ESI's cache window. A failed
-// refresh falls back to the stale entry when one exists; with no
-// entry at all the error propagates to the caller. Concurrent
-// readers of an expired entry share one refresh.
-func (app *Application) corporation(ctx context.Context, corpID int64) (corpView, error) {
-	app.corpMu.Lock()
-	entry, ok := app.corpCache[corpID]
-	if ok && time.Now().Before(entry.expiresAt) {
-		app.corpMu.Unlock()
-		return entry.view, nil
-	}
-	if app.corpCalls == nil {
-		app.corpCalls = make(map[int64]*corpCall)
-	}
-	if call, waiting := app.corpCalls[corpID]; waiting {
-		app.corpMu.Unlock()
-		select {
-		case <-call.done:
-		case <-ctx.Done():
-			if ok {
-				return entry.view, nil
-			}
-			return corpView{}, ctx.Err()
-		}
-		if call.err != nil {
-			if ok {
-				logging.Warnf("corporations: refresh corporation %d failed (%v); serving stale entry", corpID, call.err)
-				return entry.view, nil
-			}
-			return corpView{}, call.err
-		}
-		return call.view, nil
-	}
-	call := &corpCall{done: make(chan struct{})}
-	app.corpCalls[corpID] = call
-	app.corpMu.Unlock()
-
-	call.view, call.expiresAt, call.err = app.fetchCorporation(ctx, corpID)
-
-	app.corpMu.Lock()
-	delete(app.corpCalls, corpID)
-	if call.err == nil {
-		app.corpCache[corpID] = corpCacheEntry{view: call.view, expiresAt: call.expiresAt}
-	}
-	app.corpMu.Unlock()
-	close(call.done)
-
-	if call.err != nil {
-		if ok {
-			logging.Warnf("corporations: refresh corporation %d failed (%v); serving stale entry", corpID, call.err)
-			return entry.view, nil
-		}
-		return corpView{}, call.err
-	}
-	return call.view, nil
-}
-
-// fetchCorporation builds a corpView from public ESI endpoints.
-// Corporation facts come from GET /corporations/{id}/ (whose Expires
-// header drives the cache); the CEO name, alliance and home-station
-// resolutions each degrade to blank rather than failing the page.
-func (app *Application) fetchCorporation(ctx context.Context, corpID int64) (corpView, time.Time, error) {
-	body, header, err := app.esi.FetchRaw(ctx, "", fmt.Sprintf("/corporations/%d/", corpID))
-	if err != nil {
-		return corpView{}, time.Time{}, err
+// corporationOverview builds a corporation's block from stored data:
+// its public record (intel_org_worker.go), else what one of the
+// account's characters in it has stored of its own corporation.
+// Nothing is fetched to draw the page. A record not held yet is
+// queued, like any other thing a page could not show, and the block
+// is marked pending.
+func (app *Application) corporationOverview(ctx context.Context, corpID, characterID int64) corpView {
+	view := corpView{
+		ID:      corpID,
+		Name:    fmt.Sprintf("Corporation #%d", corpID),
+		LogoURL: fmt.Sprintf("https://images.evetech.net/corporations/%d/logo?size=128", corpID),
 	}
 	var corp esi.Corporation
-	if err := json.Unmarshal(body, &corp); err != nil {
-		return corpView{}, time.Time{}, fmt.Errorf("decode corporation %d: %w", corpID, err)
-	}
-
-	expiresAt := time.Now().Add(5 * time.Minute)
-	if exp := header.Get("Expires"); exp != "" {
-		if t, perr := http.ParseTime(exp); perr == nil {
-			expiresAt = t
+	var alliance esi.Alliance
+	held := false
+	if rec, err := app.queries.GetCorporationRecord(ctx, corpID); err == nil && rec.State == orgStateReady && rec.Payload != "" {
+		var payload corporationRecordPayload
+		if json.Unmarshal([]byte(rec.Payload), &payload) == nil && payload.Corp.Name != "" {
+			corp, alliance, held = payload.Corp, payload.Alliance, true
 		}
 	}
-
-	view := corpView{
-		ID:          corpID,
-		Name:        corp.Name,
-		Ticker:      corp.Ticker,
-		LogoURL:     fmt.Sprintf("https://images.evetech.net/corporations/%d/logo?size=128", corpID),
-		MemberCount: esi.FormatInt(corp.MemberCount),
-		TaxRate:     fmt.Sprintf("%.1f%%", corp.TaxRate*100),
-		Description: plainTextDescription(corp.Description),
+	if !held {
+		app.notePageWant(ctx, pageWantCorporation, corpID, 0)
+		held = characterID != 0 && app.loadCorpSnapshot(ctx, characterID, esi.SnapCorpInfo, &corp) && corp.Name != ""
 	}
+	if !held {
+		view.Pending = true
+		return view
+	}
+
+	view.Name, view.Ticker = corp.Name, corp.Ticker
+	view.MemberCount = esi.FormatInt(corp.MemberCount)
+	view.TaxRate = fmt.Sprintf("%.1f%%", corp.TaxRate*100)
+	view.Description = plainTextDescription(corp.Description)
 	if len(corp.DateFounded) >= 10 {
 		view.Founded = corp.DateFounded[:10]
 	}
-
-	// The three name lookups are independent of one another, so they
-	// run together: the page waits for the slowest, not their sum.
-	var wg sync.WaitGroup
 	if corp.CEOID > 0 {
 		view.CEOID = corp.CEOID
 		view.CEOPortraitURL = fmt.Sprintf("https://images.evetech.net/characters/%d/portrait?size=64", corp.CEOID)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			var ceo esi.Character
-			if err := app.esi.Get(ctx, "", fmt.Sprintf("/characters/%d/", corp.CEOID), &ceo); err == nil {
-				view.CEOName = ceo.Name
-			} else {
-				logging.Errorf("corporations: CEO lookup for corporation %d: %v", corpID, err)
-			}
-		}()
+		view.CEOName = app.displayCharacter(ctx, corp.CEOID)
 	}
-
 	if corp.AllianceID > 0 {
 		view.AllianceID = corp.AllianceID
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			var ally esi.Alliance
-			if err := app.esi.Get(ctx, "", fmt.Sprintf("/alliances/%d/", corp.AllianceID), &ally); err == nil {
-				if ally.Ticker != "" {
-					view.Alliance = fmt.Sprintf("%s [%s]", ally.Name, ally.Ticker)
-				} else {
-					view.Alliance = ally.Name
-				}
-			} else {
-				logging.Errorf("corporations: alliance lookup %d for corporation %d: %v", corp.AllianceID, corpID, err)
-			}
-		}()
+		name, ticker := alliance.Name, alliance.Ticker
+		if name == "" {
+			name, _ = app.resolvedAllianceName(ctx, corp.AllianceID)
+		}
+		switch {
+		case name == "":
+			view.Alliance = fmt.Sprintf("Alliance #%d", corp.AllianceID)
+		case ticker != "":
+			view.Alliance = fmt.Sprintf("%s [%s]", name, ticker)
+		default:
+			view.Alliance = name
+		}
 	}
-
 	if corp.HomeStationID > 0 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			var station esi.Station
-			if err := app.esi.Get(ctx, "", fmt.Sprintf("/universe/stations/%d/", corp.HomeStationID), &station); err == nil {
-				view.HomeStation = station.Name
-			} else {
-				logging.Errorf("corporations: station lookup %d for corporation %d: %v", corp.HomeStationID, corpID, err)
-			}
-		}()
+		view.HomeStation = app.locationTitle(ctx, corp.HomeStationID, "station")
 	}
-	wg.Wait()
-
-	return view, expiresAt, nil
+	return view
 }
 
 var (
@@ -231,12 +128,11 @@ func plainTextDescription(s string) string {
 	return strings.TrimSpace(s)
 }
 
-// handleCorporations renders the Corporation page: one block per
-// corporation the signed-in user's linked characters belong to.
-// Membership is resolved live — the characters table has no
-// corporation_id column, and public character sheets carry it — and
-// the corporation data itself comes from the public corp endpoints,
-// so this page needs no characters' tokens at all.
+// handleCorporations renders the Corporation page: one corporation the
+// signed-in user's linked characters belong to, picked among them.
+// Which corporation each character is in comes from its stored
+// profile, and the corporation's own details from what is stored of
+// it (corporationOverview): the page fetches nothing.
 func (app *Application) handleCorporations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
@@ -259,6 +155,7 @@ func (app *Application) handleCorporations(w http.ResponseWriter, r *http.Reques
 	// Group the user's characters by corporation, using cached
 	// profile snapshots (not live ESI) to avoid N outbound calls.
 	byCorp := make(map[int64][]corpCharacterRef)
+	var offered []int64 // in the order of the account's characters
 	linkChar := make(map[int64]int64)
 	for _, ch := range characters {
 		var pub esi.Character
@@ -275,50 +172,20 @@ func (app *Application) handleCorporations(w http.ResponseWriter, r *http.Reques
 		byCorp[pub.CorporationID] = append(byCorp[pub.CorporationID], corpCharacterRef{ID: ch.CharacterID, Name: name})
 		if _, seen := linkChar[pub.CorporationID]; !seen {
 			linkChar[pub.CorporationID] = ch.CharacterID
+			offered = append(offered, pub.CorporationID)
 		}
 	}
 
-	// Build the corporations together. Each build is a few public ESI
-	// lookups on a cold or expired cache entry, and going through them
-	// one corporation at a time made the page's time the sum of all of
-	// them; a handful at once makes it about the slowest one. The cap
-	// keeps one page load from flooding ESI for a user with many
-	// corporations.
-	type built struct {
-		view corpView
-		err  error
-	}
-	results := make(map[int64]built, len(byCorp))
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	slots := make(chan struct{}, corporationsPageConcurrency)
-	for corpID := range byCorp {
-		wg.Add(1)
-		go func(corpID int64) {
-			defer wg.Done()
-			slots <- struct{}{}
-			defer func() { <-slots }()
-			view, err := app.corporation(ctx, corpID)
-			mu.Lock()
-			results[corpID] = built{view: view, err: err}
-			mu.Unlock()
-		}(corpID)
-	}
-	wg.Wait()
-
-	for corpID, chars := range byCorp {
-		res := results[corpID]
-		if res.err != nil {
-			logging.Errorf("corporations: build corporation %d: %v", corpID, res.err)
-			continue
-		}
-		view := res.view
+	// One corporation to a page, picked with the selector (corp_select.go).
+	if corpID, options := app.pickCorporation(ctx, r, offered); corpID != 0 {
+		view := app.corporationOverview(ctx, corpID, linkChar[corpID])
+		chars := byCorp[corpID]
 		sort.Slice(chars, func(i, j int) bool { return chars[i].Name < chars[j].Name })
 		view.Characters = chars
 		view.LinkCharacterID = linkChar[corpID]
-		data.Corps = append(data.Corps, view)
+		data.Corps = []corpView{view}
+		data.CorpOptions = options
 	}
-	sort.Slice(data.Corps, func(i, j int) bool { return data.Corps[i].Name < data.Corps[j].Name })
 
 	app.render(ctx, w, http.StatusOK, "corporations.html", data)
 }

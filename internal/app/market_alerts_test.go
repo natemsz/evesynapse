@@ -570,7 +570,11 @@ func TestMarketItemPageChartAndWant(t *testing.T) {
 		t.Fatalf("item page: status %d", code)
 	}
 	mustContain(t, "/market/?type=34 (no history)", body, "This one's queued")
-	wants, err := q.ListMarketHistoryWants(ctx, time.Time{})
+	wants, err := q.ListMarketHistoryWants(ctx, db.ListMarketHistoryWantsParams{
+		LastRequestedAt: time.Time{},
+		TypingPriority:  wantTyping,
+		TypingLimit:     int64(app.typingSlice()),
+	})
 	if err != nil || len(wants) != 1 || wants[0].TypeID != 34 {
 		t.Fatalf("wants after view: %v err=%v, want one row for type 34", wants, err)
 	}
@@ -587,7 +591,11 @@ func TestMarketItemPageChartAndWant(t *testing.T) {
 	if strings.Contains(body, "This one's queued") {
 		t.Fatal("item page with history still shows the loading state")
 	}
-	wants, err = q.ListMarketHistoryWants(ctx, time.Time{})
+	wants, err = q.ListMarketHistoryWants(ctx, db.ListMarketHistoryWantsParams{
+		LastRequestedAt: time.Time{},
+		TypingPriority:  wantTyping,
+		TypingLimit:     int64(app.typingSlice()),
+	})
 	if err != nil || len(wants) != 1 {
 		t.Fatalf("wants after charted view: %v err=%v, want the original single want", wants, err)
 	}
@@ -595,14 +603,18 @@ func TestMarketItemPageChartAndWant(t *testing.T) {
 
 func TestMigration013Reopen(t *testing.T) {
 	transport := &countingTransport{}
-	_, conn, q := buildCorpTestApp(t, transport)
+	app, conn, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
 	// The schema guard already ran once via store.Open; every 013
 	// table answers queries on a fresh database.
 	if _, err := q.ListAllWatchlistEntries(ctx); err != nil {
 		t.Fatalf("watchlist on fresh DB: %v", err)
 	}
-	if _, err := q.ListMarketHistoryWants(ctx, time.Time{}); err != nil {
+	if _, err := q.ListMarketHistoryWants(ctx, db.ListMarketHistoryWantsParams{
+		LastRequestedAt: time.Time{},
+		TypingPriority:  wantTyping,
+		TypingLimit:     int64(app.typingSlice()),
+	}); err != nil {
 		t.Fatalf("wants on fresh DB: %v", err)
 	}
 	if _, err := q.ListOrderHealthByUser(ctx, 1); err != nil {

@@ -6,7 +6,9 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
@@ -65,4 +67,20 @@ func (app *Application) loadGlobalSnapshot(ctx context.Context, kind string, out
 		return false
 	}
 	return json.Unmarshal([]byte(snap.Payload), out) == nil
+}
+
+// storedSnapshot decodes one of a character's datasets as the worker
+// last stored it. It never fetches: a page shows what is held, and the
+// worker keeps the character somebody is looking at as fresh as ESI
+// allows (worker_tiers.go). A dataset not stored yet is sql.ErrNoRows,
+// and puts the character at the front of the worker's next cycle.
+func (app *Application) storedSnapshot(ctx context.Context, ch db.Character, kind string, out any) error {
+	snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: kind})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			app.markCharacterPriority(ch.CharacterID)
+		}
+		return err
+	}
+	return json.Unmarshal([]byte(snap.Payload), out)
 }

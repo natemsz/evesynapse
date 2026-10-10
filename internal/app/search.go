@@ -43,6 +43,20 @@ const (
 	suggestPoolAll     = "all"
 )
 
+// normalizeSuggestPool folds an unknown pool to the full feed, so
+// one queue path serves every pool nobody defined. The guess
+// ledger keys on the box, so this is also what keeps a junk pool
+// value from minting orphan boxes whose guesses no keystroke ever
+// replaces.
+func normalizeSuggestPool(pool string) string {
+	switch pool {
+	case suggestPoolMarket, suggestPoolPlanner, suggestPoolSkills, suggestPoolAll:
+		return pool
+	default:
+		return suggestPoolAll
+	}
+}
+
 // suggestDefaultLimit caps one suggestion response; boxes ask
 // for a dozen or fewer so a dropdown stays thumb-sized.
 const suggestDefaultLimit = 12
@@ -72,11 +86,7 @@ func (app *Application) suggestTypes(ctx context.Context, q, pool string, limit 
 	if len(q) < 2 {
 		return out
 	}
-	switch pool {
-	case suggestPoolMarket, suggestPoolPlanner, suggestPoolSkills, suggestPoolAll:
-	default:
-		pool = suggestPoolAll
-	}
+	pool = normalizeSuggestPool(pool)
 	if limit < 1 || limit > 25 {
 		limit = suggestDefaultLimit
 	}
@@ -126,14 +136,49 @@ func (app *Application) handleItemSearchJSON(w http.ResponseWriter, r *http.Requ
 			limit = n
 		}
 	}
-	writeSuggestJSON(w, app.suggestTypes(r.Context(), q.Get("q"), q.Get("pool"), limit))
+	pool := normalizeSuggestPool(q.Get("pool"))
+	items := app.suggestTypes(r.Context(), q.Get("q"), pool, limit)
+	app.noteSuggested(r.Context(), app.typingBox(r.Context(), "items:"+pool), pool, items)
+	writeSuggestJSON(w, items)
 }
 
 // handleMarketSuggest serves the Market search box's live
 // suggestions. It predates the shared feed and keeps its exact
 // behaviour (market pool, ten rows, no label) on the shared core.
 func (app *Application) handleMarketSuggest(w http.ResponseWriter, r *http.Request) {
-	writeSuggestJSON(w, app.suggestTypes(r.Context(), r.URL.Query().Get("q"), suggestPoolMarket, 10))
+	items := app.suggestTypes(r.Context(), r.URL.Query().Get("q"), suggestPoolMarket, 10)
+	app.noteSuggested(r.Context(), app.typingBox(r.Context(), "market"), suggestPoolMarket, items)
+	writeSuggestJSON(w, items)
+}
+
+// suggestedWarmed is how many of a box's suggestions are queued while
+// it is being typed into: the ones at the top, which is where the pick
+// usually is.
+const suggestedWarmed = 4
+
+// noteSuggested queues what the top suggestions' pages will want, so
+// that the one picked is often warm before the pick: a market
+// suggestion's price history in The Forge, an item suggestion's
+// details. Each keystroke replaces the box's previous guesses, so
+// guesses never accumulate across keystrokes. Queue writes only;
+// the worker does the fetching.
+func (app *Application) noteSuggested(ctx context.Context, box, pool string, items []suggestItem) {
+	if len(items) > suggestedWarmed {
+		items = items[:suggestedWarmed]
+	}
+	app.replaceTypingGuesses(ctx, box)
+	now := time.Now().UTC()
+	for _, it := range items {
+		if it.ID <= 0 {
+			continue
+		}
+		switch pool {
+		case suggestPoolMarket:
+			app.noteTypingHistoryGuess(ctx, box, defaultMarketRegion, it.ID, now)
+		default:
+			app.noteTypingDetailGuess(ctx, box, it.ID, now)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -231,10 +276,17 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 		hits = append(hits, hit)
 		itemMatches = append(itemMatches, marketMatch{ID: it.ID, Name: it.Name})
 	}
-	// Prefetch, same as the market page: a jump to any of these
-	// items should land on a warming chart, not a cold one.
-	if len(itemMatches) > 0 {
-		app.noteSearchHistoryWants(ctx, defaultMarketRegion, itemMatches)
+	// Guess, same as the search boxes: a jump to any of these
+	// items should land on a warming chart, not a cold one. Each
+	// keystroke replaces the box's previous guesses.
+	box := app.typingBox(ctx, "topbar")
+	app.replaceTypingGuesses(ctx, box)
+	now := time.Now().UTC()
+	for i, m := range itemMatches {
+		if i >= suggestedWarmed {
+			break
+		}
+		app.noteTypingHistoryGuess(ctx, box, defaultMarketRegion, m.ID, now)
 	}
 
 	// Corporations and alliances whose public records have
@@ -263,6 +315,9 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 			corpHits = corpHits[:4]
 		}
 		hits = append(hits, corpHits...)
+		for _, h := range corpHits {
+			app.noteTypingCorporationGuess(ctx, box, h.ID, now)
+		}
 	} else {
 		logging.Errorf("search: corporation records for %q: %v", q, err)
 	}
@@ -290,6 +345,9 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 			allianceHits = allianceHits[:4]
 		}
 		hits = append(hits, allianceHits...)
+		for _, h := range allianceHits {
+			app.noteTypingAllianceGuess(ctx, box, h.ID, now)
+		}
 	} else {
 		logging.Errorf("search: alliance records for %q: %v", q, err)
 	}
@@ -322,6 +380,9 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 		}
 		pilotHitCount = len(pilotHits)
 		hits = append(hits, pilotHits...)
+		for _, h := range pilotHits {
+			app.noteTypingPilotGuess(ctx, box, h.ID, now)
+		}
 	} else {
 		logging.Errorf("search: pilot records for %q: %v", q, err)
 	}

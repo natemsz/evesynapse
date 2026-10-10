@@ -343,7 +343,7 @@ func TestHistoryWantsDrainPriority(t *testing.T) {
 	// A viewed-item want (5001), a watchlist entry (5002), and an
 	// open order for 5003.
 	if err := q.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
-		RegionID: 10000002, TypeID: 5001, LastRequestedAt: now,
+		RegionID: 10000002, TypeID: 5001, LastRequestedAt: now, Priority: wantViewed,
 	}); err != nil {
 		t.Fatalf("seed want: %v", err)
 	}
@@ -379,7 +379,7 @@ func TestHistoryFailedFirstWantDoesNotStarveOthers(t *testing.T) {
 	now := time.Now().UTC()
 	for _, id := range []int64{5001, 5002} {
 		if err := q.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
-			RegionID: 10000002, TypeID: id, LastRequestedAt: now,
+			RegionID: 10000002, TypeID: id, LastRequestedAt: now, Priority: wantViewed,
 		}); err != nil {
 			t.Fatalf("seed want %d: %v", id, err)
 		}

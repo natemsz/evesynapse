@@ -48,6 +48,7 @@ type pageData struct {
 	IntelFW           *fwView
 	ServerStatus      *serverStatusView
 	Corps             []corpView
+	CorpOptions       []corpOption // the corporations the Corporation page can show
 	CorpChars         []assetCharLink
 	CorpMembers       *corpMembersView
 	CorpWallets       *corpWalletsView

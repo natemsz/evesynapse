@@ -4,9 +4,12 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
+{{template "corpselector" .CorpOptions}}
+
 {{range .Corps}}
   <section class="foldable">
-  <h2>{{corpLink .ID .Name}} [{{.Ticker}}]</h2>
+  <h2>{{corpLink .ID .Name}}{{if .Ticker}} [{{.Ticker}}]{{end}}</h2>
+  {{if .Pending}}<p><small>This corporation's details are still syncing. They fill in within a minute or so; reload to see them.</small></p>{{end}}
   <p><img class="portrait" src="{{.LogoURL}}" alt="Logo of {{.Name}}" width="128" height="128"></p>
   <div class="tw">
   <table>

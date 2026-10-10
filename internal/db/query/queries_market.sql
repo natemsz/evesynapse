@@ -64,15 +64,24 @@ WHERE region_id = $1 AND type_id = $2
 ORDER BY date DESC
 LIMIT sqlc.arg(row_limit)::bigint;
 -- name: UpsertMarketHistoryWant :exec
-INSERT INTO market_history_wants (region_id, type_id, last_requested_at)
-VALUES ($1, $2, $3)
+INSERT INTO market_history_wants (region_id, type_id, last_requested_at, priority)
+VALUES ($1, $2, $3, sqlc.arg(priority))
 ON CONFLICT (region_id, type_id) DO UPDATE SET
-    last_requested_at = excluded.last_requested_at;
+    last_requested_at = excluded.last_requested_at,
+    priority = GREATEST(market_history_wants.priority, excluded.priority);
 -- name: ListMarketHistoryWants :many
 SELECT region_id, type_id, last_requested_at
-FROM market_history_wants
-WHERE last_requested_at >= $1
-ORDER BY region_id, type_id;
+FROM (
+    SELECT region_id, type_id, last_requested_at, priority,
+        ROW_NUMBER() OVER (
+            PARTITION BY (priority = sqlc.arg(typing_priority)::bigint)
+            ORDER BY last_requested_at DESC
+        ) AS typing_n
+    FROM market_history_wants
+    WHERE last_requested_at >= $1
+) AS wants
+WHERE priority != sqlc.arg(typing_priority)::bigint OR typing_n <= sqlc.arg(typing_limit)::bigint
+ORDER BY priority DESC, last_requested_at DESC;
 -- name: GetMarketFetchState :one
 SELECT kind, state, detail, attempted_at
 FROM market_fetch_state
@@ -236,13 +245,19 @@ LIMIT sqlc.arg(resolution_limit)::bigint;
 SELECT character_id, payload, state, fetched_at
 FROM pilot_records
 WHERE character_id = $1;
+-- A want's priority is how close the record is to somebody (see
+-- wantViewed and its fellows in worker_pagewants.go), and noted_at is
+-- when it was last asked for. A want that is asked for again keeps
+-- the closer of its priorities and takes the later time.
 -- name: UpsertPilotWant :exec
-INSERT INTO pilot_records (character_id, priority)
-VALUES ($1, 1)
-ON CONFLICT (character_id) DO UPDATE SET priority = GREATEST(pilot_records.priority, 1);
+INSERT INTO pilot_records (character_id, priority, noted_at)
+VALUES ($1, sqlc.arg(priority), sqlc.arg(noted_at))
+ON CONFLICT (character_id) DO UPDATE SET
+    priority = GREATEST(pilot_records.priority, excluded.priority),
+    noted_at = excluded.noted_at;
 -- name: InsertPilotOrbitWant :exec
-INSERT INTO pilot_records (character_id, priority)
-VALUES ($1, 0)
+INSERT INTO pilot_records (character_id, priority, noted_at)
+VALUES ($1, 1, sqlc.arg(noted_at))
 ON CONFLICT DO NOTHING;
 -- name: ListPilotRecordIDs :many
 SELECT character_id
@@ -256,10 +271,18 @@ ON CONFLICT (character_id) DO UPDATE SET
     fetched_at = excluded.fetched_at;
 -- name: ListPilotDrains :many
 SELECT character_id
-FROM pilot_records
-WHERE state = 'pending'
-   OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < sqlc.arg(stale_cutoff)::timestamptz))
-ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at NULLS FIRST
+FROM (
+    SELECT character_id, priority, noted_at, fetched_at, state,
+        ROW_NUMBER() OVER (
+            PARTITION BY (priority = sqlc.arg(typing_priority)::bigint)
+            ORDER BY noted_at DESC NULLS LAST
+        ) AS typing_n
+    FROM pilot_records
+    WHERE state = 'pending'
+       OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < sqlc.arg(stale_cutoff)::timestamptz))
+) AS drains
+WHERE priority != sqlc.arg(typing_priority)::bigint OR typing_n <= sqlc.arg(typing_limit)::bigint
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, noted_at DESC NULLS LAST, fetched_at NULLS FIRST
 LIMIT sqlc.arg(drain_limit)::bigint;
 
 -- ---------------------------------------------------------------------
@@ -273,16 +296,20 @@ SELECT corporation_id, payload, state, fetched_at, priority
 FROM corporation_records
 WHERE corporation_id = $1;
 -- name: UpsertCorporationWant :exec
-INSERT INTO corporation_records (corporation_id, priority)
-VALUES ($1, 1)
-ON CONFLICT (corporation_id) DO UPDATE SET priority = GREATEST(corporation_records.priority, 1);
+INSERT INTO corporation_records (corporation_id, priority, noted_at)
+VALUES ($1, sqlc.arg(priority), sqlc.arg(noted_at))
+ON CONFLICT (corporation_id) DO UPDATE SET
+    priority = GREATEST(corporation_records.priority, excluded.priority),
+    noted_at = excluded.noted_at;
 -- name: UpsertCorporationWants :exec
 -- Many corporation wants in one statement: a journal harvest
 -- meets the same parties over and over, and noting each in its
 -- own round trip is the N+1 the flush in name_harvest.go avoids.
-INSERT INTO corporation_records (corporation_id, priority)
-SELECT unnest(sqlc.arg(corporation_ids)::bigint[]), 1
-ON CONFLICT (corporation_id) DO UPDATE SET priority = GREATEST(corporation_records.priority, 1);
+INSERT INTO corporation_records (corporation_id, priority, noted_at)
+SELECT unnest(sqlc.arg(corporation_ids)::bigint[]), sqlc.arg(priority)::bigint, sqlc.arg(noted_at)::timestamptz
+ON CONFLICT (corporation_id) DO UPDATE SET
+    priority = GREATEST(corporation_records.priority, excluded.priority),
+    noted_at = excluded.noted_at;
 -- name: SetCorporationRecord :exec
 INSERT INTO corporation_records (corporation_id, payload, state, fetched_at)
 VALUES ($1, $2, $3, $4)
@@ -292,25 +319,37 @@ ON CONFLICT (corporation_id) DO UPDATE SET
     fetched_at = excluded.fetched_at;
 -- name: ListCorporationDrains :many
 SELECT corporation_id
-FROM corporation_records
-WHERE state = 'pending'
-   OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < sqlc.arg(stale_cutoff)::timestamptz))
-ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at NULLS FIRST
+FROM (
+    SELECT corporation_id, priority, noted_at, fetched_at, state,
+        ROW_NUMBER() OVER (
+            PARTITION BY (priority = sqlc.arg(typing_priority)::bigint)
+            ORDER BY noted_at DESC NULLS LAST
+        ) AS typing_n
+    FROM corporation_records
+    WHERE state = 'pending'
+       OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < sqlc.arg(stale_cutoff)::timestamptz))
+) AS drains
+WHERE priority != sqlc.arg(typing_priority)::bigint OR typing_n <= sqlc.arg(typing_limit)::bigint
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, noted_at DESC NULLS LAST, fetched_at NULLS FIRST
 LIMIT sqlc.arg(drain_limit)::bigint;
 -- name: GetAllianceRecord :one
 SELECT alliance_id, payload, state, fetched_at, priority
 FROM alliance_records
 WHERE alliance_id = $1;
 -- name: UpsertAllianceWant :exec
-INSERT INTO alliance_records (alliance_id, priority)
-VALUES ($1, 1)
-ON CONFLICT (alliance_id) DO UPDATE SET priority = GREATEST(alliance_records.priority, 1);
+INSERT INTO alliance_records (alliance_id, priority, noted_at)
+VALUES ($1, sqlc.arg(priority), sqlc.arg(noted_at))
+ON CONFLICT (alliance_id) DO UPDATE SET
+    priority = GREATEST(alliance_records.priority, excluded.priority),
+    noted_at = excluded.noted_at;
 -- name: UpsertAllianceWants :exec
 -- Many alliance wants in one statement: the alliance half of
 -- UpsertCorporationWants (see above).
-INSERT INTO alliance_records (alliance_id, priority)
-SELECT unnest(sqlc.arg(alliance_ids)::bigint[]), 1
-ON CONFLICT (alliance_id) DO UPDATE SET priority = GREATEST(alliance_records.priority, 1);
+INSERT INTO alliance_records (alliance_id, priority, noted_at)
+SELECT unnest(sqlc.arg(alliance_ids)::bigint[]), sqlc.arg(priority)::bigint, sqlc.arg(noted_at)::timestamptz
+ON CONFLICT (alliance_id) DO UPDATE SET
+    priority = GREATEST(alliance_records.priority, excluded.priority),
+    noted_at = excluded.noted_at;
 -- name: SetAllianceRecord :exec
 INSERT INTO alliance_records (alliance_id, payload, state, fetched_at)
 VALUES ($1, $2, $3, $4)
@@ -320,10 +359,18 @@ ON CONFLICT (alliance_id) DO UPDATE SET
     fetched_at = excluded.fetched_at;
 -- name: ListAllianceDrains :many
 SELECT alliance_id
-FROM alliance_records
-WHERE state = 'pending'
-   OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < sqlc.arg(stale_cutoff)::timestamptz))
-ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, fetched_at NULLS FIRST
+FROM (
+    SELECT alliance_id, priority, noted_at, fetched_at, state,
+        ROW_NUMBER() OVER (
+            PARTITION BY (priority = sqlc.arg(typing_priority)::bigint)
+            ORDER BY noted_at DESC NULLS LAST
+        ) AS typing_n
+    FROM alliance_records
+    WHERE state = 'pending'
+       OR (state = 'ready' AND (fetched_at IS NULL OR fetched_at < sqlc.arg(stale_cutoff)::timestamptz))
+) AS drains
+WHERE priority != sqlc.arg(typing_priority)::bigint OR typing_n <= sqlc.arg(typing_limit)::bigint
+ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, priority DESC, noted_at DESC NULLS LAST, fetched_at NULLS FIRST
 LIMIT sqlc.arg(drain_limit)::bigint;
 
 -- Pilot name-resolution wants (schema 022): a topbar search for

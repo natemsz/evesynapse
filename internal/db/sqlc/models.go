@@ -21,6 +21,7 @@ type AllianceRecord struct {
 	State      string       `json:"state"`
 	FetchedAt  sql.NullTime `json:"fetched_at"`
 	Priority   int64        `json:"priority"`
+	NotedAt    sql.NullTime `json:"noted_at"`
 }
 
 type Character struct {
@@ -85,6 +86,7 @@ type CorporationRecord struct {
 	State         string       `json:"state"`
 	FetchedAt     sql.NullTime `json:"fetched_at"`
 	Priority      int64        `json:"priority"`
+	NotedAt       sql.NullTime `json:"noted_at"`
 }
 
 type DiscordChannelAccess struct {
@@ -252,6 +254,7 @@ type MarketHistoryWant struct {
 	RegionID        int64     `json:"region_id"`
 	TypeID          int64     `json:"type_id"`
 	LastRequestedAt time.Time `json:"last_requested_at"`
+	Priority        int64     `json:"priority"`
 }
 
 type MarketRegionStat struct {
@@ -467,6 +470,7 @@ type PilotRecord struct {
 	State       string       `json:"state"`
 	FetchedAt   sql.NullTime `json:"fetched_at"`
 	Priority    int64        `json:"priority"`
+	NotedAt     sql.NullTime `json:"noted_at"`
 }
 
 type PlanetName struct {
@@ -700,6 +704,17 @@ type TypeDetail struct {
 	TypeID      int64        `json:"type_id"`
 	Description string       `json:"description"`
 	FetchedAt   sql.NullTime `json:"fetched_at"`
+	Priority    int64        `json:"priority"`
+	NotedAt     sql.NullTime `json:"noted_at"`
+}
+
+type TypingGuess struct {
+	Box      string       `json:"box"`
+	Kind     string       `json:"kind"`
+	EntityID int64        `json:"entity_id"`
+	RegionID int64        `json:"region_id"`
+	NotedAt  time.Time    `json:"noted_at"`
+	HitAt    sql.NullTime `json:"hit_at"`
 }
 
 type TypeName struct {

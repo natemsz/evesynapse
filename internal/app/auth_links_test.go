@@ -217,7 +217,7 @@ func TestPilotPageStatesAndDrain(t *testing.T) {
 	}
 
 	// Unknown character id: drain settles 'missing', page says so.
-	if err := q2.UpsertPilotWant(ctx, 93300099); err != nil {
+	if err := q2.UpsertPilotWant(ctx, db.UpsertPilotWantParams{CharacterID: 93300099, Priority: wantViewed}); err != nil {
 		t.Fatalf("enqueue missing pilot: %v", err)
 	}
 	stub.profile = "" // ESI 404s every profile now
@@ -283,10 +283,12 @@ func TestMigration015Reopen(t *testing.T) {
 			t.Fatalf("store.Open (pass %d): %v", i, err)
 		}
 		q := db.New(conn)
-		if err := q.UpsertPilotWant(ctx, 93300001); err != nil {
+		if err := q.UpsertPilotWant(ctx, db.UpsertPilotWantParams{CharacterID: 93300001, Priority: wantViewed}); err != nil {
 			t.Fatalf("pilot want (pass %d): %v", i, err)
 		}
-		if err := q.UpsertTypeDetailWant(ctx, 34); err != nil {
+		if err := q.UpsertTypeDetailWant(ctx, db.UpsertTypeDetailWantParams{
+			TypeID: 34, Priority: wantViewed, NotedAt: timeSet(time.Now().UTC()),
+		}); err != nil {
 			t.Fatalf("type want (pass %d): %v", i, err)
 		}
 		if err := conn.Close(); err != nil {

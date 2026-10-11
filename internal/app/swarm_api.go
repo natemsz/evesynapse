@@ -266,33 +266,6 @@ func (c *swarmClient) authedGET(ctx context.Context, url string, into any) error
 	return nil
 }
 
-// fetchMembers asks one peer for its signed membership list and
-// verifies the signature against the peer's pinned key before
-// returning a single member. An unsigned or mis-signed list is
-// worthless: gossip content is untrusted until checked.
-func (c *swarmClient) fetchMembers(ctx context.Context, baseURL, peerID, peerKey string) ([]swarmMember, error) {
-	var body struct {
-		Entry swarmSignedEntry `json:"entry"`
-	}
-	if err := c.authedGET(ctx, strings.TrimSuffix(baseURL, "/")+"/swarm/members", &body); err != nil {
-		return nil, err
-	}
-	entry := body.Entry
-	if entry.Kind != swarmKindMembers || entry.Signer != peerID {
-		return nil, fmt.Errorf("swarm: %s served a member list signed by %q", baseURL, entry.Signer)
-	}
-	if !verifySwarmEntry(entry, peerKey) {
-		return nil, fmt.Errorf("swarm: %s served a member list that does not verify", baseURL)
-	}
-	var members []swarmMember
-	dec := json.NewDecoder(strings.NewReader(entry.Payload))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&members); err != nil {
-		return nil, fmt.Errorf("swarm: %s served an unreadable member list", baseURL)
-	}
-	return members, nil
-}
-
 // pullEntries asks one peer for signed entries for the given
 // keys. Verification happens at staging, not here: the caller
 // checks every entry against the signer's pinned key before

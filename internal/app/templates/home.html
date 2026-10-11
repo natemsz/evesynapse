@@ -293,6 +293,119 @@
   {{else}}<p><small>Trade ideas are not set up — set <code>CLOUDFLARE_ACCOUNT_ID</code> / <code>CLOUDFLARE_AUTH_TOKEN</code> (see <code>.env.example</code>).</small></p>{{end}}
 </section>
 {{end}}
+
+{{if eq .ID "training"}}
+<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+  <h3>Training horizon</h3>
+  {{with .Training}}
+  {{if .Events}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>Character</th><th>Skill</th><th>Finishes</th></tr></thead>
+    <tbody>
+    {{range .Events}}<tr><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{itemLink .SkillID .Skill}} {{.Level}}</td><td>{{.Finish}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else}}
+  <p><small>Nothing queued yet.</small></p>
+  {{end}}
+  {{if .Idle}}<p><small>Idle: {{range $i, $n := .Idle}}{{if $i}}, {{end}}{{$n}}{{end}}{{if .IdleMore}} and {{.IdleMore}} more{{end}}.</small></p>{{end}}
+  {{end}}
+</section>
+{{end}}
+
+{{if eq .ID "pulse"}}
+<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+  <h3>Corp pulse</h3>
+  {{with .Pulse}}
+  {{if .Corps}}
+  {{range .Corps}}
+  <h4>{{.Name}}</h4>
+  {{if .Joined}}<p><small>Joined: {{range $i, $j := .Joined}}{{if $i}}, {{end}}{{$j.Name}} ({{$j.Joined}}){{end}}.</small></p>{{end}}
+  {{if .Left}}<ul class="attention">{{range .Left}}<li>{{.Text}} left <small>{{.When}}</small></li>{{end}}</ul>{{end}}
+  {{if .Moves}}<ul class="attention">{{range .Moves}}<li>Division {{.Division}}: {{.Text}} <small>{{.When}}</small></li>{{end}}</ul>{{end}}
+  {{if .Added}}<ul class="attention">{{range .Added}}<li>Anchored: {{.Text}} <small>{{.When}}</small></li>{{end}}</ul>{{end}}
+  {{if .Removed}}<ul class="attention">{{range .Removed}}<li>Removed: {{.Text}} <small>{{.When}}</small></li>{{end}}</ul>{{end}}
+  {{if .Timers}}<ul class="attention">{{range .Timers}}<li>{{.Name}} — {{.Text}} <small>{{.When}}</small></li>{{end}}</ul>{{end}}
+  {{end}}
+  {{else}}
+  <p><small>Nothing to show — this needs a Director, Personnel Manager, Accountant, or Station Manager role in the corporation.</small></p>
+  {{end}}
+  {{end}}
+</section>
+{{end}}
+
+{{if eq .ID "walletflow"}}
+<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+  <h3>Wallet flow</h3>
+  {{with .WalletFlow}}
+  {{if .Any}}
+  <div class="tw">
+  <table>
+    <tbody>
+      <tr><th>7 days</th><td>in {{.In7}} · out {{.Out7}} · net {{.Net7}} ISK</td></tr>
+      <tr><th>30 days</th><td>in {{.In30}} · out {{.Out30}} · net {{.Net30}} ISK</td></tr>
+    </tbody>
+  </table>
+  </div>
+  {{if .HasChart}}
+  {{template "balance-chart" .Chart}}
+  <p><small>Cumulative net flow per day.</small></p>
+  {{end}}
+  {{if .Sources}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>Top sources</th><th>30 days</th></tr></thead>
+    <tbody>
+    {{range .Sources}}<tr><td>{{.Ref}}</td><td>{{.Total}} ISK</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+  {{if .Sinks}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>Top sinks</th><th>30 days</th></tr></thead>
+    <tbody>
+    {{range .Sinks}}<tr><td>{{.Ref}}</td><td>{{.Total}} ISK</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+  {{if .Chars}}
+  <p><input type="search" id="walletflow-search" placeholder="Filter by character…" aria-label="Filter wallet flow by character" data-table-filter="walletflow-table" data-row-class="walletflow-row"></p>
+  <div class="tw">
+  <table id="walletflow-table">
+    <thead><tr><th>Character</th><th>7d in</th><th>7d out</th><th>30d net</th></tr></thead>
+    <tbody>
+    {{range .Chars}}<tr class="walletflow-row" data-search="{{.Search}}"><td>{{charLink $.ViewerChars .ID .Name}}</td><td>{{.In7}} ISK</td><td>{{.Out7}} ISK</td><td>{{.Net30}} ISK</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+  {{else}}
+  <p><small>Journal data appears here once your characters have synced.</small></p>
+  {{end}}
+  {{end}}
+</section>
+{{end}}
+
+{{if eq .ID "upkeep"}}
+<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+  <h3>Upkeep &amp; fuel</h3>
+  {{with .Upkeep}}
+  {{if .Corps}}
+  {{range .Corps}}
+  <h4>{{.Name}}</h4>
+  <ul class="attention">{{range .Items}}<li>{{if .Urgent}}<strong>{{.Name}} — {{.Text}}</strong>{{else}}{{.Name}} — {{.Text}}{{end}} <small>{{.When}}</small></li>{{end}}</ul>
+  {{end}}
+  {{else}}
+  <p><small>All fueled — or this needs a Station Manager or Director role to check.</small></p>
+  {{end}}
+  {{end}}
+</section>
+{{end}}
 {{end}}
 </div>
 

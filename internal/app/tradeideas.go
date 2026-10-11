@@ -22,6 +22,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 	"net/url"
@@ -48,7 +49,7 @@ const (
 // tradeIdeasPrompt is the ask, exactly as specified: list
 // format, limited narration, across trade-strategy categories.
 // The scanner CSV follows it.
-const tradeIdeasPrompt = "Find the best trade opportunities from this CSV format list of fictional video game items for the video game EVE Online.\n\nSimply make it list format with limited narration, across different categories/types of trade strategies"
+const tradeIdeasPrompt = "Find the best trade opportunities from this CSV format list of fictional video game items for the video game EVE Online.\n\nSimply make it list format with limited narration, across different categories/types of trade strategies.\n\nFormat the answer as plain markdown only: one ### header per strategy category with a one-line *italic description* under it, then one * bullet per idea with the item name in **bold**. No other formatting."
 
 // refreshTradeIdeas asks Gemma about the Forge scanner rows and
 // stores the answer. It reports whether a fresh answer landed.
@@ -127,18 +128,20 @@ func (app *Application) tradeIdeasHTTPClient() *http.Client {
 }
 
 // tradeIdeasWidget is the home widget: the stored answer as
-// lines, with its age. Template-escaped on render, like every
-// other widget: the model's text is data, never markup.
+// safe markup, with its age. The model's text is escaped first
+// and only the theme's own elements (h4, ul.attention, p,
+// small, strong) are emitted, like every other widget: the
+// model's text is data, never markup.
 type tradeIdeasWidget struct {
-	Lines      []string
+	Body       template.HTML
 	AsOf       string // "Jan 2, 3:04 PM", empty until an answer lands
 	HasIdeas   bool
 	Configured bool // Cloudflare credentials are set
 }
 
-// maxTradeIdeasLines caps one render: the stored answer is
-// already capped, this is the belt beside it.
-const maxTradeIdeasLines = 60
+// maxTradeIdeasOutLines caps one render's source lines: the
+// stored answer is already capped, this is the belt beside it.
+const maxTradeIdeasOutLines = 80
 
 // buildTradeIdeas reads the stored answer for the home widget.
 // Rendered reads only, one bounded row, no fetches.
@@ -150,15 +153,108 @@ func (app *Application) buildTradeIdeas(ctx context.Context) *tradeIdeasWidget {
 	}
 	w.HasIdeas = true
 	w.AsOf = row.AsOf.UTC().Format("Jan 2, 3:04 PM")
-	for _, line := range strings.Split(row.Body, "\n") {
-		if line = strings.TrimSpace(line); line != "" {
-			w.Lines = append(w.Lines, line)
-		}
-		if len(w.Lines) >= maxTradeIdeasLines {
-			break
+	w.Body = renderTradeIdeasBody(row.Body)
+	return w
+}
+
+// renderTradeIdeasBody renders the stored markdown-shaped
+// answer (### headers, * bullets, **bold**, *italic* lines)
+// into the theme's elements. Text is HTML-escaped before any
+// marker becomes an element, so model text can never inject
+// markup; leftover asterisks are marker noise (EVE item names
+// contain none) and are dropped.
+func renderTradeIdeasBody(body string) template.HTML {
+	var out strings.Builder
+	inList := false
+	closeList := func() {
+		if inList {
+			out.WriteString("</ul>")
+			inList = false
 		}
 	}
-	return w
+	used := 0
+	for _, raw := range strings.Split(body, "\n") {
+		line := strings.TrimSpace(raw)
+		if line == "" {
+			continue
+		}
+		if used >= maxTradeIdeasOutLines {
+			break
+		}
+		used++
+		switch content, isList := stripTradeIdeasMarker(line); {
+		case strings.HasPrefix(line, "###"):
+			closeList()
+			h := tradeIdeasInline(strings.TrimSpace(strings.TrimLeft(line, "#")))
+			if h != "" {
+				out.WriteString("<h4>" + string(h) + "</h4>")
+			}
+		case isList:
+			if !inList {
+				out.WriteString(`<ul class="attention">`)
+				inList = true
+			}
+			if item := tradeIdeasInline(content); item != "" {
+				out.WriteString("<li>" + string(item) + "</li>")
+			}
+		case len(line) > 2 && strings.HasPrefix(line, "*") && strings.HasSuffix(line, "*"):
+			closeList()
+			if desc := tradeIdeasInline(strings.Trim(line, "*")); desc != "" {
+				out.WriteString("<p><small>" + string(desc) + "</small></p>")
+			}
+		default:
+			closeList()
+			if para := tradeIdeasInline(line); para != "" {
+				out.WriteString("<p>" + string(para) + "</p>")
+			}
+		}
+	}
+	closeList()
+	return template.HTML(out.String())
+}
+
+// stripTradeIdeasMarker removes one leading bullet marker ("* ",
+// "- ", "N. ") and reports whether the line is a list item.
+func stripTradeIdeasMarker(line string) (string, bool) {
+	if strings.HasPrefix(line, "* ") || strings.HasPrefix(line, "- ") {
+		return strings.TrimSpace(line[2:]), true
+	}
+	if dot := strings.Index(line, ". "); dot > 0 && dot < 5 {
+		numbered := true
+		for i := 0; i < dot; i++ {
+			if line[i] < '0' || line[i] > '9' {
+				numbered = false
+				break
+			}
+		}
+		if numbered {
+			return strings.TrimSpace(line[dot+2:]), true
+		}
+	}
+	return line, false
+}
+
+// tradeIdeasInline escapes text, turns **pairs** into strong,
+// and drops leftover asterisks.
+func tradeIdeasInline(text string) template.HTML {
+	esc := template.HTMLEscapeString(text)
+	var out strings.Builder
+	for {
+		a := strings.Index(esc, "**")
+		if a < 0 {
+			break
+		}
+		b := strings.Index(esc[a+2:], "**")
+		if b < 0 {
+			break
+		}
+		b += a + 2
+		out.WriteString(esc[:a])
+		out.WriteString("<strong>" + esc[a+2:b] + "</strong>")
+		esc = esc[b+2:]
+	}
+	out.WriteString(esc)
+	return template.HTML(strings.ReplaceAll(out.String(), "*", ""))
 }
 
 // cloudflareAIMessage is one Workers AI chat message.

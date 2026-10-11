@@ -169,7 +169,10 @@ type cloudflareAIMessage struct {
 
 // cloudflareAIResponse is the Workers AI run envelope. Decoded
 // leniently (no DisallowUnknownFields): Cloudflare may add
-// fields, and only success plus the answer matter here.
+// fields, and only success plus the answer matter here. The
+// answer arrives as result.response on older text models and as
+// result.choices[0].message.content on chat models (the Gemma 4
+// sync-output schema); both shapes are read.
 type cloudflareAIResponse struct {
 	Success bool `json:"success"`
 	Errors  []struct {
@@ -177,6 +180,11 @@ type cloudflareAIResponse struct {
 	} `json:"errors"`
 	Result struct {
 		Response string `json:"response"`
+		Choices  []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
 	} `json:"result"`
 }
 
@@ -234,6 +242,9 @@ func callCloudflareAI(ctx context.Context, client *http.Client, apiBase, account
 		return "", fmt.Errorf("cloudflare: model call failed%s", detail)
 	}
 	answer := strings.TrimSpace(decoded.Result.Response)
+	if answer == "" && len(decoded.Result.Choices) > 0 {
+		answer = strings.TrimSpace(decoded.Result.Choices[0].Message.Content)
+	}
 	if answer == "" {
 		return "", fmt.Errorf("cloudflare: model call returned no answer")
 	}

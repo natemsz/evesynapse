@@ -356,6 +356,31 @@ func TestTradeIdeasWidgetRendersStored(t *testing.T) {
 	}
 }
 
+func TestTradeIdeasRenderMarkdown(t *testing.T) {
+	got := string(renderTradeIdeasBody("### **High-Volume Scalping**\n" +
+		"*Focus on low spreads.*\n" +
+		"* **Tritanium**: 83.9B daily profit <script>alert(1)</script>\n" +
+		"- Pyerite: steady\n" +
+		"1. Mexallon: calm\n"))
+	for _, want := range []string{
+		"<h4><strong>High-Volume Scalping</strong></h4>",
+		`<ul class="attention">`,
+		"<p><small>Focus on low spreads.</small></p>",
+		"<li><strong>Tritanium</strong>: 83.9B daily profit &lt;script&gt;alert(1)&lt;/script&gt;</li>",
+		"<li>Pyerite: steady</li>",
+		"<li>Mexallon: calm</li>",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("rendered body missing %q in %q", want, got)
+		}
+	}
+	for _, raw := range []string{"###", "**", "<script>"} {
+		if strings.Contains(got, raw) {
+			t.Fatalf("raw markdown %q leaked into %q", raw, got)
+		}
+	}
+}
+
 func TestTradeIdeasWidgetEmptyStates(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)

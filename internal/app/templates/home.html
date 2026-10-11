@@ -258,11 +258,12 @@
   {{if .Any}}
   <p><small>{{.Colonies}} colon{{if eq .Colonies 1}}y{{else}}ies{{end}} across your characters{{if .Expired}} · {{.Expired}} extractor{{if ne .Expired 1}}s{{end}} expired{{end}} · <a href="/planets/">colonies</a></small></p>
   {{if .Soonest}}
+  <p><input type="search" id="pi-search" placeholder="Filter by character or planet…" aria-label="Filter planetary industry" data-table-filter="pi-table" data-row-class="pi-row"></p>
   <div class="tw">
-  <table>
+  <table id="pi-table">
     <thead><tr><th>Character</th><th>Planet</th><th>Extractor</th></tr></thead>
     <tbody>
-    {{range .Soonest}}<tr><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{.Planet}}</td><td>{{if .Expired}}expired {{end}}{{.Expires}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
+    {{range .Soonest}}<tr class="pi-row" data-search="{{.Search}}"><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{.Planet}}</td><td>{{if .Expired}}expired {{end}}{{.Expires}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
     </tbody>
   </table>
   </div>

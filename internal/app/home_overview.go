@@ -783,6 +783,9 @@ type skillsWidget struct {
 }
 
 // piExpiryLine is one extractor deadline in the PI widget.
+// Search is the client-side filter text (character, planet,
+// expiry state); the generic table filter in app.js matches it
+// with no page reload.
 type piExpiryLine struct {
 	Char    string
 	CharID  int64
@@ -790,6 +793,7 @@ type piExpiryLine struct {
 	Expires string
 	Left    string // "in 2d 3h", "" once expired
 	Expired bool
+	Search  string
 }
 
 type piWidget struct {
@@ -1645,8 +1649,10 @@ func (app *Application) buildPI(ctx context.Context, bundles []*charSnaps) *piWi
 				if ex.Expiry.Before(now) {
 					row.Expired = true
 					w.Expired++
+					row.Search = b.ch.Name + " " + planet + " expired"
 				} else {
 					row.Left = "in " + humanDuration(time.Until(ex.Expiry))
+					row.Search = b.ch.Name + " " + planet
 				}
 				pendingRows = append(pendingRows, pending{row: row, at: ex.Expiry})
 			}

@@ -122,5 +122,47 @@
 </table>
 </div>
 </section>
+
+{{with .Swarm}}
+<section class="card spanall">
+<h2>Shared cache</h2>
+{{if .Enabled}}
+<p><small>Mode {{.Mode}}: this instance shares public data (market history, type names, corporation and alliance records, player structure names) with the instances below, and checks everything they send — signatures on every read, spot checks against ESI before anything is used. Mode, secret and seeds come from the environment (SHARED_CACHE, SHARED_CACHE_SECRET, SHARED_CACHE_SEEDS); changing them restarts the instance. Membership spreads peer to peer {{.GossipEvery}}.</small></p>
+{{else}}
+<p><small>Mode {{.Mode}}: this instance fetches everything itself and offers nothing to peers. Set SHARED_CACHE to open or allowlist (with a SHARED_CACHE_SECRET) and restart to join a swarm. Secrets are never shown here{{if .SecretSet}}, and one is set{{end}}.</small></p>
+{{end}}
+{{if .Enabled}}
+<form method="post" action="/admin/swarm/add" class="lookup-form">
+  <label>Add an instance by address: <input type="text" name="url" placeholder="https://evesynapse.app" autocomplete="off" size="28" required></label>
+  <button type="submit">Add</button>
+</form>
+<p><small>A bare origin is enough — the address serves its member list, and this instance learns every member it names. Seeds do the same on their own, about once a day.</small></p>
+{{end}}
+{{if .Peers}}
+<div class="tw">
+<table>
+  <thead><tr><th>Instance</th><th>Address</th><th>Found by</th><th>Trust</th><th>Good</th><th>Bad</th><th>State</th><th></th></tr></thead>
+  <tbody>
+  {{range .Peers}}
+    <tr><td>{{.Display}}</td><td>{{if .ShowAddress}}{{.URL}}{{else}}—{{end}}</td><td>{{.Source}}</td><td>{{.Trust}}</td><td>{{.Good}}</td><td>{{.Bad}}</td><td>{{.State}}</td>
+    <td>{{if .Excluded}}
+      <form method="post" action="/admin/swarm/admit"><input type="hidden" name="instance" value="{{.ID}}"><button type="submit">Re-admit</button></form>
+      <form method="post" action="/admin/swarm/remove"><input type="hidden" name="instance" value="{{.ID}}"><label>Type {{.Display}} to remove: <input type="text" name="confirm" autocomplete="off" size="16" required></label> <button type="submit">Remove</button></form>
+    {{else if .Approved}}
+      <form method="post" action="/admin/swarm/exclude"><input type="hidden" name="instance" value="{{.ID}}"><button type="submit">Exclude</button></form>
+    {{else}}
+      <form method="post" action="/admin/swarm/approve"><input type="hidden" name="instance" value="{{.ID}}"><button type="submit">Approve</button></form>
+      <form method="post" action="/admin/swarm/exclude"><input type="hidden" name="instance" value="{{.ID}}"><button type="submit">Exclude</button></form>
+    {{end}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>Trust is this instance's own score for each signer: good checks over all checks, starting at 90%. Ten checks under 50% excludes on its own. Excluding never reads from a peer again; re-admitting keeps its history. Reputation never travels between instances, so no peer can talk this one into distrusting another.</small></p>
+{{else}}
+<p><small>No other instances heard from yet{{if .Enabled}} — new members arrive through the seeds and gossip{{end}}.</small></p>
+{{end}}
+</section>
+{{end}}
 {{end}}
 {{end}}

@@ -172,6 +172,16 @@ type Application struct {
 	// survive beside the newer. noteSuggested and the topbar
 	// search hold typingMu across the whole sequence.
 	typingMu sync.Mutex
+
+	// Shared cache across instances (swarm_*.go): this
+	// instance's signing identity and its peer client, set at
+	// startup when SHARED_CACHE enables sharing, nil otherwise.
+	// swarmMu guards the last gossip time only; the identity
+	// never changes after startup.
+	swarmID         *swarmIdentity
+	swarmCli        *swarmClient
+	swarmMu         sync.Mutex
+	swarmLastGossip time.Time
 }
 
 // New opens the database (applying the embedded baseline schema
@@ -185,6 +195,9 @@ func New(cfg Config) (*Application, error) {
 	}
 	if cfg.signUp.err != nil {
 		return nil, cfg.signUp.err
+	}
+	if cfg.swarm.err != nil {
+		return nil, cfg.swarm.err
 	}
 	if p := cfg.signUp; p.restricted() {
 		logging.Infof("evesynapse: new accounts are limited to %d listed character(s), %d corporation(s) and %d alliance(s)",
@@ -227,6 +240,22 @@ func New(cfg Config) (*Application, error) {
 		dbConn.Close()
 		pool.Close()
 		return nil, err
+	}
+
+	// The swarm's signing identity (swarm_identity.go): minted on
+	// first enable, sealed under the shared secret. Sharing stays
+	// off without it, and startup fails rather than sharing
+	// unsigned.
+	if cfg.swarm.enabled() {
+		id, err := loadSwarmIdentity(context.Background(), app.queries, cfg.swarm.secret)
+		if err != nil {
+			dbConn.Close()
+			pool.Close()
+			return nil, err
+		}
+		app.swarmID = id
+		app.swarmCli = newSwarmClient(cfg.swarm.secret)
+		logging.Infof("evesynapse: shared cache enabled (%s)", cfg.swarm.mode)
 	}
 
 	// When each account was last seen, from before this start
@@ -355,6 +384,13 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		// What the Sync and Admin search boxes suggest while typing.
 		r.Get("/suggest", app.handleCharacterSuggest)
 		r.Post("/accounts/remove", app.handleAdminAccountRemove)
+		// Shared cache (swarm_pages.go): add, approve,
+		// exclude, re-admit and remove swarm members.
+		r.Post("/swarm/add", app.handleSwarmAddPeer)
+		r.Post("/swarm/approve", app.handleSwarmApprove)
+		r.Post("/swarm/exclude", app.handleSwarmExclude)
+		r.Post("/swarm/admit", app.handleSwarmAdmit)
+		r.Post("/swarm/remove", app.handleSwarmRemove)
 	})
 
 	r.Route("/corporations", func(r chi.Router) {
@@ -665,6 +701,14 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 			r.Post("/warm", app.handleSyncWarm)
 			r.Post("/sde", app.handleSyncSDE)
 		})
+	})
+
+	// The swarm's machine API (swarm_api.go): bearer-gated by the
+	// shared secret, dark (404) while sharing is off. No session
+	// middleware — instances are not browsers.
+	r.Route("/swarm", func(r chi.Router) {
+		r.Get("/members", app.handleSwarmMembers)
+		r.Post("/pull", app.handleSwarmPull)
 	})
 
 	return r

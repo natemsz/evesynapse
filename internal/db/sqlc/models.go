@@ -718,12 +718,56 @@ type StructureName struct {
 	Source      string       `json:"source"`
 }
 
+type SwarmCounter struct {
+	Name  string `json:"name"`
+	Value int64  `json:"value"`
+}
+
+type SwarmIdentity struct {
+	ID         int64     `json:"id"`
+	InstanceID string    `json:"instance_id"`
+	PublicKey  string    `json:"public_key"`
+	SealedSeed string    `json:"sealed_seed"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+type SwarmPeer struct {
+	InstanceID  string       `json:"instance_id"`
+	BaseUrl     string       `json:"base_url"`
+	PublicKey   string       `json:"public_key"`
+	Source      string       `json:"source"`
+	Approved    bool         `json:"approved"`
+	Excluded    bool         `json:"excluded"`
+	ExcludeNote string       `json:"exclude_note"`
+	GoodChecks  int64        `json:"good_checks"`
+	BadChecks   int64        `json:"bad_checks"`
+	FirstSeen   time.Time    `json:"first_seen"`
+	LastSeen    time.Time    `json:"last_seen"`
+	LastGossip  sql.NullTime `json:"last_gossip"`
+}
+
+type SwarmStaging struct {
+	Kind       string       `json:"kind"`
+	Key        string       `json:"key"`
+	Payload    string       `json:"payload"`
+	Signer     string       `json:"signer"`
+	Signature  string       `json:"signature"`
+	FetchedAt  time.Time    `json:"fetched_at"`
+	ReceivedAt time.Time    `json:"received_at"`
+	CheckedAt  sql.NullTime `json:"checked_at"`
+}
+
 type TypeDetail struct {
 	TypeID      int64        `json:"type_id"`
 	Description string       `json:"description"`
 	FetchedAt   sql.NullTime `json:"fetched_at"`
 	Priority    int64        `json:"priority"`
 	NotedAt     sql.NullTime `json:"noted_at"`
+}
+
+type TypeName struct {
+	TypeID int64  `json:"type_id"`
+	Name   string `json:"name"`
 }
 
 type TypingGuess struct {
@@ -733,11 +777,6 @@ type TypingGuess struct {
 	RegionID int64        `json:"region_id"`
 	NotedAt  time.Time    `json:"noted_at"`
 	HitAt    sql.NullTime `json:"hit_at"`
-}
-
-type TypeName struct {
-	TypeID int64  `json:"type_id"`
-	Name   string `json:"name"`
 }
 
 type User struct {

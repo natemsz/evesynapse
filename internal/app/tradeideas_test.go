@@ -46,15 +46,6 @@ func (s *cloudflareStub) RoundTrip(req *http.Request) (*http.Response, error) {
 	}, nil
 }
 
-func tradeIdeasTestApp(t *testing.T) (*Application, *db.Queries) {
-	t.Helper()
-	transport := &countingTransport{}
-	app, _, q := buildCorpTestApp(t, transport)
-	app.cfg.cloudflareAccountID = "abcdef0123456789abcdef0123456789"
-	app.cfg.cloudflareAuthToken = "test-token-for-trade-ideas-only"
-	return app, q
-}
-
 func TestTradeIdeasConfigured(t *testing.T) {
 	var empty Config
 	if empty.TradeIdeasConfigured() {

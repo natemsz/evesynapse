@@ -1215,6 +1215,14 @@ instance the whole swarm. The Sync page's "Shared cache" card
 shows entries applied, ESI calls saved, spot checks for and
 against, and each instance's trust.
 
+The member list itself is private to the swarm. Fetching it
+needs the shared secret, and the list is sealed under a key
+derived from that secret on top — a response that leaks
+anywhere else stays opaque, readable by members alone. Pages
+show gossip-learned members under stable aliases
+(`adjective.noun.number`) instead of their addresses; only
+instances added by hand and the configured seeds show plainly.
+
 ## Logging
 
 Every log line carries a level:

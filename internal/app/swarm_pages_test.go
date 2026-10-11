@@ -92,7 +92,7 @@ func TestSwarmAdminActions(t *testing.T) {
 	if _, err := app.queries.GetSwarmPeer(ctx, "peer-action-1"); err != nil {
 		t.Fatalf("wrong confirm removed the peer: %v", err)
 	}
-	right := url.Values{"instance": {"peer-action-1"}, "confirm": {"peer-act"}}
+	right := url.Values{"instance": {"peer-action-1"}, "confirm": {app.swarmDisplayPeer("peer-action-1", "http://127.0.0.1:9", "gossip")}}
 	if code, _ := postForm(t, app, cookie, "/admin/swarm/remove", right); code != http.StatusSeeOther {
 		t.Fatalf("remove: status %d, want 303", code)
 	}
@@ -177,14 +177,27 @@ func TestSwarmSyncCardEnabled(t *testing.T) {
 	if err := app.queries.AddSwarmCounter(ctx, db.AddSwarmCounterParams{Name: swarmCounterAppliedHistory, Value: 7}); err != nil {
 		t.Fatalf("counter: %v", err)
 	}
+	// The seed-sourced peer shows under its alias, not its
+	// address: only hand-added and configured seeds show
+	// plainly.
+	alias := swarmAlias(swarmTestSecret, "peer-shown-12")
+	if strings.Contains(alias, "peer-shown") {
+		t.Fatalf("alias %q leaks the instance id", alias)
+	}
 	code, body := getPage(t, app, cookie, "/sync/")
 	if code != http.StatusOK {
 		t.Fatalf("/sync/: status %d", code)
 	}
-	mustContain(t, "/sync/", body, "Shared cache", "Open", "peer-sho", "ESI calls saved")
+	mustContain(t, "/sync/", body, "Shared cache", "Open", alias, "ESI calls saved")
+	if strings.Contains(body, "127.0.0.1:9") {
+		t.Fatalf("/sync/: page leaks the peer address")
+	}
 	code, body = getPage(t, app, cookie, "/admin/")
 	if code != http.StatusOK {
 		t.Fatalf("/admin/: status %d", code)
 	}
-	mustContain(t, "/admin/", body, "Mode Open", "peer-sho", "Approve", "Exclude")
+	mustContain(t, "/admin/", body, "Mode Open", alias, "Approve", "Exclude")
+	if strings.Contains(body, "127.0.0.1:9") {
+		t.Fatalf("/admin/: page leaks the peer address")
+	}
 }

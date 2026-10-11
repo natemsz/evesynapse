@@ -115,6 +115,47 @@ func TestSwarmAPIAuth(t *testing.T) {
 	}
 }
 
+func TestSwarmMembersSealed(t *testing.T) {
+	app := swarmTestApp(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	if err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
+		InstanceID: "peer-hidden-1", BaseUrl: "https://hidden-peer.example.org/",
+		PublicKey: strings.Repeat("A", 44), Source: "gossip", FirstSeen: now,
+	}); err != nil {
+		t.Fatalf("upsert peer: %v", err)
+	}
+	code, body := swarmServe(t, app, http.MethodGet, "/swarm/members", "", swarmTestSecret)
+	if code != http.StatusOK {
+		t.Fatalf("members: status %d, want 200", code)
+	}
+	// The wire carries no cleartext topology: not the peer's
+	// address, not even JSON framing around it.
+	if strings.Contains(body, "hidden-peer") {
+		t.Fatalf("member list leaks the peer address in cleartext")
+	}
+	var decoded struct {
+		Entry swarmSignedEntry `json:"entry"`
+	}
+	if err := json.Unmarshal([]byte(body), &decoded); err != nil {
+		t.Fatalf("members body: %v", err)
+	}
+	if !verifySwarmEntry(decoded.Entry, app.swarmID.publicString()) {
+		t.Fatalf("sealed member list does not verify")
+	}
+	opened, err := openSwarmMembers(decoded.Entry.Payload, swarmTestSecret)
+	if err != nil {
+		t.Fatalf("member list does not open under the secret: %v", err)
+	}
+	if !strings.Contains(string(opened), "hidden-peer") {
+		t.Fatalf("opened member list lacks the peer: %s", opened)
+	}
+	// ...and stays shut under any other secret.
+	if _, err := openSwarmMembers(decoded.Entry.Payload, strings.Repeat("x", 32)); err == nil {
+		t.Fatalf("member list opened under the wrong secret")
+	}
+}
+
 func TestSwarmPullServesHeldNames(t *testing.T) {
 	app := swarmTestApp(t)
 	ctx := context.Background()

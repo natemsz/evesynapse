@@ -114,7 +114,15 @@ func (app *Application) handleSwarmMembers(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "bad gateway", http.StatusBadGateway)
 		return
 	}
-	entry, err := signSwarmEntry(app.swarmID, app.swarmID.id, swarmKindMembers, app.swarmID.id, string(raw), time.Now())
+	// Sealed under the shared secret before signing: possession
+	// of the secret decides who may fetch; the seal decides who
+	// may read. A response that leaks anywhere else stays opaque.
+	sealed, err := sealSwarmMembers(raw, app.cfg.swarm.secret)
+	if err != nil {
+		http.Error(w, "bad gateway", http.StatusBadGateway)
+		return
+	}
+	entry, err := signSwarmEntry(app.swarmID, app.swarmID.id, swarmKindMembers, app.swarmID.id, sealed, time.Now())
 	if err != nil {
 		http.Error(w, "bad gateway", http.StatusBadGateway)
 		return

@@ -21,19 +21,23 @@ import (
 )
 
 // swarmPeerRow is one swarm member as the pages show it. ID is
-// the full instance ID (form posts); Short is the display
-// prefix (narrow tables).
+// the full instance ID (form posts); Display is what readers
+// see: the real address for instances the operator added by
+// hand or configured as seeds, and a stable alias
+// (adjective.noun.number) for everyone learned through gossip
+// or seeds — member addresses are not shown to casual readers.
 type swarmPeerRow struct {
-	ID       string
-	Short    string
-	URL      string
-	Source   string // seed, gossip, manual
-	Approved bool
-	Excluded bool
-	State    string // Approved, Waiting, Excluded (+ auto note)
-	Trust    string // trust percent
-	Good     string
-	Bad      string
+	ID          string
+	Display     string
+	URL         string
+	ShowAddress bool   // the operator added it or seeded it: the address shows
+	Source      string // seed, gossip, manual
+	Approved    bool
+	Excluded    bool
+	State       string // Approved, Waiting, Excluded (+ auto note)
+	Trust       string // trust percent
+	Good        string
+	Bad         string
 }
 
 // swarmMetricsView is the Sync page's "Shared cache" card.
@@ -61,14 +65,41 @@ type swarmAdminView struct {
 }
 
 // shortenSwarmID shows the first characters of an instance ID:
-// enough to tell members apart, short enough for a narrow
-// table. IDs are random, so prefixes do not collide in
-// practice; the full ID stays in the database.
+// enough to tell members apart, short enough for typed
+// confirmations and log lines. IDs are random, so prefixes do
+// not collide in practice; the full ID stays in the database.
 func shortenSwarmID(id string) string {
 	if len(id) <= 8 {
 		return id
 	}
 	return id[:8]
+}
+
+// swarmDisplayPeer names one peer for the pages: the real
+// address when the operator added it by hand or configured it
+// as a seed (evesynapse.app) — both already known to the
+// operator — and the stable alias otherwise, so gossip-learned
+// members never show their addresses to casual readers.
+func (app *Application) swarmDisplayPeer(instanceID, baseURL, source string) string {
+	if source == "manual" || app.swarmIsSeed(baseURL) {
+		return baseURL
+	}
+	return swarmAlias(app.cfg.swarm.secret, instanceID)
+}
+
+// swarmIsSeed reports whether a peer address is one of the
+// configured seed origins (trailing slashes ignored).
+func (app *Application) swarmIsSeed(baseURL string) bool {
+	want := strings.TrimSuffix(strings.TrimSpace(baseURL), "/")
+	if want == "" {
+		return false
+	}
+	for _, seed := range app.cfg.swarm.seeds {
+		if strings.TrimSuffix(strings.TrimSpace(seed), "/") == want {
+			return true
+		}
+	}
+	return false
 }
 
 // loadSwarmPeers reads the swarm table into display rows,
@@ -82,12 +113,13 @@ func (app *Application) loadSwarmPeers(ctx context.Context) []swarmPeerRow {
 	var out []swarmPeerRow
 	for _, p := range rows {
 		row := swarmPeerRow{
-			ID: p.InstanceID, Short: shortenSwarmID(p.InstanceID),
+			ID: p.InstanceID, Display: app.swarmDisplayPeer(p.InstanceID, p.BaseUrl, p.Source),
 			URL: p.BaseUrl, Source: p.Source,
 			Approved: p.Approved, Excluded: p.Excluded,
 			Trust: percentOf(swarmTrustPercent(p.GoodChecks, p.BadChecks), 100),
 			Good:  esi.FormatInt(p.GoodChecks), Bad: esi.FormatInt(p.BadChecks),
 		}
+		row.ShowAddress = row.Display == p.BaseUrl
 		switch {
 		case p.Excluded:
 			row.State = "Excluded"
@@ -333,16 +365,19 @@ func (app *Application) handleSwarmRemove(w http.ResponseWriter, r *http.Request
 		return
 	}
 	id := strings.TrimSpace(r.Form.Get("instance"))
-	if id == "" || strings.TrimSpace(r.Form.Get("confirm")) != shortenSwarmID(id) {
-		back("Nothing was removed: type the instance's short id to confirm.")
+	// The confirmation names what the page shows (the alias, or
+	// the address for hand-added and seed instances).
+	peer, err := app.queries.GetSwarmPeer(r.Context(), id)
+	if err != nil || id == "" {
+		back("Nothing was removed: that instance is not known.")
+		return
+	}
+	if strings.TrimSpace(r.Form.Get("confirm")) != app.swarmDisplayPeer(peer.InstanceID, peer.BaseUrl, peer.Source) {
+		back("Nothing was removed: type the instance's shown name to confirm.")
 		return
 	}
 	if app.swarmID != nil && id == app.swarmID.id {
 		back("Nothing was removed: that is this instance.")
-		return
-	}
-	if _, err := app.queries.GetSwarmPeer(r.Context(), id); err != nil {
-		back("Nothing was removed: that instance is not known.")
 		return
 	}
 	if err := app.queries.DeleteSwarmPeer(r.Context(), id); err != nil {

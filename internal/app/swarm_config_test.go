@@ -26,14 +26,14 @@ func TestSwarmOffByDefault(t *testing.T) {
 
 func TestSwarmUnknownModeStaysOff(t *testing.T) {
 	s := loadSwarmConfig(swarmEnv(map[string]string{
-		"SHARED_CACHE":        "on",
+		"SHARED_CACHE":        "yes",
 		"SHARED_CACHE_SECRET": strings.Repeat("s", 40),
 	}))
 	if s.enabled() {
-		t.Fatalf("SHARED_CACHE=on: enabled, want off")
+		t.Fatalf("SHARED_CACHE=yes: enabled, want off")
 	}
 	if s.err != nil {
-		t.Fatalf("SHARED_CACHE=on: err %v, want none (off is safe)", s.err)
+		t.Fatalf("SHARED_CACHE=yes: err %v, want none (off is safe)", s.err)
 	}
 }
 

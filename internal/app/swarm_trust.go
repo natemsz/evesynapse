@@ -246,11 +246,19 @@ func (app *Application) swarmFetchMembers(ctx context.Context, baseURL, peerID, 
 		if entry.Signer != peerID || !verifySwarmEntry(entry, peerKey) {
 			return nil, "", "", fmt.Errorf("swarm: %s served a member list that does not verify", baseURL)
 		}
-		return decodeSwarmMembers(entry.Payload, entry.Signer, peerKey)
+		return decodeSwarmMembers(app.cfg.swarm.secret, entry.Payload, entry.Signer, peerKey)
 	}
-	dec := json.NewDecoder(strings.NewReader(entry.Payload))
-	dec.DisallowUnknownFields()
+	// Trust on first use: the shared secret opens the list —
+	// only a member could have sealed it — then the signer's
+	// listed key must verify the signature, proving the key's
+	// holder sent it.
+	opened, err := openSwarmMembers(entry.Payload, app.cfg.swarm.secret)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("swarm: %s served a member list that does not open", baseURL)
+	}
 	var list []swarmMember
+	dec := json.NewDecoder(strings.NewReader(string(opened)))
+	dec.DisallowUnknownFields()
 	if err := dec.Decode(&list); err != nil {
 		return nil, "", "", fmt.Errorf("swarm: %s served an unreadable member list", baseURL)
 	}
@@ -259,15 +267,20 @@ func (app *Application) swarmFetchMembers(ctx context.Context, baseURL, peerID, 
 			continue
 		}
 		if verifySwarmEntry(entry, m.PublicKey) {
-			return decodeSwarmMembers(entry.Payload, entry.Signer, m.PublicKey)
+			return list, entry.Signer, m.PublicKey, nil
 		}
 	}
 	return nil, "", "", fmt.Errorf("swarm: %s served a member list naming no verifiable signer", baseURL)
 }
 
-// decodeSwarmMembers strictly decodes a verified member list.
-func decodeSwarmMembers(payload, signer, key string) ([]swarmMember, string, string, error) {
-	dec := json.NewDecoder(strings.NewReader(payload))
+// decodeSwarmMembers opens and strictly decodes a
+// signature-verified member list.
+func decodeSwarmMembers(secret, payload, signer, key string) ([]swarmMember, string, string, error) {
+	opened, err := openSwarmMembers(payload, secret)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("swarm: member list from %s does not open", signer)
+	}
+	dec := json.NewDecoder(strings.NewReader(string(opened)))
 	dec.DisallowUnknownFields()
 	var members []swarmMember
 	if err := dec.Decode(&members); err != nil {

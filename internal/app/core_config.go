@@ -89,6 +89,20 @@ type Config struct {
 	esiContact      string         // ESI_CONTACT: how CCP can reach the operator, sent in the User-Agent
 	logLevel        string         // LOG_LEVEL: debug, info (default), warn or error
 	logFormat       string         // LOG_FORMAT: text (default) or json
+
+	// Trade ideas (tradeideas.go): Cloudflare Workers AI, asked
+	// about the Forge spread-scanner rows every so often for the
+	// home widget. Both empty means the widget stays off; the
+	// token never leaves the Authorization header or the logs.
+	cloudflareAccountID string // CLOUDFLARE_ACCOUNT_ID
+	cloudflareAuthToken string // CLOUDFLARE_AUTH_TOKEN
+}
+
+// TradeIdeasConfigured reports whether the trade-ideas refresh
+// can run: it needs both the account ID (the URL) and the token
+// (the Authorization header).
+func (c Config) TradeIdeasConfigured() bool {
+	return c.cloudflareAccountID != "" && c.cloudflareAuthToken != ""
 }
 
 // SSOConfigured reports whether EVE SSO can run: it needs both the
@@ -209,6 +223,8 @@ func LoadConfig() (Config, error) {
 		tokenKey:            os.Getenv("TOKEN_ENCRYPTION_KEY"),
 		signUp:              loadSignUpPolicy(os.Getenv),
 		esiContact:          os.Getenv("ESI_CONTACT"),
+		cloudflareAccountID: strings.TrimSpace(os.Getenv("CLOUDFLARE_ACCOUNT_ID")),
+		cloudflareAuthToken: strings.TrimSpace(os.Getenv("CLOUDFLARE_AUTH_TOKEN")),
 		logLevel:            os.Getenv("LOG_LEVEL"),
 		logFormat:           os.Getenv("LOG_FORMAT"),
 		pushPublicKey:       os.Getenv("VAPID_PUBLIC_KEY"),

@@ -297,6 +297,7 @@ gaps; real environment variables win over the file):
 | `DB_MAX_CONNS` | no | `20` | How many database connections the app may hold open (5 to 500). The session store keeps a few more of its own (at most 4, or one per CPU core if that is more). Raise it together with PostgreSQL's `max_connections` (100 unless changed), which must stay above the two added together; more than a few dozen is rarely useful on one machine |
 | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | no | — | A Discord application's id and secret: turns on "Connect Discord" (see "Discord") |
 | `DISCORD_BOT_TOKEN` | no | — | That application's bot: lets it be added to Discord servers, where it gives roles and sends messages. What it does in each server is set on the site by that server's directors, not here |
+| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AUTH_TOKEN` | no | — | Cloudflare Workers AI credentials: turn on the Home page's "Trade ideas" module, which asks the Gemma model for trade opportunities in The Forge from the spread scanner's rows, at most twice a day. Unset, the module shows its empty state. Keep the token secret |
 | `DEV_LOGIN` | no | — | Dev build only: `1` registers the `/dev-login` route |
 
 ## Install
@@ -1180,7 +1181,13 @@ the cycle stops and waits for the next tick. Logs stay quiet: one
 summary line per cycle only when something was refreshed or failed,
 plus a heartbeat every 10 minutes. The current status (last run,
 summary, cumulative names resolved) shows on the Admin and Sync
-pages.
+pages. When the Cloudflare credentials are set, the same worker
+also refreshes the Home page's "Trade ideas" module: it feeds the
+spread scanner's Forge rows (at most 40, same columns as the
+scanner page) to the Gemma model through Cloudflare Workers AI and
+stores the answer, at most twice a day and spending no ESI budget.
+A failed refresh keeps the previous answer; the module is opt-in
+from the Home page's customize view.
 
 ## Shared cache
 

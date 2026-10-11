@@ -32,16 +32,17 @@ import (
 // Widget ids. These strings are persisted in users.home_layout;
 // never rename one.
 const (
-	widgetBriefing  = "briefing"
-	widgetFleet     = "fleet"
-	widgetAttention = "attention"
-	widgetNetWorth  = "networth"
-	widgetIndustry  = "industry"
-	widgetMarket    = "market"
-	widgetWatchlist = "watchlist"
-	widgetSkills    = "skills"
-	widgetServer    = "server"
-	widgetPI        = "pi"
+	widgetBriefing   = "briefing"
+	widgetFleet      = "fleet"
+	widgetAttention  = "attention"
+	widgetNetWorth   = "networth"
+	widgetIndustry   = "industry"
+	widgetMarket     = "market"
+	widgetWatchlist  = "watchlist"
+	widgetSkills     = "skills"
+	widgetServer     = "server"
+	widgetPI         = "pi"
+	widgetTradeIdeas = "tradeideas"
 )
 
 // Widget size classes for the home grid engine. A full module
@@ -81,6 +82,7 @@ var homeWidgetCatalog = []widgetDef{
 	{widgetWatchlist, "Market watchlist", "The items you're watching: latest prices, 7- and 30-day moves, and a flag when one crosses your alert line.", widgetSizeFlex, "market_public"},
 	{widgetSkills, "Skills", "The next skill finishes across the fleet, plus who isn't training.", widgetSizeFlex, "skills"},
 	{widgetServer, "Tranquility", "Server status: players online.", widgetSizeFlex, "server"},
+	{widgetTradeIdeas, "Trade ideas", "Gemma's read on the Forge spread scanner: top trade opportunities across strategies, refreshed twice a day.", widgetSizeFlex, "tradeideas"},
 }
 
 // defaultHomeLayout is what accounts with no saved layout get:
@@ -287,16 +289,17 @@ func spanClass(span int) string {
 // ---------------------------------------------------------------------------
 
 var widgetSnapshotKinds = map[string][]string{
-	widgetBriefing:  {esi.SnapSkillqueue, esi.SnapSkills, esi.SnapIndustryJobs, esi.SnapContracts, esi.SnapOrders, esi.SnapOrdersHistory, esi.SnapPlanets, esi.SnapMail, esi.SnapMailLabels, esi.SnapCalendar},
-	widgetFleet:     {esi.SnapProfile, esi.SnapCorpInfo, esi.SnapLocation, esi.SnapShip, esi.SnapOnline, esi.SnapSkillqueue, esi.SnapWallet, esi.SnapMailLabels},
-	widgetAttention: {esi.SnapSkillqueue, esi.SnapIndustryJobs, esi.SnapContracts, esi.SnapOrders, esi.SnapPlanets},
-	widgetNetWorth:  {esi.SnapWallet, esi.SnapAssets, esi.SnapOrders},
-	widgetIndustry:  {esi.SnapIndustryJobs},
-	widgetMarket:    {esi.SnapOrders},
-	widgetWatchlist: {}, // watchlist + stored history only; no character snapshots
-	widgetSkills:    {esi.SnapSkillqueue},
-	widgetServer:    {},
-	widgetPI:        {esi.SnapPlanets},
+	widgetBriefing:   {esi.SnapSkillqueue, esi.SnapSkills, esi.SnapIndustryJobs, esi.SnapContracts, esi.SnapOrders, esi.SnapOrdersHistory, esi.SnapPlanets, esi.SnapMail, esi.SnapMailLabels, esi.SnapCalendar},
+	widgetFleet:      {esi.SnapProfile, esi.SnapCorpInfo, esi.SnapLocation, esi.SnapShip, esi.SnapOnline, esi.SnapSkillqueue, esi.SnapWallet, esi.SnapMailLabels},
+	widgetAttention:  {esi.SnapSkillqueue, esi.SnapIndustryJobs, esi.SnapContracts, esi.SnapOrders, esi.SnapPlanets},
+	widgetNetWorth:   {esi.SnapWallet, esi.SnapAssets, esi.SnapOrders},
+	widgetIndustry:   {esi.SnapIndustryJobs},
+	widgetMarket:     {esi.SnapOrders},
+	widgetWatchlist:  {}, // watchlist + stored history only; no character snapshots
+	widgetSkills:     {esi.SnapSkillqueue},
+	widgetServer:     {},
+	widgetPI:         {esi.SnapPlanets},
+	widgetTradeIdeas: {}, // stored model answer only; no character snapshots
 }
 
 // charSnaps is one character's decoded snapshot bundle. Fields
@@ -591,22 +594,23 @@ func queueState(queue esi.Skillqueue, now time.Time) (training bool, finishedAt 
 // ---------------------------------------------------------------------------
 
 type homeWidget struct {
-	ID        string
-	Title     string
-	SpanClass string // solved grid span class: span3 | span6
-	Size      string // catalog size class (flex modules get the resize toggle)
-	SpanPref  string // user's span preference: "" (auto) | wide
-	Customize bool   // rendering under /?customize=1 (form return targets)
-	Fleet     *fleetWidget
-	Attention *attentionWidget
-	Briefing  *briefingWidget
-	NetWorth  *netWorthWidget
-	Industry  *industryWidget
-	Market    *marketWidget
-	Watchlist *watchlistWidget
-	Skills    *skillsWidget
-	Server    *serverStatusView
-	PI        *piWidget
+	ID         string
+	Title      string
+	SpanClass  string // solved grid span class: span3 | span6
+	Size       string // catalog size class (flex modules get the resize toggle)
+	SpanPref   string // user's span preference: "" (auto) | wide
+	Customize  bool   // rendering under /?customize=1 (form return targets)
+	Fleet      *fleetWidget
+	Attention  *attentionWidget
+	Briefing   *briefingWidget
+	NetWorth   *netWorthWidget
+	Industry   *industryWidget
+	Market     *marketWidget
+	Watchlist  *watchlistWidget
+	Skills     *skillsWidget
+	Server     *serverStatusView
+	PI         *piWidget
+	TradeIdeas *tradeIdeasWidget
 }
 
 // homeView is the signed-in Home body (pageData.Home).
@@ -1746,6 +1750,8 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 			if status, ok := app.loadServerStatus(ctx); ok {
 				w.Server = status
 			}
+		case widgetTradeIdeas:
+			w.TradeIdeas = app.buildTradeIdeas(ctx)
 		}
 		view.Widgets = append(view.Widgets, w)
 	}

@@ -757,6 +757,13 @@ type SwarmStaging struct {
 	CheckedAt  sql.NullTime `json:"checked_at"`
 }
 
+type TradeIdea struct {
+	ID    int64     `json:"id"`
+	Body  string    `json:"body"`
+	AsOf  time.Time `json:"as_of"`
+	Model string    `json:"model"`
+}
+
 type TypeDetail struct {
 	TypeID      int64        `json:"type_id"`
 	Description string       `json:"description"`

@@ -141,6 +141,13 @@ var pgForesightSchema string
 //go:embed schema_pg/030_swarm.sql
 var pgSwarmSchema string
 
+// Step 031: the stored trade-ideas answer for the home page
+// (one row, replaced per refresh; the widget renders stored
+// text only, never waits on the model).
+//
+//go:embed schema_pg/031_trade_ideas.sql
+var pgTradeIdeasSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -200,6 +207,7 @@ func schemaSteps() []schemaStep {
 		{28, "typing_guesses", pgTypingGuessesSchema, ""},
 		{29, "foresight", pgForesightSchema, ""},
 		{30, "swarm", pgSwarmSchema, ""},
+		{31, "trade_ideas", pgTradeIdeasSchema, ""},
 	}
 }
 

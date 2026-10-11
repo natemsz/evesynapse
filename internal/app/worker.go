@@ -605,6 +605,14 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 		return app.refreshMarketData(ctx, characters)
 	})
 
+	// Trade ideas: ask Gemma about the Forge spread-scanner rows
+	// for the home widget (tradeideas.go). No ESI budget: one
+	// Cloudflare call at most every twelve hours, stored on
+	// success, previous answer kept on failure.
+	c.pass("refreshing trade ideas", func() (int, bool) {
+		return app.refreshTradeIdeas(ctx)
+	})
+
 	// Structure names: resolve the due slice of the structure
 	// queue across every scoped character (structures.go).
 	c.pass("resolving structure names", func() (int, bool) {

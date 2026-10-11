@@ -282,6 +282,16 @@
   {{if .Server}}<p>Tranquility: {{.Server.Players}} players online</p>{{else}}<p><small>Server status has not loaded yet.</small></p>{{end}}
 </section>
 {{end}}
+{{if eq .ID "tradeideas"}}
+<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+  <h3>Trade ideas</h3>
+  {{if .TradeIdeas.HasIdeas}}
+  <ul>{{range .TradeIdeas.Lines}}<li>{{.}}</li>{{end}}</ul>
+  <p><small>As of {{.TradeIdeas.AsOf}} · Gemma on the Forge spread scanner.</small></p>
+  {{else if .TradeIdeas.Configured}}<p><small>No ideas yet — the next refresh asks the model once the Forge sweep lands.</small></p>
+  {{else}}<p><small>Trade ideas are not set up — set <code>CLOUDFLARE_ACCOUNT_ID</code> / <code>CLOUDFLARE_AUTH_TOKEN</code> (see <code>.env.example</code>).</small></p>{{end}}
+</section>
+{{end}}
 {{end}}
 </div>
 

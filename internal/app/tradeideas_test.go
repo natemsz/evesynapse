@@ -121,6 +121,20 @@ func TestCloudflareCallShape(t *testing.T) {
 	}
 }
 
+func TestCloudflareCallReadsChoices(t *testing.T) {
+	// Chat models (Gemma 4's sync-output schema) answer in
+	// result.choices, not result.response.
+	stub := &cloudflareStub{reply: `{"success":true,"errors":[],"result":{"choices":[{"message":{"role":"assistant","content":"- idea two"},"finish_reason":"stop"}]}}`}
+	got, err := callCloudflareAI(context.Background(), &http.Client{Transport: stub}, tradeIdeasAPIBase,
+		"abcdef0123456789abcdef0123456789", "test-token-for-trade-ideas-only", tradeIdeasModel, "hi")
+	if err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	if got != "- idea two" {
+		t.Fatalf("answer: %q", got)
+	}
+}
+
 func TestCloudflareCallFailsClosed(t *testing.T) {
 	ok := &cloudflareStub{reply: `{"success":true,"errors":[],"result":{"response":"x"}}`}
 	client := &http.Client{Transport: ok}

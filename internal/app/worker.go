@@ -181,9 +181,16 @@ func (app *Application) runWorker(ctx context.Context) {
 	defer heartbeat.Stop()
 	defer sdeTick.Stop()
 
+	// Thin clients run the public passes only (thin.go); the
+	// cycle body is the one behavioral fork in the worker.
+	runCycle := app.refreshCycle
+	if app.cfg.thin {
+		runCycle = app.refreshThinCycle
+	}
+
 	// First pass right away so a cold start doesn't wait a minute for
 	// fresh data.
-	app.guardedCycle(ctx, app.refreshCycle)
+	app.guardedCycle(ctx, runCycle)
 
 	for {
 		select {
@@ -194,7 +201,7 @@ func (app *Application) runWorker(ctx context.Context) {
 		case <-sdeTick.C:
 			runGuarded("SDE maintenance", func() { app.sdeMaintenance(ctx) })
 		case <-cycle.C:
-			app.guardedCycle(ctx, app.refreshCycle)
+			app.guardedCycle(ctx, runCycle)
 		}
 	}
 }
@@ -284,12 +291,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// character pass so asset valuation — the net-worth card
 	// and the daily sampler below — always has prices to work
 	// with. Fresh tables cost nothing here.
-	if stored, gLimited := app.refreshGuidePrices(ctx); stored {
-		c.refreshed++
-	} else if gLimited {
-		logging.Warnf("worker: ESI error limit hit refreshing guide prices; backing off until next cycle")
-		c.limited = true
-	}
+	c.refreshGuidePricesPass(ctx)
 
 	// The character pass, several characters at a time
 	// (worker_lanes.go).
@@ -307,7 +309,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	})
 	clock.mark("op attendance", time.Now())
 
-	c.refreshPublicData(ctx, characters)
+	c.refreshPublicData(ctx, characters, false)
 	clock.mark("public data", time.Now())
 
 	// The shared cache across instances (swarm_trust.go): gossip,
@@ -363,22 +365,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	})
 
 	clock.mark("discord", time.Now())
-	timing.Took, timing.Phases = time.Since(clock.start), clock.phases
-	timing.Fetches, timing.Deferred = c.allowance.used(app.fetchesPerCycle()), c.deferred
-	timing.RateHeld = c.rateHeld
-	timing.Budgets = app.esi.TakeRateBudgets()
-	app.recordWorkerTiming(timing)
-
-	summary := cycleSummary(c.refreshed, c.namesResolved, c.failed, c.limited, parked, c.deferred)
-	app.updateWorkerStatus(func(s *workerStatus) {
-		s.Warming = false
-		s.Summary = summary
-		s.NamesResolvedTotal += c.namesResolved
-	})
-
-	if c.refreshed > 0 || c.failed > 0 || c.namesResolved > 0 {
-		logging.Infof("worker: cycle done: %s", summary)
-	}
+	app.finishRefreshCycle(c, clock, timing, parked)
 }
 
 // cycleState is one refresh cycle while it runs: what it has done so far
@@ -602,7 +589,7 @@ func (c *cycleState) refreshCoreSnapshots(ctx context.Context, ch db.Character, 
 // refreshPublicData runs the passes that are not about one
 // character: market data, the name queues, and the public records
 // pages have asked for.
-func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Character) {
+func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Character, thin bool) {
 	app := c.app
 
 	// Market pass: price-history warming for
@@ -616,10 +603,13 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 	// Trade ideas: ask Gemma about the Forge spread-scanner rows
 	// for the home widget (tradeideas.go). No ESI budget: one
 	// Cloudflare call at most every twelve hours, stored on
-	// success, previous answer kept on failure.
-	c.pass("refreshing trade ideas", func() (int, bool) {
-		return app.refreshTradeIdeas(ctx)
-	})
+	// success, previous answer kept on failure. Full clients
+	// only: a thin client has no home page to feed.
+	if !thin {
+		c.pass("refreshing trade ideas", func() (int, bool) {
+			return app.refreshTradeIdeas(ctx)
+		})
+	}
 
 	// Structure names: resolve the due slice of the structure
 	// queue across every scoped character (structures.go).

@@ -82,6 +82,7 @@ type Config struct {
 	eveClientSecret string         // EVE SSO application client secret
 	eveCallbackURL  string         // OAuth2 redirect URI registered with CCP
 	devLogin        bool           // DEV_LOGIN=1: register the /dev-login route
+	thin            bool           // THIN_CLIENT=1: headless public-data daemon (swarm API only)
 	sdeBaseURL      string         // EVE SDE CSV dump base URL (Fuzzwork by default)
 	adminCharIDs    map[int64]bool // EVE_ADMIN_CHARACTER_IDS (comma-separated)
 	tokenKey        string         // TOKEN_ENCRYPTION_KEY: encrypts stored EVE tokens ("" = stored as they are)
@@ -218,6 +219,7 @@ func LoadConfig() (Config, error) {
 		eveClientSecret:     os.Getenv("EVE_CLIENT_SECRET"),
 		eveCallbackURL:      getenvDefault("EVE_CALLBACK_URL", "http://localhost:8080/auth/callback"),
 		devLogin:            os.Getenv("DEV_LOGIN") == "1",
+		thin:                os.Getenv("THIN_CLIENT") == "1",
 		sdeBaseURL:          getenvDefault("EVE_SDE_BASE_URL", defaultSDEBaseURL),
 		adminCharIDs:        parseAdminCharIDs(os.Getenv("EVE_ADMIN_CHARACTER_IDS")),
 		tokenKey:            os.Getenv("TOKEN_ENCRYPTION_KEY"),

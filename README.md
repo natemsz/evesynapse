@@ -298,6 +298,7 @@ gaps; real environment variables win over the file):
 | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | no | — | A Discord application's id and secret: turns on "Connect Discord" (see "Discord") |
 | `DISCORD_BOT_TOKEN` | no | — | That application's bot: lets it be added to Discord servers, where it gives roles and sends messages. What it does in each server is set on the site by that server's directors, not here |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AUTH_TOKEN` | no | — | Cloudflare Workers AI credentials: turn on the Home page's "Trade ideas" module, which asks the Gemma model for trade opportunities in The Forge from the spread scanner's rows, at most twice a day. Unset, the module shows its empty state. Keep the token secret |
+| `THIN_CLIENT` | no | — | `1` runs the same binary as a headless public-data daemon: swarm API and health check only, public worker passes only. Needs sharing on; holds no logins, sessions, or tokens |
 | `DEV_LOGIN` | no | — | Dev build only: `1` registers the `/dev-login` route |
 
 ## Install
@@ -1227,6 +1228,16 @@ worker answers only to secret-holders and 404s everything else,
 so it is not crawlable or indexable. The Sync page's "Shared
 cache" card shows entries applied, ESI calls saved, spot checks
 for and against, and each instance's trust.
+
+A thin client (`THIN_CLIENT=1`) is the same binary as a
+headless public-data daemon for a second machine: it serves the
+swarm API and health check only, and its worker runs the public
+passes only. Every ESI call it makes is tokenless (the shared
+datasets already are), so it holds no credential worth
+stealing — no logins, no sessions, no token key. Give it the
+same database schema, the same `SHARED_CACHE_SECRET`, seeds
+toward the swarm, and an `ESI_CONTACT` so CCP can reach you;
+sharing must be on or it refuses to start.
 
 The member list itself is private to the swarm. Fetching it
 needs the shared secret, and the list is sealed under a key

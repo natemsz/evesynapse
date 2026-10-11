@@ -203,6 +203,12 @@ func New(cfg Config) (*Application, error) {
 	if cfg.swarm.err != nil {
 		return nil, cfg.swarm.err
 	}
+	if err := cfg.checkThinConfig(); err != nil {
+		return nil, err
+	}
+	if cfg.thin {
+		logging.Infof("evesynapse: thin-client mode: public data only, swarm API only")
+	}
 	if p := cfg.signUp; p.restricted() {
 		logging.Infof("evesynapse: new accounts are limited to %d listed character(s), %d corporation(s) and %d alliance(s)",
 			len(p.characterIDs), len(p.corporationIDs), len(p.allianceIDs))
@@ -330,6 +336,11 @@ type RouteHook func(r chi.Router, a *Application)
 // during route setup (the dev-only routes); production routes are
 // identical with or without hooks.
 func (app *Application) Handler(hooks ...RouteHook) http.Handler {
+	// Thin clients serve the machine surface only (thin.go):
+	// every page, session, and login route stays unmounted.
+	if app.cfg.thin {
+		return app.thinHandler()
+	}
 	r := chi.NewRouter()
 	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)

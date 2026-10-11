@@ -289,6 +289,10 @@ gaps; real environment variables win over the file):
 | `WORKER_FETCHES_PER_CYCLE` | no | 120 per lane (`480`) | How many ESI fetches the worker's character pass may make in one one-minute cycle, for the whole server (kept between 20 and 2000). Raise it when the Sync page shows the allowance used up and characters put off. One lane gets through about 200 fetches in a minute, so more than about 200 per lane makes a cycle run past its minute |
 | `FORESIGHT` | no | on | Warming on game events: when a character docks at a trade hub, an industry job is about to finish, an order is undercut, a skill queue runs out or a war is declared on a corporation, the data the account is likely to open next is fetched ahead. `off` switches it off. The Sync page's "Warmed ahead" table shows what it cost and how often it was right |
 | `FORESIGHT_FETCHES_PER_CYCLE` | no | `30` | The most ESI calls a cycle may spend on that (0 to 200), out of what the rest of the cycle leaves of its allowance |
+| `SHARED_CACHE` | no | `off` | Sharing public data with other instances (see "Shared cache"): `open` (or `on`) shares with every instance holding the secret, `allowlist` also waits for each instance to be approved on the Admin page. Anything else stays off |
+| `SHARED_CACHE_SECRET` | no | — | The swarm's membership proof: at least 32 random characters (`openssl rand -hex 32`). Enabling sharing without one refuses to start. Never shown on any page |
+| `SHARED_CACHE_SEEDS` | no | — | Bootstrap and fallback directory nodes (comma-separated `https` URLs; `http` only on loopback): the instances a new or lonely one asks for the membership list. Afterwards membership spreads peer to peer |
+| `SHARED_CACHE_GOSSIP_HOURS` | no | `18` | How often, in hours, membership is re-gossiped (12 to 168). Takes effect on restart |
 | `WORKER_LANES` | no | `4` | How many characters the worker refreshes at the same time (1 to 16). Each character is still fetched one request after another, so ESI's per-character rate limits are unaffected; `1` is the worker as it was, one character at a time. More lanes mean more database connections in use at once: with more than 8, raise `DB_MAX_CONNS` to about two and a half per lane (40 for 16 lanes), which still fits PostgreSQL's default of 100. The Sync page's "Fetches a cycle" beside "Characters on average" shows what the characters actually cost, which is what to size this and the allowance by |
 | `DB_MAX_CONNS` | no | `20` | How many database connections the app may hold open (5 to 500). The session store keeps a few more of its own (at most 4, or one per CPU core if that is more). Raise it together with PostgreSQL's `max_connections` (100 unless changed), which must stay above the two added together; more than a few dozen is rarely useful on one machine |
 | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | no | — | A Discord application's id and secret: turns on "Connect Discord" (see "Discord") |
@@ -1178,6 +1182,36 @@ plus a heartbeat every 10 minutes. The current status (last run,
 summary, cumulative names resolved) shows on the Admin and Sync
 pages.
 
+## Shared cache
+
+Self-hosted instances can share public ESI data with each other
+— market history, type names, corporation and alliance records,
+and player structure names — so the whole swarm asks ESI for
+each record once instead of once per instance. Nothing private
+ever leaves the instance: no character data, no tokens, no
+accounts. The design is section 3 of [How EveSynapse
+syncs](https://synap6.io/how-evesynapse-syncs/).
+
+It is off unless `SHARED_CACHE` says `open` (or `on`) or
+`allowlist` (see "Configuration"). `open` shares with every
+instance holding the secret; `allowlist` additionally waits for
+each instance to be approved on the Admin page. New instances find
+the swarm through the `SHARED_CACHE_SEEDS` directory nodes,
+then membership spreads peer to peer about once a day
+(`SHARED_CACHE_GOSSIP_HOURS`).
+
+Trust is cryptographic and reputational. Every shared entry is
+signed by the instance that fetched it (Ed25519); the signature
+is verified before anything is stored, and entries wait in
+staging until a spot check re-fetches the datum from ESI. A bad
+signature rejects the entry; a failed spot check discards it
+and counts against its signer. Ten checks under half trust
+excludes the signer on its own. The operator can always
+approve, exclude, re-admit, or remove an instance on the Admin
+page (removing also rotates a peer's key: the next gossip pins
+the new one). The Sync page's "Shared cache" card shows entries
+applied, ESI calls saved, spot checks for and against, and each
+instance's trust.
 
 ## Logging
 

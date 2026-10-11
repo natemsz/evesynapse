@@ -73,7 +73,10 @@ func loadSwarmConfig(getenv func(string) string) swarmConfig {
 	switch raw {
 	case "", swarmOff:
 		s.mode = swarmOff
-	case swarmOpen, swarmAllowlist:
+	case swarmOpen, "on":
+		// "on" is the plain-English spelling of open.
+		s.mode = swarmOpen
+	case swarmAllowlist:
 		s.mode = raw
 	default:
 		logging.Warnf("evesynapse: SHARED_CACHE=%q is not off, open or allowlist; the shared cache stays off", getenv("SHARED_CACHE"))

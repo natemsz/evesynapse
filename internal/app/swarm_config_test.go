@@ -37,8 +37,18 @@ func TestSwarmUnknownModeStaysOff(t *testing.T) {
 	}
 }
 
+func TestSwarmOnMeansOpen(t *testing.T) {
+	s := loadSwarmConfig(swarmEnv(map[string]string{
+		"SHARED_CACHE":        "on",
+		"SHARED_CACHE_SECRET": strings.Repeat("s", 32),
+	}))
+	if !s.enabled() || s.allowlisted() || s.err != nil || s.mode != swarmOpen {
+		t.Fatalf("on: enabled=%v allowlisted=%v mode=%q err=%v", s.enabled(), s.allowlisted(), s.mode, s.err)
+	}
+}
+
 func TestSwarmNeedsSecret(t *testing.T) {
-	for _, mode := range []string{"open", "allowlist", "OPEN"} {
+	for _, mode := range []string{"open", "allowlist", "OPEN", "on"} {
 		s := loadSwarmConfig(swarmEnv(map[string]string{"SHARED_CACHE": mode}))
 		if s.err == nil {
 			t.Fatalf("SHARED_CACHE=%s without secret: no error, want refusal", mode)

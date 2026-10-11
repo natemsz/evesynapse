@@ -1,0 +1,25 @@
+# EveSynapse shared-cache seed worker.
+#
+# Usage (once):
+#   cd swarm-seed
+#   wrangler kv:namespace create SEED_PEERS
+#   # paste the id it prints below (preview_id for `wrangler dev`)
+#   wrangler secret put SHARED_CACHE_SECRET   # the SAME secret the instances share
+#   wrangler deploy
+#
+# Then point instances at it:
+#   SHARED_CACHE_SEEDS=https://<your-worker>.<account>.workers.dev
+#
+# The worker mints its own Ed25519 identity on first boot and keeps
+# it in KV: instances pin it on first contact like any peer. If the
+# identity is ever lost (KV wiped), instances re-pin on next gossip
+# like a new peer — no operator action besides checking the alias
+# changed.
+
+name = "evesynapse-seed"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+[[kv_namespaces]]
+binding = "SEED_PEERS"
+# id = "PASTE_KV_NAMESPACE_ID_HERE"

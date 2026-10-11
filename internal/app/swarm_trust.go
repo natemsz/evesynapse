@@ -200,6 +200,10 @@ func (app *Application) swarmGossip(ctx context.Context, now time.Time) {
 	if learned > 0 {
 		logging.Infof("swarm: gossip heard from %d peer(s)", learned)
 	}
+	// Tell the seeds who is listening where (swarm_seed.go):
+	// the same round, so heartbeats refresh well inside the
+	// directory TTL. Never spends ESI budget.
+	app.swarmAnnounceToSeeds(ctx, now)
 }
 
 // swarmContactPeer asks one address for its membership list and

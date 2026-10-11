@@ -1218,9 +1218,15 @@ instance by address, approve, exclude, re-admit, or remove one
 on the Admin page (removing also rotates a peer's key: the next
 gossip pins the new one). A seed serves its member list —
 itself plus every peer it knows — so one address teaches a new
-instance the whole swarm. The Sync page's "Shared cache" card
-shows entries applied, ESI calls saved, spot checks for and
-against, and each instance's trust.
+instance the whole swarm. The best seed is the Cloudflare
+worker in swarm-seed/: it holds no Eve data, speaks the same
+protocol (sealed lists, signed entries), and keeps a directory
+of heartbeats — every gossip round each instance announces its
+own dialable address, and dead peers age out on their own. The
+worker answers only to secret-holders and 404s everything else,
+so it is not crawlable or indexable. The Sync page's "Shared
+cache" card shows entries applied, ESI calls saved, spot checks
+for and against, and each instance's trust.
 
 The member list itself is private to the swarm. Fetching it
 needs the shared secret, and the list is sealed under a key

@@ -148,6 +148,13 @@ var pgSwarmSchema string
 //go:embed schema_pg/031_trade_ideas.sql
 var pgTradeIdeasSchema string
 
+// Step 032: the corp pulse change log (seen member/structure
+// IDs per corporation, plus recorded departures, arrivals and
+// removals for the Corp pulse widget).
+//
+//go:embed schema_pg/032_pulse_events.sql
+var pgPulseEventsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -208,6 +215,7 @@ func schemaSteps() []schemaStep {
 		{29, "foresight", pgForesightSchema, ""},
 		{30, "swarm", pgSwarmSchema, ""},
 		{31, "trade_ideas", pgTradeIdeasSchema, ""},
+		{32, "pulse_events", pgPulseEventsSchema, ""},
 	}
 }
 

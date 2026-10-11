@@ -498,6 +498,21 @@ type PlanetName struct {
 	ResolvedAt sql.NullTime `json:"resolved_at"`
 }
 
+type PulseEvent struct {
+	CorpID int64     `json:"corp_id"`
+	Kind   string    `json:"kind"`
+	Key    string    `json:"key"`
+	Name   string    `json:"name"`
+	At     time.Time `json:"at"`
+}
+
+type PulseSeen struct {
+	CorpID int64  `json:"corp_id"`
+	Kind   string `json:"kind"`
+	Key    string `json:"key"`
+	Name   string `json:"name"`
+}
+
 type PushSubscription struct {
 	ID        int64        `json:"id"`
 	UserID    int64        `json:"user_id"`

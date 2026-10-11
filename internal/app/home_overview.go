@@ -43,6 +43,10 @@ const (
 	widgetServer     = "server"
 	widgetPI         = "pi"
 	widgetTradeIdeas = "tradeideas"
+	widgetTraining   = "training"
+	widgetPulse      = "pulse"
+	widgetWalletFlow = "walletflow"
+	widgetUpkeep     = "upkeep"
 )
 
 // Widget size classes for the home grid engine. A full module
@@ -83,6 +87,10 @@ var homeWidgetCatalog = []widgetDef{
 	{widgetSkills, "Skills", "The next skill finishes across the fleet, plus who isn't training.", widgetSizeFlex, "skills"},
 	{widgetServer, "Tranquility", "Server status: players online.", widgetSizeFlex, "server"},
 	{widgetTradeIdeas, "Trade ideas", "Gemma's read on the Forge spread scanner: top trade opportunities across strategies, refreshed twice a day.", widgetSizeFlex, "tradeideas"},
+	{widgetTraining, "Training horizon", "The next 10 skill finishes across every character, plus who is sitting idle.", widgetSizeFlex, "skills"},
+	{widgetPulse, "Corp pulse", "What changed in the corporation: members in and out, wallet movements, structure arrivals and timers. Needs a qualifying in-game role.", widgetSizeFlex, "corp_members"},
+	{widgetWalletFlow, "Wallet flow", "Income vs spend over 7 and 30 days with top sources, sinks, and a per-character breakdown.", widgetSizeFull, "wallet"},
+	{widgetUpkeep, "Upkeep & fuel", "Structures low on fuel, unanchoring, or running a state timer. Station Managers and Directors only.", widgetSizeFlex, "corp_structures"},
 }
 
 // defaultHomeLayout is what accounts with no saved layout get:
@@ -300,6 +308,10 @@ var widgetSnapshotKinds = map[string][]string{
 	widgetServer:     {},
 	widgetPI:         {esi.SnapPlanets},
 	widgetTradeIdeas: {}, // stored model answer only; no character snapshots
+	widgetTraining:   {esi.SnapSkillqueue},
+	widgetPulse:      {}, // corp snapshots load per corporation, not via bundles
+	widgetWalletFlow: {esi.SnapWalletJournal},
+	widgetUpkeep:     {}, // corp snapshots load per corporation, not via bundles
 }
 
 // charSnaps is one character's decoded snapshot bundle. Fields
@@ -356,6 +368,9 @@ type charSnaps struct {
 
 	orderHistKnown bool
 	orderHist      esi.CharOrderHistory
+
+	journalKnown bool
+	journal      esi.WalletJournal
 
 	// fetched records when each snapshot was fetched, so widgets
 	// can date their data ("as of").
@@ -537,6 +552,11 @@ func (b *charSnaps) decode(kind, payload string) {
 		if json.Unmarshal([]byte(payload), &v) == nil {
 			b.orderHistKnown, b.orderHist = true, v
 		}
+	case esi.SnapWalletJournal:
+		var v esi.WalletJournal
+		if json.Unmarshal([]byte(payload), &v) == nil {
+			b.journalKnown, b.journal = true, v
+		}
 	}
 }
 
@@ -611,6 +631,10 @@ type homeWidget struct {
 	Server     *serverStatusView
 	PI         *piWidget
 	TradeIdeas *tradeIdeasWidget
+	Training   *trainingWidget
+	Pulse      *pulseWidget
+	WalletFlow *walletFlowWidget
+	Upkeep     *upkeepWidget
 }
 
 // homeView is the signed-in Home body (pageData.Home).
@@ -1752,6 +1776,14 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 			}
 		case widgetTradeIdeas:
 			w.TradeIdeas = app.buildTradeIdeas(ctx)
+		case widgetTraining:
+			w.Training = app.buildTraining(ctx, bundles)
+		case widgetPulse:
+			w.Pulse = app.buildPulse(ctx, userID)
+		case widgetWalletFlow:
+			w.WalletFlow = app.buildWalletFlow(ctx, bundles)
+		case widgetUpkeep:
+			w.Upkeep = app.buildUpkeep(ctx, userID)
 		}
 		view.Widgets = append(view.Widgets, w)
 	}

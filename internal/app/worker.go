@@ -329,6 +329,14 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	c.warmNames(ctx, characters)
 	clock.mark("names", time.Now())
 
+	// Corp pulse change log (home_pulse.go): diff the stored
+	// corp snapshots into pulse_events. Local data only, so it
+	// runs whether or not ESI was reachable.
+	c.pass("recording corp pulse", func() (int, bool) {
+		return app.refreshPulseEvents(ctx, characters)
+	})
+	clock.mark("corp pulse", time.Now())
+
 	// Last, with everything this cycle fetched already stored: turn
 	// what is newly true into notifications (notify.go). Local data
 	// only, so it runs whether or not ESI was reachable.

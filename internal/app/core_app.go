@@ -384,8 +384,9 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		// What the Sync and Admin search boxes suggest while typing.
 		r.Get("/suggest", app.handleCharacterSuggest)
 		r.Post("/accounts/remove", app.handleAdminAccountRemove)
-		// Shared cache (swarm_pages.go): approve, exclude,
-		// re-admit and remove swarm members.
+		// Shared cache (swarm_pages.go): add, approve,
+		// exclude, re-admit and remove swarm members.
+		r.Post("/swarm/add", app.handleSwarmAddPeer)
 		r.Post("/swarm/approve", app.handleSwarmApprove)
 		r.Post("/swarm/exclude", app.handleSwarmExclude)
 		r.Post("/swarm/admit", app.handleSwarmAdmit)

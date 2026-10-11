@@ -7,6 +7,7 @@ package app
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -102,6 +103,54 @@ func TestSwarmAdminActions(t *testing.T) {
 	bad := url.Values{"instance": {"peer-nope"}}
 	if code, _ := postForm(t, app, cookie, "/admin/swarm/exclude", bad); code != http.StatusSeeOther {
 		t.Fatalf("exclude unknown: status %d, want 303", code)
+	}
+}
+
+func TestSwarmManualAdd(t *testing.T) {
+	app, cookie := swarmPageApp(t)
+	app.cfg.swarm = swarmConfig{mode: swarmOpen, secret: swarmTestSecret, gossipHours: defaultSwarmGossipHours}
+	local, err := mintSwarmIdentity()
+	if err != nil {
+		t.Fatalf("mint local: %v", err)
+	}
+	local.id = "local-manual"
+	app.swarmID = local
+	app.swarmCli = newSwarmClient(swarmTestSecret)
+
+	transport := &countingTransport{}
+	peer, _, _ := buildCorpTestApp(t, transport)
+	peer.cfg.swarm = swarmConfig{mode: swarmOpen, secret: swarmTestSecret, gossipHours: defaultSwarmGossipHours}
+	remote, err := mintSwarmIdentity()
+	if err != nil {
+		t.Fatalf("mint peer: %v", err)
+	}
+	remote.id = "peer-manual"
+	peer.swarmID = remote
+	peer.swarmCli = newSwarmClient(swarmTestSecret)
+	srv := httptest.NewServer(peer.Handler())
+	t.Cleanup(srv.Close)
+
+	// Cleartext off-machine is refused before anything dials.
+	if code, _ := postForm(t, app, cookie, "/admin/swarm/add", url.Values{"url": {"http://example.com/"}}); code != http.StatusSeeOther {
+		t.Fatalf("add cleartext: status %d, want 303", code)
+	}
+	if rows, err := app.queries.ListSwarmPeers(context.Background()); err != nil || len(rows) != 0 {
+		t.Fatalf("cleartext add learned %d peers, want 0", len(rows))
+	}
+	// A answering address is learned under trust on first use,
+	// approved outright in open mode.
+	if code, _ := postForm(t, app, cookie, "/admin/swarm/add", url.Values{"url": {srv.URL}}); code != http.StatusSeeOther {
+		t.Fatalf("add: status %d, want 303", code)
+	}
+	got, err := app.queries.GetSwarmPeer(context.Background(), "peer-manual")
+	if err != nil {
+		t.Fatalf("manual add did not learn the peer: %v", err)
+	}
+	if got.Source != "manual" || !got.Approved || got.Excluded {
+		t.Fatalf("learned peer: %+v", got)
+	}
+	if got.PublicKey != remote.publicString() {
+		t.Fatalf("learned key is not the peer's")
 	}
 }
 

@@ -189,35 +189,42 @@ func (app *Application) swarmGossip(ctx context.Context, now time.Time) {
 	}
 	learned := 0
 	for _, c := range contacts {
-		members, signer, key, err := app.swarmFetchMembers(ctx, c.url, c.id, c.key)
-		if err != nil {
-			continue
-		}
-		// A known peer serves under its pinned identity; a seed
-		// introduces itself (trust on first use — it holds the
-		// secret, which is the membership proof).
-		if c.id != "" && signer != c.id {
-			continue
-		}
 		source := "gossip"
 		if c.id == "" {
 			source = "seed"
 		}
-		if err := app.swarmLearnMembers(ctx, members, signer, key, c.url, source, now); err != nil {
-			logging.Errorf("swarm: learn members via %s: %v", c.url, err)
-			continue
-		}
-		learned++
-		if peer, err := app.queries.GetSwarmPeer(ctx, signer); err == nil {
-			_ = peer
-			if err := app.queries.TouchSwarmPeerGossip(ctx, db.TouchSwarmPeerGossipParams{InstanceID: signer, LastGossip: timeSet(now)}); err != nil {
-				logging.Errorf("swarm: touch gossip %s: %v", signer, err)
-			}
+		if app.swarmContactPeer(ctx, c.url, c.id, c.key, source, now) {
+			learned++
 		}
 	}
 	if learned > 0 {
 		logging.Infof("swarm: gossip heard from %d peer(s)", learned)
 	}
+}
+
+// swarmContactPeer asks one address for its membership list and
+// records what it learns: the one gossip round, shared by seeds,
+// known peers, and operator-added addresses alike. A known peer
+// must serve under its pinned identity; an address with no
+// pinned key yet is trust-on-first-use — the shared secret
+// already proved membership, and the key proves possession from
+// here on. It reports whether anyone answered.
+func (app *Application) swarmContactPeer(ctx context.Context, baseURL, peerID, peerKey, source string, now time.Time) bool {
+	members, signer, key, err := app.swarmFetchMembers(ctx, baseURL, peerID, peerKey)
+	if err != nil {
+		return false
+	}
+	if peerID != "" && signer != peerID {
+		return false
+	}
+	if err := app.swarmLearnMembers(ctx, members, signer, key, baseURL, source, now); err != nil {
+		logging.Errorf("swarm: learn members via %s: %v", baseURL, err)
+		return false
+	}
+	if err := app.queries.TouchSwarmPeerGossip(ctx, db.TouchSwarmPeerGossipParams{InstanceID: signer, LastGossip: timeSet(now)}); err != nil {
+		logging.Errorf("swarm: touch gossip %s: %v", signer, err)
+	}
+	return true
 }
 
 // swarmFetchMembers asks one URL for its membership list. A

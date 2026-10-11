@@ -82,11 +82,10 @@ func (s *swarmESISStub) RoundTrip(req *http.Request) (*http.Response, error) {
 // checks. Each has its own database; ESI truth is canned per
 // side (A never needs it, B checks against it).
 type swarmPair struct {
-	a, b     *Application
-	urlA     string
-	stubB    *swarmESISStub
-	secret   string
-	cleanup  func()
+	a, b   *Application
+	urlA   string
+	stubB  *swarmESISStub
+	secret string
 }
 
 func newSwarmPair(t *testing.T, modeB string) *swarmPair {

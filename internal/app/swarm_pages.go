@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
@@ -276,6 +277,46 @@ func (app *Application) handleSwarmAdmit(w http.ResponseWriter, r *http.Request)
 	}
 	logging.Warnf("admin: account %d re-admitted swarm instance %s", app.userID(r.Context()), shortenSwarmID(id))
 	back("Instance " + shortenSwarmID(id) + " was re-admitted with its trust history intact.")
+}
+
+// handleSwarmAddPeer learns one instance by address (POST
+// /admin/swarm/add): the operator types a bare origin
+// (https://evesynapse.app), and the instance asks it for its
+// membership list — the same round as gossip, on demand. The
+// address joins under trust on first use like any seed; in
+// allowlist mode it still waits for approval. Refused while
+// sharing is off, and refused for anything but an https origin
+// (http on loopback, for local testing).
+func (app *Application) handleSwarmAddPeer(w http.ResponseWriter, r *http.Request) {
+	back := app.flashBack(w, r, "/admin/")
+	if r.ParseForm() != nil {
+		back("That request could not be read.")
+		return
+	}
+	if !app.cfg.swarm.enabled() || app.swarmID == nil || app.swarmCli == nil {
+		back("Nothing was added: the shared cache is off. Set SHARED_CACHE and restart first.")
+		return
+	}
+	raw := strings.TrimSpace(r.Form.Get("url"))
+	if !validSwarmBaseURL(raw) {
+		back("Nothing was added: that is not an https address (http only on loopback).")
+		return
+	}
+	if app.swarmContactPeer(r.Context(), strings.TrimSuffix(raw, "/"), "", "", "manual", time.Now().UTC()) {
+		logging.Warnf("admin: account %d added swarm address %s", app.userID(r.Context()), raw)
+		back("That address answered: its instances are listed below" + approvalNote(app) + ".")
+		return
+	}
+	back("Nothing was added: that address did not answer as a swarm member.")
+}
+
+// approvalNote reminds where newly learned instances wait in
+// allowlist mode.
+func approvalNote(app *Application) string {
+	if app.cfg.swarm.allowlisted() {
+		return ", waiting for approval"
+	}
+	return ""
 }
 
 // handleSwarmRemove forgets one peer entirely (POST

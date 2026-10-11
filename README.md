@@ -1206,12 +1206,14 @@ is verified before anything is stored, and entries wait in
 staging until a spot check re-fetches the datum from ESI. A bad
 signature rejects the entry; a failed spot check discards it
 and counts against its signer. Ten checks under half trust
-excludes the signer on its own. The operator can always
-approve, exclude, re-admit, or remove an instance on the Admin
-page (removing also rotates a peer's key: the next gossip pins
-the new one). The Sync page's "Shared cache" card shows entries
-applied, ESI calls saved, spot checks for and against, and each
-instance's trust.
+excludes the signer on its own. The operator can always add an
+instance by address, approve, exclude, re-admit, or remove one
+on the Admin page (removing also rotates a peer's key: the next
+gossip pins the new one). A seed serves its member list —
+itself plus every peer it knows — so one address teaches a new
+instance the whole swarm. The Sync page's "Shared cache" card
+shows entries applied, ESI calls saved, spot checks for and
+against, and each instance's trust.
 
 ## Logging
 

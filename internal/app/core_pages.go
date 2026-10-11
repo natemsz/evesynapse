@@ -309,6 +309,15 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 		return
 	}
 
+	// First-render metric: the data load is done, so a scope with
+	// nothing still on its way rendered complete. Fragments and
+	// status reads carry no scope and never count.
+	if status == http.StatusOK {
+		if scope := pageScope(ctx); scope != "" {
+			app.noteRender(app.pendingPageWantCount(ctx, scope) == 0)
+		}
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	_, _ = buf.WriteTo(w)

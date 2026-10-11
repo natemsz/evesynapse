@@ -63,3 +63,12 @@ FROM typing_guesses
 WHERE kind = $1 AND entity_id = $2 AND region_id = $3 AND noted_at <= $4
 ORDER BY noted_at DESC
 LIMIT 1;
+
+-- Hit rates by guess kind over a window: what the Sync page's
+-- guess table shows beside the foresight one.
+-- name: ListTypingGuessRates :many
+SELECT kind, COUNT(*) AS queued, COUNT(hit_at) AS opened
+FROM typing_guesses
+WHERE noted_at >= $1
+GROUP BY kind
+ORDER BY kind;

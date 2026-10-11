@@ -71,7 +71,10 @@ type syncView struct {
 	// it is (worker_timing.go); nil before the first has finished.
 	Timing *workerTimingView
 	// Foresight: what warming on game events cost and what came of it.
-	Foresight  *foresightStats
+	Foresight *foresightStats
+	// Serving: whether pages render complete, how old what they
+	// show is, and what viewing costs.
+	Serving    *serveMetricsView
 	Lookup     characterLookupView
 	Character  *syncCharacterView // nil until one is found
 	SDE        *sdeView
@@ -96,6 +99,7 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 		Warming:     status.Warming,
 		Timing:      workerTimingViewFor(status),
 		Foresight:   app.foresightStats(ctx, time.Now().UTC()),
+		Serving:     app.serveMetrics(ctx, time.Now().UTC()),
 		SDE:         app.loadSDEView(ctx),
 		Global:      app.loadGlobalView(ctx),
 	}

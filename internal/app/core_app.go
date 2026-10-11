@@ -182,6 +182,10 @@ type Application struct {
 	swarmCli        *swarmClient
 	swarmMu         sync.Mutex
 	swarmLastGossip time.Time
+
+	// Trade ideas (tradeideas.go): the Cloudflare client, set in
+	// tests; production builds a timeout client per refresh.
+	tradeIdeasHTTP *http.Client
 }
 
 // New opens the database (applying the embedded baseline schema

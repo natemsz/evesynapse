@@ -127,9 +127,10 @@ func (app *Application) loadSwarmPeers(ctx context.Context) []swarmPeerRow {
 				row.State = "Excluded (auto)"
 			}
 		case app.swarmIsSeed(p.BaseUrl):
-			// A seed is a directory, not a data source: it is
-			// never pulled, so approval is meaningless and the
-			// state says what it is.
+			// A configured seed URL is a directory: approval is
+			// meaningless and the state says what it is. Pulls
+			// are decided by identity, not address, so a
+			// directory that also serves stays pullable.
 			row.State = "Seed"
 		case p.Approved:
 			row.State = "Approved"

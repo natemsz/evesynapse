@@ -263,9 +263,11 @@ func TestSwarmFetchPhasePullsDemand(t *testing.T) {
 	}
 }
 
-// TestSwarmPullSkipsSeeds proves pulls never spend a peer slot
-// on a seed directory: the seed sees no pull, while a real
-// source beside it still serves.
+// TestSwarmPullSkipsSeeds proves the skip is the protocol's
+// seed marker, not the configured URL: a seed identity is never
+// pulled wherever it is listed from, while a directory that
+// also serves under its own identity stays pullable even when
+// it is a configured seed.
 func TestSwarmPullSkipsSeeds(t *testing.T) {
 	p := newSwarmPair(t, swarmOpen)
 	ctx := context.Background()
@@ -277,7 +279,8 @@ func TestSwarmPullSkipsSeeds(t *testing.T) {
 		_, _ = w.Write([]byte(`{"entries":[]}`))
 	}))
 	t.Cleanup(seed.Close)
-	p.b.cfg.swarm.seeds = []string{seed.URL}
+	// A serves data AND is a configured seed directory: still pulled.
+	p.b.cfg.swarm.seeds = []string{p.urlA}
 	if err := p.b.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
 		InstanceID: "seed", BaseUrl: seed.URL, PublicKey: strings.Repeat("A", 44),
 		Source: "seed", FirstSeen: now,

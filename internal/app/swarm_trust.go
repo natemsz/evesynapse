@@ -406,9 +406,13 @@ func (app *Application) swarmDemandKeys(ctx context.Context) []swarmPullKey {
 // what comes back. A peer may only serve under its own pinned
 // identity: entries signed by anyone else are skipped, so a
 // forwarder cannot spend another signer's reputation (or its
-// own, on another's lies). Seeds are directories, not sources —
-// a seed holds no data by construction, so pulling it would
-// spend one of the cycle's peer slots learning nothing.
+// own, on another's lies). Seed-only peers are directories,
+// not sources — the worker signs under its fixed "seed"
+// identity and holds no data, so pulling it would spend one of
+// the cycle's peer slots learning nothing. A directory that
+// also serves under its own minted identity (a warmer acting
+// as seed) stays pullable: only the protocol's seed marker
+// skips, never the configured URL.
 func (app *Application) swarmPull(ctx context.Context, now time.Time) {
 	keys := app.swarmDemandKeys(ctx)
 	if len(keys) == 0 {
@@ -421,7 +425,7 @@ func (app *Application) swarmPull(ctx context.Context, now time.Time) {
 	}
 	n := 0
 	for _, p := range peers {
-		if app.swarmIsSeed(p.BaseUrl) {
+		if p.InstanceID == swarmSeedInstanceID {
 			continue
 		}
 		if n >= maxSwarmPullPeersPerCycle {

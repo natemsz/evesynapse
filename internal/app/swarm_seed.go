@@ -111,6 +111,11 @@ func (c *swarmClient) sendSeedAnnounce(ctx context.Context, seedURL string, entr
 	return nil
 }
 
+// swarmSeedInstanceID is the seed worker's fixed identity. It
+// is the protocol's marker for a directory-only peer: pulls
+// skip it, wherever it is listed from.
+const swarmSeedInstanceID = "seed"
+
 // swarmAnnounceToSeeds heartbeats every configured seed. One
 // failure never stops the rest; silence (off, or nothing to
 // say) is not an error — but a configured seed with nothing to

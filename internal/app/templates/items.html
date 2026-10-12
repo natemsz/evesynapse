@@ -125,6 +125,24 @@
 {{if $d.BlueprintID}} · <a href="/planner/?product={{$d.ID}}">Plan manufacturing</a>{{end}}
 </p>
 
+{{if $d.Hubs}}
+<h3>Hub prices</h3>
+<div class="tw">
+<table>
+  <thead><tr><th>Hub</th><th>Best sell</th><th>Best buy</th></tr></thead>
+  <tbody>
+  {{range $d.Hubs}}<tr><td>{{.Region}}</td><td>{{if .BestSell}}{{.BestSell}} ISK{{else}}—{{end}}</td><td>{{if .BestBuy}}{{.BestBuy}} ISK{{else}}—{{end}}</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+{{if $d.History}}
+<h3>Price history</h3>
+{{$d.History}}
+<p><small>{{$d.HistoryNote}}</small></p>
+{{else if $d.HistoryNote}}<p class="hint">{{$d.HistoryNote}}</p>{{end}}
+
 {{template "type-description" $d}}
 
 {{if $d.UsedIn}}

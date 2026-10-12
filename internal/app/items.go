@@ -142,6 +142,13 @@ type itemTypeDetail struct {
 	BlueprintID int64           // != 0: manufacturable — link the planner
 	UsedIn      []itemUsedInRow // blueprints consuming this type, capped
 	UsedInMore  bool            // more blueprints use it than are listed
+
+	// Market sections, filled by the type-page handler for
+	// market-traded types only: swept hub prices and a history
+	// sparkline, both stored reads like the rest of the page.
+	Hubs        []publicHubPrice
+	History     template.HTML
+	HistoryNote string
 }
 
 type itemUsedInRow struct {
@@ -502,11 +509,25 @@ func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/items/", http.StatusSeeOther)
 		return
 	}
-	app.markGuessHit(ctx, pageWantTypeDescription, typeID, 0)
+	// Anonymous renders never queue work: the description
+	// warms on signed-in visits, crawlers get stored rows.
+	if data.LoggedIn {
+		app.markGuessHit(ctx, pageWantTypeDescription, typeID, 0)
+	}
 
 	detail := app.buildItemTypeDetail(ctx, t)
-	if detail.DescState == "pending" {
+	if data.LoggedIn && detail.DescState == "pending" {
 		app.notePageWant(ctx, pageWantTypeDescription, typeID, 0)
+	}
+
+	if detail.OnMarket {
+		hubs, forge := app.publicTypeMarket(ctx, typeID)
+		detail.Hubs = hubs
+		if forge > 0 {
+			detail.History, detail.HistoryNote = app.publicHistorySparkline(ctx, forge, typeID)
+		} else {
+			detail.HistoryNote = "No price history swept yet."
+		}
 	}
 
 	view.TypeDetail = detail

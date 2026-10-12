@@ -291,6 +291,16 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		c.limited = true
 	}
 
+	// Industry cost indices ride the same window: one public
+	// call keeps the planner's installation fees honest, and a
+	// fresh table is never refetched early.
+	if stored, iLimited := app.refreshCostIndices(ctx); stored {
+		c.refreshed++
+	} else if iLimited {
+		logging.Warnf("worker: ESI error limit hit refreshing cost indices; backing off until next cycle")
+		c.limited = true
+	}
+
 	// The character pass, several characters at a time
 	// (worker_lanes.go).
 	c.refreshCharacters(ctx, eligible)

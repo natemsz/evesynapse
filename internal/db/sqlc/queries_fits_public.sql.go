@@ -63,16 +63,11 @@ WHERE lf.is_public AND NOT lf.is_draft
         SELECT 1 FROM jsonb_array_elements(
             CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'items') = 'array' THEN lf.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
         WHERE (it->>'typeId')::bigint = $8::bigint))
-  AND ($9::text NOT IN ('only', 'none')
-    OR ($9::text = 'only' AND EXISTS (
+  AND ($9::text != 'none' OR NOT EXISTS (
         SELECT 1 FROM jsonb_array_elements(
             CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'items') = 'array' THEN lf.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
         JOIN sde_type_attributes ma ON ma.type_id = (it->>'typeId')::bigint AND ma.attribute_id = 1692 AND ma.value IN (4, 5, 6)))
-    OR ($9::text = 'none' AND NOT EXISTS (
-        SELECT 1 FROM jsonb_array_elements(
-            CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'items') = 'array' THEN lf.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
-        JOIN sde_type_attributes ma ON ma.type_id = (it->>'typeId')::bigint AND ma.attribute_id = 1692 AND ma.value IN (4, 5, 6))))
-  AND ($10::float8 <= 0 OR (lf.total_price > 0 AND lf.total_price <= $10::float8))
+  AND ($10::float8 <= 0 OR lf.total_price <= 0 OR lf.total_price <= $10::float8)
   AND ($11::boolean IS NOT TRUE OR (
         sg.name IN ('Corvette', 'Frigate', 'Destroyer', 'Cruiser', 'Battlecruiser', 'Battleship', 'Industrial', 'Mining Frigate', 'Shuttle')
         AND NOT EXISTS (
@@ -105,11 +100,14 @@ type CountPublicFitsParams struct {
 // reads. Every browser filter is a SQL predicate and every page is
 // LIMIT/OFFSET bounded; Go never filters full tables. The default
 // rank sort is Bayesian (fit average shrunk toward the global mean
-// with weight 5) over fits updated in the rolling last 14 days, so
-// one 5-star vote cannot top the chart. Other sorts span all time.
-// Meta groups resolve through dogma attribute 1692 (4 faction,
-// 5 officer, 6 deadspace, 2 tech II), the same source the fitting
-// engine reads. Tags match whole, whatever their case.
+// with weight 5, via public_fit_rank in migration 033) over fits
+// updated in the rolling last 14 days, so one 5-star vote cannot
+// top the chart. Other sorts span all time. Meta groups resolve
+// through dogma attribute 1692 (4 faction, 5 officer, 6 deadspace,
+// 2 tech II), the same source the fitting engine reads. The faction
+// filter is Any or No faction modules; a max price excludes only
+// fits with a known price above the cap (0 means unknown). Tags
+// match whole, whatever their case.
 // ---------------------------------------------------------------------
 func (q *Queries) CountPublicFits(ctx context.Context, arg CountPublicFitsParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countPublicFits,
@@ -184,16 +182,11 @@ WHERE lf.is_public AND NOT lf.is_draft
         SELECT 1 FROM jsonb_array_elements(
             CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'items') = 'array' THEN lf.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
         WHERE (it->>'typeId')::bigint = $8::bigint))
-  AND ($9::text NOT IN ('only', 'none')
-    OR ($9::text = 'only' AND EXISTS (
+  AND ($9::text != 'none' OR NOT EXISTS (
         SELECT 1 FROM jsonb_array_elements(
             CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'items') = 'array' THEN lf.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
         JOIN sde_type_attributes ma ON ma.type_id = (it->>'typeId')::bigint AND ma.attribute_id = 1692 AND ma.value IN (4, 5, 6)))
-    OR ($9::text = 'none' AND NOT EXISTS (
-        SELECT 1 FROM jsonb_array_elements(
-            CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'items') = 'array' THEN lf.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
-        JOIN sde_type_attributes ma ON ma.type_id = (it->>'typeId')::bigint AND ma.attribute_id = 1692 AND ma.value IN (4, 5, 6))))
-  AND ($10::float8 <= 0 OR (lf.total_price > 0 AND lf.total_price <= $10::float8))
+  AND ($10::float8 <= 0 OR lf.total_price <= 0 OR lf.total_price <= $10::float8)
   AND ($11::boolean IS NOT TRUE OR (
         sg.name IN ('Corvette', 'Frigate', 'Destroyer', 'Cruiser', 'Battlecruiser', 'Battleship', 'Industrial', 'Mining Frigate', 'Shuttle')
         AND NOT EXISTS (
@@ -205,9 +198,7 @@ WHERE lf.is_public AND NOT lf.is_draft
             CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'tags') = 'array' THEN lf.items_json::jsonb -> 'tags' ELSE '[]'::jsonb END) AS t(tag)
         WHERE lower(t.tag) = lower($12::text)))
 ORDER BY
-  CASE WHEN $1::text = 'rank' THEN
-    (lf.rating_sum + 5 * (SELECT COALESCE(AVG(CASE WHEN pf.rating_count > 0 THEN pf.rating_sum::float8 / pf.rating_count END), 3)
-                          FROM local_fittings pf WHERE pf.is_public AND NOT pf.is_draft)) / (lf.rating_count + 5) END DESC NULLS LAST,
+  CASE WHEN $1::text = 'rank' THEN public_fit_rank(lf.rating_sum, lf.rating_count) END DESC NULLS LAST,
   CASE WHEN $1::text = 'views' THEN lf.view_count END DESC NULLS LAST,
   CASE WHEN $1::text = 'new' THEN lf.updated_at END DESC NULLS LAST,
   CASE WHEN $1::text = 'old' THEN lf.updated_at END ASC NULLS LAST,
@@ -307,11 +298,15 @@ func (q *Queries) ListPublicFits(ctx context.Context, arg ListPublicFitsParams) 
 const listPublicFitsForShip = `-- name: ListPublicFitsForShip :many
 SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at,
        lf.view_count, lf.total_price, lf.rating_count, lf.rating_sum,
+       COALESCE(tn.name, '')::text AS ship_name,
+       COALESCE(sg.name, '')::text AS hull,
        COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '')::text AS author_name
 FROM local_fittings lf
+LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
+LEFT JOIN sde_types st ON st.type_id = lf.ship_type_id
+LEFT JOIN sde_groups sg ON sg.group_id = st.group_id
 WHERE lf.is_public AND NOT lf.is_draft AND lf.ship_type_id = $1
-ORDER BY (lf.rating_sum + 5 * (SELECT COALESCE(AVG(CASE WHEN pf.rating_count > 0 THEN pf.rating_sum::float8 / pf.rating_count END), 3)
-                              FROM local_fittings pf WHERE pf.is_public AND NOT pf.is_draft)) / (lf.rating_count + 5) DESC,
+ORDER BY public_fit_rank(lf.rating_sum, lf.rating_count) DESC,
          lf.id DESC
 LIMIT $2
 `
@@ -332,6 +327,8 @@ type ListPublicFitsForShipRow struct {
 	TotalPrice  float64   `json:"total_price"`
 	RatingCount int64     `json:"rating_count"`
 	RatingSum   int64     `json:"rating_sum"`
+	ShipName    string    `json:"ship_name"`
+	Hull        string    `json:"hull"`
 	AuthorName  string    `json:"author_name"`
 }
 
@@ -355,7 +352,53 @@ func (q *Queries) ListPublicFitsForShip(ctx context.Context, arg ListPublicFitsF
 			&i.TotalPrice,
 			&i.RatingCount,
 			&i.RatingSum,
+			&i.ShipName,
+			&i.Hull,
 			&i.AuthorName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublicHubStats = `-- name: ListPublicHubStats :many
+SELECT m.region_id, m.best_sell, m.best_buy,
+       COALESCE(r.name, '')::text AS region_name
+FROM market_region_stats m
+LEFT JOIN sde_regions r ON r.region_id = m.region_id
+WHERE m.type_id = $1
+ORDER BY m.region_id
+`
+
+type ListPublicHubStatsRow struct {
+	RegionID   int64   `json:"region_id"`
+	BestSell   float64 `json:"best_sell"`
+	BestBuy    float64 `json:"best_buy"`
+	RegionName string  `json:"region_name"`
+}
+
+func (q *Queries) ListPublicHubStats(ctx context.Context, typeID int64) ([]ListPublicHubStatsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPublicHubStats, typeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPublicHubStatsRow
+	for rows.Next() {
+		var i ListPublicHubStatsRow
+		if err := rows.Scan(
+			&i.RegionID,
+			&i.BestSell,
+			&i.BestBuy,
+			&i.RegionName,
 		); err != nil {
 			return nil, err
 		}
@@ -467,8 +510,7 @@ const sitemapTopFits = `-- name: SitemapTopFits :many
 SELECT lf.id, lf.updated_at
 FROM local_fittings lf
 WHERE lf.is_public AND NOT lf.is_draft
-ORDER BY (lf.rating_sum + 5 * (SELECT COALESCE(AVG(CASE WHEN pf.rating_count > 0 THEN pf.rating_sum::float8 / pf.rating_count END), 3)
-                              FROM local_fittings pf WHERE pf.is_public AND NOT pf.is_draft)) / (lf.rating_count + 5) DESC,
+ORDER BY public_fit_rank(lf.rating_sum, lf.rating_count) DESC,
          lf.id DESC
 LIMIT 1000
 `

@@ -25,3 +25,12 @@ UPDATE local_fittings lf SET total_price =
     FROM jsonb_array_elements(CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'items') = 'array' THEN lf.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
     JOIN guide_prices gp ON gp.type_id = (it->>'typeId')::bigint), 0)
 WHERE lf.total_price = 0;
+-- public_fit_rank is the browser's Bayesian rank in one place:
+-- the fit's average shrunk toward the global mean with weight 5.
+-- The list, ship-page and sitemap queries all call it, so the
+-- numbers cannot drift apart.
+CREATE OR REPLACE FUNCTION public_fit_rank(rating_sum BIGINT, rating_count BIGINT)
+RETURNS DOUBLE PRECISION LANGUAGE sql STABLE AS $$
+  SELECT (rating_sum + 5 * (SELECT COALESCE(AVG(CASE WHEN pf.rating_count > 0 THEN pf.rating_sum::float8 / pf.rating_count END), 3)
+                            FROM local_fittings pf WHERE pf.is_public AND NOT pf.is_draft)) / (rating_count + 5)
+$$;

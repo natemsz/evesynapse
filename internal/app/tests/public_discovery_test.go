@@ -56,20 +56,14 @@ func seedPublicFit(t *testing.T, q *db.Queries, userID int64, name string, ship 
 	return row.ID
 }
 
-func rateFit(t *testing.T, q *db.Queries, fitID, userID int64, stars int16) {
+// rateFit seeds a rating through the real rate endpoint, so the
+// helper exercises the handler's delta math instead of
+// reimplementing it.
+func rateFit(t *testing.T, rig *app.TestRig, cookie *http.Cookie, fitID int64, stars string) {
 	t.Helper()
-	ctx := context.Background()
-	var dc, ds int64
-	if old, err := q.GetFitRating(ctx, db.GetFitRatingParams{FitID: fitID, UserID: userID}); err == nil {
-		ds = int64(stars) - int64(old.Stars)
-	} else {
-		dc, ds = 1, int64(stars)
-	}
-	if err := q.UpsertFitRating(ctx, db.UpsertFitRatingParams{FitID: fitID, UserID: userID, Stars: stars}); err != nil {
-		t.Fatalf("rate fit: %v", err)
-	}
-	if err := q.ApplyFitRatingAggregate(ctx, db.ApplyFitRatingAggregateParams{RatingCount: dc, RatingSum: ds, ID: fitID}); err != nil {
-		t.Fatalf("rate aggregate: %v", err)
+	path := fmt.Sprintf("/fittings/public/fit/%d/rate", fitID)
+	if code, _ := postPublicForm(t, rig, cookie, path, url.Values{"stars": {stars}}); code != http.StatusSeeOther {
+		t.Fatalf("rate fit %d: status = %d, want 303", fitID, code)
 	}
 }
 
@@ -103,16 +97,35 @@ func TestPublicSEOFiles(t *testing.T) {
 		"Sitemap:",
 	)
 
+	// Seed a public fit plus swept stats, so the sitemap has
+	// fit, item and ship content beyond the core pages. URLs use
+	// the canonical origin, never the request host.
+	q := rig.Queries()
+	ctx := context.Background()
+	seedPublicSDE(t, rig.DB())
+	ua, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fitID := seedPublicFit(t, q, ua.ID, "Sitemap Rifter", 587, `{"typeId":1238,"qty":1}`, `"pvp"`, time.Now().UTC())
+	if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+		RegionID: 10000002, TypeID: 587, BestSell: 120, BestBuy: 100, UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("seed stats: %v", err)
+	}
+
 	code, body = apptest.GetPage(t, rig, nil, "/sitemap.xml")
 	if code != 200 {
 		t.Fatalf("sitemap status = %d", code)
 	}
 	apptest.MustContain(t, "/sitemap.xml", body,
-		"<urlset", "</loc>", "/fittings/public/</loc>",
+		"<urlset", "</loc>",
+		"https://evesynapse.app/</loc>",
+		"https://evesynapse.app/fittings/public/</loc>",
+		"https://evesynapse.app/fittings/public/fit/"+fmt.Sprintf("%d", fitID)+"/",
+		"https://evesynapse.app/item/587/",
+		"https://evesynapse.app/ships/587/",
 	)
-	if !strings.Contains(body, ">http") || !strings.Contains(body, "/</loc>") {
-		t.Errorf("sitemap missing the homepage loc")
-	}
 	for _, authed := range []string{"/admin/", "/api/", "/fittings/saved/", "/auth/"} {
 		if strings.Contains(body, authed) {
 			t.Errorf("sitemap leaks authed path %s", authed)
@@ -148,22 +161,24 @@ func seedPublicBrowser(t *testing.T, rig *app.TestRig) (q *db.Queries, userA, us
 	// Two 5-average Rifter fits: one 5-star vote vs three
 	// 5-star votes, plus a 1-star fit dragging the global mean
 	// down, so the Bayesian rank must prefer the three votes.
+	cookieA := apptest.SessionCookie(t, rig, ua.ID, apptest.FixtureCharA, "Alpha Pilot")
+	cookieB := apptest.SessionCookie(t, rig, ub.ID, 93300002, "Beta Pilot")
 	one := seedPublicFit(t, q, ua.ID, "Solo Rifter", 587, items(1238), `"pvp"`, now)
 	three := seedPublicFit(t, q, ub.ID, "Fleet Rifter", 587, items(1234), `"pvp","Logistics"`, now)
 	bad := seedPublicFit(t, q, ub.ID, "Bad Rifter", 587, items(1238), `"meme"`, now)
-	rateFit(t, q, one, ub.ID, 5)
-	rateFit(t, q, three, ua.ID, 5)
+	rateFit(t, rig, cookieB, one, "5")
+	rateFit(t, rig, cookieA, three, "5")
 	uc, err := q.CreateUser(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rateFit(t, q, three, uc.ID, 5)
+	rateFit(t, rig, apptest.SessionCookie(t, rig, uc.ID, 93300003, "Gamma Pilot"), three, "5")
 	ud, err := q.CreateUser(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rateFit(t, q, three, ud.ID, 5)
-	rateFit(t, q, bad, ua.ID, 1)
+	rateFit(t, rig, apptest.SessionCookie(t, rig, ud.ID, 93300004, "Delta Pilot"), three, "5")
+	rateFit(t, rig, cookieA, bad, "1")
 	// T2 fit for the faction/alpha filters.
 	seedPublicFit(t, q, ua.ID, "T2 Rifter", 587, items(1236), `"pvp"`, now)
 	// Stale fit: outside the default 14-day rank window.
@@ -234,19 +249,21 @@ func TestPublicFitsBrowser(t *testing.T) {
 	_, body = get("/fittings/public/?include=Nope+Module")
 	apptest.MustContain(t, "include=Nope", body, "that filter was ignored")
 
-	// Faction tri-state: only the Republic Fleet fit qualifies.
-	_, body = get("/fittings/public/?faction=only")
-	apptest.MustContain(t, "faction=only", body, "Fleet Rifter")
-	if strings.Contains(body, "Solo Rifter") || strings.Contains(body, "T2 Rifter") {
-		t.Errorf("faction=only leaked a non-faction fit")
-	}
+	// Faction filter: Any shows everything, No faction modules
+	// drops every fit with a faction-meta module — including the
+	// Rich Rifter, which mixes a faction extender with a T2 one.
+	_, body = get("/fittings/public/?faction=any")
+	apptest.MustContain(t, "faction=any", body, "Fleet Rifter", "Rich Rifter")
 	_, body = get("/fittings/public/?faction=none")
+	apptest.MustContain(t, "faction=none", body, "Solo Rifter", "T2 Rifter")
 	if strings.Contains(body, "Fleet Rifter") || strings.Contains(body, "Rich Rifter") {
 		t.Errorf("faction=none leaked a faction fit")
 	}
 
-	// Max price and alpha-friendly.
+	// Max price excludes only priced fits above the cap: the
+	// unpriced Solo Rifter stays visible under a tiny cap.
 	_, body = get("/fittings/public/?maxprice=1000")
+	apptest.MustContain(t, "maxprice=1000", body, "Solo Rifter")
 	if strings.Contains(body, "Rich Rifter") {
 		t.Errorf("maxprice filter leaked a 900M fit")
 	}

@@ -2106,10 +2106,7 @@ func (app *Application) handleFitMineJSON(w http.ResponseWriter, r *http.Request
 			logging.Errorf("fittings community search: %v", err)
 		} else {
 			for _, row := range pub {
-				author := ""
-				if s, ok := row.AuthorName.(string); ok {
-					author = s
-				}
+				author := row.AuthorName
 				out = append(out, fitMineRow{
 					ID: row.ID, Name: row.Name, ShipName: row.ShipName,
 					Mine: false, IsPublic: true, Author: author,
@@ -2157,10 +2154,7 @@ func (app *Application) handleFitFork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sanitizeFitDoc(&doc)
-	author := ""
-	if s, ok := src.AuthorName.(string); ok {
-		author = s
-	}
+	author := src.AuthorName
 	origin := fmt.Sprintf("Based on %q by %s.", src.Name, author)
 	if doc.Description != "" {
 		doc.Description += "\n\n" + origin

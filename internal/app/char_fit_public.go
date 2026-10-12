@@ -21,19 +21,6 @@ import (
 	"evesynapse/internal/logging"
 )
 
-// authorNameOf reads the untyped author_name COALESCE some fit
-// reads return: text arrives as string, never assumed.
-func authorNameOf(v any) string {
-	switch s := v.(type) {
-	case string:
-		return s
-	case []byte:
-		return string(s)
-	default:
-		return ""
-	}
-}
-
 // ---------------------------------------------------------------------------
 // Public fits: the fits anyone here has made public. The browser and
 // the fit pages sit outside the auth middleware: anonymous readers
@@ -137,7 +124,7 @@ func (app *Application) parsePublicFitFilters(ctx context.Context, query url.Val
 		}
 	}
 	switch f.Faction {
-	case "only", "none":
+	case "none":
 	default:
 		f.Faction = "any"
 	}
@@ -280,54 +267,57 @@ type publicFitsView struct {
 	Self string
 }
 
+// publicFitURLParam is one browser address parameter: its key,
+// the filter's current value, and the default, which is omitted
+// like an empty value.
+type publicFitURLParam struct {
+	key     string
+	current string
+	def     string
+}
+
 // publicFitURL is the browser address with some choices changed;
 // empty values take a choice off, page resets unless kept.
 func (f publicFitFilters) publicFitURL(changes map[string]string, keepPage bool) string {
-	set := map[string]string{
-		"q": f.Q, "role": f.Role, "hull": f.Hull, "hullq": f.HullQ,
-		"include": f.IncludeName, "exclude": f.ExcludeName, "faction": f.Faction,
-		"tag": f.Tag, "sort": f.Sort,
+	num := func(v float64) string {
+		if v <= 0 {
+			return ""
+		}
+		return strconv.FormatFloat(v, 'f', -1, 64)
 	}
-	for key, value := range changes {
-		set[key] = value
+	alpha := ""
+	if f.Alpha {
+		alpha = "1"
+	}
+	page := ""
+	if keepPage && f.Page > 1 {
+		page = strconv.Itoa(f.Page)
+	}
+	params := []publicFitURLParam{
+		{"q", f.Q, ""},
+		{"role", f.Role, ""},
+		{"hull", f.Hull, ""},
+		{"hullq", f.HullQ, ""},
+		{"include", f.IncludeName, ""},
+		{"exclude", f.ExcludeName, ""},
+		{"faction", f.Faction, "any"},
+		{"tag", f.Tag, ""},
+		{"sort", f.Sort, "rank"},
+		{"stars", num(f.MinStars), ""},
+		{"maxprice", num(f.MaxPrice), ""},
+		{"alpha", alpha, ""},
+		{"page", page, ""},
 	}
 	query := url.Values{}
-	for key, value := range set {
-		if value != "" && !(key == "sort" && value == "rank") && !(key == "faction" && value == "any") {
-			query.Set(key, value)
+	for _, p := range params {
+		v := p.current
+		if c, ok := changes[p.key]; ok {
+			v = c
 		}
-	}
-	if f.MinStars > 0 {
-		if _, ok := changes["stars"]; !ok {
-			query.Set("stars", strconv.FormatFloat(f.MinStars, 'f', -1, 64))
-		} else if changes["stars"] != "" {
-			query.Set("stars", changes["stars"])
+		if v == "" || v == p.def {
+			continue
 		}
-	} else if changes["stars"] != "" {
-		query.Set("stars", changes["stars"])
-	}
-	if f.MaxPrice > 0 {
-		if _, ok := changes["maxprice"]; !ok {
-			query.Set("maxprice", strconv.FormatFloat(f.MaxPrice, 'f', -1, 64))
-		} else if changes["maxprice"] != "" {
-			query.Set("maxprice", changes["maxprice"])
-		}
-	} else if changes["maxprice"] != "" {
-		query.Set("maxprice", changes["maxprice"])
-	}
-	if f.Alpha && changes["alpha"] == "" {
-		query.Set("alpha", "1")
-	} else if changes["alpha"] == "1" {
-		query.Set("alpha", "1")
-	}
-	if keepPage && f.Page > 1 {
-		if _, ok := changes["page"]; !ok {
-			query.Set("page", strconv.Itoa(f.Page))
-		} else if changes["page"] != "" {
-			query.Set("page", changes["page"])
-		}
-	} else if changes["page"] != "" {
-		query.Set("page", changes["page"])
+		query.Set(p.key, v)
 	}
 	if len(query) == 0 {
 		return publicFitsPath
@@ -449,7 +439,7 @@ func (app *Application) handlePublicFitSuggest(w http.ResponseWriter, r *http.Re
 			ship = app.typeNameOrID(ctx, row.ShipTypeID)
 		}
 		label := ship
-		if author := authorNameOf(row.AuthorName); author != "" {
+		if author := row.AuthorName; author != "" {
 			label += " · by " + author
 		}
 		out = append(out, suggestItem{
@@ -617,7 +607,7 @@ func (app *Application) handlePublicFitPage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	ship := app.typeNameOrID(ctx, row.ShipTypeID)
-	author := authorNameOf(row.AuthorName)
+	author := row.AuthorName
 	card := publicFitCard{
 		ID: row.ID, Name: row.Name, Ship: ship, ShipTypeID: row.ShipTypeID,
 		Author: author, Mine: userID > 0 && row.UserID == userID,

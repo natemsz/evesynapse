@@ -40,18 +40,22 @@ func (app *Application) handleRobots(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(robotsTXT))
 }
 
-// siteOrigin is the absolute base for public URLs: the
-// configured public origin, or the request host when the operator
-// has not set one (tests, first boot before SSO is configured).
-func (app *Application) siteOrigin(r *http.Request) string {
+// canonicalOrigin is the absolute base for every crawler- or
+// share-facing URL: the configured public origin, defaulting to
+// the production site. It never derives from the triggering
+// request: a rebuild kicked off through an alias host must not
+// bake that alias into the sitemap or the shared links.
+func (app *Application) canonicalOrigin() string {
 	if origin := app.cfg.publicOrigin(); origin != "" {
 		return origin
 	}
-	scheme := "https"
-	if r.TLS == nil {
-		scheme = "http"
-	}
-	return scheme + "://" + r.Host
+	return "https://evesynapse.app"
+}
+
+// siteOrigin is the absolute base for public URLs: always the
+// canonical origin, never the request host.
+func (app *Application) siteOrigin(r *http.Request) string {
+	return app.canonicalOrigin()
 }
 
 // handleSitemap serves the generated sitemap, rebuilt at most

@@ -7,5 +7,3 @@ bin/
 # Decoded from ci-assets/ by `make assets`; never committed.
 internal/app/static/fonts/
 internal/app/static/bg.jpg
-
-.tools/

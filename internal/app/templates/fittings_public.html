@@ -33,8 +33,7 @@
   <label>Without module <input type="search" name="exclude" value="{{.Filters.ExcludeName}}" placeholder="Exact module name" size="18"></label>
   <label>Faction <select name="faction">
     <option value="any"{{if eq $.PublicFits.Filters.Faction "any"}} selected{{end}}>Any</option>
-    <option value="only"{{if eq $.PublicFits.Filters.Faction "only"}} selected{{end}}>Only faction</option>
-    <option value="none"{{if eq $.PublicFits.Filters.Faction "none"}} selected{{end}}>No faction</option>
+    <option value="none"{{if eq $.PublicFits.Filters.Faction "none"}} selected{{end}}>No faction modules</option>
   </select></label>
   <label>Max price <input type="text" name="maxprice" value="{{if gt $.PublicFits.Filters.MaxPrice 0.0}}{{$.PublicFits.Filters.MaxPrice}}{{end}}" placeholder="ISK" size="10" inputmode="decimal"></label>
   <label><input type="checkbox" name="alpha" value="1"{{if .Filters.Alpha}} checked{{end}}> Alpha-friendly</label>

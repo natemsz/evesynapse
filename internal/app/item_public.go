@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -98,26 +97,27 @@ func sparkline(points []float64) template.HTML {
 	return template.HTML(b.String())
 }
 
-// publicHubPrices resolves one type's swept region stats to named
-// hub rows: one bounded read plus one region-name read per region
-// present (a dozen at most on a warm instance).
-func (app *Application) publicHubPrices(ctx context.Context, typeID int64) []publicHubPrice {
-	rows, err := app.queries.ListMarketRegionStatsByType(ctx, typeID)
+// publicTypeMarket loads one type's swept region stats with
+// region names resolved in the same read, and derives both the
+// named hub rows and The Forge's region ID from it: one stats
+// read per render, no per-region lookups.
+func (app *Application) publicTypeMarket(ctx context.Context, typeID int64) (hubs []publicHubPrice, forgeRegion int64) {
+	rows, err := app.queries.ListPublicHubStats(ctx, typeID)
 	if err != nil {
 		logging.Errorf("public item %d: hub stats: %v", typeID, err)
-		return nil
+		return nil, 0
 	}
 	want := map[string]bool{}
 	for _, name := range publicHubRegions {
 		want[name] = true
 	}
-	var hubs []publicHubPrice
 	for _, row := range rows {
-		region := "Region #" + idString(row.RegionID)
-		if reg, err := app.queries.GetSDERegion(ctx, row.RegionID); err == nil && reg.Name != "" {
-			region = reg.Name
-		} else if err != nil {
-			logging.Errorf("public item %d: region %d: %v", typeID, row.RegionID, err)
+		region := row.RegionName
+		if region == "" {
+			region = "Region #" + idString(row.RegionID)
+		}
+		if region == "The Forge" && forgeRegion == 0 {
+			forgeRegion = row.RegionID
 		}
 		if !want[region] {
 			continue
@@ -133,7 +133,10 @@ func (app *Application) publicHubPrices(ctx context.Context, typeID int64) []pub
 			hubs = append(hubs, hub)
 		}
 	}
-	return hubs
+	if forgeRegion == 0 && len(rows) > 0 {
+		forgeRegion = rows[0].RegionID
+	}
+	return hubs, forgeRegion
 }
 
 // publicHistorySparkline draws one region's newest recorded
@@ -157,24 +160,6 @@ func (app *Application) publicHistorySparkline(ctx context.Context, regionID, ty
 	return sparkline(points), fmt.Sprintf("%d recorded days", len(rows))
 }
 
-// publicForgeRegion finds The Forge's region ID from the warmed
-// stats, so history reads need no hardcoded region.
-func (app *Application) publicForgeRegion(ctx context.Context, typeID int64) int64 {
-	rows, err := app.queries.ListMarketRegionStatsByType(ctx, typeID)
-	if err != nil {
-		return 0
-	}
-	for _, row := range rows {
-		if reg, err := app.queries.GetSDERegion(ctx, row.RegionID); err == nil && reg.Name == "The Forge" {
-			return row.RegionID
-		}
-	}
-	if len(rows) > 0 {
-		return rows[0].RegionID
-	}
-	return 0
-}
-
 // handlePublicItem renders one /item/ page from SDE plus warmed
 // market data. Unknown types 404; nothing here queues ESI work.
 func (app *Application) handlePublicItem(w http.ResponseWriter, r *http.Request) {
@@ -192,8 +177,9 @@ func (app *Application) handlePublicItem(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	detail := app.buildItemTypeDetail(ctx, t)
-	view := &publicItemView{Detail: detail, Hubs: app.publicHubPrices(ctx, typeID)}
-	if forge := app.publicForgeRegion(ctx, typeID); forge > 0 {
+	hubs, forge := app.publicTypeMarket(ctx, typeID)
+	view := &publicItemView{Detail: detail, Hubs: hubs}
+	if forge > 0 {
 		view.History, view.HistoryNote = app.publicHistorySparkline(ctx, forge, typeID)
 	} else {
 		view.HistoryNote = "No price history swept yet."
@@ -235,11 +221,12 @@ func (app *Application) handlePublicShip(w http.ResponseWriter, r *http.Request)
 		http.NotFound(w, r)
 		return
 	}
+	hubs, forge := app.publicTypeMarket(ctx, typeID)
 	view := &publicShipView{
-		Detail: detail, Hubs: app.publicHubPrices(ctx, typeID),
+		Detail: detail, Hubs: hubs,
 		BrowserURL: publicFitsPath + "?hullq=" + url.QueryEscape(detail.Name),
 	}
-	if forge := app.publicForgeRegion(ctx, typeID); forge > 0 {
+	if forge > 0 {
 		view.History, view.HistoryNote = app.publicHistorySparkline(ctx, forge, typeID)
 	} else {
 		view.HistoryNote = "No price history swept yet."
@@ -249,26 +236,12 @@ func (app *Application) handlePublicShip(w http.ResponseWriter, r *http.Request)
 		logging.Errorf("public ship %d: fits: %v", typeID, err)
 	} else {
 		for _, row := range rows {
-			var doc fitDoc
-			tags := []string{}
-			if json.Unmarshal([]byte(row.ItemsJson), &doc) == nil {
-				tags = doc.Tags
-			}
-			card := publicFitCard{
-				ID: row.ID, Name: row.Name, Ship: detail.Name, ShipTypeID: typeID,
-				Author: row.AuthorName, Mine: userID > 0 && row.UserID == userID,
-				Views: row.ViewCount, Price: row.TotalPrice, PriceKnown: row.TotalPrice > 0,
-				Updated: row.UpdatedAt, UpdatedLine: rfc3339(row.UpdatedAt),
-				FitURL: publicFitsPath + "fit/" + idString(row.ID) + "/", Tags: tags,
-			}
-			if card.PriceKnown {
-				card.PriceLine = esi.FormatISK(row.TotalPrice)
-			}
-			if row.RatingCount > 0 {
-				card.Stars = float64(row.RatingSum) / float64(row.RatingCount)
-				card.StarCount = row.RatingCount
-			}
-			view.Fits = append(view.Fits, card)
+			view.Fits = append(view.Fits, publicFitCardOf(db.ListPublicFitsRow{
+				ID: row.ID, UserID: row.UserID, Name: row.Name, ShipTypeID: row.ShipTypeID,
+				ItemsJson: row.ItemsJson, UpdatedAt: row.UpdatedAt, ViewCount: row.ViewCount,
+				TotalPrice: row.TotalPrice, RatingCount: row.RatingCount, RatingSum: row.RatingSum,
+				ShipName: row.ShipName, Hull: row.Hull, AuthorName: row.AuthorName,
+			}, userID))
 		}
 	}
 	pageURL := app.siteOrigin(r) + "/ships/" + idString(typeID) + "/"

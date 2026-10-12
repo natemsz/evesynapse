@@ -115,26 +115,3 @@ func (c *swarmClient) sendSeedAnnounce(ctx context.Context, seedURL string, entr
 // is the protocol's marker for a directory-only peer: pulls
 // skip it, wherever it is listed from.
 const swarmSeedInstanceID = "seed"
-
-// swarmAnnounceToSeeds heartbeats every configured seed. One
-// failure never stops the rest; silence (off, or nothing to
-// say) is not an error — but a configured seed with nothing to
-// say is a misconfiguration worth one warning per gossip round,
-// or the instance silently never lists itself as a source.
-func (app *Application) swarmAnnounceToSeeds(ctx context.Context, now time.Time) {
-	if app.swarmCli == nil {
-		return
-	}
-	entry, ok := app.buildSeedAnnounce(now)
-	if !ok {
-		if len(app.cfg.swarm.seeds) > 0 {
-			logging.Warnf("swarm: not announcing to seeds: no https public address (set EVE_CALLBACK_URL to the https address peers dial)")
-		}
-		return
-	}
-	for _, seed := range app.cfg.swarm.seeds {
-		if err := app.swarmCli.sendSeedAnnounce(ctx, seed, entry); err != nil {
-			logging.Errorf("swarm: announce to seed: %v", err)
-		}
-	}
-}

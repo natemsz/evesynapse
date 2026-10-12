@@ -360,7 +360,7 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 		return nil, "That plan couldn't be computed; check the server log."
 	}
 	if res.TooLarge {
-		return nil, "That plan is too large to lay out — try fewer runs."
+		return nil, "That plan is too large to lay out."
 	}
 
 	// Names for everything on screen: tree items, shopping items,
@@ -418,7 +418,7 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 	}
 	if scope.active() {
 		view.SkillsJudge = judgeSkills(scope, scoped, requiredSkillLevels(root), nameOf)
-		view.Verdict = planVerdictFor(res, prices, productID, scope.Label)
+		view.Verdict = planVerdictFor(res, prices, productID)
 	}
 
 	// Interactive tabs read this blob; the table above ignores
@@ -932,9 +932,9 @@ func judgeSkills(scope judgeScope, data plannerScopeData, reqs map[int64]int64, 
 // cost after stock against the expected sell value of what
 // comes out. Unknown prices stay unknown — the verdict says so
 // instead of pricing missing inputs at zero.
-func planVerdictFor(res *buildplan.Result, prices map[int64]esi.MarketPrice, productID int64, label string) *planVerdict {
+func planVerdictFor(res *buildplan.Result, prices map[int64]esi.MarketPrice, productID int64) *planVerdict {
 	root := res.Root
-	verdict := &planVerdict{Heading: "Worth making — judged as " + label}
+	verdict := &planVerdict{Heading: "Profit Analysis"}
 	var notes []string
 
 	costKnown := root.CostComplete && res.UnpricedLines == 0

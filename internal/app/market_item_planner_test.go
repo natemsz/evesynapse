@@ -284,7 +284,7 @@ func TestPlannerJudgeCharacterBuildable(t *testing.T) {
 		"Every skill in the chain is covered.",
 		"netted against what Fixture Ceo holds",
 		// 20 Tritanium needed, 15 on hand → 5 to buy at 5 ISK.
-		"Worth making — judged as Fixture Ceo",
+		"Profit Analysis",
 		"25.00 ISK",
 		"975.00 ISK", // profit = 1,000.00 value − 25.00 cost
 		"97.5% of the sell value",
@@ -369,7 +369,7 @@ func TestPlannerJudgePricesIncomplete(t *testing.T) {
 	path := fmt.Sprintf("/planner/?product=1001&runs=1&judge=char:%d", fixtureCharA)
 	_, body := getPage(t, app, cookie, path)
 	mustContain(t, path, body,
-		"Worth making — judged as Fixture Ceo",
+		"Profit Analysis",
 		"Prices incomplete",
 	)
 	if strings.Contains(body, "Profit per run") {
@@ -404,9 +404,9 @@ func TestPlanMESummary(t *testing.T) {
 	}
 }
 
-// TestPlannerMESummaryCollapsed: the ME wall ships collapsed
-// behind its summary line (fields still in the HTML for
-// no-JS), with the set-all action and the tree tab's global
+// TestPlannerMESummaryCollapsed: the ME wall ships inside a
+// hidden centered modal behind a static button plus a summary
+// line, with the set-all action and the tree tab's global
 // expand/collapse controls beside it.
 func TestPlannerMESummaryCollapsed(t *testing.T) {
 	app, q, cookie := plannerScopeApp(t)
@@ -421,9 +421,11 @@ func TestPlannerMESummaryCollapsed(t *testing.T) {
 		`id="plan-form"`,
 		`id="plan-wrap"`,
 		`id="me-toggle"`,
-		`aria-expanded="false"`,
-		`Blueprint ME - Fixture Component at ME8 (owned), 1 at ME0 (assumed)`,
-		`id="me-fields" hidden`,
+		`aria-haspopup="dialog"`,
+		`>Blueprint ME</button>`,
+		`Fixture Component at ME8 (owned), 1 at ME0 (assumed)`,
+		`id="me-modal" hidden`,
+		`id="me-fields"`,
 		`id="me-setall"`,
 		`id="me-apply"`,
 		`data-me-src="owned"`,
@@ -471,7 +473,7 @@ func TestPlannerDefaultScopeIsActiveCharacter(t *testing.T) {
 		fmt.Sprintf(`value="char:%d"`, fixtureCharA),
 		`aria-current="true"`,
 		"Can Fixture Ceo build this?",
-		"Worth making — judged as Fixture Ceo",
+		"Profit Analysis",
 	)
 }
 
@@ -492,7 +494,7 @@ func TestPlannerExplicitGeneralScope(t *testing.T) {
 		"25.00 ISK",
 		`value="Everyone together"`,
 	)
-	for _, absent := range []string{"build this?", "Worth making — judged as"} {
+	for _, absent := range []string{"build this?", "Profit Analysis"} {
 		if strings.Contains(body, absent) {
 			t.Fatalf("general plan grew a scoped block: %q present", absent)
 		}

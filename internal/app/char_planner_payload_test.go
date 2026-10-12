@@ -23,7 +23,7 @@ func (s planTestSource) BlueprintForProduct(id int64) (*buildplan.Blueprint, boo
 
 // planFixtureRecipes is a two-level tree: the root builds from
 // one component (own blueprint, 300s at TE0) and mineral, each
-// priced so balanced buys nothing.
+// priced so optimized buys nothing.
 func planFixtureRecipes() buildplan.Source {
 	return planTestSource{
 		1001: {BlueprintTypeID: 2001, ProductTypeID: 1001, ProductQuantity: 1, TimeSeconds: 600, Materials: []buildplan.Material{
@@ -46,7 +46,7 @@ func planFixturePrices() map[int64]esi.MarketPrice {
 
 func planFixtureAdjusted() map[int64]float64 { return map[int64]float64{34: 12, 1002: 480} }
 
-// TestPlanPayloadPresets: balanced matches full when building
+// TestPlanPayloadPresets: optimized matches full when building
 // saves everywhere; buy-components prunes the subtree; every
 // preset's bought+built equals its materials.
 func TestPlanPayloadPresets(t *testing.T) {
@@ -62,11 +62,11 @@ func TestPlanPayloadPresets(t *testing.T) {
 	if len(p.Root.Kids) != 2 {
 		t.Fatalf("root kids = %d, want 2", len(p.Root.Kids))
 	}
-	// Balanced == full here: the component costs 50 to build
+	// Optimized == full here: the component costs 50 to build
 	// against 500 to buy. Materials 150 (50 under the
 	// component + 100 direct); fees (480 + 120) × 0.05 = 30 at
 	// the root plus 3 at the component.
-	for _, preset := range []planPresetTotals{p.Full, p.Balanced} {
+	for _, preset := range []planPresetTotals{p.Full, p.Optimized} {
 		if preset.Materials != 15000 || preset.Fees != 3300 || preset.Landed != 18300 {
 			t.Errorf("preset money = %v/%v/%v, want 15000/3300/18300",
 				preset.Materials, preset.Fees, preset.Landed)
@@ -107,14 +107,14 @@ func TestPlanPayloadSchedule(t *testing.T) {
 	}
 	unitOf := func(id int64) (float64, bool) { return buildplan.UnitPrice(planFixturePrices(), id) }
 	p := buildPlanPayload(res, 1001, planFixturePrices(), unitOf, 1, 2, nil, planFixtureName)
-	if p.Balanced.Elapsed != 900 {
-		t.Errorf("elapsed = %v, want 900 (300 then 600)", p.Balanced.Elapsed)
+	if p.Optimized.Elapsed != 900 {
+		t.Errorf("elapsed = %v, want 900 (300 then 600)", p.Optimized.Elapsed)
 	}
-	if len(p.Balanced.Jobs) != 2 {
-		t.Fatalf("jobs = %d, want 2", len(p.Balanced.Jobs))
+	if len(p.Optimized.Jobs) != 2 {
+		t.Fatalf("jobs = %d, want 2", len(p.Optimized.Jobs))
 	}
 	var crit int
-	for _, j := range p.Balanced.Jobs {
+	for _, j := range p.Optimized.Jobs {
 		if j.Critical {
 			crit++
 		}
@@ -190,7 +190,7 @@ func TestPlanShoppingKnownNodeCoversPricedLines(t *testing.T) {
 	}
 	// Contract: every priced shopping line resolves to a priced
 	// tree node with the same unit.
-	for _, preset := range []planPresetTotals{p.Full, p.Balanced, p.BuyComp} {
+	for _, preset := range []planPresetTotals{p.Full, p.Optimized, p.BuyComp} {
 		for _, line := range preset.Shopping {
 			if !line.Known {
 				continue
@@ -202,12 +202,12 @@ func TestPlanShoppingKnownNodeCoversPricedLines(t *testing.T) {
 		}
 	}
 	// The nested shortfall is the only Tritanium line here.
-	if len(p.Balanced.Shopping) != 1 || p.Balanced.Shopping[0].Qty != 3 {
-		t.Errorf("balanced shopping = %+v, want one Tritanium line of 3", p.Balanced.Shopping)
+	if len(p.Optimized.Shopping) != 1 || p.Optimized.Shopping[0].Qty != 3 {
+		t.Errorf("optimized shopping = %+v, want one Tritanium line of 3", p.Optimized.Shopping)
 	}
 }
 
-// TestPlanShoppingExcludesRoot: when balanced buys the finished
+// TestPlanShoppingExcludesRoot: when optimized buys the finished
 // product outright (its price undercuts the build cost), the
 // product itself must not appear as a shopping line — the buy
 // verdict lives in the header, and the Avatar is not an input to
@@ -227,21 +227,21 @@ func TestPlanShoppingExcludesRoot(t *testing.T) {
 	unitOf := func(id int64) (float64, bool) { return buildplan.UnitPrice(prices, id) }
 	p := buildPlanPayload(res, 1001, prices, unitOf, 1, 2, nil, planFixtureName)
 
-	b := p.Balanced
+	b := p.Optimized
 	for _, line := range b.Shopping {
 		if line.TypeID == 1001 {
-			t.Errorf("balanced shopping contains the finished product: %+v", line)
+			t.Errorf("optimized shopping contains the finished product: %+v", line)
 		}
 	}
 	if len(b.Shopping) != 0 {
-		t.Errorf("balanced shopping = %+v, want empty (root bought outright)", b.Shopping)
+		t.Errorf("optimized shopping = %+v, want empty (root bought outright)", b.Shopping)
 	}
 	// The money still counts the bought hull: 1 x 50.
 	if b.Materials != 5000 || b.Bought != 5000 || b.Landed != 5000 {
-		t.Errorf("balanced money = %v/%v/%v, want 5000/5000/5000", b.Materials, b.Bought, b.Landed)
+		t.Errorf("optimized money = %v/%v/%v, want 5000/5000/5000", b.Materials, b.Bought, b.Landed)
 	}
 	if b.Profit != 0 || !b.ProfKnown {
-		t.Errorf("balanced profit = %v known=%v, want 0/true (buying at market)", b.Profit, b.ProfKnown)
+		t.Errorf("optimized profit = %v known=%v, want 0/true (buying at market)", b.Profit, b.ProfKnown)
 	}
 	// Full build is untouched: the mineral lines stay.
 	if len(p.Full.Shopping) != 1 || p.Full.Shopping[0].TypeID != 34 {

@@ -1053,12 +1053,15 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
 .home-custom.has-controls .card > h2:first-child, .home-custom.has-controls .card > h3:first-child { padding-right: 4.6rem; position: relative; }
 .home-custom.has-controls .card.has-spanbtn > h2:first-child, .home-custom.has-controls .card.has-spanbtn > h3:first-child { padding-right: 6.6rem; }
 
-/* Add-module pop-up; closing is wired in app.js. */
+/* Modal pop-ups (add-module, planner ME); closing is wired in app.js / plan.js. */
 .modal-backdrop {
   position: fixed;
   inset: 0;
   z-index: 60;
   background: rgba(0, 0, 0, 0.66);
+  background: color-mix(in srgb, var(--panel) 50%, transparent);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3446,6 +3449,7 @@ html[data-theme="light"] .doctrine-fits li:last-child { border-color: #e3d9c6; }
 .plan-stats .plan-k { display: block; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .plan-stats strong { font-size: 1.4rem; font-weight: 700; }
 .plan-presets, .plan-tabs { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; margin: 0.5rem 0; }
+.plan-tools { display: flex; justify-content: flex-end; margin: 0.5rem 0 0; }
 .plan-tabs { border-bottom: 1px solid #262626; padding-bottom: 0.5rem; }
 .plan-legend { margin-left: auto; color: var(--muted); }
 .plan-dot { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; margin: 0 0.15rem 0 0.5rem; }
@@ -3487,6 +3491,7 @@ row, so nesting cannot shift the bar column. */
 .plan-fill { background: var(--plan-build); height: 100%; }
 .plan-buy .plan-fill, .plan-fill.plan-buy { background: var(--plan-buy); }
 .plan-node small, .plan-cols small { color: var(--muted); }
+#plan-inspector { position: sticky; top: 0.6rem; }
 #plan-inspector h4, #plan-hubsplit h4 { margin: 0 0 0.4rem; }
 .plan-pick { display: flex; gap: 0.4rem; margin-bottom: 0.5rem; }
 .plan-weeks { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.3rem; }

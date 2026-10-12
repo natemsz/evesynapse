@@ -298,20 +298,20 @@ func TestPlannerJSONPayload(t *testing.T) {
 	// Fifteen mineral cover the direct ten; the component branch
 	// (ME8) buys five at 5 ISK. Materials 25, fees 70.40 at a
 	// 6.4% index, value 1,000.
-	if p.Balanced.Landed != 9540 || p.Balanced.Profit != 90460 {
-		t.Errorf("balanced landed/profit = %v/%v, want 9540/90460", p.Balanced.Landed, p.Balanced.Profit)
+	if p.Optimized.Landed != 9540 || p.Optimized.Profit != 90460 {
+		t.Errorf("optimized landed/profit = %v/%v, want 9540/90460", p.Optimized.Landed, p.Optimized.Profit)
 	}
-	if p.Balanced.Fees != 7040 || !p.Balanced.FeesKnown {
-		t.Errorf("balanced fees = %v (known %v), want 7040/true", p.Balanced.Fees, p.Balanced.FeesKnown)
+	if p.Optimized.Fees != 7040 || !p.Optimized.FeesKnown {
+		t.Errorf("optimized fees = %v (known %v), want 7040/true", p.Optimized.Fees, p.Optimized.FeesKnown)
 	}
-	if p.Balanced.Elapsed != 1128 {
-		t.Errorf("balanced elapsed = %v, want 1128 (528 + 600)", p.Balanced.Elapsed)
+	if p.Optimized.Elapsed != 1128 {
+		t.Errorf("optimized elapsed = %v, want 1128 (528 + 600)", p.Optimized.Elapsed)
 	}
-	if len(p.Balanced.Jobs) != 2 {
-		t.Errorf("balanced jobs = %d, want 2", len(p.Balanced.Jobs))
+	if len(p.Optimized.Jobs) != 2 {
+		t.Errorf("optimized jobs = %d, want 2", len(p.Optimized.Jobs))
 	}
-	if p.Full.Materials != p.Balanced.Materials || p.Full.Elapsed != p.Balanced.Elapsed {
-		t.Error("full and balanced disagree where building saves everywhere")
+	if p.Full.Materials != p.Optimized.Materials || p.Full.Elapsed != p.Optimized.Elapsed {
+		t.Error("full and optimized disagree where building saves everywhere")
 	}
 	// Buying the components prunes the subtree: the two
 	// components at 500 against a 1,000 hull (the direct
@@ -328,7 +328,7 @@ func TestPlannerJSONPayload(t *testing.T) {
 	}
 	// Every preset's bought+built equals its materials: the
 	// unit the client cross-checks.
-	for name, preset := range map[string]planPresetTotals{"full": p.Full, "balanced": p.Balanced, "buycomp": p.BuyComp} {
+	for name, preset := range map[string]planPresetTotals{"full": p.Full, "optimized": p.Optimized, "buycomp": p.BuyComp} {
 		if preset.Bought+preset.Built != preset.Materials {
 			t.Errorf("%s bought+built != materials", name)
 		}
@@ -381,8 +381,8 @@ func TestPlannerJitaMarket(t *testing.T) {
 	}
 	// Five mineral at 6 ISK Jita sell; the finished hull at
 	// 1,100. The component stays unpriced (no Jita row).
-	if p.Balanced.Landed != 3000 || p.Balanced.Value != 110000 {
-		t.Errorf("jita landed/value = %v/%v, want 3000/110000", p.Balanced.Landed, p.Balanced.Value)
+	if p.Optimized.Landed != 3000 || p.Optimized.Value != 110000 {
+		t.Errorf("jita landed/value = %v/%v, want 3000/110000", p.Optimized.Landed, p.Optimized.Value)
 	}
 	if p.Market != "jita" || p.PricesNote == "" {
 		t.Errorf("market/note = %q/%q, want jita + stamp", p.Market, p.PricesNote)

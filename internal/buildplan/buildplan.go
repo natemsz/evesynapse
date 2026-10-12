@@ -32,8 +32,10 @@ import (
 // ---------------------------------------------------------------------------
 
 // nodeCap bounds one expansion; past it the plan reports
-// "too large" instead of grinding.
-const nodeCap = 2000
+// "too large" instead of grinding. Shared subtrees expand
+// under every parent, so a capital tree reaches several
+// thousand nodes; the cap clears that with room for supers.
+const nodeCap = 12000
 
 // maxDepth stops absurd nesting even below the node cap
 // (real EVE chains are a handful of levels deep).

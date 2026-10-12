@@ -54,7 +54,7 @@ function esc(s) {
 
 // --- state ---
 var P = null;             // payload
-var preset = "balanced";  // balanced | full | buycomp
+var preset = "optimized";  // optimized | full | buycomp
 var overrides = {};       // path -> true (buy) | false (build)
 var collapsed = {};       // path -> true
 var selected = "0";       // path
@@ -91,7 +91,7 @@ function decide(n, isRoot, mask) {
     return mask.overrides[n.path] ? "buy" : "build";
   if (mask.preset === "full") return "build";
   if (mask.preset === "buycomp") return isRoot ? "build" : "buy";
-  // balanced
+  // optimized
   return (n.deltaOn && n.delta < 0 && n.known) ? "buy" : "build";
 }
 
@@ -274,7 +274,7 @@ function checkPreset(name, server) {
 
 function crossCheck() {
   var ok = checkPreset("full", P.full) &&
-    checkPreset("balanced", P.balanced) &&
+    checkPreset("optimized", P.optimized) &&
     checkPreset("buycomp", P.buyComp);
   if (!ok) {
     serverMode = true;
@@ -286,7 +286,7 @@ function crossCheck() {
 
 // --- current view: server structs in serverMode, compute() else ---
 function serverTotals(name) {
-  return name === "full" ? P.full : name === "buycomp" ? P.buyComp : P.balanced;
+  return name === "full" ? P.full : name === "buycomp" ? P.buyComp : P.optimized;
 }
 
 function currentMask() { return { preset: preset, overrides: overrides }; }
@@ -701,7 +701,7 @@ function setPayload(payload) {
   byIdCache = {};
   // Server structs name it valueKnown; compute() names it
   // known. Normalize once so every renderer reads one shape.
-  ["full", "balanced", "buyComp"].forEach(function (k) {
+  ["full", "optimized", "buyComp"].forEach(function (k) {
     if (P[k]) P[k].known = !!P[k].valueKnown;
   });
   // A fresh tree invalidates view state; the preset choice
@@ -730,15 +730,36 @@ function syncPresetButtons() {
   });
 }
 
+var meEscapeBound = false;
 function wireME() {
-  var tog = $("me-toggle"), fields = $("me-fields");
-  if (tog && fields) tog.addEventListener("click", function () {
-    var open = fields.hidden;
-    fields.hidden = !open;
-    tog.setAttribute("aria-expanded", open ? "true" : "false");
-    var hint = $("me-hint");
-    if (hint) hint.textContent = open ? "[Collapse]" : "[Expand]";
-  });
+  var tog = $("me-toggle"), modal = $("me-modal");
+  function openME() {
+    if (!modal) return;
+    modal.hidden = false;
+    var close = $("me-close");
+    if (close) close.focus({ preventScroll: true });
+  }
+  function closeME() {
+    if (!modal) return;
+    modal.hidden = true;
+    if (tog) tog.focus({ preventScroll: true });
+  }
+  if (tog && modal) {
+    tog.addEventListener("click", openME);
+    modal.addEventListener("click", function (ev) {
+      if (ev.target === modal) closeME();
+    });
+    if (!meEscapeBound) {
+      meEscapeBound = true;
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key !== "Escape") return;
+        var m = document.getElementById("me-modal");
+        if (m && !m.hidden) m.hidden = true;
+      });
+    }
+    var closeBtn = $("me-close");
+    if (closeBtn) closeBtn.addEventListener("click", closeME);
+  }
   var apply = $("me-apply"), setall = $("me-setall");
   if (apply && setall) apply.addEventListener("click", function () {
     var v = parseInt(setall.value, 10);

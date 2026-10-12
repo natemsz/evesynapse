@@ -140,7 +140,8 @@ type itemTypeDetail struct {
 	DescState          string        // "ready" | "empty" | "pending" — drives the live-region fragment
 
 	BlueprintID int64           // != 0: manufacturable — link the planner
-	UsedIn      []itemUsedInRow // blueprints consuming this type
+	UsedIn      []itemUsedInRow // blueprints consuming this type, capped
+	UsedInMore  bool            // more blueprints use it than are listed
 }
 
 type itemUsedInRow struct {
@@ -504,8 +505,26 @@ func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
 	}
 	app.markGuessHit(ctx, pageWantTypeDescription, typeID, 0)
 
+	detail := app.buildItemTypeDetail(ctx, t)
+	if detail.DescState == "pending" {
+		app.notePageWant(ctx, pageWantTypeDescription, typeID, 0)
+	}
+
+	view.TypeDetail = detail
+	data.Items = view
+	app.render(ctx, w, http.StatusOK, "items.html", data)
+}
+
+// buildItemTypeDetail assembles one type's SDE identity,
+// description (local dump first, worker-stored details second),
+// guide prices and manufacturing links. UsedIn caps at 50 rows:
+// bulk materials feed thousands of blueprints. Shared by the
+// signed-in item page and the public one; callers own want
+// queueing (the public page never queues).
+func (app *Application) buildItemTypeDetail(ctx context.Context, t db.SdeType) *itemTypeDetail {
+	typeID := t.TypeID
 	detail := &itemTypeDetail{
-		ID:       t.TypeID,
+		ID:       typeID,
 		Name:     t.Name,
 		OnMarket: t.MarketGroupID > 0,
 	}
@@ -520,9 +539,6 @@ func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
 	// type-details drain is only the fallback for types the dump
 	// has no text for.
 	detail.DescState, detail.Description = app.itemDescription(ctx, typeID)
-	if detail.DescState == "pending" {
-		app.notePageWant(ctx, pageWantTypeDescription, typeID, 0)
-	}
 	detail.HasDescription = detail.DescState == "ready"
 	detail.DescriptionPending = detail.DescState == "pending"
 
@@ -541,6 +557,10 @@ func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
 
 	if rows, uerr := app.queries.ListSDEBlueprintsUsingMaterial(ctx, typeID); uerr == nil {
 		for _, row := range rows {
+			if len(detail.UsedIn) >= 50 {
+				detail.UsedInMore = true
+				break
+			}
 			product, perr := app.queries.GetSDEType(ctx, row.ProductTypeID)
 			if perr != nil || product.Name == "" {
 				continue
@@ -554,8 +574,5 @@ func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
 	} else {
 		logging.Errorf("items: list blueprints using %d: %v", typeID, uerr)
 	}
-
-	view.TypeDetail = detail
-	data.Items = view
-	app.render(ctx, w, http.StatusOK, "items.html", data)
+	return detail
 }

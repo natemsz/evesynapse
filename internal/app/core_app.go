@@ -637,23 +637,42 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/unlink", app.handleCharacterUnlink)
 	})
 
+	// Crawler and anonymous routes: no session middleware.
+	// Crawlers carry no cookie; anonymous readers get stored
+	// rows only, never per-user data.
+	r.Get("/robots.txt", app.handleRobots)
+	r.Get("/sitemap.xml", app.handleSitemap)
+	r.Route("/item", func(r chi.Router) {
+		r.Get("/{typeID}/", app.handlePublicItem)
+	})
+	r.Route("/ships", func(r chi.Router) {
+		r.Get("/{typeID}/", app.handlePublicShip)
+	})
+
 	r.Route("/fittings", func(r chi.Router) {
-		r.Use(app.requireAuth)
+		// Anonymous-safe surfaces: the simulator (All-V without
+		// a session), the public browser and fit pages, and the
+		// SDE-only picker. Handlers branch on the session.
 		r.Get("/", app.handleFittings)
-		r.Get("/saved/", app.handleFittingsSaved)
+		r.Post("/simulate/", app.handleFitSimulate)
+		r.Get("/picker.json", app.handleFitPickerJSON)
 		r.Get("/public/", app.handlePublicFits)
 		r.Get("/public/suggest", app.handlePublicFitSuggest)
-		r.Post("/simulate/", app.handleFitSimulate)
-		r.Get("/clones.json", app.handleFitClonesJSON)
-		r.Get("/picker.json", app.handleFitPickerJSON)
-		r.Post("/save/", app.handleFitSave)
-		r.Post("/save-to-eve/", app.handleFitSaveToEVE)
-		r.Post("/delete/", app.handleFitDelete)
-		r.Post("/import/", app.handleFitImport)
-		r.Post("/export/", app.handleFitExport)
-		r.Get("/mine.json", app.handleFitMineJSON)
-		r.Post("/fork/", app.handleFitFork)
-		r.Get("/shopping/{id}/", app.handleFitShopping)
+		r.Get("/public/fit/{fitID}/", app.handlePublicFitPage)
+		r.With(app.requireAuth).Post("/public/fit/{fitID}/rate", app.handlePublicFitRate)
+		r.Group(func(r chi.Router) {
+			r.Use(app.requireAuth)
+			r.Get("/saved/", app.handleFittingsSaved)
+			r.Get("/clones.json", app.handleFitClonesJSON)
+			r.Post("/save/", app.handleFitSave)
+			r.Post("/save-to-eve/", app.handleFitSaveToEVE)
+			r.Post("/delete/", app.handleFitDelete)
+			r.Post("/import/", app.handleFitImport)
+			r.Post("/export/", app.handleFitExport)
+			r.Get("/mine.json", app.handleFitMineJSON)
+			r.Post("/fork/", app.handleFitFork)
+			r.Get("/shopping/{id}/", app.handleFitShopping)
+		})
 	})
 
 	r.Route("/killmails", func(r chi.Router) {

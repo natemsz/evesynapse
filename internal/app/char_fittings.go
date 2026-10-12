@@ -79,12 +79,13 @@ func fittingSlotCategory(flag string) string {
 	return "Other"
 }
 
-// handleFittings renders the fit simulator page for one of the
-// signed-in user's characters (switchable via ?character=). The
-// saved-fits list lives on its own page (/fittings/saved/).
+// handleFittings renders the fit simulator page: one of the
+// signed-in user's characters (switchable via ?character=), or
+// the anonymous All-V view without a session. The saved-fits
+// list lives on its own page (/fittings/saved/).
 func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
+	data := app.publicPage(ctx)
 
 	characters, active, links, err := app.pickCharacter(ctx, r, "/fittings/")
 	if err != nil {
@@ -95,6 +96,9 @@ func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 	}
 	if links == nil {
 		app.attachFitEditor(ctx, r, &data, nil, db.Character{}, nil)
+		if data.FitEditor != nil {
+			data.FitEditor.Anonymous = app.userID(ctx) == 0
+		}
 		app.render(ctx, w, http.StatusOK, "fittings.html", data)
 		return
 	}

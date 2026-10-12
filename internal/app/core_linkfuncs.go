@@ -52,6 +52,15 @@ func itemLink(typeID int64, name string) template.HTML {
 	return template.HTML(fmt.Sprintf(`<a href="/items/type/%d/">%s</a>`, typeID, html.EscapeString(name)))
 }
 
+// publicItemLink is the anonymous twin: the public /item/ page,
+// reachable with no session, for the crawler-safe templates.
+func publicItemLink(typeID int64, name string) template.HTML {
+	if typeID <= 0 || name == "" {
+		return template.HTML(html.EscapeString(name))
+	}
+	return template.HTML(fmt.Sprintf(`<a href="/item/%d/">%s</a>`, typeID, html.EscapeString(name)))
+}
+
 // charLink renders a character name by the link policy above: own
 // characters to their sheet, strangers to the public pilot page.
 // viewer is the signed-in user's linked-character set (pageData's
@@ -246,6 +255,7 @@ func skillLevel(trained, next int, state string) template.HTML {
 func linkFuncMap() template.FuncMap {
 	return template.FuncMap{
 		"itemLink":        itemLink,
+		"publicItemLink":  publicItemLink,
 		"charLink":        charLink,
 		"killCharLink":    killCharLink,
 		"zkillKillLink":   zkillKillLink,

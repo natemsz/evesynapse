@@ -1,0 +1,52 @@
+{{define "title"}}{{with .PublicFit}}{{.Card.Name}}{{else}}Public Fit{{end}}{{end}}
+{{define "content"}}
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{with .PublicFit}}
+<p class="browse-back"><a href="/fittings/public/">← Public fits</a></p>
+<h1><span class="gt">{{.Card.Name}}</span></h1>
+<p class="lede">{{publicItemLink .Card.ShipTypeID .Card.Ship}}{{if .Card.Author}} by {{.Card.Author}}{{end}} · {{.Card.Views}} views{{if .Card.PriceKnown}} · {{.Card.PriceLine}}{{end}}</p>
+{{if .Description}}<p>{{.Description}}</p>{{end}}
+{{if .Card.Tags}}<p class="tag-row">{{range .Card.Tags}}<a href="/fittings/public/?tag={{.}}">#{{.}}</a> {{end}}</p>{{end}}
+
+{{if .StarCount}}<p><span class="badge wait">{{printf "%.1f" .AvgStars}} ★</span> {{.StarCount}} rating{{if ne .StarCount 1}}s{{end}}{{if .MyStars}} · you rated {{.MyStars}}★{{end}}</p>{{else}}<p class="hint">No ratings yet.</p>{{end}}
+
+{{if $.LoggedIn}}
+<form method="post" action="{{.Card.FitURL}}rate" class="inline-form">
+  <label>Rate this fit <select name="stars" aria-label="Stars">
+    <option value="5">5 ★</option>
+    <option value="4">4 ★</option>
+    <option value="3">3 ★</option>
+    <option value="2">2 ★</option>
+    <option value="1">1 ★</option>
+  </select></label>
+  <button type="submit">{{if $.PublicFit.MyStars}}Update rating{{else}}Rate{{end}}</button>
+</form>
+{{else}}
+<p class="hint"><a href="/auth/eve">Sign in with EVE SSO</a> to rate this fit.</p>
+{{end}}
+
+<h3>Modules</h3>
+{{if .Sections}}
+{{range .Sections}}
+<h4>{{.Label}}</h4>
+<ul>
+{{range .Items}}<li>{{publicItemLink .TypeID .Name}}{{if ne .Quantity "1"}} × {{.Quantity}}{{end}}</li>{{end}}
+</ul>
+{{end}}
+{{else}}
+<p class="hint">No modules listed.</p>
+{{end}}
+
+<h3>Share</h3>
+<p class="share-row">
+  <button type="button" data-copy data-copy-text="{{.PageURL}}">Copy link</button>
+  {{if .EFT}}<button type="button" data-copy data-copy-from="fit-eft">Copy EFT</button>{{end}}
+  <a class="btn" href="{{.ShareX}}" target="_blank" rel="noopener noreferrer">Share to X</a>
+  <a class="btn" href="{{.ShareReddit}}" target="_blank" rel="noopener noreferrer">Share to Reddit</a>
+</p>
+{{if .EFT}}<pre id="fit-eft">{{.EFT}}</pre>{{end}}
+
+<p class="hint">Open in the <a href="/fittings/?public={{.Card.ID}}#fit-editor">fitting tool</a> to simulate it with your skills or make your own copy.</p>
+{{end}}
+{{end}}

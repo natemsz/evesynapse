@@ -95,7 +95,7 @@ func TestCorporationPagesShowOneCorporation(t *testing.T) {
 	mustContain(t, "fit suggestions", get("/doctrines/suggest?scope=fits&corporation=98000001&q=guard"), "Fleet Guardian", "/fittings/?doctrine=")
 	mustContain(t, "category suggestions", get("/doctrines/suggest?scope=categories&corporation=98000001&q=str"), "Stratop")
 	mustContain(t, "saved fit suggestions", get("/doctrines/suggest?scope=myfits&q=main"), "Mainline Loki")
-	mustContain(t, "public fit suggestions", get("/fittings/public/suggest?q=rif"), "Public Rifter", "/fittings/?public=")
+	mustContain(t, "public fit suggestions", get("/fittings/public/suggest?q=rif"), "Public Rifter", "/fittings/public/fit/")
 	for _, address := range []string{"/doctrines/suggest?corporation=98000001&q=shi", "/doctrines/suggest?scope=fits&corporation=98000001&q=guard", "/doctrines/suggest?scope=myfits&q=main"} {
 		if _, body := getPage(t, f.app, stranger, address); strings.TrimSpace(body) != "[]" {
 			t.Fatalf("an outsider was suggested %s from %s", body, address)

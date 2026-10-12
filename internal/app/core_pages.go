@@ -122,6 +122,14 @@ type pageData struct {
 
 	// PublicFits is the /fittings/public/ page (char_fit_public.go).
 	PublicFits *publicFitsView
+	// PublicFit is one stable public fit page (char_fit_public.go).
+	PublicFit *publicFitView
+	// PublicItem is one /item/ page, PublicShip one /ships/ page.
+	PublicItem *publicItemView
+	PublicShip *publicShipView
+	// HeadMeta carries a public page's escaped meta/OG tags into
+	// base.html's head; empty on pages that need none.
+	HeadMeta template.HTML
 
 	// CorpSettings is the /corporations/settings/ page (corp_select.go).
 	CorpSettings *corpSettingsView
@@ -194,7 +202,7 @@ func sectionForPage(page string) string {
 		"mail.html", "calendar.html", "contacts.html", "pilot.html", "assets.html",
 		"killmails.html", "notifications.html", "notification_settings.html", "op.html", "op_form.html", "op_paps.html":
 		return "pilot"
-	case "fittings.html", "fittings_saved.html", "fit_shopping.html", "fittings_public.html":
+	case "fittings.html", "fittings_saved.html", "fit_shopping.html", "fittings_public.html", "fit_public.html":
 		return "fitting"
 	case "industry.html", "planner.html", "planets.html":
 		return "industry"
@@ -202,7 +210,7 @@ func sectionForPage(page string) string {
 		"market_restock.html",
 		"wallet.html", "orders.html", "contracts.html", "system.html", "station.html", "structure.html":
 		return "market"
-	case "items.html":
+	case "items.html", "item_public.html", "ship_public.html":
 		return "tools"
 	case "corporations.html", "corp_members.html", "corp_wallets.html",
 		"corp_orders.html", "corp_assets.html", "corp_structures.html",

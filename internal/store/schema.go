@@ -155,6 +155,12 @@ var pgTradeIdeasSchema string
 //go:embed schema_pg/032_pulse_events.sql
 var pgPulseEventsSchema string
 
+// Step 033: public discovery counters (views, stored price,
+// rating aggregates) and the per-account fit ratings table.
+//
+//go:embed schema_pg/033_public_fits.sql
+var pgPublicFitsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -216,6 +222,7 @@ func schemaSteps() []schemaStep {
 		{30, "swarm", pgSwarmSchema, ""},
 		{31, "trade_ideas", pgTradeIdeasSchema, ""},
 		{32, "pulse_events", pgPulseEventsSchema, ""},
+		{33, "public_fits", pgPublicFitsSchema, ""},
 	}
 }
 

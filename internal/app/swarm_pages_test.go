@@ -30,13 +30,95 @@ func swarmPageApp(t *testing.T) (*Application, *http.Cookie) {
 	return app, sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 }
 
+// TestSwarmSeedPeerShowsSeed proves a configured seed lists as
+// a directory, not a source: State Seed even when approved, so
+// the operator never mistakes it for an instance with data.
+func TestSwarmSeedPeerShowsSeed(t *testing.T) {
+	app, _ := swarmPageApp(t)
+	app.cfg.swarm = swarmConfig{mode: swarmOpen, secret: swarmTestSecret, seeds: []string{"https://seed.example"}, gossipHours: defaultSwarmGossipHours}
+	ctx := context.Background()
+	now := time.Now().UTC()
+	for _, peer := range []struct {
+		id, url, source string
+	}{
+		{"seed-1", "https://seed.example", "seed"},
+		{"seed", "https://directory.example", "gossip"},
+		{"peer-data-1", "https://node.example", "gossip"},
+	} {
+		if err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
+			InstanceID: peer.id, BaseUrl: peer.url,
+			PublicKey: strings.Repeat("A", 44), Source: peer.source, FirstSeen: now,
+		}); err != nil {
+			t.Fatalf("upsert %s: %v", peer.id, err)
+		}
+		if err := app.queries.SetSwarmPeerApproved(ctx, db.SetSwarmPeerApprovedParams{InstanceID: peer.id, Approved: true}); err != nil {
+			t.Fatalf("approve %s: %v", peer.id, err)
+		}
+	}
+	rows := app.loadSwarmPeers(ctx)
+	byID := map[string]swarmPeerRow{}
+	for _, row := range rows {
+		byID[row.ID] = row
+	}
+	if byID["seed-1"].State != "Seed" {
+		t.Errorf("seed state %q, want Seed", byID["seed-1"].State)
+	}
+	if byID["peer-data-1"].State != "Approved" {
+		t.Errorf("instance state %q, want Approved", byID["peer-data-1"].State)
+	}
+	// Role is what the peer functions as: the worker's fixed
+	// identity is a directory, anything serving under its own
+	// identity is a cache, and a cache answering at a directory
+	// address is both.
+	if byID["seed"].Role != "Seed" {
+		t.Errorf("seed role %q, want Seed", byID["seed"].Role)
+	}
+	if byID["seed-1"].Role != "Seed+Cache" {
+		t.Errorf("serving seed role %q, want Seed+Cache", byID["seed-1"].Role)
+	}
+	if byID["peer-data-1"].Role != "Cache" {
+		t.Errorf("instance role %q, want Cache", byID["peer-data-1"].Role)
+	}
+}
+
+// TestSwarmAdminRoleColumn renders the Admin table over a
+// directory-only seed, a serving seed and a plain cache: the
+// heading and every role reach the page.
+func TestSwarmAdminRoleColumn(t *testing.T) {
+	app, cookie := swarmPageApp(t)
+	app.cfg.swarm = swarmConfig{mode: swarmOpen, secret: swarmTestSecret, seeds: []string{"https://seed.example"}, gossipHours: defaultSwarmGossipHours}
+	ctx := context.Background()
+	now := time.Now().UTC()
+	for _, peer := range []struct {
+		id, url, source string
+	}{
+		{"seed", "https://directory.example", "gossip"},
+		{"seed-1", "https://seed.example", "seed"},
+		{"peer-data-1", "https://node.example", "gossip"},
+	} {
+		if err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
+			InstanceID: peer.id, BaseUrl: peer.url,
+			PublicKey: strings.Repeat("A", 44), Source: peer.source, FirstSeen: now,
+		}); err != nil {
+			t.Fatalf("upsert %s: %v", peer.id, err)
+		}
+	}
+	code, body := getPage(t, app, cookie, "/admin/")
+	if code != http.StatusOK {
+		t.Fatalf("/admin/: status %d", code)
+	}
+	// html/template escapes + as &#43; in the cells; the row
+	// test above pins the exact role values.
+	mustContain(t, "/admin/", body, "Swarm Cache", "<th>Role</th>", "Seed&#43;Cache", ">Cache<")
+}
+
 func TestSwarmSyncCardOff(t *testing.T) {
 	app, cookie := swarmPageApp(t)
 	code, body := getPage(t, app, cookie, "/sync/")
 	if code != http.StatusOK {
 		t.Fatalf("/sync/: status %d", code)
 	}
-	mustContain(t, "/sync/", body, "Shared cache", "Off")
+	mustContain(t, "/sync/", body, "Swarm Cache", "Off")
 }
 
 func TestSwarmAdminSectionOff(t *testing.T) {
@@ -45,7 +127,7 @@ func TestSwarmAdminSectionOff(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("/admin/: status %d", code)
 	}
-	mustContain(t, "/admin/", body, "Shared cache", "Mode Off", "SHARED_CACHE")
+	mustContain(t, "/admin/", body, "Swarm Cache", "Mode Off", "SHARED_CACHE")
 	if strings.Contains(body, "SHARED_CACHE_SECRET=") {
 		t.Fatalf("/admin/: page leaks the secret setting name with a value")
 	}
@@ -188,7 +270,7 @@ func TestSwarmSyncCardEnabled(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("/sync/: status %d", code)
 	}
-	mustContain(t, "/sync/", body, "Shared cache", "Open", alias, "ESI calls saved")
+	mustContain(t, "/sync/", body, "Swarm Cache", "Open", alias, "ESI calls saved")
 	if strings.Contains(body, "127.0.0.1:9") {
 		t.Fatalf("/sync/: page leaks the peer address")
 	}

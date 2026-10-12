@@ -151,7 +151,9 @@ func (app *Application) drainPilotNameWants(ctx context.Context, allowance *fetc
 
 // drainPilotRecord assembles and stores one pilot's public record
 // from ESI's public endpoints (no token involved anywhere). A 404
-// on the profile settles the record as 'missing'.
+// or 422 on the profile settles the record as 'missing': both are
+// ESI's definitive answer that the ID is not a character, and
+// anything else would refetch the refusal every cycle.
 func (app *Application) drainPilotRecord(ctx context.Context, id int64, allowance *fetchBudget, now time.Time) (settled bool, limited bool) {
 
 	if !allowance.take() {
@@ -163,7 +165,7 @@ func (app *Application) drainPilotRecord(ctx context.Context, id int64, allowanc
 			logging.Warnf("worker: pilot records: ESI error limit hit resolving pilot %d; backing off until next cycle", id)
 			return false, true
 		}
-		if code, has := esi.StatusCode(err); has && code == http.StatusNotFound {
+		if code, has := esi.StatusCode(err); has && (code == http.StatusNotFound || code == http.StatusUnprocessableEntity) {
 			if serr := app.queries.SetPilotRecord(ctx, db.SetPilotRecordParams{
 				CharacterID: id, Payload: "", State: pilotStateMissing, FetchedAt: timeSet(now),
 			}); serr != nil {

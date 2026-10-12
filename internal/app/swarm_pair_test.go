@@ -228,6 +228,78 @@ func TestSwarmPairSharesHistory(t *testing.T) {
 	}
 }
 
+// serveCorp seeds A with one ready corporation record, and wants
+// it on B: the demand the early fetch phase must pull.
+func serveCorp(t *testing.T, p *swarmPair) {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	if err := p.a.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
+		CorporationID: 98000001, Payload: `{"name":"Shared Corp","ticker":"SHR"}`,
+		State: orgStateReady, FetchedAt: timeSet(now),
+	}); err != nil {
+		t.Fatalf("seed A corp: %v", err)
+	}
+	if err := p.b.queries.UpsertCorporationWant(ctx, db.UpsertCorporationWantParams{
+		CorporationID: 98000001, Priority: wantViewed,
+	}); err != nil {
+		t.Fatalf("want corp on B: %v", err)
+	}
+	p.pinA(t)
+}
+
+// TestSwarmFetchPhasePullsDemand proves the early pass pulls
+// what is wanted while it is still wanted: after the phase, B
+// holds A's entry staged, before B's own worker would spend an
+// ESI call on the same record.
+func TestSwarmFetchPhasePullsDemand(t *testing.T) {
+	p := newSwarmPair(t, swarmOpen)
+	ctx := context.Background()
+	serveCorp(t, p)
+	p.b.swarmFetchPhase(ctx, time.Now().UTC())
+	staged, err := p.b.queries.ListUncheckedStaging(ctx, 10)
+	if err != nil || len(staged) != 1 || staged[0].Kind != swarmKindCorporation || staged[0].Key != "98000001" {
+		t.Fatalf("staged after fetch phase: %+v err=%v, want the corporation entry", staged, err)
+	}
+}
+
+// TestSwarmPullSkipsSeeds proves the skip is the protocol's
+// seed marker, not the configured URL: a seed identity is never
+// pulled wherever it is listed from, while a directory that
+// also serves under its own identity stays pullable even when
+// it is a configured seed.
+func TestSwarmPullSkipsSeeds(t *testing.T) {
+	p := newSwarmPair(t, swarmOpen)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	serveCorp(t, p)
+	var seedHits int
+	seed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seedHits++
+		_, _ = w.Write([]byte(`{"entries":[]}`))
+	}))
+	t.Cleanup(seed.Close)
+	// A serves data AND is a configured seed directory: still pulled.
+	p.b.cfg.swarm.seeds = []string{p.urlA}
+	if err := p.b.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
+		InstanceID: "seed", BaseUrl: seed.URL, PublicKey: strings.Repeat("A", 44),
+		Source: "seed", FirstSeen: now,
+	}); err != nil {
+		t.Fatalf("pin seed: %v", err)
+	}
+	if err := p.b.queries.SetSwarmPeerApproved(ctx, db.SetSwarmPeerApprovedParams{InstanceID: "seed", Approved: true}); err != nil {
+		t.Fatalf("approve seed: %v", err)
+	}
+	p.b.swarmPull(ctx, now)
+	if seedHits != 0 {
+		t.Fatalf("seed saw %d pulls, want 0", seedHits)
+	}
+	staged, err := p.b.queries.ListUncheckedStaging(ctx, 10)
+	if err != nil || len(staged) != 1 || staged[0].Key != "98000001" {
+		t.Fatalf("staged beside the seed: %+v err=%v, want A's entry", staged, err)
+	}
+}
+
 func TestSwarmPairPoisonNeverServed(t *testing.T) {
 	p := newSwarmPair(t, swarmOpen)
 	ctx := context.Background()

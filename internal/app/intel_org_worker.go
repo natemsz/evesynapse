@@ -99,7 +99,8 @@ func (app *Application) drainAlliancePass(ctx context.Context, allowance *fetchB
 
 // drainCorporationRecord assembles and stores one corporation's
 // public record from ESI's public endpoints (no token involved
-// anywhere). A 404 settles the record as 'missing'.
+// anywhere). A 404 or 422 settles the record as 'missing': both
+// are ESI's definitive answer that the ID is not a corporation.
 func (app *Application) drainCorporationRecord(ctx context.Context, id int64, allowance *fetchBudget, now time.Time) (settled bool, limited bool) {
 
 	if !allowance.take() {
@@ -111,7 +112,7 @@ func (app *Application) drainCorporationRecord(ctx context.Context, id int64, al
 			logging.Warnf("worker: corporation records: ESI error limit hit resolving corporation %d; backing off until next cycle", id)
 			return false, true
 		}
-		if code, has := esi.StatusCode(err); has && code == http.StatusNotFound {
+		if code, has := esi.StatusCode(err); has && (code == http.StatusNotFound || code == http.StatusUnprocessableEntity) {
 			if serr := app.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
 				CorporationID: id, Payload: "", State: orgStateMissing, FetchedAt: timeSet(now),
 			}); serr != nil {
@@ -166,7 +167,9 @@ func (app *Application) drainCorporationRecord(ctx context.Context, id int64, al
 // record: the profile plus the member-corporation list, with as
 // many member names baked in as the pass budget allows (the rest
 // resolve through the corporation queue, like pilot employment
-// histories). A 404 settles the record as 'missing'.
+// histories). A 404 or 422 settles the record as 'missing':
+// both are ESI's definitive answer that the ID is not an
+// alliance.
 func (app *Application) drainAllianceRecord(ctx context.Context, id int64, allowance *fetchBudget, now time.Time) (settled bool, limited bool) {
 
 	if !allowance.take() {
@@ -178,7 +181,7 @@ func (app *Application) drainAllianceRecord(ctx context.Context, id int64, allow
 			logging.Warnf("worker: alliance records: ESI error limit hit resolving alliance %d; backing off until next cycle", id)
 			return false, true
 		}
-		if code, has := esi.StatusCode(err); has && code == http.StatusNotFound {
+		if code, has := esi.StatusCode(err); has && (code == http.StatusNotFound || code == http.StatusUnprocessableEntity) {
 			if serr := app.queries.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
 				AllianceID: id, Payload: "", State: orgStateMissing, FetchedAt: timeSet(now),
 			}); serr != nil {

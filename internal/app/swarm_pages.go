@@ -34,13 +34,14 @@ type swarmPeerRow struct {
 	Source      string // seed, gossip, manual
 	Approved    bool
 	Excluded    bool
+	Role        string // Seed, Cache, Seed+Cache: what the peer functions as
 	State       string // Approved, Waiting, Excluded (+ auto note)
 	Trust       string // trust percent
 	Good        string
 	Bad         string
 }
 
-// swarmMetricsView is the Sync page's "Shared cache" card.
+// swarmMetricsView is the Sync page's "Swarm Cache" card.
 type swarmMetricsView struct {
 	Status  string // Off, or Open/Allowlist with peer counts
 	Enabled bool
@@ -54,7 +55,7 @@ type swarmMetricRow struct {
 	Value string
 }
 
-// swarmAdminView is the Admin page's "Shared cache" section.
+// swarmAdminView is the Admin page's "Swarm Cache" section.
 type swarmAdminView struct {
 	Mode        string // Off, Open, Allowlist
 	Enabled     bool
@@ -120,12 +121,30 @@ func (app *Application) loadSwarmPeers(ctx context.Context) []swarmPeerRow {
 			Good:  esi.FormatInt(p.GoodChecks), Bad: esi.FormatInt(p.BadChecks),
 		}
 		row.ShowAddress = row.Display == p.BaseUrl
+		// Role is what the peer functions as. The wire carries
+		// no role flag: the seed worker's fixed identity is its
+		// report — it signs as "seed" and holds no data — while
+		// anything serving under its own identity is a cache,
+		// even when it also answers at a directory address.
+		row.Role = "Cache"
+		switch {
+		case p.InstanceID == swarmSeedInstanceID:
+			row.Role = "Seed"
+		case app.swarmIsSeed(p.BaseUrl):
+			row.Role = "Seed+Cache"
+		}
 		switch {
 		case p.Excluded:
 			row.State = "Excluded"
 			if strings.HasPrefix(p.ExcludeNote, "auto:") {
 				row.State = "Excluded (auto)"
 			}
+		case app.swarmIsSeed(p.BaseUrl):
+			// A configured seed URL is a directory: approval is
+			// meaningless and the state says what it is. Pulls
+			// are decided by identity, not address, so a
+			// directory that also serves stays pullable.
+			row.State = "Seed"
 		case p.Approved:
 			row.State = "Approved"
 		default:
@@ -326,7 +345,7 @@ func (app *Application) handleSwarmAddPeer(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if !app.cfg.swarm.enabled() || app.swarmID == nil || app.swarmCli == nil {
-		back("Nothing was added: the shared cache is off. Set SHARED_CACHE and restart first.")
+		back("Nothing was added: the swarm cache is off. Set SHARED_CACHE and restart first.")
 		return
 	}
 	raw := strings.TrimSpace(r.Form.Get("url"))

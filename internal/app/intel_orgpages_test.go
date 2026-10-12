@@ -53,10 +53,11 @@ func TestOrgLinkHelpers(t *testing.T) {
 // fixtures: corporation profiles, alliance profiles, and alliance
 // member-corporation lists. IDs absent from a map answer 404.
 type orgStub struct {
-	corps     map[int64]string // corporation id -> profile payload
-	alliances map[int64]string // alliance id -> profile payload
-	members   map[int64]string // alliance id -> [corporation ids] payload
-	calls     int
+	corps           map[int64]string // corporation id -> profile payload
+	alliances       map[int64]string // alliance id -> profile payload
+	members         map[int64]string // alliance id -> [corporation ids] payload
+	unprocessableID int64            // nonzero: this profile id answers 422 (never that entity)
+	calls           int
 }
 
 func (s *orgStub) respond(status int, body string) *http.Response {
@@ -81,6 +82,9 @@ func (s *orgStub) RoundTrip(req *http.Request) (*http.Response, error) {
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	switch {
 	case len(parts) == 2 && parts[0] == "corporations":
+		if id := pathID(parts[1]); id != 0 && id == s.unprocessableID {
+			return s.respond(http.StatusUnprocessableEntity, `{"error":"no such corporation"}`), nil
+		}
 		if body, ok := s.corps[pathID(parts[1])]; ok {
 			return s.respond(http.StatusOK, body), nil
 		}
@@ -91,6 +95,9 @@ func (s *orgStub) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 		return s.respond(http.StatusNotFound, `{"error":"alliance not found"}`), nil
 	case len(parts) == 2 && parts[0] == "alliances":
+		if id := pathID(parts[1]); id != 0 && id == s.unprocessableID {
+			return s.respond(http.StatusUnprocessableEntity, `{"error":"no such alliance"}`), nil
+		}
 		if body, ok := s.alliances[pathID(parts[1])]; ok {
 			return s.respond(http.StatusOK, body), nil
 		}
@@ -211,6 +218,28 @@ func TestCorporationPageStatesAndDrain(t *testing.T) {
 		t.Fatalf("corporation missing page: status %d", code)
 	}
 	mustContain(t, "/corporation/ (missing)", body, "EVE has no public record for that corporation")
+
+	// A 422 settles 'missing' too, and stays settled.
+	if err := q2.UpsertCorporationWant(ctx, db.UpsertCorporationWantParams{CorporationID: 98000998, Priority: wantViewed}); err != nil {
+		t.Fatalf("enqueue refused corporation: %v", err)
+	}
+	stub.unprocessableID = 98000998
+	drained, _ = app2.refreshCorporationRecords(ctx, &fetchBudget{left: 120})
+	if drained != 1 {
+		t.Fatalf("refused corporation drain: drained=%d, want 1", drained)
+	}
+	rec, err = q2.GetCorporationRecord(ctx, 98000998)
+	if err != nil || rec.State != orgStateMissing {
+		t.Fatalf("refused corporation record: %+v err=%v, want missing", rec, err)
+	}
+	calls := stub.calls
+	drained, _ = app2.refreshCorporationRecords(ctx, &fetchBudget{left: 120})
+	if drained != 0 {
+		t.Fatalf("settled corporation redrained: drained=%d, want 0", drained)
+	}
+	if stub.calls != calls {
+		t.Fatalf("settled corporation refetched: %d calls after settling", stub.calls-calls)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -319,6 +348,28 @@ func TestAlliancePageStatesAndDrain(t *testing.T) {
 		t.Fatalf("alliance missing page: status %d", code)
 	}
 	mustContain(t, "/alliance/ (missing)", body, "EVE has no public record for that alliance")
+
+	// A 422 settles 'missing' too, and stays settled.
+	if err := q2.UpsertAllianceWant(ctx, db.UpsertAllianceWantParams{AllianceID: 99000998, Priority: wantViewed}); err != nil {
+		t.Fatalf("enqueue refused alliance: %v", err)
+	}
+	stub.unprocessableID = 99000998
+	drained, _ = app2.refreshAllianceRecords(ctx, &fetchBudget{left: 120})
+	if drained != 1 {
+		t.Fatalf("refused alliance drain: drained=%d, want 1", drained)
+	}
+	rec, err = q2.GetAllianceRecord(ctx, 99000998)
+	if err != nil || rec.State != orgStateMissing {
+		t.Fatalf("refused alliance record: %+v err=%v, want missing", rec, err)
+	}
+	calls := stub.calls
+	drained, _ = app2.refreshAllianceRecords(ctx, &fetchBudget{left: 120})
+	if drained != 0 {
+		t.Fatalf("settled alliance redrained: drained=%d, want 0", drained)
+	}
+	if stub.calls != calls {
+		t.Fatalf("settled alliance refetched: %d calls after settling", stub.calls-calls)
+	}
 }
 
 // ---------------------------------------------------------------------------

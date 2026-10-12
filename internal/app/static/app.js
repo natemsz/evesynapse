@@ -7,17 +7,22 @@
 
   // --- Content-ready bus --------------------------------------
   // The persistent shell (swap.js) replaces #main-content without
-  // a page load. Page widgets below subscribe to the post-swap
-  // event and initialize the fresh markup; the same initializer
-  // runs once for the first paint. Shell-level code (sidebar, top
-  // bar, palette, notifications) binds once and never re-runs.
-  // A widget that binds document-level listeners or timers must
-  // guard them itself: element bindings are safe (old nodes are
-  // discarded with the swap), global ones are not.
+  // a page load. Page widgets subscribe through EveSynapseContent
+  // and initialize the fresh markup; the same initializer runs
+  // once for the first paint. Shell-level code (sidebar, top bar,
+  // palette, notifications) binds once and never re-runs. A widget
+  // that binds document-level listeners or timers must guard them
+  // itself: element bindings are safe (old nodes are discarded
+  // with the swap), global ones are not.
+  window.EveSynapseContent = {
+    onReady: function (fn) {
+      document.addEventListener("evesynapse:content-ready", function (ev) {
+        fn((ev.detail && ev.detail.root) || document);
+      });
+    }
+  };
   function onContentReady(fn) {
-    document.addEventListener("evesynapse:content-ready", function (ev) {
-      fn(ev.detail && ev.detail.root ? ev.detail.root : document);
-    });
+    window.EveSynapseContent.onReady(fn);
   }
 
   // --- Collapsible sections -----------------------------------
@@ -1062,9 +1067,7 @@
       arm(regions[i]);
     }
   }
-  document.addEventListener("evesynapse:content-ready", function (ev) {
-    armRegions(ev.detail && ev.detail.root ? ev.detail.root : document);
-  });
+  window.EveSynapseContent.onReady(armRegions);
   document.addEventListener("evesynapse:content-will-swap", function () {
     kicks = [];
   });
@@ -2079,9 +2082,7 @@
     var roots = scope.querySelectorAll('[data-charselector]');
     for (var i = 0; i < roots.length; i++) initCharselector(roots[i]);
   }
-  document.addEventListener('evesynapse:content-ready', function (ev) {
-    initCharselectors(ev.detail && ev.detail.root ? ev.detail.root : document);
-  });
+  window.EveSynapseContent.onReady(initCharselectors);
   document.addEventListener('evesynapse:content-will-swap', pruneSelectors);
   initCharselectors(document);
 
@@ -2137,9 +2138,7 @@
     initCSVExport(root);
     initTableFilters(root);
   }
-  document.addEventListener("evesynapse:content-ready", function (ev) {
-    initContentWidgets(ev.detail && ev.detail.root ? ev.detail.root : document);
-  });
+  window.EveSynapseContent.onReady(initContentWidgets);
   initContentWidgets(document);
 
   // --- Auto-refresh pages -------------------------------------
@@ -2362,9 +2361,7 @@
       }
     });
   }
-  document.addEventListener("evesynapse:content-ready", function (ev) {
-    initPlanPicker(ev.detail && ev.detail.root ? ev.detail.root : document);
-  });
+  window.EveSynapseContent.onReady(initPlanPicker);
   initPlanPicker(document);
 
   // --- Data-driven geometry ------------------------------------

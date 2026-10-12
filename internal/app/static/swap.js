@@ -23,6 +23,12 @@
   var SWAP_DENY_EXACT = ["/fittings/"];
   var SWAP_DENY_PREFIX = ["/fittings/saved", "/planner/", "/auth/", "/characters/switch"];
 
+  // Prefetch skips more than clicks do: the auto-refresh page
+  // always falls back to a full load, so rendering it ahead of
+  // time is a wasted server render. Clicks on it still work
+  // through the normal fallback.
+  var PREFETCH_DENY_PREFIX = ["/sync/"];
+
   // Scripts the shell always carries. A fetched page that needs
   // anything else (fit.js, plan.js, push.js) loads whole when the
   // current page does not already have it.
@@ -35,6 +41,15 @@
       return path.slice(0, -1);
     }
     return path;
+  }
+
+  function deniedPrefetch(path) {
+    var p = normalizePath(path);
+    for (var i = 0; i < PREFETCH_DENY_PREFIX.length; i++) {
+      var pre = PREFETCH_DENY_PREFIX[i];
+      if (p === normalizePath(pre) || p.indexOf(pre) === 0) return true;
+    }
+    return false;
   }
 
   function deniedTarget(path) {
@@ -125,7 +140,8 @@
       bestNavHref: bestNavHref,
       normalizePath: normalizePath,
       isSlowConnection: isSlowConnection,
-      deniedTarget: deniedTarget
+      deniedTarget: deniedTarget,
+      deniedPrefetch: deniedPrefetch
     };
   }
 
@@ -134,6 +150,12 @@
   var main = document.getElementById("main-content");
   if (!main) return;
   main.setAttribute("tabindex", "-1");
+  // The shell owns scroll: the browser's own restoration would
+  // fight the swap (a second jump after the paint), so it stays
+  // off while the swapper is active.
+  try {
+    window.history.scrollRestoration = "manual";
+  } catch (e) { /* older engines: the swap still lands */ }
 
   var reducedMotion = window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -264,17 +286,20 @@
     document.dispatchEvent(new CustomEvent("evesynapse:content-will-swap", {
       detail: { url: url }
     }));
+    // The scroll lands with the paint — inside the transition
+    // update callback, or immediately without one — so back and
+    // forward arrive at the saved offset with no second jump.
     var paint = function () {
       main.innerHTML = entry.main;
       if (entry.title) document.title = entry.title;
       syncActiveNav(new URL(url, window.location.href).pathname);
-    };
-    var after = function () {
       if (push === "top") {
         window.scrollTo(0, 0);
       } else if (typeof push === "number") {
         window.scrollTo(0, push);
       }
+    };
+    var after = function () {
       try {
         main.focus({ preventScroll: true });
       } catch (e) {
@@ -392,7 +417,7 @@
     if (t && t.closest) a = t.closest("a[href]");
     if (!a) return;
     var d = describeAnchor(a, { button: 0 });
-    if (!d || !d.verdict) return;
+    if (!d || !d.verdict || deniedPrefetch(d.url.pathname)) return;
     prefetch(d.url.href);
   }
   document.addEventListener("mouseover", prefetchFromEvent);

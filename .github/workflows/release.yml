@@ -44,8 +44,16 @@ jobs:
       - name: Run the test suite
         run: go test ./...
 
+      # File list is explicit, not a glob: node --test only
+      # expands globs on Node 21+, and a quoted glob that matches
+      # nothing would pass the step with zero tests run. A missing
+      # file fails loudly instead.
       - name: Run the JavaScript tests
-        run: node --version && node --test "internal/app/jstest/*.test.js"
+        run: >-
+          node --version &&
+          node --test
+          internal/app/jstest/swap.test.js
+          internal/app/jstest/swap.browser.test.js
 
   # The same suite under the race detector, as its own job so the
   # plain run above stays fast.

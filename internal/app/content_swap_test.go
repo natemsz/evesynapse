@@ -11,7 +11,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 )
 
@@ -38,10 +37,11 @@ func TestSwapScriptServed(t *testing.T) {
 	if got := rec.Header().Get("Cache-Control"); got != cacheForever {
 		t.Errorf("versioned swap script Cache-Control = %q, want %q", got, cacheForever)
 	}
-	for _, want := range []string{"shouldSwapClick", "evesynapse:content-ready", "evesynapse:content-will-swap"} {
-		if !strings.Contains(rec.Body.String(), want) {
-			t.Errorf("swap.js is missing %q", want)
-		}
+	// The script's behavior contract lives in the JS tests
+	// (internal/app/jstest); asserting on its source text here
+	// would only make renames fail twice.
+	if rec.Body.Len() == 0 {
+		t.Errorf("versioned swap script served an empty body")
 	}
 
 	// Unversioned it revalidates with an ETag like the rest.

@@ -72,12 +72,19 @@ test("content pages qualify, including public fits and query strings", function 
   }
 });
 
-test("deniedTarget matches the prompt's out-of-scope list", function () {
+test("deniedTarget covers the full-navigation pages", function () {
   assert.equal(swap.deniedTarget("/fittings/"), true);
   assert.equal(swap.deniedTarget("/fittings"), true);
   assert.equal(swap.deniedTarget("/planner"), true);
   assert.equal(swap.deniedTarget("/market/"), false);
   assert.equal(swap.deniedTarget("/plannersham/"), false);
+});
+
+test("deniedPrefetch skips the auto-refresh page only", function () {
+  assert.equal(swap.deniedPrefetch("/sync/"), true);
+  assert.equal(swap.deniedPrefetch("/sync/?character=1"), true);
+  assert.equal(swap.deniedPrefetch("/market/"), false);
+  assert.equal(swap.deniedPrefetch("/planner/"), false);
 });
 
 test("fallback: bad status, redirects, missing main, autorefresh", function () {

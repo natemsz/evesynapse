@@ -1,7 +1,11 @@
 // Browser-path tests for ../static/swap.js: the click interceptor,
-// fetch-to-swap flow and the full-navigation fallbacks, driven
-// through a small DOM stub (no browser needed). Run with:
-// node --test "internal/app/jstest/*.test.js"
+// fetch-to-swap flow, fallbacks and history, driven through a small
+// DOM stub (no browser needed). Async waits poll for the expected
+// condition with a deadline — never a fixed sleep — so the suite
+// runs as fast as the code allows and fails deterministically.
+// Absence assertions (no fetch fired) drain the task queue instead:
+// the denied paths are fully synchronous, so once the queue is
+// empty nothing more can happen.
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -13,6 +17,43 @@ const FIT_HTML = "<html><head><title>Market · EveSynapse</title>" +
 const LOGIN_HTML = "<html><head><title>Home · EveSynapse</title></head>" +
   "<body><main id=\"main-content\">LANDING</main></body></html>";
 
+function waitFor(cond, label) {
+  const deadline = Date.now() + 4000;
+  return new Promise(function (resolve, reject) {
+    (function poll() {
+      let ok = false;
+      try {
+        ok = cond();
+      } catch (e) {
+        reject(e);
+        return;
+      }
+      if (ok) {
+        resolve();
+        return;
+      }
+      if (Date.now() > deadline) {
+        reject(new Error("timed out waiting for: " + label));
+        return;
+      }
+      setTimeout(poll, 10);
+    })();
+  });
+}
+
+function flush() {
+  // Drain pending microtasks and macrotasks; the denied paths do
+  // all their work synchronously, so afterwards a fetch can no
+  // longer appear.
+  return new Promise(function (resolve) {
+    setImmediate(function () {
+      setImmediate(function () {
+        setImmediate(resolve);
+      });
+    });
+  });
+}
+
 function makeEnv(opts) {
   opts = opts || {};
   const listeners = {};
@@ -22,6 +63,7 @@ function makeEnv(opts) {
     setAttribute: function (k, v) { this.attrs[k] = v; },
     focus: function () { this.focused = true; }
   };
+  const scrolls = [];
   const mainDoc = {
     getElementById: function (id) { return id === "main-content" ? mainEl : null; },
     querySelectorAll: function () { return []; },
@@ -59,7 +101,7 @@ function makeEnv(opts) {
       replaceState: function () {},
       pushState: function (st, t, url) { pushes.push(url); win.location.href = url; }
     },
-    scrollTo: function () {},
+    scrollTo: function (x, y) { scrolls.push([x, y]); },
     fetch: function (url) {
       win.fetched.push(url);
       if (opts.redirect) {
@@ -83,7 +125,13 @@ function makeEnv(opts) {
     AbortController: AbortController
   };
   win.DOMParser.prototype.parseFromString = function (html) { return fetchedDoc(html); };
-  return { listeners: listeners, mainEl: mainEl, mainDoc: mainDoc, win: win, pushes: pushes };
+  return {
+    listeners: listeners, mainEl: mainEl, mainDoc: mainDoc,
+    win: win, pushes: pushes, scrolls: scrolls,
+    firePopstate: function (state) {
+      (listeners.popstate || []).forEach(function (fn) { fn({ state: state }); });
+    }
+  };
 }
 
 function loadSwap(env) {
@@ -127,10 +175,10 @@ test("a qualifying click swaps main without a load", async function () {
   loadSwap(env);
   assert.equal(env.mainEl.attrs.tabindex, "-1");
   clickOn(env, "/market/");
-  await new Promise(function (r) { setTimeout(r, 50); });
-  assert.match(env.mainEl.innerHTML, /MARKET/);
+  await waitFor(function () { return env.mainEl.innerHTML.includes("MARKET"); }, "swap paint");
   assert.deepEqual(env.pushes, ["https://app.test/market/"]);
   assert.equal(env.mainDoc.title, "Market · EveSynapse");
+  assert.deepEqual(env.scrolls, [[0, 0]]);
   assert.equal(env.mainEl.focused, true);
 });
 
@@ -144,7 +192,7 @@ test("a redirect (expired session) falls back to a full load", async function ()
     get href() { return "https://app.test/characters/"; }
   };
   clickOn(env, "/wallet/");
-  await new Promise(function (r) { setTimeout(r, 50); });
+  await waitFor(function () { return navigated !== ""; }, "fallback navigation");
   assert.equal(navigated, "https://app.test/wallet/");
   assert.match(env.mainEl.innerHTML, /HOME/);
 });
@@ -154,7 +202,7 @@ test("denied targets never fetch", async function () {
   loadSwap(env);
   clickOn(env, "/fittings/");
   clickOn(env, "/planner/?product=1");
-  await new Promise(function (r) { setTimeout(r, 30); });
+  await flush();
   assert.deepEqual(env.win.fetched, []);
 });
 
@@ -163,5 +211,33 @@ test("modifier clicks and hash navs are left alone", async function () {
   loadSwap(env);
   const ev = clickOn(env, "/market/", { metaKey: true });
   assert.equal(ev.defaultPrevented, false);
+  await flush();
   assert.deepEqual(env.win.fetched, []);
+});
+
+test("back to a cached page restores without fetching or pushing", async function () {
+  const env = makeEnv();
+  loadSwap(env);
+  clickOn(env, "/market/");
+  await waitFor(function () { return env.mainEl.innerHTML.includes("MARKET"); }, "swap paint");
+  const fetches = env.win.fetched.length;
+  const pushes = env.pushes.length;
+  env.win.location.href = "https://app.test/characters/";
+  env.firePopstate({ esSwap: 1, scroll: 123 });
+  await waitFor(function () { return env.mainEl.innerHTML.includes("HOME"); }, "back restore");
+  assert.equal(env.mainDoc.title, "Home");
+  assert.deepEqual(env.scrolls[env.scrolls.length - 1], [0, 123]);
+  assert.equal(env.win.fetched.length, fetches, "back to cache must not fetch");
+  assert.equal(env.pushes.length, pushes, "back must not push state");
+});
+
+test("back to an uncached page fetches and swaps without pushing", async function () {
+  const env = makeEnv();
+  loadSwap(env);
+  const pushes = env.pushes.length;
+  env.win.location.href = "https://app.test/unvisited/";
+  env.firePopstate({ esSwap: 1, scroll: 0 });
+  await waitFor(function () { return env.mainEl.innerHTML.includes("MARKET"); }, "back fetch swap");
+  assert.ok(env.win.fetched.includes("https://app.test/unvisited/"), "back to cold page fetches");
+  assert.equal(env.pushes.length, pushes, "back must not push state");
 });

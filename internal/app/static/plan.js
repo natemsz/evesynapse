@@ -489,6 +489,9 @@ function renderMap(t) {
       var t = ev && ev.target && ev.target.closest ? ev.target.closest("[data-path]") : el;
       if (t && t !== el) return;
       selected = el.getAttribute("data-path");
+      // Selecting a branch also opens it, same as its fold
+      // button; an open or childless row is unaffected.
+      delete collapsed[selected];
       renderMap(currentTotals());
       renderInspector(currentTotals());
     }

@@ -50,7 +50,7 @@
     <tr class="bp-cat-header"><td colspan="8"><strong>{{.ProductCategory}}</strong></td></tr>
     {{$lastCat = .ProductCategory}}
     {{end}}
-    <tr class="bp-row" data-search="{{.Name}} {{.ProductName}} {{.ProductCategory}}"><td>{{itemLink .TypeID .Name}}</td><td>{{if .ProductName}}{{.ProductName}}{{else}}—{{end}}</td><td>{{if .ProductCategory}}{{.ProductCategory}}{{else}}—{{end}}</td><td>{{.Kind}}</td><td>{{.ME}}</td><td>{{.TE}}</td><td>{{.Runs}}</td><td>{{placeLink .Location}}</td></tr>
+    <tr class="bp-row" data-search="{{.Name}} {{.ProductName}} {{.ProductCategory}}"><td>{{itemLink .TypeID .Name}}</td><td>{{if .ProductTypeID}}<a href="/planner/?product={{.ProductTypeID}}">{{.ProductName}}</a>{{else if .ProductName}}{{.ProductName}}{{else}}—{{end}}</td><td>{{if .ProductCategory}}{{.ProductCategory}}{{else}}—{{end}}</td><td>{{.Kind}}</td><td>{{.ME}}</td><td>{{.TE}}</td><td>{{.Runs}}</td><td>{{placeLink .Location}}</td></tr>
   {{end}}
   </tbody>
 </table>

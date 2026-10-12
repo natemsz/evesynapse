@@ -106,7 +106,7 @@ func planNodeToDTO(n *buildplan.Node, nameOf func(int64) string, factor float64)
 }
 
 // planPreset is one scenario mask over the tree: full builds
-// every buildable node, balanced builds where building saves
+// every buildable node, optimized builds where building saves
 // (or ties) and buys the rest, buyComponents builds only the
 // root. The client mirrors these masks exactly; the server's
 // totals are the canonical cross-check.
@@ -114,7 +114,7 @@ type planPreset int
 
 const (
 	planPresetFull planPreset = iota
-	planPresetBalanced
+	planPresetOptimized
 	planPresetBuyComponents
 )
 
@@ -196,7 +196,7 @@ func (r *planRollup) buyNode(n *buildplan.Node, isRoot bool) bool {
 	switch r.preset {
 	case planPresetBuyComponents:
 		return !isRoot
-	case planPresetBalanced:
+	case planPresetOptimized:
 		return n.BvBApplicable && n.BvBDelta < 0 && n.PriceKnown
 	default:
 		return false
@@ -383,7 +383,7 @@ type planPayload struct {
 	TimeNote   string           `json:"timeNote"`
 	Root       *planNodeDTO     `json:"root"`
 	Full       planPresetTotals `json:"full"`
-	Balanced   planPresetTotals `json:"balanced"`
+	Optimized  planPresetTotals `json:"optimized"`
 	BuyComp    planPresetTotals `json:"buyComp"`
 	// StockVal is the priced stockpile behind the hub split.
 	// It never depends on the mask, so it sits at top level.
@@ -533,11 +533,11 @@ func iskCompactCents(c int64) string {
 	return s + " ISK"
 }
 
-// planHeaderLines formats the balanced preset for the header
+// planHeaderLines formats the optimized preset for the header
 // stat blocks: landed cost, market value, margin, elapsed.
 // Unknowns stay visible as unknowns, never zeros.
 func planHeaderLines(p *planPayload) (landed, landedSub, value, margin, marginSub, elapsed, elapsedSub string) {
-	b := p.Balanced
+	b := p.Optimized
 	landedSub = "materials"
 	if b.FeesKnown && b.Fees > 0 {
 		landedSub = "materials + fees"
@@ -585,10 +585,10 @@ func planHeaderLines(p *planPayload) (landed, landedSub, value, margin, marginSu
 }
 
 // planBuyOutrightLine compares buying the finished product
-// outright against the balanced build: the header's
+// outright against the optimized build: the header's
 // build-vs-buy verdict in one line.
 func planBuyOutrightLine(p *planPayload) string {
-	b := p.Balanced
+	b := p.Optimized
 	if !b.Known || !b.ProfKnown {
 		return ""
 	}
@@ -621,7 +621,7 @@ func buildPlanPayload(res *buildplan.Result, productID int64, prices map[int64]e
 		Produced: root.ProducedQty,
 		Root:     planNodeToDTO(root, nameOf, factor),
 	}
-	for _, preset := range []planPreset{planPresetFull, planPresetBalanced, planPresetBuyComponents} {
+	for _, preset := range []planPreset{planPresetFull, planPresetOptimized, planPresetBuyComponents} {
 		r := &planRollup{preset: preset, factor: factor, shop: make(map[int64]int64)}
 		r.tot.Complete = true
 		r.tot.FeesKnown = true
@@ -631,13 +631,13 @@ func buildPlanPayload(res *buildplan.Result, productID int64, prices map[int64]e
 		switch preset {
 		case planPresetFull:
 			p.Full = r.tot
-		case planPresetBalanced:
-			p.Balanced = r.tot
+		case planPresetOptimized:
+			p.Optimized = r.tot
 		default:
 			p.BuyComp = r.tot
 		}
 	}
-	p.StockVal = p.Balanced.StockVal
+	p.StockVal = p.Optimized.StockVal
 	return p
 }
 
@@ -706,9 +706,14 @@ func (app *Application) planBuildSystem(ctx context.Context, raw string) (system
 	if n, err := strconv.ParseInt(raw, 10, 64); err == nil && n > 0 {
 		systemID = n
 	}
-	if sys, err := app.queries.GetSDESystem(ctx, systemID); err == nil {
+	if sys, err := app.queries.GetSDESystem(ctx, systemID); err == nil && sys.Name != "" {
 		systemName = sys.Name
+	} else if name, ok := app.esi.CachedPlaceName(ctx, systemID); ok && name != "" {
+		systemName = name
 	} else {
+		// Honest placeholder, same shape as everywhere else:
+		// the warmer fills the cache and the name lands.
+		app.notePageWantFromContext(ctx, pageWantPlace, systemID)
 		systemName = "System " + strconv.FormatInt(systemID, 10)
 	}
 	row, err := app.queries.GetIndustryCostIndex(ctx, db.GetIndustryCostIndexParams{

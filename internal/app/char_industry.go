@@ -66,6 +66,7 @@ type blueprintRow struct {
 	Runs            string // runs remaining; "∞" for originals
 	Location        placeRef
 	ProductName     string // what the blueprint produces
+	ProductTypeID   int64  // product type, when the SDE maps one (links to the build planner)
 	ProductCategory string // category of the produced item
 }
 
@@ -208,6 +209,7 @@ func (app *Application) fillBlueprints(ctx context.Context, characterID int64, v
 		}
 		// Product info for categorization
 		if productID, ok := bpProducts[bp.TypeID]; ok {
+			row.ProductTypeID = productID
 			row.ProductName = app.typeNameOrID(ctx, productID)
 			// Get product group for categorization
 			if sdeType, err := app.queries.GetSDEType(ctx, productID); err == nil {

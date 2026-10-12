@@ -285,6 +285,78 @@ func TestPlanNotManufacturable(t *testing.T) {
 	}
 }
 
+// Capital-scale source: 40 components x 15 sub-assemblies x 8
+// leaves mirrors a deep capital tree (shared leaves expand
+// under every parent, like shared minerals). 5441 nodes must
+// clear the engine cap so caps auto-build on first load.
+func capitalScaleSource() fixturePlannerSource {
+	src := fixturePlannerSource{}
+	const rootID = 10001
+	rootMats := make([]Material, 0, 40)
+	for i := 0; i < 40; i++ {
+		compID := int64(11000 + i)
+		rootMats = append(rootMats, Material{TypeID: compID, Quantity: 1})
+		subMats := make([]Material, 0, 15)
+		for j := 0; j < 15; j++ {
+			subID := int64(12000 + i*15 + j)
+			subMats = append(subMats, Material{TypeID: subID, Quantity: 1})
+			leafMats := make([]Material, 0, 8)
+			for k := 0; k < 8; k++ {
+				leafMats = append(leafMats, Material{TypeID: int64(34 + k%4), Quantity: 10})
+			}
+			src[subID] = &Blueprint{BlueprintTypeID: 22000 + int64(i*15+j), ProductTypeID: subID,
+				ProductQuantity: 1, TimeSeconds: 60, Materials: leafMats}
+		}
+		src[compID] = &Blueprint{BlueprintTypeID: 21000 + int64(i), ProductTypeID: compID,
+			ProductQuantity: 1, TimeSeconds: 600, Materials: subMats}
+	}
+	src[rootID] = &Blueprint{BlueprintTypeID: 20001, ProductTypeID: rootID,
+		ProductQuantity: 1, TimeSeconds: 3600, Materials: rootMats}
+	return src
+}
+
+func TestPlanCapitalScaleBuilds(t *testing.T) {
+	res, err := Build(capitalScaleSource(), 10001, Input{Runs: 1})
+	if err != nil {
+		t.Fatalf("buildPlan: %v", err)
+	}
+	if res.TooLarge {
+		t.Fatal("capital-scale tree tripped the node cap")
+	}
+	if res.Root == nil {
+		t.Fatal("capital-scale tree has no root")
+	}
+	nodes := 0
+	Walk(res.Root, func(n *Node) { nodes++ })
+	if nodes != 5441 {
+		t.Errorf("capital-scale nodes: got %d, want 5441", nodes)
+	}
+	if len(res.Shopping) == 0 {
+		t.Error("capital-scale tree aggregated no shopping")
+	}
+}
+
+func TestPlanAbsurdScaleStillTripsCap(t *testing.T) {
+	src := capitalScaleSource()
+	root := src[10001]
+	wide := make([]Material, 0, 400)
+	for i := 0; i < 400; i++ {
+		id := int64(50000 + i)
+		wide = append(wide, Material{TypeID: id, Quantity: 1})
+		src[id] = &Blueprint{BlueprintTypeID: 60000 + int64(i), ProductTypeID: id,
+			ProductQuantity: 1, TimeSeconds: 1, Materials: root.Materials}
+	}
+	src[10001] = &Blueprint{BlueprintTypeID: 20001, ProductTypeID: 10001,
+		ProductQuantity: 1, TimeSeconds: 1, Materials: wide}
+	res, err := Build(src, 10001, Input{Runs: 1})
+	if err != nil {
+		t.Fatalf("buildPlan: %v", err)
+	}
+	if !res.TooLarge {
+		t.Error("absurd-scale tree should still trip the node cap")
+	}
+}
+
 func TestPlanPriceHonesty(t *testing.T) {
 	// No prices at all: costs stay unknown, quantities don't.
 	res, err := Build(fixtureRecipes(), 1001, Input{Runs: 1})

@@ -378,3 +378,194 @@ func TestSwarmGossipDue(t *testing.T) {
 		t.Fatalf("just gossiped: gossip due again")
 	}
 }
+
+// TestSwarmCheckDraw pins the sampling probabilities: always
+// verified under ten total checks, then half at half trust and
+// five percent at the top, clamped both ends.
+func TestSwarmCheckDraw(t *testing.T) {
+	for _, tc := range []struct {
+		trust float64
+		total int64
+		r     float64
+		want  bool
+	}{
+		{0.9, 5, 0.0, true},  // volume gate: new signers always verify
+		{0.9, 9, 0.99, true}, // still under the gate at nine
+		{0.5, 10, 0.499, true}, {0.5, 10, 0.5, false},
+		{0.99, 100, 0.049, true}, {0.99, 100, 0.05, false},
+		{1.0, 50, 0.049, true}, {1.0, 50, 0.051, false}, // floor: five percent
+		{0.0, 50, 0.499, true}, {0.0, 50, 0.5, false}, // cap: half
+	} {
+		if got := swarmCheckDraw(tc.trust, tc.total, tc.r); got != tc.want {
+			t.Errorf("draw(%v, %d, %v) = %v, want %v", tc.trust, tc.total, tc.r, got, tc.want)
+		}
+	}
+}
+
+// TestSwarmTrustStreakDecaySuppress covers the ledger dynamics
+// on one fixture: consecutive failures weigh doubling, any
+// success resets the run, old bad marks decay on the gossip
+// cadence, five in a row excludes whatever the lifetime score
+// says, and fresh staged rows suppress refetches while old
+// ones do not.
+func TestSwarmTrustStreakDecaySuppress(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	now := time.Now().UTC()
+
+	swarmTestPeer(t, app, "peer-s1")
+	for i := 0; i < 3; i++ {
+		app.countSwarmCheck(ctx, "peer-s1", false)
+	}
+	got, err := app.queries.GetSwarmPeer(ctx, "peer-s1")
+	if err != nil || got.BadChecks != 7 {
+		t.Fatalf("escalation: bad %d, want 7 (1+2+4)", got.BadChecks)
+	}
+	if err := app.queries.DecaySwarmBadChecks(ctx); err != nil {
+		t.Fatalf("decay: %v", err)
+	}
+	got, err = app.queries.GetSwarmPeer(ctx, "peer-s1")
+	if err != nil || got.BadChecks != 6 {
+		t.Fatalf("decay: bad %d, want 6 (7*7/8)", got.BadChecks)
+	}
+	app.countSwarmCheck(ctx, "peer-s1", true)
+	app.countSwarmCheck(ctx, "peer-s1", false)
+	got, err = app.queries.GetSwarmPeer(ctx, "peer-s1")
+	if err != nil || got.BadChecks != 7 || got.GoodChecks != 1 {
+		t.Fatalf("reset: %+v, want bad 7 good 1", got)
+	}
+
+	swarmTestPeer(t, app, "peer-s2")
+	for i := 0; i < 30; i++ {
+		app.countSwarmCheck(ctx, "peer-s2", true)
+	}
+	for i := 0; i < 5; i++ {
+		app.countSwarmCheck(ctx, "peer-s2", false)
+	}
+	got, err = app.queries.GetSwarmPeer(ctx, "peer-s2")
+	if err != nil {
+		t.Fatalf("read peer: %v", err)
+	}
+	if !got.Excluded || !strings.Contains(got.ExcludeNote, "consecutive") {
+		t.Fatalf("velocity exclusion: excluded %v note %q", got.Excluded, got.ExcludeNote)
+	}
+
+	kx := swarmTestPeer(t, app, "peer-x")
+	payload := `{"region_id":10000002,"type_id":34,"days":[{"date":"2026-10-01","average":5.5,"highest":6.0,"lowest":5.0,"volume":100,"order_count":10}]}`
+	fresh, err := signSwarmEntry(kx, "peer-x", swarmKindHistory, "10000002/34", payload, now)
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	if err := app.stageSwarmEntry(ctx, fresh, "peer-x", now); err != nil {
+		t.Fatalf("stage: %v", err)
+	}
+	if !app.swarmSuppressFetch(ctx, swarmKindHistory, "10000002/34", now) {
+		t.Fatal("fresh staged row does not suppress its refetch")
+	}
+	stalePayload := `{"region_id":10000002,"type_id":35,"days":[{"date":"2026-10-01","average":5.5,"highest":6.0,"lowest":5.0,"volume":100,"order_count":10}]}`
+	stale, err := signSwarmEntry(kx, "peer-x", swarmKindHistory, "10000002/35", stalePayload, now.Add(-time.Hour))
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	if err := app.stageSwarmEntry(ctx, stale, "peer-x", now.Add(-time.Hour)); err != nil {
+		t.Fatalf("stage: %v", err)
+	}
+	if app.swarmSuppressFetch(ctx, swarmKindHistory, "10000002/35", now) {
+		t.Fatal("hour-old staged row still suppresses its refetch")
+	}
+
+	// A single stale mark forgives fully in one round. 1*7/8
+	// truncates to zero: deliberate, not an accident of the
+	// integer math, so the cliff is pinned here.
+	swarmTestPeer(t, app, "peer-s3")
+	app.countSwarmCheck(ctx, "peer-s3", false)
+	if err := app.queries.DecaySwarmBadChecks(ctx); err != nil {
+		t.Fatalf("decay: %v", err)
+	}
+	got, err = app.queries.GetSwarmPeer(ctx, "peer-s3")
+	if err != nil || got.BadChecks != 0 {
+		t.Fatalf("decay cliff: bad %d, want 0 (1*7/8)", got.BadChecks)
+	}
+}
+
+// TestSwarmTrustEarnedAppliesUnledgered pins the trust-earned
+// path end to end: a high-trust peer's staged entry applies
+// without ESI verification, spends zero ESI calls, and moves
+// neither the good/bad ledger nor the failure streak. Only an
+// ESI verdict touches trust, through the spot pass and the
+// urgent settle alike.
+func TestSwarmTrustEarnedAppliesUnledgered(t *testing.T) {
+	ctx := context.Background()
+	transport := &countingTransport{}
+	app, _, _ := buildCorpTestApp(t, transport)
+	app.cfg.swarm = swarmConfig{mode: swarmOpen, secret: swarmTestSecret, gossipHours: defaultSwarmGossipHours}
+	id, err := mintSwarmIdentity()
+	if err != nil {
+		t.Fatalf("mint identity: %v", err)
+	}
+	id.id = "test-local"
+	app.swarmID = id
+	app.swarmCli = newSwarmClient(swarmTestSecret)
+
+	kx := swarmTestPeer(t, app, "peer-earned")
+	for i := 0; i < 50; i++ {
+		app.countSwarmCheck(ctx, "peer-earned", true)
+	}
+	app.countSwarmCheck(ctx, "peer-earned", false)
+	now := time.Now().UTC()
+	one, err := signSwarmEntry(kx, "peer-earned", swarmKindHistory, "10000002/34",
+		`{"region_id":10000002,"type_id":34,"days":[{"date":"2026-10-01","average":5.5,"highest":6.0,"lowest":5.0,"volume":100,"order_count":10}]}`, now)
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	if err := app.stageSwarmEntry(ctx, one, "peer-earned", now); err != nil {
+		t.Fatalf("stage: %v", err)
+	}
+	// Trust sits near 0.97: force the draw past any plausible
+	// sample rate so the entry skips verification.
+	oldRand := swarmRandFloat
+	swarmRandFloat = func() (float64, error) { return 0.99, nil }
+	defer func() { swarmRandFloat = oldRand }()
+
+	applied, limited := app.swarmSpotCheck(ctx, &fetchBudget{left: 10}, nil, now)
+	if limited || applied != 1 {
+		t.Fatalf("spot: applied %d limited %v, want 1/false", applied, limited)
+	}
+	if n := transport.calls.Load(); n != 0 {
+		t.Fatalf("spot: %d ESI calls, want none", n)
+	}
+	hist, err := app.queries.ListMarketHistory(ctx, db.ListMarketHistoryParams{RegionID: 10000002, TypeID: 34, RowLimit: 5})
+	if err != nil || len(hist) == 0 {
+		t.Fatalf("spot: entry never applied (rows %d err %v)", len(hist), err)
+	}
+	assertEarnedUntouched := func(where string) {
+		t.Helper()
+		got, err := app.queries.GetSwarmPeer(ctx, "peer-earned")
+		if err != nil || got.GoodChecks != 50 || got.BadChecks != 1 {
+			t.Fatalf("%s: ledger %+v err %v, want good 50 bad 1", where, got, err)
+		}
+		app.swarmStreakMu.Lock()
+		streak := app.swarmStreak["peer-earned"]
+		app.swarmStreakMu.Unlock()
+		if streak != 1 {
+			t.Fatalf("%s: failure streak %d, want 1 (untouched)", where, streak)
+		}
+		if n := transport.calls.Load(); n != 0 {
+			t.Fatalf("%s: %d ESI calls, want none", where, n)
+		}
+	}
+	assertEarnedUntouched("spot")
+
+	two, err := signSwarmEntry(kx, "peer-earned", swarmKindHistory, "10000002/35",
+		`{"region_id":10000002,"type_id":35,"days":[{"date":"2026-10-01","average":5.5,"highest":6.0,"lowest":5.0,"volume":100,"order_count":10}]}`, now)
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	if err := app.stageSwarmEntry(ctx, two, "peer-earned", now); err != nil {
+		t.Fatalf("stage: %v", err)
+	}
+	if !app.swarmSettleUrgent(ctx, swarmKindHistory, "10000002/35") {
+		t.Fatal("urgent settle did not apply the trust-earned entry")
+	}
+	assertEarnedUntouched("settle")
+}

@@ -1213,11 +1213,19 @@ instance works as a seed for the rest.
 
 Trust is cryptographic and reputational. Every shared entry is
 signed by the instance that fetched it (Ed25519); the signature
-is verified before anything is stored, and entries wait in
-staging until a spot check re-fetches the datum from ESI. A bad
-signature rejects the entry; a failed spot check discards it
-and counts against its signer. Ten checks under half trust
-excludes the signer on its own. The operator can always add an
+and shape are verified before anything is stored. Verification
+against ESI is sampled, not exhaustive: new signers are checked
+every time, then the check rate falls with trust (half at half
+trust, five percent near the top), drawn unpredictably per
+entry. A failed check counts against its signer with weight
+that doubles per consecutive failure, and five in a row excludes
+on velocity alone; old bad marks fade a little every gossip
+round, and passing checks rebuild trust, so a fixed peer earns
+its way back and the operator's re-admit is the way home. Ten
+checks under half trust excludes the signer on its own. The
+urgent drain asks peers before spending ESI, and a key with a
+fresh staged entry skips its refetch while the spot decision
+lands. The operator can always add an
 instance by address, approve, exclude, re-admit, or remove one
 on the Admin page (removing also rotates a peer's key: the next
 gossip pins the new one). A seed serves its member list —

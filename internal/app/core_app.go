@@ -182,6 +182,12 @@ type Application struct {
 	swarmCli        *swarmClient
 	swarmMu         sync.Mutex
 	swarmLastGossip time.Time
+	// swarmStreakMu guards the consecutive-failure streaks
+	// (signer to current run length). In-memory only: a
+	// restart forgets velocity but the ledger keeps every
+	// mark, so the trust floor still holds.
+	swarmStreakMu sync.Mutex
+	swarmStreak   map[string]int
 
 	// Trade ideas (tradeideas.go): the Cloudflare client, set in
 	// tests; production builds a timeout client per refresh.

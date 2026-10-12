@@ -44,6 +44,19 @@ func (q *Queries) AddSwarmPeerCheck(ctx context.Context, arg AddSwarmPeerCheckPa
 	return err
 }
 
+const decaySwarmBadChecks = `-- name: DecaySwarmBadChecks :exec
+UPDATE swarm_peers SET bad_checks = (bad_checks * 7) / 8 WHERE bad_checks > 0
+`
+
+// Forgiveness on a slow cadence: old bad marks fade even when
+// no new checks land, so a fixed peer's score recovers over
+// weeks. Exclusion itself never clears here; the operator
+// re-admits, and the decayed score is the fresh start.
+func (q *Queries) DecaySwarmBadChecks(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, decaySwarmBadChecks)
+	return err
+}
+
 const deleteStagingEntry = `-- name: DeleteStagingEntry :exec
 DELETE FROM swarm_staging WHERE kind = $1 AND key = $2
 `
@@ -70,6 +83,46 @@ DELETE FROM swarm_peers WHERE instance_id = $1
 func (q *Queries) DeleteSwarmPeer(ctx context.Context, instanceID string) error {
 	_, err := q.db.ExecContext(ctx, deleteSwarmPeer, instanceID)
 	return err
+}
+
+const getStagingEntry = `-- name: GetStagingEntry :one
+SELECT kind, key, payload, signer, signature, fetched_at, received_at
+FROM swarm_staging
+WHERE kind = $1 AND key = $2
+`
+
+type GetStagingEntryParams struct {
+	Kind string `json:"kind"`
+	Key  string `json:"key"`
+}
+
+type GetStagingEntryRow struct {
+	Kind       string    `json:"kind"`
+	Key        string    `json:"key"`
+	Payload    string    `json:"payload"`
+	Signer     string    `json:"signer"`
+	Signature  string    `json:"signature"`
+	FetchedAt  time.Time `json:"fetched_at"`
+	ReceivedAt time.Time `json:"received_at"`
+}
+
+// A staged entry is unsettled until a spot decision deletes
+// it, so any present row is one the passes may defer to. The
+// urgent drain settles it inline; the history pass skips the
+// ESI refetch while it is fresh.
+func (q *Queries) GetStagingEntry(ctx context.Context, arg GetStagingEntryParams) (GetStagingEntryRow, error) {
+	row := q.db.QueryRowContext(ctx, getStagingEntry, arg.Kind, arg.Key)
+	var i GetStagingEntryRow
+	err := row.Scan(
+		&i.Kind,
+		&i.Key,
+		&i.Payload,
+		&i.Signer,
+		&i.Signature,
+		&i.FetchedAt,
+		&i.ReceivedAt,
+	)
+	return i, err
 }
 
 const getSwarmCounters = `-- name: GetSwarmCounters :many

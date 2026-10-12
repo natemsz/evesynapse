@@ -105,6 +105,22 @@ WHERE kind = $1 AND key = $2;
 -- name: DeleteStagingEntry :exec
 DELETE FROM swarm_staging WHERE kind = $1 AND key = $2;
 
+-- A staged entry is unsettled until a spot decision deletes
+-- it, so any present row is one the passes may defer to. The
+-- urgent drain settles it inline; the history pass skips the
+-- ESI refetch while it is fresh.
+-- name: GetStagingEntry :one
+SELECT kind, key, payload, signer, signature, fetched_at, received_at
+FROM swarm_staging
+WHERE kind = $1 AND key = $2;
+
+-- Forgiveness on a slow cadence: old bad marks fade even when
+-- no new checks land, so a fixed peer's score recovers over
+-- weeks. Exclusion itself never clears here; the operator
+-- re-admits, and the decayed score is the fresh start.
+-- name: DecaySwarmBadChecks :exec
+UPDATE swarm_peers SET bad_checks = (bad_checks * 7) / 8 WHERE bad_checks > 0;
+
 -- Pending organization records someone followed a name to: what a
 -- pull asks peers for before the worker spends ESI calls on it.
 -- name: ListSwarmCorpDemand :many

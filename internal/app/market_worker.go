@@ -142,6 +142,12 @@ func (app *Application) warmMarketHistory(ctx context.Context, allowance *fetchB
 		if !app.marketFetchDue(ctx, kind, historyRefetchGate) {
 			continue
 		}
+		// A fresh staged entry means the pull already covered
+		// this key and a spot decision is moments away:
+		// refetching under it would spend the saved call.
+		if app.swarmSuppressFetch(ctx, swarmKindHistory, fmt.Sprintf("%d/%d", key.RegionID, key.TypeID), time.Now().UTC()) {
+			continue
+		}
 		if !allowance.take() {
 			break
 		}

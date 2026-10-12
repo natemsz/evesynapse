@@ -1,0 +1,9 @@
+/* Backdrop step-up: style.css paints the standard backdrop on
+   body::before; wide or hiDPI screens get the 4K master instead.
+   Only the image changes - position and sizing stay with the
+   base rule. */
+@media (min-width: 2400px), (min-width: 1200px) and (min-resolution: 2dppx), (min-width: 1200px) and (-webkit-min-device-pixel-ratio: 2) {
+  body::before {
+    background-image: url("/static/bg-4k.jpg");
+  }
+}

@@ -72,6 +72,7 @@ type planView struct {
 	Skills          []string
 	Rows            []planRowView
 	MEInputs        []planMEInput
+	MESummary       string        // one-line rollup of MEInputs; "" when none
 	Shopping        []planRowView // reuses the row shape; only name/qty/price cells fill
 	ShoppingTotal   string        // "" when some lines are unpriced
 	TotalTime       string
@@ -150,6 +151,47 @@ type planMEInput struct {
 	FieldName string // me_<blueprint type id>
 	Label     string // product built from this blueprint
 	Value     int
+	Source    string // engine MESource: "override" | "owned" | "assumed"
+}
+
+// planMESummary compresses the ME wall into one line: the
+// all-default case names the count, otherwise every non-default
+// blueprint is listed and the rest collapse into one tail.
+func planMESummary(inputs []planMEInput) string {
+	if len(inputs) == 0 {
+		return ""
+	}
+	var parts []string
+	rest := 0
+	restAssumed := true
+	for _, in := range inputs {
+		if in.Value != 0 {
+			parts = append(parts, in.Label+" at ME"+strconv.Itoa(in.Value)+" ("+in.Source+")")
+			continue
+		}
+		rest++
+		if in.Source != "assumed" {
+			restAssumed = false
+		}
+	}
+	if rest > 0 {
+		tail := strconv.Itoa(rest) + " at ME0"
+		if rest == len(inputs) {
+			tail = strconv.Itoa(rest) + " component" + pluralS(rest) + " at ME0"
+		}
+		if restAssumed {
+			tail += " (assumed)"
+		}
+		parts = append(parts, tail)
+	}
+	return strings.Join(parts, ", ")
+}
+
+func pluralS(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }
 
 // plannerMaxRunsInput clamps the runs form field; the node cap in
@@ -400,10 +442,12 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 				FieldName: fmt.Sprintf("me_%d", n.Blueprint.BlueprintTypeID),
 				Label:     nameOf(n.TypeID),
 				Value:     n.ME,
+				Source:    n.MESource,
 			})
 		}
 	})
 	sort.Slice(view.MEInputs, func(i, j int) bool { return view.MEInputs[i].Label < view.MEInputs[j].Label })
+	view.MESummary = planMESummary(view.MEInputs)
 
 	for _, line := range res.Shopping {
 		row := planRowView{

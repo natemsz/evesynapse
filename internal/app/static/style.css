@@ -3468,6 +3468,12 @@ button[data-active="1"] { outline: 2px solid var(--accent); outline-offset: 1px;
 .plan-node-top { display: flex; justify-content: space-between; gap: 0.5rem; align-items: baseline; }
 .plan-node-top span { font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
 .plan-fold { margin-left: 0.4rem; padding: 0 0.35rem; }
+.plan-treecols { display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr); gap: 0.8rem; align-items: start; }
+.plan-treetools { display: flex; gap: 0.4rem; margin-bottom: 0.5rem; }
+.plan-kids { margin-left: 1.25rem; padding-left: 0.6rem; border-left: 1px dotted #3a3a3a; }
+.me-wrap { display: inline; }
+#me-fields label { margin-right: 0.6rem; }
+#me-hint { margin-left: 0.4rem; }
 .plan-bar { background: #262626; border-radius: 3px; height: 0.55rem; margin: 0.3rem 0; overflow: hidden; }
 .plan-fill { background: var(--plan-build); height: 100%; }
 .plan-buy .plan-fill, .plan-fill.plan-buy { background: var(--plan-buy); }
@@ -3489,6 +3495,8 @@ button[data-active="1"] { outline: 2px solid var(--accent); outline-offset: 1px;
 @media (max-width: 60rem) {
   .plan-stats { grid-template-columns: 1fr 1fr; }
   .plan-cols { grid-template-columns: 1fr; }
+  .plan-treecols { grid-template-columns: 1fr; }
+  .plan-kids { margin-left: 0.7rem; padding-left: 0.4rem; }
   .plan-frow { grid-template-columns: 1fr; gap: 0.15rem; }
   .plan-grow { grid-template-columns: 1fr; }
 }

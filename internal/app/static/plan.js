@@ -103,7 +103,10 @@ function compute(mask) {
     if (n.short <= 0) return null;
     var d = decide(n, isRoot, mask);
     if (d === "buy") {
-      shop[n.id] = (shop[n.id] || 0) + n.short;
+      // Mirrors the server: the finished product never lands in
+      // the shopping aggregation (its outright cost still
+      // accrues to the money totals below).
+      if (!isRoot) shop[n.id] = (shop[n.id] || 0) + n.short;
       if (n.known) {
         var c = n.build ? n.buy : n.materials;
         t.materials += c;
@@ -341,12 +344,7 @@ function showTab(name) {
 function setPreset(name) {
   preset = name;
   overrides = {};
-  section.querySelectorAll("[data-plan-preset]").forEach(function (btn) {
-    var on = btn.getAttribute("data-plan-preset") === name;
-    btn.setAttribute("aria-pressed", on ? "true" : "false");
-    if (on) btn.setAttribute("data-active", "1");
-    else btn.removeAttribute("data-active");
-  });
+  syncPresetButtons();
   renderAll();
 }
 
@@ -386,23 +384,34 @@ function nodeTitle(n) {
   return parts.join(" · ");
 }
 
-function nodeCard(n, mask, elapsed, maxCost) {
+function nodeCost(n, mask) {
+  var d = decide(n, n.path === "0", mask);
+  if (d === "have") return 0;
+  var buying = !n.build || d === "buy";
+  if (buying && n.build) return n.known ? n.buy : n.materials;
+  return n.build ? n.materials + n.job : n.materials;
+}
+
+// Hidden descendants under a collapsed branch: the +N label.
+function subtreeSize(n) {
+  var c = 0;
+  (n.kids || []).forEach(function (k) { c += 1 + subtreeSize(k); });
+  return c;
+}
+
+function nodeCard(n, mask, elapsed, maxCost, kidsHTML) {
   var d = decide(n, n.path === "0", mask);
   var buying = !n.build || d === "buy";
   var label = d === "have" ? "HAVE" : buying ? "BUY" : "BUILD";
-  var cost;
-  if (d === "have") cost = 0;
-  else if (buying && n.build) cost = n.known ? n.buy : n.materials;
-  else cost = n.build ? n.materials + n.job : n.materials;
+  var cost = nodeCost(n, mask);
   var pct = maxCost > 0 ? Math.round(cost / maxCost * 1000) / 10 : 0;
   var fold = "";
-  // The root card spans every column, so collapsing it underneath
-  // itself is meaningless; renderMap only consults collapsed[] for
-  // depth-1 branches. A fold button on the root would be dead.
+  // The root card is the tree itself, so collapsing it underneath
+  // itself is meaningless. A fold button on the root would be dead.
   if (n.path !== "0" && n.build && n.short > 0 && (n.kids || []).length) {
     fold = ' <button type="button" class="plan-fold" data-plan-fold="' + esc(n.path) +
       '" aria-label="' + (collapsed[n.path] ? "expand" : "collapse") + " " + esc(n.name) + '">' +
-      (collapsed[n.path] ? "+" + n.kids.length : "–") + "</button>";
+      (collapsed[n.path] ? "+" + subtreeSize(n) : "–") + "</button>";
   }
   return '<div class="' + nodeClass(n, mask, elapsed) + '" data-path="' + esc(n.path) +
     '" title="' + esc(nodeTitle(n)) + '" role="button" tabindex="0">' +
@@ -410,37 +419,49 @@ function nodeCard(n, mask, elapsed, maxCost) {
     "<span>" + esc(label) + fold + "</span></div>" +
     '<div class="plan-bar"><div class="plan-fill' + (buying ? " plan-buy" : "") +
     '" data-w="' + pct + '"></div></div>' +
-    "<small>" + iskC(cost) + "</small></div>";
+    "<small>" + iskC(cost) + "</small>" + (kidsHTML || "") + "</div>";
+}
+
+// Only the root starts expanded: every branch with children
+// starts collapsed, and the global buttons flip the whole map.
+function defaultCollapse() {
+  collapsed = {};
+  (function walk(n) {
+    (n.kids || []).forEach(function (k) {
+      if ((k.kids || []).length) collapsed[k.path] = true;
+      walk(k);
+    });
+  })(P.root);
+}
+
+function setAllCollapsed(on) {
+  if (!P) return;
+  if (on) defaultCollapse();
+  else collapsed = {};
+  renderMap(currentTotals());
+}
+
+// One card with its children nested inside it, unless collapsed.
+// Bars scale against siblings, so a branch reads on its own terms.
+function renderNode(n, mask, elapsed, maxCost) {
+  var kidsHTML = "";
+  var kids = n.kids || [];
+  if (kids.length && !collapsed[n.path]) {
+    var m = 0;
+    kids.forEach(function (k) { m = Math.max(m, nodeCost(k, mask)); });
+    kidsHTML = '<div class="plan-kids">' + kids.map(function (k) {
+      return renderNode(k, mask, elapsed, m || 1);
+    }).join("") + "</div>";
+  }
+  return nodeCard(n, mask, elapsed, maxCost, kidsHTML);
 }
 
 function renderMap(t) {
   var host = $("plan-map");
-  if (!host) return;
+  if (!host || !P) return;
   var mask = currentMask();
   var root = P.root;
-  var maxCost = 0;
-  (root.kids || []).forEach(function (k) {
-    maxCost = Math.max(maxCost, k.materials + k.job);
-  });
-  var html = '<div class="plan-col"><div class="plan-colh">Final assembly</div>' +
-    nodeCard(root, mask, t.elapsed, root.materials + root.job || 1) + "</div>";
-  html += '<div class="plan-col"><div class="plan-colh">Capital components</div>';
-  (root.kids || []).forEach(function (k) {
-    html += nodeCard(k, mask, t.elapsed, maxCost);
-  });
-  html += "</div>";
-  html += '<div class="plan-col"><div class="plan-colh">Input groups</div>';
-  var shown = 0, hidden = 0;
-  (root.kids || []).forEach(function (k) {
-    if (collapsed[k.path]) { hidden += (k.kids || []).length; return; }
-    (k.kids || []).forEach(function (g) {
-      if (shown < 24) { html += nodeCard(g, mask, t.elapsed, maxCost); shown++; }
-      else hidden++;
-    });
-  });
-  if (hidden) html += "<p><small>+" + hidden + " deeper inputs in the full list below.</small></p>";
-  html += "</div>";
-  host.innerHTML = html;
+  host.innerHTML = renderNode(root, mask, t.elapsed, root.materials + root.job || 1);
   host.querySelectorAll("[data-plan-fold]").forEach(function (btn) {
     btn.addEventListener("click", function (ev) {
       ev.stopPropagation();
@@ -451,14 +472,18 @@ function renderMap(t) {
     });
   });
   host.querySelectorAll(".plan-node").forEach(function (el) {
-    function pick() {
+    function pick(ev) {
+      // Cards nest: a click inside a child bubbles through its
+      // ancestors, so only the innermost card answers.
+      var t = ev && ev.target && ev.target.closest ? ev.target.closest("[data-path]") : el;
+      if (t && t !== el) return;
       selected = el.getAttribute("data-path");
       renderMap(currentTotals());
       renderInspector(currentTotals());
     }
     el.addEventListener("click", pick);
     el.addEventListener("keydown", function (ev) {
-      if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pick(); }
+      if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pick(ev); }
     });
   });
 }
@@ -543,7 +568,13 @@ function renderBuy(t) {
   var list = $("plan-buylist"), hub = $("plan-hubsplit");
   if (!list || !hub) return;
   if (!t.shopping.length) {
-    list.innerHTML = "<p><small>Nothing to buy: stock covers the plan.</small></p>";
+    // Empty for two honest reasons: stock covers everything, or
+    // the scenario buys the finished product outright (the root
+    // is deliberately never a shopping line).
+    var rootBought = P.root.short > 0 && decide(P.root, true, currentMask()) === "buy";
+    list.innerHTML = "<p><small>" + (rootBought ?
+      "This scenario buys the finished product outright; see the header verdict." :
+      "Nothing to buy: stock covers the plan.") + "</small></p>";
   } else {
     list.innerHTML = "<ul>" + t.shopping.map(function (L) {
       return "<li><strong>" + esc(L.name) + "</strong> — " + intF(L.qty) +
@@ -649,29 +680,121 @@ function fail(note) {
   });
 }
 
-function init() {
+function setPayload(payload) {
+  P = payload;
+  if (!P || !P.root) throw new Error("empty plan");
+  assignPaths(P.root, "0");
+  byIdCache = {};
+  // Server structs name it valueKnown; compute() names it
+  // known. Normalize once so every renderer reads one shape.
+  ["full", "balanced", "buyComp"].forEach(function (k) {
+    if (P[k]) P[k].known = !!P[k].valueKnown;
+  });
+  // A fresh tree invalidates view state; the preset choice
+  // survives, its buttons re-synced below.
+  overrides = {};
+  selected = "0";
+  serverMode = false;
+  defaultCollapse();
+  crossCheck();
+  renderAll();
+}
+
+function loadJSON() {
+  return fetch(planURL(), { headers: { Accept: "application/json" } }).then(function (r) {
+    if (!r.ok) throw new Error("plan data unavailable");
+    return r.json();
+  }).then(setPayload);
+}
+
+function syncPresetButtons() {
+  section.querySelectorAll("[data-plan-preset]").forEach(function (btn) {
+    var on = btn.getAttribute("data-plan-preset") === preset;
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    if (on) btn.setAttribute("data-active", "1");
+    else btn.removeAttribute("data-active");
+  });
+}
+
+function wireME() {
+  var tog = $("me-toggle"), fields = $("me-fields");
+  if (tog && fields) tog.addEventListener("click", function () {
+    var open = fields.hidden;
+    fields.hidden = !open;
+    tog.setAttribute("aria-expanded", open ? "true" : "false");
+    var hint = $("me-hint");
+    if (hint) hint.textContent = open ? "[Collapse]" : "[Expand]";
+  });
+  var apply = $("me-apply"), setall = $("me-setall");
+  if (apply && setall) apply.addEventListener("click", function () {
+    var v = parseInt(setall.value, 10);
+    if (isNaN(v)) return;
+    v = Math.max(0, Math.min(10, v));
+    document.querySelectorAll('#me-fields input[name^="me_"]').forEach(function (el) { el.value = v; });
+  });
+}
+
+// Recalculate without a page reload: the server re-renders the
+// whole plan region (header, tabs, static list, verdict) and the
+// client reboots its interactive state on top. Anything fails,
+// the form submits natively and the server render stands alone.
+function onRecalc(ev) {
+  ev.preventDefault();
+  var form = document.getElementById("plan-form");
+  if (!form) return;
+  var sp = new URLSearchParams(new FormData(form));
+  sp.delete("format");
+  var url = window.location.pathname + "?" + sp.toString();
+  var cur = "tree";
+  section.querySelectorAll("[data-plan-tab]").forEach(function (b) {
+    if (b.getAttribute("aria-selected") === "true") cur = b.getAttribute("data-plan-tab");
+  });
+  fetch(url, { headers: { Accept: "text/html" } }).then(function (r) {
+    if (!r.ok) throw new Error("recalc unavailable");
+    return r.text();
+  }).then(function (html) {
+    var doc = new DOMParser().parseFromString(html, "text/html");
+    var fresh = doc.getElementById("plan-wrap");
+    var host = document.getElementById("plan-wrap");
+    if (!fresh || !host) throw new Error("recalc unavailable");
+    host.innerHTML = fresh.innerHTML;
+    window.history.replaceState(null, "", url);
+    section = document.getElementById("plan");
+    if (!section) throw new Error("recalc unavailable");
+    wireStatic();
+    return loadJSON();
+  }).then(function () {
+    showTab(cur);
+    var btn = document.querySelector('#plan-form button[type="submit"]');
+    if (btn) btn.focus({ preventScroll: true });
+  }).catch(function () {
+    var f = document.getElementById("plan-form");
+    if (f) f.submit();
+  });
+}
+
+function wireStatic() {
   section.querySelectorAll("[data-plan-preset]").forEach(function (btn) {
     btn.addEventListener("click", function () { setPreset(btn.getAttribute("data-plan-preset")); });
   });
+  syncPresetButtons();
   section.querySelectorAll("[data-plan-tab]").forEach(function (btn) {
     btn.addEventListener("click", function () { showTab(btn.getAttribute("data-plan-tab")); });
   });
-  fetch(planURL(), { headers: { Accept: "application/json" } }).then(function (r) {
-    if (!r.ok) throw new Error("plan data unavailable");
-    return r.json();
-  }).then(function (payload) {
-    P = payload;
-    if (!P || !P.root) throw new Error("empty plan");
-    assignPaths(P.root, "0");
-    byIdCache = {};
-    // Server structs name it valueKnown; compute() names it
-    // known. Normalize once so every renderer reads one shape.
-    ["full", "balanced", "buyComp"].forEach(function (k) {
-      if (P[k]) P[k].known = !!P[k].valueKnown;
-    });
-    crossCheck();
-    renderAll();
-  }).catch(function () {
+  section.querySelectorAll("[data-plan-expand-all]").forEach(function (btn) {
+    btn.addEventListener("click", function () { setAllCollapsed(false); });
+  });
+  section.querySelectorAll("[data-plan-collapse-all]").forEach(function (btn) {
+    btn.addEventListener("click", function () { setAllCollapsed(true); });
+  });
+  var form = document.getElementById("plan-form");
+  if (form) form.addEventListener("submit", onRecalc);
+  wireME();
+}
+
+function init() {
+  wireStatic();
+  loadJSON().catch(function () {
     fail("The interactive views need the plan data; the figures above are current.");
   });
 }

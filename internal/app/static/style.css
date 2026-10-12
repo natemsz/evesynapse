@@ -1889,6 +1889,9 @@ tbody tr.yours td { background-color: #2a2015; }
   inset: 0;
   z-index: 200;
   background: #0d0503;
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   overflow-y: auto;
 }
 .quickjump-panel {
@@ -2215,6 +2218,12 @@ html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge 
   touch-action: none;
 }
 .fit-vslot:hover { border-color: var(--accent); color: var(--text); }
+/* Read-only workbench mirror (public fit pages): the tool's
+look, none of its affordances. */
+.fit-ro .fit-vslot, .fit-ro .fit-chip { cursor: default; }
+.fit-ro .fit-vslot:hover { border-color: #6b5a43; color: var(--muted); }
+.fit-ro .fit-vslot.filled:hover { border-color: #6b5a43; }
+.fit-ro .fit-chip:hover { background: var(--row-alt); }
 .fit-vslot.filled { border-style: solid; border-color: #6b5a43; }
 .fit-vslot.filled:hover { border-color: var(--accent); }
 .fit-vslot.filled img { width: 84%; height: 84%; border-radius: 50%; pointer-events: none; }

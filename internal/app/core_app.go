@@ -560,13 +560,19 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	})
 
 	r.Route("/items", func(r chi.Router) {
-		r.Use(app.requireAuth)
+		// The browser is public: market browse data is shared by
+		// nature and the render depends on no session or
+		// character state. Everything else under /items/ stays
+		// behind the login.
 		r.Get("/", app.handleItems)
-		r.Get("/search.json", app.handleItemSearchJSON)
-		r.Get("/description-fragment", app.handleItemDescriptionFragment)
-		r.Get("/category/{categoryID}/", app.handleItemsCategory)
-		r.Get("/group/{groupID}/", app.handleItemsGroup)
-		r.Get("/type/{typeID}/", app.handleItemType)
+		r.Group(func(r chi.Router) {
+			r.Use(app.requireAuth)
+			r.Get("/search.json", app.handleItemSearchJSON)
+			r.Get("/description-fragment", app.handleItemDescriptionFragment)
+			r.Get("/category/{categoryID}/", app.handleItemsCategory)
+			r.Get("/group/{groupID}/", app.handleItemsGroup)
+			r.Get("/type/{typeID}/", app.handleItemType)
+		})
 	})
 
 	// Top banner global search (items + own characters + warmed

@@ -121,6 +121,17 @@ test("scriptsMissing ignores the shell set and dedupes", function () {
     []);
 });
 
+test("scriptsMissing normalizes cross-origin URLs on both sides", function () {
+  assert.deepEqual(
+    swap.scriptsMissing(
+      ["/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1", "/static/app.js"],
+      ["https://static.cloudflareinsights.com/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1"]),
+    []);
+  assert.deepEqual(
+    swap.scriptsMissing(["/static/fit.js"], ["/static/app.js"]),
+    ["/static/fit.js"]);
+});
+
 test("bestNavHref prefers exact matches, then longest prefix", function () {
   const hrefs = ["/", "/market/", "/market/scanner/", "/wallet/"];
   assert.equal(swap.bestNavHref(hrefs, "/market/"), "/market/");

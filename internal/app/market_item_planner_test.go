@@ -275,7 +275,10 @@ func TestPlannerJudgeCharacterBuildable(t *testing.T) {
 	}
 	mustContain(t, path, body,
 		`name="judge"`,
-		fmt.Sprintf(`value="char:%d" selected`, fixtureCharA),
+		fmt.Sprintf(`value="char:%d"`, fixtureCharA),
+		`aria-current="true"`,
+		`id="judge-q"`,
+		`value="Fixture Ceo"`,
 		"Can Fixture Ceo build this?",
 		"Industry — needs IV · trained V — covered",
 		"Every skill in the chain is covered.",
@@ -332,7 +335,8 @@ func TestPlannerJudgeTagBestOfAndCombinedStock(t *testing.T) {
 	path := "/planner/?product=1001&runs=1&judge=tag:indy"
 	_, body := getPage(t, app, cookie, path)
 	mustContain(t, path, body,
-		`value="tag:indy" selected`,
+		`value="tag:indy"`,
+		`aria-current="true"`,
 		`Can your &#34;indy&#34; characters build this?`,
 		"Industry — needs IV · best on the tag V — covered",
 		"Every skill in the chain is covered.",
@@ -373,7 +377,38 @@ func TestPlannerJudgePricesIncomplete(t *testing.T) {
 	}
 }
 
-func TestPlannerNoScopeRendersAsBefore(t *testing.T) {
+// TestPlanMESummary: the ME wall compresses to one line — the
+// all-default count, otherwise each non-default blueprint with
+// the rest in one tail.
+func TestPlanMESummary(t *testing.T) {
+	if got := planMESummary(nil); got != "" {
+		t.Errorf("empty = %q, want empty", got)
+	}
+	def := []planMEInput{
+		{Label: "A", Value: 0, Source: "assumed"},
+		{Label: "B", Value: 0, Source: "assumed"},
+	}
+	if got := planMESummary(def); got != "2 components at ME0 (assumed)" {
+		t.Errorf("default = %q, want the count line", got)
+	}
+	solo := []planMEInput{{Label: "A", Value: 0, Source: "assumed"}}
+	if got := planMESummary(solo); got != "1 component at ME0 (assumed)" {
+		t.Errorf("solo = %q, want singular", got)
+	}
+	mixed := []planMEInput{
+		{Label: "Fixture Component", Value: 8, Source: "owned"},
+		{Label: "Fixture Widget", Value: 0, Source: "assumed"},
+	}
+	if got := planMESummary(mixed); got != "Fixture Component at ME8 (owned), 1 at ME0 (assumed)" {
+		t.Errorf("mixed = %q, want non-default listed with tail", got)
+	}
+}
+
+// TestPlannerMESummaryCollapsed: the ME wall ships collapsed
+// behind its summary line (fields still in the HTML for
+// no-JS), with the set-all action and the tree tab's global
+// expand/collapse controls beside it.
+func TestPlannerMESummaryCollapsed(t *testing.T) {
 	app, q, cookie := plannerScopeApp(t)
 	seedTritanium(t, q, fixtureCharA, 15)
 	seedSnapshot(t, q, fixtureCharA, esi.SnapBlueprints, esi.Blueprints{
@@ -382,11 +417,80 @@ func TestPlannerNoScopeRendersAsBefore(t *testing.T) {
 	seedPlannerPrices(app)
 
 	_, body := getPage(t, app, cookie, "/planner/?product=1001&runs=1")
-	mustContain(t, "/planner/ (general)", body,
+	mustContain(t, "/planner/ (me summary)", body,
+		`id="plan-form"`,
+		`id="plan-wrap"`,
+		`id="me-toggle"`,
+		`aria-expanded="false"`,
+		`Blueprint ME - Fixture Component at ME8 (owned), 1 at ME0 (assumed)`,
+		`id="me-fields" hidden`,
+		`id="me-setall"`,
+		`id="me-apply"`,
+		`data-me-src="owned"`,
+		`data-plan-expand-all`,
+		`data-plan-collapse-all`,
+		"Fixture Component", // labels still render inside the collapsed block
+	)
+}
+
+// TestDefaultJudgeParam: fresh plans scope to the acting
+// character, falling back to the first character when the
+// session names none of the account's own.
+func TestDefaultJudgeParam(t *testing.T) {
+	chars := []db.Character{{CharacterID: 1}, {CharacterID: 2}}
+	if got := defaultJudgeParam(chars, 2); got != "char:2" {
+		t.Errorf("acting = %q, want char:2", got)
+	}
+	if got := defaultJudgeParam(chars, 9); got != "char:1" {
+		t.Errorf("stale session = %q, want char:1", got)
+	}
+	if got := defaultJudgeParam(nil, 9); got != "" {
+		t.Errorf("no characters = %q, want general", got)
+	}
+}
+
+// TestPlannerDefaultScopeIsActiveCharacter: with no judge pick,
+// the plan scopes to the acting character (the session's own),
+// not to everyone together.
+func TestPlannerDefaultScopeIsActiveCharacter(t *testing.T) {
+	app, q, cookie := plannerScopeApp(t)
+	seedTritanium(t, q, fixtureCharA, 15)
+	seedSnapshot(t, q, fixtureCharA, esi.SnapBlueprints, esi.Blueprints{
+		{ItemID: 1, TypeID: 2002, Quantity: -1, MaterialEfficiency: 8, TimeEfficiency: 12, Runs: -1},
+	})
+	seedPlannerPrices(app)
+
+	_, body := getPage(t, app, cookie, "/planner/?product=1001&runs=1")
+	mustContain(t, "/planner/ (default scope)", body,
 		"Fixture Component",        // ME input keeps the owned blueprint visible
-		"25.00 ISK",                // landed materials and the shopping line agree
+		"25.00 ISK",                // 20 needed, 15 on hand: 5 to buy at 5 ISK
 		"materials (fees unknown)", // no cost-index row: fees stay unknown
 		"Landed cost",
+		`id="judge-q"`,
+		`value="Fixture Ceo"`, // the picker shows the acting character
+		fmt.Sprintf(`value="char:%d"`, fixtureCharA),
+		`aria-current="true"`,
+		"Can Fixture Ceo build this?",
+		"Worth making — judged as Fixture Ceo",
+	)
+}
+
+// TestPlannerExplicitGeneralScope: an explicit empty judge pick
+// is the way back to everyone together (a missing pick defaults
+// to the acting character instead).
+func TestPlannerExplicitGeneralScope(t *testing.T) {
+	app, q, cookie := plannerScopeApp(t)
+	seedTritanium(t, q, fixtureCharA, 15)
+	seedSnapshot(t, q, fixtureCharA, esi.SnapBlueprints, esi.Blueprints{
+		{ItemID: 1, TypeID: 2002, Quantity: -1, MaterialEfficiency: 8, TimeEfficiency: 12, Runs: -1},
+	})
+	seedPlannerPrices(app)
+
+	_, body := getPage(t, app, cookie, "/planner/?product=1001&runs=1&judge=")
+	mustContain(t, "/planner/ (general)", body,
+		"Fixture Component",
+		"25.00 ISK",
+		`value="Everyone together"`,
 	)
 	for _, absent := range []string{"build this?", "Worth making — judged as"} {
 		if strings.Contains(body, absent) {

@@ -232,7 +232,13 @@ func (r *planRollup) add(n *buildplan.Node, isRoot, built bool) *planSchedNode {
 		return nil
 	}
 	if r.buyNode(n, isRoot) {
-		r.shop[n.TypeID] += n.Shortfall
+		// The finished product is never a shopping line: when
+		// a scenario buys the root outright, its cost still
+		// accrues below, but the buy verdict lives in the
+		// header, not in the list of inputs to buy.
+		if !isRoot {
+			r.shop[n.TypeID] += n.Shortfall
+		}
 		if n.PriceKnown {
 			c := planCents(n.BuyCost)
 			r.tot.Materials += c

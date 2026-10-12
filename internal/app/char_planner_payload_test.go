@@ -207,6 +207,48 @@ func TestPlanShoppingKnownNodeCoversPricedLines(t *testing.T) {
 	}
 }
 
+// TestPlanShoppingExcludesRoot: when balanced buys the finished
+// product outright (its price undercuts the build cost), the
+// product itself must not appear as a shopping line — the buy
+// verdict lives in the header, and the Avatar is not an input to
+// its own build. The bought cost still accrues to the money
+// totals; only the aggregation skips the root, on both sides of
+// the client cross-check.
+func TestPlanShoppingExcludesRoot(t *testing.T) {
+	prices := planFixturePrices()
+	prices[1001] = esi.MarketPrice{TypeID: 1001, AveragePrice: 50}
+	res, err := buildplan.Build(planFixtureRecipes(), 1001, buildplan.Input{
+		Runs: 1, Prices: prices, Adjusted: planFixtureAdjusted(),
+		CostIndex: 0.05,
+	})
+	if err != nil {
+		t.Fatalf("buildPlan: %v", err)
+	}
+	unitOf := func(id int64) (float64, bool) { return buildplan.UnitPrice(prices, id) }
+	p := buildPlanPayload(res, 1001, prices, unitOf, 1, 2, nil, planFixtureName)
+
+	b := p.Balanced
+	for _, line := range b.Shopping {
+		if line.TypeID == 1001 {
+			t.Errorf("balanced shopping contains the finished product: %+v", line)
+		}
+	}
+	if len(b.Shopping) != 0 {
+		t.Errorf("balanced shopping = %+v, want empty (root bought outright)", b.Shopping)
+	}
+	// The money still counts the bought hull: 1 x 50.
+	if b.Materials != 5000 || b.Bought != 5000 || b.Landed != 5000 {
+		t.Errorf("balanced money = %v/%v/%v, want 5000/5000/5000", b.Materials, b.Bought, b.Landed)
+	}
+	if b.Profit != 0 || !b.ProfKnown {
+		t.Errorf("balanced profit = %v known=%v, want 0/true (buying at market)", b.Profit, b.ProfKnown)
+	}
+	// Full build is untouched: the mineral lines stay.
+	if len(p.Full.Shopping) != 1 || p.Full.Shopping[0].TypeID != 34 {
+		t.Errorf("full shopping = %+v, want the one Tritanium line", p.Full.Shopping)
+	}
+}
+
 // TestPlanTimeFactorAndSlots: manual values win; the defaults
 // degrade honestly without skill data.
 func TestPlanTimeFactorAndSlots(t *testing.T) {

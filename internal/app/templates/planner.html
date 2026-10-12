@@ -34,6 +34,7 @@
 {{if .Planner.Notice}}<p>{{.Planner.Notice}}</p>{{end}}
 
 {{with .Planner.Plan}}
+<div id="plan-wrap">
 <div class="foldable" data-fold="never">
 <h3>{{.ProductName}}</h3>
 <p><small>From <strong>{{.BlueprintName}}</strong> — builds {{.ProducedLine}}.{{if .MaxRunNote}} {{.MaxRunNote}}.{{end}} · <a href="#" id="csv-export">Export CSV</a></small></p>
@@ -53,11 +54,11 @@
 {{end}}
 {{end}}
 
-<form method="get" action="/planner/">
+<form method="get" action="/planner/" id="plan-form">
   <input type="hidden" name="product" value="{{.ProductTypeID}}">
   <p>
     <label>Runs <input type="number" name="runs" value="{{.Runs}}" min="1" size="6"></label>
-    {{if .JudgeOptions}}<label>Judge as <select name="judge">{{range .JudgeOptions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label> {{end}}
+    {{if .JudgeOptions}}<span class="judge-wrap"><span>Judge as </span><input type="text" id="judge-q" value="{{.JudgeLabel}}" data-judge-current="{{.JudgeLabel}}" placeholder="Everyone together" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="judge-suggest" aria-autocomplete="list" aria-label="Judge as which character"><span id="judge-suggest" class="charselector-dropdown" hidden>{{range .JudgeOptions}}<button type="submit" name="judge" value="{{.Value}}" class="charselector-option{{if .Selected}} active{{end}}"{{if .Selected}} aria-current="true"{{end}} data-judge-pick>{{.Label}}</button>{{end}}</span></span> {{end}}
     <label>Market <select name="market">
       <option value="jita"{{if eq .Market "jita"}} selected{{end}}>Jita 4-4 sell</option>
       <option value="guide"{{if eq .Market "guide"}} selected{{end}}>Cluster average</option>
@@ -65,7 +66,14 @@
     {{if .Meta}}<label>Build system <input type="number" name="system" value="{{.Meta.SystemID}}" min="1" size="10"></label>
     <label>Slots <input type="number" name="slots" value="{{.Meta.Slots}}" min="1" max="20" size="3"></label>{{end}}
     <label>Time factor <input type="text" name="timef" placeholder="auto" size="5"></label>
-    {{range .MEInputs}}<label title="Material efficiency for the blueprint behind {{.Label}}">{{.Label}} ME <input type="number" name="{{.FieldName}}" value="{{.Value}}" min="0" max="10" size="3"></label> {{end}}
+    {{if .MEInputs}}<span class="me-wrap">
+      <button type="button" id="me-toggle" aria-expanded="false" aria-controls="me-fields"><span id="me-sum">Blueprint ME - {{.MESummary}}</span> <span id="me-hint">[Expand]</span></button>
+      <span id="me-fields" hidden>
+        <label>Set all to: <input type="number" id="me-setall" min="0" max="10" size="3"></label>
+        <button type="button" id="me-apply">Apply</button>
+        {{range .MEInputs}}<label title="Material efficiency for the blueprint behind {{.Label}}" data-me-src="{{.Source}}">{{.Label}} ME <input type="number" name="{{.FieldName}}" value="{{.Value}}" min="0" max="10" size="3"></label> {{end}}
+      </span>
+    </span>{{end}}
     <button type="submit">Recalculate</button>
   </p>
 </form>
@@ -94,7 +102,7 @@
   <button type="button" role="tab" data-plan-tab="cost" aria-selected="false">Cost flow</button>
   <span class="plan-legend"><small><i class="plan-dot plan-build"></i> build <i class="plan-dot plan-buy"></i> buy <i class="plan-dot plan-risk"></i> bottleneck <i class="plan-dot plan-crit"></i> selected / critical</small></span>
 </div>
-<div id="plan-tab-tree" role="tabpanel"><div class="plan-cols"><div id="plan-map"><p><small>Loading the decision map…</small></p></div><aside id="plan-inspector" aria-live="polite"></aside></div></div>
+<div id="plan-tab-tree" role="tabpanel"><div class="plan-treetools"><button type="button" data-plan-expand-all>Expand all</button> <button type="button" data-plan-collapse-all>Collapse all</button></div><div class="plan-treecols"><div id="plan-map"><p><small>Loading the decision map…</small></p></div><aside id="plan-inspector" aria-live="polite"></aside></div></div>
 <div id="plan-tab-time" role="tabpanel" hidden><div id="plan-gantt"><p><small>Loading the schedule…</small></p></div></div>
 <div id="plan-tab-buy" role="tabpanel" hidden><div class="plan-cols"><div id="plan-buylist"></div><aside id="plan-hubsplit"></aside></div></div>
 <div id="plan-tab-cost" role="tabpanel" hidden><div id="plan-fall"></div></div>
@@ -124,6 +132,7 @@
 {{end}}
 </div>
 {{end}}
+</div>
 
 {{end}}
 {{end}}

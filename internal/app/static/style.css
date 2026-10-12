@@ -2839,6 +2839,7 @@ input.charselector-input:focus {
   color: var(--gold);
 }
 .charselector-option[hidden] { display: none; }
+button.charselector-option { background: none; border: none; width: 100%; text-align: left; font: inherit; cursor: pointer; }
 .charselector-tags {
   font-size: 0.8em;
   color: var(--muted);

@@ -58,7 +58,7 @@
   <input type="hidden" name="product" value="{{.ProductTypeID}}">
   <p>
     <label>Runs <input type="number" name="runs" value="{{.Runs}}" min="1" size="6"></label>
-    {{if .JudgeOptions}}<label>Judge as <select name="judge">{{range .JudgeOptions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label> {{end}}
+    {{if .JudgeOptions}}<span class="judge-wrap"><span>Judge as </span><input type="text" id="judge-q" value="{{.JudgeLabel}}" data-judge-current="{{.JudgeLabel}}" placeholder="Everyone together" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="judge-suggest" aria-autocomplete="list" aria-label="Judge as which character"><span id="judge-suggest" class="charselector-dropdown" hidden>{{range .JudgeOptions}}<button type="submit" name="judge" value="{{.Value}}" class="charselector-option{{if .Selected}} active{{end}}"{{if .Selected}} aria-current="true"{{end}} data-judge-pick>{{.Label}}</button>{{end}}</span></span> {{end}}
     <label>Market <select name="market">
       <option value="jita"{{if eq .Market "jita"}} selected{{end}}>Jita 4-4 sell</option>
       <option value="guide"{{if eq .Market "guide"}} selected{{end}}>Cluster average</option>

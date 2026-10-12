@@ -59,6 +59,7 @@ var overrides = {};       // path -> true (buy) | false (build)
 var collapsed = {};       // path -> true
 var selected = "0";       // path
 var serverMode = false;   // cross-check failed: server figures only
+var judgeDocWired = false; // one outside-click closer for every reboot
 
 function planURL() {
   var sp = new URLSearchParams(window.location.search);
@@ -743,6 +744,12 @@ function onRecalc(ev) {
   var form = document.getElementById("plan-form");
   if (!form) return;
   var sp = new URLSearchParams(new FormData(form));
+  // new FormData never carries buttons, so a judge pick (a
+  // submit button with the scope as its value) must come from
+  // the submitter; without it the pick would silently re-apply
+  // the current scope.
+  var sub = ev.submitter;
+  if (sub && sub.name) sp.set(sub.name, sub.value);
   sp.delete("format");
   var url = window.location.pathname + "?" + sp.toString();
   var cur = "tree";
@@ -790,6 +797,57 @@ function wireStatic() {
   var form = document.getElementById("plan-form");
   if (form) form.addEventListener("submit", onRecalc);
   wireME();
+  wireJudge();
+}
+
+// Judge-as picker: the same filterable dropdown as the
+// character selectors elsewhere. Picks are submit buttons,
+// so choosing one flows through the normal recalculate path
+// (dynamic, or native without JS); typing only filters.
+function wireJudge() {
+  var input = document.getElementById("judge-q"), list = document.getElementById("judge-suggest");
+  if (!input || !list) return;
+  var current = input.getAttribute("data-judge-current") || "";
+  function filter() {
+    var q = input.value.toLowerCase().trim();
+    list.querySelectorAll("[data-judge-pick]").forEach(function (b) {
+      var t = (b.textContent || "").toLowerCase();
+      b.hidden = !!q && t.indexOf(q) === -1;
+    });
+  }
+  input.addEventListener("focus", function () {
+    input.value = "";
+    filter();
+    list.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+  });
+  input.addEventListener("input", function () {
+    filter();
+    list.hidden = false;
+  });
+  input.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape") {
+      list.hidden = true;
+      input.setAttribute("aria-expanded", "false");
+      input.blur();
+      if (!input.value && current) input.value = current;
+    }
+  });
+  // One document listener for every reboot: it always reads
+  // the live DOM, so swapped-in pickers keep working.
+  if (!judgeDocWired) {
+    judgeDocWired = true;
+    document.addEventListener("click", function (ev) {
+      var live = document.getElementById("judge-q"), liveList = document.getElementById("judge-suggest");
+      if (!live || !liveList) return;
+      if (!live.parentElement.contains(ev.target)) {
+        liveList.hidden = true;
+        live.setAttribute("aria-expanded", "false");
+        var cur = live.getAttribute("data-judge-current") || "";
+        if (!live.value && cur) live.value = cur;
+      }
+    });
+  }
 }
 
 function init() {

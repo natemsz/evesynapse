@@ -86,6 +86,7 @@ type planView struct {
 	// scope's trained skills and a worth-making verdict priced
 	// from the same stored sources as the rest of the page.
 	JudgeOptions []judgeOption
+	JudgeLabel   string // current scope's display name; "Everyone together" when general
 	SkillsJudge  *skillsJudge
 	Verdict      *planVerdict
 }
@@ -320,9 +321,15 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 	// "Judge as" scoping: the account's characters are the
 	// universe of scopes (one character, or everyone carrying a
 	// tag). An unknown or stale pick degrades to the general
-	// view, exactly like a stale widget scope on Home.
+	// view, exactly like a stale widget scope on Home. No pick
+	// at all defaults to the acting character; an explicit
+	// empty pick is the way back to everyone together.
 	userChars := app.plannerAccountChars(ctx)
-	scope, judgeOptions := resolveJudgeScope(q.Get("judge"), userChars)
+	judgeParam := q.Get("judge")
+	if !q.Has("judge") {
+		judgeParam = defaultJudgeParam(userChars, sessionCharID(app.sessions, ctx))
+	}
+	scope, judgeOptions := resolveJudgeScope(judgeParam, userChars)
 	inputChars := userChars
 	if scope.active() {
 		inputChars = scope.Chars
@@ -405,6 +412,10 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 		view.StockNote = "Requirements are net of everything your linked characters currently hold."
 	}
 	view.JudgeOptions = judgeOptions
+	view.JudgeLabel = "Everyone together"
+	if scope.active() {
+		view.JudgeLabel = scope.Label
+	}
 	if scope.active() {
 		view.SkillsJudge = judgeSkills(scope, scoped, requiredSkillLevels(root), nameOf)
 		view.Verdict = planVerdictFor(res, prices, productID, scope.Label)
@@ -736,9 +747,21 @@ type judgeScope struct {
 func (s judgeScope) active() bool { return s.Kind != "" && len(s.Chars) > 0 }
 
 // resolveJudgeScope validates a raw `judge` parameter against
-// the account and builds the select's options with the current
+// the account and builds the picker's options with the current
 // pick marked. Anything stale or foreign degrades to the
 // general view — never an empty judgment.
+func defaultJudgeParam(chars []db.Character, actingID int64) string {
+	for _, ch := range chars {
+		if ch.CharacterID == actingID {
+			return "char:" + strconv.FormatInt(actingID, 10)
+		}
+	}
+	if len(chars) > 0 {
+		return "char:" + strconv.FormatInt(chars[0].CharacterID, 10)
+	}
+	return ""
+}
+
 func resolveJudgeScope(raw string, chars []db.Character) (judgeScope, []judgeOption) {
 	scope := judgeScope{}
 	selected := ""

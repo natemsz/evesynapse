@@ -3471,7 +3471,15 @@ button[data-active="1"] { outline: 2px solid var(--accent); outline-offset: 1px;
 .plan-fold { margin-left: 0.4rem; padding: 0 0.35rem; }
 .plan-treecols { display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr); gap: 0.8rem; align-items: start; }
 .plan-treetools { display: flex; gap: 0.4rem; margin-bottom: 0.5rem; }
-.plan-kids { margin-left: 1.25rem; padding-left: 0.6rem; border-left: 1px dotted #3a3a3a; }
+.plan-kids { display: contents; }
+/* Tree-table row: label column flexes, cost bar column is a fixed
+240px pinned right so bars align at the same x at every depth.
+Depth indent lives on the label (data-pad-left), never on the
+row, so nesting cannot shift the bar column. */
+.plan-trow { display: grid; grid-template-columns: minmax(0, 1fr) 15rem; gap: 0.6rem; align-items: center; }
+.plan-tlabel { min-width: 0; }
+.plan-tbar { min-width: 0; }
+.plan-tbar .plan-bar { margin: 0; }
 .me-wrap { display: inline; }
 #me-fields label { margin-right: 0.6rem; }
 #me-hint { margin-left: 0.4rem; }
@@ -3497,7 +3505,7 @@ button[data-active="1"] { outline: 2px solid var(--accent); outline-offset: 1px;
   .plan-stats { grid-template-columns: 1fr 1fr; }
   .plan-cols { grid-template-columns: 1fr; }
   .plan-treecols { grid-template-columns: 1fr; }
-  .plan-kids { margin-left: 0.7rem; padding-left: 0.4rem; }
+  .plan-trow { grid-template-columns: 1fr; gap: 0.15rem; }
   .plan-frow { grid-template-columns: 1fr; gap: 0.15rem; }
   .plan-grow { grid-template-columns: 1fr; }
 }

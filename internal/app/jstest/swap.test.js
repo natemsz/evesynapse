@@ -132,6 +132,21 @@ test("scriptsMissing normalizes cross-origin URLs on both sides", function () {
     ["/static/fit.js"]);
 });
 
+test("scriptsMissing ignores edge-injected scripts the live page never carries", function () {
+  // The fetched HTML carries Cloudflare's Rocket Loader tag;
+  // the live document does not (the loader removes its own tag
+  // after running). That difference must not read as a page
+  // requirement, or every swap falls back.
+  assert.deepEqual(
+    swap.scriptsMissing(
+      ["/static/boot.js", "/static/app.js", "/static/swap.js",
+       "/cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.js",
+       "https://static.cloudflareinsights.com/beacon.min.js/v4bc70e2c01a94c73b74392e4234840661791215815920"],
+      ["/static/boot.js", "/static/app.js", "/static/swap.js",
+       "https://static.cloudflareinsights.com/beacon.min.js/v4bc70e2c01a94c73b74392e4234840661791215815920"]),
+    []);
+});
+
 test("bestNavHref prefers exact matches, then longest prefix", function () {
   const hrefs = ["/", "/market/", "/market/scanner/", "/wallet/"];
   assert.equal(swap.bestNavHref(hrefs, "/market/"), "/market/");

@@ -289,7 +289,7 @@ gaps; real environment variables win over the file):
 | `WORKER_FETCHES_PER_CYCLE` | no | 120 per lane (`480`) | How many ESI fetches the worker's character pass may make in one one-minute cycle, for the whole server (kept between 20 and 2000). Raise it when the Sync page shows the allowance used up and characters put off. One lane gets through about 200 fetches in a minute, so more than about 200 per lane makes a cycle run past its minute |
 | `FORESIGHT` | no | on | Warming on game events: when a character docks at a trade hub, an industry job is about to finish, an order is undercut, a skill queue runs out or a war is declared on a corporation, the data the account is likely to open next is fetched ahead. `off` switches it off. The Sync page's "Warmed ahead" table shows what it cost and how often it was right |
 | `FORESIGHT_FETCHES_PER_CYCLE` | no | `30` | The most ESI calls a cycle may spend on that (0 to 200), out of what the rest of the cycle leaves of its allowance |
-| `SHARED_CACHE` | no | `off` | Sharing public data with other instances (see "Shared cache"): `open` (or `on`) shares with every instance holding the secret, `allowlist` also waits for each instance to be approved on the Admin page. Anything else stays off |
+| `SHARED_CACHE` | no | `off` | Sharing public data with other instances (see "Swarm Cache"): `open` (or `on`) shares with every instance holding the secret, `allowlist` also waits for each instance to be approved on the Admin page. Anything else stays off |
 | `SHARED_CACHE_SECRET` | no | — | The swarm's membership proof: at least 32 random characters (`openssl rand -hex 32`). Enabling sharing without one refuses to start. Never shown on any page |
 | `SHARED_CACHE_SEEDS` | no | — | Bootstrap and fallback directory nodes (comma-separated `https` URLs; `http` only on loopback): the instances a new or lonely one asks for the membership list. Afterwards membership spreads peer to peer |
 | `SHARED_CACHE_GOSSIP_HOURS` | no | `18` | How often, in hours, membership is re-gossiped (12 to 168). Takes effect on restart |
@@ -1189,7 +1189,7 @@ stores the answer, at most twice a day and spending no ESI budget.
 A failed refresh keeps the previous answer; the module is opt-in
 from the Home page's customize view.
 
-## Shared cache
+## Swarm Cache
 
 Self-hosted instances can share public ESI data with each other
 — market history, type names, corporation and alliance records,
@@ -1218,7 +1218,7 @@ instance by address, approve, exclude, re-admit, or remove one
 on the Admin page (removing also rotates a peer's key: the next
 gossip pins the new one). A seed serves its member list —
 itself plus every peer it knows — so one address teaches a new
-instance the whole swarm. The Sync page's "Shared cache" card
+instance the whole swarm. The Sync page's "Swarm Cache" card
 shows entries applied, ESI calls saved, spot checks for and
 against, and each instance's trust.
 

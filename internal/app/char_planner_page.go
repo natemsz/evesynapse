@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"html/template"
 	"net/http"
 	"net/url"
 	"sort"
@@ -45,23 +46,39 @@ type plannerResultRow struct {
 
 // planView is one computed build plan, display-ready.
 type planView struct {
-	ProductTypeID int64
-	ProductName   string
-	BlueprintName string
-	Runs          int64
-	ProducedLine  string // "1,200 units (12 runs × 100 per run)"
-	StockNote     string // "Requirements are netted against everything your characters hold."
-	MaxRunNote    string // blueprint max production limit, "" when unknown
-	Skills        []string
-	Rows          []planRowView
-	MEInputs      []planMEInput
-	Shopping      []planRowView // reuses the row shape; only name/qty/price cells fill
-	ShoppingTotal string        // "" when some lines are unpriced
-	TotalTime     string
-	ProductValue  string
-	Margin        string
-	MarginNote    string
-	PricesNote    string
+	ProductTypeID   int64
+	ProductName     string
+	BlueprintName   string
+	Payload         template.JS // plan JSON for the interactive tabs; "" when none
+	Meta            *planPayload
+	Market          string // "jita" | "guide"
+	MarketName      string // "Jita 4-4 sell" | "Cluster average"
+	SystemName      string
+	IndexLine       string
+	SlotsLine       string
+	TimeFactorNote  string
+	BuyOutrightLine string
+	HdrLanded       string
+	HdrLandedSub    string
+	HdrValue        string
+	HdrMargin       string
+	HdrMarginSub    string
+	HdrElapsed      string
+	HdrElapsedSub   string
+	Runs            int64
+	ProducedLine    string // "1,200 units (12 runs × 100 per run)"
+	StockNote       string // "Requirements are netted against everything your characters hold."
+	MaxRunNote      string // blueprint max production limit, "" when unknown
+	Skills          []string
+	Rows            []planRowView
+	MEInputs        []planMEInput
+	Shopping        []planRowView // reuses the row shape; only name/qty/price cells fill
+	ShoppingTotal   string        // "" when some lines are unpriced
+	TotalTime       string
+	ProductValue    string
+	Margin          string
+	MarginNote      string
+	PricesNote      string
 
 	// "Judge as" scoping (character or tag), empty/nil when the
 	// plan is judged generally: a skill check against the
@@ -189,6 +206,11 @@ func (app *Application) handlePlanner(w http.ResponseWriter, r *http.Request) {
 		servePlannerCSV(w, view.Plan)
 		return
 	}
+	if r.URL.Query().Get("format") == "json" && view.Plan != nil && view.Plan.Payload != "" {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(view.Plan.Payload))
+		return
+	}
 	app.render(ctx, w, http.StatusOK, "planner.html", data)
 }
 
@@ -266,6 +288,11 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 	scoped := app.plannerInputsForChars(ctx, inputChars)
 	owned, stock := scoped.Owned, scoped.Stock
 	prices := app.valuationPrices(ctx)
+	// Job fees ride the first expansion too (the table ignores
+	// them); the payload reuses the same result unless the
+	// market source switches to Jita sell.
+	adjusted := planAdjustedMap(prices)
+	systemID, systemName, costIndex, indexKnown := app.planBuildSystem(ctx, q.Get("system"))
 
 	res, err := buildplan.Build(src, productID, buildplan.Input{
 		Runs:       runs,
@@ -273,6 +300,8 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 		Owned:      owned,
 		Stock:      stock,
 		Prices:     prices,
+		CostIndex:  costIndex,
+		Adjusted:   adjusted,
 	})
 	if errors.Is(err, buildplan.ErrNotManufacturable) {
 		return nil, "That item has no manufacturing blueprint in the local data, so it can't be planned."
@@ -338,6 +367,28 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 		view.SkillsJudge = judgeSkills(scope, scoped, requiredSkillLevels(root), nameOf)
 		view.Verdict = planVerdictFor(res, prices, productID, scope.Label)
 	}
+
+	// Interactive tabs read this blob; the table above ignores
+	// it, so existing rendering is unchanged until the template
+	// switches over.
+	payload, meta := app.buildPlanPayloadView(ctx, q, src, res, runs, overrides, owned, stock, scoped, inputChars, productID, systemID, systemName, costIndex, indexKnown, nameOf)
+	view.Payload = payload
+	view.Meta = meta
+	view.Market = meta.Market
+	view.MarketName = meta.MarketName
+	view.SystemName = meta.SystemName
+	if meta.IndexKnown {
+		view.IndexLine = strconv.FormatFloat(meta.IndexPct, 'f', 2, 64) + "%"
+	} else {
+		view.IndexLine = "unknown"
+	}
+	view.SlotsLine = strconv.Itoa(meta.Slots) + " slot"
+	if meta.Slots != 1 {
+		view.SlotsLine += "s"
+	}
+	view.TimeFactorNote = meta.TimeNote
+	view.BuyOutrightLine = planBuyOutrightLine(meta)
+	view.HdrLanded, view.HdrLandedSub, view.HdrValue, view.HdrMargin, view.HdrMarginSub, view.HdrElapsed, view.HdrElapsedSub = planHeaderLines(meta)
 
 	// Flatten the tree; collect the ME inputs once per blueprint.
 	seenME := make(map[int64]bool)

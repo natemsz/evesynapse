@@ -873,3 +873,93 @@ func (app *Application) refreshGuidePrices(ctx context.Context) (stored bool, li
 		len(rows), cachedUntil.UTC().Format(time.RFC3339))
 	return true, false
 }
+
+// industryCostIndexFresh is the refresh gate when ESI's Expires
+// is missing: rows written within the hour count as fresh.
+const industryCostIndexFresh = time.Hour
+
+// costIndexSystem is one row of GET /industry/systems/: the
+// system's cost indices per ESI activity name.
+type costIndexSystem struct {
+	SolarSystemID int64 `json:"solar_system_id"`
+	CostIndices   []struct {
+		Activity  string  `json:"activity"`
+		CostIndex float64 `json:"cost_index"`
+	} `json:"cost_indices"`
+}
+
+// refreshCostIndices mirrors GET /industry/systems/ into the
+// industry_cost_indices table. One public call; a fresh table
+// (by row stamp, an hour's cadence) is never refetched early,
+// and ESI's Expires header only ever extends that rest. The
+// planner reads manufacturing fees off the stored rows, so an
+// empty table simply leaves fees unknown. Reports whether it
+// stored, and whether ESI's error limit stopped it.
+func (app *Application) refreshCostIndices(ctx context.Context) (stored bool, limited bool) {
+	now := time.Now()
+	if stamp, err := app.queries.GetIndustryCostIndicesStamp(ctx); err == nil {
+		if t, ok := stamp.Stamp.(time.Time); ok && stamp.RowCount > 0 && now.Before(t.Add(industryCostIndexFresh)) {
+			return false, false // still inside the cadence window
+		}
+	} else {
+		logging.Errorf("worker: cost indices stamp: %v", err)
+	}
+
+	body, header, err := app.esi.FetchRaw(ctx, "", "/industry/systems/")
+	if err != nil {
+		if errors.Is(err, esi.ErrErrorLimit) {
+			return false, true
+		}
+		if ctx.Err() == nil {
+			logging.Errorf("worker: cost indices: %v", err)
+		}
+		return false, false
+	}
+	var systems []costIndexSystem
+	if err := json.Unmarshal(body, &systems); err != nil {
+		logging.Errorf("worker: cost indices: decode: %v", err)
+		return false, false
+	}
+
+	tx, err := app.db.BeginTx(ctx, nil)
+	if err != nil {
+		logging.Errorf("worker: cost indices: begin tx: %v", err)
+		return false, false
+	}
+	defer tx.Rollback()
+	qtx := app.queries.WithTx(tx)
+	storedRows := 0
+	for _, sys := range systems {
+		if sys.SolarSystemID <= 0 {
+			continue
+		}
+		for _, ci := range sys.CostIndices {
+			if ci.Activity == "" || ci.CostIndex < 0 {
+				continue
+			}
+			if err := qtx.UpsertIndustryCostIndex(ctx, db.UpsertIndustryCostIndexParams{
+				SolarSystemID: sys.SolarSystemID,
+				Activity:      ci.Activity,
+				CostIndex:     ci.CostIndex,
+			}); err != nil {
+				logging.Errorf("worker: cost indices: store system %d: %v", sys.SolarSystemID, err)
+				return false, false
+			}
+			storedRows++
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		logging.Errorf("worker: cost indices: commit: %v", err)
+		return false, false
+	}
+
+	cachedUntil := now.Add(industryCostIndexFresh)
+	if exp := header.Get("Expires"); exp != "" {
+		if t, perr := http.ParseTime(exp); perr == nil && t.After(now) {
+			cachedUntil = t
+		}
+	}
+	logging.Infof("worker: cost indices stored (%d rows, fresh until %s)",
+		storedRows, cachedUntil.UTC().Format(time.RFC3339))
+	return true, false
+}

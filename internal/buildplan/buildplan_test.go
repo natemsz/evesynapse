@@ -310,3 +310,95 @@ func TestPlanPriceHonesty(t *testing.T) {
 		t.Errorf("root line cost: got %v (complete %v), want 70/true", res.Root.LineCost, res.Root.CostComplete)
 	}
 }
+
+func TestPlanJobFees(t *testing.T) {
+	// Mineral 10/unit guide, 12 adjusted; component 100
+	// adjusted; index 5%. Root installs 2 components + 10
+	// mineral: (2×100 + 10×12) × 0.05 = 16.
+	prices := map[int64]esi.MarketPrice{34: {TypeID: 34, AveragePrice: 10}}
+	adjusted := map[int64]float64{34: 12, 1002: 100}
+	res, err := Build(fixtureRecipes(), 1001, Input{
+		Runs: 1, Prices: prices, Adjusted: adjusted, CostIndex: 0.05,
+	})
+	if err != nil {
+		t.Fatalf("buildPlan: %v", err)
+	}
+	if !res.Root.JobKnown || res.Root.JobCost != 16 {
+		t.Errorf("root fee: got %v (known %v), want 16/true", res.Root.JobCost, res.Root.JobKnown)
+	}
+	// Component runs twice, 10 mineral installed: 10×12×0.05.
+	comp := findPlanNode(res.Root, 1002)
+	if !comp.JobKnown || comp.JobCost != 6 {
+		t.Errorf("component fee: got %v (known %v), want 6/true", comp.JobCost, comp.JobKnown)
+	}
+	// Leaves run no job.
+	Walk(res.Root, func(n *Node) {
+		if n.Blueprint == nil && (!n.JobKnown || n.JobCost != 0) {
+			t.Errorf("leaf %d fee: got %v (known %v), want 0/true", n.TypeID, n.JobCost, n.JobKnown)
+		}
+	})
+}
+
+func TestPlanJobFeesUnknown(t *testing.T) {
+	// No adjusted map: the fee stays unknown, never a zero.
+	res, err := Build(fixtureRecipes(), 1001, Input{
+		Runs:      1,
+		Prices:    map[int64]esi.MarketPrice{34: {TypeID: 34, AveragePrice: 10}},
+		CostIndex: 0.05,
+	})
+	if err != nil {
+		t.Fatalf("buildPlan: %v", err)
+	}
+	if res.Root.JobKnown || res.Root.JobCost != 0 {
+		t.Errorf("root fee: got %v (known %v), want 0/false", res.Root.JobCost, res.Root.JobKnown)
+	}
+	// No index at all: unknown too, even with adjusted prices.
+	res, err = Build(fixtureRecipes(), 1001, Input{
+		Runs:     1,
+		Prices:   map[int64]esi.MarketPrice{34: {TypeID: 34, AveragePrice: 10}},
+		Adjusted: map[int64]float64{34: 12, 1002: 100},
+	})
+	if err != nil {
+		t.Fatalf("buildPlan: %v", err)
+	}
+	if res.Root.JobKnown {
+		t.Error("root fee known without an index")
+	}
+}
+
+func TestPlanResearchSaving(t *testing.T) {
+	// Root at ME 0: the direct mineral (10 at 10/unit) drops to
+	// 9 at ME10, saving 10; the 2 components already round to 2
+	// either way. The component branch saves the same 10 under
+	// its own runs.
+	prices := map[int64]esi.MarketPrice{34: {TypeID: 34, AveragePrice: 10}}
+	res, err := Build(fixtureRecipes(), 1001, Input{Runs: 1, Prices: prices})
+	if err != nil {
+		t.Fatalf("buildPlan: %v", err)
+	}
+	if !res.Root.ResearchKnown || res.Root.ResearchSaving != 10 {
+		t.Errorf("root saving: got %v (known %v), want 10/true", res.Root.ResearchSaving, res.Root.ResearchKnown)
+	}
+	comp := findPlanNode(res.Root, 1002)
+	if !comp.ResearchKnown || comp.ResearchSaving != 10 {
+		t.Errorf("component saving: got %v (known %v), want 10/true", comp.ResearchSaving, comp.ResearchKnown)
+	}
+	// Already at ME10: nothing left to save, still known.
+	res, err = Build(fixtureRecipes(), 1001, Input{
+		Runs: 1, Prices: prices, MEOverride: map[int64]int{2001: 10},
+	})
+	if err != nil {
+		t.Fatalf("buildPlan: %v", err)
+	}
+	if !res.Root.ResearchKnown || res.Root.ResearchSaving != 0 {
+		t.Errorf("researched root saving: got %v (known %v), want 0/true", res.Root.ResearchSaving, res.Root.ResearchKnown)
+	}
+	// No prices: the saving is unknown, never a zero.
+	res, err = Build(fixtureRecipes(), 1001, Input{Runs: 1})
+	if err != nil {
+		t.Fatalf("buildPlan: %v", err)
+	}
+	if res.Root.ResearchKnown {
+		t.Error("root saving known without prices")
+	}
+}

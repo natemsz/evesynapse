@@ -313,7 +313,7 @@ func TestPublicFitPage(t *testing.T) {
 		t.Errorf("fit page missing the EFT block")
 	}
 	// Views count the load.
-	code, body = apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
+	_, body = apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
 	apptest.MustContain(t, "second view", body, "2 views")
 
 	// Unknown, private and draft fits 404.

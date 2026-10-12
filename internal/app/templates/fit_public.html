@@ -26,9 +26,136 @@
 <p class="hint"><a href="/auth/eve">Sign in with EVE SSO</a> to rate this fit.</p>
 {{end}}
 
+{{$pub := .}}
+{{with .Sim}}
+{{if .HasShip}}
+{{$sim := .}}
+<div class="fit-wb fit-ro">
+{{if .DataNote}}<p class="fit-note">{{.DataNote}}</p>{{end}}
+{{with .Visual}}
+<div class="fit-visual" role="group" aria-label="Visual fitting">
+  <div class="fit-vring-outer" aria-hidden="true"></div>
+  <div class="fit-vring" aria-hidden="true"></div>
+  {{if .Segs}}<svg class="fit-vsegs" viewBox="0 0 100 100" aria-hidden="true">{{range .Segs}}<path d="{{.D}}" class="fit-vseg"/>{{end}}</svg>{{end}}
+  <div class="fit-vship"><img src="https://images.evetech.net/types/{{.ShipID}}/render?size=512" alt="{{.ShipName}}" draggable="false"></div>
+  {{range .Labels}}
+  <div class="fit-vlabel" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" aria-hidden="true">{{.Text}}</div>
+  {{end}}
+  {{range .Separators}}
+  <div class="fit-vsep" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" data-rot="{{printf "%.0f" .Rot}}" aria-hidden="true"></div>
+  {{end}}
+  {{range .Slots}}
+  {{if .Filled}}<span class="fit-vslot filled{{if .State}} st-{{.State}}{{end}}" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" title="{{.Name}}{{if .ChargeName}} — loaded: {{.ChargeName}}{{end}}">
+    <img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{if .ChargeID}}<span class="fit-vammo"><img src="https://images.evetech.net/types/{{.ChargeID}}/icon?size=32" alt="{{.ChargeName}}" draggable="false"></span>{{end}}
+  </span>{{end}}
+  {{end}}
+</div>
+{{end}}
+<div class="fit-cols">
+  <div class="fit-slots">
+    {{range .Groups}}
+    <div class="fit-group">
+      <h4>{{.Label}}{{if .HasMax}} <small class="{{if .Over}}fit-over{{end}}">{{.Used}}/{{.Max}}{{if .Over}} — doesn't fit{{end}}</small>{{end}}</h4>
+      <div class="fit-chips">
+        {{range .Chips}}
+        <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" title="{{.Name}}">
+          <span class="fit-chip-name">{{.Name}}</span>
+          {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
+        </span>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+    {{range .ChargeSets}}{{$loaded := "No ammunition"}}{{range .Options}}{{if .Selected}}{{$loaded = .Name}}{{end}}{{end}}
+    <p class="fit-charge">{{.WeaponName}} ammunition: {{$loaded}}</p>
+    {{end}}
+  </div>
+  {{with .Stats}}
+  <div class="fit-stats">
+    <h4>{{$sim.ShipName}} <small>with {{$sim.PilotLabel}}'s skills</small></h4>
+    <div class="fit-headline">
+      <div class="fit-headline-dps">
+        <span class="fit-headline-num">{{.TotalDPS}}</span>
+        <span class="fit-headline-label">DPS</span>
+        <span class="fit-headline-sub">turrets {{.TurretDPS}} · missiles {{.MissileDPS}} · drones {{.DroneDPS}}</span>
+      </div>
+      <div class="fit-headline-volley">
+        <span class="fit-headline-num">{{.TotalVolley}}</span>
+        <span class="fit-headline-label">volley</span>
+        <span class="fit-headline-sub">turrets {{.TurretVolley}} · missiles {{.MissileVolley}} · drones {{.DroneVolley}}</span>
+      </div>
+    </div>
+    <div class="fit-bar-row{{if .Powergrid.Over}} over{{else}} good{{end}}">
+      <span class="fit-bar-label">Powergrid</span>
+      <span class="fit-bar"><span data-w="{{printf "%.1f" .Powergrid.Pct}}"></span></span>
+      <span class="fit-bar-nums">{{.Powergrid.Used}} of {{.Powergrid.Max}} ({{.Powergrid.Left}} left)</span>
+    </div>
+    <div class="fit-bar-row{{if .CPU.Over}} over{{else}} good{{end}}">
+      <span class="fit-bar-label">CPU</span>
+      <span class="fit-bar"><span data-w="{{printf "%.1f" .CPU.Pct}}"></span></span>
+      <span class="fit-bar-nums">{{.CPU.Used}} of {{.CPU.Max}} ({{.CPU.Left}} left)</span>
+    </div>
+    <div class="tw">
+    <table class="fit-table">
+      <tbody>
+        <tr><th>Slots</th><td class="{{if .SlotsOver}}fit-over{{else}}fit-good{{end}}">{{.SlotLine}}</td></tr>
+        <tr><th>Hardpoints</th><td class="{{if .HPOver}}fit-over{{else}}fit-good{{end}}">{{.Hardpoints}}</td></tr>
+        <tr><th>Calibration</th><td class="{{if .CalibOver}}fit-over{{else}}fit-good{{end}}">{{.Calibration}}</td></tr>
+        <tr><th>Capacitor</th><td>{{.Capacitor}} · peak recharge {{.CapPeak}} · use {{.CapDraw}}</td></tr>
+        <tr><th>Capacitor state</th><td class="{{if .CapStable}}fit-good{{else}}fit-over{{end}}">{{.CapState}}</td></tr>
+        <tr><th>Damage per second</th><td>{{.TotalDPS}} — turrets {{.TurretDPS}} · missiles {{.MissileDPS}} · drones {{.DroneDPS}}</td></tr>
+        <tr><th>Volley damage</th><td>{{.TotalVolley}} — turrets {{.TurretVolley}} · missiles {{.MissileVolley}} · drones {{.DroneVolley}}</td></tr>
+        {{if .NeutDrain}}<tr><th>Neutralizer drain</th><td>{{.NeutDrain}}</td></tr>{{end}}
+        {{if .NosDrain}}<tr><th>Nosferatu drain</th><td>{{.NosDrain}}</td></tr>{{end}}
+        <tr><th>Effective hit points</th><td>{{.EHPOmni}}</td></tr>
+        <tr><th>Shield recharge</th><td>{{.ShieldReg}} at peak</td></tr>
+        <tr><th>Shield boosting</th><td>{{.ShieldBoost}}</td></tr>
+        <tr><th>Armor repair</th><td>{{.ArmorRep}}</td></tr>
+        <tr><th>Hull repair</th><td>{{.HullRep}}</td></tr>
+        <tr><th>Speed</th><td>{{.Velocity}}</td></tr>
+        <tr><th>Align time</th><td>{{.Align}}</td></tr>
+        <tr><th>Signature radius</th><td>{{.Signature}}</td></tr>
+        <tr><th>Targeting range</th><td>{{.TargetRng}}</td></tr>
+        <tr><th>Scan resolution</th><td>{{.ScanRes}}</td></tr>
+        <tr><th>Sensor strength</th><td>{{.Sensor}}</td></tr>
+        <tr><th>Locked targets</th><td>up to {{.LockedTgts}}</td></tr>
+        <tr><th>Cargo hold</th><td>{{.Cargo}}</td></tr>
+        <tr><th>Drone bandwidth</th><td>{{.DroneBW}}</td></tr>
+        <tr><th>Drone bay</th><td>{{.DroneBay}} · {{.DronesUp}}</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="tw">
+    <table class="fit-table">
+      <thead><tr><th></th><th>HP</th><th>EM</th><th>Thermal</th><th>Kinetic</th><th>Explosive</th><th>EHP</th></tr></thead>
+      <tbody>
+      {{range .Tank}}
+        <tr><th>{{.Layer}}</th><td>{{.HP}}</td><td>{{.EM}}</td><td>{{.Thermal}}</td><td>{{.Kinetic}}</td><td>{{.Explosive}}</td><td>{{.EHP}}</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+    </div>
+    {{if $sim.Missing}}
+    <div class="fit-missing">
+      <h4>Skills you're missing</h4>
+      <ul>
+      {{range $sim.Missing}}<li>{{.Name}} — {{.Have}} → {{.Need}}</li>{{end}}
+      </ul>
+    </div>
+    {{end}}
+    {{if $sim.Notes}}
+    <ul class="fit-notes">
+      {{range $sim.Notes}}<li>{{.}}</li>{{end}}
+    </ul>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+</div>
+{{else}}
 <h3>Modules</h3>
-{{if .Sections}}
-{{range .Sections}}
+{{if $pub.Sections}}
+{{range $pub.Sections}}
 <h4>{{.Label}}</h4>
 <ul>
 {{range .Items}}<li>{{publicItemLink .TypeID .Name}}{{if ne .Quantity "1"}} × {{.Quantity}}{{end}}</li>{{end}}
@@ -36,6 +163,8 @@
 {{end}}
 {{else}}
 <p class="hint">No modules listed.</p>
+{{end}}
+{{end}}
 {{end}}
 
 <h3>Share</h3>

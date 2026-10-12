@@ -463,11 +463,13 @@ func (app *Application) publicPage(ctx context.Context) pageData {
 
 // publicFitView is one stable public fit page: the stored fit,
 // its modules grouped server-side, the EFT text, the rating
-// state, and absolute share links.
+// state, and absolute share links. Sim is the same All-V
+// workbench view the fitting tool renders, shown read-only.
 type publicFitView struct {
 	Card        publicFitCard
 	Description string
 	Sections    []fittingGroup
+	Sim         *fitSimView
 	EFT         string
 	AvgStars    float64
 	StarCount   int64
@@ -622,6 +624,7 @@ func (app *Application) handlePublicFitPage(w http.ResponseWriter, r *http.Reque
 	view := &publicFitView{
 		Card: card, Description: doc.Description,
 		Sections: app.publicFitSections(ctx, &doc),
+		Sim:      app.buildFitSimView(ctx, &doc, 0, "All V", 0),
 		EFT:      app.formatEFT(ctx, &doc),
 		AvgStars: card.Stars, StarCount: card.StarCount,
 		PageURL: app.siteOrigin(r) + card.FitURL,

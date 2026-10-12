@@ -90,16 +90,35 @@
     return "";
   }
 
+  // Pure: one comparison form for a script src. Both the
+  // fetched page's list and the live document's list run through
+  // this, so a script present on both sides always cancels out —
+  // including absolute cross-origin URLs, whose pathname form
+  // would otherwise never equal the raw src.
+  function scriptKey(src) {
+    var raw = src || "";
+    var base = "https://localhost/";
+    if (typeof window !== "undefined" && window.location && window.location.href) {
+      base = window.location.href;
+    }
+    try {
+      return new URL(raw, base).pathname;
+    } catch (e) {
+      return raw.split("?")[0];
+    }
+  }
+
   // Pure: pathnames the fetched page needs that are not loaded now
   // and not part of the shell itself.
   function scriptsMissing(needed, loaded) {
     var seen = {};
     var i;
-    for (i = 0; i < loaded.length; i++) seen[loaded[i]] = true;
-    for (i = 0; i < SHELL_SCRIPTS.length; i++) seen[SHELL_SCRIPTS[i]] = true;
+    for (i = 0; i < loaded.length; i++) seen[scriptKey(loaded[i])] = true;
+    for (i = 0; i < SHELL_SCRIPTS.length; i++) seen[scriptKey(SHELL_SCRIPTS[i])] = true;
     var out = [];
     for (i = 0; i < needed.length; i++) {
-      if (!seen[needed[i]] && out.indexOf(needed[i]) === -1) out.push(needed[i]);
+      var key = scriptKey(needed[i]);
+      if (!seen[key] && out.indexOf(key) === -1) out.push(key);
     }
     return out;
   }
@@ -136,6 +155,7 @@
     module.exports = {
       shouldSwapClick: shouldSwapClick,
       checkSwapResponse: checkSwapResponse,
+      scriptKey: scriptKey,
       scriptsMissing: scriptsMissing,
       bestNavHref: bestNavHref,
       normalizePath: normalizePath,
@@ -191,12 +211,7 @@
     var out = [];
     var tags = doc.querySelectorAll("script[src]");
     for (var i = 0; i < tags.length; i++) {
-      var src = tags[i].getAttribute("src") || "";
-      var path = src;
-      try {
-        path = new URL(src, window.location.href).pathname;
-      } catch (e) { /* relative garbage: compare it raw */ }
-      out.push(path);
+      out.push(scriptKey(tags[i].getAttribute("src") || ""));
     }
     return out;
   }
@@ -205,8 +220,7 @@
     var out = [];
     var tags = document.querySelectorAll("script[src]");
     for (var i = 0; i < tags.length; i++) {
-      var src = tags[i].getAttribute("src") || "";
-      out.push(src.split("?")[0]);
+      out.push(scriptKey(tags[i].getAttribute("src") || ""));
     }
     return out;
   }

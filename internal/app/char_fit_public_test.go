@@ -1,8 +1,14 @@
 package app
 
 import (
+	"context"
+	"net/http"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	db "evesynapse/internal/db/sqlc"
 )
 
 // publicFitURL pins the browser addresses the filter bar builds:
@@ -50,5 +56,70 @@ func TestPublicFitURL(t *testing.T) {
 	}
 	if !strings.Contains(changed, "tag=solo") {
 		t.Errorf("changed URL %q misses tag=solo", changed)
+	}
+}
+
+// TestPublicFitPageMirrorsTool: the public fit page renders the
+// fitting tool's own layout read-only — ship centerpiece, slot
+// groups, headline stats at All-V — with the page's extras (EFT,
+// share links) intact and none of the editor's controls.
+func TestPublicFitPageMirrorsTool(t *testing.T) {
+	transport := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedFitUniverse(t, func(stmt string) error {
+		_, err := conn.ExecContext(ctx, stmt)
+		return err
+	})
+	now := time.Now().UTC()
+	row, err := q.CreateLocalFitting(ctx, db.CreateLocalFittingParams{
+		UserID: user.ID, Name: "Public Fixture", ShipTypeID: 1001, IsPublic: true,
+		CreatedAt: now, UpdatedAt: now,
+		ItemsJson: `{"name":"Public Fixture","shipTypeId":1001,` +
+			`"items":[{"typeId":3001,"qty":1},{"typeId":3002,"qty":1}],"charges":{"3001":4001}}`,
+	})
+	if err != nil {
+		t.Fatalf("create fitting: %v", err)
+	}
+	t.Cleanup(func() {
+		if transport.calls.Load() != 0 {
+			t.Errorf("public fit page made %d outbound calls, want 0", transport.calls.Load())
+		}
+	})
+
+	code, body := getSwapPage(t, app, nil, publicFitsPath+"fit/"+strconv.FormatInt(row.ID, 10)+"/")
+	if code != http.StatusOK {
+		t.Fatalf("public fit page (anonymous): status %d, want 200", code)
+	}
+	mustContain(t, "public fit page (anonymous)", body,
+		"Public Fixture",
+		// Ship centerpiece, slot groups, headline stats: the
+		// tool's structure and classes.
+		`class="fit-visual"`,
+		`types/1001/render?size=512`,
+		"High slots",
+		"Fixture Blaster",
+		`class="fit-headline-num"`,
+		`>DPS</span>`,
+		`class="fit-table"`,
+		"Effective hit points",
+		"with All V's skills",
+		// The page's own extras stay.
+		`id="fit-eft"`,
+		"Copy EFT",
+		"Share to X",
+	)
+	for _, editable := range []string{
+		"data-fit-dec", "data-fit-inc", "data-fit-add", "data-fit-qty",
+		"data-fit-charge", "fit-slot-empty", `id="fit-mod-search"`,
+		`id="fit-pilot"`, `id="fit-save"`, `id="fit-yourfits-search"`,
+	} {
+		if strings.Contains(body, editable) {
+			t.Errorf("public fit page exposes editor control %q", editable)
+		}
 	}
 }

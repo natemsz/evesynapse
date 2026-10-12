@@ -151,11 +151,10 @@ type itemUsedInRow struct {
 }
 
 func (app *Application) itemsPageData(r *http.Request) pageData {
-	return pageData{
-		LoggedIn:      true,
-		CharacterName: app.sessions.GetString(r.Context(), sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	// The browser is public: start from the session's login
+	// state, never assumed. Personalized bits render only
+	// when signed in; signed-in renders are unchanged.
+	return app.publicPage(r.Context())
 }
 
 // handleItems renders the explorer's top level: every SDE

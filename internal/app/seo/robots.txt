@@ -1,0 +1,64 @@
+# EveSynapse robots.txt
+# Public surfaces: the landing page, the public fits browser
+# (/fittings/public/, anonymous as of this build), the fitting
+# simulator (/fittings/, anonymous with All-V skills), and the
+# item and ship pages (/item/, /ships/). Everything else requires
+# EVE SSO and redirects to login regardless.
+
+User-agent: Googlebot
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+Disallow: /fittings/saved/
+
+User-agent: Bingbot
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+Disallow: /fittings/saved/
+
+# AI crawlers: public content only. Longest-match rules, so the
+# Allows below carve the public paths out of Disallow /. A tie
+# on / resolves to Allow, keeping the landing page crawlable.
+User-agent: GPTBot
+Allow: /$
+Allow: /fittings/$
+Allow: /fittings/public/
+Allow: /item/
+Allow: /ships/
+Disallow: /
+
+User-agent: ClaudeBot
+Allow: /$
+Allow: /fittings/$
+Allow: /fittings/public/
+Allow: /item/
+Allow: /ships/
+Disallow: /
+
+User-agent: CCBot
+Allow: /$
+Allow: /fittings/$
+Allow: /fittings/public/
+Allow: /item/
+Allow: /ships/
+Disallow: /
+
+User-agent: PerplexityBot
+Allow: /$
+Allow: /fittings/$
+Allow: /fittings/public/
+Allow: /item/
+Allow: /ships/
+Disallow: /
+
+# Everything else: public content only
+User-agent: *
+Allow: /$
+Allow: /fittings/$
+Allow: /fittings/public/
+Allow: /item/
+Allow: /ships/
+Disallow: /
+
+Sitemap: https://evesynapse.app/sitemap.xml

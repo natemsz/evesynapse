@@ -1,0 +1,59 @@
+{{define "title"}}{{with .PublicShip}}{{.Detail.Name}}{{else}}Ship{{end}}{{end}}
+{{define "content"}}
+{{with .PublicShip}}
+{{$d := .Detail}}
+<p><small><a href="/fittings/public/">Public fits</a></small></p>
+<h1><span class="gt">{{$d.Name}}</span></h1>
+
+<div class="tw">
+<table>
+  <tbody>
+    {{if $d.Group}}<tr><th>Group</th><td>{{$d.Group.Name}}</td></tr>{{end}}
+    {{if $d.Category}}<tr><th>Category</th><td>{{$d.Category.Name}}</td></tr>{{end}}
+    {{if $d.AveragePrice}}<tr><th>Average price</th><td>{{$d.AveragePrice}} ISK</td></tr>{{end}}
+    {{if $d.AdjustedPrice}}<tr><th>Adjusted price</th><td>{{$d.AdjustedPrice}} ISK</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+
+{{if .Hubs}}
+<h3>Hub prices</h3>
+<div class="tw">
+<table>
+  <thead><tr><th>Hub</th><th>Best sell</th><th>Best buy</th></tr></thead>
+  <tbody>
+  {{range .Hubs}}<tr><td>{{.Region}}</td><td>{{if .BestSell}}{{.BestSell}} ISK{{else}}—{{end}}</td><td>{{if .BestBuy}}{{.BestBuy}} ISK{{else}}—{{end}}</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+{{if .History}}
+<h3>Price history</h3>
+{{.History}}
+<p><small>{{.HistoryNote}}</small></p>
+{{else if .HistoryNote}}<p class="hint">{{.HistoryNote}}</p>{{end}}
+
+{{if eq $d.DescState "ready"}}<div class="mailbody">{{ $d.Description }}</div>{{else}}<p class="hint">No description available.</p>{{end}}
+
+<h3>Public fits for this hull</h3>
+{{if .Fits}}
+<div class="fit-cards">
+{{range .Fits}}
+<article class="fit-card">
+  <div class="fit-card-body">
+    <h4><a href="{{.FitURL}}">{{.Name}}</a></h4>
+    <p class="fit-card-line">{{if .StarCount}}<span class="badge wait">{{printf "%.1f" .Stars}} ★ ({{.StarCount}})</span> {{end}}<small>{{.Views}} views</small>{{if .PriceKnown}} <small>{{.PriceLine}}</small>{{end}}{{if .Author}} <small>by {{.Author}}</small>{{end}}</p>
+  </div>
+  <div class="fit-card-actions">
+    <a class="btn" href="{{.FitURL}}">Open fit page</a>
+  </div>
+</article>
+{{end}}
+</div>
+<p><a href="{{.BrowserURL}}">More {{.Detail.Name}} fits in the browser →</a></p>
+{{else}}
+<p class="hint">No public fits for this hull yet.</p>
+{{end}}
+{{end}}
+{{end}}

@@ -2534,3 +2534,38 @@
     btn.hidden = true;
   });
 })();
+
+// Copy buttons: [data-copy] copies its data-copy-text, or the
+// text of [data-copy-from]; the label flips to Copied briefly.
+// Server-rendered share blocks use it so no page needs its own
+// clipboard code.
+(function () {
+  "use strict";
+  function flash(btn) {
+    var prior = btn.textContent;
+    btn.textContent = "Copied";
+    setTimeout(function () { btn.textContent = prior; }, 1500);
+  }
+  document.addEventListener("click", function (ev) {
+    var btn = ev.target && ev.target.closest ? ev.target.closest("[data-copy]") : null;
+    if (!btn) return;
+    var text = btn.getAttribute("data-copy-text") || "";
+    var from = btn.getAttribute("data-copy-from");
+    if (from) {
+      var el = document.getElementById(from);
+      if (el) text = el.textContent || "";
+    }
+    if (!text) return;
+    function done(ok) { if (ok) flash(btn); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+    } else {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { done(document.execCommand("copy")); } catch (e) { done(false); }
+      document.body.removeChild(ta);
+    }
+  });
+})();

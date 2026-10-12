@@ -6,6 +6,7 @@
 <meta name="color-scheme" content="dark">
 <script src="/static/boot.js?v={{.AssetVersion}}" data-cfasync="false"></script>
 <title>{{template "title" .}} · EveSynapse</title>
+{{if .HeadMeta}}{{.HeadMeta}}{{end}}
 {{if .AutoRefresh}}<noscript><meta http-equiv="refresh" content="5"></noscript>{{end}}
 <link rel="icon" href="/static/favicon.ico?v={{.AssetVersion}}" sizes="48x48">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v={{.AssetVersion}}" sizes="any">

@@ -380,6 +380,7 @@ ORDER BY updated_at DESC, id DESC
 LIMIT 1;
 -- name: GetPublicFitting :one
 SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at,
+       lf.view_count, lf.total_price, lf.rating_count, lf.rating_sum,
        COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '') AS author_name
 FROM local_fittings lf
 WHERE lf.id = $1 AND lf.is_public AND NOT lf.is_draft;

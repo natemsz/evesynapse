@@ -531,19 +531,24 @@ func (q *Queries) GetLocalFitting(ctx context.Context, arg GetLocalFittingParams
 
 const getPublicFitting = `-- name: GetPublicFitting :one
 SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at,
+       lf.view_count, lf.total_price, lf.rating_count, lf.rating_sum,
        COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '') AS author_name
 FROM local_fittings lf
 WHERE lf.id = $1 AND lf.is_public AND NOT lf.is_draft
 `
 
 type GetPublicFittingRow struct {
-	ID         int64       `json:"id"`
-	UserID     int64       `json:"user_id"`
-	Name       string      `json:"name"`
-	ShipTypeID int64       `json:"ship_type_id"`
-	ItemsJson  string      `json:"items_json"`
-	UpdatedAt  time.Time   `json:"updated_at"`
-	AuthorName interface{} `json:"author_name"`
+	ID          int64       `json:"id"`
+	UserID      int64       `json:"user_id"`
+	Name        string      `json:"name"`
+	ShipTypeID  int64       `json:"ship_type_id"`
+	ItemsJson   string      `json:"items_json"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+	ViewCount   int64       `json:"view_count"`
+	TotalPrice  float64     `json:"total_price"`
+	RatingCount int64       `json:"rating_count"`
+	RatingSum   int64       `json:"rating_sum"`
+	AuthorName  interface{} `json:"author_name"`
 }
 
 func (q *Queries) GetPublicFitting(ctx context.Context, id int64) (GetPublicFittingRow, error) {
@@ -556,6 +561,10 @@ func (q *Queries) GetPublicFitting(ctx context.Context, id int64) (GetPublicFitt
 		&i.ShipTypeID,
 		&i.ItemsJson,
 		&i.UpdatedAt,
+		&i.ViewCount,
+		&i.TotalPrice,
+		&i.RatingCount,
+		&i.RatingSum,
 		&i.AuthorName,
 	)
 	return i, err

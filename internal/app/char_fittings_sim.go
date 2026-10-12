@@ -702,6 +702,9 @@ type fitEditorView struct {
 	LocalID     int64    // saved fit currently open (0 = unsaved)
 	Notes       []string // import notes ("couldn't place ..."), shown once
 	LocalFits   []localFitEntry
+	// Anonymous serves the editor without a session: All-V
+	// skills, no pilots, no save controls, and a sign-in note.
+	Anonymous bool
 }
 
 // localFitEntry is one saved fit for the your-fits list.
@@ -1516,7 +1519,10 @@ func (app *Application) handleFitPickerJSON(w http.ResponseWriter, r *http.Reque
 	query := q.Get("q")
 	meta, _ := strconv.ParseInt(q.Get("meta"), 10, 64)
 	pilotID, _ := strconv.ParseInt(q.Get("pilot"), 10, 64)
-	usableOnly := q.Get("usable") == "1" && pilotID > 0
+	// Without a session there is no owned pilot to check skills
+	// against, so the usable filter stays off: anonymous answers
+	// are SDE-only either way.
+	usableOnly := q.Get("usable") == "1" && pilotID > 0 && app.userID(ctx) > 0
 
 	// usableByPilot filters suggestions to what the pilot can actually
 	// use: every skill requirement (transitively) met by their levels.
@@ -1794,6 +1800,14 @@ func (app *Application) handleFitSave(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		id = row.ID
+	}
+	// The browser's max-price filter and sorts read the stored
+	// figure, priced here at write time from the guide mirror.
+	// Unknown reads as 0, which also clears any stale figure.
+	if err := app.queries.SetLocalFittingPrice(ctx, db.SetLocalFittingPriceParams{
+		TotalPrice: app.fitDocPrice(ctx, &req.Fit), ID: id, UserID: userID,
+	}); err != nil {
+		logging.Errorf("fittings save: price %d: %v", id, err)
 	}
 	writeFitJSON(w, map[string]any{"id": id, "savedAt": rfc3339(now), "isDraft": isDraft})
 }

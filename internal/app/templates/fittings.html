@@ -7,6 +7,7 @@
 {{if .FitEditor}}
 <section class="foldable" id="fit-editor">
 <h3>Build a fitting</h3>
+{{if .FitEditor.Anonymous}}<p class="hint">Fitting with All-V skills. <a href="/auth/eve">Sign in with EVE SSO</a> to use your characters' real skills and inventory — and to save fits.</p>{{end}}
 <div class="fit-head">
   <span class="searchwrap fit-searchwrap">
     <input type="text" id="fit-ship-search" value="{{.FitEditor.Sim.ShipName}}" placeholder="Search ships…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-ship-suggest" aria-autocomplete="list">
@@ -27,20 +28,20 @@
     <input type="text" id="fit-name" value="{{.FitEditor.Sim.FitName}}" placeholder="Name this fit" autocomplete="off">
   </label>
   <input type="hidden" id="fit-local-id" value="{{.FitEditor.LocalID}}">
-  <button type="button" class="btn" id="fit-save" data-fit-local-id="{{.FitEditor.LocalID}}">Save fit</button>
+  {{if not .FitEditor.Anonymous}}<button type="button" class="btn" id="fit-save" data-fit-local-id="{{.FitEditor.LocalID}}">Save fit</button>{{end}}
   {{if .FitEditor.EVECharID}}
   <button type="button" class="btn" id="fit-save-eve" data-fit-eve-char="{{.FitEditor.EVECharID}}" title="Save this fit to {{.FitEditor.EVECharName}}'s in-game fittings">Save to EVE</button>
   {{end}}
   <span class="fit-saved" id="fit-saved-at" hidden></span>
 </div>
-<div class="fit-yourfits">
+{{if not .FitEditor.Anonymous}}<div class="fit-yourfits">
   <span class="searchwrap fit-yourfitswrap">
     <input type="text" id="fit-yourfits-search" placeholder="Search ship loadouts" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-yourfits-suggest" aria-autocomplete="list">
     <ul class="suggest" id="fit-yourfits-suggest" role="listbox" hidden></ul>
   </span>
   <label class="fit-check"><input type="checkbox" id="fit-community"> Include community fits</label>
   <button type="button" class="btn" id="fit-loadouts-btn" data-href="/fittings/saved/">Ship Loadouts</button>
-</div>
+</div>{{end}}
 <p><small>Fits you save live in EveSynapse. Your EVE account's fittings are only ever read, never changed — except when you press Save to EVE.</small></p>
 {{if .FitEditor.Notes}}
 <ul class="fit-notes">

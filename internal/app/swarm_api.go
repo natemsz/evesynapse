@@ -1,19 +1,27 @@
 package app
 
 // ---------------------------------------------------------------------------
-// The swarm's HTTP API: how instances talk to each other. Two
-// endpoints, both bearer-gated by the shared secret, both dark
+// The swarm's HTTP API: how instances talk to each other. Three
+// endpoints, all bearer-gated by the shared secret, all dark
 // (404) while the shared cache is off so a disabled instance
 // offers no surface to probe.
 //
-//   GET  /swarm/members  — this instance's signed membership list
-//   POST /swarm/pull     — signed public-data entries for wanted keys
+//   GET  /swarm/members: this instance's signed membership list
+//   POST /swarm/pull: signed public-data entries for wanted keys
+//   POST /swarm/seed/register: a peer's self-signed heartbeat (see below)
 //
-// The API is pull-only: instances fetch from peers they trust;
+// Data moves pull-only: instances fetch from peers they trust;
 // no instance can push data (or wants, or queue hints) into
-// another. Membership spreads peer to peer (gossip); reputation
-// never does — every instance scores signers from its own spot
-// checks, so a liar cannot talk others into distrusting someone.
+// another. The one push is membership, not data: a heartbeat
+// carries only the sender's own URL and public key, self-signed,
+// and files through the same trust-on-first-use path as a
+// gossip sighting, approval mode and all. That is what makes
+// every instance a usable seed: register here and this
+// instance's member list teaches you the swarm, the same as
+// the Cloudflare seed worker's does. Membership spreads peer
+// to peer (gossip); reputation never does: every instance
+// scores signers from its own spot checks, so a liar cannot
+// talk others into distrusting someone.
 //
 // Transport security is the standard library throughout: the
 // server side is the app's own TLS terminator (or its loopback
@@ -30,6 +38,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -37,6 +46,7 @@ import (
 	"strings"
 	"time"
 
+	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
 )
 
@@ -128,6 +138,77 @@ func (app *Application) handleSwarmMembers(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	writeSwarmJSON(w, map[string]any{"entry": entry})
+}
+
+// handleSwarmSeedRegister serves POST /swarm/seed/register: a
+// peer's self-signed heartbeat, the same entry a seed worker
+// files. The body holds only the sender's own URL and public
+// key; the signature must verify under the payload's key with
+// key and signer all naming the sender, which is the whole
+// trust check: the shared secret already proved membership,
+// the key proves possession from here on. What verifies files
+// through the gossip path (key pinning, approval mode,
+// exclusion untouched), so a registering peer lands exactly
+// where a gossip sighting would put it. Anything else is a
+// bad request; a heartbeat from this instance itself is kept
+// as a no-op answer, not a peer row.
+func (app *Application) handleSwarmSeedRegister(w http.ResponseWriter, r *http.Request) {
+	if !app.cfg.swarm.enabled() || app.swarmID == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if !swarmAuth(app.cfg.swarm.secret, r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var body struct {
+		Entry swarmSignedEntry `json:"entry"`
+	}
+	if err := readSwarmJSON(r, &body); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	entry := body.Entry
+	if entry.Kind != seedAnnounceKind || entry.Signer == "" || entry.Key != entry.Signer {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	var payload seedAnnouncePayload
+	dec := json.NewDecoder(strings.NewReader(entry.Payload))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&payload); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if !validSwarmBaseURL(payload.BaseURL) {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	raw, err := base64.StdEncoding.DecodeString(payload.PublicKey)
+	if err != nil || len(raw) != 32 {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if !verifySwarmEntry(entry, payload.PublicKey) {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	ctx := r.Context()
+	now := time.Now()
+	if entry.Signer != app.swarmID.id {
+		members := []swarmMember{{
+			InstanceID: entry.Signer, BaseURL: payload.BaseURL, PublicKey: payload.PublicKey,
+		}}
+		if err := app.swarmLearnMembers(ctx, members, entry.Signer, payload.PublicKey, "", "gossip", now); err != nil {
+			logging.Errorf("swarm: learn seed registration: %v", err)
+			http.Error(w, "bad gateway", http.StatusBadGateway)
+			return
+		}
+		if err := app.queries.TouchSwarmPeerGossip(ctx, db.TouchSwarmPeerGossipParams{InstanceID: entry.Signer, LastGossip: timeSet(now)}); err != nil {
+			logging.Errorf("swarm: touch registration %s: %v", entry.Signer, err)
+		}
+	}
+	writeSwarmJSON(w, map[string]any{"ok": true})
 }
 
 // swarmPullRequest is one pull: the keys the caller already

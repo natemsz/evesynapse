@@ -216,6 +216,10 @@ func (app *Application) swarmGossip(ctx context.Context, now time.Time) {
 	if learned > 0 {
 		logging.Infof("swarm: gossip heard from %d peer(s)", learned)
 	}
+	// Every round ends with one heartbeat per seed, so the
+	// directory keeps a fresh record of this instance even
+	// when nobody has pulled its member list lately.
+	app.swarmAnnounceToSeeds(ctx, now)
 }
 
 // swarmContactPeer asks one address for its membership list and

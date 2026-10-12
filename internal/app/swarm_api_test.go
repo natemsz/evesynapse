@@ -85,6 +85,9 @@ func TestSwarmAPIDarkWhenOff(t *testing.T) {
 	if code, _ := swarmServe(t, app, http.MethodPost, "/swarm/pull", `{"keys":[]}`, swarmTestSecret); code != http.StatusNotFound {
 		t.Fatalf("pull while off: status %d, want 404", code)
 	}
+	if code, _ := swarmServe(t, app, http.MethodPost, "/swarm/seed/register", `{"entry":{}}`, swarmTestSecret); code != http.StatusNotFound {
+		t.Fatalf("seed register while off: status %d, want 404", code)
+	}
 }
 
 func TestSwarmAPIAuth(t *testing.T) {

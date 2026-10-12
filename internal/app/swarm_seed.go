@@ -111,6 +111,30 @@ func (c *swarmClient) sendSeedAnnounce(ctx context.Context, seedURL string, entr
 	return nil
 }
 
+// swarmAnnounceToSeeds ends the membership round with one
+// heartbeat per configured seed: this instance's self-signed
+// announce entry, the same one the seed worker files with a
+// 48h TTL. Best-effort by design: a refused heartbeat only
+// logs, never fails the round; and silent when there is
+// nothing to announce (no seeds, or no dialable origin).
+func (app *Application) swarmAnnounceToSeeds(ctx context.Context, now time.Time) {
+	entry, ok := app.buildSeedAnnounce(now)
+	if !ok {
+		return
+	}
+	kept := 0
+	for _, seed := range app.cfg.swarm.seeds {
+		if err := app.swarmCli.sendSeedAnnounce(ctx, seed, entry); err != nil {
+			logging.Warnf("swarm: announce %s: %v", seed, err)
+			continue
+		}
+		kept++
+	}
+	if kept > 0 {
+		logging.Infof("swarm: announced to %d seed(s)", kept)
+	}
+}
+
 // swarmSeedInstanceID is the seed worker's fixed identity. It
 // is the protocol's marker for a directory-only peer: pulls
 // skip it, wherever it is listed from.

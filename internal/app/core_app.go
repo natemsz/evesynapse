@@ -713,6 +713,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/swarm", func(r chi.Router) {
 		r.Get("/members", app.handleSwarmMembers)
 		r.Post("/pull", app.handleSwarmPull)
+		r.Post("/seed/register", app.handleSwarmSeedRegister)
 	})
 
 	return r

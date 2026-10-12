@@ -67,12 +67,13 @@ func TestLinkHelpers(t *testing.T) {
 
 // pilotStub serves ESI's public pilot endpoints from fixtures.
 type pilotStub struct {
-	profile  string // 404 when empty
-	history  string
-	corps    map[int64]string // corporation id -> corporation payload
-	types    map[int64]string // type id -> type payload
-	factions string
-	calls    int
+	profile       string // 404 when empty
+	profileStatus int    // nonzero: every profile answers this status (a 422 case)
+	history       string
+	corps         map[int64]string // corporation id -> corporation payload
+	types         map[int64]string // type id -> type payload
+	factions      string
+	calls         int
 }
 
 func (s *pilotStub) respond(status int, body string) *http.Response {
@@ -96,6 +97,9 @@ func (s *pilotStub) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 		return s.respond(http.StatusOK, s.history), nil
 	case strings.HasPrefix(path, "/characters/"):
+		if s.profileStatus != 0 {
+			return s.respond(s.profileStatus, `{"error":"no such character"}`), nil
+		}
 		if s.profile == "" {
 			return s.respond(http.StatusNotFound, `{"error":"character not found"}`), nil
 		}
@@ -234,6 +238,30 @@ func TestPilotPageStatesAndDrain(t *testing.T) {
 		t.Fatalf("pilot missing page: status %d", code)
 	}
 	mustContain(t, "/pilot/ (missing)", body, "EVE has no public record for that character")
+
+	// A 422 (ESI's validation refusal: the ID is never a
+	// character) settles 'missing' too — and stays settled: the
+	// next drain spends no call on it.
+	if err := q2.UpsertPilotWant(ctx, db.UpsertPilotWantParams{CharacterID: 93300098, Priority: wantViewed}); err != nil {
+		t.Fatalf("enqueue refused pilot: %v", err)
+	}
+	stub.profileStatus = http.StatusUnprocessableEntity
+	drained, _ = app2.refreshPilotRecords(ctx, &fetchBudget{left: 120})
+	if drained != 1 {
+		t.Fatalf("refused pilot drain: drained=%d, want 1", drained)
+	}
+	rec, err = q2.GetPilotRecord(ctx, 93300098)
+	if err != nil || rec.State != "missing" {
+		t.Fatalf("refused pilot record: %+v err=%v, want missing", rec, err)
+	}
+	calls := stub.calls
+	drained, _ = app2.refreshPilotRecords(ctx, &fetchBudget{left: 120})
+	if drained != 0 {
+		t.Fatalf("settled pilot redrained: drained=%d, want 0", drained)
+	}
+	if stub.calls != calls {
+		t.Fatalf("settled pilot refetched: %d calls after settling", stub.calls-calls)
+	}
 }
 
 type authedResponse struct {

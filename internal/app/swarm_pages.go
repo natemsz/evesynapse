@@ -126,6 +126,11 @@ func (app *Application) loadSwarmPeers(ctx context.Context) []swarmPeerRow {
 			if strings.HasPrefix(p.ExcludeNote, "auto:") {
 				row.State = "Excluded (auto)"
 			}
+		case app.swarmIsSeed(p.BaseUrl):
+			// A seed is a directory, not a data source: it is
+			// never pulled, so approval is meaningless and the
+			// state says what it is.
+			row.State = "Seed"
 		case p.Approved:
 			row.State = "Approved"
 		default:

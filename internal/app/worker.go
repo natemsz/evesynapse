@@ -307,6 +307,18 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	})
 	clock.mark("op attendance", time.Now())
 
+	// The swarm's fetch phase runs ahead of the public-data
+	// passes: gossip when due, then demand-driven pulls. Peer
+	// traffic spends no ESI budget, and pulling first means the
+	// passes below find the shared entries already staged —
+	// fetching first would satisfy the same demand itself and
+	// leave the pulls with nothing to ask for.
+	c.pass("asking the swarm first", func() (int, bool) {
+		app.swarmFetchPhase(ctx, time.Now())
+		return 0, false
+	})
+	clock.mark("swarm fetch", time.Now())
+
 	c.refreshPublicData(ctx, characters)
 	clock.mark("public data", time.Now())
 

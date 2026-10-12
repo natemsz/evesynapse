@@ -30,6 +30,43 @@ func swarmPageApp(t *testing.T) (*Application, *http.Cookie) {
 	return app, sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 }
 
+// TestSwarmSeedPeerShowsSeed proves a configured seed lists as
+// a directory, not a source: State Seed even when approved, so
+// the operator never mistakes it for an instance with data.
+func TestSwarmSeedPeerShowsSeed(t *testing.T) {
+	app, _ := swarmPageApp(t)
+	app.cfg.swarm = swarmConfig{mode: swarmOpen, secret: swarmTestSecret, seeds: []string{"https://seed.example"}, gossipHours: defaultSwarmGossipHours}
+	ctx := context.Background()
+	now := time.Now().UTC()
+	for _, peer := range []struct {
+		id, url, source string
+	}{
+		{"seed-1", "https://seed.example", "seed"},
+		{"peer-data-1", "https://node.example", "gossip"},
+	} {
+		if err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
+			InstanceID: peer.id, BaseUrl: peer.url,
+			PublicKey: strings.Repeat("A", 44), Source: peer.source, FirstSeen: now,
+		}); err != nil {
+			t.Fatalf("upsert %s: %v", peer.id, err)
+		}
+		if err := app.queries.SetSwarmPeerApproved(ctx, db.SetSwarmPeerApprovedParams{InstanceID: peer.id, Approved: true}); err != nil {
+			t.Fatalf("approve %s: %v", peer.id, err)
+		}
+	}
+	rows := app.loadSwarmPeers(ctx)
+	byID := map[string]swarmPeerRow{}
+	for _, row := range rows {
+		byID[row.ID] = row
+	}
+	if byID["seed-1"].State != "Seed" {
+		t.Errorf("seed state %q, want Seed", byID["seed-1"].State)
+	}
+	if byID["peer-data-1"].State != "Approved" {
+		t.Errorf("instance state %q, want Approved", byID["peer-data-1"].State)
+	}
+}
+
 func TestSwarmSyncCardOff(t *testing.T) {
 	app, cookie := swarmPageApp(t)
 	code, body := getPage(t, app, cookie, "/sync/")

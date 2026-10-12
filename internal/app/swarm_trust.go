@@ -120,6 +120,22 @@ func (app *Application) countSwarmCheck(ctx context.Context, signer string, good
 	}
 }
 
+// swarmFetchPhase is the worker's early swarm pass: gossip when
+// due, then pull what is wanted. It spends no ESI calls (peer
+// HTTP only), so the cycle runs it ahead of its own fetch
+// passes: demand is genuine at pull time, and anything a peer
+// serves settles the fetch state before the worker spends an
+// ESI call on the same datum. The spot checks stay in the later
+// swarmCycle — they spend ESI, so they wait behind the passes
+// whose pages are watching.
+func (app *Application) swarmFetchPhase(ctx context.Context, now time.Time) {
+	if !app.cfg.swarm.enabled() || app.swarmID == nil || app.swarmCli == nil {
+		return
+	}
+	app.swarmGossip(ctx, now)
+	app.swarmPull(ctx, now)
+}
+
 // swarmCycle is the worker's swarm pass: gossip when due, pull
 // what is wanted, spot-check what is staged. Only the spot
 // checks spend ESI calls, from the cycle's allowance; limited
@@ -390,7 +406,9 @@ func (app *Application) swarmDemandKeys(ctx context.Context) []swarmPullKey {
 // what comes back. A peer may only serve under its own pinned
 // identity: entries signed by anyone else are skipped, so a
 // forwarder cannot spend another signer's reputation (or its
-// own, on another's lies).
+// own, on another's lies). Seeds are directories, not sources —
+// a seed holds no data by construction, so pulling it would
+// spend one of the cycle's peer slots learning nothing.
 func (app *Application) swarmPull(ctx context.Context, now time.Time) {
 	keys := app.swarmDemandKeys(ctx)
 	if len(keys) == 0 {
@@ -403,6 +421,9 @@ func (app *Application) swarmPull(ctx context.Context, now time.Time) {
 	}
 	n := 0
 	for _, p := range peers {
+		if app.swarmIsSeed(p.BaseUrl) {
+			continue
+		}
 		if n >= maxSwarmPullPeersPerCycle {
 			break
 		}

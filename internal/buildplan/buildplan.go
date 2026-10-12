@@ -91,6 +91,12 @@ type Input struct {
 	Owned      map[int64]OwnedBlueprint
 	Stock      map[int64]int64
 	Prices     map[int64]esi.MarketPrice // market-guide cache; nil = no prices at all
+	// CostIndex is the build system's manufacturing index
+	// (0 = unknown: job fees stay unknown, never zero-filled).
+	// Adjusted prices the job-fee base per type; a type without
+	// one leaves its node's fee unknown.
+	CostIndex float64
+	Adjusted  map[int64]float64
 }
 
 // Node is one node of the expansion tree: an item the plan
@@ -120,15 +126,30 @@ type Node struct {
 	CostComplete bool    // false when some price beneath is unknown
 
 	// Per-node buy-vs-build. BuildCost
-	// is the recursive build cost (materials + job costs);
-	// BuyCost is Shortfall × unit price; BvBDelta = BuyCost −
-	// BuildCost (positive = building is cheaper). BvBApplicable
-	// is false for blueprint-type products (ESI lists BPO prices,
-	// not BPC contract prices).
+	// is the recursive material cost (LineCost); the landed
+	// cost adds JobCost beside it. BuyCost is Shortfall × unit
+	// price; BvBDelta = BuyCost − BuildCost (positive =
+	// building is cheaper). BvBApplicable is false for
+	// blueprint-type products (ESI lists BPO prices, not BPC
+	// contract prices).
 	BuildCost     float64
 	BuyCost       float64
 	BvBDelta      float64
 	BvBApplicable bool
+
+	// JobCost is the installation fee for this node's runs:
+	// ME-discounted direct materials at adjusted price times
+	// the system index. JobKnown is false when the index is
+	// unknown or any direct material lacks an adjusted price —
+	// then JobCost is incomplete, never a real zero.
+	// ResearchSaving is what researching this node's blueprint
+	// to ME10 would save on its direct materials at current
+	// prices; ResearchKnown is false when any direct material
+	// cost is unknown. Leaves carry zeros with both known.
+	JobCost        float64
+	JobKnown       bool
+	ResearchSaving float64
+	ResearchKnown  bool
 
 	Children []*Node
 }
@@ -224,6 +245,8 @@ func Build(src Source, rootProductTypeID int64, in Input) (*Result, error) {
 		owned:     in.Owned,
 		stock:     make(map[int64]int64, len(in.Stock)),
 		prices:    in.Prices,
+		costIndex: in.CostIndex,
+		adjusted:  in.Adjusted,
 	}
 	for id, qty := range in.Stock {
 		if qty > 0 {
@@ -294,6 +317,8 @@ type builder struct {
 	owned     map[int64]OwnedBlueprint
 	stock     map[int64]int64 // remaining on-hand per type
 	prices    map[int64]esi.MarketPrice
+	costIndex float64
+	adjusted  map[int64]float64
 	nodes     int
 	tooLarge  bool
 }
@@ -366,8 +391,10 @@ func (b *builder) expand(typeID int64, bp *Blueprint, depth int, basePerRun, req
 
 	// Leaf outcomes: no blueprint, fully covered by stock, a
 	// cycle back to an ancestor, or the depth safety cap. A leaf
-	// prices its shortfall at the market guide.
+	// prices its shortfall at the market guide. Leaves run no
+	// job and research nothing: zeros, known.
 	leaf := func() *Node {
+		node.JobKnown, node.ResearchKnown = true, true
 		if p, ok := UnitPrice(b.prices, typeID); ok {
 			node.UnitPrice = p
 			node.PriceKnown = true
@@ -386,6 +413,7 @@ func (b *builder) expand(typeID int64, bp *Blueprint, depth int, basePerRun, req
 	switch {
 	case node.Shortfall <= 0:
 		node.CostComplete = true
+		node.JobKnown, node.ResearchKnown = true, true
 		return node
 	case bp == nil:
 		return leaf()
@@ -428,6 +456,31 @@ func (b *builder) expand(typeID int64, bp *Blueprint, depth int, basePerRun, req
 		if b.tooLarge {
 			break
 		}
+	}
+	// Installation fee and research saving, both over the direct
+	// materials at this node's runs. The fee values the installed
+	// materials at adjusted price times the system index; the
+	// saving reprices the same materials at ME10 through each
+	// child's effective unit cost. Either stays unknown while any
+	// input it needs is unknown. Children align with mats unless
+	// the node cap cut the loop short.
+	node.JobKnown, node.ResearchKnown = true, true
+	for i, child := range node.Children {
+		if i >= len(mats) {
+			break
+		}
+		qty := MaterialForRuns(mats[i].Quantity, node.Runs, node.ME)
+		if adj, ok := b.adjusted[mats[i].TypeID]; ok && b.costIndex > 0 {
+			node.JobCost += float64(qty) * adj * b.costIndex
+		} else {
+			node.JobKnown = false
+		}
+		if !child.CostComplete || child.RequiredQty <= 0 {
+			node.ResearchKnown = false
+			continue
+		}
+		unit := child.LineCost / float64(child.RequiredQty)
+		node.ResearchSaving += float64(qty-MaterialForRuns(mats[i].Quantity, node.Runs, 10)) * unit
 	}
 	// Per-node buy-vs-build. BuildCost is the rolled-up
 	// material cost (LineCost); BuyCost is market price for the

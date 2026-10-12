@@ -383,8 +383,10 @@ func TestPlannerNoScopeRendersAsBefore(t *testing.T) {
 
 	_, body := getPage(t, app, cookie, "/planner/?product=1001&runs=1")
 	mustContain(t, "/planner/ (general)", body,
-		"ME 8% · TE 12% (owned blueprint)",
-		"975.00 ISK",
+		"Fixture Component",        // ME input keeps the owned blueprint visible
+		"25.00 ISK",                // landed materials and the shopping line agree
+		"materials (fees unknown)", // no cost-index row: fees stay unknown
+		"Landed cost",
 	)
 	for _, absent := range []string{"build this?", "Worth making — judged as"} {
 		if strings.Contains(body, absent) {

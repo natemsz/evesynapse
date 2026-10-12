@@ -281,6 +281,25 @@ func (q *Queries) GetIndustryCostIndex(ctx context.Context, arg GetIndustryCostI
 	return i, err
 }
 
+const getIndustryCostIndicesStamp = `-- name: GetIndustryCostIndicesStamp :one
+SELECT MAX(fetched_at) AS stamp, COUNT(*) AS row_count
+FROM industry_cost_indices
+`
+
+type GetIndustryCostIndicesStampRow struct {
+	Stamp    interface{} `json:"stamp"`
+	RowCount int64       `json:"row_count"`
+}
+
+// The freshest cost-index write: the refresh gate (an hour's
+// cadence when ESI's Expires is missing) without pulling rows.
+func (q *Queries) GetIndustryCostIndicesStamp(ctx context.Context) (GetIndustryCostIndicesStampRow, error) {
+	row := q.db.QueryRowContext(ctx, getIndustryCostIndicesStamp)
+	var i GetIndustryCostIndicesStampRow
+	err := row.Scan(&i.Stamp, &i.RowCount)
+	return i, err
+}
+
 const getMarketFetchState = `-- name: GetMarketFetchState :one
 SELECT kind, state, detail, attempted_at
 FROM market_fetch_state

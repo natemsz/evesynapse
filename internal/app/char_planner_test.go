@@ -16,10 +16,12 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
 
+	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/pgtest"
 	"evesynapse/internal/store"
@@ -190,6 +192,12 @@ func TestPlannerRendersFromLocalData(t *testing.T) {
 	})
 	app.prices[34] = esi.MarketPrice{TypeID: 34, AveragePrice: 5}
 	app.prices[1001] = esi.MarketPrice{TypeID: 1001, AveragePrice: 1000}
+	app.prices[1002] = esi.MarketPrice{TypeID: 1002, AveragePrice: 500}
+	if err := q.UpsertIndustryCostIndex(ctx, db.UpsertIndustryCostIndexParams{
+		SolarSystemID: 30000142, Activity: "manufacturing", CostIndex: 0.064,
+	}); err != nil {
+		t.Fatalf("seed cost index: %v", err)
+	}
 
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
 
@@ -207,10 +215,16 @@ func TestPlannerRendersFromLocalData(t *testing.T) {
 		"Fixture Widget",
 		"Fixture Component",
 		"Tritanium",
-		"ME 8% · TE 12% (owned blueprint)",
 		"Requires Industry I", // root blueprint skill line (skill type name from SDE)
-		`<a href="/items/type/34/">Tritanium</a> — 5 × 5.00 ISK = 25.00 ISK`, // 20 needed, 15 on hand, 5 left at 5 ISK
-		"975.00 ISK", // margin: 1,000.00 value − 25.00 to buy
+		"Tritanium — 5 × 5.00 ISK = 25.00 ISK", // 20 needed, 15 on hand, 5 left at 5 ISK
+		"95.40 ISK",  // landed: 25.00 materials + 70.40 fees at a 6.4% index
+		"904.60 ISK", // margin: 1,000.00 value − 95.40 landed
+		"2.89K ISK/hour",
+		"materials &#43; fees", // html/template escapes the plus
+		"building saves 904.60 ISK",
+		"Landed cost",
+		"Build tree",
+		"Shopping list",
 	)
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handler made %d outbound calls, want 0", got)
@@ -222,6 +236,162 @@ func TestPlannerRendersFromLocalData(t *testing.T) {
 		t.Fatalf("planner unknown product: status %d", code)
 	}
 	mustContain(t, "/planner/?product=999999", body, "no manufacturing blueprint")
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("handler made %d outbound calls, want 0", got)
+	}
+}
+
+// TestPlannerJSONPayload serves the interactive blob: the tree
+// with canonical preset totals the client cross-checks.
+func TestPlannerJSONPayload(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	seedPlannerSDE(t, app)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	seedSnapshot(t, q, fixtureCharA, esi.SnapAssets, []esi.Asset{
+		{ItemID: 2, TypeID: 34, Quantity: 15, LocationID: 60003760, LocationType: "station"},
+	})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapBlueprints, esi.Blueprints{
+		{ItemID: 1, TypeID: 2002, Quantity: -1, MaterialEfficiency: 8, TimeEfficiency: 12, Runs: -1},
+	})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapIndustryJobs, `[]`)
+	app.prices[34] = esi.MarketPrice{TypeID: 34, AveragePrice: 5}
+	app.prices[1001] = esi.MarketPrice{TypeID: 1001, AveragePrice: 1000}
+	app.prices[1002] = esi.MarketPrice{TypeID: 1002, AveragePrice: 500}
+	if err := q.UpsertIndustryCostIndex(ctx, db.UpsertIndustryCostIndexParams{
+		SolarSystemID: 30000142, Activity: "manufacturing", CostIndex: 0.064,
+	}); err != nil {
+		t.Fatalf("seed cost index: %v", err)
+	}
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+
+	code, body := getPage(t, app, cookie, "/planner/?product=1001&runs=1&format=json")
+	if code != http.StatusOK {
+		t.Fatalf("planner json status = %d, want 200", code)
+	}
+	var p planPayload
+	if err := json.Unmarshal([]byte(body), &p); err != nil {
+		t.Fatalf("planner json decodes: %v", err)
+	}
+	if p.Root == nil || p.Root.ID != 1001 || len(p.Root.Kids) != 2 {
+		t.Fatalf("payload root = %+v, want product 1001 with 2 kids", p.Root)
+	}
+	// The inspector's blueprint overlay rides the nodes: the
+	// owned component BPO reports ME8/TE12 from the snapshot.
+	var comp *planNodeDTO
+	for _, k := range p.Root.Kids {
+		if k.ID == 1002 {
+			comp = k
+		}
+	}
+	if comp == nil {
+		t.Fatal("component node missing from payload tree")
+	}
+	if comp.ME != 8 || comp.TE != 12 || comp.MESource != "owned" {
+		t.Errorf("component blueprint = ME%v/TE%v %q, want ME8/TE12 owned", comp.ME, comp.TE, comp.MESource)
+	}
+	// Fifteen mineral cover the direct ten; the component branch
+	// (ME8) buys five at 5 ISK. Materials 25, fees 70.40 at a
+	// 6.4% index, value 1,000.
+	if p.Balanced.Landed != 9540 || p.Balanced.Profit != 90460 {
+		t.Errorf("balanced landed/profit = %v/%v, want 9540/90460", p.Balanced.Landed, p.Balanced.Profit)
+	}
+	if p.Balanced.Fees != 7040 || !p.Balanced.FeesKnown {
+		t.Errorf("balanced fees = %v (known %v), want 7040/true", p.Balanced.Fees, p.Balanced.FeesKnown)
+	}
+	if p.Balanced.Elapsed != 1128 {
+		t.Errorf("balanced elapsed = %v, want 1128 (528 + 600)", p.Balanced.Elapsed)
+	}
+	if len(p.Balanced.Jobs) != 2 {
+		t.Errorf("balanced jobs = %d, want 2", len(p.Balanced.Jobs))
+	}
+	if p.Full.Materials != p.Balanced.Materials || p.Full.Elapsed != p.Balanced.Elapsed {
+		t.Error("full and balanced disagree where building saves everywhere")
+	}
+	// Buying the components prunes the subtree: the two
+	// components at 500 against a 1,000 hull (the direct
+	// mineral is stock-covered). Building wins, and the preset
+	// says exactly that.
+	if !p.BuyComp.Complete || !p.BuyComp.ProfKnown {
+		t.Error("buycomp should be fully priced")
+	}
+	if p.BuyComp.Landed != 106720 || p.BuyComp.Profit != -6720 {
+		t.Errorf("buycomp landed/profit = %v/%v, want 106720/-6720", p.BuyComp.Landed, p.BuyComp.Profit)
+	}
+	if p.BuyComp.Bought != 100000 || p.BuyComp.Built != 0 {
+		t.Errorf("buycomp bought/built = %v/%v, want 100000/0", p.BuyComp.Bought, p.BuyComp.Built)
+	}
+	// Every preset's bought+built equals its materials: the
+	// unit the client cross-checks.
+	for name, preset := range map[string]planPresetTotals{"full": p.Full, "balanced": p.Balanced, "buycomp": p.BuyComp} {
+		if preset.Bought+preset.Built != preset.Materials {
+			t.Errorf("%s bought+built != materials", name)
+		}
+	}
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("handler made %d outbound calls, want 0", got)
+	}
+}
+
+// TestPlannerJitaMarket switches the price source to Forge
+// sell rows; missing rows stay missing, never silent.
+func TestPlannerJitaMarket(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	seedPlannerSDE(t, app)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	seedSnapshot(t, q, fixtureCharA, esi.SnapAssets, []esi.Asset{
+		{ItemID: 2, TypeID: 34, Quantity: 15, LocationID: 60003760, LocationType: "station"},
+	})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapBlueprints, esi.Blueprints{
+		{ItemID: 1, TypeID: 2002, Quantity: -1, MaterialEfficiency: 8, TimeEfficiency: 12, Runs: -1},
+	})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapIndustryJobs, `[]`)
+	for _, row := range []struct {
+		typeID int64
+		sell   float64
+	}{
+		{34, 6}, {1001, 1100},
+	} {
+		if err := q.UpsertMarketTypePrice(ctx, db.UpsertMarketTypePriceParams{
+			RegionID: 10000002, TypeID: row.typeID, SellPrice: row.sell,
+		}); err != nil {
+			t.Fatalf("seed jita price: %v", err)
+		}
+	}
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+
+	code, body := getPage(t, app, cookie, "/planner/?product=1001&runs=1&market=jita&format=json")
+	if code != http.StatusOK {
+		t.Fatalf("planner jita json status = %d, want 200", code)
+	}
+	var p planPayload
+	if err := json.Unmarshal([]byte(body), &p); err != nil {
+		t.Fatalf("planner jita json decodes: %v", err)
+	}
+	// Five mineral at 6 ISK Jita sell; the finished hull at
+	// 1,100. The component stays unpriced (no Jita row).
+	if p.Balanced.Landed != 3000 || p.Balanced.Value != 110000 {
+		t.Errorf("jita landed/value = %v/%v, want 3000/110000", p.Balanced.Landed, p.Balanced.Value)
+	}
+	if p.Market != "jita" || p.PricesNote == "" {
+		t.Errorf("market/note = %q/%q, want jita + stamp", p.Market, p.PricesNote)
+	}
+	code, body = getPage(t, app, cookie, "/planner/?product=1001&runs=1&market=jita")
+	if code != http.StatusOK {
+		t.Fatalf("planner jita page status = %d, want 200", code)
+	}
+	mustContain(t, "/planner/", body, "30.00 ISK", "Jita 4-4 sell")
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handler made %d outbound calls, want 0", got)
 	}

@@ -835,6 +835,11 @@ ORDER BY activity, cost_index ASC;
 SELECT solar_system_id, activity, cost_index, fetched_at
 FROM industry_cost_indices
 WHERE solar_system_id = $1 AND activity = $2;
+-- name: GetIndustryCostIndicesStamp :one
+-- The freshest cost-index write: the refresh gate (an hour's
+-- cadence when ESI's Expires is missing) without pulling rows.
+SELECT MAX(fetched_at) AS stamp, COUNT(*) AS row_count
+FROM industry_cost_indices;
 
 -- Restock planner targets.
 -- name: UpsertRestockTarget :exec

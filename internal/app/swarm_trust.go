@@ -23,8 +23,10 @@ package app
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"database/sql"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -41,12 +43,53 @@ import (
 // prior), and ten checks under 0.5 excludes it. The floor needs
 // the minimum so one unlucky check (a renamed structure, a
 // deleted corporation) never exiles anyone.
+//
+// Verification is sampled, not exhaustive: the check rate
+// falls as trust rises (half at 0.5, five percent at 0.99),
+// so a trusted peer's entries mostly apply on signature and
+// shape alone while a thin random sample keeps ESI honest.
+// The draw is per entry and unpredictable; a peer that can
+// predict the sample only has to poison the rest. Below ten
+// total checks every entry is verified: trust is earned with
+// evidence first, sampled after.
+//
+// Failure weight accelerates with consecutiveness: the first
+// failure in a row counts once, the next twice, then four,
+// doubling to a cap. A compromised high-trust peer is ejected
+// on velocity, not just level: five consecutive failures
+// exclude whatever the lifetime score says. Any success
+// resets the streak. The streak lives in memory (it resets on
+// restart); the ledger in the database does not. Shape
+// rejects at staging (bad signatures, malformed payloads)
+// look like brokenness, not malice, so they ledger flat and
+// never touch the streak.
 const (
 	swarmTrustPriorGood = 9
 	swarmTrustPriorBad  = 1
 	swarmTrustFloor     = 0.5
 	swarmTrustMinChecks = 10
+
+	swarmSampleMin = 0.05
+	swarmSampleMax = 0.5
+
+	swarmStreakWeightCap = 10
+	swarmStreakExclude   = 5
 )
+
+// swarmStagedSuppressWindow bounds the coordination between
+// the pull and the passes: a key with an unsettled staged
+// entry newer than this skips its ESI refetch, because a spot
+// decision is moments away. Older rows fall back to ESI: the
+// spot pass evidently is not settling them, and pages must
+// not rot behind a stuck row. Discards re-mark the key due by
+// leaving fetch state untouched, so suppression can only
+// delay a fetch, never cancel it.
+const swarmStagedSuppressWindow = 10 * time.Minute
+
+// swarmUrgentPullTimeout bounds one peer pull inside the
+// urgent drain: a hung peer must not wedge the seconds-scale
+// tick behind it (the drain holds the shared fetch lock).
+const swarmUrgentPullTimeout = 3 * time.Second
 
 // Per-cycle bounds: spot checks are ESI calls (from the shared
 // allowance), pulls are peer HTTP (bounded anyway), and gossip
@@ -90,16 +133,73 @@ func (app *Application) addSwarmCounter(ctx context.Context, name string, n int6
 	}
 }
 
-// countSwarmCheck ledgers one check against a signer and
-// auto-excludes on sustained distrust: enough checks under the
-// floor. Exclusion never clears by itself — gossip must not
-// forgive — but the operator can re-admit by hand.
+// swarmCheckDraw reports whether one entry is ESI-verified:
+// always while the signer has fewer than ten total checks,
+// then with probability falling from half to five percent as
+// trust rises. r must be uniform in [0,1); the caller draws it
+// unpredictably per entry (swarmRandFloat), never per batch.
+func swarmCheckDraw(trust float64, total int64, r float64) bool {
+	if total < swarmTrustMinChecks {
+		return true
+	}
+	p := 1 - trust
+	if p < swarmSampleMin {
+		p = swarmSampleMin
+	}
+	if p > swarmSampleMax {
+		p = swarmSampleMax
+	}
+	return r < p
+}
+
+// swarmRandFloat draws one uniform float in [0,1) from the
+// operating system's randomness: a malicious peer observing
+// outcomes cannot predict the next draw and poison around it.
+// A variable (not a call) so tests pin deterministic draws;
+// production never reassigns it.
+var swarmRandFloat = func() (float64, error) {
+	var b [8]byte
+	if _, err := cryptorand.Read(b[:]); err != nil {
+		return 0, err
+	}
+	return float64(binary.BigEndian.Uint64(b[:])) / 18446744073709551616.0, nil
+}
+
+// swarmStreakBump advances a signer's consecutive-failure run:
+// any success resets it to zero, any failure extends it and
+// reports the ledger weight for this failure (doubling per
+// consecutive failure to a cap). In-memory only, alongside the
+// streak map the struct comment describes.
+func (app *Application) swarmStreakBump(signer string, good bool) (streak int, weight int64) {
+	app.swarmStreakMu.Lock()
+	defer app.swarmStreakMu.Unlock()
+	if app.swarmStreak == nil {
+		app.swarmStreak = make(map[string]int)
+	}
+	if good {
+		delete(app.swarmStreak, signer)
+		return 0, 1
+	}
+	streak = app.swarmStreak[signer] + 1
+	app.swarmStreak[signer] = streak
+	shift := streak - 1
+	if shift > swarmStreakWeightCap {
+		shift = swarmStreakWeightCap
+	}
+	return streak, int64(1) << uint(shift)
+}
+
+// countSwarmCheck ledgers one data verdict (a spot check or an
+// inline urgent one, verified or trust-earned): bad verdicts
+// weigh by consecutiveness, and five in a row excludes
+// whatever the lifetime score says.
 func (app *Application) countSwarmCheck(ctx context.Context, signer string, good bool) {
+	streak, weight := app.swarmStreakBump(signer, good)
 	var goodN, badN int64
 	if good {
 		goodN = 1
 	} else {
-		badN = 1
+		badN = weight
 	}
 	if err := app.queries.AddSwarmPeerCheck(ctx, db.AddSwarmPeerCheckParams{InstanceID: signer, GoodChecks: goodN, BadChecks: badN}); err != nil {
 		logging.Errorf("swarm: ledger check for %s: %v", signer, err)
@@ -107,6 +207,57 @@ func (app *Application) countSwarmCheck(ctx context.Context, signer string, good
 	}
 	peer, err := app.queries.GetSwarmPeer(ctx, signer)
 	if err != nil || peer.Excluded {
+		return
+	}
+	if streak >= swarmStreakExclude {
+		note := fmt.Sprintf("auto: %d consecutive failures", streak)
+		if err := app.queries.SetSwarmPeerExcluded(ctx, db.SetSwarmPeerExcludedParams{InstanceID: signer, Excluded: true, ExcludeNote: note}); err != nil {
+			logging.Errorf("swarm: auto-exclude %s: %v", signer, err)
+			return
+		}
+		logging.Warnf("swarm: excluded %s (%s)", signer, note)
+		return
+	}
+	total := peer.GoodChecks + peer.BadChecks
+	if total >= swarmTrustMinChecks && swarmTrust(peer.GoodChecks, peer.BadChecks) < swarmTrustFloor {
+		note := fmt.Sprintf("auto: trust %.2f over %d checks below %.2f", swarmTrust(peer.GoodChecks, peer.BadChecks), total, swarmTrustFloor)
+		if err := app.queries.SetSwarmPeerExcluded(ctx, db.SetSwarmPeerExcludedParams{InstanceID: signer, Excluded: true, ExcludeNote: note}); err != nil {
+			logging.Errorf("swarm: auto-exclude %s: %v", signer, err)
+			return
+		}
+		logging.Warnf("swarm: excluded %s (%s)", signer, note)
+	}
+}
+
+// countSwarmShapeReject ledgers one staging reject (a bad
+// signature, a malformed payload, an unknown signer): flat,
+// streak untouched. Rejects never applied anything, so they
+// read as a broken peer, not a poisoning one.
+func (app *Application) countSwarmShapeReject(ctx context.Context, signer string) {
+	if err := app.queries.AddSwarmPeerCheck(ctx, db.AddSwarmPeerCheckParams{InstanceID: signer, GoodChecks: 0, BadChecks: 1}); err != nil {
+		logging.Errorf("swarm: ledger reject for %s: %v", signer, err)
+		return
+	}
+	app.swarmEnforceTrust(ctx, signer, 0)
+}
+
+// swarmEnforceTrust excludes a signer that earned it: five
+// consecutive data failures whatever the lifetime score, or
+// enough lifetime checks under the floor. Streak zero (shape
+// rejects, or anything without velocity) can only trip the
+// floor rule.
+func (app *Application) swarmEnforceTrust(ctx context.Context, signer string, streak int) {
+	peer, err := app.queries.GetSwarmPeer(ctx, signer)
+	if err != nil || peer.Excluded {
+		return
+	}
+	if streak >= swarmStreakExclude {
+		note := fmt.Sprintf("auto: %d consecutive failures", streak)
+		if err := app.queries.SetSwarmPeerExcluded(ctx, db.SetSwarmPeerExcludedParams{InstanceID: signer, Excluded: true, ExcludeNote: note}); err != nil {
+			logging.Errorf("swarm: auto-exclude %s: %v", signer, err)
+			return
+		}
+		logging.Warnf("swarm: excluded %s (%s)", signer, note)
 		return
 	}
 	total := peer.GoodChecks + peer.BadChecks
@@ -220,6 +371,12 @@ func (app *Application) swarmGossip(ctx context.Context, now time.Time) {
 	// directory keeps a fresh record of this instance even
 	// when nobody has pulled its member list lately.
 	app.swarmAnnounceToSeeds(ctx, now)
+	// Forgiveness on the gossip cadence: old bad marks fade
+	// whether or not new checks land, so a fixed peer's score
+	// recovers over weeks. Exclusion itself never clears here.
+	if err := app.queries.DecaySwarmBadChecks(ctx); err != nil {
+		logging.Errorf("swarm: decay bad marks: %v", err)
+	}
 }
 
 // swarmContactPeer asks one address for its membership list and
@@ -406,6 +563,152 @@ func (app *Application) swarmDemandKeys(ctx context.Context) []swarmPullKey {
 	return keys
 }
 
+// swarmSampled reports whether one staged entry is ESI-verified
+// this pass: the trust draw, defaulting to verified when the
+// randomness fails (a missed draw must cost a call, never
+// trust).
+func (app *Application) swarmSampled(good, bad int64) bool {
+	r, err := swarmRandFloat()
+	if err != nil {
+		logging.Errorf("swarm: sample randomness: %v", err)
+		return true
+	}
+	return swarmCheckDraw(swarmTrust(good, bad), good+bad, r)
+}
+
+// swarmPeerPullable reports whether one listed peer may serve:
+// not the seed marker, and not under the floor once it has
+// enough checks to judge. Shared by the cycle pull and the
+// urgent single-key pull so both read the same gate.
+func swarmPeerPullable(instanceID string, good, bad int64) bool {
+	if instanceID == swarmSeedInstanceID {
+		return false
+	}
+	if total := good + bad; total >= swarmTrustMinChecks && swarmTrust(good, bad) < swarmTrustFloor {
+		return false
+	}
+	return true
+}
+
+// swarmPullOne asks approved peers for one key and stages what
+// verifies, for latency-sensitive callers (the urgent drain):
+// the freshest peer only, under the caller's deadline. Returns
+// how many entries staged. Failures stay silent; the ESI
+// fallback covers them.
+func (app *Application) swarmPullOne(ctx context.Context, kind, key string) int {
+	if !app.cfg.swarm.enabled() || app.swarmID == nil || app.swarmCli == nil {
+		return 0
+	}
+	peers, err := app.queries.ListSwarmPullPeers(ctx)
+	if err != nil {
+		logging.Errorf("swarm: pull peers: %v", err)
+		return 0
+	}
+	staged := 0
+	for _, p := range peers {
+		if !swarmPeerPullable(p.InstanceID, p.GoodChecks, p.BadChecks) {
+			continue
+		}
+		entries, err := app.swarmCli.pullEntries(ctx, p.BaseUrl, []swarmPullKey{{Kind: kind, Key: key}})
+		if err != nil {
+			app.addSwarmCounter(ctx, swarmCounterPullsFailed, 1)
+			return staged
+		}
+		app.addSwarmCounter(ctx, swarmCounterPullsOK, 1)
+		now := time.Now()
+		for _, entry := range entries {
+			if entry.Signer != p.InstanceID {
+				continue
+			}
+			if err := app.stageSwarmEntry(ctx, entry, p.InstanceID, now); err != nil {
+				logging.Warnf("swarm: pull %s: %v", p.BaseUrl, err)
+				continue
+			}
+			staged++
+		}
+		return staged
+	}
+	return staged
+}
+
+// swarmSettleUrgent settles one staged key inline for the
+// urgent drain: the trust draw decides. Unchecked entries
+// apply on reputation (a spot decision would reach the same
+// row within a cycle or two, too late for the viewing page);
+// drawn entries verify now against ESI on a one-call budget,
+// spending what the direct fetch would have cost. Anything
+// else reports unapplied and the caller fetches from ESI as
+// before. Only the direct fetch's absence saves a call.
+func (app *Application) swarmSettleUrgent(ctx context.Context, kind, key string) bool {
+	row, err := app.queries.GetStagingEntry(ctx, db.GetStagingEntryParams{Kind: kind, Key: key})
+	if err != nil {
+		return false
+	}
+	peer, err := app.queries.GetSwarmPeer(ctx, row.Signer)
+	if err != nil || peer.Excluded {
+		return false
+	}
+	now := time.Now().UTC()
+	if !app.swarmSampled(peer.GoodChecks, peer.BadChecks) {
+		if err := app.applySwarmEntry(ctx, row.Kind, row.Key, row.Payload, now); err != nil {
+			logging.Errorf("swarm: apply %s %s: %v", row.Kind, row.Key, err)
+			return false
+		}
+		app.countSwarmCheck(ctx, row.Signer, true)
+		app.addSwarmCounter(ctx, swarmCounterSpotPassed, 1)
+		return true
+	}
+	verdict, _ := app.swarmVerifyAgainstESI(ctx, &fetchBudget{left: 1}, nil, row.Kind, row.Key, row.Payload)
+	switch verdict {
+	case swarmCheckPass:
+		if err := app.applySwarmEntry(ctx, row.Kind, row.Key, row.Payload, now); err != nil {
+			logging.Errorf("swarm: apply %s %s: %v", row.Kind, row.Key, err)
+			return false
+		}
+		app.countSwarmCheck(ctx, row.Signer, true)
+		app.addSwarmCounter(ctx, swarmCounterSpotPassed, 1)
+		return true
+	case swarmCheckFail:
+		app.discardSwarmEntry(ctx, row.Kind, row.Key, row.Signer)
+		return false
+	default:
+		return false
+	}
+}
+
+// swarmUrgentHistory serves one due history want from peers
+// before the urgent drain spends ESI: one freshest-peer pull
+// under a short deadline, then an inline settle. True when the
+// want applied (verified or trust-earned) and the ESI fetch
+// may skip; false keeps the existing direct fetch. Peer
+// silence costs milliseconds, never correctness.
+func (app *Application) swarmUrgentHistory(ctx context.Context, key marketKey) bool {
+	skey := fmt.Sprintf("%d/%d", key.RegionID, key.TypeID)
+	pctx, cancel := context.WithTimeout(ctx, swarmUrgentPullTimeout)
+	app.swarmPullOne(pctx, swarmKindHistory, skey)
+	cancel()
+	return app.swarmSettleUrgent(ctx, swarmKindHistory, skey)
+}
+
+// swarmSuppressFetch reports whether one due key skips its ESI
+// refetch: an unsettled staged entry newer than the window
+// means a spot decision is moments away, and refetching under
+// it would spend the call the pull already covered. Older rows
+// fall back to ESI (see the window's comment); discards leave
+// fetch state untouched, so the key goes due again and the
+// suppression can only delay a fetch, never cancel it.
+func (app *Application) swarmSuppressFetch(ctx context.Context, kind, key string, now time.Time) bool {
+	if !app.cfg.swarm.enabled() || app.swarmID == nil {
+		return false
+	}
+	row, err := app.queries.GetStagingEntry(ctx, db.GetStagingEntryParams{Kind: kind, Key: key})
+	if err != nil {
+		return false
+	}
+	received := row.ReceivedAt
+	return now.Sub(received) < swarmStagedSuppressWindow
+}
+
 // swarmPull asks approved peers for the wanted keys and stages
 // what comes back. A peer may only serve under its own pinned
 // identity: entries signed by anyone else are skipped, so a
@@ -429,13 +732,10 @@ func (app *Application) swarmPull(ctx context.Context, now time.Time) {
 	}
 	n := 0
 	for _, p := range peers {
-		if p.InstanceID == swarmSeedInstanceID {
-			continue
-		}
 		if n >= maxSwarmPullPeersPerCycle {
 			break
 		}
-		if total := p.GoodChecks + p.BadChecks; total >= swarmTrustMinChecks && swarmTrust(p.GoodChecks, p.BadChecks) < swarmTrustFloor {
+		if !swarmPeerPullable(p.InstanceID, p.GoodChecks, p.BadChecks) {
 			continue
 		}
 		n++
@@ -485,6 +785,21 @@ func (app *Application) swarmSpotCheck(ctx context.Context, allowance *fetchBudg
 		}
 		if total := peer.GoodChecks + peer.BadChecks; total >= swarmTrustMinChecks && swarmTrust(peer.GoodChecks, peer.BadChecks) < swarmTrustFloor {
 			app.discardSwarmEntry(ctx, row.Kind, row.Key, row.Signer)
+			continue
+		}
+		if !app.swarmSampled(peer.GoodChecks, peer.BadChecks) {
+			// Trust-earned: signature and shape already
+			// verified at staging, and the sample skipped
+			// ESI. Applies like a pass and ledgers like
+			// one, so served volume counts toward the
+			// reputation it ran on.
+			if err := app.applySwarmEntry(ctx, row.Kind, row.Key, row.Payload, now); err != nil {
+				logging.Errorf("swarm: apply %s %s: %v", row.Kind, row.Key, err)
+				continue
+			}
+			app.countSwarmCheck(ctx, row.Signer, true)
+			app.addSwarmCounter(ctx, swarmCounterSpotPassed, 1)
+			applied++
 			continue
 		}
 		if checks >= maxSwarmSpotPerCycle {

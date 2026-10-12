@@ -282,15 +282,15 @@ func (app *Application) stageSwarmEntry(ctx context.Context, entry swarmSignedEn
 	}
 	peer, err := app.queries.GetSwarmPeer(ctx, entry.Signer)
 	if err != nil {
-		app.countSwarmCheck(ctx, from, false)
+		app.countSwarmShapeReject(ctx, from)
 		return fmt.Errorf("swarm: stage %s %s: unknown signer", entry.Kind, entry.Key)
 	}
 	if !verifySwarmEntry(entry, peer.PublicKey) {
-		app.countSwarmCheck(ctx, from, false)
+		app.countSwarmShapeReject(ctx, from)
 		return fmt.Errorf("swarm: stage %s %s: signature does not verify", entry.Kind, entry.Key)
 	}
 	if err := checkSwarmPayload(entry.Kind, entry.Key, entry.Payload); err != nil {
-		app.countSwarmCheck(ctx, entry.Signer, false)
+		app.countSwarmShapeReject(ctx, entry.Signer)
 		return err
 	}
 	fetchedAt := time.Unix(entry.FetchedAt, 0).UTC()

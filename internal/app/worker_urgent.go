@@ -150,6 +150,9 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 				continue
 			}
 			fetched++
+			if app.swarmUrgentHistory(ctx, key) {
+				continue
+			}
 			if _, ltd := app.fetchAndStoreHistory(ctx, key); ltd {
 				return true
 			}

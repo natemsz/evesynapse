@@ -519,3 +519,58 @@ func TestSwarmPairCorpRecord(t *testing.T) {
 func decodeJSON(r *strings.Reader, into any) error {
 	return json.NewDecoder(r).Decode(into)
 }
+
+// TestUrgentDrainPullsPeerFirst: a due history want is served
+// from the peer when it holds the pair fresh (the ESI fetch is
+// skipped and the fetch state says swarm), and falls back to
+// ESI for keys the peer lacks. B's trust in A is empty, so the
+// volume gate verifies every entry: the hit still costs the
+// one verification call, never a second fetch.
+func TestUrgentDrainPullsPeerFirst(t *testing.T) {
+	p := newSwarmPair(t, swarmOpen)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	days := `[{"date":"2026-10-01","average":5.5,"highest":6.0,"lowest":5.0,"volume":100,"order_count":10}]`
+	if err := p.a.queries.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
+		RegionID: 10000002, TypeID: 34, Date: "2026-10-01",
+		Average: 5.5, Highest: 6.0, Lowest: 5.0, Volume: 100, OrderCount: 10,
+	}); err != nil {
+		t.Fatalf("seed A history: %v", err)
+	}
+	p.a.recordMarketFetch(ctx, "history_10000002_34", fetchStateOK, "")
+	p.stubB.history = days
+	p.pinA(t)
+	if err := p.b.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
+		RegionID: 10000002, TypeID: 34, LastRequestedAt: now, Priority: wantViewed,
+	}); err != nil {
+		t.Fatalf("seed want: %v", err)
+	}
+	calls := p.stubB.calls
+	p.b.urgentDrain(ctx)
+	if p.stubB.calls != calls+1 {
+		t.Fatalf("urgent ESI calls: %d, want exactly 1 (the verification)", p.stubB.calls-calls)
+	}
+	rows, err := p.b.queries.ListMarketHistory(ctx, db.ListMarketHistoryParams{RegionID: 10000002, TypeID: 34, RowLimit: 10})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("B holds %d rows, want the peer-served one", len(rows))
+	}
+	state, err := p.b.queries.GetMarketFetchState(ctx, "history_10000002_34")
+	if err != nil || state.Detail != "swarm" {
+		t.Fatalf("fetch detail %q, want swarm (peer-served, not ESI-fetched)", state.Detail)
+	}
+	// A key A lacks falls back to ESI: one call, stored rows.
+	if err := p.b.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
+		RegionID: 10000002, TypeID: 35, LastRequestedAt: now, Priority: wantViewed,
+	}); err != nil {
+		t.Fatalf("seed want: %v", err)
+	}
+	calls = p.stubB.calls
+	p.b.urgentDrain(ctx)
+	if p.stubB.calls != calls+1 {
+		t.Fatalf("fallback ESI calls: %d, want exactly 1 (the direct fetch)", p.stubB.calls-calls)
+	}
+	rows, err = p.b.queries.ListMarketHistory(ctx, db.ListMarketHistoryParams{RegionID: 10000002, TypeID: 35, RowLimit: 10})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("B holds %d rows for the fallback key, want 1", len(rows))
+	}
+}

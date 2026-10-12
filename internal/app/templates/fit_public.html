@@ -3,8 +3,8 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{with .PublicFit}}
-<p class="browse-back"><a href="/fittings/public/">← Public fits</a></p>
 <h1><span class="gt">{{.Card.Name}}</span></h1>
+<p class="browse-back"><a href="/fittings/public/">← Public fits</a></p>
 <p class="lede">{{publicItemLink .Card.ShipTypeID .Card.Ship}}{{if .Card.Author}} by {{.Card.Author}}{{end}} · {{.Card.Views}} views{{if .Card.PriceKnown}} · {{.Card.PriceLine}}{{end}}</p>
 {{if .Description}}<p>{{.Description}}</p>{{end}}
 {{if .Card.Tags}}<p class="tag-row">{{range .Card.Tags}}<a href="/fittings/public/?tag={{.}}">#{{.}}</a> {{end}}</p>{{end}}

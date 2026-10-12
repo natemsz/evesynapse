@@ -17,7 +17,8 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Public item and ship pages: SDE identity plus already-warmed
+// Public ship pages plus the market sections shared with the
+// Item Database type page: SDE identity plus already-warmed
 // market data, server-rendered with meta/OG tags. No session
 // queries, no want queueing: crawlers must never schedule ESI
 // work or read per-user state.
@@ -31,15 +32,6 @@ type publicHubPrice struct {
 	Region   string
 	BestSell string
 	BestBuy  string
-}
-
-// publicItemView is one /item/ page: the shared SDE detail, hub
-// prices from swept stats, and a server-drawn history sparkline.
-type publicItemView struct {
-	Detail      *itemTypeDetail
-	Hubs        []publicHubPrice
-	History     template.HTML
-	HistoryNote string
 }
 
 // publicShipView is one /ships/ page: the shared SDE detail, hub
@@ -158,43 +150,6 @@ func (app *Application) publicHistorySparkline(ctx context.Context, regionID, ty
 		points = append(points, rows[i].Average)
 	}
 	return sparkline(points), fmt.Sprintf("%d recorded days", len(rows))
-}
-
-// handlePublicItem renders one /item/ page from SDE plus warmed
-// market data. Unknown types 404; nothing here queues ESI work.
-func (app *Application) handlePublicItem(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	data := app.publicPage(ctx)
-
-	typeID, err := strconv.ParseInt(chi.URLParam(r, "typeID"), 10, 64)
-	if err != nil || typeID <= 0 {
-		http.NotFound(w, r)
-		return
-	}
-	t, err := app.queries.GetSDEType(ctx, typeID)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	detail := app.buildItemTypeDetail(ctx, t)
-	hubs, forge := app.publicTypeMarket(ctx, typeID)
-	view := &publicItemView{Detail: detail, Hubs: hubs}
-	if forge > 0 {
-		view.History, view.HistoryNote = app.publicHistorySparkline(ctx, forge, typeID)
-	} else {
-		view.HistoryNote = "No price history swept yet."
-	}
-	pageURL := app.siteOrigin(r) + "/item/" + idString(typeID) + "/"
-	blurb := detail.Name
-	if detail.Group != nil {
-		blurb += ", " + detail.Group.Name
-	}
-	if detail.AdjustedPrice != "" {
-		blurb += " - " + detail.AdjustedPrice + " ISK"
-	}
-	data.HeadMeta = headMeta(detail.Name, blurb, pageURL)
-	data.PublicItem = view
-	app.render(ctx, w, http.StatusOK, "item_public.html", data)
 }
 
 // handlePublicShip renders one /ships/ page: the hull's SDE

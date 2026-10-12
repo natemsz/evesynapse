@@ -124,8 +124,7 @@ type pageData struct {
 	PublicFits *publicFitsView
 	// PublicFit is one stable public fit page (char_fit_public.go).
 	PublicFit *publicFitView
-	// PublicItem is one /item/ page, PublicShip one /ships/ page.
-	PublicItem *publicItemView
+	// PublicShip is one /ships/ page.
 	PublicShip *publicShipView
 	// HeadMeta carries a public page's escaped meta/OG tags into
 	// base.html's head; empty on pages that need none.
@@ -210,7 +209,7 @@ func sectionForPage(page string) string {
 		"market_restock.html",
 		"wallet.html", "orders.html", "contracts.html", "system.html", "station.html", "structure.html":
 		return "market"
-	case "items.html", "item_public.html", "ship_public.html":
+	case "items.html", "ship_public.html":
 		return "tools"
 	case "corporations.html", "corp_members.html", "corp_wallets.html",
 		"corp_orders.html", "corp_assets.html", "corp_structures.html",

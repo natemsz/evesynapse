@@ -52,13 +52,15 @@ func itemLink(typeID int64, name string) template.HTML {
 	return template.HTML(fmt.Sprintf(`<a href="/items/type/%d/">%s</a>`, typeID, html.EscapeString(name)))
 }
 
-// publicItemLink is the anonymous twin: the public /item/ page,
-// reachable with no session, for the crawler-safe templates.
+// publicItemLink is the link the crawler-safe templates use.
+// It targets the same Item Database type page as itemLink —
+// that page is public, so anonymous readers land on the one
+// canonical item page rather than a public twin.
 func publicItemLink(typeID int64, name string) template.HTML {
 	if typeID <= 0 || name == "" {
 		return template.HTML(html.EscapeString(name))
 	}
-	return template.HTML(fmt.Sprintf(`<a href="/item/%d/">%s</a>`, typeID, html.EscapeString(name)))
+	return template.HTML(fmt.Sprintf(`<a href="/items/type/%d/">%s</a>`, typeID, html.EscapeString(name)))
 }
 
 // charLink renders a character name by the link policy above: own

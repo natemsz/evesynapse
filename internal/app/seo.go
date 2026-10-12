@@ -127,7 +127,7 @@ func (app *Application) buildSitemap(ctx context.Context, origin string) ([]byte
 	}
 	for _, it := range items {
 		urls = append(urls, sitemapURL{
-			Loc:        origin + "/item/" + idString(it.TypeID) + "/",
+			Loc:        origin + "/items/type/" + idString(it.TypeID) + "/",
 			ChangeFreq: "weekly",
 			Priority:   "0.6",
 		})

@@ -91,7 +91,7 @@ func TestPublicSEOFiles(t *testing.T) {
 		"User-agent: Googlebot",
 		"User-agent: GPTBot",
 		"Allow: /fittings/public/",
-		"Allow: /item/",
+		"Allow: /items/",
 		"Allow: /ships/",
 		"Disallow: /fittings/saved/",
 		"Sitemap:",
@@ -123,7 +123,7 @@ func TestPublicSEOFiles(t *testing.T) {
 		"https://evesynapse.app/</loc>",
 		"https://evesynapse.app/fittings/public/</loc>",
 		"https://evesynapse.app/fittings/public/fit/"+fmt.Sprintf("%d", fitID)+"/",
-		"https://evesynapse.app/item/587/",
+		"https://evesynapse.app/items/type/587/",
 		"https://evesynapse.app/ships/587/",
 	)
 	for _, authed := range []string{"/admin/", "/api/", "/fittings/saved/", "/auth/"} {
@@ -502,18 +502,46 @@ func TestPublicItemAndShipPages(t *testing.T) {
 		t.Fatalf("seed stats: %v", err)
 	}
 
-	code, body := apptest.GetPage(t, rig, nil, "/item/587/")
-	if code != 200 {
-		t.Fatalf("item status = %d", code)
+	// The standalone public item page is retired: /item/
+	// redirects permanently to the canonical Item Database
+	// type page, which is public now and carries the hub
+	// prices and price history itself.
+	if code, _ := apptest.GetPage(t, rig, nil, "/item/587/"); code != http.StatusMovedPermanently {
+		t.Errorf("old item URL status = %d, want 301", code)
 	}
-	apptest.MustContain(t, "/item/587/", body,
+	code, body := apptest.GetPage(t, rig, nil, "/items/type/587/")
+	if code != 200 {
+		t.Fatalf("item page status = %d", code)
+	}
+	apptest.MustContain(t, "/items/type/587/", body,
 		"Rifter", "Frigate",
 		"The Rifter is a frigate.",
+		"Hub prices",
 		"The Forge", "Domain",
-		`<svg class="spark"`, "og:title",
+		`<svg class="spark"`,
 	)
-	if code, _ := apptest.GetPage(t, rig, nil, "/item/424242/"); code != 404 {
-		t.Errorf("unknown item status = %d, want 404", code)
+	if code, _ := apptest.GetPage(t, rig, nil, "/items/type/999999/"); code != http.StatusSeeOther {
+		t.Errorf("unknown item status = %d, want 303 to the browser", code)
+	}
+
+	// A type that is not traded on the market gets no market
+	// sections, even when swept stats exist for it.
+	if _, err := rig.DB().ExecContext(ctx,
+		`INSERT INTO sde_types (type_id, name, group_id, market_group_id, published, description) VALUES (4242, 'Unpublished Relic', 99, 0, 1, 'Not sold anywhere.')`); err != nil {
+		t.Fatalf("seed non-market type: %v", err)
+	}
+	if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+		RegionID: 10000002, TypeID: 4242, BestSell: 55, BestBuy: 44, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("seed non-market stats: %v", err)
+	}
+	code, body = apptest.GetPage(t, rig, nil, "/items/type/4242/")
+	if code != 200 {
+		t.Fatalf("non-market item status = %d", code)
+	}
+	apptest.MustContain(t, "/items/type/4242/", body, "Unpublished Relic", "Not traded on the market")
+	if strings.Contains(body, "Hub prices") {
+		t.Errorf("non-market item page shows hub prices")
 	}
 
 	code, body = apptest.GetPage(t, rig, nil, "/ships/587/")
@@ -540,7 +568,7 @@ func TestPublicBuildKeepsAuth(t *testing.T) {
 	transport := &apptest.CountingTransport{}
 	rig := apptest.Build(t, transport)
 
-	for _, path := range []string{"/fittings/saved/", "/fittings/mine.json", "/items/type/587/"} {
+	for _, path := range []string{"/fittings/saved/", "/fittings/mine.json"} {
 		if code, _ := apptest.GetPage(t, rig, nil, path); code != http.StatusSeeOther {
 			t.Errorf("GET %s logged out = %d, want 303", path, code)
 		}

@@ -400,7 +400,7 @@ function subtreeSize(n) {
   return c;
 }
 
-function nodeCard(n, mask, elapsed, maxCost, kidsHTML) {
+function nodeCard(n, mask, elapsed, maxCost) {
   var d = decide(n, n.path === "0", mask);
   var buying = !n.build || d === "buy";
   var label = d === "have" ? "HAVE" : buying ? "BUY" : "BUILD";
@@ -414,13 +414,19 @@ function nodeCard(n, mask, elapsed, maxCost, kidsHTML) {
       '" aria-label="' + (collapsed[n.path] ? "expand" : "collapse") + " " + esc(n.name) + '">' +
       (collapsed[n.path] ? "+" + subtreeSize(n) : "–") + "</button>";
   }
+  // Tree-table row: the label column carries the depth indent
+  // (data-pad-left, applied by app.js through the CSSOM) while the
+  // cost bar lives in a fixed-width column pinned to the right, so
+  // every row's bar starts at the same x whatever its depth.
+  var pad = (n.depth || 0) * 22;
   return '<div class="' + nodeClass(n, mask, elapsed) + '" data-path="' + esc(n.path) +
     '" title="' + esc(nodeTitle(n)) + '" role="button" tabindex="0">' +
+    '<div class="plan-trow"><div class="plan-tlabel" data-pad-left="' + pad + '">' +
     '<div class="plan-node-top"><strong>' + esc(n.name) + "</strong>" +
     "<span>" + esc(label) + fold + "</span></div>" +
-    '<div class="plan-bar"><div class="plan-fill' + (buying ? " plan-buy" : "") +
-    '" data-w="' + pct + '"></div></div>' +
-    "<small>" + iskC(cost) + "</small>" + (kidsHTML || "") + "</div>";
+    "<small>" + iskC(cost) + "</small></div>" +
+    '<div class="plan-tbar"><div class="plan-bar"><div class="plan-fill' + (buying ? " plan-buy" : "") +
+    '" data-w="' + pct + '"></div></div></div></div></div>';
 }
 
 // Only the root starts expanded: every branch with children
@@ -442,8 +448,11 @@ function setAllCollapsed(on) {
   renderMap(currentTotals());
 }
 
-// One card with its children nested inside it, unless collapsed.
-// Bars scale against siblings, so a branch reads on its own terms.
+// One row per node: children follow as siblings, never nested
+// inside the parent card, so every row spans the same width and
+// the bar column lines up at the same x at every depth. Depth
+// reads from the label indent. Bars scale against siblings, so a
+// branch reads on its own terms.
 function renderNode(n, mask, elapsed, maxCost) {
   var kidsHTML = "";
   var kids = n.kids || [];
@@ -454,7 +463,7 @@ function renderNode(n, mask, elapsed, maxCost) {
       return renderNode(k, mask, elapsed, m || 1);
     }).join("") + "</div>";
   }
-  return nodeCard(n, mask, elapsed, maxCost, kidsHTML);
+  return nodeCard(n, mask, elapsed, maxCost) + kidsHTML;
 }
 
 function renderMap(t) {
@@ -474,8 +483,9 @@ function renderMap(t) {
   });
   host.querySelectorAll(".plan-node").forEach(function (el) {
     function pick(ev) {
-      // Cards nest: a click inside a child bubbles through its
-      // ancestors, so only the innermost card answers.
+      // Rows are siblings, so the closest card is always this
+      // row's own; the guard below keeps that true if markup
+      // ever nests again.
       var t = ev && ev.target && ev.target.closest ? ev.target.closest("[data-path]") : el;
       if (t && t !== el) return;
       selected = el.getAttribute("data-path");

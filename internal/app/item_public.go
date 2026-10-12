@@ -236,12 +236,7 @@ func (app *Application) handlePublicShip(w http.ResponseWriter, r *http.Request)
 		logging.Errorf("public ship %d: fits: %v", typeID, err)
 	} else {
 		for _, row := range rows {
-			view.Fits = append(view.Fits, publicFitCardOf(db.ListPublicFitsRow{
-				ID: row.ID, UserID: row.UserID, Name: row.Name, ShipTypeID: row.ShipTypeID,
-				ItemsJson: row.ItemsJson, UpdatedAt: row.UpdatedAt, ViewCount: row.ViewCount,
-				TotalPrice: row.TotalPrice, RatingCount: row.RatingCount, RatingSum: row.RatingSum,
-				ShipName: row.ShipName, Hull: row.Hull, AuthorName: row.AuthorName,
-			}, userID))
+			view.Fits = append(view.Fits, publicFitCardOf(db.ListPublicFitsRow(row), userID))
 		}
 	}
 	pageURL := app.siteOrigin(r) + "/ships/" + idString(typeID) + "/"

@@ -5,6 +5,26 @@
 (function () {
   "use strict";
 
+  // --- Content-ready bus --------------------------------------
+  // The persistent shell (swap.js) replaces #main-content without
+  // a page load. Page widgets subscribe through EveSynapseContent
+  // and initialize the fresh markup; the same initializer runs
+  // once for the first paint. Shell-level code (sidebar, top bar,
+  // palette, notifications) binds once and never re-runs. A widget
+  // that binds document-level listeners or timers must guard them
+  // itself: element bindings are safe (old nodes are discarded
+  // with the swap), global ones are not.
+  window.EveSynapseContent = {
+    onReady: function (fn) {
+      document.addEventListener("evesynapse:content-ready", function (ev) {
+        fn((ev.detail && ev.detail.root) || document);
+      });
+    }
+  };
+  function onContentReady(fn) {
+    window.EveSynapseContent.onReady(fn);
+  }
+
   // --- Collapsible sections -----------------------------------
   // Folding lives at the smallest sensible unit on each page:
   //   - .foldable sections (the h2/h3 blocks inside a page panel)
@@ -26,6 +46,7 @@
 
   function addFold(container, heading) {
     if (!container || !heading) return;
+    if (heading.querySelector(":scope > .foldbtn")) return;
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "foldbtn";
@@ -37,18 +58,25 @@
     setFolded(container, btn, container.getAttribute("data-fold") === "closed");
   }
 
-  var foldables = document.querySelectorAll(".foldable");
-  for (var i = 0; i < foldables.length; i++) {
-    // data-fold="never": keep the foldable section styling but
-    // don't offer a fold button (Issue 17).
-    if (foldables[i].getAttribute("data-fold") === "never") continue;
-    addFold(foldables[i], foldables[i].querySelector(":scope > h2, :scope > h3"));
-  }
+  // Fold buttons are added per node, so re-running over fresh
+  // swapped markup is safe; the old nodes (and their buttons)
+  // are discarded with the swap.
+  function initFolds(root) {
+    var foldables = root.querySelectorAll(".foldable");
+    for (var i = 0; i < foldables.length; i++) {
+      // data-fold="never": keep the foldable section styling but
+      // don't offer a fold button (Issue 17).
+      if (foldables[i].getAttribute("data-fold") === "never") continue;
+      addFold(foldables[i], foldables[i].querySelector(":scope > h2, :scope > h3"));
+    }
 
-  var cards = document.querySelectorAll(".card");
-  for (var i = 0; i < cards.length; i++) {
-    addFold(cards[i], cards[i].querySelector(":scope > h2, :scope > h3"));
+    var cards = root.querySelectorAll(".card");
+    for (var j = 0; j < cards.length; j++) {
+      addFold(cards[j], cards[j].querySelector(":scope > h2, :scope > h3"));
+    }
   }
+  onContentReady(initFolds);
+  initFolds(document);
 
   // --- Nav: Escape folds an open branch back up -----------------
   document.addEventListener("keydown", function (ev) {
@@ -63,18 +91,30 @@
   // Any element carrying data-finish (RFC3339) counts down to
   // that moment (home fleet widget, character page training
   // line). Without JS the server-rendered remainder stays.
-  var countdowns = document.querySelectorAll("[data-finish]");
-  if (countdowns.length) {
-    var fmtLeft = function (ms) {
-      if (ms <= 0) return "done";
-      var s = Math.floor(ms / 1000);
-      var d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600),
-          m = Math.floor((s % 3600) / 60), sec = s % 60;
-      if (d > 0) return "in " + d + "d " + h + "h " + m + "m";
-      if (h > 0) return "in " + h + "h " + m + "m";
-      if (m > 0) return "in " + m + "m " + sec + "s";
-      return "in " + sec + "s";
-    };
+  // One ticker at a time: the will-swap event stops it before
+  // the old nodes go away, and the ready event starts it for the
+  // fresh ones. A ticking-over-detached-nodes interval would
+  // otherwise pile up behind every swap.
+  var countdownTimer = null;
+  function fmtLeft(ms) {
+    if (ms <= 0) return "done";
+    var s = Math.floor(ms / 1000);
+    var d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600),
+        m = Math.floor((s % 3600) / 60), sec = s % 60;
+    if (d > 0) return "in " + d + "d " + h + "h " + m + "m";
+    if (h > 0) return "in " + h + "h " + m + "m";
+    if (m > 0) return "in " + m + "m " + sec + "s";
+    return "in " + sec + "s";
+  }
+  function stopCountdowns() {
+    if (countdownTimer !== null) {
+      window.clearInterval(countdownTimer);
+      countdownTimer = null;
+    }
+  }
+  function initCountdowns(root) {
+    var countdowns = root.querySelectorAll("[data-finish]");
+    if (!countdowns.length) return;
     var tickCountdowns = function () {
       for (var i = 0; i < countdowns.length; i++) {
         var t = Date.parse(countdowns[i].getAttribute("data-finish"));
@@ -82,18 +122,23 @@
       }
     };
     tickCountdowns();
-    setInterval(tickCountdowns, 1000);
+    stopCountdowns();
+    countdownTimer = window.setInterval(tickCountdowns, 1000);
   }
+  document.addEventListener("evesynapse:content-will-swap", stopCountdowns);
+  onContentReady(initCountdowns);
+  initCountdowns(document);
 
   // --- Fleet filter (home overview) ---------------------------
   // The fleet table renders every character server-side; this
   // just hides rows that don't match the typed text or the
   // active tag chip. No JS: the full list is simply visible.
-  var fleetFilter = document.getElementById("fleet-filter");
-  var fleetRows = document.querySelectorAll(".fleet-row");
-  if (fleetFilter && fleetRows.length) {
-    var noMatch = document.querySelector(".fleet-nomatch");
-    var chips = document.querySelectorAll(".chip[data-tag]");
+  function initFleetFilter(root) {
+    var fleetFilter = root.querySelector("#fleet-filter");
+    var fleetRows = root.querySelectorAll(".fleet-row");
+    if (!fleetFilter || !fleetRows.length) return;
+    var noMatch = root.querySelector(".fleet-nomatch");
+    var chips = root.querySelectorAll(".chip[data-tag]");
     var activeTag = "";
     var applyFleetFilter = function () {
       var q = fleetFilter.value.trim().toLowerCase();
@@ -118,17 +163,23 @@
       });
     }
   }
+  onContentReady(initFleetFilter);
+  initFleetFilter(document);
 
   // --- Widget settings (orders scope picker) ------------------
   // A change applies at once: the form IS the plain submit (the
   // no-JS path), this just skips the button press. In customize
   // mode the page reloads so the live card re-renders in place.
-  var scopeForms = document.querySelectorAll("form.widget-scope");
-  for (var s = 0; s < scopeForms.length; s++) {
-    scopeForms[s].addEventListener("change", function () {
-      this.submit();
-    });
+  function initScopeForms(root) {
+    var scopeForms = root.querySelectorAll("form.widget-scope");
+    for (var s = 0; s < scopeForms.length; s++) {
+      scopeForms[s].addEventListener("change", function () {
+        this.submit();
+      });
+    }
   }
+  onContentReady(initScopeForms);
+  initScopeForms(document);
 
   // --- Home customize: drag, resize, remove, add module --------
   // Layered over the plain customize forms, never replacing them:
@@ -140,9 +191,28 @@
   // span live so the arrangement under the finger is the final
   // one. Without JS the up/down, half/full and add/remove forms
   // in the module list do the same job.
-  var homeGrid = document.getElementById("home-grid");
-  if (homeGrid && homeGrid.getAttribute("data-customize") === "1" && window.fetch) {
-    initHomeCustomize(homeGrid);
+  function initHomeGrid(root) {
+    var homeGrid = root.querySelector("#home-grid");
+    if (homeGrid && homeGrid.getAttribute("data-customize") === "1" && window.fetch) {
+      initHomeCustomize(homeGrid);
+    }
+  }
+  onContentReady(initHomeGrid);
+  initHomeGrid(document);
+
+  // The add-module modal Escape handler binds once and follows
+  // the current grid across swaps; binding it per grid would pile
+  // a dead handler behind every swapped customize view.
+  var homeModalCurrent = null;
+  var homeModalEscapeBound = false;
+  function armHomeModalEscape() {
+    if (homeModalEscapeBound) return;
+    homeModalEscapeBound = true;
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape" && homeModalCurrent && !homeModalCurrent.hidden) {
+        homeModalCurrent.hidden = true;
+      }
+    });
   }
 
   function initHomeCustomize(grid) {
@@ -654,9 +724,8 @@
       for (var c = 0; c < closers.length; c++) {
         closers[c].addEventListener("click", closeModal);
       }
-      document.addEventListener("keydown", function (ev) {
-        if (ev.key === "Escape" && !modal.hidden) closeModal();
-      });
+      homeModalCurrent = modal;
+      armHomeModalEscape();
       for (var a = 0; a < addItems.length; a++) {
         addItems[a].addEventListener("click", function () {
           addModule(this.getAttribute("data-add-widget"), this);
@@ -834,114 +903,122 @@
     };
   }
 
-  // Market: a pick jumps straight to that item's market page,
-  // keeping the region the page is showing.
-  (function () {
-    var regionField = document.getElementById("market-region");
+  // Page search boxes re-attach over fresh swapped markup;
+  // each attachSuggest binds the input in front of it, and the old
+  // inputs leave with the old page. The banner search below lives
+  // in the shell and binds exactly once.
+  function initPageSuggest(root) {
+    // Market: a pick jumps straight to that item's market page,
+    // keeping the region the page is showing.
+    (function () {
+      var regionField = root.querySelector("#market-region");
+      attachSuggest(
+        root.querySelector("#market-q"),
+        root.querySelector("#market-suggest"),
+        suggestURL("/market/suggest", null),
+        function (it) {
+          var url = "/market/?type=" + encodeURIComponent(it.id);
+          if (regionField && regionField.value) {
+            url += "&region=" + encodeURIComponent(regionField.value);
+          }
+          window.location.href = url;
+        });
+    })();
+
+    // Assets: suggestions come from what the account actually owns
+    // (each says whose it is), narrowed to the acting character when
+    // the box is ticked. A pick fills the box and runs the search.
+    (function () {
+      var only = root.querySelector("#assets-only");
+      attachSuggest(
+        root.querySelector("#assets-q"),
+        root.querySelector("#assets-suggest"),
+        function (q) {
+          return "/assets/suggest?q=" + encodeURIComponent(q) + (only && only.checked ? "&only=1" : "");
+        },
+        function (it, input) {
+          input.value = it.name;
+          if (input.form) input.form.submit();
+        });
+    })();
+
+    // Sync and Admin (administrators): find one character among all of
+    // them. A pick goes straight to that character's data, or to the
+    // account it belongs to; typing a name and pressing Enter does the
+    // same through the plain form.
     attachSuggest(
-      document.getElementById("market-q"),
-      document.getElementById("market-suggest"),
-      suggestURL("/market/suggest", null),
+      root.querySelector("#sync-character-q"),
+      root.querySelector("#sync-character-suggest"),
+      suggestURL("/admin/suggest", null),
+      function (it) { window.location.href = "/sync/?character=" + encodeURIComponent(it.id); });
+    attachSuggest(
+      root.querySelector("#admin-q"),
+      root.querySelector("#admin-suggest"),
+      suggestURL("/admin/suggest", null),
+      function (it) { window.location.href = "/admin/?q=" + encodeURIComponent(it.id); });
+
+    // Search boxes that name their own feed (data-suggest): the
+    // doctrine pages and the fit browsers. A suggestion that is a
+    // link is followed; any other fills the box, and where the box
+    // names a hidden field (data-suggest-target) that takes what
+    // was picked, until the box is typed in again.
+    Array.prototype.forEach.call(root.querySelectorAll("input[data-suggest]"), function (input) {
+      var base = input.getAttribute("data-suggest");
+      var target = document.getElementById(input.getAttribute("data-suggest-target") || "");
+      if (target) input.addEventListener("input", function () { target.value = ""; });
+      attachSuggest(input, document.getElementById(input.getAttribute("aria-controls")),
+        function (q) { return base + (base.indexOf("?") === -1 ? "?" : "&") + "q=" + encodeURIComponent(q); },
+        function (it, input) {
+          if (it.url) { window.location.href = it.url; return; }
+          input.value = it.name;
+          if (target) target.value = it.value || it.id;
+        });
+    });
+
+    // Watchlist finder: a pick fills the box with the exact name
+    // and runs the same find the button would.
+    (function () {
+      var input = root.querySelector("#watch-q");
+      attachSuggest(input, root.querySelector("#watch-suggest"),
+        suggestURL("/items/search.json", "market"),
+        function (it, input) {
+          input.value = it.name;
+          if (input.form) input.form.submit();
+        });
+    })();
+
+    // Planner: a pick opens that product's plan.
+    attachSuggest(
+      root.querySelector("#planner-q"),
+      root.querySelector("#planner-suggest"),
+      suggestURL("/items/search.json", "planner"),
       function (it) {
-        var url = "/market/?type=" + encodeURIComponent(it.id);
-        if (regionField && regionField.value) {
-          url += "&region=" + encodeURIComponent(regionField.value);
-        }
-        window.location.href = url;
+        window.location.href = "/planner/?product=" + encodeURIComponent(it.id);
       });
-  })();
 
-  // Assets: suggestions come from what the account actually owns
-  // (each says whose it is), narrowed to the acting character when
-  // the box is ticked. A pick fills the box and runs the search.
-  (function () {
-    var only = document.getElementById("assets-only");
+    // Skill-plan add box: a pick fills the exact skill name and
+    // runs the search, which offers the level picker as usual.
+    (function () {
+      var input = root.querySelector("#skill-q");
+      attachSuggest(input, root.querySelector("#skill-suggest"),
+        suggestURL("/items/search.json", "skills"),
+        function (it, input) {
+          input.value = it.name;
+          if (input.form) input.form.submit();
+        });
+    })();
+
+    // Items DB search: a pick opens the item's details page.
     attachSuggest(
-      document.getElementById("assets-q"),
-      document.getElementById("assets-suggest"),
-      function (q) {
-        return "/assets/suggest?q=" + encodeURIComponent(q) + (only && only.checked ? "&only=1" : "");
-      },
-      function (it, input) {
-        input.value = it.name;
-        if (input.form) input.form.submit();
+      root.querySelector("#items-q"),
+      root.querySelector("#items-suggest"),
+      suggestURL("/items/search.json", "all"),
+      function (it) {
+        window.location.href = "/items/type/" + encodeURIComponent(it.id) + "/";
       });
-  })();
-
-  // Sync and Admin (administrators): find one character among all of
-  // them. A pick goes straight to that character's data, or to the
-  // account it belongs to; typing a name and pressing Enter does the
-  // same through the plain form.
-  attachSuggest(
-    document.getElementById("sync-character-q"),
-    document.getElementById("sync-character-suggest"),
-    suggestURL("/admin/suggest", null),
-    function (it) { window.location.href = "/sync/?character=" + encodeURIComponent(it.id); });
-  attachSuggest(
-    document.getElementById("admin-q"),
-    document.getElementById("admin-suggest"),
-    suggestURL("/admin/suggest", null),
-    function (it) { window.location.href = "/admin/?q=" + encodeURIComponent(it.id); });
-
-  // Search boxes that name their own feed (data-suggest): the
-  // doctrine pages and the fit browsers. A suggestion that is a
-  // link is followed; any other fills the box, and where the box
-  // names a hidden field (data-suggest-target) that takes what
-  // was picked, until the box is typed in again.
-  Array.prototype.forEach.call(document.querySelectorAll("input[data-suggest]"), function (input) {
-    var base = input.getAttribute("data-suggest");
-    var target = document.getElementById(input.getAttribute("data-suggest-target") || "");
-    if (target) input.addEventListener("input", function () { target.value = ""; });
-    attachSuggest(input, document.getElementById(input.getAttribute("aria-controls")),
-      function (q) { return base + (base.indexOf("?") === -1 ? "?" : "&") + "q=" + encodeURIComponent(q); },
-      function (it, input) {
-        if (it.url) { window.location.href = it.url; return; }
-        input.value = it.name;
-        if (target) target.value = it.value || it.id;
-      });
-  });
-
-  // Watchlist finder: a pick fills the box with the exact name
-  // and runs the same find the button would.
-  (function () {
-    var input = document.getElementById("watch-q");
-    attachSuggest(input, document.getElementById("watch-suggest"),
-      suggestURL("/items/search.json", "market"),
-      function (it, input) {
-        input.value = it.name;
-        if (input.form) input.form.submit();
-      });
-  })();
-
-  // Planner: a pick opens that product's plan.
-  attachSuggest(
-    document.getElementById("planner-q"),
-    document.getElementById("planner-suggest"),
-    suggestURL("/items/search.json", "planner"),
-    function (it) {
-      window.location.href = "/planner/?product=" + encodeURIComponent(it.id);
-    });
-
-  // Skill-plan add box: a pick fills the exact skill name and
-  // runs the search, which offers the level picker as usual.
-  (function () {
-    var input = document.getElementById("skill-q");
-    attachSuggest(input, document.getElementById("skill-suggest"),
-      suggestURL("/items/search.json", "skills"),
-      function (it, input) {
-        input.value = it.name;
-        if (input.form) input.form.submit();
-      });
-  })();
-
-  // Items DB search: a pick opens the item's details page.
-  attachSuggest(
-    document.getElementById("items-q"),
-    document.getElementById("items-suggest"),
-    suggestURL("/items/search.json", "all"),
-    function (it) {
-      window.location.href = "/items/type/" + encodeURIComponent(it.id) + "/";
-    });
+  }
+  onContentReady(initPageSuggest);
+  initPageSuggest(document);
 
   // Banner global search: items, your characters, pilots and
   // organizations the app already knows, each to its own page.
@@ -978,9 +1055,22 @@
 // the tab becomes visible again the next poll happens at once
 // instead of whenever a throttled timer gets round to it.
 (function () {
-  var regions = document.querySelectorAll("[data-live-region]");
-  if (!regions.length || !window.fetch) return;
+  if (!window.fetch) return;
   var kicks = [];
+
+  // Arm the pending regions in fresh markup. Old regions leave
+  // with the swap (their polls notice the detach and stop), and
+  // the kick list resets so visibility wakes only live ones.
+  function armRegions(root) {
+    var regions = root.querySelectorAll("[data-live-region]");
+    for (var i = 0; i < regions.length; i++) {
+      arm(regions[i]);
+    }
+  }
+  window.EveSynapseContent.onReady(armRegions);
+  document.addEventListener("evesynapse:content-will-swap", function () {
+    kicks = [];
+  });
 
   function arm(region) {
     var url = region.getAttribute("data-poll-url");
@@ -1050,9 +1140,7 @@
     schedule();
   }
 
-  for (var i = 0; i < regions.length; i++) {
-    arm(regions[i]);
-  }
+  armRegions(document);
   document.addEventListener("visibilitychange", function () {
     if (document.visibilityState !== "visible") return;
     for (var i = 0; i < kicks.length; i++) {
@@ -1263,10 +1351,10 @@
   var indicator = document.getElementById("page-sync-indicator");
   if (!indicator || !window.fetch) return;
   var label = indicator.querySelector("[data-page-sync-label]");
-  var page = window.location.pathname + window.location.search;
-  var polls = 0;
-  var timer = null;
-  var stopped = false;
+  // The poll in flight, if any. A swap stops it (the URL it asks
+  // about belongs to the old page) and starts one for the new
+  // page; the visibility handler below always wakes the current.
+  var active = null;
 
   function unresolvedRegions() {
     return document.querySelectorAll(
@@ -1283,52 +1371,72 @@
     }
   }
 
-  function stop() {
-    stopped = true;
-    if (timer !== null) {
-      window.clearTimeout(timer);
-      timer = null;
+  function stopPageSync() {
+    if (active) {
+      active.stopped = true;
+      if (active.timer !== null) window.clearTimeout(active.timer);
+      active = null;
     }
   }
-  function schedule() {
-    if (stopped) return;
-    // ~1.5s for the first couple of minutes, then a steady
-    // ~5s while the page is still waiting.
-    timer = window.setTimeout(poll, polls <= 80 ? 1500 : 5000);
-  }
-  function poll() {
-    timer = null;
-    if (stopped) return;
-    polls += 1;
-    window.fetch("/sync/page-status?page=" + encodeURIComponent(page), {
-      credentials: "same-origin",
-      headers: { "X-Requested-With": "XMLHttpRequest" }
-    }).then(function (resp) {
-      return resp.json();
-    }).then(function (status) {
-      var pending = status && typeof status.pending === "number" ? status.pending : 0;
-      if (pending > 0 || unresolvedRegions() > 0) {
-        show(pending);
+
+  function startPageSync() {
+    stopPageSync();
+    var job = {
+      page: window.location.pathname + window.location.search,
+      polls: 0,
+      timer: null,
+      stopped: false
+    };
+    active = job;
+    function schedule() {
+      if (job.stopped) return;
+      // ~1.5s for the first couple of minutes, then a steady
+      // ~5s while the page is still waiting.
+      job.timer = window.setTimeout(poll, job.polls <= 80 ? 1500 : 5000);
+    }
+    function poll() {
+      job.timer = null;
+      if (job.stopped) return;
+      job.polls += 1;
+      window.fetch("/sync/page-status?page=" + encodeURIComponent(job.page), {
+        credentials: "same-origin",
+        headers: { "X-Requested-With": "XMLHttpRequest" }
+      }).then(function (resp) {
+        return resp.json();
+      }).then(function (status) {
+        var pending = status && typeof status.pending === "number" ? status.pending : 0;
+        if (pending > 0 || unresolvedRegions() > 0) {
+          show(pending);
+          schedule();
+        } else {
+          indicator.hidden = true;
+          if (active === job) active = null;
+          job.stopped = true;
+        }
+      }).catch(function () {
+        // A failed status poll is not news; the next one retries
+        // at the same cadence.
         schedule();
-      } else {
-        indicator.hidden = true;
-        stop();
-      }
-    }).catch(function () {
-      // A failed status poll is not news; the next one retries
-      // at the same cadence.
-      schedule();
-    });
-  }
-  document.addEventListener("visibilitychange", function () {
-    if (document.visibilityState !== "visible" || stopped) return;
-    if (timer !== null) {
-      window.clearTimeout(timer);
-      timer = null;
+      });
     }
-    poll();
+    job.kick = function () {
+      if (job.stopped) return;
+      if (job.timer !== null) {
+        window.clearTimeout(job.timer);
+        job.timer = null;
+      }
+      poll();
+    };
+    schedule();
+  }
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState !== "visible" || !active) return;
+    active.kick();
   });
-  schedule();
+  document.addEventListener("evesynapse:content-will-swap", stopPageSync);
+  document.addEventListener("evesynapse:content-ready", startPageSync);
+  startPageSync();
 })();
 
 // Navigation state: the wide sidebar can be expanded, collapsed
@@ -1905,11 +2013,37 @@
 
 // Character selector dropdown with search/filter.
 (function() {
-  document.querySelectorAll('[data-charselector]').forEach(function(root) {
+  // Live selectors: the outside-click handler below is bound once
+  // and walks these, so swaps never pile handlers. Detached roots
+  // prune themselves on the next click or swap.
+  var liveSelectors = [];
+  var outsideBound = false;
+  function pruneSelectors() {
+    liveSelectors = liveSelectors.filter(function (s) {
+      return document.contains(s.root);
+    });
+  }
+  function armOutsideClick() {
+    if (outsideBound) return;
+    outsideBound = true;
+    document.addEventListener('click', function (e) {
+      pruneSelectors();
+      liveSelectors.forEach(function (s) {
+        if (!s.root.contains(e.target)) {
+          s.dropdown.hidden = true;
+          // Restore active name if input was cleared.
+          if (!s.input.value && s.active) s.input.value = s.active.getAttribute('data-name') || '';
+        }
+      });
+    });
+  }
+  function initCharselector(root) {
     var input = root.querySelector('.charselector-input');
     var dropdown = root.querySelector('.charselector-dropdown');
-    var options = Array.prototype.slice.call(root.querySelectorAll('.charselector-option'));
     if (!input || !dropdown) return;
+    if (root.getAttribute('data-charselector-live') === '1') return;
+    root.setAttribute('data-charselector-live', '1');
+    var options = Array.prototype.slice.call(root.querySelectorAll('.charselector-option'));
 
     // Show active character name in the input initially.
     var active = root.querySelector('.charselector-option.active');
@@ -1934,14 +2068,6 @@
       filter();
       dropdown.hidden = false;
     });
-    // Close on outside click.
-    document.addEventListener('click', function(e) {
-      if (!root.contains(e.target)) {
-        dropdown.hidden = true;
-        // Restore active name if input was cleared.
-        if (!input.value && active) input.value = active.getAttribute('data-name') || '';
-      }
-    });
     // Close on Escape.
     input.addEventListener('keydown', function(e) {
       if (e.key === 'Escape') {
@@ -1949,15 +2075,27 @@
         input.blur();
       }
     });
-  });
+    liveSelectors.push({ root: root, input: input, dropdown: dropdown, active: active });
+    armOutsideClick();
+  }
+  function initCharselectors(scope) {
+    var roots = scope.querySelectorAll('[data-charselector]');
+    for (var i = 0; i < roots.length; i++) initCharselector(roots[i]);
+  }
+  window.EveSynapseContent.onReady(initCharselectors);
+  document.addEventListener('evesynapse:content-will-swap', pruneSelectors);
+  initCharselectors(document);
 
   // --- CSV export links ---------------------------------------
   // Market/planner pages carry an "Export CSV" link whose href is
-  // the current URL plus format=csv, set here.
-  var csvExportLink = document.getElementById("csv-export");
-  if (csvExportLink) {
-    csvExportLink.href = window.location.pathname + window.location.search +
-      (window.location.search ? "&" : "?") + "format=csv";
+  // the current URL plus format=csv, set here. The address bar
+  // already shows the new page when this runs after a swap.
+  function initCSVExport(root) {
+    var csvExportLink = root.querySelector("#csv-export");
+    if (csvExportLink) {
+      csvExportLink.href = window.location.pathname + window.location.search +
+        (window.location.search ? "&" : "?") + "format=csv";
+    }
   }
 
   // --- Client-side table filters ------------------------------
@@ -1967,9 +2105,10 @@
   //          data-header-class="bp-cat-header">
   // Rows whose data-search misses hide; category headers with no
   // visible rows hide with them. data-header-class is optional.
-  var tableFilterBoxes = document.querySelectorAll("input[data-table-filter]");
-  for (var filterIndex = 0; filterIndex < tableFilterBoxes.length; filterIndex++) {
-    (function (filterInput) {
+  function initTableFilters(root) {
+    var tableFilterBoxes = root.querySelectorAll("input[data-table-filter]");
+    for (var filterIndex = 0; filterIndex < tableFilterBoxes.length; filterIndex++) {
+      (function (filterInput) {
       var table = document.getElementById(filterInput.getAttribute("data-table-filter"));
       if (!table) return;
       var rowClass = filterInput.getAttribute("data-row-class") || "";
@@ -1992,8 +2131,15 @@
           h.style.display = hasVisible ? "" : "none";
         });
       });
-    })(tableFilterBoxes[filterIndex]);
+      })(tableFilterBoxes[filterIndex]);
+    }
   }
+  function initContentWidgets(root) {
+    initCSVExport(root);
+    initTableFilters(root);
+  }
+  window.EveSynapseContent.onReady(initContentWidgets);
+  initContentWidgets(document);
 
   // --- Auto-refresh pages -------------------------------------
   // The Sync page reloads itself every few seconds
@@ -2001,22 +2147,32 @@
   // meta-refresh does the same. The reload waits out typing in a
   // field and hidden tabs, and never runs for readers who asked
   // for reduced motion — they get the page as it loaded, plus the
-  // Sync page's own manual controls.
-  var autoRefreshSeconds = parseInt(document.body.getAttribute("data-autorefresh") || "", 10);
-  if (autoRefreshSeconds > 0 &&
-      !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)) {
-    (function scheduleRefresh() {
-      window.setTimeout(function () {
-        var active = document.activeElement;
-        var typing = active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName || "");
-        if (!typing && !document.hidden) {
-          window.location.reload();
-          return;
-        }
-        scheduleRefresh();
-      }, autoRefreshSeconds * 1000);
-    })();
-  }
+  // Sync page's own manual controls. A swap away stops the chain:
+  // without this the old page's timer would reload the new one.
+  // (Swaps onto an auto-refresh page fall back to a full load, so
+  // the chain only ever starts here, on first paint.)
+  var autoRefreshStopped = false;
+  document.addEventListener("evesynapse:content-will-swap", function () {
+    autoRefreshStopped = true;
+  });
+  (function () {
+    var autoRefreshSeconds = parseInt(document.body.getAttribute("data-autorefresh") || "", 10);
+    if (autoRefreshSeconds > 0 &&
+        !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)) {
+      (function scheduleRefresh() {
+        window.setTimeout(function () {
+          if (autoRefreshStopped) return;
+          var active = document.activeElement;
+          var typing = active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName || "");
+          if (!typing && !document.hidden) {
+            window.location.reload();
+            return;
+          }
+          scheduleRefresh();
+        }, autoRefreshSeconds * 1000);
+      })();
+    }
+  })();
 
 
   // --- Filters that apply as they change -----------------------
@@ -2126,9 +2282,10 @@
   // page with ?pq=. The delete button on a row asks in place — the row
   // turns into "Delete this plan? [Delete] [Keep]" — where a plain link
   // goes to the page's own confirmation.
-  (function () {
-    var picker = document.querySelector("[data-plan-picker]");
-    if (!picker) return;
+  function initPlanPicker(root) {
+    var picker = root.querySelector("[data-plan-picker]");
+    if (!picker || picker.getAttribute("data-plan-live") === "1") return;
+    picker.setAttribute("data-plan-live", "1");
     var input = picker.querySelector("[data-plan-filter]");
     var items = Array.prototype.slice.call(picker.querySelectorAll(".plan-item"));
     var none = picker.querySelector(".plan-none");
@@ -2203,7 +2360,9 @@
         li.querySelector("[data-plan-delete]").focus();
       }
     });
-  })();
+  }
+  window.EveSynapseContent.onReady(initPlanPicker);
+  initPlanPicker(document);
 
   // --- Data-driven geometry ------------------------------------
   // The content security policy forbids inline style attributes, so
@@ -2321,6 +2480,11 @@
   });
   document.addEventListener("click", function (ev) {
     if (!menu.contains(ev.target)) close();
+  });
+  // A swap replaces the page under an open list: fold it away
+  // through the same path as an outside click.
+  document.addEventListener("evesynapse:content-will-swap", function () {
+    close();
   });
   document.addEventListener("keydown", function (ev) {
     if (ev.key !== "Escape" || !menu.open) return;
@@ -2496,6 +2660,11 @@
   });
   document.addEventListener("click", function (ev) {
     if (!switcher.contains(ev.target)) close();
+  });
+  // A swap replaces the page under an open switcher: fold it
+  // away through the same path as an outside click.
+  document.addEventListener("evesynapse:content-will-swap", function () {
+    close();
   });
   document.addEventListener("keydown", function (ev) {
     if (ev.key !== "Escape" || !switcher.open) return;

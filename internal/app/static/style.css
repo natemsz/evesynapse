@@ -3501,3 +3501,14 @@ button[data-active="1"] { outline: 2px solid var(--accent); outline-offset: 1px;
   .plan-frow { grid-template-columns: 1fr; gap: 0.15rem; }
   .plan-grow { grid-template-columns: 1fr; }
 }
+/* Persistent shell: the content swap crossfades with a slight rise,
+   ~200ms, opacity/transform only. Browsers without the View
+   Transitions API (or readers who asked for less motion) swap
+   instantly from swap.js instead, so there is nothing to undo. */
+::view-transition-old(root) { animation: es-swap-out 200ms ease; }
+::view-transition-new(root) { animation: es-swap-in 200ms ease; }
+@keyframes es-swap-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes es-swap-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+}

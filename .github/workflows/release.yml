@@ -44,6 +44,9 @@ jobs:
       - name: Run the test suite
         run: go test ./...
 
+      - name: Run the JavaScript tests
+        run: node --version && node --test "internal/app/jstest/*.test.js"
+
   # The same suite under the race detector, as its own job so the
   # plain run above stays fast.
   race:

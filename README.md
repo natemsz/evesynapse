@@ -1205,7 +1205,11 @@ instance holding the secret; `allowlist` additionally waits for
 each instance to be approved on the Admin page. New instances find
 the swarm through the `SHARED_CACHE_SEEDS` directory nodes,
 then membership spreads peer to peer about once a day
-(`SHARED_CACHE_GOSSIP_HOURS`).
+(`SHARED_CACHE_GOSSIP_HOURS`). Every round ends with one
+heartbeat per configured seed, so the directory keeps a fresh
+record of each instance; every instance also accepts those
+heartbeats itself (`POST /swarm/seed/register`), so any
+instance works as a seed for the rest.
 
 Trust is cryptographic and reputational. Every shared entry is
 signed by the instance that fetched it (Ed25519); the signature

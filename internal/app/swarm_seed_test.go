@@ -15,6 +15,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	db "evesynapse/internal/db/sqlc"
 )
 
 // TestSeedAnnounceVerifies builds a heartbeat the way the
@@ -155,4 +157,213 @@ func mustJSON(t *testing.T, v any) []byte {
 		t.Fatalf("marshal: %v", err)
 	}
 	return raw
+}
+
+// TestSwarmGossipAnnouncesToSeeds: the membership round ends
+// with one heartbeat per configured seed, carrying an entry
+// that verifies under the instance key, and the next immediate
+// round sends nothing (it is not due).
+func TestSwarmGossipAnnouncesToSeeds(t *testing.T) {
+	var hits int
+	var gotAuth string
+	var gotEntry swarmSignedEntry
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/swarm/seed/register" {
+			http.NotFound(w, r)
+			return
+		}
+		hits++
+		gotAuth = r.Header.Get("Authorization")
+		raw, _ := io.ReadAll(io.LimitReader(r.Body, maxSwarmBodyBytes))
+		var body struct {
+			Entry swarmSignedEntry `json:"entry"`
+		}
+		if err := json.Unmarshal(raw, &body); err != nil {
+			t.Errorf("decode heartbeat: %v", err)
+		}
+		gotEntry = body.Entry
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	app := swarmTestApp(t)
+	app.cfg.swarm.seeds = []string{srv.URL}
+	app.cfg.eveCallbackURL = "https://node.example.org/auth/callback"
+	now := time.Now()
+	app.swarmGossip(context.Background(), now)
+	if hits != 1 {
+		t.Fatalf("heartbeats sent: %d, want 1", hits)
+	}
+	if gotAuth != "Bearer "+swarmTestSecret {
+		t.Fatalf("auth header %q", gotAuth)
+	}
+	if gotEntry.Kind != seedAnnounceKind || gotEntry.Key != app.swarmID.id || gotEntry.Signer != app.swarmID.id {
+		t.Fatalf("heartbeat identity wrong: %+v", gotEntry)
+	}
+	if !verifySwarmEntry(gotEntry, app.swarmID.publicString()) {
+		t.Fatal("heartbeat does not verify under the instance key")
+	}
+	app.swarmGossip(context.Background(), now)
+	if hits != 1 {
+		t.Fatalf("second round re-announced: %d hits, want 1", hits)
+	}
+}
+
+// TestSwarmGossipSkipsAnnounceWhenNothingToSay: no seeds and
+// no dialable origin means the round runs but dials nothing.
+func TestSwarmGossipSkipsAnnounceWhenNothingToSay(t *testing.T) {
+	app := swarmTestApp(t)
+	app.cfg.swarm.seeds = nil
+	app.cfg.eveCallbackURL = ""
+	now := time.Now()
+	app.swarmGossip(context.Background(), now)
+	if app.swarmGossipDue(now) {
+		t.Fatal("gossip round did not complete")
+	}
+}
+
+// seedTestHeartbeat signs one self-announce for an arbitrary
+// identity, the way a remote instance would.
+func seedTestHeartbeat(t *testing.T, kp *swarmIdentity, baseURL string) swarmSignedEntry {
+	t.Helper()
+	payload := string(mustJSON(t, seedAnnouncePayload{BaseURL: baseURL, PublicKey: kp.publicString()}))
+	entry, err := signSwarmEntry(kp, kp.id, seedAnnounceKind, kp.id, payload, time.Now())
+	if err != nil {
+		t.Fatalf("sign heartbeat: %v", err)
+	}
+	return entry
+}
+
+func seedTestRegister(t *testing.T, app *Application, entry swarmSignedEntry, secret string) (int, bool) {
+	t.Helper()
+	raw := string(mustJSON(t, map[string]any{"entry": entry}))
+	code, body := swarmServe(t, app, http.MethodPost, "/swarm/seed/register", raw, secret)
+	var decoded struct {
+		OK bool `json:"ok"`
+	}
+	if err := json.Unmarshal([]byte(body), &decoded); err != nil {
+		return code, false
+	}
+	return code, decoded.OK
+}
+
+// TestSwarmSeedRegisterAccepts: a verifiable heartbeat files
+// the peer through the gossip path: approved in open mode,
+// waiting in allowlist mode.
+func TestSwarmSeedRegisterAccepts(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	kp, err := mintSwarmIdentity()
+	if err != nil {
+		t.Fatalf("mint peer: %v", err)
+	}
+	kp.id = "peer-1"
+	code, ok := seedTestRegister(t, app, seedTestHeartbeat(t, kp, "https://peer-1.example"), swarmTestSecret)
+	if code != http.StatusOK || !ok {
+		t.Fatalf("register: status %d ok %v", code, ok)
+	}
+	peer, err := app.queries.GetSwarmPeer(ctx, "peer-1")
+	if err != nil {
+		t.Fatalf("peer not filed: %v", err)
+	}
+	if peer.BaseUrl != "https://peer-1.example" || peer.PublicKey != kp.publicString() || peer.Source != "gossip" {
+		t.Fatalf("peer row wrong: %+v", peer)
+	}
+	if !peer.Approved {
+		t.Fatal("open mode did not approve the registered peer")
+	}
+
+	listed := swarmTestApp(t)
+	listed.cfg.swarm.mode = swarmAllowlist
+	kp2, err := mintSwarmIdentity()
+	if err != nil {
+		t.Fatalf("mint peer: %v", err)
+	}
+	kp2.id = "peer-2"
+	code, ok = seedTestRegister(t, listed, seedTestHeartbeat(t, kp2, "https://peer-2.example"), swarmTestSecret)
+	if code != http.StatusOK || !ok {
+		t.Fatalf("register in allowlist mode: status %d ok %v", code, ok)
+	}
+	peer2, err := listed.queries.GetSwarmPeer(ctx, "peer-2")
+	if err != nil {
+		t.Fatalf("peer not filed in allowlist mode: %v", err)
+	}
+	if peer2.Approved {
+		t.Fatal("allowlist mode approved a peer nobody approved")
+	}
+}
+
+// TestSwarmSeedRegisterRejects: anything that does not verify
+// as the sender's own self-signed heartbeat is refused, and a
+// heartbeat from self is a no-op, never a peer row.
+func TestSwarmSeedRegisterRejects(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	kp, err := mintSwarmIdentity()
+	if err != nil {
+		t.Fatalf("mint peer: %v", err)
+	}
+	kp.id = "peer-9"
+	good := seedTestHeartbeat(t, kp, "https://peer-9.example")
+
+	badSig := good
+	badSig.Payload += "x"
+	if code, _ := seedTestRegister(t, app, badSig, swarmTestSecret); code != http.StatusBadRequest {
+		t.Fatalf("tampered signature: status %d, want 400", code)
+	}
+	wrongKind, err := signSwarmEntry(kp, kp.id, swarmKindMembers, kp.id, good.Payload, time.Now())
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	if code, _ := seedTestRegister(t, app, wrongKind, swarmTestSecret); code != http.StatusBadRequest {
+		t.Fatalf("wrong kind: status %d, want 400", code)
+	}
+	otherKey, err := signSwarmEntry(kp, kp.id, seedAnnounceKind, "someone-else", good.Payload, time.Now())
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	if code, _ := seedTestRegister(t, app, otherKey, swarmTestSecret); code != http.StatusBadRequest {
+		t.Fatalf("key naming another instance: status %d, want 400", code)
+	}
+	if code, _ := seedTestRegister(t, app, good, "wrong-secret-0123456789abcdef"); code != http.StatusForbidden {
+		t.Fatalf("wrong secret: status %d, want 403", code)
+	}
+	if code, _ := seedTestRegister(t, app, good, ""); code != http.StatusForbidden {
+		t.Fatalf("missing secret: status %d, want 403", code)
+	}
+	if _, err := app.queries.GetSwarmPeer(ctx, "peer-9"); err == nil {
+		t.Fatal("refused heartbeat filed a peer row")
+	}
+
+	self := seedTestHeartbeat(t, app.swarmID, "https://node.example.org")
+	if code, ok := seedTestRegister(t, app, self, swarmTestSecret); code != http.StatusOK || !ok {
+		t.Fatalf("self heartbeat: status %d ok %v", code, ok)
+	}
+	if _, err := app.queries.GetSwarmPeer(ctx, app.swarmID.id); err == nil {
+		t.Fatal("self heartbeat filed a peer row for self")
+	}
+}
+
+// TestSwarmSeedRegisterNeverForgives: re-registering cannot
+// approve or re-admit an excluded peer; the upsert only moves
+// address, key, and last-seen.
+func TestSwarmSeedRegisterNeverForgives(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	kp := swarmTestPeer(t, app, "peer-7")
+	if err := app.queries.SetSwarmPeerExcluded(ctx, db.SetSwarmPeerExcludedParams{InstanceID: "peer-7", Excluded: true, ExcludeNote: "manual test"}); err != nil {
+		t.Fatalf("exclude peer: %v", err)
+	}
+	code, ok := seedTestRegister(t, app, seedTestHeartbeat(t, kp, "https://peer-7.example"), swarmTestSecret)
+	if code != http.StatusOK || !ok {
+		t.Fatalf("re-register: status %d ok %v", code, ok)
+	}
+	peer, err := app.queries.GetSwarmPeer(ctx, "peer-7")
+	if err != nil {
+		t.Fatalf("peer lost: %v", err)
+	}
+	if !peer.Excluded {
+		t.Fatal("re-registering cleared an exclusion")
+	}
 }

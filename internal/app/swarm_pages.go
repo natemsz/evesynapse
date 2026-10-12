@@ -31,7 +31,7 @@ type swarmPeerRow struct {
 	Display     string
 	URL         string
 	ShowAddress bool   // the operator added it or seeded it: the address shows
-	Source      string // seed, gossip, manual
+	Source      string // seed, gossip (including pushed registrations), manual
 	Approved    bool
 	Excluded    bool
 	Role        string // Seed, Cache, Seed+Cache: what the peer functions as

@@ -898,26 +898,25 @@ func resolveJudgeScope(raw string, chars []db.Character) (judgeScope, []judgeOpt
 	return scope, options
 }
 
-// scopeStockNote says whose hangars the plan netted against,
-// including the version when the data isn't in yet.
+// scopeStockNote warns only when hangar data is missing: whose
+// stock the plan netted against is the normal state and needs
+// no announcement, but a plan computed without stock it should
+// have had must say so.
 func scopeStockNote(scope judgeScope, data plannerScopeData) string {
 	switch scope.Kind {
 	case "char":
-		name := scope.Chars[0].Name
 		if data.AssetsLoaded > 0 {
-			return fmt.Sprintf("Requirements are netted against what %s holds.", name)
+			return ""
 		}
-		return fmt.Sprintf("%s's hangars haven't synced yet — everything counts as to-buy for now.", name)
+		return fmt.Sprintf("%s's hangars haven't synced yet — everything counts as to-buy for now.", scope.Chars[0].Name)
 	case "tag":
 		n := len(scope.Chars)
 		if data.AssetsLoaded == 0 {
 			return fmt.Sprintf("None of your %q characters have hangar data yet — everything counts as to-buy for now.", scope.Tag)
 		}
-		note := fmt.Sprintf("Requirements are netted against the combined hangars of your %q characters (%d of them).", scope.Tag, n)
 		if data.AssetsLoaded < n {
-			note += fmt.Sprintf(" Hangar data is in for %d of %d so far.", data.AssetsLoaded, n)
+			return fmt.Sprintf("Hangar data is in for %d of %d of your %q characters so far — the rest counts as to-buy.", data.AssetsLoaded, n, scope.Tag)
 		}
-		return note
 	}
 	return ""
 }

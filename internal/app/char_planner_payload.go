@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"evesynapse/internal/buildplan"
+	"evesynapse/internal/piplan"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -78,12 +79,32 @@ type planNodeDTO struct {
 	DeltaOn   bool           `json:"deltaOn"`
 	Cycle     bool           `json:"cycle"`
 	Capped    bool           `json:"capped"`
+	Origin    string         `json:"origin,omitempty"`
+	OriginTier string        `json:"originTier,omitempty"`
 	Kids      []*planNodeDTO `json:"kids,omitempty"`
+}
+
+// planOriginClassifier classifies where a node comes from, for
+// the origin line on its card: PI commodities by name (the same
+// table the PI planner plans from, tier included), reaction
+// products by their SDE group. Anything else is unclassified.
+func planOriginClassifier(groups map[int64]string) func(int64, string) (string, string) {
+	return func(id int64, name string) (string, string) {
+		if tier := piplan.TierOf(name); tier != "" {
+			return "pi", string(tier)
+		}
+		switch groups[id] {
+		case "Advanced Materials", "Intermediate Materials", "Polymers",
+			"Composite Materials", "Molecular Materials", "Biochemical Materials":
+			return "reaction", ""
+		}
+		return "", ""
+	}
 }
 
 // planNodeToDTO converts one engine node. factor scales job
 // time (trained skills, manual override); money rounds to cents.
-func planNodeToDTO(n *buildplan.Node, nameOf func(int64) string, factor float64) *planNodeDTO {
+func planNodeToDTO(n *buildplan.Node, nameOf func(int64) string, factor float64, originOf func(int64, string) (string, string)) *planNodeDTO {
 	d := &planNodeDTO{
 		ID: n.TypeID, Name: nameOf(n.TypeID),
 		URL:   "/items/type/" + strconv.FormatInt(n.TypeID, 10) + "/",
@@ -100,8 +121,11 @@ func planNodeToDTO(n *buildplan.Node, nameOf func(int64) string, factor float64)
 		Delta: planCents(n.BvBDelta), DeltaOn: n.BvBApplicable,
 		Cycle: n.Cycle, Capped: n.DepthCapped,
 	}
+	if originOf != nil && n.Blueprint == nil {
+		d.Origin, d.OriginTier = originOf(n.TypeID, d.Name)
+	}
 	for _, c := range n.Children {
-		d.Kids = append(d.Kids, planNodeToDTO(c, nameOf, factor))
+		d.Kids = append(d.Kids, planNodeToDTO(c, nameOf, factor, originOf))
 	}
 	return d
 }
@@ -627,12 +651,12 @@ func planStockValue(stock map[int64]int64, unitOf func(int64) (float64, bool)) i
 // result: DTO tree, canonical preset totals with schedules,
 // and the run's inputs. prices selects the market source; the
 // unit function prices one type under it for shopping lines.
-func buildPlanPayload(res *buildplan.Result, productID int64, prices map[int64]esi.MarketPrice, unitOf func(int64) (float64, bool), factor float64, slots int, stock map[int64]int64, nameOf func(int64) string) *planPayload {
+func buildPlanPayload(res *buildplan.Result, productID int64, prices map[int64]esi.MarketPrice, unitOf func(int64) (float64, bool), factor float64, slots int, stock map[int64]int64, nameOf func(int64) string, originOf func(int64, string) (string, string)) *planPayload {
 	root := res.Root
 	p := &planPayload{
 		Product: productID, Name: nameOf(productID),
 		Produced: root.ProducedQty,
-		Root:     planNodeToDTO(root, nameOf, factor),
+		Root:     planNodeToDTO(root, nameOf, factor, originOf),
 	}
 	for _, preset := range []planPreset{planPresetFull, planPresetOptimized, planPresetBuyComponents} {
 		r := &planRollup{preset: preset, factor: factor, shop: make(map[int64]int64)}
@@ -883,6 +907,27 @@ func planAdjustedMap(guide map[int64]esi.MarketPrice) map[int64]float64 {
 // tree DTO, and canonical preset totals. It re-expands when the
 // market source differs from the guide the first pass used;
 // the memoized SDE source keeps that cheap and local.
+// planOriginOf builds the origin classifier for one plan: one
+// batched group lookup over the tree's types, then the pure
+// classifier. A failed lookup degrades to PI-only origins.
+func (app *Application) planOriginOf(ctx context.Context, root *buildplan.Node) func(int64, string) (string, string) {
+	seen := make(map[int64]bool)
+	var ids []int64
+	buildplan.Walk(root, func(n *buildplan.Node) {
+		if !seen[n.TypeID] {
+			seen[n.TypeID] = true
+			ids = append(ids, n.TypeID)
+		}
+	})
+	groups := make(map[int64]string, len(ids))
+	if rows, err := app.queries.ListSDETypeGroups(ctx, ids); err == nil {
+		for _, r := range rows {
+			groups[r.TypeID] = r.GroupName
+		}
+	}
+	return planOriginClassifier(groups)
+}
+
 func (app *Application) buildPlanPayloadView(ctx context.Context, q url.Values, src *sdePlannerSource, res *buildplan.Result, runs int64, overrides map[int64]int, owned map[int64]buildplan.OwnedBlueprint, stock map[int64]int64, scoped plannerScopeData, chars []db.Character, productID int64, systemID int64, systemName string, index float64, indexKnown bool, nameOf func(int64) string) (template.JS, *planPayload) {
 	guide := app.valuationPrices(ctx)
 	prices, market, marketName, pricesNote := app.planMarket(ctx, q, res, guide)
@@ -902,7 +947,7 @@ func (app *Application) buildPlanPayloadView(ctx context.Context, q url.Values, 
 	factor, timeNote := planTimeFactor(q.Get("timef"), app.planTimeSkills(ctx), scoped, chars)
 	slots, slotsNote := planSlots(q.Get("slots"), app.slotSkillIDs(ctx), scoped, chars)
 	unitOf := func(id int64) (float64, bool) { return buildplan.UnitPrice(prices, id) }
-	p := buildPlanPayload(res, productID, prices, unitOf, factor, slots, stock, nameOf)
+	p := buildPlanPayload(res, productID, prices, unitOf, factor, slots, stock, nameOf, app.planOriginOf(ctx, res.Root))
 	p.Market, p.MarketName = market, marketName
 	p.SystemID, p.SystemName = systemID, systemName
 	p.IndexKnown = indexKnown

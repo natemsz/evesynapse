@@ -126,7 +126,8 @@ func (p *swarmPair) pinA(t *testing.T) {
 	}
 }
 
-// pullStages asks A for keys and stages everything B is served.
+// pullStages asks A for keys and stages what B is served, through
+// the path the worker uses.
 func (p *swarmPair) pullStages(t *testing.T, keys []swarmPullKey) {
 	t.Helper()
 	ctx := context.Background()
@@ -137,11 +138,8 @@ func (p *swarmPair) pullStages(t *testing.T, keys []swarmPullKey) {
 	if len(entries) == 0 {
 		t.Fatalf("pull: no entries served")
 	}
-	now := time.Now().UTC()
-	for _, entry := range entries {
-		if err := p.b.stageSwarmEntry(ctx, entry, entry.Signer, now); err != nil {
-			t.Fatalf("stage %s %s: %v", entry.Kind, entry.Key, err)
-		}
+	if got := p.b.swarmStagePulled(ctx, "instance-a", p.urlA, keys, entries, time.Now().UTC()); got != len(entries) {
+		t.Fatalf("staged %d of %d served entries", got, len(entries))
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -264,5 +265,135 @@ func TestSwarmRemovedPeerPinsAfresh(t *testing.T) {
 	}
 	if peer.PublicKey != rotated.publicString() || peer.KeyConflictAt.Valid {
 		t.Fatalf("re-pinned row wrong: %+v", peer)
+	}
+}
+
+// signedBy signs one entry as kp, the way a peer serves it.
+func signedBy(t *testing.T, kp *swarmIdentity, kind, key, payload string, at time.Time) swarmSignedEntry {
+	t.Helper()
+	entry, err := signSwarmEntry(kp, kp.id, kind, key, payload, at)
+	if err != nil {
+		t.Fatalf("sign %s %s: %v", kind, key, err)
+	}
+	return entry
+}
+
+// stagedKeys lists what sits in staging, as kind/key.
+func stagedKeys(t *testing.T, app *Application) map[string]string {
+	t.Helper()
+	rows, err := app.queries.ListUncheckedStaging(context.Background(), 100)
+	if err != nil {
+		t.Fatalf("list staging: %v", err)
+	}
+	out := make(map[string]string, len(rows))
+	for _, row := range rows {
+		out[row.Kind+"/"+row.Key] = row.Payload
+	}
+	return out
+}
+
+// TestSwarmPullStagesOnlyWhatWasAsked: a peer answers a pull
+// with the key asked for and a good deal more, all correctly
+// signed. Only the asked key stages, with its first answer; the
+// rest is dropped and the response costs the peer one mark.
+func TestSwarmPullStagesOnlyWhatWasAsked(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	peer := swarmTestPeer(t, app, "peer-1")
+	other := swarmTestPeer(t, app, "peer-2")
+	now := time.Now().UTC()
+
+	asked := []swarmPullKey{
+		{Kind: swarmKindTypeName, Key: "34"},
+		{Kind: swarmKindTypeName, Key: "36"},
+	}
+	entries := []swarmSignedEntry{
+		signedBy(t, peer, swarmKindTypeName, "34", `{"type_id":34,"name":"Tritanium"}`, now),
+		// Never asked for: another type, and another kind.
+		signedBy(t, peer, swarmKindTypeName, "35", `{"type_id":35,"name":"Pyerite"}`, now),
+		signedBy(t, peer, swarmKindCorporation, "98000001", `{"id":98000001,"payload":"{}"}`, now),
+		// The asked key again, later and different: one answer per key.
+		signedBy(t, peer, swarmKindTypeName, "34", `{"type_id":34,"name":"Poison"}`, now.Add(time.Hour)),
+		// An asked key under someone else's signature: skipped, no blame.
+		signedBy(t, other, swarmKindTypeName, "36", `{"type_id":36,"name":"Mexallon"}`, now),
+	}
+	if got := app.swarmStagePulled(ctx, peer.id, "http://127.0.0.1:9", asked, entries, now); got != 1 {
+		t.Fatalf("staged %d entries, want 1", got)
+	}
+	staged := stagedKeys(t, app)
+	if len(staged) != 1 || staged[swarmKindTypeName+"/34"] != `{"type_id":34,"name":"Tritanium"}` {
+		t.Fatalf("staging holds %v, want only the first answer for type 34", staged)
+	}
+	row, err := app.queries.GetSwarmPeer(ctx, peer.id)
+	if err != nil {
+		t.Fatalf("read peer: %v", err)
+	}
+	if row.BadChecks != 1 {
+		t.Fatalf("serving peer has %d bad marks, want 1 for the response", row.BadChecks)
+	}
+	if bystander, err := app.queries.GetSwarmPeer(ctx, other.id); err != nil || bystander.BadChecks != 0 {
+		t.Fatalf("the signer named by a forwarded entry was blamed: %+v err=%v", bystander, err)
+	}
+}
+
+// TestSwarmPullCleanAnswerCostsNothing: an answer holding only
+// what was asked stages it all and leaves the ledger alone.
+func TestSwarmPullCleanAnswerCostsNothing(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	peer := swarmTestPeer(t, app, "peer-1")
+	now := time.Now().UTC()
+	asked := []swarmPullKey{{Kind: swarmKindTypeName, Key: "34"}, {Kind: swarmKindTypeName, Key: "35"}}
+	entries := []swarmSignedEntry{
+		signedBy(t, peer, swarmKindTypeName, "35", `{"type_id":35,"name":"Pyerite"}`, now),
+		signedBy(t, peer, swarmKindTypeName, "34", `{"type_id":34,"name":"Tritanium"}`, now),
+	}
+	if got := app.swarmStagePulled(ctx, peer.id, "http://127.0.0.1:9", asked, entries, now); got != 2 {
+		t.Fatalf("staged %d entries, want 2", got)
+	}
+	row, err := app.queries.GetSwarmPeer(ctx, peer.id)
+	if err != nil || row.BadChecks != 0 {
+		t.Fatalf("a clean answer marked the peer: %+v err=%v", row, err)
+	}
+}
+
+// TestSwarmPullOverHTTPDropsUnasked: the same rule end to end.
+// A peer's /swarm/pull hands back the asked record and one
+// nobody asked for; the urgent single-key pull stages one.
+func TestSwarmPullOverHTTPDropsUnasked(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	peer, err := mintSwarmIdentity()
+	if err != nil {
+		t.Fatalf("mint peer: %v", err)
+	}
+	peer.id = "peer-http"
+	now := time.Now().UTC()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/swarm/pull" {
+			http.NotFound(w, r)
+			return
+		}
+		writeSwarmJSON(w, map[string]any{"entries": []swarmSignedEntry{
+			signedBy(t, peer, swarmKindTypeName, "34", `{"type_id":34,"name":"Tritanium"}`, now),
+			signedBy(t, peer, swarmKindTypeName, "35", `{"type_id":35,"name":"Pyerite"}`, now),
+		}})
+	}))
+	t.Cleanup(srv.Close)
+	if _, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
+		InstanceID: peer.id, BaseUrl: srv.URL, PublicKey: peer.publicString(),
+		Source: "manual", FirstSeen: now,
+	}); err != nil {
+		t.Fatalf("pin peer: %v", err)
+	}
+	if err := app.queries.SetSwarmPeerApproved(ctx, db.SetSwarmPeerApprovedParams{InstanceID: peer.id, Approved: true}); err != nil {
+		t.Fatalf("approve peer: %v", err)
+	}
+	if got := app.swarmPullOne(ctx, swarmKindTypeName, "34"); got != 1 {
+		t.Fatalf("pull staged %d entries, want 1", got)
+	}
+	staged := stagedKeys(t, app)
+	if _, ok := staged[swarmKindTypeName+"/35"]; ok || len(staged) != 1 {
+		t.Fatalf("staging holds %v, want only type 34", staged)
 	}
 }

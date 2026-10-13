@@ -625,29 +625,58 @@ func (app *Application) swarmPullOne(ctx context.Context, kind, key string) int 
 		logging.Errorf("swarm: pull peers: %v", err)
 		return 0
 	}
-	staged := 0
 	for _, p := range peers {
 		if !swarmPeerPullable(p.InstanceID, p.GoodChecks, p.BadChecks) {
 			continue
 		}
-		entries, err := app.swarmCli.pullEntries(ctx, p.BaseUrl, []swarmPullKey{{Kind: kind, Key: key}})
+		keys := []swarmPullKey{{Kind: kind, Key: key}}
+		entries, err := app.swarmCli.pullEntries(ctx, p.BaseUrl, keys)
 		if err != nil {
 			app.addSwarmCounter(ctx, swarmCounterPullsFailed, 1)
 			continue
 		}
 		app.addSwarmCounter(ctx, swarmCounterPullsOK, 1)
-		now := time.Now()
-		for _, entry := range entries {
-			if entry.Signer != p.InstanceID {
-				continue
-			}
-			if err := app.stageSwarmEntry(ctx, entry, p.InstanceID, now); err != nil {
-				logging.Warnf("swarm: pull %s: %v", p.BaseUrl, err)
-				continue
-			}
-			staged++
+		return app.swarmStagePulled(ctx, p.InstanceID, p.BaseUrl, keys, entries, time.Now())
+	}
+	return 0
+}
+
+// swarmStagePulled stages what one peer answered a pull with,
+// and only that: an entry is kept when it names a key this pull
+// asked the peer for, is signed by the peer itself, and is the
+// first answer for its key. Everything else in the response is
+// dropped unread — data moves on request, so a peer cannot hand
+// over records nobody asked it for. Entries under another
+// signer are skipped without blame (a forwarder cannot spend
+// another signer's reputation, or its own on another's lies);
+// unasked-for or repeated keys are the serving peer's own doing
+// and cost it one flat mark for the response. It returns how
+// many entries staged.
+func (app *Application) swarmStagePulled(ctx context.Context, peerID, baseURL string, asked []swarmPullKey, entries []swarmSignedEntry, now time.Time) int {
+	waiting := make(map[swarmPullKey]bool, len(asked))
+	for _, k := range asked {
+		waiting[k] = true
+	}
+	staged, unasked := 0, 0
+	for _, entry := range entries {
+		if entry.Signer != peerID {
+			continue
 		}
-		return staged
+		k := swarmPullKey{Kind: entry.Kind, Key: entry.Key}
+		if !waiting[k] {
+			unasked++
+			continue
+		}
+		delete(waiting, k)
+		if err := app.stageSwarmEntry(ctx, entry, peerID, now); err != nil {
+			logging.Warnf("swarm: pull %s: %v", baseURL, err)
+			continue
+		}
+		staged++
+	}
+	if unasked > 0 {
+		logging.Warnf("swarm: pull %s: dropped %d entries the pull did not ask for", baseURL, unasked)
+		app.countSwarmShapeReject(ctx, peerID)
 	}
 	return staged
 }
@@ -738,10 +767,9 @@ func (app *Application) swarmSuppressFetch(ctx context.Context, kind, key string
 }
 
 // swarmPull asks approved peers for the wanted keys and stages
-// what comes back. A peer may only serve under its own pinned
-// identity: entries signed by anyone else are skipped, so a
-// forwarder cannot spend another signer's reputation (or its
-// own, on another's lies). Seed-only peers are directories,
+// what they answer with, through swarmStagePulled: only keys
+// this pull asked for, only under the serving peer's own pinned
+// identity. Seed-only peers are directories,
 // not sources — the worker signs under its fixed "seed"
 // identity and holds no data, so pulling it would spend one of
 // the cycle's peer slots learning nothing. A directory that
@@ -773,14 +801,7 @@ func (app *Application) swarmPull(ctx context.Context, now time.Time) {
 			continue
 		}
 		app.addSwarmCounter(ctx, swarmCounterPullsOK, 1)
-		for _, entry := range entries {
-			if entry.Signer != p.InstanceID {
-				continue
-			}
-			if err := app.stageSwarmEntry(ctx, entry, p.InstanceID, now); err != nil {
-				logging.Warnf("swarm: pull %s: %v", p.BaseUrl, err)
-			}
-		}
+		app.swarmStagePulled(ctx, p.InstanceID, p.BaseUrl, keys, entries, now)
 	}
 }
 

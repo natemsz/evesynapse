@@ -41,7 +41,7 @@ function install(payload, opts) {
   const win = {
     location: { href: "https://x.test/planner/?product=1", search: "?product=1", pathname: "/planner/" },
     history: {},
-    matchMedia: function () { return { matches: false }; },
+    matchMedia: opts.matchMedia || function () { return { matches: false }; },
     scrollTo: function () {}
   };
   global.document = doc;
@@ -150,6 +150,43 @@ test("capital-scale plan renders every view on first load", async function () {
   // (1h of a 2h elapsed) trips the bottleneck flag.
   assert.ok(els["plan-map"].innerHTML.indexOf("plan-chip") !== -1, "map cards carry a state chip");
   assert.ok(els["plan-map"].innerHTML.indexOf("BOTTLENECK") !== -1, "map flags the bottleneck");
+});
+
+test("decision map renders as stage columns by depth", async function () {
+  const els = install(capitalPayload());
+  await waitFor(function () {
+    return els["plan-map"] && els["plan-map"].innerHTML.indexOf("plan-node") !== -1;
+  }, "map render");
+  const map = els["plan-map"].innerHTML;
+  // Columnar, like the mockup: one stage per depth, root first.
+  assert.ok(map.indexOf("plan-map-cols") !== -1, "map is columnar");
+  const s0 = map.indexOf('data-depth="0"');
+  const s1 = map.indexOf('data-depth="1"');
+  assert.ok(s0 !== -1 && map.indexOf("Final assembly") !== -1, "root stage labeled Final assembly");
+  assert.ok(s1 !== -1 && map.indexOf("Components") !== -1, "second stage labeled Components");
+  assert.ok(s0 < s1, "stages run shallow to deep, left to right");
+  // Branches start collapsed: depth 2 exists in the payload but
+  // must not render until its parent is expanded.
+  assert.ok(map.indexOf('data-depth="2"') === -1, "no third stage before any expansion");
+  assert.ok(map.indexOf("Sub 0.0") === -1, "collapsed subs are not rendered");
+  // Cards know their parent (the map's connective tissue), and a
+  // crowded stage switches to the dense card size.
+  assert.ok(map.indexOf('data-parent="0"') !== -1, "component cards name the root as parent");
+  assert.ok(map.indexOf("plan-stage-dense") !== -1, "the 30-card stage renders dense");
+});
+
+test("narrow screens keep the classic indented card stack", async function () {
+  const els = install(capitalPayload(), {
+    matchMedia: function () { return { matches: true, addEventListener: function () {} }; }
+  });
+  await waitFor(function () {
+    return els["plan-map"] && els["plan-map"].innerHTML.indexOf("plan-node") !== -1;
+  }, "map render");
+  const map = els["plan-map"].innerHTML;
+  assert.ok(map.indexOf("plan-map-cols") === -1, "no stage columns on a narrow screen");
+  assert.ok(map.indexOf("plan-stage") === -1, "no stage markup in list mode");
+  assert.ok(map.indexOf('data-pad-left="22"') !== -1, "depth reads from the indent in list mode");
+  assert.ok(map.indexOf("plan-chip") !== -1, "list cards keep their state chips");
 });
 
 test("one throwing view does not blank the others", async function () {

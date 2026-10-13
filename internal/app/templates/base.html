@@ -56,8 +56,8 @@
         <summary data-tip="Fitting"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg nav-icon-fitting" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.6 14.4 8.2v5l5.8 5.2v1.8l-5.8-1.6-1.2 2.4h-2.4l-1.2-2.4-5.8 1.6v-1.8l5.8-5.2v-5Z"/><path d="M12 8.8v3"/></g></svg></span><span class="nav-label">Fitting</span></summary>
         <div class="menu">
           <a href="/fittings/"{{if eq .NavPage "fittings.html"}} class="active"{{end}}>Ship Workbench</a>
-          <a href="/fittings/saved/"{{if eq .NavPage "fittings_saved.html"}} class="active"{{end}}>Ship Loadouts</a>
-          <a href="/fittings/public/"{{if eq .NavPage "fittings_public.html"}} class="active"{{end}}>Public Fits</a>
+          <a href="/fittings/saved/"{{if eq .NavPage "fittings_saved.html"}} class="active"{{end}}>My Loadouts</a>
+          <a href="/fittings/public/"{{if eq .NavPage "fittings_public.html"}} class="active"{{end}}>Public Loadouts Browser</a>
         </div>
       </details>
       <details class="branch{{if eq .Section "industry"}} active{{end}}"{{if and (eq .Section "industry") (ne .NavState "rail")}} open{{end}} data-nav-category="industry">
@@ -92,7 +92,7 @@
           <a href="/corporations/structures/"{{if eq .NavPage "corp_structures.html"}} class="active"{{end}}>Structures</a>
           <a href="/corporations/killmails/"{{if eq .NavPage "killmails.html"}} class="active"{{end}}>Killmails</a>
           <a href="/doctrines/"{{if or (eq .NavPage "doctrines.html") (eq .NavPage "doctrine.html")}} class="active"{{end}}>Doctrines</a>
-          <a href="/doctrines/fits/"{{if eq .NavPage "corp_fits.html"}} class="active"{{end}}>Corporate Fits</a>
+          <a href="/doctrines/fits/"{{if eq .NavPage "corp_fits.html"}} class="active"{{end}}>Corporate Loadouts</a>
           <a href="/srp/"{{if eq .NavPage "srp.html"}} class="active"{{end}}>Ship replacement</a>
           <a href="/discord/servers"{{if eq .NavPage "discord_servers.html"}} class="active"{{end}}>Discord server</a>
           <a href="/groups/"{{if eq .NavPage "groups.html"}} class="active"{{end}}>Groups</a>

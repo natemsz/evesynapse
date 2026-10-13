@@ -466,7 +466,7 @@ func TestPlannerSettingsModal(t *testing.T) {
 		`aria-haspopup="dialog"`,
 		`id="plan-settings-modal" hidden`,
 		`id="plan-settings-close"`,
-		`class="plan-settings-fields"`,
+		`class="plan-settings-fields plan-setgrid"`,
 		`name="runs"`,
 		`name="market"`,
 		`id="system-q" name="system" value="Jita"`,

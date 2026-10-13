@@ -43,6 +43,8 @@ type fitCard struct {
 	Updated     time.Time
 
 	tags []string
+
+	moduleHay string // lowercased module and charge names, for the with/without filters
 }
 
 // facetChip is one link in a browser: a filter value with its count,
@@ -83,6 +85,9 @@ type fitBrowser struct {
 	Sort    string
 	Sorts   []browseSort // the first is the default
 	Filters []fitFilter
+	// With/without module free-text filters, the public browser's pair.
+	Include string
+	Exclude string
 }
 
 type formField struct{ Name, Value string }
@@ -91,6 +96,8 @@ type formField struct{ Name, Value string }
 type fitBrowserView struct {
 	Path        string
 	Q           string
+	Include     string
+	Exclude     string
 	Hidden      []formField // what a search has to carry along
 	SuggestURL  string
 	Placeholder string
@@ -125,6 +132,8 @@ func (b *fitBrowser) address(changes map[string]string) string {
 		}
 	}
 	set("q", b.Q)
+	set("include", b.Include)
+	set("exclude", b.Exclude)
 	if len(b.Sorts) > 0 && b.Sort != b.Sorts[0].Key {
 		set("sort", b.Sort)
 	} else {
@@ -151,7 +160,7 @@ func hasFold(values []string, want string) bool {
 // run searches, filters and sorts the fits, and builds the page's
 // chips from what is left.
 func (b *fitBrowser) run(cards []fitCard) *fitBrowserView {
-	view := &fitBrowserView{Path: b.Path, Q: b.Q, Total: len(cards), ClearURL: b.Path, Roles: opFleetRoles}
+	view := &fitBrowserView{Path: b.Path, Q: b.Q, Include: b.Include, Exclude: b.Exclude, Total: len(cards), ClearURL: b.Path, Roles: opFleetRoles}
 	if len(b.Fixed) > 0 {
 		view.ClearURL = b.Path + "?" + b.Fixed.Encode()
 	}
@@ -176,6 +185,28 @@ func (b *fitBrowser) run(cards []fitCard) *fitBrowserView {
 		hay := strings.ToLower(strings.Join([]string{c.Name, c.Ship, c.Hull, c.Doctrine, c.Category, c.By, strings.Join(c.tags, "\n")}, "\n"))
 		if needle == "" || strings.Contains(hay, needle) {
 			found = append(found, c)
+		}
+	}
+	// The module filters run with the search: a fit is in only if it
+	// carries the included module and none of the excluded one.
+	inc, exc := strings.ToLower(strings.TrimSpace(b.Include)), strings.ToLower(strings.TrimSpace(b.Exclude))
+	if inc != "" || exc != "" {
+		kept := found[:0]
+		for _, c := range found {
+			if inc != "" && !strings.Contains(c.moduleHay, inc) {
+				continue
+			}
+			if exc != "" && strings.Contains(c.moduleHay, exc) {
+				continue
+			}
+			kept = append(kept, c)
+		}
+		found = kept
+		if inc != "" {
+			view.Active = append(view.Active, facetChip{Label: "With module: " + b.Include, URL: b.address(map[string]string{"include": ""}), On: true})
+		}
+		if exc != "" {
+			view.Active = append(view.Active, facetChip{Label: "Without module: " + b.Exclude, URL: b.address(map[string]string{"exclude": ""}), On: true})
 		}
 	}
 	passes := func(c *fitCard, except string) bool {

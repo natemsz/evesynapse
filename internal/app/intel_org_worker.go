@@ -35,6 +35,50 @@ func (app *Application) refreshAllianceRecords(ctx context.Context, allowance *f
 	return app.drainAlliancePass(ctx, allowance, maxOrgDrainsPerCycle, time.Now().UTC())
 }
 
+// allianceSeedInterval is how often the worker re-lists EVE's
+// alliances. New alliances form a few times a week, and the list
+// call is one fetch, so a daily pass keeps the universe complete
+// at no real cost.
+const allianceSeedInterval = 24 * time.Hour
+
+// seedAllianceUniverse queues a public record for every alliance
+// in EVE, not just the ones somebody has visited: one list call
+// (GET /alliances/) and one bulk queue write. Seeded wants carry
+// the lowest closeness, so anything a person is actually looking
+// at still drains first, and the upsert never demotes an existing
+// want. The gate is in memory; a restart simply re-seeds once,
+// which the idempotent upsert makes harmless.
+func (app *Application) seedAllianceUniverse(ctx context.Context, allowance *fetchBudget) (int, bool) {
+	app.allianceSeedMu.Lock()
+	due := time.Since(app.lastAllianceSeed) >= allianceSeedInterval
+	app.allianceSeedMu.Unlock()
+	if !due {
+		return 0, false
+	}
+	if !allowance.take() {
+		return 0, false
+	}
+	var ids []int64
+	if err := app.esi.Get(ctx, "", "/alliances/", &ids); err != nil {
+		if errors.Is(err, esi.ErrErrorLimit) {
+			return 0, true
+		}
+		logging.Errorf("worker: alliance seeding: list alliances: %v", err)
+		return 0, false
+	}
+	now := time.Now().UTC()
+	if err := app.queries.UpsertAllianceWants(ctx, db.UpsertAllianceWantsParams{
+		AllianceIds: ids, Priority: wantHop, NotedAt: now,
+	}); err != nil {
+		logging.Errorf("worker: alliance seeding: queue alliances: %v", err)
+		return 0, false
+	}
+	app.allianceSeedMu.Lock()
+	app.lastAllianceSeed = now
+	app.allianceSeedMu.Unlock()
+	return len(ids), false
+}
+
 // drainCorporationPass fills up to limit due corporation records.
 // Callers hold the shared fetch lock (the cycle wrappers above,
 // the urgent drain).
@@ -164,12 +208,11 @@ func (app *Application) drainCorporationRecord(ctx context.Context, id int64, al
 }
 
 // drainAllianceRecord assembles and stores one alliance's public
-// record: the profile plus the member-corporation list, with as
-// many member names baked in as the pass budget allows (the rest
-// resolve through the corporation queue, like pilot employment
-// histories). A 404 or 422 settles the record as 'missing':
-// both are ESI's definitive answer that the ID is not an
-// alliance.
+// record: the profile plus the member-corporation list, with every
+// member name baked in through bulk name resolution, and a queued
+// corporation record for each member. A 404 or 422 settles the
+// record as 'missing': both are ESI's definitive answer that the
+// ID is not an alliance.
 func (app *Application) drainAllianceRecord(ctx context.Context, id int64, allowance *fetchBudget, now time.Time) (settled bool, limited bool) {
 
 	if !allowance.take() {
@@ -207,25 +250,22 @@ func (app *Application) drainAllianceRecord(ctx context.Context, id int64, allow
 			// store the profile with an empty list.
 			logging.Warnf("worker: alliance records: fetch member corporations for %d: %v (storing profile only)", id, err)
 		} else {
-			nameFetches := 0
+			// Every member name in one pass: the bulk names
+			// endpoint resolves a whole roster (up to 1000 IDs)
+			// per call, where the old pass baked a capped few
+			// names through one fetch apiece and left the rest
+			// to trickle in through the corporation queue.
+			names := app.resolveCorpNames(ctx, allowance, corpIDs)
 			for _, corpID := range corpIDs {
-				member := allianceMemberCorp{ID: corpID}
-				if name, ok := app.esi.CachedCorpName(corpID); ok && name != "" {
-					member.Name = name
-				} else if nameFetches < maxAllianceMemberNamesPerDrain && allowance.take() {
-					nameFetches++
-					var corp esi.Corporation
-					if err := app.esi.Get(ctx, "", fmt.Sprintf("/corporations/%d/", corpID), &corp); err != nil {
-						if errors.Is(err, esi.ErrErrorLimit) {
-							return false, true
-						}
-						logging.Errorf("worker: alliance records: fetch member corporation %d for alliance %d: %v", corpID, id, err)
-					} else {
-						member.Name = corp.Name
-						app.esi.StoreCorpName(corpID, corp.Name)
-					}
-				}
-				payload.Corporations = append(payload.Corporations, member)
+				payload.Corporations = append(payload.Corporations, allianceMemberCorp{ID: corpID, Name: names[corpID]})
+			}
+			// The roster doubles as the corporation universe's
+			// index: queue a public record for every member so
+			// corporation pages are warm before anyone visits.
+			if err := app.queries.UpsertCorporationWants(ctx, db.UpsertCorporationWantsParams{
+				CorporationIds: corpIDs, Priority: wantHop, NotedAt: now,
+			}); err != nil {
+				logging.Errorf("worker: alliance records: queue member corporations for %d: %v", id, err)
 			}
 		}
 	}

@@ -668,9 +668,13 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 	c.pass("draining pilot records", func() (int, bool) {
 		return app.refreshPilotRecords(ctx, c.allowance)
 	})
-	// Public organization records: corporations and
-	// alliances someone followed a name to. Public endpoints,
-	// same cycle allowance.
+	// Public organization records: the whole alliance universe
+	// is seeded daily so records exist before anyone visits,
+	// then corporations and alliances drain from their queues.
+	// Public endpoints, same cycle allowance.
+	c.pass("seeding alliance universe", func() (int, bool) {
+		return app.seedAllianceUniverse(ctx, c.allowance)
+	})
 	c.pass("draining corporation records", func() (int, bool) {
 		return app.refreshCorporationRecords(ctx, c.allowance)
 	})

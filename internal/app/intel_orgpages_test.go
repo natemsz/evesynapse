@@ -11,6 +11,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"io"
 	"net/http"
@@ -56,8 +57,10 @@ type orgStub struct {
 	corps           map[int64]string // corporation id -> profile payload
 	alliances       map[int64]string // alliance id -> profile payload
 	members         map[int64]string // alliance id -> [corporation ids] payload
+	allianceList    string           // GET /alliances/ payload (every alliance id)
 	unprocessableID int64            // nonzero: this profile id answers 422 (never that entity)
 	calls           int
+	namesCalls      int // POST /universe/names/ requests served
 }
 
 func (s *orgStub) respond(status int, body string) *http.Response {
@@ -81,6 +84,49 @@ func (s *orgStub) RoundTrip(req *http.Request) (*http.Response, error) {
 	path := req.URL.Path
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	switch {
+	case len(parts) == 2 && parts[0] == "universe" && parts[1] == "names":
+		// POST /universe/names/: ESI answers 404 for the whole
+		// batch when even one ID does not resolve.
+		s.namesCalls++
+		raw, err := io.ReadAll(req.Body)
+		if err != nil {
+			return s.respond(http.StatusBadRequest, `{"error":"bad body"}`), nil
+		}
+		var ids []int64
+		if err := json.Unmarshal(raw, &ids); err != nil {
+			return s.respond(http.StatusBadRequest, `{"error":"bad ids"}`), nil
+		}
+		type nameEntry struct {
+			ID       int64  `json:"id"`
+			Name     string `json:"name"`
+			Category string `json:"category"`
+		}
+		var entries []nameEntry
+		for _, id := range ids {
+			profile, isCorp := s.corps[id]
+			category := "corporation"
+			if !isCorp {
+				profile, isCorp = s.alliances[id]
+				category = "alliance"
+			}
+			if !isCorp {
+				return s.respond(http.StatusNotFound, `{"error":"no such id"}`), nil
+			}
+			var prof struct {
+				Name string `json:"name"`
+			}
+			if err := json.Unmarshal([]byte(profile), &prof); err != nil || prof.Name == "" {
+				return s.respond(http.StatusInternalServerError, `{"error":"bad fixture"}`), nil
+			}
+			entries = append(entries, nameEntry{ID: id, Name: prof.Name, Category: category})
+		}
+		out, _ := json.Marshal(entries)
+		return s.respond(http.StatusOK, string(out)), nil
+	case len(parts) == 1 && parts[0] == "alliances":
+		if s.allianceList != "" {
+			return s.respond(http.StatusOK, s.allianceList), nil
+		}
+		return s.respond(http.StatusNotFound, `{"error":"no list"}`), nil
 	case len(parts) == 2 && parts[0] == "corporations":
 		if id := pathID(parts[1]); id != 0 && id == s.unprocessableID {
 			return s.respond(http.StatusUnprocessableEntity, `{"error":"no such corporation"}`), nil
@@ -595,5 +641,86 @@ func TestOrgLabelLiveRegions(t *testing.T) {
 	code, body = getPage(t, app, cookie, "/labels/alliance-fragment?id=99000099")
 	if code != http.StatusOK || !strings.Contains(body, `data-poll-state="ready">Alliance #99000099<`) {
 		t.Fatalf("alliance fragment (missing): %d %q", code, body)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Universe ingest: bulk member names + full alliance seeding.
+// ---------------------------------------------------------------------------
+
+func TestAllianceDrainBakesEveryMemberName(t *testing.T) {
+	ctx := context.Background()
+	stub := &orgStub{
+		corps:     map[int64]string{},
+		alliances: map[int64]string{},
+		members:   map[int64]string{},
+	}
+	var memberIDs []string
+	// Fifteen members: more than the old per-drain name cap (12),
+	// so a capped drain leaves the last three nameless.
+	for i := 1; i <= 15; i++ {
+		id := int64(98000000 + i)
+		stub.corps[id] = fmt.Sprintf(`{"name":"Member Corp %02d","ticker":"M%02d","member_count":1,"ceo_id":1,"tax_rate":0.1}`, i, i)
+		memberIDs = append(memberIDs, strconv.FormatInt(id, 10))
+	}
+	stub.alliances[99000001] = `{"name":"Fixture Alliance","ticker":"FALL","creator_id":93300001,` +
+		`"creator_corporation_id":98000001,"executor_corporation_id":98000002,"date_founded":"2010-01-02T03:04:05Z"}`
+	stub.members[99000001] = "[" + strings.Join(memberIDs, ",") + "]"
+
+	app, _, q := buildCorpTestApp(t, stub)
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
+
+	if code, _ := getPage(t, app, cookie, "/alliance/?alliance=99000001"); code != http.StatusOK {
+		t.Fatalf("alliance enqueue page: status %d", code)
+	}
+	drained, limited := app.refreshAllianceRecords(ctx, &fetchBudget{left: 120})
+	if limited || drained != 1 {
+		t.Fatalf("alliance drain: drained=%d limited=%v, want 1/false", drained, limited)
+	}
+	if stub.namesCalls != 1 {
+		t.Fatalf("names endpoint calls = %d, want 1 bulk call for the whole roster", stub.namesCalls)
+	}
+	// The roster queued a corporation record for every member.
+	if _, err := q.GetCorporationRecord(ctx, 98000015); err != nil {
+		t.Fatalf("member corporation 98000015 not queued by the drain: %v", err)
+	}
+
+	code, body := getPage(t, app, cookie, "/alliance/?alliance=99000001")
+	if code != http.StatusOK {
+		t.Fatalf("alliance page: status %d", code)
+	}
+	mustContain(t, "/alliance/ (full bake)", body,
+		"Member Corp 01", "Member Corp 13", "Member Corp 15")
+	if strings.Contains(body, "Corporation #9800") {
+		t.Error("alliance page still shows an unresolved member corporation")
+	}
+}
+
+func TestSeedAllianceUniverseQueuesEveryAlliance(t *testing.T) {
+	ctx := context.Background()
+	stub := &orgStub{allianceList: `[99000001, 99000002]`}
+	app, _, q := buildCorpTestApp(t, stub)
+
+	seeded, limited := app.seedAllianceUniverse(ctx, &fetchBudget{left: 10})
+	if limited || seeded != 2 {
+		t.Fatalf("seed: seeded=%d limited=%v, want 2/false", seeded, limited)
+	}
+	for _, id := range []int64{99000001, 99000002} {
+		rec, err := q.GetAllianceRecord(ctx, id)
+		if err != nil || rec.State != orgStatePending {
+			t.Fatalf("seeded alliance %d: %+v err=%v, want pending", id, rec, err)
+		}
+	}
+	// The daily gate: a second pass in the same cycle window is a
+	// no-op and spends no fetch.
+	calls := stub.calls
+	seeded, _ = app.seedAllianceUniverse(ctx, &fetchBudget{left: 10})
+	if seeded != 0 || stub.calls != calls {
+		t.Fatalf("second seed: seeded=%d calls %d->%d, want 0 and no fetch", seeded, calls, stub.calls)
 	}
 }

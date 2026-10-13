@@ -45,7 +45,7 @@
   <div class="fit-vsep" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" data-rot="{{printf "%.0f" .Rot}}" aria-hidden="true"></div>
   {{end}}
   {{range .Slots}}
-  {{if .Filled}}<span class="fit-vslot filled{{if .State}} st-{{.State}}{{end}}" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" title="{{.Name}}{{if .ChargeName}} — loaded: {{.ChargeName}}{{end}}">
+  {{if .Filled}}<span class="fit-vslot filled{{if .State}} st-{{.State}}{{end}}" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}}" data-tip-meta="{{.Meta}}" data-tip-lines="{{.TipLines}}"{{if .ChargeName}} data-tip-charge="Loaded: {{.ChargeName}}"{{end}}>
     <img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{if .ChargeID}}<span class="fit-vammo"><img src="https://images.evetech.net/types/{{.ChargeID}}/icon?size=32" alt="{{.ChargeName}}" draggable="false"></span>{{end}}
   </span>{{end}}
   {{end}}
@@ -58,7 +58,7 @@
       <h4>{{.Label}}{{if .HasMax}} <small class="{{if .Over}}fit-over{{end}}">{{.Used}}/{{.Max}}{{if .Over}} — doesn't fit{{end}}</small>{{end}}</h4>
       <div class="fit-chips">
         {{range .Chips}}
-        <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" title="{{.Name}}">
+        <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" data-tip-name="{{.Name}}" data-tip-lines="{{.TipLines}}">
           <span class="fit-chip-name">{{.Name}}</span>
           {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
         </span>

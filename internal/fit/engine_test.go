@@ -931,3 +931,26 @@ func TestFitNormalizeModuleState(t *testing.T) {
 		t.Errorf("bogus state = %q, want active", got)
 	}
 }
+
+// TestFitEnginePerWeaponFigures pins the per-weapon record
+// the module tooltip reads: one gun's own DPS and volley,
+// not the rack total, keyed by the weapon's state key.
+func TestFitEnginePerWeaponFigures(t *testing.T) {
+	fx := punisherFixture()
+	items := []ItemInput{
+		{TypeID: 2889}, {TypeID: 2889}, {TypeID: 2889},
+		{TypeID: 519}, {TypeID: 20349}, {TypeID: 377}, {TypeID: 400},
+	}
+	res := Compute(fx.snap, 597, items, map[int64]int{3300: 5, 3302: 5},
+		map[int64]int64{2889: 185}, nil)
+	mult := 3.465 * 1.1 * 1.25
+	cycle := 3750 * 0.895 * 0.90 / 1000
+	key := StateAttrKey(2889, "")
+	near(t, "per-gun volley", res.WeaponVolley[key], 12*mult, 0.001)
+	near(t, "per-gun DPS", res.WeaponDPS[key], 12*mult/cycle, 0.001)
+	near(t, "per-gun DPS x3 = rack total", 3*res.WeaponDPS[key], res.TurretDPS, 0.001)
+	// A module that deals no damage records nothing.
+	if _, ok := res.WeaponDPS[StateAttrKey(519, "")]; ok {
+		t.Errorf("non-weapon type 519 has a per-weapon DPS entry")
+	}
+}

@@ -139,6 +139,7 @@ const (
 	AttrCPUOutput          = 48
 	AttrCPU                = 50
 	AttrSpeed              = 51
+	AttrMaxRange           = 54
 	AttrCapacitorRecharge  = 55
 	AttrDamageMultiplier   = 64
 	AttrShieldBonus        = 68
@@ -157,6 +158,8 @@ const (
 	AttrDamageExplosive    = 116
 	AttrDamageKinetic      = 117
 	AttrDamageThermal      = 118
+	AttrFalloff            = 158
+	AttrTrackingSpeed      = 160
 	AttrMaxLockedTargets   = 192
 	AttrScanRadar          = 208
 	AttrScanLadar          = 209
@@ -790,6 +793,14 @@ type Result struct {
 	// StateAttrKey — so a tooltip can show an overheated
 	// module's heated numbers rather than its resting ones.
 	StateAttrs map[string]map[int64]float64
+	// WeaponDPS and WeaponVolley hold one fitted weapon's own
+	// damage figures (a single module instance, not the rack
+	// total), keyed by StateAttrKey — the module tooltip reads
+	// its own gun's numbers from here. Recorded by offense()
+	// alongside the totals so the tooltip can never drift
+	// from the math the stats panel shows.
+	WeaponDPS    map[string]float64
+	WeaponVolley map[string]float64
 
 	// Unmodeled lists modifier shapes the engine deliberately
 	// skipped (deduped, sorted): domains/funcs it cannot target,

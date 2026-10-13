@@ -4,6 +4,149 @@
 // the re-rendered workbench fragment, which swaps in place. The
 // canonical document rides back on the fragment root, so the
 // editor state always matches what the server calculated.
+// --- shared module tooltip ------------------------------------
+// One tooltip builder for every surface that shows a fitted
+// module: the workbench editor and the read-only workbenches
+// (a public fit's page). The content is identical everywhere —
+// name, group, meta, the server's computed stat rows
+// (data-tip-lines: "label|value|class" rows, the class good or
+// bad when the effective value beats or trails the module's
+// base value), and the loaded charge. State buttons render
+// only when the caller passes a state handler AND the element
+// carries states; read-only surfaces do neither, so their
+// tooltips are information-only by construction.
+var FitTipUI = (function () {
+  function build(slot, opts) {
+    opts = opts || {};
+    var name = slot.getAttribute("data-tip-name") || "";
+    if (!name) return null;
+    var sub = slot.getAttribute("data-tip-sub") || "";
+    var tipEl = document.createElement("div");
+    tipEl.className = "fit-tip";
+    tipEl.setAttribute("role", "tooltip");
+    var h = document.createElement("div");
+    h.className = "fit-tip-name";
+    h.textContent = name;
+    tipEl.appendChild(h);
+    if (sub) {
+      var s = document.createElement("div");
+      s.className = "fit-tip-sub";
+      s.textContent = sub;
+      tipEl.appendChild(s);
+    }
+    var linesAttr = slot.getAttribute("data-tip-lines") || "";
+    if (linesAttr) {
+      var rows = document.createElement("div");
+      rows.className = "fit-tip-lines";
+      linesAttr.split(";").forEach(function (row) {
+        var f = row.split("|");
+        if (f.length < 2 || !f[0]) return;
+        var r = document.createElement("div");
+        r.className = "fit-tip-line";
+        var k = document.createElement("span");
+        k.className = "fit-tip-k";
+        k.textContent = f[0];
+        var v = document.createElement("span");
+        v.className = "fit-tip-v" + (f[2] ? " " + f[2] : "");
+        v.textContent = f[1];
+        r.appendChild(k);
+        r.appendChild(v);
+        rows.appendChild(r);
+      });
+      tipEl.appendChild(rows);
+    } else {
+      var lines = [];
+      var meta = slot.getAttribute("data-tip-meta") || "";
+      var cpu = slot.getAttribute("data-tip-cpu") || "";
+      var pg = slot.getAttribute("data-tip-pg") || "";
+      var stat = slot.getAttribute("data-tip-stat") || "";
+      if (meta) lines.push(meta);
+      if (cpu) lines.push(cpu);
+      if (pg) lines.push(pg);
+      if (stat) lines.push(stat);
+      if (lines.length) {
+        var d = document.createElement("div");
+        d.className = "fit-tip-stats";
+        d.textContent = lines.join(" · ");
+        tipEl.appendChild(d);
+      }
+    }
+    var charge = slot.getAttribute("data-tip-charge") || "";
+    if (charge) {
+      var c = document.createElement("div");
+      c.className = "fit-tip-stats";
+      c.textContent = charge;
+      tipEl.appendChild(c);
+    }
+    // Module states: the server lists only the states this
+    // module can take; the current one is highlighted. Tapping
+    // a state applies it through the caller's handler and
+    // re-simulates; the tooltip re-opens on the new state
+    // once the workbench re-renders.
+    var tipStates = slot.getAttribute("data-tip-states") || "";
+    var tipState = slot.getAttribute("data-tip-state") || "";
+    var tipKey = slot.getAttribute("data-tip-key") || "";
+    if (opts.onState && tipStates && tipKey) {
+      var labels = { offline: "Offline", online: "Online", active: "Active", overheated: "Overheat" };
+      var row = document.createElement("div");
+      row.className = "fit-tip-states";
+      row.setAttribute("role", "group");
+      row.setAttribute("aria-label", "Module state");
+      tipStates.split(",").forEach(function (s) {
+        if (!labels[s]) return;
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "fit-tip-state" + (s === tipState ? " on" : "");
+        b.textContent = labels[s];
+        b.setAttribute("aria-pressed", s === tipState ? "true" : "false");
+        (function (st, btn) {
+          btn.addEventListener("click", function (ev) {
+            ev.stopPropagation();
+            // Optimistic highlight; the re-render confirms it.
+            var sibs = row.querySelectorAll(".fit-tip-state");
+            for (var k = 0; k < sibs.length; k++) {
+              sibs[k].classList.remove("on");
+              sibs[k].setAttribute("aria-pressed", "false");
+            }
+            btn.classList.add("on");
+            btn.setAttribute("aria-pressed", "true");
+            opts.onState(tipKey, st);
+          });
+        })(s, b);
+        row.appendChild(b);
+      });
+      tipEl.appendChild(row);
+    }
+    var x = document.createElement("button");
+    x.className = "fit-tip-x";
+    x.setAttribute("aria-label", "Close");
+    x.textContent = "×";
+    x.addEventListener("click", function (ev) { ev.stopPropagation(); if (opts.onClose) opts.onClose(); });
+    tipEl.appendChild(x);
+    return tipEl;
+  }
+  // Anchors the (already appended) tooltip to its slot: below
+  // it when there is room, otherwise above; clamped inside the
+  // workbench so it can never cover the page header. The
+  // workbench is the offset parent (position: relative).
+  function place(tipEl, slot, wb) {
+    var wr = wb.getBoundingClientRect();
+    var sr = slot.getBoundingClientRect();
+    var tw = tipEl.offsetWidth || 190, th = tipEl.offsetHeight || 110;
+    var cx = sr.left - wr.left + sr.width / 2;
+    var below = sr.bottom - wr.top + 10;
+    var above = sr.top - wr.top - th - 10;
+    var ty = (below + th <= wr.height) ? below : Math.max(8, above);
+    var tx = cx - tw / 2;
+    if (tx < 8) tx = 8;
+    if (tx + tw > wr.width - 8) tx = wr.width - tw - 8;
+    if (tx < 8) tx = 8;
+    tipEl.style.left = Math.round(tx) + "px";
+    tipEl.style.top = Math.round(ty) + "px";
+  }
+  return { build: build, place: place };
+})();
+
 (function () {
   var editor = document.getElementById("fit-editor");
   if (!editor || !window.fetch) return;
@@ -23,6 +166,8 @@
   var pickerHint = document.getElementById("fit-picker-hint");
   var pickerList = document.getElementById("fit-picker-list");
   var pickerFamily = document.getElementById("fit-picker-family");
+  var pickerQ = document.getElementById("fit-picker-q");
+  var pickerTitle = document.getElementById("fit-picker-title");
   var saveBtn = document.getElementById("fit-save");
   var exportBtn = document.getElementById("fit-export-btn");
   var exportOut = document.getElementById("fit-eft-out");
@@ -682,7 +827,7 @@
       }
     }
     if (modInput) modInput.value = it.name;
-    openPicker("any");
+    openPicker("any", it.name);
   }
 
   var shipSearch = makeSuggester(shipInput, shipList, {
@@ -715,7 +860,7 @@
       }
       // Anything else (e.g. cargo items): jump the picker to it.
       if (modInput) modInput.value = it.name;
-      openPicker("any");
+      openPicker("any", it.name);
     }
   });
 
@@ -909,18 +1054,33 @@
   })();
 
   // --- module picker -------------------------------------------
-  function openPicker(family) {
+  // The picker is a modal: it opens over the workbench,
+  // scoped to the family of the slot (or search result) that
+  // summoned it, with its own quick search. What it lists is
+  // what can go on this hull — the family feed plus the
+  // ship-restriction filter in applyFittable — regardless of
+  // remaining CPU/PG, which the workbench reports after the
+  // fact like the game does.
+  function openPicker(family, seedQ) {
     if (!picker) return;
     picker.hidden = false;
-    if (pickerFamily && family) pickerFamily.value = family;
+    if (pickerFamily && family) {
+      pickerFamily.value = family;
+      if (pickerTitle) {
+        var opt = pickerFamily.options[pickerFamily.selectedIndex];
+        pickerTitle.textContent = opt ? "Add module — " + opt.textContent : "Add module";
+      }
+    }
+    if (pickerQ) pickerQ.value = seedQ || "";
     queryPicker();
-    picker.scrollIntoView({ block: "nearest" });
+    var q = pickerQ || modInput;
+    if (q && q.focus) q.focus();
   }
   function closePicker() { if (picker) picker.hidden = true; }
   function queryPicker() {
     if (!pickerList) return;
     var family = pickerFamily ? pickerFamily.value : "any";
-    var q = modInput ? modInput.value.trim() : "";
+    var q = pickerQ ? pickerQ.value.trim() : (modInput ? modInput.value.trim() : "");
     fetch(pickerURL(family, q), {
       cache: "no-store", headers: { "Accept": "application/json" }
     }).then(function (resp) {
@@ -964,6 +1124,23 @@
   if (pickerFamily) pickerFamily.addEventListener("change", queryPicker);
   var pickerClose = document.getElementById("fit-picker-close");
   if (pickerClose) pickerClose.addEventListener("click", closePicker);
+  if (pickerQ) {
+    var pickerQTimer = null;
+    pickerQ.addEventListener("input", function () {
+      if (pickerQTimer) clearTimeout(pickerQTimer);
+      pickerQTimer = setTimeout(queryPicker, 160);
+    });
+  }
+  if (picker) {
+    // Backdrop click and Escape dismiss the modal, matching
+    // the app's other dialogs.
+    picker.addEventListener("click", function (ev) {
+      if (ev.target === picker) closePicker();
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape" && !picker.hidden) closePicker();
+    });
+  }
 
   // --- pointer drag and drop --------------------------------------
   // In-game behavior, on mouse AND touch: tap shows the tooltip
@@ -1043,6 +1220,9 @@
   function startPointerDrag(ev, d) {
     if (restrictionFor(d.typeID)) { dragState = null; return; }
     d.active = true;
+    // A drag out of the picker needs the workbench visible:
+    // the modal backdrop would swallow every drop target.
+    if (!d.fromFit && picker) picker.hidden = true;
     closeTip();
     try { d.el.setPointerCapture(ev.pointerId); } catch (e) { /* not critical */ }
     d.ghost = dragGhost(d);
@@ -1270,108 +1450,13 @@
   }
   function showTip(slot) {
     closeTip();
-    var name = slot.getAttribute("data-tip-name") || "";
-    var sub = slot.getAttribute("data-tip-sub") || "";
-    var meta = slot.getAttribute("data-tip-meta") || "";
-    var cpu = slot.getAttribute("data-tip-cpu") || "";
-    var pg = slot.getAttribute("data-tip-pg") || "";
-    var stat = slot.getAttribute("data-tip-stat") || "";
-    var charge = slot.getAttribute("data-tip-charge") || "";
     var wb = workbench();
-    if (!wb || !name) return;
-    tipEl = document.createElement("div");
-    tipEl.className = "fit-tip";
-    tipEl.setAttribute("role", "tooltip");
-    var h = document.createElement("div");
-    h.className = "fit-tip-name";
-    h.textContent = name;
-    tipEl.appendChild(h);
-    if (sub) {
-      var s = document.createElement("div");
-      s.className = "fit-tip-sub";
-      s.textContent = sub;
-      tipEl.appendChild(s);
-    }
-    var lines = [];
-    if (meta) lines.push(meta);
-    if (cpu) lines.push(cpu);
-    if (pg) lines.push(pg);
-    if (stat) lines.push(stat);
-    if (lines.length) {
-      var d = document.createElement("div");
-      d.className = "fit-tip-stats";
-      d.textContent = lines.join(" · ");
-      tipEl.appendChild(d);
-    }
-    if (charge) {
-      var c = document.createElement("div");
-      c.className = "fit-tip-stats";
-      c.textContent = charge;
-      tipEl.appendChild(c);
-    }
-    // Module states: the server lists only the states this
-    // module can take; the current one is highlighted. Tapping a
-    // state applies it and re-simulates; the tooltip re-opens on
-    // the new state once the workbench re-renders.
-    var tipStates = slot.getAttribute("data-tip-states") || "";
-    var tipState = slot.getAttribute("data-tip-state") || "";
-    var tipKey = slot.getAttribute("data-tip-key") || "";
-    if (tipStates && tipKey) {
-      var labels = { offline: "Offline", online: "Online", active: "Active", overheated: "Overheat" };
-      var row = document.createElement("div");
-      row.className = "fit-tip-states";
-      row.setAttribute("role", "group");
-      row.setAttribute("aria-label", "Module state");
-      tipStates.split(",").forEach(function (s) {
-        if (!labels[s]) return;
-        var b = document.createElement("button");
-        b.type = "button";
-        b.className = "fit-tip-state" + (s === tipState ? " on" : "");
-        b.textContent = labels[s];
-        b.setAttribute("aria-pressed", s === tipState ? "true" : "false");
-        (function (st, btn) {
-          btn.addEventListener("click", function (ev) {
-            ev.stopPropagation();
-            // Optimistic highlight; the re-render confirms it.
-            var sibs = row.querySelectorAll(".fit-tip-state");
-            for (var k = 0; k < sibs.length; k++) {
-              sibs[k].classList.remove("on");
-              sibs[k].setAttribute("aria-pressed", "false");
-            }
-            btn.classList.add("on");
-            btn.setAttribute("aria-pressed", "true");
-            setModuleState(tipKey, st);
-          });
-        })(s, b);
-        row.appendChild(b);
-      });
-      tipEl.appendChild(row);
-    }
-    var x = document.createElement("button");
-    x.className = "fit-tip-x";
-    x.setAttribute("aria-label", "Close");
-    x.textContent = "×";
-    x.addEventListener("click", function (ev) { ev.stopPropagation(); closeTip(); });
-    tipEl.appendChild(x);
-    // Anchor to the slot icon: below it when there is room,
-    // otherwise above; clamped inside the workbench so it can
-    // never cover the page header. The workbench is the offset
-    // parent (position: relative).
+    if (!wb) return;
+    tipEl = FitTipUI.build(slot, { onState: setModuleState, onClose: closeTip });
+    if (!tipEl) return;
     tipEl.style.visibility = "hidden";
     wb.appendChild(tipEl);
-    var wr = wb.getBoundingClientRect();
-    var sr = slot.getBoundingClientRect();
-    var tw = tipEl.offsetWidth || 190, th = tipEl.offsetHeight || 110;
-    var cx = sr.left - wr.left + sr.width / 2;
-    var below = sr.bottom - wr.top + 10;
-    var above = sr.top - wr.top - th - 10;
-    var ty = (below + th <= wr.height) ? below : Math.max(8, above);
-    var tx = cx - tw / 2;
-    if (tx < 8) tx = 8;
-    if (tx + tw > wr.width - 8) tx = wr.width - tw - 8;
-    if (tx < 8) tx = 8;
-    tipEl.style.left = Math.round(tx) + "px";
-    tipEl.style.top = Math.round(ty) + "px";
+    FitTipUI.place(tipEl, slot, wb);
     tipEl.style.visibility = "";
   }
   // Jumps to a weapon's ammunition select (from its slot badge).
@@ -1387,7 +1472,7 @@
   var tipHoverSlot = null;
   editor.addEventListener("mouseover", function (ev) {
     if (dragState && dragState.active) return; // no tooltips mid-drag
-    var slot = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot[data-tip-name]") : null;
+    var slot = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot[data-tip-name], .fit-chip[data-tip-name]") : null;
     if (slot && slot !== tipHoverSlot) {
       tipHoverSlot = slot;
       showTip(slot);
@@ -1406,7 +1491,7 @@
     }, 150);
   }
   editor.addEventListener("mouseout", function (ev) {
-    var slot = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot[data-tip-name]") : null;
+    var slot = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot[data-tip-name], .fit-chip[data-tip-name]") : null;
     if (slot && slot === tipHoverSlot) {
       scheduleTipClose();
     }
@@ -1658,4 +1743,77 @@
   sortSel.addEventListener("change", apply);
   if (inc) inc.addEventListener("input", apply);
   if (exc) exc.addEventListener("input", apply);
+})();
+
+// --- read-only workbench tooltips ---------------------------
+// A public fit's page renders the same workbench without the
+// editor, and the editor block above bails when there is no
+// #fit-editor — so read-only surfaces get their own wiring
+// here. It only ever touches .fit-ro elements, shows the
+// shared tooltip (FitTipUI) with no state handler, and is
+// delegated from the document so content swaps can't
+// detach it.
+(function () {
+  var tipEl = null;
+  var hoverEl = null;
+  var closeTimer = null;
+  function closeTip() {
+    if (tipEl && tipEl.parentNode) tipEl.parentNode.removeChild(tipEl);
+    tipEl = null;
+    hoverEl = null;
+  }
+  function showTip(el) {
+    closeTip();
+    var wb = el.closest ? el.closest(".fit-wb") : null;
+    if (!wb) return;
+    tipEl = FitTipUI.build(el, { onClose: closeTip });
+    if (!tipEl) return;
+    hoverEl = el;
+    tipEl.style.visibility = "hidden";
+    wb.appendChild(tipEl);
+    FitTipUI.place(tipEl, el, wb);
+    tipEl.style.visibility = "";
+  }
+  function scheduleClose() {
+    if (closeTimer) clearTimeout(closeTimer);
+    closeTimer = setTimeout(function () {
+      closeTimer = null;
+      if (tipEl && !tipEl.matches(":hover")) closeTip();
+    }, 150);
+  }
+  function roTarget(ev) {
+    var t = ev.target && ev.target.closest ? ev.target.closest(".fit-ro [data-tip-name]") : null;
+    if (t && t.closest && t.closest("#fit-editor")) return null;
+    return t;
+  }
+  document.addEventListener("mouseover", function (ev) {
+    var el = roTarget(ev);
+    if (el) {
+      if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
+      if (el !== hoverEl) showTip(el);
+      return;
+    }
+    if (tipEl && ev.target && ev.target.closest && ev.target.closest(".fit-tip")) {
+      if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
+    }
+  });
+  document.addEventListener("mouseout", function (ev) {
+    var el = roTarget(ev);
+    if (el && el === hoverEl) { scheduleClose(); return; }
+    if (tipEl && ev.target && ev.target.closest && ev.target.closest(".fit-tip")) {
+      var to = ev.relatedTarget;
+      if (!to || !to.closest || !to.closest(".fit-tip")) scheduleClose();
+    }
+  });
+  document.addEventListener("click", function (ev) {
+    var el = roTarget(ev);
+    if (el) {
+      if (hoverEl === el && tipEl) closeTip(); else showTip(el);
+      return;
+    }
+    if (tipEl && !(ev.target && ev.target.closest && ev.target.closest(".fit-tip"))) closeTip();
+  });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape") closeTip();
+  });
 })();

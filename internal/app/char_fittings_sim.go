@@ -198,10 +198,11 @@ func fitFamilyFitted(family string) bool {
 // is the uniform resolved state when every instance shares one
 // ("" when mixed or stateless) — for the state visuals.
 type fitSlotChip struct {
-	TypeID int64
-	Name   string
-	Qty    int
-	State  string
+	TypeID   int64
+	Name     string
+	Qty      int
+	State    string
+	TipLines string // serialized fitTipLine rows for the tooltip
 }
 
 // fitSlotGroup is one row of the slot grid.
@@ -229,6 +230,7 @@ type fitVisualSlot struct {
 	PG         string  // ("10 MW")
 	Meta       string  // ("Tech II")
 	Stat       string  // headline effective stat ("Strength 78%")
+	TipLines   string  // serialized fitTipLine rows for the rich tooltip
 	ChargeID   int64   // loaded charge type, 0 when the weapon is unloaded
 	ChargeName string  // loaded charge name for the badge + tooltip
 	// State is the module's resolved state ("" for stateless
@@ -391,6 +393,193 @@ func fitVisualMetaOf(snap *fit.Snapshot, eff map[int64]float64, typeID int64) st
 	return ""
 }
 
+// fitTipLine is one label/value row of a module tooltip.
+// Class is "" (effective matches base), "good" (effective is
+// an improvement on the module's base value) or "bad" (it is
+// worse); the client colors the value by it.
+type fitTipLine struct {
+	Label string
+	Value string
+	Class string
+}
+
+// fitTipLinesString serializes tooltip rows for the data
+// attribute the client renders: "Label|Value|Class" rows
+// joined by ";". Labels and values are composed here from
+// formatted numbers and units, so they never contain either
+// separator.
+func fitTipLinesString(lines []fitTipLine) string {
+	parts := make([]string, len(lines))
+	for i, l := range lines {
+		parts[i] = l.Label + "|" + l.Value + "|" + l.Class
+	}
+	return strings.Join(parts, ";")
+}
+
+// fitTipClass colors an effective value against its base:
+// higherBetter says which direction counts as an improvement
+// (more range is good; less CPU is good). A relative shift
+// under half a percent reads as unchanged.
+func fitTipClass(eff, base float64, higherBetter bool) string {
+	if base == 0 || eff == 0 {
+		return ""
+	}
+	d := (eff - base) / math.Abs(base)
+	if math.Abs(d) < 0.005 {
+		return ""
+	}
+	if (d > 0) == higherBetter {
+		return "good"
+	}
+	return "bad"
+}
+
+// fitEffAttrs resolves a fitted type's effective attributes
+// for a state: the engine's per-state fold when the module
+// is in a non-default state, else its resting fold, else the
+// raw SDE row when the engine has nothing (snap may be nil).
+func fitEffAttrs(res *fit.Result, snap *fit.Snapshot, typeID int64, state string) map[int64]float64 {
+	eff := res.ItemAttrs[typeID]
+	if state != "" {
+		if sa := res.StateAttrs[fit.StateAttrKey(typeID, state)]; sa != nil {
+			eff = sa
+		}
+	}
+	if eff == nil && snap != nil {
+		eff = snap.Attrs[typeID]
+	}
+	return eff
+}
+
+// fitTipCycle is a module's cycle time in seconds from an
+// attribute set (duration, falling back to speed — the same
+// rule the engine's cycleSeconds applies).
+func fitTipCycle(attrs map[int64]float64) float64 {
+	if attrs == nil {
+		return 0
+	}
+	if d := attrs[fit.AttrDuration]; d > 0 {
+		return d / 1000
+	}
+	if s := attrs[fit.AttrSpeed]; s > 0 {
+		return s / 1000
+	}
+	return 0
+}
+
+// fitTipDamage sums a charge's four damage attributes in an
+// attribute set (the engine's damageAttrs, base or folded).
+func fitTipDamage(attrs map[int64]float64) float64 {
+	if attrs == nil {
+		return 0
+	}
+	return attrs[fit.AttrDamageEM] + attrs[fit.AttrDamageExplosive] +
+		attrs[fit.AttrDamageKinetic] + attrs[fit.AttrDamageThermal]
+}
+
+// fitTipLines composes a fitted module's tooltip rows from
+// its effective attributes against its base (raw SDE) row:
+// what the module does with this pilot's skills and hull
+// bonuses, colored where that differs from the unmodified
+// module. Weapon damage comes from the engine's per-weapon
+// record, so the figures are the stats panel's own. Rows
+// are ordered the way a pilot reads them — output, reach,
+// cost — and capped so the tooltip stays a quick look.
+func fitTipLines(res *fit.Result, snap *fit.Snapshot, doc *fitDoc, typeID int64, state string, eff map[int64]float64) []fitTipLine {
+	if eff == nil {
+		return nil
+	}
+	var base map[int64]float64
+	if snap != nil {
+		base = snap.Attrs[typeID]
+	}
+	var lines []fitTipLine
+	add := func(label, value, class string) {
+		if len(lines) < 8 {
+			lines = append(lines, fitTipLine{label, value, class})
+		}
+	}
+	chargeID := doc.Charges[typeID]
+	if chargeID > 0 {
+		key := fit.StateAttrKey(typeID, state)
+		dps, volley := res.WeaponDPS[key], res.WeaponVolley[key]
+		if dps == 0 && state != "" {
+			// The engine records an unspecified state under
+			// the default key; the slot's normalized state
+			// may name it ("active").
+			dps, volley = res.WeaponDPS[fit.StateAttrKey(typeID, "")], res.WeaponVolley[fit.StateAttrKey(typeID, "")]
+		}
+		if dps > 0 {
+			// The good/bad tint is only exact for turrets:
+			// a launcher's folded damage also carries the
+			// pilot factor, which a base comparison here
+			// cannot separate from the module's own change.
+			dpsClass, volleyClass := "", ""
+			if snap != nil && snap.HasEffect(typeID, fit.EffectTurretFitted) {
+				cb := snap.Attrs[chargeID]
+				baseVolley := fitTipDamage(cb) * base[fit.AttrDamageMultiplier]
+				if bc := fitTipCycle(base); bc > 0 {
+					dpsClass = fitTipClass(dps, baseVolley/bc, true)
+				}
+				volleyClass = fitTipClass(volley, baseVolley, true)
+			}
+			add("DPS", fitFmt1(dps), dpsClass)
+			add("Volley", fitFmt0(volley), volleyClass)
+		}
+	}
+	if rng := eff[fit.AttrMaxRange]; rng > 0 {
+		add("Optimal", fitVisualNum(rng/1000)+" km", fitTipClass(rng, base[fit.AttrMaxRange], true))
+	}
+	if fall := eff[fit.AttrFalloff]; fall > 0 {
+		add("Falloff", fitVisualNum(fall/1000)+" km", fitTipClass(fall, base[fit.AttrFalloff], true))
+	}
+	if trk := eff[fit.AttrTrackingSpeed]; trk > 0 {
+		add("Tracking", fitTipNum3(trk), fitTipClass(trk, base[fit.AttrTrackingSpeed], true))
+	}
+	if neut := eff[fit.AttrEnergyNeutralizerAmount]; neut > 0 {
+		add("Neuts", fitVisualNum(neut)+" GJ", fitTipClass(neut, base[fit.AttrEnergyNeutralizerAmount], true))
+	}
+	for _, repAttr := range []int64{fit.AttrShieldBonus, fit.AttrArmorDamageAmount} {
+		if amt := eff[repAttr]; amt > 0 {
+			if cyc := fitTipCycle(eff); cyc > 0 {
+				class := ""
+				if bc := fitTipCycle(base); bc > 0 {
+					class = fitTipClass(amt/cyc, base[repAttr]/bc, true)
+				}
+				add("Reps", fitVisualNum(amt/cyc)+" HP/s", class)
+			}
+			break
+		}
+	}
+	if sf := eff[fit.AttrSpeedFactor]; sf != 0 {
+		label := "Boost"
+		class := fitTipClass(sf, base[fit.AttrSpeedFactor], true)
+		if sf < 0 {
+			label = "Strength"
+			class = fitTipClass(-sf, -base[fit.AttrSpeedFactor], true)
+		}
+		add(label, fitVisualNum(math.Abs(sf))+"%", class)
+	}
+	if capNeed := eff[fit.AttrCapacitorNeed]; capNeed > 0 {
+		add("Cap", fitVisualNum(capNeed)+" GJ", fitTipClass(capNeed, base[fit.AttrCapacitorNeed], false))
+	}
+	if cpu := eff[fit.AttrCPU]; cpu > 0 {
+		add("CPU", fitVisualNum(cpu)+" tf", fitTipClass(cpu, base[fit.AttrCPU], false))
+	}
+	if pg := eff[fit.AttrPower]; pg > 0 {
+		add("PG", fitVisualNum(pg)+" MW", fitTipClass(pg, base[fit.AttrPower], false))
+	}
+	return lines
+}
+
+// fitTipNum3 formats a small decimal (tracking speeds) with
+// up to three decimal places, trailing zeros trimmed.
+func fitTipNum3(v float64) string {
+	s := strconv.FormatFloat(v, 'f', 3, 64)
+	s = strings.TrimRight(s, "0")
+	return strings.TrimSuffix(s, ".")
+}
+
 // fitBuildVisual shapes the visual fit display from the engine
 // result and the document's own lines: one circle per slot,
 // filled circles carrying their module, positioned on arcs around
@@ -476,15 +665,7 @@ func fitBuildVisual(res *fit.Result, doc *fitDoc, snap *fit.Snapshot, familyOf m
 				// bonuses applied), not raw SDE rows. A module in
 				// a non-default state reads its own state's
 				// numbers (an overheated module shows heated).
-				eff := res.ItemAttrs[pm.TypeID]
-				if pm.State != "" {
-					if sa := res.StateAttrs[fit.StateAttrKey(pm.TypeID, pm.State)]; sa != nil {
-						eff = sa
-					}
-				}
-				if eff == nil && snap != nil {
-					eff = snap.Attrs[pm.TypeID]
-				}
+				eff := fitEffAttrs(res, snap, pm.TypeID, pm.State)
 				if eff != nil {
 					if cpu := eff[fit.AttrCPU]; cpu > 0 {
 						s.CPU = fitVisualNum(cpu) + " tf"
@@ -510,6 +691,7 @@ func fitBuildVisual(res *fit.Result, doc *fitDoc, snap *fit.Snapshot, familyOf m
 					s.ChargeID = chID
 					s.ChargeName = nameOf(chID)
 				}
+				s.TipLines = fitTipLinesString(fitTipLines(res, snap, doc, pm.TypeID, pm.State, eff))
 			}
 			v.Slots = append(v.Slots, s)
 		}
@@ -1042,7 +1224,8 @@ func fitBuildGroups(res *fit.Result, doc *fitDoc, snap *fit.Snapshot, familyOf m
 		if !uniform {
 			st = ""
 		}
-		chips[fam] = append(chips[fam], fitSlotChip{TypeID: it.TypeID, Name: nameOf(it.TypeID), Qty: it.Qty, State: st})
+		chips[fam] = append(chips[fam], fitSlotChip{TypeID: it.TypeID, Name: nameOf(it.TypeID), Qty: it.Qty, State: st,
+			TipLines: fitTipLinesString(fitTipLines(res, snap, doc, it.TypeID, st, fitEffAttrs(res, snap, it.TypeID, st)))})
 	}
 	for fam := range chips {
 		sort.Slice(chips[fam], func(i, j int) bool { return chips[fam][i].Name < chips[fam][j].Name })

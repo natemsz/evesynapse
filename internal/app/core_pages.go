@@ -43,6 +43,8 @@ type pageData struct {
 	Industry          *industryView
 	IndustryChars     []assetCharLink
 	Planner           *plannerView
+	PIPlanner         *piPlannerView
+	PIPlannerChars    []assetCharLink
 	IntelWars         *warsView
 	IntelIncursions   *incursionsView
 	IntelFW           *fwView
@@ -203,7 +205,7 @@ func sectionForPage(page string) string {
 		return "pilot"
 	case "fittings.html", "fittings_saved.html", "fit_shopping.html", "fittings_public.html", "fit_public.html":
 		return "fitting"
-	case "industry.html", "planner.html", "planets.html":
+	case "industry.html", "planner.html", "planets.html", "piplanner.html":
 		return "industry"
 	case "market.html", "market_scanner.html", "market_tradefinder.html", "market_leaderboard.html",
 		"market_restock.html",
@@ -237,7 +239,7 @@ var (
 // pageSharedTemplates are the files every full page is parsed with:
 // the layout and the partials any page may use. One list, so that
 // nothing else parsing a page into the same cache can leave one out.
-var pageSharedTemplates = []string{"templates/base.html", "templates/notifybell.html", "templates/balancechart.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/locked.html"}
+var pageSharedTemplates = []string{"templates/base.html", "templates/notifybell.html", "templates/balancechart.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/locked.html", "templates/industrytabs.html"}
 
 // parsedTemplate returns the cached set for page, parsing it (with
 // the shared files first) the first time it is asked for.

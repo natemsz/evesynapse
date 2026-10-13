@@ -711,6 +711,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/industry", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleIndustry)
+		r.Get("/pi/", app.handlePIPlanner)
 	})
 
 	r.Route("/planner", func(r chi.Router) {

@@ -1,6 +1,7 @@
 {{define "title"}}Build Planner{{end}}
 {{define "content"}}
 <h1><span class="gt">Build Planner</span></h1>
+{{template "industrytabs" .}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 

@@ -66,6 +66,7 @@
           <a href="/industry/"{{if eq .NavPage "industry.html"}} class="active"{{end}}>Industry</a>
           <a href="/planner/"{{if eq .NavPage "planner.html"}} class="active"{{end}}>Build Planner</a>
           <a href="/planets/"{{if eq .NavPage "planets.html"}} class="active"{{end}}>Planetary Industry</a>
+          <a href="/industry/pi/"{{if eq .NavPage "piplanner.html"}} class="active"{{end}}>PI Planner</a>
         </div>
       </details>
       <details class="branch{{if eq .Section "market"}} active{{end}}"{{if and (eq .Section "market") (ne .NavState "rail")}} open{{end}} data-nav-category="market">
@@ -195,6 +196,7 @@
 <script src="/static/swap.js?v={{.AssetVersion}}" defer></script>
 {{if eq .Section "fitting"}}<script src="/static/fit.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if eq .NavPage "planner.html"}}<script src="/static/plan.js?v={{.AssetVersion}}" defer></script>{{end}}
+{{if eq .NavPage "piplanner.html"}}<script src="/static/pi.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if .NotifySettings}}<script src="/static/push.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if .LoggedIn}}
 <div class="quickjump" id="quickjump" hidden>

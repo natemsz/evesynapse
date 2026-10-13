@@ -219,7 +219,7 @@ func publicFitCardOf(row db.ListPublicFitsRow, userID int64) publicFitCard {
 		card.AddField = "public"
 	}
 	if card.PriceKnown {
-		card.PriceLine = esi.FormatISK(row.TotalPrice)
+		card.PriceLine = esi.FormatISK(row.TotalPrice) + " ISK"
 	}
 	if card.Ship == "" {
 		card.Ship = "Type #" + idString(row.ShipTypeID)

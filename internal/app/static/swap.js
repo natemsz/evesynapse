@@ -118,6 +118,12 @@
     var out = [];
     for (i = 0; i < needed.length; i++) {
       var key = scriptKey(needed[i]);
+      // Edge-injected scripts (Rocket Loader, the challenge
+      // platform) ride along in the fetched HTML but are never
+      // in the live document — the loader takes its own tag back
+      // out once it has run — and they are not the page's to
+      // load. Counting them here failed every swap.
+      if (key.indexOf("/cdn-cgi/") === 0) continue;
       if (!seen[key] && out.indexOf(key) === -1) out.push(key);
     }
     return out;

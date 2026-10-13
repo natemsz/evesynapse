@@ -562,16 +562,18 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/items", func(r chi.Router) {
 		// The browser is public: market browse data is shared by
 		// nature and the render depends on no session or
-		// character state. Everything else under /items/ stays
-		// behind the login.
+		// character state. The type page joins the landing as
+		// public (it is the item link target site-wide and the
+		// sitemap's indexed item page); the rest under /items/
+		// stays behind the login.
 		r.Get("/", app.handleItems)
+		r.Get("/type/{typeID}/", app.handleItemType)
 		r.Group(func(r chi.Router) {
 			r.Use(app.requireAuth)
 			r.Get("/search.json", app.handleItemSearchJSON)
 			r.Get("/description-fragment", app.handleItemDescriptionFragment)
 			r.Get("/category/{categoryID}/", app.handleItemsCategory)
 			r.Get("/group/{groupID}/", app.handleItemsGroup)
-			r.Get("/type/{typeID}/", app.handleItemType)
 		})
 	})
 
@@ -654,9 +656,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// rows only, never per-user data.
 	r.Get("/robots.txt", app.handleRobots)
 	r.Get("/sitemap.xml", app.handleSitemap)
-	r.Route("/item", func(r chi.Router) {
-		r.Get("/{typeID}/", app.handlePublicItem)
-	})
+
 	r.Route("/ships", func(r chi.Router) {
 		r.Get("/{typeID}/", app.handlePublicShip)
 	})

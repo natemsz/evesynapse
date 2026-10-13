@@ -1,9 +1,9 @@
 package app
 
-// Anonymous Item Browser: /items/ serves logged-out traffic while
-// the rest of /items/ stays behind the login. Market browse data
-// is shared by nature, so the anonymous render depends on no
-// session or character state.
+// Anonymous Item Browser: /items/ and the type page serve
+// logged-out traffic while the rest of /items/ stays behind the
+// login. Market browse data is shared by nature, so the
+// anonymous render depends on no session or character state.
 
 import (
 	"net/http"
@@ -36,12 +36,19 @@ func TestItemsBrowserAnonymous(t *testing.T) {
 		"Fixture Minerals",
 	)
 
+	// The type page is public too: it is the item link target
+	// site-wide and the sitemap's indexed item page.
+	code, body = getSwapPage(t, app, nil, "/items/type/34/")
+	if code != http.StatusOK {
+		t.Fatalf("GET /items/type/34/ (anonymous): status %d, want 200", code)
+	}
+	mustContain(t, "/items/type/34/ (anonymous)", body, "Tritanium")
+
 	// Everything else under /items/ still bounces logged-out
 	// visitors home.
 	for _, path := range []string{
 		"/items/category/900/",
 		"/items/group/910/",
-		"/items/type/34/",
 		"/items/search.json?q=tri",
 		"/items/description-fragment?type=34",
 	} {

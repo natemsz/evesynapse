@@ -17,7 +17,17 @@ ON CONFLICT (id) DO UPDATE SET
     instance_id = excluded.instance_id,
     public_key = excluded.public_key,
     sealed_seed = excluded.sealed_seed,
-    created_at = excluded.created_at;
+    created_at = excluded.created_at,
+    next_gossip_at = NULL;
+
+-- When the next gossip round is due: drawn once when a round
+-- ends, kept across restarts. NULL (or no identity row yet)
+-- means due now.
+-- name: GetSwarmNextGossip :one
+SELECT next_gossip_at FROM swarm_identity LIMIT 1;
+
+-- name: SetSwarmNextGossip :exec
+UPDATE swarm_identity SET next_gossip_at = $1;
 
 -- A sighting records a peer once and pins the key it arrived
 -- with. The first key seen for an instance ID is the one kept:

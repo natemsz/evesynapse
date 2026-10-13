@@ -286,25 +286,42 @@ func (app *Application) swarmCycle(ctx context.Context, allowance *fetchBudget, 
 	return app.swarmSpotCheck(ctx, allowance, characters, now)
 }
 
-// swarmGossipDue reports whether the membership round runs: the
-// first run (bootstrap), or the interval since the last one,
-// jittered ±25% so a whole swarm does not gossip in lockstep.
-func (app *Application) swarmGossipDue(now time.Time) bool {
+// swarmGossipDue reports whether the membership round runs:
+// when no round has run yet (bootstrap), or once the time drawn
+// at the end of the last round has come. That time is read from
+// the database on first use, so a restart keeps the schedule
+// instead of gossiping at once.
+func (app *Application) swarmGossipDue(ctx context.Context, now time.Time) bool {
 	app.swarmMu.Lock()
 	defer app.swarmMu.Unlock()
-	if app.swarmLastGossip.IsZero() {
-		return true
+	if !app.swarmNextLoaded {
+		// No identity row, or no time drawn yet, reads as due.
+		if next, err := app.queries.GetSwarmNextGossip(ctx); err == nil && next.Valid {
+			app.swarmNextGossip = next.Time
+		} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			logging.Errorf("swarm: read next gossip time: %v", err)
+		}
+		app.swarmNextLoaded = true
 	}
-	interval := time.Duration(app.cfg.swarm.gossipHours) * time.Hour
-	jitter := interval / 4
-	next := app.swarmLastGossip.Add(interval - jitter + time.Duration(rand.Int64N(int64(2*jitter+1))))
-	return !now.Before(next)
+	return app.swarmNextGossip.IsZero() || !now.Before(app.swarmNextGossip)
 }
 
-func (app *Application) swarmGossipDone(now time.Time) {
+// swarmGossipDone ends a round by drawing the next one's time:
+// the interval, jittered ±25% so a whole swarm does not gossip
+// in lockstep. The draw happens once, here, and the result is
+// kept: drawing afresh on every check would fire at the first
+// check to draw low, bunching every round near the early edge.
+func (app *Application) swarmGossipDone(ctx context.Context, now time.Time) {
+	interval := time.Duration(app.cfg.swarm.gossipHours) * time.Hour
+	jitter := interval / 4
+	next := now.Add(interval - jitter + time.Duration(rand.Int64N(int64(2*jitter+1))))
 	app.swarmMu.Lock()
-	defer app.swarmMu.Unlock()
-	app.swarmLastGossip = now
+	app.swarmNextGossip = next
+	app.swarmNextLoaded = true
+	app.swarmMu.Unlock()
+	if err := app.queries.SetSwarmNextGossip(ctx, timeSet(next)); err != nil {
+		logging.Errorf("swarm: keep next gossip time: %v", err)
+	}
 }
 
 // swarmGossip exchanges membership with seeds and known peers.
@@ -313,10 +330,10 @@ func (app *Application) swarmGossipDone(now time.Time) {
 // secret-holder, allowlist waits for the operator. Excluded
 // peers are neither contacted nor propagated.
 func (app *Application) swarmGossip(ctx context.Context, now time.Time) {
-	if !app.swarmGossipDue(now) {
+	if !app.swarmGossipDue(ctx, now) {
 		return
 	}
-	defer app.swarmGossipDone(now)
+	defer app.swarmGossipDone(ctx, now)
 	type contact struct {
 		url, id, key string
 	}

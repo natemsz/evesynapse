@@ -174,6 +174,12 @@ var pgSwarmKeyPinSchema string
 //go:embed schema_pg/035_swarm_provenance.sql
 var pgSwarmProvenanceSchema string
 
+// Step 036: the next gossip time, drawn once a round and kept
+// across restarts.
+//
+//go:embed schema_pg/036_swarm_next_gossip.sql
+var pgSwarmNextGossipSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -238,6 +244,7 @@ func schemaSteps() []schemaStep {
 		{33, "public_fits", pgPublicFitsSchema, ""},
 		{34, "swarm_key_pin", pgSwarmKeyPinSchema, ""},
 		{35, "swarm_provenance", pgSwarmProvenanceSchema, ""},
+		{36, "swarm_next_gossip", pgSwarmNextGossipSchema, ""},
 	}
 }
 

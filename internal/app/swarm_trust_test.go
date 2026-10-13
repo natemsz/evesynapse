@@ -623,3 +623,71 @@ func TestSwarmOnePeerRoundPerCycle(t *testing.T) {
 		t.Fatalf("peer was pulled %d times in one cycle, want 1", hits["/swarm/pull"])
 	}
 }
+
+// TestSwarmGossipTimeDrawnOnce: the next round's time is drawn
+// when a round ends, inside the jitter window, and asking again
+// does not move it. (Drawing per check fired at the first low
+// draw, so rounds bunched at the early edge of the window.)
+func TestSwarmGossipTimeDrawnOnce(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	interval := time.Duration(app.cfg.swarm.gossipHours) * time.Hour
+	now := time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC)
+	app.swarmGossipDone(ctx, now)
+
+	app.swarmMu.Lock()
+	next := app.swarmNextGossip
+	app.swarmMu.Unlock()
+	if next.Before(now.Add(interval*3/4)) || next.After(now.Add(interval*5/4)) {
+		t.Fatalf("next round at %v, outside %v ±25%% of %v", next, interval, now)
+	}
+	// Anywhere inside the window the answer is settled by the one
+	// draw: before it never, from it always, however often asked.
+	for i := 0; i < 500; i++ {
+		if app.swarmGossipDue(ctx, next.Add(-time.Second)) {
+			t.Fatalf("check %d: due a second before the drawn time", i)
+		}
+		if !app.swarmGossipDue(ctx, next) {
+			t.Fatalf("check %d: not due at the drawn time", i)
+		}
+	}
+}
+
+// TestSwarmGossipTimeSurvivesRestart: the drawn time is kept
+// with the identity, so a restarted instance waits for it; a
+// freshly minted identity starts due.
+func TestSwarmGossipTimeSurvivesRestart(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	if err := app.queries.PutSwarmIdentity(ctx, db.PutSwarmIdentityParams{
+		InstanceID: app.swarmID.id, PublicKey: app.swarmID.publicString(), SealedSeed: "sw:v1:test", CreatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("store identity: %v", err)
+	}
+	now := time.Now().UTC()
+	app.swarmGossipDone(ctx, now)
+
+	// A restart forgets everything held in memory.
+	app.swarmMu.Lock()
+	app.swarmNextGossip, app.swarmNextLoaded = time.Time{}, false
+	app.swarmMu.Unlock()
+	if app.swarmGossipDue(ctx, now.Add(time.Hour)) {
+		t.Fatalf("a restart made gossip due an hour after the last round")
+	}
+	if !app.swarmGossipDue(ctx, now.Add(200*time.Hour)) {
+		t.Fatalf("gossip never comes due after a restart")
+	}
+
+	// A new identity (the secret changed) starts from scratch.
+	if err := app.queries.PutSwarmIdentity(ctx, db.PutSwarmIdentityParams{
+		InstanceID: "fresh-identity", PublicKey: app.swarmID.publicString(), SealedSeed: "sw:v1:test", CreatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("store fresh identity: %v", err)
+	}
+	app.swarmMu.Lock()
+	app.swarmNextGossip, app.swarmNextLoaded = time.Time{}, false
+	app.swarmMu.Unlock()
+	if !app.swarmGossipDue(ctx, now.Add(time.Minute)) {
+		t.Fatalf("a fresh identity did not start with gossip due")
+	}
+}

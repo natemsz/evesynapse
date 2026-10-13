@@ -764,11 +764,12 @@ type SwarmCounter struct {
 }
 
 type SwarmIdentity struct {
-	ID         int64     `json:"id"`
-	InstanceID string    `json:"instance_id"`
-	PublicKey  string    `json:"public_key"`
-	SealedSeed string    `json:"sealed_seed"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID           int64        `json:"id"`
+	InstanceID   string       `json:"instance_id"`
+	PublicKey    string       `json:"public_key"`
+	SealedSeed   string       `json:"sealed_seed"`
+	CreatedAt    time.Time    `json:"created_at"`
+	NextGossipAt sql.NullTime `json:"next_gossip_at"`
 }
 
 type SwarmPeer struct {

@@ -257,6 +257,20 @@ func (q *Queries) GetSwarmIdentity(ctx context.Context) (GetSwarmIdentityRow, er
 	return i, err
 }
 
+const getSwarmNextGossip = `-- name: GetSwarmNextGossip :one
+SELECT next_gossip_at FROM swarm_identity LIMIT 1
+`
+
+// When the next gossip round is due: drawn once when a round
+// ends, kept across restarts. NULL (or no identity row yet)
+// means due now.
+func (q *Queries) GetSwarmNextGossip(ctx context.Context) (sql.NullTime, error) {
+	row := q.db.QueryRowContext(ctx, getSwarmNextGossip)
+	var next_gossip_at sql.NullTime
+	err := row.Scan(&next_gossip_at)
+	return next_gossip_at, err
+}
+
 const getSwarmPeer = `-- name: GetSwarmPeer :one
 SELECT instance_id, base_url, public_key, source, approved, excluded,
     exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip,
@@ -614,7 +628,8 @@ ON CONFLICT (id) DO UPDATE SET
     instance_id = excluded.instance_id,
     public_key = excluded.public_key,
     sealed_seed = excluded.sealed_seed,
-    created_at = excluded.created_at
+    created_at = excluded.created_at,
+    next_gossip_at = NULL
 `
 
 type PutSwarmIdentityParams struct {
@@ -750,6 +765,15 @@ func (q *Queries) RollBackSwarmTypeName(ctx context.Context, typeID int64) (int6
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const setSwarmNextGossip = `-- name: SetSwarmNextGossip :exec
+UPDATE swarm_identity SET next_gossip_at = $1
+`
+
+func (q *Queries) SetSwarmNextGossip(ctx context.Context, nextGossipAt sql.NullTime) error {
+	_, err := q.db.ExecContext(ctx, setSwarmNextGossip, nextGossipAt)
+	return err
 }
 
 const setSwarmPeerApproved = `-- name: SetSwarmPeerApproved :exec

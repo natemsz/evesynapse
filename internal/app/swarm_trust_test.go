@@ -572,3 +572,54 @@ func TestSwarmExcludedSignerDataIsTakenBack(t *testing.T) {
 		t.Fatalf("a second pass rolled back %d more rows", got)
 	}
 }
+
+// TestSwarmOnePeerRoundPerCycle: across both of a cycle's swarm
+// passes, a peer is asked for its member list once and for the
+// wanted keys once. The later pass only settles what is staged.
+func TestSwarmOnePeerRoundPerCycle(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	peer, err := mintSwarmIdentity()
+	if err != nil {
+		t.Fatalf("mint peer: %v", err)
+	}
+	peer.id = "peer-counted"
+	now := time.Now().UTC()
+	hits := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits[r.URL.Path]++
+		switch r.URL.Path {
+		case "/swarm/pull":
+			writeSwarmJSON(w, map[string]any{"entries": []swarmSignedEntry{}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	if _, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
+		InstanceID: peer.id, BaseUrl: srv.URL, PublicKey: peer.publicString(),
+		Source: "manual", FirstSeen: now,
+	}); err != nil {
+		t.Fatalf("pin peer: %v", err)
+	}
+	if err := app.queries.SetSwarmPeerApproved(ctx, db.SetSwarmPeerApprovedParams{InstanceID: peer.id, Approved: true}); err != nil {
+		t.Fatalf("approve peer: %v", err)
+	}
+	// Something to ask for: one pending corporation record.
+	if err := app.queries.UpsertCorporationWant(ctx, db.UpsertCorporationWantParams{
+		CorporationID: 98000001, Priority: wantViewed, NotedAt: timeSet(now),
+	}); err != nil {
+		t.Fatalf("queue a want: %v", err)
+	}
+
+	app.swarmFetchPhase(ctx, now)
+	if _, limited := app.swarmCycle(ctx, &fetchBudget{left: 10}, nil, now); limited {
+		t.Fatalf("the later pass reported the ESI limit with nothing staged")
+	}
+	if hits["/swarm/members"] != 1 {
+		t.Fatalf("peer was asked for its member list %d times in one cycle, want 1", hits["/swarm/members"])
+	}
+	if hits["/swarm/pull"] != 1 {
+		t.Fatalf("peer was pulled %d times in one cycle, want 1", hits["/swarm/pull"])
+	}
+}

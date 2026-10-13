@@ -269,17 +269,17 @@ func (app *Application) swarmFetchPhase(ctx context.Context, now time.Time) {
 	app.swarmPull(ctx, now)
 }
 
-// swarmCycle is the worker's swarm pass: gossip when due, pull
-// what is wanted, take back what excluded signers supplied,
-// spot-check what is staged. Only the spot
-// checks spend ESI calls, from the cycle's allowance; limited
-// reports ESI's stop signal like every other pass.
+// swarmCycle is the worker's later swarm pass: take back what
+// excluded signers supplied, then spot-check what is staged.
+// Gossip and the pull belong to swarmFetchPhase alone, once a
+// cycle: a second round here would ask every peer the same
+// questions again minutes later. Only the spot checks spend
+// ESI calls, from the cycle's allowance; limited reports ESI's
+// stop signal like every other pass.
 func (app *Application) swarmCycle(ctx context.Context, allowance *fetchBudget, characters []db.Character, now time.Time) (applied int, limited bool) {
 	if !app.cfg.swarm.enabled() || app.swarmID == nil || app.swarmCli == nil {
 		return 0, false
 	}
-	app.swarmGossip(ctx, now)
-	app.swarmPull(ctx, now)
 	// Before anything new applies, take back what excluded
 	// signers already supplied (local writes, no ESI).
 	app.swarmRollBack(ctx)

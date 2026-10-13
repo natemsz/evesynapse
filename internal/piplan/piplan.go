@@ -730,6 +730,28 @@ func suggestColonies(target string, plan *Plan, s Settings, cc CommandCenter) []
 		}
 	}
 
+	// Each needed raw is extracted on exactly one planet: the first
+	// in the cover that yields it. Several planets in a cover often
+	// yield the same raw (Aqueous Liquids, Base Metals); counting
+	// its extractors on each of them charged the whole requirement
+	// more than once. Its P1 factories sit on the same planet.
+	rawPlanet := map[string]string{}
+	for _, pt := range minimal {
+		for _, raw := range PlanetYields[pt] {
+			if _, needed := rawLine[raw]; !needed {
+				continue
+			}
+			if _, taken := rawPlanet[raw]; !taken {
+				rawPlanet[raw] = pt
+			}
+		}
+	}
+	p1Names := make([]string, 0, len(p1Raw))
+	for p1 := range p1Raw {
+		p1Names = append(p1Names, p1)
+	}
+	sort.Strings(p1Names)
+
 	var out []ColonyPlan
 	ecu := Facilities["Extractor Control Unit"]
 	head := Facilities["Extractor Head"]
@@ -745,7 +767,7 @@ func suggestColonies(target string, plan *Plan, s Settings, cc CommandCenter) []
 		ecus := 0
 		for _, raw := range PlanetYields[pt] {
 			ln, needed := rawLine[raw]
-			if !needed {
+			if !needed || rawPlanet[raw] != pt {
 				continue
 			}
 			n := int(math.Ceil(ln.PerHour / s.ECUYield))
@@ -757,23 +779,15 @@ func suggestColonies(target string, plan *Plan, s Settings, cc CommandCenter) []
 		}
 		cpu += int64(ecus) * (ecu.CPU + int64(s.HeadsPerECU)*head.CPU)
 		pg += int64(ecus) * (ecu.PG + int64(s.HeadsPerECU)*head.PG)
-		// Basic factories for P1s whose raw lives here (first cover wins).
+		if ecus == 0 {
+			// Every raw this planet could supply is extracted on
+			// another planet of the cover: no colony needed here.
+			continue
+		}
+		// Basic factories for the P1s whose raw is extracted here.
 		basics := 0
-		for p1, raw := range p1Raw {
-			// Assign P1 to the first minimal planet yielding its raw.
-			assigned := ""
-			for _, mp := range minimal {
-				for _, y := range PlanetYields[mp] {
-					if y == raw {
-						assigned = mp
-						break
-					}
-				}
-				if assigned != "" {
-					break
-				}
-			}
-			if assigned != pt {
+		for _, p1 := range p1Names {
+			if rawPlanet[p1Raw[p1]] != pt {
 				continue
 			}
 			if ln, ok := p1Line[p1]; ok && ln.Factories > 0 {

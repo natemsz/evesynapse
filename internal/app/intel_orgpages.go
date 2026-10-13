@@ -36,12 +36,15 @@ const (
 	orgStateMissing = "missing"
 )
 
-// Drain bounds: a handful of organizations per cycle is plenty —
-// these are lookups a human just asked for, not fleet sync.
+// Drain bounds: the seeded universe (every alliance, every
+// roster corporation) drains through the same queues as lookups
+// a human just asked for, so the per-cycle cap is sized for the
+// backlog — the shared fetch allowance stays the real governor.
+// A drain costs a few calls now that member names resolve in
+// bulk, so 25 drains spend no more than the old capped five did.
 const (
-	orgStaleAfter                  = 7 * 24 * time.Hour
-	maxOrgDrainsPerCycle           = 5
-	maxAllianceMemberNamesPerDrain = 12 // mirrors the pilot history cap
+	orgStaleAfter        = 7 * 24 * time.Hour
+	maxOrgDrainsPerCycle = 25
 )
 
 // corporationRecordPayload is the stored public record behind

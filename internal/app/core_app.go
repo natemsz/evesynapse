@@ -79,6 +79,11 @@ type Application struct {
 	workerCtx  context.Context // the worker's context, captured in New for background jobs (SDE import)
 	startedAt  time.Time       // when New built this application; /healthz measures a worker that never ran from here
 
+	// allianceSeedMu guards lastAllianceSeed, the worker's daily
+	// full-universe alliance seeding pass (intel_org_worker.go).
+	allianceSeedMu   sync.Mutex
+	lastAllianceSeed time.Time
+
 	// tokenLocks serializes access-token refreshes one character at a
 	// time: CCP rotates refresh tokens on every refresh, so two
 	// concurrent refreshes on the same stored token could invalidate

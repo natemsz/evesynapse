@@ -8,6 +8,7 @@ package buildplan
 
 import (
 	"errors"
+	"math"
 	"sort"
 
 	"evesynapse/internal/esi"
@@ -99,6 +100,14 @@ type Input struct {
 	// one leaves its node's fee unknown.
 	CostIndex float64
 	Adjusted  map[int64]float64
+	// Facility factors are the build structure's bonuses
+	// (engineering-complex role bonus × rig bonus, the caller
+	// resolving both from SDE data): multipliers on material
+	// quantities, job time, and job cost. Zero means no
+	// facility (×1) — an NPC station.
+	FacilityMatFactor  float64
+	FacilityTimeFactor float64
+	FacilityCostFactor float64
 }
 
 // Node is one node of the expansion tree: an item the plan
@@ -196,6 +205,31 @@ func MaterialForRuns(baseQty, runs int64, me int) int64 {
 	return need
 }
 
+// MaterialForRunsFactored is MaterialForRuns with a facility
+// material factor (structure + rig bonus) applied on top of the
+// blueprint's own ME, as EVE applies it: one ceiling over the
+// fully discounted quantity, same base-1 floor. A factor of 1
+// (or an invalid one) is exactly MaterialForRuns.
+func MaterialForRunsFactored(baseQty, runs int64, me int, factor float64) int64 {
+	if factor <= 0 || factor == 1 {
+		return MaterialForRuns(baseQty, runs, me)
+	}
+	if baseQty <= 0 || runs <= 0 {
+		return 0
+	}
+	if me < 0 {
+		me = 0
+	}
+	if me > 10 {
+		me = 10
+	}
+	need := int64(math.Ceil(float64(baseQty) * float64(runs) * float64(100-me) / 100 * factor))
+	if baseQty == 1 && need < runs {
+		need = runs
+	}
+	return need
+}
+
 // JobSeconds is the EVE job-time formula for one build node.
 func JobSeconds(baseSeconds, runs int64, te int) int64 {
 	if baseSeconds <= 0 || runs <= 0 {
@@ -249,6 +283,18 @@ func Build(src Source, rootProductTypeID int64, in Input) (*Result, error) {
 		prices:    in.Prices,
 		costIndex: in.CostIndex,
 		adjusted:  in.Adjusted,
+	}
+	b.matFactor = in.FacilityMatFactor
+	if b.matFactor <= 0 {
+		b.matFactor = 1
+	}
+	b.timeFactor = in.FacilityTimeFactor
+	if b.timeFactor <= 0 {
+		b.timeFactor = 1
+	}
+	b.costFactor = in.FacilityCostFactor
+	if b.costFactor <= 0 {
+		b.costFactor = 1
 	}
 	for id, qty := range in.Stock {
 		if qty > 0 {
@@ -321,8 +367,12 @@ type builder struct {
 	prices    map[int64]esi.MarketPrice
 	costIndex float64
 	adjusted  map[int64]float64
-	nodes     int
-	tooLarge  bool
+	// Facility multipliers, normalized so 1 = no facility.
+	matFactor  float64
+	timeFactor float64
+	costFactor float64
+	nodes      int
+	tooLarge   bool
 }
 
 // resolveME picks a node's ME/TE: an explicit override wins on ME,
@@ -435,6 +485,12 @@ func (b *builder) expand(typeID int64, bp *Blueprint, depth int, basePerRun, req
 	node.ProducedQty = node.Runs * perRun
 	node.SurplusQty = node.ProducedQty - node.Shortfall
 	node.TimeSeconds = JobSeconds(bp.TimeSeconds, node.Runs, node.TE)
+	if b.timeFactor != 1 && node.TimeSeconds > 0 {
+		node.TimeSeconds = int64(math.Round(float64(node.TimeSeconds) * b.timeFactor))
+		if node.TimeSeconds < 1 {
+			node.TimeSeconds = 1
+		}
+	}
 
 	childPath := path
 	if depth == 0 || path == nil {
@@ -448,7 +504,7 @@ func (b *builder) expand(typeID int64, bp *Blueprint, depth int, basePerRun, req
 	mats := append([]Material(nil), bp.Materials...)
 	sort.Slice(mats, func(i, j int) bool { return mats[i].TypeID < mats[j].TypeID })
 	for _, m := range mats {
-		need := MaterialForRuns(m.Quantity, node.Runs, node.ME)
+		need := MaterialForRunsFactored(m.Quantity, node.Runs, node.ME, b.matFactor)
 		child := b.expand(m.TypeID, nil, depth+1, m.Quantity, need, false, childPath)
 		node.Children = append(node.Children, child)
 		node.LineCost += child.LineCost
@@ -471,9 +527,9 @@ func (b *builder) expand(typeID int64, bp *Blueprint, depth int, basePerRun, req
 		if i >= len(mats) {
 			break
 		}
-		qty := MaterialForRuns(mats[i].Quantity, node.Runs, node.ME)
+		qty := MaterialForRunsFactored(mats[i].Quantity, node.Runs, node.ME, b.matFactor)
 		if adj, ok := b.adjusted[mats[i].TypeID]; ok && b.costIndex > 0 {
-			node.JobCost += float64(qty) * adj * b.costIndex
+			node.JobCost += float64(qty) * adj * b.costIndex * b.costFactor
 		} else {
 			node.JobKnown = false
 		}

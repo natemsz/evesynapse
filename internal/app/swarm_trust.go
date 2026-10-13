@@ -108,16 +108,21 @@ const (
 // could verify within a week is stale, not evidence.
 const maxSwarmStagingAge = 7 * 24 * time.Hour
 
+// maxSwarmDeferrals is how many passes may fail to decide a
+// staged entry before it is dropped.
+const maxSwarmDeferrals = 3
+
 // Sync-page counter names.
 const (
-	swarmCounterAppliedHistory = "applied_history"
-	swarmCounterAppliedNames   = "applied_names"
-	swarmCounterAppliedRecords = "applied_records"
-	swarmCounterSpotPassed     = "spot_passed"
-	swarmCounterSpotFailed     = "spot_failed"
-	swarmCounterPullsOK        = "pulls_ok"
-	swarmCounterPullsFailed    = "pulls_failed"
-	swarmCounterRolledBack     = "rolled_back"
+	swarmCounterAppliedHistory   = "applied_history"
+	swarmCounterAppliedNames     = "applied_names"
+	swarmCounterAppliedRecords   = "applied_records"
+	swarmCounterSpotPassed       = "spot_passed"
+	swarmCounterSpotFailed       = "spot_failed"
+	swarmCounterPullsOK          = "pulls_ok"
+	swarmCounterPullsFailed      = "pulls_failed"
+	swarmCounterRolledBack       = "rolled_back"
+	swarmCounterDroppedUnchecked = "dropped_unchecked"
 )
 
 // swarmTrust scores a signer from its ledger: good over total
@@ -838,10 +843,13 @@ func (app *Application) swarmPull(ctx context.Context, now time.Time) {
 // the ones that pass — the only path anything staged reaches
 // the real tables. At most a few ESI calls a cycle, from the
 // shared allowance; ESI's stop signal pauses the pass like any
-// other. Anything failing is discarded and counted against its
-// signer; anything undecidable (no scoped character, no span
-// shared with ESI's history, a transient error) waits for the next
-// pass, up to the staging age cap.
+// other. Only an entry ESI contradicts is a failure: it is
+// discarded and counted against its signer. Anything
+// undecidable (no scoped character, no span shared with ESI's
+// history, a transient error) waits for another pass, at most
+// maxSwarmDeferrals times, and is then dropped; so is an entry
+// past the staging age cap, or from a signer under the trust
+// floor. A drop is neutral: no mark, no streak, its own counter.
 func (app *Application) swarmSpotCheck(ctx context.Context, allowance *fetchBudget, characters []db.Character, now time.Time) (applied int, limited bool) {
 	rows, err := app.queries.ListUncheckedStaging(ctx, 25)
 	if err != nil {
@@ -851,7 +859,7 @@ func (app *Application) swarmSpotCheck(ctx context.Context, allowance *fetchBudg
 	checks := 0
 	for _, row := range rows {
 		if now.Sub(row.ReceivedAt) > maxSwarmStagingAge {
-			app.discardSwarmEntry(ctx, row.Kind, row.Key, row.Signer, swarmDiscardAgedOut)
+			app.dropSwarmEntry(ctx, row.Kind, row.Key, row.Signer, swarmDropAgedOut)
 			continue
 		}
 		peer, err := app.queries.GetSwarmPeer(ctx, row.Signer)
@@ -862,7 +870,7 @@ func (app *Application) swarmSpotCheck(ctx context.Context, allowance *fetchBudg
 			continue
 		}
 		if total := peer.GoodChecks + peer.BadChecks; total >= swarmTrustMinChecks && swarmTrust(peer.GoodChecks, peer.BadChecks) < swarmTrustFloor {
-			app.discardSwarmEntry(ctx, row.Kind, row.Key, row.Signer, swarmDiscardLowTrust)
+			app.dropSwarmEntry(ctx, row.Kind, row.Key, row.Signer, swarmDropLowTrust)
 			continue
 		}
 		if !app.swarmSampled(peer.GoodChecks, peer.BadChecks) {
@@ -882,7 +890,9 @@ func (app *Application) swarmSpotCheck(ctx context.Context, allowance *fetchBudg
 			applied++
 			continue
 		}
-		if checks >= maxSwarmSpotPerCycle {
+		if checks >= maxSwarmSpotPerCycle || allowance.exhausted() {
+			// Out of checks or out of calls: the rest wait,
+			// and waiting is not a deferral.
 			break
 		}
 		checks++
@@ -903,8 +913,17 @@ func (app *Application) swarmSpotCheck(ctx context.Context, allowance *fetchBudg
 			app.discardSwarmEntry(ctx, row.Kind, row.Key, row.Signer, swarmDiscardMismatch)
 		default:
 			// Deferred: no scoped character, no span shared
-			// with ESI's history, a transient error — the
-			// row waits.
+			// with ESI's history, a transient error. The row
+			// waits for another pass, a few times; one that
+			// still cannot be decided is dropped, with no
+			// mark on its signer, rather than taking a check
+			// slot every cycle until the age cap.
+			n, err := app.queries.BumpStagingDeferral(ctx, db.BumpStagingDeferralParams{Kind: row.Kind, Key: row.Key})
+			if err != nil {
+				logging.Errorf("swarm: defer %s %s: %v", row.Kind, row.Key, err)
+			} else if n >= maxSwarmDeferrals {
+				app.dropSwarmEntry(ctx, row.Kind, row.Key, row.Signer, swarmDropUndecidable)
+			}
 		}
 	}
 	return applied, false

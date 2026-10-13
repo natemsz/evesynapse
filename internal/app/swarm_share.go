@@ -741,18 +741,35 @@ func (app *Application) swarmRollBackOne(ctx context.Context, row db.SwarmApplie
 	return n > 0, err
 }
 
-// Why a staged entry was discarded, for the log line: the count
-// on the Sync page alone cannot say which entry, or whether
-// anything was actually compared.
+// Why a staged entry left staging without applying, for the log
+// line. A discard is a failed check: ESI was asked and the entry
+// was wrong. A drop is everything else, and blames nobody.
 const (
 	swarmDiscardMismatch = "it did not match ESI"
-	swarmDiscardAgedOut  = "it waited in staging past the age cap without a check"
-	swarmDiscardLowTrust = "its signer is under the trust floor"
+	swarmDropAgedOut     = "it waited in staging past the age cap"
+	swarmDropLowTrust    = "its signer is under the trust floor"
+	swarmDropUndecidable = "it could not be checked after several passes"
 )
 
+// dropSwarmEntry removes a staged entry that was never compared
+// with ESI: too old, from a signer no longer read, or impossible
+// to check from here. It is not a failed check, so it costs the
+// signer nothing (no mark, no streak) and has its own counter.
+// If the datum is still wanted, a later pull asks for it again.
+func (app *Application) dropSwarmEntry(ctx context.Context, kind, key, signer, reason string) {
+	logging.Infof("swarm: dropped %s %s from %s unchecked: %s", kind, key, shortenSwarmID(signer), reason)
+	if err := app.queries.DeleteStagingEntry(ctx, db.DeleteStagingEntryParams{Kind: kind, Key: key}); err != nil {
+		logging.Errorf("swarm: drop %s %s: %v", kind, key, err)
+		return
+	}
+	app.addSwarmCounter(ctx, swarmCounterDroppedUnchecked, 1)
+}
+
 // discardSwarmEntry drops one staged entry that failed its spot
-// check, and counts it against the signer. The row never reaches
-// the real tables: failed checks are discarded, never served.
+// check — ESI was asked and the entry was wrong — and counts it
+// against the signer. The row never reaches the real tables:
+// failed checks are discarded, never served. Nothing else comes
+// through here (see dropSwarmEntry).
 // Every discard is logged with its entry, signer and reason.
 func (app *Application) discardSwarmEntry(ctx context.Context, kind, key, signer, reason string) {
 	logging.Warnf("swarm: discarded %s %s from %s: %s", kind, key, shortenSwarmID(signer), reason)

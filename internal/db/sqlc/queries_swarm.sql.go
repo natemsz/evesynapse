@@ -44,6 +44,24 @@ func (q *Queries) AddSwarmPeerCheck(ctx context.Context, arg AddSwarmPeerCheckPa
 	return err
 }
 
+const bumpStagingDeferral = `-- name: BumpStagingDeferral :one
+UPDATE swarm_staging SET deferrals = deferrals + 1
+WHERE kind = $1 AND key = $2
+RETURNING deferrals
+`
+
+type BumpStagingDeferralParams struct {
+	Kind string `json:"kind"`
+	Key  string `json:"key"`
+}
+
+func (q *Queries) BumpStagingDeferral(ctx context.Context, arg BumpStagingDeferralParams) (int32, error) {
+	row := q.db.QueryRowContext(ctx, bumpStagingDeferral, arg.Kind, arg.Key)
+	var deferrals int32
+	err := row.Scan(&deferrals)
+	return deferrals, err
+}
+
 const countSwarmAppliedBySigner = `-- name: CountSwarmAppliedBySigner :one
 SELECT COUNT(*) FROM swarm_applied WHERE signer = $1
 `
@@ -505,10 +523,10 @@ func (q *Queries) ListSwarmPullPeers(ctx context.Context) ([]ListSwarmPullPeersR
 }
 
 const listUncheckedStaging = `-- name: ListUncheckedStaging :many
-SELECT kind, key, payload, signer, signature, fetched_at, received_at, source
+SELECT kind, key, payload, signer, signature, fetched_at, received_at, source, deferrals
 FROM swarm_staging
 WHERE checked_at IS NULL
-ORDER BY received_at
+ORDER BY deferrals, received_at
 LIMIT $1
 `
 
@@ -521,8 +539,12 @@ type ListUncheckedStagingRow struct {
 	FetchedAt  time.Time `json:"fetched_at"`
 	ReceivedAt time.Time `json:"received_at"`
 	Source     string    `json:"source"`
+	Deferrals  int32     `json:"deferrals"`
 }
 
+// Entries never tried come first, oldest first; ones that have
+// already deferred wait behind them, so an undecidable entry
+// cannot hold a check slot in front of fresh work.
 func (q *Queries) ListUncheckedStaging(ctx context.Context, limit int32) ([]ListUncheckedStagingRow, error) {
 	rows, err := q.db.QueryContext(ctx, listUncheckedStaging, limit)
 	if err != nil {
@@ -541,6 +563,7 @@ func (q *Queries) ListUncheckedStaging(ctx context.Context, limit int32) ([]List
 			&i.FetchedAt,
 			&i.ReceivedAt,
 			&i.Source,
+			&i.Deferrals,
 		); err != nil {
 			return nil, err
 		}
@@ -815,6 +838,7 @@ ON CONFLICT (kind, key) DO UPDATE SET
     fetched_at = excluded.fetched_at,
     received_at = excluded.received_at,
     source = excluded.source,
+    deferrals = 0,
     checked_at = NULL
 WHERE excluded.fetched_at > swarm_staging.fetched_at
 `

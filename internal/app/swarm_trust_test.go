@@ -1024,3 +1024,149 @@ func TestSwarmHistoryApplyKeepsToItsWindow(t *testing.T) {
 		t.Fatalf("provenance range %q..%q (err %v), want the days written", prov.FirstDate, prov.LastDate, err)
 	}
 }
+
+// ledgerOf reads a peer's marks.
+func ledgerOf(t *testing.T, app *Application, id string) (good, bad int64) {
+	t.Helper()
+	row, err := app.queries.GetSwarmPeer(context.Background(), id)
+	if err != nil {
+		t.Fatalf("read peer %s: %v", id, err)
+	}
+	return row.GoodChecks, row.BadChecks
+}
+
+// TestSwarmAgedOutEntryIsDroppedNotFailed: an entry past the
+// staging age cap was never compared with ESI. It leaves
+// staging without a mark on its signer and without counting as
+// a failed spot check.
+func TestSwarmAgedOutEntryIsDroppedNotFailed(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	peer := swarmTestPeer(t, app, "peer-1")
+	now := time.Now().UTC()
+	old := now.Add(-maxSwarmStagingAge - time.Hour)
+	entry := signedBy(t, peer, swarmKindTypeName, "34", `{"type_id":34,"name":"Tritanium"}`, old)
+	if err := app.stageSwarmEntry(ctx, entry, peer.id, old); err != nil {
+		t.Fatalf("stage: %v", err)
+	}
+	if applied, _ := app.swarmSpotCheck(ctx, &fetchBudget{left: 10}, nil, now); applied != 0 {
+		t.Fatalf("an aged-out entry applied")
+	}
+	if staged := stagedKeys(t, app); len(staged) != 0 {
+		t.Fatalf("staging still holds %v", staged)
+	}
+	if _, bad := ledgerOf(t, app, peer.id); bad != 0 {
+		t.Fatalf("an entry nobody checked cost its signer %d marks", bad)
+	}
+	counters := app.swarmCounterMap(ctx)
+	if counters[swarmCounterSpotFailed] != 0 || counters[swarmCounterDroppedUnchecked] != 1 {
+		t.Fatalf("counters %+v, want no failed check and one unchecked drop", counters)
+	}
+}
+
+// TestSwarmUndecidableEntryIsDroppedAfterAFewPasses: a structure
+// name cannot be checked without a character holding the scope.
+// It defers a bounded number of times and is then dropped, with
+// no mark and no ESI call, instead of taking a check slot every
+// cycle until the age cap.
+func TestSwarmUndecidableEntryIsDroppedAfterAFewPasses(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	peer := swarmTestPeer(t, app, "peer-1")
+	now := time.Now().UTC()
+	entry := signedBy(t, peer, swarmKindStructure, "1035000000001", `{"structure_id":1035000000001,"name":"Test Keepstar"}`, now)
+	if err := app.stageSwarmEntry(ctx, entry, peer.id, now); err != nil {
+		t.Fatalf("stage: %v", err)
+	}
+	for pass := 1; pass < maxSwarmDeferrals; pass++ {
+		app.swarmSpotCheck(ctx, &fetchBudget{left: 10}, nil, now)
+		if staged := stagedKeys(t, app); len(staged) != 1 {
+			t.Fatalf("pass %d: the entry left staging early", pass)
+		}
+	}
+	app.swarmSpotCheck(ctx, &fetchBudget{left: 10}, nil, now)
+	if staged := stagedKeys(t, app); len(staged) != 0 {
+		t.Fatalf("after %d passes the undecidable entry is still staged", maxSwarmDeferrals)
+	}
+	if good, bad := ledgerOf(t, app, peer.id); good != 0 || bad != 0 {
+		t.Fatalf("an undecidable entry moved the ledger: good %d bad %d", good, bad)
+	}
+	counters := app.swarmCounterMap(ctx)
+	if counters[swarmCounterSpotFailed] != 0 || counters[swarmCounterDroppedUnchecked] != 1 {
+		t.Fatalf("counters %+v, want no failed check and one unchecked drop", counters)
+	}
+	if _, err := app.queries.GetStructureName(ctx, 1035000000001); err == nil {
+		t.Fatalf("an undecidable entry was applied")
+	}
+}
+
+// TestSwarmWaitingIsNotDeferring: a pass that has no calls left
+// tries nothing, so nothing counts toward the deferral bound.
+func TestSwarmWaitingIsNotDeferring(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	peer := swarmTestPeer(t, app, "peer-1")
+	now := time.Now().UTC()
+	entry := signedBy(t, peer, swarmKindTypeName, "34", `{"type_id":34,"name":"Tritanium"}`, now)
+	if err := app.stageSwarmEntry(ctx, entry, peer.id, now); err != nil {
+		t.Fatalf("stage: %v", err)
+	}
+	for pass := 0; pass < maxSwarmDeferrals+2; pass++ {
+		app.swarmSpotCheck(ctx, &fetchBudget{left: 0}, nil, now)
+	}
+	if staged := stagedKeys(t, app); len(staged) != 1 {
+		t.Fatalf("an entry was dropped by passes that had no calls to check it with")
+	}
+}
+
+// TestSwarmDeferredEntriesWaitBehindFreshOnes: the pass reads
+// untried entries first, so one that keeps deferring cannot hold
+// the front of the queue.
+func TestSwarmDeferredEntriesWaitBehindFreshOnes(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	peer := swarmTestPeer(t, app, "peer-1")
+	now := time.Now().UTC()
+	older := signedBy(t, peer, swarmKindStructure, "1035000000001", `{"structure_id":1035000000001,"name":"Test Keepstar"}`, now.Add(-time.Hour))
+	if err := app.stageSwarmEntry(ctx, older, peer.id, now.Add(-time.Hour)); err != nil {
+		t.Fatalf("stage older: %v", err)
+	}
+	if _, err := app.queries.BumpStagingDeferral(ctx, db.BumpStagingDeferralParams{Kind: swarmKindStructure, Key: "1035000000001"}); err != nil {
+		t.Fatalf("defer older: %v", err)
+	}
+	fresh := signedBy(t, peer, swarmKindTypeName, "34", `{"type_id":34,"name":"Tritanium"}`, now)
+	if err := app.stageSwarmEntry(ctx, fresh, peer.id, now); err != nil {
+		t.Fatalf("stage fresh: %v", err)
+	}
+	rows, err := app.queries.ListUncheckedStaging(ctx, 10)
+	if err != nil || len(rows) != 2 || rows[0].Kind != swarmKindTypeName {
+		t.Fatalf("queue order %+v (err %v), want the untried entry first", rows, err)
+	}
+}
+
+// TestSwarmLowTrustEntryIsDroppedWithoutAnotherMark: an entry
+// from a signer already under the trust floor is not read. It
+// was not checked either, so it adds nothing to the ledger.
+func TestSwarmLowTrustEntryIsDroppedWithoutAnotherMark(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	peer := swarmTestPeer(t, app, "peer-1")
+	now := time.Now().UTC()
+	if err := app.queries.AddSwarmPeerCheck(ctx, db.AddSwarmPeerCheckParams{InstanceID: peer.id, BadChecks: 40}); err != nil {
+		t.Fatalf("sink the signer: %v", err)
+	}
+	entry := signedBy(t, peer, swarmKindTypeName, "34", `{"type_id":34,"name":"Tritanium"}`, now)
+	if err := app.stageSwarmEntry(ctx, entry, peer.id, now); err != nil {
+		t.Fatalf("stage: %v", err)
+	}
+	app.swarmSpotCheck(ctx, &fetchBudget{left: 10}, nil, now)
+	if staged := stagedKeys(t, app); len(staged) != 0 {
+		t.Fatalf("staging still holds %v", staged)
+	}
+	if _, bad := ledgerOf(t, app, peer.id); bad != 40 {
+		t.Fatalf("an unchecked entry moved the ledger to %d bad marks, want 40", bad)
+	}
+	if got := app.swarmCounterMap(ctx)[swarmCounterSpotFailed]; got != 0 {
+		t.Fatalf("an unchecked entry counted as %d failed checks", got)
+	}
+}

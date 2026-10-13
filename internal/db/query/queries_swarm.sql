@@ -116,15 +116,24 @@ ON CONFLICT (kind, key) DO UPDATE SET
     fetched_at = excluded.fetched_at,
     received_at = excluded.received_at,
     source = excluded.source,
+    deferrals = 0,
     checked_at = NULL
 WHERE excluded.fetched_at > swarm_staging.fetched_at;
 
+-- Entries never tried come first, oldest first; ones that have
+-- already deferred wait behind them, so an undecidable entry
+-- cannot hold a check slot in front of fresh work.
 -- name: ListUncheckedStaging :many
-SELECT kind, key, payload, signer, signature, fetched_at, received_at, source
+SELECT kind, key, payload, signer, signature, fetched_at, received_at, source, deferrals
 FROM swarm_staging
 WHERE checked_at IS NULL
-ORDER BY received_at
+ORDER BY deferrals, received_at
 LIMIT $1;
+
+-- name: BumpStagingDeferral :one
+UPDATE swarm_staging SET deferrals = deferrals + 1
+WHERE kind = $1 AND key = $2
+RETURNING deferrals;
 
 -- name: MarkStagingChecked :exec
 UPDATE swarm_staging SET checked_at = $3

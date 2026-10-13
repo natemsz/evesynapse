@@ -798,6 +798,7 @@ type SwarmStaging struct {
 	ReceivedAt time.Time    `json:"received_at"`
 	CheckedAt  sql.NullTime `json:"checked_at"`
 	Source     string       `json:"source"`
+	Deferrals  int32        `json:"deferrals"`
 }
 
 type TradeIdea struct {

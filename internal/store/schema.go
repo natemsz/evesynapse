@@ -180,6 +180,12 @@ var pgSwarmProvenanceSchema string
 //go:embed schema_pg/036_swarm_next_gossip.sql
 var pgSwarmNextGossipSchema string
 
+// Step 037: how often a staged swarm entry has been deferred,
+// so an undecidable one is dropped instead of waiting a week.
+//
+//go:embed schema_pg/037_swarm_staging_deferrals.sql
+var pgSwarmStagingDeferralsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -245,6 +251,7 @@ func schemaSteps() []schemaStep {
 		{34, "swarm_key_pin", pgSwarmKeyPinSchema, ""},
 		{35, "swarm_provenance", pgSwarmProvenanceSchema, ""},
 		{36, "swarm_next_gossip", pgSwarmNextGossipSchema, ""},
+		{37, "swarm_staging_deferrals", pgSwarmStagingDeferralsSchema, ""},
 	}
 }
 

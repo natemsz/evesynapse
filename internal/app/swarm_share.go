@@ -13,9 +13,14 @@ package app
 //                       game data, never account data)
 //
 // Two rules keep poison out of the tables. First, an instance
-// serves only data its own worker considers fresh — the same
-// gates the worker fetches by, so the swarm never launders
-// stale rows into fresh ones. Second, nothing applies to the
+// serves only what its own worker fetched from ESI and still
+// considers fresh — the same gates the worker fetches by. A row
+// a peer supplied is never served onward: this instance would
+// be signing another's data as its own, and the row would look
+// newly fetched at every hop. An applied row also keeps the
+// fetch time its signer signed, so it is as old here as it is
+// at its source (swarmSupplied, applySwarmEntry). Second,
+// nothing applies to the
 // real tables without passing through staging: signature
 // verified against the signer's pinned key, payload
 // strictly decoded into the row shape, and the IDs inside the
@@ -29,6 +34,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -93,11 +99,12 @@ func parseSwarmID(part string) (int64, bool) {
 }
 
 // serveSwarmKey reads one shared key from the local tables for a
-// peer pull. It serves only rows the worker holds fresh: history
-// inside its refetch gate, records in the ready state, resolved
-// structure names, any held type name. Anything else is a miss —
-// the peer fetches it itself, and the swarm never moves stale
-// data sideways.
+// peer pull. It serves only rows this instance fetched itself
+// and holds fresh: history inside its refetch gate, records in
+// the ready state, resolved structure names, any held type
+// name. A row a peer supplied is a miss like anything else — the
+// asker pulls it from its source or fetches it itself — so the
+// swarm never moves stale or second-hand data sideways.
 func (app *Application) serveSwarmKey(ctx context.Context, kind, key string) (payload string, fetchedAt time.Time, ok bool) {
 	switch kind {
 	case swarmKindHistory:
@@ -152,7 +159,7 @@ func (app *Application) serveSwarmHistory(ctx context.Context, key string) (stri
 	}
 	fetchKind := marketFetchKind("history", marketKey{RegionID: regionID, TypeID: typeID})
 	state, err := app.queries.GetMarketFetchState(ctx, fetchKind)
-	if err != nil || state.State != fetchStateOK {
+	if err != nil || state.State != fetchStateOK || state.Detail == swarmFetchDetail {
 		return "", time.Time{}, false
 	}
 	if time.Since(state.AttemptedAt) >= historyRefetchGate {
@@ -190,7 +197,7 @@ func (app *Application) serveSwarmTypeName(ctx context.Context, key string) (str
 		return "", time.Time{}, false
 	}
 	name, err := app.queries.GetTypeName(ctx, typeID)
-	if err != nil || name == "" {
+	if err != nil || name == "" || app.swarmSupplied(ctx, swarmKindTypeName, key, sql.NullTime{}) {
 		return "", time.Time{}, false
 	}
 	// Type names carry no stored timestamp (they are effectively
@@ -220,6 +227,9 @@ func (app *Application) serveSwarmCorporation(ctx context.Context, key string) (
 	if err != nil || rec.State != orgStateReady || rec.Payload == "" || !rec.FetchedAt.Valid {
 		return "", time.Time{}, false
 	}
+	if app.swarmSupplied(ctx, swarmKindCorporation, key, rec.FetchedAt) {
+		return "", time.Time{}, false
+	}
 	raw, err := json.Marshal(swarmOrgPayload{ID: id, Payload: rec.Payload})
 	if err != nil {
 		return "", time.Time{}, false
@@ -236,11 +246,36 @@ func (app *Application) serveSwarmAlliance(ctx context.Context, key string) (str
 	if err != nil || rec.State != orgStateReady || rec.Payload == "" || !rec.FetchedAt.Valid {
 		return "", time.Time{}, false
 	}
+	if app.swarmSupplied(ctx, swarmKindAlliance, key, rec.FetchedAt) {
+		return "", time.Time{}, false
+	}
 	raw, err := json.Marshal(swarmOrgPayload{ID: id, Payload: rec.Payload})
 	if err != nil {
 		return "", time.Time{}, false
 	}
 	return string(raw), rec.FetchedAt.Time, true
+}
+
+// swarmSupplied reports whether the live row for a key is still
+// the copy a peer supplied, by its provenance row: stamp is the
+// live row's own timestamp (unset for a kind that has none, where
+// any provenance row answers yes). A row this instance has
+// fetched from ESI since carries a different stamp and is its
+// own. Trouble reading provenance answers yes: when unsure, the
+// row is not served.
+func (app *Application) swarmSupplied(ctx context.Context, kind, key string, stamp sql.NullTime) bool {
+	row, err := app.queries.GetSwarmApplied(ctx, db.GetSwarmAppliedParams{Kind: kind, Key: key})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false
+		}
+		logging.Errorf("swarm: provenance of %s %s: %v", kind, key, err)
+		return true
+	}
+	if !row.RowStamp.Valid || !stamp.Valid {
+		return true
+	}
+	return stamp.Time.Equal(row.RowStamp.Time)
 }
 
 // swarmStructurePayload is structure_name on the wire.
@@ -256,6 +291,9 @@ func (app *Application) serveSwarmStructure(ctx context.Context, key string) (st
 	}
 	row, err := app.queries.GetStructureName(ctx, id)
 	if err != nil || row.State != esi.StructureResolved || row.Name == "" || !row.ResolvedAt.Valid {
+		return "", time.Time{}, false
+	}
+	if app.swarmSupplied(ctx, swarmKindStructure, key, row.ResolvedAt) {
 		return "", time.Time{}, false
 	}
 	raw, err := json.Marshal(swarmStructurePayload{StructureID: id, Name: row.Name})
@@ -415,12 +453,21 @@ type swarmOrigin struct {
 // the live row. That row is what lets swarmRollBack take the
 // data back if its signer is later excluded.
 func (app *Application) applySwarmEntry(ctx context.Context, kind, key, payload string, origin swarmOrigin, now time.Time) error {
-	// One stamp for the live row and the provenance row, at the
-	// database's own precision, so the two compare equal later.
-	stamp := now.UTC().Truncate(time.Microsecond)
+	// The live row carries the fetch time its signer signed, not
+	// the moment it arrived: a row is as old as its fetch, here
+	// as at its source, so the worker's freshness gates see its
+	// true age and nothing is made fresher by changing hands. A
+	// time ahead of this clock is held to now. The same stamp
+	// goes on the provenance row, at the database's precision,
+	// so the two compare equal later.
+	appliedAt := now.UTC().Truncate(time.Microsecond)
+	stamp := origin.fetchedAt.UTC().Truncate(time.Microsecond)
+	if origin.fetchedAt.IsZero() || stamp.After(appliedAt) {
+		stamp = appliedAt
+	}
 	applied := db.PutSwarmAppliedParams{
 		Kind: kind, Key: key, Source: origin.source, Signer: origin.signer,
-		FetchedAt: origin.fetchedAt.UTC(), AppliedAt: stamp, Verified: origin.verified,
+		FetchedAt: stamp, AppliedAt: appliedAt, Verified: origin.verified,
 		RowStamp: timeSet(stamp),
 	}
 	if applied.Source == "" {

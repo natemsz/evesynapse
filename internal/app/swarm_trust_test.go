@@ -10,6 +10,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -689,5 +690,106 @@ func TestSwarmGossipTimeSurvivesRestart(t *testing.T) {
 	app.swarmMu.Unlock()
 	if !app.swarmGossipDue(ctx, now.Add(time.Minute)) {
 		t.Fatalf("a fresh identity did not start with gossip due")
+	}
+}
+
+// TestSwarmAppliedRowKeepsSignedFetchTime: a row a peer supplied
+// is stamped with the fetch time its signer signed, not the
+// moment it arrived, so it is exactly as old here as at its
+// source. A time ahead of this clock is held to now.
+func TestSwarmAppliedRowKeepsSignedFetchTime(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	peer := swarmTestPeer(t, app, "peer-1")
+	now := time.Now().UTC()
+	fetched := now.Add(-5 * time.Hour).Truncate(time.Second)
+	origin := swarmOrigin{source: peer.id, signer: peer.id, fetchedAt: fetched}
+
+	if err := app.applySwarmEntry(ctx, swarmKindCorporation, "98000001", orgEntry(t, 98000001, `{"corp":{"name":"Test Corp"}}`), origin, now); err != nil {
+		t.Fatalf("apply corporation: %v", err)
+	}
+	rec, err := app.queries.GetCorporationRecord(ctx, 98000001)
+	if err != nil || !rec.FetchedAt.Valid || !rec.FetchedAt.Time.Equal(fetched) {
+		t.Fatalf("corporation fetched_at = %v (err %v), want the signed %v", rec.FetchedAt, err, fetched)
+	}
+	if err := app.applySwarmEntry(ctx, swarmKindStructure, "1035000000001", `{"structure_id":1035000000001,"name":"Test Keepstar"}`, origin, now); err != nil {
+		t.Fatalf("apply structure: %v", err)
+	}
+	if row, err := app.queries.GetStructureName(ctx, 1035000000001); err != nil || !row.ResolvedAt.Valid || !row.ResolvedAt.Time.Equal(fetched) {
+		t.Fatalf("structure resolved_at = %v (err %v), want the signed %v", row.ResolvedAt, err, fetched)
+	}
+	history := `{"region_id":10000002,"type_id":34,"days":[{"date":"2026-10-01","average":5,"highest":6,"lowest":4,"volume":10,"order_count":2}]}`
+	if err := app.applySwarmEntry(ctx, swarmKindHistory, "10000002/34", history, origin, now); err != nil {
+		t.Fatalf("apply history: %v", err)
+	}
+	state, err := app.queries.GetMarketFetchState(ctx, marketFetchKind("history", marketKey{RegionID: 10000002, TypeID: 34}))
+	if err != nil || !state.AttemptedAt.Equal(fetched) || state.Detail != swarmFetchDetail {
+		t.Fatalf("history fetch state = %+v (err %v), want the signed time %v marked as the swarm's", state, err, fetched)
+	}
+	prov, err := app.queries.GetSwarmApplied(ctx, db.GetSwarmAppliedParams{Kind: swarmKindCorporation, Key: "98000001"})
+	if err != nil || !prov.FetchedAt.Equal(fetched) || prov.AppliedAt.Before(now.Add(-time.Minute)) {
+		t.Fatalf("provenance = %+v (err %v), want fetched %v and applied about now", prov, err, fetched)
+	}
+
+	// A signer's clock running ahead cannot date a row in the future.
+	ahead := swarmOrigin{source: peer.id, signer: peer.id, fetchedAt: now.Add(48 * time.Hour)}
+	if err := app.applySwarmEntry(ctx, swarmKindAlliance, "99000001", orgEntry(t, 99000001, `{"alliance":{"name":"Test Alliance"}}`), ahead, now); err != nil {
+		t.Fatalf("apply alliance: %v", err)
+	}
+	if rec, err := app.queries.GetAllianceRecord(ctx, 99000001); err != nil || !rec.FetchedAt.Valid || rec.FetchedAt.Time.After(now.Add(time.Second)) {
+		t.Fatalf("alliance fetched_at = %v (err %v), dated ahead of this clock", rec.FetchedAt, err)
+	}
+}
+
+// TestSwarmNeverServesWhatAPeerSupplied: a row a peer supplied
+// is not served onward, so this instance never signs another's
+// data as its own. Once its own worker has fetched the datum
+// from ESI the row is its own, and serves under its own time.
+func TestSwarmNeverServesWhatAPeerSupplied(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	peer := swarmTestPeer(t, app, "peer-1")
+	now := time.Now().UTC()
+	origin := swarmOrigin{source: peer.id, signer: peer.id, fetchedAt: now.Add(-time.Hour).Truncate(time.Second)}
+	entries := []struct{ kind, key, payload string }{
+		{swarmKindCorporation, "98000001", orgEntry(t, 98000001, `{"corp":{"name":"Test Corp"}}`)},
+		{swarmKindAlliance, "99000001", orgEntry(t, 99000001, `{"alliance":{"name":"Test Alliance"}}`)},
+		{swarmKindTypeName, "34", `{"type_id":34,"name":"Tritanium"}`},
+		{swarmKindStructure, "1035000000001", `{"structure_id":1035000000001,"name":"Test Keepstar"}`},
+		{swarmKindHistory, "10000002/34", `{"region_id":10000002,"type_id":34,"days":[{"date":"2026-10-01","average":5,"highest":6,"lowest":4,"volume":10,"order_count":2}]}`},
+	}
+	var asked []swarmPullKey
+	for _, e := range entries {
+		if err := app.applySwarmEntry(ctx, e.kind, e.key, e.payload, origin, now); err != nil {
+			t.Fatalf("apply %s %s: %v", e.kind, e.key, err)
+		}
+		if _, _, ok := app.serveSwarmKey(ctx, e.kind, e.key); ok {
+			t.Fatalf("%s %s was supplied by a peer and is being served onward", e.kind, e.key)
+		}
+		asked = append(asked, swarmPullKey{Kind: e.kind, Key: e.key})
+	}
+	// The same over the wire: a pull for all five comes back empty.
+	code, body := swarmServe(t, app, http.MethodPost, "/swarm/pull", string(mustJSON(t, swarmPullRequest{Keys: asked})), swarmTestSecret)
+	if code != http.StatusOK || !strings.Contains(body, `"entries":[]`) {
+		t.Fatalf("pull of peer-supplied rows: status %d body %s, want no entries", code, body)
+	}
+
+	// This instance fetches two of them itself: those are its own now.
+	own := now.Add(time.Minute).Truncate(time.Second)
+	if err := app.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
+		CorporationID: 98000001, Payload: `{"corp":{"name":"Test Corp"}}`, State: orgStateReady, FetchedAt: timeSet(own),
+	}); err != nil {
+		t.Fatalf("own corporation fetch: %v", err)
+	}
+	if _, at, ok := app.serveSwarmKey(ctx, swarmKindCorporation, "98000001"); !ok || !at.Equal(own) {
+		t.Fatalf("own corporation fetch: served=%v at %v, want served at %v", ok, at, own)
+	}
+	app.recordMarketFetch(ctx, marketFetchKind("history", marketKey{RegionID: 10000002, TypeID: 34}), fetchStateOK, "")
+	if _, _, ok := app.serveSwarmKey(ctx, swarmKindHistory, "10000002/34"); !ok {
+		t.Fatalf("history this instance fetched itself is not served")
+	}
+	// The alliance is still the peer's copy.
+	if _, _, ok := app.serveSwarmKey(ctx, swarmKindAlliance, "99000001"); ok {
+		t.Fatalf("the alliance record is still the peer's copy and was served")
 	}
 }

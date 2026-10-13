@@ -1,6 +1,6 @@
-{{define "title"}}Public Fits{{end}}
+{{define "title"}}Public Loadouts Browser{{end}}
 {{define "content"}}
-<h1><span class="gt">Public Fits</span></h1>
+<h1><span class="gt">Public Loadouts Browser</span></h1>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
@@ -8,7 +8,7 @@
 <p class="lede">The fits people here have made public. Each has its own page with modules, EFT and ratings.</p>
 {{if .For}}<p class="browse-for"><strong>Choosing fits for <a href="/doctrines/{{.For.ID}}">{{.For.Name}}</a>.</strong> Each one added is copied into the doctrine.</p>{{end}}
 
-<form method="get" action="/fittings/public/" class="lookup-form">
+<form method="get" action="/fittings/public/" class="lookup-form searchpanel">
   {{if ne .Filters.Sort "rank"}}<input type="hidden" name="sort" value="{{.Filters.Sort}}">{{end}}
   <span class="searchwrap">
     <input type="search" name="q" id="fit-browse-q" value="{{.Filters.Q}}" placeholder="Search fits, ships and authors…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-browse-suggest" aria-autocomplete="list" aria-label="Search fits" data-suggest="{{.SuggestURL}}">

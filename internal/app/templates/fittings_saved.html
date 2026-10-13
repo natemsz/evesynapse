@@ -1,6 +1,6 @@
-{{define "title"}}Ship Loadouts{{end}}
+{{define "title"}}My Loadouts{{end}}
 {{define "content"}}
-<h1><span class="gt">Ship Loadouts</span></h1>
+<h1><span class="gt">My Loadouts</span></h1>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
@@ -9,7 +9,7 @@
 {{if .Fittings}}
   {{if .Fittings.Loaded}}
   {{if .Fittings.Fittings}}
-  <div class="fit-esi-controls">
+  <div class="fit-esi-controls searchpanel">
     <span class="searchwrap"><input type="search" id="fit-esi-q" placeholder="Search by fit or ship name…" autocomplete="off" aria-label="Search fittings"></span>
     <select id="fit-esi-sort" aria-label="Sort fittings">
       <option value="name-asc">Name A–Z</option>
@@ -17,10 +17,12 @@
       <option value="ship-asc">Ship A–Z</option>
       <option value="ship-desc">Ship Z–A</option>
     </select>
+    <label>With module <input type="search" id="fit-esi-include" placeholder="Module name" autocomplete="off"></label>
+    <label>Without module <input type="search" id="fit-esi-exclude" placeholder="Module name" autocomplete="off"></label>
   </div>
   <div id="fit-esi-list" class="fit-cards">
   {{range .Fittings.Fittings}}
-  <article class="fit-card" data-fit-name="{{.Name}}" data-fit-ship="{{.ShipType}}">
+  <article class="fit-card" data-fit-name="{{.Name}}" data-fit-ship="{{.ShipType}}" data-fit-items="{{range .Groups}}{{range .Items}}{{.Name}},{{end}}{{end}}">
     {{if .ShipTypeID}}<img class="fit-card-ship" src="https://images.evetech.net/types/{{.ShipTypeID}}/render?size=64" width="64" height="64" alt="" loading="lazy">{{end}}
     <div class="fit-card-body">
       <h4><a href="/fittings/?character={{$.Fittings.CharacterID}}&esi={{.FittingID}}#fit-editor">{{.Name}}</a></h4>

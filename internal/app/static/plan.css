@@ -182,12 +182,14 @@ button[data-active="1"] { outline: 2px solid var(--accent); outline-offset: 1px;
 .plan-fold { margin-left: 0.4rem; padding: 0 0.35rem; }
 .plan-treecols { display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr); gap: 0.8rem; align-items: start; }
 .plan-treetools { display: flex; gap: 0.4rem; margin-bottom: 0.5rem; }
+.plan-kids { display: contents; }
 /* The decision map, after the approved mockup: stage columns by
    depth — Final assembly on the left, Inputs on the right — with a
    hairline running into each stage and a connector dot on every
    card past the first stage. A stage scrolls inside its own column
    when a capital tree puts hundreds of cards in it; dense stages
-   shrink their cards. On narrow screens the stages stack. */
+   shrink their cards. Narrow screens get the indented card stack
+   instead (plan.js picks the renderer by viewport width). */
 .plan-map-cols {
   display: grid;
   grid-auto-flow: column;
@@ -238,11 +240,6 @@ button[data-active="1"] { outline: 2px solid var(--accent); outline-offset: 1px;
 .plan-stage-dense .plan-node { padding: 0.3rem 0.45rem; }
 .plan-stage-dense .plan-cost { font-size: 0.92rem; }
 .plan-stage-dense .plan-node .plan-bar { height: 0.5rem; margin-top: 0.25rem; }
-@media (max-width: 60rem) {
-  .plan-map-cols { grid-auto-flow: row; grid-template-columns: 1fr; gap: 1.2rem; overflow-x: visible; }
-  .plan-stage-cards { max-height: none; overflow-y: visible; }
-  .plan-stage + .plan-stage::before { display: none; }
-}
 /* Decision-map cards: state chip + bottleneck flag on the top
 row, cost and branch facts on the meta line, and a full-width
 proportional bar under the text, colored by the decision. */

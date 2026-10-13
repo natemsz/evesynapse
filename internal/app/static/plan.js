@@ -60,6 +60,11 @@ var collapsed = {};       // path -> true
 var pathAnc = {};         // paths on the selected node's ancestor chain
 var pathDesc = {};        // paths under the selected node
 var revealPath = null;    // a card to scroll into view after this render
+// The columnar map needs width; on narrow screens the tree keeps
+// the classic indented card stack instead.
+var narrowMQ = (typeof window !== "undefined" && window.matchMedia)
+  ? window.matchMedia("(max-width: 60rem)") : null;
+function listMode() { return !!(narrowMQ && narrowMQ.matches); }
 var selected = "0";       // path
 var serverMode = false;   // cross-check failed: server figures only
 var judgeDocWired = false; // one outside-click closer for every reboot
@@ -456,10 +461,14 @@ function nodeCard(n, mask, elapsed, maxCost, parentPath) {
   }
   var cls = nodeClass(n, mask, elapsed);
   if (pathAnc[n.path] || pathDesc[n.path]) cls += " plan-onpath";
+  // In list mode depth reads from the content indent (data-pad-
+  // left, applied by app.js through the CSSOM); in map mode the
+  // stage column carries depth and the card stays flush.
+  var pad = listMode() ? (n.depth || 0) * 22 : 0;
   return '<div class="' + cls + '" data-path="' + esc(n.path) +
     (parentPath != null ? '" data-parent="' + esc(parentPath) : "") +
     '" title="' + esc(nodeTitle(n)) + '" role="button" tabindex="0">' +
-    '<div class="plan-node-main">' +
+    '<div class="plan-node-main"' + (pad ? ' data-pad-left="' + pad + '"' : "") + '>' +
     '<div class="plan-node-top"><strong>' + esc(n.name) + "</strong>" +
     '<span class="plan-chips">' +
     (n.build && n.short > 0 && n.path !== "0"
@@ -514,12 +523,33 @@ function computePathSets() {
   })(sel);
 }
 
+// The narrow-screen renderer: one row per node, children as
+// siblings under their parent, depth from the content indent,
+// bars scaled against siblings. Same cards, same wiring.
+function renderNodeList(n, mask, elapsed, maxCost) {
+  var kidsHTML = "";
+  var kids = n.kids || [];
+  if (kids.length && !collapsed[n.path]) {
+    var m = 0;
+    kids.forEach(function (k) { m = Math.max(m, nodeCost(k, mask)); });
+    kidsHTML = '<div class="plan-kids">' + kids.map(function (k) {
+      return renderNodeList(k, mask, elapsed, m || 1);
+    }).join("") + "</div>";
+  }
+  return nodeCard(n, mask, elapsed, maxCost, null) + kidsHTML;
+}
+
 function renderMap(t) {
   var host = $("plan-map");
   if (!host || !P) return;
   var mask = currentMask();
   var root = P.root;
   computePathSets();
+  if (listMode()) {
+    host.innerHTML = renderNodeList(root, mask, t.elapsed, root.materials + root.job || 1);
+    wireMap(host);
+    return;
+  }
   var stages = [];
   (function walk(n, parent) {
     var d = n.depth || 0;
@@ -540,6 +570,12 @@ function renderMap(t) {
   });
   html += "</div>";
   host.innerHTML = html;
+  wireMap(host);
+}
+
+// Event wiring shared by the column map and the narrow-screen
+// list: fold buttons, chip toggles, select, fold on double-click.
+function wireMap(host) {
   host.querySelectorAll("[data-plan-fold]").forEach(function (btn) {
     btn.addEventListener("click", function (ev) {
       ev.stopPropagation();
@@ -1111,6 +1147,11 @@ function wireJudge() {
 
 function init() {
   wireStatic();
+  if (narrowMQ && narrowMQ.addEventListener) {
+    narrowMQ.addEventListener("change", function () {
+      if (P) renderMap(currentTotals());
+    });
+  }
   loadJSON().catch(function () {
     fail("The interactive views need the plan data; the figures above are current.");
   });

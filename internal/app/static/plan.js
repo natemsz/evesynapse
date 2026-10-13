@@ -311,8 +311,10 @@ function renderHeader(t) {
   setText("plan-landed", t.complete ? iskC(t.landed) : "partial");
   setText("plan-landed-sub", t.complete ? landedSub : landedSub + " · some prices missing");
   setText("plan-value", t.known ? iskC(t.value) : "—");
+  var marginCls = "";
   if (t.profKnown) {
     setText("plan-margin", (t.profit > 0 ? "+" : "") + iskC(t.profit));
+    marginCls = t.profit > 0 ? "pos" : t.profit < 0 ? "neg" : "";
     var sub = "";
     if (t.value > 0) sub = t.marginPct.toFixed(1) + "% of market value";
     if (t.elapsed > 0) {
@@ -323,6 +325,20 @@ function renderHeader(t) {
   } else {
     setText("plan-margin", "—");
     setText("plan-margin-sub", "needs full prices");
+  }
+  ["plan-margin", "plan-margin-sub"].forEach(function (id) {
+    var el = $(id);
+    if (el) el.className = marginCls;
+  });
+  var verdict = $("plan-verdict");
+  if (verdict) {
+    if (t.known && t.profKnown) {
+      verdict.textContent = t.profit >= 0 ? "Building saves " + iskC(t.profit) : "Buying saves " + iskC(-t.profit);
+      verdict.className = "plan-verdict " + (t.profit >= 0 ? "build" : "buy");
+      verdict.hidden = false;
+    } else {
+      verdict.hidden = true;
+    }
   }
   setText("plan-elapsed", dur(t.elapsed));
   setText("plan-elapsed-sub", "critical path · " + P.slots + " slots");
@@ -441,7 +457,11 @@ function nodeCard(n, mask, elapsed, maxCost) {
     '" title="' + esc(nodeTitle(n)) + '" role="button" tabindex="0">' +
     '<div class="plan-node-main" data-pad-left="' + pad + '">' +
     '<div class="plan-node-top"><strong>' + esc(n.name) + "</strong>" +
-    '<span class="plan-chips"><span class="plan-chip">' + esc(label) + "</span>" +
+    '<span class="plan-chips">' +
+    (n.build && n.short > 0 && n.path !== "0"
+      ? '<button type="button" class="plan-chip plan-chipbtn" data-plan-toggle="' + esc(n.path) +
+        '" aria-label="Toggle ' + esc(n.name) + ' between build and buy">' + esc(label) + "</button>"
+      : '<span class="plan-chip">' + esc(label) + "</span>") +
     (risk ? '<span class="plan-flag">BOTTLENECK</span>' : "") + fold + "</span></div>" +
     '<div class="plan-node-meta"><span class="plan-cost">' + iskC(cost) + "</span> " + meta + "</div>" +
     bar + "</div></div>";
@@ -499,6 +519,17 @@ function renderMap(t) {
       renderMap(currentTotals());
     });
   });
+  host.querySelectorAll("[data-plan-toggle]").forEach(function (btn) {
+    btn.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      if (serverMode) return;
+      var path = btn.getAttribute("data-plan-toggle");
+      var n = findNode(path);
+      if (!n) return;
+      overrides[path] = decide(n, false, currentMask()) !== "buy";
+      renderAll();
+    });
+  });
   host.querySelectorAll(".plan-node").forEach(function (el) {
     function pick(ev) {
       // Rows are siblings, so the closest card is always this
@@ -507,13 +538,22 @@ function renderMap(t) {
       var t = ev && ev.target && ev.target.closest ? ev.target.closest("[data-path]") : el;
       if (t && t !== el) return;
       selected = el.getAttribute("data-path");
-      // Selecting a branch also opens it, same as its fold
-      // button; an open or childless row is unaffected.
-      delete collapsed[selected];
       renderMap(currentTotals());
       renderInspector(currentTotals());
     }
     el.addEventListener("click", pick);
+    el.addEventListener("dblclick", function (ev) {
+      // Double-click toggles the branch open/closed; a single
+      // click only selects. The fold button does the same for
+      // anyone who prefers it.
+      var t = ev && ev.target && ev.target.closest ? ev.target.closest("[data-path]") : el;
+      if (t && t !== el) return;
+      var n = findNode(el.getAttribute("data-path"));
+      if (!n || n.path === "0" || !(n.kids || []).length) return;
+      if (collapsed[n.path]) delete collapsed[n.path];
+      else collapsed[n.path] = true;
+      renderMap(currentTotals());
+    });
     el.addEventListener("keydown", function (ev) {
       if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pick(ev); }
     });
@@ -901,6 +941,85 @@ function wireStatic() {
   wireME();
   wirePlanSettings();
   wireJudge();
+  wirePlaces();
+}
+
+// Place pickers (build system, market region): fetched
+// autocomplete in the same shape as the judge picker — type to
+// search, click to fill. The system box submits the picked NAME
+// (the server resolves names as before); the market box fills
+// a hidden field with the region id, "guide" for the pinned
+// cluster-average row.
+function wirePlaces() {
+  wirePlace("system-q", "system-suggest", "system", null, function (item, input) {
+    input.value = item.name;
+  });
+  wirePlace("market-q", "market-suggest", "region",
+    { id: "guide", name: "Cluster average", label: "guide prices" },
+    function (item, input) {
+      input.value = item.id === "guide" ? "" : item.name;
+      input.placeholder = item.id === "guide" ? "Cluster average" : "Search regions";
+      var hidden = document.getElementById("market-value");
+      if (hidden) hidden.value = item.id;
+    });
+}
+
+function wirePlace(inputID, listID, kind, pinned, onPick) {
+  var input = document.getElementById(inputID), list = document.getElementById(listID);
+  if (!input || !list) return;
+  var seq = 0, timer = null;
+  function close() {
+    list.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+  }
+  function render(items) {
+    list.textContent = "";
+    var any = false;
+    if (pinned) {
+      any = true;
+      list.appendChild(option(pinned));
+    }
+    (items || []).forEach(function (item) {
+      any = true;
+      list.appendChild(option(item));
+    });
+    list.hidden = !any;
+    input.setAttribute("aria-expanded", any ? "true" : "false");
+  }
+  function option(item) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "charselector-option";
+    b.textContent = item.label ? item.name + " · " + item.label : item.name;
+    b.addEventListener("click", function () {
+      onPick(item, input);
+      close();
+    });
+    return b;
+  }
+  function search() {
+    var q = input.value.trim();
+    if (q.length < 2) {
+      render([]);
+      return;
+    }
+    var mine = ++seq;
+    fetch("/planner/suggest?kind=" + kind + "&q=" + encodeURIComponent(q), { headers: { Accept: "application/json" } })
+      .then(function (r) { return r.json(); })
+      .then(function (items) { if (mine === seq) render(items); })
+      .catch(function () { if (mine === seq) render([]); });
+  }
+  input.addEventListener("focus", function () { render([]); search(); });
+  input.addEventListener("input", function () {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(search, 150);
+  });
+  input.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape") { close(); input.blur(); }
+  });
+  document.addEventListener("click", function (ev) {
+    if (!input.parentElement.contains(ev.target)) close();
+  });
 }
 
 // Judge-as picker: the same filterable dropdown as the

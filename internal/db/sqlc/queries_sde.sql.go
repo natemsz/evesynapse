@@ -2283,6 +2283,36 @@ func (q *Queries) SearchPilotRecordsByName(ctx context.Context, lower string) ([
 	return items, nil
 }
 
+const searchSDERegions = `-- name: SearchSDERegions :many
+SELECT region_id, name FROM sde_regions
+WHERE name ILIKE $1
+ORDER BY name
+LIMIT 10
+`
+
+func (q *Queries) SearchSDERegions(ctx context.Context, name string) ([]SdeRegion, error) {
+	rows, err := q.db.QueryContext(ctx, searchSDERegions, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SdeRegion
+	for rows.Next() {
+		var i SdeRegion
+		if err := rows.Scan(&i.RegionID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const searchSDESkills = `-- name: SearchSDESkills :many
 SELECT m.type_id, t.name, m.rank
 FROM sde_skill_meta m
@@ -2313,6 +2343,43 @@ func (q *Queries) SearchSDESkills(ctx context.Context, arg SearchSDESkillsParams
 	for rows.Next() {
 		var i SearchSDESkillsRow
 		if err := rows.Scan(&i.TypeID, &i.Name, &i.Rank); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchSDESystems = `-- name: SearchSDESystems :many
+SELECT s.system_id, s.name, r.name AS region_name FROM sde_systems s
+JOIN sde_regions r ON r.region_id = s.region_id
+WHERE s.name ILIKE $1
+ORDER BY s.name
+LIMIT 10
+`
+
+type SearchSDESystemsRow struct {
+	SystemID   int64  `json:"system_id"`
+	Name       string `json:"name"`
+	RegionName string `json:"region_name"`
+}
+
+func (q *Queries) SearchSDESystems(ctx context.Context, name string) ([]SearchSDESystemsRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchSDESystems, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchSDESystemsRow
+	for rows.Next() {
+		var i SearchSDESystemsRow
+		if err := rows.Scan(&i.SystemID, &i.Name, &i.RegionName); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

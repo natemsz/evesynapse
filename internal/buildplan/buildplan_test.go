@@ -125,6 +125,69 @@ func TestPlanExpansionMath(t *testing.T) {
 	}
 }
 
+func TestMaterialForRunsFactored(t *testing.T) {
+	// Factor 1 (or unset) is exactly the plain formula.
+	for _, f := range []float64{0, 1} {
+		if got := MaterialForRunsFactored(10, 3, 5, f); got != MaterialForRuns(10, 3, 5) {
+			t.Errorf("factor %v: got %d, want %d", f, got, MaterialForRuns(10, 3, 5))
+		}
+	}
+	// Raitaru + T1 rigs in hisec: ×0.99 × (1 − 0.02) ≈ ×0.9702.
+	// 5 × 2 runs at ME 8: 9.2 plain → ceil(9.2 × 0.9702) = 9.
+	if got := MaterialForRunsFactored(5, 2, 8, 0.99*0.98); got != 9 {
+		t.Errorf("factored: got %d, want 9", got)
+	}
+	// The base-1 floor survives factoring: 1-per-run never drops
+	// below one per run.
+	if got := MaterialForRunsFactored(1, 4, 10, 0.5); got != 4 {
+		t.Errorf("base-1 floor: got %d, want 4", got)
+	}
+}
+
+func TestPlanFacilityFactors(t *testing.T) {
+	// Raitaru role bonus with T1 rigs at hisec multipliers:
+	// materials ×0.99×0.98, time ×0.85×0.80, cost ×0.97.
+	res, err := Build(fixtureRecipes(), 1001, Input{
+		Runs:               1,
+		FacilityMatFactor:  0.99 * 0.98,
+		FacilityTimeFactor: 0.85 * 0.80,
+		FacilityCostFactor: 0.97,
+	})
+	if err != nil {
+		t.Fatalf("buildPlan: %v", err)
+	}
+	// Mineral: widget 10 × 0.9702 → 10 (ceil 9.702); component
+	// 5 × 2 × 0.9702 → 10 (ceil 9.702). Total 20 — the ceiling
+	// eats the bonus at this scale, so drop runs up: at 10 runs
+	// the widget needs ceil(100 × 0.9702) = 98, not 100.
+	if req, _ := leafQty(res.Root, 34); req != 20 {
+		t.Errorf("mineral at 1 run: got %d, want 20", req)
+	}
+	res, err = Build(fixtureRecipes(), 1001, Input{
+		Runs:              10,
+		FacilityMatFactor: 0.99 * 0.98,
+	})
+	if err != nil {
+		t.Fatalf("buildPlan 10 runs: %v", err)
+	}
+	// Widget: ceil(10×10 × 0.9702) = 98; component: ceil(5×20 ×
+	// 0.9702) = 98. Total 196.
+	if req, _ := leafQty(res.Root, 34); req != 196 {
+		t.Errorf("mineral at 10 runs: got %d, want 196", req)
+	}
+	// Time at the factored rate: (600 + 2×300) × 0.68 = 816.
+	res, err = Build(fixtureRecipes(), 1001, Input{
+		Runs:               1,
+		FacilityTimeFactor: 0.85 * 0.80,
+	})
+	if err != nil {
+		t.Fatalf("buildPlan time: %v", err)
+	}
+	if res.TotalSeconds != 816 {
+		t.Errorf("total seconds: got %d, want 816", res.TotalSeconds)
+	}
+}
+
 func TestPlanMEOverridesAtConsumingNode(t *testing.T) {
 	// ME 10 on the Widget blueprint: component need ceil(2×0.9)=2,
 	// mineral need ceil(10×0.9)=9, component branch unchanged.

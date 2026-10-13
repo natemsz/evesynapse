@@ -60,6 +60,17 @@ WHERE LOWER(name) = LOWER($1);
 -- name: GetSDERegion :one
 SELECT region_id, name FROM sde_regions
 WHERE region_id = $1;
+-- name: SearchSDESystems :many
+SELECT s.system_id, s.name, r.name AS region_name FROM sde_systems s
+JOIN sde_regions r ON r.region_id = s.region_id
+WHERE s.name ILIKE $1
+ORDER BY s.name
+LIMIT 10;
+-- name: SearchSDERegions :many
+SELECT region_id, name FROM sde_regions
+WHERE name ILIKE $1
+ORDER BY name
+LIMIT 10;
 -- name: SearchSDETypes :many
 SELECT type_id, name FROM sde_types
 WHERE name ILIKE $1

@@ -143,6 +143,7 @@ func seedPlannerSDE(t *testing.T, app *Application) {
 			(2001, 1002, 2), (2001, 34, 10), (2002, 34, 5)`,
 		`INSERT INTO sde_blueprint_skills (blueprint_type_id, skill_type_id, level) VALUES
 			(2001, 3380, 1), (2002, 3380, 4)`,
+		`INSERT INTO sde_regions (region_id, name) VALUES (10000002, 'The Forge')`,
 	}
 	for _, stmt := range stmts {
 		if _, err := app.db.ExecContext(ctx, stmt); err != nil {
@@ -224,16 +225,14 @@ func TestPlannerRendersFromLocalData(t *testing.T) {
 	mustContain(t, "/planner/?product=1001", body,
 		"Fixture Widget",
 		"Fixture Component",
-		"Tritanium",
-		`<td class="num">5</td><td class="num">5.00 ISK</td><td class="num">25.00 ISK</td>`, // 20 needed, 15 on hand, 5 left at 5 ISK
 		"95.40 ISK",  // landed: 25.00 materials + 70.40 fees at a 6.4% index
 		"904.60 ISK", // margin: 1,000.00 value − 95.40 landed
 		"2.89K ISK/hour",
 		"materials &#43; fees", // html/template escapes the plus
-		"building saves 904.60 ISK",
+		"Building saves 904.60 ISK",
 		"Landed cost",
 		"Build tree",
-		"Shopping list",
+		"Double-click to expand/collapse a node",
 	)
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handler made %d outbound calls, want 0", got)
@@ -388,22 +387,162 @@ func TestPlannerJitaMarket(t *testing.T) {
 	if err := json.Unmarshal([]byte(body), &p); err != nil {
 		t.Fatalf("planner jita json decodes: %v", err)
 	}
-	// Five mineral at 6 ISK Jita sell; the finished hull at
-	// 1,100. The component stays unpriced (no Jita row).
+	// Five mineral at 6 ISK Forge sell; the finished hull at
+	// 1,100. The component has no Forge row, so it layers over
+	// its guide price instead of going unpriced.
 	if p.Optimized.Landed != 3000 || p.Optimized.Value != 110000 {
 		t.Errorf("jita landed/value = %v/%v, want 3000/110000", p.Optimized.Landed, p.Optimized.Value)
 	}
-	if p.Market != "jita" || p.PricesNote == "" {
-		t.Errorf("market/note = %q/%q, want jita + stamp", p.Market, p.PricesNote)
+	if p.Market != "10000002" || !strings.Contains(p.PricesNote, "The Forge sell rows as of") || !strings.Contains(p.PricesNote, "cluster average elsewhere") {
+		t.Errorf("market/note = %q/%q, want region id + layered note", p.Market, p.PricesNote)
 	}
 	code, body = getPage(t, app, cookie, "/planner/?product=1001&runs=1&market=jita")
 	if code != http.StatusOK {
 		t.Fatalf("planner jita page status = %d, want 200", code)
 	}
-	mustContain(t, "/planner/", body, "30.00 ISK", "Jita 4-4 sell")
+	mustContain(t, "/planner/", body, "30.00 ISK", "The Forge")
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handler made %d outbound calls, want 0", got)
 	}
+}
+
+// TestPlannerRegionWithoutRowsFallsBackToGuide pins the
+// capital-plan bug: picking a region with no sell rows on file
+// must degrade to guide prices, never zero the plan (the old
+// all-or-nothing Jita mode left every unpriced item at zero and
+// the header at "partial" until a preset was clicked).
+func TestPlannerRegionWithoutRowsFallsBackToGuide(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	seedPlannerSDE(t, app)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	seedSnapshot(t, q, fixtureCharA, esi.SnapBlueprints, esi.Blueprints{
+		{ItemID: 1, TypeID: 2002, Quantity: -1, MaterialEfficiency: 8, TimeEfficiency: 12, Runs: -1},
+	})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapAssets, []esi.Asset{
+		{ItemID: 2, TypeID: 34, Quantity: 15, LocationID: 60003760, LocationType: "station"},
+	})
+	app.prices[34] = esi.MarketPrice{TypeID: 34, AveragePrice: 5}
+	app.prices[1001] = esi.MarketPrice{TypeID: 1001, AveragePrice: 1000}
+	app.prices[1002] = esi.MarketPrice{TypeID: 1002, AveragePrice: 500}
+	if err := q.UpsertIndustryCostIndex(ctx, db.UpsertIndustryCostIndexParams{
+		SolarSystemID: 30000142, Activity: "manufacturing", CostIndex: 0.064,
+	}); err != nil {
+		t.Fatalf("seed cost index: %v", err)
+	}
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+
+	code, body := getPage(t, app, cookie, "/planner/?product=1001&runs=1&market=10000043&format=json")
+	if code != http.StatusOK {
+		t.Fatalf("planner region json status = %d, want 200", code)
+	}
+	var p planPayload
+	if err := json.Unmarshal([]byte(body), &p); err != nil {
+		t.Fatalf("planner region json decodes: %v", err)
+	}
+	if p.Market != "10000043" {
+		t.Errorf("market = %q, want the picked region id", p.Market)
+	}
+	if !strings.Contains(p.PricesNote, "no sell rows on file yet; cluster average shown.") {
+		t.Errorf("prices note = %q, want the guide fallback note", p.PricesNote)
+	}
+	// Same totals as the plain guide plan: 95.40 landed
+	// (25.00 materials + 70.40 fees), 1,000.00 value.
+	if p.Optimized.Landed != 9540 || p.Optimized.Value != 100000 || !p.Optimized.Known {
+		t.Errorf("fallback landed/value/known = %v/%v/%v, want 9540/100000/true",
+			p.Optimized.Landed, p.Optimized.Value, p.Optimized.Known)
+	}
+}
+
+// TestPlannerStructureBonuses pins the facility math end to
+// end: a Raitaru with T1 rigs in a high-sec system applies the
+// SDE role bonus (materials ×0.99, time ×0.85, cost ×0.97) and
+// the rig bonuses at the high-sec multiplier (materials −2%,
+// time −20%), all read from sde_type_attributes.
+func TestPlannerStructureBonuses(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	seedPlannerSDE(t, app)
+	ctx := context.Background()
+	for _, stmt := range []string{
+		`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30000142, 'Jita', 10000002, 0.9457)`,
+		// Raitaru role bonus: mat 0.99, cost 0.97, time 0.85.
+		`INSERT INTO sde_type_attributes (type_id, attribute_id, value) VALUES
+			(35825, 2600, 0.99), (35825, 2601, 0.97), (35825, 2602, 0.85)`,
+		// T1 ME rig: −2% materials; sec multipliers 1.0/1.9/2.1.
+		`INSERT INTO sde_type_attributes (type_id, attribute_id, value) VALUES
+			(37146, 2594, -2), (37146, 2355, 1.0), (37146, 2356, 1.9), (37146, 2357, 2.1)`,
+		// T1 TE rig: −20% time.
+		`INSERT INTO sde_type_attributes (type_id, attribute_id, value) VALUES
+			(37162, 2593, -20), (37162, 2355, 1.0), (37162, 2356, 1.9), (37162, 2357, 2.1)`,
+	} {
+		if _, err := app.db.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed facility sde: %v", err)
+		}
+	}
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	seedSnapshot(t, q, fixtureCharA, esi.SnapBlueprints, esi.Blueprints{
+		{ItemID: 1, TypeID: 2002, Quantity: -1, MaterialEfficiency: 8, TimeEfficiency: 12, Runs: -1},
+	})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapAssets, []esi.Asset{
+		{ItemID: 2, TypeID: 34, Quantity: 15, LocationID: 60003760, LocationType: "station"},
+	})
+	app.prices[34] = esi.MarketPrice{TypeID: 34, AveragePrice: 5}
+	app.prices[1001] = esi.MarketPrice{TypeID: 1001, AveragePrice: 1000}
+	app.prices[1002] = esi.MarketPrice{TypeID: 1002, AveragePrice: 500}
+	if err := q.UpsertIndustryCostIndex(ctx, db.UpsertIndustryCostIndexParams{
+		SolarSystemID: 30000142, Activity: "manufacturing", CostIndex: 0.064,
+	}); err != nil {
+		t.Fatalf("seed cost index: %v", err)
+	}
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+
+	shoppingQty := func(url string) (planPayload, int64) {
+		code, body := getPage(t, app, cookie, url)
+		if code != http.StatusOK {
+			t.Fatalf("planner %s status = %d, want 200", url, code)
+		}
+		var p planPayload
+		if err := json.Unmarshal([]byte(body), &p); err != nil {
+			t.Fatalf("planner json decodes: %v", err)
+		}
+		for _, line := range p.Optimized.Shopping {
+			if line.TypeID == 34 {
+				return p, line.Qty
+			}
+		}
+		return p, -1
+	}
+
+	// Baseline (NPC station): 20 needed, 15 on hand, 5 to buy.
+	_, qty := shoppingQty("/planner/?product=1001&runs=1&format=json")
+	if qty != 5 {
+		t.Fatalf("station tritanium qty = %d, want 5", qty)
+	}
+	// Raitaru + T1 rigs: widget ceil(10 × 0.9702) = 10, component
+	// ceil(5×2×0.92 × 0.9702) = 9 → 19 needed, 4 to buy; the job
+	// also lands cheaper and faster than the station plan.
+	p, qty := shoppingQty("/planner/?product=1001&runs=1&structure=35825&rig=t1&format=json")
+	if qty != 4 {
+		t.Errorf("raitatru tritanium qty = %d, want 4", qty)
+	}
+	if p.Optimized.Landed >= 9540 {
+		t.Errorf("raitatru landed = %d, want below the station plan's 9540", p.Optimized.Landed)
+	}
+	code, body := getPage(t, app, cookie, "/planner/?product=1001&runs=1&structure=35825&rig=t1")
+	if code != http.StatusOK {
+		t.Fatalf("planner structure page status = %d, want 200", code)
+	}
+	mustContain(t, "/planner/ structure", body, "Building in Raitaru · T1 rigs", `value="35825" selected`)
 }
 
 // TestMigration011Reopen proves the schema bootstrap is

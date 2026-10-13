@@ -7,6 +7,21 @@
 .plan-stats > div { background: var(--row); padding: 0.6rem 0.8rem; }
 .plan-stats .plan-k { display: block; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .plan-stats .plan-basis { color: var(--muted); font-style: italic; }
+.plan-verdictrow { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.plan-verdict { font-size: 1.08rem; font-weight: 700; margin: 0.45rem 0 0; }
+.plan-verdict.build { color: var(--plan-build); }
+.plan-verdict.buy { color: var(--plan-buy); }
+.plan-nodehint { color: var(--muted); margin: 0.45rem 0 0; }
+#plan .pos { color: var(--plan-build); }
+#plan .neg { color: var(--plan-risk); }
+.plan-chipbtn { font: inherit; background: none; cursor: pointer; padding: 0 0.45rem; }
+.plan-chipbtn:hover { filter: brightness(1.35); }
+/* Product search matches the ship-fit search: a flex row whose
+   box grows like .fit-searchwrap, same .searchwrap/.suggest. */
+.plan-searchrow { display: flex; gap: 0.5rem; align-items: flex-start; flex-wrap: wrap; }
+.plan-searchwrap { flex: 2 1 20rem; width: auto; }
+.plan-csvbtn { display: inline-block; line-height: 0; }
+.plan-csvbtn .plan-glyph { width: 1.45rem; height: 1.45rem; vertical-align: -0.4rem; }
 .plan-stats strong { font-size: 1.4rem; font-weight: 700; }
 .plan-presets, .plan-tabs { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; margin: 0.5rem 0; }
 .plan-tools { display: flex; justify-content: flex-end; margin: 0.5rem 0 0; }
@@ -42,15 +57,19 @@ it, inactive tabs recessed and muted. */
 .plan-headbtns { display: inline-flex; align-items: center; gap: 0.5rem; flex: none; }
 .plan-glyph { width: 1.3rem; height: 1.3rem; vertical-align: -0.25rem; }
 .plan-glyph-sm { width: 0.95rem; height: 0.95rem; vertical-align: -0.15rem; }
+/* Head icon buttons (settings, skills) are chrome, not actions:
+   no button fill, no orange border — a soft tint on hover only. */
 #plan-settings-toggle {
   background: none;
   border: 1px solid transparent;
   border-radius: 3px;
+  box-shadow: none;
   cursor: pointer;
   line-height: 0;
   padding: 0.2rem;
 }
-#plan-settings-toggle:hover { border-color: var(--accent); background: rgba(255, 106, 26, 0.12); }
+#plan-settings-toggle:hover { border-color: #3a3a3a; background: rgba(255, 255, 255, 0.05); }
+.plan-has-tip { position: relative; display: inline-flex; align-items: center; }
 #plan-settings-toggle .plan-glyph { width: 1.4rem; height: 1.4rem; vertical-align: 0; }
 .plan-settings-fields p { margin: 0 0 0.6rem; }
 /* Skills glyph: a skill-book with a check/X badge. The badge
@@ -73,38 +92,9 @@ the rail tooltip treatment. */
 }
 .plan-skillglyph.ok .plan-skillbadge { background: #2e7d32; }
 .plan-skillglyph.bad .plan-skillbadge { background: #d63c14; }
-/* Glyph tooltips in the plan head: the settings button gets the
-rail-tooltip treatment as a one-liner; the skills glyph carries
-a real panel with the missing skills as a list. */
-#plan-settings-toggle[data-tip] { position: relative; }
-@media (hover: hover) {
-  #plan-settings-toggle[data-tip]::after {
-    content: attr(data-tip);
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    padding: 0.35rem 0.7rem;
-    border-radius: 0.4rem;
-    background: rgba(20, 16, 12, 0.97);
-    border: 1px solid rgba(255, 210, 122, 0.35);
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
-    color: #ffd27a;
-    font-size: 0.85rem;
-    letter-spacing: 0.04em;
-    white-space: nowrap;
-    pointer-events: none;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.12s ease, visibility 0.12s;
-    z-index: 100;
-  }
-  #plan-settings-toggle[data-tip]:hover::after,
-  #plan-settings-toggle[data-tip]:focus-visible::after {
-    opacity: 1;
-    visibility: visible;
-    transition-delay: 0.2s;
-  }
-}
+/* Glyph tooltips in the plan head: both glyphs carry the same
+.plan-tip panel — a one-line note for settings, the missing
+skills as a list for the skillbook. */
 .plan-tip {
   position: absolute;
   top: calc(100% + 8px);
@@ -126,9 +116,9 @@ a real panel with the missing skills as a list. */
   transition: opacity 0.12s ease, visibility 0.12s;
   z-index: 100;
 }
-.plan-skillglyph:hover .plan-tip,
-.plan-skillglyph:focus-visible .plan-tip,
-.plan-skillglyph:focus-within .plan-tip {
+.plan-has-tip:hover .plan-tip,
+.plan-has-tip:focus-visible .plan-tip,
+.plan-has-tip:focus-within .plan-tip {
   opacity: 1;
   visibility: visible;
   transition-delay: 0.2s;
@@ -147,7 +137,8 @@ a real panel with the missing skills as a list. */
 /* ME grid: each label + input pair is atomic and never splits;
 two pair-columns wide, one narrow. Long names truncate into
 the title tooltip instead of pushing the input off. */
-.me-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem 1rem; }
+#me-modal .modal { width: min(52rem, 100%); }
+.me-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.3rem 1rem; }
 .me-cell { display: flex; align-items: center; gap: 0.35rem; min-width: 0; white-space: nowrap; }
 .me-cell .me-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .me-cell input { flex: none; }

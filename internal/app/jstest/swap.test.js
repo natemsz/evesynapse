@@ -42,13 +42,11 @@ test("modifier keys, non-left buttons and targets stay full loads", function () 
   assert.equal(swap.shouldSwapClick(click({ target: "_self" })), true);
 });
 
-test("simulator, saved fits, planner, auth and switch stay full loads", function () {
+test("simulator, saved fits, auth and switch stay full loads", function () {
   for (const path of [
     "/fittings/",
     "/fittings/saved/",
     "/fittings/saved/?x=1",
-    "/planner/",
-    "/planner/?product=123",
     "/auth/eve",
     "/auth/callback",
     "/characters/switch?character=1"
@@ -64,6 +62,8 @@ test("content pages qualify, including public fits and query strings", function 
     "/market/?type=34",
     "/fittings/public/",
     "/fittings/public/fit/7/",
+    "/planner/",
+    "/planner/?product=123",
     "/items/",
     "/character/",
     "/sync/"
@@ -75,7 +75,7 @@ test("content pages qualify, including public fits and query strings", function 
 test("deniedTarget covers the full-navigation pages", function () {
   assert.equal(swap.deniedTarget("/fittings/"), true);
   assert.equal(swap.deniedTarget("/fittings"), true);
-  assert.equal(swap.deniedTarget("/planner"), true);
+  assert.equal(swap.deniedTarget("/planner"), false);
   assert.equal(swap.deniedTarget("/market/"), false);
   assert.equal(swap.deniedTarget("/plannersham/"), false);
 });

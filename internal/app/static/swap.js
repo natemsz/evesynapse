@@ -21,7 +21,7 @@
   // the SSO round-trips, and the character switch (the shell's
   // account area changes identity with it).
   var SWAP_DENY_EXACT = ["/fittings/"];
-  var SWAP_DENY_PREFIX = ["/fittings/saved", "/planner/", "/auth/", "/characters/switch"];
+  var SWAP_DENY_PREFIX = ["/fittings/saved", "/auth/", "/characters/switch"];
 
   // Prefetch skips more than clicks do: the auto-refresh page
   // always falls back to a full load, so rendering it ahead of

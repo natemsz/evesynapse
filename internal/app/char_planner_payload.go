@@ -505,6 +505,15 @@ func planFinishPreset(r *planRollup, root *buildplan.Node, prices map[int64]esi.
 		t.Shopping = append(t.Shopping, line)
 	}
 	t.Jobs, t.Elapsed = planSchedule(r.jobs, slots, nameOf)
+	// An empty preset (the mask buys the finished product, or
+	// stock covers everything) must still marshal as [], never
+	// null: the client dereferences both lists on first load.
+	if t.Shopping == nil {
+		t.Shopping = []planShopLine{}
+	}
+	if t.Jobs == nil {
+		t.Jobs = []planJobSpan{}
+	}
 }
 
 // iskCompactCents formats integer cents compactly for dense

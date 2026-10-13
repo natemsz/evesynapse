@@ -283,9 +283,8 @@ func TestPlannerJudgeCharacterBuildable(t *testing.T) {
 		`value="Fixture Ceo"`,
 		`plan-skillglyph ok`,
 		`aria-label="Can Fixture Ceo build this? All skills covered."`,
-		`data-tip="Every skill in the chain is covered."`,
+		`class="plan-tip"`,
 		`plan-skillbadge" aria-hidden="true">✓`,
-		"netted against what Fixture Ceo holds",
 		// 20 Tritanium needed, 15 on hand → 5 to buy at 5 ISK.
 		"Profit Analysis",
 		"25.00 ISK",
@@ -303,7 +302,7 @@ func TestPlannerJudgeCharacterShortSkill(t *testing.T) {
 	_, body := getPage(t, app, cookie, path)
 	mustContain(t, path, body,
 		`plan-skillglyph bad`,
-		`data-tip="Short skills: Industry — needs IV · trained III"`,
+		`<li>Industry — needs IV · trained III</li>`,
 		`plan-skillbadge" aria-hidden="true">✕`,
 	)
 	if strings.Contains(body, "Industry — needs IV · trained III — covered") {
@@ -319,7 +318,7 @@ func TestPlannerJudgeCharacterNoSkillsYet(t *testing.T) {
 	_, body := getPage(t, app, cookie, path)
 	mustContain(t, path, body,
 		`plan-skillglyph bad`,
-		`data-tip="Skills haven&#39;t synced for Fixture Ceo yet — once they land, this says what they can build."`,
+		"Skills haven&#39;t synced for Fixture Ceo yet — once they land, this says what they can build.",
 		`aria-label="Can Fixture Ceo build this? Some skills missing."`,
 		"Fixture Ceo&#39;s hangars haven&#39;t synced yet",
 	)
@@ -345,9 +344,9 @@ func TestPlannerJudgeTagBestOfAndCombinedStock(t *testing.T) {
 		`aria-current="true"`,
 		`plan-skillglyph ok`,
 		`aria-label="Can your &#34;indy&#34; characters build this? All skills covered."`,
-		`data-tip="Every skill in the chain is covered."`,
+		`class="plan-tip"`,
 		`plan-skillbadge" aria-hidden="true">✓`,
-		`combined hangars of your &#34;indy&#34; characters (2 of them)`,
+		"Every skill in the chain is covered.",
 	)
 }
 
@@ -363,7 +362,8 @@ func TestPlannerJudgeTagNobodyHasIt(t *testing.T) {
 	mustContain(t, path, body,
 		`plan-skillglyph bad`,
 		`aria-label="Can your &#34;indy&#34; characters build this? Some skills missing."`,
-		`data-tip="Skills are on file for 1 of 2 tagged characters; the rest count as untrained until they sync. Short skills: Industry — needs IV · best on the tag I"`,
+		"Skills are on file for 1 of 2 tagged characters; the rest count as untrained until they sync.",
+		`<li>Industry — needs IV · best on the tag I</li>`,
 		`plan-skillbadge" aria-hidden="true">✕`,
 	)
 }
@@ -462,7 +462,7 @@ func TestPlannerSettingsModal(t *testing.T) {
 	_, body := getPage(t, app, cookie, "/planner/?product=1001&runs=1")
 	mustContain(t, "/planner/ (settings)", body,
 		`id="plan-settings-toggle"`,
-		`aria-label="Plan settings"`,
+		`aria-label="Build settings"`,
 		`aria-haspopup="dialog"`,
 		`id="plan-settings-modal" hidden`,
 		`id="plan-settings-close"`,

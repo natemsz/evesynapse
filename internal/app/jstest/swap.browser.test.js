@@ -201,7 +201,6 @@ test("denied targets never fetch", async function () {
   const env = makeEnv();
   loadSwap(env);
   clickOn(env, "/fittings/");
-  clickOn(env, "/planner/?product=1");
   await flush();
   assert.deepEqual(env.win.fetched, []);
 });

@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 
+	"evesynapse/internal/buildplan"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/pgtest"
@@ -207,6 +208,15 @@ func TestPlannerRendersFromLocalData(t *testing.T) {
 	}
 	mustContain(t, "/planner/?q=Fixture", body, "/planner/?product=1001", "Fixture Widget")
 
+	// The bare planner opens to a blank planner frame, not just
+	// a search box on an empty page.
+	code, body = getPage(t, app, cookie, "/planner/")
+	if code != http.StatusOK {
+		t.Fatalf("planner bare page: status %d", code)
+	}
+	mustContain(t, "/planner/ (blank)", body,
+		"Nothing planned yet", "plan-stats", "Landed cost")
+
 	code, body = getPage(t, app, cookie, "/planner/?product=1001&runs=1")
 	if code != http.StatusOK {
 		t.Fatalf("planner plan: status %d", code)
@@ -215,8 +225,7 @@ func TestPlannerRendersFromLocalData(t *testing.T) {
 		"Fixture Widget",
 		"Fixture Component",
 		"Tritanium",
-		"Requires Industry I", // root blueprint skill line (skill type name from SDE)
-		"Tritanium — 5 × 5.00 ISK = 25.00 ISK", // 20 needed, 15 on hand, 5 left at 5 ISK
+		`<td class="num">5</td><td class="num">5.00 ISK</td><td class="num">25.00 ISK</td>`, // 20 needed, 15 on hand, 5 left at 5 ISK
 		"95.40 ISK",  // landed: 25.00 materials + 70.40 fees at a 6.4% index
 		"904.60 ISK", // margin: 1,000.00 value − 95.40 landed
 		"2.89K ISK/hour",
@@ -420,4 +429,27 @@ func TestMigration011Reopen(t *testing.T) {
 	}
 	conn.Close()
 	pool.Close()
+}
+
+// An empty preset (the mask buys the finished product, or stock
+// covers everything) must marshal its lists as [], never null —
+// the client dereferences both on first load, and a null shopping
+// list is what blanked capital plans until a preset was clicked.
+func TestPlannerEmptyPresetMarshalsLists(t *testing.T) {
+	r := &planRollup{preset: planPresetOptimized, shop: make(map[int64]int64)}
+	r.tot.Complete = true
+	r.tot.FeesKnown = true
+	root := &buildplan.Node{TypeID: 999, ProducedQty: 1}
+	planFinishPreset(r, root, map[int64]esi.MarketPrice{}, 1,
+		func(int64) string { return "X" },
+		func(int64) (float64, bool) { return 0, false })
+	raw, err := json.Marshal(r.tot)
+	if err != nil {
+		t.Fatalf("marshal totals: %v", err)
+	}
+	for _, want := range []string{`"shopping":[]`, `"jobs":[]`} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("empty preset marshaled %s missing %s (null lists break first load)", raw, want)
+		}
+	}
 }

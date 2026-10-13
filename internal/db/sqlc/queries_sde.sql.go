@@ -1703,6 +1703,41 @@ func (q *Queries) ListSDETypeEffectsByIDs(ctx context.Context, typeIds []int64) 
 	return items, nil
 }
 
+const listSDETypeGroups = `-- name: ListSDETypeGroups :many
+SELECT t.type_id, COALESCE(g.name, '') AS group_name
+FROM sde_types t
+JOIN sde_groups g ON g.group_id = t.group_id
+WHERE t.type_id = ANY($1::bigint[])
+`
+
+type ListSDETypeGroupsRow struct {
+	TypeID    int64  `json:"type_id"`
+	GroupName string `json:"group_name"`
+}
+
+func (q *Queries) ListSDETypeGroups(ctx context.Context, typeIds []int64) ([]ListSDETypeGroupsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDETypeGroups, pq.Array(typeIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDETypeGroupsRow
+	for rows.Next() {
+		var i ListSDETypeGroupsRow
+		if err := rows.Scan(&i.TypeID, &i.GroupName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDETypeGroupsByIDs = `-- name: ListSDETypeGroupsByIDs :many
 SELECT type_id, group_id FROM sde_types
 WHERE type_id = ANY($1::bigint[])

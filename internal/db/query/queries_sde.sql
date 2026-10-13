@@ -510,6 +510,12 @@ WHERE g.category_id = 6 AND t.published = 1
   AND strpos(lower(t.name), lower(@q)) > 0
 ORDER BY CASE WHEN strpos(lower(t.name), lower(@q)) = 1 THEN 0 ELSE 1 END, t.name
 LIMIT @lim::bigint;
+-- name: ListSDETypeGroups :many
+SELECT t.type_id, COALESCE(g.name, '') AS group_name
+FROM sde_types t
+JOIN sde_groups g ON g.group_id = t.group_id
+WHERE t.type_id = ANY(sqlc.arg(type_ids)::bigint[]);
+
 -- name: ListFitSlotTypes :many
 SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
 FROM sde_types t

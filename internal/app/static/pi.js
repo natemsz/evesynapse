@@ -1,9 +1,10 @@
 // pi.js — PI Planner map interactions. Server renders the plan;
 // this file only moves the highlight and navigates picks. It
 // duplicates no money or factory formula: amounts, factories and
-// taxes always come from the server render. Coverage tinting
-// mirrors the server's raw-availability check for instant feedback
-// while ticking planets; Recalculate remains the source of truth.
+// taxes always come from the server render. The coverage verdict
+// and tinting mirror the server's raw-availability check live, so
+// ticking planets never leaves the page arguing with itself;
+// Recalculate remains the source of truth for the money.
 (function () {
   "use strict";
   var graphEl = document.getElementById("pi-graph-data");
@@ -76,19 +77,80 @@
     window.location.search = params.toString();
   });
 
-  // Live planet tint: selected planets glow; chain raws your
-  // planets cannot supply flag without a round trip.
-  function retintPlanets() {
+  // Live coverage: selected planets glow, chain tiles your
+  // planets cannot supply flag, and the verdict line recomputes —
+  // all without a round trip, mirroring the server's check.
+  var tierOf = {};
+  var rawPlanets = {};
+  graphRoot.querySelectorAll("[data-pi-node]").forEach(function (el) {
+    var name = el.getAttribute("data-pi-node");
+    tierOf[name] = el.getAttribute("data-pi-tier");
+    if (tierOf[name] === "R0") {
+      var ps = {};
+      (el.getAttribute("data-pi-planets") || "").split(",").forEach(function (s) {
+        if (s.trim()) ps[s.trim()] = true;
+      });
+      rawPlanets[name] = ps;
+    }
+  });
+
+  function currentTarget() {
+    var sel = graphRoot.querySelector(".pi-node.selected");
+    if (sel) return sel.getAttribute("data-pi-node");
+    var prod = document.getElementById("pi-product");
+    return prod ? prod.value : "";
+  }
+
+  function retintCoverage() {
     var checked = {};
     document.querySelectorAll('input[name="planets"]:checked').forEach(function (b) { checked[b.value] = true; });
+    var nChecked = Object.keys(checked).length;
     graphRoot.querySelectorAll('[data-pi-tier="Planet"]').forEach(function (el) {
       var on = !!checked[el.getAttribute("data-pi-node")];
       el.classList.toggle("covered", on);
       el.classList.toggle("dimmed", !on);
     });
+    var target = currentTarget();
+    if (!target) return;
+    var chain = chainOf(target);
+    var raws = Object.keys(chain).filter(function (n) { return tierOf[n] === "R0"; });
+    var rawCovered = {};
+    var missing = [];
+    raws.forEach(function (r) {
+      var ok = nChecked > 0 && Object.keys(rawPlanets[r] || {}).some(function (p) { return checked[p]; });
+      rawCovered[r] = ok;
+      if (nChecked > 0 && !ok) missing.push(r);
+    });
+    // Tint: raws flag when unsupplied; a P1 flags when its raw is.
+    graphRoot.querySelectorAll("[data-pi-node]").forEach(function (el) {
+      var name = el.getAttribute("data-pi-node");
+      if (!chain[name]) return;
+      if (tierOf[name] === "R0") {
+        el.classList.toggle("missing", nChecked > 0 && !rawCovered[name]);
+      } else if (tierOf[name] === "P1") {
+        var ins = (graph[name] && graph[name].inputs) || [];
+        el.classList.toggle("missing", nChecked > 0 && ins.length > 0 && !rawCovered[ins[0]]);
+      }
+    });
+    // The verdict line itself, in the server's own wording.
+    var box = document.getElementById("pi-coverage");
+    if (!box) return;
+    if (nChecked === 0) {
+      box.textContent = "No planet types selected — tick planets above to check coverage.";
+      box.className = "pi-coverage";
+    } else if (missing.length === 0) {
+      box.textContent = "Covered — your " + nChecked + " selected planet type(s) supply all " +
+        raws.length + " raw resources.";
+      box.className = "pi-coverage pos";
+    } else {
+      missing.sort();
+      box.textContent = "Not covered — " + (raws.length - missing.length) + " of " + raws.length +
+        " raw resources available. Missing: " + missing.join(", ");
+      box.className = "pi-coverage neg";
+    }
   }
   document.querySelectorAll('input[name="planets"]').forEach(function (b) {
-    b.addEventListener("change", retintPlanets);
+    b.addEventListener("change", retintCoverage);
   });
-  retintPlanets();
+  retintCoverage();
 })();

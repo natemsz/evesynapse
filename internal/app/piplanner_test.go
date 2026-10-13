@@ -40,6 +40,10 @@ func TestPIPlannerRendersChain(t *testing.T) {
 		"Suggested colonies",
 		"Covered",
 		"Extractor",
+		// The live-coverage hooks pi.js drives: the verdict
+		// element's id and each raw's planet sources.
+		`id="pi-coverage"`,
+		`data-pi-planets="Gas"`,
 	)
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handler made %d outbound calls, want 0", got)

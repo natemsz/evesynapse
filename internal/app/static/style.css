@@ -3448,192 +3448,21 @@ html[data-theme="light"] .doctrine-fits li:last-child { border-color: #e3d9c6; }
 .fit-card h5 { margin: 0.6rem 0 0.2rem; font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .fit-card-items { list-style: none; margin: 0; padding: 0; }
 .fit-card-items li { padding: 0.1rem 0; overflow-wrap: anywhere; }
-/* --- build planner --- Decision map columns, inspector, Gantt,
-   buy list and waterfall for /planner/. Data colors are fixed
-   hues (build green, buy blue, risk red, critical ember) so the
-   coding survives both themes; surfaces reuse theme variables. */
-#plan { --plan-build: #3fce7a; --plan-buy: #5eb8ff; --plan-risk: #ff5a4e; --plan-fee: #ffd27a; }
-.plan-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: #262626; border: 1px solid #262626; border-radius: 4px; overflow: hidden; margin-bottom: 0.6rem; }
-.plan-stats > div { background: var(--row); padding: 0.6rem 0.8rem; }
-.plan-stats .plan-k { display: block; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-.plan-stats strong { font-size: 1.4rem; font-weight: 700; }
-.plan-presets, .plan-tabs { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; margin: 0.5rem 0; }
-.plan-tools { display: flex; justify-content: flex-end; margin: 0.5rem 0 0; }
-/* Tab strip: the views read as tabs on the panel below, not
-free-standing buttons. The strip edge is the panel's top edge;
-the active tab shares the panel paint and sits continuous with
-it, inactive tabs recessed and muted. */
-.plan-tabs { gap: 0.25rem; border-bottom: 1px solid #262626; padding-bottom: 0; align-items: flex-end; }
-.plan-tabs [data-plan-tab] {
-  background: #0b0b0b;
-  border: 1px solid #1e1e1e;
-  border-bottom: none;
-  border-radius: 4px 4px 0 0;
-  color: var(--muted);
-  cursor: pointer;
-  font: inherit;
-  margin-bottom: -1px;
-  padding: 0.4rem 0.9rem;
-}
-.plan-tabs [data-plan-tab]:hover { color: var(--text); border-color: #2c2c2c; }
-.plan-tabs [data-plan-tab][aria-selected="true"],
-.plan-tabs [data-plan-tab][data-active="1"] {
-  background: #101010;
-  border-color: #262626;
-  color: var(--text-bright);
-  outline: none;
-  position: relative;
-  z-index: 1;
-}
-/* Planner header: product name left, ME + settings buttons right. */
-.plan-headrow { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; }
-.plan-headrow h3 { margin: 0; }
-.plan-headbtns { display: inline-flex; align-items: center; gap: 0.5rem; flex: none; }
-.plan-glyph { width: 1.3rem; height: 1.3rem; vertical-align: -0.25rem; }
-.plan-glyph-sm { width: 0.95rem; height: 0.95rem; vertical-align: -0.15rem; }
-#plan-settings-toggle {
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 3px;
-  cursor: pointer;
-  line-height: 0;
-  padding: 0.2rem;
-}
-#plan-settings-toggle:hover { border-color: var(--accent); background: rgba(255, 106, 26, 0.12); }
-#plan-settings-toggle .plan-glyph { width: 1.4rem; height: 1.4rem; vertical-align: 0; }
-.plan-settings-fields p { margin: 0 0 0.6rem; }
-/* Skills glyph: a skill-book with a check/X badge. The badge
-copies the notification count badge; the hover bubble copies
-the rail tooltip treatment. */
-.plan-skillglyph { position: relative; display: inline-flex; align-items: center; cursor: default; }
-.plan-skillglyph .plan-glyph { width: 1.6rem; height: 1.6rem; }
-.plan-skillbadge {
-  position: absolute;
-  right: -0.45rem;
-  bottom: -0.35rem;
-  box-sizing: border-box;
-  min-width: 1rem;
-  padding: 0 0.2rem;
-  border-radius: 999px;
-  color: #fff;
-  font-size: 0.68rem;
-  line-height: 1rem;
-  text-align: center;
-}
-.plan-skillglyph.ok .plan-skillbadge { background: #2e7d32; }
-.plan-skillglyph.bad .plan-skillbadge { background: #d63c14; }
-.plan-skillglyph[data-tip] { position: relative; }
-@media (hover: hover) {
-  .plan-skillglyph[data-tip]::after {
-    content: attr(data-tip);
-    position: absolute;
-    top: calc(100% + 8px);
-    left: 0;
-    min-width: 12rem;
-    max-width: 26rem;
-    padding: 0.4rem 0.7rem;
-    border-radius: 0.4rem;
-    background: rgba(20, 16, 12, 0.97);
-    border: 1px solid rgba(255, 210, 122, 0.35);
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
-    color: #ffd27a;
-    font-size: 0.85rem;
-    white-space: normal;
-    pointer-events: none;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.12s ease, visibility 0.12s;
-    z-index: 100;
-  }
-  .plan-skillglyph[data-tip]:hover::after,
-  .plan-skillglyph[data-tip]:focus-visible::after {
-    opacity: 1;
-    visibility: visible;
-    transition-delay: 0.2s;
-  }
-}
-/* ME grid: each label + input pair is atomic and never splits;
-two pair-columns wide, one narrow. Long names truncate into
-the title tooltip instead of pushing the input off. */
-.me-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem 1rem; }
-.me-cell { display: flex; align-items: center; gap: 0.35rem; min-width: 0; white-space: nowrap; }
-.me-cell .me-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.me-cell input { flex: none; }
-.me-summary { color: var(--muted); }
-@media (max-width: 40rem) {
-  .me-grid { grid-template-columns: 1fr; }
-}
-.plan-legend { margin-left: auto; color: var(--muted); }
-.plan-dot { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; margin: 0 0.15rem 0 0.5rem; }
-.plan-dot.plan-build { background: var(--plan-build); }
-.plan-dot.plan-buy { background: var(--plan-buy); }
-.plan-dot.plan-risk { background: var(--plan-risk); }
-.plan-dot.plan-crit { background: var(--accent); }
-.plan-fbar.plan-crit { background: var(--accent); }
-.plan-fbar.plan-fee { background: var(--plan-fee); }
-.plan-fbar.plan-build { background: var(--plan-build); }
-.plan-fbar.plan-buy { background: var(--plan-buy); }
-button[data-active="1"] { outline: 2px solid var(--accent); outline-offset: 1px; }
-.plan-cols { display: grid; grid-template-columns: 1fr 1.4fr 1.4fr 1fr; gap: 0.8rem; align-items: start; }
-.plan-colh { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.4rem; }
-.plan-node { background: var(--row); border: 1px solid #262626; border-left-width: 3px; border-radius: 4px; padding: 0.45rem 0.6rem; margin-bottom: 0.45rem; cursor: pointer; }
-.plan-node.plan-build { border-left-color: var(--plan-build); }
-.plan-node.plan-buy { border-left-color: var(--plan-buy); }
-.plan-node.plan-have { border-left-color: var(--muted); opacity: 0.75; }
-.plan-node.plan-risk { border-left-color: var(--plan-risk); }
-.plan-node.plan-sel { outline: 2px solid var(--accent); outline-offset: 1px; }
-.plan-node-top { display: flex; justify-content: space-between; gap: 0.5rem; align-items: baseline; }
-.plan-node-top span { font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
-.plan-fold { margin-left: 0.4rem; padding: 0 0.35rem; }
-.plan-treecols { display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr); gap: 0.8rem; align-items: start; }
-.plan-treetools { display: flex; gap: 0.4rem; margin-bottom: 0.5rem; }
-.plan-kids { display: contents; }
-/* Tree-table row: label column flexes, cost bar column is a fixed
-240px pinned right so bars align at the same x at every depth.
-Depth indent lives on the label (data-pad-left), never on the
-row, so nesting cannot shift the bar column. */
-.plan-trow { display: grid; grid-template-columns: minmax(0, 1fr) 15rem; gap: 0.6rem; align-items: center; }
-.plan-tlabel { min-width: 0; }
-.plan-tbar { min-width: 0; }
-.plan-tbar .plan-bar { margin: 0; }
-.me-wrap { display: inline; }
-#me-fields label { margin-right: 0.6rem; }
-#me-hint { margin-left: 0.4rem; }
-.plan-bar { background: #262626; border-radius: 3px; height: 0.55rem; margin: 0.3rem 0; overflow: hidden; }
-.plan-fill { background: var(--plan-build); height: 100%; }
-.plan-buy .plan-fill, .plan-fill.plan-buy { background: var(--plan-buy); }
-.plan-node small, .plan-cols small { color: var(--muted); }
-#plan-inspector { position: sticky; top: calc(3.75rem + 1px + 0.6rem); }
-#plan-inspector h4, #plan-hubsplit h4 { margin: 0 0 0.4rem; }
-.plan-pick { display: flex; gap: 0.4rem; margin-bottom: 0.5rem; }
-.plan-weeks { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.3rem; }
-.plan-grow { display: grid; grid-template-columns: minmax(8rem, 12rem) 1fr; gap: 0.6rem; align-items: center; padding: 0.2rem 0; border-top: 1px solid #1c1c1c; }
-.plan-gname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.plan-gtrack { position: relative; height: 1.3rem; background: var(--row); border-radius: 3px; }
-.plan-gbar { position: absolute; top: 0; bottom: 0; background: var(--plan-build); border-radius: 3px; overflow: hidden; }
-.plan-gbar.plan-crit { background: var(--accent); }
-.plan-gbar small { color: #101010; padding: 0 0.3rem; font-size: 0.72rem; line-height: 1.3rem; white-space: nowrap; }
-.plan-gbar.plan-crit small { color: #faf3e6; }
-.plan-frow { display: grid; grid-template-columns: minmax(10rem, 14rem) 1fr 7rem; gap: 0.6rem; align-items: center; margin-bottom: 0.4rem; }
-.plan-fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.plan-ftrack { position: relative; height: 1.1rem; background: var(--row); border-radius: 3px; }
-.plan-fbar { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
-@media (max-width: 60rem) {
-  .plan-stats { grid-template-columns: 1fr 1fr; }
-  .plan-cols { grid-template-columns: 1fr; }
-  .plan-treecols { grid-template-columns: 1fr; }
-  .plan-trow { grid-template-columns: 1fr; gap: 0.15rem; }
-  .plan-frow { grid-template-columns: 1fr; gap: 0.15rem; }
-  .plan-grow { grid-template-columns: 1fr; }
-}
-/* Persistent shell: the content swap crossfades with a slight rise,
-   ~200ms, opacity/transform only. Browsers without the View
+/* Persistent shell: only the main content takes part in the swap
+   transition — the top bar and nav are the same live chrome on
+   both pages, so snapshotting the whole document (root) made the
+   glass shell flicker as it flattened and re-composited. The root
+   pair never animates; the named content crossfades with a slight
+   rise, opacity/transform only. Browsers without the View
    Transitions API (or readers who asked for less motion) swap
    instantly from swap.js instead, so there is nothing to undo. */
-::view-transition-old(root) { animation: es-swap-out 200ms ease; }
-::view-transition-new(root) { animation: es-swap-in 200ms ease; }
+#main-content { view-transition-name: main-content; }
+::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+::view-transition-old(main-content) { animation: es-swap-out 150ms ease-out both; }
+::view-transition-new(main-content) { animation: es-swap-in 260ms ease-out both; }
 @keyframes es-swap-out { from { opacity: 1; } to { opacity: 0; } }
-@keyframes es-swap-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes es-swap-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
-  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+  ::view-transition-old(root), ::view-transition-new(root),
+  ::view-transition-old(main-content), ::view-transition-new(main-content) { animation: none; }
 }

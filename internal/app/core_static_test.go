@@ -91,6 +91,25 @@ func TestStaticAssetCaching(t *testing.T) {
 	}
 }
 
+// TestStylesheetMainColumnWidth: the main column caps at 1720px;
+// the old 1560px cap must not come back.
+func TestStylesheetMainColumnWidth(t *testing.T) {
+	app, _, _ := buildCorpTestApp(t, &countingTransport{})
+	req := httptest.NewRequest(http.MethodGet, "/static/style.css", nil)
+	rec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("stylesheet: status %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "max-width: 1720px") {
+		t.Error("stylesheet lacks the 1720px main-column cap")
+	}
+	if strings.Contains(body, "1560") {
+		t.Error("stylesheet still references the old 1560px cap")
+	}
+}
+
 func TestPagesLinkVersionedAssets(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, &countingTransport{})
 	ctx := context.Background()

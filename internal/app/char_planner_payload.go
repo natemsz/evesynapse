@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"evesynapse/internal/buildplan"
@@ -696,15 +697,20 @@ func (app *Application) planMarket(ctx context.Context, q url.Values, res *build
 }
 
 // planBuildSystem resolves the ?system= build system (default
-// Jita) and its manufacturing cost index. An unknown ?system=
-// falls back to Jita; a system missing from static data keeps
-// its numeric name ("System 30000142") while the index lookup
-// still runs, so fees work wherever index rows exist. A
-// missing index leaves fees unknown.
+// Jita) and its manufacturing cost index. The field's face is a
+// name, so a name resolves first and a numeric ID second; an
+// unknown ?system= falls back to Jita. A system missing from
+// static data keeps its numeric name ("System 30000142") while
+// the index lookup still runs, so fees work wherever index rows
+// exist. A missing index leaves fees unknown.
 func (app *Application) planBuildSystem(ctx context.Context, raw string) (systemID int64, systemName string, index float64, indexKnown bool) {
 	systemID = plannerDefaultSystemID
-	if n, err := strconv.ParseInt(raw, 10, 64); err == nil && n > 0 {
-		systemID = n
+	if trimmed := strings.TrimSpace(raw); trimmed != "" {
+		if n, err := strconv.ParseInt(trimmed, 10, 64); err == nil && n > 0 {
+			systemID = n
+		} else if sys, err := app.queries.GetSDESystemByName(ctx, trimmed); err == nil {
+			systemID = sys.SystemID
+		}
 	}
 	if sys, err := app.queries.GetSDESystem(ctx, systemID); err == nil && sys.Name != "" {
 		systemName = sys.Name

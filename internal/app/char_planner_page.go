@@ -112,6 +112,7 @@ type skillsJudge struct {
 	CanBuild bool
 	Lines    []skillJudgeLine
 	Summary  string
+	Tip      string // hover text for the glyph: coverage summary, or the short skills
 }
 
 // planVerdict is the worth-making economics of a scoped plan.
@@ -317,6 +318,9 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 	}
 
 	src := &sdePlannerSource{app: app, ctx: ctx, memo: make(map[int64]*buildplan.Blueprint), none: make(map[int64]bool)}
+	// Warm the blueprint closure up front: expansion walks the
+	// same tree, and per-blueprint reads stall capital plans.
+	src.prefetch(productID)
 
 	// "Judge as" scoping: the account's characters are the
 	// universe of scopes (one character, or everyone carrying a
@@ -598,6 +602,93 @@ type sdePlannerSource struct {
 	none map[int64]bool
 }
 
+// plannerPrefetchDepth bounds the closure warm below the
+// engine's own depth cap (buildplan stops expanding at 32).
+const plannerPrefetchDepth = 32
+
+// prefetch loads the product's whole blueprint closure level by
+// level with batched reads, so expansion never pays
+// per-blueprint queries. A capital tree touches hundreds of
+// distinct blueprints; three sequential reads per blueprint
+// stalls first load by seconds, while a level at a time costs
+// three reads per level. Products with no blueprint are
+// remembered as misses exactly like the lazy path.
+func (s *sdePlannerSource) prefetch(root int64) {
+	frontier := map[int64]bool{root: true}
+	for depth := 0; depth < plannerPrefetchDepth && len(frontier) > 0; depth++ {
+		var ids []int64
+		for id := range frontier {
+			if _, ok := s.memo[id]; !ok && !s.none[id] {
+				ids = append(ids, id)
+			}
+		}
+		if len(ids) == 0 {
+			return
+		}
+		rows, err := s.app.queries.GetSDEBlueprintsForProducts(s.ctx, ids)
+		if err != nil {
+			logging.Errorf("planner: prefetch blueprints: %v", err)
+			return
+		}
+		bpByProduct := make(map[int64]int64, len(rows))
+		for _, row := range rows {
+			// The lazy path picks the lowest blueprint ID on
+			// duplicates; the warm matches it.
+			if prev, ok := bpByProduct[row.ProductTypeID]; ok && prev <= row.BlueprintTypeID {
+				continue
+			}
+			bpByProduct[row.ProductTypeID] = row.BlueprintTypeID
+			s.memo[row.ProductTypeID] = &buildplan.Blueprint{
+				BlueprintTypeID:    row.BlueprintTypeID,
+				ProductTypeID:      row.ProductTypeID,
+				ProductQuantity:    row.ProductQuantity,
+				MaxProductionLimit: row.MaxProductionLimit,
+				TimeSeconds:        row.ManufacturingTimeSeconds,
+			}
+		}
+		for _, id := range ids {
+			if _, ok := bpByProduct[id]; !ok {
+				s.none[id] = true
+			}
+		}
+		var bpIDs []int64
+		for _, bpID := range bpByProduct {
+			bpIDs = append(bpIDs, bpID)
+		}
+		if len(bpIDs) == 0 {
+			return
+		}
+		mats, err := s.app.queries.ListSDEBlueprintMaterialsForBlueprints(s.ctx, bpIDs)
+		if err != nil {
+			logging.Errorf("planner: prefetch materials: %v", err)
+			return
+		}
+		byBP := make(map[int64][]buildplan.Material, len(bpIDs))
+		next := make(map[int64]bool)
+		for _, m := range mats {
+			byBP[m.BlueprintTypeID] = append(byBP[m.BlueprintTypeID],
+				buildplan.Material{TypeID: m.MaterialTypeID, Quantity: m.Quantity})
+			next[m.MaterialTypeID] = true
+		}
+		skills, err := s.app.queries.ListSDEBlueprintSkillsForBlueprints(s.ctx, bpIDs)
+		if err != nil {
+			logging.Errorf("planner: prefetch skills: %v", err)
+			return
+		}
+		byBPSkills := make(map[int64][]buildplan.SkillReq, len(bpIDs))
+		for _, sk := range skills {
+			byBPSkills[sk.BlueprintTypeID] = append(byBPSkills[sk.BlueprintTypeID],
+				buildplan.SkillReq{TypeID: sk.SkillTypeID, Level: sk.Level})
+		}
+		for productID, bpID := range bpByProduct {
+			bp := s.memo[productID]
+			bp.Materials = byBP[bpID]
+			bp.Skills = byBPSkills[bpID]
+		}
+		frontier = next
+	}
+}
+
 func (s *sdePlannerSource) BlueprintForProduct(productTypeID int64) (*buildplan.Blueprint, bool) {
 	if bp, ok := s.memo[productTypeID]; ok {
 		return bp, true
@@ -873,6 +964,7 @@ func judgeSkills(scope judgeScope, data plannerScopeData, reqs map[int64]int64, 
 		default:
 			judge.Note = "Skills haven't synced for anyone with this tag yet — once they land, this says what they can build."
 		}
+		judge.Tip = judge.Note
 		return judge
 	}
 	judge.Known = true
@@ -897,6 +989,7 @@ func judgeSkills(scope judgeScope, data plannerScopeData, reqs map[int64]int64, 
 	sort.Slice(ids, func(i, j int) bool { return nameOf(ids[i]) < nameOf(ids[j]) })
 
 	judge.CanBuild = true
+	var short []string
 	for _, id := range ids {
 		need, have := reqs[id], int64(best(id))
 		ok := have >= need
@@ -915,6 +1008,9 @@ func judgeSkills(scope judgeScope, data plannerScopeData, reqs map[int64]int64, 
 			line.Text = fmt.Sprintf("%s — needs %s · trained %s", nameOf(id), esi.RomanLevel(int(need)), esi.RomanLevel(int(have)))
 		}
 		judge.Lines = append(judge.Lines, line)
+		if !ok {
+			short = append(short, line.Text)
+		}
 	}
 
 	switch {
@@ -924,6 +1020,17 @@ func judgeSkills(scope judgeScope, data plannerScopeData, reqs map[int64]int64, 
 		judge.Summary = "Every skill in the chain is covered."
 	default:
 		judge.Summary = "Not yet — the short skills are listed above."
+	}
+	switch {
+	case !judge.Known:
+		judge.Tip = judge.Note
+	case judge.CanBuild:
+		judge.Tip = judge.Summary
+	default:
+		judge.Tip = "Short skills: " + strings.Join(short, "; ")
+		if judge.Note != "" {
+			judge.Tip = judge.Note + " " + judge.Tip
+		}
 	}
 	return judge
 }

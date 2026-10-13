@@ -10,8 +10,9 @@ import (
 
 // TestNavStateRenderedFromCookie: a saved rail or hidden layout is on
 // the <html> tag in the server's own response, so the page paints in
-// it without any script having run. Expanded, absent and unknown
-// values leave the tag plain.
+// it without any script having run. A saved expanded choice leaves
+// the tag plain (expanded is the attribute's absence). With no cookie
+// or an unknown value the desktop default is the icon rail.
 func TestNavStateRenderedFromCookie(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, &countingTransport{})
 	user, err := q.CreateUser(context.Background())
@@ -37,19 +38,22 @@ func TestNavStateRenderedFromCookie(t *testing.T) {
 
 	mustContain(t, "rail cookie", page("rail"), `<html lang="en" data-nav="rail">`)
 	mustContain(t, "hidden cookie", page("hidden"), `<html lang="en" data-nav="hidden">`)
-	for _, plain := range []string{"", "expanded", "bogus", `"><script>`} {
-		mustContain(t, "nav="+plain, page(plain), `<html lang="en">`)
+	mustContain(t, "expanded cookie", page("expanded"), `<html lang="en" data-nav="expanded">`)
+	for _, rail := range []string{"", "bogus", `"><script>`} {
+		mustContain(t, "nav="+rail, page(rail), `<html lang="en" data-nav="rail">`)
 	}
 
 	// The category of the page being shown is open while the menu shows
 	// its labels, and left folded in the icon rail.
 	const open = `<details class="branch active" open data-nav-category="pilot">`
-	mustContain(t, "expanded menu", page(""), open)
+	mustContain(t, "expanded menu", page("expanded"), open)
 	mustContain(t, "hidden menu", page("hidden"), open)
-	if rail := page("rail"); strings.Contains(rail, open) || !strings.Contains(rail, `<details class="branch active" data-nav-category="pilot">`) {
-		t.Fatal("the icon rail rendered the current category open")
+	for _, folded := range []string{"", "rail"} {
+		if body := page(folded); strings.Contains(body, open) || !strings.Contains(body, `<details class="branch active" data-nav-category="pilot">`) {
+			t.Fatalf("nav=%q: the icon rail rendered the current category open", folded)
+		}
 	}
-	if n := strings.Count(page(""), `" open data-nav-category=`); n != 1 {
+	if n := strings.Count(page("expanded"), `" open data-nav-category=`); n != 1 {
 		t.Fatalf("%d categories rendered open, want only the current one", n)
 	}
 }

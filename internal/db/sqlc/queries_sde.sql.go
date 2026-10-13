@@ -324,6 +324,42 @@ func (q *Queries) GetSDEBlueprintForProduct(ctx context.Context, productTypeID i
 	return i, err
 }
 
+const getSDEBlueprintsForProducts = `-- name: GetSDEBlueprintsForProducts :many
+SELECT blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds
+FROM sde_blueprints
+WHERE product_type_id = ANY($1::bigint[])
+ORDER BY product_type_id, blueprint_type_id
+`
+
+func (q *Queries) GetSDEBlueprintsForProducts(ctx context.Context, productIds []int64) ([]SdeBlueprint, error) {
+	rows, err := q.db.QueryContext(ctx, getSDEBlueprintsForProducts, pq.Array(productIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SdeBlueprint
+	for rows.Next() {
+		var i SdeBlueprint
+		if err := rows.Scan(
+			&i.BlueprintTypeID,
+			&i.ProductTypeID,
+			&i.ProductQuantity,
+			&i.MaxProductionLimit,
+			&i.ManufacturingTimeSeconds,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSDECategory = `-- name: GetSDECategory :one
 SELECT category_id, name FROM sde_categories
 WHERE category_id = $1
@@ -442,6 +478,23 @@ WHERE system_id = $1
 
 func (q *Queries) GetSDESystem(ctx context.Context, systemID int64) (SdeSystem, error) {
 	row := q.db.QueryRowContext(ctx, getSDESystem, systemID)
+	var i SdeSystem
+	err := row.Scan(
+		&i.SystemID,
+		&i.Name,
+		&i.RegionID,
+		&i.Security,
+	)
+	return i, err
+}
+
+const getSDESystemByName = `-- name: GetSDESystemByName :one
+SELECT system_id, name, region_id, security FROM sde_systems
+WHERE LOWER(name) = LOWER($1)
+`
+
+func (q *Queries) GetSDESystemByName(ctx context.Context, lower string) (SdeSystem, error) {
+	row := q.db.QueryRowContext(ctx, getSDESystemByName, lower)
 	var i SdeSystem
 	err := row.Scan(
 		&i.SystemID,
@@ -829,6 +882,35 @@ func (q *Queries) ListSDEBlueprintMaterials(ctx context.Context, blueprintTypeID
 	return items, nil
 }
 
+const listSDEBlueprintMaterialsForBlueprints = `-- name: ListSDEBlueprintMaterialsForBlueprints :many
+SELECT blueprint_type_id, material_type_id, quantity FROM sde_blueprint_materials
+WHERE blueprint_type_id = ANY($1::bigint[])
+ORDER BY blueprint_type_id, material_type_id
+`
+
+func (q *Queries) ListSDEBlueprintMaterialsForBlueprints(ctx context.Context, blueprintIds []int64) ([]SdeBlueprintMaterial, error) {
+	rows, err := q.db.QueryContext(ctx, listSDEBlueprintMaterialsForBlueprints, pq.Array(blueprintIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SdeBlueprintMaterial
+	for rows.Next() {
+		var i SdeBlueprintMaterial
+		if err := rows.Scan(&i.BlueprintTypeID, &i.MaterialTypeID, &i.Quantity); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDEBlueprintProducts = `-- name: ListSDEBlueprintProducts :many
 SELECT blueprint_type_id, product_type_id FROM sde_blueprints
 `
@@ -882,6 +964,35 @@ func (q *Queries) ListSDEBlueprintSkills(ctx context.Context, blueprintTypeID in
 	for rows.Next() {
 		var i ListSDEBlueprintSkillsRow
 		if err := rows.Scan(&i.SkillTypeID, &i.Level); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDEBlueprintSkillsForBlueprints = `-- name: ListSDEBlueprintSkillsForBlueprints :many
+SELECT blueprint_type_id, skill_type_id, level FROM sde_blueprint_skills
+WHERE blueprint_type_id = ANY($1::bigint[])
+ORDER BY blueprint_type_id, level DESC, skill_type_id
+`
+
+func (q *Queries) ListSDEBlueprintSkillsForBlueprints(ctx context.Context, blueprintIds []int64) ([]SdeBlueprintSkill, error) {
+	rows, err := q.db.QueryContext(ctx, listSDEBlueprintSkillsForBlueprints, pq.Array(blueprintIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SdeBlueprintSkill
+	for rows.Next() {
+		var i SdeBlueprintSkill
+		if err := rows.Scan(&i.BlueprintTypeID, &i.SkillTypeID, &i.Level); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

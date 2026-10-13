@@ -114,7 +114,7 @@ function capitalPayload() {
   const totals = {
     materials: 150000, fees: 5000, feesKnown: true, complete: true,
     unpriced: 0, buyValue: 150000, bought: 90000, built: 60000,
-    landed: 155000, value: 200000, known: true, profit: 45000,
+    landed: 155000, value: 200000, valueKnown: true, profit: 45000,
     profKnown: true, marginPct: 22.5, elapsed: 7200,
     jobs: [{ id: 10001, name: "Cap Hull", start: 0, end: 3600, slot: 1, critical: true }],
     shopping: [{ id: 90001, name: "Cap Leaf", qty: 60, unit: 5, known: true, cost: 300 }]
@@ -161,6 +161,25 @@ test("one throwing view does not blank the others", async function () {
   for (const id of ["plan-gantt", "plan-buylist", "plan-fall", "plan-inspector"]) {
     assert.ok(els[id] && els[id].innerHTML.indexOf(rendered[id]) !== -1, id + " still rendered");
   }
+});
+
+test("verdict line, margin color and node chip toggles render", async function () {
+  const els = install(capitalPayload());
+  await waitFor(function () {
+    return els["plan-map"] && els["plan-map"].innerHTML.indexOf("plan-node") !== -1;
+  }, "map render");
+  // The verdict above the presets: the optimized profit worded
+  // as a saving, classed for the build color.
+  assert.strictEqual(els["plan-verdict"].textContent, "Building saves 450.00 ISK");
+  assert.strictEqual(els["plan-verdict"].className, "plan-verdict build");
+  // Positive profit colors the margin (and its ISK/hour sub).
+  assert.strictEqual(els["plan-margin"].className, "pos");
+  assert.strictEqual(els["plan-margin-sub"].className, "pos");
+  // Buildable non-root nodes get a chip BUTTON that swaps the
+  // node's build/buy decision; the root keeps a plain chip.
+  const map = els["plan-map"].innerHTML;
+  assert.ok(map.indexOf('data-plan-toggle="0.0"') !== -1, "component chip is a toggle");
+  assert.ok(map.indexOf('data-plan-toggle="0"') === -1, "root chip is not a toggle");
 });
 
 test("null preset lists (empty shopping/jobs marshal) still render first load", async function () {

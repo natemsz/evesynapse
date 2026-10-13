@@ -819,3 +819,61 @@ func TestFitSimulateImplants(t *testing.T) {
 		t.Errorf("foreign clones.json body = %q, want ok:false", rec.Body.String())
 	}
 }
+
+// TestFitSimulateTooltipLines: a fitted weapon's slot (and
+// chip) carries the tooltip's computed stat rows — the
+// engine's own per-gun figures plus the fitting costs.
+func TestFitSimulateTooltipLines(t *testing.T) {
+	app, cookie := fitTestApp(t)
+	code, body := postFitJSON(t, app, cookie, "/fittings/simulate/",
+		`{"shipTypeId":1001,"items":[{"typeId":3001,"qty":1}],"charges":{"3001":4001},"pilot":0}`)
+	if code != http.StatusOK {
+		t.Fatalf("simulate status = %d, body %q", code, body)
+	}
+	// Blaster by hand: charge damage 12+8 = 20, damage
+	// multiplier 5, cycle 5 s -> volley 100, DPS 20. CPU
+	// 15 tf, PG 10 MW. Effective equals base throughout
+	// the fixture, so no row carries a good/bad class.
+	mustContain(t, "tooltip lines", body,
+		`data-tip-lines="DPS|20|;Volley|100|;CPU|15 tf|;PG|10 MW|"`)
+}
+
+// TestFitTipLinesColors: rows tint by effective-vs-base — a
+// bonused-down CPU and a bonused-up range read good, an
+// unchanged cost stays neutral.
+func TestFitTipLinesColors(t *testing.T) {
+	snap := &fit.Snapshot{Attrs: map[int64]map[int64]float64{
+		3001: {fit.AttrCPU: 15, fit.AttrPower: 10, fit.AttrMaxRange: 5000},
+	}}
+	res := &fit.Result{
+		ItemAttrs: map[int64]map[int64]float64{
+			3001: {fit.AttrCPU: 12, fit.AttrPower: 10, fit.AttrMaxRange: 7500},
+		},
+		StateAttrs:   map[string]map[int64]float64{},
+		WeaponDPS:    map[string]float64{},
+		WeaponVolley: map[string]float64{},
+	}
+	doc := &fitDoc{Charges: map[int64]int64{}}
+	got := fitTipLinesString(fitTipLines(res, snap, doc, 3001, "", res.ItemAttrs[3001]))
+	want := "Optimal|7.5 km|good;CPU|12 tf|good;PG|10 MW|"
+	if got != want {
+		t.Errorf("tip lines = %q, want %q", got, want)
+	}
+}
+
+// TestFitEditorPickerModal: the module picker is a modal
+// dialog with its own quick search — the add-slot buttons
+// open it over the workbench instead of scrolling away to
+// a detached panel at the module search's old location.
+func TestFitEditorPickerModal(t *testing.T) {
+	app, cookie := fitTestApp(t)
+	code, body := getPage(t, app, cookie, "/fittings/")
+	if code != http.StatusOK {
+		t.Fatalf("editor status = %d", code)
+	}
+	mustContain(t, "picker modal", body,
+		`class="modal-backdrop" id="fit-picker"`,
+		`aria-modal="true"`,
+		`id="fit-picker-title"`,
+		`id="fit-picker-q"`)
+}

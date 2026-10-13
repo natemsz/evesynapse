@@ -58,7 +58,7 @@ func TestPlanPayloadPresets(t *testing.T) {
 		t.Fatalf("buildPlan: %v", err)
 	}
 	unitOf := func(id int64) (float64, bool) { return buildplan.UnitPrice(planFixturePrices(), id) }
-	p := buildPlanPayload(res, 1001, planFixturePrices(), unitOf, 1, 2, nil, planFixtureName)
+	p := buildPlanPayload(res, 1001, planFixturePrices(), unitOf, 1, 2, nil, planFixtureName, nil)
 	if len(p.Root.Kids) != 2 {
 		t.Fatalf("root kids = %d, want 2", len(p.Root.Kids))
 	}
@@ -106,7 +106,7 @@ func TestPlanPayloadSchedule(t *testing.T) {
 		t.Fatalf("buildPlan: %v", err)
 	}
 	unitOf := func(id int64) (float64, bool) { return buildplan.UnitPrice(planFixturePrices(), id) }
-	p := buildPlanPayload(res, 1001, planFixturePrices(), unitOf, 1, 2, nil, planFixtureName)
+	p := buildPlanPayload(res, 1001, planFixturePrices(), unitOf, 1, 2, nil, planFixtureName, nil)
 	if p.Optimized.Elapsed != 900 {
 		t.Errorf("elapsed = %v, want 900 (300 then 600)", p.Optimized.Elapsed)
 	}
@@ -148,7 +148,7 @@ func TestPlanShoppingKnownNodeCoversPricedLines(t *testing.T) {
 		t.Fatalf("buildPlan: %v", err)
 	}
 	unitOf := func(id int64) (float64, bool) { return buildplan.UnitPrice(prices, id) }
-	p := buildPlanPayload(res, 1001, prices, unitOf, 1, 2, nil, planFixtureName)
+	p := buildPlanPayload(res, 1001, prices, unitOf, 1, 2, nil, planFixtureName, nil)
 
 	known := map[int64]int64{}
 	var walk func(n *planNodeDTO)
@@ -225,7 +225,7 @@ func TestPlanShoppingExcludesRoot(t *testing.T) {
 		t.Fatalf("buildPlan: %v", err)
 	}
 	unitOf := func(id int64) (float64, bool) { return buildplan.UnitPrice(prices, id) }
-	p := buildPlanPayload(res, 1001, prices, unitOf, 1, 2, nil, planFixtureName)
+	p := buildPlanPayload(res, 1001, prices, unitOf, 1, 2, nil, planFixtureName, nil)
 
 	b := p.Optimized
 	for _, line := range b.Shopping {
@@ -275,5 +275,55 @@ func TestPlanTimeFactorAndSlots(t *testing.T) {
 	s, _ = planSlots("", map[string]int64{}, plannerScopeData{}, nil)
 	if s != 1 {
 		t.Errorf("default slots = %d, want 1 without skills", s)
+	}
+}
+
+// TestPlanPayloadOrigins: leaf origins ride the payload — a PI
+// commodity by name (tier from the PI planner's own table), a
+// reaction product by SDE group, ordinary minerals unclassified,
+// buildable nodes unclassified.
+func TestPlanPayloadOrigins(t *testing.T) {
+	res, err := buildplan.Build(planFixtureRecipes(), 1001, buildplan.Input{
+		Runs: 1, Prices: planFixturePrices(),
+		Adjusted: planFixtureAdjusted(), CostIndex: 0.05,
+	})
+	if err != nil {
+		t.Fatalf("buildPlan: %v", err)
+	}
+	unitOf := func(id int64) (float64, bool) { return buildplan.UnitPrice(planFixturePrices(), id) }
+	nameOf := func(id int64) string {
+		if id == 34 {
+			return "Biocells" // a PI commodity name
+		}
+		return planFixtureName(id)
+	}
+	originOf := planOriginClassifier(map[int64]string{1002: "Advanced Materials"})
+	p := buildPlanPayload(res, 1001, planFixturePrices(), unitOf, 1, 2, nil, nameOf, originOf)
+	var mineral, comp *planNodeDTO
+	for _, k := range p.Root.Kids {
+		switch k.ID {
+		case 34:
+			mineral = k
+		case 1002:
+			comp = k
+		}
+	}
+	if mineral == nil || comp == nil {
+		t.Fatalf("fixture kids missing: %v", p.Root.Kids)
+	}
+	if mineral.Origin != "pi" || mineral.OriginTier == "" {
+		t.Errorf("mineral-named-Biocells origin = %q/%q, want pi/<tier>", mineral.Origin, mineral.OriginTier)
+	}
+	if comp.Origin != "" {
+		t.Errorf("buildable component origin = %q, want empty (it has a blueprint)", comp.Origin)
+	}
+	// The same classifier marks the component when it appears as
+	// an unbuildable leaf: covered by classifying its group
+	// directly.
+	if o, _ := originOf(1002, "Type 1002"); o != "reaction" {
+		t.Errorf("Advanced Materials origin = %q, want reaction", o)
+	}
+	if o, _ := originOf(34, "Tritanium"); o != "" {
+		t.Errorf("plain mineral origin = %q, want empty", o)
 	}
 }

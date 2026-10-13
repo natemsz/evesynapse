@@ -83,21 +83,27 @@
   <label class="fit-check"><input type="checkbox" id="fit-public"{{if .FitEditor.IsPublic}} checked{{end}}> Make public</label>
 </div>
 
-<div class="fit-picker" id="fit-picker" hidden>
-  <div class="fit-picker-head">
-    <select id="fit-picker-family">
-      <option value="high">High slots</option>
-      <option value="medium">Mid slots</option>
-      <option value="low">Low slots</option>
-      <option value="rig">Rigs</option>
-      <option value="subsystem">Subsystems</option>
-      <option value="charge">Ammunition</option>
-      <option value="any">Any item</option>
-    </select>
-    <span class="fit-picker-hint" id="fit-picker-hint" hidden></span>
-    <button type="button" class="btn" id="fit-picker-close">Done</button>
+<div class="modal-backdrop" id="fit-picker" hidden>
+  <div class="modal fit-picker-modal" role="dialog" aria-modal="true" aria-labelledby="fit-picker-title">
+    <div class="modal-head">
+      <h2 id="fit-picker-title">Add module</h2>
+      <button type="button" class="modal-close" id="fit-picker-close" aria-label="Close">×</button>
+    </div>
+    <div class="fit-picker-head">
+      <select id="fit-picker-family" aria-label="Slot family">
+        <option value="high">High slots</option>
+        <option value="medium">Mid slots</option>
+        <option value="low">Low slots</option>
+        <option value="rig">Rigs</option>
+        <option value="subsystem">Subsystems</option>
+        <option value="charge">Ammunition</option>
+        <option value="any">Any item</option>
+      </select>
+      <input type="text" id="fit-picker-q" placeholder="Search modules…" autocomplete="off" aria-label="Search modules">
+      <span class="fit-picker-hint" id="fit-picker-hint" hidden></span>
+    </div>
+    <ul class="fit-picker-list" id="fit-picker-list"></ul>
   </div>
-  <ul class="fit-picker-list" id="fit-picker-list"></ul>
 </div>
 
 <div class="fit-eft">
@@ -143,7 +149,7 @@
   <div class="fit-vsep" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" data-rot="{{printf "%.0f" .Rot}}" aria-hidden="true"></div>
   {{end}}
   {{range .Visual.Slots}}
-  <button type="button" class="fit-vslot{{if .Filled}} filled{{end}}{{if .State}} st-{{.State}}{{end}}" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}"{{if .Filled}} data-fit-vslot="{{.TypeID}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" data-tip-key="{{.TipKey}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}}" data-tip-meta="{{.Meta}}" data-tip-cpu="{{.CPU}}" data-tip-pg="{{.PG}}" data-tip-stat="{{.Stat}}"{{if .State}} data-tip-state="{{.State}}"{{end}}{{if .StatesCSV}} data-tip-states="{{.StatesCSV}}"{{end}}{{if .ChargeName}} data-tip-charge="Loaded: {{.ChargeName}}"{{end}}{{else}}data-fit-add="{{.GroupKey}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" title="Add {{.GroupLabel}}"{{end}}>
+  <button type="button" class="fit-vslot{{if .Filled}} filled{{end}}{{if .State}} st-{{.State}}{{end}}" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}"{{if .Filled}} data-fit-vslot="{{.TypeID}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" data-tip-key="{{.TipKey}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}}" data-tip-meta="{{.Meta}}" data-tip-cpu="{{.CPU}}" data-tip-pg="{{.PG}}" data-tip-stat="{{.Stat}}" data-tip-lines="{{.TipLines}}"{{if .State}} data-tip-state="{{.State}}"{{end}}{{if .StatesCSV}} data-tip-states="{{.StatesCSV}}"{{end}}{{if .ChargeName}} data-tip-charge="Loaded: {{.ChargeName}}"{{end}}{{else}}data-fit-add="{{.GroupKey}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" title="Add {{.GroupLabel}}"{{end}}>
     {{if .Filled}}<img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{if .ChargeID}}<span class="fit-vammo" data-fit-ammo="{{.TypeID}}" title="Loaded: {{.ChargeName}} — change ammunition"><img src="https://images.evetech.net/types/{{.ChargeID}}/icon?size=32" alt="{{.ChargeName}}" draggable="false"></span>{{end}}{{else}}<span aria-hidden="true">+</span>{{end}}
   </button>
   {{end}}
@@ -157,7 +163,7 @@
       <h4>{{.Label}}{{if .HasMax}} <small class="{{if .Over}}fit-over{{end}}">{{.Used}}/{{.Max}}{{if .Over}} — doesn't fit{{end}}</small>{{end}}</h4>
       <div class="fit-chips">
         {{range .Chips}}
-        <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" data-fit-rowtype="{{.TypeID}}">
+        <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" data-fit-rowtype="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-lines="{{.TipLines}}">
           <button type="button" class="fit-chip-btn" data-fit-dec="{{.TypeID}}" title="Remove one">−</button>
           <button type="button" class="fit-chip-name" data-fit-dec="{{.TypeID}}" title="Remove one">{{.Name}}</button>
           {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}

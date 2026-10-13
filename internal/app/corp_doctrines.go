@@ -755,10 +755,22 @@ func (app *Application) corpFitBrowser(ctx context.Context, corp int64, chosen *
 					tags = append(tags, tag)
 				}
 			}
+			var modNames []string
+			for _, item := range doc.Items {
+				if name := app.esi.CachedTypeName(ctx, item.TypeID); name != "" {
+					modNames = append(modNames, name)
+				}
+			}
+			for _, chargeID := range doc.Charges {
+				if name := app.esi.CachedTypeName(ctx, chargeID); name != "" {
+					modNames = append(modNames, name)
+				}
+			}
 			cards = append(cards, fitCard{
 				ID: fit.ID, Name: fit.Name, Ship: app.typeNameOrID(ctx, fit.ShipTypeID), ShipTypeID: fit.ShipTypeID,
 				Role: fit.FleetRole, DoctrineID: d.ID, Doctrine: d.Name, DoctrineURL: doctrineURL(d.ID), Category: d.Category,
 				OpenURL: "/fittings/?doctrine=" + idString(fit.ID) + "#fit-editor", AddField: "copy", Updated: fit.AddedAt, tags: tags,
+				moduleHay: strings.ToLower(strings.Join(modNames, "\n")),
 			})
 		}
 		app.hullClasses(ctx, cards)
@@ -770,6 +782,7 @@ func (app *Application) corpFitBrowser(ctx context.Context, corp int64, chosen *
 	}
 	return &fitBrowser{
 		Path: doctrineFitsPath, Fixed: fixed, Q: strings.TrimSpace(query.Get("q")), Sort: query.Get("sort"),
+		Include: strings.TrimSpace(query.Get("include")), Exclude: strings.TrimSpace(query.Get("exclude")),
 		Sorts: []browseSort{
 			{"doctrine", "Doctrine", byFold(func(c *fitCard) string { return c.Doctrine })},
 			sortFitName, sortFitShip,

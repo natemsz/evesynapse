@@ -17,12 +17,14 @@
 {{if .For}}<p class="browse-for"><strong>Choosing fits for <a href="/doctrines/{{.For.ID}}">{{.For.Name}}</a>.</strong> Each one added is copied into the doctrine.</p>{{end}}
 
 {{if .Total}}
-<form method="get" action="{{.Path}}" class="lookup-form">
+<form method="get" action="{{.Path}}" class="lookup-form searchpanel">
   {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">{{end}}
   <span class="searchwrap">
     <input type="search" name="q" id="fit-browse-q" value="{{.Q}}" placeholder="{{.Placeholder}}" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-browse-suggest" aria-autocomplete="list" aria-label="Search fits" data-suggest="{{.SuggestURL}}">
     <ul class="suggest" id="fit-browse-suggest" role="listbox" hidden></ul>
   </span>
+  <label>With module <input type="search" name="include" value="{{.Include}}" placeholder="Module name" autocomplete="off"></label>
+  <label>Without module <input type="search" name="exclude" value="{{.Exclude}}" placeholder="Module name" autocomplete="off"></label>
   <button type="submit">Search</button>
   {{if or .Q .Active}}<a href="{{.ClearURL}}">Clear all</a>{{end}}
 </form>

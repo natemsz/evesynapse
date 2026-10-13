@@ -282,7 +282,7 @@ func TestFitLocalSaveListDelete(t *testing.T) {
 	}
 	// The editor no longer embeds the your-fits list; the search
 	// bar above finds saved fits through mine.json.
-	mustContain(t, "/fittings/", body, "Ship Loadouts", "fit-yourfits-search")
+	mustContain(t, "/fittings/", body, "My Loadouts", "fit-yourfits-search")
 	if strings.Contains(body, "Saved One") {
 		t.Errorf("editor embeds the saved fit list; it should only offer the search bar")
 	}

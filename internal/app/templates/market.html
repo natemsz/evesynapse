@@ -5,7 +5,7 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{if .Market}}
-<form method="get" action="/market/" id="market-search">
+<form method="get" action="/market/" id="market-search" class="searchpanel">
   <span class="searchwrap">
     <input type="text" name="q" id="market-q" value="{{.Market.Query}}" placeholder="Item name, e.g. Tritanium" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="market-suggest" aria-autocomplete="list">
     <ul class="suggest" id="market-suggest" role="listbox" hidden></ul>

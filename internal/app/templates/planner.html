@@ -12,7 +12,7 @@
 
 <div class="foldable" data-fold="never">
 <h3>Find something to build</h3>
-<form method="get" action="/planner/">
+<form method="get" action="/planner/" class="searchpanel">
   <p class="plan-searchrow">
     <span class="searchwrap plan-searchwrap">
       <input type="text" name="q" id="planner-q" value="{{.Planner.Query}}" placeholder="Product name, e.g. Rifter" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="planner-suggest" aria-autocomplete="list">
@@ -55,12 +55,16 @@
 {{with .Planner.Plan}}
 <div id="plan-wrap">
 <div class="foldable plan-head" data-fold="never">
-<div class="plan-headrow"><h3>{{.ProductName}}</h3><span class="plan-headbtns">
+<h2 class="plan-title">{{.ProductName}}</h2>
+<div class="plan-fromrow">
+<p class="plan-from"><small>From <strong>{{.BlueprintName}}</strong> — builds {{.ProducedLine}}.{{if .MaxRunNote}} {{.MaxRunNote}}.{{end}}</small></p>
+<span class="plan-headbtns">
 {{if .MEInputs}}<button type="button" id="me-toggle" aria-haspopup="dialog">Blueprint ME</button>{{end}}
-<span class="plan-has-tip"><button type="button" id="plan-settings-toggle" aria-haspopup="dialog" aria-label="Build settings"><svg class="plan-glyph" viewBox="0 0 24 24" aria-hidden="true"><g stroke="url(#nav-glyph-gradient)" stroke-width="3.1" stroke-linecap="round"><path d="M12 3.4v3.4M12 17.2v3.4M3.4 12h3.4M17.2 12h3.4M5.9 5.9l2.4 2.4M15.7 15.7l2.4 2.4M18.1 5.9l-2.4 2.4M8.3 15.7l-2.4 2.4"/></g><path fill-rule="evenodd" fill="url(#nav-glyph-gradient)" d="M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Zm0-1.8a5.4 5.4 0 1 0 0 10.8 5.4 5.4 0 0 0 0-10.8Z"/></svg></button><span class="plan-tip" aria-hidden="true"><span class="plan-tip-note">Build Settings</span></span></span>
+<span class="plan-has-tip"><a href="#" id="csv-export" class="plan-csvbtn" aria-label="Export CSV"><svg class="plan-glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8L18.5 8v12.5h-12.5Z"/><path d="M14 3.5V8h4.5"/></g><text x="12.2" y="17.6" text-anchor="middle" font-size="5.2" font-weight="700" fill="url(#nav-glyph-gradient)" stroke="none">CSV</text></svg></a><span class="plan-tip plan-tip-fit" aria-hidden="true"><span class="plan-tip-note">Export CSV</span></span></span>
+<span class="plan-has-tip"><button type="button" id="plan-settings-toggle" aria-haspopup="dialog" aria-label="Build settings"><svg class="plan-glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="url(#nav-glyph-gradient)"><rect x="10.1" y="1.1" width="3.8" height="4.9" rx="0.8"/><rect x="10.1" y="1.1" width="3.8" height="4.9" rx="0.8" transform="rotate(45 12 12)"/><rect x="10.1" y="1.1" width="3.8" height="4.9" rx="0.8" transform="rotate(90 12 12)"/><rect x="10.1" y="1.1" width="3.8" height="4.9" rx="0.8" transform="rotate(135 12 12)"/><rect x="10.1" y="1.1" width="3.8" height="4.9" rx="0.8" transform="rotate(180 12 12)"/><rect x="10.1" y="1.1" width="3.8" height="4.9" rx="0.8" transform="rotate(225 12 12)"/><rect x="10.1" y="1.1" width="3.8" height="4.9" rx="0.8" transform="rotate(270 12 12)"/><rect x="10.1" y="1.1" width="3.8" height="4.9" rx="0.8" transform="rotate(315 12 12)"/><path fill-rule="evenodd" d="M12 4.4a7.6 7.6 0 1 0 0 15.2 7.6 7.6 0 0 0 0-15.2Zm0 3.7a3.9 3.9 0 1 0 0 7.8 3.9 3.9 0 0 0 0-7.8Z"/></g></svg></button><span class="plan-tip plan-tip-fit" aria-hidden="true"><span class="plan-tip-note">Build Settings</span></span></span>
 {{with .SkillsJudge}}<span class="plan-skillglyph {{if and .Known .CanBuild}}ok{{else}}bad{{end}} plan-has-tip" role="img" aria-label="{{.Heading}} {{if and .Known .CanBuild}}All skills covered.{{else}}Some skills missing.{{end}}" tabindex="0"><svg class="plan-glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.2C10.1 4.4 7.1 3.7 4.3 4.1v13.6c2.8-.4 5.8.3 7.7 2.1 1.9-1.8 4.9-2.5 7.7-2.1V4.1c-2.8-.4-5.8.3-7.7 2.1Z"/><path d="M12 6.2v13.6"/></g></svg><span class="plan-skillbadge" aria-hidden="true">{{if and .Known .CanBuild}}✓{{else}}✕{{end}}</span><span class="plan-tip" aria-hidden="true">{{if not .Known}}<span class="plan-tip-note">{{.Note}}</span>{{else if .CanBuild}}<span class="plan-tip-note">{{.Tip}}</span>{{else}}{{if .Note}}<span class="plan-tip-note">{{.Note}}</span>{{end}}<span class="plan-tip-head">Missing skills</span><ul>{{range .Lines}}{{if not .OK}}<li>{{.Text}}</li>{{end}}{{end}}</ul>{{end}}</span></span>{{end}}
-</span></div>
-<p><small>From <strong>{{.BlueprintName}}</strong> — builds {{.ProducedLine}}.{{if .MaxRunNote}} {{.MaxRunNote}}.{{end}} · <a href="#" id="csv-export" class="plan-csvbtn" aria-label="Export CSV"><svg class="plan-glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8L18.5 8v12.5h-12.5Z"/><path d="M14 3.5V8h4.5"/></g><text x="12.2" y="17.6" text-anchor="middle" font-size="5.2" font-weight="700" fill="url(#nav-glyph-gradient)" stroke="none">CSV</text></svg></a></small></p>
+</span>
+</div>
 {{if .StockNote}}<p><small>{{.StockNote}}</small></p>{{end}}
 
 <form method="get" action="/planner/" id="plan-form">
@@ -68,26 +72,27 @@
   <div class="modal-backdrop" id="plan-settings-modal" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="plan-settings-title">
       <div class="modal-head"><h2 id="plan-settings-title">Plan settings</h2><button type="button" class="modal-close" id="plan-settings-close" aria-label="Close">×</button></div>
-      <div class="plan-settings-fields">
-        <p><label>Runs <input type="number" name="runs" value="{{.Runs}}" min="1" size="6"></label></p>
-        {{if .JudgeOptions}}<p><span class="judge-wrap"><span>Judge as </span><input type="text" id="judge-q" value="{{.JudgeLabel}}" data-judge-current="{{.JudgeLabel}}" placeholder="Everyone together" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="judge-suggest" aria-autocomplete="list" aria-label="Judge as which character"><span id="judge-suggest" class="charselector-dropdown" hidden>{{range .JudgeOptions}}<button type="submit" name="judge" value="{{.Value}}" class="charselector-option{{if .Selected}} active{{end}}"{{if .Selected}} aria-current="true"{{end}} data-judge-pick>{{.Label}}</button>{{end}}</span></span></p>{{end}}
-        <p><label>Market <span class="market-wrap"><input type="text" id="market-q" value="{{if ne .Market "guide"}}{{.MarketName}}{{end}}" placeholder="Cluster average" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="market-suggest" aria-autocomplete="list" aria-label="Sell market region"><input type="hidden" name="market" id="market-value" value="{{.Market}}"><span id="market-suggest" class="charselector-dropdown" hidden></span></span></label></p>
-        {{if .Meta}}<p><label>Build system <span class="sys-wrap"><input type="text" id="system-q" name="system" value="{{.SystemName}}" placeholder="Jita" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="system-suggest" aria-autocomplete="list" aria-label="Build system"><span id="system-suggest" class="charselector-dropdown" hidden></span></span></label></p>
-        <p><label>Structure <select name="structure">
+      <p class="plan-setnote"><small>Runs, pricing basis and facility for this plan. Everything recalculates from these.</small></p>
+      <div class="plan-settings-fields plan-setgrid">
+        <label class="plan-setcell"><span>Runs</span><input type="number" name="runs" value="{{.Runs}}" min="1"></label>
+        {{if .JudgeOptions}}<span class="plan-setcell judge-wrap"><span>Judge as</span><input type="text" id="judge-q" value="{{.JudgeLabel}}" data-judge-current="{{.JudgeLabel}}" placeholder="Everyone together" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="judge-suggest" aria-autocomplete="list" aria-label="Judge as which character"><span id="judge-suggest" class="charselector-dropdown" hidden>{{range .JudgeOptions}}<button type="submit" name="judge" value="{{.Value}}" class="charselector-option{{if .Selected}} active{{end}}"{{if .Selected}} aria-current="true"{{end}} data-judge-pick>{{.Label}}</button>{{end}}</span></span>{{end}}
+        <label class="plan-setcell"><span>Market</span><span class="market-wrap"><input type="text" id="market-q" value="{{if ne .Market "guide"}}{{.MarketName}}{{end}}" placeholder="Cluster average" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="market-suggest" aria-autocomplete="list" aria-label="Sell market region"><input type="hidden" name="market" id="market-value" value="{{.Market}}"><span id="market-suggest" class="charselector-dropdown" hidden></span></span></label>
+        {{if .Meta}}<label class="plan-setcell"><span>Build system</span><span class="sys-wrap"><input type="text" id="system-q" name="system" value="{{.SystemName}}" placeholder="Jita" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="system-suggest" aria-autocomplete="list" aria-label="Build system"><span id="system-suggest" class="charselector-dropdown" hidden></span></span></label>
+        <label class="plan-setcell"><span>Structure</span><select name="structure">
           <option value=""{{if eq .StructureID 0}} selected{{end}}>NPC station</option>
           <option value="35825"{{if eq .StructureID 35825}} selected{{end}}>Raitaru</option>
           <option value="35826"{{if eq .StructureID 35826}} selected{{end}}>Azbel</option>
           <option value="35827"{{if eq .StructureID 35827}} selected{{end}}>Sotiyo</option>
-        </select></label></p>
-        <p><label>Rigs <select name="rig">
+        </select></label>
+        <label class="plan-setcell"><span>Rigs</span><select name="rig">
           <option value=""{{if eq .RigTier ""}} selected{{end}}>No rigs</option>
           <option value="t1"{{if eq .RigTier "t1"}} selected{{end}}>T1 manufacturing rigs</option>
           <option value="t2"{{if eq .RigTier "t2"}} selected{{end}}>T2 manufacturing rigs</option>
-        </select></label></p>
-        <p><label>Slots <input type="number" name="slots" value="{{.Meta.Slots}}" min="1" max="20" size="3"></label></p>{{end}}
-        <p><label>Time factor <input type="text" name="timef" placeholder="auto" size="5"></label></p>
-        <p><button type="submit">Recalculate</button></p>
+        </select></label>
+        <label class="plan-setcell"><span>Slots</span><input type="number" name="slots" value="{{.Meta.Slots}}" min="1" max="20"></label>{{end}}
+        <label class="plan-setcell"><span>Time factor</span><input type="text" name="timef" placeholder="auto"></label>
       </div>
+      <p class="plan-setactions"><button type="submit">Recalculate</button></p>
     </div>
   </div>
   {{if .MEInputs}}<div class="modal-backdrop" id="me-modal" hidden>

@@ -18,7 +18,7 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{template "charselector" .AssetsChars}}
-<form method="get" action="/assets/" id="assets-search">
+<form method="get" action="/assets/" id="assets-search" class="searchpanel">
   <span class="searchwrap">
     <input type="search" name="q" id="assets-q"{{if .AssetsSearch}} value="{{.AssetsSearch.Query}}"{{end}} placeholder="Find an item you own, e.g. Rifter" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="assets-suggest" aria-autocomplete="list" aria-label="Find an item on your characters">
     <ul class="suggest" id="assets-suggest" role="listbox" hidden></ul>

@@ -453,6 +453,17 @@ function nodeCard(n, mask, elapsed, maxCost, parentPath) {
   } else if (n.short > 0 && n.known) {
     meta = "<small>" + intF(n.short) + " × " + iskC(n.unit) + "</small>";
   }
+  // Origin line: where an unbuildable node comes from. PI
+  // commodities link across to their recipe in the PI planner.
+  var origin = "";
+  if (!n.build && n.origin === "pi") {
+    origin = '<div class="plan-origin">Planetary interaction' +
+      (n.originTier ? " · " + esc(n.originTier) : "") +
+      ' <a class="plan-origin-link" href="/industry/pi/?target=' +
+      encodeURIComponent(n.name) + '">Plan it in the PI planner</a></div>';
+  } else if (!n.build && n.origin === "reaction") {
+    origin = '<div class="plan-origin">Reaction product</div>';
+  }
   var bar = "";
   if (d !== "have") {
     bar = '<div class="plan-bar"><div class="plan-fill' +
@@ -461,10 +472,10 @@ function nodeCard(n, mask, elapsed, maxCost, parentPath) {
   }
   var cls = nodeClass(n, mask, elapsed);
   if (pathAnc[n.path] || pathDesc[n.path]) cls += " plan-onpath";
-  // In list mode depth reads from the content indent (data-pad-
-  // left, applied by app.js through the CSSOM); in map mode the
-  // stage column carries depth and the card stays flush.
-  var pad = listMode() ? (n.depth || 0) * 22 : 0;
+  // Depth reads from the layout, never from padding inside the
+  // card: the stage column in map mode, the indented card box
+  // (the .plan-kids wrapper) in list mode.
+  var pad = 0;
   return '<div class="' + cls + '" data-path="' + esc(n.path) +
     (parentPath != null ? '" data-parent="' + esc(parentPath) : "") +
     '" title="' + esc(nodeTitle(n)) + '" role="button" tabindex="0">' +
@@ -477,7 +488,7 @@ function nodeCard(n, mask, elapsed, maxCost, parentPath) {
       : '<span class="plan-chip">' + esc(label) + "</span>") +
     (risk ? '<span class="plan-flag">BOTTLENECK</span>' : "") + fold + "</span></div>" +
     '<div class="plan-node-meta"><span class="plan-cost">' + iskC(cost) + "</span> " + meta + "</div>" +
-    bar + "</div></div>";
+    origin + bar + "</div></div>";
 }
 
 // Only the root starts expanded: every branch with children
@@ -539,15 +550,42 @@ function renderNodeList(n, mask, elapsed, maxCost) {
   return nodeCard(n, mask, elapsed, maxCost, null) + kidsHTML;
 }
 
+// A re-render rebuilds the map DOM, which would otherwise reset
+// every stage's scroll position to the top on each click. The
+// scroll offsets are captured before the swap and restored after,
+// so selecting a card never moves the map under the reader.
+function captureScroll(host) {
+  var s = { x: 0, tops: {} };
+  var cols = host.querySelector(".plan-map-cols");
+  if (cols) s.x = cols.scrollLeft || 0;
+  host.querySelectorAll(".plan-stage-cards").forEach(function (el) {
+    var stage = el.parentElement;
+    if (stage) s.tops[stage.getAttribute("data-depth")] = el.scrollTop || 0;
+  });
+  return s;
+}
+
+function restoreScroll(host, s) {
+  var cols = host.querySelector(".plan-map-cols");
+  if (cols) cols.scrollLeft = s.x;
+  host.querySelectorAll(".plan-stage-cards").forEach(function (el) {
+    var stage = el.parentElement;
+    var top = stage ? s.tops[stage.getAttribute("data-depth")] : 0;
+    if (top) el.scrollTop = top;
+  });
+}
+
 function renderMap(t) {
   var host = $("plan-map");
   if (!host || !P) return;
   var mask = currentMask();
   var root = P.root;
   computePathSets();
+  var saved = captureScroll(host);
   if (listMode()) {
     host.innerHTML = renderNodeList(root, mask, t.elapsed, root.materials + root.job || 1);
     wireMap(host);
+    finishRender(host, saved);
     return;
   }
   var stages = [];
@@ -571,6 +609,14 @@ function renderMap(t) {
   html += "</div>";
   host.innerHTML = html;
   wireMap(host);
+  finishRender(host, saved);
+}
+
+// After either renderer: restore the reader's scroll position,
+// then honor a pending reveal (expanding a branch scrolls its
+// card into view on purpose).
+function finishRender(host, saved) {
+  restoreScroll(host, saved);
 }
 
 // Event wiring shared by the column map and the narrow-screen

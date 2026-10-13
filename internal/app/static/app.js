@@ -1716,6 +1716,7 @@
     { name: "Industry", url: "/industry/" },
     { name: "Build Planner", url: "/planner/" },
     { name: "Planetary Industry", url: "/planets/" },
+    { name: "PI Planner", url: "/industry/pi/" },
     { name: "Market", url: "/market/" },
     { name: "Spread scanner", url: "/market/scanner/" },
     { name: "Tradefinder", url: "/market/tradefinder/" },

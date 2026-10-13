@@ -1,0 +1,117 @@
+{{define "title"}}PI Planner{{end}}
+{{define "content"}}
+<h1><span class="gt">PI Planner</span></h1>
+{{template "industrytabs" .}}
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{template "charselector" .PIPlannerChars}}
+
+{{if .PIPlanner}}
+<p><small>Plan any planetary chain end-to-end — raw extraction through P4 — with factory counts, colony fit and POCO taxes. Like evepitool, click a product in the map to make it the target; your colonies pre-fill the planet picker when signed in.</small></p>
+{{if .PIPlanner.OwnedNote}}<p><small>{{.PIPlanner.OwnedNote}}</small></p>{{end}}
+{{if .PIPlanner.PricesNote}}<p><small>{{.PIPlanner.PricesNote}}</small></p>{{end}}
+
+<form method="get" action="/industry/pi/" id="pi-form">
+  <div class="pi-controls card">
+    <p>
+      <label>Product
+        <select name="product" id="pi-product">
+          {{range .PIPlanner.Targets}}<option value="{{.}}"{{if eq . $.PIPlanner.Target}} selected{{end}}>{{.}}</option>{{end}}
+        </select>
+      </label>
+      <label>Make <input type="number" name="amount" value="{{.PIPlanner.AmountStr}}" min="1" max="100000" size="7"> units</label>
+      <label>Per 24h window</label>
+    </p>
+    <p>
+      <label>Command Center
+        <select name="cc">
+          <option value="0"{{if eq .PIPlanner.CCLevel 0}} selected{{end}}>Level 0 — Basic</option>
+          <option value="1"{{if eq .PIPlanner.CCLevel 1}} selected{{end}}>Level 1</option>
+          <option value="2"{{if eq .PIPlanner.CCLevel 2}} selected{{end}}>Level 2</option>
+          <option value="3"{{if eq .PIPlanner.CCLevel 3}} selected{{end}}>Level 3</option>
+          <option value="4"{{if eq .PIPlanner.CCLevel 4}} selected{{end}}>Level 4</option>
+          <option value="5"{{if eq .PIPlanner.CCLevel 5}} selected{{end}}>Level 5 — Elite</option>
+        </select>
+      </label>
+      <label>Heads / ECU <input type="number" name="heads" value="{{.PIPlanner.Heads}}" min="1" max="10" size="3"></label>
+      <label>ECU yield <input type="number" name="yield" value="{{.PIPlanner.Yield}}" min="100" step="100" size="7"> R0/hr</label>
+      <label>POCO tax <input type="number" name="tax" value="{{.PIPlanner.TaxStr}}" min="0" max="100" step="0.5" size="4"> %</label>
+      <button type="submit">Recalculate</button>
+    </p>
+    <fieldset class="pi-planets">
+      <legend>Your planet types (coverage check)</legend>
+      {{range .PIPlanner.PlanetChecks}}<label class="pi-planet"><input type="checkbox" name="planets" value="{{.Name}}"{{if .Checked}} checked{{end}}> {{.Name}}{{if .Owned}} <small>· colony</small>{{end}}</label> {{end}}
+      <input type="hidden" name="planets" value="">
+      <small>Untick all to see the smallest covering set. Changing planets needs Recalculate for taxes/factories; the map highlights live.</small>
+    </fieldset>
+  </div>
+</form>
+
+{{if .PIPlanner.CoverageText}}<p class="pi-coverage {{.PIPlanner.CoverageClass}}">{{.PIPlanner.CoverageText}}{{if .PIPlanner.MissingText}} {{.PIPlanner.MissingText}}{{end}}</p>{{end}}
+<p><small>{{.PIPlanner.MinimalText}}{{if .PIPlanner.SingleText}} {{.PIPlanner.SingleText}}{{end}} {{.PIPlanner.FacilityNote}}</small></p>
+
+<section class="card">
+  <h3>Production map — {{.PIPlanner.Target}}</h3>
+  <p><small>Click any P1–P4 tile to plan it. Gold = target, green = chain inputs, blue = what it feeds, faded = unrelated. With planets ticked, chain tiles that your planets cannot supply are flagged. Yields: Basic 3,000 R0 → 20 P1 / 30 min · Advanced 40+40 → 5 P2 and 10 ea → 3 P3 / 1 h · High-Tech 6 ea → 1 P4 / 1 h.</small></p>
+  <div class="pi-graph" id="pi-graph">
+    {{range .PIPlanner.Graph}}
+    <div class="pi-col">
+      <h4>{{.Title}}</h4>
+      {{range .Nodes}}<button type="button" class="pi-node {{.Class}}" data-pi-node="{{.Name}}" data-pi-tier="{{.Tier}}" title="{{.Name}}{{if .Planets}} — found on {{.Planets}}{{end}}{{if .Price}} — {{.Price}}{{end}}">{{.Name}}{{if .Price}}<small>{{.Price}}</small>{{end}}</button>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+  <script type="application/json" id="pi-graph-data">{{.PIPlanner.GraphJSON}}</script>
+  <noscript><p><small>The map highlights need JavaScript; the tables below are complete without it.</small></p></noscript>
+</section>
+
+{{if .PIPlanner.HasPlan}}
+<section class="card">
+  <div class="plan-stats">
+    <div><span class="plan-k">Sell value</span><strong>{{.PIPlanner.Revenue}}</strong><br><small>{{.PIPlanner.Amount}} × {{.PIPlanner.Target}}</small></div>
+    <div><span class="plan-k">Raw (R0) cost</span><strong>{{.PIPlanner.RawCost}}</strong><br><small>whole chain, buy R0</small></div>
+    <div><span class="plan-k">Whole-chain profit</span><strong class="{{.PIPlanner.ProfitWholeCls}}">{{.PIPlanner.ProfitWhole}}</strong><br><small>{{.PIPlanner.MarginWhole}} margin</small></div>
+    <div><span class="plan-k">POCO taxes</span><strong>{{.PIPlanner.ExportTax}}</strong><br><small>export final · import ≈ {{.PIPlanner.ImportTax}}</small></div>
+  </div>
+  <p><small>Direct-step check: buying only the target's immediate inputs costs {{.PIPlanner.StepCost}} (profit {{.PIPlanner.ProfitStep}}, {{.PIPlanner.MarginStep}}). Whole-chain counts every raw at market; step counts one tier. Both ignore hauling and extractor opportunity cost — compare before committing planets.</small></p>
+</section>
+
+<div class="tw">
+<table>
+  <thead><tr><th>Material</th><th>Tier</th><th>Needed (batch)</th><th>Per hour</th><th>Factories</th><th>Facility</th><th>Volume</th><th>Unit price</th><th>Line value</th></tr></thead>
+  <tbody>
+  {{range .PIPlanner.Lines}}
+    <tr><td>{{.Name}}</td><td>{{.Tier}}</td><td>{{.Needed}}</td><td>{{.PerHour}}</td><td>{{.Factories}}</td><td>{{.Facility}}</td><td>{{.Volume}}</td><td>{{.Price}}</td><td>{{.Value}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>Factories are parallel processors to finish the batch inside 24 hours running continuously. Halve the window and factory counts roughly double; extractor ECUs scale from your yield setting.</small></p>
+
+<h3>Suggested colonies</h3>
+{{range .PIPlanner.Colonies}}
+<section class="foldable" data-fold="never">
+  <h4>{{.Title}} <small>· {{.Planet}} · {{.CPU}} · {{if .Fits}}fits{{else}}over budget — split or upgrade CC{{end}}</small></h4>
+  <p><small>{{.Detail}}</small></p>
+  <ul>{{range .Breakdown}}<li><small>{{.}}</small></li>{{end}}</ul>
+</section>
+{{end}}
+<p><small>Extractor planets refine R0 → P1 on-planet (25% volume) before export. Factory planets import P1 and run Advanced/High-Tech; only the factory planet needs a Launchpad import route for P4's P1 input. Link and storage buffers are not counted — leave headroom on tight fits.</small></p>
+{{end}}
+
+{{if .PIPlanner.Profitable}}
+<section class="foldable">
+  <h3>Profitable chains right now (guide prices, per 10 units)</h3>
+  <div class="tw"><table>
+    <thead><tr><th>Product</th><th>Margin</th><th>Profit</th></tr></thead>
+    <tbody>{{range .PIPlanner.Profitable}}<tr><td><a href="{{.URL}}">{{.Name}}</a></td><td class="{{.Class}}">{{.Margin}}</td><td>{{.Profit}}</td></tr>{{end}}</tbody>
+  </table></div>
+  <p><small>Whole-chain margin after R0 at guide prices, before taxes and hauling. Click through to size a colony for it.</small></p>
+</section>
+{{end}}
+{{else}}
+<p>No character to show yet — link a character first, or plan standalone above.</p>
+{{end}}
+{{end}}

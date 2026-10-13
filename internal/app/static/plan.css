@@ -225,3 +225,24 @@ Depth indent lives on the card content (data-pad-left). */
   .plan-frow { grid-template-columns: 1fr; gap: 0.15rem; }
   .plan-grow { grid-template-columns: 1fr; }
 }
+/* --- Industry hub tabs + PI Planner (/industry/pi/) --- */
+.industry-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.6rem 0 1rem; }
+.industry-tabs a { padding: 0.35rem 0.8rem; border: 1px solid var(--border, #333); border-radius: 4px; text-decoration: none; }
+.industry-tabs a.active { border-color: var(--accent); color: var(--text-bright); background: var(--row-hover); }
+.pi-controls label { margin-right: 1rem; white-space: nowrap; }
+.pi-planets { border: 1px solid var(--border, #333); border-radius: 4px; margin: 0.6rem 0; }
+.pi-planet { white-space: nowrap; margin-right: 0.8rem; }
+.pi-coverage.pos { color: #3fce7a; font-weight: 600; }
+.pi-coverage.neg { color: #ff5a4e; font-weight: 600; }
+.pi-graph { display: flex; gap: 0.6rem; overflow-x: auto; padding-bottom: 0.5rem; }
+.pi-col { min-width: 11rem; flex: 1 0 11rem; }
+.pi-col h4 { margin: 0 0 0.4rem; font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.pi-node { display: block; width: 100%; text-align: left; margin-bottom: 0.3rem; padding: 0.35rem 0.5rem; border: 1px solid var(--border, #333); border-radius: 4px; background: var(--row); cursor: pointer; font: inherit; }
+.pi-node small { display: block; color: var(--muted); }
+.pi-node.dimmed { opacity: 0.45; }
+.pi-node.input { border-color: #3fce7a; }
+.pi-node.input.missing { border-color: #ff5a4e; border-style: dashed; }
+.pi-node.selected { border-color: #ffd27a; background: var(--row-hover); font-weight: 700; }
+.pi-node.output { border-color: #5eb8ff; }
+.pi-node.covered { border-color: #3fce7a; background: var(--row-hover); }
+@media (max-width: 60rem) { .pi-col { min-width: 9rem; flex-basis: 9rem; } }

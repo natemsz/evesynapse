@@ -20,10 +20,10 @@ import (
 	"time"
 
 	"evesynapse/internal/buildplan"
-	"evesynapse/internal/piplan"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/piplan"
 )
 
 const (
@@ -51,37 +51,37 @@ func planCents(f float64) int64 {
 // planNodeDTO is one engine node, JSON-ready. Money is integer
 // cents, durations whole seconds; Kids nest the subtree.
 type planNodeDTO struct {
-	ID        int64          `json:"id"`
-	Name      string         `json:"name"`
-	URL       string         `json:"url"`
-	Depth     int            `json:"depth"`
-	Build     bool           `json:"build"`
-	Need      int64          `json:"need"`
-	Have      int64          `json:"have"`
-	Short     int64          `json:"short"`
-	Runs      int64          `json:"runs"`
-	Produced  int64          `json:"produced"`
-	Surplus   int64          `json:"surplus"`
-	ME        int            `json:"me"`
-	TE        int            `json:"te"`
-	MESource  string         `json:"meSrc"`
-	TimeSec   int64          `json:"timeSec"`
-	Materials int64          `json:"materials"`
-	Complete  bool           `json:"complete"`
-	Unit      int64          `json:"unit"`
-	Known     bool           `json:"known"`
-	Buy       int64          `json:"buy"`
-	Job       int64          `json:"job"`
-	JobKnown  bool           `json:"jobKnown"`
-	Save      int64          `json:"save"`
-	SaveKnown bool           `json:"saveKnown"`
-	Delta     int64          `json:"delta"`
-	DeltaOn   bool           `json:"deltaOn"`
-	Cycle     bool           `json:"cycle"`
-	Capped    bool           `json:"capped"`
-	Origin    string         `json:"origin,omitempty"`
-	OriginTier string        `json:"originTier,omitempty"`
-	Kids      []*planNodeDTO `json:"kids,omitempty"`
+	ID         int64          `json:"id"`
+	Name       string         `json:"name"`
+	URL        string         `json:"url"`
+	Depth      int            `json:"depth"`
+	Build      bool           `json:"build"`
+	Need       int64          `json:"need"`
+	Have       int64          `json:"have"`
+	Short      int64          `json:"short"`
+	Runs       int64          `json:"runs"`
+	Produced   int64          `json:"produced"`
+	Surplus    int64          `json:"surplus"`
+	ME         int            `json:"me"`
+	TE         int            `json:"te"`
+	MESource   string         `json:"meSrc"`
+	TimeSec    int64          `json:"timeSec"`
+	Materials  int64          `json:"materials"`
+	Complete   bool           `json:"complete"`
+	Unit       int64          `json:"unit"`
+	Known      bool           `json:"known"`
+	Buy        int64          `json:"buy"`
+	Job        int64          `json:"job"`
+	JobKnown   bool           `json:"jobKnown"`
+	Save       int64          `json:"save"`
+	SaveKnown  bool           `json:"saveKnown"`
+	Delta      int64          `json:"delta"`
+	DeltaOn    bool           `json:"deltaOn"`
+	Cycle      bool           `json:"cycle"`
+	Capped     bool           `json:"capped"`
+	Origin     string         `json:"origin,omitempty"`
+	OriginTier string         `json:"originTier,omitempty"`
+	Kids       []*planNodeDTO `json:"kids,omitempty"`
 }
 
 // planOriginClassifier classifies where a node comes from, for

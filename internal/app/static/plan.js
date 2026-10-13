@@ -414,19 +414,37 @@ function nodeCard(n, mask, elapsed, maxCost) {
       '" aria-label="' + (collapsed[n.path] ? "expand" : "collapse") + " " + esc(n.name) + '">' +
       (collapsed[n.path] ? "+" + subtreeSize(n) : "–") + "</button>";
   }
-  // Tree-table row: the label column carries the depth indent
-  // (data-pad-left, applied by app.js through the CSSOM) while the
-  // cost bar lives in a fixed-width column pinned to the right, so
-  // every row's bar starts at the same x whatever its depth.
+  // Decision-map card: the face carries the verdict (state chip,
+  // bottleneck flag, cost, and the branch's own facts), and the
+  // proportional bar runs the card's full width under the text,
+  // scaled against its siblings and colored by the decision.
+  // Depth reads from the content indent (data-pad-left, applied
+  // by app.js through the CSSOM).
   var pad = (n.depth || 0) * 22;
+  var risk = d === "build" && bottleneck(n, elapsed);
+  var meta = "";
+  if (d === "have") {
+    meta = "<small>covered by stock</small>";
+  } else if (n.build && n.short > 0) {
+    meta = "<small>" + n.runs + " runs · " + dur(n.timeSec) +
+      (n.deltaOn ? " · " + (n.delta >= 0 ? "building saves " : "buying saves ") + iskC(Math.abs(n.delta)) : "") + "</small>";
+  } else if (n.short > 0 && n.known) {
+    meta = "<small>" + intF(n.short) + " × " + iskC(n.unit) + "</small>";
+  }
+  var bar = "";
+  if (d !== "have") {
+    bar = '<div class="plan-bar"><div class="plan-fill' +
+      (risk ? " plan-risk" : buying ? " plan-buy" : "") +
+      '" data-w="' + pct + '"></div></div>';
+  }
   return '<div class="' + nodeClass(n, mask, elapsed) + '" data-path="' + esc(n.path) +
     '" title="' + esc(nodeTitle(n)) + '" role="button" tabindex="0">' +
-    '<div class="plan-trow"><div class="plan-tlabel" data-pad-left="' + pad + '">' +
+    '<div class="plan-node-main" data-pad-left="' + pad + '">' +
     '<div class="plan-node-top"><strong>' + esc(n.name) + "</strong>" +
-    "<span>" + esc(label) + fold + "</span></div>" +
-    "<small>" + iskC(cost) + "</small></div>" +
-    '<div class="plan-tbar"><div class="plan-bar"><div class="plan-fill' + (buying ? " plan-buy" : "") +
-    '" data-w="' + pct + '"></div></div></div></div></div>';
+    '<span class="plan-chips"><span class="plan-chip">' + esc(label) + "</span>" +
+    (risk ? '<span class="plan-flag">BOTTLENECK</span>' : "") + fold + "</span></div>" +
+    '<div class="plan-node-meta"><span class="plan-cost">' + iskC(cost) + "</span> " + meta + "</div>" +
+    bar + "</div></div>";
 }
 
 // Only the root starts expanded: every branch with children
@@ -590,11 +608,20 @@ function renderBuy(t) {
       "This scenario buys the finished product outright; see the header verdict." :
       "Nothing to buy: stock covers the plan.") + "</small></p>";
   } else {
-    list.innerHTML = "<ul>" + t.shopping.map(function (L) {
-      return "<li><strong>" + esc(L.name) + "</strong> — " + intF(L.qty) +
-        (L.known ? " × " + iskC(L.unit) + " = " + iskC(L.cost) : " · no price data") + "</li>";
-    }).join("") + "</ul>" +
-    '<p><button type="button" id="plan-copy">Copy multibuy list</button></p>';
+    var total = 0;
+    var rows = t.shopping.map(function (L) {
+      if (L.known) total += L.cost;
+      return "<tr><td><strong>" + esc(L.name) + "</strong></td>" +
+        '<td class="num">' + intF(L.qty) + "</td>" +
+        '<td class="num">' + (L.known ? iskC(L.unit) : "—") + "</td>" +
+        '<td class="num">' + (L.known ? iskC(L.cost) : "no price data") + "</td></tr>";
+    }).join("");
+    list.innerHTML = '<table class="plan-buytable"><thead><tr><th>Item</th>' +
+      '<th class="num">Qty</th><th class="num">Unit</th><th class="num">Total</th></tr></thead>' +
+      "<tbody>" + rows + "</tbody>" +
+      '<tfoot><tr><td colspan="3">Total</td><td class="num">' + iskC(total) + "</td></tr></tfoot></table>" +
+      (t.complete ? "" : "<p><small>" + t.unpriced + " line(s) have no price data and are not in the total.</small></p>") +
+      '<p><button type="button" id="plan-copy">Copy multibuy list</button></p>';
   }
   var buy = t.buyValue, stock = P.stockVal, tot = buy + stock;
   var html = "<h4>Hub split</h4>";
@@ -606,7 +633,6 @@ function renderBuy(t) {
   } else {
     html += "<p><small>No priced value to split yet.</small></p>";
   }
-  if (!t.complete) html += "<p><small>" + t.unpriced + " line(s) have no price data.</small></p>";
   hub.innerHTML = html;
   var copy = $("plan-copy");
   if (copy) copy.addEventListener("click", copyMultibuy);
@@ -714,7 +740,11 @@ function setPayload(payload) {
   // Server structs name it valueKnown; compute() names it
   // known. Normalize once so every renderer reads one shape.
   ["full", "optimized", "buyComp"].forEach(function (k) {
-    if (P[k]) P[k].known = !!P[k].valueKnown;
+    if (P[k]) {
+      P[k].known = !!P[k].valueKnown;
+      if (!P[k].shopping) P[k].shopping = [];
+      if (!P[k].jobs) P[k].jobs = [];
+    }
   });
   // A fresh tree invalidates view state; the preset choice
   // survives, its buttons re-synced below.
@@ -935,5 +965,17 @@ if (document.readyState === "loading") {
 } else {
   init();
 }
+
+// After an in-page swap the script is not re-run, so reboot
+// against the swapped-in DOM whenever the new page carries a
+// plan. Per-plan state resets first: the header figures on the
+// fresh page describe the default preset, not the last plan's.
+document.addEventListener("evesynapse:content-ready", function () {
+  if (!document.getElementById("plan-wrap")) return;
+  preset = "optimized";
+  overrides = {};
+  selected = "0";
+  init();
+});
 
 })();

@@ -237,3 +237,44 @@ func TestExtractorColonyLoad(t *testing.T) {
 		t.Fatalf("colony CPU = %d, want %d (2 ECUs of 10 heads, 4 Basic, 1 Launchpad)", extractors[0].CPUUsed, wantCPU)
 	}
 }
+
+// TestProfitIsAfterPOCOTax: the profit figures pay the taxes
+// shown beside them. Worked example, 240 Coolant at 10%:
+//
+//	export  240 x 7,200 x 10%            = 172,800
+//	import  3,840 P1 x 400 x 10% x 0.5   =  76,800
+//
+// The whole chain and the direct step import the same P1 here,
+// so both pay 249,600 in tax.
+func TestProfitIsAfterPOCOTax(t *testing.T) {
+	prices := map[string]float64{
+		"Coolant": 10000, "Water": 300, "Electrolytes": 300,
+		"Aqueous Liquids": 1, "Ionic Solutions": 1,
+	}
+	plan, err := PlanFor("Coolant", 240, Settings{Hours: 24, TaxRate: 0.10}, prices)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.ExportTax != 172800 || plan.ImportTax != 76800 || plan.StepImportTax != 76800 {
+		t.Fatalf("taxes: export %v import %v step import %v", plan.ExportTax, plan.ImportTax, plan.StepImportTax)
+	}
+	// Revenue 2,400,000. Raw: 576,000 units at 1 ISK. Step: 3,840 P1 at 300.
+	if want := 2400000.0 - 576000 - 172800 - 76800; plan.ProfitWhole != want {
+		t.Errorf("whole-chain profit = %v, want %v (after both taxes)", plan.ProfitWhole, want)
+	}
+	if want := 2400000.0 - 1152000 - 172800 - 76800; plan.ProfitStep != want {
+		t.Errorf("step profit = %v, want %v (after both taxes)", plan.ProfitStep, want)
+	}
+	if want := plan.ProfitWhole / 2400000 * 100; math.Abs(plan.MarginWhole-want) > 1e-9 {
+		t.Errorf("whole-chain margin = %v, want %v", plan.MarginWhole, want)
+	}
+
+	// With no tax the profit is plain revenue less inputs.
+	untaxed, err := PlanFor("Coolant", 240, Settings{Hours: 24}, prices)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if untaxed.ProfitWhole != 2400000-576000 || untaxed.ProfitStep != 2400000-1152000 {
+		t.Errorf("untaxed profit: whole %v step %v", untaxed.ProfitWhole, untaxed.ProfitStep)
+	}
+}

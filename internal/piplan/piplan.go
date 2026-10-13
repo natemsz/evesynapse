@@ -565,12 +565,13 @@ type Plan struct {
 	RawCostKnown  bool
 	StepCost      float64 // cost to buy direct inputs of target
 	StepCostKnown bool
-	ProfitWhole   float64
+	ProfitWhole   float64 // revenue - raw cost - export tax - import tax
 	MarginWhole   float64 // profit / revenue
-	ProfitStep    float64
+	ProfitStep    float64 // revenue - step cost - export tax - step import tax
 	MarginStep    float64
 	ExportTax     float64 // total export tax on final product
 	ImportTax     float64 // total import tax if intermediates imported once
+	StepImportTax float64 // import tax on the target's direct inputs only
 }
 
 // PlanFor computes requirements for amount units of target.
@@ -679,22 +680,13 @@ func PlanFor(target string, amount int64, s Settings, prices map[string]float64)
 		}
 		plan.StepCostKnown = stepOK
 	}
-	if plan.RevenueKnown && plan.RawCostKnown {
-		plan.ProfitWhole = plan.Revenue - plan.RawCost
-		if plan.Revenue > 0 {
-			plan.MarginWhole = plan.ProfitWhole / plan.Revenue * 100
-		}
-	}
-	if plan.RevenueKnown && plan.StepCostKnown {
-		plan.ProfitStep = plan.Revenue - plan.StepCost
-		if plan.Revenue > 0 {
-			plan.MarginStep = plan.ProfitStep / plan.Revenue * 100
-		}
-	}
+	// POCO taxes, worked out before profit so profit can pay them.
+	// Export: the finished product leaves the planet once at the
+	// full rate. Import: half the rate on whatever is brought in.
 	if c, ok := AllCommodities[target]; ok {
 		plan.ExportTax = float64(amount) * c.TaxValue * s.TaxRate
 	}
-	// Import tax: each intermediate imported once at 0.5x.
+	// Whole chain: each intermediate is imported once.
 	for tier, ls := range plan.ByTier {
 		if tier == TierRaw || tier == TierOf(target) {
 			continue
@@ -703,6 +695,26 @@ func PlanFor(target string, amount int64, s Settings, prices map[string]float64)
 			if comm, ok := AllCommodities[ln.Name]; ok {
 				plan.ImportTax += ln.Needed * comm.TaxValue * s.TaxRate * 0.5
 			}
+		}
+	}
+	// Direct step: only the target's own inputs are imported.
+	if sch, ok := Schematics[target]; ok {
+		for in, per := range sch.Inputs {
+			plan.StepImportTax += cycles[target] * float64(per) * AllCommodities[in].TaxValue * s.TaxRate * 0.5
+		}
+	}
+	// Profit is what is left after the inputs and the taxes shown
+	// beside it: one figure, not a pre-tax number next to a tax.
+	if plan.RevenueKnown && plan.RawCostKnown {
+		plan.ProfitWhole = plan.Revenue - plan.RawCost - plan.ExportTax - plan.ImportTax
+		if plan.Revenue > 0 {
+			plan.MarginWhole = plan.ProfitWhole / plan.Revenue * 100
+		}
+	}
+	if plan.RevenueKnown && plan.StepCostKnown {
+		plan.ProfitStep = plan.Revenue - plan.StepCost - plan.ExportTax - plan.StepImportTax
+		if plan.Revenue > 0 {
+			plan.MarginStep = plan.ProfitStep / plan.Revenue * 100
 		}
 	}
 

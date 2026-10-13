@@ -1072,7 +1072,11 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
   background: var(--panel);
   border: 1px solid #6b3410;
   border-radius: 4px;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.8), 0 0 14px rgba(255, 106, 26, 0.25);
+  /* drop-shadow, not box-shadow: a large high-alpha box-shadow
+     ends at its blur's finite support, and over the backdrop's
+     blur that cutoff paints as a hard rectangular halo in both
+     Blink and Gecko. The filter's true Gaussian has no edge. */
+  filter: drop-shadow(0 18px 25px rgba(0, 0, 0, 0.8)) drop-shadow(0 0 14px rgba(255, 106, 26, 0.25));
   width: min(34rem, 100%);
   max-height: 82vh;
   overflow-y: auto;
@@ -1904,7 +1908,9 @@ tbody tr.yours td { background-color: #2a2015; }
   border: 1px solid #2a2a2a;
   border-top: 3px solid var(--accent);
   border-radius: 6px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.8);
+  /* drop-shadow rather than box-shadow: see .modal (the
+     box-shadow blur cutoff shows as a hard halo over blur). */
+  filter: drop-shadow(0 18px 24px rgba(0, 0, 0, 0.8));
   padding: 0.8rem;
   animation: quickjump-in 120ms ease-out;
 }
@@ -2294,12 +2300,18 @@ select.flash { animation: fit-flash 0.7s ease-out; }
   padding: 0.45rem 2rem 0.45rem 0.6rem;
   font-size: 0.8rem;
   line-height: 1.35;
-  max-width: 12rem;
+  max-width: 15rem;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6), 0 0 12px rgba(255, 106, 26, 0.25);
 }
 .fit-tip-name { font-weight: 600; color: var(--text); margin-bottom: 0.15rem; }
 .fit-tip-sub { color: var(--muted); font-size: 0.75rem; }
 .fit-tip-stats { color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
+.fit-tip-lines { margin-top: 0.3rem; display: grid; gap: 0.12rem; }
+.fit-tip-line { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.75rem; }
+.fit-tip-k { color: var(--muted); }
+.fit-tip-v { color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fit-tip-v.good { color: #7dc96f; }
+.fit-tip-v.bad { color: #ff7a6b; }
 .fit-tip-x {
   position: absolute;
   top: 0.1rem;
@@ -2314,22 +2326,16 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 .fit-tip-x:hover { color: var(--text); }
 .fit-tip-states { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.4rem; }
 .fit-tip-state {
-  background: #1c1c1c; border: 1px solid #3a3a3a; border-radius: 3px;
+  background: #1c1c1c; border: 1px solid #3a3a3a; border-radius: 999px;
   color: var(--text); font: inherit; font-size: 0.8rem; line-height: 1;
-  padding: 0.45rem 0.6rem; min-height: 2rem; cursor: pointer;
+  padding: 0.25rem 0.7rem; cursor: pointer;
 }
 .fit-tip-state:hover { border-color: var(--accent); }
 .fit-tip-state.on {
   border-color: #ff6a1a; color: #ffd9a8;
   box-shadow: 0 0 8px rgba(255, 106, 26, 0.35);
 }
-.fit-picker {
-  margin-top: 0.8rem;
-  border: 1px solid #2c2c2c;
-  border-radius: 4px;
-  background: var(--panel);
-  padding: 0.7rem;
-}
+.fit-picker-modal .fit-picker-list { max-height: 52vh; }
 .fit-picker-head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
 .fit-picker-head input[type="text"] { flex: 1 1 14rem; }
 .fit-picker-list { list-style: none; margin: 0.6rem 0 0; padding: 0; max-height: 16rem; overflow-y: auto; }

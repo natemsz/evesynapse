@@ -502,12 +502,13 @@ func TestPublicItemAndShipPages(t *testing.T) {
 		t.Fatalf("seed stats: %v", err)
 	}
 
-	// The standalone public item page is retired: /item/
-	// redirects permanently to the canonical Item Database
-	// type page, which is public now and carries the hub
+	// The standalone public item page is retired outright:
+	// nothing links to it, the sitemap and robots.txt point
+	// at the Item Database instead, and the URL itself is
+	// gone. The type page is public now and carries the hub
 	// prices and price history itself.
-	if code, _ := apptest.GetPage(t, rig, nil, "/item/587/"); code != http.StatusMovedPermanently {
-		t.Errorf("old item URL status = %d, want 301", code)
+	if code, _ := apptest.GetPage(t, rig, nil, "/item/587/"); code != http.StatusNotFound {
+		t.Errorf("old item URL status = %d, want 404", code)
 	}
 	code, body := apptest.GetPage(t, rig, nil, "/items/type/587/")
 	if code != 200 {

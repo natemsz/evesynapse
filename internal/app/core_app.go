@@ -656,13 +656,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// rows only, never per-user data.
 	r.Get("/robots.txt", app.handleRobots)
 	r.Get("/sitemap.xml", app.handleSitemap)
-	// The old standalone public item page is retired: its one
-	// canonical home is the Item Database type page, which is
-	// public and indexed. Keep shared and indexed /item/ links
-	// working with a permanent redirect.
-	r.Get("/item/{typeID}/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/items/type/"+chi.URLParam(r, "typeID")+"/", http.StatusMovedPermanently)
-	})
+
 	r.Route("/ships", func(r chi.Router) {
 		r.Get("/{typeID}/", app.handlePublicShip)
 	})

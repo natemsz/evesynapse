@@ -48,7 +48,7 @@
   </div>
 </form>
 
-{{if .PIPlanner.CoverageText}}<p class="pi-coverage {{.PIPlanner.CoverageClass}}">{{.PIPlanner.CoverageText}}{{if .PIPlanner.MissingText}} {{.PIPlanner.MissingText}}{{end}}</p>{{end}}
+{{if .PIPlanner.CoverageText}}<p class="pi-coverage {{.PIPlanner.CoverageClass}}" id="pi-coverage">{{.PIPlanner.CoverageText}}{{if .PIPlanner.MissingText}} {{.PIPlanner.MissingText}}{{end}}</p>{{end}}
 <p><small>{{.PIPlanner.MinimalText}}{{if .PIPlanner.SingleText}} {{.PIPlanner.SingleText}}{{end}} {{.PIPlanner.FacilityNote}}</small></p>
 
 <section class="card">
@@ -58,7 +58,7 @@
     {{range .PIPlanner.Graph}}
     <div class="pi-col">
       <h4>{{.Title}}</h4>
-      {{range .Nodes}}<button type="button" class="pi-node {{.Class}}" data-pi-node="{{.Name}}" data-pi-tier="{{.Tier}}" title="{{.Name}}{{if .Planets}} — found on {{.Planets}}{{end}}{{if .Price}} — {{.Price}}{{end}}">{{.Name}}{{if .Price}}<small>{{.Price}}</small>{{end}}</button>
+      {{range .Nodes}}<button type="button" class="pi-node {{.Class}}" data-pi-node="{{.Name}}" data-pi-tier="{{.Tier}}" data-pi-planets="{{.Planets}}" title="{{.Name}}{{if .Planets}} — found on {{.Planets}}{{end}}{{if .Price}} — {{.Price}}{{end}}">{{.Name}}{{if .Price}}<small>{{.Price}}</small>{{end}}</button>
       {{end}}
     </div>
     {{end}}

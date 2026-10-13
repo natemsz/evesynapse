@@ -594,18 +594,21 @@ func planHeaderLines(p *planPayload) (landed, landedSub, value, margin, marginSu
 	return landed, landedSub, value, margin, marginSub, elapsed, elapsedSub
 }
 
-// planBuyOutrightLine compares buying the finished product
-// outright against the optimized build: the header's
-// build-vs-buy verdict in one line.
-func planBuyOutrightLine(p *planPayload) string {
+// planVerdictLine is the build-vs-buy verdict shown above the
+// preset buttons: the optimized scenario's profit, worded as
+// what building (or buying) saves, with the color class of the
+// winning side. The price itself already sits in the header, so
+// the line carries only the saving. plan.js renderHeader rewords
+// it per preset with the same rule.
+func planVerdictLine(p *planPayload) (text, cls string) {
 	b := p.Optimized
 	if !b.Known || !b.ProfKnown {
-		return ""
+		return "", ""
 	}
 	if b.Profit >= 0 {
-		return p.MarketName + " sell " + iskCompactCents(b.Value) + " — building saves " + iskCompactCents(b.Profit)
+		return "Building saves " + iskCompactCents(b.Profit), "build"
 	}
-	return p.MarketName + " sell " + iskCompactCents(b.Value) + " — buying outright saves " + iskCompactCents(-b.Profit)
+	return "Buying saves " + iskCompactCents(-b.Profit), "buy"
 }
 
 // planStockValue prices the aggregate stockpile for the hub
@@ -655,7 +658,7 @@ func buildPlanPayload(res *buildplan.Result, productID int64, prices map[int64]e
 // types (one bounded read). Missing rows stay missing: no
 // price data, never a silent fallback. It returns the map and
 // the freshest row stamp.
-func (app *Application) planJitaPrices(ctx context.Context, res *buildplan.Result) (map[int64]esi.MarketPrice, time.Time, error) {
+func (app *Application) planRegionPrices(ctx context.Context, res *buildplan.Result, regionID int64) (map[int64]esi.MarketPrice, time.Time, error) {
 	seen := make(map[int64]bool)
 	var ids []int64
 	buildplan.Walk(res.Root, func(n *buildplan.Node) {
@@ -665,7 +668,7 @@ func (app *Application) planJitaPrices(ctx context.Context, res *buildplan.Resul
 		}
 	})
 	rows, err := app.queries.ListMarketTypePricesForTypes(ctx, db.ListMarketTypePricesForTypesParams{
-		RegionID: plannerForgeRegionID, Column2: ids,
+		RegionID: regionID, Column2: ids,
 	})
 	if err != nil {
 		return nil, time.Time{}, err
@@ -683,26 +686,56 @@ func (app *Application) planJitaPrices(ctx context.Context, res *buildplan.Resul
 	return out, stamp, nil
 }
 
-// planMarket picks the price source: Forge sell rows when
-// asked (?market=jita), else the cluster guide. The default is
-// the guide, so existing links render exactly as before; the
-// new tabs link with ?market=jita.
+// planMarketRegion parses the ?market= selector: "" and
+// "guide" are the cluster guide, "jita" is the legacy spelling
+// of The Forge, and a bare region id prices from that region.
+// Returns 0 for the guide.
+func planMarketRegion(raw string) int64 {
+	switch strings.TrimSpace(raw) {
+	case "", plannerMarketGuide:
+		return 0
+	case plannerMarketJita:
+		return plannerForgeRegionID
+	}
+	if n, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64); err == nil && n > 0 {
+		return n
+	}
+	return 0
+}
+
+// planMarket picks the price source. The default is the cluster
+// guide, so existing links render exactly as before. A region
+// LAYERS over the guide: the region's sell price wins where a
+// row is on file, and everything else keeps its guide price —
+// a thin region thins the basis note, never the totals (the
+// old all-or-nothing Jita mode zeroed plans whose items had no
+// Forge rows).
 func (app *Application) planMarket(ctx context.Context, q url.Values, res *buildplan.Result, guide map[int64]esi.MarketPrice) (prices map[int64]esi.MarketPrice, market, marketName, pricesNote string) {
-	market, marketName = plannerMarketGuide, "Cluster average"
-	prices = guide
-	if q.Get("market") != plannerMarketJita {
-		return prices, market, marketName, "Cluster-average guide prices."
+	regionID := planMarketRegion(q.Get("market"))
+	if regionID == 0 {
+		return guide, plannerMarketGuide, "Cluster average", "Cluster-average guide prices."
 	}
-	jita, stamp, err := app.planJitaPrices(ctx, res)
+	market = strconv.FormatInt(regionID, 10)
+	marketName = "Region " + market
+	if reg, err := app.queries.GetSDERegion(ctx, regionID); err == nil {
+		marketName = reg.Name
+	}
+	rows, stamp, err := app.planRegionPrices(ctx, res, regionID)
 	if err != nil {
-		logging.Errorf("planner: jita prices: %v", err)
-		return prices, market, marketName, "Jita sell unavailable; cluster average shown."
+		logging.Errorf("planner: region prices: %v", err)
+		return guide, market, marketName, marketName + " sell unavailable; cluster average shown."
 	}
-	market, marketName = plannerMarketJita, "Jita 4-4 sell"
 	if stamp.IsZero() {
-		return jita, market, marketName, "No Forge sell rows on file yet."
+		return guide, market, marketName, marketName + " has no sell rows on file yet; cluster average shown."
 	}
-	return jita, market, marketName, "Forge sell rows as of " + stamp.UTC().Format("2006-01-02 15:04") + "."
+	prices = make(map[int64]esi.MarketPrice, len(guide))
+	for id, p := range guide {
+		prices[id] = p
+	}
+	for id, p := range rows {
+		prices[id] = p
+	}
+	return prices, market, marketName, marketName + " sell rows as of " + stamp.UTC().Format("2006-01-02 15:04") + "; cluster average elsewhere."
 }
 
 // planBuildSystem resolves the ?system= build system (default
@@ -740,6 +773,96 @@ func (app *Application) planBuildSystem(ctx context.Context, raw string) (system
 	return systemID, systemName, row.CostIndex, true
 }
 
+// The SDE dogma attributes carrying facility bonuses. The
+// engineering complexes publish their role bonus as straight
+// multipliers (strEng*); rigs publish percent decreases
+// (2593/2594) plus per-security-band effectiveness multipliers
+// (2355/2356/2357). The values are uniform across every
+// manufacturing rig family of a tier (verified against the
+// SDE), so one representative rig per tier and kind speaks for
+// the family the pilot would actually fit.
+const (
+	attrStrEngMatBonus  = 2600
+	attrStrEngCostBonus = 2601
+	attrStrEngTimeBonus = 2602
+	attrRigTimeBonus    = 2593
+	attrRigMatBonus     = 2594
+	attrRigSecHi        = 2355
+	attrRigSecLow       = 2356
+	attrRigSecNull      = 2357
+)
+
+var (
+	rigRepresentativeME = map[string]int64{"t1": 37146, "t2": 37147} // Standup M-Set Basic Medium Ship ME I/II
+	rigRepresentativeTE = map[string]int64{"t1": 37162, "t2": 37153} // Standup M-Set Basic Small/Medium Ship TE I/II
+	plannerStructures   = map[int64]string{35825: "Raitaru", 35826: "Azbel", 35827: "Sotiyo"}
+)
+
+// planFacility resolves the ?structure= / ?rig= picks into the
+// engine's facility multipliers, all read from the local SDE:
+// the structure's role bonus, and the rig tier's bonuses scaled
+// by the build system's security band exactly as the rig's own
+// attributes prescribe. No structure (or an unknown one) is an
+// NPC station: every factor 1 and no note. Rigs need a
+// structure to hang on.
+func (app *Application) planFacility(ctx context.Context, rawStructure, rawRig string, systemID int64) (matFactor, timeFactor, costFactor float64, note string, structureID int64, rigTier string) {
+	matFactor, timeFactor, costFactor = 1, 1, 1
+	structureID, _ = strconv.ParseInt(strings.TrimSpace(rawStructure), 10, 64)
+	name, ok := plannerStructures[structureID]
+	if !ok {
+		return matFactor, timeFactor, costFactor, "", 0, ""
+	}
+	rigTier = strings.ToLower(strings.TrimSpace(rawRig))
+	meRig, teRig := rigRepresentativeME[rigTier], rigRepresentativeTE[rigTier]
+	if meRig == 0 {
+		rigTier, meRig, teRig = "", 0, 0
+	}
+	ids := []int64{structureID}
+	if meRig > 0 {
+		ids = append(ids, meRig, teRig)
+	}
+	attrs := make(map[int64]map[int64]float64)
+	if rows, err := app.queries.ListSDETypeAttributesByIDs(ctx, ids); err == nil {
+		for _, row := range rows {
+			if attrs[row.TypeID] == nil {
+				attrs[row.TypeID] = make(map[int64]float64)
+			}
+			attrs[row.TypeID][row.AttributeID] = row.Value
+		}
+	} else {
+		logging.Errorf("planner: facility attributes: %v", err)
+	}
+	get := func(typeID, attr int64, def float64) float64 {
+		if v, ok := attrs[typeID][attr]; ok && v != 0 {
+			return v
+		}
+		return def
+	}
+	matFactor = get(structureID, attrStrEngMatBonus, 1)
+	costFactor = get(structureID, attrStrEngCostBonus, 1)
+	timeFactor = get(structureID, attrStrEngTimeBonus, 1)
+	note = name
+	if meRig > 0 {
+		// The rig's own security multipliers, applied to the
+		// build system's band; an unknown system earns the
+		// high-sec multiplier, never a better one.
+		secAttr := int64(attrRigSecHi)
+		if sys, err := app.queries.GetSDESystem(ctx, systemID); err == nil {
+			switch {
+			case sys.Security <= 0:
+				secAttr = attrRigSecNull
+			case sys.Security < 0.5:
+				secAttr = attrRigSecLow
+			}
+		}
+		secMult := get(meRig, secAttr, 1)
+		matFactor *= 1 + get(meRig, attrRigMatBonus, 0)/100*secMult
+		timeFactor *= 1 + get(teRig, attrRigTimeBonus, 0)/100*secMult
+		note += " · " + strings.ToUpper(rigTier) + " rigs"
+	}
+	return matFactor, timeFactor, costFactor, note, structureID, rigTier
+}
+
 // planAdjustedMap builds the job-fee base from the guide:
 // adjusted price where present, average behind it.
 func planAdjustedMap(guide map[int64]esi.MarketPrice) map[int64]float64 {
@@ -764,11 +887,13 @@ func (app *Application) buildPlanPayloadView(ctx context.Context, q url.Values, 
 	guide := app.valuationPrices(ctx)
 	prices, market, marketName, pricesNote := app.planMarket(ctx, q, res, guide)
 	adjusted := planAdjustedMap(guide)
-	if market == plannerMarketJita {
+	if market != plannerMarketGuide {
+		facMat, facTime, facCost, _, _, _ := app.planFacility(ctx, q.Get("structure"), q.Get("rig"), systemID)
 		re, err := buildplan.Build(src, productID, buildplan.Input{
 			Runs: runs, MEOverride: overrides, Owned: owned,
 			Stock: stock, Prices: prices,
 			CostIndex: index, Adjusted: adjusted,
+			FacilityMatFactor: facMat, FacilityTimeFactor: facTime, FacilityCostFactor: facCost,
 		})
 		if err == nil && !re.TooLarge {
 			res = re

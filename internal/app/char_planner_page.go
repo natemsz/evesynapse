@@ -46,40 +46,45 @@ type plannerResultRow struct {
 
 // planView is one computed build plan, display-ready.
 type planView struct {
-	ProductTypeID   int64
-	ProductName     string
-	BlueprintName   string
-	Payload         template.JS // plan JSON for the interactive tabs; "" when none
-	Meta            *planPayload
-	Market          string // "jita" | "guide"
-	MarketName      string // "Jita 4-4 sell" | "Cluster average"
-	SystemName      string
-	IndexLine       string
-	SlotsLine       string
-	TimeFactorNote  string
-	BuyOutrightLine string
-	HdrLanded       string
-	HdrLandedSub    string
-	HdrValue        string
-	HdrMargin       string
-	HdrMarginSub    string
-	HdrElapsed      string
-	HdrElapsedSub   string
-	Runs            int64
-	ProducedLine    string // "1,200 units (12 runs × 100 per run)"
-	StockNote       string // "Requirements are netted against everything your characters hold."
-	MaxRunNote      string // blueprint max production limit, "" when unknown
-	Skills          []string
-	Rows            []planRowView
-	MEInputs        []planMEInput
-	MESummary       string        // one-line rollup of MEInputs; "" when none
-	Shopping        []planRowView // reuses the row shape; only name/qty/price cells fill
-	ShoppingTotal   string        // "" when some lines are unpriced
-	TotalTime       string
-	ProductValue    string
-	Margin          string
-	MarginNote      string
-	PricesNote      string
+	ProductTypeID  int64
+	ProductName    string
+	BlueprintName  string
+	Payload        template.JS // plan JSON for the interactive tabs; "" when none
+	Meta           *planPayload
+	Market         string // "jita" | "guide"
+	MarketName     string // "Jita 4-4 sell" | "Cluster average"
+	SystemName     string
+	IndexLine      string
+	SlotsLine      string
+	TimeFactorNote string
+	VerdictText    string
+	VerdictCls     string
+	FacilityNote   string
+	StructureID    int64
+	RigTier        string
+	HdrProfitCls   string
+	HdrLanded      string
+	HdrLandedSub   string
+	HdrValue       string
+	HdrMargin      string
+	HdrMarginSub   string
+	HdrElapsed     string
+	HdrElapsedSub  string
+	Runs           int64
+	ProducedLine   string // "1,200 units (12 runs × 100 per run)"
+	StockNote      string // "Requirements are netted against everything your characters hold."
+	MaxRunNote     string // blueprint max production limit, "" when unknown
+	Skills         []string
+	Rows           []planRowView
+	MEInputs       []planMEInput
+	MESummary      string        // one-line rollup of MEInputs; "" when none
+	Shopping       []planRowView // reuses the row shape; only name/qty/price cells fill
+	ShoppingTotal  string        // "" when some lines are unpriced
+	TotalTime      string
+	ProductValue   string
+	Margin         string
+	MarginNote     string
+	PricesNote     string
 
 	// "Judge as" scoping (character or tag), empty/nil when the
 	// plan is judged generally: a skill check against the
@@ -199,6 +204,39 @@ func pluralS(n int) string {
 // plannerMaxRunsInput clamps the runs form field; the node cap in
 // the engine is the real guard against runaway plans.
 const plannerMaxRunsInput = 1000000
+
+// handlePlannerSuggest serves GET /planner/suggest?kind=system|region&q=:
+// the settings pickers' autocomplete feed, in the shared
+// suggest shape the app's other search boxes use. System rows
+// carry their region as the label; region rows stand alone.
+func (app *Application) handlePlannerSuggest(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	out := []suggestItem{}
+	if len(q) >= 2 {
+		pattern := "%" + q + "%"
+		switch r.URL.Query().Get("kind") {
+		case "region":
+			rows, err := app.queries.SearchSDERegions(r.Context(), pattern)
+			if err != nil {
+				logging.Errorf("planner suggest regions %q: %v", q, err)
+				break
+			}
+			for _, row := range rows {
+				out = append(out, suggestItem{ID: row.RegionID, Name: row.Name})
+			}
+		default:
+			rows, err := app.queries.SearchSDESystems(r.Context(), pattern)
+			if err != nil {
+				logging.Errorf("planner suggest systems %q: %v", q, err)
+				break
+			}
+			for _, row := range rows {
+				out = append(out, suggestItem{ID: row.SystemID, Name: row.Name, Label: row.RegionName})
+			}
+		}
+	}
+	writeSuggestJSON(w, out)
+}
 
 func (app *Application) handlePlanner(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -347,14 +385,19 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 	adjusted := planAdjustedMap(prices)
 	systemID, systemName, costIndex, indexKnown := app.planBuildSystem(ctx, q.Get("system"))
 
+	facMat, facTime, facCost, facNote, facStructure, facRig := app.planFacility(ctx, q.Get("structure"), q.Get("rig"), systemID)
+
 	res, err := buildplan.Build(src, productID, buildplan.Input{
-		Runs:       runs,
-		MEOverride: overrides,
-		Owned:      owned,
-		Stock:      stock,
-		Prices:     prices,
-		CostIndex:  costIndex,
-		Adjusted:   adjusted,
+		Runs:               runs,
+		MEOverride:         overrides,
+		Owned:              owned,
+		Stock:              stock,
+		Prices:             prices,
+		CostIndex:          costIndex,
+		Adjusted:           adjusted,
+		FacilityMatFactor:  facMat,
+		FacilityTimeFactor: facTime,
+		FacilityCostFactor: facCost,
 	})
 	if errors.Is(err, buildplan.ErrNotManufacturable) {
 		return nil, "That item has no manufacturing blueprint in the local data, so it can't be planned."
@@ -444,7 +487,18 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 		view.SlotsLine += "s"
 	}
 	view.TimeFactorNote = meta.TimeNote
-	view.BuyOutrightLine = planBuyOutrightLine(meta)
+	view.VerdictText, view.VerdictCls = planVerdictLine(meta)
+	view.FacilityNote = facNote
+	view.StructureID = facStructure
+	view.RigTier = facRig
+	if meta.Optimized.ProfKnown {
+		switch {
+		case meta.Optimized.Profit > 0:
+			view.HdrProfitCls = "pos"
+		case meta.Optimized.Profit < 0:
+			view.HdrProfitCls = "neg"
+		}
+	}
 	view.HdrLanded, view.HdrLandedSub, view.HdrValue, view.HdrMargin, view.HdrMarginSub, view.HdrElapsed, view.HdrElapsedSub = planHeaderLines(meta)
 
 	// Flatten the tree; collect the ME inputs once per blueprint.

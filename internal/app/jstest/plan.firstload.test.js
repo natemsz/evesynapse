@@ -41,7 +41,7 @@ function install(payload, opts) {
   const win = {
     location: { href: "https://x.test/planner/?product=1", search: "?product=1", pathname: "/planner/" },
     history: {},
-    matchMedia: function () { return { matches: false }; },
+    matchMedia: opts.matchMedia || function () { return { matches: false }; },
     scrollTo: function () {}
   };
   global.document = doc;
@@ -173,6 +173,20 @@ test("decision map renders as stage columns by depth", async function () {
   // crowded stage switches to the dense card size.
   assert.ok(map.indexOf('data-parent="0"') !== -1, "component cards name the root as parent");
   assert.ok(map.indexOf("plan-stage-dense") !== -1, "the 30-card stage renders dense");
+});
+
+test("narrow screens keep the classic indented card stack", async function () {
+  const els = install(capitalPayload(), {
+    matchMedia: function () { return { matches: true, addEventListener: function () {} }; }
+  });
+  await waitFor(function () {
+    return els["plan-map"] && els["plan-map"].innerHTML.indexOf("plan-node") !== -1;
+  }, "map render");
+  const map = els["plan-map"].innerHTML;
+  assert.ok(map.indexOf("plan-map-cols") === -1, "no stage columns on a narrow screen");
+  assert.ok(map.indexOf("plan-stage") === -1, "no stage markup in list mode");
+  assert.ok(map.indexOf('data-pad-left="22"') !== -1, "depth reads from the indent in list mode");
+  assert.ok(map.indexOf("plan-chip") !== -1, "list cards keep their state chips");
 });
 
 test("one throwing view does not blank the others", async function () {

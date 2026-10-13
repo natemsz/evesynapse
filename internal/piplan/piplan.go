@@ -110,25 +110,31 @@ func init() {
 	add := func(name string, tier Tier, vol, tax float64) {
 		AllCommodities[name] = Commodity{Name: name, Tier: tier, Volume: vol, TaxValue: tax}
 	}
-	// R0 — volume 0.01 m3, taxable 5 ISK.
+	// Volumes below are the SDE's (invTypes.volume, checked against
+	// the dump of 2026-10-13 for every commodity in each tier):
+	// R0 0.005, P1 0.19, P2 0.75, P3 3, P4 50 m3. They are the
+	// fallback; a caller with an imported SDE passes its volumes
+	// in Settings.Volumes and those win. TestTierVolumes pins them.
+	//
+	// R0 — volume 0.005 m3, taxable 5 ISK.
 	for _, n := range []string{
 		"Aqueous Liquids", "Autotrophs", "Base Metals", "Carbon Compounds",
 		"Complex Organisms", "Felsic Magma", "Heavy Metals", "Ionic Solutions",
 		"Microorganisms", "Noble Gas", "Noble Metals", "Non-CS Crystals",
 		"Planktic Colonies", "Reactive Gas", "Suspended Plasma",
 	} {
-		add(n, TierRaw, 0.01, 5)
+		add(n, TierRaw, 0.005, 5)
 	}
-	// P1 — volume 0.38 m3, taxable 400 ISK.
+	// P1 — volume 0.19 m3, taxable 400 ISK.
 	for _, n := range []string{
 		"Bacteria", "Biofuels", "Biomass", "Chiral Structures", "Electrolytes",
 		"Industrial Fibers", "Oxidizing Compound", "Oxygen", "Plasmoids",
 		"Precious Metals", "Proteins", "Reactive Metals", "Silicon",
 		"Toxic Metals", "Water",
 	} {
-		add(n, TierP1, 0.38, 400)
+		add(n, TierP1, 0.19, 400)
 	}
-	// P2 — volume 0.75 m3, taxable 7200 ISK (checked: 40+40 -> 5).
+	// P2 — volume 0.75 m3, taxable 7200 ISK.
 	for _, n := range []string{
 		"Biocells", "Construction Blocks", "Consumer Electronics", "Coolant",
 		"Enriched Uranium", "Fertilizer", "Genetically Enhanced Livestock",
@@ -152,15 +158,13 @@ func init() {
 	} {
 		add(n, TierP3, 3, 60000)
 	}
-	// P4 — volume 50 m3 (Broadcast Node family 100? canonical 50, taxable 1.2M).
-	// Sterile Conduits / Wetware etc share 100? EVE uses 100 for some P4;
-	// keep 100 for accuracy where known, default 50 is corrected below.
+	// P4 — volume 50 m3 (all eight), taxable 1,200,000 ISK.
 	for _, n := range []string{
 		"Broadcast Node", "Integrity Response Drones", "Nano-Factory",
 		"Organic Mortar Applicators", "Recursive Computing Module",
 		"Self-Harmonizing Power Core", "Sterile Conduits", "Wetware Mainframe",
 	} {
-		add(n, TierP4, 100, 1200000)
+		add(n, TierP4, 50, 1200000)
 	}
 
 	Schematics = map[string]Schematic{}
@@ -486,6 +490,10 @@ type Settings struct {
 	HeadsPerECU int     // extractor heads per ECU (1..10)
 	ECUYield    float64 // R0 units per hour per ECU (all heads combined)
 	TaxRate     float64 // POCO tax rate as fraction (0.10 = 10%)
+	// Volumes overrides the built-in m3 per unit by commodity
+	// name: the caller's SDE figures, where it has them. A
+	// missing or non-positive entry keeps the built-in one.
+	Volumes map[string]float64
 	// Per-tier import/export multipliers on the taxable value.
 	// Defaults follow EVE: import 0.5x, export 1.0x of taxRate.
 	Hours float64 // plan window for factory sizing (default 24)
@@ -616,7 +624,11 @@ func PlanFor(target string, amount int64, s Settings, prices map[string]float64)
 		c := AllCommodities[name]
 		ln := Line{Name: name, Tier: c.Tier, Needed: need[name]}
 		ln.PerHour = ln.Needed / s.Hours
-		ln.Volume = ln.Needed * c.Volume
+		unitVolume := c.Volume
+		if v, ok := s.Volumes[name]; ok && v > 0 {
+			unitVolume = v
+		}
+		ln.Volume = ln.Needed * unitVolume
 		ln.TaxExport = ln.Needed * c.TaxValue * s.TaxRate
 		if p, ok := prices[name]; ok && p > 0 {
 			ln.Price, ln.PriceKnown = p, true

@@ -10,7 +10,7 @@
   var graphRoot = document.getElementById("pi-graph");
   if (!graphRoot) return;
   var graph = {};
-  try { graph = JSON.parse(graphEl.textContent); } catch (e) { graph = {}; }
+  try { graph = JSON.parse(graphEl.dataset.graph || "{}"); } catch (e) { graph = {}; }
 
   function chainOf(target) {
     var seen = {};

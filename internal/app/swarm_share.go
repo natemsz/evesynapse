@@ -27,6 +27,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -297,7 +298,7 @@ func (app *Application) stageSwarmEntry(ctx context.Context, entry swarmSignedEn
 	if err := app.queries.StageSwarmEntry(ctx, db.StageSwarmEntryParams{
 		Kind: entry.Kind, Key: entry.Key, Payload: entry.Payload,
 		Signer: entry.Signer, Signature: entry.Signature,
-		FetchedAt: fetchedAt, ReceivedAt: now,
+		FetchedAt: fetchedAt, ReceivedAt: now, Source: from,
 	}); err != nil {
 		return fmt.Errorf("swarm: stage %s %s: %w", entry.Kind, entry.Key, err)
 	}
@@ -392,12 +393,41 @@ func checkSwarmPayload(kind, key, payload string) error {
 	return nil
 }
 
-// applySwarmEntry writes one spot-checked entry to the real
-// tables through the existing upserts, and settles the fetch
-// state the worker gates on — so a swarm-supplied row stops the
-// worker fetching it itself, which is the saved ESI call. Only
-// the trust pass calls this, after a spot check passed.
-func (app *Application) applySwarmEntry(ctx context.Context, kind, key, payload string, now time.Time) error {
+// swarmOrigin is where an applied entry came from: the peer it
+// was pulled from, the instance whose key signed it, the fetch
+// time that signature covers, and whether ESI confirmed it
+// before it was applied.
+type swarmOrigin struct {
+	source    string
+	signer    string
+	fetchedAt time.Time
+	verified  bool
+}
+
+// applySwarmEntry writes one entry to the real tables through
+// the existing upserts, and settles the fetch state the worker
+// gates on — so a swarm-supplied row stops the worker fetching
+// it itself, which is the saved ESI call. Only the trust pass
+// calls this, on a passed check or a trust-earned skip.
+//
+// Every apply leaves a provenance row (swarm_applied): who
+// served the entry, who signed it, and the stamp written into
+// the live row. That row is what lets swarmRollBack take the
+// data back if its signer is later excluded.
+func (app *Application) applySwarmEntry(ctx context.Context, kind, key, payload string, origin swarmOrigin, now time.Time) error {
+	// One stamp for the live row and the provenance row, at the
+	// database's own precision, so the two compare equal later.
+	stamp := now.UTC().Truncate(time.Microsecond)
+	applied := db.PutSwarmAppliedParams{
+		Kind: kind, Key: key, Source: origin.source, Signer: origin.signer,
+		FetchedAt: origin.fetchedAt.UTC(), AppliedAt: stamp, Verified: origin.verified,
+		RowStamp: timeSet(stamp),
+	}
+	if applied.Source == "" {
+		// Staged before the serving peer was recorded: a pull
+		// only ever staged entries its server signed.
+		applied.Source = origin.signer
+	}
 	dec := json.NewDecoder(strings.NewReader(payload))
 	dec.DisallowUnknownFields()
 	switch kind {
@@ -414,8 +444,14 @@ func (app *Application) applySwarmEntry(ctx context.Context, kind, key, payload 
 			}); err != nil {
 				return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
 			}
+			if applied.FirstDate == "" || day.Date < applied.FirstDate {
+				applied.FirstDate = day.Date
+			}
+			if day.Date > applied.LastDate {
+				applied.LastDate = day.Date
+			}
 		}
-		app.recordMarketFetch(ctx, marketFetchKind("history", marketKey{RegionID: body.RegionID, TypeID: body.TypeID}), fetchStateOK, "swarm")
+		app.recordMarketFetchAt(ctx, marketFetchKind("history", marketKey{RegionID: body.RegionID, TypeID: body.TypeID}), fetchStateOK, swarmFetchDetail, stamp)
 		app.addSwarmCounter(ctx, swarmCounterAppliedHistory, 1)
 	case swarmKindTypeName:
 		var body swarmTypeNamePayload
@@ -425,6 +461,8 @@ func (app *Application) applySwarmEntry(ctx context.Context, kind, key, payload 
 		if err := app.queries.UpsertTypeName(ctx, db.UpsertTypeNameParams{TypeID: body.TypeID, Name: body.Name}); err != nil {
 			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
 		}
+		// Type names carry no timestamp in their table.
+		applied.RowStamp = sql.NullTime{}
 		app.addSwarmCounter(ctx, swarmCounterAppliedNames, 1)
 	case swarmKindCorporation:
 		var body swarmOrgPayload
@@ -432,7 +470,7 @@ func (app *Application) applySwarmEntry(ctx context.Context, kind, key, payload 
 			return err
 		}
 		if err := app.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
-			CorporationID: body.ID, Payload: body.Payload, State: orgStateReady, FetchedAt: timeSet(now),
+			CorporationID: body.ID, Payload: body.Payload, State: orgStateReady, FetchedAt: timeSet(stamp),
 		}); err != nil {
 			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
 		}
@@ -443,7 +481,7 @@ func (app *Application) applySwarmEntry(ctx context.Context, kind, key, payload 
 			return err
 		}
 		if err := app.queries.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
-			AllianceID: body.ID, Payload: body.Payload, State: orgStateReady, FetchedAt: timeSet(now),
+			AllianceID: body.ID, Payload: body.Payload, State: orgStateReady, FetchedAt: timeSet(stamp),
 		}); err != nil {
 			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
 		}
@@ -455,7 +493,7 @@ func (app *Application) applySwarmEntry(ctx context.Context, kind, key, payload 
 		}
 		if err := app.queries.SetStructureName(ctx, db.SetStructureNameParams{
 			StructureID: body.StructureID, Name: body.Name, State: esi.StructureResolved,
-			ResolvedAt: timeSet(now), Source: esi.StructureSourceCommunity,
+			ResolvedAt: timeSet(stamp), Source: esi.StructureSourceCommunity,
 		}); err != nil {
 			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
 		}
@@ -463,10 +501,124 @@ func (app *Application) applySwarmEntry(ctx context.Context, kind, key, payload 
 	default:
 		return fmt.Errorf("swarm: apply %s %s: unknown kind", kind, key)
 	}
+	if err := app.queries.PutSwarmApplied(ctx, applied); err != nil {
+		// The data is in; without its provenance it could never
+		// be taken back, so say so loudly.
+		logging.Errorf("swarm: apply %s %s: provenance not recorded: %v", kind, key, err)
+	}
 	if err := app.queries.DeleteStagingEntry(ctx, db.DeleteStagingEntryParams{Kind: kind, Key: key}); err != nil {
 		logging.Errorf("swarm: apply %s %s: unstaged: %v", kind, key, err)
 	}
 	return nil
+}
+
+// swarmFetchDetail marks a market fetch state the swarm settled,
+// not this instance's own fetch.
+const swarmFetchDetail = "swarm"
+
+// maxSwarmRollBackPerCycle bounds one cycle's rollback work: an
+// excluded signer may have supplied thousands of rows, and the
+// worker cycle is not the place to undo them all at once.
+const maxSwarmRollBackPerCycle = 200
+
+// swarmRollBack takes back what excluded signers supplied.
+// Excluding a signer stops its entries arriving; this is the
+// other half, for the ones already applied (most of which went
+// in unchecked, on the signer's reputation). Each provenance row
+// under an excluded signer is undone where the live row is
+// still the swarm's copy — a record goes back to pending, a
+// name is cleared, history loses the days the entry supplied
+// and its fetch state, so the worker fetches the truth from ESI
+// like any other missing datum. A row this instance has fetched
+// itself since is its own and stays. Local writes only; it
+// returns how many live rows were taken back.
+func (app *Application) swarmRollBack(ctx context.Context) int {
+	rows, err := app.queries.ListSwarmAppliedToRollBack(ctx, maxSwarmRollBackPerCycle)
+	if err != nil {
+		logging.Errorf("swarm: roll back: list: %v", err)
+		return 0
+	}
+	undone := 0
+	for _, row := range rows {
+		took, err := app.swarmRollBackOne(ctx, row)
+		if err != nil {
+			// The provenance row stays, so the next cycle tries again.
+			logging.Errorf("swarm: roll back %s %s: %v", row.Kind, row.Key, err)
+			continue
+		}
+		if err := app.queries.DeleteSwarmApplied(ctx, db.DeleteSwarmAppliedParams{Kind: row.Kind, Key: row.Key}); err != nil {
+			logging.Errorf("swarm: roll back %s %s: clear provenance: %v", row.Kind, row.Key, err)
+		}
+		if took {
+			undone++
+		}
+	}
+	if undone > 0 {
+		app.addSwarmCounter(ctx, swarmCounterRolledBack, int64(undone))
+		logging.Warnf("swarm: took back %d entries supplied by excluded signers", undone)
+	}
+	return undone
+}
+
+// swarmRollBackOne undoes one applied entry. took is false when
+// there was nothing left to undo (the row has been refetched, or
+// the key no longer parses): the provenance row goes either way.
+func (app *Application) swarmRollBackOne(ctx context.Context, row db.SwarmApplied) (took bool, err error) {
+	var n int64
+	switch row.Kind {
+	case swarmKindHistory:
+		parts := strings.Split(row.Key, "/")
+		if len(parts) != 2 || !row.RowStamp.Valid {
+			return false, nil
+		}
+		regionID, okRegion := parseSwarmID(parts[0])
+		typeID, okType := parseSwarmID(parts[1])
+		if !okRegion || !okType {
+			return false, nil
+		}
+		// The fetch state decides: gone or restamped means this
+		// instance has fetched the pair itself since.
+		n, err = app.queries.RollBackSwarmHistoryState(ctx, db.RollBackSwarmHistoryStateParams{
+			Kind:     marketFetchKind("history", marketKey{RegionID: regionID, TypeID: typeID}),
+			RowStamp: row.RowStamp.Time,
+		})
+		if err != nil || n == 0 {
+			return false, err
+		}
+		if _, err := app.queries.RollBackSwarmHistoryDays(ctx, db.RollBackSwarmHistoryDaysParams{
+			RegionID: regionID, TypeID: typeID, FirstDate: row.FirstDate, LastDate: row.LastDate,
+		}); err != nil {
+			return false, err
+		}
+		return true, nil
+	case swarmKindTypeName:
+		id, ok := parseSwarmID(row.Key)
+		if !ok {
+			return false, nil
+		}
+		n, err = app.queries.RollBackSwarmTypeName(ctx, id)
+	case swarmKindCorporation:
+		id, ok := parseSwarmID(row.Key)
+		if !ok || !row.RowStamp.Valid {
+			return false, nil
+		}
+		n, err = app.queries.RollBackSwarmCorporation(ctx, db.RollBackSwarmCorporationParams{CorporationID: id, RowStamp: row.RowStamp.Time})
+	case swarmKindAlliance:
+		id, ok := parseSwarmID(row.Key)
+		if !ok || !row.RowStamp.Valid {
+			return false, nil
+		}
+		n, err = app.queries.RollBackSwarmAlliance(ctx, db.RollBackSwarmAllianceParams{AllianceID: id, RowStamp: row.RowStamp.Time})
+	case swarmKindStructure:
+		id, ok := parseSwarmID(row.Key)
+		if !ok || !row.RowStamp.Valid {
+			return false, nil
+		}
+		n, err = app.queries.RollBackSwarmStructure(ctx, db.RollBackSwarmStructureParams{StructureID: id, RowStamp: row.RowStamp.Time})
+	default:
+		return false, nil
+	}
+	return n > 0, err
 }
 
 // discardSwarmEntry drops one staged entry that failed its spot

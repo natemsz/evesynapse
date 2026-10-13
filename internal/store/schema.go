@@ -167,6 +167,13 @@ var pgPublicFitsSchema string
 //go:embed schema_pg/034_swarm_key_pin.sql
 var pgSwarmKeyPinSchema string
 
+// Step 035: provenance for applied swarm entries (source, signer,
+// signed fetch time), so an excluded signer's data can be taken
+// back; and the serving peer on staged entries.
+//
+//go:embed schema_pg/035_swarm_provenance.sql
+var pgSwarmProvenanceSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -230,6 +237,7 @@ func schemaSteps() []schemaStep {
 		{32, "pulse_events", pgPulseEventsSchema, ""},
 		{33, "public_fits", pgPublicFitsSchema, ""},
 		{34, "swarm_key_pin", pgSwarmKeyPinSchema, ""},
+		{35, "swarm_provenance", pgSwarmProvenanceSchema, ""},
 	}
 }
 

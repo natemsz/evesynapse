@@ -117,6 +117,7 @@ const (
 	swarmCounterSpotFailed     = "spot_failed"
 	swarmCounterPullsOK        = "pulls_ok"
 	swarmCounterPullsFailed    = "pulls_failed"
+	swarmCounterRolledBack     = "rolled_back"
 )
 
 // swarmTrust scores a signer from its ledger: good over total
@@ -269,7 +270,8 @@ func (app *Application) swarmFetchPhase(ctx context.Context, now time.Time) {
 }
 
 // swarmCycle is the worker's swarm pass: gossip when due, pull
-// what is wanted, spot-check what is staged. Only the spot
+// what is wanted, take back what excluded signers supplied,
+// spot-check what is staged. Only the spot
 // checks spend ESI calls, from the cycle's allowance; limited
 // reports ESI's stop signal like every other pass.
 func (app *Application) swarmCycle(ctx context.Context, allowance *fetchBudget, characters []db.Character, now time.Time) (applied int, limited bool) {
@@ -278,6 +280,9 @@ func (app *Application) swarmCycle(ctx context.Context, allowance *fetchBudget, 
 	}
 	app.swarmGossip(ctx, now)
 	app.swarmPull(ctx, now)
+	// Before anything new applies, take back what excluded
+	// signers already supplied (local writes, no ESI).
+	app.swarmRollBack(ctx)
 	return app.swarmSpotCheck(ctx, allowance, characters, now)
 }
 
@@ -703,7 +708,7 @@ func (app *Application) swarmSettleUrgent(ctx context.Context, kind, key string)
 		// Trust-earned, like the spot pass below: the entry
 		// applies on reputation with the ledger untouched.
 		// Only an ESI verdict counts for or against.
-		if err := app.applySwarmEntry(ctx, row.Kind, row.Key, row.Payload, now); err != nil {
+		if err := app.applySwarmEntry(ctx, row.Kind, row.Key, row.Payload, swarmOrigin{source: row.Source, signer: row.Signer, fetchedAt: row.FetchedAt, verified: false}, now); err != nil {
 			logging.Errorf("swarm: apply %s %s: %v", row.Kind, row.Key, err)
 			return false
 		}
@@ -712,7 +717,7 @@ func (app *Application) swarmSettleUrgent(ctx context.Context, kind, key string)
 	verdict, _ := app.swarmVerifyAgainstESI(ctx, &fetchBudget{left: 1}, nil, row.Kind, row.Key, row.Payload)
 	switch verdict {
 	case swarmCheckPass:
-		if err := app.applySwarmEntry(ctx, row.Kind, row.Key, row.Payload, now); err != nil {
+		if err := app.applySwarmEntry(ctx, row.Kind, row.Key, row.Payload, swarmOrigin{source: row.Source, signer: row.Signer, fetchedAt: row.FetchedAt, verified: true}, now); err != nil {
 			logging.Errorf("swarm: apply %s %s: %v", row.Kind, row.Key, err)
 			return false
 		}
@@ -846,7 +851,7 @@ func (app *Application) swarmSpotCheck(ctx context.Context, allowance *fetchBudg
 			// untouched. The per-kind applied counters
 			// inside applySwarmEntry record the served
 			// volume.
-			if err := app.applySwarmEntry(ctx, row.Kind, row.Key, row.Payload, now); err != nil {
+			if err := app.applySwarmEntry(ctx, row.Kind, row.Key, row.Payload, swarmOrigin{source: row.Source, signer: row.Signer, fetchedAt: row.FetchedAt, verified: false}, now); err != nil {
 				logging.Errorf("swarm: apply %s %s: %v", row.Kind, row.Key, err)
 				continue
 			}
@@ -863,7 +868,7 @@ func (app *Application) swarmSpotCheck(ctx context.Context, allowance *fetchBudg
 		}
 		switch verdict {
 		case swarmCheckPass:
-			if err := app.applySwarmEntry(ctx, row.Kind, row.Key, row.Payload, now); err != nil {
+			if err := app.applySwarmEntry(ctx, row.Kind, row.Key, row.Payload, swarmOrigin{source: row.Source, signer: row.Signer, fetchedAt: row.FetchedAt, verified: true}, now); err != nil {
 				logging.Errorf("swarm: apply %s %s: %v", row.Kind, row.Key, err)
 				continue
 			}

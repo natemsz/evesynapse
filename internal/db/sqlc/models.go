@@ -745,6 +745,19 @@ type StructureName struct {
 	Source      string       `json:"source"`
 }
 
+type SwarmApplied struct {
+	Kind      string       `json:"kind"`
+	Key       string       `json:"key"`
+	Source    string       `json:"source"`
+	Signer    string       `json:"signer"`
+	FetchedAt time.Time    `json:"fetched_at"`
+	AppliedAt time.Time    `json:"applied_at"`
+	Verified  bool         `json:"verified"`
+	RowStamp  sql.NullTime `json:"row_stamp"`
+	FirstDate string       `json:"first_date"`
+	LastDate  string       `json:"last_date"`
+}
+
 type SwarmCounter struct {
 	Name  string `json:"name"`
 	Value int64  `json:"value"`
@@ -783,6 +796,7 @@ type SwarmStaging struct {
 	FetchedAt  time.Time    `json:"fetched_at"`
 	ReceivedAt time.Time    `json:"received_at"`
 	CheckedAt  sql.NullTime `json:"checked_at"`
+	Source     string       `json:"source"`
 }
 
 type TradeIdea struct {

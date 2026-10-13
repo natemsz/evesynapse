@@ -14,6 +14,7 @@ import (
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
 )
 
 // pinHonest files an approved peer with a reputation in B: the
@@ -395,5 +396,179 @@ func TestSwarmPullOverHTTPDropsUnasked(t *testing.T) {
 	staged := stagedKeys(t, app)
 	if _, ok := staged[swarmKindTypeName+"/35"]; ok || len(staged) != 1 {
 		t.Fatalf("staging holds %v, want only type 34", staged)
+	}
+}
+
+// orgEntry is a corporation or alliance record as it travels.
+func orgEntry(t *testing.T, id int64, record string) string {
+	t.Helper()
+	return string(mustJSON(t, swarmOrgPayload{ID: id, Payload: record}))
+}
+
+// TestSwarmApplyRecordsWhereItCameFrom: every applied entry
+// leaves a provenance row naming the peer that served it, the
+// instance that signed it and the fetch time the signature
+// covers, with the stamp written into the live row.
+func TestSwarmApplyRecordsWhereItCameFrom(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	peer := swarmTestPeer(t, app, "peer-1")
+	fetched := time.Date(2026, 10, 12, 8, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
+
+	origin := swarmOrigin{source: "peer-served-it", signer: peer.id, fetchedAt: fetched, verified: true}
+	if err := app.applySwarmEntry(ctx, swarmKindCorporation, "98000001", orgEntry(t, 98000001, `{"corp":{"name":"Test Corp"}}`), origin, now); err != nil {
+		t.Fatalf("apply corporation: %v", err)
+	}
+	got, err := app.queries.GetSwarmApplied(ctx, db.GetSwarmAppliedParams{Kind: swarmKindCorporation, Key: "98000001"})
+	if err != nil {
+		t.Fatalf("no provenance row: %v", err)
+	}
+	if got.Source != "peer-served-it" || got.Signer != peer.id || !got.FetchedAt.Equal(fetched) || !got.Verified {
+		t.Fatalf("provenance wrong: %+v", got)
+	}
+	rec, err := app.queries.GetCorporationRecord(ctx, 98000001)
+	if err != nil {
+		t.Fatalf("read record: %v", err)
+	}
+	if !got.RowStamp.Valid || !rec.FetchedAt.Valid || !rec.FetchedAt.Time.Equal(got.RowStamp.Time) {
+		t.Fatalf("row stamp %v does not match the live row at %v", got.RowStamp, rec.FetchedAt)
+	}
+
+	// History keeps the day range it supplied; an unchecked apply says so.
+	history := `{"region_id":10000002,"type_id":34,"days":[` +
+		`{"date":"2026-10-03","average":5,"highest":6,"lowest":4,"volume":10,"order_count":2},` +
+		`{"date":"2026-10-01","average":5,"highest":6,"lowest":4,"volume":10,"order_count":2}]}`
+	unchecked := swarmOrigin{signer: peer.id, fetchedAt: fetched}
+	if err := app.applySwarmEntry(ctx, swarmKindHistory, "10000002/34", history, unchecked, now); err != nil {
+		t.Fatalf("apply history: %v", err)
+	}
+	hist, err := app.queries.GetSwarmApplied(ctx, db.GetSwarmAppliedParams{Kind: swarmKindHistory, Key: "10000002/34"})
+	if err != nil {
+		t.Fatalf("no history provenance: %v", err)
+	}
+	if hist.FirstDate != "2026-10-01" || hist.LastDate != "2026-10-03" || hist.Verified {
+		t.Fatalf("history provenance wrong: %+v", hist)
+	}
+	if hist.Source != peer.id {
+		t.Fatalf("an entry staged without a source should fall back to its signer, got %q", hist.Source)
+	}
+}
+
+// TestSwarmPairProvenanceEndToEnd: an entry pulled over HTTP,
+// staged and checked carries its origin all the way to the row.
+func TestSwarmPairProvenanceEndToEnd(t *testing.T) {
+	p := newSwarmPair(t, swarmOpen)
+	ctx := context.Background()
+	if err := p.a.queries.UpsertTypeName(ctx, db.UpsertTypeNameParams{TypeID: 34, Name: "Tritanium"}); err != nil {
+		t.Fatalf("seed A: %v", err)
+	}
+	p.stubB.types = map[int64]string{34: `{"name":"Tritanium","group_id":18}`}
+	p.pinA(t)
+	p.pullStages(t, []swarmPullKey{{Kind: swarmKindTypeName, Key: "34"}})
+	if got := p.spotRuns(t); got != 1 {
+		t.Fatalf("applied %d, want 1", got)
+	}
+	row, err := p.b.queries.GetSwarmApplied(ctx, db.GetSwarmAppliedParams{Kind: swarmKindTypeName, Key: "34"})
+	if err != nil {
+		t.Fatalf("no provenance after a pull and a check: %v", err)
+	}
+	if row.Source != "instance-a" || row.Signer != "instance-a" || !row.Verified {
+		t.Fatalf("provenance wrong: %+v", row)
+	}
+	if time.Since(row.FetchedAt) > time.Hour || row.FetchedAt.After(time.Now().Add(time.Minute)) {
+		t.Fatalf("fetched_at %v is not the time A signed", row.FetchedAt)
+	}
+}
+
+// TestSwarmExcludedSignerDataIsTakenBack: excluding a signer
+// undoes what it supplied, one kind at a time, and nothing
+// else: not another signer's rows, not a row this instance has
+// fetched itself since, not history outside the entry's days.
+func TestSwarmExcludedSignerDataIsTakenBack(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	bad := swarmTestPeer(t, app, "peer-bad")
+	good := swarmTestPeer(t, app, "peer-good")
+	fetched := time.Date(2026, 10, 12, 8, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
+	from := func(peer *swarmIdentity) swarmOrigin {
+		return swarmOrigin{source: peer.id, signer: peer.id, fetchedAt: fetched}
+	}
+	apply := func(kind, key, payload string, origin swarmOrigin) {
+		t.Helper()
+		if err := app.applySwarmEntry(ctx, kind, key, payload, origin, now); err != nil {
+			t.Fatalf("apply %s %s: %v", kind, key, err)
+		}
+	}
+
+	// A day this instance already held, outside the entry's range.
+	if err := app.queries.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
+		RegionID: 10000002, TypeID: 34, Date: "2026-09-15", Average: 5, Highest: 6, Lowest: 4, Volume: 9, OrderCount: 1,
+	}); err != nil {
+		t.Fatalf("seed own history: %v", err)
+	}
+	apply(swarmKindCorporation, "98000001", orgEntry(t, 98000001, `{"corp":{"name":"Planted Corp"}}`), from(bad))
+	apply(swarmKindAlliance, "99000001", orgEntry(t, 99000001, `{"alliance":{"name":"Planted Alliance"}}`), from(bad))
+	apply(swarmKindHistory, "10000002/34", `{"region_id":10000002,"type_id":34,"days":[`+
+		`{"date":"2026-10-02","average":999,"highest":999,"lowest":999,"volume":1,"order_count":1},`+
+		`{"date":"2026-10-01","average":999,"highest":999,"lowest":999,"volume":1,"order_count":1}]}`, from(bad))
+	apply(swarmKindTypeName, "34", `{"type_id":34,"name":"Not Tritanium"}`, from(bad))
+	apply(swarmKindStructure, "1035000000001", `{"structure_id":1035000000001,"name":"Planted Keepstar"}`, from(bad))
+	// One this instance has since fetched from ESI itself.
+	apply(swarmKindCorporation, "98000002", orgEntry(t, 98000002, `{"corp":{"name":"Planted Too"}}`), from(bad))
+	if err := app.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
+		CorporationID: 98000002, Payload: `{"corp":{"name":"Fetched Here"}}`, State: orgStateReady, FetchedAt: timeSet(now.Add(time.Hour)),
+	}); err != nil {
+		t.Fatalf("refetch corporation: %v", err)
+	}
+	apply(swarmKindCorporation, "98000003", orgEntry(t, 98000003, `{"corp":{"name":"Honest Corp"}}`), from(good))
+
+	if got := app.swarmRollBack(ctx); got != 0 {
+		t.Fatalf("rolled back %d rows with nobody excluded", got)
+	}
+	if err := app.queries.SetSwarmPeerExcluded(ctx, db.SetSwarmPeerExcludedParams{InstanceID: bad.id, Excluded: true, ExcludeNote: "manual test"}); err != nil {
+		t.Fatalf("exclude: %v", err)
+	}
+	if got := app.swarmRollBack(ctx); got != 5 {
+		t.Fatalf("rolled back %d rows, want 5 (corporation, alliance, history, type name, structure)", got)
+	}
+
+	if rec, err := app.queries.GetCorporationRecord(ctx, 98000001); err != nil || rec.State != orgStatePending || rec.Payload != "" || rec.FetchedAt.Valid {
+		t.Fatalf("planted corporation still stands: %+v err=%v", rec, err)
+	}
+	if rec, err := app.queries.GetAllianceRecord(ctx, 99000001); err != nil || rec.State != orgStatePending || rec.Payload != "" || rec.FetchedAt.Valid {
+		t.Fatalf("planted alliance still stands: %+v err=%v", rec, err)
+	}
+	days, err := app.queries.ListMarketHistory(ctx, db.ListMarketHistoryParams{RegionID: 10000002, TypeID: 34, RowLimit: 10})
+	if err != nil || len(days) != 1 || days[0].Date != "2026-09-15" {
+		t.Fatalf("history after rollback: %+v err=%v, want only the day this instance held itself", days, err)
+	}
+	if _, err := app.queries.GetMarketFetchState(ctx, marketFetchKind("history", marketKey{RegionID: 10000002, TypeID: 34})); err == nil {
+		t.Fatalf("the pair still reads as fetched; the worker would not refetch it")
+	}
+	if name, err := app.queries.GetTypeName(ctx, 34); err == nil {
+		t.Fatalf("planted type name still stands: %q", name)
+	}
+	if row, err := app.queries.GetStructureName(ctx, 1035000000001); err != nil || row.State != esi.StructurePending || row.Name != "" {
+		t.Fatalf("planted structure name still stands: %+v err=%v", row, err)
+	}
+	if rec, err := app.queries.GetCorporationRecord(ctx, 98000002); err != nil || rec.State != orgStateReady || rec.Payload != `{"corp":{"name":"Fetched Here"}}` {
+		t.Fatalf("a record this instance fetched itself was taken back: %+v err=%v", rec, err)
+	}
+	if rec, err := app.queries.GetCorporationRecord(ctx, 98000003); err != nil || rec.State != orgStateReady {
+		t.Fatalf("another signer's record was taken back: %+v err=%v", rec, err)
+	}
+	if n, err := app.queries.CountSwarmAppliedBySigner(ctx, bad.id); err != nil || n != 0 {
+		t.Fatalf("%d provenance rows left under the excluded signer (err %v)", n, err)
+	}
+	if n, err := app.queries.CountSwarmAppliedBySigner(ctx, good.id); err != nil || n != 1 {
+		t.Fatalf("the honest signer has %d provenance rows, want 1 (err %v)", n, err)
+	}
+	if got := app.swarmCounterMap(ctx)[swarmCounterRolledBack]; got != 5 {
+		t.Fatalf("rolled-back counter = %d, want 5", got)
+	}
+	if got := app.swarmRollBack(ctx); got != 0 {
+		t.Fatalf("a second pass rolled back %d more rows", got)
 	}
 }

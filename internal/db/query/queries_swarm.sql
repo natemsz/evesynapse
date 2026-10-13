@@ -94,19 +94,20 @@ WHERE instance_id = $1;
 -- the same key replaces it, an older one never overwrites.
 -- Staging is not serving: renders read the real tables only.
 -- name: StageSwarmEntry :exec
-INSERT INTO swarm_staging (kind, key, payload, signer, signature, fetched_at, received_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO swarm_staging (kind, key, payload, signer, signature, fetched_at, received_at, source)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (kind, key) DO UPDATE SET
     payload = excluded.payload,
     signer = excluded.signer,
     signature = excluded.signature,
     fetched_at = excluded.fetched_at,
     received_at = excluded.received_at,
+    source = excluded.source,
     checked_at = NULL
 WHERE excluded.fetched_at > swarm_staging.fetched_at;
 
 -- name: ListUncheckedStaging :many
-SELECT kind, key, payload, signer, signature, fetched_at, received_at
+SELECT kind, key, payload, signer, signature, fetched_at, received_at, source
 FROM swarm_staging
 WHERE checked_at IS NULL
 ORDER BY received_at
@@ -124,7 +125,7 @@ DELETE FROM swarm_staging WHERE kind = $1 AND key = $2;
 -- urgent drain settles it inline; the history pass skips the
 -- ESI refetch while it is fresh.
 -- name: GetStagingEntry :one
-SELECT kind, key, payload, signer, signature, fetched_at, received_at
+SELECT kind, key, payload, signer, signature, fetched_at, received_at, source
 FROM swarm_staging
 WHERE kind = $1 AND key = $2;
 
@@ -158,3 +159,77 @@ ON CONFLICT (name) DO UPDATE SET value = swarm_counters.value + excluded.value;
 
 -- name: GetSwarmCounters :many
 SELECT name, value FROM swarm_counters;
+
+-- Provenance (schema 035): one row per applied key, replaced
+-- when the key is applied again. source is the instance the
+-- entry was pulled from, signer the instance whose key signed
+-- it, fetched_at the fetch time that signature covers.
+-- row_stamp is the timestamp written into the live row, where
+-- the kind has one, so a rollback can tell the swarm's copy
+-- from one this instance has fetched itself since.
+-- name: PutSwarmApplied :exec
+INSERT INTO swarm_applied (kind, key, source, signer, fetched_at, applied_at, verified, row_stamp, first_date, last_date)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+ON CONFLICT (kind, key) DO UPDATE SET
+    source = excluded.source,
+    signer = excluded.signer,
+    fetched_at = excluded.fetched_at,
+    applied_at = excluded.applied_at,
+    verified = excluded.verified,
+    row_stamp = excluded.row_stamp,
+    first_date = excluded.first_date,
+    last_date = excluded.last_date;
+
+-- name: GetSwarmApplied :one
+SELECT kind, key, source, signer, fetched_at, applied_at, verified, row_stamp, first_date, last_date
+FROM swarm_applied
+WHERE kind = $1 AND key = $2;
+
+-- name: DeleteSwarmApplied :exec
+DELETE FROM swarm_applied WHERE kind = $1 AND key = $2;
+
+-- What is still in the tables from signers that have since been
+-- excluded: the rollback pass takes these back, oldest first, a
+-- bounded batch at a time.
+-- name: ListSwarmAppliedToRollBack :many
+SELECT a.kind, a.key, a.source, a.signer, a.fetched_at, a.applied_at, a.verified, a.row_stamp, a.first_date, a.last_date
+FROM swarm_applied a
+JOIN swarm_peers p ON p.instance_id = a.signer
+WHERE p.excluded
+ORDER BY a.applied_at, a.kind, a.key
+LIMIT $1;
+
+-- name: CountSwarmAppliedBySigner :one
+SELECT COUNT(*) FROM swarm_applied WHERE signer = $1;
+
+-- The rollbacks. Each touches the live row only while it still
+-- carries the stamp the swarm apply wrote: a row this instance
+-- has fetched from ESI since is its own and stays.
+
+-- name: RollBackSwarmCorporation :execrows
+UPDATE corporation_records SET payload = '', state = 'pending', fetched_at = NULL
+WHERE corporation_id = $1 AND fetched_at = sqlc.arg(row_stamp)::timestamptz;
+
+-- name: RollBackSwarmAlliance :execrows
+UPDATE alliance_records SET payload = '', state = 'pending', fetched_at = NULL
+WHERE alliance_id = $1 AND fetched_at = sqlc.arg(row_stamp)::timestamptz;
+
+-- name: RollBackSwarmStructure :execrows
+UPDATE structure_names SET name = '', state = 'pending', resolved_at = NULL, source = 'esi'
+WHERE structure_id = $1 AND source = 'community' AND resolved_at = sqlc.arg(row_stamp)::timestamptz;
+
+-- Type names carry no timestamp to tell copies apart, so the
+-- cached name simply goes: the next reader resolves it afresh.
+-- name: RollBackSwarmTypeName :execrows
+DELETE FROM type_names WHERE type_id = $1;
+
+-- History goes by the day range the entry supplied, and only
+-- while the pair's fetch state still says the swarm supplied it.
+-- name: RollBackSwarmHistoryDays :execrows
+DELETE FROM market_history
+WHERE region_id = $1 AND type_id = $2
+  AND date >= sqlc.arg(first_date)::text AND date <= sqlc.arg(last_date)::text;
+
+-- name: RollBackSwarmHistoryState :execrows
+DELETE FROM market_fetch_state
+WHERE kind = $1 AND detail = 'swarm' AND attempted_at = sqlc.arg(row_stamp)::timestamptz;

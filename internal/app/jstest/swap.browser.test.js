@@ -64,8 +64,17 @@ function makeEnv(opts) {
     focus: function () { this.focused = true; }
   };
   const scrolls = [];
+  const drawer = opts.drawer ? {
+    checked: true,
+    events: [],
+    dispatchEvent: function (ev) { this.events.push(ev.type); return true; }
+  } : null;
   const mainDoc = {
-    getElementById: function (id) { return id === "main-content" ? mainEl : null; },
+    getElementById: function (id) {
+      if (id === "main-content") return mainEl;
+      if (id === "nav-drawer-toggle") return drawer;
+      return null;
+    },
     querySelectorAll: function () { return []; },
     addEventListener: function (type, fn) {
       (listeners[type] = listeners[type] || []).push(fn);
@@ -126,7 +135,7 @@ function makeEnv(opts) {
   };
   win.DOMParser.prototype.parseFromString = function (html) { return fetchedDoc(html); };
   return {
-    listeners: listeners, mainEl: mainEl, mainDoc: mainDoc,
+    listeners: listeners, mainEl: mainEl, mainDoc: mainDoc, drawer: drawer,
     win: win, pushes: pushes, scrolls: scrolls,
     firePopstate: function (state) {
       (listeners.popstate || []).forEach(function (fn) { fn({ state: state }); });
@@ -180,6 +189,16 @@ test("a qualifying click swaps main without a load", async function () {
   assert.equal(env.mainDoc.title, "Market · EveSynapse");
   assert.deepEqual(env.scrolls, [[0, 0]]);
   assert.equal(env.mainEl.focused, true);
+});
+
+test("a swap closes the open nav drawer", async function () {
+  const env = makeEnv({ drawer: true });
+  loadSwap(env);
+  assert.equal(env.drawer.checked, true);
+  clickOn(env, "/market/");
+  await waitFor(function () { return env.mainEl.innerHTML.includes("MARKET"); }, "swap paint");
+  assert.equal(env.drawer.checked, false);
+  assert.deepEqual(env.drawer.events, ["change"]);
 });
 
 test("a redirect (expired session) falls back to a full load", async function () {

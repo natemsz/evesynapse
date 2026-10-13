@@ -306,6 +306,14 @@
     document.dispatchEvent(new CustomEvent("evesynapse:content-will-swap", {
       detail: { url: url }
     }));
+    // The nav drawer belongs to the page being left: a full load
+    // used to close it for free, so a swap closes it too. app.js
+    // syncs its controls off the toggle's change event.
+    var drawer = document.getElementById("nav-drawer-toggle");
+    if (drawer && drawer.checked) {
+      drawer.checked = false;
+      drawer.dispatchEvent(new CustomEvent("change", { bubbles: true }));
+    }
     // The scroll lands with the paint — inside the transition
     // update callback, or immediately without one — so back and
     // forward arrive at the saved offset with no second jump.

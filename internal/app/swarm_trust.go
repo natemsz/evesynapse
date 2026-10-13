@@ -102,6 +102,7 @@ const (
 	maxSwarmGossipPeers       = 10
 	maxSwarmHistoryDemand     = 30
 	maxSwarmOrgDemand         = 10
+	maxSwarmNameDemand        = 5 // per name kind
 )
 
 // Staged entries older than this never apply: an entry nobody
@@ -578,16 +579,36 @@ func (app *Application) swarmLearnMembers(ctx context.Context, members []swarmMe
 }
 
 // swarmDemandKeys gathers what this instance already wants, for
-// peers to serve before the worker spends ESI calls: due
-// history pairs first, then pending organization records.
-// Bounded, like every read that feeds a render or a fetch.
+// peers to serve before the worker spends ESI calls: names
+// first (type names readers found missing, structure names the
+// resolver has due — few, and cheap to carry), then due history
+// pairs, then pending organization records. A pull stages only
+// what it asked for, so every kind the swarm carries has to be
+// asked for here. Bounded, like every read that feeds a render
+// or a fetch.
 func (app *Application) swarmDemandKeys(ctx context.Context) []swarmPullKey {
 	var keys []swarmPullKey
+	for _, id := range app.esi.MissingTypeNames(maxSwarmNameDemand) {
+		keys = append(keys, swarmPullKey{Kind: swarmKindTypeName, Key: fmt.Sprintf("%d", id)})
+	}
+	now := time.Now().UTC()
+	if ids, err := app.queries.ListStructureResolutions(ctx, db.ListStructureResolutionsParams{
+		ResolvedCutoff:  now.Add(-structureRenameWindow),
+		MissingCutoff:   now.Add(-structureMissingWindow),
+		ResolutionLimit: maxSwarmNameDemand,
+	}); err != nil {
+		logging.Errorf("swarm: demand structure names: %v", err)
+	} else {
+		for _, id := range ids {
+			keys = append(keys, swarmPullKey{Kind: swarmKindStructure, Key: fmt.Sprintf("%d", id)})
+		}
+	}
+	names := len(keys)
 	if candidates, err := app.historyCandidates(ctx); err != nil {
 		logging.Errorf("swarm: demand history: %v", err)
 	} else {
 		for _, key := range candidates {
-			if len(keys) >= maxSwarmHistoryDemand {
+			if len(keys)-names >= maxSwarmHistoryDemand {
 				break
 			}
 			if app.marketFetchDue(ctx, marketFetchKind("history", key), historyRefetchGate) {

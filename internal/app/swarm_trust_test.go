@@ -1170,3 +1170,112 @@ func TestSwarmLowTrustEntryIsDroppedWithoutAnotherMark(t *testing.T) {
 		t.Fatalf("an unchecked entry counted as %d failed checks", got)
 	}
 }
+
+// hasKey reports whether a demand list asks for kind/key.
+func hasKey(keys []swarmPullKey, kind, key string) bool {
+	for _, k := range keys {
+		if k.Kind == kind && k.Key == key {
+			return true
+		}
+	}
+	return false
+}
+
+// TestSwarmDemandAsksForNames: a pull stages only what it asked
+// for, so names have to be asked for. A type name a reader found
+// missing and a structure name the resolver has due are both in
+// the demand, ahead of the bulkier kinds.
+func TestSwarmDemandAsksForNames(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	const unknownType = 987654
+	if name := app.esi.CachedTypeName(ctx, unknownType); name != "" {
+		t.Fatalf("fixture type %d is already named %q", unknownType, name)
+	}
+	if err := app.queries.UpsertStructureSeen(ctx, 1035000000001); err != nil {
+		t.Fatalf("note a structure: %v", err)
+	}
+	keys := app.swarmDemandKeys(ctx)
+	if !hasKey(keys, swarmKindTypeName, "987654") {
+		t.Fatalf("demand %+v does not ask for the missing type name", keys)
+	}
+	if !hasKey(keys, swarmKindStructure, "1035000000001") {
+		t.Fatalf("demand %+v does not ask for the pending structure name", keys)
+	}
+	// A name learned settles its demand.
+	app.esi.LearnTypeName(unknownType, "Test Type")
+	if hasKey(app.swarmDemandKeys(ctx), swarmKindTypeName, "987654") {
+		t.Fatalf("a type name already learned is still being asked for")
+	}
+	if got := app.esi.CachedTypeName(ctx, unknownType); got != "Test Type" {
+		t.Fatalf("learned name reads %q", got)
+	}
+}
+
+// TestSwarmPairNamesFlowOnDemand: end to end. B misses a type
+// name and has a structure pending; A holds both. One fetch
+// phase asks A for them and stages A's answers, and the checked
+// type name lands and stops being asked for.
+func TestSwarmPairNamesFlowOnDemand(t *testing.T) {
+	p := newSwarmPair(t, swarmOpen)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	const unknownType = 987654
+	if err := p.a.queries.UpsertTypeName(ctx, db.UpsertTypeNameParams{TypeID: unknownType, Name: "Test Type"}); err != nil {
+		t.Fatalf("seed A type name: %v", err)
+	}
+	if err := p.a.queries.SetStructureName(ctx, db.SetStructureNameParams{
+		StructureID: 1035000000001, Name: "Test Keepstar", State: esi.StructureResolved,
+		ResolvedAt: timeSet(now), Source: esi.StructureSourceESI,
+	}); err != nil {
+		t.Fatalf("seed A structure name: %v", err)
+	}
+	p.stubB.types = map[int64]string{unknownType: `{"name":"Test Type","group_id":18}`}
+	p.pinA(t)
+	p.b.esi.CachedTypeName(ctx, unknownType) // a reader on B misses it
+	if err := p.b.queries.UpsertStructureSeen(ctx, 1035000000001); err != nil {
+		t.Fatalf("note the structure on B: %v", err)
+	}
+
+	p.b.swarmPull(ctx, now)
+	staged := stagedKeys(t, p.b)
+	if _, ok := staged[swarmKindTypeName+"/987654"]; !ok {
+		t.Fatalf("staging %v: the type name B asked for did not arrive", staged)
+	}
+	if _, ok := staged[swarmKindStructure+"/1035000000001"]; !ok {
+		t.Fatalf("staging %v: the structure name B asked for did not arrive", staged)
+	}
+	p.spotRuns(t)
+	if got := p.b.esi.CachedTypeName(ctx, unknownType); got != "Test Type" {
+		t.Fatalf("B reads the type as %q after the check, want the name A supplied", got)
+	}
+	if hasKey(p.b.swarmDemandKeys(ctx), swarmKindTypeName, "987654") {
+		t.Fatalf("B still asks for a type name it now holds")
+	}
+}
+
+// TestSwarmRollbackForgetsACachedTypeName: taking a type name
+// back removes it from memory too, not only from the table.
+func TestSwarmRollbackForgetsACachedTypeName(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	bad := swarmTestPeer(t, app, "peer-bad")
+	now := time.Now().UTC()
+	const unknownType = 987654
+	origin := swarmOrigin{source: bad.id, signer: bad.id, fetchedAt: now}
+	if err := app.applySwarmEntry(ctx, swarmKindTypeName, "987654", `{"type_id":987654,"name":"Planted Name"}`, origin, now); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if got := app.esi.CachedTypeName(ctx, unknownType); got != "Planted Name" {
+		t.Fatalf("applied name reads %q", got)
+	}
+	if err := app.queries.SetSwarmPeerExcluded(ctx, db.SetSwarmPeerExcludedParams{InstanceID: bad.id, Excluded: true, ExcludeNote: "manual test"}); err != nil {
+		t.Fatalf("exclude: %v", err)
+	}
+	if got := app.swarmRollBack(ctx); got != 1 {
+		t.Fatalf("rolled back %d rows, want 1", got)
+	}
+	if got := app.esi.CachedTypeName(ctx, unknownType); got != "" {
+		t.Fatalf("the planted name is still served from memory: %q", got)
+	}
+}

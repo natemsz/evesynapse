@@ -581,6 +581,8 @@ func (app *Application) applySwarmEntry(ctx context.Context, kind, key, payload 
 		if err := app.queries.UpsertTypeName(ctx, db.UpsertTypeNameParams{TypeID: body.TypeID, Name: body.Name}); err != nil {
 			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
 		}
+		// Readers see it at once, and the demand for it is settled.
+		app.esi.LearnTypeName(body.TypeID, body.Name)
 		// Type names carry no timestamp in their table.
 		applied.RowStamp = sql.NullTime{}
 		app.addSwarmCounter(ctx, swarmCounterAppliedNames, 1)
@@ -717,6 +719,8 @@ func (app *Application) swarmRollBackOne(ctx context.Context, row db.SwarmApplie
 			return false, nil
 		}
 		n, err = app.queries.RollBackSwarmTypeName(ctx, id)
+		// The in-process cache holds the name too.
+		app.esi.ForgetTypeName(id)
 	case swarmKindCorporation:
 		id, ok := parseSwarmID(row.Key)
 		if !ok || !row.RowStamp.Valid {

@@ -7,7 +7,10 @@ package app
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -67,9 +70,12 @@ func TestSwarmGossipCannotReplacePinnedKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mint liar: %v", err)
 	}
+	// A complete, self-consistent tuple: the liar signs the
+	// address with its own key and claims the honest ID.
+	liar.id = honest.id
 	if _, err := p.a.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
 		InstanceID: honest.id, BaseUrl: "https://liar.example", PublicKey: liar.publicString(),
-		Source: "gossip", FirstSeen: now,
+		Source: "gossip", FirstSeen: now, UrlSig: signSwarmMember(liar, "https://liar.example"),
 	}); err != nil {
 		t.Fatalf("plant the lie in A: %v", err)
 	}
@@ -108,50 +114,66 @@ func TestSwarmGossipCannotReplacePinnedKey(t *testing.T) {
 	}
 }
 
-// TestSwarmGossipKeepsAddressUnlessOwnerMovesIt: with the right
-// key, a third party's word about a known peer's address still
-// changes nothing but last_seen; the peer's own self-signed
-// heartbeat moves it.
-func TestSwarmGossipKeepsAddressUnlessOwnerMovesIt(t *testing.T) {
+// TestSwarmAddressMovesOnlyOnItsOwnersSignature: an address is
+// its owner's word. A relayed tuple moves a known peer's
+// address only when the address signature verifies under the
+// pinned key; any other tuple for that peer changes nothing.
+func TestSwarmAddressMovesOnlyOnItsOwnersSignature(t *testing.T) {
 	p := newSwarmPair(t, swarmOpen)
 	ctx := context.Background()
 	now := time.Now().UTC()
 	p.pinA(t)
 	honest := pinHonest(t, p, "https://honest.example")
+	relay := func(url, sig string) {
+		t.Helper()
+		// A's table is what its member list serves.
+		if _, err := p.a.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
+			InstanceID: honest.id, BaseUrl: url, PublicKey: honest.publicString(),
+			Source: "gossip", FirstSeen: now, UrlSig: sig, AddressSigned: true,
+		}); err != nil {
+			t.Fatalf("plant the tuple in A: %v", err)
+		}
+		if err := p.b.swarmContactPeer(ctx, p.urlA, "instance-a", p.a.swarmID.publicString(), "gossip", now); err != nil {
+			t.Fatalf("gossip with A: %v", err)
+		}
+	}
+	read := func() db.SwarmPeer {
+		t.Helper()
+		peer, err := p.b.queries.GetSwarmPeer(ctx, honest.id)
+		if err != nil {
+			t.Fatalf("honest peer lost: %v", err)
+		}
+		return peer
+	}
 
-	if _, err := p.a.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
-		InstanceID: honest.id, BaseUrl: "https://elsewhere.example", PublicKey: honest.publicString(),
-		Source: "gossip", FirstSeen: now,
-	}); err != nil {
-		t.Fatalf("plant the address in A: %v", err)
-	}
-	if err := p.b.swarmContactPeer(ctx, p.urlA, "instance-a", p.a.swarmID.publicString(), "gossip", now); err != nil {
-		t.Fatalf("gossip with A: %v", err)
-	}
-	peer, err := p.b.queries.GetSwarmPeer(ctx, honest.id)
+	// Signed by somebody else's key over the same ID and a new address.
+	other, err := mintSwarmIdentity()
 	if err != nil {
-		t.Fatalf("honest peer lost: %v", err)
+		t.Fatalf("mint: %v", err)
 	}
-	if peer.BaseUrl != "https://honest.example" {
-		t.Fatalf("a third party moved the address to %q", peer.BaseUrl)
+	other.id = honest.id
+	relay("https://elsewhere.example", signSwarmMember(other, "https://elsewhere.example"))
+	if peer := read(); peer.BaseUrl != "https://honest.example" || peer.KeyConflictAt.Valid {
+		t.Fatalf("a tuple its owner never signed changed the peer: %+v", peer)
 	}
-	if peer.KeyConflictAt.Valid {
-		t.Fatalf("a sighting under the pinned key was marked as a conflict")
+	// The owner's signature, but over a different address than the one relayed.
+	relay("https://swapped.example", signSwarmMember(honest, "https://honest.example"))
+	if peer := read(); peer.BaseUrl != "https://honest.example" {
+		t.Fatalf("a signature for another address moved the peer to %q", peer.BaseUrl)
 	}
-	if !peer.LastSeen.After(now.Add(-time.Hour)) {
-		t.Fatalf("a matching sighting did not refresh last_seen: %v", peer.LastSeen)
+	// The owner's own signed tuple, relayed by a third party: it moves,
+	// and the tuple is kept exactly as issued.
+	moved := signSwarmMember(honest, "https://moved.example")
+	relay("https://moved.example", moved)
+	if peer := read(); peer.BaseUrl != "https://moved.example" || peer.UrlSig != moved {
+		t.Fatalf("the owner's signed address was not taken up verbatim: %+v", peer)
 	}
-
-	// The owner's own heartbeat, under the pinned key, moves it.
-	code, ok := seedTestRegister(t, p.b, seedTestHeartbeat(t, honest, "https://moved.example"), p.secret)
+	// The owner's own heartbeat moves it too.
+	code, ok := seedTestRegister(t, p.b, seedTestHeartbeat(t, honest, "https://again.example"), p.secret)
 	if code != http.StatusOK || !ok {
 		t.Fatalf("owner heartbeat: status %d ok %v", code, ok)
 	}
-	peer, err = p.b.queries.GetSwarmPeer(ctx, honest.id)
-	if err != nil {
-		t.Fatalf("honest peer lost: %v", err)
-	}
-	if peer.BaseUrl != "https://moved.example" {
+	if peer := read(); peer.BaseUrl != "https://again.example" {
 		t.Fatalf("the owner could not move its own address: %q", peer.BaseUrl)
 	}
 }
@@ -181,9 +203,10 @@ func TestSwarmSenderUnderAnotherKeyTeachesNothing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mint third: %v", err)
 	}
+	third.id = "instance-third"
 	if _, err := p.a.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
 		InstanceID: "instance-third", BaseUrl: "https://third.example", PublicKey: third.publicString(),
-		Source: "gossip", FirstSeen: now,
+		Source: "gossip", FirstSeen: now, UrlSig: signSwarmMember(third, "https://third.example"),
 	}); err != nil {
 		t.Fatalf("list a third instance in A: %v", err)
 	}
@@ -1277,5 +1300,203 @@ func TestSwarmRollbackForgetsACachedTypeName(t *testing.T) {
 	}
 	if got := app.esi.CachedTypeName(ctx, unknownType); got != "" {
 		t.Fatalf("the planted name is still served from memory: %q", got)
+	}
+}
+
+// TestSwarmMemberMessageVector pins the bytes a member signs to
+// own its address, and one signature over them from a fixed key,
+// for the seed worker to reproduce. If this changes, every
+// instance and seed must change with it.
+func TestSwarmMemberMessageVector(t *testing.T) {
+	if got := string(swarmMemberMessage("id-1", "https://node.example.org")); got != "member\nid-1\nhttps://node.example.org" {
+		t.Fatalf("member message %q", got)
+	}
+	seed := make([]byte, ed25519.SeedSize)
+	for i := range seed {
+		seed[i] = byte(i)
+	}
+	priv := ed25519.NewKeyFromSeed(seed)
+	id := &swarmIdentity{id: "id-1", public: priv.Public().(ed25519.PublicKey), private: priv}
+	const wantKey = "A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="
+	const wantSig = "hL4z+hW20TvMySFe3JJSpEqfUihMK56p+tGu8J9qs+ZLn14WrlNvaYpIBVxxrBjC5ZI4LVOimPXGL83Vr7LWBA=="
+	if id.publicString() != wantKey {
+		t.Fatalf("public key %s, want %s", id.publicString(), wantKey)
+	}
+	if got := signSwarmMember(id, "https://node.example.org"); got != wantSig {
+		t.Fatalf("url_sig %s, want %s", got, wantSig)
+	}
+	tuple := swarmMember{InstanceID: "id-1", BaseURL: "https://node.example.org", PublicKey: wantKey, URLSig: wantSig}
+	if !verifySwarmMember(tuple) {
+		t.Fatalf("the pinned tuple does not verify")
+	}
+	tuple.BaseURL = "https://other.example.org"
+	if verifySwarmMember(tuple) {
+		t.Fatalf("the signature verified over another address")
+	}
+}
+
+// TestSwarmMemberListCarriesOwnersSignatures: an instance signs
+// its own entry and relays every other tuple exactly as it was
+// stored. A peer it knows only by an address it dialed has no
+// signed address and is not listed.
+func TestSwarmMemberListCarriesOwnersSignatures(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	app.cfg.eveCallbackURL = "https://node.example.org/auth/callback"
+	now := time.Now().UTC()
+	signedPeer, err := mintSwarmIdentity()
+	if err != nil {
+		t.Fatalf("mint: %v", err)
+	}
+	signedPeer.id = "peer-signed"
+	sig := signSwarmMember(signedPeer, "https://signed.example")
+	for _, row := range []db.UpsertSwarmPeerParams{
+		{InstanceID: signedPeer.id, BaseUrl: "https://signed.example", PublicKey: signedPeer.publicString(), UrlSig: sig},
+		{InstanceID: "peer-dialed", BaseUrl: "https://dialed.example", PublicKey: strings.Repeat("A", 44)},
+	} {
+		row.Source, row.FirstSeen = "gossip", now
+		if _, err := app.queries.UpsertSwarmPeer(ctx, row); err != nil {
+			t.Fatalf("seed %s: %v", row.InstanceID, err)
+		}
+	}
+	code, body := swarmServe(t, app, http.MethodGet, "/swarm/members", "", swarmTestSecret)
+	if code != http.StatusOK {
+		t.Fatalf("/swarm/members: status %d", code)
+	}
+	var envelope struct {
+		Entry swarmSignedEntry `json:"entry"`
+	}
+	if err := json.Unmarshal([]byte(body), &envelope); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	members, _, _, err := decodeSwarmMembers(swarmTestSecret, envelope.Entry.Payload, app.swarmID.id, app.swarmID.publicString())
+	if err != nil {
+		t.Fatalf("open member list: %v", err)
+	}
+	byID := map[string]swarmMember{}
+	for _, m := range members {
+		byID[m.InstanceID] = m
+	}
+	self, ok := byID[app.swarmID.id]
+	if !ok || self.BaseURL != "https://node.example.org" || !verifySwarmMember(self) {
+		t.Fatalf("own entry %+v does not carry a valid address signature", self)
+	}
+	relayed, ok := byID[signedPeer.id]
+	if !ok || relayed.BaseURL != "https://signed.example" || relayed.PublicKey != signedPeer.publicString() || relayed.URLSig != sig {
+		t.Fatalf("relayed tuple %+v was not passed on as stored", relayed)
+	}
+	if _, listed := byID["peer-dialed"]; listed {
+		t.Fatalf("a peer with no signed address was listed")
+	}
+}
+
+// TestSwarmIntroductionNeedsItsOwnersSignature: a member list
+// introduces a new instance only by a tuple that instance
+// signed. A tuple with a made-up signature is not stored.
+func TestSwarmIntroductionNeedsItsOwnersSignature(t *testing.T) {
+	p := newSwarmPair(t, swarmOpen)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	p.pinA(t)
+	real, err := mintSwarmIdentity()
+	if err != nil {
+		t.Fatalf("mint: %v", err)
+	}
+	real.id = "instance-real"
+	forged, err := mintSwarmIdentity()
+	if err != nil {
+		t.Fatalf("mint: %v", err)
+	}
+	forged.id = "instance-forged"
+	someoneElse, err := mintSwarmIdentity()
+	if err != nil {
+		t.Fatalf("mint: %v", err)
+	}
+	someoneElse.id = forged.id
+	for _, row := range []db.UpsertSwarmPeerParams{
+		{InstanceID: real.id, BaseUrl: "https://real.example", PublicKey: real.publicString(), UrlSig: signSwarmMember(real, "https://real.example")},
+		// The key is the forged instance's; the signature is not made with it.
+		{InstanceID: forged.id, BaseUrl: "https://forged.example", PublicKey: forged.publicString(), UrlSig: signSwarmMember(someoneElse, "https://forged.example")},
+	} {
+		row.Source, row.FirstSeen = "gossip", now
+		if _, err := p.a.queries.UpsertSwarmPeer(ctx, row); err != nil {
+			t.Fatalf("list %s in A: %v", row.InstanceID, err)
+		}
+	}
+	if err := p.b.swarmContactPeer(ctx, p.urlA, "instance-a", p.a.swarmID.publicString(), "gossip", now); err != nil {
+		t.Fatalf("gossip with A: %v", err)
+	}
+	if peer, err := p.b.queries.GetSwarmPeer(ctx, real.id); err != nil || peer.BaseUrl != "https://real.example" || peer.UrlSig == "" {
+		t.Fatalf("a properly signed introduction was not stored: %+v err=%v", peer, err)
+	}
+	if _, err := p.b.queries.GetSwarmPeer(ctx, forged.id); err == nil {
+		t.Fatalf("an introduction its owner never signed was stored")
+	}
+}
+
+// TestSwarmRegisterNeedsAnAddressSignature: a heartbeat without
+// the sender's signature over its address is refused, however
+// good its envelope signature.
+func TestSwarmRegisterNeedsAnAddressSignature(t *testing.T) {
+	app := swarmTestApp(t)
+	kp, err := mintSwarmIdentity()
+	if err != nil {
+		t.Fatalf("mint: %v", err)
+	}
+	kp.id = "peer-unsigned"
+	payload := string(mustJSON(t, seedAnnouncePayload{BaseURL: "https://peer.example", PublicKey: kp.publicString()}))
+	entry := signedBy(t, kp, seedAnnounceKind, kp.id, payload, time.Now())
+	if code, _ := seedTestRegister(t, app, entry, swarmTestSecret); code != http.StatusBadRequest {
+		t.Fatalf("heartbeat with no url_sig: status %d, want 400", code)
+	}
+	if _, err := app.queries.GetSwarmPeer(context.Background(), kp.id); err == nil {
+		t.Fatalf("a heartbeat with no address signature filed a peer")
+	}
+}
+
+// TestSwarmPullTakesPeersInTurn: with more pullable peers than
+// one cycle asks, the next cycle starts with the ones not yet
+// asked. No peer, a directory that serves nothing included,
+// holds a slot every cycle.
+func TestSwarmPullTakesPeersInTurn(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	now := time.Now().UTC()
+	hits := map[string]int{}
+	total := maxSwarmPullPeersPerCycle + 1
+	for i := 0; i < total; i++ {
+		id := fmt.Sprintf("peer-%d", i)
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hits[id]++
+			writeSwarmJSON(w, map[string]any{"entries": []swarmSignedEntry{}})
+		}))
+		t.Cleanup(srv.Close)
+		if _, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
+			InstanceID: id, BaseUrl: srv.URL, PublicKey: strings.Repeat("A", 44), Source: "manual", FirstSeen: now,
+		}); err != nil {
+			t.Fatalf("pin %s: %v", id, err)
+		}
+		if err := app.queries.SetSwarmPeerApproved(ctx, db.SetSwarmPeerApprovedParams{InstanceID: id, Approved: true}); err != nil {
+			t.Fatalf("approve %s: %v", id, err)
+		}
+	}
+	if err := app.queries.UpsertCorporationWant(ctx, db.UpsertCorporationWantParams{
+		CorporationID: 98000001, Priority: wantViewed, NotedAt: timeSet(now),
+	}); err != nil {
+		t.Fatalf("queue a want: %v", err)
+	}
+	app.swarmPull(ctx, now)
+	asked := 0
+	for _, n := range hits {
+		asked += n
+	}
+	if asked != maxSwarmPullPeersPerCycle {
+		t.Fatalf("first cycle asked %d peers, want %d", asked, maxSwarmPullPeersPerCycle)
+	}
+	app.swarmPull(ctx, now.Add(time.Minute))
+	for i := 0; i < total; i++ {
+		if hits[fmt.Sprintf("peer-%d", i)] == 0 {
+			t.Fatalf("after two cycles peer-%d has never been asked: %v", i, hits)
+		}
 	}
 }

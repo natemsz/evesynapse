@@ -32,6 +32,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"sort"
 	"strings"
 	"time"
 
@@ -498,20 +499,28 @@ func (app *Application) swarmFlagKeyConflict(ctx context.Context, instanceID, he
 	}
 }
 
-// swarmLearnMembers records the members one sighting names. The
-// first key seen for an instance ID is pinned: a sighting that
-// names a known ID under another key is refused and flagged,
-// never written (the upsert itself enforces it), and the only
-// way to a new key is the operator removing the peer. A sender
-// whose own key is not its pinned one teaches nothing at all
-// (errSwarmKeyChanged). An address moves only on its owner's
-// word: the sender's own entry, signed under its pinned key,
-// may move the sender's address; what it says about a peer
-// already known never does. Approval follows the mode;
-// exclusion is never touched. The sender is recorded under the
-// URL that just answered when its own list does not name it —
-// the dialed URL is known-good, so a lonely seed still
-// introduces itself.
+// swarmLearnMembers records the members one sighting names.
+//
+// Keys: the first key seen for an instance ID is pinned. A
+// sighting that names a known ID under another key is refused
+// and flagged, never written (the upsert itself enforces it),
+// and the only way to a new key is the operator removing the
+// peer. A sender whose own key is not its pinned one teaches
+// nothing at all (errSwarmKeyChanged).
+//
+// Addresses: an address is its owner's word. Each member tuple
+// carries the owner's signature over its instance ID and
+// address (url_sig), made with the key in the same tuple. A new
+// member is stored only if that signature verifies; a known
+// member's address moves only on a tuple whose signature
+// verifies under the pinned key, whoever relayed it. The tuple
+// is stored as it arrived, to be relayed unchanged. The one
+// address taken without a signature is the one this instance
+// dialed itself: a sender that signs no address of its own is
+// filed under the URL that just answered, and such a row is
+// never relayed.
+//
+// Approval follows the mode; exclusion is never touched.
 func (app *Application) swarmLearnMembers(ctx context.Context, members []swarmMember, signer, signerKey, dialURL, source string, now time.Time) error {
 	if signer != "" && signerKey != "" {
 		peer, err := app.queries.GetSwarmPeer(ctx, signer)
@@ -530,17 +539,23 @@ func (app *Application) swarmLearnMembers(ctx context.Context, members []swarmMe
 		seen[m.InstanceID] = true
 	}
 	if signer != "" && signerKey != "" && !seen[signer] {
-		members = append(members, swarmMember{InstanceID: signer, BaseURL: dialURL, PublicKey: signerKey})
+		members = append(members, swarmMember{InstanceID: signer, PublicKey: signerKey})
 	}
 	for _, m := range members {
 		if m.InstanceID == "" || m.InstanceID == app.swarmID.id {
 			continue
 		}
-		// The signer's own record may carry no address (no
-		// public origin configured): the URL that just
-		// answered is known-good and files it.
-		if m.InstanceID == signer && m.BaseURL == "" {
-			m.BaseURL = dialURL
+		if raw, err := base64.StdEncoding.DecodeString(m.PublicKey); err != nil || len(raw) != ed25519.PublicKeySize {
+			continue
+		}
+		signed := m.BaseURL != "" && verifySwarmMember(m)
+		if !signed {
+			// Only the sender itself, at the address this instance
+			// dialed, may be filed without a signed address.
+			if m.InstanceID != signer || m.PublicKey != signerKey || dialURL == "" {
+				continue
+			}
+			m.BaseURL, m.URLSig = dialURL, ""
 		}
 		if !validSwarmBaseURL(m.BaseURL) {
 			continue
@@ -552,13 +567,10 @@ func (app *Application) swarmLearnMembers(ctx context.Context, members []swarmMe
 			strings.TrimSuffix(m.BaseURL, "/") != strings.TrimSuffix(dialURL, "/") {
 			continue
 		}
-		if raw, err := base64.StdEncoding.DecodeString(m.PublicKey); err != nil || len(raw) != ed25519.PublicKeySize {
-			continue
-		}
 		written, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
 			InstanceID: m.InstanceID, BaseUrl: m.BaseURL, PublicKey: m.PublicKey,
 			Source: source, FirstSeen: now,
-			OwnSighting: m.InstanceID == signer && m.PublicKey == signerKey,
+			UrlSig: m.URLSig, AddressSigned: signed,
 		})
 		if err != nil {
 			return err
@@ -651,13 +663,13 @@ func (app *Application) swarmSampled(good, bad int64) bool {
 }
 
 // swarmPeerPullable reports whether one listed peer may serve:
-// not the seed marker, and not under the floor once it has
-// enough checks to judge. Shared by the cycle pull and the
-// urgent single-key pull so both read the same gate.
-func swarmPeerPullable(instanceID string, good, bad int64) bool {
-	if instanceID == swarmSeedInstanceID {
-		return false
-	}
+// not under the floor once it has enough checks to judge.
+// Shared by the cycle pull and the urgent single-key pull so
+// both read the same gate. A seed is a member like any other
+// and is not singled out here: one that holds no data answers
+// a pull with nothing, and the pull rotation keeps that from
+// costing a slot every cycle.
+func swarmPeerPullable(good, bad int64) bool {
 	if total := good + bad; total >= swarmTrustMinChecks && swarmTrust(good, bad) < swarmTrustFloor {
 		return false
 	}
@@ -680,8 +692,17 @@ func (app *Application) swarmPullOne(ctx context.Context, kind, key string) int 
 		logging.Errorf("swarm: pull peers: %v", err)
 		return 0
 	}
+	// One key, one deadline: ask whoever served something most
+	// recently, not whoever is next in the rotation.
+	sort.SliceStable(peers, func(i, j int) bool {
+		a, b := peers[i].LastServed, peers[j].LastServed
+		if a.Valid != b.Valid {
+			return a.Valid
+		}
+		return a.Valid && a.Time.After(b.Time)
+	})
 	for _, p := range peers {
-		if !swarmPeerPullable(p.InstanceID, p.GoodChecks, p.BadChecks) {
+		if !swarmPeerPullable(p.GoodChecks, p.BadChecks) {
 			continue
 		}
 		keys := []swarmPullKey{{Kind: kind, Key: key}}
@@ -728,6 +749,11 @@ func (app *Application) swarmStagePulled(ctx context.Context, peerID, baseURL st
 			continue
 		}
 		staged++
+	}
+	if staged > 0 {
+		if err := app.queries.TouchSwarmPeerServed(ctx, db.TouchSwarmPeerServedParams{InstanceID: peerID, LastServed: timeSet(now)}); err != nil {
+			logging.Errorf("swarm: note %s served: %v", shortenSwarmID(peerID), err)
+		}
 	}
 	if unasked > 0 {
 		logging.Warnf("swarm: pull %s: dropped %d entries the pull did not ask for", baseURL, unasked)
@@ -824,13 +850,9 @@ func (app *Application) swarmSuppressFetch(ctx context.Context, kind, key string
 // swarmPull asks approved peers for the wanted keys and stages
 // what they answer with, through swarmStagePulled: only keys
 // this pull asked for, only under the serving peer's own pinned
-// identity. Seed-only peers are directories,
-// not sources — the worker signs under its fixed "seed"
-// identity and holds no data, so pulling it would spend one of
-// the cycle's peer slots learning nothing. A directory that
-// also serves under its own minted identity (a warmer acting
-// as seed) stays pullable: only the protocol's seed marker
-// skips, never the configured URL.
+// identity. Peers are asked in turn, least recently pulled
+// first, a few a cycle. A seed that holds no data simply
+// answers with nothing when its turn comes.
 func (app *Application) swarmPull(ctx context.Context, now time.Time) {
 	keys := app.swarmDemandKeys(ctx)
 	if len(keys) == 0 {
@@ -846,10 +868,15 @@ func (app *Application) swarmPull(ctx context.Context, now time.Time) {
 		if n >= maxSwarmPullPeersPerCycle {
 			break
 		}
-		if !swarmPeerPullable(p.InstanceID, p.GoodChecks, p.BadChecks) {
+		if !swarmPeerPullable(p.GoodChecks, p.BadChecks) {
 			continue
 		}
 		n++
+		// Its turn is taken whether or not it answers, so a dead
+		// peer goes to the back of the line like any other.
+		if err := app.queries.TouchSwarmPeerPulled(ctx, db.TouchSwarmPeerPulledParams{InstanceID: p.InstanceID, LastPulled: timeSet(now)}); err != nil {
+			logging.Errorf("swarm: note pull of %s: %v", shortenSwarmID(p.InstanceID), err)
+		}
 		entries, err := app.swarmCli.pullEntries(ctx, p.BaseUrl, keys)
 		if err != nil {
 			app.addSwarmCounter(ctx, swarmCounterPullsFailed, 1)

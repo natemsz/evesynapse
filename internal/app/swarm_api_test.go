@@ -125,6 +125,9 @@ func TestSwarmMembersSealed(t *testing.T) {
 	if _, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
 		InstanceID: "peer-hidden-1", BaseUrl: "https://hidden-peer.example.org/",
 		PublicKey: strings.Repeat("A", 44), Source: "gossip", FirstSeen: now,
+		// Only a peer with a signed address is relayed; the list
+		// passes the stored signature on without judging it.
+		UrlSig: strings.Repeat("B", 88),
 	}); err != nil {
 		t.Fatalf("upsert peer: %v", err)
 	}

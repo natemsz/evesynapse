@@ -292,7 +292,7 @@ func (q *Queries) GetSwarmNextGossip(ctx context.Context) (sql.NullTime, error) 
 const getSwarmPeer = `-- name: GetSwarmPeer :one
 SELECT instance_id, base_url, public_key, source, approved, excluded,
     exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip,
-    key_conflict_at
+    key_conflict_at, url_sig, last_pulled, last_served
 FROM swarm_peers
 WHERE instance_id = $1
 `
@@ -314,6 +314,9 @@ func (q *Queries) GetSwarmPeer(ctx context.Context, instanceID string) (SwarmPee
 		&i.LastSeen,
 		&i.LastGossip,
 		&i.KeyConflictAt,
+		&i.UrlSig,
+		&i.LastPulled,
+		&i.LastServed,
 	)
 	return i, err
 }
@@ -431,7 +434,7 @@ func (q *Queries) ListSwarmCorpDemand(ctx context.Context, limit int32) ([]int64
 const listSwarmPeers = `-- name: ListSwarmPeers :many
 SELECT instance_id, base_url, public_key, source, approved, excluded,
     exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip,
-    key_conflict_at
+    key_conflict_at, url_sig, last_pulled, last_served
 FROM swarm_peers
 ORDER BY last_seen DESC
 LIMIT 100
@@ -460,6 +463,9 @@ func (q *Queries) ListSwarmPeers(ctx context.Context) ([]SwarmPeer, error) {
 			&i.LastSeen,
 			&i.LastGossip,
 			&i.KeyConflictAt,
+			&i.UrlSig,
+			&i.LastPulled,
+			&i.LastServed,
 		); err != nil {
 			return nil, err
 		}
@@ -475,24 +481,29 @@ func (q *Queries) ListSwarmPeers(ctx context.Context) ([]SwarmPeer, error) {
 }
 
 const listSwarmPullPeers = `-- name: ListSwarmPullPeers :many
-SELECT instance_id, base_url, public_key, good_checks, bad_checks
+SELECT instance_id, base_url, public_key, good_checks, bad_checks, last_pulled, last_served
 FROM swarm_peers
 WHERE approved AND NOT excluded
-ORDER BY last_seen DESC
+ORDER BY last_pulled ASC NULLS FIRST, last_seen DESC
 LIMIT 25
 `
 
 type ListSwarmPullPeersRow struct {
-	InstanceID string `json:"instance_id"`
-	BaseUrl    string `json:"base_url"`
-	PublicKey  string `json:"public_key"`
-	GoodChecks int64  `json:"good_checks"`
-	BadChecks  int64  `json:"bad_checks"`
+	InstanceID string       `json:"instance_id"`
+	BaseUrl    string       `json:"base_url"`
+	PublicKey  string       `json:"public_key"`
+	GoodChecks int64        `json:"good_checks"`
+	BadChecks  int64        `json:"bad_checks"`
+	LastPulled sql.NullTime `json:"last_pulled"`
+	LastServed sql.NullTime `json:"last_served"`
 }
 
 // Peers a pull may read from: approved, not excluded. Trust is
 // scored in Go from the counters; the floor keeps gossip noise
-// out of the pull set without another round trip.
+// out of the pull set without another round trip. Least
+// recently pulled first, so every peer is asked in turn: no
+// peer holds a slot every cycle, whether it is dead, slow, or a
+// directory with nothing to serve.
 func (q *Queries) ListSwarmPullPeers(ctx context.Context) ([]ListSwarmPullPeersRow, error) {
 	rows, err := q.db.QueryContext(ctx, listSwarmPullPeers)
 	if err != nil {
@@ -508,6 +519,8 @@ func (q *Queries) ListSwarmPullPeers(ctx context.Context) ([]ListSwarmPullPeersR
 			&i.PublicKey,
 			&i.GoodChecks,
 			&i.BadChecks,
+			&i.LastPulled,
+			&i.LastServed,
 		); err != nil {
 			return nil, err
 		}
@@ -888,22 +901,52 @@ func (q *Queries) TouchSwarmPeerGossip(ctx context.Context, arg TouchSwarmPeerGo
 	return err
 }
 
+const touchSwarmPeerPulled = `-- name: TouchSwarmPeerPulled :exec
+UPDATE swarm_peers SET last_pulled = $2 WHERE instance_id = $1
+`
+
+type TouchSwarmPeerPulledParams struct {
+	InstanceID string       `json:"instance_id"`
+	LastPulled sql.NullTime `json:"last_pulled"`
+}
+
+func (q *Queries) TouchSwarmPeerPulled(ctx context.Context, arg TouchSwarmPeerPulledParams) error {
+	_, err := q.db.ExecContext(ctx, touchSwarmPeerPulled, arg.InstanceID, arg.LastPulled)
+	return err
+}
+
+const touchSwarmPeerServed = `-- name: TouchSwarmPeerServed :exec
+UPDATE swarm_peers SET last_served = $2 WHERE instance_id = $1
+`
+
+type TouchSwarmPeerServedParams struct {
+	InstanceID string       `json:"instance_id"`
+	LastServed sql.NullTime `json:"last_served"`
+}
+
+func (q *Queries) TouchSwarmPeerServed(ctx context.Context, arg TouchSwarmPeerServedParams) error {
+	_, err := q.db.ExecContext(ctx, touchSwarmPeerServed, arg.InstanceID, arg.LastServed)
+	return err
+}
+
 const upsertSwarmPeer = `-- name: UpsertSwarmPeer :execrows
-INSERT INTO swarm_peers (instance_id, base_url, public_key, source, first_seen, last_seen)
-VALUES ($1, $2, $3, $4, $5, $5)
+INSERT INTO swarm_peers (instance_id, base_url, public_key, source, first_seen, last_seen, url_sig)
+VALUES ($1, $2, $3, $4, $5, $5, $6)
 ON CONFLICT (instance_id) DO UPDATE SET
-    base_url = CASE WHEN $6::boolean THEN excluded.base_url ELSE swarm_peers.base_url END,
+    base_url = CASE WHEN $7::boolean THEN excluded.base_url ELSE swarm_peers.base_url END,
+    url_sig = CASE WHEN $7::boolean THEN excluded.url_sig ELSE swarm_peers.url_sig END,
     last_seen = excluded.last_seen
 WHERE swarm_peers.public_key = excluded.public_key
 `
 
 type UpsertSwarmPeerParams struct {
-	InstanceID  string    `json:"instance_id"`
-	BaseUrl     string    `json:"base_url"`
-	PublicKey   string    `json:"public_key"`
-	Source      string    `json:"source"`
-	FirstSeen   time.Time `json:"first_seen"`
-	OwnSighting bool      `json:"own_sighting"`
+	InstanceID    string    `json:"instance_id"`
+	BaseUrl       string    `json:"base_url"`
+	PublicKey     string    `json:"public_key"`
+	Source        string    `json:"source"`
+	FirstSeen     time.Time `json:"first_seen"`
+	UrlSig        string    `json:"url_sig"`
+	AddressSigned bool      `json:"address_signed"`
 }
 
 // A sighting records a peer once and pins the key it arrived
@@ -911,8 +954,10 @@ type UpsertSwarmPeerParams struct {
 // a later sighting under another key writes nothing (zero rows,
 // which the caller flags), so no sighting can replace a pinned
 // key. The address moves only on the peer's own word
-// (own_sighting: the sighting was signed by that peer's pinned
-// key); anyone else's mention refreshes last_seen and nothing
+// (address_signed: the tuple carries the peer's signature over
+// its address, which the caller has verified against this same
+// key); the address and its signature are stored together,
+// verbatim. Any other mention refreshes last_seen and nothing
 // more. Approval, exclusion and the reputation counters are
 // never touched: hearing about an instance must not approve it
 // or forgive it.
@@ -923,7 +968,8 @@ func (q *Queries) UpsertSwarmPeer(ctx context.Context, arg UpsertSwarmPeerParams
 		arg.PublicKey,
 		arg.Source,
 		arg.FirstSeen,
-		arg.OwnSighting,
+		arg.UrlSig,
+		arg.AddressSigned,
 	)
 	if err != nil {
 		return 0, err

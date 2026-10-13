@@ -261,12 +261,11 @@ func TestSwarmFetchPhasePullsDemand(t *testing.T) {
 	}
 }
 
-// TestSwarmPullSkipsSeeds proves the skip is the protocol's
-// seed marker, not the configured URL: a seed identity is never
-// pulled wherever it is listed from, while a directory that
-// also serves under its own identity stays pullable even when
-// it is a configured seed.
-func TestSwarmPullSkipsSeeds(t *testing.T) {
+// TestSwarmPullAsksADirectoryLikeAnyPeer: no instance ID is
+// singled out. A peer that holds no data is pulled like the
+// rest and answers with nothing, and the peer that does hold
+// the record still serves it.
+func TestSwarmPullAsksADirectoryLikeAnyPeer(t *testing.T) {
 	p := newSwarmPair(t, swarmOpen)
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -289,8 +288,10 @@ func TestSwarmPullSkipsSeeds(t *testing.T) {
 		t.Fatalf("approve seed: %v", err)
 	}
 	p.b.swarmPull(ctx, now)
-	if seedHits != 0 {
-		t.Fatalf("seed saw %d pulls, want 0", seedHits)
+	// A seed is a member like any other: it is asked in its
+	// turn, answers with nothing, and costs nobody anything.
+	if seedHits != 1 {
+		t.Fatalf("the directory saw %d pulls, want 1", seedHits)
 	}
 	staged, err := p.b.queries.ListUncheckedStaging(ctx, 10)
 	if err != nil || len(staged) != 1 || staged[0].Key != "98000001" {

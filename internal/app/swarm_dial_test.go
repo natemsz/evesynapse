@@ -122,15 +122,19 @@ func TestSwarmGossipCannotIntroduceALoopbackAddress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mint: %v", err)
 	}
+	inward.id, outward.id = "instance-inward", "instance-outward"
+	// Both tuples are properly signed by their owners: only the
+	// address differs.
 	for id, row := range map[string]struct {
 		url string
-		key string
+		kp  *swarmIdentity
 	}{
-		"instance-inward":  {"http://127.0.0.1:5432", inward.publicString()},
-		"instance-outward": {"https://outward.example", outward.publicString()},
+		"instance-inward":  {"http://127.0.0.1:5432", inward},
+		"instance-outward": {"https://outward.example", outward},
 	} {
 		if _, err := p.a.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
-			InstanceID: id, BaseUrl: row.url, PublicKey: row.key, Source: "gossip", FirstSeen: now,
+			InstanceID: id, BaseUrl: row.url, PublicKey: row.kp.publicString(), Source: "gossip", FirstSeen: now,
+			UrlSig: signSwarmMember(row.kp, row.url),
 		}); err != nil {
 			t.Fatalf("list %s in A: %v", id, err)
 		}

@@ -34,16 +34,19 @@ UPDATE swarm_identity SET next_gossip_at = $1;
 -- a later sighting under another key writes nothing (zero rows,
 -- which the caller flags), so no sighting can replace a pinned
 -- key. The address moves only on the peer's own word
--- (own_sighting: the sighting was signed by that peer's pinned
--- key); anyone else's mention refreshes last_seen and nothing
+-- (address_signed: the tuple carries the peer's signature over
+-- its address, which the caller has verified against this same
+-- key); the address and its signature are stored together,
+-- verbatim. Any other mention refreshes last_seen and nothing
 -- more. Approval, exclusion and the reputation counters are
 -- never touched: hearing about an instance must not approve it
 -- or forgive it.
 -- name: UpsertSwarmPeer :execrows
-INSERT INTO swarm_peers (instance_id, base_url, public_key, source, first_seen, last_seen)
-VALUES ($1, $2, $3, $4, $5, $5)
+INSERT INTO swarm_peers (instance_id, base_url, public_key, source, first_seen, last_seen, url_sig)
+VALUES ($1, $2, $3, $4, $5, $5, sqlc.arg(url_sig))
 ON CONFLICT (instance_id) DO UPDATE SET
-    base_url = CASE WHEN sqlc.arg(own_sighting)::boolean THEN excluded.base_url ELSE swarm_peers.base_url END,
+    base_url = CASE WHEN sqlc.arg(address_signed)::boolean THEN excluded.base_url ELSE swarm_peers.base_url END,
+    url_sig = CASE WHEN sqlc.arg(address_signed)::boolean THEN excluded.url_sig ELSE swarm_peers.url_sig END,
     last_seen = excluded.last_seen
 WHERE swarm_peers.public_key = excluded.public_key;
 
@@ -55,27 +58,36 @@ UPDATE swarm_peers SET key_conflict_at = $2 WHERE instance_id = $1;
 -- name: GetSwarmPeer :one
 SELECT instance_id, base_url, public_key, source, approved, excluded,
     exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip,
-    key_conflict_at
+    key_conflict_at, url_sig, last_pulled, last_served
 FROM swarm_peers
 WHERE instance_id = $1;
 
 -- name: ListSwarmPeers :many
 SELECT instance_id, base_url, public_key, source, approved, excluded,
     exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip,
-    key_conflict_at
+    key_conflict_at, url_sig, last_pulled, last_served
 FROM swarm_peers
 ORDER BY last_seen DESC
 LIMIT 100;
 
 -- Peers a pull may read from: approved, not excluded. Trust is
 -- scored in Go from the counters; the floor keeps gossip noise
--- out of the pull set without another round trip.
+-- out of the pull set without another round trip. Least
+-- recently pulled first, so every peer is asked in turn: no
+-- peer holds a slot every cycle, whether it is dead, slow, or a
+-- directory with nothing to serve.
 -- name: ListSwarmPullPeers :many
-SELECT instance_id, base_url, public_key, good_checks, bad_checks
+SELECT instance_id, base_url, public_key, good_checks, bad_checks, last_pulled, last_served
 FROM swarm_peers
 WHERE approved AND NOT excluded
-ORDER BY last_seen DESC
+ORDER BY last_pulled ASC NULLS FIRST, last_seen DESC
 LIMIT 25;
+
+-- name: TouchSwarmPeerPulled :exec
+UPDATE swarm_peers SET last_pulled = $2 WHERE instance_id = $1;
+
+-- name: TouchSwarmPeerServed :exec
+UPDATE swarm_peers SET last_served = $2 WHERE instance_id = $1;
 
 -- name: SetSwarmPeerApproved :exec
 UPDATE swarm_peers SET approved = $2 WHERE instance_id = $1;

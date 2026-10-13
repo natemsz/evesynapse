@@ -123,17 +123,17 @@ func (app *Application) loadSwarmPeers(ctx context.Context) []swarmPeerRow {
 			Good:  esi.FormatInt(p.GoodChecks), Bad: esi.FormatInt(p.BadChecks),
 		}
 		row.ShowAddress = row.Display == p.BaseUrl
-		// Role is what the peer functions as. The wire carries
-		// no role flag: the seed worker's fixed identity is its
-		// report — it signs as "seed" and holds no data — while
-		// anything serving under its own identity is a cache,
-		// even when it also answers at a directory address.
+		// Role is what the peer functions as, as seen from
+		// here. The wire carries no role flag and a seed is a
+		// member like any other: an address configured as a
+		// seed is a Seed until a pull from it has staged
+		// something, and a Seed+Cache from then on.
 		row.Role = "Cache"
-		switch {
-		case p.InstanceID == swarmSeedInstanceID:
+		if app.swarmIsSeed(p.BaseUrl) {
 			row.Role = "Seed"
-		case app.swarmIsSeed(p.BaseUrl):
-			row.Role = "Seed+Cache"
+			if p.LastServed.Valid {
+				row.Role = "Seed+Cache"
+			}
 		}
 		switch {
 		case p.Excluded:

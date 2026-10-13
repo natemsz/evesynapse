@@ -15,6 +15,7 @@ function makeEl() {
     setAttribute: function () {},
     getAttribute: function () { return null; },
     addEventListener: function () {},
+    querySelector: function () { return null; },
     querySelectorAll: function () { return []; },
     focus: function () {}
   };
@@ -185,8 +186,25 @@ test("narrow screens keep the classic indented card stack", async function () {
   const map = els["plan-map"].innerHTML;
   assert.ok(map.indexOf("plan-map-cols") === -1, "no stage columns on a narrow screen");
   assert.ok(map.indexOf("plan-stage") === -1, "no stage markup in list mode");
-  assert.ok(map.indexOf('data-pad-left="22"') !== -1, "depth reads from the indent in list mode");
+  assert.ok(map.indexOf("plan-kids") !== -1, "children nest in the indenting wrapper in list mode");
+  assert.ok(map.indexOf("data-pad-left") === -1, "no content padding carries depth in list mode");
   assert.ok(map.indexOf("plan-chip") !== -1, "list cards keep their state chips");
+});
+
+test("PI leaf cards carry the origin line and the PI planner link", async function () {
+  const payload = capitalPayload();
+  const leaf = payload.root.kids[0];
+  leaf.build = false;
+  leaf.origin = "pi";
+  leaf.originTier = "P2";
+  const els = install(payload);
+  await waitFor(function () {
+    return els["plan-map"] && els["plan-map"].innerHTML.indexOf("plan-node") !== -1;
+  }, "map render");
+  const map = els["plan-map"].innerHTML;
+  assert.ok(map.indexOf("Planetary interaction") !== -1, "origin line names PI");
+  assert.ok(map.indexOf("P2") !== -1, "origin line carries the tier");
+  assert.ok(map.indexOf("/industry/pi/?target=") !== -1, "origin line links to the PI planner recipe");
 });
 
 test("one throwing view does not blank the others", async function () {

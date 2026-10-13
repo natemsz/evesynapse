@@ -100,9 +100,11 @@ func newFitting(snap *Snapshot, shipTypeID int64, levels map[int64]int) *fitting
 		shipTypeID: shipTypeID,
 		levels:     levels,
 		res: &Result{
-			ShipTypeID: shipTypeID,
-			ItemAttrs:  make(map[int64]map[int64]float64),
-			StateAttrs: make(map[string]map[int64]float64),
+			ShipTypeID:   shipTypeID,
+			ItemAttrs:    make(map[int64]map[int64]float64),
+			StateAttrs:   make(map[string]map[int64]float64),
+			WeaponDPS:    make(map[string]float64),
+			WeaponVolley: make(map[string]float64),
 		},
 		ship:         ship,
 		char:         char,
@@ -655,6 +657,8 @@ func (f *fitting) offense() {
 			volley *= ent.get(snap, AttrDamageMultiplier)
 			res.TurretVolley += n * volley
 			res.TurretDPS += n * volley / cycle
+			res.WeaponVolley[StateAttrKey(ent.typeID, ent.state)] = volley
+			res.WeaponDPS[StateAttrKey(ent.typeID, ent.state)] = volley / cycle
 		case snap.HasEffect(ent.typeID, EffectLauncherFitted):
 			if charge == nil {
 				f.note(fmt.Sprintf("launcher type %d has no missile selected; damage not counted", ent.typeID))
@@ -668,6 +672,8 @@ func (f *fitting) offense() {
 			volley *= f.char.get(snap, AttrMissileDamageMult)
 			res.MissileVolley += n * volley
 			res.MissileDPS += n * volley / cycle
+			res.WeaponVolley[StateAttrKey(ent.typeID, ent.state)] = volley
+			res.WeaponDPS[StateAttrKey(ent.typeID, ent.state)] = volley / cycle
 		}
 	}
 }

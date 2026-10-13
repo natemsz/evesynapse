@@ -4,8 +4,8 @@ package app
 // page still renders the full document on the no-JS path (the swap
 // only ever replaces #main-content in a browser that opts in), the
 // swap script itself is served versioned like the other assets, and
-// the pages swap.js leaves alone (simulator, saved fits, planner)
-// keep the page scripts they need.
+// the pages swap.js leaves alone (simulator, saved fits) keep the
+// page scripts they need.
 
 import (
 	"context"
@@ -103,9 +103,10 @@ func TestSwapExcludedPagesKeepPageScripts(t *testing.T) {
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 	version := staticAssetVersion()
 
-	// The simulator, saved fits and planner always load whole (the
-	// swap denylist names them), so they keep their page scripts —
-	// and the shell around them, swap script included.
+	// The simulator and saved fits always load whole (the swap
+	// denylist names them); the planner swaps only when plan.js is
+	// already loaded, so all three keep their page scripts — and
+	// the shell around them, swap script included.
 	for path, script := range map[string]string{
 		"/fittings/":       `src="/static/fit.js?v=` + version + `"`,
 		"/fittings/saved/": `src="/static/fit.js?v=` + version + `"`,

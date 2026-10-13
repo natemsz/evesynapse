@@ -142,6 +142,14 @@ test("capital-scale plan renders every view on first load", async function () {
     assert.ok(els[id] && els[id].innerHTML.indexOf(rendered[id]) !== -1, id + " rendered");
     assert.ok(els[id].innerHTML.indexOf("need the plan data") === -1, id + " has no fail note");
   }
+  // The buy list is a real table with a grand total, not a
+  // wrapped run-on list.
+  assert.ok(els["plan-buylist"].innerHTML.indexOf("plan-buytable") !== -1, "buylist is a table");
+  assert.ok(els["plan-buylist"].innerHTML.indexOf("<tfoot>") !== -1, "buylist has a total row");
+  // Decision-map cards: state chip on the face, and the root
+  // (1h of a 2h elapsed) trips the bottleneck flag.
+  assert.ok(els["plan-map"].innerHTML.indexOf("plan-chip") !== -1, "map cards carry a state chip");
+  assert.ok(els["plan-map"].innerHTML.indexOf("BOTTLENECK") !== -1, "map flags the bottleneck");
 });
 
 test("one throwing view does not blank the others", async function () {
@@ -152,5 +160,24 @@ test("one throwing view does not blank the others", async function () {
   assert.ok(els["plan-map"].innerHTML.indexOf("failed to render") !== -1, "map shows its failure note");
   for (const id of ["plan-gantt", "plan-buylist", "plan-fall", "plan-inspector"]) {
     assert.ok(els[id] && els[id].innerHTML.indexOf(rendered[id]) !== -1, id + " still rendered");
+  }
+});
+
+test("null preset lists (empty shopping/jobs marshal) still render first load", async function () {
+  // Go marshals a nil slice as null, not []: a preset whose mask
+  // leaves nothing to buy (or nothing to build) arrives with
+  // shopping: null, and first load must degrade to the honest
+  // empty states — not die into the fail note. Regression pin
+  // for the capital first-load bug (crossCheck read .length on
+  // the null inside setPayload, before any view could paint).
+  const p = capitalPayload();
+  p.optimized = Object.assign({}, p.optimized, { shopping: null, jobs: null });
+  const els = install(p);
+  await waitFor(function () {
+    return els["plan-map"] && els["plan-map"].innerHTML.indexOf("plan-node") !== -1;
+  }, "map render");
+  for (const id of ["plan-map", "plan-gantt", "plan-buylist", "plan-fall", "plan-inspector"]) {
+    assert.ok(els[id] && els[id].innerHTML.length > 0, id + " painted something");
+    assert.ok(els[id].innerHTML.indexOf("need the plan data") === -1, id + " has no fail note");
   }
 });

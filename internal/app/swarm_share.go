@@ -303,6 +303,14 @@ func (app *Application) serveSwarmStructure(ctx context.Context, key string) (st
 	return string(raw), row.ResolvedAt.Time, true
 }
 
+// swarmClockDrift is how far ahead of this clock a signed fetch
+// time may sit and still be put down to drift; maxSwarmEntryAge
+// is how old one may be and still be staged.
+const (
+	swarmClockDrift  = 5 * time.Minute
+	maxSwarmEntryAge = 90 * 24 * time.Hour
+)
+
 // stageSwarmEntry verifies one pulled entry and stages it for a
 // spot check. The signature is checked against the signer's
 // pinned key, the payload is strictly decoded into its row
@@ -332,7 +340,25 @@ func (app *Application) stageSwarmEntry(ctx context.Context, entry swarmSignedEn
 		app.countSwarmShapeReject(ctx, entry.Signer)
 		return err
 	}
+	// The signed fetch time is the signer's clock, and it decides
+	// which of two staged answers is kept and how old the applied
+	// row reads. It is only believed inside a window around this
+	// instance's own receipt: a time further ahead than clocks
+	// drift is a lie under a good signature (and would outrank
+	// every honest answer for the key), so it counts against the
+	// signer; within drift it is held to now. An entry older than
+	// the window is too stale to be worth a check and is simply
+	// not staged.
 	fetchedAt := time.Unix(entry.FetchedAt, 0).UTC()
+	switch {
+	case fetchedAt.After(now.Add(swarmClockDrift)):
+		app.countSwarmShapeReject(ctx, entry.Signer)
+		return fmt.Errorf("swarm: stage %s %s: fetch time is %s ahead of this clock", entry.Kind, entry.Key, fetchedAt.Sub(now).Round(time.Second))
+	case fetchedAt.After(now):
+		fetchedAt = now.UTC()
+	case now.Sub(fetchedAt) > maxSwarmEntryAge:
+		return fmt.Errorf("swarm: stage %s %s: fetched %s ago, too old to stage", entry.Kind, entry.Key, now.Sub(fetchedAt).Round(time.Hour))
+	}
 	if err := app.queries.StageSwarmEntry(ctx, db.StageSwarmEntryParams{
 		Kind: entry.Kind, Key: entry.Key, Payload: entry.Payload,
 		Signer: entry.Signer, Signature: entry.Signature,

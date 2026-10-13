@@ -793,3 +793,53 @@ func TestSwarmNeverServesWhatAPeerSupplied(t *testing.T) {
 		t.Fatalf("the alliance record is still the peer's copy and was served")
 	}
 }
+
+// TestSwarmStagingHoldsFetchTimeToItsOwnClock: the signed fetch
+// time is the signer's clock. Far ahead of this one it is a lie
+// (refused, and it costs the signer); a little ahead is drift
+// (held to now); very old is not staged at all, without blame.
+// A far-future time once outranked every honest answer for its
+// key and went on to date the applied row.
+func TestSwarmStagingHoldsFetchTimeToItsOwnClock(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	peer := swarmTestPeer(t, app, "peer-1")
+	now := time.Now().UTC().Truncate(time.Second)
+	name := func(id string, at time.Time) swarmSignedEntry {
+		return signedBy(t, peer, swarmKindTypeName, id, `{"type_id":`+id+`,"name":"Type `+id+`"}`, at)
+	}
+	marks := func() int64 {
+		row, err := app.queries.GetSwarmPeer(ctx, peer.id)
+		if err != nil {
+			t.Fatalf("read peer: %v", err)
+		}
+		return row.BadChecks
+	}
+
+	if err := app.stageSwarmEntry(ctx, name("34", now.Add(365*24*time.Hour)), peer.id, now); err == nil {
+		t.Fatalf("an entry fetched a year from now was staged")
+	}
+	if got := marks(); got != 1 {
+		t.Fatalf("a far-future fetch time cost the signer %d marks, want 1", got)
+	}
+	if err := app.stageSwarmEntry(ctx, name("35", now.Add(2*time.Minute)), peer.id, now); err != nil {
+		t.Fatalf("an entry two minutes ahead (clock drift) was refused: %v", err)
+	}
+	row, err := app.queries.GetStagingEntry(ctx, db.GetStagingEntryParams{Kind: swarmKindTypeName, Key: "35"})
+	if err != nil || row.FetchedAt.After(now) {
+		t.Fatalf("drifted entry staged with fetched_at %v (err %v), want it held to %v", row.FetchedAt, err, now)
+	}
+	if err := app.stageSwarmEntry(ctx, name("36", now.Add(-200*24*time.Hour)), peer.id, now); err == nil {
+		t.Fatalf("an entry fetched 200 days ago was staged")
+	}
+	if err := app.stageSwarmEntry(ctx, name("37", now.Add(-3*time.Hour)), peer.id, now); err != nil {
+		t.Fatalf("an ordinary entry was refused: %v", err)
+	}
+	if got := marks(); got != 1 {
+		t.Fatalf("drift, age and an ordinary entry changed the ledger: %d marks, want 1", got)
+	}
+	staged := stagedKeys(t, app)
+	if len(staged) != 2 {
+		t.Fatalf("staging holds %v, want types 35 and 37 only", staged)
+	}
+}

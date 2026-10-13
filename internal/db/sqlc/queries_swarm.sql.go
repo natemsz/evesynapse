@@ -832,6 +832,9 @@ type StageSwarmEntryParams struct {
 
 // A pulled entry stages at most once per key; a newer fetch of
 // the same key replaces it, an older one never overwrites.
+// fetched_at is the signer's clock, already held to a window
+// around receipt by the caller (stageSwarmEntry), so a claimed
+// far-future time cannot hold the slot against honest answers.
 // Staging is not serving: renders read the real tables only.
 func (q *Queries) StageSwarmEntry(ctx context.Context, arg StageSwarmEntryParams) error {
 	_, err := q.db.ExecContext(ctx, stageSwarmEntry,

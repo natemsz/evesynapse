@@ -10,12 +10,14 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
+	"evesynapse/internal/buildplan"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/markethistory"
@@ -279,9 +281,10 @@ func TestPlannerJudgeCharacterBuildable(t *testing.T) {
 		`aria-current="true"`,
 		`id="judge-q"`,
 		`value="Fixture Ceo"`,
-		"Can Fixture Ceo build this?",
-		"Industry — needs IV · trained V — covered",
-		"Every skill in the chain is covered.",
+		`plan-skillglyph ok`,
+		`aria-label="Can Fixture Ceo build this? All skills covered."`,
+		`data-tip="Every skill in the chain is covered."`,
+		`plan-skillbadge" aria-hidden="true">✓`,
 		"netted against what Fixture Ceo holds",
 		// 20 Tritanium needed, 15 on hand → 5 to buy at 5 ISK.
 		"Profit Analysis",
@@ -299,8 +302,9 @@ func TestPlannerJudgeCharacterShortSkill(t *testing.T) {
 	path := fmt.Sprintf("/planner/?product=1001&runs=1&judge=char:%d", fixtureCharA)
 	_, body := getPage(t, app, cookie, path)
 	mustContain(t, path, body,
-		"Industry — needs IV · trained III",
-		"Not yet — the short skills are listed above.",
+		`plan-skillglyph bad`,
+		`data-tip="Short skills: Industry — needs IV · trained III"`,
+		`plan-skillbadge" aria-hidden="true">✕`,
 	)
 	if strings.Contains(body, "Industry — needs IV · trained III — covered") {
 		t.Fatal("short skill marked covered")
@@ -314,11 +318,13 @@ func TestPlannerJudgeCharacterNoSkillsYet(t *testing.T) {
 	path := fmt.Sprintf("/planner/?product=1001&runs=1&judge=char:%d", fixtureCharA)
 	_, body := getPage(t, app, cookie, path)
 	mustContain(t, path, body,
-		"Skills haven&#39;t synced for Fixture Ceo yet",
+		`plan-skillglyph bad`,
+		`data-tip="Skills haven&#39;t synced for Fixture Ceo yet — once they land, this says what they can build."`,
+		`aria-label="Can Fixture Ceo build this? Some skills missing."`,
 		"Fixture Ceo&#39;s hangars haven&#39;t synced yet",
 	)
-	if strings.Contains(body, "can build this?</strong>") && strings.Contains(body, "covered") {
-		t.Fatal("unknown skills rendered a verdict")
+	if strings.Contains(body, "plan-skillglyph ok") {
+		t.Fatal("unknown skills rendered a covered verdict")
 	}
 }
 
@@ -337,9 +343,10 @@ func TestPlannerJudgeTagBestOfAndCombinedStock(t *testing.T) {
 	mustContain(t, path, body,
 		`value="tag:indy"`,
 		`aria-current="true"`,
-		`Can your &#34;indy&#34; characters build this?`,
-		"Industry — needs IV · best on the tag V — covered",
-		"Every skill in the chain is covered.",
+		`plan-skillglyph ok`,
+		`aria-label="Can your &#34;indy&#34; characters build this? All skills covered."`,
+		`data-tip="Every skill in the chain is covered."`,
+		`plan-skillbadge" aria-hidden="true">✓`,
 		`combined hangars of your &#34;indy&#34; characters (2 of them)`,
 	)
 }
@@ -354,9 +361,10 @@ func TestPlannerJudgeTagNobodyHasIt(t *testing.T) {
 	path := "/planner/?product=1001&runs=1&judge=tag:indy"
 	_, body := getPage(t, app, cookie, path)
 	mustContain(t, path, body,
-		"Industry — needs IV · best on the tag I",
-		"Skills are on file for 1 of 2 tagged characters",
-		"Not yet — the short skills are listed above.",
+		`plan-skillglyph bad`,
+		`aria-label="Can your &#34;indy&#34; characters build this? Some skills missing."`,
+		`data-tip="Skills are on file for 1 of 2 tagged characters; the rest count as untrained until they sync. Short skills: Industry — needs IV · best on the tag I"`,
+		`plan-skillbadge" aria-hidden="true">✕`,
 	)
 }
 
@@ -426,12 +434,71 @@ func TestPlannerMESummaryCollapsed(t *testing.T) {
 		`Fixture Component at ME8 (owned), 1 at ME0 (assumed)`,
 		`id="me-modal" hidden`,
 		`id="me-fields"`,
+		`class="me-summary"`,
+		`class="me-grid"`,
+		`class="me-cell"`,
+		`class="me-name"`,
 		`id="me-setall"`,
 		`id="me-apply"`,
 		`data-me-src="owned"`,
 		`data-plan-expand-all`,
 		`data-plan-collapse-all`,
 		"Fixture Component", // labels still render inside the collapsed block
+	)
+}
+
+// TestPlannerSettingsModal: Runs, Market, Build system, Slots,
+// Time factor and Recalculate live inside a modal behind a glyph
+// toggle in the planner header; the build-system face shows the
+// resolved system name, never a raw ID.
+func TestPlannerSettingsModal(t *testing.T) {
+	app, _, cookie := plannerScopeApp(t)
+	seedPlannerPrices(app)
+	if _, err := app.db.ExecContext(context.Background(),
+		`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30000142, 'Jita', 10000002, 0.9)`); err != nil {
+		t.Fatalf("seed system: %v", err)
+	}
+
+	_, body := getPage(t, app, cookie, "/planner/?product=1001&runs=1")
+	mustContain(t, "/planner/ (settings)", body,
+		`id="plan-settings-toggle"`,
+		`aria-label="Plan settings"`,
+		`aria-haspopup="dialog"`,
+		`id="plan-settings-modal" hidden`,
+		`id="plan-settings-close"`,
+		`class="plan-settings-fields"`,
+		`name="runs"`,
+		`name="market"`,
+		`id="system-q" name="system" value="Jita"`,
+		`name="slots"`,
+		`name="timef"`,
+		`>Recalculate</button>`,
+	)
+
+	// A system name in the query resolves to the same face, and a
+	// numeric ID renders as the name too: the raw ID is never the
+	// visible value.
+	_, named := getPage(t, app, cookie, "/planner/?product=1001&runs=1&system=Jita")
+	mustContain(t, "/planner/ (system name)", named, `id="system-q" name="system" value="Jita"`)
+	_, numbered := getPage(t, app, cookie, "/planner/?product=1001&runs=1&system=30000142")
+	mustContain(t, "/planner/ (system id)", numbered, `id="system-q" name="system" value="Jita"`)
+}
+
+// TestIndustryBlueprintPlannerLink: an owned blueprint whose SDE
+// product maps carries a hammer-glyph link into the build planner.
+func TestIndustryBlueprintPlannerLink(t *testing.T) {
+	app, q, cookie := plannerScopeApp(t)
+	seedSnapshot(t, q, fixtureCharA, esi.SnapBlueprints, esi.Blueprints{
+		{ItemID: 1, TypeID: 2001, LocationID: 60003760, LocationFlag: "Hangar", MaterialEfficiency: 10, TimeEfficiency: 20, Quantity: -1, Runs: -1},
+	})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapIndustryJobs, `[]`)
+
+	_, body := getPage(t, app, cookie, "/industry/")
+	mustContain(t, "/industry/", body,
+		`/planner/?product=1001`,
+		`title="open in build planner"`,
+		`aria-label="Fixture Widget — open in build planner"`,
+		`plan-glyph-sm`,
 	)
 }
 
@@ -448,6 +515,143 @@ func TestDefaultJudgeParam(t *testing.T) {
 	}
 	if got := defaultJudgeParam(nil, 9); got != "" {
 		t.Errorf("no characters = %q, want general", got)
+	}
+}
+
+// seedCapSDE plants a capital-scale blueprint tree: a hull with
+// 40 components of 15 sub-assemblies of 8 materials (5441 nodes
+// expanded). Leaf types are distinct rows so the shape mirrors
+// shared minerals without tripping unique constraints.
+func seedCapSDE(t *testing.T, app *Application) {
+	t.Helper()
+	ctx := context.Background()
+	var bps, mats, skills, types []string
+	types = append(types, "(10001, 'Cap Hull', 0, 0, 1)")
+	for i := 34; i < 42; i++ {
+		types = append(types, fmt.Sprintf("(%d, 'Cap Leaf %d', 0, 0, 1)", 9000+i, i))
+	}
+	bps = append(bps, "(20001, 10001, 1, 0, 3600)")
+	var rootMats []string
+	for i := 0; i < 40; i++ {
+		compID := 11000 + i
+		bps = append(bps, fmt.Sprintf("(%d, %d, 1, 0, 600)", 21000+i, compID))
+		rootMats = append(rootMats, fmt.Sprintf("(20001, %d, 1)", compID))
+		skills = append(skills, fmt.Sprintf("(%d, 3380, 1)", 21000+i))
+		for j := 0; j < 15; j++ {
+			subID := 12000 + i*15 + j
+			bps = append(bps, fmt.Sprintf("(%d, %d, 1, 0, 60)", 22000+i*15+j, subID))
+			mats = append(mats, fmt.Sprintf("(%d, %d, 1)", 21000+i, subID))
+			skills = append(skills, fmt.Sprintf("(%d, 3380, 1)", 22000+i*15+j))
+			for k := 0; k < 8; k++ {
+				mats = append(mats, fmt.Sprintf("(%d, %d, 10)", 22000+i*15+j, 9034+k))
+			}
+		}
+	}
+	mats = append(mats, rootMats...)
+	chunk := func(rows []string, stmt string) {
+		for i := 0; i < len(rows); i += 400 {
+			end := i + 400
+			if end > len(rows) {
+				end = len(rows)
+			}
+			if _, err := app.db.ExecContext(ctx, stmt+strings.Join(rows[i:end], ",")); err != nil {
+				t.Fatalf("seed cap sde: %v", err)
+			}
+		}
+	}
+	chunk(types, `INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES `)
+	chunk(bps, `INSERT INTO sde_blueprints (blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds) VALUES `)
+	chunk(mats, `INSERT INTO sde_blueprint_materials (blueprint_type_id, material_type_id, quantity) VALUES `)
+	chunk(skills, `INSERT INTO sde_blueprint_skills (blueprint_type_id, skill_type_id, level) VALUES `)
+}
+
+func capNodeCount(root *buildplan.Node) int {
+	nodes := 0
+	buildplan.Walk(root, func(n *buildplan.Node) { nodes++ })
+	return nodes
+}
+
+// TestPlannerPrefetchMatchesLazy: the batched closure warm covers
+// the whole capital tree (every blueprint memoized, leaves marked
+// misses), and expanding over it matches a lazy expansion exactly
+// — same nodes, same shopping, same money. Prefetch changes the
+// read pattern, never the plan.
+func TestPlannerPrefetchMatchesLazy(t *testing.T) {
+	app, _, _ := plannerScopeApp(t)
+	seedCapSDE(t, app)
+	ctx := context.Background()
+
+	lazy := &sdePlannerSource{app: app, ctx: ctx, memo: make(map[int64]*buildplan.Blueprint), none: make(map[int64]bool)}
+	resLazy, err := buildplan.Build(lazy, 10001, buildplan.Input{Runs: 1})
+	if err != nil {
+		t.Fatalf("lazy build: %v", err)
+	}
+	warm := &sdePlannerSource{app: app, ctx: ctx, memo: make(map[int64]*buildplan.Blueprint), none: make(map[int64]bool)}
+	warm.prefetch(10001)
+	if len(warm.memo) != 641 {
+		t.Fatalf("prefetch memoized %d blueprints, want 641 (hull + 40 + 600)", len(warm.memo))
+	}
+	resWarm, err := buildplan.Build(warm, 10001, buildplan.Input{Runs: 1})
+	if err != nil {
+		t.Fatalf("warm build: %v", err)
+	}
+	if resWarm.TooLarge || resLazy.TooLarge {
+		t.Fatalf("TooLarge warm=%v lazy=%v, want neither", resWarm.TooLarge, resLazy.TooLarge)
+	}
+	if got, want := capNodeCount(resWarm.Root), capNodeCount(resLazy.Root); got != want || got != 5441 {
+		t.Fatalf("nodes warm=%d lazy=%d, want both 5441", got, want)
+	}
+	if len(resWarm.Shopping) != len(resLazy.Shopping) {
+		t.Fatalf("shopping lines warm=%d lazy=%d", len(resWarm.Shopping), len(resLazy.Shopping))
+	}
+	for i := range resWarm.Shopping {
+		if resWarm.Shopping[i] != resLazy.Shopping[i] {
+			t.Fatalf("shopping line %d differs: %+v vs %+v", i, resWarm.Shopping[i], resLazy.Shopping[i])
+		}
+	}
+	if resWarm.Root.LineCost != resLazy.Root.LineCost || resWarm.Root.CostComplete != resLazy.Root.CostComplete {
+		t.Fatalf("root money differs: warm %v/%v lazy %v/%v",
+			resWarm.Root.LineCost, resWarm.Root.CostComplete, resLazy.Root.LineCost, resLazy.Root.CostComplete)
+	}
+}
+
+// TestPlannerCapitalJSONFirstLoad: a capital plan's JSON — what
+// plan.js fetches on first load — serves the whole tree in one
+// response: the root is present and the finished product is not
+// in its own shopping list.
+func TestPlannerCapitalJSONFirstLoad(t *testing.T) {
+	app, _, cookie := plannerScopeApp(t)
+	seedCapSDE(t, app)
+	seedPlannerPrices(app)
+
+	code, body := getPage(t, app, cookie, "/planner/?product=10001&judge=&format=json")
+	if code != http.StatusOK {
+		t.Fatalf("capital JSON: status %d", code)
+	}
+	var payload struct {
+		Product int64 `json:"product"`
+		Root    *struct {
+			ID int64 `json:"id"`
+		} `json:"root"`
+		Optimized struct {
+			Shopping []struct {
+				ID int64 `json:"id"`
+			} `json:"shopping"`
+		} `json:"optimized"`
+	}
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		t.Fatalf("capital JSON does not parse: %v", err)
+	}
+	if payload.Product != 10001 || payload.Root == nil || payload.Root.ID != 10001 {
+		t.Fatalf("capital JSON root = %+v, want product/root 10001", payload)
+	}
+	if len(payload.Optimized.Shopping) == 0 {
+		t.Fatal("capital JSON aggregated no shopping")
+	}
+	for _, line := range payload.Optimized.Shopping {
+		if line.ID == 10001 {
+			t.Fatal("capital JSON shopping contains the finished product")
+		}
 	}
 }
 

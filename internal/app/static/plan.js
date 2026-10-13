@@ -677,14 +677,26 @@ function renderFall(t) {
 }
 
 // --- render all and init ---
+// One view's failure writes its own panel a note instead of
+// blanking the views after it: a capital tree that breaks one
+// renderer still shows the rest on first load.
+function renderView(id, fn) {
+  try {
+    fn();
+  } catch (e) {
+    var el = $(id);
+    if (el) el.innerHTML = "<p><small>This view failed to render; the others are current.</small></p>";
+  }
+}
+
 function renderAll() {
   var t = currentTotals();
   renderHeader(t);
-  renderMap(t);
-  renderInspector(t);
-  renderGantt(t);
-  renderBuy(t);
-  renderFall(t);
+  renderView("plan-map", function () { renderMap(t); });
+  renderView("plan-inspector", function () { renderInspector(t); });
+  renderView("plan-gantt", function () { renderGantt(t); });
+  renderView("plan-buylist", function () { renderBuy(t); });
+  renderView("plan-fall", function () { renderFall(t); });
 }
 
 function fail(note) {
@@ -730,7 +742,18 @@ function syncPresetButtons() {
   });
 }
 
-var meEscapeBound = false;
+var planModalEscapeBound = false;
+function armPlanModalEscape() {
+  if (planModalEscapeBound) return;
+  planModalEscapeBound = true;
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Escape") return;
+    var m = document.getElementById("me-modal");
+    if (m && !m.hidden) m.hidden = true;
+    var s = document.getElementById("plan-settings-modal");
+    if (s && !s.hidden) s.hidden = true;
+  });
+}
 function wireME() {
   var tog = $("me-toggle"), modal = $("me-modal");
   function openME() {
@@ -749,14 +772,7 @@ function wireME() {
     modal.addEventListener("click", function (ev) {
       if (ev.target === modal) closeME();
     });
-    if (!meEscapeBound) {
-      meEscapeBound = true;
-      document.addEventListener("keydown", function (ev) {
-        if (ev.key !== "Escape") return;
-        var m = document.getElementById("me-modal");
-        if (m && !m.hidden) m.hidden = true;
-      });
-    }
+    armPlanModalEscape();
     var closeBtn = $("me-close");
     if (closeBtn) closeBtn.addEventListener("click", closeME);
   }
@@ -767,6 +783,28 @@ function wireME() {
     v = Math.max(0, Math.min(10, v));
     document.querySelectorAll('#me-fields input[name^="me_"]').forEach(function (el) { el.value = v; });
   });
+}
+
+function wirePlanSettings() {
+  var tog = $("plan-settings-toggle"), modal = $("plan-settings-modal");
+  function closeSettings() {
+    if (!modal) return;
+    modal.hidden = true;
+    if (tog) tog.focus({ preventScroll: true });
+  }
+  if (tog && modal) {
+    tog.addEventListener("click", function () {
+      modal.hidden = false;
+      var close = $("plan-settings-close");
+      if (close) close.focus({ preventScroll: true });
+    });
+    modal.addEventListener("click", function (ev) {
+      if (ev.target === modal) closeSettings();
+    });
+    armPlanModalEscape();
+    var closeBtn = $("plan-settings-close");
+    if (closeBtn) closeBtn.addEventListener("click", closeSettings);
+  }
 }
 
 // Recalculate without a page reload: the server re-renders the
@@ -831,6 +869,7 @@ function wireStatic() {
   var form = document.getElementById("plan-form");
   if (form) form.addEventListener("submit", onRecalc);
   wireME();
+  wirePlanSettings();
   wireJudge();
 }
 

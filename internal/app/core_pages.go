@@ -19,7 +19,7 @@ type pageData struct {
 	CharacterName     string
 	SSOConfigured     bool
 	AutoRefresh       bool   // Sync page: app.js reloads on a timer (noscript meta-refresh fallback)
-	NavState          string // saved nav layout ("rail" or "hidden") from the cookie; base.html puts it on <html>; filled by render
+	NavState          string // nav layout ("rail", "hidden" or "expanded") from the cookie, rail when unsaved; base.html puts it on <html>; filled by render
 	Notice            string // a one-time message from the action that redirected here (see flash); shown above the page content
 	Error             string // friendly, user-safe banner (never internals)
 	Section           string // top-nav branch key (base.html); filled by render from the page when empty

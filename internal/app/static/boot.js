@@ -15,6 +15,11 @@ try {
       document.cookie = "evesynapse-nav=" + savedNav + "; path=/; max-age=31536000; samesite=lax" +
         (window.location.protocol === "https:" ? "; secure" : "");
     }
+  } else if (!document.documentElement.hasAttribute("data-nav")) {
+    // No saved preference anywhere and the server rendered no
+    // layout: the default is the icon rail, applied here so it
+    // still paints right on shell-less responses.
+    document.documentElement.setAttribute("data-nav", "rail");
   }
   var savedTheme = window.localStorage.getItem("evesynapse-theme");
   if (savedTheme === "light" || savedTheme === "dark") {

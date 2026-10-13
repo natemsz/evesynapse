@@ -54,6 +54,9 @@ ORDER BY name;
 -- name: GetSDESystem :one
 SELECT system_id, name, region_id, security FROM sde_systems
 WHERE system_id = $1;
+-- name: GetSDESystemByName :one
+SELECT system_id, name, region_id, security FROM sde_systems
+WHERE LOWER(name) = LOWER($1);
 -- name: GetSDERegion :one
 SELECT region_id, name FROM sde_regions
 WHERE region_id = $1;
@@ -300,6 +303,19 @@ ORDER BY material_type_id;
 SELECT skill_type_id, level FROM sde_blueprint_skills
 WHERE blueprint_type_id = $1
 ORDER BY level DESC, skill_type_id;
+-- name: GetSDEBlueprintsForProducts :many
+SELECT blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds
+FROM sde_blueprints
+WHERE product_type_id = ANY(sqlc.arg(product_ids)::bigint[])
+ORDER BY product_type_id, blueprint_type_id;
+-- name: ListSDEBlueprintMaterialsForBlueprints :many
+SELECT blueprint_type_id, material_type_id, quantity FROM sde_blueprint_materials
+WHERE blueprint_type_id = ANY(sqlc.arg(blueprint_ids)::bigint[])
+ORDER BY blueprint_type_id, material_type_id;
+-- name: ListSDEBlueprintSkillsForBlueprints :many
+SELECT blueprint_type_id, skill_type_id, level FROM sde_blueprint_skills
+WHERE blueprint_type_id = ANY(sqlc.arg(blueprint_ids)::bigint[])
+ORDER BY blueprint_type_id, level DESC, skill_type_id;
 -- name: SearchManufacturableProducts :many
 SELECT t.type_id, t.name, b.blueprint_type_id
 FROM sde_blueprints b

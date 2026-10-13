@@ -843,3 +843,184 @@ func TestSwarmStagingHoldsFetchTimeToItsOwnClock(t *testing.T) {
 		t.Fatalf("staging holds %v, want types 35 and 37 only", staged)
 	}
 }
+
+// historyDays builds a history payload for The Forge / Tritanium
+// from dates, every day carrying the same figures ESI's canned
+// truth below carries.
+func historyDays(dates ...string) string {
+	var b strings.Builder
+	b.WriteString(`{"region_id":10000002,"type_id":34,"days":[`)
+	for i, d := range dates {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString(`{"date":"` + d + `","average":5.5,"highest":6,"lowest":5,"volume":100,"order_count":10}`)
+	}
+	b.WriteString(`]}`)
+	return b.String()
+}
+
+// esiHistory is the same days as ESI serves them.
+func esiHistory(dates ...string) string {
+	var rows []string
+	for _, d := range dates {
+		rows = append(rows, `{"date":"`+d+`","average":5.5,"highest":6,"lowest":5,"volume":100,"order_count":10}`)
+	}
+	return "[" + strings.Join(rows, ",") + "]"
+}
+
+// TestSwarmStagingRefusesImpossibleDays: a history entry whose
+// days are not real dates, repeat, or fall after the fetch that
+// is said to have returned them never stages, and costs its
+// signer a mark each time.
+func TestSwarmStagingRefusesImpossibleDays(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	peer := swarmTestPeer(t, app, "peer-1")
+	now := time.Now().UTC()
+	fetched := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	if now.Before(fetched) {
+		t.Skip("clock is before the fixture dates")
+	}
+	// Staging takes the clock as a parameter: keep it just after the fetch.
+	at := fetched.Add(time.Hour)
+	for name, payload := range map[string]string{
+		"not a date":         historyDays("2026-13-40"),
+		"another format":     historyDays("10/01/2026"),
+		"a repeated day":     historyDays("2026-10-01", "2026-10-01"),
+		"a day after fetch":  historyDays("2026-10-01", "2026-10-06"),
+		"a day far in front": historyDays("2031-01-01"),
+	} {
+		entry := signedBy(t, peer, swarmKindHistory, "10000002/34", payload, fetched)
+		if err := app.stageSwarmEntry(ctx, entry, peer.id, at); err == nil {
+			t.Fatalf("%s: the entry staged", name)
+		}
+	}
+	if staged := stagedKeys(t, app); len(staged) != 0 {
+		t.Fatalf("staging holds %v, want nothing", staged)
+	}
+	row, err := app.queries.GetSwarmPeer(ctx, peer.id)
+	if err != nil || row.BadChecks != 5 {
+		t.Fatalf("signer has %d marks (err %v), want one per refused entry", row.BadChecks, err)
+	}
+	// The fetch day itself is fine.
+	good := signedBy(t, peer, swarmKindHistory, "10000002/34", historyDays("2026-10-05", "2026-10-04"), fetched)
+	if err := app.stageSwarmEntry(ctx, good, peer.id, at); err != nil {
+		t.Fatalf("an entry ending on its fetch day was refused: %v", err)
+	}
+}
+
+// TestSwarmHistoryCheckCoversWholeSpan: the ESI check compares
+// every day in the span the entry and ESI share. A made-up day,
+// a dropped day or a changed figure inside it fails; days
+// outside it cannot be checked and are left out of what
+// applies; no shared span decides nothing.
+func TestSwarmHistoryCheckCoversWholeSpan(t *testing.T) {
+	ctx := context.Background()
+	check := func(t *testing.T, truth, payload string) (swarmCheckVerdict, string) {
+		t.Helper()
+		p := newSwarmPair(t, swarmOpen)
+		p.stubB.history = truth
+		verdict, confirmed, stop := p.b.swarmVerifyAgainstESI(ctx, &fetchBudget{left: 5}, nil, swarmKindHistory, "10000002/34", payload)
+		if stop {
+			t.Fatalf("canned ESI reported the error limit")
+		}
+		return verdict, confirmed
+	}
+	week := []string{"2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05"}
+
+	t.Run("honest and whole", func(t *testing.T) {
+		verdict, confirmed := check(t, esiHistory(week...), historyDays("2026-10-04", "2026-10-03", "2026-10-02"))
+		if verdict != swarmCheckPass || strings.Count(confirmed, `"date"`) != 3 {
+			t.Fatalf("verdict %d confirmed %s, want a pass with its three days", verdict, confirmed)
+		}
+	})
+	t.Run("a made-up day inside the span", func(t *testing.T) {
+		// ESI has no trades on the 3rd; the entry invents one.
+		truth := esiHistory("2026-10-01", "2026-10-02", "2026-10-04", "2026-10-05")
+		if verdict, _ := check(t, truth, historyDays(week...)); verdict != swarmCheckFail {
+			t.Fatalf("verdict %d, want a fail", verdict)
+		}
+	})
+	t.Run("a dropped day inside the span", func(t *testing.T) {
+		if verdict, _ := check(t, esiHistory(week...), historyDays("2026-10-01", "2026-10-02", "2026-10-04", "2026-10-05")); verdict != swarmCheckFail {
+			t.Fatalf("verdict %d, want a fail", verdict)
+		}
+	})
+	t.Run("a changed figure", func(t *testing.T) {
+		lie := strings.Replace(historyDays(week...), `"average":5.5`, `"average":999`, 1)
+		if verdict, _ := check(t, esiHistory(week...), lie); verdict != swarmCheckFail {
+			t.Fatalf("verdict %d, want a fail", verdict)
+		}
+	})
+	t.Run("days ESI cannot confirm are left out", func(t *testing.T) {
+		// One day older than ESI still serves, one newer than it serves yet.
+		entry := historyDays(append([]string{"2026-09-28"}, append(week, "2026-10-06")...)...)
+		verdict, confirmed := check(t, esiHistory(week...), entry)
+		if verdict != swarmCheckPass {
+			t.Fatalf("verdict %d, want a pass", verdict)
+		}
+		if strings.Count(confirmed, `"date"`) != 5 || strings.Contains(confirmed, "2026-09-28") || strings.Contains(confirmed, "2026-10-06") {
+			t.Fatalf("confirmed %s, want only the five days ESI has", confirmed)
+		}
+	})
+	t.Run("no shared span", func(t *testing.T) {
+		if verdict, _ := check(t, esiHistory(week...), historyDays("2026-09-01")); verdict != swarmCheckDefer {
+			t.Fatalf("verdict %d, want a deferral", verdict)
+		}
+	})
+}
+
+// TestSwarmHistoryAppliesOnlyConfirmedDays: end to end, a
+// checked entry writes the days ESI confirmed and no others.
+func TestSwarmHistoryAppliesOnlyConfirmedDays(t *testing.T) {
+	p := newSwarmPair(t, swarmOpen)
+	ctx := context.Background()
+	p.pinA(t)
+	// Recent days, so the entry is young enough to be checked.
+	now := time.Now().UTC()
+	day := func(ago int) string { return now.AddDate(0, 0, -ago).Format(time.DateOnly) }
+	p.stubB.history = esiHistory(day(3), day(2), day(1))
+	fetched := now.Add(-time.Minute)
+	entry := signedBy(t, p.a.swarmID, swarmKindHistory, "10000002/34",
+		historyDays(day(15), day(3), day(2), day(1), fetched.Format(time.DateOnly)), fetched)
+	asked := []swarmPullKey{{Kind: swarmKindHistory, Key: "10000002/34"}}
+	if got := p.b.swarmStagePulled(ctx, "instance-a", p.urlA, asked, []swarmSignedEntry{entry}, now); got != 1 {
+		t.Fatalf("staged %d entries, want 1", got)
+	}
+	if got := p.spotRuns(t); got != 1 {
+		t.Fatalf("applied %d entries, want 1", got)
+	}
+	days, err := p.b.queries.ListMarketHistory(ctx, db.ListMarketHistoryParams{RegionID: 10000002, TypeID: 34, RowLimit: 20})
+	if err != nil || len(days) != 3 {
+		t.Fatalf("history rows %+v (err %v), want the three days ESI confirmed", days, err)
+	}
+	for _, d := range days {
+		if d.Date < day(3) || d.Date > day(1) {
+			t.Fatalf("a day ESI never confirmed was written: %s", d.Date)
+		}
+	}
+}
+
+// TestSwarmHistoryApplyKeepsToItsWindow: an unchecked apply
+// writes only days its fetch could have returned: none after
+// it, none further back than one fetch reaches.
+func TestSwarmHistoryApplyKeepsToItsWindow(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	peer := swarmTestPeer(t, app, "peer-1")
+	fetched := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	origin := swarmOrigin{source: peer.id, signer: peer.id, fetchedAt: fetched}
+	payload := historyDays("2024-01-01", "2026-10-04", "2026-10-05", "2026-10-09")
+	if err := app.applySwarmEntry(ctx, swarmKindHistory, "10000002/34", payload, origin, fetched.Add(time.Hour)); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	days, err := app.queries.ListMarketHistory(ctx, db.ListMarketHistoryParams{RegionID: 10000002, TypeID: 34, RowLimit: 20})
+	if err != nil || len(days) != 2 {
+		t.Fatalf("history rows %+v (err %v), want the 4th and 5th only", days, err)
+	}
+	prov, err := app.queries.GetSwarmApplied(ctx, db.GetSwarmAppliedParams{Kind: swarmKindHistory, Key: "10000002/34"})
+	if err != nil || prov.FirstDate != "2026-10-04" || prov.LastDate != "2026-10-05" {
+		t.Fatalf("provenance range %q..%q (err %v), want the days written", prov.FirstDate, prov.LastDate, err)
+	}
+}

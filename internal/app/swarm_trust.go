@@ -731,10 +731,10 @@ func (app *Application) swarmSettleUrgent(ctx context.Context, kind, key string)
 		}
 		return true
 	}
-	verdict, _ := app.swarmVerifyAgainstESI(ctx, &fetchBudget{left: 1}, nil, row.Kind, row.Key, row.Payload)
+	verdict, confirmed, _ := app.swarmVerifyAgainstESI(ctx, &fetchBudget{left: 1}, nil, row.Kind, row.Key, row.Payload)
 	switch verdict {
 	case swarmCheckPass:
-		if err := app.applySwarmEntry(ctx, row.Kind, row.Key, row.Payload, swarmOrigin{source: row.Source, signer: row.Signer, fetchedAt: row.FetchedAt, verified: true}, now); err != nil {
+		if err := app.applySwarmEntry(ctx, row.Kind, row.Key, confirmed, swarmOrigin{source: row.Source, signer: row.Signer, fetchedAt: row.FetchedAt, verified: true}, now); err != nil {
 			logging.Errorf("swarm: apply %s %s: %v", row.Kind, row.Key, err)
 			return false
 		}
@@ -742,7 +742,7 @@ func (app *Application) swarmSettleUrgent(ctx context.Context, kind, key string)
 		app.addSwarmCounter(ctx, swarmCounterSpotPassed, 1)
 		return true
 	case swarmCheckFail:
-		app.discardSwarmEntry(ctx, row.Kind, row.Key, row.Signer)
+		app.discardSwarmEntry(ctx, row.Kind, row.Key, row.Signer, swarmDiscardMismatch)
 		return false
 	default:
 		return false
@@ -832,8 +832,8 @@ func (app *Application) swarmPull(ctx context.Context, now time.Time) {
 // the real tables. At most a few ESI calls a cycle, from the
 // shared allowance; ESI's stop signal pauses the pass like any
 // other. Anything failing is discarded and counted against its
-// signer; anything undecidable (no scoped character, no
-// overlapping history, a transient error) waits for the next
+// signer; anything undecidable (no scoped character, no span
+// shared with ESI's history, a transient error) waits for the next
 // pass, up to the staging age cap.
 func (app *Application) swarmSpotCheck(ctx context.Context, allowance *fetchBudget, characters []db.Character, now time.Time) (applied int, limited bool) {
 	rows, err := app.queries.ListUncheckedStaging(ctx, 25)
@@ -844,7 +844,7 @@ func (app *Application) swarmSpotCheck(ctx context.Context, allowance *fetchBudg
 	checks := 0
 	for _, row := range rows {
 		if now.Sub(row.ReceivedAt) > maxSwarmStagingAge {
-			app.discardSwarmEntry(ctx, row.Kind, row.Key, row.Signer)
+			app.discardSwarmEntry(ctx, row.Kind, row.Key, row.Signer, swarmDiscardAgedOut)
 			continue
 		}
 		peer, err := app.queries.GetSwarmPeer(ctx, row.Signer)
@@ -855,7 +855,7 @@ func (app *Application) swarmSpotCheck(ctx context.Context, allowance *fetchBudg
 			continue
 		}
 		if total := peer.GoodChecks + peer.BadChecks; total >= swarmTrustMinChecks && swarmTrust(peer.GoodChecks, peer.BadChecks) < swarmTrustFloor {
-			app.discardSwarmEntry(ctx, row.Kind, row.Key, row.Signer)
+			app.discardSwarmEntry(ctx, row.Kind, row.Key, row.Signer, swarmDiscardLowTrust)
 			continue
 		}
 		if !app.swarmSampled(peer.GoodChecks, peer.BadChecks) {
@@ -879,13 +879,13 @@ func (app *Application) swarmSpotCheck(ctx context.Context, allowance *fetchBudg
 			break
 		}
 		checks++
-		verdict, stop := app.swarmVerifyAgainstESI(ctx, allowance, characters, row.Kind, row.Key, row.Payload)
+		verdict, confirmed, stop := app.swarmVerifyAgainstESI(ctx, allowance, characters, row.Kind, row.Key, row.Payload)
 		if stop {
 			return applied, true
 		}
 		switch verdict {
 		case swarmCheckPass:
-			if err := app.applySwarmEntry(ctx, row.Kind, row.Key, row.Payload, swarmOrigin{source: row.Source, signer: row.Signer, fetchedAt: row.FetchedAt, verified: true}, now); err != nil {
+			if err := app.applySwarmEntry(ctx, row.Kind, row.Key, confirmed, swarmOrigin{source: row.Source, signer: row.Signer, fetchedAt: row.FetchedAt, verified: true}, now); err != nil {
 				logging.Errorf("swarm: apply %s %s: %v", row.Kind, row.Key, err)
 				continue
 			}
@@ -893,10 +893,11 @@ func (app *Application) swarmSpotCheck(ctx context.Context, allowance *fetchBudg
 			app.addSwarmCounter(ctx, swarmCounterSpotPassed, 1)
 			applied++
 		case swarmCheckFail:
-			app.discardSwarmEntry(ctx, row.Kind, row.Key, row.Signer)
+			app.discardSwarmEntry(ctx, row.Kind, row.Key, row.Signer, swarmDiscardMismatch)
 		default:
-			// Deferred: no scoped character, no overlapping
-			// history, a transient error — the row waits.
+			// Deferred: no scoped character, no span shared
+			// with ESI's history, a transient error — the
+			// row waits.
 		}
 	}
 	return applied, false
@@ -913,25 +914,29 @@ const (
 )
 
 // swarmVerifyAgainstESI re-fetches one staged entry's datum from
-// ESI and compares the slow-moving truth: exact overlap for
-// history and names, identity fields for records. stop reports
-// ESI's error-limit signal. Anything less than a clean fetch is
-// deferred, never failed — only ESI's own answer convicts.
-func (app *Application) swarmVerifyAgainstESI(ctx context.Context, allowance *fetchBudget, characters []db.Character, kind, key, payload string) (swarmCheckVerdict, bool) {
+// ESI and compares the slow-moving truth: the whole shared span
+// for history, the name for names, identity fields for records.
+// On a pass, confirmed is the payload to apply: the entry's own
+// for most kinds, and for history only the days ESI confirmed.
+// stop reports ESI's error-limit signal. Anything less than a
+// clean fetch is deferred, never failed — only ESI's own answer
+// convicts.
+func (app *Application) swarmVerifyAgainstESI(ctx context.Context, allowance *fetchBudget, characters []db.Character, kind, key, payload string) (verdict swarmCheckVerdict, confirmed string, stop bool) {
 	switch kind {
 	case swarmKindHistory:
 		return app.swarmVerifyHistory(ctx, allowance, key, payload)
 	case swarmKindTypeName:
-		return app.swarmVerifyTypeName(ctx, allowance, key, payload)
+		verdict, stop = app.swarmVerifyTypeName(ctx, allowance, key, payload)
 	case swarmKindCorporation:
-		return app.swarmVerifyCorporation(ctx, allowance, key, payload)
+		verdict, stop = app.swarmVerifyCorporation(ctx, allowance, key, payload)
 	case swarmKindAlliance:
-		return app.swarmVerifyAlliance(ctx, allowance, key, payload)
+		verdict, stop = app.swarmVerifyAlliance(ctx, allowance, key, payload)
 	case swarmKindStructure:
-		return app.swarmVerifyStructure(ctx, allowance, characters, key, payload)
+		verdict, stop = app.swarmVerifyStructure(ctx, allowance, characters, key, payload)
 	default:
-		return swarmCheckFail, false
+		return swarmCheckFail, "", false
 	}
+	return verdict, payload, stop
 }
 
 // swarmTake budgets one spot-check call: false means the cycle
@@ -940,59 +945,92 @@ func (app *Application) swarmTake(allowance *fetchBudget) bool {
 	return allowance.take()
 }
 
-func (app *Application) swarmVerifyHistory(ctx context.Context, allowance *fetchBudget, key, payload string) (swarmCheckVerdict, bool) {
+// swarmVerifyHistory checks one staged history entry against a
+// fresh ESI fetch, over the whole span the two share — not just
+// the days that happen to appear in both. Inside that span the
+// day sets must be identical and every figure equal: a staged
+// day ESI does not have was made up, and a day ESI has that the
+// entry leaves out was dropped. Days outside the span (ones ESI
+// has since let go of, or has not served this instance yet)
+// cannot be checked, so they are not applied: the payload
+// handed back holds only the days ESI confirmed. No shared span
+// verifies nothing and the entry waits.
+func (app *Application) swarmVerifyHistory(ctx context.Context, allowance *fetchBudget, key, payload string) (swarmCheckVerdict, string, bool) {
 	parts := strings.Split(key, "/")
 	if len(parts) != 2 {
-		return swarmCheckFail, false
+		return swarmCheckFail, "", false
 	}
 	regionID, ok := parseSwarmID(parts[0])
 	if !ok {
-		return swarmCheckFail, false
+		return swarmCheckFail, "", false
 	}
 	typeID, ok := parseSwarmID(parts[1])
 	if !ok {
-		return swarmCheckFail, false
+		return swarmCheckFail, "", false
 	}
 	var staged swarmHistoryPayload
 	dec := json.NewDecoder(strings.NewReader(payload))
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(&staged); err != nil {
-		return swarmCheckFail, false
+	if err := dec.Decode(&staged); err != nil || len(staged.Days) == 0 {
+		return swarmCheckFail, "", false
 	}
 	if !app.swarmTake(allowance) {
-		return swarmCheckDefer, false
+		return swarmCheckDefer, "", false
 	}
-	// Past days are immutable: every staged day ESI still shows
-	// must match exactly. Dates only the signer shows are its
-	// newer fetch, not a lie; dates only ESI shows are days the
-	// signer never stored. No overlap at all verifies nothing.
 	rows, err := app.fetchMarketHistory(ctx, marketKey{RegionID: regionID, TypeID: typeID})
 	if err != nil {
 		if errors.Is(err, esi.ErrErrorLimit) {
-			return swarmCheckDefer, true
+			return swarmCheckDefer, "", true
 		}
-		return swarmCheckDefer, false
+		return swarmCheckDefer, "", false
 	}
+	if len(rows) == 0 {
+		return swarmCheckDefer, "", false
+	}
+	// Dates are YYYY-MM-DD (checked at staging), so they order as text.
 	fresh := make(map[string]esi.MarketHistoryDay, len(rows))
+	lo, hi := rows[0].Date, rows[0].Date
 	for _, row := range rows {
 		fresh[row.Date] = row
+		lo, hi = min(lo, row.Date), max(hi, row.Date)
 	}
-	overlap := 0
+	stagedLo, stagedHi := staged.Days[0].Date, staged.Days[0].Date
 	for _, day := range staged.Days {
-		got, ok := fresh[day.Date]
-		if !ok {
+		stagedLo, stagedHi = min(stagedLo, day.Date), max(stagedHi, day.Date)
+	}
+	lo, hi = max(lo, stagedLo), min(hi, stagedHi)
+	if lo > hi {
+		return swarmCheckDefer, "", false
+	}
+	confirmed := swarmHistoryPayload{RegionID: staged.RegionID, TypeID: staged.TypeID}
+	for _, day := range staged.Days {
+		if day.Date < lo || day.Date > hi {
 			continue
 		}
-		overlap++
+		got, ok := fresh[day.Date]
+		if !ok {
+			logging.Warnf("swarm: check %s %s: the entry has %s, which ESI does not", swarmKindHistory, key, day.Date)
+			return swarmCheckFail, "", false
+		}
 		if got.Average != day.Average || got.Highest != day.Highest || got.Lowest != day.Lowest ||
 			got.Volume != day.Volume || got.OrderCount != day.OrderCount {
-			return swarmCheckFail, false
+			logging.Warnf("swarm: check %s %s: figures for %s differ from ESI", swarmKindHistory, key, day.Date)
+			return swarmCheckFail, "", false
+		}
+		confirmed.Days = append(confirmed.Days, day)
+		delete(fresh, day.Date)
+	}
+	for date := range fresh {
+		if date >= lo && date <= hi {
+			logging.Warnf("swarm: check %s %s: the entry leaves out %s, which ESI has", swarmKindHistory, key, date)
+			return swarmCheckFail, "", false
 		}
 	}
-	if overlap == 0 {
-		return swarmCheckDefer, false
+	raw, err := json.Marshal(confirmed)
+	if err != nil {
+		return swarmCheckDefer, "", false
 	}
-	return swarmCheckPass, false
+	return swarmCheckPass, string(raw), false
 }
 
 func (app *Application) swarmVerifyTypeName(ctx context.Context, allowance *fetchBudget, key, payload string) (swarmCheckVerdict, bool) {

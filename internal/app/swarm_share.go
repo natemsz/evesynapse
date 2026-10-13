@@ -311,6 +311,29 @@ const (
 	maxSwarmEntryAge = 90 * 24 * time.Hour
 )
 
+// swarmHistoryWindowDays is how far back from its fetch a
+// history entry's days are taken: the most one entry carries
+// (maxSwarmHistoryDays) plus a month of slack. Older rows are
+// left out of the apply; nothing a single fetch returns reaches
+// that far.
+const swarmHistoryWindowDays = maxSwarmHistoryDays + 31
+
+// swarmHistoryDayAfter finds a day in a history payload dated
+// after the fetch that is said to have returned it.
+func swarmHistoryDayAfter(payload string, fetchedAt time.Time) (string, bool) {
+	var body swarmHistoryPayload
+	if err := json.Unmarshal([]byte(payload), &body); err != nil {
+		return "", false
+	}
+	last := fetchedAt.UTC().Format(time.DateOnly)
+	for _, day := range body.Days {
+		if day.Date > last {
+			return day.Date, true
+		}
+	}
+	return "", false
+}
+
 // stageSwarmEntry verifies one pulled entry and stages it for a
 // spot check. The signature is checked against the signer's
 // pinned key, the payload is strictly decoded into its row
@@ -359,6 +382,14 @@ func (app *Application) stageSwarmEntry(ctx context.Context, entry swarmSignedEn
 	case now.Sub(fetchedAt) > maxSwarmEntryAge:
 		return fmt.Errorf("swarm: stage %s %s: fetched %s ago, too old to stage", entry.Kind, entry.Key, now.Sub(fetchedAt).Round(time.Hour))
 	}
+	if entry.Kind == swarmKindHistory {
+		// No fetch returns a day later than the day it ran: one
+		// in the entry is made up, under a good signature.
+		if day, bad := swarmHistoryDayAfter(entry.Payload, fetchedAt); bad {
+			app.countSwarmShapeReject(ctx, entry.Signer)
+			return fmt.Errorf("swarm: stage %s %s: day %s is after its own fetch on %s", entry.Kind, entry.Key, day, fetchedAt.Format(time.DateOnly))
+		}
+	}
 	if err := app.queries.StageSwarmEntry(ctx, db.StageSwarmEntryParams{
 		Kind: entry.Kind, Key: entry.Key, Payload: entry.Payload,
 		Signer: entry.Signer, Signature: entry.Signature,
@@ -403,10 +434,18 @@ func checkSwarmPayload(kind, key, payload string) error {
 		if len(body.Days) == 0 || len(body.Days) > maxSwarmHistoryDays {
 			return fmt.Errorf("swarm: stage %s %s: %d day rows", kind, key, len(body.Days))
 		}
+		// Every day is a real calendar date, written the one way
+		// the table writes it, and appears once: the date is the
+		// row's key, and everything later orders by it as text.
+		seen := make(map[string]bool, len(body.Days))
 		for _, day := range body.Days {
-			if day.Date == "" || day.Average < 0 || day.Highest < 0 || day.Lowest < 0 || day.Volume < 0 || day.OrderCount < 0 {
+			if day.Average < 0 || day.Highest < 0 || day.Lowest < 0 || day.Volume < 0 || day.OrderCount < 0 {
 				return fmt.Errorf("swarm: stage %s %s: malformed day row", kind, key)
 			}
+			if at, err := time.Parse(time.DateOnly, day.Date); err != nil || at.Format(time.DateOnly) != day.Date || seen[day.Date] {
+				return fmt.Errorf("swarm: stage %s %s: malformed or repeated day %q", kind, key, day.Date)
+			}
+			seen[day.Date] = true
 		}
 	case swarmKindTypeName:
 		typeID, ok := parseSwarmID(key)
@@ -509,7 +548,15 @@ func (app *Application) applySwarmEntry(ctx context.Context, kind, key, payload 
 		if err := dec.Decode(&body); err != nil {
 			return err
 		}
+		// Only days inside the window its fetch could have
+		// returned are written: none after the fetch, none
+		// further back than one fetch reaches.
+		first := stamp.AddDate(0, 0, -swarmHistoryWindowDays).Format(time.DateOnly)
+		last := stamp.Format(time.DateOnly)
 		for _, day := range body.Days {
+			if day.Date < first || day.Date > last {
+				continue
+			}
 			if err := app.queries.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
 				RegionID: body.RegionID, TypeID: body.TypeID, Date: day.Date,
 				Average: day.Average, Highest: day.Highest, Lowest: day.Lowest,
@@ -694,10 +741,21 @@ func (app *Application) swarmRollBackOne(ctx context.Context, row db.SwarmApplie
 	return n > 0, err
 }
 
+// Why a staged entry was discarded, for the log line: the count
+// on the Sync page alone cannot say which entry, or whether
+// anything was actually compared.
+const (
+	swarmDiscardMismatch = "it did not match ESI"
+	swarmDiscardAgedOut  = "it waited in staging past the age cap without a check"
+	swarmDiscardLowTrust = "its signer is under the trust floor"
+)
+
 // discardSwarmEntry drops one staged entry that failed its spot
 // check, and counts it against the signer. The row never reaches
 // the real tables: failed checks are discarded, never served.
-func (app *Application) discardSwarmEntry(ctx context.Context, kind, key, signer string) {
+// Every discard is logged with its entry, signer and reason.
+func (app *Application) discardSwarmEntry(ctx context.Context, kind, key, signer, reason string) {
+	logging.Warnf("swarm: discarded %s %s from %s: %s", kind, key, shortenSwarmID(signer), reason)
 	if err := app.queries.DeleteStagingEntry(ctx, db.DeleteStagingEntryParams{Kind: kind, Key: key}); err != nil {
 		logging.Errorf("swarm: discard %s %s: %v", kind, key, err)
 	}

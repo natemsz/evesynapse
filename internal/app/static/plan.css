@@ -51,10 +51,12 @@ it, inactive tabs recessed and muted. */
   position: relative;
   z-index: 1;
 }
-/* Planner header: product name left, ME + settings buttons right. */
-.plan-headrow { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; }
-.plan-headrow h3 { margin: 0; }
-.plan-headbtns { display: inline-flex; align-items: center; gap: 0.5rem; flex: none; }
+/* Planner header: the product name stands at full header size;
+   the From line and the action buttons share the row under it. */
+.plan-title { font-size: 1.55rem; margin: 0 0 0.15rem; }
+.plan-fromrow { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem 1rem; flex-wrap: wrap; }
+.plan-from { margin: 0.25rem 0; }
+.plan-headbtns { display: inline-flex; align-items: center; gap: 0.5rem; flex: none; margin-left: auto; }
 .plan-glyph { width: 1.3rem; height: 1.3rem; vertical-align: -0.25rem; }
 .plan-glyph-sm { width: 0.95rem; height: 0.95rem; vertical-align: -0.15rem; }
 /* Head icon buttons (settings, skills) are chrome, not actions:
@@ -71,7 +73,17 @@ it, inactive tabs recessed and muted. */
 #plan-settings-toggle:hover { border-color: #3a3a3a; background: rgba(255, 255, 255, 0.05); }
 .plan-has-tip { position: relative; display: inline-flex; align-items: center; }
 #plan-settings-toggle .plan-glyph { width: 1.4rem; height: 1.4rem; vertical-align: 0; }
-.plan-settings-fields p { margin: 0 0 0.6rem; }
+/* Build Settings modal: a uniform grid of labeled cells, the
+   same presentation as the Blueprint ME modal's cells. */
+.plan-setnote { margin: 0 0 0.7rem; color: var(--muted); }
+.plan-setgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr)); gap: 0.6rem 1rem; }
+.plan-setcell { display: flex; flex-direction: column; gap: 0.25rem; position: relative; font-size: 0.9rem; }
+.plan-setcell > span:first-child { color: var(--muted); font-size: 0.82rem; }
+.plan-setcell input, .plan-setcell select { width: 100%; box-sizing: border-box; }
+.plan-setcell .market-wrap, .plan-setcell .sys-wrap { position: relative; display: block; }
+.plan-setactions { margin: 0.9rem 0 0; text-align: right; }
+/* Short tooltips (Export CSV, Build Settings) hug their text. */
+.plan-tip-fit { width: max-content; max-width: 80vw; }
 /* Skills glyph: a skill-book with a check/X badge. The badge
 copies the notification count badge; the hover bubble copies
 the rail tooltip treatment. */
@@ -225,3 +237,6 @@ Depth indent lives on the card content (data-pad-left). */
   .plan-frow { grid-template-columns: 1fr; gap: 0.15rem; }
   .plan-grow { grid-template-columns: 1fr; }
 }
+/* The planner search sits in the shared panel: its row needs no
+   margin of its own inside it. */
+.searchpanel .plan-searchrow { margin: 0; }

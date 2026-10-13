@@ -1627,13 +1627,20 @@
   var sortSel = document.getElementById("fit-esi-sort");
   var list = document.getElementById("fit-esi-list");
   if (!q || !sortSel || !list) return;
+  var inc = document.getElementById("fit-esi-include");
+  var exc = document.getElementById("fit-esi-exclude");
   function apply() {
     var term = q.value.trim().toLowerCase();
+    var incTerm = inc ? inc.value.trim().toLowerCase() : "";
+    var excTerm = exc ? exc.value.trim().toLowerCase() : "";
     var secs = Array.prototype.slice.call(list.querySelectorAll(":scope > [data-fit-name]"));
     secs.forEach(function (s) {
       var name = (s.getAttribute("data-fit-name") || "").toLowerCase();
       var ship = (s.getAttribute("data-fit-ship") || "").toLowerCase();
+      var items = (s.getAttribute("data-fit-items") || "").toLowerCase();
       var hit = !term || name.indexOf(term) >= 0 || ship.indexOf(term) >= 0;
+      if (hit && incTerm) hit = items.indexOf(incTerm) >= 0;
+      if (hit && excTerm) hit = items.indexOf(excTerm) < 0;
       s.style.display = hit ? "" : "none";
     });
     var mode = sortSel.value;
@@ -1649,4 +1656,6 @@
   }
   q.addEventListener("input", apply);
   sortSel.addEventListener("change", apply);
+  if (inc) inc.addEventListener("input", apply);
+  if (exc) exc.addEventListener("input", apply);
 })();

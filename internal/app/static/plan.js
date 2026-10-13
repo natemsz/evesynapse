@@ -57,6 +57,14 @@ var P = null;             // payload
 var preset = "optimized";  // optimized | full | buycomp
 var overrides = {};       // path -> true (buy) | false (build)
 var collapsed = {};       // path -> true
+var pathAnc = {};         // paths on the selected node's ancestor chain
+var pathDesc = {};        // paths under the selected node
+var revealPath = null;    // a card to scroll into view after this render
+// The columnar map needs width; on narrow screens the tree keeps
+// the classic indented card stack instead.
+var narrowMQ = (typeof window !== "undefined" && window.matchMedia)
+  ? window.matchMedia("(max-width: 60rem)") : null;
+function listMode() { return !!(narrowMQ && narrowMQ.matches); }
 var selected = "0";       // path
 var serverMode = false;   // cross-check failed: server figures only
 var judgeDocWired = false; // one outside-click closer for every reboot
@@ -416,7 +424,7 @@ function subtreeSize(n) {
   return c;
 }
 
-function nodeCard(n, mask, elapsed, maxCost) {
+function nodeCard(n, mask, elapsed, maxCost, parentPath) {
   var d = decide(n, n.path === "0", mask);
   var buying = !n.build || d === "buy";
   var label = d === "have" ? "HAVE" : buying ? "BUY" : "BUILD";
@@ -433,10 +441,8 @@ function nodeCard(n, mask, elapsed, maxCost) {
   // Decision-map card: the face carries the verdict (state chip,
   // bottleneck flag, cost, and the branch's own facts), and the
   // proportional bar runs the card's full width under the text,
-  // scaled against its siblings and colored by the decision.
-  // Depth reads from the content indent (data-pad-left, applied
-  // by app.js through the CSSOM).
-  var pad = (n.depth || 0) * 22;
+  // scaled against the rest of its stage and colored by the
+  // decision. Depth reads from the stage column the card sits in.
   var risk = d === "build" && bottleneck(n, elapsed);
   var meta = "";
   if (d === "have") {
@@ -453,9 +459,16 @@ function nodeCard(n, mask, elapsed, maxCost) {
       (risk ? " plan-risk" : buying ? " plan-buy" : "") +
       '" data-w="' + pct + '"></div></div>';
   }
-  return '<div class="' + nodeClass(n, mask, elapsed) + '" data-path="' + esc(n.path) +
+  var cls = nodeClass(n, mask, elapsed);
+  if (pathAnc[n.path] || pathDesc[n.path]) cls += " plan-onpath";
+  // In list mode depth reads from the content indent (data-pad-
+  // left, applied by app.js through the CSSOM); in map mode the
+  // stage column carries depth and the card stays flush.
+  var pad = listMode() ? (n.depth || 0) * 22 : 0;
+  return '<div class="' + cls + '" data-path="' + esc(n.path) +
+    (parentPath != null ? '" data-parent="' + esc(parentPath) : "") +
     '" title="' + esc(nodeTitle(n)) + '" role="button" tabindex="0">' +
-    '<div class="plan-node-main" data-pad-left="' + pad + '">' +
+    '<div class="plan-node-main"' + (pad ? ' data-pad-left="' + pad + '"' : "") + '>' +
     '<div class="plan-node-top"><strong>' + esc(n.name) + "</strong>" +
     '<span class="plan-chips">' +
     (n.build && n.short > 0 && n.path !== "0"
@@ -486,22 +499,44 @@ function setAllCollapsed(on) {
   renderMap(currentTotals());
 }
 
-// One row per node: children follow as siblings, never nested
-// inside the parent card, so every row spans the same width and
-// the bar column lines up at the same x at every depth. Depth
-// reads from the label indent. Bars scale against siblings, so a
-// branch reads on its own terms.
-function renderNode(n, mask, elapsed, maxCost) {
+// The decision map is columnar, like the approved mockup: one
+// stage column per depth of the expanded tree, the root stage on
+// the left, inputs on the right. A node is visible when every
+// ancestor is expanded — the same rule the card stack used — and
+// bars scale against the most expensive card in their stage.
+function stageLabel(depth, anyKids) {
+  if (depth === 0) return "Final assembly";
+  if (!anyKids) return "Inputs";
+  if (depth === 1) return "Components";
+  return "Sub-components";
+}
+
+function computePathSets() {
+  pathAnc = {};
+  pathDesc = {};
+  if (!selected || !P) return;
+  var parts = selected.split(".");
+  for (var i = 1; i < parts.length; i++) pathAnc[parts.slice(0, i).join(".")] = true;
+  var sel = findNode(selected);
+  if (sel) (function walk(n) {
+    (n.kids || []).forEach(function (k) { pathDesc[k.path] = true; walk(k); });
+  })(sel);
+}
+
+// The narrow-screen renderer: one row per node, children as
+// siblings under their parent, depth from the content indent,
+// bars scaled against siblings. Same cards, same wiring.
+function renderNodeList(n, mask, elapsed, maxCost) {
   var kidsHTML = "";
   var kids = n.kids || [];
   if (kids.length && !collapsed[n.path]) {
     var m = 0;
     kids.forEach(function (k) { m = Math.max(m, nodeCost(k, mask)); });
     kidsHTML = '<div class="plan-kids">' + kids.map(function (k) {
-      return renderNode(k, mask, elapsed, m || 1);
+      return renderNodeList(k, mask, elapsed, m || 1);
     }).join("") + "</div>";
   }
-  return nodeCard(n, mask, elapsed, maxCost) + kidsHTML;
+  return nodeCard(n, mask, elapsed, maxCost, null) + kidsHTML;
 }
 
 function renderMap(t) {
@@ -509,13 +544,45 @@ function renderMap(t) {
   if (!host || !P) return;
   var mask = currentMask();
   var root = P.root;
-  host.innerHTML = renderNode(root, mask, t.elapsed, root.materials + root.job || 1);
+  computePathSets();
+  if (listMode()) {
+    host.innerHTML = renderNodeList(root, mask, t.elapsed, root.materials + root.job || 1);
+    wireMap(host);
+    return;
+  }
+  var stages = [];
+  (function walk(n, parent) {
+    var d = n.depth || 0;
+    (stages[d] = stages[d] || []).push({ n: n, parent: parent });
+    if (!collapsed[n.path]) (n.kids || []).forEach(function (k) { walk(k, n); });
+  })(root, null);
+  var html = '<div class="plan-map-cols">';
+  stages.forEach(function (list, depth) {
+    if (!list || !list.length) return;
+    var max = 0;
+    list.forEach(function (e) { max = Math.max(max, nodeCost(e.n, mask)); });
+    var anyKids = list.some(function (e) { return (e.n.kids || []).length; });
+    html += '<section class="plan-stage' + (list.length > 10 ? " plan-stage-dense" : "") +
+      '" data-depth="' + depth + '"><h4 class="plan-stage-label">' + stageLabel(depth, anyKids) +
+      '</h4><div class="plan-stage-cards">' +
+      list.map(function (e) { return nodeCard(e.n, mask, t.elapsed, max || 1, e.parent ? e.parent.path : null); }).join("") +
+      "</div></section>";
+  });
+  html += "</div>";
+  host.innerHTML = html;
+  wireMap(host);
+}
+
+// Event wiring shared by the column map and the narrow-screen
+// list: fold buttons, chip toggles, select, fold on double-click.
+function wireMap(host) {
   host.querySelectorAll("[data-plan-fold]").forEach(function (btn) {
     btn.addEventListener("click", function (ev) {
       ev.stopPropagation();
       var path = btn.getAttribute("data-plan-fold");
       if (collapsed[path]) delete collapsed[path];
       else collapsed[path] = true;
+      revealPath = path;
       renderMap(currentTotals());
     });
   });
@@ -552,12 +619,18 @@ function renderMap(t) {
       if (!n || n.path === "0" || !(n.kids || []).length) return;
       if (collapsed[n.path]) delete collapsed[n.path];
       else collapsed[n.path] = true;
+      revealPath = n.path;
       renderMap(currentTotals());
     });
     el.addEventListener("keydown", function (ev) {
       if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pick(ev); }
     });
   });
+  if (revealPath) {
+    var target = host.querySelector('[data-path="' + revealPath + '"]');
+    revealPath = null;
+    if (target && target.scrollIntoView) target.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
 }
 
 // --- inspector ---
@@ -1074,6 +1147,11 @@ function wireJudge() {
 
 function init() {
   wireStatic();
+  if (narrowMQ && narrowMQ.addEventListener) {
+    narrowMQ.addEventListener("change", function () {
+      if (P) renderMap(currentTotals());
+    });
+  }
   loadJSON().catch(function () {
     fail("The interactive views need the plan data; the figures above are current.");
   });

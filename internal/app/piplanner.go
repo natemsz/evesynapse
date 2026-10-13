@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"math"
 	"net/http"
 	"sort"
@@ -99,7 +98,7 @@ type piPlannerView struct {
 	MinimalText    string
 	SingleText     string
 	Graph          []piGraphCol
-	GraphJSON      template.JS
+	GraphJSON      string // the graph as JSON, carried on a data attribute (no inline <script>: CSP)
 	HasPlan        bool
 	PlanTarget     string
 	Lines          []piLineRow
@@ -436,7 +435,7 @@ func formatQty(f float64) string {
 // buildPIGraph shapes the five-tier dependency map. Chain nodes
 // (inputs of target) highlight; downstream consumers dim less;
 // everything else dims. Coverage tints raws/P1s.
-func buildPIGraph(target string, selected []string, prices map[string]float64, q map[string][]string) ([]piGraphCol, template.JS) {
+func buildPIGraph(target string, selected []string, prices map[string]float64, q map[string][]string) ([]piGraphCol, string) {
 	_ = q
 	chain := map[string]bool{}
 	for _, n := range piplan.ChainNodes(target) {
@@ -536,15 +535,11 @@ func buildPIGraph(target string, selected []string, prices map[string]float64, q
 		graph[name] = gnode{Name: name, Inputs: ins}
 	}
 	blob, _ := json.Marshal(graph)
-	return cols, template.JS(blob)
+	return cols, string(blob)
 }
 
 func piProfitableChains(prices map[string]float64, s piplan.Settings, q map[string][]string) []piProfitRow {
 	_ = q
-	type cand struct {
-		name string
-		plan *piplan.Plan
-	}
 	var rows []piProfitRow
 	for _, tier := range []piplan.Tier{piplan.TierP4, piplan.TierP3} {
 		for _, name := range piplan.ByTier(tier) {
@@ -562,7 +557,6 @@ func piProfitableChains(prices map[string]float64, s piplan.Settings, q map[stri
 				Name: name, Margin: fmt.Sprintf("%+.1f%%", plan.MarginWhole), MarginVal: plan.MarginWhole,
 				Profit: esi.FormatISK(plan.ProfitWhole), Class: cls,
 			})
-			_ = cand{}
 		}
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].MarginVal > rows[j].MarginVal })

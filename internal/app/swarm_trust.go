@@ -539,6 +539,13 @@ func (app *Application) swarmLearnMembers(ctx context.Context, members []swarmMe
 		if !validSwarmBaseURL(m.BaseURL) {
 			continue
 		}
+		// A loopback address is only ever one this instance was
+		// told to dial itself (a seed or a hand-added address in
+		// local development). A member list cannot introduce one.
+		if u, err := parseSwarmURL(m.BaseURL); err == nil && swarmHostIsLoopback(u.host) &&
+			strings.TrimSuffix(m.BaseURL, "/") != strings.TrimSuffix(dialURL, "/") {
+			continue
+		}
 		if raw, err := base64.StdEncoding.DecodeString(m.PublicKey); err != nil || len(raw) != ed25519.PublicKeySize {
 			continue
 		}

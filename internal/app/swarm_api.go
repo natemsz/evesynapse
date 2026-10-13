@@ -27,10 +27,13 @@ package app
 // server side is the app's own TLS terminator (or its loopback
 // listener), the client verifies certificates by default, and
 // the bearer check compares SHA-256 hashes in constant time.
-// Cleartext to a non-loopback host is refused on dial, so a
-// gossip-learned URL can never downgrade the secret onto the
-// wire. No handrolled crypto, no custom framing: JSON over
-// HTTPS, strict-decoded, size-capped.
+// The client refuses cleartext to anything but a loopback URL
+// before a request is built, and at the point of connection it
+// refuses any address that is not public and any redirect off
+// the host it asked (swarm_dial.go), so a gossip-learned URL
+// can neither downgrade the secret onto the wire nor aim a
+// request inward. No handrolled crypto, no custom framing:
+// JSON over HTTPS, strict-decoded, size-capped.
 // ---------------------------------------------------------------------------
 
 import (
@@ -321,14 +324,11 @@ func validSwarmBaseURL(raw string) bool {
 
 // swarmClient fetches from one peer: membership lists and
 // entries, over verifying TLS, with every response size-capped
-// and strictly decoded.
+// and strictly decoded. newSwarmClient (swarm_dial.go) builds
+// it with the guarded dialer and the same-host redirect rule.
 type swarmClient struct {
 	secret string
 	http   *http.Client
-}
-
-func newSwarmClient(secret string) *swarmClient {
-	return &swarmClient{secret: secret, http: &http.Client{Timeout: swarmHTTPTimeout}}
 }
 
 // swarmAuthedGET is one bearer-authenticated GET with a capped,

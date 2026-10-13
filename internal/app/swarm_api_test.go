@@ -44,7 +44,7 @@ func swarmTestPeer(t *testing.T, app *Application, id string) *swarmIdentity {
 	}
 	kp.id = id
 	now := time.Now().UTC()
-	if err := app.queries.UpsertSwarmPeer(context.Background(), db.UpsertSwarmPeerParams{
+	if _, err := app.queries.UpsertSwarmPeer(context.Background(), db.UpsertSwarmPeerParams{
 		InstanceID: id, BaseUrl: "http://127.0.0.1:9", PublicKey: kp.publicString(),
 		Source: "manual", FirstSeen: now,
 	}); err != nil {
@@ -122,7 +122,7 @@ func TestSwarmMembersSealed(t *testing.T) {
 	app := swarmTestApp(t)
 	ctx := context.Background()
 	now := time.Now().UTC()
-	if err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
+	if _, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
 		InstanceID: "peer-hidden-1", BaseUrl: "https://hidden-peer.example.org/",
 		PublicKey: strings.Repeat("A", 44), Source: "gossip", FirstSeen: now,
 	}); err != nil {

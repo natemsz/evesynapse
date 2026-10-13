@@ -36,10 +36,12 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -149,9 +151,12 @@ func (app *Application) handleSwarmMembers(w http.ResponseWriter, r *http.Reques
 // the key proves possession from here on. What verifies files
 // through the gossip path (key pinning, approval mode,
 // exclusion untouched), so a registering peer lands exactly
-// where a gossip sighting would put it. Anything else is a
-// bad request; a heartbeat from this instance itself is kept
-// as a no-op answer, not a peer row.
+// where a gossip sighting would put it: a first heartbeat
+// pins its key, a later one under that key may move its
+// address, and one under any other key is a conflict (409),
+// refused and flagged. Anything else is a bad request; a
+// heartbeat from this instance itself is kept as a no-op
+// answer, not a peer row.
 func (app *Application) handleSwarmSeedRegister(w http.ResponseWriter, r *http.Request) {
 	if !app.cfg.swarm.enabled() || app.swarmID == nil {
 		http.NotFound(w, r)
@@ -185,7 +190,7 @@ func (app *Application) handleSwarmSeedRegister(w http.ResponseWriter, r *http.R
 		return
 	}
 	raw, err := base64.StdEncoding.DecodeString(payload.PublicKey)
-	if err != nil || len(raw) != 32 {
+	if err != nil || len(raw) != ed25519.PublicKeySize {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
@@ -200,6 +205,13 @@ func (app *Application) handleSwarmSeedRegister(w http.ResponseWriter, r *http.R
 			InstanceID: entry.Signer, BaseURL: payload.BaseURL, PublicKey: payload.PublicKey,
 		}}
 		if err := app.swarmLearnMembers(ctx, members, entry.Signer, payload.PublicKey, "", "gossip", now); err != nil {
+			if errors.Is(err, errSwarmKeyChanged) {
+				// Registered before under another key: the
+				// pinned one stays, and the sender is told
+				// its heartbeat was not filed.
+				http.Error(w, "conflict", http.StatusConflict)
+				return
+			}
 			logging.Errorf("swarm: learn seed registration: %v", err)
 			http.Error(w, "bad gateway", http.StatusBadGateway)
 			return

@@ -347,7 +347,7 @@ func TestSwarmSeedRegisterRejects(t *testing.T) {
 
 // TestSwarmSeedRegisterNeverForgives: re-registering cannot
 // approve or re-admit an excluded peer; the upsert only moves
-// address, key, and last-seen.
+// address and last-seen.
 func TestSwarmSeedRegisterNeverForgives(t *testing.T) {
 	ctx := context.Background()
 	app := swarmTestApp(t)

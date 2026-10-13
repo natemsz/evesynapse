@@ -45,7 +45,7 @@ func TestSwarmSeedPeerShowsSeed(t *testing.T) {
 		{"seed", "https://directory.example", "gossip"},
 		{"peer-data-1", "https://node.example", "gossip"},
 	} {
-		if err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
+		if _, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
 			InstanceID: peer.id, BaseUrl: peer.url,
 			PublicKey: strings.Repeat("A", 44), Source: peer.source, FirstSeen: now,
 		}); err != nil {
@@ -96,7 +96,7 @@ func TestSwarmAdminRoleColumn(t *testing.T) {
 		{"seed-1", "https://seed.example", "seed"},
 		{"peer-data-1", "https://node.example", "gossip"},
 	} {
-		if err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
+		if _, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
 			InstanceID: peer.id, BaseUrl: peer.url,
 			PublicKey: strings.Repeat("A", 44), Source: peer.source, FirstSeen: now,
 		}); err != nil {
@@ -137,7 +137,7 @@ func TestSwarmAdminActions(t *testing.T) {
 	app, cookie := swarmPageApp(t)
 	ctx := context.Background()
 	now := time.Now().UTC()
-	if err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
+	if _, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
 		InstanceID: "peer-action-1", BaseUrl: "http://127.0.0.1:9",
 		PublicKey: strings.Repeat("A", 44), Source: "gossip", FirstSeen: now,
 	}); err != nil {
@@ -247,7 +247,7 @@ func TestSwarmSyncCardEnabled(t *testing.T) {
 	app.swarmCli = newSwarmClient(swarmTestSecret)
 	ctx := context.Background()
 	now := time.Now().UTC()
-	if err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
+	if _, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
 		InstanceID: "peer-shown-12", BaseUrl: "http://127.0.0.1:9",
 		PublicKey: strings.Repeat("A", 44), Source: "seed", FirstSeen: now,
 	}); err != nil {
@@ -282,4 +282,31 @@ func TestSwarmSyncCardEnabled(t *testing.T) {
 	if strings.Contains(body, "127.0.0.1:9") {
 		t.Fatalf("/admin/: page leaks the peer address")
 	}
+}
+
+// TestSwarmAdminShowsRefusedKey: a peer that had another key
+// refused says so on its Admin row, so the operator knows which
+// instance to look at.
+func TestSwarmAdminShowsRefusedKey(t *testing.T) {
+	app, cookie := swarmPageApp(t)
+	app.cfg.swarm = swarmConfig{mode: swarmOpen, secret: swarmTestSecret, gossipHours: defaultSwarmGossipHours}
+	ctx := context.Background()
+	now := time.Date(2026, 10, 13, 9, 0, 0, 0, time.UTC)
+	if _, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
+		InstanceID: "peer-flagged-1", BaseUrl: "https://node.example",
+		PublicKey: strings.Repeat("A", 44), Source: "manual", FirstSeen: now,
+	}); err != nil {
+		t.Fatalf("upsert peer: %v", err)
+	}
+	_, body := getPage(t, app, cookie, "/admin/")
+	if strings.Contains(body, "another key was refused") {
+		t.Fatalf("/admin/ shows a refused key before one was refused")
+	}
+	if err := app.queries.FlagSwarmPeerKeyConflict(ctx, db.FlagSwarmPeerKeyConflictParams{
+		InstanceID: "peer-flagged-1", KeyConflictAt: timeSet(now),
+	}); err != nil {
+		t.Fatalf("flag peer: %v", err)
+	}
+	_, body = getPage(t, app, cookie, "/admin/")
+	mustContain(t, "/admin/", body, "another key was refused on 2026-10-13")
 }

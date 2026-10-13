@@ -115,7 +115,7 @@ func newSwarmPair(t *testing.T, modeB string) *swarmPair {
 func (p *swarmPair) pinA(t *testing.T) {
 	t.Helper()
 	now := time.Now().UTC()
-	if err := p.b.queries.UpsertSwarmPeer(context.Background(), db.UpsertSwarmPeerParams{
+	if _, err := p.b.queries.UpsertSwarmPeer(context.Background(), db.UpsertSwarmPeerParams{
 		InstanceID: "instance-a", BaseUrl: p.urlA, PublicKey: p.a.swarmID.publicString(),
 		Source: "manual", FirstSeen: now,
 	}); err != nil {
@@ -281,7 +281,7 @@ func TestSwarmPullSkipsSeeds(t *testing.T) {
 	t.Cleanup(seed.Close)
 	// A serves data AND is a configured seed directory: still pulled.
 	p.b.cfg.swarm.seeds = []string{p.urlA}
-	if err := p.b.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
+	if _, err := p.b.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
 		InstanceID: "seed", BaseUrl: seed.URL, PublicKey: strings.Repeat("A", 44),
 		Source: "seed", FirstSeen: now,
 	}); err != nil {

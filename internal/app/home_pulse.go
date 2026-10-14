@@ -336,7 +336,7 @@ type pulseWidget struct {
 // endpoint the pulse reads.
 var (
 	pulseMemberRoles    = []string{"Director", "Personnel_Manager"}
-	pulseWalletRoles    = []string{"Director", "Accountant", "Junior Accountant"}
+	pulseWalletRoles    = []string{"Director", "Accountant", "Junior_Accountant"}
 	pulseStructureRoles = []string{"Director", "Station_Manager"}
 )
 

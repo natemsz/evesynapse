@@ -1,10 +1,11 @@
 // pi.js — PI Planner map interactions. Server renders the plan;
-// this file only moves the highlight and navigates picks. It
-// duplicates no money or factory formula: amounts, factories and
-// taxes always come from the server render. The coverage verdict
-// and tinting mirror the server's raw-availability check live, so
-// ticking planets never leaves the page arguing with itself;
-// Recalculate remains the source of truth for the money.
+// this file only moves the highlight and navigates picks. Amounts,
+// factories and taxes always come from the server render. One
+// formula is mirrored, on purpose: the coverage verdict and tinting
+// recompute piplan.CoverageFor (internal/piplan/piplan.go) live, so
+// ticking planets never leaves the page arguing with itself. A
+// change to either side must change both. Recalculate remains the
+// source of truth for the money.
 (function () {
   "use strict";
   var graphEl = document.getElementById("pi-graph-data");

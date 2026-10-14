@@ -41,6 +41,11 @@ type piGraphNode struct {
 	Class   string // selected|input|output|dimmed|covered|missing
 	Planets string // planet types yielding it (raws) or ""
 	Price   string
+	// On names where a chain node is made: for a raw or a P1, the
+	// selected planet types that supply it (every source when none
+	// does); for a factory product, the planets its facility may
+	// stand on. Empty off the chain.
+	On string
 }
 
 type piGraphCol struct {
@@ -141,7 +146,9 @@ func (app *Application) handlePIPlanner(w http.ResponseWriter, r *http.Request) 
 	view := &piPlannerView{Targets: piplan.AllTargets()}
 	data.PIPlanner = view
 
-	// Target: ?product= name (also accept ?target=).
+	// Target: ?product= is the page's one parameter (its form field,
+	// pi.js and every link in). ?target= is still read for links
+	// made before that was settled.
 	target := strings.TrimSpace(q.Get("product"))
 	if target == "" {
 		target = strings.TrimSpace(q.Get("target"))
@@ -178,12 +185,18 @@ func (app *Application) handlePIPlanner(w http.ResponseWriter, r *http.Request) 
 	}
 	view.TaxStr = strconv.FormatFloat(view.TaxPct, 'f', -1, 64)
 
-	// Selected planets: explicit ?planets= wins (form checkboxes
-	// repeat the key; links may comma-join it; a present-but-empty
-	// value means "none ticked"); else owned types; else the
-	// minimal cover for the target.
+	// Selected planets: ?cover=1 (a product just picked) ticks the
+	// minimal cover for the target, so the page shows which planet
+	// types that product needs; else explicit ?planets= wins (form
+	// checkboxes repeat the key; links may comma-join it; a
+	// present-but-empty value means "none ticked"); else owned
+	// types; else the minimal cover.
 	selected := map[string]bool{}
-	if _, explicit := q["planets"]; explicit {
+	if q.Get("cover") == "1" {
+		for _, p := range piplan.MinimalPlanets(target) {
+			selected[p] = true
+		}
+	} else if _, explicit := q["planets"]; explicit {
 		for _, raw := range q["planets"] {
 			for _, p := range strings.Split(raw, ",") {
 				if p = strings.TrimSpace(p); p != "" {
@@ -507,6 +520,9 @@ func buildPIGraph(target string, selected []string, prices map[string]float64) (
 		if piplan.TierOf(name) == piplan.TierRaw {
 			n.Planets = strings.Join(piplan.RawSources[name], ", ")
 		}
+		if name == target || chain[name] {
+			n.On = piProducedOn(name, selected)
+		}
 		return n
 	}
 	cols := []piGraphCol{
@@ -521,10 +537,24 @@ func buildPIGraph(target string, selected []string, prices map[string]float64) (
 	for _, p := range selected {
 		sel[p] = true
 	}
+	// A planet type that yields any raw on the chain is a source
+	// for it, ticked or not, so the column shows every planet the
+	// target could be made from beside the ones selected.
+	source := map[string]bool{}
+	for _, raw := range piplan.RequiredRaws(target) {
+		for _, p := range piplan.RawSources[raw] {
+			source[p] = true
+		}
+	}
 	for _, pt := range piplan.PlanetTypes {
 		cls := "dimmed"
 		if sel[pt] {
 			cls = "covered"
+		} else if source[pt] {
+			cls = "source"
+		}
+		if source[pt] {
+			cls += " can-supply"
 		}
 		cols[0].Nodes = append(cols[0].Nodes, piGraphNode{Name: pt, Tier: "Planet", Class: cls})
 	}
@@ -580,4 +610,38 @@ func piProfitableChains(prices map[string]float64, s piplan.Settings) []piProfit
 		rows[i].URL = "/industry/pi/?product=" + strings.ReplaceAll(rows[i].Name, " ", "+")
 	}
 	return rows
+}
+
+// piProducedOn names the planet types a chain node is made on (see
+// piGraphNode.On). pi.js recomputes the same line live as planets
+// are ticked: a change to either side must change both.
+func piProducedOn(name string, selected []string) string {
+	raw := ""
+	switch piplan.TierOf(name) {
+	case piplan.TierRaw:
+		raw = name
+	case piplan.TierP1:
+		raw, _ = piplan.RawForP1(name)
+	default:
+		if sch, ok := piplan.Schematics[name]; ok {
+			if only := piplan.FactoryPlanetOnly(sch.Facility); only != "Any" {
+				return "factory on " + only
+			}
+		}
+		return "factory on any planet"
+	}
+	sel := map[string]bool{}
+	for _, p := range selected {
+		sel[p] = true
+	}
+	var on []string
+	for _, p := range piplan.RawSources[raw] {
+		if sel[p] {
+			on = append(on, p)
+		}
+	}
+	if len(on) == 0 {
+		on = piplan.RawSources[raw]
+	}
+	return "on " + strings.Join(on, ", ")
 }

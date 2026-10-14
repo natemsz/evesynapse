@@ -243,7 +243,7 @@ test("PI leaf cards carry the origin line and the PI planner link", async functi
   const map = els["plan-map"].innerHTML;
   assert.ok(map.indexOf("Planetary interaction") !== -1, "origin line names PI");
   assert.ok(map.indexOf("P2") !== -1, "origin line carries the tier");
-  assert.ok(map.indexOf("/industry/pi/?target=") !== -1, "origin line links to the PI planner recipe");
+  assert.ok(map.indexOf("/industry/pi/?product=") !== -1, "origin line links to the PI planner by its product parameter");
 });
 
 test("a plan that buys the product says so, with no saving line", async function () {

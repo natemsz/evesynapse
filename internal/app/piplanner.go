@@ -120,7 +120,7 @@ type piPlannerView struct {
 
 func (app *Application) handlePIPlanner(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
+	data := app.publicPage(ctx) // public: no session needed
 
 	_, active, links, err := app.pickCharacter(ctx, r, "/industry/pi/")
 	if err != nil {

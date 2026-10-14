@@ -240,7 +240,7 @@ func (app *Application) handlePlannerSuggest(w http.ResponseWriter, r *http.Requ
 
 func (app *Application) handlePlanner(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
+	data := app.publicPage(ctx) // public: no session needed
 	view := &plannerView{}
 	data.Planner = view
 

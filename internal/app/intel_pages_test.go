@@ -410,3 +410,24 @@ func TestUserCorporationIDsAreScopedToTheUser(t *testing.T) {
 		t.Fatalf("corporation lookup made %d outbound calls, want 0", got)
 	}
 }
+
+// TestPublicToolsNeedNoSession: the build planner, the PI planner and
+// the Intel pages answer visitors without a session; the Industry
+// overview still sends them to sign in.
+func TestPublicToolsNeedNoSession(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, _ := buildCorpTestApp(t, transport)
+	for _, path := range []string{"/planner/", "/industry/pi/", "/intel/wars/", "/intel/incursions/", "/intel/fw/"} {
+		code, body := getSwapPage(t, app, nil, path)
+		if code != http.StatusOK {
+			t.Errorf("%s without a session: status %d, want 200", path, code)
+			continue
+		}
+		if !strings.Contains(body, "Not signed in") {
+			t.Errorf("%s without a session renders as signed in", path)
+		}
+	}
+	if code, _ := getSwapPage(t, app, nil, "/industry/"); code != http.StatusSeeOther {
+		t.Errorf("/industry/ without a session: status %d, want 303 to sign in", code)
+	}
+}

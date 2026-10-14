@@ -731,20 +731,25 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/", app.handleContracts)
 	})
 
+	// Public tools: the build planner, the PI planner and the Intel
+	// pages render from static and public data, so visitors without
+	// a session use them too (throttled per address; a build plan
+	// can be large, so the planner shares the simulator's tighter
+	// allowance). A signed-in visitor also gets their own characters'
+	// stock, blueprints, skills and colonies. The Industry overview
+	// stays signed-in only.
 	r.Route("/industry", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleIndustry)
-		r.Get("/pi/", app.handlePIPlanner)
+		r.With(app.requireAuth).Get("/", app.handleIndustry)
+		r.With(anonPages).Get("/pi/", app.handlePIPlanner)
 	})
 
 	r.Route("/planner", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handlePlanner)
-		r.Get("/suggest", app.handlePlannerSuggest)
+		r.With(anonSim).Get("/", app.handlePlanner)
+		r.With(anonPages).Get("/suggest", app.handlePlannerSuggest)
 	})
 
 	r.Route("/intel", func(r chi.Router) {
-		r.Use(app.requireAuth)
+		r.Use(anonPages)
 		r.Get("/wars/", app.handleIntelWars)
 		r.Get("/incursions/", app.handleIntelIncursions)
 		r.Get("/fw/", app.handleIntelFW)

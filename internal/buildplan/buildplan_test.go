@@ -583,6 +583,34 @@ func TestPlanResearchSaving(t *testing.T) {
 	if !res.Root.ResearchKnown || res.Root.ResearchSaving != 0 {
 		t.Errorf("researched root saving: got %v (known %v), want 0/true", res.Root.ResearchSaving, res.Root.ResearchKnown)
 	}
+	// A fully researched blueprint in a rigged structure: ten runs
+	// consume ceil(100 x 0.9 x 0.958) = 87 mineral and 18
+	// components, and ME10 is what it already has. The saving is
+	// zero, never negative (it was (87 - 90) x 10 = -30 while the
+	// ME10 side ignored the rig).
+	rigged := Input{
+		Runs: 10, Prices: prices, MEOverride: map[int64]int{2001: 10}, FacilityMatFactor: 0.958,
+	}
+	res, err = Build(fixtureRecipes(), 1001, rigged)
+	if err != nil {
+		t.Fatalf("buildPlan: %v", err)
+	}
+	if !res.Root.ResearchKnown || res.Root.ResearchSaving != 0 {
+		t.Errorf("ME10 root in a rigged structure: saving %v (known %v), want 0/true", res.Root.ResearchSaving, res.Root.ResearchKnown)
+	}
+	// The unresearched component under it runs 18 times in the
+	// same structure: ceil(90 x 0.958) = 87 mineral now,
+	// ceil(90 x 0.9 x 0.958) = 78 at ME10, so research saves nine
+	// units, 90 ISK.
+	comp = findPlanNode(res.Root, 1002)
+	if !comp.ResearchKnown || comp.ResearchSaving != 90 {
+		t.Errorf("ME0 component in a rigged structure: saving %v (known %v), want 90/true", comp.ResearchSaving, comp.ResearchKnown)
+	}
+	Walk(res.Root, func(n *Node) {
+		if n.ResearchSaving < 0 {
+			t.Errorf("node %d: negative research saving %v", n.TypeID, n.ResearchSaving)
+		}
+	})
 	// No prices: the saving is unknown, never a zero.
 	res, err = Build(fixtureRecipes(), 1001, Input{Runs: 1})
 	if err != nil {

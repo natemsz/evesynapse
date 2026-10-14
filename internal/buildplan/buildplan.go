@@ -592,7 +592,16 @@ func (b *builder) expand(typeID int64, bp *Blueprint, depth int, basePerRun, req
 			continue
 		}
 		unit := child.LineCost / float64(child.RequiredQty)
-		node.ResearchSaving += float64(qty-MaterialForRuns(mats[i].Quantity, node.Runs, 10)) * unit
+		// Both sides of the comparison are what this facility
+		// would consume: the quantity at the blueprint's ME and
+		// at ME10, each under the same structure and rig bonus.
+		// (Comparing a rigged quantity with an unrigged ME10 one
+		// made a fully researched blueprint in a rigged
+		// structure show a negative saving.) Research never
+		// costs materials, so a line cannot save less than zero.
+		if spare := qty - MaterialForRunsFactored(mats[i].Quantity, node.Runs, 10, b.matFactor); spare > 0 {
+			node.ResearchSaving += float64(spare) * unit
+		}
 	}
 	if node.JobKnown {
 		node.JobCost = JobFee(eiv, b.costIndex, b.costFactor, b.facilityTax, b.alphaClone)

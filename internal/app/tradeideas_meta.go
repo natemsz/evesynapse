@@ -45,8 +45,12 @@ type metaAIContent struct {
 // metaAIResponse is the Responses API envelope, decoded leniently:
 // the answer is every output_text part of every output message, and
 // a top-level output_text (the convenience field some responses
-// carry) is read when no parts are.
+// carry) is read when no parts are. A status other than "completed"
+// (an answer cut off at its token limit, a failed run) is refused
+// even when it carries some text: half an analysis must not replace
+// a whole one.
 type metaAIResponse struct {
+	Status string `json:"status"`
 	Output []struct {
 		Type    string `json:"type"`
 		Content []struct {
@@ -107,6 +111,9 @@ func callMetaAI(ctx context.Context, client *http.Client, apiBase, apiKey, model
 	}
 	if decodeErr != nil {
 		return "", fmt.Errorf("meta ai: decode response: %w", decodeErr)
+	}
+	if decoded.Status != "" && decoded.Status != "completed" {
+		return "", fmt.Errorf("meta ai: response %s", clip(decoded.Status, 40))
 	}
 	var answer strings.Builder
 	for _, out := range decoded.Output {

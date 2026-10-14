@@ -39,7 +39,8 @@ func TestCallMetaAIRequestAndAnswer(t *testing.T) {
 	}
 	if sent.Model != metaAIModel || sent.Stream || len(sent.Input) != 1 || sent.Input[0].Role != "user" ||
 		len(sent.Input[0].Content) != 1 || sent.Input[0].Content[0].Type != "input_text" ||
-		!strings.Contains(sent.Input[0].Content[0].Text, "Tritanium") {
+		!strings.Contains(sent.Input[0].Content[0].Text, "Tritanium") ||
+		!strings.HasPrefix(sent.Input[0].Content[0].Text, "You are a trade analyst for the video game EVE Online.") {
 		t.Fatalf("request = %+v", sent)
 	}
 }
@@ -53,6 +54,10 @@ func TestCallMetaAIFailures(t *testing.T) {
 		"status":    {code: http.StatusUnauthorized, reply: `{"error":{"message":"bad key"}}`},
 		"no answer": {reply: `{"output":[]}`},
 		"not json":  {reply: `<html>`},
+		// Cut off at the token limit: some text, but not the whole answer.
+		"incomplete": {reply: `{"status":"incomplete","output":[{"type":"message","content":[{"type":"output_text","text":"### Station Fl"}]}]}`},
+		// A refusal carries no output_text part at all.
+		"refusal": {reply: `{"status":"completed","output":[{"type":"message","content":[{"type":"refusal","refusal":"no"}]}]}`},
 	} {
 		_, err := callMetaAI(ctx, &http.Client{Transport: stub}, metaAIAPIBase, "meta-test-key", metaAIModel, "hi", 100)
 		if err == nil {

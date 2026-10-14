@@ -2,6 +2,7 @@ package piplan
 
 import (
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -159,5 +160,121 @@ func TestPlanUsesGivenVolumes(t *testing.T) {
 	}
 	if math.Abs(got["Electrolytes"]-1920*0.19) > 1e-9 {
 		t.Errorf("Electrolytes volume = %v m3, want the built-in 1920 x 0.19", got["Electrolytes"])
+	}
+}
+
+// TestRawExtractedOnOnePlanet: when two planets of the suggested
+// cover both yield a raw the chain needs, its extractors are
+// counted on one of them, once. Checked for every product, and
+// at least one product must actually have such a shared raw.
+func TestRawExtractedOnOnePlanet(t *testing.T) {
+	s := Settings{Hours: 24, HeadsPerECU: 10, ECUYield: 12000}
+	sawShared := false
+	for _, target := range AllTargets() {
+		plan, err := PlanFor(target, 10, s, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", target, err)
+		}
+		cover := MinimalPlanets(target)
+		for _, ln := range plan.ByTier[TierRaw] {
+			yielding := 0
+			for _, pt := range cover {
+				for _, raw := range PlanetYields[pt] {
+					if raw == ln.Name {
+						yielding++
+					}
+				}
+			}
+			if yielding > 1 {
+				sawShared = true
+			}
+			colonies := 0
+			for _, c := range plan.Colonies {
+				if c.Role != "Extractor" {
+					continue
+				}
+				for _, part := range c.Breakdown {
+					if strings.HasPrefix(part, ln.Name+": ") && strings.Contains(part, "ECU") {
+						colonies++
+					}
+				}
+			}
+			if colonies != 1 {
+				t.Errorf("%s: %s is extracted on %d colonies (cover %v yields it %d times), want 1",
+					target, ln.Name, colonies, cover, yielding)
+			}
+		}
+	}
+	if !sawShared {
+		t.Fatal("no product has a raw yielded by two planets of its cover: the test checks nothing")
+	}
+}
+
+// TestExtractorColonyLoad pins one colony's arithmetic: a raw
+// needed at 24,000 an hour with 12,000 per ECU is two ECUs of
+// ten heads, on one planet.
+func TestExtractorColonyLoad(t *testing.T) {
+	// 80 Water an hour needs 12,000 Aqueous Liquids an hour: 1920 Water over 24h.
+	plan, err := PlanFor("Water", 3840, Settings{Hours: 24, HeadsPerECU: 10, ECUYield: 12000}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var extractors []ColonyPlan
+	for _, c := range plan.Colonies {
+		if c.Role == "Extractor" {
+			extractors = append(extractors, c)
+		}
+	}
+	if len(extractors) != 1 {
+		t.Fatalf("%d extractor colonies for a one-raw chain, want 1", len(extractors))
+	}
+	// 3840 Water = 192 cycles x 3000 = 576,000 raw over 24h = 24,000/hr -> 2 ECUs.
+	ecu, head := Facilities["Extractor Control Unit"], Facilities["Extractor Head"]
+	basic, launch := Facilities["Basic Industry Facility"], Facilities["Launchpad"]
+	// 3840/24 = 160 Water/hr; a Basic makes 40/hr -> 4 factories.
+	wantCPU := 2*(ecu.CPU+10*head.CPU) + 4*basic.CPU + launch.CPU
+	if extractors[0].CPUUsed != wantCPU {
+		t.Fatalf("colony CPU = %d, want %d (2 ECUs of 10 heads, 4 Basic, 1 Launchpad)", extractors[0].CPUUsed, wantCPU)
+	}
+}
+
+// TestProfitIsAfterPOCOTax: the profit figures pay the taxes
+// shown beside them. Worked example, 240 Coolant at 10%:
+//
+//	export  240 x 7,200 x 10%            = 172,800
+//	import  3,840 P1 x 400 x 10% x 0.5   =  76,800
+//
+// The whole chain and the direct step import the same P1 here,
+// so both pay 249,600 in tax.
+func TestProfitIsAfterPOCOTax(t *testing.T) {
+	prices := map[string]float64{
+		"Coolant": 10000, "Water": 300, "Electrolytes": 300,
+		"Aqueous Liquids": 1, "Ionic Solutions": 1,
+	}
+	plan, err := PlanFor("Coolant", 240, Settings{Hours: 24, TaxRate: 0.10}, prices)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.ExportTax != 172800 || plan.ImportTax != 76800 || plan.StepImportTax != 76800 {
+		t.Fatalf("taxes: export %v import %v step import %v", plan.ExportTax, plan.ImportTax, plan.StepImportTax)
+	}
+	// Revenue 2,400,000. Raw: 576,000 units at 1 ISK. Step: 3,840 P1 at 300.
+	if want := 2400000.0 - 576000 - 172800 - 76800; plan.ProfitWhole != want {
+		t.Errorf("whole-chain profit = %v, want %v (after both taxes)", plan.ProfitWhole, want)
+	}
+	if want := 2400000.0 - 1152000 - 172800 - 76800; plan.ProfitStep != want {
+		t.Errorf("step profit = %v, want %v (after both taxes)", plan.ProfitStep, want)
+	}
+	if want := plan.ProfitWhole / 2400000 * 100; math.Abs(plan.MarginWhole-want) > 1e-9 {
+		t.Errorf("whole-chain margin = %v, want %v", plan.MarginWhole, want)
+	}
+
+	// With no tax the profit is plain revenue less inputs.
+	untaxed, err := PlanFor("Coolant", 240, Settings{Hours: 24}, prices)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if untaxed.ProfitWhole != 2400000-576000 || untaxed.ProfitStep != 2400000-1152000 {
+		t.Errorf("untaxed profit: whole %v step %v", untaxed.ProfitWhole, untaxed.ProfitStep)
 	}
 }

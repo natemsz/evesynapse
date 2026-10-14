@@ -72,10 +72,10 @@
   <div class="plan-stats">
     <div><span class="plan-k">Sell value</span><strong>{{.PIPlanner.Revenue}}</strong><br><small>{{.PIPlanner.Amount}} × {{.PIPlanner.Target}}</small></div>
     <div><span class="plan-k">Raw (R0) cost</span><strong>{{.PIPlanner.RawCost}}</strong><br><small>whole chain, buy R0</small></div>
-    <div><span class="plan-k">Whole-chain profit</span><strong class="{{.PIPlanner.ProfitWholeCls}}">{{.PIPlanner.ProfitWhole}}</strong><br><small>{{.PIPlanner.MarginWhole}} margin</small></div>
+    <div><span class="plan-k">Whole-chain profit</span><strong class="{{.PIPlanner.ProfitWholeCls}}">{{.PIPlanner.ProfitWhole}}</strong><br><small>{{.PIPlanner.MarginWhole}} margin, after POCO taxes</small></div>
     <div><span class="plan-k">POCO taxes</span><strong>{{.PIPlanner.ExportTax}}</strong><br><small>export final · import ≈ {{.PIPlanner.ImportTax}}</small></div>
   </div>
-  <p><small>Direct-step check: buying only the target's immediate inputs costs {{.PIPlanner.StepCost}} (profit {{.PIPlanner.ProfitStep}}, {{.PIPlanner.MarginStep}}). Whole-chain counts every raw at market; step counts one tier. Both ignore hauling and extractor opportunity cost — compare before committing planets.</small></p>
+  <p><small>Direct-step check: buying only the target's immediate inputs costs {{.PIPlanner.StepCost}} (profit {{.PIPlanner.ProfitStep}} after POCO taxes, {{.PIPlanner.MarginStep}}). Whole-chain counts every raw at market; step counts one tier. Both ignore hauling and extractor opportunity cost — compare before committing planets.</small></p>
 </section>
 
 <div class="tw">
@@ -103,7 +103,7 @@
 
 {{if .PIPlanner.Profitable}}
 <section class="foldable">
-  <h3>Profitable chains right now (guide prices, per 10 units)</h3>
+  <h3>Profitable chains right now (guide prices, per 10 units, after POCO taxes)</h3>
   <div class="tw"><table>
     <thead><tr><th>Product</th><th>Margin</th><th>Profit</th></tr></thead>
     <tbody>{{range .PIPlanner.Profitable}}<tr><td><a href="{{.URL}}">{{.Name}}</a></td><td class="{{.Class}}">{{.Margin}}</td><td>{{.Profit}}</td></tr>{{end}}</tbody>

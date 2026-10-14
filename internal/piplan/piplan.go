@@ -565,12 +565,13 @@ type Plan struct {
 	RawCostKnown  bool
 	StepCost      float64 // cost to buy direct inputs of target
 	StepCostKnown bool
-	ProfitWhole   float64
+	ProfitWhole   float64 // revenue - raw cost - export tax - import tax
 	MarginWhole   float64 // profit / revenue
-	ProfitStep    float64
+	ProfitStep    float64 // revenue - step cost - export tax - step import tax
 	MarginStep    float64
 	ExportTax     float64 // total export tax on final product
 	ImportTax     float64 // total import tax if intermediates imported once
+	StepImportTax float64 // import tax on the target's direct inputs only
 }
 
 // PlanFor computes requirements for amount units of target.
@@ -679,22 +680,13 @@ func PlanFor(target string, amount int64, s Settings, prices map[string]float64)
 		}
 		plan.StepCostKnown = stepOK
 	}
-	if plan.RevenueKnown && plan.RawCostKnown {
-		plan.ProfitWhole = plan.Revenue - plan.RawCost
-		if plan.Revenue > 0 {
-			plan.MarginWhole = plan.ProfitWhole / plan.Revenue * 100
-		}
-	}
-	if plan.RevenueKnown && plan.StepCostKnown {
-		plan.ProfitStep = plan.Revenue - plan.StepCost
-		if plan.Revenue > 0 {
-			plan.MarginStep = plan.ProfitStep / plan.Revenue * 100
-		}
-	}
+	// POCO taxes, worked out before profit so profit can pay them.
+	// Export: the finished product leaves the planet once at the
+	// full rate. Import: half the rate on whatever is brought in.
 	if c, ok := AllCommodities[target]; ok {
 		plan.ExportTax = float64(amount) * c.TaxValue * s.TaxRate
 	}
-	// Import tax: each intermediate imported once at 0.5x.
+	// Whole chain: each intermediate is imported once.
 	for tier, ls := range plan.ByTier {
 		if tier == TierRaw || tier == TierOf(target) {
 			continue
@@ -703,6 +695,26 @@ func PlanFor(target string, amount int64, s Settings, prices map[string]float64)
 			if comm, ok := AllCommodities[ln.Name]; ok {
 				plan.ImportTax += ln.Needed * comm.TaxValue * s.TaxRate * 0.5
 			}
+		}
+	}
+	// Direct step: only the target's own inputs are imported.
+	if sch, ok := Schematics[target]; ok {
+		for in, per := range sch.Inputs {
+			plan.StepImportTax += cycles[target] * float64(per) * AllCommodities[in].TaxValue * s.TaxRate * 0.5
+		}
+	}
+	// Profit is what is left after the inputs and the taxes shown
+	// beside it: one figure, not a pre-tax number next to a tax.
+	if plan.RevenueKnown && plan.RawCostKnown {
+		plan.ProfitWhole = plan.Revenue - plan.RawCost - plan.ExportTax - plan.ImportTax
+		if plan.Revenue > 0 {
+			plan.MarginWhole = plan.ProfitWhole / plan.Revenue * 100
+		}
+	}
+	if plan.RevenueKnown && plan.StepCostKnown {
+		plan.ProfitStep = plan.Revenue - plan.StepCost - plan.ExportTax - plan.StepImportTax
+		if plan.Revenue > 0 {
+			plan.MarginStep = plan.ProfitStep / plan.Revenue * 100
 		}
 	}
 
@@ -730,6 +742,28 @@ func suggestColonies(target string, plan *Plan, s Settings, cc CommandCenter) []
 		}
 	}
 
+	// Each needed raw is extracted on exactly one planet: the first
+	// in the cover that yields it. Several planets in a cover often
+	// yield the same raw (Aqueous Liquids, Base Metals); counting
+	// its extractors on each of them charged the whole requirement
+	// more than once. Its P1 factories sit on the same planet.
+	rawPlanet := map[string]string{}
+	for _, pt := range minimal {
+		for _, raw := range PlanetYields[pt] {
+			if _, needed := rawLine[raw]; !needed {
+				continue
+			}
+			if _, taken := rawPlanet[raw]; !taken {
+				rawPlanet[raw] = pt
+			}
+		}
+	}
+	p1Names := make([]string, 0, len(p1Raw))
+	for p1 := range p1Raw {
+		p1Names = append(p1Names, p1)
+	}
+	sort.Strings(p1Names)
+
 	var out []ColonyPlan
 	ecu := Facilities["Extractor Control Unit"]
 	head := Facilities["Extractor Head"]
@@ -745,7 +779,7 @@ func suggestColonies(target string, plan *Plan, s Settings, cc CommandCenter) []
 		ecus := 0
 		for _, raw := range PlanetYields[pt] {
 			ln, needed := rawLine[raw]
-			if !needed {
+			if !needed || rawPlanet[raw] != pt {
 				continue
 			}
 			n := int(math.Ceil(ln.PerHour / s.ECUYield))
@@ -757,23 +791,15 @@ func suggestColonies(target string, plan *Plan, s Settings, cc CommandCenter) []
 		}
 		cpu += int64(ecus) * (ecu.CPU + int64(s.HeadsPerECU)*head.CPU)
 		pg += int64(ecus) * (ecu.PG + int64(s.HeadsPerECU)*head.PG)
-		// Basic factories for P1s whose raw lives here (first cover wins).
+		if ecus == 0 {
+			// Every raw this planet could supply is extracted on
+			// another planet of the cover: no colony needed here.
+			continue
+		}
+		// Basic factories for the P1s whose raw is extracted here.
 		basics := 0
-		for p1, raw := range p1Raw {
-			// Assign P1 to the first minimal planet yielding its raw.
-			assigned := ""
-			for _, mp := range minimal {
-				for _, y := range PlanetYields[mp] {
-					if y == raw {
-						assigned = mp
-						break
-					}
-				}
-				if assigned != "" {
-					break
-				}
-			}
-			if assigned != pt {
+		for _, p1 := range p1Names {
+			if rawPlanet[p1Raw[p1]] != pt {
 				continue
 			}
 			if ln, ok := p1Line[p1]; ok && ln.Factories > 0 {

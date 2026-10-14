@@ -579,37 +579,35 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	})
 
 	r.Route("/market", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleMarket)
-		r.Get("/scanner/", app.handleMarketScanner)
-		r.Get("/ideas/", app.handleTradeIdeas)
-		r.Get("/tradefinder/", app.handleMarketTradefinder)
-		r.Get("/leaderboard/", app.handleMarketLeaderboard)
-		r.Get("/restock/", app.handleRestock)
-		r.Post("/restock/save/", app.handleRestockSave)
-		r.Post("/restock/delete/", app.handleRestockDelete)
-		r.Get("/suggest", app.handleMarketSuggest)
-		r.Get("/history-fragment", app.handleMarketHistoryFragment)
-		r.Get("/trader-fragment", app.handleMarketTraderFragment)
-		r.Post("/watch", app.handleMarketWatch)
+		// Public: the market reads shared data. Anonymous visitors
+		// are throttled per address and their renders read stored
+		// data only (no live order book, no queued work); the
+		// personal pieces (restock, watches) stay signed-in.
+		r.With(anonPages).Get("/", app.handleMarket)
+		r.With(anonPages).Get("/scanner/", app.handleMarketScanner)
+		r.With(anonPages).Get("/ideas/", app.handleTradeIdeas)
+		r.With(anonPages).Get("/tradefinder/", app.handleMarketTradefinder)
+		r.With(anonPages).Get("/leaderboard/", app.handleMarketLeaderboard)
+		r.With(anonPages).Get("/suggest", app.handleMarketSuggest)
+		r.With(anonPages).Get("/history-fragment", app.handleMarketHistoryFragment)
+		r.With(anonPages).Get("/trader-fragment", app.handleMarketTraderFragment)
+		r.With(app.requireAuth).Get("/restock/", app.handleRestock)
+		r.With(app.requireAuth).Post("/restock/save/", app.handleRestockSave)
+		r.With(app.requireAuth).Post("/restock/delete/", app.handleRestockDelete)
+		r.With(app.requireAuth).Post("/watch", app.handleMarketWatch)
 	})
 
 	r.Route("/items", func(r chi.Router) {
 		// The browser is public: market browse data is shared by
 		// nature and the render depends on no session or
-		// character state. The type page joins the landing as
-		// public (it is the item link target site-wide and the
-		// sitemap's indexed item page); the rest under /items/
-		// stays behind the login.
+		// character state. Anonymous renders read stored rows
+		// only (a description not stored yet is not queued).
 		r.With(anonPages).Get("/", app.handleItems)
 		r.With(anonPages).Get("/type/{typeID}/", app.handleItemType)
-		r.Group(func(r chi.Router) {
-			r.Use(app.requireAuth)
-			r.Get("/search.json", app.handleItemSearchJSON)
-			r.Get("/description-fragment", app.handleItemDescriptionFragment)
-			r.Get("/category/{categoryID}/", app.handleItemsCategory)
-			r.Get("/group/{groupID}/", app.handleItemsGroup)
-		})
+		r.With(anonPages).Get("/search.json", app.handleItemSearchJSON)
+		r.With(anonPages).Get("/description-fragment", app.handleItemDescriptionFragment)
+		r.With(anonPages).Get("/category/{categoryID}/", app.handleItemsCategory)
+		r.With(anonPages).Get("/group/{groupID}/", app.handleItemsGroup)
 	})
 
 	// Top banner global search (items + own characters + warmed

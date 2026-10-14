@@ -138,7 +138,9 @@ func (app *Application) handleItemSearchJSON(w http.ResponseWriter, r *http.Requ
 	}
 	pool := normalizeSuggestPool(q.Get("pool"))
 	items := app.suggestTypes(r.Context(), q.Get("q"), pool, limit)
-	app.noteSuggested(r.Context(), app.typingBox(r.Context(), "items:"+pool), pool, items)
+	if app.userID(r.Context()) > 0 { // anonymous suggestions warm nothing
+		app.noteSuggested(r.Context(), app.typingBox(r.Context(), "items:"+pool), pool, items)
+	}
 	writeSuggestJSON(w, items)
 }
 
@@ -147,7 +149,9 @@ func (app *Application) handleItemSearchJSON(w http.ResponseWriter, r *http.Requ
 // behaviour (market pool, ten rows, no label) on the shared core.
 func (app *Application) handleMarketSuggest(w http.ResponseWriter, r *http.Request) {
 	items := app.suggestTypes(r.Context(), r.URL.Query().Get("q"), suggestPoolMarket, 10)
-	app.noteSuggested(r.Context(), app.typingBox(r.Context(), "market"), suggestPoolMarket, items)
+	if app.userID(r.Context()) > 0 { // anonymous suggestions warm nothing
+		app.noteSuggested(r.Context(), app.typingBox(r.Context(), "market"), suggestPoolMarket, items)
+	}
 	writeSuggestJSON(w, items)
 }
 

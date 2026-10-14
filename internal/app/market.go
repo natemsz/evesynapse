@@ -82,8 +82,13 @@ type marketOrderRow struct {
 // price history (chart + changes, from market_history only — the
 // worker fills it) and the watch state for "Watch this item".
 type marketItem struct {
-	TypeID        int64
-	Name          string
+	TypeID int64
+	Name   string
+	// Anonymous: rendered for a visitor without a session. The page
+	// is read-only for them: no watch controls, and the order book
+	// only when one is already held (BookPending otherwise).
+	Anonymous     bool
+	BookPending   bool
 	AveragePrice  string // esi.FormatISK, "" when unknown
 	AdjustedPrice string // esi.FormatISK, "" when unknown
 	RegionID      int64
@@ -255,7 +260,7 @@ const marketBrowseTypesPerPage = 100
 // item view for one region. Every figure is public ESI data.
 func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
+	data := app.publicPage(ctx) // public: anonymous visitors read stored data only
 
 	q := r.URL.Query()
 	view := &marketView{
@@ -269,27 +274,40 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 	}
 	data.Market = view
 	userID := app.userID(ctx)
+	// Anonymous renders never fetch or queue work, like the public
+	// item pages: no live order book, no history wants, no guesses,
+	// and search reads the local SDE only. A signed-in visit warms
+	// what an anonymous one then reads.
+	anon := userID == 0
 
 	if typeID, err := strconv.ParseInt(q.Get("type"), 10, 64); err == nil && typeID > 0 {
-		app.foresightOpened(ctx, userID, foresightMarketView(typeID))
-		item, err := app.loadMarketItem(ctx, typeID, view.Region)
+		if !anon {
+			app.foresightOpened(ctx, userID, foresightMarketView(typeID))
+		}
+		item, err := app.loadMarketItem(ctx, typeID, view.Region, anon)
 		if err != nil {
 			logging.Errorf("market: load type %d in region %d: %v", typeID, view.Region, err)
 			data.Error = "Market data unavailable right now — please try again shortly."
 		} else {
 			view.Item = item
 		}
-		app.attachHistory(ctx, view.Item, typeID, view.Region, userID)
-		app.markGuessHit(ctx, pageWantHistory, typeID, view.Region)
+		if view.Item != nil || !anon {
+			app.attachHistory(ctx, view.Item, typeID, view.Region, userID)
+		}
 		app.attachRegionStats(ctx, view.Item)
-		if view.Item != nil && view.Item.HistoryPending {
-			app.notePageWant(ctx, pageWantHistory, typeID, view.Region)
+		if !anon {
+			app.markGuessHit(ctx, pageWantHistory, typeID, view.Region)
+			if view.Item != nil && view.Item.HistoryPending {
+				app.notePageWant(ctx, pageWantHistory, typeID, view.Region)
+			}
 		}
 	} else if view.Query != "" {
-		view.Matches = app.searchTypes(ctx, view.Query)
+		view.Matches = app.searchTypes(ctx, view.Query, anon)
 		// Prefetch: every result's history is wanted now, so a
 		// tap on any of them lands on a chart instead of a wait.
-		app.noteSearchHistoryWants(ctx, view.Region, view.Matches)
+		if !anon {
+			app.noteSearchHistoryWants(ctx, view.Region, view.Matches)
+		}
 	}
 
 	// The category browser rides every non-item render: the
@@ -494,6 +512,9 @@ func (app *Application) attachHistory(ctx context.Context, item *marketItem, typ
 			}
 			return
 		}
+		if item != nil && item.Anonymous {
+			return // anonymous renders queue no work
+		}
 		if err := app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
 			RegionID: regionID, TypeID: typeID,
 			LastRequestedAt: time.Now().UTC(), Priority: viewedPriority(ctx),
@@ -549,12 +570,14 @@ func (app *Application) historyFetchSettled(ctx context.Context, regionID, typeI
 // searchTypes merges exact /universe/ids/ hits (first) with partial
 // matches from the local SDE type table. Exact hits are persisted
 // to type_names so the fallback cache finds them too.
-func (app *Application) searchTypes(ctx context.Context, query string) []marketMatch {
+func (app *Application) searchTypes(ctx context.Context, query string, localOnly bool) []marketMatch {
 	var matches []marketMatch
 	seen := make(map[int64]bool)
 
 	var ids esi.UniverseIDs
-	if err := app.esi.PostJSON(ctx, "/universe/ids/", []string{query}, &ids); err != nil {
+	if localOnly {
+		// Anonymous: the local SDE only, no lookup at ESI.
+	} else if err := app.esi.PostJSON(ctx, "/universe/ids/", []string{query}, &ids); err != nil {
 		logging.Errorf("market: exact lookup for %q: %v", query, err)
 	} else {
 		for _, hit := range ids.InventoryTypes {
@@ -639,11 +662,22 @@ func (app *Application) cachedPrices() map[int64]esi.MarketPrice {
 
 // loadMarketItem builds the item view for (type, region): guide
 // prices plus the best and top orders of the regional book.
-func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int64) (*marketItem, error) {
+func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int64, anon bool) (*marketItem, error) {
 	item := &marketItem{
-		TypeID:   typeID,
-		Name:     app.esi.TypeName(ctx, typeID),
-		RegionID: regionID,
+		TypeID:    typeID,
+		RegionID:  regionID,
+		Anonymous: anon,
+	}
+	if anon {
+		// Names from the local SDE: an anonymous view never asks
+		// ESI, so a type the SDE doesn't carry has no page.
+		t, err := app.queries.GetSDEType(ctx, typeID)
+		if err != nil {
+			return nil, fmt.Errorf("market: type %d is not in the local data", typeID)
+		}
+		item.Name = t.Name
+	} else {
+		item.Name = app.esi.TypeName(ctx, typeID)
 	}
 	item.RegionName, _ = marketRegionName(regionID)
 	for _, reg := range marketRegions {
@@ -654,9 +688,17 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 		})
 	}
 
-	prices, err := app.marketPrices(ctx)
-	if err != nil {
-		return nil, err
+	var prices map[int64]esi.MarketPrice
+	if anon {
+		// The guide as held: an anonymous view never refreshes it.
+		app.pricesMu.Lock()
+		prices = app.prices
+		app.pricesMu.Unlock()
+	} else {
+		var err error
+		if prices, err = app.marketPrices(ctx); err != nil {
+			return nil, err
+		}
 	}
 	if p, ok := prices[typeID]; ok {
 		if p.AveragePrice > 0 {
@@ -667,9 +709,21 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 		}
 	}
 
-	sells, buys, truncated, err := app.fetchOrderBook(ctx, regionID, typeID)
-	if err != nil {
-		return nil, err
+	var sells, buys []esi.MarketOrder
+	var truncated bool
+	if anon {
+		// Only a book a signed-in view fetched lately.
+		held, ok := app.books.get(marketKey{RegionID: regionID, TypeID: typeID}, time.Now())
+		if !ok {
+			item.BookPending = true
+			return item, nil
+		}
+		sells, buys, truncated = append([]esi.MarketOrder(nil), held.sells...), append([]esi.MarketOrder(nil), held.buys...), held.truncated
+	} else {
+		var err error
+		if sells, buys, truncated, err = app.fetchOrderBook(ctx, regionID, typeID); err != nil {
+			return nil, err
+		}
 	}
 	item.Truncated = truncated
 	item.SellOrders = len(sells)
@@ -700,7 +754,9 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 		for _, o := range buys {
 			ids = append(ids, o.LocationID)
 		}
-		app.noteStructureIDs(ctx, ids...)
+		if !anon {
+			app.noteStructureIDs(ctx, ids...)
+		}
 	}
 
 	if len(sells) > 0 {

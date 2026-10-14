@@ -476,6 +476,10 @@ func (app *Application) itemDescription(ctx context.Context, typeID int64) (stri
 		return "ready", sanitizeMailHTML(td.Description)
 	case err == nil && td.FetchedAt.Valid:
 		return "empty", ""
+	case app.userID(ctx) == 0:
+		// Anonymous renders queue no work: what isn't stored yet
+		// reads as no description, and nothing polls for it.
+		return "empty", ""
 	default:
 		if qerr := app.queries.UpsertTypeDetailWant(ctx, db.UpsertTypeDetailWantParams{
 			TypeID: typeID, Priority: viewedPriority(ctx), NotedAt: timeSet(time.Now().UTC()),

@@ -371,6 +371,7 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 	scope, judgeOptions := resolveJudgeScope(judgeParam, userChars)
 	inputChars := userChars
 	if scope.active() {
+		// The All V stand-in owns nothing: its plan nets no stock.
 		inputChars = scope.Chars
 	}
 	scoped := app.plannerInputsForChars(ctx, inputChars)
@@ -919,13 +920,17 @@ func (app *Application) plannerInputsForChars(ctx context.Context, chars []db.Ch
 // judgeScope is a resolved "Judge as" pick: the characters it
 // covers and how the copy names it.
 type judgeScope struct {
-	Kind  string // "" (general) | "char" | "tag"
+	Kind  string // "" (general) | "char" | "tag" | "allv" (a stand-in pilot with every skill at V)
 	Tag   string
 	Label string // "Burzrujat" | `the "industry" tag`
 	Chars []db.Character
 }
 
-func (s judgeScope) active() bool { return s.Kind != "" && len(s.Chars) > 0 }
+func (s judgeScope) active() bool { return s.Kind == judgeAllV || (s.Kind != "" && len(s.Chars) > 0) }
+
+// judgeAllV is the stand-in pilot with every skill at V: what an
+// anonymous visitor's plans are judged as, and a pick for everyone.
+const judgeAllV = "allv"
 
 // resolveJudgeScope validates a raw `judge` parameter against
 // the account and builds the picker's options with the current
@@ -940,13 +945,16 @@ func defaultJudgeParam(chars []db.Character, actingID int64) string {
 	if len(chars) > 0 {
 		return "char:" + strconv.FormatInt(chars[0].CharacterID, 10)
 	}
-	return ""
+	return judgeAllV
 }
 
 func resolveJudgeScope(raw string, chars []db.Character) (judgeScope, []judgeOption) {
 	scope := judgeScope{}
 	selected := ""
 	switch {
+	case raw == judgeAllV:
+		scope = judgeScope{Kind: judgeAllV, Label: "All V pilot"}
+		selected = raw
 	case strings.HasPrefix(raw, "char:"):
 		if id, err := strconv.ParseInt(strings.TrimPrefix(raw, "char:"), 10, 64); err == nil && id > 0 {
 			for _, ch := range chars {
@@ -973,7 +981,7 @@ func resolveJudgeScope(raw string, chars []db.Character) (judgeScope, []judgeOpt
 		}
 	}
 
-	options := []judgeOption{{Value: "", Label: "Everyone together"}}
+	options := []judgeOption{{Value: "", Label: "Everyone together"}, {Value: judgeAllV, Label: "All V pilot", Selected: selected == judgeAllV}}
 	for _, ch := range chars {
 		value := "char:" + strconv.FormatInt(ch.CharacterID, 10)
 		options = append(options, judgeOption{Value: value, Label: ch.Name, Selected: value == selected})
@@ -981,9 +989,6 @@ func resolveJudgeScope(raw string, chars []db.Character) (judgeScope, []judgeOpt
 	for _, tag := range userTags(chars) {
 		value := "tag:" + tag
 		options = append(options, judgeOption{Value: value, Label: "Tag: " + tag, Selected: value == selected})
-	}
-	if len(chars) == 0 {
-		return judgeScope{}, nil
 	}
 	return scope, options
 }
@@ -1034,6 +1039,8 @@ func requiredSkillLevels(root *buildplan.Node) map[int64]int64 {
 func judgeSkills(scope judgeScope, data plannerScopeData, reqs map[int64]int64, nameOf func(int64) string) *skillsJudge {
 	judge := &skillsJudge{}
 	switch scope.Kind {
+	case judgeAllV:
+		judge.Heading = "Can an All V pilot build this?"
 	case "char":
 		judge.Heading = fmt.Sprintf("Can %s build this?", scope.Chars[0].Name)
 	case "tag":
@@ -1041,6 +1048,9 @@ func judgeSkills(scope judgeScope, data plannerScopeData, reqs map[int64]int64, 
 	}
 
 	loaded := 0
+	if scope.Kind == judgeAllV {
+		loaded = 1 // every skill is known: it is V
+	}
 	for _, ch := range scope.Chars {
 		if _, ok := data.Skills[ch.CharacterID]; ok {
 			loaded++
@@ -1062,6 +1072,9 @@ func judgeSkills(scope judgeScope, data plannerScopeData, reqs map[int64]int64, 
 	}
 
 	best := func(skillID int64) int {
+		if scope.Kind == judgeAllV {
+			return 5
+		}
 		level := 0
 		for _, ch := range scope.Chars {
 			if trained, ok := data.Skills[ch.CharacterID]; ok && trained[skillID] > level {

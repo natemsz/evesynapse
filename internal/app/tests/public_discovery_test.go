@@ -181,7 +181,8 @@ func seedPublicBrowser(t *testing.T, rig *app.TestRig) (q *db.Queries, userA, us
 	rateFit(t, rig, cookieA, bad, "1")
 	// T2 fit for the faction/alpha filters.
 	seedPublicFit(t, q, ua.ID, "T2 Rifter", 587, items(1236), `"pvp"`, now)
-	// Stale fit: outside the default 14-day rank window.
+	// A fit last touched twenty days ago: listed like any other,
+	// and outside the optional Updated filter's 14 days.
 	seedPublicFit(t, q, ua.ID, "Old Rifter", 587, items(1238), `"pvp"`, now.Add(-20*24*time.Hour))
 	// Priced fit for the max-price filter.
 	priced := seedPublicFit(t, q, ua.ID, "Rich Rifter", 587, items(1234, 1236), `"pvp"`, now)
@@ -203,14 +204,36 @@ func TestPublicFitsBrowser(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("browser status = %d", code)
 	}
-	apptest.MustContain(t, "/fittings/public/", body, "Fleet Rifter", "Solo Rifter", "T2 Rifter")
-	if strings.Contains(body, "Old Rifter") {
-		t.Errorf("default rank view shows a fit older than 14 days")
+	// The default view is every public fit, newest first: nothing is
+	// hidden for its age, and the twenty-day-old fit comes last.
+	apptest.MustContain(t, "/fittings/public/", body, "Fleet Rifter", "Solo Rifter", "T2 Rifter", "Old Rifter", "Last 14 days")
+	for _, name := range []string{"Fleet Rifter", "Solo Rifter", "T2 Rifter", "Rich Rifter", "Bad Rifter"} {
+		if at, old := strings.Index(body, name), strings.Index(body, "Old Rifter"); at < 0 || at > old {
+			t.Errorf("default view: %s is not listed before the oldest fit", name)
+		}
 	}
+
+	// Rank is a sort like the others: Bayesian, and it hides nothing.
+	_, body = get("/fittings/public/?sort=rank")
+	apptest.MustContain(t, "sort=rank", body, "Old Rifter")
 	first, second := strings.Index(body, "Fleet Rifter"), strings.Index(body, "Solo Rifter")
 	if first < 0 || second < 0 || first > second {
 		t.Errorf("Bayesian rank did not prefer three 5-star votes over one")
 	}
+
+	// Age is a filter the visitor picks, under any sort.
+	for _, path := range []string{"/fittings/public/?updated=14", "/fittings/public/?updated=14&sort=rank", "/fittings/public/?updated=14&sort=old"} {
+		_, body = get(path)
+		apptest.MustContain(t, path, body, "Fleet Rifter")
+		if strings.Contains(body, "Old Rifter") {
+			t.Errorf("%s shows a fit updated twenty days ago", path)
+		}
+	}
+	_, body = get("/fittings/public/?updated=30")
+	apptest.MustContain(t, "updated=30", body, "Old Rifter")
+	// An unlisted age is no filter at all.
+	_, body = get("/fittings/public/?updated=3")
+	apptest.MustContain(t, "updated=3", body, "Old Rifter")
 
 	// Oldest sort spans all time.
 	_, body = get("/fittings/public/?sort=old")

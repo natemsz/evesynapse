@@ -44,7 +44,7 @@ LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
 LEFT JOIN sde_types st ON st.type_id = lf.ship_type_id
 LEFT JOIN sde_groups sg ON sg.group_id = st.group_id
 WHERE lf.is_public AND NOT lf.is_draft
-  AND ($1::text != 'rank' OR lf.updated_at >= now() - interval '14 days')
+  AND ($1::int <= 0 OR lf.updated_at >= now() - make_interval(days => $1::int))
   AND ($2::text = '' OR lf.name ILIKE '%' || $2::text || '%'
     OR tn.name ILIKE '%' || $2::text || '%'
     OR EXISTS (SELECT 1 FROM characters c WHERE c.user_id = lf.user_id AND c.name ILIKE '%' || $2::text || '%'))
@@ -81,28 +81,30 @@ WHERE lf.is_public AND NOT lf.is_draft
 `
 
 type CountPublicFitsParams struct {
-	Sort     string  `json:"sort"`
-	Q        string  `json:"q"`
-	Role     string  `json:"role"`
-	Hull     string  `json:"hull"`
-	Hullq    string  `json:"hullq"`
-	Minstars float64 `json:"minstars"`
-	Include  int64   `json:"include"`
-	Exclude  int64   `json:"exclude"`
-	Faction  string  `json:"faction"`
-	Maxprice float64 `json:"maxprice"`
-	Alpha    bool    `json:"alpha"`
-	Tag      string  `json:"tag"`
+	Sincedays int32   `json:"sincedays"`
+	Q         string  `json:"q"`
+	Role      string  `json:"role"`
+	Hull      string  `json:"hull"`
+	Hullq     string  `json:"hullq"`
+	Minstars  float64 `json:"minstars"`
+	Include   int64   `json:"include"`
+	Exclude   int64   `json:"exclude"`
+	Faction   string  `json:"faction"`
+	Maxprice  float64 `json:"maxprice"`
+	Alpha     bool    `json:"alpha"`
+	Tag       string  `json:"tag"`
 }
 
 // ---------------------------------------------------------------------
 // Public discovery: the anonymous fit browser, ratings and sitemap
 // reads. Every browser filter is a SQL predicate and every page is
-// LIMIT/OFFSET bounded; Go never filters full tables. The default
-// rank sort is Bayesian (fit average shrunk toward the global mean
-// with weight 5, via public_fit_rank in migration 033) over fits
-// updated in the rolling last 14 days, so one 5-star vote cannot
-// top the chart. Other sorts span all time. Meta groups resolve
+// LIMIT/OFFSET bounded; Go never filters full tables. Every sort
+// spans every public fit; the default is newest first. Age is a
+// filter the visitor picks (sincedays, 0 for any time), never a
+// side effect of the sort. The rank sort is Bayesian (fit average
+// shrunk toward the global mean with weight 5, via public_fit_rank
+// in migration 033), so one 5-star vote cannot top the chart. Meta
+// groups resolve
 // through dogma attribute 1692 (4 faction, 5 officer, 6 deadspace,
 // 2 tech II), the same source the fitting engine reads. The faction
 // filter is Any or No faction modules; a max price excludes only
@@ -111,7 +113,7 @@ type CountPublicFitsParams struct {
 // ---------------------------------------------------------------------
 func (q *Queries) CountPublicFits(ctx context.Context, arg CountPublicFitsParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countPublicFits,
-		arg.Sort,
+		arg.Sincedays,
 		arg.Q,
 		arg.Role,
 		arg.Hull,
@@ -163,7 +165,7 @@ LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
 LEFT JOIN sde_types st ON st.type_id = lf.ship_type_id
 LEFT JOIN sde_groups sg ON sg.group_id = st.group_id
 WHERE lf.is_public AND NOT lf.is_draft
-  AND ($1::text != 'rank' OR lf.updated_at >= now() - interval '14 days')
+  AND ($1::int <= 0 OR lf.updated_at >= now() - make_interval(days => $1::int))
   AND ($2::text = '' OR lf.name ILIKE '%' || $2::text || '%'
     OR tn.name ILIKE '%' || $2::text || '%'
     OR EXISTS (SELECT 1 FROM characters c WHERE c.user_id = lf.user_id AND c.name ILIKE '%' || $2::text || '%'))
@@ -198,33 +200,34 @@ WHERE lf.is_public AND NOT lf.is_draft
             CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'tags') = 'array' THEN lf.items_json::jsonb -> 'tags' ELSE '[]'::jsonb END) AS t(tag)
         WHERE lower(t.tag) = lower($12::text)))
 ORDER BY
-  CASE WHEN $1::text = 'rank' THEN public_fit_rank(lf.rating_sum, lf.rating_count) END DESC NULLS LAST,
-  CASE WHEN $1::text = 'views' THEN lf.view_count END DESC NULLS LAST,
-  CASE WHEN $1::text = 'new' THEN lf.updated_at END DESC NULLS LAST,
-  CASE WHEN $1::text = 'old' THEN lf.updated_at END ASC NULLS LAST,
-  CASE WHEN $1::text = 'name' THEN lf.name END ASC NULLS LAST,
-  CASE WHEN $1::text = 'namedesc' THEN lf.name END DESC NULLS LAST,
-  CASE WHEN $1::text = 'pricelo' THEN NULLIF(lf.total_price, 0) END ASC NULLS LAST,
-  CASE WHEN $1::text = 'pricehi' THEN NULLIF(lf.total_price, 0) END DESC NULLS LAST,
+  CASE WHEN $13::text = 'rank' THEN public_fit_rank(lf.rating_sum, lf.rating_count) END DESC NULLS LAST,
+  CASE WHEN $13::text = 'views' THEN lf.view_count END DESC NULLS LAST,
+  CASE WHEN $13::text = 'new' THEN lf.updated_at END DESC NULLS LAST,
+  CASE WHEN $13::text = 'old' THEN lf.updated_at END ASC NULLS LAST,
+  CASE WHEN $13::text = 'name' THEN lf.name END ASC NULLS LAST,
+  CASE WHEN $13::text = 'namedesc' THEN lf.name END DESC NULLS LAST,
+  CASE WHEN $13::text = 'pricelo' THEN NULLIF(lf.total_price, 0) END ASC NULLS LAST,
+  CASE WHEN $13::text = 'pricehi' THEN NULLIF(lf.total_price, 0) END DESC NULLS LAST,
   lf.id DESC
-LIMIT $14::bigint OFFSET $13::bigint
+LIMIT $15::bigint OFFSET $14::bigint
 `
 
 type ListPublicFitsParams struct {
-	Sort     string  `json:"sort"`
-	Q        string  `json:"q"`
-	Role     string  `json:"role"`
-	Hull     string  `json:"hull"`
-	Hullq    string  `json:"hullq"`
-	Minstars float64 `json:"minstars"`
-	Include  int64   `json:"include"`
-	Exclude  int64   `json:"exclude"`
-	Faction  string  `json:"faction"`
-	Maxprice float64 `json:"maxprice"`
-	Alpha    bool    `json:"alpha"`
-	Tag      string  `json:"tag"`
-	Roffset  int64   `json:"roffset"`
-	Rlimit   int64   `json:"rlimit"`
+	Sincedays int32   `json:"sincedays"`
+	Q         string  `json:"q"`
+	Role      string  `json:"role"`
+	Hull      string  `json:"hull"`
+	Hullq     string  `json:"hullq"`
+	Minstars  float64 `json:"minstars"`
+	Include   int64   `json:"include"`
+	Exclude   int64   `json:"exclude"`
+	Faction   string  `json:"faction"`
+	Maxprice  float64 `json:"maxprice"`
+	Alpha     bool    `json:"alpha"`
+	Tag       string  `json:"tag"`
+	Sort      string  `json:"sort"`
+	Roffset   int64   `json:"roffset"`
+	Rlimit    int64   `json:"rlimit"`
 }
 
 type ListPublicFitsRow struct {
@@ -245,7 +248,7 @@ type ListPublicFitsRow struct {
 
 func (q *Queries) ListPublicFits(ctx context.Context, arg ListPublicFitsParams) ([]ListPublicFitsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPublicFits,
-		arg.Sort,
+		arg.Sincedays,
 		arg.Q,
 		arg.Role,
 		arg.Hull,
@@ -257,6 +260,7 @@ func (q *Queries) ListPublicFits(ctx context.Context, arg ListPublicFitsParams) 
 		arg.Maxprice,
 		arg.Alpha,
 		arg.Tag,
+		arg.Sort,
 		arg.Roffset,
 		arg.Rlimit,
 	)

@@ -91,7 +91,7 @@ var homeWidgetCatalog = []widgetDef{
 	{widgetPI, "Planetary Industry", "Colonies across your characters: extractor timers, expired heads, and the next planet needing a visit.", 1, 2, "planets"},
 	{widgetMarket, "Market", "Open orders across characters: counts, sell/buy value, orders expiring soonest.", 1, 1, "market"},
 	{widgetWatchlist, "Market Watchlist", "The items you're watching: latest prices, 7- and 30-day moves, and a flag when one crosses your alert line.", 1, 1, "market_public"},
-	{widgetTradeIdeas, "Trade Ideas", "A model's read on the Forge spread scanner, one tab per trade strategy. Refreshed twice a day; the Trade ideas page has the full list.", 2, 1, "tradeideas"},
+	{widgetTradeIdeas, "Trade Ideas", "A model's read on the Forge spread scanner, one tab per trade strategy. Refreshed twice a day; the Trade Ideas page has the full list.", 2, 1, "tradeideas"},
 	{widgetTraining, "Training Horizon", "The next 10 skill finishes across every character, plus who is sitting idle.", 1, 2, "skills"},
 	{widgetPulse, "Corp Pulse", "What changed in the corporation: members in and out, wallet movements, structure arrivals and timers. Needs a qualifying in-game role.", 1, 1, "corp_members"},
 	{widgetWalletFlow, "Wallet Flow", "Income vs spend over 7 and 30 days with top sources, sinks, and a per-character breakdown.", 2, 2, "wallet"},

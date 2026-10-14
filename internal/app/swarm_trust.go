@@ -32,6 +32,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"sort"
 	"strings"
 	"time"
 
@@ -102,22 +103,28 @@ const (
 	maxSwarmGossipPeers       = 10
 	maxSwarmHistoryDemand     = 30
 	maxSwarmOrgDemand         = 10
+	maxSwarmNameDemand        = 5 // per name kind
 )
 
 // Staged entries older than this never apply: an entry nobody
 // could verify within a week is stale, not evidence.
 const maxSwarmStagingAge = 7 * 24 * time.Hour
 
+// maxSwarmDeferrals is how many passes may fail to decide a
+// staged entry before it is dropped.
+const maxSwarmDeferrals = 3
+
 // Sync-page counter names.
 const (
-	swarmCounterAppliedHistory = "applied_history"
-	swarmCounterAppliedNames   = "applied_names"
-	swarmCounterAppliedRecords = "applied_records"
-	swarmCounterSpotPassed     = "spot_passed"
-	swarmCounterSpotFailed     = "spot_failed"
-	swarmCounterPullsOK        = "pulls_ok"
-	swarmCounterPullsFailed    = "pulls_failed"
-	swarmCounterRolledBack     = "rolled_back"
+	swarmCounterAppliedHistory   = "applied_history"
+	swarmCounterAppliedNames     = "applied_names"
+	swarmCounterAppliedRecords   = "applied_records"
+	swarmCounterSpotPassed       = "spot_passed"
+	swarmCounterSpotFailed       = "spot_failed"
+	swarmCounterPullsOK          = "pulls_ok"
+	swarmCounterPullsFailed      = "pulls_failed"
+	swarmCounterRolledBack       = "rolled_back"
+	swarmCounterDroppedUnchecked = "dropped_unchecked"
 )
 
 // swarmTrust scores a signer from its ledger: good over total
@@ -357,13 +364,26 @@ func (app *Application) swarmGossip(ctx context.Context, now time.Time) {
 		n++
 		contacts = append(contacts, contact{url: p.BaseUrl, id: p.InstanceID, key: p.PublicKey})
 	}
+	// The lists are fetched a few at a time under one deadline for
+	// the round (swarm_fanout.go), then learned one at a time.
+	type heard struct {
+		members     []swarmMember
+		signer, key string
+		err         error
+	}
+	results := make([]heard, len(contacts))
+	swarmFanOut(ctx, len(contacts), func(rctx context.Context, i int) {
+		c, r := contacts[i], &results[i]
+		r.members, r.signer, r.key, r.err = app.swarmFetchMembers(rctx, c.url, c.id, c.key)
+	})
 	learned := 0
-	for _, c := range contacts {
+	for i, c := range contacts {
 		source := "gossip"
 		if c.id == "" {
 			source = "seed"
 		}
-		if app.swarmContactPeer(ctx, c.url, c.id, c.key, source, now) == nil {
+		r := results[i]
+		if app.swarmAbsorbMembers(ctx, c.url, c.id, source, r.members, r.signer, r.key, r.err, now) == nil {
 			learned++
 		}
 	}
@@ -393,8 +413,16 @@ func (app *Application) swarmGossip(ctx context.Context, now time.Time) {
 // already pinned under another key, and taught nothing.
 func (app *Application) swarmContactPeer(ctx context.Context, baseURL, peerID, peerKey, source string, now time.Time) error {
 	members, signer, key, err := app.swarmFetchMembers(ctx, baseURL, peerID, peerKey)
-	if err != nil {
-		return err
+	return app.swarmAbsorbMembers(ctx, baseURL, peerID, source, members, signer, key, err, now)
+}
+
+// swarmAbsorbMembers records what one address answered a members
+// request with (fetchErr when it did not answer): the second half of
+// swarmContactPeer, kept apart so the gossip round can fetch in
+// parallel and record one at a time.
+func (app *Application) swarmAbsorbMembers(ctx context.Context, baseURL, peerID, source string, members []swarmMember, signer, key string, fetchErr error, now time.Time) error {
+	if fetchErr != nil {
+		return fetchErr
 	}
 	if peerID != "" && signer != peerID {
 		return fmt.Errorf("swarm: %s answered as another instance", baseURL)
@@ -407,6 +435,14 @@ func (app *Application) swarmContactPeer(ctx context.Context, baseURL, peerID, p
 	}
 	if err := app.queries.TouchSwarmPeerGossip(ctx, db.TouchSwarmPeerGossipParams{InstanceID: signer, LastGossip: timeSet(now)}); err != nil {
 		logging.Errorf("swarm: touch gossip %s: %v", signer, err)
+	}
+	// It answered: if it is not known to serve data, the next
+	// pull may probe it once more. Membership is slow, so this
+	// costs a directory one pull a round, not one a cycle.
+	if err := app.queries.RearmSwarmPeerProbe(ctx, db.RearmSwarmPeerProbeParams{
+		InstanceID: signer, ServedSince: now.Add(-swarmServesWindow),
+	}); err != nil {
+		logging.Errorf("swarm: re-arm probe of %s: %v", shortenSwarmID(signer), err)
 	}
 	return nil
 }
@@ -492,20 +528,30 @@ func (app *Application) swarmFlagKeyConflict(ctx context.Context, instanceID, he
 	}
 }
 
-// swarmLearnMembers records the members one sighting names. The
-// first key seen for an instance ID is pinned: a sighting that
-// names a known ID under another key is refused and flagged,
-// never written (the upsert itself enforces it), and the only
-// way to a new key is the operator removing the peer. A sender
-// whose own key is not its pinned one teaches nothing at all
-// (errSwarmKeyChanged). An address moves only on its owner's
-// word: the sender's own entry, signed under its pinned key,
-// may move the sender's address; what it says about a peer
-// already known never does. Approval follows the mode;
-// exclusion is never touched. The sender is recorded under the
-// URL that just answered when its own list does not name it —
-// the dialed URL is known-good, so a lonely seed still
-// introduces itself.
+// swarmLearnMembers records the members one sighting names.
+//
+// Keys: the first key seen for an instance ID is pinned. A
+// sighting that names a known ID under another key is refused
+// and flagged, never written (the upsert itself enforces it),
+// and the only way to a new key is the operator removing the
+// peer. A sender whose own key is not its pinned one teaches
+// nothing at all (errSwarmKeyChanged).
+//
+// Addresses: an address is its owner's word. Each member tuple
+// carries the owner's signature over its instance ID, address
+// and issue time (url_sig), made with the key in the same tuple.
+// A new member is stored only if that signature verifies; a
+// known member's address moves only on a tuple whose signature
+// verifies under the pinned key and which was issued later than
+// the one held, whoever relayed it — an older tuple, however
+// valid, is ignored, so a stale address cannot be replayed. The
+// tuple is stored as it arrived, to be relayed unchanged. The one
+// address taken without a signature is the one this instance
+// dialed itself: a sender that signs no address of its own is
+// filed under the URL that just answered, and such a row is
+// never relayed.
+//
+// Approval follows the mode; exclusion is never touched.
 func (app *Application) swarmLearnMembers(ctx context.Context, members []swarmMember, signer, signerKey, dialURL, source string, now time.Time) error {
 	if signer != "" && signerKey != "" {
 		peer, err := app.queries.GetSwarmPeer(ctx, signer)
@@ -524,28 +570,38 @@ func (app *Application) swarmLearnMembers(ctx context.Context, members []swarmMe
 		seen[m.InstanceID] = true
 	}
 	if signer != "" && signerKey != "" && !seen[signer] {
-		members = append(members, swarmMember{InstanceID: signer, BaseURL: dialURL, PublicKey: signerKey})
+		members = append(members, swarmMember{InstanceID: signer, PublicKey: signerKey})
 	}
 	for _, m := range members {
 		if m.InstanceID == "" || m.InstanceID == app.swarmID.id {
 			continue
 		}
-		// The signer's own record may carry no address (no
-		// public origin configured): the URL that just
-		// answered is known-good and files it.
-		if m.InstanceID == signer && m.BaseURL == "" {
-			m.BaseURL = dialURL
+		if raw, err := base64.StdEncoding.DecodeString(m.PublicKey); err != nil || len(raw) != ed25519.PublicKeySize {
+			continue
+		}
+		signed := m.BaseURL != "" && verifySwarmMember(m)
+		if !signed {
+			// Only the sender itself, at the address this instance
+			// dialed, may be filed without a signed address.
+			if m.InstanceID != signer || m.PublicKey != signerKey || dialURL == "" {
+				continue
+			}
+			m.BaseURL, m.URLSig, m.IssuedAt = dialURL, "", 0
 		}
 		if !validSwarmBaseURL(m.BaseURL) {
 			continue
 		}
-		if raw, err := base64.StdEncoding.DecodeString(m.PublicKey); err != nil || len(raw) != ed25519.PublicKeySize {
+		// A loopback address is only ever one this instance was
+		// told to dial itself (a seed or a hand-added address in
+		// local development). A member list cannot introduce one.
+		if u, err := parseSwarmURL(m.BaseURL); err == nil && swarmHostIsLoopback(u.host) &&
+			strings.TrimSuffix(m.BaseURL, "/") != strings.TrimSuffix(dialURL, "/") {
 			continue
 		}
 		written, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
 			InstanceID: m.InstanceID, BaseUrl: m.BaseURL, PublicKey: m.PublicKey,
 			Source: source, FirstSeen: now,
-			OwnSighting: m.InstanceID == signer && m.PublicKey == signerKey,
+			UrlSig: m.URLSig, UrlIssuedAt: m.IssuedAt, AddressSigned: signed,
 		})
 		if err != nil {
 			return err
@@ -566,16 +622,36 @@ func (app *Application) swarmLearnMembers(ctx context.Context, members []swarmMe
 }
 
 // swarmDemandKeys gathers what this instance already wants, for
-// peers to serve before the worker spends ESI calls: due
-// history pairs first, then pending organization records.
-// Bounded, like every read that feeds a render or a fetch.
+// peers to serve before the worker spends ESI calls: names
+// first (type names readers found missing, structure names the
+// resolver has due — few, and cheap to carry), then due history
+// pairs, then pending organization records. A pull stages only
+// what it asked for, so every kind the swarm carries has to be
+// asked for here. Bounded, like every read that feeds a render
+// or a fetch.
 func (app *Application) swarmDemandKeys(ctx context.Context) []swarmPullKey {
 	var keys []swarmPullKey
+	for _, id := range app.esi.MissingTypeNames(maxSwarmNameDemand) {
+		keys = append(keys, swarmPullKey{Kind: swarmKindTypeName, Key: fmt.Sprintf("%d", id)})
+	}
+	now := time.Now().UTC()
+	if ids, err := app.queries.ListStructureResolutions(ctx, db.ListStructureResolutionsParams{
+		ResolvedCutoff:  now.Add(-structureRenameWindow),
+		MissingCutoff:   now.Add(-structureMissingWindow),
+		ResolutionLimit: maxSwarmNameDemand,
+	}); err != nil {
+		logging.Errorf("swarm: demand structure names: %v", err)
+	} else {
+		for _, id := range ids {
+			keys = append(keys, swarmPullKey{Kind: swarmKindStructure, Key: fmt.Sprintf("%d", id)})
+		}
+	}
+	names := len(keys)
 	if candidates, err := app.historyCandidates(ctx); err != nil {
 		logging.Errorf("swarm: demand history: %v", err)
 	} else {
 		for _, key := range candidates {
-			if len(keys) >= maxSwarmHistoryDemand {
+			if len(keys)-names >= maxSwarmHistoryDemand {
 				break
 			}
 			if app.marketFetchDue(ctx, marketFetchKind("history", key), historyRefetchGate) {
@@ -617,14 +693,18 @@ func (app *Application) swarmSampled(good, bad int64) bool {
 	return swarmCheckDraw(swarmTrust(good, bad), good+bad, r)
 }
 
+// swarmServesWindow is how recently a pull must have staged
+// something from a peer for it to stay in the data rotation.
+const swarmServesWindow = 7 * 24 * time.Hour
+
 // swarmPeerPullable reports whether one listed peer may serve:
-// not the seed marker, and not under the floor once it has
-// enough checks to judge. Shared by the cycle pull and the
-// urgent single-key pull so both read the same gate.
-func swarmPeerPullable(instanceID string, good, bad int64) bool {
-	if instanceID == swarmSeedInstanceID {
-		return false
-	}
+// not under the floor once it has enough checks to judge.
+// Shared by the cycle pull and the urgent single-key pull so
+// both read the same gate. A seed is a member like any other
+// and is not singled out here: whether a peer serves data is
+// learned from its pulls (ListSwarmPullPeers), not from its
+// identity or from where it is configured.
+func swarmPeerPullable(good, bad int64) bool {
 	if total := good + bad; total >= swarmTrustMinChecks && swarmTrust(good, bad) < swarmTrustFloor {
 		return false
 	}
@@ -642,13 +722,22 @@ func (app *Application) swarmPullOne(ctx context.Context, kind, key string) int 
 	if !app.cfg.swarm.enabled() || app.swarmID == nil || app.swarmCli == nil {
 		return 0
 	}
-	peers, err := app.queries.ListSwarmPullPeers(ctx)
+	peers, err := app.queries.ListSwarmPullPeers(ctx, time.Now().UTC().Add(-swarmServesWindow))
 	if err != nil {
 		logging.Errorf("swarm: pull peers: %v", err)
 		return 0
 	}
+	// One key, one deadline: ask whoever served something most
+	// recently, not whoever is next in the rotation.
+	sort.SliceStable(peers, func(i, j int) bool {
+		a, b := peers[i].LastServed, peers[j].LastServed
+		if a.Valid != b.Valid {
+			return a.Valid
+		}
+		return a.Valid && a.Time.After(b.Time)
+	})
 	for _, p := range peers {
-		if !swarmPeerPullable(p.InstanceID, p.GoodChecks, p.BadChecks) {
+		if !swarmPeerPullable(p.GoodChecks, p.BadChecks) {
 			continue
 		}
 		keys := []swarmPullKey{{Kind: kind, Key: key}}
@@ -695,6 +784,11 @@ func (app *Application) swarmStagePulled(ctx context.Context, peerID, baseURL st
 			continue
 		}
 		staged++
+	}
+	if staged > 0 {
+		if err := app.queries.TouchSwarmPeerServed(ctx, db.TouchSwarmPeerServedParams{InstanceID: peerID, LastServed: timeSet(now)}); err != nil {
+			logging.Errorf("swarm: note %s served: %v", shortenSwarmID(peerID), err)
+		}
 	}
 	if unasked > 0 {
 		logging.Warnf("swarm: pull %s: dropped %d entries the pull did not ask for", baseURL, unasked)
@@ -791,39 +885,52 @@ func (app *Application) swarmSuppressFetch(ctx context.Context, kind, key string
 // swarmPull asks approved peers for the wanted keys and stages
 // what they answer with, through swarmStagePulled: only keys
 // this pull asked for, only under the serving peer's own pinned
-// identity. Seed-only peers are directories,
-// not sources — the worker signs under its fixed "seed"
-// identity and holds no data, so pulling it would spend one of
-// the cycle's peer slots learning nothing. A directory that
-// also serves under its own minted identity (a warmer acting
-// as seed) stays pullable: only the protocol's seed marker
-// skips, never the configured URL.
+// identity. Only peers known to serve data are asked, in turn,
+// a few a cycle; a peer not yet asked gets one probe first. A
+// seed that is only a directory answers its probe with nothing
+// and is then dialed for membership alone.
 func (app *Application) swarmPull(ctx context.Context, now time.Time) {
 	keys := app.swarmDemandKeys(ctx)
 	if len(keys) == 0 {
 		return
 	}
-	peers, err := app.queries.ListSwarmPullPeers(ctx)
+	peers, err := app.queries.ListSwarmPullPeers(ctx, time.Now().UTC().Add(-swarmServesWindow))
 	if err != nil {
 		logging.Errorf("swarm: pull peers: %v", err)
 		return
 	}
-	n := 0
+	var picked []db.ListSwarmPullPeersRow
 	for _, p := range peers {
-		if n >= maxSwarmPullPeersPerCycle {
+		if len(picked) >= maxSwarmPullPeersPerCycle {
 			break
 		}
-		if !swarmPeerPullable(p.InstanceID, p.GoodChecks, p.BadChecks) {
+		if !swarmPeerPullable(p.GoodChecks, p.BadChecks) {
 			continue
 		}
-		n++
-		entries, err := app.swarmCli.pullEntries(ctx, p.BaseUrl, keys)
-		if err != nil {
+		picked = append(picked, p)
+		// Its turn is taken whether or not it answers, so a dead
+		// peer goes to the back of the line like any other.
+		if err := app.queries.TouchSwarmPeerPulled(ctx, db.TouchSwarmPeerPulledParams{InstanceID: p.InstanceID, LastPulled: timeSet(now)}); err != nil {
+			logging.Errorf("swarm: note pull of %s: %v", shortenSwarmID(p.InstanceID), err)
+		}
+	}
+	// Asked a few at a time under one deadline (swarm_fanout.go);
+	// what they answer is staged one at a time, in rotation order.
+	type answer struct {
+		entries []swarmSignedEntry
+		err     error
+	}
+	answers := make([]answer, len(picked))
+	swarmFanOut(ctx, len(picked), func(rctx context.Context, i int) {
+		answers[i].entries, answers[i].err = app.swarmCli.pullEntries(rctx, picked[i].BaseUrl, keys)
+	})
+	for i, p := range picked {
+		if answers[i].err != nil {
 			app.addSwarmCounter(ctx, swarmCounterPullsFailed, 1)
 			continue
 		}
 		app.addSwarmCounter(ctx, swarmCounterPullsOK, 1)
-		app.swarmStagePulled(ctx, p.InstanceID, p.BaseUrl, keys, entries, now)
+		app.swarmStagePulled(ctx, p.InstanceID, p.BaseUrl, keys, answers[i].entries, now)
 	}
 }
 
@@ -831,10 +938,13 @@ func (app *Application) swarmPull(ctx context.Context, now time.Time) {
 // the ones that pass — the only path anything staged reaches
 // the real tables. At most a few ESI calls a cycle, from the
 // shared allowance; ESI's stop signal pauses the pass like any
-// other. Anything failing is discarded and counted against its
-// signer; anything undecidable (no scoped character, no span
-// shared with ESI's history, a transient error) waits for the next
-// pass, up to the staging age cap.
+// other. Only an entry ESI contradicts is a failure: it is
+// discarded and counted against its signer. Anything
+// undecidable (no scoped character, no span shared with ESI's
+// history, a transient error) waits for another pass, at most
+// maxSwarmDeferrals times, and is then dropped; so is an entry
+// past the staging age cap, or from a signer under the trust
+// floor. A drop is neutral: no mark, no streak, its own counter.
 func (app *Application) swarmSpotCheck(ctx context.Context, allowance *fetchBudget, characters []db.Character, now time.Time) (applied int, limited bool) {
 	rows, err := app.queries.ListUncheckedStaging(ctx, 25)
 	if err != nil {
@@ -844,7 +954,7 @@ func (app *Application) swarmSpotCheck(ctx context.Context, allowance *fetchBudg
 	checks := 0
 	for _, row := range rows {
 		if now.Sub(row.ReceivedAt) > maxSwarmStagingAge {
-			app.discardSwarmEntry(ctx, row.Kind, row.Key, row.Signer, swarmDiscardAgedOut)
+			app.dropSwarmEntry(ctx, row.Kind, row.Key, row.Signer, swarmDropAgedOut)
 			continue
 		}
 		peer, err := app.queries.GetSwarmPeer(ctx, row.Signer)
@@ -855,7 +965,7 @@ func (app *Application) swarmSpotCheck(ctx context.Context, allowance *fetchBudg
 			continue
 		}
 		if total := peer.GoodChecks + peer.BadChecks; total >= swarmTrustMinChecks && swarmTrust(peer.GoodChecks, peer.BadChecks) < swarmTrustFloor {
-			app.discardSwarmEntry(ctx, row.Kind, row.Key, row.Signer, swarmDiscardLowTrust)
+			app.dropSwarmEntry(ctx, row.Kind, row.Key, row.Signer, swarmDropLowTrust)
 			continue
 		}
 		if !app.swarmSampled(peer.GoodChecks, peer.BadChecks) {
@@ -875,7 +985,19 @@ func (app *Application) swarmSpotCheck(ctx context.Context, allowance *fetchBudg
 			applied++
 			continue
 		}
-		if checks >= maxSwarmSpotPerCycle {
+		if !swarmCheckable(row.Kind, characters) {
+			// Nobody here can check this kind right now (a
+			// structure name with no character holding the
+			// scope). Trying would decide nothing, so it is not
+			// tried and takes none of the cycle's check slots:
+			// it counts as a pass that could not decide, and
+			// the slots go to entries that can be checked.
+			app.swarmDeferStaged(ctx, row.Kind, row.Key, row.Signer)
+			continue
+		}
+		if checks >= maxSwarmSpotPerCycle || allowance.exhausted() {
+			// Out of checks or out of calls: the rest wait,
+			// and waiting is not a deferral.
 			break
 		}
 		checks++
@@ -896,11 +1018,48 @@ func (app *Application) swarmSpotCheck(ctx context.Context, allowance *fetchBudg
 			app.discardSwarmEntry(ctx, row.Kind, row.Key, row.Signer, swarmDiscardMismatch)
 		default:
 			// Deferred: no scoped character, no span shared
-			// with ESI's history, a transient error — the
-			// row waits.
+			// with ESI's history, a transient error. The row
+			// waits for another pass, a few times; one that
+			// still cannot be decided is dropped, with no
+			// mark on its signer, rather than taking a check
+			// slot every cycle until the age cap.
+			app.swarmDeferStaged(ctx, row.Kind, row.Key, row.Signer)
 		}
 	}
 	return applied, false
+}
+
+// swarmDeferStaged notes one pass that could not decide a staged
+// entry, and drops the entry (neutrally) once it has had
+// maxSwarmDeferrals of them.
+func (app *Application) swarmDeferStaged(ctx context.Context, kind, key, signer string) {
+	n, err := app.queries.BumpStagingDeferral(ctx, db.BumpStagingDeferralParams{Kind: kind, Key: key})
+	if err != nil {
+		logging.Errorf("swarm: defer %s %s: %v", kind, key, err)
+		return
+	}
+	if n >= maxSwarmDeferrals {
+		app.dropSwarmEntry(ctx, kind, key, signer, swarmDropUndecidable)
+	}
+}
+
+// swarmStructureChecker picks a character that can re-fetch a
+// structure name: one that syncs and holds the structure scope.
+// Nil when there is none.
+func swarmStructureChecker(characters []db.Character) *db.Character {
+	for i, ch := range characters {
+		if characterSyncs(ch) && characterHasScope(ch, structureScope) {
+			return &characters[i]
+		}
+	}
+	return nil
+}
+
+// swarmCheckable reports whether this instance could check an
+// entry of this kind against ESI at all right now. Everything
+// public always can; a structure name needs a scoped character.
+func swarmCheckable(kind string, characters []db.Character) bool {
+	return kind != swarmKindStructure || swarmStructureChecker(characters) != nil
 }
 
 // swarmCheckVerdict is what re-fetching against ESI says about
@@ -1147,13 +1306,7 @@ func (app *Application) swarmVerifyStructure(ctx context.Context, allowance *fet
 	}
 	// Structures need a scoped character to re-fetch; with none
 	// linked the row waits rather than applying blind.
-	var scoped *db.Character
-	for i, ch := range characters {
-		if characterSyncs(ch) && characterHasScope(ch, structureScope) {
-			scoped = &characters[i]
-			break
-		}
-	}
+	scoped := swarmStructureChecker(characters)
 	if scoped == nil {
 		return swarmCheckDefer, false
 	}

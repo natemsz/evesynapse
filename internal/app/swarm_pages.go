@@ -213,6 +213,7 @@ func (app *Application) loadSwarmMetrics(ctx context.Context) *swarmMetricsView 
 		{Label: "ESI calls saved", Value: esi.FormatInt(applied)},
 		{Label: "Spot checks passed", Value: esi.FormatInt(counters[swarmCounterSpotPassed])},
 		{Label: "Spot checks failed (discarded, signer flagged)", Value: esi.FormatInt(counters[swarmCounterSpotFailed])},
+		{Label: "Entries taken back (signer excluded)", Value: esi.FormatInt(counters[swarmCounterRolledBack])},
 		{Label: "Peer pulls succeeded", Value: esi.FormatInt(counters[swarmCounterPullsOK])},
 		{Label: "Peer pulls failed", Value: esi.FormatInt(counters[swarmCounterPullsFailed])},
 	}

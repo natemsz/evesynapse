@@ -1222,7 +1222,12 @@ that doubles per consecutive failure, and five in a row excludes
 on velocity alone; old bad marks fade a little every gossip
 round, and passing checks rebuild trust, so a fixed peer earns
 its way back and the operator's re-admit is the way home. Ten
-checks under half trust excludes the signer on its own. The
+checks under half trust excludes the signer on its own. Every
+applied entry records the peer that served it, the instance
+that signed it and the signed fetch time; when a signer is
+excluded, the worker takes back what it supplied that this
+instance has not fetched for itself since, and fetches it from
+ESI instead. The
 urgent drain asks peers before spending ESI, and a key with a
 fresh staged entry skips its refetch while the spot decision
 lands. The operator can always add an

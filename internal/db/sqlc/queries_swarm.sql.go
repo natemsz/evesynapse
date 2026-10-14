@@ -44,6 +44,17 @@ func (q *Queries) AddSwarmPeerCheck(ctx context.Context, arg AddSwarmPeerCheckPa
 	return err
 }
 
+const countSwarmAppliedBySigner = `-- name: CountSwarmAppliedBySigner :one
+SELECT COUNT(*) FROM swarm_applied WHERE signer = $1
+`
+
+func (q *Queries) CountSwarmAppliedBySigner(ctx context.Context, signer string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSwarmAppliedBySigner, signer)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const decaySwarmBadChecks = `-- name: DecaySwarmBadChecks :exec
 UPDATE swarm_peers SET bad_checks = (bad_checks * 7) / 8 WHERE bad_checks > 0
 `
@@ -68,6 +79,20 @@ type DeleteStagingEntryParams struct {
 
 func (q *Queries) DeleteStagingEntry(ctx context.Context, arg DeleteStagingEntryParams) error {
 	_, err := q.db.ExecContext(ctx, deleteStagingEntry, arg.Kind, arg.Key)
+	return err
+}
+
+const deleteSwarmApplied = `-- name: DeleteSwarmApplied :exec
+DELETE FROM swarm_applied WHERE kind = $1 AND key = $2
+`
+
+type DeleteSwarmAppliedParams struct {
+	Kind string `json:"kind"`
+	Key  string `json:"key"`
+}
+
+func (q *Queries) DeleteSwarmApplied(ctx context.Context, arg DeleteSwarmAppliedParams) error {
+	_, err := q.db.ExecContext(ctx, deleteSwarmApplied, arg.Kind, arg.Key)
 	return err
 }
 
@@ -103,7 +128,7 @@ func (q *Queries) FlagSwarmPeerKeyConflict(ctx context.Context, arg FlagSwarmPee
 }
 
 const getStagingEntry = `-- name: GetStagingEntry :one
-SELECT kind, key, payload, signer, signature, fetched_at, received_at
+SELECT kind, key, payload, signer, signature, fetched_at, received_at, source
 FROM swarm_staging
 WHERE kind = $1 AND key = $2
 `
@@ -121,6 +146,7 @@ type GetStagingEntryRow struct {
 	Signature  string    `json:"signature"`
 	FetchedAt  time.Time `json:"fetched_at"`
 	ReceivedAt time.Time `json:"received_at"`
+	Source     string    `json:"source"`
 }
 
 // A staged entry is unsettled until a spot decision deletes
@@ -138,6 +164,36 @@ func (q *Queries) GetStagingEntry(ctx context.Context, arg GetStagingEntryParams
 		&i.Signature,
 		&i.FetchedAt,
 		&i.ReceivedAt,
+		&i.Source,
+	)
+	return i, err
+}
+
+const getSwarmApplied = `-- name: GetSwarmApplied :one
+SELECT kind, key, source, signer, fetched_at, applied_at, verified, row_stamp, first_date, last_date
+FROM swarm_applied
+WHERE kind = $1 AND key = $2
+`
+
+type GetSwarmAppliedParams struct {
+	Kind string `json:"kind"`
+	Key  string `json:"key"`
+}
+
+func (q *Queries) GetSwarmApplied(ctx context.Context, arg GetSwarmAppliedParams) (SwarmApplied, error) {
+	row := q.db.QueryRowContext(ctx, getSwarmApplied, arg.Kind, arg.Key)
+	var i SwarmApplied
+	err := row.Scan(
+		&i.Kind,
+		&i.Key,
+		&i.Source,
+		&i.Signer,
+		&i.FetchedAt,
+		&i.AppliedAt,
+		&i.Verified,
+		&i.RowStamp,
+		&i.FirstDate,
+		&i.LastDate,
 	)
 	return i, err
 }
@@ -201,6 +257,20 @@ func (q *Queries) GetSwarmIdentity(ctx context.Context) (GetSwarmIdentityRow, er
 	return i, err
 }
 
+const getSwarmNextGossip = `-- name: GetSwarmNextGossip :one
+SELECT next_gossip_at FROM swarm_identity LIMIT 1
+`
+
+// When the next gossip round is due: drawn once when a round
+// ends, kept across restarts. NULL (or no identity row yet)
+// means due now.
+func (q *Queries) GetSwarmNextGossip(ctx context.Context) (sql.NullTime, error) {
+	row := q.db.QueryRowContext(ctx, getSwarmNextGossip)
+	var next_gossip_at sql.NullTime
+	err := row.Scan(&next_gossip_at)
+	return next_gossip_at, err
+}
+
 const getSwarmPeer = `-- name: GetSwarmPeer :one
 SELECT instance_id, base_url, public_key, source, approved, excluded,
     exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip,
@@ -251,6 +321,52 @@ func (q *Queries) ListSwarmAllianceDemand(ctx context.Context, limit int32) ([]i
 			return nil, err
 		}
 		items = append(items, alliance_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSwarmAppliedToRollBack = `-- name: ListSwarmAppliedToRollBack :many
+SELECT a.kind, a.key, a.source, a.signer, a.fetched_at, a.applied_at, a.verified, a.row_stamp, a.first_date, a.last_date
+FROM swarm_applied a
+JOIN swarm_peers p ON p.instance_id = a.signer
+WHERE p.excluded
+ORDER BY a.applied_at, a.kind, a.key
+LIMIT $1
+`
+
+// What is still in the tables from signers that have since been
+// excluded: the rollback pass takes these back, oldest first, a
+// bounded batch at a time.
+func (q *Queries) ListSwarmAppliedToRollBack(ctx context.Context, limit int32) ([]SwarmApplied, error) {
+	rows, err := q.db.QueryContext(ctx, listSwarmAppliedToRollBack, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SwarmApplied
+	for rows.Next() {
+		var i SwarmApplied
+		if err := rows.Scan(
+			&i.Kind,
+			&i.Key,
+			&i.Source,
+			&i.Signer,
+			&i.FetchedAt,
+			&i.AppliedAt,
+			&i.Verified,
+			&i.RowStamp,
+			&i.FirstDate,
+			&i.LastDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -389,7 +505,7 @@ func (q *Queries) ListSwarmPullPeers(ctx context.Context) ([]ListSwarmPullPeersR
 }
 
 const listUncheckedStaging = `-- name: ListUncheckedStaging :many
-SELECT kind, key, payload, signer, signature, fetched_at, received_at
+SELECT kind, key, payload, signer, signature, fetched_at, received_at, source
 FROM swarm_staging
 WHERE checked_at IS NULL
 ORDER BY received_at
@@ -404,6 +520,7 @@ type ListUncheckedStagingRow struct {
 	Signature  string    `json:"signature"`
 	FetchedAt  time.Time `json:"fetched_at"`
 	ReceivedAt time.Time `json:"received_at"`
+	Source     string    `json:"source"`
 }
 
 func (q *Queries) ListUncheckedStaging(ctx context.Context, limit int32) ([]ListUncheckedStagingRow, error) {
@@ -423,6 +540,7 @@ func (q *Queries) ListUncheckedStaging(ctx context.Context, limit int32) ([]List
 			&i.Signature,
 			&i.FetchedAt,
 			&i.ReceivedAt,
+			&i.Source,
 		); err != nil {
 			return nil, err
 		}
@@ -453,6 +571,56 @@ func (q *Queries) MarkStagingChecked(ctx context.Context, arg MarkStagingChecked
 	return err
 }
 
+const putSwarmApplied = `-- name: PutSwarmApplied :exec
+INSERT INTO swarm_applied (kind, key, source, signer, fetched_at, applied_at, verified, row_stamp, first_date, last_date)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+ON CONFLICT (kind, key) DO UPDATE SET
+    source = excluded.source,
+    signer = excluded.signer,
+    fetched_at = excluded.fetched_at,
+    applied_at = excluded.applied_at,
+    verified = excluded.verified,
+    row_stamp = excluded.row_stamp,
+    first_date = excluded.first_date,
+    last_date = excluded.last_date
+`
+
+type PutSwarmAppliedParams struct {
+	Kind      string       `json:"kind"`
+	Key       string       `json:"key"`
+	Source    string       `json:"source"`
+	Signer    string       `json:"signer"`
+	FetchedAt time.Time    `json:"fetched_at"`
+	AppliedAt time.Time    `json:"applied_at"`
+	Verified  bool         `json:"verified"`
+	RowStamp  sql.NullTime `json:"row_stamp"`
+	FirstDate string       `json:"first_date"`
+	LastDate  string       `json:"last_date"`
+}
+
+// Provenance (schema 035): one row per applied key, replaced
+// when the key is applied again. source is the instance the
+// entry was pulled from, signer the instance whose key signed
+// it, fetched_at the fetch time that signature covers.
+// row_stamp is the timestamp written into the live row, where
+// the kind has one, so a rollback can tell the swarm's copy
+// from one this instance has fetched itself since.
+func (q *Queries) PutSwarmApplied(ctx context.Context, arg PutSwarmAppliedParams) error {
+	_, err := q.db.ExecContext(ctx, putSwarmApplied,
+		arg.Kind,
+		arg.Key,
+		arg.Source,
+		arg.Signer,
+		arg.FetchedAt,
+		arg.AppliedAt,
+		arg.Verified,
+		arg.RowStamp,
+		arg.FirstDate,
+		arg.LastDate,
+	)
+	return err
+}
+
 const putSwarmIdentity = `-- name: PutSwarmIdentity :exec
 INSERT INTO swarm_identity (id, instance_id, public_key, sealed_seed, created_at)
 VALUES (1, $1, $2, $3, $4)
@@ -460,7 +628,8 @@ ON CONFLICT (id) DO UPDATE SET
     instance_id = excluded.instance_id,
     public_key = excluded.public_key,
     sealed_seed = excluded.sealed_seed,
-    created_at = excluded.created_at
+    created_at = excluded.created_at,
+    next_gossip_at = NULL
 `
 
 type PutSwarmIdentityParams struct {
@@ -477,6 +646,133 @@ func (q *Queries) PutSwarmIdentity(ctx context.Context, arg PutSwarmIdentityPara
 		arg.SealedSeed,
 		arg.CreatedAt,
 	)
+	return err
+}
+
+const rollBackSwarmAlliance = `-- name: RollBackSwarmAlliance :execrows
+UPDATE alliance_records SET payload = '', state = 'pending', fetched_at = NULL
+WHERE alliance_id = $1 AND fetched_at = $2::timestamptz
+`
+
+type RollBackSwarmAllianceParams struct {
+	AllianceID int64     `json:"alliance_id"`
+	RowStamp   time.Time `json:"row_stamp"`
+}
+
+func (q *Queries) RollBackSwarmAlliance(ctx context.Context, arg RollBackSwarmAllianceParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, rollBackSwarmAlliance, arg.AllianceID, arg.RowStamp)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const rollBackSwarmCorporation = `-- name: RollBackSwarmCorporation :execrows
+
+UPDATE corporation_records SET payload = '', state = 'pending', fetched_at = NULL
+WHERE corporation_id = $1 AND fetched_at = $2::timestamptz
+`
+
+type RollBackSwarmCorporationParams struct {
+	CorporationID int64     `json:"corporation_id"`
+	RowStamp      time.Time `json:"row_stamp"`
+}
+
+// The rollbacks. Each touches the live row only while it still
+// carries the stamp the swarm apply wrote: a row this instance
+// has fetched from ESI since is its own and stays.
+func (q *Queries) RollBackSwarmCorporation(ctx context.Context, arg RollBackSwarmCorporationParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, rollBackSwarmCorporation, arg.CorporationID, arg.RowStamp)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const rollBackSwarmHistoryDays = `-- name: RollBackSwarmHistoryDays :execrows
+DELETE FROM market_history
+WHERE region_id = $1 AND type_id = $2
+  AND date >= $3::text AND date <= $4::text
+`
+
+type RollBackSwarmHistoryDaysParams struct {
+	RegionID  int64  `json:"region_id"`
+	TypeID    int64  `json:"type_id"`
+	FirstDate string `json:"first_date"`
+	LastDate  string `json:"last_date"`
+}
+
+// History goes by the day range the entry supplied, and only
+// while the pair's fetch state still says the swarm supplied it.
+func (q *Queries) RollBackSwarmHistoryDays(ctx context.Context, arg RollBackSwarmHistoryDaysParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, rollBackSwarmHistoryDays,
+		arg.RegionID,
+		arg.TypeID,
+		arg.FirstDate,
+		arg.LastDate,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const rollBackSwarmHistoryState = `-- name: RollBackSwarmHistoryState :execrows
+DELETE FROM market_fetch_state
+WHERE kind = $1 AND detail = 'swarm' AND attempted_at = $2::timestamptz
+`
+
+type RollBackSwarmHistoryStateParams struct {
+	Kind     string    `json:"kind"`
+	RowStamp time.Time `json:"row_stamp"`
+}
+
+func (q *Queries) RollBackSwarmHistoryState(ctx context.Context, arg RollBackSwarmHistoryStateParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, rollBackSwarmHistoryState, arg.Kind, arg.RowStamp)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const rollBackSwarmStructure = `-- name: RollBackSwarmStructure :execrows
+UPDATE structure_names SET name = '', state = 'pending', resolved_at = NULL, source = 'esi'
+WHERE structure_id = $1 AND source = 'community' AND resolved_at = $2::timestamptz
+`
+
+type RollBackSwarmStructureParams struct {
+	StructureID int64     `json:"structure_id"`
+	RowStamp    time.Time `json:"row_stamp"`
+}
+
+func (q *Queries) RollBackSwarmStructure(ctx context.Context, arg RollBackSwarmStructureParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, rollBackSwarmStructure, arg.StructureID, arg.RowStamp)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const rollBackSwarmTypeName = `-- name: RollBackSwarmTypeName :execrows
+DELETE FROM type_names WHERE type_id = $1
+`
+
+// Type names carry no timestamp to tell copies apart, so the
+// cached name simply goes: the next reader resolves it afresh.
+func (q *Queries) RollBackSwarmTypeName(ctx context.Context, typeID int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, rollBackSwarmTypeName, typeID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const setSwarmNextGossip = `-- name: SetSwarmNextGossip :exec
+UPDATE swarm_identity SET next_gossip_at = $1
+`
+
+func (q *Queries) SetSwarmNextGossip(ctx context.Context, nextGossipAt sql.NullTime) error {
+	_, err := q.db.ExecContext(ctx, setSwarmNextGossip, nextGossipAt)
 	return err
 }
 
@@ -510,14 +806,15 @@ func (q *Queries) SetSwarmPeerExcluded(ctx context.Context, arg SetSwarmPeerExcl
 }
 
 const stageSwarmEntry = `-- name: StageSwarmEntry :exec
-INSERT INTO swarm_staging (kind, key, payload, signer, signature, fetched_at, received_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO swarm_staging (kind, key, payload, signer, signature, fetched_at, received_at, source)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (kind, key) DO UPDATE SET
     payload = excluded.payload,
     signer = excluded.signer,
     signature = excluded.signature,
     fetched_at = excluded.fetched_at,
     received_at = excluded.received_at,
+    source = excluded.source,
     checked_at = NULL
 WHERE excluded.fetched_at > swarm_staging.fetched_at
 `
@@ -530,10 +827,14 @@ type StageSwarmEntryParams struct {
 	Signature  string    `json:"signature"`
 	FetchedAt  time.Time `json:"fetched_at"`
 	ReceivedAt time.Time `json:"received_at"`
+	Source     string    `json:"source"`
 }
 
 // A pulled entry stages at most once per key; a newer fetch of
 // the same key replaces it, an older one never overwrites.
+// fetched_at is the signer's clock, already held to a window
+// around receipt by the caller (stageSwarmEntry), so a claimed
+// far-future time cannot hold the slot against honest answers.
 // Staging is not serving: renders read the real tables only.
 func (q *Queries) StageSwarmEntry(ctx context.Context, arg StageSwarmEntryParams) error {
 	_, err := q.db.ExecContext(ctx, stageSwarmEntry,
@@ -544,6 +845,7 @@ func (q *Queries) StageSwarmEntry(ctx context.Context, arg StageSwarmEntryParams
 		arg.Signature,
 		arg.FetchedAt,
 		arg.ReceivedAt,
+		arg.Source,
 	)
 	return err
 }

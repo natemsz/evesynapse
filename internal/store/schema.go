@@ -180,6 +180,13 @@ var pgSwarmProvenanceSchema string
 //go:embed schema_pg/036_swarm_next_gossip.sql
 var pgSwarmNextGossipSchema string
 
+// Step 039: the typing-guess ledger keeps its history (a guess
+// is superseded, not deleted), so the hit rates read over a
+// window see the whole window.
+//
+//go:embed schema_pg/039_typing_ledger.sql
+var pgTypingLedgerSchema string
+
 // Step 040: recount fit rating aggregates from fit_ratings (a
 // doubled first rating was counted twice). Numbered clear of the
 // steps other open branches carry.
@@ -267,6 +274,7 @@ func schemaSteps() []schemaStep {
 		{31, "trade_ideas", pgTradeIdeasSchema, ""},
 		{32, "pulse_events", pgPulseEventsSchema, ""},
 		{33, "public_fits", pgPublicFitsSchema, ""},
+		{39, "typing_ledger", pgTypingLedgerSchema, ""},
 		{34, "swarm_key_pin", pgSwarmKeyPinSchema, ""},
 		{35, "swarm_provenance", pgSwarmProvenanceSchema, ""},
 		{36, "swarm_next_gossip", pgSwarmNextGossipSchema, ""},

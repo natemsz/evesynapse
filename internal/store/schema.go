@@ -229,6 +229,12 @@ var pgTradeIdeasAttemptsSchema string
 //go:embed schema_pg/044_swarm_staging_no_checked_at.sql
 var pgSwarmStagingNoCheckedAtSchema string
 
+// Step 045: every saved home layout goes back to the default once,
+// for the overview's new grid.
+//
+//go:embed schema_pg/045_home_layout_reset.sql
+var pgHomeLayoutResetSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -302,6 +308,7 @@ func schemaSteps() []schemaStep {
 		{42, "public_fit_pages", pgPublicFitPagesSchema, ""},
 		{43, "trade_ideas_attempts", pgTradeIdeasAttemptsSchema, ""},
 		{44, "swarm_staging_no_checked_at", pgSwarmStagingNoCheckedAtSchema, ""},
+		{45, "home_layout_reset", pgHomeLayoutResetSchema, ""},
 	}
 }
 

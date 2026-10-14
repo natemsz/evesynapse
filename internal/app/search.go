@@ -249,7 +249,9 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 
 	ownIDs := map[int64]bool{}
 	ownHitCount := 0
-	if chars, err := app.queries.ListCharactersByUser(ctx, userID); err == nil {
+	if userID == 0 {
+		// Anonymous: no characters of its own to match.
+	} else if chars, err := app.queries.ListCharactersByUser(ctx, userID); err == nil {
 		charHits := []searchHit{}
 		for _, ch := range chars {
 			ownIDs[ch.CharacterID] = true
@@ -389,7 +391,9 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 		logging.Errorf("search: pilot records for %q: %v", q, err)
 	}
 
-	app.setTypingGuesses(ctx, app.typingBox(ctx, "topbar"), guesses, time.Now().UTC())
+	if userID > 0 { // anonymous typing warms nothing ahead of a visit
+		app.setTypingGuesses(ctx, app.typingBox(ctx, "topbar"), guesses, time.Now().UTC())
+	}
 
 	// No local character of either kind matched: if the query
 	// reads as a full pilot name, note the one-per-name

@@ -570,8 +570,10 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 
 	// Generic entity-label live regions (worker_pagewants.go): a pending
 	// character/structure label anywhere polls its own fragment.
+	// Name labels answer a pending label's poll from stored rows
+	// only, so the public record pages can use them too.
 	r.Route("/labels", func(r chi.Router) {
-		r.Use(app.requireAuth)
+		r.Use(anonPages)
 		r.Get("/character-fragment", app.handleCharacterLabelFragment)
 		r.Get("/corporation-fragment", app.handleCorporationLabelFragment)
 		r.Get("/alliance-fragment", app.handleAllianceLabelFragment)
@@ -612,7 +614,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 
 	// Top banner global search (items + own characters + warmed
 	// pilot records, all local).
-	r.With(app.requireAuth).Get("/search.json", app.handleTopbarSearch)
+	r.With(anonPages).Get("/search.json", app.handleTopbarSearch)
 
 	r.Route("/skills", func(r chi.Router) {
 		r.Use(app.requireAuth)
@@ -637,20 +639,24 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// Public pilot page: a stranger's public record (profile +
 	// employment history), warmed by the worker from public ESI.
 	r.Route("/pilot", func(r chi.Router) {
-		r.Use(app.requireAuth)
+		r.Use(anonPages)
 		r.Get("/", app.handlePilot)
 		r.Get("/fragment", app.handlePilotFragment)
 	})
 
-	// Public corporation & alliance pages: an organization's
-	// public record, warmed by the worker from public ESI.
+	// Public record pages (pilot, corporation, alliance, system,
+	// station, structure). Every render reads stored rows only: the
+	// instance's own data and the swarm data it has applied (which
+	// lands in the same tables; staged entries are never read). A
+	// miss renders the not-yet-known state and is queued for the
+	// worker; nothing is fetched while the page renders.
 	r.Route("/corporation", func(r chi.Router) {
-		r.Use(app.requireAuth)
+		r.Use(anonPages)
 		r.Get("/", app.handleCorporationPage)
 		r.Get("/fragment", app.handleCorporationFragment)
 	})
 	r.Route("/alliance", func(r chi.Router) {
-		r.Use(app.requireAuth)
+		r.Use(anonPages)
 		r.Get("/", app.handleAlliancePage)
 		r.Get("/fragment", app.handleAllianceFragment)
 	})
@@ -659,11 +665,11 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// destination every system/station name links to. Nothing to
 	// warm — both render from the local SDE.
 	r.Route("/system", func(r chi.Router) {
-		r.Use(app.requireAuth)
+		r.Use(anonPages)
 		r.Get("/", app.handleSystemPage)
 	})
 	r.Route("/station", func(r chi.Router) {
-		r.Use(app.requireAuth)
+		r.Use(anonPages)
 		r.Get("/", app.handleStationPage)
 	})
 
@@ -671,7 +677,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// Upwell structure (resolved name, owning corporation, system,
 	// type), filled in by the background structure resolution.
 	r.Route("/structure", func(r chi.Router) {
-		r.Use(app.requireAuth)
+		r.Use(anonPages)
 		r.Get("/", app.handleStructurePage)
 		r.Get("/fragment", app.handleStructureFragment)
 	})

@@ -537,10 +537,24 @@ func buildPIGraph(target string, selected []string, prices map[string]float64) (
 	for _, p := range selected {
 		sel[p] = true
 	}
+	// A planet type that yields any raw on the chain is a source
+	// for it, ticked or not, so the column shows every planet the
+	// target could be made from beside the ones selected.
+	source := map[string]bool{}
+	for _, raw := range piplan.RequiredRaws(target) {
+		for _, p := range piplan.RawSources[raw] {
+			source[p] = true
+		}
+	}
 	for _, pt := range piplan.PlanetTypes {
 		cls := "dimmed"
 		if sel[pt] {
 			cls = "covered"
+		} else if source[pt] {
+			cls = "source"
+		}
+		if source[pt] {
+			cls += " can-supply"
 		}
 		cols[0].Nodes = append(cols[0].Nodes, piGraphNode{Name: pt, Tier: "Planet", Class: cls})
 	}

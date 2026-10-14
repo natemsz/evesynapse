@@ -332,6 +332,7 @@ proportional bar under the text, colored by the decision. */
 .pi-node.selected { border-color: #ffd27a; background: var(--row-hover); font-weight: 700; }
 .pi-node.output { border-color: #5eb8ff; }
 .pi-node.covered { border-color: #3fce7a; background: var(--row-hover); }
+.pi-node.source, .pi-node.dimmed.can-supply { opacity: 1; border-color: #c9a06a; border-style: dashed; }
 @media (max-width: 60rem) { .pi-col { min-width: 9rem; flex-basis: 9rem; } }
 /* The planner search sits in the shared panel: its row needs no
    margin of its own inside it. */

@@ -166,6 +166,9 @@
         var on = !!checked[el.getAttribute("data-pi-node")];
         el.classList.toggle("covered", on);
         el.classList.toggle("dimmed", !on);
+        // A planet that could supply the chain stays marked whether
+        // or not it is ticked (the server sets can-supply).
+        el.classList.toggle("source", !on && el.classList.contains("can-supply"));
       });
       var target = currentTarget();
       if (!target) return;

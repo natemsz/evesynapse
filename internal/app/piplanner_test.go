@@ -78,7 +78,9 @@ func TestPIPlannerRendersChain(t *testing.T) {
 		// Every chain input names where it is made: the target's
 		// factory line, and a raw's or P1's ticked planet type.
 		`<small class="pi-on">factory on any planet</small>`,
-		`<small class="pi-on">on `+piplan.MinimalPlanets("Coolant")[0])
+		`<small class="pi-on">on `+piplan.MinimalPlanets("Coolant")[0],
+		// Planet types that could supply the chain stay marked.
+		`can-supply" data-pi-node="`)
 }
 
 // TestPIPlannerDefaults: bare /industry/pi/ opens on the default

@@ -112,7 +112,7 @@ type pilotView struct {
 // viewer's own characters redirects to its full sheet instead.
 func (app *Application) handlePilot(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
+	data := app.publicPage(ctx) // public: stored rows only
 
 	id, err := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64)
 	if err != nil || id <= 0 {

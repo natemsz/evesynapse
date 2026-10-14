@@ -128,7 +128,7 @@ type alliancePageView struct {
 // handleCorporationPage renders one corporation's public record.
 func (app *Application) handleCorporationPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
+	data := app.publicPage(ctx) // public: stored rows only
 
 	id, err := strconv.ParseInt(r.URL.Query().Get("corporation"), 10, 64)
 	if err != nil || id <= 0 {
@@ -148,7 +148,7 @@ func (app *Application) handleCorporationPage(w http.ResponseWriter, r *http.Req
 // handleAlliancePage renders one alliance's public record.
 func (app *Application) handleAlliancePage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
+	data := app.publicPage(ctx) // public: stored rows only
 
 	id, err := strconv.ParseInt(r.URL.Query().Get("alliance"), 10, 64)
 	if err != nil || id <= 0 {

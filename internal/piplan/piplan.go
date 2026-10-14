@@ -360,14 +360,15 @@ func ChainNodes(target string) []string {
 	sort.Slice(out, func(i, j int) bool {
 		ti, tj := TierOf(out[i]), TierOf(out[j])
 		if ti != tj {
-			return tierRank(ti) < tierRank(tj)
+			return TierRank(ti) < TierRank(tj)
 		}
 		return out[i] < out[j]
 	})
 	return out
 }
 
-func tierRank(t Tier) int {
+// TierRank orders tiers raw (0) to P4 (4); anything else sorts last.
+func TierRank(t Tier) int {
 	switch t {
 	case TierRaw:
 		return 0
@@ -400,7 +401,7 @@ func CoverageFor(target string, planets []string) Coverage {
 	req := RequiredRaws(target)
 	avail := map[string]bool{}
 	for _, p := range planets {
-		for _, raw := range PlanetYields[titlePlanet(p)] {
+		for _, raw := range PlanetYields[TitlePlanet(p)] {
 			avail[raw] = true
 		}
 	}
@@ -416,8 +417,8 @@ func CoverageFor(target string, planets []string) Coverage {
 	return cov
 }
 
-// titlePlanet normalises a planet type string ("barren" -> "Barren").
-func titlePlanet(s string) string {
+// TitlePlanet normalises a planet type string ("barren" -> "Barren").
+func TitlePlanet(s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return s
@@ -599,7 +600,7 @@ func PlanFor(target string, amount int64, s Settings, prices map[string]float64)
 	order := ChainNodes(target)
 	// ChainNodes is ascending; iterate descending, target first.
 	sort.Slice(order, func(i, j int) bool {
-		ri, rj := tierRank(TierOf(order[i])), tierRank(TierOf(order[j]))
+		ri, rj := TierRank(TierOf(order[i])), TierRank(TierOf(order[j]))
 		if ri != rj {
 			return ri > rj
 		}

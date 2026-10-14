@@ -370,11 +370,12 @@ func TestSwarmServeMissesWhenEmpty(t *testing.T) {
 
 func TestSwarmGossipDue(t *testing.T) {
 	app := swarmTestApp(t)
-	if !app.swarmGossipDue(time.Now().UTC()) {
+	ctx := context.Background()
+	if !app.swarmGossipDue(ctx, time.Now().UTC()) {
 		t.Fatalf("first run: gossip not due")
 	}
-	app.swarmGossipDone(time.Now().UTC())
-	if app.swarmGossipDue(time.Now().UTC()) {
+	app.swarmGossipDone(ctx, time.Now().UTC())
+	if app.swarmGossipDue(ctx, time.Now().UTC()) {
 		t.Fatalf("just gossiped: gossip due again")
 	}
 }

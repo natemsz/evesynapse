@@ -218,7 +218,7 @@ func TestSwarmGossipSkipsAnnounceWhenNothingToSay(t *testing.T) {
 	app.cfg.eveCallbackURL = ""
 	now := time.Now()
 	app.swarmGossip(context.Background(), now)
-	if app.swarmGossipDue(now) {
+	if app.swarmGossipDue(context.Background(), now) {
 		t.Fatal("gossip round did not complete")
 	}
 }

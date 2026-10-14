@@ -82,10 +82,37 @@ type briefingLine struct {
 }
 
 type briefingWidget struct {
-	Lines      []briefingLine
-	HTMLLines  []template.HTML // Lines rendered (template.HTML conversion of html)
-	More       int             // qualifying lines hidden past the cap
-	SinceLabel string          // "Oct 2, 21:41" — window start as shown
+	Lines     []briefingLine
+	HTMLLines []template.HTML // Lines rendered (template.HTML conversion of html)
+	// Items are the same lines with their severity, for the
+	// module's cards and its severity tabs; Counts tally them.
+	Items      []briefingItem
+	Counts     briefingCounts
+	More       int    // qualifying lines hidden past the cap
+	SinceLabel string // "Oct 2, 21:41" — window start as shown
+}
+
+// briefingItem is one rendered line and its severity.
+type briefingItem struct {
+	HTML     template.HTML
+	Severity string // critical | warning | info
+}
+
+type briefingCounts struct {
+	All, Critical, Warning, Info int
+}
+
+// briefingSeverity groups the rule ranks into the three tabs the
+// module filters by: what is already costing the user (critical),
+// what wants doing soon (warning), and news (info).
+func briefingSeverity(rank int) string {
+	switch rank {
+	case briefingRelink, briefingStoppedExtractor, briefingOrderExpired, briefingNotTraining:
+		return "critical"
+	case briefingCalendar, briefingWatchMove, briefingMail:
+		return "info"
+	}
+	return "warning"
 }
 
 // briefingSince formatting for the module footer.
@@ -206,6 +233,17 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 	for _, l := range lines {
 		w.Lines = append(w.Lines, l)
 		w.HTMLLines = append(w.HTMLLines, template.HTML(l.html))
+		sev := briefingSeverity(l.Rank)
+		w.Items = append(w.Items, briefingItem{HTML: template.HTML(l.html), Severity: sev})
+		switch sev {
+		case "critical":
+			w.Counts.Critical++
+		case "warning":
+			w.Counts.Warning++
+		default:
+			w.Counts.Info++
+		}
+		w.Counts.All++
 	}
 	return w
 }

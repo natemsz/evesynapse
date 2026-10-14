@@ -73,21 +73,31 @@ func (q *Queries) CountForesightLive(ctx context.Context, now time.Time) (int64,
 const getForesightWarmedForView = `-- name: GetForesightWarmedForView :one
 SELECT event_kind
 FROM foresight_targets
-WHERE view_key = $1 AND warmed_at IS NOT NULL AND warmed_at <= $2
+WHERE view_key = $1 AND user_id = $2
+  AND warmed_at IS NOT NULL AND warmed_at <= $3 AND warmed_at >= $4
 ORDER BY warmed_at DESC
 LIMIT 1
 `
 
 type GetForesightWarmedForViewParams struct {
 	ViewKey  string       `json:"view_key"`
+	UserID   int64        `json:"user_id"`
 	WarmedAt sql.NullTime `json:"warmed_at"`
+	Since    sql.NullTime `json:"since"`
 }
 
 // The latest warming behind a page view: what event the worker
 // saw before it warmed the data the page renders. Feeds the
-// "because ..." freshness line; no row means routine.
+// "because ..." freshness line; no row means routine. Only this
+// viewer's own target counts, warmed inside the window before the
+// fetch.
 func (q *Queries) GetForesightWarmedForView(ctx context.Context, arg GetForesightWarmedForViewParams) (string, error) {
-	row := q.db.QueryRowContext(ctx, getForesightWarmedForView, arg.ViewKey, arg.WarmedAt)
+	row := q.db.QueryRowContext(ctx, getForesightWarmedForView,
+		arg.ViewKey,
+		arg.UserID,
+		arg.WarmedAt,
+		arg.Since,
+	)
 	var event_kind string
 	err := row.Scan(&event_kind)
 	return event_kind, err

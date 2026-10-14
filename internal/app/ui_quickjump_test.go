@@ -118,7 +118,8 @@ func TestTopbarSearchIncludesOrganizations(t *testing.T) {
 
 // TestQuickJumpPagesMatchNav pins the palette's static page
 // group against the destinations the sidebar actually offers:
-// every sidenav link (account switcher actions aside) is in
+// every sidenav link (base.html's own and the category menus from
+// sectionNav; account switcher actions aside) is in
 // the palette, and the palette invents none.
 func TestQuickJumpPagesMatchNav(t *testing.T) {
 	base, err := templatesFS.ReadFile("templates/base.html")
@@ -134,10 +135,16 @@ func TestQuickJumpPagesMatchNav(t *testing.T) {
 	navURLs := map[string]bool{}
 	for _, m := range hrefRe.FindAllStringSubmatch(string(base)[navStart:navEnd], -1) {
 		href := m[1]
-		if strings.Contains(href, "switch") || strings.HasPrefix(href, "/auth/") {
+		if strings.Contains(href, "switch") || strings.HasPrefix(href, "/auth/") || strings.HasPrefix(href, "{{") {
 			continue
 		}
 		navURLs[href] = true
+	}
+	// The category menus render from sectionNav (nav.go).
+	for _, entries := range sectionNav {
+		for _, e := range entries {
+			navURLs[e.Href] = true
+		}
 	}
 	if len(navURLs) == 0 {
 		t.Fatal("no nav links extracted from base.html")

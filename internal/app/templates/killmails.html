@@ -1,6 +1,7 @@
 {{define "title"}}Killmails{{end}}
 {{define "content"}}
 <h1><span class="gt">{{if .Killmails}}{{.Killmails.Title}}{{else}}Killmails{{end}}</span></h1>
+{{template "sectiontabs" .}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 

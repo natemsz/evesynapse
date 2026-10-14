@@ -1,6 +1,7 @@
 {{define "title"}}Characters{{end}}
 {{define "content"}}
 <h1><span class="gt">Characters</span></h1>
+{{template "sectiontabs" .}}
 <p>Every character linked to your account. The worker keeps each one's data warm in the background; tags are your own labels for telling a fleet of alts apart (EVE doesn't reveal which characters share a game account, so grouping is yours).</p>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}

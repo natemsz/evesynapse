@@ -311,10 +311,7 @@ proportional bar under the text, colored by the decision. */
   .plan-frow { grid-template-columns: 1fr; gap: 0.15rem; }
   .plan-grow { grid-template-columns: 1fr; }
 }
-/* --- Industry hub tabs + PI Planner (/industry/pi/) --- */
-.industry-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.6rem 0 1rem; }
-.industry-tabs a { padding: 0.35rem 0.8rem; border: 1px solid var(--border, #333); border-radius: 4px; text-decoration: none; }
-.industry-tabs a.active { border-color: var(--accent); color: var(--text-bright); background: var(--row-hover); }
+/* --- PI Planner (/industry/pi/) --- */
 .pi-controls label { margin-right: 1rem; white-space: nowrap; }
 .pi-planets { border: 1px solid var(--border, #333); border-radius: 4px; margin: 0.6rem 0; }
 .pi-planet { white-space: nowrap; margin-right: 0.8rem; }

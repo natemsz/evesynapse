@@ -1,0 +1,3 @@
+{{define "sectiontabs"}}{{with .SectionTabs}}<nav class="section-tabs" aria-label="Pages in this section">
+  {{range .}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="page"{{end}}>{{.Label}}</a>{{end}}
+</nav>{{end}}{{end}}

@@ -768,8 +768,16 @@ function renderGantt(t) {
 
 // --- buy list and hub split ---
 function renderBuy(t) {
+  // The list and the hub split are separate elements: a page
+  // without one still gets the other.
   var list = $("plan-buylist"), hub = $("plan-hubsplit");
-  if (!list || !hub) return;
+  if (list) renderBuyList(list, t);
+  if (hub) renderHubSplit(hub, t);
+  var copy = $("plan-copy");
+  if (copy) copy.addEventListener("click", copyMultibuy);
+}
+
+function renderBuyList(list, t) {
   if (!t.shopping.length) {
     // Empty for two honest reasons: stock covers everything, or
     // the scenario buys the finished product outright (the root
@@ -794,6 +802,9 @@ function renderBuy(t) {
       (t.complete ? "" : "<p><small>" + t.unpriced + " line(s) have no price data and are not in the total.</small></p>") +
       '<p><button type="button" id="plan-copy">Copy multibuy list</button></p>';
   }
+}
+
+function renderHubSplit(hub, t) {
   var buy = t.buyValue, stock = P.stockVal, tot = buy + stock;
   var html = "<h4>Hub split</h4>";
   if (tot > 0) {
@@ -805,8 +816,6 @@ function renderBuy(t) {
     html += "<p><small>No priced value to split yet.</small></p>";
   }
   hub.innerHTML = html;
-  var copy = $("plan-copy");
-  if (copy) copy.addEventListener("click", copyMultibuy);
 }
 
 function copyMultibuy() {

@@ -37,6 +37,10 @@ function install(payload, opts) {
     readyState: "complete",
     title: "probe",
     getElementById: function (id) {
+      // A page that lacks an element answers null, as a browser
+      // does. Without this the stub conjures every element asked
+      // for and can never show what a missing one breaks.
+      if (opts.missing && opts.missing.indexOf(id) !== -1) return null;
       if (!els[id]) {
         els[id] = makeEl();
         if (opts.throwOnMap && id === "plan-map") {
@@ -254,6 +258,49 @@ test("a plan that buys the product says so, with no saving line", async function
   assert.strictEqual(els["plan-verdict"].className, "plan-verdict buy");
   assert.strictEqual(els["plan-verdict"].hidden, false);
   assert.ok(els["plan-verdict"].textContent.indexOf("saves") === -1, "no saving line for a buy decision");
+});
+
+// The failure class this harness exists for: the script reaches
+// for an element the page does not have, throws, and takes every
+// view down with it.
+test("missing optional elements leave every view rendered", async function () {
+  const missing = [
+    "plan-hubsplit", "plan-inspector", "plan-verdict", "plan-serverflag",
+    "plan-landed-sub", "plan-margin", "plan-margin-sub", "plan-data",
+    "plan-form", "me-toggle", "me-modal", "me-apply",
+    "plan-settings-toggle", "plan-settings-modal",
+    "judge-q", "judge-suggest", "system-q", "market-q", "market-value"
+  ];
+  const els = install(capitalPayload(), { missing: missing });
+  await waitFor(function () {
+    return els["plan-map"] && els["plan-map"].innerHTML.indexOf("plan-node") !== -1;
+  }, "map render");
+  for (const id of ["plan-map", "plan-gantt", "plan-buylist", "plan-fall"]) {
+    assert.ok(els[id] && els[id].innerHTML.indexOf(rendered[id]) !== -1, id + " rendered");
+    assert.ok(els[id].innerHTML.indexOf("need the plan data") === -1, id + " has no fail note");
+    assert.ok(els[id].innerHTML.indexOf("failed to render") === -1, id + " did not throw");
+  }
+  // The buy list does not depend on the hub split beside it.
+  assert.ok(els["plan-buylist"].innerHTML.indexOf("plan-buytable") !== -1, "buy list renders without the hub split");
+  for (const id of missing) assert.ok(!els[id], id + " stayed missing");
+});
+
+test("a missing view container leaves the other views rendered", async function () {
+  const views = ["plan-map", "plan-gantt", "plan-buylist", "plan-fall"];
+  for (const gone of views) {
+    const els = install(capitalPayload(), { missing: [gone] });
+    // Views render in one pass, the cost flow last (the timeline
+    // stands in when the cost flow is the one missing).
+    const last = gone === "plan-fall" ? "plan-gantt" : "plan-fall";
+    await waitFor(function () {
+      return els[last] && els[last].innerHTML.indexOf(rendered[last]) !== -1;
+    }, last + " render without " + gone);
+    for (const id of views) {
+      if (id === gone) continue;
+      assert.ok(els[id] && els[id].innerHTML.indexOf(rendered[id]) !== -1, id + " rendered without " + gone);
+      assert.ok(els[id].innerHTML.indexOf("failed to render") === -1, id + " did not throw without " + gone);
+    }
+  }
 });
 
 test("one throwing view does not blank the others", async function () {

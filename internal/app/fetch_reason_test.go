@@ -119,7 +119,11 @@ func TestFetchReason(t *testing.T) {
 		}
 	}
 	// A visitor without a session is credited with nothing.
-	if got := app.fetchReason(ctx, "corporation:98000002", string(pageWantCorporation), 98000002, 0, fetched); got != "" {
+	anon, err := app.sessions.Load(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := app.fetchReason(anon, "corporation:98000002", string(pageWantCorporation), 98000002, 0, fetched); got != "" {
 		t.Errorf("reason with no session = %q, want none", got)
 	}
 }

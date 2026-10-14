@@ -76,10 +76,13 @@ WHERE cc.corporation_id = ANY(sqlc.arg(corporation_ids)::bigint[]);
 
 -- The latest warming behind a page view: what event the worker
 -- saw before it warmed the data the page renders. Feeds the
--- "because ..." freshness line; no row means routine.
+-- "because ..." freshness line; no row means routine. Only this
+-- viewer's own target counts, warmed inside the window before the
+-- fetch.
 -- name: GetForesightWarmedForView :one
 SELECT event_kind
 FROM foresight_targets
-WHERE view_key = $1 AND warmed_at IS NOT NULL AND warmed_at <= $2
+WHERE view_key = sqlc.arg(view_key) AND user_id = sqlc.arg(user_id)
+  AND warmed_at IS NOT NULL AND warmed_at <= sqlc.arg(warmed_at) AND warmed_at >= sqlc.arg(since)
 ORDER BY warmed_at DESC
 LIMIT 1;

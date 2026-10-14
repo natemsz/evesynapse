@@ -125,16 +125,15 @@ var FitTipUI = (function () {
     tipEl.appendChild(x);
     return tipEl;
   }
-  // Anchors the (already appended) tooltip where it covers no
-  // module the pointer may move to next. A ring slot's tooltip sits
-  // beside the slot on its outward side — away from the ring's
-  // centre, where no other slot is — so it opens next to the
-  // pointer: right of a slot on the right, above one at the top,
-  // diagonally out from one in between. If that spot would still
-  // cover a slot once kept inside the workbench (a slot by the edge
-  // of a narrow screen), it falls back to the ring's hole, over the
-  // ship render. A list chip's sits beside its row. Positions are
-  // within the workbench, the offset parent (position: relative).
+  // Anchors the (already appended) tooltip. A ring slot's tooltip
+  // sits beside the slot, offset outward by where the slot is on the
+  // ring — right of a slot on the right, above one at the top,
+  // diagonally out from one in between — the way the game places
+  // it: never over the neighboring slots, never in the middle. It
+  // may run past the workbench over the panels beside it, as in
+  // game; it is only kept inside the window's width. A list chip's sits
+  // beside its row, inside the workbench. Positions are relative to
+  // the workbench, the offset parent (position: relative).
   function place(tipEl, slot, wb) {
     var wr = wb.getBoundingClientRect();
     var sr = slot.getBoundingClientRect();
@@ -159,40 +158,24 @@ var FitTipUI = (function () {
       // Outward on each axis that points outward; centred on the
       // slot along an axis that barely does.
       var lean = 0.38;
-      if (ux > lean) tx = sr.right + gap;
-      else if (ux < -lean) tx = sr.left - gap - tw;
-      else tx = sx - tw / 2;
-      if (uy > lean) ty = sr.bottom + gap;
-      else if (uy < -lean) ty = sr.top - gap - th;
-      else ty = sy - th / 2;
-      tx -= wr.left;
-      ty -= wr.top;
-      clamp();
-      // Does it cover any slot of the ring (its own included)?
-      var box = { l: tx + wr.left, t: ty + wr.top, r: tx + wr.left + tw, b: ty + wr.top + th };
-      var slots = ring.querySelectorAll(".fit-vslot");
-      var covers = false;
-      for (var i = 0; i < slots.length && !covers; i++) {
-        var o = slots[i].getBoundingClientRect();
-        covers = o.right > box.l + 1 && o.left < box.r - 1 && o.bottom > box.t + 1 && o.top < box.b - 1;
-      }
-      if (covers) {
-        // The ring's hole: the square inscribed in the free circle.
-        var free = len - sr.width / 2 - 6;
-        var side = Math.floor(free * Math.SQRT2);
-        if (side > 0) {
-          tipEl.style.maxWidth = side + "px";
-          tipEl.style.maxHeight = side + "px";
-          tipEl.style.overflowY = "auto";
-          tipEl.style.overflowX = "hidden";
-        }
-        tw = tipEl.offsetWidth || 190;
-        th = tipEl.offsetHeight || 110;
-        tx = cx - wr.left - tw / 2;
-        ty = cy - wr.top - th / 2;
-        clamp();
-      }
-    } else {
+      var left, top;
+      if (ux > lean) left = sr.right + gap;
+      else if (ux < -lean) left = sr.left - gap - tw;
+      else left = sx - tw / 2;
+      if (uy > lean) top = sr.bottom + gap;
+      else if (uy < -lean) top = sr.top - gap - th;
+      else top = sy - th / 2;
+      // Kept inside the window's width only: past a side it would be
+      // cut off, while above or below the page simply scrolls, and a
+      // vertical clamp would push it back onto the slots.
+      var docEl = document.documentElement;
+      var vw = (docEl && docEl.clientWidth) || window.innerWidth || Infinity;
+      left = Math.max(edge, Math.min(left, vw - tw - edge));
+      tipEl.style.left = Math.round(left - wr.left) + "px";
+      tipEl.style.top = Math.round(top - wr.top) + "px";
+      return;
+    }
+    {
       tw = tipEl.offsetWidth || 190;
       th = tipEl.offsetHeight || 110;
       var right = sr.right - wr.left + 10;

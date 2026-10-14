@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -94,8 +95,22 @@ func TestPublicSEOFiles(t *testing.T) {
 		"Allow: /items/",
 		"Allow: /ships/",
 		"Disallow: /fittings/saved/",
-		"Sitemap:",
 	)
+	// An instance with no address of its own configured publishes
+	// no absolute URL: no sitemap line, no sitemap, and never the
+	// address of some other site.
+	if strings.Contains(body, "Sitemap:") || strings.Contains(body, "evesynapse.app") {
+		t.Errorf("robots.txt names a sitemap for an instance with no origin:\n%s", body)
+	}
+	if code, _ := apptest.GetPage(t, rig, nil, "/sitemap.xml"); code != http.StatusNotFound {
+		t.Errorf("sitemap with no origin configured: status = %d, want 404", code)
+	}
+
+	// A self-hosted instance: everything it publishes is at its own
+	// origin, read from the address it is configured to be served at.
+	rig.SetCallbackURL("https://node.example.org/auth/callback")
+	_, body = apptest.GetPage(t, rig, nil, "/robots.txt")
+	apptest.MustContain(t, "/robots.txt", body, "Sitemap: https://node.example.org/sitemap.xml")
 
 	// Seed a public fit plus swept stats, so the sitemap has
 	// fit, item and ship content beyond the core pages. URLs use
@@ -120,12 +135,15 @@ func TestPublicSEOFiles(t *testing.T) {
 	}
 	apptest.MustContain(t, "/sitemap.xml", body,
 		"<urlset", "</loc>",
-		"https://evesynapse.app/</loc>",
-		"https://evesynapse.app/fittings/public/</loc>",
-		"https://evesynapse.app/fittings/public/fit/"+fmt.Sprintf("%d", fitID)+"/",
-		"https://evesynapse.app/items/type/587/",
-		"https://evesynapse.app/ships/587/",
+		"https://node.example.org/</loc>",
+		"https://node.example.org/fittings/public/</loc>",
+		"https://node.example.org/fittings/public/fit/"+fmt.Sprintf("%d", fitID)+"/",
+		"https://node.example.org/items/type/587/",
+		"https://node.example.org/ships/587/",
 	)
+	if strings.Contains(body, "evesynapse.app") {
+		t.Errorf("sitemap names another site")
+	}
 	for _, authed := range []string{"/admin/", "/api/", "/fittings/saved/", "/auth/"} {
 		if strings.Contains(body, authed) {
 			t.Errorf("sitemap leaks authed path %s", authed)
@@ -239,6 +257,17 @@ func TestPublicFitsBrowser(t *testing.T) {
 	_, body = get("/fittings/public/?sort=old")
 	apptest.MustContain(t, "sort=old", body, "Old Rifter")
 
+	// Search finds a fit by the author it shows, never by another
+	// character of the same account: that would tell a visitor which
+	// characters are one person's.
+	_, body = get("/fittings/public/?q=Alpha+Pilot")
+	apptest.MustContain(t, "q=Alpha Pilot", body, "Solo Rifter")
+	apptest.SeedCharacter(t, rig.Queries(), userA, 93399999, "Hidden Alt")
+	_, body = get("/fittings/public/?q=Hidden+Alt")
+	if strings.Contains(body, "Solo Rifter") || strings.Contains(body, "T2 Rifter") {
+		t.Error("searching an alt's name found its account's fits")
+	}
+
 	// Tag and role (roles match tags) filters.
 	_, body = get("/fittings/public/?tag=pvp")
 	apptest.MustContain(t, "tag=pvp", body, "Fleet Rifter", "Solo Rifter")
@@ -316,6 +345,40 @@ func TestPublicFitsBrowser(t *testing.T) {
 	}
 }
 
+// TestPublicFitRankFormula pins the rank: a fit's average shrunk
+// toward the global mean of rated public fits with weight 5. The
+// mean is its own function, passed in, so a ranked list reads it
+// once rather than once per row.
+func TestPublicFitRankFormula(t *testing.T) {
+	rig := apptest.Build(t, &apptest.CountingTransport{})
+	seedPublicBrowser(t, rig)
+	ctx := context.Background()
+	// The seed rates three public fits: 5 (one vote), 5 (three
+	// votes) and 1 (one vote): the mean of their averages is 11/3.
+	var mean float64
+	if err := rig.DB().QueryRowContext(ctx, `SELECT public_fit_mean()`).Scan(&mean); err != nil {
+		t.Fatal(err)
+	}
+	if mean < 11.0/3-1e-9 || mean > 11.0/3+1e-9 {
+		t.Errorf("global mean = %v, want 11/3", mean)
+	}
+	var rank float64
+	if err := rig.DB().QueryRowContext(ctx, `SELECT public_fit_rank(10, 2, 4.0)`).Scan(&rank); err != nil {
+		t.Fatal(err)
+	}
+	if want := (10 + 5*4.0) / (2 + 5); rank < want-1e-9 || rank > want+1e-9 {
+		t.Errorf("rank(10, 2, mean 4) = %v, want %v", rank, want)
+	}
+	// The two-argument form, with its per-row sub-select, is gone.
+	var n int
+	if err := rig.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM pg_proc WHERE proname = 'public_fit_rank' AND pronargs = 2`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("the two-argument public_fit_rank still exists")
+	}
+}
+
 func TestPublicFitPage(t *testing.T) {
 	transport := &apptest.CountingTransport{}
 	rig := apptest.Build(t, transport)
@@ -336,11 +399,41 @@ func TestPublicFitPage(t *testing.T) {
 		t.Fatal("fleet fit missing")
 	}
 
+	// Pages are built by the worker (or on the owner's save), never
+	// on a view: before that the page says it is being prepared.
 	code, body := apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
 	if code != 200 {
 		t.Fatalf("fit page status = %d", code)
 	}
+	apptest.MustContain(t, "fit page, not built", body, "Fleet Rifter", "being prepared")
+	if strings.Contains(body, "Copy EFT") || strings.Contains(body, "Republic Fleet Medium Shield Extender") {
+		t.Error("a page that was never built shows modules")
+	}
+	if n := rig.RunPublicFitWork(); n < 1 {
+		t.Fatalf("worker built %d pages, want at least the fleet fit", n)
+	}
+
+	// No origin configured: the page has no absolute address to
+	// share, and offers none (least of all another site's).
+	code, body = apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
+	if code != 200 {
+		t.Fatalf("fit page status = %d", code)
+	}
+	apptest.MustContain(t, "fit page, no origin", body, "Fleet Rifter", "og:title", "Copy EFT")
+	for _, absent := range []string{"og:url", "Copy link", "Share to X", "Share to Reddit", "evesynapse.app"} {
+		if strings.Contains(body, absent) {
+			t.Errorf("fit page with no origin configured has %q", absent)
+		}
+	}
+
+	rig.SetCallbackURL("https://node.example.org/auth/callback")
+	code, body = apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
+	if code != 200 {
+		t.Fatalf("fit page status = %d", code)
+	}
 	apptest.MustContain(t, "fit page", body,
+		fmt.Sprintf(`content="https://node.example.org/fittings/public/fit/%d/"`, fleetID),
+		fmt.Sprintf(`data-copy-text="https://node.example.org/fittings/public/fit/%d/"`, fleetID),
 		"Fleet Rifter", "Rifter",
 		"Republic Fleet Medium Shield Extender",
 		"og:title", "og:description", "og:url",
@@ -352,9 +445,40 @@ func TestPublicFitPage(t *testing.T) {
 	if !strings.Contains(body, "[Rifter, Fleet Rifter]") {
 		t.Errorf("fit page missing the EFT block")
 	}
-	// Views count the load.
+	// Views count the load: three above, this is the fourth. They
+	// are counted in memory (a view writes nothing) and written by
+	// the worker in one batch.
 	_, body = apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
-	apptest.MustContain(t, "second view", body, "2 views")
+	apptest.MustContain(t, "fourth view", body, "4 views")
+	// The worker run above wrote the first view; the three since wait.
+	if got, _ := q.GetPublicFitting(ctx, fleetID); got.ViewCount != 1 {
+		t.Errorf("stored views before the worker ran again = %d, want 1", got.ViewCount)
+	}
+	rig.RunPublicFitWork()
+	if got, _ := q.GetPublicFitting(ctx, fleetID); got.ViewCount != 4 {
+		t.Errorf("stored views after the worker ran = %d, want 4", got.ViewCount)
+	}
+	_, body = apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
+	apptest.MustContain(t, "fifth view", body, "5 views")
+
+	// An edit makes the stored page out of date: the page says so
+	// until the worker builds it again, and never shows the old one.
+	if _, err := rig.DB().ExecContext(ctx, `UPDATE local_fittings SET updated_at = now() WHERE id = $1`, fleetID); err != nil {
+		t.Fatal(err)
+	}
+	_, body = apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
+	apptest.MustContain(t, "edited fit", body, "being prepared")
+	if strings.Contains(body, "Copy EFT") {
+		t.Error("an edited fit shows its old stored page")
+	}
+	if n := rig.RunPublicFitWork(); n != 1 {
+		t.Errorf("worker rebuilt %d pages after one edit, want 1", n)
+	}
+	_, body = apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
+	apptest.MustContain(t, "rebuilt fit", body, "Copy EFT")
+	if n := rig.RunPublicFitWork(); n != 0 {
+		t.Errorf("worker rebuilt %d up-to-date pages, want 0", n)
+	}
 
 	// Unknown, private and draft fits 404.
 	if code, _ := apptest.GetPage(t, rig, nil, "/fittings/public/fit/424242/"); code != 404 {
@@ -452,6 +576,120 @@ func TestPublicFitRating(t *testing.T) {
 	}
 	if code, _ := postPublicForm(t, rig, cookieA, "/fittings/public/fit/424242/rate", url.Values{"stars": {"5"}}); code != http.StatusNotFound {
 		t.Errorf("unknown fit rate status = %d, want 404", code)
+	}
+}
+
+// TestPublicFitRatingCountsOnce: a rating is counted once however it
+// arrives. One account's first rating posted many times at once (a
+// double click, a retried form) used to add one to the fit for each
+// post, because every post read "no rating yet" before any wrote.
+func TestPublicFitRatingCountsOnce(t *testing.T) {
+	transport := &apptest.CountingTransport{}
+	rig := apptest.Build(t, transport)
+	q, userA, _ := seedPublicBrowser(t, rig)
+	ctx := context.Background()
+
+	var fitID int64
+	rows, err := q.ListPublicFits(ctx, db.ListPublicFitsParams{Sort: "rank", Rlimit: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range rows {
+		if row.Name == "T2 Rifter" { // nobody has rated this one
+			fitID = row.ID
+		}
+	}
+	if fitID == 0 {
+		t.Fatal("fixture fit not found")
+	}
+	ratePath := fmt.Sprintf("/fittings/public/fit/%d/rate", fitID)
+	cookieA := apptest.SessionCookie(t, rig, userA, apptest.FixtureCharA, "Alpha Pilot")
+
+	const posts = 12
+	var wg sync.WaitGroup
+	codes := make([]int, posts)
+	start := make(chan struct{})
+	for i := 0; i < posts; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			req := httptest.NewRequest(http.MethodPost, ratePath, strings.NewReader(url.Values{"stars": {"4"}}.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.AddCookie(cookieA)
+			rec := httptest.NewRecorder()
+			rig.Handler().ServeHTTP(rec, req)
+			codes[i] = rec.Code
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+	for i, code := range codes {
+		if code != http.StatusSeeOther {
+			t.Errorf("post %d: status = %d, want 303", i, code)
+		}
+	}
+	got, err := q.GetPublicFitting(ctx, fitID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RatingCount != 1 || got.RatingSum != 4 {
+		t.Errorf("after %d posts of one first rating: count=%d sum=%d, want 1 and 4", posts, got.RatingCount, got.RatingSum)
+	}
+
+	// The interleaving itself, held open: another rating of the same
+	// fit by the same account is written but not yet committed when
+	// the post arrives. The post must wait for it, then count the
+	// account once. (Reading "no rating yet" past the uncommitted
+	// row and adding one made this 2 and 7.)
+	if _, err := rig.DB().ExecContext(ctx, `DELETE FROM fit_ratings WHERE fit_id = $1`, fitID); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := rig.DB().BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	qtx := q.WithTx(tx)
+	if _, err := qtx.LockPublicFitForRating(ctx, fitID); err != nil {
+		t.Fatal(err)
+	}
+	if err := qtx.UpsertFitRating(ctx, db.UpsertFitRatingParams{FitID: fitID, UserID: userA, Stars: 3}); err != nil {
+		t.Fatal(err)
+	}
+	if err := qtx.RecountFitRatings(ctx, fitID); err != nil {
+		t.Fatal(err)
+	}
+	posted := make(chan int, 1)
+	go func() {
+		code, _ := postPublicForm(t, rig, cookieA, ratePath, url.Values{"stars": {"4"}})
+		posted <- code
+	}()
+	select {
+	case code := <-posted:
+		t.Fatalf("the post finished (status %d) while another rating of the fit was uncommitted", code)
+	case <-time.After(500 * time.Millisecond):
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if code := <-posted; code != http.StatusSeeOther {
+		t.Fatalf("held post: status = %d, want 303", code)
+	}
+	got, _ = q.GetPublicFitting(ctx, fitID)
+	if got.RatingCount != 1 || got.RatingSum != 4 {
+		t.Errorf("after two overlapping first ratings: count=%d sum=%d, want 1 and 4", got.RatingCount, got.RatingSum)
+	}
+
+	// The aggregates are whatever the rating rows say. A fit left
+	// miscounted by the old delta is put right by its next rating.
+	if _, err := rig.DB().ExecContext(ctx, `UPDATE local_fittings SET rating_count = 7, rating_sum = 31 WHERE id = $1`, fitID); err != nil {
+		t.Fatal(err)
+	}
+	rateFit(t, rig, cookieA, fitID, "2")
+	got, _ = q.GetPublicFitting(ctx, fitID)
+	if got.RatingCount != 1 || got.RatingSum != 2 {
+		t.Errorf("after re-rating a miscounted fit: count=%d sum=%d, want 1 and 2", got.RatingCount, got.RatingSum)
 	}
 }
 

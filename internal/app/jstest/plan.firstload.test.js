@@ -21,9 +21,18 @@ function makeEl() {
   };
 }
 
+let fetchCalls = 0;
+
 function install(payload, opts) {
   opts = opts || {};
   const els = {};
+  fetchCalls = 0;
+  if (opts.embed) {
+    // The page as the server renders it: the plan data rides in
+    // a JSON data block.
+    els["plan-data"] = makeEl();
+    els["plan-data"].textContent = JSON.stringify(payload);
+  }
   const doc = {
     readyState: "complete",
     title: "probe",
@@ -48,6 +57,7 @@ function install(payload, opts) {
   global.document = doc;
   global.window = win;
   global.fetch = function () {
+    fetchCalls++;
     return Promise.resolve({ ok: true, json: function () { return Promise.resolve(payload); } });
   };
   const resolved = require.resolve("../static/plan.js");
@@ -151,6 +161,25 @@ test("capital-scale plan renders every view on first load", async function () {
   // (1h of a 2h elapsed) trips the bottleneck flag.
   assert.ok(els["plan-map"].innerHTML.indexOf("plan-chip") !== -1, "map cards carry a state chip");
   assert.ok(els["plan-map"].innerHTML.indexOf("BOTTLENECK") !== -1, "map flags the bottleneck");
+});
+
+test("embedded plan data renders every view without a second request", async function () {
+  const els = install(capitalPayload(), { embed: true });
+  await waitFor(function () {
+    return els["plan-map"] && els["plan-map"].innerHTML.indexOf("plan-node") !== -1;
+  }, "map render");
+  for (const id of Object.keys(rendered)) {
+    assert.ok(els[id] && els[id].innerHTML.indexOf(rendered[id]) !== -1, id + " rendered");
+  }
+  assert.strictEqual(fetchCalls, 0, "the plan is not requested again");
+});
+
+test("a page without the data block falls back to the JSON route", async function () {
+  const els = install(capitalPayload());
+  await waitFor(function () {
+    return els["plan-map"] && els["plan-map"].innerHTML.indexOf("plan-node") !== -1;
+  }, "map render");
+  assert.strictEqual(fetchCalls, 1, "one request for the plan");
 });
 
 test("decision map renders as stage columns by depth", async function () {

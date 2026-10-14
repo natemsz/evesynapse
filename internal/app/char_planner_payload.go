@@ -698,15 +698,7 @@ func buildPlanPayload(res *buildplan.Result, productID int64, prices map[int64]e
 // types (one bounded read). Missing rows stay missing: no
 // price data, never a silent fallback. It returns the map and
 // the freshest row stamp.
-func (app *Application) planRegionPrices(ctx context.Context, res *buildplan.Result, regionID int64) (map[int64]esi.MarketPrice, time.Time, error) {
-	seen := make(map[int64]bool)
-	var ids []int64
-	buildplan.Walk(res.Root, func(n *buildplan.Node) {
-		if !seen[n.TypeID] {
-			seen[n.TypeID] = true
-			ids = append(ids, n.TypeID)
-		}
-	})
+func (app *Application) planRegionPrices(ctx context.Context, ids []int64, regionID int64) (map[int64]esi.MarketPrice, time.Time, error) {
 	rows, err := app.queries.ListMarketTypePricesForTypes(ctx, db.ListMarketTypePricesForTypesParams{
 		RegionID: regionID, Column2: ids,
 	})
@@ -749,8 +741,10 @@ func planMarketRegion(raw string) int64 {
 // row is on file, and everything else keeps its guide price —
 // a thin region thins the basis note, never the totals (the
 // old all-or-nothing Jita mode zeroed plans whose items had no
-// Forge rows).
-func (app *Application) planMarket(ctx context.Context, q url.Values, res *buildplan.Result, guide map[int64]esi.MarketPrice) (prices map[int64]esi.MarketPrice, market, marketName, pricesNote string) {
+// Forge rows). ids are the types the plan can name (the
+// blueprint closure): the source is settled before the tree is
+// built, so the tree is built once.
+func (app *Application) planMarket(ctx context.Context, q url.Values, ids []int64, guide map[int64]esi.MarketPrice) (prices map[int64]esi.MarketPrice, market, marketName, pricesNote string) {
 	regionID := planMarketRegion(q.Get("market"))
 	if regionID == 0 {
 		return guide, plannerMarketGuide, "Cluster average", "Cluster-average guide prices."
@@ -760,7 +754,7 @@ func (app *Application) planMarket(ctx context.Context, q url.Values, res *build
 	if reg, err := app.queries.GetSDERegion(ctx, regionID); err == nil {
 		marketName = reg.Name
 	}
-	rows, stamp, err := app.planRegionPrices(ctx, res, regionID)
+	rows, stamp, err := app.planRegionPrices(ctx, ids, regionID)
 	if err != nil {
 		logging.Errorf("planner: region prices: %v", err)
 		return guide, market, marketName, marketName + " sell unavailable; cluster average shown."
@@ -945,11 +939,6 @@ func planAdjustedMap(guide map[int64]esi.MarketPrice) map[int64]float64 {
 	return out
 }
 
-// buildPlanPayloadView computes the interactive blob around a
-// plan: market source, build system, skill factor, slots, the
-// tree DTO, and canonical preset totals. It re-expands when the
-// market source differs from the guide the first pass used;
-// the memoized SDE source keeps that cheap and local.
 // planOriginOf builds the origin classifier for one plan: one
 // batched group lookup over the tree's types, then the pure
 // classifier. A failed lookup degrades to PI-only origins.
@@ -971,24 +960,11 @@ func (app *Application) planOriginOf(ctx context.Context, root *buildplan.Node) 
 	return planOriginClassifier(groups)
 }
 
-func (app *Application) buildPlanPayloadView(ctx context.Context, q url.Values, src *sdePlannerSource, res *buildplan.Result, runs int64, overrides map[int64]int, owned map[int64]buildplan.OwnedBlueprint, stock map[int64]int64, scoped plannerScopeData, chars []db.Character, productID int64, systemID int64, systemName string, index float64, indexKnown bool, nameOf func(int64) string) (template.JS, *planPayload) {
-	guide := app.valuationPrices(ctx)
-	prices, market, marketName, pricesNote := app.planMarket(ctx, q, res, guide)
-	adjusted := planAdjustedMap(guide)
-	if market != plannerMarketGuide {
-		facMat, facTime, facCost, _, facStructure, _ := app.planFacility(ctx, q.Get("structure"), q.Get("rig"), systemID)
-		facTax, alpha, _ := planJobTaxes(q, facStructure)
-		re, err := buildplan.Build(src, productID, buildplan.Input{
-			Runs: runs, MEOverride: overrides, Owned: owned,
-			Stock: stock, Prices: prices,
-			CostIndex: index, Adjusted: adjusted,
-			FacilityMatFactor: facMat, FacilityTimeFactor: facTime, FacilityCostFactor: facCost,
-			FacilityTax: facTax, AlphaClone: alpha,
-		})
-		if err == nil && !re.TooLarge {
-			res = re
-		}
-	}
+// buildPlanPayloadView shapes the interactive blob around a
+// built plan: skill factor, slots, the tree DTO and the canonical
+// preset totals, labelled with the market and build system the
+// caller built it with. It never expands the tree again.
+func (app *Application) buildPlanPayloadView(ctx context.Context, q url.Values, res *buildplan.Result, prices map[int64]esi.MarketPrice, market, marketName, pricesNote string, stock map[int64]int64, scoped plannerScopeData, chars []db.Character, productID int64, systemID int64, systemName string, index float64, indexKnown bool, nameOf func(int64) string) (template.JS, *planPayload) {
 	factor, timeNote := planTimeFactor(q.Get("timef"), app.planTimeSkills(ctx), scoped, chars)
 	slots, slotsNote := planSlots(q.Get("slots"), app.slotSkillIDs(ctx), scoped, chars)
 	unitOf := func(id int64) (float64, bool) { return buildplan.UnitPrice(prices, id) }

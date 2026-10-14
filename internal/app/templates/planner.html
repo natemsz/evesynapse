@@ -143,6 +143,7 @@
 <div id="plan-tab-buy" role="tabpanel" hidden><div id="plan-buylist"></div><div id="plan-hubsplit"></div></div>
 <div id="plan-tab-cost" role="tabpanel" hidden><div id="plan-fall"></div></div>
 <noscript><p><small>The tree, timeline and cost views need JavaScript.</small></p></noscript>
+{{if .Payload}}<script type="application/json" id="plan-data">{{.Payload}}</script>{{end}}
 </section>
 {{end}}
 

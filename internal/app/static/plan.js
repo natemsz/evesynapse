@@ -927,7 +927,22 @@ function setPayload(payload) {
   renderAll();
 }
 
+// The page carries its own plan data (#plan-data): the server
+// builds it for the header figures anyway, so asking for it again
+// would compute the whole plan a second time. The fetch remains
+// only for a page that came without the block.
+function embeddedPayload() {
+  var el = $("plan-data");
+  var raw = el && el.textContent;
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch (e) { return null; }
+}
+
 function loadJSON() {
+  var embedded = embeddedPayload();
+  if (embedded) {
+    return new Promise(function (resolve) { setPayload(embedded); resolve(); });
+  }
   return fetch(planURL(), { headers: { Accept: "application/json" } }).then(function (r) {
     if (!r.ok) throw new Error("plan data unavailable");
     return r.json();

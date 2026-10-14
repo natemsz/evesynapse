@@ -381,11 +381,15 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 	}
 	scoped := app.plannerInputsForChars(ctx, inputChars)
 	owned, stock := scoped.Owned, scoped.Stock
-	prices := app.valuationPrices(ctx)
-	// Job fees ride the first expansion too (the table ignores
-	// them); the payload reuses the same result unless the
-	// market source switches to Jita sell.
-	adjusted := planAdjustedMap(prices)
+	// One expansion per plan. The price source is settled before
+	// it: a region needs only the type IDs of the blueprint
+	// closure, which the warm above already holds. Every figure
+	// on the page, in the CSV and in the plan data then comes from
+	// the one result. Job fees are charged on adjusted prices,
+	// whatever the market.
+	guide := app.valuationPrices(ctx)
+	prices, market, marketName, pricesNote := app.planMarket(ctx, q, src.closureTypes(productID), guide)
+	adjusted := planAdjustedMap(guide)
 	systemID, systemName, costIndex, indexKnown := app.planBuildSystem(ctx, q.Get("system"))
 
 	facMat, facTime, facCost, facNote, facStructure, facRig := app.planFacility(ctx, q.Get("structure"), q.Get("rig"), systemID)
@@ -474,10 +478,10 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 		view.Verdict = planVerdictFor(res, prices, productID)
 	}
 
-	// Interactive tabs read this blob; the table above ignores
-	// it, so existing rendering is unchanged until the template
-	// switches over.
-	payload, meta := app.buildPlanPayloadView(ctx, q, src, res, runs, overrides, owned, stock, scoped, inputChars, productID, systemID, systemName, costIndex, indexKnown, nameOf)
+	// The header figures come from this payload, so the page
+	// carries it too (planner.html, #plan-data): plan.js reads it
+	// there and never asks for the plan a second time.
+	payload, meta := app.buildPlanPayloadView(ctx, q, res, prices, market, marketName, pricesNote, stock, scoped, inputChars, productID, systemID, systemName, costIndex, indexKnown, nameOf)
 	view.Payload = payload
 	view.Meta = meta
 	view.Market = meta.Market
@@ -750,6 +754,28 @@ func (s *sdePlannerSource) prefetch(root int64) {
 		}
 		frontier = next
 	}
+}
+
+// closureTypes lists every type the build tree of root can name:
+// the product and each material, down to the leaves. It walks
+// blueprints, not quantities, so it is cheap next to an
+// expansion, and prefetch has normally loaded all of it.
+func (s *sdePlannerSource) closureTypes(root int64) []int64 {
+	seen := map[int64]bool{root: true}
+	ids := []int64{root}
+	for i := 0; i < len(ids); i++ {
+		bp, ok := s.BlueprintForProduct(ids[i])
+		if !ok {
+			continue
+		}
+		for _, m := range bp.Materials {
+			if !seen[m.TypeID] {
+				seen[m.TypeID] = true
+				ids = append(ids, m.TypeID)
+			}
+		}
+	}
+	return ids
 }
 
 func (s *sdePlannerSource) BlueprintForProduct(productTypeID int64) (*buildplan.Blueprint, bool) {

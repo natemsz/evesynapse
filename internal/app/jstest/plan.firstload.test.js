@@ -207,6 +207,26 @@ test("PI leaf cards carry the origin line and the PI planner link", async functi
   assert.ok(map.indexOf("/industry/pi/?target=") !== -1, "origin line links to the PI planner recipe");
 });
 
+test("a plan that buys the product says so, with no saving line", async function () {
+  const payload = capitalPayload();
+  // Optimized buys the hull outright: its cost is the market
+  // price, a margin of exactly zero.
+  payload.root.delta = -500;
+  payload.optimized = Object.assign({}, payload.optimized, {
+    rootBought: true, materials: 200000, fees: 0, landed: 200000,
+    bought: 200000, built: 0, buyValue: 200000, profit: 0, marginPct: 0,
+    elapsed: 0, jobs: [], shopping: []
+  });
+  const els = install(payload);
+  await waitFor(function () {
+    return els["plan-map"] && els["plan-map"].innerHTML.indexOf("plan-node") !== -1;
+  }, "map render");
+  assert.strictEqual(els["plan-verdict"].textContent, "Buy it on the market: building costs more");
+  assert.strictEqual(els["plan-verdict"].className, "plan-verdict buy");
+  assert.strictEqual(els["plan-verdict"].hidden, false);
+  assert.ok(els["plan-verdict"].textContent.indexOf("saves") === -1, "no saving line for a buy decision");
+});
+
 test("one throwing view does not blank the others", async function () {
   const els = install(capitalPayload(), { throwOnMap: true });
   await waitFor(function () {

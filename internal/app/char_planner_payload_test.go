@@ -245,6 +245,14 @@ func TestPlanShoppingExcludesRoot(t *testing.T) {
 	if b.Profit != 0 || !b.ProfKnown {
 		t.Errorf("optimized profit = %v known=%v, want 0/true (buying at market)", b.Profit, b.ProfKnown)
 	}
+	// The verdict says to buy. A zero margin is not a saving, and
+	// "Building saves 0.00 ISK" was what it used to read.
+	if !b.RootBought || p.Full.RootBought || p.BuyComp.RootBought {
+		t.Errorf("rootBought optimized/full/buycomp = %v/%v/%v, want true/false/false", b.RootBought, p.Full.RootBought, p.BuyComp.RootBought)
+	}
+	if text, cls := planVerdictLine(p); text != "Buy it on the market: building costs more" || cls != "buy" {
+		t.Errorf("verdict = %q (%s), want the plain buy line", text, cls)
+	}
 	// Full build is untouched: the mineral lines stay.
 	if len(p.Full.Shopping) != 1 || p.Full.Shopping[0].TypeID != 34 {
 		t.Errorf("full shopping = %+v, want the one Tritanium line", p.Full.Shopping)

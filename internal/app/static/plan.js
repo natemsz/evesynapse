@@ -105,7 +105,7 @@ function decide(n, isRoot, mask) {
 
 function compute(mask) {
   var t = { materials: 0, fees: 0, feesKnown: true, complete: true,
-    unpriced: 0, buyValue: 0, bought: 0, built: 0 };
+    unpriced: 0, buyValue: 0, bought: 0, built: 0, rootBought: false };
   var shop = {};
   var jobs = [];
   function add(n, isRoot, built) {
@@ -115,7 +115,8 @@ function compute(mask) {
       // Mirrors the server: the finished product never lands in
       // the shopping aggregation (its outright cost still
       // accrues to the money totals below).
-      if (!isRoot) shop[n.id] = (shop[n.id] || 0) + n.short;
+      if (isRoot) t.rootBought = true;
+      else shop[n.id] = (shop[n.id] || 0) + n.short;
       if (n.known) {
         var c = n.build ? n.buy : n.materials;
         t.materials += c;
@@ -271,7 +272,8 @@ function checkPreset(name, server) {
     if (c[keys[i]] !== server[keys[i]]) return false;
   }
   var flags = [["feesKnown", "feesKnown"], ["complete", "complete"],
-    ["known", "valueKnown"], ["profKnown", "profKnown"]];
+    ["known", "valueKnown"], ["profKnown", "profKnown"],
+    ["rootBought", "rootBought"]];
   for (var j = 0; j < flags.length; j++) {
     if (!!c[flags[j][0]] !== !!server[flags[j][1]]) return false;
   }
@@ -338,9 +340,19 @@ function renderHeader(t) {
     var el = $(id);
     if (el) el.className = marginCls;
   });
+  // Mirrors Go planVerdictLine. A scenario that buys the finished
+  // product states no saving: it says to buy, and why when the
+  // market price is what decided it (a manual override may buy a
+  // product that is cheaper to build).
   var verdict = $("plan-verdict");
   if (verdict) {
-    if (t.known && t.profKnown) {
+    if (t.rootBought) {
+      verdict.textContent = (P.root.deltaOn && P.root.delta < 0) ?
+        "Buy it on the market: building costs more" :
+        "This scenario buys the finished product outright";
+      verdict.className = "plan-verdict buy";
+      verdict.hidden = false;
+    } else if (t.known && t.profKnown) {
       verdict.textContent = t.profit >= 0 ? "Building saves " + iskC(t.profit) : "Buying saves " + iskC(-t.profit);
       verdict.className = "plan-verdict " + (t.profit >= 0 ? "build" : "buy");
       verdict.hidden = false;

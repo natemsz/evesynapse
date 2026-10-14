@@ -181,20 +181,23 @@ type planPresetTotals struct {
 	// Bought is the at-market cost of purchased lines; Built
 	// the market cost of raw materials consumed by built jobs.
 	// Bought + Built always equals Materials.
-	Bought    int64          `json:"bought"`
-	Built     int64          `json:"built"`
-	Complete  bool           `json:"complete"`
-	Unpriced  int            `json:"unpriced"`
-	Value     int64          `json:"value"`
-	Known     bool           `json:"valueKnown"`
-	Profit    int64          `json:"profit"`
-	ProfKnown bool           `json:"profKnown"`
-	MarginPct float64        `json:"marginPct"`
-	Elapsed   int64          `json:"elapsed"`
-	BuyValue  int64          `json:"buyValue"`
-	StockVal  int64          `json:"stockVal"`
-	Shopping  []planShopLine `json:"shopping"`
-	Jobs      []planJobSpan  `json:"jobs"`
+	Bought int64 `json:"bought"`
+	Built  int64 `json:"built"`
+	// RootBought: this scenario buys the finished product
+	// outright and builds nothing.
+	RootBought bool           `json:"rootBought"`
+	Complete   bool           `json:"complete"`
+	Unpriced   int            `json:"unpriced"`
+	Value      int64          `json:"value"`
+	Known      bool           `json:"valueKnown"`
+	Profit     int64          `json:"profit"`
+	ProfKnown  bool           `json:"profKnown"`
+	MarginPct  float64        `json:"marginPct"`
+	Elapsed    int64          `json:"elapsed"`
+	BuyValue   int64          `json:"buyValue"`
+	StockVal   int64          `json:"stockVal"`
+	Shopping   []planShopLine `json:"shopping"`
+	Jobs       []planJobSpan  `json:"jobs"`
 }
 
 // planRollup accumulates one preset's totals over the tree.
@@ -261,7 +264,9 @@ func (r *planRollup) add(n *buildplan.Node, isRoot, built bool) *planSchedNode {
 		// a scenario buys the root outright, its cost still
 		// accrues below, but the buy verdict lives in the
 		// header, not in the list of inputs to buy.
-		if !isRoot {
+		if isRoot {
+			r.tot.RootBought = true
+		} else {
 			r.shop[n.TypeID] += n.Shortfall
 		}
 		if n.PriceKnown {
@@ -618,14 +623,25 @@ func planHeaderLines(p *planPayload) (landed, landedSub, value, margin, marginSu
 	return landed, landedSub, value, margin, marginSub, elapsed, elapsedSub
 }
 
+// planVerdictBuy is the verdict when the optimized plan buys the
+// product: the optimized preset only does that when the market
+// price is below the cost of building. plan.js carries the same
+// words.
+const planVerdictBuy = "Buy it on the market: building costs more"
+
 // planVerdictLine is the build-vs-buy verdict shown above the
 // preset buttons: the optimized scenario's profit, worded as
 // what building (or buying) saves, with the color class of the
 // winning side. The price itself already sits in the header, so
-// the line carries only the saving. plan.js renderHeader rewords
-// it per preset with the same rule.
+// the line carries only the saving. A scenario that buys the
+// finished product has no saving to state (its cost is the
+// market price, a margin of exactly zero): the line says to buy.
+// plan.js renderHeader rewords it per preset with the same rule.
 func planVerdictLine(p *planPayload) (text, cls string) {
 	b := p.Optimized
+	if b.RootBought {
+		return planVerdictBuy, "buy"
+	}
 	if !b.Known || !b.ProfKnown {
 		return "", ""
 	}

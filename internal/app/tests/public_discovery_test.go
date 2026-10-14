@@ -95,8 +95,22 @@ func TestPublicSEOFiles(t *testing.T) {
 		"Allow: /items/",
 		"Allow: /ships/",
 		"Disallow: /fittings/saved/",
-		"Sitemap:",
 	)
+	// An instance with no address of its own configured publishes
+	// no absolute URL: no sitemap line, no sitemap, and never the
+	// address of some other site.
+	if strings.Contains(body, "Sitemap:") || strings.Contains(body, "evesynapse.app") {
+		t.Errorf("robots.txt names a sitemap for an instance with no origin:\n%s", body)
+	}
+	if code, _ := apptest.GetPage(t, rig, nil, "/sitemap.xml"); code != http.StatusNotFound {
+		t.Errorf("sitemap with no origin configured: status = %d, want 404", code)
+	}
+
+	// A self-hosted instance: everything it publishes is at its own
+	// origin, read from the address it is configured to be served at.
+	rig.SetCallbackURL("https://node.example.org/auth/callback")
+	_, body = apptest.GetPage(t, rig, nil, "/robots.txt")
+	apptest.MustContain(t, "/robots.txt", body, "Sitemap: https://node.example.org/sitemap.xml")
 
 	// Seed a public fit plus swept stats, so the sitemap has
 	// fit, item and ship content beyond the core pages. URLs use
@@ -121,12 +135,15 @@ func TestPublicSEOFiles(t *testing.T) {
 	}
 	apptest.MustContain(t, "/sitemap.xml", body,
 		"<urlset", "</loc>",
-		"https://evesynapse.app/</loc>",
-		"https://evesynapse.app/fittings/public/</loc>",
-		"https://evesynapse.app/fittings/public/fit/"+fmt.Sprintf("%d", fitID)+"/",
-		"https://evesynapse.app/items/type/587/",
-		"https://evesynapse.app/ships/587/",
+		"https://node.example.org/</loc>",
+		"https://node.example.org/fittings/public/</loc>",
+		"https://node.example.org/fittings/public/fit/"+fmt.Sprintf("%d", fitID)+"/",
+		"https://node.example.org/items/type/587/",
+		"https://node.example.org/ships/587/",
 	)
+	if strings.Contains(body, "evesynapse.app") {
+		t.Errorf("sitemap names another site")
+	}
 	for _, authed := range []string{"/admin/", "/api/", "/fittings/saved/", "/auth/"} {
 		if strings.Contains(body, authed) {
 			t.Errorf("sitemap leaks authed path %s", authed)
@@ -337,11 +354,27 @@ func TestPublicFitPage(t *testing.T) {
 		t.Fatal("fleet fit missing")
 	}
 
+	// No origin configured: the page has no absolute address to
+	// share, and offers none (least of all another site's).
 	code, body := apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
 	if code != 200 {
 		t.Fatalf("fit page status = %d", code)
 	}
+	apptest.MustContain(t, "fit page, no origin", body, "Fleet Rifter", "og:title", "Copy EFT")
+	for _, absent := range []string{"og:url", "Copy link", "Share to X", "Share to Reddit", "evesynapse.app"} {
+		if strings.Contains(body, absent) {
+			t.Errorf("fit page with no origin configured has %q", absent)
+		}
+	}
+
+	rig.SetCallbackURL("https://node.example.org/auth/callback")
+	code, body = apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
+	if code != 200 {
+		t.Fatalf("fit page status = %d", code)
+	}
 	apptest.MustContain(t, "fit page", body,
+		fmt.Sprintf(`content="https://node.example.org/fittings/public/fit/%d/"`, fleetID),
+		fmt.Sprintf(`data-copy-text="https://node.example.org/fittings/public/fit/%d/"`, fleetID),
 		"Fleet Rifter", "Rifter",
 		"Republic Fleet Medium Shield Extender",
 		"og:title", "og:description", "og:url",
@@ -353,9 +386,9 @@ func TestPublicFitPage(t *testing.T) {
 	if !strings.Contains(body, "[Rifter, Fleet Rifter]") {
 		t.Errorf("fit page missing the EFT block")
 	}
-	// Views count the load.
+	// Views count the load: two above, this is the third.
 	_, body = apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
-	apptest.MustContain(t, "second view", body, "2 views")
+	apptest.MustContain(t, "third view", body, "3 views")
 
 	// Unknown, private and draft fits 404.
 	if code, _ := apptest.GetPage(t, rig, nil, "/fittings/public/fit/424242/"); code != 404 {

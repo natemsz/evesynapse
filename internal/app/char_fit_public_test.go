@@ -91,6 +91,7 @@ func TestPublicFitPageMirrorsTool(t *testing.T) {
 		}
 	})
 
+	app.cfg.eveCallbackURL = "https://node.example.org/auth/callback" // share links need an origin
 	code, body := getSwapPage(t, app, nil, publicFitsPath+"fit/"+strconv.FormatInt(row.ID, 10)+"/")
 	if code != http.StatusOK {
 		t.Fatalf("public fit page (anonymous): status %d, want 200", code)

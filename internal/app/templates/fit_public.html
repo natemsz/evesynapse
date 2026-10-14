@@ -169,10 +169,10 @@
 
 <h3>Share</h3>
 <p class="share-row">
-  <button type="button" data-copy data-copy-text="{{.PageURL}}">Copy link</button>
+  {{if .PageURL}}<button type="button" data-copy data-copy-text="{{.PageURL}}">Copy link</button>{{end}}
   {{if .EFT}}<button type="button" data-copy data-copy-from="fit-eft">Copy EFT</button>{{end}}
-  <a class="btn" href="{{.ShareX}}" target="_blank" rel="noopener noreferrer">Share to X</a>
-  <a class="btn" href="{{.ShareReddit}}" target="_blank" rel="noopener noreferrer">Share to Reddit</a>
+  {{if .ShareX}}<a class="btn" href="{{.ShareX}}" target="_blank" rel="noopener noreferrer">Share to X</a>
+  <a class="btn" href="{{.ShareReddit}}" target="_blank" rel="noopener noreferrer">Share to Reddit</a>{{end}}
 </p>
 {{if .EFT}}<pre id="fit-eft">{{.EFT}}</pre>{{end}}
 

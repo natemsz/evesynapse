@@ -83,6 +83,11 @@ func (r *TestRig) SessionCookie(userID, characterID int64, name string) (*http.C
 	return &http.Cookie{Name: "evesynapse_session", Value: token, Path: "/"}, nil
 }
 
+// SetCallbackURL sets the address the fixture instance is served
+// at (EVE_CALLBACK_URL), which is where its public origin comes
+// from. A rig starts with none.
+func (r *TestRig) SetCallbackURL(callback string) { r.app.cfg.eveCallbackURL = callback }
+
 // Close closes the fixture database handles.
 func (r *TestRig) Close() { r.app.Close() }
 

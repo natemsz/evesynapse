@@ -593,7 +593,8 @@ func (app *Application) fitDocPrice(ctx context.Context, doc *fitDoc) float64 {
 }
 
 // headMeta composes escaped description and Open Graph tags for a
-// public page; values are attribute-escaped at build time.
+// public page; values are attribute-escaped at build time. og:url
+// is left out when the page has no absolute address (pageURL "").
 func headMeta(title, description, pageURL string) template.HTML {
 	esc := html.EscapeString
 	var b strings.Builder
@@ -601,7 +602,9 @@ func headMeta(title, description, pageURL string) template.HTML {
 	b.WriteString(`<meta property="og:title" content="` + esc(title) + `">` + "\n")
 	b.WriteString(`<meta property="og:description" content="` + esc(description) + `">` + "\n")
 	b.WriteString(`<meta property="og:type" content="website">` + "\n")
-	b.WriteString(`<meta property="og:url" content="` + esc(pageURL) + `">` + "\n")
+	if pageURL != "" {
+		b.WriteString(`<meta property="og:url" content="` + esc(pageURL) + `">` + "\n")
+	}
 	return template.HTML(b.String())
 }
 
@@ -656,10 +659,13 @@ func (app *Application) handlePublicFitPage(w http.ResponseWriter, r *http.Reque
 		Sim:      app.buildFitSimView(ctx, &doc, 0, "All V", 0),
 		EFT:      app.formatEFT(ctx, &doc),
 		AvgStars: card.Stars, StarCount: card.StarCount,
-		PageURL: app.siteOrigin(r) + card.FitURL,
+		PageURL: app.publicPageURL(card.FitURL),
 	}
-	view.ShareX = "https://x.com/intent/post?text=" + url.QueryEscape(row.Name+" ("+ship+")") + "&url=" + url.QueryEscape(view.PageURL)
-	view.ShareReddit = "https://www.reddit.com/submit?url=" + url.QueryEscape(view.PageURL) + "&title=" + url.QueryEscape(row.Name+" ("+ship+")")
+	// Links out need an absolute address to point back at.
+	if view.PageURL != "" {
+		view.ShareX = "https://x.com/intent/post?text=" + url.QueryEscape(row.Name+" ("+ship+")") + "&url=" + url.QueryEscape(view.PageURL)
+		view.ShareReddit = "https://www.reddit.com/submit?url=" + url.QueryEscape(view.PageURL) + "&title=" + url.QueryEscape(row.Name+" ("+ship+")")
+	}
 	if userID > 0 {
 		if mine, err := app.queries.GetFitRating(ctx, db.GetFitRatingParams{FitID: fitID, UserID: userID}); err == nil {
 			view.MyStars = int64(mine.Stars)

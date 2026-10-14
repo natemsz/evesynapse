@@ -61,4 +61,3 @@ Allow: /items/
 Allow: /ships/
 Disallow: /
 
-Sitemap: https://evesynapse.app/sitemap.xml

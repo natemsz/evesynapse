@@ -583,20 +583,13 @@ func (app *Application) pulseTimers(ctx context.Context, ref pulseCorpRef) []pul
 	if !app.loadCorpSnapshot(ctx, ref.reader(pulseStructureRoles...), esi.SnapCorpStructures, &structures) {
 		return nil
 	}
+	// The same clocks the upkeep module lists (structureClocks).
 	var out []pulseTimer
-	for _, s := range structures {
-		name := s.Name
-		if name == "" {
-			name = "Structure #" + strconv.FormatInt(s.StructureID, 10)
-		}
-		if s.UnanchorsAt != "" {
-			out = append(out, pulseTimer{Name: name, Text: "unanchoring", When: formatFinish(s.UnanchorsAt)})
-		} else if s.StateTimerEnd != "" {
-			out = append(out, pulseTimer{Name: name, Text: "state change", When: formatFinish(s.StateTimerEnd)})
-		}
+	for _, c := range structureClocks(structures) {
 		if len(out) >= 5 {
 			break
 		}
+		out = append(out, pulseTimer{Name: c.Name, Text: c.Text, When: c.When})
 	}
 	return out
 }

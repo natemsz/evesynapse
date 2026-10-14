@@ -187,7 +187,7 @@ func (app *Application) handlePIPlanner(w http.ResponseWriter, r *http.Request) 
 		for _, raw := range q["planets"] {
 			for _, p := range strings.Split(raw, ",") {
 				if p = strings.TrimSpace(p); p != "" {
-					selected[titleCasePlanet(p)] = true
+					selected[piplan.TitlePlanet(p)] = true
 				}
 			}
 		}
@@ -260,14 +260,6 @@ func (app *Application) handlePIPlanner(w http.ResponseWriter, r *http.Request) 
 	view.FacilityNote = "High-Tech (P4) only on Barren/Temperate · Advanced anywhere · Basic on the extractor planet. Taxes use CCP taxable values (R0 5 · P1 400 · P2 7,200 · P3 60,000 · P4 1,200,000 ISK); import at half the export rate."
 
 	app.render(ctx, w, http.StatusOK, "piplanner.html", data)
-}
-
-func titleCasePlanet(s string) string {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return s
-	}
-	return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
 }
 
 func (app *Application) piOwnedPlanetTypes(ctx context.Context, ch db.Character) ([]string, string) {
@@ -391,7 +383,7 @@ func fillPIPlanDisplay(view *piPlannerView, plan *piplan.Plan, prices map[string
 		if lines[j].Name == plan.Target {
 			return false
 		}
-		ri, rj := piTierRank(lines[i].Tier), piTierRank(lines[j].Tier)
+		ri, rj := piplan.TierRank(lines[i].Tier), piplan.TierRank(lines[j].Tier)
 		if ri != rj {
 			return ri > rj
 		}
@@ -445,20 +437,6 @@ func fillPIPlanDisplay(view *piPlannerView, plan *piplan.Plan, prices map[string
 	}
 	view.ExportTax = esi.FormatISK(plan.ExportTax)
 	view.ImportTax = esi.FormatISK(plan.ImportTax)
-}
-
-func piTierRank(t piplan.Tier) int {
-	switch t {
-	case piplan.TierP4:
-		return 4
-	case piplan.TierP3:
-		return 3
-	case piplan.TierP2:
-		return 2
-	case piplan.TierP1:
-		return 1
-	}
-	return 0
 }
 
 func formatQty(f float64) string {

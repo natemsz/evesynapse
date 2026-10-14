@@ -145,7 +145,7 @@ func (c *notifyCollector) add(ev notifyEvent) {
 	}
 	c.keys[ev.Key] = true
 	if len(ev.Title) > notifyTitleMax {
-		ev.Title = strings.ToValidUTF8(ev.Title[:notifyTitleMax], "") + "…"
+		ev.Title = clip(ev.Title, notifyTitleMax) + "…"
 	}
 	c.events = append(c.events, ev)
 }

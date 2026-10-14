@@ -202,7 +202,7 @@ func (app *Application) loadSwarmMetrics(ctx context.Context) *swarmMetricsView 
 	if app.cfg.swarm.allowlisted() {
 		mode = "Allowlist"
 	}
-	view.Status = mode + " — " + pluralPeer(approved) + " sharing, " + pluralPeer(excluded) + " excluded"
+	view.Status = mode + " — " + plural(approved, "peer") + " sharing, " + plural(excluded, "peer") + " excluded"
 	counters := app.swarmCounterMap(ctx)
 	applied := counters[swarmCounterAppliedHistory] + counters[swarmCounterAppliedNames] + counters[swarmCounterAppliedRecords]
 	// Every applied entry is one ESI fetch this instance did not
@@ -219,14 +219,6 @@ func (app *Application) loadSwarmMetrics(ctx context.Context) *swarmMetricsView 
 		{Label: "Peer pulls failed", Value: esi.FormatInt(counters[swarmCounterPullsFailed])},
 	}
 	return view
-}
-
-// pluralPeer counts peers in words.
-func pluralPeer(n int) string {
-	if n == 1 {
-		return "1 peer"
-	}
-	return strconv.Itoa(n) + " peers"
 }
 
 // loadSwarmAdmin builds the Admin section: the settings (from

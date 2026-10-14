@@ -154,7 +154,7 @@ func (app *Application) buildScannerView(ctx context.Context, q map[string][]str
 	}
 	view.HasData = true
 	if latest, ok := stampRow.Stamp.(time.Time); ok {
-		view.Age = statsAgeText(latest)
+		view.Age = ageText(time.Now(), latest)
 		view.AsOf = "Prices as of " + latest.UTC().Format("Jan 2, 3:04 PM")
 	}
 

@@ -26,6 +26,40 @@ const (
 	upkeepCap      = 8
 )
 
+// structureClock is one structure running a clock: unanchoring, or
+// a state timer. The corporation pulse and the upkeep module both
+// list these, from one reading (structureClocks).
+type structureClock struct {
+	Name string
+	Text string // "unanchoring" or "state change"
+	When string // formatFinish of the end time
+	At   time.Time
+}
+
+// structureName is a structure's name, or its ID while unnamed.
+func structureName(s esi.CorpStructure) string {
+	if s.Name != "" {
+		return s.Name
+	}
+	return "Structure #" + strconv.FormatInt(s.StructureID, 10)
+}
+
+// structureClocks reads every running clock from a structures
+// snapshot, in snapshot order. A structure unanchoring shows that
+// clock and not its state timer; a time that does not parse is no
+// clock.
+func structureClocks(structures esi.CorpStructures) []structureClock {
+	var out []structureClock
+	for _, s := range structures {
+		if at, ok := parseRFC3339(s.UnanchorsAt); ok {
+			out = append(out, structureClock{Name: structureName(s), Text: "unanchoring", When: formatFinish(s.UnanchorsAt), At: at})
+		} else if at, ok := parseRFC3339(s.StateTimerEnd); ok {
+			out = append(out, structureClock{Name: structureName(s), Text: "state change", When: formatFinish(s.StateTimerEnd), At: at})
+		}
+	}
+	return out
+}
+
 // upkeepItem is one structure deadline.
 type upkeepItem struct {
 	Name   string
@@ -77,27 +111,18 @@ func (app *Application) buildUpkeep(ctx context.Context, userID int64) *upkeepWi
 		}
 		view := upkeepCorpView{Name: app.pulseCorpName(ctx, ref)}
 		for _, s := range structures {
-			name := s.Name
-			if name == "" {
-				name = "Structure #" + strconv.FormatInt(s.StructureID, 10)
-			}
-			if at, ok := parseUpkeepTime(s.FuelExpires); ok && !at.After(now.Add(upkeepFuelDays*24*time.Hour)) {
+			if at, ok := parseRFC3339(s.FuelExpires); ok && !at.After(now.Add(upkeepFuelDays*24*time.Hour)) {
 				view.Items = append(view.Items, upkeepItem{
-					Name: name, Text: "fuel expires", When: formatFinish(s.FuelExpires),
+					Name: structureName(s), Text: "fuel expires", When: formatFinish(s.FuelExpires),
 					Urgent: !at.After(now), at: at,
 				})
 			}
-			if at, ok := parseUpkeepTime(s.UnanchorsAt); ok {
-				view.Items = append(view.Items, upkeepItem{
-					Name: name, Text: "unanchoring", When: formatFinish(s.UnanchorsAt),
-					Urgent: !at.After(now), at: at,
-				})
-			} else if at, ok := parseUpkeepTime(s.StateTimerEnd); ok {
-				view.Items = append(view.Items, upkeepItem{
-					Name: name, Text: "state change", When: formatFinish(s.StateTimerEnd),
-					Urgent: !at.After(now), at: at,
-				})
-			}
+		}
+		for _, c := range structureClocks(structures) {
+			view.Items = append(view.Items, upkeepItem{
+				Name: c.Name, Text: c.Text, When: c.When,
+				Urgent: !c.At.After(now), at: c.At,
+			})
 		}
 		sort.SliceStable(view.Items, func(i, j int) bool { return view.Items[i].at.Before(view.Items[j].at) })
 		if len(view.Items) > upkeepCap {
@@ -108,17 +133,4 @@ func (app *Application) buildUpkeep(ctx context.Context, userID int64) *upkeepWi
 		}
 	}
 	return w
-}
-
-// parseUpkeepTime parses an optional structure timer: empty or
-// junk means no timer, never an error.
-func parseUpkeepTime(raw string) (time.Time, bool) {
-	if raw == "" {
-		return time.Time{}, false
-	}
-	t, err := time.Parse(time.RFC3339, raw)
-	if err != nil {
-		return time.Time{}, false
-	}
-	return t, true
 }

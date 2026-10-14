@@ -462,7 +462,7 @@ func callCloudflareAI(ctx context.Context, client *http.Client, apiBase, account
 	if answer == "" {
 		return "", fmt.Errorf("cloudflare: model call returned no answer")
 	}
-	return truncateRunes(answer, tradeIdeasBodyCap), nil
+	return clip(answer, tradeIdeasBodyCap), nil
 }
 
 // validCloudflareAccountID checks the account ID before it
@@ -475,19 +475,4 @@ func validCloudflareAccountID(id string) bool {
 	return strings.IndexFunc(id, func(r rune) bool {
 		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_')
 	}) < 0
-}
-
-// truncateRunes caps text at n bytes without splitting a rune.
-func truncateRunes(text string, n int) string {
-	if len(text) <= n {
-		return text
-	}
-	keep := 0
-	for i := range text {
-		if i > n {
-			break
-		}
-		keep = i
-	}
-	return text[:keep]
 }

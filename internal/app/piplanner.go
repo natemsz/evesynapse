@@ -141,7 +141,9 @@ func (app *Application) handlePIPlanner(w http.ResponseWriter, r *http.Request) 
 	view := &piPlannerView{Targets: piplan.AllTargets()}
 	data.PIPlanner = view
 
-	// Target: ?product= name (also accept ?target=).
+	// Target: ?product= is the page's one parameter (its form field,
+	// pi.js and every link in). ?target= is still read for links
+	// made before that was settled.
 	target := strings.TrimSpace(q.Get("product"))
 	if target == "" {
 		target = strings.TrimSpace(q.Get("target"))
@@ -178,12 +180,18 @@ func (app *Application) handlePIPlanner(w http.ResponseWriter, r *http.Request) 
 	}
 	view.TaxStr = strconv.FormatFloat(view.TaxPct, 'f', -1, 64)
 
-	// Selected planets: explicit ?planets= wins (form checkboxes
-	// repeat the key; links may comma-join it; a present-but-empty
-	// value means "none ticked"); else owned types; else the
-	// minimal cover for the target.
+	// Selected planets: ?cover=1 (a product just picked) ticks the
+	// minimal cover for the target, so the page shows which planet
+	// types that product needs; else explicit ?planets= wins (form
+	// checkboxes repeat the key; links may comma-join it; a
+	// present-but-empty value means "none ticked"); else owned
+	// types; else the minimal cover.
 	selected := map[string]bool{}
-	if _, explicit := q["planets"]; explicit {
+	if q.Get("cover") == "1" {
+		for _, p := range piplan.MinimalPlanets(target) {
+			selected[p] = true
+		}
+	} else if _, explicit := q["planets"]; explicit {
 		for _, raw := range q["planets"] {
 			for _, p := range strings.Split(raw, ",") {
 				if p = strings.TrimSpace(p); p != "" {

@@ -8,6 +8,7 @@
 {{template "charselector" .PIPlannerChars}}
 
 {{if .PIPlanner}}
+<div id="pi-wrap">
 <p><small>Plan any planetary chain end-to-end — raw extraction through P4 — with factory counts, colony fit and POCO taxes. Like evepitool, click a product in the map to make it the target; your colonies pre-fill the planet picker when signed in.</small></p>
 {{if .PIPlanner.OwnedNote}}<p><small>{{.PIPlanner.OwnedNote}}</small></p>{{end}}
 {{if .PIPlanner.PricesNote}}<p><small>{{.PIPlanner.PricesNote}}</small></p>{{end}}
@@ -111,6 +112,7 @@
   <p><small>Whole-chain margin after R0 at guide prices, before taxes and hauling. Click through to size a colony for it.</small></p>
 </section>
 {{end}}
+</div>
 {{else}}
 <p>No character to show yet — link a character first, or plan standalone above.</p>
 {{end}}

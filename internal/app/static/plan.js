@@ -480,7 +480,7 @@ function nodeCard(n, mask, elapsed, maxCost, parentPath) {
   if (!n.build && n.origin === "pi") {
     origin = '<div class="plan-origin">Planetary interaction' +
       (n.originTier ? " · " + esc(n.originTier) : "") +
-      ' <a class="plan-origin-link" href="/industry/pi/?target=' +
+      ' <a class="plan-origin-link" href="/industry/pi/?product=' +
       encodeURIComponent(n.name) + '">Plan it in the PI planner</a></div>';
   } else if (!n.build && n.origin === "reaction") {
     origin = '<div class="plan-origin">Reaction product</div>';

@@ -73,15 +73,15 @@ func holdsAnyRole(roles []string, wanted ...string) bool {
 	return false
 }
 
-// pulseCorp is one corporation's data for a diff or a render:
-// its id, one linked character holding its snapshots, the
-// union of the viewer's roles across their characters in it,
-// and those characters' names for best-effort member naming.
+// pulseCorps groups the given characters by corporation: its id,
+// the roles each character holds in it (and their union), and
+// those characters' names for best-effort member naming.
 func (app *Application) pulseCorps(ctx context.Context, characters []db.Character) []pulseCorpRef {
 	type corpAcc struct {
 		linkChar int64
 		roles    map[string]bool
 		names    map[int64]string
+		holders  []pulseRoleHolder
 	}
 	byCorp := make(map[int64]*corpAcc)
 	var order []int64
@@ -107,6 +107,7 @@ func (app *Application) pulseCorps(ctx context.Context, characters []db.Characte
 			for _, r := range roles.Roles {
 				acc.roles[r] = true
 			}
+			acc.holders = append(acc.holders, pulseRoleHolder{CharID: ch.CharacterID, Roles: roles.Roles})
 		}
 	}
 	var out []pulseCorpRef
@@ -116,18 +117,45 @@ func (app *Application) pulseCorps(ctx context.Context, characters []db.Characte
 		for r := range acc.roles {
 			roles = append(roles, r)
 		}
-		out = append(out, pulseCorpRef{CorpID: corpID, LinkChar: acc.linkChar, Roles: roles, Names: acc.names})
+		out = append(out, pulseCorpRef{CorpID: corpID, LinkChar: acc.linkChar, Roles: roles, Names: acc.names, Holders: acc.holders})
 	}
 	return out
 }
 
 // pulseCorpRef hands one corporation to the pulse worker and
-// the pulse widget.
+// the pulse widget. Roles is the union across the characters in
+// it, good for deciding what a page may offer. Data is another
+// matter: a corporation snapshot is fetched with one character's
+// token and stored under that character, and only a character
+// holding the role has it. So reads never go through the union:
+// reader picks a character that holds a qualifying role itself.
+// LinkChar is any character in the corporation, for the public
+// facts every member's snapshots carry (its name).
 type pulseCorpRef struct {
 	CorpID   int64
 	LinkChar int64
 	Roles    []string
 	Names    map[int64]string
+	Holders  []pulseRoleHolder
+}
+
+// pulseRoleHolder is one character in the corporation and the
+// in-game roles it holds there.
+type pulseRoleHolder struct {
+	CharID int64
+	Roles  []string
+}
+
+// reader returns a character that itself holds one of the wanted
+// roles, and so has the snapshots that role unlocks: the first
+// such character in account order, 0 when there is none.
+func (ref pulseCorpRef) reader(wanted ...string) int64 {
+	for _, h := range ref.Holders {
+		if holdsAnyRole(h.Roles, wanted...) {
+			return h.CharID
+		}
+	}
+	return 0
 }
 
 // pulseCorpName resolves a corporation's display name from its
@@ -167,7 +195,8 @@ func (app *Application) refreshPulseEvents(ctx context.Context, characters []db.
 // set with their best-known name.
 func (app *Application) diffPulseMembers(ctx context.Context, ref pulseCorpRef, names map[int64]string, now time.Time) int {
 	var members esi.CorpMembers
-	if !app.loadCorpSnapshot(ctx, ref.LinkChar, esi.SnapCorpMembers, &members) {
+	reader := ref.reader(pulseMemberRoles...)
+	if reader == 0 || !app.loadCorpSnapshot(ctx, reader, esi.SnapCorpMembers, &members) {
 		return 0
 	}
 	current := make(map[string]bool, len(members))
@@ -215,7 +244,8 @@ func (app *Application) diffPulseMembers(ctx context.Context, ref pulseCorpRef, 
 // the same way, keyed by structure id with the payload's name.
 func (app *Application) diffPulseStructures(ctx context.Context, ref pulseCorpRef, now time.Time) int {
 	var structures esi.CorpStructures
-	if !app.loadCorpSnapshot(ctx, ref.LinkChar, esi.SnapCorpStructures, &structures) {
+	reader := ref.reader(pulseStructureRoles...)
+	if reader == 0 || !app.loadCorpSnapshot(ctx, reader, esi.SnapCorpStructures, &structures) {
 		return 0
 	}
 	current := make(map[string]string, len(structures))
@@ -352,9 +382,9 @@ func (app *Application) buildPulse(ctx context.Context, userID int64) *pulseWidg
 	}
 	now := time.Now().UTC()
 	for _, ref := range app.pulseCorps(ctx, characters) {
-		members := holdsAnyRole(ref.Roles, pulseMemberRoles...)
-		wallet := holdsAnyRole(ref.Roles, pulseWalletRoles...)
-		structs := holdsAnyRole(ref.Roles, pulseStructureRoles...)
+		members := ref.reader(pulseMemberRoles...) != 0
+		wallet := ref.reader(pulseWalletRoles...) != 0
+		structs := ref.reader(pulseStructureRoles...) != 0
 		if !members && !wallet && !structs {
 			continue
 		}
@@ -381,7 +411,7 @@ func (app *Application) buildPulse(ctx context.Context, userID int64) *pulseWidg
 // other members show by id (tracking carries no names).
 func (app *Application) pulseJoined(ctx context.Context, ref pulseCorpRef, now time.Time) []pulseJoin {
 	var tracking esi.CorpMemberTrackings
-	if !app.loadCorpSnapshot(ctx, ref.LinkChar, esi.SnapCorpMemberTracking, &tracking) {
+	if !app.loadCorpSnapshot(ctx, ref.reader(pulseMemberRoles...), esi.SnapCorpMemberTracking, &tracking) {
 		return nil
 	}
 	names := ref.Names
@@ -435,7 +465,8 @@ func (app *Application) pulseChanges(ctx context.Context, corpID int64, kind str
 // balance (the corp wallet pages show that).
 func (app *Application) pulseMoves(ctx context.Context, ref pulseCorpRef, now time.Time) []pulseMove {
 	var wallets esi.CorpWallets
-	if !app.loadCorpSnapshot(ctx, ref.LinkChar, esi.SnapCorpWallets, &wallets) {
+	reader := ref.reader(pulseWalletRoles...)
+	if !app.loadCorpSnapshot(ctx, reader, esi.SnapCorpWallets, &wallets) {
 		return nil
 	}
 	type candidate struct {
@@ -446,7 +477,7 @@ func (app *Application) pulseMoves(ctx context.Context, ref pulseCorpRef, now ti
 	var all []candidate
 	for _, div := range wallets {
 		var journal esi.CorpJournal
-		if !app.loadCorpSnapshot(ctx, ref.LinkChar, esi.CorpJournalKind(div.Division), &journal) {
+		if !app.loadCorpSnapshot(ctx, reader, esi.CorpJournalKind(div.Division), &journal) {
 			continue
 		}
 		for _, e := range journal {
@@ -491,7 +522,7 @@ func (app *Application) pulseMoves(ctx context.Context, ref pulseCorpRef, now ti
 // heading into/out of a state.
 func (app *Application) pulseTimers(ctx context.Context, ref pulseCorpRef) []pulseTimer {
 	var structures esi.CorpStructures
-	if !app.loadCorpSnapshot(ctx, ref.LinkChar, esi.SnapCorpStructures, &structures) {
+	if !app.loadCorpSnapshot(ctx, ref.reader(pulseStructureRoles...), esi.SnapCorpStructures, &structures) {
 		return nil
 	}
 	var out []pulseTimer

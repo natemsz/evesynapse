@@ -65,11 +65,14 @@ func (app *Application) buildUpkeep(ctx context.Context, userID int64) *upkeepWi
 	}
 	now := time.Now().UTC()
 	for _, ref := range app.pulseCorps(ctx, characters) {
-		if !holdsAnyRole(ref.Roles, upkeepRoles...) {
+		// Read from a character that holds the role itself: the
+		// structures snapshot exists only under that character.
+		reader := ref.reader(upkeepRoles...)
+		if reader == 0 {
 			continue
 		}
 		var structures esi.CorpStructures
-		if !app.loadCorpSnapshot(ctx, ref.LinkChar, esi.SnapCorpStructures, &structures) {
+		if !app.loadCorpSnapshot(ctx, reader, esi.SnapCorpStructures, &structures) {
 			continue
 		}
 		view := upkeepCorpView{Name: app.pulseCorpName(ctx, ref)}

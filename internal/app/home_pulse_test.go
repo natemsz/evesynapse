@@ -161,3 +161,55 @@ func TestPulseWalletShowsForJuniorAccountant(t *testing.T) {
 		t.Fatalf("pulse for a Junior Accountant: %+v, want one corporation with its wallet movement", w.Corps)
 	}
 }
+
+// TestPulseReadsFromTheCharacterHoldingTheRole: two characters in
+// one corporation, and the one listed first holds no role and so
+// has no corporation snapshots. The pulse, the worker's diff and
+// the upkeep widget all read from the second, who is the
+// Director. Reading through the first character found nothing.
+func TestPulseReadsFromTheCharacterHoldingTheRole(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	alpha := seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	beta := seedCharacter(t, q, user.ID, fixtureCharB, "Fixture Beta")
+	// Alpha: a plain member. A profile, a role list with nothing useful, no corporation data.
+	seedSnapshot(t, q, fixtureCharA, esi.SnapProfile, esi.Character{Name: "Fixture Alpha", CorporationID: pulseTestCorp})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapCorpRoles, esi.CharacterRoles{Roles: []string{"Contract_Taker"}})
+	// Beta: the Director, whose token fetched the corporation's data.
+	seedSnapshot(t, q, fixtureCharB, esi.SnapProfile, esi.Character{Name: "Fixture Beta", CorporationID: pulseTestCorp})
+	seedSnapshot(t, q, fixtureCharB, esi.SnapCorpRoles, esi.CharacterRoles{Roles: []string{"Director"}})
+	seedSnapshot(t, q, fixtureCharB, esi.SnapCorpMembers, esi.CorpMembers([]int64{fixtureCharA, fixtureCharB, 93300005}))
+	seedSnapshot(t, q, fixtureCharB, esi.SnapCorpMemberTracking, esi.CorpMemberTrackings{{CharacterID: 93300005, StartDate: rfc(now.Add(-24 * time.Hour))}})
+	seedSnapshot(t, q, fixtureCharB, esi.SnapCorpWallets, esi.CorpWallets{{Division: 1, Balance: 1000000}})
+	seedSnapshot(t, q, fixtureCharB, esi.CorpJournalKind(1), esi.CorpJournal{{ID: 2, Date: rfc(now.Add(-2 * time.Hour)), RefType: "bounty_prizes", Amount: 9000000, Balance: 10000000}})
+	seedSnapshot(t, q, fixtureCharB, esi.SnapCorpStructures, esi.CorpStructures{{StructureID: 103, Name: "Astrahus Three", FuelExpires: rfc(now.Add(24 * time.Hour))}})
+
+	w := app.buildPulse(ctx, user.ID)
+	if len(w.Corps) != 1 {
+		t.Fatalf("pulse shows %d corporations, want 1", len(w.Corps))
+	}
+	if c := w.Corps[0]; len(c.Joined) != 1 || len(c.Moves) != 1 {
+		t.Fatalf("pulse read nothing through the Director: joined %d, moves %d", len(c.Joined), len(c.Moves))
+	}
+	up := app.buildUpkeep(ctx, user.ID)
+	if len(up.Corps) != 1 || len(up.Corps[0].Items) != 1 {
+		t.Fatalf("upkeep read nothing through the Director: %+v", up.Corps)
+	}
+
+	// The worker's diff reads the same way: first pass adopts,
+	// then a departure in the Director's member list is recorded.
+	chars := []db.Character{alpha, beta}
+	if n, _ := app.refreshPulseEvents(ctx, chars); n != 0 {
+		t.Fatalf("adopt cycle recorded %d events, want 0", n)
+	}
+	seedSnapshot(t, q, fixtureCharB, esi.SnapCorpMembers, esi.CorpMembers([]int64{fixtureCharA, fixtureCharB}))
+	if n, _ := app.refreshPulseEvents(ctx, chars); n != 1 {
+		t.Fatalf("a member left and the diff recorded %d events, want 1", n)
+	}
+}

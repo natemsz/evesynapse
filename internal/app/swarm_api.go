@@ -27,10 +27,13 @@ package app
 // server side is the app's own TLS terminator (or its loopback
 // listener), the client verifies certificates by default, and
 // the bearer check compares SHA-256 hashes in constant time.
-// Cleartext to a non-loopback host is refused on dial, so a
-// gossip-learned URL can never downgrade the secret onto the
-// wire. No handrolled crypto, no custom framing: JSON over
-// HTTPS, strict-decoded, size-capped.
+// The client refuses cleartext to anything but a loopback URL
+// before a request is built, and at the point of connection it
+// refuses any address that is not public and any redirect off
+// the host it asked (swarm_dial.go), so a gossip-learned URL
+// can neither downgrade the secret onto the wire nor aim a
+// request inward. No handrolled crypto, no custom framing:
+// JSON over HTTPS, strict-decoded, size-capped.
 // ---------------------------------------------------------------------------
 
 import (
@@ -64,11 +67,19 @@ const (
 const swarmHTTPTimeout = 15 * time.Second
 
 // swarmMember is one instance as the membership list carries it:
-// identity material only, never reputation judgments.
+// identity material only, never reputation judgments. URLSig is
+// the member's own signature over its ID, address and IssuedAt
+// (swarmMemberMessage), made with the key beside it: the tuple
+// is relayed exactly as its owner issued it, by instances and
+// seeds alike, and nobody signs an address for anyone else.
+// IssuedAt is the owner's clock when it signed; of two tuples
+// for one member the later-issued is the current one.
 type swarmMember struct {
 	InstanceID string `json:"instance_id"`
 	BaseURL    string `json:"base_url"`
 	PublicKey  string `json:"public_key"`
+	URLSig     string `json:"url_sig"`
+	IssuedAt   int64  `json:"issued_at"`
 }
 
 // swarmAuth checks the request's bearer token against the shared
@@ -105,10 +116,9 @@ func (app *Application) handleSwarmMembers(w http.ResponseWriter, r *http.Reques
 	// verifies the list), even when this instance has no
 	// public address configured to advertise beside it.
 	// Callers file the signer under the URL that answered.
-	members := []swarmMember{{
-		InstanceID: app.swarmID.id, BaseURL: app.cfg.publicOrigin(),
-		PublicKey: app.swarmID.publicString(),
-	}}
+	self := swarmMember{InstanceID: app.swarmID.id, BaseURL: app.cfg.publicOrigin(), PublicKey: app.swarmID.publicString(), IssuedAt: time.Now().Unix()}
+	self.URLSig = signSwarmMember(app.swarmID, self.BaseURL, self.IssuedAt)
+	members := []swarmMember{self}
 	peers, err := app.queries.ListSwarmPeers(ctx)
 	if err != nil {
 		logging.Errorf("swarm: list peers: %v", err)
@@ -116,10 +126,12 @@ func (app *Application) handleSwarmMembers(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	for _, p := range peers {
-		if p.Excluded {
+		// A peer known only by an address this instance dialed
+		// has no signed address to pass on.
+		if p.Excluded || p.UrlSig == "" {
 			continue
 		}
-		members = append(members, swarmMember{InstanceID: p.InstanceID, BaseURL: p.BaseUrl, PublicKey: p.PublicKey})
+		members = append(members, swarmMember{InstanceID: p.InstanceID, BaseURL: p.BaseUrl, PublicKey: p.PublicKey, URLSig: p.UrlSig, IssuedAt: p.UrlIssuedAt})
 	}
 	raw, err := json.Marshal(members)
 	if err != nil {
@@ -144,8 +156,8 @@ func (app *Application) handleSwarmMembers(w http.ResponseWriter, r *http.Reques
 
 // handleSwarmSeedRegister serves POST /swarm/seed/register: a
 // peer's self-signed heartbeat, the same entry a seed worker
-// files. The body holds only the sender's own URL and public
-// key; the signature must verify under the payload's key with
+// files. The body holds only the sender's own member tuple (URL,
+// public key, and its signature over the URL); the signature must verify under the payload's key with
 // key and signer all naming the sender, which is the whole
 // trust check: the shared secret already proved membership,
 // the key proves possession from here on. What verifies files
@@ -198,13 +210,17 @@ func (app *Application) handleSwarmSeedRegister(w http.ResponseWriter, r *http.R
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+	// The tuple this instance will store and relay: the sender's
+	// own signature over its address, under the same key.
+	tuple := swarmMember{InstanceID: entry.Signer, BaseURL: payload.BaseURL, PublicKey: payload.PublicKey, URLSig: payload.URLSig, IssuedAt: payload.IssuedAt}
+	if !verifySwarmMember(tuple) {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
 	ctx := r.Context()
 	now := time.Now()
 	if entry.Signer != app.swarmID.id {
-		members := []swarmMember{{
-			InstanceID: entry.Signer, BaseURL: payload.BaseURL, PublicKey: payload.PublicKey,
-		}}
-		if err := app.swarmLearnMembers(ctx, members, entry.Signer, payload.PublicKey, "", "gossip", now); err != nil {
+		if err := app.swarmLearnMembers(ctx, []swarmMember{tuple}, entry.Signer, payload.PublicKey, "", "gossip", now); err != nil {
 			if errors.Is(err, errSwarmKeyChanged) {
 				// Registered before under another key: the
 				// pinned one stays, and the sender is told
@@ -321,14 +337,11 @@ func validSwarmBaseURL(raw string) bool {
 
 // swarmClient fetches from one peer: membership lists and
 // entries, over verifying TLS, with every response size-capped
-// and strictly decoded.
+// and strictly decoded. newSwarmClient (swarm_dial.go) builds
+// it with the guarded dialer and the same-host redirect rule.
 type swarmClient struct {
 	secret string
 	http   *http.Client
-}
-
-func newSwarmClient(secret string) *swarmClient {
-	return &swarmClient{secret: secret, http: &http.Client{Timeout: swarmHTTPTimeout}}
 }
 
 // swarmAuthedGET is one bearer-authenticated GET with a capped,

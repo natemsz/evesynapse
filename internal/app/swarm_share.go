@@ -408,8 +408,7 @@ func (app *Application) stageSwarmEntry(ctx context.Context, entry swarmSignedEn
 // the values stay exactly what the signer sent, for the spot
 // check to judge.
 func checkSwarmPayload(kind, key, payload string) error {
-	dec := json.NewDecoder(strings.NewReader(payload))
-	dec.DisallowUnknownFields()
+	dec := swarmStrictDecoder(strings.NewReader(payload))
 	switch kind {
 	case swarmKindHistory:
 		parts := strings.Split(key, "/")
@@ -540,8 +539,7 @@ func (app *Application) applySwarmEntry(ctx context.Context, kind, key, payload 
 		// only ever staged entries its server signed.
 		applied.Source = origin.signer
 	}
-	dec := json.NewDecoder(strings.NewReader(payload))
-	dec.DisallowUnknownFields()
+	dec := swarmStrictDecoder(strings.NewReader(payload))
 	switch kind {
 	case swarmKindHistory:
 		var body swarmHistoryPayload

@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -79,38 +78,13 @@ func (app *Application) buildSeedAnnounce(now time.Time) (swarmSignedEntry, bool
 }
 
 // sendSeedAnnounce POSTs one heartbeat and reports whether the
-// seed kept it. Strict-decode, size-capped, like every swarm
-// call; the secret travels in the bearer header only.
+// seed kept it, through the one swarm request helper (call).
 func (c *swarmClient) sendSeedAnnounce(ctx context.Context, seedURL string, entry swarmSignedEntry) error {
-	if !validSwarmBaseURL(seedURL) {
-		return fmt.Errorf("swarm: refusing to announce to %q (https, or http on loopback, only)", seedURL)
-	}
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(map[string]any{"entry": entry}); err != nil {
-		return err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(seedURL, "/")+"/swarm/seed/register", &buf)
-	if err != nil {
-		return fmt.Errorf("swarm: announce %s: %w", seedURL, err)
-	}
-	req.Header.Set("Authorization", "Bearer "+c.secret)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return fmt.Errorf("swarm: announce %s: %w", seedURL, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("swarm: announce %s: status %d", seedURL, resp.StatusCode)
-	}
 	var body struct {
 		OK bool `json:"ok"`
 	}
-	dec := json.NewDecoder(io.LimitReader(resp.Body, maxSwarmBodyBytes))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&body); err != nil {
-		return fmt.Errorf("swarm: announce %s: %w", seedURL, err)
+	if err := c.call(ctx, http.MethodPost, strings.TrimSuffix(seedURL, "/")+"/swarm/seed/register", map[string]any{"entry": entry}, &body); err != nil {
+		return err
 	}
 	if !body.OK {
 		return fmt.Errorf("swarm: announce %s: seed refused the heartbeat", seedURL)

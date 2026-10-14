@@ -191,9 +191,7 @@ func (app *Application) handleSwarmSeedRegister(w http.ResponseWriter, r *http.R
 		return
 	}
 	var payload seedAnnouncePayload
-	dec := json.NewDecoder(strings.NewReader(entry.Payload))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&payload); err != nil {
+	if err := decodeSwarmStrict(strings.NewReader(entry.Payload), &payload); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
@@ -298,12 +296,7 @@ func (app *Application) handleSwarmPull(w http.ResponseWriter, r *http.Request) 
 // and anything else is a probe or a version skew to notice.
 func readSwarmJSON(r *http.Request, into any) error {
 	defer r.Body.Close()
-	dec := json.NewDecoder(io.LimitReader(r.Body, maxSwarmBodyBytes))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(into); err != nil {
-		return err
-	}
-	return nil
+	return decodeSwarmStrict(io.LimitReader(r.Body, maxSwarmBodyBytes), into)
 }
 
 // writeSwarmJSON writes one response envelope.
@@ -344,32 +337,63 @@ type swarmClient struct {
 	http   *http.Client
 }
 
-// swarmAuthedGET is one bearer-authenticated GET with a capped,
-// strictly-decoded JSON response.
-func (c *swarmClient) authedGET(ctx context.Context, url string, into any) error {
+// swarmStrictDecoder decodes swarm JSON strictly: an unknown field
+// is an error, because the wire format is fixed and anything else is
+// a probe or a version skew to notice. Every swarm decode goes
+// through it (decodeSwarmStrict for one value).
+func swarmStrictDecoder(r io.Reader) *json.Decoder {
+	dec := json.NewDecoder(r)
+	dec.DisallowUnknownFields()
+	return dec
+}
+
+// decodeSwarmStrict strictly decodes one value from r.
+func decodeSwarmStrict(r io.Reader, into any) error {
+	return swarmStrictDecoder(r).Decode(into)
+}
+
+// call is every outbound swarm request: the address checked before
+// dialing (https, or http on loopback), the secret in the bearer
+// header only, the body (if any) sent as JSON, a non-200 answer an
+// error, and the answer size-capped and strictly decoded into into.
+func (c *swarmClient) call(ctx context.Context, method, url string, body, into any) error {
 	if !validSwarmBaseURL(url) {
 		return fmt.Errorf("swarm: refusing to dial %q (https, or http on loopback, only)", url)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	var reader io.Reader
+	if body != nil {
+		var buf bytes.Buffer
+		if err := json.NewEncoder(&buf).Encode(body); err != nil {
+			return fmt.Errorf("swarm: %s %s: %w", method, url, err)
+		}
+		reader = &buf
+	}
+	req, err := http.NewRequestWithContext(ctx, method, url, reader)
 	if err != nil {
-		return fmt.Errorf("swarm: GET %s: %w", url, err)
+		return fmt.Errorf("swarm: %s %s: %w", method, url, err)
 	}
 	req.Header.Set("Authorization", "Bearer "+c.secret)
 	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("swarm: GET %s: %w", url, err)
+		return fmt.Errorf("swarm: %s %s: %w", method, url, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("swarm: GET %s: status %d", url, resp.StatusCode)
+		return fmt.Errorf("swarm: %s %s: status %d", method, url, resp.StatusCode)
 	}
-	dec := json.NewDecoder(io.LimitReader(resp.Body, maxSwarmBodyBytes))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(into); err != nil {
-		return fmt.Errorf("swarm: GET %s: %w", url, err)
+	if err := decodeSwarmStrict(io.LimitReader(resp.Body, maxSwarmBodyBytes), into); err != nil {
+		return fmt.Errorf("swarm: %s %s: %w", method, url, err)
 	}
 	return nil
+}
+
+// authedGET is one GET through call.
+func (c *swarmClient) authedGET(ctx context.Context, url string, into any) error {
+	return c.call(ctx, http.MethodGet, url, nil, into)
 }
 
 // pullEntries asks one peer for signed entries for the given
@@ -377,38 +401,14 @@ func (c *swarmClient) authedGET(ctx context.Context, url string, into any) error
 // checks every entry against the signer's pinned key before
 // anything is stored.
 func (c *swarmClient) pullEntries(ctx context.Context, baseURL string, keys []swarmPullKey) ([]swarmSignedEntry, error) {
-	if !validSwarmBaseURL(baseURL) {
-		return nil, fmt.Errorf("swarm: refusing to dial %q (https, or http on loopback, only)", baseURL)
-	}
 	if len(keys) > maxSwarmPullKeys {
 		return nil, fmt.Errorf("swarm: %d keys exceeds the pull cap of %d", len(keys), maxSwarmPullKeys)
-	}
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(swarmPullRequest{Keys: keys}); err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(baseURL, "/")+"/swarm/pull", &buf)
-	if err != nil {
-		return nil, fmt.Errorf("swarm: pull %s: %w", baseURL, err)
-	}
-	req.Header.Set("Authorization", "Bearer "+c.secret)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("swarm: pull %s: %w", baseURL, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("swarm: pull %s: status %d", baseURL, resp.StatusCode)
 	}
 	var body struct {
 		Entries []swarmSignedEntry `json:"entries"`
 	}
-	dec := json.NewDecoder(io.LimitReader(resp.Body, maxSwarmBodyBytes))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&body); err != nil {
-		return nil, fmt.Errorf("swarm: pull %s: %w", baseURL, err)
+	if err := c.call(ctx, http.MethodPost, strings.TrimSuffix(baseURL, "/")+"/swarm/pull", swarmPullRequest{Keys: keys}, &body); err != nil {
+		return nil, err
 	}
 	return body.Entries, nil
 }

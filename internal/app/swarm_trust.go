@@ -477,9 +477,7 @@ func (app *Application) swarmFetchMembers(ctx context.Context, baseURL, peerID, 
 		return nil, "", "", fmt.Errorf("swarm: %s served a member list that does not open", baseURL)
 	}
 	var list []swarmMember
-	dec := json.NewDecoder(strings.NewReader(string(opened)))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&list); err != nil {
+	if err := decodeSwarmStrict(strings.NewReader(string(opened)), &list); err != nil {
 		return nil, "", "", fmt.Errorf("swarm: %s served an unreadable member list", baseURL)
 	}
 	for _, m := range list {
@@ -500,10 +498,8 @@ func decodeSwarmMembers(secret, payload, signer, key string) ([]swarmMember, str
 	if err != nil {
 		return nil, "", "", fmt.Errorf("swarm: member list from %s does not open", signer)
 	}
-	dec := json.NewDecoder(strings.NewReader(string(opened)))
-	dec.DisallowUnknownFields()
 	var members []swarmMember
-	if err := dec.Decode(&members); err != nil {
+	if err := decodeSwarmStrict(strings.NewReader(string(opened)), &members); err != nil {
 		return nil, "", "", fmt.Errorf("swarm: unreadable member list from %s", signer)
 	}
 	return members, signer, key, nil
@@ -1128,9 +1124,7 @@ func (app *Application) swarmVerifyHistory(ctx context.Context, allowance *fetch
 		return swarmCheckFail, "", false
 	}
 	var staged swarmHistoryPayload
-	dec := json.NewDecoder(strings.NewReader(payload))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&staged); err != nil || len(staged.Days) == 0 {
+	if err := decodeSwarmStrict(strings.NewReader(payload), &staged); err != nil || len(staged.Days) == 0 {
 		return swarmCheckFail, "", false
 	}
 	if !app.swarmTake(allowance) {
@@ -1198,9 +1192,7 @@ func (app *Application) swarmVerifyTypeName(ctx context.Context, allowance *fetc
 		return swarmCheckFail, false
 	}
 	var staged swarmTypeNamePayload
-	dec := json.NewDecoder(strings.NewReader(payload))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&staged); err != nil || staged.TypeID != typeID {
+	if err := decodeSwarmStrict(strings.NewReader(payload), &staged); err != nil || staged.TypeID != typeID {
 		return swarmCheckFail, false
 	}
 	if !app.swarmTake(allowance) {
@@ -1228,9 +1220,7 @@ func (app *Application) swarmVerifyCorporation(ctx context.Context, allowance *f
 		return swarmCheckFail, false
 	}
 	var staged swarmOrgPayload
-	dec := json.NewDecoder(strings.NewReader(payload))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&staged); err != nil || staged.ID != id {
+	if err := decodeSwarmStrict(strings.NewReader(payload), &staged); err != nil || staged.ID != id {
 		return swarmCheckFail, false
 	}
 	var body corporationRecordPayload
@@ -1265,9 +1255,7 @@ func (app *Application) swarmVerifyAlliance(ctx context.Context, allowance *fetc
 		return swarmCheckFail, false
 	}
 	var staged swarmOrgPayload
-	dec := json.NewDecoder(strings.NewReader(payload))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&staged); err != nil || staged.ID != id {
+	if err := decodeSwarmStrict(strings.NewReader(payload), &staged); err != nil || staged.ID != id {
 		return swarmCheckFail, false
 	}
 	var body allianceRecordPayload
@@ -1299,9 +1287,7 @@ func (app *Application) swarmVerifyStructure(ctx context.Context, allowance *fet
 		return swarmCheckFail, false
 	}
 	var staged swarmStructurePayload
-	dec := json.NewDecoder(strings.NewReader(payload))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&staged); err != nil || staged.StructureID != id {
+	if err := decodeSwarmStrict(strings.NewReader(payload), &staged); err != nil || staged.StructureID != id {
 		return swarmCheckFail, false
 	}
 	// Structures need a scoped character to re-fetch; with none

@@ -164,7 +164,7 @@ func TestFitSimulateStatsFragment(t *testing.T) {
 		"Fixture Frigate", "Fixture Blaster", "Fixture Charge S",
 		"Damage per second", "Powergrid", "Capacitor")
 	// Two blasters at 20 DPS each: the total must read 40.
-	mustContain(t, "/fittings/simulate/", body, ">40 — turrets 40 · missiles 0 · drones 0<")
+	mustContain(t, "/fittings/simulate/", body, `<span class="fit-headline-num">40</span>`, "turrets 40 · missiles 0 · drones 0")
 	// Within budget: no over-budget marker anywhere in the bars.
 	if strings.Contains(body, "fit-bar-row over") {
 		t.Errorf("in-budget fit is flagged over budget:\n%s", body)
@@ -176,7 +176,9 @@ func TestFitSimulateStatsFragment(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("overfit simulate status = %d", code)
 	}
-	mustContain(t, "/fittings/simulate/", body, "fit-bar-row over", "doesn't fit")
+	mustContain(t, "/fittings/simulate/", body, "fit-bar-row over", "doesn't fit",
+		// The banner above the workbench names the overrun.
+		`class="fit-problems"`, "<li>Powergrid over by 10 MW</li>")
 }
 
 // TestFitSimulateMissingSkills: the chosen pilot's unmet
@@ -481,7 +483,7 @@ func TestFitSimulateModuleStates(t *testing.T) {
 		`data-tip-states="offline,online,active,overheated"`,
 		`data-tip-state="active"`,
 		`data-tip-key="3003:0"`,
-		"<th>Armor</th><td>460</td>")
+		"<strong>Armor</strong> <small>460 HP ")
 	if strings.Contains(body, "Heating a module") {
 		t.Errorf("heat note still shown for a modeled overload effect")
 	}
@@ -497,7 +499,7 @@ func TestFitSimulateModuleStates(t *testing.T) {
 		body,
 		`data-tip-state="overheated"`,
 		"st-overheated",
-		"<th>Armor</th><td>462</td>")
+		"<strong>Armor</strong> <small>462 HP ")
 	if strings.Contains(body, "Heating a module") {
 		t.Errorf("heat note shown for an overheated module")
 	}
@@ -513,7 +515,7 @@ func TestFitSimulateModuleStates(t *testing.T) {
 		body,
 		`data-tip-state="offline"`,
 		"st-offline",
-		"<th>Armor</th><td>450</td>",
+		"<strong>Armor</strong> <small>450 HP ",
 		">0 MW of 50 MW (50 MW left)<")
 
 	// Online but inactive: PG/CPU counted, effect not applied.
@@ -525,7 +527,7 @@ func TestFitSimulateModuleStates(t *testing.T) {
 	mustContain(t, "/fittings/simulate/ online",
 		body,
 		`data-tip-state="online"`,
-		"<th>Armor</th><td>450</td>",
+		"<strong>Armor</strong> <small>450 HP ",
 		">10 MW of 50 MW (40 MW left)<")
 }
 

@@ -5,6 +5,9 @@ are plain spans with their tooltips, nothing adds, removes or
 retunes, and the root carries fit-ro for the read-only tooltips. */}}
 {{define "fit-workbench"}}
 {{if .ReadOnly}}<div class="fit-wb fit-ro">{{else}}<div class="fit-wb" data-fit-state="{{.StateJSON}}" data-fit-bandwidth="{{.DroneBWNum}}" data-fit-bay="{{.DroneBayNum}}" data-fit-subsystems="{{if .SupportsSubsystems}}1{{else}}0{{end}}" data-fit-restricted='{{.RestrictedJSON}}'>{{end}}
+{{$problems := false}}{{if and .HasShip .Stats}}{{if .Stats.Problems}}{{$problems = true}}{{end}}{{end}}
+{{if or .DataNote .Implants .ImplantNote $problems}}
+<div class="fit-top">
 {{if .DataNote}}<p class="fit-note">{{.DataNote}}</p>{{end}}
 {{if or .Implants .ImplantNote}}
 <details class="fit-implants">
@@ -13,8 +16,17 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
   {{if .Implants}}<ul>{{range .Implants}}<li>{{.Name}}</li>{{end}}</ul>{{end}}
 </details>
 {{end}}
+{{if $problems}}
+<div class="fit-problems" role="status">
+  <strong>Doesn't fit</strong>
+  <ul>{{range .Stats.Problems}}<li>{{.}}</li>{{end}}</ul>
+</div>
+{{end}}
+</div>
+{{end}}
 {{if .HasShip}}
 {{if .Visual}}
+<div class="fit-center">
 <div class="fit-visual"{{if not .ReadOnly}} id="fit-visual"{{end}} role="group" aria-label="Visual fitting">
   <div class="fit-vring-outer" aria-hidden="true"></div>
   <div class="fit-vring" aria-hidden="true"></div>
@@ -38,23 +50,29 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
   {{end}}
   {{end}}
 </div>
+{{with .Stats}}<div class="fit-tiles">{{range .Tiles}}<div class="fit-tile{{if .Over}} over{{end}}"><span>{{.Label}}</span><strong>{{.Value}}</strong></div>{{end}}</div>{{end}}
+</div>
 {{end}}
 <div class="fit-cols">
   <div class="fit-slots">
     {{range .Groups}}
     {{$group := .}}
     <div class="fit-group" data-fit-group="{{$group.Key}}" data-fit-used="{{$group.Used}}" data-fit-max="{{$group.Max}}">
-      <h4>{{.Label}}{{if .HasMax}} <small class="{{if .Over}}fit-over{{end}}">{{.Used}}/{{.Max}}{{if .Over}} — doesn't fit{{end}}</small>{{end}}</h4>
+      <h4><span>{{.Label}}</span>{{if .HasMax}} <small class="fit-count{{if .Over}} fit-over{{end}}">{{.Used}}/{{.Max}}{{if .Over}} — doesn't fit{{end}}</small>{{end}}</h4>
       <div class="fit-chips">
         {{range .Chips}}
         <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" data-fit-rowtype="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-lines="{{.TipLines}}">
           {{if $.ReadOnly}}<span class="fit-chip-name">{{.Name}}</span>
-          {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}{{else}}
+          {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
+          {{if .State}}<span class="fit-chip-state">{{.State}}</span>{{end}}
+          {{if .Sub}}<span class="fit-chip-sub">{{.Sub}}</span>{{end}}{{else}}
           <button type="button" class="fit-chip-btn" data-fit-dec="{{.TypeID}}" title="Remove one">−</button>
           <button type="button" class="fit-chip-name" data-fit-dec="{{.TypeID}}" title="Remove one">{{.Name}}</button>
           {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
           <button type="button" class="fit-chip-btn" data-fit-inc="{{.TypeID}}" title="Add another">+</button>
-          {{if eq $group.Key "drone"}}<input type="number" class="fit-qty" data-fit-qty="{{.TypeID}}" value="{{.Qty}}" min="0" max="10000" title="How many">{{end}}{{end}}
+          {{if eq $group.Key "drone"}}<input type="number" class="fit-qty" data-fit-qty="{{.TypeID}}" value="{{.Qty}}" min="0" max="10000" title="How many">{{end}}
+          {{if .State}}<span class="fit-chip-state">{{.State}}</span>{{end}}
+          {{if .Sub}}<span class="fit-chip-sub">{{.Sub}}</span>{{end}}{{end}}
         </span>
         {{end}}
         {{if not $.ReadOnly}}
@@ -95,68 +113,96 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
     <div class="fit-headline">
       <div class="fit-headline-dps">
         <span class="fit-headline-num">{{.TotalDPS}}</span>
-        <span class="fit-headline-label">DPS</span>
+        <span class="fit-headline-label"><abbr title="Damage per second">DPS</abbr></span>
         <span class="fit-headline-sub">turrets {{.TurretDPS}} · missiles {{.MissileDPS}} · drones {{.DroneDPS}}</span>
       </div>
       <div class="fit-headline-volley">
         <span class="fit-headline-num">{{.TotalVolley}}</span>
-        <span class="fit-headline-label">volley</span>
+        <span class="fit-headline-label"><abbr title="Volley damage">volley</abbr></span>
         <span class="fit-headline-sub">turrets {{.TurretVolley}} · missiles {{.MissileVolley}} · drones {{.DroneVolley}}</span>
       </div>
     </div>
-    <div class="fit-bar-row{{if .Powergrid.Over}} over{{else}} good{{end}}">
-      <span class="fit-bar-label">Powergrid</span>
-      <span class="fit-bar"><span data-w="{{printf "%.1f" .Powergrid.Pct}}"></span></span>
-      <span class="fit-bar-nums">{{.Powergrid.Used}} of {{.Powergrid.Max}} ({{.Powergrid.Left}} left)</span>
-    </div>
-    <div class="fit-bar-row{{if .CPU.Over}} over{{else}} good{{end}}">
-      <span class="fit-bar-label">CPU</span>
-      <span class="fit-bar"><span data-w="{{printf "%.1f" .CPU.Pct}}"></span></span>
-      <span class="fit-bar-nums">{{.CPU.Used}} of {{.CPU.Max}} ({{.CPU.Left}} left)</span>
-    </div>
-    {{with $.Cost}}{{if .Known}}
-    <p class="fit-cost" data-fit-cost="{{.TotalRaw}}"><span class="fit-cost-total">{{.Total}} ISK</span> <small>hull {{.Hull}} + fittings {{.Parts}}{{if .Unpriced}} · {{.Unpriced}} item{{if ne .Unpriced 1}}s{{end}} unpriced{{end}}</small></p>
-    {{end}}{{end}}
-    <div class="tw">
-    <table class="fit-table fit-statlist">
-      <tbody>
-        <tr><th>Slots</th><td class="{{if .SlotsOver}}fit-over{{else}}fit-good{{end}}">{{.SlotLine}}</td></tr>
-        <tr><th>Hardpoints</th><td class="{{if .HPOver}}fit-over{{else}}fit-good{{end}}">{{.Hardpoints}}</td></tr>
-        <tr><th>Calibration</th><td class="{{if .CalibOver}}fit-over{{else}}fit-good{{end}}">{{.Calibration}}</td></tr>
-        <tr><th>Capacitor</th><td>{{.Capacitor}} · peak recharge {{.CapPeak}} · use {{.CapDraw}}</td></tr>
-        <tr><th>Capacitor state</th><td class="{{if .CapStable}}fit-good{{else}}fit-over{{end}}">{{.CapState}}</td></tr>
-        <tr><th>Damage per second</th><td>{{.TotalDPS}} — turrets {{.TurretDPS}} · missiles {{.MissileDPS}} · drones {{.DroneDPS}}</td></tr>
-        <tr><th>Volley damage</th><td>{{.TotalVolley}} — turrets {{.TurretVolley}} · missiles {{.MissileVolley}} · drones {{.DroneVolley}}</td></tr>
-        {{if .NeutDrain}}<tr><th>Neutralizer drain</th><td>{{.NeutDrain}}</td></tr>{{end}}
-        {{if .NosDrain}}<tr><th>Nosferatu drain</th><td>{{.NosDrain}}</td></tr>{{end}}
-        <tr><th>Effective hit points</th><td>{{.EHPOmni}}</td></tr>
-        <tr><th>Shield recharge</th><td>{{.ShieldReg}} at peak</td></tr>
-        <tr><th>Shield boosting</th><td>{{.ShieldBoost}}</td></tr>
-        <tr><th>Armor repair</th><td>{{.ArmorRep}}</td></tr>
-        <tr><th>Hull repair</th><td>{{.HullRep}}</td></tr>
-        <tr><th>Speed</th><td>{{.Velocity}}</td></tr>
-        <tr><th>Align time</th><td>{{.Align}}</td></tr>
-        <tr><th>Signature radius</th><td>{{.Signature}}</td></tr>
-        <tr><th>Targeting range</th><td>{{.TargetRng}}</td></tr>
-        <tr><th>Scan resolution</th><td>{{.ScanRes}}</td></tr>
-        <tr><th>Sensor strength</th><td>{{.Sensor}}</td></tr>
-        <tr><th>Locked targets</th><td>up to {{.LockedTgts}}</td></tr>
-        <tr><th>Cargo hold</th><td>{{.Cargo}}</td></tr>
-        <tr><th>Drone bandwidth</th><td>{{.DroneBW}}</td></tr>
-        <tr><th>Drone bay</th><td>{{.DroneBay}} · {{.DronesUp}}</td></tr>
-      </tbody>
-    </table>
-    </div>
-    <div class="tw">
-    <table class="fit-table">
-      <thead><tr><th></th><th>HP</th><th>EM</th><th>Thermal</th><th>Kinetic</th><th>Explosive</th><th>EHP</th></tr></thead>
-      <tbody>
-      {{range .Tank}}
-        <tr><th>{{.Layer}}</th><td>{{.HP}}</td><td>{{.EM}}</td><td>{{.Thermal}}</td><td>{{.Kinetic}}</td><td>{{.Explosive}}</td><td>{{.EHP}}</td></tr>
-      {{end}}
-      </tbody>
-    </table>
-    </div>
+    {{if or .NeutDrain .NosDrain}}<dl class="fit-kv fit-kv-drain">
+      {{if .NeutDrain}}<div><dt>Neutralizer drain</dt><dd>{{.NeutDrain}}</dd></div>{{end}}
+      {{if .NosDrain}}<div><dt>Nosferatu drain</dt><dd>{{.NosDrain}}</dd></div>{{end}}
+    </dl>{{end}}
+
+    <section class="fit-panel" aria-label="Fitting">
+      <h5>Fitting</h5>
+      <div class="fit-bar-row{{if .Powergrid.Over}} over{{else}} good{{end}}">
+        <span class="fit-bar-label">Powergrid</span>
+        <span class="fit-bar"><span data-w="{{printf "%.1f" .Powergrid.Pct}}"></span></span>
+        <span class="fit-bar-nums">{{.Powergrid.Used}} of {{.Powergrid.Max}} ({{.Powergrid.Left}} left)</span>
+      </div>
+      <div class="fit-bar-row{{if .CPU.Over}} over{{else}} good{{end}}">
+        <span class="fit-bar-label">CPU</span>
+        <span class="fit-bar"><span data-w="{{printf "%.1f" .CPU.Pct}}"></span></span>
+        <span class="fit-bar-nums">{{.CPU.Used}} of {{.CPU.Max}} ({{.CPU.Left}} left)</span>
+      </div>
+      {{if ne .Calib.Max "0"}}<div class="fit-bar-row{{if .Calib.Over}} over{{else}} good{{end}}">
+        <span class="fit-bar-label">Calibration</span>
+        <span class="fit-bar"><span data-w="{{printf "%.1f" .Calib.Pct}}"></span></span>
+        <span class="fit-bar-nums">{{.Calib.Used}} of {{.Calib.Max}} ({{.Calib.Left}} left)</span>
+      </div>{{end}}
+      <dl class="fit-kv">
+        <div><dt>Slots</dt><dd class="{{if .SlotsOver}}fit-over{{else}}fit-good{{end}}">{{.SlotLine}}</dd></div>
+        <div><dt>Hardpoints</dt><dd class="{{if .HPOver}}fit-over{{else}}fit-good{{end}}">{{.Hardpoints}}</dd></div>
+      </dl>
+      {{with $.Cost}}{{if .Known}}
+      <p class="fit-cost" data-fit-cost="{{.TotalRaw}}"><span class="fit-cost-total">{{.Total}} ISK</span> <small>hull {{.Hull}} + fittings {{.Parts}}{{if .Unpriced}} · {{.Unpriced}} item{{if ne .Unpriced 1}}s{{end}} unpriced{{end}}</small></p>
+      {{end}}{{end}}
+    </section>
+
+    <section class="fit-panel" aria-label="Capacitor">
+      <h5>Capacitor <span class="fit-panel-side {{if .CapStable}}fit-good{{else}}fit-over{{end}}">{{.CapState}}</span></h5>
+      <dl class="fit-kv fit-kv-3">
+        <div><dt>Capacity</dt><dd>{{.Capacitor}}</dd></div>
+        <div><dt>Peak recharge</dt><dd>{{.CapPeak}}</dd></div>
+        <div><dt>Use</dt><dd>{{.CapDraw}}</dd></div>
+      </dl>
+    </section>
+
+    <section class="fit-panel" aria-label="Defense">
+      <h5>Defense <span class="fit-panel-side"><span class="fit-ehp">{{.EHPOmni}}</span> <abbr title="Effective hit points">EHP</abbr></span></h5>
+      <div class="fit-resists">
+        <div class="fit-res-head" aria-hidden="true"><span></span><span class="res-em">EM</span><span class="res-th">TH</span><span class="res-kin">KIN</span><span class="res-exp">EXP</span></div>
+        {{range .Tank}}
+        <div class="fit-res-row">
+          <div class="fit-res-layer"><strong>{{.Layer}}</strong> <small>{{.HP}} HP · {{.EHP}} EHP</small></div>
+          {{range .Resists}}<span class="fit-res res-{{.Kind}}" title="{{.Text}}"><span data-w="{{printf "%.1f" .Pct}}"></span><b>{{.Text}}</b></span>{{end}}
+        </div>
+        {{end}}
+      </div>
+      <dl class="fit-kv fit-kv-2">
+        <div><dt>Shield recharge</dt><dd>{{.ShieldReg}} at peak</dd></div>
+        <div><dt>Shield boosting</dt><dd>{{.ShieldBoost}}</dd></div>
+        <div><dt>Armor repair</dt><dd>{{.ArmorRep}}</dd></div>
+        <div><dt>Hull repair</dt><dd>{{.HullRep}}</dd></div>
+      </dl>
+    </section>
+
+    <section class="fit-panel" aria-label="Navigation and targeting">
+      <h5>Navigation &amp; targeting</h5>
+      <dl class="fit-kv fit-kv-2">
+        <div><dt>Speed</dt><dd>{{.Velocity}}</dd></div>
+        <div><dt>Align time</dt><dd>{{.Align}}</dd></div>
+        <div><dt>Signature radius</dt><dd>{{.Signature}}</dd></div>
+        <div><dt>Targeting range</dt><dd>{{.TargetRng}}</dd></div>
+        <div><dt>Scan resolution</dt><dd>{{.ScanRes}}</dd></div>
+        <div><dt>Sensor strength</dt><dd>{{.Sensor}}</dd></div>
+        <div><dt>Locked targets</dt><dd>up to {{.LockedTgts}}</dd></div>
+      </dl>
+    </section>
+
+    <section class="fit-panel" aria-label="Drones and cargo">
+      <h5>Drones &amp; cargo</h5>
+      <dl class="fit-kv fit-kv-2">
+        <div><dt>Drone bandwidth</dt><dd>{{.DroneBW}}</dd></div>
+        <div><dt>Drone bay</dt><dd>{{.DroneBay}}</dd></div>
+        <div><dt>Drones</dt><dd>{{.DronesUp}}</dd></div>
+        <div><dt>Cargo hold</dt><dd>{{.Cargo}}</dd></div>
+      </dl>
+    </section>
     {{if $.Missing}}
     <div class="fit-missing">
       <h4>Skills you're missing</h4>

@@ -198,7 +198,8 @@ LIMIT sqlc.arg(rlimit)::bigint;
 UPDATE local_fittings SET total_price = $1 WHERE id = $2 AND user_id = $3;
 
 -- RepriceLocalFittings sets every fit's total_price from the guide
--- mirror: the hull plus each module line at adjusted price, the sum
+-- mirror: the hull plus each item line, each at the market average or,
+-- without one, the adjusted price (fitUnitPrice), the sum
 -- fitDocPrice makes when a fit is saved (0 when nothing in the fit
 -- is priced). Rows whose price is unchanged are not written, and an
 -- empty guide prices nothing. updated_at is left alone: a new price
@@ -208,8 +209,8 @@ UPDATE local_fittings lf
 SET total_price = priced.total
 FROM (
   SELECT f.id,
-         (COALESCE((SELECT gp.adjusted_price FROM guide_prices gp WHERE gp.type_id = f.ship_type_id), 0) +
-          COALESCE((SELECT SUM((it->>'qty')::numeric * gp.adjusted_price)
+         (COALESCE((SELECT COALESCE(NULLIF(gp.average_price, 0), gp.adjusted_price) FROM guide_prices gp WHERE gp.type_id = f.ship_type_id), 0) +
+          COALESCE((SELECT SUM((it->>'qty')::numeric * COALESCE(NULLIF(gp.average_price, 0), gp.adjusted_price))
                     FROM jsonb_array_elements(
                         CASE WHEN jsonb_typeof(f.items_json::jsonb -> 'items') = 'array' THEN f.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
                     JOIN guide_prices gp ON gp.type_id = (it->>'typeId')::bigint), 0))::float8 AS total

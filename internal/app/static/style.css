@@ -2257,6 +2257,36 @@ fit reads without scrolling. */
   touch-action: none;
 }
 .fit-vslot:hover { border-color: var(--accent); color: var(--text); }
+/* Public fit page header: the fit's details beside its rating,
+the rating as a small ember panel rather than a loose form. */
+.fit-pubhead { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; margin-bottom: 1rem; }
+.fit-pubmeta { flex: 1 1 22rem; min-width: 0; }
+.fit-pubmeta .lede { margin-top: 0; }
+.fit-pubrate {
+  flex: 0 1 19rem;
+  padding: 0.7rem 0.9rem;
+  background: var(--panel);
+  border: 1px solid #4a2408;
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+}
+.fit-pubstars { margin: 0 0 0.5rem; }
+.fit-pubstars-num { font-size: 1.25rem; font-weight: 600; color: var(--gold); }
+.fit-rateform { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: end; margin: 0; }
+.fit-rateform label { display: grid; gap: 0.25rem; font-size: 0.8rem; color: var(--muted); }
+.fit-rateform select {
+  background: var(--input-bg);
+  border: 1px solid #2a2a2a;
+  border-radius: 3px;
+  color: var(--text);
+  padding: 0.38rem 0.55rem;
+  font: inherit;
+}
+.fit-rateform select:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 8px rgba(255, 106, 26, 0.35); }
+.fit-pubrate .hint { margin: 0; }
+/* What a fit costs, in the stats panel on every page that shows it. */
+.fit-cost { margin: 0.4rem 0 0.6rem; }
+.fit-cost-total { font-weight: 600; color: var(--gold); font-variant-numeric: tabular-nums; }
 /* Read-only workbench mirror (public fit pages): the tool's
 look, none of its affordances. */
 .fit-ro .fit-vslot, .fit-ro .fit-chip { cursor: default; }
@@ -2764,6 +2794,8 @@ html[data-theme="light"] .ok { background: rgba(255, 184, 77, 0.2); color: #7a54
 /* Quickjump + fitting bits. */
 html[data-theme="light"] .quickjump-results li.sel { background: #f0dfbc; }
 html[data-theme="light"] .fit-stats { border-color: #ddd2bd; }
+html[data-theme="light"] .fit-pubrate { border-color: #ddd2bd; border-left-color: var(--accent); }
+html[data-theme="light"] .fit-rateform select { border-color: #d8cdb8; }
 html[data-theme="light"] .fit-chip { border-color: #d3c7ae; }
 html[data-theme="light"] .fit-chip-btn { background: #f0e9d8; border-color: #d3c7ae; }
 html[data-theme="light"] .fit-bar { background: #e7ddc8; border-color: #d3c7ae; }

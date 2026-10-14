@@ -1065,6 +1065,33 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid rgba(255, 1
 .fleet-facts dt { font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .fleet-facts dd { margin: 0.1rem 0 0; }
 .fleet-foot { margin: 0.4rem 0 0; color: var(--muted); }
+
+/* Wallet flow donuts: income and spend by type. Slice colours
+   are a fixed palette, the same order in both donuts and their
+   keys; pie-s5 is Other. */
+.flow-pies {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.75rem 1.25rem;
+  margin: 0.6rem 0;
+}
+.flow-pie { display: flex; gap: 0.8rem; align-items: center; margin: 0; min-width: 0; }
+.flow-pie svg { flex: 0 0 6.5rem; width: 6.5rem; height: 6.5rem; }
+.flow-pie path { stroke: var(--panel); stroke-width: 0.8; }
+.flow-pie .pie-c { font-size: 11px; fill: var(--muted); text-anchor: middle; letter-spacing: 0.08em; text-transform: uppercase; }
+.flow-pie figcaption { min-width: 0; font-size: 0.8rem; }
+.pie-head { display: block; margin-bottom: 0.25rem; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.pie-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.15rem; }
+.pie-legend li { display: flex; align-items: center; gap: 0.35rem; min-width: 0; }
+.pie-legend .pie-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pie-legend b { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pie-key { flex: 0 0 auto; width: 0.6rem; height: 0.6rem; border-radius: 2px; }
+.pie-s0 { fill: #ff6a1a; background: #ff6a1a; }
+.pie-s1 { fill: #ffd27a; background: #ffd27a; }
+.pie-s2 { fill: #c62f10; background: #c62f10; }
+.pie-s3 { fill: #5eb8ff; background: #5eb8ff; }
+.pie-s4 { fill: #3fce7a; background: #3fce7a; }
+.pie-s5 { fill: #7d6a58; background: #7d6a58; }
 /* Phones: two columns. */
 @media (max-width: 719px) {
   .grid.home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

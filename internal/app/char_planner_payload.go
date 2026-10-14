@@ -887,6 +887,33 @@ func (app *Application) planFacility(ctx context.Context, rawStructure, rawRig s
 	return matFactor, timeFactor, costFactor, note, structureID, rigTier
 }
 
+// planJobTaxes resolves the job-fee terms that are neither the
+// system index nor a structure bonus (buildplan.JobFee): the
+// facility tax and whether an Alpha clone installs the job.
+//
+// The facility tax is 0.25% at an NPC station. At a player
+// structure its owner sets it and nothing public says what it
+// is, so it is whatever ?ftax= gives (a percentage) and zero
+// until then; ?ftax= also overrides the NPC rate. Clone state is
+// not in any ESI data the app holds either, so the Alpha tax is
+// a setting too (?alpha=1), off by default.
+func planJobTaxes(q url.Values, structureID int64) (facilityTax float64, alpha bool, note string) {
+	facilityTax = buildplan.NPCFacilityTax
+	if structureID != 0 {
+		facilityTax = 0
+	}
+	if pct, err := strconv.ParseFloat(strings.TrimSpace(q.Get("ftax")), 64); err == nil && pct >= 0 && pct <= 100 {
+		facilityTax = pct / 100
+	}
+	alpha = q.Get("alpha") == "1"
+	note = "facility tax " + strconv.FormatFloat(facilityTax*100, 'f', -1, 64) + "% · SCC surcharge " +
+		strconv.FormatFloat(buildplan.SCCSurcharge*100, 'f', -1, 64) + "%"
+	if alpha {
+		note += " · Alpha clone tax " + strconv.FormatFloat(buildplan.AlphaCloneTax*100, 'f', -1, 64) + "%"
+	}
+	return facilityTax, alpha, note
+}
+
 // planAdjustedMap builds the job-fee base from the guide:
 // adjusted price where present, average behind it.
 func planAdjustedMap(guide map[int64]esi.MarketPrice) map[int64]float64 {
@@ -933,12 +960,14 @@ func (app *Application) buildPlanPayloadView(ctx context.Context, q url.Values, 
 	prices, market, marketName, pricesNote := app.planMarket(ctx, q, res, guide)
 	adjusted := planAdjustedMap(guide)
 	if market != plannerMarketGuide {
-		facMat, facTime, facCost, _, _, _ := app.planFacility(ctx, q.Get("structure"), q.Get("rig"), systemID)
+		facMat, facTime, facCost, _, facStructure, _ := app.planFacility(ctx, q.Get("structure"), q.Get("rig"), systemID)
+		facTax, alpha, _ := planJobTaxes(q, facStructure)
 		re, err := buildplan.Build(src, productID, buildplan.Input{
 			Runs: runs, MEOverride: overrides, Owned: owned,
 			Stock: stock, Prices: prices,
 			CostIndex: index, Adjusted: adjusted,
 			FacilityMatFactor: facMat, FacilityTimeFactor: facTime, FacilityCostFactor: facCost,
+			FacilityTax: facTax, AlphaClone: alpha,
 		})
 		if err == nil && !re.TooLarge {
 			res = re

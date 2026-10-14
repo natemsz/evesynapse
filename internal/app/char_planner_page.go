@@ -60,6 +60,9 @@ type planView struct {
 	VerdictText    string
 	VerdictCls     string
 	FacilityNote   string
+	FeeTerms       string // "facility tax 0.25% · SCC surcharge 4%"
+	FacilityTaxPct string // the facility tax in use, as a percentage
+	AlphaClone     bool   // an Alpha clone installs the jobs
 	StructureID    int64
 	RigTier        string
 	HdrProfitCls   string
@@ -386,6 +389,7 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 	systemID, systemName, costIndex, indexKnown := app.planBuildSystem(ctx, q.Get("system"))
 
 	facMat, facTime, facCost, facNote, facStructure, facRig := app.planFacility(ctx, q.Get("structure"), q.Get("rig"), systemID)
+	facTax, alphaClone, feeTerms := planJobTaxes(q, facStructure)
 
 	res, err := buildplan.Build(src, productID, buildplan.Input{
 		Runs:               runs,
@@ -398,6 +402,8 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 		FacilityMatFactor:  facMat,
 		FacilityTimeFactor: facTime,
 		FacilityCostFactor: facCost,
+		FacilityTax:        facTax,
+		AlphaClone:         alphaClone,
 	})
 	if errors.Is(err, buildplan.ErrNotManufacturable) {
 		return nil, "That item has no manufacturing blueprint in the local data, so it can't be planned."
@@ -489,6 +495,9 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 	view.TimeFactorNote = meta.TimeNote
 	view.VerdictText, view.VerdictCls = planVerdictLine(meta)
 	view.FacilityNote = facNote
+	view.FeeTerms = feeTerms
+	view.FacilityTaxPct = strconv.FormatFloat(facTax*100, 'f', -1, 64)
+	view.AlphaClone = alphaClone
 	view.StructureID = facStructure
 	view.RigTier = facRig
 	if meta.Optimized.ProfKnown {

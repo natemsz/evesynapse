@@ -337,10 +337,11 @@ type tradeIdeasWidget struct {
 
 // tradeIdeaGroup is one strategy: a tab on the page and the module.
 type tradeIdeaGroup struct {
-	ID    string // "ti-1", ...: the tab's panel id, unique on a page
-	Title template.HTML
-	Desc  template.HTML   // the one-line description, if any
-	Ideas []template.HTML // one bullet each, best first
+	ID     string // "ti-1", ...: the tab's panel id, unique on a page
+	Accent int    // 1-6, rotating by place: the group's color (tradeideas.css)
+	Title  template.HTML
+	Desc   template.HTML   // the one-line description, if any
+	Ideas  []template.HTML // one bullet each, best first
 	// Briefs parallel Ideas: the item and its first short detail, for
 	// the home module at its resting size (a verbose model's full
 	// line is too much there; More and the page show Ideas).
@@ -454,6 +455,7 @@ func parseTradeIdeas(body string) []tradeIdeaGroup {
 			continue
 		}
 		g.ID = fmt.Sprintf("ti-%d", len(out)+1)
+		g.Accent = len(out)%6 + 1
 		out = append(out, g)
 	}
 	return out

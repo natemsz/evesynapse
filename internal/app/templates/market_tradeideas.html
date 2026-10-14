@@ -1,6 +1,6 @@
-{{define "title"}}Trade ideas{{end}}
+{{define "title"}}Trade Ideas{{end}}
 {{define "content"}}
-<h1><span class="gt">Trade ideas</span></h1>
+<h1><span class="gt">Trade Ideas</span></h1>
 {{template "sectiontabs" .}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
@@ -11,10 +11,10 @@
   {{if .HasIdeas}}
   <div class="ti">
     <div class="ti-tabs" role="tablist" aria-label="Trade strategies" data-tabs hidden>
-      {{range $i, $g := .Groups}}<button type="button" role="tab" id="{{.ID}}-tab" aria-controls="{{.ID}}" aria-selected="{{if eq $i 0}}true{{else}}false{{end}}">{{.Title}}<small>{{len .Ideas}}</small></button>{{end}}
+      {{range $i, $g := .Groups}}<button type="button" role="tab" class="ti-acc ti-a{{.Accent}}" id="{{.ID}}-tab" aria-controls="{{.ID}}" aria-selected="{{if eq $i 0}}true{{else}}false{{end}}">{{.Title}}<small>{{len .Ideas}}</small></button>{{end}}
     </div>
     {{range .Groups}}
-    <div class="ti-panel" role="tabpanel" id="{{.ID}}" aria-labelledby="{{.ID}}-tab">
+    <div class="ti-panel ti-acc ti-a{{.Accent}}" role="tabpanel" id="{{.ID}}" aria-labelledby="{{.ID}}-tab">
       <h4 class="ti-h">{{.Title}}</h4>
       {{with .Desc}}<p class="ti-desc"><small>{{.}}</small></p>{{end}}
       {{if .Ideas}}<ol class="ti-list ti-full{{if $.TradeIdeas.Detailed}} ti-detail{{end}}">{{range .Ideas}}<li>{{.}}</li>{{end}}</ol>{{end}}
@@ -24,7 +24,7 @@
   </div>
   <p><small>As of {{.AsOf}} · {{.Model}} on the Forge spread scanner.</small></p>
   {{else if .Configured}}<p><small>No ideas yet — the next refresh asks the model once the Forge sweep lands.</small></p>
-  {{else}}<p><small>Trade ideas are not set up — set <code>MODEL_API_KEY</code>, or <code>CLOUDFLARE_ACCOUNT_ID</code> / <code>CLOUDFLARE_AUTH_TOKEN</code> (see <code>.env.example</code>).</small></p>{{end}}
+  {{else}}<p><small>Trade Ideas are not set up — set <code>MODEL_API_KEY</code>, or <code>CLOUDFLARE_ACCOUNT_ID</code> / <code>CLOUDFLARE_AUTH_TOKEN</code> (see <code>.env.example</code>).</small></p>{{end}}
 </section>
 {{end}}
 {{end}}

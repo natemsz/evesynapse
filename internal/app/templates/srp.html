@@ -1,6 +1,6 @@
-{{define "title"}}Ship replacement{{end}}
+{{define "title"}}Ship Replacement{{end}}
 {{define "content"}}
-<h1><span class="gt">Ship replacement</span></h1>
+<h1><span class="gt">Ship Replacement</span></h1>
 {{template "sectiontabs" .}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
@@ -12,7 +12,7 @@
 {{$corp := .Corp}}
 {{template "corpselector" .CorpOptions}}
 <h2>{{$corp.Name}}</h2>
-<p><small><a href="/doctrines/?corporation={{$corp.ID}}">Doctrines</a> · <a href="/doctrines/fits/?corporation={{$corp.ID}}">Fits</a> · Ship replacement{{if $corp.Directs}} · <a href="/corporations/settings/?corporation={{$corp.ID}}">Settings</a>{{end}}</small></p>
+<p><small><a href="/doctrines/?corporation={{$corp.ID}}">Doctrines</a> · <a href="/doctrines/fits/?corporation={{$corp.ID}}">Fits</a> · Ship Replacement{{if $corp.Directs}} · <a href="/corporations/settings/?corporation={{$corp.ID}}">Settings</a>{{end}}</small></p>
 
 <p class="lede">Lost a ship on one of {{$corp.Name}}'s ops? Ask for it to be replaced here. A request names the killmail and the op it happened on, and whoever handles replacement sees whether the fleet recorded you there.</p>
 

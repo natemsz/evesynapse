@@ -34,28 +34,38 @@ var (
 	sitemapXML []byte
 )
 
-// handleRobots serves the static crawler rules as text/plain.
+// handleRobots serves the crawler rules as text/plain: the static
+// rules, and the sitemap's address at this instance's own origin
+// (the line is left out when the instance has none configured).
 func (app *Application) handleRobots(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = w.Write([]byte(robotsTXT))
+	if origin := app.canonicalOrigin(); origin != "" {
+		_, _ = w.Write([]byte("Sitemap: " + origin + "/sitemap.xml\n"))
+	}
 }
 
 // canonicalOrigin is the absolute base for every crawler- or
-// share-facing URL: the configured public origin, defaulting to
-// the production site. It never derives from the triggering
-// request: a rebuild kicked off through an alias host must not
-// bake that alias into the sitemap or the shared links.
+// share-facing URL: this instance's own configured public origin
+// (Config.publicOrigin), and nothing else. Every instance is
+// somebody's own site, so no other site's address is ever a
+// fallback: an instance with no origin configured gets "", and
+// its callers then publish no absolute URL at all. It never
+// derives from the triggering request either: a rebuild kicked
+// off through an alias host must not bake that alias into the
+// sitemap or the shared links.
 func (app *Application) canonicalOrigin() string {
-	if origin := app.cfg.publicOrigin(); origin != "" {
-		return origin
-	}
-	return "https://evesynapse.app"
+	return app.cfg.publicOrigin()
 }
 
-// siteOrigin is the absolute base for public URLs: always the
-// canonical origin, never the request host.
-func (app *Application) siteOrigin(r *http.Request) string {
-	return app.canonicalOrigin()
+// publicPageURL is the absolute address of one of this instance's
+// public pages, or "" when the instance has no origin configured.
+func (app *Application) publicPageURL(path string) string {
+	origin := app.canonicalOrigin()
+	if origin == "" {
+		return ""
+	}
+	return origin + path
 }
 
 // handleSitemap serves the generated sitemap, rebuilt at most
@@ -63,6 +73,13 @@ func (app *Application) siteOrigin(r *http.Request) string {
 // top public fits by weighted rating, and bounded top item and
 // ship lists.
 func (app *Application) handleSitemap(w http.ResponseWriter, r *http.Request) {
+	// A sitemap is a list of absolute URLs: without an origin of
+	// its own this instance has none to give.
+	origin := app.canonicalOrigin()
+	if origin == "" {
+		http.NotFound(w, r)
+		return
+	}
 	sitemapMu.Lock()
 	fresh := time.Since(sitemapAt) < sitemapTTL && sitemapXML != nil
 	var out []byte
@@ -72,7 +89,7 @@ func (app *Application) handleSitemap(w http.ResponseWriter, r *http.Request) {
 	sitemapMu.Unlock()
 	if !fresh {
 		var err error
-		out, err = app.buildSitemap(r.Context(), app.siteOrigin(r))
+		out, err = app.buildSitemap(r.Context(), origin)
 		if err != nil {
 			logging.Errorf("sitemap: build: %v", err)
 			http.Error(w, "Sitemap unavailable", http.StatusInternalServerError)

@@ -439,7 +439,7 @@ func (app *Application) foreseeWars(ctx context.Context, now time.Time) {
 // foresightOpened records that an account opened a page: any target
 // warmed for that page, and still current, was right.
 func (app *Application) foresightOpened(ctx context.Context, userID int64, viewKey string) {
-	if app.cfg.foresightOff || userID == 0 || app.foresight.live.Load() <= 0 {
+	if app.cfg.foresightOff || userID == 0 || isPrefetch(ctx) || app.foresight.live.Load() <= 0 {
 		return
 	}
 	now := time.Now().UTC()

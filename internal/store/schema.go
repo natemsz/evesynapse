@@ -187,6 +187,25 @@ var pgSwarmNextGossipSchema string
 //go:embed schema_pg/039_typing_ledger.sql
 var pgTypingLedgerSchema string
 
+// Step 040: recount fit rating aggregates from fit_ratings (a
+// doubled first rating was counted twice). Numbered clear of the
+// steps other open branches carry.
+//
+//go:embed schema_pg/040_fit_rating_recount.sql
+var pgFitRatingRecountSchema string
+
+// Step 041: the public fit rank takes the global mean as an
+// argument, computed once per query instead of once per row.
+//
+//go:embed schema_pg/041_public_fit_rank_once.sql
+var pgPublicFitRankOnceSchema string
+
+// Step 042: stored public fit pages (sections, simulation, EFT),
+// built once per version of a fit instead of on every view.
+//
+//go:embed schema_pg/042_public_fit_pages.sql
+var pgPublicFitPagesSchema string
+
 // Step 043: the trade ideas' last ask and failure run, for the
 // refresh backoff.
 //
@@ -259,6 +278,9 @@ func schemaSteps() []schemaStep {
 		{34, "swarm_key_pin", pgSwarmKeyPinSchema, ""},
 		{35, "swarm_provenance", pgSwarmProvenanceSchema, ""},
 		{36, "swarm_next_gossip", pgSwarmNextGossipSchema, ""},
+		{40, "fit_rating_recount", pgFitRatingRecountSchema, ""},
+		{41, "public_fit_rank_once", pgPublicFitRankOnceSchema, ""},
+		{42, "public_fit_pages", pgPublicFitPagesSchema, ""},
 		{43, "trade_ideas_attempts", pgTradeIdeasAttemptsSchema, ""},
 	}
 }

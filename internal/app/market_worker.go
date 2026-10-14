@@ -883,7 +883,27 @@ func (app *Application) refreshGuidePrices(ctx context.Context) (stored bool, li
 
 	logging.Infof("worker: guide prices stored (%d types, fresh until %s)",
 		len(rows), cachedUntil.UTC().Format(time.RFC3339))
+	// New guide prices: the stored fit prices follow them.
+	app.repriceFittings(ctx)
 	return true, false
+}
+
+// repriceFittings brings every stored fit's total_price up to the
+// guide mirror and reports how many changed. A fit is priced when
+// it is saved; without this it kept that price for good, and the
+// public browser sorted and filtered on it.
+func (app *Application) repriceFittings(ctx context.Context) int64 {
+	n, err := app.queries.RepriceLocalFittings(ctx)
+	if err != nil {
+		if ctx.Err() == nil {
+			logging.Errorf("worker: reprice fits: %v", err)
+		}
+		return 0
+	}
+	if n > 0 {
+		logging.Infof("worker: repriced %d stored fits from the guide", n)
+	}
+	return n
 }
 
 // industryCostIndexFresh is the refresh gate when ESI's Expires

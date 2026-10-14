@@ -492,6 +492,7 @@ func (app *Application) publicPage(ctx context.Context) pageData {
 // its modules grouped server-side, the EFT text, the rating
 // state, and absolute share links. Sim is the same All-V
 // workbench view the fitting tool renders, shown read-only.
+// Sections, Sim and EFT come from the stored page.
 type publicFitView struct {
 	Card        publicFitCard
 	Description string
@@ -502,6 +503,9 @@ type publicFitView struct {
 	StarCount   int64
 	MyStars     int64
 	PageURL     string
+	// Preparing: the stored page for this version of the fit is
+	// not built yet (the worker builds it within a cycle or two).
+	Preparing   bool
 	ShareX      string
 	ShareReddit string
 }
@@ -571,7 +575,9 @@ func (app *Application) publicFitSections(ctx context.Context, doc *fitDoc) []fi
 
 // fitDocPrice totals a document from the guide mirror (adjusted
 // ISK per unit): hull plus every module line. 0 when no prices
-// are warmed yet; the browser treats 0 as unknown.
+// are warmed yet; the browser treats 0 as unknown. The worker
+// makes the same sum in SQL for every stored fit whenever the
+// guide refreshes (RepriceLocalFittings): change both together.
 func (app *Application) fitDocPrice(ctx context.Context, doc *fitDoc) float64 {
 	prices := app.valuationPrices(ctx)
 	if len(prices) == 0 {
@@ -591,7 +597,8 @@ func (app *Application) fitDocPrice(ctx context.Context, doc *fitDoc) float64 {
 }
 
 // headMeta composes escaped description and Open Graph tags for a
-// public page; values are attribute-escaped at build time.
+// public page; values are attribute-escaped at build time. og:url
+// is left out when the page has no absolute address (pageURL "").
 func headMeta(title, description, pageURL string) template.HTML {
 	esc := html.EscapeString
 	var b strings.Builder
@@ -599,7 +606,9 @@ func headMeta(title, description, pageURL string) template.HTML {
 	b.WriteString(`<meta property="og:title" content="` + esc(title) + `">` + "\n")
 	b.WriteString(`<meta property="og:description" content="` + esc(description) + `">` + "\n")
 	b.WriteString(`<meta property="og:type" content="website">` + "\n")
-	b.WriteString(`<meta property="og:url" content="` + esc(pageURL) + `">` + "\n")
+	if pageURL != "" {
+		b.WriteString(`<meta property="og:url" content="` + esc(pageURL) + `">` + "\n")
+	}
 	return template.HTML(b.String())
 }
 
@@ -627,8 +636,11 @@ func (app *Application) handlePublicFitPage(w http.ResponseWriter, r *http.Reque
 		app.render(ctx, w, http.StatusOK, "fit_public.html", data)
 		return
 	}
-	if err := app.queries.BumpFitViewCount(ctx, fitID); err != nil {
-		logging.Errorf("public fit %d: count view: %v", fitID, err)
+	// Counted in memory; the worker writes views in batches. A
+	// prefetch is not a view (core_prefetch.go).
+	views := row.ViewCount + app.fitViews.peek(fitID)
+	if !isPrefetch(ctx) {
+		views = row.ViewCount + app.fitViews.count(fitID)
 	}
 	var doc fitDoc
 	if json.Unmarshal([]byte(row.ItemsJson), &doc) != nil {
@@ -640,7 +652,7 @@ func (app *Application) handlePublicFitPage(w http.ResponseWriter, r *http.Reque
 	card := publicFitCard{
 		ID: row.ID, Name: row.Name, Ship: ship, ShipTypeID: row.ShipTypeID,
 		Author: author, Mine: userID > 0 && row.UserID == userID,
-		Views: row.ViewCount + 1, Price: row.TotalPrice, PriceKnown: row.TotalPrice > 0,
+		Views: views, Price: row.TotalPrice, PriceKnown: row.TotalPrice > 0,
 		Updated: row.UpdatedAt, FitURL: publicFitsPath + "fit/" + idString(row.ID) + "/",
 		Tags: doc.Tags,
 	}
@@ -650,14 +662,21 @@ func (app *Application) handlePublicFitPage(w http.ResponseWriter, r *http.Reque
 	}
 	view := &publicFitView{
 		Card: card, Description: doc.Description,
-		Sections: app.publicFitSections(ctx, &doc),
-		Sim:      app.buildFitSimView(ctx, &doc, 0, "All V", 0),
-		EFT:      app.formatEFT(ctx, &doc),
 		AvgStars: card.Stars, StarCount: card.StarCount,
-		PageURL: app.siteOrigin(r) + card.FitURL,
+		PageURL: app.publicPageURL(card.FitURL),
 	}
-	view.ShareX = "https://x.com/intent/post?text=" + url.QueryEscape(row.Name+" ("+ship+")") + "&url=" + url.QueryEscape(view.PageURL)
-	view.ShareReddit = "https://www.reddit.com/submit?url=" + url.QueryEscape(view.PageURL) + "&title=" + url.QueryEscape(row.Name+" ("+ship+")")
+	// The modules, simulation and EFT come from the stored page
+	// (char_fit_public_store.go); a view never runs the engine.
+	if stored, ok := app.loadPublicFitStored(ctx, fitID, row.UpdatedAt); ok {
+		view.Sections, view.Sim, view.EFT = stored.Sections, stored.Sim, stored.EFT
+	} else {
+		view.Preparing = true
+	}
+	// Links out need an absolute address to point back at.
+	if view.PageURL != "" {
+		view.ShareX = "https://x.com/intent/post?text=" + url.QueryEscape(row.Name+" ("+ship+")") + "&url=" + url.QueryEscape(view.PageURL)
+		view.ShareReddit = "https://www.reddit.com/submit?url=" + url.QueryEscape(view.PageURL) + "&title=" + url.QueryEscape(row.Name+" ("+ship+")")
+	}
 	if userID > 0 {
 		if mine, err := app.queries.GetFitRating(ctx, db.GetFitRatingParams{FitID: fitID, UserID: userID}); err == nil {
 			view.MyStars = int64(mine.Stars)
@@ -679,7 +698,7 @@ func (app *Application) handlePublicFitPage(w http.ResponseWriter, r *http.Reque
 
 // handlePublicFitRate records one account's rating of a public
 // fit (POST, login required): re-rating updates the same row,
-// and the fit's aggregates move in the same transaction.
+// and the fit's aggregates are recounted in the same transaction.
 func (app *Application) handlePublicFitRate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
@@ -697,15 +716,6 @@ func (app *Application) handlePublicFitRate(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "Rate 1 to 5 stars.", http.StatusBadRequest)
 		return
 	}
-	if _, err := app.queries.GetPublicFitting(ctx, fitID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.NotFound(w, r)
-			return
-		}
-		logging.Errorf("public fit %d: rate lookup: %v", fitID, err)
-		http.Error(w, "That rating couldn't be saved.", http.StatusInternalServerError)
-		return
-	}
 	tx, err := app.db.BeginTx(ctx, nil)
 	if err != nil {
 		logging.Errorf("public fit %d: rate tx: %v", fitID, err)
@@ -714,14 +724,16 @@ func (app *Application) handlePublicFitRate(w http.ResponseWriter, r *http.Reque
 	}
 	defer tx.Rollback()
 	qtx := app.queries.WithTx(tx)
-	var dCount, dSum int64
-	if old, err := qtx.GetFitRating(ctx, db.GetFitRatingParams{FitID: fitID, UserID: userID}); err == nil {
-		dSum = int64(stars) - int64(old.Stars)
-	} else if errors.Is(err, sql.ErrNoRows) {
-		dCount = 1
-		dSum = int64(stars)
-	} else {
-		logging.Errorf("public fit %d: rate read: %v", fitID, err)
+	// The fit row is locked first, so ratings of one fit never
+	// interleave, and the aggregates are then recounted from the
+	// rating rows rather than moved by a delta. However often one
+	// rating is posted, the fit counts it once.
+	if _, err := qtx.LockPublicFitForRating(ctx, fitID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
+		logging.Errorf("public fit %d: rate lookup: %v", fitID, err)
 		http.Error(w, "That rating couldn't be saved.", http.StatusInternalServerError)
 		return
 	}
@@ -730,7 +742,7 @@ func (app *Application) handlePublicFitRate(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "That rating couldn't be saved.", http.StatusInternalServerError)
 		return
 	}
-	if err := qtx.ApplyFitRatingAggregate(ctx, db.ApplyFitRatingAggregateParams{RatingCount: dCount, RatingSum: dSum, ID: fitID}); err != nil {
+	if err := qtx.RecountFitRatings(ctx, fitID); err != nil {
 		logging.Errorf("public fit %d: rate aggregate: %v", fitID, err)
 		http.Error(w, "That rating couldn't be saved.", http.StatusInternalServerError)
 		return

@@ -111,8 +111,9 @@ function makeEnv(opts) {
       pushState: function (st, t, url) { pushes.push(url); win.location.href = url; }
     },
     scrollTo: function (x, y) { scrolls.push([x, y]); },
-    fetch: function (url) {
+    fetch: function (url, init) {
       win.fetched.push(url);
+      win.fetchInits.push(init || {});
       if (opts.redirect) {
         return Promise.resolve({ ok: true, redirected: true, url: url, text: function () { return Promise.resolve(""); } });
       }
@@ -123,6 +124,7 @@ function makeEnv(opts) {
       return Promise.resolve({ ok: true, redirected: false, url: url, text: function () { return Promise.resolve(html); } });
     },
     fetched: [],
+    fetchInits: [],
     DOMParser: function () {},
     matchMedia: function () { return { matches: false }; },
     navigator: {},
@@ -189,6 +191,35 @@ test("a qualifying click swaps main without a load", async function () {
   assert.equal(env.mainDoc.title, "Market · EveSynapse");
   assert.deepEqual(env.scrolls, [[0, 0]]);
   assert.equal(env.mainEl.focused, true);
+});
+
+test("hovering a link prefetches with zero side effects; opening it counts once", async function () {
+  const env = makeEnv();
+  loadSwap(env);
+  const a = anchor("/market/");
+  env.listeners.mouseover.forEach(function (fn) { fn({ target: { closest: function () { return a; } } }); });
+  await waitFor(function () { return env.win.fetched.length === 1; }, "prefetch");
+  await flush();
+  // The prefetch says it is one, so the server counts nothing for it,
+  // and the page is not shown or pushed.
+  assert.equal(env.win.fetchInits[0].headers["X-Swap-Prefetch"], "1");
+  assert.equal(env.mainEl.innerHTML, "HOME");
+  assert.deepEqual(env.pushes, []);
+  // Hovering again fetches nothing more.
+  env.listeners.mouseover.forEach(function (fn) { fn({ target: { closest: function () { return a; } } }); });
+  await flush();
+  assert.equal(env.win.fetched.length, 1);
+  // Opening it paints from the prefetch and sends one plain request:
+  // the view, with no prefetch header.
+  clickOn(env, "/market/");
+  await waitFor(function () { return env.mainEl.innerHTML.includes("MARKET"); }, "swap paint");
+  await waitFor(function () { return env.win.fetched.length === 2; }, "commit");
+  assert.equal(env.win.fetched[1], "https://app.test/market/");
+  assert.equal(env.win.fetchInits[1].headers["X-Swap-Prefetch"], undefined);
+  // Opening it again from the cache is not a second commit.
+  clickOn(env, "/market/");
+  await flush();
+  assert.equal(env.win.fetched.length, 2);
 });
 
 test("a swap closes the open nav drawer", async function () {

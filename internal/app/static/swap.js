@@ -231,10 +231,15 @@
     return out;
   }
 
-  function fetchPage(url, signal) {
+  function fetchPage(url, signal, prefetching) {
+    var headers = { "Accept": "text/html" };
+    // A prefetch says so: the server then counts no view, marks no
+    // guess or foresight target opened, and queues nothing at
+    // viewed priority. Only a committed navigation counts.
+    if (prefetching) headers["X-Swap-Prefetch"] = "1";
     var init = {
       credentials: "same-origin",
-      headers: { "Accept": "text/html" }
+      headers: headers
     };
     if (signal) init.signal = signal;
     return window.fetch(url, init).then(function (resp) {
@@ -349,11 +354,27 @@
     window.location.href = url;
   }
 
+  function commitView(url) {
+    try {
+      window.fetch(url, {
+        credentials: "same-origin",
+        headers: { "Accept": "text/html", "X-Swap-Commit": "1" },
+        keepalive: true
+      }).catch(function () {});
+    } catch (e) { /* the page still shows */ }
+  }
+
   function navigate(url, opts) {
     opts = opts || {};
     if (navController && navController.abort) navController.abort();
     var hit = cacheGet(url);
     if (hit) {
+      if (hit.prefetched) {
+        // Opening a prefetched page is the view: tell the server
+        // once, with a plain request whose answer is not needed.
+        hit.prefetched = false;
+        commitView(url);
+      }
       if (opts.push !== false) {
         try {
           window.history.replaceState(
@@ -394,9 +415,12 @@
     if (cacheGet(url) || inflight[url]) return;
     if (isSlowConnection(window.navigator && window.navigator.connection)) return;
     inflight[url] = true;
-    fetchPage(url).then(function (page) {
+    fetchPage(url, null, true).then(function (page) {
       delete inflight[url];
-      if (page && !page.reason) cachePut(url, page);
+      if (page && !page.reason) {
+        page.prefetched = true;
+        cachePut(url, page);
+      }
     }).catch(function () {
       delete inflight[url];
     });

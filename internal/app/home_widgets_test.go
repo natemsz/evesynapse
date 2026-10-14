@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -406,6 +407,77 @@ func (s *pricesTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		StatusCode: http.StatusInternalServerError, Header: header,
 		Body: io.NopCloser(strings.NewReader(`{"error":"fixture"}`)),
 	}, nil
+}
+
+// TestFitPricesFollowTheGuide: a saved fit is priced when it is
+// saved, and used to keep that price for good. Each guide refresh
+// now reprices the stored fits: hull plus modules at adjusted price,
+// the same sum the save handler makes.
+func TestFitPricesFollowTheGuide(t *testing.T) {
+	transport := &pricesTransport{body: `[
+		{"type_id":1001,"average_price":0,"adjusted_price":1000},
+		{"type_id":3001,"average_price":0,"adjusted_price":250},
+		{"type_id":3002,"average_price":0,"adjusted_price":40}
+	]`}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	saved := time.Now().UTC().Add(-48 * time.Hour).Truncate(time.Second)
+	mk := func(name string, hull int64, items string) int64 {
+		row, err := q.CreateLocalFitting(ctx, db.CreateLocalFittingParams{
+			UserID: user.ID, Name: name, ShipTypeID: hull, IsPublic: true,
+			CreatedAt: saved, UpdatedAt: saved,
+			ItemsJson: `{"name":"` + name + `","shipTypeId":` + strconv.FormatInt(hull, 10) + `,"items":[` + items + `]}`,
+		})
+		if err != nil {
+			t.Fatalf("create fitting %s: %v", name, err)
+		}
+		return row.ID
+	}
+	stale := mk("Stale", 1001, `{"typeId":3001,"qty":2},{"typeId":3002,"qty":3}`)
+	unknown := mk("Unknown", 9999, `{"typeId":9998,"qty":1}`)
+	// Priced long ago, at prices that no longer hold.
+	for _, id := range []int64{stale, unknown} {
+		if err := q.SetLocalFittingPrice(ctx, db.SetLocalFittingPriceParams{TotalPrice: 5, ID: id, UserID: user.ID}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if stored, limited := app.refreshGuidePrices(ctx); limited || !stored {
+		t.Fatalf("guide refresh = (stored %v, limited %v), want (true, false)", stored, limited)
+	}
+	got, err := q.GetPublicFitting(ctx, stale)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 1,000 hull + 2 x 250 + 3 x 40.
+	if got.TotalPrice != 1620 {
+		t.Errorf("repriced fit = %v ISK, want 1620", got.TotalPrice)
+	}
+	// Repricing is not an edit: the fit keeps its place in the
+	// newest-first list.
+	if !got.UpdatedAt.Equal(saved) {
+		t.Errorf("repricing moved updated_at to %v, want it left at %v", got.UpdatedAt, saved)
+	}
+	// Nothing in the guide for this hull or its module: unknown (0),
+	// not the old figure.
+	if got, _ := q.GetPublicFitting(ctx, unknown); got.TotalPrice != 0 {
+		t.Errorf("fit with no guide prices = %v ISK, want 0 (unknown)", got.TotalPrice)
+	}
+
+	// An empty guide prices nothing: the stored figures stand.
+	if _, err := app.db.ExecContext(ctx, `DELETE FROM guide_prices`); err != nil {
+		t.Fatal(err)
+	}
+	if n := app.repriceFittings(ctx); n != 0 {
+		t.Errorf("repricing against an empty guide rewrote %d fits, want 0", n)
+	}
+	if got, _ := q.GetPublicFitting(ctx, stale); got.TotalPrice != 1620 {
+		t.Errorf("empty guide changed the price to %v, want 1620 kept", got.TotalPrice)
+	}
 }
 
 // TestGuidePricesWorkerRefresh: the worker mirrors the guide

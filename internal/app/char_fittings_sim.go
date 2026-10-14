@@ -1992,6 +1992,11 @@ func (app *Application) handleFitSave(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		logging.Errorf("fittings save: price %d: %v", id, err)
 	}
+	// A public fit's page is built now, on its owner's request,
+	// never on a visitor's.
+	if isPublic && !isDraft {
+		app.storePublicFitPageNow(ctx, id)
+	}
 	writeFitJSON(w, map[string]any{"id": id, "savedAt": rfc3339(now), "isDraft": isDraft})
 }
 

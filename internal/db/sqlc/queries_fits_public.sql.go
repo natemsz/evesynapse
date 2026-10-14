@@ -7,32 +7,23 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 )
 
-const applyFitRatingAggregate = `-- name: ApplyFitRatingAggregate :exec
-UPDATE local_fittings
-SET rating_count = rating_count + $1, rating_sum = rating_sum + $2
-WHERE id = $3
+const addFitViews = `-- name: AddFitViews :exec
+UPDATE local_fittings SET view_count = view_count + $1 WHERE id = $2
 `
 
-type ApplyFitRatingAggregateParams struct {
-	RatingCount int64 `json:"rating_count"`
-	RatingSum   int64 `json:"rating_sum"`
-	ID          int64 `json:"id"`
+type AddFitViewsParams struct {
+	ViewCount int64 `json:"view_count"`
+	ID        int64 `json:"id"`
 }
 
-func (q *Queries) ApplyFitRatingAggregate(ctx context.Context, arg ApplyFitRatingAggregateParams) error {
-	_, err := q.db.ExecContext(ctx, applyFitRatingAggregate, arg.RatingCount, arg.RatingSum, arg.ID)
-	return err
-}
-
-const bumpFitViewCount = `-- name: BumpFitViewCount :exec
-UPDATE local_fittings SET view_count = view_count + 1 WHERE id = $1
-`
-
-func (q *Queries) BumpFitViewCount(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, bumpFitViewCount, id)
+// AddFitViews adds a batch of counted views to one fit: the page
+// counts views in memory and the worker writes them here.
+func (q *Queries) AddFitViews(ctx context.Context, arg AddFitViewsParams) error {
+	_, err := q.db.ExecContext(ctx, addFitViews, arg.ViewCount, arg.ID)
 	return err
 }
 
@@ -47,7 +38,7 @@ WHERE lf.is_public AND NOT lf.is_draft
   AND ($1::int <= 0 OR lf.updated_at >= now() - make_interval(days => $1::int))
   AND ($2::text = '' OR lf.name ILIKE '%' || $2::text || '%'
     OR tn.name ILIKE '%' || $2::text || '%'
-    OR EXISTS (SELECT 1 FROM characters c WHERE c.user_id = lf.user_id AND c.name ILIKE '%' || $2::text || '%'))
+    OR (SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1) ILIKE '%' || $2::text || '%')
   AND ($3::text = '' OR EXISTS (
         SELECT 1 FROM jsonb_array_elements_text(
             CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'tags') = 'array' THEN lf.items_json::jsonb -> 'tags' ELSE '[]'::jsonb END) AS t(tag)
@@ -103,13 +94,16 @@ type CountPublicFitsParams struct {
 // filter the visitor picks (sincedays, 0 for any time), never a
 // side effect of the sort. The rank sort is Bayesian (fit average
 // shrunk toward the global mean with weight 5, via public_fit_rank
-// in migration 033), so one 5-star vote cannot top the chart. Meta
-// groups resolve
+// in migrations 033 and 041), so one 5-star vote cannot top the
+// chart. Callers pass the global mean as (SELECT public_fit_mean()),
+// which Postgres computes once per query. Meta groups resolve
 // through dogma attribute 1692 (4 faction, 5 officer, 6 deadspace,
 // 2 tech II), the same source the fitting engine reads. The faction
 // filter is Any or No faction modules; a max price excludes only
 // fits with a known price above the cap (0 means unknown). Tags
-// match whole, whatever their case.
+// match whole, whatever their case. Search matches the author a fit
+// shows (the account's first character) and no other character of
+// the account: a visitor must not learn which characters share one.
 // ---------------------------------------------------------------------
 func (q *Queries) CountPublicFits(ctx context.Context, arg CountPublicFitsParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countPublicFits,
@@ -154,6 +148,25 @@ func (q *Queries) GetFitRating(ctx context.Context, arg GetFitRatingParams) (Get
 	return i, err
 }
 
+const getPublicFitPage = `-- name: GetPublicFitPage :one
+SELECT fit_id, fit_updated_at, sde_stamp, complete, built_at, body
+FROM public_fit_pages WHERE fit_id = $1
+`
+
+func (q *Queries) GetPublicFitPage(ctx context.Context, fitID int64) (PublicFitPage, error) {
+	row := q.db.QueryRowContext(ctx, getPublicFitPage, fitID)
+	var i PublicFitPage
+	err := row.Scan(
+		&i.FitID,
+		&i.FitUpdatedAt,
+		&i.SdeStamp,
+		&i.Complete,
+		&i.BuiltAt,
+		&i.Body,
+	)
+	return i, err
+}
+
 const listPublicFits = `-- name: ListPublicFits :many
 SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at,
        lf.view_count, lf.total_price, lf.rating_count, lf.rating_sum,
@@ -168,7 +181,7 @@ WHERE lf.is_public AND NOT lf.is_draft
   AND ($1::int <= 0 OR lf.updated_at >= now() - make_interval(days => $1::int))
   AND ($2::text = '' OR lf.name ILIKE '%' || $2::text || '%'
     OR tn.name ILIKE '%' || $2::text || '%'
-    OR EXISTS (SELECT 1 FROM characters c WHERE c.user_id = lf.user_id AND c.name ILIKE '%' || $2::text || '%'))
+    OR (SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1) ILIKE '%' || $2::text || '%')
   AND ($3::text = '' OR EXISTS (
         SELECT 1 FROM jsonb_array_elements_text(
             CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'tags') = 'array' THEN lf.items_json::jsonb -> 'tags' ELSE '[]'::jsonb END) AS t(tag)
@@ -200,7 +213,7 @@ WHERE lf.is_public AND NOT lf.is_draft
             CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'tags') = 'array' THEN lf.items_json::jsonb -> 'tags' ELSE '[]'::jsonb END) AS t(tag)
         WHERE lower(t.tag) = lower($12::text)))
 ORDER BY
-  CASE WHEN $13::text = 'rank' THEN public_fit_rank(lf.rating_sum, lf.rating_count) END DESC NULLS LAST,
+  CASE WHEN $13::text = 'rank' THEN public_fit_rank(lf.rating_sum, lf.rating_count, (SELECT public_fit_mean())) END DESC NULLS LAST,
   CASE WHEN $13::text = 'views' THEN lf.view_count END DESC NULLS LAST,
   CASE WHEN $13::text = 'new' THEN lf.updated_at END DESC NULLS LAST,
   CASE WHEN $13::text = 'old' THEN lf.updated_at END ASC NULLS LAST,
@@ -310,7 +323,7 @@ LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
 LEFT JOIN sde_types st ON st.type_id = lf.ship_type_id
 LEFT JOIN sde_groups sg ON sg.group_id = st.group_id
 WHERE lf.is_public AND NOT lf.is_draft AND lf.ship_type_id = $1
-ORDER BY public_fit_rank(lf.rating_sum, lf.rating_count) DESC,
+ORDER BY public_fit_rank(lf.rating_sum, lf.rating_count, (SELECT public_fit_mean())) DESC,
          lf.id DESC
 LIMIT $2
 `
@@ -373,6 +386,57 @@ func (q *Queries) ListPublicFitsForShip(ctx context.Context, arg ListPublicFitsF
 	return items, nil
 }
 
+const listPublicFitsNeedingPages = `-- name: ListPublicFitsNeedingPages :many
+SELECT lf.id, lf.items_json, lf.updated_at
+FROM local_fittings lf
+LEFT JOIN public_fit_pages p ON p.fit_id = lf.id
+WHERE lf.is_public AND NOT lf.is_draft
+  AND (p.fit_id IS NULL
+    OR p.fit_updated_at <> lf.updated_at
+    OR p.sde_stamp <> $1::text
+    OR (NOT p.complete AND p.built_at < now() - interval '10 minutes'))
+ORDER BY (p.fit_id IS NULL) DESC, lf.updated_at DESC, lf.id DESC
+LIMIT $2::bigint
+`
+
+type ListPublicFitsNeedingPagesParams struct {
+	SdeStamp string `json:"sde_stamp"`
+	Rlimit   int64  `json:"rlimit"`
+}
+
+type ListPublicFitsNeedingPagesRow struct {
+	ID        int64     `json:"id"`
+	ItemsJson string    `json:"items_json"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// ListPublicFitsNeedingPages lists public fits whose stored page is
+// missing, built from an older version of the fit or of the static
+// data, or built incomplete more than ten minutes ago. Missing pages
+// come first, then the most recently updated fits.
+func (q *Queries) ListPublicFitsNeedingPages(ctx context.Context, arg ListPublicFitsNeedingPagesParams) ([]ListPublicFitsNeedingPagesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPublicFitsNeedingPages, arg.SdeStamp, arg.Rlimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPublicFitsNeedingPagesRow
+	for rows.Next() {
+		var i ListPublicFitsNeedingPagesRow
+		if err := rows.Scan(&i.ID, &i.ItemsJson, &i.UpdatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPublicHubStats = `-- name: ListPublicHubStats :many
 SELECT m.region_id, m.best_sell, m.best_buy,
        COALESCE(r.name, '')::text AS region_name
@@ -415,6 +479,21 @@ func (q *Queries) ListPublicHubStats(ctx context.Context, typeID int64) ([]ListP
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockPublicFitForRating = `-- name: LockPublicFitForRating :one
+SELECT id FROM local_fittings
+WHERE id = $1 AND is_public AND NOT is_draft
+FOR UPDATE
+`
+
+// LockPublicFitForRating takes the fit's row for the rest of the
+// transaction, so two ratings of one fit run one after the other.
+func (q *Queries) LockPublicFitForRating(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, lockPublicFitForRating, id)
+	var id_2 int64
+	err := row.Scan(&id_2)
+	return id_2, err
 }
 
 const publicFitHullFacets = `-- name: PublicFitHullFacets :many
@@ -495,6 +574,52 @@ func (q *Queries) PublicFitTagFacets(ctx context.Context) ([]PublicFitTagFacetsR
 	return items, nil
 }
 
+const recountFitRatings = `-- name: RecountFitRatings :exec
+UPDATE local_fittings
+SET rating_count = (SELECT COUNT(*) FROM fit_ratings r WHERE r.fit_id = $1),
+    rating_sum = (SELECT COALESCE(SUM(r.stars), 0) FROM fit_ratings r WHERE r.fit_id = $1)
+WHERE id = $1
+`
+
+// RecountFitRatings sets a fit's aggregates to what fit_ratings
+// holds. They are never moved by a delta: a delta is only right if
+// the read behind it is still true when it lands.
+func (q *Queries) RecountFitRatings(ctx context.Context, fitID int64) error {
+	_, err := q.db.ExecContext(ctx, recountFitRatings, fitID)
+	return err
+}
+
+const repriceLocalFittings = `-- name: RepriceLocalFittings :execrows
+UPDATE local_fittings lf
+SET total_price = priced.total
+FROM (
+  SELECT f.id,
+         (COALESCE((SELECT gp.adjusted_price FROM guide_prices gp WHERE gp.type_id = f.ship_type_id), 0) +
+          COALESCE((SELECT SUM((it->>'qty')::numeric * gp.adjusted_price)
+                    FROM jsonb_array_elements(
+                        CASE WHEN jsonb_typeof(f.items_json::jsonb -> 'items') = 'array' THEN f.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
+                    JOIN guide_prices gp ON gp.type_id = (it->>'typeId')::bigint), 0))::float8 AS total
+  FROM local_fittings f
+) priced
+WHERE priced.id = lf.id
+  AND lf.total_price IS DISTINCT FROM priced.total
+  AND EXISTS (SELECT 1 FROM guide_prices)
+`
+
+// RepriceLocalFittings sets every fit's total_price from the guide
+// mirror: the hull plus each module line at adjusted price, the sum
+// fitDocPrice makes when a fit is saved (0 when nothing in the fit
+// is priced). Rows whose price is unchanged are not written, and an
+// empty guide prices nothing. updated_at is left alone: a new price
+// is not an edit.
+func (q *Queries) RepriceLocalFittings(ctx context.Context) (int64, error) {
+	result, err := q.db.ExecContext(ctx, repriceLocalFittings)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const setLocalFittingPrice = `-- name: SetLocalFittingPrice :exec
 UPDATE local_fittings SET total_price = $1 WHERE id = $2 AND user_id = $3
 `
@@ -514,7 +639,7 @@ const sitemapTopFits = `-- name: SitemapTopFits :many
 SELECT lf.id, lf.updated_at
 FROM local_fittings lf
 WHERE lf.is_public AND NOT lf.is_draft
-ORDER BY public_fit_rank(lf.rating_sum, lf.rating_count) DESC,
+ORDER BY public_fit_rank(lf.rating_sum, lf.rating_count, (SELECT public_fit_mean())) DESC,
          lf.id DESC
 LIMIT 1000
 `
@@ -634,5 +759,32 @@ type UpsertFitRatingParams struct {
 
 func (q *Queries) UpsertFitRating(ctx context.Context, arg UpsertFitRatingParams) error {
 	_, err := q.db.ExecContext(ctx, upsertFitRating, arg.FitID, arg.UserID, arg.Stars)
+	return err
+}
+
+const upsertPublicFitPage = `-- name: UpsertPublicFitPage :exec
+INSERT INTO public_fit_pages (fit_id, fit_updated_at, sde_stamp, complete, built_at, body)
+VALUES ($1, $2, $3, $4, now(), $5)
+ON CONFLICT (fit_id) DO UPDATE SET
+  fit_updated_at = EXCLUDED.fit_updated_at, sde_stamp = EXCLUDED.sde_stamp,
+  complete = EXCLUDED.complete, built_at = now(), body = EXCLUDED.body
+`
+
+type UpsertPublicFitPageParams struct {
+	FitID        int64           `json:"fit_id"`
+	FitUpdatedAt time.Time       `json:"fit_updated_at"`
+	SdeStamp     string          `json:"sde_stamp"`
+	Complete     bool            `json:"complete"`
+	Body         json.RawMessage `json:"body"`
+}
+
+func (q *Queries) UpsertPublicFitPage(ctx context.Context, arg UpsertPublicFitPageParams) error {
+	_, err := q.db.ExecContext(ctx, upsertPublicFitPage,
+		arg.FitID,
+		arg.FitUpdatedAt,
+		arg.SdeStamp,
+		arg.Complete,
+		arg.Body,
+	)
 	return err
 }

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -91,6 +92,12 @@ func TestPublicFitPageMirrorsTool(t *testing.T) {
 		}
 	})
 
+	app.cfg.eveCallbackURL = "https://node.example.org/auth/callback" // share links need an origin
+	// The fixture row was inserted, not saved through the editor:
+	// its page is built the way the worker builds it.
+	if n := app.refreshPublicFitPages(ctx); n != 1 {
+		t.Fatalf("built %d public fit pages, want 1", n)
+	}
 	code, body := getSwapPage(t, app, nil, publicFitsPath+"fit/"+strconv.FormatInt(row.ID, 10)+"/")
 	if code != http.StatusOK {
 		t.Fatalf("public fit page (anonymous): status %d, want 200", code)
@@ -150,6 +157,7 @@ func TestPublicFitPageTooltips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create fitting: %v", err)
 	}
+	app.refreshPublicFitPages(ctx)
 	code, body := getSwapPage(t, app, nil, publicFitsPath+"fit/"+strconv.FormatInt(row.ID, 10)+"/")
 	if code != http.StatusOK {
 		t.Fatalf("public fit page (anonymous): status %d, want 200", code)
@@ -163,5 +171,70 @@ func TestPublicFitPageTooltips(t *testing.T) {
 		if strings.Contains(body, editorOnly) {
 			t.Errorf("public fit page carries editor-only %q", editorOnly)
 		}
+	}
+}
+
+// TestPrefetchIsNotAView: a hover prefetch of a public fit page shows
+// the page but counts no view and asks for nothing at viewed
+// priority; the plain request that follows a real open counts once.
+func TestPrefetchIsNotAView(t *testing.T) {
+	transport := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedFitUniverse(t, func(stmt string) error {
+		_, err := conn.ExecContext(ctx, stmt)
+		return err
+	})
+	now := time.Now().UTC()
+	row, err := q.CreateLocalFitting(ctx, db.CreateLocalFittingParams{
+		UserID: user.ID, Name: "Hover Fixture", ShipTypeID: 1001, IsPublic: true,
+		CreatedAt: now, UpdatedAt: now,
+		ItemsJson: `{"name":"Hover Fixture","shipTypeId":1001,"items":[{"typeId":3001,"qty":1}]}`,
+	})
+	if err != nil {
+		t.Fatalf("create fitting: %v", err)
+	}
+	app.refreshPublicFitPages(ctx)
+	handler := app.Handler()
+	get := func(prefetch bool) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodGet, publicFitsPath+"fit/"+strconv.FormatInt(row.ID, 10)+"/", nil)
+		if prefetch {
+			r.Header.Set("X-Swap-Prefetch", "1")
+		}
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, r)
+		return rec
+	}
+	for i := 0; i < 3; i++ {
+		if rec := get(true); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Hover Fixture") {
+			t.Fatalf("prefetch %d: status %d", i+1, rec.Code)
+		}
+	}
+	if n := app.fitViews.peek(row.ID); n != 0 {
+		t.Errorf("three prefetches counted %d views, want 0", n)
+	}
+	if rec := get(false); !strings.Contains(rec.Body.String(), "1 views") {
+		t.Error("the opened page does not show its one view")
+	}
+	if n := app.fitViews.peek(row.ID); n != 1 {
+		t.Errorf("one open counted %d views, want 1", n)
+	}
+
+	// Fetches a prefetched page asks for wait below viewed priority.
+	pre := httptest.NewRequest(http.MethodGet, "/", nil)
+	pre.Header.Set("X-Swap-Prefetch", "1")
+	var seen int64 = -1
+	markPrefetch(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = viewedPriority(r.Context())
+	})).ServeHTTP(httptest.NewRecorder(), pre)
+	if seen != wantTyping {
+		t.Errorf("prefetch priority = %d, want the typing tier %d", seen, wantTyping)
+	}
+	if got := viewedPriority(context.Background()); got != wantViewed {
+		t.Errorf("view priority = %d, want %d", got, wantViewed)
 	}
 }

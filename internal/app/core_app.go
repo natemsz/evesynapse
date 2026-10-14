@@ -147,6 +147,16 @@ type Application struct {
 	priorityMu    sync.Mutex
 	priorityChars map[int64]bool
 
+	// Public fit page views counted since the worker last wrote
+	// them (char_fit_public_store.go).
+	fitViews fitViewCounter
+
+	// Per-address throttles on the expensive anonymous routes
+	// (core_throttle.go), made on first use.
+	anonThrottleOnce sync.Once
+	anonPageThrottle *anonThrottle
+	anonSimThrottle  *anonThrottle
+
 	// The worker's user-visible status (Sync/Admin pages).
 	workerMu sync.Mutex
 	worker   workerStatus
@@ -336,6 +346,8 @@ func (app *Application) Close() {
 	}
 	app.tradeIdeasWG.Wait()
 	if app.db != nil {
+		// Views counted since the worker last wrote them.
+		app.flushFitViews(context.Background())
 		app.db.Close()
 	}
 	if app.pool != nil {
@@ -354,6 +366,10 @@ type RouteHook func(r chi.Router, a *Application)
 // identical with or without hooks.
 func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r := chi.NewRouter()
+	// Anonymous visitors to the routes that cost real work are
+	// throttled per address (core_throttle.go).
+	pageThrottle, simThrottle := app.anonThrottles()
+	anonPages, anonSim := app.throttleAnon(pageThrottle), app.throttleAnon(simThrottle)
 	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(app.securityHeaders)
@@ -362,6 +378,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// a fraction of their size; fonts and images are left alone.
 	r.Use(middleware.Compress(5))
 	r.Use(app.crossOriginGuard())
+	r.Use(markPrefetch)
 	r.Use(app.sessions.LoadAndSave)
 	r.Use(app.slideSession)
 	r.Use(app.trackActivity)
@@ -584,8 +601,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		// public (it is the item link target site-wide and the
 		// sitemap's indexed item page); the rest under /items/
 		// stays behind the login.
-		r.Get("/", app.handleItems)
-		r.Get("/type/{typeID}/", app.handleItemType)
+		r.With(anonPages).Get("/", app.handleItems)
+		r.With(anonPages).Get("/type/{typeID}/", app.handleItemType)
 		r.Group(func(r chi.Router) {
 			r.Use(app.requireAuth)
 			r.Get("/search.json", app.handleItemSearchJSON)
@@ -676,19 +693,19 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Get("/sitemap.xml", app.handleSitemap)
 
 	r.Route("/ships", func(r chi.Router) {
-		r.Get("/{typeID}/", app.handlePublicShip)
+		r.With(anonPages).Get("/{typeID}/", app.handlePublicShip)
 	})
 
 	r.Route("/fittings", func(r chi.Router) {
 		// Anonymous-safe surfaces: the simulator (All-V without
 		// a session), the public browser and fit pages, and the
 		// SDE-only picker. Handlers branch on the session.
-		r.Get("/", app.handleFittings)
-		r.Post("/simulate/", app.handleFitSimulate)
-		r.Get("/picker.json", app.handleFitPickerJSON)
-		r.Get("/public/", app.handlePublicFits)
-		r.Get("/public/suggest", app.handlePublicFitSuggest)
-		r.Get("/public/fit/{fitID}/", app.handlePublicFitPage)
+		r.With(anonPages).Get("/", app.handleFittings)
+		r.With(anonSim).Post("/simulate/", app.handleFitSimulate)
+		r.With(anonPages).Get("/picker.json", app.handleFitPickerJSON)
+		r.With(anonPages).Get("/public/", app.handlePublicFits)
+		r.With(anonPages).Get("/public/suggest", app.handlePublicFitSuggest)
+		r.With(anonPages).Get("/public/fit/{fitID}/", app.handlePublicFitPage)
 		r.With(app.requireAuth).Post("/public/fit/{fitID}/rate", app.handlePublicFitRate)
 		r.Group(func(r chi.Router) {
 			r.Use(app.requireAuth)
@@ -726,20 +743,25 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/", app.handleContracts)
 	})
 
+	// Public tools: the build planner, the PI planner and the Intel
+	// pages render from static and public data, so visitors without
+	// a session use them too (throttled per address; a build plan
+	// can be large, so the planner shares the simulator's tighter
+	// allowance). A signed-in visitor also gets their own characters'
+	// stock, blueprints, skills and colonies. The Industry overview
+	// stays signed-in only.
 	r.Route("/industry", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleIndustry)
-		r.Get("/pi/", app.handlePIPlanner)
+		r.With(app.requireAuth).Get("/", app.handleIndustry)
+		r.With(anonPages).Get("/pi/", app.handlePIPlanner)
 	})
 
 	r.Route("/planner", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handlePlanner)
-		r.Get("/suggest", app.handlePlannerSuggest)
+		r.With(anonSim).Get("/", app.handlePlanner)
+		r.With(anonPages).Get("/suggest", app.handlePlannerSuggest)
 	})
 
 	r.Route("/intel", func(r chi.Router) {
-		r.Use(app.requireAuth)
+		r.Use(anonPages)
 		r.Get("/wars/", app.handleIntelWars)
 		r.Get("/incursions/", app.handleIntelIncursions)
 		r.Get("/fw/", app.handleIntelFW)

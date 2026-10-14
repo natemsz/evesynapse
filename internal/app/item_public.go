@@ -194,7 +194,7 @@ func (app *Application) handlePublicShip(w http.ResponseWriter, r *http.Request)
 			view.Fits = append(view.Fits, publicFitCardOf(db.ListPublicFitsRow(row), userID))
 		}
 	}
-	pageURL := app.siteOrigin(r) + "/ships/" + idString(typeID) + "/"
+	pageURL := app.publicPageURL("/ships/" + idString(typeID) + "/")
 	blurb := detail.Name + " with " + strconv.Itoa(len(view.Fits)) + " public fits"
 	data.HeadMeta = headMeta(detail.Name, blurb, pageURL)
 	data.PublicShip = view

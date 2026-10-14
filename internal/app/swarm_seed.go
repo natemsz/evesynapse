@@ -38,6 +38,11 @@ const seedAnnounceKind = "announce"
 type seedAnnouncePayload struct {
 	BaseURL   string `json:"base_url"`
 	PublicKey string `json:"public_key"`
+	// URLSig is the sender's member signature over its ID,
+	// BaseURL and IssuedAt: with the fields beside it, it is the
+	// tuple the receiver stores and relays verbatim.
+	URLSig   string `json:"url_sig"`
+	IssuedAt int64  `json:"issued_at"`
 }
 
 // buildSeedAnnounce signs this instance's heartbeat. False when
@@ -60,6 +65,8 @@ func (app *Application) buildSeedAnnounce(now time.Time) (swarmSignedEntry, bool
 	if err := json.NewEncoder(&buf).Encode(seedAnnouncePayload{
 		BaseURL:   origin,
 		PublicKey: app.swarmID.publicString(),
+		URLSig:    signSwarmMember(app.swarmID, origin, now.Unix()),
+		IssuedAt:  now.Unix(),
 	}); err != nil {
 		return swarmSignedEntry{}, false
 	}
@@ -122,10 +129,15 @@ func (app *Application) swarmAnnounceToSeeds(ctx context.Context, now time.Time)
 	if !ok {
 		return
 	}
+	seeds := app.cfg.swarm.seeds
+	errs := make([]error, len(seeds))
+	swarmFanOut(ctx, len(seeds), func(rctx context.Context, i int) {
+		errs[i] = app.swarmCli.sendSeedAnnounce(rctx, seeds[i], entry)
+	})
 	kept := 0
-	for _, seed := range app.cfg.swarm.seeds {
-		if err := app.swarmCli.sendSeedAnnounce(ctx, seed, entry); err != nil {
-			logging.Warnf("swarm: announce %s: %v", seed, err)
+	for i, err := range errs {
+		if err != nil {
+			logging.Warnf("swarm: announce %s: %v", seeds[i], err)
 			continue
 		}
 		kept++
@@ -134,8 +146,3 @@ func (app *Application) swarmAnnounceToSeeds(ctx context.Context, now time.Time)
 		logging.Infof("swarm: announced to %d seed(s)", kept)
 	}
 }
-
-// swarmSeedInstanceID is the seed worker's fixed identity. It
-// is the protocol's marker for a directory-only peer: pulls
-// skip it, wherever it is listed from.
-const swarmSeedInstanceID = "seed"

@@ -833,6 +833,10 @@ type fitImplantEntry struct {
 }
 
 type fitSimView struct {
+	// ReadOnly renders the workbench as a mirror (public fit pages):
+	// same look, no editing affordances (fit_workbench.html).
+	ReadOnly   bool
+	Cost       *fitCostView
 	HasShip    bool
 	DataNote   string // ship data still downloading, skills still warming, ...
 	ShipID     int64
@@ -1008,6 +1012,8 @@ func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotI
 	view := &fitSimView{PilotID: pilotID, FitName: doc.Name}
 	state, _ := json.Marshal(doc)
 	view.StateJSON = string(state)
+	// What the fit costs, the one composition every page shows.
+	view.Cost = app.fitCost(ctx, doc)
 	if doc.ShipTypeID <= 0 {
 		return view
 	}

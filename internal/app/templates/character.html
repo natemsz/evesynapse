@@ -13,17 +13,28 @@
   {{if .CharacterPage.IdentityKnown}}
   <div class="panel char-head">
   <h2><img class="portrait" src="{{.CharacterPage.PortraitURL}}" alt="">{{.CharacterPage.CharacterName}}</h2>
+  {{if or .CharacterPage.CorpName .CharacterPage.Birthday}}<p class="char-sub"><small>{{if .CharacterPage.CorpName}}{{corpLink .CharacterPage.CorpID .CharacterPage.CorpName}}{{end}}{{if and .CharacterPage.CorpName .CharacterPage.Birthday}} · {{end}}{{if .CharacterPage.Birthday}}born {{.CharacterPage.Birthday}}{{end}}</small></p>{{end}}
   </div>
-  <div class="tw">
-  <table>
-    <tbody>
-      {{if .CharacterPage.CorpName}}<tr><th>Corporation</th><td>{{corpLink .CharacterPage.CorpID .CharacterPage.CorpName}}</td></tr>{{end}}
-      {{if .CharacterPage.Birthday}}<tr><th>Born</th><td>{{.CharacterPage.Birthday}}</td></tr>{{end}}
-      {{if .CharacterPage.SecurityStatus}}<tr><th>Security status</th><td>{{.CharacterPage.SecurityStatus}}</td></tr>{{end}}
-      {{if .CharacterPage.WalletKnown}}<tr><th>Wallet</th><td class="isk">{{.CharacterPage.ISK}} <small>ISK</small></td></tr>{{end}}
-      {{if .CharacterPage.SkillsKnown}}<tr><th>Skill points</th><td><strong>{{.CharacterPage.TotalSP}}</strong>{{if .CharacterPage.UnallocatedSP}} · {{.CharacterPage.UnallocatedSP}} unallocated{{end}} · {{.CharacterPage.SkillsCount}} skills · {{.CharacterPage.LevelVCount}} at V</td></tr>{{end}}
-    </tbody>
-  </table>
+  {{/* The key figures as the overview's at-a-glance tiles. */}}
+  <div class="kpis kpis-small char-kpis">
+    {{if .CharacterPage.WalletKnown}}<div class="kpi">
+      <span class="kpi-k">Wallet</span>
+      <span class="kpi-v isk">{{.CharacterPage.ISK}} <small>ISK</small></span>
+    </div>{{end}}
+    {{if .CharacterPage.SkillsKnown}}<div class="kpi">
+      <span class="kpi-k">Skill points</span>
+      <span class="kpi-v">{{.CharacterPage.TotalSP}}</span>
+      <span class="kpi-sub">{{if .CharacterPage.UnallocatedSP}}{{.CharacterPage.UnallocatedSP}} unallocated · {{end}}{{.CharacterPage.SkillsCount}} skills · {{.CharacterPage.LevelVCount}} at V</span>
+    </div>
+    <div class="kpi">
+      <span class="kpi-k">Training</span>
+      <span class="kpi-v">{{if .CharacterPage.TrainingLeft}}<span class="countdown" data-finish="{{.CharacterPage.TrainingFinish}}">{{.CharacterPage.TrainingLeft}}</span>{{else if .CharacterPage.Training}}Paused{{else}}Idle{{end}}</span>
+      <span class="kpi-sub">{{if .CharacterPage.Training}}{{.CharacterPage.Training}}{{else}}Nothing in the queue{{end}}</span>
+    </div>{{end}}
+    {{if .CharacterPage.SecurityStatus}}<div class="kpi">
+      <span class="kpi-k">Security status</span>
+      <span class="kpi-v">{{.CharacterPage.SecurityStatus}}</span>
+    </div>{{end}}
   </div>
   {{end}}
 

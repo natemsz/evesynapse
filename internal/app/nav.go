@@ -1,6 +1,10 @@
 package app
 
-import "slices"
+import (
+	"slices"
+	"strconv"
+	"strings"
+)
 
 // ---------------------------------------------------------------------------
 // The section nav: one list of every category's pages. The sidebar's
@@ -88,13 +92,19 @@ type navLink struct {
 // navLinksFor renders every section's links for one page. A link is
 // active when the page is one of its pages and the page belongs to
 // the link's section: the killmails page under Corporation lights
-// Corporation > Killmails, not Pilot > Killmails.
-func navLinksFor(section, page string) map[string][]navLink {
+// Corporation > Killmails, not Pilot > Killmails. A page asked for one
+// character (?character=) passes it on to its own section's links, so
+// moving between a pilot's pages, or a corporation's, keeps it.
+func navLinksFor(section, page string, character int64) map[string][]navLink {
 	out := make(map[string][]navLink, len(sectionNav))
 	for sec, entries := range sectionNav {
 		links := make([]navLink, len(entries))
 		for i, e := range entries {
-			links[i] = navLink{Href: e.Href, Label: e.Label, Active: sec == section && slices.Contains(e.Pages, page)}
+			href := e.Href
+			if sec == section && character > 0 && !strings.Contains(href, "?") {
+				href += "?character=" + strconv.FormatInt(character, 10)
+			}
+			links[i] = navLink{Href: href, Label: e.Label, Active: sec == section && slices.Contains(e.Pages, page)}
 		}
 		out[sec] = links
 	}

@@ -167,6 +167,10 @@ type pageData struct {
 	// when the page has one.
 	NavLinks    map[string][]navLink
 	SectionTabs []navLink
+	// NavCharacter, when set, is the character the section's links
+	// carry instead of the request's own ?character= (a page that
+	// selects by something else, like the corporation overview).
+	NavCharacter int64
 }
 
 // switcherEntry is one linked character in the header switcher.
@@ -283,7 +287,10 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 	if data.NavPage == "" {
 		data.NavPage = page
 	}
-	data.NavLinks = navLinksFor(data.Section, data.NavPage)
+	if data.NavCharacter == 0 {
+		data.NavCharacter = navCharacterFrom(ctx)
+	}
+	data.NavLinks = navLinksFor(data.Section, data.NavPage, data.NavCharacter)
 	data.SectionTabs = sectionTabsFor(data.NavLinks, data.Section)
 	// Sync status for the footer. Cheap: ESI error budget
 	// is in-memory; sweep state is a single cached query.

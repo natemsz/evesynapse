@@ -169,10 +169,13 @@ func (app *Application) pulseCorpName(ctx context.Context, ref pulseCorpRef) str
 }
 
 // refreshPulseEvents diffs stored corp snapshots against the
-// seen sets and records departures, arrivals, and removals.
-// Local reads and writes only; it runs after the cycle's
-// fetches are stored. It reports recorded events.
-func (app *Application) refreshPulseEvents(ctx context.Context, characters []db.Character) (stored int, limited bool) {
+// seen sets and records departures, arrivals, and removals. The
+// diff itself is local reads and writes; the one thing it may
+// fetch is member names nobody here knows yet, in bulk, from
+// the cycle's allowance (a thousand names a call). It runs
+// after the cycle's fetches are stored and reports recorded
+// events.
+func (app *Application) refreshPulseEvents(ctx context.Context, characters []db.Character, allowance *fetchBudget) (stored int, limited bool) {
 	now := time.Now().UTC()
 	names := make(map[int64]string, len(characters))
 	for _, ch := range characters {
@@ -181,7 +184,7 @@ func (app *Application) refreshPulseEvents(ctx context.Context, characters []db.
 		}
 	}
 	for _, ref := range app.pulseCorps(ctx, characters) {
-		stored += app.diffPulseMembers(ctx, ref, names, now)
+		stored += app.diffPulseMembers(ctx, ref, names, allowance, now)
 		stored += app.diffPulseStructures(ctx, ref, now)
 	}
 	if err := app.queries.PrunePulseEvents(ctx, now.Add(-pulsePruneDays*24*time.Hour)); err != nil {
@@ -190,10 +193,22 @@ func (app *Application) refreshPulseEvents(ctx context.Context, characters []db.
 	return stored, false
 }
 
+// pulseNameUnknown reports whether a stored member name is only
+// the "Character #id" stand-in.
+func pulseNameUnknown(name string) bool {
+	return name == "" || strings.HasPrefix(name, "Character #")
+}
+
 // diffPulseMembers records member departures: seen IDs missing
 // from the current member list. Current IDs (re)enter the seen
-// set with their best-known name.
-func (app *Application) diffPulseMembers(ctx context.Context, ref pulseCorpRef, names map[int64]string, now time.Time) int {
+// set under their name. A member list is IDs only, so names
+// come from what is known locally (linked characters, the name
+// cache, a name already stored for the member) and, for the
+// rest, from the bulk name resolver: one call per thousand
+// members, from the allowance, the first time each is seen. A
+// name that still cannot be had is stored as the stand-in and
+// tried again next cycle.
+func (app *Application) diffPulseMembers(ctx context.Context, ref pulseCorpRef, names map[int64]string, allowance *fetchBudget, now time.Time) int {
 	var members esi.CorpMembers
 	reader := ref.reader(pulseMemberRoles...)
 	if reader == 0 || !app.loadCorpSnapshot(ctx, reader, esi.SnapCorpMembers, &members) {
@@ -225,10 +240,35 @@ func (app *Application) diffPulseMembers(ctx context.Context, ref pulseCorpRef, 
 			recorded++
 		}
 	}
+	stored := make(map[string]string, len(seen))
+	for _, s := range seen {
+		stored[s.Key] = s.Name
+	}
+	known := make(map[int64]string, len(members))
+	var unknown []int64
+	for _, id := range members {
+		switch {
+		case names[id] != "":
+			known[id] = names[id]
+		case !pulseNameUnknown(stored[strconv.FormatInt(id, 10)]):
+			known[id] = stored[strconv.FormatInt(id, 10)]
+		default:
+			if name, ok := app.esi.CachedCharacterName(id); ok && name != "" {
+				known[id] = name
+			} else if len(unknown) < universeNamesChunk {
+				unknown = append(unknown, id)
+			}
+		}
+	}
+	if len(unknown) > 0 {
+		for id, name := range app.resolveUniverseNames(ctx, allowance, unknown) {
+			known[id] = name
+		}
+	}
 	for _, id := range members {
 		key := strconv.FormatInt(id, 10)
-		name, ok := names[id]
-		if !ok || name == "" {
+		name := known[id]
+		if name == "" {
 			name = "Character #" + key
 		}
 		if err := app.queries.UpsertPulseSeen(ctx, db.UpsertPulseSeenParams{
@@ -407,8 +447,8 @@ func (app *Application) buildPulse(ctx context.Context, userID int64) *pulseWidg
 }
 
 // pulseJoined lists members whose tracking start date is
-// within pulseJoinedDays. Names resolve for linked characters;
-// other members show by id (tracking carries no names).
+// within pulseJoinedDays. Tracking carries no names: they come
+// from the linked characters and the shared name lookup.
 func (app *Application) pulseJoined(ctx context.Context, ref pulseCorpRef, now time.Time) []pulseJoin {
 	var tracking esi.CorpMemberTrackings
 	if !app.loadCorpSnapshot(ctx, ref.reader(pulseMemberRoles...), esi.SnapCorpMemberTracking, &tracking) {
@@ -426,7 +466,9 @@ func (app *Application) pulseJoined(ctx context.Context, ref pulseCorpRef, now t
 		}
 		name, ok := names[t.CharacterID]
 		if !ok || name == "" {
-			name = "Character #" + strconv.FormatInt(t.CharacterID, 10)
+			// The name every page uses: what is known locally,
+			// else the stand-in with a want left for the worker.
+			name = app.displayCharacter(ctx, t.CharacterID)
 		}
 		out = append(out, pulseJoin{Name: name, Joined: formatFinish(t.StartDate)})
 	}
@@ -452,7 +494,15 @@ func (app *Application) pulseChanges(ctx context.Context, corpID int64, kind str
 		if r.Kind != kind {
 			continue
 		}
-		out = append(out, pulseChange{Text: r.Name, When: formatFinish(r.At.UTC().Format(time.RFC3339))})
+		text := r.Name
+		if kind == pulseMemberLeft && pulseNameUnknown(text) {
+			// Recorded before the name was known: show what is
+			// known now, and ask for it if it still is not.
+			if id, err := strconv.ParseInt(r.Key, 10, 64); err == nil {
+				text = app.displayCharacter(ctx, id)
+			}
+		}
+		out = append(out, pulseChange{Text: text, When: formatFinish(r.At.UTC().Format(time.RFC3339))})
 		if len(out) >= 5 {
 			break
 		}

@@ -6,7 +6,10 @@ package app
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,13 +53,13 @@ func TestPulseDiffRecordsChanges(t *testing.T) {
 
 	// First cycle adopts the current sets silently: nothing
 	// present reports as newly arrived or departed.
-	if n, _ := app.refreshPulseEvents(ctx, []db.Character{alpha}); n != 0 {
+	if n, _ := app.refreshPulseEvents(ctx, []db.Character{alpha}, &fetchBudget{}); n != 0 {
 		t.Fatalf("adopt cycle recorded %d, want 0", n)
 	}
 	// Beta leaves, S101 is removed, S102 anchors.
 	seedSnapshot(t, q, fixtureCharA, esi.SnapCorpMembers, esi.CorpMembers([]int64{fixtureCharA}))
 	seedSnapshot(t, q, fixtureCharA, esi.SnapCorpStructures, esi.CorpStructures{{StructureID: 102, Name: "Fortizar Two"}})
-	if n, _ := app.refreshPulseEvents(ctx, []db.Character{alpha}); n != 3 {
+	if n, _ := app.refreshPulseEvents(ctx, []db.Character{alpha}, &fetchBudget{}); n != 3 {
 		t.Fatalf("change cycle recorded %d, want 3 (left, removed, added)", n)
 	}
 	events, err := app.queries.ListPulseEvents(ctx, db.ListPulseEventsParams{CorpID: pulseTestCorp, At: now.Add(-time.Hour)})
@@ -79,7 +82,7 @@ func TestPulseDiffRecordsChanges(t *testing.T) {
 		t.Fatalf("events missing: %v", seen)
 	}
 	// Steady state records nothing further.
-	if n, _ := app.refreshPulseEvents(ctx, []db.Character{alpha}); n != 0 {
+	if n, _ := app.refreshPulseEvents(ctx, []db.Character{alpha}, &fetchBudget{}); n != 0 {
 		t.Fatalf("steady cycle recorded %d, want 0", n)
 	}
 }
@@ -205,11 +208,88 @@ func TestPulseReadsFromTheCharacterHoldingTheRole(t *testing.T) {
 	// The worker's diff reads the same way: first pass adopts,
 	// then a departure in the Director's member list is recorded.
 	chars := []db.Character{alpha, beta}
-	if n, _ := app.refreshPulseEvents(ctx, chars); n != 0 {
+	if n, _ := app.refreshPulseEvents(ctx, chars, &fetchBudget{}); n != 0 {
 		t.Fatalf("adopt cycle recorded %d events, want 0", n)
 	}
 	seedSnapshot(t, q, fixtureCharB, esi.SnapCorpMembers, esi.CorpMembers([]int64{fixtureCharA, fixtureCharB}))
-	if n, _ := app.refreshPulseEvents(ctx, chars); n != 1 {
+	if n, _ := app.refreshPulseEvents(ctx, chars, &fetchBudget{}); n != 1 {
 		t.Fatalf("a member left and the diff recorded %d events, want 1", n)
+	}
+}
+
+// namesTransport answers the bulk names endpoint from a table
+// and fails everything else, counting the names calls.
+type namesTransport struct {
+	names map[int64]string
+	calls int
+}
+
+func (s *namesTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	respond := func(status int, body string) (*http.Response, error) {
+		return &http.Response{StatusCode: status, Header: http.Header{"Content-Type": []string{"application/json"}},
+			Body: io.NopCloser(strings.NewReader(body))}, nil
+	}
+	if req.Method != http.MethodPost || !strings.HasSuffix(req.URL.Path, "/universe/names/") {
+		return respond(http.StatusInternalServerError, `{"error":"must not be called"}`)
+	}
+	s.calls++
+	var ids []int64
+	if err := json.NewDecoder(req.Body).Decode(&ids); err != nil {
+		return respond(http.StatusBadRequest, `{"error":"bad body"}`)
+	}
+	var out []universeName
+	for _, id := range ids {
+		if name, ok := s.names[id]; ok {
+			out = append(out, universeName{ID: id, Name: name, Category: "character"})
+		}
+	}
+	raw, _ := json.Marshal(out)
+	return respond(http.StatusOK, string(raw))
+}
+
+// TestPulseNamesMembersThroughTheBulkResolver: a member list is
+// IDs. The worker names members it has not seen before in one
+// bulk call, keeps the name with the member, and does not ask
+// again; a departure is then recorded, and shown, under the
+// name rather than "Character #id".
+func TestPulseNamesMembersThroughTheBulkResolver(t *testing.T) {
+	transport := &namesTransport{names: map[int64]string{93300005: "Resolved Pilot"}}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	alpha := seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	seedPulseCorp(t, q,
+		[]string{"Director"},
+		[]int64{fixtureCharA, 93300005},
+		esi.CorpMemberTrackings{{CharacterID: 93300005, StartDate: rfc(now.Add(-48 * time.Hour))}},
+		nil, nil)
+	chars := []db.Character{alpha}
+
+	if n, _ := app.refreshPulseEvents(ctx, chars, &fetchBudget{left: 5}); n != 0 {
+		t.Fatalf("adopt cycle recorded %d events, want 0", n)
+	}
+	if transport.calls != 1 {
+		t.Fatalf("naming one unknown member took %d bulk calls, want 1", transport.calls)
+	}
+	// The linked character needed no lookup, and nothing is asked twice.
+	if n, _ := app.refreshPulseEvents(ctx, chars, &fetchBudget{left: 5}); n != 0 || transport.calls != 1 {
+		t.Fatalf("a quiet cycle recorded %d events and made %d bulk calls in all, want 0 and 1", n, transport.calls)
+	}
+	w := app.buildPulse(ctx, user.ID)
+	if len(w.Corps) != 1 || len(w.Corps[0].Joined) != 1 || w.Corps[0].Joined[0].Name != "Resolved Pilot" {
+		t.Fatalf("joined list %+v, want the member by name", w.Corps)
+	}
+
+	seedSnapshot(t, q, fixtureCharA, esi.SnapCorpMembers, esi.CorpMembers([]int64{fixtureCharA}))
+	if n, _ := app.refreshPulseEvents(ctx, chars, &fetchBudget{left: 5}); n != 1 {
+		t.Fatalf("a departure recorded %d events, want 1", n)
+	}
+	w = app.buildPulse(ctx, user.ID)
+	if len(w.Corps) != 1 || len(w.Corps[0].Left) != 1 || w.Corps[0].Left[0].Text != "Resolved Pilot" {
+		t.Fatalf("left list %+v, want the departed member by name", w.Corps)
 	}
 }

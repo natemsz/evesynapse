@@ -351,10 +351,11 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	clock.mark("names", time.Now())
 
 	// Corp pulse change log (home_pulse.go): diff the stored
-	// corp snapshots into pulse_events. Local data only, so it
-	// runs whether or not ESI was reachable.
+	// corp snapshots into pulse_events. The diff is local, so it
+	// runs whether or not ESI was reachable; it spends from the
+	// allowance only to name members it has not seen before.
 	c.pass("recording corp pulse", func() (int, bool) {
-		return app.refreshPulseEvents(ctx, characters)
+		return app.refreshPulseEvents(ctx, characters, c.allowance)
 	})
 	clock.mark("corp pulse", time.Now())
 

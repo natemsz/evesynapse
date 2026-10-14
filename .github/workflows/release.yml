@@ -55,7 +55,6 @@ jobs:
           internal/app/jstest/swap.test.js
           internal/app/jstest/swap.browser.test.js
           internal/app/jstest/plan.firstload.test.js
-          internal/app/jstest/plan.firstload.test.js
           internal/app/jstest/pi.test.js
           internal/app/jstest/fit.tip.test.js
 

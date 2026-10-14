@@ -24,6 +24,7 @@ import (
 	"strings"
 	"testing"
 
+	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/fit"
 )
@@ -796,7 +797,13 @@ func TestFitSimulateImplants(t *testing.T) {
 	}
 	mustContain(t, "/fittings/simulate/", body, ">302 m/s<")
 
-	// The clone picker lists the active clone and the jump clone.
+	// The clone picker lists the active clone and the jump clones,
+	// under the name the pilot gave one on the character sheet.
+	if err := q.UpsertCloneName(ctx, db.UpsertCloneNameParams{
+		UserID: user.ID, CharacterID: fixtureCharA, CloneID: 98765432, CustomName: "Hel Ratting Pod",
+	}); err != nil {
+		t.Fatalf("name a clone: %v", err)
+	}
 	req := httptest.NewRequest(http.MethodGet, "/fittings/clones.json?pilot=90000001", nil)
 	req.AddCookie(cookie)
 	rec := httptest.NewRecorder()
@@ -805,7 +812,10 @@ func TestFitSimulateImplants(t *testing.T) {
 		t.Fatalf("clones.json status = %d", rec.Code)
 	}
 	mustContain(t, "/fittings/clones.json", rec.Body.String(),
-		"Active clone", "PvP clone", "Jump clone #5432", "Jump clone #3579")
+		"Active clone", "PvP clone", "Hel Ratting Pod", "Jump clone #3579")
+	if strings.Contains(rec.Body.String(), "Jump clone #5432") {
+		t.Errorf("the named clone still shows its ID fallback: %s", rec.Body.String())
+	}
 
 	// A pilot the user doesn't own is refused.
 	req = httptest.NewRequest(http.MethodGet, "/fittings/clones.json?pilot=42424242", nil)

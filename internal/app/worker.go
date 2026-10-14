@@ -332,10 +332,9 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	c.refreshPublicData(ctx, characters)
 	clock.mark("public data", time.Now())
 
-	// The shared cache across instances (swarm_trust.go): gossip,
-	// demand-driven pulls, and spot checks. Peer traffic spends no
-	// ESI budget; only the spot checks do, from what is left of
-	// the allowance.
+	// The shared cache across instances (swarm_trust.go): the
+	// spot checks on what the fetch phase above staged, from what
+	// is left of the allowance. No peer traffic here.
 	c.pass("sharing with the swarm", func() (int, bool) {
 		return app.swarmCycle(ctx, c.allowance, characters, time.Now())
 	})

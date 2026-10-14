@@ -117,3 +117,47 @@ func TestPulseWidgetGatesAndRenders(t *testing.T) {
 	}
 	mustContain(t, "/", body, "needs a Director, Personnel Manager, Accountant, or Station Manager role")
 }
+
+// TestRoleSetsUseESINames: every in-game role a widget gates on
+// is spelled the way ESI spells it (underscores, not spaces), by
+// being one of the known corporation roles. "Junior Accountant"
+// with a space matched nobody.
+func TestRoleSetsUseESINames(t *testing.T) {
+	for name, set := range map[string][]string{
+		"pulse members":    pulseMemberRoles,
+		"pulse wallet":     pulseWalletRoles,
+		"pulse structures": pulseStructureRoles,
+		"upkeep":           upkeepRoles,
+	} {
+		for _, role := range set {
+			if !validEVECorpRole(role) {
+				t.Errorf("%s gates on %q, which is not an ESI corporation role name", name, role)
+			}
+		}
+	}
+}
+
+// TestPulseWalletShowsForJuniorAccountant: a Junior Accountant
+// may read the corporation wallet journal in game, so the pulse
+// shows them its movements.
+func TestPulseWalletShowsForJuniorAccountant(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	seedPulseCorp(t, q,
+		[]string{"Junior_Accountant"},
+		[]int64{fixtureCharA},
+		nil,
+		esi.CorpJournal{{ID: 2, Date: rfc(now.Add(-2 * time.Hour)), RefType: "bounty_prizes", Amount: 9000000, Balance: 10000000}},
+		nil)
+	w := app.buildPulse(ctx, user.ID)
+	if len(w.Corps) != 1 || len(w.Corps[0].Moves) != 1 {
+		t.Fatalf("pulse for a Junior Accountant: %+v, want one corporation with its wallet movement", w.Corps)
+	}
+}

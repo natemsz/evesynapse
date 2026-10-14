@@ -1,0 +1,65 @@
+{{/* Wallet flow, shared by the home module and the Wallet page. Both
+     take a *walletFlowWidget: the summary (7- and 30-day totals and the
+     income and spend donuts) and the detail (cumulative net flow, top
+     sources and sinks). */}}
+{{define "wallet-flow-figures"}}
+<div class="tw">
+<table>
+  <tbody>
+    <tr><th>7 days</th><td>in {{.In7}} · out {{.Out7}} · net {{.Net7}} ISK</td></tr>
+    <tr><th>30 days</th><td>in {{.In30}} · out {{.Out30}} · net {{.Net30}} ISK</td></tr>
+  </tbody>
+</table>
+</div>
+{{if or .InPie .OutPie}}
+<div class="flow-pies">
+  {{with .InPie}}
+  <figure class="flow-pie">
+    <svg viewBox="0 0 100 100" role="img" aria-label="Income by type, last 30 days">{{range .Slices}}<path d="{{.D}}" class="pie-s{{.Index}}"><title>{{.Label}}: {{.Pct}}</title></path>{{end}}<text x="50" y="54" class="pie-c">In</text></svg>
+    <figcaption><span class="pie-head">Income, 30 days</span><ul class="pie-legend">{{range .Slices}}<li><span class="pie-key pie-s{{.Index}}"></span><span class="pie-l">{{.Label}}</span> <b>{{.Pct}}</b></li>{{end}}</ul></figcaption>
+  </figure>
+  {{end}}
+  {{with .OutPie}}
+  <figure class="flow-pie">
+    <svg viewBox="0 0 100 100" role="img" aria-label="Spend by type, last 30 days">{{range .Slices}}<path d="{{.D}}" class="pie-s{{.Index}}"><title>{{.Label}}: {{.Pct}}</title></path>{{end}}<text x="50" y="54" class="pie-c">Out</text></svg>
+    <figcaption><span class="pie-head">Spend, 30 days</span><ul class="pie-legend">{{range .Slices}}<li><span class="pie-key pie-s{{.Index}}"></span><span class="pie-l">{{.Label}}</span> <b>{{.Pct}}</b></li>{{end}}</ul></figcaption>
+  </figure>
+  {{end}}
+</div>
+{{end}}
+{{end}}
+
+{{define "wallet-flow-detail"}}
+{{template "wallet-flow-chart" .}}
+{{template "wallet-flow-refs" .}}
+{{end}}
+
+{{define "wallet-flow-chart"}}
+{{if .HasChart}}
+{{template "balance-chart" .Chart}}
+<p><small>Cumulative net flow per day.</small></p>
+{{end}}
+{{end}}
+
+{{define "wallet-flow-refs"}}
+{{if .Sources}}
+<div class="tw">
+<table>
+  <thead><tr><th>Top sources</th><th>30 days</th></tr></thead>
+  <tbody>
+  {{range .Sources}}<tr><td>{{.Ref}}</td><td>{{.Total}} ISK</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+{{if .Sinks}}
+<div class="tw">
+<table>
+  <thead><tr><th>Top sinks</th><th>30 days</th></tr></thead>
+  <tbody>
+  {{range .Sinks}}<tr><td>{{.Ref}}</td><td>{{.Total}} ISK</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+{{end}}

@@ -11,12 +11,34 @@
 <h2>{{.Wallet.CharacterName}}</h2>
 {{if .Wallet.BalanceOK}}<div class="kpis kpis-small"><div class="kpi"><span class="kpi-k">Balance</span><span class="kpi-v isk">{{.Wallet.Balance}} <small>ISK</small></span></div></div>{{end}}
 
+{{/* Two columns on a wide screen: the charts on the left (balance
+     history, then cumulative net flow, the same size), the flow's
+     figures on the right; one column on a narrow screen. */}}
+<div class="wallet-top">
+<div class="wallet-col">
 {{if .Wallet.Graph}}
 <section class="foldable">
 <h3>Balance history</h3>
 {{template "wallet-graph" .Wallet.Graph}}
 </section>
 {{end}}
+{{with .Wallet.Flow}}{{if and .Any .HasChart}}
+<section class="foldable">
+<h3>Net flow</h3>
+{{template "wallet-flow-chart" .}}
+</section>
+{{end}}{{end}}
+</div>
+{{with .Wallet.Flow}}{{if .Any}}
+<div class="wallet-col">
+<section class="foldable">
+<h3>Wallet flow</h3>
+{{template "wallet-flow-figures" .}}
+{{template "wallet-flow-refs" .}}
+</section>
+</div>
+{{end}}{{end}}
+</div>
 
 <section class="foldable">
 <h3>Recent journal</h3>

@@ -211,7 +211,7 @@ func sectionForPage(page string) string {
 	case "home.html":
 		return "home"
 	case "character.html", "characters.html", "skills.html", "skillplans.html",
-		"mail.html", "calendar.html", "contacts.html", "pilot.html", "assets.html",
+		"mail.html", "calendar.html", "contacts.html", "pilot.html", "assets.html", "wallet.html",
 		"killmails.html", "notifications.html", "notification_settings.html", "op.html", "op_form.html", "op_paps.html":
 		return "pilot"
 	case "fittings.html", "fittings_saved.html", "fit_shopping.html", "fittings_public.html", "fit_public.html":
@@ -220,7 +220,7 @@ func sectionForPage(page string) string {
 		return "industry"
 	case "market.html", "market_scanner.html", "market_tradeideas.html", "market_tradefinder.html", "market_leaderboard.html",
 		"market_restock.html",
-		"wallet.html", "orders.html", "contracts.html", "system.html", "station.html", "structure.html":
+		"orders.html", "contracts.html", "system.html", "station.html", "structure.html":
 		return "market"
 	case "items.html", "ship_public.html":
 		return "tools"
@@ -250,7 +250,7 @@ var (
 // pageSharedTemplates are the files every full page is parsed with:
 // the layout and the partials any page may use. One list, so that
 // nothing else parsing a page into the same cache can leave one out.
-var pageSharedTemplates = []string{"templates/base.html", "templates/notifybell.html", "templates/balancechart.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html"}
+var pageSharedTemplates = []string{"templates/base.html", "templates/notifybell.html", "templates/balancechart.html", "templates/walletflow.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html"}
 
 // parsedTemplate returns the cached set for page, parsing it (with
 // the shared files first) the first time it is asked for.

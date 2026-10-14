@@ -705,6 +705,16 @@ img.portrait {
 }
 
 .corp-desc { white-space: pre-line; }
+/* Wallet page: balance history beside wallet flow, each about half
+   the width, so the chart is a readable size rather than the whole
+   page; one above the other on a narrow screen. */
+.wallet-top {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr));
+  gap: 0 1.25rem;
+  align-items: start;
+}
+.wallet-top > .wallet-col { min-width: 0; }
 
 /* --- form inputs + market search suggestions --- */
 /* Fields share one look and one height (--control-h) with the buttons
@@ -968,13 +978,14 @@ html[data-theme="light"] .widget-scope select {
 .home-actions form { margin: 0; }
 /* The home grid: three cells across on a desktop, two on a mid-size
    screen, one on a phone. A module takes gw1-3 cells across and gh1-3
-   rows down (its size, stored per user), and every cell is a fixed
-   size: a module is exactly as big as its cells, in Customize and
-   out, so what the size picker shows is what the page shows. What
-   doesn't fit a module's cells scrolls inside its body; More opens a
-   module across its row at its natural height. Modules sit in reading
-   order with no backfilling, so moving or resizing one never shuffles
-   modules it did not touch. */
+   rows down (its size, stored per user). Rows have a floor, not a
+   ceiling: a module is at least the cells it spans and grows to show
+   what it holds, and its lists hold more rows the taller it is
+   (homeCap), so a size change always shows. Nothing scrolls inside a
+   module, so the wheel always scrolls the page. Customize shows each
+   module as the page shows it (summary only, More closed), so rows
+   size the same in both views. Modules sit in reading order with no
+   backfilling, so moving or resizing one never shuffles the others. */
 .grid.home-grid {
   --home-row: 11rem;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -985,27 +996,28 @@ html[data-theme="light"] .widget-scope select {
 .grid.home-grid > .card {
   position: relative;
   min-width: 0;
-  min-height: 0;
   justify-self: stretch;
   display: flex;
   flex-direction: column;
-  /* Size containment: the module's content never sizes its row, so a
-     row is exactly the cells it spans. */
-  contain: size;
   container-type: inline-size;
 }
-.grid.home-grid > .card > .card-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: #3a2410 transparent;
-  /* Room for the scrollbar without crowding the text. */
-  margin-right: -0.5rem;
-  padding-right: 0.5rem;
-}
+.grid.home-grid > .card > .card-body { flex: 1 1 auto; min-width: 0; }
 .grid.home-grid > .card > .card-body > :last-child { margin-bottom: 0; }
+/* Every module heading is one height, in Customize and out: a row as
+   tall as the corner buttons, the title on its centre line. */
+.grid.home-grid > .card > h3:first-child {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  box-sizing: border-box;
+  /* The 1.75rem buttons, the band's 0.55rem padding top and bottom,
+     and its 1px rule: a heading with the move handle and one without
+     stand the same height. */
+  min-height: calc(2.85rem + 1px);
+}
+/* A module's tables fit its width: cells wrap rather than pushing the
+   table past the card into a sideways scroll. */
+.grid.home-grid .tw table { width: 100%; }
 /* Cards are positioned (for the corner controls), so a table's
    visually-hidden header text would otherwise anchor to the card and
    escape its scroller, widening the page on phones. */
@@ -1014,10 +1026,8 @@ html[data-theme="light"] .widget-scope select {
 .grid.home-grid > .gw3 { grid-column: span 3; }
 .grid.home-grid > .gh2 { grid-row: span 2; }
 .grid.home-grid > .gh3 { grid-row: span 3; }
-/* An expanded module shows its detail across its whole row, at its
-   natural height. */
-.grid.home-grid > .card.expanded { grid-column: 1 / -1; grid-row: auto / span 1; contain: none; }
-.grid.home-grid > .card.expanded > .card-body { overflow: visible; }
+/* An expanded module shows its detail across its whole row. */
+.grid.home-grid > .card.expanded { grid-column: 1 / -1; grid-row: auto / span 1; }
 /* Customize shows each module as the page shows it: summary only. */
 .home-custom [data-wmore] { display: none; }
 @media (max-width: 1099px) {
@@ -1028,8 +1038,7 @@ html[data-theme="light"] .widget-scope select {
    shows first and More opens the rest. */
 @media (max-width: 719px) {
   .grid.home-grid { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; }
-  .grid.home-grid > .card { grid-column: auto; grid-row: auto; contain: none; }
-  .grid.home-grid > .card > .card-body { overflow: visible; margin-right: 0; padding-right: 0; }
+  .grid.home-grid > .card { grid-column: auto; grid-row: auto; }
   /* Sizes only apply on wider screens, so there is nothing to resize. */
   .grid.home-grid .cardsize, .grid.home-grid .cardgrip, .grid.home-grid .sizepick { display: none; }
 }
@@ -1073,13 +1082,7 @@ html[data-theme="light"] .widget-scope select {
 .draghandle:active { cursor: grabbing; }
 /* In Customize the heading is a row: handle, title, then room for the
    corner controls, all on one centre line. */
-.home-custom.has-controls .card > h3:first-child {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  min-height: 1.75rem;
-  padding-right: 5.2rem;
-}
+.home-custom.has-controls .card > h3:first-child { padding-right: 5.2rem; }
 .cardctl {
   position: absolute;
   /* The heading band's own padding: the buttons share its centre. */
@@ -1204,6 +1207,16 @@ body.resize-active { user-select: none; -webkit-user-select: none; cursor: nwse-
    widening the module brings them back. */
 @container (max-width: 34rem) { .card .opt { display: none; } }
 @container (max-width: 24rem) { .card .opt2 { display: none; } }
+/* A finish time: the date with its countdown in brackets; a narrow
+   module shows the countdown alone (the date on hover), so the column
+   stays one line. */
+.when { white-space: nowrap; }
+.when-rel::before { content: "("; }
+.when-rel::after { content: ")"; }
+@container (max-width: 34rem) {
+  .card .when-abs { display: none; }
+  .card .when-rel::before, .card .when-rel::after { content: none; }
+}
 
 /* --- home modules: KPI tiles, briefing cards, fleet table ---
    The v2.4 mockup's layout in the site's own ember style: figures
@@ -1436,7 +1449,9 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid rgba(255, 1
 /* The Overview bar: a quiet strip above the grid. Arranging lives
    behind one settings menu, always to hand and never in the way. */
 .home-bar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; justify-content: flex-end; margin: -0.4rem 0 0.8rem; }
-.home-bar-note { margin: 0 auto 0 0; color: var(--muted); }
+/* The hint takes what room is left and wraps its own text, so the
+   controls beside it stay on one row. */
+.home-bar-note { flex: 1 1 14rem; min-width: 0; margin: 0 auto 0 0; color: var(--muted); }
 /* Every control on the bar stands exactly one control high, whatever
    it is (a link, a menu summary, the status pill). */
 .home-bar > .btn, .home-bar > .menu-pop > summary.btn, .home-bar > .esi-pill {
@@ -1539,6 +1554,25 @@ html[data-theme="light"] .esi-down .esi-label { color: #b91c1c; }
 }
 .menu-pop-body a:hover, .menu-pop-body button:hover { background: var(--row-hover); color: var(--text-bright); }
 .menu-pop-body form { margin: 0; }
+/* A menu item's keyboard shortcut, at its right edge. */
+.menu-pop-body a kbd, .home-bar-note kbd {
+  font: inherit;
+  font-size: 0.75rem;
+  padding: 0 0.35rem;
+  color: var(--gold);
+  border: 1px solid #4a2408;
+  border-radius: 3px;
+}
+.menu-pop-body a kbd { float: right; margin-left: 1rem; }
+.home-bar .btn kbd {
+  margin-left: 0.45rem;
+  padding: 0 0.3rem;
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  border: 1px solid rgba(42, 19, 2, 0.45);
+  border-radius: 3px;
+}
 html[data-theme="light"] .menu-pop-body { border-color: #d3c7ae; box-shadow: 0 10px 24px rgba(60, 40, 10, 0.18); }
 html[data-theme="light"] .btn.btn-quiet { border-color: #d3c7ae; }
 html[data-theme="light"] .sizepick { background: #fffdf9; }

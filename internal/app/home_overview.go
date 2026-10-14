@@ -591,7 +591,6 @@ type homeWidget struct {
 	MinW, MinH int    // the module's floor in grid cells (Customize refuses less)
 	SizeClass  string // gw1-3 gh1-3: the grid classes the CSS applies
 	Cap        int    // rows or items shown before More, by height
-	BriefCap   int    // briefing cards shown before More: one row of cards per cell of height, two more rows per extra cell
 	Customize  bool   // rendering under /?customize=1 (form return targets)
 	Fleet      *fleetWidget
 	Briefing   *briefingWidget
@@ -1397,7 +1396,7 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 			ID: item.ID, Title: def.Title,
 			W: gw, H: gh, SizeClass: fmt.Sprintf("gw%d gh%d", gw, gh),
 			MinW: minW, MinH: minH,
-			Cap: homeCap(gh), BriefCap: gw * (2*gh - 1),
+			Cap:       homeCap(gh),
 			Customize: customize,
 		}
 		switch item.ID {

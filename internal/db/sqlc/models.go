@@ -821,12 +821,14 @@ type TypeName struct {
 }
 
 type TypingGuess struct {
-	Box      string       `json:"box"`
-	Kind     string       `json:"kind"`
-	EntityID int64        `json:"entity_id"`
-	RegionID int64        `json:"region_id"`
-	NotedAt  time.Time    `json:"noted_at"`
-	HitAt    sql.NullTime `json:"hit_at"`
+	Box          string        `json:"box"`
+	Kind         string        `json:"kind"`
+	EntityID     int64         `json:"entity_id"`
+	RegionID     int64         `json:"region_id"`
+	NotedAt      time.Time     `json:"noted_at"`
+	HitAt        sql.NullTime  `json:"hit_at"`
+	ID           sql.NullInt64 `json:"id"`
+	SupersededAt sql.NullTime  `json:"superseded_at"`
 }
 
 type User struct {

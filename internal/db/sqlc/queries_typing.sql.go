@@ -8,78 +8,86 @@ package db
 import (
 	"context"
 	"time"
+
+	"github.com/lib/pq"
 )
+
+const countTypingGuesses = `-- name: CountTypingGuesses :one
+SELECT COUNT(*) FROM typing_guesses WHERE box = $1
+`
+
+func (q *Queries) CountTypingGuesses(ctx context.Context, box string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countTypingGuesses, box)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
 
 const deleteTypingAllianceGuesses = `-- name: DeleteTypingAllianceGuesses :exec
 DELETE FROM alliance_records
 WHERE priority = $2::bigint AND state = 'pending'
-  AND alliance_id IN (SELECT entity_id FROM typing_guesses WHERE box = $1 AND kind = 'alliance')
+  AND alliance_id IN (SELECT entity_id FROM typing_guesses WHERE box = $1 AND kind = 'alliance' AND superseded_at = $3::timestamptz)
 `
 
 type DeleteTypingAllianceGuessesParams struct {
-	Box            string `json:"box"`
-	TypingPriority int64  `json:"typing_priority"`
+	Box            string    `json:"box"`
+	TypingPriority int64     `json:"typing_priority"`
+	SupersededAt   time.Time `json:"superseded_at"`
 }
 
 func (q *Queries) DeleteTypingAllianceGuesses(ctx context.Context, arg DeleteTypingAllianceGuessesParams) error {
-	_, err := q.db.ExecContext(ctx, deleteTypingAllianceGuesses, arg.Box, arg.TypingPriority)
+	_, err := q.db.ExecContext(ctx, deleteTypingAllianceGuesses, arg.Box, arg.TypingPriority, arg.SupersededAt)
 	return err
 }
 
 const deleteTypingCorporationGuesses = `-- name: DeleteTypingCorporationGuesses :exec
 DELETE FROM corporation_records
 WHERE priority = $2::bigint AND state = 'pending'
-  AND corporation_id IN (SELECT entity_id FROM typing_guesses WHERE box = $1 AND kind = 'corporation')
+  AND corporation_id IN (SELECT entity_id FROM typing_guesses WHERE box = $1 AND kind = 'corporation' AND superseded_at = $3::timestamptz)
 `
 
 type DeleteTypingCorporationGuessesParams struct {
-	Box            string `json:"box"`
-	TypingPriority int64  `json:"typing_priority"`
+	Box            string    `json:"box"`
+	TypingPriority int64     `json:"typing_priority"`
+	SupersededAt   time.Time `json:"superseded_at"`
 }
 
 func (q *Queries) DeleteTypingCorporationGuesses(ctx context.Context, arg DeleteTypingCorporationGuessesParams) error {
-	_, err := q.db.ExecContext(ctx, deleteTypingCorporationGuesses, arg.Box, arg.TypingPriority)
+	_, err := q.db.ExecContext(ctx, deleteTypingCorporationGuesses, arg.Box, arg.TypingPriority, arg.SupersededAt)
 	return err
 }
 
 const deleteTypingDetailGuesses = `-- name: DeleteTypingDetailGuesses :exec
 DELETE FROM type_details
 WHERE priority = $2::bigint AND fetched_at IS NULL
-  AND type_id IN (SELECT entity_id FROM typing_guesses WHERE box = $1 AND kind = 'type_description')
+  AND type_id IN (SELECT entity_id FROM typing_guesses WHERE box = $1 AND kind = 'type_description' AND superseded_at = $3::timestamptz)
 `
 
 type DeleteTypingDetailGuessesParams struct {
-	Box            string `json:"box"`
-	TypingPriority int64  `json:"typing_priority"`
+	Box            string    `json:"box"`
+	TypingPriority int64     `json:"typing_priority"`
+	SupersededAt   time.Time `json:"superseded_at"`
 }
 
 func (q *Queries) DeleteTypingDetailGuesses(ctx context.Context, arg DeleteTypingDetailGuessesParams) error {
-	_, err := q.db.ExecContext(ctx, deleteTypingDetailGuesses, arg.Box, arg.TypingPriority)
-	return err
-}
-
-const deleteTypingGuessesForBox = `-- name: DeleteTypingGuessesForBox :exec
-DELETE FROM typing_guesses WHERE box = $1
-`
-
-func (q *Queries) DeleteTypingGuessesForBox(ctx context.Context, box string) error {
-	_, err := q.db.ExecContext(ctx, deleteTypingGuessesForBox, box)
+	_, err := q.db.ExecContext(ctx, deleteTypingDetailGuesses, arg.Box, arg.TypingPriority, arg.SupersededAt)
 	return err
 }
 
 const deleteTypingHistoryGuesses = `-- name: DeleteTypingHistoryGuesses :exec
 DELETE FROM market_history_wants
 WHERE priority = $2::bigint
-  AND (region_id, type_id) IN (SELECT region_id, entity_id FROM typing_guesses WHERE box = $1 AND kind = 'market_history')
+  AND (region_id, type_id) IN (SELECT region_id, entity_id FROM typing_guesses WHERE box = $1 AND kind = 'market_history' AND superseded_at = $3::timestamptz)
 `
 
 type DeleteTypingHistoryGuessesParams struct {
-	Box            string `json:"box"`
-	TypingPriority int64  `json:"typing_priority"`
+	Box            string    `json:"box"`
+	TypingPriority int64     `json:"typing_priority"`
+	SupersededAt   time.Time `json:"superseded_at"`
 }
 
 func (q *Queries) DeleteTypingHistoryGuesses(ctx context.Context, arg DeleteTypingHistoryGuessesParams) error {
-	_, err := q.db.ExecContext(ctx, deleteTypingHistoryGuesses, arg.Box, arg.TypingPriority)
+	_, err := q.db.ExecContext(ctx, deleteTypingHistoryGuesses, arg.Box, arg.TypingPriority, arg.SupersededAt)
 	return err
 }
 
@@ -87,27 +95,31 @@ const deleteTypingPilotGuesses = `-- name: DeleteTypingPilotGuesses :exec
 
 DELETE FROM pilot_records
 WHERE priority = $2::bigint AND state = 'pending'
-  AND character_id IN (SELECT entity_id FROM typing_guesses WHERE box = $1 AND kind = 'pilot')
+  AND character_id IN (SELECT entity_id FROM typing_guesses WHERE box = $1 AND kind = 'pilot' AND superseded_at = $3::timestamptz)
 `
 
 type DeleteTypingPilotGuessesParams struct {
-	Box            string `json:"box"`
-	TypingPriority int64  `json:"typing_priority"`
+	Box            string    `json:"box"`
+	TypingPriority int64     `json:"typing_priority"`
+	SupersededAt   time.Time `json:"superseded_at"`
 }
 
-// A box's next keystroke drops the queue rows its guesses are
-// still waiting in. Only rows still at the typing ring go: one
-// the pilot opened has been bumped to viewed, and one already
-// holding data is a record now, not a guess.
+// A box's next keystroke drops the queue rows of the guesses it
+// has just superseded (the ledger rows stamped with this
+// keystroke's superseded_at). Only rows still at the typing ring
+// go: one the pilot opened has been bumped to viewed, and one
+// already holding data is a record now, not a guess.
 func (q *Queries) DeleteTypingPilotGuesses(ctx context.Context, arg DeleteTypingPilotGuessesParams) error {
-	_, err := q.db.ExecContext(ctx, deleteTypingPilotGuesses, arg.Box, arg.TypingPriority)
+	_, err := q.db.ExecContext(ctx, deleteTypingPilotGuesses, arg.Box, arg.TypingPriority, arg.SupersededAt)
 	return err
 }
 
 const getTypingGuess = `-- name: GetTypingGuess :one
-SELECT box, kind, entity_id, region_id, noted_at, hit_at
+SELECT box, kind, entity_id, region_id, noted_at, hit_at, id, superseded_at
 FROM typing_guesses
 WHERE box = $1 AND kind = $2 AND entity_id = $3 AND region_id = $4
+ORDER BY (superseded_at IS NULL) DESC, noted_at DESC
+LIMIT 1
 `
 
 type GetTypingGuessParams struct {
@@ -117,6 +129,8 @@ type GetTypingGuessParams struct {
 	RegionID int64  `json:"region_id"`
 }
 
+// The box's guess for one entity: the current one if there is
+// one, else the latest.
 func (q *Queries) GetTypingGuess(ctx context.Context, arg GetTypingGuessParams) (TypingGuess, error) {
 	row := q.db.QueryRowContext(ctx, getTypingGuess,
 		arg.Box,
@@ -132,6 +146,8 @@ func (q *Queries) GetTypingGuess(ctx context.Context, arg GetTypingGuessParams) 
 		&i.RegionID,
 		&i.NotedAt,
 		&i.HitAt,
+		&i.ID,
+		&i.SupersededAt,
 	)
 	return i, err
 }
@@ -170,8 +186,7 @@ const insertTypingGuess = `-- name: InsertTypingGuess :exec
 
 INSERT INTO typing_guesses (box, kind, entity_id, region_id, noted_at)
 VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (box, kind, entity_id, region_id) DO UPDATE SET
-    noted_at = excluded.noted_at
+ON CONFLICT (box, kind, entity_id, region_id) WHERE superseded_at IS NULL DO NOTHING
 `
 
 type InsertTypingGuessParams struct {
@@ -182,12 +197,17 @@ type InsertTypingGuessParams struct {
 	NotedAt  time.Time `json:"noted_at"`
 }
 
-// Typing-intent guesses (schema 028): what each search box's
-// latest keystroke guessed, so the next keystroke can replace it.
-// The queue rows carry the typing ring (worker_pagewants.go); this
-// table carries which box put them there, and whether the pilot
-// opened one within minutes of it being noted (the hit rate the
-// prefetch tuning reads later).
+// Typing-intent guesses (schema 028, 039): the ledger of what
+// search boxes guessed. The queue rows carry the typing ring
+// (worker_pagewants.go); this table carries which box put them
+// there and whether the pilot opened one within minutes of it
+// being noted. A row is one guess and it stays: a box's current
+// guesses have superseded_at NULL, and a later keystroke that
+// stops guessing one stamps it instead of deleting it. So the
+// hit rates read over a window (the Sync page, the drains' order)
+// see every guess made in it, opened or not.
+// A guess the box is already making stays as it is (same row,
+// same noted_at): one guess, however many keystrokes kept it.
 func (q *Queries) InsertTypingGuess(ctx context.Context, arg InsertTypingGuessParams) error {
 	_, err := q.db.ExecContext(ctx, insertTypingGuess,
 		arg.Box,
@@ -260,5 +280,36 @@ func (q *Queries) MarkTypingGuessHits(ctx context.Context, arg MarkTypingGuessHi
 		arg.Now,
 		arg.Since,
 	)
+	return err
+}
+
+const pruneTypingGuesses = `-- name: PruneTypingGuesses :exec
+DELETE FROM typing_guesses WHERE noted_at < $1
+`
+
+// Old guesses leave by age, well outside every window that
+// reads them.
+func (q *Queries) PruneTypingGuesses(ctx context.Context, notedAt time.Time) error {
+	_, err := q.db.ExecContext(ctx, pruneTypingGuesses, notedAt)
+	return err
+}
+
+const supersedeTypingGuesses = `-- name: SupersedeTypingGuesses :exec
+UPDATE typing_guesses SET superseded_at = $2::timestamptz
+WHERE box = $1 AND superseded_at IS NULL
+  AND NOT ((kind || '|' || entity_id::text || '|' || region_id::text) = ANY($3::text[]))
+`
+
+type SupersedeTypingGuessesParams struct {
+	Box          string    `json:"box"`
+	SupersededAt time.Time `json:"superseded_at"`
+	Kept         []string  `json:"kept"`
+}
+
+// A keystroke supersedes the box's current guesses that it no
+// longer makes. The kept ones are named "kind|entity|region".
+// Nothing is deleted, and hit_at is not touched.
+func (q *Queries) SupersedeTypingGuesses(ctx context.Context, arg SupersedeTypingGuessesParams) error {
+	_, err := q.db.ExecContext(ctx, supersedeTypingGuesses, arg.Box, arg.SupersededAt, pq.Array(arg.Kept))
 	return err
 }

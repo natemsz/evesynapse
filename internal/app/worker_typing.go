@@ -15,7 +15,8 @@ import (
 // search box, the top suggestions are queued ahead of the pick at
 // the typing ring — below a record somebody has open, above the
 // proactive orbit. Each keystroke replaces the previous one for
-// that box, so guesses never accumulate; what they fetch still
+// that box, so queued guesses never accumulate (the ledger of
+// what was guessed and what was opened does, by design); what they fetch still
 // passes every shared budget gate, and the drains serve them from
 // their own capped slice (typingSlice), never ahead of real work.
 
@@ -68,15 +69,15 @@ type typingGuess struct {
 }
 
 // setTypingGuesses makes guesses the box's current ones: what its
-// previous keystroke guessed is dropped and these are noted, as
-// one step under the box's lock. The caller has finished its
+// previous keystroke guessed and this one does not is superseded,
+// and these are noted, as one step under the box's lock. The caller has finished its
 // searching by now; the lock covers these queue writes and
 // nothing slower, and only this box waits on it.
 func (app *Application) setTypingGuesses(ctx context.Context, box string, guesses []typingGuess, now time.Time) {
 	lock := app.typingLock(box)
 	lock.Lock()
 	defer lock.Unlock()
-	app.replaceTypingGuesses(ctx, box)
+	app.replaceTypingGuesses(ctx, box, guesses, now)
 	for _, g := range guesses {
 		if g.id <= 0 {
 			continue
@@ -103,38 +104,70 @@ func (app *Application) typingBox(ctx context.Context, name string) string {
 	return fmt.Sprintf("%d|%s", app.userID(ctx), name)
 }
 
-// replaceTypingGuesses drops what a box's previous keystroke
-// guessed. Only rows still waiting at the typing ring go: one
-// the pilot opened has been bumped to viewed, and one already
-// holding data is a record now, not a guess. The ledger goes
-// last — the queue deletes read it. Only setTypingGuesses calls
-// this, under the box's lock, so two keystroke sequences in one
-// box cannot interleave.
-func (app *Application) replaceTypingGuesses(ctx context.Context, box string) {
-	if err := app.queries.DeleteTypingPilotGuesses(ctx, db.DeleteTypingPilotGuessesParams{Box: box, TypingPriority: wantTyping}); err != nil {
+// typingLedgerKeep is how long a guess stays in the ledger: well
+// past the learn window, so the rates never read a thinned edge.
+const typingLedgerKeep = 30 * 24 * time.Hour
+
+// replaceTypingGuesses moves a box on to a new keystroke: the
+// guesses it was making and no longer makes (everything current
+// that is not in keep) are superseded, and their queue rows
+// dropped. Superseded, not deleted: the ledger row stays, with
+// whether the pilot opened it, so the hit rates read the whole
+// window instead of each box's last keystroke. A guess still in
+// keep is the same guess as before and is left alone.
+//
+// Only queue rows still waiting at the typing ring go: one the
+// pilot opened has been bumped to viewed, and one already
+// holding data is a record now, not a guess. Only
+// setTypingGuesses calls this, under the box's lock, so two
+// keystroke sequences in one box cannot interleave.
+func (app *Application) replaceTypingGuesses(ctx context.Context, box string, keep []typingGuess, now time.Time) {
+	// One stamp names this keystroke's superseded rows for the
+	// queue deletes below, at the database's precision.
+	at := now.UTC().Truncate(time.Microsecond)
+	kept := make([]string, 0, len(keep))
+	for _, g := range keep {
+		kept = append(kept, fmt.Sprintf("%s|%d|%d", g.kind, g.id, g.region))
+	}
+	if err := app.queries.SupersedeTypingGuesses(ctx, db.SupersedeTypingGuessesParams{Box: box, SupersededAt: at, Kept: kept}); err != nil {
+		logging.Errorf("typing: supersede guesses for box %q: %v", box, err)
+		return
+	}
+	if err := app.queries.DeleteTypingPilotGuesses(ctx, db.DeleteTypingPilotGuessesParams{Box: box, TypingPriority: wantTyping, SupersededAt: at}); err != nil {
 		logging.Errorf("typing: drop pilot guesses for box %q: %v", box, err)
 	}
-	if err := app.queries.DeleteTypingCorporationGuesses(ctx, db.DeleteTypingCorporationGuessesParams{Box: box, TypingPriority: wantTyping}); err != nil {
+	if err := app.queries.DeleteTypingCorporationGuesses(ctx, db.DeleteTypingCorporationGuessesParams{Box: box, TypingPriority: wantTyping, SupersededAt: at}); err != nil {
 		logging.Errorf("typing: drop corporation guesses for box %q: %v", box, err)
 	}
-	if err := app.queries.DeleteTypingAllianceGuesses(ctx, db.DeleteTypingAllianceGuessesParams{Box: box, TypingPriority: wantTyping}); err != nil {
+	if err := app.queries.DeleteTypingAllianceGuesses(ctx, db.DeleteTypingAllianceGuessesParams{Box: box, TypingPriority: wantTyping, SupersededAt: at}); err != nil {
 		logging.Errorf("typing: drop alliance guesses for box %q: %v", box, err)
 	}
-	if err := app.queries.DeleteTypingHistoryGuesses(ctx, db.DeleteTypingHistoryGuessesParams{Box: box, TypingPriority: wantTyping}); err != nil {
+	if err := app.queries.DeleteTypingHistoryGuesses(ctx, db.DeleteTypingHistoryGuessesParams{Box: box, TypingPriority: wantTyping, SupersededAt: at}); err != nil {
 		logging.Errorf("typing: drop history guesses for box %q: %v", box, err)
 	}
-	if err := app.queries.DeleteTypingDetailGuesses(ctx, db.DeleteTypingDetailGuessesParams{Box: box, TypingPriority: wantTyping}); err != nil {
+	if err := app.queries.DeleteTypingDetailGuesses(ctx, db.DeleteTypingDetailGuessesParams{Box: box, TypingPriority: wantTyping, SupersededAt: at}); err != nil {
 		logging.Errorf("typing: drop detail guesses for box %q: %v", box, err)
 	}
-	if err := app.queries.DeleteTypingGuessesForBox(ctx, box); err != nil {
-		logging.Errorf("typing: drop guess ledger for box %q: %v", box, err)
+	app.pruneTypingLedger(ctx, now)
+}
+
+// pruneTypingLedger drops guesses older than typingLedgerKeep,
+// at most once an hour.
+func (app *Application) pruneTypingLedger(ctx context.Context, now time.Time) {
+	last := app.typingPrunedAt.Load()
+	if now.Unix()-last < 3600 || !app.typingPrunedAt.CompareAndSwap(last, now.Unix()) {
+		return
+	}
+	if err := app.queries.PruneTypingGuesses(ctx, now.Add(-typingLedgerKeep)); err != nil {
+		logging.Errorf("typing: prune guess ledger: %v", err)
 	}
 }
 
-// noteTypingGuess records one guess in the box's ledger. The
-// queue row goes with it (see the noteTyping* helpers): ledger
-// without a queue row would never drain, and a queue row without
-// ledger would never be replaced.
+// noteTypingGuess records one guess in the box's ledger. A guess
+// the box is already making is left as it is: it is still the
+// same guess. The queue row goes with it (see the noteTyping*
+// helpers): ledger without a queue row would never drain, and a
+// queue row without ledger would never be replaced.
 func (app *Application) noteTypingGuess(ctx context.Context, box string, kind pageWantKind, entityID, regionID int64, now time.Time) {
 	if err := app.queries.InsertTypingGuess(ctx, db.InsertTypingGuessParams{
 		Box: box, Kind: string(kind), EntityID: entityID, RegionID: regionID, NotedAt: now,

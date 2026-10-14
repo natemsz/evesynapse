@@ -3,9 +3,11 @@ package app
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"evesynapse/internal/esi"
+	"evesynapse/internal/piplan"
 )
 
 // TestPIPlannerRendersChain: the PI Planner page renders the full
@@ -55,6 +57,30 @@ func TestPIPlannerRendersChain(t *testing.T) {
 		t.Fatalf("pi planner uncovered: status %d", code)
 	}
 	mustContain(t, "/industry/pi/ uncovered", body, "Not covered", "Missing:")
+
+	// A product just picked (cover=1) ticks the planet types it
+	// needs, whatever was ticked before and whatever is owned.
+	code, body = getPage(t, app, cookie, "/industry/pi/?product=Coolant&planets=Lava&cover=1")
+	if code != http.StatusOK {
+		t.Fatalf("pi planner cover: status %d", code)
+	}
+	for _, p := range piplan.PlanetTypes {
+		want := false
+		for _, m := range piplan.MinimalPlanets("Coolant") {
+			want = want || m == p
+		}
+		box := `name="planets" value="` + p + `" checked`
+		if got := strings.Contains(body, box); got != want {
+			t.Errorf("cover=1: %s ticked = %v, want %v (Coolant needs %v)", p, got, want, piplan.MinimalPlanets("Coolant"))
+		}
+	}
+	mustContain(t, "/industry/pi/ cover", body, "Covered", `id="pi-wrap"`,
+		// Every chain input names where it is made: the target's
+		// factory line, and a raw's or P1's ticked planet type.
+		`<small class="pi-on">factory on any planet</small>`,
+		`<small class="pi-on">on `+piplan.MinimalPlanets("Coolant")[0],
+		// Planet types that could supply the chain stay marked.
+		`can-supply" data-pi-node="`)
 }
 
 // TestPIPlannerDefaults: bare /industry/pi/ opens on the default

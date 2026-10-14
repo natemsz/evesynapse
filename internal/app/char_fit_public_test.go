@@ -10,6 +10,7 @@ import (
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
 )
 
 // publicFitURL pins the browser addresses the filter bar builds:
@@ -237,4 +238,68 @@ func TestPrefetchIsNotAView(t *testing.T) {
 	if got := viewedPriority(context.Background()); got != wantViewed {
 		t.Errorf("view priority = %d, want %d", got, wantViewed)
 	}
+}
+
+// TestPublicFitCostIsHullPlusParts: a public fit costs its hull plus
+// every line on it, the same number on its page, in its stored price
+// and in the fitting tool's own stats panel. The guide's market
+// average wins; a type with only an adjusted price falls back to it.
+func TestPublicFitCostIsHullPlusParts(t *testing.T) {
+	transport := &pricesTransport{body: `[
+		{"type_id":1001,"average_price":1000,"adjusted_price":900},
+		{"type_id":3001,"average_price":0,"adjusted_price":250},
+		{"type_id":3002,"average_price":40,"adjusted_price":35}
+	]`}
+	app, conn, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")
+	seedFitUniverse(t, func(stmt string) error {
+		_, err := conn.ExecContext(ctx, stmt)
+		return err
+	})
+	now := time.Now().UTC()
+	items := `[{"typeId":3001,"qty":2},{"typeId":3002,"qty":3}]`
+	row, err := q.CreateLocalFitting(ctx, db.CreateLocalFittingParams{
+		UserID: user.ID, Name: "Priced Fixture", ShipTypeID: 1001, IsPublic: true,
+		CreatedAt: now, UpdatedAt: now,
+		ItemsJson: `{"name":"Priced Fixture","shipTypeId":1001,"items":` + items + `}`,
+	})
+	if err != nil {
+		t.Fatalf("create fitting: %v", err)
+	}
+	if stored, limited := app.refreshGuidePrices(ctx); limited || !stored {
+		t.Fatalf("guide refresh = (stored %v, limited %v), want (true, false)", stored, limited)
+	}
+	if n := app.refreshPublicFitPages(ctx); n != 1 {
+		t.Fatalf("built %d public fit pages, want 1", n)
+	}
+
+	// Hull 1,000 (average) + 2 x 250 (adjusted, no average) + 3 x 40.
+	const hull, parts, total = 1000.0, 620.0, 1620.0
+	code, body := getSwapPage(t, app, nil, publicFitsPath+"fit/"+strconv.FormatInt(row.ID, 10)+"/")
+	if code != http.StatusOK {
+		t.Fatalf("public fit page: status %d", code)
+	}
+	mustContain(t, "public fit page", body,
+		esi.FormatISK(total)+" ISK",
+		"hull "+esi.FormatISK(hull)+" + fittings "+esi.FormatISK(parts),
+		`data-fit-cost="1620"`,
+	)
+	if got, err := q.GetPublicFitting(ctx, row.ID); err != nil || got.TotalPrice != total {
+		t.Errorf("stored price = %v (err %v), want %v: the browser must list the same number", got.TotalPrice, err, total)
+	}
+
+	// The fitting tool prices the same fit the same way.
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
+	code, tool := postFitJSON(t, app, cookie, "/fittings/simulate/",
+		`{"shipTypeId":1001,"items":`+items+`,"charges":{},"pilot":0}`)
+	if code != http.StatusOK {
+		t.Fatalf("simulate: status %d", code)
+	}
+	mustContain(t, "fitting tool stats", tool, `data-fit-cost="1620"`,
+		"hull "+esi.FormatISK(hull)+" + fittings "+esi.FormatISK(parts))
 }

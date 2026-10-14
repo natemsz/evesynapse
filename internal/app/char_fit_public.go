@@ -561,27 +561,74 @@ func (app *Application) publicFitSections(ctx context.Context, doc *fitDoc) []fi
 	return sections
 }
 
-// fitDocPrice totals a document from the guide mirror (adjusted
-// ISK per unit): hull plus every module line. 0 when no prices
-// are warmed yet; the browser treats 0 as unknown. The worker
-// makes the same sum in SQL for every stored fit whenever the
-// guide refreshes (RepriceLocalFittings): change both together.
-func (app *Application) fitDocPrice(ctx context.Context, doc *fitDoc) float64 {
+// fitCostView is what a fit costs, as every page shows it: the
+// fitting tool's stats panel, the public fit page and its card, and
+// the browser's price filter all read this one composition.
+type fitCostView struct {
+	Known    bool
+	Hull     string // the ship itself
+	Parts    string // every line on the hull: modules, rigs, drones, cargo
+	Total    string
+	TotalRaw float64
+	HullRaw  float64
+	PartsRaw float64
+	Unpriced int // lines the guide has no price for (hull included)
+}
+
+// fitUnitPrice is the guide's price for one unit: the market
+// average, else the adjusted price CCP publishes for every type.
+// RepriceLocalFittings makes the same choice in SQL: change both.
+func fitUnitPrice(prices map[int64]esi.MarketPrice, typeID int64) (float64, bool) {
+	p, ok := prices[typeID]
+	if !ok {
+		return 0, false
+	}
+	if p.AveragePrice > 0 {
+		return p.AveragePrice, true
+	}
+	if p.AdjustedPrice > 0 {
+		return p.AdjustedPrice, true
+	}
+	return 0, false
+}
+
+// fitCost prices a document from the guide mirror: the hull plus
+// every item line. Known is false when nothing in it is priced
+// (guide not warmed yet); the browser treats a 0 total as unknown.
+func (app *Application) fitCost(ctx context.Context, doc *fitDoc) *fitCostView {
+	c := &fitCostView{}
 	prices := app.valuationPrices(ctx)
-	if len(prices) == 0 {
-		return 0
+	if len(prices) == 0 || doc == nil || doc.ShipTypeID == 0 {
+		return c
 	}
-	priceOf := func(typeID int64) float64 {
-		if p, ok := prices[typeID]; ok {
-			return p.AdjustedPrice
-		}
-		return 0
+	if p, ok := fitUnitPrice(prices, doc.ShipTypeID); ok {
+		c.HullRaw = p
+	} else {
+		c.Unpriced++
 	}
-	total := priceOf(doc.ShipTypeID)
 	for _, it := range doc.Items {
-		total += float64(it.Qty) * priceOf(it.TypeID)
+		if p, ok := fitUnitPrice(prices, it.TypeID); ok {
+			c.PartsRaw += float64(it.Qty) * p
+		} else {
+			c.Unpriced++
+		}
 	}
-	return total
+	c.TotalRaw = c.HullRaw + c.PartsRaw
+	if c.TotalRaw > 0 {
+		c.Known = true
+		c.Hull = esi.FormatISK(c.HullRaw)
+		c.Parts = esi.FormatISK(c.PartsRaw)
+		c.Total = esi.FormatISK(c.TotalRaw)
+	}
+	return c
+}
+
+// fitDocPrice is fitCost's total, stored on the fit for the
+// browser's max-price filter and sorts (0 = unknown). The worker
+// makes the same sum in SQL whenever the guide refreshes
+// (RepriceLocalFittings): change both together.
+func (app *Application) fitDocPrice(ctx context.Context, doc *fitDoc) float64 {
+	return app.fitCost(ctx, doc).TotalRaw
 }
 
 // headMeta composes escaped description and Open Graph tags for a
@@ -637,12 +684,21 @@ func (app *Application) handlePublicFitPage(w http.ResponseWriter, r *http.Reque
 	}
 	ship := app.typeNameOrID(ctx, row.ShipTypeID)
 	author := row.AuthorName
+	// The page prices the fit now, the same way the fitting tool's
+	// stats panel does: hull plus every line, one composition.
+	if doc.ShipTypeID == 0 {
+		doc.ShipTypeID = row.ShipTypeID
+	}
+	cost := app.fitCost(ctx, &doc)
 	card := publicFitCard{
 		ID: row.ID, Name: row.Name, Ship: ship, ShipTypeID: row.ShipTypeID,
 		Author: author, Mine: userID > 0 && row.UserID == userID,
-		Views: views, Price: row.TotalPrice, PriceKnown: row.TotalPrice > 0,
+		Views: views, Price: cost.TotalRaw, PriceKnown: cost.Known,
 		Updated: row.UpdatedAt, FitURL: publicFitsPath + "fit/" + idString(row.ID) + "/",
 		Tags: doc.Tags,
+	}
+	if cost.Known {
+		card.PriceLine = cost.Total + " ISK"
 	}
 	if row.RatingCount > 0 {
 		card.Stars = float64(row.RatingSum) / float64(row.RatingCount)
@@ -656,7 +712,15 @@ func (app *Application) handlePublicFitPage(w http.ResponseWriter, r *http.Reque
 	// The modules, simulation and EFT come from the stored page
 	// (char_fit_public_store.go); a view never runs the engine.
 	if stored, ok := app.loadPublicFitStored(ctx, fitID, row.UpdatedAt); ok {
-		view.Sections, view.Sim, view.EFT = stored.Sections, stored.Sim, stored.EFT
+		view.Sections, view.EFT = stored.Sections, stored.EFT
+		if stored.Sim != nil {
+			// The stored page may be shared between requests: render
+			// a copy, as the tool's own workbench made read-only.
+			sim := *stored.Sim
+			sim.ReadOnly = true
+			sim.Cost = cost
+			view.Sim = &sim
+		}
 	} else {
 		view.Preparing = true
 	}

@@ -112,8 +112,8 @@ func TestPublicFitPageMirrorsTool(t *testing.T) {
 		"High slots",
 		"Fixture Blaster",
 		`class="fit-headline-num"`,
-		`>DPS</span>`,
-		`class="fit-table"`,
+		`>DPS</abbr>`,
+		`class="fit-resists"`,
 		"Effective hit points",
 		"with All V's skills",
 		// The page's own extras stay.

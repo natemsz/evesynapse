@@ -202,6 +202,7 @@ type fitSlotChip struct {
 	Name     string
 	Qty      int
 	State    string
+	Sub      string // the first stats from the tooltip, one line under the name
 	TipLines string // serialized fitTipLine rows for the tooltip
 }
 
@@ -401,6 +402,21 @@ type fitTipLine struct {
 	Label string
 	Value string
 	Class string
+}
+
+// fitChipSub is a module row's one-line summary: its first two
+// tooltip stats ("Optimal 2.4 km · Falloff 8.4 km").
+func fitChipSub(lines []fitTipLine) string {
+	var parts []string
+	for _, l := range lines {
+		if len(parts) == 2 {
+			break
+		}
+		if l.Label != "" && l.Value != "" {
+			parts = append(parts, l.Label+" "+l.Value)
+		}
+	}
+	return strings.Join(parts, " · ")
 }
 
 // fitTipLinesString serializes tooltip rows for the data
@@ -762,6 +778,22 @@ type fitResistRow struct {
 	Kinetic   string
 	Explosive string
 	EHP       string
+	Resists   []fitResistCell // the four resists in EM, thermal, kinetic, explosive order
+}
+
+// fitResistCell is one resist chip: its damage type (the chip's
+// colour), its text and its fill (0..100).
+type fitResistCell struct {
+	Kind string // "em", "th", "kin", "exp"
+	Text string
+	Pct  float64
+}
+
+// fitTile is one hardpoint tile under the slot ring.
+type fitTile struct {
+	Label string
+	Value string
+	Over  bool
 }
 
 // fitStatsView is the pyfa-vocabulary stat panel, preformatted.
@@ -806,6 +838,9 @@ type fitStatsView struct {
 	CalibOver     bool
 	SlotLine      string // "High 3/3 · Medium 2/3 · Low 1/2 · Rigs 0/3"
 	SlotsOver     bool
+	Calib         fitBarRow // calibration as a bar beside powergrid and CPU
+	Tiles         []fitTile // turrets, launchers, calibration under the ring
+	Problems      []string  // why the fit doesn't fit, one short line each
 }
 
 // fitMissingSkill is one unmet requirement for the chosen pilot.
@@ -1244,8 +1279,9 @@ func fitBuildGroups(res *fit.Result, doc *fitDoc, snap *fit.Snapshot, familyOf m
 		if !uniform {
 			st = ""
 		}
+		lines := fitTipLines(res, snap, doc, it.TypeID, st, fitEffAttrs(res, snap, it.TypeID, st))
 		chips[fam] = append(chips[fam], fitSlotChip{TypeID: it.TypeID, Name: nameOf(it.TypeID), Qty: it.Qty, State: st,
-			TipLines: fitTipLinesString(fitTipLines(res, snap, doc, it.TypeID, st, fitEffAttrs(res, snap, it.TypeID, st)))})
+			Sub: fitChipSub(lines), TipLines: fitTipLinesString(lines)})
 	}
 	for fam := range chips {
 		sort.Slice(chips[fam], func(i, j int) bool { return chips[fam][i].Name < chips[fam][j].Name })
@@ -1593,7 +1629,66 @@ func fitBuildStats(res *fit.Result) *fitStatsView {
 		res.LowSlotsUsed, res.LowSlots, res.RigSlotsUsed, res.RigSlots)
 	st.SlotsOver = res.HighSlotsUsed > res.HighSlots || res.MediumSlotsUsed > res.MediumSlots ||
 		res.LowSlotsUsed > res.LowSlots || res.RigSlotsUsed > res.RigSlots
+
+	st.Calib = fitBar("Calibration", res.CalibrationUsed, res.CalibrationMax)
+	st.Calib.Used = fitFmt0(res.CalibrationUsed)
+	st.Calib.Max = fitFmt0(res.CalibrationMax)
+	st.Calib.Left = fitFmt0(res.CalibrationMax - res.CalibrationUsed)
+	st.Tiles = []fitTile{
+		{"Turrets", fmt.Sprintf("%d / %d", res.TurretHardpointsUsed, res.TurretHardpoints), res.TurretHardpointsUsed > res.TurretHardpoints},
+		{"Launchers", fmt.Sprintf("%d / %d", res.LauncherHardpointsUsed, res.LauncherHardpoints), res.LauncherHardpointsUsed > res.LauncherHardpoints},
+		{"Calibration", st.Calibration, st.CalibOver},
+	}
+	layers := [][4]float64{
+		{resistOf(res, 0, true), resistOf(res, 1, true), resistOf(res, 2, true), resistOf(res, 3, true)},
+		{resistOf(res, 0, false), resistOf(res, 1, false), resistOf(res, 2, false), resistOf(res, 3, false)},
+		{res.ShipAttrs[fit.AttrResonanceEM], res.ShipAttrs[fit.AttrResonanceThermal], res.ShipAttrs[fit.AttrResonanceKinetic], res.ShipAttrs[fit.AttrResonanceExplosive]},
+	}
+	for i := range st.Tank {
+		for k, kind := range []string{"em", "th", "kin", "exp"} {
+			st.Tank[i].Resists = append(st.Tank[i].Resists, fitResistCellOf(kind, layers[i][k]))
+		}
+	}
+	st.Problems = fitProblems(res)
 	return st
+}
+
+// fitResistCellOf is one resist chip from a layer resonance.
+func fitResistCellOf(kind string, resonance float64) fitResistCell {
+	pct := math.Max(0, math.Min(100, (1-resonance)*100))
+	return fitResistCell{Kind: kind, Text: fitResist(resonance), Pct: pct}
+}
+
+// fitProblems lists what keeps a fit from fitting: resources over
+// their output, slots and hardpoints over the hull's count, and
+// calibration over the rig budget, one short line each.
+func fitProblems(res *fit.Result) []string {
+	var out []string
+	if res.PowergridMax > 0 && res.PowergridUsed > res.PowergridMax {
+		out = append(out, "Powergrid over by "+fitFmt1(res.PowergridUsed-res.PowergridMax)+" MW")
+	}
+	if res.CPUMax > 0 && res.CPUUsed > res.CPUMax {
+		out = append(out, "CPU over by "+fitFmt1(res.CPUUsed-res.CPUMax)+" tf")
+	}
+	if res.CalibrationMax > 0 && res.CalibrationUsed > res.CalibrationMax {
+		out = append(out, "Calibration over by "+fitFmt0(res.CalibrationUsed-res.CalibrationMax))
+	}
+	for _, s := range []struct {
+		label     string
+		used, max int
+	}{
+		{"High slots", res.HighSlotsUsed, res.HighSlots},
+		{"Mid slots", res.MediumSlotsUsed, res.MediumSlots},
+		{"Low slots", res.LowSlotsUsed, res.LowSlots},
+		{"Rig slots", res.RigSlotsUsed, res.RigSlots},
+		{"Turret hardpoints", res.TurretHardpointsUsed, res.TurretHardpoints},
+		{"Launcher hardpoints", res.LauncherHardpointsUsed, res.LauncherHardpoints},
+	} {
+		if s.used > s.max {
+			out = append(out, fmt.Sprintf("%s %d / %d", s.label, s.used, s.max))
+		}
+	}
+	return out
 }
 
 // resistOf reads a layer resonance back out of the computed

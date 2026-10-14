@@ -2203,29 +2203,75 @@ html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge 
   padding: 0.8rem 1rem;
 }
 .fit-stats > h4:first-child { margin-top: 0; color: var(--success); }
-/* A stats panel wide enough for two runs of rows uses both, so it
-stays about as tall as the ship ring beside it and a change to the
-fit reads without scrolling. */
+/* Stats come in small panels (fitting, capacitor, defense,
+   navigation, drones), side by side when the column is wide enough,
+   so a change to the fit reads without scrolling. */
 .fit-stats { container-type: inline-size; }
-@container (min-width: 30rem) {
-  .fit-stats .tw:has(> .fit-statlist) { overflow: visible; }
-  .fit-statlist, .fit-statlist tbody { display: block; }
-  .tw .fit-statlist { width: 100%; }
-  .fit-statlist tbody { columns: 2; column-gap: 1.25rem; }
-  .fit-statlist tr { display: flex; break-inside: avoid; }
-  .fit-statlist th, .fit-statlist td { padding-top: 0.3rem; padding-bottom: 0.3rem; }
-  /* The pinned first cell of a .tw table has nothing to pin to
-  across columns. */
-  .fit-statlist th { flex: 0 0 7.5rem; position: static; border-right: 0; }
-  .fit-statlist td { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.fit-panel { border: 1px solid #262626; border-radius: 4px; background: rgba(0, 0, 0, 0.18); padding: 0.55rem 0.75rem 0.6rem; margin: 0 0 0.6rem; }
+.fit-panel h5 { display: flex; align-items: baseline; gap: 0.6rem; margin: 0 0 0.5rem; font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
+.fit-panel-side { margin-left: auto; font-size: 0.8rem; letter-spacing: 0; text-transform: none; color: var(--muted); }
+.fit-panel-side abbr { text-decoration: none; }
+.fit-ehp { font-size: 1.15rem; font-weight: 700; color: var(--text-bright); font-variant-numeric: tabular-nums; }
+@container (min-width: 34rem) {
+  .fit-stats { display: grid; grid-template-columns: 1fr 1fr; column-gap: 0.6rem; align-items: start; }
+  .fit-stats > h4, .fit-stats > .fit-headline, .fit-stats > .fit-kv-drain,
+  .fit-stats > .fit-panel[aria-label="Defense"], .fit-stats > .fit-missing, .fit-stats > .fit-notes { grid-column: 1 / -1; }
 }
-.fit-group { margin-bottom: 0.8rem; }
-.fit-group > h4 { margin: 0 0 0.4rem; }
+.fit-kv { display: grid; grid-template-columns: 1fr; gap: 0.15rem 1rem; margin: 0.35rem 0 0; }
+.fit-kv-2 { grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr)); }
+.fit-kv-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.fit-kv > div { display: flex; justify-content: space-between; gap: 0.6rem; padding: 0.12rem 0; border-bottom: 1px solid #1f1f1f; min-width: 0; }
+.fit-kv-3 > div { flex-direction: column; justify-content: flex-start; gap: 0; border-bottom: 0; }
+.fit-kv dt { color: var(--muted); font-size: 0.82rem; }
+.fit-kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.fit-kv-3 dd { text-align: left; }
+/* Resist chips: one per damage type, filled to the resist and tinted
+   by type (EM blue, thermal red, kinetic grey, explosive amber). */
+.fit-resists { display: grid; gap: 0.35rem; margin-bottom: 0.4rem; }
+.fit-res-head, .fit-res-row { display: grid; grid-template-columns: minmax(6.5rem, 1.4fr) repeat(4, minmax(0, 1fr)); gap: 0.3rem; align-items: center; }
+.fit-res-head span { font-size: 0.7rem; letter-spacing: 0.08em; text-align: center; }
+.fit-res-layer { min-width: 0; line-height: 1.2; }
+.fit-res-layer small { display: block; color: var(--muted); font-size: 0.72rem; }
+.fit-res { position: relative; display: block; height: 1.5rem; border: 1px solid #2a2a2a; border-radius: 3px; background: #0b0b0b; overflow: hidden; }
+.fit-res > span { position: absolute; inset: 0 auto 0 0; opacity: 0.35; }
+.fit-res > b { position: relative; display: block; text-align: center; font-weight: 600; font-size: 0.8rem; line-height: 1.45rem; font-variant-numeric: tabular-nums; }
+.res-em { color: #6fb6ff; }
+.res-th { color: #ff7a5c; }
+.res-kin { color: #c9c2b8; }
+.res-exp { color: #ffc266; }
+.fit-res.res-em > span { background: #2f7fd6; }
+.fit-res.res-th > span { background: #c62f10; }
+.fit-res.res-kin > span { background: #8a847c; }
+.fit-res.res-exp > span { background: #d98a1a; }
+/* What keeps the fit from fitting, above everything else. */
+.fit-top { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.4rem 1.2rem; }
+.fit-top > .fit-note, .fit-top > .fit-implants { margin: 0; }
+.fit-top > .fit-problems { flex: 1 1 100%; }
+.fit-headline-label abbr { text-decoration: none; }
+.fit-problems { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; margin: 0 0 0.8rem; padding: 0.55rem 0.8rem; border: 1px solid rgba(198, 47, 16, 0.55); border-radius: 4px; background: rgba(198, 47, 16, 0.1); }
+.fit-problems strong { color: #ff7a5c; letter-spacing: 0.06em; text-transform: uppercase; font-size: 0.85rem; }
+.fit-problems ul { display: flex; flex-wrap: wrap; gap: 0.35rem; list-style: none; margin: 0; padding: 0; }
+.fit-problems li { padding: 0.1rem 0.5rem; border: 1px solid rgba(198, 47, 16, 0.5); border-radius: 3px; font-size: 0.82rem; color: #ffb09c; }
+/* Hardpoint tiles under the slot ring. */
+.fit-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; width: min(34rem, 100%); margin: 0.6rem auto 1rem; }
+.fit-tile { border: 1px solid #2a2a2a; border-radius: 4px; background: rgba(0, 0, 0, 0.25); padding: 0.35rem 0.5rem; text-align: center; }
+.fit-tile span { display: block; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.fit-tile strong { font-variant-numeric: tabular-nums; color: var(--text-bright); }
+.fit-tile.over { border-color: rgba(198, 47, 16, 0.6); }
+.fit-tile.over strong { color: #ff7a5c; }
+.fit-group { margin-bottom: 0.7rem; padding: 0.5rem 0.6rem 0.6rem; border: 1px solid #242424; border-radius: 4px; background: rgba(0, 0, 0, 0.18); }
+.fit-group > h4 { display: flex; align-items: baseline; gap: 0.5rem; margin: 0 0 0.45rem; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.fit-group > h4 .fit-count { margin-left: auto; letter-spacing: 0; color: var(--muted); }
+.fit-group > h4 .fit-count.fit-over { color: var(--danger); }
 .fit-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+/* One row per module line: name, count, state, and a stats line. */
 .fit-chip {
-  display: inline-flex;
+  flex: 1 1 100%;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.15rem 0.35rem;
   background: var(--row-alt);
   border: 1px solid #2c2c2c;
   border-radius: 3px;
@@ -2233,6 +2279,8 @@ fit reads without scrolling. */
 }
 .fit-chip:hover { background: var(--row-hover); }
 .fit-chip-name {
+  min-width: 0;
+  text-align: left;
   background: none;
   border: none;
   color: var(--text);
@@ -2251,6 +2299,10 @@ fit reads without scrolling. */
   padding: 0.1rem 0.35rem;
 }
 .fit-chip-qty { color: var(--success); }
+.fit-chip-state { margin-left: auto; padding: 0 0.35rem; border: 1px solid #333; border-radius: 3px; font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.fit-chip.st-active .fit-chip-state { border-color: rgba(255, 184, 77, 0.45); color: var(--success); }
+.fit-chip.st-overheated .fit-chip-state { border-color: var(--accent); color: var(--accent); }
+.fit-chip-sub { flex-basis: 100%; min-width: 0; font-size: 0.74rem; color: var(--muted); overflow-wrap: anywhere; }
 .fit-qty {
   width: 4.2rem;
   background: #0e0e0e;
@@ -2817,16 +2869,18 @@ html[data-theme="light"] .searchpanel {
     align-items: start;
   }
   .fit-wb > .fit-cols { display: contents; }
-  .fit-wb > .fit-visual {
-    grid-column: 2;
-    grid-row: 1;
-    width: 100%;
-    margin: 0;
-  }
+  /* Notes and the doesn't-fit banner take the first row across all
+     three columns; the lists, ring and stats sit in the row below. */
+  .fit-wb > .fit-top { grid-column: 1 / -1; grid-row: 1; }
+  .fit-wb > .fit-center { grid-column: 2; grid-row: 1; }
+  .fit-wb > .fit-center > .fit-visual { width: 100%; margin: 0; }
   .fit-wb > .fit-cols > .fit-slots { grid-column: 1; grid-row: 1; }
   .fit-wb > .fit-cols > .fit-stats { grid-column: 3; grid-row: 1; }
+  .fit-wb:has(> .fit-top) > .fit-center,
+  .fit-wb:has(> .fit-top) > .fit-cols > .fit-slots,
+  .fit-wb:has(> .fit-top) > .fit-cols > .fit-stats { grid-row: 2; }
   /* No ship picked: the stats panel spans columns 2-3. */
-  .fit-wb:not(:has(> .fit-visual)) > .fit-cols > .fit-stats { grid-column: 2 / 4; }
+  .fit-wb:not(:has(> .fit-center)) > .fit-cols > .fit-stats { grid-column: 2 / 4; }
 }
 
 /* --- light theme --- A re-skin of the :root variables plus overrides
@@ -2980,6 +3034,17 @@ html[data-theme="light"] .fit-pubrate { border-color: #ddd2bd; border-left-color
 html[data-theme="light"] .fit-rateform select { border-color: #d8cdb8; }
 html[data-theme="light"] .fit-chip { border-color: #d3c7ae; }
 html[data-theme="light"] .fit-chip-btn { background: #f0e9d8; border-color: #d3c7ae; }
+html[data-theme="light"] .fit-panel,
+html[data-theme="light"] .fit-group,
+html[data-theme="light"] .fit-tile { background: rgba(255, 253, 249, 0.6); border-color: #ddd2bd; }
+html[data-theme="light"] .fit-kv > div { border-bottom-color: #e8dfcc; }
+html[data-theme="light"] .fit-res { background: #fffdf9; border-color: #d3c7ae; }
+html[data-theme="light"] .res-em { color: #1f63b0; }
+html[data-theme="light"] .res-th { color: #a8280d; }
+html[data-theme="light"] .res-kin { color: #5d574f; }
+html[data-theme="light"] .res-exp { color: #94600f; }
+html[data-theme="light"] .fit-problems li { color: #8f2209; }
+html[data-theme="light"] .fit-problems strong { color: #a8280d; }
 html[data-theme="light"] .fit-bar { background: #e7ddc8; border-color: #d3c7ae; }
 html[data-theme="light"] .fit-famchips button { background: #fffdf9; border-color: #d3c7ae; }
 html[data-theme="light"] .fit-famchips button.on { background: #f5e3c2; }

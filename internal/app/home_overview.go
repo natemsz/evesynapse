@@ -226,19 +226,21 @@ func layoutIDs(items []homeLayoutItem) []string {
 // ---------------------------------------------------------------------------
 
 // solveHomeSpans resolves each layout item's column span on a
-// grid of cols columns. Walking the saved order left to right:
+// grid of cols columns holding perRow flex modules a row (3 on a
+// wide screen, 2 below it). Walking the saved order left to right:
 //
 //   - a full module, and a flex module marked wide, takes the
 //     whole row (cols);
-//   - a flex module takes half the row (cols/2) and pairs with
-//     the next flex module that fits beside it;
-//   - a flex module left ALONE in its row — nothing pairable
-//     follows before the next full/wide row boundary — stretches
-//     to the whole row.
+//   - a flex module takes cols/perRow and shares the row with
+//     the next flex modules that fit beside it;
+//   - a row of flex modules that ends short — nothing pairable
+//     follows before the next full/wide row boundary — shares the
+//     spare width among its modules, but none grows past half the
+//     row: a small module never balloons to fill width it has no
+//     use for.
 //
-// Rows therefore always tile exactly: no stranded gaps and no
-// overflow, at any column count.
-func solveHomeSpans(items []homeLayoutItem, cols int) []int {
+// Rows never overflow; a short row can end with a gap.
+func solveHomeSpans(items []homeLayoutItem, cols, perRow int) []int {
 	spans := make([]int, len(items))
 	if cols < 2 {
 		for i := range spans {
@@ -246,13 +248,26 @@ func solveHomeSpans(items []homeLayoutItem, cols int) []int {
 		}
 		return spans
 	}
-	flex := cols / 2
+	if perRow < 1 || perRow > cols {
+		perRow = 2
+	}
+	flex := cols / perRow
+	half := cols / 2
 	rowUsed, rowStart := 0, 0
-	// closeRow ends the current row at index next, stretching a
-	// lone half-width module in it to the full row.
+	// closeRow ends the current row at index next. A short row of
+	// flex modules shares its spare width, up to half a row each.
 	closeRow := func(next int) {
-		if next-rowStart == 1 && spans[rowStart] < cols {
-			spans[rowStart] = cols
+		n := next - rowStart
+		if n > 0 && rowUsed < cols {
+			share := cols / n
+			if share > half {
+				share = half
+			}
+			for k := rowStart; k < next; k++ {
+				if spans[k] < share {
+					spans[k] = share
+				}
+			}
 		}
 		rowStart, rowUsed = next, 0
 	}
@@ -276,15 +291,17 @@ func solveHomeSpans(items []homeLayoutItem, cols int) []int {
 	return spans
 }
 
-// spanClass names the CSS class carrying a span solved on the
-// 6-column grid: span3 (half row) or span6 (whole row). The CSS
-// maps the same two classes onto the phone grids (2 columns,
-// then 1), so the server renders one class set for every screen.
-func spanClass(span int) string {
-	if span > 3 {
-		return "span6"
+// spanClasses names the CSS classes carrying the two solves on
+// the 6-column grid: the two-up solve as span3 (half row) or
+// span6 (whole row), which the CSS also maps onto the phone grids,
+// and the three-up solve for wide screens as wspan2, wspan3 or
+// wspan6. The server renders both; the CSS picks by width.
+func spanClasses(two, three int) string {
+	c := "span3"
+	if two > 3 {
+		c = "span6"
 	}
-	return "span3"
+	return c + " wspan" + strconv.Itoa(three)
 }
 
 // ---------------------------------------------------------------------------
@@ -613,7 +630,7 @@ func queueState(queue esi.Skillqueue, now time.Time) (training bool, finishedAt 
 type homeWidget struct {
 	ID         string
 	Title      string
-	SpanClass  string // solved grid span class: span3 | span6
+	SpanClass  string // solved grid span classes: span3|span6 and wspan2|wspan3|wspan6
 	Size       string // catalog size class (flex modules get the resize toggle)
 	SpanPref   string // user's span preference: "" (auto) | wide
 	Customize  bool   // rendering under /?customize=1 (form return targets)
@@ -1745,12 +1762,13 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		briefingSince = app.briefingWindowStart(ctx, userID, now)
 	}
 
-	spans := solveHomeSpans(layout, 6)
+	spans := solveHomeSpans(layout, 6, 2)
+	wideSpans := solveHomeSpans(layout, 6, 3)
 	for i, item := range layout {
 		def, _ := widgetDefFor(item.ID)
 		w := homeWidget{
 			ID: item.ID, Title: def.Title,
-			SpanClass: spanClass(spans[i]), Size: def.Size, SpanPref: item.Span,
+			SpanClass: spanClasses(spans[i], wideSpans[i]), Size: def.Size, SpanPref: item.Span,
 			Customize: customize,
 		}
 		switch item.ID {

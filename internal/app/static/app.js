@@ -72,11 +72,91 @@
 
     var cards = root.querySelectorAll(".card");
     for (var j = 0; j < cards.length; j++) {
+      // Home modules expand instead of folding (see Expanders).
+      if (cards[j].closest(".home-grid")) continue;
       addFold(cards[j], cards[j].querySelector(":scope > h2, :scope > h3"));
     }
   }
   onContentReady(initFolds);
   initFolds(document);
+
+  // --- Expanders -------------------------------------------------
+  // One mechanism for every summary/detail pair. A detail block
+  // carries data-wmore; its control carries data-expand naming the
+  // block's id. Home modules get theirs here: a module whose markup
+  // has a detail block rests on its summary, with a More/Less
+  // toggle in its heading, and takes its whole grid row while
+  // open. Table rows with a detail row of their own (the fleet
+  // overview) render their control server-side and use the same
+  // switch. Without JavaScript nothing is hidden: every detail
+  // block simply renders open. Which modules are open is a
+  // per-browser convenience, remembered in localStorage.
+  var EXPANDED_KEY = "evesynapse.home.expanded";
+  function readExpanded() {
+    try {
+      var v = JSON.parse(window.localStorage.getItem(EXPANDED_KEY) || "[]");
+      return Array.isArray(v) ? v : [];
+    } catch (e) { return []; }
+  }
+  function rememberExpanded(id, open) {
+    var ids = readExpanded().filter(function (x) { return x !== id; });
+    if (open) ids.push(id);
+    try { window.localStorage.setItem(EXPANDED_KEY, JSON.stringify(ids)); } catch (e) { /* private mode */ }
+  }
+  var expandSeq = 0;
+  function setExpanded(ctrl, panel, open) {
+    panel.hidden = !open;
+    ctrl.setAttribute("aria-expanded", open ? "true" : "false");
+    if (ctrl.classList.contains("cardexpand")) {
+      ctrl.textContent = open ? "Less" : "More";
+    }
+    var owner = ctrl.getAttribute("data-expand-owner");
+    var ownerEl = owner ? document.getElementById(owner) : null;
+    if (ownerEl) ownerEl.classList.toggle("expanded", open);
+    var card = ctrl.closest(".card[data-widget]");
+    if (card && ctrl.classList.contains("cardexpand")) {
+      card.classList.toggle("expanded", open);
+      rememberExpanded(card.getAttribute("data-widget"), open);
+    }
+  }
+  function bindExpander(ctrl, panel, open) {
+    if (ctrl.hasAttribute("data-expand-bound")) return;
+    ctrl.setAttribute("data-expand-bound", "1");
+    if (!panel.id) panel.id = "wmore-" + (++expandSeq);
+    ctrl.setAttribute("aria-controls", panel.id);
+    setExpanded(ctrl, panel, open);
+    ctrl.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      setExpanded(ctrl, panel, panel.hidden);
+    });
+  }
+  function initExpanders(root) {
+    // Customize shows every module whole: it is about arranging.
+    var grid = root.querySelector ? root.querySelector(".home-grid:not(.home-custom)") : null;
+    var remembered = readExpanded();
+    if (grid) {
+      var cards = grid.querySelectorAll(".card[data-widget]");
+      for (var i = 0; i < cards.length; i++) {
+        var card = cards[i];
+        var panel = card.querySelector(":scope > [data-wmore]");
+        var heading = card.querySelector(":scope > h2, :scope > h3");
+        if (!panel || !heading || heading.querySelector(".cardexpand")) continue;
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "cardexpand";
+        heading.appendChild(btn);
+        card.classList.add("has-expand");
+        bindExpander(btn, panel, remembered.indexOf(card.getAttribute("data-widget")) !== -1);
+      }
+    }
+    var ctrls = root.querySelectorAll ? root.querySelectorAll("[data-expand]") : [];
+    for (var j = 0; j < ctrls.length; j++) {
+      var target = document.getElementById(ctrls[j].getAttribute("data-expand"));
+      if (target) bindExpander(ctrls[j], target, false);
+    }
+  }
+  onContentReady(initExpanders);
+  initExpanders(document);
 
   // --- Nav: Escape folds an open branch back up -----------------
   document.addEventListener("keydown", function (ev) {
@@ -243,23 +323,33 @@
     // --- the grid engine, mirrored ----------------------------
     // solveHomeSpans is the exact mirror of the Go solver in
     // home_overview.go: walk the order once — a full module, or a
-    // flex module marked wide, owns its row; a flex module
-    // takes half a row and pairs with the next flex module that
-    // fits; a flex module left alone in its row stretches full.
-    // The server renders these spans as span3/span6 classes; the
-    // mirror re-solves live (drag, resize toggles), so what is
-    // under the finger is always the final arrangement.
-    function solveHomeSpans(descs, cols) {
+    // flex module marked wide, owns its row; a flex module takes
+    // cols/perRow and shares the row with the next flex modules
+    // that fit; a short row of flex modules shares its spare
+    // width, none growing past half a row. The server renders the
+    // two-up solve as span3/span6 and the three-up solve as
+    // wspan2/wspan3/wspan6; the mirror re-solves both live (drag,
+    // resize toggles), so what is under the finger is always the
+    // final arrangement.
+    function solveHomeSpans(descs, cols, perRow) {
       var spans = [];
       var k;
       if (cols < 2) {
         for (k = 0; k < descs.length; k++) spans.push(1);
         return spans;
       }
-      var flex = Math.floor(cols / 2);
+      if (!(perRow >= 1 && perRow <= cols)) perRow = 2;
+      var flex = Math.floor(cols / perRow);
+      var half = Math.floor(cols / 2);
       var rowUsed = 0, rowStart = 0;
       function closeRow(next) {
-        if (next - rowStart === 1 && spans[rowStart] < cols) spans[rowStart] = cols;
+        var n = next - rowStart;
+        if (n > 0 && rowUsed < cols) {
+          var share = Math.min(Math.floor(cols / n), half);
+          for (var j = rowStart; j < next; j++) {
+            if (spans[j] < share) spans[j] = share;
+          }
+        }
         rowStart = next;
         rowUsed = 0;
       }
@@ -281,11 +371,12 @@
       };
     }
 
-    function applySpanClass(el, span) {
-      el.classList.remove("span3");
-      el.classList.remove("span6");
-      el.classList.remove("spanall");
+    function applySpanClass(el, span, wide) {
+      ["span3", "span6", "spanall", "wspan2", "wspan3", "wspan6"].forEach(function (c) {
+        el.classList.remove(c);
+      });
       el.classList.add(span >= 6 ? "span6" : "span3");
+      el.classList.add("wspan" + wide);
     }
 
     // Re-solve the grid and hand every card its span class. Mid
@@ -305,8 +396,9 @@
           descs.push(cardDescriptor(el));
         }
       }
-      var spans = solveHomeSpans(descs, 6);
-      for (var j = 0; j < nodes.length; j++) applySpanClass(nodes[j], spans[j]);
+      var spans = solveHomeSpans(descs, 6, 2);
+      var wide = solveHomeSpans(descs, 6, 3);
+      for (var j = 0; j < nodes.length; j++) applySpanClass(nodes[j], spans[j], wide[j]);
     }
 
     // Give one card its drag handle, resize toggle and × button.
@@ -518,7 +610,8 @@
         // the whole drag.
         placeholder = document.createElement("section");
         placeholder.className = "card drag-placeholder";
-        applySpanClass(placeholder, card.classList.contains("span6") ? 6 : 3);
+        applySpanClass(placeholder, card.classList.contains("span6") ? 6 : 3,
+          card.classList.contains("wspan6") ? 6 : card.classList.contains("wspan3") ? 3 : 2);
         placeholder.style.height = rect.height + "px";
         placeholder.setAttribute("aria-hidden", "true");
         grid.insertBefore(placeholder, card.nextSibling);

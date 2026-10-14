@@ -500,6 +500,30 @@ h3 + .tw > table, h3 + table {
   cursor: pointer;
 }
 .foldbtn:hover { color: var(--text-bright); border-color: var(--accent); }
+/* A home module's More/Less toggle (app.js Expanders): the same
+   seat in the heading as the fold button it replaces there. */
+.card.has-expand > h2:first-child, .card.has-expand > h3:first-child { padding-right: 5rem; position: relative; }
+.cardexpand {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  right: 0.7rem;
+  z-index: 2;
+  height: 1.7rem;
+  padding: 0 0.55rem;
+  font: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: #0e0e0e;
+  border: 1px solid #4a2408;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.cardexpand::after { content: " \25BE"; }
+.cardexpand[aria-expanded="true"]::after { content: " \25B4"; }
+.cardexpand:hover { color: var(--text-bright); border-color: var(--accent); }
 .panel.has-fold > h1:first-child { padding-right: 3rem; position: relative; }
 .panel.folded > *:not(h1),
 .card.folded > *:not(:first-child),
@@ -905,15 +929,25 @@ html[data-theme="light"] .widget-scope select {
   box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.45);
 }
 /* The home grid: the server solves each module's column span
-   (solveHomeSpans) and the CSS only applies it. Six columns on desktop. */
+   (solveHomeSpans) and the CSS only applies it. Six tracks: two
+   modules a row on desktop, three on a wide screen. Cards keep
+   their own height: a short module is not stretched to the
+   tallest one in its row. */
 .grid.home-grid {
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  align-items: stretch;
+  align-items: start;
   grid-auto-flow: dense;
 }
 .grid.home-grid > .span3 { grid-column: span 3; }
 .grid.home-grid > .span6 { grid-column: span 6; }
 .grid.home-grid > .card { min-width: 0; }
+@media (min-width: 1280px) {
+  .grid.home-grid > .wspan2 { grid-column: span 2; }
+  .grid.home-grid > .wspan3 { grid-column: span 3; }
+  .grid.home-grid > .wspan6 { grid-column: span 6; }
+}
+/* An expanded module shows its detail across its whole row. */
+.grid.home-grid > .card.expanded { grid-column: 1 / -1; }
 /* Phones: two columns. */
 @media (max-width: 719px) {
   .grid.home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

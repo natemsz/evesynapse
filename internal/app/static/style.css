@@ -366,6 +366,9 @@ main {
 }
 .panel.market-browse { background: none; border: 0; box-shadow: none; padding: 0; }
 .panel.char-head { background: none; border: 0; box-shadow: none; padding: 0; }
+.char-head .char-sub { margin: 0.1rem 0 0.6rem; }
+.char-kpis { margin: 0 0 1rem; }
+.char-kpis .kpi-sub { overflow-wrap: anywhere; }
 /* A link that belongs to a page's title sits in the title bar's right
    corner, drawn like the sidebar's links. */
 .panel > h1.h-with-action:first-child { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }

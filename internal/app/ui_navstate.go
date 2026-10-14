@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"net/http"
+	"strconv"
 )
 
 // navCookie holds the reader's navigation layout (rail, hidden or
@@ -28,8 +29,23 @@ func navStateMiddleware(next http.Handler) http.Handler {
 				state = c.Value
 			}
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), navStateKey{}, state)))
+		ctx := context.WithValue(r.Context(), navStateKey{}, state)
+		if id, err := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64); err == nil && id > 0 {
+			ctx = context.WithValue(ctx, navCharacterKey{}, id)
+		}
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// navCharacterKey carries the character a page was asked for
+// (?character=), so the links to the other pages of its section keep
+// it: switching tabs keeps the pilot, or the corporation, in view.
+type navCharacterKey struct{}
+
+// navCharacterFrom is the request's ?character=, 0 when none.
+func navCharacterFrom(ctx context.Context) int64 {
+	id, _ := ctx.Value(navCharacterKey{}).(int64)
+	return id
 }
 
 // navStateFrom returns the layout the request carries: the saved

@@ -30,7 +30,10 @@ free-standing buttons. The strip edge is the panel's top edge;
 the active tab shares the panel paint and sits continuous with
 it, inactive tabs recessed and muted. */
 .plan-tabs { gap: 0.25rem; border-bottom: 1px solid #262626; padding-bottom: 0; align-items: flex-end; }
-.plan-tabs [data-plan-tab] {
+/* The empty planner's strip (no plan yet) carries plain role="tab"
+   buttons: same look, nothing to switch to. */
+.plan-tabs [data-plan-tab],
+.plan-tabs [role="tab"] {
   background: #0b0b0b;
   border: 1px solid #1e1e1e;
   border-bottom: none;
@@ -41,9 +44,10 @@ it, inactive tabs recessed and muted. */
   margin-bottom: -1px;
   padding: 0.4rem 0.9rem;
 }
-.plan-tabs [data-plan-tab]:hover { color: var(--text); border-color: #2c2c2c; }
+.plan-tabs [data-plan-tab]:hover, .plan-tabs [role="tab"]:hover { color: var(--text); border-color: #2c2c2c; }
 .plan-tabs [data-plan-tab][aria-selected="true"],
-.plan-tabs [data-plan-tab][data-active="1"] {
+.plan-tabs [data-plan-tab][data-active="1"],
+.plan-tabs [role="tab"][aria-selected="true"] {
   background: #101010;
   border-color: #262626;
   color: var(--text-bright);

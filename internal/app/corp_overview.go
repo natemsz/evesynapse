@@ -34,10 +34,6 @@ type corpView struct {
 	HomeStation    string
 	Description    string // plain text, template escapes it
 	Characters     []corpCharacterRef
-	// LinkCharacterID is one of the user's characters in this
-	// corporation; the template links the corporation subpages
-	// with it (those pages follow the selected character's corp).
-	LinkCharacterID int64
 	// Pending: nothing is stored about the corporation yet. Its
 	// record has been asked for, and the block shows what there is.
 	Pending bool
@@ -182,7 +178,10 @@ func (app *Application) handleCorporations(w http.ResponseWriter, r *http.Reques
 		chars := byCorp[corpID]
 		sort.Slice(chars, func(i, j int) bool { return chars[i].Name < chars[j].Name })
 		view.Characters = chars
-		view.LinkCharacterID = linkChar[corpID]
+		// The section tabs open the corporation subpages for one of
+		// the user's characters in it: those pages follow the
+		// selected character's corporation.
+		data.NavCharacter = linkChar[corpID]
 		data.Corps = []corpView{view}
 		data.CorpOptions = options
 	}

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -46,6 +47,14 @@ func TestSectionTabs(t *testing.T) {
 	if strings.Contains(body, `<a href="/killmails/" class="active">`) {
 		t.Error("Pilot > Killmails marked active on the corporation killmails page")
 	}
+
+	// A page asked for one character passes it to its section's
+	// tabs, so switching tabs keeps the pilot; other sections' links
+	// stay bare.
+	_, body = getPage(t, app, cookie, "/character/?character="+strconv.FormatInt(fixtureCharA, 10))
+	tabs = sectionTabsBlock(t, body)
+	mustContain(t, "character tabs", tabs, `href="/assets/?character=`+strconv.FormatInt(fixtureCharA, 10)+`"`)
+	mustContain(t, "sidebar", body, `<a href="/market/scanner/">Spread scanner</a>`)
 
 	// A one-page section has no choice to offer: no tabs.
 	_, body = getPage(t, app, cookie, "/items/")

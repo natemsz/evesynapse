@@ -786,18 +786,22 @@ type SwarmPeer struct {
 	LastSeen      time.Time    `json:"last_seen"`
 	LastGossip    sql.NullTime `json:"last_gossip"`
 	KeyConflictAt sql.NullTime `json:"key_conflict_at"`
+	UrlSig        string       `json:"url_sig"`
+	UrlIssuedAt   int64        `json:"url_issued_at"`
+	LastPulled    sql.NullTime `json:"last_pulled"`
+	LastServed    sql.NullTime `json:"last_served"`
 }
 
 type SwarmStaging struct {
-	Kind       string       `json:"kind"`
-	Key        string       `json:"key"`
-	Payload    string       `json:"payload"`
-	Signer     string       `json:"signer"`
-	Signature  string       `json:"signature"`
-	FetchedAt  time.Time    `json:"fetched_at"`
-	ReceivedAt time.Time    `json:"received_at"`
-	CheckedAt  sql.NullTime `json:"checked_at"`
-	Source     string       `json:"source"`
+	Kind       string    `json:"kind"`
+	Key        string    `json:"key"`
+	Payload    string    `json:"payload"`
+	Signer     string    `json:"signer"`
+	Signature  string    `json:"signature"`
+	FetchedAt  time.Time `json:"fetched_at"`
+	ReceivedAt time.Time `json:"received_at"`
+	Source     string    `json:"source"`
+	Deferrals  int32     `json:"deferrals"`
 }
 
 type TradeIdea struct {

@@ -580,3 +580,62 @@ func TestTypingConcurrentKeystrokesDoNotMix(t *testing.T) {
 		}
 	}
 }
+
+// TestTypingLockIsPerBox: one search box in the middle of noting
+// its guesses holds up its own next keystroke and nobody else. A
+// single lock for every box once made each user wait on every
+// other user's search.
+func TestTypingLockIsPerBox(t *testing.T) {
+	app, _, _ := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	now := time.Now().UTC()
+	boxA := "1|topbar"
+	boxB := ""
+	for i := 2; i < 1000; i++ {
+		candidate := fmt.Sprintf("%d|topbar", i)
+		if app.typingLock(candidate) != app.typingLock(boxA) {
+			boxB = candidate
+			break
+		}
+	}
+	if boxB == "" {
+		t.Fatal("every box maps to one lock")
+	}
+	held := app.typingLock(boxA)
+	held.Lock()
+	unlocked := false
+	defer func() {
+		if !unlocked {
+			held.Unlock()
+		}
+	}()
+
+	other := make(chan struct{})
+	go func() {
+		app.setTypingGuesses(ctx, boxB, []typingGuess{{kind: pageWantTypeDescription, id: 34}}, now)
+		close(other)
+	}()
+	select {
+	case <-other:
+	case <-time.After(15 * time.Second):
+		t.Fatal("another box waited on a box that is mid-keystroke")
+	}
+
+	same := make(chan struct{})
+	go func() {
+		app.setTypingGuesses(ctx, boxA, nil, now)
+		close(same)
+	}()
+	select {
+	case <-same:
+		t.Fatal("a box's second keystroke ran through its first")
+	case <-time.After(300 * time.Millisecond):
+	}
+	held.Unlock()
+	unlocked = true
+	select {
+	case <-same:
+	case <-time.After(15 * time.Second):
+		t.Fatal("the box's next keystroke never ran after the first finished")
+	}
+}

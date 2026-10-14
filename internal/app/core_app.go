@@ -174,9 +174,11 @@ type Application struct {
 	// Typing-intent guess sequences (worker_typing.go): one
 	// keystroke's replace-plus-note must land as one step, or two
 	// keystrokes in a box interleave and the older one's guesses
-	// survive beside the newer. noteSuggested and the topbar
-	// search hold typingMu across the whole sequence.
-	typingMu sync.Mutex
+	// survive beside the newer. The step is per box, so the lock
+	// is too: setTypingGuesses holds the box's stripe for the
+	// replace and the notes, and nothing else. Searching happens
+	// before it, unlocked.
+	typingLocks [typingLockStripes]sync.Mutex
 
 	// Shared cache across instances (swarm_*.go): this
 	// instance's signing identity and its peer client, set at

@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
+	"sync"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -45,6 +47,55 @@ func (app *Application) typingSlice() int {
 	return maxTypingSlice
 }
 
+// typingLockStripes is how many locks the boxes share. A box
+// always maps to the same one, so its own keystrokes queue up
+// behind each other; two boxes share one only by coincidence.
+const typingLockStripes = 64
+
+// typingLock returns the lock that orders one box's keystrokes.
+func (app *Application) typingLock(box string) *sync.Mutex {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(box))
+	return &app.typingLocks[h.Sum32()%typingLockStripes]
+}
+
+// typingGuess is one thing a keystroke guessed the pilot will
+// open: a record kind, its ID, and the region for a history.
+type typingGuess struct {
+	kind   pageWantKind
+	id     int64
+	region int64
+}
+
+// setTypingGuesses makes guesses the box's current ones: what its
+// previous keystroke guessed is dropped and these are noted, as
+// one step under the box's lock. The caller has finished its
+// searching by now; the lock covers these queue writes and
+// nothing slower, and only this box waits on it.
+func (app *Application) setTypingGuesses(ctx context.Context, box string, guesses []typingGuess, now time.Time) {
+	lock := app.typingLock(box)
+	lock.Lock()
+	defer lock.Unlock()
+	app.replaceTypingGuesses(ctx, box)
+	for _, g := range guesses {
+		if g.id <= 0 {
+			continue
+		}
+		switch g.kind {
+		case pageWantPilot:
+			app.noteTypingPilotGuess(ctx, box, g.id, now)
+		case pageWantCorporation:
+			app.noteTypingCorporationGuess(ctx, box, g.id, now)
+		case pageWantAlliance:
+			app.noteTypingAllianceGuess(ctx, box, g.id, now)
+		case pageWantHistory:
+			app.noteTypingHistoryGuess(ctx, box, g.region, g.id, now)
+		case pageWantTypeDescription:
+			app.noteTypingDetailGuess(ctx, box, g.id, now)
+		}
+	}
+}
+
 // typingBox names one search box's guess slot: the box on the
 // page plus whose fingers are in it, so two pilots typing at
 // once never evict each other's guesses.
@@ -56,9 +107,9 @@ func (app *Application) typingBox(ctx context.Context, name string) string {
 // guessed. Only rows still waiting at the typing ring go: one
 // the pilot opened has been bumped to viewed, and one already
 // holding data is a record now, not a guess. The ledger goes
-// last — the queue deletes read it. Callers hold typingMu
-// across the replace-plus-note sequence so two keystroke
-// sequences in one box cannot interleave.
+// last — the queue deletes read it. Only setTypingGuesses calls
+// this, under the box's lock, so two keystroke sequences in one
+// box cannot interleave.
 func (app *Application) replaceTypingGuesses(ctx context.Context, box string) {
 	if err := app.queries.DeleteTypingPilotGuesses(ctx, db.DeleteTypingPilotGuessesParams{Box: box, TypingPriority: wantTyping}); err != nil {
 		logging.Errorf("typing: drop pilot guesses for box %q: %v", box, err)

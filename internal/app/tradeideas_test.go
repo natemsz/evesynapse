@@ -11,8 +11,10 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -354,39 +356,52 @@ func TestTradeIdeasPageRendersStored(t *testing.T) {
 	if !strings.Contains(body, "&lt;script&gt;") {
 		t.Fatalf("model text missing escaped")
 	}
-	// Not a home module any more: a layout that still names it shows
-	// no ideas on the home page.
+	// An optional home module: a layout that names it shows the
+	// same ideas, tabbed by strategy.
 	code, body = getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
-	if strings.Contains(body, "Station flips") {
-		t.Error("the home page still shows trade ideas")
+	mustContain(t, "/ trade ideas module", body, `data-widget="tradeideas"`, "Station flips", `role="tablist"`, `aria-controls="ti-1"`)
+	if strings.Contains(body, "<script>alert(1)</script>") {
+		t.Fatalf("model text rendered unescaped on the home page")
 	}
 }
 
 func TestTradeIdeasRenderMarkdown(t *testing.T) {
-	got := string(renderTradeIdeasBody("### **High-Volume Scalping**\n" +
+	groups := parseTradeIdeas("Some preamble\n" +
+		"* Loose idea\n" +
+		"### **High-Volume Scalping**\n" +
 		"*Focus on low spreads.*\n" +
 		"* **Tritanium**: 83.9B daily profit <script>alert(1)</script>\n" +
 		"- Pyerite: steady\n" +
-		"1. Mexallon: calm\n"))
-	for _, want := range []string{
-		"<h4><strong>High-Volume Scalping</strong></h4>",
-		`<ul class="attention">`,
-		"<p><small>Focus on low spreads.</small></p>",
-		"<li><strong>Tritanium</strong>: 83.9B daily profit &lt;script&gt;alert(1)&lt;/script&gt;</li>",
-		"<li>Pyerite: steady</li>",
-		"<li>Mexallon: calm</li>",
-	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("rendered body missing %q in %q", want, got)
-		}
+		"1. Mexallon: calm\n" +
+		"### Empty Heading\n" +
+		"### Margin Trading\n" +
+		"* **Nocxium**: wide\n")
+	if len(groups) != 3 {
+		t.Fatalf("got %d groups, want 3 (preamble, scalping, margin; the empty one dropped): %+v", len(groups), groups)
 	}
-	for _, raw := range []string{"###", "**", "<script>"} {
-		if strings.Contains(got, raw) {
-			t.Fatalf("raw markdown %q leaked into %q", raw, got)
-		}
+	if groups[0].Title != "Ideas" || len(groups[0].Ideas) != 1 || len(groups[0].Notes) != 1 {
+		t.Errorf("lines before the first header: %+v", groups[0])
+	}
+	g := groups[1]
+	if g.ID != "ti-2" || g.Title != "High-Volume Scalping" || g.Desc != "Focus on low spreads." {
+		t.Errorf("strategy heading: %+v", g)
+	}
+	want := []template.HTML{
+		"<strong>Tritanium</strong>: 83.9B daily profit &lt;script&gt;alert(1)&lt;/script&gt;",
+		"Pyerite: steady",
+		"Mexallon: calm",
+	}
+	if !reflect.DeepEqual(g.Ideas, want) {
+		t.Errorf("ideas = %q, want %q", g.Ideas, want)
+	}
+	if g.More(1) != 2 || g.More(5) != 0 {
+		t.Errorf("More(1) = %d, More(5) = %d", g.More(1), g.More(5))
+	}
+	if groups[2].ID != "ti-3" || groups[2].Title != "Margin Trading" {
+		t.Errorf("last strategy: %+v", groups[2])
 	}
 }
 

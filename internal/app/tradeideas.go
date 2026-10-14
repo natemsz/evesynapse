@@ -1,10 +1,11 @@
 package app
 
 // ---------------------------------------------------------------------------
-// Trade ideas: Gemma's read on the Forge spread scanner for the
-// home page. The worker asks Cloudflare Workers AI about the top
-// spread-scanner rows every so often and stores the answer; the
-// home widget renders the stored answer only. The model is never
+// Trade ideas: Gemma's read on the Forge spread scanner, on its own
+// page under Market and as an optional home module. The worker asks
+// Cloudflare Workers AI about the top spread-scanner rows every so
+// often and stores the answer; the page and the module render the
+// stored answer only. The model is never
 // on the render path: a slow or failed call costs a refresh,
 // not a page load, and the previous answer keeps serving
 // (stale snapshot, like every other fetch path).
@@ -35,23 +36,24 @@ import (
 	"evesynapse/internal/logging"
 )
 
-// The model, the refresh age, and the size bounds. Forty rows is
-// the common ground between useful context and a small prompt;
-// twice a day keeps the ideas within a sweep or two of fresh.
+// The model, the refresh age, and the size bounds. Sixty rows give
+// each strategy enough candidates for a full tab while keeping the
+// prompt small; twice a day keeps the ideas within a sweep or two
+// of fresh.
 const (
 	tradeIdeasModel      = "@cf/google/gemma-4-26b-a4b-it"
 	tradeIdeasAPIBase    = "https://api.cloudflare.com/client/v4"
 	tradeIdeasRefreshAge = 12 * time.Hour
-	tradeIdeasCSVRows    = 40
-	tradeIdeasBodyCap    = 8 * 1024
+	tradeIdeasCSVRows    = 60
+	tradeIdeasBodyCap    = 16 * 1024
 	tradeIdeasTimeout    = 60 * time.Second
 	tradeIdeasRespCap    = 1 << 20
 )
 
-// tradeIdeasPrompt is the ask, exactly as specified: list
-// format, limited narration, across trade-strategy categories.
-// The scanner CSV follows it.
-const tradeIdeasPrompt = "Find the best trade opportunities from this CSV format list of fictional video game items for the video game EVE Online.\n\nSimply make it list format with limited narration, across different categories/types of trade strategies.\n\nFormat the answer as plain markdown only: one ### header per strategy category with a one-line *italic description* under it, then one * bullet per idea with the item name in **bold**. No other formatting."
+// tradeIdeasPrompt is the ask: list format, limited narration,
+// across trade-strategy categories, with enough ideas in each for a
+// tab of its own. The scanner CSV follows it.
+const tradeIdeasPrompt = "Find the best trade opportunities from this CSV format list of fictional video game items for the video game EVE Online.\n\nSimply make it list format with limited narration, across four to six different categories/types of trade strategies, with six to ten ideas in each category, best first.\n\nFormat the answer as plain markdown only: one ### header per strategy category (two to four words) with a one-line *italic description* under it, then one * bullet per idea with the item name in **bold**. No other formatting."
 
 // tradeIdeasFirstBackoff is the wait after one failed ask; it doubles
 // with each failure in a row, up to tradeIdeasRefreshAge.
@@ -236,8 +238,7 @@ func (app *Application) tradeIdeasHTTPClient() *http.Client {
 }
 
 // handleTradeIdeas renders the trade ideas page (/market/ideas/):
-// the stored answer only, no model call. The ideas have this page to
-// themselves; they are not a home module.
+// the stored answer only, no model call, one tab per strategy.
 func (app *Application) handleTradeIdeas(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
@@ -245,21 +246,37 @@ func (app *Application) handleTradeIdeas(w http.ResponseWriter, r *http.Request)
 	app.render(ctx, w, http.StatusOK, "market_tradeideas.html", data)
 }
 
-// tradeIdeasWidget is the trade ideas page's content: the stored answer as
-// safe markup, with its age. The model's text is escaped first
-// and only the theme's own elements (h4, ul.attention, p,
-// small, strong) are emitted, like every other widget: the
-// model's text is data, never markup.
+// tradeIdeasWidget is the stored answer for the page and the home
+// module: the ideas grouped by strategy, with their age. The model's
+// text is escaped first and only strong survives as markup
+// (tradeIdeasInline): the model's text is data, never markup.
 type tradeIdeasWidget struct {
-	Body       template.HTML
+	Groups     []tradeIdeaGroup
 	AsOf       string // "Jan 2, 3:04 PM", empty until an answer lands
 	HasIdeas   bool
 	Configured bool // Cloudflare credentials are set
 }
 
+// tradeIdeaGroup is one strategy: a tab on the page and the module.
+type tradeIdeaGroup struct {
+	ID    string // "ti-1", ...: the tab's panel id, unique on a page
+	Title template.HTML
+	Desc  template.HTML   // the one-line description, if any
+	Ideas []template.HTML // one bullet each, best first
+	Notes []template.HTML // plain lines under the heading
+}
+
+// More is how many ideas a list capped at n leaves out.
+func (g tradeIdeaGroup) More(n int) int {
+	if len(g.Ideas) <= n {
+		return 0
+	}
+	return len(g.Ideas) - n
+}
+
 // maxTradeIdeasOutLines caps one render's source lines: the
 // stored answer is already capped, this is the belt beside it.
-const maxTradeIdeasOutLines = 80
+const maxTradeIdeasOutLines = 160
 
 // buildTradeIdeas reads the stored answer for the trade ideas page.
 // Rendered reads only, one bounded row, no fetches.
@@ -269,25 +286,27 @@ func (app *Application) buildTradeIdeas(ctx context.Context) *tradeIdeasWidget {
 	if err != nil || strings.TrimSpace(row.Body) == "" {
 		return w
 	}
-	w.HasIdeas = true
+	w.Groups = parseTradeIdeas(row.Body)
+	w.HasIdeas = len(w.Groups) > 0
 	w.AsOf = row.AsOf.UTC().Format("Jan 2, 3:04 PM")
-	w.Body = renderTradeIdeasBody(row.Body)
 	return w
 }
 
-// renderTradeIdeasBody renders the stored markdown-shaped
-// answer (### headers, * bullets, **bold**, *italic* lines)
-// into the theme's elements. Text is HTML-escaped before any
-// marker becomes an element, so model text can never inject
-// markup; leftover asterisks are marker noise (EVE item names
-// contain none) and are dropped.
-func renderTradeIdeasBody(body string) template.HTML {
-	var out strings.Builder
-	inList := false
-	closeList := func() {
-		if inList {
-			out.WriteString("</ul>")
-			inList = false
+// parseTradeIdeas reads the stored markdown-shaped answer (###
+// headers, * bullets, **bold**, *italic* lines) into one group per
+// strategy. Text is HTML-escaped before any marker becomes an
+// element, so model text can never inject markup; leftover
+// asterisks are marker noise (EVE item names contain none) and are
+// dropped. Lines before the first header, or an answer with no
+// headers at all, land in a group titled "Ideas"; a group with
+// nothing in it is dropped.
+func parseTradeIdeas(body string) []tradeIdeaGroup {
+	var groups []tradeIdeaGroup
+	cur := -1
+	ensure := func() {
+		if cur < 0 {
+			groups = append(groups, tradeIdeaGroup{Title: "Ideas"})
+			cur = len(groups) - 1
 		}
 	}
 	used := 0
@@ -301,34 +320,49 @@ func renderTradeIdeasBody(body string) template.HTML {
 		}
 		used++
 		switch content, isList := stripTradeIdeasMarker(line); {
-		case strings.HasPrefix(line, "###"):
-			closeList()
-			h := tradeIdeasInline(strings.TrimSpace(strings.TrimLeft(line, "#")))
-			if h != "" {
-				out.WriteString("<h4>" + string(h) + "</h4>")
+		case strings.HasPrefix(line, "#"):
+			title := tradeIdeasInline(strings.TrimSpace(strings.TrimLeft(line, "#")))
+			if title == "" {
+				continue
 			}
+			groups = append(groups, tradeIdeaGroup{Title: stripStrong(title)})
+			cur = len(groups) - 1
 		case isList:
-			if !inList {
-				out.WriteString(`<ul class="attention">`)
-				inList = true
-			}
 			if item := tradeIdeasInline(content); item != "" {
-				out.WriteString("<li>" + string(item) + "</li>")
+				ensure()
+				groups[cur].Ideas = append(groups[cur].Ideas, item)
 			}
 		case len(line) > 2 && strings.HasPrefix(line, "*") && strings.HasSuffix(line, "*"):
-			closeList()
 			if desc := tradeIdeasInline(strings.Trim(line, "*")); desc != "" {
-				out.WriteString("<p><small>" + string(desc) + "</small></p>")
+				ensure()
+				if groups[cur].Desc == "" {
+					groups[cur].Desc = desc
+				} else {
+					groups[cur].Notes = append(groups[cur].Notes, desc)
+				}
 			}
 		default:
-			closeList()
 			if para := tradeIdeasInline(line); para != "" {
-				out.WriteString("<p>" + string(para) + "</p>")
+				ensure()
+				groups[cur].Notes = append(groups[cur].Notes, para)
 			}
 		}
 	}
-	closeList()
-	return template.HTML(out.String())
+	out := groups[:0]
+	for _, g := range groups {
+		if len(g.Ideas) == 0 && len(g.Notes) == 0 {
+			continue
+		}
+		g.ID = fmt.Sprintf("ti-%d", len(out)+1)
+		out = append(out, g)
+	}
+	return out
+}
+
+// stripStrong drops strong tags from a heading the model bolded:
+// a tab label is plain text.
+func stripStrong(h template.HTML) template.HTML {
+	return template.HTML(strings.NewReplacer("<strong>", "", "</strong>", "").Replace(string(h)))
 }
 
 // stripTradeIdeasMarker removes one leading bullet marker ("* ",

@@ -42,6 +42,7 @@ const (
 	widgetSkills     = "skills"
 	widgetServer     = "server"
 	widgetPI         = "pi"
+	widgetTradeIdeas = "tradeideas"
 	widgetTraining   = "training"
 	widgetPulse      = "pulse"
 	widgetWalletFlow = "walletflow"
@@ -90,6 +91,7 @@ var homeWidgetCatalog = []widgetDef{
 	{widgetWatchlist, "Market watchlist", "The items you're watching: latest prices, 7- and 30-day moves, and a flag when one crosses your alert line.", 1, 1, "market_public"},
 	{widgetSkills, "Skills", "The next skill finishes across the fleet, plus who isn't training.", 1, 1, "skills"},
 	{widgetServer, "Tranquility", "Server status: players online.", 1, 1, "server"},
+	{widgetTradeIdeas, "Trade ideas", "Gemma's read on the Forge spread scanner, one tab per trade strategy. Refreshed twice a day; the Trade ideas page has the full list.", 2, 1, "tradeideas"},
 	{widgetTraining, "Training horizon", "The next 10 skill finishes across every character, plus who is sitting idle.", 1, 1, "skills"},
 	{widgetPulse, "Corp pulse", "What changed in the corporation: members in and out, wallet movements, structure arrivals and timers. Needs a qualifying in-game role.", 1, 1, "corp_members"},
 	{widgetWalletFlow, "Wallet flow", "Income vs spend over 7 and 30 days with top sources, sinks, and a per-character breakdown.", 2, 2, "wallet"},
@@ -256,6 +258,7 @@ var widgetSnapshotKinds = map[string][]string{
 	widgetSkills:     {esi.SnapSkillqueue},
 	widgetServer:     {},
 	widgetPI:         {esi.SnapPlanets},
+	widgetTradeIdeas: {}, // stored model answer only; no character snapshots
 	widgetTraining:   {esi.SnapSkillqueue},
 	widgetPulse:      {}, // corp snapshots load per corporation, not via bundles
 	widgetWalletFlow: {esi.SnapWalletJournal},
@@ -583,6 +586,7 @@ type homeWidget struct {
 	Training   *trainingWidget
 	Pulse      *pulseWidget
 	WalletFlow *walletFlowWidget
+	TradeIdeas *tradeIdeasWidget
 	Upkeep     *upkeepWidget
 	Glance     *glanceWidget
 }
@@ -1762,6 +1766,8 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 			if status, ok := app.loadServerStatus(ctx); ok {
 				w.Server = status
 			}
+		case widgetTradeIdeas:
+			w.TradeIdeas = app.buildTradeIdeas(ctx)
 		case widgetTraining:
 			w.Training = app.buildTraining(ctx, bundles)
 		case widgetPulse:

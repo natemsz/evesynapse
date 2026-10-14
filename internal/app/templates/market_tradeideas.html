@@ -8,7 +8,19 @@
 <p><small>Gemma's read on the <a href="/market/scanner/">spread scanner</a>'s top Forge rows, asked at most twice a day. A model's suggestions, not advice: check the numbers on the scanner before trading.</small></p>
 <section class="card">
   {{if .HasIdeas}}
-  {{.Body}}
+  <div class="ti">
+    <div class="ti-tabs" role="tablist" aria-label="Trade strategies" data-tabs hidden>
+      {{range $i, $g := .Groups}}<button type="button" role="tab" id="{{.ID}}-tab" aria-controls="{{.ID}}" aria-selected="{{if eq $i 0}}true{{else}}false{{end}}">{{.Title}}<small>{{len .Ideas}}</small></button>{{end}}
+    </div>
+    {{range .Groups}}
+    <div class="ti-panel" role="tabpanel" id="{{.ID}}" aria-labelledby="{{.ID}}-tab">
+      <h4 class="ti-h">{{.Title}}</h4>
+      {{with .Desc}}<p class="ti-desc"><small>{{.}}</small></p>{{end}}
+      {{if .Ideas}}<ol class="ti-list ti-full">{{range .Ideas}}<li>{{.}}</li>{{end}}</ol>{{end}}
+      {{range .Notes}}<p><small>{{.}}</small></p>{{end}}
+    </div>
+    {{end}}
+  </div>
   <p><small>As of {{.AsOf}} · Gemma on the Forge spread scanner.</small></p>
   {{else if .Configured}}<p><small>No ideas yet — the next refresh asks the model once the Forge sweep lands.</small></p>
   {{else}}<p><small>Trade ideas are not set up — set <code>CLOUDFLARE_ACCOUNT_ID</code> / <code>CLOUDFLARE_AUTH_TOKEN</code> (see <code>.env.example</code>).</small></p>{{end}}

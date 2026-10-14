@@ -89,6 +89,58 @@
     if (q && !window.confirm(q)) ev.preventDefault();
   }, true);
 
+  // --- Tabs ----------------------------------------------------
+  // A [data-tabs] tablist renders hidden, its panels all showing
+  // under their own headings: that is the page without JavaScript.
+  // Here the list appears, one panel shows at a time, and the
+  // container gets .tabs-on so the CSS can drop the per-panel
+  // headings the tabs now carry. Arrow keys move along the list; a
+  // URL hash naming a panel opens it.
+  function initTabs(root) {
+    var lists = root.querySelectorAll("[data-tabs]");
+    for (var i = 0; i < lists.length; i++) setupTabs(lists[i]);
+  }
+  function setupTabs(list) {
+    if (list.getAttribute("data-tabs-ready")) return;
+    list.setAttribute("data-tabs-ready", "1");
+    var tabs = Array.prototype.slice.call(list.querySelectorAll('[role="tab"]'));
+    if (!tabs.length) return;
+    function panelOf(tab) { return document.getElementById(tab.getAttribute("aria-controls")); }
+    function select(tab, focus) {
+      tabs.forEach(function (t) {
+        var on = t === tab;
+        t.setAttribute("aria-selected", on ? "true" : "false");
+        t.tabIndex = on ? 0 : -1;
+        var p = panelOf(t);
+        if (p) p.hidden = !on;
+      });
+      if (focus) tab.focus();
+    }
+    tabs.forEach(function (t, n) {
+      t.addEventListener("click", function () { select(t, false); });
+      t.addEventListener("keydown", function (ev) {
+        var k = ev.key, to = -1;
+        if (k === "ArrowRight") to = (n + 1) % tabs.length;
+        else if (k === "ArrowLeft") to = (n - 1 + tabs.length) % tabs.length;
+        else if (k === "Home") to = 0;
+        else if (k === "End") to = tabs.length - 1;
+        if (to < 0) return;
+        ev.preventDefault();
+        select(tabs[to], true);
+      });
+    });
+    var start = tabs[0];
+    var hash = window.location.hash ? window.location.hash.slice(1) : "";
+    tabs.forEach(function (t) {
+      if (t.getAttribute("aria-controls") === hash) start = t;
+    });
+    list.hidden = false;
+    if (list.parentElement) list.parentElement.classList.add("tabs-on");
+    select(start, false);
+  }
+  onContentReady(initTabs);
+  initTabs(document);
+
   // --- Expanders -------------------------------------------------
   // One mechanism for every summary/detail pair. A detail block
   // carries data-wmore; its control carries data-expand naming the

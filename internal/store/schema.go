@@ -192,6 +192,11 @@ var pgSwarmStagingDeferralsSchema string
 //go:embed schema_pg/038_swarm_signed_addresses.sql
 var pgSwarmSignedAddressesSchema string
 
+// Step 044: swarm_staging drops checked_at, which was never set.
+//
+//go:embed schema_pg/044_swarm_staging_no_checked_at.sql
+var pgSwarmStagingNoCheckedAtSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -259,6 +264,7 @@ func schemaSteps() []schemaStep {
 		{36, "swarm_next_gossip", pgSwarmNextGossipSchema, ""},
 		{37, "swarm_staging_deferrals", pgSwarmStagingDeferralsSchema, ""},
 		{38, "swarm_signed_addresses", pgSwarmSignedAddressesSchema, ""},
+		{44, "swarm_staging_no_checked_at", pgSwarmStagingNoCheckedAtSchema, ""},
 	}
 }
 

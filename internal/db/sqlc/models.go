@@ -793,16 +793,15 @@ type SwarmPeer struct {
 }
 
 type SwarmStaging struct {
-	Kind       string       `json:"kind"`
-	Key        string       `json:"key"`
-	Payload    string       `json:"payload"`
-	Signer     string       `json:"signer"`
-	Signature  string       `json:"signature"`
-	FetchedAt  time.Time    `json:"fetched_at"`
-	ReceivedAt time.Time    `json:"received_at"`
-	CheckedAt  sql.NullTime `json:"checked_at"`
-	Source     string       `json:"source"`
-	Deferrals  int32        `json:"deferrals"`
+	Kind       string    `json:"kind"`
+	Key        string    `json:"key"`
+	Payload    string    `json:"payload"`
+	Signer     string    `json:"signer"`
+	Signature  string    `json:"signature"`
+	FetchedAt  time.Time `json:"fetched_at"`
+	ReceivedAt time.Time `json:"received_at"`
+	Source     string    `json:"source"`
+	Deferrals  int32     `json:"deferrals"`
 }
 
 type TradeIdea struct {

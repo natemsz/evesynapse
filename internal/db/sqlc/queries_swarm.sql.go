@@ -549,35 +549,22 @@ func (q *Queries) ListSwarmPullPeers(ctx context.Context, servedSince time.Time)
 const listUncheckedStaging = `-- name: ListUncheckedStaging :many
 SELECT kind, key, payload, signer, signature, fetched_at, received_at, source, deferrals
 FROM swarm_staging
-WHERE checked_at IS NULL
 ORDER BY deferrals, received_at
 LIMIT $1
 `
 
-type ListUncheckedStagingRow struct {
-	Kind       string    `json:"kind"`
-	Key        string    `json:"key"`
-	Payload    string    `json:"payload"`
-	Signer     string    `json:"signer"`
-	Signature  string    `json:"signature"`
-	FetchedAt  time.Time `json:"fetched_at"`
-	ReceivedAt time.Time `json:"received_at"`
-	Source     string    `json:"source"`
-	Deferrals  int32     `json:"deferrals"`
-}
-
 // Entries never tried come first, oldest first; ones that have
 // already deferred wait behind them, so an undecidable entry
 // cannot hold a check slot in front of fresh work.
-func (q *Queries) ListUncheckedStaging(ctx context.Context, limit int32) ([]ListUncheckedStagingRow, error) {
+func (q *Queries) ListUncheckedStaging(ctx context.Context, limit int32) ([]SwarmStaging, error) {
 	rows, err := q.db.QueryContext(ctx, listUncheckedStaging, limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListUncheckedStagingRow
+	var items []SwarmStaging
 	for rows.Next() {
-		var i ListUncheckedStagingRow
+		var i SwarmStaging
 		if err := rows.Scan(
 			&i.Kind,
 			&i.Key,
@@ -600,22 +587,6 @@ func (q *Queries) ListUncheckedStaging(ctx context.Context, limit int32) ([]List
 		return nil, err
 	}
 	return items, nil
-}
-
-const markStagingChecked = `-- name: MarkStagingChecked :exec
-UPDATE swarm_staging SET checked_at = $3
-WHERE kind = $1 AND key = $2
-`
-
-type MarkStagingCheckedParams struct {
-	Kind      string       `json:"kind"`
-	Key       string       `json:"key"`
-	CheckedAt sql.NullTime `json:"checked_at"`
-}
-
-func (q *Queries) MarkStagingChecked(ctx context.Context, arg MarkStagingCheckedParams) error {
-	_, err := q.db.ExecContext(ctx, markStagingChecked, arg.Kind, arg.Key, arg.CheckedAt)
-	return err
 }
 
 const putSwarmApplied = `-- name: PutSwarmApplied :exec
@@ -880,8 +851,7 @@ ON CONFLICT (kind, key) DO UPDATE SET
     fetched_at = excluded.fetched_at,
     received_at = excluded.received_at,
     source = excluded.source,
-    deferrals = 0,
-    checked_at = NULL
+    deferrals = 0
 WHERE excluded.fetched_at > swarm_staging.fetched_at
 `
 

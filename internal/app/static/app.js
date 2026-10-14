@@ -867,6 +867,7 @@
       var colStart = Math.round((r0.left - gridLeft) / cellW);
       var maxW = Math.max(1, Math.min(3, cols - colStart));
       var lastX = ev.clientX, lastY = ev.clientY, under = false;
+      var startY = ev.clientY;
 
       var frame = document.createElement("div");
       frame.className = "resize-frame";
@@ -884,7 +885,13 @@
       // frame tracks the pointer with no frame of lag.
       function frameTick() {
         var r = card.getBoundingClientRect();
-        var relX = lastX - r.left, relY = lastY - r.top;
+        // Width from the pointer's offset (a module is exactly its
+        // columns wide). Height from how far the pointer has moved
+        // since the press, added to the rows the module had: a module
+        // standing taller than its rows (its content needs the room)
+        // must not jump to that height the moment the grip is taken.
+        var relX = lastX - r.left;
+        var relY = start.h * cellH - gapY + (lastY - startY);
         var w = snap((relX + gapX) / cellW, cur.w, maxW);
         var h = snap((relY + gapY) / cellH, cur.h, 3);
         under = w < min.w || h < min.h;

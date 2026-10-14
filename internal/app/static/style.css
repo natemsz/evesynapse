@@ -705,6 +705,10 @@ img.portrait {
 }
 
 .corp-desc { white-space: pre-line; }
+/* The page swap moves focus to the content for screen readers; it is
+   not a control, so it shows no focus ring (a keyboard shortcut that
+   navigated would otherwise outline the whole panel). */
+#main-content:focus { outline: none; }
 /* Wallet page: balance history beside wallet flow, each about half
    the width, so the chart is a readable size rather than the whole
    page; one above the other on a narrow screen. */
@@ -1026,8 +1030,9 @@ html[data-theme="light"] .widget-scope select {
 .grid.home-grid > .gw3 { grid-column: span 3; }
 .grid.home-grid > .gh2 { grid-row: span 2; }
 .grid.home-grid > .gh3 { grid-row: span 3; }
-/* An expanded module shows its detail across its whole row. */
-.grid.home-grid > .card.expanded { grid-column: 1 / -1; grid-row: auto / span 1; }
+/* An expanded module (More) grows taller to show its detail, inside
+   its own columns: it never changes width or pushes modules into new
+   places, so the page keeps the layout Customize set. */
 /* Customize shows each module as the page shows it: summary only. */
 .home-custom [data-wmore] { display: none; }
 @media (max-width: 1099px) {

@@ -66,15 +66,24 @@ func TestSwarmSeedPeerShowsSeed(t *testing.T) {
 	if byID["peer-data-1"].State != "Approved" {
 		t.Errorf("instance state %q, want Approved", byID["peer-data-1"].State)
 	}
-	// Role is what the peer functions as: the worker's fixed
-	// identity is a directory, anything serving under its own
-	// identity is a cache, and a cache answering at a directory
-	// address is both.
-	if byID["seed"].Role != "Seed" {
-		t.Errorf("seed role %q, want Seed", byID["seed"].Role)
+	// Role is what the peer functions as, seen from here. No
+	// instance ID is special: a configured seed address is a
+	// Seed until a pull from it has staged something, and both
+	// from then on; an instance that merely calls itself
+	// "seed" is a cache like any other.
+	if byID["seed-1"].Role != "Seed" {
+		t.Errorf("configured seed role %q, want Seed", byID["seed-1"].Role)
 	}
-	if byID["seed-1"].Role != "Seed+Cache" {
-		t.Errorf("serving seed role %q, want Seed+Cache", byID["seed-1"].Role)
+	if byID["seed"].Role != "Cache" {
+		t.Errorf("an instance named seed has role %q, want Cache", byID["seed"].Role)
+	}
+	if err := app.queries.TouchSwarmPeerServed(ctx, db.TouchSwarmPeerServedParams{InstanceID: "seed-1", LastServed: timeSet(now)}); err != nil {
+		t.Fatalf("mark served: %v", err)
+	}
+	for _, row := range app.loadSwarmPeers(ctx) {
+		if row.ID == "seed-1" && row.Role != "Seed+Cache" {
+			t.Errorf("serving seed role %q, want Seed+Cache", row.Role)
+		}
 	}
 	if byID["peer-data-1"].Role != "Cache" {
 		t.Errorf("instance role %q, want Cache", byID["peer-data-1"].Role)
@@ -102,6 +111,9 @@ func TestSwarmAdminRoleColumn(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("upsert %s: %v", peer.id, err)
 		}
+	}
+	if err := app.queries.TouchSwarmPeerServed(ctx, db.TouchSwarmPeerServedParams{InstanceID: "seed-1", LastServed: timeSet(now)}); err != nil {
+		t.Fatalf("mark served: %v", err)
 	}
 	code, body := getPage(t, app, cookie, "/admin/")
 	if code != http.StatusOK {

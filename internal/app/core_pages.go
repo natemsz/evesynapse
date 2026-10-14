@@ -71,6 +71,7 @@ type pageData struct {
 	ContactsChars     []assetCharLink
 	Market            *marketView
 	MarketScanner     *scannerView
+	TradeIdeas        *tradeIdeasWidget
 	MarketTradefinder *tradefinderView
 	MarketLeaderboard *leaderboardView
 	Restock           *restockView
@@ -207,7 +208,7 @@ func sectionForPage(page string) string {
 		return "fitting"
 	case "industry.html", "planner.html", "planets.html", "piplanner.html":
 		return "industry"
-	case "market.html", "market_scanner.html", "market_tradefinder.html", "market_leaderboard.html",
+	case "market.html", "market_scanner.html", "market_tradeideas.html", "market_tradefinder.html", "market_leaderboard.html",
 		"market_restock.html",
 		"wallet.html", "orders.html", "contracts.html", "system.html", "station.html", "structure.html":
 		return "market"

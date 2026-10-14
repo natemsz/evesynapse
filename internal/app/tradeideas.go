@@ -235,7 +235,17 @@ func (app *Application) tradeIdeasHTTPClient() *http.Client {
 	return &http.Client{Timeout: tradeIdeasTimeout}
 }
 
-// tradeIdeasWidget is the home widget: the stored answer as
+// handleTradeIdeas renders the trade ideas page (/market/ideas/):
+// the stored answer only, no model call. The ideas have this page to
+// themselves; they are not a home module.
+func (app *Application) handleTradeIdeas(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	data := app.page(ctx)
+	data.TradeIdeas = app.buildTradeIdeas(ctx)
+	app.render(ctx, w, http.StatusOK, "market_tradeideas.html", data)
+}
+
+// tradeIdeasWidget is the trade ideas page's content: the stored answer as
 // safe markup, with its age. The model's text is escaped first
 // and only the theme's own elements (h4, ul.attention, p,
 // small, strong) are emitted, like every other widget: the
@@ -251,7 +261,7 @@ type tradeIdeasWidget struct {
 // stored answer is already capped, this is the belt beside it.
 const maxTradeIdeasOutLines = 80
 
-// buildTradeIdeas reads the stored answer for the home widget.
+// buildTradeIdeas reads the stored answer for the trade ideas page.
 // Rendered reads only, one bounded row, no fetches.
 func (app *Application) buildTradeIdeas(ctx context.Context) *tradeIdeasWidget {
 	w := &tradeIdeasWidget{Configured: app.cfg.TradeIdeasConfigured()}

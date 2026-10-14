@@ -327,7 +327,7 @@ func TestTradeIdeasRefreshOffWithoutCreds(t *testing.T) {
 	}
 }
 
-func TestTradeIdeasWidgetRendersStored(t *testing.T) {
+func TestTradeIdeasPageRendersStored(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
@@ -343,16 +343,25 @@ func TestTradeIdeasWidgetRendersStored(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("store answer: %v", err)
 	}
-	code, body := getPage(t, app, cookie, "/")
+	code, body := getPage(t, app, cookie, "/market/ideas/")
 	if code != http.StatusOK {
-		t.Fatalf("GET /: status %d", code)
+		t.Fatalf("GET /market/ideas/: status %d", code)
 	}
-	mustContain(t, "/", body, "Trade ideas", "Station flips", "Gemma on the Forge spread scanner")
+	mustContain(t, "/market/ideas/", body, "Trade ideas", "Station flips", "Gemma on the Forge spread scanner")
 	if strings.Contains(body, "<script>alert(1)</script>") {
 		t.Fatalf("model text rendered unescaped")
 	}
 	if !strings.Contains(body, "&lt;script&gt;") {
 		t.Fatalf("model text missing escaped")
+	}
+	// Not a home module any more: a layout that still names it shows
+	// no ideas on the home page.
+	code, body = getPage(t, app, cookie, "/")
+	if code != http.StatusOK {
+		t.Fatalf("GET /: status %d", code)
+	}
+	if strings.Contains(body, "Station flips") {
+		t.Error("the home page still shows trade ideas")
 	}
 }
 
@@ -381,7 +390,7 @@ func TestTradeIdeasRenderMarkdown(t *testing.T) {
 	}
 }
 
-func TestTradeIdeasWidgetEmptyStates(t *testing.T) {
+func TestTradeIdeasPageEmptyStates(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
@@ -392,11 +401,11 @@ func TestTradeIdeasWidgetEmptyStates(t *testing.T) {
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
 	setHomeLayout(t, q, user.ID, `[{"id":"tradeideas"}]`)
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
-	code, body := getPage(t, app, cookie, "/")
+	code, body := getPage(t, app, cookie, "/market/ideas/")
 	if code != http.StatusOK {
-		t.Fatalf("GET /: status %d", code)
+		t.Fatalf("GET /market/ideas/: status %d", code)
 	}
-	mustContain(t, "/", body, "Trade ideas are not set up", "CLOUDFLARE_ACCOUNT_ID")
+	mustContain(t, "/market/ideas/", body, "Trade ideas are not set up", "CLOUDFLARE_ACCOUNT_ID")
 }
 
 // roundTripperFunc adapts a function to http.RoundTripper.

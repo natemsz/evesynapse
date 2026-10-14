@@ -42,7 +42,6 @@ const (
 	widgetSkills     = "skills"
 	widgetServer     = "server"
 	widgetPI         = "pi"
-	widgetTradeIdeas = "tradeideas"
 	widgetTraining   = "training"
 	widgetPulse      = "pulse"
 	widgetWalletFlow = "walletflow"
@@ -86,7 +85,6 @@ var homeWidgetCatalog = []widgetDef{
 	{widgetWatchlist, "Market watchlist", "The items you're watching: latest prices, 7- and 30-day moves, and a flag when one crosses your alert line.", widgetSizeFlex, "market_public"},
 	{widgetSkills, "Skills", "The next skill finishes across the fleet, plus who isn't training.", widgetSizeFlex, "skills"},
 	{widgetServer, "Tranquility", "Server status: players online.", widgetSizeFlex, "server"},
-	{widgetTradeIdeas, "Trade ideas", "Gemma's read on the Forge spread scanner: top trade opportunities across strategies, refreshed twice a day.", widgetSizeFlex, "tradeideas"},
 	{widgetTraining, "Training horizon", "The next 10 skill finishes across every character, plus who is sitting idle.", widgetSizeFlex, "skills"},
 	{widgetPulse, "Corp pulse", "What changed in the corporation: members in and out, wallet movements, structure arrivals and timers. Needs a qualifying in-game role.", widgetSizeFlex, "corp_members"},
 	{widgetWalletFlow, "Wallet flow", "Income vs spend over 7 and 30 days with top sources, sinks, and a per-character breakdown.", widgetSizeFull, "wallet"},
@@ -307,7 +305,6 @@ var widgetSnapshotKinds = map[string][]string{
 	widgetSkills:     {esi.SnapSkillqueue},
 	widgetServer:     {},
 	widgetPI:         {esi.SnapPlanets},
-	widgetTradeIdeas: {}, // stored model answer only; no character snapshots
 	widgetTraining:   {esi.SnapSkillqueue},
 	widgetPulse:      {}, // corp snapshots load per corporation, not via bundles
 	widgetWalletFlow: {esi.SnapWalletJournal},
@@ -630,7 +627,6 @@ type homeWidget struct {
 	Skills     *skillsWidget
 	Server     *serverStatusView
 	PI         *piWidget
-	TradeIdeas *tradeIdeasWidget
 	Training   *trainingWidget
 	Pulse      *pulseWidget
 	WalletFlow *walletFlowWidget
@@ -1780,8 +1776,6 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 			if status, ok := app.loadServerStatus(ctx); ok {
 				w.Server = status
 			}
-		case widgetTradeIdeas:
-			w.TradeIdeas = app.buildTradeIdeas(ctx)
 		case widgetTraining:
 			w.Training = app.buildTraining(ctx, bundles)
 		case widgetPulse:

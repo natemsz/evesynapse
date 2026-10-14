@@ -560,6 +560,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleMarket)
 		r.Get("/scanner/", app.handleMarketScanner)
+		r.Get("/ideas/", app.handleTradeIdeas)
 		r.Get("/tradefinder/", app.handleMarketTradefinder)
 		r.Get("/leaderboard/", app.handleMarketLeaderboard)
 		r.Get("/restock/", app.handleRestock)

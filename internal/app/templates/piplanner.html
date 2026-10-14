@@ -59,7 +59,7 @@
     {{range .PIPlanner.Graph}}
     <div class="pi-col">
       <h4>{{.Title}}</h4>
-      {{range .Nodes}}<button type="button" class="pi-node {{.Class}}" data-pi-node="{{.Name}}" data-pi-tier="{{.Tier}}" data-pi-planets="{{.Planets}}" title="{{.Name}}{{if .Planets}} — found on {{.Planets}}{{end}}{{if .Price}} — {{.Price}}{{end}}">{{.Name}}{{if .Price}}<small>{{.Price}}</small>{{end}}</button>
+      {{range .Nodes}}<button type="button" class="pi-node {{.Class}}" data-pi-node="{{.Name}}" data-pi-tier="{{.Tier}}" data-pi-planets="{{.Planets}}" title="{{.Name}}{{if .Planets}} — found on {{.Planets}}{{end}}{{if .Price}} — {{.Price}}{{end}}">{{.Name}}{{if .Price}}<small>{{.Price}}</small>{{end}}{{if .On}}<small class="pi-on">{{.On}}</small>{{end}}</button>
       {{end}}
     </div>
     {{end}}

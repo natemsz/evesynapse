@@ -178,6 +178,21 @@
         rawCovered[r] = ok;
         if (nChecked > 0 && !ok) missing.push(r);
       });
+      // Each chain raw and P1 names the planet types it comes from:
+      // the ticked ones that supply it, else every source. Mirrors
+      // piProducedOn (piplanner.go); a change to either side must
+      // change both. Factory products keep the server's line.
+      graphRoot.querySelectorAll("[data-pi-node]").forEach(function (el) {
+        var name = el.getAttribute("data-pi-node");
+        if (!chain[name] || !el.querySelector) return;
+        var raw = tierOf[name] === "R0" ? name :
+          tierOf[name] === "P1" ? ((graph[name] && graph[name].inputs) || [])[0] : null;
+        var on = raw ? el.querySelector(".pi-on") : null;
+        if (!on) return;
+        var srcs = Object.keys(rawPlanets[raw] || {});
+        var hit = srcs.filter(function (p) { return checked[p]; });
+        on.textContent = "on " + (hit.length ? hit : srcs).join(", ");
+      });
       // Tint: raws flag when unsupplied; a P1 flags when its raw is.
       graphRoot.querySelectorAll("[data-pi-node]").forEach(function (el) {
         var name = el.getAttribute("data-pi-node");

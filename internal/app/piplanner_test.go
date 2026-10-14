@@ -74,7 +74,11 @@ func TestPIPlannerRendersChain(t *testing.T) {
 			t.Errorf("cover=1: %s ticked = %v, want %v (Coolant needs %v)", p, got, want, piplan.MinimalPlanets("Coolant"))
 		}
 	}
-	mustContain(t, "/industry/pi/ cover", body, "Covered", `id="pi-wrap"`)
+	mustContain(t, "/industry/pi/ cover", body, "Covered", `id="pi-wrap"`,
+		// Every chain input names where it is made: the target's
+		// factory line, and a raw's or P1's ticked planet type.
+		`<small class="pi-on">factory on any planet</small>`,
+		`<small class="pi-on">on `+piplan.MinimalPlanets("Coolant")[0])
 }
 
 // TestPIPlannerDefaults: bare /industry/pi/ opens on the default

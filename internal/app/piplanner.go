@@ -41,6 +41,11 @@ type piGraphNode struct {
 	Class   string // selected|input|output|dimmed|covered|missing
 	Planets string // planet types yielding it (raws) or ""
 	Price   string
+	// On names where a chain node is made: for a raw or a P1, the
+	// selected planet types that supply it (every source when none
+	// does); for a factory product, the planets its facility may
+	// stand on. Empty off the chain.
+	On string
 }
 
 type piGraphCol struct {
@@ -515,6 +520,9 @@ func buildPIGraph(target string, selected []string, prices map[string]float64) (
 		if piplan.TierOf(name) == piplan.TierRaw {
 			n.Planets = strings.Join(piplan.RawSources[name], ", ")
 		}
+		if name == target || chain[name] {
+			n.On = piProducedOn(name, selected)
+		}
 		return n
 	}
 	cols := []piGraphCol{
@@ -588,4 +596,38 @@ func piProfitableChains(prices map[string]float64, s piplan.Settings) []piProfit
 		rows[i].URL = "/industry/pi/?product=" + strings.ReplaceAll(rows[i].Name, " ", "+")
 	}
 	return rows
+}
+
+// piProducedOn names the planet types a chain node is made on (see
+// piGraphNode.On). pi.js recomputes the same line live as planets
+// are ticked: a change to either side must change both.
+func piProducedOn(name string, selected []string) string {
+	raw := ""
+	switch piplan.TierOf(name) {
+	case piplan.TierRaw:
+		raw = name
+	case piplan.TierP1:
+		raw, _ = piplan.RawForP1(name)
+	default:
+		if sch, ok := piplan.Schematics[name]; ok {
+			if only := piplan.FactoryPlanetOnly(sch.Facility); only != "Any" {
+				return "factory on " + only
+			}
+		}
+		return "factory on any planet"
+	}
+	sel := map[string]bool{}
+	for _, p := range selected {
+		sel[p] = true
+	}
+	var on []string
+	for _, p := range piplan.RawSources[raw] {
+		if sel[p] {
+			on = append(on, p)
+		}
+	}
+	if len(on) == 0 {
+		on = piplan.RawSources[raw]
+	}
+	return "on " + strings.Join(on, ", ")
 }

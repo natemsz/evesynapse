@@ -325,6 +325,7 @@ proportional bar under the text, colored by the decision. */
 .pi-col h4 { margin: 0 0 0.4rem; font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .pi-node { display: block; width: 100%; text-align: left; margin-bottom: 0.3rem; padding: 0.35rem 0.5rem; border: 1px solid var(--border, #333); border-radius: 4px; background: var(--row); cursor: pointer; font: inherit; }
 .pi-node small { display: block; color: var(--muted); }
+.pi-node .pi-on { color: var(--gold, #ffd27a); font-size: 0.72rem; }
 .pi-node.dimmed { opacity: 0.45; }
 .pi-node.input { border-color: #3fce7a; }
 .pi-node.input.missing { border-color: #ff5a4e; border-style: dashed; }

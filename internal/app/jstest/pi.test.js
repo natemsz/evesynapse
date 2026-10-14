@@ -8,8 +8,11 @@ const test = require("node:test");
 
 function makeTile(name, tier, planets, seedClasses) {
   const classes = new Set(seedClasses || []);
+  const on = { textContent: "" };
   return {
     classes,
+    on,
+    querySelector(sel) { return sel === ".pi-on" ? on : null; },
     getAttribute(k) {
       if (k === "data-pi-node") return name;
       if (k === "data-pi-tier") return tier;
@@ -36,11 +39,11 @@ function makeBox(value, checked) {
   };
 }
 
-function install() {
+function install(opts) {
   const tiles = [
     makeTile("Barren", "Planet"),
     makeTile("Temperate", "Planet"),
-    makeTile("Autotrophs", "R0", "Temperate"),
+    makeTile("Autotrophs", "R0", (opts && opts.autotrophs) || "Temperate"),
     makeTile("Oxygen", "P1"),
     makeTile("Biocells", "P2"),
     makeTile("Broadcast Node", "P4", "", ["selected"])
@@ -183,4 +186,19 @@ test("Recalculate recalculates in place with the planets as ticked", async funct
 test("an in-page swap onto the planner rewires the map", function () {
   const { handlers } = install();
   assert.strictEqual(typeof handlers["doc:evesynapse:content-ready"], "function", "the reboot listener is registered");
+});
+
+test("each chain input names the planet type it comes from, live", function () {
+  const { tiles, boxes } = install({ autotrophs: "Temperate, Barren" });
+  // Barren ticked: it supplies Autotrophs, so the raw and its P1 say so.
+  assert.strictEqual(tiles["Autotrophs"].on.textContent, "on Barren");
+  assert.strictEqual(tiles["Oxygen"].on.textContent, "on Barren");
+  // Nothing ticked supplies it: every source is named.
+  boxes[0].checked = false;
+  boxes[0].fire();
+  assert.strictEqual(tiles["Autotrophs"].on.textContent, "on Temperate, Barren");
+  // Tick Temperate: it takes over.
+  boxes[1].checked = true;
+  boxes[1].fire();
+  assert.strictEqual(tiles["Oxygen"].on.textContent, "on Temperate");
 });

@@ -31,14 +31,6 @@ const (
 	nameBatchLimited                         // ESI's error limit: the caller must stop
 )
 
-// resolveUniverseNames resolves ids in bulk and returns the names
-// it settled, keyed by ID. See resolveUniverseNamesLimited, which
-// also reports ESI's stop signal.
-func (app *Application) resolveUniverseNames(ctx context.Context, allowance *fetchBudget, ids []int64) map[int64]string {
-	names, _ := app.resolveUniverseNamesLimited(ctx, allowance, ids)
-	return names
-}
-
 // resolveUniverseNamesLimited resolves ids in bulk and returns the
 // names it settled, keyed by ID, and whether ESI's error limit
 // stopped it.

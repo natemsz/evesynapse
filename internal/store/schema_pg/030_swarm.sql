@@ -72,7 +72,17 @@ CREATE TABLE IF NOT EXISTS swarm_staging (
     PRIMARY KEY (kind, key)
 );
 
-CREATE INDEX IF NOT EXISTS swarm_staging_unchecked ON swarm_staging (received_at) WHERE checked_at IS NULL;
+-- Step 044 drops checked_at (and this index with it). The guard
+-- keeps this script safe to re-run on a database that already has
+-- step 044, which the no-record adoption path does.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_schema = 'public' AND table_name = 'swarm_staging'
+                 AND column_name = 'checked_at') THEN
+        CREATE INDEX IF NOT EXISTS swarm_staging_unchecked ON swarm_staging (received_at) WHERE checked_at IS NULL;
+    END IF;
+END $$;
 
 -- swarm_counters is the Sync page's record: entries applied per
 -- kind, ESI calls saved, spot checks run and failed, all since

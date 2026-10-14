@@ -38,10 +38,11 @@ const seedAnnounceKind = "announce"
 type seedAnnouncePayload struct {
 	BaseURL   string `json:"base_url"`
 	PublicKey string `json:"public_key"`
-	// URLSig is the sender's member signature over its ID and
-	// BaseURL: with the two fields above it is the tuple the
-	// receiver stores and relays verbatim.
-	URLSig string `json:"url_sig"`
+	// URLSig is the sender's member signature over its ID,
+	// BaseURL and IssuedAt: with the fields beside it, it is the
+	// tuple the receiver stores and relays verbatim.
+	URLSig   string `json:"url_sig"`
+	IssuedAt int64  `json:"issued_at"`
 }
 
 // buildSeedAnnounce signs this instance's heartbeat. False when
@@ -64,7 +65,8 @@ func (app *Application) buildSeedAnnounce(now time.Time) (swarmSignedEntry, bool
 	if err := json.NewEncoder(&buf).Encode(seedAnnouncePayload{
 		BaseURL:   origin,
 		PublicKey: app.swarmID.publicString(),
-		URLSig:    signSwarmMember(app.swarmID, origin),
+		URLSig:    signSwarmMember(app.swarmID, origin, now.Unix()),
+		IssuedAt:  now.Unix(),
 	}); err != nil {
 		return swarmSignedEntry{}, false
 	}

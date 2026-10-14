@@ -285,7 +285,7 @@ func TestSwarmAutoExclude(t *testing.T) {
 		t.Fatalf("exclude note %q lacks the auto marker", got.ExcludeNote)
 	}
 	// Excluded peers leave the pull set.
-	pull, err := app.queries.ListSwarmPullPeers(ctx)
+	pull, err := app.queries.ListSwarmPullPeers(ctx, time.Now().Add(-swarmServesWindow))
 	if err != nil {
 		t.Fatalf("pull peers: %v", err)
 	}

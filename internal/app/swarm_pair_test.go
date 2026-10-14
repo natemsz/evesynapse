@@ -371,7 +371,7 @@ func TestSwarmPairSustainedPoisonExcludes(t *testing.T) {
 	if err != nil || !peer.Excluded {
 		t.Fatalf("sustained poisoner not excluded: %+v err %v", peer, err)
 	}
-	pull, err := p.b.queries.ListSwarmPullPeers(ctx)
+	pull, err := p.b.queries.ListSwarmPullPeers(ctx, time.Now().Add(-swarmServesWindow))
 	if err != nil {
 		t.Fatalf("pull peers: %v", err)
 	}
@@ -453,7 +453,7 @@ func TestSwarmPairAllowlistWaits(t *testing.T) {
 	if peer.Approved {
 		t.Fatalf("allowlist mode auto-approved a gossip-learned peer")
 	}
-	pull, err := p.b.queries.ListSwarmPullPeers(context.Background())
+	pull, err := p.b.queries.ListSwarmPullPeers(context.Background(), time.Now().Add(-swarmServesWindow))
 	if err != nil {
 		t.Fatalf("pull peers: %v", err)
 	}

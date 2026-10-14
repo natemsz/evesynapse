@@ -1238,10 +1238,14 @@ marked on that instance's row, and an address moves only when
 the instance itself says so under its pinned key. Removing an
 instance is the only way its key changes (the next sighting
 pins the new one). Every member signs its own address with
-its own key; that signature travels with it through every
-member list, relayed unchanged, so an address is always its
-owner's word. A seed is a member like any other, with its own
-instance ID and key, and there can be several. A seed serves its member list —
+its own key and the time it signed; that tuple travels through
+every member list, relayed unchanged, so an address is always
+its owner's word, and of two tuples the later-issued wins. A
+seed is a member like any other, with its own instance ID and
+key, and there can be several. Only peers a pull has lately
+staged data from are asked for data; any other peer gets one
+probe, then is dialed for membership alone until a gossip round
+lets it be probed again. A seed serves its member list —
 itself plus every peer it knows — so one address teaches a new
 instance the whole swarm. The Sync page's "Swarm Cache" card
 shows entries applied, ESI calls saved, spot checks for and

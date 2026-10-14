@@ -134,7 +134,7 @@ func TestSwarmGossipCannotIntroduceALoopbackAddress(t *testing.T) {
 	} {
 		if _, err := p.a.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
 			InstanceID: id, BaseUrl: row.url, PublicKey: row.kp.publicString(), Source: "gossip", FirstSeen: now,
-			UrlSig: signSwarmMember(row.kp, row.url),
+			UrlSig: signSwarmMember(row.kp, row.url, testIssued), UrlIssuedAt: testIssued,
 		}); err != nil {
 			t.Fatalf("list %s in A: %v", id, err)
 		}

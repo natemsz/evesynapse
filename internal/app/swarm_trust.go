@@ -415,6 +415,14 @@ func (app *Application) swarmContactPeer(ctx context.Context, baseURL, peerID, p
 	if err := app.queries.TouchSwarmPeerGossip(ctx, db.TouchSwarmPeerGossipParams{InstanceID: signer, LastGossip: timeSet(now)}); err != nil {
 		logging.Errorf("swarm: touch gossip %s: %v", signer, err)
 	}
+	// It answered: if it is not known to serve data, the next
+	// pull may probe it once more. Membership is slow, so this
+	// costs a directory one pull a round, not one a cycle.
+	if err := app.queries.RearmSwarmPeerProbe(ctx, db.RearmSwarmPeerProbeParams{
+		InstanceID: signer, ServedSince: now.Add(-swarmServesWindow),
+	}); err != nil {
+		logging.Errorf("swarm: re-arm probe of %s: %v", shortenSwarmID(signer), err)
+	}
 	return nil
 }
 
@@ -509,12 +517,14 @@ func (app *Application) swarmFlagKeyConflict(ctx context.Context, instanceID, he
 // nothing at all (errSwarmKeyChanged).
 //
 // Addresses: an address is its owner's word. Each member tuple
-// carries the owner's signature over its instance ID and
-// address (url_sig), made with the key in the same tuple. A new
-// member is stored only if that signature verifies; a known
-// member's address moves only on a tuple whose signature
-// verifies under the pinned key, whoever relayed it. The tuple
-// is stored as it arrived, to be relayed unchanged. The one
+// carries the owner's signature over its instance ID, address
+// and issue time (url_sig), made with the key in the same tuple.
+// A new member is stored only if that signature verifies; a
+// known member's address moves only on a tuple whose signature
+// verifies under the pinned key and which was issued later than
+// the one held, whoever relayed it — an older tuple, however
+// valid, is ignored, so a stale address cannot be replayed. The
+// tuple is stored as it arrived, to be relayed unchanged. The one
 // address taken without a signature is the one this instance
 // dialed itself: a sender that signs no address of its own is
 // filed under the URL that just answered, and such a row is
@@ -555,7 +565,7 @@ func (app *Application) swarmLearnMembers(ctx context.Context, members []swarmMe
 			if m.InstanceID != signer || m.PublicKey != signerKey || dialURL == "" {
 				continue
 			}
-			m.BaseURL, m.URLSig = dialURL, ""
+			m.BaseURL, m.URLSig, m.IssuedAt = dialURL, "", 0
 		}
 		if !validSwarmBaseURL(m.BaseURL) {
 			continue
@@ -570,7 +580,7 @@ func (app *Application) swarmLearnMembers(ctx context.Context, members []swarmMe
 		written, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
 			InstanceID: m.InstanceID, BaseUrl: m.BaseURL, PublicKey: m.PublicKey,
 			Source: source, FirstSeen: now,
-			UrlSig: m.URLSig, AddressSigned: signed,
+			UrlSig: m.URLSig, UrlIssuedAt: m.IssuedAt, AddressSigned: signed,
 		})
 		if err != nil {
 			return err
@@ -662,13 +672,17 @@ func (app *Application) swarmSampled(good, bad int64) bool {
 	return swarmCheckDraw(swarmTrust(good, bad), good+bad, r)
 }
 
+// swarmServesWindow is how recently a pull must have staged
+// something from a peer for it to stay in the data rotation.
+const swarmServesWindow = 7 * 24 * time.Hour
+
 // swarmPeerPullable reports whether one listed peer may serve:
 // not under the floor once it has enough checks to judge.
 // Shared by the cycle pull and the urgent single-key pull so
 // both read the same gate. A seed is a member like any other
-// and is not singled out here: one that holds no data answers
-// a pull with nothing, and the pull rotation keeps that from
-// costing a slot every cycle.
+// and is not singled out here: whether a peer serves data is
+// learned from its pulls (ListSwarmPullPeers), not from its
+// identity or from where it is configured.
 func swarmPeerPullable(good, bad int64) bool {
 	if total := good + bad; total >= swarmTrustMinChecks && swarmTrust(good, bad) < swarmTrustFloor {
 		return false
@@ -687,7 +701,7 @@ func (app *Application) swarmPullOne(ctx context.Context, kind, key string) int 
 	if !app.cfg.swarm.enabled() || app.swarmID == nil || app.swarmCli == nil {
 		return 0
 	}
-	peers, err := app.queries.ListSwarmPullPeers(ctx)
+	peers, err := app.queries.ListSwarmPullPeers(ctx, time.Now().UTC().Add(-swarmServesWindow))
 	if err != nil {
 		logging.Errorf("swarm: pull peers: %v", err)
 		return 0
@@ -850,15 +864,16 @@ func (app *Application) swarmSuppressFetch(ctx context.Context, kind, key string
 // swarmPull asks approved peers for the wanted keys and stages
 // what they answer with, through swarmStagePulled: only keys
 // this pull asked for, only under the serving peer's own pinned
-// identity. Peers are asked in turn, least recently pulled
-// first, a few a cycle. A seed that holds no data simply
-// answers with nothing when its turn comes.
+// identity. Only peers known to serve data are asked, in turn,
+// a few a cycle; a peer not yet asked gets one probe first. A
+// seed that is only a directory answers its probe with nothing
+// and is then dialed for membership alone.
 func (app *Application) swarmPull(ctx context.Context, now time.Time) {
 	keys := app.swarmDemandKeys(ctx)
 	if len(keys) == 0 {
 		return
 	}
-	peers, err := app.queries.ListSwarmPullPeers(ctx)
+	peers, err := app.queries.ListSwarmPullPeers(ctx, time.Now().UTC().Add(-swarmServesWindow))
 	if err != nil {
 		logging.Errorf("swarm: pull peers: %v", err)
 		return

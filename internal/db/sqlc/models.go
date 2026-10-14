@@ -787,6 +787,7 @@ type SwarmPeer struct {
 	LastGossip    sql.NullTime `json:"last_gossip"`
 	KeyConflictAt sql.NullTime `json:"key_conflict_at"`
 	UrlSig        string       `json:"url_sig"`
+	UrlIssuedAt   int64        `json:"url_issued_at"`
 	LastPulled    sql.NullTime `json:"last_pulled"`
 	LastServed    sql.NullTime `json:"last_served"`
 }

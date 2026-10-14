@@ -68,15 +68,18 @@ const swarmHTTPTimeout = 15 * time.Second
 
 // swarmMember is one instance as the membership list carries it:
 // identity material only, never reputation judgments. URLSig is
-// the member's own signature over its ID and address
+// the member's own signature over its ID, address and IssuedAt
 // (swarmMemberMessage), made with the key beside it: the tuple
 // is relayed exactly as its owner issued it, by instances and
 // seeds alike, and nobody signs an address for anyone else.
+// IssuedAt is the owner's clock when it signed; of two tuples
+// for one member the later-issued is the current one.
 type swarmMember struct {
 	InstanceID string `json:"instance_id"`
 	BaseURL    string `json:"base_url"`
 	PublicKey  string `json:"public_key"`
 	URLSig     string `json:"url_sig"`
+	IssuedAt   int64  `json:"issued_at"`
 }
 
 // swarmAuth checks the request's bearer token against the shared
@@ -113,8 +116,8 @@ func (app *Application) handleSwarmMembers(w http.ResponseWriter, r *http.Reques
 	// verifies the list), even when this instance has no
 	// public address configured to advertise beside it.
 	// Callers file the signer under the URL that answered.
-	self := swarmMember{InstanceID: app.swarmID.id, BaseURL: app.cfg.publicOrigin(), PublicKey: app.swarmID.publicString()}
-	self.URLSig = signSwarmMember(app.swarmID, self.BaseURL)
+	self := swarmMember{InstanceID: app.swarmID.id, BaseURL: app.cfg.publicOrigin(), PublicKey: app.swarmID.publicString(), IssuedAt: time.Now().Unix()}
+	self.URLSig = signSwarmMember(app.swarmID, self.BaseURL, self.IssuedAt)
 	members := []swarmMember{self}
 	peers, err := app.queries.ListSwarmPeers(ctx)
 	if err != nil {
@@ -128,7 +131,7 @@ func (app *Application) handleSwarmMembers(w http.ResponseWriter, r *http.Reques
 		if p.Excluded || p.UrlSig == "" {
 			continue
 		}
-		members = append(members, swarmMember{InstanceID: p.InstanceID, BaseURL: p.BaseUrl, PublicKey: p.PublicKey, URLSig: p.UrlSig})
+		members = append(members, swarmMember{InstanceID: p.InstanceID, BaseURL: p.BaseUrl, PublicKey: p.PublicKey, URLSig: p.UrlSig, IssuedAt: p.UrlIssuedAt})
 	}
 	raw, err := json.Marshal(members)
 	if err != nil {
@@ -209,7 +212,7 @@ func (app *Application) handleSwarmSeedRegister(w http.ResponseWriter, r *http.R
 	}
 	// The tuple this instance will store and relay: the sender's
 	// own signature over its address, under the same key.
-	tuple := swarmMember{InstanceID: entry.Signer, BaseURL: payload.BaseURL, PublicKey: payload.PublicKey, URLSig: payload.URLSig}
+	tuple := swarmMember{InstanceID: entry.Signer, BaseURL: payload.BaseURL, PublicKey: payload.PublicKey, URLSig: payload.URLSig, IssuedAt: payload.IssuedAt}
 	if !verifySwarmMember(tuple) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return

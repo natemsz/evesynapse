@@ -292,7 +292,7 @@ func (q *Queries) GetSwarmNextGossip(ctx context.Context) (sql.NullTime, error) 
 const getSwarmPeer = `-- name: GetSwarmPeer :one
 SELECT instance_id, base_url, public_key, source, approved, excluded,
     exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip,
-    key_conflict_at, url_sig, last_pulled, last_served
+    key_conflict_at, url_sig, url_issued_at, last_pulled, last_served
 FROM swarm_peers
 WHERE instance_id = $1
 `
@@ -315,6 +315,7 @@ func (q *Queries) GetSwarmPeer(ctx context.Context, instanceID string) (SwarmPee
 		&i.LastGossip,
 		&i.KeyConflictAt,
 		&i.UrlSig,
+		&i.UrlIssuedAt,
 		&i.LastPulled,
 		&i.LastServed,
 	)
@@ -434,7 +435,7 @@ func (q *Queries) ListSwarmCorpDemand(ctx context.Context, limit int32) ([]int64
 const listSwarmPeers = `-- name: ListSwarmPeers :many
 SELECT instance_id, base_url, public_key, source, approved, excluded,
     exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip,
-    key_conflict_at, url_sig, last_pulled, last_served
+    key_conflict_at, url_sig, url_issued_at, last_pulled, last_served
 FROM swarm_peers
 ORDER BY last_seen DESC
 LIMIT 100
@@ -464,6 +465,7 @@ func (q *Queries) ListSwarmPeers(ctx context.Context) ([]SwarmPeer, error) {
 			&i.LastGossip,
 			&i.KeyConflictAt,
 			&i.UrlSig,
+			&i.UrlIssuedAt,
 			&i.LastPulled,
 			&i.LastServed,
 		); err != nil {
@@ -484,6 +486,7 @@ const listSwarmPullPeers = `-- name: ListSwarmPullPeers :many
 SELECT instance_id, base_url, public_key, good_checks, bad_checks, last_pulled, last_served
 FROM swarm_peers
 WHERE approved AND NOT excluded
+  AND (last_pulled IS NULL OR last_served > $1::timestamptz)
 ORDER BY last_pulled ASC NULLS FIRST, last_seen DESC
 LIMIT 25
 `
@@ -500,12 +503,20 @@ type ListSwarmPullPeersRow struct {
 
 // Peers a pull may read from: approved, not excluded. Trust is
 // scored in Go from the counters; the floor keeps gossip noise
-// out of the pull set without another round trip. Least
-// recently pulled first, so every peer is asked in turn: no
-// peer holds a slot every cycle, whether it is dead, slow, or a
-// directory with nothing to serve.
-func (q *Queries) ListSwarmPullPeers(ctx context.Context) ([]ListSwarmPullPeersRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSwarmPullPeers)
+// out of the pull set without another round trip.
+//
+// Only peers known to serve data are in the rotation: ones a
+// pull has staged something from since served_since. Whether a
+// peer serves is learned, never assumed from what it is called
+// or where it is configured: a peer not yet asked (last_pulled
+// NULL) gets one probe, and joins the rotation if the probe
+// stages anything. A peer that served nothing (a seed that is
+// only a directory, a node that has gone quiet) is then dialed
+// for membership only, and probed again when a gossip round
+// re-arms it (RearmSwarmPeerProbe). Within the rotation, least
+// recently pulled first, so no peer holds a slot every cycle.
+func (q *Queries) ListSwarmPullPeers(ctx context.Context, servedSince time.Time) ([]ListSwarmPullPeersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSwarmPullPeers, servedSince)
 	if err != nil {
 		return nil, err
 	}
@@ -682,6 +693,24 @@ func (q *Queries) PutSwarmIdentity(ctx context.Context, arg PutSwarmIdentityPara
 		arg.SealedSeed,
 		arg.CreatedAt,
 	)
+	return err
+}
+
+const rearmSwarmPeerProbe = `-- name: RearmSwarmPeerProbe :exec
+UPDATE swarm_peers SET last_pulled = NULL
+WHERE instance_id = $1
+  AND (last_served IS NULL OR last_served <= $2::timestamptz)
+`
+
+type RearmSwarmPeerProbeParams struct {
+	InstanceID  string    `json:"instance_id"`
+	ServedSince time.Time `json:"served_since"`
+}
+
+// A gossip round that reached a peer not known to serve data
+// lets the next pull probe it once more.
+func (q *Queries) RearmSwarmPeerProbe(ctx context.Context, arg RearmSwarmPeerProbeParams) error {
+	_, err := q.db.ExecContext(ctx, rearmSwarmPeerProbe, arg.InstanceID, arg.ServedSince)
 	return err
 }
 
@@ -930,11 +959,12 @@ func (q *Queries) TouchSwarmPeerServed(ctx context.Context, arg TouchSwarmPeerSe
 }
 
 const upsertSwarmPeer = `-- name: UpsertSwarmPeer :execrows
-INSERT INTO swarm_peers (instance_id, base_url, public_key, source, first_seen, last_seen, url_sig)
-VALUES ($1, $2, $3, $4, $5, $5, $6)
+INSERT INTO swarm_peers (instance_id, base_url, public_key, source, first_seen, last_seen, url_sig, url_issued_at)
+VALUES ($1, $2, $3, $4, $5, $5, $6, $7)
 ON CONFLICT (instance_id) DO UPDATE SET
-    base_url = CASE WHEN $7::boolean THEN excluded.base_url ELSE swarm_peers.base_url END,
-    url_sig = CASE WHEN $7::boolean THEN excluded.url_sig ELSE swarm_peers.url_sig END,
+    base_url = CASE WHEN $8::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at THEN excluded.base_url ELSE swarm_peers.base_url END,
+    url_sig = CASE WHEN $8::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at THEN excluded.url_sig ELSE swarm_peers.url_sig END,
+    url_issued_at = CASE WHEN $8::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at THEN excluded.url_issued_at ELSE swarm_peers.url_issued_at END,
     last_seen = excluded.last_seen
 WHERE swarm_peers.public_key = excluded.public_key
 `
@@ -946,6 +976,7 @@ type UpsertSwarmPeerParams struct {
 	Source        string    `json:"source"`
 	FirstSeen     time.Time `json:"first_seen"`
 	UrlSig        string    `json:"url_sig"`
+	UrlIssuedAt   int64     `json:"url_issued_at"`
 	AddressSigned bool      `json:"address_signed"`
 }
 
@@ -955,10 +986,12 @@ type UpsertSwarmPeerParams struct {
 // which the caller flags), so no sighting can replace a pinned
 // key. The address moves only on the peer's own word
 // (address_signed: the tuple carries the peer's signature over
-// its address, which the caller has verified against this same
-// key); the address and its signature are stored together,
-// verbatim. Any other mention refreshes last_seen and nothing
-// more. Approval, exclusion and the reputation counters are
+// its address and issue time, which the caller has verified
+// against this same key), and only when that tuple was issued
+// later than the one held: an older one is ignored however valid
+// its signature, so a stale address cannot be replayed. Address,
+// signature and issue time are stored together, verbatim. Any
+// other mention refreshes last_seen and nothing more. Approval, exclusion and the reputation counters are
 // never touched: hearing about an instance must not approve it
 // or forgive it.
 func (q *Queries) UpsertSwarmPeer(ctx context.Context, arg UpsertSwarmPeerParams) (int64, error) {
@@ -969,6 +1002,7 @@ func (q *Queries) UpsertSwarmPeer(ctx context.Context, arg UpsertSwarmPeerParams
 		arg.Source,
 		arg.FirstSeen,
 		arg.UrlSig,
+		arg.UrlIssuedAt,
 		arg.AddressSigned,
 	)
 	if err != nil {

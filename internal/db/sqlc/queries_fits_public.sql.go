@@ -508,6 +508,37 @@ func (q *Queries) RecountFitRatings(ctx context.Context, fitID int64) error {
 	return err
 }
 
+const repriceLocalFittings = `-- name: RepriceLocalFittings :execrows
+UPDATE local_fittings lf
+SET total_price = priced.total
+FROM (
+  SELECT f.id,
+         (COALESCE((SELECT gp.adjusted_price FROM guide_prices gp WHERE gp.type_id = f.ship_type_id), 0) +
+          COALESCE((SELECT SUM((it->>'qty')::numeric * gp.adjusted_price)
+                    FROM jsonb_array_elements(
+                        CASE WHEN jsonb_typeof(f.items_json::jsonb -> 'items') = 'array' THEN f.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
+                    JOIN guide_prices gp ON gp.type_id = (it->>'typeId')::bigint), 0))::float8 AS total
+  FROM local_fittings f
+) priced
+WHERE priced.id = lf.id
+  AND lf.total_price IS DISTINCT FROM priced.total
+  AND EXISTS (SELECT 1 FROM guide_prices)
+`
+
+// RepriceLocalFittings sets every fit's total_price from the guide
+// mirror: the hull plus each module line at adjusted price, the sum
+// fitDocPrice makes when a fit is saved (0 when nothing in the fit
+// is priced). Rows whose price is unchanged are not written, and an
+// empty guide prices nothing. updated_at is left alone: a new price
+// is not an edit.
+func (q *Queries) RepriceLocalFittings(ctx context.Context) (int64, error) {
+	result, err := q.db.ExecContext(ctx, repriceLocalFittings)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const setLocalFittingPrice = `-- name: SetLocalFittingPrice :exec
 UPDATE local_fittings SET total_price = $1 WHERE id = $2 AND user_id = $3
 `

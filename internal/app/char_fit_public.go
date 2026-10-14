@@ -571,7 +571,9 @@ func (app *Application) publicFitSections(ctx context.Context, doc *fitDoc) []fi
 
 // fitDocPrice totals a document from the guide mirror (adjusted
 // ISK per unit): hull plus every module line. 0 when no prices
-// are warmed yet; the browser treats 0 as unknown.
+// are warmed yet; the browser treats 0 as unknown. The worker
+// makes the same sum in SQL for every stored fit whenever the
+// guide refreshes (RepriceLocalFittings): change both together.
 func (app *Application) fitDocPrice(ctx context.Context, doc *fitDoc) float64 {
 	prices := app.valuationPrices(ctx)
 	if len(prices) == 0 {

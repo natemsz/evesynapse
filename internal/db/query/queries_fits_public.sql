@@ -165,6 +165,28 @@ UPDATE local_fittings SET view_count = view_count + 1 WHERE id = $1;
 -- name: SetLocalFittingPrice :exec
 UPDATE local_fittings SET total_price = $1 WHERE id = $2 AND user_id = $3;
 
+-- RepriceLocalFittings sets every fit's total_price from the guide
+-- mirror: the hull plus each module line at adjusted price, the sum
+-- fitDocPrice makes when a fit is saved (0 when nothing in the fit
+-- is priced). Rows whose price is unchanged are not written, and an
+-- empty guide prices nothing. updated_at is left alone: a new price
+-- is not an edit.
+-- name: RepriceLocalFittings :execrows
+UPDATE local_fittings lf
+SET total_price = priced.total
+FROM (
+  SELECT f.id,
+         (COALESCE((SELECT gp.adjusted_price FROM guide_prices gp WHERE gp.type_id = f.ship_type_id), 0) +
+          COALESCE((SELECT SUM((it->>'qty')::numeric * gp.adjusted_price)
+                    FROM jsonb_array_elements(
+                        CASE WHEN jsonb_typeof(f.items_json::jsonb -> 'items') = 'array' THEN f.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
+                    JOIN guide_prices gp ON gp.type_id = (it->>'typeId')::bigint), 0))::float8 AS total
+  FROM local_fittings f
+) priced
+WHERE priced.id = lf.id
+  AND lf.total_price IS DISTINCT FROM priced.total
+  AND EXISTS (SELECT 1 FROM guide_prices);
+
 -- name: SitemapTopFits :many
 SELECT lf.id, lf.updated_at
 FROM local_fittings lf

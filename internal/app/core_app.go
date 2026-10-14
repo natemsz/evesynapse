@@ -181,12 +181,13 @@ type Application struct {
 	// Shared cache across instances (swarm_*.go): this
 	// instance's signing identity and its peer client, set at
 	// startup when SHARED_CACHE enables sharing, nil otherwise.
-	// swarmMu guards the last gossip time only; the identity
+	// swarmMu guards the next gossip time only; the identity
 	// never changes after startup.
 	swarmID         *swarmIdentity
 	swarmCli        *swarmClient
 	swarmMu         sync.Mutex
-	swarmLastGossip time.Time
+	swarmNextGossip time.Time
+	swarmNextLoaded bool
 	// swarmStreakMu guards the consecutive-failure streaks
 	// (signer to current run length). In-memory only: a
 	// restart forgets velocity but the ledger keeps every

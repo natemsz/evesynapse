@@ -126,51 +126,87 @@ var FitTipUI = (function () {
     return tipEl;
   }
   // Anchors the (already appended) tooltip where it covers no
-  // module the pointer may move to next. A ring slot's tooltip
-  // sits in the ring's hole, over the ship render, sized to fit
-  // inside the slots; a list chip's sits beside its row. Either
-  // way it is clamped inside the workbench, which is the offset
-  // parent (position: relative).
+  // module the pointer may move to next. A ring slot's tooltip sits
+  // beside the slot on its outward side — away from the ring's
+  // centre, where no other slot is — so it opens next to the
+  // pointer: right of a slot on the right, above one at the top,
+  // diagonally out from one in between. If that spot would still
+  // cover a slot once kept inside the workbench (a slot by the edge
+  // of a narrow screen), it falls back to the ring's hole, over the
+  // ship render. A list chip's sits beside its row. Positions are
+  // within the workbench, the offset parent (position: relative).
   function place(tipEl, slot, wb) {
     var wr = wb.getBoundingClientRect();
     var sr = slot.getBoundingClientRect();
     var ring = slot.closest ? slot.closest(".fit-visual") : null;
     var tx, ty, tw, th;
+    var gap = 8, edge = 8;
+    function clamp() {
+      if (tx + tw > wr.width - edge) tx = wr.width - tw - edge;
+      if (tx < edge) tx = edge;
+      if (ty + th > wr.height - edge) ty = wr.height - th - edge;
+      if (ty < edge) ty = edge;
+    }
     if (ring) {
       var vr = ring.getBoundingClientRect();
       var cx = vr.left + vr.width / 2, cy = vr.top + vr.height / 2;
-      var dx = sr.left + sr.width / 2 - cx, dy = sr.top + sr.height / 2 - cy;
-      // The square inscribed in the circle the slots leave free.
-      var free = Math.sqrt(dx * dx + dy * dy) - sr.width / 2 - 6;
-      var side = Math.floor(free * Math.SQRT2);
-      if (side > 0) {
-        tipEl.style.maxWidth = side + "px";
-        tipEl.style.maxHeight = side + "px";
-        tipEl.style.overflowY = "auto";
-        tipEl.style.overflowX = "hidden";
-      }
+      var sx = sr.left + sr.width / 2, sy = sr.top + sr.height / 2;
+      var dx = sx - cx, dy = sy - cy;
+      var len = Math.sqrt(dx * dx + dy * dy) || 1;
+      var ux = dx / len, uy = dy / len;
       tw = tipEl.offsetWidth || 190;
       th = tipEl.offsetHeight || 110;
-      tx = cx - wr.left - tw / 2;
-      ty = cy - wr.top - th / 2;
+      // Outward on each axis that points outward; centred on the
+      // slot along an axis that barely does.
+      var lean = 0.38;
+      if (ux > lean) tx = sr.right + gap;
+      else if (ux < -lean) tx = sr.left - gap - tw;
+      else tx = sx - tw / 2;
+      if (uy > lean) ty = sr.bottom + gap;
+      else if (uy < -lean) ty = sr.top - gap - th;
+      else ty = sy - th / 2;
+      tx -= wr.left;
+      ty -= wr.top;
+      clamp();
+      // Does it cover any slot of the ring (its own included)?
+      var box = { l: tx + wr.left, t: ty + wr.top, r: tx + wr.left + tw, b: ty + wr.top + th };
+      var slots = ring.querySelectorAll(".fit-vslot");
+      var covers = false;
+      for (var i = 0; i < slots.length && !covers; i++) {
+        var o = slots[i].getBoundingClientRect();
+        covers = o.right > box.l + 1 && o.left < box.r - 1 && o.bottom > box.t + 1 && o.top < box.b - 1;
+      }
+      if (covers) {
+        // The ring's hole: the square inscribed in the free circle.
+        var free = len - sr.width / 2 - 6;
+        var side = Math.floor(free * Math.SQRT2);
+        if (side > 0) {
+          tipEl.style.maxWidth = side + "px";
+          tipEl.style.maxHeight = side + "px";
+          tipEl.style.overflowY = "auto";
+          tipEl.style.overflowX = "hidden";
+        }
+        tw = tipEl.offsetWidth || 190;
+        th = tipEl.offsetHeight || 110;
+        tx = cx - wr.left - tw / 2;
+        ty = cy - wr.top - th / 2;
+        clamp();
+      }
     } else {
       tw = tipEl.offsetWidth || 190;
       th = tipEl.offsetHeight || 110;
       var right = sr.right - wr.left + 10;
       var left = sr.left - wr.left - tw - 10;
-      if (right + tw <= wr.width - 8) tx = right;
-      else if (left >= 8) tx = left;
+      if (right + tw <= wr.width - edge) tx = right;
+      else if (left >= edge) tx = left;
       else tx = sr.left - wr.left;
       ty = sr.top - wr.top;
       if (tx === sr.left - wr.left) {
         // No room on either side: under the row, the last resort.
         ty = sr.bottom - wr.top + 10;
       }
+      clamp();
     }
-    if (tx + tw > wr.width - 8) tx = wr.width - tw - 8;
-    if (tx < 8) tx = 8;
-    if (ty + th > wr.height - 8) ty = wr.height - th - 8;
-    if (ty < 8) ty = 8;
     tipEl.style.left = Math.round(tx) + "px";
     tipEl.style.top = Math.round(ty) + "px";
   }

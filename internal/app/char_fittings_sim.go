@@ -511,10 +511,32 @@ func fitTipLines(res *fit.Result, snap *fit.Snapshot, doc *fitDoc, typeID int64,
 	}
 	var lines []fitTipLine
 	add := func(label, value, class string) {
-		if len(lines) < 8 {
+		if len(lines) < fitTipMaxLines {
 			lines = append(lines, fitTipLine{label, value, class})
 		}
 	}
+	// A subsystem's mark on the hull: the slots and hardpoints it
+	// adds, which is what choosing one changes.
+	for _, sm := range fitTipSlotMods {
+		if n := eff[sm.attr]; n != 0 {
+			add(sm.label, fmt.Sprintf("%+d", int(math.Round(n))), "")
+		}
+	}
+	// Resist bonuses (hardeners, invulnerability fields, energized
+	// membranes, resist rigs): one row per damage type, tinted in
+	// that type's color, the figure as a resistance gain. They are
+	// state-folded like everything here, so an overheated hardener
+	// shows its heated figures.
+	for _, rb := range fitTipResistBonuses {
+		if v := eff[rb.attr]; v < 0 {
+			class := rb.class
+			if c := fitTipClass(-v, -base[rb.attr], true); c != "" {
+				class += " " + c
+			}
+			add(rb.label, "+"+fitVisualNum(-v)+"%", class)
+		}
+	}
+	weapon := snap != nil && (snap.HasEffect(typeID, fit.EffectTurretFitted) || snap.HasEffect(typeID, fit.EffectLauncherFitted))
 	chargeID := doc.Charges[typeID]
 	if chargeID > 0 {
 		key := fit.StateAttrKey(typeID, state)
@@ -576,6 +598,34 @@ func fitTipLines(res *fit.Result, snap *fit.Snapshot, doc *fitDoc, typeID int64,
 		}
 		add(label, fitVisualNum(math.Abs(sf))+"%", class)
 	}
+	// Passive bonuses: what a damage mod, extender, plate, battery,
+	// power relay or cap rig adds to the ship.
+	if !weapon {
+		if m := eff[fit.AttrDamageMultiplier]; m > 1 {
+			add("Damage", "+"+fitVisualNum((m-1)*100)+"%", fitTipClass(m, base[fit.AttrDamageMultiplier], true))
+		}
+		if m := eff[fitAttrSpeedMultiplier]; m > 0 && m < 1 {
+			add("Rate of fire", "+"+fitVisualNum((1-m)*100)+"%", fitTipClass(1-m, 1-base[fitAttrSpeedMultiplier], true))
+		}
+	}
+	if hp := eff[fitAttrCapacityBonus]; hp > 0 {
+		add("Shield HP", "+"+fitVisualNum(hp), fitTipClass(hp, base[fitAttrCapacityBonus], true))
+	}
+	if hp := eff[fitAttrArmorHPBonusAdd]; hp > 0 {
+		add("Armor HP", "+"+fitVisualNum(hp), fitTipClass(hp, base[fitAttrArmorHPBonusAdd], true))
+	}
+	if c := eff[fitAttrCapacitorBonus]; c > 0 {
+		add("Capacitor", "+"+fitVisualNum(c)+" GJ", fitTipClass(c, base[fitAttrCapacitorBonus], true))
+	}
+	if m := eff[fitAttrCapRechargeMult]; m > 0 && m < 1 {
+		add("Cap recharge", "−"+fitVisualNum((1-m)*100)+"%", fitTipClass(1-m, 1-base[fitAttrCapRechargeMult], true))
+	}
+	if m := eff[fitAttrShieldRechargeMult]; m > 0 && m < 1 {
+		add("Shield recharge", "−"+fitVisualNum((1-m)*100)+"%", fitTipClass(1-m, 1-base[fitAttrShieldRechargeMult], true))
+	}
+	if sig := eff[fitAttrSignatureRadiusBonus]; sig > 0 {
+		add("Signature", "+"+fitVisualNum(sig)+"%", fitTipClass(sig, base[fitAttrSignatureRadiusBonus], false))
+	}
 	if capNeed := eff[fit.AttrCapacitorNeed]; capNeed > 0 {
 		add("Cap", fitVisualNum(capNeed)+" GJ", fitTipClass(capNeed, base[fit.AttrCapacitorNeed], false))
 	}
@@ -586,6 +636,46 @@ func fitTipLines(res *fit.Result, snap *fit.Snapshot, doc *fitDoc, typeID int64,
 		add("PG", fitVisualNum(pg)+" MW", fitTipClass(pg, base[fit.AttrPower], false))
 	}
 	return lines
+}
+
+// fitTipMaxLines caps a tooltip: enough for a hardener's four
+// resists plus its costs, still a quick look.
+const fitTipMaxLines = 12
+
+// Module attributes the tooltip reads that the engine does not name.
+const (
+	fitAttrCapacitorBonus       = 67   // capacitor battery: capacity added
+	fitAttrCapacityBonus        = 72   // shield extender: shield HP added
+	fitAttrShieldRechargeMult   = 134  // power diagnostics, rigs
+	fitAttrCapRechargeMult      = 144  // cap power relay, cap control circuit
+	fitAttrSpeedMultiplier      = 204  // damage mods: rate-of-fire multiplier
+	fitAttrSignatureRadiusBonus = 554  // MWD signature bloom
+	fitAttrArmorHPBonusAdd      = 1159 // armor plate: armor HP added
+)
+
+// fitTipResistBonuses are the four resist-bonus attributes, in EVE's
+// own order, with each damage type's color class.
+var fitTipResistBonuses = []struct {
+	attr  int64
+	label string
+	class string
+}{
+	{984, "EM", "res-em"},
+	{987, "Thermal", "res-th"},
+	{986, "Kinetic", "res-kin"},
+	{985, "Explosive", "res-exp"},
+}
+
+// fitTipSlotMods are a subsystem's slot and hardpoint modifiers.
+var fitTipSlotMods = []struct {
+	attr  int64
+	label string
+}{
+	{fit.AttrHiSlotModifier, "High slots"},
+	{fit.AttrMedSlotModifier, "Mid slots"},
+	{fit.AttrLowSlotModifier, "Low slots"},
+	{fit.AttrTurretHardPointModifier, "Turrets"},
+	{fit.AttrLauncherHardPointModifier, "Launchers"},
 }
 
 // fitTipNum3 formats a small decimal (tracking speeds) with

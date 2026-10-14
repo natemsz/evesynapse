@@ -1593,10 +1593,11 @@ html[data-theme="light"] .cardbtn { background: #fffdf9; border-color: #d9a77a; 
   position: fixed;
   inset: 0;
   z-index: 150;
-  background: rgba(0, 0, 0, 0.66);
-  background: color-mix(in srgb, var(--panel) 70%, transparent);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  /* A deep, slightly warm smoke over a strong blur, for every modal on
+     the site (add module, quick jump, fit picker, planner dialogs). */
+  background: rgba(12, 8, 5, 0.58);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  backdrop-filter: blur(16px) saturate(1.15);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2967,6 +2968,15 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 .fit-tip-v { color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .fit-tip-v.good { color: #7dc96f; }
 .fit-tip-v.bad { color: #ff7a6b; }
+/* Resist rows wear their damage type's color (the resist bars' own);
+   a bonus above or below the module's base adds an arrow instead of
+   the green/red tint. */
+.fit-tip-v.res-em { color: #6fb6ff; }
+.fit-tip-v.res-th { color: #ff7a5c; }
+.fit-tip-v.res-kin { color: #c9c2b8; }
+.fit-tip-v.res-exp { color: #ffc266; }
+.fit-tip-v.good[class*="res-"]::after { content: " \25B2"; font-size: 0.7em; color: #7dc96f; }
+.fit-tip-v.bad[class*="res-"]::after { content: " \25BC"; font-size: 0.7em; color: #ff7a6b; }
 .fit-tip-x {
   position: absolute;
   top: 0.1rem;

@@ -163,24 +163,19 @@ const suggestedWarmed = 4
 // guesses never accumulate across keystrokes. Queue writes only;
 // the worker does the fetching.
 func (app *Application) noteSuggested(ctx context.Context, box, pool string, items []suggestItem) {
-	app.typingMu.Lock()
-	defer app.typingMu.Unlock()
 	if len(items) > suggestedWarmed {
 		items = items[:suggestedWarmed]
 	}
-	app.replaceTypingGuesses(ctx, box)
-	now := time.Now().UTC()
+	guesses := make([]typingGuess, 0, len(items))
 	for _, it := range items {
-		if it.ID <= 0 {
-			continue
-		}
 		switch pool {
 		case suggestPoolMarket:
-			app.noteTypingHistoryGuess(ctx, box, defaultMarketRegion, it.ID, now)
+			guesses = append(guesses, typingGuess{kind: pageWantHistory, id: it.ID, region: defaultMarketRegion})
 		default:
-			app.noteTypingDetailGuess(ctx, box, it.ID, now)
+			guesses = append(guesses, typingGuess{kind: pageWantTypeDescription, id: it.ID})
 		}
 	}
+	app.setTypingGuesses(ctx, box, guesses, time.Now().UTC())
 }
 
 // ---------------------------------------------------------------------------
@@ -281,18 +276,15 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 	// Guess, same as the search boxes: a jump to any of these
 	// items should land on a warming chart, not a cold one. Each
 	// keystroke replaces the box's previous guesses.
-	box := app.typingBox(ctx, "topbar")
-	// One step with the replace: a second keystroke's sequence
-	// waits outside typingMu until this one lands whole.
-	app.typingMu.Lock()
-	defer app.typingMu.Unlock()
-	app.replaceTypingGuesses(ctx, box)
-	now := time.Now().UTC()
+	// The guesses are gathered as the searches below find them
+	// and written in one step at the end (setTypingGuesses): no
+	// lock is held while anything is being searched.
+	var guesses []typingGuess
 	for i, m := range itemMatches {
 		if i >= suggestedWarmed {
 			break
 		}
-		app.noteTypingHistoryGuess(ctx, box, defaultMarketRegion, m.ID, now)
+		guesses = append(guesses, typingGuess{kind: pageWantHistory, id: m.ID, region: defaultMarketRegion})
 	}
 
 	// Corporations and alliances whose public records have
@@ -322,7 +314,7 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 		}
 		hits = append(hits, corpHits...)
 		for _, h := range corpHits {
-			app.noteTypingCorporationGuess(ctx, box, h.ID, now)
+			guesses = append(guesses, typingGuess{kind: pageWantCorporation, id: h.ID})
 		}
 	} else {
 		logging.Errorf("search: corporation records for %q: %v", q, err)
@@ -352,7 +344,7 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 		}
 		hits = append(hits, allianceHits...)
 		for _, h := range allianceHits {
-			app.noteTypingAllianceGuess(ctx, box, h.ID, now)
+			guesses = append(guesses, typingGuess{kind: pageWantAlliance, id: h.ID})
 		}
 	} else {
 		logging.Errorf("search: alliance records for %q: %v", q, err)
@@ -387,11 +379,13 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 		pilotHitCount = len(pilotHits)
 		hits = append(hits, pilotHits...)
 		for _, h := range pilotHits {
-			app.noteTypingPilotGuess(ctx, box, h.ID, now)
+			guesses = append(guesses, typingGuess{kind: pageWantPilot, id: h.ID})
 		}
 	} else {
 		logging.Errorf("search: pilot records for %q: %v", q, err)
 	}
+
+	app.setTypingGuesses(ctx, app.typingBox(ctx, "topbar"), guesses, time.Now().UTC())
 
 	// No local character of either kind matched: if the query
 	// reads as a full pilot name, note the one-per-name

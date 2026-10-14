@@ -2013,6 +2013,22 @@ html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge 
   padding: 0.8rem 1rem;
 }
 .fit-stats > h4:first-child { margin-top: 0; color: var(--success); }
+/* A stats panel wide enough for two runs of rows uses both, so it
+stays about as tall as the ship ring beside it and a change to the
+fit reads without scrolling. */
+.fit-stats { container-type: inline-size; }
+@container (min-width: 30rem) {
+  .fit-stats .tw:has(> .fit-statlist) { overflow: visible; }
+  .fit-statlist, .fit-statlist tbody { display: block; }
+  .tw .fit-statlist { width: 100%; }
+  .fit-statlist tbody { columns: 2; column-gap: 1.25rem; }
+  .fit-statlist tr { display: flex; break-inside: avoid; }
+  .fit-statlist th, .fit-statlist td { padding-top: 0.3rem; padding-bottom: 0.3rem; }
+  /* The pinned first cell of a .tw table has nothing to pin to
+  across columns. */
+  .fit-statlist th { flex: 0 0 7.5rem; position: static; border-right: 0; }
+  .fit-statlist td { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+}
 .fit-group { margin-bottom: 0.8rem; }
 .fit-group > h4 { margin: 0 0 0.4rem; }
 .fit-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
@@ -2573,7 +2589,10 @@ html[data-theme="light"] .searchpanel {
     display: grid;
     /* The module lists column is capped so it cannot push the stats
        panel far right. */
-    grid-template-columns: minmax(15rem, 22rem) minmax(20rem, 1.35fr) minmax(17rem, 1fr);
+    /* The ring takes a share of the viewport, capped at its full
+       size; the stats panel takes the rest, so on a wide screen
+       the width goes to the stats instead of empty margins. */
+    grid-template-columns: minmax(13rem, 16rem) clamp(20rem, 30vw - 2rem, 34rem) minmax(20rem, 1fr);
     gap: 1.25rem;
     align-items: start;
   }
@@ -2582,9 +2601,7 @@ html[data-theme="light"] .searchpanel {
     grid-column: 2;
     grid-row: 1;
     width: 100%;
-    max-width: 34rem;
     margin: 0;
-    justify-self: center;
   }
   .fit-wb > .fit-cols > .fit-slots { grid-column: 1; grid-row: 1; }
   .fit-wb > .fit-cols > .fit-stats { grid-column: 3; grid-row: 1; }

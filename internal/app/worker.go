@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"runtime/debug"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -1086,11 +1087,17 @@ func (app *Application) warmCharacterNames(ctx context.Context, ch db.Character,
 // type_names.
 func (app *Application) warmMissingTypeNames(ctx context.Context, typeIDs []int64, budget *warmBudget) int {
 	have := app.esi.CachedTypeNames(ctx, typeIDs)
+	now := time.Now().UTC()
 	var missing []int64
 	for _, id := range typeIDs {
-		if _, ok := have[id]; !ok {
-			missing = append(missing, id)
+		if _, ok := have[id]; ok {
+			continue
 		}
+		// Swarm first: a dedicated node's budget before this one's.
+		if app.swarmDefersFetch(ctx, swarmKindTypeName, strconv.FormatInt(id, 10), now) {
+			continue
+		}
+		missing = append(missing, id)
 	}
 	return app.runWarmPool(ctx, missing, budget, func(ctx context.Context, id int64) bool {
 		return app.warmTypeName(ctx, budget, id)

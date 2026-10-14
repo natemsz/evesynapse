@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+	"strconv"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -149,6 +150,11 @@ idsLoop:
 				app.esi.StoreStructureName(id, name)
 				resolved++
 			}
+			continue
+		}
+		// Swarm first: a dedicated node's budget before this
+		// one's (swarm_warm.go). The free tier above still runs.
+		if app.swarmDefersFetch(ctx, swarmKindStructure, strconv.FormatInt(id, 10), now) {
 			continue
 		}
 		// Tier 1: ask every eligible character, best bet first,

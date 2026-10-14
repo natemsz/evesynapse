@@ -46,7 +46,7 @@ func TestTrainingHorizonRenders(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
-	mustContain(t, "/", body, "Training horizon", "Gunnery", "Missiles", "Idle: Fixture Beta.")
+	mustContain(t, "/", body, "Training Horizon", "Gunnery", "Missiles", "Idle: Fixture Beta.")
 }
 
 // TestTrainingHorizonSkipsFinishedSkills: a stored queue keeps

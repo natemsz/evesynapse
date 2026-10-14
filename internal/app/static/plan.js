@@ -988,40 +988,19 @@ function syncPresetButtons() {
   });
 }
 
-var planModalEscapeBound = false;
-function armPlanModalEscape() {
-  if (planModalEscapeBound) return;
-  planModalEscapeBound = true;
-  document.addEventListener("keydown", function (ev) {
-    if (ev.key !== "Escape") return;
-    var m = document.getElementById("me-modal");
-    if (m && !m.hidden) m.hidden = true;
-    var s = document.getElementById("plan-settings-modal");
-    if (s && !s.hidden) s.hidden = true;
+// The ME and settings dialogs are shared modals (app.js
+// EveSynapseModal): it owns the backdrop click, Escape and giving
+// the focus back to the toggle.
+function wireModal(tog, modal, closeBtn) {
+  if (!tog || !modal) return;
+  tog.addEventListener("click", function () {
+    window.EveSynapseModal.open(modal, { focus: false });
+    if (closeBtn) closeBtn.focus({ preventScroll: true });
   });
+  if (closeBtn) closeBtn.addEventListener("click", function () { window.EveSynapseModal.close(modal); });
 }
 function wireME() {
-  var tog = $("me-toggle"), modal = $("me-modal");
-  function openME() {
-    if (!modal) return;
-    modal.hidden = false;
-    var close = $("me-close");
-    if (close) close.focus({ preventScroll: true });
-  }
-  function closeME() {
-    if (!modal) return;
-    modal.hidden = true;
-    if (tog) tog.focus({ preventScroll: true });
-  }
-  if (tog && modal) {
-    tog.addEventListener("click", openME);
-    modal.addEventListener("click", function (ev) {
-      if (ev.target === modal) closeME();
-    });
-    armPlanModalEscape();
-    var closeBtn = $("me-close");
-    if (closeBtn) closeBtn.addEventListener("click", closeME);
-  }
+  wireModal($("me-toggle"), $("me-modal"), $("me-close"));
   var apply = $("me-apply"), setall = $("me-setall");
   if (apply && setall) apply.addEventListener("click", function () {
     var v = parseInt(setall.value, 10);
@@ -1032,25 +1011,7 @@ function wireME() {
 }
 
 function wirePlanSettings() {
-  var tog = $("plan-settings-toggle"), modal = $("plan-settings-modal");
-  function closeSettings() {
-    if (!modal) return;
-    modal.hidden = true;
-    if (tog) tog.focus({ preventScroll: true });
-  }
-  if (tog && modal) {
-    tog.addEventListener("click", function () {
-      modal.hidden = false;
-      var close = $("plan-settings-close");
-      if (close) close.focus({ preventScroll: true });
-    });
-    modal.addEventListener("click", function (ev) {
-      if (ev.target === modal) closeSettings();
-    });
-    armPlanModalEscape();
-    var closeBtn = $("plan-settings-close");
-    if (closeBtn) closeBtn.addEventListener("click", closeSettings);
-  }
+  wireModal($("plan-settings-toggle"), $("plan-settings-modal"), $("plan-settings-close"));
 }
 
 // Recalculate without a page reload: the server re-renders the

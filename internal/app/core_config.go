@@ -90,20 +90,27 @@ type Config struct {
 	logLevel        string         // LOG_LEVEL: debug, info (default), warn or error
 	logFormat       string         // LOG_FORMAT: text (default) or json
 
-	// Trade ideas (tradeideas.go): Cloudflare Workers AI, asked
-	// about the Forge spread-scanner rows every so often for the
-	// home widget. Both empty means the widget stays off; the
-	// token never leaves the Authorization header or the logs.
+	// Trade ideas (tradeideas.go): a model asked about the Forge
+	// spread-scanner rows every so often. Meta's Muse Wonder when
+	// MODEL_API_KEY is set (tradeideas_meta.go), else Gemma on
+	// Cloudflare Workers AI with the account ID and token. Neither
+	// configured means the feature stays off; a key or token never
+	// leaves the Authorization header or the logs.
 	cloudflareAccountID string // CLOUDFLARE_ACCOUNT_ID
 	cloudflareAuthToken string // CLOUDFLARE_AUTH_TOKEN
+	metaAIKey           string // MODEL_API_KEY
 }
 
 // TradeIdeasConfigured reports whether the trade-ideas refresh
-// can run: it needs both the account ID (the URL) and the token
-// (the Authorization header).
+// can run: a Meta API key, or both the Cloudflare account ID (the
+// URL) and token (the Authorization header).
 func (c Config) TradeIdeasConfigured() bool {
-	return c.cloudflareAccountID != "" && c.cloudflareAuthToken != ""
+	return c.metaAIKey != "" || (c.cloudflareAccountID != "" && c.cloudflareAuthToken != "")
 }
+
+// tradeIdeasUsesMeta reports whether the refresh asks Muse Wonder
+// (MODEL_API_KEY set) rather than Gemma.
+func (c Config) tradeIdeasUsesMeta() bool { return c.metaAIKey != "" }
 
 // SSOConfigured reports whether EVE SSO can run: it needs both the
 // client ID (login redirect) and the secret (token exchange).
@@ -225,6 +232,7 @@ func LoadConfig() (Config, error) {
 		esiContact:          os.Getenv("ESI_CONTACT"),
 		cloudflareAccountID: strings.TrimSpace(os.Getenv("CLOUDFLARE_ACCOUNT_ID")),
 		cloudflareAuthToken: strings.TrimSpace(os.Getenv("CLOUDFLARE_AUTH_TOKEN")),
+		metaAIKey:           strings.TrimSpace(os.Getenv("MODEL_API_KEY")),
 		logLevel:            os.Getenv("LOG_LEVEL"),
 		logFormat:           os.Getenv("LOG_FORMAT"),
 		pushPublicKey:       os.Getenv("VAPID_PUBLIC_KEY"),

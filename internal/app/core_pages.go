@@ -24,7 +24,6 @@ type pageData struct {
 	Error             string // friendly, user-safe banner (never internals)
 	Section           string // top-nav branch key (base.html); filled by render from the page when empty
 	NavPage           string // template file rendered, for marking the exact nav link; filled by render
-	SyncStatus        string // footer "ESI Health:" value ("OK", "limited"); filled by render
 	Shopping          *shoppingView
 	Home              *homeView
 	CharChars         []assetCharLink
@@ -49,6 +48,7 @@ type pageData struct {
 	IntelIncursions   *incursionsView
 	IntelFW           *fwView
 	ServerStatus      *serverStatusView
+	ESIHealth         *esiHealthView // Overview bar: ESI health and Tranquility players (signed-in Home only)
 	Corps             []corpView
 	CorpOptions       []corpOption // the corporations the Corporation page can show
 	CorpChars         []assetCharLink
@@ -292,11 +292,6 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 	}
 	data.NavLinks = navLinksFor(data.Section, data.NavPage, data.NavCharacter)
 	data.SectionTabs = sectionTabsFor(data.NavLinks, data.Section)
-	// Sync status for the footer. Cheap: ESI error budget
-	// is in-memory; sweep state is a single cached query.
-	if data.SyncStatus == "" {
-		data.SyncStatus = app.syncStatusString(ctx)
-	}
 	// One read of the account's characters serves both the header
 	// switcher and the admin check behind the Admin/Sync nav links.
 	if data.LoggedIn && (data.Switcher == nil || !data.IsAdmin) {
@@ -372,15 +367,6 @@ func friendlyLoginError(code string) string {
 	}
 }
 
-// syncStatusString is the footer's "ESI Health:" value: "OK", or
-// "limited" when ESI's error budget is low.
-func (app *Application) syncStatusString(ctx context.Context) string {
-	if app.esi != nil && app.esi.ErrorBudgetLow() {
-		return "limited"
-	}
-	return "OK"
-}
-
 func (app *Application) handleHome(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	loggedIn := app.sessions.GetBool(ctx, sessionAuthenticated)
@@ -404,6 +390,9 @@ func (app *Application) handleHome(w http.ResponseWriter, r *http.Request) {
 	// store only; absent until the first intel pass lands it.
 	if status, ok := app.loadServerStatus(ctx); ok {
 		data.ServerStatus = status
+	}
+	if data.LoggedIn {
+		data.ESIHealth = app.esiHealth(ctx)
 	}
 	app.render(ctx, w, http.StatusOK, "home.html", data)
 }

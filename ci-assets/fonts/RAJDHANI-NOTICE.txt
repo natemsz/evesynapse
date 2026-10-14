@@ -1,0 +1,8 @@
+Rajdhani (rajdhani-600.woff2.b64, rajdhani-600-ext.woff2.b64, rajdhani-700.woff2.b64) is the font of the site's headings.
+
+Copyright (c) 2014, Indian Type Foundry (info@indiantypefoundry.com)
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is available with a FAQ at: https://scripts.sil.org/OFL
+
+The files are the Latin and Latin Extended subsets Google Fonts serves (SemiBold 600, Bold 700).

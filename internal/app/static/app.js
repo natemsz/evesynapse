@@ -25,6 +25,78 @@
     window.EveSynapseContent.onReady(fn);
   }
 
+  // --- Modal dialogs ---------------------------------------------
+  // One implementation behind every pop-up — add a module, the fit
+  // picker, the planner's ME and settings dialogs, quick jump: a
+  // .modal-backdrop around a .modal, opened and closed through
+  // EveSynapseModal. open() shows the backdrop in the browser's top
+  // layer (a manual popover), so its blur covers the whole page —
+  // top bar and sidebar included — whatever stacking the content
+  // sits in, without moving the dialog out of its form. It
+  // remembers the focus to give back and moves focus in; close()
+  // hides it and gives the focus back. A click on the backdrop
+  // itself, on any [data-close-modal] inside, or Escape closes the
+  // topmost one; opts.onClose runs on every close, however it came.
+  var modalStack = [];
+  function modalIndex(el) {
+    for (var i = modalStack.length - 1; i >= 0; i--) if (modalStack[i].el === el) return i;
+    return -1;
+  }
+  function topLayer(el, show) {
+    if (!el.showPopover) return;
+    if (!el.hasAttribute("popover")) el.setAttribute("popover", "manual");
+    try {
+      if (show) el.showPopover(); else el.hidePopover();
+    } catch (err) { /* already in that state */ }
+  }
+  var EveSynapseModal = window.EveSynapseModal = {
+    open: function (el, opts) {
+      if (!el || modalIndex(el) >= 0) return;
+      opts = opts || {};
+      modalStack.push({ el: el, back: document.activeElement, onClose: opts.onClose });
+      el.hidden = false;
+      topLayer(el, true);
+      document.documentElement.classList.add("modal-open");
+      if (opts.focus !== false) {
+        var first = el.querySelector("[autofocus], input:not([type=hidden]), select, textarea, .modal-item, button:not([data-close-modal])") ||
+          el.querySelector("[data-close-modal], button");
+        if (first && first.focus) first.focus({ preventScroll: true });
+      }
+    },
+    close: function (el) {
+      if (!el) return;
+      var i = modalIndex(el);
+      el.hidden = true;
+      topLayer(el, false);
+      if (i < 0) return;
+      var entry = modalStack.splice(i, 1)[0];
+      if (!modalStack.length) document.documentElement.classList.remove("modal-open");
+      if (entry.onClose) entry.onClose();
+      if (entry.back && entry.back.focus && document.contains(entry.back)) entry.back.focus({ preventScroll: true });
+    },
+    isOpen: function (el) { return modalIndex(el) >= 0; }
+  };
+  document.addEventListener("click", function (ev) {
+    var t = ev.target;
+    if (!t || !t.classList) return;
+    if (t.classList.contains("modal-backdrop")) { EveSynapseModal.close(t); return; }
+    var closer = t.closest && t.closest("[data-close-modal]");
+    var box = closer && closer.closest(".modal-backdrop");
+    if (box) EveSynapseModal.close(box);
+  });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Escape" || !modalStack.length || ev.defaultPrevented) return;
+    ev.preventDefault();
+    EveSynapseModal.close(modalStack[modalStack.length - 1].el);
+  });
+  // A dialog in content that is being swapped out closes with it.
+  document.addEventListener("evesynapse:content-will-swap", function () {
+    var main = document.getElementById("main-content");
+    for (var i = modalStack.length - 1; i >= 0; i--) {
+      if (main && main.contains(modalStack[i].el)) EveSynapseModal.close(modalStack[i].el);
+    }
+  });
+
   // --- Section tabs --------------------------------------------
   // On a phone the section's tabs scroll sideways; start with the
   // current page's tab in view rather than off the right edge.
@@ -404,6 +476,24 @@
   onContentReady(initScopeForms);
   initScopeForms(document);
 
+  // The size picker's outside-click close binds once and reads the
+  // current grid each time; binding it per grid would pile a dead
+  // handler behind every swapped customize view.
+  var homePickCloseBound = false;
+
+  // Card control glyphs: one stroke family, drawn at one size and
+  // centered in identical square buttons.
+  var CARD_ICONS = {
+    move: '<path d="M12 3v18M3 12h18"/><path d="m9 6 3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/>',
+    size: '<path d="M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5"/>',
+    remove: '<path d="M6 6l12 12M18 6 6 18"/>'
+  };
+  function cardIcon(name) {
+    return '<svg class="cardicon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+      '<g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
+      CARD_ICONS[name] + "</g></svg>";
+  }
+
   // --- Home customize: drag, resize, remove, add module --------
   // Layered over the plain customize forms, never replacing them:
   // this runs only on the customize view (the data-customize grid)
@@ -423,22 +513,6 @@
   onContentReady(initHomeGrid);
   initHomeGrid(document);
 
-  // The add-module modal Escape handler binds once and follows
-  // the current grid across swaps; binding it per grid would pile
-  // a dead handler behind every swapped customize view.
-  var homeModalCurrent = null;
-  var homePickCloseBound = false;
-  var homeModalEscapeBound = false;
-  function armHomeModalEscape() {
-    if (homeModalEscapeBound) return;
-    homeModalEscapeBound = true;
-    document.addEventListener("keydown", function (ev) {
-      if (ev.key === "Escape" && homeModalCurrent && !homeModalCurrent.hidden) {
-        homeModalCurrent.hidden = true;
-      }
-    });
-  }
-
   function initHomeCustomize(grid) {
     var modal = document.getElementById("add-module-modal");
     grid.classList.add("has-controls");
@@ -453,25 +527,132 @@
       }).then(function (resp) { return resp.ok; }, function () { return false; });
     }
 
+    function moduleCards() {
+      return grid.querySelectorAll(":scope > .card[data-widget]");
+    }
     function widgetIDs() {
       var ids = [];
-      var cards = grid.querySelectorAll(".card[data-widget]");
-      for (var i = 0; i < cards.length; i++) {
-        ids.push(cards[i].getAttribute("data-widget"));
-      }
+      var cards = moduleCards();
+      for (var i = 0; i < cards.length; i++) ids.push(cards[i].getAttribute("data-widget"));
       return ids;
     }
 
-    function closeModal() { if (modal) modal.hidden = true; }
+    // --- motion --------------------------------------------------
+    // Every rearrangement goes through flip(): measure where each
+    // module is drawn right now (mid-animation included), stop
+    // whatever it was doing, apply the change, measure the new
+    // layout, and play each module from where it was drawn to its
+    // new cell. Moves are translate-only — scaling a module to
+    // fake its size change squashes its text — and every module
+    // runs at most one animation, cancelled before the next change
+    // is measured, so overlapping changes never fight, jump back or
+    // replay. The measured layout (page coordinates, no transforms)
+    // is kept for the drag's hit-testing, so decisions follow where
+    // modules are going, not where an animation happens to be.
+    var reducedMotion = window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var canAnimate = !reducedMotion && !!Element.prototype.animate;
+    var MOVE_MS = 260;
+    var EASE = "cubic-bezier(0.2, 0, 0, 1)";
+    var layout = new Map();
+
+    function movers() {
+      return grid.querySelectorAll(":scope > .card:not(.dragging)");
+    }
+    function stopMotion(el) {
+      if (el._motion) { el._motion.cancel(); el._motion = null; }
+    }
+    function pageBox(r) {
+      var sx = window.scrollX, sy = window.scrollY;
+      return { l: r.left + sx, t: r.top + sy, r: r.right + sx, b: r.bottom + sy };
+    }
+    function measure() {
+      layout = new Map();
+      var els = movers();
+      for (var i = 0; i < els.length; i++) {
+        // A running move is a transform; the box under it is the
+        // layout. Strip the move to read it.
+        var el = els[i], r = el.getBoundingClientRect(), b = pageBox(r);
+        if (el._motion) {
+          var m = new DOMMatrixReadOnly(window.getComputedStyle(el).transform);
+          b = { l: b.l - m.m41, t: b.t - m.m42, r: b.r - m.m41, b: b.b - m.m42 };
+        }
+        layout.set(el, b);
+      }
+    }
+    function flip(mutate, still) {
+      var before = new Map();
+      var els = movers();
+      for (var i = 0; i < els.length; i++) before.set(els[i], els[i].getBoundingClientRect());
+      for (var j = 0; j < els.length; j++) stopMotion(els[j]);
+      mutate();
+      var now = movers();
+      layout = new Map();
+      for (var k = 0; k < now.length; k++) {
+        var el = now[k], r = el.getBoundingClientRect(), was = before.get(el);
+        layout.set(el, pageBox(r));
+        if (!canAnimate || el === still) continue;
+        if (!was) {
+          // Arriving: a soft fade and rise into its cell.
+          el._motion = el.animate([
+            { opacity: 0, transform: "translateY(10px) scale(0.98)" },
+            { opacity: 1, transform: "none" }
+          ], { duration: MOVE_MS, easing: EASE });
+        } else {
+          var dx = was.left - r.left, dy = was.top - r.top;
+          if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
+          el._motion = el.animate([
+            { transform: "translate(" + dx + "px," + dy + "px)" },
+            { transform: "none" }
+          ], { duration: MOVE_MS, easing: EASE });
+        }
+        el._motion.onfinish = (function (e, a) {
+          return function () { if (e._motion === a) e._motion = null; };
+        })(el, el._motion);
+      }
+    }
+    // A module leaving: fade it down, then close the gap.
+    function removeCard(card) {
+      var gone = false;
+      var go = function () {
+        if (gone) return;
+        gone = true;
+        flip(function () { card.remove(); });
+      };
+      if (!canAnimate) { go(); return; }
+      stopMotion(card);
+      card.style.pointerEvents = "none";
+      card.animate([
+        { opacity: 1, transform: "none" },
+        { opacity: 0, transform: "scale(0.96)" }
+      ], { duration: 160, easing: "ease-in", fill: "forwards" }).onfinish = go;
+      // A page whose animations are paused still loses the card.
+      window.setTimeout(go, 220);
+    }
+    // A brief red pulse on whatever refused a change.
+    function refuse(el) {
+      el.classList.remove("refused");
+      void el.offsetWidth;
+      el.classList.add("refused");
+      window.setTimeout(function () { el.classList.remove("refused"); }, 650);
+    }
 
     // --- sizes ---------------------------------------------------
     // A module's size is its gw/gh classes (grid cells across and
-    // down, 1-3); the CSS lays the grid out from them, so resizing
-    // is setting two classes and saving.
+    // down, 1-3); the CSS lays the grid out from them and every cell
+    // is a fixed size, so a module is exactly as big as its cells.
+    // Some modules have a floor (data-minw / data-minh): asked for
+    // less, the cells blink red and the module keeps its size.
     function sizeOf(el) {
       return {
         w: parseInt(el.getAttribute("data-gw"), 10) || 1,
         h: parseInt(el.getAttribute("data-gh"), 10) || 1
+      };
+    }
+    function minOf(el) {
+      return {
+        w: parseInt(el.getAttribute("data-minw"), 10) || 1,
+        h: parseInt(el.getAttribute("data-minh"), 10) || 1
       };
     }
     function sizeCard(el, w, h) {
@@ -481,37 +662,37 @@
       el.setAttribute("data-gw", String(w));
       el.setAttribute("data-gh", String(h));
     }
-
     // One resize, wherever it came from (picker or grip): apply it at
     // once, save it, and put the old size back if the save fails.
     function resizeCard(card, w, h) {
       var was = sizeOf(card);
       if (was.w === w && was.h === h) return;
-      flipSiblings(function () { sizeCard(card, w, h); });
+      flip(function () { sizeCard(card, w, h); });
       postLayout({ action: "size", widget: card.getAttribute("data-widget"), w: w, h: h }).then(function (ok) {
-        if (!ok) flipSiblings(function () { sizeCard(card, was.w, was.h); });
+        if (!ok) flip(function () { sizeCard(card, was.w, was.h); });
       });
     }
+    function saveOrder() {
+      return postLayout({ action: "order", ids: widgetIDs().join(",") });
+    }
 
-    // Give one card its drag handle, resize toggle and × button.
+    // Give one card its move handle, resize toggle and × button.
     // Cards added from the pop-up pass through here too.
     function enhanceCard(card) {
       var heading = card.querySelector(":scope > h2, :scope > h3");
       if (!heading || card.querySelector(".draghandle")) return;
       var id = card.getAttribute("data-widget");
-      // The fold button (+ / –) already lives in the heading;
-      // keep its glyph out of the accessible name.
-      var title = heading.textContent.replace(/[+–-]\s*$/, "").trim();
+      var title = heading.textContent.trim();
 
       var handle = document.createElement("button");
       handle.type = "button";
-      handle.className = "draghandle";
-      handle.textContent = "⠿";
-      handle.setAttribute("aria-label", "Drag to reorder " + title);
+      handle.className = "cardbtn draghandle";
+      handle.innerHTML = cardIcon("move");
+      handle.title = "Drag to move";
+      handle.setAttribute("aria-label", "Move " + title + " (drag, or use the arrow keys)");
       heading.insertBefore(handle, heading.firstChild);
-      handle.addEventListener("pointerdown", function (ev) {
-        startDrag(ev, card, handle);
-      });
+      handle.addEventListener("pointerdown", function (ev) { startDrag(ev, card, handle); });
+      handle.addEventListener("keydown", function (ev) { keyMove(ev, card, handle); });
 
       // The card's own controls sit in its top-right corner: the
       // size picker (a 3x3 grid of cells, the way a table size is
@@ -521,8 +702,9 @@
       ctl.className = "cardctl";
       var sizeBtn = document.createElement("button");
       sizeBtn.type = "button";
-      sizeBtn.className = "cardsize";
-      sizeBtn.textContent = "⤢";
+      sizeBtn.className = "cardbtn cardsize";
+      sizeBtn.innerHTML = cardIcon("size");
+      sizeBtn.title = "Resize";
       sizeBtn.setAttribute("aria-haspopup", "true");
       sizeBtn.setAttribute("aria-expanded", "false");
       sizeBtn.setAttribute("aria-label", "Resize " + title);
@@ -537,6 +719,7 @@
           (function (w, h) {
             var cell = document.createElement("button");
             cell.type = "button";
+            cell.className = "sizecell";
             cell.setAttribute("data-gw", String(w));
             cell.setAttribute("data-gh", String(h));
             cell.setAttribute("aria-label", w + " wide by " + h + " tall");
@@ -544,6 +727,15 @@
             cell.addEventListener("mouseenter", function () { paintPicker(w, h); });
             cell.addEventListener("focus", function () { paintPicker(w, h); });
             cell.addEventListener("click", function () {
+              var min = minOf(card);
+              if (w < min.w || h < min.h) {
+                // Under the module's floor: blink what was asked
+                // for, then show the size it keeps.
+                paintPicker(w, h);
+                cells.forEach(function (c) { if (c.classList.contains("on")) refuse(c); });
+                window.setTimeout(function () { var s = sizeOf(card); paintPicker(s.w, s.h); }, 650);
+                return;
+              }
               resizeCard(card, w, h);
               closePicker();
             });
@@ -553,9 +745,11 @@
         }
       }
       function paintPicker(w, h) {
+        var min = minOf(card);
         cells.forEach(function (c) {
           var cw = +c.getAttribute("data-gw"), ch = +c.getAttribute("data-gh");
           c.classList.toggle("on", cw <= w && ch <= h);
+          c.classList.toggle("floor", cw <= min.w && ch <= min.h);
         });
       }
       function closePicker() {
@@ -581,17 +775,15 @@
 
       var remove = document.createElement("button");
       remove.type = "button";
-      remove.className = "cardremove";
-      remove.textContent = "×";
+      remove.className = "cardbtn cardremove";
+      remove.innerHTML = cardIcon("remove");
+      remove.title = "Remove";
       remove.setAttribute("aria-label", "Remove " + title + " from your home");
       remove.addEventListener("click", function () {
         remove.disabled = true;
         postLayout({ action: "toggle", widget: id }).then(function (ok) {
-          if (ok) {
-            flipSiblings(function () { card.remove(); });
-          } else {
-            remove.disabled = false;
-          }
+          if (ok) removeCard(card);
+          else remove.disabled = false;
         });
       });
       ctl.appendChild(sizeBtn);
@@ -606,147 +798,129 @@
       card.appendChild(grip);
     }
 
-    // --- dragging ---------------------------------------------
-    // The model: lifting a card swaps a placeholder into its
-    // slot, wearing the span class the solver assigns the card
-    // at the hovered position, so the layout never collapses
-    // mid-drag; the card itself goes position:fixed and follows
-    // the pointer, fully opaque with its real panel colors.
-    // When the pointer crosses a sibling's center (plus a
-    // hysteresis margin) the placeholder hops slots, everything
-    // re-solves, and the displaced siblings FLIP-animate into
-    // their new cells — position and size — instead of
-    // teleporting. Holding the card near a viewport edge
-    // auto-scrolls the page, so long moves on a short screen
-    // don't need grab-drop-grab. On drop the card animates into
-    // the placeholder's slot and swaps places with it; a
-    // cancelled drag or a failed save restores the pre-drag
-    // order from a DOM snapshot taken at lift-off.
-    var reducedMotion = window.matchMedia &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-    // Midpoint hysteresis, in pixels: the pointer must push
-    // this far past the neighbor cell's center before the solve
-    // may change, so a boundary never flickers under the finger.
-    var hyst = 10;
-
-    function siblingCards() {
-      return grid.querySelectorAll(".card[data-widget]:not(.dragging)");
+    // Keyboard move: the arrow keys on a module's move handle step it
+    // one place earlier or later and save.
+    function keyMove(ev, card, handle) {
+      var back = ev.key === "ArrowUp" || ev.key === "ArrowLeft";
+      var fwd = ev.key === "ArrowDown" || ev.key === "ArrowRight";
+      if (!back && !fwd) return;
+      ev.preventDefault();
+      var all = Array.prototype.slice.call(moduleCards());
+      var i = all.indexOf(card), j = back ? i - 1 : i + 1;
+      if (j < 0 || j >= all.length) return;
+      flip(function () {
+        grid.insertBefore(card, back ? all[j] : all[j].nextSibling);
+      });
+      handle.focus();
+      saveOrder();
     }
 
-    // FLIP-animate the sibling cards around a DOM mutation:
-    // measure (position and size), mutate, then invert each
-    // moved card back onto its old spot — a translate, plus a
-    // brief scale for cards whose solved span changed size —
-    // and let a transition play it into the new cell. Cleanup
-    // removes every inline property again.
-    function flipSiblings(mutate) {
-      var cards = siblingCards();
-      var first = [];
-      for (var i = 0; i < cards.length; i++) {
-        first.push(cards[i].getBoundingClientRect());
-      }
-      mutate();
-      if (reducedMotion) return;
-      for (var j = 0; j < cards.length; j++) {
-        (function (el, before) {
-          var now = el.getBoundingClientRect();
-          var dx = before.left - now.left, dy = before.top - now.top;
-          var sx = now.width ? before.width / now.width : 1;
-          var sy = now.height ? before.height / now.height : 1;
-          if (!dx && !dy && sx === 1 && sy === 1) return;
-          el.style.transformOrigin = "0 0";
-          el.style.transform = "translate(" + dx + "px," + dy + "px) scale(" + sx + "," + sy + ")";
-          el.style.transition = "none";
-          // Reading offsetWidth commits the inverted state
-          // before the transition is armed.
-          void el.offsetWidth;
-          el.style.transition = "transform 180ms ease";
-          el.style.transform = "";
-          var done = function () {
-            el.style.transition = "";
-            el.style.transform = "";
-            el.style.transformOrigin = "";
-            el.removeEventListener("transitionend", done);
-          };
-          el.addEventListener("transitionend", done);
-          window.setTimeout(done, 260);
-        })(cards[j], first[j]);
-      }
-    }
-
-    // The insertion index a pointer at (x, y) asks for, counted
-    // in sibling cards before the placeholder, row-major: a card
-    // counts as passed once the pointer crosses its middle —
-    // below its center, or right of its center within its row.
-    function insertionIndex(x, y) {
-      var cards = siblingCards();
-      for (var i = 0; i < cards.length; i++) {
-        var r = cards[i].getBoundingClientRect();
-        if (y < r.top + r.height / 2) return i;
-        if (y <= r.bottom && x < r.left + r.width / 2) return i;
-      }
-      return cards.length;
-    }
-
-    // The index the drag may actually use: the natural index,
-    // damped by midpoint hysteresis against the placeholder's
-    // current neighbor, so the solve never flip-flops while the
-    // pointer hovers on a boundary.
-    function desiredIndex(x, y, current) {
-      var want = insertionIndex(x, y);
-      if (want === current) return current;
-      var cards = siblingCards();
-      var boundary = want > current ? cards[current] : cards[current - 1];
-      if (!boundary) return want;
-      var r = boundary.getBoundingClientRect();
-      var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-      var inRow = y >= r.top && y <= r.bottom;
-      if (want > current) {
-        return (inRow ? x > cx + hyst : y > cy + hyst) ? want : current;
-      }
-      return (inRow ? x < cx - hyst : y < cy - hyst) ? want : current;
-    }
-
-    // Grip resize: the pointer's offset from the card's top-left,
-    // in grid cells, rounded to whole cells and held to 1-3. One
-    // column's width and the grid's row unit give the cell size.
-    function cellSize() {
-      var cs = window.getComputedStyle(grid);
-      var cols = (cs.gridTemplateColumns || "").split(" ").filter(Boolean);
-      var gap = parseFloat(cs.columnGap) || 0;
-      var colW = cols.length ? parseFloat(cols[0]) : grid.clientWidth;
-      var rowH = parseFloat(cs.gridAutoRows) || 160;
-      return { w: colW + gap, h: rowH + (parseFloat(cs.rowGap) || 0), cols: cols.length || 1 };
-    }
+    // --- grip resize ---------------------------------------------
+    // The grip drags a frame that follows the pointer exactly; the
+    // module underneath snaps to whole cells as the frame crosses
+    // into them (with a little hysteresis, so a boundary never
+    // flickers), and the modules after it glide out of the way. A
+    // module grows only rightwards to the grid's edge from the
+    // column it starts in, so resizing never makes it jump rows.
+    // Dragged below the module's floor, the frame turns red and the
+    // module stays at its floor.
     function startResize(ev, card, grip) {
       if (ev.pointerType === "mouse" && ev.button !== 0) return;
       ev.preventDefault();
-      var r = card.getBoundingClientRect();
-      var cell = cellSize();
-      var start = sizeOf(card), cur = start;
+      stopMotion(card);
+      var start = sizeOf(card), cur = start, min = minOf(card);
+      var r0 = card.getBoundingClientRect();
+      var gcs = window.getComputedStyle(grid);
+      var gapX = parseFloat(gcs.columnGap) || 0, gapY = parseFloat(gcs.rowGap) || 0;
+      var cellW = (r0.width - (start.w - 1) * gapX) / start.w + gapX;
+      var cellH = (r0.height - (start.h - 1) * gapY) / start.h + gapY;
+      var cols = (gcs.gridTemplateColumns || "").split(" ").filter(Boolean).length || 1;
+      var gridLeft = grid.getBoundingClientRect().left;
+      var colStart = Math.round((r0.left - gridLeft) / cellW);
+      var maxW = Math.max(1, Math.min(3, cols - colStart));
+      var lastX = ev.clientX, lastY = ev.clientY, under = false;
+
+      var frame = document.createElement("div");
+      frame.className = "resize-frame";
+      document.body.appendChild(frame);
       try { grip.setPointerCapture(ev.pointerId); } catch (err) { /* nicety */ }
       card.classList.add("resizing");
-      function onMove(e) {
-        var w = Math.max(1, Math.min(3, cell.cols, Math.round((e.clientX - r.left) / cell.w)));
-        var h = Math.max(1, Math.min(3, Math.round((e.clientY - r.top) / cell.h)));
+      document.body.classList.add("resize-active");
+
+      function snap(raw, was, hi) {
+        var n = Math.round(raw);
+        if (n !== was && Math.abs(raw - was) < 0.62) n = was;
+        return Math.max(1, Math.min(hi, n));
+      }
+      // Runs on every pointer move, straight from the event: the
+      // frame tracks the pointer with no frame of lag.
+      function frameTick() {
+        var r = card.getBoundingClientRect();
+        var relX = lastX - r.left, relY = lastY - r.top;
+        var w = snap((relX + gapX) / cellW, cur.w, maxW);
+        var h = snap((relY + gapY) / cellH, cur.h, 3);
+        under = w < min.w || h < min.h;
+        frame.classList.toggle("under", under);
+        frame.style.left = r.left + "px";
+        frame.style.top = r.top + "px";
+        frame.style.width = Math.max(cellW * 0.5, Math.min(relX, maxW * cellW - gapX)) + "px";
+        frame.style.height = Math.max(cellH * 0.5, Math.min(relY, 3 * cellH - gapY)) + "px";
+        w = Math.max(w, min.w);
+        h = Math.max(h, min.h);
         if (w !== cur.w || h !== cur.h) {
           cur = { w: w, h: h };
-          flipSiblings(function () { sizeCard(card, w, h); });
+          flip(function () { sizeCard(card, w, h); }, card);
         }
+      }
+      function onMove(e) {
+        lastX = e.clientX;
+        lastY = e.clientY;
+        frameTick();
       }
       function onUp() {
         grip.removeEventListener("pointermove", onMove);
         grip.removeEventListener("pointerup", onUp);
         grip.removeEventListener("pointercancel", onUp);
         card.classList.remove("resizing");
+        document.body.classList.remove("resize-active");
+        frame.remove();
+        if (under) refuse(card);
         if (cur.w === start.w && cur.h === start.h) return;
-        sizeCard(card, start.w, start.h);
-        resizeCard(card, cur.w, cur.h);
+        // The module already stands at its new size; save it, and a
+        // failed save puts back the size it started at.
+        postLayout({ action: "size", widget: card.getAttribute("data-widget"), w: cur.w, h: cur.h }).then(function (ok) {
+          if (!ok) flip(function () { sizeCard(card, start.w, start.h); });
+        });
       }
       grip.addEventListener("pointermove", onMove);
       grip.addEventListener("pointerup", onUp);
       grip.addEventListener("pointercancel", onUp);
+      frameTick();
+    }
+
+    // --- dragging --------------------------------------------------
+    // Lifting a card puts a glowing slot into its place, with its
+    // size, and takes the card out of the grid (position: fixed) at
+    // exactly the spot it occupied — nothing under the pointer moves
+    // at lift-off. The card then follows the pointer by transform
+    // alone, so it tracks without lag. The slot moves when the
+    // pointer is over another module: before it if the pointer is in
+    // that module's first half (left half within the same row, top
+    // half across rows), after it otherwise; the module the slot
+    // just passed is ignored until the pointer leaves it, so a
+    // boundary never flip-flops. Past the last module the slot goes
+    // to the end. Holding the card near a viewport edge scrolls the
+    // page. On drop the card glides into the slot and takes its
+    // place; Escape or a cancelled pointer puts everything back.
+    // The grid child beside el (dir -1 before, 1 after), skipping
+    // text and the lifted card, which sits out of the flow.
+    function sibling(el, dir) {
+      var n = dir < 0 ? el.previousElementSibling : el.nextElementSibling;
+      while (n && n.classList.contains("dragging")) n = dir < 0 ? n.previousElementSibling : n.nextElementSibling;
+      return n;
+    }
+    function inside(b, x, y) {
+      return !!b && x >= b.l && x <= b.r && y >= b.t && y <= b.b;
     }
 
     function startDrag(ev, card, handle) {
@@ -755,167 +929,181 @@
 
       var startX = ev.clientX, startY = ev.clientY;
       var lastX = startX, lastY = startY;
-      var active = false;   // pointer passed the grab threshold
-      var lifted = false;   // card out of flow, placeholder in
-      var placeholder = null;
-      var phIndex = 0;      // sibling cards ahead of the placeholder
-      var grabDX = 0, grabDY = 0;
-      var savedNodes = null;
-      var rafId = 0;
+      var lifted = false, slot = null, origin = null, savedNodes = null;
+      var raf = 0, lock = null, holdUntil = 0, dirty = true;
 
-      if (handle.setPointerCapture) {
-        try { handle.setPointerCapture(ev.pointerId); } catch (err) { /* capture is a nicety */ }
-      }
+      try { handle.setPointerCapture(ev.pointerId); } catch (err) { /* nicety */ }
 
       function lift() {
         lifted = true;
-        savedNodes = [];
-        var all = grid.querySelectorAll(".card[data-widget]");
-        for (var i = 0; i < all.length; i++) savedNodes.push(all[i]);
-        phIndex = 0;
-        for (var j = 0; j < all.length; j++) {
-          if (all[j] === card) { phIndex = j; break; }
-        }
-        var rect = card.getBoundingClientRect();
-        grabDX = lastX - rect.left;
-        grabDY = lastY - rect.top;
-        // The placeholder takes the card's slot wearing the span
-        // the solver gives it there and the card's own height,
-        // so the grid underneath is the solved final layout for
-        // the whole drag.
-        placeholder = document.createElement("section");
-        placeholder.className = "card drag-placeholder";
-        var ps = sizeOf(card);
-        sizeCard(placeholder, ps.w, ps.h);
-        placeholder.style.height = rect.height + "px";
-        placeholder.setAttribute("aria-hidden", "true");
-        grid.insertBefore(placeholder, card.nextSibling);
+        savedNodes = Array.prototype.slice.call(moduleCards());
+        var open = grid.querySelectorAll(".sizepick:not([hidden])");
+        for (var i = 0; i < open.length; i++) open[i].hidden = true;
+        stopMotion(card);
+        origin = card.getBoundingClientRect();
+        slot = document.createElement("div");
+        slot.className = "card drag-placeholder";
+        slot.setAttribute("aria-hidden", "true");
+        var s = sizeOf(card);
+        sizeCard(slot, s.w, s.h);
+        grid.insertBefore(slot, card);
+        card.style.left = origin.left + "px";
+        card.style.top = origin.top + "px";
+        card.style.width = origin.width + "px";
+        card.style.height = origin.height + "px";
+        card.style.transformOrigin = (startX - origin.left) + "px " + (startY - origin.top) + "px";
         card.classList.add("dragging");
-        card.style.width = rect.width + "px";
-        card.style.height = rect.height + "px";
-        card.style.left = rect.left + "px";
-        card.style.top = rect.top + "px";
         document.body.classList.add("drag-active");
-        rafId = requestAnimationFrame(tick);
+        measure();
+        raf = requestAnimationFrame(tick);
       }
 
-      // One loop drives the follow-the-pointer positioning, the
-      // edge auto-scroll and the placeholder hop, so a burst of
-      // pointermove events costs one frame of work.
+      // The card is placed on every pointer move, straight from the
+      // event (a transform: no layout), so it never trails the
+      // pointer by a frame.
+      function follow() {
+        card.style.transform = "translate3d(" + (lastX - startX) + "px," + (lastY - startY) + "px,0)";
+      }
+
+      // The frame loop only scrolls: the closer the pointer rides to
+      // a viewport edge, the faster the page rolls under it.
       function tick() {
-        rafId = 0;
+        raf = 0;
         if (!lifted) return;
-        position();
-        // Edge auto-scroll: the closer the pointer rides to a
-        // viewport edge, the faster the page rolls under it.
-        var edge = 76, maxStep = 14, speed = 0;
-        if (lastY < edge) {
-          speed = -Math.min(maxStep, Math.ceil((edge - lastY) / 5));
-        } else if (lastY > window.innerHeight - edge) {
-          speed = Math.min(maxStep, Math.ceil((lastY - (window.innerHeight - edge)) / 5));
+        var edge = 72, speed = 0;
+        if (lastY < edge) speed = -Math.min(16, Math.ceil((edge - lastY) / 4));
+        else if (lastY > window.innerHeight - edge) speed = Math.min(16, Math.ceil((lastY - (window.innerHeight - edge)) / 4));
+        if (speed) { window.scrollBy(0, speed); dirty = true; }
+        if (dirty) retarget();
+        raf = requestAnimationFrame(tick);
+      }
+
+      function retarget() {
+        if (!lifted || performance.now() < holdUntil) return;
+        dirty = false;
+        var px = lastX + window.scrollX, py = lastY + window.scrollY;
+        if (lock && !inside(layout.get(lock), px, py)) lock = null;
+        var sb = layout.get(slot);
+        if (inside(sb, px, py)) { lock = null; return; }
+        var kids = Array.prototype.slice.call(movers());
+        var target = null, bottom = 0;
+        for (var i = 0; i < kids.length; i++) {
+          var b = layout.get(kids[i]);
+          if (b && b.b > bottom) bottom = b.b;
+          if (kids[i] !== slot && !target && inside(b, px, py)) target = kids[i];
         }
-        if (speed !== 0) window.scrollBy(0, speed);
-        movePlaceholder();
-        rafId = requestAnimationFrame(tick);
+        if (!target) {
+          if (py > bottom && kids[kids.length - 1] !== slot) moveSlot(null, null);
+          return;
+        }
+        if (target === lock) return;
+        var tb = layout.get(target);
+        var sameRow = sb && sb.t < tb.b && tb.t < sb.b;
+        var first = sameRow ? px < (tb.l + tb.r) / 2 : py < (tb.t + tb.b) / 2;
+        // Already on that side of it: nothing to do.
+        if ((first ? sibling(target, -1) : sibling(target, 1)) === slot) return;
+        moveSlot(first ? target : target.nextSibling, target);
       }
 
-      function position() {
-        card.style.left = (lastX - grabDX) + "px";
-        card.style.top = (lastY - grabDY) + "px";
-      }
-
-      // Hop the placeholder only when the pointer has carried
-      // the insertion past the current neighbor's center (plus
-      // hysteresis); the grid re-solves around the hop and the
-      // siblings FLIP into their new cells, so nothing under
-      // the finger teleports.
-      function movePlaceholder() {
-        var idx = desiredIndex(lastX, lastY, phIndex);
-        if (idx === phIndex) return;
-        var cards = siblingCards();
-        var target = idx < cards.length ? cards[idx] : null;
-        flipSiblings(function () {
-          if (target) grid.insertBefore(placeholder, target);
-          else grid.appendChild(placeholder);
-        });
-        phIndex = idx;
+      function moveSlot(ref, passed) {
+        flip(function () { grid.insertBefore(slot, ref); });
+        lock = passed;
+        // Let the hop's layout settle under the pointer before the
+        // next decision.
+        holdUntil = performance.now() + 90;
+        dirty = true;
       }
 
       function onMove(e) {
         lastX = e.clientX;
         lastY = e.clientY;
-        if (!active) {
-          if (Math.abs(lastX - startX) + Math.abs(lastY - startY) < 5) return;
-          active = true;
-          lift();
-        }
+        dirty = true;
+        if (!lifted && Math.abs(lastX - startX) + Math.abs(lastY - startY) >= 5) lift();
+        if (lifted) { follow(); retarget(); }
+      }
+
+      function onKey(e) {
+        if (e.key === "Escape") { e.preventDefault(); onCancel(); }
       }
 
       function detach() {
         handle.removeEventListener("pointermove", onMove);
         handle.removeEventListener("pointerup", onUp);
         handle.removeEventListener("pointercancel", onCancel);
-        if (rafId) cancelAnimationFrame(rafId);
-        rafId = 0;
+        document.removeEventListener("keydown", onKey, true);
+        if (raf) cancelAnimationFrame(raf);
+        raf = 0;
       }
 
-      // Every exit path funnels through here: no placeholder,
-      // no lifted card, no inline style survives a drag.
-      function cleanup() {
-        if (placeholder) { placeholder.remove(); placeholder = null; }
+      // Every exit path ends here: no slot, no lifted card, no
+      // inline style survives a drag.
+      function settle() {
+        if (slot && slot.parentNode) grid.replaceChild(card, slot);
+        slot = null;
         card.classList.remove("dragging");
-        card.classList.remove("drag-settle");
-        card.style.cssText = "";
+        card.style.left = card.style.top = card.style.width = card.style.height = "";
+        card.style.transform = card.style.transformOrigin = "";
         document.body.classList.remove("drag-active");
+        lifted = false;
       }
 
-      function restoreOrder() {
-        if (!savedNodes) return;
-        for (var i = 0; i < savedNodes.length; i++) {
-          grid.appendChild(savedNodes[i]);
-        }
+      // Glide the lifted card onto the slot's cell, then let it take
+      // the slot's place.
+      function landThen(done) {
+        var b = layout.get(slot);
+        if (!canAnimate || !b) { done(); return; }
+        var dx = b.l - window.scrollX - origin.left, dy = b.t - window.scrollY - origin.top;
+        var a = card.animate([
+          { transform: card.style.transform || "none" },
+          { transform: "translate3d(" + dx + "px," + dy + "px,0)" }
+        ], { duration: 200, easing: EASE, fill: "forwards" });
+        card.classList.add("landing");
+        // Whichever comes first: the glide's end, or a timer for a
+        // page whose animations are paused (a hidden tab).
+        var finished = false;
+        var finish = function () {
+          if (finished) return;
+          finished = true;
+          card.classList.remove("landing");
+          done();
+          a.cancel();
+        };
+        a.onfinish = finish;
+        window.setTimeout(finish, 260);
       }
 
       function onUp() {
         detach();
         if (!lifted) return;
-        // Settle: animate the card into the placeholder's solved
-        // slot (gliding to its position and size), swap the two
-        // in the DOM, then save. A failed save restores the
-        // pre-drag arrangement.
-        var slot = placeholder.getBoundingClientRect();
-        card.classList.add("drag-settle");
-        card.style.left = slot.left + "px";
-        card.style.top = slot.top + "px";
-        card.style.width = slot.width + "px";
-        card.style.height = slot.height + "px";
-        card.style.transform = "scale(1)";
-        var swapIn = function () {
-          grid.replaceChild(card, placeholder);
-          placeholder = null;
-          cleanup();
-          postLayout({ action: "order", ids: widgetIDs().join(",") }).then(function (ok) {
-            if (!ok) {
-              restoreOrder();
-            }
-            savedNodes = null;
+        lifted = false;
+        landThen(function () {
+          settle();
+          var moved = moduleCards();
+          var changed = moved.length !== savedNodes.length;
+          for (var i = 0; !changed && i < moved.length; i++) changed = moved[i] !== savedNodes[i];
+          if (!changed) return;
+          saveOrder().then(function (ok) {
+            if (!ok) flip(function () { for (var j = 0; j < savedNodes.length; j++) grid.appendChild(savedNodes[j]); });
           });
-        };
-        if (reducedMotion) swapIn();
-        else window.setTimeout(swapIn, 190);
+        });
       }
 
       function onCancel() {
         detach();
         if (!lifted) return;
-        cleanup();
-        restoreOrder();
-        savedNodes = null;
+        lifted = false;
+        // Back to where it started: the slot returns to the card's
+        // old place, the card lands there.
+        var at = savedNodes.indexOf(card);
+        var next = savedNodes[at + 1] || null;
+        flip(function () { grid.insertBefore(slot, next); });
+        landThen(settle);
       }
 
       handle.addEventListener("pointermove", onMove);
       handle.addEventListener("pointerup", onUp);
       handle.addEventListener("pointercancel", onCancel);
+      document.addEventListener("keydown", onKey, true);
     }
 
     function addModule(id, btn) {
@@ -938,17 +1126,15 @@
           // one lands.
           var stale = grid.querySelector('.card[data-widget="' + id + '"]');
           if (stale) stale.remove();
-          flipSiblings(function () {
-            grid.appendChild(node);
-          });
-          addFold(node, node.querySelector(":scope > h2, :scope > h3"));
           enhanceCard(node);
-          closeModal();
+          window.EveSynapseModal.close(modal);
+          flip(function () { grid.appendChild(node); });
+          node.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "nearest" });
         }, function () { window.location.reload(); });
       });
     }
 
-    var cards = grid.querySelectorAll(".card[data-widget]");
+    var cards = moduleCards();
     for (var i = 0; i < cards.length; i++) enhanceCard(cards[i]);
     // A size picker closes on a click anywhere outside its card's
     // controls. Bound once; it reads the current grid each time.
@@ -967,12 +1153,13 @@
 
     // Add-module pop-up. The full catalog is rendered into it;
     // each open re-filters against what is on the home right now,
-    // so removes and adds are reflected immediately.
+    // so removes and adds are reflected immediately. Opening,
+    // closing, Escape and the backdrop are the shared modal's.
     var addBtn = document.getElementById("add-module-btn");
     if (addBtn && modal) {
       var emptyNote = modal.querySelector(".modal-empty");
       var addItems = modal.querySelectorAll("[data-add-widget]");
-      var refreshModal = function () {
+      var openAdd = function () {
         var onHome = {};
         var ids = widgetIDs();
         for (var i = 0; i < ids.length; i++) onHome[ids[i]] = true;
@@ -984,27 +1171,17 @@
           if (!off) available++;
         }
         if (emptyNote) emptyNote.hidden = available > 0;
+        window.EveSynapseModal.open(modal);
       };
       addBtn.addEventListener("click", function (ev) {
         ev.preventDefault();
-        refreshModal();
-        modal.hidden = false;
+        var menu = addBtn.closest("details");
+        if (menu) menu.open = false;
+        openAdd();
       });
       // The Overview menu's "Add a module" lands here from the home
       // with ?add=1: open the pop-up straight away.
-      if (/[?&]add=1\b/.test(window.location.search)) {
-        refreshModal();
-        modal.hidden = false;
-      }
-      modal.addEventListener("click", function (ev) {
-        if (ev.target === modal) closeModal();
-      });
-      var closers = modal.querySelectorAll("[data-close-modal]");
-      for (var c = 0; c < closers.length; c++) {
-        closers[c].addEventListener("click", closeModal);
-      }
-      homeModalCurrent = modal;
-      armHomeModalEscape();
+      if (/[?&]add=1\b/.test(window.location.search)) openAdd();
       for (var a = 0; a < addItems.length; a++) {
         addItems[a].addEventListener("click", function () {
           addModule(this.getAttribute("data-add-widget"), this);
@@ -2056,7 +2233,6 @@
 
   var entries = [];   // flat, selectable rows in display order
   var selected = -1;
-  var lastFocus = null;
   var timer = null;
   var querySerial = 0;
 
@@ -2176,26 +2352,29 @@
     }).catch(function () { /* page matches already stand */ });
   }
 
+  // The palette is one of the shared modals (EveSynapseModal):
+  // the backdrop, Escape-from-anywhere and the focus hand-back are
+  // the shared ones; paletteClosed is what the palette adds.
   function openPalette() {
     if (isOpen()) return;
-    lastFocus = document.activeElement;
-    overlay.hidden = false;
     document.body.classList.add("quickjump-open");
     input.value = "";
     ask("");
+    window.EveSynapseModal.open(overlay, { focus: false, onClose: paletteClosed });
     input.focus();
     input.select();
   }
 
-  function closePalette() {
-    if (!isOpen()) return;
-    overlay.hidden = true;
+  function paletteClosed() {
     document.body.classList.remove("quickjump-open");
     querySerial++; // an answer in flight no longer matters
     if (timer) window.clearTimeout(timer);
     timer = null;
-    if (lastFocus && lastFocus.focus) lastFocus.focus();
-    lastFocus = null;
+  }
+
+  function closePalette() {
+    if (!isOpen()) return;
+    window.EveSynapseModal.close(overlay);
   }
 
   if (openBtn) {
@@ -2239,11 +2418,6 @@
     }
   });
 
-  // A click on the dimmed surround closes; clicks inside the
-  // panel (on the input, on gaps between rows) do not.
-  overlay.addEventListener("mousedown", function (ev) {
-    if (ev.target === overlay) closePalette();
-  });
 })();
 
 

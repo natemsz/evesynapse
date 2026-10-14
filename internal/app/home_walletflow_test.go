@@ -39,7 +39,7 @@ func TestWalletFlowRenders(t *testing.T) {
 		t.Fatalf("GET /: status %d", code)
 	}
 	mustContain(t, "/", body,
-		"Wallet flow",
+		"Wallet Flow",
 		"5,100.00",  // 30-day income: 5000 + 100, not the aged 999999
 		"-2,000.00", // 30-day spend
 		"3,100.00",  // 30-day net

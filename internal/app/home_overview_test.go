@@ -43,7 +43,7 @@ func rfc(t time.Time) string { return t.UTC().Format(time.RFC3339) }
 // TestHomeOverviewMultiChar: one default-layout Home render over
 // three characters in different states — training + wallet +
 // asset + order data (Alpha), empty queue (Bravo), dead link
-// (Charlie). Asserts fleet rows, attention items in rule order,
+// (Charlie). Asserts fleet rows, the Briefing's re-link line,
 // net-worth arithmetic, industry/market cards, and zero network.
 func TestHomeOverviewMultiChar(t *testing.T) {
 	transport := &countingTransport{}
@@ -128,7 +128,7 @@ func TestHomeOverviewMultiChar(t *testing.T) {
 	// Fleet rows + filter surface.
 	mustContain(t, "/", body,
 		`<span class="gt">Overview</span>`,
-		"Fleet overview",
+		"Fleet Overview",
 		"Fixture Alpha", "Fixture Corp", "Trader",
 		"Fixture Bravo", "Fixture Charlie",
 		`id="fleet-filter"`, `data-tag="PI"`,
@@ -136,38 +136,21 @@ func TestHomeOverviewMultiChar(t *testing.T) {
 		"re-link needed", // Charlie's fleet flag
 	)
 
-	// Attention feed, rule order: re-link (Charlie) > not
-	// training (Bravo) > job ready (Alpha) > order expiring
-	// (Alpha) > contract (Alpha). All five rules fire.
-	mustContain(t, "/", body,
-		"Needs attention",
-		"Fixture Charlie needs re-linking",
-		"Fixture Bravo isn&#39;t training",
-		"job ready for delivery",
-		"order expires in",
-		"contract waiting for you: Haul my stuff",
-	)
-	relAt := strings.Index(body, "Fixture Charlie needs re-linking")
-	ntAt := strings.Index(body, "Fixture Bravo isn")
-	jrAt := strings.Index(body, "job ready for delivery")
-	oeAt := strings.Index(body, "order expires in")
-	// The Briefing module (rendered above this one) may mention
-	// the same contracts; the attention feed's own order is what
-	// counts, so search from its heading down.
-	attStart := strings.Index(body, "<h3>Needs attention</h3>")
-	ctAt := attStart + strings.Index(body[attStart:], "contract waiting for you")
-	if !(relAt >= 0 && relAt < ntAt && ntAt < jrAt && jrAt < oeAt && oeAt < ctAt) {
-		t.Errorf("attention items out of rule order: relink=%d nottraining=%d jobready=%d order=%d contract=%d",
-			relAt, ntAt, jrAt, oeAt, ctAt)
+	// What needs the user is the Briefing's now (Needs Attention is
+	// retired): the re-link shows there, and a contract assigned to
+	// someone else never does.
+	mustContain(t, "/", body, "Fixture Charlie", "needs re-linking")
+	if strings.Contains(body, "Needs Attention") || strings.Contains(body, `data-widget="attention"`) {
+		t.Error("retired Needs Attention module still on the home")
 	}
 	if strings.Contains(body, "Someone elses") {
-		t.Error("attention feed leaked a contract assigned to someone else")
+		t.Error("home leaked a contract assigned to someone else")
 	}
 
 	// Net worth: wallets 1000.5 + 2000 + assets 100×5 + escrow
 	// 500 = 4,000.50. Estimate dated by the oldest input.
 	mustContain(t, "/", body,
-		"Net worth", "4,000.50", "3,000.50", "500.00",
+		"Net Worth", "4,000.50", "3,000.50", "500.00",
 		"Estimate", "data as of",
 	)
 
@@ -178,11 +161,15 @@ func TestHomeOverviewMultiChar(t *testing.T) {
 		"3,000,000.00", // sell 3 × 1,000,000
 	)
 
-	// Server widget in the default layout, warming (no global
-	// status seeded): title only, never the populated line.
-	mustContain(t, "/", body, "Tranquility")
-	if strings.Contains(body, "players online") {
-		t.Error("home shows a players-online line with no status snapshot stored")
+	// The Overview bar's ESI pill, before any status is stored:
+	// a neutral "checking" state, never a player count. The
+	// retired Tranquility module is gone from the grid.
+	mustContain(t, "/", body, `class="esi-pill esi-pending"`)
+	if strings.Contains(body, "esi-tq") {
+		t.Error("home shows a Tranquility player count with no status snapshot stored")
+	}
+	if strings.Contains(body, `data-widget="server"`) {
+		t.Error("retired Tranquility module still on the default home")
 	}
 
 	if got := transport.calls.Load(); got != 0 {
@@ -257,9 +244,9 @@ func TestHomeLayoutRoundTrip(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
-	mustContain(t, "/", body, "Fleet overview", "Needs attention", "Net worth")
-	if strings.Contains(body, ">Skills</h3>") {
-		t.Error("skills widget on by default; want it opt-in only")
+	mustContain(t, "/", body, "Fleet Overview", "Net Worth", "Training Horizon", "Planetary Industry")
+	if strings.Contains(body, `data-widget="skills"`) || strings.Contains(body, ">Market Watchlist</h3>") {
+		t.Error("default home carries a retired or opt-in module")
 	}
 
 	// Toggle Market off: the card disappears, layout persists.
@@ -275,12 +262,12 @@ func TestHomeLayoutRoundTrip(t *testing.T) {
 			t.Errorf("market widget still rendered after toggle off (body has %q)", gone)
 		}
 	}
-	mustContain(t, "/", body, "Fleet overview", "Net worth")
+	mustContain(t, "/", body, "Fleet Overview", "Net Worth")
 	if got := saved(); !strings.Contains(got, `"fleet"`) || strings.Contains(got, `"market"`) {
 		t.Errorf("persisted layout %q: want fleet without market", got)
 	}
 
-	// Move Net worth above Attention: order flips on the page.
+	// Move Net Worth above Planetary Industry: order flips on the page.
 	if code, _ := post("up", widgetNetWorth); code != http.StatusSeeOther {
 		t.Fatalf("move POST: status %d", code)
 	}
@@ -288,10 +275,10 @@ func TestHomeLayoutRoundTrip(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET / after move: status %d", code)
 	}
-	nwAt := strings.Index(body, "<h3>Net worth</h3>")
-	attAt := strings.Index(body, "<h3>Needs attention</h3>")
-	if nwAt < 0 || attAt < 0 || nwAt > attAt {
-		t.Errorf("net worth should render above attention after move-up (nw=%d att=%d)", nwAt, attAt)
+	nwAt := strings.Index(body, "<h3>Net Worth</h3>")
+	piAt := strings.Index(body, "<h3>Planetary Industry</h3>")
+	if nwAt < 0 || piAt < 0 || nwAt > piAt {
+		t.Errorf("net worth should render above planetary industry after move-up (nw=%d pi=%d)", nwAt, piAt)
 	}
 
 	// Customize page mirrors state and offers every control.
@@ -301,7 +288,7 @@ func TestHomeLayoutRoundTrip(t *testing.T) {
 	}
 	mustContain(t, "/?customize=1", body,
 		"Reset to the default layout", ">Done</a>",
-		`name="widget" value="skills"`, ">Add<", "Move up",
+		`name="widget" value="watchlist"`, ">Add<", "Move up",
 	)
 
 	// Reset restores the default set (market back).
@@ -312,7 +299,7 @@ func TestHomeLayoutRoundTrip(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET / after reset: status %d", code)
 	}
-	mustContain(t, "/", body, "<h3>Market</h3>", "Fleet overview")
+	mustContain(t, "/", body, "<h3>Market</h3>", "Fleet Overview")
 
 	// A corrupted layout (unknown ids, dupes) is normalized on
 	// load: only the real widget renders.
@@ -325,8 +312,8 @@ func TestHomeLayoutRoundTrip(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET / with bad layout: status %d", code)
 	}
-	mustContain(t, "/", body, "Fleet overview")
-	if strings.Contains(body, "<h3>Market</h3>") || strings.Contains(body, "Net worth") {
+	mustContain(t, "/", body, "Fleet Overview")
+	if strings.Contains(body, "<h3>Market</h3>") || strings.Contains(body, "<h3>Net Worth</h3>") {
 		t.Error("corrupted layout rendered widgets that were not in it")
 	}
 
@@ -386,7 +373,7 @@ func TestHomeLayoutOrderAction(t *testing.T) {
 
 	// Drag order: Market above Fleet, as one XHR save.
 	code, body := doLayoutPost(t, app, url.Values{
-		"action": {"order"}, "ids": {"market,fleet,attention"},
+		"action": {"order"}, "ids": {"market,fleet,pi"},
 	}, cookie, true)
 	if code != http.StatusOK {
 		t.Fatalf("XHR order POST: status %d, want 200 (body %q)", code, body)
@@ -394,7 +381,8 @@ func TestHomeLayoutOrderAction(t *testing.T) {
 	if body != `{"ok":true}` {
 		t.Fatalf("XHR order POST body = %q, want {\"ok\":true}", body)
 	}
-	if got := saved(); got != `[{"id":"market"},{"id":"fleet"},{"id":"attention"}]` {
+	// The default layout's sizes travel with each module.
+	if got := saved(); got != `[{"id":"market","w":1,"h":1},{"id":"fleet","w":3,"h":2},{"id":"pi","w":1,"h":2}]` {
 		t.Fatalf("saved layout = %q, want dragged order", got)
 	}
 	code, body = getPage(t, app, cookie, "/")
@@ -409,13 +397,13 @@ func TestHomeLayoutOrderAction(t *testing.T) {
 
 	// Unknown + duplicate ids normalize away; order survives.
 	code, _ = doLayoutPost(t, app, url.Values{
-		"action": {"order"}, "ids": {"skills,bogus,skills,fleet,fleet"},
+		"action": {"order"}, "ids": {"watchlist,bogus,watchlist,fleet,fleet"},
 	}, cookie, true)
 	if code != http.StatusOK {
 		t.Fatalf("XHR order POST (junk ids): status %d", code)
 	}
-	if got := saved(); got != `[{"id":"skills"},{"id":"fleet"}]` {
-		t.Fatalf("saved layout = %q, want normalized [skills fleet]", got)
+	if got := saved(); got != `[{"id":"watchlist"},{"id":"fleet","w":3,"h":2}]` {
+		t.Fatalf("saved layout = %q, want normalized [watchlist fleet]", got)
 	}
 
 	// The same action as a plain form POST still redirects.
@@ -425,7 +413,7 @@ func TestHomeLayoutOrderAction(t *testing.T) {
 	if code != http.StatusSeeOther {
 		t.Fatalf("form order POST: status %d, want 303", code)
 	}
-	if got := saved(); got != `[{"id":"fleet"}]` {
+	if got := saved(); got != `[{"id":"fleet","w":3,"h":2}]` {
 		t.Fatalf("saved layout = %q, want [fleet]", got)
 	}
 
@@ -473,9 +461,9 @@ func TestHomeLayoutToggleRoundTrips(t *testing.T) {
 	// …but it is offered in the add-module pop-up.
 	mustContain(t, "/?customize=1 (after remove)", body, `data-add-widget="networth"`)
 
-	// Add Skills from the catalog: appended after the survivors.
+	// Add Market Watchlist from the catalog: appended after the survivors.
 	code, _ = doLayoutPost(t, app, url.Values{
-		"action": {"toggle"}, "widget": {widgetSkills},
+		"action": {"toggle"}, "widget": {widgetWatchlist},
 	}, cookie, true)
 	if code != http.StatusOK {
 		t.Fatalf("XHR toggle-on POST: status %d, want 200", code)
@@ -484,13 +472,13 @@ func TestHomeLayoutToggleRoundTrips(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
-	skAt := strings.Index(body, `data-widget="skills"`)
-	svAt := strings.Index(body, `data-widget="server"`)
+	skAt := strings.Index(body, `data-widget="watchlist"`)
+	mkAt := strings.Index(body, `data-widget="market"`)
 	if skAt < 0 {
-		t.Fatal("skills card missing after add-from-catalog")
+		t.Fatal("watchlist card missing after add-from-catalog")
 	}
-	if svAt < 0 || skAt < svAt {
-		t.Errorf("added module should append at the end (skills=%d server=%d)", skAt, svAt)
+	if mkAt < 0 || skAt < mkAt {
+		t.Errorf("added module should append at the end (watchlist=%d market=%d)", skAt, mkAt)
 	}
 
 	if got := transport.calls.Load(); got != 0 {
@@ -521,18 +509,18 @@ func TestHomeCustomizeSurface(t *testing.T) {
 	mustContain(t, "/?customize=1", body,
 		// Live draggable grid.
 		`id="home-grid"`, `data-customize="1"`, `home-custom`,
-		`data-widget="fleet"`, `data-widget="server"`,
+		`data-widget="fleet"`, `data-widget="market"`,
 		// The Overview menu: Done exits, Add a module and Reset
 		// live behind one settings button; nothing to save.
 		`aria-label="Overview settings"`, ">Done</a>", `id="add-module-btn"`, ">Add a module</a>",
 		"Reset to the default layout",
 		// The pop-up: full catalog, name + plain description.
-		`id="add-module-modal"`, `data-add-widget="skills"`,
-		"The next skill finishes across the fleet",
+		`id="add-module-modal"`, `data-add-widget="watchlist"`,
+		"The items you&#39;re watching",
 		"Every module is already on your home.",
 		// The no-JS foundation underneath: the module list forms.
 		"<noscript>", `id="home-module-list"`,
-		`name="widget" value="skills"`, "Move up", "Move down",
+		`name="widget" value="watchlist"`, "Move up", "Move down",
 		// End-user copy.
 		"Changes save as you make them.",
 	)
@@ -554,7 +542,6 @@ func TestHomeCustomizeSurface(t *testing.T) {
 	}
 	mustContain(t, "/", body,
 		"Balances appear here once your characters have synced.",
-		"Server status has not loaded yet.",
 	)
 	for _, gone := range []string{
 		`data-customize="1"`, `id="add-module-modal"`,

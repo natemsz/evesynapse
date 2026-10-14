@@ -280,7 +280,7 @@ func TestWatchlistWidgetHome(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
-	mustContain(t, "/", body, "Market watchlist", "Nothing watched yet")
+	mustContain(t, "/", body, "Market Watchlist", "Nothing watched yet")
 
 	seedMarketSignals(t, app, q, user.ID, 0) // history + Tritanium watch at 5%
 	if err := q.UpsertTypeName(ctx, db.UpsertTypeNameParams{TypeID: 35, Name: "Pyroxeres"}); err != nil {
@@ -308,7 +308,7 @@ func TestWatchlistWidgetHome(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /?customize=1: status %d", code)
 	}
-	mustContain(t, "/?customize=1", body, `data-add-widget="watchlist"`, "Market watchlist")
+	mustContain(t, "/?customize=1", body, `data-add-widget="watchlist"`, "Market Watchlist")
 
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handlers made %d outbound calls, want 0", got)

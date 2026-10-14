@@ -49,6 +49,25 @@ func (q *Queries) GetTradeIdeasAttempt(ctx context.Context) (GetTradeIdeasAttemp
 	return i, err
 }
 
+const getTradeIdeasPage = `-- name: GetTradeIdeasPage :one
+
+SELECT body, as_of, model FROM trade_ideas WHERE id = 2
+`
+
+type GetTradeIdeasPageRow struct {
+	Body  string    `json:"body"`
+	AsOf  time.Time `json:"as_of"`
+	Model string    `json:"model"`
+}
+
+// The Trade ideas page's own, longer answer (schema 046): row 2.
+func (q *Queries) GetTradeIdeasPage(ctx context.Context) (GetTradeIdeasPageRow, error) {
+	row := q.db.QueryRowContext(ctx, getTradeIdeasPage)
+	var i GetTradeIdeasPageRow
+	err := row.Scan(&i.Body, &i.AsOf, &i.Model)
+	return i, err
+}
+
 const putTradeIdeas = `-- name: PutTradeIdeas :exec
 INSERT INTO trade_ideas (id, body, as_of, model)
 VALUES (1, $1, $2, $3)
@@ -84,5 +103,25 @@ type PutTradeIdeasAttemptParams struct {
 
 func (q *Queries) PutTradeIdeasAttempt(ctx context.Context, arg PutTradeIdeasAttemptParams) error {
 	_, err := q.db.ExecContext(ctx, putTradeIdeasAttempt, arg.AttemptedAt, arg.Failures)
+	return err
+}
+
+const putTradeIdeasPage = `-- name: PutTradeIdeasPage :exec
+INSERT INTO trade_ideas (id, body, as_of, model)
+VALUES (2, $1, $2, $3)
+ON CONFLICT (id) DO UPDATE SET
+    body = excluded.body,
+    as_of = excluded.as_of,
+    model = excluded.model
+`
+
+type PutTradeIdeasPageParams struct {
+	Body  string    `json:"body"`
+	AsOf  time.Time `json:"as_of"`
+	Model string    `json:"model"`
+}
+
+func (q *Queries) PutTradeIdeasPage(ctx context.Context, arg PutTradeIdeasPageParams) error {
+	_, err := q.db.ExecContext(ctx, putTradeIdeasPage, arg.Body, arg.AsOf, arg.Model)
 	return err
 }

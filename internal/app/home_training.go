@@ -2,10 +2,11 @@ package app
 
 // ---------------------------------------------------------------------------
 // Training horizon: the next finishes across every character's
-// whole skill queue, plus who is sitting idle. The Skills widget
-// shows queue heads only (the single next finish per character);
-// this looks deeper — second and third queued skills included —
-// so one glance replaces opening every character's queue.
+// whole skill queue, plus who is sitting idle — second and third
+// queued skills included, so one glance replaces opening every
+// character's queue. At one row high the module is compact (what
+// the retired Skills module was): each character's next finish only,
+// and a count of who is idle.
 // ---------------------------------------------------------------------------
 
 import (
@@ -18,7 +19,6 @@ import (
 )
 
 // trainingEvent is one upcoming finish anywhere in a queue.
-// Finish/Left render exactly like the Skills widget's rows.
 type trainingEvent struct {
 	Char    string
 	CharID  int64
@@ -32,11 +32,15 @@ type trainingEvent struct {
 
 // trainingWidget is the horizon: the soonest finishes across
 // the fleet and the names training nothing. IdleMore counts
-// the idle names cut by idleNamesCap.
+// the idle names cut by idleNamesCap. Heads and IdleCount are the
+// compact form: each training character's next finish, soonest
+// first, and how many characters are idle.
 type trainingWidget struct {
-	Events   []trainingEvent
-	Idle     []string
-	IdleMore int
+	Events    []trainingEvent
+	Idle      []string
+	IdleMore  int
+	Heads     []trainingEvent
+	IdleCount int
 }
 
 // trainingHorizonCap bounds one render; the queue snapshots
@@ -63,6 +67,11 @@ func (app *Application) buildTraining(ctx context.Context, bundles []*charSnaps)
 			w.Idle = append(w.Idle, b.ch.Name)
 			continue
 		}
+		if head := queueHead(b.queue, now); head != nil {
+			if finish, ok := parseRFC3339(head.FinishDate); ok {
+				w.Heads = append(w.Heads, app.trainingEventFor(ctx, b, *head, finish, now))
+			}
+		}
 		for _, entry := range liveSkillqueue(b.queue, now) {
 			// The horizon is dated: an entry without a finish date
 			// (a paused queue) has no place on it.
@@ -70,23 +79,12 @@ func (app *Application) buildTraining(ctx context.Context, bundles []*charSnaps)
 			if !ok {
 				continue
 			}
-			name := app.esi.CachedTypeName(ctx, entry.SkillID)
-			if name == "" {
-				name = fmt.Sprintf("Type #%d", entry.SkillID)
-			}
-			pending = append(pending, trainingEvent{
-				Char:    b.ch.Name,
-				CharID:  b.ch.CharacterID,
-				Skill:   name,
-				SkillID: entry.SkillID,
-				Level:   esi.RomanLevel(entry.FinishedLevel),
-				Finish:  formatFinish(entry.FinishDate),
-				Left:    humanDuration(finish.Sub(now)),
-				finish:  finish,
-			})
+			pending = append(pending, app.trainingEventFor(ctx, b, entry, finish, now))
 		}
 	}
 	sort.SliceStable(pending, func(i, j int) bool { return pending[i].finish.Before(pending[j].finish) })
+	sort.SliceStable(w.Heads, func(i, j int) bool { return w.Heads[i].finish.Before(w.Heads[j].finish) })
+	w.IdleCount = len(w.Idle)
 	if len(pending) > trainingHorizonCap {
 		pending = pending[:trainingHorizonCap]
 	}
@@ -97,4 +95,22 @@ func (app *Application) buildTraining(ctx context.Context, bundles []*charSnaps)
 		w.Idle = w.Idle[:idleNamesCap]
 	}
 	return w
+}
+
+// trainingEventFor is one queue entry as a horizon row.
+func (app *Application) trainingEventFor(ctx context.Context, b *charSnaps, entry esi.SkillqueueEntry, finish, now time.Time) trainingEvent {
+	name := app.esi.CachedTypeName(ctx, entry.SkillID)
+	if name == "" {
+		name = fmt.Sprintf("Type #%d", entry.SkillID)
+	}
+	return trainingEvent{
+		Char:    b.ch.Name,
+		CharID:  b.ch.CharacterID,
+		Skill:   name,
+		SkillID: entry.SkillID,
+		Level:   esi.RomanLevel(entry.FinishedLevel),
+		Finish:  formatFinish(entry.FinishDate),
+		Left:    humanDuration(finish.Sub(now)),
+		finish:  finish,
+	}
 }

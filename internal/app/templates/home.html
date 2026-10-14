@@ -13,7 +13,8 @@
 <p><a class="btn" href="/auth/eve">Link your first character</a></p>
 {{else}}
 <div class="home-bar">
-  {{if .Home.Customize}}<p class="home-bar-note"><small>Drag a module by its handle, resize it from its corner, remove it with ×. Changes save as you make them.</small></p>{{end}}
+  {{if .Home.Customize}}<p class="home-bar-note"><small>Drag a module by its move handle, resize it from its corner, remove it with ×. Changes save as you make them.</small></p>{{end}}
+  {{with .ESIHealth}}<span class="esi-pill esi-{{.State}}" title="{{.Title}}"><span class="esi-dot" aria-hidden="true"></span><span class="esi-label">{{.Label}}</span>{{if .Players}}<span class="esi-tq">Tranquility <b>{{.Players}}</b> online</span>{{end}}</span>{{end}}
   <a class="btn btn-quiet" href="/auth/eve">Link another character</a>
   {{if .Home.Customize}}<a class="btn" href="/">Done</a>{{end}}
   <details class="menu-pop home-settings">
@@ -33,8 +34,9 @@
 <div class="grid home-grid{{if .Home.Customize}} home-custom{{end}}"{{if .Home.Customize}} id="home-grid" data-customize="1"{{end}}>
 {{range .Home.Widgets}}
 {{if eq .ID "glance"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
-  <h3>At a glance</h3>
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+  <h3>{{.Title}}</h3>
+  <div class="card-body">
   {{with .Glance}}
   <div class="kpis">
     <div class="kpi">
@@ -61,12 +63,14 @@
     </div>
   </div>
   {{end}}
+  </div>
 </section>
 {{end}}
 
 {{if eq .ID "briefing"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
-  <h3>Briefing</h3>
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+  <h3>{{.Title}}</h3>
+  <div class="card-body">
   {{with .Briefing}}
   {{if .Items}}
   <div class="brief-tabs" role="group" aria-label="Show briefing items by severity">
@@ -84,12 +88,14 @@
   <p>All quiet — nothing needs you right now.</p>
   {{end}}
   {{end}}
+  </div>
 </section>
 {{end}}
 
 {{if eq .ID "fleet"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
-  <h3>Fleet overview</h3>
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+  <h3>{{.Title}}</h3>
+  <div class="card-body">
   {{with .Fleet}}
   <p class="fleet-tools">
     <input id="fleet-filter" type="search" placeholder="Filter by name, tag, corporation or system…" size="36">
@@ -127,28 +133,14 @@
   <p class="fleet-nomatch" hidden>No characters match the filter.</p>
   <p class="fleet-foot"><small>Showing <span data-fleet-shown>{{len .Rows}}</span> of {{len .Rows}} characters{{if .TotalISK}} · fleet liquid total {{.TotalISK}} ISK{{end}}</small></p>
   {{end}}
-</section>
-{{end}}
-
-{{if eq .ID "attention"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
-  <h3>Needs attention</h3>
-  {{with .Attention}}
-  {{if .Items}}
-  <ul class="attention">
-  {{range $i, $it := .Items}}<li{{if ge $i $cap}} data-wmore{{end}}><a href="{{.Link}}">{{.Text}}</a>{{if .When}} <small>{{.When}}</small>{{end}}</li>{{end}}
-  </ul>
-  {{if .More}}<p><small>…and {{.More}} more</small></p>{{end}}
-  {{else}}
-  <p><small>All clear — nothing needs you right now.</small></p>
-  {{end}}
-  {{end}}
+  </div>
 </section>
 {{end}}
 
 {{if eq .ID "networth"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
-  <h3>Net worth</h3>
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+  <h3>{{.Title}}</h3>
+  <div class="card-body">
   {{with .NetWorth}}
   {{if .Any}}
   <p class="isk">{{.Total}} <small>ISK</small></p>
@@ -171,12 +163,14 @@
   <p><small>Balances appear here once your characters have synced.</small></p>
   {{end}}
   {{end}}
+  </div>
 </section>
 {{end}}
 
 {{if eq .ID "industry"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
-  <h3>Industry</h3>
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+  <h3>{{.Title}}</h3>
+  <div class="card-body">
   {{with .Industry}}
   <p><small>{{.ActiveJobs}} active job{{if ne .ActiveJobs 1}}s{{end}}{{if .ReadyJobs}} · {{.ReadyJobs}} ready for delivery{{end}}</small></p>
   {{if .Rows}}
@@ -192,12 +186,14 @@
   <p><small>No active jobs right now.</small></p>
   {{end}}
   {{end}}
+  </div>
 </section>
 {{end}}
 
 {{if eq .ID "market"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
-  <h3>Market</h3>
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+  <h3>{{.Title}}</h3>
+  <div class="card-body">
   {{$customize := .Customize}}
   {{with .Market}}
   <div data-wmore>
@@ -255,12 +251,14 @@
   <p><small>{{.EmptyOrders}}</small></p>
   {{end}}
   {{end}}
+  </div>
 </section>
 {{end}}
 
 {{if eq .ID "watchlist"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
-  <h3>Market watchlist</h3>
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+  <h3>{{.Title}}</h3>
+  <div class="card-body">
   {{with .Watchlist}}
   {{if .Rows}}
   <div class="tw">
@@ -275,33 +273,14 @@
   <p><small>Nothing watched yet — add items from the <a href="/market/">Market page</a> and their price moves will show up here.</small></p>
   {{end}}
   {{end}}
-</section>
-{{end}}
-
-{{if eq .ID "skills"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
-  <h3>Skills</h3>
-  {{with .Skills}}
-  {{if .Finishing}}
-  <div class="tw">
-  <table>
-    <thead><tr><th>Character</th><th>Skill</th><th>Finishes</th></tr></thead>
-    <tbody>
-    {{range $i, $r := .Finishing}}<tr{{if ge $i $cap}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{itemLink .SkillID .Skill}} {{.Level}}</td><td>{{.Finish}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
-    </tbody>
-  </table>
   </div>
-  {{else}}
-  <p><small>No queue data yet.</small></p>
-  {{end}}
-  {{if .NotTraining}}<p><small>{{.NotTraining}} character{{if ne .NotTraining 1}}s{{end}} not training.</small></p>{{end}}
-  {{end}}
 </section>
 {{end}}
 
 {{if eq .ID "pi"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
-  <h3>Planetary industry</h3>
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+  <h3>{{.Title}}</h3>
+  <div class="card-body">
   {{with .PI}}
   {{if .Any}}
   <p><small>{{.Colonies}} colon{{if eq .Colonies 1}}y{{else}}ies{{end}} across your characters{{if .Expired}} · {{.Expired}} extractor{{if ne .Expired 1}}s{{end}} expired{{end}} · <a href="/planets/">colonies</a></small></p>
@@ -322,18 +301,14 @@
   <p><small>Colonies appear here once your characters have synced.</small></p>
   {{end}}
   {{end}}
+  </div>
 </section>
 {{end}}
 
-{{if eq .ID "server"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
-  <h3>Tranquility</h3>
-  {{if .Server}}<p>Tranquility: {{.Server.Players}} players online</p>{{else}}<p><small>Server status has not loaded yet.</small></p>{{end}}
-</section>
-{{end}}
 {{if eq .ID "tradeideas"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
-  <h3>Trade ideas</h3>
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+  <h3>{{.Title}}</h3>
+  <div class="card-body">
   {{with .TradeIdeas}}
   {{if .HasIdeas}}
   <div class="ti ti-compact">
@@ -348,36 +323,45 @@
     </div>
     {{end}}
   </div>
-  <p><small>As of {{.AsOf}} · Gemma on the Forge spread scanner · <a href="/market/ideas/">all ideas</a></small></p>
+  <p><small>As of {{.AsOf}} · {{.Model}} on the Forge spread scanner · <a href="/market/ideas/">all ideas</a></small></p>
   {{else if .Configured}}<p><small>No ideas yet — the next refresh asks the model once the Forge sweep lands.</small></p>
   {{else}}<p><small>Trade ideas are not set up on this server.</small></p>{{end}}
   {{end}}
+  </div>
 </section>
 {{end}}
 {{if eq .ID "training"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
-  <h3>Training horizon</h3>
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+  <h3>{{.Title}}</h3>
+  <div class="card-body">
+  {{$compact := eq .H 1}}
   {{with .Training}}
-  {{if .Events}}
+  {{/* One row high: each character's next finish and an idle count.
+       Taller: the whole horizon, deeper queue entries included. */}}
+  {{$rows := .Events}}{{if $compact}}{{$rows = .Heads}}{{end}}
+  {{if $rows}}
   <div class="tw">
   <table>
     <thead><tr><th>Character</th><th>Skill</th><th>Finishes</th></tr></thead>
     <tbody>
-    {{range $i, $r := .Events}}<tr{{if ge $i $cap}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{itemLink .SkillID .Skill}} {{.Level}}</td><td>{{.Finish}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
+    {{range $i, $r := $rows}}<tr{{if ge $i $cap}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{itemLink .SkillID .Skill}} {{.Level}}</td><td>{{.Finish}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
     </tbody>
   </table>
   </div>
   {{else}}
   <p><small>Nothing queued yet.</small></p>
   {{end}}
-  {{if .Idle}}<p><small>Idle: {{range $i, $n := .Idle}}{{if $i}}, {{end}}{{$n}}{{end}}{{if .IdleMore}} and {{.IdleMore}} more{{end}}.</small></p>{{end}}
+  {{if $compact}}{{if .IdleCount}}<p><small>{{.IdleCount}} character{{if ne .IdleCount 1}}s{{end}} not training.</small></p>{{end}}
+  {{else if .Idle}}<p><small>Idle: {{range $i, $n := .Idle}}{{if $i}}, {{end}}{{$n}}{{end}}{{if .IdleMore}} and {{.IdleMore}} more{{end}}.</small></p>{{end}}
   {{end}}
+  </div>
 </section>
 {{end}}
 
 {{if eq .ID "pulse"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
-  <h3>Corp pulse</h3>
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+  <h3>{{.Title}}</h3>
+  <div class="card-body">
   {{with .Pulse}}
   {{if .Corps}}
   {{range .Corps}}
@@ -396,12 +380,14 @@
   <p><small>Nothing to show — this needs a Director, Personnel Manager, Accountant, or Station Manager role in the corporation.</small></p>
   {{end}}
   {{end}}
+  </div>
 </section>
 {{end}}
 
 {{if eq .ID "walletflow"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
-  <h3>Wallet flow</h3>
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+  <h3>{{.Title}}</h3>
+  <div class="card-body">
   {{with .WalletFlow}}
   {{if .Any}}
   <div class="tw">
@@ -469,12 +455,14 @@
   <p><small>Journal data appears here once your characters have synced.</small></p>
   {{end}}
   {{end}}
+  </div>
 </section>
 {{end}}
 
 {{if eq .ID "upkeep"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
-  <h3>Upkeep &amp; fuel</h3>
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+  <h3>{{.Title}}</h3>
+  <div class="card-body">
   {{with .Upkeep}}
   {{if .Corps}}
   <p><small>{{.Count}} deadline{{if ne .Count 1}}s{{end}}{{if .Urgent}} · <strong>{{.Urgent}} past due</strong>{{end}}</small></p>
@@ -486,6 +474,7 @@
   <p><small>All fueled — or this needs a Station Manager or Director role to check.</small></p>
   {{end}}
   {{end}}
+  </div>
 </section>
 {{end}}
 {{end}}
@@ -495,7 +484,7 @@
 <div class="modal-backdrop" id="add-module-modal" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="add-module-title">
     <div class="modal-head">
-      <h2 id="add-module-title">Add a module</h2>
+      <h2 id="add-module-title">Add a Module</h2>
       <button type="button" class="modal-close" data-close-modal aria-label="Close">×</button>
     </div>
     <ul class="modal-list">

@@ -56,6 +56,19 @@ func swarmTestPeer(t *testing.T, app *Application, id string) *swarmIdentity {
 	return kp
 }
 
+// wantStageRefused fails unless staging refused the entry for
+// the reason named: any error would let a test pass on a check
+// other than the one it claims.
+func wantStageRefused(t *testing.T, err error, reason string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("staged an entry that should be refused (%s)", reason)
+	}
+	if !strings.Contains(err.Error(), reason) {
+		t.Fatalf("staging refused with %q, want %q", err, reason)
+	}
+}
+
 func swarmServe(t *testing.T, app *Application, method, path, body, secret string) (int, string) {
 	t.Helper()
 	var reader *strings.Reader
@@ -226,8 +239,9 @@ func TestSwarmStagingGate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sign foreign: %v", err)
 	}
-	if err := app.stageSwarmEntry(ctx, foreign, "peer-a", now); err == nil {
-		t.Fatalf("staged an entry from an unknown signer")
+	wantStageRefused(t, app.stageSwarmEntry(ctx, foreign, "peer-a", now), "unknown signer")
+	if _, err := app.queries.GetSwarmPeer(ctx, "peer-evil"); err == nil {
+		t.Fatalf("the named stranger was filed as a peer")
 	}
 
 	// Wrong key: another instance's signature under peer-a's
@@ -236,9 +250,7 @@ func TestSwarmStagingGate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sign forged: %v", err)
 	}
-	if err := app.stageSwarmEntry(ctx, forged, "peer-a", now); err == nil {
-		t.Fatalf("staged a mis-signed entry")
-	}
+	wantStageRefused(t, app.stageSwarmEntry(ctx, forged, "peer-a", now), "signature does not verify")
 	got, err := app.queries.GetSwarmPeer(ctx, "peer-a")
 	if err != nil {
 		t.Fatalf("read peer: %v", err)
@@ -254,9 +266,7 @@ func TestSwarmStagingGate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sign mismatched: %v", err)
 	}
-	if err := app.stageSwarmEntry(ctx, mismatched, "peer-a", now); err == nil {
-		t.Fatalf("staged a key-mismatched entry")
-	}
+	wantStageRefused(t, app.stageSwarmEntry(ctx, mismatched, "peer-a", now), "payload names another type")
 	got, err = app.queries.GetSwarmPeer(ctx, "peer-a")
 	if err != nil || got.BadChecks != 3 {
 		t.Fatalf("peer-a bad checks: %+v err %v, want 3", got, err)

@@ -180,11 +180,28 @@ var pgSwarmProvenanceSchema string
 //go:embed schema_pg/036_swarm_next_gossip.sql
 var pgSwarmNextGossipSchema string
 
+// Step 037: how often a staged swarm entry has been deferred,
+// so an undecidable one is dropped instead of waiting a week.
+//
+//go:embed schema_pg/037_swarm_staging_deferrals.sql
+var pgSwarmStagingDeferralsSchema string
+
+// Step 038: owner-signed peer addresses, and the pull rotation
+// that replaces singling the seed out by a fixed ID.
+//
+//go:embed schema_pg/038_swarm_signed_addresses.sql
+var pgSwarmSignedAddressesSchema string
+
 // Step 043: the trade ideas' last ask and failure run, for the
 // refresh backoff.
 //
 //go:embed schema_pg/043_trade_ideas_attempts.sql
 var pgTradeIdeasAttemptsSchema string
+
+// Step 044: swarm_staging drops checked_at, which was never set.
+//
+//go:embed schema_pg/044_swarm_staging_no_checked_at.sql
+var pgSwarmStagingNoCheckedAtSchema string
 
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
@@ -251,7 +268,10 @@ func schemaSteps() []schemaStep {
 		{34, "swarm_key_pin", pgSwarmKeyPinSchema, ""},
 		{35, "swarm_provenance", pgSwarmProvenanceSchema, ""},
 		{36, "swarm_next_gossip", pgSwarmNextGossipSchema, ""},
+		{37, "swarm_staging_deferrals", pgSwarmStagingDeferralsSchema, ""},
+		{38, "swarm_signed_addresses", pgSwarmSignedAddressesSchema, ""},
 		{43, "trade_ideas_attempts", pgTradeIdeasAttemptsSchema, ""},
+		{44, "swarm_staging_no_checked_at", pgSwarmStagingNoCheckedAtSchema, ""},
 	}
 }
 

@@ -48,3 +48,31 @@ func TestTrainingHorizonRenders(t *testing.T) {
 	}
 	mustContain(t, "/", body, "Training horizon", "Gunnery", "Missiles", "Idle: Fixture Beta.")
 }
+
+// TestTrainingHorizonSkipsFinishedSkills: a stored queue keeps
+// entries whose finish time has passed since it was fetched.
+// They are not upcoming: the horizon lists only what is still
+// to finish, soonest first.
+func TestTrainingHorizonSkipsFinishedSkills(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, _ := buildCorpTestApp(t, transport)
+	now := time.Now().UTC()
+	bundles := []*charSnaps{{
+		ch: db.Character{CharacterID: fixtureCharA, Name: "Fixture Alpha"}, queueKnown: true,
+		queue: esi.Skillqueue{
+			{SkillID: 3300, FinishedLevel: 3, FinishDate: rfc(now.Add(-3 * time.Hour))},
+			{SkillID: 3301, FinishedLevel: 4, FinishDate: rfc(now.Add(26 * time.Hour))},
+			{SkillID: 3302, FinishedLevel: 5, FinishDate: rfc(now.Add(2 * time.Hour))},
+		},
+	}}
+	w := app.buildTraining(context.Background(), bundles)
+	if len(w.Events) != 2 {
+		t.Fatalf("horizon lists %d events, want the 2 still to finish: %+v", len(w.Events), w.Events)
+	}
+	if w.Events[0].SkillID != 3302 || w.Events[1].SkillID != 3301 {
+		t.Fatalf("order %d, %d; want soonest first (3302, 3301)", w.Events[0].SkillID, w.Events[1].SkillID)
+	}
+	if len(w.Idle) != 0 {
+		t.Fatalf("a character still training is listed idle: %v", w.Idle)
+	}
+}

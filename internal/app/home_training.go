@@ -48,7 +48,7 @@ const trainingHorizonCap = 10
 const idleNamesCap = 6
 
 // buildTraining assembles the horizon from every queue entry
-// with a finish date, soonest first. Characters with no active
+// still to finish, soonest first. Characters with no active
 // queue land in Idle by name.
 func (app *Application) buildTraining(ctx context.Context, bundles []*charSnaps) *trainingWidget {
 	now := time.Now()
@@ -64,8 +64,10 @@ func (app *Application) buildTraining(ctx context.Context, bundles []*charSnaps)
 			continue
 		}
 		for _, entry := range b.queue {
+			// A stored queue still lists skills that have finished
+			// since it was fetched: they are behind us, not ahead.
 			finish, ok := parseRFC3339(entry.FinishDate)
-			if !ok {
+			if !ok || !finish.After(now) {
 				continue
 			}
 			name := app.esi.CachedTypeName(ctx, entry.SkillID)
@@ -79,21 +81,16 @@ func (app *Application) buildTraining(ctx context.Context, bundles []*charSnaps)
 				SkillID: entry.SkillID,
 				Level:   esi.RomanLevel(entry.FinishedLevel),
 				Finish:  formatFinish(entry.FinishDate),
-				Left:    humanDuration(time.Until(finish)),
+				Left:    humanDuration(finish.Sub(now)),
 				finish:  finish,
 			})
 		}
 	}
 	sort.SliceStable(pending, func(i, j int) bool { return pending[i].finish.Before(pending[j].finish) })
-	for i, p := range pending {
-		if i >= trainingHorizonCap {
-			break
-		}
-		w.Events = append(w.Events, trainingEvent{
-			Char: p.Char, CharID: p.CharID, Skill: p.Skill,
-			SkillID: p.SkillID, Level: p.Level, Finish: p.Finish, Left: p.Left,
-		})
+	if len(pending) > trainingHorizonCap {
+		pending = pending[:trainingHorizonCap]
 	}
+	w.Events = pending
 	sort.Strings(w.Idle)
 	if len(w.Idle) > idleNamesCap {
 		w.IdleMore = len(w.Idle) - idleNamesCap

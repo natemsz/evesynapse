@@ -388,9 +388,23 @@ func TestPublicFitPage(t *testing.T) {
 		t.Fatal("fleet fit missing")
 	}
 
+	// Pages are built by the worker (or on the owner's save), never
+	// on a view: before that the page says it is being prepared.
+	code, body := apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
+	if code != 200 {
+		t.Fatalf("fit page status = %d", code)
+	}
+	apptest.MustContain(t, "fit page, not built", body, "Fleet Rifter", "being prepared")
+	if strings.Contains(body, "Copy EFT") || strings.Contains(body, "Republic Fleet Medium Shield Extender") {
+		t.Error("a page that was never built shows modules")
+	}
+	if n := rig.RunPublicFitWork(); n < 1 {
+		t.Fatalf("worker built %d pages, want at least the fleet fit", n)
+	}
+
 	// No origin configured: the page has no absolute address to
 	// share, and offers none (least of all another site's).
-	code, body := apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
+	code, body = apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
 	if code != 200 {
 		t.Fatalf("fit page status = %d", code)
 	}
@@ -420,9 +434,40 @@ func TestPublicFitPage(t *testing.T) {
 	if !strings.Contains(body, "[Rifter, Fleet Rifter]") {
 		t.Errorf("fit page missing the EFT block")
 	}
-	// Views count the load: two above, this is the third.
+	// Views count the load: three above, this is the fourth. They
+	// are counted in memory (a view writes nothing) and written by
+	// the worker in one batch.
 	_, body = apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
-	apptest.MustContain(t, "third view", body, "3 views")
+	apptest.MustContain(t, "fourth view", body, "4 views")
+	// The worker run above wrote the first view; the three since wait.
+	if got, _ := q.GetPublicFitting(ctx, fleetID); got.ViewCount != 1 {
+		t.Errorf("stored views before the worker ran again = %d, want 1", got.ViewCount)
+	}
+	rig.RunPublicFitWork()
+	if got, _ := q.GetPublicFitting(ctx, fleetID); got.ViewCount != 4 {
+		t.Errorf("stored views after the worker ran = %d, want 4", got.ViewCount)
+	}
+	_, body = apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
+	apptest.MustContain(t, "fifth view", body, "5 views")
+
+	// An edit makes the stored page out of date: the page says so
+	// until the worker builds it again, and never shows the old one.
+	if _, err := rig.DB().ExecContext(ctx, `UPDATE local_fittings SET updated_at = now() WHERE id = $1`, fleetID); err != nil {
+		t.Fatal(err)
+	}
+	_, body = apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
+	apptest.MustContain(t, "edited fit", body, "being prepared")
+	if strings.Contains(body, "Copy EFT") {
+		t.Error("an edited fit shows its old stored page")
+	}
+	if n := rig.RunPublicFitWork(); n != 1 {
+		t.Errorf("worker rebuilt %d pages after one edit, want 1", n)
+	}
+	_, body = apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
+	apptest.MustContain(t, "rebuilt fit", body, "Copy EFT")
+	if n := rig.RunPublicFitWork(); n != 0 {
+		t.Errorf("worker rebuilt %d up-to-date pages, want 0", n)
+	}
 
 	// Unknown, private and draft fits 404.
 	if code, _ := apptest.GetPage(t, rig, nil, "/fittings/public/fit/424242/"); code != 404 {

@@ -27,6 +27,7 @@
 {{end}}
 
 {{$pub := .}}
+{{if .Preparing}}<p class="hint">This fit's page is being prepared: its modules and stats will be here within a few minutes.</p>{{end}}
 {{with .Sim}}
 {{if .HasShip}}
 {{$sim := .}}

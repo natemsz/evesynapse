@@ -146,6 +146,10 @@ type Application struct {
 	priorityMu    sync.Mutex
 	priorityChars map[int64]bool
 
+	// Public fit page views counted since the worker last wrote
+	// them (char_fit_public_store.go).
+	fitViews fitViewCounter
+
 	// Per-address throttles on the expensive anonymous routes
 	// (core_throttle.go), made on first use.
 	anonThrottleOnce sync.Once
@@ -331,6 +335,8 @@ func (app *Application) Close() {
 		<-app.workerDone
 	}
 	if app.db != nil {
+		// Views counted since the worker last wrote them.
+		app.flushFitViews(context.Background())
 		app.db.Close()
 	}
 	if app.pool != nil {

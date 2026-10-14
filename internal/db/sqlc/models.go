@@ -6,6 +6,7 @@ package db
 
 import (
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -508,6 +509,15 @@ type PlanetName struct {
 	Name       string       `json:"name"`
 	State      string       `json:"state"`
 	ResolvedAt sql.NullTime `json:"resolved_at"`
+}
+
+type PublicFitPage struct {
+	FitID        int64           `json:"fit_id"`
+	FitUpdatedAt time.Time       `json:"fit_updated_at"`
+	SdeStamp     string          `json:"sde_stamp"`
+	Complete     bool            `json:"complete"`
+	BuiltAt      time.Time       `json:"built_at"`
+	Body         json.RawMessage `json:"body"`
 }
 
 type PulseEvent struct {

@@ -92,6 +92,11 @@ func TestPublicFitPageMirrorsTool(t *testing.T) {
 	})
 
 	app.cfg.eveCallbackURL = "https://node.example.org/auth/callback" // share links need an origin
+	// The fixture row was inserted, not saved through the editor:
+	// its page is built the way the worker builds it.
+	if n := app.refreshPublicFitPages(ctx); n != 1 {
+		t.Fatalf("built %d public fit pages, want 1", n)
+	}
 	code, body := getSwapPage(t, app, nil, publicFitsPath+"fit/"+strconv.FormatInt(row.ID, 10)+"/")
 	if code != http.StatusOK {
 		t.Fatalf("public fit page (anonymous): status %d, want 200", code)
@@ -151,6 +156,7 @@ func TestPublicFitPageTooltips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create fitting: %v", err)
 	}
+	app.refreshPublicFitPages(ctx)
 	code, body := getSwapPage(t, app, nil, publicFitsPath+"fit/"+strconv.FormatInt(row.ID, 10)+"/")
 	if code != http.StatusOK {
 		t.Fatalf("public fit page (anonymous): status %d, want 200", code)

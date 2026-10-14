@@ -193,6 +193,12 @@ var pgFitRatingRecountSchema string
 //go:embed schema_pg/041_public_fit_rank_once.sql
 var pgPublicFitRankOnceSchema string
 
+// Step 042: stored public fit pages (sections, simulation, EFT),
+// built once per version of a fit instead of on every view.
+//
+//go:embed schema_pg/042_public_fit_pages.sql
+var pgPublicFitPagesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -260,6 +266,7 @@ func schemaSteps() []schemaStep {
 		{36, "swarm_next_gossip", pgSwarmNextGossipSchema, ""},
 		{40, "fit_rating_recount", pgFitRatingRecountSchema, ""},
 		{41, "public_fit_rank_once", pgPublicFitRankOnceSchema, ""},
+		{42, "public_fit_pages", pgPublicFitPagesSchema, ""},
 	}
 }
 

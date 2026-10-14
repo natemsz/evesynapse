@@ -97,12 +97,14 @@ func (t *anonThrottle) sweep(now time.Time) {
 	}
 }
 
-// clientAddr is the address a request came from. The app is served
-// behind a reverse proxy on the same machine (README: Caddy), which
-// connects from loopback and appends the client it saw to
-// X-Forwarded-For: so for a loopback peer the last entry of that
-// header is the client. From any other peer the header is the
-// client's own say-so and is ignored.
+// clientAddr is the address a request came from. The app sits behind
+// something on the same machine that connects from loopback: a
+// Cloudflare tunnel (cloudflared), which names the visitor in
+// CF-Connecting-IP, or a reverse proxy such as Caddy (README), which
+// appends the visitor to X-Forwarded-For. So for a loopback peer
+// CF-Connecting-IP wins, then the last X-Forwarded-For entry. From
+// any other peer both headers are the client's own say-so and are
+// ignored.
 func clientAddr(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -111,6 +113,9 @@ func clientAddr(r *http.Request) string {
 	peer := net.ParseIP(host)
 	if peer == nil || !peer.IsLoopback() {
 		return host
+	}
+	if ip := net.ParseIP(strings.TrimSpace(r.Header.Get("CF-Connecting-IP"))); ip != nil {
+		return ip.String()
 	}
 	fwd := r.Header.Values("X-Forwarded-For")
 	if len(fwd) == 0 {

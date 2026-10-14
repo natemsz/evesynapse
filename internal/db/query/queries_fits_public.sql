@@ -160,8 +160,37 @@ SET rating_count = (SELECT COUNT(*) FROM fit_ratings r WHERE r.fit_id = $1),
     rating_sum = (SELECT COALESCE(SUM(r.stars), 0) FROM fit_ratings r WHERE r.fit_id = $1)
 WHERE id = $1;
 
--- name: BumpFitViewCount :exec
-UPDATE local_fittings SET view_count = view_count + 1 WHERE id = $1;
+-- AddFitViews adds a batch of counted views to one fit: the page
+-- counts views in memory and the worker writes them here.
+-- name: AddFitViews :exec
+UPDATE local_fittings SET view_count = view_count + $1 WHERE id = $2;
+
+-- name: GetPublicFitPage :one
+SELECT fit_id, fit_updated_at, sde_stamp, complete, built_at, body
+FROM public_fit_pages WHERE fit_id = $1;
+
+-- name: UpsertPublicFitPage :exec
+INSERT INTO public_fit_pages (fit_id, fit_updated_at, sde_stamp, complete, built_at, body)
+VALUES ($1, $2, $3, $4, now(), $5)
+ON CONFLICT (fit_id) DO UPDATE SET
+  fit_updated_at = EXCLUDED.fit_updated_at, sde_stamp = EXCLUDED.sde_stamp,
+  complete = EXCLUDED.complete, built_at = now(), body = EXCLUDED.body;
+
+-- ListPublicFitsNeedingPages lists public fits whose stored page is
+-- missing, built from an older version of the fit or of the static
+-- data, or built incomplete more than ten minutes ago. Missing pages
+-- come first, then the most recently updated fits.
+-- name: ListPublicFitsNeedingPages :many
+SELECT lf.id, lf.items_json, lf.updated_at
+FROM local_fittings lf
+LEFT JOIN public_fit_pages p ON p.fit_id = lf.id
+WHERE lf.is_public AND NOT lf.is_draft
+  AND (p.fit_id IS NULL
+    OR p.fit_updated_at <> lf.updated_at
+    OR p.sde_stamp <> sqlc.arg(sde_stamp)::text
+    OR (NOT p.complete AND p.built_at < now() - interval '10 minutes'))
+ORDER BY (p.fit_id IS NULL) DESC, lf.updated_at DESC, lf.id DESC
+LIMIT sqlc.arg(rlimit)::bigint;
 
 -- name: SetLocalFittingPrice :exec
 UPDATE local_fittings SET total_price = $1 WHERE id = $2 AND user_id = $3;

@@ -7,15 +7,23 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 )
 
-const bumpFitViewCount = `-- name: BumpFitViewCount :exec
-UPDATE local_fittings SET view_count = view_count + 1 WHERE id = $1
+const addFitViews = `-- name: AddFitViews :exec
+UPDATE local_fittings SET view_count = view_count + $1 WHERE id = $2
 `
 
-func (q *Queries) BumpFitViewCount(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, bumpFitViewCount, id)
+type AddFitViewsParams struct {
+	ViewCount int64 `json:"view_count"`
+	ID        int64 `json:"id"`
+}
+
+// AddFitViews adds a batch of counted views to one fit: the page
+// counts views in memory and the worker writes them here.
+func (q *Queries) AddFitViews(ctx context.Context, arg AddFitViewsParams) error {
+	_, err := q.db.ExecContext(ctx, addFitViews, arg.ViewCount, arg.ID)
 	return err
 }
 
@@ -88,8 +96,7 @@ type CountPublicFitsParams struct {
 // shrunk toward the global mean with weight 5, via public_fit_rank
 // in migrations 033 and 041), so one 5-star vote cannot top the
 // chart. Callers pass the global mean as (SELECT public_fit_mean()),
-// which Postgres computes once per query. Meta
-// groups resolve
+// which Postgres computes once per query. Meta groups resolve
 // through dogma attribute 1692 (4 faction, 5 officer, 6 deadspace,
 // 2 tech II), the same source the fitting engine reads. The faction
 // filter is Any or No faction modules; a max price excludes only
@@ -136,6 +143,25 @@ func (q *Queries) GetFitRating(ctx context.Context, arg GetFitRatingParams) (Get
 	row := q.db.QueryRowContext(ctx, getFitRating, arg.FitID, arg.UserID)
 	var i GetFitRatingRow
 	err := row.Scan(&i.FitID, &i.UserID, &i.Stars)
+	return i, err
+}
+
+const getPublicFitPage = `-- name: GetPublicFitPage :one
+SELECT fit_id, fit_updated_at, sde_stamp, complete, built_at, body
+FROM public_fit_pages WHERE fit_id = $1
+`
+
+func (q *Queries) GetPublicFitPage(ctx context.Context, fitID int64) (PublicFitPage, error) {
+	row := q.db.QueryRowContext(ctx, getPublicFitPage, fitID)
+	var i PublicFitPage
+	err := row.Scan(
+		&i.FitID,
+		&i.FitUpdatedAt,
+		&i.SdeStamp,
+		&i.Complete,
+		&i.BuiltAt,
+		&i.Body,
+	)
 	return i, err
 }
 
@@ -345,6 +371,57 @@ func (q *Queries) ListPublicFitsForShip(ctx context.Context, arg ListPublicFitsF
 			&i.Hull,
 			&i.AuthorName,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublicFitsNeedingPages = `-- name: ListPublicFitsNeedingPages :many
+SELECT lf.id, lf.items_json, lf.updated_at
+FROM local_fittings lf
+LEFT JOIN public_fit_pages p ON p.fit_id = lf.id
+WHERE lf.is_public AND NOT lf.is_draft
+  AND (p.fit_id IS NULL
+    OR p.fit_updated_at <> lf.updated_at
+    OR p.sde_stamp <> $1::text
+    OR (NOT p.complete AND p.built_at < now() - interval '10 minutes'))
+ORDER BY (p.fit_id IS NULL) DESC, lf.updated_at DESC, lf.id DESC
+LIMIT $2::bigint
+`
+
+type ListPublicFitsNeedingPagesParams struct {
+	SdeStamp string `json:"sde_stamp"`
+	Rlimit   int64  `json:"rlimit"`
+}
+
+type ListPublicFitsNeedingPagesRow struct {
+	ID        int64     `json:"id"`
+	ItemsJson string    `json:"items_json"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// ListPublicFitsNeedingPages lists public fits whose stored page is
+// missing, built from an older version of the fit or of the static
+// data, or built incomplete more than ten minutes ago. Missing pages
+// come first, then the most recently updated fits.
+func (q *Queries) ListPublicFitsNeedingPages(ctx context.Context, arg ListPublicFitsNeedingPagesParams) ([]ListPublicFitsNeedingPagesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPublicFitsNeedingPages, arg.SdeStamp, arg.Rlimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPublicFitsNeedingPagesRow
+	for rows.Next() {
+		var i ListPublicFitsNeedingPagesRow
+		if err := rows.Scan(&i.ID, &i.ItemsJson, &i.UpdatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -680,5 +757,32 @@ type UpsertFitRatingParams struct {
 
 func (q *Queries) UpsertFitRating(ctx context.Context, arg UpsertFitRatingParams) error {
 	_, err := q.db.ExecContext(ctx, upsertFitRating, arg.FitID, arg.UserID, arg.Stars)
+	return err
+}
+
+const upsertPublicFitPage = `-- name: UpsertPublicFitPage :exec
+INSERT INTO public_fit_pages (fit_id, fit_updated_at, sde_stamp, complete, built_at, body)
+VALUES ($1, $2, $3, $4, now(), $5)
+ON CONFLICT (fit_id) DO UPDATE SET
+  fit_updated_at = EXCLUDED.fit_updated_at, sde_stamp = EXCLUDED.sde_stamp,
+  complete = EXCLUDED.complete, built_at = now(), body = EXCLUDED.body
+`
+
+type UpsertPublicFitPageParams struct {
+	FitID        int64           `json:"fit_id"`
+	FitUpdatedAt time.Time       `json:"fit_updated_at"`
+	SdeStamp     string          `json:"sde_stamp"`
+	Complete     bool            `json:"complete"`
+	Body         json.RawMessage `json:"body"`
+}
+
+func (q *Queries) UpsertPublicFitPage(ctx context.Context, arg UpsertPublicFitPageParams) error {
+	_, err := q.db.ExecContext(ctx, upsertPublicFitPage,
+		arg.FitID,
+		arg.FitUpdatedAt,
+		arg.SdeStamp,
+		arg.Complete,
+		arg.Body,
+	)
 	return err
 }

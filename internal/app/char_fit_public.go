@@ -492,6 +492,7 @@ func (app *Application) publicPage(ctx context.Context) pageData {
 // its modules grouped server-side, the EFT text, the rating
 // state, and absolute share links. Sim is the same All-V
 // workbench view the fitting tool renders, shown read-only.
+// Sections, Sim and EFT come from the stored page.
 type publicFitView struct {
 	Card        publicFitCard
 	Description string
@@ -502,6 +503,9 @@ type publicFitView struct {
 	StarCount   int64
 	MyStars     int64
 	PageURL     string
+	// Preparing: the stored page for this version of the fit is
+	// not built yet (the worker builds it within a cycle or two).
+	Preparing   bool
 	ShareX      string
 	ShareReddit string
 }
@@ -632,9 +636,8 @@ func (app *Application) handlePublicFitPage(w http.ResponseWriter, r *http.Reque
 		app.render(ctx, w, http.StatusOK, "fit_public.html", data)
 		return
 	}
-	if err := app.queries.BumpFitViewCount(ctx, fitID); err != nil {
-		logging.Errorf("public fit %d: count view: %v", fitID, err)
-	}
+	// Counted in memory; the worker writes views in batches.
+	views := row.ViewCount + app.fitViews.count(fitID)
 	var doc fitDoc
 	if json.Unmarshal([]byte(row.ItemsJson), &doc) != nil {
 		http.NotFound(w, r)
@@ -645,7 +648,7 @@ func (app *Application) handlePublicFitPage(w http.ResponseWriter, r *http.Reque
 	card := publicFitCard{
 		ID: row.ID, Name: row.Name, Ship: ship, ShipTypeID: row.ShipTypeID,
 		Author: author, Mine: userID > 0 && row.UserID == userID,
-		Views: row.ViewCount + 1, Price: row.TotalPrice, PriceKnown: row.TotalPrice > 0,
+		Views: views, Price: row.TotalPrice, PriceKnown: row.TotalPrice > 0,
 		Updated: row.UpdatedAt, FitURL: publicFitsPath + "fit/" + idString(row.ID) + "/",
 		Tags: doc.Tags,
 	}
@@ -655,11 +658,15 @@ func (app *Application) handlePublicFitPage(w http.ResponseWriter, r *http.Reque
 	}
 	view := &publicFitView{
 		Card: card, Description: doc.Description,
-		Sections: app.publicFitSections(ctx, &doc),
-		Sim:      app.buildFitSimView(ctx, &doc, 0, "All V", 0),
-		EFT:      app.formatEFT(ctx, &doc),
 		AvgStars: card.Stars, StarCount: card.StarCount,
 		PageURL: app.publicPageURL(card.FitURL),
+	}
+	// The modules, simulation and EFT come from the stored page
+	// (char_fit_public_store.go); a view never runs the engine.
+	if stored, ok := app.loadPublicFitStored(ctx, fitID, row.UpdatedAt); ok {
+		view.Sections, view.Sim, view.EFT = stored.Sections, stored.Sim, stored.EFT
+	} else {
+		view.Preparing = true
 	}
 	// Links out need an absolute address to point back at.
 	if view.PageURL != "" {

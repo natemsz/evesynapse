@@ -46,17 +46,21 @@ func TestAnonThrottleBucket(t *testing.T) {
 // proxy is on this machine.
 func TestClientAddr(t *testing.T) {
 	cases := []struct {
-		remote, fwd, want string
+		remote, fwd, cf, want string
 	}{
-		{"198.51.100.7:4242", "", "198.51.100.7"},
+		{"198.51.100.7:4242", "", "", "198.51.100.7"},
 		// A stranger cannot pick its own address.
-		{"198.51.100.7:4242", "203.0.113.9", "198.51.100.7"},
+		{"198.51.100.7:4242", "203.0.113.9", "", "198.51.100.7"},
 		// Caddy on loopback appends the client it saw: the last
 		// entry, not one the client sent ahead of it.
-		{"127.0.0.1:50000", "10.9.9.9, 203.0.113.9", "203.0.113.9"},
-		{"[::1]:50000", "2001:db8::5", "2001:db8::5"},
-		{"127.0.0.1:50000", "", "127.0.0.1"},
-		{"127.0.0.1:50000", "not-an-address", "127.0.0.1"},
+		{"127.0.0.1:50000", "10.9.9.9, 203.0.113.9", "", "203.0.113.9"},
+		{"[::1]:50000", "2001:db8::5", "", "2001:db8::5"},
+		{"127.0.0.1:50000", "", "", "127.0.0.1"},
+		{"127.0.0.1:50000", "not-an-address", "", "127.0.0.1"},
+		// cloudflared on loopback names the visitor in CF-Connecting-IP.
+		{"127.0.0.1:50000", "172.70.1.1", "203.0.113.9", "203.0.113.9"},
+		// From anywhere else it is ignored like X-Forwarded-For.
+		{"198.51.100.7:4242", "", "203.0.113.9", "198.51.100.7"},
 	}
 	for _, tc := range cases {
 		r := httptest.NewRequest(http.MethodGet, "/fittings/public/", nil)
@@ -64,8 +68,11 @@ func TestClientAddr(t *testing.T) {
 		if tc.fwd != "" {
 			r.Header.Set("X-Forwarded-For", tc.fwd)
 		}
+		if tc.cf != "" {
+			r.Header.Set("CF-Connecting-IP", tc.cf)
+		}
 		if got := clientAddr(r); got != tc.want {
-			t.Errorf("clientAddr(%s, XFF %q) = %q, want %q", tc.remote, tc.fwd, got, tc.want)
+			t.Errorf("clientAddr(%s, XFF %q, CF %q) = %q, want %q", tc.remote, tc.fwd, tc.cf, got, tc.want)
 		}
 	}
 }

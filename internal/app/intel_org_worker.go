@@ -255,7 +255,13 @@ func (app *Application) drainAllianceRecord(ctx context.Context, id int64, allow
 			// per call, where the old pass baked a capped few
 			// names through one fetch apiece and left the rest
 			// to trickle in through the corporation queue.
-			names := app.resolveCorpNames(ctx, allowance, corpIDs)
+			names, limited := app.resolveCorpNames(ctx, allowance, corpIDs)
+			if limited {
+				// ESI said stop: the record waits for a cycle that
+				// can name its members, rather than being stored
+				// with a roster of blanks.
+				return false, true
+			}
 			for _, corpID := range corpIDs {
 				payload.Corporations = append(payload.Corporations, allianceMemberCorp{ID: corpID, Name: names[corpID]})
 			}

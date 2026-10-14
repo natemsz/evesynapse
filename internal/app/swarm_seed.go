@@ -129,10 +129,15 @@ func (app *Application) swarmAnnounceToSeeds(ctx context.Context, now time.Time)
 	if !ok {
 		return
 	}
+	seeds := app.cfg.swarm.seeds
+	errs := make([]error, len(seeds))
+	swarmFanOut(ctx, len(seeds), func(rctx context.Context, i int) {
+		errs[i] = app.swarmCli.sendSeedAnnounce(rctx, seeds[i], entry)
+	})
 	kept := 0
-	for _, seed := range app.cfg.swarm.seeds {
-		if err := app.swarmCli.sendSeedAnnounce(ctx, seed, entry); err != nil {
-			logging.Warnf("swarm: announce %s: %v", seed, err)
+	for i, err := range errs {
+		if err != nil {
+			logging.Warnf("swarm: announce %s: %v", seeds[i], err)
 			continue
 		}
 		kept++

@@ -364,13 +364,26 @@ func (app *Application) swarmGossip(ctx context.Context, now time.Time) {
 		n++
 		contacts = append(contacts, contact{url: p.BaseUrl, id: p.InstanceID, key: p.PublicKey})
 	}
+	// The lists are fetched a few at a time under one deadline for
+	// the round (swarm_fanout.go), then learned one at a time.
+	type heard struct {
+		members     []swarmMember
+		signer, key string
+		err         error
+	}
+	results := make([]heard, len(contacts))
+	swarmFanOut(ctx, len(contacts), func(rctx context.Context, i int) {
+		c, r := contacts[i], &results[i]
+		r.members, r.signer, r.key, r.err = app.swarmFetchMembers(rctx, c.url, c.id, c.key)
+	})
 	learned := 0
-	for _, c := range contacts {
+	for i, c := range contacts {
 		source := "gossip"
 		if c.id == "" {
 			source = "seed"
 		}
-		if app.swarmContactPeer(ctx, c.url, c.id, c.key, source, now) == nil {
+		r := results[i]
+		if app.swarmAbsorbMembers(ctx, c.url, c.id, source, r.members, r.signer, r.key, r.err, now) == nil {
 			learned++
 		}
 	}
@@ -400,8 +413,16 @@ func (app *Application) swarmGossip(ctx context.Context, now time.Time) {
 // already pinned under another key, and taught nothing.
 func (app *Application) swarmContactPeer(ctx context.Context, baseURL, peerID, peerKey, source string, now time.Time) error {
 	members, signer, key, err := app.swarmFetchMembers(ctx, baseURL, peerID, peerKey)
-	if err != nil {
-		return err
+	return app.swarmAbsorbMembers(ctx, baseURL, peerID, source, members, signer, key, err, now)
+}
+
+// swarmAbsorbMembers records what one address answered a members
+// request with (fetchErr when it did not answer): the second half of
+// swarmContactPeer, kept apart so the gossip round can fetch in
+// parallel and record one at a time.
+func (app *Application) swarmAbsorbMembers(ctx context.Context, baseURL, peerID, source string, members []swarmMember, signer, key string, fetchErr error, now time.Time) error {
+	if fetchErr != nil {
+		return fetchErr
 	}
 	if peerID != "" && signer != peerID {
 		return fmt.Errorf("swarm: %s answered as another instance", baseURL)
@@ -878,27 +899,38 @@ func (app *Application) swarmPull(ctx context.Context, now time.Time) {
 		logging.Errorf("swarm: pull peers: %v", err)
 		return
 	}
-	n := 0
+	var picked []db.ListSwarmPullPeersRow
 	for _, p := range peers {
-		if n >= maxSwarmPullPeersPerCycle {
+		if len(picked) >= maxSwarmPullPeersPerCycle {
 			break
 		}
 		if !swarmPeerPullable(p.GoodChecks, p.BadChecks) {
 			continue
 		}
-		n++
+		picked = append(picked, p)
 		// Its turn is taken whether or not it answers, so a dead
 		// peer goes to the back of the line like any other.
 		if err := app.queries.TouchSwarmPeerPulled(ctx, db.TouchSwarmPeerPulledParams{InstanceID: p.InstanceID, LastPulled: timeSet(now)}); err != nil {
 			logging.Errorf("swarm: note pull of %s: %v", shortenSwarmID(p.InstanceID), err)
 		}
-		entries, err := app.swarmCli.pullEntries(ctx, p.BaseUrl, keys)
-		if err != nil {
+	}
+	// Asked a few at a time under one deadline (swarm_fanout.go);
+	// what they answer is staged one at a time, in rotation order.
+	type answer struct {
+		entries []swarmSignedEntry
+		err     error
+	}
+	answers := make([]answer, len(picked))
+	swarmFanOut(ctx, len(picked), func(rctx context.Context, i int) {
+		answers[i].entries, answers[i].err = app.swarmCli.pullEntries(rctx, picked[i].BaseUrl, keys)
+	})
+	for i, p := range picked {
+		if answers[i].err != nil {
 			app.addSwarmCounter(ctx, swarmCounterPullsFailed, 1)
 			continue
 		}
 		app.addSwarmCounter(ctx, swarmCounterPullsOK, 1)
-		app.swarmStagePulled(ctx, p.InstanceID, p.BaseUrl, keys, entries, now)
+		app.swarmStagePulled(ctx, p.InstanceID, p.BaseUrl, keys, answers[i].entries, now)
 	}
 }
 

@@ -482,7 +482,13 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 	// The header figures come from this payload, so the page
 	// carries it too (planner.html, #plan-data): plan.js reads it
 	// there and never asks for the plan a second time.
-	payload, meta := app.buildPlanPayloadView(ctx, q, res, prices, market, marketName, pricesNote, stock, scoped, inputChars, productID, systemID, systemName, costIndex, indexKnown, nameOf)
+	payload, meta := app.buildPlanPayloadView(ctx, planPayloadArgs{
+		Query: q, Result: res, Prices: prices,
+		Market: market, MarketName: marketName, PricesNote: pricesNote,
+		Stock: stock, Scoped: scoped, Chars: inputChars, ProductID: productID,
+		SystemID: systemID, SystemName: systemName, Index: costIndex, IndexKnown: indexKnown,
+		NameOf: nameOf,
+	})
 	view.Payload = payload
 	view.Meta = meta
 	view.Market = meta.Market

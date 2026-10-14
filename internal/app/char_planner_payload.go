@@ -729,10 +729,10 @@ func buildPlanPayload(res *buildplan.Result, productID int64, prices map[int64]e
 	return p
 }
 
-// planJitaPrices reads Forge sell rows for exactly the tree's
-// types (one bounded read). Missing rows stay missing: no
-// price data, never a silent fallback. It returns the map and
-// the freshest row stamp.
+// planRegionPrices reads one region's sell rows for exactly the
+// given types (one bounded read). A type with no row is simply
+// absent; planMarket layers what is found over the guide. It
+// returns the map and the freshest row stamp.
 func (app *Application) planRegionPrices(ctx context.Context, ids []int64, regionID int64) (map[int64]esi.MarketPrice, time.Time, error) {
 	rows, err := app.queries.ListMarketTypePricesForTypes(ctx, db.ListMarketTypePricesForTypesParams{
 		RegionID: regionID, Column2: ids,
@@ -995,11 +995,34 @@ func (app *Application) planOriginOf(ctx context.Context, root *buildplan.Node) 
 	return planOriginClassifier(groups)
 }
 
+// planPayloadArgs is a built plan and what buildPlanPayloadView
+// labels it with: the request, the prices and market it was built
+// with, the scope's stock and characters, and the build system.
+type planPayloadArgs struct {
+	Query                          url.Values
+	Result                         *buildplan.Result
+	Prices                         map[int64]esi.MarketPrice
+	Market, MarketName, PricesNote string
+	Stock                          map[int64]int64
+	Scoped                         plannerScopeData
+	Chars                          []db.Character
+	ProductID                      int64
+	SystemID                       int64
+	SystemName                     string
+	Index                          float64
+	IndexKnown                     bool
+	NameOf                         func(int64) string
+}
+
 // buildPlanPayloadView shapes the interactive blob around a
 // built plan: skill factor, slots, the tree DTO and the canonical
 // preset totals, labelled with the market and build system the
 // caller built it with. It never expands the tree again.
-func (app *Application) buildPlanPayloadView(ctx context.Context, q url.Values, res *buildplan.Result, prices map[int64]esi.MarketPrice, market, marketName, pricesNote string, stock map[int64]int64, scoped plannerScopeData, chars []db.Character, productID int64, systemID int64, systemName string, index float64, indexKnown bool, nameOf func(int64) string) (template.JS, *planPayload) {
+func (app *Application) buildPlanPayloadView(ctx context.Context, a planPayloadArgs) (template.JS, *planPayload) {
+	q, res, prices, stock, scoped, chars := a.Query, a.Result, a.Prices, a.Stock, a.Scoped, a.Chars
+	market, marketName, pricesNote := a.Market, a.MarketName, a.PricesNote
+	productID, systemID, systemName := a.ProductID, a.SystemID, a.SystemName
+	index, indexKnown, nameOf := a.Index, a.IndexKnown, a.NameOf
 	owner := planOwner(chars, sessionCharID(app.sessions, ctx))
 	factor, timeNote := planTimeFactor(q.Get("timef"), app.planTimeSkills(ctx), scoped, owner)
 	slots, slotsNote := planSlots(q.Get("slots"), app.slotSkillIDs(ctx), scoped, owner)

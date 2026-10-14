@@ -146,6 +146,12 @@ type Application struct {
 	priorityMu    sync.Mutex
 	priorityChars map[int64]bool
 
+	// Per-address throttles on the expensive anonymous routes
+	// (core_throttle.go), made on first use.
+	anonThrottleOnce sync.Once
+	anonPageThrottle *anonThrottle
+	anonSimThrottle  *anonThrottle
+
 	// The worker's user-visible status (Sync/Admin pages).
 	workerMu sync.Mutex
 	worker   workerStatus
@@ -343,6 +349,10 @@ type RouteHook func(r chi.Router, a *Application)
 // identical with or without hooks.
 func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r := chi.NewRouter()
+	// Anonymous visitors to the routes that cost real work are
+	// throttled per address (core_throttle.go).
+	pageThrottle, simThrottle := app.anonThrottles()
+	anonPages, anonSim := app.throttleAnon(pageThrottle), app.throttleAnon(simThrottle)
 	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(app.securityHeaders)
@@ -572,8 +582,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		// public (it is the item link target site-wide and the
 		// sitemap's indexed item page); the rest under /items/
 		// stays behind the login.
-		r.Get("/", app.handleItems)
-		r.Get("/type/{typeID}/", app.handleItemType)
+		r.With(anonPages).Get("/", app.handleItems)
+		r.With(anonPages).Get("/type/{typeID}/", app.handleItemType)
 		r.Group(func(r chi.Router) {
 			r.Use(app.requireAuth)
 			r.Get("/search.json", app.handleItemSearchJSON)
@@ -664,19 +674,19 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Get("/sitemap.xml", app.handleSitemap)
 
 	r.Route("/ships", func(r chi.Router) {
-		r.Get("/{typeID}/", app.handlePublicShip)
+		r.With(anonPages).Get("/{typeID}/", app.handlePublicShip)
 	})
 
 	r.Route("/fittings", func(r chi.Router) {
 		// Anonymous-safe surfaces: the simulator (All-V without
 		// a session), the public browser and fit pages, and the
 		// SDE-only picker. Handlers branch on the session.
-		r.Get("/", app.handleFittings)
-		r.Post("/simulate/", app.handleFitSimulate)
-		r.Get("/picker.json", app.handleFitPickerJSON)
-		r.Get("/public/", app.handlePublicFits)
-		r.Get("/public/suggest", app.handlePublicFitSuggest)
-		r.Get("/public/fit/{fitID}/", app.handlePublicFitPage)
+		r.With(anonPages).Get("/", app.handleFittings)
+		r.With(anonSim).Post("/simulate/", app.handleFitSimulate)
+		r.With(anonPages).Get("/picker.json", app.handleFitPickerJSON)
+		r.With(anonPages).Get("/public/", app.handlePublicFits)
+		r.With(anonPages).Get("/public/suggest", app.handlePublicFitSuggest)
+		r.With(anonPages).Get("/public/fit/{fitID}/", app.handlePublicFitPage)
 		r.With(app.requireAuth).Post("/public/fit/{fitID}/rate", app.handlePublicFitRate)
 		r.Group(func(r chi.Router) {
 			r.Use(app.requireAuth)

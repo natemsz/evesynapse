@@ -280,6 +280,9 @@ func (app *Application) handleSwarmPull(w http.ResponseWriter, r *http.Request) 
 		}
 		payload, fetchedAt, ok := app.serveSwarmKey(ctx, k.Kind, k.Key)
 		if !ok {
+			// A dedicated node takes the miss as demand and
+			// fetches it on its own budget (swarm_warm.go).
+			app.swarmNoteDemand(ctx, k.Kind, k.Key)
 			continue
 		}
 		entry, err := signSwarmEntry(app.swarmID, app.swarmID.id, k.Kind, k.Key, payload, fetchedAt)

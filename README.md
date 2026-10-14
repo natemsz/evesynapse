@@ -293,6 +293,7 @@ gaps; real environment variables win over the file):
 | `SHARED_CACHE_SECRET` | no | — | The swarm's membership proof: at least 32 random characters (`openssl rand -hex 32`). Enabling sharing without one refuses to start. Never shown on any page |
 | `SHARED_CACHE_SEEDS` | no | — | Bootstrap and fallback directory nodes (comma-separated `https` URLs; `http` only on loopback): the instances a new or lonely one asks for the membership list. Afterwards membership spreads peer to peer |
 | `SHARED_CACHE_GOSSIP_HOURS` | no | `18` | How often, in hours, membership is re-gossiped (12 to 168). Takes effect on restart |
+| `SHARED_CACHE_WARM` | no | — | Run as a dedicated warming node for these shared kinds (`all`, or a comma list of `corporation_record`, `alliance_record`, `type_name`, `market_history`, `structure_name`): the instance fetches the swarm's misses of them on its own ESI budget, and other instances spend theirs on those kinds only as the last resort. Takes effect on restart |
 | `WORKER_LANES` | no | `4` | How many characters the worker refreshes at the same time (1 to 16). Each character is still fetched one request after another, so ESI's per-character rate limits are unaffected; `1` is the worker as it was, one character at a time. More lanes mean more database connections in use at once: with more than 8, raise `DB_MAX_CONNS` to about two and a half per lane (40 for 16 lanes), which still fits PostgreSQL's default of 100. The Sync page's "Fetches a cycle" beside "Characters on average" shows what the characters actually cost, which is what to size this and the allowance by |
 | `DB_MAX_CONNS` | no | `20` | How many database connections the app may hold open (5 to 500). The session store keeps a few more of its own (at most 4, or one per CPU core if that is more). Raise it together with PostgreSQL's `max_connections` (100 unless changed), which must stay above the two added together; more than a few dozen is rarely useful on one machine |
 | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | no | — | A Discord application's id and secret: turns on "Connect Discord" (see "Discord") |
@@ -1210,6 +1211,17 @@ heartbeat per configured seed, so the directory keeps a fresh
 record of each instance; every instance also accepts those
 heartbeats itself (`POST /swarm/seed/register`), so any
 instance works as a seed for the rest.
+
+Fetch capacity is spent swarm-first. A dedicated warming node
+(`SHARED_CACHE_WARM`) says which kinds it warms
+(`GET /swarm/warms`) and takes the pull requests it cannot answer
+as demand: the key joins its own queue and its worker fetches it
+on its own ESI budget. An instance that a dedicated node covers
+leaves a miss of that kind to the swarm for 15 minutes before
+spending its own call, so its budget is the last resort; a kind
+no dedicated node covers is fetched as before. Pages never wait
+on any of this: a miss renders its not-yet-known state and fills
+in when the record lands.
 
 Trust is cryptographic and reputational. Every shared entry is
 signed by the instance that fetched it (Ed25519); the signature

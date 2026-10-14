@@ -611,6 +611,18 @@ func (app *Application) applySwarmEntry(ctx context.Context, kind, key, payload 
 		if err := dec.Decode(&body); err != nil {
 			return err
 		}
+		// A name this instance resolved from a better source
+		// (its own ESI call, a corporation list) stays: the
+		// peer's copy is consumed without being written, and no
+		// provenance points at a row it never touched.
+		if existing, err := app.queries.GetStructureName(ctx, body.StructureID); err == nil &&
+			existing.State == esi.StructureResolved &&
+			structureSourceRank(existing.Source) > structureSourceRank(esi.StructureSourceCommunity) {
+			if err := app.queries.DeleteStagingEntry(ctx, db.DeleteStagingEntryParams{Kind: kind, Key: key}); err != nil {
+				logging.Errorf("swarm: apply %s %s: unstaged: %v", kind, key, err)
+			}
+			return nil
+		}
 		if err := app.queries.SetStructureName(ctx, db.SetStructureNameParams{
 			StructureID: body.StructureID, Name: body.Name, State: esi.StructureResolved,
 			ResolvedAt: timeSet(stamp), Source: esi.StructureSourceCommunity,

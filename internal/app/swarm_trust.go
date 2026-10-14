@@ -273,6 +273,8 @@ func (app *Application) swarmFetchPhase(ctx context.Context, now time.Time) {
 		return
 	}
 	app.swarmGossip(ctx, now)
+	app.swarmRefreshCoverage(ctx, now)
+	app.swarmPruneAsked(now)
 	app.swarmPull(ctx, now)
 }
 
@@ -895,13 +897,39 @@ func (app *Application) swarmPull(ctx context.Context, now time.Time) {
 		logging.Errorf("swarm: pull peers: %v", err)
 		return
 	}
-	var picked []db.ListSwarmPullPeersRow
+	// Dedicated warming nodes are asked every cycle on top of the
+	// rotation: the pull is how demand reaches them, and how what
+	// they fetched comes back (swarm_warm.go).
+	warm := app.swarmWarmPeerIDs(now)
+	// A dedicated node is in the pull set whether or not it served
+	// lately: its first answers are empty (it is taking the demand),
+	// and dropping it then would strand what it fetches. Its trust
+	// was checked when it was asked what it warms.
+	listed := map[string]bool{}
 	for _, p := range peers {
-		if len(picked) >= maxSwarmPullPeersPerCycle {
-			break
+		listed[p.InstanceID] = true
+	}
+	for id, base := range app.swarmWarmPeerURLs(now) {
+		if !listed[id] {
+			peers = append(peers, db.ListSwarmPullPeersRow{InstanceID: id, BaseUrl: base})
 		}
+	}
+	var picked []db.ListSwarmPullPeersRow
+	rotation, warmTaken := 0, 0
+	for _, p := range peers {
 		if !swarmPeerPullable(p.GoodChecks, p.BadChecks) {
 			continue
+		}
+		if warm[p.InstanceID] {
+			if warmTaken >= maxSwarmWarmPeers {
+				continue
+			}
+			warmTaken++
+		} else {
+			if rotation >= maxSwarmPullPeersPerCycle {
+				continue
+			}
+			rotation++
 		}
 		picked = append(picked, p)
 		// Its turn is taken whether or not it answers, so a dead

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -146,6 +147,10 @@ func (app *Application) drainAlliancePass(ctx context.Context, allowance *fetchB
 // anywhere). A 404 or 422 settles the record as 'missing': both
 // are ESI's definitive answer that the ID is not a corporation.
 func (app *Application) drainCorporationRecord(ctx context.Context, id int64, allowance *fetchBudget, now time.Time) (settled bool, limited bool) {
+	// Swarm first: a dedicated node's budget before this one's.
+	if app.swarmDefersFetch(ctx, swarmKindCorporation, strconv.FormatInt(id, 10), now) {
+		return false, false
+	}
 
 	if !allowance.take() {
 		return false, false
@@ -214,6 +219,10 @@ func (app *Application) drainCorporationRecord(ctx context.Context, id int64, al
 // record as 'missing': both are ESI's definitive answer that the
 // ID is not an alliance.
 func (app *Application) drainAllianceRecord(ctx context.Context, id int64, allowance *fetchBudget, now time.Time) (settled bool, limited bool) {
+	// Swarm first: a dedicated node's budget before this one's.
+	if app.swarmDefersFetch(ctx, swarmKindAlliance, strconv.FormatInt(id, 10), now) {
+		return false, false
+	}
 
 	if !allowance.take() {
 		return false, false

@@ -210,6 +210,9 @@ type Application struct {
 	// mark, so the trust floor still holds.
 	swarmStreakMu sync.Mutex
 	swarmStreak   map[string]int
+	// swarmCover is what peers warm for the swarm and which misses
+	// have been left to them (swarm_warm.go).
+	swarmCover swarmCoverage
 
 	// Trade ideas (tradeideas.go): the Cloudflare client, set in
 	// tests; production builds a timeout client per refresh.
@@ -790,6 +793,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/swarm", func(r chi.Router) {
 		r.Get("/members", app.handleSwarmMembers)
 		r.Post("/pull", app.handleSwarmPull)
+		r.Get("/warms", app.handleSwarmWarms)
 		r.Post("/seed/register", app.handleSwarmSeedRegister)
 	})
 

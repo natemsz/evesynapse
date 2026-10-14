@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -151,6 +152,11 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 			}
 			fetched++
 			if app.swarmUrgentHistory(ctx, key) {
+				continue
+			}
+			// No peer had it yet: a dedicated node that warms
+			// history gets its grace before this budget is spent.
+			if app.swarmDefersFetch(ctx, swarmKindHistory, fmt.Sprintf("%d/%d", key.RegionID, key.TypeID), now) {
 				continue
 			}
 			if _, ltd := app.fetchAndStoreHistory(ctx, key); ltd {

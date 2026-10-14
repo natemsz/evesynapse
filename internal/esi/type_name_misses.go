@@ -14,6 +14,11 @@ import "sort"
 // and are noted again later.
 const maxTypeNameMisses = 2000
 
+// NoteTypeNameMiss puts one type ID on the miss list, as a reader
+// finding it unnamed would: a dedicated swarm node takes a peer's
+// demand for a type name this way.
+func (c *Client) NoteTypeNameMiss(id int64) { c.noteTypeNameMiss(id) }
+
 func (c *Client) noteTypeNameMiss(id int64) {
 	if id <= 0 {
 		return

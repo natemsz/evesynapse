@@ -57,7 +57,11 @@ type swarmConfig struct {
 	secret      string
 	seeds       []string
 	gossipHours int
-	err         error
+	// warms are the shared kinds this instance fetches for the
+	// swarm as a dedicated warming node (SHARED_CACHE_WARM,
+	// swarm_warm.go); empty on an ordinary instance.
+	warms map[string]bool
+	err   error
 }
 
 // enabled reports whether the instance shares anything at all.
@@ -102,6 +106,7 @@ func loadSwarmConfig(getenv func(string) string) swarmConfig {
 	}
 	s.seeds = seeds
 	s.gossipHours = parseSwarmGossipHours(getenv("SHARED_CACHE_GOSSIP_HOURS"))
+	s.warms = parseSwarmWarm(getenv("SHARED_CACHE_WARM"))
 	return s
 }
 

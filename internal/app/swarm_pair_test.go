@@ -84,6 +84,7 @@ func (s *swarmESISStub) RoundTrip(req *http.Request) (*http.Response, error) {
 type swarmPair struct {
 	a, b   *Application
 	urlA   string
+	stubA  *swarmESISStub
 	stubB  *swarmESISStub
 	secret string
 }
@@ -107,7 +108,7 @@ func newSwarmPair(t *testing.T, modeB string) *swarmPair {
 
 	srv := httptest.NewServer(ta.Handler())
 	t.Cleanup(srv.Close)
-	return &swarmPair{a: ta, b: tb, urlA: srv.URL, stubB: stubB, secret: secret}
+	return &swarmPair{a: ta, b: tb, urlA: srv.URL, stubA: stubA, stubB: stubB, secret: secret}
 }
 
 // pinA records A's identity in B as an approved peer, the way

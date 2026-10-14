@@ -300,7 +300,7 @@ func TestHomeLayoutRoundTrip(t *testing.T) {
 		t.Fatalf("GET /?customize=1: status %d", code)
 	}
 	mustContain(t, "/?customize=1", body,
-		"Customize home", "Reset to default layout",
+		"Reset to the default layout", ">Done</a>",
 		`name="widget" value="skills"`, ">Add<", "Move up",
 	)
 
@@ -522,8 +522,10 @@ func TestHomeCustomizeSurface(t *testing.T) {
 		// Live draggable grid.
 		`id="home-grid"`, `data-customize="1"`, `home-custom`,
 		`data-widget="fleet"`, `data-widget="server"`,
-		// Save-changes exit + Add module entry point.
-		">Save changes</a>", `id="add-module-btn"`, ">Add module</a>",
+		// The Overview menu: Done exits, Add a module and Reset
+		// live behind one settings button; nothing to save.
+		`aria-label="Overview settings"`, ">Done</a>", `id="add-module-btn"`, ">Add a module</a>",
+		"Reset to the default layout",
 		// The pop-up: full catalog, name + plain description.
 		`id="add-module-modal"`, `data-add-widget="skills"`,
 		"The next skill finishes across the fleet",
@@ -532,9 +534,10 @@ func TestHomeCustomizeSurface(t *testing.T) {
 		"<noscript>", `id="home-module-list"`,
 		`name="widget" value="skills"`, "Move up", "Move down",
 		// End-user copy.
-		"Changes save automatically.",
+		"Changes save as you make them.",
 	)
 	for _, gone := range []string{
+		"Save changes",
 		"no JavaScript needed", "Turn widgets on or off",
 		"check the server log",
 	} {

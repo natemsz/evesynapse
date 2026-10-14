@@ -49,21 +49,24 @@ const (
 	widgetGlance     = "glance"
 )
 
-// Widget size classes for the home grid engine. A full module
-// always owns its row; a flex module takes half a row and pairs
-// with the next flex module that fits (see solveHomeSpans).
-const (
-	widgetSizeFull = "full"
-	widgetSizeFlex = "flex"
-)
+// The home grid is three cells wide on a desktop (two on a mid-size
+// screen, one on a phone). Every module takes 1-3 cells across and
+// 1-3 rows down: its catalog default until the user resizes it in
+// Customize. Size is information, not decoration: a taller module
+// shows more of its rows before More, and a wider one shows the
+// table columns a narrow one leaves out.
+const homeGridMax = 3
 
-// Per-user span preferences for flex modules, persisted in the
-// layout: auto pairs the module with a neighbor when the solver
-// can; wide forces it onto its own row.
-const (
-	spanAuto = ""
-	spanWide = "wide"
-)
+// clampGrid holds a stored size inside the grid; 0 (unset) stays 0.
+func clampGrid(n int) int {
+	switch {
+	case n <= 0:
+		return 0
+	case n > homeGridMax:
+		return homeGridMax
+	}
+	return n
+}
 
 // widgetDef is one entry of the widget catalog: what Customize
 // offers and what a saved layout may name.
@@ -71,26 +74,26 @@ type widgetDef struct {
 	ID          string
 	Title       string
 	Description string
-	Size        string // widgetSizeFull | widgetSizeFlex
+	W, H        int    // default size in grid cells, 1-3 each
 	Module      string // id of the moduleManifest entry that powers it
 }
 
 var homeWidgetCatalog = []widgetDef{
-	{widgetGlance, "At a glance", "The fleet's key figures in one band: net worth, liquid wallets, assets, and how many pilots are training.", widgetSizeFull, "networth"},
-	{widgetBriefing, "Briefing", "What changed since you last looked, and what needs you in the next day.", widgetSizeFull, "briefing"},
-	{widgetFleet, "Fleet overview", "Every linked character at a glance: where they are, what they're flying, what they're training.", widgetSizeFull, "fleet"},
-	{widgetAttention, "Needs attention", "Characters that need you: re-links, idle queues, finished jobs, expiring orders, waiting contracts.", widgetSizeFull, "attention"},
-	{widgetNetWorth, "Net worth", "Wallets, assets and open-order escrow across all characters, at market prices. An estimate.", widgetSizeFlex, "networth"},
-	{widgetIndustry, "Industry", "Active industry jobs across characters, soonest delivery first.", widgetSizeFlex, "industry"},
-	{widgetPI, "Planetary industry", "Colonies across your characters: extractor timers, expired heads, and the next planet needing a visit.", widgetSizeFlex, "planets"},
-	{widgetMarket, "Market", "Open orders across characters: counts, sell/buy value, orders expiring soonest.", widgetSizeFlex, "market"},
-	{widgetWatchlist, "Market watchlist", "The items you're watching: latest prices, 7- and 30-day moves, and a flag when one crosses your alert line.", widgetSizeFlex, "market_public"},
-	{widgetSkills, "Skills", "The next skill finishes across the fleet, plus who isn't training.", widgetSizeFlex, "skills"},
-	{widgetServer, "Tranquility", "Server status: players online.", widgetSizeFlex, "server"},
-	{widgetTraining, "Training horizon", "The next 10 skill finishes across every character, plus who is sitting idle.", widgetSizeFlex, "skills"},
-	{widgetPulse, "Corp pulse", "What changed in the corporation: members in and out, wallet movements, structure arrivals and timers. Needs a qualifying in-game role.", widgetSizeFlex, "corp_members"},
-	{widgetWalletFlow, "Wallet flow", "Income vs spend over 7 and 30 days with top sources, sinks, and a per-character breakdown.", widgetSizeFull, "wallet"},
-	{widgetUpkeep, "Upkeep & fuel", "Structures low on fuel, unanchoring, or running a state timer. Station Managers and Directors only.", widgetSizeFlex, "corp_structures"},
+	{widgetGlance, "At a glance", "The fleet's key figures in one band: net worth, liquid wallets, assets, and how many pilots are training.", 3, 1, "networth"},
+	{widgetBriefing, "Briefing", "What changed since you last looked, and what needs you in the next day.", 3, 1, "briefing"},
+	{widgetFleet, "Fleet overview", "Every linked character at a glance: where they are, what they're flying, what they're training.", 3, 2, "fleet"},
+	{widgetAttention, "Needs attention", "Characters that need you: re-links, idle queues, finished jobs, expiring orders, waiting contracts.", 2, 1, "attention"},
+	{widgetNetWorth, "Net worth", "Wallets, assets and open-order escrow across all characters, at market prices. An estimate.", 1, 2, "networth"},
+	{widgetIndustry, "Industry", "Active industry jobs across characters, soonest delivery first.", 1, 1, "industry"},
+	{widgetPI, "Planetary industry", "Colonies across your characters: extractor timers, expired heads, and the next planet needing a visit.", 1, 1, "planets"},
+	{widgetMarket, "Market", "Open orders across characters: counts, sell/buy value, orders expiring soonest.", 1, 1, "market"},
+	{widgetWatchlist, "Market watchlist", "The items you're watching: latest prices, 7- and 30-day moves, and a flag when one crosses your alert line.", 1, 1, "market_public"},
+	{widgetSkills, "Skills", "The next skill finishes across the fleet, plus who isn't training.", 1, 1, "skills"},
+	{widgetServer, "Tranquility", "Server status: players online.", 1, 1, "server"},
+	{widgetTraining, "Training horizon", "The next 10 skill finishes across every character, plus who is sitting idle.", 1, 1, "skills"},
+	{widgetPulse, "Corp pulse", "What changed in the corporation: members in and out, wallet movements, structure arrivals and timers. Needs a qualifying in-game role.", 1, 1, "corp_members"},
+	{widgetWalletFlow, "Wallet flow", "Income vs spend over 7 and 30 days with top sources, sinks, and a per-character breakdown.", 2, 2, "wallet"},
+	{widgetUpkeep, "Upkeep & fuel", "Structures low on fuel, unanchoring, or running a state timer. Station Managers and Directors only.", 1, 1, "corp_structures"},
 }
 
 // defaultHomeLayout is what accounts with no saved layout get:
@@ -111,20 +114,30 @@ func widgetDefFor(id string) (widgetDef, bool) {
 	return widgetDef{}, false
 }
 
-// widgetSizeOf resolves a widget's catalog size class; unknown
-// ids (which a normalized layout cannot contain) read as flex.
-func widgetSizeOf(id string) string {
-	if def, ok := widgetDefFor(id); ok {
-		return def.Size
+// widgetSize resolves a layout item's size: the stored one where
+// set, else the widget's catalog default (1x1 for an unknown id,
+// which a normalized layout cannot contain).
+func widgetSize(item homeLayoutItem) (w, h int) {
+	w, h = 1, 1
+	if def, ok := widgetDefFor(item.ID); ok {
+		w, h = def.W, def.H
 	}
-	return widgetSizeFlex
+	if item.W > 0 {
+		w = item.W
+	}
+	if item.H > 0 {
+		h = item.H
+	}
+	return w, h
 }
 
-// homeLayoutItem is one persisted layout entry: the widget, plus
-// its span preference (flex modules only; ignored for full ones).
+// homeLayoutItem is one persisted layout entry: the widget and, once
+// the user has resized it, its size in grid cells (0 = the catalog
+// default).
 type homeLayoutItem struct {
-	ID   string `json:"id"`
-	Span string `json:"span,omitempty"` // spanAuto ("") | spanWide
+	ID string `json:"id"`
+	W  int    `json:"w,omitempty"`
+	H  int    `json:"h,omitempty"`
 }
 
 // parseHomeLayout normalizes a persisted layout: unknown ids
@@ -132,12 +145,12 @@ type homeLayoutItem struct {
 // (or unparseable JSON) yields the default layout; a saved empty
 // array is honored — the user turned everything off.
 //
-// Two storage formats load identically: v1, the bare id array
-// (["fleet", ...]) older builds wrote, and v2, the
-// object array ([{"id":"fleet"}, {"id":"market","span":"wide"}])
-// written since the grid engine. Each entry is decoded on its
-// own, so a corrupted entry drops out instead of taking the
-// whole layout down; an invalid span value drops back to auto.
+// Three storage formats load: v1, the bare id array (["fleet", ...]);
+// v2, objects with a span preference ({"id":"market","span":"wide"}),
+// where wide reads as the full grid width; and v3, objects with a
+// size ({"id":"market","w":2,"h":1}), written now. Each entry is
+// decoded on its own, so a corrupted entry drops out instead of
+// taking the whole layout down; a size out of range is held to it.
 func parseHomeLayout(raw string) []homeLayoutItem {
 	if strings.TrimSpace(raw) == "" {
 		return defaultHomeLayoutItems()
@@ -169,10 +182,12 @@ func parseHomeLayoutEntry(entry json.RawMessage) (homeLayoutItem, bool) {
 		}
 		return homeLayoutItem{ID: id}, true
 	}
-	// v2: {"id": ..., "span": ...}.
+	// v2/v3: {"id": ..., "span": ...} or {"id": ..., "w": .., "h": ..}.
 	var obj struct {
 		ID   string `json:"id"`
 		Span string `json:"span"`
+		W    int    `json:"w"`
+		H    int    `json:"h"`
 	}
 	if err := json.Unmarshal(entry, &obj); err != nil {
 		return homeLayoutItem{}, false
@@ -180,15 +195,15 @@ func parseHomeLayoutEntry(entry json.RawMessage) (homeLayoutItem, bool) {
 	if _, ok := widgetDefFor(obj.ID); !ok {
 		return homeLayoutItem{}, false
 	}
-	item := homeLayoutItem{ID: obj.ID}
-	if obj.Span == spanWide {
-		item.Span = spanWide
+	item := homeLayoutItem{ID: obj.ID, W: clampGrid(obj.W), H: clampGrid(obj.H)}
+	if obj.Span == "wide" && item.W == 0 {
+		item.W = homeGridMax
 	}
 	return item, true
 }
 
 // encodeHomeLayout serializes a normalized layout for storage —
-// always in the v2 object format (span omitted when auto).
+// always in the v3 object format (size omitted while default).
 func encodeHomeLayout(items []homeLayoutItem) string {
 	if items == nil {
 		items = []homeLayoutItem{}
@@ -218,93 +233,10 @@ func layoutIDs(items []homeLayoutItem) []string {
 	return ids
 }
 
-// ---------------------------------------------------------------------------
-// The home grid engine: a pure packing solver decides every
-// module's column span, so the arrangement is computed — never
-// stretched into place by the browser. The Go solver renders the
-// page (correct with zero JavaScript); the app.js mirror
-// re-solves live while a module is dragged. Both implement the
-// one rule below.
-// ---------------------------------------------------------------------------
-
-// solveHomeSpans resolves each layout item's column span on a
-// grid of cols columns holding perRow flex modules a row (3 on a
-// wide screen, 2 below it). Walking the saved order left to right:
-//
-//   - a full module, and a flex module marked wide, takes the
-//     whole row (cols);
-//   - a flex module takes cols/perRow and shares the row with
-//     the next flex modules that fit beside it;
-//   - a row of flex modules that ends short — nothing pairable
-//     follows before the next full/wide row boundary — shares the
-//     spare width among its modules, but none grows past half the
-//     row: a small module never balloons to fill width it has no
-//     use for.
-//
-// Rows never overflow; a short row can end with a gap.
-func solveHomeSpans(items []homeLayoutItem, cols, perRow int) []int {
-	spans := make([]int, len(items))
-	if cols < 2 {
-		for i := range spans {
-			spans[i] = 1
-		}
-		return spans
-	}
-	if perRow < 1 || perRow > cols {
-		perRow = 2
-	}
-	flex := cols / perRow
-	half := cols / 2
-	rowUsed, rowStart := 0, 0
-	// closeRow ends the current row at index next. A short row of
-	// flex modules shares its spare width, up to half a row each.
-	closeRow := func(next int) {
-		n := next - rowStart
-		if n > 0 && rowUsed < cols {
-			share := cols / n
-			if share > half {
-				share = half
-			}
-			for k := rowStart; k < next; k++ {
-				if spans[k] < share {
-					spans[k] = share
-				}
-			}
-		}
-		rowStart, rowUsed = next, 0
-	}
-	for i, item := range items {
-		span := flex
-		if item.Span == spanWide || widgetSizeOf(item.ID) == widgetSizeFull {
-			span = cols
-		}
-		if rowUsed > 0 && rowUsed+span > cols {
-			closeRow(i)
-		}
-		spans[i] = span
-		rowUsed += span
-		if rowUsed == cols {
-			closeRow(i + 1)
-		}
-	}
-	if rowUsed > 0 {
-		closeRow(len(items))
-	}
-	return spans
-}
-
-// spanClasses names the CSS classes carrying the two solves on
-// the 6-column grid: the two-up solve as span3 (half row) or
-// span6 (whole row), which the CSS also maps onto the phone grids,
-// and the three-up solve for wide screens as wspan2, wspan3 or
-// wspan6. The server renders both; the CSS picks by width.
-func spanClasses(two, three int) string {
-	c := "span3"
-	if two > 3 {
-		c = "span6"
-	}
-	return c + " wspan" + strconv.Itoa(three)
-}
+// homeCap is how many rows or items a module shows before More, by
+// its height: one cell holds a short list, every extra row holds
+// five more.
+func homeCap(h int) int { return 3 + 5*(h-1) }
 
 // ---------------------------------------------------------------------------
 // Snapshot store: one batched read of the kinds the visible
@@ -633,9 +565,10 @@ func queueState(queue esi.Skillqueue, now time.Time) (training bool, finishedAt 
 type homeWidget struct {
 	ID         string
 	Title      string
-	SpanClass  string // solved grid span classes: span3|span6 and wspan2|wspan3|wspan6
-	Size       string // catalog size class (flex modules get the resize toggle)
-	SpanPref   string // user's span preference: "" (auto) | wide
+	W, H       int    // size in grid cells
+	SizeClass  string // gw1-3 gh1-3: the grid classes the CSS applies
+	Cap        int    // rows or items shown before More, by height
+	BriefCap   int    // briefing cards shown before More, by area
 	Customize  bool   // rendering under /?customize=1 (form return targets)
 	Fleet      *fleetWidget
 	Attention  *attentionWidget
@@ -1797,13 +1730,13 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		briefingSince = app.briefingWindowStart(ctx, userID, now)
 	}
 
-	spans := solveHomeSpans(layout, 6, 2)
-	wideSpans := solveHomeSpans(layout, 6, 3)
-	for i, item := range layout {
+	for _, item := range layout {
 		def, _ := widgetDefFor(item.ID)
+		gw, gh := widgetSize(item)
 		w := homeWidget{
 			ID: item.ID, Title: def.Title,
-			SpanClass: spanClasses(spans[i], wideSpans[i]), Size: def.Size, SpanPref: item.Span,
+			W: gw, H: gh, SizeClass: fmt.Sprintf("gw%d gh%d", gw, gh),
+			Cap: homeCap(gh), BriefCap: 2 * gw * gh,
 			Customize: customize,
 		}
 		switch item.ID {
@@ -1862,8 +1795,7 @@ type customizeEntry struct {
 	Position    int // 1-based among enabled; 0 when disabled
 	CanUp       bool
 	CanDown     bool
-	Span        string // span preference ("wide" or "")
-	IsFlex      bool   // flex modules offer the half/full resize control
+	W, H        int // current size in grid cells (on the home or default)
 }
 
 type customizeView struct {
@@ -1872,10 +1804,10 @@ type customizeView struct {
 
 func buildCustomizeView(layout []homeLayoutItem) *customizeView {
 	position := make(map[string]int, len(layout))
-	spans := make(map[string]string, len(layout))
+	sizes := make(map[string]homeLayoutItem, len(layout))
 	for i, item := range layout {
 		position[item.ID] = i + 1
-		spans[item.ID] = item.Span
+		sizes[item.ID] = item
 	}
 	view := &customizeView{}
 	for _, def := range homeWidgetCatalog {
@@ -1885,9 +1817,8 @@ func buildCustomizeView(layout []homeLayoutItem) *customizeView {
 			Description: def.Description,
 			Enabled:     position[def.ID] > 0,
 			Position:    position[def.ID],
-			Span:        spans[def.ID],
-			IsFlex:      def.Size == widgetSizeFlex,
 		}
+		entry.W, entry.H = widgetSize(homeLayoutItem{ID: def.ID, W: sizes[def.ID].W, H: sizes[def.ID].H})
 		if entry.Enabled {
 			entry.CanUp = entry.Position > 1
 			entry.CanDown = entry.Position < len(layout)
@@ -1909,8 +1840,8 @@ func (app *Application) saveHomeLayout(ctx context.Context, userID int64, layout
 }
 
 // handleHomeLayout applies one layout change (POST /home/layout):
-// toggle a widget, move one up or down, flip a flex widget's span
-// (action=span, span=auto|wide), reset to the default, or accept a
+// toggle a widget, move one up or down, resize one (action=size,
+// w and h in grid cells, 1-3), reset to the default, or accept a
 // whole new order from a drag (action=order, ids comma-joined). Every
 // control is a plain form, so arranging works with no JavaScript: the
 // change saves and bounces back to Customize. Requests with
@@ -1974,12 +1905,12 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 			// duplicate ids drop out and the submitted order
 			// wins; span preferences carry over from the saved
 			// layout (they are orthogonal to order), and an id
-			// never seen before starts auto. An empty or
+			// never seen before starts at its default size. An empty or
 			// all-unknown list turns everything off, exactly
 			// like toggling each widget off would.
-			prefs := make(map[string]string, len(layout))
+			prefs := make(map[string]homeLayoutItem, len(layout))
 			for _, item := range layout {
-				prefs[item.ID] = item.Span
+				prefs[item.ID] = item
 			}
 			next := make([]homeLayoutItem, 0, len(layout))
 			seen := make(map[string]bool, len(layout))
@@ -1989,30 +1920,20 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 					continue
 				}
 				seen[id] = true
-				next = append(next, homeLayoutItem{ID: id, Span: prefs[id]})
+				next = append(next, homeLayoutItem{ID: id, W: prefs[id].W, H: prefs[id].H})
 			}
 			app.saveHomeLayout(ctx, userID, next)
-		case "span":
-			// Flip one widget's span preference; the id must
-			// already be on the home and the value exactly
-			// auto|wide — anything else is not a layout change.
-			if known {
-				pref, valid := spanAuto, true
-				switch r.FormValue("span") {
-				case spanWide:
-					pref = spanWide
-				case "auto":
-					pref = spanAuto
-				default:
-					valid = false
-				}
-				if valid {
-					for i := range layout {
-						if layout[i].ID == widget {
-							layout[i].Span = pref
-							app.saveHomeLayout(ctx, userID, layout)
-							break
-						}
+		case "size":
+			// Resize one widget on the home; both sizes must be
+			// whole cells inside the grid, else nothing changes.
+			wv, werr := strconv.Atoi(r.FormValue("w"))
+			hv, herr := strconv.Atoi(r.FormValue("h"))
+			if known && werr == nil && herr == nil && wv >= 1 && wv <= homeGridMax && hv >= 1 && hv <= homeGridMax {
+				for i := range layout {
+					if layout[i].ID == widget {
+						layout[i].W, layout[i].H = wv, hv
+						app.saveHomeLayout(ctx, userID, layout)
+						break
 					}
 				}
 			}

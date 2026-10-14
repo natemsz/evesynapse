@@ -928,28 +928,45 @@ html[data-theme="light"] .widget-scope select {
   border: 1px dashed #6b3410;
   box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.45);
 }
-/* The home grid: the server solves each module's column span
-   (solveHomeSpans) and the CSS only applies it. Six tracks: two
-   modules a row on desktop, three on a wide screen. Cards keep
-   their own height: a short module is not stretched to the
-   tallest one in its row. */
+/* The home grid: three cells across on a desktop, two on a mid-size
+   screen, one on a phone. A module takes gw1-3 cells across and gh1-3
+   rows down (its size, stored per user). Rows have a floor, not a
+   ceiling: a cell grows when what it holds needs to, so nothing is
+   clipped, and a gap a mix of sizes leaves is filled by the next
+   module that fits. */
 .grid.home-grid {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  align-items: start;
-  /* Saved order is visual order: a short row keeps its gap
-     rather than pulling a later module up into it. */
-  grid-auto-flow: row;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(10.5rem, auto);
+  grid-auto-flow: row dense;
+  align-items: stretch;
 }
-.grid.home-grid > .span3 { grid-column: span 3; }
-.grid.home-grid > .span6 { grid-column: span 6; }
-.grid.home-grid > .card { min-width: 0; }
-@media (min-width: 1280px) {
-  .grid.home-grid > .wspan2 { grid-column: span 2; }
-  .grid.home-grid > .wspan3 { grid-column: span 3; }
-  .grid.home-grid > .wspan6 { grid-column: span 6; }
+.grid.home-grid > .card { position: relative; min-width: 0; justify-self: stretch; container-type: inline-size; }
+/* Cards are positioned (for the corner controls), so a table's
+   visually-hidden header text would otherwise anchor to the card and
+   escape its scroller, widening the page on phones. */
+.grid.home-grid .tw { position: relative; }
+.grid.home-grid > .gw2 { grid-column: span 2; }
+.grid.home-grid > .gw3 { grid-column: span 3; }
+.grid.home-grid > .gh2 { grid-row: span 2; }
+.grid.home-grid > .gh3 { grid-row: span 3; }
+@media (max-width: 1099px) {
+  .grid.home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid.home-grid > .gw3 { grid-column: span 2; }
+}
+/* Phones: one column, every module its natural height; the summary
+   shows first and More opens the rest. */
+@media (max-width: 719px) {
+  .grid.home-grid { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; }
+  .grid.home-grid > .card { grid-column: auto; grid-row: auto; }
+  /* Sizes only apply on wider screens, so there is nothing to resize. */
+  .grid.home-grid .cardsize, .grid.home-grid .cardgrip, .grid.home-grid .sizepick { display: none; }
 }
 /* An expanded module shows its detail across its whole row. */
-.grid.home-grid > .card.expanded { grid-column: 1 / -1; }
+.grid.home-grid > .card.expanded { grid-column: 1 / -1; grid-row: auto / span 1; }
+/* Columns a narrow module has no room for (marked .opt, .opt2):
+   widening the module brings them back. */
+@container (max-width: 34rem) { .card .opt { display: none; } }
+@container (max-width: 24rem) { .card .opt2 { display: none; } }
 
 /* --- home modules: KPI tiles, briefing cards, fleet table ---
    The v2.4 mockup's layout in the site's own ember style: figures
@@ -1094,14 +1111,9 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid rgba(255, 1
 .pie-s5 { fill: #7d6a58; background: #7d6a58; }
 /* Phones: two columns. */
 @media (max-width: 719px) {
-  .grid.home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .grid.home-grid > .span3 { grid-column: span 1; }
-  .grid.home-grid > .span6 { grid-column: span 2; }
 }
 /* Very small screens: one column. */
 @media (max-width: 339px) {
-  .grid.home-grid { grid-template-columns: minmax(0, 1fr); }
-  .grid.home-grid > .span3, .grid.home-grid > .span6 { grid-column: span 1; }
 }
 /* --- market history chart: interactive day points ---------- */
 .pchart { position: relative; }
@@ -1187,14 +1199,18 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
 @media (prefers-reduced-motion: reduce) {
   .card.drag-settle { transition: none; }
 }
-/* The × and the resize toggle centre on the card heading like the fold
-   button, so all three line up at any heading height. */
-.cardremove {
+/* A module's own controls in Customize: size and remove in the
+   card's top-right corner, the resize grip in its bottom-right one,
+   the drag handle at the start of its heading. */
+.cardctl {
   position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  right: 2.6rem;
-  z-index: 2;
+  top: 0.45rem;
+  right: 0.45rem;
+  z-index: 3;
+  display: flex;
+  gap: 0.3rem;
+}
+.cardremove, .cardsize {
   width: 1.7rem;
   height: 1.7rem;
   padding: 0;
@@ -1208,28 +1224,92 @@ body.drag-active { user-select: none; -webkit-user-select: none; cursor: grabbin
   cursor: pointer;
 }
 .cardremove:hover { color: var(--text-bright); border-color: var(--danger); }
-.cardspan {
+.cardsize:hover, .cardsize[aria-expanded="true"] { color: var(--text-bright); border-color: var(--accent); }
+.sizepick {
   position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  right: 4.5rem;
-  z-index: 2;
-  width: 1.7rem;
-  height: 1.7rem;
-  padding: 0;
-  font-size: 0.95rem;
-  line-height: 1;
-  font-family: inherit;
-  color: var(--gold);
+  top: calc(100% + 0.3rem);
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1.5rem);
+  gap: 3px;
+  padding: 0.4rem;
   background: #0e0e0e;
-  border: 1px solid #4a2408;
-  border-radius: 3px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+}
+.sizepick[hidden] { display: none; }
+.sizepick button {
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  background: #1a1410;
+  border: 1px solid #3a2410;
+  border-radius: 2px;
   cursor: pointer;
 }
-.cardspan:hover { color: var(--text-bright); border-color: var(--accent); }
-.cardspan[aria-pressed="true"] { color: var(--text-bright); border-color: var(--accent); }
-.home-custom.has-controls .card > h2:first-child, .home-custom.has-controls .card > h3:first-child { padding-right: 4.6rem; position: relative; }
-.home-custom.has-controls .card.has-spanbtn > h2:first-child, .home-custom.has-controls .card.has-spanbtn > h3:first-child { padding-right: 6.6rem; }
+.sizepick button.on { background: rgba(255, 106, 26, 0.45); border-color: var(--accent); }
+.cardgrip {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  z-index: 3;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  touch-action: none;
+  background: linear-gradient(135deg, transparent 0 50%, var(--accent) 50% 58%, transparent 58% 70%, var(--accent) 70% 78%, transparent 78%);
+  opacity: 0.75;
+}
+.cardgrip:hover, .card.resizing .cardgrip { opacity: 1; }
+.card.resizing { outline: 1px dashed var(--accent); }
+.home-custom.has-controls .card > h2:first-child, .home-custom.has-controls .card > h3:first-child { padding-right: 4.4rem; }
+@media (max-width: 719px) { .cardgrip { display: none; } }
+
+/* The Overview bar: a quiet strip above the grid. Arranging lives
+   behind one settings menu, always to hand and never in the way. */
+.home-bar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; justify-content: flex-end; margin: -0.4rem 0 0.8rem; }
+.home-bar-note { margin: 0 auto 0 0; color: var(--muted); }
+.btn.btn-quiet { background: transparent; color: var(--text); border: 1px solid #4a2408; box-shadow: none; }
+.btn.btn-quiet:hover { border-color: var(--accent); color: var(--text-bright); }
+.menu-pop { position: relative; }
+.menu-pop > summary { list-style: none; display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; }
+.menu-pop > summary::-webkit-details-marker { display: none; }
+.menu-pop > summary .glyph { width: 1.05rem; height: 1.05rem; }
+.menu-pop[open] > summary { border-color: var(--accent); }
+.menu-pop-body {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.35rem);
+  z-index: 40;
+  min-width: 15rem;
+  display: grid;
+  padding: 0.3rem;
+  background: var(--panel);
+  border: 1px solid #4a2408;
+  border-radius: 4px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.6);
+}
+.menu-pop-body a, .menu-pop-body button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.menu-pop-body a:hover, .menu-pop-body button:hover { background: var(--row-hover); color: var(--text-bright); }
+.menu-pop-body form { margin: 0; }
+html[data-theme="light"] .menu-pop-body { border-color: #d3c7ae; box-shadow: 0 10px 24px rgba(60, 40, 10, 0.18); }
+html[data-theme="light"] .btn.btn-quiet { border-color: #d3c7ae; }
+html[data-theme="light"] .sizepick { background: #fffdf9; }
+html[data-theme="light"] .sizepick button { background: #f1ebdf; border-color: #d9cfba; }
 
 /* Modal pop-ups (add-module, planner ME); closing is wired in app.js / plan.js. */
 .modal-backdrop {
@@ -1977,9 +2057,6 @@ tbody tr.yours td { background-color: #2a2015; }
   .pchart .tick-mid { display: none; }
   .pchart text { font-size: 15px; }
   .legend-note { flex-basis: 100%; margin-left: 0; }
-  .grid.home-grid { grid-template-columns: minmax(0, 1fr); }
-  .grid.home-grid > .span3,
-  .grid.home-grid > .span6 { grid-column: span 1; }
   .grid { gap: 0.65rem; }
   .card { padding: 0.75rem 0.8rem 0.9rem; }
   /* The module title bleeds to the card's edges with negative margins
@@ -2956,7 +3033,7 @@ html[data-theme="light"] .nav-expand-btn { background: #fffdf9; border-color: #d
 /* Glyph chips keep a light paint so hover text stays readable. */
 html[data-theme="light"] .foldbtn,
 html[data-theme="light"] .cardremove,
-html[data-theme="light"] .cardspan,
+html[data-theme="light"] .cardsize,
 html[data-theme="light"] .modal-close,
 html[data-theme="light"] .quickjump-btn { background: #fffdf9; border-color: #d3c7ae; }
 /* The ember gradient button keeps its dark paint in light mode. */

@@ -12,29 +12,28 @@
 <p>No characters are linked to this account yet. EveSynapse tracks every character you sign in with here — link one to start.</p>
 <p><a class="btn" href="/auth/eve">Link your first character</a></p>
 {{else}}
-{{if .Home.Customize}}
-<h2>Customize home</h2>
-<p><small>Arrange the modules on your home and choose which ones appear. Changes save automatically.</small></p>
-<div class="home-actions">
-  <a class="btn" href="/">Save changes</a>
-  <a class="btn" href="#home-module-list" id="add-module-btn">Add module</a>
-  <form method="post" action="/home/layout">
-    <input type="hidden" name="action" value="reset">
-    <button type="submit" class="btn">Reset to default layout</button>
-  </form>
+<div class="home-bar">
+  {{if .Home.Customize}}<p class="home-bar-note"><small>Drag a module by its handle, resize it from its corner, remove it with ×. Changes save as you make them.</small></p>{{end}}
+  <a class="btn btn-quiet" href="/auth/eve">Link another character</a>
+  {{if .Home.Customize}}<a class="btn" href="/">Done</a>{{end}}
+  <details class="menu-pop home-settings">
+    <summary class="btn btn-quiet" title="Overview settings: arrange, add or reset modules" aria-label="Overview settings"><svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></g></svg><span>Overview</span></summary>
+    <div class="menu-pop-body" role="menu">
+      {{if not .Home.Customize}}<a role="menuitem" href="/?customize=1">Arrange and resize modules</a>{{end}}
+      <a role="menuitem" href="/?customize=1&amp;add=1" id="add-module-btn">Add a module</a>
+      <form method="post" action="/home/layout" data-confirm="Put every module back to the default layout?">
+        <input type="hidden" name="action" value="reset">
+        <button type="submit" role="menuitem">Reset to the default layout</button>
+      </form>
+    </div>
+  </details>
 </div>
-{{if not .Home.Widgets}}<p><small>Your home is empty right now — add a module to get started.</small></p>{{end}}
-{{else}}
-<div class="home-actions">
-  <a class="btn" href="/?customize=1">Customize</a>
-  <a class="btn" href="/auth/eve">Link another character</a>
-</div>
-{{end}}
+{{if .Home.Customize}}{{if not .Home.Widgets}}<p><small>Your home is empty right now — add a module from the Overview menu.</small></p>{{end}}{{end}}
 
 <div class="grid home-grid{{if .Home.Customize}} home-custom{{end}}"{{if .Home.Customize}} id="home-grid" data-customize="1"{{end}}>
 {{range .Home.Widgets}}
 {{if eq .ID "glance"}}
-<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
   <h3>At a glance</h3>
   {{with .Glance}}
   <div class="kpis">
@@ -66,7 +65,7 @@
 {{end}}
 
 {{if eq .ID "briefing"}}
-<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
   <h3>Briefing</h3>
   {{with .Briefing}}
   {{if .Items}}
@@ -77,7 +76,7 @@
     {{if .Counts.Info}}<button type="button" class="chip sev-info" data-brief="info" aria-pressed="false">Info ({{.Counts.Info}})</button>{{end}}
   </div>
   <ul class="briefing brief-cards">
-  {{range $i, $it := .Items}}<li class="brief-card sev-{{.Severity}}" data-sev="{{.Severity}}"{{if ge $i 6}} data-wmore{{end}}><span class="sev">{{.Severity}}</span> <span class="brief-text">{{.HTML}}</span></li>{{end}}
+  {{range $i, $it := .Items}}<li class="brief-card sev-{{.Severity}}" data-sev="{{.Severity}}"{{if ge $i $bcap}} data-wmore{{end}}><span class="sev">{{.Severity}}</span> <span class="brief-text">{{.HTML}}</span></li>{{end}}
   </ul>
   {{if .More}}<p><small>+{{.More}} more need{{if eq .More 1}}s{{end}} your attention.</small></p>{{end}}
   <p><small>Since {{.SinceLabel}}</small></p>
@@ -89,7 +88,7 @@
 {{end}}
 
 {{if eq .ID "fleet"}}
-<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
   <h3>Fleet overview</h3>
   {{with .Fleet}}
   <p class="fleet-tools">
@@ -100,13 +99,13 @@
   </p>
   <div class="tw">
   <table class="fleet-table">
-    <thead><tr><th>Character</th><th>Location</th><th>Ship</th><th>Training</th><th class="num">Wallet</th><th><span class="visually-hidden">Details</span></th></tr></thead>
+    <thead><tr><th>Character</th><th class="opt2">Location</th><th class="opt">Ship</th><th>Training</th><th class="num">Wallet</th><th><span class="visually-hidden">Details</span></th></tr></thead>
     <tbody>
     {{range .Rows}}
     <tr class="fleet-row" data-search="{{.Search}}"{{if and .QueueKnown .NotTraining}} data-idle="1"{{end}}>
       <td><span class="pilot"><img class="portrait" src="{{.PortraitURL}}" alt="" width="32" height="32">{{if .OnlineKnown}}<span class="dot {{if .Online}}on{{else}}off{{end}}" title="{{if .Online}}Online{{else}}Offline{{end}}"></span>{{end}}</span> <a href="/character/?character={{.ID}}">{{.Name}}</a>{{if .Relink}} <strong class="relink">re-link needed</strong>{{end}}<br><small>{{if .CorpName}}{{corpLink .CorpID .CorpName}}{{end}}{{if and .CorpName .Tags}} · {{end}}{{.Tags}}</small></td>
-      <td>{{placeLink .SystemRef}}{{if .DockedName}}<br><small>{{placeLink .DockedRef}}</small>{{end}}</td>
-      <td>{{itemLink .ShipTypeID .ShipTypeName}}{{if .ShipName}}<br><small>&ldquo;{{.ShipName}}&rdquo;</small>{{end}}</td>
+      <td class="opt2">{{placeLink .SystemRef}}{{if .DockedName}}<br><small>{{placeLink .DockedRef}}</small>{{end}}</td>
+      <td class="opt">{{itemLink .ShipTypeID .ShipTypeName}}{{if .ShipName}}<br><small>&ldquo;{{.ShipName}}&rdquo;</small>{{end}}</td>
       <td>{{if .QueueKnown}}{{if .Training}}{{.Training}}{{if .TrainingFinish}} <span class="countdown" data-finish="{{.TrainingFinish}}">{{.TrainingLeft}}</span>{{end}}{{else}}<em class="idle">Not training</em>{{end}}{{else}}—{{end}}</td>
       <td class="num">{{if .WalletKnown}}{{.ISK}} ISK{{else}}—{{end}}</td>
       <td><button type="button" class="rowexpand" data-expand="fleet-d-{{.ID}}" aria-label="Details for {{.Name}}"></button></td>
@@ -132,12 +131,12 @@
 {{end}}
 
 {{if eq .ID "attention"}}
-<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
   <h3>Needs attention</h3>
   {{with .Attention}}
   {{if .Items}}
   <ul class="attention">
-  {{range $i, $it := .Items}}<li{{if ge $i 4}} data-wmore{{end}}><a href="{{.Link}}">{{.Text}}</a>{{if .When}} <small>{{.When}}</small>{{end}}</li>{{end}}
+  {{range $i, $it := .Items}}<li{{if ge $i $cap}} data-wmore{{end}}><a href="{{.Link}}">{{.Text}}</a>{{if .When}} <small>{{.When}}</small>{{end}}</li>{{end}}
   </ul>
   {{if .More}}<p><small>…and {{.More}} more</small></p>{{end}}
   {{else}}
@@ -148,7 +147,7 @@
 {{end}}
 
 {{if eq .ID "networth"}}
-<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
   <h3>Net worth</h3>
   {{with .NetWorth}}
   {{if .Any}}
@@ -176,16 +175,16 @@
 {{end}}
 
 {{if eq .ID "industry"}}
-<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
   <h3>Industry</h3>
   {{with .Industry}}
   <p><small>{{.ActiveJobs}} active job{{if ne .ActiveJobs 1}}s{{end}}{{if .ReadyJobs}} · {{.ReadyJobs}} ready for delivery{{end}}</small></p>
   {{if .Rows}}
   <div class="tw">
   <table>
-    <thead><tr><th>Character</th><th>Activity</th><th>Product</th><th>Ends</th></tr></thead>
+    <thead><tr><th>Character</th><th class="opt">Activity</th><th>Product</th><th>Ends</th></tr></thead>
     <tbody>
-    {{range $i, $r := .Rows}}<tr{{if ge $i 3}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{.Activity}}</td><td>{{itemLink .TypeID .Name}}</td><td>{{.Ends}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
+    {{range $i, $r := .Rows}}<tr{{if ge $i $cap}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td class="opt">{{.Activity}}</td><td>{{itemLink .TypeID .Name}}</td><td>{{.Ends}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
     </tbody>
   </table>
   </div>
@@ -197,7 +196,7 @@
 {{end}}
 
 {{if eq .ID "market"}}
-<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
   <h3>Market</h3>
   {{$customize := .Customize}}
   {{with .Market}}
@@ -260,15 +259,15 @@
 {{end}}
 
 {{if eq .ID "watchlist"}}
-<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
   <h3>Market watchlist</h3>
   {{with .Watchlist}}
   {{if .Rows}}
   <div class="tw">
   <table>
-    <thead><tr><th>Item</th><th>Region</th><th>Average</th><th>7 days</th><th>30 days</th><th>Status</th></tr></thead>
+    <thead><tr><th>Item</th><th class="opt">Region</th><th>Average</th><th>7 days</th><th class="opt2">30 days</th><th>Status</th></tr></thead>
     <tbody>
-    {{range $i, $r := .Rows}}<tr{{if ge $i 3}} data-wmore{{end}}><td><a href="/items/type/{{.TypeID}}/">{{.Name}}</a></td><td>{{.Region}}</td><td>{{.Current}}</td><td>{{.Change7}}</td><td>{{.Change30}}</td><td>{{if .Moving}}<strong>{{.MoveText}}</strong>{{else}}Calm{{end}}</td></tr>{{end}}
+    {{range $i, $r := .Rows}}<tr{{if ge $i $cap}} data-wmore{{end}}><td><a href="/items/type/{{.TypeID}}/">{{.Name}}</a></td><td class="opt">{{.Region}}</td><td>{{.Current}}</td><td>{{.Change7}}</td><td class="opt2">{{.Change30}}</td><td>{{if .Moving}}<strong>{{.MoveText}}</strong>{{else}}Calm{{end}}</td></tr>{{end}}
     </tbody>
   </table>
   </div>
@@ -280,7 +279,7 @@
 {{end}}
 
 {{if eq .ID "skills"}}
-<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
   <h3>Skills</h3>
   {{with .Skills}}
   {{if .Finishing}}
@@ -288,7 +287,7 @@
   <table>
     <thead><tr><th>Character</th><th>Skill</th><th>Finishes</th></tr></thead>
     <tbody>
-    {{range $i, $r := .Finishing}}<tr{{if ge $i 3}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{itemLink .SkillID .Skill}} {{.Level}}</td><td>{{.Finish}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
+    {{range $i, $r := .Finishing}}<tr{{if ge $i $cap}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{itemLink .SkillID .Skill}} {{.Level}}</td><td>{{.Finish}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
     </tbody>
   </table>
   </div>
@@ -301,7 +300,7 @@
 {{end}}
 
 {{if eq .ID "pi"}}
-<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
   <h3>Planetary industry</h3>
   {{with .PI}}
   {{if .Any}}
@@ -312,7 +311,7 @@
   <table id="pi-table">
     <thead><tr><th>Character</th><th>Planet</th><th>Extractor</th></tr></thead>
     <tbody>
-    {{range $i, $r := .Soonest}}<tr class="pi-row" data-search="{{.Search}}"{{if ge $i 3}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{.Planet}}</td><td>{{if .Expired}}expired {{end}}{{.Expires}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
+    {{range $i, $r := .Soonest}}<tr class="pi-row" data-search="{{.Search}}"{{if ge $i $cap}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{.Planet}}</td><td>{{if .Expired}}expired {{end}}{{.Expires}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
     </tbody>
   </table>
   </div>
@@ -327,13 +326,13 @@
 {{end}}
 
 {{if eq .ID "server"}}
-<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
   <h3>Tranquility</h3>
   {{if .Server}}<p>Tranquility: {{.Server.Players}} players online</p>{{else}}<p><small>Server status has not loaded yet.</small></p>{{end}}
 </section>
 {{end}}
 {{if eq .ID "training"}}
-<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
   <h3>Training horizon</h3>
   {{with .Training}}
   {{if .Events}}
@@ -341,7 +340,7 @@
   <table>
     <thead><tr><th>Character</th><th>Skill</th><th>Finishes</th></tr></thead>
     <tbody>
-    {{range $i, $r := .Events}}<tr{{if ge $i 3}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{itemLink .SkillID .Skill}} {{.Level}}</td><td>{{.Finish}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
+    {{range $i, $r := .Events}}<tr{{if ge $i $cap}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{itemLink .SkillID .Skill}} {{.Level}}</td><td>{{.Finish}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
     </tbody>
   </table>
   </div>
@@ -354,7 +353,7 @@
 {{end}}
 
 {{if eq .ID "pulse"}}
-<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
   <h3>Corp pulse</h3>
   {{with .Pulse}}
   {{if .Corps}}
@@ -378,7 +377,7 @@
 {{end}}
 
 {{if eq .ID "walletflow"}}
-<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
   <h3>Wallet flow</h3>
   {{with .WalletFlow}}
   {{if .Any}}
@@ -435,9 +434,9 @@
   <p><input type="search" id="walletflow-search" placeholder="Filter by character…" aria-label="Filter wallet flow by character" data-table-filter="walletflow-table" data-row-class="walletflow-row"></p>
   <div class="tw">
   <table id="walletflow-table">
-    <thead><tr><th>Character</th><th>7d in</th><th>7d out</th><th>30d net</th></tr></thead>
+    <thead><tr><th>Character</th><th class="opt">7d in</th><th class="opt">7d out</th><th>30d net</th></tr></thead>
     <tbody>
-    {{range .Chars}}<tr class="walletflow-row" data-search="{{.Search}}"><td>{{charLink $.ViewerChars .ID .Name}}</td><td>{{.In7}} ISK</td><td>{{.Out7}} ISK</td><td>{{.Net30}} ISK</td></tr>{{end}}
+    {{range .Chars}}<tr class="walletflow-row" data-search="{{.Search}}"><td>{{charLink $.ViewerChars .ID .Name}}</td><td class="opt">{{.In7}} ISK</td><td class="opt">{{.Out7}} ISK</td><td>{{.Net30}} ISK</td></tr>{{end}}
     </tbody>
   </table>
   </div>
@@ -451,14 +450,14 @@
 {{end}}
 
 {{if eq .ID "upkeep"}}
-<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}">{{$cap := .Cap}}{{$bcap := .BriefCap}}
   <h3>Upkeep &amp; fuel</h3>
   {{with .Upkeep}}
   {{if .Corps}}
   <p><small>{{.Count}} deadline{{if ne .Count 1}}s{{end}}{{if .Urgent}} · <strong>{{.Urgent}} past due</strong>{{end}}</small></p>
   {{range .Corps}}
   <h4>{{.Name}}</h4>
-  <ul class="attention">{{range $i, $it := .Items}}<li{{if ge $i 3}} data-wmore{{end}}>{{if .Urgent}}<strong>{{.Name}} — {{.Text}}</strong>{{else}}{{.Name}} — {{.Text}}{{end}} <small>{{.When}}</small></li>{{end}}</ul>
+  <ul class="attention">{{range $i, $it := .Items}}<li{{if ge $i $cap}} data-wmore{{end}}>{{if .Urgent}}<strong>{{.Name}} — {{.Text}}</strong>{{else}}{{.Name}} — {{.Text}}{{end}} <small>{{.When}}</small></li>{{end}}</ul>
   {{end}}
   {{else}}
   <p><small>All fueled — or this needs a Station Manager or Director role to check.</small></p>
@@ -509,19 +508,18 @@
       <input type="hidden" name="widget" value="{{.ID}}">
       <button type="submit"{{if not .CanDown}} disabled{{end}}>Move down</button>
     </form>
-    {{if .IsFlex}}
     <form method="post" action="/home/layout">
-      <input type="hidden" name="action" value="span">
+      <input type="hidden" name="action" value="size">
       <input type="hidden" name="widget" value="{{.ID}}">
-      <input type="hidden" name="span" value="{{if eq .Span "wide"}}auto{{else}}wide{{end}}">
-      <button type="submit">{{if eq .Span "wide"}}Half width{{else}}Full width{{end}}</button>
+      <label>Width <select name="w"><option value="1"{{if eq .W 1}} selected{{end}}>1</option><option value="2"{{if eq .W 2}} selected{{end}}>2</option><option value="3"{{if eq .W 3}} selected{{end}}>3</option></select></label>
+      <label>Height <select name="h"><option value="1"{{if eq .H 1}} selected{{end}}>1</option><option value="2"{{if eq .H 2}} selected{{end}}>2</option><option value="3"{{if eq .H 3}} selected{{end}}>3</option></select></label>
+      <button type="submit">Resize</button>
     </form>
-    {{end}}
     {{end}}
   </p>
 </div>
 {{end}}
-<p><a class="btn" href="/">Save changes</a></p>
+<p><a class="btn" href="/">Done</a></p>
 </div>
 </noscript>
 {{end}}

@@ -857,6 +857,17 @@ footer .version-number {
 .home-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 .fleet-tools { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
 .fleet-tools input[type="search"] { background: var(--row); color: var(--text); border: 1px solid #333; padding: 0.4rem 0.6rem; border-radius: 3px; }
+/* Section tabs: every page of a nav category, under the page title
+   (sectiontabs.html, nav.go). They wrap on wide screens and scroll
+   sideways on phones, the current page scrolled into view. */
+.section-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.6rem 0 1rem; }
+.section-tabs a { padding: 0.35rem 0.8rem; border: 1px solid var(--border, #333); border-radius: 4px; text-decoration: none; white-space: nowrap; }
+.section-tabs a:hover { border-color: #555; }
+.section-tabs a.active { border-color: var(--accent); color: var(--text-bright); background: var(--row-hover); }
+@media (max-width: 719px) {
+  .section-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding-bottom: 0.2rem; margin: 0.4rem 0 0.8rem; }
+  .section-tabs a { flex: none; padding: 0.3rem 0.65rem; font-size: 0.9rem; }
+}
 .chip { border: 1px solid #444; background: var(--row); color: var(--text); border-radius: 999px; padding: 0.15rem 0.7rem; cursor: pointer; font: inherit; font-size: 0.85rem; }
 .chip.on { border-color: var(--accent); color: var(--accent); }
 .relink { color: var(--danger); }

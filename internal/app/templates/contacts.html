@@ -1,6 +1,7 @@
 {{define "title"}}Contacts{{end}}
 {{define "content"}}
 <h1><span class="gt">Contacts</span></h1>
+{{template "sectiontabs" .}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 

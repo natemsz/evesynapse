@@ -80,6 +80,20 @@
   onContentReady(initFolds);
   initFolds(document);
 
+  // --- Section tabs --------------------------------------------
+  // On a phone the section's tabs scroll sideways; start with the
+  // current page's tab in view rather than off the right edge.
+  function revealSectionTab(root) {
+    var strips = root.querySelectorAll(".section-tabs");
+    for (var i = 0; i < strips.length; i++) {
+      var strip = strips[i], on = strip.querySelector("a.active");
+      if (!on || strip.scrollWidth <= strip.clientWidth) continue;
+      strip.scrollLeft = on.offsetLeft - strip.offsetLeft - (strip.clientWidth - on.offsetWidth) / 2;
+    }
+  }
+  onContentReady(revealSectionTab);
+  revealSectionTab(document);
+
   // --- Expanders -------------------------------------------------
   // One mechanism for every summary/detail pair. A detail block
   // carries data-wmore; its control carries data-expand naming the

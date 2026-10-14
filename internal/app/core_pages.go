@@ -161,6 +161,12 @@ type pageData struct {
 
 	// Character management page (/characters/).
 	CharactersPage *charactersView
+
+	// Section nav (nav.go), filled by render: every section's links
+	// for the sidebar menus, and the tab strip under the page title
+	// when the page has one.
+	NavLinks    map[string][]navLink
+	SectionTabs []navLink
 }
 
 // switcherEntry is one linked character in the header switcher.
@@ -240,7 +246,7 @@ var (
 // pageSharedTemplates are the files every full page is parsed with:
 // the layout and the partials any page may use. One list, so that
 // nothing else parsing a page into the same cache can leave one out.
-var pageSharedTemplates = []string{"templates/base.html", "templates/notifybell.html", "templates/balancechart.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/fit_workbench.html", "templates/locked.html", "templates/industrytabs.html"}
+var pageSharedTemplates = []string{"templates/base.html", "templates/notifybell.html", "templates/balancechart.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html"}
 
 // parsedTemplate returns the cached set for page, parsing it (with
 // the shared files first) the first time it is asked for.
@@ -277,6 +283,8 @@ func (app *Application) render(ctx context.Context, w http.ResponseWriter, statu
 	if data.NavPage == "" {
 		data.NavPage = page
 	}
+	data.NavLinks = navLinksFor(data.Section, data.NavPage)
+	data.SectionTabs = sectionTabsFor(data.NavLinks, data.Section)
 	// Sync status for the footer. Cheap: ESI error budget
 	// is in-memory; sweep state is a single cached query.
 	if data.SyncStatus == "" {

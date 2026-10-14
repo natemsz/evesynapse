@@ -147,6 +147,7 @@ var FitTipUI = (function () {
         tipEl.style.maxWidth = side + "px";
         tipEl.style.maxHeight = side + "px";
         tipEl.style.overflowY = "auto";
+        tipEl.style.overflowX = "hidden";
       }
       tw = tipEl.offsetWidth || 190;
       th = tipEl.offsetHeight || 110;

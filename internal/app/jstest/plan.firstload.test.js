@@ -50,8 +50,12 @@ function install(payload, opts) {
       return els[id];
     },
     querySelectorAll: function () { return []; },
-    addEventListener: function () {}
+    addEventListener: function (type, fn) {
+      (els.__listeners[type] = els.__listeners[type] || []).push(fn);
+    }
   };
+  // Not enumerable: the view loops walk the element ids.
+  Object.defineProperty(els, "__listeners", { value: {}, enumerable: false });
   const win = {
     location: { href: "https://x.test/planner/?product=1", search: "?product=1", pathname: "/planner/" },
     history: {},
@@ -196,9 +200,11 @@ test("decision map renders as stage columns by depth", async function () {
   assert.ok(map.indexOf("plan-map-cols") !== -1, "map is columnar");
   const s0 = map.indexOf('data-depth="0"');
   const s1 = map.indexOf('data-depth="1"');
-  assert.ok(s0 !== -1 && map.indexOf("Final assembly") !== -1, "root stage labeled Final assembly");
-  assert.ok(s1 !== -1 && map.indexOf("Components") !== -1, "second stage labeled Components");
+  assert.ok(s0 !== -1 && s1 !== -1, "root and component stages render");
   assert.ok(s0 < s1, "stages run shallow to deep, left to right");
+  // The columns carry no depth labels.
+  assert.ok(map.indexOf("plan-stage-label") === -1, "no stage heading");
+  assert.ok(map.indexOf("Final assembly") === -1 && map.indexOf("Sub-components") === -1, "no depth label text");
   // Branches start collapsed: depth 2 exists in the payload but
   // must not render until its parent is expanded.
   assert.ok(map.indexOf('data-depth="2"') === -1, "no third stage before any expansion");
@@ -350,4 +356,67 @@ test("null preset lists (empty shopping/jobs marshal) still render first load", 
     assert.ok(els[id] && els[id].innerHTML.length > 0, id + " painted something");
     assert.ok(els[id].innerHTML.indexOf("need the plan data") === -1, id + " has no fail note");
   }
+});
+
+// The first-load race: plan.js loads with every planner page,
+// including the search page that has no plan. Picking a product
+// there swaps the plan in without re-running the script, so the
+// content-ready reboot is the only thing that can render it, and
+// it must be listening even though the first page had no #plan.
+test("a plan swapped in after a page without one renders", async function () {
+  const missing = ["plan", "plan-wrap", "plan-data", "plan-map"];
+  const els = install(capitalPayload(), { missing: missing });
+  await new Promise(function (r) { setTimeout(r, 50); });
+  assert.strictEqual(fetchCalls, 0, "no plan on the first page, nothing fetched");
+  // The swap: the new main carries the plan section, its data
+  // block and the map's loading placeholder.
+  missing.length = 0;
+  document.getElementById("plan-data").textContent = JSON.stringify(capitalPayload());
+  document.getElementById("plan-map").innerHTML = "<p><small>Loading the decision map…</small></p>";
+  const ready = els.__listeners["evesynapse:content-ready"] || [];
+  assert.ok(ready.length > 0, "the reboot listener is registered on a page without a plan");
+  ready.forEach(function (fn) { fn({ detail: {} }); });
+  await waitFor(function () {
+    return els["plan-map"].innerHTML.indexOf("plan-node") !== -1;
+  }, "map render after the swap");
+});
+
+// Deep columns follow the selection: open two components and a
+// sub under each, and the columns past the components hold the
+// selected branch's children, not every open branch's.
+test("deeper columns hold only the selected branch", async function () {
+  const els = install(capitalPayload());
+  await waitFor(function () {
+    return els["plan-map"] && els["plan-map"].innerHTML.indexOf("plan-node") !== -1;
+  }, "map render");
+  // The stub DOM has no real cards, so the map's fold buttons are
+  // stood in for: every render wires one per path and keeps its
+  // click handler here.
+  const folds = {};
+  els["plan-map"].querySelectorAll = function (sel) {
+    if (sel !== "[data-plan-fold]") return [];
+    return ["0.3", "0.4", "0.3.5", "0.4.1"].map(function (path) {
+      return {
+        getAttribute: function () { return path; },
+        addEventListener: function (type, fn) { if (type === "click") folds[path] = fn; }
+      };
+    });
+  };
+  // Re-render through the reboot so the stand-ins get wired.
+  els.__listeners["evesynapse:content-ready"].forEach(function (fn) { fn({ detail: {} }); });
+  await waitFor(function () { return !!folds["0.3"]; }, "fold buttons wired");
+  ["0.3", "0.3.5", "0.4", "0.4.1"].forEach(function (path) {
+    folds[path]({ stopPropagation: function () {} });
+  });
+  const map = els["plan-map"].innerHTML;
+  const cards = function (depth) {
+    const i = map.indexOf('data-depth="' + depth + '"');
+    if (i === -1) return 0;
+    const j = map.indexOf('data-depth="' + (depth + 1) + '"', i);
+    return (map.slice(i, j === -1 ? map.length : j).match(/ data-path="/g) || []).length;
+  };
+  assert.strictEqual(cards(1), 30, "every component stays in its column");
+  assert.strictEqual(cards(2), 12, "the sub column holds the selected component's 12 subs, not both components' 24");
+  assert.strictEqual(cards(3), 6, "the input column holds the selected sub's 6 inputs, not both subs' 12");
+  assert.ok(map.indexOf("Sub 4.1") !== -1 && map.indexOf("Sub 3.5") === -1, "the column follows the latest opened branch");
 });

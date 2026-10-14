@@ -79,10 +79,14 @@ WHERE priority = sqlc.arg(typing_priority)::bigint AND fetched_at IS NULL
 -- The latest guess behind an entity's fetch: a row means the page
 -- was warmed from a search box. Feeds the freshness line; no row
 -- means the fetch was routine or foresight-driven (checked first).
+-- Only a guess from this viewer's own boxes counts (box_prefix is
+-- "<user id>|"), noted inside the window before the fetch.
 -- name: GetTypingGuessNotedForEntity :one
 SELECT box
 FROM typing_guesses
-WHERE kind = $1 AND entity_id = $2 AND region_id = $3 AND noted_at <= $4
+WHERE kind = sqlc.arg(kind) AND entity_id = sqlc.arg(entity_id) AND region_id = sqlc.arg(region_id)
+  AND starts_with(box, sqlc.arg(box_prefix)::text)
+  AND noted_at <= sqlc.arg(noted_at) AND noted_at >= sqlc.arg(since)
 ORDER BY noted_at DESC
 LIMIT 1;
 

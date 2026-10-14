@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -34,11 +35,15 @@ func TestFetchReason(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
+	other, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
 	now := time.Now().UTC().Truncate(time.Second)
-	warmedTarget := func(entity int64, event, view string, warmed time.Time) {
+	warmedTarget := func(owner, entity int64, event, view string, warmed time.Time) {
 		t.Helper()
 		if _, err := q.AddForesightTarget(ctx, db.AddForesightTargetParams{
-			UserID: user.ID, CharacterID: 90000100, EventKind: event, EventKey: view,
+			UserID: owner, CharacterID: 90000100, EventKind: event, EventKey: view,
 			TargetKind: targetCorporation, SubjectID: entity,
 			ViewKey: view, CreatedAt: now.Add(-2 * time.Hour), ExpiresAt: now.Add(time.Hour),
 		}); err != nil {
@@ -50,7 +55,7 @@ func TestFetchReason(t *testing.T) {
 		}
 		var id int64
 		for _, tg := range pending {
-			if tg.ViewKey == view {
+			if tg.ViewKey == view && tg.UserID == owner {
 				id = tg.ID
 			}
 		}
@@ -60,10 +65,10 @@ func TestFetchReason(t *testing.T) {
 			t.Fatalf("mark warmed: %v", err)
 		}
 	}
-	guess := func(entity int64, noted time.Time) {
+	guess := func(owner, entity int64, noted time.Time) {
 		t.Helper()
 		if err := q.InsertTypingGuess(ctx, db.InsertTypingGuessParams{
-			Box: "7|topbar", Kind: string(pageWantCorporation), EntityID: entity,
+			Box: fmt.Sprintf("%d|topbar", owner), Kind: string(pageWantCorporation), EntityID: entity,
 			NotedAt: noted,
 		}); err != nil {
 			t.Fatalf("seed guess: %v", err)
@@ -71,33 +76,51 @@ func TestFetchReason(t *testing.T) {
 	}
 	fetched := now
 
-	// Warmed before the fetch: the event is the reason.
-	warmedTarget(98000001, eventWar, "corporation:98000001", now.Add(-time.Hour))
-	// Guessed before the fetch: the search is the reason.
-	guess(98000002, now.Add(-5*time.Minute))
+	// This viewer's own warming shortly before the fetch: the event.
+	warmedTarget(user.ID, 98000001, eventWar, "corporation:98000001", now.Add(-5*time.Minute))
+	// This viewer's own search shortly before the fetch: the search.
+	guess(user.ID, 98000002, now.Add(-5*time.Minute))
 	// Both: the warming wins.
-	warmedTarget(98000006, eventDock, "corporation:98000006", now.Add(-time.Hour))
-	guess(98000006, now.Add(-5*time.Minute))
-	// Warmed after the fetch: too late to have caused it.
-	warmedTarget(98000003, eventWar, "corporation:98000003", now.Add(time.Hour))
-	// Guessed after the fetch: likewise.
-	guess(98000004, now.Add(time.Hour))
+	warmedTarget(user.ID, 98000006, eventDock, "corporation:98000006", now.Add(-5*time.Minute))
+	guess(user.ID, 98000006, now.Add(-5*time.Minute))
+	// After the fetch: too late to have caused it.
+	warmedTarget(user.ID, 98000003, eventWar, "corporation:98000003", now.Add(time.Hour))
+	guess(user.ID, 98000004, now.Add(time.Hour))
+	// Somebody else's warming and search: never this viewer's credit.
+	warmedTarget(other.ID, 98000007, eventDock, "corporation:98000007", now.Add(-5*time.Minute))
+	guess(other.ID, 98000008, now.Add(-5*time.Minute))
+	// The viewer's own, but long before the fetch: not its cause.
+	warmedTarget(user.ID, 98000009, eventWar, "corporation:98000009", now.Add(-time.Hour))
+	guess(user.ID, 98000010, now.Add(-time.Hour))
 
+	viewer, err := app.sessions.Load(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.sessions.Put(viewer, sessionUserID, int(user.ID))
 	for _, tc := range []struct {
 		entity int64
-		view   string
 		want   string
 	}{
-		{98000001, "corporation:98000001", "a war was declared"},
-		{98000002, "corporation:98000002", "your search"},
-		{98000006, "corporation:98000006", "you docked"},
-		{98000003, "corporation:98000003", ""},
-		{98000004, "corporation:98000004", ""},
-		{98000005, "corporation:98000005", ""},
+		{98000001, "a war was declared"},
+		{98000002, "your search"},
+		{98000006, "you docked"},
+		{98000003, ""},
+		{98000004, ""},
+		{98000005, ""},
+		{98000007, ""},
+		{98000008, ""},
+		{98000009, ""},
+		{98000010, ""},
 	} {
-		if got := app.fetchReason(ctx, tc.view, string(pageWantCorporation), tc.entity, 0, fetched); got != tc.want {
+		view := fmt.Sprintf("corporation:%d", tc.entity)
+		if got := app.fetchReason(viewer, view, string(pageWantCorporation), tc.entity, 0, fetched); got != tc.want {
 			t.Errorf("reason for %d = %q, want %q", tc.entity, got, tc.want)
 		}
+	}
+	// A visitor without a session is credited with nothing.
+	if got := app.fetchReason(ctx, "corporation:98000002", string(pageWantCorporation), 98000002, 0, fetched); got != "" {
+		t.Errorf("reason with no session = %q, want none", got)
 	}
 }
 

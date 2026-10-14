@@ -155,27 +155,35 @@ func (q *Queries) GetTypingGuess(ctx context.Context, arg GetTypingGuessParams) 
 const getTypingGuessNotedForEntity = `-- name: GetTypingGuessNotedForEntity :one
 SELECT box
 FROM typing_guesses
-WHERE kind = $1 AND entity_id = $2 AND region_id = $3 AND noted_at <= $4
+WHERE kind = $1 AND entity_id = $2 AND region_id = $3
+  AND starts_with(box, $4::text)
+  AND noted_at <= $5 AND noted_at >= $6
 ORDER BY noted_at DESC
 LIMIT 1
 `
 
 type GetTypingGuessNotedForEntityParams struct {
-	Kind     string    `json:"kind"`
-	EntityID int64     `json:"entity_id"`
-	RegionID int64     `json:"region_id"`
-	NotedAt  time.Time `json:"noted_at"`
+	Kind      string    `json:"kind"`
+	EntityID  int64     `json:"entity_id"`
+	RegionID  int64     `json:"region_id"`
+	BoxPrefix string    `json:"box_prefix"`
+	NotedAt   time.Time `json:"noted_at"`
+	Since     time.Time `json:"since"`
 }
 
 // The latest guess behind an entity's fetch: a row means the page
 // was warmed from a search box. Feeds the freshness line; no row
 // means the fetch was routine or foresight-driven (checked first).
+// Only a guess from this viewer's own boxes counts (box_prefix is
+// "<user id>|"), noted inside the window before the fetch.
 func (q *Queries) GetTypingGuessNotedForEntity(ctx context.Context, arg GetTypingGuessNotedForEntityParams) (string, error) {
 	row := q.db.QueryRowContext(ctx, getTypingGuessNotedForEntity,
 		arg.Kind,
 		arg.EntityID,
 		arg.RegionID,
+		arg.BoxPrefix,
 		arg.NotedAt,
+		arg.Since,
 	)
 	var box string
 	err := row.Scan(&box)

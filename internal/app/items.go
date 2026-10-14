@@ -478,7 +478,7 @@ func (app *Application) itemDescription(ctx context.Context, typeID int64) (stri
 		return "empty", ""
 	default:
 		if qerr := app.queries.UpsertTypeDetailWant(ctx, db.UpsertTypeDetailWantParams{
-			TypeID: typeID, Priority: wantViewed, NotedAt: timeSet(time.Now().UTC()),
+			TypeID: typeID, Priority: viewedPriority(ctx), NotedAt: timeSet(time.Now().UTC()),
 		}); qerr != nil {
 			logging.Errorf("items: note type detail want for %d: %v", typeID, qerr)
 		}

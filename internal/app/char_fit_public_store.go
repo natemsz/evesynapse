@@ -163,6 +163,13 @@ func (c *fitViewCounter) count(fitID int64) int64 {
 	return c.pending[fitID]
 }
 
+// peek returns the views of fitID not yet written, counting none.
+func (c *fitViewCounter) peek(fitID int64) int64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.pending[fitID]
+}
+
 // take empties the counter.
 func (c *fitViewCounter) take() map[int64]int64 {
 	c.mu.Lock()

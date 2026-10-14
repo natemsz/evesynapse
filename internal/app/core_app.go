@@ -367,6 +367,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// a fraction of their size; fonts and images are left alone.
 	r.Use(middleware.Compress(5))
 	r.Use(app.crossOriginGuard())
+	r.Use(markPrefetch)
 	r.Use(app.sessions.LoadAndSave)
 	r.Use(app.slideSession)
 	r.Use(app.trackActivity)

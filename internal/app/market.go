@@ -463,7 +463,7 @@ func (app *Application) noteSearchHistoryWants(ctx context.Context, regionID int
 			continue
 		}
 		if err := app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
-			RegionID: regionID, TypeID: m.ID, LastRequestedAt: now, Priority: wantViewed,
+			RegionID: regionID, TypeID: m.ID, LastRequestedAt: now, Priority: viewedPriority(ctx),
 		}); err != nil {
 			logging.Errorf("market: prefetch want for type %d in region %d: %v", m.ID, regionID, err)
 			continue
@@ -496,7 +496,7 @@ func (app *Application) attachHistory(ctx context.Context, item *marketItem, typ
 		}
 		if err := app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
 			RegionID: regionID, TypeID: typeID,
-			LastRequestedAt: time.Now().UTC(), Priority: wantViewed,
+			LastRequestedAt: time.Now().UTC(), Priority: viewedPriority(ctx),
 		}); err != nil {
 			logging.Errorf("market: record history want for type %d in region %d: %v", typeID, regionID, err)
 		}

@@ -148,6 +148,9 @@ func (app *Application) noteTypingDetailGuess(ctx context.Context, box string, t
 // never from the guessing itself. Only the first open inside the
 // window counts.
 func (app *Application) markGuessHit(ctx context.Context, kind pageWantKind, entityID, regionID int64) {
+	if isPrefetch(ctx) {
+		return // a prefetch is not an open (core_prefetch.go)
+	}
 	now := time.Now().UTC()
 	if err := app.queries.MarkTypingGuessHits(ctx, db.MarkTypingGuessHitsParams{
 		Kind: string(kind), EntityID: entityID, RegionID: regionID,

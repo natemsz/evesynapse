@@ -292,7 +292,8 @@ func (app *Application) tierOf(ch db.Character, now time.Time) warmTier {
 func (app *Application) trackActivity(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		if userID := app.userID(ctx); userID != 0 {
+		// A prefetch is not activity (core_prefetch.go).
+		if userID := app.userID(ctx); userID != 0 && !isPrefetch(ctx) {
 			now := time.Now()
 			if app.activity.noteActivity(userID, now) && !app.cfg.workerTiersOff {
 				app.prioritizeAccount(ctx, userID)

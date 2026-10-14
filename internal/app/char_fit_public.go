@@ -636,8 +636,12 @@ func (app *Application) handlePublicFitPage(w http.ResponseWriter, r *http.Reque
 		app.render(ctx, w, http.StatusOK, "fit_public.html", data)
 		return
 	}
-	// Counted in memory; the worker writes views in batches.
-	views := row.ViewCount + app.fitViews.count(fitID)
+	// Counted in memory; the worker writes views in batches. A
+	// prefetch is not a view (core_prefetch.go).
+	views := row.ViewCount + app.fitViews.peek(fitID)
+	if !isPrefetch(ctx) {
+		views = row.ViewCount + app.fitViews.count(fitID)
+	}
 	var doc fitDoc
 	if json.Unmarshal([]byte(row.ItemsJson), &doc) != nil {
 		http.NotFound(w, r)

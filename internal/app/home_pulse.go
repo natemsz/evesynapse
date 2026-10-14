@@ -298,11 +298,7 @@ func (app *Application) diffPulseStructures(ctx context.Context, ref pulseCorpRe
 	}
 	current := make(map[string]string, len(structures))
 	for _, s := range structures {
-		name := s.Name
-		if name == "" {
-			name = "Structure #" + strconv.FormatInt(s.StructureID, 10)
-		}
-		current[strconv.FormatInt(s.StructureID, 10)] = name
+		current[strconv.FormatInt(s.StructureID, 10)] = structureName(s)
 	}
 	seen, err := app.queries.ListPulseSeen(ctx, db.ListPulseSeenParams{CorpID: ref.CorpID, Kind: pulseSeenStructure})
 	if err != nil {

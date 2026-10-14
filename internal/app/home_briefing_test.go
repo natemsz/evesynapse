@@ -306,7 +306,7 @@ func TestBriefingCapAndDedupe(t *testing.T) {
 	if n := strings.Count(section, "contract"); n > 2 {
 		t.Errorf("briefing repeats the contract rule (%d mentions), want one aggregated line", n)
 	}
-	li := strings.Count(section, "<li>")
+	li := strings.Count(section, `<li class="brief-card`)
 	if li > briefingCap {
 		t.Errorf("briefing lists %d lines, want at most %d", li, briefingCap)
 	}

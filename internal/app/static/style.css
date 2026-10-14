@@ -500,6 +500,30 @@ h3 + .tw > table, h3 + table {
   cursor: pointer;
 }
 .foldbtn:hover { color: var(--text-bright); border-color: var(--accent); }
+/* A home module's More/Less toggle (app.js Expanders): the same
+   seat in the heading as the fold button it replaces there. */
+.card.has-expand > h2:first-child, .card.has-expand > h3:first-child { padding-right: 5rem; position: relative; }
+.cardexpand {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  right: 0.7rem;
+  z-index: 2;
+  height: 1.7rem;
+  padding: 0 0.55rem;
+  font: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: #0e0e0e;
+  border: 1px solid #4a2408;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.cardexpand::after { content: " \25BE"; }
+.cardexpand[aria-expanded="true"]::after { content: " \25B4"; }
+.cardexpand:hover { color: var(--text-bright); border-color: var(--accent); }
 .panel.has-fold > h1:first-child { padding-right: 3rem; position: relative; }
 .panel.folded > *:not(h1),
 .card.folded > *:not(:first-child),
@@ -905,15 +929,142 @@ html[data-theme="light"] .widget-scope select {
   box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.45);
 }
 /* The home grid: the server solves each module's column span
-   (solveHomeSpans) and the CSS only applies it. Six columns on desktop. */
+   (solveHomeSpans) and the CSS only applies it. Six tracks: two
+   modules a row on desktop, three on a wide screen. Cards keep
+   their own height: a short module is not stretched to the
+   tallest one in its row. */
 .grid.home-grid {
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  align-items: stretch;
-  grid-auto-flow: dense;
+  align-items: start;
+  /* Saved order is visual order: a short row keeps its gap
+     rather than pulling a later module up into it. */
+  grid-auto-flow: row;
 }
 .grid.home-grid > .span3 { grid-column: span 3; }
 .grid.home-grid > .span6 { grid-column: span 6; }
 .grid.home-grid > .card { min-width: 0; }
+@media (min-width: 1280px) {
+  .grid.home-grid > .wspan2 { grid-column: span 2; }
+  .grid.home-grid > .wspan3 { grid-column: span 3; }
+  .grid.home-grid > .wspan6 { grid-column: span 6; }
+}
+/* An expanded module shows its detail across its whole row. */
+.grid.home-grid > .card.expanded { grid-column: 1 / -1; }
+
+/* --- home modules: KPI tiles, briefing cards, fleet table ---
+   The v2.4 mockup's layout in the site's own ember style: figures
+   up front, detail one click away. */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.75rem;
+}
+.kpis-small { grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); margin-bottom: 0.6rem; }
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+  padding: 0.7rem 0.8rem;
+  background: var(--row);
+  border: 1px solid #2a1a0e;
+  border-radius: 4px;
+}
+.kpi-k { font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.kpi-v {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.kpis-small .kpi-v { font-size: 1rem; overflow-wrap: normal; white-space: nowrap; }
+.kpi-v small { font-size: 0.7rem; color: var(--accent); font-weight: 400; }
+.kpi-sub { font-size: 0.75rem; color: var(--muted); }
+.kpi-bar { display: block; height: 4px; background: #1d1510; border-radius: 2px; overflow: hidden; }
+.kpi-bar > span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #d63c14, var(--accent)); }
+.kpi-bar.warn { background: rgba(198, 47, 16, 0.45); }
+.linkbtn {
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.linkbtn:hover { color: var(--gold); text-decoration: underline; }
+
+.brief-tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.6rem; }
+.chip.sev-critical { border-color: rgba(198, 47, 16, 0.6); }
+.chip.sev-warning { border-color: rgba(255, 106, 26, 0.5); }
+.chip.sev-critical.on { color: #ff7a5c; border-color: #ff7a5c; }
+ul.brief-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 0.5rem;
+  padding: 0;
+  margin: 0 0 0.5rem;
+  list-style: none;
+}
+.brief-card {
+  padding: 0.55rem 0.7rem;
+  background: var(--row);
+  border: 1px solid #2a1a0e;
+  border-left: 3px solid var(--muted);
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+.brief-card.sev-critical { border-left-color: var(--danger); }
+.brief-card.sev-warning { border-left-color: var(--accent); }
+.brief-card.sev-info { border-left-color: var(--gold); }
+.brief-card .sev {
+  display: inline-block;
+  margin-right: 0.3rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.brief-card.sev-critical .sev { color: #ff7a5c; }
+.brief-card.sev-warning .sev { color: var(--accent); }
+.brief-card.brief-off { display: none; }
+
+.fleet-table td { vertical-align: top; }
+.fleet-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.fleet-row { cursor: pointer; }
+.pilot { position: relative; display: inline-block; vertical-align: middle; }
+.pilot .dot {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  margin: 0;
+  box-shadow: 0 0 0 2px #0b0b0b;
+}
+.fleet-table em.idle { color: #ff7a5c; font-style: normal; }
+.rowexpand {
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  font: inherit;
+  color: var(--muted);
+  background: none;
+  border: 1px solid #2a1a0e;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.rowexpand::after { content: "\25BE"; }
+.rowexpand[aria-expanded="true"]::after { content: "\25B4"; }
+.rowexpand:hover, .fleet-row:hover .rowexpand { color: var(--accent); border-color: var(--accent); }
+tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid rgba(255, 106, 26, 0.22); }
+.fleet-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.5rem 1rem;
+  margin: 0;
+}
+.fleet-facts dt { font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.fleet-facts dd { margin: 0.1rem 0 0; }
+.fleet-foot { margin: 0.4rem 0 0; color: var(--muted); }
 /* Phones: two columns. */
 @media (max-width: 719px) {
   .grid.home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1793,7 +1944,6 @@ tbody tr.yours td { background-color: #2a2015; }
   }
 }
 @media (max-width: 719px) {
-  .grid.home-grid > .card[data-widget="briefing"] { grid-column: span 2; }
   .fleet-tools input[type="search"] { max-width: 100%; }
 }
 @media (max-width: 560px) {
@@ -1801,7 +1951,6 @@ tbody tr.yours td { background-color: #2a2015; }
   .pchart text { font-size: 15px; }
   .legend-note { flex-basis: 100%; margin-left: 0; }
   .grid.home-grid { grid-template-columns: minmax(0, 1fr); }
-  .grid.home-grid > .card[data-widget="briefing"] { grid-column: span 1; }
   .grid.home-grid > .span3,
   .grid.home-grid > .span6 { grid-column: span 1; }
   .grid { gap: 0.65rem; }
@@ -2794,6 +2943,12 @@ html[data-theme="light"] .ok { background: rgba(255, 184, 77, 0.2); color: #7a54
 /* Quickjump + fitting bits. */
 html[data-theme="light"] .quickjump-results li.sel { background: #f0dfbc; }
 html[data-theme="light"] .fit-stats { border-color: #ddd2bd; }
+html[data-theme="light"] .kpi,
+html[data-theme="light"] .brief-card { border-color: #ddd2bd; }
+html[data-theme="light"] .kpi-bar { background: #eadfcb; }
+html[data-theme="light"] .rowexpand { border-color: #ddd2bd; }
+html[data-theme="light"] tr.fleet-detail > td { background: #f6efe2; border-bottom-color: #ddd2bd; }
+html[data-theme="light"] .pilot .dot { box-shadow: 0 0 0 2px #fffdf9; }
 html[data-theme="light"] .fit-pubrate { border-color: #ddd2bd; border-left-color: var(--accent); }
 html[data-theme="light"] .fit-rateform select { border-color: #d8cdb8; }
 html[data-theme="light"] .fit-chip { border-color: #d3c7ae; }

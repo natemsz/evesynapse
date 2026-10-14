@@ -46,6 +46,7 @@ const (
 	widgetPulse      = "pulse"
 	widgetWalletFlow = "walletflow"
 	widgetUpkeep     = "upkeep"
+	widgetGlance     = "glance"
 )
 
 // Widget size classes for the home grid engine. A full module
@@ -75,7 +76,8 @@ type widgetDef struct {
 }
 
 var homeWidgetCatalog = []widgetDef{
-	{widgetBriefing, "Briefing", "What changed since you last looked, and what needs you in the next day.", widgetSizeFlex, "briefing"},
+	{widgetGlance, "At a glance", "The fleet's key figures in one band: net worth, liquid wallets, assets, and how many pilots are training.", widgetSizeFull, "networth"},
+	{widgetBriefing, "Briefing", "What changed since you last looked, and what needs you in the next day.", widgetSizeFull, "briefing"},
 	{widgetFleet, "Fleet overview", "Every linked character at a glance: where they are, what they're flying, what they're training.", widgetSizeFull, "fleet"},
 	{widgetAttention, "Needs attention", "Characters that need you: re-links, idle queues, finished jobs, expiring orders, waiting contracts.", widgetSizeFull, "attention"},
 	{widgetNetWorth, "Net worth", "Wallets, assets and open-order escrow across all characters, at market prices. An estimate.", widgetSizeFlex, "networth"},
@@ -96,7 +98,7 @@ var homeWidgetCatalog = []widgetDef{
 // then the money. Accounts with a saved layout keep theirs —
 // the briefing only joins a home by the user's own arrangement.
 var defaultHomeLayout = []string{
-	widgetBriefing, widgetFleet, widgetAttention, widgetNetWorth,
+	widgetGlance, widgetBriefing, widgetFleet, widgetAttention, widgetNetWorth,
 	widgetIndustry, widgetMarket, widgetServer,
 }
 
@@ -226,19 +228,21 @@ func layoutIDs(items []homeLayoutItem) []string {
 // ---------------------------------------------------------------------------
 
 // solveHomeSpans resolves each layout item's column span on a
-// grid of cols columns. Walking the saved order left to right:
+// grid of cols columns holding perRow flex modules a row (3 on a
+// wide screen, 2 below it). Walking the saved order left to right:
 //
 //   - a full module, and a flex module marked wide, takes the
 //     whole row (cols);
-//   - a flex module takes half the row (cols/2) and pairs with
-//     the next flex module that fits beside it;
-//   - a flex module left ALONE in its row — nothing pairable
-//     follows before the next full/wide row boundary — stretches
-//     to the whole row.
+//   - a flex module takes cols/perRow and shares the row with
+//     the next flex modules that fit beside it;
+//   - a row of flex modules that ends short — nothing pairable
+//     follows before the next full/wide row boundary — shares the
+//     spare width among its modules, but none grows past half the
+//     row: a small module never balloons to fill width it has no
+//     use for.
 //
-// Rows therefore always tile exactly: no stranded gaps and no
-// overflow, at any column count.
-func solveHomeSpans(items []homeLayoutItem, cols int) []int {
+// Rows never overflow; a short row can end with a gap.
+func solveHomeSpans(items []homeLayoutItem, cols, perRow int) []int {
 	spans := make([]int, len(items))
 	if cols < 2 {
 		for i := range spans {
@@ -246,13 +250,26 @@ func solveHomeSpans(items []homeLayoutItem, cols int) []int {
 		}
 		return spans
 	}
-	flex := cols / 2
+	if perRow < 1 || perRow > cols {
+		perRow = 2
+	}
+	flex := cols / perRow
+	half := cols / 2
 	rowUsed, rowStart := 0, 0
-	// closeRow ends the current row at index next, stretching a
-	// lone half-width module in it to the full row.
+	// closeRow ends the current row at index next. A short row of
+	// flex modules shares its spare width, up to half a row each.
 	closeRow := func(next int) {
-		if next-rowStart == 1 && spans[rowStart] < cols {
-			spans[rowStart] = cols
+		n := next - rowStart
+		if n > 0 && rowUsed < cols {
+			share := cols / n
+			if share > half {
+				share = half
+			}
+			for k := rowStart; k < next; k++ {
+				if spans[k] < share {
+					spans[k] = share
+				}
+			}
 		}
 		rowStart, rowUsed = next, 0
 	}
@@ -276,15 +293,17 @@ func solveHomeSpans(items []homeLayoutItem, cols int) []int {
 	return spans
 }
 
-// spanClass names the CSS class carrying a span solved on the
-// 6-column grid: span3 (half row) or span6 (whole row). The CSS
-// maps the same two classes onto the phone grids (2 columns,
-// then 1), so the server renders one class set for every screen.
-func spanClass(span int) string {
-	if span > 3 {
-		return "span6"
+// spanClasses names the CSS classes carrying the two solves on
+// the 6-column grid: the two-up solve as span3 (half row) or
+// span6 (whole row), which the CSS also maps onto the phone grids,
+// and the three-up solve for wide screens as wspan2, wspan3 or
+// wspan6. The server renders both; the CSS picks by width.
+func spanClasses(two, three int) string {
+	c := "span3"
+	if two > 3 {
+		c = "span6"
 	}
-	return "span3"
+	return c + " wspan" + strconv.Itoa(three)
 }
 
 // ---------------------------------------------------------------------------
@@ -309,6 +328,7 @@ var widgetSnapshotKinds = map[string][]string{
 	widgetPulse:      {}, // corp snapshots load per corporation, not via bundles
 	widgetWalletFlow: {esi.SnapWalletJournal},
 	widgetUpkeep:     {}, // corp snapshots load per corporation, not via bundles
+	widgetGlance:     {esi.SnapWallet, esi.SnapAssets, esi.SnapOrders, esi.SnapSkillqueue},
 }
 
 // charSnaps is one character's decoded snapshot bundle. Fields
@@ -613,7 +633,7 @@ func queueState(queue esi.Skillqueue, now time.Time) (training bool, finishedAt 
 type homeWidget struct {
 	ID         string
 	Title      string
-	SpanClass  string // solved grid span class: span3 | span6
+	SpanClass  string // solved grid span classes: span3|span6 and wspan2|wspan3|wspan6
 	Size       string // catalog size class (flex modules get the resize toggle)
 	SpanPref   string // user's span preference: "" (auto) | wide
 	Customize  bool   // rendering under /?customize=1 (form return targets)
@@ -631,6 +651,7 @@ type homeWidget struct {
 	Pulse      *pulseWidget
 	WalletFlow *walletFlowWidget
 	Upkeep     *upkeepWidget
+	Glance     *glanceWidget
 }
 
 // homeView is the signed-in Home body (pageData.Home).
@@ -675,6 +696,10 @@ type fleetRow struct {
 type fleetWidget struct {
 	Rows []fleetRow
 	Tags []string // every tag in use, for the filter chips
+	// Idle counts the characters whose queue is known and empty,
+	// for the Not-training chip; TotalISK sums the known wallets.
+	Idle     int
+	TotalISK string
 }
 
 func splitTags(raw string) []string {
@@ -713,6 +738,11 @@ type netWorthWidget struct {
 	AsOf            string
 	History         *balanceChart // net worth over time, when 2+ sampled days exist
 	HistoryBuilding bool          // history recording, not yet chartable
+	// WalletPct is the wallets' share of the total, "48.1%", and
+	// WalletBar the same share for a data-w bar; both empty when
+	// the total is not positive.
+	WalletPct string
+	WalletBar string
 }
 
 type industryRow struct {
@@ -924,7 +954,24 @@ func (app *Application) buildFleet(ctx context.Context, bundles []*charSnaps) *f
 		tags = append(tags, tag)
 	}
 	sort.Strings(tags)
-	return &fleetWidget{Rows: rows, Tags: tags}
+	w := &fleetWidget{Rows: rows, Tags: tags}
+	var isk float64
+	anyISK := false
+	for _, b := range bundles {
+		if b.walletKnown {
+			isk += b.wallet
+			anyISK = true
+		}
+	}
+	for _, r := range rows {
+		if r.QueueKnown && r.NotTraining {
+			w.Idle++
+		}
+	}
+	if anyISK {
+		w.TotalISK = esi.FormatISK(isk)
+	}
+	return w
 }
 
 // Attention rule ranks (lower = surfaces first). Fixed by rule,
@@ -1295,6 +1342,11 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 	}
 	if escrowOK {
 		w.Escrow = esi.FormatISK(escrowSum)
+	}
+	if walletOK && total > 0 {
+		pct := 100 * walletSum / total
+		w.WalletPct = fmt.Sprintf("%.1f%%", pct)
+		w.WalletBar = fmt.Sprintf("%.1f", pct)
 	}
 	if !asOf.IsZero() {
 		w.AsOf = formatFinish(asOf.UTC().Format(time.RFC3339))
@@ -1745,12 +1797,13 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		briefingSince = app.briefingWindowStart(ctx, userID, now)
 	}
 
-	spans := solveHomeSpans(layout, 6)
+	spans := solveHomeSpans(layout, 6, 2)
+	wideSpans := solveHomeSpans(layout, 6, 3)
 	for i, item := range layout {
 		def, _ := widgetDefFor(item.ID)
 		w := homeWidget{
 			ID: item.ID, Title: def.Title,
-			SpanClass: spanClass(spans[i]), Size: def.Size, SpanPref: item.Span,
+			SpanClass: spanClasses(spans[i], wideSpans[i]), Size: def.Size, SpanPref: item.Span,
 			Customize: customize,
 		}
 		switch item.ID {
@@ -1784,6 +1837,8 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 			w.WalletFlow = app.buildWalletFlow(ctx, bundles)
 		case widgetUpkeep:
 			w.Upkeep = app.buildUpkeep(ctx, userID)
+		case widgetGlance:
+			w.Glance = app.buildGlance(ctx, userID, bundles)
 		}
 		view.Widgets = append(view.Widgets, w)
 	}
@@ -1970,4 +2025,43 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	http.Redirect(w, r, "/?customize=1", http.StatusSeeOther)
+}
+
+// glanceWidget is the KPI band: the fleet's headline figures, each
+// a summary of a module with the detail (net worth, the fleet
+// table) one click away.
+type glanceWidget struct {
+	NetWorth *netWorthWidget
+	Pilots   int // characters whose queue is known
+	Training int
+	Idle     int
+	// TrainBar is the training share for a data-w bar.
+	TrainBar string
+}
+
+func (app *Application) buildGlance(ctx context.Context, userID int64, bundles []*charSnaps) *glanceWidget {
+	g := &glanceWidget{NetWorth: app.buildNetWorth(ctx, userID, bundles)}
+	now := time.Now()
+	for _, b := range bundles {
+		if !b.queueKnown {
+			continue
+		}
+		g.Pilots++
+		head := queueHead(b.queue)
+		training := false
+		if head != nil {
+			if t, ok := parseRFC3339(head.FinishDate); ok && t.After(now) {
+				training = true
+			}
+		}
+		if training {
+			g.Training++
+		} else {
+			g.Idle++
+		}
+	}
+	if g.Pilots > 0 {
+		g.TrainBar = fmt.Sprintf("%.1f", 100*float64(g.Training)/float64(g.Pilots))
+	}
+	return g
 }

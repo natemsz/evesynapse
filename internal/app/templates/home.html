@@ -33,13 +33,51 @@
 
 <div class="grid home-grid{{if .Home.Customize}} home-custom{{end}}"{{if .Home.Customize}} id="home-grid" data-customize="1"{{end}}>
 {{range .Home.Widgets}}
+{{if eq .ID "glance"}}
+<section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
+  <h3>At a glance</h3>
+  {{with .Glance}}
+  <div class="kpis">
+    <div class="kpi">
+      <span class="kpi-k">Fleet net worth</span>
+      <span class="kpi-v">{{if .NetWorth.Any}}{{.NetWorth.Total}} <small>ISK</small>{{else}}—{{end}}</span>
+      <span class="kpi-sub">{{if .NetWorth.Wallet}}Wallets {{.NetWorth.Wallet}}{{end}}{{if and .NetWorth.Wallet .NetWorth.AssetsKnown}} · {{end}}{{if .NetWorth.AssetsKnown}}Assets {{.NetWorth.Assets}}{{end}}</span>
+    </div>
+    <div class="kpi">
+      <span class="kpi-k">Liquid wallets</span>
+      <span class="kpi-v">{{if .NetWorth.Wallet}}{{.NetWorth.Wallet}} <small>ISK</small>{{else}}—{{end}}</span>
+      {{if .NetWorth.WalletBar}}<span class="kpi-bar"><span data-w="{{.NetWorth.WalletBar}}"></span></span>{{end}}
+      <span class="kpi-sub">{{if .NetWorth.WalletPct}}{{.NetWorth.WalletPct}} of net worth{{end}}</span>
+    </div>
+    <div class="kpi">
+      <span class="kpi-k">Hangar &amp; asset value</span>
+      <span class="kpi-v">{{if .NetWorth.AssetsKnown}}{{.NetWorth.Assets}} <small>ISK</small>{{else}}—{{end}}</span>
+      <span class="kpi-sub">{{if .NetWorth.AssetsNote}}{{.NetWorth.AssetsNote}}{{else if .NetWorth.Escrow}}Order escrow {{.NetWorth.Escrow}}{{end}}</span>
+    </div>
+    <div class="kpi">
+      <span class="kpi-k">Skill training</span>
+      <span class="kpi-v">{{if .Pilots}}{{.Training}} / {{.Pilots}} <small>training</small>{{else}}—{{end}}</span>
+      {{if .TrainBar}}<span class="kpi-bar{{if .Idle}} warn{{end}}"><span data-w="{{.TrainBar}}"></span></span>{{end}}
+      <span class="kpi-sub">{{if .Idle}}<button type="button" class="linkbtn" data-fleet-idle>{{.Idle}} idle — show them</button>{{else if .Pilots}}Every queue is running{{end}}</span>
+    </div>
+  </div>
+  {{end}}
+</section>
+{{end}}
+
 {{if eq .ID "briefing"}}
 <section class="card {{.SpanClass}}" data-widget="{{.ID}}" data-size="{{.Size}}" data-span="{{.SpanPref}}">
   <h3>Briefing</h3>
   {{with .Briefing}}
-  {{if .HTMLLines}}
-  <ul class="briefing">
-  {{range .HTMLLines}}<li>{{.}}</li>{{end}}
+  {{if .Items}}
+  <div class="brief-tabs" role="group" aria-label="Show briefing items by severity">
+    <button type="button" class="chip on" data-brief="all" aria-pressed="true">All ({{.Counts.All}})</button>
+    {{if .Counts.Critical}}<button type="button" class="chip sev-critical" data-brief="critical" aria-pressed="false">Critical ({{.Counts.Critical}})</button>{{end}}
+    {{if .Counts.Warning}}<button type="button" class="chip sev-warning" data-brief="warning" aria-pressed="false">Warning ({{.Counts.Warning}})</button>{{end}}
+    {{if .Counts.Info}}<button type="button" class="chip sev-info" data-brief="info" aria-pressed="false">Info ({{.Counts.Info}})</button>{{end}}
+  </div>
+  <ul class="briefing brief-cards">
+  {{range $i, $it := .Items}}<li class="brief-card sev-{{.Severity}}" data-sev="{{.Severity}}"{{if ge $i 6}} data-wmore{{end}}><span class="sev">{{.Severity}}</span> <span class="brief-text">{{.HTML}}</span></li>{{end}}
   </ul>
   {{if .More}}<p><small>+{{.More}} more need{{if eq .More 1}}s{{end}} your attention.</small></p>{{end}}
   <p><small>Since {{.SinceLabel}}</small></p>
@@ -56,28 +94,39 @@
   {{with .Fleet}}
   <p class="fleet-tools">
     <input id="fleet-filter" type="search" placeholder="Filter by name, tag, corporation or system…" size="36">
-    {{range .Tags}}<button type="button" class="chip" data-tag="{{.}}">{{.}}</button>{{end}}
+    <button type="button" class="chip on" data-tag="" aria-pressed="true">All</button>
+    {{range .Tags}}<button type="button" class="chip" data-tag="{{.}}" aria-pressed="false">{{.}}</button>{{end}}
+    {{if .Idle}}<button type="button" class="chip sev-critical" data-tag="" data-idle-chip aria-pressed="false">Not training ({{.Idle}})</button>{{end}}
   </p>
   <div class="tw">
-  <table>
-    <thead><tr><th>Character</th><th>Corporation</th><th>Location</th><th>Ship</th><th>Status</th><th>Training</th><th>Wallet</th><th>Mail</th></tr></thead>
+  <table class="fleet-table">
+    <thead><tr><th>Character</th><th>Location</th><th>Ship</th><th>Training</th><th class="num">Wallet</th><th><span class="visually-hidden">Details</span></th></tr></thead>
     <tbody>
     {{range .Rows}}
-    <tr class="fleet-row" data-search="{{.Search}}">
-      <td><img class="portrait" src="{{.PortraitURL}}" alt="" width="32" height="32"> <a href="/character/?character={{.ID}}">{{.Name}}</a>{{if .Tags}} <small>· {{.Tags}}</small>{{end}}{{if .Relink}} <strong class="relink">re-link needed</strong>{{end}}</td>
-      <td>{{corpLink .CorpID .CorpName}}</td>
-      <td>{{placeLink .SystemRef}}{{if .DockedName}}<br><small>docked: {{placeLink .DockedRef}}</small>{{end}}</td>
+    <tr class="fleet-row" data-search="{{.Search}}"{{if and .QueueKnown .NotTraining}} data-idle="1"{{end}}>
+      <td><span class="pilot"><img class="portrait" src="{{.PortraitURL}}" alt="" width="32" height="32">{{if .OnlineKnown}}<span class="dot {{if .Online}}on{{else}}off{{end}}" title="{{if .Online}}Online{{else}}Offline{{end}}"></span>{{end}}</span> <a href="/character/?character={{.ID}}">{{.Name}}</a>{{if .Relink}} <strong class="relink">re-link needed</strong>{{end}}<br><small>{{if .CorpName}}{{corpLink .CorpID .CorpName}}{{end}}{{if and .CorpName .Tags}} · {{end}}{{.Tags}}</small></td>
+      <td>{{placeLink .SystemRef}}{{if .DockedName}}<br><small>{{placeLink .DockedRef}}</small>{{end}}</td>
       <td>{{itemLink .ShipTypeID .ShipTypeName}}{{if .ShipName}}<br><small>&ldquo;{{.ShipName}}&rdquo;</small>{{end}}</td>
-      <td>{{if .OnlineKnown}}{{if .Online}}<span class="dot on"></span>Online{{else}}<span class="dot off"></span>Offline{{end}}{{if .LastLogin}}<br><small>last login {{.LastLogin}}</small>{{end}}{{else}}—{{end}}</td>
-      <td>{{if .QueueKnown}}{{if .Training}}{{.Training}}{{if .TrainingFinish}} <span class="countdown" data-finish="{{.TrainingFinish}}">{{.TrainingLeft}}</span>{{end}}{{else}}<em>Not training</em>{{end}}{{else}}—{{end}}</td>
-      <td>{{if .WalletKnown}}{{.ISK}} ISK{{else}}—{{end}}</td>
-      <td>{{if .UnreadKnown}}{{if .Unread}}<a href="/mail/?character={{.ID}}">{{.Unread}} unread</a>{{else}}—{{end}}{{else}}—{{end}}</td>
+      <td>{{if .QueueKnown}}{{if .Training}}{{.Training}}{{if .TrainingFinish}} <span class="countdown" data-finish="{{.TrainingFinish}}">{{.TrainingLeft}}</span>{{end}}{{else}}<em class="idle">Not training</em>{{end}}{{else}}—{{end}}</td>
+      <td class="num">{{if .WalletKnown}}{{.ISK}} ISK{{else}}—{{end}}</td>
+      <td><button type="button" class="rowexpand" data-expand="fleet-d-{{.ID}}" aria-label="Details for {{.Name}}"></button></td>
+    </tr>
+    <tr class="fleet-detail" id="fleet-d-{{.ID}}">
+      <td colspan="6"><dl class="fleet-facts">
+        <div><dt>Corporation</dt><dd>{{if .CorpName}}{{corpLink .CorpID .CorpName}}{{else}}—{{end}}</dd></div>
+        <div><dt>Status</dt><dd>{{if .OnlineKnown}}{{if .Online}}<span class="dot on"></span>Online{{else}}<span class="dot off"></span>Offline{{end}}{{if .LastLogin}} · last login {{.LastLogin}}{{end}}{{else}}—{{end}}</dd></div>
+        <div><dt>Docked</dt><dd>{{if .DockedName}}{{placeLink .DockedRef}}{{else}}—{{end}}</dd></div>
+        <div><dt>Mail</dt><dd>{{if .UnreadKnown}}{{if .Unread}}<a href="/mail/?character={{.ID}}">{{.Unread}} unread</a>{{else}}No unread mail{{end}}{{else}}—{{end}}</dd></div>
+        <div><dt>Tags</dt><dd>{{if .Tags}}{{.Tags}}{{else}}—{{end}}</dd></div>
+        <div><dt>Sheet</dt><dd><a href="/character/?character={{.ID}}">Open {{.Name}}</a></dd></div>
+      </dl></td>
     </tr>
     {{end}}
     </tbody>
   </table>
   </div>
   <p class="fleet-nomatch" hidden>No characters match the filter.</p>
+  <p class="fleet-foot"><small>Showing <span data-fleet-shown>{{len .Rows}}</span> of {{len .Rows}} characters{{if .TotalISK}} · fleet liquid total {{.TotalISK}} ISK{{end}}</small></p>
   {{end}}
 </section>
 {{end}}
@@ -88,7 +137,7 @@
   {{with .Attention}}
   {{if .Items}}
   <ul class="attention">
-  {{range .Items}}<li><a href="{{.Link}}">{{.Text}}</a>{{if .When}} <small>{{.When}}</small>{{end}}</li>{{end}}
+  {{range $i, $it := .Items}}<li{{if ge $i 4}} data-wmore{{end}}><a href="{{.Link}}">{{.Text}}</a>{{if .When}} <small>{{.When}}</small>{{end}}</li>{{end}}
   </ul>
   {{if .More}}<p><small>…and {{.More}} more</small></p>{{end}}
   {{else}}
@@ -104,15 +153,12 @@
   {{with .NetWorth}}
   {{if .Any}}
   <p class="isk">{{.Total}} <small>ISK</small></p>
-  <div class="tw">
-  <table>
-    <tbody>
-      {{if .Wallet}}<tr><th>Wallets</th><td>{{.Wallet}}</td></tr>{{end}}
-      {{if .AssetsKnown}}<tr><th>Assets</th><td>{{.Assets}}</td></tr>{{end}}
-      {{if .Escrow}}<tr><th>Order escrow</th><td>{{.Escrow}}</td></tr>{{end}}
-    </tbody>
-  </table>
+  <div class="kpis kpis-small">
+    {{if .Wallet}}<div class="kpi"><span class="kpi-k">Wallets</span><span class="kpi-v">{{.Wallet}}</span></div>{{end}}
+    {{if .AssetsKnown}}<div class="kpi"><span class="kpi-k">Assets</span><span class="kpi-v">{{.Assets}}</span></div>{{end}}
+    {{if .Escrow}}<div class="kpi"><span class="kpi-k">Order escrow</span><span class="kpi-v">{{.Escrow}}</span></div>{{end}}
   </div>
+  <div data-wmore>
   <p><small>Estimate{{if .AsOf}} · data as of {{.AsOf}}{{end}}</small></p>
   {{if .AssetsNote}}<p><small>{{.AssetsNote}}</small></p>{{end}}
   {{if .History}}
@@ -121,6 +167,7 @@
   {{else if .HistoryBuilding}}
   <p><small>Net worth history is building — a point is recorded each day.</small></p>
   {{end}}
+  </div>
   {{else}}
   <p><small>Balances appear here once your characters have synced.</small></p>
   {{end}}
@@ -138,7 +185,7 @@
   <table>
     <thead><tr><th>Character</th><th>Activity</th><th>Product</th><th>Ends</th></tr></thead>
     <tbody>
-    {{range .Rows}}<tr><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{.Activity}}</td><td>{{itemLink .TypeID .Name}}</td><td>{{.Ends}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
+    {{range $i, $r := .Rows}}<tr{{if ge $i 3}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{.Activity}}</td><td>{{itemLink .TypeID .Name}}</td><td>{{.Ends}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
     </tbody>
   </table>
   </div>
@@ -154,6 +201,7 @@
   <h3>Market</h3>
   {{$customize := .Customize}}
   {{with .Market}}
+  <div data-wmore>
   <form class="widget-scope" method="post" action="/home/widget-config">
     <input type="hidden" name="widget" value="market">
     <input type="hidden" name="next" value="{{if $customize}}/?customize=1{{else}}/{{end}}">
@@ -173,6 +221,7 @@
     {{end}}
     <button class="btn" type="submit">Apply</button>
   </form>
+  </div>
   {{if .ScopeEmpty}}
   <p><small>{{.ScopeEmpty}}</small></p>
   {{else if not .AnyData}}
@@ -183,7 +232,7 @@
   {{if .Health}}<p><small>{{.Health}}</small></p>{{end}}
   {{end}}
   {{if eq .Merge "per-character"}}
-  <div class="tw">
+  <div class="tw" data-wmore>
   <table>
     <thead><tr><th>Character</th><th>Orders</th><th>Soonest expiry</th></tr></thead>
     <tbody>
@@ -193,7 +242,7 @@
   </div>
   {{else if eq .Merge "both"}}
   {{if .Expiring}}
-  <div class="tw">
+  <div class="tw" data-wmore>
   <table>
     <thead><tr><th>Character</th><th>Item</th><th>Expires</th></tr></thead>
     <tbody>
@@ -219,7 +268,7 @@
   <table>
     <thead><tr><th>Item</th><th>Region</th><th>Average</th><th>7 days</th><th>30 days</th><th>Status</th></tr></thead>
     <tbody>
-    {{range .Rows}}<tr><td><a href="/items/type/{{.TypeID}}/">{{.Name}}</a></td><td>{{.Region}}</td><td>{{.Current}}</td><td>{{.Change7}}</td><td>{{.Change30}}</td><td>{{if .Moving}}<strong>{{.MoveText}}</strong>{{else}}Calm{{end}}</td></tr>{{end}}
+    {{range $i, $r := .Rows}}<tr{{if ge $i 3}} data-wmore{{end}}><td><a href="/items/type/{{.TypeID}}/">{{.Name}}</a></td><td>{{.Region}}</td><td>{{.Current}}</td><td>{{.Change7}}</td><td>{{.Change30}}</td><td>{{if .Moving}}<strong>{{.MoveText}}</strong>{{else}}Calm{{end}}</td></tr>{{end}}
     </tbody>
   </table>
   </div>
@@ -239,7 +288,7 @@
   <table>
     <thead><tr><th>Character</th><th>Skill</th><th>Finishes</th></tr></thead>
     <tbody>
-    {{range .Finishing}}<tr><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{itemLink .SkillID .Skill}} {{.Level}}</td><td>{{.Finish}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
+    {{range $i, $r := .Finishing}}<tr{{if ge $i 3}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{itemLink .SkillID .Skill}} {{.Level}}</td><td>{{.Finish}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
     </tbody>
   </table>
   </div>
@@ -258,12 +307,12 @@
   {{if .Any}}
   <p><small>{{.Colonies}} colon{{if eq .Colonies 1}}y{{else}}ies{{end}} across your characters{{if .Expired}} · {{.Expired}} extractor{{if ne .Expired 1}}s{{end}} expired{{end}} · <a href="/planets/">colonies</a></small></p>
   {{if .Soonest}}
-  <p><input type="search" id="pi-search" placeholder="Filter by character or planet…" aria-label="Filter planetary industry" data-table-filter="pi-table" data-row-class="pi-row"></p>
+  <p data-wmore><input type="search" id="pi-search" placeholder="Filter by character or planet…" aria-label="Filter planetary industry" data-table-filter="pi-table" data-row-class="pi-row"></p>
   <div class="tw">
   <table id="pi-table">
     <thead><tr><th>Character</th><th>Planet</th><th>Extractor</th></tr></thead>
     <tbody>
-    {{range .Soonest}}<tr class="pi-row" data-search="{{.Search}}"><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{.Planet}}</td><td>{{if .Expired}}expired {{end}}{{.Expires}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
+    {{range $i, $r := .Soonest}}<tr class="pi-row" data-search="{{.Search}}"{{if ge $i 3}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{.Planet}}</td><td>{{if .Expired}}expired {{end}}{{.Expires}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
     </tbody>
   </table>
   </div>
@@ -292,7 +341,7 @@
   <table>
     <thead><tr><th>Character</th><th>Skill</th><th>Finishes</th></tr></thead>
     <tbody>
-    {{range .Events}}<tr><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{itemLink .SkillID .Skill}} {{.Level}}</td><td>{{.Finish}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
+    {{range $i, $r := .Events}}<tr{{if ge $i 3}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{itemLink .SkillID .Skill}} {{.Level}}</td><td>{{.Finish}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
     </tbody>
   </table>
   </div>
@@ -311,12 +360,15 @@
   {{if .Corps}}
   {{range .Corps}}
   <h4>{{.Name}}</h4>
+  <p><small>{{len .Joined}} joined · {{len .Left}} left · {{len .Moves}} wallet move{{if ne (len .Moves) 1}}s{{end}} · {{len .Added}} anchored · {{len .Removed}} removed · {{len .Timers}} timer{{if ne (len .Timers) 1}}s{{end}}</small></p>
+  <div data-wmore>
   {{if .Joined}}<p><small>Joined: {{range $i, $j := .Joined}}{{if $i}}, {{end}}{{$j.Name}} ({{$j.Joined}}){{end}}.</small></p>{{end}}
   {{if .Left}}<ul class="attention">{{range .Left}}<li>{{.Text}} left <small>{{.When}}</small></li>{{end}}</ul>{{end}}
   {{if .Moves}}<ul class="attention">{{range .Moves}}<li>Division {{.Division}}: {{.Text}} <small>{{.When}}</small></li>{{end}}</ul>{{end}}
   {{if .Added}}<ul class="attention">{{range .Added}}<li>Anchored: {{.Text}} <small>{{.When}}</small></li>{{end}}</ul>{{end}}
   {{if .Removed}}<ul class="attention">{{range .Removed}}<li>Removed: {{.Text}} <small>{{.When}}</small></li>{{end}}</ul>{{end}}
   {{if .Timers}}<ul class="attention">{{range .Timers}}<li>{{.Name}} — {{.Text}} <small>{{.When}}</small></li>{{end}}</ul>{{end}}
+  </div>
   {{end}}
   {{else}}
   <p><small>Nothing to show — this needs a Director, Personnel Manager, Accountant, or Station Manager role in the corporation.</small></p>
@@ -338,6 +390,7 @@
     </tbody>
   </table>
   </div>
+  <div data-wmore>
   {{if .HasChart}}
   {{template "balance-chart" .Chart}}
   <p><small>Cumulative net flow per day.</small></p>
@@ -373,6 +426,7 @@
   </table>
   </div>
   {{end}}
+  </div>
   {{else}}
   <p><small>Journal data appears here once your characters have synced.</small></p>
   {{end}}
@@ -385,9 +439,10 @@
   <h3>Upkeep &amp; fuel</h3>
   {{with .Upkeep}}
   {{if .Corps}}
+  <p><small>{{.Count}} deadline{{if ne .Count 1}}s{{end}}{{if .Urgent}} · <strong>{{.Urgent}} past due</strong>{{end}}</small></p>
   {{range .Corps}}
   <h4>{{.Name}}</h4>
-  <ul class="attention">{{range .Items}}<li>{{if .Urgent}}<strong>{{.Name}} — {{.Text}}</strong>{{else}}{{.Name}} — {{.Text}}{{end}} <small>{{.When}}</small></li>{{end}}</ul>
+  <ul class="attention">{{range $i, $it := .Items}}<li{{if ge $i 3}} data-wmore{{end}}>{{if .Urgent}}<strong>{{.Name}} — {{.Text}}</strong>{{else}}{{.Name}} — {{.Text}}{{end}} <small>{{.When}}</small></li>{{end}}</ul>
   {{end}}
   {{else}}
   <p><small>All fueled — or this needs a Station Manager or Director role to check.</small></p>

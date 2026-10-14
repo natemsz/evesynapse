@@ -72,11 +72,97 @@
 
     var cards = root.querySelectorAll(".card");
     for (var j = 0; j < cards.length; j++) {
+      // Home modules expand instead of folding (see Expanders).
+      if (cards[j].closest(".home-grid")) continue;
       addFold(cards[j], cards[j].querySelector(":scope > h2, :scope > h3"));
     }
   }
   onContentReady(initFolds);
   initFolds(document);
+
+  // --- Expanders -------------------------------------------------
+  // One mechanism for every summary/detail pair. A detail block
+  // carries data-wmore; its control carries data-expand naming the
+  // block's id. Home modules get theirs here: a module whose markup
+  // has a detail block rests on its summary, with a More/Less
+  // toggle in its heading, and takes its whole grid row while
+  // open. Table rows with a detail row of their own (the fleet
+  // overview) render their control server-side and use the same
+  // switch. Without JavaScript nothing is hidden: every detail
+  // block simply renders open. Which modules are open is a
+  // per-browser convenience, remembered in localStorage.
+  var EXPANDED_KEY = "evesynapse.home.expanded";
+  function readExpanded() {
+    try {
+      var v = JSON.parse(window.localStorage.getItem(EXPANDED_KEY) || "[]");
+      return Array.isArray(v) ? v : [];
+    } catch (e) { return []; }
+  }
+  function rememberExpanded(id, open) {
+    var ids = readExpanded().filter(function (x) { return x !== id; });
+    if (open) ids.push(id);
+    try { window.localStorage.setItem(EXPANDED_KEY, JSON.stringify(ids)); } catch (e) { /* private mode */ }
+  }
+  var expandSeq = 0;
+  function setExpanded(ctrl, panels, open) {
+    for (var p = 0; p < panels.length; p++) panels[p].hidden = !open;
+    ctrl.setAttribute("aria-expanded", open ? "true" : "false");
+    if (ctrl.classList.contains("cardexpand")) {
+      ctrl.textContent = open ? "Less" : "More";
+    }
+    var owner = ctrl.getAttribute("data-expand-owner");
+    var ownerEl = owner ? document.getElementById(owner) : null;
+    if (ownerEl) ownerEl.classList.toggle("expanded", open);
+    var card = ctrl.closest(".card[data-widget]");
+    if (card && ctrl.classList.contains("cardexpand")) {
+      card.classList.toggle("expanded", open);
+      rememberExpanded(card.getAttribute("data-widget"), open);
+    }
+  }
+  function bindExpander(ctrl, panels, open) {
+    if (ctrl.hasAttribute("data-expand-bound")) return;
+    ctrl.setAttribute("data-expand-bound", "1");
+    var ids = [];
+    for (var p = 0; p < panels.length; p++) {
+      if (!panels[p].id) panels[p].id = "wmore-" + (++expandSeq);
+      ids.push(panels[p].id);
+    }
+    ctrl.setAttribute("aria-controls", ids.join(" "));
+    setExpanded(ctrl, panels, open);
+    ctrl.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      setExpanded(ctrl, panels, panels[0].hidden);
+    });
+  }
+  function initExpanders(root) {
+    // Customize shows every module whole: it is about arranging.
+    var grid = root.querySelector ? root.querySelector(".home-grid:not(.home-custom)") : null;
+    var remembered = readExpanded();
+    if (grid) {
+      var cards = grid.querySelectorAll(".card[data-widget]");
+      for (var i = 0; i < cards.length; i++) {
+        var card = cards[i];
+        // Every detail block in the module: whole blocks, and the
+        // rows or items past the summary, each marked on its own.
+        var panels = card.querySelectorAll("[data-wmore]");
+        var heading = card.querySelector(":scope > h2, :scope > h3");
+        if (!panels.length || !heading || heading.querySelector(".cardexpand")) continue;
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "cardexpand";
+        heading.appendChild(btn);
+        card.classList.add("has-expand");
+        bindExpander(btn, panels, remembered.indexOf(card.getAttribute("data-widget")) !== -1);
+      }
+    }
+    var ctrls = root.querySelectorAll ? root.querySelectorAll("[data-expand]") : [];
+    for (var j = 0; j < ctrls.length; j++) {
+      var target = document.getElementById(ctrls[j].getAttribute("data-expand"));
+      if (target) bindExpander(ctrls[j], [target], false);
+    }
+  }
+  onContentReady(initExpanders);
+  initExpanders(document);
 
   // --- Nav: Escape folds an open branch back up -----------------
   document.addEventListener("keydown", function (ev) {
@@ -132,39 +218,101 @@
   // --- Fleet filter (home overview) ---------------------------
   // The fleet table renders every character server-side; this
   // just hides rows that don't match the typed text or the
-  // active tag chip. No JS: the full list is simply visible.
+  // active chip: All, a tag, or Not training. A row's detail row
+  // goes with it, and a click anywhere on a row (not on a link)
+  // opens its detail, like its chevron. No JS: the full list is
+  // simply visible, details and all.
   function initFleetFilter(root) {
     var fleetFilter = root.querySelector("#fleet-filter");
     var fleetRows = root.querySelectorAll(".fleet-row");
     if (!fleetFilter || !fleetRows.length) return;
     var noMatch = root.querySelector(".fleet-nomatch");
-    var chips = root.querySelectorAll(".chip[data-tag]");
+    var shownEl = root.querySelector("[data-fleet-shown]");
+    var chips = root.querySelectorAll(".fleet-tools .chip");
     var activeTag = "";
+    var idleOnly = false;
+    var detailOf = function (row) {
+      var btn = row.querySelector("[data-expand]");
+      return btn ? document.getElementById(btn.getAttribute("data-expand")) : null;
+    };
     var applyFleetFilter = function () {
       var q = fleetFilter.value.trim().toLowerCase();
       var shown = 0;
       for (var i = 0; i < fleetRows.length; i++) {
         var hay = fleetRows[i].getAttribute("data-search") || "";
-        var ok = (!q || hay.indexOf(q) !== -1) && (!activeTag || hay.indexOf(activeTag) !== -1);
+        var ok = (!q || hay.indexOf(q) !== -1) && (!activeTag || hay.indexOf(activeTag) !== -1) &&
+          (!idleOnly || fleetRows[i].hasAttribute("data-idle"));
         fleetRows[i].style.display = ok ? "" : "none";
+        var detail = detailOf(fleetRows[i]);
+        if (detail) detail.style.display = ok ? "" : "none";
         if (ok) shown++;
       }
       if (noMatch) noMatch.hidden = shown > 0;
+      if (shownEl) shownEl.textContent = String(shown);
+    };
+    var pick = function (chip) {
+      activeTag = (chip.getAttribute("data-tag") || "").toLowerCase();
+      idleOnly = chip.hasAttribute("data-idle-chip");
+      for (var j = 0; j < chips.length; j++) {
+        var on = chips[j] === chip;
+        chips[j].classList.toggle("on", on);
+        chips[j].setAttribute("aria-pressed", on ? "true" : "false");
+      }
+      applyFleetFilter();
     };
     fleetFilter.addEventListener("input", applyFleetFilter);
     for (var c = 0; c < chips.length; c++) {
       chips[c].addEventListener("click", function () {
-        var tag = (this.getAttribute("data-tag") || "").toLowerCase();
-        activeTag = activeTag === tag ? "" : tag;
-        for (var j = 0; j < chips.length; j++) {
-          chips[j].classList.toggle("on", (chips[j].getAttribute("data-tag") || "").toLowerCase() === activeTag);
-        }
-        applyFleetFilter();
+        // A second press on the active chip goes back to All.
+        if (this.classList.contains("on") && chips[0] !== this) pick(chips[0]);
+        else pick(this);
       });
+    }
+    for (var r = 0; r < fleetRows.length; r++) {
+      fleetRows[r].addEventListener("click", function (ev) {
+        if (ev.target.closest("a, button, input, select")) return;
+        var btn = this.querySelector("[data-expand]");
+        if (btn) btn.click();
+      });
+    }
+    // The KPI band's idle count opens the same view.
+    var idleBtn = root.querySelector("[data-fleet-idle]");
+    var idleChip = root.querySelector(".fleet-tools [data-idle-chip]");
+    if (idleBtn && idleChip) {
+      idleBtn.addEventListener("click", function () {
+        pick(idleChip);
+        fleetFilter.scrollIntoView({ block: "start", behavior: "smooth" });
+      });
+    } else if (idleBtn) {
+      idleBtn.hidden = true;
     }
   }
   onContentReady(initFleetFilter);
   initFleetFilter(document);
+
+  // --- Briefing severity tabs ------------------------------------
+  // All / Critical / Warning / Info swap which cards show; the
+  // module's More/Less still decides how far down the list goes.
+  function initBriefTabs(root) {
+    var tabs = root.querySelectorAll("[data-brief]");
+    if (!tabs.length) return;
+    var cards = root.querySelectorAll(".brief-card");
+    for (var i = 0; i < tabs.length; i++) {
+      tabs[i].addEventListener("click", function () {
+        var sev = this.getAttribute("data-brief");
+        for (var j = 0; j < tabs.length; j++) {
+          var on = tabs[j] === this;
+          tabs[j].classList.toggle("on", on);
+          tabs[j].setAttribute("aria-pressed", on ? "true" : "false");
+        }
+        for (var k = 0; k < cards.length; k++) {
+          cards[k].classList.toggle("brief-off", sev !== "all" && cards[k].getAttribute("data-sev") !== sev);
+        }
+      });
+    }
+  }
+  onContentReady(initBriefTabs);
+  initBriefTabs(document);
 
   // --- Widget settings (orders scope picker) ------------------
   // A change applies at once: the form IS the plain submit (the
@@ -243,23 +391,33 @@
     // --- the grid engine, mirrored ----------------------------
     // solveHomeSpans is the exact mirror of the Go solver in
     // home_overview.go: walk the order once — a full module, or a
-    // flex module marked wide, owns its row; a flex module
-    // takes half a row and pairs with the next flex module that
-    // fits; a flex module left alone in its row stretches full.
-    // The server renders these spans as span3/span6 classes; the
-    // mirror re-solves live (drag, resize toggles), so what is
-    // under the finger is always the final arrangement.
-    function solveHomeSpans(descs, cols) {
+    // flex module marked wide, owns its row; a flex module takes
+    // cols/perRow and shares the row with the next flex modules
+    // that fit; a short row of flex modules shares its spare
+    // width, none growing past half a row. The server renders the
+    // two-up solve as span3/span6 and the three-up solve as
+    // wspan2/wspan3/wspan6; the mirror re-solves both live (drag,
+    // resize toggles), so what is under the finger is always the
+    // final arrangement.
+    function solveHomeSpans(descs, cols, perRow) {
       var spans = [];
       var k;
       if (cols < 2) {
         for (k = 0; k < descs.length; k++) spans.push(1);
         return spans;
       }
-      var flex = Math.floor(cols / 2);
+      if (!(perRow >= 1 && perRow <= cols)) perRow = 2;
+      var flex = Math.floor(cols / perRow);
+      var half = Math.floor(cols / 2);
       var rowUsed = 0, rowStart = 0;
       function closeRow(next) {
-        if (next - rowStart === 1 && spans[rowStart] < cols) spans[rowStart] = cols;
+        var n = next - rowStart;
+        if (n > 0 && rowUsed < cols) {
+          var share = Math.min(Math.floor(cols / n), half);
+          for (var j = rowStart; j < next; j++) {
+            if (spans[j] < share) spans[j] = share;
+          }
+        }
         rowStart = next;
         rowUsed = 0;
       }
@@ -281,11 +439,12 @@
       };
     }
 
-    function applySpanClass(el, span) {
-      el.classList.remove("span3");
-      el.classList.remove("span6");
-      el.classList.remove("spanall");
+    function applySpanClass(el, span, wide) {
+      ["span3", "span6", "spanall", "wspan2", "wspan3", "wspan6"].forEach(function (c) {
+        el.classList.remove(c);
+      });
       el.classList.add(span >= 6 ? "span6" : "span3");
+      el.classList.add("wspan" + wide);
     }
 
     // Re-solve the grid and hand every card its span class. Mid
@@ -305,8 +464,9 @@
           descs.push(cardDescriptor(el));
         }
       }
-      var spans = solveHomeSpans(descs, 6);
-      for (var j = 0; j < nodes.length; j++) applySpanClass(nodes[j], spans[j]);
+      var spans = solveHomeSpans(descs, 6, 2);
+      var wide = solveHomeSpans(descs, 6, 3);
+      for (var j = 0; j < nodes.length; j++) applySpanClass(nodes[j], spans[j], wide[j]);
     }
 
     // Give one card its drag handle, resize toggle and × button.
@@ -518,7 +678,8 @@
         // the whole drag.
         placeholder = document.createElement("section");
         placeholder.className = "card drag-placeholder";
-        applySpanClass(placeholder, card.classList.contains("span6") ? 6 : 3);
+        applySpanClass(placeholder, card.classList.contains("span6") ? 6 : 3,
+          card.classList.contains("wspan6") ? 6 : card.classList.contains("wspan3") ? 3 : 2);
         placeholder.style.height = rect.height + "px";
         placeholder.setAttribute("aria-hidden", "true");
         grid.insertBefore(placeholder, card.nextSibling);

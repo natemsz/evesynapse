@@ -81,6 +81,9 @@ type upkeepCorpView struct {
 // them (see the corp structures comment in esi.go).
 type upkeepWidget struct {
 	Corps []upkeepCorpView
+	// Count and Urgent total the deadlines shown, for the
+	// module's at-rest summary line.
+	Count, Urgent int
 }
 
 // upkeepRoles unlocks the widget: the roles behind the corp
@@ -130,6 +133,12 @@ func (app *Application) buildUpkeep(ctx context.Context, userID int64) *upkeepWi
 		}
 		if len(view.Items) > 0 {
 			w.Corps = append(w.Corps, view)
+			w.Count += len(view.Items)
+			for _, it := range view.Items {
+				if it.Urgent {
+					w.Urgent++
+				}
+			}
 		}
 	}
 	return w

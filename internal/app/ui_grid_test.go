@@ -31,32 +31,41 @@ func gridItems(spec ...string) []homeLayoutItem {
 	return items
 }
 
-// TestSolveHomeSpans pins the one packing rule, at both column
-// counts the CSS serves: 6 (desktop) and 2 (phone).
+// TestSolveHomeSpans pins the one packing rule at the three grids
+// the CSS serves: two-up on desktop (6 tracks), three-up on a wide
+// screen (6 tracks) and the phone grid (2 tracks). A short row of
+// flex modules shares its spare width, but no module grows past
+// half a row: nothing balloons to fill width it has no use for.
 func TestSolveHomeSpans(t *testing.T) {
 	cases := []struct {
 		name  string
 		items []homeLayoutItem
-		want6 []int
-		want2 []int
+		want2 []int // 6 tracks, two a row
+		want3 []int // 6 tracks, three a row
+		phone []int // 2 tracks
 	}{
-		{"empty", gridItems(), []int{}, []int{}},
-		{"lone flex stretches", gridItems("server"), []int{6}, []int{2}},
-		{"flex pair halves", gridItems("market", "skills"), []int{3, 3}, []int{1, 1}},
-		{"third flex drops to its own stretched row", gridItems("market", "skills", "server"), []int{3, 3, 6}, []int{1, 1, 2}},
-		{"flex stranded before a full row stretches", gridItems("market", "fleet", "skills"), []int{6, 6, 6}, []int{2, 2, 2}},
-		{"full then lone flex", gridItems("fleet", "market"), []int{6, 6}, []int{2, 2}},
-		{"wide flex owns its row", gridItems("market!"), []int{6}, []int{2}},
-		{"wide flex breaks the pair around it", gridItems("market", "skills!", "server"), []int{6, 6, 6}, []int{2, 2, 2}},
-		{"two pairs around a full row", gridItems("market", "skills", "fleet", "server", "networth"), []int{3, 3, 6, 3, 3}, []int{1, 1, 2, 1, 1}},
-		{"two fulls", gridItems("fleet", "attention"), []int{6, 6}, []int{2, 2}},
+		{"empty", gridItems(), []int{}, []int{}, []int{}},
+		{"lone flex keeps to half a row", gridItems("server"), []int{3}, []int{3}, []int{1}},
+		{"flex pair halves", gridItems("market", "skills"), []int{3, 3}, []int{3, 3}, []int{1, 1}},
+		{"three flex", gridItems("market", "skills", "server"), []int{3, 3, 3}, []int{2, 2, 2}, []int{1, 1, 1}},
+		{"four flex", gridItems("market", "skills", "server", "pi"), []int{3, 3, 3, 3}, []int{2, 2, 2, 3}, []int{1, 1, 1, 1}},
+		{"five flex", gridItems("market", "skills", "server", "pi", "networth"), []int{3, 3, 3, 3, 3}, []int{2, 2, 2, 3, 3}, []int{1, 1, 1, 1, 1}},
+		{"flex stranded before a full row", gridItems("market", "fleet", "skills"), []int{3, 6, 3}, []int{3, 6, 3}, []int{1, 2, 1}},
+		{"full then lone flex", gridItems("fleet", "market"), []int{6, 3}, []int{6, 3}, []int{2, 1}},
+		{"wide flex owns its row", gridItems("market!"), []int{6}, []int{6}, []int{2}},
+		{"wide flex breaks the row around it", gridItems("market", "skills!", "server"), []int{3, 6, 3}, []int{3, 6, 3}, []int{1, 2, 1}},
+		{"rows around a full row", gridItems("market", "skills", "fleet", "server", "networth"), []int{3, 3, 6, 3, 3}, []int{3, 3, 6, 3, 3}, []int{1, 1, 2, 1, 1}},
+		{"two fulls", gridItems("fleet", "attention"), []int{6, 6}, []int{6, 6}, []int{2, 2}},
 	}
 	for _, tc := range cases {
-		if got := solveHomeSpans(tc.items, 6); !reflect.DeepEqual(got, tc.want6) {
-			t.Errorf("%s: solve(6) = %v, want %v", tc.name, got, tc.want6)
+		if got := solveHomeSpans(tc.items, 6, 2); !reflect.DeepEqual(got, tc.want2) {
+			t.Errorf("%s: solve(6, two-up) = %v, want %v", tc.name, got, tc.want2)
 		}
-		if got := solveHomeSpans(tc.items, 2); !reflect.DeepEqual(got, tc.want2) {
-			t.Errorf("%s: solve(2) = %v, want %v", tc.name, got, tc.want2)
+		if got := solveHomeSpans(tc.items, 6, 3); !reflect.DeepEqual(got, tc.want3) {
+			t.Errorf("%s: solve(6, three-up) = %v, want %v", tc.name, got, tc.want3)
+		}
+		if got := solveHomeSpans(tc.items, 2, 2); !reflect.DeepEqual(got, tc.phone) {
+			t.Errorf("%s: solve(2) = %v, want %v", tc.name, got, tc.phone)
 		}
 	}
 }
@@ -137,14 +146,14 @@ func TestHomeGridRenderSpans(t *testing.T) {
 		}
 	}
 
-	// A lone flex module (v1 seed) stretches its whole row.
+	// A lone flex module (v1 seed) keeps to half a row.
 	setLayout(`["server"]`)
 	code, body := getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
 	mustContain(t, "/ lone flex", body,
-		`<section class="card span6" data-widget="server" data-size="flex" data-span="">`)
+		`<section class="card span3 wspan3" data-widget="server" data-size="flex" data-span="">`)
 
 	// Two flex modules pair at half width.
 	setLayout(`["market","skills"]`)
@@ -153,32 +162,33 @@ func TestHomeGridRenderSpans(t *testing.T) {
 		t.Fatalf("GET /: status %d", code)
 	}
 	mustContain(t, "/ flex pair", body,
-		`<section class="card span3" data-widget="market"`,
-		`<section class="card span3" data-widget="skills"`)
+		`<section class="card span3 wspan3" data-widget="market"`,
+		`<section class="card span3 wspan3" data-widget="skills"`)
 
-	// A wide-marked flex module owns its row, and the flex
-	// module after it is stranded alone — so it stretches too.
+	// A wide-marked flex module owns its row; the flex module
+	// after it is alone in its row and keeps to half of it.
 	setLayout(`[{"id":"market","span":"wide"},{"id":"skills"}]`)
 	code, body = getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
 	mustContain(t, "/ wide flex", body,
-		`<section class="card span6" data-widget="market" data-size="flex" data-span="wide">`,
-		`<section class="card span6" data-widget="skills"`)
+		`<section class="card span6 wspan6" data-widget="market" data-size="flex" data-span="wide">`,
+		`<section class="card span3 wspan3" data-widget="skills"`)
 
-	// The full-width pair stays full, flex modules after pair up.
+	// The full-width pair stays full; the flex modules after
+	// pair up two-up and sit three to a row on a wide screen.
 	setLayout(`["fleet","attention","networth","market","server"]`)
 	code, body = getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
 	mustContain(t, "/ default-ish", body,
-		`<section class="card span6" data-widget="fleet" data-size="full"`,
-		`<section class="card span6" data-widget="attention" data-size="full"`,
-		`<section class="card span3" data-widget="networth"`,
-		`<section class="card span3" data-widget="market"`,
-		`<section class="card span6" data-widget="server"`)
+		`<section class="card span6 wspan6" data-widget="fleet" data-size="full"`,
+		`<section class="card span6 wspan6" data-widget="attention" data-size="full"`,
+		`<section class="card span3 wspan2" data-widget="networth"`,
+		`<section class="card span3 wspan2" data-widget="market"`,
+		`<section class="card span3 wspan2" data-widget="server"`)
 
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handlers made %d outbound calls, want 0", got)
@@ -226,7 +236,7 @@ func TestHomeLayoutSpanAction(t *testing.T) {
 		t.Fatalf("GET /: status %d", code)
 	}
 	mustContain(t, "/ after span wide", body,
-		`<section class="card span6" data-widget="market" data-size="flex" data-span="wide">`)
+		`<section class="card span6 wspan6" data-widget="market" data-size="flex" data-span="wide">`)
 
 	// Back to auto, as the resize toggle's XHR: bare 200.
 	code, body = doLayoutPost(t, app, url.Values{

@@ -865,6 +865,30 @@ footer .version-number {
 .attention li:nth-child(even) { background: var(--row-alt); }
 .attention li:hover { background: var(--row-hover); }
 .attention li:last-child { border-bottom: none; }
+/* Trade ideas: one tab per strategy (the Trade ideas page and the
+   home module). Without JavaScript the tab list stays hidden and
+   every strategy shows under its own heading. */
+.ti-tabs { display: flex; gap: 0.35rem; overflow-x: auto; scrollbar-width: thin; margin: 0 0 0.6rem; padding-bottom: 0.15rem; }
+.ti-tabs[hidden], .ti-panel[hidden] { display: none; }
+.ti-tabs button { flex: none; display: inline-flex; align-items: baseline; gap: 0.4rem; padding: 0.3rem 0.7rem; border: 1px solid var(--border, #333); border-radius: 4px; background: transparent; color: var(--muted); font: inherit; font-size: 0.85rem; white-space: nowrap; cursor: pointer; }
+.ti-tabs button:hover { color: var(--text-bright); border-color: #555; }
+.ti-tabs button[aria-selected="true"] { border-color: var(--accent); color: var(--text-bright); background: var(--row-hover); }
+.ti-tabs button small { color: var(--accent); font-size: 0.75rem; }
+.ti-h { margin: 0.6rem 0 0.25rem; }
+.tabs-on .ti-h { display: none; }
+.ti-desc { margin: 0 0 0.5rem; }
+.ti-list { list-style: none; margin: 0; padding: 0; counter-reset: ti; }
+.ti-list li { counter-increment: ti; position: relative; background: var(--row); padding: 0.35rem 0.5rem 0.35rem 2.1rem; border-bottom: 1px solid #222; }
+.ti-list li:nth-child(even) { background: var(--row-alt); }
+.ti-list li:hover { background: var(--row-hover); }
+.ti-list li::before { content: counter(ti); position: absolute; left: 0.4rem; top: 0.45rem; width: 1.3rem; color: var(--accent); font-variant-numeric: tabular-nums; font-size: 0.8rem; text-align: right; }
+.ti-list li strong { color: var(--text-bright); }
+/* The page's full lists flow into columns when there is room. */
+.ti-full { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); gap: 0 1px; }
+.ti-compact .ti-tabs button { padding: 0.2rem 0.55rem; font-size: 0.8rem; }
+.ti-compact .ti-list li { padding: 0.25rem 0.45rem 0.25rem 2rem; font-size: 0.9rem; }
+.ti-compact .ti-list li::before { top: 0.33rem; }
+.ti-more { margin: 0.4rem 0 0; }
 .cust-row { border: 1px solid #262626; background: var(--row); padding: 0.6rem 0.8rem; margin: 0.5rem 0; border-radius: 3px; }
 .cust-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.3rem 0 0; }
 .cust-actions form { margin: 0; }

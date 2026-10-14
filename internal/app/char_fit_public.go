@@ -679,7 +679,7 @@ func (app *Application) handlePublicFitPage(w http.ResponseWriter, r *http.Reque
 
 // handlePublicFitRate records one account's rating of a public
 // fit (POST, login required): re-rating updates the same row,
-// and the fit's aggregates move in the same transaction.
+// and the fit's aggregates are recounted in the same transaction.
 func (app *Application) handlePublicFitRate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
@@ -697,15 +697,6 @@ func (app *Application) handlePublicFitRate(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "Rate 1 to 5 stars.", http.StatusBadRequest)
 		return
 	}
-	if _, err := app.queries.GetPublicFitting(ctx, fitID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.NotFound(w, r)
-			return
-		}
-		logging.Errorf("public fit %d: rate lookup: %v", fitID, err)
-		http.Error(w, "That rating couldn't be saved.", http.StatusInternalServerError)
-		return
-	}
 	tx, err := app.db.BeginTx(ctx, nil)
 	if err != nil {
 		logging.Errorf("public fit %d: rate tx: %v", fitID, err)
@@ -714,14 +705,16 @@ func (app *Application) handlePublicFitRate(w http.ResponseWriter, r *http.Reque
 	}
 	defer tx.Rollback()
 	qtx := app.queries.WithTx(tx)
-	var dCount, dSum int64
-	if old, err := qtx.GetFitRating(ctx, db.GetFitRatingParams{FitID: fitID, UserID: userID}); err == nil {
-		dSum = int64(stars) - int64(old.Stars)
-	} else if errors.Is(err, sql.ErrNoRows) {
-		dCount = 1
-		dSum = int64(stars)
-	} else {
-		logging.Errorf("public fit %d: rate read: %v", fitID, err)
+	// The fit row is locked first, so ratings of one fit never
+	// interleave, and the aggregates are then recounted from the
+	// rating rows rather than moved by a delta. However often one
+	// rating is posted, the fit counts it once.
+	if _, err := qtx.LockPublicFitForRating(ctx, fitID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
+		logging.Errorf("public fit %d: rate lookup: %v", fitID, err)
 		http.Error(w, "That rating couldn't be saved.", http.StatusInternalServerError)
 		return
 	}
@@ -730,7 +723,7 @@ func (app *Application) handlePublicFitRate(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "That rating couldn't be saved.", http.StatusInternalServerError)
 		return
 	}
-	if err := qtx.ApplyFitRatingAggregate(ctx, db.ApplyFitRatingAggregateParams{RatingCount: dCount, RatingSum: dSum, ID: fitID}); err != nil {
+	if err := qtx.RecountFitRatings(ctx, fitID); err != nil {
 		logging.Errorf("public fit %d: rate aggregate: %v", fitID, err)
 		http.Error(w, "That rating couldn't be saved.", http.StatusInternalServerError)
 		return

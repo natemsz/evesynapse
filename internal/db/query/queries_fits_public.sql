@@ -143,10 +143,21 @@ INSERT INTO fit_ratings (fit_id, user_id, stars, updated_at)
 VALUES ($1, $2, $3, now())
 ON CONFLICT (fit_id, user_id) DO UPDATE SET stars = EXCLUDED.stars, updated_at = now();
 
--- name: ApplyFitRatingAggregate :exec
+-- LockPublicFitForRating takes the fit's row for the rest of the
+-- transaction, so two ratings of one fit run one after the other.
+-- name: LockPublicFitForRating :one
+SELECT id FROM local_fittings
+WHERE id = $1 AND is_public AND NOT is_draft
+FOR UPDATE;
+
+-- RecountFitRatings sets a fit's aggregates to what fit_ratings
+-- holds. They are never moved by a delta: a delta is only right if
+-- the read behind it is still true when it lands.
+-- name: RecountFitRatings :exec
 UPDATE local_fittings
-SET rating_count = rating_count + $1, rating_sum = rating_sum + $2
-WHERE id = $3;
+SET rating_count = (SELECT COUNT(*) FROM fit_ratings r WHERE r.fit_id = $1),
+    rating_sum = (SELECT COALESCE(SUM(r.stars), 0) FROM fit_ratings r WHERE r.fit_id = $1)
+WHERE id = $1;
 
 -- name: BumpFitViewCount :exec
 UPDATE local_fittings SET view_count = view_count + 1 WHERE id = $1;

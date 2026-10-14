@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -452,6 +453,120 @@ func TestPublicFitRating(t *testing.T) {
 	}
 	if code, _ := postPublicForm(t, rig, cookieA, "/fittings/public/fit/424242/rate", url.Values{"stars": {"5"}}); code != http.StatusNotFound {
 		t.Errorf("unknown fit rate status = %d, want 404", code)
+	}
+}
+
+// TestPublicFitRatingCountsOnce: a rating is counted once however it
+// arrives. One account's first rating posted many times at once (a
+// double click, a retried form) used to add one to the fit for each
+// post, because every post read "no rating yet" before any wrote.
+func TestPublicFitRatingCountsOnce(t *testing.T) {
+	transport := &apptest.CountingTransport{}
+	rig := apptest.Build(t, transport)
+	q, userA, _ := seedPublicBrowser(t, rig)
+	ctx := context.Background()
+
+	var fitID int64
+	rows, err := q.ListPublicFits(ctx, db.ListPublicFitsParams{Sort: "rank", Rlimit: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range rows {
+		if row.Name == "T2 Rifter" { // nobody has rated this one
+			fitID = row.ID
+		}
+	}
+	if fitID == 0 {
+		t.Fatal("fixture fit not found")
+	}
+	ratePath := fmt.Sprintf("/fittings/public/fit/%d/rate", fitID)
+	cookieA := apptest.SessionCookie(t, rig, userA, apptest.FixtureCharA, "Alpha Pilot")
+
+	const posts = 12
+	var wg sync.WaitGroup
+	codes := make([]int, posts)
+	start := make(chan struct{})
+	for i := 0; i < posts; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			req := httptest.NewRequest(http.MethodPost, ratePath, strings.NewReader(url.Values{"stars": {"4"}}.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.AddCookie(cookieA)
+			rec := httptest.NewRecorder()
+			rig.Handler().ServeHTTP(rec, req)
+			codes[i] = rec.Code
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+	for i, code := range codes {
+		if code != http.StatusSeeOther {
+			t.Errorf("post %d: status = %d, want 303", i, code)
+		}
+	}
+	got, err := q.GetPublicFitting(ctx, fitID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RatingCount != 1 || got.RatingSum != 4 {
+		t.Errorf("after %d posts of one first rating: count=%d sum=%d, want 1 and 4", posts, got.RatingCount, got.RatingSum)
+	}
+
+	// The interleaving itself, held open: another rating of the same
+	// fit by the same account is written but not yet committed when
+	// the post arrives. The post must wait for it, then count the
+	// account once. (Reading "no rating yet" past the uncommitted
+	// row and adding one made this 2 and 7.)
+	if _, err := rig.DB().ExecContext(ctx, `DELETE FROM fit_ratings WHERE fit_id = $1`, fitID); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := rig.DB().BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	qtx := q.WithTx(tx)
+	if _, err := qtx.LockPublicFitForRating(ctx, fitID); err != nil {
+		t.Fatal(err)
+	}
+	if err := qtx.UpsertFitRating(ctx, db.UpsertFitRatingParams{FitID: fitID, UserID: userA, Stars: 3}); err != nil {
+		t.Fatal(err)
+	}
+	if err := qtx.RecountFitRatings(ctx, fitID); err != nil {
+		t.Fatal(err)
+	}
+	posted := make(chan int, 1)
+	go func() {
+		code, _ := postPublicForm(t, rig, cookieA, ratePath, url.Values{"stars": {"4"}})
+		posted <- code
+	}()
+	select {
+	case code := <-posted:
+		t.Fatalf("the post finished (status %d) while another rating of the fit was uncommitted", code)
+	case <-time.After(500 * time.Millisecond):
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if code := <-posted; code != http.StatusSeeOther {
+		t.Fatalf("held post: status = %d, want 303", code)
+	}
+	got, _ = q.GetPublicFitting(ctx, fitID)
+	if got.RatingCount != 1 || got.RatingSum != 4 {
+		t.Errorf("after two overlapping first ratings: count=%d sum=%d, want 1 and 4", got.RatingCount, got.RatingSum)
+	}
+
+	// The aggregates are whatever the rating rows say. A fit left
+	// miscounted by the old delta is put right by its next rating.
+	if _, err := rig.DB().ExecContext(ctx, `UPDATE local_fittings SET rating_count = 7, rating_sum = 31 WHERE id = $1`, fitID); err != nil {
+		t.Fatal(err)
+	}
+	rateFit(t, rig, cookieA, fitID, "2")
+	got, _ = q.GetPublicFitting(ctx, fitID)
+	if got.RatingCount != 1 || got.RatingSum != 2 {
+		t.Errorf("after re-rating a miscounted fit: count=%d sum=%d, want 1 and 2", got.RatingCount, got.RatingSum)
 	}
 }
 

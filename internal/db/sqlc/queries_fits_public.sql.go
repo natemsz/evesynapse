@@ -10,23 +10,6 @@ import (
 	"time"
 )
 
-const applyFitRatingAggregate = `-- name: ApplyFitRatingAggregate :exec
-UPDATE local_fittings
-SET rating_count = rating_count + $1, rating_sum = rating_sum + $2
-WHERE id = $3
-`
-
-type ApplyFitRatingAggregateParams struct {
-	RatingCount int64 `json:"rating_count"`
-	RatingSum   int64 `json:"rating_sum"`
-	ID          int64 `json:"id"`
-}
-
-func (q *Queries) ApplyFitRatingAggregate(ctx context.Context, arg ApplyFitRatingAggregateParams) error {
-	_, err := q.db.ExecContext(ctx, applyFitRatingAggregate, arg.RatingCount, arg.RatingSum, arg.ID)
-	return err
-}
-
 const bumpFitViewCount = `-- name: BumpFitViewCount :exec
 UPDATE local_fittings SET view_count = view_count + 1 WHERE id = $1
 `
@@ -417,6 +400,21 @@ func (q *Queries) ListPublicHubStats(ctx context.Context, typeID int64) ([]ListP
 	return items, nil
 }
 
+const lockPublicFitForRating = `-- name: LockPublicFitForRating :one
+SELECT id FROM local_fittings
+WHERE id = $1 AND is_public AND NOT is_draft
+FOR UPDATE
+`
+
+// LockPublicFitForRating takes the fit's row for the rest of the
+// transaction, so two ratings of one fit run one after the other.
+func (q *Queries) LockPublicFitForRating(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, lockPublicFitForRating, id)
+	var id_2 int64
+	err := row.Scan(&id_2)
+	return id_2, err
+}
+
 const publicFitHullFacets = `-- name: PublicFitHullFacets :many
 SELECT sg.name::text AS hull, COUNT(*)::bigint AS fits
 FROM local_fittings lf
@@ -493,6 +491,21 @@ func (q *Queries) PublicFitTagFacets(ctx context.Context) ([]PublicFitTagFacetsR
 		return nil, err
 	}
 	return items, nil
+}
+
+const recountFitRatings = `-- name: RecountFitRatings :exec
+UPDATE local_fittings
+SET rating_count = (SELECT COUNT(*) FROM fit_ratings r WHERE r.fit_id = $1),
+    rating_sum = (SELECT COALESCE(SUM(r.stars), 0) FROM fit_ratings r WHERE r.fit_id = $1)
+WHERE id = $1
+`
+
+// RecountFitRatings sets a fit's aggregates to what fit_ratings
+// holds. They are never moved by a delta: a delta is only right if
+// the read behind it is still true when it lands.
+func (q *Queries) RecountFitRatings(ctx context.Context, fitID int64) error {
+	_, err := q.db.ExecContext(ctx, recountFitRatings, fitID)
+	return err
 }
 
 const setLocalFittingPrice = `-- name: SetLocalFittingPrice :exec

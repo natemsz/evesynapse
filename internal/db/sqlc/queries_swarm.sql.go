@@ -44,6 +44,24 @@ func (q *Queries) AddSwarmPeerCheck(ctx context.Context, arg AddSwarmPeerCheckPa
 	return err
 }
 
+const bumpStagingDeferral = `-- name: BumpStagingDeferral :one
+UPDATE swarm_staging SET deferrals = deferrals + 1
+WHERE kind = $1 AND key = $2
+RETURNING deferrals
+`
+
+type BumpStagingDeferralParams struct {
+	Kind string `json:"kind"`
+	Key  string `json:"key"`
+}
+
+func (q *Queries) BumpStagingDeferral(ctx context.Context, arg BumpStagingDeferralParams) (int32, error) {
+	row := q.db.QueryRowContext(ctx, bumpStagingDeferral, arg.Kind, arg.Key)
+	var deferrals int32
+	err := row.Scan(&deferrals)
+	return deferrals, err
+}
+
 const countSwarmAppliedBySigner = `-- name: CountSwarmAppliedBySigner :one
 SELECT COUNT(*) FROM swarm_applied WHERE signer = $1
 `
@@ -274,7 +292,7 @@ func (q *Queries) GetSwarmNextGossip(ctx context.Context) (sql.NullTime, error) 
 const getSwarmPeer = `-- name: GetSwarmPeer :one
 SELECT instance_id, base_url, public_key, source, approved, excluded,
     exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip,
-    key_conflict_at
+    key_conflict_at, url_sig, url_issued_at, last_pulled, last_served
 FROM swarm_peers
 WHERE instance_id = $1
 `
@@ -296,6 +314,10 @@ func (q *Queries) GetSwarmPeer(ctx context.Context, instanceID string) (SwarmPee
 		&i.LastSeen,
 		&i.LastGossip,
 		&i.KeyConflictAt,
+		&i.UrlSig,
+		&i.UrlIssuedAt,
+		&i.LastPulled,
+		&i.LastServed,
 	)
 	return i, err
 }
@@ -413,7 +435,7 @@ func (q *Queries) ListSwarmCorpDemand(ctx context.Context, limit int32) ([]int64
 const listSwarmPeers = `-- name: ListSwarmPeers :many
 SELECT instance_id, base_url, public_key, source, approved, excluded,
     exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip,
-    key_conflict_at
+    key_conflict_at, url_sig, url_issued_at, last_pulled, last_served
 FROM swarm_peers
 ORDER BY last_seen DESC
 LIMIT 100
@@ -442,6 +464,10 @@ func (q *Queries) ListSwarmPeers(ctx context.Context) ([]SwarmPeer, error) {
 			&i.LastSeen,
 			&i.LastGossip,
 			&i.KeyConflictAt,
+			&i.UrlSig,
+			&i.UrlIssuedAt,
+			&i.LastPulled,
+			&i.LastServed,
 		); err != nil {
 			return nil, err
 		}
@@ -457,26 +483,40 @@ func (q *Queries) ListSwarmPeers(ctx context.Context) ([]SwarmPeer, error) {
 }
 
 const listSwarmPullPeers = `-- name: ListSwarmPullPeers :many
-SELECT instance_id, base_url, public_key, good_checks, bad_checks
+SELECT instance_id, base_url, public_key, good_checks, bad_checks, last_pulled, last_served
 FROM swarm_peers
 WHERE approved AND NOT excluded
-ORDER BY last_seen DESC
+  AND (last_pulled IS NULL OR last_served > $1::timestamptz)
+ORDER BY last_pulled ASC NULLS FIRST, last_seen DESC
 LIMIT 25
 `
 
 type ListSwarmPullPeersRow struct {
-	InstanceID string `json:"instance_id"`
-	BaseUrl    string `json:"base_url"`
-	PublicKey  string `json:"public_key"`
-	GoodChecks int64  `json:"good_checks"`
-	BadChecks  int64  `json:"bad_checks"`
+	InstanceID string       `json:"instance_id"`
+	BaseUrl    string       `json:"base_url"`
+	PublicKey  string       `json:"public_key"`
+	GoodChecks int64        `json:"good_checks"`
+	BadChecks  int64        `json:"bad_checks"`
+	LastPulled sql.NullTime `json:"last_pulled"`
+	LastServed sql.NullTime `json:"last_served"`
 }
 
 // Peers a pull may read from: approved, not excluded. Trust is
 // scored in Go from the counters; the floor keeps gossip noise
 // out of the pull set without another round trip.
-func (q *Queries) ListSwarmPullPeers(ctx context.Context) ([]ListSwarmPullPeersRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSwarmPullPeers)
+//
+// Only peers known to serve data are in the rotation: ones a
+// pull has staged something from since served_since. Whether a
+// peer serves is learned, never assumed from what it is called
+// or where it is configured: a peer not yet asked (last_pulled
+// NULL) gets one probe, and joins the rotation if the probe
+// stages anything. A peer that served nothing (a seed that is
+// only a directory, a node that has gone quiet) is then dialed
+// for membership only, and probed again when a gossip round
+// re-arms it (RearmSwarmPeerProbe). Within the rotation, least
+// recently pulled first, so no peer holds a slot every cycle.
+func (q *Queries) ListSwarmPullPeers(ctx context.Context, servedSince time.Time) ([]ListSwarmPullPeersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSwarmPullPeers, servedSince)
 	if err != nil {
 		return nil, err
 	}
@@ -490,6 +530,8 @@ func (q *Queries) ListSwarmPullPeers(ctx context.Context) ([]ListSwarmPullPeersR
 			&i.PublicKey,
 			&i.GoodChecks,
 			&i.BadChecks,
+			&i.LastPulled,
+			&i.LastServed,
 		); err != nil {
 			return nil, err
 		}
@@ -505,33 +547,24 @@ func (q *Queries) ListSwarmPullPeers(ctx context.Context) ([]ListSwarmPullPeersR
 }
 
 const listUncheckedStaging = `-- name: ListUncheckedStaging :many
-SELECT kind, key, payload, signer, signature, fetched_at, received_at, source
+SELECT kind, key, payload, signer, signature, fetched_at, received_at, source, deferrals
 FROM swarm_staging
-WHERE checked_at IS NULL
-ORDER BY received_at
+ORDER BY deferrals, received_at
 LIMIT $1
 `
 
-type ListUncheckedStagingRow struct {
-	Kind       string    `json:"kind"`
-	Key        string    `json:"key"`
-	Payload    string    `json:"payload"`
-	Signer     string    `json:"signer"`
-	Signature  string    `json:"signature"`
-	FetchedAt  time.Time `json:"fetched_at"`
-	ReceivedAt time.Time `json:"received_at"`
-	Source     string    `json:"source"`
-}
-
-func (q *Queries) ListUncheckedStaging(ctx context.Context, limit int32) ([]ListUncheckedStagingRow, error) {
+// Entries never tried come first, oldest first; ones that have
+// already deferred wait behind them, so an undecidable entry
+// cannot hold a check slot in front of fresh work.
+func (q *Queries) ListUncheckedStaging(ctx context.Context, limit int32) ([]SwarmStaging, error) {
 	rows, err := q.db.QueryContext(ctx, listUncheckedStaging, limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListUncheckedStagingRow
+	var items []SwarmStaging
 	for rows.Next() {
-		var i ListUncheckedStagingRow
+		var i SwarmStaging
 		if err := rows.Scan(
 			&i.Kind,
 			&i.Key,
@@ -541,6 +574,7 @@ func (q *Queries) ListUncheckedStaging(ctx context.Context, limit int32) ([]List
 			&i.FetchedAt,
 			&i.ReceivedAt,
 			&i.Source,
+			&i.Deferrals,
 		); err != nil {
 			return nil, err
 		}
@@ -553,22 +587,6 @@ func (q *Queries) ListUncheckedStaging(ctx context.Context, limit int32) ([]List
 		return nil, err
 	}
 	return items, nil
-}
-
-const markStagingChecked = `-- name: MarkStagingChecked :exec
-UPDATE swarm_staging SET checked_at = $3
-WHERE kind = $1 AND key = $2
-`
-
-type MarkStagingCheckedParams struct {
-	Kind      string       `json:"kind"`
-	Key       string       `json:"key"`
-	CheckedAt sql.NullTime `json:"checked_at"`
-}
-
-func (q *Queries) MarkStagingChecked(ctx context.Context, arg MarkStagingCheckedParams) error {
-	_, err := q.db.ExecContext(ctx, markStagingChecked, arg.Kind, arg.Key, arg.CheckedAt)
-	return err
 }
 
 const putSwarmApplied = `-- name: PutSwarmApplied :exec
@@ -646,6 +664,24 @@ func (q *Queries) PutSwarmIdentity(ctx context.Context, arg PutSwarmIdentityPara
 		arg.SealedSeed,
 		arg.CreatedAt,
 	)
+	return err
+}
+
+const rearmSwarmPeerProbe = `-- name: RearmSwarmPeerProbe :exec
+UPDATE swarm_peers SET last_pulled = NULL
+WHERE instance_id = $1
+  AND (last_served IS NULL OR last_served <= $2::timestamptz)
+`
+
+type RearmSwarmPeerProbeParams struct {
+	InstanceID  string    `json:"instance_id"`
+	ServedSince time.Time `json:"served_since"`
+}
+
+// A gossip round that reached a peer not known to serve data
+// lets the next pull probe it once more.
+func (q *Queries) RearmSwarmPeerProbe(ctx context.Context, arg RearmSwarmPeerProbeParams) error {
+	_, err := q.db.ExecContext(ctx, rearmSwarmPeerProbe, arg.InstanceID, arg.ServedSince)
 	return err
 }
 
@@ -815,7 +851,7 @@ ON CONFLICT (kind, key) DO UPDATE SET
     fetched_at = excluded.fetched_at,
     received_at = excluded.received_at,
     source = excluded.source,
-    checked_at = NULL
+    deferrals = 0
 WHERE excluded.fetched_at > swarm_staging.fetched_at
 `
 
@@ -864,22 +900,54 @@ func (q *Queries) TouchSwarmPeerGossip(ctx context.Context, arg TouchSwarmPeerGo
 	return err
 }
 
+const touchSwarmPeerPulled = `-- name: TouchSwarmPeerPulled :exec
+UPDATE swarm_peers SET last_pulled = $2 WHERE instance_id = $1
+`
+
+type TouchSwarmPeerPulledParams struct {
+	InstanceID string       `json:"instance_id"`
+	LastPulled sql.NullTime `json:"last_pulled"`
+}
+
+func (q *Queries) TouchSwarmPeerPulled(ctx context.Context, arg TouchSwarmPeerPulledParams) error {
+	_, err := q.db.ExecContext(ctx, touchSwarmPeerPulled, arg.InstanceID, arg.LastPulled)
+	return err
+}
+
+const touchSwarmPeerServed = `-- name: TouchSwarmPeerServed :exec
+UPDATE swarm_peers SET last_served = $2 WHERE instance_id = $1
+`
+
+type TouchSwarmPeerServedParams struct {
+	InstanceID string       `json:"instance_id"`
+	LastServed sql.NullTime `json:"last_served"`
+}
+
+func (q *Queries) TouchSwarmPeerServed(ctx context.Context, arg TouchSwarmPeerServedParams) error {
+	_, err := q.db.ExecContext(ctx, touchSwarmPeerServed, arg.InstanceID, arg.LastServed)
+	return err
+}
+
 const upsertSwarmPeer = `-- name: UpsertSwarmPeer :execrows
-INSERT INTO swarm_peers (instance_id, base_url, public_key, source, first_seen, last_seen)
-VALUES ($1, $2, $3, $4, $5, $5)
+INSERT INTO swarm_peers (instance_id, base_url, public_key, source, first_seen, last_seen, url_sig, url_issued_at)
+VALUES ($1, $2, $3, $4, $5, $5, $6, $7)
 ON CONFLICT (instance_id) DO UPDATE SET
-    base_url = CASE WHEN $6::boolean THEN excluded.base_url ELSE swarm_peers.base_url END,
+    base_url = CASE WHEN $8::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at THEN excluded.base_url ELSE swarm_peers.base_url END,
+    url_sig = CASE WHEN $8::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at THEN excluded.url_sig ELSE swarm_peers.url_sig END,
+    url_issued_at = CASE WHEN $8::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at THEN excluded.url_issued_at ELSE swarm_peers.url_issued_at END,
     last_seen = excluded.last_seen
 WHERE swarm_peers.public_key = excluded.public_key
 `
 
 type UpsertSwarmPeerParams struct {
-	InstanceID  string    `json:"instance_id"`
-	BaseUrl     string    `json:"base_url"`
-	PublicKey   string    `json:"public_key"`
-	Source      string    `json:"source"`
-	FirstSeen   time.Time `json:"first_seen"`
-	OwnSighting bool      `json:"own_sighting"`
+	InstanceID    string    `json:"instance_id"`
+	BaseUrl       string    `json:"base_url"`
+	PublicKey     string    `json:"public_key"`
+	Source        string    `json:"source"`
+	FirstSeen     time.Time `json:"first_seen"`
+	UrlSig        string    `json:"url_sig"`
+	UrlIssuedAt   int64     `json:"url_issued_at"`
+	AddressSigned bool      `json:"address_signed"`
 }
 
 // A sighting records a peer once and pins the key it arrived
@@ -887,9 +955,13 @@ type UpsertSwarmPeerParams struct {
 // a later sighting under another key writes nothing (zero rows,
 // which the caller flags), so no sighting can replace a pinned
 // key. The address moves only on the peer's own word
-// (own_sighting: the sighting was signed by that peer's pinned
-// key); anyone else's mention refreshes last_seen and nothing
-// more. Approval, exclusion and the reputation counters are
+// (address_signed: the tuple carries the peer's signature over
+// its address and issue time, which the caller has verified
+// against this same key), and only when that tuple was issued
+// later than the one held: an older one is ignored however valid
+// its signature, so a stale address cannot be replayed. Address,
+// signature and issue time are stored together, verbatim. Any
+// other mention refreshes last_seen and nothing more. Approval, exclusion and the reputation counters are
 // never touched: hearing about an instance must not approve it
 // or forgive it.
 func (q *Queries) UpsertSwarmPeer(ctx context.Context, arg UpsertSwarmPeerParams) (int64, error) {
@@ -899,7 +971,9 @@ func (q *Queries) UpsertSwarmPeer(ctx context.Context, arg UpsertSwarmPeerParams
 		arg.PublicKey,
 		arg.Source,
 		arg.FirstSeen,
-		arg.OwnSighting,
+		arg.UrlSig,
+		arg.UrlIssuedAt,
+		arg.AddressSigned,
 	)
 	if err != nil {
 		return 0, err

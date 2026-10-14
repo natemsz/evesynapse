@@ -310,6 +310,9 @@ type Client struct {
 	// type_names table).
 	typeNamesMu sync.RWMutex
 	typeNames   map[int64]string
+	// IDs asked for and found unnamed anywhere local
+	// (type_name_misses.go); guarded by typeNamesMu.
+	typeNameMisses map[int64]struct{}
 
 	// In-process cache of EVE type ID → group ID, populated as a
 	// side effect of type fetches; feeds skill-sheet grouping.
@@ -2573,6 +2576,11 @@ func (c *Client) ResolveTypeNames(ctx context.Context, ids []int64) map[int64]st
 		out[id] = t.Name
 		c.StoreTypeName(ctx, id, t)
 	}
+	for _, id := range fetch {
+		if _, ok := out[id]; !ok {
+			c.noteTypeNameMiss(id)
+		}
+	}
 	return out
 }
 
@@ -2583,6 +2591,7 @@ func (c *Client) StoreTypeName(ctx context.Context, id int64, t Type) {
 	if t.Name != "" {
 		c.typeNamesMu.Lock()
 		c.typeNames[id] = t.Name
+		delete(c.typeNameMisses, id)
 		c.typeNamesMu.Unlock()
 		if err := c.queries.UpsertTypeName(ctx, db.UpsertTypeNameParams{TypeID: id, Name: t.Name}); err != nil {
 			logging.Errorf("esi: persist type name %d: %v", id, err)
@@ -2867,7 +2876,10 @@ func (c *Client) CachedTypeNames(ctx context.Context, ids []int64) map[int64]str
 			out[id] = name
 			c.typeNamesMu.Lock()
 			c.typeNames[id] = name
+			delete(c.typeNameMisses, id)
 			c.typeNamesMu.Unlock()
+		} else {
+			c.noteTypeNameMiss(id)
 		}
 	}
 	return out

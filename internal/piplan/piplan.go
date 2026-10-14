@@ -393,6 +393,9 @@ type Coverage struct {
 }
 
 // CoverageFor checks required raws against planet types.
+//
+// static/pi.js mirrors this check live in the browser (ticking
+// planets): change both.
 func CoverageFor(target string, planets []string) Coverage {
 	req := RequiredRaws(target)
 	avail := map[string]bool{}
@@ -558,7 +561,6 @@ type Plan struct {
 	Lines         []Line // every tier, target first then by tier desc
 	ByTier        map[Tier][]Line
 	Colonies      []ColonyPlan
-	TotalCPU      int64
 	Revenue       float64
 	RevenueKnown  bool
 	RawCost       float64 // cost to buy all R0 at market (whole-chain input cost)

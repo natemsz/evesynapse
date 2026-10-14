@@ -91,8 +91,34 @@ func TestStaticAssetCaching(t *testing.T) {
 	}
 }
 
-// TestStylesheetMainColumnWidth: the main column caps at 1720px;
-// the old 1560px cap must not come back.
+// cssDeclarations returns the declarations of the first top-level
+// rule whose selector is exactly sel (a rule that starts a line,
+// so not one nested in a media query), as property -> value.
+func cssDeclarations(css, sel string) (map[string]string, bool) {
+	start := strings.Index("\n"+css, "\n"+sel+" {")
+	if start < 0 {
+		return nil, false
+	}
+	body := css[start+len(sel)+2:]
+	end := strings.Index(body, "}")
+	if end < 0 {
+		return nil, false
+	}
+	out := map[string]string{}
+	for _, decl := range strings.Split(body[:end], ";") {
+		prop, value, ok := strings.Cut(decl, ":")
+		if !ok {
+			continue
+		}
+		out[strings.TrimSpace(prop)] = strings.TrimSpace(value)
+	}
+	return out, true
+}
+
+// TestStylesheetMainColumnWidth: the page column and the top bar
+// that sits over it share one width cap. The test reads those
+// two rules and nothing else, so a number elsewhere in the
+// stylesheet cannot pass or fail it.
 func TestStylesheetMainColumnWidth(t *testing.T) {
 	app, _, _ := buildCorpTestApp(t, &countingTransport{})
 	req := httptest.NewRequest(http.MethodGet, "/static/style.css", nil)
@@ -101,12 +127,29 @@ func TestStylesheetMainColumnWidth(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("stylesheet: status %d", rec.Code)
 	}
-	body := rec.Body.String()
-	if !strings.Contains(body, "max-width: 1720px") {
-		t.Error("stylesheet lacks the 1720px main-column cap")
+	css := strings.ReplaceAll(rec.Body.String(), "\r\n", "\n")
+	const want = "1720px"
+	for _, sel := range []string{"main", "header nav"} {
+		rule, ok := cssDeclarations(css, sel)
+		if !ok {
+			t.Errorf("stylesheet has no top-level %q rule", sel)
+			continue
+		}
+		if got := rule["max-width"]; got != want {
+			t.Errorf("%s { max-width: %s }, want %s", sel, got, want)
+		}
 	}
-	if strings.Contains(body, "1560") {
-		t.Error("stylesheet still references the old 1560px cap")
+}
+
+// TestCSSDeclarations: the reader finds the named rule only.
+func TestCSSDeclarations(t *testing.T) {
+	css := "nav main { max-width: 1px; }\n@media (min-width: 10px) {\n  main { max-width: 2px; }\n}\nmain {\n  max-width: 3px;\n  margin: 0 auto;\n}\nmain.wide { max-width: 4px; }\n"
+	rule, ok := cssDeclarations(css, "main")
+	if !ok || rule["max-width"] != "3px" || rule["margin"] != "0 auto" {
+		t.Fatalf("declarations of main = %v (found %v), want the top-level rule", rule, ok)
+	}
+	if _, ok := cssDeclarations(css, "aside"); ok {
+		t.Fatal("found a rule that is not there")
 	}
 }
 

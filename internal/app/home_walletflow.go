@@ -13,7 +13,10 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"evesynapse/internal/esi"
@@ -75,6 +78,23 @@ type walletFlowWidget struct {
 	Chars    []flowChar
 	Chart    balanceChart
 	HasChart bool
+	// InPie and OutPie split the 30-day income and spend by ref
+	// type, as share of each side's total; nil when a side is empty.
+	InPie  *flowPie
+	OutPie *flowPie
+}
+
+// flowPie is one donut: the largest ref types and the rest as
+// Other, each a ring slice drawn server-side (viewBox 0 0 100 100).
+type flowPie struct {
+	Slices []flowSlice
+}
+
+type flowSlice struct {
+	Index int    // palette class, pie-s0..pie-s5 (5 is Other)
+	Label string // the ref type, readable
+	Pct   string // "42.1%"
+	D     string // SVG path of the ring slice
 }
 
 // buildWalletFlow assembles the widget from every character's
@@ -154,6 +174,8 @@ func (app *Application) finishWalletFlow(w *walletFlowWidget, dayNet map[time.Ti
 	w.Net30 = esi.FormatISK(in30 + out30)
 	w.Sources = topFlowRefs(refIn, false)
 	w.Sinks = topFlowRefs(refOut, true)
+	w.InPie = buildFlowPie(refIn)
+	w.OutPie = buildFlowPie(refOut)
 	sort.SliceStable(w.Chars, func(i, j int) bool { return w.Chars[i].Name < w.Chars[j].Name })
 	var days []time.Time
 	for d := range dayNet {
@@ -204,4 +226,88 @@ func topFlowRefs(totals map[string]float64, spend bool) []flowRef {
 		out = append(out, flowRef{Ref: r.ref, Total: esi.FormatISK(r.total)})
 	}
 	return out
+}
+
+// flowPieSlices is how many ref types a donut names before the
+// rest fold into Other.
+const flowPieSlices = 5
+
+// buildFlowPie splits one side's ref-type totals into donut slices
+// by share of the side's total (spend totals are negative; their
+// size is what counts). nil when the side moved nothing.
+func buildFlowPie(totals map[string]float64) *flowPie {
+	type part struct {
+		ref string
+		amt float64
+	}
+	var parts []part
+	var sum float64
+	for ref, v := range totals {
+		if v < 0 {
+			v = -v
+		}
+		if v == 0 {
+			continue
+		}
+		parts = append(parts, part{ref, v})
+		sum += v
+	}
+	if sum == 0 {
+		return nil
+	}
+	sort.SliceStable(parts, func(i, j int) bool {
+		if parts[i].amt != parts[j].amt {
+			return parts[i].amt > parts[j].amt
+		}
+		return parts[i].ref < parts[j].ref
+	})
+	if len(parts) > flowPieSlices {
+		var other float64
+		for _, p := range parts[flowPieSlices:] {
+			other += p.amt
+		}
+		parts = append(parts[:flowPieSlices], part{"Other", other})
+	}
+	pie := &flowPie{}
+	at := 0.0 // fraction of the ring already drawn
+	for i, p := range parts {
+		frac := p.amt / sum
+		idx := i
+		if p.ref == "Other" {
+			idx = flowPieSlices
+		}
+		pie.Slices = append(pie.Slices, flowSlice{
+			Index: idx,
+			Label: strings.ReplaceAll(p.ref, "_", " "),
+			Pct:   fmt.Sprintf("%.1f%%", 100*frac),
+			D:     ringSlicePath(at, at+frac),
+		})
+		at += frac
+	}
+	return pie
+}
+
+// ringSlicePath draws the ring between fractions a and b of a full
+// turn, clockwise from twelve o'clock: outer radius 46, inner 28,
+// centred on (50,50). A whole ring is drawn as two halves, since a
+// single arc cannot close on itself.
+func ringSlicePath(a, b float64) string {
+	if b-a >= 0.9999 {
+		return ringSlicePath(a, a+0.5) + " " + ringSlicePath(a+0.5, a+1)
+	}
+	const cx, cy, ro, ri = 50.0, 50.0, 46.0, 28.0
+	pt := func(f, r float64) (float64, float64) {
+		ang := 2*math.Pi*f - math.Pi/2
+		return cx + r*math.Cos(ang), cy + r*math.Sin(ang)
+	}
+	large := 0
+	if b-a > 0.5 {
+		large = 1
+	}
+	x0, y0 := pt(a, ro)
+	x1, y1 := pt(b, ro)
+	x2, y2 := pt(b, ri)
+	x3, y3 := pt(a, ri)
+	return fmt.Sprintf("M%.2f %.2fA%.0f %.0f 0 %d 1 %.2f %.2fL%.2f %.2fA%.0f %.0f 0 %d 0 %.2f %.2fZ",
+		x0, y0, ro, ro, large, x1, y1, x2, y2, ri, ri, large, x3, y3)
 }

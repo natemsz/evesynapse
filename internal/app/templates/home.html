@@ -390,6 +390,22 @@
     </tbody>
   </table>
   </div>
+  {{if or .InPie .OutPie}}
+  <div class="flow-pies">
+    {{with .InPie}}
+    <figure class="flow-pie">
+      <svg viewBox="0 0 100 100" role="img" aria-label="Income by type, last 30 days">{{range .Slices}}<path d="{{.D}}" class="pie-s{{.Index}}"><title>{{.Label}}: {{.Pct}}</title></path>{{end}}<text x="50" y="54" class="pie-c">In</text></svg>
+      <figcaption><span class="pie-head">Income, 30 days</span><ul class="pie-legend">{{range .Slices}}<li><span class="pie-key pie-s{{.Index}}"></span><span class="pie-l">{{.Label}}</span> <b>{{.Pct}}</b></li>{{end}}</ul></figcaption>
+    </figure>
+    {{end}}
+    {{with .OutPie}}
+    <figure class="flow-pie">
+      <svg viewBox="0 0 100 100" role="img" aria-label="Spend by type, last 30 days">{{range .Slices}}<path d="{{.D}}" class="pie-s{{.Index}}"><title>{{.Label}}: {{.Pct}}</title></path>{{end}}<text x="50" y="54" class="pie-c">Out</text></svg>
+      <figcaption><span class="pie-head">Spend, 30 days</span><ul class="pie-legend">{{range .Slices}}<li><span class="pie-key pie-s{{.Index}}"></span><span class="pie-l">{{.Label}}</span> <b>{{.Pct}}</b></li>{{end}}</ul></figcaption>
+    </figure>
+    {{end}}
+  </div>
+  {{end}}
   <div data-wmore>
   {{if .HasChart}}
   {{template "balance-chart" .Chart}}

@@ -108,6 +108,13 @@ type Input struct {
 	FacilityMatFactor  float64
 	FacilityTimeFactor float64
 	FacilityCostFactor float64
+	// FacilityTax is the facility's tax as a fraction of the
+	// estimated item value (NPCFacilityTax at an NPC station, the
+	// owner's rate at a player structure). AlphaClone adds the
+	// Alpha clone tax; the caller knows whose clone installs the
+	// job, the engine does not. See JobFee.
+	FacilityTax float64
+	AlphaClone  bool
 }
 
 // Node is one node of the expansion tree: an item the plan
@@ -262,6 +269,41 @@ func UnitPrice(prices map[int64]esi.MarketPrice, typeID int64) (price float64, o
 	return 0, false
 }
 
+// The fixed terms of a manufacturing job's cost (EVE University,
+// "Manufacturing", Total job cost):
+//
+//	total job cost = EIV x ((system cost index x structure bonuses)
+//	                        + facility tax + SCC surcharge + Alpha clone tax)
+//
+// EIV, the estimated item value, is the sum over the blueprint's
+// materials of quantity x adjusted price, at ME0 and with no
+// bonus applied: blueprint research and rigs lower what a job
+// consumes, never what it is charged on. Structure bonuses
+// multiply the system-index term only. The facility tax is a
+// fixed 0.25% at an NPC station and whatever the owner set at a
+// player structure; the SCC surcharge is a fixed 4%; the Alpha
+// clone tax is 0.25%, charged to Alpha clones only.
+const (
+	SCCSurcharge   = 0.04
+	NPCFacilityTax = 0.0025
+	AlphaCloneTax  = 0.0025
+)
+
+// JobFee is the total job cost for an estimated item value: see
+// the formula above. structureFactor is the structure's cost
+// multiplier on the system index (1 at an NPC station);
+// facilityTax is a fraction (NPCFacilityTax at an NPC station).
+func JobFee(eiv, systemIndex, structureFactor, facilityTax float64, alphaClone bool) float64 {
+	if structureFactor <= 0 {
+		structureFactor = 1
+	}
+	rate := systemIndex*structureFactor + facilityTax + SCCSurcharge
+	if alphaClone {
+		rate += AlphaCloneTax
+	}
+	return eiv * rate
+}
+
 // Build expands the recipe for rootProductTypeID into a full
 // plan. Allocation walks the tree pre-order (a node's own stock is
 // claimed before its children are planned, materials in type-ID
@@ -296,6 +338,11 @@ func Build(src Source, rootProductTypeID int64, in Input) (*Result, error) {
 	if b.costFactor <= 0 {
 		b.costFactor = 1
 	}
+	b.facilityTax = in.FacilityTax
+	if b.facilityTax < 0 {
+		b.facilityTax = 0
+	}
+	b.alphaClone = in.AlphaClone
 	for id, qty := range in.Stock {
 		if qty > 0 {
 			b.stock[id] = qty
@@ -371,8 +418,12 @@ type builder struct {
 	matFactor  float64
 	timeFactor float64
 	costFactor float64
-	nodes      int
-	tooLarge   bool
+	// facilityTax and alphaClone are the remaining job-fee
+	// terms (see JobFee).
+	facilityTax float64
+	alphaClone  bool
+	nodes       int
+	tooLarge    bool
 }
 
 // resolveME picks a node's ME/TE: an explicit override wins on ME,
@@ -516,20 +567,23 @@ func (b *builder) expand(typeID int64, bp *Blueprint, depth int, basePerRun, req
 		}
 	}
 	// Installation fee and research saving, both over the direct
-	// materials at this node's runs. The fee values the installed
-	// materials at adjusted price times the system index; the
-	// saving reprices the same materials at ME10 through each
+	// materials at this node's runs. The fee is charged on the
+	// estimated item value: the blueprint's base quantities (ME0,
+	// no facility bonus) at adjusted price, never the reduced
+	// quantities the job consumes (see JobFee). The saving
+	// reprices the consumed materials at ME10 through each
 	// child's effective unit cost. Either stays unknown while any
 	// input it needs is unknown. Children align with mats unless
 	// the node cap cut the loop short.
-	node.JobKnown, node.ResearchKnown = true, true
+	node.JobKnown, node.ResearchKnown = b.costIndex > 0, true
+	var eiv float64
 	for i, child := range node.Children {
 		if i >= len(mats) {
 			break
 		}
 		qty := MaterialForRunsFactored(mats[i].Quantity, node.Runs, node.ME, b.matFactor)
-		if adj, ok := b.adjusted[mats[i].TypeID]; ok && b.costIndex > 0 {
-			node.JobCost += float64(qty) * adj * b.costIndex * b.costFactor
+		if adj, ok := b.adjusted[mats[i].TypeID]; ok {
+			eiv += float64(mats[i].Quantity) * float64(node.Runs) * adj
 		} else {
 			node.JobKnown = false
 		}
@@ -539,6 +593,9 @@ func (b *builder) expand(typeID int64, bp *Blueprint, depth int, basePerRun, req
 		}
 		unit := child.LineCost / float64(child.RequiredQty)
 		node.ResearchSaving += float64(qty-MaterialForRuns(mats[i].Quantity, node.Runs, 10)) * unit
+	}
+	if node.JobKnown {
+		node.JobCost = JobFee(eiv, b.costIndex, b.costFactor, b.facilityTax, b.alphaClone)
 	}
 	// Per-node buy-vs-build. BuildCost is the rolled-up
 	// material cost (LineCost); BuyCost is market price for the

@@ -89,6 +89,11 @@
           <option value="t1"{{if eq .RigTier "t1"}} selected{{end}}>T1 manufacturing rigs</option>
           <option value="t2"{{if eq .RigTier "t2"}} selected{{end}}>T2 manufacturing rigs</option>
         </select></label>
+        <label class="plan-setcell"><span>Facility tax %</span><input type="number" name="ftax" value="{{.FacilityTaxPct}}" min="0" max="100" step="0.01"></label>
+        <label class="plan-setcell"><span>Alpha clone</span><select name="alpha">
+          <option value=""{{if not .AlphaClone}} selected{{end}}>No (Omega)</option>
+          <option value="1"{{if .AlphaClone}} selected{{end}}>Yes (+0.25% job tax)</option>
+        </select></label>
         <label class="plan-setcell"><span>Slots</span><input type="number" name="slots" value="{{.Meta.Slots}}" min="1" max="20"></label>{{end}}
         <label class="plan-setcell"><span>Time factor</span><input type="text" name="timef" placeholder="auto"></label>
       </div>
@@ -117,7 +122,7 @@
   <div><span class="plan-k">Projected margin</span><strong id="plan-margin"{{if .HdrProfitCls}} class="{{.HdrProfitCls}}"{{end}}>{{.HdrMargin}}</strong><br><small id="plan-margin-sub"{{if .HdrProfitCls}} class="{{.HdrProfitCls}}"{{end}}>{{.HdrMarginSub}}</small></div>
   <div><span class="plan-k">Elapsed time</span><strong id="plan-elapsed">{{.HdrElapsed}}</strong><br><small id="plan-elapsed-sub">{{.HdrElapsedSub}}</small></div>
 </div>
-<p><small id="plan-badges">Market {{.MarketName}} · Build system {{.SystemName}}{{if .FacilityNote}} · Building in {{.FacilityNote}}{{end}} · Index {{.IndexLine}} · {{.SlotsLine}} · {{.TimeFactorNote}}</small>
+<p><small id="plan-badges">Market {{.MarketName}} · Build system {{.SystemName}}{{if .FacilityNote}} · Building in {{.FacilityNote}}{{end}} · Index {{.IndexLine}}{{if .FeeTerms}} · {{.FeeTerms}}{{end}} · {{.SlotsLine}} · {{.TimeFactorNote}}</small>
 <span id="plan-serverflag" hidden><small> · server totals shown</small></span></p>
 <div class="plan-verdictrow"><p class="plan-verdict {{.VerdictCls}}" id="plan-verdict">{{.VerdictText}}</p><p class="plan-nodehint"><small>Double-click to expand/collapse a node</small></p></div>
 <div class="plan-presets" role="group" aria-label="Scenario">

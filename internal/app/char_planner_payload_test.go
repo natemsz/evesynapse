@@ -64,11 +64,13 @@ func TestPlanPayloadPresets(t *testing.T) {
 	}
 	// Optimized == full here: the component costs 50 to build
 	// against 500 to buy. Materials 150 (50 under the
-	// component + 100 direct); fees (480 + 120) × 0.05 = 30 at
-	// the root plus 3 at the component.
+	// component + 100 direct). Fees are charged on the estimated
+	// item value at index 5% plus the 4% SCC surcharge (no
+	// facility tax given): (480 + 120) × 0.09 = 54 at the root
+	// plus 60 × 0.09 = 5.40 at the component.
 	for _, preset := range []planPresetTotals{p.Full, p.Optimized} {
-		if preset.Materials != 15000 || preset.Fees != 3300 || preset.Landed != 18300 {
-			t.Errorf("preset money = %v/%v/%v, want 15000/3300/18300",
+		if preset.Materials != 15000 || preset.Fees != 5940 || preset.Landed != 20940 {
+			t.Errorf("preset money = %v/%v/%v, want 15000/5940/20940",
 				preset.Materials, preset.Fees, preset.Landed)
 		}
 		if !preset.FeesKnown || !preset.Complete {
@@ -84,8 +86,8 @@ func TestPlanPayloadPresets(t *testing.T) {
 	// Buy-components: the root still builds (100 direct mineral
 	// + fee), the component is bought at 500.
 	b := p.BuyComp
-	if b.Materials != 60000 || b.Fees != 3000 || b.Landed != 63000 {
-		t.Errorf("buycomp money = %v/%v/%v, want 60000/3000/63000", b.Materials, b.Fees, b.Landed)
+	if b.Materials != 60000 || b.Fees != 5400 || b.Landed != 65400 {
+		t.Errorf("buycomp money = %v/%v/%v, want 60000/5400/65400", b.Materials, b.Fees, b.Landed)
 	}
 	if b.Bought != 50000 || b.Built != 10000 {
 		t.Errorf("buycomp bought/built = %v/%v, want 50000/10000", b.Bought, b.Built)

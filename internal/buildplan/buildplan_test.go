@@ -7,6 +7,7 @@ package buildplan
 // honesty (a missing price is an unknown, never an invented zero).
 
 import (
+	"math"
 	"testing"
 
 	"evesynapse/internal/esi"
@@ -446,25 +447,55 @@ func TestPlanPriceHonesty(t *testing.T) {
 	}
 }
 
+// near reports whether two ISK figures agree to well under a
+// hundredth of an ISK (the fee is a product of fractions).
+func near(a, b float64) bool {
+	return math.Abs(a-b) < 1e-6
+}
+
+// TestJobFeeWorkedExample pins the job-cost formula to the worked
+// example it was verified with (EVE University, "Manufacturing",
+// Total job cost):
+//
+//	EIV 100,000,000 ISK, system cost index 5%, NPC station, Omega:
+//	100,000,000 x (0.05 + 0.0025 + 0.04) = 9,250,000 ISK
+//	the same job installed by an Alpha clone: + 0.25% = 9,500,000 ISK
+func TestJobFeeWorkedExample(t *testing.T) {
+	if got := JobFee(100000000, 0.05, 1, NPCFacilityTax, false); !near(got, 9250000) {
+		t.Errorf("Omega at an NPC station: %v ISK, want 9,250,000", got)
+	}
+	if got := JobFee(100000000, 0.05, 1, NPCFacilityTax, true); !near(got, 9500000) {
+		t.Errorf("Alpha at an NPC station: %v ISK, want 9,500,000", got)
+	}
+	// A structure's bonus multiplies the system-index term only:
+	// 3% off the index, a 1% owner tax, the surcharge untouched.
+	if got, want := JobFee(100000000, 0.05, 0.97, 0.01, false), 100000000*(0.05*0.97+0.01+0.04); !near(got, want) {
+		t.Errorf("structure with a 3%% cost bonus: %v ISK, want %v", got, want)
+	}
+	if SCCSurcharge != 0.04 || NPCFacilityTax != 0.0025 || AlphaCloneTax != 0.0025 {
+		t.Errorf("fixed terms changed: surcharge %v, NPC tax %v, Alpha tax %v", SCCSurcharge, NPCFacilityTax, AlphaCloneTax)
+	}
+}
+
 func TestPlanJobFees(t *testing.T) {
 	// Mineral 10/unit guide, 12 adjusted; component 100
-	// adjusted; index 5%. Root installs 2 components + 10
-	// mineral: (2×100 + 10×12) × 0.05 = 16.
+	// adjusted; index 5%, NPC station. Root's blueprint lists 2
+	// components + 10 mineral: EIV = 2x100 + 10x12 = 320, and
+	// the fee is 320 x (0.05 + 0.0025 + 0.04) = 29.6.
 	prices := map[int64]esi.MarketPrice{34: {TypeID: 34, AveragePrice: 10}}
 	adjusted := map[int64]float64{34: 12, 1002: 100}
-	res, err := Build(fixtureRecipes(), 1001, Input{
-		Runs: 1, Prices: prices, Adjusted: adjusted, CostIndex: 0.05,
-	})
+	in := Input{Runs: 1, Prices: prices, Adjusted: adjusted, CostIndex: 0.05, FacilityTax: NPCFacilityTax}
+	res, err := Build(fixtureRecipes(), 1001, in)
 	if err != nil {
 		t.Fatalf("buildPlan: %v", err)
 	}
-	if !res.Root.JobKnown || res.Root.JobCost != 16 {
-		t.Errorf("root fee: got %v (known %v), want 16/true", res.Root.JobCost, res.Root.JobKnown)
+	if !res.Root.JobKnown || !near(res.Root.JobCost, 29.6) {
+		t.Errorf("root fee: got %v (known %v), want 29.6/true", res.Root.JobCost, res.Root.JobKnown)
 	}
-	// Component runs twice, 10 mineral installed: 10×12×0.05.
+	// Component runs twice, 5 mineral a run: EIV 10x12 = 120.
 	comp := findPlanNode(res.Root, 1002)
-	if !comp.JobKnown || comp.JobCost != 6 {
-		t.Errorf("component fee: got %v (known %v), want 6/true", comp.JobCost, comp.JobKnown)
+	if !comp.JobKnown || !near(comp.JobCost, 120*0.0925) {
+		t.Errorf("component fee: got %v (known %v), want 11.1/true", comp.JobCost, comp.JobKnown)
 	}
 	// Leaves run no job.
 	Walk(res.Root, func(n *Node) {
@@ -472,6 +503,30 @@ func TestPlanJobFees(t *testing.T) {
 			t.Errorf("leaf %d fee: got %v (known %v), want 0/true", n.TypeID, n.JobCost, n.JobKnown)
 		}
 	})
+
+	// The fee base is the blueprint's ME0 quantities. Researching
+	// the blueprint and rigging the structure change what the job
+	// consumes, not what it is charged on.
+	reduced := in
+	reduced.MEOverride = map[int64]int{2001: 10, 2002: 10}
+	reduced.FacilityMatFactor = 0.958
+	lean, err := Build(fixtureRecipes(), 1001, reduced)
+	if err != nil {
+		t.Fatalf("buildPlan: %v", err)
+	}
+	if !near(lean.Root.JobCost, res.Root.JobCost) {
+		t.Errorf("fee at ME10 with a material rig: %v, want the same %v as at ME0", lean.Root.JobCost, res.Root.JobCost)
+	}
+	// An Alpha clone pays its 0.25% on the same base.
+	alpha := in
+	alpha.AlphaClone = true
+	taxed, err := Build(fixtureRecipes(), 1001, alpha)
+	if err != nil {
+		t.Fatalf("buildPlan: %v", err)
+	}
+	if !near(taxed.Root.JobCost, 320*(0.0925+AlphaCloneTax)) {
+		t.Errorf("Alpha fee: got %v, want %v", taxed.Root.JobCost, 320*(0.0925+AlphaCloneTax))
+	}
 }
 
 func TestPlanJobFeesUnknown(t *testing.T) {

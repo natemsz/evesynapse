@@ -225,11 +225,15 @@ func TestPlannerRendersFromLocalData(t *testing.T) {
 	mustContain(t, "/planner/?product=1001", body,
 		"Fixture Widget",
 		"Fixture Component",
-		"95.40 ISK",  // landed: 25.00 materials + 70.40 fees at a 6.4% index
-		"904.60 ISK", // margin: 1,000.00 value − 95.40 landed
-		"2.89K ISK/hour",
+		// Fees at an NPC station: 6.4% index + 0.25% facility tax
+		// + 4% SCC = 10.65% of each job's estimated item value
+		// (1,050 at the widget, 50 at the component): 111.83 + 5.33.
+		"142.16 ISK", // landed: 25.00 materials + 117.16 fees
+		"857.84 ISK", // margin: 1,000.00 value − 142.16 landed
+		"2.74K ISK/hour",
+		"facility tax 0.25% · SCC surcharge 4%",
 		"materials &#43; fees", // html/template escapes the plus
-		"Building saves 904.60 ISK",
+		"Building saves 857.84 ISK",
 		"Landed cost",
 		"Build tree",
 		"Double-click to expand/collapse a node",
@@ -304,13 +308,14 @@ func TestPlannerJSONPayload(t *testing.T) {
 		t.Errorf("component blueprint = ME%v/TE%v %q, want ME8/TE12 owned", comp.ME, comp.TE, comp.MESource)
 	}
 	// Fifteen mineral cover the direct ten; the component branch
-	// (ME8) buys five at 5 ISK. Materials 25, fees 70.40 at a
-	// 6.4% index, value 1,000.
-	if p.Optimized.Landed != 9540 || p.Optimized.Profit != 90460 {
-		t.Errorf("optimized landed/profit = %v/%v, want 9540/90460", p.Optimized.Landed, p.Optimized.Profit)
+	// (ME8) buys five at 5 ISK. Materials 25; fees 117.16 (10.65%
+	// of an estimated item value of 1,050 at the widget and 50 at
+	// the component, each rounded to the cent); value 1,000.
+	if p.Optimized.Landed != 14216 || p.Optimized.Profit != 85784 {
+		t.Errorf("optimized landed/profit = %v/%v, want 14216/85784", p.Optimized.Landed, p.Optimized.Profit)
 	}
-	if p.Optimized.Fees != 7040 || !p.Optimized.FeesKnown {
-		t.Errorf("optimized fees = %v (known %v), want 7040/true", p.Optimized.Fees, p.Optimized.FeesKnown)
+	if p.Optimized.Fees != 11716 || !p.Optimized.FeesKnown {
+		t.Errorf("optimized fees = %v (known %v), want 11716/true", p.Optimized.Fees, p.Optimized.FeesKnown)
 	}
 	if p.Optimized.Elapsed != 1128 {
 		t.Errorf("optimized elapsed = %v, want 1128 (528 + 600)", p.Optimized.Elapsed)
@@ -328,8 +333,8 @@ func TestPlannerJSONPayload(t *testing.T) {
 	if !p.BuyComp.Complete || !p.BuyComp.ProfKnown {
 		t.Error("buycomp should be fully priced")
 	}
-	if p.BuyComp.Landed != 106720 || p.BuyComp.Profit != -6720 {
-		t.Errorf("buycomp landed/profit = %v/%v, want 106720/-6720", p.BuyComp.Landed, p.BuyComp.Profit)
+	if p.BuyComp.Landed != 111183 || p.BuyComp.Profit != -11183 {
+		t.Errorf("buycomp landed/profit = %v/%v, want 111183/-11183", p.BuyComp.Landed, p.BuyComp.Profit)
 	}
 	if p.BuyComp.Bought != 100000 || p.BuyComp.Built != 0 {
 		t.Errorf("buycomp bought/built = %v/%v, want 100000/0", p.BuyComp.Bought, p.BuyComp.Built)
@@ -451,10 +456,10 @@ func TestPlannerRegionWithoutRowsFallsBackToGuide(t *testing.T) {
 	if !strings.Contains(p.PricesNote, "no sell rows on file yet; cluster average shown.") {
 		t.Errorf("prices note = %q, want the guide fallback note", p.PricesNote)
 	}
-	// Same totals as the plain guide plan: 95.40 landed
-	// (25.00 materials + 70.40 fees), 1,000.00 value.
-	if p.Optimized.Landed != 9540 || p.Optimized.Value != 100000 || !p.Optimized.Known {
-		t.Errorf("fallback landed/value/known = %v/%v/%v, want 9540/100000/true",
+	// Same totals as the plain guide plan: 142.16 landed
+	// (25.00 materials + 117.16 fees), 1,000.00 value.
+	if p.Optimized.Landed != 14216 || p.Optimized.Value != 100000 || !p.Optimized.Known {
+		t.Errorf("fallback landed/value/known = %v/%v/%v, want 14216/100000/true",
 			p.Optimized.Landed, p.Optimized.Value, p.Optimized.Known)
 	}
 }
@@ -535,8 +540,8 @@ func TestPlannerStructureBonuses(t *testing.T) {
 	if qty != 4 {
 		t.Errorf("raitatru tritanium qty = %d, want 4", qty)
 	}
-	if p.Optimized.Landed >= 9540 {
-		t.Errorf("raitatru landed = %d, want below the station plan's 9540", p.Optimized.Landed)
+	if p.Optimized.Landed >= 14216 {
+		t.Errorf("raitatru landed = %d, want below the station plan's 14216", p.Optimized.Landed)
 	}
 	code, body := getPage(t, app, cookie, "/planner/?product=1001&runs=1&structure=35825&rig=t1")
 	if code != http.StatusOK {

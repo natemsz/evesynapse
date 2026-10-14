@@ -180,6 +180,9 @@ type Application struct {
 	// replace and the notes, and nothing else. Searching happens
 	// before it, unlocked.
 	typingLocks [typingLockStripes]sync.Mutex
+	// typingPrunedAt is when the guess ledger was last pruned
+	// (unix seconds).
+	typingPrunedAt atomic.Int64
 
 	// Shared cache across instances (swarm_*.go): this
 	// instance's signing identity and its peer client, set at

@@ -40,8 +40,8 @@ func typingLedgerCount(t *testing.T, conn *sql.DB, box string) int {
 	t.Helper()
 	var n int
 	if err := conn.QueryRowContext(context.Background(),
-		`SELECT COUNT(*) FROM typing_guesses WHERE box = $1`, box).Scan(&n); err != nil {
-		t.Fatalf("count guesses for box %q: %v", box, err)
+		`SELECT COUNT(*) FROM typing_guesses WHERE box = $1 AND superseded_at IS NULL`, box).Scan(&n); err != nil {
+		t.Fatalf("count current guesses for box %q: %v", box, err)
 	}
 	return n
 }
@@ -110,17 +110,22 @@ func TestTypingGuessesReplacePerKeystroke(t *testing.T) {
 	app.noteSuggested(ctx, box, suggestPoolMarket, []suggestItem{{ID: 37, Name: "Isogen"}})
 
 	if n := typingLedgerCount(t, conn, box); n != 1 {
-		t.Fatalf("ledger rows for box %q = %d, want 1 (the latest keystroke)", box, n)
+		t.Fatalf("current guesses for box %q = %d, want 1 (the latest keystroke)", box, n)
+	}
+	if n, err := q.CountTypingGuesses(ctx, box); err != nil || n != 3 {
+		t.Fatalf("ledger rows for box %q = %d (err %v), want all 3 guesses kept", box, n, err)
 	}
 	if _, err := q.GetTypingGuess(ctx, db.GetTypingGuessParams{
 		Box: box, Kind: string(pageWantHistory), EntityID: 37, RegionID: defaultMarketRegion,
 	}); err != nil {
 		t.Fatalf("latest guess missing from ledger: %v", err)
 	}
-	if _, err := q.GetTypingGuess(ctx, db.GetTypingGuessParams{
+	if g, err := q.GetTypingGuess(ctx, db.GetTypingGuessParams{
 		Box: box, Kind: string(pageWantHistory), EntityID: 34, RegionID: defaultMarketRegion,
-	}); err != sql.ErrNoRows {
-		t.Fatalf("replaced guess still in ledger: err=%v, want ErrNoRows", err)
+	}); err != nil {
+		t.Fatalf("replaced guess gone from the ledger: %v", err)
+	} else if !g.SupersededAt.Valid {
+		t.Fatalf("replaced guess is still current")
 	}
 	for _, id := range []int64{34, 35} {
 		var n int
@@ -149,7 +154,7 @@ func TestTypingGuessesReplacePerKeystroke(t *testing.T) {
 		t.Fatalf("seed viewed pilot: %v", err)
 	}
 	app.noteTypingPilotGuess(ctx, viewBox, 93300003, now)
-	app.replaceTypingGuesses(ctx, viewBox)
+	app.replaceTypingGuesses(ctx, viewBox, nil, time.Now())
 	var n int
 	if err := conn.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM pilot_records WHERE character_id = 93300001`).Scan(&n); err != nil || n != 0 {
@@ -172,7 +177,7 @@ func TestTypingGuessesReplacePerKeystroke(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed fetched detail: %v", err)
 	}
-	app.replaceTypingGuesses(ctx, viewBox)
+	app.replaceTypingGuesses(ctx, viewBox, nil, time.Now())
 	if err := conn.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM type_details WHERE type_id = 38`).Scan(&n); err != nil || n != 1 {
 		t.Fatalf("fetched detail after replace: count=%d err=%v, want 1/nil", n, err)
@@ -561,7 +566,7 @@ func TestTypingConcurrentKeystrokesDoNotMix(t *testing.T) {
 		}()
 		wg.Wait()
 		rows, err := conn.QueryContext(ctx,
-			`SELECT entity_id FROM typing_guesses WHERE box = $1`, box)
+			`SELECT entity_id FROM typing_guesses WHERE box = $1 AND superseded_at IS NULL`, box)
 		if err != nil {
 			t.Fatalf("round %d: read ledger: %v", round, err)
 		}
@@ -576,7 +581,7 @@ func TestTypingConcurrentKeystrokesDoNotMix(t *testing.T) {
 		}
 		rows.Close()
 		if len(ids) != 1 || (ids[0] != a && ids[0] != b) {
-			t.Fatalf("round %d: ledger holds %v, want exactly [%d] or [%d]", round, ids, a, b)
+			t.Fatalf("round %d: current guesses are %v, want exactly [%d] or [%d]", round, ids, a, b)
 		}
 	}
 }
@@ -637,5 +642,78 @@ func TestTypingLockIsPerBox(t *testing.T) {
 	case <-same:
 	case <-time.After(15 * time.Second):
 		t.Fatal("the box's next keystroke never ran after the first finished")
+	}
+}
+
+// TestTypingLedgerAccumulates: the ledger is a history. Over many
+// keystrokes and several days it keeps every guess a box made,
+// with whether the pilot opened it, and the window rates count
+// all of them; a keystroke supersedes only the guesses it stops
+// making, and a guess kept across keystrokes is one guess.
+func TestTypingLedgerAccumulates(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	box := "7|items:all"
+	day := 24 * time.Hour
+	start := time.Now().UTC().Add(-5 * day)
+	key := func(id int64) typingGuess { return typingGuess{kind: pageWantTypeDescription, id: id} }
+
+	// Day one: three keystrokes. Type 34 is guessed by all three,
+	// 35 by the first two, 36 only by the last.
+	app.setTypingGuesses(ctx, box, []typingGuess{key(34), key(35)}, start)
+	app.setTypingGuesses(ctx, box, []typingGuess{key(34), key(35)}, start.Add(time.Second))
+	app.setTypingGuesses(ctx, box, []typingGuess{key(34), key(36)}, start.Add(2*time.Second))
+	// The pilot opens 34 a minute later.
+	if err := q.MarkTypingGuessHits(ctx, db.MarkTypingGuessHitsParams{
+		Kind: string(pageWantTypeDescription), EntityID: 34, RegionID: 0,
+		Now: start.Add(time.Minute), Since: start.Add(-typingGuessHitWindow),
+	}); err != nil {
+		t.Fatalf("mark hit: %v", err)
+	}
+	// Day three: the same box searches for something else entirely.
+	app.setTypingGuesses(ctx, box, []typingGuess{key(37), key(38)}, start.Add(2*day))
+	// Today: once more.
+	app.setTypingGuesses(ctx, box, []typingGuess{key(39)}, start.Add(5*day))
+
+	if n, err := q.CountTypingGuesses(ctx, box); err != nil || n != 6 {
+		t.Fatalf("ledger holds %d guesses (err %v), want 6: 34, 35, 36, 37, 38, 39 once each", n, err)
+	}
+	opened, err := q.GetTypingGuess(ctx, db.GetTypingGuessParams{Box: box, Kind: string(pageWantTypeDescription), EntityID: 34})
+	if err != nil || !opened.HitAt.Valid || !opened.SupersededAt.Valid {
+		t.Fatalf("the opened guess after later keystrokes: %+v (err %v), want it kept, hit and superseded", opened, err)
+	}
+	if !opened.NotedAt.Equal(start.Truncate(time.Microsecond)) {
+		t.Fatalf("a guess kept across keystrokes was re-noted at %v, want its first %v", opened.NotedAt, start)
+	}
+	current, err := q.GetTypingGuess(ctx, db.GetTypingGuessParams{Box: box, Kind: string(pageWantTypeDescription), EntityID: 39})
+	if err != nil || current.SupersededAt.Valid {
+		t.Fatalf("the latest guess: %+v (err %v), want it current", current, err)
+	}
+
+	// The seven-day rates see the whole window: six guesses, one opened.
+	rates, err := q.ListTypingGuessRates(ctx, time.Now().UTC().Add(-7*day))
+	if err != nil || len(rates) != 1 || rates[0].Queued != 6 || rates[0].Opened != 1 {
+		t.Fatalf("seven-day rates %+v (err %v), want 6 queued and 1 opened", rates, err)
+	}
+	// A shorter window sees only what was guessed inside it.
+	rates, err = q.ListTypingGuessRates(ctx, time.Now().UTC().Add(-3*day-time.Hour))
+	if err != nil || len(rates) != 1 || rates[0].Queued != 3 || rates[0].Opened != 0 {
+		t.Fatalf("three-day rates %+v (err %v), want 3 queued and none opened", rates, err)
+	}
+}
+
+// TestTypingLedgerPrunesByAge: guesses leave the ledger only by
+// age, long after any window reads them.
+func TestTypingLedgerPrunesByAge(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	box := "7|items:all"
+	now := time.Now().UTC()
+	app.setTypingGuesses(ctx, box, []typingGuess{{kind: pageWantTypeDescription, id: 34}}, now.Add(-typingLedgerKeep-24*time.Hour))
+	// The next keystroke, today, supersedes it and prunes by age.
+	app.typingPrunedAt.Store(0)
+	app.setTypingGuesses(ctx, box, []typingGuess{{kind: pageWantTypeDescription, id: 35}}, now)
+	if n, err := q.CountTypingGuesses(ctx, box); err != nil || n != 1 {
+		t.Fatalf("ledger holds %d guesses (err %v), want only the one inside the keep window", n, err)
 	}
 }

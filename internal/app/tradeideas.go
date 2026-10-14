@@ -241,7 +241,7 @@ func (app *Application) tradeIdeasHTTPClient() *http.Client {
 // the stored answer only, no model call, one tab per strategy.
 func (app *Application) handleTradeIdeas(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
+	data := app.publicPage(ctx) // public: stored market data only
 	data.TradeIdeas = app.buildTradeIdeas(ctx)
 	app.render(ctx, w, http.StatusOK, "market_tradeideas.html", data)
 }

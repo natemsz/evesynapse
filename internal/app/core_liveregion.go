@@ -65,7 +65,7 @@ func (app *Application) handleMarketHistoryFragment(w http.ResponseWriter, r *ht
 		regionID = defaultMarketRegion
 	}
 	regionName, _ := marketRegionName(regionID)
-	item := &marketItem{TypeID: typeID, RegionID: regionID, RegionName: regionName}
+	item := &marketItem{TypeID: typeID, RegionID: regionID, RegionName: regionName, Anonymous: app.userID(ctx) == 0}
 	app.attachHistory(ctx, item, typeID, regionID, 0)
 	app.renderFragment(w, "market.html", "history-section", item)
 }
@@ -90,7 +90,7 @@ func (app *Application) handleMarketTraderFragment(w http.ResponseWriter, r *htt
 		regionID = defaultMarketRegion
 	}
 	regionName, _ := marketRegionName(regionID)
-	item := &marketItem{TypeID: typeID, RegionID: regionID, RegionName: regionName}
+	item := &marketItem{TypeID: typeID, RegionID: regionID, RegionName: regionName, Anonymous: app.userID(ctx) == 0}
 	if v, err := strconv.ParseFloat(q.Get("bs"), 64); err == nil && v > 0 && !math.IsInf(v, 0) {
 		item.BestSellRaw = v
 	}

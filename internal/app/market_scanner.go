@@ -62,7 +62,7 @@ type scannerView struct {
 // never triggers a fetch.
 func (app *Application) handleMarketScanner(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
+	data := app.publicPage(ctx) // public: stored market data only
 	view := app.buildScannerView(ctx, r.URL.Query())
 	if wantCSV(r) {
 		serveScannerCSV(w, view)

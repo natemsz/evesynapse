@@ -504,7 +504,8 @@ func TestIndustryBlueprintPlannerLink(t *testing.T) {
 
 // TestDefaultJudgeParam: fresh plans scope to the acting
 // character, falling back to the first character when the
-// session names none of the account's own.
+// session names none of the account's own, and to the All V
+// stand-in when there are no characters (an anonymous visitor).
 func TestDefaultJudgeParam(t *testing.T) {
 	chars := []db.Character{{CharacterID: 1}, {CharacterID: 2}}
 	if got := defaultJudgeParam(chars, 2); got != "char:2" {
@@ -513,8 +514,8 @@ func TestDefaultJudgeParam(t *testing.T) {
 	if got := defaultJudgeParam(chars, 9); got != "char:1" {
 		t.Errorf("stale session = %q, want char:1", got)
 	}
-	if got := defaultJudgeParam(nil, 9); got != "" {
-		t.Errorf("no characters = %q, want general", got)
+	if got := defaultJudgeParam(nil, 9); got != judgeAllV {
+		t.Errorf("no characters = %q, want the All V stand-in", got)
 	}
 }
 

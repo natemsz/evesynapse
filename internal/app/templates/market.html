@@ -22,11 +22,15 @@
   <p><small>Average price: {{if $item.AveragePrice}}{{$item.AveragePrice}} ISK{{else}}—{{end}} · Adjusted price: {{if $item.AdjustedPrice}}{{$item.AdjustedPrice}} ISK{{else}}—{{end}}</small></p>
   <p>{{range $i, $r := $item.Regions}}{{if $i}} · {{end}}{{if $r.Active}}<strong>{{$r.Name}}</strong>{{else}}<a href="/market/?type={{$item.TypeID}}&region={{$r.ID}}">{{$r.Name}}</a>{{end}}{{end}}</p>
 
+  {{if $item.BookPending}}
+  <p class="notice"><small>The live order book loads for signed-in visitors. The hub prices below come from the latest region sweep.{{if $.SSOConfigured}} <a href="/auth/eve">Sign in with EVE</a> for the full book, price alerts and your own orders.{{end}}</small></p>
+  {{else}}
   <p>Best sell: <strong>{{if $item.BestSell}}{{$item.BestSell}} ISK{{else}}—{{end}}</strong>{{if $item.BestSellLoc.Name}} ({{placeLink $item.BestSellLoc}}){{end}}<br>
   Best buy: <strong>{{if $item.BestBuy}}{{$item.BestBuy}} ISK{{else}}—{{end}}</strong>{{if $item.BestBuyLoc.Name}} ({{placeLink $item.BestBuyLoc}}){{end}}{{if $item.Spread}}<br>
   Spread: {{$item.Spread}}{{end}}{{if $item.TypicalSell}}<br>
   Typical sell: <strong>{{$item.TypicalSell}} ISK</strong> · 9 in 10 sell orders at or under {{$item.SellBand}} ISK{{end}}{{if $item.TypicalBuy}}<br>
   Typical buy: <strong>{{$item.TypicalBuy}} ISK</strong> · 9 in 10 buy orders at or over {{$item.BuyBand}} ISK{{end}}</p>
+  {{end}}
 
   {{if $item.RegionStats}}
   <p><small>Typical prices across the hub regions:</small></p>
@@ -54,7 +58,8 @@
   <section class="foldable">
   <h3>Price history — {{$item.RegionName}}</h3>
   {{template "history-section" $item}}
-  {{if $item.Watched}}
+  {{if $item.Anonymous}}
+  {{else if $item.Watched}}
   <form method="post" action="/market/watch">
     <input type="hidden" name="action" value="update">
     <input type="hidden" name="type" value="{{$item.TypeID}}">
@@ -91,6 +96,7 @@
   </section>
   {{end}}
 
+  {{if not $item.BookPending}}
   <section class="foldable">
   <h3>Sell orders — {{$item.RegionName}}</h3>
   <div class="tw">
@@ -125,6 +131,7 @@
   <p><small>Showing top {{len $item.Buys}} · {{$item.BuyOrders}} buy orders · {{$item.BuyVolume}} total volume</small></p>
   </section>
 
+  {{end}}
   {{if $item.Truncated}}<p><small>Order book truncated — only the first 20 pages were read, so best prices are best-within-those.</small></p>{{end}}
 {{else if .Market.Matches}}
   <section class="foldable">

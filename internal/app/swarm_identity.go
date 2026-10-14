@@ -31,6 +31,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -253,4 +254,38 @@ func verifySwarmEntry(entry swarmSignedEntry, publicKey string) bool {
 		return false
 	}
 	return ed25519.Verify(pub, doc, sig)
+}
+
+// swarmMemberMessage is what a member signs to own its address:
+// "member\n" + instance ID + "\n" + base URL + "\n" + the unix
+// time it was issued, in decimal. The issue time is inside the
+// signature so that an old tuple cannot be passed off as current:
+// per member, only a tuple issued later than the one held is
+// taken up. It is only ever compared with that same member's
+// earlier issue times, so clocks need not agree across instances.
+// The seed worker builds the same bytes; changing them is a flag
+// day for every instance and seed.
+func swarmMemberMessage(instanceID, baseURL string, issuedAt int64) []byte {
+	return []byte("member\n" + instanceID + "\n" + baseURL + "\n" + strconv.FormatInt(issuedAt, 10))
+}
+
+// signSwarmMember signs this instance's own address as of issuedAt.
+func signSwarmMember(id *swarmIdentity, baseURL string, issuedAt int64) string {
+	return base64.StdEncoding.EncodeToString(ed25519.Sign(id.private, swarmMemberMessage(id.id, baseURL, issuedAt)))
+}
+
+// verifySwarmMember checks a member tuple's address signature
+// against the public key in the same tuple. Whether that key is
+// the one pinned for the instance, and whether the tuple is newer
+// than the one held, are the caller's questions.
+func verifySwarmMember(m swarmMember) bool {
+	pub, err := base64.StdEncoding.DecodeString(m.PublicKey)
+	if err != nil || len(pub) != ed25519.PublicKeySize {
+		return false
+	}
+	sig, err := base64.StdEncoding.DecodeString(m.URLSig)
+	if err != nil || len(sig) != ed25519.SignatureSize {
+		return false
+	}
+	return ed25519.Verify(pub, swarmMemberMessage(m.InstanceID, m.BaseURL, m.IssuedAt), sig)
 }

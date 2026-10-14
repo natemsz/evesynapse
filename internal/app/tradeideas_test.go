@@ -356,7 +356,7 @@ func TestTradeIdeasPageRendersStored(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /market/ideas/: status %d", code)
 	}
-	mustContain(t, "/market/ideas/", body, "Trade ideas", "Station flips", "Gemma on the Forge spread scanner")
+	mustContain(t, "/market/ideas/", body, "Trade Ideas", "Station flips", "Gemma on the Forge spread scanner", "ti-a1")
 	if strings.Contains(body, "<script>alert(1)</script>") {
 		t.Fatalf("model text rendered unescaped")
 	}
@@ -435,6 +435,25 @@ func TestTradeIdeasRenderMarkdown(t *testing.T) {
 	if groups[2].ID != "ti-3" || groups[2].Title != "Margin Trading" {
 		t.Errorf("last strategy: %+v", groups[2])
 	}
+	for i, g := range groups {
+		if g.Accent != i+1 {
+			t.Errorf("group %d accent = %d, want %d (accents rotate by place)", i, g.Accent, i+1)
+		}
+	}
+}
+
+func TestTradeIdeasAccentWrapsAfterSix(t *testing.T) {
+	var b strings.Builder
+	for i := 1; i <= 7; i++ {
+		fmt.Fprintf(&b, "### Strategy %d\n* idea\n", i)
+	}
+	groups := parseTradeIdeas(b.String())
+	if len(groups) != 7 {
+		t.Fatalf("got %d groups, want 7", len(groups))
+	}
+	if groups[5].Accent != 6 || groups[6].Accent != 1 {
+		t.Errorf("accents at the wrap: sixth = %d, seventh = %d, want 6 then 1", groups[5].Accent, groups[6].Accent)
+	}
 }
 
 func TestTradeIdeasPageEmptyStates(t *testing.T) {
@@ -452,7 +471,7 @@ func TestTradeIdeasPageEmptyStates(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /market/ideas/: status %d", code)
 	}
-	mustContain(t, "/market/ideas/", body, "Trade ideas are not set up", "CLOUDFLARE_ACCOUNT_ID")
+	mustContain(t, "/market/ideas/", body, "Trade Ideas are not set up", "CLOUDFLARE_ACCOUNT_ID")
 }
 
 // roundTripperFunc adapts a function to http.RoundTripper.

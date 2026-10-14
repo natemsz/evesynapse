@@ -12,7 +12,7 @@
 {{$corp := .Corp}}
 {{template "corpselector" .CorpOptions}}
 <h2>{{$corp.Name}}</h2>
-<p><small>Doctrines · <a href="/doctrines/fits/?corporation={{$corp.ID}}">Fits</a> · <a href="/srp/?corporation={{$corp.ID}}">Ship replacement</a>{{if $corp.Directs}} · <a href="/corporations/settings/?corporation={{$corp.ID}}">Settings</a>{{end}}</small></p>
+<p><small>Doctrines · <a href="/doctrines/fits/?corporation={{$corp.ID}}">Fits</a> · <a href="/srp/?corporation={{$corp.ID}}">Ship Replacement</a>{{if $corp.Directs}} · <a href="/corporations/settings/?corporation={{$corp.ID}}">Settings</a>{{end}}</small></p>
 
 <p class="lede">A doctrine is a set of fits for a kind of fleet. An op can name one, and every fit opens in the <a href="/fittings/">fitting tool</a>.</p>
 

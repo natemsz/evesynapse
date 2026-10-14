@@ -233,7 +233,7 @@ func TestScannerPageRendersStoredRowsZeroOutbound(t *testing.T) {
 		t.Fatalf("scanner page: status %d", code)
 	}
 	mustContain(t, "/market/scanner/", body,
-		"Spread scanner",
+		"Spread Scanner",
 		"Tritanium",
 		"Jita 4 - Moon 4 - Caldari Navy Assembly Plant",
 		"Player structure",
@@ -266,7 +266,7 @@ func TestScannerPageEmptyBeforeAnySweep(t *testing.T) {
 		t.Fatalf("scanner empty page: status %d", code)
 	}
 	mustContain(t, "/market/scanner/ (empty)", body,
-		"Spread scanner",
+		"Spread Scanner",
 		"Still gathering prices",
 	)
 	if strings.Contains(body, "Estimated daily profit") {

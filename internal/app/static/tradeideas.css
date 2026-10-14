@@ -1,0 +1,31 @@
+/* Trade ideas: one accent per strategy group. The categories are
+   the model's own and change between answers, so the accent
+   follows the group's place (tradeIdeaGroup.Accent), never its
+   name: the first group is always ember, the second gold, and so
+   on, wrapping after six. The tab, the panel heading, the cards'
+   left edge and their rank numbers all take the group's color, so
+   a strategy reads as one thing. The .ti layout lives in
+   style.css; this file only colors it, in both themes. */
+
+.ti-a1 { --ti-accent: #ff8a3c; }
+.ti-a2 { --ti-accent: #ffc94d; }
+.ti-a3 { --ti-accent: #ff6f61; }
+.ti-a4 { --ti-accent: #cf7ac2; }
+.ti-a5 { --ti-accent: #45b8a6; }
+.ti-a6 { --ti-accent: #5db9e8; }
+
+html[data-theme="light"] .ti-a1 { --ti-accent: #c75e0e; }
+html[data-theme="light"] .ti-a2 { --ti-accent: #9c7408; }
+html[data-theme="light"] .ti-a3 { --ti-accent: #cf4436; }
+html[data-theme="light"] .ti-a4 { --ti-accent: #a34a96; }
+html[data-theme="light"] .ti-a5 { --ti-accent: #1f7a6a; }
+html[data-theme="light"] .ti-a6 { --ti-accent: #1f6fb8; }
+
+.ti-tabs button.ti-acc[aria-selected="true"] { border-color: var(--ti-accent); }
+.ti-tabs button.ti-acc small { color: var(--ti-accent); }
+.ti-panel.ti-acc .ti-h { color: var(--ti-accent); }
+.ti-panel.ti-acc .ti-list li {
+  border-left: 3px solid var(--ti-accent);
+  background-image: linear-gradient(color-mix(in srgb, var(--ti-accent) 6%, transparent), color-mix(in srgb, var(--ti-accent) 6%, transparent));
+}
+.ti-panel.ti-acc .ti-list li::before { color: var(--ti-accent); }

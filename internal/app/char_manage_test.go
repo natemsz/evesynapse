@@ -170,7 +170,7 @@ func TestCharactersPageSwitcherAndTags(t *testing.T) {
 	mustContain(t, "/characters/", body,
 		"Fixture Ceo", "Second Pilot",
 		"Linked", "Re-link needed",
-		"Switch character", "Manage characters",
+		"Switch Character", "Manage Characters",
 		"/characters/switch?character=",
 		"Characters", // nav menu entry
 	)

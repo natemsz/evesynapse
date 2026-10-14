@@ -11,7 +11,7 @@
 {{else}}
 {{template "corpselector" .CorpOptions}}
 <h2>{{.Name}}</h2>
-<p><small><a href="/doctrines/?corporation={{.ID}}">Doctrines</a> · <a href="/doctrines/fits/?corporation={{.ID}}">Fits</a> · <a href="/srp/?corporation={{.ID}}">Ship replacement</a> · Settings</small></p>
+<p><small><a href="/doctrines/?corporation={{.ID}}">Doctrines</a> · <a href="/doctrines/fits/?corporation={{.ID}}">Fits</a> · <a href="/srp/?corporation={{.ID}}">Ship Replacement</a> · Settings</small></p>
 
 <p class="lede">How {{.Name}} runs on EveSynapse. Directors and the CEO can always do everything here; these settings say who else can.</p>
 
@@ -19,7 +19,7 @@
   <input type="hidden" name="corporation" value="{{.ID}}">
   <div class="settings-grid">
     <section class="setting">
-      <h4>Ship replacement</h4>
+      <h4>Ship Replacement</h4>
       <label class="field"><span class="field-label">Who handles requests, besides directors and the CEO</span>
         <select name="srp_who">{{range .SRPWho}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
         <span class="field-hint">They see every request, mark it paid or deny it</span></label>
@@ -37,7 +37,7 @@
     <section class="setting">
       <h4>Groups and Discord</h4>
       <p class="hint">Either setting above can be an in-game role or one of the corporation's groups. Groups, and the corporation's Discord server, have pages of their own.</p>
-      <div class="form-actions"><a class="btn" href="/groups/?owner=corporation:{{.ID}}">Groups</a><a class="btn" href="/discord/servers?owner=corporation:{{.ID}}">Discord server</a></div>
+      <div class="form-actions"><a class="btn" href="/groups/?owner=corporation:{{.ID}}">Groups</a><a class="btn" href="/discord/servers?owner=corporation:{{.ID}}">Discord Server</a></div>
     </section>
   </div>
   <div class="form-actions"><button type="submit">Save settings</button></div>

@@ -75,15 +75,15 @@ func TestCloudflareAccountIDRule(t *testing.T) {
 }
 
 func TestTruncateRunesKeepsBoundaries(t *testing.T) {
-	if got := truncateRunes("abc", 5); got != "abc" {
+	if got := clip("abc", 5); got != "abc" {
 		t.Fatalf("short text changed: %q", got)
 	}
-	if got := truncateRunes("abcdef", 4); got != "abcd" {
+	if got := clip("abcdef", 4); got != "abcd" {
 		t.Fatalf("ascii truncate: %q", got)
 	}
 	// Two-byte rune at the cut: keep the whole rune or drop it,
 	// never split it.
-	if got := truncateRunes("abécd", 3); got != "ab" {
+	if got := clip("abécd", 3); got != "ab" {
 		t.Fatalf("rune-boundary truncate: %q", got)
 	}
 }

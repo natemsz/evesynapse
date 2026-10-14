@@ -81,18 +81,18 @@ func (app *Application) buildUpkeep(ctx context.Context, userID int64) *upkeepWi
 			if name == "" {
 				name = "Structure #" + strconv.FormatInt(s.StructureID, 10)
 			}
-			if at, ok := parseUpkeepTime(s.FuelExpires); ok && !at.After(now.Add(upkeepFuelDays*24*time.Hour)) {
+			if at, ok := parseRFC3339(s.FuelExpires); ok && !at.After(now.Add(upkeepFuelDays*24*time.Hour)) {
 				view.Items = append(view.Items, upkeepItem{
 					Name: name, Text: "fuel expires", When: formatFinish(s.FuelExpires),
 					Urgent: !at.After(now), at: at,
 				})
 			}
-			if at, ok := parseUpkeepTime(s.UnanchorsAt); ok {
+			if at, ok := parseRFC3339(s.UnanchorsAt); ok {
 				view.Items = append(view.Items, upkeepItem{
 					Name: name, Text: "unanchoring", When: formatFinish(s.UnanchorsAt),
 					Urgent: !at.After(now), at: at,
 				})
-			} else if at, ok := parseUpkeepTime(s.StateTimerEnd); ok {
+			} else if at, ok := parseRFC3339(s.StateTimerEnd); ok {
 				view.Items = append(view.Items, upkeepItem{
 					Name: name, Text: "state change", When: formatFinish(s.StateTimerEnd),
 					Urgent: !at.After(now), at: at,
@@ -108,17 +108,4 @@ func (app *Application) buildUpkeep(ctx context.Context, userID int64) *upkeepWi
 		}
 	}
 	return w
-}
-
-// parseUpkeepTime parses an optional structure timer: empty or
-// junk means no timer, never an error.
-func parseUpkeepTime(raw string) (time.Time, bool) {
-	if raw == "" {
-		return time.Time{}, false
-	}
-	t, err := time.Parse(time.RFC3339, raw)
-	if err != nil {
-		return time.Time{}, false
-	}
-	return t, true
 }

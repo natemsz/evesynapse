@@ -6,7 +6,6 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -57,28 +56,8 @@ func (app *Application) attachRegionStats(ctx context.Context, item *marketItem)
 			if stat.TypicalBuy > 0 {
 				row.TypicalBuy = esi.FormatISK(stat.TypicalBuy)
 			}
-			row.Age = statsAgeText(stat.UpdatedAt)
+			row.Age = ageText(time.Now(), stat.UpdatedAt)
 		}
 		item.RegionStats = append(item.RegionStats, row)
-	}
-}
-
-// statsAgeText renders a time as a short end-user age for the
-// regions strip ("just now", "12 minutes ago").
-func statsAgeText(at time.Time) string {
-	d := time.Since(at)
-	switch {
-	case d < 90*time.Second:
-		return "just now"
-	case d < time.Hour:
-		return fmt.Sprintf("%d minutes ago", int(d.Minutes()))
-	case d < 48*time.Hour:
-		if h := int(d.Hours()); h == 1 {
-			return "1 hour ago"
-		} else {
-			return fmt.Sprintf("%d hours ago", h)
-		}
-	default:
-		return fmt.Sprintf("%d days ago", int(d.Hours()/24))
 	}
 }

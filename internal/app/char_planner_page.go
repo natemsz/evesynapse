@@ -188,7 +188,7 @@ func planMESummary(inputs []planMEInput) string {
 	if rest > 0 {
 		tail := strconv.Itoa(rest) + " at ME0"
 		if rest == len(inputs) {
-			tail = strconv.Itoa(rest) + " component" + pluralS(rest) + " at ME0"
+			tail = strconv.Itoa(rest) + " component" + pluralSuffix(rest) + " at ME0"
 		}
 		if restAssumed {
 			tail += " (assumed)"
@@ -196,13 +196,6 @@ func planMESummary(inputs []planMEInput) string {
 		parts = append(parts, tail)
 	}
 	return strings.Join(parts, ", ")
-}
-
-func pluralS(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
 }
 
 // plannerMaxRunsInput clamps the runs form field; the node cap in

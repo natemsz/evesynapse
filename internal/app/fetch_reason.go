@@ -18,28 +18,32 @@ import (
 // guesses carry their box — so resolving a reason is two bounded
 // reads and no new columns.
 
-// ageString renders how long ago t was: "40s ago", "2m ago".
-func ageString(now, t time.Time) string {
+// ageText renders how long before now t was, for people: "just
+// now", "12 minutes ago", "3 hours ago", "2 days ago". The one
+// relative-age formatter: the freshness line and the market's
+// regions strip and scanner all use it.
+func ageText(now, t time.Time) string {
 	d := now.Sub(t)
-	if d < 0 {
-		d = 0
-	}
 	switch {
-	case d < time.Minute:
-		return fmt.Sprintf("%ds ago", int(d/time.Second))
+	case d < 90*time.Second:
+		return "just now"
 	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d/time.Minute))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d/time.Hour))
+		return fmt.Sprintf("%d minutes ago", int(d.Minutes()))
+	case d < 48*time.Hour:
+		if h := int(d.Hours()); h == 1 {
+			return "1 hour ago"
+		} else {
+			return fmt.Sprintf("%d hours ago", h)
+		}
 	default:
-		return fmt.Sprintf("%dd ago", int(d/(24*time.Hour)))
+		return fmt.Sprintf("%d days ago", int(d.Hours()/24))
 	}
 }
 
-// freshnessLine is the page footer: "Updated 40s ago" plus the
+// freshnessLine is the page footer: "Updated 12 minutes ago" plus the
 // reason when a prefetch caused the fetch.
 func freshnessLine(now, fetchedAt time.Time, reason string) string {
-	s := "Updated " + ageString(now, fetchedAt)
+	s := "Updated " + ageText(now, fetchedAt)
 	if reason != "" {
 		s += ", because " + reason
 	}

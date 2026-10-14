@@ -11,20 +11,21 @@ import (
 	db "evesynapse/internal/db/sqlc"
 )
 
-func TestAgeString(t *testing.T) {
+func TestAgeText(t *testing.T) {
 	now := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
 	for ago, want := range map[time.Duration]string{
-		40 * time.Second:   "40s ago",
-		2 * time.Minute:    "2m ago",
-		3 * time.Hour:      "3h ago",
-		2 * 24 * time.Hour: "2d ago",
+		40 * time.Second:   "just now",
+		12 * time.Minute:   "12 minutes ago",
+		70 * time.Minute:   "1 hour ago",
+		3 * time.Hour:      "3 hours ago",
+		3 * 24 * time.Hour: "3 days ago",
 	} {
-		if got := ageString(now, now.Add(-ago)); got != want {
-			t.Errorf("ageString(%v) = %q, want %q", ago, got, want)
+		if got := ageText(now, now.Add(-ago)); got != want {
+			t.Errorf("ageText(%v) = %q, want %q", ago, got, want)
 		}
 	}
-	if got := ageString(now, now.Add(time.Minute)); got != "0s ago" {
-		t.Errorf("ageString(future) = %q, want 0s ago", got)
+	if got := ageText(now, now.Add(time.Minute)); got != "just now" {
+		t.Errorf("ageText(future) = %q, want just now", got)
 	}
 }
 

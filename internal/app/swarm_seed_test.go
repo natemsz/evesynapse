@@ -43,6 +43,10 @@ func TestSeedAnnounceVerifies(t *testing.T) {
 	if payload.BaseURL != "https://node.example.org" || payload.PublicKey != app.swarmID.publicString() {
 		t.Fatalf("announce payload wrong: %+v", payload)
 	}
+	// The payload is the member tuple a seed stores and relays.
+	if !verifySwarmMember(swarmMember{InstanceID: app.swarmID.id, BaseURL: payload.BaseURL, PublicKey: payload.PublicKey, URLSig: payload.URLSig, IssuedAt: payload.IssuedAt}) {
+		t.Fatal("announce carries no valid signature over its address")
+	}
 }
 
 // TestSeedAnnounceSilent covers the stays-dark cases: sharing
@@ -227,7 +231,8 @@ func TestSwarmGossipSkipsAnnounceWhenNothingToSay(t *testing.T) {
 // identity, the way a remote instance would.
 func seedTestHeartbeat(t *testing.T, kp *swarmIdentity, baseURL string) swarmSignedEntry {
 	t.Helper()
-	payload := string(mustJSON(t, seedAnnouncePayload{BaseURL: baseURL, PublicKey: kp.publicString()}))
+	issued := time.Now().Unix()
+	payload := string(mustJSON(t, seedAnnouncePayload{BaseURL: baseURL, PublicKey: kp.publicString(), URLSig: signSwarmMember(kp, baseURL, issued), IssuedAt: issued}))
 	entry, err := signSwarmEntry(kp, kp.id, seedAnnounceKind, kp.id, payload, time.Now())
 	if err != nil {
 		t.Fatalf("sign heartbeat: %v", err)

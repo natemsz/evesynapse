@@ -291,6 +291,12 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		c.limited = true
 	}
 
+	// Public fit pages missing or out of date are built here, not
+	// on a visitor's request, and the views counted since the last
+	// cycle are written in one batch.
+	app.refreshPublicFitPages(ctx)
+	app.flushFitViews(ctx)
+
 	// Industry cost indices ride the same window: one public
 	// call keeps the planner's installation fees honest, and a
 	// fresh table is never refetched early.

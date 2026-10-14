@@ -122,7 +122,7 @@
   <div><span class="plan-k">Projected margin</span><strong id="plan-margin"{{if .HdrProfitCls}} class="{{.HdrProfitCls}}"{{end}}>{{.HdrMargin}}</strong><br><small id="plan-margin-sub"{{if .HdrProfitCls}} class="{{.HdrProfitCls}}"{{end}}>{{.HdrMarginSub}}</small></div>
   <div><span class="plan-k">Elapsed time</span><strong id="plan-elapsed">{{.HdrElapsed}}</strong><br><small id="plan-elapsed-sub">{{.HdrElapsedSub}}</small></div>
 </div>
-<p><small id="plan-badges">Market {{.MarketName}} · Build system {{.SystemName}}{{if .FacilityNote}} · Building in {{.FacilityNote}}{{end}} · Index {{.IndexLine}}{{if .FeeTerms}} · {{.FeeTerms}}{{end}} · {{.SlotsLine}} · {{.TimeFactorNote}}</small>
+<p><small id="plan-badges">Market {{.MarketName}} · Build system {{.SystemName}}{{if .FacilityNote}} · Building in {{.FacilityNote}}{{end}} · Index {{.IndexLine}}{{if .FeeTerms}} · {{.FeeTerms}}{{end}} · {{.SlotsLine}} · {{.TimeFactorNote}}{{if .OwnerNote}} · {{.OwnerNote}}{{end}}</small>
 <span id="plan-serverflag" hidden><small> · server totals shown</small></span></p>
 <div class="plan-verdictrow"><p class="plan-verdict {{.VerdictCls}}" id="plan-verdict">{{.VerdictText}}</p><p class="plan-nodehint"><small>Double-click to expand/collapse a node</small></p></div>
 <div class="plan-presets" role="group" aria-label="Scenario">

@@ -679,6 +679,10 @@ func TestPlannerDefaultScopeIsActiveCharacter(t *testing.T) {
 		"Can Fixture Ceo build this?",
 		"Profit Analysis",
 	)
+	// One character: nothing to say about spanning.
+	if strings.Contains(body, "Jobs timed and slotted as") {
+		t.Error("a one-character plan claims to span characters")
+	}
 }
 
 // TestPlannerExplicitGeneralScope: an explicit empty judge pick
@@ -697,6 +701,9 @@ func TestPlannerExplicitGeneralScope(t *testing.T) {
 		"Fixture Component",
 		"25.00 ISK",
 		`value="Everyone together"`,
+		// The plan spans both characters and says whose jobs these
+		// are: the acting character.
+		"Jobs timed and slotted as Fixture Ceo; stock and blueprints pooled from 2 characters",
 	)
 	for _, absent := range []string{"build this?", "Profit Analysis"} {
 		if strings.Contains(body, absent) {

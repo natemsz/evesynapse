@@ -57,6 +57,7 @@ type planView struct {
 	IndexLine      string
 	SlotsLine      string
 	TimeFactorNote string
+	OwnerNote      string // set when the plan spans characters (planOwnerNote)
 	VerdictText    string
 	VerdictCls     string
 	FacilityNote   string
@@ -497,6 +498,7 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 		view.SlotsLine += "s"
 	}
 	view.TimeFactorNote = meta.TimeNote
+	view.OwnerNote = meta.OwnerNote
 	view.VerdictText, view.VerdictCls = planVerdictLine(meta)
 	view.FacilityNote = facNote
 	view.FeeTerms = feeTerms

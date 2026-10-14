@@ -6,6 +6,7 @@ package app
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"evesynapse/internal/buildplan"
@@ -273,7 +274,7 @@ func TestPlanTimeFactorAndSlots(t *testing.T) {
 	}
 	f, _ = planTimeFactor("", ids, plannerScopeData{
 		Skills: map[int64]map[int64]int{7: {3380: 5, 3390: 4}},
-	}, []db.Character{{CharacterID: 7}})
+	}, &db.Character{CharacterID: 7})
 	want := (1 - 0.04*5) * (1 - 0.03*4)
 	if f < want-1e-12 || f > want+1e-12 {
 		t.Errorf("skilled factor = %v, want %v", f, want)
@@ -285,6 +286,64 @@ func TestPlanTimeFactorAndSlots(t *testing.T) {
 	s, _ = planSlots("", map[string]int64{}, plannerScopeData{}, nil)
 	if s != 1 {
 		t.Errorf("default slots = %d, want 1 without skills", s)
+	}
+}
+
+// TestPlanSkillsAreOneCharacters: job slots and time skills are per
+// character in game. Two characters who each trained half of a
+// pair must not add up to someone who trained both.
+func TestPlanSkillsAreOneCharacters(t *testing.T) {
+	timeIDs := map[string]int64{"Industry": 3380, "Advanced Industry": 3390}
+	slotIDs := map[string]int64{"Mass Production": 3387, "Advanced Mass Production": 24625}
+	ann := db.Character{CharacterID: 7, Name: "Ann"}
+	bob := db.Character{CharacterID: 8, Name: "Bob"}
+	data := plannerScopeData{Skills: map[int64]map[int64]int{
+		7: {3380: 5, 3387: 5},  // Ann: Industry V, Mass Production V
+		8: {3390: 5, 24625: 4}, // Bob: Advanced Industry V, Advanced Mass Production IV
+	}}
+
+	// Ann owns the plan: her Industry V alone (0.80), her six slots.
+	// The blend this replaces gave 0.80 x 0.85 = 0.68 and ten slots.
+	f, note := planTimeFactor("", timeIDs, data, &ann)
+	if f < 0.8-1e-12 || f > 0.8+1e-12 {
+		t.Errorf("Ann's time factor = %v, want 0.8 (her Industry V only)", f)
+	}
+	if !strings.Contains(note, "Ann") {
+		t.Errorf("time note %q does not name the character", note)
+	}
+	s, note := planSlots("", slotIDs, data, &ann)
+	if s != 6 {
+		t.Errorf("Ann's slots = %d, want 6 (1 + her Mass Production V)", s)
+	}
+	if !strings.Contains(note, "Ann") {
+		t.Errorf("slots note %q does not name the character", note)
+	}
+	// Bob owns it: Advanced Industry V alone (0.85), five slots.
+	f, _ = planTimeFactor("", timeIDs, data, &bob)
+	if f < 0.85-1e-12 || f > 0.85+1e-12 {
+		t.Errorf("Bob's time factor = %v, want 0.85", f)
+	}
+	if s, _ = planSlots("", slotIDs, data, &bob); s != 5 {
+		t.Errorf("Bob's slots = %d, want 5 (1 + his Advanced Mass Production IV)", s)
+	}
+
+	// The owner: the acting character when in the scope, else the
+	// scope's first; a plan that spans characters says so.
+	both := []db.Character{ann, bob}
+	if o := planOwner(both, 8); o == nil || o.CharacterID != 8 {
+		t.Errorf("owner with Bob acting = %+v, want Bob", o)
+	}
+	if o := planOwner(both, 99); o == nil || o.CharacterID != 7 {
+		t.Errorf("owner with an outsider acting = %+v, want the first of the scope", o)
+	}
+	if o := planOwner(nil, 7); o != nil {
+		t.Errorf("owner of an empty scope = %+v, want none", o)
+	}
+	if got := planOwnerNote(&ann, both); !strings.Contains(got, "Ann") || !strings.Contains(got, "2 characters") {
+		t.Errorf("spanning note = %q, want the owner and the pooled count", got)
+	}
+	if got := planOwnerNote(&ann, []db.Character{ann}); got != "" {
+		t.Errorf("one-character note = %q, want none", got)
 	}
 }
 

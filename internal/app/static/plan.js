@@ -1,15 +1,22 @@
-// plan.js — the build planner's client side. It fetches the plan
-// JSON (?format=json), renders the four tabs, and recomputes on
-// make/buy toggles without a round trip.
+// plan.js — the build planner's client side. It reads the plan
+// data the page carries (#plan-data; ?format=json when absent),
+// renders the four tabs, and recomputes on make/buy toggles without
+// a round trip.
 //
-// The trust rule: this file duplicates no formula. Every figure
-// it shows is a server figure or a sum of server figures, and the
-// payload carries the server's canonical preset totals. One
-// shared compute() path serves presets and custom masks alike;
-// presets are verified against the server exactly (integer
-// cents, whole seconds), and any mismatch locks the page to
-// server totals with a visible flag. A client bug can only fall
-// back, never invent a number.
+// This file mirrors server formulas, on purpose, so a toggle
+// recomputes live. Each mirror names its Go twin, and a change to
+// either side must change both:
+//   decide/compute      char_planner_payload.go planRollup (buyNode, add)
+//                       and planFinishPreset (value, profit, margin)
+//   schedule            planSchedule
+//   renderHeader        planHeaderLines and planVerdictLine
+//   iskC, dur           iskCompactCents, humanDuration
+// Per-node figures (costs, fees, times) are the server's, never
+// recomputed here. The payload carries the server's preset totals;
+// presets are checked against them exactly (integer cents, whole
+// seconds) and any mismatch locks the page to server totals with a
+// visible flag, so a drifted mirror shows server truth instead of
+// an invented number.
 //
 // Markup rules (CSP): no inline styles or handlers anywhere.
 // Geometry rides data-w / data-left attributes that app.js
@@ -91,7 +98,8 @@ function findNode(path) {
   return n;
 }
 
-// --- the one compute path (mirrors Go planRollup) ---
+// --- the one compute path (mirrors Go planRollup and
+// planFinishPreset: change both) ---
 function decide(n, isRoot, mask) {
   if (n.short <= 0) return "have";
   if (!n.build) return "buy";
@@ -188,7 +196,8 @@ function findFirst(id) {
   return priced || hit;
 }
 
-// Deterministic list scheduling (mirrors Go planSchedule).
+// Deterministic list scheduling (mirrors Go planSchedule: change
+// both).
 function schedule(jobs, slots) {
   if (slots < 1) slots = 1;
   var ordered = jobs.slice().sort(function (a, b) {

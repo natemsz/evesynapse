@@ -1,12 +1,14 @@
 package app
 
 // Planner payload: one JSON blob per computed plan carrying the
-// full build tree with every figure the client may display. The
-// client duplicates no formula: it only sums server figures over
-// make/buy masks (toggles and presets). Each preset's canonical
-// totals ride along; the client compares in integer cents and
-// falls back to the server figures on any mismatch, so a client
-// bug shows server truth, never an invented number.
+// full build tree with every figure the client may display.
+// plan.js mirrors the preset rollup, the schedule and the header
+// lines here so a make/buy toggle recomputes live; each mirrored
+// function names its twin in plan.js, and a change to either side
+// must change both. Each preset's totals ride along; the client
+// compares in integer cents and falls back to the server figures
+// on any mismatch, so a drifted mirror shows server truth, never an
+// invented number.
 
 import (
 	"context"
@@ -201,6 +203,7 @@ type planPresetTotals struct {
 }
 
 // planRollup accumulates one preset's totals over the tree.
+// Mirrored by plan.js decide/compute: change both.
 // Bought subtrees are pruned (their jobs, fees and shopping
 // never accrue); covered nodes cost nothing.
 type planRollup struct {
@@ -295,7 +298,8 @@ func (r *planRollup) add(n *buildplan.Node, isRoot, built bool) *planSchedNode {
 	return sn
 }
 
-// planSchedule runs deterministic list scheduling over the
+// planSchedule (mirrored by plan.js schedule: change both) runs
+// deterministic list scheduling over the
 // preset's jobs: post-order (children first), ties by type ID,
 // each job on the lowest free slot once its dependencies end.
 // It returns spans and the makespan.
@@ -526,7 +530,8 @@ func planSlots(raw string, ids map[string]int64, data plannerScopeData, owner *d
 	return slots, owner.Name + "'s job slots (Mass Production)."
 }
 
-// planFinishPreset fills value/profit/shopping/schedule around
+// planFinishPreset (value, profit and margin mirrored by plan.js
+// compute: change both) fills value/profit/shopping/schedule around
 // a rollup: product sell value, margin, stock value, buy lines,
 // and the slot-aware Gantt spans.
 func planFinishPreset(r *planRollup, root *buildplan.Node, prices map[int64]esi.MarketPrice, slots int, nameOf func(int64) string, unitOf func(int64) (float64, bool)) {
@@ -601,7 +606,8 @@ func iskCompactCents(c int64) string {
 	return s + " ISK"
 }
 
-// planHeaderLines formats the optimized preset for the header
+// planHeaderLines (mirrored by plan.js renderHeader: change both)
+// formats the optimized preset for the header
 // stat blocks: landed cost, market value, margin, elapsed.
 // Unknowns stay visible as unknowns, never zeros.
 func planHeaderLines(p *planPayload) (landed, landedSub, value, margin, marginSub, elapsed, elapsedSub string) {

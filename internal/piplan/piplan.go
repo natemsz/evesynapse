@@ -389,6 +389,9 @@ type Coverage struct {
 }
 
 // CoverageFor checks required raws against planet types.
+//
+// static/pi.js mirrors this check live in the browser (ticking
+// planets): change both.
 func CoverageFor(target string, planets []string) Coverage {
 	req := RequiredRaws(target)
 	avail := map[string]bool{}

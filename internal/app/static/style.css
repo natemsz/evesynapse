@@ -2277,8 +2277,13 @@ fit reads without scrolling. */
 /* Visual fitting: ship render with module slots on arcs around it. */
 /* The workbench is the tooltips' positioning context. */
 .fit-wb { position: relative; }
+/* Everything on the ring is sized as a share of the ring's own
+   width (cqi), in the proportions of the full-size 34rem ring, so a
+   ring squeezed by the three-column layout or a phone shrinks its
+   slots with it instead of piling them on top of each other. */
 .fit-visual {
   position: relative;
+  container-type: inline-size;
   width: min(34rem, 100%);
   aspect-ratio: 1 / 1;
   margin: 0 auto 1rem;
@@ -2376,7 +2381,7 @@ fit reads without scrolling. */
 .fit-vlabel {
   position: absolute;
   transform: translate(-50%, -50%);
-  font-size: 0.68rem;
+  font-size: clamp(0.5rem, 2cqi, 0.68rem);
   font-weight: 600;
   letter-spacing: 0.22em;
   text-indent: 0.22em;
@@ -2390,8 +2395,8 @@ fit reads without scrolling. */
 }
 .fit-vslot {
   position: absolute;
-  width: 2.9rem;
-  height: 2.9rem;
+  width: min(2.9rem, 8.5cqi);
+  height: min(2.9rem, 8.5cqi);
   transform: translate(-50%, -50%);
   border-radius: 50%;
   border: 2px dashed #3a3a3a;
@@ -2402,7 +2407,7 @@ fit reads without scrolling. */
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
+  font-size: min(1.2rem, 3.5cqi);
   touch-action: none;
 }
 .fit-vslot:hover { border-color: var(--accent); color: var(--text); }
@@ -2467,8 +2472,8 @@ look, none of its affordances. */
   position: absolute;
   right: -3px;
   bottom: -3px;
-  width: 1.2rem;
-  height: 1.2rem;
+  width: 42%;
+  height: 42%;
   border-radius: 50%;
   border: 1px solid #ffb84d;
   background: #0a0a0a;
@@ -2621,8 +2626,6 @@ html[data-theme="light"] .searchpanel {
 .fit-notice.err { border-color: var(--danger); background: rgba(198, 47, 16, 0.08); }
 @media (max-width: 480px) {
   .fit-vship { width: 44%; }
-  .fit-vslot { width: 2.3rem; height: 2.3rem; font-size: 1rem; }
-  .fit-vlabel { font-size: 0.6rem; }
   .fit-modsearch { top: 3.9rem; }
 }
 /* Unified search row: family chips + filters. */

@@ -127,7 +127,7 @@ type warsView struct {
 // list joined with the warmed war details.
 func (app *Application) handleIntelWars(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
+	data := app.publicPage(ctx) // public: no session needed
 
 	view := &warsView{}
 	data.IntelWars = view
@@ -252,7 +252,7 @@ type incursionsView struct {
 // the factions snapshot.
 func (app *Application) handleIntelIncursions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
+	data := app.publicPage(ctx) // public: no session needed
 
 	view := &incursionsView{}
 	data.IntelIncursions = view
@@ -349,7 +349,7 @@ type fwView struct {
 // from /fw/systems/, both from the global store.
 func (app *Application) handleIntelFW(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
+	data := app.publicPage(ctx) // public: no session needed
 
 	view := &fwView{}
 	data.IntelFW = view

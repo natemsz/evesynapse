@@ -21,13 +21,26 @@ function makeEl() {
   };
 }
 
+let fetchCalls = 0;
+
 function install(payload, opts) {
   opts = opts || {};
   const els = {};
+  fetchCalls = 0;
+  if (opts.embed) {
+    // The page as the server renders it: the plan data rides in
+    // a JSON data block.
+    els["plan-data"] = makeEl();
+    els["plan-data"].textContent = JSON.stringify(payload);
+  }
   const doc = {
     readyState: "complete",
     title: "probe",
     getElementById: function (id) {
+      // A page that lacks an element answers null, as a browser
+      // does. Without this the stub conjures every element asked
+      // for and can never show what a missing one breaks.
+      if (opts.missing && opts.missing.indexOf(id) !== -1) return null;
       if (!els[id]) {
         els[id] = makeEl();
         if (opts.throwOnMap && id === "plan-map") {
@@ -48,6 +61,7 @@ function install(payload, opts) {
   global.document = doc;
   global.window = win;
   global.fetch = function () {
+    fetchCalls++;
     return Promise.resolve({ ok: true, json: function () { return Promise.resolve(payload); } });
   };
   const resolved = require.resolve("../static/plan.js");
@@ -153,6 +167,25 @@ test("capital-scale plan renders every view on first load", async function () {
   assert.ok(els["plan-map"].innerHTML.indexOf("BOTTLENECK") !== -1, "map flags the bottleneck");
 });
 
+test("embedded plan data renders every view without a second request", async function () {
+  const els = install(capitalPayload(), { embed: true });
+  await waitFor(function () {
+    return els["plan-map"] && els["plan-map"].innerHTML.indexOf("plan-node") !== -1;
+  }, "map render");
+  for (const id of Object.keys(rendered)) {
+    assert.ok(els[id] && els[id].innerHTML.indexOf(rendered[id]) !== -1, id + " rendered");
+  }
+  assert.strictEqual(fetchCalls, 0, "the plan is not requested again");
+});
+
+test("a page without the data block falls back to the JSON route", async function () {
+  const els = install(capitalPayload());
+  await waitFor(function () {
+    return els["plan-map"] && els["plan-map"].innerHTML.indexOf("plan-node") !== -1;
+  }, "map render");
+  assert.strictEqual(fetchCalls, 1, "one request for the plan");
+});
+
 test("decision map renders as stage columns by depth", async function () {
   const els = install(capitalPayload());
   await waitFor(function () {
@@ -205,6 +238,69 @@ test("PI leaf cards carry the origin line and the PI planner link", async functi
   assert.ok(map.indexOf("Planetary interaction") !== -1, "origin line names PI");
   assert.ok(map.indexOf("P2") !== -1, "origin line carries the tier");
   assert.ok(map.indexOf("/industry/pi/?target=") !== -1, "origin line links to the PI planner recipe");
+});
+
+test("a plan that buys the product says so, with no saving line", async function () {
+  const payload = capitalPayload();
+  // Optimized buys the hull outright: its cost is the market
+  // price, a margin of exactly zero.
+  payload.root.delta = -500;
+  payload.optimized = Object.assign({}, payload.optimized, {
+    rootBought: true, materials: 200000, fees: 0, landed: 200000,
+    bought: 200000, built: 0, buyValue: 200000, profit: 0, marginPct: 0,
+    elapsed: 0, jobs: [], shopping: []
+  });
+  const els = install(payload);
+  await waitFor(function () {
+    return els["plan-map"] && els["plan-map"].innerHTML.indexOf("plan-node") !== -1;
+  }, "map render");
+  assert.strictEqual(els["plan-verdict"].textContent, "Buy it on the market: building costs more");
+  assert.strictEqual(els["plan-verdict"].className, "plan-verdict buy");
+  assert.strictEqual(els["plan-verdict"].hidden, false);
+  assert.ok(els["plan-verdict"].textContent.indexOf("saves") === -1, "no saving line for a buy decision");
+});
+
+// The failure class this harness exists for: the script reaches
+// for an element the page does not have, throws, and takes every
+// view down with it.
+test("missing optional elements leave every view rendered", async function () {
+  const missing = [
+    "plan-hubsplit", "plan-inspector", "plan-verdict", "plan-serverflag",
+    "plan-landed-sub", "plan-margin", "plan-margin-sub", "plan-data",
+    "plan-form", "me-toggle", "me-modal", "me-apply",
+    "plan-settings-toggle", "plan-settings-modal",
+    "judge-q", "judge-suggest", "system-q", "market-q", "market-value"
+  ];
+  const els = install(capitalPayload(), { missing: missing });
+  await waitFor(function () {
+    return els["plan-map"] && els["plan-map"].innerHTML.indexOf("plan-node") !== -1;
+  }, "map render");
+  for (const id of ["plan-map", "plan-gantt", "plan-buylist", "plan-fall"]) {
+    assert.ok(els[id] && els[id].innerHTML.indexOf(rendered[id]) !== -1, id + " rendered");
+    assert.ok(els[id].innerHTML.indexOf("need the plan data") === -1, id + " has no fail note");
+    assert.ok(els[id].innerHTML.indexOf("failed to render") === -1, id + " did not throw");
+  }
+  // The buy list does not depend on the hub split beside it.
+  assert.ok(els["plan-buylist"].innerHTML.indexOf("plan-buytable") !== -1, "buy list renders without the hub split");
+  for (const id of missing) assert.ok(!els[id], id + " stayed missing");
+});
+
+test("a missing view container leaves the other views rendered", async function () {
+  const views = ["plan-map", "plan-gantt", "plan-buylist", "plan-fall"];
+  for (const gone of views) {
+    const els = install(capitalPayload(), { missing: [gone] });
+    // Views render in one pass, the cost flow last (the timeline
+    // stands in when the cost flow is the one missing).
+    const last = gone === "plan-fall" ? "plan-gantt" : "plan-fall";
+    await waitFor(function () {
+      return els[last] && els[last].innerHTML.indexOf(rendered[last]) !== -1;
+    }, last + " render without " + gone);
+    for (const id of views) {
+      if (id === gone) continue;
+      assert.ok(els[id] && els[id].innerHTML.indexOf(rendered[id]) !== -1, id + " rendered without " + gone);
+      assert.ok(els[id].innerHTML.indexOf("failed to render") === -1, id + " did not throw without " + gone);
+    }
+  }
 });
 
 test("one throwing view does not blank the others", async function () {

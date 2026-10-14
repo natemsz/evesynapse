@@ -1,0 +1,17 @@
+{{define "title"}}Trade ideas{{end}}
+{{define "content"}}
+<h1><span class="gt">Trade ideas</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{with .TradeIdeas}}
+<p><small>Gemma's read on the <a href="/market/scanner/">spread scanner</a>'s top Forge rows, asked at most twice a day. A model's suggestions, not advice: check the numbers on the scanner before trading.</small></p>
+<section class="card">
+  {{if .HasIdeas}}
+  {{.Body}}
+  <p><small>As of {{.AsOf}} · Gemma on the Forge spread scanner.</small></p>
+  {{else if .Configured}}<p><small>No ideas yet — the next refresh asks the model once the Forge sweep lands.</small></p>
+  {{else}}<p><small>Trade ideas are not set up — set <code>CLOUDFLARE_ACCOUNT_ID</code> / <code>CLOUDFLARE_AUTH_TOKEN</code> (see <code>.env.example</code>).</small></p>{{end}}
+</section>
+{{end}}
+{{end}}

@@ -807,6 +807,12 @@ type TradeIdea struct {
 	Model string    `json:"model"`
 }
 
+type TradeIdeasAttempt struct {
+	ID          int64     `json:"id"`
+	AttemptedAt time.Time `json:"attempted_at"`
+	Failures    int32     `json:"failures"`
+}
+
 type TypeDetail struct {
 	TypeID      int64        `json:"type_id"`
 	Description string       `json:"description"`

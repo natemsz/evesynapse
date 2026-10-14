@@ -31,6 +31,24 @@ func (q *Queries) GetTradeIdeas(ctx context.Context) (GetTradeIdeasRow, error) {
 	return i, err
 }
 
+const getTradeIdeasAttempt = `-- name: GetTradeIdeasAttempt :one
+
+SELECT attempted_at, failures FROM trade_ideas_attempts WHERE id = 1
+`
+
+type GetTradeIdeasAttemptRow struct {
+	AttemptedAt time.Time `json:"attempted_at"`
+	Failures    int32     `json:"failures"`
+}
+
+// The last ask and the run of failures it ended (schema 043).
+func (q *Queries) GetTradeIdeasAttempt(ctx context.Context) (GetTradeIdeasAttemptRow, error) {
+	row := q.db.QueryRowContext(ctx, getTradeIdeasAttempt)
+	var i GetTradeIdeasAttemptRow
+	err := row.Scan(&i.AttemptedAt, &i.Failures)
+	return i, err
+}
+
 const putTradeIdeas = `-- name: PutTradeIdeas :exec
 INSERT INTO trade_ideas (id, body, as_of, model)
 VALUES (1, $1, $2, $3)
@@ -48,5 +66,23 @@ type PutTradeIdeasParams struct {
 
 func (q *Queries) PutTradeIdeas(ctx context.Context, arg PutTradeIdeasParams) error {
 	_, err := q.db.ExecContext(ctx, putTradeIdeas, arg.Body, arg.AsOf, arg.Model)
+	return err
+}
+
+const putTradeIdeasAttempt = `-- name: PutTradeIdeasAttempt :exec
+INSERT INTO trade_ideas_attempts (id, attempted_at, failures)
+VALUES (1, $1, $2)
+ON CONFLICT (id) DO UPDATE SET
+    attempted_at = excluded.attempted_at,
+    failures = excluded.failures
+`
+
+type PutTradeIdeasAttemptParams struct {
+	AttemptedAt time.Time `json:"attempted_at"`
+	Failures    int32     `json:"failures"`
+}
+
+func (q *Queries) PutTradeIdeasAttempt(ctx context.Context, arg PutTradeIdeasAttemptParams) error {
+	_, err := q.db.ExecContext(ctx, putTradeIdeasAttempt, arg.AttemptedAt, arg.Failures)
 	return err
 }

@@ -1719,6 +1719,7 @@
     { name: "PI Planner", url: "/industry/pi/" },
     { name: "Market", url: "/market/" },
     { name: "Spread scanner", url: "/market/scanner/" },
+    { name: "Trade ideas", url: "/market/ideas/" },
     { name: "Tradefinder", url: "/market/tradefinder/" },
     { name: "Top stations", url: "/market/leaderboard/" },
     { name: "Restock planner", url: "/market/restock/" },

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -45,13 +46,25 @@ func freshnessLine(now, fetchedAt time.Time, reason string) string {
 	return s
 }
 
+// freshnessReasonWindow bounds how long before a fetch the viewer's
+// own warming or search may be to count as its cause.
+const freshnessReasonWindow = 15 * time.Minute
+
 // fetchReason explains why the record rendered under viewKey was
 // fetched when it was: a foresight warming first, a search guess
-// second, routine ("") otherwise. Best-effort display logic: any
-// database trouble resolves to routine, never to a broken page.
+// second, routine ("") otherwise. Either counts only when it was
+// this viewer's own, inside freshnessReasonWindow before the fetch:
+// the line never credits a visitor with somebody else's search or
+// event. Best-effort display logic: any database trouble resolves to
+// routine, never to a broken page.
 func (app *Application) fetchReason(ctx context.Context, viewKey, kind string, entityID, regionID int64, fetchedAt time.Time) string {
+	userID := app.userID(ctx)
+	if userID == 0 {
+		return ""
+	}
+	since := fetchedAt.Add(-freshnessReasonWindow)
 	event, err := app.queries.GetForesightWarmedForView(ctx, db.GetForesightWarmedForViewParams{
-		ViewKey: viewKey, WarmedAt: timeSet(fetchedAt),
+		ViewKey: viewKey, UserID: userID, WarmedAt: timeSet(fetchedAt), Since: timeSet(since),
 	})
 	if err == nil {
 		switch event {
@@ -72,7 +85,8 @@ func (app *Application) fetchReason(ctx context.Context, viewKey, kind string, e
 		logging.Errorf("freshness: foresight reason for %s: %v", viewKey, err)
 	}
 	if _, err := app.queries.GetTypingGuessNotedForEntity(ctx, db.GetTypingGuessNotedForEntityParams{
-		Kind: kind, EntityID: entityID, RegionID: regionID, NotedAt: fetchedAt,
+		Kind: kind, EntityID: entityID, RegionID: regionID,
+		BoxPrefix: strconv.FormatInt(userID, 10) + "|", NotedAt: fetchedAt, Since: since,
 	}); err == nil {
 		return "your search"
 	} else if !errors.Is(err, sql.ErrNoRows) {

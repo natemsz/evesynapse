@@ -1,15 +1,22 @@
-// plan.js — the build planner's client side. It fetches the plan
-// JSON (?format=json), renders the four tabs, and recomputes on
-// make/buy toggles without a round trip.
+// plan.js — the build planner's client side. It reads the plan
+// data the page carries (#plan-data; ?format=json when absent),
+// renders the four tabs, and recomputes on make/buy toggles without
+// a round trip.
 //
-// The trust rule: this file duplicates no formula. Every figure
-// it shows is a server figure or a sum of server figures, and the
-// payload carries the server's canonical preset totals. One
-// shared compute() path serves presets and custom masks alike;
-// presets are verified against the server exactly (integer
-// cents, whole seconds), and any mismatch locks the page to
-// server totals with a visible flag. A client bug can only fall
-// back, never invent a number.
+// This file mirrors server formulas, on purpose, so a toggle
+// recomputes live. Each mirror names its Go twin, and a change to
+// either side must change both:
+//   decide/compute      char_planner_payload.go planRollup (buyNode, add)
+//                       and planFinishPreset (value, profit, margin)
+//   schedule            planSchedule
+//   renderHeader        planHeaderLines and planVerdictLine
+//   iskC, dur           iskCompactCents, humanDuration
+// Per-node figures (costs, fees, times) are the server's, never
+// recomputed here. The payload carries the server's preset totals;
+// presets are checked against them exactly (integer cents, whole
+// seconds) and any mismatch locks the page to server totals with a
+// visible flag, so a drifted mirror shows server truth instead of
+// an invented number.
 //
 // Markup rules (CSP): no inline styles or handlers anywhere.
 // Geometry rides data-w / data-left attributes that app.js
@@ -91,7 +98,8 @@ function findNode(path) {
   return n;
 }
 
-// --- the one compute path (mirrors Go planRollup) ---
+// --- the one compute path (mirrors Go planRollup and
+// planFinishPreset: change both) ---
 function decide(n, isRoot, mask) {
   if (n.short <= 0) return "have";
   if (!n.build) return "buy";
@@ -105,7 +113,7 @@ function decide(n, isRoot, mask) {
 
 function compute(mask) {
   var t = { materials: 0, fees: 0, feesKnown: true, complete: true,
-    unpriced: 0, buyValue: 0, bought: 0, built: 0 };
+    unpriced: 0, buyValue: 0, bought: 0, built: 0, rootBought: false };
   var shop = {};
   var jobs = [];
   function add(n, isRoot, built) {
@@ -115,7 +123,8 @@ function compute(mask) {
       // Mirrors the server: the finished product never lands in
       // the shopping aggregation (its outright cost still
       // accrues to the money totals below).
-      if (!isRoot) shop[n.id] = (shop[n.id] || 0) + n.short;
+      if (isRoot) t.rootBought = true;
+      else shop[n.id] = (shop[n.id] || 0) + n.short;
       if (n.known) {
         var c = n.build ? n.buy : n.materials;
         t.materials += c;
@@ -187,7 +196,8 @@ function findFirst(id) {
   return priced || hit;
 }
 
-// Deterministic list scheduling (mirrors Go planSchedule).
+// Deterministic list scheduling (mirrors Go planSchedule: change
+// both).
 function schedule(jobs, slots) {
   if (slots < 1) slots = 1;
   var ordered = jobs.slice().sort(function (a, b) {
@@ -271,7 +281,8 @@ function checkPreset(name, server) {
     if (c[keys[i]] !== server[keys[i]]) return false;
   }
   var flags = [["feesKnown", "feesKnown"], ["complete", "complete"],
-    ["known", "valueKnown"], ["profKnown", "profKnown"]];
+    ["known", "valueKnown"], ["profKnown", "profKnown"],
+    ["rootBought", "rootBought"]];
   for (var j = 0; j < flags.length; j++) {
     if (!!c[flags[j][0]] !== !!server[flags[j][1]]) return false;
   }
@@ -338,9 +349,19 @@ function renderHeader(t) {
     var el = $(id);
     if (el) el.className = marginCls;
   });
+  // Mirrors Go planVerdictLine. A scenario that buys the finished
+  // product states no saving: it says to buy, and why when the
+  // market price is what decided it (a manual override may buy a
+  // product that is cheaper to build).
   var verdict = $("plan-verdict");
   if (verdict) {
-    if (t.known && t.profKnown) {
+    if (t.rootBought) {
+      verdict.textContent = (P.root.deltaOn && P.root.delta < 0) ?
+        "Buy it on the market: building costs more" :
+        "This scenario buys the finished product outright";
+      verdict.className = "plan-verdict buy";
+      verdict.hidden = false;
+    } else if (t.known && t.profKnown) {
       verdict.textContent = t.profit >= 0 ? "Building saves " + iskC(t.profit) : "Buying saves " + iskC(-t.profit);
       verdict.className = "plan-verdict " + (t.profit >= 0 ? "build" : "buy");
       verdict.hidden = false;
@@ -756,8 +777,16 @@ function renderGantt(t) {
 
 // --- buy list and hub split ---
 function renderBuy(t) {
+  // The list and the hub split are separate elements: a page
+  // without one still gets the other.
   var list = $("plan-buylist"), hub = $("plan-hubsplit");
-  if (!list || !hub) return;
+  if (list) renderBuyList(list, t);
+  if (hub) renderHubSplit(hub, t);
+  var copy = $("plan-copy");
+  if (copy) copy.addEventListener("click", copyMultibuy);
+}
+
+function renderBuyList(list, t) {
   if (!t.shopping.length) {
     // Empty for two honest reasons: stock covers everything, or
     // the scenario buys the finished product outright (the root
@@ -782,6 +811,9 @@ function renderBuy(t) {
       (t.complete ? "" : "<p><small>" + t.unpriced + " line(s) have no price data and are not in the total.</small></p>") +
       '<p><button type="button" id="plan-copy">Copy multibuy list</button></p>';
   }
+}
+
+function renderHubSplit(hub, t) {
   var buy = t.buyValue, stock = P.stockVal, tot = buy + stock;
   var html = "<h4>Hub split</h4>";
   if (tot > 0) {
@@ -793,8 +825,6 @@ function renderBuy(t) {
     html += "<p><small>No priced value to split yet.</small></p>";
   }
   hub.innerHTML = html;
-  var copy = $("plan-copy");
-  if (copy) copy.addEventListener("click", copyMultibuy);
 }
 
 function copyMultibuy() {
@@ -915,7 +945,22 @@ function setPayload(payload) {
   renderAll();
 }
 
+// The page carries its own plan data (#plan-data): the server
+// builds it for the header figures anyway, so asking for it again
+// would compute the whole plan a second time. The fetch remains
+// only for a page that came without the block.
+function embeddedPayload() {
+  var el = $("plan-data");
+  var raw = el && el.textContent;
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch (e) { return null; }
+}
+
 function loadJSON() {
+  var embedded = embeddedPayload();
+  if (embedded) {
+    return new Promise(function (resolve) { setPayload(embedded); resolve(); });
+  }
   return fetch(planURL(), { headers: { Accept: "application/json" } }).then(function (r) {
     if (!r.ok) throw new Error("plan data unavailable");
     return r.json();

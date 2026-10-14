@@ -15,6 +15,8 @@ import (
 // template and script, so a page the other tests never render is
 // still covered. Dynamic geometry goes through data-* attributes
 // that app.js applies (applyDataGeometry), not through style="…".
+// A <script type="application/json"> is a data block: the browser
+// never runs it and the policy does not apply to it.
 func TestNoInlineCodeInTemplatesOrScripts(t *testing.T) {
 	forbidden := []struct {
 		re   *regexp.Regexp
@@ -44,7 +46,7 @@ func TestNoInlineCodeInTemplatesOrScripts(t *testing.T) {
 		}
 		for _, m := range inlineScript.FindAllStringSubmatchIndex(src, -1) {
 			attrs := src[m[2]:m[3]]
-			if !strings.Contains(attrs, "src=") {
+			if !strings.Contains(attrs, "src=") && !strings.Contains(attrs, `type="application/json"`) {
 				t.Errorf("%s has an inline <script> near %q", name, snippet(src, m[0]))
 			}
 		}

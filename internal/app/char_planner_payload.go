@@ -1,12 +1,14 @@
 package app
 
 // Planner payload: one JSON blob per computed plan carrying the
-// full build tree with every figure the client may display. The
-// client duplicates no formula: it only sums server figures over
-// make/buy masks (toggles and presets). Each preset's canonical
-// totals ride along; the client compares in integer cents and
-// falls back to the server figures on any mismatch, so a client
-// bug shows server truth, never an invented number.
+// full build tree with every figure the client may display.
+// plan.js mirrors the preset rollup, the schedule and the header
+// lines here so a make/buy toggle recomputes live; each mirrored
+// function names its twin in plan.js, and a change to either side
+// must change both. Each preset's totals ride along; the client
+// compares in integer cents and falls back to the server figures
+// on any mismatch, so a drifted mirror shows server truth, never an
+// invented number.
 
 import (
 	"context"
@@ -181,23 +183,27 @@ type planPresetTotals struct {
 	// Bought is the at-market cost of purchased lines; Built
 	// the market cost of raw materials consumed by built jobs.
 	// Bought + Built always equals Materials.
-	Bought    int64          `json:"bought"`
-	Built     int64          `json:"built"`
-	Complete  bool           `json:"complete"`
-	Unpriced  int            `json:"unpriced"`
-	Value     int64          `json:"value"`
-	Known     bool           `json:"valueKnown"`
-	Profit    int64          `json:"profit"`
-	ProfKnown bool           `json:"profKnown"`
-	MarginPct float64        `json:"marginPct"`
-	Elapsed   int64          `json:"elapsed"`
-	BuyValue  int64          `json:"buyValue"`
-	StockVal  int64          `json:"stockVal"`
-	Shopping  []planShopLine `json:"shopping"`
-	Jobs      []planJobSpan  `json:"jobs"`
+	Bought int64 `json:"bought"`
+	Built  int64 `json:"built"`
+	// RootBought: this scenario buys the finished product
+	// outright and builds nothing.
+	RootBought bool           `json:"rootBought"`
+	Complete   bool           `json:"complete"`
+	Unpriced   int            `json:"unpriced"`
+	Value      int64          `json:"value"`
+	Known      bool           `json:"valueKnown"`
+	Profit     int64          `json:"profit"`
+	ProfKnown  bool           `json:"profKnown"`
+	MarginPct  float64        `json:"marginPct"`
+	Elapsed    int64          `json:"elapsed"`
+	BuyValue   int64          `json:"buyValue"`
+	StockVal   int64          `json:"stockVal"`
+	Shopping   []planShopLine `json:"shopping"`
+	Jobs       []planJobSpan  `json:"jobs"`
 }
 
 // planRollup accumulates one preset's totals over the tree.
+// Mirrored by plan.js decide/compute: change both.
 // Bought subtrees are pruned (their jobs, fees and shopping
 // never accrue); covered nodes cost nothing.
 type planRollup struct {
@@ -261,7 +267,9 @@ func (r *planRollup) add(n *buildplan.Node, isRoot, built bool) *planSchedNode {
 		// a scenario buys the root outright, its cost still
 		// accrues below, but the buy verdict lives in the
 		// header, not in the list of inputs to buy.
-		if !isRoot {
+		if isRoot {
+			r.tot.RootBought = true
+		} else {
 			r.shop[n.TypeID] += n.Shortfall
 		}
 		if n.PriceKnown {
@@ -290,7 +298,8 @@ func (r *planRollup) add(n *buildplan.Node, isRoot, built bool) *planSchedNode {
 	return sn
 }
 
-// planSchedule runs deterministic list scheduling over the
+// planSchedule (mirrored by plan.js schedule: change both) runs
+// deterministic list scheduling over the
 // preset's jobs: post-order (children first), ties by type ID,
 // each job on the lowest free slot once its dependencies end.
 // It returns spans and the makespan.
@@ -393,23 +402,28 @@ func planSchedule(jobs []*planSchedNode, slots int, nameOf func(int64) string) (
 // figure, the three canonical preset totals (the cross-check),
 // and the run's inputs. Money is integer cents throughout.
 type planPayload struct {
-	Product    int64            `json:"product"`
-	Name       string           `json:"name"`
-	Produced   int64            `json:"produced"`
-	Market     string           `json:"market"`
-	MarketName string           `json:"marketName"`
-	SystemID   int64            `json:"system"`
-	SystemName string           `json:"systemName"`
-	IndexPct   float64          `json:"indexPct"`
-	IndexKnown bool             `json:"indexKnown"`
-	PricesNote string           `json:"pricesNote"`
-	Slots      int              `json:"slots"`
-	SlotsNote  string           `json:"slotsNote"`
-	TimeNote   string           `json:"timeNote"`
-	Root       *planNodeDTO     `json:"root"`
-	Full       planPresetTotals `json:"full"`
-	Optimized  planPresetTotals `json:"optimized"`
-	BuyComp    planPresetTotals `json:"buyComp"`
+	Product    int64   `json:"product"`
+	Name       string  `json:"name"`
+	Produced   int64   `json:"produced"`
+	Market     string  `json:"market"`
+	MarketName string  `json:"marketName"`
+	SystemID   int64   `json:"system"`
+	SystemName string  `json:"systemName"`
+	IndexPct   float64 `json:"indexPct"`
+	IndexKnown bool    `json:"indexKnown"`
+	PricesNote string  `json:"pricesNote"`
+	Slots      int     `json:"slots"`
+	SlotsNote  string  `json:"slotsNote"`
+	TimeNote   string  `json:"timeNote"`
+	// Owner is the one character the jobs are timed and slotted
+	// as (planOwner); OwnerNote is set when the plan spans more
+	// characters than that.
+	Owner     string           `json:"owner"`
+	OwnerNote string           `json:"ownerNote"`
+	Root      *planNodeDTO     `json:"root"`
+	Full      planPresetTotals `json:"full"`
+	Optimized planPresetTotals `json:"optimized"`
+	BuyComp   planPresetTotals `json:"buyComp"`
 	// StockVal is the priced stockpile behind the hub split.
 	// It never depends on the mask, so it sits at top level.
 	StockVal int64 `json:"stockVal"`
@@ -432,67 +446,92 @@ func (app *Application) planTimeSkills(ctx context.Context) map[string]int64 {
 	return out
 }
 
-// planTimeFactor is the job-time multiplier from the scope's
+// planOwner names the one character a plan's jobs are timed and
+// slotted as. Job slots are per character in game, and so are the
+// skills that shorten a job, so neither may be the best level
+// found across several characters. The planner assigns no step to
+// anyone in particular, so every step is the owner's.
+//
+// A single judged character owns its plan. A wider scope (a tag,
+// everyone together) pools stock and blueprints, and is owned by
+// the acting character when it is in the scope, else by the
+// scope's first character.
+func planOwner(chars []db.Character, actingID int64) *db.Character {
+	for i := range chars {
+		if chars[i].CharacterID == actingID {
+			return &chars[i]
+		}
+	}
+	if len(chars) > 0 {
+		return &chars[0]
+	}
+	return nil
+}
+
+// planOwnerNote says so when a plan spans characters: whose skills
+// time and slot the jobs, and that the stock and blueprints are
+// pooled. A one-character plan needs no such line.
+func planOwnerNote(owner *db.Character, chars []db.Character) string {
+	if owner == nil || len(chars) < 2 {
+		return ""
+	}
+	return "Jobs timed and slotted as " + owner.Name + "; stock and blueprints pooled from " + strconv.Itoa(len(chars)) + " characters"
+}
+
+// planTimeFactor is the job-time multiplier from the owner's
 // trained Industry (4%/level) and Advanced Industry (3%/level),
-// multiplicative after TE. Unknown skills (or no scope) mean
-// no reduction; a manual ?timef= value wins when sane.
-func planTimeFactor(raw string, ids map[string]int64, data plannerScopeData, chars []db.Character) (float64, string) {
+// multiplicative after TE. Both levels are one character's (see
+// planOwner). Unknown skills (or no owner) mean no reduction; a
+// manual ?timef= value wins when sane.
+func planTimeFactor(raw string, ids map[string]int64, data plannerScopeData, owner *db.Character) (float64, string) {
 	if f, err := strconv.ParseFloat(raw, 64); err == nil && f >= 0.05 && f <= 1 {
 		return f, "Manual time factor."
 	}
-	best := func(skillID int64) int {
-		level := 0
-		for _, ch := range chars {
-			if trained, ok := data.Skills[ch.CharacterID]; ok && trained[skillID] > level {
-				level = trained[skillID]
-			}
-		}
-		return level
-	}
-	ind, adv := 0, 0
-	if id := ids["Industry"]; id > 0 {
-		ind = best(id)
-	}
-	if id := ids["Advanced Industry"]; id > 0 {
-		adv = best(id)
-	}
-	if ind == 0 && adv == 0 {
+	if owner == nil {
 		return 1, "No time skills on file: full build times shown."
 	}
+	trained := data.Skills[owner.CharacterID]
+	ind, adv := 0, 0
+	if id := ids["Industry"]; id > 0 {
+		ind = trained[id]
+	}
+	if id := ids["Advanced Industry"]; id > 0 {
+		adv = trained[id]
+	}
+	if ind == 0 && adv == 0 {
+		return 1, "No time skills on file for " + owner.Name + ": full build times shown."
+	}
 	factor := (1 - 0.04*float64(ind)) * (1 - 0.03*float64(adv))
-	return factor, "Industry and Advanced Industry applied from trained skills."
+	return factor, "Job times use " + owner.Name + "'s Industry and Advanced Industry."
 }
 
-// planSlots counts manufacturing job slots: one plus Mass
-// Production plus Advanced Mass Production, best across the
-// scope; a manual ?slots= value wins when sane.
-func planSlots(raw string, ids map[string]int64, data plannerScopeData, chars []db.Character) (int, string) {
+// planSlots counts the owner's manufacturing job slots: one plus
+// Mass Production plus Advanced Mass Production, both that one
+// character's (see planOwner); a manual ?slots= value wins when
+// sane.
+func planSlots(raw string, ids map[string]int64, data plannerScopeData, owner *db.Character) (int, string) {
 	if n, err := strconv.Atoi(raw); err == nil && n >= 1 && n <= 20 {
 		return n, "Manual slot count."
 	}
-	best := func(name string) int {
-		level := 0
-		for _, ch := range chars {
-			if trained, ok := data.Skills[ch.CharacterID]; ok && trained[ids[name]] > level {
-				level = trained[ids[name]]
-			}
-		}
-		return level
-	}
-	slots := 1
-	if ids["Mass Production"] > 0 {
-		slots += best("Mass Production")
-	}
-	if ids["Advanced Mass Production"] > 0 {
-		slots += best("Advanced Mass Production")
-	}
-	if slots <= 1 {
+	if owner == nil {
 		return 1, "One slot: no Mass Production on file."
 	}
-	return slots, "Slots from trained Mass Production."
+	trained := data.Skills[owner.CharacterID]
+	slots := 1
+	if id := ids["Mass Production"]; id > 0 {
+		slots += trained[id]
+	}
+	if id := ids["Advanced Mass Production"]; id > 0 {
+		slots += trained[id]
+	}
+	if slots <= 1 {
+		return 1, "One slot: no Mass Production on file for " + owner.Name + "."
+	}
+	return slots, owner.Name + "'s job slots (Mass Production)."
 }
 
-// planFinishPreset fills value/profit/shopping/schedule around
+// planFinishPreset (value, profit and margin mirrored by plan.js
+// compute: change both) fills value/profit/shopping/schedule around
 // a rollup: product sell value, margin, stock value, buy lines,
 // and the slot-aware Gantt spans.
 func planFinishPreset(r *planRollup, root *buildplan.Node, prices map[int64]esi.MarketPrice, slots int, nameOf func(int64) string, unitOf func(int64) (float64, bool)) {
@@ -567,7 +606,8 @@ func iskCompactCents(c int64) string {
 	return s + " ISK"
 }
 
-// planHeaderLines formats the optimized preset for the header
+// planHeaderLines (mirrored by plan.js renderHeader: change both)
+// formats the optimized preset for the header
 // stat blocks: landed cost, market value, margin, elapsed.
 // Unknowns stay visible as unknowns, never zeros.
 func planHeaderLines(p *planPayload) (landed, landedSub, value, margin, marginSub, elapsed, elapsedSub string) {
@@ -618,14 +658,25 @@ func planHeaderLines(p *planPayload) (landed, landedSub, value, margin, marginSu
 	return landed, landedSub, value, margin, marginSub, elapsed, elapsedSub
 }
 
+// planVerdictBuy is the verdict when the optimized plan buys the
+// product: the optimized preset only does that when the market
+// price is below the cost of building. plan.js carries the same
+// words.
+const planVerdictBuy = "Buy it on the market: building costs more"
+
 // planVerdictLine is the build-vs-buy verdict shown above the
 // preset buttons: the optimized scenario's profit, worded as
 // what building (or buying) saves, with the color class of the
 // winning side. The price itself already sits in the header, so
-// the line carries only the saving. plan.js renderHeader rewords
-// it per preset with the same rule.
+// the line carries only the saving. A scenario that buys the
+// finished product has no saving to state (its cost is the
+// market price, a margin of exactly zero): the line says to buy.
+// plan.js renderHeader rewords it per preset with the same rule.
 func planVerdictLine(p *planPayload) (text, cls string) {
 	b := p.Optimized
+	if b.RootBought {
+		return planVerdictBuy, "buy"
+	}
 	if !b.Known || !b.ProfKnown {
 		return "", ""
 	}
@@ -678,19 +729,11 @@ func buildPlanPayload(res *buildplan.Result, productID int64, prices map[int64]e
 	return p
 }
 
-// planJitaPrices reads Forge sell rows for exactly the tree's
-// types (one bounded read). Missing rows stay missing: no
-// price data, never a silent fallback. It returns the map and
-// the freshest row stamp.
-func (app *Application) planRegionPrices(ctx context.Context, res *buildplan.Result, regionID int64) (map[int64]esi.MarketPrice, time.Time, error) {
-	seen := make(map[int64]bool)
-	var ids []int64
-	buildplan.Walk(res.Root, func(n *buildplan.Node) {
-		if !seen[n.TypeID] {
-			seen[n.TypeID] = true
-			ids = append(ids, n.TypeID)
-		}
-	})
+// planRegionPrices reads one region's sell rows for exactly the
+// given types (one bounded read). A type with no row is simply
+// absent; planMarket layers what is found over the guide. It
+// returns the map and the freshest row stamp.
+func (app *Application) planRegionPrices(ctx context.Context, ids []int64, regionID int64) (map[int64]esi.MarketPrice, time.Time, error) {
 	rows, err := app.queries.ListMarketTypePricesForTypes(ctx, db.ListMarketTypePricesForTypesParams{
 		RegionID: regionID, Column2: ids,
 	})
@@ -733,8 +776,10 @@ func planMarketRegion(raw string) int64 {
 // row is on file, and everything else keeps its guide price —
 // a thin region thins the basis note, never the totals (the
 // old all-or-nothing Jita mode zeroed plans whose items had no
-// Forge rows).
-func (app *Application) planMarket(ctx context.Context, q url.Values, res *buildplan.Result, guide map[int64]esi.MarketPrice) (prices map[int64]esi.MarketPrice, market, marketName, pricesNote string) {
+// Forge rows). ids are the types the plan can name (the
+// blueprint closure): the source is settled before the tree is
+// built, so the tree is built once.
+func (app *Application) planMarket(ctx context.Context, q url.Values, ids []int64, guide map[int64]esi.MarketPrice) (prices map[int64]esi.MarketPrice, market, marketName, pricesNote string) {
 	regionID := planMarketRegion(q.Get("market"))
 	if regionID == 0 {
 		return guide, plannerMarketGuide, "Cluster average", "Cluster-average guide prices."
@@ -744,7 +789,7 @@ func (app *Application) planMarket(ctx context.Context, q url.Values, res *build
 	if reg, err := app.queries.GetSDERegion(ctx, regionID); err == nil {
 		marketName = reg.Name
 	}
-	rows, stamp, err := app.planRegionPrices(ctx, res, regionID)
+	rows, stamp, err := app.planRegionPrices(ctx, ids, regionID)
 	if err != nil {
 		logging.Errorf("planner: region prices: %v", err)
 		return guide, market, marketName, marketName + " sell unavailable; cluster average shown."
@@ -929,11 +974,6 @@ func planAdjustedMap(guide map[int64]esi.MarketPrice) map[int64]float64 {
 	return out
 }
 
-// buildPlanPayloadView computes the interactive blob around a
-// plan: market source, build system, skill factor, slots, the
-// tree DTO, and canonical preset totals. It re-expands when the
-// market source differs from the guide the first pass used;
-// the memoized SDE source keeps that cheap and local.
 // planOriginOf builds the origin classifier for one plan: one
 // batched group lookup over the tree's types, then the pure
 // classifier. A failed lookup degrades to PI-only origins.
@@ -955,26 +995,37 @@ func (app *Application) planOriginOf(ctx context.Context, root *buildplan.Node) 
 	return planOriginClassifier(groups)
 }
 
-func (app *Application) buildPlanPayloadView(ctx context.Context, q url.Values, src *sdePlannerSource, res *buildplan.Result, runs int64, overrides map[int64]int, owned map[int64]buildplan.OwnedBlueprint, stock map[int64]int64, scoped plannerScopeData, chars []db.Character, productID int64, systemID int64, systemName string, index float64, indexKnown bool, nameOf func(int64) string) (template.JS, *planPayload) {
-	guide := app.valuationPrices(ctx)
-	prices, market, marketName, pricesNote := app.planMarket(ctx, q, res, guide)
-	adjusted := planAdjustedMap(guide)
-	if market != plannerMarketGuide {
-		facMat, facTime, facCost, _, facStructure, _ := app.planFacility(ctx, q.Get("structure"), q.Get("rig"), systemID)
-		facTax, alpha, _ := planJobTaxes(q, facStructure)
-		re, err := buildplan.Build(src, productID, buildplan.Input{
-			Runs: runs, MEOverride: overrides, Owned: owned,
-			Stock: stock, Prices: prices,
-			CostIndex: index, Adjusted: adjusted,
-			FacilityMatFactor: facMat, FacilityTimeFactor: facTime, FacilityCostFactor: facCost,
-			FacilityTax: facTax, AlphaClone: alpha,
-		})
-		if err == nil && !re.TooLarge {
-			res = re
-		}
-	}
-	factor, timeNote := planTimeFactor(q.Get("timef"), app.planTimeSkills(ctx), scoped, chars)
-	slots, slotsNote := planSlots(q.Get("slots"), app.slotSkillIDs(ctx), scoped, chars)
+// planPayloadArgs is a built plan and what buildPlanPayloadView
+// labels it with: the request, the prices and market it was built
+// with, the scope's stock and characters, and the build system.
+type planPayloadArgs struct {
+	Query                          url.Values
+	Result                         *buildplan.Result
+	Prices                         map[int64]esi.MarketPrice
+	Market, MarketName, PricesNote string
+	Stock                          map[int64]int64
+	Scoped                         plannerScopeData
+	Chars                          []db.Character
+	ProductID                      int64
+	SystemID                       int64
+	SystemName                     string
+	Index                          float64
+	IndexKnown                     bool
+	NameOf                         func(int64) string
+}
+
+// buildPlanPayloadView shapes the interactive blob around a
+// built plan: skill factor, slots, the tree DTO and the canonical
+// preset totals, labelled with the market and build system the
+// caller built it with. It never expands the tree again.
+func (app *Application) buildPlanPayloadView(ctx context.Context, a planPayloadArgs) (template.JS, *planPayload) {
+	q, res, prices, stock, scoped, chars := a.Query, a.Result, a.Prices, a.Stock, a.Scoped, a.Chars
+	market, marketName, pricesNote := a.Market, a.MarketName, a.PricesNote
+	productID, systemID, systemName := a.ProductID, a.SystemID, a.SystemName
+	index, indexKnown, nameOf := a.Index, a.IndexKnown, a.NameOf
+	owner := planOwner(chars, sessionCharID(app.sessions, ctx))
+	factor, timeNote := planTimeFactor(q.Get("timef"), app.planTimeSkills(ctx), scoped, owner)
+	slots, slotsNote := planSlots(q.Get("slots"), app.slotSkillIDs(ctx), scoped, owner)
 	unitOf := func(id int64) (float64, bool) { return buildplan.UnitPrice(prices, id) }
 	p := buildPlanPayload(res, productID, prices, unitOf, factor, slots, stock, nameOf, app.planOriginOf(ctx, res.Root))
 	p.Market, p.MarketName = market, marketName
@@ -986,6 +1037,10 @@ func (app *Application) buildPlanPayloadView(ctx context.Context, q url.Values, 
 	p.PricesNote = pricesNote
 	p.Slots, p.SlotsNote = slots, slotsNote
 	p.TimeNote = timeNote
+	if owner != nil {
+		p.Owner = owner.Name
+	}
+	p.OwnerNote = planOwnerNote(owner, chars)
 	raw, err := json.Marshal(p)
 	if err != nil {
 		logging.Errorf("planner: payload for product %d: %v", productID, err)

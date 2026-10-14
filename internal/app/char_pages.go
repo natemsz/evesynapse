@@ -99,7 +99,8 @@ func (app *Application) locationTitle(ctx context.Context, id int64, locType str
 	}
 }
 
-// humanDuration renders a duration compactly for "time remaining"
+// humanDuration (mirrored by plan.js dur: change both) renders a
+// duration compactly for "time remaining"
 // labels: "2d 3h", "3h 12m", "45m", "<1m". Non-positive durations
 // render "<1m"; callers that care check the sign themselves.
 func humanDuration(d time.Duration) string {

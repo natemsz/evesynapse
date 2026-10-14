@@ -193,12 +193,12 @@ func TestIntelPagesRenderFromStore(t *testing.T) {
 	}
 	mustContain(t, "/ (signed out)", rec.Body.String(), "Tranquility: 23,456 players online")
 
-	// Intel pages require sign-in.
+	// Intel pages are public: the stored wars render signed out too.
 	req = httptest.NewRequest(http.MethodGet, "/intel/wars/", nil)
 	rec = httptest.NewRecorder()
 	app.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("wars page unauthenticated: status %d, want 303", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("wars page unauthenticated: status %d, want 200", rec.Code)
 	}
 
 	if got := transport.calls.Load(); got != 0 {
@@ -408,5 +408,26 @@ func TestUserCorporationIDsAreScopedToTheUser(t *testing.T) {
 	}
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("corporation lookup made %d outbound calls, want 0", got)
+	}
+}
+
+// TestPublicToolsNeedNoSession: the build planner, the PI planner and
+// the Intel pages answer visitors without a session; the Industry
+// overview still sends them to sign in.
+func TestPublicToolsNeedNoSession(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, _ := buildCorpTestApp(t, transport)
+	for _, path := range []string{"/planner/", "/industry/pi/", "/intel/wars/", "/intel/incursions/", "/intel/fw/"} {
+		code, body := getSwapPage(t, app, nil, path)
+		if code != http.StatusOK {
+			t.Errorf("%s without a session: status %d, want 200", path, code)
+			continue
+		}
+		if !strings.Contains(body, "Not signed in") {
+			t.Errorf("%s without a session renders as signed in", path)
+		}
+	}
+	if code, _ := getSwapPage(t, app, nil, "/industry/"); code != http.StatusSeeOther {
+		t.Errorf("/industry/ without a session: status %d, want 303 to sign in", code)
 	}
 }

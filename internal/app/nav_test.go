@@ -32,12 +32,12 @@ func TestSectionTabs(t *testing.T) {
 			t.Errorf("market tabs miss %s", e.Href)
 		}
 	}
-	mustContain(t, "market tabs", tabs, `<a href="/market/ideas/" class="active" aria-current="page">Trade ideas</a>`)
+	mustContain(t, "market tabs", tabs, `<a href="/market/ideas/" class="active" aria-current="page">Trade Ideas</a>`)
 	if strings.Count(tabs, `class="active"`) != 1 {
 		t.Errorf("market tabs mark %d pages, want 1", strings.Count(tabs, `class="active"`))
 	}
 	// The sidebar menu renders from the same list.
-	mustContain(t, "sidebar", body, `<a href="/market/restock/">Restock planner</a>`)
+	mustContain(t, "sidebar", body, `<a href="/market/restock/">Restock Planner</a>`)
 
 	// The corporation killmails page lights Corporation > Killmails,
 	// not Pilot > Killmails.
@@ -54,7 +54,7 @@ func TestSectionTabs(t *testing.T) {
 	_, body = getPage(t, app, cookie, "/character/?character="+strconv.FormatInt(fixtureCharA, 10))
 	tabs = sectionTabsBlock(t, body)
 	mustContain(t, "character tabs", tabs, `href="/assets/?character=`+strconv.FormatInt(fixtureCharA, 10)+`"`)
-	mustContain(t, "sidebar", body, `<a href="/market/scanner/">Spread scanner</a>`)
+	mustContain(t, "sidebar", body, `<a href="/market/scanner/">Spread Scanner</a>`)
 
 	// A one-page section has no choice to offer: no tabs.
 	_, body = getPage(t, app, cookie, "/items/")

@@ -10,6 +10,9 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
+
+	db "evesynapse/internal/db/sqlc"
 )
 
 const metaReply = `{"id":"resp_1","object":"response","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"### Station Flips\n* **Tritanium** · Jita IV-4 — deep volume"}]}]}`
@@ -39,7 +42,8 @@ func TestCallMetaAIRequestAndAnswer(t *testing.T) {
 	}
 	if sent.Model != metaAIModel || sent.Stream || len(sent.Input) != 1 || sent.Input[0].Role != "user" ||
 		len(sent.Input[0].Content) != 1 || sent.Input[0].Content[0].Type != "input_text" ||
-		!strings.Contains(sent.Input[0].Content[0].Text, "Tritanium") {
+		!strings.Contains(sent.Input[0].Content[0].Text, "Tritanium") ||
+		!strings.HasPrefix(sent.Input[0].Content[0].Text, "You are a trade analyst for the video game EVE Online.") {
 		t.Fatalf("request = %+v", sent)
 	}
 }
@@ -53,6 +57,10 @@ func TestCallMetaAIFailures(t *testing.T) {
 		"status":    {code: http.StatusUnauthorized, reply: `{"error":{"message":"bad key"}}`},
 		"no answer": {reply: `{"output":[]}`},
 		"not json":  {reply: `<html>`},
+		// Cut off at the token limit: some text, but not the whole answer.
+		"incomplete": {reply: `{"status":"incomplete","output":[{"type":"message","content":[{"type":"output_text","text":"### Station Fl"}]}]}`},
+		// A refusal carries no output_text part at all.
+		"refusal": {reply: `{"status":"completed","output":[{"type":"message","content":[{"type":"refusal","refusal":"no"}]}]}`},
 	} {
 		_, err := callMetaAI(ctx, &http.Client{Transport: stub}, metaAIAPIBase, "meta-test-key", metaAIModel, "hi", 100)
 		if err == nil {
@@ -111,5 +119,35 @@ func TestTradeIdeasConfiguredWithMetaKey(t *testing.T) {
 	c = Config{cloudflareAccountID: "abcdef0123456789abcdef0123456789", cloudflareAuthToken: "tok"}
 	if !c.TradeIdeasConfigured() || c.tradeIdeasUsesMeta() {
 		t.Fatal("Cloudflare credentials alone should configure trade ideas through Gemma")
+	}
+}
+
+// TestTradeIdeasModelSwitchRefreshesNow: a fresh Gemma answer does
+// not hold off Muse Wonder once MODEL_API_KEY is set — the answer
+// another model gave is asked again on the next cycle, not 12 hours
+// later — and the new model's fresh answer then holds as usual.
+func TestTradeIdeasModelSwitchRefreshesNow(t *testing.T) {
+	app, conn, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	seedTradeIdeasScanner(t, conn, q)
+	fresh := time.Now().UTC().Add(-time.Hour)
+	if err := q.PutTradeIdeas(ctx, db.PutTradeIdeasParams{Body: "### Gemma\n* old", AsOf: fresh, Model: tradeIdeasModel}); err != nil {
+		t.Fatalf("seed module answer: %v", err)
+	}
+	if err := q.PutTradeIdeasPage(ctx, db.PutTradeIdeasPageParams{Body: "### Gemma\n* old", AsOf: fresh, Model: tradeIdeasModel}); err != nil {
+		t.Fatalf("seed page answer: %v", err)
+	}
+	app.cfg.metaAIKey = "meta-test-key"
+	stub := &cloudflareStub{reply: metaReply}
+	app.tradeIdeasHTTP = &http.Client{Transport: stub}
+
+	if stored, _ := app.refreshTradeIdeas(ctx); stored != 2 || stub.calls != 2 {
+		t.Fatalf("after the switch: stored %d with %d calls, want 2 and 2", stored, stub.calls)
+	}
+	if row, err := q.GetTradeIdeas(ctx); err != nil || row.Model != metaAIModel {
+		t.Fatalf("module row after the switch: %+v err %v", row, err)
+	}
+	if stored, _ := app.refreshTradeIdeas(ctx); stored != 0 || stub.calls != 2 {
+		t.Fatalf("second refresh: stored %d with %d calls, want 0 and 2", stored, stub.calls)
 	}
 }

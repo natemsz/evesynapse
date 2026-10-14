@@ -125,6 +125,7 @@ type walletView struct {
 	BalanceOK     bool
 	Balance       string // esi.FormatISK, bare number
 	Graph         *walletGraphView
+	Flow          *walletFlowWidget // the home Wallet Flow module, for this character alone
 	Journal       econSectionState
 	JournalRows   []walletJournalRow
 	JournalCut    int
@@ -227,6 +228,9 @@ func (app *Application) handleWallet(w http.ResponseWriter, r *http.Request) {
 	// journal above, the daily samples, and the wallet snapshot
 	// the header balance came from.
 	view.Graph = app.attachWalletGraph(ctx, active.UserID, active.CharacterID, journal, view.Journal.Loaded)
+	// Wallet flow, as the home module reads it, for this character:
+	// the same stored journal window, one bundle.
+	view.Flow = app.buildWalletFlow(ctx, app.loadCharSnaps(ctx, active.UserID, []db.Character{active}, []string{widgetWalletFlow}))
 
 	app.render(ctx, w, http.StatusOK, "wallet.html", data)
 }

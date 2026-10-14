@@ -13,14 +13,14 @@
 <p><a class="btn" href="/auth/eve">Link your first character</a></p>
 {{else}}
 <div class="home-bar">
-  {{if .Home.Customize}}<p class="home-bar-note"><small>Drag a module by its move handle, resize it from its corner, remove it with ×. Changes save as you make them.</small></p>{{end}}
+  {{if .Home.Customize}}<p class="home-bar-note"><small>Drag a module by its move handle, resize it from its corner, remove it with ×. Changes save as you make them. <kbd>\</kbd> finishes.</small></p>{{end}}
   {{with .ESIHealth}}<span class="esi-pill esi-{{.State}}" title="{{.Title}}"><span class="esi-dot" aria-hidden="true"></span><span class="esi-label">{{.Label}}</span>{{if .Players}}<span class="esi-tq">Tranquility <b>{{.Players}}</b> online</span>{{end}}</span>{{end}}
   <a class="btn btn-quiet" href="/auth/eve">Link another character</a>
-  {{if .Home.Customize}}<a class="btn" href="/">Done</a>{{end}}
+  {{if .Home.Customize}}<a class="btn" href="/" title="Done (\)" aria-keyshortcuts="\">Done <kbd>\</kbd></a>{{end}}
   <details class="menu-pop home-settings">
     <summary class="btn btn-quiet" title="Overview settings: arrange, add or reset modules" aria-label="Overview settings"><svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></g></svg><span>Overview</span></summary>
     <div class="menu-pop-body" role="menu">
-      {{if not .Home.Customize}}<a role="menuitem" href="/?customize=1">Arrange and resize modules</a>{{end}}
+      {{if not .Home.Customize}}<a role="menuitem" href="/?customize=1" aria-keyshortcuts="\">Arrange and resize modules <kbd>\</kbd></a>{{end}}
       <a role="menuitem" href="/?customize=1&amp;add=1" id="add-module-btn">Add a module</a>
       <form method="post" action="/home/layout" data-confirm="Put every module back to the default layout?">
         <input type="hidden" name="action" value="reset">
@@ -34,7 +34,7 @@
 <div class="grid home-grid{{if .Home.Customize}} home-custom{{end}}"{{if .Home.Customize}} id="home-grid" data-customize="1"{{end}}>
 {{range .Home.Widgets}}
 {{if eq .ID "glance"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .Glance}}
@@ -68,7 +68,7 @@
 {{end}}
 
 {{if eq .ID "briefing"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .Briefing}}
@@ -80,7 +80,8 @@
     {{if .Counts.Info}}<button type="button" class="chip sev-info" data-brief="info" aria-pressed="false">Info ({{.Counts.Info}})</button>{{end}}
   </div>
   <ul class="briefing brief-cards">
-  {{range $i, $it := .Items}}<li class="brief-card sev-{{.Severity}}" data-sev="{{.Severity}}"{{if ge $i $bcap}} data-wmore{{end}}><span class="sev">{{.Severity}}</span> <span class="brief-text">{{.HTML}}</span></li>{{end}}
+  {{/* The briefing always shows every item it has: no More toggle. */}}
+  {{range .Items}}<li class="brief-card sev-{{.Severity}}" data-sev="{{.Severity}}"><span class="sev">{{.Severity}}</span> <span class="brief-text">{{.HTML}}</span></li>{{end}}
   </ul>
   {{if .More}}<p><small>+{{.More}} more need{{if eq .More 1}}s{{end}} your attention.</small></p>{{end}}
   <p><small>Since {{.SinceLabel}}</small></p>
@@ -93,7 +94,7 @@
 {{end}}
 
 {{if eq .ID "fleet"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .Fleet}}
@@ -138,9 +139,12 @@
 {{end}}
 
 {{if eq .ID "networth"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
+  {{/* Two rows high or more, the history chart is part of the summary;
+       one row high it waits behind More. */}}
+  {{$chartUp := ge .H 2}}
   {{with .NetWorth}}
   {{if .Any}}
   <p class="isk">{{.Total}} <small>ISK</small></p>
@@ -149,11 +153,14 @@
     {{if .AssetsKnown}}<div class="kpi"><span class="kpi-k">Assets</span><span class="kpi-v">{{.Assets}}</span></div>{{end}}
     {{if .Escrow}}<div class="kpi"><span class="kpi-k">Order escrow</span><span class="kpi-v">{{.Escrow}}</span></div>{{end}}
   </div>
+  {{if and $chartUp .History}}
+  <div class="nw-chart">{{template "balance-chart" .History}}</div>
+  {{end}}
   <div data-wmore>
   <p><small>Estimate{{if .AsOf}} · data as of {{.AsOf}}{{end}}</small></p>
   {{if .AssetsNote}}<p><small>{{.AssetsNote}}</small></p>{{end}}
   {{if .History}}
-  {{template "balance-chart" .History}}
+  {{if not $chartUp}}{{template "balance-chart" .History}}{{end}}
   <p><small>Net worth over time, from the daily samples.</small></p>
   {{else if .HistoryBuilding}}
   <p><small>Net worth history is building — a point is recorded each day.</small></p>
@@ -168,7 +175,7 @@
 {{end}}
 
 {{if eq .ID "industry"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .Industry}}
@@ -178,7 +185,7 @@
   <table>
     <thead><tr><th>Character</th><th class="opt">Activity</th><th>Product</th><th>Ends</th></tr></thead>
     <tbody>
-    {{range $i, $r := .Rows}}<tr{{if ge $i $cap}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td class="opt">{{.Activity}}</td><td>{{itemLink .TypeID .Name}}</td><td>{{.Ends}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
+    {{range $i, $r := .Rows}}<tr{{if ge $i $cap}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td class="opt">{{.Activity}}</td><td>{{itemLink .TypeID .Name}}</td><td class="when"><span class="when-abs">{{.Ends}}</span>{{if .Left}} <span class="when-rel" title="{{.Ends}}">{{.Left}}</span>{{end}}</td></tr>{{end}}
     </tbody>
   </table>
   </div>
@@ -191,7 +198,7 @@
 {{end}}
 
 {{if eq .ID "market"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{$customize := .Customize}}
@@ -256,7 +263,7 @@
 {{end}}
 
 {{if eq .ID "watchlist"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .Watchlist}}
@@ -278,7 +285,7 @@
 {{end}}
 
 {{if eq .ID "pi"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .PI}}
@@ -306,7 +313,7 @@
 {{end}}
 
 {{if eq .ID "tradeideas"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .TradeIdeas}}
@@ -331,7 +338,7 @@
 </section>
 {{end}}
 {{if eq .ID "training"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{$compact := eq .H 1}}
@@ -344,7 +351,7 @@
   <table>
     <thead><tr><th>Character</th><th>Skill</th><th>Finishes</th></tr></thead>
     <tbody>
-    {{range $i, $r := $rows}}<tr{{if ge $i $cap}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{itemLink .SkillID .Skill}} {{.Level}}</td><td>{{.Finish}}{{if .Left}} ({{.Left}}){{end}}</td></tr>{{end}}
+    {{range $i, $r := $rows}}<tr{{if ge $i $cap}} data-wmore{{end}}><td>{{charLink $.ViewerChars .CharID .Char}}</td><td>{{itemLink .SkillID .Skill}} {{.Level}}</td><td class="when"><span class="when-abs">{{.Finish}}</span>{{if .Left}} <span class="when-rel" title="{{.Finish}}">{{.Left}}</span>{{end}}</td></tr>{{end}}
     </tbody>
   </table>
   </div>
@@ -359,7 +366,7 @@
 {{end}}
 
 {{if eq .ID "pulse"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .Pulse}}
@@ -385,60 +392,14 @@
 {{end}}
 
 {{if eq .ID "walletflow"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .WalletFlow}}
   {{if .Any}}
-  <div class="tw">
-  <table>
-    <tbody>
-      <tr><th>7 days</th><td>in {{.In7}} · out {{.Out7}} · net {{.Net7}} ISK</td></tr>
-      <tr><th>30 days</th><td>in {{.In30}} · out {{.Out30}} · net {{.Net30}} ISK</td></tr>
-    </tbody>
-  </table>
-  </div>
-  {{if or .InPie .OutPie}}
-  <div class="flow-pies">
-    {{with .InPie}}
-    <figure class="flow-pie">
-      <svg viewBox="0 0 100 100" role="img" aria-label="Income by type, last 30 days">{{range .Slices}}<path d="{{.D}}" class="pie-s{{.Index}}"><title>{{.Label}}: {{.Pct}}</title></path>{{end}}<text x="50" y="54" class="pie-c">In</text></svg>
-      <figcaption><span class="pie-head">Income, 30 days</span><ul class="pie-legend">{{range .Slices}}<li><span class="pie-key pie-s{{.Index}}"></span><span class="pie-l">{{.Label}}</span> <b>{{.Pct}}</b></li>{{end}}</ul></figcaption>
-    </figure>
-    {{end}}
-    {{with .OutPie}}
-    <figure class="flow-pie">
-      <svg viewBox="0 0 100 100" role="img" aria-label="Spend by type, last 30 days">{{range .Slices}}<path d="{{.D}}" class="pie-s{{.Index}}"><title>{{.Label}}: {{.Pct}}</title></path>{{end}}<text x="50" y="54" class="pie-c">Out</text></svg>
-      <figcaption><span class="pie-head">Spend, 30 days</span><ul class="pie-legend">{{range .Slices}}<li><span class="pie-key pie-s{{.Index}}"></span><span class="pie-l">{{.Label}}</span> <b>{{.Pct}}</b></li>{{end}}</ul></figcaption>
-    </figure>
-    {{end}}
-  </div>
-  {{end}}
+  {{template "wallet-flow-figures" .}}
   <div data-wmore>
-  {{if .HasChart}}
-  {{template "balance-chart" .Chart}}
-  <p><small>Cumulative net flow per day.</small></p>
-  {{end}}
-  {{if .Sources}}
-  <div class="tw">
-  <table>
-    <thead><tr><th>Top sources</th><th>30 days</th></tr></thead>
-    <tbody>
-    {{range .Sources}}<tr><td>{{.Ref}}</td><td>{{.Total}} ISK</td></tr>{{end}}
-    </tbody>
-  </table>
-  </div>
-  {{end}}
-  {{if .Sinks}}
-  <div class="tw">
-  <table>
-    <thead><tr><th>Top sinks</th><th>30 days</th></tr></thead>
-    <tbody>
-    {{range .Sinks}}<tr><td>{{.Ref}}</td><td>{{.Total}} ISK</td></tr>{{end}}
-    </tbody>
-  </table>
-  </div>
-  {{end}}
+  {{template "wallet-flow-detail" .}}
   {{if .Chars}}
   <p><input type="search" id="walletflow-search" placeholder="Filter by character…" aria-label="Filter wallet flow by character" data-table-filter="walletflow-table" data-row-class="walletflow-row"></p>
   <div class="tw">
@@ -460,7 +421,7 @@
 {{end}}
 
 {{if eq .ID "upkeep"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}{{$bcap := .BriefCap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .Upkeep}}

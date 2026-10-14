@@ -504,6 +504,28 @@
   // span live so the arrangement under the finger is the final
   // one. Without JS the up/down, half/full and add/remove forms
   // in the module list do the same job.
+  // Keyboard: \ on the Overview opens Customize, and in Customize
+  // finishes it (every change already saved, so it is Done). Bound
+  // once, reading the current page each time. Typing in a field,
+  // modifier chords and a drag in progress are left alone.
+  document.addEventListener("keydown", function (ev) {
+    if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.defaultPrevented) return;
+    var t = ev.target;
+    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+    var grid = document.querySelector(".grid.home-grid");
+    if (!grid) return;
+    var custom = grid.classList.contains("home-custom");
+    var go = function (href) {
+      // Through a real link when the page has one, so the shell's
+      // swap navigation handles it; a plain navigation otherwise.
+      var link = document.querySelector('.home-bar a[href="' + href + '"]');
+      if (link) link.click(); else window.location.assign(href);
+    };
+    if (ev.key !== "\\" || document.body.classList.contains("drag-active")) return;
+    ev.preventDefault();
+    go(custom ? "/" : "/?customize=1");
+  });
+
   function initHomeGrid(root) {
     var homeGrid = root.querySelector("#home-grid");
     if (homeGrid && homeGrid.getAttribute("data-customize") === "1" && window.fetch) {
@@ -770,7 +792,8 @@
         }
       });
       picker.addEventListener("keydown", function (ev) {
-        if (ev.key === "Escape") { closePicker(); sizeBtn.focus(); }
+        // Escape closes the picker only; it does not also leave Customize.
+        if (ev.key === "Escape") { ev.preventDefault(); closePicker(); sizeBtn.focus(); }
       });
 
       var remove = document.createElement("button");
@@ -833,7 +856,12 @@
       var gcs = window.getComputedStyle(grid);
       var gapX = parseFloat(gcs.columnGap) || 0, gapY = parseFloat(gcs.rowGap) || 0;
       var cellW = (r0.width - (start.w - 1) * gapX) / start.w + gapX;
-      var cellH = (r0.height - (start.h - 1) * gapY) / start.h + gapY;
+      // A row is the grid's row floor (--home-row): modules can stand
+      // taller than their cells when their content needs it, so the
+      // card's own height is not the measure.
+      var rowPx = parseFloat(gcs.getPropertyValue("--home-row")) *
+        parseFloat(window.getComputedStyle(document.documentElement).fontSize);
+      var cellH = (rowPx || 176) + gapY;
       var cols = (gcs.gridTemplateColumns || "").split(" ").filter(Boolean).length || 1;
       var gridLeft = grid.getBoundingClientRect().left;
       var colStart = Math.round((r0.left - gridLeft) / cellW);

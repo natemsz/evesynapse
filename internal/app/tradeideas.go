@@ -125,24 +125,27 @@ func (app *Application) refreshTradeIdeas(ctx context.Context) (stored int, limi
 		return 0, false
 	}
 	now := time.Now().UTC()
+	// One model answers both: Muse Wonder when its key is set, else
+	// Gemma. An answer another model gave counts as never answered,
+	// so switching models (setting or clearing MODEL_API_KEY) asks
+	// the new one on the next cycle instead of up to 12 hours later.
+	model := tradeIdeasModel
+	if app.cfg.tradeIdeasUsesMeta() {
+		model = metaAIModel
+	}
 	var moduleAt, pageAt, attemptedAt time.Time
 	failures := 0
-	if row, err := app.queries.GetTradeIdeas(ctx); err == nil {
+	if row, err := app.queries.GetTradeIdeas(ctx); err == nil && row.Model == model {
 		moduleAt = row.AsOf
 	}
-	if row, err := app.queries.GetTradeIdeasPage(ctx); err == nil {
+	if row, err := app.queries.GetTradeIdeasPage(ctx); err == nil && row.Model == model {
 		pageAt = row.AsOf
 	}
 	if a, err := app.queries.GetTradeIdeasAttempt(ctx); err == nil {
 		attemptedAt, failures = a.AttemptedAt, int(a.Failures)
 	}
 	// The module's answer and the page's share the cadence and the
-	// backoff; each is asked for only when it is due itself. One
-	// model answers both: Muse Wonder when its key is set, else Gemma.
-	model := tradeIdeasModel
-	if app.cfg.tradeIdeasUsesMeta() {
-		model = metaAIModel
-	}
+	// backoff; each is asked for only when it is due itself.
 	asks := []struct {
 		want      bool
 		name      string

@@ -38,7 +38,6 @@ type piPlanetCheck struct {
 type piGraphNode struct {
 	Name    string
 	Tier    string
-	URL     string // select-as-target link ("" for planets/raws header)
 	Class   string // selected|input|output|dimmed|covered|missing
 	Planets string // planet types yielding it (raws) or ""
 	Price   string
@@ -237,7 +236,7 @@ func (app *Application) handlePIPlanner(w http.ResponseWriter, r *http.Request) 
 	view.HasPlan = true
 	view.PlanTarget = target
 	fillPIPlanDisplay(view, plan, prices)
-	view.Graph, view.GraphJSON = buildPIGraph(target, selList, prices, q)
+	view.Graph, view.GraphJSON = buildPIGraph(target, selList, prices)
 	// Coverage summary.
 	cov := piplan.CoverageFor(target, selList)
 	if cov.Complete {
@@ -257,7 +256,7 @@ func (app *Application) handlePIPlanner(w http.ResponseWriter, r *http.Request) 
 	if one, ok := piplan.SinglePlanet(target); ok {
 		view.SingleText = "Single-planet possible on " + one + "."
 	}
-	view.Profitable = piProfitableChains(prices, settings, q)
+	view.Profitable = piProfitableChains(prices, settings)
 	view.FacilityNote = "High-Tech (P4) only on Barren/Temperate · Advanced anywhere · Basic on the extractor planet. Taxes use CCP taxable values (R0 5 · P1 400 · P2 7,200 · P3 60,000 · P4 1,200,000 ISK); import at half the export rate."
 
 	app.render(ctx, w, http.StatusOK, "piplanner.html", data)
@@ -472,8 +471,7 @@ func formatQty(f float64) string {
 // buildPIGraph shapes the five-tier dependency map. Chain nodes
 // (inputs of target) highlight; downstream consumers dim less;
 // everything else dims. Coverage tints raws/P1s.
-func buildPIGraph(target string, selected []string, prices map[string]float64, q map[string][]string) ([]piGraphCol, string) {
-	_ = q
+func buildPIGraph(target string, selected []string, prices map[string]float64) ([]piGraphCol, string) {
 	chain := map[string]bool{}
 	for _, n := range piplan.ChainNodes(target) {
 		chain[n] = true
@@ -575,8 +573,7 @@ func buildPIGraph(target string, selected []string, prices map[string]float64, q
 	return cols, string(blob)
 }
 
-func piProfitableChains(prices map[string]float64, s piplan.Settings, q map[string][]string) []piProfitRow {
-	_ = q
+func piProfitableChains(prices map[string]float64, s piplan.Settings) []piProfitRow {
 	var rows []piProfitRow
 	for _, tier := range []piplan.Tier{piplan.TierP4, piplan.TierP3} {
 		for _, name := range piplan.ByTier(tier) {

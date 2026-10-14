@@ -169,6 +169,9 @@ func (app *Application) collectNotifyEvents(ctx context.Context, userID int64, b
 // notifySkillEvents: queue entries whose finish time has passed. The
 // queue keeps a finished entry until the character next logs in, so
 // time passing is enough; no refetch is needed to notice.
+//
+// It reads the raw queue on purpose: its events are the finished
+// entries views leave out (skillqueue_live.go).
 func (app *Application) notifySkillEvents(ctx context.Context, c *notifyCollector, b *charSnaps, now time.Time) {
 	if !b.queueKnown {
 		return

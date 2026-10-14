@@ -99,7 +99,9 @@ func (app *Application) loadCharTraining(ctx context.Context, characterID int64)
 
 	var queue esi.Skillqueue
 	if app.loadCorpSnapshot(ctx, characterID, esi.SnapSkillqueue, &queue) {
-		for _, e := range queue {
+		// Live entries only: a finished level is already in the
+		// trained skills and must not also count as queued.
+		for _, e := range liveSkillqueue(queue, time.Now()) {
 			if e.FinishedLevel > ct.QueuedTo[e.SkillID] {
 				ct.QueuedTo[e.SkillID] = e.FinishedLevel
 			}

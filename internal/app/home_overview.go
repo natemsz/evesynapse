@@ -534,15 +534,6 @@ func (b *charSnaps) corpID() int64 {
 
 // currentEntry returns the queue's head entry (position 0) — the
 // skill training right now — or nil.
-func queueHead(queue esi.Skillqueue) *esi.SkillqueueEntry {
-	for i := range queue {
-		if queue[i].QueuePosition == 0 {
-			return &queue[i]
-		}
-	}
-	return nil
-}
-
 // queueState summarizes a character's training: known is false
 // until the skillqueue snapshot exists; training is true when a
 // future-dated entry remains; finishedAt is the last finish when
@@ -855,7 +846,7 @@ func (app *Application) buildFleet(ctx context.Context, bundles []*charSnaps) *f
 		}
 		if b.queueKnown {
 			row.QueueKnown = true
-			head := queueHead(b.queue)
+			head := queueHead(b.queue, time.Now())
 			if head == nil {
 				row.NotTraining = true
 			} else {
@@ -1583,7 +1574,7 @@ func (app *Application) buildSkills(ctx context.Context, bundles []*charSnaps) *
 			w.NotTraining++
 			continue
 		}
-		head := queueHead(b.queue)
+		head := queueHead(b.queue, now)
 		if head == nil {
 			continue
 		}
@@ -1974,7 +1965,7 @@ func (app *Application) buildGlance(ctx context.Context, userID int64, bundles [
 			continue
 		}
 		g.Pilots++
-		head := queueHead(b.queue)
+		head := queueHead(b.queue, now)
 		training := false
 		if head != nil {
 			if t, ok := parseRFC3339(head.FinishDate); ok && t.After(now) {

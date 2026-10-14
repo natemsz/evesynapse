@@ -300,7 +300,7 @@ func (bb *briefingBuilder) skillLines(ctx context.Context, b *charSnaps, prefix 
 			bb.add(briefingKey(b.ch.CharacterID, "not-training"), briefingNotTraining, finishedAt,
 				template.HTML(fmt.Sprintf("%s isn't training — the skill queue is empty. <a href=\"/character/?character=%d\">Skills</a>", prefix, b.ch.CharacterID)))
 		default:
-			if head := queueHead(b.queue); head != nil {
+			if head := queueHead(b.queue, now); head != nil {
 				if finish, ok := parseRFC3339(lastQueueFinish(b.queue)); ok && finish.After(now) && finish.Before(now.Add(briefingAhead)) {
 					skillID := head.SkillID
 					skillName := app.typeNameOrID(ctx, skillID)

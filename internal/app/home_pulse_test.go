@@ -293,3 +293,63 @@ func TestPulseNamesMembersThroughTheBulkResolver(t *testing.T) {
 		t.Fatalf("left list %+v, want the departed member by name", w.Corps)
 	}
 }
+
+// TestPulseQuietCycleWritesNothing: with no change in the member
+// list the diff leaves every seen row alone. The row versions
+// (xmin moves on any update) are the same after the cycle as
+// before; a member arriving writes exactly its own row.
+func TestPulseQuietCycleWritesNothing(t *testing.T) {
+	transport := &namesTransport{names: map[int64]string{93300005: "Resolved Pilot", 93300006: "Second Pilot"}}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	alpha := seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	seedPulseCorp(t, q, []string{"Director"}, []int64{fixtureCharA, 93300005}, nil, nil, nil)
+	chars := []db.Character{alpha}
+	versions := func() map[string]string {
+		t.Helper()
+		rows, err := app.db.QueryContext(ctx, `SELECT key, xmin::text FROM pulse_seen WHERE kind = 'member'`)
+		if err != nil {
+			t.Fatalf("read row versions: %v", err)
+		}
+		defer rows.Close()
+		out := map[string]string{}
+		for rows.Next() {
+			var key, version string
+			if err := rows.Scan(&key, &version); err != nil {
+				t.Fatalf("scan: %v", err)
+			}
+			out[key] = version
+		}
+		return out
+	}
+	app.refreshPulseEvents(ctx, chars, &fetchBudget{left: 5})
+	before := versions()
+	if len(before) != 2 {
+		t.Fatalf("seen set has %d members, want 2", len(before))
+	}
+	for cycle := 0; cycle < 3; cycle++ {
+		app.refreshPulseEvents(ctx, chars, &fetchBudget{left: 5})
+	}
+	after := versions()
+	for key, version := range before {
+		if after[key] != version {
+			t.Fatalf("member %s was rewritten on a quiet cycle", key)
+		}
+	}
+	// A new member writes one row and leaves the others alone.
+	seedSnapshot(t, q, fixtureCharA, esi.SnapCorpMembers, esi.CorpMembers([]int64{fixtureCharA, 93300005, 93300006}))
+	app.refreshPulseEvents(ctx, chars, &fetchBudget{left: 5})
+	grown := versions()
+	if len(grown) != 3 {
+		t.Fatalf("seen set has %d members after an arrival, want 3", len(grown))
+	}
+	for key, version := range before {
+		if grown[key] != version {
+			t.Fatalf("member %s was rewritten when another member arrived", key)
+		}
+	}
+}

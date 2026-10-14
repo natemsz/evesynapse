@@ -271,6 +271,13 @@ func (app *Application) diffPulseMembers(ctx context.Context, ref pulseCorpRef, 
 		if name == "" {
 			name = "Character #" + key
 		}
+		// Written only when it would change something: a member
+		// not seen before, or one whose name has just been
+		// learned. A quiet cycle over a large corporation writes
+		// nothing.
+		if prior, seenBefore := stored[key]; seenBefore && prior == name {
+			continue
+		}
 		if err := app.queries.UpsertPulseSeen(ctx, db.UpsertPulseSeenParams{
 			CorpID: ref.CorpID, Kind: pulseSeenMember, Key: key, Name: name,
 		}); err != nil {

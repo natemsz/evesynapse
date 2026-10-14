@@ -34,11 +34,11 @@ func TestParseHomeLayoutFormats(t *testing.T) {
 	if want := []homeLayoutItem{{ID: "market", W: 3}}; !reflect.DeepEqual(wide, want) {
 		t.Fatalf("v2 wide = %v, want %v", wide, want)
 	}
-	v3 := parseHomeLayout(`[{"id":"market","w":2,"h":3},{"id":"skills","w":9,"h":-1}]`)
-	if want := []homeLayoutItem{{ID: "market", W: 2, H: 3}, {ID: "skills", W: 3}}; !reflect.DeepEqual(v3, want) {
+	v3 := parseHomeLayout(`[{"id":"market","w":2,"h":3},{"id":"watchlist","w":9,"h":-1}]`)
+	if want := []homeLayoutItem{{ID: "market", W: 2, H: 3}, {ID: "watchlist", W: 3}}; !reflect.DeepEqual(v3, want) {
 		t.Fatalf("v3 = %v, want %v (sizes held to 1-3, unset left unset)", v3, want)
 	}
-	if got := encodeHomeLayout(v3); got != `[{"id":"market","w":2,"h":3},{"id":"skills","w":3}]` {
+	if got := encodeHomeLayout(v3); got != `[{"id":"market","w":2,"h":3},{"id":"watchlist","w":3}]` {
 		t.Fatalf("encode(v3) = %q", got)
 	}
 	if got := encodeHomeLayout(nil); got != `[]` {
@@ -72,7 +72,7 @@ func TestParseHomeLayoutNormalization(t *testing.T) {
 	if got := parseHomeLayout(`["bogus","fleet","fleet","nope"]`); !reflect.DeepEqual(got, []homeLayoutItem{{ID: "fleet"}}) {
 		t.Errorf("unknown/dupe: got %v", got)
 	}
-	if got := parseHomeLayout(`[42,null,{"span":"wide"},{"id":"skills"},true]`); !reflect.DeepEqual(got, []homeLayoutItem{{ID: "skills"}}) {
+	if got := parseHomeLayout(`[42,null,{"span":"wide"},{"id":"watchlist"},true]`); !reflect.DeepEqual(got, []homeLayoutItem{{ID: "watchlist"}}) {
 		t.Errorf("junk entries: got %v", got)
 	}
 	if got := parseHomeLayout(`{"id":"fleet"}`); !reflect.DeepEqual(got, defaultHomeLayoutItems()) {
@@ -110,34 +110,38 @@ func TestHomeGridSizes(t *testing.T) {
 		}
 		return raw
 	}
-	if err := q.SetUserHomeLayout(ctx, db.SetUserHomeLayoutParams{HomeLayout: `[{"id":"fleet"},{"id":"market","span":"wide"},{"id":"skills"}]`, ID: user.ID}); err != nil {
+	if err := q.SetUserHomeLayout(ctx, db.SetUserHomeLayoutParams{HomeLayout: `[{"id":"fleet"},{"id":"market","span":"wide"},{"id":"watchlist"}]`, ID: user.ID}); err != nil {
 		t.Fatalf("seed layout: %v", err)
 	}
 	_, body := getPage(t, app, cookie, "/")
 	mustContain(t, "/ defaults", body,
-		`<section class="card gw3 gh2" data-widget="fleet" data-gw="3" data-gh="2">`,
+		// The fleet table carries its floor for the size picker.
+		`<section class="card gw3 gh2" data-widget="fleet" data-gw="3" data-gh="2" data-minw="2" data-minh="2">`,
 		// An old wide span is the full width now.
 		`<section class="card gw3 gh1" data-widget="market" data-gw="3" data-gh="1">`,
-		`<section class="card gw1 gh1" data-widget="skills" data-gw="1" data-gh="1">`)
+		`<section class="card gw1 gh1" data-widget="watchlist" data-gw="1" data-gh="1">`)
 
 	// Resize, as the picker's XHR: stored, rendered.
-	code, resp := doLayoutPost(t, app, url.Values{"action": {"size"}, "widget": {widgetSkills}, "w": {"2"}, "h": {"3"}}, cookie, true)
+	code, resp := doLayoutPost(t, app, url.Values{"action": {"size"}, "widget": {widgetWatchlist}, "w": {"2"}, "h": {"3"}}, cookie, true)
 	if code != http.StatusOK || resp != `{"ok":true}` {
 		t.Fatalf("size POST: status %d body %q", code, resp)
 	}
-	if got := saved(); !strings.Contains(got, `{"id":"skills","w":2,"h":3}`) {
+	if got := saved(); !strings.Contains(got, `{"id":"watchlist","w":2,"h":3}`) {
 		t.Fatalf("saved layout = %q, want skills 2x3", got)
 	}
 	_, body = getPage(t, app, cookie, "/")
-	mustContain(t, "/ resized", body, `<section class="card gw2 gh3" data-widget="skills" data-gw="2" data-gh="3">`)
+	mustContain(t, "/ resized", body, `<section class="card gw2 gh3" data-widget="watchlist" data-gw="2" data-gh="3">`)
 
 	// Out of the grid, unparsable, or not on the home: no change.
 	before := saved()
 	for _, v := range []url.Values{
-		{"action": {"size"}, "widget": {widgetSkills}, "w": {"4"}, "h": {"1"}},
-		{"action": {"size"}, "widget": {widgetSkills}, "w": {"1"}, "h": {"0"}},
-		{"action": {"size"}, "widget": {widgetSkills}, "w": {"x"}, "h": {"1"}},
+		{"action": {"size"}, "widget": {widgetWatchlist}, "w": {"4"}, "h": {"1"}},
+		{"action": {"size"}, "widget": {widgetWatchlist}, "w": {"1"}, "h": {"0"}},
+		{"action": {"size"}, "widget": {widgetWatchlist}, "w": {"x"}, "h": {"1"}},
 		{"action": {"size"}, "widget": {widgetPI}, "w": {"2"}, "h": {"2"}},
+		// Under the fleet table's 2x2 floor.
+		{"action": {"size"}, "widget": {widgetFleet}, "w": {"1"}, "h": {"2"}},
+		{"action": {"size"}, "widget": {widgetFleet}, "w": {"3"}, "h": {"1"}},
 	} {
 		if code, _ := doLayoutPost(t, app, v, cookie, true); code != http.StatusOK {
 			t.Fatalf("size POST %v: status %d", v, code)
@@ -147,11 +151,11 @@ func TestHomeGridSizes(t *testing.T) {
 		t.Fatalf("invalid sizes changed storage: %q -> %q", before, got)
 	}
 	// The no-JS form path redirects back to Customize.
-	if code, _ := doLayoutPost(t, app, url.Values{"action": {"size"}, "widget": {widgetSkills}, "w": {"1"}, "h": {"1"}}, cookie, false); code != http.StatusSeeOther {
+	if code, _ := doLayoutPost(t, app, url.Values{"action": {"size"}, "widget": {widgetWatchlist}, "w": {"1"}, "h": {"1"}}, cookie, false); code != http.StatusSeeOther {
 		t.Fatalf("form size POST: status %d, want 303", code)
 	}
 	// Anonymous POSTs bounce like every layout action.
-	if code, _, _ := doReq(t, app, http.MethodPost, "/home/layout", url.Values{"action": {"size"}, "widget": {widgetSkills}, "w": {"2"}, "h": {"2"}}); code != http.StatusSeeOther {
+	if code, _, _ := doReq(t, app, http.MethodPost, "/home/layout", url.Values{"action": {"size"}, "widget": {widgetWatchlist}, "w": {"2"}, "h": {"2"}}); code != http.StatusSeeOther {
 		t.Fatalf("anonymous size POST: status %d, want 303", code)
 	}
 	if got := transport.calls.Load(); got != 0 {

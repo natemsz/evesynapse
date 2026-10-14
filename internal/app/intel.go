@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -452,4 +453,47 @@ func (app *Application) loadServerStatus(ctx context.Context) (*serverStatusView
 		return nil, false
 	}
 	return &serverStatusView{Players: esi.FormatInt(status.Players)}, true
+}
+
+// esiDownAfter is how stale the stored Tranquility status may get
+// before the Overview bar calls ESI down. The worker refreshes it
+// every cycle (about a minute) on a 30-second ESI cache window, so
+// ten minutes without a fresh copy means ESI has stopped answering
+// (daily downtime, an outage), not a slow cycle.
+const esiDownAfter = 10 * time.Minute
+
+// esiHealthView is the Overview bar's status pill: ESI's health and,
+// while it is up, Tranquility's player count.
+type esiHealthView struct {
+	State   string // "ok", "limited", "down" or "pending" (nothing stored yet)
+	Label   string // the pill's words
+	Players string // formatted player count; empty while down or unknown
+	Title   string // the hover text: what the state means
+}
+
+// esiHealth reads the pill's state from what is already held: the
+// stored status snapshot's age (a fetch that keeps failing leaves
+// it to age) and the in-memory ESI error budget. DB only, no ESI.
+func (app *Application) esiHealth(ctx context.Context) *esiHealthView {
+	snap, err := app.queries.GetGlobalSnapshot(ctx, esi.GlobalStatus)
+	if err != nil {
+		return &esiHealthView{State: "pending", Label: "ESI", Title: "Checking ESI — the first status check has not landed yet."}
+	}
+	if time.Since(snap.FetchedAt) > esiDownAfter {
+		return &esiHealthView{State: "down", Label: "ESI down",
+			Title: "ESI has not answered since " + snap.FetchedAt.UTC().Format("15:04") + " UTC. Figures here are the last ones stored."}
+	}
+	view := &esiHealthView{State: "ok", Label: "ESI healthy", Title: "ESI is answering normally."}
+	var status esi.ServerStatus
+	if json.Unmarshal([]byte(snap.Payload), &status) == nil {
+		view.Players = esi.FormatInt(status.Players)
+		if status.VIP {
+			view.Title = "ESI is answering; Tranquility is in VIP mode (developers only)."
+		}
+	}
+	if app.esi != nil && app.esi.ErrorBudgetLow() {
+		view.State, view.Label = "limited", "ESI limited"
+		view.Title = "ESI is answering, but this server is close to its error limit, so syncing is paused briefly."
+	}
+	return view
 }

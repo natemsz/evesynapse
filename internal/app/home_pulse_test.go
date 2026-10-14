@@ -110,7 +110,7 @@ func TestPulseWidgetGatesAndRenders(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
-	mustContain(t, "/", body, "Corp pulse", "Character #93300006", "bounty_prizes", "Astrahus Three", "unanchoring")
+	mustContain(t, "/", body, "Corp Pulse", "Character #93300006", "bounty_prizes", "Astrahus Three", "unanchoring")
 
 	// Without a qualifying role the widget shows the gated note.
 	seedSnapshot(t, q, fixtureCharA, esi.SnapCorpRoles, esi.CharacterRoles{Roles: []string{"Contract_Taker"}})

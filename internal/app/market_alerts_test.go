@@ -3,7 +3,7 @@ package app
 // Hermetic tests for market history + alerts: change
 // math and chart geometry as pure functions, worker warming and
 // health computation against a path-routing stub, watchlist CRUD
-// through the real router, and the two Home consumers (attention
+// through the real router, and the Home consumers (briefing
 // feed + Market widget) reading stored state with zero outbound
 // calls.
 
@@ -432,89 +432,6 @@ func seedMarketSignals(t *testing.T, app *Application, q *db.Queries, userID int
 		ThresholdPct: 5, CreatedAt: now,
 	}); err != nil {
 		t.Fatalf("seed watchlist: %v", err)
-	}
-}
-
-func TestHomeAttentionMarketRules(t *testing.T) {
-	transport := &countingTransport{}
-	app, _, q := buildCorpTestApp(t, transport)
-	ctx := context.Background()
-	now := time.Now()
-
-	user, err := q.CreateUser(ctx)
-	if err != nil {
-		t.Fatalf("create user: %v", err)
-	}
-	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
-	// A ready industry job (rank 2) so the market rules (ranks 6/7)
-	// provably sort after the character rules.
-	if err := q.UpsertTypeName(ctx, db.UpsertTypeNameParams{TypeID: 587, Name: "Rifter"}); err != nil {
-		t.Fatalf("seed type name: %v", err)
-	}
-	seedSnapshot(t, q, fixtureCharA, esi.SnapIndustryJobs, []esi.IndustryJob{
-		{JobID: 11, ActivityID: 1, Status: "ready", ProductTypeID: 587, BlueprintTypeID: 691,
-			EndDate: rfc(now.Add(-time.Hour)), CompletedDate: rfc(now.Add(-time.Hour))},
-	})
-	seedSnapshot(t, q, fixtureCharA, esi.SnapOrders, []esi.CharOrder{
-		{OrderID: 700, TypeID: 34, LocationID: 60003760, RegionID: 10000002, Price: 10,
-			VolumeRemain: 5, VolumeTotal: 5, Issued: rfc(now.Add(-time.Hour)), Duration: 90},
-	})
-	seedMarketSignals(t, app, q, user.ID, 1)
-
-	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
-	code, body := getPage(t, app, cookie, "/")
-	if code != http.StatusOK {
-		t.Fatalf("home: status %d", code)
-	}
-	mustContain(t, "/", body,
-		"Fixture Alpha — Tritanium sell order: undercut by 0.50 ISK (5.0%) at this station.",
-		"Tritanium up 8.0% over 7 days in The Forge.",
-		"1 order undercut · watchlist: 1 moving",
-	)
-	// Scope the order check to the attention feed: the Briefing
-	// above it reports the same market moves in its own order.
-	attStart := strings.Index(body, "<h3>Needs attention</h3>")
-	attBody := body[attStart:]
-	jobAt := strings.Index(attBody, "job ready for delivery")
-	undercutAt := strings.Index(attBody, "sell order: undercut")
-	moveAt := strings.Index(attBody, "over 7 days in The Forge")
-	if !(jobAt >= 0 && jobAt < undercutAt && undercutAt < moveAt) {
-		t.Fatalf("attention order: job %d, undercut %d, move %d — want job < undercut < move", jobAt, undercutAt, moveAt)
-	}
-	if got := transport.calls.Load(); got != 0 {
-		t.Fatalf("home render made %d outbound calls, want 0", got)
-	}
-}
-
-func TestHomeAttentionMarketAggregation(t *testing.T) {
-	transport := &countingTransport{}
-	app, _, q := buildCorpTestApp(t, transport)
-	ctx := context.Background()
-	now := time.Now()
-
-	user, err := q.CreateUser(ctx)
-	if err != nil {
-		t.Fatalf("create user: %v", err)
-	}
-	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
-	var orders []esi.CharOrder
-	for i := 0; i < 4; i++ {
-		orders = append(orders, esi.CharOrder{
-			OrderID: int64(700 + i), TypeID: 34, LocationID: 60003760, RegionID: 10000002,
-			Price: 10, VolumeRemain: 5, VolumeTotal: 5, Issued: rfc(now.Add(-time.Hour)), Duration: 90,
-		})
-	}
-	seedSnapshot(t, q, fixtureCharA, esi.SnapOrders, orders)
-	seedMarketSignals(t, app, q, user.ID, 4)
-
-	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
-	_, body := getPage(t, app, cookie, "/")
-	mustContain(t, "/", body, "4 of your sell orders are undercut right now.")
-	if strings.Contains(body, "sell order: undercut by") {
-		t.Fatal("aggregated attention still lists per-order undercut lines")
-	}
-	if got := transport.calls.Load(); got != 0 {
-		t.Fatalf("home render made %d outbound calls, want 0", got)
 	}
 }
 

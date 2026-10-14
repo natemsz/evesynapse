@@ -235,6 +235,12 @@ var pgSwarmStagingNoCheckedAtSchema string
 //go:embed schema_pg/045_home_layout_reset.sql
 var pgHomeLayoutResetSchema string
 
+// Step 046: trade_ideas holds a second answer (row 2), the Trade
+// ideas page's longer one.
+//
+//go:embed schema_pg/046_trade_ideas_page.sql
+var pgTradeIdeasPageSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -309,6 +315,7 @@ func schemaSteps() []schemaStep {
 		{43, "trade_ideas_attempts", pgTradeIdeasAttemptsSchema, ""},
 		{44, "swarm_staging_no_checked_at", pgSwarmStagingNoCheckedAtSchema, ""},
 		{45, "home_layout_reset", pgHomeLayoutResetSchema, ""},
+		{46, "trade_ideas_page", pgTradeIdeasPageSchema, ""},
 	}
 }
 

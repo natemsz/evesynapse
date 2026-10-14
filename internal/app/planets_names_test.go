@@ -226,10 +226,10 @@ func TestPlanetRenderFallbackThenName(t *testing.T) {
 	}
 }
 
-// TestPlanetAttentionLineResolves covers the user's screenshot:
-// the home attention line reads "extractor on Planet #40152063
-// has expired" until the name lands, then names the planet.
-func TestPlanetAttentionLineResolves(t *testing.T) {
+// TestPlanetHomeNameResolves covers the user's screenshot: the
+// home's Planetary Industry module shows "Planet #40152063" until
+// the name lands, then names the planet.
+func TestPlanetHomeNameResolves(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
@@ -250,7 +250,7 @@ func TestPlanetAttentionLineResolves(t *testing.T) {
 		},
 	})
 	if err := q.SetUserHomeLayout(ctx, db.SetUserHomeLayoutParams{
-		HomeLayout: `["attention"]`,
+		HomeLayout: `["pi"]`,
 		ID:         user.ID,
 	}); err != nil {
 		t.Fatalf("set home layout: %v", err)
@@ -261,7 +261,7 @@ func TestPlanetAttentionLineResolves(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("home: status %d", code)
 	}
-	mustContain(t, "/ (unresolved attention)", body, "extractor on Planet #40152063 has expired")
+	mustContain(t, "/ (unresolved planet)", body, "Planet #40152063")
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("home render made %d outbound calls, want 0", got)
 	}
@@ -276,7 +276,10 @@ func TestPlanetAttentionLineResolves(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("home (resolved): status %d", code)
 	}
-	mustContain(t, "/ (resolved attention)", body, "extractor on Jita IV has expired")
+	mustContain(t, "/ (resolved planet)", body, "Jita IV")
+	if strings.Contains(body, "Planet #40152063") {
+		t.Error("resolved planet still shows its placeholder name")
+	}
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("home (resolved) render made %d outbound calls, want 0", got)
 	}

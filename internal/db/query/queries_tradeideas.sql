@@ -24,3 +24,16 @@ VALUES (1, $1, $2)
 ON CONFLICT (id) DO UPDATE SET
     attempted_at = excluded.attempted_at,
     failures = excluded.failures;
+
+-- The Trade ideas page's own, longer answer (schema 046): row 2.
+
+-- name: GetTradeIdeasPage :one
+SELECT body, as_of, model FROM trade_ideas WHERE id = 2;
+
+-- name: PutTradeIdeasPage :exec
+INSERT INTO trade_ideas (id, body, as_of, model)
+VALUES (2, $1, $2, $3)
+ON CONFLICT (id) DO UPDATE SET
+    body = excluded.body,
+    as_of = excluded.as_of,
+    model = excluded.model;

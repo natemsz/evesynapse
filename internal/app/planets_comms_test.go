@@ -127,7 +127,7 @@ func TestPlanetsPagesRenderFromSnapshots(t *testing.T) {
 	seedSnapshot(t, q, fixtureCharA, esi.SnapMailLabels, esi.MailLabels{TotalUnreadCount: 3})
 
 	if err := q.SetUserHomeLayout(ctx, db.SetUserHomeLayoutParams{
-		HomeLayout: `["fleet","attention","pi"]`,
+		HomeLayout: `["fleet","pi"]`,
 		ID:         user.ID,
 	}); err != nil {
 		t.Fatalf("set home layout: %v", err)
@@ -167,10 +167,9 @@ func TestPlanetsPagesRenderFromSnapshots(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("home: status %d", code)
 	}
-	mustContain(t, "/ (PI widget + attention + fleet)", body,
-		"Planetary industry",
+	mustContain(t, "/ (PI widget + fleet)", body,
+		"Planetary Industry",
 		"2 colonies across your characters", "1 extractor expired",
-		"extractor on Jita I has expired",
 		"3 unread",
 	)
 	if got := transport.calls.Load(); got != before {

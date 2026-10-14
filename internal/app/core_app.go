@@ -214,9 +214,11 @@ type Application struct {
 	// have been left to them (swarm_warm.go).
 	swarmCover swarmCoverage
 
-	// Trade ideas (tradeideas.go): the Cloudflare client, set in
-	// tests; production builds a timeout client per refresh.
+	// Trade ideas (tradeideas.go): the model client and the Meta API
+	// base, set in tests; production builds a timeout client per
+	// refresh and calls api.meta.ai.
 	tradeIdeasHTTP *http.Client
+	metaAIAPIBase  string
 	// tradeIdeasBusy is set while a refresh runs beside the worker;
 	// Close waits on tradeIdeasWG.
 	tradeIdeasBusy atomic.Bool

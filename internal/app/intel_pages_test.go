@@ -175,14 +175,31 @@ func TestIntelPagesRenderFromStore(t *testing.T) {
 		"Caldari State", "Minmatar Republic", "20", "1,200", "42",
 		"Jita", "50%", "10%")
 
-	// Home with a name-only session (no character to load): the
-	// Tranquility line renders from the global store.
-	anon := sessionCookie(t, app, user.ID, 0, "")
-	code, body = getPage(t, app, anon, "/")
+	// Home signed in: the Overview bar's ESI pill. The seeded
+	// status is months old — ESI has stopped answering — so the
+	// pill reads down, with no player count.
+	code, body = getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
 		t.Fatalf("home: status %d", code)
 	}
-	mustContain(t, "/", body, "Tranquility: 23,456 players online")
+	mustContain(t, "/ (stale status)", body, `class="esi-pill esi-down"`, "ESI down")
+	if strings.Contains(body, "esi-tq") {
+		t.Error("ESI down pill still shows a player count")
+	}
+	// A fresh status: healthy, with the player count.
+	if err := q.UpsertGlobalSnapshot(ctx, db.UpsertGlobalSnapshotParams{
+		Kind:        esi.GlobalStatus,
+		Payload:     `{"players":23456,"server_version":"1132976","start_time":"2026-10-01T11:00:00Z","vip":false}`,
+		FetchedAt:   time.Now(),
+		CachedUntil: time.Now().Add(30 * time.Second),
+	}); err != nil {
+		t.Fatalf("refresh status snapshot: %v", err)
+	}
+	code, body = getPage(t, app, cookie, "/")
+	if code != http.StatusOK {
+		t.Fatalf("home: status %d", code)
+	}
+	mustContain(t, "/ (fresh status)", body, `class="esi-pill esi-ok"`, "ESI healthy", "Tranquility <b>23,456</b> online")
 
 	// Signed out, the line renders too (status is public data).
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -226,14 +243,15 @@ func TestIntelPagesEmptyStates(t *testing.T) {
 		mustContain(t, path, body, "Still warming up")
 	}
 
-	// Home keeps rendering exactly as before without the status
-	// snapshot: no Tranquility line, no errors.
-	code, body := getPage(t, app, sessionCookie(t, app, user.ID, 0, ""), "/")
+	// Home keeps rendering without the status snapshot: the ESI
+	// pill waits in its neutral state, with no player count.
+	code, body := getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
 		t.Fatalf("home: status %d", code)
 	}
-	if strings.Contains(body, "Tranquility:") {
-		t.Error("home shows a Tranquility line with no status snapshot stored")
+	mustContain(t, "/", body, `class="esi-pill esi-pending"`)
+	if strings.Contains(body, "Tranquility:") || strings.Contains(body, "esi-tq") {
+		t.Error("home shows a Tranquility count with no status snapshot stored")
 	}
 
 	if got := transport.calls.Load(); got != 0 {

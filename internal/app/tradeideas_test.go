@@ -271,19 +271,26 @@ func TestTradeIdeasRefreshStores(t *testing.T) {
 	seedTradeIdeasScanner(t, conn, q)
 	stub := &cloudflareStub{reply: `{"success":true,"errors":[],"result":{"response":"- Buy Tritanium low"}}`}
 	app.tradeIdeasHTTP = &http.Client{Transport: stub}
-	if stored, _ := app.refreshTradeIdeas(ctx); stored != 1 {
-		t.Fatalf("refresh stored %d, want 1", stored)
+	// Two asks: the module's short answer and the page's own long one.
+	if stored, _ := app.refreshTradeIdeas(ctx); stored != 2 || stub.calls != 2 {
+		t.Fatalf("refresh stored %d with %d calls, want 2 and 2", stored, stub.calls)
 	}
 	row, err := q.GetTradeIdeas(ctx)
 	if err != nil || !strings.Contains(row.Body, "Buy Tritanium low") || row.Model != tradeIdeasModel {
 		t.Fatalf("stored row: %+v err %v", row, err)
 	}
-	if !strings.Contains(string(mustReadStub(t, stub)), "Tritanium") {
-		t.Fatalf("prompt lacked the scanner rows")
+	page, err := q.GetTradeIdeasPage(ctx)
+	if err != nil || !strings.Contains(page.Body, "Buy Tritanium low") {
+		t.Fatalf("stored page row: %+v err %v", page, err)
+	}
+	// The last ask was the page's: its prompt, its larger answer.
+	sent := string(mustReadStub(t, stub))
+	if !strings.Contains(sent, "Tritanium") || !strings.Contains(sent, "up to twenty ideas") || !strings.Contains(sent, `"max_tokens"`) {
+		t.Fatalf("page ask lacked its prompt, the scanner rows or its token allowance: %s", sent)
 	}
 	// Fresh enough: the model is not asked again.
-	if stored, _ := app.refreshTradeIdeas(ctx); stored != 0 || stub.calls != 1 {
-		t.Fatalf("second refresh stored %d with %d calls, want 0 and 1", stored, stub.calls)
+	if stored, _ := app.refreshTradeIdeas(ctx); stored != 0 || stub.calls != 2 {
+		t.Fatalf("second refresh stored %d with %d calls, want 0 and 2", stored, stub.calls)
 	}
 }
 
@@ -365,6 +372,31 @@ func TestTradeIdeasPageRendersStored(t *testing.T) {
 	mustContain(t, "/ trade ideas module", body, `data-widget="tradeideas"`, "Station flips", `role="tablist"`, `aria-controls="ti-1"`)
 	if strings.Contains(body, "<script>alert(1)</script>") {
 		t.Fatalf("model text rendered unescaped on the home page")
+	}
+
+	// Once the page's own answer lands, the page shows it — every
+	// idea with its figures — while the module keeps its short one.
+	if err := q.PutTradeIdeasPage(ctx, db.PutTradeIdeasPageParams{
+		Body:  "### Hauling Arbitrage\n* **Pyerite** · Jita IV-4 · buy 9.10 · sell 10.40 · 14.3% · 2,000/day · 2.6M ISK/day — thin spread, deep volume",
+		AsOf:  time.Now().UTC(),
+		Model: tradeIdeasModel,
+	}); err != nil {
+		t.Fatalf("store page answer: %v", err)
+	}
+	code, body = getPage(t, app, cookie, "/market/ideas/")
+	if code != http.StatusOK {
+		t.Fatalf("GET /market/ideas/ (page answer): status %d", code)
+	}
+	mustContain(t, "/market/ideas/ (page answer)", body, "Hauling Arbitrage", "<strong>Pyerite</strong>", "2.6M ISK/day", "thin spread, deep volume", "ti-detail")
+	if strings.Contains(body, "Station flips") {
+		t.Error("page still shows the module's answer after its own landed")
+	}
+	code, body = getPage(t, app, cookie, "/")
+	if code != http.StatusOK {
+		t.Fatalf("GET / (page answer): status %d", code)
+	}
+	if !strings.Contains(body, "Station flips") || strings.Contains(body, "Hauling Arbitrage") {
+		t.Error("home module should keep the module's own answer")
 	}
 }
 

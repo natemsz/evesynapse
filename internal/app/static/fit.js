@@ -1082,7 +1082,8 @@ var FitTipUI = (function () {
   // fact like the game does.
   function openPicker(family, seedQ) {
     if (!picker) return;
-    picker.hidden = false;
+    if (window.EveSynapseModal) window.EveSynapseModal.open(picker, { focus: false });
+    else picker.hidden = false;
     if (pickerFamily && family) {
       pickerFamily.value = family;
       if (pickerTitle) {
@@ -1095,7 +1096,11 @@ var FitTipUI = (function () {
     var q = pickerQ || modInput;
     if (q && q.focus) q.focus();
   }
-  function closePicker() { if (picker) picker.hidden = true; }
+  function closePicker() {
+    if (!picker) return;
+    if (window.EveSynapseModal) window.EveSynapseModal.close(picker);
+    else picker.hidden = true;
+  }
   function queryPicker() {
     if (!pickerList) return;
     var family = pickerFamily ? pickerFamily.value : "any";
@@ -1150,16 +1155,8 @@ var FitTipUI = (function () {
       pickerQTimer = setTimeout(queryPicker, 160);
     });
   }
-  if (picker) {
-    // Backdrop click and Escape dismiss the modal, matching
-    // the app's other dialogs.
-    picker.addEventListener("click", function (ev) {
-      if (ev.target === picker) closePicker();
-    });
-    document.addEventListener("keydown", function (ev) {
-      if (ev.key === "Escape" && !picker.hidden) closePicker();
-    });
-  }
+  // Backdrop click and Escape are the shared modal's (app.js
+  // EveSynapseModal), as on the app's other dialogs.
 
   // --- pointer drag and drop --------------------------------------
   // In-game behavior, on mouse AND touch: tap shows the tooltip
@@ -1241,7 +1238,7 @@ var FitTipUI = (function () {
     d.active = true;
     // A drag out of the picker needs the workbench visible:
     // the modal backdrop would swallow every drop target.
-    if (!d.fromFit && picker) picker.hidden = true;
+    if (!d.fromFit && picker) closePicker();
     closeTip();
     try { d.el.setPointerCapture(ev.pointerId); } catch (e) { /* not critical */ }
     d.ghost = dragGhost(d);

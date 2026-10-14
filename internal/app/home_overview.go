@@ -34,13 +34,10 @@ import (
 const (
 	widgetBriefing   = "briefing"
 	widgetFleet      = "fleet"
-	widgetAttention  = "attention"
 	widgetNetWorth   = "networth"
 	widgetIndustry   = "industry"
 	widgetMarket     = "market"
 	widgetWatchlist  = "watchlist"
-	widgetSkills     = "skills"
-	widgetServer     = "server"
 	widgetPI         = "pi"
 	widgetTradeIdeas = "tradeideas"
 	widgetTraining   = "training"
@@ -48,6 +45,12 @@ const (
 	widgetWalletFlow = "walletflow"
 	widgetUpkeep     = "upkeep"
 	widgetGlance     = "glance"
+	// "server" (the Tranquility module) is retired: the player count
+	// and ESI health ride the Overview bar now. A saved layout naming
+	// it drops the entry on load; never reuse the id. "attention"
+	// (Needs Attention) is retired the same way: every line it
+	// listed is a Briefing line too. "skills" is retired as well:
+	// Training Horizon at one row high is what it showed.
 )
 
 // The home grid is three cells wide on a desktop (two on a mid-size
@@ -80,31 +83,60 @@ type widgetDef struct {
 }
 
 var homeWidgetCatalog = []widgetDef{
-	{widgetGlance, "At a glance", "The fleet's key figures in one band: net worth, liquid wallets, assets, and how many pilots are training.", 3, 1, "networth"},
+	{widgetGlance, "At a Glance", "The fleet's key figures in one band: net worth, liquid wallets, assets, and how many pilots are training.", 3, 1, "networth"},
 	{widgetBriefing, "Briefing", "What changed since you last looked, and what needs you in the next day.", 3, 1, "briefing"},
-	{widgetFleet, "Fleet overview", "Every linked character at a glance: where they are, what they're flying, what they're training.", 3, 2, "fleet"},
-	{widgetAttention, "Needs attention", "Characters that need you: re-links, idle queues, finished jobs, expiring orders, waiting contracts.", 2, 1, "attention"},
-	{widgetNetWorth, "Net worth", "Wallets, assets and open-order escrow across all characters, at market prices. An estimate.", 1, 2, "networth"},
+	{widgetFleet, "Fleet Overview", "Every linked character at a glance: where they are, what they're flying, what they're training.", 3, 2, "fleet"},
+	{widgetNetWorth, "Net Worth", "Wallets, assets and open-order escrow across all characters, at market prices. An estimate.", 1, 2, "networth"},
 	{widgetIndustry, "Industry", "Active industry jobs across characters, soonest delivery first.", 1, 1, "industry"},
-	{widgetPI, "Planetary industry", "Colonies across your characters: extractor timers, expired heads, and the next planet needing a visit.", 1, 1, "planets"},
+	{widgetPI, "Planetary Industry", "Colonies across your characters: extractor timers, expired heads, and the next planet needing a visit.", 1, 2, "planets"},
 	{widgetMarket, "Market", "Open orders across characters: counts, sell/buy value, orders expiring soonest.", 1, 1, "market"},
-	{widgetWatchlist, "Market watchlist", "The items you're watching: latest prices, 7- and 30-day moves, and a flag when one crosses your alert line.", 1, 1, "market_public"},
-	{widgetSkills, "Skills", "The next skill finishes across the fleet, plus who isn't training.", 1, 1, "skills"},
-	{widgetServer, "Tranquility", "Server status: players online.", 1, 1, "server"},
-	{widgetTradeIdeas, "Trade ideas", "Gemma's read on the Forge spread scanner, one tab per trade strategy. Refreshed twice a day; the Trade ideas page has the full list.", 2, 1, "tradeideas"},
-	{widgetTraining, "Training horizon", "The next 10 skill finishes across every character, plus who is sitting idle.", 1, 1, "skills"},
-	{widgetPulse, "Corp pulse", "What changed in the corporation: members in and out, wallet movements, structure arrivals and timers. Needs a qualifying in-game role.", 1, 1, "corp_members"},
-	{widgetWalletFlow, "Wallet flow", "Income vs spend over 7 and 30 days with top sources, sinks, and a per-character breakdown.", 2, 2, "wallet"},
-	{widgetUpkeep, "Upkeep & fuel", "Structures low on fuel, unanchoring, or running a state timer. Station Managers and Directors only.", 1, 1, "corp_structures"},
+	{widgetWatchlist, "Market Watchlist", "The items you're watching: latest prices, 7- and 30-day moves, and a flag when one crosses your alert line.", 1, 1, "market_public"},
+	{widgetTradeIdeas, "Trade Ideas", "A model's read on the Forge spread scanner, one tab per trade strategy. Refreshed twice a day; the Trade ideas page has the full list.", 2, 1, "tradeideas"},
+	{widgetTraining, "Training Horizon", "The next 10 skill finishes across every character, plus who is sitting idle.", 1, 2, "skills"},
+	{widgetPulse, "Corp Pulse", "What changed in the corporation: members in and out, wallet movements, structure arrivals and timers. Needs a qualifying in-game role.", 1, 1, "corp_members"},
+	{widgetWalletFlow, "Wallet Flow", "Income vs spend over 7 and 30 days with top sources, sinks, and a per-character breakdown.", 2, 2, "wallet"},
+	{widgetUpkeep, "Upkeep & Fuel", "Structures low on fuel, unanchoring, or running a state timer. Station Managers and Directors only.", 1, 1, "corp_structures"},
 }
 
-// defaultHomeLayout is what accounts with no saved layout get:
-// the briefing first, then the fleet, what needs the user next,
-// then the money. Accounts with a saved layout keep theirs —
-// the briefing only joins a home by the user's own arrangement.
-var defaultHomeLayout = []string{
-	widgetGlance, widgetBriefing, widgetFleet, widgetAttention, widgetNetWorth,
-	widgetIndustry, widgetMarket, widgetServer,
+// defaultHomeLayout is what accounts with no saved layout get, sized
+// to tile the three-column grid with no gaps: the headline figures
+// on top and the fleet right under them, the briefing as a band,
+// then the three things an everyday pilot checks most (skill
+// finishes, extractor timers, net worth) side by side at double
+// height, and wallet flow at two by two with the industry and
+// market checks stacked beside it. Sizes are explicit here rather
+// than taken from the catalog, so the default tiles even where a
+// module's catalog size (what Add a module gives it) differs.
+// Accounts with a saved layout keep theirs.
+var defaultHomeLayout = []homeLayoutItem{
+	{ID: widgetGlance, W: 3, H: 1},
+	{ID: widgetFleet, W: 3, H: 2},
+	{ID: widgetBriefing, W: 3, H: 1},
+	{ID: widgetTraining, W: 1, H: 2},
+	{ID: widgetPI, W: 1, H: 2},
+	{ID: widgetNetWorth, W: 1, H: 2},
+	{ID: widgetWalletFlow, W: 2, H: 2},
+	{ID: widgetIndustry, W: 1, H: 1},
+	{ID: widgetMarket, W: 1, H: 1},
+}
+
+// widgetMinSize is the floor under a module's size, for the modules
+// whose content stops making sense below it (a table needs its
+// columns, a band its width). Unlisted modules go down to one cell.
+// Customize refuses a smaller size, and a stored one is held up to it.
+var widgetMinSize = map[string]struct{ W, H int }{
+	widgetGlance:     {2, 1},
+	widgetBriefing:   {2, 1},
+	widgetFleet:      {2, 2},
+	widgetWalletFlow: {2, 1},
+}
+
+// widgetMin is a module's floor in grid cells (1x1 when it has none).
+func widgetMin(id string) (w, h int) {
+	if m, ok := widgetMinSize[id]; ok {
+		return m.W, m.H
+	}
+	return 1, 1
 }
 
 func widgetDefFor(id string) (widgetDef, bool) {
@@ -130,7 +162,8 @@ func widgetSize(item homeLayoutItem) (w, h int) {
 	if item.H > 0 {
 		h = item.H
 	}
-	return w, h
+	minW, minH := widgetMin(item.ID)
+	return max(w, minW), max(h, minH)
 }
 
 // homeLayoutItem is one persisted layout entry: the widget and, once
@@ -220,9 +253,7 @@ func encodeHomeLayout(items []homeLayoutItem) string {
 // defaultHomeLayoutItems is the default layout in item form.
 func defaultHomeLayoutItems() []homeLayoutItem {
 	items := make([]homeLayoutItem, len(defaultHomeLayout))
-	for i, id := range defaultHomeLayout {
-		items[i] = homeLayoutItem{ID: id}
-	}
+	copy(items, defaultHomeLayout)
 	return items
 }
 
@@ -250,13 +281,10 @@ func homeCap(h int) int { return 3 + 5*(h-1) }
 var widgetSnapshotKinds = map[string][]string{
 	widgetBriefing:   {esi.SnapSkillqueue, esi.SnapSkills, esi.SnapIndustryJobs, esi.SnapContracts, esi.SnapOrders, esi.SnapOrdersHistory, esi.SnapPlanets, esi.SnapMail, esi.SnapMailLabels, esi.SnapCalendar},
 	widgetFleet:      {esi.SnapProfile, esi.SnapCorpInfo, esi.SnapLocation, esi.SnapShip, esi.SnapOnline, esi.SnapSkillqueue, esi.SnapWallet, esi.SnapMailLabels},
-	widgetAttention:  {esi.SnapSkillqueue, esi.SnapIndustryJobs, esi.SnapContracts, esi.SnapOrders, esi.SnapPlanets},
 	widgetNetWorth:   {esi.SnapWallet, esi.SnapAssets, esi.SnapOrders},
 	widgetIndustry:   {esi.SnapIndustryJobs},
 	widgetMarket:     {esi.SnapOrders},
 	widgetWatchlist:  {}, // watchlist + stored history only; no character snapshots
-	widgetSkills:     {esi.SnapSkillqueue},
-	widgetServer:     {},
 	widgetPI:         {esi.SnapPlanets},
 	widgetTradeIdeas: {}, // stored model answer only; no character snapshots
 	widgetTraining:   {esi.SnapSkillqueue},
@@ -380,11 +408,11 @@ func (app *Application) loadCharSnaps(ctx context.Context, userID int64, chars [
 
 	// Per-planet layouts ride suffix-keyed snapshots, so they
 	// cannot join the batched kind list above: load them in a
-	// second pass when a visible widget (attention, PI) reads
+	// second pass when a visible widget (briefing, PI) reads
 	// them.
 	needLayouts := false
 	for _, id := range layout {
-		if id == widgetAttention || id == widgetPI || id == widgetBriefing {
+		if id == widgetPI || id == widgetBriefing {
 			needLayouts = true
 			break
 		}
@@ -560,19 +588,17 @@ type homeWidget struct {
 	ID         string
 	Title      string
 	W, H       int    // size in grid cells
+	MinW, MinH int    // the module's floor in grid cells (Customize refuses less)
 	SizeClass  string // gw1-3 gh1-3: the grid classes the CSS applies
 	Cap        int    // rows or items shown before More, by height
-	BriefCap   int    // briefing cards shown before More, by area
+	BriefCap   int    // briefing cards shown before More: one row of cards per cell of height, two more rows per extra cell
 	Customize  bool   // rendering under /?customize=1 (form return targets)
 	Fleet      *fleetWidget
-	Attention  *attentionWidget
 	Briefing   *briefingWidget
 	NetWorth   *netWorthWidget
 	Industry   *industryWidget
 	Market     *marketWidget
 	Watchlist  *watchlistWidget
-	Skills     *skillsWidget
-	Server     *serverStatusView
 	PI         *piWidget
 	Training   *trainingWidget
 	Pulse      *pulseWidget
@@ -635,25 +661,6 @@ func splitTags(raw string) []string {
 		return r == ',' || r == ' ' || r == ';'
 	})
 }
-
-// attentionItem is one Needs-attention line. Rank orders the
-// severities (fixed rule order, most actionable first); At breaks
-// ties chronologically.
-type attentionItem struct {
-	Char string // character the item is about
-	Text string
-	Link string
-	When string // short human timing, may be ""
-	Rank int
-	At   time.Time
-}
-
-type attentionWidget struct {
-	Items []attentionItem
-	More  int // items hidden past the cap
-}
-
-const attentionCap = 12
 
 type netWorthWidget struct {
 	Any             bool
@@ -743,21 +750,6 @@ type marketWidget struct {
 	Expiring    []marketExpiry
 	PerChar     []marketCharRow
 	Health      string // One-liner: undercuts + watchlist moves, "" when quiet
-}
-
-type skillFinish struct {
-	Char    string
-	CharID  int64
-	Skill   string
-	SkillID int64
-	Level   string // roman level being finished
-	Finish  string
-	Left    string
-}
-
-type skillsWidget struct {
-	Finishing   []skillFinish
-	NotTraining int
 }
 
 // piExpiryLine is one extractor deadline in the PI widget.
@@ -902,287 +894,13 @@ func (app *Application) buildFleet(ctx context.Context, bundles []*charSnaps) *f
 	return w
 }
 
-// Attention rule ranks (lower = surfaces first). Fixed by rule,
-// then chronological within a rank.
-const (
-	attentionRelink = iota
-	attentionNotTraining
-	attentionJobReady
-	attentionOrderExpiring
-	attentionContract
-	attentionPI // Expired/imminent extractors (appended; order preserved)
-	attentionUndercut
-	attentionMarketMove
-)
-
-func (app *Application) buildAttention(ctx context.Context, bundles []*charSnaps) *attentionWidget {
-	now := time.Now()
-	var items []attentionItem
-
-	// Job/product names resolve in one batched name-cache pass.
-	addJobItem := func(b *charSnaps, j esi.IndustryJob) {
-		nameID := j.ProductTypeID
-		if nameID == 0 {
-			nameID = j.BlueprintTypeID
-		}
-		name := app.typeNameOrID(ctx, nameID)
-		at, _ := parseRFC3339(j.CompletedDate)
-		if at.IsZero() {
-			at, _ = parseRFC3339(j.EndDate)
-		}
-		items = append(items, attentionItem{
-			Char: b.ch.Name,
-			Text: fmt.Sprintf("%s — job ready for delivery: %s (%s)", b.ch.Name, name, industryActivityLabel(j.ActivityID)),
-			Link: fmt.Sprintf("/industry/?character=%d", b.ch.CharacterID),
-			Rank: attentionJobReady,
-			At:   at,
-		})
-	}
-
-	for _, b := range bundles {
-		// Re-link needed: the token is dead or the character
-		// changed hands; everything else about them is frozen
-		// until they sign in again, so this outranks all else.
-		if b.ch.LinkState != "" && b.ch.LinkState != linkStateOK {
-			reason := "sign-in expired"
-			if b.ch.LinkState == linkStateOwnerChanged {
-				reason = "character changed accounts"
-			}
-			items = append(items, attentionItem{
-				Char: b.ch.Name,
-				Text: fmt.Sprintf("%s needs re-linking — %s.", b.ch.Name, reason),
-				Link: "/characters/",
-				Rank: attentionRelink,
-			})
-		}
-
-		// Not training: the queue snapshot exists and nothing in
-		// it finishes in the future.
-		if b.queueKnown {
-			training, finishedAt := queueState(b.queue, now)
-			if !training {
-				item := attentionItem{
-					Char: b.ch.Name,
-					Text: fmt.Sprintf("%s isn't training — the queue is empty.", b.ch.Name),
-					Link: fmt.Sprintf("/character/?character=%d", b.ch.CharacterID),
-					Rank: attentionNotTraining,
-					At:   finishedAt,
-				}
-				if !finishedAt.IsZero() {
-					item.Text = fmt.Sprintf("%s isn't training — the queue finished %s.", b.ch.Name, formatFinish(b.queueLastFinish()))
-					item.When = "finished " + finishedAt.UTC().Format("2006-01-02")
-				}
-				items = append(items, item)
-			}
-		}
-
-		// Industry jobs ready for delivery.
-		if b.jobsKnown {
-			for _, j := range b.jobs {
-				if j.Status == "ready" {
-					addJobItem(b, j)
-				}
-			}
-		}
-
-		// Orders expiring within 24h.
-		if b.ordersKnown {
-			for _, o := range b.orders {
-				expiry, ok := orderExpiry(o)
-				if !ok || expiry.Before(now) || expiry.After(now.Add(24*time.Hour)) {
-					continue
-				}
-				items = append(items, attentionItem{
-					Char: b.ch.Name,
-					Text: fmt.Sprintf("%s — %s order expires in %s.", b.ch.Name,
-						app.typeNameOrID(ctx, o.TypeID), humanDuration(time.Until(expiry))),
-					Link: fmt.Sprintf("/orders/?character=%d", b.ch.CharacterID),
-					When: "expires " + expiry.UTC().Format("2006-01-02 15:04 UTC"),
-					Rank: attentionOrderExpiring,
-					At:   expiry,
-				})
-			}
-		}
-
-		// Contracts waiting on this character to accept/act.
-		if b.contractsKnown {
-			for _, c := range b.contracts {
-				if c.Status != "outstanding" || c.AssigneeID != b.ch.CharacterID || c.AcceptorID != 0 {
-					continue
-				}
-				label := c.Title
-				if label == "" {
-					label = c.Type + " contract"
-				}
-				at, _ := parseRFC3339(c.DateExpired)
-				items = append(items, attentionItem{
-					Char: b.ch.Name,
-					Text: fmt.Sprintf("%s — contract waiting for you: %s.", b.ch.Name, label),
-					Link: fmt.Sprintf("/contracts/?character=%d", b.ch.CharacterID),
-					Rank: attentionContract,
-					At:   at,
-				})
-			}
-		}
-
-		// Extractors expired or running dry within a
-		// day, from the warmed colony layouts (expiry fixed at
-		// install time, so the countdown is real).
-		if b.planetsKnown {
-			for _, colony := range b.colonies {
-				layout := b.layouts[colony.PlanetID]
-				if layout == nil {
-					continue
-				}
-				planet := app.planetDisplayName(ctx, colony.PlanetID)
-				for _, ex := range layoutExtractors(*layout) {
-					if !ex.ExpiryOK {
-						continue
-					}
-					switch {
-					case ex.Expiry.Before(now):
-						items = append(items, attentionItem{
-							Char: b.ch.Name,
-							Text: fmt.Sprintf("%s — extractor on %s has expired.", b.ch.Name, planet),
-							Link: fmt.Sprintf("/planets/?character=%d", b.ch.CharacterID),
-							When: "expired " + formatFinish(ex.Expiry.UTC().Format(time.RFC3339)),
-							Rank: attentionPI,
-							At:   ex.Expiry,
-						})
-					case ex.Expiry.Before(now.Add(24 * time.Hour)):
-						items = append(items, attentionItem{
-							Char: b.ch.Name,
-							Text: fmt.Sprintf("%s — extractor on %s runs dry in %s.", b.ch.Name, planet, humanDuration(time.Until(ex.Expiry))),
-							Link: fmt.Sprintf("/planets/?character=%d", b.ch.CharacterID),
-							When: "expires " + formatFinish(ex.Expiry.UTC().Format(time.RFC3339)),
-							Rank: attentionPI,
-							At:   ex.Expiry,
-						})
-					}
-				}
-			}
-		}
-	}
-
-	// Market health — undercut sell orders and
-	// watchlist moves, from the worker's stored verdicts and
-	// price history. Account-level (not per bundle), appended
-	// after the extractor rules.
-	items = append(items, app.attentionMarketItems(ctx, bundles)...)
-
-	sort.SliceStable(items, func(i, j int) bool {
-		if items[i].Rank != items[j].Rank {
-			return items[i].Rank < items[j].Rank
-		}
-		return items[i].At.Before(items[j].At)
-	})
-	w := &attentionWidget{}
-	if len(items) > attentionCap {
-		w.More = len(items) - attentionCap
-		items = items[:attentionCap]
-	}
-	w.Items = items
-	return w
-}
-
-// attentionMarketItems builds the Needs-attention lines
-// for one account: undercut sell orders (one line each, folded
-// into a single summary past three) and watchlist moves past the
-// user's threshold. Everything reads the stored verdicts and
-// history — a quiet market adds nothing.
-func (app *Application) attentionMarketItems(ctx context.Context, bundles []*charSnaps) []attentionItem {
-	if len(bundles) == 0 {
-		return nil
-	}
-	userID := bundles[0].ch.UserID
-	charNames := make(map[int64]string, len(bundles))
-	for _, b := range bundles {
-		charNames[b.ch.CharacterID] = b.ch.Name
-	}
-
-	var items []attentionItem
-	health, err := app.queries.ListOrderHealthByUser(ctx, userID)
-	if err != nil {
-		logging.Errorf("home: attention: list order health for user %d: %v", userID, err)
-	} else {
-		var undercut []db.OrderHealth
-		for _, h := range health {
-			if h.Status == "undercut_station" || h.Status == "undercut_region" {
-				undercut = append(undercut, h)
-			}
-		}
-		switch {
-		case len(undercut) > 3:
-			items = append(items, attentionItem{
-				Text: fmt.Sprintf("%d of your sell orders are undercut right now.", len(undercut)),
-				Link: "/market/",
-				Rank: attentionUndercut,
-			})
-		default:
-			for _, h := range undercut {
-				text, _ := orderHealthText(h.MyPrice, h.Status, h.StationBest, h.RegionBest)
-				items = append(items, attentionItem{
-					Char: charNames[h.CharacterID],
-					Text: fmt.Sprintf("%s — %s sell order: %s.",
-						charNames[h.CharacterID], app.typeNameOrID(ctx, h.TypeID), lowerFirst(text)),
-					Link: "/market/",
-					Rank: attentionUndercut,
-					At:   h.ComputedAt,
-				})
-			}
-		}
-	}
-
-	entries, err := app.queries.ListWatchlistByUser(ctx, userID)
-	if err != nil {
-		logging.Errorf("home: attention: list watchlist for user %d: %v", userID, err)
-		return items
-	}
-	for _, e := range entries {
-		rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, markethistory.ChartRows)
-		pct, ok := markethistory.ChangePct(rows, 7)
-		if !ok || absFloat(pct) < e.ThresholdPct {
-			continue
-		}
-		items = append(items, attentionItem{
-			Text: fmt.Sprintf("%s %s over 7 days in %s.",
-				app.typeNameOrID(ctx, e.TypeID), markethistory.ChangeDirection(pct),
-				app.marketRegionLabel(ctx, e.RegionID)),
-			Link: "/market/",
-			Rank: attentionMarketMove,
-		})
-	}
-	return items
-}
-
-// lowerFirst lowercases a string's first letter ("Undercut…" →
-// "undercut…") for embedding mid-sentence.
-func lowerFirst(s string) string {
-	if s == "" {
-		return s
-	}
-	return strings.ToLower(s[:1]) + s[1:]
-}
-
-// absFloat is |x| for the attention threshold comparison (keeps
+// absFloat is |x| for the watchlist threshold comparison (keeps
 // home_overview.go free of a math import it otherwise doesn't need).
 func absFloat(x float64) float64 {
 	if x < 0 {
 		return -x
 	}
 	return x
-}
-
-// queueLastFinish returns the latest finish_date in the queue, or
-// "" when no entry carries one.
-func (b *charSnaps) queueLastFinish() string {
-	last := ""
-	for _, e := range b.queue {
-		if e.FinishDate > last {
-			last = e.FinishDate
-		}
-	}
-	return last
 }
 
 func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles []*charSnaps) *netWorthWidget {
@@ -1496,7 +1214,7 @@ func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps, c
 	}
 	// Health line: how many sell orders are undercut and
 	// how many watched items are moving, from the same stored
-	// verdicts the attention feed reads. Quiet when zero. It is
+	// verdicts the Briefing reads. Quiet when zero. It is
 	// an account-wide summary, so it only reads under the
 	// all-characters scope it describes.
 	if cfg.ScopeType == scopeAll && len(bundles) > 0 {
@@ -1555,60 +1273,6 @@ func (app *Application) marketHealthLine(ctx context.Context, userID int64) stri
 		}
 	}
 	return strings.Join(parts, " · ")
-}
-
-func (app *Application) buildSkills(ctx context.Context, bundles []*charSnaps) *skillsWidget {
-	now := time.Now()
-	type pending struct {
-		row    skillFinish
-		finish time.Time
-	}
-	var pendingRows []pending
-	w := &skillsWidget{}
-	for _, b := range bundles {
-		if !b.queueKnown {
-			continue
-		}
-		training, _ := queueState(b.queue, now)
-		if !training {
-			w.NotTraining++
-			continue
-		}
-		head := queueHead(b.queue, now)
-		if head == nil {
-			continue
-		}
-		finish, ok := parseRFC3339(head.FinishDate)
-		if !ok {
-			continue
-		}
-		name := app.esi.CachedTypeName(ctx, head.SkillID)
-		if name == "" {
-			name = fmt.Sprintf("Type #%d", head.SkillID)
-		}
-		pendingRows = append(pendingRows, pending{
-			row: skillFinish{
-				Char:    b.ch.Name,
-				CharID:  b.ch.CharacterID,
-				Skill:   name,
-				SkillID: head.SkillID,
-				Level:   esi.RomanLevel(head.FinishedLevel),
-				Finish:  formatFinish(head.FinishDate),
-				Left:    humanDuration(time.Until(finish)),
-			},
-			finish: finish,
-		})
-	}
-	sort.SliceStable(pendingRows, func(i, j int) bool {
-		return pendingRows[i].finish.Before(pendingRows[j].finish)
-	})
-	for i, p := range pendingRows {
-		if i >= 8 {
-			break
-		}
-		w.Finishing = append(w.Finishing, p.row)
-	}
-	return w
 }
 
 // buildPI assembles the planetary-industry widget: colonies
@@ -1728,10 +1392,12 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 	for _, item := range layout {
 		def, _ := widgetDefFor(item.ID)
 		gw, gh := widgetSize(item)
+		minW, minH := widgetMin(item.ID)
 		w := homeWidget{
 			ID: item.ID, Title: def.Title,
 			W: gw, H: gh, SizeClass: fmt.Sprintf("gw%d gh%d", gw, gh),
-			Cap: homeCap(gh), BriefCap: 2 * gw * gh,
+			MinW: minW, MinH: minH,
+			Cap: homeCap(gh), BriefCap: gw * (2*gh - 1),
 			Customize: customize,
 		}
 		switch item.ID {
@@ -1739,8 +1405,6 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 			w.Briefing = app.buildBriefing(ctx, bundles, briefingSince, now)
 		case widgetFleet:
 			w.Fleet = app.buildFleet(ctx, bundles)
-		case widgetAttention:
-			w.Attention = app.buildAttention(ctx, bundles)
 		case widgetNetWorth:
 			w.NetWorth = app.buildNetWorth(ctx, userID, bundles)
 		case widgetIndustry:
@@ -1749,14 +1413,8 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 			w.Market = app.buildMarket(ctx, bundles, app.ordersConfigFor(ctx, userID))
 		case widgetWatchlist:
 			w.Watchlist = app.buildWatchlistWidget(ctx, userID)
-		case widgetSkills:
-			w.Skills = app.buildSkills(ctx, bundles)
 		case widgetPI:
 			w.PI = app.buildPI(ctx, bundles)
-		case widgetServer:
-			if status, ok := app.loadServerStatus(ctx); ok {
-				w.Server = status
-			}
 		case widgetTradeIdeas:
 			w.TradeIdeas = app.buildTradeIdeas(ctx)
 		case widgetTraining:
@@ -1925,7 +1583,8 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 			// whole cells inside the grid, else nothing changes.
 			wv, werr := strconv.Atoi(r.FormValue("w"))
 			hv, herr := strconv.Atoi(r.FormValue("h"))
-			if known && werr == nil && herr == nil && wv >= 1 && wv <= homeGridMax && hv >= 1 && hv <= homeGridMax {
+			minW, minH := widgetMin(widget)
+			if known && werr == nil && herr == nil && wv >= minW && wv <= homeGridMax && hv >= minH && hv <= homeGridMax {
 				for i := range layout {
 					if layout[i].ID == widget {
 						layout[i].W, layout[i].H = wv, hv

@@ -1986,6 +1986,20 @@ body.quickjump-open { overflow: hidden; }
   margin-bottom: 0.4rem;
 }
 .fit-head label { display: grid; gap: 0.25rem; font-size: 0.85rem; }
+/* Clone labels carry a name and a location: the picker may
+shrink, and a long label ends in an ellipsis instead of pushing
+the page sideways. */
+.fit-head .fit-clonepick { flex: 0 1 18rem; min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.fit-head .fit-clonepick select {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* Save and its public flag wrap as one unit. */
+.fit-head .fit-saverow { display: inline-flex; align-items: center; gap: 0.6rem; }
+.fit-head .fit-publicchk { display: inline-flex; }
 .fit-head select, .fit-charge select {
   background: var(--input-bg);
   border: 1px solid #2a2a2a;

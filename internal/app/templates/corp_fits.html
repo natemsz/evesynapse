@@ -11,7 +11,7 @@
 {{else}}
 {{template "corpselector" .CorpOptions}}
 <h2>{{.CorpName}}</h2>
-<p><small><a href="/doctrines/?corporation={{.CorpID}}">Doctrines</a> · Fits · <a href="/srp/?corporation={{.CorpID}}">Ship replacement</a>{{if .Directs}} · <a href="/corporations/settings/?corporation={{.CorpID}}">Settings</a>{{end}}</small></p>
+<p><small><a href="/doctrines/?corporation={{.CorpID}}">Doctrines</a> · Fits · <a href="/srp/?corporation={{.CorpID}}">Ship Replacement</a>{{if .Directs}} · <a href="/corporations/settings/?corporation={{.CorpID}}">Settings</a>{{end}}</small></p>
 
 {{template "fitbrowser" .Browser}}
 {{end}}

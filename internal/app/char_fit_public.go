@@ -254,13 +254,6 @@ func publicFitCardOf(row db.ListPublicFitsRow, userID int64) publicFitCard {
 	return card
 }
 
-type publicFitChip struct {
-	Label string
-	Count int64
-	URL   string
-	On    bool
-}
-
 // publicFitsView is the browser page: the filter bar's current
 // state, facet chips, sort links, one bounded page of cards.
 type publicFitsView struct {
@@ -275,9 +268,9 @@ type publicFitsView struct {
 	NextURL     string
 	FirstURL    string
 	Roles       []string
-	Sorts       []publicFitChip
-	Hulls       []publicFitChip
-	Tags        []publicFitChip
+	Sorts       []facetChip
+	Hulls       []facetChip
+	Tags        []facetChip
 	Ages        []int // the Updated filter's choices, in days
 	DefaultSort string
 	SuggestURL  string
@@ -288,18 +281,11 @@ type publicFitsView struct {
 	Self string
 }
 
-// publicFitURLParam is one browser address parameter: its key,
-// the filter's current value, and the default, which is omitted
-// like an empty value.
-type publicFitURLParam struct {
-	key     string
-	current string
-	def     string
-}
-
-// publicFitURL is the browser address with some choices changed;
-// empty values take a choice off, page resets unless kept.
-func (f publicFitFilters) publicFitURL(changes map[string]string, keepPage bool) string {
+// browser describes the public browser's address as a fitBrowser, so
+// its links come from the one address builder the fit browsers share
+// (fitBrowser.address). Defaults (newest first, any faction, page
+// one) are left out of the address.
+func (f publicFitFilters) browser(keepPage bool) *fitBrowser {
 	num := func(v float64) string {
 		if v <= 0 {
 			return ""
@@ -318,37 +304,39 @@ func (f publicFitFilters) publicFitURL(changes map[string]string, keepPage bool)
 	if keepPage && f.Page > 1 {
 		page = strconv.Itoa(f.Page)
 	}
-	params := []publicFitURLParam{
-		{"q", f.Q, ""},
-		{"role", f.Role, ""},
-		{"hull", f.Hull, ""},
-		{"hullq", f.HullQ, ""},
-		{"include", f.IncludeName, ""},
-		{"exclude", f.ExcludeName, ""},
-		{"faction", f.Faction, "any"},
-		{"tag", f.Tag, ""},
-		{"sort", f.Sort, publicFitDefaultSort},
-		{"updated", updated, ""},
-		{"stars", num(f.MinStars), ""},
-		{"maxprice", num(f.MaxPrice), ""},
-		{"alpha", alpha, ""},
-		{"page", page, ""},
+	faction := f.Faction
+	if faction == "any" {
+		faction = ""
 	}
-	query := url.Values{}
-	for _, p := range params {
-		v := p.current
-		if c, ok := changes[p.key]; ok {
-			v = c
+	sorts := make([]browseSort, len(publicFitSorts))
+	for i, s := range publicFitSorts {
+		sorts[i] = browseSort{Key: s.Key, Label: s.Label}
+	}
+	filter := func(key, value string) fitFilter { return fitFilter{Key: key, Value: value} }
+	return &fitBrowser{
+		Path: publicFitsPath, Q: f.Q, Include: f.IncludeName, Exclude: f.ExcludeName,
+		Sort: f.Sort, Sorts: sorts,
+		Filters: []fitFilter{
+			filter("role", f.Role), filter("hull", f.Hull), filter("hullq", f.HullQ),
+			filter("faction", faction), filter("tag", f.Tag), filter("updated", updated),
+			filter("stars", num(f.MinStars)), filter("maxprice", num(f.MaxPrice)),
+			filter("alpha", alpha), filter("page", page),
+		},
+	}
+}
+
+// publicFitURL is the browser address with some choices changed;
+// empty values take a choice off, page resets unless kept. A change
+// to a default value takes the choice off too.
+func (f publicFitFilters) publicFitURL(changes map[string]string, keepPage bool) string {
+	norm := make(map[string]string, len(changes))
+	for k, v := range changes {
+		if (k == "sort" && v == publicFitDefaultSort) || (k == "faction" && v == "any") {
+			v = ""
 		}
-		if v == "" || v == p.def {
-			continue
-		}
-		query.Set(p.key, v)
+		norm[k] = v
 	}
-	if len(query) == 0 {
-		return publicFitsPath
-	}
-	return publicFitsPath + "?" + query.Encode()
+	return f.browser(keepPage).address(norm)
 }
 
 // handlePublicFits renders the anonymous fit browser: one bounded
@@ -408,14 +396,14 @@ func (app *Application) handlePublicFits(w http.ResponseWriter, r *http.Request)
 	}
 	view.FirstURL = filters.publicFitURL(map[string]string{}, false)
 	for _, s := range publicFitSorts {
-		view.Sorts = append(view.Sorts, publicFitChip{
+		view.Sorts = append(view.Sorts, facetChip{
 			Label: s.Label, On: s.Key == filters.Sort,
 			URL: filters.publicFitURL(map[string]string{"sort": s.Key}, false),
 		})
 	}
 	if hulls, err := app.queries.PublicFitHullFacets(ctx); err == nil {
 		for _, h := range hulls {
-			chip := publicFitChip{Label: h.Hull, Count: h.Fits, On: h.Hull == filters.Hull}
+			chip := facetChip{Label: h.Hull, Count: int(h.Fits), On: h.Hull == filters.Hull}
 			if chip.On {
 				chip.URL = filters.publicFitURL(map[string]string{"hull": ""}, false)
 			} else {
@@ -428,7 +416,7 @@ func (app *Application) handlePublicFits(w http.ResponseWriter, r *http.Request)
 	}
 	if tags, err := app.queries.PublicFitTagFacets(ctx); err == nil {
 		for _, tg := range tags {
-			chip := publicFitChip{Label: tg.Tag, Count: tg.Fits, On: strings.EqualFold(tg.Tag, filters.Tag)}
+			chip := facetChip{Label: tg.Tag, Count: int(tg.Fits), On: strings.EqualFold(tg.Tag, filters.Tag)}
 			if chip.On {
 				chip.URL = filters.publicFitURL(map[string]string{"tag": ""}, false)
 			} else {

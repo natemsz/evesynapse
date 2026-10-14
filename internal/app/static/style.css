@@ -2519,7 +2519,9 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 }
 .fit-tip-name { font-weight: 600; color: var(--text); margin-bottom: 0.15rem; }
 .fit-tip-sub { color: var(--muted); font-size: 0.75rem; }
-.fit-tip-stats { color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
+/* Stat and charge lines wrap: a tooltip sized to the ring's hole
+   must never grow a sideways scrollbar for a long ammo name. */
+.fit-tip-stats { color: var(--muted); font-size: 0.75rem; overflow-wrap: anywhere; }
 .fit-tip-lines { margin-top: 0.3rem; display: grid; gap: 0.12rem; }
 .fit-tip-line { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.75rem; }
 .fit-tip-k { color: var(--muted); }

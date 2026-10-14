@@ -80,6 +80,15 @@
   onContentReady(initFolds);
   initFolds(document);
 
+  // --- Confirmed forms ------------------------------------------
+  // A form carrying data-confirm asks before it submits (CSP rules
+  // out inline handlers). Delegated, so swapped pages need nothing.
+  document.addEventListener("submit", function (ev) {
+    var form = ev.target;
+    var q = form && form.getAttribute ? form.getAttribute("data-confirm") : null;
+    if (q && !window.confirm(q)) ev.preventDefault();
+  }, true);
+
   // --- Expanders -------------------------------------------------
   // One mechanism for every summary/detail pair. A detail block
   // carries data-wmore; its control carries data-expand naming the
@@ -352,6 +361,7 @@
   // the current grid across swaps; binding it per grid would pile
   // a dead handler behind every swapped customize view.
   var homeModalCurrent = null;
+  var homePickCloseBound = false;
   var homeModalEscapeBound = false;
   function armHomeModalEscape() {
     if (homeModalEscapeBound) return;
@@ -388,85 +398,33 @@
 
     function closeModal() { if (modal) modal.hidden = true; }
 
-    // --- the grid engine, mirrored ----------------------------
-    // solveHomeSpans is the exact mirror of the Go solver in
-    // home_overview.go: walk the order once — a full module, or a
-    // flex module marked wide, owns its row; a flex module takes
-    // cols/perRow and shares the row with the next flex modules
-    // that fit; a short row of flex modules shares its spare
-    // width, none growing past half a row. The server renders the
-    // two-up solve as span3/span6 and the three-up solve as
-    // wspan2/wspan3/wspan6; the mirror re-solves both live (drag,
-    // resize toggles), so what is under the finger is always the
-    // final arrangement.
-    function solveHomeSpans(descs, cols, perRow) {
-      var spans = [];
-      var k;
-      if (cols < 2) {
-        for (k = 0; k < descs.length; k++) spans.push(1);
-        return spans;
-      }
-      if (!(perRow >= 1 && perRow <= cols)) perRow = 2;
-      var flex = Math.floor(cols / perRow);
-      var half = Math.floor(cols / 2);
-      var rowUsed = 0, rowStart = 0;
-      function closeRow(next) {
-        var n = next - rowStart;
-        if (n > 0 && rowUsed < cols) {
-          var share = Math.min(Math.floor(cols / n), half);
-          for (var j = rowStart; j < next; j++) {
-            if (spans[j] < share) spans[j] = share;
-          }
-        }
-        rowStart = next;
-        rowUsed = 0;
-      }
-      for (var i = 0; i < descs.length; i++) {
-        var span = (descs[i].wide || descs[i].full) ? cols : flex;
-        if (rowUsed > 0 && rowUsed + span > cols) closeRow(i);
-        spans[i] = span;
-        rowUsed += span;
-        if (rowUsed === cols) closeRow(i + 1);
-      }
-      if (rowUsed > 0) closeRow(descs.length);
-      return spans;
-    }
-
-    function cardDescriptor(el) {
+    // --- sizes ---------------------------------------------------
+    // A module's size is its gw/gh classes (grid cells across and
+    // down, 1-3); the CSS lays the grid out from them, so resizing
+    // is setting two classes and saving.
+    function sizeOf(el) {
       return {
-        wide: el.getAttribute("data-span") === "wide",
-        full: el.getAttribute("data-size") === "full"
+        w: parseInt(el.getAttribute("data-gw"), 10) || 1,
+        h: parseInt(el.getAttribute("data-gh"), 10) || 1
       };
     }
-
-    function applySpanClass(el, span, wide) {
-      ["span3", "span6", "spanall", "wspan2", "wspan3", "wspan6"].forEach(function (c) {
-        el.classList.remove(c);
-      });
-      el.classList.add(span >= 6 ? "span6" : "span3");
-      el.classList.add("wspan" + wide);
+    function sizeCard(el, w, h) {
+      ["gw1", "gw2", "gw3", "gh1", "gh2", "gh3"].forEach(function (c) { el.classList.remove(c); });
+      el.classList.add("gw" + w);
+      el.classList.add("gh" + h);
+      el.setAttribute("data-gw", String(w));
+      el.setAttribute("data-gh", String(h));
     }
 
-    // Re-solve the grid and hand every card its span class. Mid
-    // drag the dragged card is out of flow and the placeholder
-    // stands in for it — pass both; otherwise pass nulls.
-    function respan(placeholder, draggedCard) {
-      var nodes = [], descs = [];
-      var kids = grid.children;
-      for (var i = 0; i < kids.length; i++) {
-        var el = kids[i];
-        if (draggedCard && el === draggedCard) continue;
-        if (placeholder && el === placeholder) {
-          nodes.push(el);
-          descs.push(cardDescriptor(draggedCard));
-        } else if (el.classList && el.classList.contains("card") && el.hasAttribute("data-widget")) {
-          nodes.push(el);
-          descs.push(cardDescriptor(el));
-        }
-      }
-      var spans = solveHomeSpans(descs, 6, 2);
-      var wide = solveHomeSpans(descs, 6, 3);
-      for (var j = 0; j < nodes.length; j++) applySpanClass(nodes[j], spans[j], wide[j]);
+    // One resize, wherever it came from (picker or grip): apply it at
+    // once, save it, and put the old size back if the save fails.
+    function resizeCard(card, w, h) {
+      var was = sizeOf(card);
+      if (was.w === w && was.h === h) return;
+      flipSiblings(function () { sizeCard(card, w, h); });
+      postLayout({ action: "size", widget: card.getAttribute("data-widget"), w: w, h: h }).then(function (ok) {
+        if (!ok) flipSiblings(function () { sizeCard(card, was.w, was.h); });
+      });
     }
 
     // Give one card its drag handle, resize toggle and × button.
@@ -489,35 +447,71 @@
         startDrag(ev, card, handle);
       });
 
-      // Flex modules get the half/full resize toggle: flip the
-      // stored span preference, then re-solve the grid in place.
-      if (card.getAttribute("data-size") === "flex") {
-        card.classList.add("has-spanbtn");
-        var spanBtn = document.createElement("button");
-        spanBtn.type = "button";
-        spanBtn.className = "cardspan";
-        spanBtn.textContent = "⤢";
-        var paintSpanBtn = function () {
-          var wide = card.getAttribute("data-span") === "wide";
-          spanBtn.setAttribute("aria-pressed", wide ? "true" : "false");
-          spanBtn.setAttribute("aria-label", wide
-            ? "Show " + title + " at half width"
-            : "Show " + title + " full width");
-        };
-        paintSpanBtn();
-        spanBtn.addEventListener("click", function () {
-          var next = card.getAttribute("data-span") === "wide" ? "auto" : "wide";
-          spanBtn.disabled = true;
-          postLayout({ action: "span", widget: id, span: next }).then(function (ok) {
-            spanBtn.disabled = false;
-            if (!ok) return;
-            card.setAttribute("data-span", next === "wide" ? "wide" : "");
-            paintSpanBtn();
-            flipSiblings(function () { respan(null, null); });
-          });
-        });
-        heading.appendChild(spanBtn);
+      // The card's own controls sit in its top-right corner: the
+      // size picker (a 3x3 grid of cells, the way a table size is
+      // picked) and remove. The grip in the bottom-right corner
+      // resizes by dragging, snapping to whole cells.
+      var ctl = document.createElement("div");
+      ctl.className = "cardctl";
+      var sizeBtn = document.createElement("button");
+      sizeBtn.type = "button";
+      sizeBtn.className = "cardsize";
+      sizeBtn.textContent = "⤢";
+      sizeBtn.setAttribute("aria-haspopup", "true");
+      sizeBtn.setAttribute("aria-expanded", "false");
+      sizeBtn.setAttribute("aria-label", "Resize " + title);
+      var picker = document.createElement("div");
+      picker.className = "sizepick";
+      picker.hidden = true;
+      picker.setAttribute("role", "group");
+      picker.setAttribute("aria-label", "Size of " + title + ", in grid cells");
+      var cells = [];
+      for (var ph = 1; ph <= 3; ph++) {
+        for (var pw = 1; pw <= 3; pw++) {
+          (function (w, h) {
+            var cell = document.createElement("button");
+            cell.type = "button";
+            cell.setAttribute("data-gw", String(w));
+            cell.setAttribute("data-gh", String(h));
+            cell.setAttribute("aria-label", w + " wide by " + h + " tall");
+            cell.title = w + " × " + h;
+            cell.addEventListener("mouseenter", function () { paintPicker(w, h); });
+            cell.addEventListener("focus", function () { paintPicker(w, h); });
+            cell.addEventListener("click", function () {
+              resizeCard(card, w, h);
+              closePicker();
+            });
+            cells.push(cell);
+            picker.appendChild(cell);
+          })(pw, ph);
+        }
       }
+      function paintPicker(w, h) {
+        cells.forEach(function (c) {
+          var cw = +c.getAttribute("data-gw"), ch = +c.getAttribute("data-gh");
+          c.classList.toggle("on", cw <= w && ch <= h);
+        });
+      }
+      function closePicker() {
+        picker.hidden = true;
+        sizeBtn.setAttribute("aria-expanded", "false");
+      }
+      picker.addEventListener("mouseleave", function () { var s = sizeOf(card); paintPicker(s.w, s.h); });
+      sizeBtn.addEventListener("click", function () {
+        var open = picker.hidden;
+        var others = grid.querySelectorAll(".sizepick");
+        for (var o = 0; o < others.length; o++) others[o].hidden = true;
+        picker.hidden = !open;
+        sizeBtn.setAttribute("aria-expanded", open ? "true" : "false");
+        if (open) {
+          var s = sizeOf(card);
+          paintPicker(s.w, s.h);
+          cells[(s.h - 1) * 3 + (s.w - 1)].focus();
+        }
+      });
+      picker.addEventListener("keydown", function (ev) {
+        if (ev.key === "Escape") { closePicker(); sizeBtn.focus(); }
+      });
 
       var remove = document.createElement("button");
       remove.type = "button";
@@ -528,16 +522,22 @@
         remove.disabled = true;
         postLayout({ action: "toggle", widget: id }).then(function (ok) {
           if (ok) {
-            flipSiblings(function () {
-              card.remove();
-              respan(null, null);
-            });
+            flipSiblings(function () { card.remove(); });
           } else {
             remove.disabled = false;
           }
         });
       });
-      heading.appendChild(remove);
+      ctl.appendChild(sizeBtn);
+      ctl.appendChild(remove);
+      ctl.appendChild(picker);
+      card.appendChild(ctl);
+
+      var grip = document.createElement("span");
+      grip.className = "cardgrip";
+      grip.setAttribute("aria-hidden", "true");
+      grip.addEventListener("pointerdown", function (ev) { startResize(ev, card, grip); });
+      card.appendChild(grip);
     }
 
     // --- dragging ---------------------------------------------
@@ -642,6 +642,47 @@
       return (inRow ? x < cx - hyst : y < cy - hyst) ? want : current;
     }
 
+    // Grip resize: the pointer's offset from the card's top-left,
+    // in grid cells, rounded to whole cells and held to 1-3. One
+    // column's width and the grid's row unit give the cell size.
+    function cellSize() {
+      var cs = window.getComputedStyle(grid);
+      var cols = (cs.gridTemplateColumns || "").split(" ").filter(Boolean);
+      var gap = parseFloat(cs.columnGap) || 0;
+      var colW = cols.length ? parseFloat(cols[0]) : grid.clientWidth;
+      var rowH = parseFloat(cs.gridAutoRows) || 160;
+      return { w: colW + gap, h: rowH + (parseFloat(cs.rowGap) || 0), cols: cols.length || 1 };
+    }
+    function startResize(ev, card, grip) {
+      if (ev.pointerType === "mouse" && ev.button !== 0) return;
+      ev.preventDefault();
+      var r = card.getBoundingClientRect();
+      var cell = cellSize();
+      var start = sizeOf(card), cur = start;
+      try { grip.setPointerCapture(ev.pointerId); } catch (err) { /* nicety */ }
+      card.classList.add("resizing");
+      function onMove(e) {
+        var w = Math.max(1, Math.min(3, cell.cols, Math.round((e.clientX - r.left) / cell.w)));
+        var h = Math.max(1, Math.min(3, Math.round((e.clientY - r.top) / cell.h)));
+        if (w !== cur.w || h !== cur.h) {
+          cur = { w: w, h: h };
+          flipSiblings(function () { sizeCard(card, w, h); });
+        }
+      }
+      function onUp() {
+        grip.removeEventListener("pointermove", onMove);
+        grip.removeEventListener("pointerup", onUp);
+        grip.removeEventListener("pointercancel", onUp);
+        card.classList.remove("resizing");
+        if (cur.w === start.w && cur.h === start.h) return;
+        sizeCard(card, start.w, start.h);
+        resizeCard(card, cur.w, cur.h);
+      }
+      grip.addEventListener("pointermove", onMove);
+      grip.addEventListener("pointerup", onUp);
+      grip.addEventListener("pointercancel", onUp);
+    }
+
     function startDrag(ev, card, handle) {
       if (ev.pointerType === "mouse" && ev.button !== 0) return;
       ev.preventDefault();
@@ -678,8 +719,8 @@
         // the whole drag.
         placeholder = document.createElement("section");
         placeholder.className = "card drag-placeholder";
-        applySpanClass(placeholder, card.classList.contains("span6") ? 6 : 3,
-          card.classList.contains("wspan6") ? 6 : card.classList.contains("wspan3") ? 3 : 2);
+        var ps = sizeOf(card);
+        sizeCard(placeholder, ps.w, ps.h);
         placeholder.style.height = rect.height + "px";
         placeholder.setAttribute("aria-hidden", "true");
         grid.insertBefore(placeholder, card.nextSibling);
@@ -688,7 +729,6 @@
         card.style.height = rect.height + "px";
         card.style.left = rect.left + "px";
         card.style.top = rect.top + "px";
-        respan(placeholder, card);
         document.body.classList.add("drag-active");
         rafId = requestAnimationFrame(tick);
       }
@@ -731,7 +771,6 @@
         flipSiblings(function () {
           if (target) grid.insertBefore(placeholder, target);
           else grid.appendChild(placeholder);
-          respan(placeholder, card);
         });
         phIndex = idx;
       }
@@ -789,11 +828,9 @@
           grid.replaceChild(card, placeholder);
           placeholder = null;
           cleanup();
-          respan(null, null);
           postLayout({ action: "order", ids: widgetIDs().join(",") }).then(function (ok) {
             if (!ok) {
               restoreOrder();
-              respan(null, null);
             }
             savedNodes = null;
           });
@@ -807,7 +844,6 @@
         if (!lifted) return;
         cleanup();
         restoreOrder();
-        respan(null, null);
         savedNodes = null;
       }
 
@@ -838,7 +874,6 @@
           if (stale) stale.remove();
           flipSiblings(function () {
             grid.appendChild(node);
-            respan(null, null);
           });
           addFold(node, node.querySelector(":scope > h2, :scope > h3"));
           enhanceCard(node);
@@ -849,9 +884,20 @@
 
     var cards = grid.querySelectorAll(".card[data-widget]");
     for (var i = 0; i < cards.length; i++) enhanceCard(cards[i]);
-    // The server solved and rendered these spans already; one
-    // mirror pass here keeps the two solvers in lockstep.
-    respan(null, null);
+    // A size picker closes on a click anywhere outside its card's
+    // controls. Bound once; it reads the current grid each time.
+    if (!homePickCloseBound) {
+      homePickCloseBound = true;
+      document.addEventListener("click", function (ev) {
+        if (ev.target.closest && ev.target.closest(".cardctl")) return;
+        var open = document.querySelectorAll(".sizepick:not([hidden])");
+        for (var p = 0; p < open.length; p++) {
+          open[p].hidden = true;
+          var btn = open[p].parentNode.querySelector(".cardsize");
+          if (btn) btn.setAttribute("aria-expanded", "false");
+        }
+      });
+    }
 
     // Add-module pop-up. The full catalog is rendered into it;
     // each open re-filters against what is on the home right now,
@@ -878,6 +924,12 @@
         refreshModal();
         modal.hidden = false;
       });
+      // The Overview menu's "Add a module" lands here from the home
+      // with ?add=1: open the pop-up straight away.
+      if (/[?&]add=1\b/.test(window.location.search)) {
+        refreshModal();
+        modal.hidden = false;
+      }
       modal.addEventListener("click", function (ev) {
         if (ev.target === modal) closeModal();
       });

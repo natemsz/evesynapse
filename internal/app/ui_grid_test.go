@@ -1,8 +1,8 @@
 package app
 
-// Tests for the home grid engine: the packing solver (both
-// column modes), the layout v1→v2 storage formats, the span
-// action, and the span classes the server renders. Same hermetic
+// Tests for the home grid: module sizes (catalog defaults and
+// stored sizes), the layout storage formats (v1 ids, v2 spans, v3
+// sizes), the size action, and the classes the server renders. Same hermetic
 // contract as the overview suite — seeded snapshots, counting
 // transport, zero outbound calls.
 
@@ -17,62 +17,10 @@ import (
 	db "evesynapse/internal/db/sqlc"
 )
 
-// gridItems builds layout items from a shorthand: a widget id,
-// with a trailing "!" marking the wide span preference.
-func gridItems(spec ...string) []homeLayoutItem {
-	items := make([]homeLayoutItem, len(spec))
-	for i, s := range spec {
-		item := homeLayoutItem{ID: strings.TrimSuffix(s, "!")}
-		if strings.HasSuffix(s, "!") {
-			item.Span = spanWide
-		}
-		items[i] = item
-	}
-	return items
-}
-
-// TestSolveHomeSpans pins the one packing rule at the three grids
-// the CSS serves: two-up on desktop (6 tracks), three-up on a wide
-// screen (6 tracks) and the phone grid (2 tracks). A short row of
-// flex modules shares its spare width, but no module grows past
-// half a row: nothing balloons to fill width it has no use for.
-func TestSolveHomeSpans(t *testing.T) {
-	cases := []struct {
-		name  string
-		items []homeLayoutItem
-		want2 []int // 6 tracks, two a row
-		want3 []int // 6 tracks, three a row
-		phone []int // 2 tracks
-	}{
-		{"empty", gridItems(), []int{}, []int{}, []int{}},
-		{"lone flex keeps to half a row", gridItems("server"), []int{3}, []int{3}, []int{1}},
-		{"flex pair halves", gridItems("market", "skills"), []int{3, 3}, []int{3, 3}, []int{1, 1}},
-		{"three flex", gridItems("market", "skills", "server"), []int{3, 3, 3}, []int{2, 2, 2}, []int{1, 1, 1}},
-		{"four flex", gridItems("market", "skills", "server", "pi"), []int{3, 3, 3, 3}, []int{2, 2, 2, 3}, []int{1, 1, 1, 1}},
-		{"five flex", gridItems("market", "skills", "server", "pi", "networth"), []int{3, 3, 3, 3, 3}, []int{2, 2, 2, 3, 3}, []int{1, 1, 1, 1, 1}},
-		{"flex stranded before a full row", gridItems("market", "fleet", "skills"), []int{3, 6, 3}, []int{3, 6, 3}, []int{1, 2, 1}},
-		{"full then lone flex", gridItems("fleet", "market"), []int{6, 3}, []int{6, 3}, []int{2, 1}},
-		{"wide flex owns its row", gridItems("market!"), []int{6}, []int{6}, []int{2}},
-		{"wide flex breaks the row around it", gridItems("market", "skills!", "server"), []int{3, 6, 3}, []int{3, 6, 3}, []int{1, 2, 1}},
-		{"rows around a full row", gridItems("market", "skills", "fleet", "server", "networth"), []int{3, 3, 6, 3, 3}, []int{3, 3, 6, 3, 3}, []int{1, 1, 2, 1, 1}},
-		{"two fulls", gridItems("fleet", "attention"), []int{6, 6}, []int{6, 6}, []int{2, 2}},
-	}
-	for _, tc := range cases {
-		if got := solveHomeSpans(tc.items, 6, 2); !reflect.DeepEqual(got, tc.want2) {
-			t.Errorf("%s: solve(6, two-up) = %v, want %v", tc.name, got, tc.want2)
-		}
-		if got := solveHomeSpans(tc.items, 6, 3); !reflect.DeepEqual(got, tc.want3) {
-			t.Errorf("%s: solve(6, three-up) = %v, want %v", tc.name, got, tc.want3)
-		}
-		if got := solveHomeSpans(tc.items, 2, 2); !reflect.DeepEqual(got, tc.phone) {
-			t.Errorf("%s: solve(2) = %v, want %v", tc.name, got, tc.phone)
-		}
-	}
-}
-
-// TestParseHomeLayoutFormats: the v1 id array every old build
-// wrote loads identically to the v2 object array, encoding
-// always lands on v2, and a v2→parse round trip is stable.
+// TestParseHomeLayoutFormats: every stored format loads. v1 ids and
+// v2 objects without a span read as default sizes; a v2 wide span
+// reads as the full grid width; v3 sizes load as stored, held to the
+// grid; encoding always writes v3, omitting default sizes.
 func TestParseHomeLayoutFormats(t *testing.T) {
 	v1 := parseHomeLayout(`["fleet","market"]`)
 	v2 := parseHomeLayout(`[{"id":"fleet"},{"id":"market"}]`)
@@ -80,34 +28,51 @@ func TestParseHomeLayoutFormats(t *testing.T) {
 		t.Fatalf("v1 %v and v2 %v layouts differ", v1, v2)
 	}
 	if got := encodeHomeLayout(v1); got != `[{"id":"fleet"},{"id":"market"}]` {
-		t.Fatalf("encode(v1-parsed) = %q, want canonical v2", got)
+		t.Fatalf("encode(v1-parsed) = %q", got)
 	}
-
-	mixed := gridItems("fleet", "market!", "skills")
-	if got := encodeHomeLayout(mixed); got != `[{"id":"fleet"},{"id":"market","span":"wide"},{"id":"skills"}]` {
-		t.Fatalf("encode(mixed) = %q", got)
+	wide := parseHomeLayout(`[{"id":"market","span":"wide"}]`)
+	if want := []homeLayoutItem{{ID: "market", W: 3}}; !reflect.DeepEqual(wide, want) {
+		t.Fatalf("v2 wide = %v, want %v", wide, want)
 	}
-	if back := parseHomeLayout(encodeHomeLayout(mixed)); !reflect.DeepEqual(back, mixed) {
-		t.Fatalf("encode→parse round trip: got %v, want %v", back, mixed)
+	v3 := parseHomeLayout(`[{"id":"market","w":2,"h":3},{"id":"skills","w":9,"h":-1}]`)
+	if want := []homeLayoutItem{{ID: "market", W: 2, H: 3}, {ID: "skills", W: 3}}; !reflect.DeepEqual(v3, want) {
+		t.Fatalf("v3 = %v, want %v (sizes held to 1-3, unset left unset)", v3, want)
+	}
+	if got := encodeHomeLayout(v3); got != `[{"id":"market","w":2,"h":3},{"id":"skills","w":3}]` {
+		t.Fatalf("encode(v3) = %q", got)
 	}
 	if got := encodeHomeLayout(nil); got != `[]` {
 		t.Fatalf("encode(nil) = %q, want []", got)
 	}
 }
 
-// TestParseHomeLayoutNormalization: corrupted entries drop out
-// one by one (unknown ids, dupes, junk scalars, invalid spans)
-// instead of failing the whole layout; unparseable storage and
-// empty storage fall back to the default, and a saved empty
-// array still means "everything off".
+// TestWidgetSizeDefaults: every catalog module has a default size
+// inside the grid, and a stored size overrides it per axis.
+func TestWidgetSizeDefaults(t *testing.T) {
+	for _, def := range homeWidgetCatalog {
+		if def.W < 1 || def.W > homeGridMax || def.H < 1 || def.H > homeGridMax {
+			t.Errorf("widget %q default size %dx%d is outside the grid", def.ID, def.W, def.H)
+		}
+	}
+	if w, h := widgetSize(homeLayoutItem{ID: widgetFleet}); w != 3 || h != 2 {
+		t.Errorf("fleet default = %dx%d, want 3x2", w, h)
+	}
+	if w, h := widgetSize(homeLayoutItem{ID: widgetFleet, H: 3}); w != 3 || h != 3 {
+		t.Errorf("fleet with a stored height = %dx%d, want 3x3", w, h)
+	}
+	if homeCap(1) >= homeCap(2) || homeCap(2) >= homeCap(3) {
+		t.Errorf("taller modules must show more: caps %d, %d, %d", homeCap(1), homeCap(2), homeCap(3))
+	}
+}
+
+// TestParseHomeLayoutNormalization: corrupted entries drop out one
+// by one; unparseable and empty storage fall back to the default,
+// and a saved empty array still means "everything off".
 func TestParseHomeLayoutNormalization(t *testing.T) {
-	if got := parseHomeLayout(`["bogus","fleet","fleet","nope"]`); !reflect.DeepEqual(got, gridItems("fleet")) {
+	if got := parseHomeLayout(`["bogus","fleet","fleet","nope"]`); !reflect.DeepEqual(got, []homeLayoutItem{{ID: "fleet"}}) {
 		t.Errorf("unknown/dupe: got %v", got)
 	}
-	if got := parseHomeLayout(`[{"id":"market","span":"huge"}]`); !reflect.DeepEqual(got, gridItems("market")) {
-		t.Errorf("invalid span should drop back to auto: got %v", got)
-	}
-	if got := parseHomeLayout(`[42,null,{"span":"wide"},{"id":"skills"},true]`); !reflect.DeepEqual(got, gridItems("skills")) {
+	if got := parseHomeLayout(`[42,null,{"span":"wide"},{"id":"skills"},true]`); !reflect.DeepEqual(got, []homeLayoutItem{{ID: "skills"}}) {
 		t.Errorf("junk entries: got %v", got)
 	}
 	if got := parseHomeLayout(`{"id":"fleet"}`); !reflect.DeepEqual(got, defaultHomeLayoutItems()) {
@@ -124,93 +89,19 @@ func TestParseHomeLayoutNormalization(t *testing.T) {
 	}
 }
 
-// TestHomeGridRenderSpans: the server-rendered classes match the
-// solver for representative layouts — seeding through the v1
-// storage format proves old users' layouts survive untouched.
-func TestHomeGridRenderSpans(t *testing.T) {
+// TestHomeGridSizes: the size action stores a size, the page renders
+// it as grid classes, a taller module shows more rows before More,
+// and bad or off-home sizes change nothing.
+func TestHomeGridSizes(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
-
 	user, err := q.CreateUser(ctx)
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
-
-	setLayout := func(raw string) {
-		t.Helper()
-		if err := q.SetUserHomeLayout(ctx, db.SetUserHomeLayoutParams{HomeLayout: raw, ID: user.ID}); err != nil {
-			t.Fatalf("seed layout: %v", err)
-		}
-	}
-
-	// A lone flex module (v1 seed) keeps to half a row.
-	setLayout(`["server"]`)
-	code, body := getPage(t, app, cookie, "/")
-	if code != http.StatusOK {
-		t.Fatalf("GET /: status %d", code)
-	}
-	mustContain(t, "/ lone flex", body,
-		`<section class="card span3 wspan3" data-widget="server" data-size="flex" data-span="">`)
-
-	// Two flex modules pair at half width.
-	setLayout(`["market","skills"]`)
-	code, body = getPage(t, app, cookie, "/")
-	if code != http.StatusOK {
-		t.Fatalf("GET /: status %d", code)
-	}
-	mustContain(t, "/ flex pair", body,
-		`<section class="card span3 wspan3" data-widget="market"`,
-		`<section class="card span3 wspan3" data-widget="skills"`)
-
-	// A wide-marked flex module owns its row; the flex module
-	// after it is alone in its row and keeps to half of it.
-	setLayout(`[{"id":"market","span":"wide"},{"id":"skills"}]`)
-	code, body = getPage(t, app, cookie, "/")
-	if code != http.StatusOK {
-		t.Fatalf("GET /: status %d", code)
-	}
-	mustContain(t, "/ wide flex", body,
-		`<section class="card span6 wspan6" data-widget="market" data-size="flex" data-span="wide">`,
-		`<section class="card span3 wspan3" data-widget="skills"`)
-
-	// The full-width pair stays full; the flex modules after
-	// pair up two-up and sit three to a row on a wide screen.
-	setLayout(`["fleet","attention","networth","market","server"]`)
-	code, body = getPage(t, app, cookie, "/")
-	if code != http.StatusOK {
-		t.Fatalf("GET /: status %d", code)
-	}
-	mustContain(t, "/ default-ish", body,
-		`<section class="card span6 wspan6" data-widget="fleet" data-size="full"`,
-		`<section class="card span6 wspan6" data-widget="attention" data-size="full"`,
-		`<section class="card span3 wspan2" data-widget="networth"`,
-		`<section class="card span3 wspan2" data-widget="market"`,
-		`<section class="card span3 wspan2" data-widget="server"`)
-
-	if got := transport.calls.Load(); got != 0 {
-		t.Fatalf("handlers made %d outbound calls, want 0", got)
-	}
-}
-
-// TestHomeLayoutSpanAction: the span save behind the resize
-// toggle (and its no-JS form equivalent) — wide persists as a
-// v2 entry and renders, auto clears it, invalid values never
-// reach storage, and anonymous POSTs still bounce.
-func TestHomeLayoutSpanAction(t *testing.T) {
-	transport := &countingTransport{}
-	app, _, q := buildCorpTestApp(t, transport)
-	ctx := context.Background()
-
-	user, err := q.CreateUser(ctx)
-	if err != nil {
-		t.Fatalf("create user: %v", err)
-	}
-	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
-	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
-
 	saved := func() string {
 		t.Helper()
 		raw, err := q.GetUserHomeLayout(ctx, user.ID)
@@ -219,70 +110,50 @@ func TestHomeLayoutSpanAction(t *testing.T) {
 		}
 		return raw
 	}
-
-	// Wide, as a plain form POST (the no-JS path): 303, and the
-	// preference persists in v2 form.
-	code, _ := doLayoutPost(t, app, url.Values{
-		"action": {"span"}, "widget": {widgetMarket}, "span": {"wide"},
-	}, cookie, false)
-	if code != http.StatusSeeOther {
-		t.Fatalf("form span POST: status %d, want 303", code)
-	}
-	if got := saved(); !strings.Contains(got, `{"id":"market","span":"wide"}`) {
-		t.Fatalf("saved layout = %q, want market persisted wide", got)
-	}
-	code, body := getPage(t, app, cookie, "/")
-	if code != http.StatusOK {
-		t.Fatalf("GET /: status %d", code)
-	}
-	mustContain(t, "/ after span wide", body,
-		`<section class="card span6 wspan6" data-widget="market" data-size="flex" data-span="wide">`)
-
-	// Back to auto, as the resize toggle's XHR: bare 200.
-	code, body = doLayoutPost(t, app, url.Values{
-		"action": {"span"}, "widget": {widgetMarket}, "span": {"auto"},
-	}, cookie, true)
-	if code != http.StatusOK || body != `{"ok":true}` {
-		t.Fatalf("XHR span POST: status %d body %q, want 200 ok", code, body)
-	}
-	if got := saved(); strings.Contains(got, `"span":"wide"`) || !strings.Contains(got, `{"id":"market"}`) {
-		t.Fatalf("saved layout = %q, want market back to auto", got)
-	}
-
-	// An invalid span value is not a layout change.
-	before := saved()
-	code, _ = doLayoutPost(t, app, url.Values{
-		"action": {"span"}, "widget": {widgetMarket}, "span": {"enormous"},
-	}, cookie, true)
-	if code != http.StatusOK {
-		t.Fatalf("XHR bad-span POST: status %d", code)
-	}
-	if got := saved(); got != before {
-		t.Fatalf("bad span value changed storage: %q -> %q", before, got)
-	}
-
-	// Span on a module that is not on the home: no-op, and the
-	// module does not appear.
-	if err := q.SetUserHomeLayout(ctx, db.SetUserHomeLayoutParams{HomeLayout: `[{"id":"fleet"}]`, ID: user.ID}); err != nil {
+	if err := q.SetUserHomeLayout(ctx, db.SetUserHomeLayoutParams{HomeLayout: `[{"id":"fleet"},{"id":"market","span":"wide"},{"id":"skills"}]`, ID: user.ID}); err != nil {
 		t.Fatalf("seed layout: %v", err)
 	}
-	code, _ = doLayoutPost(t, app, url.Values{
-		"action": {"span"}, "widget": {widgetMarket}, "span": {"wide"},
-	}, cookie, true)
-	if code != http.StatusOK {
-		t.Fatalf("XHR span POST (not on home): status %d", code)
-	}
-	if got := saved(); got != `[{"id":"fleet"}]` {
-		t.Fatalf("saved layout = %q, want fleet only", got)
-	}
+	_, body := getPage(t, app, cookie, "/")
+	mustContain(t, "/ defaults", body,
+		`<section class="card gw3 gh2" data-widget="fleet" data-gw="3" data-gh="2">`,
+		// An old wide span is the full width now.
+		`<section class="card gw3 gh1" data-widget="market" data-gw="3" data-gh="1">`,
+		`<section class="card gw1 gh1" data-widget="skills" data-gw="1" data-gh="1">`)
 
-	// Anonymous span POSTs bounce like every layout action.
-	code, _, _ = doReq(t, app, http.MethodPost, "/home/layout",
-		url.Values{"action": {"span"}, "widget": {widgetMarket}, "span": {"wide"}})
-	if code != http.StatusSeeOther {
-		t.Fatalf("anonymous span POST: status %d, want 303", code)
+	// Resize, as the picker's XHR: stored, rendered.
+	code, resp := doLayoutPost(t, app, url.Values{"action": {"size"}, "widget": {widgetSkills}, "w": {"2"}, "h": {"3"}}, cookie, true)
+	if code != http.StatusOK || resp != `{"ok":true}` {
+		t.Fatalf("size POST: status %d body %q", code, resp)
 	}
+	if got := saved(); !strings.Contains(got, `{"id":"skills","w":2,"h":3}`) {
+		t.Fatalf("saved layout = %q, want skills 2x3", got)
+	}
+	_, body = getPage(t, app, cookie, "/")
+	mustContain(t, "/ resized", body, `<section class="card gw2 gh3" data-widget="skills" data-gw="2" data-gh="3">`)
 
+	// Out of the grid, unparsable, or not on the home: no change.
+	before := saved()
+	for _, v := range []url.Values{
+		{"action": {"size"}, "widget": {widgetSkills}, "w": {"4"}, "h": {"1"}},
+		{"action": {"size"}, "widget": {widgetSkills}, "w": {"1"}, "h": {"0"}},
+		{"action": {"size"}, "widget": {widgetSkills}, "w": {"x"}, "h": {"1"}},
+		{"action": {"size"}, "widget": {widgetPI}, "w": {"2"}, "h": {"2"}},
+	} {
+		if code, _ := doLayoutPost(t, app, v, cookie, true); code != http.StatusOK {
+			t.Fatalf("size POST %v: status %d", v, code)
+		}
+	}
+	if got := saved(); got != before {
+		t.Fatalf("invalid sizes changed storage: %q -> %q", before, got)
+	}
+	// The no-JS form path redirects back to Customize.
+	if code, _ := doLayoutPost(t, app, url.Values{"action": {"size"}, "widget": {widgetSkills}, "w": {"1"}, "h": {"1"}}, cookie, false); code != http.StatusSeeOther {
+		t.Fatalf("form size POST: status %d, want 303", code)
+	}
+	// Anonymous POSTs bounce like every layout action.
+	if code, _, _ := doReq(t, app, http.MethodPost, "/home/layout", url.Values{"action": {"size"}, "widget": {widgetSkills}, "w": {"2"}, "h": {"2"}}); code != http.StatusSeeOther {
+		t.Fatalf("anonymous size POST: status %d, want 303", code)
+	}
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handlers made %d outbound calls, want 0", got)
 	}

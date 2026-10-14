@@ -2162,6 +2162,20 @@ body.quickjump-open { overflow: hidden; }
   margin-bottom: 0.4rem;
 }
 .fit-head label { display: grid; gap: 0.25rem; font-size: 0.85rem; }
+/* Clone labels carry a name and a location: the picker may
+shrink, and a long label ends in an ellipsis instead of pushing
+the page sideways. */
+.fit-head .fit-clonepick { flex: 0 1 18rem; min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.fit-head .fit-clonepick select {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* Save and its public flag wrap as one unit. */
+.fit-head .fit-saverow { display: inline-flex; align-items: center; gap: 0.6rem; }
+.fit-head .fit-publicchk { display: inline-flex; }
 .fit-head select, .fit-charge select {
   background: var(--input-bg);
   border: 1px solid #2a2a2a;
@@ -2189,6 +2203,22 @@ html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge 
   padding: 0.8rem 1rem;
 }
 .fit-stats > h4:first-child { margin-top: 0; color: var(--success); }
+/* A stats panel wide enough for two runs of rows uses both, so it
+stays about as tall as the ship ring beside it and a change to the
+fit reads without scrolling. */
+.fit-stats { container-type: inline-size; }
+@container (min-width: 30rem) {
+  .fit-stats .tw:has(> .fit-statlist) { overflow: visible; }
+  .fit-statlist, .fit-statlist tbody { display: block; }
+  .tw .fit-statlist { width: 100%; }
+  .fit-statlist tbody { columns: 2; column-gap: 1.25rem; }
+  .fit-statlist tr { display: flex; break-inside: avoid; }
+  .fit-statlist th, .fit-statlist td { padding-top: 0.3rem; padding-bottom: 0.3rem; }
+  /* The pinned first cell of a .tw table has nothing to pin to
+  across columns. */
+  .fit-statlist th { flex: 0 0 7.5rem; position: static; border-right: 0; }
+  .fit-statlist td { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+}
 .fit-group { margin-bottom: 0.8rem; }
 .fit-group > h4 { margin: 0 0 0.4rem; }
 .fit-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
@@ -2403,6 +2433,36 @@ html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge 
   touch-action: none;
 }
 .fit-vslot:hover { border-color: var(--accent); color: var(--text); }
+/* Public fit page header: the fit's details beside its rating,
+the rating as a small ember panel rather than a loose form. */
+.fit-pubhead { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; margin-bottom: 1rem; }
+.fit-pubmeta { flex: 1 1 22rem; min-width: 0; }
+.fit-pubmeta .lede { margin-top: 0; }
+.fit-pubrate {
+  flex: 0 1 19rem;
+  padding: 0.7rem 0.9rem;
+  background: var(--panel);
+  border: 1px solid #4a2408;
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+}
+.fit-pubstars { margin: 0 0 0.5rem; }
+.fit-pubstars-num { font-size: 1.25rem; font-weight: 600; color: var(--gold); }
+.fit-rateform { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: end; margin: 0; }
+.fit-rateform label { display: grid; gap: 0.25rem; font-size: 0.8rem; color: var(--muted); }
+.fit-rateform select {
+  background: var(--input-bg);
+  border: 1px solid #2a2a2a;
+  border-radius: 3px;
+  color: var(--text);
+  padding: 0.38rem 0.55rem;
+  font: inherit;
+}
+.fit-rateform select:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 8px rgba(255, 106, 26, 0.35); }
+.fit-pubrate .hint { margin: 0; }
+/* What a fit costs, in the stats panel on every page that shows it. */
+.fit-cost { margin: 0.4rem 0 0.6rem; }
+.fit-cost-total { font-weight: 600; color: var(--gold); font-variant-numeric: tabular-nums; }
 /* Read-only workbench mirror (public fit pages): the tool's
 look, none of its affordances. */
 .fit-ro .fit-vslot, .fit-ro .fit-chip { cursor: default; }
@@ -2749,7 +2809,10 @@ html[data-theme="light"] .searchpanel {
     display: grid;
     /* The module lists column is capped so it cannot push the stats
        panel far right. */
-    grid-template-columns: minmax(15rem, 22rem) minmax(20rem, 1.35fr) minmax(17rem, 1fr);
+    /* The ring takes a share of the viewport, capped at its full
+       size; the stats panel takes the rest, so on a wide screen
+       the width goes to the stats instead of empty margins. */
+    grid-template-columns: minmax(13rem, 16rem) clamp(20rem, 30vw - 2rem, 34rem) minmax(20rem, 1fr);
     gap: 1.25rem;
     align-items: start;
   }
@@ -2758,9 +2821,7 @@ html[data-theme="light"] .searchpanel {
     grid-column: 2;
     grid-row: 1;
     width: 100%;
-    max-width: 34rem;
     margin: 0;
-    justify-self: center;
   }
   .fit-wb > .fit-cols > .fit-slots { grid-column: 1; grid-row: 1; }
   .fit-wb > .fit-cols > .fit-stats { grid-column: 3; grid-row: 1; }
@@ -2915,6 +2976,8 @@ html[data-theme="light"] .kpi-bar { background: #eadfcb; }
 html[data-theme="light"] .rowexpand { border-color: #ddd2bd; }
 html[data-theme="light"] tr.fleet-detail > td { background: #f6efe2; border-bottom-color: #ddd2bd; }
 html[data-theme="light"] .pilot .dot { box-shadow: 0 0 0 2px #fffdf9; }
+html[data-theme="light"] .fit-pubrate { border-color: #ddd2bd; border-left-color: var(--accent); }
+html[data-theme="light"] .fit-rateform select { border-color: #d8cdb8; }
 html[data-theme="light"] .fit-chip { border-color: #d3c7ae; }
 html[data-theme="light"] .fit-chip-btn { background: #f0e9d8; border-color: #d3c7ae; }
 html[data-theme="light"] .fit-bar { background: #e7ddc8; border-color: #d3c7ae; }

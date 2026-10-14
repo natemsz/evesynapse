@@ -408,19 +408,17 @@ func TestSwarmPairCryptoChecks(t *testing.T) {
 		t.Fatalf("sign: %v", err)
 	}
 	entry.Payload = `{"type_id":34,"name":"Scordite"}`
-	if err := p.b.stageSwarmEntry(context.Background(), entry, "instance-a", now); err == nil {
-		t.Fatalf("staged a tampered entry")
-	}
+	wantStageRefused(t, p.b.stageSwarmEntry(context.Background(), entry, "instance-a", now), "signature does not verify")
 	// A replay onto another key fails too: the signature covers
-	// the key it was minted for.
+	// the key it was minted for. (The payload names type 34, so
+	// the payload check would refuse it as well; the reason shows
+	// the signature caught it first.)
 	entry, err = signSwarmEntry(p.a.swarmID, "instance-a", swarmKindTypeName, "34", `{"type_id":34,"name":"Tritanium"}`, now)
 	if err != nil {
 		t.Fatalf("sign: %v", err)
 	}
 	entry.Key = "35"
-	if err := p.b.stageSwarmEntry(context.Background(), entry, "instance-a", now); err == nil {
-		t.Fatalf("staged a replayed entry")
-	}
+	wantStageRefused(t, p.b.stageSwarmEntry(context.Background(), entry, "instance-a", now), "signature does not verify")
 }
 
 func TestSwarmPairGossipLearns(t *testing.T) {

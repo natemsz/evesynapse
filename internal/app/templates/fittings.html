@@ -19,7 +19,7 @@
       {{range .FitEditor.Pilots}}<option value="{{.ID}}"{{if eq .ID $.FitEditor.PilotID}} selected{{end}}>{{.Name}}</option>{{end}}
     </select>
   </label>
-  <label>Clone
+  <label class="fit-clonepick">Clone
     <select id="fit-clone"{{if not .FitEditor.Clones}} disabled{{end}} title="Whose implants the numbers are calculated with">
       {{if .FitEditor.Clones}}{{range .FitEditor.Clones}}<option value="{{.ID}}"{{if eq .ID $.FitEditor.CloneID}} selected{{end}}>{{.Name}}{{if .Implants}} ({{.Implants}}){{end}}</option>{{end}}{{else}}<option value="0">Active clone</option>{{end}}
     </select>
@@ -28,7 +28,10 @@
     <input type="text" id="fit-name" value="{{.FitEditor.Sim.FitName}}" placeholder="Name this fit" autocomplete="off">
   </label>
   <input type="hidden" id="fit-local-id" value="{{.FitEditor.LocalID}}">
+  <span class="fit-saverow">
   {{if not .FitEditor.Anonymous}}<button type="button" class="btn" id="fit-save" data-fit-local-id="{{.FitEditor.LocalID}}">Save fit</button>{{end}}
+  <label class="fit-check fit-publicchk"><input type="checkbox" id="fit-public"{{if .FitEditor.IsPublic}} checked{{end}}> Make public</label>
+  </span>
   {{if .FitEditor.EVECharID}}
   <button type="button" class="btn" id="fit-save-eve" data-fit-eve-char="{{.FitEditor.EVECharID}}" title="Save this fit to {{.FitEditor.EVECharName}}'s in-game fittings">Save to EVE</button>
   {{end}}
@@ -80,7 +83,6 @@
   <label class="fit-meta-tags">Tags
     <input type="text" id="fit-tags" value="{{.FitEditor.Tags}}" placeholder="pvp, kiting, …" autocomplete="off">
   </label>
-  <label class="fit-check"><input type="checkbox" id="fit-public"{{if .FitEditor.IsPublic}} checked{{end}}> Make public</label>
 </div>
 
 <div class="modal-backdrop" id="fit-picker" hidden>
@@ -119,167 +121,4 @@
 
 </section>
 {{end}}
-{{end}}
-
-{{define "fit-workbench"}}
-<div class="fit-wb" data-fit-state="{{.StateJSON}}" data-fit-bandwidth="{{.DroneBWNum}}" data-fit-bay="{{.DroneBayNum}}" data-fit-subsystems="{{if .SupportsSubsystems}}1{{else}}0{{end}}" data-fit-restricted='{{.RestrictedJSON}}'>
-{{if .DataNote}}<p class="fit-note">{{.DataNote}}</p>{{end}}
-{{if or .Implants .ImplantNote}}
-<details class="fit-implants">
-  <summary>Implants{{if .Implants}} ({{len .Implants}}){{end}}</summary>
-  {{if .ImplantNote}}<p class="fit-note">{{.ImplantNote}}</p>{{end}}
-  {{if .Implants}}<ul>{{range .Implants}}<li>{{.Name}}</li>{{end}}</ul>{{end}}
-</details>
-{{end}}
-{{if .HasShip}}
-{{if .Visual}}
-<div class="fit-visual" id="fit-visual" role="group" aria-label="Visual fitting">
-  <div class="fit-vring-outer" aria-hidden="true"></div>
-  <div class="fit-vring" aria-hidden="true"></div>
-  {{if .Visual.Segs}}<svg class="fit-vsegs" viewBox="0 0 100 100" aria-hidden="true">{{range .Visual.Segs}}<path d="{{.D}}" class="fit-vseg"/>{{end}}</svg>{{end}}
-  <div class="fit-vship"><img src="https://images.evetech.net/types/{{.Visual.ShipID}}/render?size=512" alt="{{.Visual.ShipName}}" draggable="false"></div>
-  <div class="fit-vhistory" role="group" aria-label="Undo and redo">
-    <button type="button" class="fit-vhist" data-fit-undo title="Undo" aria-label="Undo" disabled>↩</button>
-    <button type="button" class="fit-vhist" data-fit-redo title="Redo" aria-label="Redo" disabled>↪</button>
-  </div>
-  {{range .Visual.Labels}}
-  <div class="fit-vlabel" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" aria-hidden="true">{{.Text}}</div>
-  {{end}}
-  {{range .Visual.Separators}}
-  <div class="fit-vsep" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" data-rot="{{printf "%.0f" .Rot}}" aria-hidden="true"></div>
-  {{end}}
-  {{range .Visual.Slots}}
-  <button type="button" class="fit-vslot{{if .Filled}} filled{{end}}{{if .State}} st-{{.State}}{{end}}" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}"{{if .Filled}} data-fit-vslot="{{.TypeID}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" data-tip-key="{{.TipKey}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}}" data-tip-meta="{{.Meta}}" data-tip-cpu="{{.CPU}}" data-tip-pg="{{.PG}}" data-tip-stat="{{.Stat}}" data-tip-lines="{{.TipLines}}"{{if .State}} data-tip-state="{{.State}}"{{end}}{{if .StatesCSV}} data-tip-states="{{.StatesCSV}}"{{end}}{{if .ChargeName}} data-tip-charge="Loaded: {{.ChargeName}}"{{end}}{{else}}data-fit-add="{{.GroupKey}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" title="Add {{.GroupLabel}}"{{end}}>
-    {{if .Filled}}<img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{if .ChargeID}}<span class="fit-vammo" data-fit-ammo="{{.TypeID}}" title="Loaded: {{.ChargeName}} — change ammunition"><img src="https://images.evetech.net/types/{{.ChargeID}}/icon?size=32" alt="{{.ChargeName}}" draggable="false"></span>{{end}}{{else}}<span aria-hidden="true">+</span>{{end}}
-  </button>
-  {{end}}
-</div>
-{{end}}
-<div class="fit-cols">
-  <div class="fit-slots">
-    {{range .Groups}}
-    {{$group := .}}
-    <div class="fit-group" data-fit-group="{{$group.Key}}" data-fit-used="{{$group.Used}}" data-fit-max="{{$group.Max}}">
-      <h4>{{.Label}}{{if .HasMax}} <small class="{{if .Over}}fit-over{{end}}">{{.Used}}/{{.Max}}{{if .Over}} — doesn't fit{{end}}</small>{{end}}</h4>
-      <div class="fit-chips">
-        {{range .Chips}}
-        <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" data-fit-rowtype="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-lines="{{.TipLines}}">
-          <button type="button" class="fit-chip-btn" data-fit-dec="{{.TypeID}}" title="Remove one">−</button>
-          <button type="button" class="fit-chip-name" data-fit-dec="{{.TypeID}}" title="Remove one">{{.Name}}</button>
-          {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
-          <button type="button" class="fit-chip-btn" data-fit-inc="{{.TypeID}}" title="Add another">+</button>
-          {{if eq $group.Key "drone"}}<input type="number" class="fit-qty" data-fit-qty="{{.TypeID}}" value="{{.Qty}}" min="0" max="10000" title="How many">{{end}}
-        </span>
-        {{end}}
-        {{range .Empty}}
-        <button type="button" class="fit-slot-empty" data-fit-add="{{$group.Key}}">+ Empty {{$group.Label}} slot</button>
-        {{end}}
-        {{if and (not .HasMax) (eq .Key "drone")}}
-        <button type="button" class="fit-slot-empty" data-fit-add="drone">+ Add drones</button>
-        {{end}}
-        {{if and (not .HasMax) (eq .Key "cargo")}}
-        <button type="button" class="fit-slot-empty" data-fit-add="any">+ Add to cargo</button>
-        {{end}}
-        {{if and (not .HasMax) (eq .Key "subsystem")}}
-        <button type="button" class="fit-slot-empty" data-fit-add="subsystem">+ Add a subsystem</button>
-        {{end}}
-      </div>
-    </div>
-    {{end}}
-    {{range .ChargeSets}}
-    <p class="fit-charge">
-      <label>{{.WeaponName}} ammunition
-        <select data-fit-charge="{{.WeaponID}}">
-          <option value="0">No ammunition</option>
-          {{range .Options}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}
-        </select>
-      </label>
-    </p>
-    {{end}}
-  </div>
-  {{with .Stats}}
-  <div class="fit-stats">
-    <h4>{{$.ShipName}} <small>with {{$.PilotLabel}}'s skills</small></h4>
-    <div class="fit-headline">
-      <div class="fit-headline-dps">
-        <span class="fit-headline-num">{{.TotalDPS}}</span>
-        <span class="fit-headline-label">DPS</span>
-        <span class="fit-headline-sub">turrets {{.TurretDPS}} · missiles {{.MissileDPS}} · drones {{.DroneDPS}}</span>
-      </div>
-      <div class="fit-headline-volley">
-        <span class="fit-headline-num">{{.TotalVolley}}</span>
-        <span class="fit-headline-label">volley</span>
-        <span class="fit-headline-sub">turrets {{.TurretVolley}} · missiles {{.MissileVolley}} · drones {{.DroneVolley}}</span>
-      </div>
-    </div>
-    <div class="fit-bar-row{{if .Powergrid.Over}} over{{else}} good{{end}}">
-      <span class="fit-bar-label">Powergrid</span>
-      <span class="fit-bar"><span data-w="{{printf "%.1f" .Powergrid.Pct}}"></span></span>
-      <span class="fit-bar-nums">{{.Powergrid.Used}} of {{.Powergrid.Max}} ({{.Powergrid.Left}} left)</span>
-    </div>
-    <div class="fit-bar-row{{if .CPU.Over}} over{{else}} good{{end}}">
-      <span class="fit-bar-label">CPU</span>
-      <span class="fit-bar"><span data-w="{{printf "%.1f" .CPU.Pct}}"></span></span>
-      <span class="fit-bar-nums">{{.CPU.Used}} of {{.CPU.Max}} ({{.CPU.Left}} left)</span>
-    </div>
-    <div class="tw">
-    <table class="fit-table">
-      <tbody>
-        <tr><th>Slots</th><td class="{{if .SlotsOver}}fit-over{{else}}fit-good{{end}}">{{.SlotLine}}</td></tr>
-        <tr><th>Hardpoints</th><td class="{{if .HPOver}}fit-over{{else}}fit-good{{end}}">{{.Hardpoints}}</td></tr>
-        <tr><th>Calibration</th><td class="{{if .CalibOver}}fit-over{{else}}fit-good{{end}}">{{.Calibration}}</td></tr>
-        <tr><th>Capacitor</th><td>{{.Capacitor}} · peak recharge {{.CapPeak}} · use {{.CapDraw}}</td></tr>
-        <tr><th>Capacitor state</th><td class="{{if .CapStable}}fit-good{{else}}fit-over{{end}}">{{.CapState}}</td></tr>
-        <tr><th>Damage per second</th><td>{{.TotalDPS}} — turrets {{.TurretDPS}} · missiles {{.MissileDPS}} · drones {{.DroneDPS}}</td></tr>
-        <tr><th>Volley damage</th><td>{{.TotalVolley}} — turrets {{.TurretVolley}} · missiles {{.MissileVolley}} · drones {{.DroneVolley}}</td></tr>
-        {{if .NeutDrain}}<tr><th>Neutralizer drain</th><td>{{.NeutDrain}}</td></tr>{{end}}
-        {{if .NosDrain}}<tr><th>Nosferatu drain</th><td>{{.NosDrain}}</td></tr>{{end}}
-        <tr><th>Effective hit points</th><td>{{.EHPOmni}}</td></tr>
-        <tr><th>Shield recharge</th><td>{{.ShieldReg}} at peak</td></tr>
-        <tr><th>Shield boosting</th><td>{{.ShieldBoost}}</td></tr>
-        <tr><th>Armor repair</th><td>{{.ArmorRep}}</td></tr>
-        <tr><th>Hull repair</th><td>{{.HullRep}}</td></tr>
-        <tr><th>Speed</th><td>{{.Velocity}}</td></tr>
-        <tr><th>Align time</th><td>{{.Align}}</td></tr>
-        <tr><th>Signature radius</th><td>{{.Signature}}</td></tr>
-        <tr><th>Targeting range</th><td>{{.TargetRng}}</td></tr>
-        <tr><th>Scan resolution</th><td>{{.ScanRes}}</td></tr>
-        <tr><th>Sensor strength</th><td>{{.Sensor}}</td></tr>
-        <tr><th>Locked targets</th><td>up to {{.LockedTgts}}</td></tr>
-        <tr><th>Cargo hold</th><td>{{.Cargo}}</td></tr>
-        <tr><th>Drone bandwidth</th><td>{{.DroneBW}}</td></tr>
-        <tr><th>Drone bay</th><td>{{.DroneBay}} · {{.DronesUp}}</td></tr>
-      </tbody>
-    </table>
-    </div>
-    <div class="tw">
-    <table class="fit-table">
-      <thead><tr><th></th><th>HP</th><th>EM</th><th>Thermal</th><th>Kinetic</th><th>Explosive</th><th>EHP</th></tr></thead>
-      <tbody>
-      {{range .Tank}}
-        <tr><th>{{.Layer}}</th><td>{{.HP}}</td><td>{{.EM}}</td><td>{{.Thermal}}</td><td>{{.Kinetic}}</td><td>{{.Explosive}}</td><td>{{.EHP}}</td></tr>
-      {{end}}
-      </tbody>
-    </table>
-    </div>
-    {{if $.Missing}}
-    <div class="fit-missing">
-      <h4>Skills you're missing</h4>
-      <ul>
-      {{range $.Missing}}<li>{{.Name}} — {{.Have}} → {{.Need}}</li>{{end}}
-      </ul>
-    </div>
-    {{end}}
-    {{if $.Notes}}
-    <ul class="fit-notes">
-      {{range $.Notes}}<li>{{.}}</li>{{end}}
-    </ul>
-    {{end}}
-  </div>
-  {{end}}
-</div>
-{{else}}
-{{if not .DataNote}}<p><small>Pick a ship above to start building your fit.</small></p>{{end}}
-{{end}}
-</div>
 {{end}}

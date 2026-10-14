@@ -25,8 +25,10 @@
 (function () {
 "use strict";
 
-var section = document.getElementById("plan");
-if (!section) return;
+// The plan section is looked up on every init, never kept from the
+// first run: the script loads with any planner page, including the
+// search page that has no plan, and an in-page swap replaces #plan.
+var section = null;
 
 function $(id) { return document.getElementById(id); }
 
@@ -480,7 +482,7 @@ function nodeCard(n, mask, elapsed, maxCost, parentPath) {
   if (!n.build && n.origin === "pi") {
     origin = '<div class="plan-origin">Planetary interaction' +
       (n.originTier ? " · " + esc(n.originTier) : "") +
-      ' <a class="plan-origin-link" href="/industry/pi/?target=' +
+      ' <a class="plan-origin-link" href="/industry/pi/?product=' +
       encodeURIComponent(n.name) + '">Plan it in the PI planner</a></div>';
   } else if (!n.build && n.origin === "reaction") {
     origin = '<div class="plan-origin">Reaction product</div>';
@@ -532,16 +534,13 @@ function setAllCollapsed(on) {
 }
 
 // The decision map is columnar, like the approved mockup: one
-// stage column per depth of the expanded tree, the root stage on
-// the left, inputs on the right. A node is visible when every
-// ancestor is expanded — the same rule the card stack used — and
-// bars scale against the most expensive card in their stage.
-function stageLabel(depth, anyKids) {
-  if (depth === 0) return "Final assembly";
-  if (!anyKids) return "Inputs";
-  if (depth === 1) return "Components";
-  return "Sub-components";
-}
+// stage column per depth, the root stage on the left, inputs on
+// the right. Past the components, a column follows the selection:
+// it holds the children of the selected node's own branch at that
+// depth, never every expanded branch at once, so a deep column
+// lists one thing's inputs. A node shows when its parent is
+// expanded and on the selection path; bars scale against the
+// most expensive card in their stage.
 
 function computePathSets() {
   pathAnc = {};
@@ -613,17 +612,17 @@ function renderMap(t) {
   (function walk(n, parent) {
     var d = n.depth || 0;
     (stages[d] = stages[d] || []).push({ n: n, parent: parent });
-    if (!collapsed[n.path]) (n.kids || []).forEach(function (k) { walk(k, n); });
+    if (collapsed[n.path]) return;
+    if (n.path !== "0" && n.path !== selected && !pathAnc[n.path]) return;
+    (n.kids || []).forEach(function (k) { walk(k, n); });
   })(root, null);
   var html = '<div class="plan-map-cols">';
   stages.forEach(function (list, depth) {
     if (!list || !list.length) return;
     var max = 0;
     list.forEach(function (e) { max = Math.max(max, nodeCost(e.n, mask)); });
-    var anyKids = list.some(function (e) { return (e.n.kids || []).length; });
     html += '<section class="plan-stage' + (list.length > 10 ? " plan-stage-dense" : "") +
-      '" data-depth="' + depth + '"><h4 class="plan-stage-label">' + stageLabel(depth, anyKids) +
-      '</h4><div class="plan-stage-cards">' +
+      '" data-depth="' + depth + '"><div class="plan-stage-cards">' +
       list.map(function (e) { return nodeCard(e.n, mask, t.elapsed, max || 1, e.parent ? e.parent.path : null); }).join("") +
       "</div></section>";
   });
@@ -631,6 +630,15 @@ function renderMap(t) {
   host.innerHTML = html;
   wireMap(host);
   finishRender(host, saved);
+}
+
+// Opening a branch selects it, so the column after it fills with
+// that branch's children at once (deeper columns follow the
+// selection). The inspector follows too.
+function expandSelects(path) {
+  if (listMode() || path === selected) return;
+  selected = path;
+  renderInspector(currentTotals());
 }
 
 // After either renderer: restore the reader's scroll position,
@@ -647,8 +655,10 @@ function wireMap(host) {
     btn.addEventListener("click", function (ev) {
       ev.stopPropagation();
       var path = btn.getAttribute("data-plan-fold");
-      if (collapsed[path]) delete collapsed[path];
-      else collapsed[path] = true;
+      if (collapsed[path]) {
+        delete collapsed[path];
+        expandSelects(path);
+      } else collapsed[path] = true;
       revealPath = path;
       renderMap(currentTotals());
     });
@@ -684,8 +694,10 @@ function wireMap(host) {
       if (t && t !== el) return;
       var n = findNode(el.getAttribute("data-path"));
       if (!n || n.path === "0" || !(n.kids || []).length) return;
-      if (collapsed[n.path]) delete collapsed[n.path];
-      else collapsed[n.path] = true;
+      if (collapsed[n.path]) {
+        delete collapsed[n.path];
+        expandSelects(n.path);
+      } else collapsed[n.path] = true;
       revealPath = n.path;
       renderMap(currentTotals());
     });
@@ -1236,9 +1248,13 @@ function wireJudge() {
   }
 }
 
+var narrowWired = false;
 function init() {
+  section = document.getElementById("plan");
+  if (!section) return;
   wireStatic();
-  if (narrowMQ && narrowMQ.addEventListener) {
+  if (!narrowWired && narrowMQ && narrowMQ.addEventListener) {
+    narrowWired = true;
     narrowMQ.addEventListener("change", function () {
       if (P) renderMap(currentTotals());
     });
@@ -1256,7 +1272,9 @@ if (document.readyState === "loading") {
 
 // After an in-page swap the script is not re-run, so reboot
 // against the swapped-in DOM whenever the new page carries a
-// plan. Per-plan state resets first: the header figures on the
+// plan. This listener is registered whatever the first page was:
+// the search page has no plan, and picking a product from it is
+// the swap that brings the first one in. Per-plan state resets first: the header figures on the
 // fresh page describe the default preset, not the last plan's.
 document.addEventListener("evesynapse:content-ready", function () {
   if (!document.getElementById("plan-wrap")) return;

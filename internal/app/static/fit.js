@@ -125,22 +125,51 @@ var FitTipUI = (function () {
     tipEl.appendChild(x);
     return tipEl;
   }
-  // Anchors the (already appended) tooltip to its slot: below
-  // it when there is room, otherwise above; clamped inside the
-  // workbench so it can never cover the page header. The
-  // workbench is the offset parent (position: relative).
+  // Anchors the (already appended) tooltip where it covers no
+  // module the pointer may move to next. A ring slot's tooltip
+  // sits in the ring's hole, over the ship render, sized to fit
+  // inside the slots; a list chip's sits beside its row. Either
+  // way it is clamped inside the workbench, which is the offset
+  // parent (position: relative).
   function place(tipEl, slot, wb) {
     var wr = wb.getBoundingClientRect();
     var sr = slot.getBoundingClientRect();
-    var tw = tipEl.offsetWidth || 190, th = tipEl.offsetHeight || 110;
-    var cx = sr.left - wr.left + sr.width / 2;
-    var below = sr.bottom - wr.top + 10;
-    var above = sr.top - wr.top - th - 10;
-    var ty = (below + th <= wr.height) ? below : Math.max(8, above);
-    var tx = cx - tw / 2;
-    if (tx < 8) tx = 8;
+    var ring = slot.closest ? slot.closest(".fit-visual") : null;
+    var tx, ty, tw, th;
+    if (ring) {
+      var vr = ring.getBoundingClientRect();
+      var cx = vr.left + vr.width / 2, cy = vr.top + vr.height / 2;
+      var dx = sr.left + sr.width / 2 - cx, dy = sr.top + sr.height / 2 - cy;
+      // The square inscribed in the circle the slots leave free.
+      var free = Math.sqrt(dx * dx + dy * dy) - sr.width / 2 - 6;
+      var side = Math.floor(free * Math.SQRT2);
+      if (side > 0) {
+        tipEl.style.maxWidth = side + "px";
+        tipEl.style.maxHeight = side + "px";
+        tipEl.style.overflowY = "auto";
+      }
+      tw = tipEl.offsetWidth || 190;
+      th = tipEl.offsetHeight || 110;
+      tx = cx - wr.left - tw / 2;
+      ty = cy - wr.top - th / 2;
+    } else {
+      tw = tipEl.offsetWidth || 190;
+      th = tipEl.offsetHeight || 110;
+      var right = sr.right - wr.left + 10;
+      var left = sr.left - wr.left - tw - 10;
+      if (right + tw <= wr.width - 8) tx = right;
+      else if (left >= 8) tx = left;
+      else tx = sr.left - wr.left;
+      ty = sr.top - wr.top;
+      if (tx === sr.left - wr.left) {
+        // No room on either side: under the row, the last resort.
+        ty = sr.bottom - wr.top + 10;
+      }
+    }
     if (tx + tw > wr.width - 8) tx = wr.width - tw - 8;
     if (tx < 8) tx = 8;
+    if (ty + th > wr.height - 8) ty = wr.height - th - 8;
+    if (ty < 8) ty = 8;
     tipEl.style.left = Math.round(tx) + "px";
     tipEl.style.top = Math.round(ty) + "px";
   }
@@ -215,10 +244,6 @@ var FitTipUI = (function () {
   // No silent taps: the last add/remove/charge change arms a flash
   // that fires on the re-rendered target once simulate() lands.
   var pendingFlash = null; // {type: "slot"|"group"|"charge", id: number, family: string}
-  // After a tooltip state change re-simulates, the re-rendered
-  // workbench replaces the tooltip's slot: this key re-opens the
-  // tooltip on the new element so it stays open on the new state.
-  var pendingTipKey = null;
   function simulate() {
     // Coalesce bursts: one request in flight at a time; a change
     // made mid-flight re-sends once with the latest state instead
@@ -260,18 +285,7 @@ var FitTipUI = (function () {
         state = next;
         normItems();
       }
-      if (pendingTipKey) {
-        var key = pendingTipKey;
-        pendingTipKey = null;
-        var slot = editor.querySelector('.fit-vslot[data-tip-key="' + key + '"]');
-        if (slot) {
-          showTip(slot);
-          // Match toggleTip's key so a later tap on the same
-          // slot closes the tooltip instead of re-showing it.
-          if (tipEl) tipEl.setAttribute("data-for",
-            slot.getAttribute("data-v-index") + ":" + (slot.getAttribute("data-v-family") || ""));
-        }
-      }
+      reanchorTip();
       syncFilterUI();
       syncSubsystemUI();
       syncUndoButtons();
@@ -520,11 +534,15 @@ var FitTipUI = (function () {
     if (wb && wb.contains(t)) {
       if (t.closest("[data-fit-undo]")) { undo(); return; }
       if (t.closest("[data-fit-redo]")) { redo(); return; }
-      var dec = t.getAttribute("data-fit-dec");
-      if (dec) { decItem(parseInt(dec, 10) || 0); return; }
-      var inc = t.getAttribute("data-fit-inc");
-      if (inc) { addItem(parseInt(inc, 10) || 0, 1); return; }
-      var add = t.getAttribute("data-fit-add");
+      // Resolve the control from the nearest carrier, never the raw
+      // target: a click on a slot's inner glyph must count as a
+      // click on the slot (only the border used to respond).
+      var decEl = t.closest("[data-fit-dec]");
+      if (decEl) { decItem(parseInt(decEl.getAttribute("data-fit-dec"), 10) || 0); return; }
+      var incEl = t.closest("[data-fit-inc]");
+      if (incEl) { addItem(parseInt(incEl.getAttribute("data-fit-inc"), 10) || 0, 1); return; }
+      var addEl = t.closest("[data-fit-add]");
+      var add = addEl ? addEl.getAttribute("data-fit-add") : "";
       if (add) {
         if (add === "drone") { focusModuleSearch("drone"); return; }
         openPicker(add);
@@ -1439,14 +1457,27 @@ var FitTipUI = (function () {
   }
   // --- slot tooltips ----------------------------------------------
   // Hover (desktop) or tap (mobile) on a fitted icon shows the
-  // quick-look tooltip: name, slot, meta, CPU/PG. Positioned
-  // outward from the ship center so it never covers the render.
-  // Tap never navigates or deletes. Dismissible via the close
+  // quick-look tooltip: name, slot, meta, CPU/PG. FitTipUI.place
+  // puts it where it covers no other module. Tap never navigates
+  // or deletes. Dismissible via the close
   // button, tapping elsewhere, or Escape.
+  // One tooltip at a time. tipAnchor is the slot it belongs to;
+  // a re-render replaces every slot, so reanchorTip() moves the
+  // open tooltip onto the new element with the same data-tip-key
+  // (or closes it) — nothing may keep pointing at the old DOM.
   var tipEl = null;
+  var tipAnchor = null;
+  var tipHoverSlot = null;
+  var tipCloseTimer = null;
+  function cancelTipClose() {
+    if (tipCloseTimer) clearTimeout(tipCloseTimer);
+    tipCloseTimer = null;
+  }
   function closeTip() {
+    cancelTipClose();
     if (tipEl && tipEl.parentNode) tipEl.parentNode.removeChild(tipEl);
     tipEl = null;
+    tipAnchor = null;
   }
   function showTip(slot) {
     closeTip();
@@ -1454,10 +1485,30 @@ var FitTipUI = (function () {
     if (!wb) return;
     tipEl = FitTipUI.build(slot, { onState: setModuleState, onClose: closeTip });
     if (!tipEl) return;
+    tipAnchor = slot;
     tipEl.style.visibility = "hidden";
     wb.appendChild(tipEl);
     FitTipUI.place(tipEl, slot, wb);
     tipEl.style.visibility = "";
+  }
+  function reanchorTip() {
+    if (!tipEl) { tipHoverSlot = null; return; }
+    var key = tipAnchor ? tipAnchor.getAttribute("data-tip-key") : "";
+    var toggled = tipEl.getAttribute("data-for");
+    var hovered = !!tipAnchor && tipHoverSlot === tipAnchor;
+    var slot = key ? editor.querySelector('.fit-vslot[data-tip-key="' + key + '"]') : null;
+    closeTip();
+    tipHoverSlot = null;
+    if (!slot) return;
+    showTip(slot);
+    if (!tipEl) return;
+    // A tapped tooltip stays tapped, so a later tap on the slot
+    // still closes it; a hovered one still closes on mouse leave.
+    if (toggled) tipEl.setAttribute("data-for", tipToggleKey(slot));
+    if (hovered) tipHoverSlot = slot;
+  }
+  function tipToggleKey(slot) {
+    return slot.getAttribute("data-v-index") + ":" + (slot.getAttribute("data-v-family") || "");
   }
   // Jumps to a weapon's ammunition select (from its slot badge).
   function jumpToCharge(weaponID) {
@@ -1469,7 +1520,6 @@ var FitTipUI = (function () {
     sel.classList.add("flash");
     window.setTimeout(function () { sel.classList.remove("flash"); }, 750);
   }
-  var tipHoverSlot = null;
   editor.addEventListener("mouseover", function (ev) {
     if (dragState && dragState.active) return; // no tooltips mid-drag
     var slot = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot[data-tip-name], .fit-chip[data-tip-name]") : null;
@@ -1478,17 +1528,23 @@ var FitTipUI = (function () {
       showTip(slot);
     }
   });
-  var tipCloseTimer = null;
+  // The close timer belongs to the tooltip it was armed for:
+  // showTip cancels it, and it never closes a later tooltip
+  // (leaving A arms it; arriving on B must not let it kill B's).
+  // The delay covers the trip from a ring slot to its tooltip in
+  // the ring's hole, where the state buttons are.
+  var TIP_CLOSE_MS = 400;
   function scheduleTipClose() {
-    if (tipCloseTimer) clearTimeout(tipCloseTimer);
+    cancelTipClose();
+    var forTip = tipEl;
     tipCloseTimer = setTimeout(function() {
       tipCloseTimer = null;
       // Only close if mouse is not over the tooltip
-      if (tipEl && !tipEl.matches(':hover')) {
+      if (tipEl && tipEl === forTip && !tipEl.matches(':hover')) {
         tipHoverSlot = null;
         closeTip();
       }
-    }, 150);
+    }, TIP_CLOSE_MS);
   }
   editor.addEventListener("mouseout", function (ev) {
     var slot = ev.target && ev.target.closest ? ev.target.closest(".fit-vslot[data-tip-name], .fit-chip[data-tip-name]") : null;
@@ -1518,7 +1574,7 @@ var FitTipUI = (function () {
   // or navigates. Keyboard: Enter/Space on a focused slot toggles
   // its tooltip the same way a tap does.
   function toggleTip(slot) {
-    var key = slot.getAttribute("data-v-index") + ":" + (slot.getAttribute("data-v-family") || "");
+    var key = tipToggleKey(slot);
     if (tipEl && tipEl.getAttribute("data-for") === key) {
       closeTip();
     } else {
@@ -1542,7 +1598,9 @@ var FitTipUI = (function () {
     pushHistory();
     it.states[ordinal] = newState;
     markDirty();
-    pendingTipKey = tipKey;
+    // The re-render re-anchors whichever tooltip is open by then
+    // (reanchorTip), so a pointer that moved on is never left
+    // with this module's tooltip stuck on screen.
     simulate();
   }
   editor.addEventListener("keydown", function (ev) {

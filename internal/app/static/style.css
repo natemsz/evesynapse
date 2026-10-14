@@ -2,12 +2,55 @@
    Molten-orange eclipse palette: ember red and flare gold accents on
    neutral near-black grey containers. Single dependency-free stylesheet. */
 
+/* Every face is free (SIL Open Font License) and self-hosted
+   (font-src 'self'; ci-assets/fonts holds them and their notices).
+   Body text: Saira Semi Condensed, a squared, compact techno sans.
+   Numerals: JetBrains Mono, through a face that covers only the
+   digits and their separators, listed first in the body stack, so
+   every figure on the site (ISK, counts, dates) is monospaced while
+   letters fall through to Saira. */
 @font-face {
-  font-family: 'Shentox';
+  font-family: 'Synapse Numerals';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('/static/fonts/jetbrains-mono.woff2') format('woff2');
+  unicode-range: U+0030-0039, U+002C, U+002E;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('/static/fonts/jetbrains-mono.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Saira Semi Condensed';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url('/static/fonts/shentox-regular.woff2') format('woff2');
+  src: url('/static/fonts/saira-sc-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Saira Semi Condensed';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/static/fonts/saira-sc-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Saira Semi Condensed';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/static/fonts/saira-sc-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Saira Semi Condensed';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/static/fonts/saira-sc-700.woff2') format('woff2');
 }
 /* The wordmark face. font-display: block keeps the brand from flashing
    in a fallback face; the file is preloaded. */
@@ -17,55 +60,6 @@
   font-weight: 600;
   font-display: block;
   src: url('/static/fonts/pixelify-sans-semibold.ttf') format('truetype');
-}
-@font-face {
-  font-family: 'Univers Next Pro';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('/static/fonts/univers-next-pro-medium.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Univers Next Pro';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('/static/fonts/univers-next-pro-bold.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Univers Next Pro';
-  font-style: italic;
-  font-weight: 300;
-  font-display: swap;
-  src: url('/static/fonts/univers-next-pro-light-italic.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Univers Next Pro';
-  font-style: normal;
-  font-weight: 300;
-  font-display: swap;
-  src: url('/static/fonts/univers-next-pro-light.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Univers Next Pro';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/static/fonts/univers-next-pro-regular.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Univers Next Pro Condensed';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('/static/fonts/univers-next-pro-medium-condensed.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Univers Next Pro Condensed';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('/static/fonts/univers-next-pro-bold-condensed.woff2') format('woff2');
 }
 /* The heading face: Rajdhani SemiBold (and Bold), set in capitals.
    SIL Open Font License; self-hosted (font-src 'self'). */
@@ -156,7 +150,7 @@ body {
      composites one background surface. */
   background: #0d0503;
   color: var(--text);
-  font-family: "Shentox", "Univers Next Pro", "UniversNextPro330BasicLightLatin", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: "Synapse Numerals", "Saira Semi Condensed", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 400;
   font-size: 13px;
   line-height: 1.4;
@@ -192,32 +186,32 @@ a:hover { color: var(--success); text-decoration: underline; }
 }
 .skip-link:focus { top: 0.5rem; color: var(--text-bright); }
 
-/* Headers, nav category labels, buttons, badges and table headers use
-   Univers Next Pro Condensed Medium (500); the wordmark keeps Bold
-   Condensed (600). Synthetic bold is off. Nav links use the
-   non-condensed cut (next rule); body text keeps the Shentox stack. */
+/* Headers, nav category labels, buttons, badges and table headers are
+   Rajdhani SemiBold in spaced capitals. Synthetic bold is off. Nav
+   links use the body face (next rule). */
 h1, h2, h3, h4, .wordmark, .btn, thead th, .badge,
 :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])),
 .branch > summary,
 .sidenav a.navlink,
 .sidebar-account-footer .navlink {
-  font-family: "Univers Next Pro Condensed", "Univers Next Pro", -apple-system, "SF Pro Display", "Segoe UI", "Inter", sans-serif;
-  font-weight: 500;
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-weight: 600;
   font-synthesis-weight: none;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
-/* Nav menu links: non-condensed Univers at Regular (400). The
-   standalone top-level rows (Home, Sync, Admin) are not in this rule:
-   they take the category headers' condensed cut. */
+/* Nav menu links: the body face at Medium; the standalone top-level
+   rows (Home, Sync, Admin) take the category headers' capitals. */
 header a.navlink, .branch .menu a {
-  font-family: "Univers Next Pro", -apple-system, "SF Pro Display", "Segoe UI", "Inter", sans-serif;
-  font-weight: 400;
+  font-family: "Synapse Numerals", "Saira Semi Condensed", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 500;
   font-synthesis-weight: none;
 }
 .wordmark { font-weight: 600; }
 
 /* Headings: Rajdhani SemiBold in spaced capitals, the HUD face. */
 h1, h2, h3, h4 {
-  font-family: "Rajdhani", "Univers Next Pro Condensed", "Segoe UI", sans-serif;
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
   font-weight: 600;
   font-synthesis-weight: none;
   text-transform: uppercase;
@@ -400,6 +394,19 @@ main {
 .panel.market-browse { background: none; border: 0; box-shadow: none; padding: 0; }
 .panel.char-head { background: none; border: 0; box-shadow: none; padding: 0; }
 .char-head .char-sub { margin: 0.1rem 0 0.6rem; }
+/* The pilot's name sits large in the band's bottom-right corner, apart
+   from the portrait, lifted off the backdrop by a black shadow. */
+.panel > h2.char-hero { display: flex; align-items: flex-end; gap: 1rem; min-height: 8rem; }
+.char-hero .char-name {
+  margin-left: auto;
+  font-size: clamp(1.6rem, 3.2vw, 2.4rem);
+  line-height: 1;
+  letter-spacing: 0.08em;
+  color: var(--text-bright);
+  text-shadow: 0 2px 2px #000, 0 0 14px rgba(0, 0, 0, 0.9), 0 0 28px rgba(0, 0, 0, 0.7);
+  overflow-wrap: anywhere;
+  text-align: right;
+}
 .char-kpis { margin: 0 0 1rem; }
 .char-kpis .kpi-sub { overflow-wrap: anywhere; }
 /* A link that belongs to a page's title sits in the title bar's right
@@ -695,8 +702,8 @@ img.portrait {
 }
 
 .isk {
-  font-family: "Shentox", "Univers Next Pro", "Inter", sans-serif;
-  font-weight: 300;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-weight: 400;
   letter-spacing: 0.01em;
   color: var(--text-bright);
 }
@@ -869,7 +876,7 @@ footer .version {
   text-wrap: balance;
 }
 footer .version-number {
-  font-family: "Shentox", "Univers Next Pro", "Inter", sans-serif;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
   font-weight: 400;
 }
 
@@ -914,6 +921,14 @@ footer .version-number {
 .section-tabs a { padding: 0.35rem 0.8rem; border: 1px solid var(--border, #333); border-radius: 4px; text-decoration: none; white-space: nowrap; }
 .section-tabs a:hover { border-color: #555; }
 .section-tabs a.active { border-color: var(--accent); color: var(--text-bright); background: var(--row-hover); }
+/* Section tabs, filter chips and strategy tabs read as controls: the
+   same Rajdhani capitals as the buttons. */
+.section-tabs a, .chip, .ti-tabs button {
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
 @media (max-width: 719px) {
   .section-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding-bottom: 0.2rem; margin: 0.4rem 0 0.8rem; }
   .section-tabs a { flex: none; padding: 0.3rem 0.65rem; font-size: 0.9rem; }
@@ -954,6 +969,10 @@ footer .version-number {
 .ti-compact .ti-tabs button { padding: 0.2rem 0.55rem; font-size: 0.8rem; }
 .ti-compact .ti-list li { padding: 0.25rem 0.45rem 0.25rem 2rem; font-size: 0.9rem; }
 .ti-compact .ti-list li::before { top: 0.33rem; }
+/* The module shows each idea's brief until More opens it. */
+.ti-compact .ti-whole, .card.expanded .ti-compact .ti-brief { display: none; }
+.card.expanded .ti-compact .ti-whole { display: inline; }
+.ti-compact .ti-brief { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 .ti-more { margin: 0.4rem 0 0; }
 .cust-row { border: 1px solid #262626; background: var(--row); padding: 0.6rem 0.8rem; margin: 0.5rem 0; border-radius: 3px; }
 .cust-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.3rem 0 0; }
@@ -1026,6 +1045,9 @@ html[data-theme="light"] .widget-scope select {
    visually-hidden header text would otherwise anchor to the card and
    escape its scroller, widening the page on phones. */
 .grid.home-grid .tw { position: relative; }
+/* A module scrolled to (the idle link to the fleet) lands below the
+   sticky top bar, not under it. */
+.grid.home-grid > .card { scroll-margin-top: 4.75rem; }
 .grid.home-grid > .gw2 { grid-column: span 2; }
 .grid.home-grid > .gw3 { grid-column: span 3; }
 .grid.home-grid > .gh2 { grid-row: span 2; }
@@ -1384,9 +1406,11 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid rgba(255, 1
   gap: 0.35rem 0.9rem;
   margin: 0.15rem 0 0.35rem;
   color: var(--note);
-  font-family: "Univers Next Pro Condensed", "Univers Next Pro", sans-serif;
+  font-family: "Rajdhani", sans-serif;
+  font-weight: 600;
   font-size: 0.92em;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 .legend-item { display: inline-flex; align-items: center; gap: 0.35rem; }
 .legend-swatch {
@@ -1403,8 +1427,8 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid rgba(255, 1
 .legend-total { height: 2px; background: #ffd27a; }
 .legend-note { margin-left: auto; color: #9d8668; }
 .pchart text {
-  font-family: "Univers Next Pro Condensed", "Univers Next Pro", sans-serif;
-  font-size: 11px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
 }
 .chart-gridline { stroke: #241708; stroke-width: 1; }
 .volume-gridline { stroke: #2a1408; stroke-dasharray: 3 3; }
@@ -2154,7 +2178,8 @@ html[data-nav="rail"] { --nav-axis: calc(2.5rem - 0.5px); }
   border: 1px solid transparent;
   border-radius: 3px;
   cursor: pointer;
-  font-family: "Univers Next Pro Condensed", "Univers Next Pro", sans-serif;
+  font-family: "Rajdhani", sans-serif;
+  font-weight: 600;
   font-size: 0.95rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2481,7 +2506,7 @@ tbody tr.yours td { background-color: #2a2015; }
 .quickjump-results li.qj-group {
   padding: 0.55rem 0.6rem 0.2rem;
   cursor: default;
-  font-family: "Univers Next Pro Condensed", "Univers Next Pro", sans-serif;
+  font-family: "Rajdhani", sans-serif;
   font-weight: 600;
   font-size: 0.78rem;
   letter-spacing: 0.14em;

@@ -422,16 +422,19 @@
         if (btn) btn.click();
       });
     }
-    // The KPI band's idle count opens the same view.
-    var idleBtn = root.querySelector("[data-fleet-idle]");
+    // The KPI band's idle count ("N idle — show them") is a link to
+    // the Characters page; with the Fleet Overview on the page it
+    // filters the fleet to the idle pilots and brings the module into
+    // view instead.
+    var idleLink = root.querySelector("[data-fleet-idle]");
     var idleChip = root.querySelector(".fleet-tools [data-idle-chip]");
-    if (idleBtn && idleChip) {
-      idleBtn.addEventListener("click", function () {
-        pick(idleChip);
-        fleetFilter.scrollIntoView({ block: "start", behavior: "smooth" });
+    var fleetCard = fleetFilter.closest(".card");
+    if (idleLink && idleChip && fleetCard) {
+      idleLink.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        if (!idleChip.classList.contains("on")) pick(idleChip);
+        fleetCard.scrollIntoView({ block: "start", behavior: "smooth" });
       });
-    } else if (idleBtn) {
-      idleBtn.hidden = true;
     }
   }
   onContentReady(initFleetFilter);
@@ -2116,9 +2119,19 @@
       return;
     }
     var openBranch = sidebar.querySelector(".sidenav details.branch[open]");
-    if (openBranch && !openBranch.contains(e.target)) {
+    if (!openBranch) return;
+    // A link chosen in the flyout closes it at once: the page swap
+    // that follows paints the new content over anything still out,
+    // which left the flyout half covered behind the panel.
+    var link = e.target.closest && e.target.closest(".menu a");
+    if (!openBranch.contains(e.target) || (link && openBranch.contains(link))) {
       closeCategoryBranches(null);
     }
+  });
+  // However a page swap starts (a link, Back, a shortcut), no rail
+  // flyout stays out over the incoming page.
+  document.addEventListener("evesynapse:content-will-swap", function () {
+    if (railActive()) closeCategoryBranches(null);
   });
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && drawerQuery.matches) {

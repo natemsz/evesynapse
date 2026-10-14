@@ -59,6 +59,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 				return 2
 			}
 			return app.RunRefresh(args[1:], cfg, stdout, stderr)
+		case "-populate-names":
+			cfg, err := app.LoadConfig()
+			if err != nil {
+				fmt.Fprintln(stderr, "evesynapse:", err)
+				return 2
+			}
+			return app.RunPopulateNames(args[1:], cfg, stdout, stderr)
 		case "-push-keys":
 			return app.RunPushKeys(stdout, stderr)
 		case "-h", "--help", "-help":
@@ -81,6 +88,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  evesynapse -update -dev             update to the latest dev-branch release")
 	fmt.Fprintln(w, "  evesynapse -update <url> <checksum> install a downloaded update and restart (a local file needs no checksum)")
 	fmt.Fprintln(w, "  evesynapse -refresh                 refresh all cached data on next start (app must be stopped)")
+	fmt.Fprintln(w, "  evesynapse -populate-names          store every alliance and corporation name now (safe while running)")
 	fmt.Fprintln(w, "  evesynapse -push-keys               print a new key pair for browser push, as lines for .env")
 }
 

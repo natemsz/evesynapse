@@ -341,7 +341,11 @@ type tradeIdeaGroup struct {
 	Title template.HTML
 	Desc  template.HTML   // the one-line description, if any
 	Ideas []template.HTML // one bullet each, best first
-	Notes []template.HTML // plain lines under the heading
+	// Briefs parallel Ideas: the item and its first short detail, for
+	// the home module at its resting size (a verbose model's full
+	// line is too much there; More and the page show Ideas).
+	Briefs []template.HTML
+	Notes  []template.HTML // plain lines under the heading
 }
 
 // More is how many ideas a list capped at n leaves out.
@@ -426,6 +430,7 @@ func parseTradeIdeas(body string) []tradeIdeaGroup {
 			if item := tradeIdeasInline(content); item != "" {
 				ensure()
 				groups[cur].Ideas = append(groups[cur].Ideas, item)
+				groups[cur].Briefs = append(groups[cur].Briefs, tradeIdeasInline(tradeIdeaBrief(content)))
 			}
 		case len(line) > 2 && strings.HasPrefix(line, "*") && strings.HasSuffix(line, "*"):
 			if desc := tradeIdeasInline(strings.Trim(line, "*")); desc != "" {
@@ -452,6 +457,45 @@ func parseTradeIdeas(body string) []tradeIdeaGroup {
 		out = append(out, g)
 	}
 	return out
+}
+
+// tradeIdeaBriefMax caps a brief's detail, in runes.
+const tradeIdeaBriefMax = 44
+
+// tradeIdeaBrief shortens one idea line (markdown) for the compact
+// module: the bolded item, then the first clause of what follows it
+// (up to the first " · ", " — ", "; " or ". "), cut at a word near
+// tradeIdeaBriefMax with an ellipsis. A line with no bold item keeps
+// its own first clause.
+func tradeIdeaBrief(line string) string {
+	head, rest := "", line
+	if strings.HasPrefix(line, "**") {
+		if end := strings.Index(line[2:], "**"); end >= 0 {
+			head = line[:end+4]
+			rest = line[end+4:]
+		}
+	}
+	rest = strings.TrimLeft(rest, " :·—–-,")
+	for _, sep := range []string{" · ", " — ", " – ", "; ", ". "} {
+		if i := strings.Index(rest, sep); i >= 0 {
+			rest = rest[:i]
+		}
+	}
+	rest = strings.TrimSpace(rest)
+	if r := []rune(rest); len(r) > tradeIdeaBriefMax {
+		cut := string(r[:tradeIdeaBriefMax])
+		if sp := strings.LastIndex(cut, " "); sp > tradeIdeaBriefMax/2 {
+			cut = cut[:sp]
+		}
+		rest = strings.TrimRight(cut, " ,;:") + "…"
+	}
+	switch {
+	case head == "":
+		return rest
+	case rest == "":
+		return head
+	}
+	return head + " — " + rest
 }
 
 // stripStrong drops strong tags from a heading the model bolded:

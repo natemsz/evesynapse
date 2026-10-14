@@ -1,0 +1,8 @@
+Saira Semi Condensed (saira-sc-400/500/600/700.woff2.b64) is the site's body face.
+
+Copyright 2016 The Saira Project Authors (https://github.com/Omnibus-Type/Saira)
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is available with a FAQ at: https://scripts.sil.org/OFL
+
+The files are the Latin subsets Google Fonts serves.

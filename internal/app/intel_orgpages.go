@@ -374,20 +374,41 @@ func (app *Application) buildAllianceView(ctx context.Context, id int64, payload
 		view.ExecutorCorp = app.corpDisplayName(ctx, p.Alliance.ExecutorCorporationID)
 		view.ExecutorPending = app.corpNamePending(ctx, p.Alliance.ExecutorCorporationID)
 	}
+	// Member names in one lookup (memory, then one query against
+	// entity_names) rather than a record read per corporation: an
+	// alliance of hundreds rendered in hundreds of round trips. The
+	// name baked into the record is the fallback. Only a few names
+	// still unknown after that take the per-corporation path, which
+	// also queues their fetch; the rest show as pending until the
+	// next alliance refresh names them.
+	ids := make([]int64, len(p.Corporations))
+	for i, member := range p.Corporations {
+		ids[i] = member.ID
+	}
+	known := app.namesFor(ctx, esi.NameCorporation, ids)
+	resolveLeft := allianceMemberResolveCap
 	for _, member := range p.Corporations {
-		row := allianceMemberView{CorpID: member.ID, Name: member.Name}
-		if name, ok := app.esi.CachedCorpName(member.ID); ok && name != "" {
-			row.Name = name
-		}
+		row := allianceMemberView{CorpID: member.ID, Name: known[member.ID]}
 		if row.Name == "" {
-			row.Name = app.corpDisplayName(ctx, member.ID)
+			row.Name = member.Name
 		}
-		row.NamePending = row.Name == fmt.Sprintf("Corporation #%d", member.ID) &&
-			app.corpNamePending(ctx, member.ID)
+		if row.Name == "" && resolveLeft > 0 {
+			resolveLeft--
+			row.Name = app.corpDisplayName(ctx, member.ID)
+			row.NamePending = row.Name == fmt.Sprintf("Corporation #%d", member.ID) &&
+				app.corpNamePending(ctx, member.ID)
+		} else if row.Name == "" {
+			row.Name = fmt.Sprintf("Corporation #%d", member.ID)
+			row.NamePending = true
+		}
 		view.Members = append(view.Members, row)
 	}
 	return view, true
 }
+
+// allianceMemberResolveCap bounds the per-corporation resolves one
+// alliance render may make for names no lookup knows yet.
+const allianceMemberResolveCap = 20
 
 // resolvedCorpName reads the corporation-name tiers without
 // queueing work: the name, and whether the answer is settled (a

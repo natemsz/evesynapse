@@ -1,0 +1,8 @@
+JetBrains Mono (jetbrains-mono.woff2.b64) sets the site's figures: ISK amounts and every numeral in body text.
+
+Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is available with a FAQ at: https://scripts.sil.org/OFL
+
+The file is the Latin subset of the variable font Google Fonts serves (weights 100-800).

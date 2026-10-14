@@ -99,6 +99,11 @@ type Config struct {
 	cloudflareAccountID string // CLOUDFLARE_ACCOUNT_ID
 	cloudflareAuthToken string // CLOUDFLARE_AUTH_TOKEN
 	metaAIKey           string // MODEL_API_KEY
+
+	// noWorker builds the application without its background worker:
+	// one-shot commands (-populate-names) that share the database
+	// with a running server must not run a second worker beside it.
+	noWorker bool
 }
 
 // TradeIdeasConfigured reports whether the trade-ideas refresh

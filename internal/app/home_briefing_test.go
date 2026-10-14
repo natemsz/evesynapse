@@ -375,15 +375,15 @@ func TestBriefingFontPreloadAndFooter(t *testing.T) {
 		t.Fatalf("GET /: status %d", code)
 	}
 	mustContain(t, "home head", body,
-		`<link rel="preload" as="font" type="font/woff2" href="/static/fonts/shentox-regular.woff2" crossorigin>`,
-		`<link rel="preload" as="font" type="font/woff2" href="/static/fonts/univers-next-pro-medium-condensed.woff2" crossorigin>`,
+		`<link rel="preload" as="font" type="font/woff2" href="/static/fonts/saira-sc-400.woff2" crossorigin>`,
+		`<link rel="preload" as="font" type="font/woff2" href="/static/fonts/jetbrains-mono.woff2" crossorigin>`,
 		`<link rel="preload" as="font" type="font/ttf" href="/static/fonts/pixelify-sans-semibold.ttf" crossorigin>`,
 		`<link rel="stylesheet" href="/static/style.css?v=`+staticAssetVersion()+`">`,
-		`Powered by EveSynapse <span class="version-number">`+appVersion+`</span> 🏓 by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>`,
+		`<a href="https://github.com/natemsz/evesynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <span class="version-number">`+appVersion+`</span> · Made in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>`,
 	)
 
 	// The font file itself rides the immutable cache header.
-	req := httptest.NewRequest(http.MethodGet, "/static/fonts/shentox-regular.woff2", nil)
+	req := httptest.NewRequest(http.MethodGet, "/static/fonts/saira-sc-400.woff2", nil)
 	rec := httptest.NewRecorder()
 	app.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {

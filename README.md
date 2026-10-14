@@ -1227,8 +1227,12 @@ urgent drain asks peers before spending ESI, and a key with a
 fresh staged entry skips its refetch while the spot decision
 lands. The operator can always add an
 instance by address, approve, exclude, re-admit, or remove one
-on the Admin page (removing also rotates a peer's key: the next
-gossip pins the new one). A seed serves its member list —
+on the Admin page. The first key seen for an instance is the
+one kept: a later sighting under another key is refused and
+marked on that instance's row, and an address moves only when
+the instance itself says so under its pinned key. Removing an
+instance is the only way its key changes (the next sighting
+pins the new one). A seed serves its member list —
 itself plus every peer it knows — so one address teaches a new
 instance the whole swarm. The Sync page's "Swarm Cache" card
 shows entries applied, ESI calls saved, spot checks for and

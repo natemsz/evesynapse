@@ -161,6 +161,12 @@ var pgPulseEventsSchema string
 //go:embed schema_pg/033_public_fits.sql
 var pgPublicFitsSchema string
 
+// Step 034: when a swarm peer last presented a key other than
+// its pinned one (refused; shown to the operator).
+//
+//go:embed schema_pg/034_swarm_key_pin.sql
+var pgSwarmKeyPinSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -223,6 +229,7 @@ func schemaSteps() []schemaStep {
 		{31, "trade_ideas", pgTradeIdeasSchema, ""},
 		{32, "pulse_events", pgPulseEventsSchema, ""},
 		{33, "public_fits", pgPublicFitsSchema, ""},
+		{34, "swarm_key_pin", pgSwarmKeyPinSchema, ""},
 	}
 }
 

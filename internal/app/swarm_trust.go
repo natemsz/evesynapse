@@ -23,6 +23,7 @@ package app
 
 import (
 	"context"
+	"crypto/ed25519"
 	cryptorand "crypto/rand"
 	"database/sql"
 	"encoding/base64"
@@ -340,7 +341,7 @@ func (app *Application) swarmGossip(ctx context.Context, now time.Time) {
 		if c.id == "" {
 			source = "seed"
 		}
-		if app.swarmContactPeer(ctx, c.url, c.id, c.key, source, now) {
+		if app.swarmContactPeer(ctx, c.url, c.id, c.key, source, now) == nil {
 			learned++
 		}
 	}
@@ -365,23 +366,27 @@ func (app *Application) swarmGossip(ctx context.Context, now time.Time) {
 // must serve under its pinned identity; an address with no
 // pinned key yet is trust-on-first-use — the shared secret
 // already proved membership, and the key proves possession from
-// here on. It reports whether anyone answered.
-func (app *Application) swarmContactPeer(ctx context.Context, baseURL, peerID, peerKey, source string, now time.Time) bool {
+// here on. Nil means the address answered and its list was
+// learned; errSwarmKeyChanged means it answered as an instance
+// already pinned under another key, and taught nothing.
+func (app *Application) swarmContactPeer(ctx context.Context, baseURL, peerID, peerKey, source string, now time.Time) error {
 	members, signer, key, err := app.swarmFetchMembers(ctx, baseURL, peerID, peerKey)
 	if err != nil {
-		return false
+		return err
 	}
 	if peerID != "" && signer != peerID {
-		return false
+		return fmt.Errorf("swarm: %s answered as another instance", baseURL)
 	}
 	if err := app.swarmLearnMembers(ctx, members, signer, key, baseURL, source, now); err != nil {
-		logging.Errorf("swarm: learn members via %s: %v", baseURL, err)
-		return false
+		if !errors.Is(err, errSwarmKeyChanged) {
+			logging.Errorf("swarm: learn members via %s: %v", baseURL, err)
+		}
+		return err
 	}
 	if err := app.queries.TouchSwarmPeerGossip(ctx, db.TouchSwarmPeerGossipParams{InstanceID: signer, LastGossip: timeSet(now)}); err != nil {
 		logging.Errorf("swarm: touch gossip %s: %v", signer, err)
 	}
-	return true
+	return nil
 }
 
 // swarmFetchMembers asks one URL for its membership list. A
@@ -446,24 +451,50 @@ func decodeSwarmMembers(secret, payload, signer, key string) ([]swarmMember, str
 	return members, signer, key, nil
 }
 
-// swarmLearnMembers records gossip-learned members. New IDs pin
-// the key they arrived with; a changed key for a known ID is
-// kept as-is (rotation goes through the operator: delete the
-// peer row and the next gossip re-pins). Approval follows the
-// mode; exclusion is never touched by gossip. The contacted
-// signer is recorded under the URL that just answered when its
-// own list does not name it — the dialed URL is known-good, so
-// a lonely seed still introduces itself.
+// errSwarmKeyChanged reports a sighting whose sender presented a
+// key other than the one pinned for it. Nothing it said is
+// learned.
+var errSwarmKeyChanged = errors.New("swarm: the sender's key is not the one pinned for it")
+
+// swarmFlagKeyConflict marks a refused key change on the peer
+// it was aimed at and says so in the log. The pinned key stays;
+// if the new one is real, the operator removes the peer and the
+// next sighting pins it.
+func (app *Application) swarmFlagKeyConflict(ctx context.Context, instanceID, heardFrom string, now time.Time) {
+	logging.Warnf("swarm: refused a changed key for %s (heard from %s); the pinned key stays until the operator removes the instance",
+		shortenSwarmID(instanceID), shortenSwarmID(heardFrom))
+	if err := app.queries.FlagSwarmPeerKeyConflict(ctx, db.FlagSwarmPeerKeyConflictParams{
+		InstanceID: instanceID, KeyConflictAt: timeSet(now),
+	}); err != nil {
+		logging.Errorf("swarm: mark key conflict on %s: %v", shortenSwarmID(instanceID), err)
+	}
+}
+
+// swarmLearnMembers records the members one sighting names. The
+// first key seen for an instance ID is pinned: a sighting that
+// names a known ID under another key is refused and flagged,
+// never written (the upsert itself enforces it), and the only
+// way to a new key is the operator removing the peer. A sender
+// whose own key is not its pinned one teaches nothing at all
+// (errSwarmKeyChanged). An address moves only on its owner's
+// word: the sender's own entry, signed under its pinned key,
+// may move the sender's address; what it says about a peer
+// already known never does. Approval follows the mode;
+// exclusion is never touched. The sender is recorded under the
+// URL that just answered when its own list does not name it —
+// the dialed URL is known-good, so a lonely seed still
+// introduces itself.
 func (app *Application) swarmLearnMembers(ctx context.Context, members []swarmMember, signer, signerKey, dialURL, source string, now time.Time) error {
 	if signer != "" && signerKey != "" {
-		if peer, err := app.queries.GetSwarmPeer(ctx, signer); err != nil {
-			// A signer never heard of is new, not broken:
-			// anything else aborts the whole sighting.
-			if !errors.Is(err, sql.ErrNoRows) {
-				return err
-			}
-		} else if peer.PublicKey != signerKey {
-			logging.Warnf("swarm: %s presents a changed key; keeping the pinned one until the operator re-admits it", signer)
+		peer, err := app.queries.GetSwarmPeer(ctx, signer)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			// A sender never heard of is new, not broken.
+		case err != nil:
+			return err
+		case peer.PublicKey != signerKey:
+			app.swarmFlagKeyConflict(ctx, signer, signer, now)
+			return errSwarmKeyChanged
 		}
 	}
 	seen := make(map[string]bool, len(members)+1)
@@ -486,14 +517,22 @@ func (app *Application) swarmLearnMembers(ctx context.Context, members []swarmMe
 		if !validSwarmBaseURL(m.BaseURL) {
 			continue
 		}
-		if raw, err := base64.StdEncoding.DecodeString(m.PublicKey); err != nil || len(raw) != 32 {
+		if raw, err := base64.StdEncoding.DecodeString(m.PublicKey); err != nil || len(raw) != ed25519.PublicKeySize {
 			continue
 		}
-		if err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
+		written, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
 			InstanceID: m.InstanceID, BaseUrl: m.BaseURL, PublicKey: m.PublicKey,
 			Source: source, FirstSeen: now,
-		}); err != nil {
+			OwnSighting: m.InstanceID == signer && m.PublicKey == signerKey,
+		})
+		if err != nil {
 			return err
+		}
+		if written == 0 {
+			// Known under another key: refused, and nothing
+			// about it changes, approval included.
+			app.swarmFlagKeyConflict(ctx, m.InstanceID, signer, now)
+			continue
 		}
 		if !app.cfg.swarm.allowlisted() {
 			if err := app.queries.SetSwarmPeerApproved(ctx, db.SetSwarmPeerApprovedParams{InstanceID: m.InstanceID, Approved: true}); err != nil {

@@ -19,27 +19,40 @@ ON CONFLICT (id) DO UPDATE SET
     sealed_seed = excluded.sealed_seed,
     created_at = excluded.created_at;
 
--- A gossip or seed sighting records (or refreshes) a peer's
--- address and key and when it was last seen. It never touches
--- approval, exclusion, or the reputation counters: hearing
--- about an instance must not approve it or forgive it.
--- name: UpsertSwarmPeer :exec
+-- A sighting records a peer once and pins the key it arrived
+-- with. The first key seen for an instance ID is the one kept:
+-- a later sighting under another key writes nothing (zero rows,
+-- which the caller flags), so no sighting can replace a pinned
+-- key. The address moves only on the peer's own word
+-- (own_sighting: the sighting was signed by that peer's pinned
+-- key); anyone else's mention refreshes last_seen and nothing
+-- more. Approval, exclusion and the reputation counters are
+-- never touched: hearing about an instance must not approve it
+-- or forgive it.
+-- name: UpsertSwarmPeer :execrows
 INSERT INTO swarm_peers (instance_id, base_url, public_key, source, first_seen, last_seen)
 VALUES ($1, $2, $3, $4, $5, $5)
 ON CONFLICT (instance_id) DO UPDATE SET
-    base_url = excluded.base_url,
-    public_key = excluded.public_key,
-    last_seen = excluded.last_seen;
+    base_url = CASE WHEN sqlc.arg(own_sighting)::boolean THEN excluded.base_url ELSE swarm_peers.base_url END,
+    last_seen = excluded.last_seen
+WHERE swarm_peers.public_key = excluded.public_key;
+
+-- A refused key change is marked on the peer it was aimed at,
+-- for the operator to see. Nothing else about the peer changes.
+-- name: FlagSwarmPeerKeyConflict :exec
+UPDATE swarm_peers SET key_conflict_at = $2 WHERE instance_id = $1;
 
 -- name: GetSwarmPeer :one
 SELECT instance_id, base_url, public_key, source, approved, excluded,
-    exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip
+    exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip,
+    key_conflict_at
 FROM swarm_peers
 WHERE instance_id = $1;
 
 -- name: ListSwarmPeers :many
 SELECT instance_id, base_url, public_key, source, approved, excluded,
-    exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip
+    exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip,
+    key_conflict_at
 FROM swarm_peers
 ORDER BY last_seen DESC
 LIMIT 100;
@@ -64,9 +77,10 @@ UPDATE swarm_peers SET excluded = $2, exclude_note = $3 WHERE instance_id = $1;
 UPDATE swarm_peers SET last_gossip = $2 WHERE instance_id = $1;
 
 -- Removing a peer forgets everything: address, pinned key,
--- approval, exclusion, and the ledger. The operator removes a
--- peer to rotate its key (the next gossip re-pins from scratch)
--- or to drop a dead instance. Staged entries under its name
+-- approval, exclusion, the ledger, and any key-conflict mark.
+-- It is the only way a new key is accepted for an instance ID:
+-- the operator removes the peer and the next sighting pins from
+-- scratch. It is also how a dead instance leaves the list. Staged entries under its name
 -- stay staged: they still face their own spot checks.
 -- name: DeleteSwarmPeer :exec
 DELETE FROM swarm_peers WHERE instance_id = $1;

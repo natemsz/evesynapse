@@ -10,6 +10,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -36,6 +37,7 @@ type swarmPeerRow struct {
 	Excluded    bool
 	Role        string // Seed, Cache, Seed+Cache: what the peer functions as
 	State       string // Approved, Waiting, Excluded (+ auto note)
+	KeyConflict string // "another key was refused on 2026-10-13", empty when none was
 	Trust       string // trust percent
 	Good        string
 	Bad         string
@@ -149,6 +151,9 @@ func (app *Application) loadSwarmPeers(ctx context.Context) []swarmPeerRow {
 			row.State = "Approved"
 		default:
 			row.State = "Waiting"
+		}
+		if p.KeyConflictAt.Valid {
+			row.KeyConflict = "another key was refused on " + p.KeyConflictAt.Time.UTC().Format("2006-01-02")
 		}
 		out = append(out, row)
 	}
@@ -353,12 +358,15 @@ func (app *Application) handleSwarmAddPeer(w http.ResponseWriter, r *http.Reques
 		back("Nothing was added: that is not an https address (http only on loopback).")
 		return
 	}
-	if app.swarmContactPeer(r.Context(), strings.TrimSuffix(raw, "/"), "", "", "manual", time.Now().UTC()) {
+	switch err := app.swarmContactPeer(r.Context(), strings.TrimSuffix(raw, "/"), "", "", "manual", time.Now().UTC()); {
+	case err == nil:
 		logging.Warnf("admin: account %d added swarm address %s", app.userID(r.Context()), raw)
 		back("That address answered: its instances are listed below" + approvalNote(app) + ".")
-		return
+	case errors.Is(err, errSwarmKeyChanged):
+		back("Nothing was added: that address answered as an instance already listed under a different key. Remove that instance first if its key really changed.")
+	default:
+		back("Nothing was added: that address did not answer as a swarm member.")
 	}
-	back("Nothing was added: that address did not answer as a swarm member.")
 }
 
 // approvalNote reminds where newly learned instances wait in

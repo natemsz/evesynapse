@@ -9,7 +9,7 @@
 {{if .For}}<p class="browse-for"><strong>Choosing fits for <a href="/doctrines/{{.For.ID}}">{{.For.Name}}</a>.</strong> Each one added is copied into the doctrine.</p>{{end}}
 
 <form method="get" action="/fittings/public/" class="lookup-form searchpanel">
-  {{if ne .Filters.Sort "rank"}}<input type="hidden" name="sort" value="{{.Filters.Sort}}">{{end}}
+  {{if ne .Filters.Sort .DefaultSort}}<input type="hidden" name="sort" value="{{.Filters.Sort}}">{{end}}
   <span class="searchwrap">
     <input type="search" name="q" id="fit-browse-q" value="{{.Filters.Q}}" placeholder="Search fits, ships and authors…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-browse-suggest" aria-autocomplete="list" aria-label="Search fits" data-suggest="{{.SuggestURL}}">
     <ul class="suggest" id="fit-browse-suggest" role="listbox" hidden></ul>
@@ -28,6 +28,10 @@
     <option value="4.5"{{if eq $.PublicFits.Filters.MinStars 4.5}} selected{{end}}>4.5+</option>
     <option value="4"{{if eq $.PublicFits.Filters.MinStars 4.0}} selected{{end}}>4+</option>
     <option value="3"{{if eq $.PublicFits.Filters.MinStars 3.0}} selected{{end}}>3+</option>
+  </select></label>
+  <label>Updated <select name="updated">
+    <option value="">Any time</option>
+    {{range .Ages}}<option value="{{.}}"{{if eq $.PublicFits.Filters.SinceDays .}} selected{{end}}>Last {{.}} days</option>{{end}}
   </select></label>
   <label>With module <input type="search" name="include" value="{{.Filters.IncludeName}}" placeholder="Exact module name" size="18"></label>
   <label>Without module <input type="search" name="exclude" value="{{.Filters.ExcludeName}}" placeholder="Exact module name" size="18"></label>

@@ -34,15 +34,22 @@ const (
 	// publicFitsPerPage bounds every browser page; the count
 	// query beside the list query feeds the page links.
 	publicFitsPerPage = 24
+	// publicFitDefaultSort: every public fit, newest first.
+	publicFitDefaultSort = "new"
 )
 
+// publicFitAges are the Updated filter's choices in days, in
+// display order; anything else means any time.
+var publicFitAges = []int{14, 30, 90}
+
 // publicFitSorts are the browser's sort orders in display order;
-// the first is the default. Keys are allowlisted: only these ever
-// reach the ORDER BY.
+// the first is the default (publicFitDefaultSort). Keys are
+// allowlisted: only these ever reach the ORDER BY. No sort hides
+// a fit: age is the Updated filter's business.
 var publicFitSorts = []struct{ Key, Label string }{
+	{publicFitDefaultSort, "Newest"},
 	{"rank", "Rank"},
 	{"views", "Most viewed"},
-	{"new", "Newest"},
 	{"old", "Oldest"},
 	{"name", "Name A-Z"},
 	{"namedesc", "Name Z-A"},
@@ -67,13 +74,16 @@ type publicFitFilters struct {
 	MaxPrice    float64
 	Alpha       bool
 	Tag         string
-	Sort        string
-	Page        int
-	Note        string
+	// SinceDays keeps fits updated within that many days; 0 is
+	// any time, the default.
+	SinceDays int
+	Sort      string
+	Page      int
+	Note      string
 }
 
 // parsePublicFitFilters reads the browser address; unknown sorts
-// fall back to rank, bad numbers to blank.
+// fall back to the default, bad numbers to blank.
 func (app *Application) parsePublicFitFilters(ctx context.Context, query url.Values) publicFitFilters {
 	f := publicFitFilters{
 		Q:       strings.TrimSpace(query.Get("q")),
@@ -85,7 +95,7 @@ func (app *Application) parsePublicFitFilters(ctx context.Context, query url.Val
 		Sort:    strings.TrimSpace(query.Get("sort")),
 	}
 	if f.Sort == "" {
-		f.Sort = "rank"
+		f.Sort = publicFitDefaultSort
 	}
 	known := false
 	for _, s := range publicFitSorts {
@@ -94,7 +104,14 @@ func (app *Application) parsePublicFitFilters(ctx context.Context, query url.Val
 		}
 	}
 	if !known {
-		f.Sort = "rank"
+		f.Sort = publicFitDefaultSort
+	}
+	if days, err := strconv.Atoi(strings.TrimSpace(query.Get("updated"))); err == nil {
+		for _, age := range publicFitAges {
+			if days == age {
+				f.SinceDays = days
+			}
+		}
 	}
 	if v, err := strconv.ParseFloat(strings.TrimSpace(query.Get("stars")), 64); err == nil && v > 0 {
 		if v > 5 {
@@ -161,13 +178,15 @@ func (f publicFitFilters) listParams(limit int64) db.ListPublicFitsParams {
 		Sort: f.Sort, Q: f.Q, Role: f.Role, Hull: f.Hull, Hullq: f.HullQ,
 		Minstars: f.MinStars, Include: f.Include, Exclude: f.Exclude,
 		Faction: f.Faction, Maxprice: f.MaxPrice, Alpha: f.Alpha, Tag: f.Tag,
-		Rlimit: limit, Roffset: int64(f.Page-1) * limit,
+		Sincedays: int32(f.SinceDays),
+		Rlimit:    limit, Roffset: int64(f.Page-1) * limit,
 	}
 }
 
 func (f publicFitFilters) countParams() db.CountPublicFitsParams {
 	return db.CountPublicFitsParams{
-		Sort: f.Sort, Q: f.Q, Role: f.Role, Hull: f.Hull, Hullq: f.HullQ,
+		Sincedays: int32(f.SinceDays),
+		Q:         f.Q, Role: f.Role, Hull: f.Hull, Hullq: f.HullQ,
 		Minstars: f.MinStars, Include: f.Include, Exclude: f.Exclude,
 		Faction: f.Faction, Maxprice: f.MaxPrice, Alpha: f.Alpha, Tag: f.Tag,
 	}
@@ -245,22 +264,24 @@ type publicFitChip struct {
 // publicFitsView is the browser page: the filter bar's current
 // state, facet chips, sort links, one bounded page of cards.
 type publicFitsView struct {
-	Filters    publicFitFilters
-	Cards      []publicFitCard
-	Total      int64
-	Page       int
-	Pages      int
-	HasPrev    bool
-	HasNext    bool
-	PrevURL    string
-	NextURL    string
-	FirstURL   string
-	Roles      []string
-	Sorts      []publicFitChip
-	Hulls      []publicFitChip
-	Tags       []publicFitChip
-	SuggestURL string
-	Empty      string
+	Filters     publicFitFilters
+	Cards       []publicFitCard
+	Total       int64
+	Page        int
+	Pages       int
+	HasPrev     bool
+	HasNext     bool
+	PrevURL     string
+	NextURL     string
+	FirstURL    string
+	Roles       []string
+	Sorts       []publicFitChip
+	Hulls       []publicFitChip
+	Tags        []publicFitChip
+	Ages        []int // the Updated filter's choices, in days
+	DefaultSort string
+	SuggestURL  string
+	Empty       string
 	// For is the doctrine a keeper is choosing fits for, when
 	// the page was opened from one (?for=, keepers only).
 	For  *opChoice
@@ -289,6 +310,10 @@ func (f publicFitFilters) publicFitURL(changes map[string]string, keepPage bool)
 	if f.Alpha {
 		alpha = "1"
 	}
+	updated := ""
+	if f.SinceDays > 0 {
+		updated = strconv.Itoa(f.SinceDays)
+	}
 	page := ""
 	if keepPage && f.Page > 1 {
 		page = strconv.Itoa(f.Page)
@@ -302,7 +327,8 @@ func (f publicFitFilters) publicFitURL(changes map[string]string, keepPage bool)
 		{"exclude", f.ExcludeName, ""},
 		{"faction", f.Faction, "any"},
 		{"tag", f.Tag, ""},
-		{"sort", f.Sort, "rank"},
+		{"sort", f.Sort, publicFitDefaultSort},
+		{"updated", updated, ""},
 		{"stars", num(f.MinStars), ""},
 		{"maxprice", num(f.MaxPrice), ""},
 		{"alpha", alpha, ""},
@@ -365,7 +391,8 @@ func (app *Application) handlePublicFits(w http.ResponseWriter, r *http.Request)
 	chosen := app.doctrineChosenFor(ctx, userID, r.URL.Query().Get("for"))
 	view := &publicFitsView{
 		Filters: filters, Cards: cards, Total: total, Page: page, Pages: pages,
-		Roles:      opFleetRoles,
+		Roles: opFleetRoles,
+		Ages:  publicFitAges, DefaultSort: publicFitDefaultSort,
 		SuggestURL: publicFitsPath + "suggest",
 		Empty:      `Nobody has made a fit public yet. To share one of yours, tick "Make public" on it in the fitting tool.`,
 		For:        chosen,

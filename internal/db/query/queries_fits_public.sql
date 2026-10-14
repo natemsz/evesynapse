@@ -1,11 +1,13 @@
 -- ---------------------------------------------------------------------
 -- Public discovery: the anonymous fit browser, ratings and sitemap
 -- reads. Every browser filter is a SQL predicate and every page is
--- LIMIT/OFFSET bounded; Go never filters full tables. The default
--- rank sort is Bayesian (fit average shrunk toward the global mean
--- with weight 5, via public_fit_rank in migration 033) over fits
--- updated in the rolling last 14 days, so one 5-star vote cannot
--- top the chart. Other sorts span all time. Meta groups resolve
+-- LIMIT/OFFSET bounded; Go never filters full tables. Every sort
+-- spans every public fit; the default is newest first. Age is a
+-- filter the visitor picks (sincedays, 0 for any time), never a
+-- side effect of the sort. The rank sort is Bayesian (fit average
+-- shrunk toward the global mean with weight 5, via public_fit_rank
+-- in migration 033), so one 5-star vote cannot top the chart. Meta
+-- groups resolve
 -- through dogma attribute 1692 (4 faction, 5 officer, 6 deadspace,
 -- 2 tech II), the same source the fitting engine reads. The faction
 -- filter is Any or No faction modules; a max price excludes only
@@ -20,7 +22,7 @@ LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
 LEFT JOIN sde_types st ON st.type_id = lf.ship_type_id
 LEFT JOIN sde_groups sg ON sg.group_id = st.group_id
 WHERE lf.is_public AND NOT lf.is_draft
-  AND (sqlc.arg(sort)::text != 'rank' OR lf.updated_at >= now() - interval '14 days')
+  AND (sqlc.arg(sincedays)::int <= 0 OR lf.updated_at >= now() - make_interval(days => sqlc.arg(sincedays)::int))
   AND (sqlc.arg(q)::text = '' OR lf.name ILIKE '%' || sqlc.arg(q)::text || '%'
     OR tn.name ILIKE '%' || sqlc.arg(q)::text || '%'
     OR EXISTS (SELECT 1 FROM characters c WHERE c.user_id = lf.user_id AND c.name ILIKE '%' || sqlc.arg(q)::text || '%'))
@@ -66,7 +68,7 @@ LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
 LEFT JOIN sde_types st ON st.type_id = lf.ship_type_id
 LEFT JOIN sde_groups sg ON sg.group_id = st.group_id
 WHERE lf.is_public AND NOT lf.is_draft
-  AND (sqlc.arg(sort)::text != 'rank' OR lf.updated_at >= now() - interval '14 days')
+  AND (sqlc.arg(sincedays)::int <= 0 OR lf.updated_at >= now() - make_interval(days => sqlc.arg(sincedays)::int))
   AND (sqlc.arg(q)::text = '' OR lf.name ILIKE '%' || sqlc.arg(q)::text || '%'
     OR tn.name ILIKE '%' || sqlc.arg(q)::text || '%'
     OR EXISTS (SELECT 1 FROM characters c WHERE c.user_id = lf.user_id AND c.name ILIKE '%' || sqlc.arg(q)::text || '%'))

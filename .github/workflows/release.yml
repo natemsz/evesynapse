@@ -42,7 +42,9 @@ jobs:
         run: go vet ./...
 
       - name: Run the test suite
-        run: go test ./...
+        # internal/app runs a few minutes; the default 10m per-package
+        # limit leaves too little headroom on a slow runner.
+        run: go test -timeout 20m ./...
 
       # File list is explicit, not a glob: node --test only
       # expands globs on Node 21+, and a quoted glob that matches
@@ -75,7 +77,10 @@ jobs:
         run: make assets
 
       - name: Run the test suite with the race detector
-        run: go test -race ./...
+        # Under the race detector internal/app takes 5-10 minutes,
+        # depending on the runner: past go test's default 10m limit
+        # on a slow one, which failed the run with a timeout panic.
+        run: go test -race -timeout 30m ./...
 
   # Static analysis and the known-vulnerability check. Advisory: a
   # finding shows up on the run without blocking a release, since

@@ -953,6 +953,16 @@ func (app *Application) swarmSpotCheck(ctx context.Context, allowance *fetchBudg
 			applied++
 			continue
 		}
+		if !swarmCheckable(row.Kind, characters) {
+			// Nobody here can check this kind right now (a
+			// structure name with no character holding the
+			// scope). Trying would decide nothing, so it is not
+			// tried and takes none of the cycle's check slots:
+			// it counts as a pass that could not decide, and
+			// the slots go to entries that can be checked.
+			app.swarmDeferStaged(ctx, row.Kind, row.Key, row.Signer)
+			continue
+		}
 		if checks >= maxSwarmSpotPerCycle || allowance.exhausted() {
 			// Out of checks or out of calls: the rest wait,
 			// and waiting is not a deferral.
@@ -981,15 +991,43 @@ func (app *Application) swarmSpotCheck(ctx context.Context, allowance *fetchBudg
 			// still cannot be decided is dropped, with no
 			// mark on its signer, rather than taking a check
 			// slot every cycle until the age cap.
-			n, err := app.queries.BumpStagingDeferral(ctx, db.BumpStagingDeferralParams{Kind: row.Kind, Key: row.Key})
-			if err != nil {
-				logging.Errorf("swarm: defer %s %s: %v", row.Kind, row.Key, err)
-			} else if n >= maxSwarmDeferrals {
-				app.dropSwarmEntry(ctx, row.Kind, row.Key, row.Signer, swarmDropUndecidable)
-			}
+			app.swarmDeferStaged(ctx, row.Kind, row.Key, row.Signer)
 		}
 	}
 	return applied, false
+}
+
+// swarmDeferStaged notes one pass that could not decide a staged
+// entry, and drops the entry (neutrally) once it has had
+// maxSwarmDeferrals of them.
+func (app *Application) swarmDeferStaged(ctx context.Context, kind, key, signer string) {
+	n, err := app.queries.BumpStagingDeferral(ctx, db.BumpStagingDeferralParams{Kind: kind, Key: key})
+	if err != nil {
+		logging.Errorf("swarm: defer %s %s: %v", kind, key, err)
+		return
+	}
+	if n >= maxSwarmDeferrals {
+		app.dropSwarmEntry(ctx, kind, key, signer, swarmDropUndecidable)
+	}
+}
+
+// swarmStructureChecker picks a character that can re-fetch a
+// structure name: one that syncs and holds the structure scope.
+// Nil when there is none.
+func swarmStructureChecker(characters []db.Character) *db.Character {
+	for i, ch := range characters {
+		if characterSyncs(ch) && characterHasScope(ch, structureScope) {
+			return &characters[i]
+		}
+	}
+	return nil
+}
+
+// swarmCheckable reports whether this instance could check an
+// entry of this kind against ESI at all right now. Everything
+// public always can; a structure name needs a scoped character.
+func swarmCheckable(kind string, characters []db.Character) bool {
+	return kind != swarmKindStructure || swarmStructureChecker(characters) != nil
 }
 
 // swarmCheckVerdict is what re-fetching against ESI says about
@@ -1236,13 +1274,7 @@ func (app *Application) swarmVerifyStructure(ctx context.Context, allowance *fet
 	}
 	// Structures need a scoped character to re-fetch; with none
 	// linked the row waits rather than applying blind.
-	var scoped *db.Character
-	for i, ch := range characters {
-		if characterSyncs(ch) && characterHasScope(ch, structureScope) {
-			scoped = &characters[i]
-			break
-		}
-	}
+	scoped := swarmStructureChecker(characters)
 	if scoped == nil {
 		return swarmCheckDefer, false
 	}

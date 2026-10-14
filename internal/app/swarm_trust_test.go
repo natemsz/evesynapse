@@ -1631,3 +1631,51 @@ func TestSwarmUpgradeDropsTheLegacySeedRow(t *testing.T) {
 		t.Fatalf("a real member was removed: %v", err)
 	}
 }
+
+// TestSwarmUncheckableEntriesTakeNoCheckSlot: structure names
+// cannot be checked here without a scoped character. A queue
+// headed by a full cycle's worth of them still spends every
+// check slot on entries that can be checked, and makes no ESI
+// call for the ones that cannot.
+func TestSwarmUncheckableEntriesTakeNoCheckSlot(t *testing.T) {
+	p := newSwarmPair(t, swarmOpen)
+	ctx := context.Background()
+	p.pinA(t)
+	now := time.Now().UTC()
+	p.stubB.types = map[int64]string{}
+	// Older, so they head the queue.
+	for i := 0; i < maxSwarmSpotPerCycle; i++ {
+		id := fmt.Sprintf("%d", 1035000000001+i)
+		entry := signedBy(t, p.a.swarmID, swarmKindStructure, id, `{"structure_id":`+id+`,"name":"Structure `+id+`"}`, now.Add(-2*time.Hour))
+		if err := p.b.stageSwarmEntry(ctx, entry, "instance-a", now.Add(-time.Hour)); err != nil {
+			t.Fatalf("stage structure: %v", err)
+		}
+	}
+	for i := 0; i < maxSwarmSpotPerCycle; i++ {
+		typeID := int64(987000 + i)
+		id := fmt.Sprintf("%d", typeID)
+		p.stubB.types[typeID] = `{"name":"Type ` + id + `","group_id":18}`
+		entry := signedBy(t, p.a.swarmID, swarmKindTypeName, id, `{"type_id":`+id+`,"name":"Type `+id+`"}`, now)
+		if err := p.b.stageSwarmEntry(ctx, entry, "instance-a", now); err != nil {
+			t.Fatalf("stage type name: %v", err)
+		}
+	}
+	if got := p.spotRuns(t); got != maxSwarmSpotPerCycle {
+		t.Fatalf("one pass applied %d entries, want all %d checkable ones", got, maxSwarmSpotPerCycle)
+	}
+	if p.stubB.calls != maxSwarmSpotPerCycle {
+		t.Fatalf("the pass made %d ESI calls, want %d (none for the uncheckable entries)", p.stubB.calls, maxSwarmSpotPerCycle)
+	}
+	rows, err := p.b.queries.ListUncheckedStaging(ctx, 50)
+	if err != nil || len(rows) != maxSwarmSpotPerCycle {
+		t.Fatalf("staging holds %d rows (err %v), want the %d structure names", len(rows), err, maxSwarmSpotPerCycle)
+	}
+	for _, row := range rows {
+		if row.Kind != swarmKindStructure || row.Deferrals != 1 {
+			t.Fatalf("left in staging: %s %s with %d deferrals, want a structure name deferred once", row.Kind, row.Key, row.Deferrals)
+		}
+	}
+	if _, bad := ledgerOf(t, p.b, "instance-a"); bad != 0 {
+		t.Fatalf("uncheckable entries cost the signer %d marks", bad)
+	}
+}

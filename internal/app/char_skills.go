@@ -170,15 +170,13 @@ func (app *Application) fillBrowse(ctx context.Context, view *skillsView, ch db.
 	}
 }
 
-// fillQueue builds the queue block: one row per entry in queue
-// order, the currently-training line (the position-0 entry, same
-// semantics as the home page), and the completion time of the
-// final entry.
-func (app *Application) fillQueue(ctx context.Context, view *skillsView, queue esi.Skillqueue) {
-	sorted := append(esi.Skillqueue(nil), queue...)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].QueuePosition < sorted[j].QueuePosition
-	})
+// fillQueue builds the queue block from the live queue (finished
+// entries are trained, not queued; skillqueue_live.go): one row per
+// entry in queue order, the currently-training line (the first live
+// entry, same as the home page; none when nothing is live), and the
+// completion time of the final entry.
+func (app *Application) fillQueue(ctx context.Context, view *skillsView, queue esi.Skillqueue, now time.Time) {
+	sorted := liveSkillqueue(queue, now)
 
 	ids := make([]int64, 0, len(sorted))
 	for _, entry := range sorted {
@@ -201,7 +199,7 @@ func (app *Application) fillQueue(ctx context.Context, view *skillsView, queue e
 			LevelNum: entry.FinishedLevel,
 			Finishes: formatFinish(entry.FinishDate),
 		})
-		if entry.QueuePosition == 0 && view.Training == "" {
+		if i == 0 {
 			line := fmt.Sprintf("%s %s", nameFor(entry.SkillID), esi.RomanLevel(entry.FinishedLevel))
 			if f := formatFinish(entry.FinishDate); f != "" {
 				line += " — finishes " + f

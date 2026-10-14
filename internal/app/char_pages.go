@@ -512,16 +512,17 @@ func (app *Application) fillCharacterSkills(ctx context.Context, ch db.Character
 
 // fillCharacterQueue: the skill queue and what is training now.
 func (app *Application) fillCharacterQueue(ctx context.Context, ch db.Character, view *characterView, trainedByID map[int64]int) {
-	// Queue: the full table plus the currently-training line
-	// (position 0). An empty queue is a valid state: QueueKnown
-	// true, Training "". Rows are enriched with trained levels
+	// Queue: the live queue's table plus the currently-training
+	// line (its first entry; skillqueue_live.go). An empty queue is
+	// a valid state: QueueKnown true, Training "". Rows are enriched with trained levels
 	// and training/queued state for the 5-box indicators, and the
 	// matching group rows get the same markers.
 	var queue esi.Skillqueue
 	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapSkillqueue, &queue) {
 		view.QueueKnown = true
+		now := time.Now()
 		qv := &skillsView{}
-		app.fillQueue(ctx, qv, queue)
+		app.fillQueue(ctx, qv, queue, now)
 		view.Queue = qv.Queue
 		view.Training = qv.Training
 		view.CompletesAt = qv.CompletesAt
@@ -551,19 +552,13 @@ func (app *Application) fillCharacterQueue(ctx context.Context, ch db.Character,
 				}
 			}
 		}
-		for _, entry := range queue {
-			if entry.QueuePosition != 0 {
-				continue
-			}
-			if t, err := time.Parse(time.RFC3339, entry.FinishDate); err == nil {
+		// The head is live, so it finishes after now (or has no
+		// date at all, a paused queue).
+		if head := queueHead(queue, now); head != nil {
+			if t, err := time.Parse(time.RFC3339, head.FinishDate); err == nil {
 				view.TrainingFinish = t.UTC().Format(time.RFC3339)
-				if left := time.Until(t); left > 0 {
-					view.TrainingLeft = "in " + humanDuration(left)
-				} else {
-					view.TrainingLeft = "done"
-				}
+				view.TrainingLeft = "in " + humanDuration(t.Sub(now))
 			}
-			break
 		}
 	}
 }

@@ -63,11 +63,11 @@ func (app *Application) buildTraining(ctx context.Context, bundles []*charSnaps)
 			w.Idle = append(w.Idle, b.ch.Name)
 			continue
 		}
-		for _, entry := range b.queue {
-			// A stored queue still lists skills that have finished
-			// since it was fetched: they are behind us, not ahead.
+		for _, entry := range liveSkillqueue(b.queue, now) {
+			// The horizon is dated: an entry without a finish date
+			// (a paused queue) has no place on it.
 			finish, ok := parseRFC3339(entry.FinishDate)
-			if !ok || !finish.After(now) {
+			if !ok {
 				continue
 			}
 			name := app.esi.CachedTypeName(ctx, entry.SkillID)

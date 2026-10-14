@@ -316,7 +316,9 @@ func (app *Application) foreseeJobs(ctx context.Context, userID int64, b *charSn
 
 // foreseeQueue: the last skill in the queue has finished. The stored
 // queue says when without being fetched again; what is wanted fresh is
-// what the character can now train, which is its skills.
+// what the character can now train, which is its skills. It reads the
+// raw queue on purpose: the finished entries are the event
+// (skillqueue_live.go).
 func (app *Application) foreseeQueue(ctx context.Context, userID int64, b *charSnaps, now time.Time) {
 	if !b.queueKnown || len(b.queue) == 0 {
 		return

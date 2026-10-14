@@ -1609,6 +1609,9 @@ func TestSwarmDirectoryLeavesTheDataRotation(t *testing.T) {
 	if hits["peer-directory"] != 2 {
 		t.Fatalf("after a re-arm the directory was asked %d times in all, want 2", hits["peer-directory"])
 	}
+	if hits[source.id] != 6 {
+		t.Fatalf("the serving peer was asked %d times in six cycles, want 6 (re-arming must not disturb it)", hits[source.id])
+	}
 }
 
 // TestSwarmUpgradeDropsTheLegacySeedRow: the schema step that

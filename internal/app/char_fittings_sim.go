@@ -962,10 +962,24 @@ func (app *Application) fitPilotImplants(ctx context.Context, pilotID, cloneID i
 		}
 		return nil, 0, nil, "This pilot's implant data is still on its way in — the fit below is calculated with no implants applied."
 	}
+	// Names the pilot gave their clones on the character sheet
+	// (ESI has no naming API), so the dropdown reads the same.
+	customNames := map[int64]string{}
+	if userID := app.userID(ctx); userID != 0 {
+		if rows, err := app.queries.ListCloneNames(ctx, db.ListCloneNamesParams{UserID: userID, CharacterID: pilotID}); err != nil {
+			logging.Errorf("fittings sim: clone names for character %d: %v", pilotID, err)
+		} else {
+			for _, r := range rows {
+				customNames[r.CloneID] = strings.TrimSpace(r.CustomName)
+			}
+		}
+	}
 	clones = []fitCloneOption{{ID: 0, Name: "Active clone", Implants: len(active)}}
 	for _, c := range jc.JumpClones {
 		name := strings.TrimSpace(c.Name)
-		if name == "" || name == "Jump clone" {
+		if cn := customNames[c.JumpCloneID]; cn != "" {
+			name = cn
+		} else if name == "" || name == "Jump clone" {
 			// EVE doesn't let players name jump clones, so ESI's
 			// name field is usually empty or generic. Fall back to
 			// the clone ID's last four digits so the dropdown

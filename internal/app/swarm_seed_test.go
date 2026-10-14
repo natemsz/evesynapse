@@ -75,7 +75,7 @@ func TestSeedAnnounceSilent(t *testing.T) {
 // {ok} answer required.
 func TestSeedAnnounceSender(t *testing.T) {
 	const secret = "0123456789abcdef0123456789abcdef"
-	var gotAuth, gotType string
+	var gotAuth, gotType, gotBody string
 	var gotEntry swarmSignedEntry
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
@@ -84,6 +84,7 @@ func TestSeedAnnounceSender(t *testing.T) {
 			t.Errorf("path %q", r.URL.Path)
 		}
 		raw, _ := io.ReadAll(io.LimitReader(r.Body, maxSwarmBodyBytes))
+		gotBody = string(raw)
 		var body struct {
 			Entry swarmSignedEntry `json:"entry"`
 		}
@@ -117,8 +118,9 @@ func TestSeedAnnounceSender(t *testing.T) {
 	if gotEntry.Kind != seedAnnounceKind || gotEntry.Signer != "id-1" {
 		t.Fatalf("entry mangled: %+v", gotEntry)
 	}
-	if strings.Contains(string(mustJSON(t, entry)), secret) {
-		t.Fatal("secret leaked into the body")
+	// The bytes that went over the wire, not the entry as built.
+	if gotBody == "" || strings.Contains(gotBody, secret) {
+		t.Fatalf("secret leaked into the body, or no body arrived: %q", gotBody)
 	}
 }
 
@@ -350,13 +352,17 @@ func TestSwarmSeedRegisterRejects(t *testing.T) {
 	}
 }
 
-// TestSwarmSeedRegisterNeverForgives: re-registering cannot
-// approve or re-admit an excluded peer; the upsert only moves
-// address and last-seen.
+// TestSwarmSeedRegisterNeverForgives: in allowlist mode,
+// re-registering cannot approve or re-admit an excluded peer;
+// the owner's signed heartbeat only moves its address.
 func TestSwarmSeedRegisterNeverForgives(t *testing.T) {
 	ctx := context.Background()
 	app := swarmTestApp(t)
+	app.cfg.swarm.mode = swarmAllowlist
 	kp := swarmTestPeer(t, app, "peer-7")
+	if err := app.queries.SetSwarmPeerApproved(ctx, db.SetSwarmPeerApprovedParams{InstanceID: "peer-7", Approved: false}); err != nil {
+		t.Fatalf("unapprove peer: %v", err)
+	}
 	if err := app.queries.SetSwarmPeerExcluded(ctx, db.SetSwarmPeerExcludedParams{InstanceID: "peer-7", Excluded: true, ExcludeNote: "manual test"}); err != nil {
 		t.Fatalf("exclude peer: %v", err)
 	}
@@ -370,5 +376,11 @@ func TestSwarmSeedRegisterNeverForgives(t *testing.T) {
 	}
 	if !peer.Excluded {
 		t.Fatal("re-registering cleared an exclusion")
+	}
+	if peer.Approved {
+		t.Fatal("re-registering approved a peer nobody approved")
+	}
+	if peer.BaseUrl != "https://peer-7.example" {
+		t.Fatalf("the owner's signed heartbeat did not move its address: %q", peer.BaseUrl)
 	}
 }

@@ -19,7 +19,7 @@
       {{range .FitEditor.Pilots}}<option value="{{.ID}}"{{if eq .ID $.FitEditor.PilotID}} selected{{end}}>{{.Name}}</option>{{end}}
     </select>
   </label>
-  <label>Clone
+  <label class="fit-clonepick">Clone
     <select id="fit-clone"{{if not .FitEditor.Clones}} disabled{{end}} title="Whose implants the numbers are calculated with">
       {{if .FitEditor.Clones}}{{range .FitEditor.Clones}}<option value="{{.ID}}"{{if eq .ID $.FitEditor.CloneID}} selected{{end}}>{{.Name}}{{if .Implants}} ({{.Implants}}){{end}}</option>{{end}}{{else}}<option value="0">Active clone</option>{{end}}
     </select>
@@ -28,7 +28,10 @@
     <input type="text" id="fit-name" value="{{.FitEditor.Sim.FitName}}" placeholder="Name this fit" autocomplete="off">
   </label>
   <input type="hidden" id="fit-local-id" value="{{.FitEditor.LocalID}}">
+  <span class="fit-saverow">
   {{if not .FitEditor.Anonymous}}<button type="button" class="btn" id="fit-save" data-fit-local-id="{{.FitEditor.LocalID}}">Save fit</button>{{end}}
+  <label class="fit-check fit-publicchk"><input type="checkbox" id="fit-public"{{if .FitEditor.IsPublic}} checked{{end}}> Make public</label>
+  </span>
   {{if .FitEditor.EVECharID}}
   <button type="button" class="btn" id="fit-save-eve" data-fit-eve-char="{{.FitEditor.EVECharID}}" title="Save this fit to {{.FitEditor.EVECharName}}'s in-game fittings">Save to EVE</button>
   {{end}}
@@ -80,7 +83,6 @@
   <label class="fit-meta-tags">Tags
     <input type="text" id="fit-tags" value="{{.FitEditor.Tags}}" placeholder="pvp, kiting, …" autocomplete="off">
   </label>
-  <label class="fit-check"><input type="checkbox" id="fit-public"{{if .FitEditor.IsPublic}} checked{{end}}> Make public</label>
 </div>
 
 <div class="modal-backdrop" id="fit-picker" hidden>

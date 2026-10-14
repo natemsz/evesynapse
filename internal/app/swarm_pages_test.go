@@ -80,10 +80,17 @@ func TestSwarmSeedPeerShowsSeed(t *testing.T) {
 	if err := app.queries.TouchSwarmPeerServed(ctx, db.TouchSwarmPeerServedParams{InstanceID: "seed-1", LastServed: timeSet(now)}); err != nil {
 		t.Fatalf("mark served: %v", err)
 	}
+	found := false
 	for _, row := range app.loadSwarmPeers(ctx) {
-		if row.ID == "seed-1" && row.Role != "Seed+Cache" {
-			t.Errorf("serving seed role %q, want Seed+Cache", row.Role)
+		if row.ID == "seed-1" {
+			found = true
+			if row.Role != "Seed+Cache" {
+				t.Errorf("serving seed role %q, want Seed+Cache", row.Role)
+			}
 		}
+	}
+	if !found {
+		t.Errorf("the serving seed is missing from the peer rows")
 	}
 	if byID["peer-data-1"].Role != "Cache" {
 		t.Errorf("instance role %q, want Cache", byID["peer-data-1"].Role)
@@ -95,7 +102,7 @@ func TestSwarmSeedPeerShowsSeed(t *testing.T) {
 // heading and every role reach the page.
 func TestSwarmAdminRoleColumn(t *testing.T) {
 	app, cookie := swarmPageApp(t)
-	app.cfg.swarm = swarmConfig{mode: swarmOpen, secret: swarmTestSecret, seeds: []string{"https://seed.example"}, gossipHours: defaultSwarmGossipHours}
+	app.cfg.swarm = swarmConfig{mode: swarmOpen, secret: swarmTestSecret, seeds: []string{"https://seed.example", "https://seed-2.example"}, gossipHours: defaultSwarmGossipHours}
 	ctx := context.Background()
 	now := time.Now().UTC()
 	for _, peer := range []struct {
@@ -103,6 +110,7 @@ func TestSwarmAdminRoleColumn(t *testing.T) {
 	}{
 		{"seed", "https://directory.example", "gossip"},
 		{"seed-1", "https://seed.example", "seed"},
+		{"seed-2", "https://seed-2.example", "seed"}, // never serves: a directory only
 		{"peer-data-1", "https://node.example", "gossip"},
 	} {
 		if _, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
@@ -121,7 +129,9 @@ func TestSwarmAdminRoleColumn(t *testing.T) {
 	}
 	// html/template escapes + as &#43; in the cells; the row
 	// test above pins the exact role values.
-	mustContain(t, "/admin/", body, "Swarm Cache", "<th>Role</th>", "Seed&#43;Cache", ">Cache<")
+	mustContain(t, "/admin/", body, "Swarm Cache", "<th>Role</th>", "Seed&#43;Cache", ">Cache<",
+		// State then Role: only the seed that never served is a Seed in both.
+		"<td>Seed</td><td>Seed</td>")
 }
 
 func TestSwarmSyncCardOff(t *testing.T) {
@@ -197,6 +207,11 @@ func TestSwarmAdminActions(t *testing.T) {
 	bad := url.Values{"instance": {"peer-nope"}}
 	if code, _ := postForm(t, app, cookie, "/admin/swarm/exclude", bad); code != http.StatusSeeOther {
 		t.Fatalf("exclude unknown: status %d, want 303", code)
+	}
+	_, body := getPage(t, app, cookie, "/admin/")
+	mustContain(t, "/admin/", body, "Nothing was excluded: that instance is not known.")
+	if _, err := app.queries.GetSwarmPeer(ctx, "peer-nope"); err == nil {
+		t.Fatalf("excluding an unknown instance created a row for it")
 	}
 }
 

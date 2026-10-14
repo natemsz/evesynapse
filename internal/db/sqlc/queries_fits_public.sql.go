@@ -86,7 +86,9 @@ type CountPublicFitsParams struct {
 // filter the visitor picks (sincedays, 0 for any time), never a
 // side effect of the sort. The rank sort is Bayesian (fit average
 // shrunk toward the global mean with weight 5, via public_fit_rank
-// in migration 033), so one 5-star vote cannot top the chart. Meta
+// in migrations 033 and 041), so one 5-star vote cannot top the
+// chart. Callers pass the global mean as (SELECT public_fit_mean()),
+// which Postgres computes once per query. Meta
 // groups resolve
 // through dogma attribute 1692 (4 faction, 5 officer, 6 deadspace,
 // 2 tech II), the same source the fitting engine reads. The faction
@@ -183,7 +185,7 @@ WHERE lf.is_public AND NOT lf.is_draft
             CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'tags') = 'array' THEN lf.items_json::jsonb -> 'tags' ELSE '[]'::jsonb END) AS t(tag)
         WHERE lower(t.tag) = lower($12::text)))
 ORDER BY
-  CASE WHEN $13::text = 'rank' THEN public_fit_rank(lf.rating_sum, lf.rating_count) END DESC NULLS LAST,
+  CASE WHEN $13::text = 'rank' THEN public_fit_rank(lf.rating_sum, lf.rating_count, (SELECT public_fit_mean())) END DESC NULLS LAST,
   CASE WHEN $13::text = 'views' THEN lf.view_count END DESC NULLS LAST,
   CASE WHEN $13::text = 'new' THEN lf.updated_at END DESC NULLS LAST,
   CASE WHEN $13::text = 'old' THEN lf.updated_at END ASC NULLS LAST,
@@ -293,7 +295,7 @@ LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
 LEFT JOIN sde_types st ON st.type_id = lf.ship_type_id
 LEFT JOIN sde_groups sg ON sg.group_id = st.group_id
 WHERE lf.is_public AND NOT lf.is_draft AND lf.ship_type_id = $1
-ORDER BY public_fit_rank(lf.rating_sum, lf.rating_count) DESC,
+ORDER BY public_fit_rank(lf.rating_sum, lf.rating_count, (SELECT public_fit_mean())) DESC,
          lf.id DESC
 LIMIT $2
 `
@@ -558,7 +560,7 @@ const sitemapTopFits = `-- name: SitemapTopFits :many
 SELECT lf.id, lf.updated_at
 FROM local_fittings lf
 WHERE lf.is_public AND NOT lf.is_draft
-ORDER BY public_fit_rank(lf.rating_sum, lf.rating_count) DESC,
+ORDER BY public_fit_rank(lf.rating_sum, lf.rating_count, (SELECT public_fit_mean())) DESC,
          lf.id DESC
 LIMIT 1000
 `

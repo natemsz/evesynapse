@@ -334,6 +334,40 @@ func TestPublicFitsBrowser(t *testing.T) {
 	}
 }
 
+// TestPublicFitRankFormula pins the rank: a fit's average shrunk
+// toward the global mean of rated public fits with weight 5. The
+// mean is its own function, passed in, so a ranked list reads it
+// once rather than once per row.
+func TestPublicFitRankFormula(t *testing.T) {
+	rig := apptest.Build(t, &apptest.CountingTransport{})
+	seedPublicBrowser(t, rig)
+	ctx := context.Background()
+	// The seed rates three public fits: 5 (one vote), 5 (three
+	// votes) and 1 (one vote): the mean of their averages is 11/3.
+	var mean float64
+	if err := rig.DB().QueryRowContext(ctx, `SELECT public_fit_mean()`).Scan(&mean); err != nil {
+		t.Fatal(err)
+	}
+	if mean < 11.0/3-1e-9 || mean > 11.0/3+1e-9 {
+		t.Errorf("global mean = %v, want 11/3", mean)
+	}
+	var rank float64
+	if err := rig.DB().QueryRowContext(ctx, `SELECT public_fit_rank(10, 2, 4.0)`).Scan(&rank); err != nil {
+		t.Fatal(err)
+	}
+	if want := (10 + 5*4.0) / (2 + 5); rank < want-1e-9 || rank > want+1e-9 {
+		t.Errorf("rank(10, 2, mean 4) = %v, want %v", rank, want)
+	}
+	// The two-argument form, with its per-row sub-select, is gone.
+	var n int
+	if err := rig.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM pg_proc WHERE proname = 'public_fit_rank' AND pronargs = 2`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("the two-argument public_fit_rank still exists")
+	}
+}
+
 func TestPublicFitPage(t *testing.T) {
 	transport := &apptest.CountingTransport{}
 	rig := apptest.Build(t, transport)

@@ -187,6 +187,12 @@ var pgSwarmNextGossipSchema string
 //go:embed schema_pg/040_fit_rating_recount.sql
 var pgFitRatingRecountSchema string
 
+// Step 041: the public fit rank takes the global mean as an
+// argument, computed once per query instead of once per row.
+//
+//go:embed schema_pg/041_public_fit_rank_once.sql
+var pgPublicFitRankOnceSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -253,6 +259,7 @@ func schemaSteps() []schemaStep {
 		{35, "swarm_provenance", pgSwarmProvenanceSchema, ""},
 		{36, "swarm_next_gossip", pgSwarmNextGossipSchema, ""},
 		{40, "fit_rating_recount", pgFitRatingRecountSchema, ""},
+		{41, "public_fit_rank_once", pgPublicFitRankOnceSchema, ""},
 	}
 }
 

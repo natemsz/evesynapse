@@ -193,12 +193,12 @@ func TestIntelPagesRenderFromStore(t *testing.T) {
 	}
 	mustContain(t, "/ (signed out)", rec.Body.String(), "Tranquility: 23,456 players online")
 
-	// Intel pages require sign-in.
+	// Intel pages are public: the stored wars render signed out too.
 	req = httptest.NewRequest(http.MethodGet, "/intel/wars/", nil)
 	rec = httptest.NewRecorder()
 	app.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("wars page unauthenticated: status %d, want 303", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("wars page unauthenticated: status %d, want 200", rec.Code)
 	}
 
 	if got := transport.calls.Load(); got != 0 {

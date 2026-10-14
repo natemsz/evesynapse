@@ -110,3 +110,54 @@ func TestUnknownAndRawRejected(t *testing.T) {
 		t.Fatal("raw target should error")
 	}
 }
+
+// TestTierVolumes pins the built-in volume of every tier to the
+// SDE's figures (invTypes.volume, dump of 2026-10-13: every
+// commodity of a tier shares one volume). These changed once
+// already, when PI volumes were halved; if an SDE import shows
+// different ones again, change them here on purpose.
+func TestTierVolumes(t *testing.T) {
+	want := map[Tier]float64{TierRaw: 0.005, TierP1: 0.19, TierP2: 0.75, TierP3: 3, TierP4: 50}
+	counts := map[Tier]int{TierRaw: 15, TierP1: 15, TierP2: 24, TierP3: 21, TierP4: 8}
+	for tier, volume := range want {
+		names := ByTier(tier)
+		if len(names) != counts[tier] {
+			t.Errorf("%s has %d commodities, want %d", tier, len(names), counts[tier])
+		}
+		for _, name := range names {
+			if got := AllCommodities[name].Volume; got != volume {
+				t.Errorf("%s (%s) volume = %v m3, want %v", name, tier, got, volume)
+			}
+		}
+	}
+	for name, volume := range map[string]float64{
+		"Aqueous Liquids": 0.005, "Water": 0.19, "Coolant": 0.75, "Robotics": 3, "Broadcast Node": 50,
+	} {
+		if got := AllCommodities[name].Volume; got != volume {
+			t.Errorf("%s volume = %v m3, want %v", name, got, volume)
+		}
+	}
+}
+
+// TestPlanUsesGivenVolumes: a caller's volume for a commodity
+// (its SDE figure) replaces the built-in one for that line only;
+// a missing or non-positive entry keeps the built-in figure.
+func TestPlanUsesGivenVolumes(t *testing.T) {
+	plan, err := PlanFor("Coolant", 240, Settings{Hours: 24, Volumes: map[string]float64{"Coolant": 2, "Water": 0}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]float64{}
+	for _, ln := range plan.Lines {
+		got[ln.Name] = ln.Volume
+	}
+	if got["Coolant"] != 480 {
+		t.Errorf("Coolant volume = %v m3, want 240 x 2 = 480", got["Coolant"])
+	}
+	if math.Abs(got["Water"]-1920*0.19) > 1e-9 {
+		t.Errorf("Water volume = %v m3, want the built-in 1920 x 0.19", got["Water"])
+	}
+	if math.Abs(got["Electrolytes"]-1920*0.19) > 1e-9 {
+		t.Errorf("Electrolytes volume = %v m3, want the built-in 1920 x 0.19", got["Electrolytes"])
+	}
+}

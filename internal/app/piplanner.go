@@ -226,6 +226,7 @@ func (app *Application) handlePIPlanner(w http.ResponseWriter, r *http.Request) 
 	settings := piplan.Settings{
 		CCLevel: view.CCLevel, HeadsPerECU: view.Heads,
 		ECUYield: float64(view.Yield), TaxRate: view.TaxPct / 100, Hours: 24,
+		Volumes: app.piVolumesByName(ctx),
 	}
 	plan, perr := piplan.PlanFor(target, view.Amount, settings, prices)
 	if perr != nil {
@@ -292,6 +293,42 @@ func (app *Application) piOwnedPlanetTypes(ctx context.Context, ch db.Character)
 		return nil, "No colonies yet for this character — plan standalone below."
 	}
 	return out, fmt.Sprintf("Pre-filled from %s's colonies (%s). Tick/untick to what-if other planets.", ch.Name, strings.Join(out, ", "))
+}
+
+// piVolumesByName reads every PI commodity's volume from the
+// imported SDE, by name. The SDE is the truth for volumes; the
+// engine's built-in figures only stand in for a commodity the
+// SDE does not carry (or before the SDE is imported), so a
+// failed or empty read just returns less.
+func (app *Application) piVolumesByName(ctx context.Context) map[string]float64 {
+	names := make([]string, 0, len(piplan.AllCommodities))
+	for n := range piplan.AllCommodities {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	out := map[string]float64{}
+	types, err := app.queries.ListSDETypesByNames(ctx, names)
+	if err != nil {
+		logging.Errorf("piplanner: resolve type IDs for volumes: %v", err)
+		return out
+	}
+	byID := make(map[int64]string, len(types))
+	ids := make([]int64, 0, len(types))
+	for _, row := range types {
+		byID[row.TypeID] = row.Name
+		ids = append(ids, row.TypeID)
+	}
+	physics, err := app.queries.ListSDETypePhysicsByIDs(ctx, ids)
+	if err != nil {
+		logging.Errorf("piplanner: read volumes: %v", err)
+		return out
+	}
+	for _, row := range physics {
+		if row.Volume > 0 {
+			out[byID[row.TypeID]] = row.Volume
+		}
+	}
+	return out
 }
 
 // piPricesByName resolves guide prices for every PI commodity.

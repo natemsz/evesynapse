@@ -783,9 +783,15 @@ func marketFetchFailureState(err error) string {
 // recordMarketFetch upserts one market fetch outcome (best
 // effort, like the snapshot fetch-state log).
 func (app *Application) recordMarketFetch(ctx context.Context, kind, state, detail string) {
+	app.recordMarketFetchAt(ctx, kind, state, detail, time.Now().UTC())
+}
+
+// recordMarketFetchAt is recordMarketFetch with the attempt time
+// given, for callers that must know the exact stamp they wrote.
+func (app *Application) recordMarketFetchAt(ctx context.Context, kind, state, detail string, at time.Time) {
 	if err := app.queries.UpsertMarketFetchState(ctx, db.UpsertMarketFetchStateParams{
 		Kind: kind, State: state, Detail: detail,
-		AttemptedAt: time.Now().UTC(),
+		AttemptedAt: at,
 	}); err != nil {
 		logging.Errorf("worker: market fetch-state %s: %v", kind, err)
 	}

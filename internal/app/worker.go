@@ -635,12 +635,10 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 	})
 
 	// Trade ideas: ask Gemma about the Forge spread-scanner rows
-	// for the home widget (tradeideas.go). No ESI budget: one
-	// Cloudflare call at most every twelve hours, stored on
-	// success, previous answer kept on failure.
-	c.pass("refreshing trade ideas", func() (int, bool) {
-		return app.refreshTradeIdeas(ctx)
-	})
+	// (tradeideas.go). No ESI budget: one Cloudflare call at most
+	// every twelve hours, backing off after failures, run beside
+	// the cycle so the cycle never waits on the model.
+	app.startTradeIdeasRefresh(ctx)
 
 	// Structure names: resolve the due slice of the structure
 	// queue across every scoped character (structures.go).

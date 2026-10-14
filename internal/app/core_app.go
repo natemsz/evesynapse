@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/alexedwards/scs/pgxstore"
@@ -198,6 +199,10 @@ type Application struct {
 	// Trade ideas (tradeideas.go): the Cloudflare client, set in
 	// tests; production builds a timeout client per refresh.
 	tradeIdeasHTTP *http.Client
+	// tradeIdeasBusy is set while a refresh runs beside the worker;
+	// Close waits on tradeIdeasWG.
+	tradeIdeasBusy atomic.Bool
+	tradeIdeasWG   sync.WaitGroup
 }
 
 // New opens the database (applying the embedded baseline schema
@@ -324,6 +329,7 @@ func (app *Application) Close() {
 	if app.workerDone != nil {
 		<-app.workerDone
 	}
+	app.tradeIdeasWG.Wait()
 	if app.db != nil {
 		app.db.Close()
 	}

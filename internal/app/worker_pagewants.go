@@ -141,13 +141,13 @@ func (app *Application) notePageWant(ctx context.Context, kind pageWantKind, id 
 	}
 	switch kind {
 	case pageWantCharacter, pageWantPilot:
-		if err := app.wantPilot(ctx, id, wantViewed); err != nil {
+		if err := app.wantPilot(ctx, id, viewedPriority(ctx)); err != nil {
 			logging.Errorf("pagewant: note pilot want for %d: %v", id, err)
 		}
 	case pageWantTypeDescription:
 		if _, settled := app.descriptionState(ctx, id); !settled {
 			if err := app.queries.UpsertTypeDetailWant(ctx, db.UpsertTypeDetailWantParams{
-				TypeID: id, Priority: wantViewed, NotedAt: timeSet(time.Now().UTC()),
+				TypeID: id, Priority: viewedPriority(ctx), NotedAt: timeSet(time.Now().UTC()),
 			}); err != nil {
 				logging.Errorf("pagewant: note type detail want for %d: %v", id, err)
 			}
@@ -158,17 +158,17 @@ func (app *Application) notePageWant(ctx context.Context, kind pageWantKind, id 
 		if regionID > 0 {
 			if err := app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
 				RegionID: regionID, TypeID: id,
-				LastRequestedAt: time.Now().UTC(), Priority: wantViewed,
+				LastRequestedAt: time.Now().UTC(), Priority: viewedPriority(ctx),
 			}); err != nil {
 				logging.Errorf("pagewant: note history want for type %d in region %d: %v", id, regionID, err)
 			}
 		}
 	case pageWantCorporation:
-		if err := app.wantCorporation(ctx, id, wantViewed); err != nil {
+		if err := app.wantCorporation(ctx, id, viewedPriority(ctx)); err != nil {
 			logging.Errorf("pagewant: note corporation want for %d: %v", id, err)
 		}
 	case pageWantAlliance:
-		if err := app.wantAlliance(ctx, id, wantViewed); err != nil {
+		if err := app.wantAlliance(ctx, id, viewedPriority(ctx)); err != nil {
 			logging.Errorf("pagewant: note alliance want for %d: %v", id, err)
 		}
 	case pageWantPlace:

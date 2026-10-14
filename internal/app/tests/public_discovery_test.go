@@ -257,6 +257,17 @@ func TestPublicFitsBrowser(t *testing.T) {
 	_, body = get("/fittings/public/?sort=old")
 	apptest.MustContain(t, "sort=old", body, "Old Rifter")
 
+	// Search finds a fit by the author it shows, never by another
+	// character of the same account: that would tell a visitor which
+	// characters are one person's.
+	_, body = get("/fittings/public/?q=Alpha+Pilot")
+	apptest.MustContain(t, "q=Alpha Pilot", body, "Solo Rifter")
+	apptest.SeedCharacter(t, rig.Queries(), userA, 93399999, "Hidden Alt")
+	_, body = get("/fittings/public/?q=Hidden+Alt")
+	if strings.Contains(body, "Solo Rifter") || strings.Contains(body, "T2 Rifter") {
+		t.Error("searching an alt's name found its account's fits")
+	}
+
 	// Tag and role (roles match tags) filters.
 	_, body = get("/fittings/public/?tag=pvp")
 	apptest.MustContain(t, "tag=pvp", body, "Fleet Rifter", "Solo Rifter")

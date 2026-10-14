@@ -13,7 +13,9 @@
 -- 2 tech II), the same source the fitting engine reads. The faction
 -- filter is Any or No faction modules; a max price excludes only
 -- fits with a known price above the cap (0 means unknown). Tags
--- match whole, whatever their case.
+-- match whole, whatever their case. Search matches the author a fit
+-- shows (the account's first character) and no other character of
+-- the account: a visitor must not learn which characters share one.
 -- ---------------------------------------------------------------------
 
 -- name: CountPublicFits :one
@@ -26,7 +28,7 @@ WHERE lf.is_public AND NOT lf.is_draft
   AND (sqlc.arg(sincedays)::int <= 0 OR lf.updated_at >= now() - make_interval(days => sqlc.arg(sincedays)::int))
   AND (sqlc.arg(q)::text = '' OR lf.name ILIKE '%' || sqlc.arg(q)::text || '%'
     OR tn.name ILIKE '%' || sqlc.arg(q)::text || '%'
-    OR EXISTS (SELECT 1 FROM characters c WHERE c.user_id = lf.user_id AND c.name ILIKE '%' || sqlc.arg(q)::text || '%'))
+    OR (SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1) ILIKE '%' || sqlc.arg(q)::text || '%')
   AND (sqlc.arg(role)::text = '' OR EXISTS (
         SELECT 1 FROM jsonb_array_elements_text(
             CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'tags') = 'array' THEN lf.items_json::jsonb -> 'tags' ELSE '[]'::jsonb END) AS t(tag)
@@ -72,7 +74,7 @@ WHERE lf.is_public AND NOT lf.is_draft
   AND (sqlc.arg(sincedays)::int <= 0 OR lf.updated_at >= now() - make_interval(days => sqlc.arg(sincedays)::int))
   AND (sqlc.arg(q)::text = '' OR lf.name ILIKE '%' || sqlc.arg(q)::text || '%'
     OR tn.name ILIKE '%' || sqlc.arg(q)::text || '%'
-    OR EXISTS (SELECT 1 FROM characters c WHERE c.user_id = lf.user_id AND c.name ILIKE '%' || sqlc.arg(q)::text || '%'))
+    OR (SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1) ILIKE '%' || sqlc.arg(q)::text || '%')
   AND (sqlc.arg(role)::text = '' OR EXISTS (
         SELECT 1 FROM jsonb_array_elements_text(
             CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'tags') = 'array' THEN lf.items_json::jsonb -> 'tags' ELSE '[]'::jsonb END) AS t(tag)

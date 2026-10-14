@@ -180,6 +180,18 @@ var pgSwarmProvenanceSchema string
 //go:embed schema_pg/036_swarm_next_gossip.sql
 var pgSwarmNextGossipSchema string
 
+// Step 037: how often a staged swarm entry has been deferred,
+// so an undecidable one is dropped instead of waiting a week.
+//
+//go:embed schema_pg/037_swarm_staging_deferrals.sql
+var pgSwarmStagingDeferralsSchema string
+
+// Step 038: owner-signed peer addresses, and the pull rotation
+// that replaces singling the seed out by a fixed ID.
+//
+//go:embed schema_pg/038_swarm_signed_addresses.sql
+var pgSwarmSignedAddressesSchema string
+
 // Step 039: the typing-guess ledger keeps its history (a guess
 // is superseded, not deleted), so the hit rates read over a
 // window see the whole window.
@@ -211,6 +223,11 @@ var pgPublicFitPagesSchema string
 //
 //go:embed schema_pg/043_trade_ideas_attempts.sql
 var pgTradeIdeasAttemptsSchema string
+
+// Step 044: swarm_staging drops checked_at, which was never set.
+//
+//go:embed schema_pg/044_swarm_staging_no_checked_at.sql
+var pgSwarmStagingNoCheckedAtSchema string
 
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
@@ -274,14 +291,17 @@ func schemaSteps() []schemaStep {
 		{31, "trade_ideas", pgTradeIdeasSchema, ""},
 		{32, "pulse_events", pgPulseEventsSchema, ""},
 		{33, "public_fits", pgPublicFitsSchema, ""},
-		{39, "typing_ledger", pgTypingLedgerSchema, ""},
 		{34, "swarm_key_pin", pgSwarmKeyPinSchema, ""},
 		{35, "swarm_provenance", pgSwarmProvenanceSchema, ""},
 		{36, "swarm_next_gossip", pgSwarmNextGossipSchema, ""},
+		{37, "swarm_staging_deferrals", pgSwarmStagingDeferralsSchema, ""},
+		{38, "swarm_signed_addresses", pgSwarmSignedAddressesSchema, ""},
+		{39, "typing_ledger", pgTypingLedgerSchema, ""},
 		{40, "fit_rating_recount", pgFitRatingRecountSchema, ""},
 		{41, "public_fit_rank_once", pgPublicFitRankOnceSchema, ""},
 		{42, "public_fit_pages", pgPublicFitPagesSchema, ""},
 		{43, "trade_ideas_attempts", pgTradeIdeasAttemptsSchema, ""},
+		{44, "swarm_staging_no_checked_at", pgSwarmStagingNoCheckedAtSchema, ""},
 	}
 }
 

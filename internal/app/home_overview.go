@@ -16,6 +16,7 @@ import (
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/markethistory"
+	"evesynapse/internal/tags"
 )
 
 // ---------------------------------------------------------------------------
@@ -656,11 +657,7 @@ type fleetWidget struct {
 	TotalISK string
 }
 
-func splitTags(raw string) []string {
-	return strings.FieldsFunc(raw, func(r rune) bool {
-		return r == ',' || r == ' ' || r == ';'
-	})
-}
+func splitTags(raw string) []string { return tags.Split(raw) }
 
 type netWorthWidget struct {
 	Any             bool

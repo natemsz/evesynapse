@@ -6,7 +6,7 @@
 // This file mirrors server formulas, on purpose, so a toggle
 // recomputes live. Each mirror names its Go twin, and a change to
 // either side must change both:
-//   decide/compute      char_planner_payload.go planRollup (buyNode, add)
+//   decide/compute      buildplanner/payload.go planRollup (buyNode, add)
 //                       and planFinishPreset (value, profit, margin)
 //   schedule            planSchedule
 //   renderHeader        planHeaderLines and planVerdictLine

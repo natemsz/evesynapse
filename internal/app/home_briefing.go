@@ -10,6 +10,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/humanize"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/markethistory"
 )
@@ -746,12 +747,7 @@ func newestUnreadHeader(headers esi.MailHeaders) (esi.MailHeader, bool) {
 }
 
 // pluralSuffix: "" for one, "s" otherwise ("3 extractors").
-func pluralSuffix(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
-}
+func pluralSuffix(n int) string { return humanize.PluralSuffix(n) }
 
 // pluralVerb: "s" for one, "" otherwise ("1 order expires").
 func pluralVerb(n int) string {

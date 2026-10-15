@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"evesynapse/internal/app/buildplanner"
 	"evesynapse/internal/buildplan"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
@@ -385,33 +386,6 @@ func TestPlannerJudgePricesIncomplete(t *testing.T) {
 	}
 }
 
-// TestPlanMESummary: the ME wall compresses to one line — the
-// all-default count, otherwise each non-default blueprint with
-// the rest in one tail.
-func TestPlanMESummary(t *testing.T) {
-	if got := planMESummary(nil); got != "" {
-		t.Errorf("empty = %q, want empty", got)
-	}
-	def := []planMEInput{
-		{Label: "A", Value: 0, Source: "assumed"},
-		{Label: "B", Value: 0, Source: "assumed"},
-	}
-	if got := planMESummary(def); got != "2 components at ME0 (assumed)" {
-		t.Errorf("default = %q, want the count line", got)
-	}
-	solo := []planMEInput{{Label: "A", Value: 0, Source: "assumed"}}
-	if got := planMESummary(solo); got != "1 component at ME0 (assumed)" {
-		t.Errorf("solo = %q, want singular", got)
-	}
-	mixed := []planMEInput{
-		{Label: "Fixture Component", Value: 8, Source: "owned"},
-		{Label: "Fixture Widget", Value: 0, Source: "assumed"},
-	}
-	if got := planMESummary(mixed); got != "Fixture Component at ME8 (owned), 1 at ME0 (assumed)" {
-		t.Errorf("mixed = %q, want non-default listed with tail", got)
-	}
-}
-
 // TestPlannerMESummaryCollapsed: the ME wall ships inside a
 // hidden centered modal behind a static button plus a summary
 // line, with the set-all action and the tree tab's global
@@ -502,23 +476,6 @@ func TestIndustryBlueprintPlannerLink(t *testing.T) {
 	)
 }
 
-// TestDefaultJudgeParam: fresh plans scope to the acting
-// character, falling back to the first character when the
-// session names none of the account's own, and to the All V
-// stand-in when there are no characters (an anonymous visitor).
-func TestDefaultJudgeParam(t *testing.T) {
-	chars := []db.Character{{CharacterID: 1}, {CharacterID: 2}}
-	if got := defaultJudgeParam(chars, 2); got != "char:2" {
-		t.Errorf("acting = %q, want char:2", got)
-	}
-	if got := defaultJudgeParam(chars, 9); got != "char:1" {
-		t.Errorf("stale session = %q, want char:1", got)
-	}
-	if got := defaultJudgeParam(nil, 9); got != judgeAllV {
-		t.Errorf("no characters = %q, want the All V stand-in", got)
-	}
-}
-
 // seedCapSDE plants a capital-scale blueprint tree: a hull with
 // 40 components of 15 sub-assemblies of 8 materials (5441 nodes
 // expanded). Leaf types are distinct rows so the shape mirrors
@@ -582,15 +539,15 @@ func TestPlannerPrefetchMatchesLazy(t *testing.T) {
 	seedCapSDE(t, app)
 	ctx := context.Background()
 
-	lazy := &sdePlannerSource{app: app, ctx: ctx, memo: make(map[int64]*buildplan.Blueprint), none: make(map[int64]bool)}
+	lazy := buildplanner.NewSDESource(app, ctx)
 	resLazy, err := buildplan.Build(lazy, 10001, buildplan.Input{Runs: 1})
 	if err != nil {
 		t.Fatalf("lazy build: %v", err)
 	}
-	warm := &sdePlannerSource{app: app, ctx: ctx, memo: make(map[int64]*buildplan.Blueprint), none: make(map[int64]bool)}
-	warm.prefetch(10001)
-	if len(warm.memo) != 641 {
-		t.Fatalf("prefetch memoized %d blueprints, want 641 (hull + 40 + 600)", len(warm.memo))
+	warm := buildplanner.NewSDESource(app, ctx)
+	warm.Prefetch(10001)
+	if warm.Memoized() != 641 {
+		t.Fatalf("prefetch memoized %d blueprints, want 641 (hull + 40 + 600)", warm.Memoized())
 	}
 	resWarm, err := buildplan.Build(warm, 10001, buildplan.Input{Runs: 1})
 	if err != nil {

@@ -779,11 +779,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.With(app.requireAuth).Get("/", app.handleIndustry)
 	})
 
-	r.Route("/planner", func(r chi.Router) {
-		r.With(anonSim).Get("/", app.handlePlanner)
-		r.With(anonPages).Get("/suggest", app.handlePlannerSuggest)
-	})
-
 	r.Route("/sync", func(r chi.Router) {
 		// The banner indicator's poll runs on every signed-in
 		// page (app.js), so it is gated on login only; the handler
@@ -1107,6 +1102,43 @@ func (app *Application) ResolvedCorpName(ctx context.Context, corpID int64) (str
 
 func (app *Application) DisplayCharacter(ctx context.Context, characterID int64) string {
 	return app.displayCharacter(ctx, characterID)
+}
+
+func (app *Application) AnonSim() func(http.Handler) http.Handler {
+	_, simThrottle := app.anonThrottles()
+	return app.throttleAnon(simThrottle)
+}
+
+func (app *Application) CachedTypeNames(ctx context.Context, ids []int64) map[int64]string {
+	return app.esi.CachedTypeNames(ctx, ids)
+}
+
+func (app *Application) CachedPlaceName(ctx context.Context, id int64) (string, bool) {
+	return app.esi.CachedPlaceName(ctx, id)
+}
+
+func (app *Application) NotePlaceWant(ctx context.Context, id int64) {
+	app.notePageWantFromContext(ctx, pageWantPlace, id)
+}
+
+func (app *Application) SessionCharacterID(ctx context.Context) int64 {
+	return sessionCharID(app.sessions, ctx)
+}
+
+func (app *Application) SlotSkillIDs(ctx context.Context) map[string]int64 {
+	return app.slotSkillIDs(ctx)
+}
+
+func (app *Application) WriteSuggest(w http.ResponseWriter, rows []module.SuggestItem) {
+	out := make([]suggestItem, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, suggestItem(r))
+	}
+	writeSuggestJSON(w, out)
+}
+
+func (app *Application) ServeCSV(w http.ResponseWriter, filename string, header []string, rows [][]string) {
+	serveCSV(w, filename, header, rows)
 }
 
 func (app *Application) AnonPages() func(http.Handler) http.Handler {

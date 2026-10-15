@@ -31,7 +31,6 @@ type pageData struct {
 	ContractsChars    []assetCharLink
 	Industry          *industryView
 	IndustryChars     []assetCharLink
-	Planner           *plannerView
 	ServerStatus      *serverStatusView
 	ESIHealth         *esiHealthView // Overview bar: ESI health and Tranquility players (signed-in Home only)
 	Corps             []corpView
@@ -162,7 +161,7 @@ func sectionForPage(page string) string {
 		return "pilot"
 	case "fittings.html", "fittings_saved.html", "fit_shopping.html", "fittings_public.html", "fit_public.html":
 		return "fitting"
-	case "industry.html", "planner.html", "planets.html":
+	case "industry.html", "planets.html":
 		return "industry"
 	case "market.html", "market_scanner.html", "market_tradefinder.html", "market_leaderboard.html",
 		"market_restock.html",

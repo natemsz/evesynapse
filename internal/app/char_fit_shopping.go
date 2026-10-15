@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 )
 
@@ -131,4 +132,9 @@ func (app *Application) handleFitShopping(w http.ResponseWriter, r *http.Request
 
 	data.Shopping = view
 	app.render(ctx, w, http.StatusOK, "fit_shopping.html", data)
+}
+
+// isk formats a float as a template-ready price string.
+func isk(f float64) string {
+	return esi.FormatISK(f) + " ISK"
 }

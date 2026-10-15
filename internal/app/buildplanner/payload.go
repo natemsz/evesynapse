@@ -1,4 +1,4 @@
-package app
+package buildplanner
 
 // Planner payload: one JSON blob per computed plan carrying the
 // full build tree with every figure the client may display.
@@ -24,6 +24,7 @@ import (
 	"evesynapse/internal/buildplan"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/humanize"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/piplan"
 )
@@ -431,7 +432,7 @@ type planPayload struct {
 
 // planTimeSkills resolves the manufacturing time skills' type
 // IDs from static data by name (IDs are CCP's to change).
-func (app *Application) planTimeSkills(ctx context.Context) map[string]int64 {
+func (app *planner) planTimeSkills(ctx context.Context) map[string]int64 {
 	out := map[string]int64{"Industry": 0, "Advanced Industry": 0}
 	rows, err := app.queries.ListSDETypesByNames(ctx, []string{"Industry", "Advanced Industry"})
 	if err != nil {
@@ -650,7 +651,7 @@ func planHeaderLines(p *planPayload) (landed, landedSub, value, margin, marginSu
 		margin = "—"
 		marginSub = "needs full prices"
 	}
-	elapsed = humanDuration(time.Duration(b.Elapsed) * time.Second)
+	elapsed = humanize.Duration(time.Duration(b.Elapsed) * time.Second)
 	elapsedSub = "critical path · " + strconv.Itoa(p.Slots) + " slot"
 	if p.Slots != 1 {
 		elapsedSub += "s"
@@ -733,7 +734,7 @@ func buildPlanPayload(res *buildplan.Result, productID int64, prices map[int64]e
 // given types (one bounded read). A type with no row is simply
 // absent; planMarket layers what is found over the guide. It
 // returns the map and the freshest row stamp.
-func (app *Application) planRegionPrices(ctx context.Context, ids []int64, regionID int64) (map[int64]esi.MarketPrice, time.Time, error) {
+func (app *planner) planRegionPrices(ctx context.Context, ids []int64, regionID int64) (map[int64]esi.MarketPrice, time.Time, error) {
 	rows, err := app.queries.ListMarketTypePricesForTypes(ctx, db.ListMarketTypePricesForTypesParams{
 		RegionID: regionID, Column2: ids,
 	})
@@ -779,7 +780,7 @@ func planMarketRegion(raw string) int64 {
 // Forge rows). ids are the types the plan can name (the
 // blueprint closure): the source is settled before the tree is
 // built, so the tree is built once.
-func (app *Application) planMarket(ctx context.Context, q url.Values, ids []int64, guide map[int64]esi.MarketPrice) (prices map[int64]esi.MarketPrice, market, marketName, pricesNote string) {
+func (app *planner) planMarket(ctx context.Context, q url.Values, ids []int64, guide map[int64]esi.MarketPrice) (prices map[int64]esi.MarketPrice, market, marketName, pricesNote string) {
 	regionID := planMarketRegion(q.Get("market"))
 	if regionID == 0 {
 		return guide, plannerMarketGuide, "Cluster average", "Cluster-average guide prices."
@@ -814,7 +815,7 @@ func (app *Application) planMarket(ctx context.Context, q url.Values, ids []int6
 // static data keeps its numeric name ("System 30000142") while
 // the index lookup still runs, so fees work wherever index rows
 // exist. A missing index leaves fees unknown.
-func (app *Application) planBuildSystem(ctx context.Context, raw string) (systemID int64, systemName string, index float64, indexKnown bool) {
+func (app *planner) planBuildSystem(ctx context.Context, raw string) (systemID int64, systemName string, index float64, indexKnown bool) {
 	systemID = plannerDefaultSystemID
 	if trimmed := strings.TrimSpace(raw); trimmed != "" {
 		if n, err := strconv.ParseInt(trimmed, 10, 64); err == nil && n > 0 {
@@ -825,12 +826,12 @@ func (app *Application) planBuildSystem(ctx context.Context, raw string) (system
 	}
 	if sys, err := app.queries.GetSDESystem(ctx, systemID); err == nil && sys.Name != "" {
 		systemName = sys.Name
-	} else if name, ok := app.esi.CachedPlaceName(ctx, systemID); ok && name != "" {
+	} else if name, ok := app.deps.CachedPlaceName(ctx, systemID); ok && name != "" {
 		systemName = name
 	} else {
 		// Honest placeholder, same shape as everywhere else:
 		// the warmer fills the cache and the name lands.
-		app.notePageWantFromContext(ctx, pageWantPlace, systemID)
+		app.deps.NotePlaceWant(ctx, systemID)
 		systemName = "System " + strconv.FormatInt(systemID, 10)
 	}
 	row, err := app.queries.GetIndustryCostIndex(ctx, db.GetIndustryCostIndexParams{
@@ -874,7 +875,7 @@ var (
 // attributes prescribe. No structure (or an unknown one) is an
 // NPC station: every factor 1 and no note. Rigs need a
 // structure to hang on.
-func (app *Application) planFacility(ctx context.Context, rawStructure, rawRig string, systemID int64) (matFactor, timeFactor, costFactor float64, note string, structureID int64, rigTier string) {
+func (app *planner) planFacility(ctx context.Context, rawStructure, rawRig string, systemID int64) (matFactor, timeFactor, costFactor float64, note string, structureID int64, rigTier string) {
 	matFactor, timeFactor, costFactor = 1, 1, 1
 	structureID, _ = strconv.ParseInt(strings.TrimSpace(rawStructure), 10, 64)
 	name, ok := plannerStructures[structureID]
@@ -977,7 +978,7 @@ func planAdjustedMap(guide map[int64]esi.MarketPrice) map[int64]float64 {
 // planOriginOf builds the origin classifier for one plan: one
 // batched group lookup over the tree's types, then the pure
 // classifier. A failed lookup degrades to PI-only origins.
-func (app *Application) planOriginOf(ctx context.Context, root *buildplan.Node) func(int64, string) (string, string) {
+func (app *planner) planOriginOf(ctx context.Context, root *buildplan.Node) func(int64, string) (string, string) {
 	seen := make(map[int64]bool)
 	var ids []int64
 	buildplan.Walk(root, func(n *buildplan.Node) {
@@ -1018,14 +1019,14 @@ type planPayloadArgs struct {
 // built plan: skill factor, slots, the tree DTO and the canonical
 // preset totals, labelled with the market and build system the
 // caller built it with. It never expands the tree again.
-func (app *Application) buildPlanPayloadView(ctx context.Context, a planPayloadArgs) (template.JS, *planPayload) {
+func (app *planner) buildPlanPayloadView(ctx context.Context, a planPayloadArgs) (template.JS, *planPayload) {
 	q, res, prices, stock, scoped, chars := a.Query, a.Result, a.Prices, a.Stock, a.Scoped, a.Chars
 	market, marketName, pricesNote := a.Market, a.MarketName, a.PricesNote
 	productID, systemID, systemName := a.ProductID, a.SystemID, a.SystemName
 	index, indexKnown, nameOf := a.Index, a.IndexKnown, a.NameOf
-	owner := planOwner(chars, sessionCharID(app.sessions, ctx))
+	owner := planOwner(chars, app.deps.SessionCharacterID(ctx))
 	factor, timeNote := planTimeFactor(q.Get("timef"), app.planTimeSkills(ctx), scoped, owner)
-	slots, slotsNote := planSlots(q.Get("slots"), app.slotSkillIDs(ctx), scoped, owner)
+	slots, slotsNote := planSlots(q.Get("slots"), app.deps.SlotSkillIDs(ctx), scoped, owner)
 	unitOf := func(id int64) (float64, bool) { return buildplan.UnitPrice(prices, id) }
 	p := buildPlanPayload(res, productID, prices, unitOf, factor, slots, stock, nameOf, app.planOriginOf(ctx, res.Root))
 	p.Market, p.MarketName = market, marketName

@@ -1,4 +1,4 @@
-package app
+package buildplanner
 
 import (
 	"context"
@@ -13,10 +13,13 @@ import (
 	"strings"
 	"time"
 
+	"evesynapse/internal/app/module"
 	"evesynapse/internal/buildplan"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/humanize"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/tags"
 )
 
 // ---------------------------------------------------------------------------
@@ -188,7 +191,7 @@ func planMESummary(inputs []planMEInput) string {
 	if rest > 0 {
 		tail := strconv.Itoa(rest) + " at ME0"
 		if rest == len(inputs) {
-			tail = strconv.Itoa(rest) + " component" + pluralSuffix(rest) + " at ME0"
+			tail = strconv.Itoa(rest) + " component" + humanize.PluralSuffix(rest) + " at ME0"
 		}
 		if restAssumed {
 			tail += " (assumed)"
@@ -206,9 +209,15 @@ const plannerMaxRunsInput = 1000000
 // the settings pickers' autocomplete feed, in the shared
 // suggest shape the app's other search boxes use. System rows
 // carry their region as the label; region rows stand alone.
-func (app *Application) handlePlannerSuggest(w http.ResponseWriter, r *http.Request) {
+func handlePlannerSuggest(deps module.Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		newPlanner(deps).suggest(w, r)
+	}
+}
+
+func (app *planner) suggest(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	out := []suggestItem{}
+	out := []module.SuggestItem{}
 	if len(q) >= 2 {
 		pattern := "%" + q + "%"
 		switch r.URL.Query().Get("kind") {
@@ -219,7 +228,7 @@ func (app *Application) handlePlannerSuggest(w http.ResponseWriter, r *http.Requ
 				break
 			}
 			for _, row := range rows {
-				out = append(out, suggestItem{ID: row.RegionID, Name: row.Name})
+				out = append(out, module.SuggestItem{ID: row.RegionID, Name: row.Name})
 			}
 		default:
 			rows, err := app.queries.SearchSDESystems(r.Context(), pattern)
@@ -228,16 +237,22 @@ func (app *Application) handlePlannerSuggest(w http.ResponseWriter, r *http.Requ
 				break
 			}
 			for _, row := range rows {
-				out = append(out, suggestItem{ID: row.SystemID, Name: row.Name, Label: row.RegionName})
+				out = append(out, module.SuggestItem{ID: row.SystemID, Name: row.Name, Label: row.RegionName})
 			}
 		}
 	}
-	writeSuggestJSON(w, out)
+	app.deps.WriteSuggest(w, out)
 }
 
-func (app *Application) handlePlanner(w http.ResponseWriter, r *http.Request) {
+func handlePlanner(deps module.Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		newPlanner(deps).page(w, r)
+	}
+}
+
+func (app *planner) page(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.publicPage(ctx) // public: no session needed
+	data := &PageData{ShellData: app.deps.PublicShell(ctx)} // public: no session needed
 	view := &plannerView{}
 	data.Planner = view
 
@@ -245,12 +260,12 @@ func (app *Application) handlePlanner(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logging.Errorf("planner: count blueprints: %v", err)
 		data.Error = "Could not load planner data; check the server log."
-		app.render(ctx, w, http.StatusOK, "planner.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "planner.html", data)
 		return
 	}
 	if count == 0 {
 		view.Warming = true
-		app.render(ctx, w, http.StatusOK, "planner.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "planner.html", data)
 		return
 	}
 
@@ -281,8 +296,8 @@ func (app *Application) handlePlanner(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if wantCSV(r) && view.Plan != nil {
-		servePlannerCSV(w, view.Plan)
+	if r.URL.Query().Get("format") == "csv" && view.Plan != nil {
+		app.servePlannerCSV(w, view.Plan)
 		return
 	}
 	if r.URL.Query().Get("format") == "json" && view.Plan != nil && view.Plan.Payload != "" {
@@ -290,12 +305,12 @@ func (app *Application) handlePlanner(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(view.Plan.Payload))
 		return
 	}
-	app.render(ctx, w, http.StatusOK, "planner.html", data)
+	app.deps.Render(ctx, w, http.StatusOK, "planner.html", data)
 }
 
 // servePlannerCSV writes the build plan's material rows and
 // shopping list as a CSV download.
-func servePlannerCSV(w http.ResponseWriter, plan *planView) {
+func (app *planner) servePlannerCSV(w http.ResponseWriter, plan *planView) {
 	header := []string{"Item", "Per run", "Need", "Have", "To buy", "Build", "ME/TE", "Time", "Unit price", "Buy cost", "Buy vs build"}
 	rows := make([][]string, 0, len(plan.Rows)+len(plan.Shopping)+2)
 	for _, row := range plan.Rows {
@@ -325,12 +340,12 @@ func servePlannerCSV(w http.ResponseWriter, plan *planView) {
 			})
 		}
 	}
-	serveCSV(w, "build-plan", header, rows)
+	app.deps.ServeCSV(w, "build-plan", header, rows)
 }
 
 // buildPlanView runs the engine for one product pick and shapes
 // the result for the template. notice is a user-safe dead-end.
-func (app *Application) buildPlanView(ctx context.Context, q url.Values, productID int64) (*planView, string) {
+func (app *planner) buildPlanView(ctx context.Context, q url.Values, productID int64) (*planView, string) {
 	runs := int64(1)
 	if raw := q.Get("runs"); raw != "" {
 		if n, err := strconv.ParseInt(raw, 10, 64); err == nil && n >= 1 {
@@ -366,7 +381,7 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 	userChars := app.plannerAccountChars(ctx)
 	judgeParam := q.Get("judge")
 	if !q.Has("judge") {
-		judgeParam = defaultJudgeParam(userChars, sessionCharID(app.sessions, ctx))
+		judgeParam = defaultJudgeParam(userChars, app.deps.SessionCharacterID(ctx))
 	}
 	scope, judgeOptions := resolveJudgeScope(judgeParam, userChars)
 	inputChars := userChars
@@ -382,7 +397,7 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 	// on the page, in the CSV and in the plan data then comes from
 	// the one result. Job fees are charged on adjusted prices,
 	// whatever the market.
-	guide := app.valuationPrices(ctx)
+	guide := app.deps.ValuationPrices(ctx)
 	prices, market, marketName, pricesNote := app.planMarket(ctx, q, src.closureTypes(productID), guide)
 	adjusted := planAdjustedMap(guide)
 	systemID, systemName, costIndex, indexKnown := app.planBuildSystem(ctx, q.Get("system"))
@@ -427,7 +442,7 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 			}
 		}
 	})
-	names := app.esi.CachedTypeNames(ctx, ids)
+	names := app.deps.CachedTypeNames(ctx, ids)
 	nameOf := func(id int64) string {
 		if n, ok := names[id]; ok && n != "" {
 			return n
@@ -549,7 +564,7 @@ func (app *Application) buildPlanView(ctx context.Context, q url.Values, product
 	}
 	sort.Slice(view.Shopping, func(i, j int) bool { return view.Shopping[i].Name < view.Shopping[j].Name })
 
-	view.TotalTime = humanDuration(time.Duration(res.TotalSeconds) * time.Second)
+	view.TotalTime = humanize.Duration(time.Duration(res.TotalSeconds) * time.Second)
 
 	buyTotal := root.LineCost
 	if !root.CostComplete || res.UnpricedLines > 0 {
@@ -610,7 +625,7 @@ func planRow(n *buildplan.Node, nameOf func(int64) string) planRowView {
 		default:
 			row.ME = fmt.Sprintf("ME %d%% (assumed unresearched)", n.ME)
 		}
-		row.Time = humanDuration(time.Duration(n.TimeSeconds) * time.Second)
+		row.Time = humanize.Duration(time.Duration(n.TimeSeconds) * time.Second)
 		if len(n.Blueprint.Skills) > 0 {
 			parts := make([]string, 0, len(n.Blueprint.Skills))
 			for _, s := range n.Blueprint.Skills {
@@ -665,7 +680,7 @@ func planRow(n *buildplan.Node, nameOf func(int64) string) planRowView {
 // sdePlannerSource resolves blueprints from the local SDE tables,
 // memoized per render (a recipe tree revisits the same products).
 type sdePlannerSource struct {
-	app  *Application
+	app  *planner
 	ctx  context.Context
 	memo map[int64]*buildplan.Blueprint
 	none map[int64]bool
@@ -823,8 +838,8 @@ func (s *sdePlannerSource) BlueprintForProduct(productTypeID int64) (*buildplan.
 // plannerAccountChars lists the signed-in user's characters —
 // the universe the planner's scopes pick from. A dev-login
 // session (no user) simply has none.
-func (app *Application) plannerAccountChars(ctx context.Context) []db.Character {
-	userID := app.userID(ctx)
+func (app *planner) plannerAccountChars(ctx context.Context) []db.Character {
+	userID := app.deps.UserID(ctx)
 	if userID == 0 {
 		return nil
 	}
@@ -851,7 +866,7 @@ type plannerScopeData struct {
 // per blueprint type), total stockpile, and trained skills over
 // exactly the given characters — the whole account for the
 // general view, one character or one tag's members when judged.
-func (app *Application) plannerInputsForChars(ctx context.Context, chars []db.Character) plannerScopeData {
+func (app *planner) plannerInputsForChars(ctx context.Context, chars []db.Character) plannerScopeData {
 	data := plannerScopeData{
 		Owned:  make(map[int64]buildplan.OwnedBlueprint),
 		Stock:  make(map[int64]int64),
@@ -888,13 +903,13 @@ func (app *Application) plannerInputsForChars(ctx context.Context, chars []db.Ch
 
 	for _, ch := range chars {
 		var bps esi.Blueprints
-		if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapBlueprints, &bps) {
+		if app.deps.LoadCorpSnapshot(ctx, ch.CharacterID, esi.SnapBlueprints, &bps) {
 			for _, bp := range bps {
 				consider(bp)
 			}
 		}
 		var assets []esi.Asset
-		if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapAssets, &assets) {
+		if app.deps.LoadCorpSnapshot(ctx, ch.CharacterID, esi.SnapAssets, &assets) {
 			data.AssetsLoaded++
 			for _, a := range assets {
 				if a.Quantity > 0 {
@@ -903,7 +918,7 @@ func (app *Application) plannerInputsForChars(ctx context.Context, chars []db.Ch
 			}
 		}
 		var skills esi.Skills
-		if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapSkills, &skills) {
+		if app.deps.LoadCorpSnapshot(ctx, ch.CharacterID, esi.SnapSkills, &skills) {
 			trained := make(map[int64]int, len(skills.Skills))
 			for _, s := range skills.Skills {
 				trained[s.SkillID] = s.TrainedSkillLevel
@@ -968,7 +983,7 @@ func resolveJudgeScope(raw string, chars []db.Character) (judgeScope, []judgeOpt
 		tag := strings.TrimPrefix(raw, "tag:")
 		var members []db.Character
 		for _, ch := range chars {
-			for _, t := range splitTags(ch.Tags) {
+			for _, t := range tags.Split(ch.Tags) {
 				if t == tag {
 					members = append(members, ch)
 					break
@@ -986,7 +1001,7 @@ func resolveJudgeScope(raw string, chars []db.Character) (judgeScope, []judgeOpt
 		value := "char:" + strconv.FormatInt(ch.CharacterID, 10)
 		options = append(options, judgeOption{Value: value, Label: ch.Name, Selected: value == selected})
 	}
-	for _, tag := range userTags(chars) {
+	for _, tag := range tags.InUse(chars) {
 		value := "tag:" + tag
 		options = append(options, judgeOption{Value: value, Label: "Tag: " + tag, Selected: value == selected})
 	}

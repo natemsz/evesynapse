@@ -108,7 +108,6 @@ var sectionNav = map[string][]navEntry{
 	},
 	"industry": {
 		{"/industry/", "Industry", []string{"industry.html"}},
-		{"/planner/", "Build Planner", []string{"planner.html"}},
 		{"/planets/", "Planetary Industry", []string{"planets.html"}},
 	},
 	"market": {

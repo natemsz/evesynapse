@@ -1,4 +1,4 @@
-package app
+package buildplanner
 
 // Payload tests: preset economics, the bought/built split, and
 // the slot-aware schedule around a hand-built engine result.

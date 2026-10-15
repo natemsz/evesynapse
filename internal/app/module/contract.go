@@ -34,6 +34,19 @@ type NavSection struct {
 	Entries []NavEntry
 }
 
+// SuggestItem is one row of the shared autocomplete feed the front end
+// reads (see FRONTEND.md); core's other search boxes answer with the
+// same shape.
+type SuggestItem struct {
+	ID      int64  `json:"id"`
+	Name    string `json:"name"`
+	Label   string `json:"label,omitempty"`
+	Kind    string `json:"kind,omitempty"`
+	URL     string `json:"url,omitempty"`
+	Value   string `json:"value,omitempty"`
+	Missing bool   `json:"missing,omitempty"`
+}
+
 // Page declares a template file rendered by the module, its default section,
 // and any client scripts that must be loaded for it.
 type Page struct {
@@ -267,6 +280,9 @@ type Deps interface {
 	PickCharacter(ctx context.Context, r *http.Request, path string) ([]db.Character, db.Character, []CharLink, error)
 	Render(ctx context.Context, w http.ResponseWriter, status int, page string, data any)
 	AnonPages() func(http.Handler) http.Handler
+	// AnonSim is the tighter per-address allowance for pages whose
+	// result can be large (the simulator, the build planner).
+	AnonSim() func(http.Handler) http.Handler
 	// RequireAuth guards a route group for signed-in accounts.
 	RequireAuth() func(http.Handler) http.Handler
 
@@ -307,6 +323,22 @@ type Deps interface {
 	// and row cap for reading the stored spread statistics: shared data,
 	// the same numbers whichever module or page reads them.
 	SpreadDefaults() (minSpreadPct float64, rowCap int)
+
+	// --- names, sessions and shared feeds (the build planner reads these) ---
+
+	// CachedTypeNames and CachedPlaceName are cache-only name reads.
+	CachedTypeNames(ctx context.Context, ids []int64) map[int64]string
+	CachedPlaceName(ctx context.Context, id int64) (string, bool)
+	// NotePlaceWant asks the worker to resolve a place the page lacked.
+	NotePlaceWant(ctx context.Context, id int64)
+	// SessionCharacterID is the session's acting character, 0 when none.
+	SessionCharacterID(ctx context.Context) int64
+	// SlotSkillIDs resolves the industry slot skills' type ids by name.
+	SlotSkillIDs(ctx context.Context) map[string]int64
+	// WriteSuggest answers with the shared autocomplete shape.
+	WriteSuggest(w http.ResponseWriter, rows []SuggestItem)
+	// ServeCSV writes a CSV download the way every export does.
+	ServeCSV(w http.ResponseWriter, filename string, header []string, rows [][]string)
 
 	// --- the session, pages and the site ---------------------------------
 

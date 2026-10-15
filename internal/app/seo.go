@@ -130,7 +130,6 @@ func (app *Application) buildSitemap(ctx context.Context, origin string) ([]byte
 		{Loc: origin + "/fittings/public/", ChangeFreq: "daily", Priority: "0.9"},
 		{Loc: origin + "/fittings/", ChangeFreq: "monthly", Priority: "0.8"},
 		{Loc: origin + "/items/", ChangeFreq: "weekly", Priority: "0.8"},
-		{Loc: origin + "/planner/", ChangeFreq: "monthly", Priority: "0.8"},
 	}
 	// Each enabled module's own public pages: a build without the
 	// module has no such page to list.

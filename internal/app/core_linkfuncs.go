@@ -299,6 +299,9 @@ func skillLevel(trained, next int, state string) template.HTML {
 // policy; core_pages.go registers it for every render.
 func linkFuncMap() template.FuncMap {
 	return template.FuncMap{
+		// moduleOn: whether an optional module is compiled into this
+		// build, for the core links that lead to its pages.
+		"moduleOn":        moduleCompiledIn,
 		"itemLink":        itemLink,
 		"publicItemLink":  publicItemLink,
 		"charLink":        charLink,

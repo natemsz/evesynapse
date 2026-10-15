@@ -78,7 +78,7 @@ Contact: nate@synap6.io or in-game 'Burzrujat'
   | `ui_` | navigation state and the tests that pin layout and styling |
   | `module_` | which modules an account has, by the scopes it granted |
   | `home_` | the home page: widgets, briefing, net worth |
-  | `char_` | pages about one character: sheet, skills and plans, assets, fittings, killmails, industry |
+  | `char_` | pages about one character: sheet, skills, assets, fittings, killmails, industry |
   | `economy_` | wallet, orders, contracts |
   | `planets_` | planetary industry |
   | `comms_` | mail, calendar, contacts |
@@ -113,6 +113,7 @@ Contact: nate@synap6.io or in-game 'Burzrujat'
 - `internal/skillplan/` — skill-plan arithmetic: SP per level,
   training speed, ordering targets with their prerequisites, the
   remap advisor. Pure; the skill pages supply the skill graph
+- `internal/app/skillplans/` — the Skill Plans module: plan pages, plan-from-fit and plan editing over `module.Deps`, built on `internal/skillplan`
 - `internal/app/buildplanner/` — the Build Planner module: its page, JSON payload and recipe source over the SDE, built on `module.Deps`
 - `internal/humanize/`, `internal/tags/` — small pure wording and tag helpers shared by core and modules
 - `internal/buildplan/` — the industry build planner's engine: the

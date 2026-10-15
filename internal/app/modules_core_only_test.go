@@ -18,7 +18,7 @@ func TestCoreOnlyOmitsModules(t *testing.T) {
 	}
 	for section, entries := range sectionNav {
 		for _, e := range entries {
-			if e.Href == "/industry/pi/" || e.Href == "/planner/" || strings.HasPrefix(e.Href, "/intel/") || e.Href == "/market/ideas/" || e.Href == "/discord/servers" {
+			if e.Href == "/industry/pi/" || e.Href == "/planner/" || e.Href == "/skills/plans" || strings.HasPrefix(e.Href, "/intel/") || e.Href == "/market/ideas/" || e.Href == "/discord/servers" {
 				t.Errorf("nav section %q lists %s in the core-only build", section, e.Href)
 			}
 		}
@@ -37,7 +37,7 @@ func TestCoreOnlyOmitsModules(t *testing.T) {
 		t.Errorf("GET /industry/pi/ in the core-only build: status %d, want 404", code)
 	}
 
-	for _, path := range []string{"/planner/", "/planner/suggest", "/intel/wars/", "/intel/incursions/", "/intel/fw/", "/market/ideas/", "/discord/servers"} {
+	for _, path := range []string{"/skills/plans", "/planner/", "/planner/suggest", "/intel/wars/", "/intel/incursions/", "/intel/fw/", "/market/ideas/", "/discord/servers"} {
 		if code, _ := getPage(t, app, cookie, path); code != http.StatusNotFound {
 			t.Errorf("GET %s in the core-only build: status %d, want 404", path, code)
 		}
@@ -63,7 +63,7 @@ func TestCoreOnlyOmitsModules(t *testing.T) {
 // TestCoreOnlyHasNoModuleScopes: with no module compiled in, the scope
 // surfaces know only the core manifest.
 func TestCoreOnlyHasNoModuleScopes(t *testing.T) {
-	for _, id := range []string{"buildplanner", "piplanner", "intel", "tradeideas", "discord"} {
+	for _, id := range []string{"buildplanner", "skillplans", "piplanner", "intel", "tradeideas", "discord"} {
 		if _, ok := moduleByID(id); ok {
 			t.Errorf("the core-only build still knows %s's declaration", id)
 		}

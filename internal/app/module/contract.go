@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/alexedwards/scs/v2"
 
@@ -339,6 +340,17 @@ type Deps interface {
 	WriteSuggest(w http.ResponseWriter, rows []SuggestItem)
 	// ServeCSV writes a CSV download the way every export does.
 	ServeCSV(w http.ResponseWriter, filename string, header []string, rows [][]string)
+
+	// --- skills and fragments (the skill plans module reads these) ---------
+
+	// SkillsViewOpened tells the foresight that this account opened the
+	// character's skills views, so their snapshots stay warm.
+	SkillsViewOpened(ctx context.Context, userID, characterID int64)
+	// LiveSkillqueue is the queue entries still to train at now.
+	LiveSkillqueue(queue esi.Skillqueue, now time.Time) esi.Skillqueue
+	// RenderFragmentStatus answers with one named template of a page
+	// file (the live-region swap), at the given status.
+	RenderFragmentStatus(w http.ResponseWriter, status int, page, define string, data any)
 
 	// --- the session, pages and the site ---------------------------------
 

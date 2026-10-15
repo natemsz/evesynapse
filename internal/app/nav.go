@@ -93,7 +93,6 @@ var sectionNav = map[string][]navEntry{
 	"pilot": {
 		{"/character/", "Overview", []string{"character.html"}},
 		{"/characters/", "Characters", []string{"characters.html"}},
-		{"/skills/plans", "Skill Plans", []string{"skillplans.html"}},
 		{"/assets/", "Assets", []string{"assets.html"}},
 		{"/wallet/", "Wallet", []string{"wallet.html"}},
 		{"/mail/", "Mail", []string{"mail.html"}},

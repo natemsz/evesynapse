@@ -212,7 +212,7 @@
   {{if .CharacterPage.BrowseWarming}}
   <p><small>Skill data is still loading. The full catalog appears when the static data import finishes; progress is on the <a href="/sync/">Sync page</a>.</small></p>
   {{else}}
-  {{if not .CharacterPage.Plans}}<p><small><a href="/skills/plans?character={{.CharacterPage.CharacterID}}">Create a skill plan</a> to add skills straight from this catalog.</small></p>{{end}}
+  {{if and (moduleOn "skillplans") (not .CharacterPage.Plans)}}<p><small><a href="/skills/plans?character={{.CharacterPage.CharacterID}}">Create a skill plan</a> to add skills straight from this catalog.</small></p>{{end}}
   {{range .CharacterPage.Browse}}
   <section class="foldable" data-fold="closed">
   <h3>{{.Name}}</h3>

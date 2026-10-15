@@ -35,3 +35,11 @@ func PluralSuffix(n int) string {
 	}
 	return "s"
 }
+
+// Rank renders an SDE skill rank (always integral in practice): "3x".
+func Rank(rank float64) string {
+	if rank == float64(int64(rank)) {
+		return fmt.Sprintf("%dx", int64(rank))
+	}
+	return fmt.Sprintf("%.1fx", rank)
+}

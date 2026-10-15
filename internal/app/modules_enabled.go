@@ -8,6 +8,7 @@ import (
 	"evesynapse/internal/app/intel"
 	"evesynapse/internal/app/module"
 	"evesynapse/internal/app/piplanner"
+	"evesynapse/internal/app/skillplans"
 	"evesynapse/internal/app/tradeideas"
 )
 
@@ -23,6 +24,7 @@ func init() {
 		discord.Module,
 		intel.Module,
 		piplanner.Module,
+		skillplans.Module,
 		tradeideas.Module,
 	})
 }

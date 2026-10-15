@@ -1,4 +1,4 @@
-package app
+package skillplans
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/humanize"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/skillplan"
 )
@@ -28,14 +29,14 @@ import (
 // sdeSkillGraph is the handler-side skillplan.Graph: SDE table reads,
 // memoized per render (plan expansion revisits the same skills).
 type sdeSkillGraph struct {
-	app  *Application
+	app  *plans
 	ctx  context.Context
 	meta map[int64]skillplan.SkillMeta
 	miss map[int64]bool
 	reqs map[int64][]skillplan.Requirement
 }
 
-func newSDESkillGraph(app *Application, ctx context.Context) *sdeSkillGraph {
+func newSDESkillGraph(app *plans, ctx context.Context) *sdeSkillGraph {
 	return &sdeSkillGraph{
 		app:  app,
 		ctx:  ctx,
@@ -83,13 +84,13 @@ func (g *sdeSkillGraph) Requirements(typeID int64) []skillplan.Requirement {
 // loadCharTraining assembles the engine's character input from the
 // snapshots. loaded=false when the skills snapshot isn't there yet
 // (the worker is still warming this character).
-func (app *Application) loadCharTraining(ctx context.Context, characterID int64) (skillplan.CharTraining, esi.Attributes, bool) {
+func (app *plans) loadCharTraining(ctx context.Context, characterID int64) (skillplan.CharTraining, esi.Attributes, bool) {
 	ct := skillplan.CharTraining{
 		SP:       make(map[int64]int64),
 		QueuedTo: make(map[int64]int),
 	}
 	var skills esi.Skills
-	if !app.loadCorpSnapshot(ctx, characterID, esi.SnapSkills, &skills) {
+	if !app.deps.LoadCorpSnapshot(ctx, characterID, esi.SnapSkills, &skills) {
 		return ct, esi.Attributes{}, false
 	}
 	for _, s := range skills.Skills {
@@ -98,10 +99,10 @@ func (app *Application) loadCharTraining(ctx context.Context, characterID int64)
 	ct.Unallocated = skills.UnallocatedSP
 
 	var queue esi.Skillqueue
-	if app.loadCorpSnapshot(ctx, characterID, esi.SnapSkillqueue, &queue) {
+	if app.deps.LoadCorpSnapshot(ctx, characterID, esi.SnapSkillqueue, &queue) {
 		// Live entries only: a finished level is already in the
 		// trained skills and must not also count as queued.
-		for _, e := range liveSkillqueue(queue, time.Now()) {
+		for _, e := range app.deps.LiveSkillqueue(queue, time.Now()) {
 			if e.FinishedLevel > ct.QueuedTo[e.SkillID] {
 				ct.QueuedTo[e.SkillID] = e.FinishedLevel
 			}
@@ -114,7 +115,7 @@ func (app *Application) loadCharTraining(ctx context.Context, characterID int64)
 	}
 
 	var attrs esi.Attributes
-	app.loadCorpSnapshot(ctx, characterID, esi.SnapAttributes, &attrs)
+	app.deps.LoadCorpSnapshot(ctx, characterID, esi.SnapAttributes, &attrs)
 	return ct, attrs, true
 }
 
@@ -136,14 +137,14 @@ func attrsOrFlat(raw esi.Attributes, loaded bool) (skillplan.AttrSet, bool) {
 // characterAttrsLoaded reports whether the attributes snapshot is
 // readable for the character (separate from skills loading: the
 // times fall back to a flat 20 spread with a notice either way).
-func (app *Application) characterAttrsLoaded(ctx context.Context, characterID int64) bool {
+func (app *plans) characterAttrsLoaded(ctx context.Context, characterID int64) bool {
 	var raw esi.Attributes
-	return app.loadCorpSnapshot(ctx, characterID, esi.SnapAttributes, &raw)
+	return app.deps.LoadCorpSnapshot(ctx, characterID, esi.SnapAttributes, &raw)
 }
 
 // typeNames resolves names for IDs from local caches only.
-func (app *Application) typeNames(ctx context.Context, ids []int64) map[int64]string {
-	return app.esi.CachedTypeNames(ctx, ids)
+func (app *plans) typeNames(ctx context.Context, ids []int64) map[int64]string {
+	return app.deps.CachedTypeNames(ctx, ids)
 }
 
 func nameOrID(names map[int64]string, id int64) string {
@@ -278,28 +279,28 @@ type fitPreviewRow struct {
 // Handlers.
 // ---------------------------------------------------------------------------
 
-func (app *Application) handleSkillPlans(w http.ResponseWriter, r *http.Request) {
+func (app *plans) handleSkillPlans(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
+	data := &PageData{ShellData: app.deps.PageShell(ctx)}
 
-	userID := app.userID(ctx)
+	userID := app.deps.UserID(ctx)
 	if userID == 0 {
-		app.render(ctx, w, http.StatusOK, "skillplans.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "skillplans.html", data)
 		return
 	}
-	_, active, links, err := app.pickCharacter(ctx, r, "/skills/plans")
+	_, active, links, err := app.deps.PickCharacter(ctx, r, "/skills/plans")
 	if err != nil {
 		logging.Errorf("skill plans: list characters: %v", err)
 		data.Error = "Could not load skill plans; check the server log."
-		app.render(ctx, w, http.StatusOK, "skillplans.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "skillplans.html", data)
 		return
 	}
 	if links == nil {
-		app.render(ctx, w, http.StatusOK, "skillplans.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "skillplans.html", data)
 		return
 	}
 	data.SkillsChars = links
-	app.foresightOpened(ctx, userID, foresightSkillsView(active.CharacterID))
+	app.deps.SkillsViewOpened(ctx, userID, active.CharacterID)
 
 	view := &skillPlansView{CharacterID: active.CharacterID, CharacterName: active.Name}
 	data.SkillPlans = view
@@ -309,7 +310,7 @@ func (app *Application) handleSkillPlans(w http.ResponseWriter, r *http.Request)
 			logging.Errorf("skill plans: count skill meta: %v", err)
 		}
 		view.GraphWarming = true
-		app.render(ctx, w, http.StatusOK, "skillplans.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "skillplans.html", data)
 		return
 	}
 
@@ -317,7 +318,7 @@ func (app *Application) handleSkillPlans(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		logging.Errorf("skill plans: list for character %d: %v", active.CharacterID, err)
 		data.Error = "Could not load skill plans; check the server log."
-		app.render(ctx, w, http.StatusOK, "skillplans.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "skillplans.html", data)
 		return
 	}
 	all := make([]skillPlanSummary, 0, len(plans))
@@ -385,7 +386,7 @@ func (app *Application) handleSkillPlans(w http.ResponseWriter, r *http.Request)
 				trained = trainedLevel(searchGraph, ct, hit.TypeID)
 			}
 			row := skillSearchRow{
-				SkillID: hit.TypeID, Name: hit.Name, Rank: formatRank(hit.Rank),
+				SkillID: hit.TypeID, Name: hit.Name, Rank: humanize.Rank(hit.Rank),
 				Squares: planLevels(trained, trained),
 			}
 			// Only the levels above what is trained: those are what a plan
@@ -397,7 +398,7 @@ func (app *Application) handleSkillPlans(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	app.render(ctx, w, http.StatusOK, "skillplans.html", data)
+	app.deps.Render(ctx, w, http.StatusOK, "skillplans.html", data)
 }
 
 // planLeft says what is left in a computed plan, for the picker's list.
@@ -415,7 +416,7 @@ func planLeft(d *skillPlanDetail) string {
 
 // buildPlanDetail computes one plan against the character's
 // current training state and shapes it for the editor.
-func (app *Application) buildPlanDetail(ctx context.Context, ch db.Character, plan db.SkillPlan, confirmDelete bool) *skillPlanDetail {
+func (app *plans) buildPlanDetail(ctx context.Context, ch db.Character, plan db.SkillPlan, confirmDelete bool) *skillPlanDetail {
 	detail := &skillPlanDetail{ID: plan.ID, Name: plan.Name, ConfirmDelete: confirmDelete}
 
 	items, err := app.queries.ListSkillPlanItems(ctx, plan.ID)
@@ -502,7 +503,7 @@ func (app *Application) buildPlanDetail(ctx context.Context, ch db.Character, pl
 			Squares: planLevels(s.FromLevel, s.ToLevel),
 			FromTo:  fmt.Sprintf("%s → %s", esi.RomanLevel(s.FromLevel), esi.RomanLevel(s.ToLevel)),
 			SP:      esi.FormatInt(s.SPRemaining),
-			Time:    humanDuration(time.Duration(s.Seconds * float64(time.Second))),
+			Time:    humanize.Duration(time.Duration(s.Seconds * float64(time.Second))),
 			Finish:  s.Finish.UTC().Format("2006-01-02 15:04 UTC"),
 		}
 		if !row.Direct {
@@ -566,7 +567,7 @@ func (app *Application) buildPlanDetail(ctx context.Context, ch db.Character, pl
 
 	if len(outcome.Steps) > 0 {
 		detail.TotalSP = esi.FormatInt(outcome.TotalSP)
-		detail.TotalTime = humanDuration(time.Duration(outcome.TotalSecond * float64(time.Second)))
+		detail.TotalTime = humanize.Duration(time.Duration(outcome.TotalSecond * float64(time.Second)))
 		if ct.QueueEnd.After(time.Now()) {
 			detail.StartsNote = fmt.Sprintf("Plan timing starts when your current queue finishes (%s).",
 				ct.QueueEnd.UTC().Format("2006-01-02 15:04 UTC"))
@@ -581,12 +582,12 @@ func (app *Application) buildPlanDetail(ctx context.Context, ch db.Character, pl
 		rv := &remapView{
 			CurrentLine: spreadLine(advice.Current),
 			BestLine:    spreadLine(advice.Best),
-			CurrentTime: humanDuration(time.Duration(advice.CurSeconds * float64(time.Second))),
-			BestTime:    humanDuration(time.Duration(advice.BestSeconds * float64(time.Second))),
+			CurrentTime: humanize.Duration(time.Duration(advice.CurSeconds * float64(time.Second))),
+			BestTime:    humanize.Duration(time.Duration(advice.BestSeconds * float64(time.Second))),
 		}
 		if advice.Best != advice.Current && advice.BestSeconds < advice.CurSeconds {
 			saving := advice.CurSeconds - advice.BestSeconds
-			rv.Saving = humanDuration(time.Duration(saving * float64(time.Second)))
+			rv.Saving = humanize.Duration(time.Duration(saving * float64(time.Second)))
 		}
 		if rawAttrs.BonusRemaps != nil {
 			rv.BonusNote = fmt.Sprintf("%d bonus remap(s) available", *rawAttrs.BonusRemaps)
@@ -607,14 +608,6 @@ func spreadLine(a skillplan.AttrSet) string {
 		a.Charisma, a.Intelligence, a.Memory, a.Perception, a.Willpower)
 }
 
-// formatRank renders an SDE rank (always integral in practice).
-func formatRank(rank float64) string {
-	if rank == float64(int64(rank)) {
-		return fmt.Sprintf("%dx", int64(rank))
-	}
-	return fmt.Sprintf("%.1fx", rank)
-}
-
 // ---------------------------------------------------------------------------
 // POST handlers. All verify plan ownership against the session
 // user and redirect back to the relevant page.
@@ -629,7 +622,7 @@ func skillPlansRedirect(w http.ResponseWriter, r *http.Request, characterID, pla
 }
 
 // ownedPlan loads a plan the session user owns for the character.
-func (app *Application) ownedPlan(ctx context.Context, userID, characterID, planID int64) (db.SkillPlan, bool) {
+func (app *plans) ownedPlan(ctx context.Context, userID, characterID, planID int64) (db.SkillPlan, bool) {
 	plan, err := app.queries.GetSkillPlan(ctx, db.GetSkillPlanParams{ID: planID, UserID: userID})
 	if err != nil || plan.CharacterID != characterID {
 		return db.SkillPlan{}, false
@@ -637,9 +630,9 @@ func (app *Application) ownedPlan(ctx context.Context, userID, characterID, plan
 	return plan, true
 }
 
-func (app *Application) handleSkillPlanCreate(w http.ResponseWriter, r *http.Request) {
+func (app *plans) handleSkillPlanCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := app.userID(ctx)
+	userID := app.deps.UserID(ctx)
 	if err := r.ParseForm(); err != nil || userID == 0 {
 		http.Redirect(w, r, "/skills/plans", http.StatusSeeOther)
 		return
@@ -672,7 +665,7 @@ func (app *Application) handleSkillPlanCreate(w http.ResponseWriter, r *http.Req
 
 // userOwnsCharacter reports whether the character belongs to the
 // user (plans are only ever made for one's own characters).
-func (app *Application) userOwnsCharacter(ctx context.Context, userID, characterID int64) bool {
+func (app *plans) userOwnsCharacter(ctx context.Context, userID, characterID int64) bool {
 	characters, err := app.queries.ListCharactersByUser(ctx, userID)
 	if err != nil {
 		return false
@@ -685,9 +678,9 @@ func (app *Application) userOwnsCharacter(ctx context.Context, userID, character
 	return false
 }
 
-func (app *Application) handleSkillPlanItemAdd(w http.ResponseWriter, r *http.Request) {
+func (app *plans) handleSkillPlanItemAdd(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := app.userID(ctx)
+	userID := app.deps.UserID(ctx)
 	if err := r.ParseForm(); err != nil || userID == 0 {
 		http.Redirect(w, r, "/skills/plans", http.StatusSeeOther)
 		return
@@ -722,7 +715,7 @@ func (app *Application) handleSkillPlanItemAdd(w http.ResponseWriter, r *http.Re
 	}
 	if level <= trained {
 		names := app.typeNames(ctx, []int64{skillID})
-		app.flash(ctx, fmt.Sprintf("%s is already trained to %s on this character, so it is not added. Pick a higher level to plan.",
+		app.deps.Flash(ctx, fmt.Sprintf("%s is already trained to %s on this character, so it is not added. Pick a higher level to plan.",
 			nameOrID(names, skillID), esi.RomanLevel(trained)))
 		skillPlansRedirect(w, r, characterID, planID)
 		return
@@ -735,7 +728,7 @@ func (app *Application) handleSkillPlanItemAdd(w http.ResponseWriter, r *http.Re
 	for _, item := range existingItems {
 		if item.SkillTypeID == skillID && int(item.TargetLevel) >= level {
 			names := app.typeNames(ctx, []int64{skillID})
-			app.flash(ctx, fmt.Sprintf("%s is already in this plan to %s.",
+			app.deps.Flash(ctx, fmt.Sprintf("%s is already in this plan to %s.",
 				nameOrID(names, skillID), esi.RomanLevel(int(item.TargetLevel))))
 			skillPlansRedirect(w, r, characterID, planID)
 			return
@@ -772,9 +765,9 @@ type planEditRequest struct {
 // planEditFromRequest reads and checks an edit request. ok is false when
 // the response has been written (nothing to edit: a redirect, or a 404
 // for the in-place caller).
-func (app *Application) planEditFromRequest(w http.ResponseWriter, r *http.Request) (req planEditRequest, ok bool) {
+func (app *plans) planEditFromRequest(w http.ResponseWriter, r *http.Request) (req planEditRequest, ok bool) {
 	ctx := r.Context()
-	req.userID = app.userID(ctx)
+	req.userID = app.deps.UserID(ctx)
 	if err := r.ParseForm(); err != nil || req.userID == 0 {
 		if wantsFragment(r) {
 			http.Error(w, "not signed in", http.StatusUnauthorized)
@@ -809,11 +802,11 @@ func wantsFragment(r *http.Request) bool {
 // planEdited answers an edit: the refreshed editor for the in-place
 // caller (409 with the reason shown inside it when refused), or a
 // redirect back to the page with the reason as a flash message.
-func (app *Application) planEdited(w http.ResponseWriter, r *http.Request, req planEditRequest, refusal string) {
+func (app *plans) planEdited(w http.ResponseWriter, r *http.Request, req planEditRequest, refusal string) {
 	ctx := r.Context()
 	if !wantsFragment(r) {
 		if refusal != "" {
-			app.flash(ctx, refusal)
+			app.deps.Flash(ctx, refusal)
 		}
 		skillPlansRedirect(w, r, req.characterID, req.plan.ID)
 		return
@@ -827,10 +820,10 @@ func (app *Application) planEdited(w http.ResponseWriter, r *http.Request, req p
 	if refusal != "" {
 		status = http.StatusConflict
 	}
-	app.renderFragmentStatus(w, status, "skillplans.html", "plan-body", view)
+	app.deps.RenderFragmentStatus(w, status, "skillplans.html", "plan-body", view)
 }
 
-func (app *Application) handleSkillPlanItemRemove(w http.ResponseWriter, r *http.Request) {
+func (app *plans) handleSkillPlanItemRemove(w http.ResponseWriter, r *http.Request) {
 	req, ok := app.planEditFromRequest(w, r)
 	if !ok {
 		return
@@ -841,7 +834,7 @@ func (app *Application) handleSkillPlanItemRemove(w http.ResponseWriter, r *http
 	app.planEdited(w, r, req, "")
 }
 
-func (app *Application) handleSkillPlanItemMove(w http.ResponseWriter, r *http.Request) {
+func (app *plans) handleSkillPlanItemMove(w http.ResponseWriter, r *http.Request) {
 	req, ok := app.planEditFromRequest(w, r)
 	if !ok {
 		return
@@ -859,7 +852,7 @@ func (app *Application) handleSkillPlanItemMove(w http.ResponseWriter, r *http.R
 // enough when prerequisites sit between them. The move is made on the
 // computed order and the positions are renumbered to match, which the
 // computation then reproduces.
-func (app *Application) movePlanSkill(ctx context.Context, plan db.SkillPlan, skillID int64, dir string) string {
+func (app *plans) movePlanSkill(ctx context.Context, plan db.SkillPlan, skillID int64, dir string) string {
 	if dir != "up" && dir != "down" {
 		return "Pick a direction to move it."
 	}
@@ -922,9 +915,9 @@ func (app *Application) movePlanSkill(ctx context.Context, plan db.SkillPlan, sk
 	return ""
 }
 
-func (app *Application) handleSkillPlanDelete(w http.ResponseWriter, r *http.Request) {
+func (app *plans) handleSkillPlanDelete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := app.userID(ctx)
+	userID := app.deps.UserID(ctx)
 	if err := r.ParseForm(); err != nil || userID == 0 {
 		http.Redirect(w, r, "/skills/plans", http.StatusSeeOther)
 		return
@@ -940,7 +933,7 @@ func (app *Application) handleSkillPlanDelete(w http.ResponseWriter, r *http.Req
 }
 
 // createPlanWithItems makes a plan and fills it, returning its ID.
-func (app *Application) createPlanWithItems(ctx context.Context, userID, characterID int64, name string, targets []skillplan.Target) (int64, error) {
+func (app *plans) createPlanWithItems(ctx context.Context, userID, characterID int64, name string, targets []skillplan.Target) (int64, error) {
 	plan, err := app.queries.CreateSkillPlan(ctx, db.CreateSkillPlanParams{
 		UserID:      userID,
 		CharacterID: characterID,
@@ -962,7 +955,7 @@ func (app *Application) createPlanWithItems(ctx context.Context, userID, charact
 
 // uniquePlanName finds a free plan name for the character by
 // numbering duplicates ("Loki", "Loki (2)", …).
-func (app *Application) uniquePlanName(ctx context.Context, userID, characterID int64, base string) string {
+func (app *plans) uniquePlanName(ctx context.Context, userID, characterID int64, base string) string {
 	plans, err := app.queries.ListSkillPlans(ctx, db.ListSkillPlansParams{UserID: userID, CharacterID: characterID})
 	if err != nil {
 		return base
@@ -991,9 +984,9 @@ func (app *Application) uniquePlanName(ctx context.Context, userID, characterID 
 
 // loadFitting finds one saved fitting of the character from its
 // snapshot.
-func (app *Application) loadFitting(ctx context.Context, characterID, fittingID int64) (esi.Fitting, bool) {
+func (app *plans) loadFitting(ctx context.Context, characterID, fittingID int64) (esi.Fitting, bool) {
 	var fittings esi.Fittings
-	if !app.loadCorpSnapshot(ctx, characterID, esi.SnapFittings, &fittings) {
+	if !app.deps.LoadCorpSnapshot(ctx, characterID, esi.SnapFittings, &fittings) {
 		return esi.Fitting{}, false
 	}
 	for _, f := range fittings {
@@ -1006,7 +999,7 @@ func (app *Application) loadFitting(ctx context.Context, characterID, fittingID 
 
 // fitClosureTargets computes a fitting's skill closure plus the
 // per-skill status against the character (for the preview).
-func (app *Application) fitClosureTargets(ctx context.Context, ch db.Character, fit esi.Fitting) (targets []skillplan.Target, preview *fitPreview) {
+func (app *plans) fitClosureTargets(ctx context.Context, ch db.Character, fit esi.Fitting) (targets []skillplan.Target, preview *fitPreview) {
 	graph := newSDESkillGraph(app, ctx)
 	typeIDs := []int64{fit.ShipTypeID}
 	seen := map[int64]bool{fit.ShipTypeID: true}
@@ -1059,21 +1052,21 @@ func (app *Application) fitClosureTargets(ctx context.Context, ch db.Character, 
 	return targets, preview
 }
 
-func (app *Application) handleSkillPlanFitPreview(w http.ResponseWriter, r *http.Request) {
+func (app *plans) handleSkillPlanFitPreview(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
-	userID := app.userID(ctx)
+	data := &PageData{ShellData: app.deps.PageShell(ctx)}
+	userID := app.deps.UserID(ctx)
 	if userID == 0 {
-		app.render(ctx, w, http.StatusOK, "skillplans.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "skillplans.html", data)
 		return
 	}
-	_, active, links, err := app.pickCharacter(ctx, r, "/skills/plans/fit")
+	_, active, links, err := app.deps.PickCharacter(ctx, r, "/skills/plans/fit")
 	if err != nil || links == nil {
 		if err != nil {
 			logging.Errorf("skill plans: fit preview characters: %v", err)
 			data.Error = "Could not load fittings; check the server log."
 		}
-		app.render(ctx, w, http.StatusOK, "skillplans.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "skillplans.html", data)
 		return
 	}
 	data.SkillsChars = links
@@ -1084,17 +1077,17 @@ func (app *Application) handleSkillPlanFitPreview(w http.ResponseWriter, r *http
 	fit, ok := app.loadFitting(ctx, active.CharacterID, fittingID)
 	if !ok {
 		data.Error = "That fitting isn't in this character's saved fittings (or they haven't synced yet)."
-		app.render(ctx, w, http.StatusOK, "skillplans.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "skillplans.html", data)
 		return
 	}
 	_, preview := app.fitClosureTargets(ctx, active, fit)
 	view.FitPreview = preview
-	app.render(ctx, w, http.StatusOK, "skillplans.html", data)
+	app.deps.Render(ctx, w, http.StatusOK, "skillplans.html", data)
 }
 
-func (app *Application) handleSkillPlanFromFit(w http.ResponseWriter, r *http.Request) {
+func (app *plans) handleSkillPlanFromFit(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := app.userID(ctx)
+	userID := app.deps.UserID(ctx)
 	if err := r.ParseForm(); err != nil || userID == 0 {
 		http.Redirect(w, r, "/fittings/", http.StatusSeeOther)
 		return
@@ -1142,12 +1135,12 @@ func (app *Application) handleSkillPlanFromFit(w http.ResponseWriter, r *http.Re
 	fitTotal := len(kept)
 	kept, skipped, _ := app.untrainedTargets(ctx, characterID, graph, kept)
 	if len(kept) == 0 && fitTotal > 0 {
-		app.flash(ctx, "This character already has every skill this fit needs, so there is nothing to plan.")
+		app.deps.Flash(ctx, "This character already has every skill this fit needs, so there is nothing to plan.")
 		skillPlansRedirect(w, r, characterID, 0)
 		return
 	}
 	if len(skipped) > 0 {
-		app.flash(ctx, fmt.Sprintf("Plan created without the %d skill(s) already trained: %s.", len(skipped), strings.Join(skipped, ", ")))
+		app.deps.Flash(ctx, fmt.Sprintf("Plan created without the %d skill(s) already trained: %s.", len(skipped), strings.Join(skipped, ", ")))
 	}
 	base := strings.TrimSpace(fit.Name)
 	if base == "" {
@@ -1179,7 +1172,7 @@ func trainedLevel(graph skillplan.Graph, ct skillplan.CharTraining, skillID int6
 // done does not belong in one. skipped says what was left out, as
 // "Name level" strings. With no skills snapshot yet there is nothing to
 // compare against, so every target stays and known is false.
-func (app *Application) untrainedTargets(ctx context.Context, characterID int64, graph skillplan.Graph, targets []skillplan.Target) (kept []skillplan.Target, skipped []string, known bool) {
+func (app *plans) untrainedTargets(ctx context.Context, characterID int64, graph skillplan.Graph, targets []skillplan.Target) (kept []skillplan.Target, skipped []string, known bool) {
 	ct, _, loaded := app.loadCharTraining(ctx, characterID)
 	if !loaded {
 		return targets, nil, false

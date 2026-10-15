@@ -636,15 +636,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/skills", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleSkills)
-		r.Get("/plans", app.handleSkillPlans)
-		r.Get("/plans/", app.handleSkillPlans) // old links and bookmarks carry the slash
-		r.Get("/plans/fit", app.handleSkillPlanFitPreview)
-		r.Post("/plans/create", app.handleSkillPlanCreate)
-		r.Post("/plans/item-add", app.handleSkillPlanItemAdd)
-		r.Post("/plans/item-remove", app.handleSkillPlanItemRemove)
-		r.Post("/plans/item-move", app.handleSkillPlanItemMove)
-		r.Post("/plans/delete", app.handleSkillPlanDelete)
-		r.Post("/plans/from-fit", app.handleSkillPlanFromFit)
 	})
 
 	r.Route("/character", func(r chi.Router) {
@@ -1139,6 +1130,18 @@ func (app *Application) WriteSuggest(w http.ResponseWriter, rows []module.Sugges
 
 func (app *Application) ServeCSV(w http.ResponseWriter, filename string, header []string, rows [][]string) {
 	serveCSV(w, filename, header, rows)
+}
+
+func (app *Application) SkillsViewOpened(ctx context.Context, userID, characterID int64) {
+	app.foresightOpened(ctx, userID, foresightSkillsView(characterID))
+}
+
+func (app *Application) LiveSkillqueue(queue esi.Skillqueue, now time.Time) esi.Skillqueue {
+	return liveSkillqueue(queue, now)
+}
+
+func (app *Application) RenderFragmentStatus(w http.ResponseWriter, status int, page, define string, data any) {
+	app.renderFragmentStatus(w, status, page, define, data)
 }
 
 func (app *Application) AnonPages() func(http.Handler) http.Handler {

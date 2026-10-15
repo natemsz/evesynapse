@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"evesynapse/internal/app/skillplans"
 	"evesynapse/internal/esi"
 )
 
@@ -70,7 +71,7 @@ func TestSkillqueueFinishedEntriesAreTrained(t *testing.T) {
 		t.Error("home fleet row shows the finished entry as training")
 	}
 
-	ct, _, ok := app.loadCharTraining(ctx, fixtureCharA)
+	ct, _, ok := skillplans.LoadCharTraining(ctx, app, fixtureCharA)
 	if !ok {
 		t.Fatal("skill planner: training state not loaded")
 	}

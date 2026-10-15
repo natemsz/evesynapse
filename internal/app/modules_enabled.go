@@ -4,6 +4,9 @@ package app
 
 import (
 	"evesynapse/internal/app/buildplanner"
+	"evesynapse/internal/app/calendar"
+	"evesynapse/internal/app/contacts"
+	"evesynapse/internal/app/contracts"
 	"evesynapse/internal/app/corpdata"
 	"evesynapse/internal/app/discord"
 	"evesynapse/internal/app/doctrines"
@@ -11,7 +14,9 @@ import (
 	"evesynapse/internal/app/groups"
 	"evesynapse/internal/app/intel"
 	"evesynapse/internal/app/leaderboard"
+	"evesynapse/internal/app/mail"
 	"evesynapse/internal/app/module"
+	"evesynapse/internal/app/orders"
 	"evesynapse/internal/app/piplanner"
 	"evesynapse/internal/app/publicfits"
 	"evesynapse/internal/app/restock"
@@ -20,6 +25,7 @@ import (
 	"evesynapse/internal/app/srp"
 	"evesynapse/internal/app/tradefinder"
 	"evesynapse/internal/app/tradeideas"
+	"evesynapse/internal/app/wallet"
 )
 
 // The build-selected modules. A module is compiled in when this file
@@ -34,10 +40,16 @@ func init() {
 		fitting.Module,
 		publicfits.Module,
 		skillplans.Module,
+		wallet.Module,
+		mail.Module,
+		calendar.Module,
+		contacts.Module,
 		scanner.Module,
 		tradefinder.Module,
 		leaderboard.Module,
 		restock.Module,
+		orders.Module,
+		contracts.Module,
 		corpdata.Module,
 		doctrines.Module,
 		srp.Module,

@@ -497,14 +497,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/", app.handlePlanets)
 	})
 
-	r.Route("/mail", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleMail)
-		r.Post("/read/", app.handleMailMarkRead)
-		r.Get("/compose/", app.handleMailCompose)
-		r.Post("/send/", app.handleMailSend)
-	})
-
 	// Notifications (notify_pages.go): the list, and the two actions
 	// that change what is unread.
 	r.Route("/notifications", func(r chi.Router) {
@@ -520,12 +512,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/push/test", app.handlePushTest)
 	})
 
-	r.Route("/calendar", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleCalendar)
-		r.Post("/respond", app.handleCalendarRespond)
-	})
-
 	// Ops (ops.go): EveSynapse's own calendar entries and the
 	// sign-ups to them.
 	r.Route("/ops", func(r chi.Router) {
@@ -538,12 +524,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/{opID}/signup", app.handleOpSignup)
 		r.Post("/{opID}/cancel", app.handleOpCancel)
 		r.Post("/{opID}/attendance", app.handleOpAttendance)
-	})
-
-	r.Route("/contacts", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleContacts)
-		r.Get("/name-fragment", app.handleContactNameFragment)
 	})
 
 	// Generic entity-label live regions (worker_pagewants.go): a pending
@@ -669,22 +649,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/killmails", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleKillmails)
-	})
-
-	r.Route("/wallet", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleWallet)
-		r.Get("/graph-fragment", app.handleWalletGraphFragment)
-	})
-
-	r.Route("/orders", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleOrders)
-	})
-
-	r.Route("/contracts", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleContracts)
 	})
 
 	// Public tools: the build planner, the PI planner and the Intel
@@ -1229,6 +1193,78 @@ func (app *Application) SendEVEMail(ctx context.Context, from db.Character, reci
 }
 
 func (app *Application) ESIRefusalDetail(err error) string { return esiRefusalDetail(err) }
+
+func (app *Application) EconSection(ctx context.Context, characterID int64, kind string, out any) module.EconSectionState {
+	return app.econSection(ctx, characterID, kind, out)
+}
+
+func (app *Application) OpCorps(ctx context.Context, userID int64, managedOnly bool) []int64 {
+	return opCorps(app.opMembers(ctx, userID), managedOnly)
+}
+
+func (app *Application) RelinkURL(moduleID string, characterID int64) string {
+	return relinkURL(moduleID, characterID)
+}
+
+func (app *Application) CharLinkHTML(ctx context.Context, characterID int64, name string) template.HTML {
+	return charLink(app.viewerCharSet(ctx), characterID, name)
+}
+
+func (app *Application) NoteCharacterWant(ctx context.Context, characterID int64) {
+	app.notePageWant(ctx, pageWantCharacter, characterID, 0)
+}
+
+func (app *Application) MarkMailReadLocally(ctx context.Context, characterID, mailID int64) {
+	app.markMailReadLocally(ctx, characterID, mailID)
+}
+
+func (app *Application) AttachWalletGraph(ctx context.Context, userID, characterID int64, journal esi.WalletJournal, journalLoaded bool) any {
+	return app.attachWalletGraph(ctx, userID, characterID, journal, journalLoaded)
+}
+
+func (app *Application) EmptyWalletGraph() any { return &walletGraphView{State: walletGraphEmpty} }
+
+func (app *Application) WalletFlow(ctx context.Context, ch db.Character) any {
+	return app.buildWalletFlow(ctx, app.loadCharSnaps(ctx, ch.UserID, []db.Character{ch}, []string{widgetWalletFlow}))
+}
+
+func (app *Application) AllianceDisplayName(ctx context.Context, allianceID int64) string {
+	return app.allianceDisplayName(ctx, allianceID)
+}
+
+func (app *Application) ResolvedCharacterName(ctx context.Context, characterID int64) (string, bool) {
+	return app.resolvedCharacterName(ctx, characterID)
+}
+
+func (app *Application) CharacterLabelPending(ctx context.Context, characterID int64) bool {
+	return app.characterLabelPending(ctx, characterID)
+}
+
+func (app *Application) CachedCharacterName(id int64) (string, bool) {
+	return app.esi.CachedCharacterName(id)
+}
+
+func (app *Application) CachedCorpName(id int64) (string, bool) { return app.esi.CachedCorpName(id) }
+
+func (app *Application) LinkPlace(ctx context.Context, locationID int64, title string) module.PlaceRef {
+	return app.linkPlace(ctx, locationID, title)
+}
+
+func (app *Application) EconLocationTitle(ctx context.Context, locationID int64) string {
+	return app.econLocationTitle(ctx, locationID)
+}
+
+func (app *Application) RewriteSnapshot(ctx context.Context, characterID int64, kind string, edit func(payload string) (string, bool)) {
+	app.rewriteSnapshot(ctx, characterID, kind, edit)
+}
+
+func (app *Application) PutESI(ctx context.Context, token, path string, body any) error {
+	return app.esi.PutJSONAuthed(ctx, token, path, body)
+}
+
+func (app *Application) PostESIPublic(ctx context.Context, path string, body, out any) error {
+	return app.esi.PostJSON(ctx, path, body, out)
+}
 
 // FitBuilder is the fit foundation over this application's stored state.
 func (app *Application) FitBuilder() *fitview.Builder { return app.fitBuilder() }

@@ -1,9 +1,10 @@
-package app
+package calendar
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"evesynapse/internal/app/module"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -59,9 +60,9 @@ func calendarEventURL(characterID int64, month string, eventID int64) string {
 	return "/calendar/?" + q.Encode()
 }
 
-func (app *Application) handleCalendarRespond(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleCalendarRespond(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := app.userID(ctx)
+	userID := app.deps.UserID(ctx)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
@@ -78,25 +79,25 @@ func (app *Application) handleCalendarRespond(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	if !characterHasScope(ch, calendarRespondScope) {
-		http.Error(w, mailRelinkNotice(ch.Name, "answer calendar events"), http.StatusForbidden)
+	if !module.CharacterHasScope(ch, module.CalendarRespondScope) {
+		http.Error(w, module.RelinkNotice(ch.Name, "answer calendar events"), http.StatusForbidden)
 		return
 	}
-	token, err := app.validAccessToken(ctx, ch)
+	token, err := app.deps.AccessToken(ctx, ch)
 	if err != nil {
 		logging.Errorf("calendar respond: token for character %d: %v", charID, err)
 		http.Error(w, "Could not reach EVE. Sign in again if it keeps failing.", http.StatusBadGateway)
 		return
 	}
 	path := fmt.Sprintf("/characters/%d/calendar/%d/", charID, eventID)
-	if err := app.esi.PutJSONAuthed(ctx, token, path, map[string]string{"response": answer}); err != nil {
+	if err := app.deps.PutESI(ctx, token, path, map[string]string{"response": answer}); err != nil {
 		var se *esi.StatusError
 		if errors.As(err, &se) && se.Code == http.StatusForbidden {
-			http.Error(w, mailRelinkNotice(ch.Name, "answer calendar events"), http.StatusForbidden)
+			http.Error(w, module.RelinkNotice(ch.Name, "answer calendar events"), http.StatusForbidden)
 			return
 		}
 		logging.Errorf("calendar respond: ESI PUT %s: %v", path, err)
-		http.Error(w, "EVE refused the answer"+esiRefusalDetail(err)+".", http.StatusBadGateway)
+		http.Error(w, "EVE refused the answer"+app.deps.ESIRefusalDetail(err)+".", http.StatusBadGateway)
 		return
 	}
 	// EVE took it. The page renders from stored copies, so record the
@@ -112,8 +113,8 @@ func (app *Application) handleCalendarRespond(w http.ResponseWriter, r *http.Req
 
 // setCalendarAnswerLocally writes the character's answer into the
 // stored event list, the event itself and its attendee list.
-func (app *Application) setCalendarAnswerLocally(ctx context.Context, characterID, eventID int64, answer string) {
-	app.rewriteSnapshot(ctx, characterID, esi.SnapCalendar, func(payload string) (string, bool) {
+func (app *mod) setCalendarAnswerLocally(ctx context.Context, characterID, eventID int64, answer string) {
+	app.deps.RewriteSnapshot(ctx, characterID, esi.SnapCalendar, func(payload string) (string, bool) {
 		var events esi.CalendarEventSummaries
 		if json.Unmarshal([]byte(payload), &events) != nil {
 			return "", false
@@ -127,7 +128,7 @@ func (app *Application) setCalendarAnswerLocally(ctx context.Context, characterI
 		}
 		return "", false
 	})
-	app.rewriteSnapshot(ctx, characterID, esi.CalendarEventKind(eventID), func(payload string) (string, bool) {
+	app.deps.RewriteSnapshot(ctx, characterID, esi.CalendarEventKind(eventID), func(payload string) (string, bool) {
 		var ev esi.CalendarEvent
 		if json.Unmarshal([]byte(payload), &ev) != nil {
 			return "", false
@@ -136,7 +137,7 @@ func (app *Application) setCalendarAnswerLocally(ctx context.Context, characterI
 		out, err := json.Marshal(ev)
 		return string(out), err == nil
 	})
-	app.rewriteSnapshot(ctx, characterID, esi.CalendarAttendeesKind(eventID), func(payload string) (string, bool) {
+	app.deps.RewriteSnapshot(ctx, characterID, esi.CalendarAttendeesKind(eventID), func(payload string) (string, bool) {
 		var attendees esi.CalendarAttendees
 		if json.Unmarshal([]byte(payload), &attendees) != nil {
 			return "", false

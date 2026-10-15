@@ -1,6 +1,8 @@
-package app
+package calendar
 
 import (
+	"evesynapse/internal/app/module"
+	"evesynapse/internal/humanize"
 	"net/http"
 	"sort"
 	"strconv"
@@ -54,7 +56,7 @@ type calendarDetail struct {
 type calendarView struct {
 	CharacterID   int64
 	CharacterName string
-	Events        econSectionState
+	Events        module.EconSectionState
 	Rows          []calendarRow
 	Detail        *calendarDetail
 	// Month is the grid of the month being looked at, holding the
@@ -64,19 +66,19 @@ type calendarView struct {
 	CanCreate bool
 }
 
-func (app *Application) handleCalendar(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleCalendar(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
+	data := &PageData{ShellData: app.deps.PageShell(ctx)}
 
-	_, active, links, err := app.pickCharacter(ctx, r, "/calendar/")
+	_, active, links, err := app.deps.PickCharacter(ctx, r, "/calendar/")
 	if err != nil {
 		logging.Errorf("calendar: list characters: %v", err)
 		data.Error = "Could not load calendar events; check the server log."
-		app.render(ctx, w, http.StatusOK, "calendar.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "calendar.html", data)
 		return
 	}
 	if links == nil {
-		app.render(ctx, w, http.StatusOK, "calendar.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "calendar.html", data)
 		return
 	}
 	data.CalendarChars = links
@@ -85,17 +87,17 @@ func (app *Application) handleCalendar(w http.ResponseWriter, r *http.Request) {
 	data.Calendar = view
 
 	var events esi.CalendarEventSummaries
-	view.Events = app.econSection(ctx, active.CharacterID, esi.SnapCalendar, &events)
+	view.Events = app.deps.EconSection(ctx, active.CharacterID, esi.SnapCalendar, &events)
 	if view.Events.Loaded {
 		sorted := append(esi.CalendarEventSummaries(nil), events...)
 		sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].EventDate < sorted[j].EventDate })
 		for _, ev := range sorted {
 			view.Rows = append(view.Rows, calendarRow{
 				ID:        ev.EventID,
-				Date:      formatFinish(ev.EventDate),
+				Date:      humanize.Finish(ev.EventDate),
 				DateRaw:   ev.EventDate,
 				Title:     ev.Title,
-				Response:  humanizeEnum(ev.EventResponse),
+				Response:  app.deps.HumanizeEnum(ev.EventResponse),
 				Important: ev.Importance > 0,
 			})
 		}
@@ -103,21 +105,20 @@ func (app *Application) handleCalendar(w http.ResponseWriter, r *http.Request) {
 
 	// The month grid: in-game events and ops in one view.
 	{
-		userID := app.userID(ctx)
-		members := app.opMembers(ctx, userID)
+		userID := app.deps.UserID(ctx)
 		now := time.Now()
 		month := parseCalMonth(r.URL.Query().Get("month"), now)
 		from, to := calGridRange(month)
-		view.Month = buildCalMonth(month, now, app.calendarEntries(ctx, userID, members, active, events, from, to, month.Format(calMonthLayout)))
-		view.CanCreate = len(opCorps(members, true)) > 0
+		view.Month = buildCalMonth(month, now, app.calendarEntries(ctx, userID, active, events, from, to, month.Format(calMonthLayout)))
+		view.CanCreate = len(app.deps.OpCorps(ctx, userID, true)) > 0
 	}
 
 	// An open event renders its detail under the list.
 	if eventID, _ := strconv.ParseInt(r.URL.Query().Get("event"), 10, 64); eventID > 0 {
 		detail := &calendarDetail{
 			EventID:    eventID,
-			CanRespond: characterHasScope(active, calendarRespondScope),
-			RelinkURL:  relinkURL("calendar", active.CharacterID),
+			CanRespond: module.CharacterHasScope(active, module.CalendarRespondScope),
+			RelinkURL:  app.deps.RelinkURL("calendar", active.CharacterID),
 		}
 		current := ""
 		for _, ev := range events {
@@ -127,23 +128,23 @@ func (app *Application) handleCalendar(w http.ResponseWriter, r *http.Request) {
 		}
 		detail.Answers = calendarAnswers(current)
 		var ev esi.CalendarEvent
-		if app.loadCorpSnapshot(ctx, active.CharacterID, esi.CalendarEventKind(eventID), &ev) {
+		if app.deps.LoadCorpSnapshot(ctx, active.CharacterID, esi.CalendarEventKind(eventID), &ev) {
 			detail.Title = ev.Title
-			detail.Date = formatFinish(ev.Date)
+			detail.Date = humanize.Finish(ev.Date)
 			detail.Owner = ev.OwnerName
 			detail.OwnerID = ev.OwnerID
 			detail.OwnerIsChar = ev.OwnerType == "character"
 			detail.Text = ev.Text
 			if ev.Duration > 0 {
-				detail.Duration = humanDuration(time.Duration(ev.Duration) * time.Minute)
+				detail.Duration = humanize.Duration(time.Duration(ev.Duration) * time.Minute)
 			}
 			var attendees esi.CalendarAttendees
-			if app.loadCorpSnapshot(ctx, active.CharacterID, esi.CalendarAttendeesKind(eventID), &attendees) {
+			if app.deps.LoadCorpSnapshot(ctx, active.CharacterID, esi.CalendarAttendeesKind(eventID), &attendees) {
 				for _, a := range attendees {
 					detail.Attendees = append(detail.Attendees, calendarAttendeeRow{
-						Name:     app.displayCharacter(ctx, a.CharacterID),
+						Name:     app.deps.DisplayCharacter(ctx, a.CharacterID),
 						ID:       a.CharacterID,
-						Response: humanizeEnum(a.EventResponse),
+						Response: app.deps.HumanizeEnum(a.EventResponse),
 					})
 				}
 				sort.Slice(detail.Attendees, func(i, j int) bool { return detail.Attendees[i].Name < detail.Attendees[j].Name })
@@ -162,5 +163,5 @@ func (app *Application) handleCalendar(w http.ResponseWriter, r *http.Request) {
 		view.Detail = detail
 	}
 
-	app.render(ctx, w, http.StatusOK, "calendar.html", data)
+	app.deps.Render(ctx, w, http.StatusOK, "calendar.html", data)
 }

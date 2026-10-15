@@ -1,7 +1,8 @@
-package app
+package calendar
 
 import (
 	"context"
+	"evesynapse/internal/app/module"
 	"fmt"
 	"sort"
 	"time"
@@ -109,10 +110,10 @@ func buildCalMonth(month, now time.Time, entries []calEntry) *calMonth {
 // calendarEntries gathers what the grid shows between from and to:
 // the corporations' ops, with the account's own answer on each, and
 // the character's in-game events.
-func (app *Application) calendarEntries(ctx context.Context, userID int64, members []opMember, active db.Character, events esi.CalendarEventSummaries, from, to time.Time, month string) []calEntry {
+func (app *mod) calendarEntries(ctx context.Context, userID int64, active db.Character, events esi.CalendarEventSummaries, from, to time.Time, month string) []calEntry {
 	var entries []calEntry
 
-	if corps := opCorps(members, false); len(corps) > 0 {
+	if corps := app.deps.OpCorps(ctx, userID, false); len(corps) > 0 {
 		ops, err := app.queries.ListOpsForCorporationsBetween(ctx, db.ListOpsForCorporationsBetweenParams{
 			CorporationIds: corps, FromTime: from, ToTime: to,
 		})
@@ -131,7 +132,7 @@ func (app *Application) calendarEntries(ctx context.Context, userID int64, membe
 			}
 			// With several characters signed up, "yes" outranks
 			// "maybe", which outranks "no".
-			rank := map[string]int{opNo: 1, opMaybe: 2, opYes: 3}
+			rank := map[string]int{module.OpNo: 1, module.OpMaybe: 2, module.OpYes: 3}
 			for _, row := range rows {
 				if row.UserID == userID && rank[row.Response] > rank[mine[row.OpID]] {
 					mine[row.OpID] = row.Response
@@ -140,14 +141,14 @@ func (app *Application) calendarEntries(ctx context.Context, userID int64, membe
 		}
 		for _, op := range ops {
 			entries = append(entries, calEntry{
-				Time: op.StartsAt.UTC().Format("15:04"), Title: op.Title, URL: opURL(op.ID),
+				Time: op.StartsAt.UTC().Format("15:04"), Title: op.Title, URL: module.OpURL(op.ID),
 				Kind: calKindOp, Cancelled: op.CancelledAt.Valid, Mine: mine[op.ID], at: op.StartsAt,
 			})
 		}
 	}
 
 	for _, ev := range events {
-		at, ok := parseRFC3339(ev.EventDate)
+		at, ok := module.ParseRFC3339(ev.EventDate)
 		if !ok || at.Before(from) || !at.Before(to) {
 			continue
 		}

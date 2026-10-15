@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"evesynapse/internal/htmlsanitize"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -329,7 +330,7 @@ func (app *Application) buildCorporationView(ctx context.Context, id int64, payl
 	}
 	if p.Corp.Description != "" {
 		view.HasDescription = true
-		view.Description = sanitizeMailHTML(p.Corp.Description)
+		view.Description = htmlsanitize.Sanitize(p.Corp.Description)
 	}
 	return view, true
 }

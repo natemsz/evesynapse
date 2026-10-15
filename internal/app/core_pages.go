@@ -14,42 +14,29 @@ import (
 // pageData is the view model shared by the templates.
 type pageData struct {
 	module.ShellData
-	Home           *homeView
-	CharChars      []assetCharLink
-	CharacterPage  *characterView
-	Killmails      *killmailsView
-	KillmailChars  []assetCharLink
-	Wallet         *walletView
-	WalletChars    []assetCharLink
-	Orders         *ordersView
-	OrdersChars    []assetCharLink
-	Contracts      *contractsView
-	ContractsChars []assetCharLink
-	Industry       *industryView
-	IndustryChars  []assetCharLink
-	ServerStatus   *serverStatusView
-	ESIHealth      *esiHealthView // Overview bar: ESI health and Tranquility players (signed-in Home only)
-	Corps          []corpView
-	CorpOptions    []corpOption // the corporations the Corporation page can show
-	CorpChars      []assetCharLink
-	Assets         *assetsView
-	AssetsChars    []assetCharLink
-	AssetsSearch   *assetsSearchView
-	Planets        *planetsView
-	PlanetsChars   []assetCharLink
-	Mail           *mailView
-	MailChars      []assetCharLink
-	MailCompose    *mailComposeView
-	Calendar       *calendarView
-	CalendarChars  []assetCharLink
-	Contacts       *contactsView
-	ContactsChars  []assetCharLink
-	Market         *marketView
-	Items          *itemsView
-	Skills         *skillsView
-	SkillsChars    []assetCharLink
-	Sync           *syncView
-	Admin          *adminView
+	Home          *homeView
+	CharChars     []assetCharLink
+	CharacterPage *characterView
+	Killmails     *killmailsView
+	KillmailChars []assetCharLink
+	Industry      *industryView
+	IndustryChars []assetCharLink
+	ServerStatus  *serverStatusView
+	ESIHealth     *esiHealthView // Overview bar: ESI health and Tranquility players (signed-in Home only)
+	Corps         []corpView
+	CorpOptions   []corpOption // the corporations the Corporation page can show
+	CorpChars     []assetCharLink
+	Assets        *assetsView
+	AssetsChars   []assetCharLink
+	AssetsSearch  *assetsSearchView
+	Planets       *planetsView
+	PlanetsChars  []assetCharLink
+	Market        *marketView
+	Items         *itemsView
+	Skills        *skillsView
+	SkillsChars   []assetCharLink
+	Sync          *syncView
+	Admin         *adminView
 
 	// Notifications is the /notifications/ page.
 	Notifications *notificationsView
@@ -126,13 +113,13 @@ func sectionForPage(page string) string {
 	case "home.html":
 		return "home"
 	case "character.html", "characters.html", "skills.html",
-		"mail.html", "calendar.html", "contacts.html", "pilot.html", "assets.html", "wallet.html",
+		"pilot.html", "assets.html",
 		"killmails.html", "notifications.html", "notification_settings.html", "op.html", "op_form.html", "op_paps.html":
 		return "pilot"
 	case "industry.html", "planets.html":
 		return "industry"
-	case "market.html", "market_scanner.html",
-		"orders.html", "contracts.html", "system.html", "station.html", "structure.html", "region.html":
+	case "market.html",
+		"system.html", "station.html", "structure.html", "region.html":
 		return "market"
 	case "items.html", "ship_public.html":
 		return "tools"

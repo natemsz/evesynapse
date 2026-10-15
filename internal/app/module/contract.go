@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -270,6 +271,59 @@ type DoctrineFitView struct {
 
 // DoctrineURL is a doctrine's page.
 func DoctrineURL(id int64) string { return "/doctrines/" + strconv.FormatInt(id, 10) }
+
+// EconSectionState is the empty-state triage the economy sections render
+// from: data loaded, still warming, or why it is absent.
+type EconSectionState struct {
+	Loaded  bool
+	Warming bool   // no snapshot yet and no failure recorded
+	Note    string // why the data is absent, when not warming
+}
+
+// Scopes and op answers the pilot pages ask about.
+const (
+	MailOrganizeScope    = "esi-mail.organize_mail.v1"
+	CalendarRespondScope = "esi-calendar.respond_calendar_events.v1"
+	OpYes                = "yes"
+	OpMaybe              = "maybe"
+	OpNo                 = "no"
+)
+
+// ErrMailToken is what sending a mail answers when the character’s token
+// could not be made good.
+var ErrMailToken = errors.New("mail: no usable token")
+
+// RelinkNotice is what a reader is told when a character lacks the scope
+// an action needs.
+func RelinkNotice(name, what string) string {
+	return name + " was linked before EveSynapse asked for permission to " + what + " — sign in again to grant it."
+}
+
+// ParseRFC3339 reads an ESI timestamp; false when it is empty or not one.
+func ParseRFC3339(raw string) (time.Time, bool) {
+	if raw == "" {
+		return time.Time{}, false
+	}
+	t, err := time.Parse(time.RFC3339, raw)
+	return t, err == nil
+}
+
+// OrderRangeLabel renders an order range readably: the ESI enum is
+// "station", "solarsystem", "region" or a jump count.
+func OrderRangeLabel(r string) string {
+	switch r {
+	case "station":
+		return "Station"
+	case "solarsystem":
+		return "System"
+	case "region":
+		return "Region"
+	case "":
+		return ""
+	default:
+		return r + " jumps"
+	}
+}
 
 // Page declares a template file rendered by the module, its default section,
 // and any client scripts that must be loaded for it.
@@ -674,6 +728,48 @@ type Deps interface {
 
 	// DoctrineFitViews reads the fits of some doctrines, by doctrine id.
 	DoctrineFitViews(ctx context.Context, doctrineIDs []int64) map[int64][]DoctrineFitView
+	// --- the pilot pages: economy and comms ----------------------------------
+
+	// EconSection resolves one stored economy section’s display state: a
+	// decoded snapshot wins; otherwise the recorded fetch state decides
+	// between the warming note and the failure note.
+	EconSection(ctx context.Context, characterID int64, kind string, out any) EconSectionState
+	// OpCorps lists the corporations an account has a character in
+	// (managedOnly: those where it may manage ops).
+	OpCorps(ctx context.Context, userID int64, managedOnly bool) []int64
+	// RelinkURL is the address that re-links a character for one module’s
+	// scopes.
+	RelinkURL(moduleID string, characterID int64) string
+	// CharLinkHTML links a character by the core link policy.
+	CharLinkHTML(ctx context.Context, characterID int64, name string) template.HTML
+	// NoteCharacterWant asks the worker to resolve a character’s name.
+	NoteCharacterWant(ctx context.Context, characterID int64)
+	// MarkMailReadLocally records a mail as read in the stored headers.
+	MarkMailReadLocally(ctx context.Context, characterID, mailID int64)
+	// AttachWalletGraph and WalletFlow build the wallet page’s balance
+	// history and the home wallet-flow cells for one character; the results
+	// are read by the wallet template only.
+	AttachWalletGraph(ctx context.Context, userID, characterID int64, journal esi.WalletJournal, journalLoaded bool) any
+	WalletFlow(ctx context.Context, ch db.Character) any
+	// EmptyWalletGraph is the settled-empty balance history.
+	EmptyWalletGraph() any
+	AllianceDisplayName(ctx context.Context, allianceID int64) string
+	// ResolvedCharacterName is a character’s name from every local tier;
+	// settled says the local tiers have a final answer.
+	ResolvedCharacterName(ctx context.Context, characterID int64) (name string, settled bool)
+	CharacterLabelPending(ctx context.Context, characterID int64) bool
+	CachedCharacterName(id int64) (string, bool)
+	CachedCorpName(id int64) (string, bool)
+	// LinkPlace links a location by the core link policy.
+	LinkPlace(ctx context.Context, locationID int64, title string) PlaceRef
+	EconLocationTitle(ctx context.Context, locationID int64) string
+	// RewriteSnapshot edits one stored snapshot in place (what an action
+	// that succeeded in the game changes locally, ahead of the next fetch).
+	RewriteSnapshot(ctx context.Context, characterID int64, kind string, edit func(payload string) (string, bool))
+	// PutESI and PostESIPublic write to the game’s API: an authenticated
+	// PUT, and an unauthenticated POST (name lookups).
+	PutESI(ctx context.Context, token, path string, body any) error
+	PostESIPublic(ctx context.Context, path string, body, out any) error
 	// CorpActorFor is how an account acts for a corporation; UserCorps the
 	// corporations it has a character in, in the order of its characters.
 	CorpActorFor(ctx context.Context, userID, corp int64) CorpActor
@@ -797,6 +893,10 @@ type Module struct {
 	// Sitemap lists the module's public pages, so a build without the
 	// module leaves them out of sitemap.xml.
 	Sitemap []SitemapEntry
+	// Snapshots lists the snapshot kinds (or kind prefixes) the module
+	// reads, so the worker and the sync page can tie a stored kind to the
+	// module that shows it.
+	Snapshots []string
 	// SitemapRows adds pages read from the database (the top public
 	// fits, for one); called when the sitemap is built.
 	SitemapRows func(ctx context.Context, deps Deps) ([]SitemapRow, error)

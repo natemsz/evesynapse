@@ -283,7 +283,7 @@ func moduleDefs() []moduleDef {
 // its required scopes, then its enhancement scopes as the optional
 // ones. A module that wants no scope at all is public.
 func moduleDefFromRegistry(m module.Module) moduleDef {
-	d := moduleDef{ID: m.ID, Title: m.Title, Layer: layerPublic, Uses: m.Requires}
+	d := moduleDef{ID: m.ID, Title: m.Title, Layer: layerPublic, Uses: m.Requires, Snapshots: m.Snapshots}
 	for _, s := range m.Scopes {
 		d.Scopes = append(d.Scopes, req(s.Scope, s.Unlocks))
 	}

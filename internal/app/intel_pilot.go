@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"evesynapse/internal/htmlsanitize"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -222,7 +223,7 @@ func buildPilotView(id int64, payload string) (*pilotView, bool) {
 	}
 	if p.Profile.Description != "" {
 		view.HasDescription = true
-		view.Description = sanitizeMailHTML(p.Profile.Description)
+		view.Description = htmlsanitize.Sanitize(p.Profile.Description)
 	}
 	for _, stint := range p.History {
 		row := pilotHistoryView{CorpID: stint.CorpID, CorpName: stint.CorpName, To: "Present"}

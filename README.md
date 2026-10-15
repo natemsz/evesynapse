@@ -114,6 +114,8 @@ Contact: nate@synap6.io or in-game 'Burzrujat'
   training speed, ordering targets with their prerequisites, the
   remap advisor. Pure; the skill pages supply the skill graph
 - `internal/app/scanner/`, `tradefinder/`, `leaderboard/`, `restock/` — the market page modules, each a page over stored rows read through `module.Deps`
+- `internal/htmlsanitize/` — makes text written by other players safe to show inside a page (mail, pilot bios, descriptions)
+- `internal/app/wallet/`, `mail/`, `calendar/`, `contacts/`, `orders/` (module id `market`), `contracts/` — the pilot economy and comms pages
 - `internal/balancechart/` — the balance-over-time chart builder shared by the wallet pages, the home net-worth card and the corporation wallets
 - `internal/app/corpdata/`, `srp/`, `doctrines/`, `groups/` — the corporation modules: member, wallet, order, asset and structure pages; ship replacement; doctrines and corporate loadouts; groups
 - `internal/fitview/` — the fit foundation: the fit document, EFT, slot families and the simulation view, read by core and the fitting modules

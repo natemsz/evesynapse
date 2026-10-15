@@ -1,10 +1,12 @@
-package app
+package contracts
 
 import (
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"evesynapse/internal/app/module"
+	"evesynapse/internal/humanize"
 	"fmt"
 	"net/http"
 	"sort"
@@ -53,9 +55,9 @@ type contractRow struct {
 	Price           string
 	Reward          string
 	Collateral      string
-	RouteStart      placeRef // couriers only: pickup location
-	RouteEnd        placeRef // couriers only: drop-off location
-	HasRoute        bool     // couriers: either end known
+	RouteStart      module.PlaceRef // couriers only: pickup location
+	RouteEnd        module.PlaceRef // couriers only: drop-off location
+	HasRoute        bool            // couriers: either end known
 	Issued          string
 	Expires         string
 	Items           []contractItemRow
@@ -65,7 +67,7 @@ type contractRow struct {
 // contractsView is the Contracts page body.
 type contractsView struct {
 	CharacterName string
-	Contracts     econSectionState
+	Contracts     module.EconSectionState
 	Rows          []contractRow
 	Cut           int
 }
@@ -74,19 +76,19 @@ type contractsView struct {
 // store for the contracts shown.
 const maxContractsShown = 100
 
-func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleContracts(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
+	data := &PageData{ShellData: app.deps.PageShell(ctx)}
 
-	_, active, links, err := app.pickCharacter(ctx, r, "/contracts/")
+	_, active, links, err := app.deps.PickCharacter(ctx, r, "/contracts/")
 	if err != nil {
 		logging.Errorf("contracts: list characters: %v", err)
 		data.Error = "Could not load contract data; check the server log."
-		app.render(ctx, w, http.StatusOK, "contracts.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "contracts.html", data)
 		return
 	}
 	if links == nil {
-		app.render(ctx, w, http.StatusOK, "contracts.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "contracts.html", data)
 		return
 	}
 	data.ContractsChars = links
@@ -95,9 +97,9 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 	data.Contracts = view
 
 	var contracts esi.Contracts
-	view.Contracts = app.econSection(ctx, active.CharacterID, esi.SnapContracts, &contracts)
+	view.Contracts = app.deps.EconSection(ctx, active.CharacterID, esi.SnapContracts, &contracts)
 	if !view.Contracts.Loaded {
-		app.render(ctx, w, http.StatusOK, "contracts.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "contracts.html", data)
 		return
 	}
 
@@ -111,14 +113,14 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 	for _, c := range contracts {
 		row := contractRow{
 			Title:      c.Title,
-			Type:       humanizeEnum(c.Type),
-			Status:     humanizeEnum(c.Status),
+			Type:       app.deps.HumanizeEnum(c.Type),
+			Status:     app.deps.HumanizeEnum(c.Status),
 			IssuerID:   c.IssuerID,
 			Price:      esi.FormatISK(c.Price),
 			Reward:     esi.FormatISK(c.Reward),
 			Collateral: esi.FormatISK(c.Collateral),
-			Issued:     formatFinish(c.DateIssued),
-			Expires:    formatFinish(c.DateExpired),
+			Issued:     humanize.Finish(c.DateIssued),
+			Expires:    humanize.Finish(c.DateExpired),
 		}
 		row.Issuer, row.IssuerPending = app.contractCharLabel(ctx, c.IssuerID)
 		if row.Title == "" {
@@ -130,7 +132,7 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 			// resolve whichever tier knows the ID and link
 			// accordingly. While neither tier knows it, the cell
 			// polls the character label like the issuer does.
-			name, isChar, isCorp := app.txnCounterparty(ctx, c.AssigneeID)
+			name, isChar, isCorp := app.deps.TxnCounterparty(ctx, c.AssigneeID)
 			row.Assignee = name
 			row.AssigneeIsChar = isChar
 			row.AssigneeIsCorp = isCorp
@@ -146,8 +148,8 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 		}
 		if c.Type == "courier" && (c.StartLocationID > 0 || c.EndLocationID > 0) {
 			row.HasRoute = true
-			row.RouteStart = app.linkPlace(ctx, c.StartLocationID, app.econLocationTitle(ctx, c.StartLocationID))
-			row.RouteEnd = app.linkPlace(ctx, c.EndLocationID, app.econLocationTitle(ctx, c.EndLocationID))
+			row.RouteStart = app.deps.LinkPlace(ctx, c.StartLocationID, app.deps.EconLocationTitle(ctx, c.StartLocationID))
+			row.RouteEnd = app.deps.LinkPlace(ctx, c.EndLocationID, app.deps.EconLocationTitle(ctx, c.EndLocationID))
 		}
 
 		// Warmed item list from the detail store (item-exchange
@@ -171,7 +173,7 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 					note = "singleton"
 				}
 				row.Items = append(row.Items, contractItemRow{
-					Name:   app.typeNameOrID(ctx, it.TypeID),
+					Name:   app.deps.TypeNameOrID(ctx, it.TypeID),
 					TypeID: it.TypeID,
 					Qty:    esi.FormatInt(it.Quantity),
 					Note:   note,
@@ -183,7 +185,7 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 		view.Rows = append(view.Rows, row)
 	}
 
-	app.render(ctx, w, http.StatusOK, "contracts.html", data)
+	app.deps.Render(ctx, w, http.StatusOK, "contracts.html", data)
 }
 
 // contractCharLabel resolves one counterparty label for the
@@ -191,9 +193,9 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 // pending flag while it is still on its way (the cell then
 // renders a live region). Rendering the label on a page leaves a
 // viewed-priority want behind via displayCharacter.
-func (app *Application) contractCharLabel(ctx context.Context, characterID int64) (string, bool) {
-	name := app.displayCharacter(ctx, characterID)
-	if name == fmt.Sprintf("Character #%d", characterID) && app.characterLabelPending(ctx, characterID) {
+func (app *mod) contractCharLabel(ctx context.Context, characterID int64) (string, bool) {
+	name := app.deps.DisplayCharacter(ctx, characterID)
+	if name == fmt.Sprintf("Character #%d", characterID) && app.deps.CharacterLabelPending(ctx, characterID) {
 		return name, true
 	}
 	return name, false
@@ -202,7 +204,7 @@ func (app *Application) contractCharLabel(ctx context.Context, characterID int64
 // loadContractItems reads one contract's warmed item list from
 // contract_details. ok=false means the worker has not warmed it
 // yet (or the contract has no list stored).
-func (app *Application) loadContractItems(ctx context.Context, contractID int64) (esi.ContractItems, bool, error) {
+func (app *mod) loadContractItems(ctx context.Context, contractID int64) (esi.ContractItems, bool, error) {
 	row, err := app.queries.GetContractDetail(ctx, contractID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

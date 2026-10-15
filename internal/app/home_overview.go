@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"evesynapse/internal/app/module"
 	"evesynapse/internal/balancechart"
 	"evesynapse/internal/ideas"
 	"fmt"
@@ -803,13 +804,7 @@ func orderExpiry(o esi.CharOrder) (time.Time, bool) {
 }
 
 // parseRFC3339 parses a snapshot timestamp; ok=false for ""/junk.
-func parseRFC3339(raw string) (time.Time, bool) {
-	if raw == "" {
-		return time.Time{}, false
-	}
-	t, err := time.Parse(time.RFC3339, raw)
-	return t, err == nil
-}
+func parseRFC3339(raw string) (time.Time, bool) { return module.ParseRFC3339(raw) }
 
 // ---------------------------------------------------------------------------
 // Widget builders. All pure reads over the decoded bundles; the

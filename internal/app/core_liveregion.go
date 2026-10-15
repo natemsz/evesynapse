@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 )
 
@@ -99,26 +98,6 @@ func (app *Application) handleMarketTraderFragment(w http.ResponseWriter, r *htt
 	}
 	app.attachHistory(ctx, item, typeID, regionID, 0)
 	app.renderFragment(w, "market.html", "trader-section", item)
-}
-
-// handleWalletGraphFragment re-renders just the wallet page's
-// balance-history section from stored rows, so the graph fills
-// in when the journal snapshot lands instead of waiting for a
-// manual refresh. Cache-only, like every fragment.
-func (app *Application) handleWalletGraphFragment(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	_, active, links, err := app.pickCharacter(ctx, r, "/wallet/")
-	if err != nil || links == nil {
-		app.renderFragment(w, "wallet.html", "wallet-graph", &walletGraphView{State: walletGraphEmpty})
-		return
-	}
-	var journal esi.WalletJournal
-	loaded := app.loadCorpSnapshot(ctx, active.CharacterID, esi.SnapWalletJournal, &journal)
-	if !loaded {
-		journal = nil
-	}
-	app.renderFragment(w, "wallet.html", "wallet-graph",
-		app.attachWalletGraph(ctx, active.UserID, active.CharacterID, journal, loaded))
 }
 
 // handlePilotFragment re-renders just the pilot record body from

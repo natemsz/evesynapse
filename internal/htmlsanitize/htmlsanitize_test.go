@@ -1,4 +1,4 @@
-package app
+package htmlsanitize
 
 // Tests that the HTML sanitizer's output is always well-formed on
 // its own. It renders text written by other players (mail, pilot
@@ -21,7 +21,7 @@ func assertWellFormed(t *testing.T, in, out string) {
 	var open []string
 	for _, m := range sanitizedTagPattern.FindAllStringSubmatch(out, -1) {
 		closing, name := m[1] == "/", m[2]
-		if mailVoidTags[name] {
+		if MailVoidTags[name] {
 			continue
 		}
 		if !closing {
@@ -102,7 +102,7 @@ func TestSanitizeMailHTMLOutputIsBalanced(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := string(sanitizeMailHTML(tc.in))
+			got := string(Sanitize(tc.in))
 			if got != tc.want {
 				t.Errorf("sanitizeMailHTML(%q)\n got %q\nwant %q", tc.in, got, tc.want)
 			}
@@ -113,9 +113,9 @@ func TestSanitizeMailHTMLOutputIsBalanced(t *testing.T) {
 
 func TestSanitizeMailHTMLNestingIsCapped(t *testing.T) {
 	in := strings.Repeat("<div>", 5000) + "deep" + strings.Repeat("</div>", 5000)
-	got := string(sanitizeMailHTML(in))
-	if n := strings.Count(got, "<div>"); n != mailMaxDepth {
-		t.Fatalf("%d nested <div> written, want the cap of %d", n, mailMaxDepth)
+	got := string(Sanitize(in))
+	if n := strings.Count(got, "<div>"); n != MailMaxDepth {
+		t.Fatalf("%d nested <div> written, want the cap of %d", n, MailMaxDepth)
 	}
 	if !strings.Contains(got, "deep") {
 		t.Fatal("the text inside the over-deep nesting was lost")
@@ -148,7 +148,7 @@ func TestSanitizeMailHTMLAlwaysBalanced(t *testing.T) {
 			b.WriteString(pieces[next(len(pieces))])
 		}
 		in := b.String()
-		out := string(sanitizeMailHTML(in))
+		out := string(Sanitize(in))
 		assertWellFormed(t, in, out)
 		// Every tag in the output is one of the exact forms the
 		// sanitizer writes: a bare allowed tag, or a link with a
@@ -156,7 +156,7 @@ func TestSanitizeMailHTMLAlwaysBalanced(t *testing.T) {
 		for _, m := range sanitizedTagPattern.FindAllStringSubmatch(out, -1) {
 			tag, name := m[0], m[2]
 			switch {
-			case !mailAllowedTags[name]:
+			case !MailAllowedTags[name]:
 				t.Errorf("sanitizeMailHTML(%q) = %q: wrote <%s>, which is not allowed", in, out, name)
 			case tag == "<"+name+">" || tag == "</"+name+">":
 			case name == "a" && linkTagPattern.MatchString(tag):

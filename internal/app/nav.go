@@ -94,10 +94,6 @@ var sectionNav = map[string][]navEntry{
 		{"/character/", "Overview", []string{"character.html"}},
 		{"/characters/", "Characters", []string{"characters.html"}},
 		{"/assets/", "Assets", []string{"assets.html"}},
-		{"/wallet/", "Wallet", []string{"wallet.html"}},
-		{"/mail/", "Mail", []string{"mail.html"}},
-		{"/calendar/", "Calendar", []string{"calendar.html"}},
-		{"/contacts/", "Contacts", []string{"contacts.html"}},
 		{"/killmails/", "Killmails", []string{"killmails.html"}},
 	},
 	"fitting": {},
@@ -107,8 +103,6 @@ var sectionNav = map[string][]navEntry{
 	},
 	"market": {
 		{"/market/", "Market", []string{"market.html"}},
-		{"/orders/", "Orders", []string{"orders.html"}},
-		{"/contracts/", "Contracts", []string{"contracts.html"}},
 	},
 	"corporation": {
 		{"/corporations/", "Overview", []string{"corporations.html"}},

@@ -6,6 +6,7 @@ import (
 	"context"
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -14,7 +15,7 @@ import (
 // module, and a module's nav entry, page and sitemap line come from its
 // registration.
 func TestDefaultBuildEnablesModules(t *testing.T) {
-	for _, id := range []string{"buildplanner", "fitting", "publicfits", "corpdata", "doctrines", "srp", "groups", "skillplans", "scanner", "tradefinder", "leaderboard", "restock", "piplanner", "intel", "tradeideas", "discord"} {
+	for _, id := range []string{"buildplanner", "fitting", "publicfits", "wallet", "mail", "calendar", "contacts", "market", "contracts", "corpdata", "doctrines", "srp", "groups", "skillplans", "scanner", "tradefinder", "leaderboard", "restock", "piplanner", "intel", "tradeideas", "discord"} {
 		if !moduleCompiledIn(id) {
 			t.Fatalf("the default build does not register %s", id)
 		}
@@ -152,6 +153,20 @@ func TestModuleNavKeepsItsPlace(t *testing.T) {
 	follows("market", "/market/restock/", "/market/leaderboard/")
 	follows("market", "/orders/", "/market/restock/")
 
+	// The whole pilot and market menus, in the order they had before the modules.
+	for section, want := range map[string][]string{
+		"pilot":  {"/character/", "/characters/", "/skills/plans", "/assets/", "/wallet/", "/mail/", "/calendar/", "/contacts/", "/killmails/"},
+		"market": {"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/orders/", "/contracts/"},
+	} {
+		var got []string
+		for _, e := range sectionNav[section] {
+			got = append(got, e.Href)
+		}
+		if strings.Join(got, " ") != strings.Join(want, " ") {
+			t.Errorf("%s menu = %v, want %v", section, got, want)
+		}
+	}
+
 	// The whole corporation menu, in the order it had before the modules.
 	want := []string{"/corporations/", "/corporations/members/", "/corporations/wallets/", "/corporations/orders/",
 		"/corporations/assets/", "/corporations/structures/", "/corporations/killmails/", "/doctrines/", "/doctrines/fits/",
@@ -162,5 +177,30 @@ func TestModuleNavKeepsItsPlace(t *testing.T) {
 	}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Errorf("corporation menu = %v, want %v", got, want)
+	}
+}
+
+// TestRegisteredFeaturesAgreeWithTheManifest: a module that takes over a
+// manifest feature (mail, wallet, ...) declares the same scopes and
+// snapshot kinds core's manifest names for the data feed it keeps fetched,
+// so the two cannot drift apart.
+func TestRegisteredFeaturesAgreeWithTheManifest(t *testing.T) {
+	for _, m := range registeredModules {
+		var manifest *moduleDef
+		for i := range moduleManifest {
+			if moduleManifest[i].ID == m.ID {
+				manifest = &moduleManifest[i]
+			}
+		}
+		if manifest == nil {
+			continue
+		}
+		got := moduleDefFromRegistry(m)
+		if fmt.Sprint(got.Scopes) != fmt.Sprint(manifest.Scopes) {
+			t.Errorf("%s: module scopes %v differ from the manifest's %v", m.ID, got.Scopes, manifest.Scopes)
+		}
+		if fmt.Sprint(got.Snapshots) != fmt.Sprint(manifest.Snapshots) {
+			t.Errorf("%s: module snapshots %v differ from the manifest's %v", m.ID, got.Snapshots, manifest.Snapshots)
+		}
 	}
 }

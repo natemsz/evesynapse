@@ -1132,10 +1132,10 @@ type fitSimView struct {
 	ImplantNote string
 	// ImplantEffects is what the implants change on this fit's stats.
 	ImplantEffects []fitImplantEffect
-	Groups      []fitSlotGroup
-	Visual      *fitVisualView // in-game-style ship + slot rings
-	DroneBWNum  float64        // drone bandwidth (for the fittable filter)
-	DroneBayNum float64        // drone bay m3 (for the fittable filter)
+	Groups         []fitSlotGroup
+	Visual         *fitVisualView // in-game-style ship + slot rings
+	DroneBWNum     float64        // drone bandwidth (for the fittable filter)
+	DroneBayNum    float64        // drone bay m3 (for the fittable filter)
 	// SupportsSubsystems: the hull is a strategic cruiser (SDE
 	// group), so the subsystem ring, group, and search family show.
 	SupportsSubsystems bool

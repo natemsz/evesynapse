@@ -108,9 +108,7 @@ func linkFeatures() []linkFeature {
 			continue
 		}
 		f := linkFeature{ID: def.ID, Title: def.Title, Activities: def.Activities}
-		for _, use := range def.Uses {
-			f.Requires = append(f.Requires, use)
-		}
+		f.Requires = append(f.Requires, def.Uses...)
 		for _, s := range def.Scopes {
 			switch {
 			case s.Optional:

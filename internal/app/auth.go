@@ -298,7 +298,7 @@ func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // relinkScopesFor resolves a targeted re-link request: the module must
-// be in the manifest and the character must be linked to the session's
+// be known to the scope surfaces (manifest or module declaration) and the character must be linked to the session's
 // account. ok is false otherwise, so one cannot probe other accounts'
 // characters.
 func (app *Application) relinkScopesFor(r *http.Request, moduleID string) (scopes []string, ok bool) {

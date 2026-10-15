@@ -6,13 +6,22 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Module manifest
+// Module manifest: core's own features
 //
-// A module is one feature a user can subscribe to (a home widget, a
-// page). The manifest is the single place that says which ESI scopes
-// a module needs, what each scope unlocks, and which snapshot kinds
-// it reads. Subscribing (user preference) and enabling (scope state)
-// are orthogonal: the manifest only describes the second.
+// The manifest is NOT a list of the optional modules. Each optional
+// module declares its own scopes, snapshot kinds and activities on
+// its module.Module (single source; moduleDefs reads the registry
+// first). What remains here is core's own declaration of the features
+// whose data core itself reads — the character picture (skills,
+// wallet, assets, ...), the corporation snapshot feed, and the
+// derived aggregates over them. Only "wallet" and "market" appear in
+// both places, because net worth reads the wallet and the open
+// orders; the module of the same id declares the same scopes, and
+// TestRegisteredFeaturesAgreeWithTheManifest pins that they agree,
+// while TestModuleOnlyFeaturesHaveNoManifestEntry pins that no other
+// module's scope data lives here. Subscribing (user preference) and
+// enabling (scope state) are orthogonal: the manifest only describes
+// the second.
 //
 // Layers:
 //   - public:    no character token; always works.
@@ -275,11 +284,12 @@ var moduleManifest = []moduleDef{
 		Uses: []string{"wallet", "assets", "market"}},
 }
 
-// moduleDefs is every module the scope surfaces know of: the registry's
-// declarations first (the source of truth for a module that has been
-// extracted), then the manifest entries no registered module has taken
-// over. When a stage extracts a feature it deletes its manifest entry
-// and its declaration serves; by the last stage the manifest is gone.
+// moduleDefs is every feature the scope surfaces know of: the
+// registry's declarations first (the source of truth for every
+// optional module), then the manifest's core-feature entries no
+// registered module shares. The manifest survives in that core role;
+// it is not retired, and it holds no optional module's scope data
+// (see the manifest comment above).
 func moduleDefs() []moduleDef {
 	defs := make([]moduleDef, 0, len(registeredModules)+len(moduleManifest))
 	taken := map[string]bool{}

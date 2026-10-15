@@ -113,6 +113,7 @@ Contact: nate@synap6.io or in-game 'Burzrujat'
 - `internal/skillplan/` — skill-plan arithmetic: SP per level,
   training speed, ordering targets with their prerequisites, the
   remap advisor. Pure; the skill pages supply the skill graph
+- `cmd/modbuild/`, `internal/app/modulecatalog/` — the module build tool and the list of every module it chooses from
 - `internal/app/scanner/`, `tradefinder/`, `leaderboard/`, `restock/` — the market page modules, each a page over stored rows read through `module.Deps`
 - `internal/htmlsanitize/` — makes text written by other players safe to show inside a page (mail, pilot bios, descriptions)
 - `internal/app/wallet/`, `mail/`, `calendar/`, `contacts/`, `orders/` (module id `market`), `contracts/` — the pilot economy and comms pages
@@ -818,6 +819,20 @@ make build-amd64   # bin/evesynapse-amd64
 make test          # the test suite (starts its own embedded PostgreSQL)
 make check         # what CI checks: gofmt, go vet, tests under the race detector
 ```
+
+### Choosing the modules in a build
+
+Every optional feature (the build planner, the fitting tool, the market pages, the corporation pages, Discord, the shared cache, ...) is a module, and a build contains exactly the modules `internal/app/modules_enabled.go` imports. The default file lists them all. To build a smaller server, let the build tool write that file for your selection; whatever a chosen module requires comes along, and the tool prints the ESI scopes the selection will ask players for:
+
+```sh
+make modules                                          # every module, what it requires and the scopes it declares
+go run ./cmd/modbuild -modules fitting,doctrines      # print the file and the scopes; nothing is written
+go run ./cmd/modbuild -modules fitting,doctrines -write
+go build -o bin/evesynapse ./cmd/evesynapse
+go run ./cmd/modbuild -all -write                     # back to the default, everything
+```
+
+`-core-only` is the empty selection (`go build -tags core_only` compiles none regardless of the file). CI checks that the default file is the all-modules selection and that each module builds on its own with what it requires.
 
 Install your build with:
 

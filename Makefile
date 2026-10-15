@@ -1,9 +1,12 @@
 # EveSynapse — dev tasks
 
-.PHONY: build build-arm64 build-amd64 build-dev run tidy gen clean assets test fmt check
+.PHONY: modules build build-arm64 build-amd64 build-dev run tidy gen clean assets test fmt check
 
 build: ## Compile the release server into ./bin/evesynapse
 	go build -o bin/evesynapse ./cmd/evesynapse
+
+modules: ## List the optional modules; choose some with: go run ./cmd/modbuild -modules a,b -write
+	go run ./cmd/modbuild -list
 
 test: ## Run the test suite (it starts its own embedded PostgreSQL)
 	go test ./...

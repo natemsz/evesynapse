@@ -569,6 +569,13 @@ func (app *Application) applySwarmEntry(ctx context.Context, kind, key, payload 
 				applied.LastDate = day.Date
 			}
 		}
+		// The sold-per-day figure follows, as after a direct fetch
+		// (fetchAndStoreHistory).
+		if err := app.queries.RefreshMarketRegionStatAvgVolume(ctx, db.RefreshMarketRegionStatAvgVolumeParams{
+			RegionID: body.RegionID, TypeID: body.TypeID,
+		}); err != nil {
+			logging.Errorf("swarm: refresh sold-per-day for %s: %v", key, err)
+		}
 		app.recordMarketFetchAt(ctx, marketFetchKind("history", marketKey{RegionID: body.RegionID, TypeID: body.TypeID}), fetchStateOK, swarmFetchDetail, stamp)
 		app.addSwarmCounter(ctx, swarmCounterAppliedHistory, 1)
 	case swarmKindTypeName:

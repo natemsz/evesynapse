@@ -502,3 +502,45 @@ func TestTradefinderPendingRoutesQueueHistory(t *testing.T) {
 		t.Fatalf("tradefinder made %d outbound calls, want 0", got)
 	}
 }
+
+// TestTradefinderHealsPendingWithStoredHistory: a pending route whose
+// destination history is already stored -- it arrived by a path that
+// did not update the sold-per-day figure (a swarm peer, or before the
+// figure was kept current) -- ranks into the table on the next view,
+// from stored rows alone.
+func TestTradefinderHealsPendingWithStoredHistory(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	seedTradefinderFixture(t, app)
+	now := time.Now().UTC()
+	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfOrigin, 36, 0, 4, 0, 50, 0, now)); err != nil {
+		t.Fatalf("seed origin stat: %v", err)
+	}
+	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfDest, 36, 0, 10, 0, 100, 0, now)); err != nil {
+		t.Fatalf("seed dest stat: %v", err)
+	}
+	// History is stored, but the figure was never refreshed.
+	for i, vol := range []int64{20, 30, 40} {
+		if err := q.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
+			RegionID: tfDest, TypeID: 36, Date: now.AddDate(0, 0, -i).Format("2006-01-02"),
+			Average: 10, Highest: 10, Lowest: 10, Volume: vol, OrderCount: 1,
+		}); err != nil {
+			t.Fatalf("seed history: %v", err)
+		}
+	}
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+	_, body := getPage(t, app, cookie, "/market/tradefinder/")
+	mustContain(t, "/market/tradefinder/ (healed)", body, "Mexallon", "Estimated profit per day")
+	if strings.Contains(body, "Waiting on sales figures") {
+		t.Error("a route with stored history still lists as pending")
+	}
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("tradefinder made %d outbound calls, want 0", got)
+	}
+}

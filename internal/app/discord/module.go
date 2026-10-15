@@ -147,7 +147,6 @@ type (
 const (
 	ownerCorporation = standing.OwnerCorporation
 	ownerAlliance    = standing.OwnerAlliance
-
 )
 
 // meetsRule asks a standing whether it meets one stored rule.

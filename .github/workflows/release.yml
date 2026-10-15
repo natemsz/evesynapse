@@ -82,6 +82,32 @@ jobs:
         # on a slow one, which failed the run with a timeout panic.
         run: go test -race -timeout 30m ./...
 
+  # The core-only configuration: no optional module imported. It must
+  # compile and vet, and the module-exclusion tests must pass, so
+  # that adding a module can never make the core depend on it.
+  core-only:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+
+      - name: Decode the embedded assets (fonts, wallpaper)
+        run: make assets
+
+      - name: Build without any optional module
+        run: go build -tags core_only ./...
+
+      - name: Vet without any optional module
+        run: go vet -tags core_only ./...
+
+      - name: Run the core-only tests
+        run: go test -tags core_only -timeout 20m -run 'TestCoreOnly' ./internal/app/
+
   # Static analysis and the known-vulnerability check. Advisory: a
   # finding shows up on the run without blocking a release, since
   # both tools gain new checks over time.
@@ -121,7 +147,7 @@ jobs:
   release:
     # Only what passed the tests is built, and pull requests never
     # publish.
-    needs: [test, race]
+    needs: [test, race, core-only]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:

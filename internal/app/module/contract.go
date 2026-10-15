@@ -33,6 +33,13 @@ type Page struct {
 	Scripts  []string
 }
 
+// SitemapEntry is one public page a module adds to sitemap.xml.
+type SitemapEntry struct {
+	Path       string // e.g. "/industry/pi/"
+	ChangeFreq string
+	Priority   string
+}
+
 // WorkerJob represents a named pass for the worker cycle.
 type WorkerJob struct {
 	Name string
@@ -128,5 +135,8 @@ type Module struct {
 	WorkerJobs []WorkerJob
 	Widgets    []Widget
 	Suggest    []SuggestPool
-	Pages      []Page
+	// Sitemap lists the module's public pages, so a build without the
+	// module leaves them out of sitemap.xml.
+	Sitemap []SitemapEntry
+	Pages   []Page
 }

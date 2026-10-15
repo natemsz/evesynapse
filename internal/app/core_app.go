@@ -833,7 +833,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/seed/register", app.handleSwarmSeedRegister)
 	})
 
-	for _, m := range enabledModules {
+	for _, m := range registeredModules {
 		if m.Routes != nil {
 			m.Routes(r, app)
 		}

@@ -4,7 +4,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 
 	"evesynapse/internal/app/module"
 )
@@ -27,27 +26,41 @@ type navEntry struct {
 var (
 	registeredModules []module.Module
 	registeredPages   = map[string]module.Page{}
-	registerOnce      sync.Once
 )
 
+// registerModules adds modules to the nav and page registries. A
+// module already registered (same ID) is skipped, so calling it again
+// is harmless.
 func registerModules(modules []module.Module) {
-	registerOnce.Do(func() {
-		for _, m := range modules {
-			registeredModules = append(registeredModules, m)
-			for _, sec := range m.Nav {
-				for _, e := range sec.Entries {
-					sectionNav[sec.Section] = append(sectionNav[sec.Section], navEntry{
-						Href:  e.Href,
-						Label: e.Label,
-						Pages: e.Pages,
-					})
-				}
-			}
-			for _, p := range m.Pages {
-				registeredPages[p.Template] = p
+	for _, m := range modules {
+		if moduleCompiledIn(m.ID) {
+			continue
+		}
+		registeredModules = append(registeredModules, m)
+		for _, sec := range m.Nav {
+			for _, e := range sec.Entries {
+				sectionNav[sec.Section] = append(sectionNav[sec.Section], navEntry{
+					Href:  e.Href,
+					Label: e.Label,
+					Pages: e.Pages,
+				})
 			}
 		}
-	})
+		for _, p := range m.Pages {
+			registeredPages[p.Template] = p
+		}
+	}
+}
+
+// moduleCompiledIn reports whether a module with this ID is compiled in
+// and registered.
+func moduleCompiledIn(id string) bool {
+	for _, m := range registeredModules {
+		if m.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 // sectionNav is every nav category's pages, in menu order. The keys

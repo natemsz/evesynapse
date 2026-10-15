@@ -673,7 +673,8 @@ func displayPlanetType(raw string) string {
 
 // Module exposes the PI planner module registration contract.
 var Module = module.Module{
-	ID: "piplanner",
+	ID:      "piplanner",
+	Sitemap: []module.SitemapEntry{{Path: "/industry/pi/", ChangeFreq: "monthly", Priority: "0.8"}},
 	Nav: []module.NavSection{
 		{
 			Section: "industry",

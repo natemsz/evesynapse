@@ -131,10 +131,16 @@ func (app *Application) buildSitemap(ctx context.Context, origin string) ([]byte
 		{Loc: origin + "/fittings/", ChangeFreq: "monthly", Priority: "0.8"},
 		{Loc: origin + "/items/", ChangeFreq: "weekly", Priority: "0.8"},
 		{Loc: origin + "/planner/", ChangeFreq: "monthly", Priority: "0.8"},
-		{Loc: origin + "/industry/pi/", ChangeFreq: "monthly", Priority: "0.8"},
 		{Loc: origin + "/intel/wars/", ChangeFreq: "weekly", Priority: "0.7"},
 		{Loc: origin + "/intel/incursions/", ChangeFreq: "weekly", Priority: "0.7"},
 		{Loc: origin + "/intel/fw/", ChangeFreq: "weekly", Priority: "0.7"},
+	}
+	// Each enabled module's own public pages: a build without the
+	// module has no such page to list.
+	for _, m := range registeredModules {
+		for _, e := range m.Sitemap {
+			urls = append(urls, sitemapURL{Loc: origin + e.Path, ChangeFreq: e.ChangeFreq, Priority: e.Priority})
+		}
 	}
 	fits, err := app.queries.SitemapTopFits(ctx)
 	if err != nil {

@@ -1,3 +1,5 @@
+//go:build !core_only
+
 package app
 
 import (
@@ -5,11 +7,14 @@ import (
 	"evesynapse/internal/app/piplanner"
 )
 
-// enabledModules lists the build-selected modules compiled into the binary.
-var enabledModules = []module.Module{
-	piplanner.Module,
-}
-
+// The build-selected modules. A module is compiled in when this file
+// imports its package, and left out when it does not: Go excludes what
+// is never imported. The default build (this file) enables every
+// module; `go build -tags core_only` swaps it for modules_core_only.go
+// and enables none. One line per module, in nav order. The module
+// build tool (stage S14) writes this file for a chosen selection.
 func init() {
-	registerModules(enabledModules)
+	registerModules([]module.Module{
+		piplanner.Module,
+	})
 }

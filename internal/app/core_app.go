@@ -1024,7 +1024,7 @@ func (app *Application) StationRef(ctx context.Context, memo map[int64]module.Pl
 	return app.scannerStationRef(ctx, memo, locationID)
 }
 
-func (app *Application) ScannerDefaults() (float64, int) {
+func (app *Application) SpreadDefaults() (float64, int) {
 	return defaultScannerMinSpreadPct, scannerRowCap
 }
 

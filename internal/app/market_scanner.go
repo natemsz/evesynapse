@@ -21,15 +21,6 @@ import (
 	"evesynapse/internal/logging"
 )
 
-// scannerRowCap caps how many opportunities one render lists.
-// The sort is by estimated daily profit, so the cap keeps the
-// best trades and drops the long tail.
-const scannerRowCap = 100
-
-// defaultScannerMinSpreadPct is the floor the spread filter
-// starts at: below this the gap rarely covers fees and effort.
-const defaultScannerMinSpreadPct = 5.0
-
 // scannerRow is one opportunity line, display-ready.
 type scannerRow struct {
 	TypeID      int64

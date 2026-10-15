@@ -201,10 +201,10 @@ type Deps interface {
 	// StationRef resolves an order location to its title and link ids
 	// (memo keeps a render to one resolution per location).
 	StationRef(ctx context.Context, memo map[int64]PlaceRef, locationID int64) PlaceRef
-	// ScannerDefaults are the spread scanner's default minimum spread
-	// (percent) and its row cap, for modules that read the same stored
-	// scanner statistics.
-	ScannerDefaults() (minSpreadPct float64, rowCap int)
+	// SpreadDefaults are the core-owned default minimum spread (percent)
+	// and row cap for reading the stored spread statistics: shared data,
+	// the same numbers whichever module or page reads them.
+	SpreadDefaults() (minSpreadPct float64, rowCap int)
 }
 
 // Module is the registration contract exposed by every build-selectable module.

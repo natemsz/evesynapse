@@ -205,8 +205,8 @@ const forgeRegionID = int64(10000002)
 
 // BuildCSV renders the Forge scanner's top rows as the CSV the model
 // reads, capped to limit rows. It reads the stored scanner statistics
-// itself (the same bounded query the spread scanner page uses, at the
-// scanner's default filters and row cap) and formats the rows here, so
+// itself (the same bounded stored-statistics query the spread scanner page
+// uses, at the core-owned spread defaults, Deps.SpreadDefaults) and formats the rows here, so
 // it does not depend on the scanner page's view. False when the sweep
 // has not covered the Forge yet.
 func BuildCSV(ctx context.Context, deps module.Deps, limit int) (string, bool) {
@@ -218,10 +218,10 @@ func BuildCSV(ctx context.Context, deps module.Deps, limit int) (string, bool) {
 		}
 		return "", false
 	}
-	minSpread, scannerRowCap := deps.ScannerDefaults()
+	minSpread, rowLimit := deps.SpreadDefaults()
 	rowCap := int64(limit)
-	if rowCap > int64(scannerRowCap) {
-		rowCap = int64(scannerRowCap)
+	if rowCap > int64(rowLimit) {
+		rowCap = int64(rowLimit)
 	}
 	opp, err := q.ListScannerOpportunities(ctx, db.ListScannerOpportunitiesParams{
 		RegionID:  forgeRegionID,

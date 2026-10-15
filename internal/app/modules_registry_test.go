@@ -4,8 +4,10 @@ package app
 
 import (
 	"context"
+	"evesynapse/internal/app/mail"
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
 	"fmt"
 	"strings"
 	"testing"
@@ -225,5 +227,43 @@ func TestModuleDeclaredCatalogsKeepTheirOrder(t *testing.T) {
 	wantKinds := "watch skill mail calendar op op_reminder srp_new srp_done killmail pi industry"
 	if got := strings.Join(kinds, " "); got != wantKinds {
 		t.Errorf("notification kinds = %q, want %q", got, wantKinds)
+	}
+}
+
+// TestModuleOnlyFeaturesHaveNoManifestEntry: a feature only a module's pages
+// read is declared once, by the module. Only "wallet" and "market" are in
+// both, because core's net worth reads the wallet and the open orders.
+func TestModuleOnlyFeaturesHaveNoManifestEntry(t *testing.T) {
+	shared := map[string]bool{"wallet": true, "market": true}
+	for _, m := range registeredModules {
+		for _, def := range moduleManifest {
+			if def.ID == m.ID && !shared[m.ID] {
+				t.Errorf("%q is declared by its module and again in the manifest", m.ID)
+			}
+		}
+	}
+}
+
+// TestKindsOfAbsentModulesAreNotFetched: the feed fetches a kind that only a
+// module reads only where the module is built in.
+func TestKindsOfAbsentModulesAreNotFetched(t *testing.T) {
+	has := func(kinds []string, want string) bool {
+		for _, k := range kinds {
+			if k == want {
+				return true
+			}
+		}
+		return false
+	}
+	withModules(t)
+	if has(commsSnapshotKinds(), esi.SnapMail) || has(commsSnapshotKinds(), esi.SnapContacts) || has(economySnapshotKinds(), esi.SnapContracts) {
+		t.Error("with no module built in the worker would still fetch mail, contacts or contracts")
+	}
+	if !has(economySnapshotKinds(), esi.SnapWalletJournal) || !has(economySnapshotKinds(), esi.SnapOrders) {
+		t.Error("the wallet and order feeds are core's (net worth) and must stay")
+	}
+	withModules(t, mail.Module)
+	if !has(commsSnapshotKinds(), esi.SnapMail) || has(commsSnapshotKinds(), esi.SnapCalendar) {
+		t.Error("with only the mail module, mail should be fetched and the calendar not")
 	}
 }

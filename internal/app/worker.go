@@ -544,7 +544,10 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 	// lists behind the contracts snapshot (economy_worker.go).
 	c.characterPass("warming contract items", ch, func() (int, bool) {
 		stored := app.refreshEconomySnapshots(ctx, ch)
-		warmed, limited := app.warmContractItems(ctx, ch)
+		warmed, limited := 0, false
+		if moduleCompiledIn("contracts") {
+			warmed, limited = app.warmContractItems(ctx, ch)
+		}
 		return stored + warmed, limited
 	})
 

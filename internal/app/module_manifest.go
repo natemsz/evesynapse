@@ -64,6 +64,14 @@ func opt(scope, unlocks string) scopeUse {
 	return scopeUse{Scope: scope, Unlocks: unlocks, Optional: true}
 }
 
+// moduleManifest is core's own declaration of the features whose data core
+// itself reads (the fleet, net worth and briefing read the skills, assets,
+// wallet, market orders and the rest). A feature that only a module's pages
+// read has no entry here: its scopes and snapshot kinds are the module's
+// declaration, so a build without the module neither requests nor fetches
+// them. "wallet" and "market" stay because net worth reads the wallet and
+// the open orders; the modules of the same id declare the same scopes, and
+// TestRegisteredFeaturesAgreeWithTheManifest pins that they agree.
 var moduleManifest = []moduleDef{
 	// --- public ---------------------------------------------------------
 	{ID: "server", Title: "Tranquility", Layer: layerPublic,
@@ -111,26 +119,6 @@ var moduleManifest = []moduleDef{
 			req("esi-characters.read_fatigue.v1", "Jump fatigue timers."),
 		},
 		Snapshots: []string{esi.SnapFatigue}},
-	{ID: "mail", Title: "Mail", Layer: layerCharacter,
-		Scopes: []scopeUse{
-			req("esi-mail.read_mail.v1", "Inbox, labels, mailing lists and bodies."),
-			opt(mailOrganizeScope, "Mark mail as read."),
-			opt(mailSendScope, "Compose and send mail."),
-		},
-		Snapshots: []string{esi.SnapMail, esi.SnapMailLabels, esi.SnapMailLists, esi.SnapMailBodyPrefix}},
-	{ID: "calendar", Title: "Calendar", Layer: layerCharacter,
-		Scopes: []scopeUse{
-			req("esi-calendar.read_calendar_events.v1", "Upcoming events and attendees."),
-			opt(calendarRespondScope, "Accept or decline events."),
-		},
-		Snapshots: []string{esi.SnapCalendar, esi.SnapCalendarEventPrefix, esi.SnapCalendarAttPrefix}},
-	{ID: "contacts", Title: "Contacts", Layer: layerCharacter,
-		Scopes: []scopeUse{
-			req("esi-characters.read_contacts.v1", "Personal contacts and standings."),
-			opt("esi-corporations.read_contacts.v1", "Corporation contacts."),
-			opt("esi-alliances.read_contacts.v1", "Alliance contacts."),
-		},
-		Snapshots: []string{esi.SnapContacts}},
 	{ID: "industry", Title: "Industry", Layer: layerCharacter,
 		Scopes: []scopeUse{
 			req("esi-industry.read_character_jobs.v1", "Active and finished jobs."),
@@ -148,11 +136,6 @@ var moduleManifest = []moduleDef{
 			opt("esi-markets.structure_markets.v1", "Prices at player-owned structures."),
 		},
 		Snapshots: []string{esi.SnapOrders, esi.SnapOrdersHistory}},
-	{ID: "contracts", Title: "Contracts", Layer: layerCharacter,
-		Scopes: []scopeUse{
-			req("esi-contracts.read_character_contracts.v1", "Courier, item and auction contracts."),
-		},
-		Snapshots: []string{esi.SnapContracts}},
 	{ID: "killmails", Title: "Killmails", Layer: layerCharacter,
 		Scopes: []scopeUse{
 			req("esi-killmails.read_killmails.v1", "The character's kills and losses."),

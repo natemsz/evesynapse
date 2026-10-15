@@ -7,7 +7,7 @@ func TestModuleManifestScopesAreRequested(t *testing.T) {
 	for _, s := range eveScopes {
 		requested[s] = true
 	}
-	for _, m := range moduleManifest {
+	for _, m := range moduleDefs() {
 		for _, s := range m.Scopes {
 			if !requested[s.Scope] {
 				t.Errorf("module %q names scope %q that eveScopes does not request", m.ID, s.Scope)
@@ -20,12 +20,20 @@ func TestModuleManifestScopesAreRequested(t *testing.T) {
 }
 
 func TestEveScopesBelongToAModule(t *testing.T) {
-	owner := map[string]string{}
+	// Core's manifest gives each scope one owner; modules may enhance with
+	// a scope another feature also uses, so ownership reads the merged view.
+	seen := map[string]string{}
 	for _, m := range moduleManifest {
 		for _, s := range m.Scopes {
-			if prev, dup := owner[s.Scope]; dup {
+			if prev, dup := seen[s.Scope]; dup {
 				t.Errorf("scope %q is in both %q and %q", s.Scope, prev, m.ID)
 			}
+			seen[s.Scope] = m.ID
+		}
+	}
+	owner := map[string]string{}
+	for _, m := range moduleDefs() {
+		for _, s := range m.Scopes {
 			owner[s.Scope] = m.ID
 		}
 	}

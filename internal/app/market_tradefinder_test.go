@@ -446,3 +446,60 @@ func TestTradefinderMarginRankingAndCapInSQL(t *testing.T) {
 		t.Fatalf("tradefinder build made %d outbound calls, want 0", got)
 	}
 }
+
+// TestTradefinderPendingRoutesQueueHistory: a route whose destination
+// has no recorded sales yet is not dropped. It lists as pending, a
+// signed-in view queues the destination history for it, and once that
+// history lands the route ranks into the table.
+func TestTradefinderPendingRoutesQueueHistory(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	seedTradefinderFixture(t, app)
+	now := time.Now().UTC()
+	// Pyerite clears the price rules but Domain has no sold-per-day figure.
+	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfOrigin, 35, 4, 0, 50, 0, 0, now)); err != nil {
+		t.Fatalf("seed origin stat: %v", err)
+	}
+	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfDest, 35, 0, 10, 0, 100, 0, now)); err != nil {
+		t.Fatalf("seed dest stat: %v", err)
+	}
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+	_, body := getPage(t, app, cookie, "/market/tradefinder/")
+	mustContain(t, "/market/tradefinder/ (pending)", body,
+		"Waiting on sales figures", "Pyerite", "No route has sales figures in Domain yet")
+	var wants int
+	if err := app.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM market_history_wants WHERE region_id = $1 AND type_id = 35`, tfDest).Scan(&wants); err != nil {
+		t.Fatalf("count wants: %v", err)
+	}
+	if wants != 1 {
+		t.Fatalf("history wants for the pending route = %d, want 1", wants)
+	}
+
+	// The history arrives (what fetchAndStoreHistory stores and then
+	// refreshes): the route moves into the ranked table.
+	for i, vol := range []int64{30, 40, 50} {
+		if err := q.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
+			RegionID: tfDest, TypeID: 35, Date: now.AddDate(0, 0, -i).Format("2006-01-02"),
+			Average: 10, Highest: 10, Lowest: 10, Volume: vol, OrderCount: 1,
+		}); err != nil {
+			t.Fatalf("seed history: %v", err)
+		}
+	}
+	if err := q.RefreshMarketRegionStatAvgVolume(ctx, db.RefreshMarketRegionStatAvgVolumeParams{RegionID: tfDest, TypeID: 35}); err != nil {
+		t.Fatalf("refresh sold per day: %v", err)
+	}
+	_, body = getPage(t, app, cookie, "/market/tradefinder/")
+	mustContain(t, "/market/tradefinder/ (ranked)", body, "Pyerite", "Estimated profit per day")
+	if strings.Contains(body, "Waiting on sales figures") {
+		t.Error("the route still lists as pending after its history landed")
+	}
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("tradefinder made %d outbound calls, want 0", got)
+	}
+}

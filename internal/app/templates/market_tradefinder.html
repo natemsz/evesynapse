@@ -56,7 +56,28 @@
 </div>
 <p><small>Profit per item is the typical sell price in {{$s.DestName}} minus the typical buy price in {{$s.OriginName}}. Sold per day is the average daily amount that actually traded in {{$s.DestName}} over the last seven recorded days. Estimated profit per day is the profit per item times whichever runs out first: what trades each day in {{$s.DestName}}, the open buy volume in {{$s.OriginName}}, or the open sell volume in {{$s.DestName}}. Before broker fees, sales tax, and hauling.</small></p>
 {{else}}
-<p>No profitable routes between these regions right now. Try a lower minimum margin or fewer sold per day{{if not $s.Lowball}}, or include lowball routes{{end}}.</p>
+{{if $s.Pending}}<p>No route has sales figures in {{$s.DestName}} yet. The candidates are listed below while their figures are fetched.</p>
+{{else}}<p>No profitable routes between these regions right now. Try a lower minimum margin or fewer sold per day{{if not $s.Lowball}}, or include lowball routes{{end}}.</p>{{end}}
+{{end}}
+{{if and (not $s.SameRegion) $s.Pending}}
+<h3>Waiting on sales figures</h3>
+<p><small>These routes clear the price rules, but {{$s.DestName}} has no recorded sales for them yet, so there is no sold-per-day figure to rank them by. Their sales history is being fetched; each one moves into the table above once it arrives.</small></p>
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th>Buy in {{$s.OriginName}} (typical)</th><th>Sell in {{$s.DestName}} (typical)</th><th>Profit per item</th><th>Margin</th></tr></thead>
+  <tbody>
+  {{range $s.Pending}}
+    <tr>
+      <td><a href="/market/?type={{.TypeID}}&amp;region={{$s.DestID}}">{{.ItemName}}</a></td>
+      <td>{{.BuyTypical}} ISK</td>
+      <td>{{.SellTypical}} ISK</td>
+      <td>{{.ProfitItem}} ISK</td>
+      <td>{{.MarginPct}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
 {{end}}
 
 {{else if $s.SameRegion}}

@@ -28,6 +28,12 @@ package app
 // both are "how much room is there" caps next to what
 // actually trades each day. A row with any of the three at zero
 // cannot move, so it drops out instead of showing a fantasy number.
+// A route whose destination has no recorded history yet has no
+// sold-per-day figure at all (history is fetched per item, and only
+// The Forge's liquid core is kept warm without being asked). Those
+// routes are not dropped silently: they list apart as pending, and
+// a signed-in view queues the destination history for the best of
+// them, so they rank into the table as their figures arrive.
 // Figures older than three days on EITHER side are excluded: a
 // route priced off a stale book is not a route. Routes out of a
 // degenerate origin buy book (lowballRoute) are hidden unless the
@@ -60,6 +66,10 @@ const defaultTradefinderMinMarginPct = 5.0
 // this on either side of a route exclude the route.
 const tradefinderMaxStatAge = 3 * 24 * time.Hour
 
+// tradefinderPendingCap caps the pending list, and with it how many
+// destination histories one view queues.
+const tradefinderPendingCap = 25
+
 // defaultTradefinderDestination is the default sell-in region:
 // Domain (Amarr), the biggest hub outside The Forge.
 const defaultTradefinderDestination = int64(10000043)
@@ -84,6 +94,17 @@ type tradefinderRow struct {
 	DestBest      string // esi.FormatISK, "" when no buy order
 }
 
+// tradefinderPendingRow is a route that passes the price rules but
+// has no sold-per-day figure at the destination yet.
+type tradefinderPendingRow struct {
+	TypeID      int64
+	ItemName    string
+	BuyTypical  string
+	SellTypical string
+	ProfitItem  string
+	MarginPct   string
+}
+
 // tradefinderView is the /market/tradefinder/ page body.
 type tradefinderView struct {
 	OriginID      int64
@@ -100,6 +121,9 @@ type tradefinderView struct {
 	OriginAsOf    string // "<region> figures last gathered Oct 4, 3:04 PM", when gathered
 	DestAsOf      string
 	Rows          []tradefinderRow
+	// Pending is the routes still waiting on a destination
+	// sold-per-day figure (see the file comment).
+	Pending []tradefinderPendingRow
 }
 
 // HasData reports whether both ends have any stored figures at
@@ -118,6 +142,9 @@ func (app *Application) handleMarketTradefinder(w http.ResponseWriter, r *http.R
 	ctx := r.Context()
 	data := app.publicPage(ctx) // public: stored market data only
 	view := app.buildTradefinderView(ctx, r.URL.Query())
+	if app.userID(ctx) > 0 { // anonymous views warm nothing
+		app.queueTradefinderPending(ctx, view)
+	}
 	if wantCSV(r) {
 		serveTradefinderCSV(w, view)
 		return
@@ -332,5 +359,45 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 		}
 		view.Rows = append(view.Rows, row)
 	}
+
+	// Routes with no sold-per-day figure at the destination yet:
+	// listed apart, and their destination history queued.
+	pending, err := app.queries.ListTradefinderPendingRoutes(ctx, db.ListTradefinderPendingRoutesParams{
+		DestRegion:     destID,
+		OriginRegion:   originID,
+		IncludeLowball: lowballParam,
+		MinMargin:      minMargin,
+		Cutoff:         time.Now().UTC().Add(-tradefinderMaxStatAge),
+		RowCap:         tradefinderPendingCap,
+	})
+	if err != nil {
+		logging.Errorf("tradefinder: list pending routes %d -> %d: %v", originID, destID, err)
+		return view
+	}
+	for _, r := range pending {
+		margin := r.DestTypicalSell - r.OriginTypicalBuy
+		view.Pending = append(view.Pending, tradefinderPendingRow{
+			TypeID:      r.TypeID,
+			ItemName:    itemNameFor(r.TypeID),
+			BuyTypical:  esi.FormatISK(r.OriginTypicalBuy),
+			SellTypical: esi.FormatISK(r.DestTypicalSell),
+			ProfitItem:  esi.FormatISK(margin),
+			MarginPct:   fmt.Sprintf("%.1f%%", margin/r.OriginTypicalBuy*100),
+		})
+	}
 	return view
+}
+
+// queueTradefinderPending asks the worker for the destination history
+// of the view's pending routes, so they can rank in. Queue writes
+// only: nothing is fetched here.
+func (app *Application) queueTradefinderPending(ctx context.Context, view *tradefinderView) {
+	now := time.Now().UTC()
+	for _, r := range view.Pending {
+		if err := app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
+			RegionID: view.DestID, TypeID: r.TypeID, LastRequestedAt: now, Priority: wantOrbit,
+		}); err != nil {
+			logging.Errorf("tradefinder: queue history for type %d in region %d: %v", r.TypeID, view.DestID, err)
+		}
+	}
 }

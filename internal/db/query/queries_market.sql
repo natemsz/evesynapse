@@ -626,6 +626,42 @@ FROM (
 ) ranked
 ORDER BY profit DESC, type_id
 LIMIT sqlc.arg(row_cap)::bigint;
+-- name: ListTradefinderPendingRoutes :many
+-- Routes that pass every price rule but have no sold-per-day
+-- figure at the destination yet (no recorded history there): the
+-- tradefinder lists them apart and queues their history, ranked
+-- by margin times the smaller open volume as a rough potential.
+SELECT o.type_id,
+       o.typical_buy AS origin_typical_buy,
+       d.typical_sell AS dest_typical_sell
+FROM market_region_stats o
+JOIN market_region_stats d ON d.region_id = sqlc.arg(dest_region) AND d.type_id = o.type_id
+WHERE o.region_id = sqlc.arg(origin_region)
+  AND o.typical_buy > 0 AND d.typical_sell > 0
+  AND d.typical_sell > o.typical_buy
+  AND (sqlc.arg(include_lowball)::bigint = 1 OR NOT (o.typical_sell > 0 AND o.typical_buy * 10 < o.typical_sell))
+  AND (d.typical_sell - o.typical_buy) / o.typical_buy * 100 >= sqlc.arg(min_margin)
+  AND d.avg_daily_volume = 0
+  AND LEAST(o.buy_volume, d.sell_volume) > 0
+  AND o.updated_at >= sqlc.arg(cutoff) AND d.updated_at >= sqlc.arg(cutoff)
+ORDER BY (d.typical_sell - o.typical_buy) * LEAST(o.buy_volume, d.sell_volume)::double precision DESC, o.type_id
+LIMIT sqlc.arg(row_cap)::bigint;
+-- name: RefreshMarketRegionStatAvgVolume :exec
+-- Recomputes one region stat's sold-per-day figure from its stored
+-- history (the same seven-day window ListMarketAvgDailyVolumes uses)
+-- right after a history fetch, so the figure doesn't wait for the
+-- region's next sweep.
+UPDATE market_region_stats SET avg_daily_volume = COALESCE((
+    SELECT CAST(AVG(h.volume) AS DOUBLE PRECISION)
+    FROM market_history h
+    WHERE h.region_id = sqlc.arg(region_id) AND h.type_id = sqlc.arg(type_id)
+      AND h.date >= (
+          SELECT to_char(MAX(m.date)::date - INTERVAL '6 days', 'YYYY-MM-DD')
+          FROM market_history m
+          WHERE m.region_id = sqlc.arg(region_id) AND m.type_id = sqlc.arg(type_id)
+      )
+), 0)
+WHERE region_id = sqlc.arg(region_id) AND type_id = sqlc.arg(type_id);
 -- name: ListCheapestSellStations :many
 -- Per-type cheapest-sell station rows for a bounded type list:
 -- the tradefinder's "cheapest at" hints without pulling the

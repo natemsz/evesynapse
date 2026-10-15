@@ -24,6 +24,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/discord"
 	"evesynapse/internal/esi"
@@ -795,7 +796,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// stays signed-in only.
 	r.Route("/industry", func(r chi.Router) {
 		r.With(app.requireAuth).Get("/", app.handleIndustry)
-		r.With(anonPages).Get("/pi/", app.handlePIPlanner)
 	})
 
 	r.Route("/planner", func(r chi.Router) {
@@ -832,6 +832,12 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/warms", app.handleSwarmWarms)
 		r.Post("/seed/register", app.handleSwarmSeedRegister)
 	})
+
+	for _, m := range enabledModules {
+		if m.Routes != nil {
+			m.Routes(r, app)
+		}
+	}
 
 	return r
 }
@@ -925,4 +931,46 @@ func requestLogger(next http.Handler) http.Handler {
 		logf("%s %s -> %d (%s)", r.Method, r.URL.Path, ww.Status(),
 			time.Since(start).Round(time.Millisecond))
 	})
+}
+
+// --- module.Deps implementation ---
+
+var _ module.Deps = (*Application)(nil)
+
+func (app *Application) DB() *db.Queries {
+	return app.queries
+}
+
+func (app *Application) ValuationPrices(ctx context.Context) map[int64]esi.MarketPrice {
+	return app.valuationPrices(ctx)
+}
+
+func (app *Application) LoadCorpSnapshot(ctx context.Context, characterID int64, kind string, out any) bool {
+	return app.loadCorpSnapshot(ctx, characterID, kind, out)
+}
+
+func (app *Application) PINotEnabled(ctx context.Context, ch db.Character) bool {
+	return app.piNotEnabled(ctx, ch)
+}
+
+func (app *Application) PublicShell(ctx context.Context) module.ShellData {
+	loggedIn := app.sessions.GetBool(ctx, sessionAuthenticated)
+	return module.ShellData{
+		LoggedIn:      loggedIn,
+		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
+		SSOConfigured: app.cfg.SSOConfigured(),
+	}
+}
+
+func (app *Application) PickCharacter(ctx context.Context, r *http.Request, path string) ([]db.Character, db.Character, []module.CharLink, error) {
+	return app.pickCharacter(ctx, r, path)
+}
+
+func (app *Application) Render(ctx context.Context, w http.ResponseWriter, status int, page string, data any) {
+	app.render(ctx, w, status, page, data)
+}
+
+func (app *Application) AnonPages() func(http.Handler) http.Handler {
+	pageThrottle, _ := app.anonThrottles()
+	return app.throttleAnon(pageThrottle)
 }

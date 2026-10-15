@@ -1,4 +1,4 @@
-package app
+package piplanner
 
 import (
 	"context"
@@ -10,6 +10,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
+
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -122,163 +125,178 @@ type piPlannerView struct {
 	FacilityNote   string
 }
 
-func (app *Application) handlePIPlanner(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	data := app.publicPage(ctx) // public: no session needed
-
-	_, active, links, err := app.pickCharacter(ctx, r, "/industry/pi/")
-	if err != nil {
-		logging.Errorf("piplanner: list characters: %v", err)
-		data.Error = "Could not load PI planner data; check the server log."
-		app.render(ctx, w, http.StatusOK, "piplanner.html", data)
-		return
-	}
-	// Standalone like evepitool: no character is fine. When one
-	// exists, its colonies pre-fill the planet picker.
-	var ownedPlanets []string
-	ownedNote := ""
-	if links != nil && active.CharacterID != 0 {
-		data.PIPlannerChars = links
-		ownedPlanets, ownedNote = app.piOwnedPlanetTypes(ctx, active)
-	}
-
-	q := r.URL.Query()
-	view := &piPlannerView{Targets: piplan.AllTargets()}
-	data.PIPlanner = view
-
-	// Target: ?product= is the page's one parameter (its form field,
-	// pi.js and every link in). ?target= is still read for links
-	// made before that was settled.
-	target := strings.TrimSpace(q.Get("product"))
-	if target == "" {
-		target = strings.TrimSpace(q.Get("target"))
-	}
-	if target == "" {
-		target = "Broadcast Node"
-	}
-	// Validate against the catalogue; unknown falls back.
-	if _, ok := piplan.AllCommodities[target]; !ok || piplan.TierOf(target) == piplan.TierRaw {
-		target = "Broadcast Node"
-	}
-	view.Target = target
-
-	view.Amount = 10
-	if n, err := strconv.ParseInt(q.Get("amount"), 10, 64); err == nil && n >= 1 && n <= 100000 {
-		view.Amount = n
-	}
-	view.AmountStr = strconv.FormatInt(view.Amount, 10)
-	view.CCLevel = 5
-	if n, err := strconv.Atoi(q.Get("cc")); err == nil && n >= 0 && n <= 5 {
-		view.CCLevel = n
-	}
-	view.Heads = 10
-	if n, err := strconv.Atoi(q.Get("heads")); err == nil && n >= 1 && n <= 10 {
-		view.Heads = n
-	}
-	view.Yield = 12000
-	if n, err := strconv.ParseInt(q.Get("yield"), 10, 64); err == nil && n >= 100 && n <= 1000000 {
-		view.Yield = n
-	}
-	view.TaxPct = 10
-	if f, err := strconv.ParseFloat(q.Get("tax"), 64); err == nil && f >= 0 && f <= 100 {
-		view.TaxPct = f
-	}
-	view.TaxStr = strconv.FormatFloat(view.TaxPct, 'f', -1, 64)
-
-	// Selected planets: ?cover=1 (a product just picked) ticks the
-	// minimal cover for the target, so the page shows which planet
-	// types that product needs; else explicit ?planets= wins (form
-	// checkboxes repeat the key; links may comma-join it; a
-	// present-but-empty value means "none ticked"); else owned
-	// types; else the minimal cover.
-	selected := map[string]bool{}
-	if q.Get("cover") == "1" {
-		for _, p := range piplan.MinimalPlanets(target) {
-			selected[p] = true
-		}
-	} else if _, explicit := q["planets"]; explicit {
-		for _, raw := range q["planets"] {
-			for _, p := range strings.Split(raw, ",") {
-				if p = strings.TrimSpace(p); p != "" {
-					selected[piplan.TitlePlanet(p)] = true
-				}
-			}
-		}
-	} else if len(ownedPlanets) > 0 {
-		for _, p := range ownedPlanets {
-			selected[p] = true
-		}
-	} else {
-		for _, p := range piplan.MinimalPlanets(target) {
-			selected[p] = true
-		}
-	}
-	ownedSet := map[string]bool{}
-	for _, p := range ownedPlanets {
-		ownedSet[p] = true
-	}
-	for _, pt := range piplan.PlanetTypes {
-		view.PlanetChecks = append(view.PlanetChecks, piPlanetCheck{
-			Name: pt, Checked: selected[pt], Owned: ownedSet[pt],
-		})
-	}
-	view.OwnedPlanets = ownedPlanets
-	view.OwnedNote = ownedNote
-
-	var selList []string
-	for _, c := range view.PlanetChecks {
-		if c.Checked {
-			selList = append(selList, c.Name)
-		}
-	}
-
-	prices, priceNote := app.piPricesByName(ctx)
-	view.PricesNote = priceNote
-
-	settings := piplan.Settings{
-		CCLevel: view.CCLevel, HeadsPerECU: view.Heads,
-		ECUYield: float64(view.Yield), TaxRate: view.TaxPct / 100, Hours: 24,
-		Volumes: app.piVolumesByName(ctx),
-	}
-	plan, perr := piplan.PlanFor(target, view.Amount, settings, prices)
-	if perr != nil {
-		data.Error = perr.Error()
-		app.render(ctx, w, http.StatusOK, "piplanner.html", data)
-		return
-	}
-	view.HasPlan = true
-	view.PlanTarget = target
-	fillPIPlanDisplay(view, plan, prices)
-	view.Graph, view.GraphJSON = buildPIGraph(target, selList, prices)
-	// Coverage summary.
-	cov := piplan.CoverageFor(target, selList)
-	if cov.Complete {
-		view.CoverageText = fmt.Sprintf("Covered — your %d selected planet type(s) supply all %d raw resources.", len(selList), len(cov.Required))
-		view.CoverageClass = "pos"
-	} else if len(selList) == 0 {
-		view.CoverageText = "No planet types selected — tick planets above to check coverage."
-		view.CoverageClass = ""
-	} else {
-		view.CoverageText = fmt.Sprintf("Not covered — %d of %d raw resources available.", len(cov.Covered), len(cov.Required))
-		view.CoverageClass = "neg"
-	}
-	if len(cov.Missing) > 0 {
-		view.MissingText = "Missing: " + strings.Join(cov.Missing, ", ")
-	}
-	view.MinimalText = "Smallest covering set: " + strings.Join(piplan.MinimalPlanets(target), ", ")
-	if one, ok := piplan.SinglePlanet(target); ok {
-		view.SingleText = "Single-planet possible on " + one + "."
-	}
-	view.Profitable = piProfitableChains(prices, settings)
-	view.FacilityNote = "High-Tech (P4) only on Barren/Temperate · Advanced anywhere · Basic on the extractor planet. Taxes use CCP taxable values (R0 5 · P1 400 · P2 7,200 · P3 60,000 · P4 1,200,000 ISK); import at half the export rate."
-
-	app.render(ctx, w, http.StatusOK, "piplanner.html", data)
+// PageData is the view model passed to piplanner.html.
+type PageData struct {
+	module.ShellData
+	PIPlanner      *piPlannerView
+	PIPlannerChars []module.CharLink
 }
 
-func (app *Application) piOwnedPlanetTypes(ctx context.Context, ch db.Character) ([]string, string) {
+// Shell returns the embedded ShellData pointer for render.
+func (p *PageData) Shell() *module.ShellData {
+	return &p.ShellData
+}
+
+// HandlePIPlanner serves the PI planner page over the given foundation Deps.
+func HandlePIPlanner(deps module.Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		data := PageData{ShellData: deps.PublicShell(ctx)} // public: no session needed
+
+		_, active, links, err := deps.PickCharacter(ctx, r, "/industry/pi/")
+		if err != nil {
+			logging.Errorf("piplanner: list characters: %v", err)
+			data.Error = "Could not load PI planner data; check the server log."
+			deps.Render(ctx, w, http.StatusOK, "piplanner.html", &data)
+			return
+		}
+		// Standalone like evepitool: no character is fine. When one
+		// exists, its colonies pre-fill the planet picker.
+		var ownedPlanets []string
+		ownedNote := ""
+		if links != nil && active.CharacterID != 0 {
+			data.PIPlannerChars = links
+			ownedPlanets, ownedNote = piOwnedPlanetTypes(ctx, deps, active)
+		}
+
+		q := r.URL.Query()
+		view := &piPlannerView{Targets: piplan.AllTargets()}
+		data.PIPlanner = view
+
+		// Target: ?product= is the page's one parameter (its form field,
+		// pi.js and every link in). ?target= is still read for links
+		// made before that was settled.
+		target := strings.TrimSpace(q.Get("product"))
+		if target == "" {
+			target = strings.TrimSpace(q.Get("target"))
+		}
+		if target == "" {
+			target = "Broadcast Node"
+		}
+		// Validate against the catalogue; unknown falls back.
+		if _, ok := piplan.AllCommodities[target]; !ok || piplan.TierOf(target) == piplan.TierRaw {
+			target = "Broadcast Node"
+		}
+		view.Target = target
+
+		view.Amount = 10
+		if n, err := strconv.ParseInt(q.Get("amount"), 10, 64); err == nil && n >= 1 && n <= 100000 {
+			view.Amount = n
+		}
+		view.AmountStr = strconv.FormatInt(view.Amount, 10)
+		view.CCLevel = 5
+		if n, err := strconv.Atoi(q.Get("cc")); err == nil && n >= 0 && n <= 5 {
+			view.CCLevel = n
+		}
+		view.Heads = 10
+		if n, err := strconv.Atoi(q.Get("heads")); err == nil && n >= 1 && n <= 10 {
+			view.Heads = n
+		}
+		view.Yield = 12000
+		if n, err := strconv.ParseInt(q.Get("yield"), 10, 64); err == nil && n >= 100 && n <= 1000000 {
+			view.Yield = n
+		}
+		view.TaxPct = 10
+		if f, err := strconv.ParseFloat(q.Get("tax"), 64); err == nil && f >= 0 && f <= 100 {
+			view.TaxPct = f
+		}
+		view.TaxStr = strconv.FormatFloat(view.TaxPct, 'f', -1, 64)
+
+		// Selected planets: ?cover=1 (a product just picked) ticks the
+		// minimal cover for the target, so the page shows which planet
+		// types that product needs; else explicit ?planets= wins (form
+		// checkboxes repeat the key; links may comma-join it; a
+		// present-but-empty value means "none ticked"); else owned
+		// types; else the minimal cover.
+		selected := map[string]bool{}
+		if q.Get("cover") == "1" {
+			for _, p := range piplan.MinimalPlanets(target) {
+				selected[p] = true
+			}
+		} else if _, explicit := q["planets"]; explicit {
+			for _, raw := range q["planets"] {
+				for _, p := range strings.Split(raw, ",") {
+					if p = strings.TrimSpace(p); p != "" {
+						selected[piplan.TitlePlanet(p)] = true
+					}
+				}
+			}
+		} else if len(ownedPlanets) > 0 {
+			for _, p := range ownedPlanets {
+				selected[p] = true
+			}
+		} else {
+			for _, p := range piplan.MinimalPlanets(target) {
+				selected[p] = true
+			}
+		}
+		ownedSet := map[string]bool{}
+		for _, p := range ownedPlanets {
+			ownedSet[p] = true
+		}
+		for _, pt := range piplan.PlanetTypes {
+			view.PlanetChecks = append(view.PlanetChecks, piPlanetCheck{
+				Name: pt, Checked: selected[pt], Owned: ownedSet[pt],
+			})
+		}
+		view.OwnedPlanets = ownedPlanets
+		view.OwnedNote = ownedNote
+
+		var selList []string
+		for _, c := range view.PlanetChecks {
+			if c.Checked {
+				selList = append(selList, c.Name)
+			}
+		}
+
+		prices, priceNote := piPricesByName(ctx, deps)
+		view.PricesNote = priceNote
+
+		settings := piplan.Settings{
+			CCLevel: view.CCLevel, HeadsPerECU: view.Heads,
+			ECUYield: float64(view.Yield), TaxRate: view.TaxPct / 100, Hours: 24,
+			Volumes: VolumesByName(ctx, deps),
+		}
+		plan, perr := piplan.PlanFor(target, view.Amount, settings, prices)
+		if perr != nil {
+			data.Error = perr.Error()
+			deps.Render(ctx, w, http.StatusOK, "piplanner.html", &data)
+			return
+		}
+		view.HasPlan = true
+		view.PlanTarget = target
+		fillPIPlanDisplay(view, plan, prices)
+		view.Graph, view.GraphJSON = buildPIGraph(target, selList, prices)
+		// Coverage summary.
+		cov := piplan.CoverageFor(target, selList)
+		if cov.Complete {
+			view.CoverageText = fmt.Sprintf("Covered — your %d selected planet type(s) supply all %d raw resources.", len(selList), len(cov.Required))
+			view.CoverageClass = "pos"
+		} else if len(selList) == 0 {
+			view.CoverageText = "No planet types selected — tick planets above to check coverage."
+			view.CoverageClass = ""
+		} else {
+			view.CoverageText = fmt.Sprintf("Not covered — %d of %d raw resources available.", len(cov.Covered), len(cov.Required))
+			view.CoverageClass = "neg"
+		}
+		if len(cov.Missing) > 0 {
+			view.MissingText = "Missing: " + strings.Join(cov.Missing, ", ")
+		}
+		view.MinimalText = "Smallest covering set: " + strings.Join(piplan.MinimalPlanets(target), ", ")
+		if one, ok := piplan.SinglePlanet(target); ok {
+			view.SingleText = "Single-planet possible on " + one + "."
+		}
+		view.Profitable = piProfitableChains(prices, settings)
+		view.FacilityNote = "High-Tech (P4) only on Barren/Temperate · Advanced anywhere · Basic on the extractor planet. Taxes use CCP taxable values (R0 5 · P1 400 · P2 7,200 · P3 60,000 · P4 1,200,000 ISK); import at half the export rate."
+
+		deps.Render(ctx, w, http.StatusOK, "piplanner.html", &data)
+	}
+}
+
+func piOwnedPlanetTypes(ctx context.Context, deps module.Deps, ch db.Character) ([]string, string) {
 	var colonies esi.Colonies
-	if !app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapPlanets, &colonies) {
-		if app.piNotEnabled(ctx, ch) {
+	if !deps.LoadCorpSnapshot(ctx, ch.CharacterID, esi.SnapPlanets, &colonies) {
+		if deps.PINotEnabled(ctx, ch) {
 			return nil, "Planetary scope not enabled for this character yet — re-link to pre-fill from your colonies. You can still plan standalone."
 		}
 		return nil, "Your colonies are still syncing. Plan without them for now, or check back after the next sync."
@@ -299,19 +317,19 @@ func (app *Application) piOwnedPlanetTypes(ctx context.Context, ch db.Character)
 	return out, fmt.Sprintf("Pre-filled from %s's colonies (%s). Tick/untick to what-if other planets.", ch.Name, strings.Join(out, ", "))
 }
 
-// piVolumesByName reads every PI commodity's volume from the
+// VolumesByName reads every PI commodity's volume from the
 // imported SDE, by name. The SDE is the truth for volumes; the
 // engine's built-in figures only stand in for a commodity the
 // SDE does not carry (or before the SDE is imported), so a
 // failed or empty read just returns less.
-func (app *Application) piVolumesByName(ctx context.Context) map[string]float64 {
+func VolumesByName(ctx context.Context, deps module.Deps) map[string]float64 {
 	names := make([]string, 0, len(piplan.AllCommodities))
 	for n := range piplan.AllCommodities {
 		names = append(names, n)
 	}
 	sort.Strings(names)
 	out := map[string]float64{}
-	types, err := app.queries.ListSDETypesByNames(ctx, names)
+	types, err := deps.DB().ListSDETypesByNames(ctx, names)
 	if err != nil {
 		logging.Errorf("piplanner: resolve type IDs for volumes: %v", err)
 		return out
@@ -322,7 +340,7 @@ func (app *Application) piVolumesByName(ctx context.Context) map[string]float64 
 		byID[row.TypeID] = row.Name
 		ids = append(ids, row.TypeID)
 	}
-	physics, err := app.queries.ListSDETypePhysicsByIDs(ctx, ids)
+	physics, err := deps.DB().ListSDETypePhysicsByIDs(ctx, ids)
 	if err != nil {
 		logging.Errorf("piplanner: read volumes: %v", err)
 		return out
@@ -338,18 +356,18 @@ func (app *Application) piVolumesByName(ctx context.Context) map[string]float64 
 // piPricesByName resolves guide prices for every PI commodity.
 // Names resolve to type IDs through the SDE; the guide map then
 // prices them. Missing SDE rows simply stay unpriced.
-func (app *Application) piPricesByName(ctx context.Context) (map[string]float64, string) {
+func piPricesByName(ctx context.Context, deps module.Deps) (map[string]float64, string) {
 	names := make([]string, 0, len(piplan.AllCommodities))
 	for n := range piplan.AllCommodities {
 		names = append(names, n)
 	}
 	sort.Strings(names)
 	out := map[string]float64{}
-	guide := app.valuationPrices(ctx)
+	guide := deps.ValuationPrices(ctx)
 	if guide == nil {
 		return out, "No market guide yet — prices land with the first market refresh; quantities, factories and taxes already work."
 	}
-	rows, err := app.queries.ListSDETypesByNames(ctx, names)
+	rows, err := deps.DB().ListSDETypesByNames(ctx, names)
 	if err != nil {
 		logging.Errorf("piplanner: resolve type IDs: %v", err)
 		return out, "Prices unavailable — type lookup failed; quantities, factories and taxes already work."
@@ -644,4 +662,34 @@ func piProducedOn(name string, selected []string) string {
 		on = piplan.RawSources[raw]
 	}
 	return "on " + strings.Join(on, ", ")
+}
+
+func displayPlanetType(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	return strings.ToUpper(raw[:1]) + raw[1:]
+}
+
+// Module exposes the PI planner module registration contract.
+var Module = module.Module{
+	ID: "piplanner",
+	Nav: []module.NavSection{
+		{
+			Section: "industry",
+			Entries: []module.NavEntry{
+				{Href: "/industry/pi/", Label: "PI Planner", Pages: []string{"piplanner.html"}},
+			},
+		},
+	},
+	Routes: func(r chi.Router, deps module.Deps) {
+		r.With(deps.AnonPages()).Get("/industry/pi/", HandlePIPlanner(deps))
+	},
+	Pages: []module.Page{
+		{
+			Template: "piplanner.html",
+			Section:  "industry",
+			Scripts:  []string{"/static/pi.js"},
+		},
+	},
 }

@@ -4,6 +4,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
+
+	"evesynapse/internal/app/module"
 )
 
 // ---------------------------------------------------------------------------
@@ -19,6 +22,32 @@ type navEntry struct {
 	Href  string
 	Label string
 	Pages []string
+}
+
+var (
+	registeredModules []module.Module
+	registeredPages   = map[string]module.Page{}
+	registerOnce      sync.Once
+)
+
+func registerModules(modules []module.Module) {
+	registerOnce.Do(func() {
+		for _, m := range modules {
+			registeredModules = append(registeredModules, m)
+			for _, sec := range m.Nav {
+				for _, e := range sec.Entries {
+					sectionNav[sec.Section] = append(sectionNav[sec.Section], navEntry{
+						Href:  e.Href,
+						Label: e.Label,
+						Pages: e.Pages,
+					})
+				}
+			}
+			for _, p := range m.Pages {
+				registeredPages[p.Template] = p
+			}
+		}
+	})
 }
 
 // sectionNav is every nav category's pages, in menu order. The keys
@@ -44,7 +73,6 @@ var sectionNav = map[string][]navEntry{
 		{"/industry/", "Industry", []string{"industry.html"}},
 		{"/planner/", "Build Planner", []string{"planner.html"}},
 		{"/planets/", "Planetary Industry", []string{"planets.html"}},
-		{"/industry/pi/", "PI Planner", []string{"piplanner.html"}},
 	},
 	"market": {
 		{"/market/", "Market", []string{"market.html"}},
@@ -83,11 +111,7 @@ var sectionNav = map[string][]navEntry{
 
 // navLink is one rendered nav link: the sidebar menu item and the
 // section tab are the same thing.
-type navLink struct {
-	Href   string
-	Label  string
-	Active bool
-}
+type navLink = module.NavLink
 
 // navLinksFor renders every section's links for one page. A link is
 // active when the page is one of its pages and the page belongs to

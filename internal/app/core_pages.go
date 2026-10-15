@@ -7,23 +7,13 @@ import (
 	"net/http"
 	"sync"
 
+	"evesynapse/internal/app/module"
 	"evesynapse/internal/logging"
 )
 
 // pageData is the view model shared by the templates.
 type pageData struct {
-	Version           string // footer product version ("v0.3.00.002"); filled by render
-	AssetVersion      string // cache-busting token on stylesheet/script URLs (core_static.go); filled by render
-	LoggedIn          bool
-	IsAdmin           bool // one of the account's characters is in EVE_ADMIN_CHARACTER_IDS; filled by render
-	CharacterName     string
-	SSOConfigured     bool
-	AutoRefresh       bool   // Sync page: app.js reloads on a timer (noscript meta-refresh fallback)
-	NavState          string // nav layout ("rail", "hidden" or "expanded") from the cookie, rail when unsaved; base.html puts it on <html>; filled by render
-	Notice            string // a one-time message from the action that redirected here (see flash); shown above the page content
-	Error             string // friendly, user-safe banner (never internals)
-	Section           string // top-nav branch key (base.html); filled by render from the page when empty
-	NavPage           string // template file rendered, for marking the exact nav link; filled by render
+	module.ShellData
 	Shopping          *shoppingView
 	Home              *homeView
 	CharChars         []assetCharLink
@@ -42,8 +32,6 @@ type pageData struct {
 	Industry          *industryView
 	IndustryChars     []assetCharLink
 	Planner           *plannerView
-	PIPlanner         *piPlannerView
-	PIPlannerChars    []assetCharLink
 	IntelWars         *warsView
 	IntelIncursions   *incursionsView
 	IntelFW           *fwView
@@ -82,31 +70,8 @@ type pageData struct {
 	Sync              *syncView
 	Admin             *adminView
 
-	// Header character switcher (base.html): every character
-	// linked to the signed-in account, the acting one marked.
-	// Filled by render; handlers never set it.
-	Switcher []switcherEntry
-
-	// ViewerChars is the set of the signed-in user's own linked
-	// character IDs — the charLink/killCharLink template helpers
-	// route own characters to their sheet and everyone else to
-	// the public pilot page (or zKillboard in kill contexts).
-	// Filled by render from Switcher; handlers never set it.
-	ViewerChars map[int64]bool
-
-	// Notify is the top-bar notifications icon and its short list
-	// (notify_pages.go). Filled by render; handlers never set it.
-	Notify *notifyBadge
-	// NotifyPoll is how often, in seconds, the page asks whether the
-	// icon has changed (NOTIFY_POLL_SECONDS); 0 means it does not ask.
-	// Filled by render.
-	NotifyPoll int
-
 	// Notifications is the /notifications/ page.
 	Notifications *notificationsView
-
-	// NotifySettings is the /notifications/settings page.
-	NotifySettings *notifySettingsView
 
 	// DiscordServers is the /discord/servers page.
 	DiscordServers *discordServersView
@@ -129,9 +94,6 @@ type pageData struct {
 	PublicFit *publicFitView
 	// PublicShip is one /ships/ page.
 	PublicShip *publicShipView
-	// HeadMeta carries a public page's escaped meta/OG tags into
-	// base.html's head; empty on pages that need none.
-	HeadMeta template.HTML
 
 	// CorpSettings is the /corporations/settings/ page (corp_select.go).
 	CorpSettings *corpSettingsView
@@ -162,27 +124,14 @@ type pageData struct {
 
 	// Character management page (/characters/).
 	CharactersPage *charactersView
+}
 
-	// Section nav (nav.go), filled by render: every section's links
-	// for the sidebar menus, and the tab strip under the page title
-	// when the page has one.
-	NavLinks    map[string][]navLink
-	SectionTabs []navLink
-	// NavCharacter, when set, is the character the section's links
-	// carry instead of the request's own ?character= (a page that
-	// selects by something else, like the corporation overview).
-	NavCharacter int64
+func (p *pageData) Shell() *module.ShellData {
+	return &p.ShellData
 }
 
 // switcherEntry is one linked character in the header switcher.
-type switcherEntry struct {
-	ID          int64
-	Name        string
-	Tags        string
-	PortraitURL string
-	Active      bool
-	Relink      bool // token_dead / owner_changed: needs a fresh sign-in
-}
+type switcherEntry = module.SwitcherEntry
 
 // skillRow is one line of the character-page skills table.
 
@@ -208,6 +157,9 @@ type skillRow struct {
 // killmails view reuses killmails.html — set pageData.Section
 // explicitly and render leaves it alone.
 func sectionForPage(page string) string {
+	if p, ok := registeredPages[page]; ok && p.Section != "" {
+		return p.Section
+	}
 	switch page {
 	case "home.html":
 		return "home"
@@ -217,7 +169,7 @@ func sectionForPage(page string) string {
 		return "pilot"
 	case "fittings.html", "fittings_saved.html", "fit_shopping.html", "fittings_public.html", "fit_public.html":
 		return "fitting"
-	case "industry.html", "planner.html", "planets.html", "piplanner.html":
+	case "industry.html", "planner.html", "planets.html":
 		return "industry"
 	case "market.html", "market_scanner.html", "market_tradeideas.html", "market_tradefinder.html", "market_leaderboard.html",
 		"market_restock.html",
@@ -269,53 +221,75 @@ func parsedTemplate(cache *sync.Map, name, page string, shared ...string) (*temp
 	return kept.(*template.Template), nil
 }
 
-func (app *Application) render(ctx context.Context, w http.ResponseWriter, status int, page string, data pageData) {
-	if data.Version == "" {
-		data.Version = appVersion
+type shellProvider interface {
+	Shell() *module.ShellData
+}
+
+func (app *Application) fillShell(ctx context.Context, shell *module.ShellData, page string) {
+	if shell.Version == "" {
+		shell.Version = appVersion
 	}
-	if data.AssetVersion == "" {
-		data.AssetVersion = staticAssetVersion()
+	if shell.AssetVersion == "" {
+		shell.AssetVersion = staticAssetVersion()
 	}
-	if data.Section == "" {
-		data.Section = sectionForPage(page)
+	if shell.Section == "" {
+		shell.Section = sectionForPage(page)
 	}
-	if data.NavState == "" {
-		data.NavState = navStateFrom(ctx)
+	if shell.NavState == "" {
+		shell.NavState = navStateFrom(ctx)
 	}
-	if data.Notice == "" {
-		data.Notice = app.sessions.PopString(ctx, sessionFlash)
+	if shell.Notice == "" {
+		shell.Notice = app.sessions.PopString(ctx, sessionFlash)
 	}
-	if data.NavPage == "" {
-		data.NavPage = page
+	if shell.NavPage == "" {
+		shell.NavPage = page
 	}
-	if data.NavCharacter == 0 {
-		data.NavCharacter = navCharacterFrom(ctx)
+	if shell.NavCharacter == 0 {
+		shell.NavCharacter = navCharacterFrom(ctx)
 	}
-	data.NavLinks = navLinksFor(data.Section, data.NavPage, data.NavCharacter)
-	data.SectionTabs = sectionTabsFor(data.NavLinks, data.Section)
+	shell.NavLinks = navLinksFor(shell.Section, shell.NavPage, shell.NavCharacter)
+	shell.SectionTabs = sectionTabsFor(shell.NavLinks, shell.Section)
+	if len(shell.Scripts) == 0 {
+		if p, ok := registeredPages[page]; ok {
+			shell.Scripts = p.Scripts
+		}
+	}
 	// One read of the account's characters serves both the header
 	// switcher and the admin check behind the Admin/Sync nav links.
-	if data.LoggedIn && (data.Switcher == nil || !data.IsAdmin) {
+	if shell.LoggedIn && (shell.Switcher == nil || !shell.IsAdmin) {
 		characters := app.sessionCharacters(ctx)
-		if data.Switcher == nil {
-			data.Switcher = app.switcherEntriesFor(ctx, characters)
+		if shell.Switcher == nil {
+			shell.Switcher = app.switcherEntriesFor(ctx, characters)
 		}
-		if !data.IsAdmin {
-			data.IsAdmin = app.adminAmong(characters)
-		}
-	}
-	if data.LoggedIn && data.Notify == nil {
-		data.Notify = app.notifyBadgeFor(ctx, app.userID(ctx))
-	}
-	if data.LoggedIn {
-		data.NotifyPoll = app.cfg.notifyPoll
-	}
-	if data.LoggedIn && data.ViewerChars == nil {
-		data.ViewerChars = make(map[int64]bool, len(data.Switcher))
-		for _, entry := range data.Switcher {
-			data.ViewerChars[entry.ID] = true
+		if !shell.IsAdmin {
+			shell.IsAdmin = app.adminAmong(characters)
 		}
 	}
+	if shell.LoggedIn && shell.Notify == nil {
+		shell.Notify = app.notifyBadgeFor(ctx, app.userID(ctx))
+	}
+	if shell.LoggedIn {
+		shell.NotifyPoll = app.cfg.notifyPoll
+	}
+	if shell.LoggedIn && shell.ViewerChars == nil {
+		shell.ViewerChars = make(map[int64]bool, len(shell.Switcher))
+		for _, entry := range shell.Switcher {
+			shell.ViewerChars[entry.ID] = true
+		}
+	}
+}
+
+func (app *Application) render(ctx context.Context, w http.ResponseWriter, status int, page string, data any) {
+	switch d := data.(type) {
+	case pageData:
+		app.fillShell(ctx, &d.ShellData, page)
+		data = d
+	case *pageData:
+		app.fillShell(ctx, &d.ShellData, page)
+	case shellProvider:
+		app.fillShell(ctx, d.Shell(), page)
+	}
+
 	ts, err := parsedTemplate(&pageTemplates, "base", page, pageSharedTemplates...)
 	if err != nil {
 		logging.Errorf("parse template %s: %v", page, err)

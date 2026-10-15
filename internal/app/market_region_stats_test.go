@@ -283,7 +283,7 @@ func TestRegionSweepIncrementalPageBudget(t *testing.T) {
 }
 
 func TestRegionSweepErrorLimitKeepsProgress(t *testing.T) {
-	transport := &regionBookTransport{books: map[int64][][]esi.MarketOrder{}, failWith: 429}
+	transport := &regionBookTransport{books: map[int64][][]esi.MarketOrder{}, failWith: 420}
 	app, conn, q := buildCorpTestApp(t, transport)
 	for _, region := range marketRegions {
 		if region.ID != 10000002 {

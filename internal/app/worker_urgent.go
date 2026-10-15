@@ -71,7 +71,8 @@ func (app *Application) urgentDrain(ctx context.Context) {
 }
 
 // drainUrgentWants fetches what the want queues are holding,
-// current-page wants first: pilot name resolutions the topbar
+// organization records first (their own lock and budget), then
+// current-page wants: pilot name resolutions the topbar
 // search is waiting on (each queues the pilot record it names),
 // planet names behind any "Planet #<id>" on screen, pilot
 // records (the drain query already orders viewed wants ahead of
@@ -81,23 +82,46 @@ func (app *Application) urgentDrain(ctx context.Context) {
 // finally the guide-price want a kill view left behind (schema
 // 027). Every pass spends from the same small allowances as
 // before — urgency reorders the work, it never widens it.
-// Returns ESI's stop signal. Runs under the shared fetch lock
-// so it never races the cycle's passes over the same queue rows.
+// Returns ESI's stop signal: the error limit only; a rate limit
+// stops just the pass that met it. Everything after the
+// organizations runs under the shared fetch lock, taken only if
+// free, so it never races the cycle's passes over the same rows.
 func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
-	app.fetchMu.Lock()
+	now := time.Now().UTC()
+	// hard: a pass stopped on a limit stops the whole nudge only for
+	// ESI's application-wide error limit; a rate limit is one bucket's,
+	// and the next pass uses another.
+	hard := func(ltd bool) bool { return ltd && app.esi.HardLimitActive(time.Now()) }
+
+	// Organization records first, under their own lock and budget: a
+	// corporation or alliance name on the page being looked at fills in
+	// within a tick, whatever the cycle is busy with.
+	app.orgFetchMu.Lock()
+	orgAllowance := &fetchBudget{left: urgentOrgFetchAllowance}
+	_, corpLtd := app.drainCorporationPass(ctx, orgAllowance, urgentOrgsPerNudge, now)
+	_, allianceLtd := app.drainAlliancePass(ctx, orgAllowance, urgentOrgsPerNudge, now)
+	app.orgFetchMu.Unlock()
+	if hard(corpLtd) || hard(allianceLtd) {
+		return true
+	}
+
+	// The rest shares the cycle's lock. A cycle pass holding it (a
+	// long market sweep) means this tick skips the rest rather than
+	// queueing behind it; the next tick is five seconds away.
+	if !app.fetchMu.TryLock() {
+		return false
+	}
 	defer app.fetchMu.Unlock()
 
-	now := time.Now().UTC()
-
 	allowance := &fetchBudget{left: urgentPilotFetchAllowance}
-	if _, ltd := app.drainPilotNameWants(ctx, allowance); ltd {
+	if _, ltd := app.drainPilotNameWants(ctx, allowance); hard(ltd) {
 		return true
 	}
 	// Planet names: a "Planet #<id>" on the page the user is
 	// looking at is a current-page want like any other (schema
 	// 025). Idempotent upserts make an overlap with the cycle's
 	// planet pass harmless.
-	if _, ltd := app.resolvePlanetNames(ctx, allowance); ltd {
+	if _, ltd := app.resolvePlanetNames(ctx, allowance); hard(ltd) {
 		return true
 	}
 	ids, err := app.queries.ListPilotDrains(ctx, db.ListPilotDrainsParams{
@@ -117,20 +141,12 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 				break
 			}
 			if _, ltd := app.drainPilotRecord(ctx, id, allowance, now); ltd {
-				return true
+				if hard(ltd) {
+					return true
+				}
+				break
 			}
 		}
-	}
-
-	// Organization records: a corporation or alliance page the
-	// user is looking at fills in within seconds the same way, on
-	// a budget of their own so the pilot work above can't use it up.
-	orgAllowance := &fetchBudget{left: urgentOrgFetchAllowance}
-	if _, ltd := app.drainCorporationPass(ctx, orgAllowance, urgentOrgsPerNudge, now); ltd {
-		return true
-	}
-	if _, ltd := app.drainAlliancePass(ctx, orgAllowance, urgentOrgsPerNudge, now); ltd {
-		return true
 	}
 
 	wants, err := app.queries.ListMarketHistoryWants(ctx, db.ListMarketHistoryWantsParams{
@@ -163,7 +179,10 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 				continue
 			}
 			if _, ltd := app.fetchAndStoreHistory(ctx, key); ltd {
-				return true
+				if hard(ltd) {
+					return true
+				}
+				break
 			}
 		}
 	}
@@ -184,7 +203,10 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 				break
 			}
 			if _, ltd := app.fetchOneTypeDetail(ctx, id, now); ltd {
-				return true
+				if hard(ltd) {
+					return true
+				}
+				break
 			}
 		}
 	}
@@ -193,10 +215,7 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 	// with left the durable want behind (schema 027); answer it
 	// with a guide refresh so kill values stop depending on a
 	// Market visit.
-	if app.drainGuidePriceWant(ctx) {
-		return true
-	}
-	return false
+	return hard(app.drainGuidePriceWant(ctx))
 }
 
 // drainGuidePriceWant answers the durable guide-price want a

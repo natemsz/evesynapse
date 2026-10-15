@@ -2562,7 +2562,7 @@ the page sideways. */
 /* Save and its public flag wrap as one unit. */
 .fit-head .fit-saverow { display: inline-flex; align-items: center; gap: 0.6rem; }
 .fit-head .fit-publicchk { display: inline-flex; }
-.fit-head select, .fit-charge select {
+.fit-head select {
   background: var(--input-bg);
   border: 1px solid #2a2a2a;
   border-radius: 3px;
@@ -2570,10 +2570,10 @@ the page sideways. */
   padding: 0.42rem 0.6rem;
   font: inherit;
 }
-html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge select {
+html[data-theme="light"] .fit-head select {
   border-color: #d8cdb8;
 }
-.fit-head select:focus, .fit-charge select:focus {
+.fit-head select:focus {
   border-color: var(--accent);
   outline: none;
   box-shadow: 0 0 8px rgba(255, 106, 26, 0.35);
@@ -2739,6 +2739,23 @@ html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge 
 .fit-imp-empty .fit-imp-input::placeholder { color: var(--muted); font-style: italic; }
 .fit-imp-warn { flex: none; font-size: 0.7rem; color: var(--danger); }
 .fit-imp-missing .fit-imp-input { color: var(--danger); }
+.fit-imp-icon { flex: none; width: 20px; height: 20px; }
+.fit-kv-effects dd small { color: var(--muted); }
+/* Cargo past five items: the rest fold behind a chevron line. */
+.fit-fold:not(.open) .fit-chips > .fit-chip:nth-child(n+6) { display: none; }
+.fit-fold-more {
+  display: flex; align-items: center; gap: 0.6rem; width: 100%;
+  margin: 0.45rem 0 0; padding: 0.2rem 0 0; border: 0; border-top: 1px solid #2c2c2c;
+  background: none; color: var(--muted); font: inherit; font-size: 0.72rem;
+  letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer;
+}
+.fit-fold-more::before, .fit-fold-more::after {
+  content: ""; flex: 1; height: 10px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='10'%3E%3Cpath d='M6 2.5l5 5 5-5' fill='none' stroke='%23ff6a1a' stroke-opacity='.6' stroke-width='1.5'/%3E%3C/svg%3E") repeat-x center;
+}
+.fit-fold.open .fit-fold-more::before, .fit-fold.open .fit-fold-more::after { transform: scaleY(-1); }
+.fit-fold-more:hover { color: var(--text); }
+.fit-fold-more:hover::before, .fit-fold-more:hover::after { filter: brightness(1.4); }
 .fit-imp > .suggest { top: calc(100% + 2px); max-height: 18rem; overflow-y: auto; }
 .suggest li.sug-missing > span:not(.sug-label) { color: var(--danger); }
 .suggest li .sug-missing-tag { margin-left: 0.4rem; font-size: 0.7rem; color: var(--danger); }
@@ -2965,7 +2982,7 @@ look, none of its affordances. */
   100% { box-shadow: 0 0 0 0 rgba(255, 184, 77, 0), 0 0 0 rgba(255, 106, 26, 0); }
 }
 .fit-vslot.flash { animation: fit-flash 0.7s ease-out; border-color: var(--success); }
-.fit-group.flash h3, .fit-charge.flash { animation: fit-flash 0.7s ease-out; border-radius: 4px; }
+.fit-group.flash h3, .fit-imp.flash { animation: fit-flash 0.7s ease-out; border-radius: 4px; }
 select.flash { animation: fit-flash 0.7s ease-out; }
 .fit-vslot.drop-ok {
   border-color: var(--success);
@@ -3201,7 +3218,6 @@ html[data-theme="light"] .searchpanel {
   outline: none;
   box-shadow: 0 0 8px rgba(255, 106, 26, 0.35);
 }
-.fit-charge { margin: 0.3rem 0; }
 
 /* DPS/volley headline: the two numbers fitters look at first. */
 .fit-headline {
@@ -3270,12 +3286,11 @@ html[data-theme="light"] .searchpanel {
 @media (min-width: 1100px) {
   .fit-wb {
     display: grid;
-    /* The module lists column is capped so it cannot push the stats
-       panel far right. */
     /* The ring takes a share of the viewport, capped at its full
-       size; the stats panel takes the rest, so on a wide screen
-       the width goes to the stats instead of empty margins. */
-    grid-template-columns: minmax(13rem, 16rem) clamp(20rem, 30vw - 2rem, 34rem) minmax(20rem, 1fr);
+       size. The module lists and the stats share the rest, the
+       stats a little more (their rows run three across), so
+       neither side towers over the other on a wide screen. */
+    grid-template-columns: minmax(14rem, 1fr) clamp(20rem, 30vw - 2rem, 34rem) minmax(21rem, 1.25fr);
     gap: 1.25rem;
     align-items: start;
   }

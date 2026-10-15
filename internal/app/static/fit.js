@@ -307,6 +307,7 @@ var FitTipUI = (function () {
         normItems();
       }
       reanchorTip();
+      syncFold();
       syncFilterUI();
       syncSubsystemUI();
       syncUndoButtons();
@@ -326,7 +327,8 @@ var FitTipUI = (function () {
     } else if (f.type === "group") {
       el = editor.querySelector('.fit-group[data-fit-group="' + f.family + '"]');
     } else if (f.type === "charge") {
-      el = editor.querySelector('select[data-fit-charge="' + f.id + '"]');
+      el = editor.querySelector('[data-fit-ammo-for="' + f.id + '"]');
+      if (el && el.closest) el = el.closest(".fit-imp");
       if (!el) el = editor.querySelector('.fit-vslot[data-fit-vslot="' + f.id + '"] .fit-vammo');
     }
     if (!el) return;
@@ -560,6 +562,10 @@ var FitTipUI = (function () {
       // Resolve the control from the nearest carrier, never the raw
       // target: a click on a slot's inner glyph must count as a
       // click on the slot (only the border used to respond).
+      var ammoClear = t.closest("[data-fit-ammo-clear]");
+      if (ammoClear) { setCharge(ammoClear.getAttribute("data-fit-ammo-clear"), 0); return; }
+      var fold = t.closest("[data-fit-fold]");
+      if (fold) { foldOpen[fold.closest(".fit-group").getAttribute("data-fit-group")] = !fold.closest(".fit-group").classList.contains("open"); syncFold(); return; }
       var impReset = t.closest("[data-fit-imp-reset]");
       if (impReset) { setImplant(impReset.getAttribute("data-fit-imp-reset"), null); return; }
       var impClear = t.closest("[data-fit-imp-clear]");
@@ -580,16 +586,6 @@ var FitTipUI = (function () {
   editor.addEventListener("change", function (ev) {
     var t = ev.target;
     if (!t || !t.getAttribute) return;
-    var chargeFor = t.getAttribute("data-fit-charge");
-    if (chargeFor) {
-      var weapon = parseInt(chargeFor, 10) || 0;
-      var charge = parseInt(t.value, 10) || 0;
-      if (charge > 0) state.charges[weapon] = charge;
-      else delete state.charges[weapon];
-      pendingFlash = { type: "charge", id: weapon };
-      simulate();
-      return;
-    }
     var qtyFor = t.getAttribute("data-fit-qty");
     if (qtyFor) {
       setItemQty(parseInt(qtyFor, 10) || 0, parseInt(t.value, 10) || 0);
@@ -859,23 +855,13 @@ var FitTipUI = (function () {
   // ammunition select when one takes them, else fall back to the
   // picker so the user can browse.
   function pickCharge(it) {
-    var sels = editor.querySelectorAll("select[data-fit-charge]");
-    for (var i = 0; i < sels.length; i++) {
-      var opts = sels[i].options;
-      for (var j = 0; j < opts.length; j++) {
-        if (String(opts[j].value) === String(it.id)) {
-          sels[i].value = opts[j].value;
-          var ev;
-          try {
-            ev = new Event("change", { bubbles: true });
-          } catch (e) {
-            ev = document.createEvent("Event");
-            ev.initEvent("change", true, true);
-          }
-          sels[i].dispatchEvent(ev);
-          if (modInput) modInput.value = "";
-          return;
-        }
+    var rows = editor.querySelectorAll("[data-fit-ammo-for]");
+    for (var i = 0; i < rows.length; i++) {
+      var ids = (rows[i].getAttribute("data-fit-ammo-ids") || "").split(",");
+      if (ids.indexOf(String(it.id)) >= 0) {
+        setCharge(rows[i].getAttribute("data-fit-ammo-for"), it.id);
+        if (modInput) modInput.value = "";
+        return;
       }
     }
     if (modInput) modInput.value = it.name;
@@ -969,6 +955,24 @@ var FitTipUI = (function () {
   // Each slot's box searches only that slot's implants; picks
   // override the clone there. id null = back to the clone's implant,
   // 0 = slot left empty.
+  // Folded lists (cargo past five items) keep their open state
+  // across re-renders.
+  var foldOpen = {};
+  function syncFold() {
+    var groups = editor.querySelectorAll(".fit-fold");
+    for (var i = 0; i < groups.length; i++) {
+      var open = !!foldOpen[groups[i].getAttribute("data-fit-group")];
+      groups[i].classList.toggle("open", open);
+      var btn = groups[i].querySelector("[data-fit-fold]");
+      if (!btn) continue;
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+      var label = btn.querySelector("span");
+      if (label) {
+        if (!label.getAttribute("data-closed")) label.setAttribute("data-closed", label.textContent);
+        label.textContent = open ? "show fewer" : label.getAttribute("data-closed");
+      }
+    }
+  }
   function setImplant(slot, id) {
     pushHistory();
     state.implants = state.implants || {};
@@ -978,31 +982,63 @@ var FitTipUI = (function () {
     markDirty();
     simulate();
   }
-  editor.addEventListener("focusin", function (ev) {
-    var input = ev.target;
-    if (!input || !input.getAttribute || !input.getAttribute("data-fit-imp-slot")) return;
-    if (!input._fitSug) {
-      var slot = input.getAttribute("data-fit-imp-slot");
-      var list = document.createElement("ul");
-      list.className = "suggest";
-      list.setAttribute("role", "listbox");
-      list.hidden = true;
-      input.parentNode.appendChild(list);
-      var labels = {};
-      labels.implant = "Slot " + slot + " implants";
-      input._fitSug = makeSuggester(input, list, {
+  // Weapon ammunition: id 0 unloads.
+  function setCharge(weapon, id) {
+    pushHistory();
+    if (id > 0) state.charges[weapon] = id;
+    else delete state.charges[weapon];
+    pendingFlash = { type: "charge", id: weapon };
+    markDirty();
+    simulate();
+  }
+  // Row searches are built on first focus (the workbench re-renders):
+  // an implant slot lists that slot's implants, a weapon's ammunition
+  // row the charges it takes.
+  function rowSearchConfig(input) {
+    var slot = input.getAttribute("data-fit-imp-slot");
+    if (slot) {
+      return {
         url: function (q) {
           return "/fittings/picker.json?family=implant&slot=" + encodeURIComponent(slot) +
             "&q=" + encodeURIComponent(q) + "&pilot=" + pilotID();
         },
         kinds: ["implant"],
-        labels: labels,
-        pick: function (it) {
-          input._fitSug.close();
-          input.value = it.name;
-          setImplant(slot, it.id);
-        }
-      });
+        labels: { implant: "Slot " + slot + " implants" },
+        pick: function (it) { setImplant(slot, it.id); }
+      };
+    }
+    var weapon = input.getAttribute("data-fit-ammo-for");
+    if (weapon) {
+      return {
+        url: function (q) {
+          return "/fittings/picker.json?family=charge&weapon=" + encodeURIComponent(weapon) +
+            "&q=" + encodeURIComponent(q);
+        },
+        kinds: ["charge"],
+        labels: { charge: (input.getAttribute("data-fit-ammo-weapon") || "Weapon") + " ammunition" },
+        pick: function (it) { setCharge(weapon, it.id); }
+      };
+    }
+    return null;
+  }
+  editor.addEventListener("focusin", function (ev) {
+    var input = ev.target;
+    if (!input || !input.getAttribute) return;
+    if (!input._fitSug) {
+      var cfg = rowSearchConfig(input);
+      if (!cfg) return;
+      var list = document.createElement("ul");
+      list.className = "suggest";
+      list.setAttribute("role", "listbox");
+      list.hidden = true;
+      input.parentNode.appendChild(list);
+      var pick = cfg.pick;
+      cfg.pick = function (it) {
+        input._fitSug.close();
+        input.value = it.name;
+        pick(it);
+      };
+      input._fitSug = makeSuggester(input, list, cfg);
       // A box left without a pick shows the slot's implant again.
       input.addEventListener("blur", function () {
         window.setTimeout(function () { input.value = input.defaultValue; }, 150);
@@ -1589,15 +1625,18 @@ var FitTipUI = (function () {
   function tipToggleKey(slot) {
     return slot.getAttribute("data-v-index") + ":" + (slot.getAttribute("data-v-family") || "");
   }
-  // Jumps to a weapon's ammunition select (from its slot badge).
+  // Jumps to a weapon's ammunition search (from its slot badge),
+  // which opens on everything the weapon takes.
   function jumpToCharge(weaponID) {
-    var sel = editor.querySelector('select[data-fit-charge="' + weaponID + '"]');
-    if (!sel) return;
+    var input = editor.querySelector('[data-fit-ammo-for="' + weaponID + '"]');
+    if (!input) return;
     closeTip();
-    if (sel.scrollIntoView) sel.scrollIntoView({ block: "center" });
-    try { sel.focus({ preventScroll: true }); } catch (e) { try { sel.focus(); } catch (e2) {} }
-    sel.classList.add("flash");
-    window.setTimeout(function () { sel.classList.remove("flash"); }, 750);
+    if (input.scrollIntoView) input.scrollIntoView({ block: "center" });
+    try { input.focus({ preventScroll: true }); } catch (e) { try { input.focus(); } catch (e2) {} }
+    var row = input.closest ? input.closest(".fit-imp") : null;
+    if (!row) return;
+    row.classList.add("flash");
+    window.setTimeout(function () { row.classList.remove("flash"); }, 750);
   }
   editor.addEventListener("mouseover", function (ev) {
     if (dragState && dragState.active) return; // no tooltips mid-drag
@@ -1944,6 +1983,21 @@ var FitTipUI = (function () {
     }
   });
   document.addEventListener("click", function (ev) {
+    // The cargo list's fold line (the editor's own copy is wired
+    // with its state above).
+    var fold = ev.target && ev.target.closest ? ev.target.closest(".fit-ro [data-fit-fold]") : null;
+    if (fold && !fold.closest("#fit-editor")) {
+      var group = fold.closest(".fit-group");
+      var open = !group.classList.contains("open");
+      group.classList.toggle("open", open);
+      fold.setAttribute("aria-expanded", open ? "true" : "false");
+      var label = fold.querySelector("span");
+      if (label) {
+        if (!label.getAttribute("data-closed")) label.setAttribute("data-closed", label.textContent);
+        label.textContent = open ? "show fewer" : label.getAttribute("data-closed");
+      }
+      return;
+    }
     var el = roTarget(ev);
     if (el) {
       if (hoverEl === el && tipEl) closeTip(); else showTip(el);

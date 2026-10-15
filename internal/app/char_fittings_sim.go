@@ -903,6 +903,99 @@ type fitChargeSet struct {
 	Options    []fitChargeOption
 }
 
+// Loaded is the selected charge, if any.
+func (c fitChargeSet) Loaded() (o fitChargeOption) {
+	for _, opt := range c.Options {
+		if opt.Selected {
+			return opt
+		}
+	}
+	return o
+}
+
+// OptionIDs lists the charges the weapon takes, comma-separated, so
+// the module search can load one without another round trip.
+func (c fitChargeSet) OptionIDs() string {
+	ids := make([]string, 0, len(c.Options))
+	for _, opt := range c.Options {
+		ids = append(ids, strconv.FormatInt(opt.ID, 10))
+	}
+	return strings.Join(ids, ",")
+}
+
+// fitImplantEffect is one stat the plugged-in implants move: the
+// value without them, with them, and the change.
+type fitImplantEffect struct {
+	Label string
+	From  string
+	To    string
+	Delta string
+	Good  bool
+}
+
+// fitImplantEffects compares the fit computed without implants
+// (base) to the fit with them, stat by stat, keeping the stats
+// that changed.
+func fitImplantEffects(base, with *fit.Result) []fitImplantEffect {
+	km := func(v float64) string {
+		if v >= 1000 {
+			return fitFmt1(v/1000) + " km"
+		}
+		return fitFmt0(v) + " m"
+	}
+	unit := func(f func(float64) string, u string) func(float64) string {
+		return func(v float64) string { return f(v) + u }
+	}
+	stats := []struct {
+		label  string
+		get    func(*fit.Result) float64
+		format func(float64) string
+		lower  bool // a smaller number is the better one
+	}{
+		{"DPS", func(r *fit.Result) float64 { return r.DPS }, fitFmt1, false},
+		{"Volley", func(r *fit.Result) float64 { return r.Volley }, fitFmt1, false},
+		{"Effective HP", func(r *fit.Result) float64 { return r.EHP.Omni }, fitEHPText, false},
+		{"Shield HP", func(r *fit.Result) float64 { return r.ShieldHP }, fitFmt0, false},
+		{"Armor HP", func(r *fit.Result) float64 { return r.ArmorHP }, fitFmt0, false},
+		{"Hull HP", func(r *fit.Result) float64 { return r.HullHP }, fitFmt0, false},
+		{"Shield recharge", func(r *fit.Result) float64 { return r.ShieldRegenPeak }, unit(fitFmt1, " HP/s"), false},
+		{"Shield boosting", func(r *fit.Result) float64 { return r.ShieldBoostRate }, unit(fitFmt1, " HP/s"), false},
+		{"Armor repair", func(r *fit.Result) float64 { return r.ArmorRepairRate }, unit(fitFmt1, " HP/s"), false},
+		{"Capacitor", func(r *fit.Result) float64 { return r.CapacitorCapacity }, unit(fitFmt1, " GJ"), false},
+		{"Cap recharge", func(r *fit.Result) float64 { return r.CapacitorPeakRecharge }, unit(fitFmt1, " GJ/s"), false},
+		{"Cap use", func(r *fit.Result) float64 { return r.CapacitorDraw }, unit(fitFmt1, " GJ/s"), true},
+		{"Powergrid", func(r *fit.Result) float64 { return r.PowergridMax }, unit(fitFmt1, " MW"), false},
+		{"CPU", func(r *fit.Result) float64 { return r.CPUMax }, unit(fitFmt1, " tf"), false},
+		{"Speed", func(r *fit.Result) float64 { return r.Velocity }, unit(fitFmt0, " m/s"), false},
+		{"Align time", func(r *fit.Result) float64 { return r.AlignSeconds }, unit(fitFmt1, " s"), true},
+		{"Signature radius", func(r *fit.Result) float64 { return r.SignatureRadius }, unit(fitFmt0, " m"), true},
+		{"Targeting range", func(r *fit.Result) float64 { return r.MaxTargetRange }, km, false},
+		{"Scan resolution", func(r *fit.Result) float64 { return r.ScanResolution }, unit(fitFmt0, " mm"), false},
+		{"Sensor strength", func(r *fit.Result) float64 { return r.SensorStrength }, fitFmt1, false},
+		{"Drone bandwidth", func(r *fit.Result) float64 { return r.DroneBandwidth }, unit(fitFmt1, " Mbit/s"), false},
+		{"Cargo hold", func(r *fit.Result) float64 { return r.CargoCapacity }, unit(fitFmt1, " m³"), false},
+	}
+	var out []fitImplantEffect
+	for _, st := range stats {
+		from, to := st.get(base), st.get(with)
+		if from == to || from == 0 {
+			continue
+		}
+		pct := (to - from) / from * 100
+		if pct > -0.05 && pct < 0.05 {
+			continue
+		}
+		out = append(out, fitImplantEffect{
+			Label: st.label,
+			From:  st.format(from),
+			To:    st.format(to),
+			Delta: fmt.Sprintf("%+.1f%%", pct),
+			Good:  (to > from) != st.lower,
+		})
+	}
+	return out
+}
+
 // fitBarRow is one resource bar (powergrid, CPU).
 type fitBarRow struct {
 	Label string
@@ -1037,6 +1130,8 @@ type fitSimView struct {
 	Clones      []fitCloneOption
 	Implants    []fitImplantSlot
 	ImplantNote string
+	// ImplantEffects is what the implants change on this fit's stats.
+	ImplantEffects []fitImplantEffect
 	Groups      []fitSlotGroup
 	Visual      *fitVisualView // in-game-style ship + slot rings
 	DroneBWNum  float64        // drone bandwidth (for the fittable filter)
@@ -1286,6 +1381,10 @@ func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotI
 		}
 	}
 	res := fit.Compute(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, implantIDs)
+	if len(implantIDs) > 0 {
+		base := fit.Compute(snap, doc.ShipTypeID, engineItems, levels, doc.Charges, nil)
+		view.ImplantEffects = fitImplantEffects(base, res)
+	}
 
 	// Names for everything the fragment prints.
 	names := app.esi.CachedTypeNames(ctx, typeIDs)
@@ -2211,7 +2310,11 @@ func (app *Application) handleFitPickerJSON(w http.ResponseWriter, r *http.Reque
 	case family == "charge":
 		weaponID, _ := strconv.ParseInt(q.Get("weapon"), 10, 64)
 		if weaponID > 0 {
+			needle := strings.ToLower(strings.TrimSpace(query))
 			for _, row := range app.fitChargeCandidates(ctx, weaponID) {
+				if needle != "" && !strings.Contains(strings.ToLower(row.Name), needle) {
+					continue
+				}
 				out = append(out, suggestItem{ID: row.TypeID, Name: row.Name, Kind: "charge"})
 			}
 		}

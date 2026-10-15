@@ -54,21 +54,31 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
     {{range .SlotGroups}}{{template "fit-group" .}}{{end}}
   </div>
   <div class="fit-bays">
-    {{range .BayGroups}}{{template "fit-group" .}}{{end}}
-    {{range .ChargeSets}}
-    {{if $.ReadOnly}}{{$loaded := "No ammunition"}}{{range .Options}}{{if .Selected}}{{$loaded = .Name}}{{end}}{{end}}
-    <p class="fit-charge">{{.WeaponName}} ammunition: {{$loaded}}</p>
-    {{else}}
-    <p class="fit-charge">
-      <label>{{.WeaponName}} ammunition
-        <select data-fit-charge="{{.WeaponID}}">
-          <option value="0">No ammunition</option>
-          {{range .Options}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}
-        </select>
-      </label>
-    </p>
+    {{range .BayGroups}}{{if eq .Key "drone"}}{{template "fit-group" .}}{{end}}{{end}}
+    {{if .ChargeSets}}
+    <div class="fit-group fit-ammo-group" data-fit-group="ammo">
+      <h4><span>Ammunition</span></h4>
+      <div class="fit-chips">
+        {{range .ChargeSets}}{{$loaded := .Loaded}}
+        {{if $.ReadOnly}}
+        <span class="fit-chip fit-imp">
+          <img class="fit-imp-icon" src="https://images.evetech.net/types/{{if $loaded.ID}}{{$loaded.ID}}{{else}}{{.WeaponID}}{{end}}/icon?size=32" alt="" draggable="false">
+          <span class="fit-chip-name">{{if $loaded.ID}}{{$loaded.Name}}{{else}}No ammunition{{end}}</span>
+          <span class="fit-chip-sub">{{.WeaponName}}</span>
+        </span>
+        {{else}}
+        <span class="fit-chip fit-imp{{if not $loaded.ID}} fit-imp-empty{{end}}">
+          <img class="fit-imp-icon" src="https://images.evetech.net/types/{{if $loaded.ID}}{{$loaded.ID}}{{else}}{{.WeaponID}}{{end}}/icon?size=32" alt="" draggable="false">
+          <input type="text" class="fit-imp-input" data-fit-ammo-for="{{.WeaponID}}" data-fit-ammo-ids="{{.OptionIDs}}" data-fit-ammo-weapon="{{.WeaponName}}" value="{{$loaded.Name}}" placeholder="No ammunition — search" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-label="{{.WeaponName}} ammunition">
+          {{if $loaded.ID}}<button type="button" class="fit-chip-btn" data-fit-ammo-clear="{{.WeaponID}}" title="Unload">×</button>{{end}}
+          <span class="fit-chip-sub">{{.WeaponName}}</span>
+        </span>
+        {{end}}
+        {{end}}
+      </div>
+    </div>
     {{end}}
-    {{end}}
+    {{range .BayGroups}}{{if ne .Key "drone"}}{{template "fit-group" .}}{{end}}{{end}}
     {{if or (not .ReadOnly) .ImplantsUsed}}
     <div class="fit-group fit-implant-group" data-fit-group="implant">
       <h4><span>Implants</span> <small class="fit-count">{{.ImplantsUsed}}/10</small></h4>
@@ -187,6 +197,18 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
         <div><dt>Cargo hold</dt><dd>{{.Cargo}}</dd></div>
       </dl>
     </section>
+    {{if $.ImplantsUsed}}
+    <section class="fit-panel" aria-label="Effects from implants">
+      <h5>Effects from implants <span class="fit-panel-side">{{$.ImplantsUsed}} implant{{if ne $.ImplantsUsed 1}}s{{end}}</span></h5>
+      {{if $.ImplantEffects}}
+      <dl class="fit-kv fit-kv-2 fit-kv-effects">
+        {{range $.ImplantEffects}}<div><dt>{{.Label}}</dt><dd><span class="{{if .Good}}fit-good{{else}}fit-over{{end}}">{{.Delta}}</span> <small>{{.From}} → {{.To}}</small></dd></div>{{end}}
+      </dl>
+      {{else}}
+      <p class="fit-note">None of this fit's stats change: these implants work on things the fit doesn't use.</p>
+      {{end}}
+    </section>
+    {{end}}
     {{if $.Missing}}
     <div class="fit-missing">
       <h4>Skills you're missing</h4>
@@ -213,7 +235,8 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
      fitSlotGroup, which carries the workbench's ReadOnly. */}}
 {{define "fit-group"}}
     {{$group := .}}
-    <div class="fit-group" data-fit-group="{{$group.Key}}" data-fit-used="{{$group.Used}}" data-fit-max="{{$group.Max}}">
+    {{$fold := and (eq $group.Key "cargo") (gt (len $group.Chips) 5)}}
+    <div class="fit-group{{if $fold}} fit-fold{{end}}" data-fit-group="{{$group.Key}}" data-fit-used="{{$group.Used}}" data-fit-max="{{$group.Max}}">
       <h4><span>{{.Label}}</span>{{if .HasMax}} <small class="fit-count{{if .Over}} fit-over{{end}}">{{.Used}}/{{.Max}}{{if .Over}} — doesn't fit{{end}}</small>{{end}}</h4>
       <div class="fit-chips">
         {{range .Chips}}
@@ -246,5 +269,6 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
         {{end}}
         {{end}}
       </div>
+      {{if $fold}}<button type="button" class="fit-fold-more" data-fit-fold aria-expanded="false"><span>{{len $group.Chips}} items · show all</span></button>{{end}}
     </div>
 {{end}}

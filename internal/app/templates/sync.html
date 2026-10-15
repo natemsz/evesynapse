@@ -6,7 +6,17 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{if .Sync}}
-<section class="card spanall">
+<nav class="section-tabs" aria-label="Sections on this page">
+  <a href="#sync-worker">Worker</a>
+  {{if .Sync.Foresight}}<a href="#sync-warmed">Warmed ahead</a>{{end}}
+  {{if .Sync.Serving}}<a href="#sync-serving">Serving pages</a>{{end}}
+  {{if .Sync.Swarm}}<a href="#sync-swarm">Swarm cache</a>{{end}}
+  <a href="#sync-characters">Character data</a>
+  {{if .Sync.Global}}<a href="#sync-public">Public data</a>{{end}}
+  {{if .Sync.SDE}}<a href="#sync-sde">Static data</a>{{end}}
+</nav>
+
+<section class="card spanall" id="sync-worker">
 <h2>Worker</h2>
 <p>{{.Sync.WorkerLine}}{{if .Sync.Warming}} — a cycle is running now…{{end}}</p>
 <p><small>ESI error budget: {{.Sync.ErrorBudget}}</small></p>
@@ -53,7 +63,7 @@
 </section>
 
 {{with .Sync.Foresight}}
-<section class="card spanall">
+<section class="card spanall" id="sync-warmed">
 <h2>Warmed ahead</h2>
 {{if .Off}}
 <p><small>Switched off (FORESIGHT=off).</small></p>
@@ -73,7 +83,7 @@
 {{end}}
 
 {{with .Sync.Serving}}
-<section class="card spanall">
+<section class="card spanall" id="sync-serving">
 <h2>Serving pages</h2>
 <p><small>Whether pages render complete, how old what they show is, and what viewing costs in ESI calls.</small></p>
 <table class="stat-table">
@@ -99,7 +109,7 @@
 {{end}}
 
 {{with .Sync.Swarm}}
-<section class="card spanall">
+<section class="card spanall" id="sync-swarm">
 <h2>Swarm Cache</h2>
 {{if .Enabled}}
 <p><small>{{.Status}}. Public data only: market history, type names, corporation and alliance records, player structure names. Every entry is signed by the instance that fetched it and spot-checked against ESI before it is used; entries that fail are discarded and their signer flagged. Trust below half over ten checks excludes a signer on its own.</small></p>
@@ -127,7 +137,7 @@
 </section>
 {{end}}
 
-<section class="card spanall">
+<section class="card spanall" id="sync-characters">
 <h2>Character data</h2>
 <p><small>One character's stored data and how fresh it is. Type a name or a character id; any character on the site can be looked up.</small></p>
 <form method="get" action="/sync/" class="lookup-form">
@@ -175,7 +185,7 @@
 </section>
 
 {{if .Sync.Global}}
-<section class="card spanall">
+<section class="card spanall" id="sync-public">
 <h2>Public data (no login needed)</h2>
 <p><small>Wars, incursions, faction warfare and server status are public ESI data; they're fetched once and shared by everyone (Intel pages, Home status line).</small></p>
 <div class="tw">
@@ -193,7 +203,7 @@
 {{end}}
 
 {{if .Sync.SDE}}
-<section class="card spanall">
+<section class="card spanall" id="sync-sde">
 <h2>EVE static data (SDE)</h2>
 <p><small>Item, skill, station and system names come from a local copy of CCP's static data export (via Fuzzwork's CSV conversion), checked for updates weekly. ESI is only used for names the SDE lacks.</small></p>
 <p>State: <strong>{{.Sync.SDE.State}}</strong>

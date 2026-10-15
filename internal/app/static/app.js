@@ -2686,12 +2686,14 @@
   initContentWidgets(document);
 
   // --- Auto-refresh pages -------------------------------------
-  // The Sync page reloads itself every few seconds
-  // (body[data-autorefresh]); with JavaScript off, a <noscript>
-  // meta-refresh does the same. The reload waits out typing in a
-  // field and hidden tabs, and never runs for readers who asked
-  // for reduced motion — they get the page as it loaded, plus the
-  // Sync page's own manual controls. A swap away stops the chain:
+  // The Sync page refreshes itself every few seconds
+  // (body[data-autorefresh]) in place: the page is fetched again and
+  // only its content is swapped, so the reader keeps their scroll
+  // position (a full reload went back to the top). With JavaScript
+  // off, a <noscript> meta-refresh does the same. The refresh waits
+  // out typing in a field and hidden tabs, and never runs for readers
+  // who asked for reduced motion — they get the page as it loaded,
+  // plus the Sync page's own manual controls. A swap away stops the chain:
   // without this the old page's timer would reload the new one.
   // (Swaps onto an auto-refresh page fall back to a full load, so
   // the chain only ever starts here, on first paint.)
@@ -2699,6 +2701,31 @@
   document.addEventListener("evesynapse:content-will-swap", function () {
     autoRefreshStopped = true;
   });
+  // refreshInPlace fetches this page again and swaps its main
+  // content, leaving the scroll position alone, then lets the content
+  // widgets set up the fresh markup. Anything unexpected is skipped
+  // until the next tick rather than reloading.
+  function refreshInPlace() {
+    if (!window.fetch || !window.DOMParser) {
+      window.location.reload();
+      return Promise.resolve();
+    }
+    var url = window.location.pathname + window.location.search;
+    return window.fetch(url, { credentials: "same-origin", cache: "no-store" })
+      .then(function (resp) { return resp.ok && !resp.redirected ? resp.text() : ""; })
+      .then(function (html) {
+        if (!html || autoRefreshStopped) return;
+        var active = document.activeElement;
+        if (active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName || "")) return;
+        var next = new DOMParser().parseFromString(html, "text/html").getElementById("main-content");
+        var main = document.getElementById("main-content");
+        if (!next || !main) return;
+        main.innerHTML = next.innerHTML;
+        document.dispatchEvent(new CustomEvent("evesynapse:content-ready", {
+          detail: { root: main, url: url }
+        }));
+      });
+  }
   (function () {
     var autoRefreshSeconds = parseInt(document.body.getAttribute("data-autorefresh") || "", 10);
     if (autoRefreshSeconds > 0 &&
@@ -2709,7 +2736,7 @@
           var active = document.activeElement;
           var typing = active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName || "");
           if (!typing && !document.hidden) {
-            window.location.reload();
+            refreshInPlace().then(scheduleRefresh, scheduleRefresh);
             return;
           }
           scheduleRefresh();

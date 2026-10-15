@@ -1307,6 +1307,9 @@ td, dd, .kpi-v, .fit-headline-num, .fit-bar-nums, .fit-count, .fit-chip-qty, .fi
 }
 .kpis-small .kpi-v { font-size: 1rem; overflow-wrap: normal; white-space: nowrap; }
 .kpi-v small { font-size: 0.7rem; color: var(--accent); font-weight: 400; }
+.kpi-trend { font-size: 0.7rem; vertical-align: 0.15em; cursor: default; }
+.kpi-trend.up { color: var(--success); }
+.kpi-trend.down { color: var(--danger); }
 .kpi-sub { font-size: 0.75rem; color: var(--muted); }
 .kpi-bar { display: block; height: 4px; background: #1d1510; border-radius: 2px; overflow: hidden; }
 .kpi-bar > span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #d63c14, var(--accent)); }

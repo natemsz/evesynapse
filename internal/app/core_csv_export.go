@@ -27,8 +27,3 @@ func serveCSV(w http.ResponseWriter, filename string, header []string, rows [][]
 	}
 	cw.Flush()
 }
-
-// wantCSV reports whether the request asks for CSV instead of HTML.
-func wantCSV(r *http.Request) bool {
-	return r.URL.Query().Get("format") == "csv"
-}

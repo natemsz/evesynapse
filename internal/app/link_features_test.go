@@ -83,19 +83,19 @@ func TestPlaystylePicksGrantRequiredScopesOnly(t *testing.T) {
 // TestExtrasBelongToChosenFeatures: an opt-in adds exactly its scope, and
 // one that belongs to no chosen feature is refused.
 func TestExtrasBelongToChosenFeatures(t *testing.T) {
-	base, err := resolveLink(linkChoice{Features: []string{"mail"}})
+	base, err := resolveLink(linkChoice{Features: []string{"contacts"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	with, err := resolveLink(linkChoice{Features: []string{"mail"}, Enhance: []string{"esi-mail.send_mail.v1"}})
+	with, err := resolveLink(linkChoice{Features: []string{"contacts"}, Enhance: []string{"esi-alliances.read_contacts.v1"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(with.Scopes) != len(base.Scopes)+1 || !contains(with.Scopes, "esi-mail.send_mail.v1") {
-		t.Errorf("opting in to send mail gave %v from %v", with.Scopes, base.Scopes)
+	if len(with.Scopes) != len(base.Scopes)+1 || !contains(with.Scopes, "esi-alliances.read_contacts.v1") {
+		t.Errorf("opting in to alliance contacts gave %v from %v", with.Scopes, base.Scopes)
 	}
-	if _, err := resolveLink(linkChoice{Features: []string{"wallet"}, Enhance: []string{"esi-mail.send_mail.v1"}}); err == nil {
-		t.Error("a mail permission was accepted without the mail feature")
+	if _, err := resolveLink(linkChoice{Features: []string{"wallet"}, Enhance: []string{"esi-alliances.read_contacts.v1"}}); err == nil {
+		t.Error("a contacts permission was accepted without the contacts feature")
 	}
 	if _, err := resolveLink(linkChoice{Features: []string{"nosuchfeature"}}); err == nil {
 		t.Error("an unknown feature was accepted")
@@ -217,9 +217,14 @@ func TestLinkToEVEIsBuiltFromTheChoice(t *testing.T) {
 		}
 	}
 
-	plus := eveScopeParam(t, get(app, nil, "/auth/eve?feature=mail&enhance=esi-mail.send_mail.v1"))
-	if !contains(plus, "esi-mail.send_mail.v1") || contains(plus, "esi-mail.organize_mail.v1") {
-		t.Errorf("mail with the send extra asks for %v", plus)
+	plus := eveScopeParam(t, get(app, nil, "/auth/eve?feature=contacts&enhance=esi-alliances.read_contacts.v1"))
+	if !contains(plus, "esi-alliances.read_contacts.v1") || !contains(plus, "esi-characters.read_contacts.v1") {
+		t.Errorf("contacts with the alliance extra asks for %v", plus)
+	}
+	// An extra of a feature that is not chosen is dropped, not requested.
+	dropped := eveScopeParam(t, get(app, nil, "/auth/eve?feature=skills&enhance=esi-alliances.read_contacts.v1"))
+	if contains(dropped, "esi-alliances.read_contacts.v1") {
+		t.Errorf("an extra of an unchosen feature was requested: %v", dropped)
 	}
 
 	full := eveScopeParam(t, get(app, nil, "/auth/eve"))
@@ -230,7 +235,7 @@ func TestLinkToEVEIsBuiltFromTheChoice(t *testing.T) {
 		t.Errorf("a plain /auth/eve asks for %v, want the full list", full)
 	}
 
-	for _, bad := range []string{"/auth/eve?feature=nosuch", "/auth/eve?enhance=esi-mail.send_mail.v1", "/auth/eve?feature=skills&enhance=esi-wallet.read_character_wallet.v1"} {
+	for _, bad := range []string{"/auth/eve?feature=nosuch", "/auth/eve?feature=skills&enhance=esi-nosuch.scope.v1"} {
 		if rec := get(app, nil, bad); rec.Code != http.StatusBadRequest {
 			t.Errorf("%s: status %d, want 400", bad, rec.Code)
 		}
@@ -257,12 +262,12 @@ func TestChooserPages(t *testing.T) {
 
 	rec = get(app, nil, "/auth/link?activity=market")
 	body = rec.Body.String()
-	if !strings.Contains(body, "This is what will be turned on") || !strings.Contains(body, "Spread Scanner") || !strings.Contains(body, "Continue to EVE") {
+	if !strings.Contains(body, "This is what will be turned on") || !strings.Contains(body, "Spread Scanner") || !strings.Contains(body, "Complete sign up") || strings.Contains(body, "Update the list") || !strings.Contains(body, "Go back") || !strings.Contains(body, "Jump to bottom") {
 		t.Errorf("the reveal for the market is missing its parts:\n%s", body)
 	}
 
 	rec = get(app, nil, "/auth/link?advanced=1")
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Choose the features") || !strings.Contains(rec.Body.String(), "esi-mail.send_mail.v1") {
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Choose the features") || !strings.Contains(rec.Body.String(), "esi-alliances.read_contacts.v1") {
 		t.Errorf("the advanced list is missing its parts (status %d)", rec.Code)
 	}
 

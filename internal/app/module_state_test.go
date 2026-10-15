@@ -17,11 +17,10 @@ func TestModuleStatusFor(t *testing.T) {
 		missReq int
 		missOpt int
 	}{
-		{"none", nil, moduleLocked, 1, 2},
-		{"required only", []string{"esi-mail.read_mail.v1"}, moduleLimited, 0, 2},
-		{"one optional", []string{"esi-mail.read_mail.v1", mailSendScope}, moduleLimited, 0, 1},
+		{"none", nil, moduleLocked, 3, 0},
+		{"read only", []string{"esi-mail.read_mail.v1"}, moduleLocked, 2, 0},
+		{"send missing", []string{"esi-mail.read_mail.v1", mailOrganizeScope}, moduleLocked, 1, 0},
 		{"all", []string{"esi-mail.read_mail.v1", mailSendScope, mailOrganizeScope}, moduleEnabled, 0, 0},
-		{"optional without required", []string{mailSendScope, mailOrganizeScope}, moduleLocked, 1, 0},
 	}
 	for _, c := range cases {
 		st := mail.statusFor(scopeSet(strings.Join(c.granted, " ")))
@@ -62,12 +61,14 @@ func TestModuleStatusNotice(t *testing.T) {
 		t.Errorf("enabled module produced a notice: %+v", n)
 	}
 	locked := mail.statusFor(scopeSet("")).notice(mail, 42, "Pilot")
-	if locked == nil || !locked.Locked || len(locked.Scopes) != 1 {
-		t.Fatalf("locked notice = %+v, want Locked with the one required scope", locked)
+	if locked == nil || !locked.Locked || len(locked.Scopes) != 3 {
+		t.Fatalf("locked notice = %+v, want Locked with the three required scopes", locked)
 	}
-	limited := mail.statusFor(scopeSet("esi-mail.read_mail.v1")).notice(mail, 42, "Pilot")
-	if limited == nil || limited.Locked || len(limited.Scopes) != 2 {
-		t.Fatalf("limited notice = %+v, want not Locked with two optional scopes", limited)
+	// A module with optional scopes: the corporation data module offers its pages as extras.
+	corp, _ := moduleByID("corpdata")
+	limited := corp.statusFor(scopeSet("")).notice(corp, 42, "Pilot")
+	if limited == nil || limited.Locked || len(limited.Scopes) == 0 {
+		t.Fatalf("limited notice = %+v, want not Locked with the optional scopes", limited)
 	}
 }
 

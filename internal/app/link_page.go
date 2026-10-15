@@ -41,7 +41,7 @@ type linkView struct {
 	Step       string // "cards", "reveal" or "advanced"
 	Activities []linkActivityCard
 	Features   []linkFeatureView
-	Groups     []linkGroupView // advanced: every feature, grouped
+	Groups     []linkGroupView // the features by kind of play with what each permission is for (all of them in advanced, the chosen ones in the reveal)
 	Popular    []linkEnhancementView
 	Roles      []linkRoleView        // corporation permissions, framed by the in-game role they need
 	Server     []linkEnhancementView // what this server offers on top
@@ -52,6 +52,8 @@ type linkView struct {
 	Continue   string // the link to EVE
 	Full       string // the same with every extra permission ticked
 	Switch     string // the other layer
+	Back       string // the question again
+	AllPicked  bool   // every card picked (pick=all)
 	Error      string
 	Hidden     []linkHidden // choices to carry across a form
 }
@@ -115,7 +117,8 @@ func (app *Application) handleLinkChoose(w http.ResponseWriter, r *http.Request)
 	if submitted {
 		choice.Activities = nil // the ticked features are the answer now
 	}
-	if choice.empty() && !submitted {
+	forceCards := q.Get("cards") == "1"
+	if choice.empty() && !submitted && !forceCards {
 		if remembered, ok := app.rememberedLink(ctx); ok {
 			choice = remembered
 			view.Remembered = true
@@ -125,15 +128,16 @@ func (app *Application) handleLinkChoose(w http.ResponseWriter, r *http.Request)
 	switch {
 	case q.Get("advanced") == "1":
 		view.Step = "advanced"
-	case choice.empty() && !submitted:
+	case forceCards || (choice.empty() && !submitted):
 		view.Step = "cards"
 	default:
 		view.Step = "reveal"
 	}
 
 	if view.Step == "cards" {
+		view.AllPicked = q.Get("pick") == "all"
 		for _, a := range linkActivities {
-			view.Activities = append(view.Activities, linkActivityCard{linkActivity: a, Selected: contains(choice.Activities, a.ID)})
+			view.Activities = append(view.Activities, linkActivityCard{linkActivity: a, Selected: view.AllPicked || contains(choice.Activities, a.ID)})
 		}
 		view.Switch = linkChooseURL(url.Values{"advanced": {"1"}}, view.Character)
 		app.render(ctx, w, http.StatusOK, "link.html", data)
@@ -151,9 +155,8 @@ func (app *Application) handleLinkChoose(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	fillLinkView(view, res)
-	if view.Step == "advanced" {
-		fillAdvanced(view, res)
-	}
+	fillAdvanced(view, res, view.Step == "reveal")
+	view.Back = linkChooseURL(url.Values{"cards": {"1"}, "activity": q["activity"]}, view.Character)
 	app.render(ctx, w, http.StatusOK, "link.html", data)
 }
 
@@ -229,9 +232,11 @@ func fillLinkView(view *linkView, res linkResolved) {
 	view.Switch = linkChooseURL(url.Values{"advanced": {"1"}, "feature": pinned, "enhance": chosen, "submitted": {"1"}}, view.Character)
 }
 
-// fillAdvanced lists every feature, grouped by the kind of play it serves,
-// with what is ticked now marked.
-func fillAdvanced(view *linkView, res linkResolved) {
+// fillAdvanced lists features grouped by the kind of play they serve, each
+// with the permissions it needs and its extras, what is ticked now marked.
+// The advanced layer lists every feature; the reveal (onlyChosen) the same
+// breakdown for the chosen ones, so it shows what each permission is for.
+func fillAdvanced(view *linkView, res linkResolved, onlyChosen bool) {
 	in := map[string]linkFeatureRow{}
 	for _, row := range res.Features {
 		in[row.ID] = row
@@ -255,6 +260,9 @@ func fillAdvanced(view *linkView, res linkResolved) {
 	groups := map[string]*linkGroupView{}
 	var order []string
 	for _, f := range all {
+		if _, isIn := in[f.ID]; onlyChosen && !isIn {
+			continue
+		}
 		g := "other"
 		if len(f.Activities) > 0 {
 			g = f.Activities[0]
@@ -406,9 +414,23 @@ func (app *Application) resolveLinkLenient(c linkChoice) (linkResolved, error) {
 	for _, e := range base.ServerExtras {
 		known[e.Scope] = true
 	}
+	// A permission some feature declares but no chosen one does is dropped;
+	// one nothing declares stays, and the strict resolve refuses it.
+	declared := map[string]bool{}
+	for _, f := range linkFeatures() {
+		for _, s := range f.Enhance {
+			declared[s.Scope] = true
+		}
+		for _, r := range f.Role {
+			declared[r.Scope] = true
+		}
+	}
+	for _, e := range app.linkServerExtras() {
+		declared[e.Scope] = true
+	}
 	var keep []string
 	for _, s := range c.Enhance {
-		if known[s] {
+		if known[s] || !declared[s] {
 			keep = append(keep, s)
 		}
 	}

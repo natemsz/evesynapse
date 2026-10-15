@@ -23,7 +23,6 @@ var Module = module.Module{
 		{Scope: "esi-characters.read_contacts.v1", Unlocks: "Personal contacts and standings."},
 	},
 	EnhanceScopes: []module.Scope{
-		{Scope: "esi-corporations.read_contacts.v1", Unlocks: "Corporation contacts."},
 		{Scope: "esi-alliances.read_contacts.v1", Unlocks: "Alliance contacts."},
 	},
 	Snapshots:  []string{esi.SnapContacts},

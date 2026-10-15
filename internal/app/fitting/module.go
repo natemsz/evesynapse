@@ -22,12 +22,13 @@ var Module = module.Module{
 	Title:    "Fitting",
 	Requires: []string{},
 	// The simulator works for anyone, signed in or not (All V).
-	Scopes: []module.Scope{},
+	Scopes: []module.Scope{
+		{Scope: "esi-fittings.read_fittings.v1", Unlocks: "Import your in-game fittings into the workbench."},
+		{Scope: "esi-fittings.write_fittings.v1", Unlocks: "Save a fit to the game's own fittings."},
+	},
 	EnhanceScopes: []module.Scope{
 		{Scope: "esi-skills.read_skills.v1", Unlocks: "Simulate with a pilot's own trained skills instead of All V."},
 		{Scope: "esi-clones.read_implants.v1", Unlocks: "Simulate with the pilot's implants, and each jump clone's."},
-		{Scope: "esi-fittings.read_fittings.v1", Unlocks: "Your in-game saved fittings appear beside your loadouts."},
-		{Scope: "esi-fittings.write_fittings.v1", Unlocks: "Save a fit to the game's own fittings."},
 	},
 	Sitemap:    []module.SitemapEntry{{Path: "/fittings/", ChangeFreq: "monthly", Priority: "0.8"}},
 	Activities: []string{"fitting"},

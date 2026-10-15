@@ -21,14 +21,13 @@ var Module = module.Module{
 	// names for the data feed it keeps fetched (a test pins that they agree).
 	Scopes: []module.Scope{
 		{Scope: "esi-mail.read_mail.v1", Unlocks: "Inbox, labels, mailing lists and bodies."},
-	},
-	EnhanceScopes: []module.Scope{
 		{Scope: "esi-mail.organize_mail.v1", Unlocks: "Mark mail as read."},
 		{Scope: "esi-mail.send_mail.v1", Unlocks: "Compose and send mail."},
 	},
-	Snapshots:   []string{esi.SnapMail, esi.SnapMailLabels, esi.SnapMailLists, esi.SnapMailBodyPrefix},
-	NotifyKinds: []module.NotifyKindDecl{{ID: "mail", Title: "New mail", After: "skill"}},
-	Activities:  []string{"pilots"},
+	EnhanceScopes: []module.Scope{},
+	Snapshots:     []string{esi.SnapMail, esi.SnapMailLabels, esi.SnapMailLists, esi.SnapMailBodyPrefix},
+	NotifyKinds:   []module.NotifyKindDecl{{ID: "mail", Title: "New mail", After: "skill"}},
+	Activities:    []string{"pilots"},
 	Nav: []module.NavSection{{
 		Section: "pilot",
 		Entries: []module.NavEntry{

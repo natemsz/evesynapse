@@ -154,10 +154,10 @@ func TestMenuWarning(t *testing.T) {
 func TestScopesAreTheUnionOfDeclarations(t *testing.T) {
 	sel, _ := resolve([]string{"mail", "wallet"})
 	needs, enh := scopeSets(sel.Entries)
-	if strings.Join(needs, " ") != "esi-mail.read_mail.v1 esi-wallet.read_character_wallet.v1" {
+	if strings.Join(needs, " ") != "esi-mail.organize_mail.v1 esi-mail.read_mail.v1 esi-mail.send_mail.v1 esi-wallet.read_character_wallet.v1" {
 		t.Errorf("needs = %v", needs)
 	}
-	if strings.Join(enh, " ") != "esi-mail.organize_mail.v1 esi-mail.send_mail.v1" {
+	if len(enh) != 0 {
 		t.Errorf("enhances = %v", enh)
 	}
 }

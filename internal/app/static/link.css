@@ -72,3 +72,6 @@
 .lk-group { margin-top: 0.9rem; }
 .lk-group.foldable > h3:first-child { margin-top: 0; color: var(--ti-accent, var(--accent)); border-left: 3px solid var(--ti-accent, var(--accent)); }
 .lk-sub { margin: 0.6rem 0 0.2rem; }
+
+.lk-top { margin: 0.1rem 0 0.4rem; font-size: 0.85rem; }
+.lk-privacy { margin: 0.3rem 0 0; color: var(--muted); }

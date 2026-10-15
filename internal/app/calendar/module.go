@@ -22,13 +22,12 @@ var Module = module.Module{
 	// names for the data feed it keeps fetched (a test pins that they agree).
 	Scopes: []module.Scope{
 		{Scope: "esi-calendar.read_calendar_events.v1", Unlocks: "Upcoming events and attendees."},
-	},
-	EnhanceScopes: []module.Scope{
 		{Scope: "esi-calendar.respond_calendar_events.v1", Unlocks: "Accept or decline events."},
 	},
-	Snapshots:   []string{esi.SnapCalendar, esi.SnapCalendarEventPrefix, esi.SnapCalendarAttPrefix},
-	NotifyKinds: []module.NotifyKindDecl{{ID: "calendar", Title: "New in-game calendar event", After: "mail"}},
-	Activities:  []string{"pilots"},
+	EnhanceScopes: []module.Scope{},
+	Snapshots:     []string{esi.SnapCalendar, esi.SnapCalendarEventPrefix, esi.SnapCalendarAttPrefix},
+	NotifyKinds:   []module.NotifyKindDecl{{ID: "calendar", Title: "New in-game calendar event", After: "mail"}},
+	Activities:    []string{"pilots"},
 	Nav: []module.NavSection{{
 		Section: "pilot",
 		Entries: []module.NavEntry{

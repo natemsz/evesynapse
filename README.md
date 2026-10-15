@@ -413,8 +413,10 @@ Updating afterwards is one command — see "Updating" below.
 Signing in or linking another character opens a short chooser (`/auth/link`) instead of asking EVE for every permission at once:
 
 1. **What do you want to do?** Activity cards (track my pilots, trade the market, build and produce, run my corporation, fit and plan ships, a bit of everything). Each module and core feature declares which kinds of play it serves, and the registry's own `requires` closure turns the answers into the features to switch on.
-2. **The reveal.** Before anything is sent to EVE, the page lists the features that will be turned on, the permissions each needs in plain words, and how many permissions EVE will ask for. Features can be unticked (one another feature needs stays, and says why). Extra permissions (opt-ins such as sending mail, or reading corporation contacts) are listed beneath, unticked.
-3. **Choose features myself** opens the same summary with every feature and every extra permission as its own tick.
+2. **The reveal.** Before anything is sent to EVE, the page lists the features that will be turned on, grouped by kind of play, each with the permissions it needs in plain words and its extras beneath (unticked), and how many permissions EVE will ask for (it recounts as you tick). Features can be unticked (one another feature needs stays, and says why). Corporation permissions are opt-ins framed by the in-game role EVE needs for them. The only actions are **Complete sign up** and **Go back**.
+3. **Choose features myself** is the same breakdown with every feature, not just the chosen ones.
+
+A scope is declared *required* when a user who chose that feature would be surprised to find the capability missing (it is what the feature is); it stays an *enhancement* only when it is specialist data a user goes looking for (audit logs, flavor records, niche statistics).
 
 Playstyle answers grant only the permissions their features cannot work without. The server works the scope list out from the declarations (the page sends feature ids, never scopes), and a link only ever asks for a subset of `eveScopes`, the list the EVE developer portal allows. The account remembers its last choice, so the next character opens on the reveal, preselected. Linking more onto a character asks for what it already granted too, so a grant never narrows. `/auth/eve` with no choice is the full link, as before. ESI cannot narrow a granted token, so there is no removal flow; a narrower grant is a fresh link at the narrower set.
 

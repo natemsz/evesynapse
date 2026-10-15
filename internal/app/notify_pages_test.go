@@ -220,11 +220,11 @@ func TestNotificationSettings(t *testing.T) {
 	// A second character that has granted mail but not killmails.
 	alt := seedCharacter(t, f.q, f.userID, fixtureCharB, "Fixture Alt")
 	if _, err := f.app.db.ExecContext(f.ctx, `UPDATE characters SET scopes = $1 WHERE character_id = $2`,
-		"esi-mail.read_mail.v1", alt.CharacterID); err != nil {
+		"esi-mail.read_mail.v1 esi-mail.organize_mail.v1 esi-mail.send_mail.v1", alt.CharacterID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.app.db.ExecContext(f.ctx, `UPDATE characters SET scopes = $1 WHERE character_id = $2`,
-		"esi-mail.read_mail.v1 esi-killmails.read_killmails.v1", f.ch.CharacterID); err != nil {
+		"esi-mail.read_mail.v1 esi-mail.organize_mail.v1 esi-mail.send_mail.v1 esi-killmails.read_killmails.v1", f.ch.CharacterID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -292,8 +292,8 @@ func TestNotificationSettingsPerCharacter(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	scopes(f.ch.CharacterID, "esi-mail.read_mail.v1 esi-killmails.read_killmails.v1")
-	scopes(alt.CharacterID, "esi-mail.read_mail.v1") // no killmail access
+	scopes(f.ch.CharacterID, "esi-mail.read_mail.v1 esi-mail.organize_mail.v1 esi-mail.send_mail.v1 esi-killmails.read_killmails.v1")
+	scopes(alt.CharacterID, "esi-mail.read_mail.v1 esi-mail.organize_mail.v1 esi-mail.send_mail.v1") // no killmail access
 	a, b := "90000001", "90000002"
 
 	// Every kind on; mail only for the first character. The alt's

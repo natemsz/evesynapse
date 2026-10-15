@@ -23,9 +23,10 @@ var Module = module.Module{
 	Title:    "Build Planner",
 	Requires: []string{},
 	// The planner works for anyone, signed in or not.
-	Scopes: []module.Scope{},
-	EnhanceScopes: []module.Scope{
+	Scopes: []module.Scope{
 		{Scope: "esi-characters.read_blueprints.v1", Unlocks: "Your owned blueprints fill in each build step's ME and TE."},
+	},
+	EnhanceScopes: []module.Scope{
 		{Scope: "esi-assets.read_assets.v1", Unlocks: "Your stockpile is netted against what the build needs."},
 		{Scope: "esi-skills.read_skills.v1", Unlocks: "Build times use your trained industry skills, and a pilot can be judged on the skills the chain needs."},
 	},

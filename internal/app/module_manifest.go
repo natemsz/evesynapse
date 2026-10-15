@@ -119,7 +119,7 @@ var moduleManifest = []moduleDef{
 		Activities: []string{"fitting"},
 		Scopes: []scopeUse{
 			req("esi-fittings.read_fittings.v1", "Saved in-game fittings."),
-			opt("esi-fittings.write_fittings.v1", "Save to EVE from the fitting tools."),
+			req("esi-fittings.write_fittings.v1", "Save to EVE from the fitting tools."),
 		},
 		Snapshots: []string{esi.SnapFittings}},
 	{ID: "fatigue", Title: "Jump fatigue", Layer: layerCharacter,
@@ -145,7 +145,7 @@ var moduleManifest = []moduleDef{
 		Activities: []string{"market"},
 		Scopes: []scopeUse{
 			req("esi-markets.read_character_orders.v1", "Open orders and order history."),
-			opt("esi-markets.structure_markets.v1", "Prices at player-owned structures."),
+			req("esi-markets.structure_markets.v1", "Prices at player-owned structures."),
 		},
 		Snapshots: []string{esi.SnapOrders, esi.SnapOrdersHistory}},
 	{ID: "killmails", Title: "Killmails", Layer: layerCharacter,
@@ -163,7 +163,7 @@ var moduleManifest = []moduleDef{
 		Activities: []string{"industry"},
 		Scopes: []scopeUse{
 			req(planetScope, "Colonies and their layouts (the only scope that gates colony reads)."),
-			opt("esi-planets.read_customs_offices.v1", "Customs office tax rates."),
+			req("esi-planets.read_customs_offices.v1", "Customs office tax rates."),
 		},
 		Snapshots: []string{esi.SnapPlanets, esi.SnapPlanetLayoutPrefix}},
 	{ID: "structures", Title: "Structures", Layer: layerCharacter,
@@ -214,7 +214,7 @@ var moduleManifest = []moduleDef{
 		Scopes: []scopeUse{
 			req("esi-industry.read_corporation_jobs.v1", "Corporation industry jobs."),
 			opt("esi-industry.read_corporation_mining.v1", "Corporation mining observers."),
-			opt("esi-corporations.read_blueprints.v1", "Corporation blueprints."),
+			req("esi-corporations.read_blueprints.v1", "Corporation blueprints."),
 			opt("esi-corporations.read_container_logs.v1", "Container access logs."),
 		}},
 	{ID: "corp_market", Title: "Corporation orders", Layer: layerCorp,
@@ -228,6 +228,11 @@ var moduleManifest = []moduleDef{
 		Scopes: []scopeUse{
 			req("esi-contracts.read_corporation_contracts.v1", "Corporation contracts."),
 		}},
+	{ID: "corp_contacts", Title: "Corporation contacts", Layer: layerCorp,
+		Activities: []string{"corporation"},
+		Scopes: []scopeUse{
+			req("esi-corporations.read_contacts.v1", "Corporation contacts."),
+		}},
 	{ID: "corp_killmails", Title: "Corporation killmails", Layer: layerCorp,
 		Activities: []string{"corporation"},
 		Scopes: []scopeUse{
@@ -238,17 +243,17 @@ var moduleManifest = []moduleDef{
 		Activities: []string{"corporation"},
 		Scopes: []scopeUse{
 			req("esi-corporations.read_structures.v1", "Structures and their fuel and state."),
-			opt("esi-corporations.read_starbases.v1", "Starbases."),
-			opt("esi-corporations.read_facilities.v1", "Industry facilities."),
+			req("esi-corporations.read_starbases.v1", "Starbases."),
+			req("esi-corporations.read_facilities.v1", "Industry facilities."),
 		},
 		Snapshots: []string{esi.SnapCorpStructures}},
 	{ID: "corp_members", Title: "Corporation members", Layer: layerCorp,
 		Activities: []string{"corporation"},
 		Scopes: []scopeUse{
 			req("esi-corporations.read_corporation_membership.v1", "The member list."),
-			opt("esi-corporations.track_members.v1", "Member locations, ships and last login."),
+			req("esi-corporations.track_members.v1", "Member locations, ships and last login."),
 			opt("esi-corporations.read_titles.v1", "Corporation titles."),
-			opt("esi-corporations.read_divisions.v1", "Hangar and wallet division names."),
+			req("esi-corporations.read_divisions.v1", "Hangar and wallet division names."),
 		},
 		Snapshots: []string{esi.SnapCorpMembers, esi.SnapCorpMemberTracking}},
 	{ID: "corp_standings", Title: "Corporation standings", Layer: layerCorp,

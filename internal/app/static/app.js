@@ -3374,3 +3374,49 @@
     }
   });
 })();
+
+// The sign-up chooser (/auth/link): select all, tick every extra without
+// leaving the place on the page, and a live count of the permissions.
+(function () {
+  "use strict";
+  function recount(form) {
+    var countEl = document.querySelector("[data-lk-count]");
+    if (!form || !countEl) return;
+    var req = {}, all = {};
+    var feats = form.querySelectorAll('input[name="feature"]');
+    for (var i = 0; i < feats.length; i++) {
+      if (!feats[i].checked) continue;
+      var sc = (feats[i].getAttribute("data-scopes") || "").split(/s+/);
+      for (var j = 0; j < sc.length; j++) if (sc[j]) { req[sc[j]] = true; all[sc[j]] = true; }
+    }
+    var extras = form.querySelectorAll('input[name="enhance"]');
+    for (var k = 0; k < extras.length; k++) if (extras[k].checked) all[extras[k].value] = true;
+    var n = Object.keys(all).length;
+    countEl.textContent = String(n);
+    var reqEl = document.querySelector("[data-lk-required]");
+    if (reqEl) reqEl.textContent = String(Object.keys(req).length);
+  }
+  document.addEventListener("click", function (ev) {
+    var t = ev.target && ev.target.closest ? ev.target.closest("[data-tick-all],[data-select-all]") : null;
+    if (!t) return;
+    ev.preventDefault();
+    if (t.hasAttribute("data-select-all")) {
+      var cards = document.querySelectorAll(".lk-cards input[type=checkbox]");
+      var every = true;
+      for (var i = 0; i < cards.length; i++) if (!cards[i].checked) every = false;
+      for (var j = 0; j < cards.length; j++) cards[j].checked = !every;
+      return;
+    }
+    var form = t.closest("form");
+    if (!form) return;
+    var boxes = form.querySelectorAll('input[name="enhance"]');
+    var allOn = true;
+    for (var a = 0; a < boxes.length; a++) if (!boxes[a].checked) allOn = false;
+    for (var b = 0; b < boxes.length; b++) boxes[b].checked = !allOn;
+    recount(form);
+  });
+  document.addEventListener("change", function (ev) {
+    var form = ev.target && ev.target.closest ? ev.target.closest("[data-lk-form]") : null;
+    if (form) recount(form);
+  });
+})();

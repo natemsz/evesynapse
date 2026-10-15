@@ -441,7 +441,7 @@ func (app *Application) buildPlanDetail(ctx context.Context, ch db.Character, pl
 	if !skillsLoaded {
 		// Without the skills snapshot every step would read as
 		// from-scratch; say so instead of presenting fiction.
-		detail.AttrsNote = "Skill data is still warming up for this character — times will settle once the first sync lands."
+		detail.AttrsNote = "Skill data for this character is still syncing. Training times will settle after the first sync."
 	}
 
 	// Names for items, steps, drops, unknowns.
@@ -593,7 +593,7 @@ func (app *Application) buildPlanDetail(ctx context.Context, ch db.Character, pl
 		}
 		detail.Remap = rv
 	} else if detail.AttrsNote == "" {
-		detail.AttrsNote = "Attribute snapshot is still warming up — training times assume a flat 20-point spread until it lands."
+		detail.AttrsNote = "Attributes are still syncing. Until they arrive, training times assume a flat 20-point spread."
 	}
 	if ct.Unallocated > 0 {
 		detail.UnallocatedNote = fmt.Sprintf("You have %s unallocated SP that could cover part of this plan.", esi.FormatInt(ct.Unallocated))

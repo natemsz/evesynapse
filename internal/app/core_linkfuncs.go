@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"html/template"
+	"math"
 	"net/url"
 	"strings"
 )
@@ -127,6 +128,36 @@ func systemLink(systemID int64, name string) template.HTML {
 	return template.HTML(fmt.Sprintf(`<a href="/system/?system=%d">%s</a>`, systemID, html.EscapeString(name)))
 }
 
+// regionLink renders a region name as a link to the region page.
+// Plain text when either side is missing.
+func regionLink(regionID int64, name string) template.HTML {
+	if regionID <= 0 || name == "" {
+		return template.HTML(html.EscapeString(name))
+	}
+	return template.HTML(fmt.Sprintf(`<a href="/region/?region=%d">%s</a>`, regionID, html.EscapeString(name)))
+}
+
+// secRound is a security status as EVE shows it: one decimal, with
+// anything above 0.0 and under 0.05 shown as 0.1 (it is still
+// high enough to count as low-sec, not null). tier is the color
+// step, 0 (null) to 10 (1.0).
+func secRound(sec float64) (text string, tier int) {
+	r := math.Round(sec*10) / 10
+	if sec > 0 && sec < 0.05 {
+		r = 0.1
+	}
+	if r <= 0 {
+		return fmt.Sprintf("%.1f", r), 0
+	}
+	return fmt.Sprintf("%.1f", r), int(math.Round(r * 10))
+}
+
+// secStatus renders a security status in its in-game color.
+func secStatus(sec float64) template.HTML {
+	text, tier := secRound(sec)
+	return template.HTML(fmt.Sprintf(`<span class="sec sec-%d">%s</span>`, tier, text))
+}
+
 // stationLink renders an NPC station name as a link to the
 // station page. Plain text when either side is missing.
 func stationLink(stationID int64, name string) template.HTML {
@@ -150,6 +181,9 @@ func dotlanRegionLink(name string) template.HTML {
 // dotlanSystemURL is the address of a system's Dotlan page, for a
 // template that draws the link itself; "" when the name is unresolved.
 func dotlanSystemURL(name string) string { return dotlanURL("system", name) }
+
+// dotlanRegionURL is the address of a region's Dotlan map.
+func dotlanRegionURL(name string) string { return dotlanURL("map", name) }
 
 func dotlanURL(kind, name string) string {
 	if name == "" {
@@ -264,12 +298,15 @@ func linkFuncMap() template.FuncMap {
 		"corpLink":        corpLink,
 		"allianceLink":    allianceLink,
 		"systemLink":      systemLink,
+		"regionLink":      regionLink,
+		"secStatus":       secStatus,
 		"stationLink":     stationLink,
 		"structureLink":   structureLink,
 		"placeLink":       placeLink,
 		"dotlanSystem":    dotlanSystemLink,
 		"dotlanSystemURL": dotlanSystemURL,
 		"dotlanRegion":    dotlanRegionLink,
+		"dotlanRegionURL": dotlanRegionURL,
 		"skillLevel":      skillLevel,
 		// Not a link: how a stored time is written out (core_timestamps.go).
 		"rfc3339": rfc3339,

@@ -6,7 +6,7 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{with .TradeIdeas}}
-<p><small>A model's read on the <a href="/market/scanner/">spread scanner</a>'s top Forge rows, asked at most twice a day. A model's suggestions, not advice: check the numbers on the scanner before trading.</small></p>
+<p><small>AI-generated ideas based on the <a href="/market/scanner/">spread scanner</a>'s top Forge results, refreshed at most twice a day. They're suggestions, not advice: check the numbers on the scanner before trading.</small></p>
 <section class="card">
   {{if .HasIdeas}}
   <div class="ti">
@@ -23,8 +23,8 @@
     {{end}}
   </div>
   <p><small>As of {{.AsOf}} · {{.Model}} on the Forge spread scanner.</small></p>
-  {{else if .Configured}}<p><small>No ideas yet — the next refresh asks the model once the Forge sweep lands.</small></p>
-  {{else}}<p><small>Trade Ideas are not set up — set <code>MODEL_API_KEY</code>, or <code>CLOUDFLARE_ACCOUNT_ID</code> / <code>CLOUDFLARE_AUTH_TOKEN</code> (see <code>.env.example</code>).</small></p>{{end}}
+  {{else if .Configured}}<p><small>No ideas yet. They're generated after the next Forge market sweep.</small></p>
+  {{else}}<p><small>Trade Ideas are not set up. Set <code>MODEL_API_KEY</code>, or <code>CLOUDFLARE_ACCOUNT_ID</code> / <code>CLOUDFLARE_AUTH_TOKEN</code> (see <code>.env.example</code>).</small></p>{{end}}
 </section>
 {{end}}
 {{end}}

@@ -428,7 +428,7 @@ func TestHistoryEmptySettlesToNoHistoryCopy(t *testing.T) {
 	// First view: nothing stored, section says it's loading and
 	// leaves a want.
 	_, body := getPage(t, app, cookie, "/market/?type=34")
-	mustContain(t, "/market/?type=34 (cold)", body, "This one's queued")
+	mustContain(t, "/market/?type=34 (cold)", body, "This item is queued")
 
 	// The worker drains the want; ESI answers with no trades.
 	stored, _ := app.warmMarketHistory(ctx, &fetchBudget{left: 120})
@@ -441,7 +441,7 @@ func TestHistoryEmptySettlesToNoHistoryCopy(t *testing.T) {
 	_, body = getPage(t, app, cookie, "/market/?type=34")
 	mustContain(t, "/market/?type=34 (settled empty)", body,
 		"No trade history in The Forge for this item yet.")
-	if strings.Contains(body, "This one's queued") {
+	if strings.Contains(body, "This item is queued") {
 		t.Fatal("settled-empty page still claims loading")
 	}
 	if idx := strings.Index(body, "Price history — The Forge"); idx >= 0 {
@@ -486,7 +486,7 @@ func TestHistoryFewRowsSummaryAndStaleChart(t *testing.T) {
 	if strings.Contains(body, `class="pchart"`) {
 		t.Fatal("one-row page drew a chart")
 	}
-	if strings.Contains(body, "This one's queued") {
+	if strings.Contains(body, "This item is queued") {
 		t.Fatal("one-row page claims loading")
 	}
 

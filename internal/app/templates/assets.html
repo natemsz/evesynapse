@@ -53,7 +53,7 @@
   {{else}}
   <p>No stacks matching “{{$v.Query}}” {{if $v.Only}}on this character{{else}}on any character{{end}}.</p>
   {{end}}
-  {{if $v.Syncing}}<p><small>Not included yet — still waiting on a first sync for {{range $i, $n := $v.Syncing}}{{if $i}}, {{end}}{{$n}}{{end}}.</small></p>{{end}}
+  {{if $v.Syncing}}<p><small>Not included yet: still waiting on the first sync for {{range $i, $n := $v.Syncing}}{{if $i}}, {{end}}{{$n}}{{end}}.</small></p>{{end}}
 {{else if .Assets}}
   {{if .Assets.Loaded}}
   <p><small>{{.Assets.Stacks}} stacks · {{.Assets.TotalItems}} items · {{len .Assets.Locations}} locations</small></p>
@@ -72,12 +72,12 @@
   {{end}}
   {{else}}
   {{if .Assets.Warming}}
-  <p>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</p>
+  <p>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</p>
   {{else}}
-  <p><small>Assets are unavailable right now — check the server log.</small></p>
+  <p><small>Assets couldn't be loaded. The server log has the details.</small></p>
   {{end}}
   {{end}}
 {{else}}
-  <p>No assets to show yet — link a character first.</p>
+  <p>No assets to show yet. Link a character first.</p>
 {{end}}
 {{end}}

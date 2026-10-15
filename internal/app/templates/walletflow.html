@@ -4,10 +4,11 @@
      sources and sinks). */}}
 {{define "wallet-flow-figures"}}
 <div class="tw">
-<table>
+<table class="flow-figs">
+  <thead><tr><th></th><th>In</th><th>Out</th><th>Net <small>ISK</small></th></tr></thead>
   <tbody>
-    <tr><th>7 days</th><td>in {{.In7}} · out {{.Out7}} · net {{.Net7}} ISK</td></tr>
-    <tr><th>30 days</th><td>in {{.In30}} · out {{.Out30}} · net {{.Net30}} ISK</td></tr>
+    <tr><th>7 days</th><td>{{.In7}}</td><td>{{.Out7}}</td><td>{{.Net7}}</td></tr>
+    <tr><th>30 days</th><td>{{.In30}}</td><td>{{.Out30}}</td><td>{{.Net30}}</td></tr>
   </tbody>
 </table>
 </div>

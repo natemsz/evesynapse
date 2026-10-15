@@ -13,12 +13,12 @@
 
   {{if .CorpStructs.Forbidden}}
   {{if .CorpStructs.RoleMissing}}
-  <p>Needs the <b>{{.CorpStructs.RoleMissing}}</b> role in-game — {{.CorpStructs.CharacterName}} doesn't hold it, so ESI won't share this corporation's structures. They appear here once they do.</p>
+  <p>Needs the <b>{{.CorpStructs.RoleMissing}}</b> role in game. {{.CorpStructs.CharacterName}} doesn't hold it, so ESI won't share this corporation's structures. They appear here once they do.</p>
   {{else}}
-  <p>Structures were refused by ESI (403) — they appear here once {{.CorpStructs.CharacterName}} holds the Station Manager role in this corporation.</p>
+  <p>Structures were refused by ESI (403). They'll appear here once {{.CorpStructs.CharacterName}} holds the Station Manager role in this corporation.</p>
   {{end}}
   {{else if .CorpStructs.Warming}}
-  <p>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</p>
+  <p>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</p>
   {{else if .CorpStructs.Loaded}}
   {{if .CorpStructs.Rows}}
   {{range .CorpStructs.Rows}}
@@ -44,6 +44,6 @@
   {{end}}
   {{end}}
 {{else}}
-  <p>No corporation to show yet — link a character first.</p>
+  <p>No corporation to show yet. Link a character first.</p>
 {{end}}
 {{end}}

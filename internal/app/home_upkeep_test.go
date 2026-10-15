@@ -50,7 +50,7 @@ func TestUpkeepRendersAndGates(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
-	mustContain(t, "/", body, "needs a Station Manager or Director role")
+	mustContain(t, "/", body, "Station Manager or Director role needed")
 	if strings.Contains(body, "Low Fuel Fort") {
 		t.Fatalf("upkeep leaked without the role")
 	}

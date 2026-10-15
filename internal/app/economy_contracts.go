@@ -178,7 +178,7 @@ func (app *Application) handleContracts(w http.ResponseWriter, r *http.Request) 
 				})
 			}
 		case c.Type == "item_exchange":
-			row.ItemsNote = "Item details are still warming up."
+			row.ItemsNote = "Item details are still loading."
 		}
 		view.Rows = append(view.Rows, row)
 	}

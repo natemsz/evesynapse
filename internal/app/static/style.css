@@ -5,10 +5,12 @@
 /* Every face is free (SIL Open Font License) and self-hosted
    (font-src 'self'; ci-assets/fonts holds them and their notices).
    Body text: Saira Semi Condensed, a squared, compact techno sans.
-   Numerals: JetBrains Mono, through a face that covers only the
-   digits and their separators, listed first in the body stack, so
-   every figure on the site (ISK, counts, dates) is monospaced while
-   letters fall through to Saira. */
+   Figures: JetBrains Mono, through a face that covers only the
+   digits and their separators. It is opt-in, for figures that stand
+   on their own (table cells, stat values, KPIs, ISK amounts): a
+   figure followed by its unit reads well, but one in the middle of
+   a sentence looks pasted in, so running text keeps Saira's digits
+   (and .prose-figs opts a value cell back out). */
 @font-face {
   font-family: 'Synapse Numerals';
   font-style: normal;
@@ -150,7 +152,7 @@ body {
      composites one background surface. */
   background: #0d0503;
   color: var(--text);
-  font-family: "Synapse Numerals", "Saira Semi Condensed", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: "Saira Semi Condensed", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 400;
   font-size: 13px;
   line-height: 1.4;
@@ -203,7 +205,7 @@ h1, h2, h3, h4, .wordmark, .btn, thead th, .badge,
 /* Nav menu links: the body face at Medium; the standalone top-level
    rows (Home, Sync, Admin) take the category headers' capitals. */
 header a.navlink, .branch .menu a {
-  font-family: "Synapse Numerals", "Saira Semi Condensed", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: "Saira Semi Condensed", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 500;
   font-synthesis-weight: none;
 }
@@ -792,6 +794,21 @@ input[type="text"]:focus, input[type="search"]:focus, input[type="number"]:focus
   text-overflow: ellipsis;
 }
 
+/* Security status in EVE's own colors, 1.0 down to null. */
+.sec { font-variant-numeric: tabular-nums; font-weight: 600; }
+.sec-10 { color: #2c74e0; }
+.sec-9 { color: #3a9aeb; }
+.sec-8 { color: #4ecef8; }
+.sec-7 { color: #60dba3; }
+.sec-6 { color: #71e554; }
+.sec-5 { color: #f3fd82; }
+.sec-4 { color: #dc6d07; }
+.sec-3 { color: #ce440f; }
+.sec-2 { color: #d0262c; }
+.sec-1 { color: #b33a3a; }
+.sec-0 { color: #c0508a; }
+.sug-label .sec, .qj-label .sec { margin-right: 0.4em; }
+
 /* --- top bar search --- */
 .topsearch { margin: 0; }
 .searchwrap.topsearch-wrap { width: min(20rem, 34vw); }
@@ -946,6 +963,14 @@ footer .version-number {
    every strategy shows under its own heading. */
 .ti-tabs { display: flex; gap: 0.35rem; overflow-x: auto; scrollbar-width: thin; margin: 0 0 0.6rem; padding-bottom: 0.15rem; }
 .ti-tabs[hidden], .ti-panel[hidden] { display: none; }
+/* With JavaScript on (boot.js marks <html class="js"> before first
+   paint), the page paints as tabs from the start instead of showing
+   every panel until app.js sorts them: the tab strip shows, only the
+   first panel does, and the per-panel headings stay down. */
+html.js .ti-tabs[data-tabs]:not([data-tabs-ready]) { display: flex; }
+html.js [data-tabs]:not([data-tabs-ready]) ~ [role="tabpanel"] { display: none; }
+html.js [data-tabs]:not([data-tabs-ready]) + [role="tabpanel"] { display: block; }
+html.js :has(> [data-tabs]:not([data-tabs-ready])) .ti-h { display: none; }
 .ti-tabs button { flex: none; display: inline-flex; align-items: baseline; gap: 0.4rem; padding: 0.3rem 0.7rem; border: 1px solid var(--border, #333); border-radius: 4px; background: transparent; color: var(--muted); font: inherit; font-size: 0.85rem; white-space: nowrap; cursor: pointer; }
 .ti-tabs button:hover { color: var(--text-bright); border-color: #555; }
 .ti-tabs button[aria-selected="true"] { border-color: var(--accent); color: var(--text-bright); background: var(--row-hover); }
@@ -1265,6 +1290,14 @@ body.resize-active { user-select: none; -webkit-user-select: none; cursor: nwse-
   border-radius: 4px;
 }
 .kpi-k { font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+td, dd, .kpi-v, .fit-headline-num, .fit-bar-nums, .fit-count, .fit-chip-qty, .fit-res > b, .sec {
+  /* Standalone figures: monospaced digits, Saira for any letters. */
+  font-family: "Synapse Numerals", "Saira Semi Condensed", "Inter", "Segoe UI", sans-serif;
+}
+.prose-figs { font-family: "Saira Semi Condensed", "Inter", "Segoe UI", sans-serif; }
+.flow-figs td { text-align: right; white-space: nowrap; }
+.flow-figs thead th { text-align: right; }
+.flow-figs thead small { color: var(--accent); font-size: 0.7em; }
 .kpi-v {
   font-size: 1.35rem;
   font-weight: 600;

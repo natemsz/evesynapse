@@ -8,7 +8,7 @@
 {{if .FitEditor}}
 <section class="foldable" id="fit-editor">
 <h3>Build a fitting</h3>
-{{if .FitEditor.Anonymous}}<p class="hint">Fitting with All-V skills. <a href="/auth/eve">Sign in with EVE SSO</a> to use your characters' real skills and inventory — and to save fits.</p>{{end}}
+{{if .FitEditor.Anonymous}}<p class="hint">Fitting with All-V skills. <a href="/auth/eve">Sign in with EVE SSO</a> to save fits and use your characters' real skills and inventory.</p>{{end}}
 <div class="fit-head searchpanel">
   <span class="searchwrap fit-searchwrap">
     <input type="text" id="fit-ship-search" value="{{.FitEditor.Sim.ShipName}}" placeholder="Search ships…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-ship-suggest" aria-autocomplete="list">
@@ -46,7 +46,7 @@
   <label class="fit-check"><input type="checkbox" id="fit-community"> Include community fits</label>
   <button type="button" class="btn" id="fit-loadouts-btn" data-href="/fittings/saved/">My Loadouts</button>
 </div>{{end}}
-<p><small>Fits you save live in EveSynapse. Your EVE account's fittings are only ever read, never changed — except when you press Save to EVE.</small></p>
+<p><small>Fits you save are stored in EveSynapse. Your in-game fittings are only read, never changed, unless you press Save to EVE.</small></p>
 {{if .FitEditor.Notes}}
 <ul class="fit-notes">
   {{range .FitEditor.Notes}}<li>{{.}}</li>{{end}}
@@ -112,9 +112,9 @@
 <div class="fit-eft">
   <h4>Share this fit</h4>
   <p><button type="button" class="btn" id="fit-export-btn">Show as EFT</button></p>
-  <textarea id="fit-eft-out" rows="9" readonly placeholder="The EFT text appears here — ready to paste into EVE or any fitting tool."></textarea>
+  <textarea id="fit-eft-out" rows="9" readonly placeholder="The EFT text appears here, ready to paste into EVE or any fitting tool."></textarea>
   <form method="post" action="/fittings/import/">
-    <p><label for="fit-eft-in">Import a fit — paste EFT text</label></p>
+    <p><label for="fit-eft-in">Import a fit from EFT text</label></p>
     <textarea id="fit-eft-in" name="eft" rows="9" placeholder="[Rifter, My fit]&#10;Damage Control II&#10;..."></textarea>
     <p><button type="submit" class="btn">Import</button></p>
   </form>

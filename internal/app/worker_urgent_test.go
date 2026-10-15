@@ -210,7 +210,7 @@ func TestSDEDescriptionLocalFirstAndFallback(t *testing.T) {
 		t.Fatalf("seed fallback type: %v", err)
 	}
 	_, body = getPage(t, app, cookie, "/items/type/35/")
-	mustContain(t, "/items/type/35/", body, "This description is queued")
+	mustContain(t, "/items/type/35/", body, "This description is on its way")
 	td, err := q.GetTypeDetail(ctx, 35)
 	if err != nil || td.FetchedAt.Valid {
 		t.Fatalf("fallback want: td=%+v err=%v, want unfilled want row", td, err)

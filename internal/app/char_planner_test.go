@@ -166,7 +166,7 @@ func TestPlannerWarmState(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("planner warm page: status %d", code)
 	}
-	mustContain(t, "/planner/", body, "hasn't landed yet")
+	mustContain(t, "/planner/", body, "isn't loaded yet")
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handler made %d outbound calls, want 0", got)
 	}

@@ -40,8 +40,8 @@ func TestCorpWalletGraph(t *testing.T) {
 
 	// One journal entry and no balance: a single point is a fact, not a shape.
 	chart, note = corpWalletGraph(journal[:1], 0, false, time.Time{})
-	if chart != nil || !strings.Contains(note, "building") {
-		t.Errorf("one point: chart %v, note %q; want no chart and a building note", chart, note)
+	if chart != nil || !strings.Contains(note, "has started") {
+		t.Errorf("one point: chart %v, note %q; want no chart and a has-started note", chart, note)
 	}
 	// Nothing at all.
 	chart, note = corpWalletGraph(nil, 0, false, time.Time{})
@@ -102,7 +102,7 @@ func TestCorpWalletsPageShowsTheGraph(t *testing.T) {
 
 	// A division with a single point says it is building.
 	_, body = getPage(t, app, cookie, "/corporations/wallets/?character=90000001&division=2")
-	mustContain(t, "/corporations/wallets/ (division 2)", body, "Division 2 — balance over time", "Balance history is building")
+	mustContain(t, "/corporations/wallets/ (division 2)", body, "Division 2 — balance over time", "Balance history has started")
 	if strings.Contains(body, "<polyline") {
 		t.Error("a one-point division drew a line")
 	}

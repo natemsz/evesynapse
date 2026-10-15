@@ -12,12 +12,12 @@
 
   {{if .CorpMembers.Forbidden}}
   {{if .CorpMembers.RoleMissing}}
-  <p>Needs the <b>{{.CorpMembers.RoleMissing}}</b> role in-game — {{.CorpMembers.CharacterName}} doesn't hold it, so ESI won't share this corporation's member list. It appears here once they do.</p>
+  <p>Needs the <b>{{.CorpMembers.RoleMissing}}</b> role in game. {{.CorpMembers.CharacterName}} doesn't hold it, so ESI won't share this corporation's member list. It appears here once they do.</p>
   {{else}}
-  <p>Membership was refused by ESI (403) — this list appears once {{.CorpMembers.CharacterName}} is a member of this corporation again.</p>
+  <p>Membership was refused by ESI (403). This list appears once {{.CorpMembers.CharacterName}} is a member of this corporation again.</p>
   {{end}}
   {{else if .CorpMembers.Warming}}
-  <p>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</p>
+  <p>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</p>
   {{else if .CorpMembers.Loaded}}
   {{if .CorpMembers.TrackingNote}}<p><small>{{.CorpMembers.TrackingNote}}</small></p>{{end}}
   {{if .CorpMembers.CanGroup}}
@@ -60,6 +60,6 @@
   <p><small>Login, ship and location columns come from member tracking, which needs the Director role in-game.</small></p>
   {{end}}
 {{else}}
-  <p>No corporation to show yet — link a character first.</p>
+  <p>No corporation to show yet. Link a character first.</p>
 {{end}}
 {{end}}

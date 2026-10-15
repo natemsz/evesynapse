@@ -36,14 +36,14 @@
   {{end}}
   {{else}}
   {{if .Killmails.RoleMissing}}
-  <p>Needs the <b>{{.Killmails.RoleMissing}}</b> role in-game — {{.Killmails.CharacterName}} doesn't hold it, so ESI won't share {{.Killmails.Subject}}'s recent killmails. The list appears here once they do.</p>
+  <p>Needs the <b>{{.Killmails.RoleMissing}}</b> role in game. {{.Killmails.CharacterName}} doesn't hold it, so ESI won't share {{.Killmails.Subject}}'s recent killmails. The list appears here once they do.</p>
   {{else if .Killmails.Warming}}
-  <p>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</p>
+  <p>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</p>
   {{else}}
-  <p><small>Killmails are unavailable right now — check the server log.</small></p>
+  <p><small>Killmails couldn't be loaded. The server log has the details.</small></p>
   {{end}}
   {{end}}
 {{else}}
-  <p>No killmails to show yet — link a character first.</p>
+  <p>No killmails to show yet. Link a character first.</p>
 {{end}}
 {{end}}

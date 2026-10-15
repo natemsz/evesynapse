@@ -143,7 +143,7 @@ func TestPlanetsPagesRenderFromSnapshots(t *testing.T) {
 		"Jita I", "Jita II", "Jita", "Temperate", "command center upgrades 3",
 		"Tritanium", "1,200", "30m", "Expired",
 		"Fixture Widgets", "Fixture Storage ×2",
-		"Colony layout still warming up", // planet B
+		"Colony layout is still loading", // planet B
 		"Stored commodity amounts are not shown",
 	)
 	if got := transport.calls.Load(); got != 0 {
@@ -284,7 +284,7 @@ func TestPlanetsWorkerAndScopeRefusal(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("characters page: status %d", code)
 	}
-	mustContain(t, "/characters/ (PI flag)", body, "Planetary industry not enabled", "re-link to enable")
+	mustContain(t, "/characters/ (PI flag)", body, "Planetary industry not enabled", "Re-link to enable")
 
 	// Re-link: the scope lands on the character row, the next
 	// attempt bypasses the backoff and fetches.

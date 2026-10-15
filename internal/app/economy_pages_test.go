@@ -159,14 +159,14 @@ func TestEconomyPagesRenderFromSnapshots(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("contracts page (B): status %d", code)
 	}
-	mustContain(t, "/contracts/ (B)", body, "Item details are still warming up.")
+	mustContain(t, "/contracts/ (B)", body, "Item details are still loading.")
 
 	// Warming copy where nothing has landed yet.
 	code, body = getPage(t, app, cookie, "/industry/?character=90000002")
 	if code != http.StatusOK {
 		t.Fatalf("industry page (B): status %d", code)
 	}
-	mustContain(t, "/industry/ (B)", body, "Still warming up")
+	mustContain(t, "/industry/ (B)", body, "Still syncing")
 
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handlers made %d outbound calls, want 0", got)

@@ -281,7 +281,7 @@ func (app *Application) piOwnedPlanetTypes(ctx context.Context, ch db.Character)
 		if app.piNotEnabled(ctx, ch) {
 			return nil, "Planetary scope not enabled for this character yet — re-link to pre-fill from your colonies. You can still plan standalone."
 		}
-		return nil, "Colonies still warming up — plan standalone, or check back once Sync has landed them."
+		return nil, "Your colonies are still syncing. Plan without them for now, or check back after the next sync."
 	}
 	seen := map[string]bool{}
 	var out []string

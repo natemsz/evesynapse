@@ -99,7 +99,7 @@ func (app *Application) handleCorpMembers(w http.ResponseWriter, r *http.Request
 			view.TrackingNote = "Member tracking was refused by ESI (403) — only the roster is shown."
 		}
 	} else {
-		view.TrackingNote = "Member tracking is still warming up — only the roster is shown for now."
+		view.TrackingNote = "Member tracking is still syncing. Only the roster is shown for now."
 	}
 
 	structureNames := app.corpStructureNames(ctx, sel.Active.CharacterID)
@@ -262,7 +262,7 @@ func (app *Application) handleCorpWallets(w http.ResponseWriter, r *http.Request
 			view.LedgerNote = "Wallet ledgers were refused by ESI (403)."
 		}
 	default:
-		view.LedgerNote = "This division's journal is still warming up."
+		view.LedgerNote = "This division's journal is still syncing."
 	}
 
 	// The division's balance over time, from the same journal plus the

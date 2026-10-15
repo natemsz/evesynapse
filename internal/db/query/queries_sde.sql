@@ -71,6 +71,25 @@ SELECT region_id, name FROM sde_regions
 WHERE name ILIKE $1
 ORDER BY name
 LIMIT 10;
+-- SuggestSDESystems: systems by name for the search boxes, prefix matches first.
+-- name: SuggestSDESystems :many
+SELECT s.system_id, s.name, s.region_id, COALESCE(r.name, '') AS region_name, s.security
+FROM sde_systems s
+LEFT JOIN sde_regions r ON r.region_id = s.region_id
+WHERE strpos(lower(s.name), lower(@q::text)) > 0
+ORDER BY CASE WHEN strpos(lower(s.name), lower(@q::text)) = 1 THEN 0 ELSE 1 END, s.name
+LIMIT @lim::bigint;
+-- SuggestSDERegions: regions by name for the search boxes, prefix matches first.
+-- name: SuggestSDERegions :many
+SELECT region_id, name FROM sde_regions
+WHERE strpos(lower(name), lower(@q::text)) > 0
+ORDER BY CASE WHEN strpos(lower(name), lower(@q::text)) = 1 THEN 0 ELSE 1 END, name
+LIMIT @lim::bigint;
+-- ListSDESystemsByRegion: one region's systems for its page.
+-- name: ListSDESystemsByRegion :many
+SELECT system_id, name, security FROM sde_systems
+WHERE region_id = $1
+ORDER BY name;
 -- name: SearchSDETypes :many
 SELECT type_id, name FROM sde_types
 WHERE name ILIKE $1

@@ -102,7 +102,7 @@
 <section class="card spanall">
 <h2>Swarm Cache</h2>
 {{if .Enabled}}
-<p><small>{{.Status}}. Public data only — market history, type names, corporation and alliance records, player structure names. Every entry is signed by the instance that fetched it and spot-checked against ESI before it is used; entries that fail are discarded and their signer flagged. Trust below half over ten checks excludes a signer on its own.</small></p>
+<p><small>{{.Status}}. Public data only: market history, type names, corporation and alliance records, player structure names. Every entry is signed by the instance that fetched it and spot-checked against ESI before it is used; entries that fail are discarded and their signer flagged. Trust below half over ten checks excludes a signer on its own.</small></p>
 <table class="stat-table">
   <tbody>
   {{range .Rows}}<tr><td>{{.Label}}</td><td>{{.Value}}</td></tr>
@@ -171,13 +171,13 @@
 </div>
 <form method="post" action="/sync/warm?character={{.ID}}" class="inline-form"><button class="btn" type="submit">Re-warm {{.Name}} now</button></form>
 {{end}}
-<form method="post" action="/sync/warm" class="inline-form"><button class="btn" type="submit">Re-warm all of my characters</button></form>
+<form method="post" action="/sync/warm" class="inline-form"><button class="btn" type="submit">Refresh all of my characters</button></form>
 </section>
 
 {{if .Sync.Global}}
 <section class="card spanall">
 <h2>Public data (no login needed)</h2>
-<p><small>Wars, incursions, faction warfare and server status are public ESI data; the worker keeps them warm in a shared store (Intel pages, Home status line).</small></p>
+<p><small>Wars, incursions, faction warfare and server status are public ESI data; they're fetched once and shared by everyone (Intel pages, Home status line).</small></p>
 <div class="tw">
 <table>
   <thead><tr><th>Data</th><th>State</th><th>Fetched at</th><th>Cached until</th></tr></thead>
@@ -195,7 +195,7 @@
 {{if .Sync.SDE}}
 <section class="card spanall">
 <h2>EVE static data (SDE)</h2>
-<p><small>Item, skill, station and system names come from a local copy of CCP's static data export (via Fuzzwork's CSV conversion), refreshed on a weekly check — ESI is only a fallback for names the SDE lacks.</small></p>
+<p><small>Item, skill, station and system names come from a local copy of CCP's static data export (via Fuzzwork's CSV conversion), checked for updates weekly. ESI is only used for names the SDE lacks.</small></p>
 <p>State: <strong>{{.Sync.SDE.State}}</strong>
 {{if .Sync.SDE.ImportedAt}} · imported {{.Sync.SDE.ImportedAt}}{{end}}
 <br><small>Source: {{.Sync.SDE.SourceBase}}</small></p>

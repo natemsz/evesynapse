@@ -38,7 +38,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
   {{range .Visual.Slots}}
   {{if $.ReadOnly}}{{if .Filled}}<span class="fit-vslot filled{{if .State}} st-{{.State}}{{end}}" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}}" data-tip-meta="{{.Meta}}" data-tip-lines="{{.TipLines}}"{{if .ChargeName}} data-tip-charge="Loaded: {{.ChargeName}}"{{end}}><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{if .ChargeID}}<span class="fit-vammo"><img src="https://images.evetech.net/types/{{.ChargeID}}/icon?size=32" alt="{{.ChargeName}}" draggable="false"></span>{{end}}</span>{{else}}<span class="fit-vslot" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}" aria-hidden="true"></span>{{end}}{{else}}
   <button type="button" class="fit-vslot{{if .Filled}} filled{{end}}{{if .State}} st-{{.State}}{{end}}" data-left="{{printf "%.1f" .X}}" data-top="{{printf "%.1f" .Y}}"{{if .Filled}} data-fit-vslot="{{.TypeID}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" data-tip-key="{{.TipKey}}" data-tip-name="{{.Name}}" data-tip-sub="{{.GroupLabel}}" data-tip-meta="{{.Meta}}" data-tip-cpu="{{.CPU}}" data-tip-pg="{{.PG}}" data-tip-stat="{{.Stat}}" data-tip-lines="{{.TipLines}}"{{if .State}} data-tip-state="{{.State}}"{{end}}{{if .StatesCSV}} data-tip-states="{{.StatesCSV}}"{{end}}{{if .ChargeName}} data-tip-charge="Loaded: {{.ChargeName}}"{{end}}{{else}}data-fit-add="{{.GroupKey}}" data-v-index="{{.Index}}" data-v-family="{{.GroupKey}}" title="Add {{.GroupLabel}}"{{end}}>
-    {{if .Filled}}<img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{if .ChargeID}}<span class="fit-vammo" data-fit-ammo="{{.TypeID}}" title="Loaded: {{.ChargeName}} — change ammunition"><img src="https://images.evetech.net/types/{{.ChargeID}}/icon?size=32" alt="{{.ChargeName}}" draggable="false"></span>{{end}}{{else}}<span aria-hidden="true">+</span>{{end}}
+    {{if .Filled}}<img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=64" alt="{{.Name}}" draggable="false">{{if .ChargeID}}<span class="fit-vammo" data-fit-ammo="{{.TypeID}}" title="Loaded: {{.ChargeName}}. Click to change ammunition"><img src="https://images.evetech.net/types/{{.ChargeID}}/icon?size=32" alt="{{.ChargeName}}" draggable="false"></span>{{end}}{{else}}<span aria-hidden="true">+</span>{{end}}
   </button>
   {{end}}
   {{end}}
@@ -80,7 +80,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
         {{end}}{{else}}
         <span class="fit-chip fit-imp{{if .Missing}} fit-imp-missing{{end}}{{if not .TypeID}} fit-imp-empty{{end}}">
           <span class="fit-imp-slot" title="Slot {{.Slot}}">{{.Slot}}</span>
-          <input type="text" class="fit-imp-input" data-fit-imp-slot="{{.Slot}}" value="{{.Name}}" placeholder="Empty — search slot {{.Slot}} implants" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-label="Implant slot {{.Slot}}">
+          <input type="text" class="fit-imp-input" data-fit-imp-slot="{{.Slot}}" value="{{.Name}}" placeholder="Empty: search slot {{.Slot}} implants" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-label="Implant slot {{.Slot}}">
           {{if .Missing}}<span class="fit-imp-warn" title="This pilot is missing skills for this implant">Missing skills</span>{{end}}
           {{if .Overridden}}<button type="button" class="fit-chip-btn" data-fit-imp-reset="{{.Slot}}" title="Back to the clone's implant">↺</button>{{end}}
           {{if .TypeID}}<button type="button" class="fit-chip-btn" data-fit-imp-clear="{{.Slot}}" title="Empty this slot">×</button>{{end}}
@@ -129,8 +129,8 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
         <span class="fit-bar-nums">{{.Calib.Used}} of {{.Calib.Max}} ({{.Calib.Left}} left)</span>
       </div>{{end}}
       <dl class="fit-kv">
-        <div><dt>Slots</dt><dd class="{{if .SlotsOver}}fit-over{{else}}fit-good{{end}}">{{.SlotLine}}</dd></div>
-        <div><dt>Hardpoints</dt><dd class="{{if .HPOver}}fit-over{{else}}fit-good{{end}}">{{.Hardpoints}}</dd></div>
+        <div><dt>Slots</dt><dd class="prose-figs {{if .SlotsOver}}fit-over{{else}}fit-good{{end}}">{{.SlotLine}}</dd></div>
+        <div><dt>Hardpoints</dt><dd class="prose-figs {{if .HPOver}}fit-over{{else}}fit-good{{end}}">{{.Hardpoints}}</dd></div>
       </dl>
       {{with $.Cost}}{{if .Known}}
       <p class="fit-cost" data-fit-cost="{{.TotalRaw}}"><span class="fit-cost-total">{{.Total}} ISK</span> <small>hull {{.Hull}} + fittings {{.Parts}}{{if .Unpriced}} · {{.Unpriced}} item{{if ne .Unpriced 1}}s{{end}} unpriced{{end}}</small></p>

@@ -13,13 +13,13 @@
 {{if .Planets.Colonies.Note}}
 <p>{{.Planets.Colonies.Note}}</p>
 {{else if .Planets.Colonies.Warming}}
-<p><small>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</small></p>
+<p><small>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</small></p>
 {{else if .Planets.Rows}}
 {{range .Planets.Rows}}
 <section class="foldable">
 <h3>{{.Planet}} <small>· {{placeLink .SystemRef}} · {{.Type}} · command center upgrades {{.Upgrade}} · {{.Pins}} pins{{if .Updated}} · updated {{.Updated}}{{end}}</small></h3>
 {{if .LayoutWarming}}
-<p><small>Colony layout still warming up.</small></p>
+<p><small>Colony layout is still loading.</small></p>
 {{else}}
 {{if .Extractors}}
 <div class="tw">
@@ -50,11 +50,11 @@
 {{end}}
 </section>
 {{end}}
-<p><small>Extractor timers (end time, per-cycle yield, head count) are fixed when a program is installed, so the countdowns above are exact. Stored commodity amounts are not shown: EVE only recalculates them when you open the colony in-game, so any number here would be a quiet lie.</small></p>
+<p><small>Extractor timers (end time, per-cycle yield, head count) are fixed when a program is installed, so the countdowns above are exact. Stored commodity amounts are not shown: EVE only recalculates them when you open the colony in-game, so any number shown here would be out of date.</small></p>
 {{else}}
 <p><small>No colonies for this character in the latest snapshot.</small></p>
 {{end}}
 {{else}}
-<p>No character to show yet — link a character first.</p>
+<p>No character to show yet. Link a character first.</p>
 {{end}}
 {{end}}

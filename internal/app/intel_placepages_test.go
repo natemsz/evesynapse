@@ -40,6 +40,11 @@ func TestPlaceLinkHelpers(t *testing.T) {
 		{"ref station wins", placeLink(placeRef{Name: "Jita 4 - Moon 4", StationID: 60003760, SystemID: 30000142}), `<a href="/station/?station=60003760">Jita 4 - Moon 4</a>`},
 		{"ref system", placeLink(placeRef{Name: "Jita", SystemID: 30000142}), `<a href="/system/?system=30000142">Jita</a>`},
 		{"ref structure stays text", placeLink(placeRef{Name: "Some Citadel"}), `Some Citadel`},
+		{"region", regionLink(10000002, "The Forge"), `<a href="/region/?region=10000002">The Forge</a>`},
+		{"region no id", regionLink(0, "The Forge"), `The Forge`},
+		{"sec high", secStatus(0.946), `<span class="sec sec-9">0.9</span>`},
+		{"sec barely low", secStatus(0.04), `<span class="sec sec-1">0.1</span>`},
+		{"sec null", secStatus(-0.32), `<span class="sec sec-0">-0.3</span>`},
 		{"ref fallback stays text", placeLink(placeRef{Name: "Station #60003760"}), `Station #60003760`},
 	}
 	for _, c := range cases {
@@ -89,7 +94,8 @@ func TestSystemAndStationPages(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /system/: status %d", code)
 	}
-	mustContain(t, "/system/", body, "Jita", "0.9", "The Forge",
+	mustContain(t, "/system/", body, "Jita", `<span class="sec sec-9">0.9</span>`,
+		`<a href="/region/?region=10000002">The Forge</a>`,
 		`<a href="/station/?station=60003760">Jita 4 - Moon 4 - Caldari Navy Assembly Plant</a>`,
 		`<a href="/station/?station=60003761">Jita 4 - Moon 10 - Hyasyoda Corporation Refinery</a>`)
 	if strings.Contains(body, "Tranquility Trading Tower") {
@@ -102,19 +108,44 @@ func TestSystemAndStationPages(t *testing.T) {
 		t.Fatalf("GET /station/: status %d", code)
 	}
 	mustContain(t, "/station/", body, "Jita 4 - Moon 4 - Caldari Navy Assembly Plant",
-		`<a href="/system/?system=30000142">Jita</a>`, "The Forge")
+		`<a href="/system/?system=30000142">Jita</a>`, `<a href="/region/?region=10000002">The Forge</a>`)
+
+	// Region page: its systems, each linked with its security.
+	code, body = getPage(t, app, cookie, "/region/?region=10000002")
+	if code != http.StatusOK {
+		t.Fatalf("GET /region/: status %d", code)
+	}
+	mustContain(t, "/region/", body, "The Forge", "2 systems", "2 high-sec",
+		`<a href="/system/?system=30000142">Jita</a>`, `<a href="/system/?system=30000143">Perimeter</a>`,
+		`<span class="sec sec-9">0.9</span>`)
+
+	// The top search finds systems (with region and security) and
+	// regions.
+	code, body = getPage(t, app, cookie, "/search.json?q=jita")
+	if code != http.StatusOK {
+		t.Fatalf("GET /search.json: status %d", code)
+	}
+	mustContain(t, "/search.json", body, `"kind":"system"`, `"name":"Jita"`,
+		`"label":"System · The Forge"`, `"sec":"0.9"`, `"secTier":9`)
+	_, body = getPage(t, app, cookie, "/search.json?q=forge")
+	mustContain(t, "/search.json region", body, `"kind":"region"`, `"name":"The Forge"`)
 
 	// Unknown ids: not-in-the-star-map states, still 200.
 	code, body = getPage(t, app, cookie, "/system/?system=39999999")
 	if code != http.StatusOK {
 		t.Fatalf("GET /system/ unknown: status %d", code)
 	}
-	mustContain(t, "/system/ unknown", body, "isn't in the local star map yet")
+	mustContain(t, "/system/ unknown", body, "isn't in the star map data yet")
 	code, body = getPage(t, app, cookie, "/station/?station=69999999")
 	if code != http.StatusOK {
 		t.Fatalf("GET /station/ unknown: status %d", code)
 	}
-	mustContain(t, "/station/ unknown", body, "isn't in the local directory yet")
+	mustContain(t, "/station/ unknown", body, "isn't in the star map data yet")
+	code, body = getPage(t, app, cookie, "/region/?region=19999999")
+	if code != http.StatusOK {
+		t.Fatalf("GET /region/ unknown: status %d", code)
+	}
+	mustContain(t, "/region/ unknown", body, "isn't in the star map data yet")
 
 	// Unparseable ids bounce home instead of erroring.
 	for _, path := range []string{"/system/", "/system/?system=abc", "/station/?station=-4"} {

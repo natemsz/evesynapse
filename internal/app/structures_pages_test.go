@@ -189,7 +189,7 @@ func TestStructurePageNamedWithoutContextAndMissing(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /structure/ missing: status %d", code)
 	}
-	mustContain(t, "/structure/ missing", body, "no longer be standing")
+	mustContain(t, "/structure/ missing", body, "may have been destroyed")
 	if strings.Contains(body, "data-live-region") {
 		t.Error("missing structure page still carries a live region")
 	}

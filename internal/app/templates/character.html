@@ -12,7 +12,7 @@
 
   {{if .CharacterPage.IdentityKnown}}
   <div class="panel char-head">
-  <h2><img class="portrait" src="{{.CharacterPage.PortraitURL}}" alt="">{{.CharacterPage.CharacterName}}</h2>
+  <h2 class="char-hero"><img class="portrait" src="{{.CharacterPage.PortraitURL}}" alt=""><span class="char-name">{{.CharacterPage.CharacterName}}</span></h2>
   {{if or .CharacterPage.CorpName .CharacterPage.Birthday}}<p class="char-sub"><small>{{if .CharacterPage.CorpName}}{{corpLink .CharacterPage.CorpID .CharacterPage.CorpName}}{{end}}{{if and .CharacterPage.CorpName .CharacterPage.Birthday}} · {{end}}{{if .CharacterPage.Birthday}}born {{.CharacterPage.Birthday}}{{end}}</small></p>{{end}}
   </div>
   {{/* The key figures as the overview's at-a-glance tiles. */}}

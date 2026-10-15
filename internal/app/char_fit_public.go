@@ -493,9 +493,9 @@ type publicFitView struct {
 	PageURL     string
 	// Preparing: the stored page for this version of the fit is
 	// not built yet (the worker builds it within a cycle or two).
-	Preparing   bool
-	ShareX      string
-	ShareReddit string
+	Preparing    bool
+	ShareDiscord string // a ready-to-paste Discord message: the fit, its ship and the link (Discord has no share URL)
+	ShareReddit  string
 }
 
 // publicFitSections groups a stored document's items the way the
@@ -726,7 +726,7 @@ func (app *Application) handlePublicFitPage(w http.ResponseWriter, r *http.Reque
 	}
 	// Links out need an absolute address to point back at.
 	if view.PageURL != "" {
-		view.ShareX = "https://x.com/intent/post?text=" + url.QueryEscape(row.Name+" ("+ship+")") + "&url=" + url.QueryEscape(view.PageURL)
+		view.ShareDiscord = row.Name + " (" + ship + ") — " + view.PageURL
 		view.ShareReddit = "https://www.reddit.com/submit?url=" + url.QueryEscape(view.PageURL) + "&title=" + url.QueryEscape(row.Name+" ("+ship+")")
 	}
 	if userID > 0 {

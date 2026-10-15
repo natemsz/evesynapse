@@ -223,6 +223,11 @@ type Application struct {
 	// Close waits on tradeIdeasWG.
 	tradeIdeasBusy atomic.Bool
 	tradeIdeasWG   sync.WaitGroup
+
+	// names writes learned character, corporation and alliance
+	// names to entity_names (entity_names.go).
+	names   *nameWriter
+	namesWG sync.WaitGroup // the first-start bulk name fill
 }
 
 // New opens the database (applying the embedded baseline schema
@@ -274,6 +279,11 @@ func New(cfg Config) (*Application, error) {
 	}
 	app.esi = esi.New(loginHTTPClient, app.queries, app.validAccessToken)
 	app.esi.SetUserAgent(cfg.esiUserAgent())
+	// Every stored name is in memory before the first request, and
+	// every name learned from here on is kept (entity_names.go).
+	app.loadEntityNames(context.Background())
+	app.names = newNameWriter(app.db)
+	app.esi.SetNameSink(app.names.enqueue)
 
 	// Before anything reads a token: check the stored ones open
 	// with the configured key, and encrypt any that predate it.
@@ -307,12 +317,21 @@ func New(cfg Config) (*Application, error) {
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	app.stopWorker = stopWorker
 	app.workerCtx = workerCtx
-	app.workerDone = make(chan struct{})
 	app.startedAt = time.Now()
-	go func() {
-		defer close(app.workerDone)
-		app.runWorker(workerCtx)
-	}()
+	if !cfg.noWorker {
+		app.workerDone = make(chan struct{})
+		go func() {
+			defer close(app.workerDone)
+			app.runWorker(workerCtx)
+		}()
+		// A database that has never been filled with names fills
+		// itself once, in the background (entity_names_populate.go).
+		app.namesWG.Add(1)
+		go func() {
+			defer app.namesWG.Done()
+			app.populateNamesIfEmpty(workerCtx)
+		}()
+	}
 
 	// One-shot reachability probe so phone (Termux) logs immediately
 	// show whether CCP is reachable — DNS trouble there otherwise only
@@ -350,6 +369,10 @@ func (app *Application) Close() {
 		<-app.workerDone
 	}
 	app.tradeIdeasWG.Wait()
+	app.namesWG.Wait()
+	if app.names != nil {
+		app.names.close()
+	}
 	if app.db != nil {
 		// Views counted since the worker last wrote them.
 		app.flushFitViews(context.Background())

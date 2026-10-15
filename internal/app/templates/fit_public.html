@@ -54,7 +54,7 @@
 <p class="share-row">
   {{if .PageURL}}<button type="button" data-copy data-copy-text="{{.PageURL}}">Copy link</button>{{end}}
   {{if .EFT}}<button type="button" data-copy data-copy-from="fit-eft">Copy EFT</button>{{end}}
-  {{if .ShareX}}<a class="btn" href="{{.ShareX}}" target="_blank" rel="noopener noreferrer">Share to X</a>
+  {{if .ShareDiscord}}<button type="button" class="btn btn-discord" data-copy data-copy-text="{{.ShareDiscord}}" title="Copies a message to paste into Discord; the link unfurls into a preview">Share to Discord</button>
   <a class="btn" href="{{.ShareReddit}}" target="_blank" rel="noopener noreferrer">Share to Reddit</a>{{end}}
 </p>
 {{if .EFT}}<pre id="fit-eft">{{.EFT}}</pre>{{end}}

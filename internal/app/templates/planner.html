@@ -13,13 +13,16 @@
 <div class="foldable" data-fold="never">
 <h3>Find something to build</h3>
 <form method="get" action="/planner/" class="searchpanel">
-  <p class="plan-searchrow">
+  {{/* A div, not a p: the suggestion list is a ul, which a p cannot
+       hold — the parser would close the p early and the list would
+       drop below the whole panel. */}}
+  <div class="plan-searchrow">
     <span class="searchwrap plan-searchwrap">
       <input type="text" name="q" id="planner-q" value="{{.Planner.Query}}" placeholder="Product name, e.g. Rifter" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="planner-suggest" aria-autocomplete="list">
       <ul class="suggest" id="planner-suggest" role="listbox" hidden></ul>
     </span>
     <button type="submit">Search</button>
-  </p>
+  </div>
 </form>
 {{if .Planner.Searched}}
 {{if .Planner.Results}}

@@ -119,7 +119,7 @@ func TestPublicFitPageMirrorsTool(t *testing.T) {
 		// The page's own extras stay.
 		`id="fit-eft"`,
 		"Copy EFT",
-		"Share to X",
+		"Share to Discord",
 	)
 	for _, editable := range []string{
 		"data-fit-dec", "data-fit-inc", "data-fit-add", "data-fit-qty",

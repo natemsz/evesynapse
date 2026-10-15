@@ -59,7 +59,7 @@
       <span class="kpi-k">Skill training</span>
       <span class="kpi-v">{{if .Pilots}}{{.Training}} / {{.Pilots}} <small>training</small>{{else}}—{{end}}</span>
       {{if .TrainBar}}<span class="kpi-bar{{if .Idle}} warn{{end}}"><span data-w="{{.TrainBar}}"></span></span>{{end}}
-      <span class="kpi-sub">{{if .Idle}}<button type="button" class="linkbtn" data-fleet-idle>{{.Idle}} idle — show them</button>{{else if .Pilots}}Every queue is running{{end}}</span>
+      <span class="kpi-sub">{{if .Idle}}<a class="linkbtn" href="/characters/" data-fleet-idle>{{.Idle}} idle — show them</a>{{else if .Pilots}}Every queue is running{{end}}</span>
     </div>
   </div>
   {{end}}
@@ -322,10 +322,11 @@
     <div class="ti-tabs" role="tablist" aria-label="Trade strategies" data-tabs hidden>
       {{range $i, $g := .Groups}}<button type="button" role="tab" class="ti-acc ti-a{{.Accent}}" id="{{.ID}}-tab" aria-controls="{{.ID}}" aria-selected="{{if eq $i 0}}true{{else}}false{{end}}">{{.Title}}</button>{{end}}
     </div>
-    {{range .Groups}}
+    {{range $g := .Groups}}
     <div class="ti-panel ti-acc ti-a{{.Accent}}" role="tabpanel" id="{{.ID}}" aria-labelledby="{{.ID}}-tab">
       <h4 class="ti-h">{{.Title}}</h4>
-      <ol class="ti-list">{{range $i, $idea := .Ideas}}<li{{if ge $i $cap}} data-wmore{{end}}>{{$idea}}</li>{{end}}</ol>
+      {{/* The brief at the resting size, the whole line once More is open. */}}
+      <ol class="ti-list">{{range $i, $idea := .Ideas}}<li{{if ge $i $cap}} data-wmore{{end}}><span class="ti-brief">{{index $g.Briefs $i}}</span><span class="ti-whole">{{$idea}}</span></li>{{end}}</ol>
       {{with .More $cap}}<p class="ti-more" data-wmore><small><a href="/market/ideas/">All ideas on the Trade Ideas page</a></small></p>{{end}}
     </div>
     {{end}}

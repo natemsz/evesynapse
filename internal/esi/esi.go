@@ -355,6 +355,13 @@ type Client struct {
 	allianceNamesMu sync.RWMutex
 	allianceNames   map[int64]string
 
+	// nameSink, when set, hears every character, corporation and
+	// alliance name the caches learn or see change (Store*Name), so
+	// the app can keep them in its database (entity_names). Names
+	// loaded from that table go in through PrimeName and are not
+	// echoed back.
+	nameSink func(kind string, id int64, name string)
+
 	// In-process cache of constellation ID → name for the
 	// incursions page (constellations aren't in the SDE tables;
 	// the IDs sit in their own range, clear of stations/systems).
@@ -3159,8 +3166,10 @@ func (c *Client) CachedCharacterName(id int64) (string, bool) {
 // cache (the worker's warm-up pass stores fetched names this way).
 func (c *Client) StoreCharacterName(id int64, name string) {
 	c.charNamesMu.Lock()
+	changed := c.charNames[id] != name
 	c.charNames[id] = name
 	c.charNamesMu.Unlock()
+	c.heardName(NameCharacter, id, name, changed)
 }
 
 // CharacterNameMissed reports whether ESI has already definitively
@@ -3199,8 +3208,10 @@ func (c *Client) CachedCorpName(id int64) (string, bool) {
 // cache (the worker's warm-up pass stores fetched names this way).
 func (c *Client) StoreCorpName(id int64, name string) {
 	c.corpNamesMu.Lock()
+	changed := c.corpNames[id] != name
 	c.corpNames[id] = name
 	c.corpNamesMu.Unlock()
+	c.heardName(NameCorporation, id, name, changed)
 }
 
 // CachedAllianceName resolves an alliance ID from the in-process
@@ -3216,8 +3227,49 @@ func (c *Client) CachedAllianceName(id int64) (string, bool) {
 // cache.
 func (c *Client) StoreAllianceName(id int64, name string) {
 	c.allianceNamesMu.Lock()
+	changed := c.allianceNames[id] != name
 	c.allianceNames[id] = name
 	c.allianceNamesMu.Unlock()
+	c.heardName(NameAlliance, id, name, changed)
+}
+
+// The kinds of name the caches hold, as entity_names stores them.
+const (
+	NameCharacter   = "character"
+	NameCorporation = "corporation"
+	NameAlliance    = "alliance"
+)
+
+// SetNameSink registers the listener for learned names (see
+// nameSink). Set once at startup, before the worker runs.
+func (c *Client) SetNameSink(sink func(kind string, id int64, name string)) {
+	c.nameSink = sink
+}
+
+// heardName passes a new or changed name to the sink.
+func (c *Client) heardName(kind string, id int64, name string, changed bool) {
+	if changed && name != "" && c.nameSink != nil {
+		c.nameSink(kind, id, name)
+	}
+}
+
+// PrimeName puts a stored name into its cache without telling the
+// sink: the startup load from entity_names.
+func (c *Client) PrimeName(kind string, id int64, name string) {
+	switch kind {
+	case NameCharacter:
+		c.charNamesMu.Lock()
+		c.charNames[id] = name
+		c.charNamesMu.Unlock()
+	case NameCorporation:
+		c.corpNamesMu.Lock()
+		c.corpNames[id] = name
+		c.corpNamesMu.Unlock()
+	case NameAlliance:
+		c.allianceNamesMu.Lock()
+		c.allianceNames[id] = name
+		c.allianceNamesMu.Unlock()
+	}
 }
 
 // CachedConstellationName resolves a constellation ID from the

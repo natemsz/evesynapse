@@ -125,8 +125,8 @@ func (app *Application) refreshMarketData(ctx context.Context, characters []db.C
 // under the shared fetch lock so the urgent drain never
 // double-fetches the same pair in the same moment.
 func (app *Application) warmMarketHistory(ctx context.Context, allowance *fetchBudget) (stored int, limited bool) {
-	app.fetchMu.Lock()
-	defer app.fetchMu.Unlock()
+	app.histFetchMu.Lock()
+	defer app.histFetchMu.Unlock()
 
 	candidates, err := app.historyCandidates(ctx)
 	if err != nil {

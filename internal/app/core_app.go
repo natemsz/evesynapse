@@ -107,6 +107,9 @@ type Application struct {
 	// urgent) on their own, so a long pass under fetchMu (a market
 	// sweep) never keeps a name someone is looking at waiting.
 	orgFetchMu sync.Mutex
+	// histFetchMu serializes market history fetches (cycle and urgent)
+	// apart from fetchMu, for the same reason.
+	histFetchMu sync.Mutex
 
 	// urgentMu guards urgentHoldUntil: after ESI pushes back, the
 	// urgent drain stays quiet for a while instead of nudging

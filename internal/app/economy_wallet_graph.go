@@ -387,6 +387,51 @@ func (app *Application) attachWalletGraph(ctx context.Context, userID, character
 	return g
 }
 
+// trendWindow is how far back the At a Glance arrows look.
+const trendWindow = 7 * 24 * time.Hour
+
+// trendBaseline is the sampled day the trends compare against: the
+// newest at least a week old, or failing that the oldest that is at
+// least a day old (a young history still shows a direction).
+func trendBaseline(days []netWorthDay, now time.Time) (netWorthDay, bool) {
+	var base netWorthDay
+	found := false
+	for _, d := range days { // ascending
+		if now.Sub(d.At) >= trendWindow {
+			base, found = d, true
+		}
+	}
+	if found {
+		return base, true
+	}
+	if len(days) > 0 && now.Sub(days[0].At) >= 24*time.Hour {
+		return days[0], true
+	}
+	return netWorthDay{}, false
+}
+
+// trendSpan names how far back the baseline is: "7 days", "3 days".
+func trendSpan(at, now time.Time) string {
+	n := int(now.Sub(at).Hours() / 24)
+	if n == 1 {
+		return "1 day"
+	}
+	return fmt.Sprintf("%d days", n)
+}
+
+// newKPITrend compares a figure with its baseline; nil when there is
+// no baseline to speak of or the change rounds to nothing.
+func newKPITrend(now, then float64, since string) *kpiTrend {
+	if then <= 0 {
+		return nil
+	}
+	pct := (now - then) / then * 100
+	if pct > -0.05 && pct < 0.05 {
+		return nil
+	}
+	return &kpiTrend{Up: pct > 0, Text: fmt.Sprintf("%+.1f%% over %s", pct, since)}
+}
+
 // attachNetWorthHistory fills the home Net worth module's
 // history from the user's sampler rows: a chart once two daily
 // totals exist, the "building" state before that.
@@ -397,6 +442,16 @@ func (app *Application) attachNetWorthHistory(ctx context.Context, w *netWorthWi
 		return
 	}
 	days := netWorthBreakdownDays(rows)
+	if base, ok := trendBaseline(days, time.Now()); ok && w.Any {
+		since := trendSpan(base.At, time.Now())
+		w.TotalTrend = newKPITrend(w.totalNow, base.Total(), since)
+		if w.Wallet != "" {
+			w.WalletTrend = newKPITrend(w.walletNow, base.ISK, since)
+		}
+		if w.AssetsKnown {
+			w.AssetsTrend = newKPITrend(w.assetsNow, base.Assets, since)
+		}
+	}
 	if len(days) >= 2 {
 		if chart, ok := buildNetWorthChart(days); ok {
 			c := chart

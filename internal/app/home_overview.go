@@ -677,6 +677,23 @@ type netWorthWidget struct {
 	// the total is not positive.
 	WalletPct string
 	WalletBar string
+
+	// Trends beside the At a Glance figures: each live figure against
+	// the daily sample about a week back; nil without an older sample
+	// or a change worth showing.
+	TotalTrend  *kpiTrend
+	WalletTrend *kpiTrend
+	AssetsTrend *kpiTrend
+
+	// The live figures the trends compare.
+	totalNow, walletNow, assetsNow float64
+}
+
+// kpiTrend is one figure's direction and its change, for the arrow's
+// title ("+3.2% over 7 days").
+type kpiTrend struct {
+	Up   bool
+	Text string
 }
 
 type industryRow struct {
@@ -971,6 +988,7 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 	}
 
 	total := walletSum + assetSum + escrowSum
+	w.totalNow, w.walletNow, w.assetsNow = total, walletSum, assetSum+escrowSum
 	if walletOK || assetsSeen || escrowOK {
 		w.Any = true
 		w.Total = esi.FormatISK(total)

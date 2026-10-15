@@ -41,18 +41,18 @@
   <div class="kpis">
     <div class="kpi">
       <span class="kpi-k">Fleet net worth</span>
-      <span class="kpi-v">{{if .NetWorth.Any}}{{.NetWorth.Total}} <small>ISK</small>{{else}}—{{end}}</span>
+      <span class="kpi-v">{{if .NetWorth.Any}}{{.NetWorth.Total}} <small>ISK</small>{{template "kpi-trend" .NetWorth.TotalTrend}}{{else}}—{{end}}</span>
       <span class="kpi-sub">{{if .NetWorth.Wallet}}Wallets {{.NetWorth.Wallet}}{{end}}{{if and .NetWorth.Wallet .NetWorth.AssetsKnown}} · {{end}}{{if .NetWorth.AssetsKnown}}Assets {{.NetWorth.Assets}}{{end}}</span>
     </div>
     <div class="kpi">
       <span class="kpi-k">Liquid wallets</span>
-      <span class="kpi-v">{{if .NetWorth.Wallet}}{{.NetWorth.Wallet}} <small>ISK</small>{{else}}—{{end}}</span>
+      <span class="kpi-v">{{if .NetWorth.Wallet}}{{.NetWorth.Wallet}} <small>ISK</small>{{template "kpi-trend" .NetWorth.WalletTrend}}{{else}}—{{end}}</span>
       {{if .NetWorth.WalletBar}}<span class="kpi-bar"><span data-w="{{.NetWorth.WalletBar}}"></span></span>{{end}}
       <span class="kpi-sub">{{if .NetWorth.WalletPct}}{{.NetWorth.WalletPct}} of net worth{{end}}</span>
     </div>
     <div class="kpi">
       <span class="kpi-k">Hangar &amp; asset value</span>
-      <span class="kpi-v">{{if .NetWorth.AssetsKnown}}{{.NetWorth.Assets}} <small>ISK</small>{{else}}—{{end}}</span>
+      <span class="kpi-v">{{if .NetWorth.AssetsKnown}}{{.NetWorth.Assets}} <small>ISK</small>{{template "kpi-trend" .NetWorth.AssetsTrend}}{{else}}—{{end}}</span>
       <span class="kpi-sub">{{if .NetWorth.AssetsNote}}{{.NetWorth.AssetsNote}}{{else if .NetWorth.Escrow}}Order escrow {{.NetWorth.Escrow}}{{end}}</span>
     </div>
     <div class="kpi">
@@ -513,3 +513,6 @@
 {{end}}
 {{end}}
 {{end}}
+
+{{/* A KPI's trend arrow: green up, red down, the change as its title. */}}
+{{define "kpi-trend"}}{{with .}} <span class="kpi-trend {{if .Up}}up{{else}}down{{end}}" title="{{.Text}}" aria-label="{{if .Up}}Up{{else}}Down{{end}} {{.Text}}">{{if .Up}}▲{{else}}▼{{end}}</span>{{end}}{{end}}

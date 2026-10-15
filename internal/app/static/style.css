@@ -1295,6 +1295,7 @@ td, dd, .kpi-v, .fit-headline-num, .fit-bar-nums, .fit-count, .fit-chip-qty, .fi
   font-family: "Synapse Numerals", "Saira Semi Condensed", "Inter", "Segoe UI", sans-serif;
 }
 .prose-figs { font-family: "Saira Semi Condensed", "Inter", "Segoe UI", sans-serif; }
+.watch-matches td:last-child, .watch-matches th:last-child { width: 1%; white-space: nowrap; text-align: right; }
 .flow-figs td { text-align: right; white-space: nowrap; }
 .flow-figs thead th { text-align: right; }
 .flow-figs thead small { color: var(--accent); font-size: 0.7em; }

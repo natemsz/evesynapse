@@ -48,7 +48,27 @@ const topMarketOrders = 5
 // search notes for its result types (results shown, never more).
 const maxSearchPrefetchWants = 50
 
+// globalMarketRegion is ESI's region for EVE's one global market, where
+// PLEX has traded since 2021 instead of in any regional market.
+const globalMarketRegion = int64(19000001)
+
+// globalMarketTypes trade only on the global market: PLEX.
+var globalMarketTypes = map[int64]bool{44992: true}
+
+// marketRegionForType is the region a type's market lives in: the
+// global market for a global-market type, whatever was asked for;
+// otherwise the region asked for.
+func marketRegionForType(typeID, regionID int64) int64 {
+	if globalMarketTypes[typeID] {
+		return globalMarketRegion
+	}
+	return regionID
+}
+
 func marketRegionName(id int64) (string, bool) {
+	if id == globalMarketRegion {
+		return "Global market", true
+	}
 	for _, r := range marketRegions {
 		if r.ID == id {
 			return r.Name, true
@@ -281,6 +301,7 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 	anon := userID == 0
 
 	if typeID, err := strconv.ParseInt(q.Get("type"), 10, 64); err == nil && typeID > 0 {
+		view.Region = marketRegionForType(typeID, view.Region)
 		if !anon {
 			app.foresightOpened(ctx, userID, foresightMarketView(typeID))
 		}
@@ -680,7 +701,11 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 		item.Name = app.esi.TypeName(ctx, typeID)
 	}
 	item.RegionName, _ = marketRegionName(regionID)
+	// A global-market type (PLEX) has one market; no regions to switch.
 	for _, reg := range marketRegions {
+		if globalMarketTypes[typeID] {
+			break
+		}
 		item.Regions = append(item.Regions, marketRegion{
 			ID:     reg.ID,
 			Name:   reg.Name,
@@ -881,13 +906,13 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 			TypeID:    e.TypeID,
 			Name:      app.typeNameOrID(ctx, e.TypeID),
 			RegionID:  e.RegionID,
-			Region:    app.marketRegionLabel(ctx, e.RegionID),
+			Region:    app.marketRegionLabel(ctx, marketRegionForType(e.TypeID, e.RegionID)),
 			Current:   "—",
 			Change7:   "—",
 			Change30:  "—",
 			Threshold: fmt.Sprintf("%g", e.ThresholdPct),
 		}
-		rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, markethistory.ChartRows)
+		rows := app.recentHistoryRows(ctx, marketRegionForType(e.TypeID, e.RegionID), e.TypeID, markethistory.ChartRows)
 		if len(rows) > 0 {
 			row.Current = esi.FormatISK(rows[len(rows)-1].Average)
 		}
@@ -1002,6 +1027,9 @@ func (app *Application) handleMarketWatch(w http.ResponseWriter, r *http.Request
 			regionID, _ := strconv.ParseInt(r.Form.Get("region"), 10, 64)
 			if regionID <= 0 {
 				regionID = defaultMarketRegion
+			}
+			if r.Form.Get("action") != "remove" {
+				regionID = marketRegionForType(typeID, regionID)
 			}
 			switch r.Form.Get("action") {
 			case "add", "update":

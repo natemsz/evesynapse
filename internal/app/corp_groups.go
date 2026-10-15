@@ -82,9 +82,9 @@ func (app *Application) handleGroups(w http.ResponseWriter, r *http.Request) {
 	data := app.page(ctx)
 	userID := app.userID(ctx)
 	view := &groupsView{}
-	var shown []discordOwner
-	if owner, options, ok := app.pickOwner(ctx, r, app.discordManageable(ctx, userID)); ok {
-		shown, view.OwnerOptions = []discordOwner{owner}, options
+	var shown []orgOwner
+	if owner, options, ok := app.pickOwner(ctx, r, app.manageableOwners(ctx, userID)); ok {
+		shown, view.OwnerOptions = []orgOwner{owner}, options
 	}
 	for _, owner := range shown {
 		ov := groupOwnerView{Key: owner.key(), Kind: owner.Kind, Name: app.ownerName(ctx, owner)}
@@ -144,7 +144,7 @@ func (app *Application) groupFor(r *http.Request, userID int64) (db.OrgGroup, bo
 	if err != nil {
 		return db.OrgGroup{}, false
 	}
-	if !discordManages(app.discordManageable(r.Context(), userID), discordOwner{group.OwnerKind, group.OwnerID}) {
+	if !ownersInclude(app.manageableOwners(r.Context(), userID), orgOwner{group.OwnerKind, group.OwnerID}) {
 		return db.OrgGroup{}, false
 	}
 	return group, true
@@ -160,8 +160,8 @@ func (app *Application) handleGroupCreate(w http.ResponseWriter, r *http.Request
 	ctx := r.Context()
 	userID := app.userID(ctx)
 	_ = r.ParseForm()
-	owner, ok := parseDiscordOwner(r.Form.Get("owner"))
-	if !ok || !discordManages(app.discordManageable(ctx, userID), owner) {
+	owner, ok := parseOrgOwner(r.Form.Get("owner"))
+	if !ok || !ownersInclude(app.manageableOwners(ctx, userID), owner) {
 		app.groupsBack(w, r, "Only a director can make groups for that corporation or alliance.")
 		return
 	}
@@ -243,7 +243,7 @@ func (app *Application) handleGroupMemberAdd(w http.ResponseWriter, r *http.Requ
 // happened. Each has to be a linked character in the corporation, or in
 // a corporation of the alliance, the group belongs to.
 func (app *Application) addToGroup(ctx context.Context, userID int64, group db.OrgGroup, characters []string) string {
-	owner := discordOwner{group.OwnerKind, group.OwnerID}
+	owner := orgOwner{group.OwnerKind, group.OwnerID}
 	allowed := map[int64]bool{}
 	if corps := app.ownerCorporations(ctx, owner); len(corps) > 0 {
 		rows, err := app.queries.ListCharactersInCorporations(ctx, corps)
@@ -308,7 +308,7 @@ func (app *Application) handleCorpMembersGroup(w http.ResponseWriter, r *http.Re
 	back := app.flashBack(w, r, path)
 	id, _ := strconv.ParseInt(r.Form.Get("group"), 10, 64)
 	group, err := app.queries.GetOrgGroup(ctx, id)
-	if err != nil || !discordManages(app.discordManageable(ctx, userID), discordOwner{group.OwnerKind, group.OwnerID}) {
+	if err != nil || !ownersInclude(app.manageableOwners(ctx, userID), orgOwner{group.OwnerKind, group.OwnerID}) {
 		back("That group is not yours to change.")
 		return
 	}
@@ -323,8 +323,8 @@ func (app *Application) handleCorpMembersGroup(w http.ResponseWriter, r *http.Re
 // put members in the corporation's groups: the groups, which members
 // are linked here, and which groups each is already in.
 func (app *Application) memberGroups(ctx context.Context, userID int64, view *corpMembersView) {
-	owner := discordOwner{ownerCorporation, view.CorpID}
-	if !discordManages(app.discordManageable(ctx, userID), owner) {
+	owner := orgOwner{ownerCorporation, view.CorpID}
+	if !ownersInclude(app.manageableOwners(ctx, userID), owner) {
 		return
 	}
 	view.CanGroup = true

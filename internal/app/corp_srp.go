@@ -309,7 +309,7 @@ func (app *Application) handleSRP(w http.ResponseWriter, r *http.Request) {
 		app.render(ctx, w, http.StatusOK, "srp.html", data)
 		return
 	}
-	st, err := app.discordStandingFor(ctx, userID)
+	st, err := app.standingFor(ctx, userID)
 	if err != nil {
 		logging.Errorf("srp: standing of user %d: %v", userID, err)
 		data.Error = "Could not load ship replacement; check the server log."

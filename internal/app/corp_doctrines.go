@@ -178,7 +178,7 @@ func (app *Application) handleDoctrines(w http.ResponseWriter, r *http.Request) 
 		app.render(ctx, w, http.StatusOK, "doctrines.html", data)
 		return
 	}
-	st, err := app.discordStandingFor(ctx, userID)
+	st, err := app.standingFor(ctx, userID)
 	if err != nil {
 		logging.Errorf("doctrines: standing of user %d: %v", userID, err)
 		data.Error = "Could not load the doctrines; check the server log."
@@ -345,7 +345,7 @@ func (app *Application) handleDoctrineCreate(w http.ResponseWriter, r *http.Requ
 	_ = r.ParseForm()
 	corp, _ := strconv.ParseInt(r.Form.Get("corporation"), 10, 64)
 	back := app.flashBack(w, r, corpAddress(doctrinesPath, corp))
-	st, err := app.discordStandingFor(ctx, userID)
+	st, err := app.standingFor(ctx, userID)
 	if err != nil || corp == 0 || !app.corpPermits(ctx, st, corp, permDoctrines) {
 		back("That corporation's doctrines are not yours to keep.")
 		return
@@ -383,7 +383,7 @@ func (app *Application) doctrineAccess(r *http.Request) (d db.Doctrine, reads, k
 	if err != nil {
 		return d, false, false
 	}
-	st, err := app.discordStandingFor(ctx, app.userID(ctx))
+	st, err := app.standingFor(ctx, app.userID(ctx))
 	if err != nil {
 		return d, false, false
 	}
@@ -717,7 +717,7 @@ func (app *Application) doctrineChosenFor(ctx context.Context, userID int64, raw
 	if err != nil {
 		return nil
 	}
-	st, err := app.discordStandingFor(ctx, userID)
+	st, err := app.standingFor(ctx, userID)
 	if err != nil || !app.corpPermits(ctx, st, d.CorporationID, permDoctrines) {
 		return nil
 	}
@@ -811,7 +811,7 @@ func (app *Application) handleCorpFits(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view.CorpOptions, view.CorpID, view.CorpName = options, corp, app.corpDisplayName(ctx, corp)
-	if st, err := app.discordStandingFor(ctx, userID); err == nil {
+	if st, err := app.standingFor(ctx, userID); err == nil {
 		view.Directs = st.directs(corp)
 	}
 	chosen := app.doctrineChosenFor(ctx, userID, r.URL.Query().Get("for"))

@@ -27,13 +27,13 @@ const (
 
 // directs reports whether the account has a director, or the CEO, of
 // a corporation.
-func (st discordStanding) directs(corp int64) bool {
+func (st orgStanding) directs(corp int64) bool {
 	return st.working && (st.ceoOf[corp] || st.eveRoles[corp]["director"])
 }
 
 // corpPermits reports whether an account of that standing may run one
 // of a corporation's programmes.
-func (app *Application) corpPermits(ctx context.Context, st discordStanding, corp int64, permission string) bool {
+func (app *Application) corpPermits(ctx context.Context, st orgStanding, corp int64, permission string) bool {
 	if st.directs(corp) {
 		return true
 	}
@@ -44,7 +44,7 @@ func (app *Application) corpPermits(ctx context.Context, st discordStanding, cor
 	if err != nil {
 		return false
 	}
-	return st.meets(discordOwner{ownerCorporation, corp}, db.DiscordRoleRule{Kind: rule.Kind, Ref: rule.Ref})
+	return st.meets(orgOwner{ownerCorporation, corp}, db.DiscordRoleRule{Kind: rule.Kind, Ref: rule.Ref})
 }
 
 // permissionChoice is one answer to "who else may run this".
@@ -61,7 +61,7 @@ func (app *Application) permissionChoices(ctx context.Context, corp int64, permi
 		current = rule.Kind + ":" + rule.Ref
 	}
 	out := []permissionChoice{{Value: "", Label: "Nobody else", Selected: current == ""}}
-	for _, who := range app.discordWhoChoices(ctx, discordOwner{ownerCorporation, corp}) {
+	for _, who := range app.whoChoices(ctx, orgOwner{ownerCorporation, corp}) {
 		if permissionRule(who.Value) {
 			out = append(out, permissionChoice{Value: who.Value, Label: who.Label, Selected: who.Value == current})
 		}
@@ -87,7 +87,7 @@ func (app *Application) setCorpPermission(ctx context.Context, corp int64, permi
 		}
 		return true
 	}
-	kind, ref, ok := app.parseRuleWho(ctx, discordOwner{ownerCorporation, corp}, raw)
+	kind, ref, ok := app.parseRuleWho(ctx, orgOwner{ownerCorporation, corp}, raw)
 	if !ok || !permissionRule(kind+":"+ref) {
 		return false
 	}

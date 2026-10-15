@@ -103,26 +103,12 @@ func (app *Application) discordUserToken(ctx context.Context, link db.DiscordLin
 	return renewed.Access, true
 }
 
-// belongs reports whether one of the account's working characters is
-// in the owner corporation, or in a corporation of the owner alliance.
-func (st discordStanding) belongs(owner discordOwner) bool {
-	if !st.working {
-		return false
-	}
-	for corp := range st.corps {
-		if st.within(owner, corp) {
-			return true
-		}
-	}
-	return false
-}
-
 // discordJoin puts an account that belongs to a server's owner into
 // the server, with the roles it is owed. joined is false, with no
 // error, whenever there is simply nothing to do: the server does not
 // add people, the account does not belong, or it has no usable token.
-func (app *Application) discordJoin(ctx context.Context, guild db.DiscordGuild, link db.DiscordLink, st discordStanding, wanted []string, now time.Time) (joined bool, err error) {
-	if !guild.AutoJoin || !st.belongs(discordOwner{guild.OwnerKind, guild.OwnerID}) {
+func (app *Application) discordJoin(ctx context.Context, guild db.DiscordGuild, link db.DiscordLink, st orgStanding, wanted []string, now time.Time) (joined bool, err error) {
+	if !guild.AutoJoin || !st.belongs(orgOwner{guild.OwnerKind, guild.OwnerID}) {
 		return false, nil
 	}
 	token, ok := app.discordUserToken(ctx, link, now)

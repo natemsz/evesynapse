@@ -107,7 +107,7 @@ func (app *Application) discordKickPlan(ctx context.Context, guild db.DiscordGui
 		}
 		// Connected, and owed a role here: stays.
 		if link, lerr := app.queries.GetDiscordLinkByDiscordID(ctx, m.User.ID); lerr == nil {
-			st, serr := app.discordStandingFor(ctx, link.UserID)
+			st, serr := app.standingFor(ctx, link.UserID)
 			if serr != nil {
 				return kickPlan{}, serr // not knowing is not a reason to remove
 			}

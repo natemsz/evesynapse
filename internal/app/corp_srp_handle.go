@@ -75,9 +75,9 @@ func (app *Application) srpActorFor(ctx context.Context, userID, corp int64) srp
 
 // srpHandler reports whether the account making a request may answer a
 // corporation's requests.
-func (app *Application) srpHandler(r *http.Request, corp int64) (discordStanding, bool) {
+func (app *Application) srpHandler(r *http.Request, corp int64) (orgStanding, bool) {
 	ctx := r.Context()
-	st, err := app.discordStandingFor(ctx, app.userID(ctx))
+	st, err := app.standingFor(ctx, app.userID(ctx))
 	return st, err == nil && corp != 0 && app.corpPermits(ctx, st, corp, permSRP)
 }
 
@@ -309,7 +309,7 @@ func (app *Application) notifySRPEvents(ctx context.Context, c *notifyCollector,
 	if err != nil || len(open) == 0 {
 		return
 	}
-	st, err := app.discordStandingFor(ctx, userID)
+	st, err := app.standingFor(ctx, userID)
 	if err != nil {
 		return
 	}

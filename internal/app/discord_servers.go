@@ -2,18 +2,15 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/discord"
-	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 )
 
@@ -45,121 +42,12 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	ownerCorporation = "corporation"
-	ownerAlliance    = "alliance"
-
 	// sessionDiscordInstall holds, while someone is on Discord's page
 	// adding the bot, whose server it is to be ("corporation:98000001").
 	sessionDiscordInstall = "discord_install_owner"
 
 	discordServersPath = "/discord/servers"
 )
-
-// discordOwner is a corporation or alliance that servers belong to.
-type discordOwner struct {
-	Kind string
-	ID   int64
-}
-
-func (o discordOwner) key() string { return o.Kind + ":" + strconv.FormatInt(o.ID, 10) }
-
-func parseDiscordOwner(raw string) (discordOwner, bool) {
-	kind, id, found := strings.Cut(raw, ":")
-	n, err := strconv.ParseInt(id, 10, 64)
-	if !found || err != nil || n <= 0 || (kind != ownerCorporation && kind != ownerAlliance) {
-		return discordOwner{}, false
-	}
-	return discordOwner{Kind: kind, ID: n}, true
-}
-
-// corpAlliance reports the alliance a corporation is in and that
-// alliance's executor corporation, from the stored corporation record.
-// Both are 0 for a corporation in no alliance, or one whose record has
-// not been fetched yet; the record is asked for then, so that a later
-// look finds it.
-func (app *Application) corpAlliance(ctx context.Context, corpID int64) (allianceID, executorCorpID int64) {
-	rec, err := app.queries.GetCorporationRecord(ctx, corpID)
-	if err != nil || rec.State != orgStateReady || rec.Payload == "" {
-		app.notePageWantFromContext(ctx, pageWantCorporation, corpID)
-		return 0, 0
-	}
-	var payload corporationRecordPayload
-	if json.Unmarshal([]byte(rec.Payload), &payload) != nil || payload.Corp.AllianceID == 0 {
-		return 0, 0
-	}
-	return payload.Corp.AllianceID, payload.Alliance.ExecutorCorporationID
-}
-
-// discordManageable lists the corporations and alliances whose servers
-// an account may manage, in the order of its characters.
-func (app *Application) discordManageable(ctx context.Context, userID int64) []discordOwner {
-	rows, err := app.queries.ListCharacterCorporationsByUser(ctx, userID)
-	if err != nil {
-		logging.Errorf("discord: characters of user %d: %v", userID, err)
-		return nil
-	}
-	working := map[int64]bool{}
-	if characters, cerr := app.queries.ListCharactersByUser(ctx, userID); cerr == nil {
-		for _, ch := range characters {
-			working[ch.CharacterID] = ch.LinkState == "ok"
-		}
-	}
-	seen := map[string]bool{}
-	var out []discordOwner
-	add := func(o discordOwner) {
-		if !seen[o.key()] {
-			seen[o.key()] = true
-			out = append(out, o)
-		}
-	}
-	for _, row := range rows {
-		if !working[row.CharacterID] || row.CorporationID == 0 {
-			continue
-		}
-		var roles esi.CharacterRoles
-		if !app.loadCorpSnapshot(ctx, row.CharacterID, esi.SnapCorpRoles, &roles) || !holdsDirector(roles.Roles) {
-			continue
-		}
-		add(discordOwner{ownerCorporation, row.CorporationID})
-		if alliance, executor := app.corpAlliance(ctx, row.CorporationID); alliance != 0 && executor == row.CorporationID {
-			add(discordOwner{ownerAlliance, alliance})
-		}
-	}
-	return out
-}
-
-// holdsDirector reports whether a character's corporation roles
-// include Director. This is the in-game role itself, not the
-// OPS_MANAGER_ROLES setting: who runs a Discord server is not a
-// thing to widen by configuration.
-func holdsDirector(roles []string) bool {
-	for _, role := range roles {
-		if strings.EqualFold(role, "Director") {
-			return true
-		}
-	}
-	return false
-}
-
-func discordManages(owners []discordOwner, o discordOwner) bool {
-	for _, owner := range owners {
-		if owner == o {
-			return true
-		}
-	}
-	return false
-}
-
-// ownerName is how an owner is shown.
-func (app *Application) ownerName(ctx context.Context, o discordOwner) string {
-	if o.Kind == ownerAlliance {
-		if name, ok := app.resolvedAllianceName(ctx, o.ID); ok && name != "" {
-			return name
-		}
-		return fmt.Sprintf("Alliance #%d", o.ID)
-	}
-	return app.corpDisplayName(ctx, o.ID)
-}
 
 // discordServersView is the /discord/servers page.
 type discordServersView struct {
@@ -179,9 +67,9 @@ type discordOwnerView struct {
 type discordServerView struct {
 	GuildID  string
 	Name     string
-	Rules    []discordRuleView  // who gets which role (discord_rules.go)
-	Who      []discordWhoChoice // what a new rule can be about
-	Roles    []discordChoice    // the roles a new rule can give
+	Rules    []discordRuleView // who gets which role (discord_rules.go)
+	Who      []whoChoice       // what a new rule can be about
+	Roles    []discordChoice   // the roles a new rule can give
 	Channels []discordChoice
 	// AutoJoin: members of the owner who have connected Discord are
 	// added to the server without an invite (discord_join.go).
@@ -238,15 +126,15 @@ func (app *Application) handleDiscordServers(w http.ResponseWriter, r *http.Requ
 	data := app.page(ctx)
 	userID := app.userID(ctx)
 	view := &discordServersView{CanInstall: app.discord != nil && app.discord.Config().CanInstall()}
-	owners := app.discordManageable(ctx, userID)
+	owners := app.manageableOwners(ctx, userID)
 	guilds, err := app.queries.ListDiscordGuilds(ctx)
 	if err != nil {
 		logging.Errorf("discord: list servers: %v", err)
 		data.Error = "Could not load the servers; check the server log."
 	}
-	var shown []discordOwner
+	var shown []orgOwner
 	if owner, options, ok := app.pickOwner(ctx, r, owners); ok {
-		shown, view.OwnerOptions = []discordOwner{owner}, options
+		shown, view.OwnerOptions = []orgOwner{owner}, options
 	}
 	for _, owner := range shown {
 		ov := discordOwnerView{Key: owner.key(), Kind: owner.Kind, Name: app.ownerName(ctx, owner)}
@@ -261,7 +149,7 @@ func (app *Application) handleDiscordServers(w http.ResponseWriter, r *http.Requ
 				sv.Unreachable = true
 			} else {
 				sv.Rules = app.discordRuleViews(ctx, guild, roles)
-				sv.Who = app.discordWhoChoices(ctx, owner)
+				sv.Who = app.whoChoices(ctx, owner)
 				sv.Roles = discordRoleChoices(roles, "")
 				if all, aerr := app.discord.GuildChannels(ctx, guild.GuildID); aerr == nil {
 					sv.Managed = app.discordChannelViews(ctx, guild.GuildID, all, roles)
@@ -288,7 +176,7 @@ func (app *Application) handleDiscordServers(w http.ResponseWriter, r *http.Requ
 				_, serr := app.queries.GetDiscordOpsShare(ctx, owner.ID)
 				view.Shares = append(view.Shares, discordShareView{
 					CorporationID: owner.ID, Name: ov.Name,
-					Alliance: app.ownerName(ctx, discordOwner{ownerAlliance, alliance}), On: serr == nil,
+					Alliance: app.ownerName(ctx, orgOwner{ownerAlliance, alliance}), On: serr == nil,
 				})
 			}
 		}
@@ -308,8 +196,8 @@ func (app *Application) handleDiscordServerAdd(w http.ResponseWriter, r *http.Re
 		return
 	}
 	_ = r.ParseForm()
-	owner, ok := parseDiscordOwner(r.Form.Get("owner"))
-	if !ok || !discordManages(app.discordManageable(ctx, userID), owner) {
+	owner, ok := parseOrgOwner(r.Form.Get("owner"))
+	if !ok || !ownersInclude(app.manageableOwners(ctx, userID), owner) {
 		back("Only a director can add the bot for that corporation or alliance.")
 		return
 	}
@@ -330,8 +218,8 @@ func (app *Application) handleDiscordServerAdd(w http.ResponseWriter, r *http.Re
 func (app *Application) discordFinishInstall(w http.ResponseWriter, r *http.Request, userID int64, ownerKey, code string) {
 	ctx := r.Context()
 	back := app.flashBack(w, r, ownerAddress(discordServersPath, ownerKey))
-	owner, ok := parseDiscordOwner(ownerKey)
-	if !ok || !discordManages(app.discordManageable(ctx, userID), owner) {
+	owner, ok := parseOrgOwner(ownerKey)
+	if !ok || !ownersInclude(app.manageableOwners(ctx, userID), owner) {
 		back("Only a director can add the bot for that corporation or alliance.")
 		return
 	}
@@ -364,7 +252,7 @@ func (app *Application) discordBack(w http.ResponseWriter, r *http.Request) func
 	_ = r.ParseForm()
 	key := r.Form.Get("owner")
 	if guild, err := app.queries.GetDiscordGuild(r.Context(), chi.URLParam(r, "guildID")); err == nil {
-		key = discordOwner{guild.OwnerKind, guild.OwnerID}.key()
+		key = orgOwner{guild.OwnerKind, guild.OwnerID}.key()
 	} else if corp := r.Form.Get("corporation"); key == "" && corp != "" {
 		key = ownerCorporation + ":" + corp
 	}
@@ -382,7 +270,7 @@ func (app *Application) discordGuildFor(r *http.Request, userID int64) (db.Disco
 	if err != nil {
 		return db.DiscordGuild{}, false
 	}
-	if !discordManages(app.discordManageable(r.Context(), userID), discordOwner{guild.OwnerKind, guild.OwnerID}) {
+	if !ownersInclude(app.manageableOwners(r.Context(), userID), orgOwner{guild.OwnerKind, guild.OwnerID}) {
 		return db.DiscordGuild{}, false
 	}
 	return guild, true
@@ -489,7 +377,7 @@ func (app *Application) handleDiscordOpsShare(w http.ResponseWriter, r *http.Req
 	back := app.discordBack(w, r)
 	_ = r.ParseForm()
 	corp, _ := strconv.ParseInt(r.Form.Get("corporation"), 10, 64)
-	if corp <= 0 || !discordManages(app.discordManageable(ctx, userID), discordOwner{ownerCorporation, corp}) {
+	if corp <= 0 || !ownersInclude(app.manageableOwners(ctx, userID), orgOwner{ownerCorporation, corp}) {
 		back("Only a director of that corporation can decide that.")
 		return
 	}

@@ -2417,6 +2417,11 @@ func (app *Application) handleFitSave(w http.ResponseWriter, r *http.Request) {
 		}
 		if !isDraft {
 			isPublic = req.IsPublic
+			if !moduleCompiledIn("publicfits") {
+				// Making a fit public is the Public Fits module's surface;
+				// without it a saved fit keeps the flag it had.
+				isPublic = row.IsPublic
+			}
 		}
 		if err := app.queries.UpdateLocalFitting(ctx, db.UpdateLocalFittingParams{
 			Name: name, ShipTypeID: req.Fit.ShipTypeID, ItemsJson: string(raw),
@@ -2442,7 +2447,7 @@ func (app *Application) handleFitSave(w http.ResponseWriter, r *http.Request) {
 	} else {
 		isDraft = !(req.Promote && name != "Unnamed fit")
 		if !isDraft {
-			isPublic = req.IsPublic
+			isPublic = req.IsPublic && moduleCompiledIn("publicfits")
 		}
 		row, err := app.queries.CreateLocalFitting(ctx, db.CreateLocalFittingParams{
 			UserID: userID, Name: name, ShipTypeID: req.Fit.ShipTypeID,
@@ -2466,7 +2471,7 @@ func (app *Application) handleFitSave(w http.ResponseWriter, r *http.Request) {
 	}
 	// A public fit's page is built now, on its owner's request,
 	// never on a visitor's.
-	if isPublic && !isDraft {
+	if isPublic && !isDraft && moduleCompiledIn("publicfits") {
 		app.storePublicFitPageNow(ctx, id)
 	}
 	writeFitJSON(w, map[string]any{"id": id, "savedAt": rfc3339(now), "isDraft": isDraft})

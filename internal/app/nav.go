@@ -103,7 +103,6 @@ var sectionNav = map[string][]navEntry{
 	"fitting": {
 		{"/fittings/", "Ship Workbench", []string{"fittings.html"}},
 		{"/fittings/saved/", "My Loadouts", []string{"fittings_saved.html"}},
-		{"/fittings/public/", "Public Loadouts Browser", []string{"fittings_public.html"}},
 	},
 	"industry": {
 		{"/industry/", "Industry", []string{"industry.html"}},

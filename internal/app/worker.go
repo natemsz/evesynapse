@@ -293,11 +293,11 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		c.limited = true
 	}
 
-	// Public fit pages missing or out of date are built here, not
-	// on a visitor's request, and the views counted since the last
-	// cycle are written in one batch.
-	app.refreshPublicFitPages(ctx)
-	app.flushFitViews(ctx)
+	// Module jobs that follow the guide refresh (the public fits
+	// module's: pages missing or out of date are built here, not on a
+	// visitor's request, and the views counted since the last cycle are
+	// written in one batch).
+	app.runModuleJobs(ctx, module.AfterGuidePrices, nil)
 
 	// Industry cost indices ride the same window: one public
 	// call keeps the planner's installation fees honest, and a

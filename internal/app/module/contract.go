@@ -3,9 +3,11 @@ package module
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"html/template"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -70,6 +72,97 @@ func QueryValue(q map[string][]string, key string) string {
 	return ""
 }
 
+// NamedChoice is one pickable thing a page offers: an id, its name,
+// and whether it is the one chosen.
+type NamedChoice struct {
+	ID       int64
+	Name     string
+	Selected bool
+}
+
+// PublicFitsPath is where the public fits browser lives.
+const PublicFitsPath = "/fittings/public/"
+
+// PublicFitBody is what the fitting side derives from a public fit for
+// its page. Sections and Sim are the fitting view types, carried
+// opaquely: the template reads them, the module never does.
+type PublicFitBody struct {
+	PriceKnown bool
+	PriceRaw   float64
+	PriceTotal string
+	Sections   any
+	Sim        any
+	EFT        string
+	// Preparing: the stored page for this version of the fit is not
+	// built yet (the worker builds it within a cycle or two).
+	Preparing bool
+}
+
+// PublicFitCard is one fit on the browser, a ship page or the fit page
+// header: stored aggregates only, never a per-render computation.
+type PublicFitCard struct {
+	ID          int64
+	Name        string
+	Ship        string
+	ShipTypeID  int64
+	Hull        string
+	Author      string
+	Mine        bool
+	Stars       float64
+	StarCount   int64
+	Views       int64
+	Price       float64
+	PriceKnown  bool
+	PriceLine   string
+	Tags        []string
+	Updated     time.Time
+	UpdatedLine string
+	FitURL      string
+	// OpenToolURL opens the fit in the simulator (own fits via
+	// ?local=, others via ?public=): the doctrine keepers' flow.
+	OpenToolURL string
+	// AddField names this card’s hidden input on the keeper’s
+	// add-to-doctrine form: local for own fits, public otherwise.
+	AddField string
+}
+
+// PublicFitCardOf renders one list row; tags decode from the stored
+// document.
+func PublicFitCardOf(row db.ListPublicFitsRow, userID int64) PublicFitCard {
+	id := strconv.FormatInt(row.ID, 10)
+	card := PublicFitCard{
+		ID: row.ID, Name: row.Name, Ship: row.ShipName, ShipTypeID: row.ShipTypeID,
+		Hull: row.Hull, Author: row.AuthorName, Mine: userID > 0 && row.UserID == userID,
+		Views: row.ViewCount, Price: row.TotalPrice, PriceKnown: row.TotalPrice > 0,
+		Updated: row.UpdatedAt, UpdatedLine: row.UpdatedAt.UTC().Format(time.RFC3339),
+		FitURL: PublicFitsPath + "fit/" + id + "/",
+	}
+	if card.Mine {
+		card.OpenToolURL = "/fittings/?local=" + id + "#fit-editor"
+		card.AddField = "local"
+	} else {
+		card.OpenToolURL = "/fittings/?public=" + id + "#fit-editor"
+		card.AddField = "public"
+	}
+	if card.PriceKnown {
+		card.PriceLine = esi.FormatISK(row.TotalPrice) + " ISK"
+	}
+	if card.Ship == "" {
+		card.Ship = "Type #" + strconv.FormatInt(row.ShipTypeID, 10)
+	}
+	if row.RatingCount > 0 {
+		card.Stars = float64(row.RatingSum) / float64(row.RatingCount)
+		card.StarCount = row.RatingCount
+	}
+	var doc struct {
+		Tags []string `json:"tags,omitempty"`
+	}
+	if json.Unmarshal([]byte(row.ItemsJson), &doc) == nil {
+		card.Tags = doc.Tags
+	}
+	return card
+}
+
 // Page declares a template file rendered by the module, its default section,
 // and any client scripts that must be loaded for it.
 type Page struct {
@@ -95,6 +188,14 @@ type Scope struct {
 	Unlocks string
 }
 
+// SitemapRow is one stored page a module lists in sitemap.xml.
+type SitemapRow struct {
+	Path       string
+	LastMod    string // 2006-01-02, "" when unknown
+	ChangeFreq string
+	Priority   string
+}
+
 // SitemapEntry is one public page a module adds to sitemap.xml.
 type SitemapEntry struct {
 	Path       string // e.g. "/industry/pi/"
@@ -109,6 +210,9 @@ type JobPhase string
 const (
 	// AfterMarket runs the job after the market data pass.
 	AfterMarket JobPhase = "market"
+	// AfterGuidePrices runs it right after the market guide refresh,
+	// ahead of the character pass.
+	AfterGuidePrices JobPhase = "guide"
 	// AfterNotifications runs it last, with everything the cycle
 	// fetched already stored and this cycle's notifications made.
 	AfterNotifications JobPhase = "notifications"
@@ -393,6 +497,34 @@ type Deps interface {
 	// when unknown (and the page wants it resolved).
 	TypeNameOrID(ctx context.Context, typeID int64) string
 
+	// --- public fit upkeep: the work that keeps anonymous renders stored-only ---
+
+	// RefreshPublicFitPages builds the stored pages that are missing or
+	// out of date and reports how many it built; FlushFitViews writes the
+	// views counted since the last flush. Both are the fitting side’s to
+	// do, run by the public fits module’s worker jobs.
+	RefreshPublicFitPages(ctx context.Context) int
+	FlushFitViews(ctx context.Context)
+
+	// --- public fits (the fitting side keeps the fit-derived parts) ---------
+
+	// DoctrineChosenFor reads the "for" of an address: the doctrine a
+	// keeper is choosing fits for, nil unless the account keeps it.
+	DoctrineChosenFor(ctx context.Context, userID int64, raw string) *NamedChoice
+	// FleetRoles is the fleet-role taxonomy a fit’s tags are matched to.
+	FleetRoles() []string
+	// FitViewsPending counts a view of a public fit (a prefetch is not a
+	// view) and returns the views not yet written to its row.
+	FitViewsPending(ctx context.Context, fitID int64) int64
+	// PublicFitBody is the fit-derived part of a public fit’s page: its
+	// price, and the stored module groups, read-only simulation and EFT.
+	PublicFitBody(ctx context.Context, fitID int64, updatedAt time.Time, itemsJSON string, shipTypeID int64) PublicFitBody
+	// PublicPageURL makes a site path an absolute address, "" when the
+	// install has no public address.
+	PublicPageURL(path string) string
+	// HeadMeta composes the escaped description and Open Graph tags.
+	HeadMeta(title, description, pageURL string) template.HTML
+
 	// --- the session, pages and the site ---------------------------------
 
 	// Sessions is the session manager (OAuth state, flash messages).
@@ -473,5 +605,8 @@ type Module struct {
 	// Sitemap lists the module's public pages, so a build without the
 	// module leaves them out of sitemap.xml.
 	Sitemap []SitemapEntry
-	Pages   []Page
+	// SitemapRows adds pages read from the database (the top public
+	// fits, for one); called when the sitemap is built.
+	SitemapRows func(ctx context.Context, deps Deps) ([]SitemapRow, error)
+	Pages       []Page
 }

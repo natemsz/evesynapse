@@ -713,10 +713,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.With(anonPages).Get("/", app.handleFittings)
 		r.With(anonSim).Post("/simulate/", app.handleFitSimulate)
 		r.With(anonPages).Get("/picker.json", app.handleFitPickerJSON)
-		r.With(anonPages).Get("/public/", app.handlePublicFits)
-		r.With(anonPages).Get("/public/suggest", app.handlePublicFitSuggest)
-		r.With(anonPages).Get("/public/fit/{fitID}/", app.handlePublicFitPage)
-		r.With(app.requireAuth).Post("/public/fit/{fitID}/rate", app.handlePublicFitRate)
 		r.Group(func(r chi.Router) {
 			r.Use(app.requireAuth)
 			r.Get("/saved/", app.handleFittingsSaved)
@@ -1165,6 +1161,31 @@ func (app *Application) AgeText(t time.Time) string { return ageText(time.Now(),
 func (app *Application) TypeNameOrID(ctx context.Context, typeID int64) string {
 	return app.typeNameOrID(ctx, typeID)
 }
+
+func (app *Application) DoctrineChosenFor(ctx context.Context, userID int64, raw string) *module.NamedChoice {
+	return app.doctrineChosenFor(ctx, userID, raw)
+}
+
+func (app *Application) FleetRoles() []string { return opFleetRoles }
+
+func (app *Application) FitViewsPending(ctx context.Context, fitID int64) int64 {
+	if isPrefetch(ctx) {
+		return app.fitViews.peek(fitID)
+	}
+	return app.fitViews.count(fitID)
+}
+
+func (app *Application) PublicPageURL(path string) string { return app.publicPageURL(path) }
+
+func (app *Application) HeadMeta(title, description, pageURL string) template.HTML {
+	return headMeta(title, description, pageURL)
+}
+
+func (app *Application) RefreshPublicFitPages(ctx context.Context) int {
+	return app.refreshPublicFitPages(ctx)
+}
+
+func (app *Application) FlushFitViews(ctx context.Context) { app.flushFitViews(ctx) }
 
 func (app *Application) AnonPages() func(http.Handler) http.Handler {
 	pageThrottle, _ := app.anonThrottles()

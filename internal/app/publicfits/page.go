@@ -1,23 +1,19 @@
-package app
+package publicfits
 
 import (
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"html"
-	"html/template"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
-	"evesynapse/internal/esi"
-	"evesynapse/internal/fit"
 	"evesynapse/internal/logging"
 )
 
@@ -30,7 +26,6 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	publicFitsPath = "/fittings/public/"
 	// publicFitsPerPage bounds every browser page; the count
 	// query beside the list query feeds the page links.
 	publicFitsPerPage = 24
@@ -84,7 +79,7 @@ type publicFitFilters struct {
 
 // parsePublicFitFilters reads the browser address; unknown sorts
 // fall back to the default, bad numbers to blank.
-func (app *Application) parsePublicFitFilters(ctx context.Context, query url.Values) publicFitFilters {
+func (app *page) parsePublicFitFilters(ctx context.Context, query url.Values) publicFitFilters {
 	f := publicFitFilters{
 		Q:       strings.TrimSpace(query.Get("q")),
 		Role:    strings.TrimSpace(query.Get("role")),
@@ -160,7 +155,7 @@ func (app *Application) parsePublicFitFilters(ctx context.Context, query url.Val
 // resolveFitModuleType maps a typed module name to its type ID:
 // exact SDE name match only, so a filter never silently means a
 // different module than the one named.
-func (app *Application) resolveFitModuleType(ctx context.Context, name string) (int64, bool) {
+func (app *page) resolveFitModuleType(ctx context.Context, name string) (int64, bool) {
 	if name == "" {
 		return 0, false
 	}
@@ -192,73 +187,11 @@ func (f publicFitFilters) countParams() db.CountPublicFitsParams {
 	}
 }
 
-// publicFitCard is one fit on the browser or the fit page header:
-// stored aggregates only, never a per-render computation.
-type publicFitCard struct {
-	ID          int64
-	Name        string
-	Ship        string
-	ShipTypeID  int64
-	Hull        string
-	Author      string
-	Mine        bool
-	Stars       float64
-	StarCount   int64
-	Views       int64
-	Price       float64
-	PriceKnown  bool
-	PriceLine   string
-	Tags        []string
-	Updated     time.Time
-	UpdatedLine string
-	FitURL      string
-	// OpenToolURL opens the fit in the simulator (own fits via
-	// ?local=, others via ?public=): the doctrine keepers' flow.
-	OpenToolURL string
-	// AddField names this card's hidden input on the keeper's
-	// add-to-doctrine form: local for own fits, public otherwise.
-	AddField string
-}
-
-// publicFitCardOf renders one list row; tags decode from the
-// stored document.
-func publicFitCardOf(row db.ListPublicFitsRow, userID int64) publicFitCard {
-	card := publicFitCard{
-		ID: row.ID, Name: row.Name, Ship: row.ShipName, ShipTypeID: row.ShipTypeID,
-		Hull: row.Hull, Author: row.AuthorName, Mine: userID > 0 && row.UserID == userID,
-		Views: row.ViewCount, Price: row.TotalPrice, PriceKnown: row.TotalPrice > 0,
-		Updated: row.UpdatedAt, UpdatedLine: rfc3339(row.UpdatedAt),
-		FitURL: publicFitsPath + "fit/" + idString(row.ID) + "/",
-	}
-	if card.Mine {
-		card.OpenToolURL = "/fittings/?local=" + idString(row.ID) + "#fit-editor"
-		card.AddField = "local"
-	} else {
-		card.OpenToolURL = "/fittings/?public=" + idString(row.ID) + "#fit-editor"
-		card.AddField = "public"
-	}
-	if card.PriceKnown {
-		card.PriceLine = esi.FormatISK(row.TotalPrice) + " ISK"
-	}
-	if card.Ship == "" {
-		card.Ship = "Type #" + idString(row.ShipTypeID)
-	}
-	if row.RatingCount > 0 {
-		card.Stars = float64(row.RatingSum) / float64(row.RatingCount)
-		card.StarCount = row.RatingCount
-	}
-	var doc fitDoc
-	if json.Unmarshal([]byte(row.ItemsJson), &doc) == nil {
-		card.Tags = doc.Tags
-	}
-	return card
-}
-
 // publicFitsView is the browser page: the filter bar's current
 // state, facet chips, sort links, one bounded page of cards.
 type publicFitsView struct {
 	Filters     publicFitFilters
-	Cards       []publicFitCard
+	Cards       []module.PublicFitCard
 	Total       int64
 	Page        int
 	Pages       int
@@ -277,15 +210,14 @@ type publicFitsView struct {
 	Empty       string
 	// For is the doctrine a keeper is choosing fits for, when
 	// the page was opened from one (?for=, keepers only).
-	For  *opChoice
+	For  *module.NamedChoice
 	Self string
 }
 
-// browser describes the public browser's address as a fitBrowser, so
-// its links come from the one address builder the fit browsers share
-// (fitBrowser.address). Defaults (newest first, any faction, page
-// one) are left out of the address.
-func (f publicFitFilters) browser(keepPage bool) *fitBrowser {
+// browser describes the public browser's address, so its links come from
+// one address builder. Defaults (newest first, any faction, page one) are
+// left out of the address.
+func (f publicFitFilters) browser(keepPage bool) *browserAddr {
 	num := func(v float64) string {
 		if v <= 0 {
 			return ""
@@ -308,21 +240,69 @@ func (f publicFitFilters) browser(keepPage bool) *fitBrowser {
 	if faction == "any" {
 		faction = ""
 	}
-	sorts := make([]browseSort, len(publicFitSorts))
-	for i, s := range publicFitSorts {
-		sorts[i] = browseSort{Key: s.Key, Label: s.Label}
-	}
-	filter := func(key, value string) fitFilter { return fitFilter{Key: key, Value: value} }
-	return &fitBrowser{
-		Path: publicFitsPath, Q: f.Q, Include: f.IncludeName, Exclude: f.ExcludeName,
-		Sort: f.Sort, Sorts: sorts,
-		Filters: []fitFilter{
+	filter := func(key, value string) addrFilter { return addrFilter{Key: key, Value: value} }
+	return &browserAddr{
+		Path: module.PublicFitsPath, Q: f.Q, Include: f.IncludeName, Exclude: f.ExcludeName,
+		Sort: f.Sort, DefaultSort: publicFitSorts[0].Key,
+		Filters: []addrFilter{
 			filter("role", f.Role), filter("hull", f.Hull), filter("hullq", f.HullQ),
 			filter("faction", faction), filter("tag", f.Tag), filter("updated", updated),
 			filter("stars", num(f.MinStars)), filter("maxprice", num(f.MaxPrice)),
 			filter("alpha", alpha), filter("page", page),
 		},
 	}
+}
+
+// browserAddr is the public browser's address: where it lives and the
+// choices every link keeps.
+type browserAddr struct {
+	Path        string
+	Q           string
+	Include     string
+	Exclude     string
+	Sort        string
+	DefaultSort string
+	Filters     []addrFilter
+}
+
+type addrFilter struct{ Key, Value string }
+
+// address is the browser's address with some choices changed; an empty
+// value takes a choice off.
+func (b *browserAddr) address(changes map[string]string) string {
+	query := url.Values{}
+	set := func(key, value string) {
+		if changed, ok := changes[key]; ok {
+			value = changed
+		}
+		if value != "" {
+			query.Set(key, value)
+		}
+	}
+	set("q", b.Q)
+	set("include", b.Include)
+	set("exclude", b.Exclude)
+	if b.Sort != b.DefaultSort {
+		set("sort", b.Sort)
+	} else {
+		set("sort", "")
+	}
+	for _, f := range b.Filters {
+		set(f.Key, f.Value)
+	}
+	if len(query) == 0 {
+		return b.Path
+	}
+	return b.Path + "?" + query.Encode()
+}
+
+// facetChip is one link in the browser: a filter value with its count,
+// a sort order, or a chosen filter to take off again.
+type facetChip struct {
+	Label string
+	Count int
+	URL   string
+	On    bool
 }
 
 // publicFitURL is the browser address with some choices changed;
@@ -342,17 +322,17 @@ func (f publicFitFilters) publicFitURL(changes map[string]string, keepPage bool)
 // handlePublicFits renders the anonymous fit browser: one bounded
 // SQL page of stored rows, facet chips from bounded aggregate
 // reads, no per-user queries when nobody is signed in.
-func (app *Application) handlePublicFits(w http.ResponseWriter, r *http.Request) {
+func (app *page) handlePublicFits(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.publicPage(ctx)
-	userID := app.userID(ctx)
+	data := &PageData{ShellData: app.deps.PublicShell(ctx)}
+	userID := app.deps.UserID(ctx)
 	filters := app.parsePublicFitFilters(ctx, r.URL.Query())
 
 	total, err := app.queries.CountPublicFits(ctx, filters.countParams())
 	if err != nil {
 		logging.Errorf("public fits: count: %v", err)
 		data.Error = "Could not load public fits; check the server log."
-		app.render(ctx, w, http.StatusOK, "fittings_public.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "fittings_public.html", data)
 		return
 	}
 	pages := int((total + publicFitsPerPage - 1) / publicFitsPerPage)
@@ -367,21 +347,21 @@ func (app *Application) handlePublicFits(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		logging.Errorf("public fits: list: %v", err)
 		data.Error = "Could not load public fits; check the server log."
-		app.render(ctx, w, http.StatusOK, "fittings_public.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "fittings_public.html", data)
 		return
 	}
-	cards := make([]publicFitCard, 0, len(rows))
+	cards := make([]module.PublicFitCard, 0, len(rows))
 	for _, row := range rows {
-		cards = append(cards, publicFitCardOf(row, userID))
+		cards = append(cards, module.PublicFitCardOf(row, userID))
 	}
 	// doctrineChosenFor returns nil unless the account keeps the
 	// doctrine, so a non-nil For is the keeper flag itself.
-	chosen := app.doctrineChosenFor(ctx, userID, r.URL.Query().Get("for"))
+	chosen := app.deps.DoctrineChosenFor(ctx, userID, r.URL.Query().Get("for"))
 	view := &publicFitsView{
 		Filters: filters, Cards: cards, Total: total, Page: page, Pages: pages,
-		Roles: opFleetRoles,
+		Roles: app.deps.FleetRoles(),
 		Ages:  publicFitAges, DefaultSort: publicFitDefaultSort,
-		SuggestURL: publicFitsPath + "suggest",
+		SuggestURL: module.PublicFitsPath + "suggest",
 		Empty:      `Nobody has made a fit public yet. To share one of yours, tick "Make public" on it in the fitting tool.`,
 		For:        chosen,
 	}
@@ -428,52 +408,41 @@ func (app *Application) handlePublicFits(w http.ResponseWriter, r *http.Request)
 		logging.Errorf("public fits: tag facets: %v", err)
 	}
 	data.PublicFits = view
-	app.render(ctx, w, http.StatusOK, "fittings_public.html", data)
+	app.deps.Render(ctx, w, http.StatusOK, "fittings_public.html", data)
 }
 
 // handlePublicFitSuggest feeds the public browser search box
 // (GET /fittings/public/suggest?q=): one bounded SQL read.
-func (app *Application) handlePublicFitSuggest(w http.ResponseWriter, r *http.Request) {
+func (app *page) handlePublicFitSuggest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := app.userID(ctx)
+	userID := app.deps.UserID(ctx)
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if len(q) < 2 {
-		writeSuggestJSON(w, nil)
+		app.deps.WriteSuggest(w, nil)
 		return
 	}
 	rows, err := app.queries.SearchPublicFittings(ctx, db.SearchPublicFittingsParams{Q: q, UserID: userID})
 	if err != nil {
 		logging.Errorf("public fits: suggest: %v", err)
-		writeSuggestJSON(w, nil)
+		app.deps.WriteSuggest(w, nil)
 		return
 	}
-	out := make([]suggestItem, 0, len(rows))
+	out := make([]module.SuggestItem, 0, len(rows))
 	for _, row := range rows {
 		ship := row.ShipName
 		if ship == "" {
-			ship = app.typeNameOrID(ctx, row.ShipTypeID)
+			ship = app.deps.TypeNameOrID(ctx, row.ShipTypeID)
 		}
 		label := ship
 		if author := row.AuthorName; author != "" {
 			label += " · by " + author
 		}
-		out = append(out, suggestItem{
+		out = append(out, module.SuggestItem{
 			Name: row.Name, Label: label,
-			URL: publicFitsPath + "fit/" + idString(row.ID) + "/",
+			URL: module.PublicFitsPath + "fit/" + idString(row.ID) + "/",
 		})
 	}
-	writeSuggestJSON(w, out)
-}
-
-// publicPage is the page data anonymous-safe routes start from:
-// the session's login state, never assumed.
-func (app *Application) publicPage(ctx context.Context) pageData {
-	loggedIn := app.sessions.GetBool(ctx, sessionAuthenticated)
-	return pageData{
-		LoggedIn:      loggedIn,
-		CharacterName: app.sessions.GetString(ctx, sessionCharacterName),
-		SSOConfigured: app.cfg.SSOConfigured(),
-	}
+	app.deps.WriteSuggest(w, out)
 }
 
 // publicFitView is one stable public fit page: the stored fit,
@@ -482,10 +451,10 @@ func (app *Application) publicPage(ctx context.Context) pageData {
 // workbench view the fitting tool renders, shown read-only.
 // Sections, Sim and EFT come from the stored page.
 type publicFitView struct {
-	Card        publicFitCard
+	Card        module.PublicFitCard
 	Description string
-	Sections    []fittingGroup
-	Sim         *fitSimView
+	Sections    any // the stored page's module groups (core's fitting view)
+	Sim         any // the stored read-only workbench view
 	EFT         string
 	AvgStars    float64
 	StarCount   int64
@@ -498,162 +467,13 @@ type publicFitView struct {
 	ShareReddit  string
 }
 
-// publicFitSections groups a stored document's items the way the
-// saved-fits list does, resolving every name from the local
-// caches. Classification needs the dogma snapshot; without it
-// every line lands in Other rather than vanishing.
-func (app *Application) publicFitSections(ctx context.Context, doc *fitDoc) []fittingGroup {
-	typeIDs := []int64{doc.ShipTypeID}
-	for _, it := range doc.Items {
-		typeIDs = append(typeIDs, it.TypeID)
-	}
-	names := app.esi.CachedTypeNames(ctx, typeIDs)
-	nameOf := func(typeID int64) string {
-		if n, ok := names[typeID]; ok && n != "" {
-			return n
-		}
-		return "Type #" + idString(typeID)
-	}
-	familyOf := map[int64]string{}
-	if snap, err := fit.LoadSnapshot(ctx, app.queries, typeIDs); err == nil && snap != nil {
-		for _, id := range typeIDs {
-			familyOf[id] = fitSlotFamilyOf(snap, id)
-		}
-	}
-	familyLabel := map[string]string{
-		fitFamilyHigh: "High slots", fitFamilyMedium: "Medium slots",
-		fitFamilyLow: "Low slots", fitFamilyRig: "Rig slots",
-		fitFamilySubsystem: "Subsystem slots", fitFamilyDrone: "Drone bay",
-		fitFamilyCargo: "Cargo hold",
-	}
-	byFamily := map[string][]fittingItemRow{}
-	order := []string{}
-	for _, it := range doc.Items {
-		family := familyOf[it.TypeID]
-		if _, ok := familyLabel[family]; !ok {
-			family = "other"
-		}
-		if _, ok := byFamily[family]; !ok {
-			order = append(order, family)
-		}
-		byFamily[family] = append(byFamily[family], fittingItemRow{
-			Name: nameOf(it.TypeID), TypeID: it.TypeID,
-			Quantity: esi.FormatInt(int64(it.Qty)),
-		})
-	}
-	ordered := []string{fitFamilyHigh, fitFamilyMedium, fitFamilyLow, fitFamilyRig, fitFamilySubsystem, fitFamilyDrone, fitFamilyCargo}
-	seen := map[string]bool{}
-	var sections []fittingGroup
-	for _, family := range ordered {
-		items, ok := byFamily[family]
-		if !ok {
-			continue
-		}
-		seen[family] = true
-		sections = append(sections, fittingGroup{Label: familyLabel[family], Items: items})
-	}
-	for _, family := range order {
-		if seen[family] {
-			continue
-		}
-		sections = append(sections, fittingGroup{Label: "Other", Items: byFamily[family]})
-	}
-	return sections
-}
-
-// fitCostView is what a fit costs, as every page shows it: the
-// fitting tool's stats panel, the public fit page and its card, and
-// the browser's price filter all read this one composition.
-type fitCostView struct {
-	Known    bool
-	Hull     string // the ship itself
-	Parts    string // every line on the hull: modules, rigs, drones, cargo
-	Total    string
-	TotalRaw float64
-	HullRaw  float64
-	PartsRaw float64
-	Unpriced int // lines the guide has no price for (hull included)
-}
-
-// fitUnitPrice is the guide's price for one unit: the market
-// average, else the adjusted price CCP publishes for every type.
-// RepriceLocalFittings makes the same choice in SQL: change both.
-func fitUnitPrice(prices map[int64]esi.MarketPrice, typeID int64) (float64, bool) {
-	p, ok := prices[typeID]
-	if !ok {
-		return 0, false
-	}
-	if p.AveragePrice > 0 {
-		return p.AveragePrice, true
-	}
-	if p.AdjustedPrice > 0 {
-		return p.AdjustedPrice, true
-	}
-	return 0, false
-}
-
-// fitCost prices a document from the guide mirror: the hull plus
-// every item line. Known is false when nothing in it is priced
-// (guide not warmed yet); the browser treats a 0 total as unknown.
-func (app *Application) fitCost(ctx context.Context, doc *fitDoc) *fitCostView {
-	c := &fitCostView{}
-	prices := app.valuationPrices(ctx)
-	if len(prices) == 0 || doc == nil || doc.ShipTypeID == 0 {
-		return c
-	}
-	if p, ok := fitUnitPrice(prices, doc.ShipTypeID); ok {
-		c.HullRaw = p
-	} else {
-		c.Unpriced++
-	}
-	for _, it := range doc.Items {
-		if p, ok := fitUnitPrice(prices, it.TypeID); ok {
-			c.PartsRaw += float64(it.Qty) * p
-		} else {
-			c.Unpriced++
-		}
-	}
-	c.TotalRaw = c.HullRaw + c.PartsRaw
-	if c.TotalRaw > 0 {
-		c.Known = true
-		c.Hull = esi.FormatISK(c.HullRaw)
-		c.Parts = esi.FormatISK(c.PartsRaw)
-		c.Total = esi.FormatISK(c.TotalRaw)
-	}
-	return c
-}
-
-// fitDocPrice is fitCost's total, stored on the fit for the
-// browser's max-price filter and sorts (0 = unknown). The worker
-// makes the same sum in SQL whenever the guide refreshes
-// (RepriceLocalFittings): change both together.
-func (app *Application) fitDocPrice(ctx context.Context, doc *fitDoc) float64 {
-	return app.fitCost(ctx, doc).TotalRaw
-}
-
-// headMeta composes escaped description and Open Graph tags for a
-// public page; values are attribute-escaped at build time. og:url
-// is left out when the page has no absolute address (pageURL "").
-func headMeta(title, description, pageURL string) template.HTML {
-	esc := html.EscapeString
-	var b strings.Builder
-	b.WriteString(`<meta name="description" content="` + esc(description) + `">` + "\n")
-	b.WriteString(`<meta property="og:title" content="` + esc(title) + `">` + "\n")
-	b.WriteString(`<meta property="og:description" content="` + esc(description) + `">` + "\n")
-	b.WriteString(`<meta property="og:type" content="website">` + "\n")
-	if pageURL != "" {
-		b.WriteString(`<meta property="og:url" content="` + esc(pageURL) + `">` + "\n")
-	}
-	return template.HTML(b.String())
-}
-
 // handlePublicFitPage renders one stable public fit page:
 // server-rendered modules, EFT, share links and the rating
 // widget. Anonymous readers see everything but the rate form.
-func (app *Application) handlePublicFitPage(w http.ResponseWriter, r *http.Request) {
+func (app *page) handlePublicFitPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.publicPage(ctx)
-	userID := app.userID(ctx)
+	data := &PageData{ShellData: app.deps.PublicShell(ctx)}
+	userID := app.deps.UserID(ctx)
 
 	fitID, err := strconv.ParseInt(chi.URLParam(r, "fitID"), 10, 64)
 	if err != nil || fitID <= 0 {
@@ -668,37 +488,34 @@ func (app *Application) handlePublicFitPage(w http.ResponseWriter, r *http.Reque
 		}
 		logging.Errorf("public fit %d: load: %v", fitID, err)
 		data.Error = "Could not load that fit; check the server log."
-		app.render(ctx, w, http.StatusOK, "fit_public.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "fit_public.html", data)
 		return
 	}
 	// Counted in memory; the worker writes views in batches. A
 	// prefetch is not a view (core_prefetch.go).
-	views := row.ViewCount + app.fitViews.peek(fitID)
-	if !isPrefetch(ctx) {
-		views = row.ViewCount + app.fitViews.count(fitID)
-	}
+	views := row.ViewCount + app.deps.FitViewsPending(ctx, fitID)
 	var doc fitDoc
 	if json.Unmarshal([]byte(row.ItemsJson), &doc) != nil {
 		http.NotFound(w, r)
 		return
 	}
-	ship := app.typeNameOrID(ctx, row.ShipTypeID)
+	ship := app.deps.TypeNameOrID(ctx, row.ShipTypeID)
 	author := row.AuthorName
 	// The page prices the fit now, the same way the fitting tool's
 	// stats panel does: hull plus every line, one composition.
 	if doc.ShipTypeID == 0 {
 		doc.ShipTypeID = row.ShipTypeID
 	}
-	cost := app.fitCost(ctx, &doc)
-	card := publicFitCard{
+	body := app.deps.PublicFitBody(ctx, fitID, row.UpdatedAt, row.ItemsJson, row.ShipTypeID)
+	card := module.PublicFitCard{
 		ID: row.ID, Name: row.Name, Ship: ship, ShipTypeID: row.ShipTypeID,
 		Author: author, Mine: userID > 0 && row.UserID == userID,
-		Views: views, Price: cost.TotalRaw, PriceKnown: cost.Known,
-		Updated: row.UpdatedAt, FitURL: publicFitsPath + "fit/" + idString(row.ID) + "/",
+		Views: views, Price: body.PriceRaw, PriceKnown: body.PriceKnown,
+		Updated: row.UpdatedAt, FitURL: module.PublicFitsPath + "fit/" + idString(row.ID) + "/",
 		Tags: doc.Tags,
 	}
-	if cost.Known {
-		card.PriceLine = cost.Total + " ISK"
+	if body.PriceKnown {
+		card.PriceLine = body.PriceTotal + " ISK"
 	}
 	if row.RatingCount > 0 {
 		card.Stars = float64(row.RatingSum) / float64(row.RatingCount)
@@ -707,23 +524,11 @@ func (app *Application) handlePublicFitPage(w http.ResponseWriter, r *http.Reque
 	view := &publicFitView{
 		Card: card, Description: doc.Description,
 		AvgStars: card.Stars, StarCount: card.StarCount,
-		PageURL: app.publicPageURL(card.FitURL),
+		PageURL: app.deps.PublicPageURL(card.FitURL),
 	}
-	// The modules, simulation and EFT come from the stored page
-	// (char_fit_public_store.go); a view never runs the engine.
-	if stored, ok := app.loadPublicFitStored(ctx, fitID, row.UpdatedAt); ok {
-		view.Sections, view.EFT = stored.Sections, stored.EFT
-		if stored.Sim != nil {
-			// The stored page may be shared between requests: render
-			// a copy, as the tool's own workbench made read-only.
-			sim := *stored.Sim
-			sim.ReadOnly = true
-			sim.Cost = cost
-			view.Sim = &sim
-		}
-	} else {
-		view.Preparing = true
-	}
+	// The modules, simulation and EFT come from the stored page the
+	// fitting side keeps; a view never runs the engine.
+	view.Sections, view.Sim, view.EFT, view.Preparing = body.Sections, body.Sim, body.EFT, body.Preparing
 	// Links out need an absolute address to point back at.
 	if view.PageURL != "" {
 		view.ShareDiscord = row.Name + " (" + ship + ") — " + view.PageURL
@@ -743,17 +548,17 @@ func (app *Application) handlePublicFitPage(w http.ResponseWriter, r *http.Reque
 	if doc.Description != "" {
 		blurb += " - " + doc.Description
 	}
-	data.HeadMeta = headMeta(row.Name+" ("+ship+")", blurb, view.PageURL)
+	data.HeadMeta = app.deps.HeadMeta(row.Name+" ("+ship+")", blurb, view.PageURL)
 	data.PublicFit = view
-	app.render(ctx, w, http.StatusOK, "fit_public.html", data)
+	app.deps.Render(ctx, w, http.StatusOK, "fit_public.html", data)
 }
 
 // handlePublicFitRate records one account's rating of a public
 // fit (POST, login required): re-rating updates the same row,
 // and the fit's aggregates are recounted in the same transaction.
-func (app *Application) handlePublicFitRate(w http.ResponseWriter, r *http.Request) {
+func (app *page) handlePublicFitRate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := app.userID(ctx)
+	userID := app.deps.UserID(ctx)
 	fitID, err := strconv.ParseInt(chi.URLParam(r, "fitID"), 10, 64)
 	if err != nil || fitID <= 0 {
 		http.NotFound(w, r)
@@ -768,7 +573,7 @@ func (app *Application) handlePublicFitRate(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "Rate 1 to 5 stars.", http.StatusBadRequest)
 		return
 	}
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.deps.SQLDB().BeginTx(ctx, nil)
 	if err != nil {
 		logging.Errorf("public fit %d: rate tx: %v", fitID, err)
 		http.Error(w, "That rating couldn't be saved.", http.StatusInternalServerError)
@@ -804,5 +609,16 @@ func (app *Application) handlePublicFitRate(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "That rating couldn't be saved.", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, publicFitsPath+"fit/"+idString(fitID)+"/", http.StatusSeeOther)
+	http.Redirect(w, r, module.PublicFitsPath+"fit/"+idString(fitID)+"/", http.StatusSeeOther)
 }
+
+// fitDoc is the part of a stored fit document this module reads: the
+// description and tags a page shows. The fit itself is the fitting
+// side's business.
+type fitDoc struct {
+	Description string   `json:"description,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	ShipTypeID  int64    `json:"shipTypeId"`
+}
+
+func idString(id int64) string { return strconv.FormatInt(id, 10) }

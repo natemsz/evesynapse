@@ -75,10 +75,6 @@ type pageData struct {
 	Doctrine  *doctrineView
 	CorpFits  *corpFitsView
 
-	// PublicFits is the /fittings/public/ page (char_fit_public.go).
-	PublicFits *publicFitsView
-	// PublicFit is one stable public fit page (char_fit_public.go).
-	PublicFit *publicFitView
 	// PublicShip is one /ships/ page.
 	PublicShip *publicShipView
 
@@ -154,7 +150,7 @@ func sectionForPage(page string) string {
 		"mail.html", "calendar.html", "contacts.html", "pilot.html", "assets.html", "wallet.html",
 		"killmails.html", "notifications.html", "notification_settings.html", "op.html", "op_form.html", "op_paps.html":
 		return "pilot"
-	case "fittings.html", "fittings_saved.html", "fit_shopping.html", "fittings_public.html", "fit_public.html":
+	case "fittings.html", "fittings_saved.html", "fit_shopping.html":
 		return "fitting"
 	case "industry.html", "planets.html":
 		return "industry"

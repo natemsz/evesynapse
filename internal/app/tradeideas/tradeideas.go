@@ -41,6 +41,7 @@ var Module = module.Module{
 	Requires:      []string{},
 	Scopes:        []module.Scope{},
 	EnhanceScopes: []module.Scope{},
+	Activities:    []string{"market"},
 	Widgets:       []module.WidgetDecl{{ID: "tradeideas", Title: "Trade Ideas", Description: "A model's read on the Forge spread scanner, one tab per trade strategy. Refreshed twice a day; the Trade Ideas page has the full list.", W: 2, H: 1, After: "watchlist"}},
 	Nav: []module.NavSection{{
 		Section: "market",

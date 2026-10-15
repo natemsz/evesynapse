@@ -42,6 +42,7 @@ var Module = module.Module{
 	EnhanceScopes: []module.Scope{
 		{Scope: "esi-characters.read_corporation_roles.v1", Unlocks: "Directors can manage their corporation's Discord servers, and rules can give roles by in-game corporation role."},
 	},
+	Activities: []string{"corporation"},
 	Nav: []module.NavSection{{
 		Section: "corporation",
 		Entries: []module.NavEntry{

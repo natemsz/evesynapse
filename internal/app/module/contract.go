@@ -1093,9 +1093,14 @@ type Module struct {
 	Requires      []string
 	Scopes        []Scope
 	EnhanceScopes []Scope
-	Nav           []NavSection
-	Routes        func(r chi.Router, deps Deps)
-	WorkerJobs    []WorkerJob
+	// Activities names the kinds of play the module serves ("pilots",
+	// "market", "industry", "corporation", "fitting"): the sign-up asks
+	// players what they want to do and turns the answers into modules
+	// from these declarations, with no list of its own to drift.
+	Activities []string
+	Nav        []NavSection
+	Routes     func(r chi.Router, deps Deps)
+	WorkerJobs []WorkerJob
 	// Deliverers are the module's notification channels (see Deliverer).
 	Deliverers []Deliverer
 	// NotifySettings contributes to the notification settings page.

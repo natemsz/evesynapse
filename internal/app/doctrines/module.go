@@ -26,6 +26,7 @@ var Module = module.Module{
 		{Scope: "esi-characters.read_corporation_roles.v1", Unlocks: "Directors and role holders can keep their corporation's doctrines."},
 		{Scope: "esi-fittings.read_fittings.v1", Unlocks: "A keeper can add a fit from their in-game fittings to a doctrine."},
 	},
+	Activities: []string{"corporation", "fitting"},
 	Nav: []module.NavSection{{
 		Section: "corporation",
 		Entries: []module.NavEntry{

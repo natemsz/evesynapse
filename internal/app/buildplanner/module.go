@@ -29,7 +29,8 @@ var Module = module.Module{
 		{Scope: "esi-assets.read_assets.v1", Unlocks: "Your stockpile is netted against what the build needs."},
 		{Scope: "esi-skills.read_skills.v1", Unlocks: "Build times use your trained industry skills, and a pilot can be judged on the skills the chain needs."},
 	},
-	Sitemap: []module.SitemapEntry{{Path: "/planner/", ChangeFreq: "monthly", Priority: "0.8"}},
+	Sitemap:    []module.SitemapEntry{{Path: "/planner/", ChangeFreq: "monthly", Priority: "0.8"}},
+	Activities: []string{"industry"},
 	Nav: []module.NavSection{{
 		Section: "industry",
 		Entries: []module.NavEntry{

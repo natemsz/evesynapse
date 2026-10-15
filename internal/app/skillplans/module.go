@@ -22,6 +22,7 @@ var Module = module.Module{
 		{Scope: "esi-skills.read_skills.v1", Unlocks: "Plans show what is already trained, the skills still to train, and the time they take."},
 		{Scope: "esi-skills.read_skillqueue.v1", Unlocks: "Skills already in the training queue count toward a plan, and times start when the queue ends."},
 	},
+	Activities: []string{"pilots", "fitting"},
 	Nav: []module.NavSection{{
 		Section: "pilot",
 		Entries: []module.NavEntry{

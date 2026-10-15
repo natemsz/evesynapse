@@ -37,6 +37,7 @@ var Module = module.Module{
 		{ID: "pulse", Title: "Corp Pulse", Description: "What changed in the corporation: members in and out, wallet movements, structure arrivals and timers. Needs a qualifying in-game role.", W: 1, H: 1, Feature: "corp_members", After: "training"},
 		{ID: "upkeep", Title: "Upkeep & Fuel", Description: "Structures low on fuel, unanchoring, or running a state timer. Station Managers and Directors only.", W: 1, H: 1, Feature: "corp_structures", After: "walletflow"},
 	},
+	Activities: []string{"corporation"},
 	Nav: []module.NavSection{{
 		Section: "corporation",
 		Entries: []module.NavEntry{

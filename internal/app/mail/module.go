@@ -28,6 +28,7 @@ var Module = module.Module{
 	},
 	Snapshots:   []string{esi.SnapMail, esi.SnapMailLabels, esi.SnapMailLists, esi.SnapMailBodyPrefix},
 	NotifyKinds: []module.NotifyKindDecl{{ID: "mail", Title: "New mail", After: "skill"}},
+	Activities:  []string{"pilots"},
 	Nav: []module.NavSection{{
 		Section: "pilot",
 		Entries: []module.NavEntry{

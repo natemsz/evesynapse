@@ -427,6 +427,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	} else {
 		r.Handle("/static/*", assets)
 	}
+	r.Get("/auth/link", app.handleLinkChoose)
 	r.Get("/auth/eve", app.handleEVELogin)
 	r.Get("/auth/callback", app.handleEVECallback)
 	// Signing out changes state, so it is a POST: a link or an image

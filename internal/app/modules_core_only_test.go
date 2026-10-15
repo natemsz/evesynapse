@@ -92,3 +92,27 @@ func TestCoreOnlyHasNoModuleWidgetsOrKinds(t *testing.T) {
 		}
 	}
 }
+
+// TestCoreOnlyChooserOffersOnlyCoreFeatures: in the core-only build the
+// full link leaves out every module's scopes, and the chooser still works.
+func TestCoreOnlyChooserOffersOnlyCoreFeatures(t *testing.T) {
+	full := requestableScopes()
+	for _, s := range full {
+		if !contains(eveScopes, s) {
+			t.Errorf("the full link asks for %q, outside the portal list", s)
+		}
+	}
+	for _, moduleScope := range []string{"esi-mail.send_mail.v1", "esi-calendar.read_calendar_events.v1", "esi-characters.read_contacts.v1", "esi-contracts.read_character_contracts.v1"} {
+		if contains(full, moduleScope) {
+			t.Errorf("the core-only link still asks for %q", moduleScope)
+		}
+	}
+	for _, f := range linkFeatures() {
+		if f.ID == "mail" || f.ID == "doctrines" || f.ID == "swarm" {
+			t.Errorf("the chooser offers %q in the core-only build", f.ID)
+		}
+	}
+	if len(full) == 0 {
+		t.Error("the core-only full link asks for nothing at all")
+	}
+}

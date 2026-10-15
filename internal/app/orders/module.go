@@ -25,8 +25,9 @@ var Module = module.Module{
 	EnhanceScopes: []module.Scope{
 		{Scope: "esi-markets.structure_markets.v1", Unlocks: "Prices at player-owned structures."},
 	},
-	Snapshots: []string{esi.SnapOrders, esi.SnapOrdersHistory},
-	Widgets:   []module.WidgetDecl{{ID: "market", Title: "Market", Description: "Open orders across characters: counts, sell/buy value, orders expiring soonest.", W: 1, H: 1, After: "pi"}},
+	Snapshots:  []string{esi.SnapOrders, esi.SnapOrdersHistory},
+	Widgets:    []module.WidgetDecl{{ID: "market", Title: "Market", Description: "Open orders across characters: counts, sell/buy value, orders expiring soonest.", W: 1, H: 1, After: "pi"}},
+	Activities: []string{"market"},
 	Nav: []module.NavSection{{
 		Section: "market",
 		Entries: []module.NavEntry{

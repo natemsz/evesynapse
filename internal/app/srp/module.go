@@ -31,6 +31,7 @@ var Module = module.Module{
 		{ID: "srp_new", Title: "New SRP request to handle", Account: true, After: "op_reminder"},
 		{ID: "srp_done", Title: "SRP request paid or denied", After: "srp_new"},
 	},
+	Activities: []string{"corporation"},
 	Nav: []module.NavSection{{
 		Section: "corporation",
 		Entries: []module.NavEntry{

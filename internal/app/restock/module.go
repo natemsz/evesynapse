@@ -19,6 +19,7 @@ var Module = module.Module{
 	EnhanceScopes: []module.Scope{
 		{Scope: "esi-markets.read_character_orders.v1", Unlocks: "What you already have listed counts against each target."},
 	},
+	Activities: []string{"market"},
 	Nav: []module.NavSection{{
 		Section: "market",
 		Entries: []module.NavEntry{

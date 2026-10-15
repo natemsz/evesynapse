@@ -24,6 +24,7 @@ var Module = module.Module{
 	EnhanceScopes: []module.Scope{
 		{Scope: "esi-characters.read_corporation_roles.v1", Unlocks: "Directors can manage their corporation's groups."},
 	},
+	Activities: []string{"corporation"},
 	Nav: []module.NavSection{{
 		Section: "corporation",
 		Entries: []module.NavEntry{

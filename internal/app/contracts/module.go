@@ -25,6 +25,7 @@ var Module = module.Module{
 	},
 	EnhanceScopes: []module.Scope{},
 	Snapshots:     []string{esi.SnapContracts},
+	Activities:    []string{"market"},
 	Nav: []module.NavSection{{
 		Section: "market",
 		Entries: []module.NavEntry{

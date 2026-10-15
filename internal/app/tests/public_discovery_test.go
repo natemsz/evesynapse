@@ -710,7 +710,7 @@ func TestPublicSimulatorAnon(t *testing.T) {
 	}
 	apptest.MustContain(t, "/fittings/", body,
 		"Fitting with All-V skills",
-		"/auth/eve",
+		"/auth/link",
 		"All V",
 	)
 	for _, leaked := range []string{`id="fit-save"`, `id="fit-yourfits-search"`, "Alpha Pilot", "Beta Pilot"} {

@@ -29,7 +29,8 @@ var Module = module.Module{
 		{Scope: "esi-fittings.read_fittings.v1", Unlocks: "Your in-game saved fittings appear beside your loadouts."},
 		{Scope: "esi-fittings.write_fittings.v1", Unlocks: "Save a fit to the game's own fittings."},
 	},
-	Sitemap: []module.SitemapEntry{{Path: "/fittings/", ChangeFreq: "monthly", Priority: "0.8"}},
+	Sitemap:    []module.SitemapEntry{{Path: "/fittings/", ChangeFreq: "monthly", Priority: "0.8"}},
+	Activities: []string{"fitting"},
 	Nav: []module.NavSection{{
 		Section: "fitting",
 		Entries: []module.NavEntry{

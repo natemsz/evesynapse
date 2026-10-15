@@ -1771,7 +1771,7 @@ var FitTipUI = (function () {
     if (relink) {
       p.appendChild(document.createTextNode(" "));
       var a = document.createElement("a");
-      a.href = "/auth/eve";
+      a.href = "/auth/link";
       a.textContent = "Sign in again";
       p.appendChild(a);
     }

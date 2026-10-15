@@ -28,6 +28,7 @@ var Module = module.Module{
 	},
 	Snapshots:   []string{esi.SnapCalendar, esi.SnapCalendarEventPrefix, esi.SnapCalendarAttPrefix},
 	NotifyKinds: []module.NotifyKindDecl{{ID: "calendar", Title: "New in-game calendar event", After: "mail"}},
+	Activities:  []string{"pilots"},
 	Nav: []module.NavSection{{
 		Section: "pilot",
 		Entries: []module.NavEntry{

@@ -26,7 +26,8 @@ var Module = module.Module{
 		{Scope: "esi-corporations.read_contacts.v1", Unlocks: "Corporation contacts."},
 		{Scope: "esi-alliances.read_contacts.v1", Unlocks: "Alliance contacts."},
 	},
-	Snapshots: []string{esi.SnapContacts},
+	Snapshots:  []string{esi.SnapContacts},
+	Activities: []string{"pilots"},
 	Nav: []module.NavSection{{
 		Section: "pilot",
 		Entries: []module.NavEntry{

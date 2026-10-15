@@ -777,7 +777,7 @@ input[type="text"]:focus, input[type="search"]:focus, input[type="number"]:focus
 /* An open dropdown sits above everything after it: the panel or form
    that holds it (each can be its own stacking layer) is lifted while
    the list is open, so later panels and the footer never cover it. */
-:where(.card, .foldable, section, form, .searchwrap, header, nav):has(.suggest:not([hidden])) { position: relative; z-index: 60; }
+:where(main .card, main .foldable, main form):has(.suggest:not([hidden])) { position: relative; z-index: 60; }
 .suggest li {
   padding: 0.5rem 0.6rem;
   border-radius: 3px;

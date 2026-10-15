@@ -204,7 +204,8 @@ var eveScopes = []string{
 	"esi.cosmetic.char:read",
 }
 
-// loginHTTPClient is shared by the SSO/JWKS calls (auth.go) and ESI.
+// loginHTTPClient serves the SSO/JWKS calls (auth.go) only. ESI has
+// its own tuned client (esi.NewHTTPClient); the two never share.
 var loginHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
 // eveOAuthConfig builds the EVE SSO OAuth2 config. The redirect URL must

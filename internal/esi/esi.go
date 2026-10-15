@@ -403,8 +403,9 @@ type Client struct {
 	changes changeLog
 }
 
-// New builds a Client. httpClient performs every ESI request (the
-// caller shares it with the SSO/JWKS calls); queries is the sqlc
+// New builds a Client. httpClient performs every ESI request (in
+// production the tuned NewHTTPClient, never the SSO/JWKS client);
+// queries is the sqlc
 // handle for the snapshot and type-name tables; tokens supplies
 // access tokens for authenticated character endpoints.
 func New(httpClient *http.Client, queries *db.Queries, tokens TokenFunc) *Client {

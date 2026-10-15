@@ -14,7 +14,7 @@ import (
 // module, and a module's nav entry, page and sitemap line come from its
 // registration.
 func TestDefaultBuildEnablesModules(t *testing.T) {
-	for _, id := range []string{"buildplanner", "skillplans", "piplanner", "intel", "tradeideas", "discord"} {
+	for _, id := range []string{"buildplanner", "skillplans", "scanner", "tradefinder", "leaderboard", "restock", "piplanner", "intel", "tradeideas", "discord"} {
 		if !moduleCompiledIn(id) {
 			t.Fatalf("the default build does not register %s", id)
 		}
@@ -144,4 +144,9 @@ func TestModuleNavKeepsItsPlace(t *testing.T) {
 	follows("corporation", "/discord/servers", "/srp/")
 	follows("industry", "/planner/", "/industry/")
 	follows("pilot", "/skills/plans", "/characters/")
+	follows("market", "/market/scanner/", "/market/")
+	follows("market", "/market/tradefinder/", "/market/ideas/")
+	follows("market", "/market/leaderboard/", "/market/tradefinder/")
+	follows("market", "/market/restock/", "/market/leaderboard/")
+	follows("market", "/orders/", "/market/restock/")
 }

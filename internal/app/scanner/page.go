@@ -1,10 +1,10 @@
-package app
+package scanner
 
 // Spread scanner: the station-trading screen. It reads only stored rows
 // — the per-station book statistics (market_station_stats) and the
 // stored 7-day average traded volume per type, both filled by the
 // whole-region sweeps. The filter math, profit estimate and ranking
-// happen in one SQL query capped at scannerRowCap rows, so a page load
+// happen in one SQL query capped at rowCap rows, so a page load
 // costs the same however many rows a region holds.
 
 import (
@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -25,7 +26,7 @@ import (
 type scannerRow struct {
 	TypeID      int64
 	ItemName    string
-	Station     placeRef
+	Station     module.PlaceRef
 	BestBuy     string // esi.FormatISK, highest buy price here
 	BestSell    string // esi.FormatISK, lowest sell price here
 	SpreadPct   string // "12.3%"
@@ -37,7 +38,7 @@ type scannerRow struct {
 type scannerView struct {
 	RegionID   int64
 	RegionName string
-	Regions    []marketRegion
+	Regions    []module.RegionChoice
 	MinVolume  int64  // sold-per-day floor from the filter
 	MinSpread  string // spread-% floor as typed (echoed in the form)
 	HasData    bool   // a sweep has covered this region
@@ -51,20 +52,20 @@ type scannerView struct {
 // minspread) so a view is shareable and a reload is free. No
 // sweep state means the still-gathering state; the page
 // never triggers a fetch.
-func (app *Application) handleMarketScanner(w http.ResponseWriter, r *http.Request) {
+func (app *page) handleMarketScanner(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.publicPage(ctx) // public: stored market data only
+	data := &PageData{ShellData: app.deps.PublicShell(ctx)} // public: stored market data only
 	view := app.buildScannerView(ctx, r.URL.Query())
-	if wantCSV(r) {
-		serveScannerCSV(w, view)
+	if r.URL.Query().Get("format") == "csv" {
+		app.serveScannerCSV(w, view)
 		return
 	}
 	data.MarketScanner = view
-	app.render(ctx, w, http.StatusOK, "market_scanner.html", data)
+	app.deps.Render(ctx, w, http.StatusOK, "market_scanner.html", data)
 }
 
 // serveScannerCSV writes the scanner's opportunity rows as a CSV download.
-func serveScannerCSV(w http.ResponseWriter, view *scannerView) {
+func (app *page) serveScannerCSV(w http.ResponseWriter, view *scannerView) {
 	header := []string{"Item", "Station", "Highest buy price", "Lowest sell price", "Spread %", "Sold per day", "Estimated daily profit"}
 	rows := make([][]string, 0, len(view.Rows))
 	for _, row := range view.Rows {
@@ -78,7 +79,7 @@ func serveScannerCSV(w http.ResponseWriter, view *scannerView) {
 			row.DailyProfit,
 		})
 	}
-	serveCSV(w, "spread-scanner", header, rows)
+	app.deps.ServeCSV(w, "spread-scanner", header, rows)
 }
 
 // buildScannerView assembles the scanner page for one region
@@ -95,26 +96,27 @@ func serveScannerCSV(w http.ResponseWriter, view *scannerView) {
 // spread. The filtering, profit math, and ranking all happen
 // in one bounded SQL query (ListScannerOpportunities); Go
 // only formats the displayed rows.
-func (app *Application) buildScannerView(ctx context.Context, q map[string][]string) *scannerView {
-	regionID := defaultMarketRegion
-	if raw := firstQuery(q, "region"); raw != "" {
+func (app *page) buildScannerView(ctx context.Context, q map[string][]string) *scannerView {
+	regionID := app.deps.DefaultMarketRegion()
+	if raw := module.QueryValue(q, "region"); raw != "" {
 		if id, err := strconv.ParseInt(raw, 10, 64); err == nil {
-			if _, ok := marketRegionName(id); ok {
+			if _, ok := app.deps.MarketRegionName(id); ok {
 				regionID = id
 			}
 		}
 	}
-	regionName, _ := marketRegionName(regionID)
+	regionName, _ := app.deps.MarketRegionName(regionID)
 
 	minVolume := int64(1)
-	if raw := firstQuery(q, "minvol"); raw != "" {
+	if raw := module.QueryValue(q, "minvol"); raw != "" {
 		if v, err := strconv.ParseInt(raw, 10, 64); err == nil && v >= 0 {
 			minVolume = v
 		}
 	}
 
-	minSpread := defaultScannerMinSpreadPct
-	if raw := firstQuery(q, "minspread"); raw != "" {
+	defaultMinSpread, rowCap := app.deps.SpreadDefaults()
+	minSpread := defaultMinSpread
+	if raw := module.QueryValue(q, "minspread"); raw != "" {
 		if v, err := strconv.ParseFloat(raw, 64); err == nil && !math.IsNaN(v) && v >= 0 {
 			minSpread = v
 		}
@@ -126,8 +128,8 @@ func (app *Application) buildScannerView(ctx context.Context, q map[string][]str
 		MinVolume:  minVolume,
 		MinSpread:  strconv.FormatFloat(minSpread, 'f', -1, 64),
 	}
-	for _, region := range marketRegions {
-		view.Regions = append(view.Regions, marketRegion{
+	for _, region := range app.deps.MarketRegions() {
+		view.Regions = append(view.Regions, module.RegionChoice{
 			ID: region.ID, Name: region.Name, Active: region.ID == regionID,
 		})
 	}
@@ -145,7 +147,7 @@ func (app *Application) buildScannerView(ctx context.Context, q map[string][]str
 	}
 	view.HasData = true
 	if latest, ok := stampRow.Stamp.(time.Time); ok {
-		view.Age = ageText(time.Now(), latest)
+		view.Age = app.deps.AgeText(latest)
 		view.AsOf = "Prices as of " + latest.UTC().Format("Jan 2, 3:04 PM")
 	}
 
@@ -154,7 +156,7 @@ func (app *Application) buildScannerView(ctx context.Context, q map[string][]str
 		if name, ok := typeNames[typeID]; ok {
 			return name
 		}
-		name := app.typeNameOrID(ctx, typeID)
+		name := app.deps.TypeNameOrID(ctx, typeID)
 		if strings.HasPrefix(name, "Type #") {
 			// The SDE knows most types by name; fall back to the
 			// local SDE row before settling for the placeholder.
@@ -170,13 +172,13 @@ func (app *Application) buildScannerView(ctx context.Context, q map[string][]str
 		RegionID:  regionID,
 		MinSpread: minSpread,
 		MinVolume: minVolume,
-		RowCap:    int64(scannerRowCap),
+		RowCap:    int64(rowCap),
 	})
 	if err != nil {
 		logging.Errorf("scanner: list opportunities for region %d: %v", regionID, err)
 		return view
 	}
-	stationMemo := make(map[int64]placeRef)
+	stationMemo := make(map[int64]module.PlaceRef)
 	for _, s := range opp {
 		spreadPct := (s.BestSell - s.BestBuy) / s.BestBuy * 100
 		vol := s.DailyVolume
@@ -194,7 +196,7 @@ func (app *Application) buildScannerView(ctx context.Context, q map[string][]str
 		view.Rows = append(view.Rows, scannerRow{
 			TypeID:      s.TypeID,
 			ItemName:    itemNameFor(s.TypeID),
-			Station:     app.scannerStationRef(ctx, stationMemo, s.LocationID),
+			Station:     app.deps.StationRef(ctx, stationMemo, s.LocationID),
 			BestBuy:     esi.FormatISK(s.BestBuy),
 			BestSell:    esi.FormatISK(s.BestSell),
 			SpreadPct:   fmt.Sprintf("%.1f%%", spreadPct),
@@ -203,49 +205,4 @@ func (app *Application) buildScannerView(ctx context.Context, q map[string][]str
 		})
 	}
 	return view
-}
-
-// firstQuery returns the first value of a query parameter.
-func firstQuery(q map[string][]string, key string) string {
-	if vs, ok := q[key]; ok && len(vs) > 0 {
-		return strings.TrimSpace(vs[0])
-	}
-	return ""
-}
-
-// scannerStationRef resolves one order location to its display
-// title and link by the name policy: an NPC station the SDE
-// knows links to the station page, a player structure with a
-// resolved name links to the structure page, and a structure
-// nobody has named yet reads "Player structure" as plain text
-// -- never a bare number. Cache-only. The per-render memo keeps
-// row-building loops (scanner, tradefinder, leaderboard) to one
-// resolution per location per render.
-func (app *Application) scannerStationRef(ctx context.Context, memo map[int64]placeRef, locationID int64) placeRef {
-	if ref, ok := memo[locationID]; ok {
-		return ref
-	}
-	ref := app.resolveScannerStationRef(ctx, locationID)
-	memo[locationID] = ref
-	return ref
-}
-
-func (app *Application) resolveScannerStationRef(ctx context.Context, locationID int64) placeRef {
-	if locationID <= 0 {
-		return placeRef{Name: "Player structure"}
-	}
-	if isStructureID(locationID) {
-		if name := app.resolvedStructureTitle(ctx, locationID); name != "" {
-			return app.linkPlace(ctx, locationID, name)
-		}
-		return placeRef{Name: "Player structure"}
-	}
-	title := app.econLocationTitle(ctx, locationID)
-	if strings.HasPrefix(title, "Station #") || strings.HasPrefix(title, "Structure #") {
-		// The SDE has no name for this place; keep the promise
-		// that the scanner never shows a bare number.
-		title = "Player structure"
-		return placeRef{Name: title}
-	}
-	return app.linkPlace(ctx, locationID, title)
 }

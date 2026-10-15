@@ -1,4 +1,4 @@
-package app
+package tradefinder
 
 // Tradefinder: the cross-region route
 // screen. It reads only stored rows -- the worker's per-(region,
@@ -48,6 +48,7 @@ import (
 	"strings"
 	"time"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -88,9 +89,9 @@ type tradefinderRow struct {
 	// Best-price hints from the station grain: where the cheapest
 	// sell order in the origin and the highest buy order in the
 	// destination actually sit. Empty name = no such order.
-	OriginStation placeRef
+	OriginStation module.PlaceRef
 	OriginBest    string // esi.FormatISK, "" when no sell order
-	DestStation   placeRef
+	DestStation   module.PlaceRef
 	DestBest      string // esi.FormatISK, "" when no buy order
 }
 
@@ -111,7 +112,7 @@ type tradefinderView struct {
 	OriginName    string
 	DestID        int64
 	DestName      string
-	Regions       []marketRegion
+	Regions       []module.RegionChoice
 	MinMargin     string // margin-% floor as typed (echoed in the form)
 	MinVolume     int64  // sold-per-day floor from the filter
 	Lowball       bool   // include long-shot routes (hidden by default)
@@ -138,9 +139,9 @@ func (v *tradefinderView) HasData() bool {
 // minmargin, minvol) so a view is shareable and a reload is free.
 // No sweep state means the still-gathering state; the page
 // never triggers a fetch.
-func (app *Application) handleMarketTradefinder(w http.ResponseWriter, r *http.Request) {
+func (app *page) handleMarketTradefinder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.publicPage(ctx) // public: stored market data only
+	data := &PageData{ShellData: app.deps.PublicShell(ctx)} // public: stored market data only
 	view := app.buildTradefinderView(ctx, r.URL.Query())
 	// A pending route whose history is already stored (it arrived by a
 	// path that did not update the figure, or before the figure was
@@ -149,19 +150,19 @@ func (app *Application) handleMarketTradefinder(w http.ResponseWriter, r *http.R
 	if app.healPendingVolumes(ctx, view) {
 		view = app.buildTradefinderView(ctx, r.URL.Query())
 	}
-	if app.userID(ctx) > 0 { // anonymous views warm nothing
+	if app.deps.UserID(ctx) > 0 { // anonymous views warm nothing
 		app.queueTradefinderPending(ctx, view)
 	}
-	if wantCSV(r) {
-		serveTradefinderCSV(w, view)
+	if r.URL.Query().Get("format") == "csv" {
+		app.serveTradefinderCSV(w, view)
 		return
 	}
 	data.MarketTradefinder = view
-	app.render(ctx, w, http.StatusOK, "market_tradefinder.html", data)
+	app.deps.Render(ctx, w, http.StatusOK, "market_tradefinder.html", data)
 }
 
 // serveTradefinderCSV writes the tradefinder's route rows as a CSV download.
-func serveTradefinderCSV(w http.ResponseWriter, view *tradefinderView) {
+func (app *page) serveTradefinderCSV(w http.ResponseWriter, view *tradefinderView) {
 	header := []string{"Item", "Buy region", "Buy typical", "Sell region", "Sell typical", "Profit per item", "Margin %", "Sold per day", "Profit per day", "Cheapest origin station", "Origin best", "Best dest station", "Dest best"}
 	rows := make([][]string, 0, len(view.Rows))
 	for _, row := range view.Rows {
@@ -181,7 +182,7 @@ func serveTradefinderCSV(w http.ResponseWriter, view *tradefinderView) {
 			row.DestBest,
 		})
 	}
-	serveCSV(w, "tradefinder", header, rows)
+	app.deps.ServeCSV(w, "tradefinder", header, rows)
 }
 
 // buildTradefinderView assembles the tradefinder page for one
@@ -190,41 +191,41 @@ func serveTradefinderCSV(w http.ResponseWriter, view *tradefinderView) {
 // average (market_region_stats, schema 035) -- ESI's recorded
 // daily trades, averaged at sweep time over the newest seven
 // recorded days (the same window the spread scanner uses).
-func (app *Application) buildTradefinderView(ctx context.Context, q map[string][]string) *tradefinderView {
-	originID := defaultMarketRegion
-	if raw := firstQuery(q, "origin"); raw != "" {
+func (app *page) buildTradefinderView(ctx context.Context, q map[string][]string) *tradefinderView {
+	originID := app.deps.DefaultMarketRegion()
+	if raw := module.QueryValue(q, "origin"); raw != "" {
 		if id, err := strconv.ParseInt(raw, 10, 64); err == nil {
-			if _, ok := marketRegionName(id); ok {
+			if _, ok := app.deps.MarketRegionName(id); ok {
 				originID = id
 			}
 		}
 	}
 	destID := defaultTradefinderDestination
-	if raw := firstQuery(q, "destination"); raw != "" {
+	if raw := module.QueryValue(q, "destination"); raw != "" {
 		if id, err := strconv.ParseInt(raw, 10, 64); err == nil {
-			if _, ok := marketRegionName(id); ok {
+			if _, ok := app.deps.MarketRegionName(id); ok {
 				destID = id
 			}
 		}
 	}
-	originName, _ := marketRegionName(originID)
-	destName, _ := marketRegionName(destID)
+	originName, _ := app.deps.MarketRegionName(originID)
+	destName, _ := app.deps.MarketRegionName(destID)
 
 	minMargin := defaultTradefinderMinMarginPct
-	if raw := firstQuery(q, "minmargin"); raw != "" {
+	if raw := module.QueryValue(q, "minmargin"); raw != "" {
 		if v, err := strconv.ParseFloat(raw, 64); err == nil && !math.IsNaN(v) && v >= 0 {
 			minMargin = v
 		}
 	}
 	minVolume := int64(1)
-	if raw := firstQuery(q, "minvol"); raw != "" {
+	if raw := module.QueryValue(q, "minvol"); raw != "" {
 		if v, err := strconv.ParseInt(raw, 10, 64); err == nil && v >= 0 {
 			minVolume = v
 		}
 	}
 	// Long-shot routes (destination over ten times the origin) stay
 	// hidden unless the viewer opts in; the flag echoes in the form.
-	includeLowball := firstQuery(q, "lowball") == "1"
+	includeLowball := module.QueryValue(q, "lowball") == "1"
 
 	view := &tradefinderView{
 		OriginID:   originID,
@@ -236,8 +237,8 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 		MinVolume:  minVolume,
 		Lowball:    includeLowball,
 	}
-	for _, region := range marketRegions {
-		view.Regions = append(view.Regions, marketRegion{
+	for _, region := range app.deps.MarketRegions() {
+		view.Regions = append(view.Regions, module.RegionChoice{
 			ID: region.ID, Name: region.Name,
 		})
 	}
@@ -269,7 +270,7 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 		if name, ok := typeNames[typeID]; ok {
 			return name
 		}
-		name := app.typeNameOrID(ctx, typeID)
+		name := app.deps.TypeNameOrID(ctx, typeID)
 		if strings.HasPrefix(name, "Type #") {
 			if row, rerr := app.queries.GetSDEType(ctx, typeID); rerr == nil && row.Name != "" {
 				name = row.Name
@@ -326,7 +327,7 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 		}
 	}
 
-	stationMemo := make(map[int64]placeRef)
+	stationMemo := make(map[int64]module.PlaceRef)
 	for _, r := range routes {
 		margin := r.DestTypicalSell - r.OriginTypicalSell
 		marginPct := margin / r.OriginTypicalSell * 100
@@ -353,11 +354,11 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 			ProfitDay:   esi.FormatISK(profit),
 		}
 		if hint, ok := originCheapest[r.TypeID]; ok {
-			row.OriginStation = app.scannerStationRef(ctx, stationMemo, hint.LocationID)
+			row.OriginStation = app.deps.StationRef(ctx, stationMemo, hint.LocationID)
 			row.OriginBest = esi.FormatISK(hint.BestSell)
 		}
 		if hint, ok := destBestBuy[r.TypeID]; ok {
-			row.DestStation = app.scannerStationRef(ctx, stationMemo, hint.LocationID)
+			row.DestStation = app.deps.StationRef(ctx, stationMemo, hint.LocationID)
 			row.DestBest = esi.FormatISK(hint.BestBuy)
 		}
 		view.Rows = append(view.Rows, row)
@@ -394,7 +395,7 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 // healPendingVolumes recomputes the destination sold-per-day figure
 // for the view's pending routes from their stored history, reporting
 // whether any changed. No ESI: only rows already held.
-func (app *Application) healPendingVolumes(ctx context.Context, view *tradefinderView) bool {
+func (app *page) healPendingVolumes(ctx context.Context, view *tradefinderView) bool {
 	if len(view.Pending) == 0 {
 		return false
 	}
@@ -415,12 +416,9 @@ func (app *Application) healPendingVolumes(ctx context.Context, view *tradefinde
 // queueTradefinderPending asks the worker for the destination history
 // of the view's pending routes, so they can rank in. Queue writes
 // only: nothing is fetched here.
-func (app *Application) queueTradefinderPending(ctx context.Context, view *tradefinderView) {
-	now := time.Now().UTC()
+func (app *page) queueTradefinderPending(ctx context.Context, view *tradefinderView) {
 	for _, r := range view.Pending {
-		if err := app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
-			RegionID: view.DestID, TypeID: r.TypeID, LastRequestedAt: now, Priority: wantOrbit,
-		}); err != nil {
+		if err := app.deps.QueueHistoryWant(ctx, view.DestID, r.TypeID); err != nil {
 			logging.Errorf("tradefinder: queue history for type %d in region %d: %v", r.TypeID, view.DestID, err)
 		}
 	}

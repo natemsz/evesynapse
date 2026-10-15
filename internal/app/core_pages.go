@@ -14,55 +14,51 @@ import (
 // pageData is the view model shared by the templates.
 type pageData struct {
 	module.ShellData
-	Shopping          *shoppingView
-	Home              *homeView
-	CharChars         []assetCharLink
-	CharacterPage     *characterView
-	Fittings          *fittingsView
-	FittingsChars     []assetCharLink
-	FitEditor         *fitEditorView
-	Killmails         *killmailsView
-	KillmailChars     []assetCharLink
-	Wallet            *walletView
-	WalletChars       []assetCharLink
-	Orders            *ordersView
-	OrdersChars       []assetCharLink
-	Contracts         *contractsView
-	ContractsChars    []assetCharLink
-	Industry          *industryView
-	IndustryChars     []assetCharLink
-	ServerStatus      *serverStatusView
-	ESIHealth         *esiHealthView // Overview bar: ESI health and Tranquility players (signed-in Home only)
-	Corps             []corpView
-	CorpOptions       []corpOption // the corporations the Corporation page can show
-	CorpChars         []assetCharLink
-	CorpMembers       *corpMembersView
-	CorpWallets       *corpWalletsView
-	CorpOrders        *corpOrdersView
-	CorpAssets        *corpAssetsView
-	CorpStructs       *corpStructuresView
-	Assets            *assetsView
-	AssetsChars       []assetCharLink
-	AssetsSearch      *assetsSearchView
-	Planets           *planetsView
-	PlanetsChars      []assetCharLink
-	Mail              *mailView
-	MailChars         []assetCharLink
-	MailCompose       *mailComposeView
-	Calendar          *calendarView
-	CalendarChars     []assetCharLink
-	Contacts          *contactsView
-	ContactsChars     []assetCharLink
-	Market            *marketView
-	MarketScanner     *scannerView
-	MarketTradefinder *tradefinderView
-	MarketLeaderboard *leaderboardView
-	Restock           *restockView
-	Items             *itemsView
-	Skills            *skillsView
-	SkillsChars       []assetCharLink
-	Sync              *syncView
-	Admin             *adminView
+	Shopping       *shoppingView
+	Home           *homeView
+	CharChars      []assetCharLink
+	CharacterPage  *characterView
+	Fittings       *fittingsView
+	FittingsChars  []assetCharLink
+	FitEditor      *fitEditorView
+	Killmails      *killmailsView
+	KillmailChars  []assetCharLink
+	Wallet         *walletView
+	WalletChars    []assetCharLink
+	Orders         *ordersView
+	OrdersChars    []assetCharLink
+	Contracts      *contractsView
+	ContractsChars []assetCharLink
+	Industry       *industryView
+	IndustryChars  []assetCharLink
+	ServerStatus   *serverStatusView
+	ESIHealth      *esiHealthView // Overview bar: ESI health and Tranquility players (signed-in Home only)
+	Corps          []corpView
+	CorpOptions    []corpOption // the corporations the Corporation page can show
+	CorpChars      []assetCharLink
+	CorpMembers    *corpMembersView
+	CorpWallets    *corpWalletsView
+	CorpOrders     *corpOrdersView
+	CorpAssets     *corpAssetsView
+	CorpStructs    *corpStructuresView
+	Assets         *assetsView
+	AssetsChars    []assetCharLink
+	AssetsSearch   *assetsSearchView
+	Planets        *planetsView
+	PlanetsChars   []assetCharLink
+	Mail           *mailView
+	MailChars      []assetCharLink
+	MailCompose    *mailComposeView
+	Calendar       *calendarView
+	CalendarChars  []assetCharLink
+	Contacts       *contactsView
+	ContactsChars  []assetCharLink
+	Market         *marketView
+	Items          *itemsView
+	Skills         *skillsView
+	SkillsChars    []assetCharLink
+	Sync           *syncView
+	Admin          *adminView
 
 	// Notifications is the /notifications/ page.
 	Notifications *notificationsView
@@ -162,8 +158,7 @@ func sectionForPage(page string) string {
 		return "fitting"
 	case "industry.html", "planets.html":
 		return "industry"
-	case "market.html", "market_scanner.html", "market_tradefinder.html", "market_leaderboard.html",
-		"market_restock.html",
+	case "market.html", "market_scanner.html",
 		"orders.html", "contracts.html", "system.html", "station.html", "structure.html", "region.html":
 		return "market"
 	case "items.html", "ship_public.html":

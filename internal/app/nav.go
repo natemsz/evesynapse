@@ -111,10 +111,6 @@ var sectionNav = map[string][]navEntry{
 	},
 	"market": {
 		{"/market/", "Market", []string{"market.html"}},
-		{"/market/scanner/", "Spread Scanner", []string{"market_scanner.html"}},
-		{"/market/tradefinder/", "Tradefinder", []string{"market_tradefinder.html"}},
-		{"/market/leaderboard/", "Top Stations", []string{"market_leaderboard.html"}},
-		{"/market/restock/", "Restock Planner", []string{"market_restock.html"}},
 		{"/orders/", "Orders", []string{"orders.html"}},
 		{"/contracts/", "Contracts", []string{"contracts.html"}},
 	},

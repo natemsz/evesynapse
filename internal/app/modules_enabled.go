@@ -6,9 +6,13 @@ import (
 	"evesynapse/internal/app/buildplanner"
 	"evesynapse/internal/app/discord"
 	"evesynapse/internal/app/intel"
+	"evesynapse/internal/app/leaderboard"
 	"evesynapse/internal/app/module"
 	"evesynapse/internal/app/piplanner"
+	"evesynapse/internal/app/restock"
+	"evesynapse/internal/app/scanner"
 	"evesynapse/internal/app/skillplans"
+	"evesynapse/internal/app/tradefinder"
 	"evesynapse/internal/app/tradeideas"
 )
 
@@ -25,6 +29,10 @@ func init() {
 		intel.Module,
 		piplanner.Module,
 		skillplans.Module,
+		scanner.Module,
+		tradefinder.Module,
+		leaderboard.Module,
+		restock.Module,
 		tradeideas.Module,
 	})
 }

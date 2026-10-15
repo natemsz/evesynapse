@@ -1,4 +1,4 @@
-package app
+package restock
 
 import (
 	"context"
@@ -41,16 +41,16 @@ type restockView struct {
 	TotalCost string
 }
 
-func (app *Application) handleRestock(w http.ResponseWriter, r *http.Request) {
+func (app *page) handleRestock(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
+	data := &PageData{ShellData: app.deps.PageShell(ctx)}
 	data.Restock = app.buildRestockView(ctx, r)
-	app.render(ctx, w, http.StatusOK, "market_restock.html", data)
+	app.deps.Render(ctx, w, http.StatusOK, "market_restock.html", data)
 }
 
-func (app *Application) buildRestockView(ctx context.Context, r *http.Request) *restockView {
+func (app *page) buildRestockView(ctx context.Context, r *http.Request) *restockView {
 	view := &restockView{}
-	userID := app.userID(ctx)
+	userID := app.deps.UserID(ctx)
 	if userID == 0 {
 		return view
 	}
@@ -69,13 +69,13 @@ func (app *Application) buildRestockView(ctx context.Context, r *http.Request) *
 	listedByType := app.restockListedQty(ctx, r)
 
 	// Market sell prices from the guide cache.
-	prices, _ := app.marketPrices(ctx)
+	prices, _ := app.deps.MarketPrices(ctx)
 
 	var totalCost float64
 	for _, t := range targets {
 		row := restockRow{
 			TypeID:    t.TypeID,
-			Name:      app.typeNameOrID(ctx, t.TypeID),
+			Name:      app.deps.TypeNameOrID(ctx, t.TypeID),
 			URL:       "/items/type/" + strconv.FormatInt(t.TypeID, 10) + "/",
 			TargetQty: esi.FormatInt(t.TargetQty),
 		}
@@ -117,15 +117,15 @@ func (app *Application) buildRestockView(ctx context.Context, r *http.Request) *
 
 // restockListedQty sums open sell order volume_remain per type across
 // the user's characters.
-func (app *Application) restockListedQty(ctx context.Context, r *http.Request) map[int64]int64 {
+func (app *page) restockListedQty(ctx context.Context, r *http.Request) map[int64]int64 {
 	out := make(map[int64]int64)
-	_, _, links, err := app.pickCharacter(ctx, r, "/market/restock/")
+	_, _, links, err := app.deps.PickCharacter(ctx, r, "/market/restock/")
 	if err != nil || links == nil {
 		return out
 	}
 	for _, link := range links {
 		var orders esi.CharOrders
-		if !app.econSection(ctx, link.ID, esi.SnapOrders, &orders).Loaded {
+		if !app.deps.LoadCorpSnapshot(ctx, link.ID, esi.SnapOrders, &orders) {
 			continue
 		}
 		for _, o := range orders {
@@ -138,9 +138,9 @@ func (app *Application) restockListedQty(ctx context.Context, r *http.Request) m
 	return out
 }
 
-func (app *Application) handleRestockSave(w http.ResponseWriter, r *http.Request) {
+func (app *page) handleRestockSave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := app.userID(ctx)
+	userID := app.deps.UserID(ctx)
 	if userID == 0 {
 		http.Redirect(w, r, "/market/restock/", http.StatusSeeOther)
 		return
@@ -168,9 +168,9 @@ func (app *Application) handleRestockSave(w http.ResponseWriter, r *http.Request
 	http.Redirect(w, r, "/market/restock/", http.StatusSeeOther)
 }
 
-func (app *Application) handleRestockDelete(w http.ResponseWriter, r *http.Request) {
+func (app *page) handleRestockDelete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := app.userID(ctx)
+	userID := app.deps.UserID(ctx)
 	if userID == 0 {
 		http.Redirect(w, r, "/market/restock/", http.StatusSeeOther)
 		return

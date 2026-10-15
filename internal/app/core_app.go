@@ -604,15 +604,9 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		// data only (no live order book, no queued work); the
 		// personal pieces (restock, watches) stay signed-in.
 		r.With(anonPages).Get("/", app.handleMarket)
-		r.With(anonPages).Get("/scanner/", app.handleMarketScanner)
-		r.With(anonPages).Get("/tradefinder/", app.handleMarketTradefinder)
-		r.With(anonPages).Get("/leaderboard/", app.handleMarketLeaderboard)
 		r.With(anonPages).Get("/suggest", app.handleMarketSuggest)
 		r.With(anonPages).Get("/history-fragment", app.handleMarketHistoryFragment)
 		r.With(anonPages).Get("/trader-fragment", app.handleMarketTraderFragment)
-		r.With(app.requireAuth).Get("/restock/", app.handleRestock)
-		r.With(app.requireAuth).Post("/restock/save/", app.handleRestockSave)
-		r.With(app.requireAuth).Post("/restock/delete/", app.handleRestockDelete)
 		r.With(app.requireAuth).Post("/watch", app.handleMarketWatch)
 	})
 
@@ -1142,6 +1136,34 @@ func (app *Application) LiveSkillqueue(queue esi.Skillqueue, now time.Time) esi.
 
 func (app *Application) RenderFragmentStatus(w http.ResponseWriter, status int, page, define string, data any) {
 	app.renderFragmentStatus(w, status, page, define, data)
+}
+
+func (app *Application) MarketPrices(ctx context.Context) (map[int64]esi.MarketPrice, error) {
+	return app.marketPrices(ctx)
+}
+
+func (app *Application) MarketRegions() []module.RegionOption {
+	out := make([]module.RegionOption, 0, len(marketRegions))
+	for _, r := range marketRegions {
+		out = append(out, module.RegionOption{ID: r.ID, Name: r.Name})
+	}
+	return out
+}
+
+func (app *Application) DefaultMarketRegion() int64 { return defaultMarketRegion }
+
+func (app *Application) MarketRegionName(id int64) (string, bool) { return marketRegionName(id) }
+
+func (app *Application) QueueHistoryWant(ctx context.Context, regionID, typeID int64) error {
+	return app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
+		RegionID: regionID, TypeID: typeID, LastRequestedAt: time.Now().UTC(), Priority: wantOrbit,
+	})
+}
+
+func (app *Application) AgeText(t time.Time) string { return ageText(time.Now(), t) }
+
+func (app *Application) TypeNameOrID(ctx context.Context, typeID int64) string {
+	return app.typeNameOrID(ctx, typeID)
 }
 
 func (app *Application) AnonPages() func(http.Handler) http.Handler {

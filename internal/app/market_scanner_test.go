@@ -6,6 +6,7 @@ package app
 
 import (
 	"context"
+	"evesynapse/internal/app/scanner"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -140,7 +141,7 @@ func TestScannerMathFiltersSortAndCap(t *testing.T) {
 	seedScannerVolume(t, q, 10000002, 35, 100)
 	seedScannerVolume(t, q, 10000002, 36, 100)
 
-	view := app.buildScannerView(ctx, url.Values{})
+	view := scanner.BuildView(ctx, app, url.Values{})
 	if !view.HasData || len(view.Rows) != 2 {
 		t.Fatalf("scanner rows: %d (hasData %v), want 2", len(view.Rows), view.HasData)
 	}
@@ -156,11 +157,11 @@ func TestScannerMathFiltersSortAndCap(t *testing.T) {
 
 	// Filters: a 200% spread floor drops everything; a sold-per-day
 	// floor of 50 keeps only Pyerite (100/day).
-	view = app.buildScannerView(ctx, url.Values{"minspread": {"200"}})
+	view = scanner.BuildView(ctx, app, url.Values{"minspread": {"200"}})
 	if len(view.Rows) != 0 {
 		t.Fatalf("200%% spread floor rows: %d, want 0", len(view.Rows))
 	}
-	view = app.buildScannerView(ctx, url.Values{"minvol": {"50"}})
+	view = scanner.BuildView(ctx, app, url.Values{"minvol": {"50"}})
 	if len(view.Rows) != 1 || view.Rows[0].TypeID != 35 {
 		t.Fatalf("minvol 50 rows: %+v, want only type 35", view.Rows)
 	}
@@ -183,7 +184,7 @@ func TestScannerMathFiltersSortAndCap(t *testing.T) {
 		}
 		seedScannerVolume(t, q, 10000002, typeID, 10)
 	}
-	view = app.buildScannerView(ctx, url.Values{})
+	view = scanner.BuildView(ctx, app, url.Values{})
 	if len(view.Rows) != scannerRowCap {
 		t.Fatalf("capped scanner rows: %d, want %d", len(view.Rows), scannerRowCap)
 	}
@@ -311,7 +312,7 @@ func TestScannerProfitRankingAndCapInSQL(t *testing.T) {
 		seedScannerVolume(t, q, 10000002, typeID, 10)
 	}
 
-	view := app.buildScannerView(ctx, url.Values{})
+	view := scanner.BuildView(ctx, app, url.Values{})
 	if !view.HasData {
 		t.Fatal("scanner has no data after seeding 105 rows")
 	}

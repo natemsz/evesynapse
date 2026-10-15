@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -46,6 +47,27 @@ type SuggestItem struct {
 	URL     string `json:"url,omitempty"`
 	Value   string `json:"value,omitempty"`
 	Missing bool   `json:"missing,omitempty"`
+}
+
+// RegionOption is one market region the pages offer.
+type RegionOption struct {
+	ID   int64
+	Name string
+}
+
+// RegionChoice is a region option as a page's filter shows it.
+type RegionChoice struct {
+	ID     int64
+	Name   string
+	Active bool
+}
+
+// QueryValue is the first value of a query parameter, trimmed.
+func QueryValue(q map[string][]string, key string) string {
+	if vs, ok := q[key]; ok && len(vs) > 0 {
+		return strings.TrimSpace(vs[0])
+	}
+	return ""
 }
 
 // Page declares a template file rendered by the module, its default section,
@@ -351,6 +373,25 @@ type Deps interface {
 	// RenderFragmentStatus answers with one named template of a page
 	// file (the live-region swap), at the given status.
 	RenderFragmentStatus(w http.ResponseWriter, status int, page, define string, data any)
+
+	// --- market data the market pages share ---------------------------------
+
+	// MarketPrices is the cached market guide (average and adjusted prices).
+	MarketPrices(ctx context.Context) (map[int64]esi.MarketPrice, error)
+	// MarketRegions is the regions the market pages offer, in menu order;
+	// DefaultMarketRegion is the one a page starts on, MarketRegionName
+	// names any region the market knows.
+	MarketRegions() []RegionOption
+	DefaultMarketRegion() int64
+	MarketRegionName(id int64) (string, bool)
+	// QueueHistoryWant asks the worker for a type's price history in a
+	// region at the page-want priority; nothing is fetched here.
+	QueueHistoryWant(ctx context.Context, regionID, typeID int64) error
+	// AgeText says how long ago a stored row was written: "12 minutes ago".
+	AgeText(t time.Time) string
+	// TypeNameOrID is an item's name from the name caches, "Type #id"
+	// when unknown (and the page wants it resolved).
+	TypeNameOrID(ctx context.Context, typeID int64) string
 
 	// --- the session, pages and the site ---------------------------------
 

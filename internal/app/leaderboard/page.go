@@ -1,4 +1,4 @@
-package app
+package leaderboard
 
 // Station leaderboard: a completed region sweep distills one row per
 // station into market_station_leaderboard (market_region_stats.go);
@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"time"
 
+	"evesynapse/internal/app/module"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 )
@@ -27,7 +28,7 @@ const leaderboardRowCap = 100
 
 type leaderboardRow struct {
 	Rank       int
-	Station    placeRef
+	Station    module.PlaceRef
 	RegionID   int64
 	RegionName string
 	Orders     string // esi.FormatInt
@@ -40,26 +41,26 @@ type leaderboardRow struct {
 type leaderboardView struct {
 	RegionID int64  // 0 = all regions
 	Sort     string // "value" (default) or "orders"
-	Regions  []marketRegion
+	Regions  []module.RegionChoice
 	HasData  bool
 	AsOf     string // "Figures last gathered Oct 5, 1:04 PM"
 	Rows     []leaderboardRow
 }
 
-func (app *Application) handleMarketLeaderboard(w http.ResponseWriter, r *http.Request) {
+func (app *page) handleMarketLeaderboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.publicPage(ctx) // public: stored market data only
+	data := &PageData{ShellData: app.deps.PublicShell(ctx)} // public: stored market data only
 	view := app.buildLeaderboardView(ctx, r.URL.Query())
-	if wantCSV(r) {
-		serveLeaderboardCSV(w, view)
+	if r.URL.Query().Get("format") == "csv" {
+		app.serveLeaderboardCSV(w, view)
 		return
 	}
 	data.MarketLeaderboard = view
-	app.render(ctx, w, http.StatusOK, "market_leaderboard.html", data)
+	app.deps.Render(ctx, w, http.StatusOK, "market_leaderboard.html", data)
 }
 
 // serveLeaderboardCSV writes the leaderboard's station rows as a CSV download.
-func serveLeaderboardCSV(w http.ResponseWriter, view *leaderboardView) {
+func (app *page) serveLeaderboardCSV(w http.ResponseWriter, view *leaderboardView) {
 	header := []string{"Rank", "Station", "Region", "Open orders", "ISK on orders"}
 	rows := make([][]string, 0, len(view.Rows))
 	for _, row := range view.Rows {
@@ -71,22 +72,22 @@ func serveLeaderboardCSV(w http.ResponseWriter, view *leaderboardView) {
 			row.OpenValue,
 		})
 	}
-	serveCSV(w, "top-stations", header, rows)
+	app.deps.ServeCSV(w, "top-stations", header, rows)
 }
 
-func (app *Application) buildLeaderboardView(ctx context.Context, q url.Values) *leaderboardView {
+func (app *page) buildLeaderboardView(ctx context.Context, q url.Values) *leaderboardView {
 	view := &leaderboardView{Sort: "value"}
 	if q.Get("sort") == "orders" {
 		view.Sort = "orders"
 	}
 	if regionID, err := strconv.ParseInt(q.Get("region"), 10, 64); err == nil && regionID != 0 {
-		if _, ok := marketRegionName(regionID); ok {
+		if _, ok := app.deps.MarketRegionName(regionID); ok {
 			view.RegionID = regionID
 		}
 	}
-	regions := []marketRegion{{ID: 0, Name: "All regions", Active: view.RegionID == 0}}
-	for _, region := range marketRegions {
-		regions = append(regions, marketRegion{ID: region.ID, Name: region.Name, Active: view.RegionID == region.ID})
+	regions := []module.RegionChoice{{ID: 0, Name: "All regions", Active: view.RegionID == 0}}
+	for _, region := range app.deps.MarketRegions() {
+		regions = append(regions, module.RegionChoice{ID: region.ID, Name: region.Name, Active: view.RegionID == region.ID})
 	}
 	view.Regions = regions
 
@@ -95,14 +96,14 @@ func (app *Application) buildLeaderboardView(ctx context.Context, q url.Values) 
 		logging.Errorf("leaderboard: list rows for region %d: %v", view.RegionID, err)
 		return view
 	}
-	stationMemo := make(map[int64]placeRef)
+	stationMemo := make(map[int64]module.PlaceRef)
 	for _, row := range rows {
-		regionName, ok := marketRegionName(row.RegionID)
+		regionName, ok := app.deps.MarketRegionName(row.RegionID)
 		if !ok {
 			continue
 		}
 		view.Rows = append(view.Rows, leaderboardRow{
-			Station:    app.scannerStationRef(ctx, stationMemo, row.LocationID),
+			Station:    app.deps.StationRef(ctx, stationMemo, row.LocationID),
 			RegionID:   row.RegionID,
 			RegionName: regionName,
 			Orders:     esi.FormatInt(row.SellOrders + row.BuyOrders),

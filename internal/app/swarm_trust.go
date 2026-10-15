@@ -876,9 +876,28 @@ func (app *Application) swarmSuppressFetch(ctx context.Context, kind, key string
 	if err != nil {
 		return false
 	}
-	received := row.ReceivedAt
-	return now.Sub(received) < swarmStagedSuppressWindow
+	if now.Sub(row.ReceivedAt) >= swarmStagedSuppressWindow {
+		return false
+	}
+	// However often the entry is restaged, one key is held back at most
+	// swarmSuppressCap in all: then this instance fetches it itself.
+	id := "suppress|" + kind + "|" + key
+	app.swarmCover.mu.Lock()
+	defer app.swarmCover.mu.Unlock()
+	if app.swarmCover.asked == nil {
+		app.swarmCover.asked = map[string]time.Time{}
+	}
+	first, seen := app.swarmCover.asked[id]
+	if !seen {
+		app.swarmCover.asked[id] = now
+		return true
+	}
+	return now.Sub(first) < swarmSuppressCap
 }
+
+// swarmSuppressCap bounds how long staged peer entries can hold back
+// one key's own fetch, restaged or not.
+const swarmSuppressCap = 2 * time.Minute
 
 // swarmPull asks approved peers for the wanted keys and stages
 // what they answer with, through swarmStagePulled: only keys

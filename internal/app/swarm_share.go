@@ -596,8 +596,18 @@ func (app *Application) applySwarmEntry(ctx context.Context, kind, key, payload 
 		if err := dec.Decode(&body); err != nil {
 			return err
 		}
+		// Stored in this app's shape whatever shape the peer sent; a
+		// payload that names no corporation is not stored at all.
+		normalized, ok := decodeCorpPayload(body.Payload)
+		if !ok {
+			return fmt.Errorf("swarm: apply %s %s: unreadable corporation record", kind, key)
+		}
+		encoded, err := json.Marshal(normalized)
+		if err != nil {
+			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
+		}
 		if err := app.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
-			CorporationID: body.ID, Payload: body.Payload, State: orgStateReady, FetchedAt: timeSet(stamp),
+			CorporationID: body.ID, Payload: string(encoded), State: orgStateReady, FetchedAt: timeSet(stamp),
 		}); err != nil {
 			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
 		}
@@ -607,8 +617,16 @@ func (app *Application) applySwarmEntry(ctx context.Context, kind, key, payload 
 		if err := dec.Decode(&body); err != nil {
 			return err
 		}
+		normalized, ok := decodeAlliancePayload(body.Payload)
+		if !ok {
+			return fmt.Errorf("swarm: apply %s %s: unreadable alliance record", kind, key)
+		}
+		encoded, err := json.Marshal(normalized)
+		if err != nil {
+			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
+		}
 		if err := app.queries.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
-			AllianceID: body.ID, Payload: body.Payload, State: orgStateReady, FetchedAt: timeSet(stamp),
+			AllianceID: body.ID, Payload: string(encoded), State: orgStateReady, FetchedAt: timeSet(stamp),
 		}); err != nil {
 			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
 		}

@@ -242,6 +242,53 @@ func TestLinkToEVEIsBuiltFromTheChoice(t *testing.T) {
 	}
 }
 
+// TestEmptySubmittedChoiceNeverWidens: a submitted choice with every
+// feature unticked is a choice of nothing. It must loop back to the
+// chooser at zero, never read as "no choice" and widen to every scope.
+// A plain /auth/eve with no choice at all stays the full link.
+func TestEmptySubmittedChoiceNeverWidens(t *testing.T) {
+	app := linkApp(t)
+
+	rec := get(app, nil, "/auth/eve?submitted=1")
+	loc := rec.Header().Get("Location")
+	if rec.Code != http.StatusFound || strings.Contains(loc, "login.eveonline.com") || strings.Contains(loc, "scope=") {
+		t.Fatalf("an empty submitted choice went to EVE (status %d, Location %q); it must loop to the chooser", rec.Code, loc)
+	}
+	if !strings.HasPrefix(loc, "/auth/link") {
+		t.Errorf("an empty submitted choice redirects to %q, want the chooser", loc)
+	}
+
+	body := get(app, nil, "/auth/link?submitted=1").Body.String()
+	if !strings.Contains(body, "you only sign in") {
+		t.Errorf("the zero-choice reveal does not show the zero count:\n%s", body)
+	}
+
+	full := eveScopeParam(t, get(app, nil, "/auth/eve"))
+	if len(full) != len(eveScopes) {
+		t.Errorf("a plain /auth/eve asks for %d scopes, want the full %d", len(full), len(eveScopes))
+	}
+}
+
+// TestFreshChooserPreTicksEssentials: a fresh sign-up opens with the
+// Essentials set ticked; an explicit cards submission that unticks
+// everything is respected as zero, not silently re-ticked.
+func TestFreshChooserPreTicksEssentials(t *testing.T) {
+	app := linkApp(t)
+
+	body := get(app, nil, "/auth/link").Body.String()
+	if !strings.Contains(body, `value="pilots" checked`) {
+		t.Errorf("a fresh chooser does not pre-tick the Essentials (pilots) card:\n%s", body)
+	}
+	if strings.Contains(body, `value="market" checked`) {
+		t.Error("a fresh chooser pre-ticks more than the Essentials set")
+	}
+
+	body = get(app, nil, "/auth/link?from=cards").Body.String()
+	if strings.Contains(body, `value="pilots" checked`) {
+		t.Error("an explicit zero cards submission was re-ticked with the Essentials set")
+	}
+}
+
 // TestChooserPages: the cards, the reveal and the advanced list render, and
 // the reveal tells the player how many permissions EVE will ask for.
 func TestChooserPages(t *testing.T) {

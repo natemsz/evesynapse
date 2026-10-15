@@ -247,6 +247,17 @@ func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 	// declarations (never from scope strings sent by the browser), and a
 	// link asks only for a subset of what the developer portal allows.
 	if choice, ok := app.linkChoiceFromQuery(r.URL.Query()); ok {
+		if choice.empty() {
+			// A submitted choice with everything unticked: the chooser
+			// again at zero. Never the full link — that is only for a
+			// request with no choice in it at all.
+			target := "/auth/link?submitted=1"
+			if cid := r.URL.Query().Get("character"); cid != "" {
+				target += "&character=" + cid
+			}
+			http.Redirect(w, r, target, http.StatusFound)
+			return
+		}
 		res, err := app.resolveLinkLenient(choice)
 		if err != nil {
 			http.Error(w, "Unknown feature or permission", http.StatusBadRequest)

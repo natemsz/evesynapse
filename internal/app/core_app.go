@@ -971,12 +971,7 @@ func (app *Application) ParseRuleWho(ctx context.Context, owner standing.Owner, 
 }
 
 func (app *Application) PickOwner(ctx context.Context, r *http.Request, offered []standing.Owner) (standing.Owner, []module.OwnerOption, bool) {
-	owner, options, ok := app.pickOwner(ctx, r, offered)
-	out := make([]module.OwnerOption, len(options))
-	for i, o := range options {
-		out[i] = module.OwnerOption{ID: o.ID, Name: o.Name, Active: o.Active, Param: o.Param, Value: o.Value}
-	}
-	return owner, out, ok
+	return app.pickOwner(ctx, r, offered)
 }
 
 func (app *Application) ResolvedCorpName(ctx context.Context, corpID int64) (string, bool) {

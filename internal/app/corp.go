@@ -135,7 +135,10 @@ type corpSectionState = module.CorpSectionState
 
 // corpSection resolves the display state for one snapshot kind:
 // a decoded snapshot wins; otherwise the recorded fetch state
-// decides between the role note and the warming note.
+// decides between the role note and the warming note. A character
+// who granted none of the scopes of the module that reads the kind
+// is not warming: nobody feeds this section, and the state carries
+// the targeted add-scopes link that would change that.
 func (app *Application) corpSection(ctx context.Context, characterID int64, kind string, out any) corpSectionState {
 	if app.loadCorpSnapshot(ctx, characterID, kind, out) {
 		return corpSectionState{Loaded: true}
@@ -143,6 +146,11 @@ func (app *Application) corpSection(ctx context.Context, characterID int64, kind
 	state, detail, found := app.corpKindState(ctx, characterID, kind)
 	if found && state == fetchStateRoleMissing {
 		return corpSectionState{Forbidden: true, RoleMissing: detail}
+	}
+	if m, ok := snapshotModule(kind); ok {
+		if ch, err := app.queries.GetCharacter(ctx, characterID); err == nil && kindLockedOut(scopeSet(ch.Scopes), kind) {
+			return corpSectionState{Warming: true, NoFeeder: true, AddScopesURL: relinkURL(m.ID, characterID)}
+		}
 	}
 	return corpSectionState{Warming: true}
 }

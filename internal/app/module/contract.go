@@ -179,13 +179,21 @@ func WalletDivisionLabel(division int64) string {
 }
 
 // CorpSectionState is the empty-state triage every corporation section
-// renders from: data loaded, still warming, or refused for want of an
-// in-game role.
+// renders from: data loaded, still warming, refused for want of an
+// in-game role, or never fed because the character granted none of the
+// scopes that feed the section.
 type CorpSectionState struct {
 	Loaded      bool
 	Warming     bool   // no snapshot yet and no refusal recorded
 	Forbidden   bool   // ESI answered 403 on the last attempt
 	RoleMissing string // role label when Forbidden named one ("" = label-less)
+	// NoFeeder: no snapshot, no refusal, and the character granted none
+	// of the scopes of the module that reads this kind, so no fetch
+	// could ever feed it. AddScopesURL is the targeted re-link that
+	// asks for that module's scopes (the role opt-in), the way locked
+	// features offer theirs.
+	NoFeeder     bool
+	AddScopesURL string
 }
 
 // CorpViewBase carries what every corporation subpage header renders:

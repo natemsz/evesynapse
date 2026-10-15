@@ -659,7 +659,11 @@ thead th {
   text-transform: uppercase;
   font-size: 0.7rem;
 }
-td, .isk { font-variant-numeric: tabular-nums; }
+td, .isk, dd, .kpi-v, .kpi-sub, .fleet-foot, .flow-figs { font-variant-numeric: tabular-nums; }
+/* Sortable headers (app.js): a pointer, and the direction once sorted. */
+#main-content table:not([data-nosort]) > thead th:not(:empty) { cursor: pointer; user-select: none; }
+#main-content table > thead th[aria-sort="ascending"]::after { content: " ▲"; font-size: 0.75em; }
+#main-content table > thead th[aria-sort="descending"]::after { content: " ▼"; font-size: 0.75em; }
 tbody tr { background: var(--row); }
 tbody tr:nth-child(even) { background: var(--row-alt); }
 tbody tr:hover td { background: var(--row-hover); }
@@ -1297,6 +1301,9 @@ td, dd, .kpi-v, .fit-headline-num, .fit-bar-nums, .fit-count, .fit-chip-qty, .fi
   font-family: "Synapse Numerals", "Saira Semi Condensed", "Inter", "Segoe UI", sans-serif;
 }
 .prose-figs { font-family: "Saira Semi Condensed", "Inter", "Segoe UI", sans-serif; }
+/* Money in and out: losses soft red, gains muted green. */
+td.neg, .neg { color: #ff4d4d; }
+td.pos, .pos { color: #28c76f; }
 .watch-matches td:last-child, .watch-matches th:last-child { width: 1%; white-space: nowrap; text-align: right; }
 .flow-figs td { text-align: right; white-space: nowrap; }
 .flow-figs thead th { text-align: right; }
@@ -1398,6 +1405,12 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid rgba(255, 1
 .fleet-facts dt { font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .fleet-facts dd { margin: 0.1rem 0 0; }
 .fleet-foot { margin: 0.4rem 0 0; color: var(--muted); }
+/* A fleet table taller than its module scrolls inside it, and the
+   "Showing x of y" line stays pinned at the bottom. */
+.grid.home-grid > .card[data-widget="fleet"] { min-height: 0; overflow: hidden; }
+.grid.home-grid > .card[data-widget="fleet"] > .card-body { display: flex; flex-direction: column; min-height: 0; }
+.grid.home-grid > .card[data-widget="fleet"] > .card-body > .tw { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.grid.home-grid > .card[data-widget="fleet"] .fleet-foot { flex: none; position: sticky; bottom: 0; padding-top: 0.3rem; background: var(--panel); }
 
 /* Wallet flow donuts: income and spend by type. Slice colours
    are a fixed palette, the same order in both donuts and their

@@ -2746,6 +2746,68 @@
   })();
 
 
+  // --- Sortable tables ------------------------------------------
+  // Any table under the page content sorts by a header click: again
+  // reverses. A column whose cells all read as numbers (ISK, counts,
+  // percentages, "1.2B") sorts numerically, else as text. A row's
+  // detail rows (rows that are one wide cell, like the fleet table's)
+  // move with it, and in a capped widget the rows past the cap
+  // (data-wmore) are re-marked by position. data-nosort opts a table
+  // out; empty headers do nothing.
+  function sortKey(cell) {
+    var raw = (cell ? (cell.getAttribute("data-sort") || cell.textContent) : "").trim();
+    var m = raw.replace(/ISK|,|\s|%|\+|×/g, "").replace(/^[−–]/, "-").match(/^(-?\d+(?:\.\d+)?)([KMBT]?)$/i);
+    if (m) {
+      var mult = { "": 1, k: 1e3, m: 1e6, b: 1e9, t: 1e12 }[m[2].toLowerCase()];
+      return { num: parseFloat(m[1]) * mult, text: raw };
+    }
+    return { num: null, text: raw.toLowerCase() };
+  }
+  document.addEventListener("click", function (ev) {
+    var th = ev.target && ev.target.closest ? ev.target.closest("#main-content table > thead th") : null;
+    if (!th || ev.target.closest("a, button, input, select")) return;
+    var table = th.closest("table");
+    if (!table || table.hasAttribute("data-nosort") || !th.textContent.trim()) return;
+    var body = table.tBodies[0];
+    if (!body || body.rows.length < 2) return;
+    var col = th.cellIndex;
+    // Rows with their attached detail rows.
+    var groups = [];
+    Array.prototype.forEach.call(body.rows, function (row) {
+      var single = row.cells.length === 1 && row.cells[0].colSpan > 1;
+      if (single && groups.length) groups[groups.length - 1].push(row);
+      else groups.push([row]);
+    });
+    var dir = th.getAttribute("aria-sort") === "ascending" ? -1 : 1;
+    var keys = groups.map(function (g) { return sortKey(g[0].cells[col]); });
+    var numeric = keys.every(function (k) { return k.num !== null || k.text === "" || k.text === "—"; });
+    var order = groups.map(function (g, i) { return i; });
+    order.sort(function (a, b) {
+      var ka = keys[a], kb = keys[b], r;
+      if (numeric) {
+        var na = ka.num === null ? -Infinity : ka.num, nb = kb.num === null ? -Infinity : kb.num;
+        r = na - nb;
+      } else {
+        r = ka.text < kb.text ? -1 : ka.text > kb.text ? 1 : 0;
+      }
+      return r * dir || a - b;
+    });
+    var capped = body.querySelectorAll("tr[data-wmore]").length;
+    var heads = [];
+    order.forEach(function (i) {
+      groups[i].forEach(function (row) { body.appendChild(row); });
+      heads.push(groups[i][0]);
+    });
+    if (capped) {
+      heads.forEach(function (row, i) {
+        if (i >= heads.length - capped) row.setAttribute("data-wmore", "");
+        else row.removeAttribute("data-wmore");
+      });
+    }
+    Array.prototype.forEach.call(th.parentNode.cells, function (c) { c.removeAttribute("aria-sort"); });
+    th.setAttribute("aria-sort", dir === 1 ? "ascending" : "descending");
+  });
+
   // --- Filters that apply as they change -----------------------
   // A control marked data-autosubmit (the Item Database's "Market
   // items only" box and its category and group pickers) submits its

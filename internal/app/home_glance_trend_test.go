@@ -19,7 +19,7 @@ func TestGlanceTrends(t *testing.T) {
 	if !ok || base.Total() != 200 {
 		t.Fatalf("baseline %+v (%v); want the 8-day-old sample", base, ok)
 	}
-	if tr := newKPITrend(220, base.Total(), trendSpan(base.At, now)); tr == nil || !tr.Up || tr.Text != "+10.0% over 8 days" {
+	if tr := newKPITrend(220, base.Total(), trendSpan(base.At, now)); tr == nil || !tr.Up || tr.Delta != "+20 (+10.0%)" || tr.Text != "+20 ISK (+10.0%) over 8 days" {
 		t.Fatalf("up trend: %+v", tr)
 	}
 	if tr := newKPITrend(150, 200, "8 days"); tr == nil || tr.Up {

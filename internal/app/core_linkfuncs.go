@@ -158,6 +158,19 @@ func secStatus(sec float64) template.HTML {
 	return template.HTML(fmt.Sprintf(`<span class="sec sec-%d">%s</span>`, tier, text))
 }
 
+// signClass is "neg" for a formatted amount below zero, "pos" for one
+// above, "" for zero or blank: red and green in the money columns.
+func signClass(amount string) string {
+	a := strings.TrimSpace(amount)
+	switch {
+	case strings.HasPrefix(a, "-") || strings.HasPrefix(a, "−"):
+		return "neg"
+	case strings.Trim(a, "0.,+ ") == "":
+		return ""
+	}
+	return "pos"
+}
+
 // stationLink renders an NPC station name as a link to the
 // station page. Plain text when either side is missing.
 func stationLink(stationID int64, name string) template.HTML {
@@ -308,6 +321,8 @@ func linkFuncMap() template.FuncMap {
 		"dotlanRegion":    dotlanRegionLink,
 		"dotlanRegionURL": dotlanRegionURL,
 		"skillLevel":      skillLevel,
+		// Not a link: an amount's sign as a class, "neg" or "pos".
+		"signClass": signClass,
 		// Not a link: how a stored time is written out (core_timestamps.go).
 		"rfc3339": rfc3339,
 	}

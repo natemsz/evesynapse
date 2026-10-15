@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"sort"
+	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -213,6 +214,7 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 		bb.calendarLines(b, prefix)
 		bb.mailLines(b, prefix)
 	}
+	bb.flushIdle()
 	lines := bb.lines
 
 	// --- Account-level market lines: undercut sell orders and
@@ -261,6 +263,42 @@ type briefingBuilder struct {
 
 	lines []briefingLine
 	seen  map[string]bool
+
+	// idle holds the characters with an empty skill queue until every
+	// character is seen: three or more become one grouped line.
+	idle []idleLine
+}
+
+// idleLine is one character with nothing training.
+type idleLine struct {
+	id     int64
+	prefix string
+	at     time.Time
+}
+
+// briefingGroupAt is how many of the same alert collapse into one line.
+const briefingGroupAt = 3
+
+// flushIdle writes the empty-queue lines: one per character, or one
+// line naming them all once there are briefingGroupAt or more.
+func (bb *briefingBuilder) flushIdle() {
+	if len(bb.idle) >= briefingGroupAt {
+		names := make([]string, 0, len(bb.idle))
+		latest := time.Time{}
+		for _, l := range bb.idle {
+			names = append(names, l.prefix)
+			if l.at.After(latest) {
+				latest = l.at
+			}
+		}
+		bb.add("not-training-group", briefingNotTraining, latest,
+			template.HTML(fmt.Sprintf("%d skill queues empty — %s. <a href=\"/characters/\">Characters</a>", len(bb.idle), strings.Join(names, ", "))))
+		return
+	}
+	for _, l := range bb.idle {
+		bb.add(briefingKey(l.id, "not-training"), briefingNotTraining, l.at,
+			template.HTML(fmt.Sprintf("%s isn't training — the skill queue is empty. <a href=\"/character/?character=%d\">Skills</a>", l.prefix, l.id)))
+	}
 }
 
 func (bb *briefingBuilder) add(key string, rank int, at time.Time, html template.HTML) {
@@ -297,8 +335,7 @@ func (bb *briefingBuilder) skillLines(ctx context.Context, b *charSnaps, prefix 
 		training, finishedAt := queueState(b.queue, now)
 		switch {
 		case !training:
-			bb.add(briefingKey(b.ch.CharacterID, "not-training"), briefingNotTraining, finishedAt,
-				template.HTML(fmt.Sprintf("%s isn't training — the skill queue is empty. <a href=\"/character/?character=%d\">Skills</a>", prefix, b.ch.CharacterID)))
+			bb.idle = append(bb.idle, idleLine{id: b.ch.CharacterID, prefix: prefix, at: finishedAt})
 		default:
 			if head := queueHead(b.queue, now); head != nil {
 				if finish, ok := parseRFC3339(lastQueueFinish(b.queue)); ok && finish.After(now) && finish.Before(now.Add(briefingAhead)) {

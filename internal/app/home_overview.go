@@ -692,8 +692,9 @@ type netWorthWidget struct {
 // kpiTrend is one figure's direction and its change, for the arrow's
 // title ("+3.2% over 7 days").
 type kpiTrend struct {
-	Up   bool
-	Text string
+	Up    bool
+	Delta string // shown beside the arrow: "-1.74B (-1.2%)"
+	Text  string
 }
 
 type industryRow struct {
@@ -780,6 +781,9 @@ type piExpiryLine struct {
 	Left    string // "in 2d 3h", "" once expired
 	Expired bool
 	Search  string
+	// Count is how many extractors on the planet share this deadline
+	// (to the minute): one row for them all.
+	Count int
 }
 
 type piWidget struct {
@@ -1305,6 +1309,7 @@ func (app *Application) buildPI(ctx context.Context, bundles []*charSnaps) *piWi
 		at  time.Time
 	}
 	var pendingRows []pending
+	grouped := map[string]int{}
 	for _, b := range bundles {
 		if !b.planetsKnown {
 			continue
@@ -1335,6 +1340,15 @@ func (app *Application) buildPI(ctx context.Context, bundles []*charSnaps) *piWi
 					row.Left = "in " + humanDuration(time.Until(ex.Expiry))
 					row.Search = b.ch.Name + " " + planet
 				}
+				row.Count = 1
+				// Extractors on one planet installed together end together:
+				// one row with a count rather than one row each.
+				key := fmt.Sprintf("%d|%d|%d", b.ch.CharacterID, colony.PlanetID, ex.Expiry.Unix()/60)
+				if i, seen := grouped[key]; seen {
+					pendingRows[i].row.Count++
+					continue
+				}
+				grouped[key] = len(pendingRows)
 				pendingRows = append(pendingRows, pending{row: row, at: ex.Expiry})
 			}
 		}

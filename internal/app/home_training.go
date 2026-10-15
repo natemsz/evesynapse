@@ -25,9 +25,15 @@ type trainingEvent struct {
 	Skill   string
 	SkillID int64
 	Level   string
-	Finish  string
-	Left    string
-	finish  time.Time
+	// The character page's level pips (skillLevel): levels already
+	// trained, the level this row finishes, and "training" for the
+	// queue head or "queued" behind it.
+	TrainedLvl int
+	LevelNum   int
+	State      string
+	Finish     string
+	Left       string
+	finish     time.Time
 }
 
 // trainingWidget is the horizon: the soonest finishes across
@@ -67,19 +73,45 @@ func (app *Application) buildTraining(ctx context.Context, bundles []*charSnaps)
 			w.Idle = append(w.Idle, b.ch.Name)
 			continue
 		}
-		if head := queueHead(b.queue, now); head != nil {
+		live := liveSkillqueue(b.queue, now)
+		// Levels still in the queue, per skill: the level below the
+		// lowest one queued is trained (the character page's rule).
+		queuedLevels := map[int64]map[int]bool{}
+		for _, e := range live {
+			if queuedLevels[e.SkillID] == nil {
+				queuedLevels[e.SkillID] = map[int]bool{}
+			}
+			queuedLevels[e.SkillID][e.FinishedLevel] = true
+		}
+		head := queueHead(b.queue, now)
+		levelOf := func(e esi.SkillqueueEntry) (trained int, state string) {
+			trained = e.FinishedLevel - 1
+			for trained > 0 && queuedLevels[e.SkillID][trained] {
+				trained--
+			}
+			state = "queued"
+			if head != nil && e.SkillID == head.SkillID && e.FinishedLevel == head.FinishedLevel {
+				state = "training"
+			}
+			return trained, state
+		}
+		if head != nil {
 			if finish, ok := parseRFC3339(head.FinishDate); ok {
-				w.Heads = append(w.Heads, app.trainingEventFor(ctx, b, *head, finish, now))
+				ev := app.trainingEventFor(ctx, b, *head, finish, now)
+				ev.TrainedLvl, ev.State = levelOf(*head)
+				w.Heads = append(w.Heads, ev)
 			}
 		}
-		for _, entry := range liveSkillqueue(b.queue, now) {
+		for _, entry := range live {
 			// The horizon is dated: an entry without a finish date
 			// (a paused queue) has no place on it.
 			finish, ok := parseRFC3339(entry.FinishDate)
 			if !ok {
 				continue
 			}
-			pending = append(pending, app.trainingEventFor(ctx, b, entry, finish, now))
+			ev := app.trainingEventFor(ctx, b, entry, finish, now)
+			ev.TrainedLvl, ev.State = levelOf(entry)
+			pending = append(pending, ev)
 		}
 	}
 	sort.SliceStable(pending, func(i, j int) bool { return pending[i].finish.Before(pending[j].finish) })
@@ -104,13 +136,14 @@ func (app *Application) trainingEventFor(ctx context.Context, b *charSnaps, entr
 		name = fmt.Sprintf("Type #%d", entry.SkillID)
 	}
 	return trainingEvent{
-		Char:    b.ch.Name,
-		CharID:  b.ch.CharacterID,
-		Skill:   name,
-		SkillID: entry.SkillID,
-		Level:   esi.RomanLevel(entry.FinishedLevel),
-		Finish:  formatFinish(entry.FinishDate),
-		Left:    humanDuration(finish.Sub(now)),
-		finish:  finish,
+		Char:     b.ch.Name,
+		CharID:   b.ch.CharacterID,
+		Skill:    name,
+		SkillID:  entry.SkillID,
+		Level:    esi.RomanLevel(entry.FinishedLevel),
+		LevelNum: entry.FinishedLevel,
+		Finish:   formatFinish(entry.FinishDate),
+		Left:     humanDuration(finish.Sub(now)),
+		finish:   finish,
 	}
 }

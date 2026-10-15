@@ -76,6 +76,36 @@ type allianceRecordPayload struct {
 	Corporations []allianceMemberCorp `json:"corporations"`
 }
 
+// decodeCorpPayload reads a stored corporation record. The app writes
+// {"corp":{...},"alliance":{...}}; a record a swarm peer sent can be the
+// bare ESI corporation instead, which reads as the corp with no
+// alliance. ok is false when neither shape names a corporation.
+func decodeCorpPayload(raw string) (corporationRecordPayload, bool) {
+	var p corporationRecordPayload
+	if err := json.Unmarshal([]byte(raw), &p); err == nil && p.Corp.Name != "" {
+		return p, true
+	}
+	var bare esi.Corporation
+	if err := json.Unmarshal([]byte(raw), &bare); err == nil && bare.Name != "" {
+		return corporationRecordPayload{Corp: bare}, true
+	}
+	return corporationRecordPayload{}, false
+}
+
+// decodeAlliancePayload is decodeCorpPayload for alliance records: the
+// app's {"alliance":{...},"corporations":[...]}, or a bare ESI alliance.
+func decodeAlliancePayload(raw string) (allianceRecordPayload, bool) {
+	var p allianceRecordPayload
+	if err := json.Unmarshal([]byte(raw), &p); err == nil && p.Alliance.Name != "" {
+		return p, true
+	}
+	var bare esi.Alliance
+	if err := json.Unmarshal([]byte(raw), &bare); err == nil && bare.Name != "" {
+		return allianceRecordPayload{Alliance: bare}, true
+	}
+	return allianceRecordPayload{}, false
+}
+
 // corporationPageView is the /corporation/ page body.
 type corporationPageView struct {
 	CorporationID   int64
@@ -247,8 +277,8 @@ func (app *Application) loadCorporationView(ctx context.Context, id int64) *corp
 // the same local tiers every other page uses (and note their own
 // wants while unresolved).
 func (app *Application) buildCorporationView(ctx context.Context, id int64, payload string) (*corporationPageView, bool) {
-	var p corporationRecordPayload
-	if err := json.Unmarshal([]byte(payload), &p); err != nil {
+	p, ok := decodeCorpPayload(payload)
+	if !ok {
 		return nil, false
 	}
 	view := &corporationPageView{
@@ -349,8 +379,8 @@ func (app *Application) loadAllianceView(ctx context.Context, id int64) *allianc
 
 // buildAllianceView turns a stored payload into the render model.
 func (app *Application) buildAllianceView(ctx context.Context, id int64, payload string) (*alliancePageView, bool) {
-	var p allianceRecordPayload
-	if err := json.Unmarshal([]byte(payload), &p); err != nil {
+	p, ok := decodeAlliancePayload(payload)
+	if !ok {
 		return nil, false
 	}
 	view := &alliancePageView{
@@ -427,11 +457,17 @@ func (app *Application) resolvedCorpName(ctx context.Context, corpID int64) (str
 	if err != nil {
 		return "", false
 	}
-	if rec.State == orgStateReady && rec.Payload != "" {
-		var payload corporationRecordPayload
-		if jerr := json.Unmarshal([]byte(rec.Payload), &payload); jerr == nil && payload.Corp.Name != "" {
+	if rec.State == orgStateReady {
+		if payload, ok := decodeCorpPayload(rec.Payload); ok {
 			app.esi.StoreCorpName(corpID, payload.Corp.Name)
 			return payload.Corp.Name, true
+		}
+		// Ready but unreadable: the drain would leave it a week, so it
+		// goes back in the queue now, at the priority it had.
+		if err := app.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
+			CorporationID: corpID, Payload: "", State: orgStatePending, FetchedAt: sql.NullTime{},
+		}); err != nil {
+			logging.Errorf("corporation: requeue unreadable record %d: %v", corpID, err)
 		}
 	}
 	if rec.State == orgStateMissing {
@@ -470,11 +506,15 @@ func (app *Application) resolvedAllianceName(ctx context.Context, allianceID int
 	if err != nil {
 		return "", false
 	}
-	if rec.State == orgStateReady && rec.Payload != "" {
-		var payload allianceRecordPayload
-		if jerr := json.Unmarshal([]byte(rec.Payload), &payload); jerr == nil && payload.Alliance.Name != "" {
+	if rec.State == orgStateReady {
+		if payload, ok := decodeAlliancePayload(rec.Payload); ok {
 			app.esi.StoreAllianceName(allianceID, payload.Alliance.Name)
 			return payload.Alliance.Name, true
+		}
+		if err := app.queries.SetAllianceRecord(ctx, db.SetAllianceRecordParams{
+			AllianceID: allianceID, Payload: "", State: orgStatePending, FetchedAt: sql.NullTime{},
+		}); err != nil {
+			logging.Errorf("alliance: requeue unreadable record %d: %v", allianceID, err)
 		}
 	}
 	if rec.State == orgStateMissing {

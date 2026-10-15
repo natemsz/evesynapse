@@ -326,8 +326,8 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 	if rows, err := app.queries.SearchCorporationRecordsByName(ctx, q); err == nil {
 		corpHits := []searchHit{}
 		for _, row := range rows {
-			var payload corporationRecordPayload
-			if jerr := json.Unmarshal([]byte(row.Payload), &payload); jerr != nil || payload.Corp.Name == "" {
+			payload, ok := decodeCorpPayload(row.Payload)
+			if !ok {
 				continue
 			}
 			if _, ok := nameMatchTier(payload.Corp.Name, q); !ok {
@@ -356,8 +356,8 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 	if rows, err := app.queries.SearchAllianceRecordsByName(ctx, q); err == nil {
 		allianceHits := []searchHit{}
 		for _, row := range rows {
-			var payload allianceRecordPayload
-			if jerr := json.Unmarshal([]byte(row.Payload), &payload); jerr != nil || payload.Alliance.Name == "" {
+			payload, ok := decodeAlliancePayload(row.Payload)
+			if !ok {
 				continue
 			}
 			if _, ok := nameMatchTier(payload.Alliance.Name, q); !ok {

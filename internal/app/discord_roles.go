@@ -88,10 +88,10 @@ func splitRoles(joined string) []string {
 // discordWanted is the roles an account of that standing should hold
 // in a server now, sorted: every role a rule gives it.
 func discordWanted(guild db.DiscordGuild, rules []db.DiscordRoleRule, st orgStanding) []string {
-	owner := orgOwner{guild.OwnerKind, guild.OwnerID}
+	owner := orgOwner{Kind: guild.OwnerKind, ID: guild.OwnerID}
 	set := roleSet{}
 	for _, rule := range rules {
-		if st.meets(owner, rule) {
+		if meetsRule(st, owner, rule) {
 			set.add(rule.RoleID)
 		}
 	}

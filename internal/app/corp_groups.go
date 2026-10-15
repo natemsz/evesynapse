@@ -87,13 +87,13 @@ func (app *Application) handleGroups(w http.ResponseWriter, r *http.Request) {
 		shown, view.OwnerOptions = []orgOwner{owner}, options
 	}
 	for _, owner := range shown {
-		ov := groupOwnerView{Key: owner.key(), Kind: owner.Kind, Name: app.ownerName(ctx, owner)}
+		ov := groupOwnerView{Key: owner.Key(), Kind: owner.Kind, Name: app.ownerName(ctx, owner)}
 		corps := app.ownerCorporations(ctx, owner)
 		inside := map[int64]bool{}
 		if len(corps) > 0 {
 			rows, err := app.queries.ListCharactersInCorporations(ctx, corps)
 			if err != nil {
-				logging.Errorf("groups: characters of %s: %v", owner.key(), err)
+				logging.Errorf("groups: characters of %s: %v", owner.Key(), err)
 			}
 			for _, row := range rows {
 				inside[row.CharacterID] = true
@@ -102,7 +102,7 @@ func (app *Application) handleGroups(w http.ResponseWriter, r *http.Request) {
 		}
 		groups, err := app.queries.ListOrgGroupsForOwner(ctx, db.ListOrgGroupsForOwnerParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
 		if err != nil {
-			logging.Errorf("groups: groups of %s: %v", owner.key(), err)
+			logging.Errorf("groups: groups of %s: %v", owner.Key(), err)
 			data.Error = "Could not load the groups; check the server log."
 		}
 		for _, group := range groups {
@@ -144,7 +144,7 @@ func (app *Application) groupFor(r *http.Request, userID int64) (db.OrgGroup, bo
 	if err != nil {
 		return db.OrgGroup{}, false
 	}
-	if !ownersInclude(app.manageableOwners(r.Context(), userID), orgOwner{group.OwnerKind, group.OwnerID}) {
+	if !ownersInclude(app.manageableOwners(r.Context(), userID), orgOwner{Kind: group.OwnerKind, ID: group.OwnerID}) {
 		return db.OrgGroup{}, false
 	}
 	return group, true
@@ -186,11 +186,11 @@ func (app *Application) handleGroupCreate(w http.ResponseWriter, r *http.Request
 		Description: clip(strings.TrimSpace(r.Form.Get("description")), groupDescMax),
 		CreatedBy:   userID, CreatedAt: time.Now().UTC(),
 	}); err != nil {
-		logging.Errorf("groups: create %q for %s: %v", name, owner.key(), err)
+		logging.Errorf("groups: create %q for %s: %v", name, owner.Key(), err)
 		app.groupsBack(w, r, "The group could not be made; check the server log.")
 		return
 	}
-	logging.Infof("groups: user %d made group %q for %s", userID, name, owner.key())
+	logging.Infof("groups: user %d made group %q for %s", userID, name, owner.Key())
 	app.groupsBack(w, r, "Group "+name+" made. Add its members below.")
 }
 
@@ -243,12 +243,12 @@ func (app *Application) handleGroupMemberAdd(w http.ResponseWriter, r *http.Requ
 // happened. Each has to be a linked character in the corporation, or in
 // a corporation of the alliance, the group belongs to.
 func (app *Application) addToGroup(ctx context.Context, userID int64, group db.OrgGroup, characters []string) string {
-	owner := orgOwner{group.OwnerKind, group.OwnerID}
+	owner := orgOwner{Kind: group.OwnerKind, ID: group.OwnerID}
 	allowed := map[int64]bool{}
 	if corps := app.ownerCorporations(ctx, owner); len(corps) > 0 {
 		rows, err := app.queries.ListCharactersInCorporations(ctx, corps)
 		if err != nil {
-			logging.Errorf("groups: characters of %s: %v", owner.key(), err)
+			logging.Errorf("groups: characters of %s: %v", owner.Key(), err)
 		}
 		for _, row := range rows {
 			allowed[row.CharacterID] = true
@@ -308,7 +308,7 @@ func (app *Application) handleCorpMembersGroup(w http.ResponseWriter, r *http.Re
 	back := app.flashBack(w, r, path)
 	id, _ := strconv.ParseInt(r.Form.Get("group"), 10, 64)
 	group, err := app.queries.GetOrgGroup(ctx, id)
-	if err != nil || !ownersInclude(app.manageableOwners(ctx, userID), orgOwner{group.OwnerKind, group.OwnerID}) {
+	if err != nil || !ownersInclude(app.manageableOwners(ctx, userID), orgOwner{Kind: group.OwnerKind, ID: group.OwnerID}) {
 		back("That group is not yours to change.")
 		return
 	}
@@ -323,7 +323,7 @@ func (app *Application) handleCorpMembersGroup(w http.ResponseWriter, r *http.Re
 // put members in the corporation's groups: the groups, which members
 // are linked here, and which groups each is already in.
 func (app *Application) memberGroups(ctx context.Context, userID int64, view *corpMembersView) {
-	owner := orgOwner{ownerCorporation, view.CorpID}
+	owner := orgOwner{Kind: ownerCorporation, ID: view.CorpID}
 	if !ownersInclude(app.manageableOwners(ctx, userID), owner) {
 		return
 	}
@@ -337,7 +337,7 @@ func (app *Application) memberGroups(ctx context.Context, userID int64, view *co
 	in := map[int64][]string{}
 	groups, err := app.queries.ListOrgGroupsForOwner(ctx, db.ListOrgGroupsForOwnerParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
 	if err != nil {
-		logging.Errorf("groups: groups of %s: %v", owner.key(), err)
+		logging.Errorf("groups: groups of %s: %v", owner.Key(), err)
 	}
 	for _, group := range groups {
 		view.Groups = append(view.Groups, groupChoice{ID: group.ID, Name: group.Name})

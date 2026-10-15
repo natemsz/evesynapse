@@ -39,7 +39,7 @@ func (app *Application) discordRuleViews(ctx context.Context, guild db.DiscordGu
 	for _, role := range roles {
 		names[role.ID] = role.Name
 	}
-	owner := orgOwner{guild.OwnerKind, guild.OwnerID}
+	owner := orgOwner{Kind: guild.OwnerKind, ID: guild.OwnerID}
 	out := make([]discordRuleView, 0, len(rules))
 	for _, rule := range rules {
 		name, exists := names[rule.RoleID]
@@ -62,7 +62,7 @@ func (app *Application) handleDiscordRuleAdd(w http.ResponseWriter, r *http.Requ
 		back("That server is not yours to change.")
 		return
 	}
-	owner := orgOwner{guild.OwnerKind, guild.OwnerID}
+	owner := orgOwner{Kind: guild.OwnerKind, ID: guild.OwnerID}
 	kind, ref, ok := app.parseRuleWho(ctx, owner, r.Form.Get("who"))
 	if !ok {
 		back("That is not something a rule in this server can be about.")

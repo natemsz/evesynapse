@@ -314,7 +314,7 @@ func (app *Application) handleSRP(w http.ResponseWriter, r *http.Request) {
 		logging.Errorf("srp: standing of user %d: %v", userID, err)
 		data.Error = "Could not load ship replacement; check the server log."
 	}
-	cv := &srpCorpView{ID: corp, Name: app.corpDisplayName(ctx, corp), Directs: st.directs(corp)}
+	cv := &srpCorpView{ID: corp, Name: app.corpDisplayName(ctx, corp), Directs: st.Directs(corp)}
 	cv.Handles = app.corpPermits(ctx, st, corp, permSRP)
 	view.CorpOptions, view.Corp = options, cv
 	if settings, err := app.queries.GetSRPSettings(ctx, corp); err == nil {

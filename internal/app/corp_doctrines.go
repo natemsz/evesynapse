@@ -183,7 +183,7 @@ func (app *Application) handleDoctrines(w http.ResponseWriter, r *http.Request) 
 		logging.Errorf("doctrines: standing of user %d: %v", userID, err)
 		data.Error = "Could not load the doctrines; check the server log."
 	}
-	cv := &doctrineCorpView{ID: corp, Name: app.corpDisplayName(ctx, corp), Directs: st.directs(corp)}
+	cv := &doctrineCorpView{ID: corp, Name: app.corpDisplayName(ctx, corp), Directs: st.Directs(corp)}
 	cv.Manages = app.corpPermits(ctx, st, corp, permDoctrines)
 	view.CorpOptions, view.Corp = options, cv
 
@@ -387,7 +387,7 @@ func (app *Application) doctrineAccess(r *http.Request) (d db.Doctrine, reads, k
 	if err != nil {
 		return d, false, false
 	}
-	return d, st.corps[d.CorporationID], app.corpPermits(ctx, st, d.CorporationID, permDoctrines)
+	return d, st.Corps[d.CorporationID], app.corpPermits(ctx, st, d.CorporationID, permDoctrines)
 }
 
 // doctrineView is one doctrine's own page.
@@ -812,7 +812,7 @@ func (app *Application) handleCorpFits(w http.ResponseWriter, r *http.Request) {
 	}
 	view.CorpOptions, view.CorpID, view.CorpName = options, corp, app.corpDisplayName(ctx, corp)
 	if st, err := app.standingFor(ctx, userID); err == nil {
-		view.Directs = st.directs(corp)
+		view.Directs = st.Directs(corp)
 	}
 	chosen := app.doctrineChosenFor(ctx, userID, r.URL.Query().Get("for"))
 	browser, cards := app.corpFitBrowser(ctx, corp, chosen, r.URL.Query())

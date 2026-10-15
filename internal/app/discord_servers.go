@@ -137,7 +137,7 @@ func (app *Application) handleDiscordServers(w http.ResponseWriter, r *http.Requ
 		shown, view.OwnerOptions = []orgOwner{owner}, options
 	}
 	for _, owner := range shown {
-		ov := discordOwnerView{Key: owner.key(), Kind: owner.Kind, Name: app.ownerName(ctx, owner)}
+		ov := discordOwnerView{Key: owner.Key(), Kind: owner.Kind, Name: app.ownerName(ctx, owner)}
 		for _, guild := range guilds {
 			if guild.OwnerKind != owner.Kind || guild.OwnerID != owner.ID {
 				continue
@@ -176,7 +176,7 @@ func (app *Application) handleDiscordServers(w http.ResponseWriter, r *http.Requ
 				_, serr := app.queries.GetDiscordOpsShare(ctx, owner.ID)
 				view.Shares = append(view.Shares, discordShareView{
 					CorporationID: owner.ID, Name: ov.Name,
-					Alliance: app.ownerName(ctx, orgOwner{ownerAlliance, alliance}), On: serr == nil,
+					Alliance: app.ownerName(ctx, orgOwner{Kind: ownerAlliance, ID: alliance}), On: serr == nil,
 				})
 			}
 		}
@@ -208,7 +208,7 @@ func (app *Application) handleDiscordServerAdd(w http.ResponseWriter, r *http.Re
 		return
 	}
 	app.sessions.Put(ctx, sessionDiscordState, state)
-	app.sessions.Put(ctx, sessionDiscordInstall, owner.key())
+	app.sessions.Put(ctx, sessionDiscordInstall, owner.Key())
 	http.Redirect(w, r, app.discord.InstallURL(state), http.StatusFound)
 }
 
@@ -241,7 +241,7 @@ func (app *Application) discordFinishInstall(w http.ResponseWriter, r *http.Requ
 		back("The server could not be saved; check the server log.")
 		return
 	}
-	logging.Infof("discord: user %d added the bot to server %s (%s) for %s", userID, guild.ID, guild.Name, owner.key())
+	logging.Infof("discord: user %d added the bot to server %s (%s) for %s", userID, guild.ID, guild.Name, owner.Key())
 	back("The bot was added to " + guild.Name + ". Choose its roles and channel below.")
 }
 
@@ -252,7 +252,7 @@ func (app *Application) discordBack(w http.ResponseWriter, r *http.Request) func
 	_ = r.ParseForm()
 	key := r.Form.Get("owner")
 	if guild, err := app.queries.GetDiscordGuild(r.Context(), chi.URLParam(r, "guildID")); err == nil {
-		key = orgOwner{guild.OwnerKind, guild.OwnerID}.key()
+		key = orgOwner{Kind: guild.OwnerKind, ID: guild.OwnerID}.Key()
 	} else if corp := r.Form.Get("corporation"); key == "" && corp != "" {
 		key = ownerCorporation + ":" + corp
 	}
@@ -270,7 +270,7 @@ func (app *Application) discordGuildFor(r *http.Request, userID int64) (db.Disco
 	if err != nil {
 		return db.DiscordGuild{}, false
 	}
-	if !ownersInclude(app.manageableOwners(r.Context(), userID), orgOwner{guild.OwnerKind, guild.OwnerID}) {
+	if !ownersInclude(app.manageableOwners(r.Context(), userID), orgOwner{Kind: guild.OwnerKind, ID: guild.OwnerID}) {
 		return db.DiscordGuild{}, false
 	}
 	return guild, true
@@ -377,7 +377,7 @@ func (app *Application) handleDiscordOpsShare(w http.ResponseWriter, r *http.Req
 	back := app.discordBack(w, r)
 	_ = r.ParseForm()
 	corp, _ := strconv.ParseInt(r.Form.Get("corporation"), 10, 64)
-	if corp <= 0 || !ownersInclude(app.manageableOwners(ctx, userID), orgOwner{ownerCorporation, corp}) {
+	if corp <= 0 || !ownersInclude(app.manageableOwners(ctx, userID), orgOwner{Kind: ownerCorporation, ID: corp}) {
 		back("Only a director of that corporation can decide that.")
 		return
 	}

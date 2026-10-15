@@ -108,7 +108,7 @@ func (app *Application) discordUserToken(ctx context.Context, link db.DiscordLin
 // error, whenever there is simply nothing to do: the server does not
 // add people, the account does not belong, or it has no usable token.
 func (app *Application) discordJoin(ctx context.Context, guild db.DiscordGuild, link db.DiscordLink, st orgStanding, wanted []string, now time.Time) (joined bool, err error) {
-	if !guild.AutoJoin || !st.belongs(orgOwner{guild.OwnerKind, guild.OwnerID}) {
+	if !guild.AutoJoin || !st.Belongs(orgOwner{Kind: guild.OwnerKind, ID: guild.OwnerID}) {
 		return false, nil
 	}
 	token, ok := app.discordUserToken(ctx, link, now)

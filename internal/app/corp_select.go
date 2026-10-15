@@ -87,7 +87,7 @@ func (app *Application) pickOwner(ctx context.Context, r *http.Request, offered 
 	}
 	active := offered[0]
 	if row, err := app.queries.GetCharacterCorporation(ctx, sessionCharID(app.sessions, ctx)); err == nil {
-		if mine := (orgOwner{ownerCorporation, row.CorporationID}); ownersInclude(offered, mine) {
+		if mine := (orgOwner{Kind: ownerCorporation, ID: row.CorporationID}); ownersInclude(offered, mine) {
 			active = mine
 		}
 	}
@@ -100,7 +100,7 @@ func (app *Application) pickOwner(ctx context.Context, r *http.Request, offered 
 		if owner.Kind == ownerAlliance {
 			name += " (alliance)"
 		}
-		options = append(options, corpOption{ID: owner.ID, Name: name, Active: owner == active, Param: "owner", Value: owner.key()})
+		options = append(options, corpOption{ID: owner.ID, Name: name, Active: owner == active, Param: "owner", Value: owner.Key()})
 	}
 	return active, options, true
 }
@@ -151,7 +151,7 @@ func (app *Application) directedCorps(ctx context.Context, userID int64) []int64
 	}
 	var out []int64
 	for _, corp := range app.playerCorps(ctx, userID) {
-		if st.directs(corp) {
+		if st.Directs(corp) {
 			out = append(out, corp)
 		}
 	}
@@ -185,11 +185,11 @@ func (app *Application) handleCorpSettingsSave(w http.ResponseWriter, r *http.Re
 	corp, _ := strconv.ParseInt(r.Form.Get("corporation"), 10, 64)
 	back := app.flashBack(w, r, corpAddress(corpSettingsPath, corp))
 	st, err := app.standingFor(ctx, userID)
-	if err != nil || corp == 0 || !st.directs(corp) {
+	if err != nil || corp == 0 || !st.Directs(corp) {
 		app.flashBack(w, r, corpSettingsPath)("Only a director or the CEO of the corporation can change its settings.")
 		return
 	}
-	owner := orgOwner{ownerCorporation, corp}
+	owner := orgOwner{Kind: ownerCorporation, ID: corp}
 	for _, raw := range []string{r.Form.Get("srp_who"), r.Form.Get("doctrines_who")} {
 		if kind, ref, ok := app.parseRuleWho(ctx, owner, raw); raw != "" && (!ok || !permissionRule(kind+":"+ref)) {
 			back("That cannot be handed to the choice made; nothing was saved.")

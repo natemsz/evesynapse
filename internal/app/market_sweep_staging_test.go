@@ -165,9 +165,9 @@ func sweepStateCount(t *testing.T, conn *sql.DB, regionID int64) (states, staged
 	return states, staged
 }
 
-func TestMarketSweepPageBudgetIsFifty(t *testing.T) {
-	if maxRegionSweepPagesPerCycle != 50 {
-		t.Fatalf("maxRegionSweepPagesPerCycle = %d, want 50", maxRegionSweepPagesPerCycle)
+func TestMarketSweepPageBudget(t *testing.T) {
+	if maxRegionSweepPagesPerCycle != 500 {
+		t.Fatalf("maxRegionSweepPagesPerCycle = %d, want 500", maxRegionSweepPagesPerCycle)
 	}
 }
 

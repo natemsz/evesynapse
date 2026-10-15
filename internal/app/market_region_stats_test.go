@@ -210,14 +210,15 @@ func TestRegionSweepIncrementalPageBudget(t *testing.T) {
 	app, conn, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
 
-	// Aim the sweep at Domain with a 60-page book -- more pages
-	// than one cycle may read.
+	// Aim the sweep at Domain with a book ten pages past what one
+	// cycle may read.
 	for _, region := range marketRegions {
 		if region.ID != 10000043 {
 			markRegionFresh(t, q, region.ID)
 		}
 	}
-	pages := make([][]esi.MarketOrder, 60)
+	n := maxRegionSweepPagesPerCycle + 10
+	pages := make([][]esi.MarketOrder, n)
 	for i := range pages {
 		pages[i] = []esi.MarketOrder{
 			{OrderID: int64(1000 + i), TypeID: 34, IsBuyOrder: false, Price: float64(10 + i), VolumeRemain: 1},
@@ -225,7 +226,7 @@ func TestRegionSweepIncrementalPageBudget(t *testing.T) {
 	}
 	transport.books[10000043] = pages
 
-	stored, limited := app.sweepRegionStats(ctx, &fetchBudget{left: 1000})
+	stored, limited := app.sweepRegionStats(ctx, &fetchBudget{left: 4 * n})
 	if limited {
 		t.Fatal("sweep reported the error limit on a healthy stub")
 	}
@@ -239,21 +240,21 @@ func TestRegionSweepIncrementalPageBudget(t *testing.T) {
 	if live != 0 {
 		t.Fatalf("partial sweep stored %d stats rows, want 0 (writes land only on completion)", live)
 	}
-	// Progress lives on disk: the cursor sits at page 51 with
-	// the first 50 pages staged behind it.
+	// Progress lives on disk: the cursor sits one past the cap with
+	// the first cycle's pages staged behind it.
 	var nextPage int64
 	if err := conn.QueryRow(`SELECT next_page FROM market_sweep_state WHERE region_id = 10000043`).Scan(&nextPage); err != nil {
 		t.Fatalf("read sweep cursor: %v", err)
 	}
-	if nextPage != 51 {
-		t.Fatalf("sweep cursor at page %d, want 51", nextPage)
+	if nextPage != int64(maxRegionSweepPagesPerCycle+1) {
+		t.Fatalf("sweep cursor at page %d, want %d", nextPage, maxRegionSweepPagesPerCycle+1)
 	}
 	var staged int
 	if err := conn.QueryRow(`SELECT COUNT(*) FROM market_sweep_orders WHERE region_id = 10000043`).Scan(&staged); err != nil {
 		t.Fatalf("count staged orders: %v", err)
 	}
-	if staged != 50 {
-		t.Fatalf("staged orders after one cycle: %d, want 50 (one per page)", staged)
+	if staged != maxRegionSweepPagesPerCycle {
+		t.Fatalf("staged orders after one cycle: %d, want %d (one per page)", staged, maxRegionSweepPagesPerCycle)
 	}
 
 	sweepUntilIdle(t, app)
@@ -261,8 +262,9 @@ func TestRegionSweepIncrementalPageBudget(t *testing.T) {
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("stats after full sweep: rows=%d err=%v, want 1", len(rows), err)
 	}
-	if rows[0].SellOrders != 60 || rows[0].TypicalSell != 39.5 {
-		t.Fatalf("60-page book: %d sell orders, typical %v, want 60 / 39.5", rows[0].SellOrders, rows[0].TypicalSell)
+	// Prices run 10 .. 10+n-1, one order a page: the middle is 10 + (n-1)/2.
+	if wantTypical := 10 + float64(n-1)/2; rows[0].SellOrders != int64(n) || rows[0].TypicalSell != wantTypical {
+		t.Fatalf("%d-page book: %d sell orders, typical %v, want %d / %v", n, rows[0].SellOrders, rows[0].TypicalSell, n, wantTypical)
 	}
 	// Completion cleared the staging and the cursor.
 	if err := conn.QueryRow(`SELECT COUNT(*) FROM market_sweep_orders WHERE region_id = 10000043`).Scan(&staged); err != nil {

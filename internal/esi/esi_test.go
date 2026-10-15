@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // stubESI answers every request with a fixed status, body and
@@ -218,12 +219,21 @@ func TestEveryResponseFeedsTheErrorBudget(t *testing.T) {
 		t.Error("budget does not read low with 3 errors left")
 	}
 
-	// A reset time that has already passed means a fresh budget.
+	// While it reads low, requests are held here instead of sent.
 	stub.status = http.StatusOK
-	stub.headers["X-Esi-Error-Limit-Reset"] = "0"
-	_ = client.Get(ctx, "", "/status/", &out)
+	if err := client.Get(ctx, "", "/status/", &out); !errors.Is(err, ErrErrorLimit) {
+		t.Errorf("a request with the budget nearly spent: %v; want it held as the error limit", err)
+	}
+
+	// A reset time that has passed means a fresh budget.
+	client.errBudgetMu.Lock()
+	client.errBudgetReset = time.Now().Unix() - 1
+	client.errBudgetMu.Unlock()
 	if client.ErrorBudgetLow() {
 		t.Error("budget still reads low after its reset time passed")
+	}
+	if err := client.Get(ctx, "", "/status/", &out); err != nil {
+		t.Errorf("a request after the reset: %v", err)
 	}
 }
 

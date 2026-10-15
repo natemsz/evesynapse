@@ -45,3 +45,11 @@ func TestCoreOnlyOmitsModules(t *testing.T) {
 		t.Error("sitemap lists /industry/pi/ in the core-only build")
 	}
 }
+
+// TestCoreOnlyHasNoModuleScopes: with no module compiled in, the scope
+// surfaces know only the core manifest.
+func TestCoreOnlyHasNoModuleScopes(t *testing.T) {
+	if _, ok := moduleByID("piplanner"); ok {
+		t.Error("the core-only build still knows the PI planner's scope declaration")
+	}
+}

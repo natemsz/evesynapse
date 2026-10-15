@@ -33,6 +33,13 @@ type Page struct {
 	Scripts  []string
 }
 
+// Scope is one ESI scope a module wants, with what granting it adds,
+// in words the player reads on the sign-up and re-link screens.
+type Scope struct {
+	Scope   string
+	Unlocks string
+}
+
 // SitemapEntry is one public page a module adds to sitemap.xml.
 type SitemapEntry struct {
 	Path       string // e.g. "/industry/pi/"
@@ -128,13 +135,26 @@ type Deps interface {
 }
 
 // Module is the registration contract exposed by every build-selectable module.
+//
+// A module declares what it needs from the build and from the player,
+// all five explicitly (an empty list is written as an empty list, not
+// left out): ID and Title, Requires (the modules it depends on),
+// Scopes (the ESI scopes it cannot function without) and EnhanceScopes
+// (optional scopes, each with the extra feature it unlocks). The build
+// tool reads Requires; sign-up, the locked-state notices and the
+// scope manifest read Scopes and EnhanceScopes, so no scope list lives
+// anywhere else.
 type Module struct {
-	ID         string
-	Nav        []NavSection
-	Routes     func(r chi.Router, deps Deps)
-	WorkerJobs []WorkerJob
-	Widgets    []Widget
-	Suggest    []SuggestPool
+	ID            string
+	Title         string
+	Requires      []string
+	Scopes        []Scope
+	EnhanceScopes []Scope
+	Nav           []NavSection
+	Routes        func(r chi.Router, deps Deps)
+	WorkerJobs    []WorkerJob
+	Widgets       []Widget
+	Suggest       []SuggestPool
 	// Sitemap lists the module's public pages, so a build without the
 	// module leaves them out of sitemap.xml.
 	Sitemap []SitemapEntry

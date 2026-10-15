@@ -673,7 +673,14 @@ func displayPlanetType(raw string) string {
 
 // Module exposes the PI planner module registration contract.
 var Module = module.Module{
-	ID:      "piplanner",
+	ID:       "piplanner",
+	Title:    "PI Planner",
+	Requires: []string{},
+	// The planner works for anyone, signed in or not.
+	Scopes: []module.Scope{},
+	EnhanceScopes: []module.Scope{
+		{Scope: "esi-planets.manage_planets.v1", Unlocks: "Your colonies fill in the planet picker and the coverage check."},
+	},
 	Sitemap: []module.SitemapEntry{{Path: "/industry/pi/", ChangeFreq: "monthly", Priority: "0.8"}},
 	Nav: []module.NavSection{
 		{

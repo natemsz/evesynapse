@@ -1,6 +1,9 @@
 package app
 
-import "evesynapse/internal/esi"
+import (
+	"evesynapse/internal/app/module"
+	"evesynapse/internal/esi"
+)
 
 // ---------------------------------------------------------------------------
 // Module manifest
@@ -259,9 +262,46 @@ var moduleManifest = []moduleDef{
 		Uses: []string{"wallet", "assets", "market"}},
 }
 
-// moduleByID returns the manifest entry for id.
-func moduleByID(id string) (moduleDef, bool) {
+// moduleDefs is every module the scope surfaces know of: the registry's
+// declarations first (the source of truth for a module that has been
+// extracted), then the manifest entries no registered module has taken
+// over. When a stage extracts a feature it deletes its manifest entry
+// and its declaration serves; by the last stage the manifest is gone.
+func moduleDefs() []moduleDef {
+	defs := make([]moduleDef, 0, len(registeredModules)+len(moduleManifest))
+	taken := map[string]bool{}
+	for _, m := range registeredModules {
+		defs = append(defs, moduleDefFromRegistry(m))
+		taken[m.ID] = true
+	}
 	for _, m := range moduleManifest {
+		if !taken[m.ID] {
+			defs = append(defs, m)
+		}
+	}
+	return defs
+}
+
+// moduleDefFromRegistry reads a module's declaration as a moduleDef:
+// its required scopes, then its enhancement scopes as the optional
+// ones. A module that wants no scope at all is public.
+func moduleDefFromRegistry(m module.Module) moduleDef {
+	d := moduleDef{ID: m.ID, Title: m.Title, Layer: layerPublic, Uses: m.Requires}
+	for _, s := range m.Scopes {
+		d.Scopes = append(d.Scopes, req(s.Scope, s.Unlocks))
+	}
+	for _, s := range m.EnhanceScopes {
+		d.Scopes = append(d.Scopes, opt(s.Scope, s.Unlocks))
+	}
+	if len(d.Scopes) > 0 {
+		d.Layer = layerCharacter
+	}
+	return d
+}
+
+// moduleByID returns the declaration or manifest entry for id.
+func moduleByID(id string) (moduleDef, bool) {
+	for _, m := range moduleDefs() {
 		if m.ID == id {
 			return m, true
 		}

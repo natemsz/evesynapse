@@ -71,8 +71,9 @@ func (m moduleDef) statusFor(granted map[string]bool) moduleStatus {
 // the in-corporation role they also need is not visible in scopes.
 func characterModuleStates(ch db.Character) map[string]moduleStatus {
 	granted := scopeSet(ch.Scopes)
-	out := make(map[string]moduleStatus, len(moduleManifest))
-	for _, m := range moduleManifest {
+	defs := moduleDefs()
+	out := make(map[string]moduleStatus, len(defs))
+	for _, m := range defs {
 		out[m.ID] = m.statusFor(granted)
 	}
 	return out
@@ -138,7 +139,7 @@ func relinkScopes(granted string, m moduleDef) []string {
 // snapshotModule returns the manifest module that reads snapshot kind,
 // if any. Kinds no module lists (the profile, say) return false.
 func snapshotModule(kind string) (moduleDef, bool) {
-	for _, m := range moduleManifest {
+	for _, m := range moduleDefs() {
 		for _, k := range m.Snapshots {
 			if k == kind {
 				return m, true

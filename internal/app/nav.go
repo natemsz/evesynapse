@@ -36,6 +36,7 @@ func registerModules(modules []module.Module) {
 		if moduleCompiledIn(m.ID) {
 			continue
 		}
+		validateModule(m)
 		registeredModules = append(registeredModules, m)
 		for _, sec := range m.Nav {
 			for _, e := range sec.Entries {
@@ -49,6 +50,21 @@ func registerModules(modules []module.Module) {
 		for _, p := range m.Pages {
 			registeredPages[p.Template] = p
 		}
+	}
+}
+
+// validateModule stops a module that left a declaration out: ID, Title
+// and the three lists are all required, the lists explicit even when
+// empty. A module is compiled-in code, so this is a developer error
+// caught on the first start or test run.
+func validateModule(m module.Module) {
+	switch {
+	case m.ID == "":
+		panic("module registered without an ID")
+	case m.Title == "":
+		panic("module " + m.ID + " declares no Title")
+	case m.Requires == nil, m.Scopes == nil, m.EnhanceScopes == nil:
+		panic("module " + m.ID + " must declare Requires, Scopes and EnhanceScopes (empty lists are written out, not omitted)")
 	}
 }
 

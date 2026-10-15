@@ -69,9 +69,10 @@ func (app *Application) publicPageURL(path string) string {
 }
 
 // handleSitemap serves the generated sitemap, rebuilt at most
-// hourly: the landing page, the public browser and simulator, the
-// top public fits by weighted rating, and bounded top item and
-// ship lists.
+// hourly: the core public pages (landing, public fits, simulator,
+// item browser, the public planners, the Intel pages), the top
+// public fits by weighted rating, and bounded top item and ship
+// lists.
 func (app *Application) handleSitemap(w http.ResponseWriter, r *http.Request) {
 	// A sitemap is a list of absolute URLs: without an origin of
 	// its own this instance has none to give.
@@ -117,14 +118,23 @@ type sitemapSet struct {
 }
 
 // buildSitemap renders the sitemap from the database: core public
-// pages, the top public fits by weighted rating (LIMIT 1000), the
-// top items by swept volume (LIMIT 1000), and the ships with the
-// most public fits (LIMIT 200). Authed paths never appear.
+// pages (the landing page, the public fits browser and simulator,
+// the item browser, the public build and PI planners, and the
+// Intel pages — the same surfaces robots.txt names), the top
+// public fits by weighted rating (LIMIT 1000), the top items by
+// swept volume (LIMIT 1000), and the ships with the most public
+// fits (LIMIT 200). Authed paths never appear.
 func (app *Application) buildSitemap(ctx context.Context, origin string) ([]byte, error) {
 	urls := []sitemapURL{
 		{Loc: origin + "/", ChangeFreq: "weekly", Priority: "1.0"},
 		{Loc: origin + "/fittings/public/", ChangeFreq: "daily", Priority: "0.9"},
 		{Loc: origin + "/fittings/", ChangeFreq: "monthly", Priority: "0.8"},
+		{Loc: origin + "/items/", ChangeFreq: "weekly", Priority: "0.8"},
+		{Loc: origin + "/planner/", ChangeFreq: "monthly", Priority: "0.8"},
+		{Loc: origin + "/industry/pi/", ChangeFreq: "monthly", Priority: "0.8"},
+		{Loc: origin + "/intel/wars/", ChangeFreq: "weekly", Priority: "0.7"},
+		{Loc: origin + "/intel/incursions/", ChangeFreq: "weekly", Priority: "0.7"},
+		{Loc: origin + "/intel/fw/", ChangeFreq: "weekly", Priority: "0.7"},
 	}
 	fits, err := app.queries.SitemapTopFits(ctx)
 	if err != nil {

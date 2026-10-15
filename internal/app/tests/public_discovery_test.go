@@ -137,6 +137,12 @@ func TestPublicSEOFiles(t *testing.T) {
 		"<urlset", "</loc>",
 		"https://node.example.org/</loc>",
 		"https://node.example.org/fittings/public/</loc>",
+		"https://node.example.org/items/</loc>",
+		"https://node.example.org/planner/</loc>",
+		"https://node.example.org/industry/pi/</loc>",
+		"https://node.example.org/intel/wars/</loc>",
+		"https://node.example.org/intel/incursions/</loc>",
+		"https://node.example.org/intel/fw/</loc>",
 		"https://node.example.org/fittings/public/fit/"+fmt.Sprintf("%d", fitID)+"/",
 		"https://node.example.org/items/type/587/",
 		"https://node.example.org/ships/587/",
@@ -420,7 +426,7 @@ func TestPublicFitPage(t *testing.T) {
 		t.Fatalf("fit page status = %d", code)
 	}
 	apptest.MustContain(t, "fit page, no origin", body, "Fleet Rifter", "og:title", "Copy EFT")
-	for _, absent := range []string{"og:url", "Copy link", "Share to Discord", "Share to Reddit", "evesynapse.app"} {
+	for _, absent := range []string{"og:url", "Copy link", "Share to X", "Share to Reddit", "evesynapse.app"} {
 		if strings.Contains(body, absent) {
 			t.Errorf("fit page with no origin configured has %q", absent)
 		}
@@ -437,8 +443,8 @@ func TestPublicFitPage(t *testing.T) {
 		"Fleet Rifter", "Rifter",
 		"Republic Fleet Medium Shield Extender",
 		"og:title", "og:description", "og:url",
-		"Copy link", "Copy EFT", "Share to Discord", "Share to Reddit",
-		"reddit.com/submit",
+		"Copy link", "Copy EFT", "Share to X", "Share to Reddit",
+		"x.com/intent/post", "reddit.com/submit",
 		"Sign in with EVE SSO",
 		"5.0", "3 ratings",
 	)

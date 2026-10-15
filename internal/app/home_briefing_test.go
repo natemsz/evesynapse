@@ -335,7 +335,7 @@ func TestBriefingQuietAndSlots(t *testing.T) {
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 	_, body := getPage(t, app, cookie, "/")
 	section := briefingSection(t, body)
-	mustContain(t, "briefing quiet", section, "All quiet — nothing needs you right now.")
+	mustContain(t, "briefing quiet", section, "Nothing needs your attention right now.")
 
 	// An industrially-active character whose slots stand idle:
 	// Mass Production IV → 5 manufacturing slots, none in use.

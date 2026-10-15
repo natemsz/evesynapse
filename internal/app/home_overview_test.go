@@ -612,7 +612,7 @@ func TestCharacterSheetFromSnapshots(t *testing.T) {
 	if !strings.Contains(strings.ToLower(body), "training") {
 		t.Error("character page lost the training section")
 	}
-	if strings.Contains(body, "Still warming up") {
+	if strings.Contains(body, "Still syncing") {
 		t.Error("character page stuck on warming with every snapshot seeded")
 	}
 

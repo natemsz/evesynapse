@@ -202,10 +202,14 @@ func (app *Application) noteSuggested(ctx context.Context, box, pool string, ite
 // the not-yet-resolved name search: it carries no link and is
 // never offered as a pick.
 type searchHit struct {
-	Kind  string `json:"kind"` // "item" | "character" | "pilot" | "corporation" | "alliance" | "pilot-pending"
+	Kind  string `json:"kind"` // "item" | "character" | "pilot" | "corporation" | "alliance" | "system" | "region" | "pilot-pending"
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
 	Label string `json:"label,omitempty"`
+	// Sec and SecTier are a system's security status as EVE shows it
+	// and its color step (0 null to 10 for 1.0); systems only.
+	Sec     string `json:"sec,omitempty"`
+	SecTier int    `json:"secTier,omitempty"`
 }
 
 func nameMatchTier(name, q string) (tier int, ok bool) {
@@ -232,8 +236,8 @@ func sortHitsByName(hits []searchHit, q string) {
 
 // handleTopbarSearch serves GET /search.json?q=: the signed-in
 // user's characters first (they're the highest-intent match),
-// then items, corporations, alliances, and warmed pilot
-// records. It also backs the Ctrl+K quick-jump palette, which
+// then items, systems, regions, corporations, alliances, and
+// warmed pilot records. It also backs the Ctrl+K quick-jump palette, which
 // renders the same hits grouped by kind. Every item hit notes
 // the market-history prefetch wants the market page's search
 // notes, so whichever result the user jumps to already has its
@@ -293,6 +297,27 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 			break
 		}
 		guesses = append(guesses, typingGuess{kind: pageWantHistory, id: m.ID, region: defaultMarketRegion})
+	}
+
+	// Systems and regions, from the local star map. A system names
+	// its region and carries its security status.
+	if rows, err := app.queries.SuggestSDESystems(ctx, db.SuggestSDESystemsParams{Q: q, Lim: 4}); err == nil {
+		for _, row := range rows {
+			sec, tier := secRound(row.Security)
+			hits = append(hits, searchHit{
+				Kind: "system", ID: row.SystemID, Name: row.Name, Label: "System · " + row.RegionName,
+				Sec: sec, SecTier: tier,
+			})
+		}
+	} else {
+		logging.Errorf("search: systems for %q: %v", q, err)
+	}
+	if rows, err := app.queries.SuggestSDERegions(ctx, db.SuggestSDERegionsParams{Q: q, Lim: 3}); err == nil {
+		for _, row := range rows {
+			hits = append(hits, searchHit{Kind: "region", ID: row.RegionID, Name: row.Name, Label: "Region"})
+		}
+	} else {
+		logging.Errorf("search: regions for %q: %v", q, err)
 	}
 
 	// Corporations and alliances whose public records have

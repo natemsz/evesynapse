@@ -2438,6 +2438,129 @@ func (q *Queries) SearchSDESkills(ctx context.Context, arg SearchSDESkillsParams
 	return items, nil
 }
 
+const suggestSDESystems = `-- name: SuggestSDESystems :many
+SELECT s.system_id, s.name, s.region_id, COALESCE(r.name, '') AS region_name, s.security
+FROM sde_systems s
+LEFT JOIN sde_regions r ON r.region_id = s.region_id
+WHERE strpos(lower(s.name), lower($1::text)) > 0
+ORDER BY CASE WHEN strpos(lower(s.name), lower($1::text)) = 1 THEN 0 ELSE 1 END, s.name
+LIMIT $2::bigint
+`
+
+type SuggestSDESystemsParams struct {
+	Q   string `json:"q"`
+	Lim int64  `json:"lim"`
+}
+
+type SuggestSDESystemsRow struct {
+	SystemID   int64   `json:"system_id"`
+	Name       string  `json:"name"`
+	RegionID   int64   `json:"region_id"`
+	RegionName string  `json:"region_name"`
+	Security   float64 `json:"security"`
+}
+
+// SuggestSDESystems: systems by name for the search boxes, prefix matches first.
+func (q *Queries) SuggestSDESystems(ctx context.Context, arg SuggestSDESystemsParams) ([]SuggestSDESystemsRow, error) {
+	rows, err := q.db.QueryContext(ctx, suggestSDESystems, arg.Q, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SuggestSDESystemsRow
+	for rows.Next() {
+		var i SuggestSDESystemsRow
+		if err := rows.Scan(&i.SystemID, &i.Name, &i.RegionID, &i.RegionName, &i.Security); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const suggestSDERegions = `-- name: SuggestSDERegions :many
+SELECT region_id, name FROM sde_regions
+WHERE strpos(lower(name), lower($1::text)) > 0
+ORDER BY CASE WHEN strpos(lower(name), lower($1::text)) = 1 THEN 0 ELSE 1 END, name
+LIMIT $2::bigint
+`
+
+type SuggestSDERegionsParams struct {
+	Q   string `json:"q"`
+	Lim int64  `json:"lim"`
+}
+
+type SuggestSDERegionsRow struct {
+	RegionID int64  `json:"region_id"`
+	Name     string `json:"name"`
+}
+
+// SuggestSDERegions: regions by name for the search boxes, prefix matches first.
+func (q *Queries) SuggestSDERegions(ctx context.Context, arg SuggestSDERegionsParams) ([]SuggestSDERegionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, suggestSDERegions, arg.Q, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SuggestSDERegionsRow
+	for rows.Next() {
+		var i SuggestSDERegionsRow
+		if err := rows.Scan(&i.RegionID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDESystemsByRegion = `-- name: ListSDESystemsByRegion :many
+SELECT system_id, name, security FROM sde_systems
+WHERE region_id = $1
+ORDER BY name
+`
+
+type ListSDESystemsByRegionRow struct {
+	SystemID int64   `json:"system_id"`
+	Name     string  `json:"name"`
+	Security float64 `json:"security"`
+}
+
+// ListSDESystemsByRegion: one region's systems for its page.
+func (q *Queries) ListSDESystemsByRegion(ctx context.Context, regionID int64) ([]ListSDESystemsByRegionRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDESystemsByRegion, regionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDESystemsByRegionRow
+	for rows.Next() {
+		var i ListSDESystemsByRegionRow
+		if err := rows.Scan(&i.SystemID, &i.Name, &i.Security); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const searchSDESystems = `-- name: SearchSDESystems :many
 SELECT s.system_id, s.name, r.name AS region_name FROM sde_systems s
 JOIN sde_regions r ON r.region_id = s.region_id

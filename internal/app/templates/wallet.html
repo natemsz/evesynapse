@@ -45,7 +45,7 @@
 {{if .Wallet.Journal.Note}}
 <p><small>{{.Wallet.Journal.Note}}</small></p>
 {{else if .Wallet.Journal.Warming}}
-<p><small>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</small></p>
+<p><small>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</small></p>
 {{else if .Wallet.JournalRows}}
 <div class="tw">
 <table>
@@ -68,7 +68,7 @@
 {{if .Wallet.Txns.Note}}
 <p><small>{{.Wallet.Txns.Note}}</small></p>
 {{else if .Wallet.Txns.Warming}}
-<p><small>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</small></p>
+<p><small>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</small></p>
 {{else if .Wallet.TxnRows}}
 <div class="tw">
 <table>
@@ -86,7 +86,7 @@
 {{end}}
 </section>
 {{else}}
-<p>No character to show yet — link a character first.</p>
+<p>No character to show yet. Link a character first.</p>
 {{end}}
 {{end}}
 
@@ -94,13 +94,13 @@
 <div class="wallet-graph-body" data-poll-state="{{.State}}"{{if eq .State "pending"}} data-live-region data-poll-url="{{.PollURL}}"{{end}}>
   {{if eq .State "chart"}}
   {{template "balance-chart" .Chart}}
-  <p><small>Balance from {{.Chart.From}} to {{.Chart.To}} — every journal entry up close, daily samples further back.</small></p>
+  <p><small>Balance from {{.Chart.From}} to {{.Chart.To}}: every journal entry for recent days, daily samples further back.</small></p>
   {{else if eq .State "few"}}
-  <p><small>Balance history is building — one point recorded so far{{if .Latest}} ({{.Latest}} ISK){{end}}. The graph draws itself once there's a second.</small></p>
+  <p><small>Balance history has started: one point so far{{if .Latest}} ({{.Latest}} ISK){{end}}. The graph appears once there's a second.</small></p>
   {{else if eq .State "empty"}}
-  <p><small>No wallet activity recorded yet — the graph starts with your first journal entries.</small></p>
+  <p><small>No wallet activity recorded yet. The graph starts with your first journal entries.</small></p>
   {{else}}
-  <p><span class="loading-pulse" aria-hidden="true"></span><small>Your balance history is on its way — it fills in here on its own.</small></p>
+  <p><span class="loading-pulse" aria-hidden="true"></span><small>Your balance history is loading and will appear here by itself.</small></p>
   {{end}}
 </div>
 {{end}}

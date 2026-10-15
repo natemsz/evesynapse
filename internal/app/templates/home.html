@@ -7,9 +7,9 @@
 
 {{if .Home}}
 {{if .Home.LoadFailed}}
-<p>Could not load your characters — please try again shortly.</p>
+<p>Your characters couldn't be loaded. Try again shortly.</p>
 {{else if not .Home.HasChars}}
-<p>No characters are linked to this account yet. EveSynapse tracks every character you sign in with here — link one to start.</p>
+<p>No characters are linked to this account yet. Every character you sign in with shows up here. Link one to start.</p>
 <p><a class="btn" href="/auth/eve">Link your first character</a></p>
 {{else}}
 <div class="home-bar">
@@ -29,7 +29,7 @@
     </div>
   </details>
 </div>
-{{if .Home.Customize}}{{if not .Home.Widgets}}<p><small>Your home is empty right now — add a module from the Overview menu.</small></p>{{end}}{{end}}
+{{if .Home.Customize}}{{if not .Home.Widgets}}<p><small>Your home is empty. Add a module from the Overview menu.</small></p>{{end}}{{end}}
 
 <div class="grid home-grid{{if .Home.Customize}} home-custom{{end}}"{{if .Home.Customize}} id="home-grid" data-customize="1"{{end}}>
 {{range .Home.Widgets}}
@@ -59,7 +59,7 @@
       <span class="kpi-k">Skill training</span>
       <span class="kpi-v">{{if .Pilots}}{{.Training}} / {{.Pilots}} <small>training</small>{{else}}—{{end}}</span>
       {{if .TrainBar}}<span class="kpi-bar{{if .Idle}} warn{{end}}"><span data-w="{{.TrainBar}}"></span></span>{{end}}
-      <span class="kpi-sub">{{if .Idle}}<a class="linkbtn" href="/characters/" data-fleet-idle>{{.Idle}} idle — show them</a>{{else if .Pilots}}Every queue is running{{end}}</span>
+      <span class="kpi-sub">{{if .Idle}}<a class="linkbtn" href="/characters/" data-fleet-idle>{{.Idle}} idle · show them</a>{{else if .Pilots}}Every queue is running{{end}}</span>
     </div>
   </div>
   {{end}}
@@ -86,7 +86,7 @@
   {{if .More}}<p><small>+{{.More}} more need{{if eq .More 1}}s{{end}} your attention.</small></p>{{end}}
   <p><small>Since {{.SinceLabel}}</small></p>
   {{else}}
-  <p>All quiet — nothing needs you right now.</p>
+  <p>Nothing needs your attention right now.</p>
   {{end}}
   {{end}}
   </div>
@@ -163,7 +163,7 @@
   {{if not $chartUp}}{{template "balance-chart" .History}}{{end}}
   <p><small>Net worth over time, from the daily samples.</small></p>
   {{else if .HistoryBuilding}}
-  <p><small>Net worth history is building — a point is recorded each day.</small></p>
+  <p><small>Net worth history has started. A point is recorded each day.</small></p>
   {{end}}
   </div>
   {{else}}
@@ -230,7 +230,7 @@
   <p><small>Order data appears here once your characters have synced.</small></p>
   {{else if .Open}}
   {{if ne .Merge "per-character"}}
-  <p><strong>{{.Open}}</strong> open orders — {{.SellCount}} sell ({{.SellValue}} ISK) · {{.BuyCount}} buy ({{.BuyValue}} ISK in escrow)</p>
+  <p><strong>{{.Open}}</strong> open orders: {{.SellCount}} sell ({{.SellValue}} ISK) · {{.BuyCount}} buy ({{.BuyValue}} ISK in escrow)</p>
   {{if .Health}}<p><small>{{.Health}}</small></p>{{end}}
   {{end}}
   {{if eq .Merge "per-character"}}
@@ -277,7 +277,7 @@
   </table>
   </div>
   {{else}}
-  <p><small>Nothing watched yet — add items from the <a href="/market/">Market page</a> and their price moves will show up here.</small></p>
+  <p><small>Nothing watched yet. Add items from the <a href="/market/">Market page</a> to see their price moves here.</small></p>
   {{end}}
   {{end}}
   </div>
@@ -332,7 +332,7 @@
     {{end}}
   </div>
   <p><small>As of {{.AsOf}} · {{.Model}} on the Forge spread scanner · <a href="/market/ideas/">all ideas</a></small></p>
-  {{else if .Configured}}<p><small>No ideas yet — the next refresh asks the model once the Forge sweep lands.</small></p>
+  {{else if .Configured}}<p><small>No ideas yet. They're generated after the next Forge market sweep.</small></p>
   {{else}}<p><small>Trade Ideas are not set up on this server.</small></p>{{end}}
   {{end}}
   </div>
@@ -385,7 +385,7 @@
   </div>
   {{end}}
   {{else}}
-  <p><small>Nothing to show — this needs a Director, Personnel Manager, Accountant, or Station Manager role in the corporation.</small></p>
+  <p><small>Nothing to show. This needs a Director, Personnel Manager, Accountant, or Station Manager role in the corporation.</small></p>
   {{end}}
   {{end}}
   </div>
@@ -433,7 +433,7 @@
   <ul class="attention">{{range $i, $it := .Items}}<li{{if ge $i $cap}} data-wmore{{end}}>{{if .Urgent}}<strong>{{.Name}} — {{.Text}}</strong>{{else}}{{.Name}} — {{.Text}}{{end}} <small>{{.When}}</small></li>{{end}}</ul>
   {{end}}
   {{else}}
-  <p><small>All fueled — or this needs a Station Manager or Director role to check.</small></p>
+  <p><small>All structures are fueled, or none of your characters has the Station Manager or Director role needed to check.</small></p>
   {{end}}
   {{end}}
   </div>
@@ -502,14 +502,14 @@
 
 {{else}}
 <h1><span class="gt">Welcome</span></h1>
-<p>One-stop EVE Online companion: characters, market, fitting, intel. Rebuilt in Go on ESI + EVE SSO.</p>
+<p>An EVE Online companion for your characters, the market, fitting and intel.</p>
 {{if .ServerStatus}}<p><small>Tranquility: {{.ServerStatus.Players}} players online</small></p>{{end}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 <p>You are not signed in.</p>
 <p><a class="btn" href="/auth/eve">Log in with EVE SSO</a></p>
 {{if not .SSOConfigured}}
-<p><small>EVE SSO is not configured — set <code>EVE_CLIENT_ID</code> / <code>EVE_CLIENT_SECRET</code> (see <code>.env.example</code>).</small></p>
+<p><small>EVE SSO is not configured. Set <code>EVE_CLIENT_ID</code> / <code>EVE_CLIENT_SECRET</code> (see <code>.env.example</code>).</small></p>
 {{end}}
 {{end}}
 {{end}}

@@ -127,7 +127,7 @@
 <section class="card spanall">
 <h2>Swarm Cache</h2>
 {{if .Enabled}}
-<p><small>Mode {{.Mode}}: this instance shares public data (market history, type names, corporation and alliance records, player structure names) with the instances below, and checks everything they send — signatures on every read, spot checks against ESI before anything is used. Mode, secret and seeds come from the environment (SHARED_CACHE, SHARED_CACHE_SECRET, SHARED_CACHE_SEEDS); changing them restarts the instance. Membership spreads peer to peer {{.GossipEvery}}.</small></p>
+<p><small>Mode {{.Mode}}: this instance shares public data (market history, type names, corporation and alliance records, player structure names) with the instances below, and checks everything they send: signatures on every read, and spot checks against ESI before anything is used. Mode, secret and seeds come from the environment (SHARED_CACHE, SHARED_CACHE_SECRET, SHARED_CACHE_SEEDS); changing them restarts the instance. Membership spreads peer to peer {{.GossipEvery}}.</small></p>
 {{else}}
 <p><small>Mode {{.Mode}}: this instance fetches everything itself and offers nothing to peers. Set SHARED_CACHE to open or allowlist (with a SHARED_CACHE_SECRET) and restart to join a swarm. Secrets are never shown here{{if .SecretSet}}, and one is set{{end}}.</small></p>
 {{end}}
@@ -136,7 +136,7 @@
   <label>Add an instance by address: <input type="text" name="url" placeholder="https://evesynapse.app" autocomplete="off" size="28" required></label>
   <button type="submit">Add</button>
 </form>
-<p><small>A bare origin is enough — the address serves its member list, and this instance learns every member it names. Seeds do the same on their own, about once a day.</small></p>
+<p><small>An origin is enough: the address serves its member list, and this instance learns every member it names. Seeds do the same on their own, about once a day.</small></p>
 {{end}}
 {{if .Peers}}
 <div class="tw">

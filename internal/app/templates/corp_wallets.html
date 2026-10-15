@@ -13,12 +13,12 @@
 
   {{if .CorpWallets.Forbidden}}
   {{if .CorpWallets.RoleMissing}}
-  <p>Needs the <b>{{.CorpWallets.RoleMissing}}</b> role in-game — {{.CorpWallets.CharacterName}} doesn't hold it, so ESI won't share this corporation's wallet balances. They appear here once they do.</p>
+  <p>Needs the <b>{{.CorpWallets.RoleMissing}}</b> role in game. {{.CorpWallets.CharacterName}} doesn't hold it, so ESI won't share this corporation's wallet balances. They appear here once they do.</p>
   {{else}}
-  <p>Wallet balances were refused by ESI (403) — they appear here once {{.CorpWallets.CharacterName}} holds an accounting role in this corporation.</p>
+  <p>Wallet balances were refused by ESI (403). They'll appear here once {{.CorpWallets.CharacterName}} holds an accounting role in this corporation.</p>
   {{end}}
   {{else if .CorpWallets.Warming}}
-  <p>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</p>
+  <p>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</p>
   {{else if .CorpWallets.Loaded}}
   <div class="tw">
   <table>
@@ -35,7 +35,7 @@
   <h3>{{if eq .CorpWallets.Division 1}}Master Wallet{{else}}Division {{.CorpWallets.Division}}{{end}} — balance over time</h3>
   {{if .CorpWallets.Graph}}
   {{template "balance-chart" .CorpWallets.Graph}}
-  <p><small>Balance from {{.CorpWallets.Graph.From}} to {{.CorpWallets.Graph.To}} — every journal entry in this division's latest snapshot, ending at its current balance. ESI keeps about a month of a corporation wallet's journal, so that is how far back the line goes.</small></p>
+  <p><small>Balance from {{.CorpWallets.Graph.From}} to {{.CorpWallets.Graph.To}}: every journal entry in this division's latest snapshot, ending at its current balance. ESI keeps about a month of a corporation wallet's journal, so that is how far back the line goes.</small></p>
   {{else if .CorpWallets.GraphNote}}
   <p><small>{{.CorpWallets.GraphNote}}</small></p>
   {{end}}
@@ -82,6 +82,6 @@
   </section>
   {{end}}
 {{else}}
-  <p>No corporation to show yet — link a character first.</p>
+  <p>No corporation to show yet. Link a character first.</p>
 {{end}}
 {{end}}

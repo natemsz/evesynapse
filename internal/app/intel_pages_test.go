@@ -157,7 +157,7 @@ func TestIntelPagesRenderFromStore(t *testing.T) {
 		"#9002", "Aggressor Corp", "Fixture Corp", "Your corporation",
 		"Open for allies", "Active", "3 ships", "1,500,000.50",
 		"#9001", "Aggressor Alliance", "Defender Corp", "Ally Corp", "Ended", "Mutual",
-		"#9003", "details warming")
+		"#9003", "loading details")
 
 	code, body = getPage(t, app, cookie, "/intel/incursions/")
 	if code != http.StatusOK {
@@ -240,7 +240,7 @@ func TestIntelPagesEmptyStates(t *testing.T) {
 		if code != http.StatusOK {
 			t.Fatalf("%s: status %d", path, code)
 		}
-		mustContain(t, path, body, "Still warming up")
+		mustContain(t, path, body, "Not loaded yet")
 	}
 
 	// Home keeps rendering without the status snapshot: the ESI

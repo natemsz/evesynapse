@@ -13,12 +13,12 @@
 
   {{if .CorpAssets.Forbidden}}
   {{if .CorpAssets.RoleMissing}}
-  <p>Needs the <b>{{.CorpAssets.RoleMissing}}</b> role in-game — {{.CorpAssets.CharacterName}} doesn't hold it, so ESI won't share this corporation's assets. They appear here once they do.</p>
+  <p>Needs the <b>{{.CorpAssets.RoleMissing}}</b> role in game. {{.CorpAssets.CharacterName}} doesn't hold it, so ESI won't share this corporation's assets. They appear here once they do.</p>
   {{else}}
-  <p>Assets were refused by ESI (403) — they appear here once {{.CorpAssets.CharacterName}} holds the Director role in this corporation.</p>
+  <p>Assets were refused by ESI (403). They'll appear here once {{.CorpAssets.CharacterName}} holds the Director role in this corporation.</p>
   {{end}}
   {{else if .CorpAssets.Warming}}
-  <p>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</p>
+  <p>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</p>
   {{else if .CorpAssets.Loaded}}
   <p><small>{{.CorpAssets.Stacks}} stacks · {{.CorpAssets.TotalItems}} items · {{len .CorpAssets.Locations}} locations</small></p>
   {{range .CorpAssets.Locations}}
@@ -40,6 +40,6 @@
   <p><small>Ships and renamed containers show their player-given names once the worker has resolved them; other items show their type names.</small></p>
   {{end}}
 {{else}}
-  <p>No corporation to show yet — link a character first.</p>
+  <p>No corporation to show yet. Link a character first.</p>
 {{end}}
 {{end}}

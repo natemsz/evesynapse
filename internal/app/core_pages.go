@@ -154,6 +154,7 @@ type pageData struct {
 	// place record.
 	System  *systemPageView
 	Station *stationPageView
+	Region  *regionPageView
 
 	// Player structure page (/structure/): the local structure
 	// record.
@@ -220,7 +221,7 @@ func sectionForPage(page string) string {
 		return "industry"
 	case "market.html", "market_scanner.html", "market_tradeideas.html", "market_tradefinder.html", "market_leaderboard.html",
 		"market_restock.html",
-		"orders.html", "contracts.html", "system.html", "station.html", "structure.html":
+		"orders.html", "contracts.html", "system.html", "station.html", "structure.html", "region.html":
 		return "market"
 	case "items.html", "ship_public.html":
 		return "tools"

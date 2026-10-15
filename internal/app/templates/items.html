@@ -9,7 +9,7 @@
 
 {{if eq $v.Mode "categories"}}
 {{template "items-search-form" $v}}
-<p><small>Browse every item category in the local static data. Pick a category to see its groups, then a group for its types — each type links to its details page.</small></p>
+<p><small>Browse every item category in the local static data. Pick a category to see its groups, then a group to see its types. Each type links to its details page.</small></p>
 {{if $v.Categories}}
 <div class="tw">
 <table>
@@ -22,7 +22,7 @@
 </table>
 </div>
 {{else}}
-<p><small>No static data yet — the item database fills in once the SDE import lands (watch the <a href="/sync/">Sync page</a>).</small></p>
+<p><small>No static data yet. The item database fills in when the static data import finishes; progress is on the <a href="/sync/">Sync page</a>.</small></p>
 {{end}}
 {{end}}
 
@@ -72,7 +72,7 @@
 {{if $v.HasPrev}} · <a href="/items/?q={{$v.SearchQuery}}{{if $v.MarketOnly}}&market=1{{end}}{{if $v.CategoryID}}&category={{$v.CategoryID}}{{end}}{{if $v.GroupID}}&group={{$v.GroupID}}{{end}}&page={{$v.PrevPage}}">← Prev</a>{{end}}
 {{if $v.HasNext}} · <a href="/items/?q={{$v.SearchQuery}}{{if $v.MarketOnly}}&market=1{{end}}{{if $v.CategoryID}}&category={{$v.CategoryID}}{{end}}{{if $v.GroupID}}&group={{$v.GroupID}}{{end}}&page={{$v.NextPage}}">Next →</a>{{end}}</p>
 {{else}}
-<p><small>No items{{if $v.SearchQuery}} matching "{{$v.SearchQuery}}"{{end}}{{if $v.MarketOnly}} on the market{{end}} in the local static data.{{if $v.MarketOnly}} Try turning off “Market items only” — plenty of items exist that can't be traded.{{end}}</small></p>
+<p><small>No items{{if $v.SearchQuery}} matching "{{$v.SearchQuery}}"{{end}}{{if $v.MarketOnly}} on the market{{end}} in the local static data.{{if $v.MarketOnly}} Try turning off “Market items only”: many items can't be traded.{{end}}</small></p>
 {{end}}
 {{end}}
 
@@ -166,7 +166,7 @@
 
 {{define "type-description"}}
 {{if eq .DescState "ready"}}<div class="mailbody" data-poll-state="ready">{{.Description}}</div>
-{{else if eq .DescState "pending"}}<div data-live-region data-poll-url="/items/description-fragment?type={{.ID}}" data-poll-state="pending"><p><span class="loading-pulse" aria-hidden="true"></span><small>This description is queued — it will be ready in a moment.</small></p></div>
+{{else if eq .DescState "pending"}}<div data-live-region data-poll-url="/items/description-fragment?type={{.ID}}" data-poll-state="pending"><p><span class="loading-pulse" aria-hidden="true"></span><small>This description is on its way. It'll be ready in a moment.</small></p></div>
 {{end}}{{end}}
 
 {{define "items-search-form"}}

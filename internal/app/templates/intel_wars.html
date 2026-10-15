@@ -7,7 +7,7 @@
 
 {{if .IntelWars}}
   {{if .IntelWars.Warming}}
-  <p>Still warming up — the worker pulls the public war list on its regular cycle. Watch progress on the <a href="/sync/">Sync page</a>.</p>
+  <p>Not loaded yet. The public war list is fetched on a regular cycle; progress is on the <a href="/sync/">Sync page</a>.</p>
   {{else}}
   {{if .IntelWars.Rows}}
   <div class="tw">
@@ -19,7 +19,7 @@
         <td>#{{.ID}}{{if .Yours}}<br><span class="badge kill">Your corporation</span>{{end}}</td>
         <td>{{.Aggressor}}{{if .OpenAllies}}<br><span class="badge loss">Open for allies</span>{{end}}{{if .Mutual}}<br><small>Mutual</small>{{end}}</td>
         <td>{{.Defender}}{{if .Allies}}<br><small>Allies: {{range $i, $a := .Allies}}{{if $i}}, {{end}}{{$a}}{{end}}</small>{{end}}</td>
-        <td>{{if .Warming}}<small>details warming</small>{{else}}{{.State}}{{end}}</td>
+        <td>{{if .Warming}}<small>loading details</small>{{else}}{{.State}}{{end}}</td>
         <td>{{.Declared}}</td>
         <td>{{.AggKills}}</td>
         <td>{{.DefKills}}</td>

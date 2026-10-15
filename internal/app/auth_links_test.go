@@ -371,7 +371,7 @@ func TestItemDetailsPageAndTypeDetailDrain(t *testing.T) {
 		"Traded on the market",
 		"Orders &amp; price history", `href="/market/?type=34"`,
 		"Plan manufacturing", `href="/planner/?product=34"`,
-		"This description is queued",
+		"This description is on its way",
 		"Fixture Widget", `href="/items/type/1001/"`,
 	)
 	if _, err := q.GetTypeDetail(ctx, 34); err != nil {
@@ -408,7 +408,7 @@ func TestItemDetailsPageAndTypeDetailDrain(t *testing.T) {
 		t.Fatalf("item details page after drain: status %d", code)
 	}
 	mustContain(t, "/items/type/34/ (described)", body, "The building block", "of everything")
-	if strings.Contains(body, "This description is queued") {
+	if strings.Contains(body, "This description is on its way") {
 		t.Fatal("described item page still claims the description is loading")
 	}
 }

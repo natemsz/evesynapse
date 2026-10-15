@@ -486,7 +486,7 @@ func TestMarketItemPageChartAndWant(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("item page: status %d", code)
 	}
-	mustContain(t, "/market/?type=34 (no history)", body, "This one's queued")
+	mustContain(t, "/market/?type=34 (no history)", body, "This item is queued")
 	wants, err := q.ListMarketHistoryWants(ctx, db.ListMarketHistoryWantsParams{
 		LastRequestedAt: time.Time{},
 		TypingPriority:  wantTyping,
@@ -508,7 +508,7 @@ func TestMarketItemPageChartAndWant(t *testing.T) {
 	mustContain(t, "/market/?type=34 (with history)", body,
 		"<svg", "<polyline", "Price history — The Forge", "&#43;8.0%",
 	)
-	if strings.Contains(body, "This one's queued") {
+	if strings.Contains(body, "This item is queued") {
 		t.Fatal("item page with history still shows the loading state")
 	}
 	wants, err = q.ListMarketHistoryWants(ctx, db.ListMarketHistoryWantsParams{

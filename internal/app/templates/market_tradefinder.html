@@ -34,7 +34,7 @@
 <p><small>{{$s.OriginName}} {{$s.OriginAsOf}} · {{$s.DestName}} {{$s.DestAsOf}} · Figures older than 3 days are left out. Showing up to 100 routes, best estimated daily profit first. · <a href="#" id="csv-export">Export CSV</a></small></p>
 
 {{if $s.SameRegion}}
-<p>Pick two different regions — buying and selling in the same region is what the <a href="/market/scanner/">Spread Scanner</a> is for.</p>
+<p>Pick two different regions. For buying and selling in the same region, use the <a href="/market/scanner/">Spread Scanner</a>.</p>
 {{else if $s.Rows}}
 <div class="tw">
 <table>
@@ -81,9 +81,9 @@
 {{end}}
 
 {{else if $s.SameRegion}}
-<p>Pick two different regions — buying and selling in the same region is what the <a href="/market/scanner/">Spread Scanner</a> is for.</p>
+<p>Pick two different regions. For buying and selling in the same region, use the <a href="/market/scanner/">Spread Scanner</a>.</p>
 {{else}}
-<p>Still gathering prices — check back soon. The tradefinder fills in once the first sweep of each region lands.</p>
+<p>Still gathering prices. The Trade Finder fills in after the first sweep of each region.</p>
 {{end}}
 
 {{end}}

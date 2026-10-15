@@ -8,7 +8,7 @@
 
 {{if eq .State "missing"}}
 <h1><span class="gt">Structure</span></h1>
-<p><small>None of your characters can see this structure's name — it may be private, or it may no longer be standing.</small></p>
+<p><small>None of your characters can see this structure's name. It may be private, or it may have been destroyed.</small></p>
 {{else if eq .State "loading"}}
 <h1><span class="gt">Structure</span></h1>
 <p><span class="loading-pulse" aria-hidden="true"></span><small>Looking up this structure…</small></p>
@@ -29,6 +29,6 @@
 </div>
 {{end}}
 
-{{if eq .State "ready"}}<p><small>A player-built structure — what EveSynapse knows about it from your characters' records.</small></p>{{end}}
+{{if eq .State "ready"}}<p><small>A player-built structure, as seen through your characters' records.</small></p>{{end}}
 </div>
 {{end}}

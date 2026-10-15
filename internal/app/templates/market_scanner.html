@@ -7,7 +7,7 @@
 
 {{if .MarketScanner}}
 {{$s := .MarketScanner}}
-<p><small>Find items where buying low and selling high at the same station leaves a wide gap. Prices come from the latest sweep of each region — buy at the highest buy price, sell at the lowest sell price, and the gap in between is your room before fees.</small></p>
+<p><small>Find items where buying low and selling high at the same station leaves a wide gap. Prices come from each region's latest sweep: buy at the highest buy price, sell at the lowest sell price, and the gap between them is your margin before fees.</small></p>
 
 <form method="get" action="/market/scanner/">
   <label><small>Region</small>
@@ -52,7 +52,7 @@
 {{end}}
 
 {{else}}
-<p>Still gathering prices for {{$s.RegionName}} — check back soon. The scanner fills in once the first sweep of this region's stations lands.</p>
+<p>Still gathering prices for {{$s.RegionName}}. The scanner fills in after the first sweep of this region's stations.</p>
 {{end}}
 
 {{end}}

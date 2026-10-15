@@ -1235,6 +1235,19 @@
   // box names its feed (a pool of the one suggestion endpoint)
   // and what a pick does; without one of them the plain form
   // still submits exactly as before.
+  // hitLabel fills a result's type line: a system's security status
+  // in its color, then the label text.
+  function hitLabel(el, it) {
+    if (it.sec) {
+      var sec = document.createElement("span");
+      sec.className = "sec sec-" + (it.secTier || 0);
+      sec.textContent = it.sec;
+      el.appendChild(sec);
+    }
+    el.appendChild(document.createTextNode(it.label || ""));
+  }
+  window.EveSynapseHitLabel = hitLabel;
+
   function attachSuggest(input, list, endpoint, onPick) {
     if (!input || !list || !window.fetch) return;
     var items = [];
@@ -1285,7 +1298,7 @@
         if (it.label) {
           var lab = document.createElement("span");
           lab.className = "sug-label";
-          lab.textContent = it.label;
+          hitLabel(lab, it);
           li.appendChild(lab);
         }
         if (idx === selected) {
@@ -1514,8 +1527,9 @@
   onContentReady(initPageSuggest);
   initPageSuggest(document);
 
-  // Banner global search: items, your characters, pilots and
-  // organizations the app already knows, each to its own page.
+  // Banner global search: items, your characters, systems, regions,
+  // pilots and organizations the app already knows, each to its own
+  // page.
   attachSuggest(
     document.getElementById("topbar-q"),
     document.getElementById("topbar-suggest"),
@@ -1530,6 +1544,10 @@
         url = "/corporation/?corporation=" + encodeURIComponent(it.id);
       } else if (it.kind === "alliance") {
         url = "/alliance/?alliance=" + encodeURIComponent(it.id);
+      } else if (it.kind === "system") {
+        url = "/system/?system=" + encodeURIComponent(it.id);
+      } else if (it.kind === "region") {
+        url = "/region/?region=" + encodeURIComponent(it.id);
       } else {
         url = "/items/type/" + encodeURIComponent(it.id) + "/";
       }
@@ -2263,6 +2281,8 @@
     ["page", "Pages"],
     ["character", "Characters"],
     ["item", "Items"],
+    ["system", "Systems"],
+    ["region", "Regions"],
     ["corporation", "Corporations"],
     ["alliance", "Alliances"],
     ["pilot", "Pilots"]
@@ -2275,6 +2295,8 @@
       case "pilot": return "/pilot/?character=" + encodeURIComponent(hit.id);
       case "corporation": return "/corporation/?corporation=" + encodeURIComponent(hit.id);
       case "alliance": return "/alliance/?alliance=" + encodeURIComponent(hit.id);
+      case "system": return "/system/?system=" + encodeURIComponent(hit.id);
+      case "region": return "/region/?region=" + encodeURIComponent(hit.id);
       default: return "/market/?type=" + encodeURIComponent(hit.id);
     }
   }
@@ -2309,7 +2331,8 @@
           if (hit.label) {
             var lab = document.createElement("span");
             lab.className = "qj-label";
-            lab.textContent = hit.label;
+            if (window.EveSynapseHitLabel) window.EveSynapseHitLabel(lab, hit);
+            else lab.textContent = hit.label;
             li.appendChild(lab);
           }
           if (hit.kind === "pilot-pending") {

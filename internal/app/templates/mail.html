@@ -15,7 +15,7 @@
 <section class="foldable">
 {{if .Mail.DetailWarming}}
 <h3>Mail</h3>
-<p><small>This mail's body is still warming up — check back shortly.</small></p>
+<p><small>This mail's body is still loading. Check back shortly.</small></p>
 <p><a href="/mail/?character={{.Mail.CharacterID}}">Back to the inbox</a></p>
 {{else}}
 {{with .Mail.Detail}}
@@ -51,7 +51,7 @@
 {{if .Mail.Headers.Note}}
 <p><small>{{.Mail.Headers.Note}}</small></p>
 {{else if .Mail.Headers.Warming}}
-<p><small>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</small></p>
+<p><small>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</small></p>
 {{else if .Mail.Rows}}
 <div class="tw">
 <table>
@@ -68,6 +68,6 @@
 <p><small>No mail in the latest snapshot{{if .Mail.LabelFilter}} with that label{{end}}.</small></p>
 {{end}}
 {{else}}
-<p>No character to show yet — link a character first.</p>
+<p>No character to show yet. Link a character first.</p>
 {{end}}
 {{end}}

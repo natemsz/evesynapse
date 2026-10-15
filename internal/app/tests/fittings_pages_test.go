@@ -85,7 +85,7 @@ func TestFittingsPagesSplit(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("saved-fits warming status = %d", code)
 	}
-	apptest.MustContain(t, "/fittings/saved/?character=90000002", body, "Still warming up")
+	apptest.MustContain(t, "/fittings/saved/?character=90000002", body, "Still syncing")
 	if got := transport.Calls.Load() - before; got != pageCalls {
 		t.Errorf("warming page made %d outbound calls, want %d", got, pageCalls)
 	}

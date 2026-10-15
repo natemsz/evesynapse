@@ -11,7 +11,7 @@
 {{with .SkillPlans}}
 
 {{if .GraphWarming}}
-<p>Skill data is still loading — plans appear once the static-data import lands. Watch the <a href="/sync/">Sync page</a>.</p>
+<p>Skill data is still loading. Plans appear when the static data import finishes; progress is on the <a href="/sync/">Sync page</a>.</p>
 {{else}}
 
 {{if .FitPreview}}
@@ -90,7 +90,7 @@
 {{end}}
 {{end}}
 {{else}}
-  <p>No skill plans to show yet — link a character first.</p>
+  <p>No skill plans to show yet. Link a character first.</p>
 {{end}}
 {{end}}
 
@@ -227,7 +227,7 @@
 {{else if .Covered}}
 <p><small>Everything in this plan is already trained.</small></p>
 {{else}}
-<p><small>This plan is empty — add skills above, or browse the <a href="/character/?character={{$.CharacterID}}">skill catalog</a>.</small></p>
+<p><small>This plan is empty. Add skills above, or browse the <a href="/character/?character={{$.CharacterID}}">skill catalog</a>.</small></p>
 {{end}}
 
 {{if .Unknown}}

@@ -394,7 +394,7 @@ func TestCorpPagesRenderFromSnapshots(t *testing.T) {
 		t.Fatalf("wallets page (B): status %d", code)
 	}
 	mustContain(t, "/corporations/wallets/ (B)", body,
-		"Needs the", "Accountant or Junior Accountant", "role in-game")
+		"Needs the", "Accountant or Junior Accountant", "role in game")
 
 	// The Sync page explains the same states.
 	code, body = getPage(t, app, cookie, "/sync/")

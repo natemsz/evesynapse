@@ -7,7 +7,7 @@
 
 {{if .MarketLeaderboard}}
 {{$s := .MarketLeaderboard}}
-<p><small>The busiest stations and structures across the hub regions: how many orders are open at each, and how much ISK is sitting on them. Each region sweep distills these figures when it completes — the page never computes them live.</small></p>
+<p><small>The busiest stations and structures across the hub regions: how many orders are open at each, and how much ISK is sitting on them. The figures update after each region sweep.</small></p>
 
 <form method="get" action="/market/leaderboard/">
   <label><small>Region</small>
@@ -46,7 +46,7 @@
 
 <p><small>Open orders counts every open buy and sell order the latest sweep saw at the station; ISK on orders is the value still open on those orders (price times remaining volume). Visit a station to see its best prices and the spreads traders are working there.</small></p>
 {{else}}
-<p>Still gathering prices — check back soon. The leaderboard fills in once the first region sweeps land.</p>
+<p>Still gathering prices. The leaderboard fills in after the first region sweeps finish.</p>
 {{end}}
 {{end}}
 {{end}}

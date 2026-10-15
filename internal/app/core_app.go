@@ -696,6 +696,10 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(anonPages)
 		r.Get("/", app.handleSystemPage)
 	})
+	r.Route("/region", func(r chi.Router) {
+		r.Use(anonPages)
+		r.Get("/", app.handleRegionPage)
+	})
 	r.Route("/station", func(r chi.Router) {
 		r.Use(anonPages)
 		r.Get("/", app.handleStationPage)

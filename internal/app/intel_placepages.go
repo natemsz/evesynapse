@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -12,12 +11,11 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Solar system and station pages (/system/, /station/): where every
-// resolved system and station name links to. Both render entirely from
-// the local SDE (sde_systems, sde_stations, sde_regions), so there is
-// nothing to warm. An id the SDE does not know settles in a
-// not-in-the-star-map state. Region names render as text: there is no
-// region page.
+// Solar system, region and station pages (/system/, /region/,
+// /station/): where every resolved place name links to. All render
+// entirely from the local SDE (sde_systems, sde_stations,
+// sde_regions), so there is nothing to warm. An id the SDE does not
+// know settles in a not-in-the-star-map state.
 // ---------------------------------------------------------------------------
 
 // systemStationLine is one NPC station listed on a system page.
@@ -31,7 +29,7 @@ type systemPageView struct {
 	SystemID int64
 	State    string // "ready" | "missing"
 	Name     string
-	Security string // EVE-style one-decimal security, e.g. "0.9"
+	Security float64 // shown EVE-style by secStatus
 	RegionID int64
 	Region   string
 	Stations []systemStationLine
@@ -44,6 +42,7 @@ type stationPageView struct {
 	Name      string
 	SystemID  int64
 	System    string
+	RegionID  int64
 	Region    string
 }
 
@@ -60,6 +59,68 @@ func (app *Application) handleSystemPage(w http.ResponseWriter, r *http.Request)
 
 	data.System = app.loadSystemView(ctx, id)
 	app.render(ctx, w, http.StatusOK, "system.html", data)
+}
+
+// regionSystemLine is one system listed on a region page.
+type regionSystemLine struct {
+	SystemID int64
+	Name     string
+	Security float64
+}
+
+// regionPageView is the /region/ page body.
+type regionPageView struct {
+	RegionID int64
+	State    string // "ready" | "missing"
+	Name     string
+	Systems  []regionSystemLine
+	// How the region's systems split by security band.
+	High, Low, Null int
+}
+
+// handleRegionPage renders one region's SDE record: its systems.
+func (app *Application) handleRegionPage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	data := app.publicPage(ctx) // public: stored rows only
+
+	id, err := strconv.ParseInt(r.URL.Query().Get("region"), 10, 64)
+	if err != nil || id <= 0 {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	data.Region = app.loadRegionView(ctx, id)
+	app.render(ctx, w, http.StatusOK, "region.html", data)
+}
+
+// loadRegionView builds the region page from the SDE tables.
+func (app *Application) loadRegionView(ctx context.Context, id int64) *regionPageView {
+	view := &regionPageView{RegionID: id, State: "missing"}
+	region, err := app.queries.GetSDERegion(ctx, id)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			logging.Errorf("region page: read region %d: %v", id, err)
+		}
+		return view
+	}
+	view.State = "ready"
+	view.Name = region.Name
+	systems, err := app.queries.ListSDESystemsByRegion(ctx, id)
+	if err != nil {
+		logging.Errorf("region page: list systems for region %d: %v", id, err)
+		return view
+	}
+	for _, sys := range systems {
+		view.Systems = append(view.Systems, regionSystemLine{SystemID: sys.SystemID, Name: sys.Name, Security: sys.Security})
+		switch _, tier := secRound(sys.Security); {
+		case tier >= 5:
+			view.High++
+		case tier >= 1:
+			view.Low++
+		default:
+			view.Null++
+		}
+	}
+	return view
 }
 
 // handleStationPage renders one NPC station's SDE record.
@@ -92,7 +153,7 @@ func (app *Application) loadSystemView(ctx context.Context, id int64) *systemPag
 
 	view.State = "ready"
 	view.Name = sys.Name
-	view.Security = fmt.Sprintf("%.1f", sys.Security)
+	view.Security = sys.Security
 	view.RegionID = sys.RegionID
 	if region, rerr := app.queries.GetSDERegion(ctx, sys.RegionID); rerr == nil {
 		view.Region = region.Name
@@ -128,6 +189,7 @@ func (app *Application) loadStationView(ctx context.Context, id int64) *stationP
 	view.SystemID = st.SystemID
 	if sys, serr := app.queries.GetSDESystem(ctx, st.SystemID); serr == nil {
 		view.System = sys.Name
+		view.RegionID = sys.RegionID
 		if region, rerr := app.queries.GetSDERegion(ctx, sys.RegionID); rerr == nil {
 			view.Region = region.Name
 		}

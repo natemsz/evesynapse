@@ -2,7 +2,7 @@
 {{define "content"}}
 <h1><span class="gt">Characters</span></h1>
 {{template "sectiontabs" .}}
-<p>Every character linked to your account. The worker keeps each one's data warm in the background; tags are your own labels for telling a fleet of alts apart (EVE doesn't reveal which characters share a game account, so grouping is yours).</p>
+<p>Every character linked to your account. Their data stays up to date in the background. Tags are your own labels for telling alts apart; EVE doesn't say which characters share a game account.</p>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
@@ -12,7 +12,7 @@
 {{if .ConfirmUnlink}}
 <section class="card">
 <h2>Unlink {{.ConfirmUnlink.Name}}?</h2>
-<p>This removes the character from your account and deletes its saved login and all cached data for it (snapshots, wallet/order history views, corp data warmed through it). Data other characters warmed is untouched. This cannot be undone — you can link the character again with EVE sign-in at any time.</p>
+<p>This removes the character from your account and deletes its saved login and all cached data for it (snapshots, wallet/order history views, corp data warmed through it). Data other characters warmed is untouched. This can't be undone, but you can link the character again with EVE sign-in at any time.</p>
 <form method="post" action="/characters/unlink">
   <input type="hidden" name="character_id" value="{{.ConfirmUnlink.ID}}">
   <button class="btn" type="submit">Unlink {{.ConfirmUnlink.Name}}</button>
@@ -33,7 +33,7 @@
     <tr{{if .Active}} class="yours"{{end}}>
       <td><img class="portrait" src="{{.PortraitURL}}" alt="" width="32" height="32"> <strong><a href="/character/?character={{.ID}}">{{.Name}}</a></strong>{{if .Active}} <small>· active</small>{{end}}<br><small>#{{.ID}}</small></td>
       <td>{{if .CorpName}}{{corpLink .CorpID .CorpName}}{{else}}—{{end}}</td>
-      <td>{{.StateLabel}}{{if .StateDetail}}<br><small>{{.StateDetail}}</small>{{end}}{{if .Since}}<br><small>since {{.Since}}</small>{{end}}{{if .PINotEnabled}}<br><small>Planetary industry not enabled — <a href="/auth/eve">re-link to enable</a></small>{{end}}</td>
+      <td>{{.StateLabel}}{{if .StateDetail}}<br><small>{{.StateDetail}}</small>{{end}}{{if .Since}}<br><small>since {{.Since}}</small>{{end}}{{if .PINotEnabled}}<br><small>Planetary industry not enabled. <a href="/auth/eve">Re-link to enable</a></small>{{end}}</td>
       <td>{{if .Snapshots}}{{.Fresh}} of {{.Snapshots}} fresh<br><small>newest {{.Newest}}</small>{{else}}—{{end}}</td>
       <td>
         <form method="post" action="/characters/tags">
@@ -53,7 +53,7 @@
 </table>
 </div>
 {{else}}
-<p>No characters linked yet. <a href="/auth/eve">Sign in with EVE SSO</a> to link your first character — you can add the rest the same way.</p>
+<p>No characters linked yet. <a href="/auth/eve">Sign in with EVE SSO</a> to link your first character. Add the rest the same way.</p>
 {{end}}
 
 {{end}}

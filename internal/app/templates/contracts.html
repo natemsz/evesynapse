@@ -12,7 +12,7 @@
 {{if .Contracts.Contracts.Note}}
 <p><small>{{.Contracts.Contracts.Note}}</small></p>
 {{else if .Contracts.Contracts.Warming}}
-<p><small>Still warming up — watch progress on the <a href="/sync/">Sync page</a>.</small></p>
+<p><small>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</small></p>
 {{else if .Contracts.Rows}}
 <div class="tw">
 <table>
@@ -32,6 +32,6 @@
 <p><small>No contracts in the latest snapshot.</small></p>
 {{end}}
 {{else}}
-<p>No character to show yet — link a character first.</p>
+<p>No character to show yet. Link a character first.</p>
 {{end}}
 {{end}}

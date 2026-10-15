@@ -132,7 +132,7 @@
   </section>
 
   {{end}}
-  {{if $item.Truncated}}<p><small>Order book truncated — only the first 20 pages were read, so best prices are best-within-those.</small></p>{{end}}
+  {{if $item.Truncated}}<p><small>Order book truncated: only the first 20 pages were read, so the best prices shown are the best within those pages.</small></p>{{end}}
 {{else if .Market.Matches}}
   <section class="foldable">
   <h3>Matches</h3>
@@ -242,7 +242,7 @@
 </table>
 </div>
 {{else}}
-<p><small>Nothing watched yet — watch an item and you'll hear about it here and on Home when its price moves.</small></p>
+<p><small>Nothing watched yet. Watch an item to hear about its price moves here and on Home.</small></p>
 {{end}}
 </div>
 {{end}}
@@ -311,18 +311,18 @@
   </div>
   {{end}}
   {{else}}
-  <p><small>Price history for this item hasn't charted yet — check back soon.</small></p>
+  <p><small>Price history for this item isn't ready yet. Check back soon.</small></p>
   {{end}}
   {{else if eq .HistoryState "few"}}
   {{if .Stats}}
-  <p><small>Only {{.Stats.Days}} {{if eq .Stats.Days 1}}day{{else}}days{{end}} of recorded trades in {{.RegionName}} — not enough history to chart yet. Average {{.Stats.Mean}} ISK · low {{.Stats.Min}} · high {{.Stats.Max}} · latest {{.Stats.Latest}} ({{.Stats.LastDay}}).{{if .HistoryLastDay}} Last trades {{.HistoryLastDay}}.{{end}}</small></p>
+  <p><small>Only {{.Stats.Days}} {{if eq .Stats.Days 1}}day{{else}}days{{end}} of recorded trades in {{.RegionName}}: not enough history to chart yet. Average {{.Stats.Mean}} ISK · low {{.Stats.Min}} · high {{.Stats.Max}} · latest {{.Stats.Latest}} ({{.Stats.LastDay}}).{{if .HistoryLastDay}} Last trades {{.HistoryLastDay}}.{{end}}</small></p>
   {{else}}
-  <p><small>Only a little trade history in {{.RegionName}} so far — not enough to chart yet.</small></p>
+  <p><small>Only a little trade history in {{.RegionName}} so far: not enough to chart yet.</small></p>
   {{end}}
   {{else if eq .HistoryState "empty"}}
   <p><small>No trade history in {{.RegionName}} for this item yet.</small></p>
   {{else}}
-  <p><span class="loading-pulse" aria-hidden="true"></span><small>This one's queued — it will be ready in a moment.</small></p>
+  <p><span class="loading-pulse" aria-hidden="true"></span><small>This item is queued. It'll be ready in a moment.</small></p>
   {{end}}
 </div>
 {{end}}
@@ -330,7 +330,7 @@
 {{define "trader-section"}}
 <div class="trader-body" data-poll-state="{{.HistoryState}}"{{if eq .HistoryState "pending"}} data-live-region data-poll-url="{{.TraderPollURL}}"{{end}}>
   {{if eq .HistoryState "pending"}}
-  <p><span class="loading-pulse" aria-hidden="true"></span><small>This one's queued — the averages fill in as trades are recorded.</small></p>
+  <p><span class="loading-pulse" aria-hidden="true"></span><small>This item is queued. The averages fill in as trades are recorded.</small></p>
   {{else}}
   <div class="tw">
   <table>

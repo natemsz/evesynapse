@@ -467,7 +467,7 @@ func TestLiveRegionFragments(t *testing.T) {
 	mustContain(t, "history fragment (pending)", body,
 		`data-live-region`, `data-poll-state="pending"`,
 		`data-poll-url="/market/history-fragment?region=10000002&amp;type=34"`,
-		"This one's queued")
+		"This item is queued")
 
 	// Trader fragment: the averages carry the same live-fill
 	// contract as the chart. Pending shows the loading
@@ -480,7 +480,7 @@ func TestLiveRegionFragments(t *testing.T) {
 	mustContain(t, "trader fragment (pending)", body,
 		`data-live-region`, `data-poll-state="pending"`,
 		`data-poll-url="/market/trader-fragment?region=10000002&amp;type=34&amp;bs=12&amp;bb=10"`,
-		"loading-pulse", "the averages fill in")
+		"loading-pulse", "The averages fill in")
 
 	// Then the chart state once rows exist.
 	for _, stmt := range []string{
@@ -542,7 +542,7 @@ func TestLiveRegionFragments(t *testing.T) {
 		t.Fatalf("description fragment: status %d", code)
 	}
 	mustContain(t, "description fragment", body,
-		`data-live-region`, `data-poll-state="pending"`, "This description is queued")
+		`data-live-region`, `data-poll-state="pending"`, "This description is on its way")
 
 	// The market page's pending state points at the fragment.
 	if _, err := conn.ExecContext(ctx,

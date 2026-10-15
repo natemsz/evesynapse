@@ -538,6 +538,16 @@ WHERE t.published = 1 AND t.market_group_id > 0
   AND (@meta::bigint = 0 OR (@meta::bigint = 1 AND (meta.value IS NULL OR meta.value = 1)) OR (@meta::bigint > 1 AND meta.value = @meta::bigint))
 ORDER BY CASE WHEN strpos(lower(t.name), lower(@q)) = 1 THEN 0 ELSE 1 END, t.name
 LIMIT @lim::bigint;
+-- ListFitImplantTypes: implants for one slot (implantness, attribute 331).
+-- name: ListFitImplantTypes :many
+SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
+FROM sde_types t
+JOIN sde_type_attributes a ON a.type_id = t.type_id AND a.attribute_id = 331 AND a.value = @slot::bigint
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+WHERE t.published = 1 AND t.market_group_id > 0
+  AND (@q = '' OR strpos(lower(t.name), lower(@q)) > 0)
+ORDER BY CASE WHEN strpos(lower(t.name), lower(@q)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT @lim::bigint;
 -- name: ListFitChargeTypes :many
 SELECT t.type_id, t.name
 FROM sde_types t

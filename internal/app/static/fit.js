@@ -277,6 +277,7 @@ var FitTipUI = (function () {
       shipTypeId: state.shipTypeId,
       items: state.items,
       charges: state.charges,
+      implants: state.implants || {},
       pilot: pilotID(),
       clone: cloneID()
     };
@@ -371,13 +372,15 @@ var FitTipUI = (function () {
       shipTypeId: state.shipTypeId,
       shipName: shipInput ? shipInput.value : "",
       items: JSON.parse(JSON.stringify(state.items || [])),
-      charges: JSON.parse(JSON.stringify(state.charges || {}))
+      charges: JSON.parse(JSON.stringify(state.charges || {})),
+      implants: JSON.parse(JSON.stringify(state.implants || {}))
     };
   }
   function applySnap(s) {
     state.shipTypeId = s.shipTypeId;
     state.items = JSON.parse(JSON.stringify(s.items || []));
     state.charges = JSON.parse(JSON.stringify(s.charges || {}));
+    state.implants = JSON.parse(JSON.stringify(s.implants || {}));
     if (shipInput) shipInput.value = s.shipName || "";
     markDirty();
     simulate();
@@ -557,6 +560,10 @@ var FitTipUI = (function () {
       // Resolve the control from the nearest carrier, never the raw
       // target: a click on a slot's inner glyph must count as a
       // click on the slot (only the border used to respond).
+      var impReset = t.closest("[data-fit-imp-reset]");
+      if (impReset) { setImplant(impReset.getAttribute("data-fit-imp-reset"), null); return; }
+      var impClear = t.closest("[data-fit-imp-clear]");
+      if (impClear) { setImplant(impClear.getAttribute("data-fit-imp-clear"), 0); return; }
       var decEl = t.closest("[data-fit-dec]");
       if (decEl) { decItem(parseInt(decEl.getAttribute("data-fit-dec"), 10) || 0); return; }
       var incEl = t.closest("[data-fit-inc]");
@@ -652,7 +659,7 @@ var FitTipUI = (function () {
         description: descInput ? descInput.value : "",
         tags: tagsInput ? tagsInput.value : "",
         isPublic: pubChkInit.checked, promote: false,
-        fit: { name: nm, shipTypeId: state.shipTypeId, items: state.items, charges: state.charges }
+        fit: { name: nm, shipTypeId: state.shipTypeId, items: state.items, charges: state.charges, implants: state.implants || {} }
       })
     }).catch(function () {});
   });
@@ -743,12 +750,12 @@ var FitTipUI = (function () {
       if (!input || !list) return;
       var q = input.value.trim();
       if (q.length < 2 && !force) { close(); return; }
-      fetch(pickerURL(cfg.family(), q), {
+      fetch(cfg.url ? cfg.url(q) : pickerURL(cfg.family(), q), {
         cache: "no-store", headers: { "Accept": "application/json" }
       }).then(function (resp) {
         return resp.ok ? resp.json() : [];
       }).then(function (data) {
-        var filtered = applyFittable(data || []);
+        var filtered = cfg.url ? (data || []) : applyFittable(data || []);
         if (cfg.dropShips) {
           filtered = filtered.filter(function (it) { return (it.kind || "") !== "ship"; });
         }
@@ -784,6 +791,13 @@ var FitTipUI = (function () {
           var name = document.createElement("span");
           name.textContent = it.name;
           li.appendChild(name);
+          if (it.missing) {
+            li.classList.add("sug-missing");
+            var miss = document.createElement("span");
+            miss.className = "sug-missing-tag";
+            miss.textContent = "Missing skills";
+            li.appendChild(miss);
+          }
           if (it.label) {
             var lab = document.createElement("span");
             lab.className = "sug-label";
@@ -951,6 +965,54 @@ var FitTipUI = (function () {
     modSearch.query();
     if (picker && !picker.hidden) queryPicker();
   }
+  // --- implants: one search per clone slot --------------------------
+  // Each slot's box searches only that slot's implants; picks
+  // override the clone there. id null = back to the clone's implant,
+  // 0 = slot left empty.
+  function setImplant(slot, id) {
+    pushHistory();
+    state.implants = state.implants || {};
+    if (id === null) delete state.implants[slot];
+    else state.implants[slot] = id;
+    pendingFlash = { type: "group", family: "implant" };
+    markDirty();
+    simulate();
+  }
+  editor.addEventListener("focusin", function (ev) {
+    var input = ev.target;
+    if (!input || !input.getAttribute || !input.getAttribute("data-fit-imp-slot")) return;
+    if (!input._fitSug) {
+      var slot = input.getAttribute("data-fit-imp-slot");
+      var list = document.createElement("ul");
+      list.className = "suggest";
+      list.setAttribute("role", "listbox");
+      list.hidden = true;
+      input.parentNode.appendChild(list);
+      var labels = {};
+      labels.implant = "Slot " + slot + " implants";
+      input._fitSug = makeSuggester(input, list, {
+        url: function (q) {
+          return "/fittings/picker.json?family=implant&slot=" + encodeURIComponent(slot) +
+            "&q=" + encodeURIComponent(q) + "&pilot=" + pilotID();
+        },
+        kinds: ["implant"],
+        labels: labels,
+        pick: function (it) {
+          input._fitSug.close();
+          input.value = it.name;
+          setImplant(slot, it.id);
+        }
+      });
+      // A box left without a pick shows the slot's implant again.
+      input.addEventListener("blur", function () {
+        window.setTimeout(function () { input.value = input.defaultValue; }, 150);
+      });
+    }
+    // Open on the whole slot; typing narrows it.
+    input.value = "";
+    input._fitSug.query(true);
+  });
+
   if (fittableChk) fittableChk.addEventListener("change", filtersChanged);
   if (usableChk) usableChk.addEventListener("change", filtersChanged);
   if (metaSel) metaSel.addEventListener("change", filtersChanged);
@@ -1733,7 +1795,8 @@ var FitTipUI = (function () {
           name: state.name,
           shipTypeId: state.shipTypeId,
           items: state.items,
-          charges: state.charges
+          charges: state.charges,
+          implants: state.implants || {}
         }
       };
       fetch("/fittings/save/", {

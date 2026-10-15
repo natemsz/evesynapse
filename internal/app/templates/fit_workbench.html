@@ -6,16 +6,9 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
 {{define "fit-workbench"}}
 {{if .ReadOnly}}<div class="fit-wb fit-ro">{{else}}<div class="fit-wb" data-fit-state="{{.StateJSON}}" data-fit-bandwidth="{{.DroneBWNum}}" data-fit-bay="{{.DroneBayNum}}" data-fit-subsystems="{{if .SupportsSubsystems}}1{{else}}0{{end}}" data-fit-restricted='{{.RestrictedJSON}}'>{{end}}
 {{$problems := false}}{{if and .HasShip .Stats}}{{if .Stats.Problems}}{{$problems = true}}{{end}}{{end}}
-{{if or .DataNote .Implants .ImplantNote $problems}}
+{{if or .DataNote $problems}}
 <div class="fit-top">
 {{if .DataNote}}<p class="fit-note">{{.DataNote}}</p>{{end}}
-{{if or .Implants .ImplantNote}}
-<details class="fit-implants">
-  <summary>Implants{{if .Implants}} ({{len .Implants}}){{end}}</summary>
-  {{if .ImplantNote}}<p class="fit-note">{{.ImplantNote}}</p>{{end}}
-  {{if .Implants}}<ul>{{range .Implants}}<li>{{.Name}}</li>{{end}}</ul>{{end}}
-</details>
-{{end}}
 {{if $problems}}
 <div class="fit-problems" role="status">
   <strong>Doesn't fit</strong>
@@ -54,44 +47,14 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
 </div>
 {{end}}
 <div class="fit-cols">
+  {{/* Fitted slots beside the ring; the bays (drones, cargo) and the
+       ammunition under it on a wide screen (style.css), after the
+       slots on a narrow one. */}}
   <div class="fit-slots">
-    {{range .Groups}}
-    {{$group := .}}
-    <div class="fit-group" data-fit-group="{{$group.Key}}" data-fit-used="{{$group.Used}}" data-fit-max="{{$group.Max}}">
-      <h4><span>{{.Label}}</span>{{if .HasMax}} <small class="fit-count{{if .Over}} fit-over{{end}}">{{.Used}}/{{.Max}}{{if .Over}} — doesn't fit{{end}}</small>{{end}}</h4>
-      <div class="fit-chips">
-        {{range .Chips}}
-        <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" data-fit-rowtype="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-lines="{{.TipLines}}">
-          {{if $.ReadOnly}}<span class="fit-chip-name">{{.Name}}</span>
-          {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
-          {{if .State}}<span class="fit-chip-state">{{.State}}</span>{{end}}
-          {{if .Sub}}<span class="fit-chip-sub">{{.Sub}}</span>{{end}}{{else}}
-          <button type="button" class="fit-chip-btn" data-fit-dec="{{.TypeID}}" title="Remove one">−</button>
-          <button type="button" class="fit-chip-name" data-fit-dec="{{.TypeID}}" title="Remove one">{{.Name}}</button>
-          {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
-          <button type="button" class="fit-chip-btn" data-fit-inc="{{.TypeID}}" title="Add another">+</button>
-          {{if eq $group.Key "drone"}}<input type="number" class="fit-qty" data-fit-qty="{{.TypeID}}" value="{{.Qty}}" min="0" max="10000" title="How many">{{end}}
-          {{if .State}}<span class="fit-chip-state">{{.State}}</span>{{end}}
-          {{if .Sub}}<span class="fit-chip-sub">{{.Sub}}</span>{{end}}{{end}}
-        </span>
-        {{end}}
-        {{if not $.ReadOnly}}
-        {{range .Empty}}
-        <button type="button" class="fit-slot-empty" data-fit-add="{{$group.Key}}">+ Empty {{$group.Label}} slot</button>
-        {{end}}
-        {{if and (not .HasMax) (eq .Key "drone")}}
-        <button type="button" class="fit-slot-empty" data-fit-add="drone">+ Add drones</button>
-        {{end}}
-        {{if and (not .HasMax) (eq .Key "cargo")}}
-        <button type="button" class="fit-slot-empty" data-fit-add="any">+ Add to cargo</button>
-        {{end}}
-        {{if and (not .HasMax) (eq .Key "subsystem")}}
-        <button type="button" class="fit-slot-empty" data-fit-add="subsystem">+ Add a subsystem</button>
-        {{end}}
-        {{end}}
-      </div>
-    </div>
-    {{end}}
+    {{range .SlotGroups}}{{template "fit-group" .}}{{end}}
+  </div>
+  <div class="fit-bays">
+    {{range .BayGroups}}{{template "fit-group" .}}{{end}}
     {{range .ChargeSets}}
     {{if $.ReadOnly}}{{$loaded := "No ammunition"}}{{range .Options}}{{if .Selected}}{{$loaded = .Name}}{{end}}{{end}}
     <p class="fit-charge">{{.WeaponName}} ammunition: {{$loaded}}</p>
@@ -105,6 +68,27 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       </label>
     </p>
     {{end}}
+    {{end}}
+    {{if or (not .ReadOnly) .ImplantsUsed}}
+    <div class="fit-group fit-implant-group" data-fit-group="implant">
+      <h4><span>Implants</span> <small class="fit-count">{{.ImplantsUsed}}/10</small></h4>
+      {{if .ImplantNote}}<p class="fit-note">{{.ImplantNote}}</p>{{end}}
+      <div class="fit-chips">
+        {{range .Implants}}
+        {{if $.ReadOnly}}{{if .TypeID}}
+        <span class="fit-chip fit-imp"><span class="fit-imp-slot">{{.Slot}}</span><span class="fit-chip-name">{{.Name}}</span></span>
+        {{end}}{{else}}
+        <span class="fit-chip fit-imp{{if .Missing}} fit-imp-missing{{end}}{{if not .TypeID}} fit-imp-empty{{end}}">
+          <span class="fit-imp-slot" title="Slot {{.Slot}}">{{.Slot}}</span>
+          <input type="text" class="fit-imp-input" data-fit-imp-slot="{{.Slot}}" value="{{.Name}}" placeholder="Empty — search slot {{.Slot}} implants" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-label="Implant slot {{.Slot}}">
+          {{if .Missing}}<span class="fit-imp-warn" title="This pilot is missing skills for this implant">Missing skills</span>{{end}}
+          {{if .Overridden}}<button type="button" class="fit-chip-btn" data-fit-imp-reset="{{.Slot}}" title="Back to the clone's implant">↺</button>{{end}}
+          {{if .TypeID}}<button type="button" class="fit-chip-btn" data-fit-imp-clear="{{.Slot}}" title="Empty this slot">×</button>{{end}}
+        </span>
+        {{end}}
+        {{end}}
+      </div>
+    </div>
     {{end}}
   </div>
   {{with .Stats}}
@@ -223,4 +207,44 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
 {{if and (not .DataNote) (not .ReadOnly)}}<p><small>Pick a ship above to start building your fit.</small></p>{{end}}
 {{end}}
 </div>
+{{end}}
+
+{{/* One slot or bay group: its heading and its chips. Takes a
+     fitSlotGroup, which carries the workbench's ReadOnly. */}}
+{{define "fit-group"}}
+    {{$group := .}}
+    <div class="fit-group" data-fit-group="{{$group.Key}}" data-fit-used="{{$group.Used}}" data-fit-max="{{$group.Max}}">
+      <h4><span>{{.Label}}</span>{{if .HasMax}} <small class="fit-count{{if .Over}} fit-over{{end}}">{{.Used}}/{{.Max}}{{if .Over}} — doesn't fit{{end}}</small>{{end}}</h4>
+      <div class="fit-chips">
+        {{range .Chips}}
+        <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" data-fit-rowtype="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-lines="{{.TipLines}}">
+          {{if $group.ReadOnly}}<span class="fit-chip-name">{{.Name}}</span>
+          {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
+          {{if .State}}<span class="fit-chip-state">{{.State}}</span>{{end}}
+          {{if .Sub}}<span class="fit-chip-sub">{{.Sub}}</span>{{end}}{{else}}
+          <button type="button" class="fit-chip-btn" data-fit-dec="{{.TypeID}}" title="Remove one">−</button>
+          <button type="button" class="fit-chip-name" data-fit-dec="{{.TypeID}}" title="Remove one">{{.Name}}</button>
+          {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
+          <button type="button" class="fit-chip-btn" data-fit-inc="{{.TypeID}}" title="Add another">+</button>
+          {{if eq $group.Key "drone"}}<input type="number" class="fit-qty" data-fit-qty="{{.TypeID}}" value="{{.Qty}}" min="0" max="10000" title="How many">{{end}}
+          {{if .State}}<span class="fit-chip-state">{{.State}}</span>{{end}}
+          {{if .Sub}}<span class="fit-chip-sub">{{.Sub}}</span>{{end}}{{end}}
+        </span>
+        {{end}}
+        {{if not $group.ReadOnly}}
+        {{range .Empty}}
+        <button type="button" class="fit-slot-empty" data-fit-add="{{$group.Key}}">+ Empty {{$group.Label}} slot</button>
+        {{end}}
+        {{if and (not .HasMax) (eq .Key "drone")}}
+        <button type="button" class="fit-slot-empty" data-fit-add="drone">+ Add drones</button>
+        {{end}}
+        {{if and (not .HasMax) (eq .Key "cargo")}}
+        <button type="button" class="fit-slot-empty" data-fit-add="any">+ Add to cargo</button>
+        {{end}}
+        {{if and (not .HasMax) (eq .Key "subsystem")}}
+        <button type="button" class="fit-slot-empty" data-fit-add="subsystem">+ Add a subsystem</button>
+        {{end}}
+        {{end}}
+      </div>
+    </div>
 {{end}}

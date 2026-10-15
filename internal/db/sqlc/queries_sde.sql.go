@@ -700,6 +700,53 @@ func (q *Queries) ListFitDroneTypes(ctx context.Context, arg ListFitDroneTypesPa
 	return items, nil
 }
 
+const listFitImplantTypes = `-- name: ListFitImplantTypes :many
+SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
+FROM sde_types t
+JOIN sde_type_attributes a ON a.type_id = t.type_id AND a.attribute_id = 331 AND a.value = $1::bigint
+LEFT JOIN sde_groups g ON g.group_id = t.group_id
+WHERE t.published = 1 AND t.market_group_id > 0
+  AND ($2 = '' OR strpos(lower(t.name), lower($2)) > 0)
+ORDER BY CASE WHEN strpos(lower(t.name), lower($2)) = 1 THEN 0 ELSE 1 END, t.name
+LIMIT $3::bigint
+`
+
+type ListFitImplantTypesParams struct {
+	Slot int64       `json:"slot"`
+	Q    interface{} `json:"q"`
+	Lim  int64       `json:"lim"`
+}
+
+type ListFitImplantTypesRow struct {
+	TypeID    int64  `json:"type_id"`
+	Name      string `json:"name"`
+	GroupName string `json:"group_name"`
+}
+
+// ListFitImplantTypes: implants for one slot (implantness, attribute 331).
+func (q *Queries) ListFitImplantTypes(ctx context.Context, arg ListFitImplantTypesParams) ([]ListFitImplantTypesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFitImplantTypes, arg.Slot, arg.Q, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFitImplantTypesRow
+	for rows.Next() {
+		var i ListFitImplantTypesRow
+		if err := rows.Scan(&i.TypeID, &i.Name, &i.GroupName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFitSlotTypes = `-- name: ListFitSlotTypes :many
 SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
 FROM sde_types t

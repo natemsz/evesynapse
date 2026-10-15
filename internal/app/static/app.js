@@ -1482,15 +1482,33 @@
         });
     });
 
-    // Watchlist finder: a pick fills the box with the exact name
-    // and runs the same find the button would.
+    // Watchlist finder: a pick watches that exact item at once (the
+    // same post the Watch buttons make); the keyword matches only list
+    // when the box is submitted without a pick.
     (function () {
       var input = root.querySelector("#watch-q");
       attachSuggest(input, root.querySelector("#watch-suggest"),
         suggestURL("/items/search.json", "market"),
         function (it, input) {
           input.value = it.name;
-          if (input.form) input.form.submit();
+          var form = document.createElement("form");
+          form.method = "post";
+          form.action = "/market/watch";
+          form.hidden = true;
+          var fields = {
+            action: "add", type: String(it.id),
+            region: input.getAttribute("data-watch-region") || "",
+            threshold: "5", next: "/market/"
+          };
+          Object.keys(fields).forEach(function (name) {
+            var field = document.createElement("input");
+            field.type = "hidden";
+            field.name = name;
+            field.value = fields[name];
+            form.appendChild(field);
+          });
+          document.body.appendChild(form);
+          form.submit();
         });
     })();
 

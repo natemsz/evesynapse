@@ -154,20 +154,23 @@ func TestWritesSendJSONAndAcceptTheirStatuses(t *testing.T) {
 func TestStatusesAreReadTheSameWayEverywhere(t *testing.T) {
 	ctx := context.Background()
 	stub := &stubESI{}
-	client := newStubClient(stub)
 	var out any
 
-	calls := map[string]func() error{
-		"FetchRaw": func() error { _, _, err := client.FetchRaw(ctx, "t", "/x/"); return err },
-		"Get":      func() error { return client.Get(ctx, "t", "/x/", &out) },
-		"PostJSON": func() error { return client.PostJSON(ctx, "/x/", []int{1}, &out) },
-		"PostJSONAuthed": func() error {
+	// Each answer goes to a client of its own: a 429 holds its route
+	// for that client until Retry-After, so a shared client would
+	// refuse what follows on the same route without asking ESI.
+	calls := map[string]func(client *Client) error{
+		"FetchRaw": func(client *Client) error { _, _, err := client.FetchRaw(ctx, "t", "/x/"); return err },
+		"Get":      func(client *Client) error { return client.Get(ctx, "t", "/x/", &out) },
+		"PostJSON": func(client *Client) error { return client.PostJSON(ctx, "/x/", []int{1}, &out) },
+		"PostJSONAuthed": func(client *Client) error {
 			return client.PostJSONAuthed(ctx, "t", "/x/", []int{1}, &out)
 		},
-		"PutJSONAuthed": func() error { return client.PutJSONAuthed(ctx, "t", "/x/", []int{1}) },
+		"PutJSONAuthed": func(client *Client) error { return client.PutJSONAuthed(ctx, "t", "/x/", []int{1}) },
 	}
 
-	for name, call := range calls {
+	for name, run := range calls {
+		call := func() error { return run(newStubClient(stub)) }
 		// ESI's error-limit answers stop the caller.
 		for _, code := range []int{420, http.StatusTooManyRequests} {
 			stub.status, stub.body = code, `{"error":"slow down"}`

@@ -1627,7 +1627,7 @@ func (c *Client) sendOnce(ctx context.Context, method, accessToken, path string,
 	}
 	if resp.StatusCode == http.StatusTooManyRequests {
 		// One character's budget, not everybody's (ratelimit.go).
-		c.noteRateLimited(characterFrom(ctx), resp.Header, time.Now())
+		c.noteRateLimited(routeOf(method, path), characterFrom(ctx), resp.Header, time.Now())
 		return nil, resp.Header, resp.StatusCode, fmt.Errorf("ESI %s %s: status %d: %w (%w)", method, path, resp.StatusCode, ErrErrorLimit, ErrRateLimited)
 	}
 	if resp.StatusCode == 420 {

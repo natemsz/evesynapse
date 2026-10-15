@@ -28,7 +28,7 @@ const (
 	// maxPlanetResolutionsPerCycle bounds planet lookups per
 	// worker cycle; a cold backlog converges over a few cycles
 	// instead of bursting.
-	maxPlanetResolutionsPerCycle = 20
+	maxPlanetResolutionsPerCycle = 200
 	// planetRenameWindow is how long a resolved name is trusted
 	// before the worker re-asks.
 	planetRenameWindow = 90 * 24 * time.Hour

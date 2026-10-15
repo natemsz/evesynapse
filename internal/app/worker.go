@@ -1351,7 +1351,7 @@ func (app *Application) warmSchematic(ctx context.Context, budget *warmBudget, i
 // maxKillmailDetailsPerCycle bounds detail fetches per character
 // per worker cycle; a busy character's backlog converges over a
 // few cycles instead of turning one cycle into an ESI marathon.
-const maxKillmailDetailsPerCycle = 10
+const maxKillmailDetailsPerCycle = 100
 
 // warmKillmailDetails fetches detail payloads for the entries of
 // the character's recent-killmails snapshot that are not stored

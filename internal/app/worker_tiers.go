@@ -362,7 +362,7 @@ func (c *cycleState) coreFreshness(ctx context.Context, ch db.Character, tier wa
 // Bounds on WORKER_FETCHES_PER_CYCLE.
 const (
 	minFetchesPerCycle  = 20
-	mostFetchesPerCycle = 2000
+	mostFetchesPerCycle = 20000
 )
 
 // parseWorkerFetches reads WORKER_FETCHES_PER_CYCLE: 0 (use the

@@ -50,16 +50,16 @@ const (
 // these are lookups a human just asked for, not fleet sync.
 const (
 	pilotStaleAfter             = 7 * 24 * time.Hour
-	maxPilotDrainsPerCycle      = 5
+	maxPilotDrainsPerCycle      = 50
 	maxPilotNameResolutions     = 3 // per pass; one ESI name lookup each
 	pilotNameWantRetryDelay     = 15 * time.Minute
 	maxHistoryCorpNamesPerDrain = 12
-	maxTypeDetailsPerCycle      = 8
+	maxTypeDetailsPerCycle      = 80
 	// maxOrbitPilotsPerCycle bounds how many newly seen
 	// counterparties one cycle notes for proactive warming; the
 	// queue drains a few per cycle (and viewed pilots outrank
 	// the orbit), so a big roster converges over a few cycles.
-	maxOrbitPilotsPerCycle = 50
+	maxOrbitPilotsPerCycle = 500
 )
 
 // pilotPayload is the stored public record: the profile, the

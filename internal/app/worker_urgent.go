@@ -28,13 +28,13 @@ import (
 
 const (
 	urgentTickInterval        = 5 * time.Second
-	urgentHistoryPerNudge     = 3
-	urgentPilotsPerNudge      = 3
+	urgentHistoryPerNudge     = 20
+	urgentPilotsPerNudge      = 20
 	urgentOrgsPerNudge        = 50                     // corp + alliance records are the cheapest ESI calls; a page that queues a batch (an alliance's member list) clears in one tick
 	urgentOrgFetchAllowance   = 2 * urgentOrgsPerNudge // their own budget: pilot work earlier in the tick can't starve them
-	urgentTypeDetailsPerNudge = 2
+	urgentTypeDetailsPerNudge = 15
 	urgentErrorBackoff        = 2 * time.Minute
-	urgentPilotFetchAllowance = 20
+	urgentPilotFetchAllowance = 150
 )
 
 // runUrgentDrain polls the want queues on the short cadence

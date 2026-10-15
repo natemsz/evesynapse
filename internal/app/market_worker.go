@@ -47,7 +47,7 @@ const (
 	// maxHistoryFetchesPerCycle bounds history downloads per
 	// worker cycle; a cold watchlist converges over a few
 	// one-minute cycles instead of bursting.
-	maxHistoryFetchesPerCycle = 10
+	maxHistoryFetchesPerCycle = 200
 	// historyRefetchGate is the minimum age of a successful
 	// history fetch before the pair is fetched again.
 	historyRefetchGate = 20 * time.Hour
@@ -61,10 +61,10 @@ const (
 	// lane, separate from the character pass budget: public
 	// prices and the region sweeps never queue behind
 	// per-character warming.
-	maxMarketFetchesPerCycle = 120
+	maxMarketFetchesPerCycle = 1200
 	// maxBookFetchesPerCycle bounds regional order-book reads
 	// per cycle (each may still paginate in fetchOrderBook).
-	maxBookFetchesPerCycle = 10
+	maxBookFetchesPerCycle = 100
 	// bookRefetchGate is the minimum age of a successful book
 	// fetch before that (region, type) is re-read for health.
 	bookRefetchGate = 10 * time.Minute

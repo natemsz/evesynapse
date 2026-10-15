@@ -1586,6 +1586,11 @@ func parseRetryAfter(value string) (time.Duration, bool) {
 // 420/429 wrap ErrErrorLimit, a status outside want is a StatusError,
 // anything else is the body.
 func (c *Client) sendOnce(ctx context.Context, method, accessToken, path string, raw []byte, ifNoneMatch string, want []int) (body []byte, header http.Header, status int, err error) {
+	// ESI's limits, seen coming (ratelimit.go): refused here rather
+	// than by ESI.
+	if err := c.preflight(ctx, method, path, time.Now()); err != nil {
+		return nil, nil, 0, err
+	}
 	c.noteCall()
 	var reqBody io.Reader
 	if raw != nil {
@@ -1612,7 +1617,7 @@ func (c *Client) sendOnce(ctx context.Context, method, accessToken, path string,
 	}
 	defer resp.Body.Close()
 	c.trackErrorBudget(resp.Header)
-	c.trackRateHeaders(characterFrom(ctx), resp.Header, time.Now())
+	c.trackRateHeaders(routeOf(method, path), characterFrom(ctx), resp.Header, time.Now())
 	body, err = io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
 		return nil, nil, 0, fmt.Errorf("ESI %s %s: read body: %w", method, path, err)

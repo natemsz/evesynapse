@@ -11,11 +11,6 @@ func humanizeEnum(s string) string {
 	return strings.ReplaceAll(s, "_", " ")
 }
 
-// maxLedgerRows caps the journal/transaction tables; the snapshot
-// holds the newest page (up to 1,000 entries) but a page wants
-// headlines, not a ledger dump.
-const maxLedgerRows = 100
-
 func idString(id int64) string { return strconv.FormatInt(id, 10) }
 
 // srpPolicyMax is the longest text a corporation's SRP policy can be (the

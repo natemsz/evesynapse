@@ -88,7 +88,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  evesynapse -update -dev             update to the latest dev-branch release")
 	fmt.Fprintln(w, "  evesynapse -update <url> <checksum> install a downloaded update and restart (a local file needs no checksum)")
 	fmt.Fprintln(w, "  evesynapse -refresh                 refresh all cached data on next start (app must be stopped)")
-	fmt.Fprintln(w, "  evesynapse -populate-names          store every alliance and corporation name now (safe while running)")
+	fmt.Fprintln(w, "  evesynapse -populate-names          store every alliance and reachable corporation name now (safe while running)")
 	fmt.Fprintln(w, "  evesynapse -push-keys               print a new key pair for browser push, as lines for .env")
 }
 

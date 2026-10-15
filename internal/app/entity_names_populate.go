@@ -1,8 +1,12 @@
 package app
 
 // `evesynapse -populate-names`: fills entity_names in bulk from ESI so
-// every alliance and every corporation in one has its name stored
-// before anyone asks. A starting server runs it once by itself when the
+// every alliance and every corporation the app can reach has its name
+// stored before anyone asks: each alliance's members, its creator and
+// executor corporations (often in no alliance any more), the NPC
+// corporations, and every corporation ID already in the database. ESI
+// has no list of all corporations, so a player corporation in no
+// alliance that the app has never met still arrives the usual way. A starting server runs it once by itself when the
 // table is next to empty (a fresh install); run it by hand any time —
 // it is safe while the server runs. Characters have no
 // public list, so their names keep arriving as the app meets them.
@@ -15,11 +19,12 @@ import (
 	"sync"
 	"time"
 
+	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 )
 
-// populateCorpFetchers is how many alliance member lists are fetched
-// at once.
+// populateCorpFetchers is how many alliances are read at once (their
+// member list and their record).
 const populateCorpFetchers = 6
 
 // RunPopulateNames is the -populate-names command.
@@ -69,8 +74,9 @@ func (logWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// populateNames resolves every alliance and its member corporations.
-// Names reach entity_names through the client's name sink.
+// populateNames resolves every alliance and every corporation it can
+// reach (see the file comment). Names reach entity_names through the
+// client's name sink.
 func (app *Application) populateNames(ctx context.Context, out io.Writer) error {
 	start := time.Now()
 	var alliances []int64
@@ -83,9 +89,10 @@ func (app *Application) populateNames(ctx context.Context, out io.Writer) error 
 	if limited {
 		return fmt.Errorf("ESI error limit reached resolving alliance names; run again in a minute")
 	}
-	fmt.Fprintf(out, "%d alliance names stored. Listing member corporations…\n", len(allianceNames))
+	fmt.Fprintf(out, "%d alliance names stored. Reading each alliance's corporations…\n", len(allianceNames))
 
-	// Member lists, a few at a time.
+	// Member lists and alliance records (creator and executor
+	// corporations), a few alliances at a time.
 	var (
 		mu    sync.Mutex
 		corps = make(map[int64]bool)
@@ -100,11 +107,17 @@ func (app *Application) populateNames(ctx context.Context, out io.Writer) error 
 			for id := range next {
 				var ids []int64
 				if err := app.esi.Get(ctx, "", fmt.Sprintf("/alliances/%d/corporations/", id), &ids); err != nil {
-					continue // one alliance short; the next run or the worker fills it
+					ids = nil // one alliance short; the next run or the worker fills it
+				}
+				var rec esi.Alliance
+				if err := app.esi.Get(ctx, "", fmt.Sprintf("/alliances/%d/", id), &rec); err == nil {
+					ids = append(ids, rec.CreatorCorporationID, rec.ExecutorCorporationID)
 				}
 				mu.Lock()
 				for _, c := range ids {
-					corps[c] = true
+					if c > 0 {
+						corps[c] = true
+					}
 				}
 				done++
 				if done%250 == 0 {
@@ -123,11 +136,32 @@ func (app *Application) populateNames(ctx context.Context, out io.Writer) error 
 	close(next)
 	wg.Wait()
 
+	fromAlliances := len(corps)
+
+	// The NPC corporations: a list ESI does publish.
+	var npc []int64
+	if err := app.esi.Get(ctx, "", "/corporations/npccorps/", &npc); err != nil {
+		fmt.Fprintf(out, "  NPC corporation list unavailable (%v); skipping them\n", err)
+	}
+	for _, c := range npc {
+		corps[c] = true
+	}
+
+	// Every corporation ID the app already holds anywhere.
+	known, err := app.knownCorporationIDs(ctx)
+	if err != nil {
+		fmt.Fprintf(out, "  stored corporation IDs unavailable (%v); skipping them\n", err)
+	}
+	for _, c := range known {
+		corps[c] = true
+	}
+
 	ids := make([]int64, 0, len(corps))
 	for id := range corps {
 		ids = append(ids, id)
 	}
-	fmt.Fprintf(out, "%d member corporations; resolving their names…\n", len(ids))
+	fmt.Fprintf(out, "%d corporations (%d from alliances, %d NPC, %d already known here); resolving their names…\n",
+		len(ids), fromAlliances, len(npc), len(known))
 	corpNames, limited := app.resolveUniverseNamesLimited(ctx, unlimited, ids)
 	if limited {
 		return fmt.Errorf("ESI error limit reached resolving corporation names (%d stored so far); run again in a minute", len(corpNames))
@@ -135,4 +169,33 @@ func (app *Application) populateNames(ctx context.Context, out io.Writer) error 
 	fmt.Fprintf(out, "Done in %s: %d alliance and %d corporation names stored.\n",
 		time.Since(start).Round(time.Second), len(allianceNames), len(corpNames))
 	return nil
+}
+
+// knownCorporationIDs is every corporation ID stored anywhere in the
+// database: public records (and the queue behind them), characters'
+// corporations, structure owners, and corporation features (ops,
+// ship replacement, doctrines, Discord servers).
+func (app *Application) knownCorporationIDs(ctx context.Context) ([]int64, error) {
+	rows, err := app.db.QueryContext(ctx, `
+		SELECT corporation_id FROM corporation_records
+		UNION SELECT corporation_id FROM character_corporations
+		UNION SELECT owner_corporation_id FROM structure_context
+		UNION SELECT corporation_id FROM ops
+		UNION SELECT corporation_id FROM srp_requests
+		UNION SELECT corporation_id FROM doctrines`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		if id > 0 {
+			ids = append(ids, id)
+		}
+	}
+	return ids, rows.Err()
 }

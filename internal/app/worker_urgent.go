@@ -105,6 +105,55 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 		return true
 	}
 
+	// Market history next, under its own lock: the item page being
+	// looked at gets its chart within a tick even while a long cycle
+	// pass (a market sweep) holds the fetch lock.
+	if func() bool {
+		app.histFetchMu.Lock()
+		defer app.histFetchMu.Unlock()
+		wants, err := app.queries.ListMarketHistoryWants(ctx, db.ListMarketHistoryWantsParams{
+			LastRequestedAt: now.Add(-historyWantMaxAge),
+			TypingPriority:  wantTyping,
+			TypingAssumed:   typingAssumedHit,
+			TypingWeight:    typingAssumedWeight,
+			TypingSince:     now.Add(-typingLearnWindow),
+			TypingLimit:     int64(app.typingSlice()),
+		})
+		if err != nil {
+			logging.Errorf("worker: urgent drain: list history wants: %v", err)
+		} else {
+			fetched := 0
+			for _, wn := range wants {
+				if fetched >= urgentHistoryPerNudge || ctx.Err() != nil {
+					break
+				}
+				key := marketKey{RegionID: wn.RegionID, TypeID: wn.TypeID}
+				if !app.marketFetchDue(ctx, marketFetchKind("history", key), historyRefetchGate) {
+					continue
+				}
+				fetched++
+				if app.swarmUrgentHistory(ctx, key) {
+					continue
+				}
+				// No peer had it yet: a dedicated node that warms
+				// history gets its grace before this budget is spent.
+				if app.swarmDefersFetch(ctx, swarmKindHistory, fmt.Sprintf("%d/%d", key.RegionID, key.TypeID), now) {
+					continue
+				}
+				if _, ltd := app.fetchAndStoreHistory(ctx, key); ltd {
+					if hard(ltd) {
+						return true
+					}
+					break
+				}
+			}
+		}
+
+		return false
+	}() {
+		return true
+	}
+
 	// The rest shares the cycle's lock. A cycle pass holding it (a
 	// long market sweep) means this tick skips the rest rather than
 	// queueing behind it; the next tick is five seconds away.
@@ -141,44 +190,6 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 				break
 			}
 			if _, ltd := app.drainPilotRecord(ctx, id, allowance, now); ltd {
-				if hard(ltd) {
-					return true
-				}
-				break
-			}
-		}
-	}
-
-	wants, err := app.queries.ListMarketHistoryWants(ctx, db.ListMarketHistoryWantsParams{
-		LastRequestedAt: now.Add(-historyWantMaxAge),
-		TypingPriority:  wantTyping,
-		TypingAssumed:   typingAssumedHit,
-		TypingWeight:    typingAssumedWeight,
-		TypingSince:     now.Add(-typingLearnWindow),
-		TypingLimit:     int64(app.typingSlice()),
-	})
-	if err != nil {
-		logging.Errorf("worker: urgent drain: list history wants: %v", err)
-	} else {
-		fetched := 0
-		for _, wn := range wants {
-			if fetched >= urgentHistoryPerNudge || ctx.Err() != nil {
-				break
-			}
-			key := marketKey{RegionID: wn.RegionID, TypeID: wn.TypeID}
-			if !app.marketFetchDue(ctx, marketFetchKind("history", key), historyRefetchGate) {
-				continue
-			}
-			fetched++
-			if app.swarmUrgentHistory(ctx, key) {
-				continue
-			}
-			// No peer had it yet: a dedicated node that warms
-			// history gets its grace before this budget is spent.
-			if app.swarmDefersFetch(ctx, swarmKindHistory, fmt.Sprintf("%d/%d", key.RegionID, key.TypeID), now) {
-				continue
-			}
-			if _, ltd := app.fetchAndStoreHistory(ctx, key); ltd {
 				if hard(ltd) {
 					return true
 				}

@@ -148,12 +148,6 @@ const (
 	ownerCorporation = standing.OwnerCorporation
 	ownerAlliance    = standing.OwnerAlliance
 
-	ruleLinked  = standing.RuleLinked
-	ruleMember  = standing.RuleMember
-	ruleCorp    = standing.RuleCorp
-	ruleCEO     = standing.RuleCEO
-	ruleEVERole = standing.RuleEVERole
-	ruleGroup   = standing.RuleGroup
 )
 
 // meetsRule asks a standing whether it meets one stored rule.

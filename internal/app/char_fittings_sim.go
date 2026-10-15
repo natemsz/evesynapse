@@ -84,7 +84,17 @@ type fitDoc struct {
 	ShipTypeID  int64           `json:"shipTypeId"`
 	Items       []fitDocItem    `json:"items"`
 	Charges     map[int64]int64 `json:"charges"` // weapon type -> loaded charge type
+	// Implants overrides the pilot's clone slot by slot: slot (1-10)
+	// -> implant type, 0 = slot left empty. Slots not listed keep
+	// whatever the selected clone has plugged in.
+	Implants map[int]int64 `json:"implants,omitempty"`
 }
+
+// fitImplantSlots is how many implant slots a clone has.
+const fitImplantSlots = 10
+
+// fitAttrImplantness is the dogma attribute naming an implant's slot.
+const fitAttrImplantness = 331
 
 // sanitizeFitDoc normalizes a fit document arriving from the
 // browser or storage: sane quantities, duplicate lines folded,
@@ -119,6 +129,14 @@ func sanitizeFitDoc(doc *fitDoc) {
 		}
 	}
 	doc.Items = merged
+	for slot, typeID := range doc.Implants {
+		if slot < 1 || slot > fitImplantSlots || typeID < 0 {
+			delete(doc.Implants, slot)
+		}
+	}
+	if len(doc.Implants) == 0 {
+		doc.Implants = nil
+	}
 	// Normalize per-instance module states: one entry per
 	// instance, unknown values demoted to "" (the default), and
 	// all-default arrays dropped so stored docs stay lean.
@@ -216,6 +234,42 @@ type fitSlotGroup struct {
 	Over   bool
 	Chips  []fitSlotChip
 	Empty  []int // empty slot buttons to render (slot ordinals)
+	// ReadOnly mirrors the workbench's, so the shared group template
+	// (fit_workbench.html "fit-group") can drop editing controls.
+	ReadOnly bool
+}
+
+// fitBayGroup reports whether a group holds a bay's contents (drones,
+// cargo) rather than fitted slots: the workbench shows bays under the
+// ring on a wide screen, slots beside it.
+func fitBayGroup(key string) bool { return key == "drone" || key == "cargo" }
+
+// ImplantsUsed counts the filled implant slots.
+func (v *fitSimView) ImplantsUsed() int {
+	n := 0
+	for _, s := range v.Implants {
+		if s.TypeID > 0 {
+			n++
+		}
+	}
+	return n
+}
+
+// SlotGroups are the fitted-slot groups, in order.
+func (v *fitSimView) SlotGroups() []fitSlotGroup { return v.groupsWhere(false) }
+
+// BayGroups are the drone and cargo groups, in order.
+func (v *fitSimView) BayGroups() []fitSlotGroup { return v.groupsWhere(true) }
+
+func (v *fitSimView) groupsWhere(bays bool) []fitSlotGroup {
+	var out []fitSlotGroup
+	for _, g := range v.Groups {
+		if fitBayGroup(g.Key) == bays {
+			g.ReadOnly = v.ReadOnly
+			out = append(out, g)
+		}
+	}
+	return out
 }
 
 // fitVisualSlot is one slot circle on the in-game-style visual fit.
@@ -511,10 +565,32 @@ func fitTipLines(res *fit.Result, snap *fit.Snapshot, doc *fitDoc, typeID int64,
 	}
 	var lines []fitTipLine
 	add := func(label, value, class string) {
-		if len(lines) < 8 {
+		if len(lines) < fitTipMaxLines {
 			lines = append(lines, fitTipLine{label, value, class})
 		}
 	}
+	// A subsystem's mark on the hull: the slots and hardpoints it
+	// adds, which is what choosing one changes.
+	for _, sm := range fitTipSlotMods {
+		if n := eff[sm.attr]; n != 0 {
+			add(sm.label, fmt.Sprintf("%+d", int(math.Round(n))), "")
+		}
+	}
+	// Resist bonuses (hardeners, invulnerability fields, energized
+	// membranes, resist rigs): one row per damage type, tinted in
+	// that type's color, the figure as a resistance gain. They are
+	// state-folded like everything here, so an overheated hardener
+	// shows its heated figures.
+	for _, rb := range fitTipResistBonuses {
+		if v := eff[rb.attr]; v < 0 {
+			class := rb.class
+			if c := fitTipClass(-v, -base[rb.attr], true); c != "" {
+				class += " " + c
+			}
+			add(rb.label, "+"+fitVisualNum(-v)+"%", class)
+		}
+	}
+	weapon := snap != nil && (snap.HasEffect(typeID, fit.EffectTurretFitted) || snap.HasEffect(typeID, fit.EffectLauncherFitted))
 	chargeID := doc.Charges[typeID]
 	if chargeID > 0 {
 		key := fit.StateAttrKey(typeID, state)
@@ -576,6 +652,34 @@ func fitTipLines(res *fit.Result, snap *fit.Snapshot, doc *fitDoc, typeID int64,
 		}
 		add(label, fitVisualNum(math.Abs(sf))+"%", class)
 	}
+	// Passive bonuses: what a damage mod, extender, plate, battery,
+	// power relay or cap rig adds to the ship.
+	if !weapon {
+		if m := eff[fit.AttrDamageMultiplier]; m > 1 {
+			add("Damage", "+"+fitVisualNum((m-1)*100)+"%", fitTipClass(m, base[fit.AttrDamageMultiplier], true))
+		}
+		if m := eff[fitAttrSpeedMultiplier]; m > 0 && m < 1 {
+			add("Rate of fire", "+"+fitVisualNum((1-m)*100)+"%", fitTipClass(1-m, 1-base[fitAttrSpeedMultiplier], true))
+		}
+	}
+	if hp := eff[fitAttrCapacityBonus]; hp > 0 {
+		add("Shield HP", "+"+fitVisualNum(hp), fitTipClass(hp, base[fitAttrCapacityBonus], true))
+	}
+	if hp := eff[fitAttrArmorHPBonusAdd]; hp > 0 {
+		add("Armor HP", "+"+fitVisualNum(hp), fitTipClass(hp, base[fitAttrArmorHPBonusAdd], true))
+	}
+	if c := eff[fitAttrCapacitorBonus]; c > 0 {
+		add("Capacitor", "+"+fitVisualNum(c)+" GJ", fitTipClass(c, base[fitAttrCapacitorBonus], true))
+	}
+	if m := eff[fitAttrCapRechargeMult]; m > 0 && m < 1 {
+		add("Cap recharge", "−"+fitVisualNum((1-m)*100)+"%", fitTipClass(1-m, 1-base[fitAttrCapRechargeMult], true))
+	}
+	if m := eff[fitAttrShieldRechargeMult]; m > 0 && m < 1 {
+		add("Shield recharge", "−"+fitVisualNum((1-m)*100)+"%", fitTipClass(1-m, 1-base[fitAttrShieldRechargeMult], true))
+	}
+	if sig := eff[fitAttrSignatureRadiusBonus]; sig > 0 {
+		add("Signature", "+"+fitVisualNum(sig)+"%", fitTipClass(sig, base[fitAttrSignatureRadiusBonus], false))
+	}
 	if capNeed := eff[fit.AttrCapacitorNeed]; capNeed > 0 {
 		add("Cap", fitVisualNum(capNeed)+" GJ", fitTipClass(capNeed, base[fit.AttrCapacitorNeed], false))
 	}
@@ -586,6 +690,46 @@ func fitTipLines(res *fit.Result, snap *fit.Snapshot, doc *fitDoc, typeID int64,
 		add("PG", fitVisualNum(pg)+" MW", fitTipClass(pg, base[fit.AttrPower], false))
 	}
 	return lines
+}
+
+// fitTipMaxLines caps a tooltip: enough for a hardener's four
+// resists plus its costs, still a quick look.
+const fitTipMaxLines = 12
+
+// Module attributes the tooltip reads that the engine does not name.
+const (
+	fitAttrCapacitorBonus       = 67   // capacitor battery: capacity added
+	fitAttrCapacityBonus        = 72   // shield extender: shield HP added
+	fitAttrShieldRechargeMult   = 134  // power diagnostics, rigs
+	fitAttrCapRechargeMult      = 144  // cap power relay, cap control circuit
+	fitAttrSpeedMultiplier      = 204  // damage mods: rate-of-fire multiplier
+	fitAttrSignatureRadiusBonus = 554  // MWD signature bloom
+	fitAttrArmorHPBonusAdd      = 1159 // armor plate: armor HP added
+)
+
+// fitTipResistBonuses are the four resist-bonus attributes, in EVE's
+// own order, with each damage type's color class.
+var fitTipResistBonuses = []struct {
+	attr  int64
+	label string
+	class string
+}{
+	{984, "EM", "res-em"},
+	{987, "Thermal", "res-th"},
+	{986, "Kinetic", "res-kin"},
+	{985, "Explosive", "res-exp"},
+}
+
+// fitTipSlotMods are a subsystem's slot and hardpoint modifiers.
+var fitTipSlotMods = []struct {
+	attr  int64
+	label string
+}{
+	{fit.AttrHiSlotModifier, "High slots"},
+	{fit.AttrMedSlotModifier, "Mid slots"},
+	{fit.AttrLowSlotModifier, "Low slots"},
+	{fit.AttrTurretHardPointModifier, "Turrets"},
+	{fit.AttrLauncherHardPointModifier, "Launchers"},
 }
 
 // fitTipNum3 formats a small decimal (tracking speeds) with
@@ -860,11 +1004,16 @@ type fitCloneOption struct {
 	Implants int    // implant count, shown in the label
 }
 
-// fitImplantEntry is one applied implant for the compact list
-// under the workbench.
-type fitImplantEntry struct {
-	TypeID int64
-	Name   string
+// fitImplantSlot is one of the clone's ten implant slots as the
+// workbench shows it: what is plugged in (TypeID 0 = empty),
+// whether the fit overrides the clone there, and whether the pilot
+// lacks the skills to use it.
+type fitImplantSlot struct {
+	Slot       int
+	TypeID     int64
+	Name       string
+	Overridden bool
+	Missing    bool
 }
 
 type fitSimView struct {
@@ -881,11 +1030,12 @@ type fitSimView struct {
 	PilotLabel string
 	StateJSON  string // canonical fit document for the editor script
 	// CloneID is the selected clone (0 = active clone); Clones
-	// feeds the Clone dropdown; Implants is the compact applied
-	// list; ImplantNote covers warming / re-login states.
+	// feeds the Clone dropdown; Implants is the ten slots (clone
+	// plus the fit's overrides); ImplantNote covers warming /
+	// re-login states.
 	CloneID     int64
 	Clones      []fitCloneOption
-	Implants    []fitImplantEntry
+	Implants    []fitImplantSlot
 	ImplantNote string
 	Groups      []fitSlotGroup
 	Visual      *fitVisualView // in-game-style ship + slot rings
@@ -1075,6 +1225,11 @@ func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotI
 	view.ImplantNote = implantNote
 	typeIDs := fitDocTypeIDs(doc)
 	typeIDs = append(typeIDs, implantIDs...)
+	for _, id := range doc.Implants {
+		if id > 0 {
+			typeIDs = append(typeIDs, id)
+		}
+	}
 	snap, err := fit.LoadSnapshot(ctx, app.queries, typeIDs)
 	if err != nil {
 		logging.Errorf("fittings sim: load snapshot for ship %d: %v", doc.ShipTypeID, err)
@@ -1087,6 +1242,14 @@ func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotI
 	}
 	view.HasShip = true
 	view.SupportsSubsystems = app.shipSupportsSubsystems(ctx, snap, doc.ShipTypeID)
+
+	slots := fitResolveImplantSlots(snap, implantIDs, doc.Implants)
+	implantIDs = implantIDs[:0:0]
+	for _, s := range slots {
+		if s.TypeID > 0 {
+			implantIDs = append(implantIDs, s.TypeID)
+		}
+	}
 
 	levels, note := app.fitPilotLevels(ctx, pilotID, snap, doc)
 	view.PilotLabel = pilotLabel
@@ -1134,8 +1297,12 @@ func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotI
 	}
 	view.ShipID = doc.ShipTypeID
 	view.ShipName = nameOf(doc.ShipTypeID)
-	for _, id := range implantIDs {
-		view.Implants = append(view.Implants, fitImplantEntry{TypeID: id, Name: nameOf(id)})
+	for _, s := range slots {
+		if s.TypeID > 0 {
+			s.Name = nameOf(s.TypeID)
+			s.Missing = pilotID != 0 && !fitSkillsMet(snap, s.TypeID, levels)
+		}
+		view.Implants = append(view.Implants, s)
 	}
 
 	view.Groups = fitBuildGroups(res, doc, snap, familyOf, nameOf, view.SupportsSubsystems)
@@ -1144,7 +1311,12 @@ func (app *Application) buildFitSimView(ctx context.Context, doc *fitDoc, pilotI
 	view.DroneBayNum = res.DroneBayCapacity
 	view.ChargeSets = app.fitBuildChargeSets(ctx, doc, snap, nameOf)
 	view.Stats = fitBuildStats(res)
-	view.Missing = fitMissingList(ctx, app, snap, doc, engineItems, levels, pilotID)
+	// Implants count toward the pilot's missing skills like modules.
+	skillItems := append([]fit.ItemInput{}, engineItems...)
+	for _, id := range implantIDs {
+		skillItems = append(skillItems, fit.ItemInput{TypeID: id, Quantity: 1})
+	}
+	view.Missing = fitMissingList(ctx, app, snap, doc, skillItems, levels, pilotID)
 	view.Notes = fitPlainNotes(res.Unmodeled)
 	view.RestrictedJSON = app.fitRestrictedJSON(ctx, res.Restricted, nameOf)
 	for _, r := range res.Restricted {
@@ -1202,6 +1374,55 @@ func engineItemsAll(engineItems []fit.ItemInput, doc *fitDoc) []fit.ItemInput {
 		out = append(out, fit.ItemInput{TypeID: charge, Quantity: 1})
 	}
 	return out
+}
+
+// fitResolveImplantSlots lays the clone's implants into their slots
+// (by the implantness attribute) and applies the fit's overrides.
+// An override naming a type that isn't an implant for that slot is
+// ignored, as is a clone implant whose slot the SDE doesn't know.
+func fitResolveImplantSlots(snap *fit.Snapshot, clone []int64, overrides map[int]int64) []fitImplantSlot {
+	slots := make([]fitImplantSlot, fitImplantSlots)
+	for i := range slots {
+		slots[i].Slot = i + 1
+	}
+	slotOf := func(id int64) int {
+		return int(snap.Attrs[id][fitAttrImplantness])
+	}
+	for _, id := range clone {
+		if n := slotOf(id); n >= 1 && n <= fitImplantSlots {
+			slots[n-1].TypeID = id
+		}
+	}
+	for n, id := range overrides {
+		if n < 1 || n > fitImplantSlots || (id > 0 && slotOf(id) != n) {
+			continue
+		}
+		slots[n-1].TypeID = id
+		slots[n-1].Overridden = true
+	}
+	return slots
+}
+
+// fitSkillsMet reports whether levels cover every skill requirement
+// of typeID the snapshot knows, prerequisites included.
+func fitSkillsMet(snap *fit.Snapshot, typeID int64, levels map[int64]int) bool {
+	seen := map[int64]bool{}
+	queue := []int64{typeID}
+	for len(queue) > 0 {
+		id := queue[0]
+		queue = queue[1:]
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		for _, req := range snap.Requirements[id] {
+			if int64(levels[req.SkillTypeID]) < req.Level {
+				return false
+			}
+			queue = append(queue, req.SkillTypeID)
+		}
+	}
+	return true
 }
 
 // fitMissingList names the missing skills for a real pilot (the
@@ -1822,15 +2043,13 @@ func (app *Application) handleFitPickerJSON(w http.ResponseWriter, r *http.Reque
 	// are SDE-only either way.
 	usableOnly := q.Get("usable") == "1" && pilotID > 0 && app.userID(ctx) > 0
 
-	// usableByPilot filters suggestions to what the pilot can actually
-	// use: every skill requirement (transitively) met by their levels.
-	usableByPilot := func(rows []suggestItem) []suggestItem {
-		if !usableOnly || len(rows) == 0 {
-			return rows
-		}
+	// pilotCanUse answers, for the rows given, whether the pilot can
+	// actually use each: every skill requirement (transitively) met by
+	// their levels. Nil when that can't be told (skills not warmed).
+	pilotCanUse := func(rows []suggestItem) func(int64) bool {
 		var skills esi.Skills
 		if !app.loadCorpSnapshot(ctx, pilotID, esi.SnapSkills, &skills) {
-			return rows // skills not warmed yet: don't hide everything
+			return nil
 		}
 		levels := briefingSkillLevels(skills)
 		ids := make([]int64, 0, len(rows))
@@ -1844,7 +2063,7 @@ func (app *Application) handleFitPickerJSON(w http.ResponseWriter, r *http.Reque
 			batch, err := app.queries.ListSDERequirementsByTypes(ctx, pending)
 			if err != nil {
 				logging.Errorf("fittings picker: requirements: %v", err)
-				return rows
+				return nil
 			}
 			var next []int64
 			seen := make(map[int64]bool)
@@ -1875,6 +2094,17 @@ func (app *Application) handleFitPickerJSON(w http.ResponseWriter, r *http.Reque
 				}
 			}
 			return true
+		}
+		return usable
+	}
+	// usableByPilot filters suggestions to what the pilot can use.
+	usableByPilot := func(rows []suggestItem) []suggestItem {
+		if !usableOnly || len(rows) == 0 {
+			return rows
+		}
+		usable := pilotCanUse(rows)
+		if usable == nil {
+			return rows // skills not warmed yet: don't hide everything
 		}
 		out := rows[:0]
 		for _, row := range rows {
@@ -1954,6 +2184,30 @@ func (app *Application) handleFitPickerJSON(w http.ResponseWriter, r *http.Reque
 		for _, row := range rows {
 			out = append(out, suggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "drone"})
 		}
+	case family == "implant":
+		// One slot's implants. Every one lists; those the pilot
+		// can't use yet are marked rather than hidden.
+		slot, _ := strconv.ParseInt(q.Get("slot"), 10, 64)
+		if slot < 1 || slot > fitImplantSlots {
+			break
+		}
+		rows, err := app.queries.ListFitImplantTypes(ctx, db.ListFitImplantTypesParams{Slot: slot, Q: query, Lim: 60})
+		if err != nil {
+			logging.Errorf("fittings picker: implants: %v", err)
+			break
+		}
+		for _, row := range rows {
+			out = append(out, suggestItem{ID: row.TypeID, Name: row.Name, Label: row.GroupName, Kind: "implant"})
+		}
+		if _, owned := app.fitPilotLabel(ctx, app.userID(ctx), pilotID); owned && len(out) > 0 {
+			if usable := pilotCanUse(out); usable != nil {
+				for i := range out {
+					out[i].Missing = !usable(out[i].ID)
+				}
+			}
+		}
+		writeSuggestJSON(w, out)
+		return
 	case family == "charge":
 		weaponID, _ := strconv.ParseInt(q.Get("weapon"), 10, 64)
 		if weaponID > 0 {

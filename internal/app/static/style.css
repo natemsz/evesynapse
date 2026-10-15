@@ -1617,10 +1617,11 @@ html[data-theme="light"] .cardbtn { background: #fffdf9; border-color: #d9a77a; 
   position: fixed;
   inset: 0;
   z-index: 150;
-  background: rgba(0, 0, 0, 0.66);
-  background: color-mix(in srgb, var(--panel) 70%, transparent);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  /* A deep, slightly warm smoke over a strong blur, for every modal on
+     the site (add module, quick jump, fit picker, planner dialogs). */
+  background: rgba(12, 8, 5, 0.58);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  backdrop-filter: blur(16px) saturate(1.15);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2630,7 +2631,7 @@ html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge 
 .fit-res.res-exp > span { background: #d98a1a; }
 /* What keeps the fit from fitting, above everything else. */
 .fit-top { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.4rem 1.2rem; }
-.fit-top > .fit-note, .fit-top > .fit-implants { margin: 0; }
+.fit-top > .fit-note { margin: 0; }
 .fit-top > .fit-problems { flex: 1 1 100%; }
 .fit-headline-label abbr { text-decoration: none; }
 .fit-problems { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; margin: 0 0 0.8rem; padding: 0.55rem 0.8rem; border: 1px solid rgba(198, 47, 16, 0.55); border-radius: 4px; background: rgba(198, 47, 16, 0.1); }
@@ -2727,9 +2728,20 @@ html[data-theme="light"] .fit-head select, html[data-theme="light"] .fit-charge 
 .fit-good { color: var(--success); }
 .fit-note, .fit-notes { color: var(--note); }
 .fit-notes { padding-left: 1.2rem; }
-.fit-implants { margin: 0.4rem 0; color: var(--note); }
-.fit-implants summary { cursor: pointer; }
-.fit-implants ul { margin: 0.3rem 0 0; padding-left: 1.2rem; }
+/* Implants: one row per clone slot, each its own search box. */
+.fit-implant-group > .fit-note { margin: 0 0 0.45rem; }
+.fit-implant-group .fit-chips { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
+.fit-chip.fit-imp { position: relative; display: flex; align-items: center; gap: 0.4rem; }
+.fit-imp-slot { flex: none; min-width: 1.4em; text-align: center; font-size: 0.75rem; color: var(--muted); }
+.fit-imp-input { flex: 1; min-width: 0; padding: 0.15rem 0.3rem; border: 1px solid transparent; border-radius: 3px; background: transparent; color: inherit; font: inherit; }
+.fit-imp-input:hover { border-color: #333; }
+.fit-imp-input:focus { border-color: var(--accent); background: rgba(0, 0, 0, 0.3); outline: none; }
+.fit-imp-empty .fit-imp-input::placeholder { color: var(--muted); font-style: italic; }
+.fit-imp-warn { flex: none; font-size: 0.7rem; color: var(--danger); }
+.fit-imp-missing .fit-imp-input { color: var(--danger); }
+.fit-imp > .suggest { top: calc(100% + 2px); max-height: 18rem; overflow-y: auto; }
+.suggest li.sug-missing > span:not(.sug-label) { color: var(--danger); }
+.suggest li .sug-missing-tag { margin-left: 0.4rem; font-size: 0.7rem; color: var(--danger); }
 .fit-missing {
   border: 1px solid #4a3410;
   border-radius: 4px;
@@ -2992,6 +3004,15 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 .fit-tip-v { color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .fit-tip-v.good { color: #7dc96f; }
 .fit-tip-v.bad { color: #ff7a6b; }
+/* Resist rows wear their damage type's color (the resist bars' own);
+   a bonus above or below the module's base adds an arrow instead of
+   the green/red tint. */
+.fit-tip-v.res-em { color: #6fb6ff; }
+.fit-tip-v.res-th { color: #ff7a5c; }
+.fit-tip-v.res-kin { color: #c9c2b8; }
+.fit-tip-v.res-exp { color: #ffc266; }
+.fit-tip-v.good[class*="res-"]::after { content: " \25B2"; font-size: 0.7em; color: #7dc96f; }
+.fit-tip-v.bad[class*="res-"]::after { content: " \25BC"; font-size: 0.7em; color: #ff7a6b; }
 .fit-tip-x {
   position: absolute;
   top: 0.1rem;
@@ -3264,11 +3285,16 @@ html[data-theme="light"] .searchpanel {
   .fit-wb > .fit-top { grid-column: 1 / -1; grid-row: 1; }
   .fit-wb > .fit-center { grid-column: 2; grid-row: 1; }
   .fit-wb > .fit-center > .fit-visual { width: 100%; margin: 0; }
-  .fit-wb > .fit-cols > .fit-slots { grid-column: 1; grid-row: 1; }
-  .fit-wb > .fit-cols > .fit-stats { grid-column: 3; grid-row: 1; }
-  .fit-wb:has(> .fit-top) > .fit-center,
+  /* The slot list and the stats each span two rows; the ring takes
+     the first of the middle column and the bays (drones, cargo,
+     ammunition) sit straight under it. */
+  .fit-wb > .fit-cols > .fit-slots { grid-column: 1; grid-row: 1 / span 2; }
+  .fit-wb > .fit-cols > .fit-stats { grid-column: 3; grid-row: 1 / span 2; }
+  .fit-wb > .fit-cols > .fit-bays { grid-column: 2; grid-row: 2; }
+  .fit-wb:has(> .fit-top) > .fit-center { grid-row: 2; }
   .fit-wb:has(> .fit-top) > .fit-cols > .fit-slots,
-  .fit-wb:has(> .fit-top) > .fit-cols > .fit-stats { grid-row: 2; }
+  .fit-wb:has(> .fit-top) > .fit-cols > .fit-stats { grid-row: 2 / span 2; }
+  .fit-wb:has(> .fit-top) > .fit-cols > .fit-bays { grid-row: 3; }
   /* No ship picked: the stats panel spans columns 2-3. */
   .fit-wb:not(:has(> .fit-center)) > .fit-cols > .fit-stats { grid-column: 2 / 4; }
 }

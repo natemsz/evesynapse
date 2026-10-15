@@ -714,7 +714,9 @@ func seedSnakeUniverse(t *testing.T, exec func(string) error) {
 			(19553, 315, 0.75), (19553, 802, 1.15),
 			(19554, 315, 0.875), (19554, 802, 1.15),
 			(19555, 315, 1.0), (19555, 802, 1.15),
-			(19556, 802, 3.0)`,
+			(19556, 802, 3.0),
+			(19540, 331, 1), (19551, 331, 2), (19553, 331, 3),
+			(19554, 331, 4), (19555, 331, 5), (19556, 331, 6)`,
 		`INSERT INTO sde_type_effects (type_id, effect_id, is_default) VALUES
 			(19540, 394, 0), (19540, 1261, 0),
 			(19551, 394, 0), (19551, 1261, 0),
@@ -798,6 +800,31 @@ func TestFitSimulateImplants(t *testing.T) {
 		t.Fatalf("clone simulate status = %d, body %q", code, body)
 	}
 	mustContain(t, "/fittings/simulate/", body, ">302 m/s<")
+
+	// Slot by slot: emptying slot 6 drops the Omega (and its set
+	// multiplier) while the rest of the clone stays; an override
+	// naming an implant for another slot is ignored.
+	code, body = postFitJSON(t, app, cookie, "/fittings/simulate/",
+		`{"shipTypeId":1001,"items":[],"charges":{},"pilot":90000001,"implants":{"6":0,"1":19551}}`)
+	if code != http.StatusOK {
+		t.Fatalf("override simulate status = %d, body %q", code, body)
+	}
+	mustContain(t, "/fittings/simulate/", body,
+		`data-fit-imp-slot="1" value="High-grade Snake Alpha"`,
+		`data-fit-imp-slot="6" value=""`,
+		`data-fit-imp-reset="6"`, ">5/10<")
+	if strings.Contains(body, ">374 m/s<") {
+		t.Errorf("the emptied Omega slot still applies the full set bonus")
+	}
+	// A slot's search lists only that slot's implants.
+	req0 := httptest.NewRequest(http.MethodGet, "/fittings/picker.json?family=implant&slot=2&q=snake&pilot=90000001", nil)
+	req0.AddCookie(cookie)
+	rec0 := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec0, req0)
+	mustContain(t, "/fittings/picker.json", rec0.Body.String(), "High-grade Snake Beta")
+	if strings.Contains(rec0.Body.String(), "Snake Alpha") {
+		t.Errorf("slot 2 search lists a slot 1 implant: %s", rec0.Body.String())
+	}
 
 	// The clone picker lists the active clone and the jump clones,
 	// under the name the pilot gave one on the character sheet.

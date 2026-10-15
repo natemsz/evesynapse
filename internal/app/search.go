@@ -74,6 +74,8 @@ type suggestItem struct {
 	URL string `json:"url,omitempty"`
 	// Value is what a pick stands for, where an id alone does not say.
 	Value string `json:"value,omitempty"`
+	// Missing marks an item the chosen pilot lacks the skills to use.
+	Missing bool `json:"missing,omitempty"`
 }
 
 // suggestTypes runs the shared feed: prefix matches first, then

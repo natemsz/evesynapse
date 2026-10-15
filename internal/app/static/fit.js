@@ -125,52 +125,71 @@ var FitTipUI = (function () {
     tipEl.appendChild(x);
     return tipEl;
   }
-  // Anchors the (already appended) tooltip where it covers no
-  // module the pointer may move to next. A ring slot's tooltip
-  // sits in the ring's hole, over the ship render, sized to fit
-  // inside the slots; a list chip's sits beside its row. Either
-  // way it is clamped inside the workbench, which is the offset
-  // parent (position: relative).
+  // Anchors the (already appended) tooltip. A ring slot's tooltip
+  // sits beside the slot, offset outward by where the slot is on the
+  // ring — right of a slot on the right, above one at the top,
+  // diagonally out from one in between — the way the game places
+  // it: never over the neighboring slots, never in the middle. It
+  // may run past the workbench over the panels beside it, as in
+  // game; it is only kept inside the window's width. A list chip's sits
+  // beside its row, inside the workbench. Positions are relative to
+  // the workbench, the offset parent (position: relative).
   function place(tipEl, slot, wb) {
     var wr = wb.getBoundingClientRect();
     var sr = slot.getBoundingClientRect();
     var ring = slot.closest ? slot.closest(".fit-visual") : null;
     var tx, ty, tw, th;
+    var gap = 8, edge = 8;
+    function clamp() {
+      if (tx + tw > wr.width - edge) tx = wr.width - tw - edge;
+      if (tx < edge) tx = edge;
+      if (ty + th > wr.height - edge) ty = wr.height - th - edge;
+      if (ty < edge) ty = edge;
+    }
     if (ring) {
       var vr = ring.getBoundingClientRect();
       var cx = vr.left + vr.width / 2, cy = vr.top + vr.height / 2;
-      var dx = sr.left + sr.width / 2 - cx, dy = sr.top + sr.height / 2 - cy;
-      // The square inscribed in the circle the slots leave free.
-      var free = Math.sqrt(dx * dx + dy * dy) - sr.width / 2 - 6;
-      var side = Math.floor(free * Math.SQRT2);
-      if (side > 0) {
-        tipEl.style.maxWidth = side + "px";
-        tipEl.style.maxHeight = side + "px";
-        tipEl.style.overflowY = "auto";
-        tipEl.style.overflowX = "hidden";
-      }
+      var sx = sr.left + sr.width / 2, sy = sr.top + sr.height / 2;
+      var dx = sx - cx, dy = sy - cy;
+      var len = Math.sqrt(dx * dx + dy * dy) || 1;
+      var ux = dx / len, uy = dy / len;
       tw = tipEl.offsetWidth || 190;
       th = tipEl.offsetHeight || 110;
-      tx = cx - wr.left - tw / 2;
-      ty = cy - wr.top - th / 2;
-    } else {
+      // Outward on each axis that points outward; centred on the
+      // slot along an axis that barely does.
+      var lean = 0.38;
+      var left, top;
+      if (ux > lean) left = sr.right + gap;
+      else if (ux < -lean) left = sr.left - gap - tw;
+      else left = sx - tw / 2;
+      if (uy > lean) top = sr.bottom + gap;
+      else if (uy < -lean) top = sr.top - gap - th;
+      else top = sy - th / 2;
+      // Kept inside the window's width only: past a side it would be
+      // cut off, while above or below the page simply scrolls, and a
+      // vertical clamp would push it back onto the slots.
+      var docEl = document.documentElement;
+      var vw = (docEl && docEl.clientWidth) || window.innerWidth || Infinity;
+      left = Math.max(edge, Math.min(left, vw - tw - edge));
+      tipEl.style.left = Math.round(left - wr.left) + "px";
+      tipEl.style.top = Math.round(top - wr.top) + "px";
+      return;
+    }
+    {
       tw = tipEl.offsetWidth || 190;
       th = tipEl.offsetHeight || 110;
       var right = sr.right - wr.left + 10;
       var left = sr.left - wr.left - tw - 10;
-      if (right + tw <= wr.width - 8) tx = right;
-      else if (left >= 8) tx = left;
+      if (right + tw <= wr.width - edge) tx = right;
+      else if (left >= edge) tx = left;
       else tx = sr.left - wr.left;
       ty = sr.top - wr.top;
       if (tx === sr.left - wr.left) {
         // No room on either side: under the row, the last resort.
         ty = sr.bottom - wr.top + 10;
       }
+      clamp();
     }
-    if (tx + tw > wr.width - 8) tx = wr.width - tw - 8;
-    if (tx < 8) tx = 8;
-    if (ty + th > wr.height - 8) ty = wr.height - th - 8;
-    if (ty < 8) ty = 8;
     tipEl.style.left = Math.round(tx) + "px";
     tipEl.style.top = Math.round(ty) + "px";
   }
@@ -258,6 +277,7 @@ var FitTipUI = (function () {
       shipTypeId: state.shipTypeId,
       items: state.items,
       charges: state.charges,
+      implants: state.implants || {},
       pilot: pilotID(),
       clone: cloneID()
     };
@@ -352,13 +372,15 @@ var FitTipUI = (function () {
       shipTypeId: state.shipTypeId,
       shipName: shipInput ? shipInput.value : "",
       items: JSON.parse(JSON.stringify(state.items || [])),
-      charges: JSON.parse(JSON.stringify(state.charges || {}))
+      charges: JSON.parse(JSON.stringify(state.charges || {})),
+      implants: JSON.parse(JSON.stringify(state.implants || {}))
     };
   }
   function applySnap(s) {
     state.shipTypeId = s.shipTypeId;
     state.items = JSON.parse(JSON.stringify(s.items || []));
     state.charges = JSON.parse(JSON.stringify(s.charges || {}));
+    state.implants = JSON.parse(JSON.stringify(s.implants || {}));
     if (shipInput) shipInput.value = s.shipName || "";
     markDirty();
     simulate();
@@ -538,6 +560,10 @@ var FitTipUI = (function () {
       // Resolve the control from the nearest carrier, never the raw
       // target: a click on a slot's inner glyph must count as a
       // click on the slot (only the border used to respond).
+      var impReset = t.closest("[data-fit-imp-reset]");
+      if (impReset) { setImplant(impReset.getAttribute("data-fit-imp-reset"), null); return; }
+      var impClear = t.closest("[data-fit-imp-clear]");
+      if (impClear) { setImplant(impClear.getAttribute("data-fit-imp-clear"), 0); return; }
       var decEl = t.closest("[data-fit-dec]");
       if (decEl) { decItem(parseInt(decEl.getAttribute("data-fit-dec"), 10) || 0); return; }
       var incEl = t.closest("[data-fit-inc]");
@@ -633,7 +659,7 @@ var FitTipUI = (function () {
         description: descInput ? descInput.value : "",
         tags: tagsInput ? tagsInput.value : "",
         isPublic: pubChkInit.checked, promote: false,
-        fit: { name: nm, shipTypeId: state.shipTypeId, items: state.items, charges: state.charges }
+        fit: { name: nm, shipTypeId: state.shipTypeId, items: state.items, charges: state.charges, implants: state.implants || {} }
       })
     }).catch(function () {});
   });
@@ -724,12 +750,12 @@ var FitTipUI = (function () {
       if (!input || !list) return;
       var q = input.value.trim();
       if (q.length < 2 && !force) { close(); return; }
-      fetch(pickerURL(cfg.family(), q), {
+      fetch(cfg.url ? cfg.url(q) : pickerURL(cfg.family(), q), {
         cache: "no-store", headers: { "Accept": "application/json" }
       }).then(function (resp) {
         return resp.ok ? resp.json() : [];
       }).then(function (data) {
-        var filtered = applyFittable(data || []);
+        var filtered = cfg.url ? (data || []) : applyFittable(data || []);
         if (cfg.dropShips) {
           filtered = filtered.filter(function (it) { return (it.kind || "") !== "ship"; });
         }
@@ -765,6 +791,13 @@ var FitTipUI = (function () {
           var name = document.createElement("span");
           name.textContent = it.name;
           li.appendChild(name);
+          if (it.missing) {
+            li.classList.add("sug-missing");
+            var miss = document.createElement("span");
+            miss.className = "sug-missing-tag";
+            miss.textContent = "Missing skills";
+            li.appendChild(miss);
+          }
           if (it.label) {
             var lab = document.createElement("span");
             lab.className = "sug-label";
@@ -932,6 +965,54 @@ var FitTipUI = (function () {
     modSearch.query();
     if (picker && !picker.hidden) queryPicker();
   }
+  // --- implants: one search per clone slot --------------------------
+  // Each slot's box searches only that slot's implants; picks
+  // override the clone there. id null = back to the clone's implant,
+  // 0 = slot left empty.
+  function setImplant(slot, id) {
+    pushHistory();
+    state.implants = state.implants || {};
+    if (id === null) delete state.implants[slot];
+    else state.implants[slot] = id;
+    pendingFlash = { type: "group", family: "implant" };
+    markDirty();
+    simulate();
+  }
+  editor.addEventListener("focusin", function (ev) {
+    var input = ev.target;
+    if (!input || !input.getAttribute || !input.getAttribute("data-fit-imp-slot")) return;
+    if (!input._fitSug) {
+      var slot = input.getAttribute("data-fit-imp-slot");
+      var list = document.createElement("ul");
+      list.className = "suggest";
+      list.setAttribute("role", "listbox");
+      list.hidden = true;
+      input.parentNode.appendChild(list);
+      var labels = {};
+      labels.implant = "Slot " + slot + " implants";
+      input._fitSug = makeSuggester(input, list, {
+        url: function (q) {
+          return "/fittings/picker.json?family=implant&slot=" + encodeURIComponent(slot) +
+            "&q=" + encodeURIComponent(q) + "&pilot=" + pilotID();
+        },
+        kinds: ["implant"],
+        labels: labels,
+        pick: function (it) {
+          input._fitSug.close();
+          input.value = it.name;
+          setImplant(slot, it.id);
+        }
+      });
+      // A box left without a pick shows the slot's implant again.
+      input.addEventListener("blur", function () {
+        window.setTimeout(function () { input.value = input.defaultValue; }, 150);
+      });
+    }
+    // Open on the whole slot; typing narrows it.
+    input.value = "";
+    input._fitSug.query(true);
+  });
+
   if (fittableChk) fittableChk.addEventListener("change", filtersChanged);
   if (usableChk) usableChk.addEventListener("change", filtersChanged);
   if (metaSel) metaSel.addEventListener("change", filtersChanged);
@@ -1714,7 +1795,8 @@ var FitTipUI = (function () {
           name: state.name,
           shipTypeId: state.shipTypeId,
           items: state.items,
-          charges: state.charges
+          charges: state.charges,
+          implants: state.implants || {}
         }
       };
       fetch("/fittings/save/", {

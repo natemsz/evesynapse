@@ -98,10 +98,11 @@ func seedKillmailCharacter(t *testing.T, transport http.RoundTripper, n int) (*A
 
 func TestWarmKillmailDetailsBound(t *testing.T) {
 	transport := &stubTransport{status: http.StatusOK}
-	app, ch := seedKillmailCharacter(t, transport, 15)
+	total := maxKillmailDetailsPerCycle + 5
+	app, ch := seedKillmailCharacter(t, transport, total)
 	ctx := context.Background()
 
-	// First pass: the per-cycle bound stops at 10 despite 15 refs.
+	// First pass: the per-cycle bound stops short of every ref.
 	fetched, limited := app.warmKillmailDetails(ctx, ch)
 	if limited {
 		t.Fatal("first pass: unexpected error-limit stop")
@@ -118,22 +119,22 @@ func TestWarmKillmailDetailsBound(t *testing.T) {
 	if limited || fetched != 5 {
 		t.Fatalf("second pass: fetched %d limited %v, want 5/false", fetched, limited)
 	}
-	if got := transport.calls.Load(); got != 15 {
-		t.Fatalf("second pass: %d HTTP calls total, want 15", got)
+	if got := transport.calls.Load(); got != int64(total) {
+		t.Fatalf("second pass: %d HTTP calls total, want %d", got, total)
 	}
 
 	// Third pass: everything stored, no HTTP at all.
 	fetched, _ = app.warmKillmailDetails(ctx, ch)
-	if fetched != 0 || transport.calls.Load() != 15 {
-		t.Fatalf("third pass: fetched %d, calls %d; want 0/15", fetched, transport.calls.Load())
+	if fetched != 0 || transport.calls.Load() != int64(total) {
+		t.Fatalf("third pass: fetched %d, calls %d; want 0/%d", fetched, transport.calls.Load(), total)
 	}
 
 	ids, err := app.queries.ListKillmailDetailIDsByCharacter(ctx, ch.CharacterID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ids) != 15 {
-		t.Fatalf("stored detail ids: %d, want 15", len(ids))
+	if len(ids) != total {
+		t.Fatalf("stored detail ids: %d, want %d", len(ids), total)
 	}
 }
 

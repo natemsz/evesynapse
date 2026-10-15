@@ -45,7 +45,7 @@ const piScopeDetail = "Planetary industry is not enabled for this character"
 // maxPlanetLayoutsPerCycle bounds layout fetches per character
 // per worker cycle. A character can hold at most six colonies, so
 // the cap is headroom, not a schedule.
-const maxPlanetLayoutsPerCycle = 8
+const maxPlanetLayoutsPerCycle = 80
 
 // piScopeRefusal reports whether an ESI failure on a planetary
 // endpoint means "this login never granted the planetary scope"

@@ -28,12 +28,13 @@ import (
 
 const (
 	urgentTickInterval        = 5 * time.Second
-	urgentHistoryPerNudge     = 3
-	urgentPilotsPerNudge      = 3
-	urgentOrgsPerNudge        = 8 // corp + alliance names are the cheapest ESI calls; a page that queues a handful (alliance member list) should clear in one tick, not four
-	urgentTypeDetailsPerNudge = 2
+	urgentHistoryPerNudge     = 20
+	urgentPilotsPerNudge      = 20
+	urgentOrgsPerNudge        = 50                     // corp + alliance records are the cheapest ESI calls; a page that queues a batch (an alliance's member list) clears in one tick
+	urgentOrgFetchAllowance   = 2 * urgentOrgsPerNudge // their own budget: pilot work earlier in the tick can't starve them
+	urgentTypeDetailsPerNudge = 15
 	urgentErrorBackoff        = 2 * time.Minute
-	urgentPilotFetchAllowance = 20
+	urgentPilotFetchAllowance = 150
 )
 
 // runUrgentDrain polls the want queues on the short cadence
@@ -122,11 +123,13 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 	}
 
 	// Organization records: a corporation or alliance page the
-	// user is looking at fills in within seconds the same way.
-	if _, ltd := app.drainCorporationPass(ctx, allowance, urgentOrgsPerNudge, now); ltd {
+	// user is looking at fills in within seconds the same way, on
+	// a budget of their own so the pilot work above can't use it up.
+	orgAllowance := &fetchBudget{left: urgentOrgFetchAllowance}
+	if _, ltd := app.drainCorporationPass(ctx, orgAllowance, urgentOrgsPerNudge, now); ltd {
 		return true
 	}
-	if _, ltd := app.drainAlliancePass(ctx, allowance, urgentOrgsPerNudge, now); ltd {
+	if _, ltd := app.drainAlliancePass(ctx, orgAllowance, urgentOrgsPerNudge, now); ltd {
 		return true
 	}
 

@@ -34,7 +34,7 @@ const (
 	// maxWarDetailsPerCycle bounds war-detail fetches per worker
 	// cycle; a cold start converges over a few cycles instead of
 	// bursting hundreds of detail calls at once.
-	maxWarDetailsPerCycle = 50
+	maxWarDetailsPerCycle = 500
 	// warDetailMaxAge is how old an *active* war's detail
 	// payload may get before the worker refreshes it (kill and
 	// ISK counters move while the war runs). A finished war's

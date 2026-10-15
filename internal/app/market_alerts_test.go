@@ -231,8 +231,10 @@ func TestMarketWorkerHistoryDrainAndGate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
-	// 12 watched types: one cycle drains 10, the next the rest.
-	for i := int64(0); i < 12; i++ {
+	// Two more watched types than one cycle drains: the first cycle
+	// takes the cap, the next the rest.
+	capN := int64(maxHistoryFetchesPerCycle)
+	for i := int64(0); i < capN+2; i++ {
 		if err := q.UpsertWatchlistEntry(ctx, db.UpsertWatchlistEntryParams{
 			UserID: user.ID, TypeID: 1000 + i, RegionID: 10000002,
 			ThresholdPct: 5, CreatedAt: time.Now().UTC(),
@@ -240,17 +242,17 @@ func TestMarketWorkerHistoryDrainAndGate(t *testing.T) {
 			t.Fatalf("seed watchlist: %v", err)
 		}
 	}
-	allowance := &fetchBudget{left: 120}
+	allowance := &fetchBudget{left: 4 * maxHistoryFetchesPerCycle}
 
 	stored, limited := app.warmMarketHistory(ctx, allowance)
 	if limited {
 		t.Fatal("history pass reported the error limit on a healthy stub")
 	}
-	if stored != 10 {
-		t.Fatalf("first pass stored %d histories, want 10 (drain cap)", stored)
+	if stored != maxHistoryFetchesPerCycle {
+		t.Fatalf("first pass stored %d histories, want %d (drain cap)", stored, maxHistoryFetchesPerCycle)
 	}
-	if got := transport.calls.Load(); got != 10 {
-		t.Fatalf("first pass made %d calls, want 10", got)
+	if got := transport.calls.Load(); got != capN {
+		t.Fatalf("first pass made %d calls, want %d", got, capN)
 	}
 	rows, err := q.ListMarketHistory(ctx, db.ListMarketHistoryParams{RegionID: 10000002, TypeID: 1000, RowLimit: 90})
 	if err != nil || len(rows) != 2 {
@@ -262,19 +264,19 @@ func TestMarketWorkerHistoryDrainAndGate(t *testing.T) {
 	}
 
 	// Second pass: only the two unfetched pairs go out (the 20h
-	// gate holds the first ten).
+	// gate holds the first cycle's).
 	stored, _ = app.warmMarketHistory(ctx, allowance)
 	if stored != 2 {
 		t.Fatalf("second pass stored %d, want 2", stored)
 	}
-	if got := transport.calls.Load(); got != 12 {
-		t.Fatalf("after second pass: %d calls, want 12", got)
+	if got := transport.calls.Load(); got != capN+2 {
+		t.Fatalf("after second pass: %d calls, want %d", got, capN+2)
 	}
 
 	// Third pass: everything gated, nothing fetched.
 	stored, _ = app.warmMarketHistory(ctx, allowance)
-	if stored != 0 || transport.calls.Load() != 12 {
-		t.Fatalf("third pass: stored %d calls %d, want 0/12", stored, transport.calls.Load())
+	if stored != 0 || transport.calls.Load() != capN+2 {
+		t.Fatalf("third pass: stored %d calls %d, want 0/%d", stored, transport.calls.Load(), capN+2)
 	}
 }
 

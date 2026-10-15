@@ -51,7 +51,7 @@ const (
 	// few hundred pages) finishes inside a few minutes per
 	// region, and no single cycle bursts hundreds of requests
 	// at ESI.
-	maxRegionSweepPagesPerCycle = 50
+	maxRegionSweepPagesPerCycle = 500
 	// maxRegionSweepPagesTotal is a safety stop far beyond any
 	// real book: if a region ever reported more pages than
 	// this, the sweep stores what it has rather than page

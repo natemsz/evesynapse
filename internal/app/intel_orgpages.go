@@ -40,11 +40,17 @@ const (
 // roster corporation) drains through the same queues as lookups
 // a human just asked for, so the per-cycle cap is sized for the
 // backlog — the shared fetch allowance stays the real governor.
-// A drain costs a few calls now that member names resolve in
-// bulk, so 25 drains spend no more than the old capped five did.
+// A drain is one or two of ESI's cheapest public calls, which it
+// answers far faster than this ever asks (the bulk name fill pulls
+// hundreds a second without complaint), so organization records get
+// a budget of their own each cycle instead of whatever the rest of
+// the cycle leaves.
 const (
 	orgStaleAfter        = 7 * 24 * time.Hour
-	maxOrgDrainsPerCycle = 25
+	maxOrgDrainsPerCycle = 250
+	// orgFetchesPerCycle is that budget: room for every drain
+	// plus the alliance each corporation record carries.
+	orgFetchesPerCycle = 2 * maxOrgDrainsPerCycle
 )
 
 // corporationRecordPayload is the stored public record behind

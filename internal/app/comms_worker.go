@@ -29,11 +29,11 @@ import (
 // maxMailBodiesPerCycle bounds body fetches per character per
 // cycle. Bodies are immutable, so a backlog drains at this rate
 // and then never costs a fetch again.
-const maxMailBodiesPerCycle = 20
+const maxMailBodiesPerCycle = 200
 
 // maxCalendarDetailsPerCycle bounds calendar event detail +
 // attendee fetches per character per cycle (both kinds counted).
-const maxCalendarDetailsPerCycle = 10
+const maxCalendarDetailsPerCycle = 100
 
 // commsSnapshotKinds lists the list-level kinds in fetch order:
 // mail first (its bodies warm behind it), then calendar, contacts.

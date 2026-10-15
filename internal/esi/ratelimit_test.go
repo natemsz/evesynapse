@@ -156,3 +156,70 @@ func TestLowBudgetEasesOff(t *testing.T) {
 		t.Fatal("a public request running low was held as if it were a character")
 	}
 }
+
+// TestPreflightHoldsAtReserve: once a route's bucket is known to be
+// down to its reserve for a character, the next request on any route in
+// that group is refused here, as a rate limit, without reaching ESI;
+// other characters and routes ESI never grouped go on; and the window
+// giving tokens back lets requests through again.
+func TestPreflightHoldsAtReserve(t *testing.T) {
+	transport := &headerTransport{status: http.StatusOK, header: http.Header{
+		"X-Ratelimit-Group": {"char-wallet"}, "X-Ratelimit-Limit": {"150/15m"}, "X-Ratelimit-Remaining": {"12"},
+	}}
+	c := New(&http.Client{Transport: transport}, nil, nil)
+	ctx := WithCharacter(context.Background(), 1)
+	if _, _, _, err := c.send(ctx, http.MethodGet, "", "/characters/1/wallet/", nil, "", http.StatusOK); err != nil {
+		t.Fatalf("first request: %v", err)
+	}
+	before := c.CallsTotal()
+	_, _, _, err := c.send(ctx, http.MethodGet, "", "/characters/1/wallet/", nil, "", http.StatusOK)
+	if !errors.Is(err, ErrRateLimited) || !errors.Is(err, ErrErrorLimit) {
+		t.Fatalf("at the reserve (12 of 150, reserve 15): %v; want a rate limit", err)
+	}
+	if c.CallsTotal() != before {
+		t.Fatal("a request at the reserve still reached ESI")
+	}
+	// Another character's bucket is its own.
+	if _, _, _, err := c.send(WithCharacter(context.Background(), 2), http.MethodGet, "", "/characters/2/wallet/", nil, "", http.StatusOK); err != nil {
+		t.Fatalf("another character: %v", err)
+	}
+	// A route with no group stated is never held.
+	transport.header = http.Header{}
+	if _, _, _, err := c.send(context.Background(), http.MethodGet, "", "/corporations/98000001/", nil, "", http.StatusOK); err != nil {
+		t.Fatalf("ungrouped route: %v", err)
+	}
+
+	// The window gives tokens back: two minutes of a 150/15m bucket
+	// is 20 tokens, past the reserve.
+	b := bucketState{remaining: 12, limit: 150, window: 15 * time.Minute, at: time.Now().Add(-2 * time.Minute)}
+	if got := b.estimate(time.Now()); got < 31 || got > 33 {
+		t.Fatalf("estimate after two minutes: %d, want about 32", got)
+	}
+	if b.estimate(time.Now()) <= b.reserve() {
+		t.Fatal("a refilled bucket is still at its reserve")
+	}
+}
+
+func TestParseRateLimit(t *testing.T) {
+	for in, want := range map[string]struct {
+		n  int
+		w  time.Duration
+		ok bool
+	}{
+		"150/15m": {150, 15 * time.Minute, true},
+		"30/1h":   {30, time.Hour, true},
+		"600/60s": {600, time.Minute, true},
+		"":        {0, 0, false},
+		"150":     {0, 0, false},
+		"x/15m":   {0, 0, false},
+		"150/15d": {0, 0, false},
+	} {
+		n, w, ok := parseRateLimit(in)
+		if n != want.n || w != want.w || ok != want.ok {
+			t.Errorf("parseRateLimit(%q) = %d, %v, %v; want %d, %v, %v", in, n, w, ok, want.n, want.w, want.ok)
+		}
+	}
+	if got := routeOf(http.MethodGet, "/characters/90000001/wallet/journal/?page=2"); got != "GET /characters/{id}/wallet/journal/" {
+		t.Errorf("routeOf: %q", got)
+	}
+}

@@ -50,7 +50,7 @@ const (
 	// maxStructureResolutionsPerCycle bounds structure lookups
 	// per worker cycle; a cold backlog converges over a few
 	// cycles instead of bursting.
-	maxStructureResolutionsPerCycle = 10
+	maxStructureResolutionsPerCycle = 100
 	// structureRenameWindow is how long a resolved name is
 	// trusted before the worker re-asks.
 	structureRenameWindow = 30 * 24 * time.Hour

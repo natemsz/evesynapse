@@ -3,6 +3,7 @@ package esi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -28,6 +29,15 @@ import (
 // doing so. A 429 also wraps ErrRateLimited, and the character it was
 // about is remembered, so that a caller working through many
 // characters can set that one aside and carry on with the rest.
+//
+// Both are also seen coming, and that is what governs how fast the
+// app calls ESI, rather than fixed per-pass counts. Every response
+// says which group its route is in and how many tokens are left; the
+// client learns route -> group, and before each request estimates
+// the bucket's tokens (what was left, plus what the window has given
+// back since). A bucket down to its reserve, or an error budget down
+// to its last few, is refused here, with the same errors ESI would
+// have answered, before ESI ever has to refuse it.
 // ---------------------------------------------------------------------------
 
 // ErrRateLimited marks a 429: the rate limit of one character (or of
@@ -82,6 +92,149 @@ type rateLimits struct {
 	mu     sync.Mutex
 	until  map[int64]time.Time     // character (0: unauthenticated) -> left alone until
 	groups map[string]RateHeadroom // group -> the lowest budget seen since last read
+
+	// routeGroup is which rate-limit group each route is in, as ESI
+	// named it (route: the path with its numbers as {id}).
+	routeGroup map[string]string
+	// buckets is each group's latest state for each character
+	// (0: unauthenticated), what the pre-request check reads.
+	buckets map[bucketKey]bucketState
+}
+
+type bucketKey struct {
+	group     string
+	character int64
+}
+
+// bucketState is one bucket as of its latest response.
+type bucketState struct {
+	remaining int
+	limit     int           // tokens per window; 0 when not stated
+	window    time.Duration // 0 when not stated
+	at        time.Time
+}
+
+// rateReserveShare is how much of a bucket is kept back: requests stop
+// when the estimated tokens fall to a tenth of the limit (and never
+// below rateLowWater), before ESI would refuse anything.
+const rateReserveShare = 0.10
+
+// reserve is the tokens a bucket keeps back.
+func (b bucketState) reserve() int {
+	r := int(float64(b.limit) * rateReserveShare)
+	if r < rateLowWater {
+		r = rateLowWater
+	}
+	return r
+}
+
+// estimate is the bucket's tokens now: what was left at its latest
+// response, plus the share of the limit the window has given back
+// since (ESI's buckets refill as the window slides). Without a stated
+// limit and window only the latest count is known.
+func (b bucketState) estimate(now time.Time) int {
+	if b.limit <= 0 || b.window <= 0 {
+		return b.remaining
+	}
+	back := int(float64(b.limit) * float64(now.Sub(b.at)) / float64(b.window))
+	if n := b.remaining + back; n < b.limit {
+		return n
+	}
+	return b.limit
+}
+
+// parseRateLimit reads ESI's X-Ratelimit-Limit, e.g. "150/15m": tokens
+// per window. ok is false when it is missing or not in that form.
+func parseRateLimit(v string) (tokens int, window time.Duration, ok bool) {
+	n, w, found := strings.Cut(strings.TrimSpace(v), "/")
+	if !found {
+		return 0, 0, false
+	}
+	tokens, err := strconv.Atoi(strings.TrimSpace(n))
+	if err != nil || tokens <= 0 {
+		return 0, 0, false
+	}
+	w = strings.TrimSpace(w)
+	if w == "" {
+		return 0, 0, false
+	}
+	unit := map[byte]time.Duration{'s': time.Second, 'm': time.Minute, 'h': time.Hour}[w[len(w)-1]]
+	count, err := strconv.Atoi(w[:len(w)-1])
+	if unit == 0 || err != nil || count <= 0 {
+		return 0, 0, false
+	}
+	return tokens, time.Duration(count) * unit, true
+}
+
+// routeOf is a request path as a route: no query, numbers as {id}, so
+// every character's wallet is one route.
+func routeOf(method, path string) string {
+	path, _, _ = strings.Cut(path, "?")
+	parts := strings.Split(path, "/")
+	for i, part := range parts {
+		if part != "" && strings.Trim(part, "0123456789") == "" {
+			parts[i] = "{id}"
+		}
+	}
+	return method + " " + strings.Join(parts, "/")
+}
+
+// learnBucket records a response's bucket and the route's group.
+// Callers hold c.rates.mu.
+func (c *Client) learnBucket(route string, characterID int64, group string, remaining int, header http.Header, now time.Time) {
+	if group == "" {
+		return
+	}
+	if c.rates.routeGroup == nil {
+		c.rates.routeGroup = map[string]string{}
+		c.rates.buckets = map[bucketKey]bucketState{}
+	}
+	if len(c.rates.routeGroup) < 2000 {
+		c.rates.routeGroup[route] = group
+	}
+	state := bucketState{remaining: remaining, at: now}
+	if tokens, window, ok := parseRateLimit(header.Get("X-Ratelimit-Limit")); ok {
+		state.limit, state.window = tokens, window
+	}
+	if len(c.rates.buckets) < 50000 {
+		c.rates.buckets[bucketKey{group, characterID}] = state
+	}
+}
+
+// preflight refuses a request ESI would soon refuse: the error budget
+// at its last few, or the route's bucket for this character down to its
+// reserve. The errors are the ones ESI's own refusals carry, so every
+// caller backs off the way it already does; nothing is sent.
+func (c *Client) preflight(ctx context.Context, method, path string, now time.Time) error {
+	if c.ErrorBudgetLow() {
+		return fmt.Errorf("ESI %s %s: error budget nearly spent, holding until it resets: %w", method, path, ErrErrorLimit)
+	}
+	characterID := characterFrom(ctx)
+	c.rates.mu.Lock()
+	defer c.rates.mu.Unlock()
+	group, known := c.rates.routeGroup[routeOf(method, path)]
+	if !known {
+		return nil
+	}
+	b, seen := c.rates.buckets[bucketKey{group, characterID}]
+	if !seen || b.estimate(now) > b.reserve() {
+		return nil
+	}
+	// Held for as long as the window takes to give the reserve back.
+	wait := rateLowWait
+	if b.limit > 0 && b.window > 0 {
+		wait = time.Duration(float64(b.window) * float64(b.reserve()) / float64(b.limit))
+		if wait < 5*time.Second {
+			wait = 5 * time.Second
+		}
+	}
+	if c.rates.until == nil {
+		c.rates.until = map[int64]time.Time{}
+	}
+	if until := now.Add(wait); until.After(c.rates.until[characterID]) {
+		c.rates.until[characterID] = until
+	}
+	return fmt.Errorf("ESI %s %s: %s budget at its reserve: %w (%w)", method, path, group, ErrErrorLimit, ErrRateLimited)
 }
 
 // noteRateLimited records a 429 about a character.
@@ -124,7 +277,7 @@ func (c *Client) RateLimitedUntil(characterID int64, now time.Time) time.Time {
 // tightest budget seen. Headers that are missing or not as expected
 // are ignored: this is for seeing the limit coming, not for deciding
 // anything.
-func (c *Client) trackRateHeaders(characterID int64, header http.Header, now time.Time) {
+func (c *Client) trackRateHeaders(route string, characterID int64, header http.Header, now time.Time) {
 	raw := strings.TrimSpace(header.Get("X-Ratelimit-Remaining"))
 	if raw == "" {
 		return
@@ -145,6 +298,7 @@ func (c *Client) trackRateHeaders(characterID int64, header http.Header, now tim
 		}
 	}
 	group := clipHeader(header.Get("X-Ratelimit-Group"))
+	c.learnBucket(route, characterID, group, remaining, header, now)
 	if seen, known := c.rates.groups[group]; known && remaining >= seen.Remaining {
 		return
 	}

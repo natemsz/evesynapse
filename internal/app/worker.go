@@ -675,16 +675,18 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 	})
 	// Public organization records: the whole alliance universe
 	// is seeded daily so records exist before anyone visits,
-	// then corporations and alliances drain from their queues.
-	// Public endpoints, same cycle allowance.
+	// then corporations and alliances drain from their queues on
+	// a budget of their own (orgFetchesPerCycle), so a busy cycle
+	// never leaves a corporation someone is looking at unnamed.
 	c.pass("seeding alliance universe", func() (int, bool) {
 		return app.seedAllianceUniverse(ctx, c.allowance)
 	})
+	orgAllowance := &fetchBudget{left: orgFetchesPerCycle}
 	c.pass("draining corporation records", func() (int, bool) {
-		return app.refreshCorporationRecords(ctx, c.allowance)
+		return app.refreshCorporationRecords(ctx, orgAllowance)
 	})
 	c.pass("draining alliance records", func() (int, bool) {
-		return app.refreshAllianceRecords(ctx, c.allowance)
+		return app.refreshAllianceRecords(ctx, orgAllowance)
 	})
 	c.pass("draining type details", func() (int, bool) {
 		return app.refreshTypeDetails(ctx, c.allowance)
@@ -1349,7 +1351,7 @@ func (app *Application) warmSchematic(ctx context.Context, budget *warmBudget, i
 // maxKillmailDetailsPerCycle bounds detail fetches per character
 // per worker cycle; a busy character's backlog converges over a
 // few cycles instead of turning one cycle into an ESI marathon.
-const maxKillmailDetailsPerCycle = 10
+const maxKillmailDetailsPerCycle = 100
 
 // warmKillmailDetails fetches detail payloads for the entries of
 // the character's recent-killmails snapshot that are not stored

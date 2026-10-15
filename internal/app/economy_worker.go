@@ -111,7 +111,7 @@ func (app *Application) fetchCharKind(ctx context.Context, ch db.Character, kind
 
 // maxContractItemsPerCycle bounds item-list fetches per character
 // per worker cycle.
-const maxContractItemsPerCycle = 10
+const maxContractItemsPerCycle = 100
 
 // warmContractItems fetches item lists for the contracts in the
 // character's contracts snapshot that are not stored yet, at most

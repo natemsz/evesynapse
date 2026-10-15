@@ -659,6 +659,25 @@ UPDATE market_region_stats SET avg_daily_volume = COALESCE((
       )
 ), 0)
 WHERE region_id = sqlc.arg(region_id) AND type_id = sqlc.arg(type_id);
+-- name: RefreshMarketRegionStatAvgVolumes :execrows
+-- RefreshMarketRegionStatAvgVolume for several types of one region in
+-- one statement, touching only rows whose figure changed: the
+-- tradefinder's self-heal for pending routes whose history is stored
+-- but whose sold-per-day figure has not caught up.
+UPDATE market_region_stats s SET avg_daily_volume = v.avg_daily_volume
+FROM (
+    SELECT h.type_id, CAST(AVG(h.volume) AS DOUBLE PRECISION) AS avg_daily_volume
+    FROM market_history h
+    JOIN (
+        SELECT m.type_id, to_char(MAX(m.date)::date - INTERVAL '6 days', 'YYYY-MM-DD') AS window_start
+        FROM market_history m
+        WHERE m.region_id = sqlc.arg(region_id) AND m.type_id = ANY(sqlc.arg(type_ids)::bigint[])
+        GROUP BY m.type_id
+    ) w ON w.type_id = h.type_id
+    WHERE h.region_id = sqlc.arg(region_id) AND h.type_id = ANY(sqlc.arg(type_ids)::bigint[]) AND h.date >= w.window_start
+    GROUP BY h.type_id
+) v
+WHERE s.region_id = sqlc.arg(region_id) AND s.type_id = v.type_id AND s.avg_daily_volume <> v.avg_daily_volume;
 -- name: ListCheapestSellStations :many
 -- Per-type cheapest-sell station rows for a bounded type list:
 -- the tradefinder's "cheapest at" hints without pulling the

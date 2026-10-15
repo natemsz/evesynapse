@@ -934,6 +934,40 @@ func (q *Queries) RefreshMarketRegionStatAvgVolume(ctx context.Context, arg Refr
 	return err
 }
 
+const refreshMarketRegionStatAvgVolumes = `-- name: RefreshMarketRegionStatAvgVolumes :execrows
+UPDATE market_region_stats s SET avg_daily_volume = v.avg_daily_volume
+FROM (
+    SELECT h.type_id, CAST(AVG(h.volume) AS DOUBLE PRECISION) AS avg_daily_volume
+    FROM market_history h
+    JOIN (
+        SELECT m.type_id, to_char(MAX(m.date)::date - INTERVAL '6 days', 'YYYY-MM-DD') AS window_start
+        FROM market_history m
+        WHERE m.region_id = $1 AND m.type_id = ANY($2::bigint[])
+        GROUP BY m.type_id
+    ) w ON w.type_id = h.type_id
+    WHERE h.region_id = $1 AND h.type_id = ANY($2::bigint[]) AND h.date >= w.window_start
+    GROUP BY h.type_id
+) v
+WHERE s.region_id = $1 AND s.type_id = v.type_id AND s.avg_daily_volume <> v.avg_daily_volume
+`
+
+type RefreshMarketRegionStatAvgVolumesParams struct {
+	RegionID int64   `json:"region_id"`
+	TypeIds  []int64 `json:"type_ids"`
+}
+
+// RefreshMarketRegionStatAvgVolume for several types of one region in
+// one statement, touching only rows whose figure changed: the
+// tradefinder's self-heal for pending routes whose history is stored
+// but whose sold-per-day figure has not caught up.
+func (q *Queries) RefreshMarketRegionStatAvgVolumes(ctx context.Context, arg RefreshMarketRegionStatAvgVolumesParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, refreshMarketRegionStatAvgVolumes, arg.RegionID, pq.Array(arg.TypeIds))
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const listCheapestSellStations = `-- name: ListCheapestSellStations :many
 SELECT DISTINCT ON (type_id) type_id, location_id, best_sell
 FROM market_station_stats

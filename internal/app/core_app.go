@@ -103,6 +103,10 @@ type Application struct {
 	// urgent want drain, so the two never fetch the same queue row
 	// in the same moment.
 	fetchMu sync.Mutex
+	// orgFetchMu serializes organization record drains (cycle and
+	// urgent) on their own, so a long pass under fetchMu (a market
+	// sweep) never keeps a name someone is looking at waiting.
+	orgFetchMu sync.Mutex
 
 	// urgentMu guards urgentHoldUntil: after ESI pushes back, the
 	// urgent drain stays quiet for a while instead of nudging

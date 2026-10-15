@@ -116,6 +116,25 @@ func (app *Application) drainPilotNameWants(ctx context.Context, allowance *fetc
 			logging.Errorf("worker: pilot name wants: resolve %q: %v", want.DisplayName, err)
 			continue
 		}
+		// The same answer names any corporation or alliance called
+		// exactly that: their records are queued too, so typing one's
+		// name brings it in like a pilot's.
+		for _, c := range ids.Corporations {
+			if strings.EqualFold(c.Name, want.DisplayName) {
+				app.esi.StoreCorpName(c.ID, c.Name)
+				if qerr := app.wantCorporation(ctx, c.ID, wantViewed); qerr != nil {
+					logging.Errorf("worker: name wants: queue corporation %d for %q: %v", c.ID, want.DisplayName, qerr)
+				}
+			}
+		}
+		for _, a := range ids.Alliances {
+			if strings.EqualFold(a.Name, want.DisplayName) {
+				app.esi.StoreAllianceName(a.ID, a.Name)
+				if qerr := app.wantAlliance(ctx, a.ID, wantViewed); qerr != nil {
+					logging.Errorf("worker: name wants: queue alliance %d for %q: %v", a.ID, want.DisplayName, qerr)
+				}
+			}
+		}
 		var match *esi.UniverseIDEntry
 		for i := range ids.Characters {
 			if strings.EqualFold(ids.Characters[i].Name, want.DisplayName) {

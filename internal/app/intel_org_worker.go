@@ -23,16 +23,16 @@ import (
 // the cycle budget: 'pending' rows first, then ready rows gone
 // stale. Called from refreshCycle.
 func (app *Application) refreshCorporationRecords(ctx context.Context, allowance *fetchBudget) (drained int, limited bool) {
-	app.fetchMu.Lock()
-	defer app.fetchMu.Unlock()
+	app.orgFetchMu.Lock()
+	defer app.orgFetchMu.Unlock()
 	return app.drainCorporationPass(ctx, allowance, maxOrgDrainsPerCycle, time.Now().UTC())
 }
 
 // refreshAllianceRecords is refreshCorporationRecords for the
 // alliance queue.
 func (app *Application) refreshAllianceRecords(ctx context.Context, allowance *fetchBudget) (drained int, limited bool) {
-	app.fetchMu.Lock()
-	defer app.fetchMu.Unlock()
+	app.orgFetchMu.Lock()
+	defer app.orgFetchMu.Unlock()
 	return app.drainAlliancePass(ctx, allowance, maxOrgDrainsPerCycle, time.Now().UTC())
 }
 
@@ -81,7 +81,7 @@ func (app *Application) seedAllianceUniverse(ctx context.Context, allowance *fet
 }
 
 // drainCorporationPass fills up to limit due corporation records.
-// Callers hold the shared fetch lock (the cycle wrappers above,
+// Callers hold the organization lock (the cycle wrappers above,
 // the urgent drain).
 func (app *Application) drainCorporationPass(ctx context.Context, allowance *fetchBudget, limit int, now time.Time) (drained int, limited bool) {
 	ids, err := app.queries.ListCorporationDrains(ctx, db.ListCorporationDrainsParams{

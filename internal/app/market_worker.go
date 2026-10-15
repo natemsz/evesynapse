@@ -246,7 +246,7 @@ func (app *Application) historyCandidates(ctx context.Context) ([]marketKey, err
 		return nil, err
 	}
 	for _, e := range entries {
-		add(e.RegionID, e.TypeID)
+		add(marketRegionForType(e.TypeID, e.RegionID), e.TypeID)
 	}
 
 	// Types with open orders ride their orders snapshots; a

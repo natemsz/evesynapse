@@ -99,6 +99,9 @@ type rateLimits struct {
 	// buckets is each group's latest state for each character
 	// (0: unauthenticated), what the pre-request check reads.
 	buckets map[bucketKey]bucketState
+	// routeHold is a route ESI answered 429 for, per character, held
+	// until its Retry-After (keyed by route in place of group).
+	routeHold map[bucketKey]time.Time
 }
 
 type bucketKey struct {
@@ -210,9 +213,16 @@ func (c *Client) preflight(ctx context.Context, method, path string, now time.Ti
 		return fmt.Errorf("ESI %s %s: error budget nearly spent, holding until it resets: %w", method, path, ErrErrorLimit)
 	}
 	characterID := characterFrom(ctx)
+	route := routeOf(method, path)
 	c.rates.mu.Lock()
 	defer c.rates.mu.Unlock()
-	group, known := c.rates.routeGroup[routeOf(method, path)]
+	if until, held := c.rates.routeHold[bucketKey{route, characterID}]; held {
+		if now.Before(until) {
+			return fmt.Errorf("ESI %s %s: rate limited until %s: %w (%w)", method, path, until.UTC().Format("15:04:05"), ErrErrorLimit, ErrRateLimited)
+		}
+		delete(c.rates.routeHold, bucketKey{route, characterID})
+	}
+	group, known := c.rates.routeGroup[route]
 	if !known {
 		return nil
 	}
@@ -238,7 +248,7 @@ func (c *Client) preflight(ctx context.Context, method, path string, now time.Ti
 }
 
 // noteRateLimited records a 429 about a character.
-func (c *Client) noteRateLimited(characterID int64, header http.Header, now time.Time) {
+func (c *Client) noteRateLimited(route string, characterID int64, header http.Header, now time.Time) {
 	wait := rateLimitDefaultWait
 	if w, ok := parseRetryAfter(header.Get("Retry-After")); ok && w > 0 {
 		wait = w
@@ -253,6 +263,14 @@ func (c *Client) noteRateLimited(characterID int64, header http.Header, now time
 	}
 	if until := now.Add(wait); until.After(c.rates.until[characterID]) {
 		c.rates.until[characterID] = until
+	}
+	// The route itself waits out Retry-After too, for this character:
+	// asking again sooner only spends another refusal.
+	if c.rates.routeHold == nil {
+		c.rates.routeHold = map[bucketKey]time.Time{}
+	}
+	if len(c.rates.routeHold) < 50000 {
+		c.rates.routeHold[bucketKey{route, characterID}] = now.Add(wait)
 	}
 }
 

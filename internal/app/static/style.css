@@ -941,6 +941,8 @@ footer .version-number {
 .section-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.6rem 0 1rem; }
 .section-tabs a { padding: 0.35rem 0.8rem; border: 1px solid var(--border, #333); border-radius: 4px; text-decoration: none; white-space: nowrap; }
 .section-tabs a:hover { border-color: #555; }
+/* In-page section anchors land clear of the sticky top bar. */
+.card[id] { scroll-margin-top: 4.5rem; }
 .section-tabs a.active { border-color: var(--accent); color: var(--text-bright); background: var(--row-hover); }
 /* Section tabs, filter chips and strategy tabs read as controls: the
    same Rajdhani capitals as the buttons. */
@@ -1302,6 +1304,7 @@ td, dd, .kpi-v, .fit-headline-num, .fit-bar-nums, .fit-count, .fit-chip-qty, .fi
 /* Money in and out: losses soft red, gains muted green. */
 td.neg, .neg { color: #ff4d4d; }
 td.pos, .pos { color: #28c76f; }
+.watch-matches td:last-child, .watch-matches th:last-child { width: 1%; white-space: nowrap; text-align: right; }
 .flow-figs td { text-align: right; white-space: nowrap; }
 .flow-figs thead th { text-align: right; }
 .flow-figs thead small { color: var(--accent); font-size: 0.7em; }

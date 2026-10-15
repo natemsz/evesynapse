@@ -459,6 +459,15 @@ type WidgetDecl struct {
 	After       string
 }
 
+// BriefingTopicDecl declares a family of briefing lines the module
+// owns: core's briefing builder produces those lines only when the
+// module is built in. The builder stays core's, reading the shared
+// snapshots; the declaration is only the gate.
+type BriefingTopicDecl struct {
+	ID    string
+	Title string
+}
+
 // NotifyKindDecl declares a kind of notification the module owns: core
 // offers it in the settings, produces it and shows it in the bell only when
 // the module is built in. After names the kind it follows in the settings.
@@ -1114,6 +1123,9 @@ type Module struct {
 	// the shared snapshots, but nothing is shown for a module not built in.
 	Widgets     []WidgetDecl
 	NotifyKinds []NotifyKindDecl
+	// BriefingTopics are the briefing line families the module owns;
+	// core's briefing builder reads them from this declaration.
+	BriefingTopics []BriefingTopicDecl
 	// FetchGates are asked before the fetch pipeline spends ESI.
 	FetchGates []FetchGate
 	// CycleJobs run inside the worker cycle at a named phase.

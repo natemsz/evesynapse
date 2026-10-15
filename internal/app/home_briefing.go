@@ -181,6 +181,22 @@ func (app *Application) advanceBriefingAnchor(ctx context.Context, userID int64,
 	}
 }
 
+// briefingTopicBuiltIn reports whether a built-in module declares the
+// briefing topic: the line families a module owns are produced only
+// where that module is built in. The builders stay here in core; the
+// gate is the module's BriefingTopics declaration, read from the
+// registry like Widgets and NotifyKinds.
+func briefingTopicBuiltIn(id string) bool {
+	for _, m := range registeredModules {
+		for _, t := range m.BriefingTopics {
+			if t.ID == id {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps, since, now time.Time) *briefingWidget {
 	w := &briefingWidget{SinceLabel: briefingSinceLabel(since)}
 	if len(bundles) == 0 {
@@ -209,18 +225,18 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 		bb.linkLines(ctx, b, prefix)
 		bb.skillLines(ctx, b, prefix)
 		bb.industryLines(ctx, b, prefix)
-		if moduleCompiledIn("market") {
+		if briefingTopicBuiltIn("orders") {
 			bb.orderLines(ctx, b, prefix)
 		}
 		bb.planetLines(ctx, b, prefix)
 		// What a module owns is told only where the module is built in.
-		if moduleCompiledIn("contracts") {
+		if briefingTopicBuiltIn("contracts") {
 			bb.contractLines(b, prefix)
 		}
-		if moduleCompiledIn("calendar") {
+		if briefingTopicBuiltIn("calendar") {
 			bb.calendarLines(b, prefix)
 		}
-		if moduleCompiledIn("mail") {
+		if briefingTopicBuiltIn("mail") {
 			bb.mailLines(b, prefix)
 		}
 	}
@@ -618,7 +634,7 @@ func (app *Application) briefingMarketLines(ctx context.Context, bundles []*char
 	var lines []briefingLine
 
 	health, err := app.queries.ListOrderHealthByUser(ctx, userID)
-	if !moduleCompiledIn("market") {
+	if !briefingTopicBuiltIn("orders") {
 		health = nil
 	}
 	if err != nil {

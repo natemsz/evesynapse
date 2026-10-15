@@ -23,9 +23,10 @@ var Module = module.Module{
 	Scopes: []module.Scope{
 		{Scope: "esi-contracts.read_character_contracts.v1", Unlocks: "Courier, item and auction contracts."},
 	},
-	EnhanceScopes: []module.Scope{},
-	Snapshots:     []string{esi.SnapContracts},
-	Activities:    []string{"market"},
+	EnhanceScopes:  []module.Scope{},
+	Snapshots:      []string{esi.SnapContracts},
+	BriefingTopics: []module.BriefingTopicDecl{{ID: "contracts", Title: "Contract deadlines"}},
+	Activities:     []string{"market"},
 	Nav: []module.NavSection{{
 		Section: "market",
 		Entries: []module.NavEntry{

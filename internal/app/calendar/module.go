@@ -24,10 +24,11 @@ var Module = module.Module{
 		{Scope: "esi-calendar.read_calendar_events.v1", Unlocks: "Upcoming events and attendees."},
 		{Scope: "esi-calendar.respond_calendar_events.v1", Unlocks: "Accept or decline events."},
 	},
-	EnhanceScopes: []module.Scope{},
-	Snapshots:     []string{esi.SnapCalendar, esi.SnapCalendarEventPrefix, esi.SnapCalendarAttPrefix},
-	NotifyKinds:   []module.NotifyKindDecl{{ID: "calendar", Title: "New in-game calendar event", After: "mail"}},
-	Activities:    []string{"pilots"},
+	EnhanceScopes:  []module.Scope{},
+	Snapshots:      []string{esi.SnapCalendar, esi.SnapCalendarEventPrefix, esi.SnapCalendarAttPrefix},
+	NotifyKinds:    []module.NotifyKindDecl{{ID: "calendar", Title: "New in-game calendar event", After: "mail"}},
+	BriefingTopics: []module.BriefingTopicDecl{{ID: "calendar", Title: "Calendar events"}},
+	Activities:     []string{"pilots"},
 	Nav: []module.NavSection{{
 		Section: "pilot",
 		Entries: []module.NavEntry{

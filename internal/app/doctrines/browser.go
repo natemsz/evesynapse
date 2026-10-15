@@ -1,7 +1,8 @@
-package app
+package doctrines
 
 import (
 	"context"
+	"evesynapse/internal/app/module"
 	"net/url"
 	"sort"
 	"strconv"
@@ -88,6 +89,8 @@ type fitBrowser struct {
 	// With/without module free-text filters, the public browser's pair.
 	Include string
 	Exclude string
+	// Roles is the fleet-role taxonomy the cards' roles are chosen from.
+	Roles []string
 }
 
 type formField struct{ Name, Value string }
@@ -110,7 +113,7 @@ type fitBrowserView struct {
 	More        bool // more match than are shown
 	// For is the doctrine a keeper is choosing fits for, when the page
 	// was opened from one.
-	For   *opChoice
+	For   *module.NamedChoice
 	Roles []string
 	Self  string // this page's address as filtered, to come back to
 	Empty string // what to say when there are no fits at all
@@ -160,7 +163,7 @@ func hasFold(values []string, want string) bool {
 // run searches, filters and sorts the fits, and builds the page's
 // chips from what is left.
 func (b *fitBrowser) run(cards []fitCard) *fitBrowserView {
-	view := &fitBrowserView{Path: b.Path, Q: b.Q, Include: b.Include, Exclude: b.Exclude, Total: len(cards), ClearURL: b.Path, Roles: opFleetRoles}
+	view := &fitBrowserView{Path: b.Path, Q: b.Q, Include: b.Include, Exclude: b.Exclude, Total: len(cards), ClearURL: b.Path, Roles: b.Roles}
 	if len(b.Fixed) > 0 {
 		view.ClearURL = b.Path + "?" + b.Fixed.Encode()
 	}
@@ -330,7 +333,7 @@ func filterTag(value string) fitFilter {
 
 // hullClasses names the class of each ship: its group in the game's
 // data (Frigate, Logistics, Strategic Cruiser, …).
-func (app *Application) hullClasses(ctx context.Context, cards []fitCard) {
+func (app *mod) hullClasses(ctx context.Context, cards []fitCard) {
 	seen := map[int64]bool{}
 	var ids []int64
 	for _, c := range cards {
@@ -359,12 +362,12 @@ func (app *Application) hullClasses(ctx context.Context, cards []fitCard) {
 // suggestFits offers what a browser's search box suggests while
 // typing: fits (a pick opens one in the fitting tool), then the
 // filters a word could mean, each a link to the browser so filtered.
-func (b *fitBrowser) suggestFits(cards []fitCard, q string) []suggestItem {
+func (b *fitBrowser) suggestFits(cards []fitCard, q string) []module.SuggestItem {
 	needle := strings.ToLower(strings.TrimSpace(q))
 	if needle == "" {
 		return nil
 	}
-	var out []suggestItem
+	var out []module.SuggestItem
 	seen := map[string]bool{}
 	add := func(name, label, address string) {
 		key := label + "\n" + strings.ToLower(name)
@@ -372,7 +375,7 @@ func (b *fitBrowser) suggestFits(cards []fitCard, q string) []suggestItem {
 			return
 		}
 		seen[key] = true
-		out = append(out, suggestItem{Name: name, Label: label, URL: address})
+		out = append(out, module.SuggestItem{Name: name, Label: label, URL: address})
 	}
 	for i := range cards {
 		c := &cards[i]
@@ -399,7 +402,7 @@ func (b *fitBrowser) suggestFits(cards []fitCard, q string) []suggestItem {
 					key := f.Title + "\n" + strings.ToLower(shown)
 					if !seen[key] && len(out) < suggestBrowseMost {
 						seen[key] = true
-						out = append(out, suggestItem{Name: shown, Label: f.Title, URL: b.address(map[string]string{f.Key: v, "q": ""})})
+						out = append(out, module.SuggestItem{Name: shown, Label: f.Title, URL: b.address(map[string]string{f.Key: v, "q": ""})})
 					}
 				}
 			}

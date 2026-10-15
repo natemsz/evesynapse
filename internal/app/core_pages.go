@@ -32,11 +32,6 @@ type pageData struct {
 	Corps          []corpView
 	CorpOptions    []corpOption // the corporations the Corporation page can show
 	CorpChars      []assetCharLink
-	CorpMembers    *corpMembersView
-	CorpWallets    *corpWalletsView
-	CorpOrders     *corpOrdersView
-	CorpAssets     *corpAssetsView
-	CorpStructs    *corpStructuresView
 	Assets         *assetsView
 	AssetsChars    []assetCharLink
 	AssetsSearch   *assetsSearchView
@@ -58,18 +53,6 @@ type pageData struct {
 
 	// Notifications is the /notifications/ page.
 	Notifications *notificationsView
-
-	// Groups is the /groups page.
-	Groups *groupsView
-
-	// SRP is the /srp/ page (corp_srp.go).
-	SRP *srpView
-
-	// Doctrines (corp_doctrines.go): the list, one doctrine's page, and
-	// the corporation's fits on one page.
-	Doctrines *doctrinesView
-	Doctrine  *doctrineView
-	CorpFits  *corpFitsView
 
 	// PublicShip is one /ships/ page.
 	PublicShip *publicShipView
@@ -153,9 +136,7 @@ func sectionForPage(page string) string {
 		return "market"
 	case "items.html", "ship_public.html":
 		return "tools"
-	case "corporations.html", "corp_members.html", "corp_wallets.html",
-		"corp_orders.html", "corp_assets.html", "corp_structures.html",
-		"corporation.html", "alliance.html", "groups.html", "srp.html", "doctrines.html", "doctrine.html", "corp_fits.html", "corp_settings.html":
+	case "corporations.html", "corporation.html", "alliance.html", "corp_settings.html":
 		return "corporation"
 	case "sync.html":
 		return "sync"

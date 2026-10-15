@@ -13,6 +13,7 @@ package app
 
 import (
 	"context"
+	"evesynapse/internal/balancechart"
 	"fmt"
 	"math"
 	"sort"
@@ -76,7 +77,7 @@ type walletFlowWidget struct {
 	Sources  []flowRef
 	Sinks    []flowRef
 	Chars    []flowChar
-	Chart    balanceChart
+	Chart    balancechart.BalanceChart
 	HasChart bool
 	// InPie and OutPie split the 30-day income and spend by ref
 	// type, as share of each side's total; nil when a side is empty.
@@ -182,13 +183,13 @@ func (app *Application) finishWalletFlow(w *walletFlowWidget, dayNet map[time.Ti
 		days = append(days, d)
 	}
 	sort.Slice(days, func(i, j int) bool { return days[i].Before(days[j]) })
-	var points []balancePoint
+	var points []balancechart.BalancePoint
 	var running float64
 	for _, d := range days {
 		running += dayNet[d]
-		points = append(points, balancePoint{At: d, Balance: running})
+		points = append(points, balancechart.BalancePoint{At: d, Balance: running})
 	}
-	if chart, ok := buildBalanceChart(points); ok {
+	if chart, ok := balancechart.BuildBalanceChart(points); ok {
 		chart.Label = "Cumulative net flow, ISK per day"
 		chart.LegendNote = "Net income minus spend, per day"
 		w.Chart = chart

@@ -481,14 +481,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/corporations", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleCorporations)
-		r.Get("/members/", app.handleCorpMembers)
-		r.Post("/members/group", app.handleCorpMembersGroup)
 		r.Get("/settings/", app.handleCorpSettings)
 		r.Post("/settings/save", app.handleCorpSettingsSave)
-		r.Get("/wallets/", app.handleCorpWallets)
-		r.Get("/orders/", app.handleCorpOrders)
-		r.Get("/assets/", app.handleCorpAssets)
-		r.Get("/structures/", app.handleCorpStructures)
 		r.Get("/killmails/", app.handleCorpKillmails)
 	})
 
@@ -524,41 +518,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/push/subscribe", app.handlePushSubscribe)
 		r.Post("/push/unsubscribe", app.handlePushUnsubscribe)
 		r.Post("/push/test", app.handlePushTest)
-	})
-
-	// Groups (corp_groups.go): sets of characters the directors of a
-	// corporation or alliance keep by hand.
-	r.Route("/groups", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleGroups)
-		r.Post("/create", app.handleGroupCreate)
-		r.Post("/{groupID}/delete", app.handleGroupDelete)
-		r.Post("/{groupID}/members/add", app.handleGroupMemberAdd)
-		r.Post("/{groupID}/members/remove", app.handleGroupMemberRemove)
-	})
-
-	// Ship replacement (corp_srp.go).
-	r.Route("/srp", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleSRP)
-		r.Post("/request", app.handleSRPRequest)
-		r.Post("/paylist", app.handleSRPPayList)
-		r.Post("/{id}/decide", app.handleSRPDecide)
-		r.Post("/{id}/withdraw", app.handleSRPWithdraw)
-	})
-
-	// Doctrines and their fits (corp_doctrines.go).
-	r.Route("/doctrines", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleDoctrines)
-		r.Get("/fits/", app.handleCorpFits)
-		r.Post("/create", app.handleDoctrineCreate)
-		r.Get("/suggest", app.handleDoctrineSuggest)
-		r.Get("/{doctrineID}", app.handleDoctrine)
-		r.Post("/{doctrineID}/save", app.handleDoctrineSave)
-		r.Post("/{doctrineID}/delete", app.handleDoctrineDelete)
-		r.Post("/{doctrineID}/fits/add", app.handleDoctrineFitAdd)
-		r.Post("/{doctrineID}/fits/{fitID}/remove", app.handleDoctrineFitRemove)
 	})
 
 	r.Route("/calendar", func(r chi.Router) {
@@ -1204,6 +1163,72 @@ func (app *Application) StorePublicFitPageNow(ctx context.Context, fitID int64) 
 func (app *Application) DoctrineFitDoc(ctx context.Context, userID, fitID int64) (*fitview.FitDoc, bool) {
 	return app.doctrineFitDoc(ctx, userID, fitID)
 }
+
+func (app *Application) CorpSection(ctx context.Context, characterID int64, kind string, out any) module.CorpSectionState {
+	return app.corpSection(ctx, characterID, kind, out)
+}
+
+func (app *Application) PickCorpPage(ctx context.Context, r *http.Request) (module.CorpPageSelection, bool, error) {
+	return app.pickCorpPage(ctx, r)
+}
+
+func (app *Application) CorpStructureNames(ctx context.Context, characterID int64) map[int64]string {
+	return app.corpStructureNames(ctx, characterID)
+}
+
+func (app *Application) CorpLocationTitle(ctx context.Context, locationID int64, structureNames map[int64]string) string {
+	return app.corpLocationTitle(ctx, locationID, structureNames)
+}
+
+func (app *Application) LinkPlaceMemo(ctx context.Context, memo map[int64]module.PlaceRef, locationID int64, title string) module.PlaceRef {
+	return app.linkPlaceMemo(ctx, memo, locationID, title)
+}
+
+func (app *Application) ResolvedStructureTitle(ctx context.Context, structureID int64) string {
+	return app.resolvedStructureTitle(ctx, structureID)
+}
+
+func (app *Application) TxnCounterparty(ctx context.Context, id int64) (string, bool, bool) {
+	return app.txnCounterparty(ctx, id)
+}
+
+func (app *Application) AssetLocations(ctx context.Context, items []esi.Asset, extraTitles, nameOverrides map[int64]string) any {
+	return app.buildAssetLocationsWith(ctx, items, extraTitles, nameOverrides)
+}
+
+func (app *Application) OrderHealthText(myPrice float64, status string, stationBest, regionBest float64) (string, bool) {
+	return orderHealthText(myPrice, status, stationBest, regionBest)
+}
+
+func (app *Application) CorpDisplayName(ctx context.Context, corpID int64) string {
+	return app.corpDisplayName(ctx, corpID)
+}
+
+func (app *Application) CorpPermits(ctx context.Context, st standing.Standing, corp int64, permission string) bool {
+	return app.corpPermits(ctx, st, corp, permission)
+}
+
+func (app *Application) PlayerCorps(ctx context.Context, userID int64) []int64 {
+	return app.playerCorps(ctx, userID)
+}
+
+func (app *Application) PickCorporation(ctx context.Context, r *http.Request, offered []int64) (int64, []module.OwnerOption) {
+	return app.pickCorporation(ctx, r, offered)
+}
+
+func (app *Application) OwnerCorporations(ctx context.Context, o standing.Owner) []int64 {
+	return app.ownerCorporations(ctx, o)
+}
+
+func (app *Application) ResolvedAllianceName(ctx context.Context, allianceID int64) (string, bool) {
+	return app.resolvedAllianceName(ctx, allianceID)
+}
+
+func (app *Application) SendEVEMail(ctx context.Context, from db.Character, recipientID int64, recipientType, subject, body string, approvedCost int) error {
+	return app.sendEVEMail(ctx, from, recipientID, recipientType, subject, body, approvedCost)
+}
+
+func (app *Application) ESIRefusalDetail(err error) string { return esiRefusalDetail(err) }
 
 // FitBuilder is the fit foundation over this application's stored state.
 func (app *Application) FitBuilder() *fitview.Builder { return app.fitBuilder() }

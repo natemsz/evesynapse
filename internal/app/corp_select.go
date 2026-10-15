@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"evesynapse/internal/app/module"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -23,13 +24,7 @@ import (
 // ---------------------------------------------------------------------------
 
 // corpOption is one corporation in the selector.
-type corpOption struct {
-	ID     int64
-	Name   string
-	Active bool
-	// Param and Value are what the option's link sets in the address.
-	Param, Value string
-}
+type corpOption = module.OwnerOption
 
 // npcCorporation reports whether an id is one of the game's own
 // corporations, which nobody runs: they have no directors, so no
@@ -40,7 +35,7 @@ func npcCorporation(id int64) bool { return id >= 1_000_000 && id < 2_000_000 }
 // in, in the order of its characters.
 func (app *Application) playerCorps(ctx context.Context, userID int64) []int64 {
 	var out []int64
-	for _, corp := range app.srpCorps(ctx, userID) {
+	for _, corp := range app.UserCorps(ctx, userID) {
 		if !npcCorporation(corp) {
 			out = append(out, corp)
 		}
@@ -196,7 +191,7 @@ func (app *Application) handleCorpSettingsSave(w http.ResponseWriter, r *http.Re
 			return
 		}
 	}
-	by := app.srpActorFor(ctx, userID, corp).CharacterID
+	by := app.CorpActorFor(ctx, userID, corp).CharacterID
 	saved := app.setCorpPermission(ctx, corp, permSRP, r.Form.Get("srp_who"), by) &&
 		app.setCorpPermission(ctx, corp, permDoctrines, r.Form.Get("doctrines_who"), by)
 	if saved {

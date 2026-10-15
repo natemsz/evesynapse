@@ -1,7 +1,8 @@
-package app
+package groups
 
 import (
 	"context"
+	"evesynapse/internal/humanize"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,8 +10,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/standing"
 )
 
 // ---------------------------------------------------------------------------
@@ -41,7 +44,7 @@ const (
 
 // groupsView is the /groups page.
 type groupsView struct {
-	OwnerOptions []corpOption
+	OwnerOptions []module.OwnerOption
 	Owner        *groupOwnerView // the corporation or alliance the page is about
 }
 
@@ -77,18 +80,18 @@ type groupCandidate struct {
 	Name        string
 }
 
-func (app *Application) handleGroups(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleGroups(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
-	userID := app.userID(ctx)
+	data := &PageData{ShellData: app.deps.PageShell(ctx)}
+	userID := app.deps.UserID(ctx)
 	view := &groupsView{}
-	var shown []orgOwner
-	if owner, options, ok := app.pickOwner(ctx, r, app.manageableOwners(ctx, userID)); ok {
-		shown, view.OwnerOptions = []orgOwner{owner}, options
+	var shown []standing.Owner
+	if owner, options, ok := app.deps.PickOwner(ctx, r, app.deps.ManageableOwners(ctx, userID)); ok {
+		shown, view.OwnerOptions = []standing.Owner{owner}, options
 	}
 	for _, owner := range shown {
-		ov := groupOwnerView{Key: owner.Key(), Kind: owner.Kind, Name: app.ownerName(ctx, owner)}
-		corps := app.ownerCorporations(ctx, owner)
+		ov := groupOwnerView{Key: owner.Key(), Kind: owner.Kind, Name: app.deps.OwnerName(ctx, owner)}
+		corps := app.deps.OwnerCorporations(ctx, owner)
 		inside := map[int64]bool{}
 		if len(corps) > 0 {
 			rows, err := app.queries.ListCharactersInCorporations(ctx, corps)
@@ -116,7 +119,7 @@ func (app *Application) handleGroups(w http.ResponseWriter, r *http.Request) {
 				in[m.CharacterID] = true
 				name := m.Name
 				if name == "" {
-					name = app.displayCharacter(ctx, m.CharacterID)
+					name = app.deps.DisplayCharacter(ctx, m.CharacterID)
 				}
 				gv.Members = append(gv.Members, groupMemberView{CharacterID: m.CharacterID, Name: name, Outside: !inside[m.CharacterID]})
 			}
@@ -130,12 +133,12 @@ func (app *Application) handleGroups(w http.ResponseWriter, r *http.Request) {
 		view.Owner = &ov
 	}
 	data.Groups = view
-	app.render(ctx, w, http.StatusOK, "groups.html", data)
+	app.deps.Render(ctx, w, http.StatusOK, "groups.html", data)
 }
 
 // groupFor loads the group named in the address, for an account that
 // may manage its owner.
-func (app *Application) groupFor(r *http.Request, userID int64) (db.OrgGroup, bool) {
+func (app *mod) groupFor(r *http.Request, userID int64) (db.OrgGroup, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "groupID"), 10, 64)
 	if err != nil {
 		return db.OrgGroup{}, false
@@ -144,24 +147,24 @@ func (app *Application) groupFor(r *http.Request, userID int64) (db.OrgGroup, bo
 	if err != nil {
 		return db.OrgGroup{}, false
 	}
-	if !ownersInclude(app.manageableOwners(r.Context(), userID), orgOwner{Kind: group.OwnerKind, ID: group.OwnerID}) {
+	if !standing.Includes(app.deps.ManageableOwners(r.Context(), userID), standing.Owner{Kind: group.OwnerKind, ID: group.OwnerID}) {
 		return db.OrgGroup{}, false
 	}
 	return group, true
 }
 
-func (app *Application) groupsBack(w http.ResponseWriter, r *http.Request, message string) {
-	app.flash(r.Context(), message)
+func (app *mod) groupsBack(w http.ResponseWriter, r *http.Request, message string) {
+	app.deps.Flash(r.Context(), message)
 	_ = r.ParseForm()
-	http.Redirect(w, r, ownerAddress(groupsPath, r.Form.Get("owner")), http.StatusSeeOther)
+	http.Redirect(w, r, standing.Address(groupsPath, r.Form.Get("owner")), http.StatusSeeOther)
 }
 
-func (app *Application) handleGroupCreate(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleGroupCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := app.userID(ctx)
+	userID := app.deps.UserID(ctx)
 	_ = r.ParseForm()
-	owner, ok := parseOrgOwner(r.Form.Get("owner"))
-	if !ok || !ownersInclude(app.manageableOwners(ctx, userID), owner) {
+	owner, ok := standing.ParseOwner(r.Form.Get("owner"))
+	if !ok || !standing.Includes(app.deps.ManageableOwners(ctx, userID), owner) {
 		app.groupsBack(w, r, "Only a director can make groups for that corporation or alliance.")
 		return
 	}
@@ -183,7 +186,7 @@ func (app *Application) handleGroupCreate(w http.ResponseWriter, r *http.Request
 	}
 	if _, err := app.queries.CreateOrgGroup(ctx, db.CreateOrgGroupParams{
 		OwnerKind: owner.Kind, OwnerID: owner.ID, Name: name,
-		Description: clip(strings.TrimSpace(r.Form.Get("description")), groupDescMax),
+		Description: humanize.Clip(strings.TrimSpace(r.Form.Get("description")), groupDescMax),
 		CreatedBy:   userID, CreatedAt: time.Now().UTC(),
 	}); err != nil {
 		logging.Errorf("groups: create %q for %s: %v", name, owner.Key(), err)
@@ -197,15 +200,15 @@ func (app *Application) handleGroupCreate(w http.ResponseWriter, r *http.Request
 // handleGroupDelete removes a group, and with it the Discord role
 // rules that named it: whoever held a role only through the group
 // loses it on the worker's next pass.
-func (app *Application) handleGroupDelete(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleGroupDelete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := app.userID(ctx)
+	userID := app.deps.UserID(ctx)
 	group, ok := app.groupFor(r, userID)
 	if !ok {
 		app.groupsBack(w, r, "That group is not yours to change.")
 		return
 	}
-	tx, err := app.db.BeginTx(ctx, nil)
+	tx, err := app.deps.SQLDB().BeginTx(ctx, nil)
 	if err == nil {
 		defer tx.Rollback()
 		q := app.queries.WithTx(tx)
@@ -228,9 +231,9 @@ func (app *Application) handleGroupDelete(w http.ResponseWriter, r *http.Request
 // handleGroupMemberAdd puts characters in a group. Each has to be a
 // linked character in the corporation, or in a corporation of the
 // alliance, the group belongs to.
-func (app *Application) handleGroupMemberAdd(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleGroupMemberAdd(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := app.userID(ctx)
+	userID := app.deps.UserID(ctx)
 	group, ok := app.groupFor(r, userID)
 	if !ok || r.ParseForm() != nil {
 		app.groupsBack(w, r, "That group is not yours to change.")
@@ -242,10 +245,10 @@ func (app *Application) handleGroupMemberAdd(w http.ResponseWriter, r *http.Requ
 // addToGroup puts the characters named in a group and says what
 // happened. Each has to be a linked character in the corporation, or in
 // a corporation of the alliance, the group belongs to.
-func (app *Application) addToGroup(ctx context.Context, userID int64, group db.OrgGroup, characters []string) string {
-	owner := orgOwner{Kind: group.OwnerKind, ID: group.OwnerID}
+func (app *mod) addToGroup(ctx context.Context, userID int64, group db.OrgGroup, characters []string) string {
+	owner := standing.Owner{Kind: group.OwnerKind, ID: group.OwnerID}
 	allowed := map[int64]bool{}
-	if corps := app.ownerCorporations(ctx, owner); len(corps) > 0 {
+	if corps := app.deps.OwnerCorporations(ctx, owner); len(corps) > 0 {
 		rows, err := app.queries.ListCharactersInCorporations(ctx, corps)
 		if err != nil {
 			logging.Errorf("groups: characters of %s: %v", owner.Key(), err)
@@ -277,9 +280,9 @@ func (app *Application) addToGroup(ctx context.Context, userID int64, group db.O
 	return strconv.Itoa(added) + " added to " + group.Name + "."
 }
 
-func (app *Application) handleGroupMemberRemove(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleGroupMemberRemove(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := app.userID(ctx)
+	userID := app.deps.UserID(ctx)
 	group, ok := app.groupFor(r, userID)
 	if !ok || r.ParseForm() != nil {
 		app.groupsBack(w, r, "That group is not yours to change.")
@@ -297,18 +300,18 @@ func (app *Application) handleGroupMemberRemove(w http.ResponseWriter, r *http.R
 
 // handleCorpMembersGroup adds the members ticked on the corporation's
 // members list to one of its groups (POST /corporations/members/group).
-func (app *Application) handleCorpMembersGroup(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleCorpMembersGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := app.userID(ctx)
+	userID := app.deps.UserID(ctx)
 	_ = r.ParseForm()
 	path := "/corporations/members/"
 	if id, err := strconv.ParseInt(r.Form.Get("as"), 10, 64); err == nil && id > 0 {
 		path += "?character=" + strconv.FormatInt(id, 10)
 	}
-	back := app.flashBack(w, r, path)
+	back := app.deps.FlashBack(w, r, path)
 	id, _ := strconv.ParseInt(r.Form.Get("group"), 10, 64)
 	group, err := app.queries.GetOrgGroup(ctx, id)
-	if err != nil || !ownersInclude(app.manageableOwners(ctx, userID), orgOwner{Kind: group.OwnerKind, ID: group.OwnerID}) {
+	if err != nil || !standing.Includes(app.deps.ManageableOwners(ctx, userID), standing.Owner{Kind: group.OwnerKind, ID: group.OwnerID}) {
 		back("That group is not yours to change.")
 		return
 	}
@@ -317,44 +320,4 @@ func (app *Application) handleCorpMembersGroup(w http.ResponseWriter, r *http.Re
 		return
 	}
 	back(app.addToGroup(ctx, userID, group, r.Form["character"]))
-}
-
-// memberGroups fills in what a director needs on the members list to
-// put members in the corporation's groups: the groups, which members
-// are linked here, and which groups each is already in.
-func (app *Application) memberGroups(ctx context.Context, userID int64, view *corpMembersView) {
-	owner := orgOwner{Kind: ownerCorporation, ID: view.CorpID}
-	if !ownersInclude(app.manageableOwners(ctx, userID), owner) {
-		return
-	}
-	view.CanGroup = true
-	linked := map[int64]bool{}
-	if rows, err := app.queries.ListCharactersInCorporations(ctx, []int64{view.CorpID}); err == nil {
-		for _, row := range rows {
-			linked[row.CharacterID] = true
-		}
-	}
-	in := map[int64][]string{}
-	groups, err := app.queries.ListOrgGroupsForOwner(ctx, db.ListOrgGroupsForOwnerParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
-	if err != nil {
-		logging.Errorf("groups: groups of %s: %v", owner.Key(), err)
-	}
-	for _, group := range groups {
-		view.Groups = append(view.Groups, groupChoice{ID: group.ID, Name: group.Name})
-		members, _ := app.queries.ListOrgGroupMembers(ctx, group.ID)
-		for _, m := range members {
-			in[m.CharacterID] = append(in[m.CharacterID], group.Name)
-		}
-	}
-	for i := range view.Rows {
-		row := &view.Rows[i]
-		row.Linked = linked[row.ID]
-		row.Groups = strings.Join(in[row.ID], ", ")
-	}
-}
-
-// groupChoice is one group in the members list's "add to" picker.
-type groupChoice struct {
-	ID   int64
-	Name string
 }

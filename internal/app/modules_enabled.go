@@ -4,8 +4,11 @@ package app
 
 import (
 	"evesynapse/internal/app/buildplanner"
+	"evesynapse/internal/app/corpdata"
 	"evesynapse/internal/app/discord"
+	"evesynapse/internal/app/doctrines"
 	"evesynapse/internal/app/fitting"
+	"evesynapse/internal/app/groups"
 	"evesynapse/internal/app/intel"
 	"evesynapse/internal/app/leaderboard"
 	"evesynapse/internal/app/module"
@@ -14,6 +17,7 @@ import (
 	"evesynapse/internal/app/restock"
 	"evesynapse/internal/app/scanner"
 	"evesynapse/internal/app/skillplans"
+	"evesynapse/internal/app/srp"
 	"evesynapse/internal/app/tradefinder"
 	"evesynapse/internal/app/tradeideas"
 )
@@ -27,16 +31,20 @@ import (
 func init() {
 	registerModules([]module.Module{
 		buildplanner.Module,
-		discord.Module,
-		intel.Module,
-		piplanner.Module,
-		skillplans.Module,
 		fitting.Module,
 		publicfits.Module,
+		skillplans.Module,
 		scanner.Module,
 		tradefinder.Module,
 		leaderboard.Module,
 		restock.Module,
+		corpdata.Module,
+		doctrines.Module,
+		srp.Module,
+		groups.Module,
+		discord.Module,
+		intel.Module,
+		piplanner.Module,
 		tradeideas.Module,
 	})
 }

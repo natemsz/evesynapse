@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"evesynapse/internal/balancechart"
 	"evesynapse/internal/ideas"
 	"fmt"
 	"io"
@@ -668,8 +669,8 @@ type netWorthWidget struct {
 	AssetsNote      string // partial-pricing coverage line, "" when everything priced
 	Escrow          string
 	AsOf            string
-	History         *balanceChart // net worth over time, when 2+ sampled days exist
-	HistoryBuilding bool          // history recording, not yet chartable
+	History         *balancechart.BalanceChart // net worth over time, when 2+ sampled days exist
+	HistoryBuilding bool                       // history recording, not yet chartable
 	// WalletPct is the wallets' share of the total, "48.1%", and
 	// WalletBar the same share for a data-w bar; both empty when
 	// the total is not positive.

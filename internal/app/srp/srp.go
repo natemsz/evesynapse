@@ -1,10 +1,12 @@
-package app
+package srp
 
 import (
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"evesynapse/internal/app/module"
+	"evesynapse/internal/humanize"
 	"fmt"
 	"net/http"
 	"sort"
@@ -69,11 +71,11 @@ type srpLoss struct {
 
 // srpLosses lists the losses of an account's characters inside the
 // claim window, newest first, from stored killmails only.
-func (app *Application) srpLosses(ctx context.Context, characters []db.Character, now time.Time) []srpLoss {
+func (app *mod) srpLosses(ctx context.Context, characters []db.Character, now time.Time) []srpLoss {
 	var ids, mine []int64
 	for _, ch := range characters {
 		var refs []esi.KillmailRef
-		if !app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapKillmails, &refs) {
+		if !app.deps.LoadCorpSnapshot(ctx, ch.CharacterID, esi.SnapKillmails, &refs) {
 			continue
 		}
 		mine = append(mine, ch.CharacterID)
@@ -111,7 +113,7 @@ func (app *Application) srpLosses(ctx context.Context, characters []db.Character
 // srpDuring reports whether a moment falls inside an op, counting the
 // time a fleet forms up before it and runs on after it.
 func srpDuring(op db.Op, at time.Time) bool {
-	return !op.CancelledAt.Valid && !at.Before(op.StartsAt.Add(-opCaptureLead)) && !at.After(opEnd(op).Add(opCaptureTail))
+	return !op.CancelledAt.Valid && !at.Before(op.StartsAt.Add(-module.OpCaptureLead)) && !at.After(module.OpEnd(op).Add(module.OpCaptureTail))
 }
 
 // srpLossValue estimates what a loss cost the pilot: the hull and
@@ -158,11 +160,11 @@ func parseISK(raw string) (float64, bool) {
 
 // srpPilot names a pilot: by the linked character's name, else however
 // the character is known.
-func (app *Application) srpPilot(ctx context.Context, characterID int64) string {
+func (app *mod) srpPilot(ctx context.Context, characterID int64) string {
 	if ch, err := app.queries.GetCharacter(ctx, characterID); err == nil && ch.Name != "" {
 		return ch.Name
 	}
-	return app.displayCharacter(ctx, characterID)
+	return app.deps.DisplayCharacter(ctx, characterID)
 }
 
 // srpLossChoice is one loss the form offers, on one op.
@@ -215,12 +217,12 @@ type srpCorpView struct {
 	OpenValue string
 	PaidCount int64
 	PaidValue string
-	Mailers   []opChoice // the account's characters that can send the EVE mail
+	Mailers   []module.NamedChoice // the account's characters that can send the EVE mail
 }
 
 // srpView is the /srp/ page: one corporation's ship replacement.
 type srpView struct {
-	CorpOptions []corpOption
+	CorpOptions []module.OwnerOption
 	Corp        *srpCorpView // nil when the account is in no player corporation
 	Losses      []srpLossChoice
 	Outside     int // recent losses in the corporation that were not during an op
@@ -230,7 +232,7 @@ type srpView struct {
 
 // srpRows builds the page's rows for a list of requests. Attendance is
 // looked up for the open ones only: it no longer matters for the rest.
-func (app *Application) srpRows(ctx context.Context, requests []db.SrpRequest, ops map[int64]db.Op) []srpRow {
+func (app *mod) srpRows(ctx context.Context, requests []db.SrpRequest, ops map[int64]db.Op) []srpRow {
 	rows := make([]srpRow, 0, len(requests))
 	for _, req := range requests {
 		op, known := ops[req.OpID]
@@ -240,10 +242,10 @@ func (app *Application) srpRows(ctx context.Context, requests []db.SrpRequest, o
 		}
 		row := srpRow{
 			ID: req.ID, Pilot: app.srpPilot(ctx, req.CharacterID), PilotID: req.CharacterID,
-			Ship: app.typeNameOrID(ctx, req.ShipTypeID), ShipTypeID: req.ShipTypeID,
-			System: app.locationTitle(ctx, req.SolarSystemID, "solar_system"),
+			Ship: app.deps.TypeNameOrID(ctx, req.ShipTypeID), ShipTypeID: req.ShipTypeID,
+			System: app.deps.LocationTitle(ctx, req.SolarSystemID, "solar_system"),
 			LostAt: req.LostAt.UTC().Format("2006-01-02 15:04"),
-			Op:     op.Title, OpURL: opURL(req.OpID), KillmailID: req.KillmailID,
+			Op:     op.Title, OpURL: module.OpURL(req.OpID), KillmailID: req.KillmailID,
 			Value: srpISK(req.LossValue), Note: req.Note,
 			Open: req.Status == srpOpen, Paid: req.Status == srpPaid,
 			Payout: srpISK(req.Payout), HandlerNote: req.HandlerNote,
@@ -264,10 +266,10 @@ func (app *Application) srpRows(ctx context.Context, requests []db.SrpRequest, o
 			if seen, err := app.queries.GetOpAttendance(ctx, db.GetOpAttendanceParams{OpID: req.OpID, CharacterID: req.CharacterID}); err == nil {
 				row.Attended = true
 				row.Attendance = "Ticked present by hand."
-				if seen.Source == attendanceFleet {
+				if seen.Source == module.AttendanceFleet {
 					row.Attendance = "Seen in the fleet."
 					if seen.ShipTypeID != 0 {
-						row.Attendance = "Seen in the fleet in a " + app.typeNameOrID(ctx, seen.ShipTypeID) + "."
+						row.Attendance = "Seen in the fleet in a " + app.deps.TypeNameOrID(ctx, seen.ShipTypeID) + "."
 					}
 				}
 			}
@@ -277,45 +279,26 @@ func (app *Application) srpRows(ctx context.Context, requests []db.SrpRequest, o
 	return rows
 }
 
-// srpCorps lists the corporations an account has a character in, in
-// the order of its characters.
-func (app *Application) srpCorps(ctx context.Context, userID int64) []int64 {
-	rows, err := app.queries.ListCharacterCorporationsByUser(ctx, userID)
-	if err != nil {
-		logging.Errorf("srp: corporations of user %d: %v", userID, err)
-		return nil
-	}
-	seen := map[int64]bool{}
-	var out []int64
-	for _, row := range rows {
-		if row.CorporationID != 0 && !seen[row.CorporationID] {
-			seen[row.CorporationID] = true
-			out = append(out, row.CorporationID)
-		}
-	}
-	return out
-}
-
-func (app *Application) handleSRP(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleSRP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
-	userID := app.userID(ctx)
+	data := &PageData{ShellData: app.deps.PageShell(ctx)}
+	userID := app.deps.UserID(ctx)
 	now := time.Now().UTC()
 	view := &srpView{}
 	data.SRP = view
 
-	corp, options := app.pickCorporation(ctx, r, app.playerCorps(ctx, userID))
+	corp, options := app.deps.PickCorporation(ctx, r, app.deps.PlayerCorps(ctx, userID))
 	if corp == 0 {
-		app.render(ctx, w, http.StatusOK, "srp.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "srp.html", data)
 		return
 	}
-	st, err := app.standingFor(ctx, userID)
+	st, err := app.deps.StandingFor(ctx, userID)
 	if err != nil {
 		logging.Errorf("srp: standing of user %d: %v", userID, err)
 		data.Error = "Could not load ship replacement; check the server log."
 	}
-	cv := &srpCorpView{ID: corp, Name: app.corpDisplayName(ctx, corp), Directs: st.Directs(corp)}
-	cv.Handles = app.corpPermits(ctx, st, corp, permSRP)
+	cv := &srpCorpView{ID: corp, Name: app.deps.CorpDisplayName(ctx, corp), Directs: st.Directs(corp)}
+	cv.Handles = app.deps.CorpPermits(ctx, st, corp, permSRP)
 	view.CorpOptions, view.Corp = options, cv
 	if settings, err := app.queries.GetSRPSettings(ctx, corp); err == nil {
 		cv.Policy = settings.Policy
@@ -353,26 +336,26 @@ func (app *Application) handleSRP(w http.ResponseWriter, r *http.Request) {
 			cv.PaidCount, cv.PaidValue = paid.Requests, srpISK(paid.Paid)
 		}
 		for _, ch := range characters {
-			if ch.LinkState == linkStateOK && characterHasScope(ch, mailSendScope) {
-				cv.Mailers = append(cv.Mailers, opChoice{ID: ch.CharacterID, Name: ch.Name})
+			if ch.LinkState == module.LinkStateOK && module.CharacterHasScope(ch, module.MailSendScope) {
+				cv.Mailers = append(cv.Mailers, module.NamedChoice{ID: ch.CharacterID, Name: ch.Name})
 			}
 		}
 	}
-	app.render(ctx, w, http.StatusOK, "srp.html", data)
+	app.deps.Render(ctx, w, http.StatusOK, "srp.html", data)
 }
 
 // srpBack answers an SRP form by sending the account back to the
 // corporation's page it was sent from, with a word.
-func (app *Application) srpBack(w http.ResponseWriter, r *http.Request) func(string) {
+func (app *mod) srpBack(w http.ResponseWriter, r *http.Request) func(string) {
 	_ = r.ParseForm()
 	corp, _ := strconv.ParseInt(r.Form.Get("corporation"), 10, 64)
-	return app.flashBack(w, r, corpAddress(srpPath, corp))
+	return app.deps.FlashBack(w, r, module.CorpAddress(srpPath, corp))
 }
 
 // srpOffer fills in the losses an account can ask a corporation
 // about: those of a pilot who was in it, that fell inside one of its
 // ops, and that nobody has asked about yet.
-func (app *Application) srpOffer(ctx context.Context, view *srpView, characters []db.Character, corp int64, now time.Time) {
+func (app *mod) srpOffer(ctx context.Context, view *srpView, characters []db.Character, corp int64, now time.Time) {
 	all := app.srpLosses(ctx, characters, now)
 	losses := all[:0]
 	for _, loss := range all {
@@ -401,8 +384,8 @@ func (app *Application) srpOffer(ctx context.Context, view *srpView, characters 
 	}
 	ops, err := app.queries.ListOpsForCorporationsBetween(ctx, db.ListOpsForCorporationsBetweenParams{
 		CorporationIds: corps,
-		FromTime:       now.Add(-srpClaimWindow - opMaxDuration*time.Minute - opCaptureTail),
-		ToTime:         now.Add(opCaptureLead),
+		FromTime:       now.Add(-srpClaimWindow - module.OpMaxDuration*time.Minute - module.OpCaptureTail),
+		ToTime:         now.Add(module.OpCaptureLead),
 	})
 	if err != nil {
 		logging.Errorf("srp: ops for losses: %v", err)
@@ -422,8 +405,8 @@ func (app *Application) srpOffer(ctx context.Context, view *srpView, characters 
 			view.Losses = append(view.Losses, srpLossChoice{
 				Value: fmt.Sprintf("%d:%d", loss.km.KillmailID, op.ID),
 				Label: fmt.Sprintf("%s · %s · %s · %s · op: %s",
-					loss.at.UTC().Format("Jan 2 15:04"), app.typeNameOrID(ctx, loss.km.Victim.ShipTypeID),
-					app.locationTitle(ctx, loss.km.SolarSystemID, "solar_system"),
+					loss.at.UTC().Format("Jan 2 15:04"), app.deps.TypeNameOrID(ctx, loss.km.Victim.ShipTypeID),
+					app.deps.LocationTitle(ctx, loss.km.SolarSystemID, "solar_system"),
 					app.srpPilot(ctx, loss.km.Victim.CharacterID), op.Title),
 			})
 		}
@@ -436,9 +419,9 @@ func (app *Application) srpOffer(ctx context.Context, view *srpView, characters 
 // handleSRPRequest files a request (POST /srp/request). Everything it
 // stores about the loss is read from the stored killmail, not from the
 // form: the form only says which killmail and which op.
-func (app *Application) handleSRPRequest(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleSRPRequest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := app.userID(ctx)
+	userID := app.deps.UserID(ctx)
 	back := app.srpBack(w, r)
 	_ = r.ParseForm()
 	now := time.Now().UTC()
@@ -470,8 +453,8 @@ func (app *Application) handleSRPRequest(w http.ResponseWriter, r *http.Request)
 	id, err := app.queries.CreateSRPRequest(ctx, db.CreateSRPRequestParams{
 		CorporationID: op.CorporationID, OpID: op.ID, KillmailID: km.KillmailID, KillmailHash: stored.Hash,
 		CharacterID: pilot.CharacterID, UserID: userID, ShipTypeID: km.Victim.ShipTypeID, SolarSystemID: km.SolarSystemID,
-		LostAt: at, LossValue: srpLossValue(km, app.valuationPrices(ctx)),
-		Note: clip(strings.TrimSpace(r.Form.Get("note")), srpNoteMax), CreatedAt: now,
+		LostAt: at, LossValue: srpLossValue(km, app.deps.ValuationPrices(ctx)),
+		Note: humanize.Clip(strings.TrimSpace(r.Form.Get("note")), srpNoteMax), CreatedAt: now,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		back("That loss has already been claimed.")
@@ -488,14 +471,21 @@ func (app *Application) handleSRPRequest(w http.ResponseWriter, r *http.Request)
 
 // handleSRPWithdraw takes back a request nobody has answered
 // (POST /srp/{id}/withdraw).
-func (app *Application) handleSRPWithdraw(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleSRPWithdraw(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	back := app.srpBack(w, r)
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	n, err := app.queries.WithdrawSRPRequest(ctx, db.WithdrawSRPRequestParams{ID: id, UserID: app.userID(ctx)})
+	n, err := app.queries.WithdrawSRPRequest(ctx, db.WithdrawSRPRequestParams{ID: id, UserID: app.deps.UserID(ctx)})
 	if err != nil || n == 0 {
 		back("That request could not be withdrawn: it is not yours, or it has been answered.")
 		return
 	}
 	back("Request withdrawn.")
 }
+
+// permSRP is the corporation permission that lets an account handle ship
+// replacement requests (core's access model names it "srp").
+const permSRP = "srp"
+
+// timeSet is a valid timestamp for a nullable column.
+func timeSet(t time.Time) sql.NullTime { return sql.NullTime{Time: t, Valid: true} }

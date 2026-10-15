@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -163,6 +164,112 @@ func PublicFitCardOf(row db.ListPublicFitsRow, userID int64) PublicFitCard {
 	}
 	return card
 }
+
+// WalletDivisionCount is how many wallet divisions a corporation has.
+const WalletDivisionCount = 7
+
+// WalletDivisionLabel names a wallet division the way the client does:
+// division 1 is the master wallet.
+func WalletDivisionLabel(division int64) string {
+	if division == 1 {
+		return "Master Wallet"
+	}
+	return fmt.Sprintf("Division %d", division)
+}
+
+// CorpSectionState is the empty-state triage every corporation section
+// renders from: data loaded, still warming, or refused for want of an
+// in-game role.
+type CorpSectionState struct {
+	Loaded      bool
+	Warming     bool   // no snapshot yet and no refusal recorded
+	Forbidden   bool   // ESI answered 403 on the last attempt
+	RoleMissing string // role label when Forbidden named one ("" = label-less)
+}
+
+// CorpViewBase carries what every corporation subpage header renders:
+// the viewing character, the corporation’s display title, and the ids
+// the switcher and sub-nav links need. Embedded in each subpage’s view.
+type CorpViewBase struct {
+	CharacterName string
+	CharacterID   int64 // active character (switcher + sub-nav links)
+	CorpID        int64
+	CorpTitle     string // "Name [TICKER]", or "Corporation #<id>" until corp_info lands
+	MemberCount   string // member count from corp_info, "" when unknown
+}
+
+// CorpPageSelection is PickCorpPage’s result: the switcher state plus the
+// selected character’s corporation.
+type CorpPageSelection struct {
+	Active db.Character
+	Links  []CharLink
+	Base   CorpViewBase
+}
+
+// Character link state and scopes the modules ask about.
+const (
+	LinkStateOK   = "ok"
+	MailSendScope = "esi-mail.send_mail.v1"
+)
+
+// CharacterHasScope reports whether a linked character granted a scope.
+func CharacterHasScope(ch db.Character, scope string) bool {
+	for _, s := range strings.Fields(ch.Scopes) {
+		if s == scope {
+			return true
+		}
+	}
+	return false
+}
+
+// Op timing the corporation modules match losses and fits to.
+const (
+	// OpCaptureLead and OpCaptureTail are how far around an op’s own
+	// times a fleet or a loss still counts as the op’s.
+	OpCaptureLead = 15 * time.Minute
+	OpCaptureTail = 15 * time.Minute
+	// OpMaxDuration is the longest an op can run, in minutes.
+	OpMaxDuration = 24 * 60
+	// AttendanceFleet is the attendance source for what the fleet reported.
+	AttendanceFleet = "fleet"
+)
+
+// OpEnd is when an op is over.
+func OpEnd(op db.Op) time.Time {
+	return op.StartsAt.Add(time.Duration(op.DurationMinutes) * time.Minute)
+}
+
+// OpURL is an op’s page.
+func OpURL(id int64) string { return fmt.Sprintf("/ops/%d", id) }
+
+// CorpAddress is a corporation page’s address for one corporation.
+func CorpAddress(path string, corp int64) string {
+	if corp == 0 {
+		return path
+	}
+	return path + "?corporation=" + strconv.FormatInt(corp, 10)
+}
+
+// CorpActor is how an account acts for a corporation: the character of
+// its that is in the corporation, and one that can send EVE mail.
+type CorpActor struct {
+	CharacterID int64
+	Mailer      *db.Character
+}
+
+// DoctrineFitView is one fit of a doctrine on a page.
+type DoctrineFitView struct {
+	ID         int64
+	Name       string
+	Ship       string
+	ShipTypeID int64
+	Role       string
+	Note       string
+	EFT        string // the fit as text the game imports; the doctrine's own page only
+}
+
+// DoctrineURL is a doctrine's page.
+func DoctrineURL(id int64) string { return "/doctrines/" + strconv.FormatInt(id, 10) }
 
 // Page declares a template file rendered by the module, its default section,
 // and any client scripts that must be loaded for it.
@@ -526,6 +633,55 @@ type Deps interface {
 	// DoctrineFitDoc reads one of a corporation’s doctrine fits the
 	// account may use, as a fit document.
 	DoctrineFitDoc(ctx context.Context, userID, fitID int64) (*fitview.FitDoc, bool)
+
+	// --- the corporation foundation (core keeps the access model and the feed) ---
+
+	// CorpSection resolves the display state of one corporation snapshot
+	// kind: loaded, still warming, or refused for want of an in-game role.
+	CorpSection(ctx context.Context, characterID int64, kind string, out any) CorpSectionState
+	// PickCorpPage resolves a corporation sub-page: the account’s active
+	// character, its switcher, and its corporation’s display identity.
+	// ok=false means the session has no user or no characters yet.
+	PickCorpPage(ctx context.Context, r *http.Request) (CorpPageSelection, bool, error)
+	// CorpStructureNames maps structure ids to the names in the stored
+	// structures snapshot.
+	CorpStructureNames(ctx context.Context, characterID int64) map[int64]string
+	// CorpLocationTitle titles an order or asset location.
+	CorpLocationTitle(ctx context.Context, locationID int64, structureNames map[int64]string) string
+	// LinkPlaceMemo links a location by the core link policy, memoised
+	// per render.
+	LinkPlaceMemo(ctx context.Context, memo map[int64]PlaceRef, locationID int64, title string) PlaceRef
+	// ResolvedStructureTitle is a player structure’s resolved name, "".
+	ResolvedStructureTitle(ctx context.Context, structureID int64) string
+	// TxnCounterparty names the other side of a wallet transaction.
+	TxnCounterparty(ctx context.Context, id int64) (name string, isChar, isCorp bool)
+	// AssetLocations groups assets by location for the assets pages; the
+	// result is the pages’ own location view, read by the template only.
+	AssetLocations(ctx context.Context, items []esi.Asset, extraTitles, nameOverrides map[int64]string) any
+	// OrderHealthText says how an order’s price stands against the market.
+	OrderHealthText(myPrice float64, status string, stationBest, regionBest float64) (string, bool)
+	// CorpDisplayName, PlayerCorps, PickCorporation and CorpPermits are
+	// the access model the corporation modules ask.
+	CorpDisplayName(ctx context.Context, corpID int64) string
+	CorpPermits(ctx context.Context, st standing.Standing, corp int64, permission string) bool
+	PlayerCorps(ctx context.Context, userID int64) []int64
+	PickCorporation(ctx context.Context, r *http.Request, offered []int64) (int64, []OwnerOption)
+	// OwnerCorporations lists the corporations an owner covers.
+	OwnerCorporations(ctx context.Context, o standing.Owner) []int64
+	// ResolvedAllianceName, LocationTitle: cache-only names.
+	ResolvedAllianceName(ctx context.Context, allianceID int64) (string, bool)
+	LocationTitle(ctx context.Context, id int64, locType string) string
+
+	// DoctrineFitViews reads the fits of some doctrines, by doctrine id.
+	DoctrineFitViews(ctx context.Context, doctrineIDs []int64) map[int64][]DoctrineFitView
+	// CorpActorFor is how an account acts for a corporation; UserCorps the
+	// corporations it has a character in, in the order of its characters.
+	CorpActorFor(ctx context.Context, userID, corp int64) CorpActor
+	UserCorps(ctx context.Context, userID int64) []int64
+	// SendEVEMail sends an in-game mail from one of the account’s
+	// characters; ESIRefusalDetail says why the game refused one.
+	SendEVEMail(ctx context.Context, from db.Character, recipientID int64, recipientType, subject, body string, approvedCost int) error
+	ESIRefusalDetail(err error) string
 
 	// --- the fit foundation -------------------------------------------------
 

@@ -112,16 +112,7 @@ var sectionNav = map[string][]navEntry{
 	},
 	"corporation": {
 		{"/corporations/", "Overview", []string{"corporations.html"}},
-		{"/corporations/members/", "Members", []string{"corp_members.html"}},
-		{"/corporations/wallets/", "Wallets", []string{"corp_wallets.html"}},
-		{"/corporations/orders/", "Orders", []string{"corp_orders.html"}},
-		{"/corporations/assets/", "Assets", []string{"corp_assets.html"}},
-		{"/corporations/structures/", "Structures", []string{"corp_structures.html"}},
 		{"/corporations/killmails/", "Killmails", []string{"killmails.html"}},
-		{"/doctrines/", "Doctrines", []string{"doctrines.html", "doctrine.html"}},
-		{"/doctrines/fits/", "Corporate Loadouts", []string{"corp_fits.html"}},
-		{"/srp/", "Ship Replacement", []string{"srp.html"}},
-		{"/groups/", "Groups", []string{"groups.html"}},
 		{"/corporations/settings/", "Settings", []string{"corp_settings.html"}},
 	},
 	"tools": {

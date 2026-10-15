@@ -1,6 +1,7 @@
-package app
+package corpdata
 
 import (
+	"evesynapse/internal/balancechart"
 	"time"
 
 	"evesynapse/internal/esi"
@@ -13,17 +14,17 @@ import (
 // fetched. The line covers the journal window ESI keeps (about a
 // month), and the note says so. With fewer than two points the chart is
 // left out.
-func corpWalletGraph(journal esi.CorpJournal, balance float64, balanceKnown bool, balanceAt time.Time) (*balanceChart, string) {
+func corpWalletGraph(journal esi.CorpJournal, balance float64, balanceKnown bool, balanceAt time.Time) (*balancechart.BalanceChart, string) {
 	asWallet := make(esi.WalletJournal, 0, len(journal))
 	for _, e := range journal {
 		asWallet = append(asWallet, esi.WalletJournalEntry{Date: e.Date, Balance: e.Balance})
 	}
-	var now *balancePoint
+	var now *balancechart.BalancePoint
 	if balanceKnown && !balanceAt.IsZero() {
-		now = &balancePoint{At: balanceAt, Balance: balance}
+		now = &balancechart.BalancePoint{At: balanceAt, Balance: balance}
 	}
-	points := buildBalanceSeries(asWallet, nil, now)
-	if chart, ok := buildBalanceChart(points); ok {
+	points := balancechart.BuildBalanceSeries(asWallet, nil, now)
+	if chart, ok := balancechart.BuildBalanceChart(points); ok {
 		chart.Label = "Division balance over time"
 		return &chart, ""
 	}

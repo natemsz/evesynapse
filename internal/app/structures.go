@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"time"
+	"evesynapse/internal/app/module"
 
 	"evesynapse/internal/logging"
 )
@@ -46,17 +46,17 @@ const (
 	// structureIDThreshold separates player structure ids (11+,
 	// e.g. 1044752365771) from stations (~6×10⁷) and systems
 	// (~3×10⁷) in location-id fields that don't carry a kind.
-	structureIDThreshold = int64(1_000_000_000_000)
+	structureIDThreshold = module.StructureIDThreshold
 	// maxStructureResolutionsPerCycle bounds structure lookups
 	// per worker cycle; a cold backlog converges over a few
 	// cycles instead of bursting.
 	maxStructureResolutionsPerCycle = 100
 	// structureRenameWindow is how long a resolved name is
 	// trusted before the worker re-asks.
-	structureRenameWindow = 30 * 24 * time.Hour
+	structureRenameWindow = module.StructureRenameWindow
 	// structureMissingWindow is how long a 403/404 answer is
 	// trusted before the worker re-asks.
-	structureMissingWindow = 24 * time.Hour
+	structureMissingWindow = module.StructureMissingWindow
 )
 
 // isStructureID reports whether a bare location id is in the

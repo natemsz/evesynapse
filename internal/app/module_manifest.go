@@ -38,7 +38,7 @@ const (
 	mailOrganizeScope    = "esi-mail.organize_mail.v1"
 	calendarRespondScope = "esi-calendar.respond_calendar_events.v1"
 	planetScope          = "esi-planets.manage_planets.v1"
-	structureScope       = "esi-universe.read_structures.v1"
+	structureScope       = module.StructureScope
 )
 
 // scopeUse is one scope a module wants. Required scopes are what the

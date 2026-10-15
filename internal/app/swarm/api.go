@@ -1,4 +1,4 @@
-package app
+package swarm
 
 // ---------------------------------------------------------------------------
 // The swarm's HTTP API: how instances talk to each other. Three
@@ -30,7 +30,7 @@ package app
 // The client refuses cleartext to anything but a loopback URL
 // before a request is built, and at the point of connection it
 // refuses any address that is not public and any redirect off
-// the host it asked (swarm_dial.go), so a gossip-learned URL
+// the host it asked (swarm/dial.go), so a gossip-learned URL
 // can neither downgrade the secret onto the wire nor aim a
 // request inward. No handrolled crypto, no custom framing:
 // JSON over HTTPS, strict-decoded, size-capped.
@@ -58,23 +58,23 @@ import (
 // Bounds on the swarm API: one pull names at most this many keys,
 // and no request or response body past this size is read.
 const (
-	maxSwarmPullKeys  = 50
-	maxSwarmBodyBytes = 1 << 20
+	MaxSwarmPullKeys  = 50
+	MaxSwarmBodyBytes = 1 << 20
 )
 
-// swarmHTTPTimeout bounds one peer round trip. Peers are few and
+// SwarmHTTPTimeout bounds one peer round trip. Peers are few and
 // slow gossip is fine; a hung peer must not hold a worker pass.
-const swarmHTTPTimeout = 15 * time.Second
+const SwarmHTTPTimeout = 15 * time.Second
 
-// swarmMember is one instance as the membership list carries it:
+// SwarmMember is one instance as the membership list carries it:
 // identity material only, never reputation judgments. URLSig is
 // the member's own signature over its ID, address and IssuedAt
-// (swarmMemberMessage), made with the key beside it: the tuple
+// (SwarmMemberMessage), made with the key beside it: the tuple
 // is relayed exactly as its owner issued it, by instances and
 // seeds alike, and nobody signs an address for anyone else.
 // IssuedAt is the owner's clock when it signed; of two tuples
 // for one member the later-issued is the current one.
-type swarmMember struct {
+type SwarmMember struct {
 	InstanceID string `json:"instance_id"`
 	BaseURL    string `json:"base_url"`
 	PublicKey  string `json:"public_key"`
@@ -82,11 +82,11 @@ type swarmMember struct {
 	IssuedAt   int64  `json:"issued_at"`
 }
 
-// swarmAuth checks the request's bearer token against the shared
+// SwarmAuth checks the request's bearer token against the shared
 // secret. Hashes are compared (not the secret itself) so a
 // length difference leaks nothing, in constant time so a prefix
 // match learns nothing. False on any failure, with no reason.
-func swarmAuth(secret string, r *http.Request) bool {
+func SwarmAuth(secret string, r *http.Request) bool {
 	if secret == "" {
 		return false
 	}
@@ -99,15 +99,15 @@ func swarmAuth(secret string, r *http.Request) bool {
 	return subtle.ConstantTimeCompare(want[:], got[:]) == 1
 }
 
-// handleSwarmMembers serves GET /swarm/members: the signed
+// HandleSwarmMembers serves GET /swarm/members: the signed
 // membership list — this instance plus every non-excluded peer
 // it knows, so the caller learns the swarm one hop at a time.
-func (app *Application) handleSwarmMembers(w http.ResponseWriter, r *http.Request) {
-	if !app.cfg.swarm.enabled() || app.swarmID == nil {
+func (app *Mod) HandleSwarmMembers(w http.ResponseWriter, r *http.Request) {
+	if !app.Cfg.Enabled() || app.SwarmID == nil {
 		http.NotFound(w, r)
 		return
 	}
-	if !swarmAuth(app.cfg.swarm.secret, r) {
+	if !SwarmAuth(app.Cfg.Secret, r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -116,10 +116,10 @@ func (app *Application) handleSwarmMembers(w http.ResponseWriter, r *http.Reques
 	// verifies the list), even when this instance has no
 	// public address configured to advertise beside it.
 	// Callers file the signer under the URL that answered.
-	self := swarmMember{InstanceID: app.swarmID.id, BaseURL: app.cfg.publicOrigin(), PublicKey: app.swarmID.publicString(), IssuedAt: time.Now().Unix()}
-	self.URLSig = signSwarmMember(app.swarmID, self.BaseURL, self.IssuedAt)
-	members := []swarmMember{self}
-	peers, err := app.queries.ListSwarmPeers(ctx)
+	self := SwarmMember{InstanceID: app.SwarmID.ID, BaseURL: app.Deps.PublicOrigin(), PublicKey: app.SwarmID.PublicString(), IssuedAt: time.Now().Unix()}
+	self.URLSig = SignSwarmMember(app.SwarmID, self.BaseURL, self.IssuedAt)
+	members := []SwarmMember{self}
+	peers, err := app.Queries.ListSwarmPeers(ctx)
 	if err != nil {
 		logging.Errorf("swarm: list peers: %v", err)
 		http.Error(w, "bad gateway", http.StatusBadGateway)
@@ -131,7 +131,7 @@ func (app *Application) handleSwarmMembers(w http.ResponseWriter, r *http.Reques
 		if p.Excluded || p.UrlSig == "" {
 			continue
 		}
-		members = append(members, swarmMember{InstanceID: p.InstanceID, BaseURL: p.BaseUrl, PublicKey: p.PublicKey, URLSig: p.UrlSig, IssuedAt: p.UrlIssuedAt})
+		members = append(members, SwarmMember{InstanceID: p.InstanceID, BaseURL: p.BaseUrl, PublicKey: p.PublicKey, URLSig: p.UrlSig, IssuedAt: p.UrlIssuedAt})
 	}
 	raw, err := json.Marshal(members)
 	if err != nil {
@@ -141,20 +141,20 @@ func (app *Application) handleSwarmMembers(w http.ResponseWriter, r *http.Reques
 	// Sealed under the shared secret before signing: possession
 	// of the secret decides who may fetch; the seal decides who
 	// may read. A response that leaks anywhere else stays opaque.
-	sealed, err := sealSwarmMembers(raw, app.cfg.swarm.secret)
+	sealed, err := SealSwarmMembers(raw, app.Cfg.Secret)
 	if err != nil {
 		http.Error(w, "bad gateway", http.StatusBadGateway)
 		return
 	}
-	entry, err := signSwarmEntry(app.swarmID, app.swarmID.id, swarmKindMembers, app.swarmID.id, sealed, time.Now())
+	entry, err := SignSwarmEntry(app.SwarmID, app.SwarmID.ID, SwarmKindMembers, app.SwarmID.ID, sealed, time.Now())
 	if err != nil {
 		http.Error(w, "bad gateway", http.StatusBadGateway)
 		return
 	}
-	writeSwarmJSON(w, map[string]any{"entry": entry})
+	WriteSwarmJSON(w, map[string]any{"entry": entry})
 }
 
-// handleSwarmSeedRegister serves POST /swarm/seed/register: a
+// HandleSwarmSeedRegister serves POST /swarm/seed/register: a
 // peer's self-signed heartbeat, the same entry a seed worker
 // files. The body holds only the sender's own member tuple (URL,
 // public key, and its signature over the URL); the signature must verify under the payload's key with
@@ -169,33 +169,33 @@ func (app *Application) handleSwarmMembers(w http.ResponseWriter, r *http.Reques
 // refused and flagged. Anything else is a bad request; a
 // heartbeat from this instance itself is kept as a no-op
 // answer, not a peer row.
-func (app *Application) handleSwarmSeedRegister(w http.ResponseWriter, r *http.Request) {
-	if !app.cfg.swarm.enabled() || app.swarmID == nil {
+func (app *Mod) HandleSwarmSeedRegister(w http.ResponseWriter, r *http.Request) {
+	if !app.Cfg.Enabled() || app.SwarmID == nil {
 		http.NotFound(w, r)
 		return
 	}
-	if !swarmAuth(app.cfg.swarm.secret, r) {
+	if !SwarmAuth(app.Cfg.Secret, r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 	var body struct {
-		Entry swarmSignedEntry `json:"entry"`
+		Entry SwarmSignedEntry `json:"entry"`
 	}
-	if err := readSwarmJSON(r, &body); err != nil {
+	if err := ReadSwarmJSON(r, &body); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 	entry := body.Entry
-	if entry.Kind != seedAnnounceKind || entry.Signer == "" || entry.Key != entry.Signer {
+	if entry.Kind != SeedAnnounceKind || entry.Signer == "" || entry.Key != entry.Signer {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	var payload seedAnnouncePayload
-	if err := decodeSwarmStrict(strings.NewReader(entry.Payload), &payload); err != nil {
+	var payload SeedAnnouncePayload
+	if err := DecodeSwarmStrict(strings.NewReader(entry.Payload), &payload); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	if !validSwarmBaseURL(payload.BaseURL) {
+	if !ValidSwarmBaseURL(payload.BaseURL) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
@@ -204,22 +204,22 @@ func (app *Application) handleSwarmSeedRegister(w http.ResponseWriter, r *http.R
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	if !verifySwarmEntry(entry, payload.PublicKey) {
+	if !VerifySwarmEntry(entry, payload.PublicKey) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 	// The tuple this instance will store and relay: the sender's
 	// own signature over its address, under the same key.
-	tuple := swarmMember{InstanceID: entry.Signer, BaseURL: payload.BaseURL, PublicKey: payload.PublicKey, URLSig: payload.URLSig, IssuedAt: payload.IssuedAt}
-	if !verifySwarmMember(tuple) {
+	tuple := SwarmMember{InstanceID: entry.Signer, BaseURL: payload.BaseURL, PublicKey: payload.PublicKey, URLSig: payload.URLSig, IssuedAt: payload.IssuedAt}
+	if !VerifySwarmMember(tuple) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 	ctx := r.Context()
 	now := time.Now()
-	if entry.Signer != app.swarmID.id {
-		if err := app.swarmLearnMembers(ctx, []swarmMember{tuple}, entry.Signer, payload.PublicKey, "", "gossip", now); err != nil {
-			if errors.Is(err, errSwarmKeyChanged) {
+	if entry.Signer != app.SwarmID.ID {
+		if err := app.SwarmLearnMembers(ctx, []SwarmMember{tuple}, entry.Signer, payload.PublicKey, "", "gossip", now); err != nil {
+			if errors.Is(err, ErrSwarmKeyChanged) {
 				// Registered before under another key: the
 				// pinned one stays, and the sender is told
 				// its heartbeat was not filed.
@@ -230,80 +230,80 @@ func (app *Application) handleSwarmSeedRegister(w http.ResponseWriter, r *http.R
 			http.Error(w, "bad gateway", http.StatusBadGateway)
 			return
 		}
-		if err := app.queries.TouchSwarmPeerGossip(ctx, db.TouchSwarmPeerGossipParams{InstanceID: entry.Signer, LastGossip: timeSet(now)}); err != nil {
+		if err := app.Queries.TouchSwarmPeerGossip(ctx, db.TouchSwarmPeerGossipParams{InstanceID: entry.Signer, LastGossip: timeSet(now)}); err != nil {
 			logging.Errorf("swarm: touch registration %s: %v", entry.Signer, err)
 		}
 	}
-	writeSwarmJSON(w, map[string]any{"ok": true})
+	WriteSwarmJSON(w, map[string]any{"ok": true})
 }
 
-// swarmPullRequest is one pull: the keys the caller already
+// SwarmPullRequest is one pull: the keys the caller already
 // wants (demand-driven — a peer only ever serves what the caller
 // asked for, never what it chose to send).
-type swarmPullRequest struct {
-	Keys []swarmPullKey `json:"keys"`
+type SwarmPullRequest struct {
+	Keys []SwarmPullKey `json:"keys"`
 }
 
-// swarmPullKey names one public record.
-type swarmPullKey struct {
+// SwarmPullKey names one public record.
+type SwarmPullKey struct {
 	Kind string `json:"kind"`
 	Key  string `json:"key"`
 }
 
-// handleSwarmPull serves POST /swarm/pull: the signed entries
+// HandleSwarmPull serves POST /swarm/pull: the signed entries
 // for the requested keys this instance holds. Unknown kinds and
 // keys it does not hold are skipped silently, so the response
 // never says what is missing — only what is shared.
-func (app *Application) handleSwarmPull(w http.ResponseWriter, r *http.Request) {
-	if !app.cfg.swarm.enabled() || app.swarmID == nil {
+func (app *Mod) HandleSwarmPull(w http.ResponseWriter, r *http.Request) {
+	if !app.Cfg.Enabled() || app.SwarmID == nil {
 		http.NotFound(w, r)
 		return
 	}
-	if !swarmAuth(app.cfg.swarm.secret, r) {
+	if !SwarmAuth(app.Cfg.Secret, r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	var req swarmPullRequest
-	if err := readSwarmJSON(r, &req); err != nil {
+	var req SwarmPullRequest
+	if err := ReadSwarmJSON(r, &req); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	if len(req.Keys) > maxSwarmPullKeys {
+	if len(req.Keys) > MaxSwarmPullKeys {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 	ctx := r.Context()
-	entries := []swarmSignedEntry{}
+	entries := []SwarmSignedEntry{}
 	for _, k := range req.Keys {
-		if !validSwarmKind(k.Kind) || k.Key == "" || len(k.Key) > 128 {
+		if !ValidSwarmKind(k.Kind) || k.Key == "" || len(k.Key) > 128 {
 			continue
 		}
-		payload, fetchedAt, ok := app.serveSwarmKey(ctx, k.Kind, k.Key)
+		payload, fetchedAt, ok := app.ServeSwarmKey(ctx, k.Kind, k.Key)
 		if !ok {
 			// A dedicated node takes the miss as demand and
-			// fetches it on its own budget (swarm_warm.go).
-			app.swarmNoteDemand(ctx, k.Kind, k.Key)
+			// fetches it on its own budget (swarm/warm.go).
+			app.SwarmNoteDemand(ctx, k.Kind, k.Key)
 			continue
 		}
-		entry, err := signSwarmEntry(app.swarmID, app.swarmID.id, k.Kind, k.Key, payload, fetchedAt)
+		entry, err := SignSwarmEntry(app.SwarmID, app.SwarmID.ID, k.Kind, k.Key, payload, fetchedAt)
 		if err != nil {
 			continue
 		}
 		entries = append(entries, entry)
 	}
-	writeSwarmJSON(w, map[string]any{"entries": entries})
+	WriteSwarmJSON(w, map[string]any{"entries": entries})
 }
 
-// readSwarmJSON strictly decodes one size-capped request body.
+// ReadSwarmJSON strictly decodes one size-capped request body.
 // Unknown fields reject the request: the wire format is fixed,
 // and anything else is a probe or a version skew to notice.
-func readSwarmJSON(r *http.Request, into any) error {
+func ReadSwarmJSON(r *http.Request, into any) error {
 	defer r.Body.Close()
-	return decodeSwarmStrict(io.LimitReader(r.Body, maxSwarmBodyBytes), into)
+	return DecodeSwarmStrict(io.LimitReader(r.Body, MaxSwarmBodyBytes), into)
 }
 
-// writeSwarmJSON writes one response envelope.
-func writeSwarmJSON(w http.ResponseWriter, body any) {
+// WriteSwarmJSON writes one response envelope.
+func WriteSwarmJSON(w http.ResponseWriter, body any) {
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(body); err != nil {
 		http.Error(w, "bad gateway", http.StatusBadGateway)
@@ -313,54 +313,54 @@ func writeSwarmJSON(w http.ResponseWriter, body any) {
 	_, _ = buf.WriteTo(w)
 }
 
-// validSwarmBaseURL reports whether a peer URL may be dialed:
+// ValidSwarmBaseURL reports whether a peer URL may be dialed:
 // https anywhere, http on loopback only (local development and
 // tests, where it never leaves the machine).
-func validSwarmBaseURL(raw string) bool {
-	u, err := parseSwarmURL(raw)
+func ValidSwarmBaseURL(raw string) bool {
+	u, err := ParseSwarmURL(raw)
 	if err != nil {
 		return false
 	}
-	switch u.scheme {
+	switch u.Scheme {
 	case "https":
 		return true
 	case "http":
-		return swarmHostIsLoopback(u.host)
+		return SwarmHostIsLoopback(u.Host)
 	default:
 		return false
 	}
 }
 
-// swarmClient fetches from one peer: membership lists and
+// SwarmClient fetches from one peer: membership lists and
 // entries, over verifying TLS, with every response size-capped
-// and strictly decoded. newSwarmClient (swarm_dial.go) builds
+// and strictly decoded. NewSwarmClient (swarm/dial.go) builds
 // it with the guarded dialer and the same-host redirect rule.
-type swarmClient struct {
-	secret string
-	http   *http.Client
+type SwarmClient struct {
+	Secret string
+	Http   *http.Client
 }
 
-// swarmStrictDecoder decodes swarm JSON strictly: an unknown field
+// SwarmStrictDecoder decodes swarm JSON strictly: an unknown field
 // is an error, because the wire format is fixed and anything else is
 // a probe or a version skew to notice. Every swarm decode goes
-// through it (decodeSwarmStrict for one value).
-func swarmStrictDecoder(r io.Reader) *json.Decoder {
+// through it (DecodeSwarmStrict for one value).
+func SwarmStrictDecoder(r io.Reader) *json.Decoder {
 	dec := json.NewDecoder(r)
 	dec.DisallowUnknownFields()
 	return dec
 }
 
-// decodeSwarmStrict strictly decodes one value from r.
-func decodeSwarmStrict(r io.Reader, into any) error {
-	return swarmStrictDecoder(r).Decode(into)
+// DecodeSwarmStrict strictly decodes one value from r.
+func DecodeSwarmStrict(r io.Reader, into any) error {
+	return SwarmStrictDecoder(r).Decode(into)
 }
 
-// call is every outbound swarm request: the address checked before
+// Call is every outbound swarm request: the address checked before
 // dialing (https, or http on loopback), the secret in the bearer
 // header only, the body (if any) sent as JSON, a non-200 answer an
 // error, and the answer size-capped and strictly decoded into into.
-func (c *swarmClient) call(ctx context.Context, method, url string, body, into any) error {
-	if !validSwarmBaseURL(url) {
+func (c *SwarmClient) Call(ctx context.Context, method, url string, body, into any) error {
+	if !ValidSwarmBaseURL(url) {
 		return fmt.Errorf("swarm: refusing to dial %q (https, or http on loopback, only)", url)
 	}
 	var reader io.Reader
@@ -375,12 +375,12 @@ func (c *swarmClient) call(ctx context.Context, method, url string, body, into a
 	if err != nil {
 		return fmt.Errorf("swarm: %s %s: %w", method, url, err)
 	}
-	req.Header.Set("Authorization", "Bearer "+c.secret)
+	req.Header.Set("Authorization", "Bearer "+c.Secret)
 	req.Header.Set("Accept", "application/json")
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := c.http.Do(req)
+	resp, err := c.Http.Do(req)
 	if err != nil {
 		return fmt.Errorf("swarm: %s %s: %w", method, url, err)
 	}
@@ -388,29 +388,29 @@ func (c *swarmClient) call(ctx context.Context, method, url string, body, into a
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("swarm: %s %s: status %d", method, url, resp.StatusCode)
 	}
-	if err := decodeSwarmStrict(io.LimitReader(resp.Body, maxSwarmBodyBytes), into); err != nil {
+	if err := DecodeSwarmStrict(io.LimitReader(resp.Body, MaxSwarmBodyBytes), into); err != nil {
 		return fmt.Errorf("swarm: %s %s: %w", method, url, err)
 	}
 	return nil
 }
 
-// authedGET is one GET through call.
-func (c *swarmClient) authedGET(ctx context.Context, url string, into any) error {
-	return c.call(ctx, http.MethodGet, url, nil, into)
+// AuthedGET is one GET through Call.
+func (c *SwarmClient) AuthedGET(ctx context.Context, url string, into any) error {
+	return c.Call(ctx, http.MethodGet, url, nil, into)
 }
 
-// pullEntries asks one peer for signed entries for the given
+// PullEntries asks one peer for signed entries for the given
 // keys. Verification happens at staging, not here: the caller
 // checks every entry against the signer's pinned key before
 // anything is stored.
-func (c *swarmClient) pullEntries(ctx context.Context, baseURL string, keys []swarmPullKey) ([]swarmSignedEntry, error) {
-	if len(keys) > maxSwarmPullKeys {
-		return nil, fmt.Errorf("swarm: %d keys exceeds the pull cap of %d", len(keys), maxSwarmPullKeys)
+func (c *SwarmClient) PullEntries(ctx context.Context, baseURL string, keys []SwarmPullKey) ([]SwarmSignedEntry, error) {
+	if len(keys) > MaxSwarmPullKeys {
+		return nil, fmt.Errorf("swarm: %d keys exceeds the pull cap of %d", len(keys), MaxSwarmPullKeys)
 	}
 	var body struct {
-		Entries []swarmSignedEntry `json:"entries"`
+		Entries []SwarmSignedEntry `json:"entries"`
 	}
-	if err := c.call(ctx, http.MethodPost, strings.TrimSuffix(baseURL, "/")+"/swarm/pull", swarmPullRequest{Keys: keys}, &body); err != nil {
+	if err := c.Call(ctx, http.MethodPost, strings.TrimSuffix(baseURL, "/")+"/swarm/pull", SwarmPullRequest{Keys: keys}, &body); err != nil {
 		return nil, err
 	}
 	return body.Entries, nil

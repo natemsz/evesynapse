@@ -1,4 +1,4 @@
-package app
+package swarm
 
 import (
 	"context"
@@ -8,10 +8,10 @@ import (
 )
 
 // TestSwarmFanOutBounds: every peer is called, never more than
-// swarmParallelPeers at once.
+// SwarmParallelPeers at once.
 func TestSwarmFanOutBounds(t *testing.T) {
 	var now, peak, calls atomic.Int64
-	swarmFanOut(context.Background(), 10, func(ctx context.Context, i int) {
+	SwarmFanOut(context.Background(), 10, func(ctx context.Context, i int) {
 		calls.Add(1)
 		cur := now.Add(1)
 		for {
@@ -26,21 +26,21 @@ func TestSwarmFanOutBounds(t *testing.T) {
 	if calls.Load() != 10 {
 		t.Errorf("called %d peers, want 10", calls.Load())
 	}
-	if p := peak.Load(); p > swarmParallelPeers || p < 2 {
-		t.Errorf("peak concurrency %d, want 2..%d", p, swarmParallelPeers)
+	if p := peak.Load(); p > SwarmParallelPeers || p < 2 {
+		t.Errorf("peak concurrency %d, want 2..%d", p, SwarmParallelPeers)
 	}
 }
 
 // TestSwarmFanOutSharedDeadline: N peers that never answer cost one
 // round deadline, not N timeouts, and each sees its context end.
 func TestSwarmFanOutSharedDeadline(t *testing.T) {
-	old := swarmRoundDeadline
-	swarmRoundDeadline = 100 * time.Millisecond
-	defer func() { swarmRoundDeadline = old }()
+	old := SwarmRoundDeadline
+	SwarmRoundDeadline = 100 * time.Millisecond
+	defer func() { SwarmRoundDeadline = old }()
 
 	var ended atomic.Int64
 	start := time.Now()
-	swarmFanOut(context.Background(), 12, func(ctx context.Context, i int) {
+	SwarmFanOut(context.Background(), 12, func(ctx context.Context, i int) {
 		<-ctx.Done() // a peer that never answers
 		ended.Add(1)
 	})

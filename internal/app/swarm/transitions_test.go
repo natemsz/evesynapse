@@ -1,4 +1,4 @@
-package app
+package swarm
 
 import (
 	"math"
@@ -25,17 +25,17 @@ func TestSwarmTrustPrior(t *testing.T) {
 		{0, 10, 9.0 / 20},
 		{990, 0, 999.0 / 1000},
 	} {
-		if got := swarmTrust(tc.good, tc.bad); !near(got, tc.want) {
+		if got := SwarmTrust(tc.good, tc.bad); !near(got, tc.want) {
 			t.Errorf("trust(%d good, %d bad) = %v, want %v", tc.good, tc.bad, got, tc.want)
 		}
 	}
 	// More good never lowers trust; more bad never raises it.
 	for good := int64(0); good < 50; good++ {
 		for bad := int64(0); bad < 50; bad++ {
-			if swarmTrust(good+1, bad) < swarmTrust(good, bad) {
+			if SwarmTrust(good+1, bad) < SwarmTrust(good, bad) {
 				t.Fatalf("a good check lowered trust at %d/%d", good, bad)
 			}
-			if swarmTrust(good, bad+1) > swarmTrust(good, bad) {
+			if SwarmTrust(good, bad+1) > SwarmTrust(good, bad) {
 				t.Fatalf("a bad check raised trust at %d/%d", good, bad)
 			}
 		}
@@ -43,7 +43,7 @@ func TestSwarmTrustPrior(t *testing.T) {
 }
 
 // TestSwarmPullGateEdges: a peer is judged only once it has
-// swarmTrustMinChecks checks, and then leaves the rotation only
+// SwarmTrustMinChecks checks, and then leaves the rotation only
 // strictly below the floor.
 func TestSwarmPullGateEdges(t *testing.T) {
 	for _, tc := range []struct {
@@ -57,20 +57,20 @@ func TestSwarmPullGateEdges(t *testing.T) {
 		{10, 10, true}, // 0.63
 		{500, 60, true},
 	} {
-		if got := swarmPeerPullable(tc.good, tc.bad); got != tc.want {
-			t.Errorf("pullable(%d good, %d bad) = %v, want %v (trust %.3f)", tc.good, tc.bad, got, tc.want, swarmTrust(tc.good, tc.bad))
+		if got := SwarmPeerPullable(tc.good, tc.bad); got != tc.want {
+			t.Errorf("pullable(%d good, %d bad) = %v, want %v (trust %.3f)", tc.good, tc.bad, got, tc.want, SwarmTrust(tc.good, tc.bad))
 		}
 	}
 }
 
 // sampleRate is the share of draws that verify, for a signer's
-// ledger: the probability swarmCheckDraw answers true, measured on a
+// ledger: the probability SwarmCheckDraw answers true, measured on a
 // fine grid of draws.
 func sampleRate(good, bad int64) float64 {
 	const steps = 10000
 	hits := 0
 	for i := 0; i < steps; i++ {
-		if swarmCheckDraw(swarmTrust(good, bad), good+bad, float64(i)/steps) {
+		if SwarmCheckDraw(SwarmTrust(good, bad), good+bad, float64(i)/steps) {
 			hits++
 		}
 	}
@@ -79,32 +79,32 @@ func sampleRate(good, bad int64) float64 {
 
 // TestSwarmSampleRateFollowsTrust: a new signer is always checked;
 // once judged, the rate falls as good checks accumulate, stays inside
-// [swarmSampleMin, swarmSampleMax], and a failure raises it again.
+// [SwarmSampleMin, SwarmSampleMax], and a failure raises it again.
 func TestSwarmSampleRateFollowsTrust(t *testing.T) {
-	for total := int64(0); total < swarmTrustMinChecks; total++ {
+	for total := int64(0); total < SwarmTrustMinChecks; total++ {
 		if r := sampleRate(total, 0); r != 1 {
 			t.Errorf("signer with %d checks sampled at %v, want always", total, r)
 		}
 	}
 	prev := 1.0
-	for good := int64(swarmTrustMinChecks); good <= 2000; good += 10 {
+	for good := int64(SwarmTrustMinChecks); good <= 2000; good += 10 {
 		r := sampleRate(good, 0)
 		if r > prev+1e-9 {
 			t.Fatalf("rate rose from %v to %v as good checks grew to %d", prev, r, good)
 		}
-		if r < swarmSampleMin-1e-4 || r > swarmSampleMax+1e-4 {
-			t.Fatalf("rate %v at %d good checks is outside [%v, %v]", r, good, swarmSampleMin, swarmSampleMax)
+		if r < SwarmSampleMin-1e-4 || r > SwarmSampleMax+1e-4 {
+			t.Fatalf("rate %v at %d good checks is outside [%v, %v]", r, good, SwarmSampleMin, SwarmSampleMax)
 		}
 		prev = r
 	}
-	if prev > swarmSampleMin+1e-4 {
-		t.Errorf("a long clean record samples at %v, want the floor %v", prev, swarmSampleMin)
+	if prev > SwarmSampleMin+1e-4 {
+		t.Errorf("a long clean record samples at %v, want the floor %v", prev, SwarmSampleMin)
 	}
 	// Failures bring the checks back.
 	if clean, failed := sampleRate(200, 0), sampleRate(200, 20); failed <= clean {
 		t.Errorf("twenty failures left the rate at %v (clean %v); want it higher", failed, clean)
 	}
-	if r := sampleRate(0, 50); r < swarmSampleMax-1e-4 {
-		t.Errorf("an all-failing signer samples at %v, want the cap %v", r, swarmSampleMax)
+	if r := sampleRate(0, 50); r < SwarmSampleMax-1e-4 {
+		t.Errorf("an all-failing signer samples at %v, want the cap %v", r, SwarmSampleMax)
 	}
 }

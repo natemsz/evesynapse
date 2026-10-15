@@ -23,6 +23,7 @@ import (
 	"evesynapse/internal/app/scanner"
 	"evesynapse/internal/app/skillplans"
 	"evesynapse/internal/app/srp"
+	"evesynapse/internal/app/swarm"
 	"evesynapse/internal/app/tradefinder"
 	"evesynapse/internal/app/tradeideas"
 	"evesynapse/internal/app/wallet"
@@ -55,6 +56,7 @@ func init() {
 		srp.Module,
 		groups.Module,
 		discord.Module,
+		swarm.Module,
 		intel.Module,
 		piplanner.Module,
 		tradeideas.Module,

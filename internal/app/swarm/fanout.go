@@ -1,4 +1,4 @@
-package app
+package swarm
 
 import (
 	"context"
@@ -10,24 +10,24 @@ import (
 // heartbeats) run a few at a time under one deadline for the whole
 // round. One at a time, each with its own 15 s client timeout, N
 // slow peers could stretch a cycle by N x 15 s; now a round costs at
-// most swarmRoundDeadline whatever the peers do.
-const swarmParallelPeers = 4
+// most SwarmRoundDeadline whatever the peers do.
+const SwarmParallelPeers = 4
 
-// swarmRoundDeadline is a var so tests can shorten it.
-var swarmRoundDeadline = 20 * time.Second
+// SwarmRoundDeadline is a var so tests can shorten it.
+var SwarmRoundDeadline = 20 * time.Second
 
-// swarmFanOut calls fn for 0..n-1, at most swarmParallelPeers at
-// once, all under one context that ends swarmRoundDeadline from now
+// SwarmFanOut calls fn for 0..n-1, at most SwarmParallelPeers at
+// once, all under one context that ends SwarmRoundDeadline from now
 // (or sooner with ctx). fn must only do network work and record its
 // result in its own slot: the caller handles the results afterwards,
 // one at a time.
-func swarmFanOut(ctx context.Context, n int, fn func(ctx context.Context, i int)) {
+func SwarmFanOut(ctx context.Context, n int, fn func(ctx context.Context, i int)) {
 	if n <= 0 {
 		return
 	}
-	rctx, cancel := context.WithTimeout(ctx, swarmRoundDeadline)
+	rctx, cancel := context.WithTimeout(ctx, SwarmRoundDeadline)
 	defer cancel()
-	slots := make(chan struct{}, swarmParallelPeers)
+	slots := make(chan struct{}, SwarmParallelPeers)
 	var wg sync.WaitGroup
 	for i := 0; i < n; i++ {
 		select {

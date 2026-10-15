@@ -325,28 +325,19 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	})
 	clock.mark("op attendance", time.Now())
 
-	// The swarm's fetch phase runs ahead of the public-data
-	// passes: gossip when due, then demand-driven pulls. Peer
-	// traffic spends no ESI budget, and pulling first means the
-	// passes below find the shared entries already staged —
-	// fetching first would satisfy the same demand itself and
-	// leave the pulls with nothing to ask for.
-	c.pass("asking the swarm first", func() (int, bool) {
-		app.swarmFetchPhase(ctx, time.Now())
-		return 0, false
-	})
-	clock.mark("swarm fetch", time.Now())
+	// Module passes that run ahead of the public-data passes (the
+	// swarm's fetch phase: gossip when due, then demand-driven pulls;
+	// peer traffic spends no ESI budget, and pulling first means the
+	// passes below find the shared entries already staged).
+	app.runCycleJobs(ctx, c, module.BeforePublicData, characters, clock)
 
 	c.refreshPublicData(ctx, characters)
 	clock.mark("public data", time.Now())
 
-	// The shared cache across instances (swarm_trust.go): the
-	// spot checks on what the fetch phase above staged, from what
-	// is left of the allowance. No peer traffic here.
-	c.pass("sharing with the swarm", func() (int, bool) {
-		return app.swarmCycle(ctx, c.allowance, characters, time.Now())
-	})
-	clock.mark("swarm", time.Now())
+	// Module passes that follow the public-data passes (the swarm's
+	// spot checks on what its fetch phase staged, from what is left of
+	// the allowance).
+	app.runCycleJobs(ctx, c, module.AfterPublicData, characters, clock)
 
 	// What an event in the game makes likely to be opened next, best
 	// worth first, from what is left of the allowance (foresight.go).
@@ -792,6 +783,12 @@ type fetchBudget struct {
 	left int
 }
 
+// Take and Exhausted are take and exhausted for the modules' cycle jobs
+// (module.Budget).
+func (b *fetchBudget) Take() bool { return b.take() }
+
+func (b *fetchBudget) Exhausted() bool { return b.exhausted() }
+
 // take spends one fetch, reporting whether it was available.
 func (b *fetchBudget) take() bool {
 	b.mu.Lock()
@@ -1092,7 +1089,7 @@ func (app *Application) warmMissingTypeNames(ctx context.Context, typeIDs []int6
 			continue
 		}
 		// Swarm first: a dedicated node's budget before this one's.
-		if app.swarmDefersFetch(ctx, swarmKindTypeName, strconv.FormatInt(id, 10), now) {
+		if app.deferFetch(ctx, module.FetchKindTypeName, strconv.FormatInt(id, 10), now) {
 			continue
 		}
 		missing = append(missing, id)

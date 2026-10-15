@@ -325,6 +325,173 @@ func OrderRangeLabel(r string) string {
 	}
 }
 
+// FetchGate is the library seam between the fetch pipeline and a module
+// that can answer a fetch from elsewhere (the swarm). Core asks every
+// registered gate before it spends ESI on a name, record, structure or
+// market history. A gate only ever delays or replaces a fetch: it never
+// cancels one, and any failure of a gate (an error, a panic) is read as
+// "fetch normally" (core recovers and answers false).
+type FetchGate interface {
+	// Defer says this fetch should wait for a peer this time. kind is one
+	// of the FetchKind values and key names the thing (an id, or
+	// "region/type" for a market history).
+	Defer(ctx context.Context, deps Deps, kind, key string, now time.Time) bool
+	// UrgentHistory serves one due market history from elsewhere before
+	// the urgent drain spends ESI; true means it was applied and the ESI
+	// fetch may be skipped.
+	UrgentHistory(ctx context.Context, deps Deps, regionID, typeID int64) bool
+}
+
+// What a fetch is of: the kinds a gate is asked about.
+const (
+	FetchKindHistory     = "market_history"
+	FetchKindTypeName    = "type_name"
+	FetchKindCorporation = "corporation_record"
+	FetchKindAlliance    = "alliance_record"
+	FetchKindStructure   = "structure_name"
+)
+
+// MarketKey is one (region, type) pair to warm.
+type MarketKey struct {
+	RegionID int64
+	TypeID   int64
+}
+
+// MarketFetchKind is the fetch-state kind of one market key.
+func MarketFetchKind(prefix string, key MarketKey) string {
+	return prefix + "_" + strconv.FormatInt(key.RegionID, 10) + "_" + strconv.FormatInt(key.TypeID, 10)
+}
+
+// Fetch bookkeeping constants shared by the data feed and the modules.
+const (
+	FetchStateOK           = "ok"
+	OrgStateReady          = "ready"
+	HistoryRefetchGate     = 20 * time.Hour
+	StructureRenameWindow  = 30 * 24 * time.Hour
+	StructureMissingWindow = 24 * time.Hour
+	StructureScope         = "esi-universe.read_structures.v1"
+	// WantViewed is the priority of a want a page view noted.
+	WantViewed int64 = 3
+)
+
+// CorporationRecordPayload is the stored public record behind a corporation
+// page: the corporation profile, with the alliance's name and ticker baked
+// in when the corporation belongs to one.
+type CorporationRecordPayload struct {
+	Corp     esi.Corporation `json:"corp"`
+	Alliance esi.Alliance    `json:"alliance"`
+}
+
+// AllianceMemberCorp is one member corporation of an alliance; Name is
+// baked when the drain could resolve it, "" until then.
+type AllianceMemberCorp struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// AllianceRecordPayload is the stored public record behind an alliance
+// page: the alliance profile plus its member corporations.
+type AllianceRecordPayload struct {
+	Alliance     esi.Alliance         `json:"alliance"`
+	Corporations []AllianceMemberCorp `json:"corporations"`
+}
+
+// DecodeCorpPayload reads a stored corporation record: the app's
+// {"corp":{...},"alliance":{...}}, or a bare ESI corporation a peer sent.
+func DecodeCorpPayload(raw string) (CorporationRecordPayload, bool) {
+	var p CorporationRecordPayload
+	if err := json.Unmarshal([]byte(raw), &p); err == nil && p.Corp.Name != "" {
+		return p, true
+	}
+	var bare esi.Corporation
+	if err := json.Unmarshal([]byte(raw), &bare); err == nil && bare.Name != "" {
+		return CorporationRecordPayload{Corp: bare}, true
+	}
+	return CorporationRecordPayload{}, false
+}
+
+// decodeAlliancePayload is decodeCorpPayload for alliance records: the
+// app's {"alliance":{...},"corporations":[...]}, or a bare ESI alliance.
+func DecodeAlliancePayload(raw string) (AllianceRecordPayload, bool) {
+	var p AllianceRecordPayload
+	if err := json.Unmarshal([]byte(raw), &p); err == nil && p.Alliance.Name != "" {
+		return p, true
+	}
+	var bare esi.Alliance
+	if err := json.Unmarshal([]byte(raw), &bare); err == nil && bare.Name != "" {
+		return AllianceRecordPayload{Alliance: bare}, true
+	}
+	return AllianceRecordPayload{}, false
+}
+
+// StructureIDThreshold is where player-structure ids begin: far above the
+// station and system ranges.
+const StructureIDThreshold = int64(1_000_000_000_000)
+
+// IsStructureID reports whether a bare location id is in the
+// player-structure range.
+func IsStructureID(id int64) bool { return id > StructureIDThreshold }
+
+// StructureSourceRank orders name provenance: ESI truth always outranks
+// the community tier, so a lower-trust name never overwrites a better one.
+func StructureSourceRank(source string) int {
+	switch source {
+	case esi.StructureSourceESI:
+		return 3
+	case esi.StructureSourceCorp:
+		return 2
+	case esi.StructureSourceCommunity:
+		return 1
+	}
+	return 0
+}
+
+// Cycle is what a worker-cycle job is given: the fetch allowance left,
+// the characters this cycle works, and the time.
+type Cycle struct {
+	Budget     Budget
+	Characters []db.Character
+	Now        time.Time
+}
+
+// Budget is the cycle's fetch allowance.
+type Budget interface {
+	// Take spends one fetch, reporting whether it was available.
+	Take() bool
+	// Exhausted reports that none is left.
+	Exhausted() bool
+}
+
+// CyclePhase is where in the worker cycle a CycleJob runs.
+type CyclePhase string
+
+const (
+	// BeforePublicData runs the job ahead of the public-data passes.
+	BeforePublicData CyclePhase = "before public data"
+	// AfterPublicData runs it right after them.
+	AfterPublicData CyclePhase = "after public data"
+)
+
+// CycleJob is a pass that runs inside the worker cycle under the cycle’s
+// own accounting: it is timed under its Name, guarded like a pass, and
+// reports what it stored and whether ESI limited it. Describe is how a
+// limit is worded in the log.
+type CycleJob struct {
+	Name     string
+	Describe string
+	At       CyclePhase
+	Run      func(ctx context.Context, deps Deps, c Cycle) (stored int, limited bool)
+}
+
+// PageSection is a block a module contributes to a core page (the admin
+// page, the sync page): rendered to HTML, with an anchor and a title for
+// the page’s own jump links.
+type PageSection struct {
+	Anchor string
+	Title  string
+	Render func(ctx context.Context, deps Deps) template.HTML
+}
+
 // Page declares a template file rendered by the module, its default section,
 // and any client scripts that must be loaded for it.
 type Page struct {
@@ -770,6 +937,32 @@ type Deps interface {
 	// PUT, and an unauthenticated POST (name lookups).
 	PutESI(ctx context.Context, token, path string, body any) error
 	PostESIPublic(ctx context.Context, path string, body, out any) error
+	// --- the fetch seam: what a module that shares fetched data (the swarm) may ask ---
+
+	// MarketFetchDue, RecordMarketFetchAt, HistoryCandidates and
+	// FetchMarketHistory are the market history bookkeeping; NoteStructureIDs,
+	// WantCorporation and WantAlliance queue what pages want resolved.
+	MarketFetchDue(ctx context.Context, kind string, gate time.Duration) bool
+	RecordMarketFetchAt(ctx context.Context, kind, state, detail string, at time.Time)
+	HistoryCandidates(ctx context.Context) ([]MarketKey, error)
+	FetchMarketHistory(ctx context.Context, key MarketKey) ([]esi.MarketHistoryDay, error)
+	NoteStructureIDs(ctx context.Context, ids ...int64)
+	WantCorporation(ctx context.Context, id, closeness int64) error
+	WantAlliance(ctx context.Context, id, closeness int64) error
+	// ESIGet reads a public ESI path (unauthenticated) into out;
+	// FetchStructure reads a structure with a character’s token.
+	ESIGet(ctx context.Context, path string, out any) error
+	FetchStructure(ctx context.Context, ch db.Character, id int64) (esi.UniverseStructure, error)
+	// The type-name cache the swarm keeps in step with its peers.
+	LearnTypeName(id int64, name string)
+	ForgetTypeName(id int64)
+	MissingTypeNames(limit int) []int64
+	NoteTypeNameMiss(id int64)
+	// PublicOrigin is this install’s public address, "" when it has none.
+	PublicOrigin() string
+	// RequireAdmin guards a route group for administrators.
+	RequireAdmin() func(http.Handler) http.Handler
+
 	// CorpActorFor is how an account acts for a corporation; UserCorps the
 	// corporations it has a character in, in the order of its characters.
 	CorpActorFor(ctx context.Context, userID, corp int64) CorpActor
@@ -893,6 +1086,17 @@ type Module struct {
 	// Sitemap lists the module's public pages, so a build without the
 	// module leaves them out of sitemap.xml.
 	Sitemap []SitemapEntry
+	// FetchGates are asked before the fetch pipeline spends ESI.
+	FetchGates []FetchGate
+	// CycleJobs run inside the worker cycle at a named phase.
+	CycleJobs []CycleJob
+	// AdminSections and SyncSections add blocks to those two pages.
+	AdminSections []PageSection
+	SyncSections  []PageSection
+	// Init runs once the application is built and its store is open; an
+	// error stops the start (a module whose settings are wrong says so
+	// before serving anything).
+	Init func(deps Deps) error
 	// Snapshots lists the snapshot kinds (or kind prefixes) the module
 	// reads, so the worker and the sync page can tie a stored kind to the
 	// module that shows it.

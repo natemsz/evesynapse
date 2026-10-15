@@ -3,6 +3,8 @@ package app
 import (
 	"database/sql"
 	"errors"
+	"evesynapse/internal/app/module"
+	"html/template"
 	"net/http"
 	"strconv"
 	"strings"
@@ -42,7 +44,7 @@ type adminView struct {
 	Lookup       characterLookupView
 	NoAccount    bool              // ?account= named one that does not exist
 	Account      *adminAccountView // nil until one is found
-	Swarm        *swarmAdminView   // shared cache: settings and members
+	Sections     []template.HTML   // what the modules add (the shared cache)
 }
 
 // adminAccountRow is one line of the newest-accounts list.
@@ -115,7 +117,7 @@ func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 
 	found, lookup := app.lookupCharacter(ctx, r.URL.Query().Get("q"))
 	view.Lookup = lookup
-	view.Swarm = app.loadSwarmAdmin(ctx)
+	view.Sections = app.moduleSections(ctx, func(m module.Module) []module.PageSection { return m.AdminSections }, nil)
 	var accountID, foundID int64
 	if found != nil {
 		accountID, foundID = found.UserID, found.CharacterID

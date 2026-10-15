@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"evesynapse/internal/app/module"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -63,10 +64,10 @@ const pageWantTTL = 3 * time.Minute
 // Stored (pilot_records.priority and its fellows): the order is what
 // matters, and the numbers do not change.
 const (
-	wantHop    int64 = 0 // one relationship beyond a character's own records: the corporation of somebody it traded with
-	wantOrbit  int64 = 1 // named by a character's own records
-	wantTyping int64 = 2 // guessed from a search box while it is being typed into
-	wantViewed int64 = 3 // on a page somebody has open
+	wantHop    int64 = 0                 // one relationship beyond a character's own records: the corporation of somebody it traded with
+	wantOrbit  int64 = 1                 // named by a character's own records
+	wantTyping int64 = 2                 // guessed from a search box while it is being typed into
+	wantViewed int64 = module.WantViewed // on a page somebody has open
 )
 
 // wantPilot, wantCorporation and wantAlliance queue a public record at

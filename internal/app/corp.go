@@ -36,7 +36,7 @@ const walletDivisionCount = module.WalletDivisionCount
 
 // Fetch-state values stored in snapshot_fetch_state.state.
 const (
-	fetchStateOK          = "ok"
+	fetchStateOK          = module.FetchStateOK
 	fetchStateRoleMissing = "role_missing"
 	fetchStateError       = "error"
 	// fetchStateDead marks a definitive market failure (the

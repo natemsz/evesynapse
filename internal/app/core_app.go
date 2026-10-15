@@ -209,26 +209,6 @@ type Application struct {
 	// (unix seconds).
 	typingPrunedAt atomic.Int64
 
-	// Shared cache across instances (swarm_*.go): this
-	// instance's signing identity and its peer client, set at
-	// startup when SHARED_CACHE enables sharing, nil otherwise.
-	// swarmMu guards the next gossip time only; the identity
-	// never changes after startup.
-	swarmID         *swarmIdentity
-	swarmCli        *swarmClient
-	swarmMu         sync.Mutex
-	swarmNextGossip time.Time
-	swarmNextLoaded bool
-	// swarmStreakMu guards the consecutive-failure streaks
-	// (signer to current run length). In-memory only: a
-	// restart forgets velocity but the ledger keeps every
-	// mark, so the trust floor still holds.
-	swarmStreakMu sync.Mutex
-	swarmStreak   map[string]int
-	// swarmCover is what peers warm for the swarm and which misses
-	// have been left to them (swarm_warm.go).
-	swarmCover swarmCoverage
-
 	// Trade ideas (tradeideas.go): the model client and the Meta API
 	// base, set in tests; production builds a timeout client per
 	// refresh and calls api.meta.ai.
@@ -255,9 +235,6 @@ func New(cfg Config) (*Application, error) {
 	}
 	if cfg.signUp.err != nil {
 		return nil, cfg.signUp.err
-	}
-	if cfg.swarm.err != nil {
-		return nil, cfg.swarm.err
 	}
 	if p := cfg.signUp; p.restricted() {
 		logging.Infof("evesynapse: new accounts are limited to %d listed character(s), %d corporation(s) and %d alliance(s)",
@@ -306,20 +283,18 @@ func New(cfg Config) (*Application, error) {
 		return nil, err
 	}
 
-	// The swarm's signing identity (swarm_identity.go): minted on
-	// first enable, sealed under the shared secret. Sharing stays
-	// off without it, and startup fails rather than sharing
-	// unsigned.
-	if cfg.swarm.enabled() {
-		id, err := loadSwarmIdentity(context.Background(), app.queries, cfg.swarm.secret)
-		if err != nil {
+	// Each module starts once the store is open; a module whose
+	// settings are wrong stops the start (the swarm refuses to share
+	// unsigned, for one).
+	for _, m := range registeredModules {
+		if m.Init == nil {
+			continue
+		}
+		if err := m.Init(app); err != nil {
 			dbConn.Close()
 			pool.Close()
 			return nil, err
 		}
-		app.swarmID = id
-		app.swarmCli = newSwarmClient(cfg.swarm.secret)
-		logging.Infof("evesynapse: shared cache enabled (%s)", cfg.swarm.mode)
 	}
 
 	// When each account was last seen, from before this start
@@ -469,13 +444,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		// What the Sync and Admin search boxes suggest while typing.
 		r.Get("/suggest", app.handleCharacterSuggest)
 		r.Post("/accounts/remove", app.handleAdminAccountRemove)
-		// Shared cache (swarm_pages.go): add, approve,
-		// exclude, re-admit and remove swarm members.
-		r.Post("/swarm/add", app.handleSwarmAddPeer)
-		r.Post("/swarm/approve", app.handleSwarmApprove)
-		r.Post("/swarm/exclude", app.handleSwarmExclude)
-		r.Post("/swarm/admit", app.handleSwarmAdmit)
-		r.Post("/swarm/remove", app.handleSwarmRemove)
 	})
 
 	r.Route("/corporations", func(r chi.Router) {
@@ -673,16 +641,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 			r.Post("/warm", app.handleSyncWarm)
 			r.Post("/sde", app.handleSyncSDE)
 		})
-	})
-
-	// The swarm's machine API (swarm_api.go): bearer-gated by the
-	// shared secret, dark (404) while sharing is off. No session
-	// middleware — instances are not browsers.
-	r.Route("/swarm", func(r chi.Router) {
-		r.Get("/members", app.handleSwarmMembers)
-		r.Post("/pull", app.handleSwarmPull)
-		r.Get("/warms", app.handleSwarmWarms)
-		r.Post("/seed/register", app.handleSwarmSeedRegister)
 	})
 
 	for _, m := range registeredModules {
@@ -1260,6 +1218,54 @@ func (app *Application) PutESI(ctx context.Context, token, path string, body any
 func (app *Application) PostESIPublic(ctx context.Context, path string, body, out any) error {
 	return app.esi.PostJSON(ctx, path, body, out)
 }
+
+func (app *Application) MarketFetchDue(ctx context.Context, kind string, gate time.Duration) bool {
+	return app.marketFetchDue(ctx, kind, gate)
+}
+
+func (app *Application) RecordMarketFetchAt(ctx context.Context, kind, state, detail string, at time.Time) {
+	app.recordMarketFetchAt(ctx, kind, state, detail, at)
+}
+
+func (app *Application) HistoryCandidates(ctx context.Context) ([]module.MarketKey, error) {
+	return app.historyCandidates(ctx)
+}
+
+func (app *Application) FetchMarketHistory(ctx context.Context, key module.MarketKey) ([]esi.MarketHistoryDay, error) {
+	return app.fetchMarketHistory(ctx, key)
+}
+
+func (app *Application) NoteStructureIDs(ctx context.Context, ids ...int64) {
+	app.noteStructureIDs(ctx, ids...)
+}
+
+func (app *Application) WantCorporation(ctx context.Context, id, closeness int64) error {
+	return app.wantCorporation(ctx, id, closeness)
+}
+
+func (app *Application) WantAlliance(ctx context.Context, id, closeness int64) error {
+	return app.wantAlliance(ctx, id, closeness)
+}
+
+func (app *Application) ESIGet(ctx context.Context, path string, out any) error {
+	return app.esi.Get(ctx, "", path, out)
+}
+
+func (app *Application) FetchStructure(ctx context.Context, ch db.Character, id int64) (esi.UniverseStructure, error) {
+	return app.esi.FetchStructure(ctx, ch, id)
+}
+
+func (app *Application) LearnTypeName(id int64, name string) { app.esi.LearnTypeName(id, name) }
+
+func (app *Application) ForgetTypeName(id int64) { app.esi.ForgetTypeName(id) }
+
+func (app *Application) MissingTypeNames(limit int) []int64 { return app.esi.MissingTypeNames(limit) }
+
+func (app *Application) NoteTypeNameMiss(id int64) { app.esi.NoteTypeNameMiss(id) }
+
+func (app *Application) PublicOrigin() string { return app.cfg.publicOrigin() }
+
+func (app *Application) RequireAdmin() func(http.Handler) http.Handler { return app.requireAdmin }
 
 // FitBuilder is the fit foundation over this application's stored state.
 func (app *Application) FitBuilder() *fitview.Builder { return app.fitBuilder() }

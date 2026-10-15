@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"evesynapse/internal/app/swarm"
 	"fmt"
 	"strings"
 	"testing"
@@ -23,7 +24,7 @@ import (
 //   - A miss nobody delivers is still B's to fetch once the grace has
 //     run out: deferring delays a fetch, never cancels it.
 func TestSwarmFirstWarming(t *testing.T) {
-	p := newSwarmPair(t, swarmOpen)
+	p := newSwarmPair(t, swarm.SwarmOpen)
 	ctx := context.Background()
 	now := time.Now().UTC()
 	const corpID, strandedID = int64(98000001), int64(98000002)
@@ -32,7 +33,7 @@ func TestSwarmFirstWarming(t *testing.T) {
 	}
 	p.stubA.corps = map[int64]string{corpID: truth("Warmed Corp")}
 	p.stubB.corps = map[int64]string{corpID: truth("Warmed Corp"), strandedID: truth("Stranded Corp")}
-	p.a.cfg.swarm.warms = parseSwarmWarm("corporation_record")
+	swarm.StateFor(p.a).Cfg.Warms = swarm.ParseSwarmWarm("corporation_record")
 	p.pinA(t)
 	for _, id := range []int64{corpID, strandedID} {
 		if err := p.b.queries.UpsertCorporationWant(ctx, db.UpsertCorporationWantParams{CorporationID: id, Priority: wantViewed}); err != nil {
@@ -41,8 +42,8 @@ func TestSwarmFirstWarming(t *testing.T) {
 	}
 
 	// B learns what A warms and leaves its misses to it.
-	p.b.swarmRefreshCoverage(ctx, now)
-	if !p.b.swarmCovered(swarmKindCorporation, now) {
+	swarm.StateFor(p.b).SwarmRefreshCoverage(ctx, now)
+	if !swarm.StateFor(p.b).SwarmCovered(swarm.SwarmKindCorporation, now) {
 		t.Fatal("B did not learn that A warms corporation records")
 	}
 	for _, id := range []int64{corpID, strandedID} {
@@ -55,7 +56,7 @@ func TestSwarmFirstWarming(t *testing.T) {
 	}
 
 	// The pull is A's demand: it queues the key for its own worker.
-	p.b.swarmFetchPhase(ctx, now)
+	swarm.StateFor(p.b).SwarmFetchPhase(ctx, now)
 	if rec, err := p.a.queries.GetCorporationRecord(ctx, corpID); err != nil || rec.State != orgStatePending {
 		t.Fatalf("A record after B's pull: %+v (%v), want a queued lookup", rec, err)
 	}
@@ -64,7 +65,7 @@ func TestSwarmFirstWarming(t *testing.T) {
 	}
 
 	// B's next pull brings it back; the trust pipeline applies it.
-	p.b.swarmFetchPhase(ctx, now)
+	swarm.StateFor(p.b).SwarmFetchPhase(ctx, now)
 	if got := p.spotRuns(t); got != 1 {
 		t.Fatalf("B applied %d entries, want 1", got)
 	}
@@ -76,11 +77,11 @@ func TestSwarmFirstWarming(t *testing.T) {
 
 	// Nobody delivers the other one: past the grace, B's own budget
 	// is the last resort.
-	later := now.Add(swarmWarmGrace + time.Minute)
+	later := now.Add(swarm.SwarmWarmGrace + time.Minute)
 	if settled, _ := p.b.drainCorporationRecord(ctx, strandedID, &fetchBudget{left: 10}, later); !settled {
 		t.Fatal("B never fell back to its own fetch after the grace")
 	}
 	if p.stubB.calls == spotCalls {
-		t.Fatal("B's fallback spent no ESI call")
+		t.Fatal("B's fallback spent no ESI swarm.Call")
 	}
 }

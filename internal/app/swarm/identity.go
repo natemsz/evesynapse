@@ -1,4 +1,4 @@
-package app
+package swarm
 
 // ---------------------------------------------------------------------------
 // Swarm identity and entry signatures (the paper: "every shared
@@ -44,49 +44,49 @@ import (
 // stops every sealed seed opening, which mints a fresh identity
 // rather than reusing a key that cannot be read.
 const (
-	swarmSeedPrefix = "sw:v1:"
-	swarmKDFSalt    = "evesynapse/swarm-seed/v1"
-	swarmKDFInfo    = "swarm entry signing"
+	SwarmSeedPrefix = "sw:v1:"
+	SwarmKDFSalt    = "evesynapse/swarm-seed/v1"
+	SwarmKDFInfo    = "swarm entry signing"
 )
 
-// swarmIdentity is this instance: its ID and its signing key.
-type swarmIdentity struct {
-	id      string
-	public  ed25519.PublicKey
-	private ed25519.PrivateKey
+// SwarmIdentity is this instance: its ID and its signing key.
+type SwarmIdentity struct {
+	ID      string
+	Public  ed25519.PublicKey
+	Private ed25519.PrivateKey
 }
 
-// publicString is the key as it travels in membership lists.
-func (id *swarmIdentity) publicString() string {
-	return base64.StdEncoding.EncodeToString(id.public)
+// PublicString is the key as it travels in membership lists.
+func (id *SwarmIdentity) PublicString() string {
+	return base64.StdEncoding.EncodeToString(id.Public)
 }
 
-// loadSwarmIdentity reads this instance's identity, minting and
+// LoadSwarmIdentity reads this instance's identity, minting and
 // storing one on first enable. A seal that stops opening (the
 // secret changed) mints a fresh identity: the old key is gone
 // with the old secret, and signing on with an unreadable key is
 // impossible by construction.
-func loadSwarmIdentity(ctx context.Context, q *db.Queries, secret string) (*swarmIdentity, error) {
+func LoadSwarmIdentity(ctx context.Context, q *db.Queries, secret string) (*SwarmIdentity, error) {
 	if row, err := q.GetSwarmIdentity(ctx); err == nil {
-		if id, ok := openSwarmIdentity(row.InstanceID, row.PublicKey, row.SealedSeed, secret); ok {
+		if id, ok := OpenSwarmIdentity(row.InstanceID, row.PublicKey, row.SealedSeed, secret); ok {
 			return id, nil
 		}
 		logging.Warnf("swarm: the sealed signing key does not open with the configured secret; minting a fresh instance identity")
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("swarm: read identity: %w", err)
 	}
-	id, err := mintSwarmIdentity()
+	id, err := MintSwarmIdentity()
 	if err != nil {
 		return nil, err
 	}
-	sealed, err := sealSwarmSeed(id.private.Seed(), secret)
+	sealed, err := SealSwarmSeed(id.Private.Seed(), secret)
 	if err != nil {
 		return nil, err
 	}
 	now := time.Now().UTC()
 	if err := q.PutSwarmIdentity(ctx, db.PutSwarmIdentityParams{
-		InstanceID: id.id,
-		PublicKey:  id.publicString(),
+		InstanceID: id.ID,
+		PublicKey:  id.PublicString(),
 		SealedSeed: sealed,
 		CreatedAt:  now,
 	}); err != nil {
@@ -95,8 +95,8 @@ func loadSwarmIdentity(ctx context.Context, q *db.Queries, secret string) (*swar
 	return id, nil
 }
 
-// mintSwarmIdentity generates one fresh instance ID and keypair.
-func mintSwarmIdentity() (*swarmIdentity, error) {
+// MintSwarmIdentity generates one fresh instance ID and keypair.
+func MintSwarmIdentity() (*SwarmIdentity, error) {
 	var raw [16]byte
 	if _, err := rand.Read(raw[:]); err != nil {
 		return nil, fmt.Errorf("swarm: mint identity: %w", err)
@@ -105,17 +105,17 @@ func mintSwarmIdentity() (*swarmIdentity, error) {
 	if err != nil {
 		return nil, fmt.Errorf("swarm: mint identity: %w", err)
 	}
-	return &swarmIdentity{
-		id:      base64.RawURLEncoding.EncodeToString(raw[:]),
-		public:  pub,
-		private: priv,
+	return &SwarmIdentity{
+		ID:      base64.RawURLEncoding.EncodeToString(raw[:]),
+		Public:  pub,
+		Private: priv,
 	}, nil
 }
 
-// openSwarmIdentity unseals a stored identity. ok is false on any
+// OpenSwarmIdentity unseals a stored identity. ok is false on any
 // failure: a wrong key, a wrong secret, or a malformed row all
 // refuse identically, with nothing about which check failed.
-func openSwarmIdentity(instanceID, publicKey, sealed, secret string) (id *swarmIdentity, ok bool) {
+func OpenSwarmIdentity(instanceID, publicKey, sealed, secret string) (id *SwarmIdentity, ok bool) {
 	if instanceID == "" {
 		return nil, false
 	}
@@ -123,7 +123,7 @@ func openSwarmIdentity(instanceID, publicKey, sealed, secret string) (id *swarmI
 	if err != nil || len(pub) != ed25519.PublicKeySize {
 		return nil, false
 	}
-	seed, err := unsealSwarmSeed(sealed, secret)
+	seed, err := UnsealSwarmSeed(sealed, secret)
 	if err != nil || len(seed) != ed25519.SeedSize {
 		return nil, false
 	}
@@ -131,19 +131,19 @@ func openSwarmIdentity(instanceID, publicKey, sealed, secret string) (id *swarmI
 	if !ed25519.PublicKey(pub).Equal(priv.Public()) {
 		return nil, false
 	}
-	return &swarmIdentity{id: instanceID, public: pub, private: priv}, true
+	return &SwarmIdentity{ID: instanceID, Public: pub, Private: priv}, true
 }
 
-// swarmSealKey derives the seed-sealing key from the shared
+// SwarmSealKey derives the seed-sealing key from the shared
 // secret (HKDF-SHA-256, the token box's construction with the
 // swarm's own salt and label).
-func swarmSealKey(secret string) ([]byte, error) {
-	return hkdf.Key(sha256.New, []byte(secret), []byte(swarmKDFSalt), swarmKDFInfo, 32)
+func SwarmSealKey(secret string) ([]byte, error) {
+	return hkdf.Key(sha256.New, []byte(secret), []byte(SwarmKDFSalt), SwarmKDFInfo, 32)
 }
 
-// sealSwarmSeed seals an Ed25519 seed under the shared secret.
-func sealSwarmSeed(seed []byte, secret string) (string, error) {
-	key, err := swarmSealKey(secret)
+// SealSwarmSeed seals an Ed25519 seed under the shared secret.
+func SealSwarmSeed(seed []byte, secret string) (string, error) {
+	key, err := SwarmSealKey(secret)
 	if err != nil {
 		return "", err
 	}
@@ -156,14 +156,14 @@ func sealSwarmSeed(seed []byte, secret string) (string, error) {
 		return "", fmt.Errorf("swarm: seal seed: %w", err)
 	}
 	sealed := aead.Seal(nonce, nonce, seed, nil)
-	return swarmSeedPrefix + base64.StdEncoding.EncodeToString(sealed), nil
+	return SwarmSeedPrefix + base64.StdEncoding.EncodeToString(sealed), nil
 }
 
-// unsealSwarmSeed opens a sealed seed. Any failure is one error:
+// UnsealSwarmSeed opens a sealed seed. Any failure is one error:
 // callers must not learn whether the prefix, the encoding, the
 // secret, or the key was wrong.
-func unsealSwarmSeed(sealed, secret string) ([]byte, error) {
-	rest, ok := strings.CutPrefix(sealed, swarmSeedPrefix)
+func UnsealSwarmSeed(sealed, secret string) ([]byte, error) {
+	rest, ok := strings.CutPrefix(sealed, SwarmSeedPrefix)
 	if !ok {
 		return nil, errors.New("swarm: sealed seed does not open")
 	}
@@ -171,7 +171,7 @@ func unsealSwarmSeed(sealed, secret string) ([]byte, error) {
 	if err != nil {
 		return nil, errors.New("swarm: sealed seed does not open")
 	}
-	key, err := swarmSealKey(secret)
+	key, err := SwarmSealKey(secret)
 	if err != nil {
 		return nil, errors.New("swarm: sealed seed does not open")
 	}
@@ -189,10 +189,10 @@ func unsealSwarmSeed(sealed, secret string) ([]byte, error) {
 	return seed, nil
 }
 
-// swarmEnvelope is the canonical signed document: struct field
+// SwarmEnvelope is the canonical signed document: struct field
 // order makes encoding/json deterministic, so signer and
 // verifier hash the same bytes without a canonicalizer.
-type swarmEnvelope struct {
+type SwarmEnvelope struct {
 	V         int    `json:"v"`
 	Kind      string `json:"kind"`
 	Key       string `json:"key"`
@@ -201,9 +201,9 @@ type swarmEnvelope struct {
 	Signer    string `json:"signer"`
 }
 
-// swarmSignedEntry is an envelope with its signature, as it
+// SwarmSignedEntry is an envelope with its signature, as it
 // travels over the swarm API and sits in staging.
-type swarmSignedEntry struct {
+type SwarmSignedEntry struct {
 	Kind      string `json:"kind"`
 	Key       string `json:"key"`
 	Payload   string `json:"payload"`
@@ -212,33 +212,33 @@ type swarmSignedEntry struct {
 	Signature string `json:"signature"`
 }
 
-// signSwarmEntry signs one entry. Payload size is capped: a peer
+// SignSwarmEntry signs one entry. Payload size is capped: a peer
 // asked to store megabytes per entry could fill the staging
 // table one entry at a time.
-const maxSwarmPayloadBytes = 256 * 1024
+const MaxSwarmPayloadBytes = 256 * 1024
 
-func signSwarmEntry(id *swarmIdentity, instanceID, kind, key, payload string, fetchedAt time.Time) (swarmSignedEntry, error) {
-	entry := swarmSignedEntry{Kind: kind, Key: key, Payload: payload, FetchedAt: fetchedAt.UTC().Unix(), Signer: instanceID}
-	if len(payload) > maxSwarmPayloadBytes {
-		return swarmSignedEntry{}, fmt.Errorf("swarm: sign %s %s: payload %d bytes exceeds %d", kind, key, len(payload), maxSwarmPayloadBytes)
+func SignSwarmEntry(id *SwarmIdentity, instanceID, kind, key, payload string, fetchedAt time.Time) (SwarmSignedEntry, error) {
+	entry := SwarmSignedEntry{Kind: kind, Key: key, Payload: payload, FetchedAt: fetchedAt.UTC().Unix(), Signer: instanceID}
+	if len(payload) > MaxSwarmPayloadBytes {
+		return SwarmSignedEntry{}, fmt.Errorf("swarm: sign %s %s: payload %d bytes exceeds %d", kind, key, len(payload), MaxSwarmPayloadBytes)
 	}
-	doc, err := json.Marshal(swarmEnvelope{V: 1, Kind: kind, Key: key, Payload: payload, FetchedAt: entry.FetchedAt, Signer: instanceID})
+	doc, err := json.Marshal(SwarmEnvelope{V: 1, Kind: kind, Key: key, Payload: payload, FetchedAt: entry.FetchedAt, Signer: instanceID})
 	if err != nil {
-		return swarmSignedEntry{}, fmt.Errorf("swarm: sign %s %s: %w", kind, key, err)
+		return SwarmSignedEntry{}, fmt.Errorf("swarm: sign %s %s: %w", kind, key, err)
 	}
-	entry.Signature = base64.StdEncoding.EncodeToString(ed25519.Sign(id.private, doc))
+	entry.Signature = base64.StdEncoding.EncodeToString(ed25519.Sign(id.Private, doc))
 	return entry, nil
 }
 
-// verifySwarmEntry checks one entry against the signer's pinned
+// VerifySwarmEntry checks one entry against the signer's pinned
 // public key. Every field the entry carries is covered; every
 // failure is false, with no reason given (the reason is a
-// logging decision at the call site, never a parsing oracle).
-func verifySwarmEntry(entry swarmSignedEntry, publicKey string) bool {
+// logging decision at the Call site, never a parsing oracle).
+func VerifySwarmEntry(entry SwarmSignedEntry, publicKey string) bool {
 	if entry.Kind == "" || entry.Key == "" || entry.Signer == "" {
 		return false
 	}
-	if len(entry.Payload) > maxSwarmPayloadBytes {
+	if len(entry.Payload) > MaxSwarmPayloadBytes {
 		return false
 	}
 	pub, err := base64.StdEncoding.DecodeString(publicKey)
@@ -249,14 +249,14 @@ func verifySwarmEntry(entry swarmSignedEntry, publicKey string) bool {
 	if err != nil || len(sig) != ed25519.SignatureSize {
 		return false
 	}
-	doc, err := json.Marshal(swarmEnvelope{V: 1, Kind: entry.Kind, Key: entry.Key, Payload: entry.Payload, FetchedAt: entry.FetchedAt, Signer: entry.Signer})
+	doc, err := json.Marshal(SwarmEnvelope{V: 1, Kind: entry.Kind, Key: entry.Key, Payload: entry.Payload, FetchedAt: entry.FetchedAt, Signer: entry.Signer})
 	if err != nil {
 		return false
 	}
 	return ed25519.Verify(pub, doc, sig)
 }
 
-// swarmMemberMessage is what a member signs to own its address:
+// SwarmMemberMessage is what a member signs to own its address:
 // "member\n" + instance ID + "\n" + base URL + "\n" + the unix
 // time it was issued, in decimal. The issue time is inside the
 // signature so that an old tuple cannot be passed off as current:
@@ -265,20 +265,20 @@ func verifySwarmEntry(entry swarmSignedEntry, publicKey string) bool {
 // earlier issue times, so clocks need not agree across instances.
 // The seed worker builds the same bytes; changing them is a flag
 // day for every instance and seed.
-func swarmMemberMessage(instanceID, baseURL string, issuedAt int64) []byte {
+func SwarmMemberMessage(instanceID, baseURL string, issuedAt int64) []byte {
 	return []byte("member\n" + instanceID + "\n" + baseURL + "\n" + strconv.FormatInt(issuedAt, 10))
 }
 
-// signSwarmMember signs this instance's own address as of issuedAt.
-func signSwarmMember(id *swarmIdentity, baseURL string, issuedAt int64) string {
-	return base64.StdEncoding.EncodeToString(ed25519.Sign(id.private, swarmMemberMessage(id.id, baseURL, issuedAt)))
+// SignSwarmMember signs this instance's own address as of issuedAt.
+func SignSwarmMember(id *SwarmIdentity, baseURL string, issuedAt int64) string {
+	return base64.StdEncoding.EncodeToString(ed25519.Sign(id.Private, SwarmMemberMessage(id.ID, baseURL, issuedAt)))
 }
 
-// verifySwarmMember checks a member tuple's address signature
+// VerifySwarmMember checks a member tuple's address signature
 // against the public key in the same tuple. Whether that key is
 // the one pinned for the instance, and whether the tuple is newer
 // than the one held, are the caller's questions.
-func verifySwarmMember(m swarmMember) bool {
+func VerifySwarmMember(m SwarmMember) bool {
 	pub, err := base64.StdEncoding.DecodeString(m.PublicKey)
 	if err != nil || len(pub) != ed25519.PublicKeySize {
 		return false
@@ -287,5 +287,5 @@ func verifySwarmMember(m swarmMember) bool {
 	if err != nil || len(sig) != ed25519.SignatureSize {
 		return false
 	}
-	return ed25519.Verify(pub, swarmMemberMessage(m.InstanceID, m.BaseURL, m.IssuedAt), sig)
+	return ed25519.Verify(pub, SwarmMemberMessage(m.InstanceID, m.BaseURL, m.IssuedAt), sig)
 }

@@ -7,6 +7,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"evesynapse/internal/app/swarm"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,34 +19,34 @@ import (
 
 const swarmTestSecret = "test-shared-secret-0123456789abcdef"
 
-// swarmTestApp builds a fixture app with sharing enabled in
+// swarmTestApp builds a fixture app with sharing swarm.Enabled in
 // open mode, holding a fresh identity.
 func swarmTestApp(t *testing.T) *Application {
 	t.Helper()
 	transport := &countingTransport{}
 	app, _, _ := buildCorpTestApp(t, transport)
-	app.cfg.swarm = swarmConfig{mode: swarmOpen, secret: swarmTestSecret, gossipHours: defaultSwarmGossipHours}
-	id, err := mintSwarmIdentity()
+	swarm.StateFor(app).Cfg = swarm.SwarmConfig{Mode: swarm.SwarmOpen, Secret: swarmTestSecret, GossipHours: swarm.DefaultSwarmGossipHours}
+	id, err := swarm.MintSwarmIdentity()
 	if err != nil {
 		t.Fatalf("mint identity: %v", err)
 	}
-	id.id = "test-local"
-	app.swarmID = id
-	app.swarmCli = newSwarmClient(swarmTestSecret)
+	id.ID = "test-local"
+	swarm.StateFor(app).SwarmID = id
+	swarm.StateFor(app).SwarmCli = swarm.NewSwarmClient(swarmTestSecret)
 	return app
 }
 
 // swarmTestPeer pins a peer identity the tests sign with.
-func swarmTestPeer(t *testing.T, app *Application, id string) *swarmIdentity {
+func swarmTestPeer(t *testing.T, app *Application, id string) *swarm.SwarmIdentity {
 	t.Helper()
-	kp, err := mintSwarmIdentity()
+	kp, err := swarm.MintSwarmIdentity()
 	if err != nil {
 		t.Fatalf("mint peer: %v", err)
 	}
-	kp.id = id
+	kp.ID = id
 	now := time.Now().UTC()
 	if _, err := app.queries.UpsertSwarmPeer(context.Background(), db.UpsertSwarmPeerParams{
-		InstanceID: id, BaseUrl: "http://127.0.0.1:9", PublicKey: kp.publicString(),
+		InstanceID: id, BaseUrl: "http://127.0.0.1:9", PublicKey: kp.PublicString(),
 		Source: "manual", FirstSeen: now,
 	}); err != nil {
 		t.Fatalf("upsert peer: %v", err)
@@ -116,17 +117,17 @@ func TestSwarmAPIAuth(t *testing.T) {
 		t.Fatalf("members with bearer: status %d, want 200", code)
 	}
 	var decoded struct {
-		Entry swarmSignedEntry `json:"entry"`
+		Entry swarm.SwarmSignedEntry `json:"entry"`
 	}
 	dec := json.NewDecoder(strings.NewReader(body))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&decoded); err != nil {
 		t.Fatalf("members body: %v", err)
 	}
-	if decoded.Entry.Kind != swarmKindMembers || decoded.Entry.Signer != "test-local" {
+	if decoded.Entry.Kind != swarm.SwarmKindMembers || decoded.Entry.Signer != "test-local" {
 		t.Fatalf("members entry: kind %q signer %q", decoded.Entry.Kind, decoded.Entry.Signer)
 	}
-	if !verifySwarmEntry(decoded.Entry, app.swarmID.publicString()) {
+	if !swarm.VerifySwarmEntry(decoded.Entry, swarm.StateFor(app).SwarmID.PublicString()) {
 		t.Fatalf("members entry does not verify")
 	}
 }
@@ -154,15 +155,15 @@ func TestSwarmMembersSealed(t *testing.T) {
 		t.Fatalf("member list leaks the peer address in cleartext")
 	}
 	var decoded struct {
-		Entry swarmSignedEntry `json:"entry"`
+		Entry swarm.SwarmSignedEntry `json:"entry"`
 	}
 	if err := json.Unmarshal([]byte(body), &decoded); err != nil {
 		t.Fatalf("members body: %v", err)
 	}
-	if !verifySwarmEntry(decoded.Entry, app.swarmID.publicString()) {
+	if !swarm.VerifySwarmEntry(decoded.Entry, swarm.StateFor(app).SwarmID.PublicString()) {
 		t.Fatalf("sealed member list does not verify")
 	}
-	opened, err := openSwarmMembers(decoded.Entry.Payload, swarmTestSecret)
+	opened, err := swarm.OpenSwarmMembers(decoded.Entry.Payload, swarmTestSecret)
 	if err != nil {
 		t.Fatalf("member list does not open under the secret: %v", err)
 	}
@@ -170,7 +171,7 @@ func TestSwarmMembersSealed(t *testing.T) {
 		t.Fatalf("opened member list lacks the peer: %s", opened)
 	}
 	// ...and stays shut under any other secret.
-	if _, err := openSwarmMembers(decoded.Entry.Payload, strings.Repeat("x", 32)); err == nil {
+	if _, err := swarm.OpenSwarmMembers(decoded.Entry.Payload, strings.Repeat("x", 32)); err == nil {
 		t.Fatalf("member list opened under the wrong secret")
 	}
 }
@@ -188,7 +189,7 @@ func TestSwarmPullServesHeldNames(t *testing.T) {
 		t.Fatalf("pull: status %d, want 200", code)
 	}
 	var decoded struct {
-		Entries []swarmSignedEntry `json:"entries"`
+		Entries []swarm.SwarmSignedEntry `json:"entries"`
 	}
 	if err := json.Unmarshal([]byte(body), &decoded); err != nil {
 		t.Fatalf("pull body: %v", err)
@@ -199,7 +200,7 @@ func TestSwarmPullServesHeldNames(t *testing.T) {
 		t.Fatalf("pull entries: %d, want 1", len(decoded.Entries))
 	}
 	entry := decoded.Entries[0]
-	if !verifySwarmEntry(entry, app.swarmID.publicString()) {
+	if !swarm.VerifySwarmEntry(entry, swarm.StateFor(app).SwarmID.PublicString()) {
 		t.Fatalf("pulled entry does not verify")
 	}
 	if !strings.Contains(entry.Payload, "Tritanium") {
@@ -216,11 +217,11 @@ func TestSwarmStagingGate(t *testing.T) {
 	peer := swarmTestPeer(t, app, "peer-a")
 	now := time.Now().UTC()
 
-	entry, err := signSwarmEntry(peer, "peer-a", swarmKindTypeName, "34", `{"type_id":34,"name":"Tritanium"}`, now)
+	entry, err := swarm.SignSwarmEntry(peer, "peer-a", swarm.SwarmKindTypeName, "34", `{"type_id":34,"name":"Tritanium"}`, now)
 	if err != nil {
 		t.Fatalf("sign: %v", err)
 	}
-	if err := app.stageSwarmEntry(ctx, entry, "peer-a", now); err != nil {
+	if err := swarm.StateFor(app).StageSwarmEntry(ctx, entry, "peer-a", now); err != nil {
 		t.Fatalf("stage good entry: %v", err)
 	}
 	rows, err := app.queries.ListUncheckedStaging(ctx, 10)
@@ -231,26 +232,26 @@ func TestSwarmStagingGate(t *testing.T) {
 	// Unknown signer, served by peer-a: no pinned key, no
 	// stage — and the serving peer is at fault, not the named
 	// stranger (naming someone else must never frame them).
-	other, err := mintSwarmIdentity()
+	other, err := swarm.MintSwarmIdentity()
 	if err != nil {
 		t.Fatalf("mint other: %v", err)
 	}
-	foreign, err := signSwarmEntry(other, "peer-evil", swarmKindTypeName, "35", `{"type_id":35,"name":"Pyroxeres"}`, now)
+	foreign, err := swarm.SignSwarmEntry(other, "peer-evil", swarm.SwarmKindTypeName, "35", `{"type_id":35,"name":"Pyroxeres"}`, now)
 	if err != nil {
 		t.Fatalf("sign foreign: %v", err)
 	}
-	wantStageRefused(t, app.stageSwarmEntry(ctx, foreign, "peer-a", now), "unknown signer")
+	wantStageRefused(t, swarm.StateFor(app).StageSwarmEntry(ctx, foreign, "peer-a", now), "unknown signer")
 	if _, err := app.queries.GetSwarmPeer(ctx, "peer-evil"); err == nil {
 		t.Fatalf("the named stranger was filed as a peer")
 	}
 
 	// Wrong key: another instance's signature under peer-a's
 	// name, served by peer-a — peer-a's ledger takes it.
-	forged, err := signSwarmEntry(other, "peer-a", swarmKindTypeName, "36", `{"type_id":36,"name":"Mexallon"}`, now)
+	forged, err := swarm.SignSwarmEntry(other, "peer-a", swarm.SwarmKindTypeName, "36", `{"type_id":36,"name":"Mexallon"}`, now)
 	if err != nil {
 		t.Fatalf("sign forged: %v", err)
 	}
-	wantStageRefused(t, app.stageSwarmEntry(ctx, forged, "peer-a", now), "signature does not verify")
+	wantStageRefused(t, swarm.StateFor(app).StageSwarmEntry(ctx, forged, "peer-a", now), "signature does not verify")
 	got, err := app.queries.GetSwarmPeer(ctx, "peer-a")
 	if err != nil {
 		t.Fatalf("read peer: %v", err)
@@ -262,11 +263,11 @@ func TestSwarmStagingGate(t *testing.T) {
 	// Valid signature, lying content (payload names another
 	// type): staged nowhere; the signer proved authorship, so
 	// the signer takes this one.
-	mismatched, err := signSwarmEntry(peer, "peer-a", swarmKindTypeName, "34", `{"type_id":99,"name":"Tritanium"}`, now)
+	mismatched, err := swarm.SignSwarmEntry(peer, "peer-a", swarm.SwarmKindTypeName, "34", `{"type_id":99,"name":"Tritanium"}`, now)
 	if err != nil {
 		t.Fatalf("sign mismatched: %v", err)
 	}
-	wantStageRefused(t, app.stageSwarmEntry(ctx, mismatched, "peer-a", now), "payload names another type")
+	wantStageRefused(t, swarm.StateFor(app).StageSwarmEntry(ctx, mismatched, "peer-a", now), "payload names another type")
 	got, err = app.queries.GetSwarmPeer(ctx, "peer-a")
 	if err != nil || got.BadChecks != 3 {
 		t.Fatalf("peer-a bad checks: %+v err %v, want 3", got, err)
@@ -281,21 +282,21 @@ func TestSwarmAutoExclude(t *testing.T) {
 	app := swarmTestApp(t)
 	ctx := context.Background()
 	swarmTestPeer(t, app, "peer-liar")
-	for i := 0; i < swarmTrustMinChecks; i++ {
-		app.countSwarmCheck(ctx, "peer-liar", false)
+	for i := 0; i < swarm.SwarmTrustMinChecks; i++ {
+		swarm.StateFor(app).CountSwarmCheck(ctx, "peer-liar", false)
 	}
 	got, err := app.queries.GetSwarmPeer(ctx, "peer-liar")
 	if err != nil {
 		t.Fatalf("read peer: %v", err)
 	}
 	if !got.Excluded {
-		t.Fatalf("sustained liar not excluded after %d bad checks", swarmTrustMinChecks)
+		t.Fatalf("sustained liar not excluded after %d bad checks", swarm.SwarmTrustMinChecks)
 	}
 	if !strings.Contains(got.ExcludeNote, "auto:") {
 		t.Fatalf("exclude note %q lacks the auto marker", got.ExcludeNote)
 	}
 	// Excluded peers leave the pull set.
-	pull, err := app.queries.ListSwarmPullPeers(ctx, time.Now().Add(-swarmServesWindow))
+	pull, err := app.queries.ListSwarmPullPeers(ctx, time.Now().Add(-swarm.SwarmServesWindow))
 	if err != nil {
 		t.Fatalf("pull peers: %v", err)
 	}
@@ -310,8 +311,8 @@ func TestSwarmGoodRecordNeverExcludes(t *testing.T) {
 	app := swarmTestApp(t)
 	ctx := context.Background()
 	swarmTestPeer(t, app, "peer-good")
-	for i := 0; i < 3*swarmTrustMinChecks; i++ {
-		app.countSwarmCheck(ctx, "peer-good", true)
+	for i := 0; i < 3*swarm.SwarmTrustMinChecks; i++ {
+		swarm.StateFor(app).CountSwarmCheck(ctx, "peer-good", true)
 	}
 	got, err := app.queries.GetSwarmPeer(ctx, "peer-good")
 	if err != nil {
@@ -323,13 +324,13 @@ func TestSwarmGoodRecordNeverExcludes(t *testing.T) {
 	// 30 good checks: (30+9)/(30+10) = 0.975 — the prior
 	// keeps a good peer near the top without ever calling it
 	// perfect.
-	if trust := swarmTrust(got.GoodChecks, got.BadChecks); trust < 0.975 {
+	if trust := swarm.SwarmTrust(got.GoodChecks, got.BadChecks); trust < 0.975 {
 		t.Fatalf("good peer trust %.3f, want >= 0.975", trust)
 	}
 	// One unlucky check does not exile: new peers start near
 	// the top and a single failure barely moves them.
 	swarmTestPeer(t, app, "peer-new")
-	app.countSwarmCheck(ctx, "peer-new", false)
+	swarm.StateFor(app).CountSwarmCheck(ctx, "peer-new", false)
 	got, err = app.queries.GetSwarmPeer(ctx, "peer-new")
 	if err != nil {
 		t.Fatalf("read peer: %v", err)
@@ -347,7 +348,7 @@ func TestSwarmBaseURLRule(t *testing.T) {
 		"http://localhost:8080/",
 		"http://[::1]:8080/",
 	} {
-		if !validSwarmBaseURL(raw) {
+		if !swarm.ValidSwarmBaseURL(raw) {
 			t.Fatalf("valid URL refused: %q", raw)
 		}
 	}
@@ -359,7 +360,7 @@ func TestSwarmBaseURLRule(t *testing.T) {
 		"ftp://swarm.example.org/",
 		"gopher://swarm.example.org/",
 	} {
-		if validSwarmBaseURL(raw) {
+		if swarm.ValidSwarmBaseURL(raw) {
 			t.Fatalf("unsafe URL dialable: %q", raw)
 		}
 	}
@@ -368,14 +369,14 @@ func TestSwarmBaseURLRule(t *testing.T) {
 func TestSwarmServeMissesWhenEmpty(t *testing.T) {
 	app := swarmTestApp(t)
 	ctx := context.Background()
-	for _, k := range []swarmPullKey{
-		{Kind: swarmKindHistory, Key: "10000002/34"},
-		{Kind: swarmKindTypeName, Key: "34"},
-		{Kind: swarmKindCorporation, Key: "98000001"},
-		{Kind: swarmKindAlliance, Key: "99000001"},
-		{Kind: swarmKindStructure, Key: "1044752365771"},
+	for _, k := range []swarm.SwarmPullKey{
+		{Kind: swarm.SwarmKindHistory, Key: "10000002/34"},
+		{Kind: swarm.SwarmKindTypeName, Key: "34"},
+		{Kind: swarm.SwarmKindCorporation, Key: "98000001"},
+		{Kind: swarm.SwarmKindAlliance, Key: "99000001"},
+		{Kind: swarm.SwarmKindStructure, Key: "1044752365771"},
 	} {
-		if _, _, ok := app.serveSwarmKey(ctx, k.Kind, k.Key); ok {
+		if _, _, ok := swarm.StateFor(app).ServeSwarmKey(ctx, k.Kind, k.Key); ok {
 			t.Fatalf("served %s %s from empty tables", k.Kind, k.Key)
 		}
 	}
@@ -384,11 +385,11 @@ func TestSwarmServeMissesWhenEmpty(t *testing.T) {
 func TestSwarmGossipDue(t *testing.T) {
 	app := swarmTestApp(t)
 	ctx := context.Background()
-	if !app.swarmGossipDue(ctx, time.Now().UTC()) {
+	if !swarm.StateFor(app).SwarmGossipDue(ctx, time.Now().UTC()) {
 		t.Fatalf("first run: gossip not due")
 	}
-	app.swarmGossipDone(ctx, time.Now().UTC())
-	if app.swarmGossipDue(ctx, time.Now().UTC()) {
+	swarm.StateFor(app).SwarmGossipDone(ctx, time.Now().UTC())
+	if swarm.StateFor(app).SwarmGossipDue(ctx, time.Now().UTC()) {
 		t.Fatalf("just gossiped: gossip due again")
 	}
 }
@@ -410,7 +411,7 @@ func TestSwarmCheckDraw(t *testing.T) {
 		{1.0, 50, 0.049, true}, {1.0, 50, 0.051, false}, // floor: five percent
 		{0.0, 50, 0.499, true}, {0.0, 50, 0.5, false}, // cap: half
 	} {
-		if got := swarmCheckDraw(tc.trust, tc.total, tc.r); got != tc.want {
+		if got := swarm.SwarmCheckDraw(tc.trust, tc.total, tc.r); got != tc.want {
 			t.Errorf("draw(%v, %d, %v) = %v, want %v", tc.trust, tc.total, tc.r, got, tc.want)
 		}
 	}
@@ -429,7 +430,7 @@ func TestSwarmTrustStreakDecaySuppress(t *testing.T) {
 
 	swarmTestPeer(t, app, "peer-s1")
 	for i := 0; i < 3; i++ {
-		app.countSwarmCheck(ctx, "peer-s1", false)
+		swarm.StateFor(app).CountSwarmCheck(ctx, "peer-s1", false)
 	}
 	got, err := app.queries.GetSwarmPeer(ctx, "peer-s1")
 	if err != nil || got.BadChecks != 7 {
@@ -442,8 +443,8 @@ func TestSwarmTrustStreakDecaySuppress(t *testing.T) {
 	if err != nil || got.BadChecks != 6 {
 		t.Fatalf("decay: bad %d, want 6 (7*7/8)", got.BadChecks)
 	}
-	app.countSwarmCheck(ctx, "peer-s1", true)
-	app.countSwarmCheck(ctx, "peer-s1", false)
+	swarm.StateFor(app).CountSwarmCheck(ctx, "peer-s1", true)
+	swarm.StateFor(app).CountSwarmCheck(ctx, "peer-s1", false)
 	got, err = app.queries.GetSwarmPeer(ctx, "peer-s1")
 	if err != nil || got.BadChecks != 7 || got.GoodChecks != 1 {
 		t.Fatalf("reset: %+v, want bad 7 good 1", got)
@@ -451,10 +452,10 @@ func TestSwarmTrustStreakDecaySuppress(t *testing.T) {
 
 	swarmTestPeer(t, app, "peer-s2")
 	for i := 0; i < 30; i++ {
-		app.countSwarmCheck(ctx, "peer-s2", true)
+		swarm.StateFor(app).CountSwarmCheck(ctx, "peer-s2", true)
 	}
 	for i := 0; i < 5; i++ {
-		app.countSwarmCheck(ctx, "peer-s2", false)
+		swarm.StateFor(app).CountSwarmCheck(ctx, "peer-s2", false)
 	}
 	got, err = app.queries.GetSwarmPeer(ctx, "peer-s2")
 	if err != nil {
@@ -466,25 +467,25 @@ func TestSwarmTrustStreakDecaySuppress(t *testing.T) {
 
 	kx := swarmTestPeer(t, app, "peer-x")
 	payload := `{"region_id":10000002,"type_id":34,"days":[{"date":"2026-10-01","average":5.5,"highest":6.0,"lowest":5.0,"volume":100,"order_count":10}]}`
-	fresh, err := signSwarmEntry(kx, "peer-x", swarmKindHistory, "10000002/34", payload, now)
+	fresh, err := swarm.SignSwarmEntry(kx, "peer-x", swarm.SwarmKindHistory, "10000002/34", payload, now)
 	if err != nil {
 		t.Fatalf("sign: %v", err)
 	}
-	if err := app.stageSwarmEntry(ctx, fresh, "peer-x", now); err != nil {
+	if err := swarm.StateFor(app).StageSwarmEntry(ctx, fresh, "peer-x", now); err != nil {
 		t.Fatalf("stage: %v", err)
 	}
-	if !app.swarmSuppressFetch(ctx, swarmKindHistory, "10000002/34", now) {
+	if !swarm.StateFor(app).SwarmSuppressFetch(ctx, swarm.SwarmKindHistory, "10000002/34", now) {
 		t.Fatal("fresh staged row does not suppress its refetch")
 	}
 	stalePayload := `{"region_id":10000002,"type_id":35,"days":[{"date":"2026-10-01","average":5.5,"highest":6.0,"lowest":5.0,"volume":100,"order_count":10}]}`
-	stale, err := signSwarmEntry(kx, "peer-x", swarmKindHistory, "10000002/35", stalePayload, now.Add(-time.Hour))
+	stale, err := swarm.SignSwarmEntry(kx, "peer-x", swarm.SwarmKindHistory, "10000002/35", stalePayload, now.Add(-time.Hour))
 	if err != nil {
 		t.Fatalf("sign: %v", err)
 	}
-	if err := app.stageSwarmEntry(ctx, stale, "peer-x", now.Add(-time.Hour)); err != nil {
+	if err := swarm.StateFor(app).StageSwarmEntry(ctx, stale, "peer-x", now.Add(-time.Hour)); err != nil {
 		t.Fatalf("stage: %v", err)
 	}
-	if app.swarmSuppressFetch(ctx, swarmKindHistory, "10000002/35", now) {
+	if swarm.StateFor(app).SwarmSuppressFetch(ctx, swarm.SwarmKindHistory, "10000002/35", now) {
 		t.Fatal("hour-old staged row still suppresses its refetch")
 	}
 
@@ -492,7 +493,7 @@ func TestSwarmTrustStreakDecaySuppress(t *testing.T) {
 	// truncates to zero: deliberate, not an accident of the
 	// integer math, so the cliff is pinned here.
 	swarmTestPeer(t, app, "peer-s3")
-	app.countSwarmCheck(ctx, "peer-s3", false)
+	swarm.StateFor(app).CountSwarmCheck(ctx, "peer-s3", false)
 	if err := app.queries.DecaySwarmBadChecks(ctx); err != nil {
 		t.Fatalf("decay: %v", err)
 	}
@@ -512,36 +513,36 @@ func TestSwarmTrustEarnedAppliesUnledgered(t *testing.T) {
 	ctx := context.Background()
 	transport := &countingTransport{}
 	app, _, _ := buildCorpTestApp(t, transport)
-	app.cfg.swarm = swarmConfig{mode: swarmOpen, secret: swarmTestSecret, gossipHours: defaultSwarmGossipHours}
-	id, err := mintSwarmIdentity()
+	swarm.StateFor(app).Cfg = swarm.SwarmConfig{Mode: swarm.SwarmOpen, Secret: swarmTestSecret, GossipHours: swarm.DefaultSwarmGossipHours}
+	id, err := swarm.MintSwarmIdentity()
 	if err != nil {
 		t.Fatalf("mint identity: %v", err)
 	}
-	id.id = "test-local"
-	app.swarmID = id
-	app.swarmCli = newSwarmClient(swarmTestSecret)
+	id.ID = "test-local"
+	swarm.StateFor(app).SwarmID = id
+	swarm.StateFor(app).SwarmCli = swarm.NewSwarmClient(swarmTestSecret)
 
 	kx := swarmTestPeer(t, app, "peer-earned")
 	for i := 0; i < 50; i++ {
-		app.countSwarmCheck(ctx, "peer-earned", true)
+		swarm.StateFor(app).CountSwarmCheck(ctx, "peer-earned", true)
 	}
-	app.countSwarmCheck(ctx, "peer-earned", false)
+	swarm.StateFor(app).CountSwarmCheck(ctx, "peer-earned", false)
 	now := time.Now().UTC()
-	one, err := signSwarmEntry(kx, "peer-earned", swarmKindHistory, "10000002/34",
+	one, err := swarm.SignSwarmEntry(kx, "peer-earned", swarm.SwarmKindHistory, "10000002/34",
 		`{"region_id":10000002,"type_id":34,"days":[{"date":"2026-10-01","average":5.5,"highest":6.0,"lowest":5.0,"volume":100,"order_count":10}]}`, now)
 	if err != nil {
 		t.Fatalf("sign: %v", err)
 	}
-	if err := app.stageSwarmEntry(ctx, one, "peer-earned", now); err != nil {
+	if err := swarm.StateFor(app).StageSwarmEntry(ctx, one, "peer-earned", now); err != nil {
 		t.Fatalf("stage: %v", err)
 	}
 	// Trust sits near 0.97: force the draw past any plausible
 	// sample rate so the entry skips verification.
-	oldRand := swarmRandFloat
-	swarmRandFloat = func() (float64, error) { return 0.99, nil }
-	defer func() { swarmRandFloat = oldRand }()
+	oldRand := swarm.SwarmRandFloat
+	swarm.SwarmRandFloat = func() (float64, error) { return 0.99, nil }
+	defer func() { swarm.SwarmRandFloat = oldRand }()
 
-	applied, limited := app.swarmSpotCheck(ctx, &fetchBudget{left: 10}, nil, now)
+	applied, limited := swarm.StateFor(app).SwarmSpotCheck(ctx, &fetchBudget{left: 10}, nil, now)
 	if limited || applied != 1 {
 		t.Fatalf("spot: applied %d limited %v, want 1/false", applied, limited)
 	}
@@ -558,9 +559,9 @@ func TestSwarmTrustEarnedAppliesUnledgered(t *testing.T) {
 		if err != nil || got.GoodChecks != 50 || got.BadChecks != 1 {
 			t.Fatalf("%s: ledger %+v err %v, want good 50 bad 1", where, got, err)
 		}
-		app.swarmStreakMu.Lock()
-		streak := app.swarmStreak["peer-earned"]
-		app.swarmStreakMu.Unlock()
+		swarm.StateFor(app).SwarmStreakMu.Lock()
+		streak := swarm.StateFor(app).SwarmStreak["peer-earned"]
+		swarm.StateFor(app).SwarmStreakMu.Unlock()
 		if streak != 1 {
 			t.Fatalf("%s: failure streak %d, want 1 (untouched)", where, streak)
 		}
@@ -570,15 +571,15 @@ func TestSwarmTrustEarnedAppliesUnledgered(t *testing.T) {
 	}
 	assertEarnedUntouched("spot")
 
-	two, err := signSwarmEntry(kx, "peer-earned", swarmKindHistory, "10000002/35",
+	two, err := swarm.SignSwarmEntry(kx, "peer-earned", swarm.SwarmKindHistory, "10000002/35",
 		`{"region_id":10000002,"type_id":35,"days":[{"date":"2026-10-01","average":5.5,"highest":6.0,"lowest":5.0,"volume":100,"order_count":10}]}`, now)
 	if err != nil {
 		t.Fatalf("sign: %v", err)
 	}
-	if err := app.stageSwarmEntry(ctx, two, "peer-earned", now); err != nil {
+	if err := swarm.StateFor(app).StageSwarmEntry(ctx, two, "peer-earned", now); err != nil {
 		t.Fatalf("stage: %v", err)
 	}
-	if !app.swarmSettleUrgent(ctx, swarmKindHistory, "10000002/35") {
+	if !swarm.StateFor(app).SwarmSettleUrgent(ctx, swarm.SwarmKindHistory, "10000002/35") {
 		t.Fatal("urgent settle did not apply the trust-earned entry")
 	}
 	assertEarnedUntouched("settle")

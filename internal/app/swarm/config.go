@@ -1,4 +1,4 @@
-package app
+package swarm
 
 // ---------------------------------------------------------------------------
 // Shared-cache configuration (the paper's "shared cache across
@@ -26,9 +26,9 @@ import (
 
 // The shared-cache modes (SHARED_CACHE).
 const (
-	swarmOff       = "off"
-	swarmOpen      = "open"
-	swarmAllowlist = "allowlist"
+	SwarmOff       = "off"
+	SwarmOpen      = "open"
+	SwarmAllowlist = "allowlist"
 )
 
 // Defaults and bounds for the gossip rate: membership spreads
@@ -36,87 +36,87 @@ const (
 // stays near zero. Below 12 hours is refused: gossip is for
 // slow membership drift, not for data.
 const (
-	defaultSwarmGossipHours = 18
-	minSwarmGossipHours     = 12
-	maxSwarmGossipHours     = 168
+	DefaultSwarmGossipHours = 18
+	MinSwarmGossipHours     = 12
+	MaxSwarmGossipHours     = 168
 )
 
-// swarmSecretMinLength is the shortest SHARED_CACHE_SECRET
+// SwarmSecretMinLength is the shortest SHARED_CACHE_SECRET
 // accepted. It is a bearer credential for the whole swarm, not
 // a password to remember; generate it like the token key
 // (openssl rand -hex 32).
-const swarmSecretMinLength = 32
+const SwarmSecretMinLength = 32
 
-// swarmConfig is the shared cache's configuration (SHARED_CACHE,
+// SwarmConfig is the shared cache's configuration (SHARED_CACHE,
 // SHARED_CACHE_SECRET, SHARED_CACHE_SEEDS,
 // SHARED_CACHE_GOSSIP_HOURS). err is set when the operator asked
 // for sharing but the settings cannot run it safely; New refuses
 // to start on it, the way a broken sign-up restriction refuses.
-type swarmConfig struct {
-	mode        string // off, open, allowlist
-	secret      string
-	seeds       []string
-	gossipHours int
+type SwarmConfig struct {
+	Mode        string // off, open, allowlist
+	Secret      string
+	Seeds       []string
+	GossipHours int
 	// warms are the shared kinds this instance fetches for the
 	// swarm as a dedicated warming node (SHARED_CACHE_WARM,
-	// swarm_warm.go); empty on an ordinary instance.
-	warms map[string]bool
-	err   error
+	// swarm/warm.go); empty on an ordinary instance.
+	Warms map[string]bool
+	Err   error
 }
 
-// enabled reports whether the instance shares anything at all.
-func (s swarmConfig) enabled() bool { return s.mode == swarmOpen || s.mode == swarmAllowlist }
+// Enabled reports whether the instance shares anything at all.
+func (s SwarmConfig) Enabled() bool { return s.Mode == SwarmOpen || s.Mode == SwarmAllowlist }
 
-// allowlisted reports whether peers need approval before
+// Allowlisted reports whether peers need approval before
 // anything is read from them.
-func (s swarmConfig) allowlisted() bool { return s.mode == swarmAllowlist }
+func (s SwarmConfig) Allowlisted() bool { return s.Mode == SwarmAllowlist }
 
-func loadSwarmConfig(getenv func(string) string) swarmConfig {
-	var s swarmConfig
+func LoadSwarmConfig(getenv func(string) string) SwarmConfig {
+	var s SwarmConfig
 	raw := strings.ToLower(strings.TrimSpace(getenv("SHARED_CACHE")))
 	switch raw {
-	case "", swarmOff:
-		s.mode = swarmOff
-	case swarmOpen, "on":
+	case "", SwarmOff:
+		s.Mode = SwarmOff
+	case SwarmOpen, "on":
 		// "on" is the plain-English spelling of open.
-		s.mode = swarmOpen
-	case swarmAllowlist:
-		s.mode = raw
+		s.Mode = SwarmOpen
+	case SwarmAllowlist:
+		s.Mode = raw
 	default:
 		logging.Warnf("evesynapse: SHARED_CACHE=%q is not off, open or allowlist; the shared cache stays off", getenv("SHARED_CACHE"))
-		s.mode = swarmOff
+		s.Mode = SwarmOff
 		return s
 	}
-	if !s.enabled() {
+	if !s.Enabled() {
 		return s
 	}
-	s.secret = strings.TrimSpace(getenv("SHARED_CACHE_SECRET"))
-	if len(s.secret) < swarmSecretMinLength {
-		if s.secret == "" {
-			s.err = fmt.Errorf("SHARED_CACHE=%s needs a SHARED_CACHE_SECRET (at least %d random characters, for example: openssl rand -hex 32)", s.mode, swarmSecretMinLength)
+	s.Secret = strings.TrimSpace(getenv("SHARED_CACHE_SECRET"))
+	if len(s.Secret) < SwarmSecretMinLength {
+		if s.Secret == "" {
+			s.Err = fmt.Errorf("SHARED_CACHE=%s needs a SHARED_CACHE_SECRET (at least %d random characters, for example: openssl rand -hex 32)", s.Mode, SwarmSecretMinLength)
 		} else {
-			s.err = fmt.Errorf("SHARED_CACHE_SECRET is %d characters long; it needs at least %d random ones (for example: openssl rand -hex 32)", len(s.secret), swarmSecretMinLength)
+			s.Err = fmt.Errorf("SHARED_CACHE_SECRET is %d characters long; it needs at least %d random ones (for example: openssl rand -hex 32)", len(s.Secret), SwarmSecretMinLength)
 		}
 		return s
 	}
-	seeds, err := parseSwarmSeeds(getenv("SHARED_CACHE_SEEDS"))
+	seeds, err := ParseSwarmSeeds(getenv("SHARED_CACHE_SEEDS"))
 	if err != nil {
-		s.err = err
+		s.Err = err
 		return s
 	}
-	s.seeds = seeds
-	s.gossipHours = parseSwarmGossipHours(getenv("SHARED_CACHE_GOSSIP_HOURS"))
-	s.warms = parseSwarmWarm(getenv("SHARED_CACHE_WARM"))
+	s.Seeds = seeds
+	s.GossipHours = ParseSwarmGossipHours(getenv("SHARED_CACHE_GOSSIP_HOURS"))
+	s.Warms = ParseSwarmWarm(getenv("SHARED_CACHE_WARM"))
 	return s
 }
 
-// parseSwarmSeeds reads the bootstrap/fallback directory nodes:
+// ParseSwarmSeeds reads the bootstrap/fallback directory nodes:
 // the instances a new or lonely one asks for the membership
 // list. Each must be an https URL, except loopback (local
 // development and tests), where plain http never leaves the
 // machine. Anything else refuses to start rather than gossip
 // the shared secret somewhere unsafe.
-func parseSwarmSeeds(raw string) ([]string, error) {
+func ParseSwarmSeeds(raw string) ([]string, error) {
 	var out []string
 	for _, part := range strings.Split(raw, ",") {
 		part = strings.TrimSpace(part)
@@ -130,7 +130,7 @@ func parseSwarmSeeds(raw string) ([]string, error) {
 		switch strings.ToLower(u.Scheme) {
 		case "https":
 		case "http":
-			if !swarmHostIsLoopback(u.Hostname()) {
+			if !SwarmHostIsLoopback(u.Hostname()) {
 				return nil, fmt.Errorf("SHARED_CACHE_SEEDS: %q must be https (http is only allowed on loopback)", part)
 			}
 		default:
@@ -141,9 +141,9 @@ func parseSwarmSeeds(raw string) ([]string, error) {
 	return out, nil
 }
 
-// swarmHostIsLoopback reports whether a hostname is this machine
+// SwarmHostIsLoopback reports whether a hostname is this machine
 // itself: localhost names or a loopback IP.
-func swarmHostIsLoopback(host string) bool {
+func SwarmHostIsLoopback(host string) bool {
 	host = strings.ToLower(strings.TrimSpace(host))
 	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
 		return true
@@ -152,9 +152,9 @@ func swarmHostIsLoopback(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// parseSwarmGossipHours reads SHARED_CACHE_GOSSIP_HOURS: unset or
+// ParseSwarmGossipHours reads SHARED_CACHE_GOSSIP_HOURS: unset or
 // unreadable means the default; anything outside 12–168 hours is
 // kept in bounds (which the log says).
-func parseSwarmGossipHours(raw string) int {
-	return intSetting("SHARED_CACHE_GOSSIP_HOURS", raw, minSwarmGossipHours, maxSwarmGossipHours, defaultSwarmGossipHours)
+func ParseSwarmGossipHours(raw string) int {
+	return intSetting("SHARED_CACHE_GOSSIP_HOURS", raw, MinSwarmGossipHours, MaxSwarmGossipHours, DefaultSwarmGossipHours)
 }

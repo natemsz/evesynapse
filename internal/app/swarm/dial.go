@@ -1,4 +1,4 @@
-package app
+package swarm
 
 // ---------------------------------------------------------------------------
 // Where the swarm client may connect. Peer addresses arrive from
@@ -33,33 +33,33 @@ import (
 	"time"
 )
 
-// maxSwarmRedirects bounds same-host redirects (a trailing slash,
+// MaxSwarmRedirects bounds same-host redirects (a trailing slash,
 // a canonical path); nothing legitimate needs more.
-const maxSwarmRedirects = 3
+const MaxSwarmRedirects = 3
 
-// swarmLoopbackKey marks a request whose URL names loopback
+// SwarmLoopbackKey marks a request whose URL names loopback
 // itself, the one case where a loopback connection is allowed.
-type swarmLoopbackKey struct{}
+type SwarmLoopbackKey struct{}
 
-// swarmCGNAT is carrier-grade NAT space (RFC 6598): not private
+// SwarmCGNAT is carrier-grade NAT space (RFC 6598): not private
 // by the standard library's definition, and not public either.
-var swarmCGNAT = netip.MustParsePrefix("100.64.0.0/10")
+var SwarmCGNAT = netip.MustParsePrefix("100.64.0.0/10")
 
-// swarmPublicIP reports whether ip is an address on the public
+// SwarmPublicIP reports whether ip is an address on the public
 // internet: global unicast, and none of the private, link-local,
 // loopback, shared or unspecified ranges.
-func swarmPublicIP(ip netip.Addr) bool {
+func SwarmPublicIP(ip netip.Addr) bool {
 	ip = ip.Unmap()
 	if !ip.IsValid() || !ip.IsGlobalUnicast() {
 		return false
 	}
-	return !ip.IsPrivate() && !ip.IsLoopback() && !ip.IsLinkLocalUnicast() && !swarmCGNAT.Contains(ip)
+	return !ip.IsPrivate() && !ip.IsLoopback() && !ip.IsLinkLocalUnicast() && !SwarmCGNAT.Contains(ip)
 }
 
-// swarmDialControl runs on every connection the swarm client
+// SwarmDialControl runs on every connection the swarm client
 // opens, after the name has resolved and before anything is
 // sent, and refuses an address the rules above do not allow.
-func swarmDialControl(ctx context.Context, _, address string, _ syscall.RawConn) error {
+func SwarmDialControl(ctx context.Context, _, address string, _ syscall.RawConn) error {
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
 		return fmt.Errorf("swarm: refusing to dial %q: %w", address, err)
@@ -69,24 +69,24 @@ func swarmDialControl(ctx context.Context, _, address string, _ syscall.RawConn)
 		return fmt.Errorf("swarm: refusing to dial %q: not an IP address", address)
 	}
 	if ip.Unmap().IsLoopback() {
-		if allowed, _ := ctx.Value(swarmLoopbackKey{}).(bool); allowed {
+		if allowed, _ := ctx.Value(SwarmLoopbackKey{}).(bool); allowed {
 			return nil
 		}
 		return fmt.Errorf("swarm: refusing to dial %s: a peer address resolved to this machine", ip)
 	}
-	if !swarmPublicIP(ip) {
+	if !SwarmPublicIP(ip) {
 		return fmt.Errorf("swarm: refusing to dial %s: not a public address", ip)
 	}
 	return nil
 }
 
-// swarmCheckRedirect follows a redirect only within the scheme
+// SwarmCheckRedirect follows a redirect only within the scheme
 // and host that were asked, a few times at most.
-func swarmCheckRedirect(req *http.Request, via []*http.Request) error {
+func SwarmCheckRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) == 0 {
 		return nil
 	}
-	if len(via) > maxSwarmRedirects {
+	if len(via) > MaxSwarmRedirects {
 		return errors.New("swarm: too many redirects")
 	}
 	asked := via[0].URL
@@ -96,35 +96,35 @@ func swarmCheckRedirect(req *http.Request, via []*http.Request) error {
 	return nil
 }
 
-// swarmTransport marks loopback-URL requests for the dial check
+// SwarmTransport marks loopback-URL requests for the dial check
 // and hands everything to the guarded transport.
-type swarmTransport struct {
-	base *http.Transport
+type SwarmTransport struct {
+	Base *http.Transport
 }
 
-func (t swarmTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if swarmHostIsLoopback(req.URL.Hostname()) {
-		req = req.WithContext(context.WithValue(req.Context(), swarmLoopbackKey{}, true))
+func (t SwarmTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if SwarmHostIsLoopback(req.URL.Hostname()) {
+		req = req.WithContext(context.WithValue(req.Context(), SwarmLoopbackKey{}, true))
 	}
-	return t.base.RoundTrip(req)
+	return t.Base.RoundTrip(req)
 }
 
-// newSwarmClient builds the peer client: bearer secret, the
+// NewSwarmClient builds the peer client: bearer secret, the
 // guarded dialer, the same-host redirect rule, no proxy.
-func newSwarmClient(secret string) *swarmClient {
-	dialer := &net.Dialer{Timeout: 10 * time.Second, ControlContext: swarmDialControl}
+func NewSwarmClient(secret string) *SwarmClient {
+	dialer := &net.Dialer{Timeout: 10 * time.Second, ControlContext: SwarmDialControl}
 	transport := &http.Transport{
 		Proxy:                 nil,
 		DialContext:           dialer.DialContext,
 		ForceAttemptHTTP2:     true,
 		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: swarmHTTPTimeout,
+		ResponseHeaderTimeout: SwarmHTTPTimeout,
 		MaxIdleConns:          16,
 		IdleConnTimeout:       90 * time.Second,
 	}
-	return &swarmClient{secret: secret, http: &http.Client{
-		Timeout:       swarmHTTPTimeout,
-		Transport:     swarmTransport{base: transport},
-		CheckRedirect: swarmCheckRedirect,
+	return &SwarmClient{Secret: secret, Http: &http.Client{
+		Timeout:       SwarmHTTPTimeout,
+		Transport:     SwarmTransport{Base: transport},
+		CheckRedirect: SwarmCheckRedirect,
 	}}
 }

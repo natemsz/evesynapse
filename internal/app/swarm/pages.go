@@ -1,4 +1,4 @@
-package app
+package swarm
 
 // ---------------------------------------------------------------------------
 // The swarm on the Sync and Admin pages. Sync shows what sharing
@@ -11,6 +11,7 @@ package app
 import (
 	"context"
 	"errors"
+	"evesynapse/internal/humanize"
 	"net/http"
 	"strconv"
 	"strings"
@@ -21,13 +22,13 @@ import (
 	"evesynapse/internal/logging"
 )
 
-// swarmPeerRow is one swarm member as the pages show it. ID is
+// SwarmPeerRow is one swarm member as the pages show it. ID is
 // the full instance ID (form posts); Display is what readers
 // see: the real address for instances the operator added by
 // hand or configured as seeds, and a stable alias
 // (adjective.noun.number) for everyone learned through gossip
 // or seeds — member addresses are not shown to casual readers.
-type swarmPeerRow struct {
+type SwarmPeerRow struct {
 	ID          string
 	Display     string
 	URL         string
@@ -43,61 +44,61 @@ type swarmPeerRow struct {
 	Bad         string
 }
 
-// swarmMetricsView is the Sync page's "Swarm Cache" card.
-type swarmMetricsView struct {
+// SwarmMetricsView is the Sync page's "Swarm Cache" card.
+type SwarmMetricsView struct {
 	Status  string // Off, or Open/Allowlist with peer counts
 	Enabled bool
-	Rows    []swarmMetricRow
-	Peers   []swarmPeerRow
+	Rows    []SwarmMetricRow
+	Peers   []SwarmPeerRow
 }
 
-// swarmMetricRow is one label/value line in the card.
-type swarmMetricRow struct {
+// SwarmMetricRow is one label/value line in the card.
+type SwarmMetricRow struct {
 	Label string
 	Value string
 }
 
-// swarmAdminView is the Admin page's "Swarm Cache" section.
-type swarmAdminView struct {
+// SwarmAdminView is the Admin page's "Swarm Cache" section.
+type SwarmAdminView struct {
 	Mode        string // Off, Open, Allowlist
 	Enabled     bool
 	SecretSet   bool
 	Seeds       string
 	GossipEvery string
-	Peers       []swarmPeerRow
+	Peers       []SwarmPeerRow
 }
 
-// shortenSwarmID shows the first characters of an instance ID:
+// ShortenSwarmID shows the first characters of an instance ID:
 // enough to tell members apart, short enough for typed
 // confirmations and log lines. IDs are random, so prefixes do
 // not collide in practice; the full ID stays in the database.
-func shortenSwarmID(id string) string {
+func ShortenSwarmID(id string) string {
 	if len(id) <= 8 {
 		return id
 	}
 	return id[:8]
 }
 
-// swarmDisplayPeer names one peer for the pages: the real
+// SwarmDisplayPeer names one peer for the pages: the real
 // address when the operator added it by hand or configured it
 // as a seed (evesynapse.app) — both already known to the
 // operator — and the stable alias otherwise, so gossip-learned
 // members never show their addresses to casual readers.
-func (app *Application) swarmDisplayPeer(instanceID, baseURL, source string) string {
-	if source == "manual" || app.swarmIsSeed(baseURL) {
+func (app *Mod) SwarmDisplayPeer(instanceID, baseURL, source string) string {
+	if source == "manual" || app.SwarmIsSeed(baseURL) {
 		return baseURL
 	}
-	return swarmAlias(app.cfg.swarm.secret, instanceID)
+	return SwarmAlias(app.Cfg.Secret, instanceID)
 }
 
-// swarmIsSeed reports whether a peer address is one of the
+// SwarmIsSeed reports whether a peer address is one of the
 // configured seed origins (trailing slashes ignored).
-func (app *Application) swarmIsSeed(baseURL string) bool {
+func (app *Mod) SwarmIsSeed(baseURL string) bool {
 	want := strings.TrimSuffix(strings.TrimSpace(baseURL), "/")
 	if want == "" {
 		return false
 	}
-	for _, seed := range app.cfg.swarm.seeds {
+	for _, seed := range app.Cfg.Seeds {
 		if strings.TrimSuffix(strings.TrimSpace(seed), "/") == want {
 			return true
 		}
@@ -105,21 +106,21 @@ func (app *Application) swarmIsSeed(baseURL string) bool {
 	return false
 }
 
-// loadSwarmPeers reads the swarm table into display rows,
+// LoadSwarmPeers reads the swarm table into display rows,
 // newest-heard first (the query's order).
-func (app *Application) loadSwarmPeers(ctx context.Context) []swarmPeerRow {
-	rows, err := app.queries.ListSwarmPeers(ctx)
+func (app *Mod) LoadSwarmPeers(ctx context.Context) []SwarmPeerRow {
+	rows, err := app.Queries.ListSwarmPeers(ctx)
 	if err != nil {
 		logging.Errorf("swarm: list peers for pages: %v", err)
 		return nil
 	}
-	var out []swarmPeerRow
+	var out []SwarmPeerRow
 	for _, p := range rows {
-		row := swarmPeerRow{
-			ID: p.InstanceID, Display: app.swarmDisplayPeer(p.InstanceID, p.BaseUrl, p.Source),
+		row := SwarmPeerRow{
+			ID: p.InstanceID, Display: app.SwarmDisplayPeer(p.InstanceID, p.BaseUrl, p.Source),
 			URL: p.BaseUrl, Source: p.Source,
 			Approved: p.Approved, Excluded: p.Excluded,
-			Trust: percentOf(swarmTrustPercent(p.GoodChecks, p.BadChecks), 100),
+			Trust: percentOf(SwarmTrustPercent(p.GoodChecks, p.BadChecks), 100),
 			Good:  esi.FormatInt(p.GoodChecks), Bad: esi.FormatInt(p.BadChecks),
 		}
 		row.ShowAddress = row.Display == p.BaseUrl
@@ -129,7 +130,7 @@ func (app *Application) loadSwarmPeers(ctx context.Context) []swarmPeerRow {
 		// seed is a Seed until a pull from it has staged
 		// something, and a Seed+Cache from then on.
 		row.Role = "Cache"
-		if app.swarmIsSeed(p.BaseUrl) {
+		if app.SwarmIsSeed(p.BaseUrl) {
 			row.Role = "Seed"
 			if p.LastServed.Valid {
 				row.Role = "Seed+Cache"
@@ -141,7 +142,7 @@ func (app *Application) loadSwarmPeers(ctx context.Context) []swarmPeerRow {
 			if strings.HasPrefix(p.ExcludeNote, "auto:") {
 				row.State = "Excluded (auto)"
 			}
-		case app.swarmIsSeed(p.BaseUrl):
+		case app.SwarmIsSeed(p.BaseUrl):
 			// A configured seed URL is a directory: approval is
 			// meaningless and the state says what it is. Pulls
 			// are decided by identity, not address, so a
@@ -160,15 +161,15 @@ func (app *Application) loadSwarmPeers(ctx context.Context) []swarmPeerRow {
 	return out
 }
 
-// swarmTrustPercent renders a trust score 0-100 for percentOf.
-func swarmTrustPercent(good, bad int64) int64 {
-	return int64(swarmTrust(good, bad)*100 + 0.5)
+// SwarmTrustPercent renders a trust score 0-100 for percentOf.
+func SwarmTrustPercent(good, bad int64) int64 {
+	return int64(SwarmTrust(good, bad)*100 + 0.5)
 }
 
-// swarmCounterMap reads the Sync counters into a map.
-func (app *Application) swarmCounterMap(ctx context.Context) map[string]int64 {
+// SwarmCounterMap reads the Sync counters into a map.
+func (app *Mod) SwarmCounterMap(ctx context.Context) map[string]int64 {
 	out := map[string]int64{}
-	rows, err := app.queries.GetSwarmCounters(ctx)
+	rows, err := app.Queries.GetSwarmCounters(ctx)
 	if err != nil {
 		logging.Errorf("swarm: counters: %v", err)
 		return out
@@ -179,16 +180,16 @@ func (app *Application) swarmCounterMap(ctx context.Context) map[string]int64 {
 	return out
 }
 
-// loadSwarmMetrics builds the Sync card. Rendered reads only,
+// LoadSwarmMetrics builds the Sync card. Rendered reads only,
 // bounded (100 peers), no fetches.
-func (app *Application) loadSwarmMetrics(ctx context.Context) *swarmMetricsView {
-	view := &swarmMetricsView{}
-	if !app.cfg.swarm.enabled() {
+func (app *Mod) LoadSwarmMetrics(ctx context.Context) *SwarmMetricsView {
+	view := &SwarmMetricsView{}
+	if !app.Cfg.Enabled() {
 		view.Status = "Off — this instance fetches everything itself (SHARED_CACHE)."
 		return view
 	}
 	view.Enabled = true
-	peers := app.loadSwarmPeers(ctx)
+	peers := app.LoadSwarmPeers(ctx)
 	view.Peers = peers
 	approved, excluded := 0, 0
 	for _, p := range peers {
@@ -199,53 +200,53 @@ func (app *Application) loadSwarmMetrics(ctx context.Context) *swarmMetricsView 
 		}
 	}
 	mode := "Open"
-	if app.cfg.swarm.allowlisted() {
+	if app.Cfg.Allowlisted() {
 		mode = "Allowlist"
 	}
-	view.Status = mode + " — " + plural(approved, "peer") + " sharing, " + plural(excluded, "peer") + " excluded"
-	counters := app.swarmCounterMap(ctx)
-	applied := counters[swarmCounterAppliedHistory] + counters[swarmCounterAppliedNames] + counters[swarmCounterAppliedRecords]
+	view.Status = mode + " — " + humanize.Plural(approved, "peer") + " sharing, " + humanize.Plural(excluded, "peer") + " excluded"
+	counters := app.SwarmCounterMap(ctx)
+	applied := counters[SwarmCounterAppliedHistory] + counters[SwarmCounterAppliedNames] + counters[SwarmCounterAppliedRecords]
 	// Every applied entry is one ESI fetch this instance did not
 	// make: the worker settles the fetch state on apply, so the
 	// datum is never fetched twice.
-	view.Rows = []swarmMetricRow{
+	view.Rows = []SwarmMetricRow{
 		{Label: "Entries applied from peers", Value: esi.FormatInt(applied)},
 		{Label: "ESI calls saved", Value: esi.FormatInt(applied)},
-		{Label: "Spot checks passed", Value: esi.FormatInt(counters[swarmCounterSpotPassed])},
-		{Label: "Spot checks failed (discarded, signer flagged)", Value: esi.FormatInt(counters[swarmCounterSpotFailed])},
-		{Label: "Entries dropped unchecked (expired or undecidable; nobody blamed)", Value: esi.FormatInt(counters[swarmCounterDroppedUnchecked])},
-		{Label: "Entries taken back (signer excluded)", Value: esi.FormatInt(counters[swarmCounterRolledBack])},
-		{Label: "Peer pulls succeeded", Value: esi.FormatInt(counters[swarmCounterPullsOK])},
-		{Label: "Peer pulls failed", Value: esi.FormatInt(counters[swarmCounterPullsFailed])},
+		{Label: "Spot checks passed", Value: esi.FormatInt(counters[SwarmCounterSpotPassed])},
+		{Label: "Spot checks failed (discarded, signer flagged)", Value: esi.FormatInt(counters[SwarmCounterSpotFailed])},
+		{Label: "Entries dropped unchecked (expired or undecidable; nobody blamed)", Value: esi.FormatInt(counters[SwarmCounterDroppedUnchecked])},
+		{Label: "Entries taken back (signer excluded)", Value: esi.FormatInt(counters[SwarmCounterRolledBack])},
+		{Label: "Peer pulls succeeded", Value: esi.FormatInt(counters[SwarmCounterPullsOK])},
+		{Label: "Peer pulls failed", Value: esi.FormatInt(counters[SwarmCounterPullsFailed])},
 	}
 	return view
 }
 
-// loadSwarmAdmin builds the Admin section: the settings (from
+// LoadSwarmAdmin builds the Admin section: the settings (from
 // the environment — changing them restarts the instance) and
 // the swarm itself with its actions.
-func (app *Application) loadSwarmAdmin(ctx context.Context) *swarmAdminView {
-	view := &swarmAdminView{SecretSet: app.cfg.swarm.secret != ""}
+func (app *Mod) LoadSwarmAdmin(ctx context.Context) *SwarmAdminView {
+	view := &SwarmAdminView{SecretSet: app.Cfg.Secret != ""}
 	switch {
-	case !app.cfg.swarm.enabled():
+	case !app.Cfg.Enabled():
 		view.Mode = "Off"
-	case app.cfg.swarm.allowlisted():
+	case app.Cfg.Allowlisted():
 		view.Mode = "Allowlist"
 	default:
 		view.Mode = "Open"
 	}
-	view.Enabled = app.cfg.swarm.enabled()
-	view.Seeds = strings.Join(app.cfg.swarm.seeds, ", ")
-	view.GossipEvery = "every " + strconv.Itoa(app.cfg.swarm.gossipHours) + " hours"
-	view.Peers = app.loadSwarmPeers(ctx)
+	view.Enabled = app.Cfg.Enabled()
+	view.Seeds = strings.Join(app.Cfg.Seeds, ", ")
+	view.GossipEvery = "every " + strconv.Itoa(app.Cfg.GossipHours) + " hours"
+	view.Peers = app.LoadSwarmPeers(ctx)
 	return view
 }
 
-// handleSwarmApprove approves one gossip-learned peer (POST
+// HandleSwarmApprove approves one gossip-learned peer (POST
 // /admin/swarm/approve). In open mode everything the secret
 // lets in is already approved; this is the allowlist's door.
-func (app *Application) handleSwarmApprove(w http.ResponseWriter, r *http.Request) {
-	back := app.flashBack(w, r, "/admin/")
+func (app *Mod) HandleSwarmApprove(w http.ResponseWriter, r *http.Request) {
+	back := app.Deps.FlashBack(w, r, "/admin/")
 	if r.ParseForm() != nil {
 		back("That request could not be read.")
 		return
@@ -255,7 +256,7 @@ func (app *Application) handleSwarmApprove(w http.ResponseWriter, r *http.Reques
 		back("Nothing was approved: no instance was named.")
 		return
 	}
-	peer, err := app.queries.GetSwarmPeer(r.Context(), id)
+	peer, err := app.Queries.GetSwarmPeer(r.Context(), id)
 	if err != nil {
 		back("Nothing was approved: that instance is not known.")
 		return
@@ -264,21 +265,21 @@ func (app *Application) handleSwarmApprove(w http.ResponseWriter, r *http.Reques
 		back("Nothing was approved: that instance is excluded. Re-admit it first.")
 		return
 	}
-	if err := app.queries.SetSwarmPeerApproved(r.Context(), db.SetSwarmPeerApprovedParams{InstanceID: id, Approved: true}); err != nil {
+	if err := app.Queries.SetSwarmPeerApproved(r.Context(), db.SetSwarmPeerApprovedParams{InstanceID: id, Approved: true}); err != nil {
 		logging.Errorf("admin: swarm approve %s: %v", id, err)
 		back("The instance could not be approved; check the server log.")
 		return
 	}
-	logging.Warnf("admin: account %d approved swarm instance %s", app.userID(r.Context()), shortenSwarmID(id))
-	back("Instance " + shortenSwarmID(id) + " was approved: its entries may now be pulled and checked.")
+	logging.Warnf("admin: account %d approved swarm instance %s", app.Deps.UserID(r.Context()), ShortenSwarmID(id))
+	back("Instance " + ShortenSwarmID(id) + " was approved: its entries may now be pulled and checked.")
 }
 
-// handleSwarmExclude excludes one peer by hand (POST
+// HandleSwarmExclude excludes one peer by hand (POST
 // /admin/swarm/exclude). Excluded peers are never contacted,
 // never pulled from, and their staged entries are dropped. The
 // reputation ledger stays, so re-admitting keeps the history.
-func (app *Application) handleSwarmExclude(w http.ResponseWriter, r *http.Request) {
-	back := app.flashBack(w, r, "/admin/")
+func (app *Mod) HandleSwarmExclude(w http.ResponseWriter, r *http.Request) {
+	back := app.Deps.FlashBack(w, r, "/admin/")
 	if r.ParseForm() != nil {
 		back("That request could not be read.")
 		return
@@ -288,25 +289,25 @@ func (app *Application) handleSwarmExclude(w http.ResponseWriter, r *http.Reques
 		back("Nothing was excluded: no instance was named.")
 		return
 	}
-	if _, err := app.queries.GetSwarmPeer(r.Context(), id); err != nil {
+	if _, err := app.Queries.GetSwarmPeer(r.Context(), id); err != nil {
 		back("Nothing was excluded: that instance is not known.")
 		return
 	}
 	note := "manual: excluded by the operator"
-	if err := app.queries.SetSwarmPeerExcluded(r.Context(), db.SetSwarmPeerExcludedParams{InstanceID: id, Excluded: true, ExcludeNote: note}); err != nil {
+	if err := app.Queries.SetSwarmPeerExcluded(r.Context(), db.SetSwarmPeerExcludedParams{InstanceID: id, Excluded: true, ExcludeNote: note}); err != nil {
 		logging.Errorf("admin: swarm exclude %s: %v", id, err)
 		back("The instance could not be excluded; check the server log.")
 		return
 	}
-	logging.Warnf("admin: account %d excluded swarm instance %s", app.userID(r.Context()), shortenSwarmID(id))
-	back("Instance " + shortenSwarmID(id) + " was excluded: nothing more is read from it.")
+	logging.Warnf("admin: account %d excluded swarm instance %s", app.Deps.UserID(r.Context()), ShortenSwarmID(id))
+	back("Instance " + ShortenSwarmID(id) + " was excluded: nothing more is read from it.")
 }
 
-// handleSwarmAdmit re-admits one excluded peer (POST
+// HandleSwarmAdmit re-admits one excluded peer (POST
 // /admin/swarm/admit). Trust starts where the ledger left it —
 // admitting does not forgive, it only re-opens the door.
-func (app *Application) handleSwarmAdmit(w http.ResponseWriter, r *http.Request) {
-	back := app.flashBack(w, r, "/admin/")
+func (app *Mod) HandleSwarmAdmit(w http.ResponseWriter, r *http.Request) {
+	back := app.Deps.FlashBack(w, r, "/admin/")
 	if r.ParseForm() != nil {
 		back("That request could not be read.")
 		return
@@ -316,20 +317,20 @@ func (app *Application) handleSwarmAdmit(w http.ResponseWriter, r *http.Request)
 		back("Nothing was re-admitted: no instance was named.")
 		return
 	}
-	if _, err := app.queries.GetSwarmPeer(r.Context(), id); err != nil {
+	if _, err := app.Queries.GetSwarmPeer(r.Context(), id); err != nil {
 		back("Nothing was re-admitted: that instance is not known.")
 		return
 	}
-	if err := app.queries.SetSwarmPeerExcluded(r.Context(), db.SetSwarmPeerExcludedParams{InstanceID: id, Excluded: false, ExcludeNote: ""}); err != nil {
+	if err := app.Queries.SetSwarmPeerExcluded(r.Context(), db.SetSwarmPeerExcludedParams{InstanceID: id, Excluded: false, ExcludeNote: ""}); err != nil {
 		logging.Errorf("admin: swarm admit %s: %v", id, err)
 		back("The instance could not be re-admitted; check the server log.")
 		return
 	}
-	logging.Warnf("admin: account %d re-admitted swarm instance %s", app.userID(r.Context()), shortenSwarmID(id))
-	back("Instance " + shortenSwarmID(id) + " was re-admitted with its trust history intact.")
+	logging.Warnf("admin: account %d re-admitted swarm instance %s", app.Deps.UserID(r.Context()), ShortenSwarmID(id))
+	back("Instance " + ShortenSwarmID(id) + " was re-admitted with its trust history intact.")
 }
 
-// handleSwarmAddPeer learns one instance by address (POST
+// HandleSwarmAddPeer learns one instance by address (POST
 // /admin/swarm/add): the operator types a bare origin
 // (https://evesynapse.app), and the instance asks it for its
 // membership list — the same round as gossip, on demand. The
@@ -337,50 +338,50 @@ func (app *Application) handleSwarmAdmit(w http.ResponseWriter, r *http.Request)
 // allowlist mode it still waits for approval. Refused while
 // sharing is off, and refused for anything but an https origin
 // (http on loopback, for local testing).
-func (app *Application) handleSwarmAddPeer(w http.ResponseWriter, r *http.Request) {
-	back := app.flashBack(w, r, "/admin/")
+func (app *Mod) HandleSwarmAddPeer(w http.ResponseWriter, r *http.Request) {
+	back := app.Deps.FlashBack(w, r, "/admin/")
 	if r.ParseForm() != nil {
 		back("That request could not be read.")
 		return
 	}
-	if !app.cfg.swarm.enabled() || app.swarmID == nil || app.swarmCli == nil {
+	if !app.Cfg.Enabled() || app.SwarmID == nil || app.SwarmCli == nil {
 		back("Nothing was added: the swarm cache is off. Set SHARED_CACHE and restart first.")
 		return
 	}
 	raw := strings.TrimSpace(r.Form.Get("url"))
-	if !validSwarmBaseURL(raw) {
+	if !ValidSwarmBaseURL(raw) {
 		back("Nothing was added: that is not an https address (http only on loopback).")
 		return
 	}
-	switch err := app.swarmContactPeer(r.Context(), strings.TrimSuffix(raw, "/"), "", "", "manual", time.Now().UTC()); {
+	switch err := app.SwarmContactPeer(r.Context(), strings.TrimSuffix(raw, "/"), "", "", "manual", time.Now().UTC()); {
 	case err == nil:
-		logging.Warnf("admin: account %d added swarm address %s", app.userID(r.Context()), raw)
-		back("That address answered: its instances are listed below" + approvalNote(app) + ".")
-	case errors.Is(err, errSwarmKeyChanged):
+		logging.Warnf("admin: account %d added swarm address %s", app.Deps.UserID(r.Context()), raw)
+		back("That address answered: its instances are listed below" + ApprovalNote(app) + ".")
+	case errors.Is(err, ErrSwarmKeyChanged):
 		back("Nothing was added: that address answered as an instance already listed under a different key. Remove that instance first if its key really changed.")
 	default:
 		back("Nothing was added: that address did not answer as a swarm member.")
 	}
 }
 
-// approvalNote reminds where newly learned instances wait in
+// ApprovalNote reminds where newly learned instances wait in
 // allowlist mode.
-func approvalNote(app *Application) string {
-	if app.cfg.swarm.allowlisted() {
+func ApprovalNote(app *Mod) string {
+	if app.Cfg.Allowlisted() {
 		return ", waiting for approval"
 	}
 	return ""
 }
 
-// handleSwarmRemove forgets one peer entirely (POST
+// HandleSwarmRemove forgets one peer entirely (POST
 // /admin/swarm/remove): address, pinned key, approval,
 // exclusion, and the ledger. Removing is how a peer's key is
 // rotated — the next gossip pins the new one from scratch —
 // and how dead instances leave the list. Like account removal
 // it asks twice: the instance in the form, and typed out by
 // hand. Never the instance itself.
-func (app *Application) handleSwarmRemove(w http.ResponseWriter, r *http.Request) {
-	back := app.flashBack(w, r, "/admin/")
+func (app *Mod) HandleSwarmRemove(w http.ResponseWriter, r *http.Request) {
+	back := app.Deps.FlashBack(w, r, "/admin/")
 	if r.ParseForm() != nil {
 		back("That request could not be read.")
 		return
@@ -388,24 +389,24 @@ func (app *Application) handleSwarmRemove(w http.ResponseWriter, r *http.Request
 	id := strings.TrimSpace(r.Form.Get("instance"))
 	// The confirmation names what the page shows (the alias, or
 	// the address for hand-added and seed instances).
-	peer, err := app.queries.GetSwarmPeer(r.Context(), id)
+	peer, err := app.Queries.GetSwarmPeer(r.Context(), id)
 	if err != nil || id == "" {
 		back("Nothing was removed: that instance is not known.")
 		return
 	}
-	if strings.TrimSpace(r.Form.Get("confirm")) != app.swarmDisplayPeer(peer.InstanceID, peer.BaseUrl, peer.Source) {
+	if strings.TrimSpace(r.Form.Get("confirm")) != app.SwarmDisplayPeer(peer.InstanceID, peer.BaseUrl, peer.Source) {
 		back("Nothing was removed: type the instance's shown name to confirm.")
 		return
 	}
-	if app.swarmID != nil && id == app.swarmID.id {
+	if app.SwarmID != nil && id == app.SwarmID.ID {
 		back("Nothing was removed: that is this instance.")
 		return
 	}
-	if err := app.queries.DeleteSwarmPeer(r.Context(), id); err != nil {
+	if err := app.Queries.DeleteSwarmPeer(r.Context(), id); err != nil {
 		logging.Errorf("admin: swarm remove %s: %v", id, err)
 		back("The instance could not be removed; check the server log.")
 		return
 	}
-	logging.Warnf("admin: account %d removed swarm instance %s", app.userID(r.Context()), shortenSwarmID(id))
-	back("Instance " + shortenSwarmID(id) + " was removed, with its key and trust history.")
+	logging.Warnf("admin: account %d removed swarm instance %s", app.Deps.UserID(r.Context()), ShortenSwarmID(id))
+	back("Instance " + ShortenSwarmID(id) + " was removed, with its key and trust history.")
 }

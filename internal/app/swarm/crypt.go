@@ -1,11 +1,11 @@
-package app
+package swarm
 
 // ---------------------------------------------------------------------------
 // Swarm member privacy. The member list is topology: who is in
 // the swarm and where they listen. Two layers keep it from
 // leaking:
 //
-// 1. The /swarm/members endpoint is bearer-gated (swarm_api.go),
+// 1. The /swarm/members endpoint is bearer-gated (swarm/api.go),
 //    so only secret-holders can fetch it at all. On top of that
 //    the list payload itself is sealed under a key derived from
 //    the shared secret — a leaked, cached, or logged response
@@ -39,23 +39,23 @@ import (
 // base64(nonce | ciphertext). Salt and label are part of the
 // format, as with the token box and the sealed seed.
 const (
-	swarmMembersPrefix = "swm:v1:"
-	swarmMembersSalt   = "evesynapse/swarm-members/v1"
-	swarmMembersInfo   = "swarm member list"
+	SwarmMembersPrefix = "swm:v1:"
+	SwarmMembersSalt   = "evesynapse/swarm-members/v1"
+	SwarmMembersInfo   = "swarm member list"
 )
 
-// swarmMembersKey derives the list-sealing key from the shared
+// SwarmMembersKey derives the list-sealing key from the shared
 // secret. Members hold the secret, so members alone decode.
-func swarmMembersKey(secret string) ([]byte, error) {
-	return hkdf.Key(sha256.New, []byte(secret), []byte(swarmMembersSalt), swarmMembersInfo, 32)
+func SwarmMembersKey(secret string) ([]byte, error) {
+	return hkdf.Key(sha256.New, []byte(secret), []byte(SwarmMembersSalt), SwarmMembersInfo, 32)
 }
 
-// sealSwarmMembers seals one marshalled member list under the
+// SealSwarmMembers seals one marshalled member list under the
 // shared secret. The signature still goes over the sealed blob
 // (encrypt-then-sign): authenticity is checked before anything
 // decrypts.
-func sealSwarmMembers(raw []byte, secret string) (string, error) {
-	key, err := swarmMembersKey(secret)
+func SealSwarmMembers(raw []byte, secret string) (string, error) {
+	key, err := SwarmMembersKey(secret)
 	if err != nil {
 		return "", err
 	}
@@ -68,14 +68,14 @@ func sealSwarmMembers(raw []byte, secret string) (string, error) {
 		return "", fmt.Errorf("swarm: seal members: %w", err)
 	}
 	sealed := aead.Seal(nonce, nonce, raw, nil)
-	return swarmMembersPrefix + base64.StdEncoding.EncodeToString(sealed), nil
+	return SwarmMembersPrefix + base64.StdEncoding.EncodeToString(sealed), nil
 }
 
-// openSwarmMembers opens a sealed member list. Any failure is
+// OpenSwarmMembers opens a sealed member list. Any failure is
 // one error: callers must not learn whether the prefix, the
 // encoding, the secret, or the ciphertext was wrong.
-func openSwarmMembers(sealed, secret string) ([]byte, error) {
-	rest, ok := strings.CutPrefix(sealed, swarmMembersPrefix)
+func OpenSwarmMembers(sealed, secret string) ([]byte, error) {
+	rest, ok := strings.CutPrefix(sealed, SwarmMembersPrefix)
 	if !ok {
 		return nil, errors.New("swarm: member list does not open")
 	}
@@ -83,7 +83,7 @@ func openSwarmMembers(sealed, secret string) ([]byte, error) {
 	if err != nil {
 		return nil, errors.New("swarm: member list does not open")
 	}
-	key, err := swarmMembersKey(secret)
+	key, err := SwarmMembersKey(secret)
 	if err != nil {
 		return nil, errors.New("swarm: member list does not open")
 	}
@@ -105,7 +105,7 @@ func openSwarmMembers(sealed, secret string) ([]byte, error) {
 // Plain neutral words: an alias identifies a row, never a
 // machine, owner, or place.
 var (
-	swarmAliasAdjectives = []string{
+	SwarmAliasAdjectives = []string{
 		"amber", "arctic", "ashen", "birch", "brisk", "calm", "cedar",
 		"clear", "cobalt", "copper", "coral", "crisp", "dawn", "delta",
 		"ember", "even", "fern", "flint", "frost", "garnet", "gentle",
@@ -114,7 +114,7 @@ var (
 		"meadow", "moss", "nimbus", "north", "ochre", "onyx", "opal",
 		"pebble", "pine", "quartz", "quiet", "river", "sable", "sage",
 	}
-	swarmAliasNouns = []string{
+	SwarmAliasNouns = []string{
 		"alder", "anchor", "antler", "arc", "basin", "beacon", "birch",
 		"brook", "burrow", "cairn", "cedar", "channel", "cinder", "cliff",
 		"comet", "cove", "crane", "crest", "drift", "dune", "elm",
@@ -125,17 +125,17 @@ var (
 	}
 )
 
-// swarmAlias derives a peer's display alias from its instance ID
+// SwarmAlias derives a peer's display alias from its instance ID
 // and the shared secret: stable per swarm (every member
 // computes the same one), meaningless without the list it came
 // with. HMAC keyed by the secret, so aliases differ per swarm
 // and reveal nothing across swarms.
-func swarmAlias(secret, instanceID string) string {
+func SwarmAlias(secret, instanceID string) string {
 	mac := hmac.New(sha256.New, []byte("swarm-alias/v1\x00"+secret))
 	mac.Write([]byte(instanceID))
 	sum := mac.Sum(nil)
-	adj := swarmAliasAdjectives[int(sum[0])%len(swarmAliasAdjectives)]
-	noun := swarmAliasNouns[int(sum[1])%len(swarmAliasNouns)]
+	adj := SwarmAliasAdjectives[int(sum[0])%len(SwarmAliasAdjectives)]
+	noun := SwarmAliasNouns[int(sum[1])%len(SwarmAliasNouns)]
 	num := (int(sum[2])<<8 | int(sum[3])) % 1000
 	return fmt.Sprintf("%s.%s.%d", adj, noun, num)
 }

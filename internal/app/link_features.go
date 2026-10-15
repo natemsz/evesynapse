@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 )
 
@@ -61,7 +62,27 @@ type linkFeature struct {
 	Requires   []string
 	Required   []scopeUse
 	Enhance    []scopeUse
+	Role       []linkRole // corporation data: the scope is only worth having with the in-game role
 	Activities []string
+}
+
+// linkRole is a permission whose data EVE gives only to a character holding
+// an in-game corporation role. It is declared required (the feature dies
+// without it) but, for a given player, that is true of nobody and somebody
+// at once, so the sign-up offers it as an opt-in framed by the role.
+type linkRole struct {
+	scopeUse
+	Roles string // "Accountant or Junior Accountant"; "" when it varies
+}
+
+// corpFeatureKinds names the corporation snapshot whose 403 tells which
+// role a feature needs (corpKindRole has the labels).
+var corpFeatureKinds = map[string]string{
+	"corp_wallet":     esi.SnapCorpWallets,
+	"corp_assets":     esi.SnapCorpAssets,
+	"corp_market":     esi.SnapCorpOrders,
+	"corp_killmails":  esi.SnapCorpKillmails,
+	"corp_structures": esi.SnapCorpStructures,
 }
 
 // linkFeatures lists the features the sign-up offers, in the order they
@@ -74,7 +95,16 @@ func linkFeatures() []linkFeature {
 		if def.Layer == layerDerived {
 			continue
 		}
-		if len(def.Scopes) == 0 && len(def.Activities) == 0 {
+		required := 0
+		for _, sc := range def.Scopes {
+			if !sc.Optional {
+				required++
+			}
+		}
+		// Nothing required and no kind of play: not a feature the player
+		// can pick (the shared cache is operator-level; its one extra is
+		// offered through Module.LinkExtras when the server has it on).
+		if required == 0 && len(def.Activities) == 0 {
 			continue
 		}
 		f := linkFeature{ID: def.ID, Title: def.Title, Activities: def.Activities}
@@ -82,9 +112,12 @@ func linkFeatures() []linkFeature {
 			f.Requires = append(f.Requires, use)
 		}
 		for _, s := range def.Scopes {
-			if s.Optional {
+			switch {
+			case s.Optional:
 				f.Enhance = append(f.Enhance, s)
-			} else {
+			case def.Layer == layerCorp:
+				f.Role = append(f.Role, linkRole{scopeUse: s, Roles: corpKindRole(corpFeatureKinds[def.ID])})
+			default:
 				f.Required = append(f.Required, s)
 			}
 		}
@@ -125,14 +158,48 @@ type linkResolved struct {
 	Features     []linkFeatureRow
 	Required     []string // the scopes the features cannot work without
 	Enhancements []linkEnhancement
-	Scopes       []string // required plus opted-in enhancements, sorted
+	RoleOptIns   []linkRoleOptIn   // corporation permissions, framed by the role they need
+	ServerExtras []linkEnhancement // what this server offers on top (Module.LinkExtras)
+	Scopes       []string          // required plus opted-in enhancements, sorted
+}
+
+// linkRoleOptIn is one role-gated permission of a chosen corporation feature.
+type linkRoleOptIn struct {
+	Scope   string
+	Unlocks string
+	Feature string
+	Roles   string
+	Chosen  bool
 }
 
 // resolveLink works a choice out: the features it names (an activity names
 // the features that declare it), the closure over what they require, the
 // scopes those declare, and the opted-in enhancements. An unknown activity,
 // feature or an enhancement that belongs to no chosen feature is an error.
-func resolveLink(c linkChoice) (linkResolved, error) {
+func resolveLink(c linkChoice) (linkResolved, error) { return resolveLinkWith(c, nil) }
+
+// resolveLink is the package function with what this server offers on top.
+func (app *Application) resolveLink(c linkChoice) (linkResolved, error) {
+	return resolveLinkWith(c, app.linkServerExtras())
+}
+
+// linkServerExtras are the optional permissions the built-in modules offer
+// on this server (Module.LinkExtras): none unless the module's own settings
+// call for them.
+func (app *Application) linkServerExtras() []linkEnhancement {
+	var out []linkEnhancement
+	for _, m := range registeredModules {
+		if m.LinkExtras == nil {
+			continue
+		}
+		for _, sc := range m.LinkExtras(app) {
+			out = append(out, linkEnhancement{Scope: sc.Scope, Unlocks: sc.Unlocks, Feature: "This server"})
+		}
+	}
+	return out
+}
+
+func resolveLinkWith(c linkChoice, extras []linkEnhancement) (linkResolved, error) {
 	all := linkFeatures()
 	byID := make(map[string]linkFeature, len(all))
 	for _, f := range all {
@@ -179,6 +246,8 @@ func resolveLink(c linkChoice) (linkResolved, error) {
 	res := linkResolved{Choice: c}
 	required := map[string]bool{}
 	optional := map[string]linkEnhancement{}
+	roles := map[string]linkRoleOptIn{}
+	var roleOrder []string
 	for _, f := range all {
 		if !in[f.ID] {
 			continue
@@ -187,20 +256,55 @@ func resolveLink(c linkChoice) (linkResolved, error) {
 		for _, s := range f.Required {
 			required[s.Scope] = true
 		}
+		for _, r := range f.Role {
+			if _, seen := roles[r.Scope]; !seen {
+				roles[r.Scope] = linkRoleOptIn{Scope: r.Scope, Unlocks: r.Unlocks, Feature: f.Title, Roles: r.Roles}
+				roleOrder = append(roleOrder, r.Scope)
+			}
+		}
 		for _, s := range f.Enhance {
 			if _, seen := optional[s.Scope]; !seen {
 				optional[s.Scope] = linkEnhancement{Scope: s.Scope, Unlocks: s.Unlocks, Feature: f.Title}
 			}
 		}
 	}
+	// A permission a role opt-in already offers is not a second extra.
+	for scope := range roles {
+		delete(optional, scope)
+	}
+	serverExtra := map[string]linkEnhancement{}
+	for _, e := range extras {
+		if required[e.Scope] {
+			continue
+		}
+		if _, isRole := roles[e.Scope]; isRole {
+			continue
+		}
+		if _, isOpt := optional[e.Scope]; isOpt {
+			continue
+		}
+		serverExtra[e.Scope] = e
+	}
 	chosen := map[string]bool{}
 	for _, scope := range c.Enhance {
+		if required[scope] {
+			continue // already needed: not an extra
+		}
+		if r, ok := roles[scope]; ok {
+			r.Chosen = true
+			roles[scope] = r
+			chosen[scope] = true
+			continue
+		}
+		if e, ok := serverExtra[scope]; ok {
+			e.Chosen = true
+			serverExtra[scope] = e
+			chosen[scope] = true
+			continue
+		}
 		e, ok := optional[scope]
 		if !ok {
 			return linkResolved{}, fmt.Errorf("permission %q belongs to no chosen feature", scope)
-		}
-		if required[scope] {
-			continue // already needed: not an extra
 		}
 		e.Chosen = true
 		optional[scope] = e
@@ -219,6 +323,13 @@ func resolveLink(c linkChoice) (linkResolved, error) {
 		}
 		return a.Scope < b.Scope
 	})
+	for _, scope := range roleOrder {
+		res.RoleOptIns = append(res.RoleOptIns, roles[scope])
+	}
+	for _, e := range serverExtra {
+		res.ServerExtras = append(res.ServerExtras, e)
+	}
+	sort.Slice(res.ServerExtras, func(i, j int) bool { return res.ServerExtras[i].Scope < res.ServerExtras[j].Scope })
 	for scope := range required {
 		res.Required = append(res.Required, scope)
 	}
@@ -235,14 +346,25 @@ func resolveLink(c linkChoice) (linkResolved, error) {
 }
 
 // fullLinkChoice is every feature with every enhancement: today's link.
-func fullLinkChoice() linkChoice {
+func fullLinkChoice() linkChoice { return fullLinkChoiceWith(nil) }
+
+func fullLinkChoiceWith(extras []linkEnhancement) linkChoice {
 	c := linkChoice{Activities: []string{activityEverything}}
+	add := func(scope string) {
+		if !contains(c.Enhance, scope) {
+			c.Enhance = append(c.Enhance, scope)
+		}
+	}
 	for _, f := range linkFeatures() {
 		for _, s := range f.Enhance {
-			if !contains(c.Enhance, s.Scope) {
-				c.Enhance = append(c.Enhance, s.Scope)
-			}
+			add(s.Scope)
 		}
+		for _, r := range f.Role {
+			add(r.Scope)
+		}
+	}
+	for _, e := range extras {
+		add(e.Scope)
 	}
 	return c
 }
@@ -250,8 +372,14 @@ func fullLinkChoice() linkChoice {
 // requestableScopes is every scope this build can ask for: the full link.
 // In a build with every module it is eveScopes; a build without a module
 // leaves that module's scopes out.
-func requestableScopes() []string {
-	res, err := resolveLink(fullLinkChoice())
+func requestableScopes() []string { return requestableScopesWith(nil) }
+
+func (app *Application) requestableScopes() []string {
+	return requestableScopesWith(app.linkServerExtras())
+}
+
+func requestableScopesWith(extras []linkEnhancement) []string {
+	res, err := resolveLinkWith(fullLinkChoiceWith(extras), extras)
 	if err != nil {
 		logging.Errorf("link: the full selection did not resolve: %v", err)
 		return eveScopes

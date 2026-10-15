@@ -1121,6 +1121,11 @@ type Module struct {
 	// AdminSections and SyncSections add blocks to those two pages.
 	AdminSections []PageSection
 	SyncSections  []PageSection
+	// LinkExtras are optional permissions the module offers at sign-up
+	// only when its own settings call for them (the shared cache offers
+	// the structures permission only on a server that has the cache on).
+	// They are never a feature of their own.
+	LinkExtras func(deps Deps) []Scope
 	// Init runs once the application is built and its store is open; an
 	// error stops the start (a module whose settings are wrong says so
 	// before serving anything).

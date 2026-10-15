@@ -6,7 +6,7 @@
 
 {{with .Link}}
 {{if eq .Step "cards"}}
-<section class="card">
+<section class="card" data-fold="never">
   <h2>What do you want to do with EveSynapse?</h2>
   <p><small>Pick as many as you like. EveSynapse asks EVE only for the permissions those need, and shows you the list before anything is sent. You can add more later.</small></p>
   <form method="get" action="/auth/link">
@@ -24,7 +24,7 @@
   </form>
 </section>
 {{else}}
-<section class="card">
+<section class="card" data-fold="never">
   <h2>{{if eq .Step "advanced"}}Choose the features{{else}}This is what will be turned on{{end}}</h2>
   {{if .Remembered}}<p><small>These are the choices you made last time. Change anything, or continue as they are.</small></p>{{end}}
   <p class="lk-count">EVE will ask for <strong>{{.Count}}</strong> permission{{if ne .Count 1}}s{{end}}{{if .Count}}, {{.Required}} of them needed by the features below{{else}}: you only sign in, and nothing about your characters is read{{end}}.</p>
@@ -35,14 +35,15 @@
 
     {{if eq .Step "advanced"}}
       {{range .Groups}}
-      <div class="lk-group ti-acc ti-a{{.Accent}}">
+      <div class="lk-group foldable ti-acc ti-a{{.Accent}}">
         <h3>{{.Title}}</h3>
         <div class="lk-rows">
           {{range .Features}}
           <div class="lk-row">
             <label class="lk-name"><input type="checkbox" name="feature" value="{{.ID}}"{{if .Ticked}} checked{{end}}{{if .Locked}} disabled{{end}}><strong>{{.Title}}</strong>{{if .Why}} <span class="lk-why">{{.Why}}</span>{{end}}</label>
             {{if .Needs}}<small class="lk-why">Needs {{.Needs}}</small>{{end}}
-            {{if .Required}}<ul>{{range .Required}}<li>{{.Unlocks}} <code>{{.Scope}}</code></li>{{end}}</ul>{{else}}<ul><li>No EVE permission needed.</li></ul>{{end}}
+            {{if .Required}}<ul>{{range .Required}}<li>{{.Unlocks}} <code>{{.Scope}}</code></li>{{end}}</ul>{{else if not .Role}}<ul><li>No EVE permission needed.</li></ul>{{end}}
+            {{range .Role}}<label class="lk-opt"><input type="checkbox" name="enhance" value="{{.Scope}}"{{if .Ticked}} checked{{end}}><span>{{if .Roles}}With the role {{.Roles}}: {{end}}{{.Unlocks}} <code>{{.Scope}}</code></span></label>{{end}}
             {{range .Enhance}}<label class="lk-opt"><input type="checkbox" name="enhance" value="{{.Scope}}"{{if .Ticked}} checked{{end}}><span>Extra: {{.Unlocks}} <code>{{.Scope}}</code></span></label>{{end}}
           </div>
           {{end}}
@@ -55,10 +56,29 @@
         <div class="lk-row ti-acc ti-a{{.Accent}}">
           <label class="lk-name"><input type="checkbox" name="feature" value="{{.ID}}" checked{{if .Locked}} disabled{{end}}><strong>{{.Title}}</strong>{{if .Why}} <span class="lk-why">{{.Why}}</span>{{end}}</label>
           {{if .Needs}}<small class="lk-why">Needs {{.Needs}}</small>{{end}}
-          {{if .Required}}<ul>{{range .Required}}<li>{{.Unlocks}} <code>{{.Scope}}</code></li>{{end}}</ul>{{else}}<ul><li>No EVE permission needed.</li></ul>{{end}}
+          {{if .Required}}<ul>{{range .Required}}<li>{{.Unlocks}} <code>{{.Scope}}</code></li>{{end}}</ul>{{else if .Role}}<ul><li>Reads what your in-game role allows: choose below.</li></ul>{{else}}<ul><li>No EVE permission needed.</li></ul>{{end}}
         </div>
         {{end}}
       </div>
+    {{end}}
+
+    {{if and .Roles (ne .Step "advanced")}}
+    <h3 class="lk-sub">Your role in the corporation <small>(EVE only shows corporation data to characters who hold the role)</small></h3>
+    <p><small>Tick what this character can do in its corporation. If you are not sure, leave it unticked: you can add it later from your characters.</small></p>
+    <div class="lk-rows">
+      {{range .Roles}}
+      <label class="lk-opt"><input type="checkbox" name="enhance" value="{{.Scope}}"{{if .Ticked}} checked{{end}}><span><strong>{{.Feature}}</strong>{{if .Roles}} <em>(needs the role {{.Roles}})</em>{{end}}: {{.Unlocks}} <code>{{.Scope}}</code></span></label>
+      {{end}}
+    </div>
+    {{end}}
+
+    {{if .Server}}
+    <h3 class="lk-sub">This server <small>(your choice; not needed)</small></h3>
+    <div class="lk-rows">
+      {{range .Server}}
+      <label class="lk-opt"><input type="checkbox" name="enhance" value="{{.Scope}}"{{if .Ticked}} checked{{end}}><span>{{.Unlocks}} <code>{{.Scope}}</code></span></label>
+      {{end}}
+    </div>
     {{end}}
 
     {{if and .Popular (ne .Step "advanced")}}

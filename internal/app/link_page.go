@@ -43,7 +43,9 @@ type linkView struct {
 	Features   []linkFeatureView
 	Groups     []linkGroupView // advanced: every feature, grouped
 	Popular    []linkEnhancementView
-	Count      int // permissions EVE will ask for
+	Roles      []linkRoleView        // corporation permissions, framed by the in-game role they need
+	Server     []linkEnhancementView // what this server offers on top
+	Count      int                   // permissions EVE will ask for
 	Required   int
 	Remembered bool
 	Character  int64
@@ -70,10 +72,19 @@ type linkFeatureView struct {
 	Why      string // "Needed by Doctrines"
 	Needs    string // "Needs Fitting"
 	Required []linkScopeView
+	Role     []linkRoleView // corporation permissions of the feature, as opt-ins
 	Enhance  []linkEnhancementView
 }
 
 type linkScopeView struct{ Scope, Unlocks string }
+
+type linkRoleView struct {
+	Scope   string
+	Unlocks string
+	Feature string
+	Roles   string
+	Ticked  bool
+}
 
 type linkEnhancementView struct {
 	Scope   string
@@ -129,7 +140,7 @@ func (app *Application) handleLinkChoose(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	res, err := resolveLinkLenient(choice)
+	res, err := app.resolveLinkLenient(choice)
 	if err != nil {
 		view.Error = "That selection could not be read: " + err.Error() + "."
 		view.Step = "cards"
@@ -178,25 +189,42 @@ func fillLinkView(view *linkView, res linkResolved) {
 	for _, e := range res.Enhancements {
 		view.Popular = append(view.Popular, linkEnhancementView{Scope: e.Scope, Unlocks: e.Unlocks, Feature: e.Feature, Ticked: e.Chosen})
 	}
+	for _, r := range res.RoleOptIns {
+		view.Roles = append(view.Roles, linkRoleView{Scope: r.Scope, Unlocks: r.Unlocks, Feature: r.Feature, Roles: r.Roles, Ticked: r.Chosen})
+	}
+	for _, e := range res.ServerExtras {
+		view.Server = append(view.Server, linkEnhancementView{Scope: e.Scope, Unlocks: e.Unlocks, Feature: e.Feature, Ticked: e.Chosen})
+	}
 	var pinned []string
 	for _, row := range res.Features {
 		if row.Pinned {
 			pinned = append(pinned, row.ID)
 		}
 	}
-	var chosen []string
+	var chosen, unchosen []string
 	for _, e := range res.Enhancements {
 		if e.Chosen {
 			chosen = append(chosen, e.Scope)
+		} else {
+			unchosen = append(unchosen, e.Scope)
+		}
+	}
+	for _, r := range res.RoleOptIns {
+		if r.Chosen {
+			chosen = append(chosen, r.Scope)
+		} else {
+			unchosen = append(unchosen, r.Scope)
+		}
+	}
+	for _, e := range res.ServerExtras {
+		if e.Chosen {
+			chosen = append(chosen, e.Scope)
+		} else {
+			unchosen = append(unchosen, e.Scope)
 		}
 	}
 	view.Continue = linkEVEURL(pinned, chosen, view.Character)
-	all := append([]string(nil), chosen...)
-	for _, e := range res.Enhancements {
-		if !e.Chosen {
-			all = append(all, e.Scope)
-		}
-	}
+	all := append(append([]string(nil), chosen...), unchosen...)
 	view.Full = linkChooseURL(url.Values{"feature": pinned, "enhance": all, "submitted": {"1"}}, view.Character)
 	view.Switch = linkChooseURL(url.Values{"advanced": {"1"}, "feature": pinned, "enhance": chosen, "submitted": {"1"}}, view.Character)
 }
@@ -212,6 +240,11 @@ func fillAdvanced(view *linkView, res linkResolved) {
 	for _, e := range res.Enhancements {
 		if e.Chosen {
 			chosen[e.Scope] = true
+		}
+	}
+	for _, r := range res.RoleOptIns {
+		if r.Chosen {
+			chosen[r.Scope] = true
 		}
 	}
 	titles := map[string]string{}
@@ -253,6 +286,9 @@ func fillAdvanced(view *linkView, res linkResolved) {
 		fv.Needs = titleList(needs)
 		for _, s := range f.Required {
 			fv.Required = append(fv.Required, linkScopeView{Scope: s.Scope, Unlocks: s.Unlocks})
+		}
+		for _, r := range f.Role {
+			fv.Role = append(fv.Role, linkRoleView{Scope: r.Scope, Unlocks: r.Unlocks, Feature: f.Title, Roles: r.Roles, Ticked: chosen[r.Scope]})
 		}
 		for _, s := range f.Enhance {
 			fv.Enhance = append(fv.Enhance, linkEnhancementView{Scope: s.Scope, Unlocks: s.Unlocks, Feature: f.Title, Ticked: chosen[s.Scope]})
@@ -317,9 +353,9 @@ func (app *Application) rememberedLink(ctx context.Context) (linkChoice, bool) {
 	}
 	// A feature or permission a later build dropped must not break the
 	// page: keep what still resolves.
-	if _, err := resolveLink(c); err != nil {
+	if _, err := app.resolveLink(c); err != nil {
 		c = linkChoice{Activities: c.Activities}
-		if _, err := resolveLink(c); err != nil {
+		if _, err := app.resolveLink(c); err != nil {
 			return linkChoice{}, false
 		}
 	}
@@ -343,9 +379,9 @@ func (app *Application) rememberLink(ctx context.Context, userID int64, c linkCh
 // linkChoiceFromQuery reads a choice from /auth/eve: repeated feature,
 // enhance and activity parameters, or full=1 for every feature and every
 // extra permission (the link as it was before the chooser).
-func linkChoiceFromQuery(q url.Values) (linkChoice, bool) {
+func (app *Application) linkChoiceFromQuery(q url.Values) (linkChoice, bool) {
 	if q.Get("full") == "1" {
-		return fullLinkChoice(), true
+		return fullLinkChoiceWith(app.linkServerExtras()), true
 	}
 	c := linkChoice{Activities: q["activity"], Features: q["feature"], Enhance: q["enhance"]}
 	return c, !c.empty()
@@ -355,13 +391,19 @@ func linkChoiceFromQuery(q url.Values) (linkChoice, bool) {
 // permission that belongs to no chosen feature (its feature was just
 // unticked) is dropped instead of refused, so the list can be updated.
 // The link to EVE (resolveLink) stays strict.
-func resolveLinkLenient(c linkChoice) (linkResolved, error) {
-	base, err := resolveLink(linkChoice{Activities: c.Activities, Features: c.Features})
+func (app *Application) resolveLinkLenient(c linkChoice) (linkResolved, error) {
+	base, err := app.resolveLink(linkChoice{Activities: c.Activities, Features: c.Features})
 	if err != nil {
 		return linkResolved{}, err
 	}
 	known := map[string]bool{}
 	for _, e := range base.Enhancements {
+		known[e.Scope] = true
+	}
+	for _, r := range base.RoleOptIns {
+		known[r.Scope] = true
+	}
+	for _, e := range base.ServerExtras {
 		known[e.Scope] = true
 	}
 	var keep []string
@@ -371,7 +413,7 @@ func resolveLinkLenient(c linkChoice) (linkResolved, error) {
 		}
 	}
 	c.Enhance = keep
-	return resolveLink(c)
+	return app.resolveLink(c)
 }
 
 // linkAccent is the accent of the first kind of play a feature serves.

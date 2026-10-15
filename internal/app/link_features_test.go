@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"evesynapse/internal/app/swarm"
 	"html"
 	"net/http"
 	"net/http/httptest"
@@ -157,6 +158,9 @@ func TestEveryModuleIsReachable(t *testing.T) {
 	}
 	all, _ := resolveLink(linkChoice{Activities: []string{activityEverything}})
 	for _, m := range registeredModules {
+		if exempt[m.ID] {
+			continue // operator-level: never a switch in the chooser
+		}
 		found := false
 		for _, f := range all.Features {
 			found = found || f.ID == m.ID
@@ -288,5 +292,77 @@ func TestChoiceIsRemembered(t *testing.T) {
 	body := get(app, cookie, "/auth/link").Body.String()
 	if !strings.Contains(body, "the choices you made last time") || !strings.Contains(body, "Skills") {
 		t.Errorf("the next link does not open on the remembered choice:\n%s", body)
+	}
+}
+
+// TestCorporationScopesAreRoleOptIns: picking the corporation playstyle
+// does not ask for the role-gated corporation permissions. They are offered
+// as opt-ins framed by the in-game role each needs, and ticking one adds
+// exactly that scope.
+func TestCorporationScopesAreRoleOptIns(t *testing.T) {
+	const wallets = "esi-wallet.read_corporation_wallets.v1"
+	res, err := resolveLink(linkChoice{Activities: []string{"corporation"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if contains(res.Scopes, wallets) || contains(res.Required, wallets) {
+		t.Errorf("the corporation playstyle asks for %q without being told the role", wallets)
+	}
+	var offered *linkRoleOptIn
+	for i := range res.RoleOptIns {
+		if res.RoleOptIns[i].Scope == wallets {
+			offered = &res.RoleOptIns[i]
+		}
+	}
+	if offered == nil || offered.Chosen || offered.Roles != "Accountant or Junior Accountant" {
+		t.Fatalf("the wallet opt-in = %+v, want an unticked one framed by the Accountant role", offered)
+	}
+	with, err := resolveLink(linkChoice{Activities: []string{"corporation"}, Enhance: []string{wallets}})
+	if err != nil || !contains(with.Scopes, wallets) || len(with.Scopes) != len(res.Scopes)+1 {
+		t.Errorf("opting in to the wallets gave %v from %v (%v)", with.Scopes, res.Scopes, err)
+	}
+	// Not offered without a corporation feature to go with it.
+	if _, err := resolveLink(linkChoice{Features: []string{"skills"}, Enhance: []string{wallets}}); err == nil {
+		t.Error("a corporation permission was accepted without a corporation feature")
+	}
+	// The full link still carries it.
+	if !contains(requestableScopes(), wallets) {
+		t.Error("the full link lost the corporation wallets permission")
+	}
+}
+
+// TestSharedCacheIsNotAFeature: the shared cache is never a switch in the
+// chooser. Its one extra, the structures permission, is offered only on a
+// server that has the cache on (SHARED_CACHE open or allowlist).
+func TestSharedCacheIsNotAFeature(t *testing.T) {
+	app := linkApp(t)
+	const structures = "esi-universe.read_structures.v1"
+	for _, f := range linkFeatures() {
+		if f.ID == "swarm" {
+			t.Fatal("the shared cache is offered as a feature")
+		}
+	}
+
+	off := get(app, nil, "/auth/link?submitted=1&feature=skills").Body.String()
+	if strings.Contains(off, "This server") || strings.Contains(off, structures) {
+		t.Error("the structures extra is offered on a server with the shared cache off")
+	}
+	if rec := get(app, nil, "/auth/eve?feature=skills&enhance="+structures); rec.Code != http.StatusBadRequest {
+		t.Errorf("the structures extra was accepted with the cache off (status %d)", rec.Code)
+	}
+
+	swarm.StateFor(app).Cfg = swarm.SwarmConfig{Mode: swarm.SwarmOpen, Secret: swarmTestSecret, GossipHours: swarm.DefaultSwarmGossipHours}
+	on := get(app, nil, "/auth/link?submitted=1&feature=skills").Body.String()
+	if !strings.Contains(on, "This server") || !strings.Contains(on, structures) {
+		t.Error("the structures extra is not offered with the shared cache on")
+	}
+	if strings.Contains(on, "Shared Cache") || strings.Contains(on, ">swarm<") {
+		t.Error("the page offers the shared cache itself")
+	}
+	if got := eveScopeParam(t, get(app, nil, "/auth/eve?feature=skills&enhance="+structures)); !contains(got, structures) {
+		t.Errorf("opting in asked for %v", got)
+	}
+	if got := eveScopeParam(t, get(app, nil, "/auth/eve?feature=skills")); contains(got, structures) {
+		t.Error("the structures extra is ticked by default")
 	}
 }

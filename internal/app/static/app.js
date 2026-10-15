@@ -160,6 +160,9 @@
     for (var j = 0; j < cards.length; j++) {
       // Home modules expand instead of folding (see Expanders).
       if (cards[j].closest(".home-grid")) continue;
+      // data-fold="never" on a card: one window that is the page (the
+      // sign-up question), nothing to fold.
+      if (cards[j].getAttribute("data-fold") === "never") continue;
       addFold(cards[j], cards[j].querySelector(":scope > h2, :scope > h3"));
     }
   }

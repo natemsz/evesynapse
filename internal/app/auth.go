@@ -246,8 +246,8 @@ func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 	// permissions by id. The server works the scopes out from the
 	// declarations (never from scope strings sent by the browser), and a
 	// link asks only for a subset of what the developer portal allows.
-	if choice, ok := linkChoiceFromQuery(r.URL.Query()); ok {
-		res, err := resolveLink(choice)
+	if choice, ok := app.linkChoiceFromQuery(r.URL.Query()); ok {
+		res, err := app.resolveLink(choice)
 		if err != nil {
 			http.Error(w, "Unknown feature or permission", http.StatusBadRequest)
 			return
@@ -270,7 +270,7 @@ func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// No choice: every feature this build has, as before the chooser.
-		cfg.Scopes = requestableScopes()
+		cfg.Scopes = app.requestableScopes()
 	}
 	// A targeted re-link (?module=&character=) asks for the module's
 	// missing scopes on top of the character's existing grants.
@@ -682,7 +682,7 @@ func (app *Application) verifyAccessToken(ctx context.Context, accessToken strin
 	// the character; it changes when the character is transferred.
 	ownerHash, _ = claims["owner"].(string)
 
-	scopes = strings.Join(requestableScopes(), " ")
+	scopes = strings.Join(app.requestableScopes(), " ")
 	if scp, ok := claims["scp"].([]any); ok && len(scp) > 0 {
 		granted := make([]string, 0, len(scp))
 		for _, s := range scp {

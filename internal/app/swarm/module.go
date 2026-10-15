@@ -152,7 +152,13 @@ var Module = module.Module{
 	EnhanceScopes: []module.Scope{
 		{Scope: module.StructureScope, Unlocks: "Shared structure names are spot-checked with a character that can read the structure."},
 	},
-	Init:       initSwarm,
+	Init: initSwarm,
+	LinkExtras: func(deps module.Deps) []module.Scope {
+		if !StateFor(deps).Cfg.Enabled() {
+			return nil
+		}
+		return []module.Scope{{Scope: module.StructureScope, Unlocks: "Check the structure names this server shares with other instances, using a character that can read the structure."}}
+	},
 	FetchGates: []module.FetchGate{gate{}},
 	CycleJobs: []module.CycleJob{
 		{Name: "swarm fetch", Describe: "asking the swarm first", At: module.BeforePublicData, Run: func(ctx context.Context, deps module.Deps, c module.Cycle) (int, bool) {

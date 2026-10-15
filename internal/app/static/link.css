@@ -69,5 +69,6 @@
 .lk-row li code { color: var(--muted-2); font-size: 0.78rem; }
 .lk-opt { display: flex; align-items: baseline; gap: 0.45rem; margin: 0.2rem 0 0 1.6rem; color: var(--muted); font-size: 0.85rem; cursor: pointer; }
 .lk-opt input { margin-top: 0.15rem; }
-.lk-group h3 { margin: 0.9rem 0 0.2rem; color: var(--ti-accent, var(--accent)); }
+.lk-group { margin-top: 0.9rem; }
+.lk-group.foldable > h3:first-child { margin-top: 0; color: var(--ti-accent, var(--accent)); border-left: 3px solid var(--ti-accent, var(--accent)); }
 .lk-sub { margin: 0.6rem 0 0.2rem; }

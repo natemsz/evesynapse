@@ -791,6 +791,8 @@ func TestFitSimulateImplants(t *testing.T) {
 	mustContain(t, "/fittings/simulate/", body, ">374 m/s<")
 	mustContain(t, "/fittings/simulate/", body,
 		"High-grade Snake Alpha", "High-grade Snake Omega")
+	// What the set does, beside the ship stats: 300 -> 374 m/s.
+	mustContain(t, "/fittings/simulate/", body, "Effects from implants", "<dt>Speed</dt>", "300 m/s → 374 m/s")
 
 	// Jump clone with a lone Alpha: set multiplier 1.15 on 0.5% ->
 	// 300 * 1.00575 = 301.725 -> "302 m/s".

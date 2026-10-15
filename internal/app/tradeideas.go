@@ -28,12 +28,14 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"math"
 	"net/http"
-	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 )
 
@@ -262,23 +264,65 @@ func (app *Application) buildTradeIdeasCSV(ctx context.Context) (string, bool) {
 }
 
 // buildTradeIdeasCSVRows is buildTradeIdeasCSV capped to limit rows
-// (the page's ask reads more of the scanner than the module's).
+// (the page's ask reads more of the scanner than the module's). It reads
+// the stored scanner statistics itself -- the same bounded query the
+// spread scanner page uses (ListScannerOpportunities, at the scanner's
+// default filters, capped at the scanner's own row cap) -- and formats
+// the rows here, so it does not depend on the scanner page's view.
 func (app *Application) buildTradeIdeasCSVRows(ctx context.Context, limit int) (string, bool) {
-	view := app.buildScannerView(ctx, url.Values{"region": {forgeRegionID}})
-	if !view.HasData || len(view.Rows) == 0 {
+	regionID, _ := strconv.ParseInt(forgeRegionID, 10, 64)
+	stamp, err := app.queries.GetMarketStationStatsStamp(ctx, regionID)
+	if err != nil || stamp.RowCount == 0 {
+		if err != nil {
+			logging.Errorf("trade ideas: station stats stamp for region %d: %v", regionID, err)
+		}
 		return "", false
 	}
-	rows := view.Rows
-	if len(rows) > limit {
-		rows = rows[:limit]
+	rowCap := int64(limit)
+	if rowCap > scannerRowCap {
+		rowCap = scannerRowCap
+	}
+	opp, err := app.queries.ListScannerOpportunities(ctx, db.ListScannerOpportunitiesParams{
+		RegionID:  regionID,
+		MinSpread: defaultScannerMinSpreadPct,
+		MinVolume: 1,
+		RowCap:    rowCap,
+	})
+	if err != nil {
+		logging.Errorf("trade ideas: list opportunities for region %d: %v", regionID, err)
+		return "", false
+	}
+	if len(opp) == 0 {
+		return "", false
 	}
 	var buf bytes.Buffer
 	out := csv.NewWriter(&buf)
 	_ = out.Write([]string{"Item", "Station", "Highest buy price", "Lowest sell price", "Spread %", "Sold per day", "Estimated daily profit"})
-	for _, row := range rows {
+	stationMemo := make(map[int64]placeRef)
+	for _, s := range opp {
+		name := app.typeNameOrID(ctx, s.TypeID)
+		if strings.HasPrefix(name, "Type #") {
+			if row, rerr := app.queries.GetSDEType(ctx, s.TypeID); rerr == nil && row.Name != "" {
+				name = row.Name
+			}
+		}
+		// The tradeable size is whichever runs out first: what trades
+		// each day, what sellers hold, or what buyers want.
+		size := s.DailyVolume
+		if float64(s.SellVolume) < size {
+			size = float64(s.SellVolume)
+		}
+		if float64(s.BuyVolume) < size {
+			size = float64(s.BuyVolume)
+		}
 		_ = out.Write([]string{
-			tradeIdeasCell(row.ItemName), tradeIdeasCell(row.Station.Name), row.BestBuy, row.BestSell,
-			row.SpreadPct, row.DailyVolume, row.DailyProfit,
+			tradeIdeasCell(name),
+			tradeIdeasCell(app.scannerStationRef(ctx, stationMemo, s.LocationID).Name),
+			esi.FormatISK(s.BestBuy),
+			esi.FormatISK(s.BestSell),
+			fmt.Sprintf("%.1f%%", (s.BestSell-s.BestBuy)/s.BestBuy*100),
+			esi.FormatInt(int64(math.Round(s.DailyVolume))),
+			esi.FormatISK((s.BestSell - s.BestBuy) * size),
 		})
 	}
 	out.Flush()

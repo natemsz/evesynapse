@@ -13,21 +13,21 @@ package app
 // load costs the same whether the regions hold ten thousand
 // or a hundred thousand stored rows.
 //
-// Formula (deliberate; mirrored in the page copy):
+// Formula (mirrored in the page copy): a haul. Buy from the
+// origin's sell orders, carry it over, list it in the destination.
 //
-//	margin per item  = destination typical sell - origin typical buy
-//	margin %         = margin / origin typical buy * 100
+//	margin per item  = destination typical sell - origin typical sell
+//	margin %         = margin / origin typical sell * 100
 //	units per day    = min(destination sold per day,
-//	                       origin's open buy volume,
-//	                       destination's open sell volume)
+//	                       origin's stock on sale)
 //	profit per day   = margin * units per day
 //
-// The origin's open buy volume is how much buying is already posted
-// where the buying happens, and the destination's open sell volume
-// is how much stock is already posted where the selling happens --
-// both are "how much room is there" caps next to what
-// actually trades each day. A row with any of the three at zero
-// cannot move, so it drops out instead of showing a fantasy number.
+// What the destination sells a day is how fast listed stock moves;
+// the origin's open sell volume is how much there is to buy. A row
+// with either at zero cannot move, so it drops out instead of
+// showing a fantasy number. A destination price over ten times the
+// origin's is a long shot (a thin book, or a price nobody pays), so
+// those routes are hidden unless the viewer opts in.
 // A route whose destination has no recorded history yet has no
 // sold-per-day figure at all (history is fetched per item, and only
 // The Forge's liquid core is kept warm without being asked). Those
@@ -78,7 +78,7 @@ const defaultTradefinderDestination = int64(10000043)
 type tradefinderRow struct {
 	TypeID      int64
 	ItemName    string
-	BuyTypical  string // esi.FormatISK, origin typical buy
+	BuyTypical  string // esi.FormatISK, origin typical sell (what buying costs)
 	SellTypical string // esi.FormatISK, destination typical sell
 	ProfitItem  string // esi.FormatISK, margin per item
 	MarginPct   string // "12.3%"
@@ -114,7 +114,7 @@ type tradefinderView struct {
 	Regions       []marketRegion
 	MinMargin     string // margin-% floor as typed (echoed in the form)
 	MinVolume     int64  // sold-per-day floor from the filter
-	Lowball       bool   // include degenerate-book routes (hidden by default)
+	Lowball       bool   // include long-shot routes (hidden by default)
 	SameRegion    bool   // origin == destination: a valid but empty case
 	OriginHasData bool   // a sweep has covered the origin region
 	DestHasData   bool   // a sweep has covered the destination region
@@ -215,8 +215,8 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 			minVolume = v
 		}
 	}
-	// Lowball routes (degenerate origin buy books) stay hidden
-	// unless the viewer opts in; the flag echoes in the form.
+	// Long-shot routes (destination over ten times the origin) stay
+	// hidden unless the viewer opts in; the flag echoes in the form.
 	includeLowball := firstQuery(q, "lowball") == "1"
 
 	view := &tradefinderView{
@@ -321,28 +321,24 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 
 	stationMemo := make(map[int64]placeRef)
 	for _, r := range routes {
-		margin := r.DestTypicalSell - r.OriginTypicalBuy
-		marginPct := margin / r.OriginTypicalBuy * 100
-		// Sold per day at the destination: the sweep's stored
-		// 7-day average on the destination's region row (schema
-		// 035) -- no per-type history reads at render time.
+		margin := r.DestTypicalSell - r.OriginTypicalSell
+		marginPct := margin / r.OriginTypicalSell * 100
+		// Sold per day at the destination: the stored 7-day average
+		// on the destination's region row -- no per-type history
+		// reads at render time.
 		vol := r.DestDailyVolume
-		// The movable size is whichever runs out first: what
-		// actually trades at the destination each day, the open
-		// buy volume where the buying happens, or the open sell
-		// volume where the selling happens.
+		// The movable size is whichever runs out first: what the
+		// destination sells each day, or the stock on sale in the
+		// origin.
 		size := vol
-		if float64(r.OriginBuyVolume) < size {
-			size = float64(r.OriginBuyVolume)
-		}
-		if float64(r.DestSellVolume) < size {
-			size = float64(r.DestSellVolume)
+		if float64(r.OriginSellVolume) < size {
+			size = float64(r.OriginSellVolume)
 		}
 		profit := margin * size
 		row := tradefinderRow{
 			TypeID:      r.TypeID,
 			ItemName:    itemNameFor(r.TypeID),
-			BuyTypical:  esi.FormatISK(r.OriginTypicalBuy),
+			BuyTypical:  esi.FormatISK(r.OriginTypicalSell),
 			SellTypical: esi.FormatISK(r.DestTypicalSell),
 			ProfitItem:  esi.FormatISK(margin),
 			MarginPct:   fmt.Sprintf("%.1f%%", marginPct),
@@ -375,14 +371,14 @@ func (app *Application) buildTradefinderView(ctx context.Context, q map[string][
 		return view
 	}
 	for _, r := range pending {
-		margin := r.DestTypicalSell - r.OriginTypicalBuy
+		margin := r.DestTypicalSell - r.OriginTypicalSell
 		view.Pending = append(view.Pending, tradefinderPendingRow{
 			TypeID:      r.TypeID,
 			ItemName:    itemNameFor(r.TypeID),
-			BuyTypical:  esi.FormatISK(r.OriginTypicalBuy),
+			BuyTypical:  esi.FormatISK(r.OriginTypicalSell),
 			SellTypical: esi.FormatISK(r.DestTypicalSell),
 			ProfitItem:  esi.FormatISK(margin),
-			MarginPct:   fmt.Sprintf("%.1f%%", margin/r.OriginTypicalBuy*100),
+			MarginPct:   fmt.Sprintf("%.1f%%", margin/r.OriginTypicalSell*100),
 		})
 	}
 	return view

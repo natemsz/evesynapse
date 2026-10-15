@@ -596,32 +596,30 @@ SELECT MAX(updated_at) AS stamp, COUNT(*) AS row_count
 FROM market_region_stats WHERE region_id = $1;
 -- name: ListTradefinderRoutes :many
 -- The tradefinder's routes, computed and ranked in SQL: one
--- bounded read of at most tradefinderRowCap rows instead of
--- pulling both regions' stored stats into Go. Mirrors the old
--- Go filter exactly: fresh figures on both sides (3-day rule), a
--- real typical buy and sell, margin above zero, the lowball
--- opt-out, the margin-% floor, the sold-per-day floor, and the
--- movable size as the least of what trades, the origin's open buy
--- volume, and the destination's open sell volume.
-SELECT type_id, origin_typical_buy, dest_typical_sell, dest_daily_volume,
-       origin_buy_volume, dest_sell_volume
+-- bounded read of at most tradefinderRowCap rows. A route buys
+-- from the origin's sell orders (its typical sell price) and lists
+-- in the destination at its typical sell price. Fresh figures on
+-- both sides (3-day rule), margin above zero and over the margin-%
+-- floor, long-shot routes (destination over ten times the origin)
+-- only on opt-in, the sold-per-day floor, and the movable size as
+-- the lesser of what the destination sells a day and the stock on
+-- sale in the origin.
+SELECT type_id, origin_typical_sell, dest_typical_sell, dest_daily_volume, origin_sell_volume
 FROM (
     SELECT o.type_id,
-           o.typical_buy AS origin_typical_buy,
+           o.typical_sell AS origin_typical_sell,
            d.typical_sell AS dest_typical_sell,
            d.avg_daily_volume AS dest_daily_volume,
-           o.buy_volume AS origin_buy_volume,
-           d.sell_volume AS dest_sell_volume,
-           (d.typical_sell - o.typical_buy) * LEAST(d.avg_daily_volume, o.buy_volume::double precision, d.sell_volume::double precision) AS profit
+           o.sell_volume AS origin_sell_volume,
+           (d.typical_sell - o.typical_sell) * LEAST(d.avg_daily_volume, o.sell_volume::double precision) AS profit
     FROM market_region_stats o
     JOIN market_region_stats d ON d.region_id = sqlc.arg(dest_region) AND d.type_id = o.type_id
     WHERE o.region_id = sqlc.arg(origin_region)
-      AND o.typical_buy > 0 AND d.typical_sell > 0
-      AND d.typical_sell > o.typical_buy
-      AND (sqlc.arg(include_lowball)::bigint = 1 OR NOT (o.typical_sell > 0 AND o.typical_buy * 10 < o.typical_sell))
-      AND (d.typical_sell - o.typical_buy) / o.typical_buy * 100 >= sqlc.arg(min_margin)
+      AND o.typical_sell > 0 AND d.typical_sell > o.typical_sell
+      AND (sqlc.arg(include_lowball)::bigint = 1 OR d.typical_sell <= o.typical_sell * 10)
+      AND (d.typical_sell - o.typical_sell) / o.typical_sell * 100 >= sqlc.arg(min_margin)
       AND d.avg_daily_volume >= sqlc.arg(min_volume)::bigint
-      AND LEAST(d.avg_daily_volume, o.buy_volume::double precision, d.sell_volume::double precision) > 0
+      AND LEAST(d.avg_daily_volume, o.sell_volume::double precision) > 0
       AND o.updated_at >= sqlc.arg(cutoff) AND d.updated_at >= sqlc.arg(cutoff)
 ) ranked
 ORDER BY profit DESC, type_id
@@ -630,21 +628,20 @@ LIMIT sqlc.arg(row_cap)::bigint;
 -- Routes that pass every price rule but have no sold-per-day
 -- figure at the destination yet (no recorded history there): the
 -- tradefinder lists them apart and queues their history, ranked
--- by margin times the smaller open volume as a rough potential.
+-- by margin times the origin's stock on sale as a rough potential.
 SELECT o.type_id,
-       o.typical_buy AS origin_typical_buy,
+       o.typical_sell AS origin_typical_sell,
        d.typical_sell AS dest_typical_sell
 FROM market_region_stats o
 JOIN market_region_stats d ON d.region_id = sqlc.arg(dest_region) AND d.type_id = o.type_id
 WHERE o.region_id = sqlc.arg(origin_region)
-  AND o.typical_buy > 0 AND d.typical_sell > 0
-  AND d.typical_sell > o.typical_buy
-  AND (sqlc.arg(include_lowball)::bigint = 1 OR NOT (o.typical_sell > 0 AND o.typical_buy * 10 < o.typical_sell))
-  AND (d.typical_sell - o.typical_buy) / o.typical_buy * 100 >= sqlc.arg(min_margin)
+  AND o.typical_sell > 0 AND d.typical_sell > o.typical_sell
+  AND (sqlc.arg(include_lowball)::bigint = 1 OR d.typical_sell <= o.typical_sell * 10)
+  AND (d.typical_sell - o.typical_sell) / o.typical_sell * 100 >= sqlc.arg(min_margin)
   AND d.avg_daily_volume = 0
-  AND LEAST(o.buy_volume, d.sell_volume) > 0
+  AND o.sell_volume > 0
   AND o.updated_at >= sqlc.arg(cutoff) AND d.updated_at >= sqlc.arg(cutoff)
-ORDER BY (d.typical_sell - o.typical_buy) * LEAST(o.buy_volume, d.sell_volume)::double precision DESC, o.type_id
+ORDER BY (d.typical_sell - o.typical_sell) * o.sell_volume::double precision DESC, o.type_id
 LIMIT sqlc.arg(row_cap)::bigint;
 -- name: RefreshMarketRegionStatAvgVolume :exec
 -- Recomputes one region stat's sold-per-day figure from its stored

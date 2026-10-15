@@ -468,6 +468,14 @@ func (c *cycleState) noteLimit(what string) {
 			return
 		}
 	}
+	// A rate limit on one group of routes (a public bucket, or one
+	// held at its reserve) stops only the pass that ran into it: the
+	// cycle's other passes use other buckets. Only the application's
+	// error limit stops everything.
+	if !c.app.esi.HardLimitActive(time.Now()) {
+		logging.Warnf("worker: ESI rate limit %s; that pass waits for the next cycle", what)
+		return
+	}
 	logging.Warnf("worker: ESI error limit hit %s; backing off until next cycle", what)
 	c.limited = true
 	if c.halt != nil {

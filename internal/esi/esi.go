@@ -391,7 +391,8 @@ type Client struct {
 	// before spending budget instead of discovering 420s.
 	errBudgetMu     sync.RWMutex
 	errBudgetRemain int
-	errBudgetReset  int64 // unix seconds when the budget resets
+	errBudgetReset  int64     // unix seconds when the budget resets
+	hardLimitAt     time.Time // the latest 420 (HardLimitActive)
 
 	// rates is what is known of ESI's per-character rate limits
 	// (ratelimit.go).
@@ -576,6 +577,8 @@ type UniverseIDEntry struct {
 // UniverseIDs is the slice of POST /universe/ids/ we consume.
 type UniverseIDs struct {
 	Characters     []UniverseIDEntry `json:"characters"`
+	Corporations   []UniverseIDEntry `json:"corporations"`
+	Alliances      []UniverseIDEntry `json:"alliances"`
 	InventoryTypes []UniverseIDEntry `json:"inventory_types"`
 }
 
@@ -1628,6 +1631,7 @@ func (c *Client) sendOnce(ctx context.Context, method, accessToken, path string,
 		return nil, resp.Header, resp.StatusCode, fmt.Errorf("ESI %s %s: status %d: %w (%w)", method, path, resp.StatusCode, ErrErrorLimit, ErrRateLimited)
 	}
 	if resp.StatusCode == 420 {
+		c.noteHardLimit(time.Now())
 		return nil, resp.Header, resp.StatusCode, fmt.Errorf("ESI %s %s: status %d: %w", method, path, resp.StatusCode, ErrErrorLimit)
 	}
 	for _, code := range want {
@@ -1715,6 +1719,32 @@ func (c *Client) trackErrorBudget(h http.Header) {
 			c.errBudgetReset = time.Now().Unix() + int64(n)
 		}
 	}
+}
+
+// hardLimitHold is how long after a 420 everything stays held: ESI's
+// error-limit window is a minute.
+const hardLimitHold = time.Minute
+
+// noteHardLimit records a 420: the whole application's error limit.
+func (c *Client) noteHardLimit(now time.Time) {
+	c.errBudgetMu.Lock()
+	c.hardLimitAt = now
+	c.errBudgetMu.Unlock()
+}
+
+// HardLimitActive reports whether ESI's application-wide error limit
+// is in force: a 420 within the last minute, or an error budget nearly
+// spent. A rate limit (429, or a bucket held at its reserve) is about
+// one group of routes for one character and is not this: work outside
+// that bucket should carry on.
+func (c *Client) HardLimitActive(now time.Time) bool {
+	c.errBudgetMu.RLock()
+	at := c.hardLimitAt
+	c.errBudgetMu.RUnlock()
+	if !at.IsZero() && now.Sub(at) < hardLimitHold {
+		return true
+	}
+	return c.ErrorBudgetLow()
 }
 
 // ErrorBudgetLow reports whether ESI's error budget is exhausted or

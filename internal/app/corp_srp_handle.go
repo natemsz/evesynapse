@@ -219,7 +219,7 @@ func (app *Application) handleSRPPayList(w http.ResponseWriter, r *http.Request)
 	name := app.corpDisplayName(ctx, corp)
 	lines := []string{
 		"Open ship replacement requests for " + html.EscapeString(name) + ".",
-		"Open a pilot's name to give ISK, then mark each request paid at " + app.siteURL(srpPath),
+		"Open a pilot's name to give ISK, then mark each request paid at " + app.SiteURL(srpPath),
 		"",
 	}
 	ops := map[int64]db.Op{}

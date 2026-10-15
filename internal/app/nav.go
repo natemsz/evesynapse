@@ -40,11 +40,19 @@ func registerModules(modules []module.Module) {
 		registeredModules = append(registeredModules, m)
 		for _, sec := range m.Nav {
 			for _, e := range sec.Entries {
-				sectionNav[sec.Section] = append(sectionNav[sec.Section], navEntry{
-					Href:  e.Href,
-					Label: e.Label,
-					Pages: e.Pages,
-				})
+				entry := navEntry{Href: e.Href, Label: e.Label, Pages: e.Pages}
+				list := sectionNav[sec.Section]
+				at := len(list)
+				for i, existing := range list {
+					if e.After != "" && existing.Href == e.After {
+						at = i + 1
+						break
+					}
+				}
+				list = append(list, navEntry{})
+				copy(list[at+1:], list[at:])
+				list[at] = entry
+				sectionNav[sec.Section] = list
 			}
 		}
 		for _, p := range m.Pages {
@@ -123,7 +131,6 @@ var sectionNav = map[string][]navEntry{
 		{"/doctrines/", "Doctrines", []string{"doctrines.html", "doctrine.html"}},
 		{"/doctrines/fits/", "Corporate Loadouts", []string{"corp_fits.html"}},
 		{"/srp/", "Ship Replacement", []string{"srp.html"}},
-		{"/discord/servers", "Discord Server", []string{"discord_servers.html"}},
 		{"/groups/", "Groups", []string{"groups.html"}},
 		{"/corporations/settings/", "Settings", []string{"corp_settings.html"}},
 	},

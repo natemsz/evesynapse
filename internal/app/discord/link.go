@@ -1,4 +1,4 @@
-package app
+package discord
 
 import (
 	"crypto/subtle"
@@ -8,7 +8,6 @@ import (
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
-	"evesynapse/internal/discord"
 	"evesynapse/internal/logging"
 )
 
@@ -28,30 +27,13 @@ import (
 // sessionDiscordState holds the sign-in's single-use state value.
 const sessionDiscordState = "discord_oauth_state"
 
-// discordFromConfig builds the Discord client, or nil when the install
-// has no Discord settings at all.
-func discordFromConfig(cfg Config) *discord.Client {
-	dc := discord.Config{
-		ClientID:     cfg.discordClientID,
-		ClientSecret: cfg.discordClientSecret,
-		BotToken:     cfg.discordBotToken,
-	}
-	if origin := cfg.publicOrigin(); origin != "" {
-		dc.RedirectURL = origin + "/discord/callback"
-	}
-	if !dc.CanLink() && !dc.HasBot() {
-		return nil
-	}
-	return discord.New(dc, nil, "")
-}
-
 // discordCanLink reports whether "Connect Discord" is offered.
-func (app *Application) discordCanLink() bool {
+func (app *mod) discordCanLink() bool {
 	return app.discord != nil && app.discord.Config().CanLink()
 }
 
 // discordLinkFor returns the account's link, if it has one.
-func (app *Application) discordLinkFor(r *http.Request, userID int64) (db.DiscordLink, bool) {
+func (app *mod) discordLinkFor(r *http.Request, userID int64) (db.DiscordLink, bool) {
 	link, err := app.queries.GetDiscordLink(r.Context(), userID)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
@@ -66,7 +48,7 @@ func (app *Application) discordLinkFor(r *http.Request, userID int64) (db.Discor
 // its actions come back to.
 const discordSettingsPath = "/notifications/settings"
 
-func (app *Application) handleDiscordConnect(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleDiscordConnect(w http.ResponseWriter, r *http.Request) {
 	app.sessions.Remove(r.Context(), sessionDiscordInstall)
 	if !app.discordCanLink() {
 		app.flash(r.Context(), "Discord is not set up on this server.")
@@ -83,7 +65,7 @@ func (app *Application) handleDiscordConnect(w http.ResponseWriter, r *http.Requ
 	http.Redirect(w, r, app.discord.AuthURL(state), http.StatusFound)
 }
 
-func (app *Application) handleDiscordCallback(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleDiscordCallback(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	q := r.URL.Query()
 	back := app.flashBack(w, r, discordSettingsPath)
@@ -159,7 +141,7 @@ func (app *Application) handleDiscordCallback(w http.ResponseWriter, r *http.Req
 	back("Discord connected as " + account.DisplayName() + ".")
 }
 
-func (app *Application) handleDiscordDisconnect(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleDiscordDisconnect(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
 	if userID != 0 {

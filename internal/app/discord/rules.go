@@ -1,4 +1,4 @@
-package app
+package discord
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	db "evesynapse/internal/db/sqlc"
-	"evesynapse/internal/discord"
+	dc "evesynapse/internal/discord"
 	"evesynapse/internal/logging"
 )
 
@@ -29,7 +29,7 @@ type discordRuleView struct {
 }
 
 // discordRuleViews builds a server's rule list for the page.
-func (app *Application) discordRuleViews(ctx context.Context, guild db.DiscordGuild, roles []discord.Role) []discordRuleView {
+func (app *mod) discordRuleViews(ctx context.Context, guild db.DiscordGuild, roles []dc.Role) []discordRuleView {
 	rules, err := app.queries.ListDiscordRoleRulesForGuild(ctx, guild.GuildID)
 	if err != nil {
 		logging.Errorf("discord: rules of %s: %v", guild.GuildID, err)
@@ -53,7 +53,7 @@ func (app *Application) discordRuleViews(ctx context.Context, guild db.DiscordGu
 
 // handleDiscordRuleAdd adds a rule to a server. The role has to be one
 // Discord lists for that very server and that can be given.
-func (app *Application) handleDiscordRuleAdd(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleDiscordRuleAdd(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
 	back := app.discordBack(w, r)
@@ -95,7 +95,7 @@ func (app *Application) handleDiscordRuleAdd(w http.ResponseWriter, r *http.Requ
 
 // handleDiscordRuleRemove removes a rule. Whoever held the role only
 // through it loses the role on the worker's next pass.
-func (app *Application) handleDiscordRuleRemove(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleDiscordRuleRemove(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
 	back := app.discordBack(w, r)

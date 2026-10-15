@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	discordmod "evesynapse/internal/app/discord"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -155,7 +156,7 @@ func TestDiscordManyRoles(t *testing.T) {
 	fake.join(discordCorpGuild, discordBob)
 	now := notifyT0
 
-	f.app.discordSyncRoles(f.ctx, now)
+	discordmod.SyncRoles(f.ctx, f.app, now)
 	if got, want := fake.held(discordCorpGuild, discordAlice), groupRoleCEO+","+groupRoleDirector+","+discordRoleMember+","+discordRoleMod; got != sorted(want) {
 		t.Fatalf("the CEO and director holds %s, want %s", got, sorted(want))
 	}
@@ -166,13 +167,13 @@ func TestDiscordManyRoles(t *testing.T) {
 	// The in-game Director role is taken away: that role goes, the
 	// others stay. (CEO is read from the corporation, not from roles.)
 	seedSnapshot(t, f.q, f.ch.CharacterID, esi.SnapCorpRoles, esi.CharacterRoles{Roles: []string{"Accountant"}})
-	f.app.discordSyncRoles(f.ctx, now.Add(60e9))
+	discordmod.SyncRoles(f.ctx, f.app, now.Add(60e9))
 	if got, want := fake.held(discordCorpGuild, discordAlice), groupRoleCEO+","+discordRoleMember+","+discordRoleMod; got != sorted(want) {
 		t.Fatalf("after losing Director: %s, want %s", got, sorted(want))
 	}
 	// Somebody else becomes CEO.
 	f.ceoOf(discordCorp, 95000001)
-	f.app.discordSyncRoles(f.ctx, now.Add(120e9))
+	discordmod.SyncRoles(f.ctx, f.app, now.Add(120e9))
 	if got, want := fake.held(discordCorpGuild, discordAlice), discordRoleMember+","+discordRoleMod; got != sorted(want) {
 		t.Fatalf("after the CEO changed: %s, want %s", got, sorted(want))
 	}
@@ -180,14 +181,14 @@ func TestDiscordManyRoles(t *testing.T) {
 	// Out of the group: the group's role goes.
 	f.joinCorp(f.ch.CharacterID, discordCorp, "Director")
 	f.post(cookie, "/groups/"+strconv.FormatInt(logi, 10)+"/members/remove", url.Values{"character": {"90000002"}})
-	f.app.discordSyncRoles(f.ctx, now.Add(180e9))
+	discordmod.SyncRoles(f.ctx, f.app, now.Add(180e9))
 	if got := fake.held(discordCorpGuild, discordBob); got != discordRoleMember {
 		t.Fatalf("after leaving the group: %s, want the member role only", got)
 	}
 	// Back in, then the group is deleted: its rule goes with it, and
 	// so does the role.
 	f.post(cookie, "/groups/"+strconv.FormatInt(logi, 10)+"/members/add", url.Values{"character": {"90000002"}})
-	f.app.discordSyncRoles(f.ctx, now.Add(240e9))
+	discordmod.SyncRoles(f.ctx, f.app, now.Add(240e9))
 	if got, want := fake.held(discordCorpGuild, discordBob), discordRoleMember+","+groupRoleLogi; got != sorted(want) {
 		t.Fatalf("back in the group: %s, want %s", got, sorted(want))
 	}
@@ -200,7 +201,7 @@ func TestDiscordManyRoles(t *testing.T) {
 			t.Fatal("a rule about a deleted group is still there")
 		}
 	}
-	f.app.discordSyncRoles(f.ctx, now.Add(300e9))
+	discordmod.SyncRoles(f.ctx, f.app, now.Add(300e9))
 	if got := fake.held(discordCorpGuild, discordBob); got != discordRoleMember {
 		t.Fatalf("after the group was deleted: %s, want the member role only", got)
 	}

@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/http"
 	"strconv"
 	"strings"
@@ -237,8 +238,11 @@ type notifySettingsView struct {
 	PushConfigured bool
 	PushKey        string
 	PushDevices    int64
-	// Discord: what this server offers and what the account has done.
-	Discord discordSettingsView
+	// ChannelSections and AccountSections are what the modules that
+	// deliver notifications add to the page: a box inside the form, and
+	// a section below it (module.SettingsSection).
+	ChannelSections []template.HTML
+	AccountSections []template.HTML
 }
 
 type notifySettingRow struct {
@@ -253,21 +257,6 @@ type notifySettingRow struct {
 	// Minutes is the choice of lead for the op reminder, with the
 	// current one marked; nil for every other kind.
 	Minutes []notifyMinutesOption
-}
-
-// discordSettingsView is the Discord part of the settings page.
-type discordSettingsView struct {
-	CanLink bool // "Connect Discord" is offered
-	HasBot  bool // the bot can message and give roles
-	Linked  bool
-	Name    string // the connected account
-	DM      bool   // notifications go to it as direct messages
-	// DMProblem is what went wrong with the last direct message, if
-	// anything did.
-	DMProblem string
-	// Reconnect: the account connected before EveSynapse could add
-	// people to servers, or took that permission back on Discord.
-	Reconnect bool
 }
 
 // notifyMinutesOption is one lead the op reminder can be set to.
@@ -373,12 +362,14 @@ func (app *Application) handleNotificationSettings(w http.ResponseWriter, r *htt
 			view.PushDevices = n
 		}
 	}
-	view.Discord = discordSettingsView{CanLink: app.discordCanLink(), HasBot: app.discordHasBot()}
-	if link, linked := app.discordLinkFor(r, userID); linked {
-		view.Discord.Linked, view.Discord.Name, view.Discord.DM = true, link.Username, link.DmNotifications
-		view.Discord.Reconnect = view.Discord.HasBot && link.AccessToken == ""
-		if link.DmNotifications {
-			view.Discord.DMProblem = link.DmProblem
+	for _, m := range registeredModules {
+		if sec := m.NotifySettings; sec != nil {
+			if sec.Channel != nil {
+				view.ChannelSections = append(view.ChannelSections, sec.Channel(ctx, app, r, userID))
+			}
+			if sec.Account != nil {
+				view.AccountSections = append(view.AccountSections, sec.Account(ctx, app, r, userID))
+			}
 		}
 	}
 	data.NotifySettings = view
@@ -430,13 +421,12 @@ func (app *Application) handleNotificationSettingsSave(w http.ResponseWriter, r 
 			UserID: userID, WidgetID: notifyConfigID, Config: string(blob), UpdatedAt: time.Now().UTC(),
 		})
 	}
-	// The page's one Save button also carries the Discord switch,
-	// when the page showed it (discord_shown): a box left unticked
-	// sends nothing, so its absence alone would not mean "off".
-	if err == nil && r.Form.Get("discord_shown") == "1" {
-		err = app.queries.SetDiscordDMNotifications(ctx, db.SetDiscordDMNotificationsParams{
-			UserID: userID, DmNotifications: r.Form.Get("discord_dm") == "1",
-		})
+	// The page's one Save button also carries the modules' channel
+	// boxes; each module reads its own (module.SettingsSection.Save).
+	for _, m := range registeredModules {
+		if sec := m.NotifySettings; err == nil && sec != nil && sec.Save != nil {
+			err = sec.Save(ctx, app, userID, r.Form)
+		}
 	}
 	if err != nil {
 		logging.Errorf("notifications: save settings for user %d: %v", userID, err)

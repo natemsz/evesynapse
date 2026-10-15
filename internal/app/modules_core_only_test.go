@@ -18,7 +18,7 @@ func TestCoreOnlyOmitsModules(t *testing.T) {
 	}
 	for section, entries := range sectionNav {
 		for _, e := range entries {
-			if e.Href == "/industry/pi/" || strings.HasPrefix(e.Href, "/intel/") || e.Href == "/market/ideas/" {
+			if e.Href == "/industry/pi/" || strings.HasPrefix(e.Href, "/intel/") || e.Href == "/market/ideas/" || e.Href == "/discord/servers" {
 				t.Errorf("nav section %q lists %s in the core-only build", section, e.Href)
 			}
 		}
@@ -37,13 +37,18 @@ func TestCoreOnlyOmitsModules(t *testing.T) {
 		t.Errorf("GET /industry/pi/ in the core-only build: status %d, want 404", code)
 	}
 
-	for _, path := range []string{"/intel/wars/", "/intel/incursions/", "/intel/fw/", "/market/ideas/"} {
+	for _, path := range []string{"/intel/wars/", "/intel/incursions/", "/intel/fw/", "/market/ideas/", "/discord/servers"} {
 		if code, _ := getPage(t, app, cookie, path); code != http.StatusNotFound {
 			t.Errorf("GET %s in the core-only build: status %d, want 404", path, code)
 		}
 	}
 	if _, body := getPage(t, app, cookie, "/items/"); strings.Contains(body, `data-nav-category="intel"`) {
 		t.Error("the menu still has an Intel branch in the core-only build")
+	}
+
+	// The notification settings page has no Discord section.
+	if _, body := getPage(t, app, cookie, "/notifications/settings"); strings.Contains(body, "/discord/connect") || strings.Contains(strings.ToLower(body), "also send these to me on discord") {
+		t.Error("the notification settings still offer Discord in the core-only build")
 	}
 
 	sitemap, err := app.buildSitemap(ctx, "https://node.example.org")
@@ -58,7 +63,7 @@ func TestCoreOnlyOmitsModules(t *testing.T) {
 // TestCoreOnlyHasNoModuleScopes: with no module compiled in, the scope
 // surfaces know only the core manifest.
 func TestCoreOnlyHasNoModuleScopes(t *testing.T) {
-	for _, id := range []string{"piplanner", "intel", "tradeideas"} {
+	for _, id := range []string{"piplanner", "intel", "tradeideas", "discord"} {
 		if _, ok := moduleByID(id); ok {
 			t.Errorf("the core-only build still knows %s's declaration", id)
 		}

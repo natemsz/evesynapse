@@ -1,4 +1,4 @@
-package app
+package discord
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
-	"evesynapse/internal/discord"
+	dc "evesynapse/internal/discord"
 	"evesynapse/internal/logging"
 )
 
@@ -108,7 +108,7 @@ func ruleRoles(rules []db.DiscordRoleRule) []string {
 }
 
 // discordRulesByGuild loads every server's rules.
-func (app *Application) discordRulesByGuild(ctx context.Context) (map[string][]db.DiscordRoleRule, error) {
+func (app *mod) discordRulesByGuild(ctx context.Context) (map[string][]db.DiscordRoleRule, error) {
 	rules, err := app.queries.ListDiscordRoleRules(ctx)
 	if err != nil {
 		return nil, err
@@ -124,10 +124,10 @@ func (app *Application) discordRulesByGuild(ctx context.Context) (map[string][]d
 // among managed (the roles the server's rules name) and any in also
 // (roles given earlier that may since have left the rules). It reports
 // the set now held, and whether the account is in the server at all.
-func (app *Application) discordApplyRoles(ctx context.Context, guildID, discordID string, wanted, managed, also []string) (applied string, member bool, err error) {
+func (app *mod) discordApplyRoles(ctx context.Context, guildID, discordID string, wanted, managed, also []string) (applied string, member bool, err error) {
 	held, err := app.discord.MemberRoles(ctx, guildID, discordID)
 	if err != nil {
-		if discord.IsStatus(err, http.StatusNotFound) {
+		if dc.IsStatus(err, http.StatusNotFound) {
 			return "", false, nil
 		}
 		return "", false, err
@@ -154,7 +154,7 @@ func (app *Application) discordApplyRoles(ctx context.Context, guildID, discordI
 // the same server would meet too: asked to slow down, or the bot not
 // being allowed.
 func discordStop(err error) bool {
-	return discord.IsStatus(err, http.StatusTooManyRequests) || discord.IsStatus(err, http.StatusForbidden) || discord.IsStatus(err, http.StatusUnauthorized)
+	return dc.IsStatus(err, http.StatusTooManyRequests) || dc.IsStatus(err, http.StatusForbidden) || dc.IsStatus(err, http.StatusUnauthorized)
 }
 
 // discordSyncMember brings one connected account up to date in one
@@ -162,7 +162,7 @@ func discordStop(err error) bool {
 // belongs to the server's owner and is not in the server is added to
 // it (discord_join.go). The row is kept even when nothing is held, as
 // the note of when the account was last looked for in that server.
-func (app *Application) discordSyncMember(ctx context.Context, guild db.DiscordGuild, rules []db.DiscordRoleRule, link db.DiscordLink, st orgStanding, wanted []string, had string, now time.Time) (changed bool, err error) {
+func (app *mod) discordSyncMember(ctx context.Context, guild db.DiscordGuild, rules []db.DiscordRoleRule, link db.DiscordLink, st orgStanding, wanted []string, had string, now time.Time) (changed bool, err error) {
 	discordID := link.DiscordID
 	applied, member, err := app.discordApplyRoles(ctx, guild.GuildID, discordID, wanted, ruleRoles(rules), splitRoles(had))
 	if err != nil {
@@ -193,7 +193,7 @@ func (app *Application) discordSyncMember(ctx context.Context, guild db.DiscordG
 // the connected accounts whose wanted roles differ from what was last
 // given, and those not checked for a while. Discord is asked only
 // about those, and about at most discordRolesPerPass members a pass.
-func (app *Application) discordSyncRoles(ctx context.Context, now time.Time) (changed int) {
+func (app *mod) discordSyncRoles(ctx context.Context, now time.Time) (changed int) {
 	if !app.discordHasBot() {
 		return 0
 	}
@@ -317,7 +317,7 @@ func (app *Application) discordSyncRoles(ctx context.Context, now time.Time) (ch
 // discordSyncAccount brings one account's roles up to date in every
 // server at once, whatever was checked when: for the "check my roles
 // now" button, pressed by someone who has just joined a server.
-func (app *Application) discordSyncAccount(ctx context.Context, link db.DiscordLink, now time.Time) (servers int, err error) {
+func (app *mod) discordSyncAccount(ctx context.Context, link db.DiscordLink, now time.Time) (servers int, err error) {
 	guilds, err := app.queries.ListDiscordGuilds(ctx)
 	if err != nil {
 		return 0, err
@@ -356,7 +356,7 @@ func (app *Application) discordSyncAccount(ctx context.Context, link db.DiscordL
 // disconnects Discord. Where Discord cannot be reached now, what was
 // given stays written down and the worker takes it back on a later
 // pass.
-func (app *Application) discordDropRoles(ctx context.Context, userID int64) {
+func (app *mod) discordDropRoles(ctx context.Context, userID int64) {
 	if !app.discordHasBot() {
 		return
 	}

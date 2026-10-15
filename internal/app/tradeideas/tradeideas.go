@@ -44,13 +44,13 @@ var Module = module.Module{
 	Nav: []module.NavSection{{
 		Section: "market",
 		Entries: []module.NavEntry{
-			{Href: "/market/ideas/", Label: "Trade Ideas", Pages: []string{"market_tradeideas.html"}},
+			{Href: "/market/ideas/", Label: "Trade Ideas", Pages: []string{"market_tradeideas.html"}, After: "/market/scanner/"},
 		},
 	}},
 	Pages: []module.Page{
 		{Template: "market_tradeideas.html", Section: "market"},
 	},
-	WorkerJobs: []module.WorkerJob{{Name: "trade ideas refresh", Start: Start}},
+	WorkerJobs: []module.WorkerJob{{Name: "trade ideas refresh", After: module.AfterMarket, Start: Start}},
 	Routes: func(r chi.Router, deps module.Deps) {
 		r.With(deps.AnonPages()).Get("/market/ideas/", handlePage(deps))
 	},

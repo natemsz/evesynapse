@@ -1,4 +1,4 @@
-package app
+package discord
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
-	"evesynapse/internal/discord"
+	dc "evesynapse/internal/discord"
 	"evesynapse/internal/logging"
 )
 
@@ -45,14 +45,14 @@ const (
 
 // discordStoreToken seals and stores an account's Discord token. An
 // empty token forgets what was stored.
-func (app *Application) discordStoreToken(ctx context.Context, userID int64, tok discord.Token) error {
+func (app *mod) discordStoreToken(ctx context.Context, userID int64, tok dc.Token) error {
 	params := db.SetDiscordLinkTokensParams{UserID: userID}
 	if tok.Access != "" {
-		access, err := app.tokens.seal(tok.Access, userID, discordAccessField)
+		access, err := app.deps.SealToken(tok.Access, userID, discordAccessField)
 		if err != nil {
 			return err
 		}
-		refresh, err := app.tokens.seal(tok.Refresh, userID, discordRefreshField)
+		refresh, err := app.deps.SealToken(tok.Refresh, userID, discordRefreshField)
 		if err != nil {
 			return err
 		}
@@ -66,11 +66,11 @@ func (app *Application) discordStoreToken(ctx context.Context, userID int64, tok
 // usable token: the account connected before tokens were kept, or has
 // since taken its permission back on Discord (the stored token is
 // forgotten then, and the settings page asks them to connect again).
-func (app *Application) discordUserToken(ctx context.Context, link db.DiscordLink, now time.Time) (token string, ok bool) {
+func (app *mod) discordUserToken(ctx context.Context, link db.DiscordLink, now time.Time) (token string, ok bool) {
 	if link.AccessToken == "" {
 		return "", false
 	}
-	access, err := app.tokens.open(link.AccessToken, link.UserID, discordAccessField)
+	access, err := app.deps.OpenToken(link.AccessToken, link.UserID, discordAccessField)
 	if err != nil {
 		logging.Errorf("discord: open token of user %d: %v", link.UserID, err)
 		return "", false
@@ -78,15 +78,15 @@ func (app *Application) discordUserToken(ctx context.Context, link db.DiscordLin
 	if link.TokenExpiry.Valid && link.TokenExpiry.Time.After(now.Add(discordTokenSkew)) {
 		return access, true
 	}
-	refresh, err := app.tokens.open(link.RefreshToken, link.UserID, discordRefreshField)
+	refresh, err := app.deps.OpenToken(link.RefreshToken, link.UserID, discordRefreshField)
 	if err != nil || refresh == "" {
 		return "", false
 	}
 	renewed, err := app.discord.Refresh(ctx, refresh)
 	if err != nil {
-		if discord.IsStatus(err, http.StatusBadRequest) || discord.IsStatus(err, http.StatusUnauthorized) {
+		if dc.IsStatus(err, http.StatusBadRequest) || dc.IsStatus(err, http.StatusUnauthorized) {
 			// Permission taken back: nothing stored is of any use now.
-			if serr := app.discordStoreToken(ctx, link.UserID, discord.Token{}); serr != nil {
+			if serr := app.discordStoreToken(ctx, link.UserID, dc.Token{}); serr != nil {
 				logging.Errorf("discord: forget token of user %d: %v", link.UserID, serr)
 			}
 		} else {
@@ -107,7 +107,7 @@ func (app *Application) discordUserToken(ctx context.Context, link db.DiscordLin
 // the server, with the roles it is owed. joined is false, with no
 // error, whenever there is simply nothing to do: the server does not
 // add people, the account does not belong, or it has no usable token.
-func (app *Application) discordJoin(ctx context.Context, guild db.DiscordGuild, link db.DiscordLink, st orgStanding, wanted []string, now time.Time) (joined bool, err error) {
+func (app *mod) discordJoin(ctx context.Context, guild db.DiscordGuild, link db.DiscordLink, st orgStanding, wanted []string, now time.Time) (joined bool, err error) {
 	if !guild.AutoJoin || !st.Belongs(orgOwner{Kind: guild.OwnerKind, ID: guild.OwnerID}) {
 		return false, nil
 	}

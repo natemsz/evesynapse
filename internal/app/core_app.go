@@ -7,9 +7,11 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"embed"
+	"evesynapse/internal/standing"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -27,7 +29,6 @@ import (
 
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
-	"evesynapse/internal/discord"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/store"
@@ -69,7 +70,11 @@ type Application struct {
 
 	// discord is the Discord client (discord_link.go), nil when the
 	// install has no Discord settings.
-	discord *discord.Client
+	// discordHTTP and discordBase inject the Discord API for tests; nil
+	// and empty mean the real one (read by the Discord module through
+	// Deps.DiscordConfig).
+	discordHTTP *http.Client
+	discordBase string
 
 	// db, pool, and stopWorker/workerDone are the resources Close
 	// releases: it cancels the worker, waits for workerDone to
@@ -274,7 +279,6 @@ func New(cfg Config) (*Application, error) {
 	app := &Application{
 		cfg:           cfg,
 		push:          pushConfigFromEnv(cfg),
-		discord:       discordFromConfig(cfg),
 		sessions:      sessionManager,
 		queries:       db.New(dbConn),
 		jwks:          &jwksCache{},
@@ -519,28 +523,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/push/subscribe", app.handlePushSubscribe)
 		r.Post("/push/unsubscribe", app.handlePushUnsubscribe)
 		r.Post("/push/test", app.handlePushTest)
-	})
-
-	// Discord (discord_link.go): connecting an account, and what it
-	// is used for.
-	r.Route("/discord", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/connect", app.handleDiscordConnect)
-		r.Get("/callback", app.handleDiscordCallback)
-		r.Post("/disconnect", app.handleDiscordDisconnect)
-		r.Post("/settings", app.handleDiscordSettings)
-		r.Post("/test", app.handleDiscordTest)
-		r.Post("/roles/refresh", app.handleDiscordRolesRefresh)
-		r.Get("/servers", app.handleDiscordServers)
-		r.Post("/servers/add", app.handleDiscordServerAdd)
-		r.Post("/servers/share", app.handleDiscordOpsShare)
-		r.Post("/servers/{guildID}/save", app.handleDiscordServerSave)
-		r.Post("/servers/{guildID}/rules/add", app.handleDiscordRuleAdd)
-		r.Post("/servers/{guildID}/channels", app.handleDiscordChannelSave)
-		r.Post("/servers/{guildID}/removals", app.handleDiscordKickSave)
-		r.Post("/servers/{guildID}/removals/preview", app.handleDiscordKickPreview)
-		r.Post("/servers/{guildID}/rules/{ruleID}/remove", app.handleDiscordRuleRemove)
-		r.Post("/servers/{guildID}/remove", app.handleDiscordServerForget)
 	})
 
 	// Groups (corp_groups.go): sets of characters the directors of a
@@ -1026,6 +1008,105 @@ func (app *Application) StationRef(ctx context.Context, memo map[int64]module.Pl
 
 func (app *Application) SpreadDefaults() (float64, int) {
 	return defaultScannerMinSpreadPct, scannerRowCap
+}
+
+func (app *Application) RequireAuth() func(http.Handler) http.Handler { return app.requireAuth }
+
+func (app *Application) Sessions() *scs.SessionManager { return app.sessions }
+
+func (app *Application) Flash(ctx context.Context, msg string) { app.flash(ctx, msg) }
+
+func (app *Application) FlashBack(w http.ResponseWriter, r *http.Request, path string) func(string) {
+	return app.flashBack(w, r, path)
+}
+
+func (app *Application) SiteURL(path string) string {
+	return app.cfg.publicOrigin() + notifyTarget(path)
+}
+
+func (app *Application) PageShell(ctx context.Context) module.ShellData {
+	return app.page(ctx).ShellData
+}
+
+func (app *Application) Fragment(page, define string, data any) (template.HTML, error) {
+	ts, err := parsedTemplate(&fragmentTemplates, "fragment", page, "templates/balancechart.html", "templates/walletflow.html", "templates/charselector.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html")
+	if err != nil {
+		return "", err
+	}
+	buf := new(bytes.Buffer)
+	if err := ts.ExecuteTemplate(buf, define, data); err != nil {
+		return "", err
+	}
+	return template.HTML(buf.String()), nil
+}
+
+func (app *Application) SQLDB() *sql.DB { return app.db }
+
+func (app *Application) SealToken(plain string, userID int64, field string) (string, error) {
+	return app.tokens.seal(plain, userID, field)
+}
+
+func (app *Application) OpenToken(sealed string, userID int64, field string) (string, error) {
+	return app.tokens.open(sealed, userID, field)
+}
+
+func (app *Application) DiscordConfig() module.DiscordConfig {
+	return module.DiscordConfig{
+		ClientID:     app.cfg.discordClientID,
+		ClientSecret: app.cfg.discordClientSecret,
+		BotToken:     app.cfg.discordBotToken,
+		HTTP:         app.discordHTTP,
+		BaseURL:      app.discordBase,
+	}
+}
+
+func (app *Application) StandingFor(ctx context.Context, userID int64) (standing.Standing, error) {
+	return app.standingFor(ctx, userID)
+}
+
+func (app *Application) ManageableOwners(ctx context.Context, userID int64) []standing.Owner {
+	return app.manageableOwners(ctx, userID)
+}
+
+func (app *Application) OwnerName(ctx context.Context, o standing.Owner) string {
+	return app.ownerName(ctx, o)
+}
+
+func (app *Application) CorpAlliance(ctx context.Context, corpID int64) (int64, int64) {
+	return app.corpAlliance(ctx, corpID)
+}
+
+func (app *Application) WhoChoices(ctx context.Context, owner standing.Owner) []module.WhoChoice {
+	var out []module.WhoChoice
+	for _, c := range app.whoChoices(ctx, owner) {
+		out = append(out, module.WhoChoice{Value: c.Value, Label: c.Label})
+	}
+	return out
+}
+
+func (app *Application) RuleWho(ctx context.Context, owner standing.Owner, rule standing.Rule) string {
+	return app.ruleWho(ctx, owner, db.DiscordRoleRule{Kind: rule.Kind, Ref: rule.Ref})
+}
+
+func (app *Application) ParseRuleWho(ctx context.Context, owner standing.Owner, raw string) (string, string, bool) {
+	return app.parseRuleWho(ctx, owner, raw)
+}
+
+func (app *Application) PickOwner(ctx context.Context, r *http.Request, offered []standing.Owner) (standing.Owner, []module.OwnerOption, bool) {
+	owner, options, ok := app.pickOwner(ctx, r, offered)
+	out := make([]module.OwnerOption, len(options))
+	for i, o := range options {
+		out[i] = module.OwnerOption{ID: o.ID, Name: o.Name, Active: o.Active, Param: o.Param, Value: o.Value}
+	}
+	return owner, out, ok
+}
+
+func (app *Application) ResolvedCorpName(ctx context.Context, corpID int64) (string, bool) {
+	return app.resolvedCorpName(ctx, corpID)
+}
+
+func (app *Application) DisplayCharacter(ctx context.Context, characterID int64) string {
+	return app.displayCharacter(ctx, characterID)
 }
 
 func (app *Application) AnonPages() func(http.Handler) http.Handler {

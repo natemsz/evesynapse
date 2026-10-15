@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"evesynapse/internal/app/module"
 	"fmt"
 	"runtime/debug"
 	"sort"
@@ -376,22 +377,10 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	})
 	clock.mark("notifications", time.Now())
 
-	// Discord, where a bot is set up (discord_notify.go,
-	// discord_roles.go): new ops to their channels, and roles brought
-	// in line with what was just synced.
-	runGuarded("discord", func() {
-		if n := app.discordAnnounceOps(ctx, time.Now()); n > 0 {
-			logging.Infof("worker: %d op(s) posted to Discord", n)
-		}
-		if n := app.discordSyncRoles(ctx, time.Now()); n > 0 {
-			logging.Infof("worker: Discord roles changed for %d account(s)", n)
-		}
-		if n := app.discordKickPass(ctx, time.Now()); n > 0 {
-			logging.Infof("worker: %d member(s) removed from Discord servers", n)
-		}
-	})
-
-	clock.mark("discord", time.Now())
+	// Module jobs that follow the notifications (Discord's, for one:
+	// new ops to their channels, roles brought in line with what was
+	// just synced, then removals). Each runs under its own guard.
+	app.runModuleJobs(ctx, module.AfterNotifications, clock.mark)
 	timing.Took, timing.Phases = time.Since(clock.start), clock.phases
 	timing.Fetches, timing.Deferred = c.allowance.used(app.fetchesPerCycle()), c.deferred
 	timing.RateHeld = c.rateHeld
@@ -650,10 +639,10 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 		return app.refreshMarketData(ctx, characters)
 	})
 
-	// Module jobs (Trade Ideas' model refresh, for one): each module's
-	// Start runs beside the cycle and returns at once, so the cycle
-	// never waits on one.
-	app.startModuleJobs(ctx)
+	// Module jobs that follow the market pass (Trade Ideas' model
+	// refresh, for one): it starts beside the cycle and returns at once,
+	// so the cycle never waits on it.
+	app.runModuleJobs(ctx, module.AfterMarket, nil)
 
 	// Structure names: resolve the due slice of the structure
 	// queue across every scoped character (structures.go).
@@ -1433,12 +1422,23 @@ func sortedInt64Keys(set map[int64]bool) []int64 {
 	return keys
 }
 
-// startModuleJobs starts every registered module's worker jobs.
-func (app *Application) startModuleJobs(ctx context.Context) {
+// runModuleJobs runs every registered module's worker jobs that follow
+// the given pass, in registration order, each under its own panic guard
+// and, where mark is given, its own phase in the cycle's timing. A job
+// that omits its phase follows the market pass.
+func (app *Application) runModuleJobs(ctx context.Context, phase module.JobPhase, mark func(string, time.Time)) {
 	for _, m := range registeredModules {
 		for _, job := range m.WorkerJobs {
-			if job.Start != nil {
-				job.Start(ctx, app)
+			after := job.After
+			if after == "" {
+				after = module.AfterMarket
+			}
+			if after != phase || job.Start == nil {
+				continue
+			}
+			runGuarded(job.Name, func() { job.Start(ctx, app) })
+			if mark != nil {
+				mark(job.Name, time.Now())
 			}
 		}
 	}

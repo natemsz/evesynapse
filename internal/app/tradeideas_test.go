@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/csv"
+	"evesynapse/internal/app/module"
 	"evesynapse/internal/app/tradeideas"
 	"evesynapse/internal/ideas"
 	"fmt"
@@ -359,8 +360,8 @@ func TestTradeIdeasRefreshBesideCycle(t *testing.T) {
 			Body: io.NopCloser(strings.NewReader(`{"success":true,"result":{"response":"- late"}}`))}, nil
 	})}
 	start := time.Now()
-	app.startModuleJobs(ctx)
-	app.startModuleJobs(ctx) // one at a time: a no-op while busy
+	app.runModuleJobs(ctx, module.AfterMarket, nil)
+	app.runModuleJobs(ctx, module.AfterMarket, nil) // one at a time: a no-op while busy
 	if took := time.Since(start); took > time.Second {
 		t.Errorf("starting the refresh took %v; the cycle waited on the model", took)
 	}

@@ -69,9 +69,6 @@ type pageData struct {
 	// Notifications is the /notifications/ page.
 	Notifications *notificationsView
 
-	// DiscordServers is the /discord/servers page.
-	DiscordServers *discordServersView
-
 	// Groups is the /groups page.
 	Groups *groupsView
 
@@ -175,7 +172,7 @@ func sectionForPage(page string) string {
 		return "tools"
 	case "corporations.html", "corp_members.html", "corp_wallets.html",
 		"corp_orders.html", "corp_assets.html", "corp_structures.html",
-		"corporation.html", "alliance.html", "discord_servers.html", "groups.html", "srp.html", "doctrines.html", "doctrine.html", "corp_fits.html", "corp_settings.html":
+		"corporation.html", "alliance.html", "groups.html", "srp.html", "doctrines.html", "doctrine.html", "corp_fits.html", "corp_settings.html":
 		return "corporation"
 	case "sync.html":
 		return "sync"

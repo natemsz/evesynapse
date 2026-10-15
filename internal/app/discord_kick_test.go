@@ -1,6 +1,7 @@
 package app
 
 import (
+	discordmod "evesynapse/internal/app/discord"
 	"net/url"
 	"strings"
 	"testing"
@@ -24,13 +25,13 @@ func TestDiscordRemovals(t *testing.T) {
 	save := func(form url.Values) string {
 		t.Helper()
 		f.post(cookie, "/discord/servers/"+discordCorpGuild+"/removals", form)
-		_, body := getPage(t, f.app, cookie, discordServersPath)
+		_, body := getPage(t, f.app, cookie, "/discord/servers")
 		return body
 	}
 	preview := func() string {
 		t.Helper()
 		f.post(cookie, "/discord/servers/"+discordCorpGuild+"/removals/preview", url.Values{})
-		_, body := getPage(t, f.app, cookie, discordServersPath)
+		_, body := getPage(t, f.app, cookie, "/discord/servers")
 		return body
 	}
 	const (
@@ -58,7 +59,7 @@ func TestDiscordRemovals(t *testing.T) {
 
 	// Off to begin with: a pass removes nobody and asks nothing.
 	calls := fake.asked()
-	if n := f.app.discordKickPass(f.ctx, now); n != 0 || fake.asked() != calls {
+	if n := discordmod.KickPass(f.ctx, f.app, now); n != 0 || fake.asked() != calls {
 		t.Fatalf("with removals off: %d removed, %d call(s)", n, fake.asked()-calls)
 	}
 
@@ -90,7 +91,7 @@ func TestDiscordRemovals(t *testing.T) {
 	if !guild.KickEnabled || guild.KickExemptRoles != discordRoleMod {
 		t.Fatalf("stored %v, exempt %q; want on, with only the role that exists", guild.KickEnabled, guild.KickExemptRoles)
 	}
-	if n := f.app.discordKickPass(f.ctx, now); n != 2 {
+	if n := discordmod.KickPass(f.ctx, f.app, now); n != 2 {
 		t.Fatalf("%d removed, want the stranger and the member of another corporation: %q", n, fake.kicked)
 	}
 	gone := strings.Join(fake.kicked, " ")
@@ -106,12 +107,12 @@ func TestDiscordRemovals(t *testing.T) {
 	}
 	// Not gone through again for half an hour.
 	calls = fake.asked()
-	if n := f.app.discordKickPass(f.ctx, now.Add(5*time.Minute)); n != 0 || fake.asked() != calls {
+	if n := discordmod.KickPass(f.ctx, f.app, now.Add(5*time.Minute)); n != 0 || fake.asked() != calls {
 		t.Fatalf("five minutes later: %d removed, %d call(s)", n, fake.asked()-calls)
 	}
 
 	// The newcomer's day runs out, and they still have not connected.
-	if n := f.app.discordKickPass(f.ctx, now.Add(25*time.Hour)); n != 1 || !strings.Contains(strings.Join(fake.kicked, " "), newcomer) {
+	if n := discordmod.KickPass(f.ctx, f.app, now.Add(25*time.Hour)); n != 1 || !strings.Contains(strings.Join(fake.kicked, " "), newcomer) {
 		t.Fatalf("after the newcomer's first day: %d removed, %q", n, fake.kicked)
 	}
 
@@ -120,7 +121,7 @@ func TestDiscordRemovals(t *testing.T) {
 	// was the moderators'; take it away first.)
 	fake.join(discordCorpGuild, discordAlice)
 	f.joinCorp(f.ch.CharacterID, discordOtherCorp)
-	if n := f.app.discordKickPass(f.ctx, now.Add(26*time.Hour)); n != 1 || !strings.Contains(strings.Join(fake.kicked, " "), discordAlice) {
+	if n := discordmod.KickPass(f.ctx, f.app, now.Add(26*time.Hour)); n != 1 || !strings.Contains(strings.Join(fake.kicked, " "), discordAlice) {
 		t.Fatalf("after leaving the corporation: %d removed, %q", n, fake.kicked)
 	}
 
@@ -130,7 +131,7 @@ func TestDiscordRemovals(t *testing.T) {
 	fake.noList = true
 	fake.mu.Unlock()
 	before := len(fake.kicked)
-	if n := f.app.discordKickPass(f.ctx, now.Add(27*time.Hour)); n != 0 || len(fake.kicked) != before {
+	if n := discordmod.KickPass(f.ctx, f.app, now.Add(27*time.Hour)); n != 0 || len(fake.kicked) != before {
 		t.Fatalf("with the member list refused: %d removed", n)
 	}
 }

@@ -1,4 +1,4 @@
-package app
+package discord
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
-	"evesynapse/internal/discord"
+	dc "evesynapse/internal/discord"
 	"evesynapse/internal/logging"
 )
 
@@ -47,7 +47,7 @@ type discordChannelView struct {
 }
 
 // channelLabel names a channel the way Discord shows its kind.
-func channelLabel(ch discord.Channel) string {
+func channelLabel(ch dc.Channel) string {
 	switch ch.Type {
 	case 4:
 		return "Category: " + ch.Name
@@ -58,7 +58,7 @@ func channelLabel(ch discord.Channel) string {
 }
 
 // discordChannelViews lists a server's managed channels for the page.
-func (app *Application) discordChannelViews(ctx context.Context, guildID string, channels []discord.Channel, roles []discord.Role) []discordChannelView {
+func (app *mod) discordChannelViews(ctx context.Context, guildID string, channels []dc.Channel, roles []dc.Role) []discordChannelView {
 	rows, err := app.queries.ListDiscordChannelAccess(ctx, guildID)
 	if err != nil {
 		logging.Errorf("discord: channel access of %s: %v", guildID, err)
@@ -99,22 +99,22 @@ func (app *Application) discordChannelViews(ctx context.Context, guildID string,
 // discordApplyChannel makes a channel private to the roles in now,
 // given the roles the bot let in before. With now empty it only takes
 // the old roles' entries away.
-func (app *Application) discordApplyChannel(ctx context.Context, guildID, channelID string, now, before []string) error {
+func (app *mod) discordApplyChannel(ctx context.Context, guildID, channelID string, now, before []string) error {
 	if len(now) > 0 {
 		bot, err := app.discord.BotUserID(ctx)
 		if err != nil {
 			return err
 		}
-		if err := app.discord.AllowChannel(ctx, channelID, bot, discord.ForMember); err != nil {
+		if err := app.discord.AllowChannel(ctx, channelID, bot, dc.ForMember); err != nil {
 			return err
 		}
 		for _, role := range now {
-			if err := app.discord.AllowChannel(ctx, channelID, role, discord.ForRole); err != nil {
+			if err := app.discord.AllowChannel(ctx, channelID, role, dc.ForRole); err != nil {
 				return err
 			}
 		}
 		// @everyone is the role whose id is the server's own.
-		if err := app.discord.DenyChannel(ctx, channelID, guildID, discord.ForRole); err != nil {
+		if err := app.discord.DenyChannel(ctx, channelID, guildID, dc.ForRole); err != nil {
 			return err
 		}
 	}
@@ -124,7 +124,7 @@ func (app *Application) discordApplyChannel(ctx context.Context, guildID, channe
 		if keep[role] {
 			continue
 		}
-		if err := app.discord.ClearChannel(ctx, channelID, role); err != nil && !discord.IsStatus(err, http.StatusNotFound) {
+		if err := app.discord.ClearChannel(ctx, channelID, role); err != nil && !dc.IsStatus(err, http.StatusNotFound) {
 			return err
 		}
 	}
@@ -135,7 +135,7 @@ func (app *Application) discordApplyChannel(ctx context.Context, guildID, channe
 // channel and every role have to be ones Discord lists for that very
 // server. Discord is changed first and the record after, so the record
 // never claims more than was done.
-func (app *Application) handleDiscordChannelSave(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleDiscordChannelSave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
 	back := app.discordBack(w, r)
@@ -187,7 +187,7 @@ func (app *Application) handleDiscordChannelSave(w http.ResponseWriter, r *http.
 	}
 	if err := app.discordApplyChannel(ctx, guild.GuildID, channelID, now.list(), before); err != nil {
 		logging.Warnf("discord: set access of channel %s in %s: %v", channelID, guild.GuildID, err)
-		if discord.IsStatus(err, http.StatusForbidden) {
+		if dc.IsStatus(err, http.StatusForbidden) {
 			back("Discord would not let the bot change " + label + ". The bot has to be able to see the channel itself, and its own role has to sit above the roles being let in.")
 			return
 		}

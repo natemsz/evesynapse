@@ -7,6 +7,7 @@
 package standing
 
 import (
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -76,6 +77,15 @@ func ParseOwner(raw string) (Owner, bool) {
 		return Owner{}, false
 	}
 	return Owner{Kind: kind, ID: n}, true
+}
+
+// Address is a page's address for one owner, named by its key; the
+// plain page where the key is not one.
+func Address(path, key string) string {
+	if _, ok := ParseOwner(key); !ok {
+		return path
+	}
+	return path + "?owner=" + url.QueryEscape(key)
 }
 
 // Includes reports whether o is among owners.

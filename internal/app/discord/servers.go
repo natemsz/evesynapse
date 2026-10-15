@@ -1,7 +1,9 @@
-package app
+package discord
 
 import (
 	"context"
+	"evesynapse/internal/app/module"
+	"evesynapse/internal/standing"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -10,7 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	db "evesynapse/internal/db/sqlc"
-	"evesynapse/internal/discord"
+	dc "evesynapse/internal/discord"
 	"evesynapse/internal/logging"
 )
 
@@ -52,7 +54,7 @@ const (
 // discordServersView is the /discord/servers page.
 type discordServersView struct {
 	CanInstall   bool
-	OwnerOptions []corpOption
+	OwnerOptions []module.OwnerOption
 	Owner        *discordOwnerView // the corporation or alliance the page is about
 	Shares       []discordShareView
 }
@@ -102,7 +104,7 @@ type discordShareView struct {
 	On            bool
 }
 
-func discordRoleChoices(roles []discord.Role, current string) []discordChoice {
+func discordRoleChoices(roles []dc.Role, current string) []discordChoice {
 	var out []discordChoice
 	for _, role := range roles {
 		if role.Managed {
@@ -113,7 +115,7 @@ func discordRoleChoices(roles []discord.Role, current string) []discordChoice {
 	return out
 }
 
-func discordChannelChoices(channels []discord.Channel, current string) []discordChoice {
+func discordChannelChoices(channels []dc.Channel, current string) []discordChoice {
 	out := []discordChoice{{ID: "", Name: "Do not post ops", Selected: current == ""}}
 	for _, ch := range channels {
 		out = append(out, discordChoice{ID: ch.ID, Name: "#" + ch.Name, Selected: ch.ID == current})
@@ -121,7 +123,7 @@ func discordChannelChoices(channels []discord.Channel, current string) []discord
 	return out
 }
 
-func (app *Application) handleDiscordServers(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleDiscordServers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
 	userID := app.userID(ctx)
@@ -187,7 +189,7 @@ func (app *Application) handleDiscordServers(w http.ResponseWriter, r *http.Requ
 
 // handleDiscordServerAdd sends a director to Discord to add the bot to
 // a server of theirs, remembering whose server it is to be.
-func (app *Application) handleDiscordServerAdd(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleDiscordServerAdd(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
 	back := app.discordBack(w, r)
@@ -196,8 +198,8 @@ func (app *Application) handleDiscordServerAdd(w http.ResponseWriter, r *http.Re
 		return
 	}
 	_ = r.ParseForm()
-	owner, ok := parseOrgOwner(r.Form.Get("owner"))
-	if !ok || !ownersInclude(app.manageableOwners(ctx, userID), owner) {
+	owner, ok := standing.ParseOwner(r.Form.Get("owner"))
+	if !ok || !standing.Includes(app.manageableOwners(ctx, userID), owner) {
 		back("Only a director can add the bot for that corporation or alliance.")
 		return
 	}
@@ -215,11 +217,11 @@ func (app *Application) handleDiscordServerAdd(w http.ResponseWriter, r *http.Re
 // discordFinishInstall is the return from Discord after the bot was
 // added to a server: the server is recorded as the owner's. The
 // account's right to manage that owner is checked again here.
-func (app *Application) discordFinishInstall(w http.ResponseWriter, r *http.Request, userID int64, ownerKey, code string) {
+func (app *mod) discordFinishInstall(w http.ResponseWriter, r *http.Request, userID int64, ownerKey, code string) {
 	ctx := r.Context()
-	back := app.flashBack(w, r, ownerAddress(discordServersPath, ownerKey))
-	owner, ok := parseOrgOwner(ownerKey)
-	if !ok || !ownersInclude(app.manageableOwners(ctx, userID), owner) {
+	back := app.flashBack(w, r, standing.Address(discordServersPath, ownerKey))
+	owner, ok := standing.ParseOwner(ownerKey)
+	if !ok || !standing.Includes(app.manageableOwners(ctx, userID), owner) {
 		back("Only a director can add the bot for that corporation or alliance.")
 		return
 	}
@@ -248,7 +250,7 @@ func (app *Application) discordFinishInstall(w http.ResponseWriter, r *http.Requ
 // discordBack answers a form on the servers page by sending the
 // account back to the page of the owner it was about: the owner of the
 // server in the address, else the one the form names.
-func (app *Application) discordBack(w http.ResponseWriter, r *http.Request) func(string) {
+func (app *mod) discordBack(w http.ResponseWriter, r *http.Request) func(string) {
 	_ = r.ParseForm()
 	key := r.Form.Get("owner")
 	if guild, err := app.queries.GetDiscordGuild(r.Context(), chi.URLParam(r, "guildID")); err == nil {
@@ -256,21 +258,21 @@ func (app *Application) discordBack(w http.ResponseWriter, r *http.Request) func
 	} else if corp := r.Form.Get("corporation"); key == "" && corp != "" {
 		key = ownerCorporation + ":" + corp
 	}
-	return app.flashBack(w, r, ownerAddress(discordServersPath, key))
+	return app.flashBack(w, r, standing.Address(discordServersPath, key))
 }
 
 // discordGuildFor loads the server named in the address, for an
 // account that may manage it.
-func (app *Application) discordGuildFor(r *http.Request, userID int64) (db.DiscordGuild, bool) {
+func (app *mod) discordGuildFor(r *http.Request, userID int64) (db.DiscordGuild, bool) {
 	id := chi.URLParam(r, "guildID")
-	if !discord.ValidID(id) {
+	if !dc.ValidID(id) {
 		return db.DiscordGuild{}, false
 	}
 	guild, err := app.queries.GetDiscordGuild(r.Context(), id)
 	if err != nil {
 		return db.DiscordGuild{}, false
 	}
-	if !ownersInclude(app.manageableOwners(r.Context(), userID), orgOwner{Kind: guild.OwnerKind, ID: guild.OwnerID}) {
+	if !standing.Includes(app.manageableOwners(r.Context(), userID), orgOwner{Kind: guild.OwnerKind, ID: guild.OwnerID}) {
 		return db.DiscordGuild{}, false
 	}
 	return guild, true
@@ -279,7 +281,7 @@ func (app *Application) discordGuildFor(r *http.Request, userID int64) (db.Disco
 // handleDiscordServerSave stores where a server's new ops are posted.
 // The channel has to be one Discord lists for that very server. (Who
 // gets which role is the server's rules: discord_rules.go.)
-func (app *Application) handleDiscordServerSave(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleDiscordServerSave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
 	back := app.discordBack(w, r)
@@ -322,7 +324,7 @@ func (app *Application) handleDiscordServerSave(w http.ResponseWriter, r *http.R
 // is done the server is kept, with its rules cleared, so the bot
 // still knows what to take back. Then the record is removed and the
 // bot leaves the server.
-func (app *Application) handleDiscordServerForget(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleDiscordServerForget(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
 	back := app.discordBack(w, r)
@@ -359,7 +361,7 @@ func (app *Application) handleDiscordServerForget(w http.ResponseWriter, r *http
 		back("The server could not be removed; check the server log.")
 		return
 	}
-	if err := app.discord.LeaveGuild(ctx, guild.GuildID); err != nil && !discord.IsStatus(err, http.StatusNotFound) {
+	if err := app.discord.LeaveGuild(ctx, guild.GuildID); err != nil && !dc.IsStatus(err, http.StatusNotFound) {
 		logging.Warnf("discord: leave server %s: %v", guild.GuildID, err)
 		back(guild.Name + " was removed here, but the bot could not leave it. Remove the bot in the server's own settings.")
 		return
@@ -371,13 +373,13 @@ func (app *Application) handleDiscordServerForget(w http.ResponseWriter, r *http
 // handleDiscordOpsShare stores whether a corporation's ops are also
 // posted in its alliance's server. Only that corporation's directors
 // decide it.
-func (app *Application) handleDiscordOpsShare(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleDiscordOpsShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
 	back := app.discordBack(w, r)
 	_ = r.ParseForm()
 	corp, _ := strconv.ParseInt(r.Form.Get("corporation"), 10, 64)
-	if corp <= 0 || !ownersInclude(app.manageableOwners(ctx, userID), orgOwner{Kind: ownerCorporation, ID: corp}) {
+	if corp <= 0 || !standing.Includes(app.manageableOwners(ctx, userID), orgOwner{Kind: ownerCorporation, ID: corp}) {
 		back("Only a director of that corporation can decide that.")
 		return
 	}
@@ -398,7 +400,7 @@ func (app *Application) handleDiscordOpsShare(w http.ResponseWriter, r *http.Req
 // discordOpsChannels lists where a corporation's new op is posted: its
 // own servers' channels, and its alliance's when the corporation has
 // agreed to that.
-func (app *Application) discordOpsChannels(ctx context.Context, guilds []db.DiscordGuild, corpID int64) []db.DiscordGuild {
+func (app *mod) discordOpsChannels(ctx context.Context, guilds []db.DiscordGuild, corpID int64) []db.DiscordGuild {
 	alliance, _ := app.corpAlliance(ctx, corpID)
 	shared := false
 	if alliance != 0 {

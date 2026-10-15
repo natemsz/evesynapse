@@ -2,13 +2,18 @@ package module
 
 import (
 	"context"
+	"database/sql"
 	"html/template"
 	"net/http"
+	"net/url"
+
+	"github.com/alexedwards/scs/v2"
 
 	"github.com/go-chi/chi/v5"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/standing"
 )
 
 // NavEntry is one page in a section's nav: its link, its label, and
@@ -17,6 +22,10 @@ type NavEntry struct {
 	Href  string
 	Label string
 	Pages []string
+	// After is the Href of the entry this one follows in its section;
+	// empty (or not found) appends it. It keeps a module's page where
+	// the menu always had it.
+	After string
 }
 
 // NavSection associates nav entries with a category section key (e.g. "industry").
@@ -57,12 +66,103 @@ type SitemapEntry struct {
 	Priority   string
 }
 
-// WorkerJob is a pass a module runs beside the worker. Start is called
-// once per worker cycle; it must not block the cycle (a job that has
-// slow work starts it with Deps.Background and returns).
+// JobPhase is where in the worker cycle a module job runs: the cycle's
+// structure is core's, and a job names the pass it follows.
+type JobPhase string
+
+const (
+	// AfterMarket runs the job after the market data pass.
+	AfterMarket JobPhase = "market"
+	// AfterNotifications runs it last, with everything the cycle
+	// fetched already stored and this cycle's notifications made.
+	AfterNotifications JobPhase = "notifications"
+)
+
+// WorkerJob is a pass a module runs in the worker cycle, under its own
+// name and its own panic guard (one job failing leaves the others
+// running). Start is called once per cycle at its phase. A job with
+// slow work that must not hold the cycle starts it with Deps.Background
+// and returns; a job that is meant to run in the cycle, as a bounded
+// pass does, simply does its work before it returns.
 type WorkerJob struct {
 	Name  string
+	After JobPhase // AfterMarket when empty
 	Start func(ctx context.Context, deps Deps)
+}
+
+// NotifyEvent is one notification offered for delivery.
+type NotifyEvent struct {
+	Kind        string
+	CharacterID int64 // 0 for an account-level event
+	Title       string
+	URL         string
+}
+
+// NotifyMessage is a notification as it is sent outside the site: the
+// notifier has already condensed a burst (a few are sent one by one,
+// many as a single line with a count).
+type NotifyMessage struct {
+	Title string
+	Body  string
+	URL   string // a site path; Deps.SiteURL makes it a full address
+}
+
+// Notification is one batch of new notifications for one account.
+type Notification struct {
+	Events   []NotifyEvent
+	Messages []NotifyMessage
+}
+
+// Deliverer sends a Notification to the account through one channel.
+//
+// Delivery is a fan-out: the notifier offers every notification to
+// every registered Deliverer, in registration order. Each Deliverer
+// honors the account's own preferences for its channel (an account that
+// has not asked for it gets nothing from it). The result says whether
+// THIS channel delivered it; it is information for logs and
+// diagnostics. A true never stops the others, and nothing is
+// first-claim-wins: the top bar, browser push and every module channel
+// each deliver the same notification independently. A failure loses
+// nothing, because the notification is already stored in the top bar.
+type Deliverer func(ctx context.Context, deps Deps, userID int64, n Notification) (delivered bool)
+
+// SettingsSection is a module's contribution to the notification
+// settings page.
+type SettingsSection struct {
+	// Channel renders inside the settings form, under the per-kind
+	// table (an "also send these by <channel>" box). Nil means none.
+	Channel func(ctx context.Context, deps Deps, r *http.Request, userID int64) template.HTML
+	// Account renders below the form as a section of its own (connect
+	// or disconnect the channel's account). Nil means none.
+	Account func(ctx context.Context, deps Deps, r *http.Request, userID int64) template.HTML
+	// Save is called when the form is saved, with the submitted values;
+	// an error makes the save report failure.
+	Save func(ctx context.Context, deps Deps, userID int64, form url.Values) error
+}
+
+// WhoChoice is one thing a rule can be about: Value is "kind" or
+// "kind:ref".
+type WhoChoice struct {
+	Value, Label string
+}
+
+// OwnerOption is one corporation or alliance in an owner chooser.
+type OwnerOption struct {
+	ID     int64
+	Name   string
+	Active bool
+	// Param and Value are what the option's link sets in the address.
+	Param, Value string
+}
+
+// DiscordConfig is the Discord access an install has: the sign-in
+// application and the bot. HTTP and BaseURL are test injections.
+type DiscordConfig struct {
+	ClientID     string
+	ClientSecret string
+	BotToken     string
+	HTTP         *http.Client
+	BaseURL      string
 }
 
 // ModelConfig is the access a module has to the configured language
@@ -167,6 +267,8 @@ type Deps interface {
 	PickCharacter(ctx context.Context, r *http.Request, path string) ([]db.Character, db.Character, []CharLink, error)
 	Render(ctx context.Context, w http.ResponseWriter, status int, page string, data any)
 	AnonPages() func(http.Handler) http.Handler
+	// RequireAuth guards a route group for signed-in accounts.
+	RequireAuth() func(http.Handler) http.Handler
 
 	// UserID is the signed-in user's id, 0 when anonymous.
 	UserID(ctx context.Context) int64
@@ -205,6 +307,57 @@ type Deps interface {
 	// and row cap for reading the stored spread statistics: shared data,
 	// the same numbers whichever module or page reads them.
 	SpreadDefaults() (minSpreadPct float64, rowCap int)
+
+	// --- the session, pages and the site ---------------------------------
+
+	// Sessions is the session manager (OAuth state, flash messages).
+	Sessions() *scs.SessionManager
+	// Flash leaves a message for the next page this session renders.
+	Flash(ctx context.Context, msg string)
+	// FlashBack is how a form handler answers: leave a message and go
+	// back to path.
+	FlashBack(w http.ResponseWriter, r *http.Request, path string) func(string)
+	// SiteURL makes a site path a full address for a message read
+	// outside the site.
+	SiteURL(path string) string
+	// PageShell is the shell state of a signed-in page.
+	PageShell(ctx context.Context) ShellData
+	// Fragment renders one named template of a page file to HTML, for a
+	// section a module contributes to a core page.
+	Fragment(page, define string, data any) (template.HTML, error)
+	// SQLDB is the database handle, for the few places that need a
+	// transaction.
+	SQLDB() *sql.DB
+	// SealToken and OpenToken encrypt and decrypt a stored token.
+	SealToken(plain string, userID int64, field string) (string, error)
+	OpenToken(sealed string, userID int64, field string) (string, error)
+	// DiscordConfig is this install's Discord access.
+	DiscordConfig() DiscordConfig
+
+	// --- standing: the corporation/alliance foundation --------------------
+
+	// StandingFor works an account's standing out from stored data.
+	StandingFor(ctx context.Context, userID int64) (standing.Standing, error)
+	// ManageableOwners lists the corporations and alliances an account
+	// may manage things for (it directs them).
+	ManageableOwners(ctx context.Context, userID int64) []standing.Owner
+	// OwnerName is how an owner is shown.
+	OwnerName(ctx context.Context, o standing.Owner) string
+	// CorpAlliance is a corporation's alliance and that alliance's
+	// executor corporation (0, 0 when none or not fetched yet).
+	CorpAlliance(ctx context.Context, corpID int64) (allianceID, executorCorpID int64)
+	// WhoChoices lists what a rule of an owner's can be about, RuleWho
+	// says in words who a stored rule is about, ParseRuleWho checks a
+	// submitted choice against the owner.
+	WhoChoices(ctx context.Context, owner standing.Owner) []WhoChoice
+	RuleWho(ctx context.Context, owner standing.Owner, rule standing.Rule) string
+	ParseRuleWho(ctx context.Context, owner standing.Owner, raw string) (kind, ref string, ok bool)
+	// PickOwner chooses which of the offered owners a page is about
+	// (from the address), with the chooser's options.
+	PickOwner(ctx context.Context, r *http.Request, offered []standing.Owner) (standing.Owner, []OwnerOption, bool)
+	// ResolvedCorpName and DisplayCharacter are cache-only names.
+	ResolvedCorpName(ctx context.Context, corpID int64) (string, bool)
+	DisplayCharacter(ctx context.Context, characterID int64) string
 }
 
 // Module is the registration contract exposed by every build-selectable module.
@@ -226,8 +379,12 @@ type Module struct {
 	Nav           []NavSection
 	Routes        func(r chi.Router, deps Deps)
 	WorkerJobs    []WorkerJob
-	Widgets       []Widget
-	Suggest       []SuggestPool
+	// Deliverers are the module's notification channels (see Deliverer).
+	Deliverers []Deliverer
+	// NotifySettings contributes to the notification settings page.
+	NotifySettings *SettingsSection
+	Widgets        []Widget
+	Suggest        []SuggestPool
 	// Sitemap lists the module's public pages, so a build without the
 	// module leaves them out of sitemap.xml.
 	Sitemap []SitemapEntry

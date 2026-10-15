@@ -1,4 +1,4 @@
-package app
+package discord
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
-	"evesynapse/internal/discord"
+	dc "evesynapse/internal/discord"
 	"evesynapse/internal/logging"
 )
 
@@ -54,10 +54,10 @@ const (
 
 // kickPlan is what going through a server's members found.
 type kickPlan struct {
-	Members  int              // members looked at
-	Complete bool             // the list was read to its end
-	NoRules  bool             // the server has no rules: nobody is removed
-	Remove   []discord.Member // who is owed nothing and not protected
+	Members  int         // members looked at
+	Complete bool        // the list was read to its end
+	NoRules  bool        // the server has no rules: nobody is removed
+	Remove   []dc.Member // who is owed nothing and not protected
 }
 
 // names lists up to n of the members to remove, for showing.
@@ -75,7 +75,7 @@ func (p kickPlan) names(n int) string {
 
 // discordKickPlan goes through a server's members and lists who would
 // be removed now. It changes nothing.
-func (app *Application) discordKickPlan(ctx context.Context, guild db.DiscordGuild, now time.Time) (kickPlan, error) {
+func (app *mod) discordKickPlan(ctx context.Context, guild db.DiscordGuild, now time.Time) (kickPlan, error) {
 	rules, err := app.queries.ListDiscordRoleRulesForGuild(ctx, guild.GuildID)
 	if err != nil {
 		return kickPlan{}, err
@@ -123,7 +123,7 @@ func (app *Application) discordKickPlan(ctx context.Context, guild db.DiscordGui
 // discordKickPass removes, in each server that has it switched on, the
 // members who do not belong. A server is gone through at most every
 // kickEvery, and at most kickPerPass members are removed a pass.
-func (app *Application) discordKickPass(ctx context.Context, now time.Time) (removed int) {
+func (app *mod) discordKickPass(ctx context.Context, now time.Time) (removed int) {
 	if !app.discordHasBot() {
 		return 0
 	}
@@ -176,7 +176,7 @@ func (app *Application) discordKickPass(ctx context.Context, now time.Time) (rem
 
 // handleDiscordKickPreview says who would be removed from a server if
 // removals were on, and changes nothing.
-func (app *Application) handleDiscordKickPreview(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleDiscordKickPreview(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
 	back := app.discordBack(w, r)
@@ -187,7 +187,7 @@ func (app *Application) handleDiscordKickPreview(w http.ResponseWriter, r *http.
 	}
 	plan, err := app.discordKickPlan(ctx, guild, time.Now().UTC())
 	switch {
-	case err != nil && discord.IsStatus(err, http.StatusForbidden):
+	case err != nil && dc.IsStatus(err, http.StatusForbidden):
 		back("Discord would not hand over that server's member list. Switch on the Server Members intent for the application (Developer Portal, Bot), and check the bot is still in the server.")
 	case err != nil:
 		logging.Warnf("discord: preview removals in %s: %v", guild.GuildID, err)
@@ -205,7 +205,7 @@ func (app *Application) handleDiscordKickPreview(w http.ResponseWriter, r *http.
 
 // handleDiscordKickSave stores a server's removal settings. Switching
 // removals on is refused for a server with no rules.
-func (app *Application) handleDiscordKickSave(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleDiscordKickSave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
 	back := app.discordBack(w, r)

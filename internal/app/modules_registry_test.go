@@ -14,7 +14,7 @@ import (
 // module, and a module's nav entry, page and sitemap line come from its
 // registration.
 func TestDefaultBuildEnablesModules(t *testing.T) {
-	for _, id := range []string{"piplanner", "intel", "tradeideas"} {
+	for _, id := range []string{"piplanner", "intel", "tradeideas", "discord"} {
 		if !moduleCompiledIn(id) {
 			t.Fatalf("the default build does not register %s", id)
 		}
@@ -121,4 +121,25 @@ func TestRegisterRejectsAnUndeclaredModule(t *testing.T) {
 		}
 	}()
 	registerModules([]module.Module{{ID: "half-declared"}})
+}
+
+// TestModuleNavKeepsItsPlace: a module's menu entry sits where the menu
+// has always had it (module.NavEntry.After), not at the end of its
+// section.
+func TestModuleNavKeepsItsPlace(t *testing.T) {
+	follows := func(section, href, prev string) {
+		t.Helper()
+		list := sectionNav[section]
+		for i, e := range list {
+			if e.Href == href {
+				if i == 0 || list[i-1].Href != prev {
+					t.Errorf("%s: %s follows %q, want %q", section, href, list[max(i-1, 0)].Href, prev)
+				}
+				return
+			}
+		}
+		t.Errorf("%s: no %s entry", section, href)
+	}
+	follows("market", "/market/ideas/", "/market/scanner/")
+	follows("corporation", "/discord/servers", "/srp/")
 }

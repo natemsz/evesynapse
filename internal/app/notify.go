@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"evesynapse/internal/app/module"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -632,7 +633,7 @@ func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db
 	// subscribed (notify_push.go). A failed send loses nothing: the
 	// notification is already in the top bar.
 	app.pushToUser(ctx, userID, pushMessagesFor(announce))
-	app.discordToUser(ctx, userID, announce)
+	app.deliverToModules(ctx, userID, announce)
 	return len(announce), nil
 }
 
@@ -791,6 +792,34 @@ func (app *Application) notifyOpEvents(ctx context.Context, c *notifyCollector, 
 				Title: fmt.Sprintf("Op%s starts at %s EVE time: %s", corp, op.StartsAt.UTC().Format("15:04"), op.Title),
 				URL:   opURL(op.ID),
 			})
+		}
+	}
+}
+
+// deliverToModules offers one batch of new notifications to every
+// registered module channel. It is a fan-out: each Deliverer sees every
+// notification and honors the account's own preferences for its channel;
+// what a Deliverer reports is only whether THIS channel delivered it (for
+// the log), and never stops the others. See module.Deliverer.
+func (app *Application) deliverToModules(ctx context.Context, userID int64, events []notifyEvent) {
+	if len(events) == 0 {
+		return
+	}
+	n := module.Notification{}
+	for _, ev := range events {
+		n.Events = append(n.Events, module.NotifyEvent{Kind: ev.Kind, CharacterID: ev.CharacterID, Title: ev.Title, URL: ev.URL})
+	}
+	for _, msg := range pushMessagesFor(events) {
+		n.Messages = append(n.Messages, module.NotifyMessage{Title: msg.Title, Body: msg.Body, URL: msg.URL})
+	}
+	for _, m := range registeredModules {
+		for _, deliver := range m.Deliverers {
+			func() {
+				defer recoverWorkerPanic("notification delivery: " + m.ID)
+				if deliver(ctx, app, userID, n) {
+					logging.Debugf("notify: delivered to user %d through %s", userID, m.ID)
+				}
+			}()
 		}
 	}
 }

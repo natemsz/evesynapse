@@ -1,13 +1,14 @@
-package app
+package discord
 
 import (
 	"context"
+	"evesynapse/internal/app/module"
 	"fmt"
 	"net/http"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
-	"evesynapse/internal/discord"
+	dc "evesynapse/internal/discord"
 	"evesynapse/internal/logging"
 )
 
@@ -40,41 +41,40 @@ const (
 )
 
 // discordHasBot reports whether the bot can send at all.
-func (app *Application) discordHasBot() bool {
+func (app *mod) discordHasBot() bool {
 	return app.discord != nil && app.discord.Config().HasBot()
 }
 
-// siteURL makes a site path into a full address for a message read
-// outside the site. Without a known public address the path alone is
-// returned.
-func (app *Application) siteURL(path string) string {
-	return app.cfg.publicOrigin() + notifyTarget(path)
-}
-
-// discordToUser sends one worker pass's new notifications to the
-// account as direct messages, if it asked for that. Failures are
-// logged and lose nothing: the notifications are already stored.
-func (app *Application) discordToUser(ctx context.Context, userID int64, events []notifyEvent) {
-	if !app.discordHasBot() || len(events) == 0 {
-		return
+// deliver sends one batch of new notifications to the account as direct
+// messages, if it asked for that: this module's channel in the notifier's
+// fan-out (see module.Deliverer). It honors the account's own choice
+// (discord_links.dm_notifications) and reports whether it delivered
+// them. Failures are logged and lose nothing: the notifications are
+// already stored.
+func deliver(ctx context.Context, deps module.Deps, userID int64, n module.Notification) bool {
+	app := newMod(deps)
+	if !app.discordHasBot() || len(n.Messages) == 0 {
+		return false
 	}
 	link, err := app.queries.GetDiscordLink(ctx, userID)
 	if err != nil || !link.DmNotifications {
-		return
+		return false
 	}
 	ctx, cancel := context.WithTimeout(ctx, discordUserBudget)
 	defer cancel()
 	// The same rule as browser push: a few are sent one by one, a
-	// burst as a single line with a count.
-	for _, msg := range pushMessagesFor(events) {
-		text := msg.Body + "\n" + app.siteURL(msg.URL)
-		if err := app.discord.SendDM(ctx, link.DiscordID, discord.Message{Content: text}); err != nil {
+	// burst as a single line with a count (the notifier has already
+	// condensed them).
+	for _, msg := range n.Messages {
+		text := msg.Body + "\n" + deps.SiteURL(msg.URL)
+		if err := app.discord.SendDM(ctx, link.DiscordID, dc.Message{Content: text}); err != nil {
 			logging.Warnf("discord: message to user %d: %v", userID, err)
 			app.discordNoteDM(ctx, link, err)
-			return // this account cannot be reached right now: do not try the rest
+			return false // this account cannot be reached right now: do not try the rest
 		}
 	}
 	app.discordNoteDM(ctx, link, nil)
+	return true
 }
 
 // Why a direct message did not arrive, as the settings page says it.
@@ -86,11 +86,11 @@ const (
 // discordNoteDM records how the last direct message to an account went,
 // so that the person it concerns can see it, not only the server's log.
 // A message that goes through clears it.
-func (app *Application) discordNoteDM(ctx context.Context, link db.DiscordLink, err error) {
+func (app *mod) discordNoteDM(ctx context.Context, link db.DiscordLink, err error) {
 	problem := ""
 	switch {
 	case err == nil:
-	case discord.IsStatus(err, http.StatusForbidden):
+	case dc.IsStatus(err, http.StatusForbidden):
 		problem = discordDMRefused
 	default:
 		problem = discordDMFailed
@@ -109,7 +109,7 @@ func (app *Application) discordNoteDM(ctx context.Context, link db.DiscordLink, 
 // discordAnnounceOps posts the ops planned since the last look, each
 // once, in every channel set for it. An op with nowhere to go is
 // marked as looked at, so it is not asked about again.
-func (app *Application) discordAnnounceOps(ctx context.Context, now time.Time) (posted int) {
+func (app *mod) discordAnnounceOps(ctx context.Context, now time.Time) (posted int) {
 	if !app.discordHasBot() {
 		return 0
 	}
@@ -142,16 +142,16 @@ func (app *Application) discordAnnounceOps(ctx context.Context, now time.Time) (
 			if op.Doctrine != "" {
 				text += " · " + op.Doctrine
 			}
-			text += "\nSign up: " + app.siteURL(opURL(op.ID))
+			text += "\nSign up: " + app.deps.SiteURL(opPath(op.ID))
 			for _, guild := range targets {
-				err := app.discord.SendChannel(ctx, guild.OpsChannel, discord.Message{Content: text})
+				err := app.discord.SendChannel(ctx, guild.OpsChannel, dc.Message{Content: text})
 				switch {
 				case err == nil:
 					posted++
-				case discord.IsStatus(err, http.StatusTooManyRequests):
+				case dc.IsStatus(err, http.StatusTooManyRequests):
 					logging.Warnf("discord: announce op %d in %s: %v", op.ID, guild.Name, err)
 					return posted // asked to slow down: the rest wait for the next pass
-				case discord.IsStatus(err, http.StatusForbidden), discord.IsStatus(err, http.StatusNotFound):
+				case dc.IsStatus(err, http.StatusForbidden), dc.IsStatus(err, http.StatusNotFound):
 					// The bot cannot post there at all: not worth asking every minute.
 					logging.Warnf("discord: announce op %d in %s: %v", op.ID, guild.Name, err)
 				default:
@@ -172,7 +172,7 @@ func (app *Application) discordAnnounceOps(ctx context.Context, now time.Time) (
 
 // handleDiscordSettings stores whether the account wants its
 // notifications as direct messages.
-func (app *Application) handleDiscordSettings(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleDiscordSettings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
 	if err := r.ParseForm(); err == nil && userID != 0 {
@@ -191,7 +191,7 @@ func (app *Application) handleDiscordSettings(w http.ResponseWriter, r *http.Req
 // handleDiscordRolesRefresh checks the account's roles in every server
 // now, without waiting for the worker's turn: for someone who has just
 // joined a server.
-func (app *Application) handleDiscordRolesRefresh(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleDiscordRolesRefresh(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
 	link, linked := app.discordLinkFor(r, userID)
@@ -216,7 +216,7 @@ func (app *Application) handleDiscordRolesRefresh(w http.ResponseWriter, r *http
 
 // handleDiscordTest sends the account a direct message, so the user
 // can see that the bot reaches them, and says why when it does not.
-func (app *Application) handleDiscordTest(w http.ResponseWriter, r *http.Request) {
+func (app *mod) handleDiscordTest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
 	link, linked := app.discordLinkFor(r, userID)
@@ -226,14 +226,14 @@ func (app *Application) handleDiscordTest(w http.ResponseWriter, r *http.Request
 	case !linked:
 		app.flash(ctx, "Connect a Discord account first.")
 	default:
-		err := app.discord.SendDM(ctx, link.DiscordID, discord.Message{
-			Content: "EveSynapse can reach you here. Notifications you switch on will arrive as messages like this one.\n" + app.siteURL(discordSettingsPath),
+		err := app.discord.SendDM(ctx, link.DiscordID, dc.Message{
+			Content: "EveSynapse can reach you here. Notifications you switch on will arrive as messages like this one.\n" + app.deps.SiteURL(discordSettingsPath),
 		})
 		app.discordNoteDM(ctx, link, err)
 		switch {
 		case err == nil:
 			app.flash(ctx, "Test message sent to "+link.Username+" on Discord.")
-		case discord.IsStatus(err, http.StatusForbidden):
+		case dc.IsStatus(err, http.StatusForbidden):
 			app.flash(ctx, "Discord would not deliver the message. In Discord, open the server you share with the bot, then Privacy Settings, and allow direct messages from server members; then try again.")
 		default:
 			logging.Warnf("discord: test message to user %d: %v", userID, err)

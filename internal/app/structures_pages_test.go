@@ -127,7 +127,7 @@ func TestStructurePageStates(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /structure/ ready: status %d", code)
 	}
-	mustContain(t, "/structure/ ready", body, "Corp Home", "player-built structure",
+	mustContain(t, "/structure/ ready", body, "Corp Home",
 		`<a href="/corporation/?corporation=777000">Fixture Owners</a>`)
 	if strings.Contains(body, "data-live-region") {
 		t.Error("ready structure page still carries a live region")

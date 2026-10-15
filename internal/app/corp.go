@@ -112,10 +112,6 @@ func divisionOfKind(kind string) (int64, bool) {
 	return 0, false
 }
 
-// walletDivisionLabel names a wallet division the way the client
-// does: division 1 is the master wallet.
-func walletDivisionLabel(division int64) string { return module.WalletDivisionLabel(division) }
-
 // ---------------------------------------------------------------------------
 // Handler-side loaders: snapshot rows and fetch state, DB only.
 // ---------------------------------------------------------------------------

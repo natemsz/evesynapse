@@ -26,7 +26,8 @@ var Module = module.Module{
 		{Scope: "esi-mail.organize_mail.v1", Unlocks: "Mark mail as read."},
 		{Scope: "esi-mail.send_mail.v1", Unlocks: "Compose and send mail."},
 	},
-	Snapshots: []string{esi.SnapMail, esi.SnapMailLabels, esi.SnapMailLists, esi.SnapMailBodyPrefix},
+	Snapshots:   []string{esi.SnapMail, esi.SnapMailLabels, esi.SnapMailLists, esi.SnapMailBodyPrefix},
+	NotifyKinds: []module.NotifyKindDecl{{ID: "mail", Title: "New mail", After: "skill"}},
 	Nav: []module.NavSection{{
 		Section: "pilot",
 		Entries: []module.NavEntry{

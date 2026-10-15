@@ -27,6 +27,10 @@ var Module = module.Module{
 		{Scope: "esi-mail.send_mail.v1", Unlocks: "Handlers mail the pay list and tell a pilot their request was paid."},
 		{Scope: "esi-characters.read_corporation_roles.v1", Unlocks: "Directors and role holders can handle their corporation's requests."},
 	},
+	NotifyKinds: []module.NotifyKindDecl{
+		{ID: "srp_new", Title: "New SRP request to handle", Account: true, After: "op_reminder"},
+		{ID: "srp_done", Title: "SRP request paid or denied", After: "srp_new"},
+	},
 	Nav: []module.NavSection{{
 		Section: "corporation",
 		Entries: []module.NavEntry{

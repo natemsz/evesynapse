@@ -69,3 +69,26 @@ func TestCoreOnlyHasNoModuleScopes(t *testing.T) {
 		}
 	}
 }
+
+// TestCoreOnlyHasNoModuleWidgetsOrKinds: with no module built in, the
+// home page offers only core's widgets, the default layout leaves out
+// the rest, and the notification settings list only core's kinds.
+func TestCoreOnlyHasNoModuleWidgetsOrKinds(t *testing.T) {
+	absent := map[string]bool{"market": true, "tradeideas": true, "pulse": true, "walletflow": true, "upkeep": true,
+		"mail": true, "calendar": true, "srp_new": true, "srp_done": true}
+	for _, w := range homeWidgetCatalog() {
+		if absent[w.ID] {
+			t.Errorf("the widget catalog lists %q in the core-only build", w.ID)
+		}
+	}
+	for _, item := range defaultHomeLayoutItems() {
+		if absent[item.ID] {
+			t.Errorf("the default layout lists %q in the core-only build", item.ID)
+		}
+	}
+	for _, k := range notifyKindList() {
+		if absent[k.ID] {
+			t.Errorf("the notification kinds list %q in the core-only build", k.ID)
+		}
+	}
+}

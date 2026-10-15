@@ -464,7 +464,7 @@ func TestDiscordDirectMessages(t *testing.T) {
 	// The switch is saved by the page's own Save button, with the rest.
 	settings := func(dm bool) url.Values {
 		form := url.Values{"discord_shown": {"1"}}
-		for _, kind := range notifyKinds {
+		for _, kind := range notifyKindList() {
 			form.Add("kind", kind.ID)
 			if !kind.Account {
 				form.Add("char."+kind.ID, "90000001")

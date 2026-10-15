@@ -446,6 +446,31 @@ func StructureSourceRank(source string) int {
 	return 0
 }
 
+// WidgetDecl declares a home widget the module owns: core lists and lays
+// it out only when the module is built in. Feature is the manifest feature
+// whose scopes power it (the module's own id when empty); After names the
+// widget it follows in the catalog.
+type WidgetDecl struct {
+	ID          string
+	Title       string
+	Description string
+	W, H        int
+	Feature     string
+	After       string
+}
+
+// NotifyKindDecl declares a kind of notification the module owns: core
+// offers it in the settings, produces it and shows it in the bell only when
+// the module is built in. After names the kind it follows in the settings.
+type NotifyKindDecl struct {
+	ID       string
+	Title    string
+	Standing bool
+	Account  bool
+	Feature  string
+	After    string
+}
+
 // Cycle is what a worker-cycle job is given: the fetch allowance left,
 // the characters this cycle works, and the time.
 type Cycle struct {
@@ -655,12 +680,6 @@ func (c ModelConfig) Configured() bool {
 // UsesMeta reports whether Muse Wonder (MODEL_API_KEY set) answers
 // rather than Gemma.
 func (c ModelConfig) UsesMeta() bool { return c.MetaKey != "" }
-
-// Widget represents a home dashboard widget contribution.
-type Widget struct {
-	ID    string
-	Title string
-}
 
 // SuggestPool represents a search or quick-jump suggestion pool.
 type SuggestPool struct {
@@ -1081,11 +1100,15 @@ type Module struct {
 	Deliverers []Deliverer
 	// NotifySettings contributes to the notification settings page.
 	NotifySettings *SettingsSection
-	Widgets        []Widget
 	Suggest        []SuggestPool
 	// Sitemap lists the module's public pages, so a build without the
 	// module leaves them out of sitemap.xml.
 	Sitemap []SitemapEntry
+	// Widgets and NotifyKinds are what the module adds to the home page and
+	// to the notifications; the builders and producers stay core's, reading
+	// the shared snapshots, but nothing is shown for a module not built in.
+	Widgets     []WidgetDecl
+	NotifyKinds []NotifyKindDecl
 	// FetchGates are asked before the fetch pipeline spends ESI.
 	FetchGates []FetchGate
 	// CycleJobs run inside the worker cycle at a named phase.

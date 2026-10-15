@@ -24,6 +24,7 @@ var Module = module.Module{
 	},
 	EnhanceScopes: []module.Scope{},
 	Snapshots:     []string{esi.SnapWallet, esi.SnapWalletJournal, esi.SnapWalletTxns},
+	Widgets:       []module.WidgetDecl{{ID: "walletflow", Title: "Wallet Flow", Description: "Income vs spend over 7 and 30 days with top sources, sinks, and a per-character breakdown.", W: 2, H: 2, After: "pulse"}},
 	Nav: []module.NavSection{{
 		Section: "pilot",
 		Entries: []module.NavEntry{

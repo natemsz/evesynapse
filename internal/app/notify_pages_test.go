@@ -233,7 +233,7 @@ func TestNotificationSettings(t *testing.T) {
 		t.Fatalf("GET settings = %d", code)
 	}
 	// Everything is on to begin with.
-	for _, kind := range notifyKinds {
+	for _, kind := range notifyKindList() {
 		mustContain(t, "/notifications/settings", body,
 			`<input type="checkbox" name="kind" value="`+kind.ID+`" checked> `+kind.Title)
 	}
@@ -249,7 +249,7 @@ func TestNotificationSettings(t *testing.T) {
 
 	// Switch off mail and killmails: the form sends the ones left on.
 	var keep []string
-	for _, kind := range notifyKinds {
+	for _, kind := range notifyKindList() {
 		if kind.ID != notifyMail && kind.ID != notifyKillmail {
 			keep = append(keep, kind.ID)
 		}
@@ -299,7 +299,7 @@ func TestNotificationSettingsPerCharacter(t *testing.T) {
 	// Every kind on; mail only for the first character. The alt's
 	// killmail box cannot be ticked, so the form does not carry it.
 	form := url.Values{}
-	for _, kind := range notifyKinds {
+	for _, kind := range notifyKindList() {
 		form.Add("kind", kind.ID)
 		if !kind.Account {
 			form.Add("char."+kind.ID, a)
@@ -432,7 +432,7 @@ func TestNotifyNewOps(t *testing.T) {
 	// and still quiet about that op after switching back on.
 	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
 	form := url.Values{}
-	for _, kind := range notifyKinds {
+	for _, kind := range notifyKindList() {
 		form.Add("kind", kind.ID)
 		if !kind.Account && kind.ID != notifyOp {
 			form.Add("char."+kind.ID, "90000001")
@@ -548,7 +548,7 @@ func TestNotifyOpReminder(t *testing.T) {
 		`value="op_reminder" checked> Op starting soon</label>`,
 		`<select name="op_reminder_minutes"`, `<option value="30" selected>30 minutes</option>`, `<option value="120">2 hours</option>`)
 	form := url.Values{"op_reminder_minutes": {"120"}}
-	for _, kind := range notifyKinds {
+	for _, kind := range notifyKindList() {
 		form.Add("kind", kind.ID)
 		if !kind.Account {
 			form.Add("char."+kind.ID, "90000001")

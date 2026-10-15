@@ -33,6 +33,10 @@ var Module = module.Module{
 		{Scope: "esi-assets.read_corporation_assets.v1", Unlocks: "The Assets page: corporation hangars and assets."},
 		{Scope: "esi-corporations.read_structures.v1", Unlocks: "The Structures page: structures and their fuel and state."},
 	},
+	Widgets: []module.WidgetDecl{
+		{ID: "pulse", Title: "Corp Pulse", Description: "What changed in the corporation: members in and out, wallet movements, structure arrivals and timers. Needs a qualifying in-game role.", W: 1, H: 1, Feature: "corp_members", After: "training"},
+		{ID: "upkeep", Title: "Upkeep & Fuel", Description: "Structures low on fuel, unanchoring, or running a state timer. Station Managers and Directors only.", W: 1, H: 1, Feature: "corp_structures", After: "walletflow"},
+	},
 	Nav: []module.NavSection{{
 		Section: "corporation",
 		Entries: []module.NavEntry{

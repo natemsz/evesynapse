@@ -26,7 +26,8 @@ var Module = module.Module{
 	EnhanceScopes: []module.Scope{
 		{Scope: "esi-calendar.respond_calendar_events.v1", Unlocks: "Accept or decline events."},
 	},
-	Snapshots: []string{esi.SnapCalendar, esi.SnapCalendarEventPrefix, esi.SnapCalendarAttPrefix},
+	Snapshots:   []string{esi.SnapCalendar, esi.SnapCalendarEventPrefix, esi.SnapCalendarAttPrefix},
+	NotifyKinds: []module.NotifyKindDecl{{ID: "calendar", Title: "New in-game calendar event", After: "mail"}},
 	Nav: []module.NavSection{{
 		Section: "pilot",
 		Entries: []module.NavEntry{

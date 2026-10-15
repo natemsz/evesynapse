@@ -49,7 +49,7 @@ func TestParseHomeLayoutFormats(t *testing.T) {
 // TestWidgetSizeDefaults: every catalog module has a default size
 // inside the grid, and a stored size overrides it per axis.
 func TestWidgetSizeDefaults(t *testing.T) {
-	for _, def := range homeWidgetCatalog {
+	for _, def := range homeWidgetCatalog() {
 		if def.W < 1 || def.W > homeGridMax || def.H < 1 || def.H > homeGridMax {
 			t.Errorf("widget %q default size %dx%d is outside the grid", def.ID, def.W, def.H)
 		}

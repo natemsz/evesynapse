@@ -209,11 +209,20 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 		bb.linkLines(ctx, b, prefix)
 		bb.skillLines(ctx, b, prefix)
 		bb.industryLines(ctx, b, prefix)
-		bb.orderLines(ctx, b, prefix)
+		if moduleCompiledIn("market") {
+			bb.orderLines(ctx, b, prefix)
+		}
 		bb.planetLines(ctx, b, prefix)
-		bb.contractLines(b, prefix)
-		bb.calendarLines(b, prefix)
-		bb.mailLines(b, prefix)
+		// What a module owns is told only where the module is built in.
+		if moduleCompiledIn("contracts") {
+			bb.contractLines(b, prefix)
+		}
+		if moduleCompiledIn("calendar") {
+			bb.calendarLines(b, prefix)
+		}
+		if moduleCompiledIn("mail") {
+			bb.mailLines(b, prefix)
+		}
 	}
 	bb.flushIdle()
 	lines := bb.lines
@@ -609,6 +618,9 @@ func (app *Application) briefingMarketLines(ctx context.Context, bundles []*char
 	var lines []briefingLine
 
 	health, err := app.queries.ListOrderHealthByUser(ctx, userID)
+	if !moduleCompiledIn("market") {
+		health = nil
+	}
 	if err != nil {
 		logging.Errorf("home: briefing: list order health for user %d: %v", userID, err)
 	} else {

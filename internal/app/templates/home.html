@@ -122,7 +122,7 @@
         <div><dt>Corporation</dt><dd>{{if .CorpName}}{{corpLink .CorpID .CorpName}}{{else}}—{{end}}</dd></div>
         <div><dt>Status</dt><dd>{{if .OnlineKnown}}{{if .Online}}<span class="dot on"></span>Online{{else}}<span class="dot off"></span>Offline{{end}}{{if .LastLogin}} · last login {{.LastLogin}}{{end}}{{else}}—{{end}}</dd></div>
         <div><dt>Docked</dt><dd>{{if .DockedName}}{{placeLink .DockedRef}}{{else}}—{{end}}</dd></div>
-        <div><dt>Mail</dt><dd>{{if .UnreadKnown}}{{if .Unread}}<a href="/mail/?character={{.ID}}">{{.Unread}} unread</a>{{else}}No unread mail{{end}}{{else}}—{{end}}</dd></div>
+        {{if moduleOn "mail"}}<div><dt>Mail</dt><dd>{{if .UnreadKnown}}{{if .Unread}}<a href="/mail/?character={{.ID}}">{{.Unread}} unread</a>{{else}}No unread mail{{end}}{{else}}—{{end}}</dd></div>{{end}}
         <div><dt>Tags</dt><dd>{{if .Tags}}{{.Tags}}{{else}}—{{end}}</dd></div>
         <div><dt>Sheet</dt><dd><a href="/character/?character={{.ID}}">Open {{.Name}}</a></dd></div>
       </dl></td>

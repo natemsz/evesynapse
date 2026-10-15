@@ -480,7 +480,7 @@ func TestLiveRegionFragments(t *testing.T) {
 	mustContain(t, "trader fragment (pending)", body,
 		`data-live-region`, `data-poll-state="pending"`,
 		`data-poll-url="/market/trader-fragment?region=10000002&amp;type=34&amp;bs=12&amp;bb=10"`,
-		"loading-pulse", "the averages fill in")
+		"loading-pulse", "The averages fill in")
 
 	// Then the chart state once rows exist.
 	for _, stmt := range []string{

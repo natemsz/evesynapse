@@ -76,6 +76,7 @@
           {{end}}
         </div>
       </details>
+      {{if index .NavLinks "intel"}}
       <details class="branch{{if eq .Section "intel"}} active{{end}}"{{if and (eq .Section "intel") (ne .NavState "rail")}} open{{end}} data-nav-category="intel">
         <summary data-tip="Intel"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg nav-icon-intel" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2"><circle cx="12" cy="12" r="7.4"/><circle cx="12" cy="12" r="3.6"/></g><circle cx="12" cy="12" r="1.35" fill="url(#nav-glyph-gradient)"/></svg></span><span class="nav-label">Intel</span></summary>
         <div class="menu">
@@ -83,6 +84,7 @@
           {{end}}
         </div>
       </details>
+      {{end}}
       <details class="branch{{if eq .Section "tools"}} active{{end}}"{{if and (eq .Section "tools") (ne .NavState "rail")}} open{{end}} data-nav-category="tools">
         <summary data-tip="Tools"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 0 0-6 6L3 18l3 3 5.7-5.7a4.5 4.5 0 0 0 6-6L14 13l-3-3 3.7-3.7Z"/></g></svg></span><span class="nav-label">Tools</span></summary>
         <div class="menu">

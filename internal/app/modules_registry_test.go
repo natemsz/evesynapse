@@ -14,8 +14,10 @@ import (
 // module, and a module's nav entry, page and sitemap line come from its
 // registration.
 func TestDefaultBuildEnablesModules(t *testing.T) {
-	if !moduleCompiledIn("piplanner") {
-		t.Fatal("the default build does not register the PI planner")
+	for _, id := range []string{"piplanner", "intel"} {
+		if !moduleCompiledIn(id) {
+			t.Fatalf("the default build does not register %s", id)
+		}
 	}
 	found := false
 	for _, e := range sectionNav["industry"] {

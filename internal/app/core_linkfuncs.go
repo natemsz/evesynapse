@@ -1,6 +1,7 @@
 package app
 
 import (
+	"evesynapse/internal/app/module"
 	"fmt"
 	"html"
 	"html/template"
@@ -229,12 +230,7 @@ func structureLink(structureID int64, name string) template.HTML {
 // NPC station, SystemID for a solar system, StructureID for a
 // player structure whose name or context the app holds — all 0
 // for containers and unresolved ids, which stay text.
-type placeRef struct {
-	Name        string
-	StationID   int64
-	StructureID int64
-	SystemID    int64
-}
+type placeRef = module.PlaceRef
 
 // placeLink renders a placeRef by the policy: station wins, then
 // structure, then system, otherwise the plain title.

@@ -3,6 +3,7 @@
 package app
 
 import (
+	"evesynapse/internal/app/intel"
 	"evesynapse/internal/app/module"
 	"evesynapse/internal/app/piplanner"
 )
@@ -15,6 +16,7 @@ import (
 // build tool (stage S14) writes this file for a chosen selection.
 func init() {
 	registerModules([]module.Module{
+		intel.Module,
 		piplanner.Module,
 	})
 }

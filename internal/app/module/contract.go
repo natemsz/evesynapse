@@ -33,6 +33,16 @@ type Page struct {
 	Scripts  []string
 }
 
+// PlaceRef is a place's title with the ids it can link by (see the
+// core link policy: station, then structure, then system, otherwise
+// plain text).
+type PlaceRef struct {
+	Name        string
+	StationID   int64
+	StructureID int64
+	SystemID    int64
+}
+
 // Scope is one ESI scope a module wants, with what granting it adds,
 // in words the player reads on the sign-up and re-link screens.
 type Scope struct {
@@ -132,6 +142,28 @@ type Deps interface {
 	PickCharacter(ctx context.Context, r *http.Request, path string) ([]db.Character, db.Character, []CharLink, error)
 	Render(ctx context.Context, w http.ResponseWriter, status int, page string, data any)
 	AnonPages() func(http.Handler) http.Handler
+
+	// UserID is the signed-in user's id, 0 when anonymous.
+	UserID(ctx context.Context) int64
+	// LoadGlobalSnapshot reads one public-data snapshot (wars,
+	// incursions, ...) the worker keeps warm; false until it exists.
+	LoadGlobalSnapshot(ctx context.Context, kind string, out any) bool
+	// UserCorporationIDs is every corporation the user's characters
+	// belong to.
+	UserCorporationIDs(ctx context.Context, userID int64) map[int64]bool
+	// OrgLink renders an alliance or corporation as a link to its page.
+	OrgLink(ctx context.Context, corporationID, allianceID int64) template.HTML
+	// SystemRef is a solar system's title with its link ids.
+	SystemRef(ctx context.Context, systemID int64) PlaceRef
+	// ConstellationName reads the worker-warmed constellation name cache.
+	ConstellationName(id int64) (string, bool)
+	// FormatFinish writes an ESI timestamp the way pages show times.
+	FormatFinish(ts string) string
+	// HumanizeEnum turns an ESI snake_case enum into words.
+	HumanizeEnum(s string) string
+	// WarDetailWindow is how many of the newest wars the worker keeps
+	// details warm for.
+	WarDetailWindow() int
 }
 
 // Module is the registration contract exposed by every build-selectable module.

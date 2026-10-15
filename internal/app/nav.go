@@ -128,11 +128,6 @@ var sectionNav = map[string][]navEntry{
 		{"/groups/", "Groups", []string{"groups.html"}},
 		{"/corporations/settings/", "Settings", []string{"corp_settings.html"}},
 	},
-	"intel": {
-		{"/intel/wars/", "Wars", []string{"intel_wars.html"}},
-		{"/intel/incursions/", "Incursions", []string{"intel_incursions.html"}},
-		{"/intel/fw/", "Faction Warfare", []string{"intel_fw.html"}},
-	},
 	"tools": {
 		{"/items/", "Item Browser", []string{"items.html"}},
 	},

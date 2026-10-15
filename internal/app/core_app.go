@@ -11,6 +11,7 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"html/template"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -803,13 +804,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.With(anonPages).Get("/suggest", app.handlePlannerSuggest)
 	})
 
-	r.Route("/intel", func(r chi.Router) {
-		r.Use(anonPages)
-		r.Get("/wars/", app.handleIntelWars)
-		r.Get("/incursions/", app.handleIntelIncursions)
-		r.Get("/fw/", app.handleIntelFW)
-	})
-
 	r.Route("/sync", func(r chi.Router) {
 		// The banner indicator's poll runs on every signed-in
 		// page (app.js), so it is gated on login only; the handler
@@ -969,6 +963,34 @@ func (app *Application) PickCharacter(ctx context.Context, r *http.Request, path
 func (app *Application) Render(ctx context.Context, w http.ResponseWriter, status int, page string, data any) {
 	app.render(ctx, w, status, page, data)
 }
+
+func (app *Application) UserID(ctx context.Context) int64 { return app.userID(ctx) }
+
+func (app *Application) LoadGlobalSnapshot(ctx context.Context, kind string, out any) bool {
+	return app.loadGlobalSnapshot(ctx, kind, out)
+}
+
+func (app *Application) UserCorporationIDs(ctx context.Context, userID int64) map[int64]bool {
+	return app.userCorporationIDs(ctx, userID)
+}
+
+func (app *Application) OrgLink(ctx context.Context, corporationID, allianceID int64) template.HTML {
+	return app.orgDisplay(ctx, corporationID, allianceID)
+}
+
+func (app *Application) SystemRef(ctx context.Context, systemID int64) module.PlaceRef {
+	return app.linkPlace(ctx, systemID, app.locationTitle(ctx, systemID, "solar_system"))
+}
+
+func (app *Application) ConstellationName(id int64) (string, bool) {
+	return app.esi.CachedConstellationName(id)
+}
+
+func (app *Application) FormatFinish(ts string) string { return formatFinish(ts) }
+
+func (app *Application) HumanizeEnum(s string) string { return humanizeEnum(s) }
+
+func (app *Application) WarDetailWindow() int { return maxWarsShown }
 
 func (app *Application) AnonPages() func(http.Handler) http.Handler {
 	pageThrottle, _ := app.anonThrottles()

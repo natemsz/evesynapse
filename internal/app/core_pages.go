@@ -32,9 +32,6 @@ type pageData struct {
 	Industry          *industryView
 	IndustryChars     []assetCharLink
 	Planner           *plannerView
-	IntelWars         *warsView
-	IntelIncursions   *incursionsView
-	IntelFW           *fwView
 	ServerStatus      *serverStatusView
 	ESIHealth         *esiHealthView // Overview bar: ESI health and Tranquility players (signed-in Home only)
 	Corps             []corpView
@@ -181,8 +178,6 @@ func sectionForPage(page string) string {
 		"corp_orders.html", "corp_assets.html", "corp_structures.html",
 		"corporation.html", "alliance.html", "discord_servers.html", "groups.html", "srp.html", "doctrines.html", "doctrine.html", "corp_fits.html", "corp_settings.html":
 		return "corporation"
-	case "intel_wars.html", "intel_incursions.html", "intel_fw.html":
-		return "intel"
 	case "sync.html":
 		return "sync"
 	case "admin.html":

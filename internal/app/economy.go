@@ -37,7 +37,6 @@ func (app *Application) econSection(ctx context.Context, characterID int64, kind
 
 // orderRangeLabel renders an order's range readably: the ESI
 // enum is "station"|"solarsystem"|"region" or a jump count.
-func orderRangeLabel(r string) string { return module.OrderRangeLabel(r) }
 
 // econLocationTitle renders an order/transaction/contract
 // location: NPC station and system names from the local caches,

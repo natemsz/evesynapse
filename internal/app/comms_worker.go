@@ -38,10 +38,10 @@ const maxCalendarDetailsPerCycle = 100
 // commsSnapshotKinds lists the list-level kinds in fetch order:
 // mail first (its bodies warm behind it), then calendar, contacts.
 func commsSnapshotKinds() []string {
-	return []string{
+	return builtInKinds([]string{
 		esi.SnapMail, esi.SnapMailLabels, esi.SnapMailLists,
 		esi.SnapCalendar, esi.SnapContacts,
-	}
+	})
 }
 
 // refreshCommsSnapshots runs the mail/calendar/contacts pass for
@@ -60,10 +60,15 @@ func (app *Application) refreshCommsSnapshots(ctx context.Context, ch db.Charact
 		}
 	}
 
-	bodies, ltd := app.warmMailBodies(ctx, ch, allowance)
-	refreshed += bodies
-	if ltd {
-		return refreshed, true
+	if moduleCompiledIn("mail") {
+		bodies, ltd := app.warmMailBodies(ctx, ch, allowance)
+		refreshed += bodies
+		if ltd {
+			return refreshed, true
+		}
+	}
+	if !moduleCompiledIn("calendar") {
+		return refreshed, false
 	}
 	details, ltd := app.warmCalendarDetails(ctx, ch, allowance)
 	return refreshed + details, ltd

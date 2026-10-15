@@ -1,6 +1,7 @@
 package app
 
 import (
+	"evesynapse/internal/balancechart"
 	"fmt"
 	"math"
 	"sort"
@@ -79,15 +80,15 @@ func netWorthBreakdownDays(rows []db.WalletHistory) []netWorthDay {
 // buildNetWorthChart draws the stacked history: ISK from the baseline up,
 // assets from there to the total, and the total as the line. ok=false
 // under two days, like the single-series chart.
-func buildNetWorthChart(days []netWorthDay) (balanceChart, bool) {
+func buildNetWorthChart(days []netWorthDay) (balancechart.BalanceChart, bool) {
 	if len(days) < 2 {
-		return balanceChart{}, false
+		return balancechart.BalanceChart{}, false
 	}
-	chart := balanceChart{
+	chart := balancechart.BalanceChart{
 		Width: markethistory.ChartWidth, Height: markethistory.ChartHeight,
 		Label:   "Net worth over time, split into ISK and assets",
 		Stacked: true,
-		Legend: []chartLegendItem{
+		Legend: []balancechart.ChartLegendItem{
 			{Class: "legend-isk", Label: "ISK"},
 			{Class: "legend-assets", Label: "Assets & orders"},
 			{Class: "legend-total", Label: "Total"},
@@ -118,8 +119,8 @@ func buildNetWorthChart(days []netWorthDay) (balanceChart, bool) {
 	}
 
 	stride := 1
-	if len(days) > walletChartMaxDots {
-		stride = (len(days) + walletChartMaxDots - 1) / walletChartMaxDots
+	if len(days) > balancechart.WalletChartMaxDots {
+		stride = (len(days) + balancechart.WalletChartMaxDots - 1) / balancechart.WalletChartMaxDots
 	}
 	var kept []netWorthDay
 	for i, d := range days {
@@ -131,7 +132,7 @@ func buildNetWorthChart(days []netWorthDay) (balanceChart, bool) {
 		if len(kept) == 1 {
 			return markethistory.ChartWidth / 2
 		}
-		return balanceChartInset + i*(markethistory.ChartWidth-1-2*balanceChartInset)/(len(kept)-1)
+		return balancechart.BalanceChartInset + i*(markethistory.ChartWidth-1-2*balancechart.BalanceChartInset)/(len(kept)-1)
 	}
 	y := func(v float64) int {
 		return bottom - int(math.Round(v/maxTotal*float64(plotH)))
@@ -143,7 +144,7 @@ func buildNetWorthChart(days []netWorthDay) (balanceChart, bool) {
 		iskTop = append(iskTop, fmt.Sprintf("%d,%d", px, y(d.ISK)))
 		totalTop = append(totalTop, fmt.Sprintf("%d,%d", px, y(d.Total())))
 		line = append(line, fmt.Sprintf("%d,%d", px, y(d.Total())))
-		chart.Dots = append(chart.Dots, balanceDot{
+		chart.Dots = append(chart.Dots, balancechart.BalanceDot{
 			X: px, Y: y(d.Total()),
 			Date:    d.At.Format(markethistory.DateLayout),
 			Balance: esi.FormatISK(d.Total()),
@@ -163,7 +164,7 @@ func buildNetWorthChart(days []netWorthDay) (balanceChart, bool) {
 	for i := last; i >= 0; i-- {
 		assetsPoly = append(assetsPoly, iskTop[i])
 	}
-	chart.Bands = []balanceBand{
+	chart.Bands = []balancechart.BalanceBand{
 		{Label: "ISK", Fill: netWorthISKColour, Opacity: "0.55", Points: strings.Join(iskPoly, " ")},
 		{Label: "Assets and orders", Fill: netWorthAssetsColour, Opacity: "0.5", Points: strings.Join(assetsPoly, " ")},
 	}

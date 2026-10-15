@@ -229,15 +229,7 @@ func (app *Application) fillQueue(ctx context.Context, view *skillsView, queue e
 
 // formatFinish renders an ESI RFC3339 timestamp the way the home
 // page does; unparseable values pass through, empty stays empty.
-func formatFinish(raw string) string {
-	if raw == "" {
-		return ""
-	}
-	if t, err := time.Parse(time.RFC3339, raw); err == nil {
-		return t.UTC().Format("2006-01-02 15:04 UTC")
-	}
-	return raw
-}
+func formatFinish(raw string) string { return humanize.Finish(raw) }
 
 // fillSkillSections computes the header stats and the per-group
 // skill tables (every skill, heaviest first, SP subtotal per

@@ -10,12 +10,12 @@
 <p>Your characters couldn't be loaded. Try again shortly.</p>
 {{else if not .Home.HasChars}}
 <p>No characters are linked to this account yet. Every character you sign in with shows up here. Link one to start.</p>
-<p><a class="btn" href="/auth/eve">Link your first character</a></p>
+<p><a class="btn" href="/auth/link">Link your first character</a></p>
 {{else}}
 <div class="home-bar">
   {{if .Home.Customize}}<p class="home-bar-note"><small>Drag a module by its move handle, resize it from its corner, remove it with ×. Changes save as you make them. <kbd>\</kbd> finishes.</small></p>{{end}}
   {{with .ESIHealth}}<span class="esi-pill esi-{{.State}}" title="{{.Title}}"><span class="esi-dot" aria-hidden="true"></span><span class="esi-label">{{.Label}}</span>{{if .Players}}<span class="esi-tq">Tranquility <b>{{.Players}}</b> online</span>{{end}}</span>{{end}}
-  <a class="btn btn-quiet" href="/auth/eve">Link another character</a>
+  <a class="btn btn-quiet" href="/auth/link">Link another character</a>
   {{if .Home.Customize}}<a class="btn" href="/" title="Done (\)" aria-keyshortcuts="\">Done <kbd>\</kbd></a>{{end}}
   <details class="menu-pop home-settings">
     <summary class="btn btn-quiet" title="Overview settings: arrange, add or reset modules" aria-label="Overview settings"><svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></g></svg><span>Overview</span></summary>
@@ -122,7 +122,7 @@
         <div><dt>Corporation</dt><dd>{{if .CorpName}}{{corpLink .CorpID .CorpName}}{{else}}—{{end}}</dd></div>
         <div><dt>Status</dt><dd>{{if .OnlineKnown}}{{if .Online}}<span class="dot on"></span>Online{{else}}<span class="dot off"></span>Offline{{end}}{{if .LastLogin}} · last login {{.LastLogin}}{{end}}{{else}}—{{end}}</dd></div>
         <div><dt>Docked</dt><dd>{{if .DockedName}}{{placeLink .DockedRef}}{{else}}—{{end}}</dd></div>
-        <div><dt>Mail</dt><dd>{{if .UnreadKnown}}{{if .Unread}}<a href="/mail/?character={{.ID}}">{{.Unread}} unread</a>{{else}}No unread mail{{end}}{{else}}—{{end}}</dd></div>
+        {{if moduleOn "mail"}}<div><dt>Mail</dt><dd>{{if .UnreadKnown}}{{if .Unread}}<a href="/mail/?character={{.ID}}">{{.Unread}} unread</a>{{else}}No unread mail{{end}}{{else}}—{{end}}</dd></div>{{end}}
         <div><dt>Tags</dt><dd>{{if .Tags}}{{.Tags}}{{else}}—{{end}}</dd></div>
         <div><dt>Sheet</dt><dd><a href="/character/?character={{.ID}}">Open {{.Name}}</a></dd></div>
       </dl></td>
@@ -507,7 +507,7 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 <p>You are not signed in.</p>
-<p><a class="btn" href="/auth/eve">Log in with EVE SSO</a></p>
+<p><a class="btn" href="/auth/link">Log in with EVE SSO</a></p>
 {{if not .SSOConfigured}}
 <p><small>EVE SSO is not configured. Set <code>EVE_CLIENT_ID</code> / <code>EVE_CLIENT_SECRET</code> (see <code>.env.example</code>).</small></p>
 {{end}}

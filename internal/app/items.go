@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"evesynapse/internal/htmlsanitize"
 	"html/template"
 	"net/http"
 	"strconv"
@@ -468,12 +469,12 @@ func (app *Application) descriptionState(ctx context.Context, typeID int64) (sta
 // live-region fragment.
 func (app *Application) itemDescription(ctx context.Context, typeID int64) (string, template.HTML) {
 	if desc := app.sdeTypeDescription(ctx, typeID); desc != "" {
-		return "ready", sanitizeMailHTML(desc)
+		return "ready", htmlsanitize.Sanitize(desc)
 	}
 	td, err := app.queries.GetTypeDetail(ctx, typeID)
 	switch {
 	case err == nil && td.FetchedAt.Valid && td.Description != "":
-		return "ready", sanitizeMailHTML(td.Description)
+		return "ready", htmlsanitize.Sanitize(td.Description)
 	case err == nil && td.FetchedAt.Valid:
 		return "empty", ""
 	case app.userID(ctx) == 0:

@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -17,6 +19,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/fitview"
 	"evesynapse/internal/standing"
 )
 
@@ -161,6 +164,357 @@ func PublicFitCardOf(row db.ListPublicFitsRow, userID int64) PublicFitCard {
 		card.Tags = doc.Tags
 	}
 	return card
+}
+
+// WalletDivisionCount is how many wallet divisions a corporation has.
+const WalletDivisionCount = 7
+
+// WalletDivisionLabel names a wallet division the way the client does:
+// division 1 is the master wallet.
+func WalletDivisionLabel(division int64) string {
+	if division == 1 {
+		return "Master Wallet"
+	}
+	return fmt.Sprintf("Division %d", division)
+}
+
+// CorpSectionState is the empty-state triage every corporation section
+// renders from: data loaded, still warming, or refused for want of an
+// in-game role.
+type CorpSectionState struct {
+	Loaded      bool
+	Warming     bool   // no snapshot yet and no refusal recorded
+	Forbidden   bool   // ESI answered 403 on the last attempt
+	RoleMissing string // role label when Forbidden named one ("" = label-less)
+}
+
+// CorpViewBase carries what every corporation subpage header renders:
+// the viewing character, the corporation’s display title, and the ids
+// the switcher and sub-nav links need. Embedded in each subpage’s view.
+type CorpViewBase struct {
+	CharacterName string
+	CharacterID   int64 // active character (switcher + sub-nav links)
+	CorpID        int64
+	CorpTitle     string // "Name [TICKER]", or "Corporation #<id>" until corp_info lands
+	MemberCount   string // member count from corp_info, "" when unknown
+}
+
+// CorpPageSelection is PickCorpPage’s result: the switcher state plus the
+// selected character’s corporation.
+type CorpPageSelection struct {
+	Active db.Character
+	Links  []CharLink
+	Base   CorpViewBase
+}
+
+// Character link state and scopes the modules ask about.
+const (
+	LinkStateOK   = "ok"
+	MailSendScope = "esi-mail.send_mail.v1"
+)
+
+// CharacterHasScope reports whether a linked character granted a scope.
+func CharacterHasScope(ch db.Character, scope string) bool {
+	for _, s := range strings.Fields(ch.Scopes) {
+		if s == scope {
+			return true
+		}
+	}
+	return false
+}
+
+// Op timing the corporation modules match losses and fits to.
+const (
+	// OpCaptureLead and OpCaptureTail are how far around an op’s own
+	// times a fleet or a loss still counts as the op’s.
+	OpCaptureLead = 15 * time.Minute
+	OpCaptureTail = 15 * time.Minute
+	// OpMaxDuration is the longest an op can run, in minutes.
+	OpMaxDuration = 24 * 60
+	// AttendanceFleet is the attendance source for what the fleet reported.
+	AttendanceFleet = "fleet"
+)
+
+// OpEnd is when an op is over.
+func OpEnd(op db.Op) time.Time {
+	return op.StartsAt.Add(time.Duration(op.DurationMinutes) * time.Minute)
+}
+
+// OpURL is an op’s page.
+func OpURL(id int64) string { return fmt.Sprintf("/ops/%d", id) }
+
+// CorpAddress is a corporation page’s address for one corporation.
+func CorpAddress(path string, corp int64) string {
+	if corp == 0 {
+		return path
+	}
+	return path + "?corporation=" + strconv.FormatInt(corp, 10)
+}
+
+// CorpActor is how an account acts for a corporation: the character of
+// its that is in the corporation, and one that can send EVE mail.
+type CorpActor struct {
+	CharacterID int64
+	Mailer      *db.Character
+}
+
+// DoctrineFitView is one fit of a doctrine on a page.
+type DoctrineFitView struct {
+	ID         int64
+	Name       string
+	Ship       string
+	ShipTypeID int64
+	Role       string
+	Note       string
+	EFT        string // the fit as text the game imports; the doctrine's own page only
+}
+
+// DoctrineURL is a doctrine's page.
+func DoctrineURL(id int64) string { return "/doctrines/" + strconv.FormatInt(id, 10) }
+
+// EconSectionState is the empty-state triage the economy sections render
+// from: data loaded, still warming, or why it is absent.
+type EconSectionState struct {
+	Loaded  bool
+	Warming bool   // no snapshot yet and no failure recorded
+	Note    string // why the data is absent, when not warming
+}
+
+// Scopes and op answers the pilot pages ask about.
+const (
+	MailOrganizeScope    = "esi-mail.organize_mail.v1"
+	CalendarRespondScope = "esi-calendar.respond_calendar_events.v1"
+	OpYes                = "yes"
+	OpMaybe              = "maybe"
+	OpNo                 = "no"
+)
+
+// ErrMailToken is what sending a mail answers when the character’s token
+// could not be made good.
+var ErrMailToken = errors.New("mail: no usable token")
+
+// RelinkNotice is what a reader is told when a character lacks the scope
+// an action needs.
+func RelinkNotice(name, what string) string {
+	return name + " was linked before EveSynapse asked for permission to " + what + " — sign in again to grant it."
+}
+
+// ParseRFC3339 reads an ESI timestamp; false when it is empty or not one.
+func ParseRFC3339(raw string) (time.Time, bool) {
+	if raw == "" {
+		return time.Time{}, false
+	}
+	t, err := time.Parse(time.RFC3339, raw)
+	return t, err == nil
+}
+
+// OrderRangeLabel renders an order range readably: the ESI enum is
+// "station", "solarsystem", "region" or a jump count.
+func OrderRangeLabel(r string) string {
+	switch r {
+	case "station":
+		return "Station"
+	case "solarsystem":
+		return "System"
+	case "region":
+		return "Region"
+	case "":
+		return ""
+	default:
+		return r + " jumps"
+	}
+}
+
+// FetchGate is the library seam between the fetch pipeline and a module
+// that can answer a fetch from elsewhere (the swarm). Core asks every
+// registered gate before it spends ESI on a name, record, structure or
+// market history. A gate only ever delays or replaces a fetch: it never
+// cancels one, and any failure of a gate (an error, a panic) is read as
+// "fetch normally" (core recovers and answers false).
+type FetchGate interface {
+	// Defer says this fetch should wait for a peer this time. kind is one
+	// of the FetchKind values and key names the thing (an id, or
+	// "region/type" for a market history).
+	Defer(ctx context.Context, deps Deps, kind, key string, now time.Time) bool
+	// UrgentHistory serves one due market history from elsewhere before
+	// the urgent drain spends ESI; true means it was applied and the ESI
+	// fetch may be skipped.
+	UrgentHistory(ctx context.Context, deps Deps, regionID, typeID int64) bool
+}
+
+// What a fetch is of: the kinds a gate is asked about.
+const (
+	FetchKindHistory     = "market_history"
+	FetchKindTypeName    = "type_name"
+	FetchKindCorporation = "corporation_record"
+	FetchKindAlliance    = "alliance_record"
+	FetchKindStructure   = "structure_name"
+)
+
+// MarketKey is one (region, type) pair to warm.
+type MarketKey struct {
+	RegionID int64
+	TypeID   int64
+}
+
+// MarketFetchKind is the fetch-state kind of one market key.
+func MarketFetchKind(prefix string, key MarketKey) string {
+	return prefix + "_" + strconv.FormatInt(key.RegionID, 10) + "_" + strconv.FormatInt(key.TypeID, 10)
+}
+
+// Fetch bookkeeping constants shared by the data feed and the modules.
+const (
+	FetchStateOK           = "ok"
+	OrgStateReady          = "ready"
+	HistoryRefetchGate     = 20 * time.Hour
+	StructureRenameWindow  = 30 * 24 * time.Hour
+	StructureMissingWindow = 24 * time.Hour
+	StructureScope         = "esi-universe.read_structures.v1"
+	// WantViewed is the priority of a want a page view noted.
+	WantViewed int64 = 3
+)
+
+// CorporationRecordPayload is the stored public record behind a corporation
+// page: the corporation profile, with the alliance's name and ticker baked
+// in when the corporation belongs to one.
+type CorporationRecordPayload struct {
+	Corp     esi.Corporation `json:"corp"`
+	Alliance esi.Alliance    `json:"alliance"`
+}
+
+// AllianceMemberCorp is one member corporation of an alliance; Name is
+// baked when the drain could resolve it, "" until then.
+type AllianceMemberCorp struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// AllianceRecordPayload is the stored public record behind an alliance
+// page: the alliance profile plus its member corporations.
+type AllianceRecordPayload struct {
+	Alliance     esi.Alliance         `json:"alliance"`
+	Corporations []AllianceMemberCorp `json:"corporations"`
+}
+
+// DecodeCorpPayload reads a stored corporation record: the app's
+// {"corp":{...},"alliance":{...}}, or a bare ESI corporation a peer sent.
+func DecodeCorpPayload(raw string) (CorporationRecordPayload, bool) {
+	var p CorporationRecordPayload
+	if err := json.Unmarshal([]byte(raw), &p); err == nil && p.Corp.Name != "" {
+		return p, true
+	}
+	var bare esi.Corporation
+	if err := json.Unmarshal([]byte(raw), &bare); err == nil && bare.Name != "" {
+		return CorporationRecordPayload{Corp: bare}, true
+	}
+	return CorporationRecordPayload{}, false
+}
+
+// decodeAlliancePayload is decodeCorpPayload for alliance records: the
+// app's {"alliance":{...},"corporations":[...]}, or a bare ESI alliance.
+func DecodeAlliancePayload(raw string) (AllianceRecordPayload, bool) {
+	var p AllianceRecordPayload
+	if err := json.Unmarshal([]byte(raw), &p); err == nil && p.Alliance.Name != "" {
+		return p, true
+	}
+	var bare esi.Alliance
+	if err := json.Unmarshal([]byte(raw), &bare); err == nil && bare.Name != "" {
+		return AllianceRecordPayload{Alliance: bare}, true
+	}
+	return AllianceRecordPayload{}, false
+}
+
+// StructureIDThreshold is where player-structure ids begin: far above the
+// station and system ranges.
+const StructureIDThreshold = int64(1_000_000_000_000)
+
+// IsStructureID reports whether a bare location id is in the
+// player-structure range.
+func IsStructureID(id int64) bool { return id > StructureIDThreshold }
+
+// StructureSourceRank orders name provenance: ESI truth always outranks
+// the community tier, so a lower-trust name never overwrites a better one.
+func StructureSourceRank(source string) int {
+	switch source {
+	case esi.StructureSourceESI:
+		return 3
+	case esi.StructureSourceCorp:
+		return 2
+	case esi.StructureSourceCommunity:
+		return 1
+	}
+	return 0
+}
+
+// WidgetDecl declares a home widget the module owns: core lists and lays
+// it out only when the module is built in. Feature is the manifest feature
+// whose scopes power it (the module's own id when empty); After names the
+// widget it follows in the catalog.
+type WidgetDecl struct {
+	ID          string
+	Title       string
+	Description string
+	W, H        int
+	Feature     string
+	After       string
+}
+
+// NotifyKindDecl declares a kind of notification the module owns: core
+// offers it in the settings, produces it and shows it in the bell only when
+// the module is built in. After names the kind it follows in the settings.
+type NotifyKindDecl struct {
+	ID       string
+	Title    string
+	Standing bool
+	Account  bool
+	Feature  string
+	After    string
+}
+
+// Cycle is what a worker-cycle job is given: the fetch allowance left,
+// the characters this cycle works, and the time.
+type Cycle struct {
+	Budget     Budget
+	Characters []db.Character
+	Now        time.Time
+}
+
+// Budget is the cycle's fetch allowance.
+type Budget interface {
+	// Take spends one fetch, reporting whether it was available.
+	Take() bool
+	// Exhausted reports that none is left.
+	Exhausted() bool
+}
+
+// CyclePhase is where in the worker cycle a CycleJob runs.
+type CyclePhase string
+
+const (
+	// BeforePublicData runs the job ahead of the public-data passes.
+	BeforePublicData CyclePhase = "before public data"
+	// AfterPublicData runs it right after them.
+	AfterPublicData CyclePhase = "after public data"
+)
+
+// CycleJob is a pass that runs inside the worker cycle under the cycle’s
+// own accounting: it is timed under its Name, guarded like a pass, and
+// reports what it stored and whether ESI limited it. Describe is how a
+// limit is worded in the log.
+type CycleJob struct {
+	Name     string
+	Describe string
+	At       CyclePhase
+	Run      func(ctx context.Context, deps Deps, c Cycle) (stored int, limited bool)
+}
+
+// PageSection is a block a module contributes to a core page (the admin
+// page, the sync page): rendered to HTML, with an anchor and a title for
+// the page’s own jump links.
+type PageSection struct {
+	Anchor string
+	Title  string
+	Render func(ctx context.Context, deps Deps) template.HTML
 }
 
 // Page declares a template file rendered by the module, its default section,
@@ -327,12 +681,6 @@ func (c ModelConfig) Configured() bool {
 // rather than Gemma.
 func (c ModelConfig) UsesMeta() bool { return c.MetaKey != "" }
 
-// Widget represents a home dashboard widget contribution.
-type Widget struct {
-	ID    string
-	Title string
-}
-
 // SuggestPool represents a search or quick-jump suggestion pool.
 type SuggestPool struct {
 	Name string
@@ -497,6 +845,158 @@ type Deps interface {
 	// when unknown (and the page wants it resolved).
 	TypeNameOrID(ctx context.Context, typeID int64) string
 
+	// --- stored state and the game's API, for the fitting tool ----------------
+
+	// StoredSnapshot reads one stored snapshot of a character; an error
+	// when none is stored.
+	StoredSnapshot(ctx context.Context, ch db.Character, kind string, out any) error
+	// RenderFragment answers with one named template of a page file.
+	RenderFragment(w http.ResponseWriter, page, define string, data any)
+	// SuggestTypes is the shared item search over the stored types; pool
+	// narrows it ("market" for anything sold).
+	SuggestTypes(ctx context.Context, query, pool string, limit int64) []SuggestItem
+	// AccessToken is a valid access token for one of the account's
+	// characters, refreshed if it was about to lapse.
+	AccessToken(ctx context.Context, ch db.Character) (string, error)
+	// PostESI posts JSON to an authenticated game API path and decodes
+	// the answer into out; a refusal is an *esi.StatusError.
+	PostESI(ctx context.Context, token, path string, body, out any) error
+	// RefreshSnapshot fetches and stores one snapshot of a character now.
+	RefreshSnapshot(ctx context.Context, ch db.Character, kind string) error
+
+	// ModuleEnabled reports whether another module is compiled in, for the
+	// surfaces that only make sense with it.
+	ModuleEnabled(id string) bool
+	// StorePublicFitPageNow builds a public fit’s stored page now, on its
+	// owner’s request.
+	StorePublicFitPageNow(ctx context.Context, fitID int64)
+	// DoctrineFitDoc reads one of a corporation’s doctrine fits the
+	// account may use, as a fit document.
+	DoctrineFitDoc(ctx context.Context, userID, fitID int64) (*fitview.FitDoc, bool)
+
+	// --- the corporation foundation (core keeps the access model and the feed) ---
+
+	// CorpSection resolves the display state of one corporation snapshot
+	// kind: loaded, still warming, or refused for want of an in-game role.
+	CorpSection(ctx context.Context, characterID int64, kind string, out any) CorpSectionState
+	// PickCorpPage resolves a corporation sub-page: the account’s active
+	// character, its switcher, and its corporation’s display identity.
+	// ok=false means the session has no user or no characters yet.
+	PickCorpPage(ctx context.Context, r *http.Request) (CorpPageSelection, bool, error)
+	// CorpStructureNames maps structure ids to the names in the stored
+	// structures snapshot.
+	CorpStructureNames(ctx context.Context, characterID int64) map[int64]string
+	// CorpLocationTitle titles an order or asset location.
+	CorpLocationTitle(ctx context.Context, locationID int64, structureNames map[int64]string) string
+	// LinkPlaceMemo links a location by the core link policy, memoised
+	// per render.
+	LinkPlaceMemo(ctx context.Context, memo map[int64]PlaceRef, locationID int64, title string) PlaceRef
+	// ResolvedStructureTitle is a player structure’s resolved name, "".
+	ResolvedStructureTitle(ctx context.Context, structureID int64) string
+	// TxnCounterparty names the other side of a wallet transaction.
+	TxnCounterparty(ctx context.Context, id int64) (name string, isChar, isCorp bool)
+	// AssetLocations groups assets by location for the assets pages; the
+	// result is the pages’ own location view, read by the template only.
+	AssetLocations(ctx context.Context, items []esi.Asset, extraTitles, nameOverrides map[int64]string) any
+	// OrderHealthText says how an order’s price stands against the market.
+	OrderHealthText(myPrice float64, status string, stationBest, regionBest float64) (string, bool)
+	// CorpDisplayName, PlayerCorps, PickCorporation and CorpPermits are
+	// the access model the corporation modules ask.
+	CorpDisplayName(ctx context.Context, corpID int64) string
+	CorpPermits(ctx context.Context, st standing.Standing, corp int64, permission string) bool
+	PlayerCorps(ctx context.Context, userID int64) []int64
+	PickCorporation(ctx context.Context, r *http.Request, offered []int64) (int64, []OwnerOption)
+	// OwnerCorporations lists the corporations an owner covers.
+	OwnerCorporations(ctx context.Context, o standing.Owner) []int64
+	// ResolvedAllianceName, LocationTitle: cache-only names.
+	ResolvedAllianceName(ctx context.Context, allianceID int64) (string, bool)
+	LocationTitle(ctx context.Context, id int64, locType string) string
+
+	// DoctrineFitViews reads the fits of some doctrines, by doctrine id.
+	DoctrineFitViews(ctx context.Context, doctrineIDs []int64) map[int64][]DoctrineFitView
+	// --- the pilot pages: economy and comms ----------------------------------
+
+	// EconSection resolves one stored economy section’s display state: a
+	// decoded snapshot wins; otherwise the recorded fetch state decides
+	// between the warming note and the failure note.
+	EconSection(ctx context.Context, characterID int64, kind string, out any) EconSectionState
+	// OpCorps lists the corporations an account has a character in
+	// (managedOnly: those where it may manage ops).
+	OpCorps(ctx context.Context, userID int64, managedOnly bool) []int64
+	// RelinkURL is the address that re-links a character for one module’s
+	// scopes.
+	RelinkURL(moduleID string, characterID int64) string
+	// CharLinkHTML links a character by the core link policy.
+	CharLinkHTML(ctx context.Context, characterID int64, name string) template.HTML
+	// NoteCharacterWant asks the worker to resolve a character’s name.
+	NoteCharacterWant(ctx context.Context, characterID int64)
+	// MarkMailReadLocally records a mail as read in the stored headers.
+	MarkMailReadLocally(ctx context.Context, characterID, mailID int64)
+	// AttachWalletGraph and WalletFlow build the wallet page’s balance
+	// history and the home wallet-flow cells for one character; the results
+	// are read by the wallet template only.
+	AttachWalletGraph(ctx context.Context, userID, characterID int64, journal esi.WalletJournal, journalLoaded bool) any
+	WalletFlow(ctx context.Context, ch db.Character) any
+	// EmptyWalletGraph is the settled-empty balance history.
+	EmptyWalletGraph() any
+	AllianceDisplayName(ctx context.Context, allianceID int64) string
+	// ResolvedCharacterName is a character’s name from every local tier;
+	// settled says the local tiers have a final answer.
+	ResolvedCharacterName(ctx context.Context, characterID int64) (name string, settled bool)
+	CharacterLabelPending(ctx context.Context, characterID int64) bool
+	CachedCharacterName(id int64) (string, bool)
+	CachedCorpName(id int64) (string, bool)
+	// LinkPlace links a location by the core link policy.
+	LinkPlace(ctx context.Context, locationID int64, title string) PlaceRef
+	EconLocationTitle(ctx context.Context, locationID int64) string
+	// RewriteSnapshot edits one stored snapshot in place (what an action
+	// that succeeded in the game changes locally, ahead of the next fetch).
+	RewriteSnapshot(ctx context.Context, characterID int64, kind string, edit func(payload string) (string, bool))
+	// PutESI and PostESIPublic write to the game’s API: an authenticated
+	// PUT, and an unauthenticated POST (name lookups).
+	PutESI(ctx context.Context, token, path string, body any) error
+	PostESIPublic(ctx context.Context, path string, body, out any) error
+	// --- the fetch seam: what a module that shares fetched data (the swarm) may ask ---
+
+	// MarketFetchDue, RecordMarketFetchAt, HistoryCandidates and
+	// FetchMarketHistory are the market history bookkeeping; NoteStructureIDs,
+	// WantCorporation and WantAlliance queue what pages want resolved.
+	MarketFetchDue(ctx context.Context, kind string, gate time.Duration) bool
+	RecordMarketFetchAt(ctx context.Context, kind, state, detail string, at time.Time)
+	HistoryCandidates(ctx context.Context) ([]MarketKey, error)
+	FetchMarketHistory(ctx context.Context, key MarketKey) ([]esi.MarketHistoryDay, error)
+	NoteStructureIDs(ctx context.Context, ids ...int64)
+	WantCorporation(ctx context.Context, id, closeness int64) error
+	WantAlliance(ctx context.Context, id, closeness int64) error
+	// ESIGet reads a public ESI path (unauthenticated) into out;
+	// FetchStructure reads a structure with a character’s token.
+	ESIGet(ctx context.Context, path string, out any) error
+	FetchStructure(ctx context.Context, ch db.Character, id int64) (esi.UniverseStructure, error)
+	// The type-name cache the swarm keeps in step with its peers.
+	LearnTypeName(id int64, name string)
+	ForgetTypeName(id int64)
+	MissingTypeNames(limit int) []int64
+	NoteTypeNameMiss(id int64)
+	// PublicOrigin is this install’s public address, "" when it has none.
+	PublicOrigin() string
+	// RequireAdmin guards a route group for administrators.
+	RequireAdmin() func(http.Handler) http.Handler
+
+	// CorpActorFor is how an account acts for a corporation; UserCorps the
+	// corporations it has a character in, in the order of its characters.
+	CorpActorFor(ctx context.Context, userID, corp int64) CorpActor
+	UserCorps(ctx context.Context, userID int64) []int64
+	// SendEVEMail sends an in-game mail from one of the account’s
+	// characters; ESIRefusalDetail says why the game refused one.
+	SendEVEMail(ctx context.Context, from db.Character, recipientID int64, recipientType, subject, body string, approvedCost int) error
+	ESIRefusalDetail(err error) string
+
+	// --- the fit foundation -------------------------------------------------
+
+	// FitBuilder builds fit views (document, EFT, simulation) from the
+	// foundation package, over core's stored state.
+	FitBuilder() *fitview.Builder
+
 	// --- public fit upkeep: the work that keeps anonymous renders stored-only ---
 
 	// RefreshPublicFitPages builds the stored pages that are missing or
@@ -593,18 +1093,47 @@ type Module struct {
 	Requires      []string
 	Scopes        []Scope
 	EnhanceScopes []Scope
-	Nav           []NavSection
-	Routes        func(r chi.Router, deps Deps)
-	WorkerJobs    []WorkerJob
+	// Activities names the kinds of play the module serves ("pilots",
+	// "market", "industry", "corporation", "fitting"): the sign-up asks
+	// players what they want to do and turns the answers into modules
+	// from these declarations, with no list of its own to drift.
+	Activities []string
+	Nav        []NavSection
+	Routes     func(r chi.Router, deps Deps)
+	WorkerJobs []WorkerJob
 	// Deliverers are the module's notification channels (see Deliverer).
 	Deliverers []Deliverer
 	// NotifySettings contributes to the notification settings page.
 	NotifySettings *SettingsSection
-	Widgets        []Widget
 	Suggest        []SuggestPool
 	// Sitemap lists the module's public pages, so a build without the
 	// module leaves them out of sitemap.xml.
 	Sitemap []SitemapEntry
+	// Widgets and NotifyKinds are what the module adds to the home page and
+	// to the notifications; the builders and producers stay core's, reading
+	// the shared snapshots, but nothing is shown for a module not built in.
+	Widgets     []WidgetDecl
+	NotifyKinds []NotifyKindDecl
+	// FetchGates are asked before the fetch pipeline spends ESI.
+	FetchGates []FetchGate
+	// CycleJobs run inside the worker cycle at a named phase.
+	CycleJobs []CycleJob
+	// AdminSections and SyncSections add blocks to those two pages.
+	AdminSections []PageSection
+	SyncSections  []PageSection
+	// LinkExtras are optional permissions the module offers at sign-up
+	// only when its own settings call for them (the shared cache offers
+	// the structures permission only on a server that has the cache on).
+	// They are never a feature of their own.
+	LinkExtras func(deps Deps) []Scope
+	// Init runs once the application is built and its store is open; an
+	// error stops the start (a module whose settings are wrong says so
+	// before serving anything).
+	Init func(deps Deps) error
+	// Snapshots lists the snapshot kinds (or kind prefixes) the module
+	// reads, so the worker and the sync page can tie a stored kind to the
+	// module that shows it.
+	Snapshots []string
 	// SitemapRows adds pages read from the database (the top public
 	// fits, for one); called when the sitemap is built.
 	SitemapRows func(ctx context.Context, deps Deps) ([]SitemapRow, error)

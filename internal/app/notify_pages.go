@@ -87,7 +87,7 @@ func (app *Application) notifyBadgeFor(ctx context.Context, userID int64) *notif
 	for _, row := range rows {
 		byKind[row.Kind] = row
 	}
-	for _, kind := range notifyKinds {
+	for _, kind := range notifyKindList() {
 		row, ok := byKind[kind.ID]
 		if !ok {
 			continue
@@ -325,8 +325,8 @@ func notifyCharactersSummary(options []notifyCharacterOption) string {
 // notifySettingRows builds the page's rows from the stored settings
 // and the account's characters.
 func notifySettingRows(prefs notifyPrefs, characters []db.Character) []notifySettingRow {
-	rows := make([]notifySettingRow, 0, len(notifyKinds))
-	for _, kind := range notifyKinds {
+	rows := make([]notifySettingRow, 0, len(notifyKindList()))
+	for _, kind := range notifyKindList() {
 		row := notifySettingRow{ID: kind.ID, Title: kind.Title, On: !prefs.off(kind.ID)}
 		if kind.ID == notifyOpReminder {
 			row.Minutes = notifyMinutesOptions(prefs)

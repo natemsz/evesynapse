@@ -242,6 +242,36 @@ func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg := eveOAuthConfig(app.cfg)
+	// A choice from the chooser (/auth/link): the features and extra
+	// permissions by id. The server works the scopes out from the
+	// declarations (never from scope strings sent by the browser), and a
+	// link asks only for a subset of what the developer portal allows.
+	if choice, ok := app.linkChoiceFromQuery(r.URL.Query()); ok {
+		res, err := app.resolveLinkLenient(choice)
+		if err != nil {
+			http.Error(w, "Unknown feature or permission", http.StatusBadRequest)
+			return
+		}
+		scopes := res.Scopes
+		if id, perr := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64); perr == nil && id > 0 {
+			// Linking more onto a character asks for what it already
+			// granted too, so a grant never narrows.
+			for _, ch := range app.sessionCharacters(r.Context()) {
+				if ch.CharacterID == id {
+					scopes = mergeScopes(scopes, strings.Fields(ch.Scopes))
+				}
+			}
+		}
+		cfg.Scopes = scopes
+		if userID := app.userID(r.Context()); userID != 0 {
+			app.rememberLink(r.Context(), userID, choice)
+		} else if blob, err := json.Marshal(choice); err == nil {
+			app.sessions.Put(r.Context(), sessionLinkChoice, string(blob))
+		}
+	} else {
+		// No choice: every feature this build has, as before the chooser.
+		cfg.Scopes = app.requestableScopes()
+	}
 	// A targeted re-link (?module=&character=) asks for the module's
 	// missing scopes on top of the character's existing grants.
 	if id := r.URL.Query().Get("module"); id != "" {
@@ -368,6 +398,17 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 			fail("save")
 		}
 		return
+	}
+
+	// What the player chose at sign-up is remembered for the account's
+	// next character link (the choice waited in the session until there
+	// was an account).
+	if blob := app.sessions.GetString(ctx, sessionLinkChoice); blob != "" {
+		app.sessions.Remove(ctx, sessionLinkChoice)
+		var c linkChoice
+		if json.Unmarshal([]byte(blob), &c) == nil {
+			app.rememberLink(ctx, userID, c)
+		}
 	}
 
 	result, err := app.linkVerifiedCharacter(ctx, linkCharacterInput{
@@ -641,7 +682,7 @@ func (app *Application) verifyAccessToken(ctx context.Context, accessToken strin
 	// the character; it changes when the character is transferred.
 	ownerHash, _ = claims["owner"].(string)
 
-	scopes = strings.Join(eveScopes, " ")
+	scopes = strings.Join(app.requestableScopes(), " ")
 	if scp, ok := claims["scp"].([]any); ok && len(scp) > 0 {
 		granted := make([]string, 0, len(scp))
 		for _, s := range scp {

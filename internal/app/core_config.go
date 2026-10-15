@@ -60,10 +60,6 @@ type Config struct {
 	foresightOff     bool
 	foresightFetches int
 
-	// Shared cache across instances (swarm_config.go): public ESI
-	// data only, off unless SHARED_CACHE says open or allowlist.
-	swarm swarmConfig
-
 	// dbConns is how many database connections the app may hold
 	// (DB_MAX_CONNS); 0 means the store's default.
 	dbConns int
@@ -219,7 +215,6 @@ func LoadConfig() (Config, error) {
 		workerLanes:         parseWorkerLanes(os.Getenv("WORKER_LANES")),
 		foresightOff:        strings.EqualFold(strings.TrimSpace(os.Getenv("FORESIGHT")), "off"),
 		foresightFetches:    parseForesightFetches(os.Getenv("FORESIGHT_FETCHES_PER_CYCLE")),
-		swarm:               loadSwarmConfig(os.Getenv),
 		dbConns:             parseDBConns(os.Getenv("DB_MAX_CONNS")),
 		discordClientID:     os.Getenv("DISCORD_CLIENT_ID"),
 		discordClientSecret: os.Getenv("DISCORD_CLIENT_SECRET"),

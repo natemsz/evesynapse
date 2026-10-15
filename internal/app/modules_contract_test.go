@@ -143,3 +143,48 @@ func TestNotifySettingsSectionsAreContributedAndSaved(t *testing.T) {
 		t.Errorf("a failing module Save did not make the save report failure")
 	}
 }
+
+type stubGate struct {
+	defer_   bool
+	urgent   bool
+	panicNow bool
+}
+
+func (g stubGate) Defer(ctx context.Context, deps module.Deps, kind, key string, now time.Time) bool {
+	if g.panicNow {
+		panic("gate broke")
+	}
+	return g.defer_
+}
+
+func (g stubGate) UrgentHistory(ctx context.Context, deps module.Deps, regionID, typeID int64) bool {
+	if g.panicNow {
+		panic("gate broke")
+	}
+	return g.urgent
+}
+
+// TestFetchGatesFailOpen: a gate can delay a fetch but never break one.
+// A gate that says "defer" defers; one that panics is read as "fetch
+// normally", and does not stop a later gate from answering.
+func TestFetchGatesFailOpen(t *testing.T) {
+	app, _, _ := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	now := time.Now()
+	mod := func(id string, g module.FetchGate) module.Module {
+		return module.Module{ID: id, Title: id, Requires: []string{}, Scopes: []module.Scope{}, EnhanceScopes: []module.Scope{}, FetchGates: []module.FetchGate{g}}
+	}
+
+	withModules(t)
+	if app.deferFetch(ctx, module.FetchKindTypeName, "1", now) || app.urgentHistory(ctx, marketKey{RegionID: 1, TypeID: 2}) {
+		t.Error("with no gate registered a fetch was deferred")
+	}
+	withModules(t, mod("a", stubGate{panicNow: true}))
+	if app.deferFetch(ctx, module.FetchKindTypeName, "1", now) || app.urgentHistory(ctx, marketKey{RegionID: 1, TypeID: 2}) {
+		t.Error("a panicking gate deferred a fetch; it must read as fetch normally")
+	}
+	withModules(t, mod("a", stubGate{panicNow: true}), mod("b", stubGate{defer_: true, urgent: true}))
+	if !app.deferFetch(ctx, module.FetchKindTypeName, "1", now) || !app.urgentHistory(ctx, marketKey{RegionID: 1, TypeID: 2}) {
+		t.Error("a working gate after a broken one did not answer")
+	}
+}

@@ -108,6 +108,22 @@ jobs:
       - name: Run the core-only tests
         run: go test -tags core_only -timeout 20m -run 'TestCoreOnly' ./internal/app/
 
+      # The module build tool: the default file is what it writes for every
+      # module, and each module compiles and vets on its own (with what it
+      # requires), so no module depends on another one that it did not
+      # declare. The checkout is throwaway, so the loop may rewrite the file.
+      - name: The default build file is the all-modules selection
+        run: go run ./cmd/modbuild -all -check
+
+      - name: Each module builds on its own
+        run: |
+          for id in $(go run ./cmd/modbuild -ids); do
+            go run ./cmd/modbuild -modules "$id" -write > /dev/null
+            echo "== $id"
+            go build ./cmd/evesynapse
+            go vet ./internal/app/
+          done
+
   # Static analysis and the known-vulnerability check. Advisory: a
   # finding shows up on the run without blocking a release, since
   # both tools gain new checks over time.

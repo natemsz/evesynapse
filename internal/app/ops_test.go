@@ -8,6 +8,7 @@ package app
 
 import (
 	"context"
+	"evesynapse/internal/app/calendar"
 	"fmt"
 	"io"
 	"net/http"
@@ -204,7 +205,7 @@ func TestOpsAreSeenOnlyByTheirCorporation(t *testing.T) {
 	f := newOpsFixture(t)
 	start := time.Now().UTC().Add(48 * time.Hour).Truncate(time.Minute)
 	id := f.create(start, "Members only")
-	month := start.Format(calMonthLayout)
+	month := start.Format(calendar.MonthLayout)
 
 	if code, _, body := f.get(f.member, opURL(id)); code != http.StatusOK || !strings.Contains(body, "Members only") {
 		t.Fatalf("a member cannot open their corporation's op (%d)", code)
@@ -262,7 +263,7 @@ func TestOpSignUpCancelAndReopen(t *testing.T) {
 		t.Fatal("a member without the role is offered Cancel op")
 	}
 	// On the calendar, the member's own answer sits on the entry.
-	_, _, body = f.get(f.member, "/calendar/?month="+start.Format(calMonthLayout))
+	_, _, body = f.get(f.member, "/calendar/?month="+start.Format(calendar.MonthLayout))
 	mustContain(t, "calendar", body, "Structure bash <small>yes</small>")
 
 	// Changing one's mind: not coming clears what was to be brought.
@@ -309,7 +310,7 @@ func TestOpSignUpCancelAndReopen(t *testing.T) {
 			t.Fatal("a sign-up to a cancelled op was recorded")
 		}
 	}
-	_, _, body = f.get(f.member, "/calendar/?month="+start.Format(calMonthLayout))
+	_, _, body = f.get(f.member, "/calendar/?month="+start.Format(calendar.MonthLayout))
 	mustContain(t, "calendar", body, `class="cal-entry cal-op cal-cancelled"`)
 	// And the manager can bring it back.
 	f.post(f.director, opURL(id)+"/cancel", url.Values{})
@@ -343,13 +344,13 @@ func TestCalendarShowsOpsAndInGameEventsTogether(t *testing.T) {
 		{EventID: 503, Title: "Next year's thing", EventDate: rfc(month.AddDate(1, 0, 0))},
 	})
 
-	code, _, body := f.get(f.director, "/calendar/?character=90000001&month="+month.Format(calMonthLayout))
+	code, _, body := f.get(f.director, "/calendar/?character=90000001&month="+month.Format(calendar.MonthLayout))
 	if code != http.StatusOK {
 		t.Fatalf("GET /calendar/ = %d", code)
 	}
 	mustContain(t, "/calendar/", body,
 		`<strong class="cal-title">`+month.Format("January 2006")+`</strong>`,
-		"month="+month.AddDate(0, -1, 0).Format(calMonthLayout), "month="+month.AddDate(0, 1, 0).Format(calMonthLayout),
+		"month="+month.AddDate(0, -1, 0).Format(calendar.MonthLayout), "month="+month.AddDate(0, 1, 0).Format(calendar.MonthLayout),
 		`<a class="btn cal-new" href="/ops/new">New op</a>`,
 		`href="/ops/new?date=`+opAt.Format("2006-01-02")+`"`,
 		`<a class="cal-entry cal-op" href="`+opURL(id)+`"><span class="cal-time">19:00</span> Fleet night</a>`,
@@ -371,11 +372,11 @@ func TestCalendarShowsOpsAndInGameEventsTogether(t *testing.T) {
 	}
 
 	// The grid is whole weeks from Monday.
-	from, to := calGridRange(time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC))
+	from, to := calendar.GridRange(time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC))
 	if from.Format("Mon 2006-01-02") != "Mon 2026-09-28" || to.Format("Mon 2006-01-02") != "Mon 2026-11-02" {
 		t.Fatalf("October 2026 grid runs %s to %s", from.Format("Mon 2006-01-02"), to.Format("Mon 2006-01-02"))
 	}
-	if got := parseCalMonth("nonsense", time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)).Format(calMonthLayout); got != "2026-10" {
+	if got := calendar.ParseMonth("nonsense", time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)).Format(calendar.MonthLayout); got != "2026-10" {
 		t.Fatalf("an unreadable month gave %s, want the current one", got)
 	}
 }

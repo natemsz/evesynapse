@@ -38,7 +38,7 @@ const (
 	mailOrganizeScope    = "esi-mail.organize_mail.v1"
 	calendarRespondScope = "esi-calendar.respond_calendar_events.v1"
 	planetScope          = "esi-planets.manage_planets.v1"
-	structureScope       = "esi-universe.read_structures.v1"
+	structureScope       = module.StructureScope
 )
 
 // scopeUse is one scope a module wants. Required scopes are what the
@@ -56,7 +56,9 @@ type moduleDef struct {
 	Layer     moduleLayer
 	Scopes    []scopeUse
 	Snapshots []string // snapshot kinds (or kind prefixes) it reads
-	Uses      []string // derived modules: ids of the modules aggregated
+	// Activities are the kinds of play it serves (see module.Module).
+	Activities []string
+	Uses       []string // derived modules: ids of the modules aggregated
 }
 
 func req(scope, unlocks string) scopeUse { return scopeUse{Scope: scope, Unlocks: unlocks} }
@@ -64,30 +66,42 @@ func opt(scope, unlocks string) scopeUse {
 	return scopeUse{Scope: scope, Unlocks: unlocks, Optional: true}
 }
 
+// moduleManifest is core's own declaration of the features whose data core
+// itself reads (the fleet, net worth and briefing read the skills, assets,
+// wallet, market orders and the rest). A feature that only a module's pages
+// read has no entry here: its scopes and snapshot kinds are the module's
+// declaration, so a build without the module neither requests nor fetches
+// them. "wallet" and "market" stay because net worth reads the wallet and
+// the open orders; the modules of the same id declare the same scopes, and
+// TestRegisteredFeaturesAgreeWithTheManifest pins that they agree.
 var moduleManifest = []moduleDef{
 	// --- public ---------------------------------------------------------
 	{ID: "server", Title: "Tranquility", Layer: layerPublic,
 		Snapshots: []string{esi.GlobalStatus}},
-	{ID: "market_public", Title: "Market watchlist", Layer: layerPublic},
+	{ID: "market_public", Title: "Market watchlist", Layer: layerPublic, Activities: []string{"market"}},
 
 	// --- character ------------------------------------------------------
 	{ID: "skills", Title: "Skills", Layer: layerCharacter,
+		Activities: []string{"pilots"},
 		Scopes: []scopeUse{
 			req("esi-skills.read_skills.v1", "Trained skills and attributes."),
 			req("esi-skills.read_skillqueue.v1", "The training queue and finish times."),
 		},
 		Snapshots: []string{esi.SnapSkills, esi.SnapSkillqueue, esi.SnapAttributes}},
 	{ID: "wallet", Title: "Wallet", Layer: layerCharacter,
+		Activities: []string{"pilots"},
 		Scopes: []scopeUse{
 			req("esi-wallet.read_character_wallet.v1", "Balance, journal and transactions."),
 		},
 		Snapshots: []string{esi.SnapWallet, esi.SnapWalletJournal, esi.SnapWalletTxns}},
 	{ID: "assets", Title: "Assets", Layer: layerCharacter,
+		Activities: []string{"pilots", "industry"},
 		Scopes: []scopeUse{
 			req("esi-assets.read_assets.v1", "Everything the character owns, and where."),
 		},
 		Snapshots: []string{esi.SnapAssets}},
 	{ID: "location", Title: "Location and ship", Layer: layerCharacter,
+		Activities: []string{"pilots"},
 		Scopes: []scopeUse{
 			req("esi-location.read_location.v1", "Current system or station."),
 			req("esi-location.read_online.v1", "Online status and last login."),
@@ -95,96 +109,84 @@ var moduleManifest = []moduleDef{
 		},
 		Snapshots: []string{esi.SnapLocation, esi.SnapOnline, esi.SnapShip}},
 	{ID: "clones", Title: "Clones and implants", Layer: layerCharacter,
+		Activities: []string{"pilots", "fitting"},
 		Scopes: []scopeUse{
 			req("esi-clones.read_clones.v1", "Home station, jump clones."),
 			req("esi-clones.read_implants.v1", "Active implants."),
 		},
 		Snapshots: []string{esi.SnapClones, esi.SnapImplants}},
 	{ID: "fittings", Title: "Fittings", Layer: layerCharacter,
+		Activities: []string{"fitting"},
 		Scopes: []scopeUse{
 			req("esi-fittings.read_fittings.v1", "Saved in-game fittings."),
-			opt("esi-fittings.write_fittings.v1", "Save to EVE from the fitting tools."),
+			req("esi-fittings.write_fittings.v1", "Save to EVE from the fitting tools."),
 		},
 		Snapshots: []string{esi.SnapFittings}},
 	{ID: "fatigue", Title: "Jump fatigue", Layer: layerCharacter,
+		Activities: []string{"pilots"},
 		Scopes: []scopeUse{
 			req("esi-characters.read_fatigue.v1", "Jump fatigue timers."),
 		},
 		Snapshots: []string{esi.SnapFatigue}},
-	{ID: "mail", Title: "Mail", Layer: layerCharacter,
-		Scopes: []scopeUse{
-			req("esi-mail.read_mail.v1", "Inbox, labels, mailing lists and bodies."),
-			opt(mailOrganizeScope, "Mark mail as read."),
-			opt(mailSendScope, "Compose and send mail."),
-		},
-		Snapshots: []string{esi.SnapMail, esi.SnapMailLabels, esi.SnapMailLists, esi.SnapMailBodyPrefix}},
-	{ID: "calendar", Title: "Calendar", Layer: layerCharacter,
-		Scopes: []scopeUse{
-			req("esi-calendar.read_calendar_events.v1", "Upcoming events and attendees."),
-			opt(calendarRespondScope, "Accept or decline events."),
-		},
-		Snapshots: []string{esi.SnapCalendar, esi.SnapCalendarEventPrefix, esi.SnapCalendarAttPrefix}},
-	{ID: "contacts", Title: "Contacts", Layer: layerCharacter,
-		Scopes: []scopeUse{
-			req("esi-characters.read_contacts.v1", "Personal contacts and standings."),
-			opt("esi-corporations.read_contacts.v1", "Corporation contacts."),
-			opt("esi-alliances.read_contacts.v1", "Alliance contacts."),
-		},
-		Snapshots: []string{esi.SnapContacts}},
 	{ID: "industry", Title: "Industry", Layer: layerCharacter,
+		Activities: []string{"industry"},
 		Scopes: []scopeUse{
 			req("esi-industry.read_character_jobs.v1", "Active and finished jobs."),
 			opt("esi-characters.read_blueprints.v1", "Owned blueprints and their research levels."),
 		},
 		Snapshots: []string{esi.SnapIndustryJobs, esi.SnapBlueprints}},
 	{ID: "mining", Title: "Mining ledger", Layer: layerCharacter,
+		Activities: []string{"industry"},
 		Scopes: []scopeUse{
 			req("esi-industry.read_character_mining.v1", "The mining ledger."),
 		},
 		Snapshots: []string{esi.SnapMining}},
 	{ID: "market", Title: "Market orders", Layer: layerCharacter,
+		Activities: []string{"market"},
 		Scopes: []scopeUse{
 			req("esi-markets.read_character_orders.v1", "Open orders and order history."),
-			opt("esi-markets.structure_markets.v1", "Prices at player-owned structures."),
+			req("esi-markets.structure_markets.v1", "Prices at player-owned structures."),
 		},
 		Snapshots: []string{esi.SnapOrders, esi.SnapOrdersHistory}},
-	{ID: "contracts", Title: "Contracts", Layer: layerCharacter,
-		Scopes: []scopeUse{
-			req("esi-contracts.read_character_contracts.v1", "Courier, item and auction contracts."),
-		},
-		Snapshots: []string{esi.SnapContracts}},
 	{ID: "killmails", Title: "Killmails", Layer: layerCharacter,
+		Activities: []string{"pilots"},
 		Scopes: []scopeUse{
 			req("esi-killmails.read_killmails.v1", "The character's kills and losses."),
 		},
 		Snapshots: []string{esi.SnapKillmails}},
 	{ID: "fleet_ops", Title: "Fleet operations", Layer: layerCharacter,
+		Activities: []string{"corporation"},
 		Scopes: []scopeUse{
 			req("esi-fleets.read_fleet.v1", "Live fleet composition while the character is in a fleet."),
 		}},
 	{ID: "planets", Title: "Planetary industry", Layer: layerCharacter,
+		Activities: []string{"industry"},
 		Scopes: []scopeUse{
 			req(planetScope, "Colonies and their layouts (the only scope that gates colony reads)."),
-			opt("esi-planets.read_customs_offices.v1", "Customs office tax rates."),
+			req("esi-planets.read_customs_offices.v1", "Customs office tax rates."),
 		},
 		Snapshots: []string{esi.SnapPlanets, esi.SnapPlanetLayoutPrefix}},
 	{ID: "structures", Title: "Structures", Layer: layerCharacter,
+		Activities: []string{"corporation"},
 		Scopes: []scopeUse{
 			req(structureScope, "Names of player-owned structures."),
 			opt("esi-search.search_structures.v1", "Searching structures by name."),
 		}},
 	{ID: "standings", Title: "Standings and loyalty", Layer: layerCharacter,
+		Activities: []string{"pilots"},
 		Scopes: []scopeUse{
 			req("esi-characters.read_standings.v1", "NPC standings."),
 			opt("esi-characters.read_loyalty.v1", "Loyalty points."),
 			opt("esi-characters.read_fw_stats.v1", "Faction Warfare stats."),
 		}},
 	{ID: "corp_roles", Title: "Corporation roles", Layer: layerCharacter,
+		Activities: []string{"corporation"},
 		Scopes: []scopeUse{
 			req("esi-characters.read_corporation_roles.v1", "The corporation roles held, which decide who may create ops."),
 		},
 		Snapshots: []string{esi.SnapCorpRoles}},
 	{ID: "character_record", Title: "Character record", Layer: layerCharacter,
+		Activities: []string{"pilots"},
 		Scopes: []scopeUse{
 			req("esi-characters.read_notifications.v1", "In-game notifications."),
 			opt("esi-characters.read_medals.v1", "Medals."),
@@ -196,52 +198,66 @@ var moduleManifest = []moduleDef{
 
 	// --- corp -----------------------------------------------------------
 	{ID: "corp_wallet", Title: "Corporation wallets", Layer: layerCorp,
+		Activities: []string{"corporation"},
 		Scopes: []scopeUse{
 			req("esi-wallet.read_corporation_wallets.v1", "Division balances, journals and transactions."),
 		},
 		Snapshots: []string{esi.SnapCorpWallets, esi.SnapCorpJournalPrefix, esi.SnapCorpTxnsPrefix}},
 	{ID: "corp_assets", Title: "Corporation assets", Layer: layerCorp,
+		Activities: []string{"corporation"},
 		Scopes: []scopeUse{
 			req("esi-assets.read_corporation_assets.v1", "Corporation hangars and assets."),
 		},
 		Snapshots: []string{esi.SnapCorpAssets}},
 	{ID: "corp_industry", Title: "Corporation industry", Layer: layerCorp,
+		Activities: []string{"corporation"},
 		Scopes: []scopeUse{
 			req("esi-industry.read_corporation_jobs.v1", "Corporation industry jobs."),
 			opt("esi-industry.read_corporation_mining.v1", "Corporation mining observers."),
-			opt("esi-corporations.read_blueprints.v1", "Corporation blueprints."),
+			req("esi-corporations.read_blueprints.v1", "Corporation blueprints."),
 			opt("esi-corporations.read_container_logs.v1", "Container access logs."),
 		}},
 	{ID: "corp_market", Title: "Corporation orders", Layer: layerCorp,
+		Activities: []string{"corporation"},
 		Scopes: []scopeUse{
 			req("esi-markets.read_corporation_orders.v1", "Corporation market orders."),
 		},
 		Snapshots: []string{esi.SnapCorpOrders}},
 	{ID: "corp_contracts", Title: "Corporation contracts", Layer: layerCorp,
+		Activities: []string{"corporation"},
 		Scopes: []scopeUse{
 			req("esi-contracts.read_corporation_contracts.v1", "Corporation contracts."),
 		}},
+	{ID: "corp_contacts", Title: "Corporation contacts", Layer: layerCorp,
+		Activities: []string{"corporation"},
+		Scopes: []scopeUse{
+			req("esi-corporations.read_contacts.v1", "Corporation contacts."),
+		}},
 	{ID: "corp_killmails", Title: "Corporation killmails", Layer: layerCorp,
+		Activities: []string{"corporation"},
 		Scopes: []scopeUse{
 			req("esi-killmails.read_corporation_killmails.v1", "The corporation's kills and losses."),
 		},
 		Snapshots: []string{esi.SnapCorpKillmails}},
 	{ID: "corp_structures", Title: "Corporation structures", Layer: layerCorp,
+		Activities: []string{"corporation"},
 		Scopes: []scopeUse{
 			req("esi-corporations.read_structures.v1", "Structures and their fuel and state."),
-			opt("esi-corporations.read_starbases.v1", "Starbases."),
-			opt("esi-corporations.read_facilities.v1", "Industry facilities."),
+			req("esi-corporations.read_starbases.v1", "Starbases."),
+			req("esi-corporations.read_facilities.v1", "Industry facilities."),
 		},
 		Snapshots: []string{esi.SnapCorpStructures}},
 	{ID: "corp_members", Title: "Corporation members", Layer: layerCorp,
+		Activities: []string{"corporation"},
 		Scopes: []scopeUse{
 			req("esi-corporations.read_corporation_membership.v1", "The member list."),
-			opt("esi-corporations.track_members.v1", "Member locations, ships and last login."),
+			req("esi-corporations.track_members.v1", "Member locations, ships and last login."),
 			opt("esi-corporations.read_titles.v1", "Corporation titles."),
-			opt("esi-corporations.read_divisions.v1", "Hangar and wallet division names."),
+			req("esi-corporations.read_divisions.v1", "Hangar and wallet division names."),
 		},
 		Snapshots: []string{esi.SnapCorpMembers, esi.SnapCorpMemberTracking}},
 	{ID: "corp_standings", Title: "Corporation standings", Layer: layerCorp,
+		Activities: []string{"corporation"},
 		Scopes: []scopeUse{
 			req("esi-corporations.read_standings.v1", "Corporation standings."),
 			opt("esi-corporations.read_fw_stats.v1", "Corporation Faction Warfare stats."),
@@ -283,7 +299,7 @@ func moduleDefs() []moduleDef {
 // its required scopes, then its enhancement scopes as the optional
 // ones. A module that wants no scope at all is public.
 func moduleDefFromRegistry(m module.Module) moduleDef {
-	d := moduleDef{ID: m.ID, Title: m.Title, Layer: layerPublic, Uses: m.Requires}
+	d := moduleDef{ID: m.ID, Title: m.Title, Layer: layerPublic, Uses: m.Requires, Snapshots: m.Snapshots, Activities: m.Activities}
 	for _, s := range m.Scopes {
 		d.Scopes = append(d.Scopes, req(s.Scope, s.Unlocks))
 	}

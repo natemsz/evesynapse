@@ -43,3 +43,32 @@ func Rank(rank float64) string {
 	}
 	return fmt.Sprintf("%.1fx", rank)
 }
+
+// Finish writes an ESI timestamp the way pages show times: "2006-01-02
+// 15:04 UTC", the input unchanged when it is not a timestamp, "" when empty.
+func Finish(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return t.UTC().Format("2006-01-02 15:04 UTC")
+	}
+	return raw
+}
+
+// Clip cuts a string to at most max characters, adding an ellipsis.
+func Clip(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max]) + "…"
+}
+
+// Plural is "1 order", "2 orders": the count and the word, pluralised.
+func Plural(n int, word string) string {
+	if n == 1 {
+		return fmt.Sprintf("%d %s", n, word)
+	}
+	return fmt.Sprintf("%d %ss", n, word)
+}

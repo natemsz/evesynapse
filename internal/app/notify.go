@@ -74,26 +74,48 @@ type notifyKind struct {
 }
 
 // notifyKinds is every kind, in the order the settings page lists them.
-var notifyKinds = []notifyKind{
+var coreNotifyKinds = []notifyKind{
 	{ID: notifyWatch, Title: "Watch list alerts", Module: "market_public", Standing: true, Account: true},
 	{ID: notifySkill, Title: "Skill complete", Module: "skills"},
-	{ID: notifyMail, Title: "New mail", Module: "mail"},
-	{ID: notifyCalendar, Title: "New in-game calendar event", Module: "calendar"},
 	// Ops are EveSynapse's own (ops.go): any character sees its
 	// corporation's, with no access to grant.
 	{ID: notifyOp, Title: "New op on the calendar"},
 	{ID: notifyOpReminder, Title: "Op starting soon"},
 	// Ship replacement (corp_srp.go) is EveSynapse's own too.
-	{ID: notifySRPNew, Title: "New SRP request to handle", Account: true},
-	{ID: notifySRPDone, Title: "SRP request paid or denied"},
 	{ID: notifyKillmail, Title: "New killmail", Module: "killmails"},
 	{ID: notifyPI, Title: "Stopped planetary extractors", Module: "planets"},
 	{ID: notifyIndustry, Title: "Industry job complete", Module: "industry"},
 }
 
+// notifyKindList is every kind this build has, in the order the settings
+// page lists them: core's own, then the ones the built-in modules declare,
+// each after the kind it names.
+func notifyKindList() []notifyKind {
+	out := append([]notifyKind(nil), coreNotifyKinds...)
+	for _, m := range registeredModules {
+		for _, k := range m.NotifyKinds {
+			kind := notifyKind{ID: k.ID, Title: k.Title, Module: k.Feature, Standing: k.Standing, Account: k.Account}
+			if kind.Module == "" {
+				kind.Module = m.ID
+			}
+			at := len(out)
+			for i, existing := range out {
+				if k.After != "" && existing.ID == k.After {
+					at = i + 1
+					break
+				}
+			}
+			out = append(out, notifyKind{})
+			copy(out[at+1:], out[at:])
+			out[at] = kind
+		}
+	}
+	return out
+}
+
 // notifyKindByID returns the kind for id.
 func notifyKindByID(id string) (notifyKind, bool) {
-	for _, k := range notifyKinds {
+	for _, k := range notifyKindList() {
 		if k.ID == id {
 			return k, true
 		}
@@ -157,8 +179,12 @@ func (app *Application) collectNotifyEvents(ctx context.Context, userID int64, b
 	c := newNotifyCollector()
 	for _, b := range bundles {
 		app.notifySkillEvents(ctx, c, b, now)
-		app.notifyMailEvents(c, b)
-		app.notifyCalendarEvents(c, b, now)
+		if _, ok := notifyKindByID(notifyMail); ok {
+			app.notifyMailEvents(c, b)
+		}
+		if _, ok := notifyKindByID(notifyCalendar); ok {
+			app.notifyCalendarEvents(c, b, now)
+		}
 		app.notifyKillmailEvents(ctx, c, b)
 		app.notifyPIEvents(ctx, c, b, now)
 		app.notifyIndustryEvents(ctx, c, b, now)
@@ -545,7 +571,9 @@ func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db
 	}
 	prefs := app.notifyPrefsFor(ctx, userID)
 	app.notifyOpEvents(ctx, c, userID, prefs, now)
-	app.notifySRPEvents(ctx, c, userID, now)
+	if _, ok := notifyKindByID(notifySRPNew); ok {
+		app.notifySRPEvents(ctx, c, userID, now)
+	}
 	if len(c.sources) == 0 {
 		return 0, nil
 	}
@@ -610,7 +638,7 @@ func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db
 	// Standing kinds: a state that no longer holds is forgotten. Only
 	// where the source was readable this time, so that a failed read
 	// is not mistaken for everything having cleared.
-	for _, kind := range notifyKinds {
+	for _, kind := range notifyKindList() {
 		if !kind.Standing || !c.sources[fmt.Sprintf("base|%s|%d", kind.ID, userID)] {
 			continue
 		}

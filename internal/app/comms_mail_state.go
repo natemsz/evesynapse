@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
@@ -70,7 +71,7 @@ func (app *Application) markMailReadLocally(ctx context.Context, characterID, ma
 				return "", false
 			}
 			for i := range labels.Labels {
-				if containsInt64(labelIDs, labels.Labels[i].LabelID) && labels.Labels[i].UnreadCount > 0 {
+				if slices.Contains(labelIDs, labels.Labels[i].LabelID) && labels.Labels[i].UnreadCount > 0 {
 					labels.Labels[i].UnreadCount--
 				}
 			}

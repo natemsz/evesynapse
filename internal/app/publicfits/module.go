@@ -24,10 +24,11 @@ import (
 var Module = module.Module{
 	ID:       "publicfits",
 	Title:    "Public Fits",
-	Requires: []string{},
+	Requires: []string{"fitting"},
 	// Everything here is public data: no scope, signed in or not.
 	Scopes:        []module.Scope{},
 	EnhanceScopes: []module.Scope{},
+	Activities:    []string{"fitting"},
 	Nav: []module.NavSection{{
 		Section: "fitting",
 		Entries: []module.NavEntry{

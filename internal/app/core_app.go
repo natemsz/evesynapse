@@ -30,6 +30,7 @@ import (
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/fitview"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/store"
 	"evesynapse/internal/webpush"
@@ -208,26 +209,6 @@ type Application struct {
 	// (unix seconds).
 	typingPrunedAt atomic.Int64
 
-	// Shared cache across instances (swarm_*.go): this
-	// instance's signing identity and its peer client, set at
-	// startup when SHARED_CACHE enables sharing, nil otherwise.
-	// swarmMu guards the next gossip time only; the identity
-	// never changes after startup.
-	swarmID         *swarmIdentity
-	swarmCli        *swarmClient
-	swarmMu         sync.Mutex
-	swarmNextGossip time.Time
-	swarmNextLoaded bool
-	// swarmStreakMu guards the consecutive-failure streaks
-	// (signer to current run length). In-memory only: a
-	// restart forgets velocity but the ledger keeps every
-	// mark, so the trust floor still holds.
-	swarmStreakMu sync.Mutex
-	swarmStreak   map[string]int
-	// swarmCover is what peers warm for the swarm and which misses
-	// have been left to them (swarm_warm.go).
-	swarmCover swarmCoverage
-
 	// Trade ideas (tradeideas.go): the model client and the Meta API
 	// base, set in tests; production builds a timeout client per
 	// refresh and calls api.meta.ai.
@@ -254,9 +235,6 @@ func New(cfg Config) (*Application, error) {
 	}
 	if cfg.signUp.err != nil {
 		return nil, cfg.signUp.err
-	}
-	if cfg.swarm.err != nil {
-		return nil, cfg.swarm.err
 	}
 	if p := cfg.signUp; p.restricted() {
 		logging.Infof("evesynapse: new accounts are limited to %d listed character(s), %d corporation(s) and %d alliance(s)",
@@ -305,20 +283,18 @@ func New(cfg Config) (*Application, error) {
 		return nil, err
 	}
 
-	// The swarm's signing identity (swarm_identity.go): minted on
-	// first enable, sealed under the shared secret. Sharing stays
-	// off without it, and startup fails rather than sharing
-	// unsigned.
-	if cfg.swarm.enabled() {
-		id, err := loadSwarmIdentity(context.Background(), app.queries, cfg.swarm.secret)
-		if err != nil {
+	// Each module starts once the store is open; a module whose
+	// settings are wrong stops the start (the swarm refuses to share
+	// unsigned, for one).
+	for _, m := range registeredModules {
+		if m.Init == nil {
+			continue
+		}
+		if err := m.Init(app); err != nil {
 			dbConn.Close()
 			pool.Close()
 			return nil, err
 		}
-		app.swarmID = id
-		app.swarmCli = newSwarmClient(cfg.swarm.secret)
-		logging.Infof("evesynapse: shared cache enabled (%s)", cfg.swarm.mode)
 	}
 
 	// When each account was last seen, from before this start
@@ -408,8 +384,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r := chi.NewRouter()
 	// Anonymous visitors to the routes that cost real work are
 	// throttled per address (core_throttle.go).
-	pageThrottle, simThrottle := app.anonThrottles()
-	anonPages, anonSim := app.throttleAnon(pageThrottle), app.throttleAnon(simThrottle)
+	pageThrottle, _ := app.anonThrottles()
+	anonPages := app.throttleAnon(pageThrottle)
 	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(app.securityHeaders)
@@ -451,6 +427,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	} else {
 		r.Handle("/static/*", assets)
 	}
+	r.Get("/auth/link", app.handleLinkChoose)
 	r.Get("/auth/eve", app.handleEVELogin)
 	r.Get("/auth/callback", app.handleEVECallback)
 	// Signing out changes state, so it is a POST: a link or an image
@@ -468,26 +445,13 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		// What the Sync and Admin search boxes suggest while typing.
 		r.Get("/suggest", app.handleCharacterSuggest)
 		r.Post("/accounts/remove", app.handleAdminAccountRemove)
-		// Shared cache (swarm_pages.go): add, approve,
-		// exclude, re-admit and remove swarm members.
-		r.Post("/swarm/add", app.handleSwarmAddPeer)
-		r.Post("/swarm/approve", app.handleSwarmApprove)
-		r.Post("/swarm/exclude", app.handleSwarmExclude)
-		r.Post("/swarm/admit", app.handleSwarmAdmit)
-		r.Post("/swarm/remove", app.handleSwarmRemove)
 	})
 
 	r.Route("/corporations", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleCorporations)
-		r.Get("/members/", app.handleCorpMembers)
-		r.Post("/members/group", app.handleCorpMembersGroup)
 		r.Get("/settings/", app.handleCorpSettings)
 		r.Post("/settings/save", app.handleCorpSettingsSave)
-		r.Get("/wallets/", app.handleCorpWallets)
-		r.Get("/orders/", app.handleCorpOrders)
-		r.Get("/assets/", app.handleCorpAssets)
-		r.Get("/structures/", app.handleCorpStructures)
 		r.Get("/killmails/", app.handleCorpKillmails)
 	})
 
@@ -500,14 +464,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/planets", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handlePlanets)
-	})
-
-	r.Route("/mail", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleMail)
-		r.Post("/read/", app.handleMailMarkRead)
-		r.Get("/compose/", app.handleMailCompose)
-		r.Post("/send/", app.handleMailSend)
 	})
 
 	// Notifications (notify_pages.go): the list, and the two actions
@@ -525,47 +481,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/push/test", app.handlePushTest)
 	})
 
-	// Groups (corp_groups.go): sets of characters the directors of a
-	// corporation or alliance keep by hand.
-	r.Route("/groups", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleGroups)
-		r.Post("/create", app.handleGroupCreate)
-		r.Post("/{groupID}/delete", app.handleGroupDelete)
-		r.Post("/{groupID}/members/add", app.handleGroupMemberAdd)
-		r.Post("/{groupID}/members/remove", app.handleGroupMemberRemove)
-	})
-
-	// Ship replacement (corp_srp.go).
-	r.Route("/srp", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleSRP)
-		r.Post("/request", app.handleSRPRequest)
-		r.Post("/paylist", app.handleSRPPayList)
-		r.Post("/{id}/decide", app.handleSRPDecide)
-		r.Post("/{id}/withdraw", app.handleSRPWithdraw)
-	})
-
-	// Doctrines and their fits (corp_doctrines.go).
-	r.Route("/doctrines", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleDoctrines)
-		r.Get("/fits/", app.handleCorpFits)
-		r.Post("/create", app.handleDoctrineCreate)
-		r.Get("/suggest", app.handleDoctrineSuggest)
-		r.Get("/{doctrineID}", app.handleDoctrine)
-		r.Post("/{doctrineID}/save", app.handleDoctrineSave)
-		r.Post("/{doctrineID}/delete", app.handleDoctrineDelete)
-		r.Post("/{doctrineID}/fits/add", app.handleDoctrineFitAdd)
-		r.Post("/{doctrineID}/fits/{fitID}/remove", app.handleDoctrineFitRemove)
-	})
-
-	r.Route("/calendar", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleCalendar)
-		r.Post("/respond", app.handleCalendarRespond)
-	})
-
 	// Ops (ops.go): EveSynapse's own calendar entries and the
 	// sign-ups to them.
 	r.Route("/ops", func(r chi.Router) {
@@ -578,12 +493,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/{opID}/signup", app.handleOpSignup)
 		r.Post("/{opID}/cancel", app.handleOpCancel)
 		r.Post("/{opID}/attendance", app.handleOpAttendance)
-	})
-
-	r.Route("/contacts", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleContacts)
-		r.Get("/name-fragment", app.handleContactNameFragment)
 	})
 
 	// Generic entity-label live regions (worker_pagewants.go): a pending
@@ -706,47 +615,9 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.With(anonPages).Get("/{typeID}/", app.handlePublicShip)
 	})
 
-	r.Route("/fittings", func(r chi.Router) {
-		// Anonymous-safe surfaces: the simulator (All-V without
-		// a session), the public browser and fit pages, and the
-		// SDE-only picker. Handlers branch on the session.
-		r.With(anonPages).Get("/", app.handleFittings)
-		r.With(anonSim).Post("/simulate/", app.handleFitSimulate)
-		r.With(anonPages).Get("/picker.json", app.handleFitPickerJSON)
-		r.Group(func(r chi.Router) {
-			r.Use(app.requireAuth)
-			r.Get("/saved/", app.handleFittingsSaved)
-			r.Get("/clones.json", app.handleFitClonesJSON)
-			r.Post("/save/", app.handleFitSave)
-			r.Post("/save-to-eve/", app.handleFitSaveToEVE)
-			r.Post("/delete/", app.handleFitDelete)
-			r.Post("/import/", app.handleFitImport)
-			r.Post("/export/", app.handleFitExport)
-			r.Get("/mine.json", app.handleFitMineJSON)
-			r.Post("/fork/", app.handleFitFork)
-			r.Get("/shopping/{id}/", app.handleFitShopping)
-		})
-	})
-
 	r.Route("/killmails", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleKillmails)
-	})
-
-	r.Route("/wallet", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleWallet)
-		r.Get("/graph-fragment", app.handleWalletGraphFragment)
-	})
-
-	r.Route("/orders", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleOrders)
-	})
-
-	r.Route("/contracts", func(r chi.Router) {
-		r.Use(app.requireAuth)
-		r.Get("/", app.handleContracts)
 	})
 
 	// Public tools: the build planner, the PI planner and the Intel
@@ -771,16 +642,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 			r.Post("/warm", app.handleSyncWarm)
 			r.Post("/sde", app.handleSyncSDE)
 		})
-	})
-
-	// The swarm's machine API (swarm_api.go): bearer-gated by the
-	// shared secret, dark (404) while sharing is off. No session
-	// middleware — instances are not browsers.
-	r.Route("/swarm", func(r chi.Router) {
-		r.Get("/members", app.handleSwarmMembers)
-		r.Post("/pull", app.handleSwarmPull)
-		r.Get("/warms", app.handleSwarmWarms)
-		r.Post("/seed/register", app.handleSwarmSeedRegister)
 	})
 
 	for _, m := range registeredModules {
@@ -1069,12 +930,7 @@ func (app *Application) ParseRuleWho(ctx context.Context, owner standing.Owner, 
 }
 
 func (app *Application) PickOwner(ctx context.Context, r *http.Request, offered []standing.Owner) (standing.Owner, []module.OwnerOption, bool) {
-	owner, options, ok := app.pickOwner(ctx, r, offered)
-	out := make([]module.OwnerOption, len(options))
-	for i, o := range options {
-		out[i] = module.OwnerOption{ID: o.ID, Name: o.Name, Active: o.Active, Param: o.Param, Value: o.Value}
-	}
-	return owner, out, ok
+	return app.pickOwner(ctx, r, offered)
 }
 
 func (app *Application) ResolvedCorpName(ctx context.Context, corpID int64) (string, bool) {
@@ -1186,6 +1042,256 @@ func (app *Application) RefreshPublicFitPages(ctx context.Context) int {
 }
 
 func (app *Application) FlushFitViews(ctx context.Context) { app.flushFitViews(ctx) }
+
+func (app *Application) StoredSnapshot(ctx context.Context, ch db.Character, kind string, out any) error {
+	return app.storedSnapshot(ctx, ch, kind, out)
+}
+
+func (app *Application) RenderFragment(w http.ResponseWriter, page, define string, data any) {
+	app.renderFragment(w, page, define, data)
+}
+
+func (app *Application) SuggestTypes(ctx context.Context, query, pool string, limit int64) []module.SuggestItem {
+	rows := app.suggestTypes(ctx, query, pool, limit)
+	out := make([]module.SuggestItem, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, module.SuggestItem(r))
+	}
+	return out
+}
+
+func (app *Application) AccessToken(ctx context.Context, ch db.Character) (string, error) {
+	return app.validAccessToken(ctx, ch)
+}
+
+func (app *Application) PostESI(ctx context.Context, token, path string, body, out any) error {
+	return app.esi.PostJSONAuthed(ctx, token, path, body, out)
+}
+
+func (app *Application) RefreshSnapshot(ctx context.Context, ch db.Character, kind string) error {
+	return app.esi.FetchAndStoreSnapshot(ctx, ch, kind)
+}
+
+func (app *Application) ModuleEnabled(id string) bool { return moduleCompiledIn(id) }
+
+func (app *Application) StorePublicFitPageNow(ctx context.Context, fitID int64) {
+	app.storePublicFitPageNow(ctx, fitID)
+}
+
+func (app *Application) DoctrineFitDoc(ctx context.Context, userID, fitID int64) (*fitview.FitDoc, bool) {
+	return app.doctrineFitDoc(ctx, userID, fitID)
+}
+
+func (app *Application) CorpSection(ctx context.Context, characterID int64, kind string, out any) module.CorpSectionState {
+	return app.corpSection(ctx, characterID, kind, out)
+}
+
+func (app *Application) PickCorpPage(ctx context.Context, r *http.Request) (module.CorpPageSelection, bool, error) {
+	return app.pickCorpPage(ctx, r)
+}
+
+func (app *Application) CorpStructureNames(ctx context.Context, characterID int64) map[int64]string {
+	return app.corpStructureNames(ctx, characterID)
+}
+
+func (app *Application) CorpLocationTitle(ctx context.Context, locationID int64, structureNames map[int64]string) string {
+	return app.corpLocationTitle(ctx, locationID, structureNames)
+}
+
+func (app *Application) LinkPlaceMemo(ctx context.Context, memo map[int64]module.PlaceRef, locationID int64, title string) module.PlaceRef {
+	return app.linkPlaceMemo(ctx, memo, locationID, title)
+}
+
+func (app *Application) ResolvedStructureTitle(ctx context.Context, structureID int64) string {
+	return app.resolvedStructureTitle(ctx, structureID)
+}
+
+func (app *Application) TxnCounterparty(ctx context.Context, id int64) (string, bool, bool) {
+	return app.txnCounterparty(ctx, id)
+}
+
+func (app *Application) AssetLocations(ctx context.Context, items []esi.Asset, extraTitles, nameOverrides map[int64]string) any {
+	return app.buildAssetLocationsWith(ctx, items, extraTitles, nameOverrides)
+}
+
+func (app *Application) OrderHealthText(myPrice float64, status string, stationBest, regionBest float64) (string, bool) {
+	return orderHealthText(myPrice, status, stationBest, regionBest)
+}
+
+func (app *Application) CorpDisplayName(ctx context.Context, corpID int64) string {
+	return app.corpDisplayName(ctx, corpID)
+}
+
+func (app *Application) CorpPermits(ctx context.Context, st standing.Standing, corp int64, permission string) bool {
+	return app.corpPermits(ctx, st, corp, permission)
+}
+
+func (app *Application) PlayerCorps(ctx context.Context, userID int64) []int64 {
+	return app.playerCorps(ctx, userID)
+}
+
+func (app *Application) PickCorporation(ctx context.Context, r *http.Request, offered []int64) (int64, []module.OwnerOption) {
+	return app.pickCorporation(ctx, r, offered)
+}
+
+func (app *Application) OwnerCorporations(ctx context.Context, o standing.Owner) []int64 {
+	return app.ownerCorporations(ctx, o)
+}
+
+func (app *Application) ResolvedAllianceName(ctx context.Context, allianceID int64) (string, bool) {
+	return app.resolvedAllianceName(ctx, allianceID)
+}
+
+func (app *Application) SendEVEMail(ctx context.Context, from db.Character, recipientID int64, recipientType, subject, body string, approvedCost int) error {
+	return app.sendEVEMail(ctx, from, recipientID, recipientType, subject, body, approvedCost)
+}
+
+func (app *Application) ESIRefusalDetail(err error) string { return esiRefusalDetail(err) }
+
+func (app *Application) EconSection(ctx context.Context, characterID int64, kind string, out any) module.EconSectionState {
+	return app.econSection(ctx, characterID, kind, out)
+}
+
+func (app *Application) OpCorps(ctx context.Context, userID int64, managedOnly bool) []int64 {
+	return opCorps(app.opMembers(ctx, userID), managedOnly)
+}
+
+func (app *Application) RelinkURL(moduleID string, characterID int64) string {
+	return relinkURL(moduleID, characterID)
+}
+
+func (app *Application) CharLinkHTML(ctx context.Context, characterID int64, name string) template.HTML {
+	return charLink(app.viewerCharSet(ctx), characterID, name)
+}
+
+func (app *Application) NoteCharacterWant(ctx context.Context, characterID int64) {
+	app.notePageWant(ctx, pageWantCharacter, characterID, 0)
+}
+
+func (app *Application) MarkMailReadLocally(ctx context.Context, characterID, mailID int64) {
+	app.markMailReadLocally(ctx, characterID, mailID)
+}
+
+func (app *Application) AttachWalletGraph(ctx context.Context, userID, characterID int64, journal esi.WalletJournal, journalLoaded bool) any {
+	return app.attachWalletGraph(ctx, userID, characterID, journal, journalLoaded)
+}
+
+func (app *Application) EmptyWalletGraph() any { return &walletGraphView{State: walletGraphEmpty} }
+
+func (app *Application) WalletFlow(ctx context.Context, ch db.Character) any {
+	return app.buildWalletFlow(ctx, app.loadCharSnaps(ctx, ch.UserID, []db.Character{ch}, []string{widgetWalletFlow}))
+}
+
+func (app *Application) AllianceDisplayName(ctx context.Context, allianceID int64) string {
+	return app.allianceDisplayName(ctx, allianceID)
+}
+
+func (app *Application) ResolvedCharacterName(ctx context.Context, characterID int64) (string, bool) {
+	return app.resolvedCharacterName(ctx, characterID)
+}
+
+func (app *Application) CharacterLabelPending(ctx context.Context, characterID int64) bool {
+	return app.characterLabelPending(ctx, characterID)
+}
+
+func (app *Application) CachedCharacterName(id int64) (string, bool) {
+	return app.esi.CachedCharacterName(id)
+}
+
+func (app *Application) CachedCorpName(id int64) (string, bool) { return app.esi.CachedCorpName(id) }
+
+func (app *Application) LinkPlace(ctx context.Context, locationID int64, title string) module.PlaceRef {
+	return app.linkPlace(ctx, locationID, title)
+}
+
+func (app *Application) EconLocationTitle(ctx context.Context, locationID int64) string {
+	return app.econLocationTitle(ctx, locationID)
+}
+
+func (app *Application) RewriteSnapshot(ctx context.Context, characterID int64, kind string, edit func(payload string) (string, bool)) {
+	app.rewriteSnapshot(ctx, characterID, kind, edit)
+}
+
+func (app *Application) PutESI(ctx context.Context, token, path string, body any) error {
+	return app.esi.PutJSONAuthed(ctx, token, path, body)
+}
+
+func (app *Application) PostESIPublic(ctx context.Context, path string, body, out any) error {
+	return app.esi.PostJSON(ctx, path, body, out)
+}
+
+func (app *Application) MarketFetchDue(ctx context.Context, kind string, gate time.Duration) bool {
+	return app.marketFetchDue(ctx, kind, gate)
+}
+
+func (app *Application) RecordMarketFetchAt(ctx context.Context, kind, state, detail string, at time.Time) {
+	app.recordMarketFetchAt(ctx, kind, state, detail, at)
+}
+
+func (app *Application) HistoryCandidates(ctx context.Context) ([]module.MarketKey, error) {
+	return app.historyCandidates(ctx)
+}
+
+func (app *Application) FetchMarketHistory(ctx context.Context, key module.MarketKey) ([]esi.MarketHistoryDay, error) {
+	return app.fetchMarketHistory(ctx, key)
+}
+
+func (app *Application) NoteStructureIDs(ctx context.Context, ids ...int64) {
+	app.noteStructureIDs(ctx, ids...)
+}
+
+func (app *Application) WantCorporation(ctx context.Context, id, closeness int64) error {
+	return app.wantCorporation(ctx, id, closeness)
+}
+
+func (app *Application) WantAlliance(ctx context.Context, id, closeness int64) error {
+	return app.wantAlliance(ctx, id, closeness)
+}
+
+func (app *Application) ESIGet(ctx context.Context, path string, out any) error {
+	return app.esi.Get(ctx, "", path, out)
+}
+
+func (app *Application) FetchStructure(ctx context.Context, ch db.Character, id int64) (esi.UniverseStructure, error) {
+	return app.esi.FetchStructure(ctx, ch, id)
+}
+
+func (app *Application) LearnTypeName(id int64, name string) { app.esi.LearnTypeName(id, name) }
+
+func (app *Application) ForgetTypeName(id int64) { app.esi.ForgetTypeName(id) }
+
+func (app *Application) MissingTypeNames(limit int) []int64 { return app.esi.MissingTypeNames(limit) }
+
+func (app *Application) NoteTypeNameMiss(id int64) { app.esi.NoteTypeNameMiss(id) }
+
+func (app *Application) PublicOrigin() string { return app.cfg.publicOrigin() }
+
+func (app *Application) RequireAdmin() func(http.Handler) http.Handler { return app.requireAdmin }
+
+// FitBuilder is the fit foundation over this application's stored state.
+func (app *Application) FitBuilder() *fitview.Builder { return app.fitBuilder() }
+
+func (app *Application) fitBuilder() *fitview.Builder { return fitview.New(app.queries, app) }
+
+// CachedGroupNames, LoadSnapshot, LocationTitle and SnapshotRoleMissing
+// complete fitview.Env (the name caches, snapshots and price guide the
+// foundation reads).
+func (app *Application) CachedGroupNames(ctx context.Context, ids []int64) map[int64]string {
+	return app.esi.CachedGroupNames(ctx, ids)
+}
+
+func (app *Application) LoadSnapshot(ctx context.Context, characterID int64, kind string, out any) bool {
+	return app.loadCorpSnapshot(ctx, characterID, kind, out)
+}
+
+func (app *Application) LocationTitle(ctx context.Context, id int64, locType string) string {
+	return app.locationTitle(ctx, id, locType)
+}
+
+func (app *Application) SnapshotRoleMissing(ctx context.Context, characterID int64, kind string) bool {
+	state, _, found := app.corpKindState(ctx, characterID, kind)
+	return found && state == fetchStateRoleMissing
+}
 
 func (app *Application) AnonPages() func(http.Handler) http.Handler {
 	pageThrottle, _ := app.anonThrottles()

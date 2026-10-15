@@ -8,6 +8,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"evesynapse/internal/balancechart"
 	"net/http"
 	"strings"
 	"testing"
@@ -34,7 +35,7 @@ func TestBuildBalanceSeriesJournalOnly(t *testing.T) {
 		{ID: 1, Date: "2026-03-01T10:00:00Z", Balance: 100},
 		{ID: 2, Date: "2026-03-02T10:00:00Z", Balance: 200},
 	}
-	points := buildBalanceSeries(journal, nil, nil)
+	points := balancechart.BuildBalanceSeries(journal, nil, nil)
 	if len(points) != 3 {
 		t.Fatalf("points = %d, want 3", len(points))
 	}
@@ -50,7 +51,7 @@ func TestBuildBalanceSeriesSamplerOnly(t *testing.T) {
 		{Day: "2026-03-01", Balance: 50, SampledAt: mustTime("2026-03-01T09:00:00Z")},
 		{Day: "2026-03-02", Balance: 75, SampledAt: mustTime("2026-03-02T09:00:00Z")},
 	}
-	points := buildBalanceSeries(nil, samples, nil)
+	points := balancechart.BuildBalanceSeries(nil, samples, nil)
 	if len(points) != 2 || points[0].Balance != 50 || points[1].Balance != 75 {
 		t.Fatalf("points = %+v, want [50 75]", points)
 	}
@@ -69,8 +70,8 @@ func TestBuildBalanceSeriesMergedSeam(t *testing.T) {
 		{ID: 1, Date: "2026-03-01T10:00:00Z", Balance: 100},
 		{ID: 2, Date: "2026-03-03T10:00:00Z", Balance: 300},
 	}
-	now := &balancePoint{At: time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC), Balance: 350}
-	points := buildBalanceSeries(journal, samples, now)
+	now := &balancechart.BalancePoint{At: time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC), Balance: 350}
+	points := balancechart.BuildBalanceSeries(journal, samples, now)
 	want := []float64{10, 100, 300, 350}
 	if len(points) != len(want) {
 		t.Fatalf("points = %+v, want balances %v", points, want)
@@ -83,24 +84,24 @@ func TestBuildBalanceSeriesMergedSeam(t *testing.T) {
 
 	// A snapshot stamped at the last journal entry's moment
 	// refreshes that point instead of duplicating it.
-	same := &balancePoint{At: time.Date(2026, 3, 3, 10, 0, 0, 0, time.UTC), Balance: 325}
-	points = buildBalanceSeries(journal, nil, same)
+	same := &balancechart.BalancePoint{At: time.Date(2026, 3, 3, 10, 0, 0, 0, time.UTC), Balance: 325}
+	points = balancechart.BuildBalanceSeries(journal, nil, same)
 	if len(points) != 2 || points[1].Balance != 325 {
 		t.Fatalf("equal-timestamp refresh: points = %+v, want last balance 325", points)
 	}
 }
 
 func TestBuildBalanceChartStates(t *testing.T) {
-	at := func(day int, bal float64) balancePoint {
-		return balancePoint{At: time.Date(2026, 3, day, 0, 0, 0, 0, time.UTC), Balance: bal}
+	at := func(day int, bal float64) balancechart.BalancePoint {
+		return balancechart.BalancePoint{At: time.Date(2026, 3, day, 0, 0, 0, 0, time.UTC), Balance: bal}
 	}
-	if _, ok := buildBalanceChart(nil); ok {
+	if _, ok := balancechart.BuildBalanceChart(nil); ok {
 		t.Fatal("no points charted")
 	}
-	if _, ok := buildBalanceChart([]balancePoint{at(1, 100)}); ok {
+	if _, ok := balancechart.BuildBalanceChart([]balancechart.BalancePoint{at(1, 100)}); ok {
 		t.Fatal("one point charted — a fact is not a shape")
 	}
-	chart, ok := buildBalanceChart([]balancePoint{at(1, 100), at(2, 250), at(3, 200)})
+	chart, ok := balancechart.BuildBalanceChart([]balancechart.BalancePoint{at(1, 100), at(2, 250), at(3, 200)})
 	if !ok {
 		t.Fatal("three points did not chart")
 	}
@@ -111,14 +112,14 @@ func TestBuildBalanceChartStates(t *testing.T) {
 		t.Fatalf("axis span = %s..%s, want the real first/last points", chart.From, chart.To)
 	}
 	// Flat series still draws, mid-band.
-	flat, ok := buildBalanceChart([]balancePoint{at(1, 100), at(2, 100)})
+	flat, ok := balancechart.BuildBalanceChart([]balancechart.BalancePoint{at(1, 100), at(2, 100)})
 	if !ok || flat.Dots[0].Y != flat.Dots[1].Y {
 		t.Fatalf("flat series: ok=%v dots=%+v", ok, flat.Dots)
 	}
 	// Microscopically different values (floating-point summation
 	// residue across thousands of assets) draw flat too, not as
 	// phantom peaks stretched across the full chart height.
-	epsFlat, ok := buildBalanceChart([]balancePoint{
+	epsFlat, ok := balancechart.BuildBalanceChart([]balancechart.BalancePoint{
 		at(1, 158842302202.96),
 		at(2, 158842302202.96002),
 		at(3, 158842302202.95999),
@@ -206,7 +207,7 @@ func TestNetWorthHistoryPoints(t *testing.T) {
 		{CharacterID: 1, Day: "2026-03-02", NetWorth: sql.NullFloat64{}}, // unknown: day stays off
 		{CharacterID: 1, Day: "2026-03-03", NetWorth: sql.NullFloat64{Float64: 400, Valid: true}},
 	}
-	points := netWorthHistoryPoints(rows)
+	points := balancechart.NetWorthHistoryPoints(rows)
 	if len(points) != 2 || points[0].Balance != 150 || points[1].Balance != 400 {
 		t.Fatalf("points = %+v, want [150 400] with the unknown day skipped", points)
 	}

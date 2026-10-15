@@ -681,7 +681,8 @@ var Module = module.Module{
 	EnhanceScopes: []module.Scope{
 		{Scope: "esi-planets.manage_planets.v1", Unlocks: "Your colonies fill in the planet picker and the coverage check."},
 	},
-	Sitemap: []module.SitemapEntry{{Path: "/industry/pi/", ChangeFreq: "monthly", Priority: "0.8"}},
+	Sitemap:    []module.SitemapEntry{{Path: "/industry/pi/", ChangeFreq: "monthly", Priority: "0.8"}},
+	Activities: []string{"industry"},
 	Nav: []module.NavSection{
 		{
 			Section: "industry",

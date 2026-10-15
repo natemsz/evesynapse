@@ -14,66 +14,35 @@ import (
 // pageData is the view model shared by the templates.
 type pageData struct {
 	module.ShellData
-	Shopping       *shoppingView
-	Home           *homeView
-	CharChars      []assetCharLink
-	CharacterPage  *characterView
-	Fittings       *fittingsView
-	FittingsChars  []assetCharLink
-	FitEditor      *fitEditorView
-	Killmails      *killmailsView
-	KillmailChars  []assetCharLink
-	Wallet         *walletView
-	WalletChars    []assetCharLink
-	Orders         *ordersView
-	OrdersChars    []assetCharLink
-	Contracts      *contractsView
-	ContractsChars []assetCharLink
-	Industry       *industryView
-	IndustryChars  []assetCharLink
-	ServerStatus   *serverStatusView
-	ESIHealth      *esiHealthView // Overview bar: ESI health and Tranquility players (signed-in Home only)
-	Corps          []corpView
-	CorpOptions    []corpOption // the corporations the Corporation page can show
-	CorpChars      []assetCharLink
-	CorpMembers    *corpMembersView
-	CorpWallets    *corpWalletsView
-	CorpOrders     *corpOrdersView
-	CorpAssets     *corpAssetsView
-	CorpStructs    *corpStructuresView
-	Assets         *assetsView
-	AssetsChars    []assetCharLink
-	AssetsSearch   *assetsSearchView
-	Planets        *planetsView
-	PlanetsChars   []assetCharLink
-	Mail           *mailView
-	MailChars      []assetCharLink
-	MailCompose    *mailComposeView
-	Calendar       *calendarView
-	CalendarChars  []assetCharLink
-	Contacts       *contactsView
-	ContactsChars  []assetCharLink
-	Market         *marketView
-	Items          *itemsView
-	Skills         *skillsView
-	SkillsChars    []assetCharLink
-	Sync           *syncView
-	Admin          *adminView
+	Home          *homeView
+	CharChars     []assetCharLink
+	CharacterPage *characterView
+	Killmails     *killmailsView
+	KillmailChars []assetCharLink
+	Industry      *industryView
+	IndustryChars []assetCharLink
+	ServerStatus  *serverStatusView
+	ESIHealth     *esiHealthView // Overview bar: ESI health and Tranquility players (signed-in Home only)
+	Corps         []corpView
+	CorpOptions   []corpOption // the corporations the Corporation page can show
+	CorpChars     []assetCharLink
+	Assets        *assetsView
+	AssetsChars   []assetCharLink
+	AssetsSearch  *assetsSearchView
+	Planets       *planetsView
+	PlanetsChars  []assetCharLink
+	Market        *marketView
+	Items         *itemsView
+	Skills        *skillsView
+	SkillsChars   []assetCharLink
+	Sync          *syncView
+	Admin         *adminView
 
 	// Notifications is the /notifications/ page.
 	Notifications *notificationsView
 
-	// Groups is the /groups page.
-	Groups *groupsView
-
-	// SRP is the /srp/ page (corp_srp.go).
-	SRP *srpView
-
-	// Doctrines (corp_doctrines.go): the list, one doctrine's page, and
-	// the corporation's fits on one page.
-	Doctrines *doctrinesView
-	Doctrine  *doctrineView
-	CorpFits  *corpFitsView
+	// Link is the sign-up and character-link chooser (/auth/link).
+	Link *linkView
 
 	// PublicShip is one /ships/ page.
 	PublicShip *publicShipView
@@ -147,21 +116,17 @@ func sectionForPage(page string) string {
 	case "home.html":
 		return "home"
 	case "character.html", "characters.html", "skills.html",
-		"mail.html", "calendar.html", "contacts.html", "pilot.html", "assets.html", "wallet.html",
+		"pilot.html", "assets.html",
 		"killmails.html", "notifications.html", "notification_settings.html", "op.html", "op_form.html", "op_paps.html":
 		return "pilot"
-	case "fittings.html", "fittings_saved.html", "fit_shopping.html":
-		return "fitting"
 	case "industry.html", "planets.html":
 		return "industry"
-	case "market.html", "market_scanner.html",
-		"orders.html", "contracts.html", "system.html", "station.html", "structure.html", "region.html":
+	case "market.html",
+		"system.html", "station.html", "structure.html", "region.html":
 		return "market"
 	case "items.html", "ship_public.html":
 		return "tools"
-	case "corporations.html", "corp_members.html", "corp_wallets.html",
-		"corp_orders.html", "corp_assets.html", "corp_structures.html",
-		"corporation.html", "alliance.html", "groups.html", "srp.html", "doctrines.html", "doctrine.html", "corp_fits.html", "corp_settings.html":
+	case "corporations.html", "corporation.html", "alliance.html", "corp_settings.html":
 		return "corporation"
 	case "sync.html":
 		return "sync"

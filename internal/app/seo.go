@@ -127,7 +127,6 @@ type sitemapSet struct {
 func (app *Application) buildSitemap(ctx context.Context, origin string) ([]byte, error) {
 	urls := []sitemapURL{
 		{Loc: origin + "/", ChangeFreq: "weekly", Priority: "1.0"},
-		{Loc: origin + "/fittings/", ChangeFreq: "monthly", Priority: "0.8"},
 		{Loc: origin + "/items/", ChangeFreq: "weekly", Priority: "0.8"},
 	}
 	// Each enabled module's own public pages: a build without the

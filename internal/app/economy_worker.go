@@ -34,12 +34,12 @@ const forbiddenDetailPrefix = "ESI refused (403)"
 // economySnapshotKinds lists the economy snapshot kinds in fetch
 // order: wallet windows first, then orders, contracts, industry.
 func economySnapshotKinds() []string {
-	return []string{
+	return builtInKinds([]string{
 		esi.SnapWalletJournal, esi.SnapWalletTxns,
 		esi.SnapOrders, esi.SnapOrdersHistory,
 		esi.SnapContracts,
 		esi.SnapIndustryJobs, esi.SnapBlueprints, esi.SnapMining,
-	}
+	})
 }
 
 // refreshEconomySnapshots runs the economy pass for one character

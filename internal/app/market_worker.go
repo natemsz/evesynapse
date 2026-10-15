@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"evesynapse/internal/app/module"
 	"fmt"
 	"net/http"
 	"sort"
@@ -50,7 +51,7 @@ const (
 	maxHistoryFetchesPerCycle = 200
 	// historyRefetchGate is the minimum age of a successful
 	// history fetch before the pair is fetched again.
-	historyRefetchGate = 20 * time.Hour
+	historyRefetchGate = module.HistoryRefetchGate
 	// marketFetchErrorGate is the minimum age of a transiently
 	// failed market fetch before it retries. Without it a
 	// failed attempt is always due and one poisoned pair
@@ -87,10 +88,7 @@ const (
 )
 
 // marketKey is one (region, type) pair to warm.
-type marketKey struct {
-	RegionID int64
-	TypeID   int64
-}
+type marketKey = module.MarketKey
 
 // refreshMarketData runs one market pass, reporting how many
 // payloads it stored (history downloads + book reads + region
@@ -146,7 +144,7 @@ func (app *Application) warmMarketHistory(ctx context.Context, allowance *fetchB
 		// this key and a spot decision is moments away, and a
 		// dedicated node that warms history gets its grace
 		// first: either way this instance's own call waits.
-		if app.swarmDefersFetch(ctx, swarmKindHistory, fmt.Sprintf("%d/%d", key.RegionID, key.TypeID), time.Now().UTC()) {
+		if app.deferFetch(ctx, module.FetchKindHistory, fmt.Sprintf("%d/%d", key.RegionID, key.TypeID), time.Now().UTC()) {
 			continue
 		}
 		if !allowance.take() {
@@ -756,9 +754,7 @@ func computeOrderHealth(o esi.CharOrder, sells []esi.MarketOrder) (status string
 }
 
 // marketFetchKind names one row of market_fetch_state.
-func marketFetchKind(prefix string, key marketKey) string {
-	return fmt.Sprintf("%s_%d_%d", prefix, key.RegionID, key.TypeID)
-}
+func marketFetchKind(prefix string, key marketKey) string { return module.MarketFetchKind(prefix, key) }
 
 // marketFetchDue reports whether a fetch kind may run again: a
 // missing record is always due; a successful or definitively

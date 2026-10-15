@@ -18,6 +18,7 @@ var Module = module.Module{
 	Requires:      []string{},
 	Scopes:        []module.Scope{},
 	EnhanceScopes: []module.Scope{},
+	Activities:    []string{"market"},
 	Nav: []module.NavSection{{
 		Section: "market",
 		Entries: []module.NavEntry{

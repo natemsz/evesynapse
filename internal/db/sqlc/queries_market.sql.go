@@ -840,6 +840,100 @@ func (q *Queries) ListBestBuyStations(ctx context.Context, arg ListBestBuyStatio
 	return items, nil
 }
 
+const listTradefinderPendingRoutes = `-- name: ListTradefinderPendingRoutes :many
+SELECT o.type_id,
+       o.typical_sell AS origin_typical_sell,
+       d.typical_sell AS dest_typical_sell
+FROM market_region_stats o
+JOIN market_region_stats d ON d.region_id = $1 AND d.type_id = o.type_id
+WHERE o.region_id = $2
+  AND o.typical_sell > 0 AND d.typical_sell > o.typical_sell
+  AND ($3::bigint = 1 OR d.typical_sell <= o.typical_sell * 10)
+  AND (d.typical_sell - o.typical_sell) / o.typical_sell * 100 >= $4
+  AND d.avg_daily_volume = 0
+  AND o.sell_volume > 0
+  AND o.updated_at >= $5 AND d.updated_at >= $5
+ORDER BY (d.typical_sell - o.typical_sell) * o.sell_volume::double precision DESC, o.type_id
+LIMIT $6::bigint
+`
+
+type ListTradefinderPendingRoutesParams struct {
+	DestRegion     int64     `json:"dest_region"`
+	OriginRegion   int64     `json:"origin_region"`
+	IncludeLowball int64     `json:"include_lowball"`
+	MinMargin      float64   `json:"min_margin"`
+	Cutoff         time.Time `json:"cutoff"`
+	RowCap         int64     `json:"row_cap"`
+}
+
+type ListTradefinderPendingRoutesRow struct {
+	TypeID            int64   `json:"type_id"`
+	OriginTypicalSell float64 `json:"origin_typical_sell"`
+	DestTypicalSell   float64 `json:"dest_typical_sell"`
+}
+
+// Routes that pass every price rule but have no sold-per-day
+// figure at the destination yet (no recorded history there): the
+// tradefinder lists them apart and queues their history, ranked
+// by margin times the origin's stock on sale as a rough potential.
+func (q *Queries) ListTradefinderPendingRoutes(ctx context.Context, arg ListTradefinderPendingRoutesParams) ([]ListTradefinderPendingRoutesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTradefinderPendingRoutes,
+		arg.DestRegion,
+		arg.OriginRegion,
+		arg.IncludeLowball,
+		arg.MinMargin,
+		arg.Cutoff,
+		arg.RowCap,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTradefinderPendingRoutesRow
+	for rows.Next() {
+		var i ListTradefinderPendingRoutesRow
+		if err := rows.Scan(&i.TypeID, &i.OriginTypicalSell, &i.DestTypicalSell); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const refreshMarketRegionStatAvgVolume = `-- name: RefreshMarketRegionStatAvgVolume :exec
+UPDATE market_region_stats SET avg_daily_volume = COALESCE((
+    SELECT CAST(AVG(h.volume) AS DOUBLE PRECISION)
+    FROM market_history h
+    WHERE h.region_id = $1 AND h.type_id = $2
+      AND h.date >= (
+          SELECT to_char(MAX(m.date)::date - INTERVAL '6 days', 'YYYY-MM-DD')
+          FROM market_history m
+          WHERE m.region_id = $1 AND m.type_id = $2
+      )
+), 0)
+WHERE region_id = $1 AND type_id = $2
+`
+
+type RefreshMarketRegionStatAvgVolumeParams struct {
+	RegionID int64 `json:"region_id"`
+	TypeID   int64 `json:"type_id"`
+}
+
+// Recomputes one region stat's sold-per-day figure from its stored
+// history (the same seven-day window ListMarketAvgDailyVolumes uses)
+// right after a history fetch, so the figure doesn't wait for the
+// region's next sweep.
+func (q *Queries) RefreshMarketRegionStatAvgVolume(ctx context.Context, arg RefreshMarketRegionStatAvgVolumeParams) error {
+	_, err := q.db.ExecContext(ctx, refreshMarketRegionStatAvgVolume, arg.RegionID, arg.TypeID)
+	return err
+}
+
 const listCheapestSellStations = `-- name: ListCheapestSellStations :many
 SELECT DISTINCT ON (type_id) type_id, location_id, best_sell
 FROM market_station_stats
@@ -2288,25 +2382,22 @@ func (q *Queries) ListStructureResolutions(ctx context.Context, arg ListStructur
 }
 
 const listTradefinderRoutes = `-- name: ListTradefinderRoutes :many
-SELECT type_id, origin_typical_buy, dest_typical_sell, dest_daily_volume,
-       origin_buy_volume, dest_sell_volume
+SELECT type_id, origin_typical_sell, dest_typical_sell, dest_daily_volume, origin_sell_volume
 FROM (
     SELECT o.type_id,
-           o.typical_buy AS origin_typical_buy,
+           o.typical_sell AS origin_typical_sell,
            d.typical_sell AS dest_typical_sell,
            d.avg_daily_volume AS dest_daily_volume,
-           o.buy_volume AS origin_buy_volume,
-           d.sell_volume AS dest_sell_volume,
-           (d.typical_sell - o.typical_buy) * LEAST(d.avg_daily_volume, o.buy_volume::double precision, d.sell_volume::double precision) AS profit
+           o.sell_volume AS origin_sell_volume,
+           (d.typical_sell - o.typical_sell) * LEAST(d.avg_daily_volume, o.sell_volume::double precision) AS profit
     FROM market_region_stats o
     JOIN market_region_stats d ON d.region_id = $1 AND d.type_id = o.type_id
     WHERE o.region_id = $2
-      AND o.typical_buy > 0 AND d.typical_sell > 0
-      AND d.typical_sell > o.typical_buy
-      AND ($3::bigint = 1 OR NOT (o.typical_sell > 0 AND o.typical_buy * 10 < o.typical_sell))
-      AND (d.typical_sell - o.typical_buy) / o.typical_buy * 100 >= $4
+      AND o.typical_sell > 0 AND d.typical_sell > o.typical_sell
+      AND ($3::bigint = 1 OR d.typical_sell <= o.typical_sell * 10)
+      AND (d.typical_sell - o.typical_sell) / o.typical_sell * 100 >= $4
       AND d.avg_daily_volume >= $5::bigint
-      AND LEAST(d.avg_daily_volume, o.buy_volume::double precision, d.sell_volume::double precision) > 0
+      AND LEAST(d.avg_daily_volume, o.sell_volume::double precision) > 0
       AND o.updated_at >= $6 AND d.updated_at >= $6
 ) ranked
 ORDER BY profit DESC, type_id
@@ -2324,22 +2415,22 @@ type ListTradefinderRoutesParams struct {
 }
 
 type ListTradefinderRoutesRow struct {
-	TypeID           int64   `json:"type_id"`
-	OriginTypicalBuy float64 `json:"origin_typical_buy"`
-	DestTypicalSell  float64 `json:"dest_typical_sell"`
-	DestDailyVolume  float64 `json:"dest_daily_volume"`
-	OriginBuyVolume  int64   `json:"origin_buy_volume"`
-	DestSellVolume   int64   `json:"dest_sell_volume"`
+	TypeID            int64   `json:"type_id"`
+	OriginTypicalSell float64 `json:"origin_typical_sell"`
+	DestTypicalSell   float64 `json:"dest_typical_sell"`
+	DestDailyVolume   float64 `json:"dest_daily_volume"`
+	OriginSellVolume  int64   `json:"origin_sell_volume"`
 }
 
 // The tradefinder's routes, computed and ranked in SQL: one
-// bounded read of at most tradefinderRowCap rows instead of
-// pulling both regions' stored stats into Go. Mirrors the old
-// Go filter exactly: fresh figures on both sides (3-day rule), a
-// real typical buy and sell, margin above zero, the lowball
-// opt-out, the margin-% floor, the sold-per-day floor, and the
-// movable size as the least of what trades, the origin's open buy
-// volume, and the destination's open sell volume.
+// bounded read of at most tradefinderRowCap rows. A route buys
+// from the origin's sell orders (its typical sell price) and lists
+// in the destination at its typical sell price. Fresh figures on
+// both sides (3-day rule), margin above zero and over the margin-%
+// floor, long-shot routes (destination over ten times the origin)
+// only on opt-in, the sold-per-day floor, and the movable size as
+// the lesser of what the destination sells a day and the stock on
+// sale in the origin.
 func (q *Queries) ListTradefinderRoutes(ctx context.Context, arg ListTradefinderRoutesParams) ([]ListTradefinderRoutesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listTradefinderRoutes,
 		arg.DestRegion,
@@ -2359,11 +2450,10 @@ func (q *Queries) ListTradefinderRoutes(ctx context.Context, arg ListTradefinder
 		var i ListTradefinderRoutesRow
 		if err := rows.Scan(
 			&i.TypeID,
-			&i.OriginTypicalBuy,
+			&i.OriginTypicalSell,
 			&i.DestTypicalSell,
 			&i.DestDailyVolume,
-			&i.OriginBuyVolume,
-			&i.DestSellVolume,
+			&i.OriginSellVolume,
 		); err != nil {
 			return nil, err
 		}

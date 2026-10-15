@@ -194,6 +194,14 @@ func (app *Application) fetchAndStoreHistory(ctx context.Context, key marketKey)
 			logging.Errorf("worker: market history: store %s day %s: %v", kind, row.Date, err)
 		}
 	}
+	// The region stat's sold-per-day figure follows the new history at
+	// once rather than at the region's next sweep, so a route waiting
+	// on it (the tradefinder's pending list) ranks in right away.
+	if err := app.queries.RefreshMarketRegionStatAvgVolume(ctx, db.RefreshMarketRegionStatAvgVolumeParams{
+		RegionID: key.RegionID, TypeID: key.TypeID,
+	}); err != nil {
+		logging.Errorf("worker: market history: refresh sold-per-day for %s: %v", kind, err)
+	}
 	app.recordMarketFetch(ctx, kind, fetchStateOK, "")
 	return true, false
 }

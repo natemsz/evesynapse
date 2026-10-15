@@ -62,29 +62,29 @@ func TestTradefinderMathFreshnessFiltersAndHints(t *testing.T) {
 	now := nowT
 	stale := nowT.Add(-4 * 24 * time.Hour)
 
-	// Type 34: margin 10-4=6, 150%; units min(20/day, origin buy
-	// 50, dest sell 100) = 20 -> 120/day. The headline route.
-	// Type 35: margin 100-90=10, 11.1%; units min(100, 5, 10) = 5
-	// -> 50/day (origin buy volume is the cap that bites).
-	// Type 36: healthy margin but the destination has no open
-	// sell volume -- cannot move, drops out.
+	// Type 34: margin 10-4=6, 150%; units min(20/day, origin
+	// stock 50) = 20 -> 120/day. The headline route.
+	// Type 35: margin 100-90=10, 11.1%; units min(100, 5) = 5
+	// -> 50/day (the origin's stock on sale is the cap that bites).
+	// Type 36: healthy margin but nothing on sale in the origin --
+	// cannot move, drops out.
 	// Type 37: origin figures 4 days old -- excluded even though
 	// the destination side is fresh.
 	// Type 38: destination figures 4 days old -- excluded even
 	// though the origin side is fresh.
 	// Type 39: margin 2% -- under the 5% default floor.
 	originSeeds := []db.UpsertMarketRegionStatParams{
-		tfRegionStat(tfOrigin, 34, 4, 0, 50, 0, 0, now),
-		tfRegionStat(tfOrigin, 35, 90, 0, 5, 0, 0, now),
-		tfRegionStat(tfOrigin, 36, 4, 0, 50, 0, 0, now),
-		tfRegionStat(tfOrigin, 37, 4, 0, 50, 0, 0, stale),
-		tfRegionStat(tfOrigin, 38, 4, 0, 50, 0, 0, now),
-		tfRegionStat(tfOrigin, 39, 100, 0, 50, 0, 0, now),
+		tfRegionStat(tfOrigin, 34, 0, 4, 0, 50, 0, now),
+		tfRegionStat(tfOrigin, 35, 0, 90, 0, 5, 0, now),
+		tfRegionStat(tfOrigin, 36, 0, 4, 0, 0, 0, now),
+		tfRegionStat(tfOrigin, 37, 0, 4, 0, 50, 0, stale),
+		tfRegionStat(tfOrigin, 38, 0, 4, 0, 50, 0, now),
+		tfRegionStat(tfOrigin, 39, 0, 100, 0, 50, 0, now),
 	}
 	destSeeds := []db.UpsertMarketRegionStatParams{
 		tfRegionStat(tfDest, 34, 0, 10, 0, 100, 20, now),
 		tfRegionStat(tfDest, 35, 0, 100, 0, 10, 100, now),
-		tfRegionStat(tfDest, 36, 0, 10, 0, 0, 100, now),
+		tfRegionStat(tfDest, 36, 0, 10, 0, 100, 100, now),
 		tfRegionStat(tfDest, 37, 0, 10, 0, 100, 100, now),
 		tfRegionStat(tfDest, 38, 0, 10, 0, 100, 100, stale),
 		tfRegionStat(tfDest, 39, 0, 102, 0, 100, 100, now),
@@ -120,7 +120,7 @@ func TestTradefinderMathFreshnessFiltersAndHints(t *testing.T) {
 		t.Fatalf("top route: %+v, want type 34, 150%%, 20/day, %s/day, %s/item", top, esi.FormatISK(120), esi.FormatISK(6))
 	}
 	if view.Rows[1].TypeID != 35 || view.Rows[1].ProfitDay != esi.FormatISK(50) {
-		t.Fatalf("second route: %+v, want type 35 capped by origin buy volume at %s/day", view.Rows[1], esi.FormatISK(50))
+		t.Fatalf("second route: %+v, want type 35 capped by the origin's stock at %s/day", view.Rows[1], esi.FormatISK(50))
 	}
 	if top.OriginStation.Name == "" || top.OriginBest != esi.FormatISK(5.0) {
 		t.Fatalf("cheapest hint: %+v %q, want the 5.0 Jita station", top.OriginStation, top.OriginBest)
@@ -183,7 +183,7 @@ func TestTradefinderCap(t *testing.T) {
 		if _, err := conn.ExecContext(ctx, `INSERT INTO sde_types (type_id, name, group_id) VALUES ($1, $2, 18)`, typeID, fmt.Sprintf("Cap Item %d", i)); err != nil {
 			t.Fatalf("seed cap type: %v", err)
 		}
-		if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfOrigin, typeID, 10, 0, 1000, 0, 0, now)); err != nil {
+		if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfOrigin, typeID, 0, 10, 0, 1000, 0, now)); err != nil {
 			t.Fatalf("seed cap origin stat: %v", err)
 		}
 		if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfDest, typeID, 0, 20, 0, 1000, 10, now)); err != nil {
@@ -210,7 +210,7 @@ func TestTradefinderPageRendersStoredRowsZeroOutbound(t *testing.T) {
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
 	seedTradefinderFixture(t, app)
 	now := time.Now().UTC()
-	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfOrigin, 34, 4, 0, 50, 0, 0, now)); err != nil {
+	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfOrigin, 34, 0, 4, 0, 50, 0, now)); err != nil {
 		t.Fatalf("seed origin stat: %v", err)
 	}
 	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfDest, 34, 0, 10, 0, 100, 20, now)); err != nil {
@@ -267,15 +267,14 @@ func TestTradefinderLowballRoutesOptIn(t *testing.T) {
 		t.Fatalf("seed lowball type: %v", err)
 	}
 
-	// Type 34: a sane route -- origin typical buy 4 against a
-	// typical sell of 5, destination typical sell 10.
-	// Type 40: the degenerate one -- origin typical buy 1.5
-	// against a typical sell of 240M (a buy book of lowball
-	// orders), destination typical sell 250M.
+	// Type 34: a sane route -- origin typical sell 5,
+	// destination typical sell 10.
+	// Type 40: the long shot -- origin typical sell 1.5 against a
+	// destination typical sell of 250M, far past ten times.
 	for _, s := range []db.UpsertMarketRegionStatParams{
-		tfRegionStat(tfOrigin, 34, 4, 5, 50, 0, 0, now),
+		tfRegionStat(tfOrigin, 34, 4, 5, 0, 50, 0, now),
 		tfRegionStat(tfDest, 34, 0, 10, 0, 100, 20, now),
-		tfRegionStat(tfOrigin, 40, 1.5, 240_000_000, 100, 0, 0, now),
+		tfRegionStat(tfOrigin, 40, 1, 1.5, 0, 100, 0, now),
 		tfRegionStat(tfDest, 40, 0, 250_000_000, 0, 100, 10, now),
 	} {
 		if err := q.UpsertMarketRegionStat(ctx, s); err != nil {
@@ -377,7 +376,7 @@ func TestTradefinderPageEmptyStates(t *testing.T) {
 	// distinct no-routes state.
 	seedTradefinderFixture(t, app)
 	now := time.Now().UTC()
-	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfOrigin, 34, 100, 0, 50, 0, 0, now)); err != nil {
+	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfOrigin, 34, 0, 100, 0, 50, 0, now)); err != nil {
 		t.Fatalf("seed origin stat: %v", err)
 	}
 	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfDest, 34, 0, 101, 0, 100, 20, now)); err != nil {
@@ -408,8 +407,8 @@ func TestTradefinderMarginRankingAndCapInSQL(t *testing.T) {
 	conn := app.db
 
 	// 105 qualifying pairs with strictly increasing margin:
-	// origin typical buy 100, destination typical sell 200+i.
-	// units/day = min(10, 1000, 1000) = 10, so profit grows
+	// origin typical sell 100, destination typical sell 200+i.
+	// units/day = min(10, 1000) = 10, so profit grows
 	// strictly with the type id: the single bounded query must
 	// return exactly the top 100 in margin-descending order.
 	for i := int64(0); i < 105; i++ {
@@ -417,7 +416,7 @@ func TestTradefinderMarginRankingAndCapInSQL(t *testing.T) {
 		if _, err := conn.ExecContext(ctx, `INSERT INTO sde_types (type_id, name, group_id) VALUES ($1, $2, 18)`, typeID, fmt.Sprintf("Rank Item %d", i)); err != nil {
 			t.Fatalf("seed rank type: %v", err)
 		}
-		if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfOrigin, typeID, 100, 0, 1000, 0, 0, now)); err != nil {
+		if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfOrigin, typeID, 0, 100, 0, 1000, 0, now)); err != nil {
 			t.Fatalf("seed rank origin stat: %v", err)
 		}
 		if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfDest, typeID, 0, 200+float64(i), 0, 1000, 10, now)); err != nil {
@@ -444,5 +443,62 @@ func TestTradefinderMarginRankingAndCapInSQL(t *testing.T) {
 	}
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("tradefinder build made %d outbound calls, want 0", got)
+	}
+}
+
+// TestTradefinderPendingRoutesQueueHistory: a route whose destination
+// has no recorded sales yet is not dropped. It lists as pending, a
+// signed-in view queues the destination history for it, and once that
+// history lands the route ranks into the table.
+func TestTradefinderPendingRoutesQueueHistory(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	seedTradefinderFixture(t, app)
+	now := time.Now().UTC()
+	// Pyerite clears the price rules but Domain has no sold-per-day figure.
+	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfOrigin, 35, 0, 4, 0, 50, 0, now)); err != nil {
+		t.Fatalf("seed origin stat: %v", err)
+	}
+	if err := q.UpsertMarketRegionStat(ctx, tfRegionStat(tfDest, 35, 0, 10, 0, 100, 0, now)); err != nil {
+		t.Fatalf("seed dest stat: %v", err)
+	}
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+	_, body := getPage(t, app, cookie, "/market/tradefinder/")
+	mustContain(t, "/market/tradefinder/ (pending)", body,
+		"Waiting on sales figures", "Pyerite", "No route has sales figures in Domain yet")
+	var wants int
+	if err := app.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM market_history_wants WHERE region_id = $1 AND type_id = 35`, tfDest).Scan(&wants); err != nil {
+		t.Fatalf("count wants: %v", err)
+	}
+	if wants != 1 {
+		t.Fatalf("history wants for the pending route = %d, want 1", wants)
+	}
+
+	// The history arrives (what fetchAndStoreHistory stores and then
+	// refreshes): the route moves into the ranked table.
+	for i, vol := range []int64{30, 40, 50} {
+		if err := q.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
+			RegionID: tfDest, TypeID: 35, Date: now.AddDate(0, 0, -i).Format("2006-01-02"),
+			Average: 10, Highest: 10, Lowest: 10, Volume: vol, OrderCount: 1,
+		}); err != nil {
+			t.Fatalf("seed history: %v", err)
+		}
+	}
+	if err := q.RefreshMarketRegionStatAvgVolume(ctx, db.RefreshMarketRegionStatAvgVolumeParams{RegionID: tfDest, TypeID: 35}); err != nil {
+		t.Fatalf("refresh sold per day: %v", err)
+	}
+	_, body = getPage(t, app, cookie, "/market/tradefinder/")
+	mustContain(t, "/market/tradefinder/ (ranked)", body, "Pyerite", "Estimated profit per day")
+	if strings.Contains(body, "Waiting on sales figures") {
+		t.Error("the route still lists as pending after its history landed")
+	}
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("tradefinder made %d outbound calls, want 0", got)
 	}
 }

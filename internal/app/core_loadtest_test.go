@@ -491,8 +491,8 @@ func seedLoadFixture(t *testing.T, conn *sql.DB, q *db.Queries) {
 	seedLoadRows(t, tx, "sde_types (type_id, name, group_id)", typeRows)
 
 	// Region stats for both hubs across every seeded type. Forge
-	// buys sit ~8% under Forge sells; Domain sells sit ~6% over
-	// Forge buys, so the tradefinder finds real margins. The
+	// buys sit ~8% under Forge sells; Domain sells sit ~11% over
+	// Forge sells, so the tradefinder finds real margins. The
 	// stored avg_daily_volume (schema 035) matches the history
 	// seeded below, so the scanner and tradefinder read the same
 	// sold-per-day figure a completed sweep would have stored.

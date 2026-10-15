@@ -114,6 +114,8 @@ Contact: nate@synap6.io or in-game 'Burzrujat'
   training speed, ordering targets with their prerequisites, the
   remap advisor. Pure; the skill pages supply the skill graph
 - `internal/app/scanner/`, `tradefinder/`, `leaderboard/`, `restock/` — the market page modules, each a page over stored rows read through `module.Deps`
+- `internal/fitview/` — the fit foundation: the fit document, EFT, slot families and the simulation view, read by core and the fitting modules
+- `internal/app/fitting/` — the Fitting module: workbench, saved loadouts, import/export, save to the game, shopping list
 - `internal/app/publicfits/` — the Public Fits module: browser, fit pages, ratings and the jobs that keep them stored-only; the flag and storage stay core
 - `internal/app/skillplans/` — the Skill Plans module: plan pages, plan-from-fit and plan editing over `module.Deps`, built on `internal/skillplan`
 - `internal/app/buildplanner/` — the Build Planner module: its page, JSON payload and recipe source over the SDE, built on `module.Deps`

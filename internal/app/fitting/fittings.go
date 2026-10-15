@@ -1,4 +1,4 @@
-package app
+package fitting
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/fitview"
 	"evesynapse/internal/logging"
 )
 
@@ -20,26 +21,13 @@ import (
 // every name resolves from the local caches only.
 // ---------------------------------------------------------------------------
 
-// fittingItemRow is one fitted item line.
-type fittingItemRow struct {
-	Name     string
-	TypeID   int64
-	Quantity string // thousands-separated
-}
-
-// fittingGroup is one slot-category block of a fitting.
-type fittingGroup struct {
-	Label string
-	Items []fittingItemRow
-}
-
 // fittingEntry is one saved fitting: ship, name, grouped items.
 type fittingEntry struct {
 	FittingID  int64
 	Name       string
 	ShipType   string
 	ShipTypeID int64
-	Groups     []fittingGroup
+	Groups     []fitview.FittingGroup
 }
 
 // fittingsView is the Fittings page body for one character.
@@ -83,23 +71,23 @@ func fittingSlotCategory(flag string) string {
 // signed-in user's characters (switchable via ?character=), or
 // the anonymous All-V view without a session. The saved-fits
 // list lives on its own page (/fittings/saved/).
-func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
+func (app *tool) handleFittings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.publicPage(ctx)
+	data := &PageData{ShellData: app.deps.PublicShell(ctx)}
 
-	characters, active, links, err := app.pickCharacter(ctx, r, "/fittings/")
+	characters, active, links, err := app.deps.PickCharacter(ctx, r, "/fittings/")
 	if err != nil {
 		logging.Errorf("fittings: list characters: %v", err)
 		data.Error = "Could not load fitting data; check the server log."
-		app.render(ctx, w, http.StatusOK, "fittings.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "fittings.html", data)
 		return
 	}
 	if links == nil {
-		app.attachFitEditor(ctx, r, &data, nil, db.Character{}, nil)
+		app.attachFitEditor(ctx, r, data, nil, db.Character{}, nil)
 		if data.FitEditor != nil {
-			data.FitEditor.Anonymous = app.userID(ctx) == 0
+			data.FitEditor.Anonymous = app.deps.UserID(ctx) == 0
 		}
-		app.render(ctx, w, http.StatusOK, "fittings.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "fittings.html", data)
 		return
 	}
 	data.FittingsChars = links
@@ -108,30 +96,30 @@ func (app *Application) handleFittings(w http.ResponseWriter, r *http.Request) {
 	// against the character's EVE fittings; a missing snapshot
 	// just means the link won't resolve.
 	var fittings esi.Fittings
-	if err := app.storedSnapshot(ctx, active, esi.SnapFittings, &fittings); err != nil {
+	if err := app.deps.StoredSnapshot(ctx, active, esi.SnapFittings, &fittings); err != nil {
 		logging.Errorf("fittings: load for character %d: %v", active.CharacterID, err)
 	}
-	app.attachFitEditor(ctx, r, &data, characters, active, fittings)
-	app.render(ctx, w, http.StatusOK, "fittings.html", data)
+	app.attachFitEditor(ctx, r, data, characters, active, fittings)
+	app.deps.Render(ctx, w, http.StatusOK, "fittings.html", data)
 }
 
 // handleFittingsSaved renders the "Saved fits" page: the signed-in
 // user's EVE fittings for one character (switchable via
 // ?character=), items grouped by slot category. Data comes from the
 // fittings snapshot; every name resolves from the local caches only.
-func (app *Application) handleFittingsSaved(w http.ResponseWriter, r *http.Request) {
+func (app *tool) handleFittingsSaved(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
+	data := &PageData{ShellData: app.deps.PageShell(ctx)}
 
-	_, active, links, err := app.pickCharacter(ctx, r, "/fittings/saved/")
+	_, active, links, err := app.deps.PickCharacter(ctx, r, "/fittings/saved/")
 	if err != nil {
 		logging.Errorf("fittings: list characters: %v", err)
 		data.Error = "Could not load fitting data; check the server log."
-		app.render(ctx, w, http.StatusOK, "fittings_saved.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "fittings_saved.html", data)
 		return
 	}
 	if links == nil {
-		app.render(ctx, w, http.StatusOK, "fittings_saved.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "fittings_saved.html", data)
 		return
 	}
 	data.FittingsChars = links
@@ -140,25 +128,25 @@ func (app *Application) handleFittingsSaved(w http.ResponseWriter, r *http.Reque
 	data.Fittings = view
 
 	var fittings esi.Fittings
-	if err := app.storedSnapshot(ctx, active, esi.SnapFittings, &fittings); err != nil {
+	if err := app.deps.StoredSnapshot(ctx, active, esi.SnapFittings, &fittings); err != nil {
 		logging.Errorf("fittings: load for character %d: %v", active.CharacterID, err)
 		// No snapshot row at all = cold start: the worker is still
 		// importing this character, which the Sync page shows live.
 		if _, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: active.CharacterID, Kind: esi.SnapFittings}); errors.Is(serr, sql.ErrNoRows) {
 			view.Warming = true
 		}
-		app.render(ctx, w, http.StatusOK, "fittings_saved.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "fittings_saved.html", data)
 		return
 	}
 	view.Loaded = true
 	view.Fittings = app.buildFittingEntries(ctx, fittings)
-	app.render(ctx, w, http.StatusOK, "fittings_saved.html", data)
+	app.deps.Render(ctx, w, http.StatusOK, "fittings_saved.html", data)
 }
 
 // buildFittingEntries groups one character's EVE fittings by slot
 // category, resolving every ship and item name from the local
 // caches. One cache-only name pass covers the whole list.
-func (app *Application) buildFittingEntries(ctx context.Context, fittings esi.Fittings) []fittingEntry {
+func (app *tool) buildFittingEntries(ctx context.Context, fittings esi.Fittings) []fittingEntry {
 	typeIDs := make([]int64, 0, len(fittings))
 	for _, f := range fittings {
 		typeIDs = append(typeIDs, f.ShipTypeID)
@@ -166,7 +154,7 @@ func (app *Application) buildFittingEntries(ctx context.Context, fittings esi.Fi
 			typeIDs = append(typeIDs, it.TypeID)
 		}
 	}
-	names := app.esi.CachedTypeNames(ctx, typeIDs)
+	names := app.deps.CachedTypeNames(ctx, typeIDs)
 	nameOf := func(typeID int64) string {
 		if n, ok := names[typeID]; ok {
 			return n
@@ -178,10 +166,10 @@ func (app *Application) buildFittingEntries(ctx context.Context, fittings esi.Fi
 	for _, f := range fittings {
 		entry := fittingEntry{FittingID: f.FittingID, Name: f.Name, ShipType: nameOf(f.ShipTypeID), ShipTypeID: f.ShipTypeID}
 
-		byLabel := make(map[string][]fittingItemRow)
+		byLabel := make(map[string][]fitview.FittingItemRow)
 		for _, it := range f.Items {
 			label := fittingSlotCategory(it.Flag)
-			byLabel[label] = append(byLabel[label], fittingItemRow{
+			byLabel[label] = append(byLabel[label], fitview.FittingItemRow{
 				Name:     nameOf(it.TypeID),
 				TypeID:   it.TypeID,
 				Quantity: esi.FormatInt(it.Quantity),
@@ -193,11 +181,11 @@ func (app *Application) buildFittingEntries(ctx context.Context, fittings esi.Fi
 				continue
 			}
 			sort.Slice(items, func(i, j int) bool { return items[i].Name < items[j].Name })
-			entry.Groups = append(entry.Groups, fittingGroup{Label: cat.Label, Items: items})
+			entry.Groups = append(entry.Groups, fitview.FittingGroup{Label: cat.Label, Items: items})
 		}
 		if items, ok := byLabel["Other"]; ok {
 			sort.Slice(items, func(i, j int) bool { return items[i].Name < items[j].Name })
-			entry.Groups = append(entry.Groups, fittingGroup{Label: "Other", Items: items})
+			entry.Groups = append(entry.Groups, fitview.FittingGroup{Label: "Other", Items: items})
 		}
 		entries = append(entries, entry)
 	}

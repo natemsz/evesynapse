@@ -5,6 +5,7 @@ package app
 import (
 	"evesynapse/internal/app/buildplanner"
 	"evesynapse/internal/app/discord"
+	"evesynapse/internal/app/fitting"
 	"evesynapse/internal/app/intel"
 	"evesynapse/internal/app/leaderboard"
 	"evesynapse/internal/app/module"
@@ -30,6 +31,7 @@ func init() {
 		intel.Module,
 		piplanner.Module,
 		skillplans.Module,
+		fitting.Module,
 		publicfits.Module,
 		scanner.Module,
 		tradefinder.Module,

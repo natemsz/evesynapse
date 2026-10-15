@@ -100,10 +100,7 @@ var sectionNav = map[string][]navEntry{
 		{"/contacts/", "Contacts", []string{"contacts.html"}},
 		{"/killmails/", "Killmails", []string{"killmails.html"}},
 	},
-	"fitting": {
-		{"/fittings/", "Ship Workbench", []string{"fittings.html"}},
-		{"/fittings/saved/", "My Loadouts", []string{"fittings_saved.html"}},
-	},
+	"fitting": {},
 	"industry": {
 		{"/industry/", "Industry", []string{"industry.html"}},
 		{"/planets/", "Planetary Industry", []string{"planets.html"}},

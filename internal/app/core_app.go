@@ -30,6 +30,7 @@ import (
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/fitview"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/store"
 	"evesynapse/internal/webpush"
@@ -408,8 +409,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r := chi.NewRouter()
 	// Anonymous visitors to the routes that cost real work are
 	// throttled per address (core_throttle.go).
-	pageThrottle, simThrottle := app.anonThrottles()
-	anonPages, anonSim := app.throttleAnon(pageThrottle), app.throttleAnon(simThrottle)
+	pageThrottle, _ := app.anonThrottles()
+	anonPages := app.throttleAnon(pageThrottle)
 	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(app.securityHeaders)
@@ -704,28 +705,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 
 	r.Route("/ships", func(r chi.Router) {
 		r.With(anonPages).Get("/{typeID}/", app.handlePublicShip)
-	})
-
-	r.Route("/fittings", func(r chi.Router) {
-		// Anonymous-safe surfaces: the simulator (All-V without
-		// a session), the public browser and fit pages, and the
-		// SDE-only picker. Handlers branch on the session.
-		r.With(anonPages).Get("/", app.handleFittings)
-		r.With(anonSim).Post("/simulate/", app.handleFitSimulate)
-		r.With(anonPages).Get("/picker.json", app.handleFitPickerJSON)
-		r.Group(func(r chi.Router) {
-			r.Use(app.requireAuth)
-			r.Get("/saved/", app.handleFittingsSaved)
-			r.Get("/clones.json", app.handleFitClonesJSON)
-			r.Post("/save/", app.handleFitSave)
-			r.Post("/save-to-eve/", app.handleFitSaveToEVE)
-			r.Post("/delete/", app.handleFitDelete)
-			r.Post("/import/", app.handleFitImport)
-			r.Post("/export/", app.handleFitExport)
-			r.Get("/mine.json", app.handleFitMineJSON)
-			r.Post("/fork/", app.handleFitFork)
-			r.Get("/shopping/{id}/", app.handleFitShopping)
-		})
 	})
 
 	r.Route("/killmails", func(r chi.Router) {
@@ -1186,6 +1165,70 @@ func (app *Application) RefreshPublicFitPages(ctx context.Context) int {
 }
 
 func (app *Application) FlushFitViews(ctx context.Context) { app.flushFitViews(ctx) }
+
+func (app *Application) StoredSnapshot(ctx context.Context, ch db.Character, kind string, out any) error {
+	return app.storedSnapshot(ctx, ch, kind, out)
+}
+
+func (app *Application) RenderFragment(w http.ResponseWriter, page, define string, data any) {
+	app.renderFragment(w, page, define, data)
+}
+
+func (app *Application) SuggestTypes(ctx context.Context, query, pool string, limit int64) []module.SuggestItem {
+	rows := app.suggestTypes(ctx, query, pool, limit)
+	out := make([]module.SuggestItem, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, module.SuggestItem(r))
+	}
+	return out
+}
+
+func (app *Application) AccessToken(ctx context.Context, ch db.Character) (string, error) {
+	return app.validAccessToken(ctx, ch)
+}
+
+func (app *Application) PostESI(ctx context.Context, token, path string, body, out any) error {
+	return app.esi.PostJSONAuthed(ctx, token, path, body, out)
+}
+
+func (app *Application) RefreshSnapshot(ctx context.Context, ch db.Character, kind string) error {
+	return app.esi.FetchAndStoreSnapshot(ctx, ch, kind)
+}
+
+func (app *Application) ModuleEnabled(id string) bool { return moduleCompiledIn(id) }
+
+func (app *Application) StorePublicFitPageNow(ctx context.Context, fitID int64) {
+	app.storePublicFitPageNow(ctx, fitID)
+}
+
+func (app *Application) DoctrineFitDoc(ctx context.Context, userID, fitID int64) (*fitview.FitDoc, bool) {
+	return app.doctrineFitDoc(ctx, userID, fitID)
+}
+
+// FitBuilder is the fit foundation over this application's stored state.
+func (app *Application) FitBuilder() *fitview.Builder { return app.fitBuilder() }
+
+func (app *Application) fitBuilder() *fitview.Builder { return fitview.New(app.queries, app) }
+
+// CachedGroupNames, LoadSnapshot, LocationTitle and SnapshotRoleMissing
+// complete fitview.Env (the name caches, snapshots and price guide the
+// foundation reads).
+func (app *Application) CachedGroupNames(ctx context.Context, ids []int64) map[int64]string {
+	return app.esi.CachedGroupNames(ctx, ids)
+}
+
+func (app *Application) LoadSnapshot(ctx context.Context, characterID int64, kind string, out any) bool {
+	return app.loadCorpSnapshot(ctx, characterID, kind, out)
+}
+
+func (app *Application) LocationTitle(ctx context.Context, id int64, locType string) string {
+	return app.locationTitle(ctx, id, locType)
+}
+
+func (app *Application) SnapshotRoleMissing(ctx context.Context, characterID int64, kind string) bool {
+	state, _, found := app.corpKindState(ctx, characterID, kind)
+	return found && state == fetchStateRoleMissing
+}
 
 func (app *Application) AnonPages() func(http.Handler) http.Handler {
 	pageThrottle, _ := app.anonThrottles()

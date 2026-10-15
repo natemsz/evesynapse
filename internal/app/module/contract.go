@@ -17,6 +17,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/fitview"
 	"evesynapse/internal/standing"
 )
 
@@ -496,6 +497,41 @@ type Deps interface {
 	// TypeNameOrID is an item's name from the name caches, "Type #id"
 	// when unknown (and the page wants it resolved).
 	TypeNameOrID(ctx context.Context, typeID int64) string
+
+	// --- stored state and the game's API, for the fitting tool ----------------
+
+	// StoredSnapshot reads one stored snapshot of a character; an error
+	// when none is stored.
+	StoredSnapshot(ctx context.Context, ch db.Character, kind string, out any) error
+	// RenderFragment answers with one named template of a page file.
+	RenderFragment(w http.ResponseWriter, page, define string, data any)
+	// SuggestTypes is the shared item search over the stored types; pool
+	// narrows it ("market" for anything sold).
+	SuggestTypes(ctx context.Context, query, pool string, limit int64) []SuggestItem
+	// AccessToken is a valid access token for one of the account's
+	// characters, refreshed if it was about to lapse.
+	AccessToken(ctx context.Context, ch db.Character) (string, error)
+	// PostESI posts JSON to an authenticated game API path and decodes
+	// the answer into out; a refusal is an *esi.StatusError.
+	PostESI(ctx context.Context, token, path string, body, out any) error
+	// RefreshSnapshot fetches and stores one snapshot of a character now.
+	RefreshSnapshot(ctx context.Context, ch db.Character, kind string) error
+
+	// ModuleEnabled reports whether another module is compiled in, for the
+	// surfaces that only make sense with it.
+	ModuleEnabled(id string) bool
+	// StorePublicFitPageNow builds a public fit’s stored page now, on its
+	// owner’s request.
+	StorePublicFitPageNow(ctx context.Context, fitID int64)
+	// DoctrineFitDoc reads one of a corporation’s doctrine fits the
+	// account may use, as a fit document.
+	DoctrineFitDoc(ctx context.Context, userID, fitID int64) (*fitview.FitDoc, bool)
+
+	// --- the fit foundation -------------------------------------------------
+
+	// FitBuilder builds fit views (document, EFT, simulation) from the
+	// foundation package, over core's stored state.
+	FitBuilder() *fitview.Builder
 
 	// --- public fit upkeep: the work that keeps anonymous renders stored-only ---
 

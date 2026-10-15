@@ -14,13 +14,9 @@ import (
 // pageData is the view model shared by the templates.
 type pageData struct {
 	module.ShellData
-	Shopping       *shoppingView
 	Home           *homeView
 	CharChars      []assetCharLink
 	CharacterPage  *characterView
-	Fittings       *fittingsView
-	FittingsChars  []assetCharLink
-	FitEditor      *fitEditorView
 	Killmails      *killmailsView
 	KillmailChars  []assetCharLink
 	Wallet         *walletView
@@ -150,8 +146,6 @@ func sectionForPage(page string) string {
 		"mail.html", "calendar.html", "contacts.html", "pilot.html", "assets.html", "wallet.html",
 		"killmails.html", "notifications.html", "notification_settings.html", "op.html", "op_form.html", "op_paps.html":
 		return "pilot"
-	case "fittings.html", "fittings_saved.html", "fit_shopping.html":
-		return "fitting"
 	case "industry.html", "planets.html":
 		return "industry"
 	case "market.html", "market_scanner.html",

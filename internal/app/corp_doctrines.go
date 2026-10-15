@@ -17,6 +17,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/fitview"
 	"evesynapse/internal/logging"
 )
 
@@ -55,7 +56,7 @@ func doctrineURL(id int64) string { return doctrinesPath + strconv.FormatInt(id,
 // doctrineTags reads a tags field into the stored form: the tags as
 // typed, comma-separated, without repeats.
 func doctrineTags(raw string) string {
-	tags := parseFitTags(raw)
+	tags := fitview.ParseFitTags(raw)
 	if len(tags) > doctrineTagsMost {
 		tags = tags[:doctrineTagsMost]
 	}
@@ -425,10 +426,10 @@ func (app *Application) handleDoctrine(w http.ResponseWriter, r *http.Request) {
 			ID: fit.ID, Name: fit.Name, Ship: app.typeNameOrID(ctx, fit.ShipTypeID), ShipTypeID: fit.ShipTypeID,
 			Role: fit.FleetRole, Note: fit.Note,
 		}
-		var doc fitDoc
+		var doc fitview.FitDoc
 		if json.Unmarshal([]byte(fit.ItemsJson), &doc) == nil {
 			doc.Name = fit.Name
-			fv.EFT = app.formatEFT(ctx, &doc)
+			fv.EFT = app.fitBuilder().FormatEFT(ctx, &doc)
 		}
 		view.Fits = append(view.Fits, fv)
 	}
@@ -491,11 +492,11 @@ func (app *Application) handleDoctrineDelete(w http.ResponseWriter, r *http.Requ
 // their own saved fits, a public fit, a fit of a doctrine they can
 // read, or pasted EFT text (skipped counts its lines that were not
 // understood).
-func (app *Application) doctrineFitSource(r *http.Request) (doc *fitDoc, problem string, skipped int) {
+func (app *Application) doctrineFitSource(r *http.Request) (doc *fitview.FitDoc, problem string, skipped int) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
-	read := func(raw string) (*fitDoc, string, int) {
-		var doc fitDoc
+	read := func(raw string) (*fitview.FitDoc, string, int) {
+		var doc fitview.FitDoc
 		if json.Unmarshal([]byte(raw), &doc) != nil {
 			return nil, "That fit could not be read.", 0
 		}
@@ -522,7 +523,7 @@ func (app *Application) doctrineFitSource(r *http.Request) (doc *fitDoc, problem
 			character, fitting, _ := strings.Cut(rest, ":")
 			for _, mine := range app.accountEVEFits(ctx, userID) {
 				if idString(mine.character.CharacterID) == character && idString(mine.fit.FittingID) == fitting {
-					return app.fitDocFromESI(ctx, mine.fit), "", 0
+					return app.fitBuilder().FitDocFromESI(ctx, mine.fit), "", 0
 				}
 			}
 		}
@@ -538,7 +539,7 @@ func (app *Application) doctrineFitSource(r *http.Request) (doc *fitDoc, problem
 		}
 		for _, mine := range app.accountEVEFits(ctx, userID) {
 			if strings.EqualFold(mine.fit.Name, name) {
-				return app.fitDocFromESI(ctx, mine.fit), "", 0
+				return app.fitBuilder().FitDocFromESI(ctx, mine.fit), "", 0
 			}
 		}
 		return nil, "None of your fits is called " + name + ". Pick one from the list.", 0
@@ -560,7 +561,7 @@ func (app *Application) doctrineFitSource(r *http.Request) (doc *fitDoc, problem
 		if len(text) > doctrineEFTMax {
 			return nil, "That is too long to be one fit.", 0
 		}
-		doc, notes := app.parseEFT(ctx, text)
+		doc, notes := app.fitBuilder().ParseEFT(ctx, text)
 		return doc, "", len(notes)
 	}
 	return nil, "Pick a fit, or paste one.", 0
@@ -593,7 +594,7 @@ func (app *Application) accountEVEFits(ctx context.Context, userID int64) []eveF
 
 // doctrineFitDoc reads a doctrine's fit for an account with a
 // character in the doctrine's corporation.
-func (app *Application) doctrineFitDoc(ctx context.Context, userID, fitID int64) (*fitDoc, bool) {
+func (app *Application) doctrineFitDoc(ctx context.Context, userID, fitID int64) (*fitview.FitDoc, bool) {
 	row, err := app.queries.GetDoctrineFit(ctx, fitID)
 	if err != nil {
 		return nil, false
@@ -602,7 +603,7 @@ func (app *Application) doctrineFitDoc(ctx context.Context, userID, fitID int64)
 	for _, corp := range app.srpCorps(ctx, userID) {
 		inside = inside || corp == row.CorporationID
 	}
-	var doc fitDoc
+	var doc fitview.FitDoc
 	if !inside || json.Unmarshal([]byte(row.ItemsJson), &doc) != nil {
 		return nil, false
 	}
@@ -634,7 +635,7 @@ func (app *Application) handleDoctrineFitAdd(w http.ResponseWriter, r *http.Requ
 		back(problem)
 		return
 	}
-	sanitizeFitDoc(doc)
+	fitview.SanitizeFitDoc(doc)
 	if doc.ShipTypeID <= 0 {
 		back("That fit has no ship EveSynapse knows. Pasted text has to start with a line like [Guardian, Fleet logi].")
 		return
@@ -747,7 +748,7 @@ func (app *Application) corpFitBrowser(ctx context.Context, corp int64, chosen *
 		}
 		for _, fit := range fits {
 			d := byID[fit.DoctrineID]
-			var doc fitDoc
+			var doc fitview.FitDoc
 			_ = json.Unmarshal([]byte(fit.ItemsJson), &doc)
 			tags := doctrineTagList(d.Tags)
 			for _, tag := range doc.Tags {

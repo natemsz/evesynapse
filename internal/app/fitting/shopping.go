@@ -1,4 +1,4 @@
-package app
+package fitting
 
 import (
 	"encoding/json"
@@ -11,6 +11,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/fitview"
 	"evesynapse/internal/logging"
 )
 
@@ -40,25 +41,25 @@ type shoppingView struct {
 	Unpriced  int
 }
 
-func (app *Application) handleFitShopping(w http.ResponseWriter, r *http.Request) {
+func (app *tool) handleFitShopping(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := app.page(ctx)
+	data := &PageData{ShellData: app.deps.PageShell(ctx)}
 
 	fitID := chi.URLParam(r, "id")
 	if fitID == "" {
 		data.Error = "No fit specified."
-		app.render(ctx, w, http.StatusOK, "fit_shopping.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "fit_shopping.html", data)
 		return
 	}
 	fitIDNum, err := strconv.ParseInt(fitID, 10, 64)
 	if err != nil {
 		data.Error = "Invalid fit ID."
-		app.render(ctx, w, http.StatusOK, "fit_shopping.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "fit_shopping.html", data)
 		return
 	}
 
 	// Load the fit's items_json. We need the user ID from the session.
-	userID := app.userID(ctx)
+	userID := app.deps.UserID(ctx)
 	row, err := app.queries.GetLocalFitting(ctx, db.GetLocalFittingParams{
 		ID:     fitIDNum,
 		UserID: userID,
@@ -66,17 +67,17 @@ func (app *Application) handleFitShopping(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		logging.Errorf("fit shopping: load fit %s: %v", fitID, err)
 		data.Error = "Could not load fit."
-		app.render(ctx, w, http.StatusOK, "fit_shopping.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "fit_shopping.html", data)
 		return
 	}
 	itemsJSON := row.ItemsJson
 	fitName := row.Name
 
-	var doc fitDoc
+	var doc fitview.FitDoc
 	if err := json.Unmarshal([]byte(itemsJSON), &doc); err != nil {
 		logging.Errorf("fit shopping: parse fit %s: %v", fitID, err)
 		data.Error = "Could not parse fit."
-		app.render(ctx, w, http.StatusOK, "fit_shopping.html", data)
+		app.deps.Render(ctx, w, http.StatusOK, "fit_shopping.html", data)
 		return
 	}
 	if fitName == "" {
@@ -84,7 +85,7 @@ func (app *Application) handleFitShopping(w http.ResponseWriter, r *http.Request
 	}
 
 	// Aggregate typeID → qty: ship × 1 + modules × qty + charges.
-	// Charges carry no count in fitDoc (type per weapon only), so we
+	// Charges carry no count in fitview.FitDoc (type per weapon only), so we
 	// default to 1,000 rounds per charge type — a sane shopping
 	// default the user can adjust.
 	qtyByType := make(map[int64]int64)
@@ -103,13 +104,13 @@ func (app *Application) handleFitShopping(w http.ResponseWriter, r *http.Request
 	}
 
 	// Price each line from the market guide cache.
-	priceMap := app.valuationPrices(ctx)
+	priceMap := app.deps.ValuationPrices(ctx)
 	view := &shoppingView{FitName: fitName, FitID: fitID}
 	var total float64
 	for typeID, qty := range qtyByType {
 		line := shoppingLine{
 			TypeID:   typeID,
-			Name:     app.typeNameOrID(ctx, typeID),
+			Name:     app.deps.TypeNameOrID(ctx, typeID),
 			URL:      fmt.Sprintf("/items/type/%d/", typeID),
 			Quantity: qty,
 		}
@@ -131,7 +132,7 @@ func (app *Application) handleFitShopping(w http.ResponseWriter, r *http.Request
 	view.TotalCost = isk(total)
 
 	data.Shopping = view
-	app.render(ctx, w, http.StatusOK, "fit_shopping.html", data)
+	app.deps.Render(ctx, w, http.StatusOK, "fit_shopping.html", data)
 }
 
 // isk formats a float as a template-ready price string.

@@ -228,10 +228,9 @@ type Application struct {
 	// refresh and calls api.meta.ai.
 	tradeIdeasHTTP *http.Client
 	metaAIAPIBase  string
-	// tradeIdeasBusy is set while a refresh runs beside the worker;
-	// Close waits on tradeIdeasWG.
-	tradeIdeasBusy atomic.Bool
-	tradeIdeasWG   sync.WaitGroup
+	// moduleWG counts module goroutines started through Background;
+	// Close waits on it.
+	moduleWG sync.WaitGroup
 
 	// names writes learned character, corporation and alliance
 	// names to entity_names (entity_names.go).
@@ -377,7 +376,7 @@ func (app *Application) Close() {
 	if app.workerDone != nil {
 		<-app.workerDone
 	}
-	app.tradeIdeasWG.Wait()
+	app.moduleWG.Wait()
 	app.namesWG.Wait()
 	if app.names != nil {
 		app.names.close()
@@ -624,7 +623,6 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		// personal pieces (restock, watches) stay signed-in.
 		r.With(anonPages).Get("/", app.handleMarket)
 		r.With(anonPages).Get("/scanner/", app.handleMarketScanner)
-		r.With(anonPages).Get("/ideas/", app.handleTradeIdeas)
 		r.With(anonPages).Get("/tradefinder/", app.handleMarketTradefinder)
 		r.With(anonPages).Get("/leaderboard/", app.handleMarketLeaderboard)
 		r.With(anonPages).Get("/suggest", app.handleMarketSuggest)
@@ -991,6 +989,44 @@ func (app *Application) FormatFinish(ts string) string { return formatFinish(ts)
 func (app *Application) HumanizeEnum(s string) string { return humanizeEnum(s) }
 
 func (app *Application) WarDetailWindow() int { return maxWarsShown }
+
+func (app *Application) ModelConfig() module.ModelConfig {
+	return module.ModelConfig{
+		MetaKey:             app.cfg.metaAIKey,
+		CloudflareAccountID: app.cfg.cloudflareAccountID,
+		CloudflareToken:     app.cfg.cloudflareAuthToken,
+		HTTP:                app.tradeIdeasHTTP,
+		MetaAPIBase:         app.metaAIAPIBase,
+	}
+}
+
+func (app *Application) Background(fn func()) {
+	app.moduleWG.Add(1)
+	go func() {
+		defer app.moduleWG.Done()
+		fn()
+	}()
+}
+
+func (app *Application) TypeName(ctx context.Context, typeID int64) string {
+	name := app.typeNameOrID(ctx, typeID)
+	if strings.HasPrefix(name, "Type #") {
+		// The SDE knows most types by name; fall back to the local SDE
+		// row before settling for the placeholder.
+		if row, err := app.queries.GetSDEType(ctx, typeID); err == nil && row.Name != "" {
+			name = row.Name
+		}
+	}
+	return name
+}
+
+func (app *Application) StationRef(ctx context.Context, memo map[int64]module.PlaceRef, locationID int64) module.PlaceRef {
+	return app.scannerStationRef(ctx, memo, locationID)
+}
+
+func (app *Application) ScannerDefaults() (float64, int) {
+	return defaultScannerMinSpreadPct, scannerRowCap
+}
 
 func (app *Application) AnonPages() func(http.Handler) http.Handler {
 	pageThrottle, _ := app.anonThrottles()

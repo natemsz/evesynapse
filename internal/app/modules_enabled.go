@@ -6,6 +6,7 @@ import (
 	"evesynapse/internal/app/intel"
 	"evesynapse/internal/app/module"
 	"evesynapse/internal/app/piplanner"
+	"evesynapse/internal/app/tradeideas"
 )
 
 // The build-selected modules. A module is compiled in when this file
@@ -18,5 +19,6 @@ func init() {
 	registerModules([]module.Module{
 		intel.Module,
 		piplanner.Module,
+		tradeideas.Module,
 	})
 }

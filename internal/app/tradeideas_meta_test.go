@@ -6,7 +6,8 @@ package app
 
 import (
 	"context"
-	"encoding/json"
+	"evesynapse/internal/app/tradeideas"
+	"evesynapse/internal/ideas"
 	"net/http"
 	"strings"
 	"testing"
@@ -16,65 +17,6 @@ import (
 )
 
 const metaReply = `{"id":"resp_1","object":"response","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"### Station Flips\n* **Tritanium** · Jita IV-4 — deep volume"}]}]}`
-
-func TestCallMetaAIRequestAndAnswer(t *testing.T) {
-	stub := &cloudflareStub{reply: metaReply}
-	got, err := callMetaAI(context.Background(), &http.Client{Transport: stub}, metaAIAPIBase,
-		"meta-test-key", metaAIModel, "Item,Station\nTritanium,Jita\n", tradeIdeasBodyCap)
-	if err != nil {
-		t.Fatalf("callMetaAI: %v", err)
-	}
-	if !strings.Contains(got, "**Tritanium**") || !strings.Contains(got, "### Station Flips") {
-		t.Fatalf("answer = %q", got)
-	}
-	if u := stub.last.URL.String(); u != "https://api.meta.ai/v1/responses" {
-		t.Fatalf("URL = %q", u)
-	}
-	if strings.Contains(stub.last.URL.String(), "meta-test-key") {
-		t.Fatal("API key leaked into the URL")
-	}
-	if h := stub.last.Header.Get("Authorization"); h != "Bearer meta-test-key" {
-		t.Fatalf("Authorization = %q", h)
-	}
-	var sent metaAIRequest
-	if err := json.Unmarshal(stub.body, &sent); err != nil {
-		t.Fatalf("request body: %v", err)
-	}
-	if sent.Model != metaAIModel || sent.Stream || len(sent.Input) != 1 || sent.Input[0].Role != "user" ||
-		len(sent.Input[0].Content) != 1 || sent.Input[0].Content[0].Type != "input_text" ||
-		!strings.Contains(sent.Input[0].Content[0].Text, "Tritanium") ||
-		!strings.HasPrefix(sent.Input[0].Content[0].Text, "You are a trade analyst for the video game EVE Online.") {
-		t.Fatalf("request = %+v", sent)
-	}
-}
-
-func TestCallMetaAIFailures(t *testing.T) {
-	ctx := context.Background()
-	if _, err := callMetaAI(ctx, &http.Client{Transport: &cloudflareStub{reply: metaReply}}, metaAIAPIBase, "", metaAIModel, "hi", 100); err == nil {
-		t.Error("no key: want an error")
-	}
-	for name, stub := range map[string]*cloudflareStub{
-		"status":    {code: http.StatusUnauthorized, reply: `{"error":{"message":"bad key"}}`},
-		"no answer": {reply: `{"output":[]}`},
-		"not json":  {reply: `<html>`},
-		// Cut off at the token limit: some text, but not the whole answer.
-		"incomplete": {reply: `{"status":"incomplete","output":[{"type":"message","content":[{"type":"output_text","text":"### Station Fl"}]}]}`},
-		// A refusal carries no output_text part at all.
-		"refusal": {reply: `{"status":"completed","output":[{"type":"message","content":[{"type":"refusal","refusal":"no"}]}]}`},
-	} {
-		_, err := callMetaAI(ctx, &http.Client{Transport: stub}, metaAIAPIBase, "meta-test-key", metaAIModel, "hi", 100)
-		if err == nil {
-			t.Errorf("%s: want an error", name)
-		} else if strings.Contains(err.Error(), "meta-test-key") {
-			t.Errorf("%s: error carries the key: %v", name, err)
-		}
-	}
-	// The convenience field stands in when no parts carry text.
-	stub := &cloudflareStub{reply: `{"output_text":"* **Pyerite**"}`}
-	if got, err := callMetaAI(ctx, &http.Client{Transport: stub}, metaAIAPIBase, "meta-test-key", metaAIModel, "hi", 100); err != nil || got != "* **Pyerite**" {
-		t.Errorf("output_text fallback = %q, %v", got, err)
-	}
-}
 
 // TestTradeIdeasRefreshUsesMeta: with MODEL_API_KEY set the refresh
 // asks Muse Wonder for both answers (never Cloudflare), stores them
@@ -89,18 +31,18 @@ func TestTradeIdeasRefreshUsesMeta(t *testing.T) {
 	stub := &cloudflareStub{reply: metaReply}
 	app.tradeIdeasHTTP = &http.Client{Transport: stub}
 
-	if stored, _ := app.refreshTradeIdeas(ctx); stored != 2 || stub.calls != 2 {
+	if stored := tradeideas.Refresh(ctx, app); stored != 2 || stub.calls != 2 {
 		t.Fatalf("refresh stored %d with %d calls, want 2 and 2", stored, stub.calls)
 	}
 	if host := stub.last.URL.Host; host != "api.meta.ai" {
 		t.Fatalf("asked %q, want api.meta.ai", host)
 	}
 	row, err := q.GetTradeIdeas(ctx)
-	if err != nil || row.Model != metaAIModel || !strings.Contains(row.Body, "Tritanium") {
+	if err != nil || row.Model != ideas.MuseModel || !strings.Contains(row.Body, "Tritanium") {
 		t.Fatalf("module row: %+v err %v", row, err)
 	}
 	page, err := q.GetTradeIdeasPage(ctx)
-	if err != nil || page.Model != metaAIModel {
+	if err != nil || page.Model != ideas.MuseModel {
 		t.Fatalf("page row: %+v err %v", page, err)
 	}
 
@@ -131,23 +73,23 @@ func TestTradeIdeasModelSwitchRefreshesNow(t *testing.T) {
 	ctx := context.Background()
 	seedTradeIdeasScanner(t, conn, q)
 	fresh := time.Now().UTC().Add(-time.Hour)
-	if err := q.PutTradeIdeas(ctx, db.PutTradeIdeasParams{Body: "### Gemma\n* old", AsOf: fresh, Model: tradeIdeasModel}); err != nil {
+	if err := q.PutTradeIdeas(ctx, db.PutTradeIdeasParams{Body: "### Gemma\n* old", AsOf: fresh, Model: ideas.GemmaModel}); err != nil {
 		t.Fatalf("seed module answer: %v", err)
 	}
-	if err := q.PutTradeIdeasPage(ctx, db.PutTradeIdeasPageParams{Body: "### Gemma\n* old", AsOf: fresh, Model: tradeIdeasModel}); err != nil {
+	if err := q.PutTradeIdeasPage(ctx, db.PutTradeIdeasPageParams{Body: "### Gemma\n* old", AsOf: fresh, Model: ideas.GemmaModel}); err != nil {
 		t.Fatalf("seed page answer: %v", err)
 	}
 	app.cfg.metaAIKey = "meta-test-key"
 	stub := &cloudflareStub{reply: metaReply}
 	app.tradeIdeasHTTP = &http.Client{Transport: stub}
 
-	if stored, _ := app.refreshTradeIdeas(ctx); stored != 2 || stub.calls != 2 {
+	if stored := tradeideas.Refresh(ctx, app); stored != 2 || stub.calls != 2 {
 		t.Fatalf("after the switch: stored %d with %d calls, want 2 and 2", stored, stub.calls)
 	}
-	if row, err := q.GetTradeIdeas(ctx); err != nil || row.Model != metaAIModel {
+	if row, err := q.GetTradeIdeas(ctx); err != nil || row.Model != ideas.MuseModel {
 		t.Fatalf("module row after the switch: %+v err %v", row, err)
 	}
-	if stored, _ := app.refreshTradeIdeas(ctx); stored != 0 || stub.calls != 2 {
+	if stored := tradeideas.Refresh(ctx, app); stored != 0 || stub.calls != 2 {
 		t.Fatalf("second refresh: stored %d with %d calls, want 0 and 2", stored, stub.calls)
 	}
 }

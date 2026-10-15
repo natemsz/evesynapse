@@ -650,11 +650,10 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 		return app.refreshMarketData(ctx, characters)
 	})
 
-	// Trade ideas: ask Gemma about the Forge spread-scanner rows
-	// (tradeideas.go). No ESI budget: one Cloudflare call at most
-	// every twelve hours, backing off after failures, run beside
-	// the cycle so the cycle never waits on the model.
-	app.startTradeIdeasRefresh(ctx)
+	// Module jobs (Trade Ideas' model refresh, for one): each module's
+	// Start runs beside the cycle and returns at once, so the cycle
+	// never waits on one.
+	app.startModuleJobs(ctx)
 
 	// Structure names: resolve the due slice of the structure
 	// queue across every scoped character (structures.go).
@@ -1432,4 +1431,15 @@ func sortedInt64Keys(set map[int64]bool) []int64 {
 	}
 	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
 	return keys
+}
+
+// startModuleJobs starts every registered module's worker jobs.
+func (app *Application) startModuleJobs(ctx context.Context) {
+	for _, m := range registeredModules {
+		for _, job := range m.WorkerJobs {
+			if job.Start != nil {
+				job.Start(ctx, app)
+			}
+		}
+	}
 }

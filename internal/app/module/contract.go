@@ -57,10 +57,35 @@ type SitemapEntry struct {
 	Priority   string
 }
 
-// WorkerJob represents a named pass for the worker cycle.
+// WorkerJob is a pass a module runs beside the worker. Start is called
+// once per worker cycle; it must not block the cycle (a job that has
+// slow work starts it with Deps.Background and returns).
 type WorkerJob struct {
-	Name string
+	Name  string
+	Start func(ctx context.Context, deps Deps)
 }
+
+// ModelConfig is the access a module has to the configured language
+// model (Meta's Muse Wonder with an API key, else Gemma on Cloudflare
+// Workers AI). HTTP and MetaAPIBase are test injections; nil and empty
+// mean the real endpoints.
+type ModelConfig struct {
+	MetaKey             string
+	CloudflareAccountID string
+	CloudflareToken     string
+	HTTP                *http.Client
+	MetaAPIBase         string
+}
+
+// Configured reports whether a model can be asked at all: a Meta API
+// key, or both Cloudflare credentials.
+func (c ModelConfig) Configured() bool {
+	return c.MetaKey != "" || (c.CloudflareAccountID != "" && c.CloudflareToken != "")
+}
+
+// UsesMeta reports whether Muse Wonder (MODEL_API_KEY set) answers
+// rather than Gemma.
+func (c ModelConfig) UsesMeta() bool { return c.MetaKey != "" }
 
 // Widget represents a home dashboard widget contribution.
 type Widget struct {
@@ -164,6 +189,22 @@ type Deps interface {
 	// WarDetailWindow is how many of the newest wars the worker keeps
 	// details warm for.
 	WarDetailWindow() int
+
+	// ModelConfig is the configured language model's access.
+	ModelConfig() ModelConfig
+	// Background runs fn in a goroutine the application waits for on
+	// shutdown.
+	Background(fn func())
+	// TypeName is an item's name from the name caches, falling back to
+	// the local static data; "Type #id" when unknown.
+	TypeName(ctx context.Context, typeID int64) string
+	// StationRef resolves an order location to its title and link ids
+	// (memo keeps a render to one resolution per location).
+	StationRef(ctx context.Context, memo map[int64]PlaceRef, locationID int64) PlaceRef
+	// ScannerDefaults are the spread scanner's default minimum spread
+	// (percent) and its row cap, for modules that read the same stored
+	// scanner statistics.
+	ScannerDefaults() (minSpreadPct float64, rowCap int)
 }
 
 // Module is the registration contract exposed by every build-selectable module.

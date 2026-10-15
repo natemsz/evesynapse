@@ -69,7 +69,6 @@ var moduleManifest = []moduleDef{
 	{ID: "server", Title: "Tranquility", Layer: layerPublic,
 		Snapshots: []string{esi.GlobalStatus}},
 	{ID: "market_public", Title: "Market watchlist", Layer: layerPublic},
-	{ID: "tradeideas", Title: "Trade Ideas", Layer: layerPublic},
 
 	// --- character ------------------------------------------------------
 	{ID: "skills", Title: "Skills", Layer: layerCharacter,

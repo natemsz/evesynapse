@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"evesynapse/internal/ideas"
 	"fmt"
 	"io"
 	"net/http"
@@ -602,7 +603,7 @@ type homeWidget struct {
 	Training   *trainingWidget
 	Pulse      *pulseWidget
 	WalletFlow *walletFlowWidget
-	TradeIdeas *tradeIdeasWidget
+	TradeIdeas *ideas.Widget
 	Upkeep     *upkeepWidget
 	Glance     *glanceWidget
 }
@@ -1447,7 +1448,7 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		case widgetPI:
 			w.PI = app.buildPI(ctx, bundles)
 		case widgetTradeIdeas:
-			w.TradeIdeas = app.buildTradeIdeas(ctx)
+			w.TradeIdeas = ideas.Stored(ctx, app.queries, app.cfg.TradeIdeasConfigured())
 		case widgetTraining:
 			w.Training = app.buildTraining(ctx, bundles)
 		case widgetPulse:

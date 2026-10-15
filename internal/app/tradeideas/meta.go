@@ -1,4 +1,4 @@
-package app
+package tradeideas
 
 // ---------------------------------------------------------------------------
 // Trade ideas through Meta's Muse Wonder model (the Responses API at
@@ -17,10 +17,12 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"evesynapse/internal/ideas"
 )
 
 const (
-	metaAIModel   = "muse-wonder-1.0"
+	metaAIModel   = ideas.MuseModel
 	metaAIAPIBase = "https://api.meta.ai/v1"
 )
 
@@ -131,13 +133,4 @@ func callMetaAI(ctx context.Context, client *http.Client, apiBase, apiKey, model
 		return "", fmt.Errorf("meta ai: model call returned no answer")
 	}
 	return clip(text, bodyCap), nil
-}
-
-// tradeIdeasModelLabel names the model behind a stored answer for the
-// page and module footers.
-func tradeIdeasModelLabel(model string) string {
-	if strings.HasPrefix(model, "muse-") {
-		return "Muse Wonder"
-	}
-	return "Gemma"
 }

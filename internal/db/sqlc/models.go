@@ -815,10 +815,11 @@ type SwarmStaging struct {
 }
 
 type TradeIdea struct {
-	ID    int64     `json:"id"`
-	Body  string    `json:"body"`
-	AsOf  time.Time `json:"as_of"`
-	Model string    `json:"model"`
+	ID    int64          `json:"id"`
+	Body  string         `json:"body"`
+	AsOf  time.Time      `json:"as_of"`
+	Model string         `json:"model"`
+	Rows  sql.NullString `json:"rows"`
 }
 
 type TradeIdeasAttempt struct {

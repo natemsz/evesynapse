@@ -250,6 +250,12 @@ var pgEntityNamesSchema string
 //go:embed schema_pg/048_link_choices.sql
 var pgLinkChoicesSchema string
 
+// Step 049: trade_ideas rows, the scanner rows each stored
+// trade-ideas answer was written from (see the step file).
+//
+//go:embed schema_pg/049_trade_ideas_rows.sql
+var pgTradeIdeasRowsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -327,6 +333,7 @@ func schemaSteps() []schemaStep {
 		{46, "trade_ideas_page", pgTradeIdeasPageSchema, ""},
 		{47, "entity_names", pgEntityNamesSchema, ""},
 		{48, "link_choices", pgLinkChoicesSchema, ""},
+		{49, "trade_ideas_rows", pgTradeIdeasRowsSchema, ""},
 	}
 }
 

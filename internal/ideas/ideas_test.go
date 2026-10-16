@@ -9,16 +9,16 @@ import (
 )
 
 func TestTradeIdeasRenderMarkdown(t *testing.T) {
-	groups := Parse("Some preamble\n" +
-		"* Loose idea\n" +
-		"### **High-Volume Scalping**\n" +
-		"*Focus on low spreads.*\n" +
-		"* **Tritanium**: 83.9B daily profit <script>alert(1)</script>\n" +
-		"- Pyerite: steady\n" +
-		"1. Mexallon: calm\n" +
-		"### Empty Heading\n" +
-		"### Margin Trading\n" +
-		"* **Nocxium**: wide\n")
+	groups := Parse("Some preamble\n"+
+		"* Loose idea\n"+
+		"### **High-Volume Scalping**\n"+
+		"*Focus on low spreads.*\n"+
+		"* **Tritanium**: 83.9B daily profit <script>alert(1)</script>\n"+
+		"- Pyerite: steady\n"+
+		"1. Mexallon: calm\n"+
+		"### Empty Heading\n"+
+		"### Margin Trading\n"+
+		"* **Nocxium**: wide\n", nil)
 	if len(groups) != 3 {
 		t.Fatalf("got %d groups, want 3 (preamble, scalping, margin; the empty one dropped): %+v", len(groups), groups)
 	}
@@ -55,7 +55,7 @@ func TestTradeIdeasAccentWrapsAfterSix(t *testing.T) {
 	for i := 1; i <= 7; i++ {
 		fmt.Fprintf(&b, "### Strategy %d\n* idea\n", i)
 	}
-	groups := Parse(b.String())
+	groups := Parse(b.String(), nil)
 	if len(groups) != 7 {
 		t.Fatalf("got %d groups, want 7", len(groups))
 	}

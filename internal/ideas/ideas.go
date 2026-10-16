@@ -8,12 +8,55 @@ package ideas
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"html/template"
+	"strconv"
 	"strings"
 
 	db "evesynapse/internal/db/sqlc"
 )
+
+// Row is one scanner row of the CSV a trade-ideas answer was written
+// from, exactly as it was sent to the model: the 1-based row number
+// the model's "(#n)" references name, and the pre-formatted figure
+// strings (never re-derived numbers). The answer stores its rows
+// beside its body (trade_ideas.rows), and Parse composes each idea's
+// figure segment from them, so the model never transcribes — and
+// never slips on — the figures it used to copy out of the CSV.
+type Row struct {
+	N       int    `json:"n"`
+	Item    string `json:"item"`
+	Station string `json:"station"`
+	Buy     string `json:"buy"`
+	Sell    string `json:"sell"`
+	Spread  string `json:"spread"` // as sent, with its "%" (e.g. "12.3%")
+	Sold    string `json:"sold"`   // sold per day, as sent
+	Profit  string `json:"profit"` // estimated daily profit, as sent
+}
+
+// DecodeRows reads a stored row set. Anything unusable (an answer
+// written before rows were stored, a damaged value) reads as no
+// rows, and the body renders verbatim, as it always has.
+func DecodeRows(raw string) []Row {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var rows []Row
+	if err := json.Unmarshal([]byte(raw), &rows); err != nil || len(rows) == 0 {
+		return nil
+	}
+	return rows
+}
+
+// EncodeRows renders a row set for storage beside an answer's body.
+func EncodeRows(rows []Row) (string, error) {
+	b, err := json.Marshal(rows)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
 
 // The two models that can answer, as stored with each answer.
 const (
@@ -41,7 +84,7 @@ func Stored(ctx context.Context, q *db.Queries, configured bool) *Widget {
 	if err != nil || strings.TrimSpace(row.Body) == "" {
 		return w
 	}
-	w.Groups = Parse(row.Body)
+	w.Groups = Parse(row.Body, DecodeRows(row.Rows.String))
 	w.HasIdeas = len(w.Groups) > 0
 	w.AsOf = row.AsOf.UTC().Format("Jan 2, 3:04 PM")
 	w.Model = ModelLabel(row.Model)
@@ -56,7 +99,7 @@ func StoredPage(ctx context.Context, q *db.Queries, configured bool) *Widget {
 		return Stored(ctx, q, configured)
 	}
 	w := &Widget{Configured: configured, Detailed: true}
-	w.Groups = Parse(row.Body)
+	w.Groups = Parse(row.Body, DecodeRows(row.Rows.String))
 	w.HasIdeas = len(w.Groups) > 0
 	w.AsOf = row.AsOf.UTC().Format("Jan 2, 3:04 PM")
 	w.Model = ModelLabel(row.Model)
@@ -105,13 +148,20 @@ const maxOutLines = 400
 
 // Parse reads the stored markdown-shaped answer (###
 // headers, * bullets, **bold**, *italic* lines) into one group per
-// strategy. Text is HTML-escaped before any marker becomes an
+// strategy. An idea in the current answer shape —
+// "* **Item** (#n) — reason" — is composed at parse time: the
+// "(#n)" reference (never rendered) names a row of the answer's
+// stored row set, and the displayed line takes its item name and
+// figure segment from that row, in the exact format the model used
+// to transcribe. A body with no row set (every answer written
+// before rows were stored) renders verbatim, as it always has.
+// Text is HTML-escaped before any marker becomes an
 // element, so model text can never inject markup; leftover
 // asterisks are marker noise (EVE item names contain none) and are
 // dropped. Lines before the first header, or an answer with no
 // headers at all, land in a group titled "Ideas"; a group with
 // nothing in it is dropped.
-func Parse(body string) []Group {
+func Parse(body string, rows []Row) []Group {
 	var groups []Group
 	cur := -1
 	ensure := func() {
@@ -139,6 +189,7 @@ func Parse(body string) []Group {
 			groups = append(groups, Group{Title: stripStrong(title)})
 			cur = len(groups) - 1
 		case isList:
+			content = composeIdea(content, rows)
 			if item := Inline(content); item != "" {
 				ensure()
 				groups[cur].Ideas = append(groups[cur].Ideas, item)
@@ -170,6 +221,79 @@ func Parse(body string) []Group {
 		out = append(out, g)
 	}
 	return out
+}
+
+// composeIdea resolves one idea bullet against the answer's stored
+// row set. The current shape is "**Item** (#n) — reason": the
+// reference is extracted (never rendered), and a reference that
+// lands composes the display line from the ROW — its item name, not
+// the model's, and its figure strings in the format the model used
+// to transcribe. No row set, no reference, an unparseable reference,
+// or one out of range leaves the model's own item and reason with
+// no figure segment; nothing here can break a line.
+func composeIdea(content string, rows []Row) string {
+	if len(rows) == 0 {
+		return content
+	}
+	n, valid, cleaned, present := splitRowRef(content)
+	if !present {
+		return content
+	}
+	head, reason := splitItemReason(cleaned)
+	if valid {
+		for _, r := range rows {
+			if r.N == n {
+				line := "**" + r.Item + "** · " + r.Station +
+					" · Highest buy " + r.Buy +
+					" · Lowest sell " + r.Sell +
+					" · Spread " + r.Spread +
+					" · " + r.Sold + " sold per day" +
+					" · Estimated daily profit " + r.Profit
+				if reason != "" {
+					line += " — " + reason
+				}
+				return line
+			}
+		}
+	}
+	// The reference named nothing: the model's item and reason,
+	// with no figure segment and no reference.
+	if reason == "" {
+		return head
+	}
+	return head + " — " + reason
+}
+
+// splitRowRef removes a "(#n)" reference from a bullet and reports
+// what it held. present is true when a "(#...)" token was there at
+// all; valid only when it was a plain row number.
+func splitRowRef(content string) (n int, valid bool, cleaned string, present bool) {
+	open := strings.Index(content, "(#")
+	if open < 0 {
+		return 0, false, content, false
+	}
+	end := strings.Index(content[open:], ")")
+	if end < 0 {
+		return 0, false, content, false
+	}
+	end += open
+	inner := content[open+2 : end]
+	cleaned = strings.TrimSpace(strings.ReplaceAll(content[:open]+" "+content[end+1:], "  ", " "))
+	if v, err := strconv.Atoi(inner); err == nil && inner != "" {
+		return v, true, cleaned, true
+	}
+	return 0, false, cleaned, true
+}
+
+// splitItemReason splits a bullet's head (the bold item, usually)
+// from its reason at the first dash separator.
+func splitItemReason(s string) (head, reason string) {
+	for _, sep := range []string{" — ", " – ", " - "} {
+		if i := strings.Index(s, sep); i >= 0 {
+			return strings.TrimSpace(s[:i]), strings.TrimSpace(s[i+len(sep):])
+		}
+	}
+	return strings.TrimSpace(s), ""
 }
 
 // briefMax caps a brief's detail, in runes.

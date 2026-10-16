@@ -1,15 +1,19 @@
 -- Trade ideas for the home page (schema 030): the stored
 -- model answer, replaced per refresh. The widget reads this
 -- row only; a failed refresh keeps the previous answer.
+-- The rows column (schema 049) is the scanner CSV rows the
+-- answer was written from, as a JSON array; the reader composes
+-- each idea's figures from them.
 
 -- name: GetTradeIdeas :one
-SELECT body, as_of, model FROM trade_ideas WHERE id = 1;
+SELECT body, rows, as_of, model FROM trade_ideas WHERE id = 1;
 
 -- name: PutTradeIdeas :exec
-INSERT INTO trade_ideas (id, body, as_of, model)
-VALUES (1, $1, $2, $3)
+INSERT INTO trade_ideas (id, body, rows, as_of, model)
+VALUES (1, $1, $2, $3, $4)
 ON CONFLICT (id) DO UPDATE SET
     body = excluded.body,
+    rows = excluded.rows,
     as_of = excluded.as_of,
     model = excluded.model;
 
@@ -28,12 +32,13 @@ ON CONFLICT (id) DO UPDATE SET
 -- The Trade ideas page's own, longer answer (schema 046): row 2.
 
 -- name: GetTradeIdeasPage :one
-SELECT body, as_of, model FROM trade_ideas WHERE id = 2;
+SELECT body, rows, as_of, model FROM trade_ideas WHERE id = 2;
 
 -- name: PutTradeIdeasPage :exec
-INSERT INTO trade_ideas (id, body, as_of, model)
-VALUES (2, $1, $2, $3)
+INSERT INTO trade_ideas (id, body, rows, as_of, model)
+VALUES (2, $1, $2, $3, $4)
 ON CONFLICT (id) DO UPDATE SET
     body = excluded.body,
+    rows = excluded.rows,
     as_of = excluded.as_of,
     model = excluded.model;

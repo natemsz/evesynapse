@@ -27,11 +27,12 @@ const (
 )
 
 // metaAIRequest is one Responses API call: a single user turn, no
-// streaming.
+// streaming, its output capped by the ask that sends it.
 type metaAIRequest struct {
-	Model  string          `json:"model"`
-	Input  []metaAIMessage `json:"input"`
-	Stream bool            `json:"stream"`
+	Model           string          `json:"model"`
+	Input           []metaAIMessage `json:"input"`
+	Stream          bool            `json:"stream"`
+	MaxOutputTokens int             `json:"max_output_tokens,omitempty"`
 }
 
 type metaAIMessage struct {
@@ -67,16 +68,21 @@ type metaAIResponse struct {
 }
 
 // callMetaAI runs one Muse Wonder call and returns the answer text,
-// truncated to bodyCap. The analyst framing the Cloudflare call
-// sends as a system message leads the user turn here. apiBase is a
-// parameter for tests; production passes metaAIAPIBase.
-func callMetaAI(ctx context.Context, client *http.Client, apiBase, apiKey, model, prompt string, bodyCap int) (string, error) {
+// truncated to bodyCap, with the model's output capped at
+// maxOutputTokens (the ask's own cap, as the Cloudflare call sends).
+// A response the cap cut short reports a status other than
+// "completed" and is refused below, never half-stored. The analyst
+// framing the Cloudflare call sends as a system message leads the
+// user turn here. apiBase is a parameter for tests; production
+// passes metaAIAPIBase.
+func callMetaAI(ctx context.Context, client *http.Client, apiBase, apiKey, model, prompt string, bodyCap, maxOutputTokens int) (string, error) {
 	if apiKey == "" {
 		return "", fmt.Errorf("meta ai: no API key configured")
 	}
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(metaAIRequest{
-		Model: model,
+		Model:           model,
+		MaxOutputTokens: maxOutputTokens,
 		Input: []metaAIMessage{{
 			Role: "user",
 			Content: []metaAIContent{{

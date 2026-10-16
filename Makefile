@@ -31,6 +31,9 @@ assets: ## Decode the fonts/wallpaper from ci-assets/ into the embedded asset di
 	ls ci-assets/bg.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg.jpg
 	ls ci-assets/bg-4k.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-4k.jpg
 	ls ci-assets/bg-uhd.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-uhd.jpg
+	ls ci-assets/bg.jxl.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg.jxl
+	ls ci-assets/bg-4k.jxl.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-4k.jxl
+	ls ci-assets/bg-uhd.jxl.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-uhd.jxl
 	ls ci-assets/shot-fitting.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/shot-fitting.webp
 	ls ci-assets/shot-planner.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/shot-planner.webp
 	ls ci-assets/shot-overview.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/shot-overview.webp

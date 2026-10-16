@@ -75,8 +75,8 @@ body::before { filter: brightness(0.74) saturate(0.97) blur(2px); transform: sca
 .ld-mini-lab { color: var(--faint, #8a7a66); font-size: 12.5px; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 7px; }
 .ld-movers div { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px dashed rgba(255, 255, 255, 0.06); font-size: 15px; }
 .ld-movers div:last-child { border-bottom: none; }
-.ld-up { color: var(--success); }
-.ld-down { color: var(--danger); }
+.ld-up { color: #3fb96f; }
+.ld-down { color: #e5484d; }
 .ld-evergreen, .ld-fit-sub { color: var(--muted); font-size: 14.5px; }
 .ld-fit-line { font-size: 17px; }
 

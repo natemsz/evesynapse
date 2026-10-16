@@ -39,11 +39,11 @@ type landingFit struct {
 // approved sample figures, verbatim, shaped like the real home
 // KPI band so the illustration cannot drift from the product.
 type landingShowcaseData struct {
-	NetWorth, NetWorthSub     string
-	Liquid, LiquidSub         string
-	Hangar, HangarSub         string
-	Training, TrainingSub     string
-	SparkPoints, SparkArea    string
+	NetWorth, NetWorthSub          string
+	Liquid, LiquidSub              string
+	Hangar, HangarSub              string
+	Training, TrainingSub          string
+	SparkPoints, SparkArea         string
 	LiquidPct, HangarPct, TrainPct string
 }
 
@@ -52,8 +52,8 @@ var landingShowcase = landingShowcaseData{
 	Liquid: "67,713,672,586", LiquidSub: "48.1% of net worth",
 	Hangar: "72,985,548,513", HangarSub: "93.5% priced",
 	Training: "3 of 8 training", TrainingSub: "5 queues idle, flagged below",
-	SparkPoints: "0,24 18,22 36,23 54,18 72,19 90,13 108,14 126,8 144,6",
-	SparkArea:   "0,24 18,22 36,23 54,18 72,19 90,13 108,14 126,8 144,6 144,30 0,30",
+	SparkPoints: "0,22 13,21 25,21 38,17 50,18 63,12 75,13 88,7 100,6",
+	SparkArea:   "0,22 13,21 25,21 38,17 50,18 63,12 75,13 88,7 100,6 100,28 0,28",
 	LiquidPct:   "48", HangarPct: "93", TrainPct: "37",
 }
 
@@ -64,6 +64,7 @@ type landingData struct {
 	Showcase      landingShowcaseData
 	Movers        []landingMover
 	Fit           *landingFit
+	ServerStatus  *serverStatusView
 	HasStrip      bool
 }
 
@@ -130,7 +131,11 @@ func (app *Application) buildLanding(ctx context.Context) landingData {
 		}
 	}
 
-	data.HasStrip = len(data.Movers) > 0 || data.Fit != nil
+	if status, ok := app.loadServerStatus(ctx); ok {
+		data.ServerStatus = status
+	}
+
+	data.HasStrip = len(data.Movers) > 0 || data.Fit != nil || data.ServerStatus != nil
 	return data
 }
 

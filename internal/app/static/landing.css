@@ -38,8 +38,11 @@
 .ld-pv-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
 .ld-pv-head h3 { font-size: 19px; }
 .ld-pv-head span { color: var(--faint, #8a7a66); font-size: 14px; }
-.ld-bar { height: 5px; background: rgba(255, 255, 255, 0.09); border-radius: 3px; margin-top: 8px; overflow: hidden; }
-.ld-bar i { display: block; height: 100%; background: linear-gradient(90deg, #f25f00, #ffb35c); border-radius: 3px; }
+.ld-bar { display: block; width: 100%; height: 6px; margin-top: 8px; }
+.ld-bar-track { fill: rgba(255, 255, 255, 0.09); }
+.ld-bar-fill { fill: #f97116; }
+.ld-loop-2 { margin-top: 22px; }
+.ld-ctas-center { justify-content: center; }
 .ld-brief { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
 
 .ld-strip { margin-top: 22px; padding: 18px 22px; }

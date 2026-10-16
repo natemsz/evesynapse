@@ -82,13 +82,23 @@ func TestPagesRenderFullShellNoJS(t *testing.T) {
 		}
 		mustContain(t, path+" (authed)", body, shell...)
 	}
-	for _, path := range []string{"/", "/fittings/public/"} {
+	for _, path := range []string{"/fittings/public/"} {
 		code, body := getSwapPage(t, app, nil, path)
 		if code != http.StatusOK {
 			t.Errorf("GET %s (anonymous): status %d, want 200", path, code)
 			continue
 		}
 		mustContain(t, path+" (anonymous)", body, shell...)
+	}
+	// The anonymous front door is the landing page: a standalone
+	// document with its own slim header, deliberately outside the
+	// app shell (signed-in members skip it and get the shell).
+	code, body := getSwapPage(t, app, nil, "/")
+	if code != http.StatusOK {
+		t.Errorf("GET / (anonymous): status %d, want 200", code)
+	} else {
+		mustContain(t, "/ (anonymous landing)", body,
+			`<header class="ld-header">`, "Greater than the", `</html>`)
 	}
 }
 

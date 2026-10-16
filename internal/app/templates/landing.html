@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>EveSynapse: Greater than the sum of its parts</title>
+<title>EVE Online Fleet, Market & Fitting Tools · EveSynapse</title>
 {{if .HeadMeta}}{{.HeadMeta}}{{end}}
 <link rel="icon" href="/static/favicon.ico?v={{.AssetVersion}}" sizes="48x48">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v={{.AssetVersion}}" sizes="any">
@@ -41,9 +41,9 @@
       <div class="ld-pv-head"><h3>Fleet Overview</h3><span>every character, one glance. This is the home page your pilots get, shown with sample data</span></div>
       <div class="kpis">
         <div class="kpi"><span class="kpi-k">Fleet net worth</span><span class="kpi-v">{{.Showcase.NetWorth}}</span><span class="kpi-sub">{{.Showcase.NetWorthSub}}</span><svg class="kpi-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true" focusable="false"><polygon class="kpi-spark-area" points="{{.Showcase.SparkArea}}"/><polyline class="kpi-spark-line" points="{{.Showcase.SparkPoints}}"/></svg></div>
-        <div class="kpi"><span class="kpi-k">Liquid ISK</span><span class="kpi-v">{{.Showcase.Liquid}}</span><span class="kpi-sub">{{.Showcase.LiquidSub}}</span><div class="ld-bar"><i style="width:{{.Showcase.LiquidPct}}%"></i></div></div>
-        <div class="kpi"><span class="kpi-k">Hangar &amp; assets</span><span class="kpi-v">{{.Showcase.Hangar}}</span><span class="kpi-sub">{{.Showcase.HangarSub}}</span><div class="ld-bar"><i style="width:{{.Showcase.HangarPct}}%"></i></div></div>
-        <div class="kpi"><span class="kpi-k">Skill training</span><span class="kpi-v">{{.Showcase.Training}}</span><span class="kpi-sub">{{.Showcase.TrainingSub}}</span><div class="ld-bar"><i style="width:{{.Showcase.TrainPct}}%"></i></div></div>
+        <div class="kpi"><span class="kpi-k">Liquid ISK</span><span class="kpi-v">{{.Showcase.Liquid}}</span><span class="kpi-sub">{{.Showcase.LiquidSub}}</span><svg class="ld-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="ld-bar-track" width="100" height="6" rx="3"/><rect class="ld-bar-fill" width="{{.Showcase.LiquidPct}}" height="6" rx="3"/></svg></div>
+        <div class="kpi"><span class="kpi-k">Hangar &amp; assets</span><span class="kpi-v">{{.Showcase.Hangar}}</span><span class="kpi-sub">{{.Showcase.HangarSub}}</span><svg class="ld-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="ld-bar-track" width="100" height="6" rx="3"/><rect class="ld-bar-fill" width="{{.Showcase.HangarPct}}" height="6" rx="3"/></svg></div>
+        <div class="kpi"><span class="kpi-k">Skill training</span><span class="kpi-v">{{.Showcase.Training}}</span><span class="kpi-sub">{{.Showcase.TrainingSub}}</span><svg class="ld-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="ld-bar-track" width="100" height="6" rx="3"/><rect class="ld-bar-fill" width="{{.Showcase.TrainPct}}" height="6" rx="3"/></svg></div>
       </div>
       <div class="ld-brief">
         <div class="brief-card sev-critical"><span class="sev">critical</span> <span class="brief-text"><strong>Skill queues empty: 5 pilots.</strong> Idle training is wasted SP. The briefing names them, every day, before it costs you a month.</span><span class="brief-icon brief-icon-skills" aria-hidden="true"></span></div>
@@ -60,7 +60,7 @@
           {{range .Movers}}<div><span>{{.Name}}</span><span>{{.Price}} {{if .Up}}<span class="ld-up">▲ {{.Pct}}</span>{{else}}<span class="ld-down">▼ {{.Pct}}</span>{{end}}</span></div>{{end}}
         </div>{{else}}<p class="ld-evergreen">The spread scanner reads every hub's order books. <a href="/market/scanner/">Open the scanner</a></p>{{end}}
         </div>
-        <div><div class="ld-mini-lab">Intel</div><p class="ld-evergreen">Wars, incursions and faction warfare, tracked as they happen. <a href="/intel/wars/">Read the intel pages</a></p></div>
+        <div><div class="ld-mini-lab">Intel</div><p class="ld-evergreen">Wars, incursions and faction warfare, tracked as they happen. <a href="/intel/wars/">Read the intel pages</a></p>{{if .ServerStatus}}<p class="ld-strip-note">Tranquility: {{.ServerStatus.Players}} players online</p>{{end}}</div>
         <div><div class="ld-mini-lab">Newest public fit</div>
         {{with .Fit}}<p class="ld-fit-line"><b>{{.ShipName}}</b> · {{.FitName}}</p><p class="ld-fit-sub">Shared{{if .Author}} by {{.Author}}{{end}}, priced from stored market data. <a href="{{.URL}}">Open the fit</a></p>{{else}}<p class="ld-evergreen">Community fits, simulated and priced. <a href="/fittings/public/">Browse public fits</a></p>{{end}}
         </div>
@@ -91,7 +91,7 @@
       <div class="ld-arrow">→</div>
       <div class="ld-glass ld-node"><h3>Discord</h3><p>Your corp's server runs off the same groups and roles as everything else.</p></div>
     </div>
-    <div class="ld-loop" style="margin-top:22px">
+    <div class="ld-loop ld-loop-2">
       <div class="ld-glass ld-node"><h3>Briefing</h3><p>Your day in one view: empty skill queues, halted extractors, expiring orders and unread mail, ranked by what costs you most.</p></div>
       <div class="ld-arrow">→</div>
       <div class="ld-glass ld-node"><h3>Market</h3><p>Your orders and wallet watched for you, and AI trade ideas that read every hub sweep and point at what to trade next.</p></div>
@@ -174,7 +174,7 @@
     <div class="ld-h-line">Rebuilt over <em>4 years</em>. Originating in <em>2013</em>. Built for <em>2026</em>.</div>
   </div>
   <div class="ld-finalcta">
-    <div class="ld-ctas" style="justify-content:center">
+    <div class="ld-ctas ld-ctas-center">
       <a class="ld-btn ld-btn-ember" href="/auth/link">Link your characters, free</a>
       <a class="ld-btn ld-btn-ghost" href="#tools">Browse the public tools</a>
     </div>

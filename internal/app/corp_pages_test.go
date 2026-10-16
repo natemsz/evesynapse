@@ -178,6 +178,53 @@ func mustContain(t *testing.T, path, body string, wants ...string) {
 	}
 }
 
+// TestCorpEmptyStates: the five corporation pages tell "no character
+// linked" apart from "a character is linked but nobody feeds this
+// corporation's data". The first keeps its link-a-character text; the
+// second names the missing grant and offers the targeted add-scopes
+// (role opt-in) link in place, instead of a bare "still syncing".
+func TestCorpEmptyStates(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	pages := []struct{ path, module string }{
+		{"/corporations/members/", "corp_members"},
+		{"/corporations/wallets/", "corp_wallet"},
+		{"/corporations/orders/", "corp_market"},
+		{"/corporations/assets/", "corp_assets"},
+		{"/corporations/structures/", "corp_structures"},
+	}
+
+	// No character linked yet.
+	noChar := sessionCookie(t, app, user.ID, 0, "")
+	for _, p := range pages {
+		_, body := getPage(t, app, noChar, p.path)
+		mustContain(t, p.path+" (no character)", body, "No corporation to show yet", `href="/auth/link">Link a character</a>`)
+		if strings.Contains(body, "module=") {
+			t.Errorf("GET %s with no character offers an add-scopes link", p.path)
+		}
+	}
+
+	// A character linked with none of the corporation scopes granted
+	// and no snapshots: nobody feeds this corporation's data.
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
+	for _, p := range pages {
+		_, body := getPage(t, app, cookie, p.path)
+		mustContain(t, p.path+" (no feeder)", body,
+			"hasn't granted the corporation permissions",
+			`href="/auth/eve?character=90000001&amp;module=`+p.module+`"`)
+		if strings.Contains(body, "Still syncing") || strings.Contains(body, "Link a character first") {
+			t.Errorf("GET %s with a linked character but no feeder shows the wrong empty state", p.path)
+		}
+	}
+}
+
 // TestCorpPagesRenderFromSnapshots is the render-layer proof:
 // every corporation subpage serves fixture content from local
 // rows, the role-missing character sees plain role states, and

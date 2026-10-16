@@ -230,6 +230,35 @@ func TestModuleDeclaredCatalogsKeepTheirOrder(t *testing.T) {
 	}
 }
 
+// TestBriefingTopicsAreDeclarations: the briefing line families a module
+// owns are declared on that module, once each, and the briefing reads
+// them from the registry — a topic no built-in module declares is off.
+func TestBriefingTopicsAreDeclarations(t *testing.T) {
+	owners := map[string]string{}
+	for _, m := range registeredModules {
+		for _, topic := range m.BriefingTopics {
+			if other, dup := owners[topic.ID]; dup {
+				t.Errorf("briefing topic %q is declared by both %s and %s", topic.ID, other, m.ID)
+			}
+			owners[topic.ID] = m.ID
+			if topic.Title == "" {
+				t.Errorf("briefing topic %q from %s has no title", topic.ID, m.ID)
+			}
+		}
+	}
+	for topic, owner := range map[string]string{"orders": "market", "contracts": "contracts", "calendar": "calendar", "mail": "mail"} {
+		if owners[topic] != owner {
+			t.Errorf("briefing topic %q is owned by %q, want %q", topic, owners[topic], owner)
+		}
+		if !briefingTopicBuiltIn(topic) {
+			t.Errorf("briefing topic %q is declared but not read as built in", topic)
+		}
+	}
+	if briefingTopicBuiltIn("nosuchtopic") {
+		t.Error("an undeclared briefing topic reads as built in")
+	}
+}
+
 // TestModuleOnlyFeaturesHaveNoManifestEntry: a feature only a module's pages
 // read is declared once, by the module. Only "wallet" and "market" are in
 // both, because core's net worth reads the wallet and the open orders.

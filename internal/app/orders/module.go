@@ -23,10 +23,11 @@ var Module = module.Module{
 		{Scope: "esi-markets.read_character_orders.v1", Unlocks: "Open orders and order history."},
 		{Scope: "esi-markets.structure_markets.v1", Unlocks: "Prices at player-owned structures."},
 	},
-	EnhanceScopes: []module.Scope{},
-	Snapshots:     []string{esi.SnapOrders, esi.SnapOrdersHistory},
-	Widgets:       []module.WidgetDecl{{ID: "market", Title: "Market", Description: "Open orders across characters: counts, sell/buy value, orders expiring soonest.", W: 1, H: 1, After: "pi"}},
-	Activities:    []string{"market"},
+	EnhanceScopes:  []module.Scope{},
+	Snapshots:      []string{esi.SnapOrders, esi.SnapOrdersHistory},
+	Widgets:        []module.WidgetDecl{{ID: "market", Title: "Market", Description: "Open orders across characters: counts, sell/buy value, orders expiring soonest.", W: 1, H: 1, After: "pi"}},
+	BriefingTopics: []module.BriefingTopicDecl{{ID: "orders", Title: "Order expiries and undercuts"}},
+	Activities:     []string{"market"},
 	Nav: []module.NavSection{{
 		Section: "market",
 		Entries: []module.NavEntry{

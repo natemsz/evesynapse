@@ -93,6 +93,16 @@ func TestCoreOnlyHasNoModuleWidgetsOrKinds(t *testing.T) {
 	}
 }
 
+// TestCoreOnlyHasNoBriefingTopics: with no module built in, no module's
+// briefing lines are on — the digest keeps only core's lines.
+func TestCoreOnlyHasNoBriefingTopics(t *testing.T) {
+	for _, topic := range []string{"orders", "contracts", "calendar", "mail"} {
+		if briefingTopicBuiltIn(topic) {
+			t.Errorf("briefing topic %q is on in the core-only build", topic)
+		}
+	}
+}
+
 // TestCoreOnlyChooserOffersOnlyCoreFeatures: in the core-only build the
 // full link leaves out every module's scopes, and the chooser still works.
 func TestCoreOnlyChooserOffersOnlyCoreFeatures(t *testing.T) {

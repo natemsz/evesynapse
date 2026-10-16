@@ -46,6 +46,13 @@ var linkActivities = []linkActivity{
 	{activityEverything, "A bit of everything", "Every feature. You still choose which extra permissions to add.", 6},
 }
 
+// linkEssentials is the starting set a fresh sign-up opens with
+// pre-ticked: tracking your pilots (skills, wallet, assets, location and
+// the rest of the core character picture). Later links open on the
+// account's remembered choice instead; an explicit submission that
+// unticks everything is a choice of nothing and is never widened.
+var linkEssentials = []string{"pilots"}
+
 func linkActivityByID(id string) (linkActivity, bool) {
 	for _, a := range linkActivities {
 		if a.ID == id {

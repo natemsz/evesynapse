@@ -118,7 +118,7 @@ func (app *Application) handleLinkChoose(w http.ResponseWriter, r *http.Request)
 		choice.Activities = nil // the ticked features are the answer now
 	}
 	forceCards := q.Get("cards") == "1"
-	if choice.empty() && !submitted && !forceCards {
+	if choice.empty() && !submitted && !forceCards && q.Get("from") != "cards" {
 		if remembered, ok := app.rememberedLink(ctx); ok {
 			choice = remembered
 			view.Remembered = true
@@ -136,8 +136,15 @@ func (app *Application) handleLinkChoose(w http.ResponseWriter, r *http.Request)
 
 	if view.Step == "cards" {
 		view.AllPicked = q.Get("pick") == "all"
+		// A fresh visit (no cards submission in the query) opens with
+		// the Essentials set ticked. A cards submission (from=cards)
+		// says what is ticked, even when that is nothing.
+		picked := choice.Activities
+		if q.Get("from") != "cards" && len(picked) == 0 && !view.AllPicked {
+			picked = linkEssentials
+		}
 		for _, a := range linkActivities {
-			view.Activities = append(view.Activities, linkActivityCard{linkActivity: a, Selected: view.AllPicked || contains(choice.Activities, a.ID)})
+			view.Activities = append(view.Activities, linkActivityCard{linkActivity: a, Selected: view.AllPicked || contains(picked, a.ID)})
 		}
 		view.Switch = linkChooseURL(url.Values{"advanced": {"1"}}, view.Character)
 		app.render(ctx, w, http.StatusOK, "link.html", data)
@@ -386,13 +393,29 @@ func (app *Application) rememberLink(ctx context.Context, userID int64, c linkCh
 
 // linkChoiceFromQuery reads a choice from /auth/eve: repeated feature,
 // enhance and activity parameters, or full=1 for every feature and every
-// extra permission (the link as it was before the chooser).
+// extra permission (the link as it was before the chooser). ok is true
+// when a choice was submitted at all — the chooser's submitted=1 marker
+// or any choice parameter — even when everything was unticked. Only a
+// request with no choice in it at all is "no choice" (the full link);
+// an empty submitted choice is a choice of nothing and never widens.
 func (app *Application) linkChoiceFromQuery(q url.Values) (linkChoice, bool) {
 	if q.Get("full") == "1" {
 		return fullLinkChoiceWith(app.linkServerExtras()), true
 	}
-	c := linkChoice{Activities: q["activity"], Features: q["feature"], Enhance: q["enhance"]}
-	return c, !c.empty()
+	nonEmpty := func(in []string) (out []string) {
+		for _, s := range in {
+			if s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	c := linkChoice{Activities: nonEmpty(q["activity"]), Features: nonEmpty(q["feature"]), Enhance: nonEmpty(q["enhance"])}
+	_, hasActivity := q["activity"]
+	_, hasFeature := q["feature"]
+	_, hasEnhance := q["enhance"]
+	submitted := q.Get("submitted") == "1" || hasActivity || hasFeature || hasEnhance
+	return c, submitted
 }
 
 // resolveLinkLenient is resolveLink for the chooser page: an extra

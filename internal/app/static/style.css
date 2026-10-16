@@ -1597,6 +1597,27 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid rgba(255, 1
 @media (max-width: 719px) {
   .esi-pill .esi-tq { display: none; }
 }
+/* Phones (the measured fix, 17-viewport rig): a ~6% root scale and a
+   compressed Overview bar that stays on ONE row.
+   Root font-size, deliberately NOT the CSS zoom property: media
+   queries re-derive under zoom and can oscillate at the boundary;
+   font-size has no such loop. 15px against the 16px default shrinks
+   every rem-sized element on the page by about 6%, which is the
+   point — and the risk: KPI stacks, fleet tables and the briefing
+   ride along, so they are re-checked at phone widths, not just
+   this bar. */
+@media (max-width: 480px) {
+  html { font-size: 15px; }
+  /* One row, never the rejected two-row layout: the ESI pill goes
+     dot-only (the dot carries the status, the pill's title still
+     carries the words), the Overview summary drops its word and
+     keeps its gear (its aria-label is already set), and "Link
+     another character" keeps its full text. */
+  .home-bar { flex-wrap: nowrap; gap: 0.35rem; }
+  .home-bar .esi-pill { gap: 0; padding: 0 0.55rem; }
+  .home-bar .esi-pill .esi-label { display: none; }
+  .home-bar .home-settings > summary > span { display: none; }
+}
 html[data-theme="light"] .kpi-bar { background: #eadfcb; }
 html[data-theme="light"] .esi-pill { background: #fffdf9; border-color: #d3c7ae; }
 html[data-theme="light"] .esi-ok .esi-label { color: #047857; }

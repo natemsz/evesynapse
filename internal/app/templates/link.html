@@ -11,6 +11,7 @@
   <p><small>Pick as many as you like. EveSynapse asks EVE only for the permissions those need, and shows you the list before anything is sent. You can add more later.</small></p>
   <p class="lk-privacy"><small>Sign-in goes through EVE Online's official secure login. Your login details, account details and personal information are never shared with EveSynapse.</small></p>
   <form method="get" action="/auth/link">
+    <input type="hidden" name="from" value="cards">
     {{if .Character}}<input type="hidden" name="character" value="{{.Character}}">{{end}}
     <div class="lk-cards">
       {{range .Activities}}

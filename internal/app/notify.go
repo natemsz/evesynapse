@@ -64,7 +64,7 @@ const (
 type notifyKind struct {
 	ID     string
 	Title  string // as the settings page names it
-	Module string // the manifest module whose data it reads
+	Module string // the feature (manifest entry or module declaration) whose data it reads
 	// Standing is a state rather than an event: it is announced when
 	// it starts to hold and again if it clears and comes back.
 	Standing bool

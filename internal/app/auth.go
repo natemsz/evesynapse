@@ -204,7 +204,8 @@ var eveScopes = []string{
 	"esi.cosmetic.char:read",
 }
 
-// loginHTTPClient is shared by the SSO/JWKS calls (auth.go) and ESI.
+// loginHTTPClient serves the SSO/JWKS calls (auth.go) only. ESI has
+// its own tuned client (esi.NewHTTPClient); the two never share.
 var loginHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
 // eveOAuthConfig builds the EVE SSO OAuth2 config. The redirect URL must
@@ -247,6 +248,17 @@ func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 	// declarations (never from scope strings sent by the browser), and a
 	// link asks only for a subset of what the developer portal allows.
 	if choice, ok := app.linkChoiceFromQuery(r.URL.Query()); ok {
+		if choice.empty() {
+			// A submitted choice with everything unticked: the chooser
+			// again at zero. Never the full link — that is only for a
+			// request with no choice in it at all.
+			target := "/auth/link?submitted=1"
+			if cid := r.URL.Query().Get("character"); cid != "" {
+				target += "&character=" + cid
+			}
+			http.Redirect(w, r, target, http.StatusFound)
+			return
+		}
 		res, err := app.resolveLinkLenient(choice)
 		if err != nil {
 			http.Error(w, "Unknown feature or permission", http.StatusBadRequest)
@@ -287,7 +299,7 @@ func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // relinkScopesFor resolves a targeted re-link request: the module must
-// be in the manifest and the character must be linked to the session's
+// be known to the scope surfaces (manifest or module declaration) and the character must be linked to the session's
 // account. ok is false otherwise, so one cannot probe other accounts'
 // characters.
 func (app *Application) relinkScopesFor(r *http.Request, moduleID string) (scopes []string, ok bool) {

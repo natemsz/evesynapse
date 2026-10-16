@@ -267,7 +267,7 @@ func New(cfg Config) (*Application, error) {
 		pageWants:     make(map[string]map[string]pageWant),
 		tokens:        tokens,
 	}
-	app.esi = esi.New(loginHTTPClient, app.queries, app.validAccessToken)
+	app.esi = esi.New(esi.NewHTTPClient(), app.queries, app.validAccessToken)
 	app.esi.SetUserAgent(cfg.esiUserAgent())
 	// Every stored name is in memory before the first request, and
 	// every name learned from here on is kept (entity_names.go).

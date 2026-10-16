@@ -83,7 +83,7 @@ type widgetDef struct {
 	Title       string
 	Description string
 	W, H        int    // default size in grid cells, 1-3 each
-	Module      string // id of the moduleManifest entry that powers it
+	Module      string // id of the feature (manifest entry or module declaration) that powers it
 }
 
 var coreWidgetCatalog = []widgetDef{

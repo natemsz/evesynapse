@@ -16,7 +16,7 @@ import (
 // ---------------------------------------------------------------------------
 // The sign-up and character-link chooser (/auth/link).
 //
-// Three layers, one computation:
+// Two steps, one computation:
 //
 //  1. The question: "What do you want to do with EveSynapse?" as activity
 //     cards. The registry's own declarations turn the answers into
@@ -26,8 +26,6 @@ import (
 //     will ask for. Features can be unticked (a feature another one needs
 //     stays, and says why); every permission of the chosen features
 //     starts ticked, the optional ones included, listed like the rest.
-//  3. Advanced: every feature with its own tick and every enhancement as
-//     its own toggle, and the same summary.
 //
 // The server works everything out; the page only carries choices. The link
 // to EVE (/auth/eve) is built from ids, never from scope strings the
@@ -39,10 +37,10 @@ const sessionLinkChoice = "link_choice"
 
 // linkView is the chooser page.
 type linkView struct {
-	Step       string // "cards", "reveal" or "advanced"
+	Step       string // "cards" or "reveal"
 	Activities []linkActivityCard
 	Features   []linkFeatureView
-	Groups     []linkGroupView // the features by kind of play with what each permission is for (all of them in advanced, the chosen ones in the reveal)
+	Groups     []linkGroupView // the chosen features by kind of play, with what each permission is for
 	Popular    []linkEnhancementView
 	Roles      []linkRoleView        // corporation permissions, framed by the in-game role they need
 	Server     []linkEnhancementView // what this server offers on top
@@ -52,7 +50,6 @@ type linkView struct {
 	Character  int64
 	Continue   string // the link to EVE
 	Full       string // the same with every extra permission ticked
-	Switch     string // the other layer
 	Back       string // the question again
 	AllPicked  bool   // every card picked (pick=all)
 	Error      string
@@ -126,12 +123,12 @@ func (app *Application) handleLinkChoose(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	switch {
-	case q.Get("advanced") == "1":
-		view.Step = "advanced"
-	case forceCards || (choice.empty() && !submitted):
+	// Two steps only: the cards, then the summary. A legacy
+	// advanced=1 link lands wherever its choice lands (the cards
+	// when it carries none, the summary when it does).
+	if forceCards || (choice.empty() && !submitted) {
 		view.Step = "cards"
-	default:
+	} else {
 		view.Step = "reveal"
 	}
 
@@ -147,7 +144,6 @@ func (app *Application) handleLinkChoose(w http.ResponseWriter, r *http.Request)
 		for _, a := range linkActivities {
 			view.Activities = append(view.Activities, linkActivityCard{linkActivity: a, Selected: view.AllPicked || contains(picked, a.ID)})
 		}
-		view.Switch = linkChooseURL(url.Values{"advanced": {"1"}}, view.Character)
 		app.render(ctx, w, http.StatusOK, "link.html", data)
 		return
 	}
@@ -175,7 +171,7 @@ func (app *Application) handleLinkChoose(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	fillLinkView(view, res)
-	fillAdvanced(view, res, view.Step == "reveal")
+	fillAdvanced(view, res)
 	view.Back = linkChooseURL(url.Values{"cards": {"1"}, "activity": q["activity"]}, view.Character)
 	app.render(ctx, w, http.StatusOK, "link.html", data)
 }
@@ -272,14 +268,13 @@ func fillLinkView(view *linkView, res linkResolved) {
 	view.Continue = linkEVEURL(pinned, chosen, view.Character)
 	all := append(append([]string(nil), chosen...), unchosen...)
 	view.Full = linkChooseURL(url.Values{"feature": pinned, "enhance": all, "submitted": {"1"}}, view.Character)
-	view.Switch = linkChooseURL(url.Values{"advanced": {"1"}, "feature": pinned, "enhance": chosen, "submitted": {"1"}}, view.Character)
+
 }
 
-// fillAdvanced lists features grouped by the kind of play they serve, each
-// with the permissions it needs and its extras, what is ticked now marked.
-// The advanced layer lists every feature; the reveal (onlyChosen) the same
-// breakdown for the chosen ones, so it shows what each permission is for.
-func fillAdvanced(view *linkView, res linkResolved, onlyChosen bool) {
+// fillAdvanced lists the chosen features grouped by the kind of play
+// they serve, each with the permissions it needs, what is ticked now
+// marked, so the summary shows what each permission is for.
+func fillAdvanced(view *linkView, res linkResolved) {
 	in := map[string]linkFeatureRow{}
 	for _, row := range res.Features {
 		in[row.ID] = row
@@ -308,7 +303,7 @@ func fillAdvanced(view *linkView, res linkResolved, onlyChosen bool) {
 	groups := map[string]*linkGroupView{}
 	var order []string
 	for _, f := range all {
-		if _, isIn := in[f.ID]; onlyChosen && !isIn {
+		if _, isIn := in[f.ID]; !isIn {
 			continue
 		}
 		g := "other"

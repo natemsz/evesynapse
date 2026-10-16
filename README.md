@@ -414,7 +414,6 @@ Signing in or linking another character opens a short chooser (`/auth/link`) ins
 
 1. **What do you want to do?** Activity cards (track my pilots, trade the market, build and produce, run my corporation, fit and plan ships, a bit of everything). Each module and core feature declares which kinds of play it serves, and the registry's own `requires` closure turns the answers into the features to switch on.
 2. **The reveal.** Before anything is sent to EVE, the page lists the features that will be turned on, grouped by kind of play, each with the permissions it uses in plain words (the optional ones included, all ticked like the rest), and how many permissions EVE will ask for (it recounts as you tick). Features can be unticked (one another feature needs stays, and says why). Corporation permissions are opt-ins framed by the in-game role EVE needs for them. The only actions are **Complete sign up** and **Go back**.
-3. **Choose features myself** is the same breakdown with every feature, not just the chosen ones.
 
 A scope is declared *required* when a user who chose that feature would be surprised to find the capability missing (it is what the feature is); it stays an *enhancement* only when it is specialist data a user goes looking for (audit logs, flavor records, niche statistics).
 

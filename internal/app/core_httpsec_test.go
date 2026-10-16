@@ -88,7 +88,7 @@ func TestSecurityHeaders(t *testing.T) {
 		"style-src 'self'",
 		"img-src 'self' data: https://images.evetech.net",
 		"frame-ancestors 'none'",
-		"form-action 'self'",
+		"form-action 'self' https://login.eveonline.com",
 		"base-uri 'self'",
 		"object-src 'none'",
 	} {

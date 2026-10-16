@@ -177,6 +177,14 @@
   if (!main) return;
   main.setAttribute("tabindex", "-1");
 
+  // The document the shell is currently showing, fragment aside.
+  // A fragment-only history move (an in-page anchor such as a
+  // "jump to bottom" link, or back/forward across one) is the
+  // browser's own business: the content is already on screen, and
+  // swapping it in again would repaint the page and throw the
+  // scroll back to the top.
+  var docURL = window.location.href.split("#")[0];
+
   // Modal backdrops are position: fixed, and a backdrop-filter
   // ancestor (the glass page wrapper) becomes their containing
   // block, shrinking them from the viewport to the wrapper. They
@@ -333,6 +341,7 @@
   }
 
   function applySwapped(url, entry, push) {
+    docURL = String(url).split("#")[0];
     document.dispatchEvent(new CustomEvent("evesynapse:content-will-swap", {
       detail: { url: url }
     }));
@@ -527,6 +536,10 @@
 
   window.addEventListener("popstate", function (ev) {
     var url = window.location.href;
+    // Fragment-only move: the same document with a different (or
+    // no) hash. The browser has already scrolled (or will); there
+    // is nothing to swap.
+    if (url.split("#")[0] === docURL) return;
     var st = ev.state || {};
     var scroll = typeof st.scroll === "number" ? st.scroll : 0;
     var same = false;

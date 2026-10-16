@@ -265,6 +265,20 @@ test("modifier clicks and hash navs are left alone", async function () {
   assert.deepEqual(env.win.fetched, []);
 });
 
+test("a fragment-only history move is left to the browser", async function () {
+  const env = makeEnv();
+  loadSwap(env);
+  // An in-page anchor (a "jump to bottom" link) fires popstate with
+  // the same document under the hash: no fetch, no repaint, no
+  // scroll back to the top.
+  env.win.location.href = "https://app.test/characters/#lk-actions";
+  env.firePopstate(null);
+  await flush();
+  assert.deepEqual(env.win.fetched, []);
+  assert.equal(env.mainEl.innerHTML, "HOME");
+  assert.deepEqual(env.scrolls, []);
+});
+
 test("back to a cached page restores without fetching or pushing", async function () {
   const env = makeEnv();
   loadSwap(env);

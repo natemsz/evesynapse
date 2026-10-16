@@ -3,8 +3,8 @@
    hues (build green, buy blue, risk red, critical ember) so the
    coding survives both themes; surfaces reuse theme variables. */
 #plan { --plan-build: #3fce7a; --plan-buy: #5eb8ff; --plan-risk: #ff5a4e; --plan-fee: #ffd27a; }
-.plan-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: #262626; border: 1px solid #262626; border-radius: 4px; overflow: hidden; margin-bottom: 0.6rem; }
-.plan-stats > div { background: var(--row); padding: 0.6rem 0.8rem; }
+.plan-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: rgba(255, 110, 0, 0.14); border: 1px solid rgba(255, 110, 0, 0.14); border-radius: 0.5rem; overflow: hidden; margin-bottom: 0.6rem; }
+.plan-stats > div { background: rgba(255, 255, 255, 0.03); padding: 0.6rem 0.8rem; }
 .plan-stats .plan-k { display: block; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .plan-stats .plan-basis { color: var(--muted); font-style: italic; }
 .plan-verdictrow { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }

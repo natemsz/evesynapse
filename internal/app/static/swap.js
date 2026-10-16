@@ -176,6 +176,31 @@
   var main = document.getElementById("main-content");
   if (!main) return;
   main.setAttribute("tabindex", "-1");
+
+  // Modal backdrops are position: fixed, and a backdrop-filter
+  // ancestor (the glass page wrapper) becomes their containing
+  // block, shrinking them from the viewport to the wrapper. They
+  // live at body level instead, where fixed means the viewport:
+  // hoisted on first load and after every swap (the incoming
+  // page's backdrops arrive inside the swapped markup), and the
+  // outgoing page's hoisted backdrops are dropped as it leaves.
+  function hoistModals(root) {
+    var found = root.querySelectorAll(".modal-backdrop");
+    for (var i = 0; i < found.length; i++) {
+      var el = found[i];
+      if (el.parentNode !== document.body) {
+        el.setAttribute("data-hoisted", "1");
+        document.body.appendChild(el);
+      }
+    }
+  }
+  function dropHoistedModals() {
+    var stale = document.querySelectorAll("body > .modal-backdrop[data-hoisted]");
+    for (var i = 0; i < stale.length; i++) {
+      stale[i].parentNode.removeChild(stale[i]);
+    }
+  }
+  hoistModals(document);
   // The shell owns scroll: the browser's own restoration would
   // fight the swap (a second jump after the paint), so it stays
   // off while the swapper is active.
@@ -323,7 +348,9 @@
     // update callback, or immediately without one — so back and
     // forward arrive at the saved offset with no second jump.
     var paint = function () {
+      dropHoistedModals();
       main.innerHTML = entry.main;
+      hoistModals(main);
       if (entry.title) document.title = entry.title;
       syncActiveNav(new URL(url, window.location.href).pathname);
       if (push === "top") {

@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -303,7 +304,11 @@ func TestBriefingCapAndDedupe(t *testing.T) {
 	_, body := getPage(t, app, cookie, "/")
 	section := briefingSection(t, body)
 	mustContain(t, "briefing dedupe", section, "15 contracts waiting for your answer")
-	if n := strings.Count(section, "contract"); n > 2 {
+	// Count rule mentions in the visible text only: card markup
+	// (the category icon's class name) legitimately repeats the
+	// word without repeating the line.
+	visibleText := regexp.MustCompile(`<[^>]+>`).ReplaceAllString(section, " ")
+	if n := strings.Count(visibleText, "contract"); n > 2 {
 		t.Errorf("briefing repeats the contract rule (%d mentions), want one aggregated line", n)
 	}
 	li := strings.Count(section, `<li class="brief-card`)

@@ -16,7 +16,7 @@ body::before {
   background-position: center;
   animation: ember-breathe 9s ease-in-out infinite alternate;
 }
-@media (min-width: 2001px), (min-width: 1001px) and (min-resolution: 2dppx), (min-width: 1001px) and (-webkit-min-device-pixel-ratio: 2) {
+@media (min-width: 1501px), (min-width: 751px) and (min-resolution: 2dppx), (min-width: 751px) and (-webkit-min-device-pixel-ratio: 2) {
   body::before {
     background-image: url("/static/bg-4k.jpg");
   }

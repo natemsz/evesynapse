@@ -24,12 +24,17 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	for _, want := range []string{
 		"--glass: color-mix(in srgb, var(--panel) 88%, transparent)",
 		"--glass-edge: color-mix(in srgb, var(--accent) 24%, transparent)",
-		"-webkit-backdrop-filter: blur(14px) saturate(1.15)",
-		"backdrop-filter: blur(14px) saturate(1.15)",
+		"-webkit-backdrop-filter: blur(24px) saturate(1.25)",
+		"backdrop-filter: blur(24px) saturate(1.25)",
 		".brief-card:hover, .brief-card:focus-within",
 		"transform: translateY(-2px)",
 		"color-mix(in srgb, var(--sev-glow, var(--accent)) 55%, transparent)",
 		"animation: sev-pulse 3.2s ease-in-out infinite;",
+		"--panel: #130e0a;",
+		"--r-lg: 16px;",
+		"--r-md: 12px;",
+		"--r-sm: 8px;",
+		"grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));",
 		"--row: rgba(16, 13, 10, 0.55)",
 		"--row-alt: rgba(255, 255, 255, 0.03)",
 		".chip:hover",
@@ -107,6 +112,13 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	for name, css := range map[string]string{"plan.css": plan, "link.css": link} {
 		if !strings.Contains(css, "background: color-mix(in srgb, var(--row) 85%, transparent);") {
 			t.Errorf("%s has a card surface that did not pick up the glass alpha", name)
+		}
+	}
+	// One corner-radius scale: components take the radius tokens,
+	// never a raw 3/4/5px (the squarish look the owner rejected).
+	for _, raw := range []string{"border-radius: 3px", "border-radius: 4px", "border-radius: 5px"} {
+		if strings.Contains(style, raw) {
+			t.Errorf("style.css regained a raw %s; use the --r-* tokens", raw)
 		}
 	}
 	// The sparkline renders only when it has points (never a fake line).

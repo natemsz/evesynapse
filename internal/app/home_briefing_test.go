@@ -455,3 +455,53 @@ func TestBriefingAnchorWriteSkippedWhenFresh(t *testing.T) {
 		t.Fatalf("home renders made %d outbound calls, want 0", got)
 	}
 }
+
+// The same count-bearing alert across three or more characters
+// collapses into one card carrying the total and each character's
+// count (the mockup's combined briefing cards); two characters keep
+// their detailed lines, and large spreads fold the tail into
+// "and N more" with the counts already inside the total.
+func TestBriefingAggregatesAcrossCharacters(t *testing.T) {
+	mk := func(rule string, count int, prefix string) briefingLine {
+		return briefingLine{html: prefix + " detail", Rank: 1, key: rule + prefix,
+			aggRule: rule, aggCount: count, aggPrefix: prefix}
+	}
+	lines := []briefingLine{
+		mk("pi-stopped", 12, "Burzrujat"),
+		mk("mail", 3, "Khastira"),
+		mk("pi-stopped", 10, "Khastira"),
+		mk("mail", 122, "Pinkamena"),
+		mk("pi-stopped", 12, "Pinkamena"),
+	}
+	out := aggregateBriefing(lines)
+	pi, mail := 0, 0
+	for _, l := range out {
+		if strings.Contains(l.html, "extractors have stopped") {
+			pi++
+			for _, want := range []string{"34 extractors have stopped", "Burzrujat (12)", "Khastira (10)", "Pinkamena (12)", "/planets/"} {
+				if !strings.Contains(l.html, want) {
+					t.Errorf("combined extractor card is missing %q: %s", want, l.html)
+				}
+			}
+		}
+		if l.aggRule == "mail" {
+			mail++
+		}
+	}
+	if pi != 1 {
+		t.Errorf("three characters' stopped extractors made %d cards, want 1", pi)
+	}
+	if mail != 2 {
+		t.Errorf("two characters' mail made %d lines, want the 2 detailed lines", mail)
+	}
+
+	five := []briefingLine{}
+	for i, n := range []int{1, 2, 3, 4, 5} {
+		five = append(five, mk("mail", n, fmt.Sprintf("Char%d", i)))
+	}
+	out = aggregateBriefing(five)
+	if len(out) != 1 || !strings.Contains(out[0].html, "15 unread mails") ||
+		!strings.Contains(out[0].html, "and 1 more") || strings.Contains(out[0].html, "Char4") {
+		t.Errorf("five-way mail spread did not fold into one card: %+v", out)
+	}
+}

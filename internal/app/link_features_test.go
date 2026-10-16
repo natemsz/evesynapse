@@ -136,7 +136,7 @@ func TestRequiresClosureIsShown(t *testing.T) {
 // TestEveryModuleIsReachable: the answers reach every module, so the
 // sign-up can switch each of them on: each module declares the kind of
 // play it serves (the shared cache is the one operator-level exception,
-// reached by "a bit of everything" and the advanced list), and each kind of
+// reached by "a bit of everything"), and each kind of
 // play reaches at least one feature.
 func TestEveryModuleIsReachable(t *testing.T) {
 	exempt := map[string]bool{"swarm": true}
@@ -289,8 +289,8 @@ func TestFreshChooserPreTicksEssentials(t *testing.T) {
 	}
 }
 
-// TestChooserPages: the cards, the reveal and the advanced list render, and
-// the reveal tells the player how many permissions EVE will ask for.
+// TestChooserPages: the cards and the reveal render, and the reveal
+// tells the player how many permissions EVE will ask for.
 func TestChooserPages(t *testing.T) {
 	app := linkApp(t)
 	rec := get(app, nil, "/auth/link")
@@ -318,9 +318,12 @@ func TestChooserPages(t *testing.T) {
 		t.Error("the reveal still marks extras, or its form does not post straight to /auth/eve")
 	}
 
+	// There is no features-myself page anymore: its link is gone from
+	// both steps, and a legacy advanced=1 URL lands on the cards like
+	// any other choiceless visit.
 	rec = get(app, nil, "/auth/link?advanced=1")
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Choose the features") || !strings.Contains(rec.Body.String(), "esi-alliances.read_contacts.v1") {
-		t.Errorf("the advanced list is missing its parts (status %d)", rec.Code)
+	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "Choose the features") || strings.Contains(body, "Choose features myself") || strings.Contains(rec.Body.String(), "Choose features myself") {
+		t.Errorf("the removed features-myself page is still offered (status %d)", rec.Code)
 	}
 
 	// Unticking a feature another one needs does not remove it.

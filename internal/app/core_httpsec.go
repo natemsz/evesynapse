@@ -47,8 +47,14 @@ func warnIfServedInTheClear(cfg Config) {
 // contentSecurityPolicy limits what a page may load and where it
 // may send data: everything comes from the app itself (fonts
 // included), plus images from CCP's image server (portraits, logos,
-// item icons). Pages can not be framed, cannot post forms elsewhere,
-// and cannot have their base address moved.
+// item icons). Pages can not be framed, cannot have their base
+// address moved, and cannot post forms elsewhere, with one
+// exception: form-action must name EVE's sign-in host, because
+// browsers check the policy against the whole redirect chain and
+// the sign-up form's submit ends at /auth/eve, which answers with
+// a redirect to login.eveonline.com. Without the exception the
+// browser silently cancels the submission and Complete sign up
+// appears to do nothing.
 //
 // No inline scripts, styles, or event handlers anywhere: every
 // script is a versioned file under /static/ (boot.js, app.js,
@@ -84,7 +90,7 @@ func contentSecurityPolicy(nonce string) string {
 		"connect-src 'self' https://cloudflareinsights.com; " +
 		"object-src 'none'; " +
 		"base-uri 'self'; " +
-		"form-action 'self'; " +
+		"form-action 'self' https://login.eveonline.com; " +
 		"frame-ancestors 'none'"
 }
 

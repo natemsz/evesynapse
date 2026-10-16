@@ -292,6 +292,16 @@ SELECT user_id, character_id, day, balance, net_worth, sampled_at
 FROM wallet_history
 WHERE user_id = $1
 ORDER BY day, character_id;
+-- name: ListUserNetWorthDays :many
+-- The account's total net worth per day (summed over its
+-- characters), newest first, for the KPI sparkline: one bounded
+-- grouped read, never more than 31 rows.
+SELECT day, SUM(net_worth)::float8 AS total
+FROM wallet_history
+WHERE user_id = $1 AND net_worth IS NOT NULL
+GROUP BY day
+ORDER BY day DESC
+LIMIT 31;
 
 -- ---------------------------------------------------------------------
 -- Widget configuration (schema 020): one JSON blob per

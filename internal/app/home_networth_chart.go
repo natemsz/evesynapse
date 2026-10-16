@@ -77,6 +77,60 @@ func netWorthBreakdownDays(rows []db.WalletHistory) []netWorthDay {
 	return out
 }
 
+// netWorthSparkTotals is the sparkline series over sampled history
+// rows: each day's total net worth summed across the account's
+// characters (the breakdown rule), ascending, capped at the last 31
+// days. The KPI reads its series through the bounded grouped query
+// (ListUserNetWorthDays); this shaping is the same math over rows.
+func netWorthSparkTotals(rows []db.WalletHistory) []float64 {
+	days := netWorthBreakdownDays(rows)
+	totals := make([]float64, 0, len(days))
+	for _, d := range days {
+		totals = append(totals, d.Total())
+	}
+	if len(totals) > 31 {
+		totals = totals[len(totals)-31:]
+	}
+	return totals
+}
+
+// The KPI sparkline's box: viewBox units, polyline points inset so
+// the stroke is never clipped.
+const (
+	sparkWidth  = 100.0
+	sparkHeight = 28.0
+	sparkPad    = 2.0
+)
+
+// sparklineSVG shapes daily totals into an inline SVG sparkline: a
+// polyline and its soft area fill, in viewBox coordinates. ok=false
+// under two days — no line is drawn at all, never a placeholder.
+func sparklineSVG(totals []float64) (line, area string, ok bool) {
+	if len(totals) < 2 {
+		return "", "", false
+	}
+	lo, hi := totals[0], totals[0]
+	for _, v := range totals {
+		lo = math.Min(lo, v)
+		hi = math.Max(hi, v)
+	}
+	span := hi - lo
+	pts := make([]string, 0, len(totals))
+	for i, v := range totals {
+		x := sparkPad + float64(i)*(sparkWidth-2*sparkPad)/float64(len(totals)-1)
+		y := sparkHeight - sparkPad
+		if span > 0 {
+			y -= (v - lo) / span * (sparkHeight - 2*sparkPad)
+		} else {
+			y = sparkHeight / 2
+		}
+		pts = append(pts, fmt.Sprintf("%.1f,%.1f", x, y))
+	}
+	line = strings.Join(pts, " ")
+	area = line + fmt.Sprintf(" %.1f,%.1f %.1f,%.1f", sparkWidth-sparkPad, sparkHeight, sparkPad, sparkHeight)
+	return line, area, true
+}
+
 // buildNetWorthChart draws the stacked history: ISK from the baseline up,
 // assets from there to the total, and the total as the line. ok=false
 // under two days, like the single-series chart.

@@ -646,14 +646,20 @@ type homeView struct {
 
 // fleetRow is one line of the fleet overview.
 type fleetRow struct {
-	ID             int64
-	Name           string
-	PortraitURL    string
-	CorpID         int64
-	CorpName       string
-	Tags           string
-	SystemName     string
-	SystemRef      placeRef // SystemName classified for the link policy
+	ID          int64
+	Name        string
+	PortraitURL string
+	CorpID      int64
+	CorpName    string
+	Tags        string
+	SystemName  string
+	SystemRef   placeRef // SystemName classified for the link policy
+	// The location system's security badge, from the stored
+	// sde_systems row (the fleet read carries it alongside the
+	// title): text and tier by the shared secStatus rounding.
+	SecKnown       bool
+	SecText        string
+	SecTier        int
 	DockedName     string
 	DockedRef      placeRef // DockedName classified for the link policy
 	ShipTypeName   string
@@ -702,6 +708,15 @@ type netWorthWidget struct {
 	// the total is not positive.
 	WalletPct string
 	WalletBar string
+	// AssetsPct/AssetsBar are the priced share for the Hangar KPI's
+	// bar: items priced over items known, from the same stored-read
+	// pass that totals the assets.
+	AssetsPct string
+	AssetsBar string
+	// The net-worth sparkline (last 30 days of daily totals), as SVG
+	// point strings; both empty under two sampled days.
+	SparkPoints string
+	SparkArea   string
 
 	// Trends beside the At a Glance figures: each live figure against
 	// the daily sample about a week back; nil without an older sample
@@ -857,6 +872,10 @@ func (app *Application) buildFleet(ctx context.Context, bundles []*charSnaps) *f
 		if b.location != nil {
 			row.SystemName = app.locationTitle(ctx, b.location.SolarSystemID, "solar_system")
 			row.SystemRef = app.linkPlace(ctx, b.location.SolarSystemID, row.SystemName)
+			if sys, serr := app.queries.GetSDESystem(ctx, b.location.SolarSystemID); serr == nil {
+				row.SecText, row.SecTier = secRound(sys.Security)
+				row.SecKnown = true
+			}
 			if b.location.StationID > 0 {
 				row.DockedName = app.locationTitle(ctx, b.location.StationID, "station")
 				row.DockedRef = app.linkPlace(ctx, b.location.StationID, row.DockedName)
@@ -1034,6 +1053,11 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 		w.WalletPct = fmt.Sprintf("%.1f%%", pct)
 		w.WalletBar = fmt.Sprintf("%.1f", pct)
 	}
+	if assetsSeen && totalItems > 0 {
+		pct := 100 * float64(pricedItems) / float64(totalItems)
+		w.AssetsPct = fmt.Sprintf("%.1f%%", pct)
+		w.AssetsBar = fmt.Sprintf("%.1f", pct)
+	}
 	if !asOf.IsZero() {
 		w.AsOf = formatFinish(asOf.UTC().Format(time.RFC3339))
 	}
@@ -1041,7 +1065,27 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 	// a chart once two sampled days exist, a "building"
 	// note before that. Stored rows only — no fetching here.
 	app.attachNetWorthHistory(ctx, w, userID)
+	app.attachNetWorthSpark(ctx, w, userID)
 	return w
+}
+
+// attachNetWorthSpark fills the KPI sparkline from the account's
+// daily net-worth totals: one bounded grouped query (<=31 rows,
+// newest last 31 days). Under two sampled days the spark stays
+// empty and the KPI renders no line.
+func (app *Application) attachNetWorthSpark(ctx context.Context, w *netWorthWidget, userID int64) {
+	rows, err := app.queries.ListUserNetWorthDays(ctx, userID)
+	if err != nil {
+		logging.Errorf("net worth sparkline for user %d: %v", userID, err)
+		return
+	}
+	totals := make([]float64, 0, len(rows))
+	for i := len(rows) - 1; i >= 0; i-- { // query is newest-first
+		totals = append(totals, rows[i].Total)
+	}
+	if line, area, ok := sparklineSVG(totals); ok {
+		w.SparkPoints, w.SparkArea = line, area
+	}
 }
 
 func (app *Application) buildIndustry(ctx context.Context, bundles []*charSnaps) *industryWidget {

@@ -5,8 +5,9 @@
    uses: the limb crosses behind the content, not above it)
    and steps screens up through resolution tiers (each tier is
    at least twice the rendered pixels of the screens it serves:
-   the Lanczos master is 8000 wide, the UHD tier 6400, the 4K
-   tier 3840, the base 2000). The
+   the master is a 6400-wide generative restoration of the
+   original art, the UHD tier is the master itself, the 4K tier
+   3840, the base 2000). The
    art stack breathes at the edge of perception; that stops
    dead under reduced motion. */
 body::before {

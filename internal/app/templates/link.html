@@ -7,18 +7,38 @@
 <p><small>Already have an EveSynapse account? <a href="/auth/login">Log in</a> instead: no setup, and you keep the permissions you chose.</small></p>
 
 {{with .Link}}
+{{if eq .Step "cards"}}
 <section class="card" data-fold="never">
-  <h2>This is what will be turned on</h2>
+  <h2>What do you want to do with EveSynapse?</h2>
+  <p><small>Pick as many as you like. EveSynapse asks EVE only for the permissions those need, and shows you the list before anything is sent. You can add more later.</small></p>
+  <p class="lk-privacy"><small>Sign-in goes through EVE Online's official secure login. Your login details, account details and personal information are never shared with EveSynapse.</small></p>
+  <form method="get" action="/auth/link">
+    <input type="hidden" name="from" value="cards">
+    {{if .Character}}<input type="hidden" name="character" value="{{.Character}}">{{end}}
+    <div class="lk-cards">
+      {{range .Activities}}
+      <label class="lk-card ti-acc ti-a{{.Accent}}">
+        <input type="checkbox" name="activity" value="{{.ID}}"{{if .Selected}} checked{{end}}>
+        <span class="lk-title">{{.Title}}</span>
+        <span class="lk-blurb">{{.Blurb}}</span>
+      </label>
+      {{end}}
+    </div>
+    <p class="lk-actions"><button class="btn" type="submit">Continue</button> <a href="?cards=1&amp;pick=all{{if .Character}}&amp;character={{.Character}}{{end}}" data-select-all>Select all</a> <a href="{{.Switch}}">Choose features myself</a></p>
+  </form>
+</section>
+{{else}}
+<section class="card" data-fold="never">
+  <h2>{{if eq .Step "advanced"}}Choose the features{{else}}This is what will be turned on{{end}}</h2>
   <p class="lk-top"><a href="#lk-actions">Jump to bottom <span aria-hidden="true">&darr;</span></a></p>
   {{if .Remembered}}<p><small>These are the choices you made last time. Change anything, or continue as they are.</small></p>{{end}}
-  <p><small>Everything EveSynapse can use is ticked, grouped by what it is for. Untick anything you do not want to share; you can add it later.</small></p>
-  <p class="lk-privacy"><small>Sign-in goes through EVE Online's official secure login. Your login details, account details and personal information are never shared with EveSynapse.</small></p>
-  <p class="lk-count">EVE will ask for <strong data-lk-count>{{.Count}}</strong> permission{{if ne .Count 1}}s{{end}}{{if .Count}} for the features below{{else}}: you only sign in, and nothing about your characters is read{{end}}.</p>
+  <p class="lk-count">EVE will ask for <strong data-lk-count>{{.Count}}</strong> permission{{if ne .Count 1}}s{{end}}{{if .Count}}, <span data-lk-required>{{.Required}}</span> of them needed by the features below{{else}}: you only sign in, and nothing about your characters is read{{end}}.</p>
   <form method="get" action="/auth/eve" data-lk-form>
     <input type="hidden" name="submitted" value="1">
+    {{if eq .Step "advanced"}}<input type="hidden" name="advanced" value="1">{{end}}
     {{if .Character}}<input type="hidden" name="character" value="{{.Character}}">{{end}}
 
-    {{if .Roles}}<p><small>Corporation permissions are included under their feature, framed by the in-game role EVE needs for them. Untick any this character does not hold.</small></p>{{end}}
+    {{if and .Roles (ne .Step "advanced")}}<p><small>Corporation permissions are shown under their feature, framed by the in-game role EVE needs for them. Tick what this character can do in its corporation; if you are not sure, leave it unticked and add it later.</small></p>{{end}}
 
     {{range .Groups}}
     <div class="lk-group foldable ti-acc ti-a{{.Accent}}">
@@ -48,8 +68,12 @@
 
     <p class="lk-actions" id="lk-actions">
       <button class="btn" type="submit">Complete sign up</button>
+      <a href="{{.Back}}">Go back</a>
+      <a href="{{.Full}}#lk-actions" data-tick-all>Tick every permission</a>
+      {{if ne .Step "advanced"}}<a href="{{.Switch}}">Choose features myself</a>{{end}}
     </p>
   </form>
 </section>
+{{end}}
 {{end}}
 {{end}}

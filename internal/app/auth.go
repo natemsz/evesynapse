@@ -34,6 +34,7 @@ const (
 	sessionCharacterID   = "character_id"
 	sessionCharacterName = "character_name"
 	sessionOAuthState    = "oauth_state"
+	sessionIdentityLogin = "identity_login"
 )
 
 // sessionCharID reads the session's acting character ID. EVE IDs
@@ -298,6 +299,58 @@ func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, cfg.AuthCodeURL(state), http.StatusFound)
 }
 
+// handleEVELoginIdentity starts the plain login: an EVE SSO round
+// trip that asks for no scopes at all, so it proves only who the
+// pilot is. The callback (finishIdentityLogin) lands a character
+// that is already linked on its existing account and leaves its
+// stored tokens and granted scopes untouched — logging in must
+// never widen or narrow what sign-up chose. A character with no
+// account yet is sent to the chooser to sign up properly.
+func (app *Application) handleEVELoginIdentity(w http.ResponseWriter, r *http.Request) {
+	if !app.cfg.SSOConfigured() {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		fmt.Fprintln(w, "EVE SSO is not configured yet: set EVE_CLIENT_ID / EVE_CLIENT_SECRET (see .env.example).")
+		return
+	}
+	state, err := newOAuthState()
+	if err != nil {
+		logging.Errorf("sso: generate state: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	cfg := eveOAuthConfig(app.cfg)
+	cfg.Scopes = nil
+	app.sessions.Put(r.Context(), sessionOAuthState, state)
+	app.sessions.Put(r.Context(), sessionIdentityLogin, "1")
+	http.Redirect(w, r, cfg.AuthCodeURL(state), http.StatusFound)
+}
+
+// finishIdentityLogin completes a plain login after the callback
+// has verified who the character is. Anything that is not a plain
+// return to an existing, healthy link is handed to the flow that
+// handles it: the chooser for a sign-up or an owner change, the
+// full re-link for a dead token. Stored tokens and scopes are
+// never touched here.
+func (app *Application) finishIdentityLogin(w http.ResponseWriter, r *http.Request, characterID int64, characterName, ownerHash string) {
+	ctx := r.Context()
+	userID, target := app.identityLogin(ctx, characterID, ownerHash)
+	if target != "" {
+		http.Redirect(w, r, target, http.StatusSeeOther)
+		return
+	}
+	logging.Infof("sso: identity login for character %d (%s) on user %d", characterID, characterName, userID)
+	app.markCharacterPriority(characterID)
+	if err := app.sessions.RenewToken(ctx); err != nil {
+		logging.Errorf("sso identity login: renew session token: %v", err)
+	}
+	app.sessions.Put(ctx, sessionAuthenticated, true)
+	app.sessions.Put(ctx, sessionUserID, int(userID))
+	putSessionCharID(app.sessions, ctx, characterID)
+	app.sessions.Put(ctx, sessionCharacterName, characterName)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
 // relinkScopesFor resolves a targeted re-link request: the module must
 // be known to the scope surfaces (manifest or module declaration) and the character must be linked to the session's
 // account. ok is false otherwise, so one cannot probe other accounts'
@@ -387,6 +440,14 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		logging.Warnf("sso callback: access token verification failed: %v", err)
 		fail("verify")
+		return
+	}
+
+	// A plain login ends here: it never links, never stores the
+	// (scopeless) token, and never creates an account.
+	if app.sessions.GetString(ctx, sessionIdentityLogin) != "" {
+		app.sessions.Remove(ctx, sessionIdentityLogin)
+		app.finishIdentityLogin(w, r, characterID, characterName, ownerHash)
 		return
 	}
 

@@ -509,7 +509,7 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 <p>You are not signed in.</p>
-<p><a class="btn" href="/auth/link">Log in with EVE SSO</a></p>
+<p><a class="btn" href="/auth/login">Log in with EVE SSO</a> <small>New here? <a href="/auth/link">Sign up and choose your features</a> instead.</small></p>
 {{if not .SSOConfigured}}
 <p><small>EVE SSO is not configured. Set <code>EVE_CLIENT_ID</code> / <code>EVE_CLIENT_SECRET</code> (see <code>.env.example</code>).</small></p>
 {{end}}

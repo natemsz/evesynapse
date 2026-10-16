@@ -8,6 +8,7 @@ import (
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/logging"
 )
 
 // Character link states (characters.link_state): the worker-facing
@@ -169,6 +170,30 @@ func (app *Application) resolveSignInUser(ctx context.Context, sessionUserID, ch
 	default:
 		return 0, err
 	}
+}
+
+// identityLogin resolves a plain (identity-only) login to the
+// account the character is already linked to, without creating
+// anything and without touching the stored token or scopes. When
+// the character cannot simply log in, it returns the path of the
+// flow that handles its case instead: the chooser when there is
+// no link to return to (never linked, or the character changed
+// EVE accounts and its new owner must sign up in their own
+// right), the full re-link when the stored token is dead.
+func (app *Application) identityLogin(ctx context.Context, characterID int64, ownerHash string) (int64, string) {
+	ch, err := app.queries.GetCharacter(ctx, characterID)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return 0, "/auth/link"
+	case err != nil:
+		logging.Errorf("identity login: read character %d: %v", characterID, err)
+		return 0, "/?error=save"
+	case ownerHashChanged(ch.OwnerHash, ownerHash) || ch.LinkState == linkStateOwnerChanged:
+		return 0, "/auth/link"
+	case ch.LinkState == linkStateTokenDead:
+		return 0, "/auth/eve"
+	}
+	return ch.UserID, ""
 }
 
 // markCharacterTokenDead flags a character token_dead: CCP has

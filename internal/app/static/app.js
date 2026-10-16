@@ -994,6 +994,17 @@
         card.style.height = origin.height + "px";
         card.style.transformOrigin = (startX - origin.left) + "px " + (startY - origin.top) + "px";
         card.classList.add("dragging");
+        // A grouped ancestor (the view-transition name on <main>, or
+        // any transform/filter on a wrapper) is the containing block
+        // for a fixed element, so viewport coordinates land offset
+        // by that ancestor's origin. Measure the miss and correct
+        // it: the card stays exactly under the pointer either way.
+        var placed = card.getBoundingClientRect();
+        var missX = placed.left - origin.left, missY = placed.top - origin.top;
+        if (missX || missY) {
+          card.style.left = (origin.left - missX) + "px";
+          card.style.top = (origin.top - missY) + "px";
+        }
         document.body.classList.add("drag-active");
         measure();
         raf = requestAnimationFrame(tick);

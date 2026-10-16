@@ -5,8 +5,8 @@
    uses: the limb crosses behind the content, not above it)
    and steps screens up through resolution tiers (each tier is
    at least twice the rendered pixels of the screens it serves:
-   the Lanczos master is 8000 wide, the UHD tier 6400, the 4K
-   tier 3840, the base 2000). The
+   the EDSR master is 8000 wide, the UHD tier 6400, the 4K tier
+   3840, the base 2000). The
    art stack breathes at the edge of perception; that stops
    dead under reduced motion. */
 body::before {
@@ -33,3 +33,11 @@ body::before {
 @media (prefers-reduced-motion: reduce) {
   body::before { animation: none; }
 }
+
+/* The standing view-transition-name on #main-content (style.css)
+   makes <main> a backdrop root, which silently disables every
+   backdrop-filter inside it: the glass tint paints but nothing
+   blurs. swap.js now arms the name only for the duration of a
+   page swap, so it is forced off here; the ::view-transition
+   rules in style.css still apply while a swap runs. */
+#main-content { view-transition-name: none; }

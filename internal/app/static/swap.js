@@ -343,7 +343,20 @@
       }));
     };
     if (!reducedMotion && document.startViewTransition) {
-      document.startViewTransition(function () { paint(); }).finished.then(after, after);
+      // The transition name is armed only for the swap itself: a
+      // standing view-transition-name on <main> makes it a backdrop
+      // root, which silently disables backdrop-filter for every
+      // glass surface inside it. While the transition runs the
+      // content is a snapshot anyway, so the name costs nothing
+      // there; the moment it finishes, the name comes off and the
+      // glass blurs again.
+      main.style.viewTransitionName = "main-content";
+      var transition = document.startViewTransition(function () { paint(); });
+      var disarm = function () {
+        main.style.viewTransitionName = "";
+        after();
+      };
+      transition.finished.then(disarm, disarm);
     } else {
       paint();
       after();

@@ -3,7 +3,10 @@
    style.css paints the standard backdrop on body::before;
    this file centers it (the composition the design mockup
    uses: the limb crosses behind the content, not above it)
-   and steps wide or hiDPI screens up to the 4K master. The
+   and steps screens up through resolution tiers (each tier is
+   at least twice the rendered pixels of the screens it serves:
+   the EDSR master is 8000 wide, the UHD tier 6400, the 4K tier
+   3840, the base 2000). The
    art stack breathes at the edge of perception; that stops
    dead under reduced motion. */
 body::before {
@@ -13,9 +16,14 @@ body::before {
   background-position: center;
   animation: ember-breathe 9s ease-in-out infinite alternate;
 }
-@media (min-width: 2400px), (min-width: 1200px) and (min-resolution: 2dppx), (min-width: 1200px) and (-webkit-min-device-pixel-ratio: 2) {
+@media (min-width: 2001px), (min-width: 1001px) and (min-resolution: 2dppx), (min-width: 1001px) and (-webkit-min-device-pixel-ratio: 2) {
   body::before {
     background-image: url("/static/bg-4k.jpg");
+  }
+}
+@media (min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx), (min-width: 1601px) and (-webkit-min-device-pixel-ratio: 2) {
+  body::before {
+    background-image: url("/static/bg-uhd.jpg");
   }
 }
 @keyframes ember-breathe {
@@ -25,3 +33,11 @@ body::before {
 @media (prefers-reduced-motion: reduce) {
   body::before { animation: none; }
 }
+
+/* The standing view-transition-name on #main-content (style.css)
+   makes <main> a backdrop root, which silently disables every
+   backdrop-filter inside it: the glass tint paints but nothing
+   blurs. swap.js now arms the name only for the duration of a
+   page swap, so it is forced off here; the ::view-transition
+   rules in style.css still apply while a swap runs. */
+#main-content { view-transition-name: none; }

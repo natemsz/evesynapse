@@ -4,6 +4,8 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
+<p><small>Already have an EveSynapse account? <a href="/auth/login">Log in</a> instead: no setup, and you keep the permissions you chose.</small></p>
+
 {{with .Link}}
 {{if eq .Step "cards"}}
 <section class="card" data-fold="never">

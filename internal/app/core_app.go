@@ -429,6 +429,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	}
 	r.Get("/auth/link", app.handleLinkChoose)
 	r.Get("/auth/eve", app.handleEVELogin)
+	r.Get("/auth/login", app.handleEVELoginIdentity)
 	r.Get("/auth/callback", app.handleEVECallback)
 	// Signing out changes state, so it is a POST: a link or an image
 	// tag on another page cannot sign the visitor out.

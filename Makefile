@@ -30,6 +30,7 @@ assets: ## Decode the fonts/wallpaper from ci-assets/ into the embedded asset di
 	for f in ci-assets/fonts/*.b64; do base64 -d "$$f" > "internal/app/static/fonts/$$(basename "$${f%.b64}")"; done
 	cat ci-assets/bg.jpg.b64.part-* | base64 -d > internal/app/static/bg.jpg
 	cat ci-assets/bg-4k.jpg.b64.part-* | base64 -d > internal/app/static/bg-4k.jpg
+	cat ci-assets/bg-uhd.jpg.b64.part-* | base64 -d > internal/app/static/bg-uhd.jpg
 
 build-dev: ## Compile the dev server (includes /dev-login) into ./bin/evesynapse-dev
 	go build -o bin/evesynapse-dev ./cmd/evesynapse-dev

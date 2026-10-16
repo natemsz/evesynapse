@@ -22,10 +22,10 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	style, bg, plan, link := read("style.css"), read("bg.css"), read("plan.css"), read("link.css")
 
 	for _, want := range []string{
-		"--glass: color-mix(in srgb, var(--panel) 78%, transparent)",
+		"--glass: color-mix(in srgb, var(--panel) 83%, transparent)",
 		"--glass-edge: color-mix(in srgb, var(--accent) 24%, transparent)",
-		"-webkit-backdrop-filter: blur(20px) saturate(1.25)",
-		"backdrop-filter: blur(20px) saturate(1.25)",
+		"-webkit-backdrop-filter: blur(25px) saturate(0.9)",
+		"backdrop-filter: blur(25px) saturate(0.9)",
 		".brief-card:hover, .brief-card:focus-within",
 		"transform: translateY(-2px)",
 		"color-mix(in srgb, var(--sev-glow, var(--accent)) 55%, transparent)",
@@ -87,7 +87,7 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	// browse panel paints its own glass again, and the two pages
 	// that floated entirely on the sky (PI planner, public fit)
 	// wrap their bodies in a card.
-	if !strings.Contains(style, "backdrop-filter: blur(20px) saturate(1.25); }") ||
+	if !strings.Contains(style, "backdrop-filter: blur(25px) saturate(0.9); }") ||
 		!strings.Contains(style, ".foldable .tw { background: none;") {
 		t.Error("the foldable section lost its glass surface or its nested-table suppression")
 	}
@@ -129,6 +129,26 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	// not a user, catches the next one.
 	if !strings.Contains(bg, "#main-content { view-transition-name: none; }") {
 		t.Error("bg.css lost the view-transition-name override; the backdrop blur is dead")
+	}
+	// The fitting workbench sits inside the glass page wrapper like
+	// every other page; only the widget home is exempt. Its drag
+	// ghost and tooltips never depended on the wrapper, and the one
+	// fixed element it owns (the picker backdrop) is hoisted to
+	// body level by swap.js, so the wrapper's backdrop-filter has
+	// nothing left to capture.
+	if strings.Contains(style, ":has(.fit-wb)") {
+		t.Error("style.css re-exempted the fitting workbench from the page wrapper")
+	}
+	if !strings.Contains(style, ".page-body:has(.home-grid) {") {
+		t.Error("style.css lost the widget-home wrapper exemption")
+	}
+	swapJS, err := staticFS.ReadFile("static/swap.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(swapJS), `querySelectorAll(".modal-backdrop")`) ||
+		!strings.Contains(string(swapJS), "data-hoisted") {
+		t.Error("swap.js lost the modal-backdrop hoist; fixed modals would be captured by the glass wrapper again")
 	}
 	// The art is the sky: no synthetic starfield may come back.
 	if strings.Contains(bg, "data:image/svg+xml") ||

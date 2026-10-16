@@ -83,7 +83,7 @@
   </div>
   <ul class="briefing brief-cards">
   {{/* The briefing always shows every item it has: no More toggle. */}}
-  {{range .Items}}<li class="brief-card sev-{{.Severity}}" data-sev="{{.Severity}}"><span class="sev">{{.Severity}}</span> <span class="brief-text">{{.HTML}}</span></li>{{end}}
+  {{range .Items}}<li class="brief-card sev-{{.Severity}}" data-sev="{{.Severity}}"><span class="sev">{{.Severity}}</span> <span class="brief-text">{{.HTML}}</span><span class="brief-icon brief-icon-{{.Kind}}" aria-hidden="true"></span></li>{{end}}
   </ul>
   {{if .More}}<p><small>+{{.More}} more need{{if eq .More 1}}s{{end}} your attention.</small></p>{{end}}
   <p><small>Since {{.SinceLabel}}</small></p>

@@ -105,6 +105,34 @@ type briefingWidget struct {
 type briefingItem struct {
 	HTML     template.HTML
 	Severity string // critical | warning | info
+	Kind     string // icon category: mail | orders | skills | pi | ...
+}
+
+// briefingKind maps a rule rank to the icon category its card
+// carries: mail, orders, industry and the rest of the surfaces
+// the briefing speaks for.
+func briefingKind(rank int) string {
+	switch rank {
+	case briefingRelink:
+		return "link"
+	case briefingStoppedExtractor, briefingExtractorDry:
+		return "pi"
+	case briefingOrderExpired, briefingOrderExpiring, briefingUndercut:
+		return "orders"
+	case briefingJobReady:
+		return "industry"
+	case briefingSkillEnding, briefingNotTraining, briefingIdleSlots:
+		return "skills"
+	case briefingCourier, briefingContract:
+		return "contract"
+	case briefingCalendar:
+		return "calendar"
+	case briefingWatchMove:
+		return "market"
+	case briefingMail:
+		return "mail"
+	}
+	return "market"
 }
 
 type briefingCounts struct {
@@ -270,7 +298,7 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 		w.Lines = append(w.Lines, l)
 		w.HTMLLines = append(w.HTMLLines, template.HTML(l.html))
 		sev := briefingSeverity(l.Rank)
-		w.Items = append(w.Items, briefingItem{HTML: template.HTML(l.html), Severity: sev})
+		w.Items = append(w.Items, briefingItem{HTML: template.HTML(l.html), Severity: sev, Kind: briefingKind(l.Rank)})
 		switch sev {
 		case "critical":
 			w.Counts.Critical++

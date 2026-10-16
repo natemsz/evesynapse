@@ -61,6 +61,7 @@ function makeEnv(opts) {
     innerHTML: "HOME",
     attrs: {},
     setAttribute: function (k, v) { this.attrs[k] = v; },
+    querySelectorAll: function () { return []; },
     focus: function () { this.focused = true; }
   };
   const scrolls = [];

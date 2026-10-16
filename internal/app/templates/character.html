@@ -62,6 +62,8 @@
   </section>
   {{end}}
 
+  {{if or .CharacterPage.PIKnown .CharacterPage.PINotEnabled}}
+  <section class="foldable">
   {{if .CharacterPage.PIKnown}}
   <h3>Planetary industry</h3>
   <p><small>{{.CharacterPage.PIColonies}} colon{{if eq .CharacterPage.PIColonies 1}}y{{else}}ies{{end}}{{if .CharacterPage.PIExpired}} · {{.CharacterPage.PIExpired}} extractor{{if ne .CharacterPage.PIExpired 1}}s{{end}} expired{{end}}{{if .CharacterPage.PISoonest}} · next extractor expiry {{.CharacterPage.PISoonest}}{{if .CharacterPage.PISoonestIn}} ({{.CharacterPage.PISoonestIn}}){{end}}{{end}} — <a href="/planets/?character={{.CharacterPage.CharacterID}}">view colonies</a></small></p>
@@ -69,8 +71,11 @@
   <h3>Planetary industry</h3>
   <p><small>Not enabled for this character. <a href="/planets/?character={{.CharacterPage.CharacterID}}">Re-link it to enable</a>.</small></p>
   {{end}}
+  </section>
+  {{end}}
 
   {{if .CharacterPage.OnlineKnown}}
+  <section class="foldable">
   <h3>Status</h3>
   <div class="tw">
   <table>
@@ -82,9 +87,11 @@
     </tbody>
   </table>
   </div>
+  </section>
   {{end}}
 
   {{if .CharacterPage.LocationKnown}}
+  <section class="foldable">
   <h3>Location</h3>
   <div class="tw">
   <table>
@@ -94,9 +101,11 @@
     </tbody>
   </table>
   </div>
+  </section>
   {{end}}
 
   {{if .CharacterPage.ShipKnown}}
+  <section class="foldable">
   <h3>Ship</h3>
   <div class="tw">
   <table>
@@ -105,9 +114,11 @@
     </tbody>
   </table>
   </div>
+  </section>
   {{end}}
 
   {{if .CharacterPage.FatigueKnown}}
+  <section class="foldable">
   <h3>Jump fatigue</h3>
   <div class="tw">
   <table>
@@ -117,9 +128,11 @@
     </tbody>
   </table>
   </div>
+  </section>
   {{end}}
 
   {{if .CharacterPage.ImplantsKnown}}
+  <section class="foldable">
   <h3>Active implants</h3>
   {{if .CharacterPage.Implants}}
   <div class="tw">
@@ -135,6 +148,7 @@
   {{else}}
   <p><small>No implants plugged in.</small></p>
   {{end}}
+  </section>
   {{end}}
 
   {{if .CharacterPage.ClonesKnown}}

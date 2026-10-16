@@ -28,8 +28,10 @@ func TestLandingAnonymous(t *testing.T) {
 		"Every tool in the box.",
 		"Developed in Seattle, WA by",
 		"BSD-3-Clause-Clear",
-		"© 2026 Synap6.io LLC",
+		"© 2026 Synap6.io LLC, dba Synap6",
 		"intellectual property of CCP Games hf",
+		"Ship replacement manager",
+		"Universe Map",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("landing is missing %q", want)
@@ -56,12 +58,14 @@ func TestLandingStripFromStoredRows(t *testing.T) {
 	conn := rig.DB()
 	ctx := context.Background()
 	stmts := []string{
-		`INSERT INTO type_names (type_id, name) VALUES (34, 'Tritanium'), (35, 'Pyerite')`,
+		`INSERT INTO type_names (type_id, name) VALUES (34, 'Tritanium'), (35, 'Pyerite'), (36, 'Junk Relic')`,
 		`INSERT INTO market_history (region_id, type_id, date, average, highest, lowest, volume, order_count) VALUES
-		   (10000002, 34, '2026-10-14', 4.00, 5, 3, 1000000, 100),
-		   (10000002, 34, '2026-10-15', 5.00, 6, 4, 1200000, 110),
-		   (10000002, 35, '2026-10-14', 8.00, 9, 7, 500000, 60),
-		   (10000002, 35, '2026-10-15', 6.00, 7, 5, 700000, 70)`,
+		   (10000002, 34, '2026-10-14', 40.00, 50, 30, 1000000, 100),
+		   (10000002, 34, '2026-10-15', 50.00, 60, 40, 1200000, 110),
+		   (10000002, 35, '2026-10-14', 80.00, 90, 70, 500000, 60),
+		   (10000002, 35, '2026-10-15', 60.00, 70, 50, 700000, 70),
+		   (10000002, 36, '2026-10-14', 0.01, 1, 0.01, 5, 1),
+		   (10000002, 36, '2026-10-15', 999.00, 999, 999, 5, 1)`,
 	}
 	for _, stmt := range stmts {
 		if _, err := conn.ExecContext(ctx, stmt); err != nil {
@@ -82,6 +86,11 @@ func TestLandingStripFromStoredRows(t *testing.T) {
 	}
 	if !strings.Contains(body, "25.0%") {
 		t.Error("strip does not show the seeded move percentage")
+	}
+	// The junk row (near-zero baseline, no volume) is sanity-
+	// bounded out of the strip entirely.
+	if strings.Contains(body, "Junk Relic") {
+		t.Error("strip shows an illiquid junk mover")
 	}
 }
 

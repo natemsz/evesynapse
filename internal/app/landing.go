@@ -87,19 +87,25 @@ func formatISKShort(v float64) string {
 func (app *Application) buildLanding(ctx context.Context) landingData {
 	data := landingData{SSOConfigured: app.cfg.SSOConfigured(), Showcase: landingShowcase}
 
+	// Movers are sanity-bounded: a named type, real volume on both
+	// days, a baseline average of at least 10 ISK, and a move of at
+	// most 400% — illiquid one-order types otherwise headline the
+	// strip with five-digit percentages off a near-zero baseline.
 	rows, err := app.db.QueryContext(ctx, `
 		WITH latest AS (
 		  SELECT MAX(date) AS d FROM market_history WHERE region_id = 10000002
 		), prev AS (
 		  SELECT MAX(date) AS d FROM market_history WHERE region_id = 10000002 AND date < (SELECT d FROM latest)
 		)
-		SELECT COALESCE(tn.name, '') AS type_name, cur.average AS price,
+		SELECT tn.name AS type_name, cur.average AS price,
 		       ((cur.average - old.average) / old.average * 100) AS pct_change
 		FROM market_history cur
 		JOIN market_history old ON old.region_id = cur.region_id AND old.type_id = cur.type_id AND old.date = (SELECT d FROM prev)
-		LEFT JOIN type_names tn ON tn.type_id = cur.type_id
+		JOIN type_names tn ON tn.type_id = cur.type_id
 		WHERE cur.region_id = 10000002 AND cur.date = (SELECT d FROM latest)
-		  AND old.average > 0 AND cur.volume > 0
+		  AND tn.name <> ''
+		  AND old.average >= 10 AND old.volume >= 1000 AND cur.volume >= 1000
+		  AND ABS((cur.average - old.average) / old.average) <= 4
 		ORDER BY ABS((cur.average - old.average) / old.average) DESC
 		LIMIT 3`)
 	if err == nil {

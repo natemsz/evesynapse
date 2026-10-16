@@ -138,6 +138,13 @@ func (app *Application) handleCorporationPage(w http.ResponseWriter, r *http.Req
 	if data.Corporation != nil && data.Corporation.State == "loading" {
 		app.notePageWant(ctx, pageWantCorporation, id, 0)
 	}
+	if v := data.Corporation; v != nil && v.State == "ready" {
+		data.HeadMeta = app.HeadMeta(module.PageMeta{
+			Title:         v.Name,
+			Description:   v.Name + ": corporation profile, membership and public record. EveSynapse EVE Online universe data.",
+			CanonicalPath: "/corporation/",
+		})
+	}
 	app.render(ctx, w, http.StatusOK, "corporation.html", data)
 }
 
@@ -157,6 +164,13 @@ func (app *Application) handleAlliancePage(w http.ResponseWriter, r *http.Reques
 	data.Alliance = app.loadAllianceView(ctx, id)
 	if data.Alliance != nil && data.Alliance.State == "loading" {
 		app.notePageWant(ctx, pageWantAlliance, id, 0)
+	}
+	if v := data.Alliance; v != nil && v.State == "ready" {
+		data.HeadMeta = app.HeadMeta(module.PageMeta{
+			Title:         v.Name,
+			Description:   v.Name + ": alliance profile, member corporations and public record. EveSynapse EVE Online universe data.",
+			CanonicalPath: "/alliance/",
+		})
 	}
 	app.render(ctx, w, http.StatusOK, "alliance.html", data)
 }

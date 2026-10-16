@@ -1,4 +1,4 @@
-{{define "title"}}Home{{end}}
+{{define "title"}}{{if .LoggedIn}}Home{{else}}EVE Online Fleet, Market & Fitting Tools{{end}}{{end}}
 {{define "content"}}
 {{if .LoggedIn}}
 <h1><span class="gt">Overview</span></h1>

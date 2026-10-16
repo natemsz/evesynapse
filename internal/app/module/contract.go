@@ -1039,8 +1039,10 @@ type Deps interface {
 	// PublicPageURL makes a site path an absolute address, "" when the
 	// install has no public address.
 	PublicPageURL(path string) string
-	// HeadMeta composes the escaped description and Open Graph tags.
-	HeadMeta(title, description, pageURL string) template.HTML
+	// HeadMeta composes a PageMeta into the escaped head block
+	// (description, canonical, Open Graph, twitter card, any
+	// structured data) via the one shared mechanism.
+	HeadMeta(meta PageMeta) template.HTML
 
 	// --- the session, pages and the site ---------------------------------
 

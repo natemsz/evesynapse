@@ -6,9 +6,6 @@ import (
 	"time"
 
 	"evesynapse/internal/app/module"
-	"html"
-	"html/template"
-	"strings"
 
 	"evesynapse/internal/fitview"
 )
@@ -24,21 +21,10 @@ func (app *Application) publicPage(ctx context.Context) pageData {
 	}
 }
 
-// headMeta composes escaped description and Open Graph tags for a
-// public page; values are attribute-escaped at build time. og:url
-// is left out when the page has no absolute address (pageURL "").
-func headMeta(title, description, pageURL string) template.HTML {
-	esc := html.EscapeString
-	var b strings.Builder
-	b.WriteString(`<meta name="description" content="` + esc(description) + `">` + "\n")
-	b.WriteString(`<meta property="og:title" content="` + esc(title) + `">` + "\n")
-	b.WriteString(`<meta property="og:description" content="` + esc(description) + `">` + "\n")
-	b.WriteString(`<meta property="og:type" content="website">` + "\n")
-	if pageURL != "" {
-		b.WriteString(`<meta property="og:url" content="` + esc(pageURL) + `">` + "\n")
-	}
-	return template.HTML(b.String())
-}
+// Head metadata for every public page is the one shared
+// mechanism: module.PageMeta, composed by module.RenderPageMeta
+// (the fit page's original escaping discipline, now with the
+// canonical and twitter card the mechanism adds).
 
 // publicFitsPath, publicFitCard and publicFitCardOf are the public fits
 // module's card, read by the ship pages.

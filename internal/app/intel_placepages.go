@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"evesynapse/internal/app/module"
 	"evesynapse/internal/logging"
 )
 
@@ -58,6 +59,14 @@ func (app *Application) handleSystemPage(w http.ResponseWriter, r *http.Request)
 	}
 
 	data.System = app.loadSystemView(ctx, id)
+	if s := data.System; s != nil && s.State == "ready" {
+		desc := s.Name
+		if s.Region != "" {
+			desc += " in " + s.Region
+		}
+		desc += ": security, activity, stations and market presence. EveSynapse EVE Online universe data."
+		data.HeadMeta = app.HeadMeta(module.PageMeta{Title: s.Name, Description: desc, CanonicalPath: "/system/"})
+	}
 	app.render(ctx, w, http.StatusOK, "system.html", data)
 }
 
@@ -89,6 +98,13 @@ func (app *Application) handleRegionPage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	data.Region = app.loadRegionView(ctx, id)
+	if v := data.Region; v != nil && v.State == "ready" {
+		data.HeadMeta = app.HeadMeta(module.PageMeta{
+			Title:         v.Name,
+			Description:   v.Name + ": its systems, security and activity across the region. EveSynapse EVE Online universe data.",
+			CanonicalPath: "/region/",
+		})
+	}
 	app.render(ctx, w, http.StatusOK, "region.html", data)
 }
 
@@ -135,6 +151,13 @@ func (app *Application) handleStationPage(w http.ResponseWriter, r *http.Request
 	}
 
 	data.Station = app.loadStationView(ctx, id)
+	if v := data.Station; v != nil && v.State == "ready" {
+		data.HeadMeta = app.HeadMeta(module.PageMeta{
+			Title:         v.Name,
+			Description:   v.Name + ": station services, market and activity. EveSynapse EVE Online universe data.",
+			CanonicalPath: "/station/",
+		})
+	}
 	app.render(ctx, w, http.StatusOK, "station.html", data)
 }
 

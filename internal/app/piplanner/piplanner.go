@@ -142,6 +142,7 @@ func HandlePIPlanner(deps module.Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		data := PageData{ShellData: deps.PublicShell(ctx)} // public: no session needed
+		data.HeadMeta = deps.HeadMeta(module.PageMeta{Title: "PI Planner", Description: "Plan EVE Online planetary industry: chain extractors and factories from raw planet goods up to finished products, step by step.", CanonicalPath: "/industry/pi/"})
 
 		_, active, links, err := deps.PickCharacter(ctx, r, "/industry/pi/")
 		if err != nil {

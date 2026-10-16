@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"evesynapse/internal/app/swarm"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -31,7 +32,7 @@ func TestSwarmPublicIP(t *testing.T) {
 		"::ffff:10.0.0.5":      false, // a private address in IPv6 clothing
 		"::ffff:93.184.216.34": true,
 	} {
-		if got := swarmPublicIP(netip.MustParseAddr(addr)); got != want {
+		if got := swarm.SwarmPublicIP(netip.MustParseAddr(addr)); got != want {
 			t.Errorf("swarmPublicIP(%s) = %v, want %v", addr, got, want)
 		}
 	}
@@ -42,7 +43,7 @@ func TestSwarmPublicIP(t *testing.T) {
 // loopback.
 func TestSwarmDialControl(t *testing.T) {
 	plain := context.Background()
-	loopbackURL := context.WithValue(plain, swarmLoopbackKey{}, true)
+	loopbackURL := context.WithValue(plain, swarm.SwarmLoopbackKey{}, true)
 	for _, tc := range []struct {
 		name    string
 		ctx     context.Context
@@ -57,7 +58,7 @@ func TestSwarmDialControl(t *testing.T) {
 		{"a loopback URL does not unlock private space", loopbackURL, "192.168.1.10:8080", false},
 		{"ipv6 loopback by name", plain, "[::1]:443", false},
 	} {
-		err := swarmDialControl(tc.ctx, "tcp", tc.address, nil)
+		err := swarm.SwarmDialControl(tc.ctx, "tcp", tc.address, nil)
 		if (err == nil) != tc.allowed {
 			t.Errorf("%s: dial %s err = %v, want allowed = %v", tc.name, tc.address, err, tc.allowed)
 		}
@@ -92,16 +93,16 @@ func TestSwarmClientStaysOnTheHostItAsked(t *testing.T) {
 	}))
 	t.Cleanup(peer.Close)
 
-	client := newSwarmClient(swarmTestSecret)
+	client := swarm.NewSwarmClient(swarmTestSecret)
 	var into struct{}
-	err := client.authedGET(ctx, peer.URL+"/away", &into)
+	err := client.AuthedGET(ctx, peer.URL+"/away", &into)
 	if err == nil || !strings.Contains(err.Error(), "redirect") {
 		t.Fatalf("redirect to another host: err = %v, want a refusal", err)
 	}
 	if elsewhereHits != 0 {
 		t.Fatalf("the other host received %d requests, want none", elsewhereHits)
 	}
-	if err := client.authedGET(ctx, peer.URL+"/moved", &into); err != nil {
+	if err := client.AuthedGET(ctx, peer.URL+"/moved", &into); err != nil {
 		t.Fatalf("redirect within the host: %v", err)
 	}
 }
@@ -110,36 +111,36 @@ func TestSwarmClientStaysOnTheHostItAsked(t *testing.T) {
 // naming an instance at a loopback address teaches nothing
 // about it. Loopback is for addresses the operator dialed.
 func TestSwarmGossipCannotIntroduceALoopbackAddress(t *testing.T) {
-	p := newSwarmPair(t, swarmOpen)
+	p := newSwarmPair(t, swarm.SwarmOpen)
 	ctx := context.Background()
 	now := time.Now().UTC()
 	p.pinA(t)
-	inward, err := mintSwarmIdentity()
+	inward, err := swarm.MintSwarmIdentity()
 	if err != nil {
 		t.Fatalf("mint: %v", err)
 	}
-	outward, err := mintSwarmIdentity()
+	outward, err := swarm.MintSwarmIdentity()
 	if err != nil {
 		t.Fatalf("mint: %v", err)
 	}
-	inward.id, outward.id = "instance-inward", "instance-outward"
+	inward.ID, outward.ID = "instance-inward", "instance-outward"
 	// Both tuples are properly signed by their owners: only the
 	// address differs.
 	for id, row := range map[string]struct {
 		url string
-		kp  *swarmIdentity
+		kp  *swarm.SwarmIdentity
 	}{
 		"instance-inward":  {"http://127.0.0.1:5432", inward},
 		"instance-outward": {"https://outward.example", outward},
 	} {
 		if _, err := p.a.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
-			InstanceID: id, BaseUrl: row.url, PublicKey: row.kp.publicString(), Source: "gossip", FirstSeen: now,
-			UrlSig: signSwarmMember(row.kp, row.url, testIssued), UrlIssuedAt: testIssued,
+			InstanceID: id, BaseUrl: row.url, PublicKey: row.kp.PublicString(), Source: "gossip", FirstSeen: now,
+			UrlSig: swarm.SignSwarmMember(row.kp, row.url, testIssued), UrlIssuedAt: testIssued,
 		}); err != nil {
 			t.Fatalf("list %s in A: %v", id, err)
 		}
 	}
-	if err := p.b.swarmContactPeer(ctx, p.urlA, "instance-a", p.a.swarmID.publicString(), "gossip", now); err != nil {
+	if err := swarm.StateFor(p.b).SwarmContactPeer(ctx, p.urlA, "instance-a", swarm.StateFor(p.a).SwarmID.PublicString(), "gossip", now); err != nil {
 		t.Fatalf("gossip with A: %v", err)
 	}
 	if _, err := p.b.queries.GetSwarmPeer(ctx, "instance-inward"); err == nil {

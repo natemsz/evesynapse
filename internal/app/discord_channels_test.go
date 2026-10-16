@@ -21,7 +21,7 @@ func TestDiscordChannelAccess(t *testing.T) {
 	save := func(_ any, form url.Values) string {
 		t.Helper()
 		f.post(cookie, "/discord/servers/"+discordCorpGuild+"/channels", form)
-		_, body := getPage(t, f.app, cookie, discordServersPath)
+		_, body := getPage(t, f.app, cookie, "/discord/servers")
 		return body
 	}
 	edits := func() string {
@@ -45,7 +45,7 @@ func TestDiscordChannelAccess(t *testing.T) {
 	}
 	ch := discordOpsChannel
 
-	_, body := getPage(t, f.app, cookie, discordServersPath)
+	_, body := getPage(t, f.app, cookie, "/discord/servers")
 	mustContain(t, "the form", body, `action="/discord/servers/`+discordCorpGuild+`/channels"`,
 		`<option value="`+ch+`">#ops</option>`, `<option value="`+discordVoiceChannel+`">Voice: Voice</option>`,
 		"The bot is not keeping any channel private here.")

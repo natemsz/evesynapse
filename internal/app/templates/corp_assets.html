@@ -17,6 +17,8 @@
   {{else}}
   <p>Assets were refused by ESI (403). They'll appear here once {{.CorpAssets.CharacterName}} holds the Director role in this corporation.</p>
   {{end}}
+  {{else if .CorpAssets.NoFeeder}}
+  <p>{{.CorpAssets.CharacterName}} hasn't granted the corporation permissions that feed the corporation assets, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.CorpAssets.AddScopesURL}}">Add the corporation permissions</a> — EVE asks for them on top of what is already granted.</p>
   {{else if .CorpAssets.Warming}}
   <p>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</p>
   {{else if .CorpAssets.Loaded}}
@@ -40,6 +42,6 @@
   <p><small>Ships and renamed containers show their player-given names once the worker has resolved them; other items show their type names.</small></p>
   {{end}}
 {{else}}
-  <p>No corporation to show yet. Link a character first.</p>
+  <p>No corporation to show yet. <a href="/auth/link">Link a character</a> first.</p>
 {{end}}
 {{end}}

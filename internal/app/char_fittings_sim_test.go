@@ -15,7 +15,7 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"evesynapse/internal/fitview"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -216,7 +216,7 @@ func TestFitEFTRoundTrip(t *testing.T) {
 		"Fixture Drone x3\n\n" +
 		"Fixture Charge S x100\n" +
 		"Not A Real Module\n"
-	doc, notes := app.parseEFT(ctx, text)
+	doc, notes := app.fitBuilder().ParseEFT(ctx, text)
 	if doc.ShipTypeID != fitShipID || doc.Name != "Test Fit" {
 		t.Fatalf("parsed header = ship %d name %q", doc.ShipTypeID, doc.Name)
 	}
@@ -234,7 +234,7 @@ func TestFitEFTRoundTrip(t *testing.T) {
 		t.Fatalf("parsed quantities = %v", qty)
 	}
 
-	out := app.formatEFT(ctx, doc)
+	out := app.fitBuilder().FormatEFT(ctx, doc)
 	for _, want := range []string{
 		"[Fixture Frigate, Test Fit]", "Fixture Plate",
 		"Fixture Blaster, Fixture Charge S", "Fixture Drone x3", "Fixture Charge S x100",
@@ -245,7 +245,7 @@ func TestFitEFTRoundTrip(t *testing.T) {
 	}
 
 	// Parse the export back: the documents must agree.
-	doc2, notes2 := app.parseEFT(ctx, out)
+	doc2, notes2 := app.fitBuilder().ParseEFT(ctx, out)
 	if len(notes2) != 0 {
 		t.Fatalf("re-parse notes = %v", notes2)
 	}
@@ -255,9 +255,9 @@ func TestFitEFTRoundTrip(t *testing.T) {
 }
 
 // canonFitDoc renders a document canonically for comparison.
-func canonFitDoc(doc *fitDoc) string {
+func canonFitDoc(doc *fitview.FitDoc) string {
 	cp := *doc
-	sanitizeFitDoc(&cp)
+	fitview.SanitizeFitDoc(&cp)
 	sort.Slice(cp.Items, func(i, j int) bool { return cp.Items[i].TypeID < cp.Items[j].TypeID })
 	raw, _ := json.Marshal(cp)
 	return string(raw)
@@ -311,14 +311,14 @@ func TestFitLocalSaveListDelete(t *testing.T) {
 // positions inside the box with highs on top and lows below.
 func TestFitBuildVisual(t *testing.T) {
 	res := &fit.Result{HighSlots: 3, MediumSlots: 3, LowSlots: 2, RigSlots: 3}
-	doc := &fitDoc{ShipTypeID: fitShipID, Items: []fitDocItem{
+	doc := &fitview.FitDoc{ShipTypeID: fitShipID, Items: []fitview.FitDocItem{
 		{TypeID: fitBlasterID, Qty: 2},
 		{TypeID: fitPlateID, Qty: 1},
 	}}
-	familyOf := map[int64]string{fitBlasterID: fitFamilyHigh, fitPlateID: fitFamilyLow}
+	familyOf := map[int64]string{fitBlasterID: fitview.FitFamilyHigh, fitPlateID: fitview.FitFamilyLow}
 	nameOf := func(id int64) string { return "Type " + strconv.FormatInt(id, 10) }
 
-	v := fitBuildVisual(res, doc, nil, familyOf, nameOf, false)
+	v := fitview.FitBuildVisual(res, doc, nil, familyOf, nameOf, false)
 	if v.ShipID != fitShipID {
 		t.Errorf("ShipID = %d, want %d", v.ShipID, fitShipID)
 	}
@@ -338,11 +338,11 @@ func TestFitBuildVisual(t *testing.T) {
 			}
 		}
 		switch s.GroupKey {
-		case fitFamilyHigh:
+		case fitview.FitFamilyHigh:
 			if s.Y >= 50 {
 				t.Errorf("high slot at y=%.1f, want above center", s.Y)
 			}
-		case fitFamilyLow:
+		case fitview.FitFamilyLow:
 			if s.Y <= 50 {
 				t.Errorf("low slot at y=%.1f, want below center", s.Y)
 			}
@@ -390,11 +390,11 @@ func TestFitVisualMetaName(t *testing.T) {
 		6: "Deadspace",
 	}
 	for group, want := range cases {
-		if got := fitVisualMetaName(group); got != want {
+		if got := fitview.FitVisualMetaName(group); got != want {
 			t.Errorf("meta group %d = %q, want %q", group, got, want)
 		}
 	}
-	if got := fitVisualMetaName(0); got != "Tech I" {
+	if got := fitview.FitVisualMetaName(0); got != "Tech I" {
 		t.Errorf("unmarked meta group = %q, want the Tech I default", got)
 	}
 }
@@ -414,9 +414,9 @@ func TestFitBuildVisualTooltips(t *testing.T) {
 			gunID: {fit.AttrCPU: 12, fit.AttrPower: 10, fit.AttrDamageMultiplier: 5},
 		},
 	}
-	doc := &fitDoc{
+	doc := &fitview.FitDoc{
 		ShipTypeID: fitShipID,
-		Items:      []fitDocItem{{TypeID: gunID, Qty: 1}},
+		Items:      []fitview.FitDocItem{{TypeID: gunID, Qty: 1}},
 		Charges:    map[int64]int64{gunID: 4001},
 	}
 	snap := &fit.Snapshot{
@@ -425,12 +425,12 @@ func TestFitBuildVisualTooltips(t *testing.T) {
 			4001:  {},
 		},
 	}
-	familyOf := map[int64]string{gunID: fitFamilyHigh}
+	familyOf := map[int64]string{gunID: fitview.FitFamilyHigh}
 	names := map[int64]string{gunID: "Fixture Blaster", 4001: "Fixture Charge S"}
 	nameOf := func(id int64) string { return names[id] }
 
-	v := fitBuildVisual(res, doc, snap, familyOf, nameOf, false)
-	var slot *fitVisualSlot
+	v := fitview.FitBuildVisual(res, doc, snap, familyOf, nameOf, false)
+	var slot *fitview.FitVisualSlot
 	for i := range v.Slots {
 		if v.Slots[i].Filled && v.Slots[i].TypeID == gunID {
 			slot = &v.Slots[i]
@@ -529,79 +529,6 @@ func TestFitSimulateModuleStates(t *testing.T) {
 		`data-tip-state="online"`,
 		"<strong>Armor</strong> <small>450 HP ",
 		">10 MW of 50 MW (40 MW left)<")
-}
-
-// TestFitESIFittingBody: the editor document maps to the ESI
-// fitting body — one flag per module instance (HiSlot0-7 etc.),
-// charges riding their weapon's slot, drones to DroneBay and cargo
-// to Cargo. Over-slot documents are an error, never silently
-// truncated.
-func TestFitESIFittingBody(t *testing.T) {
-	const (
-		droneID  = int64(9001)
-		cargoID  = int64(9002)
-		chargeID = int64(9003)
-	)
-	doc := &fitDoc{
-		Name:       "Test fit",
-		ShipTypeID: fitShipID,
-		Items: []fitDocItem{
-			{TypeID: fitBlasterID, Qty: 2},
-			{TypeID: fitPlateID, Qty: 1},
-			{TypeID: droneID, Qty: 3},
-			{TypeID: cargoID, Qty: 10},
-		},
-		Charges: map[int64]int64{fitBlasterID: chargeID},
-	}
-	familyOf := map[int64]string{
-		fitBlasterID: fitFamilyHigh,
-		fitPlateID:   fitFamilyLow,
-		droneID:      fitFamilyDrone,
-		cargoID:      fitFamilyCargo,
-	}
-	body, err := fitESIFittingBody("Test fit", doc, familyOf)
-	if err != nil {
-		t.Fatalf("fitESIFittingBody: %v", err)
-	}
-	if body.Name != "Test fit" || body.ShipTypeID != fitShipID {
-		t.Errorf("body name/ship = %q/%d", body.Name, body.ShipTypeID)
-	}
-	if body.Description == "" {
-		t.Error("body description should mark EveSynapse as the creator")
-	}
-	got := map[string][]int64{}
-	qty := map[string]int64{}
-	for _, it := range body.Items {
-		got[it.Flag] = append(got[it.Flag], it.TypeID)
-		qty[it.Flag] = it.Quantity
-	}
-	// One flag per module instance; the charge rides the first
-	// blaster's slot (HiSlot0 carries both the module and its ammo).
-	want := map[string][]int64{
-		"HiSlot0":  {fitBlasterID, chargeID},
-		"HiSlot1":  {fitBlasterID},
-		"LoSlot0":  {fitPlateID},
-		"DroneBay": {droneID},
-		"Cargo":    {cargoID},
-	}
-	for flag, ids := range want {
-		if fmt.Sprint(got[flag]) != fmt.Sprint(ids) {
-			t.Errorf("flag %s = %v, want %v", flag, got[flag], ids)
-		}
-	}
-	if qty["DroneBay"] != 3 || qty["Cargo"] != 10 {
-		t.Errorf("drone/cargo quantities = %d/%d, want 3/10", qty["DroneBay"], qty["Cargo"])
-	}
-	if len(body.Items) != 6 { // 2 blasters + plate + drone + cargo + charge
-		t.Errorf("items = %d, want 6", len(body.Items))
-	}
-
-	// Nine high-slot modules: no HiSlot8 exists, so this is an
-	// error rather than a silent drop.
-	doc.Items = []fitDocItem{{TypeID: fitBlasterID, Qty: 9}}
-	if _, err := fitESIFittingBody("Test fit", doc, familyOf); err == nil {
-		t.Error("9 high-slot modules should be an error, got nil")
-	}
 }
 
 // TestFitEditorEndpointsAndImport: the picker feeds, the EFT
@@ -894,8 +821,8 @@ func TestFitTipLinesColors(t *testing.T) {
 		WeaponDPS:    map[string]float64{},
 		WeaponVolley: map[string]float64{},
 	}
-	doc := &fitDoc{Charges: map[int64]int64{}}
-	got := fitTipLinesString(fitTipLines(res, snap, doc, 3001, "", res.ItemAttrs[3001]))
+	doc := &fitview.FitDoc{Charges: map[int64]int64{}}
+	got := fitview.FitTipLinesString(fitview.FitTipLines(res, snap, doc, 3001, "", res.ItemAttrs[3001]))
 	want := "Optimal|7.5 km|good;CPU|12 tf|good;PG|10 MW|"
 	if got != want {
 		t.Errorf("tip lines = %q, want %q", got, want)

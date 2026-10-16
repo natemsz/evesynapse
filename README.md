@@ -78,7 +78,7 @@ Contact: nate@synap6.io or in-game 'Burzrujat'
   | `ui_` | navigation state and the tests that pin layout and styling |
   | `module_` | which modules an account has, by the scopes it granted |
   | `home_` | the home page: widgets, briefing, net worth |
-  | `char_` | pages about one character: sheet, skills and plans, assets, fittings, killmails, industry, build planner |
+  | `char_` | pages about one character: sheet, skills, assets, fittings, killmails, industry |
   | `economy_` | wallet, orders, contracts |
   | `planets_` | planetary industry |
   | `comms_` | mail, calendar, contacts |
@@ -113,6 +113,18 @@ Contact: nate@synap6.io or in-game 'Burzrujat'
 - `internal/skillplan/` — skill-plan arithmetic: SP per level,
   training speed, ordering targets with their prerequisites, the
   remap advisor. Pure; the skill pages supply the skill graph
+- `cmd/modbuild/`, `internal/app/modulecatalog/` — the module build tool and the list of every module it chooses from
+- `internal/app/scanner/`, `tradefinder/`, `leaderboard/`, `restock/` — the market page modules, each a page over stored rows read through `module.Deps`
+- `internal/htmlsanitize/` — makes text written by other players safe to show inside a page (mail, pilot bios, descriptions)
+- `internal/app/wallet/`, `mail/`, `calendar/`, `contacts/`, `orders/` (module id `market`), `contracts/` — the pilot economy and comms pages
+- `internal/balancechart/` — the balance-over-time chart builder shared by the wallet pages, the home net-worth card and the corporation wallets
+- `internal/app/corpdata/`, `srp/`, `doctrines/`, `groups/` — the corporation modules: member, wallet, order, asset and structure pages; ship replacement; doctrines and corporate loadouts; groups
+- `internal/fitview/` — the fit foundation: the fit document, EFT, slot families and the simulation view, read by core and the fitting modules
+- `internal/app/fitting/` — the Fitting module: workbench, saved loadouts, import/export, save to the game, shopping list
+- `internal/app/publicfits/` — the Public Fits module: browser, fit pages, ratings and the jobs that keep them stored-only; the flag and storage stay core
+- `internal/app/skillplans/` — the Skill Plans module: plan pages, plan-from-fit and plan editing over `module.Deps`, built on `internal/skillplan`
+- `internal/app/buildplanner/` — the Build Planner module: its page, JSON payload and recipe source over the SDE, built on `module.Deps`
+- `internal/humanize/`, `internal/tags/` — small pure wording and tag helpers shared by core and modules
 - `internal/buildplan/` — the industry build planner's engine: the
   tree of everything a product needs, the manufacturing formulae,
   what is already held, and the price of the rest. Pure
@@ -395,6 +407,18 @@ registration for sign-in ("EVE SSO flow" below). Then:
 
 Updating afterwards is one command — see "Updating" below.
 
+
+## Choosing what to link
+
+Signing in or linking another character opens a short chooser (`/auth/link`) instead of asking EVE for every permission at once:
+
+1. **What do you want to do?** Activity cards (track my pilots, trade the market, build and produce, run my corporation, fit and plan ships, a bit of everything). Each module and core feature declares which kinds of play it serves, and the registry's own `requires` closure turns the answers into the features to switch on.
+2. **The reveal.** Before anything is sent to EVE, the page lists the features that will be turned on, grouped by kind of play, each with the permissions it needs in plain words and its extras beneath (unticked), and how many permissions EVE will ask for (it recounts as you tick). Features can be unticked (one another feature needs stays, and says why). Corporation permissions are opt-ins framed by the in-game role EVE needs for them. The only actions are **Complete sign up** and **Go back**.
+3. **Choose features myself** is the same breakdown with every feature, not just the chosen ones.
+
+A scope is declared *required* when a user who chose that feature would be surprised to find the capability missing (it is what the feature is); it stays an *enhancement* only when it is specialist data a user goes looking for (audit logs, flavor records, niche statistics).
+
+Playstyle answers grant only the permissions their features cannot work without. The server works the scope list out from the declarations (the page sends feature ids, never scopes), and a link only ever asks for a subset of `eveScopes`, the list the EVE developer portal allows. The account remembers its last choice, so the next character opens on the reveal, preselected. Linking more onto a character asks for what it already granted too, so a grant never narrows. `/auth/eve` with no choice is the full link, as before. ESI cannot narrow a granted token, so there is no removal flow; a narrower grant is a fresh link at the narrower set.
 
 ## Who can sign up
 
@@ -807,6 +831,20 @@ make build-amd64   # bin/evesynapse-amd64
 make test          # the test suite (starts its own embedded PostgreSQL)
 make check         # what CI checks: gofmt, go vet, tests under the race detector
 ```
+
+### Choosing the modules in a build
+
+Every optional feature (the build planner, the fitting tool, the market pages, the corporation pages, Discord, the shared cache, ...) is a module, and a build contains exactly the modules `internal/app/modules_enabled.go` imports. The default file lists them all. To build a smaller server, let the build tool write that file for your selection; whatever a chosen module requires comes along, and the tool prints the ESI scopes the selection will ask players for:
+
+```sh
+make modules                                          # every module, what it requires and the scopes it declares
+go run ./cmd/modbuild -modules fitting,doctrines      # print the file and the scopes; nothing is written
+go run ./cmd/modbuild -modules fitting,doctrines -write
+go build -o bin/evesynapse ./cmd/evesynapse
+go run ./cmd/modbuild -all -write                     # back to the default, everything
+```
+
+`-core-only` is the empty selection (`go build -tags core_only` compiles none regardless of the file). CI checks that the default file is the all-modules selection and that each module builds on its own with what it requires.
 
 Install your build with:
 

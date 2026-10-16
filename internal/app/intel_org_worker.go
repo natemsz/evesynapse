@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"evesynapse/internal/app/module"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -148,7 +149,7 @@ func (app *Application) drainAlliancePass(ctx context.Context, allowance *fetchB
 // are ESI's definitive answer that the ID is not a corporation.
 func (app *Application) drainCorporationRecord(ctx context.Context, id int64, allowance *fetchBudget, now time.Time) (settled bool, limited bool) {
 	// Swarm first: a dedicated node's budget before this one's.
-	if app.swarmDefersFetch(ctx, swarmKindCorporation, strconv.FormatInt(id, 10), now) {
+	if app.deferFetch(ctx, module.FetchKindCorporation, strconv.FormatInt(id, 10), now) {
 		return false, false
 	}
 
@@ -220,7 +221,7 @@ func (app *Application) drainCorporationRecord(ctx context.Context, id int64, al
 // ID is not an alliance.
 func (app *Application) drainAllianceRecord(ctx context.Context, id int64, allowance *fetchBudget, now time.Time) (settled bool, limited bool) {
 	// Swarm first: a dedicated node's budget before this one's.
-	if app.swarmDefersFetch(ctx, swarmKindAlliance, strconv.FormatInt(id, 10), now) {
+	if app.deferFetch(ctx, module.FetchKindAlliance, strconv.FormatInt(id, 10), now) {
 		return false, false
 	}
 

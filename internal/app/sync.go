@@ -3,7 +3,9 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"evesynapse/internal/app/module"
 	"fmt"
+	"html/template"
 	"net/http"
 	"strconv"
 	"strings"
@@ -75,9 +77,9 @@ type syncView struct {
 	// Serving: whether pages render complete, how old what they
 	// show is, and what viewing costs.
 	Serving *serveMetricsView
-	// Swarm: the shared cache across instances — what it costs
-	// and earns, and who is in it.
-	Swarm      *swarmMetricsView
+	// Sections are what the modules add (the shared cache across
+	// instances: what it costs and earns, and who is in it).
+	Sections   []syncSection
 	Lookup     characterLookupView
 	Character  *syncCharacterView // nil until one is found
 	SDE        *sdeView
@@ -103,10 +105,12 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 		Timing:      workerTimingViewFor(status),
 		Foresight:   app.foresightStats(ctx, time.Now().UTC()),
 		Serving:     app.serveMetrics(ctx, time.Now().UTC()),
-		Swarm:       app.loadSwarmMetrics(ctx),
 		SDE:         app.loadSDEView(ctx),
 		Global:      app.loadGlobalView(ctx),
 	}
+	app.moduleSections(ctx, func(m module.Module) []module.PageSection { return m.SyncSections }, func(sec module.PageSection, html template.HTML) {
+		view.Sections = append(view.Sections, syncSection{Anchor: sec.Anchor, Title: sec.Title, HTML: html})
+	})
 	if n, err := app.queries.CountWarDetails(ctx); err != nil {
 		logging.Errorf("sync: count war details: %v", err)
 	} else {

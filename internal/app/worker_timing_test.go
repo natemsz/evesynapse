@@ -130,8 +130,21 @@ func TestWorkerCycleIsTimed(t *testing.T) {
 	for _, p := range timing.Phases {
 		names = append(names, p.Name)
 	}
-	if got := strings.Join(names, ","); got != "ordering,characters,op attendance,swarm fetch,public data,swarm,foresight,names,corp pulse,notifications,discord" {
-		t.Fatalf("phases %q", got)
+	// The cycle's own phases, with the ones modules add where they run.
+	want := []string{"ordering", "characters", "op attendance"}
+	if moduleCompiledIn("swarm") {
+		want = append(want, "swarm fetch")
+	}
+	want = append(want, "public data")
+	if moduleCompiledIn("swarm") {
+		want = append(want, "swarm")
+	}
+	want = append(want, "foresight", "names", "corp pulse", "notifications")
+	if moduleCompiledIn("discord") {
+		want = append(want, "discord announce ops", "discord role sync", "discord kick pass")
+	}
+	if got := strings.Join(names, ","); got != strings.Join(want, ",") {
+		t.Fatalf("phases %q, want %q", got, strings.Join(want, ","))
 	}
 	if timing.Fetches < 0 || timing.Fetches > maxFetchesPerCycle {
 		t.Fatalf("%d fetches counted against an allowance of %d", timing.Fetches, maxFetchesPerCycle)

@@ -90,6 +90,12 @@ func TestAnonThrottleRoutes(t *testing.T) {
 	}
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
+	// A frozen clock: under the race detector 60 requests take long enough
+	// for real time to refill a token and the burst would not run out.
+	pages, sim := app.anonThrottles()
+	frozen := time.Now()
+	pages.now = func() time.Time { return frozen }
+	sim.now = func() time.Time { return frozen }
 	handler := app.Handler()
 	get := func(path, addr string, c *http.Cookie) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodGet, path, nil)

@@ -10,6 +10,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/humanize"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/markethistory"
 )
@@ -180,6 +181,22 @@ func (app *Application) advanceBriefingAnchor(ctx context.Context, userID int64,
 	}
 }
 
+// briefingTopicBuiltIn reports whether a built-in module declares the
+// briefing topic: the line families a module owns are produced only
+// where that module is built in. The builders stay here in core; the
+// gate is the module's BriefingTopics declaration, read from the
+// registry like Widgets and NotifyKinds.
+func briefingTopicBuiltIn(id string) bool {
+	for _, m := range registeredModules {
+		for _, t := range m.BriefingTopics {
+			if t.ID == id {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps, since, now time.Time) *briefingWidget {
 	w := &briefingWidget{SinceLabel: briefingSinceLabel(since)}
 	if len(bundles) == 0 {
@@ -208,11 +225,20 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 		bb.linkLines(ctx, b, prefix)
 		bb.skillLines(ctx, b, prefix)
 		bb.industryLines(ctx, b, prefix)
-		bb.orderLines(ctx, b, prefix)
+		if briefingTopicBuiltIn("orders") {
+			bb.orderLines(ctx, b, prefix)
+		}
 		bb.planetLines(ctx, b, prefix)
-		bb.contractLines(b, prefix)
-		bb.calendarLines(b, prefix)
-		bb.mailLines(b, prefix)
+		// What a module owns is told only where the module is built in.
+		if briefingTopicBuiltIn("contracts") {
+			bb.contractLines(b, prefix)
+		}
+		if briefingTopicBuiltIn("calendar") {
+			bb.calendarLines(b, prefix)
+		}
+		if briefingTopicBuiltIn("mail") {
+			bb.mailLines(b, prefix)
+		}
 	}
 	bb.flushIdle()
 	lines := bb.lines
@@ -608,6 +634,9 @@ func (app *Application) briefingMarketLines(ctx context.Context, bundles []*char
 	var lines []briefingLine
 
 	health, err := app.queries.ListOrderHealthByUser(ctx, userID)
+	if !briefingTopicBuiltIn("orders") {
+		health = nil
+	}
 	if err != nil {
 		logging.Errorf("home: briefing: list order health for user %d: %v", userID, err)
 	} else {
@@ -746,12 +775,7 @@ func newestUnreadHeader(headers esi.MailHeaders) (esi.MailHeader, bool) {
 }
 
 // pluralSuffix: "" for one, "s" otherwise ("3 extractors").
-func pluralSuffix(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
-}
+func pluralSuffix(n int) string { return humanize.PluralSuffix(n) }
 
 // pluralVerb: "s" for one, "" otherwise ("1 order expires").
 func pluralVerb(n int) string {

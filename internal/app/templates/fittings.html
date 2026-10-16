@@ -8,7 +8,7 @@
 {{if .FitEditor}}
 <section class="foldable" id="fit-editor">
 <h3>Build a fitting</h3>
-{{if .FitEditor.Anonymous}}<p class="hint">Fitting with All-V skills. <a href="/auth/eve">Sign in with EVE SSO</a> to save fits and use your characters' real skills and inventory.</p>{{end}}
+{{if .FitEditor.Anonymous}}<p class="hint">Fitting with All-V skills. <a href="/auth/link">Sign in with EVE SSO</a> to save fits and use your characters' real skills and inventory.</p>{{end}}
 <div class="fit-head searchpanel">
   <span class="searchwrap fit-searchwrap">
     <input type="text" id="fit-ship-search" value="{{.FitEditor.Sim.ShipName}}" placeholder="Search ships…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-ship-suggest" aria-autocomplete="list">
@@ -31,7 +31,7 @@
   <input type="hidden" id="fit-local-id" value="{{.FitEditor.LocalID}}">
   <span class="fit-saverow">
   {{if not .FitEditor.Anonymous}}<button type="button" class="btn" id="fit-save" data-fit-local-id="{{.FitEditor.LocalID}}">Save fit</button>{{end}}
-  <label class="fit-check fit-publicchk"><input type="checkbox" id="fit-public"{{if .FitEditor.IsPublic}} checked{{end}}> Make public</label>
+  {{if moduleOn "publicfits"}}<label class="fit-check fit-publicchk"><input type="checkbox" id="fit-public"{{if .FitEditor.IsPublic}} checked{{end}}> Make public</label>{{end}}
   </span>
   {{if .FitEditor.EVECharID}}
   <button type="button" class="btn" id="fit-save-eve" data-fit-eve-char="{{.FitEditor.EVECharID}}" title="Save this fit to {{.FitEditor.EVECharName}}'s in-game fittings">Save to EVE</button>

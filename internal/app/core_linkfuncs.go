@@ -1,6 +1,7 @@
 package app
 
 import (
+	"evesynapse/internal/app/module"
 	"fmt"
 	"html"
 	"html/template"
@@ -229,12 +230,7 @@ func structureLink(structureID int64, name string) template.HTML {
 // NPC station, SystemID for a solar system, StructureID for a
 // player structure whose name or context the app holds — all 0
 // for containers and unresolved ids, which stay text.
-type placeRef struct {
-	Name        string
-	StationID   int64
-	StructureID int64
-	SystemID    int64
-}
+type placeRef = module.PlaceRef
 
 // placeLink renders a placeRef by the policy: station wins, then
 // structure, then system, otherwise the plain title.
@@ -303,6 +299,9 @@ func skillLevel(trained, next int, state string) template.HTML {
 // policy; core_pages.go registers it for every render.
 func linkFuncMap() template.FuncMap {
 	return template.FuncMap{
+		// moduleOn: whether an optional module is compiled into this
+		// build, for the core links that lead to its pages.
+		"moduleOn":        moduleCompiledIn,
 		"itemLink":        itemLink,
 		"publicItemLink":  publicItemLink,
 		"charLink":        charLink,

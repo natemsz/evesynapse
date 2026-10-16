@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"evesynapse/internal/app/module"
 	"net/http"
 	"strconv"
 	"strings"
@@ -39,7 +40,7 @@ func TestPublicRecordsAnonymous(t *testing.T) {
 	}
 	// A peer's entry waiting in staging: not yet verified, never fact.
 	if err := q.StageSwarmEntry(ctx, db.StageSwarmEntryParams{
-		Kind: swarmKindCorporation, Key: strconv.FormatInt(staged, 10), Payload: payload("Staged Shadow", "STG"),
+		Kind: module.FetchKindCorporation, Key: strconv.FormatInt(staged, 10), Payload: payload("Staged Shadow", "STG"),
 		Signer: "peer", Signature: "sig", FetchedAt: now, ReceivedAt: now, Source: "pull",
 	}); err != nil {
 		t.Fatalf("stage entry: %v", err)

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"evesynapse/internal/app/module"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -63,7 +64,7 @@ const (
 type notifyKind struct {
 	ID     string
 	Title  string // as the settings page names it
-	Module string // the manifest module whose data it reads
+	Module string // the feature (manifest entry or module declaration) whose data it reads
 	// Standing is a state rather than an event: it is announced when
 	// it starts to hold and again if it clears and comes back.
 	Standing bool
@@ -73,26 +74,48 @@ type notifyKind struct {
 }
 
 // notifyKinds is every kind, in the order the settings page lists them.
-var notifyKinds = []notifyKind{
+var coreNotifyKinds = []notifyKind{
 	{ID: notifyWatch, Title: "Watch list alerts", Module: "market_public", Standing: true, Account: true},
 	{ID: notifySkill, Title: "Skill complete", Module: "skills"},
-	{ID: notifyMail, Title: "New mail", Module: "mail"},
-	{ID: notifyCalendar, Title: "New in-game calendar event", Module: "calendar"},
 	// Ops are EveSynapse's own (ops.go): any character sees its
 	// corporation's, with no access to grant.
 	{ID: notifyOp, Title: "New op on the calendar"},
 	{ID: notifyOpReminder, Title: "Op starting soon"},
 	// Ship replacement (corp_srp.go) is EveSynapse's own too.
-	{ID: notifySRPNew, Title: "New SRP request to handle", Account: true},
-	{ID: notifySRPDone, Title: "SRP request paid or denied"},
 	{ID: notifyKillmail, Title: "New killmail", Module: "killmails"},
 	{ID: notifyPI, Title: "Stopped planetary extractors", Module: "planets"},
 	{ID: notifyIndustry, Title: "Industry job complete", Module: "industry"},
 }
 
+// notifyKindList is every kind this build has, in the order the settings
+// page lists them: core's own, then the ones the built-in modules declare,
+// each after the kind it names.
+func notifyKindList() []notifyKind {
+	out := append([]notifyKind(nil), coreNotifyKinds...)
+	for _, m := range registeredModules {
+		for _, k := range m.NotifyKinds {
+			kind := notifyKind{ID: k.ID, Title: k.Title, Module: k.Feature, Standing: k.Standing, Account: k.Account}
+			if kind.Module == "" {
+				kind.Module = m.ID
+			}
+			at := len(out)
+			for i, existing := range out {
+				if k.After != "" && existing.ID == k.After {
+					at = i + 1
+					break
+				}
+			}
+			out = append(out, notifyKind{})
+			copy(out[at+1:], out[at:])
+			out[at] = kind
+		}
+	}
+	return out
+}
+
 // notifyKindByID returns the kind for id.
 func notifyKindByID(id string) (notifyKind, bool) {
-	for _, k := range notifyKinds {
+	for _, k := range notifyKindList() {
 		if k.ID == id {
 			return k, true
 		}
@@ -156,8 +179,12 @@ func (app *Application) collectNotifyEvents(ctx context.Context, userID int64, b
 	c := newNotifyCollector()
 	for _, b := range bundles {
 		app.notifySkillEvents(ctx, c, b, now)
-		app.notifyMailEvents(c, b)
-		app.notifyCalendarEvents(c, b, now)
+		if _, ok := notifyKindByID(notifyMail); ok {
+			app.notifyMailEvents(c, b)
+		}
+		if _, ok := notifyKindByID(notifyCalendar); ok {
+			app.notifyCalendarEvents(c, b, now)
+		}
 		app.notifyKillmailEvents(ctx, c, b)
 		app.notifyPIEvents(ctx, c, b, now)
 		app.notifyIndustryEvents(ctx, c, b, now)
@@ -544,7 +571,9 @@ func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db
 	}
 	prefs := app.notifyPrefsFor(ctx, userID)
 	app.notifyOpEvents(ctx, c, userID, prefs, now)
-	app.notifySRPEvents(ctx, c, userID, now)
+	if _, ok := notifyKindByID(notifySRPNew); ok {
+		app.notifySRPEvents(ctx, c, userID, now)
+	}
 	if len(c.sources) == 0 {
 		return 0, nil
 	}
@@ -609,7 +638,7 @@ func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db
 	// Standing kinds: a state that no longer holds is forgotten. Only
 	// where the source was readable this time, so that a failed read
 	// is not mistaken for everything having cleared.
-	for _, kind := range notifyKinds {
+	for _, kind := range notifyKindList() {
 		if !kind.Standing || !c.sources[fmt.Sprintf("base|%s|%d", kind.ID, userID)] {
 			continue
 		}
@@ -632,7 +661,7 @@ func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db
 	// subscribed (notify_push.go). A failed send loses nothing: the
 	// notification is already in the top bar.
 	app.pushToUser(ctx, userID, pushMessagesFor(announce))
-	app.discordToUser(ctx, userID, announce)
+	app.deliverToModules(ctx, userID, announce)
 	return len(announce), nil
 }
 
@@ -791,6 +820,34 @@ func (app *Application) notifyOpEvents(ctx context.Context, c *notifyCollector, 
 				Title: fmt.Sprintf("Op%s starts at %s EVE time: %s", corp, op.StartsAt.UTC().Format("15:04"), op.Title),
 				URL:   opURL(op.ID),
 			})
+		}
+	}
+}
+
+// deliverToModules offers one batch of new notifications to every
+// registered module channel. It is a fan-out: each Deliverer sees every
+// notification and honors the account's own preferences for its channel;
+// what a Deliverer reports is only whether THIS channel delivered it (for
+// the log), and never stops the others. See module.Deliverer.
+func (app *Application) deliverToModules(ctx context.Context, userID int64, events []notifyEvent) {
+	if len(events) == 0 {
+		return
+	}
+	n := module.Notification{}
+	for _, ev := range events {
+		n.Events = append(n.Events, module.NotifyEvent{Kind: ev.Kind, CharacterID: ev.CharacterID, Title: ev.Title, URL: ev.URL})
+	}
+	for _, msg := range pushMessagesFor(events) {
+		n.Messages = append(n.Messages, module.NotifyMessage{Title: msg.Title, Body: msg.Body, URL: msg.URL})
+	}
+	for _, m := range registeredModules {
+		for _, deliver := range m.Deliverers {
+			func() {
+				defer recoverWorkerPanic("notification delivery: " + m.ID)
+				if deliver(ctx, app, userID, n) {
+					logging.Debugf("notify: delivered to user %d through %s", userID, m.ID)
+				}
+			}()
 		}
 	}
 }

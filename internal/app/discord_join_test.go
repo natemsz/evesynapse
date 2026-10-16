@@ -1,6 +1,7 @@
 package app
 
 import (
+	discordmod "evesynapse/internal/app/discord"
 	"net/url"
 	"strings"
 	"testing"
@@ -31,7 +32,7 @@ func TestDiscordAddsMembersToTheirServer(t *testing.T) {
 
 	// A member of the corporation connects: added, with both roles.
 	cookie, _ = f.connect(cookie, "alice")
-	if n := f.app.discordSyncRoles(f.ctx, now); n != 1 {
+	if n := discordmod.SyncRoles(f.ctx, f.app, now); n != 1 {
 		t.Fatalf("%d change(s), want the member added", n)
 	}
 	if len(fake.added) != 1 || fake.added[0] != discordCorpGuild+" "+discordAlice {
@@ -42,7 +43,7 @@ func TestDiscordAddsMembersToTheirServer(t *testing.T) {
 	}
 	// Once in, nothing more is asked.
 	calls := fake.asked()
-	if n := f.app.discordSyncRoles(f.ctx, now.Add(time.Minute)); n != 0 || fake.asked() != calls {
+	if n := discordmod.SyncRoles(f.ctx, f.app, now.Add(time.Minute)); n != 0 || fake.asked() != calls {
 		t.Fatalf("after adding: %d change(s), %d call(s)", n, fake.asked()-calls)
 	}
 
@@ -54,19 +55,19 @@ func TestDiscordAddsMembersToTheirServer(t *testing.T) {
 	f.joinCorp(fixtureCharB, discordOtherCorp)
 	theirs := sessionCookie(t, f.app, other.ID, fixtureCharB, "Fixture Other")
 	theirs, _ = f.connect(theirs, "bob")
-	f.app.discordSyncRoles(f.ctx, now.Add(2*time.Minute))
+	discordmod.SyncRoles(f.ctx, f.app, now.Add(2*time.Minute))
 	if len(fake.added) != 1 {
 		t.Fatalf("a stranger to the corporation was added to its server: %q", fake.added)
 	}
 	// They join the corporation: now they are added, at the next pass.
 	f.joinCorp(fixtureCharB, discordCorp)
-	f.app.discordSyncRoles(f.ctx, now.Add(3*time.Minute))
+	discordmod.SyncRoles(f.ctx, f.app, now.Add(3*time.Minute))
 	if len(fake.added) != 2 || fake.added[1] != discordCorpGuild+" "+discordBob {
 		t.Fatalf("after joining the corporation: added %q", fake.added)
 	}
 
 	// Switched off by the directors: nobody new is added.
-	_, body := getPage(t, f.app, cookie, discordServersPath)
+	_, body := getPage(t, f.app, cookie, "/discord/servers")
 	mustContain(t, "server settings", body, `name="auto_join" value="1" checked>`)
 	f.post(cookie, "/discord/servers/"+discordCorpGuild+"/save", url.Values{"ops_channel": {""}})
 	if guild, _ := f.q.GetDiscordGuild(f.ctx, discordCorpGuild); guild.AutoJoin {
@@ -80,7 +81,7 @@ func TestDiscordAddsMembersToTheirServer(t *testing.T) {
 	fake.mu.Unlock()
 	thirds := sessionCookie(t, f.app, third.ID, 90000003, "Fixture Third")
 	f.connect(thirds, "carol")
-	f.app.discordSyncRoles(f.ctx, now.Add(4*time.Minute))
+	discordmod.SyncRoles(f.ctx, f.app, now.Add(4*time.Minute))
 	if len(fake.added) != 2 {
 		t.Fatalf("someone was added with the adding switched off: %q", fake.added)
 	}
@@ -94,9 +95,9 @@ func TestDiscordAddsMembersToTheirServer(t *testing.T) {
 	fake.mu.Lock()
 	fake.noJoin = true
 	fake.mu.Unlock()
-	f.app.discordSyncRoles(f.ctx, now.Add(5*time.Minute))
+	discordmod.SyncRoles(f.ctx, f.app, now.Add(5*time.Minute))
 	calls = fake.asked()
-	f.app.discordSyncRoles(f.ctx, now.Add(6*time.Minute))
+	discordmod.SyncRoles(f.ctx, f.app, now.Add(6*time.Minute))
 	if fake.asked() != calls {
 		t.Fatalf("a server that refuses new members was asked again a minute later (%d call(s))", fake.asked()-calls)
 	}
@@ -116,7 +117,7 @@ func TestDiscordAddsMembersToTheirServer(t *testing.T) {
 	fake.mu.Lock()
 	fake.revoked = true
 	fake.mu.Unlock()
-	f.app.discordSyncRoles(f.ctx, now.Add(7*time.Minute))
+	discordmod.SyncRoles(f.ctx, f.app, now.Add(7*time.Minute))
 	if len(fake.added) != 2 || fake.refreshes != 1 {
 		t.Fatalf("with permission taken back: added %q after %d renewal(s)", fake.added, fake.refreshes)
 	}
@@ -124,9 +125,9 @@ func TestDiscordAddsMembersToTheirServer(t *testing.T) {
 	if err != nil || link.AccessToken != "" || link.RefreshToken != "" {
 		t.Fatalf("the unusable token was kept: %+v, %v", link, err)
 	}
-	_, body = getPage(t, f.app, thirds, discordSettingsPath)
+	_, body = getPage(t, f.app, thirds, "/notifications/settings")
 	mustContain(t, "settings after permission was taken back", body, "Connect Discord again")
-	if _, body = getPage(t, f.app, cookie, discordSettingsPath); strings.Contains(body, "Connect Discord again") {
+	if _, body = getPage(t, f.app, cookie, "/notifications/settings"); strings.Contains(body, "Connect Discord again") {
 		t.Fatal("an account with a working token is asked to reconnect")
 	}
 
@@ -135,7 +136,7 @@ func TestDiscordAddsMembersToTheirServer(t *testing.T) {
 	fake.revoked = false
 	fake.mu.Unlock()
 	f.connect(thirds, "carol")
-	f.app.discordSyncRoles(f.ctx, now.Add(8*time.Minute))
+	discordmod.SyncRoles(f.ctx, f.app, now.Add(8*time.Minute))
 	if len(fake.added) != 3 {
 		t.Fatalf("after reconnecting: added %q", fake.added)
 	}

@@ -6,6 +6,7 @@ package app
 
 import (
 	"context"
+	"evesynapse/internal/app/swarm"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -35,7 +36,7 @@ func swarmPageApp(t *testing.T) (*Application, *http.Cookie) {
 // the operator never mistakes it for an instance with data.
 func TestSwarmSeedPeerShowsSeed(t *testing.T) {
 	app, _ := swarmPageApp(t)
-	app.cfg.swarm = swarmConfig{mode: swarmOpen, secret: swarmTestSecret, seeds: []string{"https://seed.example"}, gossipHours: defaultSwarmGossipHours}
+	swarm.StateFor(app).Cfg = swarm.SwarmConfig{Mode: swarm.SwarmOpen, Secret: swarmTestSecret, Seeds: []string{"https://seed.example"}, GossipHours: swarm.DefaultSwarmGossipHours}
 	ctx := context.Background()
 	now := time.Now().UTC()
 	for _, peer := range []struct {
@@ -55,8 +56,8 @@ func TestSwarmSeedPeerShowsSeed(t *testing.T) {
 			t.Fatalf("approve %s: %v", peer.id, err)
 		}
 	}
-	rows := app.loadSwarmPeers(ctx)
-	byID := map[string]swarmPeerRow{}
+	rows := swarm.StateFor(app).LoadSwarmPeers(ctx)
+	byID := map[string]swarm.SwarmPeerRow{}
 	for _, row := range rows {
 		byID[row.ID] = row
 	}
@@ -81,7 +82,7 @@ func TestSwarmSeedPeerShowsSeed(t *testing.T) {
 		t.Fatalf("mark served: %v", err)
 	}
 	found := false
-	for _, row := range app.loadSwarmPeers(ctx) {
+	for _, row := range swarm.StateFor(app).LoadSwarmPeers(ctx) {
 		if row.ID == "seed-1" {
 			found = true
 			if row.Role != "Seed+Cache" {
@@ -102,7 +103,7 @@ func TestSwarmSeedPeerShowsSeed(t *testing.T) {
 // heading and every role reach the page.
 func TestSwarmAdminRoleColumn(t *testing.T) {
 	app, cookie := swarmPageApp(t)
-	app.cfg.swarm = swarmConfig{mode: swarmOpen, secret: swarmTestSecret, seeds: []string{"https://seed.example", "https://seed-2.example"}, gossipHours: defaultSwarmGossipHours}
+	swarm.StateFor(app).Cfg = swarm.SwarmConfig{Mode: swarm.SwarmOpen, Secret: swarmTestSecret, Seeds: []string{"https://seed.example", "https://seed-2.example"}, GossipHours: swarm.DefaultSwarmGossipHours}
 	ctx := context.Background()
 	now := time.Now().UTC()
 	for _, peer := range []struct {
@@ -196,7 +197,7 @@ func TestSwarmAdminActions(t *testing.T) {
 	if _, err := app.queries.GetSwarmPeer(ctx, "peer-action-1"); err != nil {
 		t.Fatalf("wrong confirm removed the peer: %v", err)
 	}
-	right := url.Values{"instance": {"peer-action-1"}, "confirm": {app.swarmDisplayPeer("peer-action-1", "http://127.0.0.1:9", "gossip")}}
+	right := url.Values{"instance": {"peer-action-1"}, "confirm": {swarm.StateFor(app).SwarmDisplayPeer("peer-action-1", "http://127.0.0.1:9", "gossip")}}
 	if code, _ := postForm(t, app, cookie, "/admin/swarm/remove", right); code != http.StatusSeeOther {
 		t.Fatalf("remove: status %d, want 303", code)
 	}
@@ -217,25 +218,25 @@ func TestSwarmAdminActions(t *testing.T) {
 
 func TestSwarmManualAdd(t *testing.T) {
 	app, cookie := swarmPageApp(t)
-	app.cfg.swarm = swarmConfig{mode: swarmOpen, secret: swarmTestSecret, gossipHours: defaultSwarmGossipHours}
-	local, err := mintSwarmIdentity()
+	swarm.StateFor(app).Cfg = swarm.SwarmConfig{Mode: swarm.SwarmOpen, Secret: swarmTestSecret, GossipHours: swarm.DefaultSwarmGossipHours}
+	local, err := swarm.MintSwarmIdentity()
 	if err != nil {
 		t.Fatalf("mint local: %v", err)
 	}
-	local.id = "local-manual"
-	app.swarmID = local
-	app.swarmCli = newSwarmClient(swarmTestSecret)
+	local.ID = "local-manual"
+	swarm.StateFor(app).SwarmID = local
+	swarm.StateFor(app).SwarmCli = swarm.NewSwarmClient(swarmTestSecret)
 
 	transport := &countingTransport{}
 	peer, _, _ := buildCorpTestApp(t, transport)
-	peer.cfg.swarm = swarmConfig{mode: swarmOpen, secret: swarmTestSecret, gossipHours: defaultSwarmGossipHours}
-	remote, err := mintSwarmIdentity()
+	swarm.StateFor(peer).Cfg = swarm.SwarmConfig{Mode: swarm.SwarmOpen, Secret: swarmTestSecret, GossipHours: swarm.DefaultSwarmGossipHours}
+	remote, err := swarm.MintSwarmIdentity()
 	if err != nil {
 		t.Fatalf("mint peer: %v", err)
 	}
-	remote.id = "peer-manual"
-	peer.swarmID = remote
-	peer.swarmCli = newSwarmClient(swarmTestSecret)
+	remote.ID = "peer-manual"
+	swarm.StateFor(peer).SwarmID = remote
+	swarm.StateFor(peer).SwarmCli = swarm.NewSwarmClient(swarmTestSecret)
 	srv := httptest.NewServer(peer.Handler())
 	t.Cleanup(srv.Close)
 
@@ -258,20 +259,20 @@ func TestSwarmManualAdd(t *testing.T) {
 	if got.Source != "manual" || !got.Approved || got.Excluded {
 		t.Fatalf("learned peer: %+v", got)
 	}
-	if got.PublicKey != remote.publicString() {
+	if got.PublicKey != remote.PublicString() {
 		t.Fatalf("learned key is not the peer's")
 	}
 }
 
 func TestSwarmSyncCardEnabled(t *testing.T) {
 	app, cookie := swarmPageApp(t)
-	app.cfg.swarm = swarmConfig{mode: swarmOpen, secret: swarmTestSecret, gossipHours: defaultSwarmGossipHours}
-	id, err := mintSwarmIdentity()
+	swarm.StateFor(app).Cfg = swarm.SwarmConfig{Mode: swarm.SwarmOpen, Secret: swarmTestSecret, GossipHours: swarm.DefaultSwarmGossipHours}
+	id, err := swarm.MintSwarmIdentity()
 	if err != nil {
 		t.Fatalf("mint: %v", err)
 	}
-	app.swarmID = id
-	app.swarmCli = newSwarmClient(swarmTestSecret)
+	swarm.StateFor(app).SwarmID = id
+	swarm.StateFor(app).SwarmCli = swarm.NewSwarmClient(swarmTestSecret)
 	ctx := context.Background()
 	now := time.Now().UTC()
 	if _, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
@@ -283,13 +284,13 @@ func TestSwarmSyncCardEnabled(t *testing.T) {
 	if err := app.queries.SetSwarmPeerApproved(ctx, db.SetSwarmPeerApprovedParams{InstanceID: "peer-shown-12", Approved: true}); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
-	if err := app.queries.AddSwarmCounter(ctx, db.AddSwarmCounterParams{Name: swarmCounterAppliedHistory, Value: 7}); err != nil {
+	if err := app.queries.AddSwarmCounter(ctx, db.AddSwarmCounterParams{Name: swarm.SwarmCounterAppliedHistory, Value: 7}); err != nil {
 		t.Fatalf("counter: %v", err)
 	}
 	// The seed-sourced peer shows under its alias, not its
 	// address: only hand-added and configured seeds show
 	// plainly.
-	alias := swarmAlias(swarmTestSecret, "peer-shown-12")
+	alias := swarm.SwarmAlias(swarmTestSecret, "peer-shown-12")
 	if strings.Contains(alias, "peer-shown") {
 		t.Fatalf("alias %q leaks the instance id", alias)
 	}
@@ -316,7 +317,7 @@ func TestSwarmSyncCardEnabled(t *testing.T) {
 // instance to look at.
 func TestSwarmAdminShowsRefusedKey(t *testing.T) {
 	app, cookie := swarmPageApp(t)
-	app.cfg.swarm = swarmConfig{mode: swarmOpen, secret: swarmTestSecret, gossipHours: defaultSwarmGossipHours}
+	swarm.StateFor(app).Cfg = swarm.SwarmConfig{Mode: swarm.SwarmOpen, Secret: swarmTestSecret, GossipHours: swarm.DefaultSwarmGossipHours}
 	ctx := context.Background()
 	now := time.Date(2026, 10, 13, 9, 0, 0, 0, time.UTC)
 	if _, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{

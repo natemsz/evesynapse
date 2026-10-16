@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"evesynapse/internal/app/module"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -23,13 +24,7 @@ import (
 // ---------------------------------------------------------------------------
 
 // corpOption is one corporation in the selector.
-type corpOption struct {
-	ID     int64
-	Name   string
-	Active bool
-	// Param and Value are what the option's link sets in the address.
-	Param, Value string
-}
+type corpOption = module.OwnerOption
 
 // npcCorporation reports whether an id is one of the game's own
 // corporations, which nobody runs: they have no directors, so no
@@ -40,7 +35,7 @@ func npcCorporation(id int64) bool { return id >= 1_000_000 && id < 2_000_000 }
 // in, in the order of its characters.
 func (app *Application) playerCorps(ctx context.Context, userID int64) []int64 {
 	var out []int64
-	for _, corp := range app.srpCorps(ctx, userID) {
+	for _, corp := range app.UserCorps(ctx, userID) {
 		if !npcCorporation(corp) {
 			out = append(out, corp)
 		}
@@ -81,17 +76,17 @@ func (app *Application) pickCorporation(ctx context.Context, r *http.Request, of
 // alliance's directors run (groups, Discord servers): among the owners
 // offered, the one the address names (?owner=), else the corporation
 // the character in use is in, else the first.
-func (app *Application) pickOwner(ctx context.Context, r *http.Request, offered []discordOwner) (discordOwner, []corpOption, bool) {
+func (app *Application) pickOwner(ctx context.Context, r *http.Request, offered []orgOwner) (orgOwner, []corpOption, bool) {
 	if len(offered) == 0 {
-		return discordOwner{}, nil, false
+		return orgOwner{}, nil, false
 	}
 	active := offered[0]
 	if row, err := app.queries.GetCharacterCorporation(ctx, sessionCharID(app.sessions, ctx)); err == nil {
-		if mine := (discordOwner{ownerCorporation, row.CorporationID}); discordManages(offered, mine) {
+		if mine := (orgOwner{Kind: ownerCorporation, ID: row.CorporationID}); ownersInclude(offered, mine) {
 			active = mine
 		}
 	}
-	if named, ok := parseDiscordOwner(r.URL.Query().Get("owner")); ok && discordManages(offered, named) {
+	if named, ok := parseOrgOwner(r.URL.Query().Get("owner")); ok && ownersInclude(offered, named) {
 		active = named
 	}
 	options := make([]corpOption, 0, len(offered))
@@ -100,7 +95,7 @@ func (app *Application) pickOwner(ctx context.Context, r *http.Request, offered 
 		if owner.Kind == ownerAlliance {
 			name += " (alliance)"
 		}
-		options = append(options, corpOption{ID: owner.ID, Name: name, Active: owner == active, Param: "owner", Value: owner.key()})
+		options = append(options, corpOption{ID: owner.ID, Name: name, Active: owner == active, Param: "owner", Value: owner.Key()})
 	}
 	return active, options, true
 }
@@ -108,7 +103,7 @@ func (app *Application) pickOwner(ctx context.Context, r *http.Request, offered 
 // ownerAddress is such a page's address for one owner, named by its
 // key; the plain page where the key is not one.
 func ownerAddress(path, key string) string {
-	if _, ok := parseDiscordOwner(key); !ok {
+	if _, ok := parseOrgOwner(key); !ok {
 		return path
 	}
 	return path + "?owner=" + url.QueryEscape(key)
@@ -144,14 +139,14 @@ type corpSettingsView struct {
 // directedCorps lists the corporations an account has a director, or
 // the CEO, of.
 func (app *Application) directedCorps(ctx context.Context, userID int64) []int64 {
-	st, err := app.discordStandingFor(ctx, userID)
+	st, err := app.standingFor(ctx, userID)
 	if err != nil {
 		logging.Errorf("corporation settings: standing of user %d: %v", userID, err)
 		return nil
 	}
 	var out []int64
 	for _, corp := range app.playerCorps(ctx, userID) {
-		if st.directs(corp) {
+		if st.Directs(corp) {
 			out = append(out, corp)
 		}
 	}
@@ -184,19 +179,19 @@ func (app *Application) handleCorpSettingsSave(w http.ResponseWriter, r *http.Re
 	_ = r.ParseForm()
 	corp, _ := strconv.ParseInt(r.Form.Get("corporation"), 10, 64)
 	back := app.flashBack(w, r, corpAddress(corpSettingsPath, corp))
-	st, err := app.discordStandingFor(ctx, userID)
-	if err != nil || corp == 0 || !st.directs(corp) {
+	st, err := app.standingFor(ctx, userID)
+	if err != nil || corp == 0 || !st.Directs(corp) {
 		app.flashBack(w, r, corpSettingsPath)("Only a director or the CEO of the corporation can change its settings.")
 		return
 	}
-	owner := discordOwner{ownerCorporation, corp}
+	owner := orgOwner{Kind: ownerCorporation, ID: corp}
 	for _, raw := range []string{r.Form.Get("srp_who"), r.Form.Get("doctrines_who")} {
 		if kind, ref, ok := app.parseRuleWho(ctx, owner, raw); raw != "" && (!ok || !permissionRule(kind+":"+ref)) {
 			back("That cannot be handed to the choice made; nothing was saved.")
 			return
 		}
 	}
-	by := app.srpActorFor(ctx, userID, corp).CharacterID
+	by := app.CorpActorFor(ctx, userID, corp).CharacterID
 	saved := app.setCorpPermission(ctx, corp, permSRP, r.Form.Get("srp_who"), by) &&
 		app.setCorpPermission(ctx, corp, permDoctrines, r.Form.Get("doctrines_who"), by)
 	if saved {

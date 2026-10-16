@@ -10,6 +10,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/humanize"
 	"evesynapse/internal/logging"
 )
 
@@ -103,22 +104,7 @@ func (app *Application) locationTitle(ctx context.Context, id int64, locType str
 // duration compactly for "time remaining"
 // labels: "2d 3h", "3h 12m", "45m", "<1m". Non-positive durations
 // render "<1m"; callers that care check the sign themselves.
-func humanDuration(d time.Duration) string {
-	if d < time.Minute {
-		return "<1m"
-	}
-	days := int(d / (24 * time.Hour))
-	hours := int((d % (24 * time.Hour)) / time.Hour)
-	mins := int((d % time.Hour) / time.Minute)
-	switch {
-	case days > 0:
-		return fmt.Sprintf("%dd %dh", days, hours)
-	case hours > 0:
-		return fmt.Sprintf("%dh %dm", hours, mins)
-	default:
-		return fmt.Sprintf("%dm", mins)
-	}
-}
+func humanDuration(d time.Duration) string { return humanize.Duration(d) }
 
 // ---------------------------------------------------------------------------
 // Character page: live state (location/ship/online), jump fatigue,

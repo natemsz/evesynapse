@@ -10,6 +10,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/humanize"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/skillplan"
 )
@@ -20,6 +21,16 @@ import (
 // the worker is still importing), which gets friendlier copy
 // than a hard failure. Queue data degrades independently: a
 // failed queue fetch leaves Queue empty and Training blank.
+// skillPlanSummary is one of the character's plans as the skills pages
+// offer it in their Add-to-plan pickers (the Skill Plans module owns the
+// plans themselves).
+type skillPlanSummary struct {
+	ID        int64
+	Name      string
+	Items     int
+	Character int64
+}
+
 type skillsView struct {
 	CharacterName string
 	CharacterID   int64
@@ -141,7 +152,7 @@ func (app *Application) fillBrowse(ctx context.Context, view *skillsView, ch db.
 		brow := browseSkillRow{
 			TypeID:    row.TypeID,
 			Name:      row.Name,
-			Rank:      formatRank(row.Rank),
+			Rank:      humanize.Rank(row.Rank),
 			Trained:   "—",
 			Primary:   skillplan.AttributeName(row.PrimaryAttr),
 			Secondary: skillplan.AttributeName(row.SecondaryAttr),
@@ -156,6 +167,9 @@ func (app *Application) fillBrowse(ctx context.Context, view *skillsView, ch db.
 	}
 	view.Browse = groups
 
+	if !moduleCompiledIn("skillplans") {
+		return
+	}
 	plans, err := app.queries.ListSkillPlans(ctx, db.ListSkillPlansParams{UserID: userID, CharacterID: ch.CharacterID})
 	if err != nil {
 		logging.Errorf("skills: plans for character %d: %v", ch.CharacterID, err)
@@ -215,15 +229,7 @@ func (app *Application) fillQueue(ctx context.Context, view *skillsView, queue e
 
 // formatFinish renders an ESI RFC3339 timestamp the way the home
 // page does; unparseable values pass through, empty stays empty.
-func formatFinish(raw string) string {
-	if raw == "" {
-		return ""
-	}
-	if t, err := time.Parse(time.RFC3339, raw); err == nil {
-		return t.UTC().Format("2006-01-02 15:04 UTC")
-	}
-	return raw
-}
+func formatFinish(raw string) string { return humanize.Finish(raw) }
 
 // fillSkillSections computes the header stats and the per-group
 // skill tables (every skill, heaviest first, SP subtotal per

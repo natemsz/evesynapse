@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"evesynapse/internal/app/leaderboard"
 	"net/url"
 	"testing"
 
@@ -30,7 +31,7 @@ func TestLeaderboardStampIsTheNewestWriteInUTC(t *testing.T) {
 		}
 	}
 
-	view := app.buildLeaderboardView(ctx, url.Values{"region": {"10000002"}})
+	view := leaderboard.BuildView(ctx, app, url.Values{"region": {"10000002"}})
 	if !view.HasData || len(view.Rows) != 2 {
 		t.Fatalf("The Forge: HasData=%v with %d rows, want 2 rows", view.HasData, len(view.Rows))
 	}
@@ -38,7 +39,7 @@ func TestLeaderboardStampIsTheNewestWriteInUTC(t *testing.T) {
 		t.Errorf("AsOf = %q, want %q", view.AsOf, want)
 	}
 
-	empty := app.buildLeaderboardView(ctx, url.Values{"region": {"10000043"}})
+	empty := leaderboard.BuildView(ctx, app, url.Values{"region": {"10000043"}})
 	if empty.RegionID != domain {
 		t.Fatalf("region = %d, want Domain", empty.RegionID)
 	}

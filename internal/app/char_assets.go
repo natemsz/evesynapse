@@ -10,18 +10,14 @@ import (
 	"strconv"
 	"strings"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 )
 
 // assetCharLink is one entry of the Assets page character switcher.
-type assetCharLink struct {
-	ID     int64
-	Name   string
-	Active bool
-	Tags   string
-}
+type assetCharLink = module.CharLink
 
 // assetRow is one item stack in a location table.
 type assetRow struct {

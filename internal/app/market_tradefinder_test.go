@@ -7,6 +7,7 @@ package app
 
 import (
 	"context"
+	"evesynapse/internal/app/tradefinder"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -108,7 +109,7 @@ func TestTradefinderMathFreshnessFiltersAndHints(t *testing.T) {
 		}
 	}
 
-	view := app.buildTradefinderView(ctx, url.Values{})
+	view := tradefinder.BuildView(ctx, app, url.Values{})
 	if !view.HasData() {
 		t.Fatalf("tradefinder HasData false, want true (origin %v, dest %v)", view.OriginHasData, view.DestHasData)
 	}
@@ -141,15 +142,15 @@ func TestTradefinderMathFreshnessFiltersAndHints(t *testing.T) {
 	// Filters: a 200% margin floor drops everything; a sold-per
 	// -day floor of 50 keeps only Pyerite (100/day); a 1% margin
 	// floor admits the 2% Zydrine route.
-	view = app.buildTradefinderView(ctx, url.Values{"minmargin": {"200"}})
+	view = tradefinder.BuildView(ctx, app, url.Values{"minmargin": {"200"}})
 	if len(view.Rows) != 0 {
 		t.Fatalf("200%% margin floor rows: %d, want 0", len(view.Rows))
 	}
-	view = app.buildTradefinderView(ctx, url.Values{"minvol": {"50"}})
+	view = tradefinder.BuildView(ctx, app, url.Values{"minvol": {"50"}})
 	if len(view.Rows) != 1 || view.Rows[0].TypeID != 35 {
 		t.Fatalf("minvol 50 rows: %+v, want only type 35", view.Rows)
 	}
-	view = app.buildTradefinderView(ctx, url.Values{"minmargin": {"1"}})
+	view = tradefinder.BuildView(ctx, app, url.Values{"minmargin": {"1"}})
 	found39 := false
 	for _, r := range view.Rows {
 		if r.TypeID == 39 {
@@ -161,7 +162,7 @@ func TestTradefinderMathFreshnessFiltersAndHints(t *testing.T) {
 	}
 
 	// Same region on both ends: valid, but no routes by design.
-	view = app.buildTradefinderView(ctx, url.Values{"origin": {"10000002"}, "destination": {"10000002"}})
+	view = tradefinder.BuildView(ctx, app, url.Values{"origin": {"10000002"}, "destination": {"10000002"}})
 	if !view.SameRegion || len(view.Rows) != 0 {
 		t.Fatalf("same-region view: same %v, rows %d, want same with 0 rows", view.SameRegion, len(view.Rows))
 	}
@@ -190,9 +191,9 @@ func TestTradefinderCap(t *testing.T) {
 			t.Fatalf("seed cap dest stat: %v", err)
 		}
 	}
-	view := app.buildTradefinderView(ctx, url.Values{})
-	if len(view.Rows) != tradefinderRowCap {
-		t.Fatalf("capped tradefinder rows: %d, want %d", len(view.Rows), tradefinderRowCap)
+	view := tradefinder.BuildView(ctx, app, url.Values{})
+	if len(view.Rows) != tradefinder.RowCap {
+		t.Fatalf("capped tradefinder rows: %d, want %d", len(view.Rows), tradefinder.RowCap)
 	}
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("tradefinder cap build made %d outbound calls, want 0", got)
@@ -282,7 +283,7 @@ func TestTradefinderLowballRoutesOptIn(t *testing.T) {
 		}
 	}
 
-	routeIDs := func(view *tradefinderView) map[int64]bool {
+	routeIDs := func(view *tradefinder.View) map[int64]bool {
 		ids := make(map[int64]bool, len(view.Rows))
 		for _, r := range view.Rows {
 			ids[r.TypeID] = true
@@ -291,7 +292,7 @@ func TestTradefinderLowballRoutesOptIn(t *testing.T) {
 	}
 
 	// Default: the degenerate route is hidden, the sane one shows.
-	view := app.buildTradefinderView(ctx, url.Values{})
+	view := tradefinder.BuildView(ctx, app, url.Values{})
 	if view.Lowball {
 		t.Error("default view has lowball routes on, want off")
 	}
@@ -300,7 +301,7 @@ func TestTradefinderLowballRoutesOptIn(t *testing.T) {
 	}
 
 	// Opted in: both routes list, and the flag echoes for the form.
-	view = app.buildTradefinderView(ctx, url.Values{"lowball": {"1"}})
+	view = tradefinder.BuildView(ctx, app, url.Values{"lowball": {"1"}})
 	if !view.Lowball {
 		t.Error("lowball=1 view dropped the opt-in flag")
 	}
@@ -309,7 +310,7 @@ func TestTradefinderLowballRoutesOptIn(t *testing.T) {
 	}
 
 	// An explicit 0 is off, like an unchecked box.
-	view = app.buildTradefinderView(ctx, url.Values{"lowball": {"0"}})
+	view = tradefinder.BuildView(ctx, app, url.Values{"lowball": {"0"}})
 	if view.Lowball {
 		t.Error("lowball=0 view has lowball routes on, want off")
 	}
@@ -424,12 +425,12 @@ func TestTradefinderMarginRankingAndCapInSQL(t *testing.T) {
 		}
 	}
 
-	view := app.buildTradefinderView(ctx, url.Values{})
+	view := tradefinder.BuildView(ctx, app, url.Values{})
 	if !view.HasData() {
 		t.Fatal("tradefinder has no data after seeding 105 pairs")
 	}
-	if len(view.Rows) != tradefinderRowCap {
-		t.Fatalf("tradefinder rows: %d, want %d", len(view.Rows), tradefinderRowCap)
+	if len(view.Rows) != tradefinder.RowCap {
+		t.Fatalf("tradefinder rows: %d, want %d", len(view.Rows), tradefinder.RowCap)
 	}
 	for i, row := range view.Rows {
 		if want := int64(2104 - i); row.TypeID != want {

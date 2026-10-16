@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"evesynapse/internal/app/module"
+
 	"github.com/go-chi/chi/v5"
 
 	db "evesynapse/internal/db/sqlc"
@@ -129,11 +131,7 @@ func opEnd(op db.Op) time.Time {
 // Creating and changing an op.
 // ---------------------------------------------------------------------------
 
-type opChoice struct {
-	ID       int64
-	Name     string
-	Selected bool
-}
+type opChoice = module.NamedChoice
 
 // opFormView is the create/edit form.
 type opFormView struct {

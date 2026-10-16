@@ -1,0 +1,77 @@
+{{define "title"}}Link a character{{end}}
+{{define "content"}}
+<h1><span class="gt">Link a character</span></h1>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{with .Link}}
+{{if eq .Step "cards"}}
+<section class="card" data-fold="never">
+  <h2>What do you want to do with EveSynapse?</h2>
+  <p><small>Pick as many as you like. EveSynapse asks EVE only for the permissions those need, and shows you the list before anything is sent. You can add more later.</small></p>
+  <p class="lk-privacy"><small>Sign-in goes through EVE Online's official secure login. Your login details, account details and personal information are never shared with EveSynapse.</small></p>
+  <form method="get" action="/auth/link">
+    <input type="hidden" name="from" value="cards">
+    {{if .Character}}<input type="hidden" name="character" value="{{.Character}}">{{end}}
+    <div class="lk-cards">
+      {{range .Activities}}
+      <label class="lk-card ti-acc ti-a{{.Accent}}">
+        <input type="checkbox" name="activity" value="{{.ID}}"{{if .Selected}} checked{{end}}>
+        <span class="lk-title">{{.Title}}</span>
+        <span class="lk-blurb">{{.Blurb}}</span>
+      </label>
+      {{end}}
+    </div>
+    <p class="lk-actions"><button class="btn" type="submit">Continue</button> <a href="?cards=1&amp;pick=all{{if .Character}}&amp;character={{.Character}}{{end}}" data-select-all>Select all</a> <a href="{{.Switch}}">Choose features myself</a></p>
+  </form>
+</section>
+{{else}}
+<section class="card" data-fold="never">
+  <h2>{{if eq .Step "advanced"}}Choose the features{{else}}This is what will be turned on{{end}}</h2>
+  <p class="lk-top"><a href="#lk-actions">Jump to bottom <span aria-hidden="true">&darr;</span></a></p>
+  {{if .Remembered}}<p><small>These are the choices you made last time. Change anything, or continue as they are.</small></p>{{end}}
+  <p class="lk-count">EVE will ask for <strong data-lk-count>{{.Count}}</strong> permission{{if ne .Count 1}}s{{end}}{{if .Count}}, <span data-lk-required>{{.Required}}</span> of them needed by the features below{{else}}: you only sign in, and nothing about your characters is read{{end}}.</p>
+  <form method="get" action="/auth/link" data-lk-form>
+    <input type="hidden" name="submitted" value="1">
+    {{if eq .Step "advanced"}}<input type="hidden" name="advanced" value="1">{{end}}
+    {{if .Character}}<input type="hidden" name="character" value="{{.Character}}">{{end}}
+
+    {{if and .Roles (ne .Step "advanced")}}<p><small>Corporation permissions are shown under their feature, framed by the in-game role EVE needs for them. Tick what this character can do in its corporation; if you are not sure, leave it unticked and add it later.</small></p>{{end}}
+
+    {{range .Groups}}
+    <div class="lk-group foldable ti-acc ti-a{{.Accent}}">
+      <h3>{{.Title}}</h3>
+      <div class="lk-rows">
+        {{range .Features}}
+        <div class="lk-row">
+          <label class="lk-name"><input type="checkbox" name="feature" value="{{.ID}}" data-scopes="{{range .Required}}{{.Scope}} {{end}}"{{if .Ticked}} checked{{end}}{{if .Locked}} disabled{{end}}><strong>{{.Title}}</strong>{{if .Why}} <span class="lk-why">{{.Why}}</span>{{end}}</label>
+          {{if .Needs}}<small class="lk-why">Needs {{.Needs}}</small>{{end}}
+          {{if .Required}}<ul>{{range .Required}}<li>{{.Unlocks}} <code>{{.Scope}}</code></li>{{end}}</ul>{{else if not .Role}}<ul><li>No EVE permission needed.</li></ul>{{end}}
+          {{range .Role}}<label class="lk-opt"><input type="checkbox" name="enhance" value="{{.Scope}}"{{if .Ticked}} checked{{end}}><span>{{if .Roles}}With the role {{.Roles}}: {{end}}{{.Unlocks}} <code>{{.Scope}}</code></span></label>{{end}}
+          {{range .Enhance}}<label class="lk-opt"><input type="checkbox" name="enhance" value="{{.Scope}}"{{if .Ticked}} checked{{end}}><span>Extra: {{.Unlocks}} <code>{{.Scope}}</code></span></label>{{end}}
+        </div>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+
+    {{if .Server}}
+    <h3 class="lk-sub">This server <small>(your choice; not needed)</small></h3>
+    <div class="lk-rows">
+      {{range .Server}}
+      <label class="lk-opt"><input type="checkbox" name="enhance" value="{{.Scope}}"{{if .Ticked}} checked{{end}}><span>{{.Unlocks}} <code>{{.Scope}}</code></span></label>
+      {{end}}
+    </div>
+    {{end}}
+
+    <p class="lk-actions" id="lk-actions">
+      <button class="btn" type="submit" formaction="/auth/eve">Complete sign up</button>
+      <a href="{{.Back}}">Go back</a>
+      <a href="{{.Full}}#lk-actions" data-tick-all>Tick every extra permission</a>
+      {{if ne .Step "advanced"}}<a href="{{.Switch}}">Choose features myself</a>{{end}}
+    </p>
+  </form>
+</section>
+{{end}}
+{{end}}
+{{end}}

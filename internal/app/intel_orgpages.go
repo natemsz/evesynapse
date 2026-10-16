@@ -3,7 +3,8 @@ package app
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
+	"evesynapse/internal/app/module"
+	"evesynapse/internal/htmlsanitize"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -32,7 +33,7 @@ import (
 // Organization record states (corporation_records / alliance_records).
 const (
 	orgStatePending = "pending"
-	orgStateReady   = "ready"
+	orgStateReady   = module.OrgStateReady
 	orgStateMissing = "missing"
 )
 
@@ -57,55 +58,14 @@ const (
 // /corporation/: the corporation profile, with the alliance's
 // name/ticker baked in when the corporation belongs to one, so
 // renders never chase names.
-type corporationRecordPayload struct {
-	Corp     esi.Corporation `json:"corp"`
-	Alliance esi.Alliance    `json:"alliance"`
-}
-
 // allianceMemberCorp is one member corporation of an alliance;
 // Name is baked when the drain could resolve it, "" until then.
-type allianceMemberCorp struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
-}
-
 // allianceRecordPayload is the stored public record behind
 // /alliance/: the alliance profile plus its member corporations.
-type allianceRecordPayload struct {
-	Alliance     esi.Alliance         `json:"alliance"`
-	Corporations []allianceMemberCorp `json:"corporations"`
-}
-
 // decodeCorpPayload reads a stored corporation record. The app writes
 // {"corp":{...},"alliance":{...}}; a record a swarm peer sent can be the
 // bare ESI corporation instead, which reads as the corp with no
 // alliance. ok is false when neither shape names a corporation.
-func decodeCorpPayload(raw string) (corporationRecordPayload, bool) {
-	var p corporationRecordPayload
-	if err := json.Unmarshal([]byte(raw), &p); err == nil && p.Corp.Name != "" {
-		return p, true
-	}
-	var bare esi.Corporation
-	if err := json.Unmarshal([]byte(raw), &bare); err == nil && bare.Name != "" {
-		return corporationRecordPayload{Corp: bare}, true
-	}
-	return corporationRecordPayload{}, false
-}
-
-// decodeAlliancePayload is decodeCorpPayload for alliance records: the
-// app's {"alliance":{...},"corporations":[...]}, or a bare ESI alliance.
-func decodeAlliancePayload(raw string) (allianceRecordPayload, bool) {
-	var p allianceRecordPayload
-	if err := json.Unmarshal([]byte(raw), &p); err == nil && p.Alliance.Name != "" {
-		return p, true
-	}
-	var bare esi.Alliance
-	if err := json.Unmarshal([]byte(raw), &bare); err == nil && bare.Name != "" {
-		return allianceRecordPayload{Alliance: bare}, true
-	}
-	return allianceRecordPayload{}, false
-}
-
 // corporationPageView is the /corporation/ page body.
 type corporationPageView struct {
 	CorporationID   int64
@@ -329,7 +289,7 @@ func (app *Application) buildCorporationView(ctx context.Context, id int64, payl
 	}
 	if p.Corp.Description != "" {
 		view.HasDescription = true
-		view.Description = sanitizeMailHTML(p.Corp.Description)
+		view.Description = htmlsanitize.Sanitize(p.Corp.Description)
 	}
 	return view, true
 }
@@ -554,4 +514,16 @@ func (app *Application) resolvedPlaceName(ctx context.Context, id int64) (string
 		return "", true
 	}
 	return "", false
+}
+
+type corporationRecordPayload = module.CorporationRecordPayload
+type allianceMemberCorp = module.AllianceMemberCorp
+type allianceRecordPayload = module.AllianceRecordPayload
+
+func decodeCorpPayload(raw string) (corporationRecordPayload, bool) {
+	return module.DecodeCorpPayload(raw)
+}
+
+func decodeAlliancePayload(raw string) (allianceRecordPayload, bool) {
+	return module.DecodeAlliancePayload(raw)
 }

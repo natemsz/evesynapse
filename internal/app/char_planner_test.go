@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"evesynapse/internal/buildplan"
+	"evesynapse/internal/app/buildplanner"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/pgtest"
@@ -286,7 +286,7 @@ func TestPlannerJSONPayload(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("planner json status = %d, want 200", code)
 	}
-	var p planPayload
+	var p buildplanner.Payload
 	if err := json.Unmarshal([]byte(body), &p); err != nil {
 		t.Fatalf("planner json decodes: %v", err)
 	}
@@ -295,7 +295,7 @@ func TestPlannerJSONPayload(t *testing.T) {
 	}
 	// The inspector's blueprint overlay rides the nodes: the
 	// owned component BPO reports ME8/TE12 from the snapshot.
-	var comp *planNodeDTO
+	var comp *buildplanner.NodeDTO
 	for _, k := range p.Root.Kids {
 		if k.ID == 1002 {
 			comp = k
@@ -341,7 +341,7 @@ func TestPlannerJSONPayload(t *testing.T) {
 	}
 	// Every preset's bought+built equals its materials: the
 	// unit the client cross-checks.
-	for name, preset := range map[string]planPresetTotals{"full": p.Full, "optimized": p.Optimized, "buycomp": p.BuyComp} {
+	for name, preset := range map[string]buildplanner.PresetTotals{"full": p.Full, "optimized": p.Optimized, "buycomp": p.BuyComp} {
 		if preset.Bought+preset.Built != preset.Materials {
 			t.Errorf("%s bought+built != materials", name)
 		}
@@ -405,7 +405,7 @@ func TestPlannerJitaMarket(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("planner jita json status = %d, want 200", code)
 	}
-	var p planPayload
+	var p buildplanner.Payload
 	if err := json.Unmarshal([]byte(body), &p); err != nil {
 		t.Fatalf("planner jita json decodes: %v", err)
 	}
@@ -479,7 +479,7 @@ func TestPlannerRegionWithoutRowsFallsBackToGuide(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("planner region json status = %d, want 200", code)
 	}
-	var p planPayload
+	var p buildplanner.Payload
 	if err := json.Unmarshal([]byte(body), &p); err != nil {
 		t.Fatalf("planner region json decodes: %v", err)
 	}
@@ -544,12 +544,12 @@ func TestPlannerStructureBonuses(t *testing.T) {
 	}
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 
-	shoppingQty := func(url string) (planPayload, int64) {
+	shoppingQty := func(url string) (buildplanner.Payload, int64) {
 		code, body := getPage(t, app, cookie, url)
 		if code != http.StatusOK {
 			t.Fatalf("planner %s status = %d, want 200", url, code)
 		}
-		var p planPayload
+		var p buildplanner.Payload
 		if err := json.Unmarshal([]byte(body), &p); err != nil {
 			t.Fatalf("planner json decodes: %v", err)
 		}
@@ -606,27 +606,4 @@ func TestMigration011Reopen(t *testing.T) {
 	}
 	conn.Close()
 	pool.Close()
-}
-
-// An empty preset (the mask buys the finished product, or stock
-// covers everything) must marshal its lists as [], never null —
-// the client dereferences both on first load, and a null shopping
-// list is what blanked capital plans until a preset was clicked.
-func TestPlannerEmptyPresetMarshalsLists(t *testing.T) {
-	r := &planRollup{preset: planPresetOptimized, shop: make(map[int64]int64)}
-	r.tot.Complete = true
-	r.tot.FeesKnown = true
-	root := &buildplan.Node{TypeID: 999, ProducedQty: 1}
-	planFinishPreset(r, root, map[int64]esi.MarketPrice{}, 1,
-		func(int64) string { return "X" },
-		func(int64) (float64, bool) { return 0, false })
-	raw, err := json.Marshal(r.tot)
-	if err != nil {
-		t.Fatalf("marshal totals: %v", err)
-	}
-	for _, want := range []string{`"shopping":[]`, `"jobs":[]`} {
-		if !strings.Contains(string(raw), want) {
-			t.Errorf("empty preset marshaled %s missing %s (null lists break first load)", raw, want)
-		}
-	}
 }

@@ -3,6 +3,9 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"evesynapse/internal/app/module"
+	"evesynapse/internal/balancechart"
+	"evesynapse/internal/ideas"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +18,7 @@ import (
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/markethistory"
+	"evesynapse/internal/tags"
 )
 
 // ---------------------------------------------------------------------------
@@ -79,23 +83,18 @@ type widgetDef struct {
 	Title       string
 	Description string
 	W, H        int    // default size in grid cells, 1-3 each
-	Module      string // id of the moduleManifest entry that powers it
+	Module      string // id of the feature (manifest entry or module declaration) that powers it
 }
 
-var homeWidgetCatalog = []widgetDef{
+var coreWidgetCatalog = []widgetDef{
 	{widgetGlance, "At a Glance", "The fleet's key figures in one band: net worth, liquid wallets, assets, and how many pilots are training.", 3, 1, "networth"},
 	{widgetBriefing, "Briefing", "What changed since you last looked, and what needs you in the next day.", 3, 1, "briefing"},
 	{widgetFleet, "Fleet Overview", "Every linked character at a glance: where they are, what they're flying, what they're training.", 3, 2, "fleet"},
 	{widgetNetWorth, "Net Worth", "Wallets, assets and open-order escrow across all characters, at market prices. An estimate.", 1, 2, "networth"},
 	{widgetIndustry, "Industry", "Active industry jobs across characters, soonest delivery first.", 1, 1, "industry"},
 	{widgetPI, "Planetary Industry", "Colonies across your characters: extractor timers, expired heads, and the next planet needing a visit.", 1, 2, "planets"},
-	{widgetMarket, "Market", "Open orders across characters: counts, sell/buy value, orders expiring soonest.", 1, 1, "market"},
 	{widgetWatchlist, "Market Watchlist", "The items you're watching: latest prices, 7- and 30-day moves, and a flag when one crosses your alert line.", 1, 1, "market_public"},
-	{widgetTradeIdeas, "Trade Ideas", "A model's read on the Forge spread scanner, one tab per trade strategy. Refreshed twice a day; the Trade Ideas page has the full list.", 2, 1, "tradeideas"},
 	{widgetTraining, "Training Horizon", "The next 10 skill finishes across every character, plus who is sitting idle.", 1, 2, "skills"},
-	{widgetPulse, "Corp Pulse", "What changed in the corporation: members in and out, wallet movements, structure arrivals and timers. Needs a qualifying in-game role.", 1, 1, "corp_members"},
-	{widgetWalletFlow, "Wallet Flow", "Income vs spend over 7 and 30 days with top sources, sinks, and a per-character breakdown.", 2, 2, "wallet"},
-	{widgetUpkeep, "Upkeep & Fuel", "Structures low on fuel, unanchoring, or running a state timer. Station Managers and Directors only.", 1, 1, "corp_structures"},
 }
 
 // defaultHomeLayout is what accounts with no saved layout get, sized
@@ -139,8 +138,33 @@ func widgetMin(id string) (w, h int) {
 	return 1, 1
 }
 
+// homeWidgetCatalog is every widget this build has: core's own, then the
+// ones the built-in modules declare, each after the widget it names.
+func homeWidgetCatalog() []widgetDef {
+	out := append([]widgetDef(nil), coreWidgetCatalog...)
+	for _, m := range registeredModules {
+		for _, w := range m.Widgets {
+			def := widgetDef{ID: w.ID, Title: w.Title, Description: w.Description, W: w.W, H: w.H, Module: w.Feature}
+			if def.Module == "" {
+				def.Module = m.ID
+			}
+			at := len(out)
+			for i, existing := range out {
+				if w.After != "" && existing.ID == w.After {
+					at = i + 1
+					break
+				}
+			}
+			out = append(out, widgetDef{})
+			copy(out[at+1:], out[at:])
+			out[at] = def
+		}
+	}
+	return out
+}
+
 func widgetDefFor(id string) (widgetDef, bool) {
-	for _, def := range homeWidgetCatalog {
+	for _, def := range homeWidgetCatalog() {
 		if def.ID == id {
 			return def, true
 		}
@@ -252,8 +276,13 @@ func encodeHomeLayout(items []homeLayoutItem) string {
 
 // defaultHomeLayoutItems is the default layout in item form.
 func defaultHomeLayoutItems() []homeLayoutItem {
-	items := make([]homeLayoutItem, len(defaultHomeLayout))
-	copy(items, defaultHomeLayout)
+	items := make([]homeLayoutItem, 0, len(defaultHomeLayout))
+	for _, item := range defaultHomeLayout {
+		// A widget whose module is not built in is not in the catalog.
+		if _, ok := widgetDefFor(item.ID); ok {
+			items = append(items, item)
+		}
+	}
 	return items
 }
 
@@ -602,7 +631,7 @@ type homeWidget struct {
 	Training   *trainingWidget
 	Pulse      *pulseWidget
 	WalletFlow *walletFlowWidget
-	TradeIdeas *tradeIdeasWidget
+	TradeIdeas *ideas.Widget
 	Upkeep     *upkeepWidget
 	Glance     *glanceWidget
 }
@@ -655,11 +684,7 @@ type fleetWidget struct {
 	TotalISK string
 }
 
-func splitTags(raw string) []string {
-	return strings.FieldsFunc(raw, func(r rune) bool {
-		return r == ',' || r == ' ' || r == ';'
-	})
-}
+func splitTags(raw string) []string { return tags.Split(raw) }
 
 type netWorthWidget struct {
 	Any             bool
@@ -670,8 +695,8 @@ type netWorthWidget struct {
 	AssetsNote      string // partial-pricing coverage line, "" when everything priced
 	Escrow          string
 	AsOf            string
-	History         *balanceChart // net worth over time, when 2+ sampled days exist
-	HistoryBuilding bool          // history recording, not yet chartable
+	History         *balancechart.BalanceChart // net worth over time, when 2+ sampled days exist
+	HistoryBuilding bool                       // history recording, not yet chartable
 	// WalletPct is the wallets' share of the total, "48.1%", and
 	// WalletBar the same share for a data-w bar; both empty when
 	// the total is not positive.
@@ -804,13 +829,7 @@ func orderExpiry(o esi.CharOrder) (time.Time, bool) {
 }
 
 // parseRFC3339 parses a snapshot timestamp; ok=false for ""/junk.
-func parseRFC3339(raw string) (time.Time, bool) {
-	if raw == "" {
-		return time.Time{}, false
-	}
-	t, err := time.Parse(time.RFC3339, raw)
-	return t, err == nil
-}
+func parseRFC3339(raw string) (time.Time, bool) { return module.ParseRFC3339(raw) }
 
 // ---------------------------------------------------------------------------
 // Widget builders. All pure reads over the decoded bundles; the
@@ -1447,7 +1466,7 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		case widgetPI:
 			w.PI = app.buildPI(ctx, bundles)
 		case widgetTradeIdeas:
-			w.TradeIdeas = app.buildTradeIdeas(ctx)
+			w.TradeIdeas = ideas.Stored(ctx, app.queries, app.cfg.TradeIdeasConfigured())
 		case widgetTraining:
 			w.Training = app.buildTraining(ctx, bundles)
 		case widgetPulse:
@@ -1496,7 +1515,7 @@ func buildCustomizeView(layout []homeLayoutItem) *customizeView {
 		sizes[item.ID] = item
 	}
 	view := &customizeView{}
-	for _, def := range homeWidgetCatalog {
+	for _, def := range homeWidgetCatalog() {
 		entry := customizeEntry{
 			ID:          def.ID,
 			Title:       def.Title,

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"evesynapse/internal/app/corpdata"
 	"net/http"
 	"strings"
 	"testing"
@@ -27,7 +28,7 @@ func TestCorpWalletGraph(t *testing.T) {
 		{ID: 1, Date: "2026-10-01T12:00:00Z", Balance: 1000},
 		{ID: 2, Date: "2026-10-02T12:00:00Z", Balance: 1250},
 	}
-	chart, note := corpWalletGraph(journal, 1600, true, at("2026-10-04T12:00:00Z"))
+	chart, note := corpdata.WalletGraph(journal, 1600, true, at("2026-10-04T12:00:00Z"))
 	if chart == nil || note != "" {
 		t.Fatalf("chart %v, note %q; want a chart and no note", chart, note)
 	}
@@ -39,12 +40,12 @@ func TestCorpWalletGraph(t *testing.T) {
 	}
 
 	// One journal entry and no balance: a single point is a fact, not a shape.
-	chart, note = corpWalletGraph(journal[:1], 0, false, time.Time{})
+	chart, note = corpdata.WalletGraph(journal[:1], 0, false, time.Time{})
 	if chart != nil || !strings.Contains(note, "has started") {
 		t.Errorf("one point: chart %v, note %q; want no chart and a has-started note", chart, note)
 	}
 	// Nothing at all.
-	chart, note = corpWalletGraph(nil, 0, false, time.Time{})
+	chart, note = corpdata.WalletGraph(nil, 0, false, time.Time{})
 	if chart != nil || !strings.Contains(note, "No wallet activity") {
 		t.Errorf("no points: chart %v, note %q; want no chart and a no-activity note", chart, note)
 	}

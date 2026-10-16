@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"evesynapse/internal/app/module"
 	"fmt"
 	"time"
 
@@ -132,12 +133,12 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 					continue
 				}
 				fetched++
-				if app.swarmUrgentHistory(ctx, key) {
+				if app.urgentHistory(ctx, key) {
 					continue
 				}
 				// No peer had it yet: a dedicated node that warms
 				// history gets its grace before this budget is spent.
-				if app.swarmDefersFetch(ctx, swarmKindHistory, fmt.Sprintf("%d/%d", key.RegionID, key.TypeID), now) {
+				if app.deferFetch(ctx, module.FetchKindHistory, fmt.Sprintf("%d/%d", key.RegionID, key.TypeID), now) {
 					continue
 				}
 				if _, ltd := app.fetchAndStoreHistory(ctx, key); ltd {

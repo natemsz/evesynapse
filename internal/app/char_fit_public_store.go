@@ -10,6 +10,7 @@ import (
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/fitview"
 	"evesynapse/internal/logging"
 )
 
@@ -28,19 +29,19 @@ const publicFitPagesPerCycle = 25
 
 // publicFitStored is what a stored page holds.
 type publicFitStored struct {
-	Sections []fittingGroup
-	Sim      *fitSimView
+	Sections []fitview.FittingGroup
+	Sim      *fitview.FitSimView
 	EFT      string
 }
 
 // buildPublicFitStored builds a page's stored parts from the fit
 // document. complete is false when a type name or the ship's data
 // was still missing, so the page is built again later.
-func (app *Application) buildPublicFitStored(ctx context.Context, doc *fitDoc) (publicFitStored, bool) {
+func (app *Application) buildPublicFitStored(ctx context.Context, doc *fitview.FitDoc) (publicFitStored, bool) {
 	stored := publicFitStored{
-		Sections: app.publicFitSections(ctx, doc),
-		Sim:      app.buildFitSimView(ctx, doc, 0, "All V", 0),
-		EFT:      app.formatEFT(ctx, doc),
+		Sections: app.fitBuilder().PublicFitSections(ctx, doc),
+		Sim:      app.fitBuilder().BuildFitSimView(ctx, doc, 0, "All V", 0),
+		EFT:      app.fitBuilder().FormatEFT(ctx, doc),
 	}
 	complete := stored.Sim == nil || stored.Sim.DataNote == ""
 	for _, g := range stored.Sections {
@@ -65,7 +66,7 @@ func (app *Application) publicFitSDEStamp(ctx context.Context) string {
 
 // storePublicFitPage builds and stores one fit's page.
 func (app *Application) storePublicFitPage(ctx context.Context, fitID int64, itemsJSON string, updatedAt time.Time, sdeStamp string) error {
-	var doc fitDoc
+	var doc fitview.FitDoc
 	if err := json.Unmarshal([]byte(itemsJSON), &doc); err != nil {
 		return err
 	}

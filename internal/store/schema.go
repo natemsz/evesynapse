@@ -247,6 +247,9 @@ var pgTradeIdeasPageSchema string
 //go:embed schema_pg/047_entity_names.sql
 var pgEntityNamesSchema string
 
+//go:embed schema_pg/048_link_choices.sql
+var pgLinkChoicesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -323,6 +326,7 @@ func schemaSteps() []schemaStep {
 		{45, "home_layout_reset", pgHomeLayoutResetSchema, ""},
 		{46, "trade_ideas_page", pgTradeIdeasPageSchema, ""},
 		{47, "entity_names", pgEntityNamesSchema, ""},
+		{48, "link_choices", pgLinkChoicesSchema, ""},
 	}
 }
 

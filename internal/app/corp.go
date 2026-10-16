@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"evesynapse/internal/app/module"
 	"fmt"
 	"net/http"
 
@@ -31,11 +32,11 @@ import (
 
 // walletDivisionCount is EVE's fixed corporation wallet division
 // count (divisions 1..7; 1 is the master wallet).
-const walletDivisionCount = 7
+const walletDivisionCount = module.WalletDivisionCount
 
 // Fetch-state values stored in snapshot_fetch_state.state.
 const (
-	fetchStateOK          = "ok"
+	fetchStateOK          = module.FetchStateOK
 	fetchStateRoleMissing = "role_missing"
 	fetchStateError       = "error"
 	// fetchStateDead marks a definitive market failure (the
@@ -111,15 +112,6 @@ func divisionOfKind(kind string) (int64, bool) {
 	return 0, false
 }
 
-// walletDivisionLabel names a wallet division the way the client
-// does: division 1 is the master wallet.
-func walletDivisionLabel(division int64) string {
-	if division == 1 {
-		return "Master Wallet"
-	}
-	return fmt.Sprintf("Division %d", division)
-}
-
 // ---------------------------------------------------------------------------
 // Handler-side loaders: snapshot rows and fetch state, DB only.
 // ---------------------------------------------------------------------------
@@ -139,16 +131,14 @@ func (app *Application) corpKindState(ctx context.Context, characterID int64, ki
 // corpSectionState is the empty-state triage every corporation
 // section renders from: data loaded, still warming, or refused for
 // want of an in-game role.
-type corpSectionState struct {
-	Loaded      bool
-	Warming     bool   // no snapshot yet and no refusal recorded
-	Forbidden   bool   // ESI answered 403 on the last attempt
-	RoleMissing string // role label when Forbidden named one ("" = label-less)
-}
+type corpSectionState = module.CorpSectionState
 
 // corpSection resolves the display state for one snapshot kind:
 // a decoded snapshot wins; otherwise the recorded fetch state
-// decides between the role note and the warming note.
+// decides between the role note and the warming note. A character
+// who granted none of the scopes of the module that reads the kind
+// is not warming: nobody feeds this section, and the state carries
+// the targeted add-scopes link that would change that.
 func (app *Application) corpSection(ctx context.Context, characterID int64, kind string, out any) corpSectionState {
 	if app.loadCorpSnapshot(ctx, characterID, kind, out) {
 		return corpSectionState{Loaded: true}
@@ -156,6 +146,11 @@ func (app *Application) corpSection(ctx context.Context, characterID int64, kind
 	state, detail, found := app.corpKindState(ctx, characterID, kind)
 	if found && state == fetchStateRoleMissing {
 		return corpSectionState{Forbidden: true, RoleMissing: detail}
+	}
+	if m, ok := snapshotModule(kind); ok {
+		if ch, err := app.queries.GetCharacter(ctx, characterID); err == nil && kindLockedOut(scopeSet(ch.Scopes), kind) {
+			return corpSectionState{Warming: true, NoFeeder: true, AddScopesURL: relinkURL(m.ID, characterID)}
+		}
 	}
 	return corpSectionState{Warming: true}
 }
@@ -169,22 +164,12 @@ func (app *Application) corpSection(ctx context.Context, characterID int64, kind
 // renders: the viewing character, the corporation's display title,
 // and the IDs the switcher/sub-nav links need. Embedded in each
 // subpage's view.
-type corpViewBase struct {
-	CharacterName string
-	CharacterID   int64 // active character (switcher + sub-nav links)
-	CorpID        int64
-	CorpTitle     string // "Name [TICKER]", or "Corporation #<id>" until corp_info lands
-	MemberCount   string // member count from corp_info, "" when unknown
-}
+type corpViewBase = module.CorpViewBase
 
 // corpPageSelection is pickCorpPage's result: the switcher state
 // plus the selected character's corporation (from local tables
 // only).
-type corpPageSelection struct {
-	Active db.Character
-	Links  []assetCharLink
-	Base   corpViewBase
-}
+type corpPageSelection = module.CorpPageSelection
 
 // pickCorpPage resolves the corporation subpage context: the
 // signed-in user's characters and active one (pickCharacter

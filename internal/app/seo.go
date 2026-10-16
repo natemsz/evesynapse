@@ -127,26 +127,26 @@ type sitemapSet struct {
 func (app *Application) buildSitemap(ctx context.Context, origin string) ([]byte, error) {
 	urls := []sitemapURL{
 		{Loc: origin + "/", ChangeFreq: "weekly", Priority: "1.0"},
-		{Loc: origin + "/fittings/public/", ChangeFreq: "daily", Priority: "0.9"},
-		{Loc: origin + "/fittings/", ChangeFreq: "monthly", Priority: "0.8"},
 		{Loc: origin + "/items/", ChangeFreq: "weekly", Priority: "0.8"},
-		{Loc: origin + "/planner/", ChangeFreq: "monthly", Priority: "0.8"},
-		{Loc: origin + "/industry/pi/", ChangeFreq: "monthly", Priority: "0.8"},
-		{Loc: origin + "/intel/wars/", ChangeFreq: "weekly", Priority: "0.7"},
-		{Loc: origin + "/intel/incursions/", ChangeFreq: "weekly", Priority: "0.7"},
-		{Loc: origin + "/intel/fw/", ChangeFreq: "weekly", Priority: "0.7"},
 	}
-	fits, err := app.queries.SitemapTopFits(ctx)
-	if err != nil {
-		return nil, err
+	// Each enabled module's own public pages: a build without the
+	// module has no such page to list.
+	for _, m := range registeredModules {
+		for _, e := range m.Sitemap {
+			urls = append(urls, sitemapURL{Loc: origin + e.Path, ChangeFreq: e.ChangeFreq, Priority: e.Priority})
+		}
 	}
-	for _, f := range fits {
-		urls = append(urls, sitemapURL{
-			Loc:        origin + "/fittings/public/fit/" + idString(f.ID) + "/",
-			LastMod:    f.UpdatedAt.Format("2006-01-02"),
-			ChangeFreq: "weekly",
-			Priority:   "0.7",
-		})
+	for _, m := range registeredModules {
+		if m.SitemapRows == nil {
+			continue
+		}
+		rows, err := m.SitemapRows(ctx, app)
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			urls = append(urls, sitemapURL{Loc: origin + row.Path, LastMod: row.LastMod, ChangeFreq: row.ChangeFreq, Priority: row.Priority})
+		}
 	}
 	items, err := app.queries.SitemapTopItems(ctx)
 	if err != nil {

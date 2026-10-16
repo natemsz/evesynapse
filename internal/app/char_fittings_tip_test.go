@@ -1,6 +1,7 @@
 package app
 
 import (
+	"evesynapse/internal/fitview"
 	"strings"
 	"testing"
 
@@ -17,17 +18,17 @@ func TestFitTipLinesByModuleKind(t *testing.T) {
 		ItemAttrs: map[int64]map[int64]float64{
 			invuln:    {984: -30, 985: -30, 986: -30, 987: -30, fit.AttrCapacitorNeed: 40, fit.AttrCPU: 29},
 			subsystem: {fit.AttrHiSlotModifier: 2, fit.AttrMedSlotModifier: 1, fit.AttrTurretHardPointModifier: 2},
-			mwd:       {fit.AttrSpeedFactor: 505, fitAttrSignatureRadiusBonus: 500, fit.AttrCPU: 50},
-			extender:  {fitAttrCapacityBonus: 2600, fit.AttrPower: 165},
+			mwd:       {fit.AttrSpeedFactor: 505, fitview.FitAttrSignatureRadiusBonus: 500, fit.AttrCPU: 50},
+			extender:  {fitview.FitAttrCapacityBonus: 2600, fit.AttrPower: 165},
 		},
 		StateAttrs: map[string]map[int64]float64{
 			fit.StateAttrKey(invuln, fit.StateOverheated): {984: -36, 985: -36, 986: -36, 987: -36},
 		},
 	}
-	doc := &fitDoc{Charges: map[int64]int64{}}
+	doc := &fitview.FitDoc{Charges: map[int64]int64{}}
 	lines := func(typeID int64, state string) string {
 		var b strings.Builder
-		for _, l := range fitTipLines(res, nil, doc, typeID, state, fitEffAttrs(res, nil, typeID, state)) {
+		for _, l := range fitview.FitTipLines(res, nil, doc, typeID, state, fitview.FitEffAttrs(res, nil, typeID, state)) {
 			b.WriteString(l.Label + "|" + l.Value + "|" + l.Class + ";")
 		}
 		return b.String()

@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"evesynapse/internal/app/module"
 	"sort"
 	"strconv"
 	"time"
@@ -22,18 +23,6 @@ import (
 // authenticated lookup, then the corp structure list) always
 // outranks the community tier, so a lower-trust name can never
 // overwrite a better one.
-func structureSourceRank(source string) int {
-	switch source {
-	case esi.StructureSourceESI:
-		return 3
-	case esi.StructureSourceCorp:
-		return 2
-	case esi.StructureSourceCommunity:
-		return 1
-	}
-	return 0
-}
-
 // storeStructureName records a resolution outcome, respecting
 // provenance: an existing resolved name from a better-trusted
 // source is kept. Reports whether the row was written.
@@ -153,8 +142,8 @@ idsLoop:
 			continue
 		}
 		// Swarm first: a dedicated node's budget before this
-		// one's (swarm_warm.go). The free tier above still runs.
-		if app.swarmDefersFetch(ctx, swarmKindStructure, strconv.FormatInt(id, 10), now) {
+		// one's (swarm/warm.go). The free tier above still runs.
+		if app.deferFetch(ctx, module.FetchKindStructure, strconv.FormatInt(id, 10), now) {
 			continue
 		}
 		// Tier 1: ask every eligible character, best bet first,
@@ -234,3 +223,5 @@ func (app *Application) persistStructureContexts(ctx context.Context, structures
 		}
 	}
 }
+
+func structureSourceRank(source string) int { return module.StructureSourceRank(source) }

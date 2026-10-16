@@ -39,7 +39,7 @@
     </details>
     <div class="fit-card-actions">
       <a class="btn" href="/fittings/?character={{$.Fittings.CharacterID}}&esi={{.FittingID}}#fit-editor">Open in fitting tool</a>
-      <a href="/skills/plans/fit?character={{$.Fittings.CharacterID}}&fitting={{.FittingID}}">Training plan for this fit</a>
+      {{if moduleOn "skillplans"}}<a href="/skills/plans/fit?character={{$.Fittings.CharacterID}}&fitting={{.FittingID}}">Training plan for this fit</a>{{end}}
     </div>
   </article>
   {{end}}

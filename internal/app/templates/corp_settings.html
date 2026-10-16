@@ -11,7 +11,7 @@
 {{else}}
 {{template "corpselector" .CorpOptions}}
 <h2>{{.Name}}</h2>
-<p><small><a href="/doctrines/?corporation={{.ID}}">Doctrines</a> · <a href="/doctrines/fits/?corporation={{.ID}}">Fits</a> · <a href="/srp/?corporation={{.ID}}">Ship Replacement</a> · Settings</small></p>
+<p><small>{{if moduleOn "doctrines"}}<a href="/doctrines/?corporation={{.ID}}">Doctrines</a> · <a href="/doctrines/fits/?corporation={{.ID}}">Fits</a> · {{end}}{{if moduleOn "srp"}}<a href="/srp/?corporation={{.ID}}">Ship Replacement</a> · {{end}}Settings</small></p>
 
 <p class="lede">How {{.Name}} runs on EveSynapse. Directors and the CEO can always do everything here; these settings say who else can.</p>
 
@@ -37,7 +37,7 @@
     <section class="setting">
       <h4>Groups and Discord</h4>
       <p class="hint">Either setting above can be an in-game role or one of the corporation's groups. Groups, and the corporation's Discord server, have pages of their own.</p>
-      <div class="form-actions"><a class="btn" href="/groups/?owner=corporation:{{.ID}}">Groups</a><a class="btn" href="/discord/servers?owner=corporation:{{.ID}}">Discord Server</a></div>
+      <div class="form-actions">{{if moduleOn "groups"}}<a class="btn" href="/groups/?owner=corporation:{{.ID}}">Groups</a>{{end}}{{if moduleOn "discord"}}<a class="btn" href="/discord/servers?owner=corporation:{{.ID}}">Discord Server</a>{{end}}</div>
     </section>
   </div>
   <div class="form-actions"><button type="submit">Save settings</button></div>

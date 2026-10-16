@@ -7,13 +7,13 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/tags"
 )
 
 // ---------------------------------------------------------------------------
@@ -147,20 +147,7 @@ func (app *Application) saveOrdersConfig(ctx context.Context, userID int64, cfg 
 
 // userTags lists every tag in use across the account's
 // characters (the fleet widget's chips, shared vocabulary).
-func userTags(chars []db.Character) []string {
-	seen := map[string]bool{}
-	for _, ch := range chars {
-		for _, tag := range splitTags(ch.Tags) {
-			seen[tag] = true
-		}
-	}
-	tags := make([]string, 0, len(seen))
-	for tag := range seen {
-		tags = append(tags, tag)
-	}
-	sort.Strings(tags)
-	return tags
-}
+func userTags(chars []db.Character) []string { return tags.InUse(chars) }
 
 // handleWidgetConfig saves one widget's settings (POST
 // /home/widget-config, today only the orders widget's scope and

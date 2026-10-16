@@ -186,16 +186,22 @@ func (app *Application) handlePublicShip(w http.ResponseWriter, r *http.Request)
 	} else {
 		view.HistoryNote = "No price history swept yet."
 	}
-	rows, err := app.queries.ListPublicFitsForShip(ctx, db.ListPublicFitsForShipParams{ShipTypeID: typeID, Limit: 12})
-	if err != nil {
-		logging.Errorf("public ship %d: fits: %v", typeID, err)
-	} else {
-		for _, row := range rows {
-			view.Fits = append(view.Fits, publicFitCardOf(db.ListPublicFitsRow(row), userID))
+	// The public fits list is the Public Fits module's surface.
+	if moduleCompiledIn("publicfits") {
+		rows, err := app.queries.ListPublicFitsForShip(ctx, db.ListPublicFitsForShipParams{ShipTypeID: typeID, Limit: 12})
+		if err != nil {
+			logging.Errorf("public ship %d: fits: %v", typeID, err)
+		} else {
+			for _, row := range rows {
+				view.Fits = append(view.Fits, publicFitCardOf(db.ListPublicFitsRow(row), userID))
+			}
 		}
 	}
 	pageURL := app.publicPageURL("/ships/" + idString(typeID) + "/")
 	blurb := detail.Name + " with " + strconv.Itoa(len(view.Fits)) + " public fits"
+	if !moduleCompiledIn("publicfits") {
+		blurb = detail.Name
+	}
 	data.HeadMeta = headMeta(detail.Name, blurb, pageURL)
 	data.PublicShip = view
 	app.render(ctx, w, http.StatusOK, "ship_public.html", data)

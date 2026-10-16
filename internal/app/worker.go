@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"evesynapse/internal/app/module"
 	"fmt"
 	"runtime/debug"
 	"sort"
@@ -292,11 +293,11 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		c.limited = true
 	}
 
-	// Public fit pages missing or out of date are built here, not
-	// on a visitor's request, and the views counted since the last
-	// cycle are written in one batch.
-	app.refreshPublicFitPages(ctx)
-	app.flushFitViews(ctx)
+	// Module jobs that follow the guide refresh (the public fits
+	// module's: pages missing or out of date are built here, not on a
+	// visitor's request, and the views counted since the last cycle are
+	// written in one batch).
+	app.runModuleJobs(ctx, module.AfterGuidePrices, nil)
 
 	// Industry cost indices ride the same window: one public
 	// call keeps the planner's installation fees honest, and a
@@ -324,28 +325,19 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	})
 	clock.mark("op attendance", time.Now())
 
-	// The swarm's fetch phase runs ahead of the public-data
-	// passes: gossip when due, then demand-driven pulls. Peer
-	// traffic spends no ESI budget, and pulling first means the
-	// passes below find the shared entries already staged —
-	// fetching first would satisfy the same demand itself and
-	// leave the pulls with nothing to ask for.
-	c.pass("asking the swarm first", func() (int, bool) {
-		app.swarmFetchPhase(ctx, time.Now())
-		return 0, false
-	})
-	clock.mark("swarm fetch", time.Now())
+	// Module passes that run ahead of the public-data passes (the
+	// swarm's fetch phase: gossip when due, then demand-driven pulls;
+	// peer traffic spends no ESI budget, and pulling first means the
+	// passes below find the shared entries already staged).
+	app.runCycleJobs(ctx, c, module.BeforePublicData, characters, clock)
 
 	c.refreshPublicData(ctx, characters)
 	clock.mark("public data", time.Now())
 
-	// The shared cache across instances (swarm_trust.go): the
-	// spot checks on what the fetch phase above staged, from what
-	// is left of the allowance. No peer traffic here.
-	c.pass("sharing with the swarm", func() (int, bool) {
-		return app.swarmCycle(ctx, c.allowance, characters, time.Now())
-	})
-	clock.mark("swarm", time.Now())
+	// Module passes that follow the public-data passes (the swarm's
+	// spot checks on what its fetch phase staged, from what is left of
+	// the allowance).
+	app.runCycleJobs(ctx, c, module.AfterPublicData, characters, clock)
 
 	// What an event in the game makes likely to be opened next, best
 	// worth first, from what is left of the allowance (foresight.go).
@@ -376,22 +368,10 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	})
 	clock.mark("notifications", time.Now())
 
-	// Discord, where a bot is set up (discord_notify.go,
-	// discord_roles.go): new ops to their channels, and roles brought
-	// in line with what was just synced.
-	runGuarded("discord", func() {
-		if n := app.discordAnnounceOps(ctx, time.Now()); n > 0 {
-			logging.Infof("worker: %d op(s) posted to Discord", n)
-		}
-		if n := app.discordSyncRoles(ctx, time.Now()); n > 0 {
-			logging.Infof("worker: Discord roles changed for %d account(s)", n)
-		}
-		if n := app.discordKickPass(ctx, time.Now()); n > 0 {
-			logging.Infof("worker: %d member(s) removed from Discord servers", n)
-		}
-	})
-
-	clock.mark("discord", time.Now())
+	// Module jobs that follow the notifications (Discord's, for one:
+	// new ops to their channels, roles brought in line with what was
+	// just synced, then removals). Each runs under its own guard.
+	app.runModuleJobs(ctx, module.AfterNotifications, clock.mark)
 	timing.Took, timing.Phases = time.Since(clock.start), clock.phases
 	timing.Fetches, timing.Deferred = c.allowance.used(app.fetchesPerCycle()), c.deferred
 	timing.RateHeld = c.rateHeld
@@ -564,7 +544,10 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 	// lists behind the contracts snapshot (economy_worker.go).
 	c.characterPass("warming contract items", ch, func() (int, bool) {
 		stored := app.refreshEconomySnapshots(ctx, ch)
-		warmed, limited := app.warmContractItems(ctx, ch)
+		warmed, limited := 0, false
+		if moduleCompiledIn("contracts") {
+			warmed, limited = app.warmContractItems(ctx, ch)
+		}
 		return stored + warmed, limited
 	})
 
@@ -650,11 +633,10 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 		return app.refreshMarketData(ctx, characters)
 	})
 
-	// Trade ideas: ask Gemma about the Forge spread-scanner rows
-	// (tradeideas.go). No ESI budget: one Cloudflare call at most
-	// every twelve hours, backing off after failures, run beside
-	// the cycle so the cycle never waits on the model.
-	app.startTradeIdeasRefresh(ctx)
+	// Module jobs that follow the market pass (Trade Ideas' model
+	// refresh, for one): it starts beside the cycle and returns at once,
+	// so the cycle never waits on it.
+	app.runModuleJobs(ctx, module.AfterMarket, nil)
 
 	// Structure names: resolve the due slice of the structure
 	// queue across every scoped character (structures.go).
@@ -803,6 +785,12 @@ type fetchBudget struct {
 	mu   sync.Mutex
 	left int
 }
+
+// Take and Exhausted are take and exhausted for the modules' cycle jobs
+// (module.Budget).
+func (b *fetchBudget) Take() bool { return b.take() }
+
+func (b *fetchBudget) Exhausted() bool { return b.exhausted() }
 
 // take spends one fetch, reporting whether it was available.
 func (b *fetchBudget) take() bool {
@@ -1104,7 +1092,7 @@ func (app *Application) warmMissingTypeNames(ctx context.Context, typeIDs []int6
 			continue
 		}
 		// Swarm first: a dedicated node's budget before this one's.
-		if app.swarmDefersFetch(ctx, swarmKindTypeName, strconv.FormatInt(id, 10), now) {
+		if app.deferFetch(ctx, module.FetchKindTypeName, strconv.FormatInt(id, 10), now) {
 			continue
 		}
 		missing = append(missing, id)
@@ -1432,4 +1420,26 @@ func sortedInt64Keys(set map[int64]bool) []int64 {
 	}
 	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
 	return keys
+}
+
+// runModuleJobs runs every registered module's worker jobs that follow
+// the given pass, in registration order, each under its own panic guard
+// and, where mark is given, its own phase in the cycle's timing. A job
+// that omits its phase follows the market pass.
+func (app *Application) runModuleJobs(ctx context.Context, phase module.JobPhase, mark func(string, time.Time)) {
+	for _, m := range registeredModules {
+		for _, job := range m.WorkerJobs {
+			after := job.After
+			if after == "" {
+				after = module.AfterMarket
+			}
+			if after != phase || job.Start == nil {
+				continue
+			}
+			runGuarded(job.Name, func() { job.Start(ctx, app) })
+			if mark != nil {
+				mark(job.Name, time.Now())
+			}
+		}
+	}
 }

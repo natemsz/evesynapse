@@ -16,6 +16,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"evesynapse/internal/htmlsanitize"
 	"fmt"
 	"io"
 	"net/http"
@@ -596,7 +597,7 @@ func TestSanitizeMailHTML(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := string(sanitizeMailHTML(tc.in))
+			got := string(htmlsanitize.Sanitize(tc.in))
 			if got != tc.want {
 				t.Errorf("sanitizeMailHTML(%q)\n got %q\nwant %q", tc.in, got, tc.want)
 			}

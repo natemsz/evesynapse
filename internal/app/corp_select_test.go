@@ -142,9 +142,9 @@ func TestOwnerPagesShowOneOwner(t *testing.T) {
 		t.Fatalf("owner address %q", got)
 	}
 
-	_, body = getPage(t, f.app, director, discordServersPath+"?owner=alliance:99000001")
+	_, body = getPage(t, f.app, director, "/discord/servers"+"?owner=alliance:99000001")
 	mustContain(t, "discord servers, the alliance", body, "owner=corporation%3a98000001", "· alliance")
-	_, body = getPage(t, f.app, director, discordServersPath+"?owner=alliance:99000777")
+	_, body = getPage(t, f.app, director, "/discord/servers"+"?owner=alliance:99000777")
 	if !strings.Contains(body, "· corporation") {
 		t.Fatal("an owner the account does not manage was not replaced by its own")
 	}

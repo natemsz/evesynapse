@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"evesynapse/internal/app/module"
 )
 
 // ---------------------------------------------------------------------------
@@ -21,60 +23,91 @@ type navEntry struct {
 	Pages []string
 }
 
+var (
+	registeredModules []module.Module
+	registeredPages   = map[string]module.Page{}
+)
+
+// registerModules adds modules to the nav and page registries. A
+// module already registered (same ID) is skipped, so calling it again
+// is harmless.
+func registerModules(modules []module.Module) {
+	for _, m := range modules {
+		if moduleCompiledIn(m.ID) {
+			continue
+		}
+		validateModule(m)
+		registeredModules = append(registeredModules, m)
+		for _, sec := range m.Nav {
+			for _, e := range sec.Entries {
+				entry := navEntry{Href: e.Href, Label: e.Label, Pages: e.Pages}
+				list := sectionNav[sec.Section]
+				at := len(list)
+				for i, existing := range list {
+					if e.After != "" && existing.Href == e.After {
+						at = i + 1
+						break
+					}
+				}
+				list = append(list, navEntry{})
+				copy(list[at+1:], list[at:])
+				list[at] = entry
+				sectionNav[sec.Section] = list
+			}
+		}
+		for _, p := range m.Pages {
+			registeredPages[p.Template] = p
+		}
+	}
+}
+
+// validateModule stops a module that left a declaration out: ID, Title
+// and the three lists are all required, the lists explicit even when
+// empty. A module is compiled-in code, so this is a developer error
+// caught on the first start or test run.
+func validateModule(m module.Module) {
+	switch {
+	case m.ID == "":
+		panic("module registered without an ID")
+	case m.Title == "":
+		panic("module " + m.ID + " declares no Title")
+	case m.Requires == nil, m.Scopes == nil, m.EnhanceScopes == nil:
+		panic("module " + m.ID + " must declare Requires, Scopes and EnhanceScopes (empty lists are written out, not omitted)")
+	}
+}
+
+// moduleCompiledIn reports whether a module with this ID is compiled in
+// and registered.
+func moduleCompiledIn(id string) bool {
+	for _, m := range registeredModules {
+		if m.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 // sectionNav is every nav category's pages, in menu order. The keys
 // are the section keys sectionForPage returns.
 var sectionNav = map[string][]navEntry{
 	"pilot": {
 		{"/character/", "Overview", []string{"character.html"}},
 		{"/characters/", "Characters", []string{"characters.html"}},
-		{"/skills/plans", "Skill Plans", []string{"skillplans.html"}},
 		{"/assets/", "Assets", []string{"assets.html"}},
-		{"/wallet/", "Wallet", []string{"wallet.html"}},
-		{"/mail/", "Mail", []string{"mail.html"}},
-		{"/calendar/", "Calendar", []string{"calendar.html"}},
-		{"/contacts/", "Contacts", []string{"contacts.html"}},
 		{"/killmails/", "Killmails", []string{"killmails.html"}},
 	},
-	"fitting": {
-		{"/fittings/", "Ship Workbench", []string{"fittings.html"}},
-		{"/fittings/saved/", "My Loadouts", []string{"fittings_saved.html"}},
-		{"/fittings/public/", "Public Loadouts Browser", []string{"fittings_public.html"}},
-	},
+	"fitting": {},
 	"industry": {
 		{"/industry/", "Industry", []string{"industry.html"}},
-		{"/planner/", "Build Planner", []string{"planner.html"}},
 		{"/planets/", "Planetary Industry", []string{"planets.html"}},
-		{"/industry/pi/", "PI Planner", []string{"piplanner.html"}},
 	},
 	"market": {
 		{"/market/", "Market", []string{"market.html"}},
-		{"/market/scanner/", "Spread Scanner", []string{"market_scanner.html"}},
-		{"/market/ideas/", "Trade Ideas", []string{"market_tradeideas.html"}},
-		{"/market/tradefinder/", "Tradefinder", []string{"market_tradefinder.html"}},
-		{"/market/leaderboard/", "Top Stations", []string{"market_leaderboard.html"}},
-		{"/market/restock/", "Restock Planner", []string{"market_restock.html"}},
-		{"/orders/", "Orders", []string{"orders.html"}},
-		{"/contracts/", "Contracts", []string{"contracts.html"}},
 	},
 	"corporation": {
 		{"/corporations/", "Overview", []string{"corporations.html"}},
-		{"/corporations/members/", "Members", []string{"corp_members.html"}},
-		{"/corporations/wallets/", "Wallets", []string{"corp_wallets.html"}},
-		{"/corporations/orders/", "Orders", []string{"corp_orders.html"}},
-		{"/corporations/assets/", "Assets", []string{"corp_assets.html"}},
-		{"/corporations/structures/", "Structures", []string{"corp_structures.html"}},
 		{"/corporations/killmails/", "Killmails", []string{"killmails.html"}},
-		{"/doctrines/", "Doctrines", []string{"doctrines.html", "doctrine.html"}},
-		{"/doctrines/fits/", "Corporate Loadouts", []string{"corp_fits.html"}},
-		{"/srp/", "Ship Replacement", []string{"srp.html"}},
-		{"/discord/servers", "Discord Server", []string{"discord_servers.html"}},
-		{"/groups/", "Groups", []string{"groups.html"}},
 		{"/corporations/settings/", "Settings", []string{"corp_settings.html"}},
-	},
-	"intel": {
-		{"/intel/wars/", "Wars", []string{"intel_wars.html"}},
-		{"/intel/incursions/", "Incursions", []string{"intel_incursions.html"}},
-		{"/intel/fw/", "Faction Warfare", []string{"intel_fw.html"}},
 	},
 	"tools": {
 		{"/items/", "Item Browser", []string{"items.html"}},
@@ -83,11 +116,7 @@ var sectionNav = map[string][]navEntry{
 
 // navLink is one rendered nav link: the sidebar menu item and the
 // section tab are the same thing.
-type navLink struct {
-	Href   string
-	Label  string
-	Active bool
-}
+type navLink = module.NavLink
 
 // navLinksFor renders every section's links for one page. A link is
 // active when the page is one of its pages and the page belongs to

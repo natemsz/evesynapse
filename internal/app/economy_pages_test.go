@@ -17,6 +17,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"evesynapse/internal/app/contracts"
 	"fmt"
 	"io"
 	"net/http"
@@ -299,7 +300,7 @@ func TestRefreshEconomySnapshots(t *testing.T) {
 	if err != nil {
 		t.Fatalf("contract detail 555: %v", err)
 	}
-	items, ok, err := app.loadContractItems(ctx, 555)
+	items, ok, err := contracts.LoadItems(ctx, app, 555)
 	if err != nil || !ok || len(items) != 1 || items[0].TypeID != 34 {
 		t.Fatalf("load contract items: %+v ok=%v err=%v (detail %+v)", items, ok, err, detail)
 	}

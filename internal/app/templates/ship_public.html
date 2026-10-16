@@ -2,7 +2,7 @@
 {{define "content"}}
 {{with .PublicShip}}
 {{$d := .Detail}}
-<p><small><a href="/fittings/public/">Public fits</a></small></p>
+{{if moduleOn "publicfits"}}<p><small><a href="/fittings/public/">Public fits</a></small></p>{{end}}
 <h1><span class="gt">{{$d.Name}}</span></h1>
 
 <div class="tw">
@@ -36,6 +36,7 @@
 
 {{if eq $d.DescState "ready"}}<div class="mailbody">{{ $d.Description }}</div>{{else}}<p class="hint">No description available.</p>{{end}}
 
+{{if moduleOn "publicfits"}}
 <h3>Public fits for this hull</h3>
 {{if .Fits}}
 <div class="fit-cards">
@@ -54,6 +55,7 @@
 <p><a href="{{.BrowserURL}}">More {{.Detail.Name}} fits in the browser →</a></p>
 {{else}}
 <p class="hint">No public fits for this hull yet.</p>
+{{end}}
 {{end}}
 {{end}}
 {{end}}

@@ -9,7 +9,7 @@
 
 {{if .Wallet}}
 <h2>{{.Wallet.CharacterName}}</h2>
-{{if .Wallet.BalanceOK}}<div class="kpis kpis-small"><div class="kpi"><span class="kpi-k">Balance</span><span class="kpi-v isk">{{.Wallet.Balance}} <small>ISK</small></span></div></div>{{end}}
+{{if .Wallet.BalanceOK}}<div class="kpi"><span class="kpi-k">Balance</span><span class="kpi-v isk">{{.Wallet.Balance}} <small>ISK</small></span></div>{{end}}
 
 {{/* Two columns on a wide screen: the charts on the left (balance
      history, then cumulative net flow, the same size), the flow's

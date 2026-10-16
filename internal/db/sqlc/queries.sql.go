@@ -1739,6 +1739,46 @@ func (q *Queries) ListSnapshotsForUser(ctx context.Context, arg ListSnapshotsFor
 	return items, nil
 }
 
+const listUserNetWorthDays = `-- name: ListUserNetWorthDays :many
+SELECT day, SUM(net_worth)::float8 AS total
+FROM wallet_history
+WHERE user_id = $1 AND net_worth IS NOT NULL
+GROUP BY day
+ORDER BY day DESC
+LIMIT 31
+`
+
+type ListUserNetWorthDaysRow struct {
+	Day   string  `json:"day"`
+	Total float64 `json:"total"`
+}
+
+// The account's total net worth per day (summed over its
+// characters), newest first, for the KPI sparkline: one bounded
+// grouped read, never more than 31 rows.
+func (q *Queries) ListUserNetWorthDays(ctx context.Context, userID int64) ([]ListUserNetWorthDaysRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUserNetWorthDays, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUserNetWorthDaysRow
+	for rows.Next() {
+		var i ListUserNetWorthDaysRow
+		if err := rows.Scan(&i.Day, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUserWalletHistory = `-- name: ListUserWalletHistory :many
 SELECT user_id, character_id, day, balance, net_worth, sampled_at
 FROM wallet_history

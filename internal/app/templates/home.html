@@ -42,6 +42,7 @@
     <div class="kpi">
       <span class="kpi-k">Fleet net worth</span>
       <span class="kpi-v">{{if .NetWorth.Any}}{{.NetWorth.Total}} <small>ISK</small>{{template "kpi-trend" .NetWorth.TotalTrend}}{{else}}—{{end}}</span>
+      {{if .NetWorth.SparkPoints}}<svg class="kpi-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true" focusable="false"><polygon class="kpi-spark-area" points="{{.NetWorth.SparkArea}}"/><polyline class="kpi-spark-line" points="{{.NetWorth.SparkPoints}}"/></svg>{{end}}
       <span class="kpi-sub">{{if .NetWorth.Wallet}}Wallets {{.NetWorth.Wallet}}{{end}}{{if and .NetWorth.Wallet .NetWorth.AssetsKnown}} · {{end}}{{if .NetWorth.AssetsKnown}}Assets {{.NetWorth.Assets}}{{end}}</span>
     </div>
     <div class="kpi">
@@ -53,7 +54,8 @@
     <div class="kpi">
       <span class="kpi-k">Hangar &amp; asset value</span>
       <span class="kpi-v">{{if .NetWorth.AssetsKnown}}{{.NetWorth.Assets}} <small>ISK</small>{{template "kpi-trend" .NetWorth.AssetsTrend}}{{else}}—{{end}}</span>
-      <span class="kpi-sub">{{if .NetWorth.AssetsNote}}{{.NetWorth.AssetsNote}}{{else if .NetWorth.Escrow}}Order escrow {{.NetWorth.Escrow}}{{end}}</span>
+      {{if .NetWorth.AssetsBar}}<span class="kpi-bar"><span data-w="{{.NetWorth.AssetsBar}}"></span></span>{{end}}
+      <span class="kpi-sub">{{if .NetWorth.AssetsNote}}{{.NetWorth.AssetsNote}}{{else if .NetWorth.Escrow}}Order escrow {{.NetWorth.Escrow}}{{end}}{{if and .NetWorth.AssetsPct (not .NetWorth.AssetsNote)}} · {{.NetWorth.AssetsPct}} priced{{end}}</span>
     </div>
     <div class="kpi">
       <span class="kpi-k">Skill training</span>
@@ -111,7 +113,7 @@
     {{range .Rows}}
     <tr class="fleet-row" data-search="{{.Search}}"{{if and .QueueKnown .NotTraining}} data-idle="1"{{end}}>
       <td><span class="pilot"><img class="portrait" src="{{.PortraitURL}}" alt="" width="32" height="32">{{if .OnlineKnown}}<span class="dot {{if .Online}}on{{else}}off{{end}}" title="{{if .Online}}Online{{else}}Offline{{end}}"></span>{{end}}</span> <a href="/character/?character={{.ID}}">{{.Name}}</a>{{if .Relink}} <strong class="relink">re-link needed</strong>{{end}}<br><small>{{if .CorpName}}{{corpLink .CorpID .CorpName}}{{end}}{{if and .CorpName .Tags}} · {{end}}{{.Tags}}</small></td>
-      <td class="opt2">{{placeLink .SystemRef}}{{if .DockedName}}<br><small>{{placeLink .DockedRef}}</small>{{end}}</td>
+      <td class="opt2">{{placeLink .SystemRef}}{{if .SecKnown}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span>{{end}}{{if .DockedName}}<br><small>{{placeLink .DockedRef}}</small>{{end}}</td>
       <td class="opt">{{itemLink .ShipTypeID .ShipTypeName}}{{if .ShipName}}<br><small>&ldquo;{{.ShipName}}&rdquo;</small>{{end}}</td>
       <td>{{if .QueueKnown}}{{if .Training}}{{.Training}}{{if .TrainingFinish}} <span class="countdown" data-finish="{{.TrainingFinish}}">{{.TrainingLeft}}</span>{{end}}{{else}}<em class="idle">Not training</em>{{end}}{{else}}—{{end}}</td>
       <td class="num">{{if .WalletKnown}}{{.ISK}} ISK{{else}}—{{end}}</td>

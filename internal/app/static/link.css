@@ -20,7 +20,7 @@
   border: 1px solid #262626;
   border-left: 3px solid var(--ti-accent, var(--accent));
   border-radius: 4px;
-  background: var(--row);
+  background: color-mix(in srgb, var(--row) 85%, transparent);
   background-image: linear-gradient(color-mix(in srgb, var(--ti-accent, var(--accent)) 6%, transparent), color-mix(in srgb, var(--ti-accent, var(--accent)) 6%, transparent));
   cursor: pointer;
 }
@@ -58,7 +58,7 @@
   border: 1px solid #262626;
   border-left: 3px solid var(--ti-accent, var(--accent));
   border-radius: 4px;
-  background: var(--row);
+  background: color-mix(in srgb, var(--row) 85%, transparent);
   padding: 0.45rem 0.65rem 0.5rem;
 }
 .lk-row label.lk-name { display: flex; align-items: baseline; gap: 0.45rem; cursor: pointer; }

@@ -268,3 +268,20 @@ func TestConcurrentRendersShareTemplates(t *testing.T) {
 		}
 	}
 }
+
+// The wallpaper's JPEG XL tiers only paint if the file server
+// labels them image/jxl: the content sniffer does not recognise
+// the format, so without the explicit registration in
+// staticHandler the response degrades to octet-stream.
+func TestStaticServesJXLContentType(t *testing.T) {
+	app, _, _ := buildCorpTestApp(t, &countingTransport{})
+	req := httptest.NewRequest(http.MethodGet, "/static/bg-uhd.jxl", nil)
+	rec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /static/bg-uhd.jxl: status %d", rec.Code)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "image/jxl" {
+		t.Errorf("bg-uhd.jxl Content-Type = %q, want image/jxl", got)
+	}
+}

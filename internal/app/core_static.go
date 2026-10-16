@@ -25,6 +25,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io/fs"
+	"mime"
 	"net/http"
 	"sort"
 	"strings"
@@ -76,6 +77,12 @@ func staticAssetVersion() string { return loadStaticIndex().version }
 // staticHandler serves the embedded assets under /static/ with the
 // caching rules above.
 func staticHandler() (http.Handler, error) {
+	// The wallpaper tiers ship JPEG XL twins. Not every host's
+	// mime database knows .jxl yet and the content sniffer does
+	// not recognise the format, so register the type explicitly:
+	// without it the file server falls back to octet-stream and
+	// browsers will not paint the image.
+	_ = mime.AddExtensionType(".jxl", "image/jxl")
 	sub, err := fs.Sub(staticFS, "static")
 	if err != nil {
 		return nil, err

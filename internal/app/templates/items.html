@@ -106,6 +106,7 @@
 {{if eq $v.Mode "type"}}
 {{$d := $v.TypeDetail}}
 <p><small><a href="/items/">Item Database</a>{{if $d.Category}} › <a href="/items/category/{{$d.Category.ID}}/">{{$d.Category.Name}}</a>{{end}}{{if $d.Group}} › <a href="/items/group/{{$d.Group.ID}}/">{{$d.Group.Name}}</a>{{end}}</small></p>
+<section class="card">
 <h2>{{$d.Name}}</h2>
 
 <div class="tw">
@@ -159,6 +160,7 @@
 </div>
 {{if $d.UsedInMore}}<p class="hint">Showing the first 50; bulk materials feed many more.</p>{{end}}
 {{end}}
+</section>
 {{end}}
 
 {{end}}

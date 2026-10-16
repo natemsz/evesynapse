@@ -95,6 +95,8 @@
 .ld-finalcta .ld-ctas { justify-content: center; }
 
 .ld-footer { border-top: 1px solid rgba(255, 255, 255, 0.07); padding: 22px 0 30px; color: var(--faint, #8a7a66); font-size: 13.5px; }
+.ld-footer a { color: var(--muted); }
+.ld-legal { font-size: 12.5px; margin-bottom: 10px; }
 .ld-version { margin-top: 8px; }
 
 @media (max-width: 900px) {

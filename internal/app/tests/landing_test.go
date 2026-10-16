@@ -26,6 +26,10 @@ func TestLandingAnonymous(t *testing.T) {
 		"Fleet Overview",
 		"shown with sample data",
 		"Every tool in the box.",
+		"Developed in Seattle, WA by",
+		"BSD-3-Clause-Clear",
+		"© 2026 Synap6.io LLC",
+		"intellectual property of CCP Games hf",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("landing is missing %q", want)

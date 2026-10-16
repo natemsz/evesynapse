@@ -815,7 +815,11 @@ input[type="text"]:focus, input[type="search"]:focus, input[type="number"]:focus
   margin: 0;
   padding: 0.3rem;
   list-style: none;
-  background: rgba(14, 11, 9, 0.82);
+  /* Near-opaque on purpose: nested inside the page's glass wrapper
+     (itself a backdrop layer), the dropdown's own blur cannot
+     always reach the content behind it, so legibility comes from
+     the paint, with the blur as a bonus where it can sample. */
+  background: rgba(13, 10, 8, 0.94);
   border: 1px solid rgba(255, 110, 0, 0.25);
   border-radius: var(--r-md);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
@@ -826,6 +830,12 @@ input[type="text"]:focus, input[type="search"]:focus, input[type="number"]:focus
    that holds it (each can be its own stacking layer) is lifted while
    the list is open, so later panels and the footer never cover it. */
 :where(main .card, main .foldable, main form):has(.suggest:not([hidden])) { position: relative; z-index: 60; }
+/* The footer is its own backdrop layer and a later sibling of
+   main, so a long dropdown would slide behind it despite the
+   lift above (the card's z-index competes only inside the page
+   wrapper's layer). While a dropdown is open, main itself takes
+   the top layer; the lift drops again when it closes. */
+body:has(main .suggest:not([hidden])) main { position: relative; z-index: 70; }
 .suggest li {
   padding: 0.5rem 0.6rem;
   border-radius: var(--r-sm);

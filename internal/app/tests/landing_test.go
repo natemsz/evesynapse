@@ -23,6 +23,7 @@ func TestLandingAnonymous(t *testing.T) {
 		"Rebuilt over <em>4 years</em>. Originating in <em>2013</em>. Built for <em>2026</em>.",
 		"href=\"/auth/login\"", // existing members sign in plainly
 		"href=\"/auth/link\"",  // new members link characters
+		"href=\"/planner/\"",   // the public industry face is the Build Planner
 		"Fleet Overview",
 		"shown with sample data",
 		"Every tool in the box.",
@@ -32,6 +33,25 @@ func TestLandingAnonymous(t *testing.T) {
 		"intellectual property of CCP Games hf",
 		"Ship replacement manager",
 		"Universe Map",
+		"The real thing, not a mockup.",
+		"shot-fitting.webp",
+		"ld-browser",
+		"evesynapse.app/fittings/",
+		"Plans that price themselves.",
+		"shot-planner.webp",
+		"evesynapse.app/planner/",
+		"Building it saves 362 million.",
+		"Every pilot. One glance.",
+		"shot-overview.webp",
+		"evesynapse.app/",
+		"pilots frosted out",
+		"An analyst reads every sweep.",
+		"shot-ideas.webp",
+		"evesynapse.app/market/ideas/",
+		"Prices with a memory.",
+		"shot-market.webp",
+		"ninety days of Forge history",
+		"priced and simulated with its pilot's own skills",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("landing is missing %q", want)
@@ -39,6 +59,11 @@ func TestLandingAnonymous(t *testing.T) {
 	}
 	if strings.Contains(body, "—") {
 		t.Error("landing contains an em dash")
+	}
+	// The industry page itself is members-only (it bounces anonymous
+	// visitors home); the nav must never link a visitor into a wall.
+	if strings.Contains(body, "href=\"/industry/\"") {
+		t.Error("landing nav links to the members-only industry page")
 	}
 	// No stored rows in the fixture: the strip hides entirely.
 	if strings.Contains(body, "NEW EDEN, RIGHT NOW") {

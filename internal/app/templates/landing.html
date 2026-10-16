@@ -18,7 +18,7 @@
 <body>
 <header class="ld-header"><div class="ld-wrap ld-hbar">
   <a class="wordmark ld-wordmark" href="/" aria-label="EveSynapse home"><img class="wordmark-glyph" src="/static/logo.svg?v={{.AssetVersion}}" alt="" width="64" height="64"><span><span class="wm-eve">EVE</span><span class="wm-syn"><span>S</span><span>Y</span><span>N</span><span>A</span><span>P</span><span>S</span><span>E</span></span></span></a>
-  <nav class="ld-nav"><a href="/fittings/">Fitting</a><a href="/market/">Market</a><a href="/industry/">Industry</a><a href="/intel/wars/">Intel</a><a href="/fittings/public/">Public Fits</a></nav>
+  <nav class="ld-nav"><a href="/fittings/">Fitting</a><a href="/market/">Market</a><a href="/planner/">Build Planner</a><a href="/intel/wars/">Intel</a><a href="/fittings/public/">Public Fits</a></nav>
   <div class="ld-hsp"></div>
   <a class="ld-btn ld-btn-ghost" href="/auth/login">Sign in</a>
   <a class="ld-btn ld-btn-ember" href="/auth/link">Link your characters</a>
@@ -69,6 +69,30 @@
     {{end}}
   </div>
 
+  <section class="ld-blk ld-showcase">
+    <h2>Every pilot. One glance.</h2>
+    <p class="ld-lede">The home page reads every character you link and puts what matters on one screen: the fleet's worth, a briefing that names what needs doing, and every pilot's training and wallet under it.</p>
+    <figure class="ld-shot">
+      <div class="ld-browser">
+        <div class="ld-browser-bar" aria-hidden="true"><span class="ld-dot ld-dot-on"></span><span class="ld-dot"></span><span class="ld-dot"></span><span class="ld-url">evesynapse.app/</span></div>
+        <img src="/static/shot-overview.webp?v={{.AssetVersion}}" width="1023" height="860" loading="lazy" alt="EveSynapse Fleet Overview home page: fleet net worth, a priority briefing and the pilot table, with the pilots' names frosted out">
+      </div>
+      <figcaption>A real home page with the pilots frosted out. Your characters are shown to you, and to nobody else.</figcaption>
+    </figure>
+  </section>
+
+  <section class="ld-blk ld-showcase">
+    <h2>The real thing, not a mockup.</h2>
+    <p class="ld-lede">This is the fitting simulator exactly as pilots use it. A real fit, run through its pilot's actual skills and implants, every module priced from stored market data. Hover a module and the math is right there, because it is calculated, not drawn.</p>
+    <figure class="ld-shot">
+      <div class="ld-browser">
+        <div class="ld-browser-bar" aria-hidden="true"><span class="ld-dot ld-dot-on"></span><span class="ld-dot"></span><span class="ld-dot"></span><span class="ld-url">evesynapse.app/fittings/</span></div>
+        <img src="/static/shot-fitting.webp?v={{.AssetVersion}}" width="1023" height="860" loading="lazy" alt="EveSynapse fitting simulator: a Loki simulated with its pilot's real skills, a module tooltip open, the fit priced at 2.16 billion ISK">
+      </div>
+      <figcaption>A 2.16 billion ISK Loki, priced and simulated with its pilot's own skills.</figcaption>
+    </figure>
+  </section>
+
   <section class="ld-blk">
     <h2>Data in. Decisions out.</h2>
     <p class="ld-lede">Most tools stop at showing you numbers. EveSynapse reads them for you, and tells you what they're worth doing about.</p>
@@ -101,6 +125,42 @@
       <div class="ld-glass ld-node"><h3>Fitting</h3><p>Every fit simulated with your real skills, priced the moment you change a module, saved next to your skill plans.</p></div>
     </div>
     <p class="ld-loop-note">Flying solo, the same loop runs smaller. Nothing here is a separate app with a separate login. It is one system that knows itself.</p>
+  </section>
+
+  <section class="ld-blk ld-showcase">
+    <h2>Plans that price themselves.</h2>
+    <p class="ld-lede">The Build Planner reads a blueprint and costs the whole tree before you commit a single ISK: what to build, what to buy, where the bottleneck sits, and what the finished thing earns against the market.</p>
+    <figure class="ld-shot">
+      <div class="ld-browser">
+        <div class="ld-browser-bar" aria-hidden="true"><span class="ld-dot ld-dot-on"></span><span class="ld-dot"></span><span class="ld-dot"></span><span class="ld-url">evesynapse.app/planner/</span></div>
+        <img src="/static/shot-planner.webp?v={{.AssetVersion}}" width="1023" height="860" loading="lazy" alt="EveSynapse Build Planner: a Cenotaph build plan with landed cost, market value, projected margin and the full build tree costed node by node">
+      </div>
+      <figcaption>One Cenotaph: 87.6 million ISK to build, 449.8 million at market. Building it saves 362 million.</figcaption>
+    </figure>
+  </section>
+
+  <section class="ld-blk ld-showcase">
+    <h2>An analyst reads every sweep.</h2>
+    <p class="ld-lede">The spread scanner reads every hub's order books. Then an AI analyst writes up the best of it: the item, the spread, the daily volume and the estimated profit, in plain words.</p>
+    <figure class="ld-shot">
+      <div class="ld-browser">
+        <div class="ld-browser-bar" aria-hidden="true"><span class="ld-dot ld-dot-on"></span><span class="ld-dot"></span><span class="ld-dot"></span><span class="ld-url">evesynapse.app/market/ideas/</span></div>
+        <img src="/static/shot-ideas.webp?v={{.AssetVersion}}" width="1061" height="500" loading="lazy" alt="EveSynapse Trade Ideas: twelve market opportunities for The Forge written up by an AI analyst with spreads, volumes and estimated profit">
+      </div>
+      <figcaption>One morning's Trade Ideas for The Forge. Suggestions, not advice, and the page says so itself.</figcaption>
+    </figure>
+  </section>
+
+  <section class="ld-blk ld-showcase">
+    <h2>Prices with a memory.</h2>
+    <p class="ld-lede">Every item page carries its recorded history with it: best buy and sell across all five hub regions, and ninety days of trades charted from stored data, not fetched while you wait.</p>
+    <figure class="ld-shot">
+      <div class="ld-browser">
+        <div class="ld-browser-bar" aria-hidden="true"><span class="ld-dot ld-dot-on"></span><span class="ld-dot"></span><span class="ld-dot"></span><span class="ld-url">evesynapse.app/market/</span></div>
+        <img src="/static/shot-market.webp?v={{.AssetVersion}}" width="1023" height="860" loading="lazy" alt="EveSynapse market item page for a Large Skill Injector: prices across five hub regions and a ninety day price history chart">
+      </div>
+      <figcaption>A Large Skill Injector, priced across five regions with ninety days of Forge history underneath.</figcaption>
+    </figure>
   </section>
 
   <section class="ld-blk">

@@ -16,10 +16,12 @@ import (
 // (skills, assets, location, ...). Each declares the ESI scopes it cannot
 // work without and the optional ones that light up more of it, so the
 // link to EVE is built from the declarations, never from a list of its
-// own. A player answers what they want to do (an activity); the registry's
-// Requires closure turns that into the features to switch on; the features
-// declare the scopes. Playstyle answers grant required scopes only: the
-// enhancements stay opt-ins, offered beside the summary.
+// own. The registry's Requires closure turns a choice into the features
+// to switch on; the features declare the scopes. The readout's starting
+// choice is the full one: every feature and every enhancement, because
+// the enhancements are part of how the features are expected to work.
+// A narrower stored or submitted choice still grants exactly what it
+// names (a playstyle answer, required scopes only).
 //
 // A request is only ever a subset of eveScopes, the list the EVE developer
 // portal allows: asking for a scope the portal does not have fails the
@@ -43,15 +45,8 @@ var linkActivities = []linkActivity{
 	{"industry", "Build & produce", "Build plans, blueprints, jobs and planetary industry.", 3},
 	{"corporation", "Run my corporation", "Members, wallets, ship replacement, doctrines, groups and Discord.", 4},
 	{"fitting", "Fit & plan ships", "The ship workbench, loadouts, skill plans and doctrine fits.", 5},
-	{activityEverything, "A bit of everything", "Every feature. You still choose which extra permissions to add.", 6},
+	{activityEverything, "A bit of everything", "Every feature and every permission it uses.", 6},
 }
-
-// linkEssentials is the starting set a fresh sign-up opens with
-// pre-ticked: tracking your pilots (skills, wallet, assets, location and
-// the rest of the core character picture). Later links open on the
-// account's remembered choice instead; an explicit submission that
-// unticks everything is a choice of nothing and is never widened.
-var linkEssentials = []string{"pilots"}
 
 func linkActivityByID(id string) (linkActivity, bool) {
 	for _, a := range linkActivities {

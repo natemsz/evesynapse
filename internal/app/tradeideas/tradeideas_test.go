@@ -206,7 +206,7 @@ func TestTradeIdeasPromptFencesData(t *testing.T) {
 func TestCallMetaAIRequestAndAnswer(t *testing.T) {
 	stub := &cloudflareStub{reply: metaReply}
 	got, err := callMetaAI(context.Background(), &http.Client{Transport: stub}, metaAIAPIBase,
-		"meta-test-key", metaAIModel, "Item,Station\nTritanium,Jita\n", tradeIdeasBodyCap)
+		"meta-test-key", metaAIModel, "Item,Station\nTritanium,Jita\n", tradeIdeasBodyCap, 2222)
 	if err != nil {
 		t.Fatalf("callMetaAI: %v", err)
 	}
@@ -226,6 +226,9 @@ func TestCallMetaAIRequestAndAnswer(t *testing.T) {
 	if err := json.Unmarshal(stub.body, &sent); err != nil {
 		t.Fatalf("request body: %v", err)
 	}
+	if sent.MaxOutputTokens != 2222 {
+		t.Fatalf("max_output_tokens = %d, want the ask's cap (2222) sent", sent.MaxOutputTokens)
+	}
 	if sent.Model != metaAIModel || sent.Stream || len(sent.Input) != 1 || sent.Input[0].Role != "user" ||
 		len(sent.Input[0].Content) != 1 || sent.Input[0].Content[0].Type != "input_text" ||
 		!strings.Contains(sent.Input[0].Content[0].Text, "Tritanium") ||
@@ -236,7 +239,7 @@ func TestCallMetaAIRequestAndAnswer(t *testing.T) {
 
 func TestCallMetaAIFailures(t *testing.T) {
 	ctx := context.Background()
-	if _, err := callMetaAI(ctx, &http.Client{Transport: &cloudflareStub{reply: metaReply}}, metaAIAPIBase, "", metaAIModel, "hi", 100); err == nil {
+	if _, err := callMetaAI(ctx, &http.Client{Transport: &cloudflareStub{reply: metaReply}}, metaAIAPIBase, "", metaAIModel, "hi", 100, 100); err == nil {
 		t.Error("no key: want an error")
 	}
 	for name, stub := range map[string]*cloudflareStub{
@@ -248,7 +251,7 @@ func TestCallMetaAIFailures(t *testing.T) {
 		// A refusal carries no output_text part at all.
 		"refusal": {reply: `{"status":"completed","output":[{"type":"message","content":[{"type":"refusal","refusal":"no"}]}]}`},
 	} {
-		_, err := callMetaAI(ctx, &http.Client{Transport: stub}, metaAIAPIBase, "meta-test-key", metaAIModel, "hi", 100)
+		_, err := callMetaAI(ctx, &http.Client{Transport: stub}, metaAIAPIBase, "meta-test-key", metaAIModel, "hi", 100, 100)
 		if err == nil {
 			t.Errorf("%s: want an error", name)
 		} else if strings.Contains(err.Error(), "meta-test-key") {
@@ -257,7 +260,7 @@ func TestCallMetaAIFailures(t *testing.T) {
 	}
 	// The convenience field stands in when no parts carry text.
 	stub := &cloudflareStub{reply: `{"output_text":"* **Pyerite**"}`}
-	if got, err := callMetaAI(ctx, &http.Client{Transport: stub}, metaAIAPIBase, "meta-test-key", metaAIModel, "hi", 100); err != nil || got != "* **Pyerite**" {
+	if got, err := callMetaAI(ctx, &http.Client{Transport: stub}, metaAIAPIBase, "meta-test-key", metaAIModel, "hi", 100, 100); err != nil || got != "* **Pyerite**" {
 		t.Errorf("output_text fallback = %q, %v", got, err)
 	}
 }

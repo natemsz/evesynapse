@@ -18,6 +18,7 @@ package tradeideas
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/csv"
 	"fmt"
 	"math"
@@ -134,15 +135,23 @@ func Refresh(ctx context.Context, deps module.Deps) (stored int) {
 		prompt    string
 		bodyCap   int
 		maxTokens int
-		put       func(body string) error
+		put       func(body string, rows []ideas.Row) error
 	}{
-		{tradeIdeasDue(now, moduleAt, attemptedAt, failures), "module", tradeIdeasCSVRows, tradeIdeasPrompt, tradeIdeasBodyCap, 0,
-			func(body string) error {
-				return q.PutTradeIdeas(ctx, db.PutTradeIdeasParams{Body: body, AsOf: now, Model: model})
+		{tradeIdeasDue(now, moduleAt, attemptedAt, failures), "module", tradeIdeasCSVRows, tradeIdeasPrompt, tradeIdeasBodyCap, tradeIdeasModuleMaxTokens,
+			func(body string, rows []ideas.Row) error {
+				raw, err := ideas.EncodeRows(rows)
+				if err != nil {
+					return err
+				}
+				return q.PutTradeIdeas(ctx, db.PutTradeIdeasParams{Body: body, Rows: sql.NullString{String: raw, Valid: true}, AsOf: now, Model: model})
 			}},
 		{tradeIdeasDue(now, pageAt, attemptedAt, failures), "page", tradeIdeasPageCSVRows, tradeIdeasPagePrompt, tradeIdeasPageBodyCap, tradeIdeasPageMaxTokens,
-			func(body string) error {
-				return q.PutTradeIdeasPage(ctx, db.PutTradeIdeasPageParams{Body: body, AsOf: now, Model: model})
+			func(body string, rows []ideas.Row) error {
+				raw, err := ideas.EncodeRows(rows)
+				if err != nil {
+					return err
+				}
+				return q.PutTradeIdeasPage(ctx, db.PutTradeIdeasPageParams{Body: body, Rows: sql.NullString{String: raw, Valid: true}, AsOf: now, Model: model})
 			}},
 	}
 	asked := false
@@ -150,10 +159,11 @@ func Refresh(ctx context.Context, deps module.Deps) (stored int) {
 		if !ask.want {
 			continue
 		}
-		csvText, ok := BuildCSV(ctx, deps, ask.rows)
+		rows, ok := BuildCSVRows(ctx, deps, ask.rows)
 		if !ok {
 			return stored // nothing to ask about yet: not an attempt
 		}
+		csvText := RenderCSV(rows)
 		asked = true
 		prompt := tradeIdeasWrap(ask.prompt, csvText)
 		var body string
@@ -167,13 +177,13 @@ func Refresh(ctx context.Context, deps module.Deps) (stored int) {
 			if base == "" {
 				base = metaAIAPIBase
 			}
-			body, err = callMetaAI(ctx, client, base, cfg.MetaKey, model, prompt, ask.bodyCap)
+			body, err = callMetaAI(ctx, client, base, cfg.MetaKey, model, prompt, ask.bodyCap, ask.maxTokens)
 		} else {
 			body, err = callCloudflareAIWith(ctx, client, tradeIdeasAPIBase,
 				cfg.CloudflareAccountID, cfg.CloudflareToken, model, prompt, ask.bodyCap, ask.maxTokens)
 		}
 		if err == nil {
-			if err = ask.put(body); err != nil {
+			if err = ask.put(body, rows); err != nil {
 				err = fmt.Errorf("store: %w", err)
 			}
 		}
@@ -206,19 +216,46 @@ func noteAttempt(ctx context.Context, q *db.Queries, at time.Time, failures int)
 const forgeRegionID = int64(10000002)
 
 // BuildCSV renders the Forge scanner's top rows as the CSV the model
-// reads, capped to limit rows. It reads the stored scanner statistics
-// itself (the same bounded stored-statistics query the spread scanner page
-// uses, at the core-owned spread defaults, Deps.SpreadDefaults) and formats the rows here, so
-// it does not depend on the scanner page's view. False when the sweep
-// has not covered the Forge yet.
+// reads, capped to limit rows. Each row leads with its 1-based "#"
+// number, the reference the model's answer names; the rest of the
+// CSV is byte-identical to what it has always been.
 func BuildCSV(ctx context.Context, deps module.Deps, limit int) (string, bool) {
+	rows, ok := BuildCSVRows(ctx, deps, limit)
+	if !ok {
+		return "", false
+	}
+	return RenderCSV(rows), true
+}
+
+// RenderCSV renders row values as the CSV text the model reads: the
+// header and one line per row, the leading "#" column the model's
+// "(#n)" references name.
+func RenderCSV(rows []ideas.Row) string {
+	var buf bytes.Buffer
+	out := csv.NewWriter(&buf)
+	_ = out.Write([]string{"#", "Item", "Station", "Highest buy price", "Lowest sell price", "Spread %", "Sold per day", "Estimated daily profit"})
+	for _, r := range rows {
+		_ = out.Write([]string{fmt.Sprintf("%d", r.N), r.Item, r.Station, r.Buy, r.Sell, r.Spread, r.Sold, r.Profit})
+	}
+	out.Flush()
+	return buf.String()
+}
+
+// BuildCSVRows reads the Forge scanner's top rows as the values the
+// CSV carries and the answer later stores, capped to limit rows. It
+// reads the stored scanner statistics itself (the same bounded
+// stored-statistics query the spread scanner page uses, at the
+// core-owned spread defaults, Deps.SpreadDefaults) and formats the
+// rows here, so it does not depend on the scanner page's view. False
+// when the sweep has not covered the Forge yet.
+func BuildCSVRows(ctx context.Context, deps module.Deps, limit int) ([]ideas.Row, bool) {
 	q := deps.DB()
 	stamp, err := q.GetMarketStationStatsStamp(ctx, forgeRegionID)
 	if err != nil || stamp.RowCount == 0 {
 		if err != nil {
 			logging.Errorf("trade ideas: station stats stamp for region %d: %v", forgeRegionID, err)
 		}
-		return "", false
+		return nil, false
 	}
 	minSpread, rowLimit := deps.SpreadDefaults()
 	rowCap := int64(limit)
@@ -233,16 +270,14 @@ func BuildCSV(ctx context.Context, deps module.Deps, limit int) (string, bool) {
 	})
 	if err != nil {
 		logging.Errorf("trade ideas: list opportunities for region %d: %v", forgeRegionID, err)
-		return "", false
+		return nil, false
 	}
 	if len(opp) == 0 {
-		return "", false
+		return nil, false
 	}
-	var buf bytes.Buffer
-	out := csv.NewWriter(&buf)
-	_ = out.Write([]string{"Item", "Station", "Highest buy price", "Lowest sell price", "Spread %", "Sold per day", "Estimated daily profit"})
+	rows := make([]ideas.Row, 0, len(opp))
 	stationMemo := make(map[int64]module.PlaceRef)
-	for _, s := range opp {
+	for i, s := range opp {
 		// The tradeable size is whichever runs out first: what trades
 		// each day, what sellers hold, or what buyers want.
 		size := s.DailyVolume
@@ -252,20 +287,16 @@ func BuildCSV(ctx context.Context, deps module.Deps, limit int) (string, bool) {
 		if float64(s.BuyVolume) < size {
 			size = float64(s.BuyVolume)
 		}
-		_ = out.Write([]string{
-			tradeIdeasCell(deps.TypeName(ctx, s.TypeID)),
-			tradeIdeasCell(deps.StationRef(ctx, stationMemo, s.LocationID).Name),
-			esi.FormatISK(s.BestBuy),
-			esi.FormatISK(s.BestSell),
-			fmt.Sprintf("%.1f%%", (s.BestSell-s.BestBuy)/s.BestBuy*100),
-			esi.FormatInt(int64(math.Round(s.DailyVolume))),
-			esi.FormatISK((s.BestSell - s.BestBuy) * size),
+		rows = append(rows, ideas.Row{
+			N:       i + 1,
+			Item:    tradeIdeasCell(deps.TypeName(ctx, s.TypeID)),
+			Station: tradeIdeasCell(deps.StationRef(ctx, stationMemo, s.LocationID).Name),
+			Buy:     esi.FormatISK(s.BestBuy),
+			Sell:    esi.FormatISK(s.BestSell),
+			Spread:  fmt.Sprintf("%.1f%%", (s.BestSell-s.BestBuy)/s.BestBuy*100),
+			Sold:    esi.FormatInt(int64(math.Round(s.DailyVolume))),
+			Profit:  esi.FormatISK((s.BestSell - s.BestBuy) * size),
 		})
 	}
-	out.Flush()
-	if err := out.Error(); err != nil {
-		logging.Errorf("trade ideas: csv: %v", err)
-		return "", false
-	}
-	return buf.String(), true
+	return rows, true
 }

@@ -13,28 +13,32 @@ import (
 // and may answer at more length, so twenty ideas a strategy have
 // room. Twice a day keeps the ideas within a sweep or two of fresh.
 const (
-	tradeIdeasModel         = ideas.GemmaModel
-	tradeIdeasAPIBase       = "https://api.cloudflare.com/client/v4"
-	tradeIdeasRefreshAge    = 12 * time.Hour
-	tradeIdeasCSVRows       = 60
-	tradeIdeasPageCSVRows   = 200
-	tradeIdeasBodyCap       = 16 * 1024
-	tradeIdeasPageBodyCap   = 64 * 1024
-	tradeIdeasPageMaxTokens = 12000
-	tradeIdeasTimeout       = 3 * time.Minute
-	tradeIdeasRespCap       = 1 << 20
+	tradeIdeasModel           = ideas.GemmaModel
+	tradeIdeasAPIBase         = "https://api.cloudflare.com/client/v4"
+	tradeIdeasRefreshAge      = 12 * time.Hour
+	tradeIdeasCSVRows         = 60
+	tradeIdeasPageCSVRows     = 200
+	tradeIdeasBodyCap         = 10 * 1024
+	tradeIdeasPageBodyCap     = 32 * 1024
+	tradeIdeasModuleMaxTokens = 2500
+	tradeIdeasPageMaxTokens   = 6000
+	tradeIdeasTimeout         = 3 * time.Minute
+	tradeIdeasRespCap         = 1 << 20
 )
 
 // tradeIdeasPrompt is the ask: list format, limited narration,
 // across trade-strategy categories, with enough ideas in each for a
-// tab of its own. The scanner CSV follows it.
-const tradeIdeasPrompt = "Find the best trade opportunities from this CSV format list of fictional video game items for the video game EVE Online.\n\nSimply make it list format with limited narration, across four to six different categories/types of trade strategies, with six to ten ideas in each category, best first.\n\nFormat the answer as plain markdown only: one ### header per strategy category (two to four words) with a one-line *italic description* under it, then one * bullet per idea with the item name in **bold**. No other formatting."
+// tab of its own. The scanner CSV follows it. The model supplies
+// only the judgment (category, ranking, item choice, reason); the
+// server composes each idea's figures from the row it references.
+const tradeIdeasPrompt = "Find the best trade opportunities from this CSV format list of fictional video game items for the video game EVE Online.\n\nSimply make it list format with limited narration, across four to six different categories/types of trade strategies, with six to ten ideas in each category, best first.\n\nFormat the answer as plain markdown only: one ### header per strategy category (two to four words) with a one-line *italic description* under it, then one * bullet per idea on a single line, exactly in this shape: * **Item name** (#n) — reason. The item name must match the row it is about, and (#n) is that row's number in the first (#) column. Do NOT repeat any prices, spreads, volumes or profits in your answer — the page prints the figures from the row beside your reason, so the reason carries the judgment only: why this item, why this strategy, in a single clause. No other formatting."
 
 // tradeIdeasPagePrompt is the Trade ideas page's own ask: the same
-// strategies and format as the module's, differing in one way — up
-// to twenty ideas a strategy, each carrying its figures and reason,
-// where the module lists its short top picks.
-const tradeIdeasPagePrompt = "Find the best trade opportunities from this CSV format list of fictional video game items for the video game EVE Online.\n\nMake it list format across four to six different categories/types of trade strategies, with up to twenty ideas in each category, best first. Give every idea its details from the data: the station, the highest buy and lowest sell price, the spread, how many sell per day and the estimated daily profit, then a short reason it fits the strategy.\n\nFormat the answer as plain markdown only: one ### header per strategy category (two to four words) with a one-line *italic description* under it, then one * bullet per idea, each on a single line: the item name in **bold**, then its details separated by \" · \", then \" — \" and the reason. No tables and no other formatting."
+// strategies, references and slim format as the module's, differing
+// in one way — up to twenty ideas a strategy, where the module
+// lists its short top picks. The figures come from the referenced
+// rows, never from the model's text.
+const tradeIdeasPagePrompt = "Find the best trade opportunities from this CSV format list of fictional video game items for the video game EVE Online.\n\nMake it list format across four to six different categories/types of trade strategies, with up to twenty ideas in each category, best first.\n\nFormat the answer as plain markdown only: one ### header per strategy category (two to four words) with a one-line *italic description* under it, then one * bullet per idea on a single line, exactly in this shape: * **Item name** (#n) — reason. The item name must match the row it is about, and (#n) is that row's number in the first (#) column. Do NOT repeat any prices, spreads, volumes or profits in your answer — the page prints the figures from the row beside your reason, so the reason carries the judgment only: why this item, why this strategy, in one line. No tables and no other formatting."
 
 // tradeIdeasFirstBackoff is the wait after one failed ask; it doubles
 // with each failure in a row, up to tradeIdeasRefreshAge.

@@ -99,3 +99,16 @@ html[data-theme="light"] .charselector-dropdown {
   background-color: #fdfbf6;
   border-color: #d9cfba;
 }
+
+/* My Loadouts: the training-plan action is a skill-book glyph,
+   not a text link, so a card's actions row stays one line for
+   both fit sources. */
+.fit-plan-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent);
+}
+.fit-plan-icon svg {
+  width: 20px;
+  height: 20px;
+}

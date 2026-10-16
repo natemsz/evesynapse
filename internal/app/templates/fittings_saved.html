@@ -1,4 +1,5 @@
 {{define "title"}}My Loadouts{{end}}
+{{define "fitplanicon"}}<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5C10.4 5.2 8.2 4.6 5.5 4.6v12.2c2.7 0 4.9.6 6.5 1.9 1.6-1.3 3.8-1.9 6.5-1.9V4.6c-2.7 0-4.9.6-6.5 1.9z"/><path d="M12 6.5v12.2"/></g></svg>{{end}}
 {{define "content"}}
 <h1><span class="gt">My Loadouts</span></h1>
 {{template "sectiontabs" .}}
@@ -7,7 +8,12 @@
 <section class="card page-card">
 
 {{if .Fittings}}
-  {{if .Fittings.Loaded}}
+  <div class="facet-chips">
+    <a class="chip{{if eq .Fittings.Source "all"}} on{{end}}" href="/fittings/saved/?source=all{{if .Fittings.CharacterID}}&amp;character={{.Fittings.CharacterID}}{{end}}">All <small>{{.Fittings.CountAll}}</small></a>
+    <a class="chip{{if eq .Fittings.Source "public"}} on{{end}}" href="/fittings/saved/?source=public{{if .Fittings.CharacterID}}&amp;character={{.Fittings.CharacterID}}{{end}}">Public <small>{{.Fittings.CountPublic}}</small></a>
+    <a class="chip{{if eq .Fittings.Source "evesynapse"}} on{{end}}" href="/fittings/saved/?source=evesynapse{{if .Fittings.CharacterID}}&amp;character={{.Fittings.CharacterID}}{{end}}">EveSynapse <small>{{.Fittings.CountLocal}}</small></a>
+    <a class="chip{{if eq .Fittings.Source "eve"}} on{{end}}" href="/fittings/saved/?source=eve{{if .Fittings.CharacterID}}&amp;character={{.Fittings.CharacterID}}{{end}}">EVE account <small>{{.Fittings.CountEVE}}</small></a>
+  </div>
   {{if .Fittings.Fittings}}
   <div class="fit-esi-controls searchpanel">
     <span class="searchwrap"><input type="search" id="fit-esi-q" placeholder="Search by fit or ship name…" autocomplete="off" aria-label="Search fittings"></span>
@@ -25,8 +31,13 @@
   <article class="fit-card" data-fit-name="{{.Name}}" data-fit-ship="{{.ShipType}}" data-fit-items="{{range .Groups}}{{range .Items}}{{.Name}},{{end}}{{end}}">
     {{if .ShipTypeID}}<img class="fit-card-ship" src="https://images.evetech.net/types/{{.ShipTypeID}}/render?size=64" width="64" height="64" alt="" loading="lazy">{{end}}
     <div class="fit-card-body">
+      {{if eq .Source "local"}}
+      <h4><a href="/fittings/?local={{.LocalID}}#fit-editor">{{.Name}}</a></h4>
+      <p class="fit-card-line">{{itemLink .ShipTypeID .ShipType}} {{if .IsPublic}}<small>Public</small>{{else}}<small>EveSynapse</small>{{end}}</p>
+      {{else}}
       <h4><a href="/fittings/?character={{$.Fittings.CharacterID}}&esi={{.FittingID}}#fit-editor">{{.Name}}</a></h4>
-      <p class="fit-card-line">{{itemLink .ShipTypeID .ShipType}}</p>
+      <p class="fit-card-line">{{itemLink .ShipTypeID .ShipType}} <small>EVE account</small></p>
+      {{end}}
     </div>
     <details class="doctrine-eft">
       <summary>Modules and cargo</summary>
@@ -39,20 +50,34 @@
       {{end}}
     </details>
     <div class="fit-card-actions">
+      {{if eq .Source "local"}}
+      <a class="btn" href="/fittings/?local={{.LocalID}}#fit-editor">Open in fitting tool</a>
+      {{if .IsPublic}}<a href="/fittings/public/fit/{{.LocalID}}/">Public page</a>{{end}}
+      {{if and (moduleOn "skillplans") $.Fittings.CharacterID}}<a class="fit-plan-icon" href="/skills/plans/fit?character={{$.Fittings.CharacterID}}&amp;local={{.LocalID}}" title="Training plan for this fit" aria-label="Training plan for this fit">{{template "fitplanicon"}}</a>{{end}}
+      {{else}}
       <a class="btn" href="/fittings/?character={{$.Fittings.CharacterID}}&esi={{.FittingID}}#fit-editor">Open in fitting tool</a>
-      {{if moduleOn "skillplans"}}<a href="/skills/plans/fit?character={{$.Fittings.CharacterID}}&fitting={{.FittingID}}">Training plan for this fit</a>{{end}}
+      {{if moduleOn "skillplans"}}<a class="fit-plan-icon" href="/skills/plans/fit?character={{$.Fittings.CharacterID}}&amp;fitting={{.FittingID}}" title="Training plan for this fit" aria-label="Training plan for this fit">{{template "fitplanicon"}}</a>{{end}}
+      {{end}}
     </div>
   </article>
   {{end}}
   </div>
+  {{if .Fittings.Warming}}<p><small>EVE fittings are still syncing. Progress is on the <a href="/sync/">Sync page</a>.</small></p>{{end}}
   {{else}}
-  <p><small>No saved fittings for this character.</small></p>
-  {{end}}
-  {{else}}
+  {{if eq .Fittings.Source "public"}}
+  <p><small>No public fits yet. Open one of your EveSynapse fits in the fitting tool and turn on Make Public to publish it here.</small></p>
+  {{else if eq .Fittings.Source "evesynapse"}}
+  <p><small>No EveSynapse fits yet. Build one in the <a href="/fittings/">fitting tool</a> and save it.</small></p>
+  {{else if eq .Fittings.Source "eve"}}
   {{if .Fittings.Warming}}
   <p>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</p>
   {{else}}
-  <p><small>Fittings couldn't be loaded. The server log has the details.</small></p>
+  <p><small>No saved fittings for this character in EVE.</small></p>
+  {{end}}
+  {{else if .Fittings.Warming}}
+  <p>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</p>
+  {{else}}
+  <p><small>No loadouts yet. Save a fit in the <a href="/fittings/">fitting tool</a>, or link a character to see its EVE fittings here.</small></p>
   {{end}}
   {{end}}
 {{else}}

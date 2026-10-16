@@ -60,7 +60,7 @@
 </p>
 {{if .EFT}}<pre id="fit-eft">{{.EFT}}</pre>{{end}}
 
-<p class="hint">Open in the <a href="/fittings/?public={{.Card.ID}}#fit-editor">fitting tool</a> to simulate it with your skills or make your own copy.</p>
+{{if .Card.Mine}}<p class="hint">This is your fit. Open it in the <a href="/fittings/?local={{.Card.ID}}#fit-editor">fitting tool</a> to edit it; saving updates this page.</p>{{else}}<p class="hint">Open in the <a href="/fittings/?public={{.Card.ID}}#fit-editor">fitting tool</a> to simulate it with your skills or make your own copy.</p>{{end}}
 </section>
 {{end}}
 {{end}}

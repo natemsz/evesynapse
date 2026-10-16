@@ -909,11 +909,17 @@ func (app *tool) attachFitEditor(ctx context.Context, r *http.Request, data *Pag
 			}
 		}
 	case publicID > 0:
-		// Somebody's public fit, opened unsaved: saving it makes a copy.
+		// A public fit. The owner's own opens as their saved fit,
+		// so saving edits it in place (and rebuilds its public
+		// page); anybody else's opens unsaved: saving makes a copy.
 		if row, err := app.queries.GetPublicFitting(ctx, publicID); err == nil {
 			var stored fitview.FitDoc
 			if json.Unmarshal([]byte(row.ItemsJson), &stored) == nil {
 				doc = &stored
+				if userID > 0 && row.UserID == userID {
+					editor.LocalID = row.ID
+					editor.IsPublic = true
+				}
 			}
 		}
 	case doctrineFitID > 0 && userID > 0:

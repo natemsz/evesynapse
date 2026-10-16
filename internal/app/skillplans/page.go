@@ -2,6 +2,7 @@ package skillplans
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/fitview"
 	"evesynapse/internal/humanize"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/skillplan"
@@ -259,6 +261,7 @@ type levelOption struct {
 // before the user commits it to a saved plan.
 type fitPreview struct {
 	FittingID   int64
+	LocalID     int64 // the EveSynapse fit behind the preview, when it is one (0 = an EVE fitting)
 	FitName     string
 	ShipName    string
 	ShipTypeID  int64
@@ -997,6 +1000,27 @@ func (app *plans) loadFitting(ctx context.Context, characterID, fittingID int64)
 	return esi.Fitting{}, false
 }
 
+// loadLocalFitting loads one of the user's EveSynapse fits as an
+// ESI-shaped fitting, so the preview and plan creation treat both
+// fit sources the same from here on. The closure only reads type
+// IDs, so the document's items carry no slot flags. Drafts are
+// workbench scratch, never a plan source.
+func (app *plans) loadLocalFitting(ctx context.Context, userID, localID int64) (esi.Fitting, bool) {
+	row, err := app.queries.GetLocalFitting(ctx, db.GetLocalFittingParams{ID: localID, UserID: userID})
+	if err != nil || row.IsDraft {
+		return esi.Fitting{}, false
+	}
+	var doc fitview.FitDoc
+	if err := json.Unmarshal([]byte(row.ItemsJson), &doc); err != nil {
+		return esi.Fitting{}, false
+	}
+	fit := esi.Fitting{FittingID: row.ID, Name: row.Name, ShipTypeID: row.ShipTypeID}
+	for _, it := range doc.Items {
+		fit.Items = append(fit.Items, esi.FittingItem{TypeID: it.TypeID, Quantity: int64(it.Qty)})
+	}
+	return fit, true
+}
+
 // fitClosureTargets computes a fitting's skill closure plus the
 // per-skill status against the character (for the preview).
 func (app *plans) fitClosureTargets(ctx context.Context, ch db.Character, fit esi.Fitting) (targets []skillplan.Target, preview *fitPreview) {
@@ -1074,13 +1098,25 @@ func (app *plans) handleSkillPlanFitPreview(w http.ResponseWriter, r *http.Reque
 	data.SkillPlans = view
 
 	fittingID, _ := strconv.ParseInt(r.URL.Query().Get("fitting"), 10, 64)
-	fit, ok := app.loadFitting(ctx, active.CharacterID, fittingID)
+	localID, _ := strconv.ParseInt(r.URL.Query().Get("local"), 10, 64)
+	var fit esi.Fitting
+	var ok bool
+	if localID > 0 {
+		fit, ok = app.loadLocalFitting(ctx, userID, localID)
+	} else {
+		fit, ok = app.loadFitting(ctx, active.CharacterID, fittingID)
+	}
 	if !ok {
-		data.Error = "That fitting isn't in this character's saved fittings (or they haven't synced yet)."
+		if localID > 0 {
+			data.Error = "That fitting isn't one of your EveSynapse fits."
+		} else {
+			data.Error = "That fitting isn't in this character's saved fittings (or they haven't synced yet)."
+		}
 		app.deps.Render(ctx, w, http.StatusOK, "skillplans.html", data)
 		return
 	}
 	_, preview := app.fitClosureTargets(ctx, active, fit)
+	preview.LocalID = localID
 	view.FitPreview = preview
 	app.deps.Render(ctx, w, http.StatusOK, "skillplans.html", data)
 }
@@ -1094,6 +1130,7 @@ func (app *plans) handleSkillPlanFromFit(w http.ResponseWriter, r *http.Request)
 	}
 	characterID, _ := strconv.ParseInt(r.FormValue("character"), 10, 64)
 	fittingID, _ := strconv.ParseInt(r.FormValue("fitting"), 10, 64)
+	localID, _ := strconv.ParseInt(r.FormValue("local"), 10, 64)
 	if !app.userOwnsCharacter(ctx, userID, characterID) {
 		skillPlansRedirect(w, r, characterID, 0)
 		return
@@ -1114,7 +1151,13 @@ func (app *plans) handleSkillPlanFromFit(w http.ResponseWriter, r *http.Request)
 		skillPlansRedirect(w, r, characterID, 0)
 		return
 	}
-	fit, ok := app.loadFitting(ctx, characterID, fittingID)
+	var fit esi.Fitting
+	var ok bool
+	if localID > 0 {
+		fit, ok = app.loadLocalFitting(ctx, userID, localID)
+	} else {
+		fit, ok = app.loadFitting(ctx, characterID, fittingID)
+	}
 	if !ok {
 		http.Redirect(w, r, "/fittings/", http.StatusSeeOther)
 		return
@@ -1149,7 +1192,7 @@ func (app *plans) handleSkillPlanFromFit(w http.ResponseWriter, r *http.Request)
 	name := app.uniquePlanName(ctx, userID, characterID, "Fit: "+base)
 	planID, err := app.createPlanWithItems(ctx, userID, characterID, name, kept)
 	if err != nil {
-		logging.Errorf("skill plans: create from fit %d for character %d: %v", fittingID, characterID, err)
+		logging.Errorf("skill plans: create from fit %d for character %d: %v", fit.FittingID, characterID, err)
 		skillPlansRedirect(w, r, characterID, 0)
 		return
 	}

@@ -31,7 +31,7 @@
 </div>
 <form method="post" action="/skills/plans/from-fit">
   <input type="hidden" name="character" value="{{$.SkillPlans.CharacterID}}">
-  <input type="hidden" name="fitting" value="{{.FittingID}}">
+  {{if .LocalID}}<input type="hidden" name="local" value="{{.LocalID}}">{{else}}<input type="hidden" name="fitting" value="{{.FittingID}}">{{end}}
   <button type="submit">Create this plan</button>
 </form>
 <p><small><a href="/fittings/?character={{$.SkillPlans.CharacterID}}">Back to fittings</a></small></p>

@@ -8,10 +8,16 @@
    the master is a 6400-wide generative restoration of the
    original art, the UHD tier is the master itself, the 4K tier
    3840, the base 2000). The
+   Each tier also ships a JPEG XL twin (bg.jxl, bg-4k.jxl,
+   bg-uhd.jxl, distance 0.8): the image-set declarations below
+   serve it to browsers that decode image/jxl (Chrome 155+,
+   Firefox 158+, Safari 17+), which download the JXL only;
+   everyone else keeps the JPEG from the plain url line.
    art stack breathes at the edge of perception; that stops
    dead under reduced motion. */
 body::before {
   background-image: url("/static/bg.jpg");
+  background-image: image-set(url("/static/bg.jxl") type("image/jxl"), url("/static/bg.jpg") type("image/jpeg"));
   background-repeat: no-repeat;
   background-size: cover;
   background-position: center;
@@ -20,11 +26,13 @@ body::before {
 @media (min-width: 1501px), (min-width: 751px) and (min-resolution: 2dppx), (min-width: 751px) and (-webkit-min-device-pixel-ratio: 2) {
   body::before {
     background-image: url("/static/bg-4k.jpg");
+    background-image: image-set(url("/static/bg-4k.jxl") type("image/jxl"), url("/static/bg-4k.jpg") type("image/jpeg"));
   }
 }
 @media (min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx), (min-width: 1601px) and (-webkit-min-device-pixel-ratio: 2) {
   body::before {
     background-image: url("/static/bg-uhd.jpg");
+    background-image: image-set(url("/static/bg-uhd.jxl") type("image/jxl"), url("/static/bg-uhd.jpg") type("image/jpeg"));
   }
 }
 @keyframes ember-breathe {

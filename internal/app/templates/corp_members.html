@@ -8,6 +8,7 @@
 {{template "charselector" .CorpChars}}
 
 {{if .CorpMembers}}
+<section class="card page-card">
 <h2>{{corpLink .CorpMembers.CorpID .CorpMembers.CorpTitle}}{{if .CorpMembers.MemberCount}} Â· {{.CorpMembers.MemberCount}} members{{end}}</h2>
 
   {{if .CorpMembers.Forbidden}}
@@ -17,7 +18,7 @@
   <p>Membership was refused by ESI (403). This list appears once {{.CorpMembers.CharacterName}} is a member of this corporation again.</p>
   {{end}}
   {{else if .CorpMembers.NoFeeder}}
-  <p>{{.CorpMembers.CharacterName}} hasn't granted the corporation permissions that feed the member list, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.CorpMembers.AddScopesURL}}">Add the corporation permissions</a> — EVE asks for them on top of what is already granted.</p>
+  <p>{{.CorpMembers.CharacterName}} hasn't granted the corporation permissions that feed the member list, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.CorpMembers.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p>
   {{else if .CorpMembers.Warming}}
   <p>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</p>
   {{else if .CorpMembers.Loaded}}
@@ -61,6 +62,7 @@
   {{end}}
   <p><small>Login, ship and location columns come from member tracking, which needs the Director role in-game.</small></p>
   {{end}}
+</section>
 {{else}}
   <p>No corporation to show yet. <a href="/auth/link">Link a character</a> first.</p>
 {{end}}

@@ -44,16 +44,21 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	if !strings.Contains(style, `html[data-theme="light"] .brief-card:hover`) {
 		t.Error("the light theme's shadow-only briefing hover is missing")
 	}
-	// Blur cap under 720px, alpha compensating.
+	// The glass recipe holds at every width: no blur-off tier, no
+	// alpha compensation. The <720px block keeps only the fleet
+	// Location hiding (a layout rule, not a surface rule).
 	phoneAt := strings.Index(style, "Motion and blur discipline")
 	if phoneAt < 0 {
 		t.Fatal("the motion/blur discipline block is missing from style.css")
 	}
 	phone := style[phoneAt:]
-	if !strings.Contains(phone, "backdrop-filter: none") ||
-		!strings.Contains(phone, "--glass: color-mix(in srgb, var(--panel) 94%, transparent)") ||
+	if strings.Contains(phone, "backdrop-filter: none") &&
+		strings.Contains(phone, ".card, .panel") {
+		t.Error("a small-screen tier is stripping the backdrop blur again")
+	}
+	if strings.Contains(phone, "94%, transparent") ||
 		!strings.Contains(phone, ".fleet-table .opt2 { display: none; }") {
-		t.Error("the <720px block lost the blur cap, the alpha compensation, or the fleet Location hiding")
+		t.Error("the <720px block regained the alpha compensation or lost the fleet Location hiding")
 	}
 	// Reduced motion stops every animation this pass adds.
 	if i := strings.Index(style, "@media (prefers-reduced-motion: reduce) {\n  .brief-card"); i < 0 {

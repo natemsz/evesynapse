@@ -31,14 +31,14 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		"color-mix(in srgb, var(--sev-glow, var(--accent)) 55%, transparent)",
 		"animation: sev-pulse 3.2s ease-in-out infinite;",
 		"--panel: #130e0a;",
-		"--r-lg: 16px;",
-		"--r-md: 12px;",
-		"--r-sm: 8px;",
+		"--r-lg: 0.5rem;",
+		"--r-md: 0.5rem;",
+		"--r-sm: 0.5rem;",
 		"grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));",
 		"--row: rgba(16, 13, 10, 0.55)",
 		"--row-alt: rgba(255, 255, 255, 0.03)",
 		".chip:hover",
-		"background: rgba(18, 14, 11, 0.94)",
+		"tbody td:first-child, tbody th:first-child {\n  background: transparent;",
 		".kpi-spark-line { fill: none; stroke: var(--accent);",
 	} {
 		if !strings.Contains(style, want) {

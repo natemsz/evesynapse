@@ -136,6 +136,13 @@
   --note: #c9a06a;
   --panel: #151515;
   --panel-head: #0e0e0e;
+  /* Glass (Ember Nebula): the shared card/panel surface — the panel
+     color at ~0.85 alpha, an accent-tinted edge, and the blur that
+     turns the backdrop art behind a card into atmosphere. Every
+     value rides the theme variables, so faction themes recolor
+     the glass and the light theme's solid overrides still win. */
+  --glass: color-mix(in srgb, var(--panel) 85%, transparent);
+  --glass-edge: color-mix(in srgb, var(--accent) 24%, transparent);
   --row: #101010;
   --row-alt: #141414;
   --row-hover: #1b1b1b;
@@ -386,11 +393,17 @@ main {
   padding: 0 1rem;
 }
 .panel {
-  background: linear-gradient(#151515, #111111) padding-box,
+  /* Glass: the legibility gradient (deep at top, clear by mid)
+     rides over the translucent surface; the ember ramp stays on
+     the border. */
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.30), rgba(0, 0, 0, 0) 55%) padding-box,
+    linear-gradient(var(--glass), var(--glass)) padding-box,
     linear-gradient(135deg, #7a3a12 0%, #4a2408 45%, #2a1404 100%) border-box;
   border: 1px solid transparent;
   border-radius: 4px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 2px 14px rgba(0, 0, 0, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 4px 20px rgba(0, 0, 0, 0.65);
+  -webkit-backdrop-filter: blur(9px) saturate(1.15);
+  backdrop-filter: blur(9px) saturate(1.15);
   padding: 1.25rem 1.25rem 1.5rem;
 }
 .panel.market-browse { background: none; border: 0; box-shadow: none; padding: 0; }
@@ -464,9 +477,15 @@ main {
 .grid .spanall { grid-column: 1 / -1; }
 .card {
   position: relative;
-  background: #101010;
-  border: 1px solid #262626;
+  /* Glass, same recipe as .panel: legibility gradient over the
+     translucent surface, accent-tinted edge, deepened shadow. */
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.30), rgba(0, 0, 0, 0) 55%),
+    var(--glass);
+  border: 1px solid var(--glass-edge);
   border-radius: 4px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(9px) saturate(1.15);
+  backdrop-filter: blur(9px) saturate(1.15);
   padding: 0.85rem 1rem 1rem;
 }
 /* Darker header bands: a solid ::before behind the heading. Layering
@@ -816,6 +835,21 @@ input[type="text"]:focus, input[type="search"]:focus, input[type="number"]:focus
 .sec-1 { color: #b33a3a; }
 .sec-0 { color: #c0508a; }
 .sug-label .sec, .qj-label .sec { margin-right: 0.4em; }
+/* The fleet table's security pill: the same severity colors and
+   one-decimal value, boxed small beside the system name. Its text
+   color comes from the .sec-N class it carries, like everywhere. */
+.sec-pill {
+  display: inline-block;
+  margin-left: 0.35em;
+  padding: 0 0.35em;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.78em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  vertical-align: 0.12em;
+  white-space: nowrap;
+}
 
 /* --- top bar search --- */
 .topsearch { margin: 0; }
@@ -1328,6 +1362,11 @@ td.pos, .pos { color: #28c76f; }
 .kpi-bar { display: block; height: 4px; background: #1d1510; border-radius: 2px; overflow: hidden; }
 .kpi-bar > span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #d63c14, var(--accent)); }
 .kpi-bar.warn { background: rgba(198, 47, 16, 0.45); }
+/* The net-worth sparkline beside the trend arrow: accent line over
+   a soft accent fill, shaped server-side from the daily samples. */
+.kpi-spark { display: block; width: 100%; height: 28px; margin-top: 0.25rem; }
+.kpi-spark-line { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+.kpi-spark-area { fill: color-mix(in srgb, var(--accent) 18%, transparent); stroke: none; }
 .linkbtn {
   padding: 0;
   font: inherit;
@@ -1352,15 +1391,41 @@ ul.brief-cards {
 }
 .brief-card {
   padding: 0.55rem 0.7rem;
-  background: var(--row);
+  /* Briefing glass: the shared recipe at tile scale — translucent
+     surface with the legibility gradient, no own blur (tiles sit
+     inside the glass card; one blur layer is enough). */
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0) 60%),
+    color-mix(in srgb, var(--row) 85%, transparent);
   border: 1px solid #2a1a0e;
   border-left: 3px solid var(--muted);
   border-radius: 4px;
   font-size: 0.85rem;
+  transition: transform 160ms ease, box-shadow 160ms ease;
 }
-.brief-card.sev-critical { border-left-color: var(--danger); }
-.brief-card.sev-warning { border-left-color: var(--accent); }
-.brief-card.sev-info { border-left-color: var(--gold); }
+.brief-card.sev-critical { border-left-color: var(--danger); --sev-glow: var(--danger); }
+.brief-card.sev-warning { border-left-color: var(--accent); --sev-glow: var(--accent); }
+.brief-card.sev-info { border-left-color: var(--gold); --sev-glow: var(--gold); }
+/* Briefing glow: hover/focus lifts the card 2px into a halo of its
+   severity color over a warm under-shadow. The colors ride the
+   severity variables, so faction themes follow; the light theme
+   below keeps the shadow and drops the glow. */
+.brief-card:hover, .brief-card:focus-within {
+  transform: translateY(-2px);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--sev-glow, var(--accent)) 45%, transparent),
+    0 6px 14px rgba(20, 8, 2, 0.55);
+}
+html[data-theme="light"] .brief-card:hover, html[data-theme="light"] .brief-card:focus-within {
+  box-shadow: 0 6px 14px rgba(90, 70, 40, 0.25);
+}
+/* The critical card breathes: a slow halo pulse in its severity
+   color at low alpha, box-shadow only. */
+.brief-card.sev-critical {
+  animation: brief-pulse 3.2s ease-in-out infinite;
+}
+@keyframes brief-pulse {
+  0%, 100% { box-shadow: 0 0 6px color-mix(in srgb, var(--danger) 14%, transparent); }
+  50% { box-shadow: 0 0 16px color-mix(in srgb, var(--danger) 30%, transparent); }
+}
 .brief-card .sev {
   display: inline-block;
   margin-right: 0.3rem;
@@ -1596,6 +1661,24 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid rgba(255, 1
 }
 @media (max-width: 719px) {
   .esi-pill .esi-tq { display: none; }
+}
+/* Motion and blur discipline (Ember Nebula): every animation this
+   pass adds is transform/opacity/box-shadow only and stops under
+   reduced motion; below 720px the glass blur drops to 0 and the
+   surface alpha rises to compensate — legibility over effect. */
+@media (prefers-reduced-motion: reduce) {
+  .brief-card { animation: none; transition: none; }
+  .brief-card:hover, .brief-card:focus-within { transform: none; }
+}
+@media (max-width: 719px) {
+  :root { --glass: color-mix(in srgb, var(--panel) 94%, transparent); }
+  .card, .panel {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  /* The fleet overview's Location column costs more width than a
+     phone has. */
+  .fleet-table .opt2 { display: none; }
 }
 /* Phones (the measured fix, 17-viewport rig): a ~6% root scale and a
    compressed Overview bar that stays on ONE row.

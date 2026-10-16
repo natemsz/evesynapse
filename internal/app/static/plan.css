@@ -175,7 +175,7 @@ the title tooltip instead of pushing the input off. */
 button[data-active="1"] { outline: 2px solid var(--accent); outline-offset: 1px; }
 .plan-cols { display: grid; grid-template-columns: 1fr 1.4fr 1.4fr 1fr; gap: 0.8rem; align-items: start; }
 .plan-colh { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.4rem; }
-.plan-node { background: var(--row); border: 1px solid #262626; border-left-width: 3px; border-radius: 4px; padding: 0.55rem 0.6rem; margin-bottom: 0.45rem; cursor: pointer; }
+.plan-node { background: color-mix(in srgb, var(--row) 85%, transparent); border: 1px solid #262626; border-left-width: 3px; border-radius: 4px; padding: 0.55rem 0.6rem; margin-bottom: 0.45rem; cursor: pointer; }
 .plan-node.plan-build { border-left-color: var(--plan-build); }
 .plan-node.plan-buy { border-left-color: var(--plan-buy); }
 .plan-node.plan-have { border-left-color: var(--muted); opacity: 0.75; }
@@ -324,7 +324,7 @@ proportional bar under the text, colored by the decision. */
 .pi-graph { display: flex; gap: 0.6rem; overflow-x: auto; padding-bottom: 0.5rem; }
 .pi-col { min-width: 11rem; flex: 1 0 11rem; }
 .pi-col h4 { margin: 0 0 0.4rem; font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-.pi-node { display: block; width: 100%; text-align: left; margin-bottom: 0.3rem; padding: 0.35rem 0.5rem; border: 1px solid var(--border, #333); border-radius: 4px; background: var(--row); cursor: pointer; font: inherit; }
+.pi-node { display: block; width: 100%; text-align: left; margin-bottom: 0.3rem; padding: 0.35rem 0.5rem; border: 1px solid var(--border, #333); border-radius: 4px; background: color-mix(in srgb, var(--row) 85%, transparent); cursor: pointer; font: inherit; }
 .pi-node small { display: block; color: var(--muted); }
 .pi-node .pi-on { color: var(--gold, #ffd27a); font-size: 0.72rem; }
 .pi-node.dimmed { opacity: 0.45; }

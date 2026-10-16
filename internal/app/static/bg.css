@@ -1,9 +1,56 @@
 /* Backdrop step-up: style.css paints the standard backdrop on
    body::before; wide or hiDPI screens get the 4K master instead.
    Only the image changes - position and sizing stay with the
-   base rule. */
+   base rule. That swap is restated below with the speckle
+   layers, because the layers share one background-image list. */
+
+/* Starfield (Ember Nebula): two SVG-speckle layers ride the same
+   body::before stack as the backdrop art — a sparse bright layer
+   and a denser fine one — tuned down until they read as depth
+   behind the art's own stars, never as duplication. A third layer
+   on body::after twinkles slowly (opacity only), and the art stack
+   itself breathes at the edge of perception; both stop dead under
+   reduced motion, and the light theme (plain background) has
+   neither. */
+body::before {
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='170'%3E%3Cg fill='%23ffffff'%3E%3Ccircle cx='14' cy='22' r='1' fill-opacity='.55'/%3E%3Ccircle cx='58' cy='9' r='.7' fill-opacity='.4'/%3E%3Ccircle cx='96' cy='38' r='.9' fill-opacity='.5'/%3E%3Ccircle cx='141' cy='16' r='.6' fill-opacity='.35'/%3E%3Ccircle cx='33' cy='74' r='.8' fill-opacity='.45'/%3E%3Ccircle cx='78' cy='96' r='1' fill-opacity='.5'/%3E%3Ccircle cx='122' cy='82' r='.7' fill-opacity='.38'/%3E%3Ccircle cx='160' cy='120' r='.9' fill-opacity='.42'/%3E%3Ccircle cx='8' cy='133' r='.7' fill-opacity='.4'/%3E%3Ccircle cx='51' cy='158' r='.9' fill-opacity='.48'/%3E%3Ccircle cx='104' cy='141' r='.6' fill-opacity='.34'/%3E%3Ccircle cx='149' cy='163' r='.8' fill-opacity='.44'/%3E%3C/g%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90'%3E%3Cg fill='%23ffffff'%3E%3Ccircle cx='7' cy='13' r='.6' fill-opacity='.5'/%3E%3Ccircle cx='29' cy='41' r='.5' fill-opacity='.42'/%3E%3Ccircle cx='47' cy='6' r='.6' fill-opacity='.46'/%3E%3Ccircle cx='66' cy='29' r='.5' fill-opacity='.4'/%3E%3Ccircle cx='84' cy='57' r='.6' fill-opacity='.5'/%3E%3Ccircle cx='17' cy='71' r='.5' fill-opacity='.44'/%3E%3Ccircle cx='39' cy='84' r='.6' fill-opacity='.48'/%3E%3Ccircle cx='58' cy='66' r='.5' fill-opacity='.4'/%3E%3Ccircle cx='76' cy='87' r='.5' fill-opacity='.43'/%3E%3C/g%3E%3C/svg%3E"),
+    url("/static/bg.jpg");
+  background-repeat: repeat, repeat, no-repeat;
+  background-size: 170px 170px, 90px 90px, cover;
+  background-position: 0 0, 27px 41px, top center;
+  animation: ember-breathe 9s ease-in-out infinite alternate;
+}
 @media (min-width: 2400px), (min-width: 1200px) and (min-resolution: 2dppx), (min-width: 1200px) and (-webkit-min-device-pixel-ratio: 2) {
   body::before {
-    background-image: url("/static/bg-4k.jpg");
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='170'%3E%3Cg fill='%23ffffff'%3E%3Ccircle cx='14' cy='22' r='1' fill-opacity='.55'/%3E%3Ccircle cx='58' cy='9' r='.7' fill-opacity='.4'/%3E%3Ccircle cx='96' cy='38' r='.9' fill-opacity='.5'/%3E%3Ccircle cx='141' cy='16' r='.6' fill-opacity='.35'/%3E%3Ccircle cx='33' cy='74' r='.8' fill-opacity='.45'/%3E%3Ccircle cx='78' cy='96' r='1' fill-opacity='.5'/%3E%3Ccircle cx='122' cy='82' r='.7' fill-opacity='.38'/%3E%3Ccircle cx='160' cy='120' r='.9' fill-opacity='.42'/%3E%3Ccircle cx='8' cy='133' r='.7' fill-opacity='.4'/%3E%3Ccircle cx='51' cy='158' r='.9' fill-opacity='.48'/%3E%3Ccircle cx='104' cy='141' r='.6' fill-opacity='.34'/%3E%3Ccircle cx='149' cy='163' r='.8' fill-opacity='.44'/%3E%3C/g%3E%3C/svg%3E"),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90'%3E%3Cg fill='%23ffffff'%3E%3Ccircle cx='7' cy='13' r='.6' fill-opacity='.5'/%3E%3Ccircle cx='29' cy='41' r='.5' fill-opacity='.42'/%3E%3Ccircle cx='47' cy='6' r='.6' fill-opacity='.46'/%3E%3Ccircle cx='66' cy='29' r='.5' fill-opacity='.4'/%3E%3Ccircle cx='84' cy='57' r='.6' fill-opacity='.5'/%3E%3Ccircle cx='17' cy='71' r='.5' fill-opacity='.44'/%3E%3Ccircle cx='39' cy='84' r='.6' fill-opacity='.48'/%3E%3Ccircle cx='58' cy='66' r='.5' fill-opacity='.4'/%3E%3Ccircle cx='76' cy='87' r='.5' fill-opacity='.43'/%3E%3C/g%3E%3C/svg%3E"),
+      url("/static/bg-4k.jpg");
   }
+}
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='230' height='230'%3E%3Cg fill='%23ffffff'%3E%3Ccircle cx='21' cy='34' r='1.1' fill-opacity='.9'/%3E%3Ccircle cx='74' cy='12' r='.8' fill-opacity='.7'/%3E%3Ccircle cx='129' cy='48' r='1' fill-opacity='.85'/%3E%3Ccircle cx='188' cy='25' r='.7' fill-opacity='.65'/%3E%3Ccircle cx='43' cy='103' r='.9' fill-opacity='.8'/%3E%3Ccircle cx='98' cy='79' r='.7' fill-opacity='.6'/%3E%3Ccircle cx='162' cy='112' r='1.1' fill-opacity='.9'/%3E%3Ccircle cx='213' cy='91' r='.8' fill-opacity='.7'/%3E%3Ccircle cx='12' cy='171' r='.8' fill-opacity='.72'/%3E%3Ccircle cx='66' cy='208' r='1' fill-opacity='.85'/%3E%3Ccircle cx='117' cy='183' r='.7' fill-opacity='.62'/%3E%3Ccircle cx='176' cy='219' r='.9' fill-opacity='.8'/%3E%3Ccircle cx='221' cy='158' r='.7' fill-opacity='.66'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 230px 230px;
+  opacity: 0.28;
+  animation: ember-twinkle 6s ease-in-out infinite alternate;
+}
+@keyframes ember-twinkle {
+  from { opacity: 0.16; }
+  to { opacity: 0.34; }
+}
+@keyframes ember-breathe {
+  from { opacity: 0.97; }
+  to { opacity: 1; }
+}
+html[data-theme="light"] body::after { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  body::before, body::after { animation: none; }
 }

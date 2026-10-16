@@ -53,9 +53,9 @@
 
     {{if .HasStrip}}
     <div class="ld-glass ld-strip">
-      <div class="ld-strip-head"><h3>NEW EDEN, RIGHT NOW</h3><span class="ld-live">● FROM STORED DATA</span><span class="ld-strip-note">precomputed by the workers. This page never waits on ESI</span></div>
+      <div class="ld-strip-head"><h3>NEW EDEN, RIGHT NOW</h3><span class="ld-live">● FROM STORED DATA</span></div>
       <div class="ld-strip-grid">
-        <div><div class="ld-mini-lab">Market movers · The Forge</div>
+        <div><div class="ld-mini-lab">Market</div>
         {{if .Movers}}<div class="ld-movers">
           {{range .Movers}}<div><span>{{.Name}}</span><span>{{.Price}} {{if .Up}}<span class="ld-up">▲ {{.Pct}}</span>{{else}}<span class="ld-down">▼ {{.Pct}}</span>{{end}}</span></div>{{end}}
         </div>{{else}}<p class="ld-evergreen">The spread scanner reads every hub's order books. <a href="/market/scanner/">Open the scanner</a></p>{{end}}
@@ -165,7 +165,7 @@
 
   <section class="ld-blk">
     <h2>Three alts, or a hundred multiboxed characters.</h2>
-    <p class="ld-lede">It adapts to your playstyle. A 100-character multiboxing setup and your 3 alts get the same treatment: every character warming in the background, the briefing weighted toward what you actually do, fresh data without a stutter, and without waiting on pages to load.</p>
+    <p class="ld-lede">It adapts to your playstyle. A 100-character multiboxing setup and your 3 alts get the same treatment: every character syncing in the background, the briefing weighted toward what you actually do, fresh data without a stutter, and without waiting on pages to load.</p>
     <div class="ld-stats">
       <div class="ld-glass ld-stat"><b>0</b><span>JS frameworks. Server-rendered pages, native app speed</span></div>
       <div class="ld-glass ld-stat"><b>1,000</b><span>pilots and all their alts, tracked concurrently on one server, no stale information</span></div>

@@ -87,27 +87,35 @@ func formatISKShort(v float64) string {
 func (app *Application) buildLanding(ctx context.Context) landingData {
 	data := landingData{SSOConfigured: app.cfg.SSOConfigured(), Showcase: landingShowcase}
 
-	// Movers are sanity-bounded: a named type, real volume on both
-	// days, a baseline average of at least 10 ISK, and a move of at
-	// most 400% — illiquid one-order types otherwise headline the
-	// strip with five-digit percentages off a near-zero baseline.
+	// The strip shows three watched items, always the same: PLEX
+	// and the two skill injectors, the prices every pilot checks.
+	// Latest stored day against the day before, each in its own
+	// market: the injectors in The Forge, PLEX on the global
+	// market (region 19000001, where it has traded since 2021;
+	// it has no Forge history at all). An item with no stored
+	// history simply drops out.
 	rows, err := app.db.QueryContext(ctx, `
-		WITH latest AS (
-		  SELECT MAX(date) AS d FROM market_history WHERE region_id = 10000002
-		), prev AS (
-		  SELECT MAX(date) AS d FROM market_history WHERE region_id = 10000002 AND date < (SELECT d FROM latest)
+		WITH days AS (
+		  SELECT region_id, MAX(date) AS d FROM market_history
+		  WHERE region_id IN (10000002, 19000001) GROUP BY region_id
+		), prevs AS (
+		  SELECT h.region_id, MAX(h.date) AS d FROM market_history h
+		  JOIN days ON days.region_id = h.region_id AND h.date < days.d
+		  GROUP BY h.region_id
 		)
 		SELECT tn.name AS type_name, cur.average AS price,
 		       ((cur.average - old.average) / old.average * 100) AS pct_change
-		FROM market_history cur
-		JOIN market_history old ON old.region_id = cur.region_id AND old.type_id = cur.type_id AND old.date = (SELECT d FROM prev)
-		JOIN type_names tn ON tn.type_id = cur.type_id
-		WHERE cur.region_id = 10000002 AND cur.date = (SELECT d FROM latest)
-		  AND tn.name <> ''
-		  AND old.average >= 10 AND old.volume >= 1000 AND cur.volume >= 1000
-		  AND ABS((cur.average - old.average) / old.average) <= 4
-		ORDER BY ABS((cur.average - old.average) / old.average) DESC
-		LIMIT 3`)
+		FROM type_names tn
+		JOIN days ON days.region_id = CASE WHEN tn.name = 'PLEX' THEN 19000001 ELSE 10000002 END
+		JOIN prevs ON prevs.region_id = days.region_id
+		JOIN market_history cur ON cur.type_id = tn.type_id
+		  AND cur.region_id = days.region_id AND cur.date = days.d
+		JOIN market_history old ON old.type_id = tn.type_id
+		  AND old.region_id = days.region_id AND old.date = prevs.d
+		WHERE tn.name IN ('PLEX', 'Large Skill Injector', 'Small Skill Injector')
+		  AND old.average > 0
+		ORDER BY CASE tn.name
+		  WHEN 'PLEX' THEN 0 WHEN 'Large Skill Injector' THEN 1 ELSE 2 END`)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {

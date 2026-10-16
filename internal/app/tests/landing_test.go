@@ -75,22 +75,27 @@ func TestLandingAnonymous(t *testing.T) {
 	}
 }
 
-// With stored market history and a public fit seeded, the strip
-// shows real rows shaped from them (movers from the two most
-// recent history days, the newest public fit).
+// With stored market history seeded, the strip shows the three
+// watched items (PLEX, Large Skill Injector, Small Skill
+// Injector) priced from the two most recent history days, in
+// that order, with color-coded deltas. PLEX prices come from
+// the global market region (19000001), the injectors from The
+// Forge. Nothing else makes the strip, however hard it moved.
 func TestLandingStripFromStoredRows(t *testing.T) {
 	rig := apptest.Build(t, nil)
 	conn := rig.DB()
 	ctx := context.Background()
 	stmts := []string{
-		`INSERT INTO type_names (type_id, name) VALUES (34, 'Tritanium'), (35, 'Pyerite'), (36, 'Junk Relic')`,
+		`INSERT INTO type_names (type_id, name) VALUES (44992, 'PLEX'), (40520, 'Large Skill Injector'), (45635, 'Small Skill Injector'), (34, 'Tritanium')`,
 		`INSERT INTO market_history (region_id, type_id, date, average, highest, lowest, volume, order_count) VALUES
-		   (10000002, 34, '2026-10-14', 40.00, 50, 30, 1000000, 100),
-		   (10000002, 34, '2026-10-15', 50.00, 60, 40, 1200000, 110),
-		   (10000002, 35, '2026-10-14', 80.00, 90, 70, 500000, 60),
-		   (10000002, 35, '2026-10-15', 60.00, 70, 50, 700000, 70),
-		   (10000002, 36, '2026-10-14', 0.01, 1, 0.01, 5, 1),
-		   (10000002, 36, '2026-10-15', 999.00, 999, 999, 5, 1)`,
+		   (19000001, 44992, '2026-10-14', 5900000.00, 6000000, 5800000, 100000, 900),
+		   (19000001, 44992, '2026-10-15', 6200000.00, 6300000, 6100000, 110000, 950),
+		   (10000002, 40520, '2026-10-14', 800000000.00, 810000000, 790000000, 5000, 300),
+		   (10000002, 40520, '2026-10-15', 760000000.00, 770000000, 750000000, 5200, 310),
+		   (10000002, 45635, '2026-10-14', 320000000.00, 325000000, 315000000, 8000, 400),
+		   (10000002, 45635, '2026-10-15', 320000000.00, 325000000, 315000000, 8100, 405),
+		   (10000002, 34, '2026-10-14', 4.00, 5, 3, 1000000, 100),
+		   (10000002, 34, '2026-10-15', 400.00, 500, 300, 1200000, 110)`,
 	}
 	for _, stmt := range stmts {
 		if _, err := conn.ExecContext(ctx, stmt); err != nil {
@@ -104,18 +109,41 @@ func TestLandingStripFromStoredRows(t *testing.T) {
 	if !strings.Contains(body, "NEW EDEN, RIGHT NOW") {
 		t.Fatal("strip missing with stored rows seeded")
 	}
-	// Pyerite fell 25%, Tritanium rose 25%: both movers listed,
-	// Pyerite (same |pct|, stable order) present by name either way.
-	if !strings.Contains(body, "Tritanium") || !strings.Contains(body, "Pyerite") {
-		t.Error("strip does not show the seeded movers")
+	plex := strings.Index(body, "PLEX")
+	large := strings.Index(body, "Large Skill Injector")
+	small := strings.Index(body, "Small Skill Injector")
+	if plex < 0 || large < 0 || small < 0 {
+		t.Fatalf("strip does not show all three watched items (plex %d, large %d, small %d)", plex, large, small)
 	}
-	if !strings.Contains(body, "25.0%") {
-		t.Error("strip does not show the seeded move percentage")
+	if !(plex < large && large < small) {
+		t.Error("watched items out of order: want PLEX, Large Skill Injector, Small Skill Injector")
 	}
-	// The junk row (near-zero baseline, no volume) is sanity-
-	// bounded out of the strip entirely.
-	if strings.Contains(body, "Junk Relic") {
-		t.Error("strip shows an illiquid junk mover")
+	// PLEX rose 5.1% (green up) on the global market (its shown
+	// price is that region's), the Large Skill Injector fell
+	// 5.0% (red down); the deltas carry their color classes.
+	if !strings.Contains(body, "6.20M") {
+		t.Error("strip does not show PLEX's global-market price")
+	}
+	if !strings.Contains(body, `ld-up">▲ 5.1%`) {
+		t.Error("strip does not show PLEX's rise as a green up delta")
+	}
+	if !strings.Contains(body, `ld-down">▼ 5.0%`) {
+		t.Error("strip does not show the injector's fall as a red down delta")
+	}
+	// Tritanium moved 100x and is still not a watched item.
+	if strings.Contains(body, "Tritanium") {
+		t.Error("strip shows an item outside the watched three")
+	}
+	// The workers blurb is gone, and the page says syncing, not
+	// warming.
+	if strings.Contains(body, "precomputed by the workers") {
+		t.Error("landing still carries the precomputed-by-the-workers blurb")
+	}
+	if strings.Contains(body, "warming") {
+		t.Error("landing still says warming")
+	}
+	if !strings.Contains(body, "syncing in the background") {
+		t.Error("landing does not say syncing in the background")
 	}
 }
 

@@ -135,18 +135,18 @@
   --muted-2: #b8a58c;
   --note: #c9a06a;
   --panel: #151515;
-  --panel-head: #0e0e0e;
+  --panel-head: rgba(10, 7, 4, 0.55);
   /* Glass (Ember Nebula): the shared card/panel surface — the panel
      color at ~0.85 alpha, an accent-tinted edge, and the blur that
      turns the backdrop art behind a card into atmosphere. Every
      value rides the theme variables, so faction themes recolor
      the glass and the light theme's solid overrides still win. */
-  --glass: color-mix(in srgb, var(--panel) 85%, transparent);
+  --glass: color-mix(in srgb, var(--panel) 88%, transparent);
   --glass-edge: color-mix(in srgb, var(--accent) 24%, transparent);
-  --row: #101010;
-  --row-alt: #141414;
-  --row-hover: #1b1b1b;
-  --input-bg: #0e0e0e;
+  --row: rgba(16, 13, 10, 0.55);
+  --row-alt: rgba(255, 255, 255, 0.03);
+  --row-hover: rgba(255, 140, 50, 0.09);
+  --input-bg: rgba(12, 9, 6, 0.6);
 }
 
 * { box-sizing: border-box; }
@@ -172,7 +172,7 @@ body::before {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background: url("/static/bg.jpg") no-repeat top center;
+  background: url("/static/bg.jpg") no-repeat center;
   background-size: cover;
   transform: translateZ(0);
 }
@@ -370,10 +370,12 @@ header a.navlink.utility { font-size: 0.9em; color: var(--muted); }
   display: flex;
   flex-direction: column;
   padding: 0.35rem;
-  background: #0e0e0e;
-  border: 1px solid #2a2a2a;
+  background: rgba(14, 11, 9, 0.82);
+  border: 1px solid rgba(255, 110, 0, 0.25);
   border-radius: 4px;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  backdrop-filter: blur(14px) saturate(1.15);
 }
 .branch .menu a {
   color: #d8c3a5;
@@ -402,8 +404,8 @@ main {
   border: 1px solid transparent;
   border-radius: 4px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 4px 20px rgba(0, 0, 0, 0.65);
-  -webkit-backdrop-filter: blur(9px) saturate(1.15);
-  backdrop-filter: blur(9px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  backdrop-filter: blur(14px) saturate(1.15);
   padding: 1.25rem 1.25rem 1.5rem;
 }
 .panel.market-browse { background: none; border: 0; box-shadow: none; padding: 0; }
@@ -484,8 +486,8 @@ main {
   border: 1px solid var(--glass-edge);
   border-radius: 4px;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
-  -webkit-backdrop-filter: blur(9px) saturate(1.15);
-  backdrop-filter: blur(9px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  backdrop-filter: blur(14px) saturate(1.15);
   padding: 0.85rem 1rem 1rem;
 }
 /* Darker header bands: a solid ::before behind the heading. Layering
@@ -655,7 +657,15 @@ h3 + .tw > table, h3 + table {
 }
 
 /* --- tables --- */
-.tw { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tw { overflow-x: auto; -webkit-overflow-scrolling: touch;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.30), rgba(0, 0, 0, 0) 55%), var(--glass);
+  border: 1px solid var(--glass-edge);
+  border-radius: 4px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  backdrop-filter: blur(14px) saturate(1.15);
+}
+.card .tw, .panel .tw { background: none; border: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 table {
   border-collapse: collapse;
   width: 100%;
@@ -788,10 +798,12 @@ input[type="text"]:focus, input[type="search"]:focus, input[type="number"]:focus
   margin: 0;
   padding: 0.3rem;
   list-style: none;
-  background: #0e0e0e;
-  border: 1px solid #2a2a2a;
+  background: rgba(14, 11, 9, 0.82);
+  border: 1px solid rgba(255, 110, 0, 0.25);
   border-radius: 4px;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  backdrop-filter: blur(14px) saturate(1.15);
 }
 /* An open dropdown sits above everything after it: the panel or form
    that holds it (each can be its own stacking layer) is lifted while
@@ -1321,7 +1333,15 @@ body.resize-active { user-select: none; -webkit-user-select: none; cursor: nwse-
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
   gap: 0.75rem;
+  padding: 0.9rem;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.30), rgba(0, 0, 0, 0) 55%), var(--glass);
+  border: 1px solid var(--glass-edge);
+  border-radius: 4px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  backdrop-filter: blur(14px) saturate(1.15);
 }
+.card .kpis, .panel .kpis { background: none; border: none; box-shadow: none; padding: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
 .kpis-small { grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); margin-bottom: 0.6rem; }
 .kpi {
   display: flex;
@@ -1329,8 +1349,8 @@ body.resize-active { user-select: none; -webkit-user-select: none; cursor: nwse-
   gap: 0.3rem;
   min-width: 0;
   padding: 0.7rem 0.8rem;
-  background: var(--row);
-  border: 1px solid #2a1a0e;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 110, 0, 0.16);
   border-radius: 4px;
 }
 .kpi-k { font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
@@ -1395,8 +1415,8 @@ ul.brief-cards {
      surface with the legibility gradient, no own blur (tiles sit
      inside the glass card; one blur layer is enough). */
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0) 60%),
-    color-mix(in srgb, var(--row) 85%, transparent);
-  border: 1px solid #2a1a0e;
+    rgba(23, 16, 12, 0.62);
+  border: 1px solid rgba(255, 110, 0, 0.16);
   border-left: 3px solid var(--muted);
   border-radius: 4px;
   font-size: 0.85rem;
@@ -1411,7 +1431,7 @@ ul.brief-cards {
    below keeps the shadow and drops the glow. */
 .brief-card:hover, .brief-card:focus-within {
   transform: translateY(-2px);
-  box-shadow: 0 0 16px color-mix(in srgb, var(--sev-glow, var(--accent)) 45%, transparent),
+  box-shadow: 0 0 22px color-mix(in srgb, var(--sev-glow, var(--accent)) 55%, transparent),
     0 6px 14px rgba(20, 8, 2, 0.55);
 }
 html[data-theme="light"] .brief-card:hover, html[data-theme="light"] .brief-card:focus-within {
@@ -1419,12 +1439,12 @@ html[data-theme="light"] .brief-card:hover, html[data-theme="light"] .brief-card
 }
 /* The critical card breathes: a slow halo pulse in its severity
    color at low alpha, box-shadow only. */
-.brief-card.sev-critical {
-  animation: brief-pulse 3.2s ease-in-out infinite;
+.brief-card.sev-critical .sev {
+  animation: sev-pulse 3.2s ease-in-out infinite;
 }
-@keyframes brief-pulse {
-  0%, 100% { box-shadow: 0 0 6px color-mix(in srgb, var(--danger) 14%, transparent); }
-  50% { box-shadow: 0 0 16px color-mix(in srgb, var(--danger) 30%, transparent); }
+@keyframes sev-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
 }
 .brief-card .sev {
   display: inline-block;
@@ -1664,18 +1684,15 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid rgba(255, 1
 }
 /* Motion and blur discipline (Ember Nebula): every animation this
    pass adds is transform/opacity/box-shadow only and stops under
-   reduced motion; below 720px the glass blur drops to 0 and the
-   surface alpha rises to compensate — legibility over effect. */
+   reduced motion. The glass recipe holds at every width: the
+   mockup has no small-screen exception, and stripping the blur
+   on phones made the surfaces read as flat tints. */
 @media (prefers-reduced-motion: reduce) {
   .brief-card { animation: none; transition: none; }
+  .brief-card .sev { animation: none; }
   .brief-card:hover, .brief-card:focus-within { transform: none; }
 }
 @media (max-width: 719px) {
-  :root { --glass: color-mix(in srgb, var(--panel) 94%, transparent); }
-  .card, .panel {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
   /* The fleet overview's Location column costs more width than a
      phone has. */
   .fleet-table .opt2 { display: none; }
@@ -3549,6 +3566,9 @@ html[data-theme="light"] header .who,
 html[data-theme="light"] thead th { text-shadow: none; }
 /* Surfaces painted with hardcoded dark colors. */
 html[data-theme="light"] .card { background: #fdfbf6; border-color: #ddd2bd; }
+html[data-theme="light"] .tw, html[data-theme="light"] .kpis { background: #fdfbf6; border-color: #ddd2bd; }
+.page-body { padding: 1.25rem 1.25rem 1.5rem; }
+.page-card { padding: 1rem 1.25rem; }
 html[data-theme="light"] .panel {
   background: linear-gradient(#fdfbf6, #f8f4ec) padding-box,
     linear-gradient(135deg, #e8d5b5 0%, #d9c19a 45%, #c9ad7f 100%) border-box;
@@ -4388,3 +4408,30 @@ html[data-theme="light"] .doctrine-fits li:last-child { border-color: #e3d9c6; }
   ::view-transition-old(root), ::view-transition-new(root),
   ::view-transition-old(main-content), ::view-transition-new(main-content) { animation: none; }
 }
+
+/* Ember correction (2026-10-15): pinned first-column cells sit over
+   scrolled content, so they keep a near-opaque version of the row
+   paint now that --row itself is translucent. */
+.tw thead th:first-child, .tw tbody td:first-child, .tw tbody th:first-child,
+tbody td:first-child {
+  background: rgba(18, 14, 11, 0.94);
+}
+.tw tbody tr:nth-child(even) td:first-child, .tw tbody tr:nth-child(even) th:first-child {
+  background: rgba(24, 19, 15, 0.94);
+}
+/* Hover states in the site's own vocabulary (accent edge, bright
+   text) for the interactive surfaces that had none: chips, filter
+   and search inputs, selects. */
+.chip:hover, .ti-tabs button:hover {
+  border-color: var(--accent);
+  color: var(--text-bright);
+}
+input[type="text"]:hover, input[type="search"]:hover, input[type="number"]:hover,
+input[type="url"]:hover, select:hover, textarea:hover {
+  border-color: rgba(255, 140, 50, 0.55);
+}
+
+/* Top search results: the suggestion rows glow like the mockup's
+   interactive rows (kind headers and the empty row stay plain). */
+.suggest li:not(.sug-kind):not(.sug-empty):hover, .suggest li.sel { background: rgba(255, 110, 0, 0.13); box-shadow: inset 0 0 0 1px rgba(255, 130, 20, 0.45), 0 0 14px rgba(255, 95, 0, 0.18); color: var(--text-bright); }
+html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[data-theme="light"] .suggest li.sel { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 14px rgba(190, 120, 30, 0.15); }

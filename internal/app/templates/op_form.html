@@ -2,6 +2,7 @@
 {{define "content"}}
 {{with .OpForm}}
 <h1><span class="gt">{{if .ID}}Change op{{else}}New op{{end}}</span></h1>
+<section class="card page-card">
 
 {{range .Errors}}<p class="err">{{.}}</p>{{end}}
 
@@ -47,5 +48,6 @@
     <a href="{{if .ID}}/ops/{{.ID}}{{else}}/calendar/{{end}}">Cancel</a>
   </div>
 </form>
+</section>
 {{end}}
 {{end}}

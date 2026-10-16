@@ -4,6 +4,7 @@
 {{template "sectiontabs" .}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+<section class="card page-card">
 
 {{with .Groups}}
 <p class="lede">A group is a list of characters that a corporation's or alliance's directors keep by hand: a special interest group, the fleet commanders, a logistics wing. A <a href="/discord/servers">Discord server's</a> rules can give everyone in a group a role.</p>
@@ -73,4 +74,5 @@
 </div>
 {{end}}
 {{end}}
+</section>
 {{end}}

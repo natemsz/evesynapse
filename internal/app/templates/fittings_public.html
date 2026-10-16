@@ -4,6 +4,7 @@
 {{template "sectiontabs" .}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+<section class="card page-card">
 
 {{with .PublicFits}}
 <p class="lede">The fits people here have made public. Each has its own page with modules, EFT and ratings.</p>
@@ -91,4 +92,5 @@
 <p class="hint">No fit matches. <a href="{{.FirstURL}}">Clear the search and filters</a>.</p>
 {{end}}
 {{end}}
+</section>
 {{end}}

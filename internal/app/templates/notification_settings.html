@@ -3,6 +3,7 @@
 <h1><span class="gt">Notification settings</span></h1>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+<section class="card page-card">
 
 {{with .NotifySettings}}
 <p><small>Choose what EveSynapse tells you about, and for which of your characters. Notifications show in the top bar; what you switch off is not shown, and switching it back on starts from then, not from what you missed.</small></p>
@@ -53,4 +54,5 @@
 
 <p><a href="/notifications/">Back to notifications</a></p>
 {{end}}
+</section>
 {{end}}

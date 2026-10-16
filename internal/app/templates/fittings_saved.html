@@ -4,6 +4,7 @@
 {{template "sectiontabs" .}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+<section class="card page-card">
 
 {{if .Fittings}}
   {{if .Fittings.Loaded}}
@@ -57,4 +58,5 @@
 {{else}}
   <p>No fittings to show yet. Link a character first.</p>
 {{end}}
+</section>
 {{end}}

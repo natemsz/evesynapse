@@ -4,6 +4,7 @@
 {{template "sectiontabs" .}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+<section class="card page-card">
 
 {{with .CorpSettings}}
 {{if not .ID}}
@@ -44,4 +45,5 @@
 </form>
 {{end}}
 {{end}}
+</section>
 {{end}}

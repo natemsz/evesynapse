@@ -60,6 +60,28 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		!strings.Contains(phone, ".fleet-table .opt2 { display: none; }") {
 		t.Error("the <720px block regained the alpha compensation or lost the fleet Location hiding")
 	}
+	// No enclosing panel: base.html wraps page content in the
+	// unpainted .page-body, and the shared blocks carry their own
+	// glass (a card inside a card sheds it again).
+	baseRaw, err := fs.ReadFile(templatesFS, "templates/base.html")
+	if err != nil {
+		t.Fatalf("read base.html: %v", err)
+	}
+	base := string(baseRaw)
+	if !strings.Contains(base, `<div class="page-body">`) || strings.Contains(base, `<div class="panel">`) {
+		t.Error("base.html must wrap content in .page-body, not an enclosing .panel")
+	}
+	if !strings.Contains(style, ".page-body { padding: 1.25rem 1.25rem 1.5rem; }") ||
+		!strings.Contains(style, ".tw { overflow-x: auto;") ||
+		!strings.Contains(style, ".card .tw, .panel .tw { background: none;") ||
+		!strings.Contains(style, ".card .kpis, .panel .kpis { background: none;") {
+		t.Error("the page-body spacing or the shared-block glass surfaces are missing")
+	}
+	// Top search results are glass with a glowing row highlight.
+	if !strings.Contains(style, "background: rgba(14, 11, 9, 0.82);") ||
+		!strings.Contains(style, ".suggest li:not(.sug-kind):not(.sug-empty):hover") {
+		t.Error("the suggestion dropdown lost its glass or its row glow")
+	}
 	// Reduced motion stops every animation this pass adds.
 	if i := strings.Index(style, "@media (prefers-reduced-motion: reduce) {\n  .brief-card"); i < 0 {
 		t.Error("the reduced-motion guard for the briefing animation is missing")

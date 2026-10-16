@@ -3,6 +3,7 @@
 {{with .Doctrine}}
 <h1><span class="gt">{{.Name}}</span></h1>
 {{template "sectiontabs" $}}
+<section class="card page-card">
 
 <p><small><a href="/doctrines/?corporation={{.CorpID}}">Doctrines</a> · {{.Corporation}}{{if .Category}} · <a href="/doctrines/?corporation={{.CorpID}}&amp;category={{.Category}}">{{.Category}}</a>{{end}}</small></p>
 {{if .Tags}}<p class="tag-row">{{range .Tags}}<a href="/doctrines/?corporation={{$.Doctrine.CorpID}}&amp;tag={{.}}">#{{.}}</a> {{end}}</p>{{end}}
@@ -102,4 +103,5 @@
 </div>
 {{end}}
 {{end}}
+</section>
 {{end}}

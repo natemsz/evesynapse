@@ -4,6 +4,7 @@
 {{template "sectiontabs" .}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+<section class="card page-card">
 
 {{with .CorpFits}}
 {{if not .CorpID}}
@@ -16,4 +17,5 @@
 {{template "fitbrowser" .Browser}}
 {{end}}
 {{end}}
+</section>
 {{end}}

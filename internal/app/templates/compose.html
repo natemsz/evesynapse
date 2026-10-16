@@ -3,6 +3,7 @@
 <h1><span class="gt">Compose Mail</span></h1>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+<section class="card page-card">
 
 {{template "charselector" .MailChars}}
 
@@ -38,4 +39,5 @@
 {{else}}
 <p>No character to send from yet. Link a character first.</p>
 {{end}}
+</section>
 {{end}}

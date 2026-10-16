@@ -4518,3 +4518,61 @@ input[type="url"]:hover, select:hover, textarea:hover {
    interactive rows (kind headers and the empty row stay plain). */
 .suggest li:not(.sug-kind):not(.sug-empty):hover, .suggest li.sel { background: rgba(255, 110, 0, 0.13); box-shadow: inset 0 0 0 1px rgba(255, 130, 20, 0.45), 0 0 14px rgba(255, 95, 0, 0.18); color: var(--text-bright); }
 html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[data-theme="light"] .suggest li.sel { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 14px rgba(190, 120, 30, 0.15); }
+
+/* The page wrapper (owner, 2026-10-16): normal pages sit inside
+   ONE large glass surface instead of a scatter of floating items
+   each with its own transparency, its own blur, or nothing at
+   all. Sections inside step DOWN a tier: whisper fills, hairline
+   borders, no blur of their own (the wrapper already blurs the
+   sky behind everything on the page). The widget home and the
+   fitting workbench are exempt: the home grid is a field of
+   widget cards by design, and the workbench is its own surface. */
+.page-body {
+  margin: 1rem 1.25rem 1.25rem;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(20px) saturate(1.15);
+  backdrop-filter: blur(20px) saturate(1.15);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-lg);
+}
+.page-body:has(.home-grid), .page-body:has(.fit-wb) {
+  margin: 0;
+  background: none;
+  border: 0;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.page-body:not(:has(.home-grid)):not(:has(.fit-wb)) .card,
+.page-body:not(:has(.home-grid)):not(:has(.fit-wb)) .foldable,
+.page-body:not(:has(.home-grid)):not(:has(.fit-wb)) .panel,
+.page-body:not(:has(.home-grid)):not(:has(.fit-wb)) .searchpanel {
+  background: rgba(255, 255, 255, 0.03);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-color: rgba(255, 110, 0, 0.14);
+  box-shadow: none;
+}
+.page-body:not(:has(.home-grid)):not(:has(.fit-wb)) .kpis {
+  background: none;
+  border: 0;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+.page-body:not(:has(.home-grid)):not(:has(.fit-wb)) .kpi,
+.page-body:not(:has(.home-grid)):not(:has(.fit-wb)) .brief-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 110, 0, 0.14);
+}
+.page-body:not(:has(.home-grid)):not(:has(.fit-wb)) .panel > h1:first-child {
+  background: none;
+  border-image: none;
+  border-bottom: 1px solid rgba(255, 110, 0, 0.15);
+}
+.page-body:not(:has(.home-grid)):not(:has(.fit-wb)) .tw {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}

@@ -226,10 +226,12 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 	// anything before schema 012 lacks the dogma skill graph,
 	// anything before schema 024 lacks the market browse tree,
 	// and anything before schema 029 lacks the full dogma
-	// attribute/effect set, so re-import once (the store writes
+	// attribute/effect set, and imports before version 8 lack the
+	// modifier-less effects the fitting engine reads module
+	// states from, so re-import once (the store writes
 	// the marker when it lands). Retries on later ticks while an
 	// import keeps failing.
-	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "7" {
+	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "8" {
 		logging.Infof("sde: static data predates current columns — re-importing to backfill")
 		app.startSDEImport("schema-029 backfill")
 		return
@@ -1290,10 +1292,13 @@ type sdeModifierJSON struct {
 	SkillTypeID          *int64  `json:"skillTypeID"`
 }
 
-// parseSDEEffects reads dgmEffects.csv. Only rows whose
-// modifierInfo is non-empty are kept (the fitting-relevant set:
-// ~94% of the dump), with each modifier decoded into a row.
-// Rows whose modifier JSON fails to decode abort the import --
+// parseSDEEffects reads dgmEffects.csv. Every effect row is kept
+// (name and category included): the fitting engine derives module
+// states from effect categories, and an active module's defining
+// effect (armorRepair, shieldBoosting, ...) carries no modifiers
+// at all, so keeping only modifier-bearing effects would leave
+// such modules unable to cycle. Each modifier is decoded into a
+// row. Rows whose modifier JSON fails to decode abort the import --
 // a silently partial effect set would compute wrong fits.
 func parseSDEEffects(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error {
 	_, err := eachCSVRow(cr, func(rec []string) error {
@@ -1301,22 +1306,26 @@ func parseSDEEffects(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) erro
 		if err != nil {
 			return errSkipRow
 		}
+		name, ferr := csvField(rec, idx, "effectName")
+		if ferr != nil {
+			return ferr
+		}
+		parsed.effects = append(parsed.effects, sdeEffectRow{
+			effectID: id,
+			name:     name,
+			category: csvIDOrZero(rec, idx, "effectCategory"),
+		})
 		info, ferr := csvField(rec, idx, "modifierInfo")
 		if ferr != nil {
 			return ferr
 		}
 		if strings.TrimSpace(info) == "" {
-			return nil // no modifiers: not a fitting effect
+			return nil // no modifiers to decode
 		}
 		var mods []sdeModifierJSON
 		if jerr := json.Unmarshal([]byte(info), &mods); jerr != nil {
 			return fmt.Errorf("effect %d: decode modifierInfo: %w", id, jerr)
 		}
-		name, ferr := csvField(rec, idx, "effectName")
-		if ferr != nil {
-			return ferr
-		}
-		kept := false
 		for _, m := range mods {
 			// Modifiers without both attributes or an operation
 			// (the EffectStopper rows) cannot be applied by the
@@ -1344,14 +1353,6 @@ func parseSDEEffects(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) erro
 				row.skillTypeID = *m.SkillTypeID
 			}
 			parsed.modifiers = append(parsed.modifiers, row)
-			kept = true
-		}
-		if kept {
-			parsed.effects = append(parsed.effects, sdeEffectRow{
-				effectID: id,
-				name:     name,
-				category: csvIDOrZero(rec, idx, "effectCategory"),
-			})
 		}
 		return nil
 	})
@@ -1614,9 +1615,10 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		// the schema-011 planner tables from 3, the schema-012
 		// skill graph from 4, the schema-018 bulk item
 		// descriptions from 5, the schema-024 market browse
-		// tree from 6, and the schema-029 full dogma set from 7
+		// tree from 6, the schema-029 full dogma set from 7, and
+		// every effect (not just modifier-bearing ones) from 8
 		// (sdeMaintenance backfills once when it's behind).
-		{Key: "sde_import_version", Value: "7"},
+		{Key: "sde_import_version", Value: "8"},
 	}
 	for name, m := range parsed.markers {
 		meta = append(meta,

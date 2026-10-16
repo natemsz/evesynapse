@@ -1041,6 +1041,7 @@ type FitStatsView struct {
 	TurretDPS     string
 	MissileDPS    string
 	DroneDPS      string
+	SmartbombDPS  string // "" when no smartbomb is fitted
 	TotalDPS      string
 	TurretVolley  string
 	MissileVolley string
@@ -1831,6 +1832,9 @@ func FitBuildStats(res *fit.Result) *FitStatsView {
 	st.TurretDPS = FitFmt1(res.TurretDPS)
 	st.MissileDPS = FitFmt1(res.MissileDPS)
 	st.DroneDPS = FitFmt1(res.DroneDPS)
+	if res.SmartbombDPS > 0 {
+		st.SmartbombDPS = FitFmt1(res.SmartbombDPS)
+	}
 	st.TotalDPS = FitFmt1(res.DPS)
 
 	st.TurretVolley = FitFmt1(res.TurretVolley)

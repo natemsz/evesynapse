@@ -32,9 +32,11 @@ func TestSDEDogmaParsers(t *testing.T) {
 		t.Fatalf("attribute type 1 = %+v, want non-stackable default 1", got)
 	}
 
-	// dgmEffects: only modifierInfo rows land, modifiers decode,
-	// EffectStopper-only rows (no operation) store nothing. The
-	// fixture is written through a real CSV writer so the JSON
+	// dgmEffects: every effect row lands (the fitting engine reads
+	// module states from effect categories, and armorRepair /
+	// shieldBoosting carry no modifiers), modifiers decode, and
+	// EffectStopper-only rows (no operation) store no modifier.
+	// The fixture is written through a real CSV writer so the JSON
 	// quoting matches the dump's actual escaping.
 	var effectsBuf bytes.Buffer
 	cw := csv.NewWriter(&effectsBuf)
@@ -50,8 +52,18 @@ func TestSDEDogmaParsers(t *testing.T) {
 	if err := parseSDEFile("dgmEffects.csv", &effectsBuf, &parsed); err != nil {
 		t.Fatalf("parse effects: %v", err)
 	}
-	if len(parsed.effects) != 2 {
-		t.Fatalf("parsed %d effects, want 2 (21 and 92 only)", len(parsed.effects))
+	if len(parsed.effects) != 4 {
+		t.Fatalf("parsed %d effects, want all 4 rows", len(parsed.effects))
+	}
+	byID := map[int64]sdeEffectRow{}
+	for _, e := range parsed.effects {
+		byID[e.effectID] = e
+	}
+	if got := byID[34]; got.name != "projectileFired" || got.category != 2 {
+		t.Fatalf("modifier-less effect 34 = %+v, want projectileFired category 2", got)
+	}
+	if got := byID[5928]; got.category != 1 {
+		t.Fatalf("EffectStopper effect 5928 = %+v, want category 1 kept", got)
 	}
 	if len(parsed.modifiers) != 2 {
 		t.Fatalf("parsed %d modifiers, want 2", len(parsed.modifiers))
@@ -172,7 +184,7 @@ func TestSDEDogmaStoreRoundTrip(t *testing.T) {
 	if err != nil || len(phys) != 1 || phys[0].Mass != 1190000 || phys[0].Capacity != 275 {
 		t.Fatalf("ListSDETypePhysicsByIDs(597) = %+v, %v", phys, err)
 	}
-	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "7" {
-		t.Fatalf("sde_import_version = %q, want 7", ver)
+	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "8" {
+		t.Fatalf("sde_import_version = %q, want 8", ver)
 	}
 }

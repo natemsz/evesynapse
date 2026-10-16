@@ -71,6 +71,9 @@ func TestMyLoadoutsSourcesAndOwnerEdit(t *testing.T) {
 		"Public <small>1</small>", "EveSynapse <small>2</small>", "EVE account <small>1</small>",
 		fmt.Sprintf("/fittings/?local=%d#fit-editor", publicFit.ID),
 		fmt.Sprintf("/fittings/public/fit/%d/", publicFit.ID),
+		// The training-plan glyph rides on both fit sources.
+		fmt.Sprintf("/skills/plans/fit?character=90000001&amp;local=%d", publicFit.ID),
+		"/skills/plans/fit?character=90000001&amp;fitting=42",
 	)
 	if strings.Contains(body, "Harbor Draft Rifter") {
 		t.Errorf("saved page lists the autosave draft")

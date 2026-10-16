@@ -22,10 +22,10 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	style, bg, plan, link := read("style.css"), read("bg.css"), read("plan.css"), read("link.css")
 
 	for _, want := range []string{
-		"--glass: color-mix(in srgb, var(--panel) 88%, transparent)",
+		"--glass: color-mix(in srgb, var(--panel) 78%, transparent)",
 		"--glass-edge: color-mix(in srgb, var(--accent) 24%, transparent)",
-		"-webkit-backdrop-filter: blur(24px) saturate(1.25)",
-		"backdrop-filter: blur(24px) saturate(1.25)",
+		"-webkit-backdrop-filter: blur(20px) saturate(1.25)",
+		"backdrop-filter: blur(20px) saturate(1.25)",
 		".brief-card:hover, .brief-card:focus-within",
 		"transform: translateY(-2px)",
 		"color-mix(in srgb, var(--sev-glow, var(--accent)) 55%, transparent)",
@@ -78,9 +78,34 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	}
 	if !strings.Contains(style, ".page-body { padding: 1.25rem 1.25rem 1.5rem; }") ||
 		!strings.Contains(style, ".tw { overflow-x: auto;") ||
-		!strings.Contains(style, ".card .tw, .panel .tw { background: none;") ||
-		!strings.Contains(style, ".card .kpis, .panel .kpis { background: none;") {
+		!strings.Contains(style, ".card .tw, .panel .tw, .foldable .tw { background: none;") ||
+		!strings.Contains(style, ".card .kpis, .panel .kpis, .foldable .kpis { background: none;") {
 		t.Error("the page-body spacing or the shared-block glass surfaces are missing")
+	}
+	// Section wrappers: the foldable is a glass section (industry,
+	// planets, market and character sections ride it), the market
+	// browse panel paints its own glass again, and the two pages
+	// that floated entirely on the sky (PI planner, public fit)
+	// wrap their bodies in a card.
+	if !strings.Contains(style, "backdrop-filter: blur(20px) saturate(1.25); }") ||
+		!strings.Contains(style, ".foldable .tw { background: none;") {
+		t.Error("the foldable section lost its glass surface or its nested-table suppression")
+	}
+	if strings.Contains(style, ".panel.market-browse { background: none;") {
+		t.Error("the market browse panel is unpainted again; its category tiles float on the sky")
+	}
+	for name, marker := range map[string]string{
+		"piplanner.html":    `<section class="card page-card">`,
+		"fit_public.html":   `<section class="card page-card">`,
+		"corp_members.html": `<section class="card page-card">`,
+	} {
+		raw, err := fs.ReadFile(templatesFS, "templates/"+name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		if !strings.Contains(string(raw), marker) {
+			t.Errorf("%s lost its glass wrapper section", name)
+		}
 	}
 	// Top search results are glass with a glowing row highlight.
 	if !strings.Contains(style, "background: rgba(14, 11, 9, 0.82);") ||

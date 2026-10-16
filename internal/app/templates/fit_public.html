@@ -5,6 +5,7 @@
 {{with .PublicFit}}
 <h1><span class="gt">{{.Card.Name}}</span></h1>
 <p class="browse-back"><a href="/fittings/public/">← Public fits</a></p>
+<section class="card page-card">
 <div class="fit-pubhead">
   <div class="fit-pubmeta">
     <p class="lede">{{publicItemLink .Card.ShipTypeID .Card.Ship}}{{if .Card.Author}} by {{.Card.Author}}{{end}} · {{.Card.Views}} views{{if .Card.PriceKnown}} · {{.Card.PriceLine}}{{end}}</p>
@@ -60,5 +61,6 @@
 {{if .EFT}}<pre id="fit-eft">{{.EFT}}</pre>{{end}}
 
 <p class="hint">Open in the <a href="/fittings/?public={{.Card.ID}}#fit-editor">fitting tool</a> to simulate it with your skills or make your own copy.</p>
+</section>
 {{end}}
 {{end}}

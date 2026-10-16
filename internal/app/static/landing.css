@@ -51,6 +51,18 @@ body::before { filter: brightness(0.74) saturate(0.97) blur(2px); transform: sca
 .ld-bar-track { fill: rgba(255, 255, 255, 0.09); }
 .ld-bar-fill { fill: #f97116; }
 .ld-loop-2 { margin-top: 22px; }
+
+/* Product screenshots: real captures in a browser chrome frame,
+   flat on the sky. The frame says "this is the actual product"
+   before a word of caption is read. */
+.ld-shot { margin: 30px 0 0; }
+.ld-browser { max-width: 1050px; margin: 0 auto; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255, 140, 40, 0.4); background: #17100b; box-shadow: 0 40px 90px rgba(0, 0, 0, 0.8), 0 0 70px rgba(255, 110, 0, 0.18); }
+.ld-browser-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.ld-dot { width: 11px; height: 11px; border-radius: 50%; background: #3a2c20; flex: none; }
+.ld-dot-on { background: #f97116; }
+.ld-url { margin-left: 10px; background: rgba(255, 255, 255, 0.06); border-radius: 7px; padding: 4px 12px; font-size: 13px; color: #cdbca6; }
+.ld-browser img { display: block; width: 100%; height: auto; }
+.ld-shot figcaption { text-align: center; color: var(--muted); font-size: 15px; margin-top: 22px; }
 .ld-ctas-center { justify-content: center; }
 .ld-brief { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
 

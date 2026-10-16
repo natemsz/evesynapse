@@ -27,8 +27,8 @@ func TestNewHTTPClientIsTuned(t *testing.T) {
 	if tr.MaxIdleConnsPerHost != 128 {
 		t.Errorf("MaxIdleConnsPerHost = %d, want 128 (not Go's default 2)", tr.MaxIdleConnsPerHost)
 	}
-	if tr.MaxIdleConns != 100 {
-		t.Errorf("MaxIdleConns = %d, want 100", tr.MaxIdleConns)
+	if tr.MaxIdleConns != 128 {
+		t.Errorf("MaxIdleConns = %d, want 128 (at least the per-host pool)", tr.MaxIdleConns)
 	}
 	if tr.IdleConnTimeout != 90*time.Second {
 		t.Errorf("IdleConnTimeout = %v, want 90s", tr.IdleConnTimeout)

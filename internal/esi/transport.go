@@ -28,7 +28,7 @@ func NewHTTPClient() *http.Client {
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           esiDialer().DialContext,
 		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          100,
+		MaxIdleConns:          128,
 		MaxIdleConnsPerHost:   128,
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   5 * time.Second,

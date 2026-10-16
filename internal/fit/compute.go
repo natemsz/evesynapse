@@ -674,6 +674,20 @@ func (f *fitting) offense() {
 			res.MissileDPS += n * volley / cycle
 			res.WeaponVolley[StateAttrKey(ent.typeID, ent.state)] = volley
 			res.WeaponDPS[StateAttrKey(ent.typeID, ent.state)] = volley / cycle
+		case snap.Groups[ent.typeID] == groupSmartbomb:
+			// A smartbomb's damage rides on the module itself;
+			// there is no charge and no damage multiplier.
+			volley := 0.0
+			for _, a := range damageAttrs {
+				volley += ent.get(snap, a)
+			}
+			if volley <= 0 {
+				continue
+			}
+			res.SmartbombVolley += n * volley
+			res.SmartbombDPS += n * volley / cycle
+			res.WeaponVolley[StateAttrKey(ent.typeID, ent.state)] = volley
+			res.WeaponDPS[StateAttrKey(ent.typeID, ent.state)] = volley / cycle
 		}
 	}
 }
@@ -721,8 +735,8 @@ func (f *fitting) droneStats() {
 			res.DroneDPS += float64(fly) * volley / cycle
 		}
 	}
-	res.DPS = res.TurretDPS + res.MissileDPS + res.DroneDPS
-	res.Volley = res.TurretVolley + res.MissileVolley + res.DroneVolley
+	res.DPS = res.TurretDPS + res.MissileDPS + res.DroneDPS + res.SmartbombDPS
+	res.Volley = res.TurretVolley + res.MissileVolley + res.DroneVolley + res.SmartbombVolley
 }
 
 // tank works out hit points and effective hit points per layer,

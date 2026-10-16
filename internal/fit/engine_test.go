@@ -819,6 +819,78 @@ func stateFixture() (*fitFixture, int64) {
 	return fx, ship
 }
 
+// TestFitRepairModulesCycle: armor repairers, shield boosters and
+// hull repairers define themselves by an active-category effect
+// that carries no modifiers (armorRepair 27, shieldBoosting 21 in
+// the real dump). The snapshot keeps such effects for their
+// categories, so the modules default to Active and their rates
+// land; when the category is missing they fall back to Online and
+// every rate (and their capacitor draw) silently reads zero.
+func TestFitRepairModulesCycle(t *testing.T) {
+	const ship = int64(1001)
+	fx := newFitFixture()
+	fx.attrs(ship, map[int64]float64{
+		263: 1000, 265: 1000, 9: 1000, 482: 1000, 55: 100000,
+		267: 0.5, 268: 0.5, 269: 0.5, 270: 0.5,
+		271: 0.5, 272: 0.5, 273: 0.5, 274: 0.5,
+		109: 0.5, 110: 0.5, 111: 0.5, 113: 0.5,
+		479: 100000,
+	})
+	// Repair modules: amount / duration / capacitor need, with a
+	// modifier-less active effect each (kept for its category).
+	fx.attrs(3001, map[int64]float64{84: 300, 73: 10000, 6: 100}) // armor: 300 HP / 10 s
+	fx.attrs(3002, map[int64]float64{68: 240, 73: 4000, 6: 40})   // shield: 240 HP / 4 s
+	fx.attrs(3003, map[int64]float64{83: 90, 73: 6000, 6: 30})    // hull: 90 HP / 6 s
+	for _, m := range []struct {
+		typeID, effectID int64
+	}{{3001, 27}, {3002, 21}, {3003, 9027}} {
+		fx.snap.TypeEffects[m.typeID] = append(fx.snap.TypeEffects[m.typeID], m.effectID)
+		fx.snap.Effects[m.effectID] = &Effect{Name: "activeNoModifiers", Category: 1}
+		fx.flag(m.typeID, 16)
+	}
+
+	for _, typeID := range []int64{3001, 3002, 3003} {
+		states := ModuleValidStates(fx.snap, typeID)
+		found := false
+		for _, s := range states {
+			found = found || s == StateActive
+		}
+		if !found {
+			t.Errorf("type %d states = %v, want Active among them", typeID, states)
+		}
+		if got := NormalizeModuleState(fx.snap, typeID, ""); got != StateActive {
+			t.Errorf("type %d defaults to %q, want Active", typeID, got)
+		}
+	}
+
+	res := Compute(fx.snap, ship, []ItemInput{{TypeID: 3001}, {TypeID: 3002}, {TypeID: 3003}}, nil, nil, nil)
+	near(t, "armor repair rate", res.ArmorRepairRate, 30, 1e-9)
+	near(t, "shield boost rate", res.ShieldBoostRate, 60, 1e-9)
+	near(t, "hull repair rate", res.HullRepairRate, 15, 1e-9)
+	// Capacitor draw counts all three: 100/10 + 40/4 + 30/6 = 25.
+	near(t, "capacitor draw", res.CapacitorDraw, 25, 1e-9)
+}
+
+// TestFitSmartbombDamage: a smartbomb's damage rides on the
+// module itself (no charge), and counts toward the totals. Two
+// Small Proton Smartbomb I shapes: 50 explosive damage per 10 s
+// cycle each.
+func TestFitSmartbombDamage(t *testing.T) {
+	const ship = int64(1001)
+	fx := newFitFixture()
+	fx.attrs(ship, map[int64]float64{263: 1000, 265: 1000, 9: 1000})
+	fx.attrs(3001, map[int64]float64{116: 50, 73: 10000})
+	fx.group(3001, groupSmartbomb)
+	fx.snap.TypeEffects[3001] = append(fx.snap.TypeEffects[3001], 9030)
+	fx.snap.Effects[9030] = &Effect{Name: "smartBomb", Category: 1}
+
+	res := Compute(fx.snap, ship, []ItemInput{{TypeID: 3001}, {TypeID: 3001}}, nil, nil, nil)
+	near(t, "smartbomb DPS", res.SmartbombDPS, 10, 1e-9)
+	near(t, "smartbomb volley", res.SmartbombVolley, 100, 1e-9)
+	near(t, "total DPS", res.DPS, 10, 1e-9)
+	near(t, "total volley", res.Volley, 100, 1e-9)
+}
+
 func TestFitModuleStateDefaults(t *testing.T) {
 	fx, ship := stateFixture()
 	// No states given: active module behaves active, passive online.

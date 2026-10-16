@@ -219,6 +219,7 @@ const (
 	AttrPowerTransferAmount     = 90
 	groupRemoteCapTransmitter   = 67
 	groupNosferatu              = 68
+	groupSmartbomb              = 72
 )
 
 // Slot / fitting effect IDs (dgmEffects names verified live).
@@ -310,7 +311,7 @@ type Snapshot struct {
 	Physics      map[int64]Physics
 	Groups       map[int64]int64 // type -> invGroups group ID
 	Meta         map[int64]AttrMeta
-	Effects      map[int64]*Effect // only modifier-bearing effects
+	Effects      map[int64]*Effect // every effect; Modifiers may be empty
 	TypeEffects  map[int64][]int64 // type -> effect IDs (sorted)
 	Requirements map[int64][]SkillReq
 }
@@ -533,8 +534,8 @@ func LoadSnapshot(ctx context.Context, q *db.Queries, typeIDs []int64) (*Snapsho
 				SkillReq{SkillTypeID: r.SkillTypeID, Level: r.Level})
 		}
 
-		// Effects carried by the fresh types (only ones the
-		// importer stored, i.e. carrying modifiers).
+		// Effects carried by the fresh types (the importer
+		// stores every effect; many carry no modifiers).
 		var newEffects []int64
 		for _, id := range fresh {
 			for _, eid := range snap.TypeEffects[id] {
@@ -739,16 +740,18 @@ type Result struct {
 	CapacitorStablePercent float64 // equilibrium % when stable (pyfa's cap state)
 	CapacitorDepletionSecs float64 // approx seconds to empty; 0 when stable
 
-	TurretDPS  float64
-	MissileDPS float64
-	DroneDPS   float64
-	DPS        float64
+	TurretDPS    float64
+	MissileDPS   float64
+	DroneDPS     float64
+	SmartbombDPS float64
+	DPS          float64
 
 	// Volley damage per weapon cycle, broken down like DPS.
-	TurretVolley  float64
-	MissileVolley float64
-	DroneVolley   float64
-	Volley        float64
+	TurretVolley    float64
+	MissileVolley   float64
+	DroneVolley     float64
+	SmartbombVolley float64
+	Volley          float64
 
 	// Capacitor warfare: neutralizer and nosferatu drain, per
 	// cycle and per second, from fitted modules.

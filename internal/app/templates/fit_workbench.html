@@ -108,7 +108,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       <div class="fit-headline-dps">
         <span class="fit-headline-num">{{.TotalDPS}}</span>
         <span class="fit-headline-label"><abbr title="Damage per second">DPS</abbr></span>
-        <span class="fit-headline-sub">turrets {{.TurretDPS}} · missiles {{.MissileDPS}} · drones {{.DroneDPS}}</span>
+        <span class="fit-headline-sub">turrets {{.TurretDPS}} · missiles {{.MissileDPS}} · drones {{.DroneDPS}}{{if .SmartbombDPS}} · smartbombs {{.SmartbombDPS}}{{end}}</span>
       </div>
       <div class="fit-headline-volley">
         <span class="fit-headline-num">{{.TotalVolley}}</span>

@@ -38,6 +38,9 @@ type pageData struct {
 	Sync          *syncView
 	Admin         *adminView
 
+	// Legal is the /license/ page (license_page.go).
+	Legal *legalView
+
 	// Notifications is the /notifications/ page.
 	Notifications *notificationsView
 

@@ -1,0 +1,42 @@
+{{define "title"}}About EveSynapse{{end}}
+{{define "content"}}
+<h1><span class="gt">About EveSynapse</span></h1>
+
+<div class="legal-stack">
+<section class="card" id="about" data-fold="never">
+  <h2>About</h2>
+  <p>EveSynapse is a web application for EVE Online players who run more than one character. It stores each linked character's skills, wallet, assets, industry jobs, planetary colonies, mail and market orders under one account, and keeps them updated on a schedule.</p>
+  <p>Pages, briefings and alerts are computed from that stored data in the background, not when a page loads.</p>
+  <p>The first version was built in 2013 and never released. The current version is a ground-up rebuild written in Go. The public instance runs on a single small server. Corporations and alliances can run their own instance from the same source code.</p>
+  <p>EveSynapse is developed in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a> and operated by Synap6.io LLC, dba Synap6. The source code is at <a href="https://github.com/natemsz/evesynapse" target="_blank" rel="noopener noreferrer">github.com/natemsz/evesynapse</a>, published under the BSD-3-Clause-Clear license with a separate patent grant. The full texts are on the <a href="/license/">license page</a>.</p>
+</section>
+
+<section class="card" id="contact" data-fold="never">
+  <h2>Contact</h2>
+  <p>Email: <a href="mailto:admin@evesynapse.app">admin@evesynapse.app</a>. Support questions, bug reports, privacy requests and account questions all go to this address.</p>
+  <p>Bugs and feature requests can also be filed on <a href="https://github.com/natemsz/evesynapse/issues" target="_blank" rel="noopener noreferrer">GitHub</a>.</p>
+</section>
+
+<section class="card" id="privacy" data-fold="never">
+  <h2>Privacy Policy</h2>
+  <p><small>Last updated October 16, 2026.</small></p>
+  <p>EveSynapse is operated by Synap6.io LLC, dba Synap6 ("we", "us"). This policy covers the public instance at evesynapse.app. If you run your own instance of EveSynapse, you are that instance's operator and this policy does not cover it.</p>
+  <p>Mailing address: Synap6.io LLC, 3518 Fremont Ave N, Seattle, WA 98103 Ste E, USA. Email: <a href="mailto:admin@evesynapse.app">admin@evesynapse.app</a>.</p>
+  <h3>What we collect</h3>
+  <p>Sign-in happens through EVE Online's official SSO. We never see or store your EVE password.</p>
+  <p>When you link a character, EVE issues this instance an access token covering the permissions (scopes) you approved on the sign-in page. Tokens are stored encrypted at rest. You choose the permissions; linking another character never widens an existing character's permissions.</p>
+  <p>For each linked character we store what ESI returns under those permissions: identity, skills and skill queues, wallet journals and balances, assets, mail, contracts, industry jobs, planetary colonies and similar game data. It is refreshed on a schedule so that pages load from stored data rather than live requests.</p>
+  <p>We also collect public game data, such as market prices and item and universe data. It is not tied to any account.</p>
+  <h3>Cookies and your browser</h3>
+  <p>One session cookie keeps you signed in. Your theme choice and home page layout are stored in your own browser's local storage. There are no advertising cookies, and the site runs no third-party analytics or trackers. Browser push notifications are opt-in, and you can turn them off on the Notifications page or in your browser at any time.</p>
+  <h3>How data is used</h3>
+  <p>Character data is used to render your pages and compute your briefings and alerts. The Trade Ideas feature sends aggregated public market statistics to an AI model provider for analysis; no character or account data is ever included in those requests.</p>
+  <h3>Sharing</h3>
+  <p>We do not sell personal data, and we do not share character data with third parties. Instances of EveSynapse may exchange public market data with peer instances to keep prices fresh; character data never leaves the instance it was linked to. We disclose data only when required by law.</p>
+  <h3>Your control</h3>
+  <p>You can unlink a character on the Characters page at any time. Unlinking deletes that character's stored data and tokens immediately. You can also revoke this instance's access from your EVE account's third-party applications page, which invalidates the stored tokens. To delete your whole account, email <a href="mailto:admin@evesynapse.app">admin@evesynapse.app</a> and we will remove it.</p>
+  <h3>Changes</h3>
+  <p>If this policy changes, the new version will be posted here with a new date.</p>
+</section>
+</div>
+{{end}}

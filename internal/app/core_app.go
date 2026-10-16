@@ -427,6 +427,12 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	} else {
 		r.Handle("/static/*", assets)
 	}
+	// The About page (about, contact, privacy policy) is public:
+	// the footer on every page links into its anchored sections.
+	r.Get("/about", app.handleAbout)
+	r.Get("/about/", app.handleAbout)
+	r.Get("/license", app.handleLicense)
+	r.Get("/license/", app.handleLicense)
 	r.Get("/auth/link", app.handleLinkChoose)
 	r.Get("/auth/eve", app.handleEVELogin)
 	r.Get("/auth/login", app.handleEVELoginIdentity)

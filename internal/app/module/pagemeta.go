@@ -33,6 +33,13 @@ type PageMeta struct {
 	// Any query or fragment on it is stripped; "" emits no
 	// canonical and no og:url.
 	CanonicalPath string
+	// CanonicalURL, when set, is the canonical address verbatim
+	// and wins over CanonicalPath. It exists for pages that have
+	// always carried their own absolute address — the public fit
+	// page, whose og:url is the install's configured origin and
+	// is omitted entirely where the install has none. Moving it
+	// onto the helper must not change that output.
+	CanonicalURL string
 	// WebApplication asks for the front page's static
 	// WebApplication JSON-LD block.
 	WebApplication bool
@@ -69,6 +76,9 @@ func CanonicalURL(path string) string {
 func RenderPageMeta(m PageMeta) template.HTML {
 	esc := html.EscapeString
 	canonical := CanonicalURL(m.CanonicalPath)
+	if m.CanonicalURL != "" {
+		canonical = m.CanonicalURL
+	}
 	var b strings.Builder
 	if m.Description != "" {
 		b.WriteString(`<meta name="description" content="` + esc(m.Description) + `">` + "\n")

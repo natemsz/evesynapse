@@ -82,6 +82,25 @@ func TestRenderPageMetaKeepsTheFitPageTags(t *testing.T) {
 	}
 }
 
+// The fit page's own absolute address wins over a path-built
+// canonical, and a page with neither emits no canonical and no
+// og:url at all — the unnamed-install behavior the fit page has
+// always shipped.
+func TestRenderPageMetaCanonicalURLWins(t *testing.T) {
+	out := string(RenderPageMeta(PageMeta{
+		Title: "Fit", Description: "d",
+		CanonicalPath: "/fittings/public/fit/7/",
+		CanonicalURL:  "https://node.example.org/fittings/public/fit/7/",
+	}))
+	if !strings.Contains(out, `<meta property="og:url" content="https://node.example.org/fittings/public/fit/7/">`) {
+		t.Errorf("the supplied canonical URL did not win:\n%s", out)
+	}
+	bare := string(RenderPageMeta(PageMeta{Title: "Fit", Description: "d"}))
+	if strings.Contains(bare, "og:url") || strings.Contains(bare, `rel="canonical"`) {
+		t.Errorf("a page with no canonical address emitted one:\n%s", bare)
+	}
+}
+
 // TestRenderPageMetaStructuredData: the front page's WebApplication
 // block and a BreadcrumbList carry only what they were given.
 func TestRenderPageMetaStructuredData(t *testing.T) {

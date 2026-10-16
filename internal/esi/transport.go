@@ -29,7 +29,7 @@ func NewHTTPClient() *http.Client {
 		DialContext:           esiDialer().DialContext,
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          100,
-		MaxIdleConnsPerHost:   32,
+		MaxIdleConnsPerHost:   128,
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   5 * time.Second,
 		ResponseHeaderTimeout: 8 * time.Second,

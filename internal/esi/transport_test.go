@@ -24,8 +24,8 @@ func TestNewHTTPClientIsTuned(t *testing.T) {
 	if !ok {
 		t.Fatalf("client transport is %T, want the tuned *http.Transport", client.Transport)
 	}
-	if tr.MaxIdleConnsPerHost != 32 {
-		t.Errorf("MaxIdleConnsPerHost = %d, want 32 (not Go's default 2)", tr.MaxIdleConnsPerHost)
+	if tr.MaxIdleConnsPerHost != 128 {
+		t.Errorf("MaxIdleConnsPerHost = %d, want 128 (not Go's default 2)", tr.MaxIdleConnsPerHost)
 	}
 	if tr.MaxIdleConns != 100 {
 		t.Errorf("MaxIdleConns = %d, want 100", tr.MaxIdleConns)

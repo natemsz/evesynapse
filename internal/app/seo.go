@@ -128,6 +128,7 @@ func (app *Application) buildSitemap(ctx context.Context, origin string) ([]byte
 	urls := []sitemapURL{
 		{Loc: origin + "/", ChangeFreq: "weekly", Priority: "1.0"},
 		{Loc: origin + "/items/", ChangeFreq: "weekly", Priority: "0.8"},
+		{Loc: origin + "/about/", ChangeFreq: "monthly", Priority: "0.3"},
 	}
 	// Each enabled module's own public pages: a build without the
 	// module has no such page to list.

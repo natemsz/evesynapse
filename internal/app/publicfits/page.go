@@ -325,6 +325,11 @@ func (f publicFitFilters) publicFitURL(changes map[string]string, keepPage bool)
 func (app *page) handlePublicFits(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := &PageData{ShellData: app.deps.PublicShell(ctx)}
+	data.HeadMeta = app.deps.HeadMeta(module.PageMeta{
+		Title:         "Public Fits",
+		Description:   "Browse community EVE Online ship fittings shared by their authors, with prices and stats for every loadout.",
+		CanonicalPath: "/fittings/public/",
+	})
 	userID := app.deps.UserID(ctx)
 	filters := app.parsePublicFitFilters(ctx, r.URL.Query())
 
@@ -548,7 +553,11 @@ func (app *page) handlePublicFitPage(w http.ResponseWriter, r *http.Request) {
 	if doc.Description != "" {
 		blurb += " - " + doc.Description
 	}
-	data.HeadMeta = app.deps.HeadMeta(row.Name+" ("+ship+")", blurb, view.PageURL)
+	data.HeadMeta = app.deps.HeadMeta(module.PageMeta{
+		Title:         row.Name + " (" + ship + ")",
+		Description:   blurb,
+		CanonicalPath: card.FitURL,
+	})
 	data.PublicFit = view
 	app.deps.Render(ctx, w, http.StatusOK, "fit_public.html", data)
 }

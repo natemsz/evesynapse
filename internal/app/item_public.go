@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -197,12 +198,11 @@ func (app *Application) handlePublicShip(w http.ResponseWriter, r *http.Request)
 			}
 		}
 	}
-	pageURL := app.publicPageURL("/ships/" + idString(typeID) + "/")
-	blurb := detail.Name + " with " + strconv.Itoa(len(view.Fits)) + " public fits"
-	if !moduleCompiledIn("publicfits") {
-		blurb = detail.Name
-	}
-	data.HeadMeta = headMeta(detail.Name, blurb, pageURL)
+	data.HeadMeta = module.RenderPageMeta(module.PageMeta{
+		Title:         detail.Name,
+		Description:   detail.Name + " stats, market prices and community fittings in EveSynapse's EVE Online fitting and market tools.",
+		CanonicalPath: "/ships/" + idString(typeID) + "/",
+	})
 	data.PublicShip = view
 	app.render(ctx, w, http.StatusOK, "ship_public.html", data)
 }

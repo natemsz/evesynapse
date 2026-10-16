@@ -1033,8 +1033,8 @@ func (app *Application) FitViewsPending(ctx context.Context, fitID int64) int64 
 
 func (app *Application) PublicPageURL(path string) string { return app.publicPageURL(path) }
 
-func (app *Application) HeadMeta(title, description, pageURL string) template.HTML {
-	return headMeta(title, description, pageURL)
+func (app *Application) HeadMeta(meta module.PageMeta) template.HTML {
+	return module.RenderPageMeta(meta)
 }
 
 func (app *Application) RefreshPublicFitPages(ctx context.Context) int {

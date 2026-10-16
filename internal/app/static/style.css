@@ -146,7 +146,7 @@
      turns the backdrop art behind a card into atmosphere. Every
      value rides the theme variables, so faction themes recolor
      the glass and the light theme's solid overrides still win. */
-  --glass: color-mix(in srgb, var(--panel) 78%, transparent);
+  --glass: color-mix(in srgb, var(--panel) 83%, transparent);
   --glass-edge: color-mix(in srgb, var(--accent) 24%, transparent);
   --row: rgba(16, 13, 10, 0.55);
   --row-alt: rgba(255, 255, 255, 0.03);
@@ -271,7 +271,7 @@ header {
   z-index: 10;
   /* Glass: the bar paint at 90% over a backdrop blur. The paint alone
      is the no-blur fallback. */
-  background: linear-gradient(to bottom, rgba(24, 24, 24, 0.9), rgba(11, 11, 11, 0.9));
+  background: linear-gradient(to bottom, rgba(24, 24, 24, 0.74), rgba(11, 11, 11, 0.74));
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
   border-bottom: 1px solid rgba(255, 110, 0, 0.18);
@@ -409,8 +409,8 @@ main {
   border: 1px solid transparent;
   border-radius: var(--r-lg);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 4px 20px rgba(0, 0, 0, 0.65);
-  -webkit-backdrop-filter: blur(20px) saturate(1.25);
-  backdrop-filter: blur(20px) saturate(1.25);
+  -webkit-backdrop-filter: blur(25px) saturate(0.9);
+  backdrop-filter: blur(25px) saturate(0.9);
   padding: 1.25rem 1.25rem 1.5rem;
 }
 .panel.char-head { background: none; border: 0; box-shadow: none; padding: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
@@ -494,8 +494,8 @@ main {
   border: 1px solid var(--glass-edge);
   border-radius: var(--r-lg);
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
-  -webkit-backdrop-filter: blur(20px) saturate(1.25);
-  backdrop-filter: blur(20px) saturate(1.25);
+  -webkit-backdrop-filter: blur(25px) saturate(0.9);
+  backdrop-filter: blur(25px) saturate(0.9);
   padding: 0.85rem 1rem 1rem;
 }
 /* Darker header bands: a solid ::before behind the heading. Layering
@@ -615,8 +615,8 @@ h3 + .tw > table, h3 + table {
     var(--glass);
   border: 1px solid var(--glass-edge); border-radius: var(--r-lg);
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
-  -webkit-backdrop-filter: blur(20px) saturate(1.25);
-  backdrop-filter: blur(20px) saturate(1.25); }
+  -webkit-backdrop-filter: blur(25px) saturate(0.9);
+  backdrop-filter: blur(25px) saturate(0.9); }
 .foldable.has-fold > h2:first-child, .foldable.has-fold > h3:first-child { padding-right: 2.2rem; position: relative; }
 
 /* --- buttons --- A plain <button> or submit/button <input> with no
@@ -676,8 +676,8 @@ h3 + .tw > table, h3 + table {
   border: 1px solid var(--glass-edge);
   border-radius: var(--r-lg);
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
-  -webkit-backdrop-filter: blur(20px) saturate(1.25);
-  backdrop-filter: blur(20px) saturate(1.25);
+  -webkit-backdrop-filter: blur(25px) saturate(0.9);
+  backdrop-filter: blur(25px) saturate(0.9);
 }
 .card .pi-controls { background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; padding: 0; }
 .card .foldable, .panel .foldable { background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; padding: 0; }
@@ -819,8 +819,8 @@ input[type="text"]:focus, input[type="search"]:focus, input[type="number"]:focus
   border: 1px solid rgba(255, 110, 0, 0.25);
   border-radius: var(--r-md);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
-  -webkit-backdrop-filter: blur(20px) saturate(1.25);
-  backdrop-filter: blur(20px) saturate(1.25);
+  -webkit-backdrop-filter: blur(25px) saturate(0.9);
+  backdrop-filter: blur(25px) saturate(0.9);
 }
 /* An open dropdown sits above everything after it: the panel or form
    that holds it (each can be its own stacking layer) is lifted while
@@ -1023,7 +1023,7 @@ footer .version-number {
   .section-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding-bottom: 0.2rem; margin: 0.4rem 0 0.8rem; }
   .section-tabs a { flex: none; padding: 0.3rem 0.65rem; font-size: 0.9rem; }
 }
-.chip { border: 1px solid #444; background: var(--row); color: var(--text); border-radius: 999px; padding: 0.15rem 0.7rem; cursor: pointer; font: inherit; font-size: 0.85rem; }
+.chip { border: 1px solid #444; background: var(--row); color: var(--text); border-radius: 999px; padding: 0.15rem 0.7rem; cursor: pointer; font-family: Rajdhani, sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; font-size: 0.8rem; }
 .chip.on { border-color: var(--accent); color: var(--accent); }
 .relink { color: var(--danger); }
 .attention { list-style: none; margin: 0; padding: 0; }
@@ -1034,7 +1034,7 @@ footer .version-number {
 /* Trade ideas: one tab per strategy (the Trade ideas page and the
    home module). Without JavaScript the tab list stays hidden and
    every strategy shows under its own heading. */
-.ti-tabs { display: flex; gap: 0.35rem; overflow-x: auto; scrollbar-width: thin; margin: 0 0 0.6rem; padding-bottom: 0.15rem; }
+.ti-tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0 0 0.6rem; padding-bottom: 0.15rem; }
 .ti-tabs[hidden], .ti-panel[hidden] { display: none; }
 /* With JavaScript on (boot.js marks <html class="js"> before first
    paint), the page paints as tabs from the start instead of showing
@@ -1355,8 +1355,8 @@ body.resize-active { user-select: none; -webkit-user-select: none; cursor: nwse-
   border: 1px solid var(--glass-edge);
   border-radius: var(--r-lg);
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
-  -webkit-backdrop-filter: blur(20px) saturate(1.25);
-  backdrop-filter: blur(20px) saturate(1.25);
+  -webkit-backdrop-filter: blur(25px) saturate(0.9);
+  backdrop-filter: blur(25px) saturate(0.9);
 }
 .card .kpis, .panel .kpis, .foldable .kpis { background: none; border: none; box-shadow: none; padding: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
 .kpis-small { grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); margin-bottom: 0.6rem; }
@@ -1439,6 +1439,21 @@ ul.brief-cards {
   font-size: 0.95rem;
   transition: transform 160ms ease, box-shadow 160ms ease;
 }
+
+/* Briefing category icons: a small ember glyph in the card's top
+   right says what the line is about (mail, orders, industry...)
+   before a word is read. */
+.brief-card { position: relative; padding-right: 2.1rem; }
+.brief-icon { position: absolute; top: 0.55rem; right: 0.6rem; width: 16px; height: 16px; background-size: contain; background-repeat: no-repeat; opacity: 0.85; pointer-events: none; }
+.brief-icon-mail { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffa25e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='2' y='4' width='20' height='16' rx='2'/><path d='m22 7-10 6L2 7'/></svg>"); }
+.brief-icon-pi { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffa25e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='4'/><path d='M2.5 15.5c5.5 3 13.5 3 19 0'/><path d='M3 9.5c2-1 4.5-1.6 7-1.8'/></svg>"); }
+.brief-icon-orders { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffa25e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.5 8.5a2 2 0 0 0 2.828 0l7.172-7.172a2 2 0 0 0 0-2.828z'/><circle cx='7' cy='7' r='1.2'/></svg>"); }
+.brief-icon-industry { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffa25e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M2 20h20'/><path d='M4 20V9l5 3.5V9l5 3.5V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v15'/></svg>"); }
+.brief-icon-skills { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffa25e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z'/><path d='M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z'/></svg>"); }
+.brief-icon-contract { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffa25e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/><path d='M14 2v6h6'/><path d='M9 13h6'/><path d='M9 17h6'/></svg>"); }
+.brief-icon-calendar { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffa25e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='4' width='18' height='17' rx='2'/><path d='M16 2v4'/><path d='M8 2v4'/><path d='M3 9h18'/></svg>"); }
+.brief-icon-market { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffa25e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m22 7-8.5 8.5-5-5L2 17'/><path d='M16 7h6v6'/></svg>"); }
+.brief-icon-link { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffa25e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/><path d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/></svg>"); }
 .brief-card.sev-critical { border-left-color: var(--danger); border-color: rgba(239, 68, 68, 0.35); --sev-glow: #ef4444; }
 .brief-card.sev-warning { border-left-color: var(--accent); --sev-glow: var(--accent); }
 .brief-card.sev-info { border-left-color: #38bdf8; border-color: rgba(56, 189, 248, 0.30); --sev-glow: #38bdf8; }
@@ -1535,7 +1550,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid rgba(255, 1
 .grid.home-grid > .card[data-widget="fleet"] { min-height: 0; overflow: hidden; }
 .grid.home-grid > .card[data-widget="fleet"] > .card-body { display: flex; flex-direction: column; min-height: 0; }
 .grid.home-grid > .card[data-widget="fleet"] > .card-body > .tw { flex: 1 1 auto; min-height: 0; overflow: auto; }
-.grid.home-grid > .card[data-widget="fleet"] .fleet-foot { flex: none; position: sticky; bottom: 0; padding-top: 0.3rem; background: var(--panel); }
+.grid.home-grid > .card[data-widget="fleet"] .fleet-foot { flex: none; position: sticky; bottom: 0; padding-top: 0.3rem; background: var(--glass); border-top: 1px solid rgba(255, 110, 0, 0.14); }
 
 /* Wallet flow donuts: income and spend by type. Slice colours
    are a fixed palette, the same order in both donuts and their
@@ -1833,8 +1848,8 @@ html[data-theme="light"] .cardbtn { background: #fffdf9; border-color: #d9a77a; 
   /* A deep, slightly warm smoke over a strong blur, for every modal on
      the site (add module, quick jump, fit picker, planner dialogs). */
   background: rgba(12, 8, 5, 0.58);
-  -webkit-backdrop-filter: blur(20px) saturate(1.25);
-  backdrop-filter: blur(20px) saturate(1.25);
+  -webkit-backdrop-filter: blur(25px) saturate(0.9);
+  backdrop-filter: blur(25px) saturate(0.9);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1985,7 +2000,7 @@ html[data-nav="hidden"] body { grid-template-columns: 0 minmax(0, 1fr); }
   min-width: 0;
   /* Glass, as on the top bar. Rail flyouts and content panels stay
      solid. */
-  background: linear-gradient(rgba(21, 21, 21, 0.9), rgba(17, 17, 17, 0.9)) padding-box;
+  background: linear-gradient(rgba(21, 21, 21, 0.74), rgba(17, 17, 17, 0.74)) padding-box;
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
   border-right: 1px solid #262626;
@@ -2451,7 +2466,7 @@ tbody tr.yours td { background-color: #2a2015; }
     width: min(20rem, calc(100vw - 3rem));
     height: 100dvh;
     z-index: 80;
-    background: linear-gradient(rgba(21, 21, 21, 0.9), rgba(17, 17, 17, 0.9)) padding-box;
+    background: linear-gradient(rgba(21, 21, 21, 0.74), rgba(17, 17, 17, 0.74)) padding-box;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
     transform: translateX(-105%);
@@ -2796,8 +2811,8 @@ html[data-theme="light"] .fit-head select {
 .fit-stats {
   flex: 1 1 22rem;
   min-width: min(18rem, 100%);
-  background: var(--panel);
-  border: 1px solid #242424;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 110, 0, 0.14);
   border-radius: var(--r-md);
   padding: 0.8rem 1rem;
 }
@@ -2806,7 +2821,7 @@ html[data-theme="light"] .fit-head select {
    navigation, drones), side by side when the column is wide enough,
    so a change to the fit reads without scrolling. */
 .fit-stats { container-type: inline-size; }
-.fit-panel { border: 1px solid #262626; border-radius: var(--r-md); background: rgba(0, 0, 0, 0.18); padding: 0.55rem 0.75rem 0.6rem; margin: 0 0 0.6rem; }
+.fit-panel { border: 1px solid rgba(255, 110, 0, 0.14); border-radius: var(--r-md); background: rgba(255, 255, 255, 0.02); padding: 0.55rem 0.75rem 0.6rem; margin: 0 0 0.6rem; }
 .fit-panel h5 { display: flex; align-items: baseline; gap: 0.6rem; margin: 0 0 0.5rem; font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
 .fit-panel-side { margin-left: auto; font-size: 0.8rem; letter-spacing: 0; text-transform: none; color: var(--muted); }
 .fit-panel-side abbr { text-decoration: none; }
@@ -3323,8 +3338,8 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 .searchpanel {
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.30), rgba(0, 0, 0, 0) 55%),
     var(--glass);
-  -webkit-backdrop-filter: blur(20px) saturate(1.25);
-  backdrop-filter: blur(20px) saturate(1.25);
+  -webkit-backdrop-filter: blur(25px) saturate(0.9);
+  backdrop-filter: blur(25px) saturate(0.9);
   border: 1px solid var(--glass-edge);
   border-radius: var(--r-md);
   padding: 0.6rem 0.7rem;
@@ -4485,6 +4500,12 @@ tbody tr:nth-child(even) th:first-child {
    border-color above must not flatten them: it is set only on
    the tab-shaped pills, and chips are handled by fill alone). */
 .section-tabs a, .ti-tabs button {
+  font-family: Rajdhani, sans-serif;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-size: 0.8rem;
+
   background: rgba(23, 17, 13, 0.55);
   border-color: rgba(255, 110, 0, 0.22);
   -webkit-backdrop-filter: blur(10px) saturate(1.2);
@@ -4524,52 +4545,57 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
    each with its own transparency, its own blur, or nothing at
    all. Sections inside step DOWN a tier: whisper fills, hairline
    borders, no blur of their own (the wrapper already blurs the
-   sky behind everything on the page). The widget home and the
-   fitting workbench are exempt: the home grid is a field of
-   widget cards by design, and the workbench is its own surface. */
+   sky behind everything on the page). Only the widget home is
+   exempt: the home grid is a field of widget cards by design.
+   The fitting workbench sits inside the wrapper like any other
+   page; its drag ghost, tooltips and picker were audited for it:
+   the ghost and the modal backdrops live at body level (swap.js
+   moves the backdrops there) and the tooltips are absolutely
+   positioned against the workbench itself, so no fixed element
+   is left for the wrapper's backdrop-filter to capture. */
 .page-body {
   margin: 1rem 1.25rem 1.25rem;
   background: var(--glass);
-  -webkit-backdrop-filter: blur(20px) saturate(1.15);
-  backdrop-filter: blur(20px) saturate(1.15);
+  -webkit-backdrop-filter: blur(25px) saturate(0.9);
+  backdrop-filter: blur(25px) saturate(0.9);
   border: 1px solid var(--glass-edge);
   border-radius: var(--r-lg);
 }
-.page-body:has(.home-grid), .page-body:has(.fit-wb) {
+.page-body:has(.home-grid) {
   margin: 0;
   background: none;
   border: 0;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
-.page-body:not(:has(.home-grid)):not(:has(.fit-wb)) .card,
-.page-body:not(:has(.home-grid)):not(:has(.fit-wb)) .foldable,
-.page-body:not(:has(.home-grid)):not(:has(.fit-wb)) .panel,
-.page-body:not(:has(.home-grid)):not(:has(.fit-wb)) .searchpanel {
+.page-body:not(:has(.home-grid)) .card,
+.page-body:not(:has(.home-grid)) .foldable,
+.page-body:not(:has(.home-grid)) .panel,
+.page-body:not(:has(.home-grid)) .searchpanel {
   background: rgba(255, 255, 255, 0.03);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   border-color: rgba(255, 110, 0, 0.14);
   box-shadow: none;
 }
-.page-body:not(:has(.home-grid)):not(:has(.fit-wb)) .kpis {
+.page-body:not(:has(.home-grid)) .kpis {
   background: none;
   border: 0;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   box-shadow: none;
 }
-.page-body:not(:has(.home-grid)):not(:has(.fit-wb)) .kpi,
-.page-body:not(:has(.home-grid)):not(:has(.fit-wb)) .brief-card {
+.page-body:not(:has(.home-grid)) .kpi,
+.page-body:not(:has(.home-grid)) .brief-card {
   background: rgba(255, 255, 255, 0.03);
   border-color: rgba(255, 110, 0, 0.14);
 }
-.page-body:not(:has(.home-grid)):not(:has(.fit-wb)) .panel > h1:first-child {
+.page-body:not(:has(.home-grid)) .panel > h1:first-child {
   background: none;
   border-image: none;
   border-bottom: 1px solid rgba(255, 110, 0, 0.15);
 }
-.page-body:not(:has(.home-grid)):not(:has(.fit-wb)) .tw {
+.page-body:not(:has(.home-grid)) .tw {
   background: none;
   border: 0;
   box-shadow: none;

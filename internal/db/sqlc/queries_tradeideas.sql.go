@@ -7,27 +7,37 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
 const getTradeIdeas = `-- name: GetTradeIdeas :one
 
-SELECT body, as_of, model FROM trade_ideas WHERE id = 1
+SELECT body, rows, as_of, model FROM trade_ideas WHERE id = 1
 `
 
 type GetTradeIdeasRow struct {
-	Body  string    `json:"body"`
-	AsOf  time.Time `json:"as_of"`
-	Model string    `json:"model"`
+	Body  string         `json:"body"`
+	Rows  sql.NullString `json:"rows"`
+	AsOf  time.Time      `json:"as_of"`
+	Model string         `json:"model"`
 }
 
 // Trade ideas for the home page (schema 030): the stored
 // model answer, replaced per refresh. The widget reads this
 // row only; a failed refresh keeps the previous answer.
+// The rows column (schema 049) is the scanner CSV rows the
+// answer was written from, as a JSON array; the reader composes
+// each idea's figures from them.
 func (q *Queries) GetTradeIdeas(ctx context.Context) (GetTradeIdeasRow, error) {
 	row := q.db.QueryRowContext(ctx, getTradeIdeas)
 	var i GetTradeIdeasRow
-	err := row.Scan(&i.Body, &i.AsOf, &i.Model)
+	err := row.Scan(
+		&i.Body,
+		&i.Rows,
+		&i.AsOf,
+		&i.Model,
+	)
 	return i, err
 }
 
@@ -51,40 +61,53 @@ func (q *Queries) GetTradeIdeasAttempt(ctx context.Context) (GetTradeIdeasAttemp
 
 const getTradeIdeasPage = `-- name: GetTradeIdeasPage :one
 
-SELECT body, as_of, model FROM trade_ideas WHERE id = 2
+SELECT body, rows, as_of, model FROM trade_ideas WHERE id = 2
 `
 
 type GetTradeIdeasPageRow struct {
-	Body  string    `json:"body"`
-	AsOf  time.Time `json:"as_of"`
-	Model string    `json:"model"`
+	Body  string         `json:"body"`
+	Rows  sql.NullString `json:"rows"`
+	AsOf  time.Time      `json:"as_of"`
+	Model string         `json:"model"`
 }
 
 // The Trade ideas page's own, longer answer (schema 046): row 2.
 func (q *Queries) GetTradeIdeasPage(ctx context.Context) (GetTradeIdeasPageRow, error) {
 	row := q.db.QueryRowContext(ctx, getTradeIdeasPage)
 	var i GetTradeIdeasPageRow
-	err := row.Scan(&i.Body, &i.AsOf, &i.Model)
+	err := row.Scan(
+		&i.Body,
+		&i.Rows,
+		&i.AsOf,
+		&i.Model,
+	)
 	return i, err
 }
 
 const putTradeIdeas = `-- name: PutTradeIdeas :exec
-INSERT INTO trade_ideas (id, body, as_of, model)
-VALUES (1, $1, $2, $3)
+INSERT INTO trade_ideas (id, body, rows, as_of, model)
+VALUES (1, $1, $2, $3, $4)
 ON CONFLICT (id) DO UPDATE SET
     body = excluded.body,
+    rows = excluded.rows,
     as_of = excluded.as_of,
     model = excluded.model
 `
 
 type PutTradeIdeasParams struct {
-	Body  string    `json:"body"`
-	AsOf  time.Time `json:"as_of"`
-	Model string    `json:"model"`
+	Body  string         `json:"body"`
+	Rows  sql.NullString `json:"rows"`
+	AsOf  time.Time      `json:"as_of"`
+	Model string         `json:"model"`
 }
 
 func (q *Queries) PutTradeIdeas(ctx context.Context, arg PutTradeIdeasParams) error {
-	_, err := q.db.ExecContext(ctx, putTradeIdeas, arg.Body, arg.AsOf, arg.Model)
+	_, err := q.db.ExecContext(ctx, putTradeIdeas,
+		arg.Body,
+		arg.Rows,
+		arg.AsOf,
+		arg.Model,
+	)
 	return err
 }
 
@@ -107,21 +130,28 @@ func (q *Queries) PutTradeIdeasAttempt(ctx context.Context, arg PutTradeIdeasAtt
 }
 
 const putTradeIdeasPage = `-- name: PutTradeIdeasPage :exec
-INSERT INTO trade_ideas (id, body, as_of, model)
-VALUES (2, $1, $2, $3)
+INSERT INTO trade_ideas (id, body, rows, as_of, model)
+VALUES (2, $1, $2, $3, $4)
 ON CONFLICT (id) DO UPDATE SET
     body = excluded.body,
+    rows = excluded.rows,
     as_of = excluded.as_of,
     model = excluded.model
 `
 
 type PutTradeIdeasPageParams struct {
-	Body  string    `json:"body"`
-	AsOf  time.Time `json:"as_of"`
-	Model string    `json:"model"`
+	Body  string         `json:"body"`
+	Rows  sql.NullString `json:"rows"`
+	AsOf  time.Time      `json:"as_of"`
+	Model string         `json:"model"`
 }
 
 func (q *Queries) PutTradeIdeasPage(ctx context.Context, arg PutTradeIdeasPageParams) error {
-	_, err := q.db.ExecContext(ctx, putTradeIdeasPage, arg.Body, arg.AsOf, arg.Model)
+	_, err := q.db.ExecContext(ctx, putTradeIdeasPage,
+		arg.Body,
+		arg.Rows,
+		arg.AsOf,
+		arg.Model,
+	)
 	return err
 }

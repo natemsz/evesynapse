@@ -113,6 +113,14 @@ func TestTradeIdeasCSVBounded(t *testing.T) {
 	if len(rows) != 3 { // header + Tritanium + Pyerite
 		t.Fatalf("CSV rows: %d, want 3", len(rows))
 	}
+	// The leading "#" column numbers the rows 1-based; the model's
+	// "(#n)" references name it.
+	if rows[0][0] != "#" || rows[1][0] != "1" || rows[2][0] != "2" {
+		t.Fatalf("CSV row numbers: header %q, then %q, %q", rows[0][0], rows[1][0], rows[2][0])
+	}
+	if rows[1][1] != "Tritanium" || rows[0][1] != "Item" {
+		t.Fatalf("CSV shifted by the new column: header %q, first row %q", rows[0][1], rows[1][1])
+	}
 	if !strings.Contains(text, "Tritanium") || !strings.Contains(text, "150.0%") {
 		t.Fatalf("CSV lacks the seeded opportunity:\n%s", text)
 	}
@@ -183,10 +191,25 @@ func TestTradeIdeasRefreshStores(t *testing.T) {
 	if err != nil || !strings.Contains(page.Body, "Buy Tritanium low") {
 		t.Fatalf("stored page row: %+v err %v", page, err)
 	}
+	// Body and row set are stored together, for both asks: the rows
+	// the CSV carried, numbered as sent.
+	for name, raw := range map[string]string{"module": row.Rows.String, "page": page.Rows.String} {
+		rows := ideas.DecodeRows(raw)
+		if len(rows) != 2 || rows[0].N != 1 || rows[1].N != 2 {
+			t.Fatalf("%s row set = %+v, want the two seeded rows numbered 1, 2", name, rows)
+		}
+		items := map[string]bool{rows[0].Item: true, rows[1].Item: true}
+		if !items["Tritanium"] || !items["Pyerite"] || rows[0].Spread == "" || rows[0].Profit == "" {
+			t.Fatalf("%s row set lacks the seeded figures: %+v", name, rows)
+		}
+	}
 	// The last ask was the page's: its prompt, its larger answer.
 	sent := string(mustReadStub(t, stub))
-	if !strings.Contains(sent, "Tritanium") || !strings.Contains(sent, "up to twenty ideas") || !strings.Contains(sent, `"max_tokens"`) {
-		t.Fatalf("page ask lacked its prompt, the scanner rows or its token allowance: %s", sent)
+	if !strings.Contains(sent, "Tritanium") || !strings.Contains(sent, "up to twenty ideas") || !strings.Contains(sent, `"max_tokens":6000`) {
+		t.Fatalf("page ask lacked its prompt, the scanner rows or its slim token cap: %s", sent)
+	}
+	if !strings.Contains(sent, "Do NOT repeat any prices") || !strings.Contains(sent, "(#n)") {
+		t.Fatalf("page ask is not on the row-reference contract: %s", sent)
 	}
 	// Fresh enough: the model is not asked again.
 	if stored := tradeideas.Refresh(ctx, app); stored != 0 || stub.calls != 2 {
@@ -297,6 +320,45 @@ func TestTradeIdeasPageRendersStored(t *testing.T) {
 	}
 	if !strings.Contains(body, "Station flips") || strings.Contains(body, "Hauling Arbitrage") {
 		t.Error("home module should keep the module's own answer")
+	}
+}
+
+// TestTradeIdeasPageComposesFromRows: a new-format answer and its
+// stored row set render the composed line — figures from the rows,
+// in the legacy format, no reference shown.
+func TestTradeIdeasPageComposesFromRows(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+	raw, err := ideas.EncodeRows([]ideas.Row{
+		{N: 1, Item: "Tritanium", Station: "Jita IV - Moon 4", Buy: "4.00", Sell: "10.00", Spread: "150.0%", Sold: "20", Profit: "120.00"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := q.PutTradeIdeasPage(ctx, db.PutTradeIdeasPageParams{
+		Body:  "### Station Flips\n* **Tritanium** (#1) — deep volume at the hub",
+		Rows:  sql.NullString{String: raw, Valid: true},
+		AsOf:  time.Now().UTC(),
+		Model: ideas.GemmaModel,
+	}); err != nil {
+		t.Fatalf("store answer with rows: %v", err)
+	}
+	code, body := getPage(t, app, cookie, "/market/ideas/")
+	if code != http.StatusOK {
+		t.Fatalf("GET /market/ideas/: status %d", code)
+	}
+	mustContain(t, "/market/ideas/ (composed)", body,
+		"<strong>Tritanium</strong>", "Highest buy 4.00", "Lowest sell 10.00",
+		"Spread 150.0%", "20 sold per day", "Estimated daily profit 120.00", "deep volume at the hub")
+	if strings.Contains(body, "(#1)") {
+		t.Error("the row reference is rendered on the page")
 	}
 }
 

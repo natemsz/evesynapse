@@ -8,7 +8,7 @@ import (
 
 // TestEmberGlassAndSkyRules pins the Ember Nebula design pass in the
 // shipped stylesheets: the glass recipe on the shared surfaces, the
-// starfield sky, the briefing glow and pulse, and the motion/blur
+// art-only sky, the briefing glow and pulse, and the motion/blur
 // discipline. Atmosphere lives in the shared classes; if a rule
 // drops out of the CSS, every page loses it at once — this says so.
 func TestEmberGlassAndSkyRules(t *testing.T) {
@@ -22,14 +22,18 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	style, bg, plan, link := read("style.css"), read("bg.css"), read("plan.css"), read("link.css")
 
 	for _, want := range []string{
-		"--glass: color-mix(in srgb, var(--panel) 85%, transparent)",
+		"--glass: color-mix(in srgb, var(--panel) 88%, transparent)",
 		"--glass-edge: color-mix(in srgb, var(--accent) 24%, transparent)",
-		"-webkit-backdrop-filter: blur(9px) saturate(1.15)",
-		"backdrop-filter: blur(9px) saturate(1.15)",
+		"-webkit-backdrop-filter: blur(14px) saturate(1.15)",
+		"backdrop-filter: blur(14px) saturate(1.15)",
 		".brief-card:hover, .brief-card:focus-within",
 		"transform: translateY(-2px)",
-		"color-mix(in srgb, var(--sev-glow, var(--accent)) 45%, transparent)",
-		"animation: brief-pulse 3.2s ease-in-out infinite;",
+		"color-mix(in srgb, var(--sev-glow, var(--accent)) 55%, transparent)",
+		"animation: sev-pulse 3.2s ease-in-out infinite;",
+		"--row: rgba(16, 13, 10, 0.55)",
+		"--row-alt: rgba(255, 255, 255, 0.03)",
+		".chip:hover",
+		"background: rgba(18, 14, 11, 0.94)",
 		".kpi-spark-line { fill: none; stroke: var(--accent);",
 	} {
 		if !strings.Contains(style, want) {
@@ -56,11 +60,21 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		t.Error("the reduced-motion guard for the briefing animation is missing")
 	}
 	if !strings.Contains(bg, "@media (prefers-reduced-motion: reduce)") ||
-		!strings.Contains(bg, "animation: ember-twinkle 6s") ||
 		!strings.Contains(bg, "animation: ember-breathe 9s") ||
-		strings.Count(bg, "data:image/svg+xml") < 3 ||
-		!strings.Contains(bg, `html[data-theme="light"] body::after { display: none; }`) {
-		t.Error("bg.css lost the starfield layers, the twinkle/breathe, or a motion/light guard")
+		!strings.Contains(bg, "background-position: center;") {
+		t.Error("bg.css lost the breathe, the centered composition, or the motion guard")
+	}
+	// The art is the sky: no synthetic starfield may come back.
+	if strings.Contains(bg, "data:image/svg+xml") ||
+		strings.Contains(bg, "ember-twinkle") ||
+		strings.Contains(bg, "body::after") {
+		t.Error("bg.css regained a synthetic starfield layer; the art carries its own stars")
+	}
+	// The briefing pulse lives on the severity chip, never on the
+	// card's box-shadow (a running shadow animation overrides the
+	// hover glow and makes every critical card glow in sync).
+	if strings.Contains(style, "brief-pulse") {
+		t.Error("the card-level brief-pulse is back; the pulse belongs on the .sev chip only")
 	}
 	// Feature card surfaces aligned to the same translucent recipe.
 	for name, css := range map[string]string{"plan.css": plan, "link.css": link} {

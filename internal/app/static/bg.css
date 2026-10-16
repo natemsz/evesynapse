@@ -41,3 +41,31 @@ body::before {
    page swap, so it is forced off here; the ::view-transition
    rules in style.css still apply while a swap runs. */
 #main-content { view-transition-name: none; }
+
+/* About and license pages: the legal sections (About, Contact,
+   Privacy Policy, the license texts) are separate documents and
+   must read that way, not as one continuous panel: real gaps
+   between them, and each section lifted a step above the whisper
+   tier the page wrapper assigns to inner cards. */
+.legal-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.page-body:not(:has(.home-grid)) .legal-stack > .card {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 110, 0, 0.22);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+}
+[data-theme="light"] .page-body:not(:has(.home-grid)) .legal-stack > .card {
+  background: #fdfbf6;
+  border-color: #d9cfba;
+  box-shadow: 0 4px 18px rgba(90, 70, 40, 0.18);
+}
+.legal-text {
+  white-space: pre-wrap;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  margin: 0;
+}

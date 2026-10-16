@@ -28,14 +28,14 @@ build-amd64: ## Cross-compile the release server for linux/amd64 (Intel/AMD serv
 assets: ## Decode the fonts/wallpaper from ci-assets/ into the embedded asset dir
 	mkdir -p internal/app/static/fonts
 	for f in ci-assets/fonts/*.b64; do base64 -d "$$f" > "internal/app/static/fonts/$$(basename "$${f%.b64}")"; done
-	cat ci-assets/bg.jpg.b64.part-* | base64 -d > internal/app/static/bg.jpg
-	cat ci-assets/bg-4k.jpg.b64.part-* | base64 -d > internal/app/static/bg-4k.jpg
-	cat ci-assets/bg-uhd.jpg.b64.part-* | base64 -d > internal/app/static/bg-uhd.jpg
-	cat ci-assets/shot-fitting.webp.b64.part-* | base64 -d > internal/app/static/shot-fitting.webp
-	cat ci-assets/shot-planner.webp.b64.part-* | base64 -d > internal/app/static/shot-planner.webp
-	cat ci-assets/shot-overview.webp.b64.part-* | base64 -d > internal/app/static/shot-overview.webp
-	cat ci-assets/shot-ideas.webp.b64.part-* | base64 -d > internal/app/static/shot-ideas.webp
-	cat ci-assets/shot-market.webp.b64.part-* | base64 -d > internal/app/static/shot-market.webp
+	ls ci-assets/bg.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg.jpg
+	ls ci-assets/bg-4k.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-4k.jpg
+	ls ci-assets/bg-uhd.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-uhd.jpg
+	ls ci-assets/shot-fitting.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/shot-fitting.webp
+	ls ci-assets/shot-planner.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/shot-planner.webp
+	ls ci-assets/shot-overview.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/shot-overview.webp
+	ls ci-assets/shot-ideas.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/shot-ideas.webp
+	ls ci-assets/shot-market.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/shot-market.webp
 
 build-dev: ## Compile the dev server (includes /dev-login) into ./bin/evesynapse-dev
 	go build -o bin/evesynapse-dev ./cmd/evesynapse-dev

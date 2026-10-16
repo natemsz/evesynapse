@@ -41,7 +41,7 @@ type pageData struct {
 	// Notifications is the /notifications/ page.
 	Notifications *notificationsView
 
-	// Link is the sign-up and character-link chooser (/auth/link).
+	// Link is the sign-up and character-link readout (/auth/link).
 	Link *linkView
 
 	// PublicShip is one /ships/ page.

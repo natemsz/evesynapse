@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -269,28 +270,40 @@ func TestEmptySubmittedChoiceNeverWidens(t *testing.T) {
 	}
 }
 
-// TestFreshChooserPreTicksEssentials: a fresh sign-up opens with the
-// Essentials set ticked; an explicit cards submission that unticks
-// everything is respected as zero, not silently re-ticked.
-func TestFreshChooserPreTicksEssentials(t *testing.T) {
+// TestFreshChooserOpensFullyTicked: there is no extras step and no
+// playstyle question. A fresh sign-up lands on the categorized readout
+// with every feature and every permission ticked, because the optional
+// scopes are part of how the features are expected to work. Unticking
+// is the player's move from there.
+func TestFreshChooserOpensFullyTicked(t *testing.T) {
 	app := linkApp(t)
 
 	body := get(app, nil, "/auth/link").Body.String()
-	if !strings.Contains(body, `value="pilots" checked`) {
-		t.Errorf("a fresh chooser does not pre-tick the Essentials (pilots) card:\n%s", body)
+	if strings.Contains(body, "What do you want to do") || !strings.Contains(body, "This is what will be turned on") {
+		t.Errorf("a fresh sign-up does not open on the readout:\n%s", body)
 	}
-	if strings.Contains(body, `value="market" checked`) {
-		t.Error("a fresh chooser pre-ticks more than the Essentials set")
+	for _, want := range []string{`name="feature" value="skills"`, `name="feature" value="fitting"`} {
+		if !strings.Contains(body, want+" data-scopes=") && !strings.Contains(body, want) {
+			t.Errorf("the readout misses the feature checkbox %q", want)
+		}
 	}
-
-	body = get(app, nil, "/auth/link?from=cards").Body.String()
-	if strings.Contains(body, `value="pilots" checked`) {
-		t.Error("an explicit zero cards submission was re-ticked with the Essentials set")
+	for _, frag := range []string{`name="enhance" value="esi-alliances.read_contacts.v1" checked`, `name="enhance" value="esi-wallet.read_corporation_wallets.v1" checked`} {
+		if !strings.Contains(body, frag) {
+			t.Errorf("the readout does not open with %q ticked", frag)
+		}
+	}
+	if strings.Contains(body, ">Extra: ") || strings.Contains(body, "Tick every extra permission") || strings.Contains(body, "Choose features myself") {
+		t.Error("the readout still speaks of extras or a step beyond it")
+	}
+	// A legacy cards link lands on the same readout, not a dead step.
+	if legacy := get(app, nil, "/auth/link?from=cards").Body.String(); !strings.Contains(legacy, "This is what will be turned on") {
+		t.Error("a legacy cards link does not land on the readout")
 	}
 }
 
-// TestChooserPages: the cards, the reveal and the advanced list render, and
-// the reveal tells the player how many permissions EVE will ask for.
+// TestChooserPages: the readout renders every feature under its kind
+// of play, tells the player how many permissions EVE will ask for, and
+// its one form goes straight to EVE. Legacy step links land here too.
 func TestChooserPages(t *testing.T) {
 	app := linkApp(t)
 	rec := get(app, nil, "/auth/link")
@@ -299,29 +312,102 @@ func TestChooserPages(t *testing.T) {
 		t.Fatalf("/auth/link: status %d", rec.Code)
 	}
 	for _, a := range linkActivities {
+		if a.ID == activityEverything {
+			continue // no feature declares it; it names no group
+		}
 		if !strings.Contains(body, html.EscapeString(a.Title)) {
-			t.Errorf("the cards miss %q", a.Title)
+			t.Errorf("the readout groups miss %q", a.Title)
 		}
 	}
-	if !strings.Contains(body, `class="lk-card ti-acc ti-a1"`) {
-		t.Error("the cards do not carry the accent classes the Trade Ideas page uses")
+	if !strings.Contains(body, "This is what will be turned on") || !strings.Contains(body, "Spread Scanner") || !strings.Contains(body, "Complete sign up") || strings.Contains(body, "Update the list") || strings.Contains(body, "Go back") || !strings.Contains(body, "Jump to bottom") {
+		t.Errorf("the readout is missing its parts:\n%s", body)
 	}
-
-	rec = get(app, nil, "/auth/link?activity=market")
-	body = rec.Body.String()
-	if !strings.Contains(body, "This is what will be turned on") || !strings.Contains(body, "Spread Scanner") || !strings.Contains(body, "Complete sign up") || strings.Contains(body, "Update the list") || !strings.Contains(body, "Go back") || !strings.Contains(body, "Jump to bottom") {
-		t.Errorf("the reveal for the market is missing its parts:\n%s", body)
+	// Complete sign up is a plain submit of the one form, whose action
+	// is EVE itself: no formaction detour.
+	if !strings.Contains(body, `<form method="get" action="/auth/eve" data-lk-form>`) || strings.Contains(body, "formaction") {
+		t.Error("the readout form does not post straight to /auth/eve")
 	}
 
 	rec = get(app, nil, "/auth/link?advanced=1")
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Choose the features") || !strings.Contains(rec.Body.String(), "esi-alliances.read_contacts.v1") {
-		t.Errorf("the advanced list is missing its parts (status %d)", rec.Code)
+	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "Choose the features") || !strings.Contains(rec.Body.String(), "esi-alliances.read_contacts.v1") {
+		t.Errorf("a legacy advanced link does not land on the readout (status %d)", rec.Code)
 	}
 
 	// Unticking a feature another one needs does not remove it.
 	rec = get(app, nil, "/auth/link?submitted=1&feature=doctrines")
 	if !strings.Contains(rec.Body.String(), "Needed by Doctrines") {
-		t.Error("the reveal does not say Fitting is needed by Doctrines")
+		t.Error("the readout does not say Fitting is needed by Doctrines")
+	}
+}
+
+// formControls collects what a browser would submit from the readout
+// form: every successful control (checked checkboxes, hidden fields),
+// in the form the page renders.
+func formControls(t *testing.T, body string) url.Values {
+	t.Helper()
+	start := strings.Index(body, `data-lk-form`)
+	if start < 0 {
+		t.Fatal("the readout form is missing")
+	}
+	form := body[start:]
+	if end := strings.Index(form, "</form>"); end >= 0 {
+		form = form[:end]
+	}
+	vals := url.Values{}
+	for _, tag := range strings.FieldsFunc(form, func(r rune) bool { return r == '<' }) {
+		if !strings.HasPrefix(tag, "input ") {
+			continue
+		}
+		attr := func(name string) string {
+			i := strings.Index(tag, name+`="`)
+			if i < 0 {
+				return ""
+			}
+			rest := tag[i+len(name)+2:]
+			j := strings.Index(rest, `"`)
+			if j < 0 {
+				return ""
+			}
+			return rest[:j]
+		}
+		name := attr("name")
+		if name == "" || strings.Contains(tag, "disabled") {
+			continue
+		}
+		if attr("type") == "checkbox" && !strings.Contains(tag, "checked") {
+			continue
+		}
+		vals.Add(name, attr("value"))
+	}
+	return vals
+}
+
+// TestCompleteSignUpSendsTheFullSelection: clicking Complete sign up on
+// the fresh readout sends the browser's form to EVE, and EVE is asked
+// for the full selection: every required scope and every optional one,
+// the scopes that used to hide behind an extras step included.
+func TestCompleteSignUpSendsTheFullSelection(t *testing.T) {
+	app := linkApp(t)
+
+	body := get(app, nil, "/auth/link").Body.String()
+	// Not one checkbox on the readout starts unticked.
+	boxRe := regexp.MustCompile(`<input[^>]*name="(feature|enhance)"[^>]*>`)
+	boxes := boxRe.FindAllString(body, -1)
+	if len(boxes) == 0 {
+		t.Fatal("the readout renders no checkboxes")
+	}
+	for _, b := range boxes {
+		if !strings.Contains(b, "checked") {
+			t.Errorf("a checkbox starts unticked: %s", b)
+		}
+	}
+
+	got := eveScopeParam(t, get(app, nil, "/auth/eve?"+formControls(t, body).Encode()))
+	want := app.requestableScopes()
+	sort.Strings(got)
+	sort.Strings(want)
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("Complete sign up asks EVE for %v, want the full selection %v", got, want)
 	}
 }
 
@@ -337,8 +423,8 @@ func TestChoiceIsRemembered(t *testing.T) {
 	seedCharacter(t, app.queries, user.ID, fixtureCharA, "Fixture Ceo")
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
 
-	if body := get(app, cookie, "/auth/link").Body.String(); !strings.Contains(body, "What do you want to do") {
-		t.Fatal("a new account is not asked what it wants to do")
+	if body := get(app, cookie, "/auth/link").Body.String(); !strings.Contains(body, "This is what will be turned on") {
+		t.Fatal("a new account does not open on the readout")
 	}
 	eveScopeParam(t, get(app, cookie, "/auth/eve?feature=skills&feature=wallet"))
 	body := get(app, cookie, "/auth/link").Body.String()
@@ -395,8 +481,12 @@ func TestSharedCacheIsNotAFeature(t *testing.T) {
 		}
 	}
 
+	// The readout lists every feature, and the Structures feature's own
+	// permission is this same scope; what must not appear with the
+	// cache off is the server offer: the "This server" section and its
+	// enhance checkbox.
 	off := get(app, nil, "/auth/link?submitted=1&feature=skills").Body.String()
-	if strings.Contains(off, "This server") || strings.Contains(off, structures) {
+	if strings.Contains(off, "This server") || strings.Contains(off, `name="enhance" value="`+structures+`"`) {
 		t.Error("the structures extra is offered on a server with the shared cache off")
 	}
 	if rec := get(app, nil, "/auth/eve?feature=skills&enhance="+structures); rec.Code != http.StatusBadRequest {

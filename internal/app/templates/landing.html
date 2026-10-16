@@ -1,0 +1,192 @@
+{{define "landing"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>EveSynapse: Greater than the sum of its parts</title>
+{{if .HeadMeta}}{{.HeadMeta}}{{end}}
+<link rel="icon" href="/static/favicon.ico?v={{.AssetVersion}}" sizes="48x48">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v={{.AssetVersion}}" sizes="any">
+<meta name="theme-color" content="#0d0503">
+<link rel="preload" as="font" type="font/woff2" href="/static/fonts/saira-sc-400.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="/static/fonts/rajdhani-600.woff2" crossorigin>
+<link rel="stylesheet" href="/static/style.css?v={{.AssetVersion}}">
+<link rel="stylesheet" href="/static/bg.css?v={{.AssetVersion}}">
+<link rel="stylesheet" href="/static/landing.css?v={{.AssetVersion}}">
+</head>
+<body>
+<header class="ld-header"><div class="ld-wrap ld-hbar">
+  <a class="wordmark ld-wordmark" href="/" aria-label="EveSynapse home"><img class="wordmark-glyph" src="/static/logo.svg?v={{.AssetVersion}}" alt="" width="64" height="64"><span><span class="wm-eve">EVE</span><span class="wm-syn"><span>S</span><span>Y</span><span>N</span><span>A</span><span>P</span><span>S</span><span>E</span></span></span></a>
+  <nav class="ld-nav"><a href="/fittings/">Fitting</a><a href="/market/">Market</a><a href="/industry/">Industry</a><a href="/intel/wars/">Intel</a><a href="/fittings/public/">Public Fits</a></nav>
+  <div class="ld-hsp"></div>
+  <a class="ld-btn ld-btn-ghost" href="/auth/login">Sign in</a>
+  <a class="ld-btn ld-btn-ember" href="/auth/link">Link your characters</a>
+</div></header>
+
+<main class="ld-main">
+<div class="ld-wrap">
+  {{if .Error}}<p class="ld-error">{{.Error}}</p>{{end}}
+  <div class="ld-hero">
+    <div class="ld-kicker">EVE Online Companion</div>
+    <h1>Greater than the <span class="ld-amp">sum of its parts.</span></h1>
+    <p class="ld-sub">EveSynapse doesn't just display your EVE data. <b>It turns it into insight.</b> Your characters, the market, fitting, industry, and your corporation, each feeding the others in one fast dashboard.</p>
+    <div class="ld-ctas">
+      <a class="ld-btn ld-btn-ember" href="/auth/link">Link your characters, free</a>
+      <a class="ld-btn ld-btn-ghost" href="#tools">Use the tools, no account needed</a>
+    </div>
+    <div class="ld-cta-note">Scope-minimal EVE SSO · tokens encrypted at rest · open source</div>
+
+    <div class="ld-glass ld-preview">
+      <div class="ld-pv-head"><h3>Fleet Overview</h3><span>every character, one glance. This is the home page your pilots get, shown with sample data</span></div>
+      <div class="kpis">
+        <div class="kpi"><span class="kpi-k">Fleet net worth</span><span class="kpi-v">{{.Showcase.NetWorth}}</span><span class="kpi-sub">{{.Showcase.NetWorthSub}}</span><svg class="kpi-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true" focusable="false"><polygon class="kpi-spark-area" points="{{.Showcase.SparkArea}}"/><polyline class="kpi-spark-line" points="{{.Showcase.SparkPoints}}"/></svg></div>
+        <div class="kpi"><span class="kpi-k">Liquid ISK</span><span class="kpi-v">{{.Showcase.Liquid}}</span><span class="kpi-sub">{{.Showcase.LiquidSub}}</span><div class="ld-bar"><i style="width:{{.Showcase.LiquidPct}}%"></i></div></div>
+        <div class="kpi"><span class="kpi-k">Hangar &amp; assets</span><span class="kpi-v">{{.Showcase.Hangar}}</span><span class="kpi-sub">{{.Showcase.HangarSub}}</span><div class="ld-bar"><i style="width:{{.Showcase.HangarPct}}%"></i></div></div>
+        <div class="kpi"><span class="kpi-k">Skill training</span><span class="kpi-v">{{.Showcase.Training}}</span><span class="kpi-sub">{{.Showcase.TrainingSub}}</span><div class="ld-bar"><i style="width:{{.Showcase.TrainPct}}%"></i></div></div>
+      </div>
+      <div class="ld-brief">
+        <div class="brief-card sev-critical"><span class="sev">critical</span> <span class="brief-text"><strong>Skill queues empty: 5 pilots.</strong> Idle training is wasted SP. The briefing names them, every day, before it costs you a month.</span><span class="brief-icon brief-icon-skills" aria-hidden="true"></span></div>
+        <div class="brief-card sev-warning"><span class="sev">warning</span> <span class="brief-text"><strong>Planetary extractors halted: 34.</strong> Three colonies stopped producing. Restart reminders grouped by character, not buried in a menu.</span><span class="brief-icon brief-icon-pi" aria-hidden="true"></span></div>
+      </div>
+    </div>
+
+    {{if .HasStrip}}
+    <div class="ld-glass ld-strip">
+      <div class="ld-strip-head"><h3>NEW EDEN, RIGHT NOW</h3><span class="ld-live">● FROM STORED DATA</span><span class="ld-strip-note">precomputed by the workers. This page never waits on ESI</span></div>
+      <div class="ld-strip-grid">
+        <div><div class="ld-mini-lab">Market movers · The Forge</div>
+        {{if .Movers}}<div class="ld-movers">
+          {{range .Movers}}<div><span>{{.Name}}</span><span>{{.Price}} {{if .Up}}<span class="ld-up">▲ {{.Pct}}</span>{{else}}<span class="ld-down">▼ {{.Pct}}</span>{{end}}</span></div>{{end}}
+        </div>{{else}}<p class="ld-evergreen">The spread scanner reads every hub's order books. <a href="/market/scanner/">Open the scanner</a></p>{{end}}
+        </div>
+        <div><div class="ld-mini-lab">Intel</div><p class="ld-evergreen">Wars, incursions and faction warfare, tracked as they happen. <a href="/intel/wars/">Read the intel pages</a></p></div>
+        <div><div class="ld-mini-lab">Newest public fit</div>
+        {{with .Fit}}<p class="ld-fit-line"><b>{{.ShipName}}</b> · {{.FitName}}</p><p class="ld-fit-sub">Shared{{if .Author}} by {{.Author}}{{end}}, priced from stored market data. <a href="{{.URL}}">Open the fit</a></p>{{else}}<p class="ld-evergreen">Community fits, simulated and priced. <a href="/fittings/public/">Browse public fits</a></p>{{end}}
+        </div>
+      </div>
+    </div>
+    {{end}}
+  </div>
+
+  <section class="ld-blk">
+    <h2>Data in. Decisions out.</h2>
+    <p class="ld-lede">Most tools stop at showing you numbers. EveSynapse reads them for you, and tells you what they're worth doing about.</p>
+    <div class="ld-cards3">
+      <div class="ld-glass ld-icard"><h3>Trade ideas, not price lists</h3><p>The market engine watches every hub sweep and an AI analyst reads the result: what to trade, what to build, and why, grounded in your region's real order books.</p></div>
+      <div class="ld-glass ld-icard"><h3>A briefing, not a dashboard dump</h3><p>Every character digested into one prioritized briefing: empty skill queues, halted extractors, expiring orders, unread mail that matters. Critical first, noise never.</p></div>
+      <div class="ld-glass ld-icard"><h3>Foresight for industry</h3><p>Build and PI planners that price from stored market data, check your hangars for what you already own, and only ever ask you to buy what's missing.</p></div>
+    </div>
+  </section>
+
+  <section class="ld-blk">
+    <h2>Each point integrates with the other.</h2>
+    <p class="ld-lede">Run the whole corporation stack on shared parts, or let the same loop work quietly for one pilot.</p>
+    <div class="ld-loop">
+      <div class="ld-glass ld-node"><h3>Doctrines</h3><p>Your corp's official fits, kept by directors, readable by every member.</p></div>
+      <div class="ld-arrow">→</div>
+      <div class="ld-glass ld-node"><h3>Fits</h3><p>Priced by the market engine and checked against your actual hangars.</p></div>
+      <div class="ld-arrow">→</div>
+      <div class="ld-glass ld-node"><h3>SRP</h3><p>Reimbursement pays out against those doctrines. No spreadsheets. No disputes about what the fit was.</p></div>
+      <div class="ld-arrow">→</div>
+      <div class="ld-glass ld-node"><h3>Discord</h3><p>Your corp's server runs off the same groups and roles as everything else.</p></div>
+    </div>
+    <div class="ld-loop" style="margin-top:22px">
+      <div class="ld-glass ld-node"><h3>Briefing</h3><p>Your day in one view: empty skill queues, halted extractors, expiring orders and unread mail, ranked by what costs you most.</p></div>
+      <div class="ld-arrow">→</div>
+      <div class="ld-glass ld-node"><h3>Market</h3><p>Your orders and wallet watched for you, and AI trade ideas that read every hub sweep and point at what to trade next.</p></div>
+      <div class="ld-arrow">→</div>
+      <div class="ld-glass ld-node"><h3>Industry</h3><p>Build and PI plans priced from stored market data and checked against your hangars, so you only buy what is missing.</p></div>
+      <div class="ld-arrow">→</div>
+      <div class="ld-glass ld-node"><h3>Fitting</h3><p>Every fit simulated with your real skills, priced the moment you change a module, saved next to your skill plans.</p></div>
+    </div>
+    <p class="ld-loop-note">Flying solo, the same loop runs smaller. Nothing here is a separate app with a separate login. It is one system that knows itself.</p>
+  </section>
+
+  <section class="ld-blk">
+    <h2>Three alts, or a hundred boxed characters.</h2>
+    <p class="ld-lede">It adapts to your playstyle. A 100-character multiboxing setup and your 3 alts get the same treatment: every character warming in the background, the briefing weighted toward what you actually do, fresh data without a stutter, and without waiting on pages to load.</p>
+    <div class="ld-stats">
+      <div class="ld-glass ld-stat"><b>0</b><span>JavaScript frameworks, ever</span></div>
+      <div class="ld-glass ld-stat"><b>1,000</b><span>concurrent pilots on one small server, the design target</span></div>
+      <div class="ld-glass ld-stat"><b>23</b><span>feature modules, each one feeding the others</span></div>
+    </div>
+  </section>
+
+  <section class="ld-blk" id="tools">
+    <h2>Every tool in the box.</h2>
+    <p class="ld-lede">Twenty-three modules plus the core pages, all reading the same stored data. The public tools work with no account at all.</p>
+    <div class="ld-tools">
+      <div class="ld-glass ld-tgroup"><h3>Your pilots</h3><ul>
+        <li><b>Fleet Overview</b> with the daily briefing</li>
+        <li><b>Wallet</b> and journal across every character</li>
+        <li><b>Assets</b> searchable account-wide</li>
+        <li><b>Mail</b>, <b>Calendar</b> and <b>Contacts</b></li>
+        <li><b>Skill Plans</b> and training tracking</li>
+      </ul></div>
+      <div class="ld-glass ld-tgroup"><h3>Fitting</h3><ul>
+        <li><b>Fitting Simulator</b> with real skill math</li>
+        <li><b>Saved Fits</b> and community <b>Public Fits</b></li>
+        <li><b>Doctrines</b>, your corp's official fit sets</li>
+        <li><b>Ship Replacement</b> paid against doctrines</li>
+        <li><b>Save to EVE</b> from the simulator</li>
+      </ul></div>
+      <div class="ld-glass ld-tgroup"><h3>Industry</h3><ul>
+        <li><b>Build Planner</b> with hangar coverage checks</li>
+        <li><b>PI Planner</b> from extractor to finished goods</li>
+        <li><b>Restock Planner</b> for market stock levels</li>
+        <li><b>Blueprints</b> and job tracking</li>
+      </ul></div>
+      <div class="ld-glass ld-tgroup"><h3>Market</h3><ul>
+        <li><b>Spread Scanner</b> across every hub</li>
+        <li><b>Tradefinder</b> routes between regions</li>
+        <li><b>Trade Ideas</b>, the AI analyst</li>
+        <li><b>Market Orders</b> with outbid tracking</li>
+        <li><b>Top Stations</b> leaderboard</li>
+        <li><b>Contracts</b> worth watching</li>
+      </ul></div>
+      <div class="ld-glass ld-tgroup"><h3>Corporation</h3><ul>
+        <li><b>Corporation Data</b>: members, wallets, assets, structures</li>
+        <li><b>Groups</b> and roles across the corp</li>
+        <li><b>Discord</b> server roles, ops posts and DMs</li>
+        <li><b>Ops Calendar</b> shared with every member</li>
+      </ul></div>
+      <div class="ld-glass ld-tgroup"><h3>Intel and reference</h3><ul>
+        <li><b>Wars</b>, <b>Incursions</b> and <b>Faction Warfare</b></li>
+        <li><b>System Pages</b> with kill heat</li>
+        <li><b>Item Database</b> for all of New Eden</li>
+        <li><b>Character Pages</b> for any pilot</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <section class="ld-blk">
+    <h2>Your keys, your call.</h2>
+    <div class="ld-trust">
+      <div class="ld-glass ld-tcard"><h3>You pick the scopes</h3><p>Choose the features you want; the EVE login asks for exactly those scopes, and no more.</p></div>
+      <div class="ld-glass ld-tcard"><h3>Encrypted at rest</h3><p>Refresh tokens are AES-encrypted in the database. Reading your data never means trusting us with the keys to it.</p></div>
+      <div class="ld-glass ld-tcard"><h3>No login, no problem</h3><p>The fitting simulator, planners, market and intel tools all work anonymously. Sign up only when you want your own data in them.</p></div>
+      <div class="ld-glass ld-tcard"><h3>Or run it yourself</h3><p>Open source, one setup script, your own ESI application and your own data. Self-hosting is a supported path, not a hack.</p></div>
+    </div>
+  </section>
+
+  <div class="ld-heritage">
+    <div class="ld-h-line">Rebuilt over <em>4 years</em>. Originating in <em>2013</em>. Built for <em>2026</em>.</div>
+  </div>
+  <div class="ld-finalcta">
+    <div class="ld-ctas" style="justify-content:center">
+      <a class="ld-btn ld-btn-ember" href="/auth/link">Link your characters, free</a>
+      <a class="ld-btn ld-btn-ghost" href="#tools">Browse the public tools</a>
+    </div>
+  </div>
+</div>
+</main>
+
+<footer class="ld-footer"><div class="ld-wrap">
+  <p>EVE Online and all associated material are the intellectual property of CCP Games hf and are used with permission.<br>
+  No official affiliation or endorsement by CCP Games hf is stated or implied.</p>
+  <p class="ld-version"><a href="https://github.com/natemsz/evesynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <span class="version-number">{{.Version}}</span> · Made in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a></p>
+</div></footer>
+</body>
+</html>
+{{end}}

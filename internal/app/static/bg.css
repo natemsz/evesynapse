@@ -1,1 +1,64 @@
-__BG__
+/* Backdrop: the ember sunrise art is the whole sky — it carries
+   its own stars, so there is no synthetic starfield layer.
+   style.css paints the standard backdrop on body::before;
+   this file centers it (the composition the design mockup
+   uses: the limb crosses behind the content, not above it)
+   and steps screens up through resolution tiers (each tier is
+   at least twice the rendered pixels of the screens it serves:
+   the Lanczos master is 8000 wide, the UHD tier 6400, the 4K
+   tier 3840, the base 2000). The
+   art stack breathes at the edge of perception; that stops
+   dead under reduced motion. */
+body::before {
+  background-image: url("/static/bg.jpg");
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center;
+  animation: ember-breathe 9s ease-in-out infinite alternate;
+}
+@media (min-width: 1501px), (min-width: 751px) and (min-resolution: 2dppx), (min-width: 751px) and (-webkit-min-device-pixel-ratio: 2) {
+  body::before {
+    background-image: url("/static/bg-4k.jpg");
+  }
+}
+@media (min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx), (min-width: 1601px) and (-webkit-min-device-pixel-ratio: 2) {
+  body::before {
+    background-image: url("/static/bg-uhd.jpg");
+  }
+}
+@keyframes ember-breathe {
+  from { opacity: 0.97; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body::before { animation: none; }
+}
+
+/* The standing view-transition-name on #main-content (style.css)
+   makes <main> a backdrop root, which silently disables every
+   backdrop-filter inside it: the glass tint paints but nothing
+   blurs. swap.js now arms the name only for the duration of a
+   page swap, so it is forced off here; the ::view-transition
+   rules in style.css still apply while a swap runs. */
+#main-content { view-transition-name: none; }
+
+/* The character selector's dropdown (style.css) paints with
+   --input-bg, 60% dark: right for the input resting on a panel,
+   wrong for the open list floating over page content, where the
+   text underneath (a wallet balance, say) bleeds straight
+   through and the names turn unreadable. It gets the .suggest
+   treatment, verbatim: near-opaque paint does the legibility
+   work, the blur is a bonus where it can sample. Kept in this
+   file, which loads after style.css, so the override needs no
+   specificity games. */
+.charselector-dropdown {
+  background-color: rgba(13, 10, 8, 0.94);
+  border-color: rgba(255, 110, 0, 0.25);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
+  -webkit-backdrop-filter: blur(25px) saturate(0.9);
+  backdrop-filter: blur(25px) saturate(0.9);
+}
+html[data-theme="light"] .charselector-dropdown {
+  background-color: #fdfbf6;
+  border-color: #d9cfba;
+}

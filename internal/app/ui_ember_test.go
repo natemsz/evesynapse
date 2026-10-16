@@ -121,6 +121,15 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		!strings.Contains(bg, "background-position: center;") {
 		t.Error("bg.css lost the breathe, the centered composition, or the motion guard")
 	}
+	// The blur lives or dies on this override: a standing
+	// view-transition-name makes <main> a backdrop root and every
+	// backdrop-filter inside it samples nothing. bg.css must keep
+	// forcing the name off (swap.js arms it only during a swap).
+	// Lost once to a stale-branch merge; pinned here so a test,
+	// not a user, catches the next one.
+	if !strings.Contains(bg, "#main-content { view-transition-name: none; }") {
+		t.Error("bg.css lost the view-transition-name override; the backdrop blur is dead")
+	}
 	// The art is the sky: no synthetic starfield may come back.
 	if strings.Contains(bg, "data:image/svg+xml") ||
 		strings.Contains(bg, "ember-twinkle") ||

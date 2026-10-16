@@ -130,6 +130,7 @@ func handleWars(deps module.Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		data := PageData{ShellData: deps.PublicShell(ctx)} // public: no session needed
+		data.HeadMeta = deps.HeadMeta(module.PageMeta{Title: "Wars", Description: "Current EVE Online wars: who is fighting, kills and ISK destroyed, from data refreshed from ESI.", CanonicalPath: "/intel/wars/"})
 
 		view := &warsView{}
 		data.IntelWars = view
@@ -258,6 +259,7 @@ func handleIncursions(deps module.Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		data := PageData{ShellData: deps.PublicShell(ctx)} // public: no session needed
+		data.HeadMeta = deps.HeadMeta(module.PageMeta{Title: "Incursions", Description: "Active EVE Online incursions by constellation, with staging systems and status, from data refreshed from ESI.", CanonicalPath: "/intel/incursions/"})
 
 		view := &incursionsView{}
 		data.IntelIncursions = view
@@ -356,6 +358,7 @@ func handleFW(deps module.Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		data := PageData{ShellData: deps.PublicShell(ctx)} // public: no session needed
+		data.HeadMeta = deps.HeadMeta(module.PageMeta{Title: "Faction Warfare", Description: "Faction warfare in EVE Online: militia strength, frontlines and contested systems, from data refreshed from ESI.", CanonicalPath: "/intel/fw/"})
 
 		view := &fwView{}
 		data.IntelFW = view

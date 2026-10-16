@@ -313,6 +313,17 @@ func (app *Application) handleHome(w http.ResponseWriter, r *http.Request) {
 	}
 	if data.LoggedIn {
 		data.ESIHealth = app.esiHealth(ctx)
+	} else {
+		// The anonymous front page is the site's search face: its
+		// own descriptive title (the home.html title template
+		// branches on the same flag), description, canonical and
+		// structured data.
+		data.HeadMeta = app.HeadMeta(module.PageMeta{
+			Title:          "EVE Online Fleet, Market & Fitting Tools",
+			Description:    "Free EVE Online tools for fleet and market play: track pilots and wallets, plan builds and fittings, and read market data refreshed from ESI.",
+			CanonicalPath:  "/",
+			WebApplication: true,
+		})
 	}
 	app.render(ctx, w, http.StatusOK, "home.html", data)
 }

@@ -253,6 +253,7 @@ func handlePlanner(deps module.Deps) http.HandlerFunc {
 func (app *planner) page(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := &PageData{ShellData: app.deps.PublicShell(ctx)} // public: no session needed
+	data.HeadMeta = app.deps.HeadMeta(module.PageMeta{Title: "Build Planner", Description: "Plan EVE Online industry builds: materials, build steps and costs for manufacturable items, worked out from local market data.", CanonicalPath: "/planner/"})
 	view := &plannerView{}
 	data.Planner = view
 

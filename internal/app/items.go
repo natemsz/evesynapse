@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -158,6 +159,41 @@ type itemUsedInRow struct {
 	PerRun      string // formatted material quantity per production run
 }
 
+// itemsHeadMeta is the Item Database's head metadata: one
+// hand-written description for the explorer, the pattern (with
+// breadcrumbs from the trail the page itself draws) for a type.
+func (app *Application) itemsHeadMeta(view *itemsView) template.HTML {
+	title := "Item Database"
+	desc := "Browse EVE Online items by category and group, with market prices, history and trade data for every item, refreshed from ESI."
+	path := "/items/"
+	var crumbs []module.Breadcrumb
+	switch view.Mode {
+	case "category":
+		if view.Category != nil {
+			path = "/items/category/" + idString(view.Category.ID) + "/"
+		}
+	case "group":
+		if view.Group != nil {
+			path = "/items/group/" + idString(view.Group.ID) + "/"
+		}
+	case "type":
+		if d := view.TypeDetail; d != nil {
+			title = d.Name
+			desc = "Market orders, price history and trade data for " + d.Name + ", refreshed from ESI. Part of EveSynapse's EVE Online market tools."
+			path = "/items/type/" + idString(d.ID) + "/"
+			crumbs = []module.Breadcrumb{{Name: "Item Database", Path: "/items/"}}
+			if d.Category != nil {
+				crumbs = append(crumbs, module.Breadcrumb{Name: d.Category.Name, Path: "/items/category/" + idString(d.Category.ID) + "/"})
+			}
+			if d.Group != nil {
+				crumbs = append(crumbs, module.Breadcrumb{Name: d.Group.Name, Path: "/items/group/" + idString(d.Group.ID) + "/"})
+			}
+			crumbs = append(crumbs, module.Breadcrumb{Name: d.Name, Path: path})
+		}
+	}
+	return app.HeadMeta(module.PageMeta{Title: title, Description: desc, CanonicalPath: path, Breadcrumbs: crumbs})
+}
+
 func (app *Application) itemsPageData(r *http.Request) pageData {
 	// The browser is public: start from the session's login
 	// state, never assumed. Personalized bits render only
@@ -206,6 +242,7 @@ func (app *Application) handleItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	data.Items = view
+	data.HeadMeta = app.itemsHeadMeta(view)
 	app.render(ctx, w, http.StatusOK, "items.html", data)
 }
 
@@ -307,6 +344,7 @@ func (app *Application) handleItemsSearch(w http.ResponseWriter, r *http.Request
 		view.SearchSections = groupSearchRows(view.SearchResults)
 	}
 	data.Items = view
+	data.HeadMeta = app.itemsHeadMeta(view)
 	app.render(ctx, w, http.StatusOK, "items.html", data)
 }
 
@@ -353,6 +391,7 @@ func (app *Application) handleItemsCategory(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	data.Items = view
+	data.HeadMeta = app.itemsHeadMeta(view)
 	app.render(ctx, w, http.StatusOK, "items.html", data)
 }
 
@@ -430,6 +469,7 @@ func (app *Application) handleItemsGroup(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	data.Items = view
+	data.HeadMeta = app.itemsHeadMeta(view)
 	app.render(ctx, w, http.StatusOK, "items.html", data)
 }
 
@@ -537,6 +577,7 @@ func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
 
 	view.TypeDetail = detail
 	data.Items = view
+	data.HeadMeta = app.itemsHeadMeta(view)
 	app.render(ctx, w, http.StatusOK, "items.html", data)
 }
 

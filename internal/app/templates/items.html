@@ -1,4 +1,4 @@
-{{define "title"}}Item Database{{end}}
+{{define "title"}}{{if and .Items .Items.TypeDetail}}{{.Items.TypeDetail.Name}}{{else}}Item Database{{end}}{{end}}
 {{define "content"}}
 <h1><span class="gt">Item Database</span></h1>
 

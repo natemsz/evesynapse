@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/fitview"
@@ -74,6 +75,7 @@ func fittingSlotCategory(flag string) string {
 func (app *tool) handleFittings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := &PageData{ShellData: app.deps.PublicShell(ctx)}
+	data.HeadMeta = app.deps.HeadMeta(module.PageMeta{Title: "Ship Workbench", Description: "Fit EVE Online ships in the browser workbench: simulated stats, saved fittings and a priced shopping list for the whole fit.", CanonicalPath: "/fittings/"})
 
 	characters, active, links, err := app.deps.PickCharacter(ctx, r, "/fittings/")
 	if err != nil {

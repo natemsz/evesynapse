@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -131,6 +132,13 @@ func (app *Application) handlePilot(w http.ResponseWriter, r *http.Request) {
 	data.Pilot = app.loadPilotView(ctx, id)
 	if data.Pilot != nil && data.Pilot.State == "loading" {
 		app.notePageWant(ctx, pageWantPilot, id, 0)
+	}
+	if v := data.Pilot; v != nil && v.State == "ready" {
+		data.HeadMeta = app.HeadMeta(module.PageMeta{
+			Title:         v.Name,
+			Description:   v.Name + ": corporation, security status and employment history on the public pilot record. EveSynapse EVE Online universe data.",
+			CanonicalPath: "/pilot/",
+		})
 	}
 	app.render(ctx, w, http.StatusOK, "pilot.html", data)
 }

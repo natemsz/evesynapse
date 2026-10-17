@@ -790,6 +790,11 @@ type Deps interface {
 	OrgLink(ctx context.Context, corporationID, allianceID int64) template.HTML
 	// SystemRef is a solar system's title with its link ids.
 	SystemRef(ctx context.Context, systemID int64) PlaceRef
+	// SystemSecurity is a solar system's stored security status the
+	// way pages show it: the one-decimal text and the color tier of
+	// the .sec-pill (the fleet overview's location badge). known is
+	// false when the SDE has no row for the system.
+	SystemSecurity(ctx context.Context, systemID int64) (text string, tier int, known bool)
 	// ConstellationName reads the worker-warmed constellation name cache.
 	ConstellationName(id int64) (string, bool)
 	// FormatFinish writes an ESI timestamp the way pages show times.

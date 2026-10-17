@@ -238,11 +238,16 @@ func warInvolves(war esi.War, yourCorps map[int64]bool) bool {
 type incursionRow struct {
 	Constellation string
 	Staging       module.PlaceRef // staging solar system (linked when the SDE knows it)
-	State         string          // humanized
-	InfluencePct  int             // 0..100, drives the bar
-	Boss          bool            // final-encounter boss present
-	FactionName   string
-	Systems       []module.PlaceRef // affected (infested) systems
+	// The staging system's security pill (the fleet overview's
+	// badge): staging only — the affected systems carry none.
+	StagingSecKnown bool
+	StagingSecText  string
+	StagingSecTier  int
+	State           string // humanized
+	InfluencePct    int    // 0..100, drives the bar
+	Boss            bool   // final-encounter boss present
+	FactionName     string
+	Systems         []module.PlaceRef // affected (infested) systems
 }
 
 // incursionsView is the Incursions page body.
@@ -284,6 +289,7 @@ func handleIncursions(deps module.Deps) http.HandlerFunc {
 			if name, ok := deps.ConstellationName(inc.ConstellationID); ok {
 				row.Constellation = name
 			}
+			row.StagingSecText, row.StagingSecTier, row.StagingSecKnown = deps.SystemSecurity(ctx, inc.StagingSystemID)
 			pct := int(inc.Influence*100 + 0.5)
 			if pct < 0 {
 				pct = 0
@@ -340,6 +346,12 @@ type fwSystemRow struct {
 	Owner    string
 	State    string // humanized contested label
 	Percent  int    // contested %, -1 when the state has no live contest
+	// The system's security pill (the fleet overview's badge),
+	// resolved after the row cap so lookups stay bounded by the
+	// rows actually rendered.
+	SecKnown bool
+	SecText  string
+	SecTier  int
 }
 
 // fwView is the Faction Warfare page body.
@@ -416,6 +428,9 @@ func handleFW(deps module.Deps) http.HandlerFunc {
 			})
 			if len(rows) > maxFWSystemsShown {
 				rows = rows[:maxFWSystemsShown]
+			}
+			for i := range rows {
+				rows[i].SecText, rows[i].SecTier, rows[i].SecKnown = deps.SystemSecurity(ctx, rows[i].System.SystemID)
 			}
 			view.Systems = rows
 		}

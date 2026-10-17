@@ -17,7 +17,7 @@
   <div class="tw">
   <table>
     <tbody>
-      <tr><th>Staging</th><td>{{placeLink .Staging}}</td></tr>
+      <tr><th>Staging</th><td>{{placeLink .Staging}}{{if .StagingSecKnown}}<span class="sec-pill sec-{{.StagingSecTier}}">{{.StagingSecText}}</span>{{end}}</td></tr>
       <tr><th>State</th><td>{{.State}}{{if .Boss}} · final-encounter boss is up{{end}}</td></tr>
       <tr><th>Faction</th><td>{{.FactionName}}</td></tr>
       <tr><th>Influence</th><td>{{.InfluencePct}}%

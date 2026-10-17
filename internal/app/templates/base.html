@@ -161,6 +161,7 @@
 </header>
 <div class="page-shell">
 <main id="main-content">
+{{template "pagetitle" .}}
   <div class="page-body">
 {{if .Notice}}<p class="notice" role="status">{{.Notice}}</p>{{end}}
 {{template "content" .}}
@@ -191,4 +192,6 @@
 </body>
 </html>
 {{end}}
+
+{{define "pagetitle"}}{{end}}
 

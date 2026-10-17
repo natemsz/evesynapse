@@ -1,4 +1,5 @@
 {{define "title"}}Assets{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Assets</span></h1>{{end}}
 {{define "asset-rows"}}{{range .}}
         <tr><td>{{itemLink .TypeID .Name}}{{if .TypeName}} <small>{{.TypeName}}</small>{{end}}{{if .Where}} <small>in {{.Where}}</small>{{end}}</td><td>{{.Quantity}}</td><td>{{.Note}}</td></tr>
         {{if .Children}}<tr class="asset-inside"><td colspan="3">
@@ -13,7 +14,6 @@
         </td></tr>{{end}}
 {{end}}{{end}}
 {{define "content"}}
-<h1><span class="gt">Assets</span></h1>
 {{template "sectiontabs" .}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}

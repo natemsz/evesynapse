@@ -749,6 +749,7 @@ type ShellData struct {
 	ViewerChars    map[int64]bool
 	Notify         any
 	NotifyPoll     int
+	NotifyPrompt   any
 	NotifySettings any
 	NavLinks       map[string][]NavLink
 	SectionTabs    []NavLink

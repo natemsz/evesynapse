@@ -403,6 +403,15 @@ func (app *Application) notifyWatchEvents(ctx context.Context, c *notifyCollecto
 // notifyConfigID is the widget_configs id the settings live under.
 const notifyConfigID = "notifications"
 
+// Delivery channels, the ids notifyPrefs.OffChannels stores. Discord
+// is not one of them: it has its own switch, on the account's
+// Discord link (discord_links.dm_notifications), which the settings
+// page and the first-run prompt both read and write.
+const (
+	notifyChannelInApp   = "inapp"
+	notifyChannelDesktop = "desktop"
+)
+
 // notifyPrefs is an account's notification settings. The zero value,
 // and any missing or damaged stored value, means every kind is on.
 type notifyPrefs struct {
@@ -414,6 +423,15 @@ type notifyPrefs struct {
 	// OpReminderMinutes is how long before an op starts the account
 	// is reminded of it (notifyOpReminder); 0 means the default.
 	OpReminderMinutes int `json:"op_reminder_minutes,omitempty"`
+	// OffChannels: delivery channels switched off, by id
+	// (notifyChannelInApp, notifyChannelDesktop). A channel off
+	// stops only that channel: the news is still recorded as seen,
+	// and the other channels still carry it.
+	OffChannels []string `json:"off_channels,omitempty"`
+	// PromptAnswered: the account has answered the first-run prompt
+	// (notify_prompt.go), or waved it away. Either way the prompt is
+	// not shown unasked again; it stays one click away in the bell.
+	PromptAnswered bool `json:"prompt_answered,omitempty"`
 }
 
 // parseNotifyPrefs decodes stored settings, keeping only kinds that
@@ -445,7 +463,36 @@ func parseNotifyPrefs(blob string) notifyPrefs {
 			}
 		}
 	}
+	for _, id := range raw.OffChannels {
+		if (id == notifyChannelInApp || id == notifyChannelDesktop) && !prefs.channelOff(id) {
+			prefs.OffChannels = append(prefs.OffChannels, id)
+		}
+	}
+	prefs.PromptAnswered = raw.PromptAnswered
 	return prefs
+}
+
+// channelOff reports whether a delivery channel is switched off.
+func (p notifyPrefs) channelOff(id string) bool {
+	for _, off := range p.OffChannels {
+		if off == id {
+			return true
+		}
+	}
+	return false
+}
+
+// offChannels builds the stored channel list from two switches, in a
+// fixed order so the stored value is stable.
+func offChannels(inAppOn, desktopOn bool) []string {
+	var out []string
+	if !inAppOn {
+		out = append(out, notifyChannelInApp)
+	}
+	if !desktopOn {
+		out = append(out, notifyChannelDesktop)
+	}
+	return out
 }
 
 func (p notifyPrefs) off(kind string) bool {
@@ -484,6 +531,17 @@ func (app *Application) notifyPrefsFor(ctx context.Context, userID int64) notify
 		return notifyPrefs{}
 	}
 	return parseNotifyPrefs(blob)
+}
+
+// storeNotifyPrefs saves an account's settings.
+func (app *Application) storeNotifyPrefs(ctx context.Context, userID int64, prefs notifyPrefs) error {
+	blob, err := json.Marshal(prefs)
+	if err != nil {
+		return err
+	}
+	return app.queries.UpsertWidgetConfig(ctx, db.UpsertWidgetConfigParams{
+		UserID: userID, WidgetID: notifyConfigID, Config: string(blob), UpdatedAt: time.Now().UTC(),
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -623,11 +681,16 @@ func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db
 			return 0, fmt.Errorf("record seen keys: %w", err)
 		}
 	}
-	for _, ev := range announce {
-		if _, err := q.InsertNotification(ctx, db.InsertNotificationParams{
-			UserID: userID, CharacterID: ev.CharacterID, Kind: ev.Kind, Title: ev.Title, Url: ev.URL, CreatedAt: now,
-		}); err != nil {
-			return 0, fmt.Errorf("create notification: %w", err)
+	// A channel switched off stops only that channel's delivery:
+	// the keys above are still recorded as seen, so switching back
+	// on starts from now and never replays what was missed.
+	if !prefs.channelOff(notifyChannelInApp) {
+		for _, ev := range announce {
+			if _, err := q.InsertNotification(ctx, db.InsertNotificationParams{
+				UserID: userID, CharacterID: ev.CharacterID, Kind: ev.Kind, Title: ev.Title, Url: ev.URL, CreatedAt: now,
+			}); err != nil {
+				return 0, fmt.Errorf("create notification: %w", err)
+			}
 		}
 	}
 	if err := q.TouchNotificationSeen(ctx, db.TouchNotificationSeenParams{
@@ -657,10 +720,14 @@ func (app *Application) notifyUser(ctx context.Context, userID int64, chars []db
 	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("commit: %w", err)
 	}
-	// Saved; now the same news goes to any browser the account has
-	// subscribed (notify_push.go). A failed send loses nothing: the
-	// notification is already in the top bar.
-	app.pushToUser(ctx, userID, pushMessagesFor(announce))
+	// Saved; now the same news goes out on the channels the account
+	// has on: any browser it has subscribed (notify_push.go), and the
+	// module channels (deliverToModules), each of which honors its
+	// own switch. A failed send loses nothing: what was announced
+	// here is not news again.
+	if !prefs.channelOff(notifyChannelDesktop) {
+		app.pushToUser(ctx, userID, pushMessagesFor(announce))
+	}
 	app.deliverToModules(ctx, userID, announce)
 	return len(announce), nil
 }

@@ -501,6 +501,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get(strings.TrimPrefix(notifyBadgePath, "/notifications"), app.handleNotifyBadge)
 		r.Post("/read", app.handleNotificationsRead)
 		r.Post("/open", app.handleNotificationsOpen)
+		r.Post("/prompt", app.handleNotifyPrompt)
 		r.Get("/settings", app.handleNotificationSettings)
 		r.Post("/settings", app.handleNotificationSettingsSave)
 		r.Post("/push/subscribe", app.handlePushSubscribe)

@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -232,6 +231,11 @@ func notifyTarget(url string) string {
 // notifySettingsView is the /notifications/settings page.
 type notifySettingsView struct {
 	Rows []notifySettingRow
+	// The delivery channels, the same switches the first-run
+	// prompt offers: InApp always, Desktop when this server can
+	// push (it is part of the push section below then).
+	InApp   bool
+	Desktop bool
 	// Browser push: whether this server offers it, the key a browser
 	// needs to subscribe, and how many browsers the account has
 	// subscribed so far.
@@ -353,8 +357,11 @@ func (app *Application) handleNotificationSettings(w http.ResponseWriter, r *htt
 	ctx := r.Context()
 	data := app.page(ctx)
 	userID := app.userID(ctx)
+	prefs := app.notifyPrefsFor(ctx, userID)
 	view := &notifySettingsView{
-		Rows: notifySettingRows(app.notifyPrefsFor(ctx, userID), app.sessionCharacters(ctx)),
+		Rows:    notifySettingRows(prefs, app.sessionCharacters(ctx)),
+		InApp:   !prefs.channelOff(notifyChannelInApp),
+		Desktop: !prefs.channelOff(notifyChannelDesktop),
 	}
 	if app.push != nil {
 		view.PushConfigured, view.PushKey = true, app.push.PublicKey
@@ -394,6 +401,19 @@ func (app *Application) handleNotificationSettingsSave(w http.ResponseWriter, r 
 	}
 	before := app.notifyPrefsFor(ctx, userID)
 	prefs := notifyPrefs{OffFor: map[string][]int64{}, OpReminderMinutes: before.OpReminderMinutes}
+	// The prompt's answer and the channel switches are this form's
+	// to carry, not to reset: the answer is kept as it was, and the
+	// channels follow the form's own boxes when it showed them
+	// (channels_shown) — a form without them changes nothing there.
+	prefs.PromptAnswered = before.PromptAnswered
+	prefs.OffChannels = before.OffChannels
+	if r.Form.Get("channels_shown") == "1" {
+		desktopOn := !before.channelOff(notifyChannelDesktop)
+		if app.push != nil {
+			desktopOn = r.Form.Get("channel_desktop") == "1"
+		}
+		prefs.OffChannels = offChannels(r.Form.Get("channel_inapp") == "1", desktopOn)
+	}
 	if n, err := strconv.Atoi(r.Form.Get("op_reminder_minutes")); err == nil && validReminderMinutes(n) {
 		prefs.OpReminderMinutes = n
 	}
@@ -415,12 +435,7 @@ func (app *Application) handleNotificationSettingsSave(w http.ResponseWriter, r 
 			}
 		}
 	}
-	blob, err := json.Marshal(prefs)
-	if err == nil {
-		err = app.queries.UpsertWidgetConfig(ctx, db.UpsertWidgetConfigParams{
-			UserID: userID, WidgetID: notifyConfigID, Config: string(blob), UpdatedAt: time.Now().UTC(),
-		})
-	}
+	err := app.storeNotifyPrefs(ctx, userID, prefs)
 	// The page's one Save button also carries the modules' channel
 	// boxes; each module reads its own (module.SettingsSection.Save).
 	for _, m := range registeredModules {

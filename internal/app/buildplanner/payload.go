@@ -40,7 +40,7 @@ const (
 	// industry_cost_indices are ESI's, not SDE IDs).
 	plannerCostActivity = "manufacturing"
 	// plannerMarketJita prices from Forge sell rows;
-	// plannerMarketGuide from the cluster price guide.
+	// plannerMarketGuide is the default resolved house map.
 	plannerMarketJita  = "jita"
 	plannerMarketGuide = "guide"
 )
@@ -771,19 +771,88 @@ func planMarketRegion(raw string) int64 {
 	return 0
 }
 
-// planMarket picks the price source. The default is the cluster
-// guide, so existing links render exactly as before. A region
-// LAYERS over the guide: the region's sell price wins where a
-// row is on file, and everything else keeps its guide price —
-// a thin region thins the basis note, never the totals (the
-// old all-or-nothing Jita mode zeroed plans whose items had no
-// Forge rows). ids are the types the plan can name (the
-// blueprint closure): the source is settled before the tree is
-// built, so the tree is built once.
-func (app *planner) planMarket(ctx context.Context, q url.Values, ids []int64, guide map[int64]esi.MarketPrice) (prices map[int64]esi.MarketPrice, market, marketName, pricesNote string) {
+// resolvePlanPrices settles the planner's one price map from
+// the house's own stored sources, per type, in the house order:
+//
+//  1. The Forge's typical sell, distilled by the market sweeps
+//     into market_region_stats: what a buyer actually pays in
+//     Jita, with joke orders filtered by the band math.
+//  2. The stored estimated sell (true_values), for the items
+//     the market cannot price -- thin and contract-traded
+//     types. It is the same figure the item page shows, so a
+//     plan and the item page cannot disagree about what the
+//     product is worth.
+//
+// A type neither source knows is left out of the map: unpriced,
+// never a cluster statistic dressed up as a price. CCP's guide
+// prices play no part here -- the guide average lags the market
+// too far to plan on, and the adjusted figure is a valuation
+// statistic, not a price. The guide still bases job fees, via
+// planAdjustedMap, because CCP defines the fee base on it.
+// (A stored fallback-aggregate source slots in between the
+// estimated sell and unpriced once that feed exists.)
+//
+// Resolved prices ride in AveragePrice with AdjustedPrice left
+// zero, so buildplan.UnitPrice reads exactly the resolved price
+// and can never fall through to an adjusted figure.
+func resolvePlanPrices(ids []int64, typicals, estSells map[int64]float64) map[int64]esi.MarketPrice {
+	out := make(map[int64]esi.MarketPrice, len(ids))
+	for _, id := range ids {
+		switch {
+		case typicals[id] > 0:
+			out[id] = esi.MarketPrice{TypeID: id, AveragePrice: typicals[id]}
+		case estSells[id] > 0:
+			out[id] = esi.MarketPrice{TypeID: id, AveragePrice: estSells[id]}
+		}
+	}
+	return out
+}
+
+// planPriceMap reads the two stored price sources for exactly
+// the plan's closure types (two bounded reads) and resolves
+// the price map. A failed read degrades that source to empty
+// -- its types price from the next source, or not at all --
+// rather than failing the whole plan.
+func (app *planner) planPriceMap(ctx context.Context, ids []int64) map[int64]esi.MarketPrice {
+	typicals := make(map[int64]float64, len(ids))
+	if rows, err := app.queries.ListMarketRegionStatsForTypes(ctx, db.ListMarketRegionStatsForTypesParams{
+		RegionID: plannerForgeRegionID, Column2: ids,
+	}); err != nil {
+		logging.Errorf("planner: forge stats for plan: %v", err)
+	} else {
+		for _, row := range rows {
+			if row.TypicalSell > 0 {
+				typicals[row.TypeID] = row.TypicalSell
+			}
+		}
+	}
+	estSells := make(map[int64]float64, len(ids))
+	if rows, err := app.queries.ListTrueValuesForTypes(ctx, ids); err != nil {
+		logging.Errorf("planner: true values for plan: %v", err)
+	} else {
+		for _, row := range rows {
+			if row.EstSell.Valid && row.EstSell.Float64 > 0 {
+				estSells[row.TypeID] = row.EstSell.Float64
+			}
+		}
+	}
+	return resolvePlanPrices(ids, typicals, estSells)
+}
+
+// planMarket picks the price source. The default is the
+// resolved house map (planPriceMap): Jita typicals and stored
+// estimated sells. A region LAYERS over that base: the region's
+// sell price wins where a row is on file, and everything else
+// keeps its resolved price -- a thin region thins the basis
+// note, never the totals (the old all-or-nothing Jita mode
+// zeroed plans whose items had no Forge rows). ids are the
+// types the plan can name (the blueprint closure): the source
+// is settled before the tree is built, so the tree is built
+// once.
+func (app *planner) planMarket(ctx context.Context, q url.Values, ids []int64, base map[int64]esi.MarketPrice) (prices map[int64]esi.MarketPrice, market, marketName, pricesNote string) {
 	regionID := planMarketRegion(q.Get("market"))
 	if regionID == 0 {
-		return guide, plannerMarketGuide, "Cluster average", "Cluster-average guide prices."
+		return base, plannerMarketGuide, "Jita market", "Jita sell prices where the market trades; the stored estimated sell for contract-only items."
 	}
 	market = strconv.FormatInt(regionID, 10)
 	marketName = "Region " + market
@@ -793,19 +862,19 @@ func (app *planner) planMarket(ctx context.Context, q url.Values, ids []int64, g
 	rows, stamp, err := app.planRegionPrices(ctx, ids, regionID)
 	if err != nil {
 		logging.Errorf("planner: region prices: %v", err)
-		return guide, market, marketName, marketName + " sell unavailable; cluster average shown."
+		return base, market, marketName, marketName + " sell unavailable; Jita market shown."
 	}
 	if stamp.IsZero() {
-		return guide, market, marketName, marketName + " has no sell rows on file yet; cluster average shown."
+		return base, market, marketName, marketName + " has no sell rows on file yet; Jita market shown."
 	}
-	prices = make(map[int64]esi.MarketPrice, len(guide))
-	for id, p := range guide {
+	prices = make(map[int64]esi.MarketPrice, len(base))
+	for id, p := range base {
 		prices[id] = p
 	}
 	for id, p := range rows {
 		prices[id] = p
 	}
-	return prices, market, marketName, marketName + " sell rows as of " + stamp.UTC().Format("2006-01-02 15:04") + "; cluster average elsewhere."
+	return prices, market, marketName, marketName + " sell rows as of " + stamp.UTC().Format("2006-01-02 15:04") + "; Jita market elsewhere."
 }
 
 // planBuildSystem resolves the ?system= build system (default

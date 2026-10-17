@@ -107,6 +107,43 @@ func TestHomeKPISparkAndPricedBar(t *testing.T) {
 		`<span class="kpi-bar"><span data-w="50.0"></span></span>`) // 1 of 2 items priced
 }
 
+// TestHomeKPIGlyphs: each of the four glance KPI tiles carries
+// its mockup glyph span (wallet, coins, package, book) — the
+// briefing-card icon treatment at tile scale — and no other tile
+// on the page grows one.
+func TestHomeKPIGlyphs(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	seedSnapshot(t, q, fixtureCharA, esi.SnapWallet, 1000.5)
+	setHomeLayout(t, q, user.ID, `[{"id":"glance"}]`)
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+
+	code, body := getPage(t, app, cookie, "/")
+	if code != 200 {
+		t.Fatalf("GET /: status %d", code)
+	}
+	mustContain(t, "/ (kpi glyphs)", body,
+		`<span class="kpi-icon kpi-icon-wallet" aria-hidden="true">`,
+		`<span class="kpi-icon kpi-icon-coins" aria-hidden="true">`,
+		`<span class="kpi-icon kpi-icon-assets" aria-hidden="true">`,
+		`<span class="kpi-icon kpi-icon-skills" aria-hidden="true">`,
+		// One distinctive path fragment per glyph, so a swapped
+		// or dropped path fails here, not on the owner's screen.
+		`M19 7V4a1 1 0 0 0-1-1H5`,                   // wallet body
+		`<circle cx="16" cy="8" r="6"/>`,            // coins top coin
+		`<polyline points="3.29 7 12 12 20.71 7"/>`, // package lid seam
+		`M22 4h-6a4 4 0 0 0-4 4v12`)                 // book-open right cover
+	if got := strings.Count(body, `class="kpi-icon `); got != 4 {
+		t.Errorf("kpi glyph spans = %d, want exactly the four glance tiles", got)
+	}
+}
+
 // TestFleetSecurityBadge: a pilot's location cell carries the
 // security pill from the stored systems row (tier and one-decimal
 // value by the shared rounding, negatives included); a pilot with

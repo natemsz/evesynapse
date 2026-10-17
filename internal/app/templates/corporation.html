@@ -1,20 +1,28 @@
 {{define "title"}}{{if and .Corporation .Corporation.Name}}{{.Corporation.Name}}{{else}}Corporation{{end}}{{end}}
+{{define "pagetitle"}}{{if .Corporation}}{{template "corporation-title" .Corporation}}{{end}}{{end}}
 {{define "content"}}
 {{if .Corporation}}{{template "corporation-body" .Corporation}}{{end}}
 {{end}}
 
-{{define "corporation-body"}}
-<div data-poll-state="{{.State}}"{{if eq .State "loading"}} data-live-region data-poll-url="/corporation/fragment?corporation={{.CorporationID}}"{{end}}>
-
+{{define "corporation-title"}}
 {{if eq .State "missing"}}
 <h1><span class="gt">Corporation</span></h1>
-<p><small>EVE has no public record for that corporation.</small></p>
 {{else if eq .State "loading"}}
 <h1><span class="gt">Corporation</span></h1>
+{{else}}
+<h1><span class="gt">{{.Name}}{{if .Ticker}} [{{.Ticker}}]{{end}}</span></h1>
+{{end}}
+{{end}}
+
+{{define "corporation-body"}}
+<div data-poll-state="{{.State}}"{{if eq .State "loading"}} data-live-region data-poll-url="/corporation/fragment?corporation={{.CorporationID}}"{{end}}{{if eq .State "ready"}} data-title-text="{{.Name}}{{if .Ticker}} [{{.Ticker}}]{{end}}"{{end}}>
+
+{{if eq .State "missing"}}
+<p><small>EVE has no public record for that corporation.</small></p>
+{{else if eq .State "loading"}}
 <p><img class="portrait" src="{{.LogoURL}}" alt="" width="128" height="128"></p>
 <p><span class="loading-pulse" aria-hidden="true"></span><small>Loading this corporation's public record…</small></p>
 {{else}}
-<h1><span class="gt">{{.Name}}{{if .Ticker}} [{{.Ticker}}]{{end}}</span></h1>
 <p><img class="portrait" src="{{.LogoURL}}" alt="" width="128" height="128"></p>
 {{if .Freshness}}<p><small>{{.Freshness}}</small></p>{{end}}
 

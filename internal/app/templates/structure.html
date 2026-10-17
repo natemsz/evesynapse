@@ -1,19 +1,27 @@
 {{define "title"}}{{if and .Structure .Structure.Name}}{{.Structure.Name}}{{else}}Structure{{end}}{{end}}
+{{define "pagetitle"}}{{if .Structure}}{{template "structure-title" .Structure}}{{end}}{{end}}
 {{define "content"}}
 {{if .Structure}}{{template "structure-body" .Structure}}{{end}}
 {{end}}
 
-{{define "structure-body"}}
-<div data-poll-state="{{.State}}"{{if eq .State "loading"}} data-live-region data-poll-url="/structure/fragment?structure={{.StructureID}}"{{end}}>
-
+{{define "structure-title"}}
 {{if eq .State "missing"}}
 <h1><span class="gt">Structure</span></h1>
-<p><small>None of your characters can see this structure's name. It may be private, or it may have been destroyed.</small></p>
 {{else if eq .State "loading"}}
 <h1><span class="gt">Structure</span></h1>
-<p><span class="loading-pulse" aria-hidden="true"></span><small>Looking up this structure…</small></p>
 {{else}}
 <h1><span class="gt">{{.Name}}</span></h1>
+{{end}}
+{{end}}
+
+{{define "structure-body"}}
+<div data-poll-state="{{.State}}"{{if eq .State "loading"}} data-live-region data-poll-url="/structure/fragment?structure={{.StructureID}}"{{end}}{{if eq .State "ready"}} data-title-text="{{.Name}}"{{end}}>
+
+{{if eq .State "missing"}}
+<p><small>None of your characters can see this structure's name. It may be private, or it may have been destroyed.</small></p>
+{{else if eq .State "loading"}}
+<p><span class="loading-pulse" aria-hidden="true"></span><small>Looking up this structure…</small></p>
+{{else}}
 {{if .IconURL}}<p><img class="portrait" src="{{.IconURL}}" alt="" width="64" height="64"></p>{{end}}
 {{end}}
 

@@ -1,6 +1,6 @@
 {{define "title"}}Corporation Assets{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Corporation Assets</span></h1>{{end}}
 {{define "content"}}
-<h1><span class="gt">Corporation Assets</span></h1>
 {{template "sectiontabs" .}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
@@ -18,7 +18,7 @@
   <p>Assets were refused by ESI (403). They'll appear here once {{.CorpAssets.CharacterName}} holds the Director role in this corporation.</p>
   {{end}}
   {{else if .CorpAssets.NoFeeder}}
-  <p>{{.CorpAssets.CharacterName}} hasn't granted the corporation permissions that feed the corporation assets, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.CorpAssets.AddScopesURL}}">Add the corporation permissions</a> — EVE asks for them on top of what is already granted.</p>
+  <p>{{.CorpAssets.CharacterName}} hasn't granted the corporation permissions that feed the corporation assets, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.CorpAssets.AddScopesURL}}">Add the corporation permissions</a> â€” EVE asks for them on top of what is already granted.</p>
   {{else if .CorpAssets.Warming}}
   <p>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</p>
   {{else if .CorpAssets.Loaded}}

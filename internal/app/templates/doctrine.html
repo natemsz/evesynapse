@@ -1,7 +1,7 @@
 {{define "title"}}{{if .Doctrine}}{{.Doctrine.Name}}{{else}}Doctrine{{end}}{{end}}
+{{define "pagetitle"}}{{with .Doctrine}}<h1><span class="gt">{{.Name}}</span></h1>{{end}}{{end}}
 {{define "content"}}
 {{with .Doctrine}}
-<h1><span class="gt">{{.Name}}</span></h1>
 {{template "sectiontabs" $}}
 <section class="card page-card">
 

@@ -1,20 +1,28 @@
 {{define "title"}}{{if and .Pilot .Pilot.Name}}{{.Pilot.Name}}{{else}}Pilot{{end}}{{end}}
+{{define "pagetitle"}}{{if .Pilot}}{{template "pilot-title" .Pilot}}{{end}}{{end}}
 {{define "content"}}
 {{if .Pilot}}{{template "pilot-body" .Pilot}}{{end}}
 {{end}}
 
-{{define "pilot-body"}}
-<div data-poll-state="{{.State}}"{{if eq .State "loading"}} data-live-region data-poll-url="/pilot/fragment?character={{.CharacterID}}"{{end}}>
-
+{{define "pilot-title"}}
 {{if eq .State "missing"}}
 <h1><span class="gt">Pilot</span></h1>
-<p><small>EVE has no public record for that character.</small></p>
 {{else if eq .State "loading"}}
 <h1><span class="gt">Pilot</span></h1>
+{{else}}
+<h1><span class="gt">{{.Name}}</span></h1>
+{{end}}
+{{end}}
+
+{{define "pilot-body"}}
+<div data-poll-state="{{.State}}"{{if eq .State "loading"}} data-live-region data-poll-url="/pilot/fragment?character={{.CharacterID}}"{{end}}{{if eq .State "ready"}} data-title-text="{{.Name}}"{{end}}>
+
+{{if eq .State "missing"}}
+<p><small>EVE has no public record for that character.</small></p>
+{{else if eq .State "loading"}}
 <p><img class="portrait" src="{{.PortraitURL}}" alt="" width="128" height="128"></p>
 <p><span class="loading-pulse" aria-hidden="true"></span><small>Loading this pilot's public record…</small></p>
 {{else}}
-<h1><span class="gt">{{.Name}}</span></h1>
 <p><img class="portrait" src="{{.PortraitURL}}" alt="" width="128" height="128"></p>
 {{if .Title}}<p><small>{{.Title}}</small></p>{{end}}
 

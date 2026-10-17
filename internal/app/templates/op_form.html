@@ -1,7 +1,7 @@
 {{define "title"}}{{if .OpForm.ID}}Change op{{else}}New op{{end}}{{end}}
+{{define "pagetitle"}}{{with .OpForm}}<h1><span class="gt">{{if .ID}}Change op{{else}}New op{{end}}</span></h1>{{end}}{{end}}
 {{define "content"}}
 {{with .OpForm}}
-<h1><span class="gt">{{if .ID}}Change op{{else}}New op{{end}}</span></h1>
 <section class="card page-card">
 
 {{range .Errors}}<p class="err">{{.}}</p>{{end}}

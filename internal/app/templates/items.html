@@ -1,6 +1,6 @@
 {{define "title"}}{{if and .Items .Items.TypeDetail}}{{.Items.TypeDetail.Name}}{{else}}Item Database{{end}}{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Item Database</span></h1>{{end}}
 {{define "content"}}
-<h1><span class="gt">Item Database</span></h1>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 

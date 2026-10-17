@@ -58,9 +58,15 @@
       <svg class="kpi-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true" focusable="false"><polygon class="kpi-spark-area" points="{{$item.AvgSparkArea}}"/><polyline class="kpi-spark-line" points="{{$item.AvgSparkPoints}}"/></svg>{{end}}
     </div>
     <div class="kpi">
+      {{if $item.EstimatedSell}}
+      <span class="kpi-k">Estimated value</span>
+      <span class="kpi-v">{{$item.EstimatedSell}} <small>ISK</small></span>
+      <span class="kpi-sub">Estimated sell · {{$item.EstimatedSellNote}}</span>
+      {{else}}
       <span class="kpi-k">Adjusted price</span>
       <span class="kpi-v">{{if $item.AdjustedPrice}}{{$item.AdjustedPrice}} <small>ISK</small>{{else}}—{{end}}</span>
       <span class="kpi-sub">Industry &amp; insurance reference</span>
+      {{end}}
     </div>
   </div>
 

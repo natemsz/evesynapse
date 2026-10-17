@@ -147,6 +147,18 @@ type Application struct {
 	storedPricesCache map[int64]esi.MarketPrice
 	storedPricesStamp time.Time
 
+	// The worker's true values (truevalue.go), cached in
+	// memory for a short window so renders and valuation
+	// reload the table only a few times an hour; and the
+	// pricing pass's own progress between cycles
+	// (truevalue_worker.go): sweep cursor, the input
+	// fingerprint the stored rows were computed under, and
+	// the public-contract samples gathered so far.
+	trueValuesMu     sync.Mutex
+	trueValuesCache  map[int64]db.TrueValue
+	trueValuesLoaded time.Time
+	trueValuePass    tvPassState
+
 	// Character IDs flagged for first-in-line warm-up on the next
 	// worker cycle (fresh SSO logins, Sync-page re-warm requests).
 	// activity is when each account was last seen, which sets how

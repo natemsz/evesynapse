@@ -117,22 +117,28 @@ type marketItem struct {
 	BookStoredAt  string // age of the stored sweep book shown, "" unless it came from one
 	AveragePrice  string // esi.FormatISK, "" when unknown
 	AdjustedPrice string // esi.FormatISK, "" when unknown
-	RegionID      int64
-	RegionName    string
-	Regions       []marketRegion
-	BestSell      string // esi.FormatISK, "" when no sell orders
-	BestBuy       string // esi.FormatISK, "" when no buy orders
-	BestSellLoc   placeRef
-	BestBuyLoc    placeRef
-	Spread        string // "12.3%", "" unless both sides exist
-	SpreadBand    string // color band for the spread card: white|pastel|green|blue
-	SellOrders    int
-	BuyOrders     int
-	SellVolume    string // esi.FormatInt of summed volume_remain
-	BuyVolume     string
-	Truncated     bool // order book capped at maxOrderPages
-	Sells         []marketOrderRow
-	Buys          []marketOrderRow
+	// The worker's estimated sell (truevalue.go) for a type
+	// with no guide average: the Adjusted price card then
+	// presents this as the "Estimated value" instead, with
+	// EstimatedSellNote as its basis line.
+	EstimatedSell     string // esi.FormatISK, "" when no true value applies
+	EstimatedSellNote string
+	RegionID          int64
+	RegionName        string
+	Regions           []marketRegion
+	BestSell          string // esi.FormatISK, "" when no sell orders
+	BestBuy           string // esi.FormatISK, "" when no buy orders
+	BestSellLoc       placeRef
+	BestBuyLoc        placeRef
+	Spread            string // "12.3%", "" unless both sides exist
+	SpreadBand        string // color band for the spread card: white|pastel|green|blue
+	SellOrders        int
+	BuyOrders         int
+	SellVolume        string // esi.FormatInt of summed volume_remain
+	BuyVolume         string
+	Truncated         bool // order book capped at maxOrderPages
+	Sells             []marketOrderRow
+	Buys              []marketOrderRow
 
 	BestSellRaw float64 // numeric bests behind the formatted strings (0 = none)
 	BestBuyRaw  float64
@@ -780,6 +786,16 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 		}
 		if p.AdjustedPrice > 0 {
 			item.AdjustedPrice = esi.FormatISK(p.AdjustedPrice)
+		}
+	}
+
+	// No average: the type trades by contract, not on the
+	// market, and CCP's adjusted price for it is a fossil.
+	// The stored true value is the honest headline instead.
+	if item.AveragePrice == "" {
+		if tv, ok := app.storedTrueValues(ctx)[typeID]; ok && tv.EstSell.Valid && tv.EstSell.Float64 > 0 {
+			item.EstimatedSell = esi.FormatISK(tv.EstSell.Float64)
+			item.EstimatedSellNote = trueValueBasis(tv)
 		}
 	}
 

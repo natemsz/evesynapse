@@ -10,6 +10,12 @@ import (
 	"time"
 )
 
+type AccountLinkChoice struct {
+	UserID    int64     `json:"user_id"`
+	Choice    string    `json:"choice"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type AdminOwner struct {
 	CharacterID int64     `json:"character_id"`
 	OwnerHash   string    `json:"owner_hash"`
@@ -174,6 +180,13 @@ type DoctrineFit struct {
 	Note       string    `json:"note"`
 	AddedBy    int64     `json:"added_by"`
 	AddedAt    time.Time `json:"added_at"`
+}
+
+type EntityName struct {
+	Kind      string    `json:"kind"`
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type FitRating struct {
@@ -845,6 +858,15 @@ type TradeIdeasAttempt struct {
 	ID          int64     `json:"id"`
 	AttemptedAt time.Time `json:"attempted_at"`
 	Failures    int32     `json:"failures"`
+}
+
+type TrueValue struct {
+	TypeID         int64           `json:"type_id"`
+	BuildCost      float64         `json:"build_cost"`
+	EstSell        sql.NullFloat64 `json:"est_sell"`
+	SellSamples    int64           `json:"sell_samples"`
+	ComputedAt     time.Time       `json:"computed_at"`
+	ProfileVersion int64           `json:"profile_version"`
 }
 
 type TypeDetail struct {

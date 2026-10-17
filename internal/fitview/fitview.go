@@ -2321,7 +2321,10 @@ type FitCostView struct {
 
 // FitUnitPrice is the guide's price for one unit: the market
 // average, else the adjusted price CCP publishes for every type.
-// RepriceLocalFittings makes the same choice in SQL: change both.
+// FitCost resolves one tier deeper between the two -- the
+// stored true-value estimated sell, for types the market
+// cannot price (see fitUnitPrice). RepriceLocalFittings makes
+// the same three choices in SQL: change both.
 func FitUnitPrice(prices map[int64]esi.MarketPrice, typeID int64) (float64, bool) {
 	p, ok := prices[typeID]
 	if !ok {
@@ -2336,6 +2339,27 @@ func FitUnitPrice(prices map[int64]esi.MarketPrice, typeID int64) (float64, bool
 	return 0, false
 }
 
+// fitUnitPrice resolves one unit's price for fit valuation in
+// the house order: the market average, then the true-value
+// estimated sell (trueValues, nil when the worker has stored
+// none), then the adjusted price. The middle tier is what
+// gives a supercapital hull an actual value: CCP's adjusted
+// price for it is a fossil (~65B against a ~600B real Avatar),
+// while its market average does not exist at all.
+func fitUnitPrice(prices map[int64]esi.MarketPrice, trueValues map[int64]float64, typeID int64) (float64, bool) {
+	p, ok := prices[typeID]
+	if ok && p.AveragePrice > 0 {
+		return p.AveragePrice, true
+	}
+	if est, has := trueValues[typeID]; has && est > 0 {
+		return est, true
+	}
+	if ok && p.AdjustedPrice > 0 {
+		return p.AdjustedPrice, true
+	}
+	return 0, false
+}
+
 // FitCost prices a document from the guide mirror: the hull plus
 // every item line. Known is false when nothing in it is priced
 // (guide not warmed yet); the browser treats a 0 total as unknown.
@@ -2345,13 +2369,14 @@ func (app *Builder) FitCost(ctx context.Context, doc *FitDoc) *FitCostView {
 	if len(prices) == 0 || doc == nil || doc.ShipTypeID == 0 {
 		return c
 	}
-	if p, ok := FitUnitPrice(prices, doc.ShipTypeID); ok {
+	trueValues := app.env.TrueValues(ctx)
+	if p, ok := fitUnitPrice(prices, trueValues, doc.ShipTypeID); ok {
 		c.HullRaw = p
 	} else {
 		c.Unpriced++
 	}
 	for _, it := range doc.Items {
-		if p, ok := FitUnitPrice(prices, it.TypeID); ok {
+		if p, ok := fitUnitPrice(prices, trueValues, it.TypeID); ok {
 			c.PartsRaw += float64(it.Qty) * p
 		} else {
 			c.Unpriced++
@@ -2391,6 +2416,10 @@ type Env interface {
 	// failed because the character was linked without the needed scope.
 	SnapshotRoleMissing(ctx context.Context, characterID int64, kind string) bool
 	ValuationPrices(ctx context.Context) map[int64]esi.MarketPrice
+	// TrueValues is the worker's estimated sell per type for
+	// types the market cannot price (nil when none are
+	// stored): fit valuation's middle tier.
+	TrueValues(ctx context.Context) map[int64]float64
 }
 
 // Builder builds fit views from a fit document over the static data

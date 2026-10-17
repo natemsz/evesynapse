@@ -13,6 +13,12 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
 <div class="fit-problems" role="status">
   <strong>Doesn't fit</strong>
   <ul>{{range .Stats.Problems}}<li>{{.}}</li>{{end}}</ul>
+  {{if not .ReadOnly}}{{if or .Stats.CPU.Over .Stats.Powergrid.Over}}
+  <div class="fit-solve">
+    <button type="button" class="fit-solve-btn" data-fit-solve>Simulate implants to fit</button>
+    <div class="fit-solve-out" data-fit-solve-out hidden></div>
+  </div>
+  {{end}}{{end}}
 </div>
 {{end}}
 </div>

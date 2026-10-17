@@ -9,6 +9,8 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 const deleteTVContractObservation = `-- name: DeleteTVContractObservation :exec
@@ -127,6 +129,44 @@ ORDER BY type_id
 
 func (q *Queries) ListTrueValues(ctx context.Context) ([]TrueValue, error) {
 	rows, err := q.db.QueryContext(ctx, listTrueValues)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TrueValue
+	for rows.Next() {
+		var i TrueValue
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.BuildCost,
+			&i.EstSell,
+			&i.SellSamples,
+			&i.ComputedAt,
+			&i.ProfileVersion,
+			&i.SellSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTrueValuesForTypes = `-- name: ListTrueValuesForTypes :many
+SELECT type_id, build_cost, est_sell, sell_samples, computed_at, profile_version, sell_source
+FROM true_values
+WHERE type_id = ANY($1::bigint[])
+ORDER BY type_id
+`
+
+func (q *Queries) ListTrueValuesForTypes(ctx context.Context, dollar_1 []int64) ([]TrueValue, error) {
+	rows, err := q.db.QueryContext(ctx, listTrueValuesForTypes, pq.Array(dollar_1))
 	if err != nil {
 		return nil, err
 	}

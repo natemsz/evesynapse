@@ -1576,6 +1576,55 @@ func (q *Queries) ListMarketRegionStatsDaily(ctx context.Context, arg ListMarket
 	return items, nil
 }
 
+const listMarketRegionStatsForTypes = `-- name: ListMarketRegionStatsForTypes :many
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
+FROM market_region_stats
+WHERE region_id = $1 AND type_id = ANY($2::bigint[])
+`
+
+type ListMarketRegionStatsForTypesParams struct {
+	RegionID int64   `json:"region_id"`
+	Column2  []int64 `json:"column_2"`
+}
+
+func (q *Queries) ListMarketRegionStatsForTypes(ctx context.Context, arg ListMarketRegionStatsForTypesParams) ([]MarketRegionStat, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketRegionStatsForTypes, arg.RegionID, pq.Array(arg.Column2))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketRegionStat
+	for rows.Next() {
+		var i MarketRegionStat
+		if err := rows.Scan(
+			&i.RegionID,
+			&i.TypeID,
+			&i.BestSell,
+			&i.TypicalSell,
+			&i.SellBand,
+			&i.BestBuy,
+			&i.TypicalBuy,
+			&i.BuyBand,
+			&i.SellOrders,
+			&i.BuyOrders,
+			&i.SellVolume,
+			&i.BuyVolume,
+			&i.UpdatedAt,
+			&i.AvgDailyVolume,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMarketStationLeaderboard = `-- name: ListMarketStationLeaderboard :many
 SELECT region_id, location_id, sell_orders, buy_orders, sell_value, buy_value, updated_at
 FROM market_station_leaderboard

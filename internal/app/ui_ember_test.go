@@ -236,3 +236,49 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		t.Error("the KPI sparkline is not gated on its points being present")
 	}
 }
+
+// TestWallpaperFirstPaintUnderlay pins the first-paint fix: every
+// wallpaper tier declaration in bg.css paints over the thumbnail
+// copy of the art, so a full navigation shows the (soft) sky from
+// the first frame instead of the flat body background while the
+// tier's JXL is still decoding; base.html preloads the two large
+// JXL tiers so their fetch starts at parse time. If a tier drops
+// its underlay layer, that tier flashes black again on load.
+func TestWallpaperFirstPaintUnderlay(t *testing.T) {
+	raw, err := fs.ReadFile(staticFS, "static/bg.css")
+	if err != nil {
+		t.Fatalf("read bg.css: %v", err)
+	}
+	bg := string(raw)
+	// Six tier declarations (plain + image-set for base/4K/UHD),
+	// each with the thumb as its last layer.
+	if n := strings.Count(bg, `url("/static/bg-thumb.jpg")`); n != 6 {
+		t.Errorf("bg.css carries the first-paint underlay on %d tier declarations, want 6", n)
+	}
+	for _, want := range []string{
+		`background-image: url("/static/bg.jpg"), url("/static/bg-thumb.jpg");`,
+		`background-image: url("/static/bg-4k.jpg"), url("/static/bg-thumb.jpg");`,
+		`background-image: url("/static/bg-uhd.jpg"), url("/static/bg-thumb.jpg");`,
+	} {
+		if !strings.Contains(bg, want) {
+			t.Errorf("bg.css is missing the underlay declaration %q", want)
+		}
+	}
+	// The decoded thumbnail must be in the embedded assets (the
+	// Makefile decodes it from ci-assets like every other tier).
+	if _, err := fs.Stat(staticFS, "static/bg-thumb.jpg"); err != nil {
+		t.Errorf("static/bg-thumb.jpg is not embedded: %v", err)
+	}
+	base, err := fs.ReadFile(templatesFS, "templates/base.html")
+	if err != nil {
+		t.Fatalf("read base.html: %v", err)
+	}
+	for _, want := range []string{
+		`<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-uhd.jxl"`,
+		`<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-4k.jxl"`,
+	} {
+		if !strings.Contains(string(base), want) {
+			t.Errorf("base.html is missing the wallpaper preload %q", want)
+		}
+	}
+}

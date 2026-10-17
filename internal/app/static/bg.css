@@ -15,9 +15,19 @@
    everyone else keeps the JPEG from the plain url line.
    art stack breathes at the edge of perception; that stops
    dead under reduced motion. */
+/* Every tier paints over a small copy of the same art
+   (bg-thumb.jpg, the last background layer). On a full
+   navigation the new document paints before the tier image has
+   decoded — the JXL tiers take far longer to decode than the
+   JPEGs they replaced — and until it landed the viewport showed
+   the flat body background: a black flash, worst where the most
+   sky shows (short pages, and the destinations that always load
+   whole — the fitting workbench, the PI planner). The thumb
+   decodes almost immediately at the same cover/center geometry
+   and the tier covers it seamlessly when it arrives. */
 body::before {
-  background-image: url("/static/bg.jpg");
-  background-image: image-set(url("/static/bg.jxl") type("image/jxl"), url("/static/bg.jpg") type("image/jpeg"));
+  background-image: url("/static/bg.jpg"), url("/static/bg-thumb.jpg");
+  background-image: image-set(url("/static/bg.jxl") type("image/jxl"), url("/static/bg.jpg") type("image/jpeg")), url("/static/bg-thumb.jpg");
   background-repeat: no-repeat;
   background-size: cover;
   background-position: center;
@@ -25,14 +35,14 @@ body::before {
 }
 @media (min-width: 1501px), (min-width: 751px) and (min-resolution: 2dppx), (min-width: 751px) and (-webkit-min-device-pixel-ratio: 2) {
   body::before {
-    background-image: url("/static/bg-4k.jpg");
-    background-image: image-set(url("/static/bg-4k.jxl") type("image/jxl"), url("/static/bg-4k.jpg") type("image/jpeg"));
+    background-image: url("/static/bg-4k.jpg"), url("/static/bg-thumb.jpg");
+    background-image: image-set(url("/static/bg-4k.jxl") type("image/jxl"), url("/static/bg-4k.jpg") type("image/jpeg")), url("/static/bg-thumb.jpg");
   }
 }
 @media (min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx), (min-width: 1601px) and (-webkit-min-device-pixel-ratio: 2) {
   body::before {
-    background-image: url("/static/bg-uhd.jpg");
-    background-image: image-set(url("/static/bg-uhd.jxl") type("image/jxl"), url("/static/bg-uhd.jpg") type("image/jpeg"));
+    background-image: url("/static/bg-uhd.jpg"), url("/static/bg-thumb.jpg");
+    background-image: image-set(url("/static/bg-uhd.jxl") type("image/jxl"), url("/static/bg-uhd.jpg") type("image/jpeg")), url("/static/bg-thumb.jpg");
   }
 }
 @keyframes ember-breathe {

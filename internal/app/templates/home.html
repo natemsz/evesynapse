@@ -1,18 +1,6 @@
 {{define "title"}}{{if .LoggedIn}}Home{{else}}EVE Online Fleet, Market & Fitting Tools{{end}}{{end}}
-{{define "pagetitle"}}{{if .LoggedIn}}<h1><span class="gt">Overview</span></h1>{{else}}<h1><span class="gt">Welcome</span></h1>{{end}}{{end}}
-{{define "content"}}
-{{if .LoggedIn}}
-
-{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
-
-{{if .Home}}
-{{if .Home.LoadFailed}}
-<p>Your characters couldn't be loaded. Try again shortly.</p>
-{{else if not .Home.HasChars}}
-<p>No characters are linked to this account yet. Every character you sign in with shows up here. Link one to start.</p>
-<p><a class="btn" href="/auth/link">Link your first character</a></p>
-{{else}}
-<div class="home-bar">
+{{define "pagetitle"}}{{if .LoggedIn}}{{if and .Home (not .Home.LoadFailed) .Home.HasChars}}<div class="page-head"><h1><span class="gt">Overview</span></h1>{{template "homebar" .}}</div>{{else}}<h1><span class="gt">Overview</span></h1>{{end}}{{else}}<h1><span class="gt">Welcome</span></h1>{{end}}{{end}}
+{{define "homebar"}}<div class="home-bar">
   {{if .Home.Customize}}<p class="home-bar-note"><small>Drag a module by its move handle, resize it from its corner, remove it with ×. Changes save as you make them. <kbd>\</kbd> finishes.</small></p>{{end}}
   {{with .ESIHealth}}<span class="esi-pill esi-{{.State}}" title="{{.Title}}"><span class="esi-dot" aria-hidden="true"></span><span class="esi-label">{{.Label}}</span>{{if .Players}}<span class="esi-tq">Tranquility <b>{{.Players}}</b> online</span>{{end}}</span>{{end}}
   <a class="btn btn-quiet" href="/auth/link">Link another character</a>
@@ -28,7 +16,19 @@
       </form>
     </div>
   </details>
-</div>
+</div>{{end}}
+{{define "content"}}
+{{if .LoggedIn}}
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{if .Home}}
+{{if .Home.LoadFailed}}
+<p>Your characters couldn't be loaded. Try again shortly.</p>
+{{else if not .Home.HasChars}}
+<p>No characters are linked to this account yet. Every character you sign in with shows up here. Link one to start.</p>
+<p><a class="btn" href="/auth/link">Link your first character</a></p>
+{{else}}
 {{if .Home.Customize}}{{if not .Home.Widgets}}<p><small>Your home is empty. Add a module from the Overview menu.</small></p>{{end}}{{end}}
 
 <div class="grid home-grid{{if .Home.Customize}} home-custom{{end}}"{{if .Home.Customize}} id="home-grid" data-customize="1"{{end}}>

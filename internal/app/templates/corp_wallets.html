@@ -1,6 +1,6 @@
 {{define "title"}}Corporation Wallets{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Corporation Wallets</span></h1>{{end}}
 {{define "content"}}
-<h1><span class="gt">Corporation Wallets</span></h1>
 {{template "sectiontabs" .}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
@@ -18,7 +18,7 @@
   <p>Wallet balances were refused by ESI (403). They'll appear here once {{.CorpWallets.CharacterName}} holds an accounting role in this corporation.</p>
   {{end}}
   {{else if .CorpWallets.NoFeeder}}
-  <p>{{.CorpWallets.CharacterName}} hasn't granted the corporation permissions that feed the wallet balances, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.CorpWallets.AddScopesURL}}">Add the corporation permissions</a> — EVE asks for them on top of what is already granted.</p>
+  <p>{{.CorpWallets.CharacterName}} hasn't granted the corporation permissions that feed the wallet balances, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.CorpWallets.AddScopesURL}}">Add the corporation permissions</a> ï¿½ EVE asks for them on top of what is already granted.</p>
   {{else if .CorpWallets.Warming}}
   <p>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</p>
   {{else if .CorpWallets.Loaded}}

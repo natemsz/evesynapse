@@ -2316,67 +2316,49 @@ type FitCostView struct {
 	TotalRaw float64
 	HullRaw  float64
 	PartsRaw float64
-	Unpriced int // lines the guide has no price for (hull included)
+	Unpriced int // lines no house price source knows (hull included)
 }
 
-// FitUnitPrice is the guide's price for one unit: the market
-// average, else the adjusted price CCP publishes for every type.
-// FitCost resolves one tier deeper between the two -- the
-// stored true-value estimated sell, for types the market
-// cannot price (see fitUnitPrice). RepriceLocalFittings makes
-// the same three choices in SQL: change both.
-func FitUnitPrice(prices map[int64]esi.MarketPrice, typeID int64) (float64, bool) {
-	p, ok := prices[typeID]
-	if !ok {
-		return 0, false
+// FitUnitPrice resolves one unit's price for fit valuation in
+// the house order: The Forge's swept typical sell, then the
+// stored true-value estimated sell (trueValues, nil when the
+// worker has stored none). A type neither source knows is
+// unpriced — CCP's guide average is banned as a price source
+// (owner doctrine, 2026-10-17) and its adjusted price is not
+// one either; it survives only as the EIV input to job fees.
+// The estimated sell is what gives a supercapital hull an
+// actual value: it has no swept market to take a typical from,
+// while its stored estimate tracks real contract trades.
+// RepriceLocalFittings makes the same choices in SQL: change
+// both.
+func FitUnitPrice(typicals, trueValues map[int64]float64, typeID int64) (float64, bool) {
+	if v, ok := typicals[typeID]; ok && v > 0 {
+		return v, true
 	}
-	if p.AveragePrice > 0 {
-		return p.AveragePrice, true
-	}
-	if p.AdjustedPrice > 0 {
-		return p.AdjustedPrice, true
-	}
-	return 0, false
-}
-
-// fitUnitPrice resolves one unit's price for fit valuation in
-// the house order: the market average, then the true-value
-// estimated sell (trueValues, nil when the worker has stored
-// none), then the adjusted price. The middle tier is what
-// gives a supercapital hull an actual value: CCP's adjusted
-// price for it is a fossil (~65B against a ~600B real Avatar),
-// while its market average does not exist at all.
-func fitUnitPrice(prices map[int64]esi.MarketPrice, trueValues map[int64]float64, typeID int64) (float64, bool) {
-	p, ok := prices[typeID]
-	if ok && p.AveragePrice > 0 {
-		return p.AveragePrice, true
-	}
-	if est, has := trueValues[typeID]; has && est > 0 {
+	if est, ok := trueValues[typeID]; ok && est > 0 {
 		return est, true
 	}
-	if ok && p.AdjustedPrice > 0 {
-		return p.AdjustedPrice, true
-	}
 	return 0, false
 }
 
-// FitCost prices a document from the guide mirror: the hull plus
-// every item line. Known is false when nothing in it is priced
-// (guide not warmed yet); the browser treats a 0 total as unknown.
+// FitCost prices a document from the stored price sources: the
+// hull plus every item line. Known is false when nothing in it
+// is priced (no sweep or estimate stored yet); the browser
+// treats a 0 total as unknown.
 func (app *Builder) FitCost(ctx context.Context, doc *FitDoc) *FitCostView {
 	c := &FitCostView{}
-	prices := app.env.ValuationPrices(ctx)
-	if len(prices) == 0 || doc == nil || doc.ShipTypeID == 0 {
+	typicals := app.env.TypicalSells(ctx)
+	trueValues := app.env.TrueValues(ctx)
+	if (len(typicals) == 0 && len(trueValues) == 0) || doc == nil || doc.ShipTypeID == 0 {
 		return c
 	}
-	trueValues := app.env.TrueValues(ctx)
-	if p, ok := fitUnitPrice(prices, trueValues, doc.ShipTypeID); ok {
+	if p, ok := FitUnitPrice(typicals, trueValues, doc.ShipTypeID); ok {
 		c.HullRaw = p
 	} else {
 		c.Unpriced++
 	}
 	for _, it := range doc.Items {
-		if p, ok := fitUnitPrice(prices, trueValues, it.TypeID); ok {
+		if p, ok := FitUnitPrice(typicals, trueValues, it.TypeID); ok {
 			c.PartsRaw += float64(it.Qty) * p
 		} else {
 			c.Unpriced++
@@ -2394,7 +2376,7 @@ func (app *Builder) FitCost(ctx context.Context, doc *FitDoc) *FitCostView {
 
 // FitDocPrice is FitCost's total, stored on the fit for the
 // browser's max-price filter and sorts (0 = unknown). The worker
-// makes the same sum in SQL whenever the guide refreshes
+// makes the same sum in SQL whenever prices refresh
 // (RepriceLocalFittings): change both together.
 func (app *Builder) FitDocPrice(ctx context.Context, doc *FitDoc) float64 {
 	return app.FitCost(ctx, doc).TotalRaw
@@ -2402,7 +2384,7 @@ func (app *Builder) FitDocPrice(ctx context.Context, doc *FitDoc) float64 {
 
 // Env is what the foundation needs from the application that is not the
 // static data: the name caches, stored snapshots, who is asking, and the
-// price guide. Core fills it; nothing here reaches the network.
+// price sources. Core fills it; nothing here reaches the network.
 type Env interface {
 	CachedTypeNames(ctx context.Context, ids []int64) map[int64]string
 	CachedGroupNames(ctx context.Context, ids []int64) map[int64]string
@@ -2415,10 +2397,13 @@ type Env interface {
 	// SnapshotRoleMissing reports that the last fetch of a snapshot
 	// failed because the character was linked without the needed scope.
 	SnapshotRoleMissing(ctx context.Context, characterID int64, kind string) bool
-	ValuationPrices(ctx context.Context) map[int64]esi.MarketPrice
+	// TypicalSells is The Forge's swept typical sell per type
+	// (nil when no sweep has landed yet): fit valuation's
+	// first tier.
+	TypicalSells(ctx context.Context) map[int64]float64
 	// TrueValues is the worker's estimated sell per type for
 	// types the market cannot price (nil when none are
-	// stored): fit valuation's middle tier.
+	// stored): fit valuation's second tier.
 	TrueValues(ctx context.Context) map[int64]float64
 }
 

@@ -103,8 +103,11 @@ func (app *tool) handleFitShopping(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Price each line from the market guide cache.
-	priceMap := app.deps.ValuationPrices(ctx)
+	// Price each line in the house order (fitview.FitUnitPrice):
+	// The Forge's swept typical sell, then the stored estimated
+	// sell. The guide's average prices nothing.
+	typicals := app.deps.TypicalSells(ctx)
+	trueValues := app.deps.TrueValues(ctx)
 	view := &shoppingView{FitName: fitName, FitID: fitID}
 	var total float64
 	for typeID, qty := range qtyByType {
@@ -114,8 +117,7 @@ func (app *tool) handleFitShopping(w http.ResponseWriter, r *http.Request) {
 			URL:      fmt.Sprintf("/items/type/%d/", typeID),
 			Quantity: qty,
 		}
-		if mp, ok := priceMap[typeID]; ok && mp.AveragePrice > 0 {
-			p := mp.AveragePrice
+		if p, ok := fitview.FitUnitPrice(typicals, trueValues, typeID); ok {
 			line.PriceKnown = true
 			line.UnitPrice = isk(p)
 			cost := p * float64(qty)

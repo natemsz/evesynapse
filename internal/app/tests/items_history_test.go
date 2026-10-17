@@ -8,11 +8,14 @@ import (
 	"evesynapse/internal/apptest"
 )
 
-// The item page's price-history sparkline: the polyline must
-// carry its own stroke. It once relied on a CSS rule that does
-// not exist, so the chart rendered as an empty box under its
-// heading while the page claimed recorded days.
-func TestItemPageHistorySparklinePaints(t *testing.T) {
+// The item browser's price history is the Market page's history
+// section — same chart, same states, same warming — not the bare
+// sparkline it used to draw. These tests pin both ends of that
+// contract: stored rows render the full chart, and no rows render
+// the live pending section that polls the shared fragment while
+// the view leaves the same want the Market view leaves.
+
+func TestItemPageHistoryChart(t *testing.T) {
 	rig := apptest.Build(t, nil)
 	conn := rig.DB()
 	ctx := context.Background()
@@ -36,19 +39,69 @@ func TestItemPageHistorySparklinePaints(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("item page status = %d", code)
 	}
-	if !strings.Contains(body, "Price history") {
-		t.Fatal("item page has no price history section")
+	apptest.MustContain(t, "/items/type/34/ (chart)", body,
+		"Price history — The Forge",
+		`class="pchart"`,
+		`data-chart-scrub="true"`,
+		"<polyline",
+		`stroke="#ffb84d"`,
+		"Average price",
+		"Volume",
+		"3 days of recorded trades in The Forge",
+		"Last recorded days",
+		"2026-10-15",
+		"Hub prices",
+	)
+	if strings.Contains(body, `class="spark"`) {
+		t.Error("item page still renders the old bare sparkline")
 	}
-	if !strings.Contains(body, `class="spark"`) {
-		t.Fatal("item page renders no sparkline svg")
+}
+
+func TestItemPageHistoryPendingQueuesWant(t *testing.T) {
+	rig := apptest.Build(t, nil)
+	conn := rig.DB()
+	q := rig.Queries()
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
 	}
-	if !strings.Contains(body, `stroke="#ffb84d"`) {
-		t.Error("sparkline polyline carries no stroke: the chart paints nothing")
+	apptest.SeedCharacter(t, q, user.ID, apptest.FixtureCharA, "Alpha Pilot")
+	stmts := []string{
+		`INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES (34, 'Tritanium', 18, 1, 1)`,
+		`INSERT INTO sde_groups (group_id, name, category_id) VALUES (18, 'Mineral', 4)`,
+		`INSERT INTO sde_categories (category_id, name) VALUES (4, 'Material')`,
+		`INSERT INTO sde_regions (region_id, name) VALUES (10000002, 'The Forge')`,
+		`INSERT INTO market_region_stats (region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume) VALUES (10000002, 34, 6.5, 6.4, 7.0, 5.9, 6.0, 5.5, 40, 35, 1000000, 900000, NOW(), 500000)`,
 	}
-	if !strings.Contains(body, "3 recorded days") {
-		t.Error("item page does not note the recorded days under the chart")
+	for _, stmt := range stmts {
+		if _, err := conn.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
 	}
-	if !strings.Contains(body, "The Forge") {
-		t.Error("item page does not show the hub prices")
+	cookie := apptest.SessionCookie(t, rig, user.ID, apptest.FixtureCharA, "Alpha Pilot")
+	code, body := apptest.GetPage(t, rig, cookie, "/items/type/34/")
+	if code != 200 {
+		t.Fatalf("item page status = %d", code)
+	}
+	// No stored history: the section is the market's live pending
+	// state — it names the shared fragment it will poll until the
+	// chart swaps in, without the reader going anywhere.
+	apptest.MustContain(t, "/items/type/34/ (pending)", body,
+		"Price history — The Forge",
+		`data-poll-state="pending"`,
+		`data-poll-url="/market/history-fragment?region=10000002&amp;type=34"`,
+		"This item is queued",
+	)
+	// And the view leaves the worker the same want a Market view
+	// leaves.
+	var wants int
+	if err := conn.QueryRowContext(ctx,
+		`SELECT count(*) FROM market_history_wants WHERE region_id = 10000002 AND type_id = 34`,
+	).Scan(&wants); err != nil {
+		t.Fatalf("count wants: %v", err)
+	}
+	if wants != 1 {
+		t.Fatalf("market_history_wants rows = %d, want 1", wants)
 	}
 }

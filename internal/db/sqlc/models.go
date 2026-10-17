@@ -10,6 +10,56 @@ import (
 	"time"
 )
 
+type AbyssalFamilyWeight struct {
+	Family      string  `json:"family"`
+	AttributeID int64   `json:"attribute_id"`
+	Weight      float64 `json:"weight"`
+	PenaltyOnly bool    `json:"penalty_only"`
+}
+
+type AbyssalItem struct {
+	ItemID        int64           `json:"item_id"`
+	TypeID        int64           `json:"type_id"`
+	SourceTypeID  int64           `json:"source_type_id"`
+	MutatorTypeID int64           `json:"mutator_type_id"`
+	CreatedBy     int64           `json:"created_by"`
+	Attributes    json.RawMessage `json:"attributes"`
+	FetchedAt     time.Time       `json:"fetched_at"`
+	FirstSeenAt   time.Time       `json:"first_seen_at"`
+	LastSeenAt    time.Time       `json:"last_seen_at"`
+}
+
+type AbyssalProbe struct {
+	ItemID    int64     `json:"item_id"`
+	TypeID    int64     `json:"type_id"`
+	IsDynamic bool      `json:"is_dynamic"`
+	ProbedAt  time.Time `json:"probed_at"`
+}
+
+type AbyssalRange struct {
+	MutatorTypeID int64   `json:"mutator_type_id"`
+	AttributeID   int64   `json:"attribute_id"`
+	MinMult       float64 `json:"min_mult"`
+	MaxMult       float64 `json:"max_mult"`
+	SdeBuild      string  `json:"sde_build"`
+}
+
+type AbyssalSighting struct {
+	ItemID       int64           `json:"item_id"`
+	ContractID   int64           `json:"contract_id"`
+	ContractType string          `json:"contract_type"`
+	Price        float64         `json:"price"`
+	RegionID     int64           `json:"region_id"`
+	LocationID   int64           `json:"location_id"`
+	DateExpired  sql.NullTime    `json:"date_expired"`
+	FirstSeenAt  time.Time       `json:"first_seen_at"`
+	LastSeenAt   time.Time       `json:"last_seen_at"`
+	DepartedAt   sql.NullTime    `json:"departed_at"`
+	DepartKind   sql.NullString  `json:"depart_kind"`
+	BidCount     sql.NullInt64   `json:"bid_count"`
+	TopBid       sql.NullFloat64 `json:"top_bid"`
+}
+
 type AccountLinkChoice struct {
 	UserID    int64     `json:"user_id"`
 	Choice    string    `json:"choice"`
@@ -561,6 +611,58 @@ type PlanetName struct {
 	Name       string       `json:"name"`
 	State      string       `json:"state"`
 	ResolvedAt sql.NullTime `json:"resolved_at"`
+}
+
+type PubContract struct {
+	ContractID          int64     `json:"contract_id"`
+	RegionID            int64     `json:"region_id"`
+	Type                string    `json:"type"`
+	IssuerID            int64     `json:"issuer_id"`
+	IssuerCorporationID int64     `json:"issuer_corporation_id"`
+	ForCorporation      bool      `json:"for_corporation"`
+	Title               string    `json:"title"`
+	Price               float64   `json:"price"`
+	Buyout              float64   `json:"buyout"`
+	Reward              float64   `json:"reward"`
+	Collateral          float64   `json:"collateral"`
+	Volume              float64   `json:"volume"`
+	StartLocationID     int64     `json:"start_location_id"`
+	EndLocationID       int64     `json:"end_location_id"`
+	DateIssued          time.Time `json:"date_issued"`
+	DateExpired         time.Time `json:"date_expired"`
+	DaysToComplete      int64     `json:"days_to_complete"`
+	ItemsState          string    `json:"items_state"`
+	LastCycle           int64     `json:"last_cycle"`
+	FirstSeen           time.Time `json:"first_seen"`
+	LastSeen            time.Time `json:"last_seen"`
+}
+
+type PubContractBid struct {
+	BidID      int64     `json:"bid_id"`
+	ContractID int64     `json:"contract_id"`
+	Amount     float64   `json:"amount"`
+	DateBid    time.Time `json:"date_bid"`
+}
+
+type PubContractItem struct {
+	RecordID           int64         `json:"record_id"`
+	ContractID         int64         `json:"contract_id"`
+	TypeID             int64         `json:"type_id"`
+	ItemID             sql.NullInt64 `json:"item_id"`
+	Quantity           int64         `json:"quantity"`
+	IsIncluded         bool          `json:"is_included"`
+	IsBlueprintCopy    bool          `json:"is_blueprint_copy"`
+	Runs               sql.NullInt64 `json:"runs"`
+	MaterialEfficiency sql.NullInt64 `json:"material_efficiency"`
+	TimeEfficiency     sql.NullInt64 `json:"time_efficiency"`
+}
+
+type PubContractSweepState struct {
+	RegionID   int64     `json:"region_id"`
+	NextPage   int64     `json:"next_page"`
+	TotalPages int64     `json:"total_pages"`
+	Cycle      int64     `json:"cycle"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type PublicFitPage struct {

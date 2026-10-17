@@ -1,0 +1,340 @@
+package app
+
+// ---------------------------------------------------------------------------
+// Public contracts, the warming passes (schema 055): what the
+// list sweep leaves behind, filled in from the same allowance.
+//
+// Item lists are fetched once per contract, ever -- a
+// contract's list is immutable once issued, so the fetch is
+// pure history-keeping. Courier contracts refuse the route
+// (their cargo is private): the refusal is recorded and never
+// retried. Bids refresh for live auctions on the same
+// 30-minute cadence as the list; a bid list is replace-on-
+// read, small enough that nothing cleverer is warranted.
+//
+// Dogma probing is the abyssal corpus being born: every
+// singleton item on a live contract is probed exactly once
+// against ESI's dynamic-item route (a miss is an ordinary
+// module, and costs error budget, so the outcome is stored
+// either way and no instance is ever probed twice). A hit
+// stores the instance's rolls forever and opens its sighting
+// history (pub_contracts.go's completion step keeps the
+// sightings of live listings current from there).
+// ---------------------------------------------------------------------------
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"time"
+
+	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
+	"evesynapse/internal/logging"
+)
+
+const (
+	// pubContractItemsPerCycle bounds item-list fetches in
+	// one pass: steady state is the new-contract rate, and
+	// the first pass over a full corpus drains over a few
+	// cycles instead of bursting.
+	pubContractItemsPerCycle = 80
+	// pubContractBidsPerCycle bounds auction bid refreshes in
+	// one pass (auctions are ~1% of the corpus and ride the
+	// list route's cadence through their own fetch-state
+	// rows, so a pass only ever touches the due slice).
+	pubContractBidsPerCycle = 60
+	// pubContractProbesPerCycle bounds dogma probes in one
+	// pass: paced on purpose, because every miss costs ESI
+	// error budget.
+	pubContractProbesPerCycle = 60
+)
+
+// pubContractBidsKind names an auction's bid-refresh row in
+// market_fetch_state.
+func pubContractBidsKind(contractID int64) string {
+	return fmt.Sprintf("pubbids_%d", contractID)
+}
+
+// warmPublicContractItems fetches the item lists of contracts
+// whose lists were never fetched, oldest first. One landing
+// (or one definitive refusal) per contract, ever.
+func (app *Application) warmPublicContractItems(ctx context.Context, allowance *fetchBudget) (stored int, limited bool) {
+	pending, err := app.queries.ListPublicContractsPendingItems(ctx, pubContractItemsPerCycle)
+	if err != nil {
+		logging.Errorf("worker: public contracts: pending items: %v", err)
+		return 0, false
+	}
+	for _, pc := range pending {
+		if !allowance.Take() {
+			return stored, false
+		}
+		path := fmt.Sprintf("/contracts/public/items/%d/", pc.ContractID)
+		body, _, err := app.esi.FetchRaw(ctx, "", path)
+		if err != nil {
+			if errors.Is(err, esi.ErrErrorLimit) {
+				return stored, true
+			}
+			if code, ok := esi.StatusCode(err); ok {
+				switch code {
+				case http.StatusBadRequest:
+					// Courier cargo is private by design: the
+					// refusal is the answer, recorded once.
+					app.setPublicContractItemsState(ctx, pc.ContractID, "private")
+					stored++
+					continue
+				case http.StatusNotFound:
+					// The contract ended before its list was
+					// ever fetched; it leaves with the sweep.
+					app.setPublicContractItemsState(ctx, pc.ContractID, "gone")
+					stored++
+					continue
+				}
+			}
+			continue // transient: stays pending, retried next pass
+		}
+		var items []esi.PublicContractItem
+		if err := json.Unmarshal(body, &items); err != nil {
+			logging.Errorf("worker: public contracts: items %d: decode: %v", pc.ContractID, err)
+			continue
+		}
+		if err := app.storePublicContractItems(ctx, pc.ContractID, items); err != nil {
+			logging.Errorf("worker: public contracts: items %d: store: %v", pc.ContractID, err)
+			continue
+		}
+		stored++
+	}
+	return stored, false
+}
+
+// storePublicContractItems stores one contract's item list
+// and marks it fetched, in one transaction.
+func (app *Application) storePublicContractItems(ctx context.Context, contractID int64, items []esi.PublicContractItem) error {
+	tx, err := app.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin items store: %w", err)
+	}
+	defer tx.Rollback()
+	q := db.New(tx)
+	for _, item := range items {
+		if err := q.InsertPublicContractItem(ctx, db.InsertPublicContractItemParams{
+			RecordID: item.RecordID, ContractID: contractID, TypeID: item.TypeID,
+			ItemID:             nullInt64(item.ItemID),
+			Quantity:           item.Quantity,
+			IsIncluded:         item.IsIncluded,
+			IsBlueprintCopy:    item.IsBlueprintCopy,
+			Runs:               nullInt64Ptr(item.Runs),
+			MaterialEfficiency: nullInt64Ptr(item.MaterialEfficiency),
+			TimeEfficiency:     nullInt64Ptr(item.TimeEfficiency),
+		}); err != nil {
+			return fmt.Errorf("insert item %d: %w", item.RecordID, err)
+		}
+	}
+	if err := q.SetPublicContractItemsState(ctx, db.SetPublicContractItemsStateParams{
+		ContractID: contractID, ItemsState: "stored",
+	}); err != nil {
+		return fmt.Errorf("mark items stored %d: %w", contractID, err)
+	}
+	// A known abyssal instance on this list opens its sighting
+	// for the listing now: a relist never re-probes, so this
+	// is the moment its new listing enters the history.
+	if err := q.OpenAbyssalSightingsForContract(ctx, db.OpenAbyssalSightingsForContractParams{
+		ContractID: contractID, LastSeenAt: time.Now().UTC(),
+	}); err != nil {
+		return fmt.Errorf("open sightings %d: %w", contractID, err)
+	}
+	return tx.Commit()
+}
+
+func (app *Application) setPublicContractItemsState(ctx context.Context, contractID int64, state string) {
+	if err := app.queries.SetPublicContractItemsState(ctx, db.SetPublicContractItemsStateParams{
+		ContractID: contractID, ItemsState: state,
+	}); err != nil {
+		logging.Errorf("worker: public contracts: items state %d: %v", contractID, err)
+	}
+}
+
+func nullInt64(v int64) sql.NullInt64 {
+	return sql.NullInt64{Int64: v, Valid: v != 0}
+}
+
+func nullInt64Ptr(v *int64) sql.NullInt64 {
+	if v == nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: *v, Valid: true}
+}
+
+// warmPublicContractBids refreshes the bid lists of live
+// auctions whose refresh is due, soonest-ending first. Bids
+// are anonymous in ESI and stored as they arrive: an amount
+// and a time, nothing else exists to store.
+func (app *Application) warmPublicContractBids(ctx context.Context, allowance *fetchBudget) (stored int, limited bool) {
+	now := time.Now().UTC()
+	auctions, err := app.queries.ListPublicContractLiveAuctions(ctx, db.ListPublicContractLiveAuctionsParams{
+		DateExpired: now, Limit: pubContractBidsPerCycle * 4,
+	})
+	if err != nil {
+		logging.Errorf("worker: public contracts: live auctions: %v", err)
+		return 0, false
+	}
+	fetched := 0
+	for _, contractID := range auctions {
+		if fetched >= pubContractBidsPerCycle {
+			break
+		}
+		kind := pubContractBidsKind(contractID)
+		if !app.marketFetchDue(ctx, kind, pubContractSweepGate) {
+			continue
+		}
+		if !allowance.Take() {
+			return stored, false
+		}
+		fetched++
+		path := fmt.Sprintf("/contracts/public/bids/%d/", contractID)
+		body, _, err := app.esi.FetchRaw(ctx, "", path)
+		if err != nil {
+			if errors.Is(err, esi.ErrErrorLimit) {
+				return stored, true
+			}
+			app.recordMarketFetch(ctx, kind, marketFetchFailureState(err), "contract bids failed")
+			continue
+		}
+		var bids []esi.PublicContractBid
+		if err := json.Unmarshal(body, &bids); err != nil {
+			logging.Errorf("worker: public contracts: bids %d: decode: %v", contractID, err)
+			continue
+		}
+		if err := app.storePublicContractBids(ctx, contractID, bids); err != nil {
+			logging.Errorf("worker: public contracts: bids %d: store: %v", contractID, err)
+			continue
+		}
+		app.recordMarketFetch(ctx, kind, fetchStateOK, "")
+		stored++
+	}
+	return stored, false
+}
+
+// storePublicContractBids replaces one auction's bid list:
+// ESI returns the whole list each time, and a stored list
+// that lags the route's by a bid is worse than one replaced.
+func (app *Application) storePublicContractBids(ctx context.Context, contractID int64, bids []esi.PublicContractBid) error {
+	tx, err := app.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin bids store: %w", err)
+	}
+	defer tx.Rollback()
+	q := db.New(tx)
+	if err := q.DeletePublicContractBids(ctx, contractID); err != nil {
+		return fmt.Errorf("clear bids %d: %w", contractID, err)
+	}
+	for _, bid := range bids {
+		at, err := time.Parse(time.RFC3339, bid.DateBid)
+		if err != nil {
+			continue
+		}
+		if err := q.InsertPublicContractBid(ctx, db.InsertPublicContractBidParams{
+			BidID: bid.BidID, ContractID: contractID, Amount: bid.Amount, DateBid: at,
+		}); err != nil {
+			return fmt.Errorf("insert bid %d: %w", bid.BidID, err)
+		}
+	}
+	return tx.Commit()
+}
+
+// warmAbyssalProbes probes singleton items no probe has ever
+// touched, oldest listing first. Every outcome is stored:
+// a dynamic hit opens the instance's corpus row and its
+// sighting for the listing that surfaced it; a 404 is an
+// ordinary module and is never asked about again.
+func (app *Application) warmAbyssalProbes(ctx context.Context, allowance *fetchBudget) (stored int, limited bool) {
+	candidates, err := app.queries.ListAbyssalProbeCandidates(ctx, pubContractProbesPerCycle)
+	if err != nil {
+		logging.Errorf("worker: public contracts: probe candidates: %v", err)
+		return 0, false
+	}
+	now := time.Now().UTC()
+	for _, cand := range candidates {
+		if !cand.ItemID.Valid {
+			continue
+		}
+		if !allowance.Take() {
+			return stored, false
+		}
+		itemID := cand.ItemID.Int64
+		path := fmt.Sprintf("/dogma/dynamic/items/%d/%d/", cand.TypeID, itemID)
+		body, _, err := app.esi.FetchRaw(ctx, "", path)
+		if err != nil {
+			if errors.Is(err, esi.ErrErrorLimit) {
+				return stored, true
+			}
+			if code, ok := esi.StatusCode(err); ok && code == http.StatusNotFound {
+				if err := app.queries.InsertAbyssalProbe(ctx, db.InsertAbyssalProbeParams{
+					ItemID: itemID, TypeID: cand.TypeID, IsDynamic: false, ProbedAt: now,
+				}); err != nil {
+					logging.Errorf("worker: public contracts: store probe %d: %v", itemID, err)
+					continue
+				}
+				stored++
+			}
+			continue // anything else is transient: no probe row, retried later
+		}
+		var dyn esi.DynamicItem
+		if err := json.Unmarshal(body, &dyn); err != nil {
+			logging.Errorf("worker: public contracts: probe %d: decode: %v", itemID, err)
+			continue
+		}
+		attrs, err := json.Marshal(dyn.DogmaAttributes)
+		if err != nil {
+			logging.Errorf("worker: public contracts: probe %d: encode rolls: %v", itemID, err)
+			continue
+		}
+		if err := app.storeAbyssalProbeHit(ctx, cand, dyn, attrs, now); err != nil {
+			logging.Errorf("worker: public contracts: probe %d: store: %v", itemID, err)
+			continue
+		}
+		stored++
+	}
+	return stored, false
+}
+
+// storeAbyssalProbeHit stores one dynamic item: the probe
+// outcome, the instance's rolls (first fetch wins; the rolls
+// never change), and the opening sighting for the listing
+// that surfaced it -- its asking price, region and location,
+// first seen when the listing was.
+func (app *Application) storeAbyssalProbeHit(ctx context.Context, cand db.ListAbyssalProbeCandidatesRow, dyn esi.DynamicItem, attrs []byte, now time.Time) error {
+	itemID := cand.ItemID.Int64
+	tx, err := app.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin probe store: %w", err)
+	}
+	defer tx.Rollback()
+	q := db.New(tx)
+	if err := q.InsertAbyssalProbe(ctx, db.InsertAbyssalProbeParams{
+		ItemID: itemID, TypeID: cand.TypeID, IsDynamic: true, ProbedAt: now,
+	}); err != nil {
+		return fmt.Errorf("insert probe: %w", err)
+	}
+	if err := q.UpsertAbyssalItem(ctx, db.UpsertAbyssalItemParams{
+		ItemID: itemID, TypeID: cand.TypeID,
+		SourceTypeID: dyn.SourceTypeID, MutatorTypeID: dyn.MutatorTypeID,
+		CreatedBy: dyn.CreatedBy, Attributes: attrs,
+		FetchedAt: now, FirstSeenAt: cand.FirstSeen,
+	}); err != nil {
+		return fmt.Errorf("upsert abyssal item: %w", err)
+	}
+	if err := q.UpsertAbyssalSighting(ctx, db.UpsertAbyssalSightingParams{
+		ItemID: itemID, ContractID: cand.ContractID, ContractType: cand.Type,
+		Price: cand.Price, RegionID: cand.RegionID,
+		LocationID:  cand.StartLocationID,
+		DateExpired: sql.NullTime{Time: cand.DateExpired, Valid: true},
+		FirstSeenAt: cand.FirstSeen, LastSeenAt: now,
+	}); err != nil {
+		return fmt.Errorf("open sighting: %w", err)
+	}
+	return tx.Commit()
+}

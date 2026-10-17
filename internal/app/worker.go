@@ -646,6 +646,16 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 		return app.refreshMarketData(ctx, characters)
 	})
 
+	// Public contracts (schema 055): the region list sweeps and
+	// their item/bid/probe warming, on the routes' own cache
+	// cadence and a fetch lane of their own, so the contract
+	// corpus is as fresh as ESI allows without ever bidding
+	// against the market pass for fetches.
+	contractAllowance := &fetchBudget{left: pubContractFetchesPerCycle}
+	c.pass("refreshing public contracts", func() (int, bool) {
+		return app.refreshPublicContracts(ctx, contractAllowance)
+	})
+
 	// Module jobs that follow the market pass (Trade Ideas' model
 	// refresh, for one): it starts beside the cycle and returns at once,
 	// so the cycle never waits on it.

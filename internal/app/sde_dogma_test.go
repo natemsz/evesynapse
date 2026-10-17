@@ -184,7 +184,7 @@ func TestSDEDogmaStoreRoundTrip(t *testing.T) {
 	if err != nil || len(phys) != 1 || phys[0].Mass != 1190000 || phys[0].Capacity != 275 {
 		t.Fatalf("ListSDETypePhysicsByIDs(597) = %+v, %v", phys, err)
 	}
-	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "8" {
-		t.Fatalf("sde_import_version = %q, want 8", ver)
+	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "9" {
+		t.Fatalf("sde_import_version = %q, want 9", ver)
 	}
 }

@@ -295,6 +295,14 @@ var pgStationTypicalsSchema string
 //go:embed schema_pg/054_market_stats_fallback.sql
 var pgMarketStatsFallbackSchema string
 
+// Step 055: public contracts (the search corpus), the
+// abyssal item corpus with its per-instance sighting
+// history, and the mutaplasmid roll ranges the SDE importer
+// keeps filled.
+//
+//go:embed schema_pg/055_public_contracts.sql
+var pgPublicContractsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -378,6 +386,7 @@ func schemaSteps() []schemaStep {
 		{52, "true_value_evidence", pgTrueValueEvidenceSchema, ""},
 		{53, "station_typicals", pgStationTypicalsSchema, ""},
 		{54, "market_stats_fallback", pgMarketStatsFallbackSchema, ""},
+		{55, "public_contracts", pgPublicContractsSchema, ""},
 	}
 }
 

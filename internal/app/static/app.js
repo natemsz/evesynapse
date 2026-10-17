@@ -3211,6 +3211,71 @@
   }
 })();
 
+// The first-run notification prompt: a small card under the bell.
+// The server renders it open on the first view of a session for an
+// account that has not answered (and never again once it has); this
+// only gives it the bell list's motion, a way to close it without
+// answering (the close is this visit only — answering is the form),
+// and the bell list's "Notification choices" entry as a way back
+// in. The form itself is an ordinary post and works without this.
+(function () {
+  "use strict";
+  var card = document.getElementById("notify-prompt");
+  if (!card) return;
+  var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var hiding = null; // a close on its way; opening again cancels it
+
+  function show() {
+    window.clearTimeout(hiding);
+    hiding = null;
+    card.hidden = false;
+    // Reading the width makes the browser lay the card out in its
+    // starting state first, so the transition has something to run
+    // from (the bell list's trick).
+    void card.offsetWidth;
+    card.classList.add("is-open");
+  }
+
+  function hide() {
+    if (card.hidden || hiding) return;
+    card.classList.remove("is-open");
+    if (still) {
+      card.hidden = true;
+      return;
+    }
+    hiding = window.setTimeout(function () {
+      hiding = null;
+      card.hidden = true;
+    }, 180);
+  }
+
+  if (!card.hidden) {
+    // Rendered open: give it the drop.
+    window.requestAnimationFrame(function () { card.classList.add("is-open"); });
+  }
+
+  document.addEventListener("click", function (ev) {
+    if (!ev.target.closest) return;
+    if (ev.target.closest("[data-notify-prompt-open]")) {
+      var menu = document.getElementById("notify-menu");
+      if (menu) {
+        menu.open = false;
+        menu.classList.remove("is-open");
+      }
+      show();
+      return;
+    }
+    if (card.hidden) return;
+    if (ev.target.closest("[data-notify-prompt-close]") || !card.contains(ev.target)) hide();
+  });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape" && !card.hidden) hide();
+  });
+  document.addEventListener("evesynapse:content-will-swap", function () {
+    if (!card.hidden) hide();
+  });
+})();
+
 // Notification settings: under each kind, the characters it is on for
 // (a [data-checkselector]: the character selector's look, with a tick
 // box per character). The field shows the count and filters the list

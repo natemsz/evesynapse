@@ -529,3 +529,89 @@ html[data-theme="light"] #main-content > .section-subtabs a.active {
    table's own .yours rows keep the style.css treatment. */
 .chars-table tbody tr.yours td { background: rgba(255, 110, 0, 0.16); }
 .chars-table tbody tr.yours td:first-child { background: rgba(255, 110, 0, 0.16); }
+
+/* --- The first-run notification prompt --------------------------------
+   A small card that drops down from the bell (base.html renders it
+   right after the bell, positioned against the sticky header: top
+   100% is the header's own bottom edge, so it hangs from the bar
+   wherever the bar wraps). Ember glass like the other floating
+   surfaces. Without script it simply appears on the first view;
+   html.js gives it the bell list's drop. */
+.notify-prompt {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0.75rem;
+  z-index: 40;
+  width: min(24rem, calc(100vw - 2rem));
+  padding: 0.9rem 1rem 0.8rem;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+  backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-lg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+}
+.notify-prompt form { margin: 0; }
+.notify-prompt-title { margin: 0 1.2rem 0.3rem 0; font-size: 1.05rem; font-weight: 600; color: var(--text-bright); }
+.notify-prompt-sub { margin: 0 0 0.55rem; color: var(--muted); font-size: 0.9rem; }
+.notify-prompt-rows { display: flex; flex-direction: column; }
+.notify-prompt-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.45rem 0.55rem;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+label.notify-prompt-row:hover { background: var(--row-hover); }
+.notify-prompt-row input { margin-top: 0.2rem; flex: none; }
+.notify-prompt-row.is-unavailable { cursor: default; padding-left: 1.55rem; color: var(--muted); }
+.notify-prompt-text { display: block; }
+.notify-prompt-name { display: block; color: var(--text); }
+.notify-prompt-note { display: block; color: var(--muted); font-size: 0.85rem; }
+.notify-prompt-actions { display: flex; gap: 0.5rem; margin-top: 0.65rem; }
+.notify-prompt-fine { margin: 0.6rem 0 0; color: var(--muted); }
+.notify-prompt-close {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.5rem;
+  padding: 0.15rem 0.4rem;
+  background: none;
+  border: 0;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  font: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.notify-prompt-close:hover, .notify-prompt-close:focus-visible { color: var(--text-bright); background: var(--row-hover); outline: none; }
+html.js .notify-prompt {
+  opacity: 0;
+  transform: translateY(-0.25rem);
+  transition: opacity 140ms ease-out, transform 180ms ease-out;
+}
+html.js .notify-prompt.is-open { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  html.js .notify-prompt { transition: none; }
+}
+/* The bell list's "Notification choices" entry is a <button> wearing
+   the .notify-all link's clothes. */
+.notify-menu button.notify-all {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+.notify-menu button.notify-all:hover { color: var(--success); text-decoration: underline; }
+/* The settings page's channel switches, one per line like the
+   per-kind rows below them. */
+.notify-channels { display: flex; flex-direction: column; gap: 0.3rem; margin: 0 0 0.75rem; }
+.notify-channels label { cursor: pointer; }
+@media (max-width: 860px) {
+  .notify-prompt { left: 0.5rem; right: 0.5rem; width: auto; }
+}

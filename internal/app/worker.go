@@ -316,6 +316,12 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// the character pass so valuation reads fresh rows.
 	app.refreshTrueValues(ctx)
 
+	// Fallback prices: the Fuzzwork aggregate mirror, the
+	// layer under our own sweeps for the regions they do not
+	// cover. Self-gated to an hourly orderset poll; a fresh
+	// mirror costs this cycle nothing.
+	app.refreshFallbackPrices(ctx)
+
 	// The character pass, several characters at a time
 	// (worker_lanes.go).
 	c.refreshCharacters(ctx, eligible)

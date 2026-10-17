@@ -429,6 +429,75 @@ func TestUserCorporationIDsAreScopedToTheUser(t *testing.T) {
 	}
 }
 
+// TestIntelSecPills: the fleet overview's security pill rides along
+// on the Intel pages — every FW system row carries it, and on the
+// Incursions page the staging system carries it while the affected
+// systems (even ones whose security is known) do not. A system the
+// SDE has no row for renders no pill, the fleet badge's own guard.
+func TestIntelSecPills(t *testing.T) {
+	transport := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
+
+	// SDE fixtures: a highsec, a lowsec (0.34 rounds to 0.3) and a
+	// nullsec system. 30002003 is deliberately absent: unknown
+	// security renders no pill.
+	for _, stmt := range []string{
+		`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30000142, 'Jita', 10000002, 0.9), (30002001, 'Nourvukaiken', 10000043, 0.34), (30002002, 'Fixture Null', 10000060, -0.15)`,
+	} {
+		if _, err := conn.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed sde: %v", err)
+		}
+	}
+
+	seedGlobalSnapshot(t, q, esi.GlobalIncursions, []esi.Incursion{
+		{ConstellationID: 20000002, FactionID: 500019, HasBoss: false,
+			InfestedSystems: []int64{30000142, 30002001, 30002002}, Influence: 0.5,
+			StagingSystemID: 30002002, State: "mobilizing", Type: "Incursion"},
+	})
+	seedGlobalSnapshot(t, q, esi.GlobalFWSystems, []esi.FWSystem{
+		{SolarSystemID: 30002001, OccupierFactionID: 500002, OwnerFactionID: 500001, Contested: "contested", VictoryPoints: 900000, VictoryPointsThreshold: 1000000},
+		{SolarSystemID: 30000142, OccupierFactionID: 500001, OwnerFactionID: 500002, Contested: "contested", VictoryPoints: 500000, VictoryPointsThreshold: 1000000},
+		{SolarSystemID: 30002003, OccupierFactionID: 500001, OwnerFactionID: 500001, Contested: "contested", VictoryPoints: 100000, VictoryPointsThreshold: 1000000},
+	})
+	app.esi.StoreConstellationName(20000002, "Fixture Constellation")
+
+	// Incursions: exactly one pill on the page — the staging
+	// system's — even though both other affected systems have
+	// known security.
+	code, body := getPage(t, app, cookie, "/intel/incursions/")
+	if code != http.StatusOK {
+		t.Fatalf("incursions page: status %d", code)
+	}
+	mustContain(t, "/intel/incursions/", body,
+		"Fixture Null</a><span class=\"sec-pill sec-0\">-0.2</span>")
+	if n := strings.Count(body, "sec-pill sec-"); n != 1 {
+		t.Errorf("incursions page: %d security pills, want exactly 1 (staging only)", n)
+	}
+
+	// Faction warfare: the lowsec and highsec rows carry their
+	// pills (tier and text by the shared rounding); the system
+	// with no SDE row renders its name with no pill.
+	code, body = getPage(t, app, cookie, "/intel/fw/")
+	if code != http.StatusOK {
+		t.Fatalf("fw page: status %d", code)
+	}
+	mustContain(t, "/intel/fw/", body,
+		"Nourvukaiken</a><span class=\"sec-pill sec-3\">0.3</span>",
+		"Jita</a><span class=\"sec-pill sec-9\">0.9</span>",
+		"System #30002003")
+	if n := strings.Count(body, "sec-pill sec-"); n != 2 {
+		t.Errorf("fw page: %d security pills, want 2 (known-security rows only)", n)
+	}
+}
+
 // TestPublicToolsNeedNoSession: the build planner, the PI planner and
 // the Intel pages answer visitors without a session; the Industry
 // overview still sends them to sign in.

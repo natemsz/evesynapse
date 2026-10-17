@@ -38,7 +38,7 @@
     <tbody>
     {{range .IntelFW.Systems}}
       <tr>
-        <td>{{placeLink .System}}</td>
+        <td>{{placeLink .System}}{{if .SecKnown}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span>{{end}}</td>
         <td>{{.Occupier}}</td>
         <td>{{.Owner}}</td>
         <td>{{.State}}</td>

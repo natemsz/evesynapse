@@ -828,6 +828,17 @@ func (app *Application) SystemRef(ctx context.Context, systemID int64) module.Pl
 	return app.linkPlace(ctx, systemID, app.locationTitle(ctx, systemID, "solar_system"))
 }
 
+// SystemSecurity mirrors the fleet overview's location badge: the
+// stored sde_systems row's security, rounded by secRound.
+func (app *Application) SystemSecurity(ctx context.Context, systemID int64) (string, int, bool) {
+	sys, err := app.queries.GetSDESystem(ctx, systemID)
+	if err != nil {
+		return "", 0, false
+	}
+	text, tier := secRound(sys.Security)
+	return text, tier, true
+}
+
 func (app *Application) ConstellationName(id int64) (string, bool) {
 	return app.esi.CachedConstellationName(id)
 }

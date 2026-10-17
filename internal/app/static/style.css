@@ -142,13 +142,13 @@
   --panel: #130e0a;
   --panel-head: rgba(10, 7, 4, 0.55);
   /* Glass (Ember Nebula): the shared card/panel surface — the panel
-     color at ~0.85 alpha, an accent-tinted edge, and the blur that
+     color at 78% strength, an accent-tinted edge, and the blur that
      turns the backdrop art behind a card into atmosphere. Every
      value rides the theme variables, so faction themes recolor
      the glass and the light theme's solid overrides still win. */
-  --glass: color-mix(in srgb, var(--panel) 83%, transparent);
+  --glass: color-mix(in srgb, var(--panel) 78%, transparent);
   --glass-edge: color-mix(in srgb, var(--accent) 24%, transparent);
-  --glass-blur: 47px;
+  --glass-blur: 42px;
   --row: rgba(16, 13, 10, 0.55);
   --row-alt: rgba(255, 255, 255, 0.03);
   --row-hover: rgba(255, 140, 50, 0.09);
@@ -1557,11 +1557,13 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid rgba(255, 1
 .fleet-facts dd { margin: 0.1rem 0 0; }
 .fleet-foot { margin: 0.4rem 0 0; color: var(--muted); }
 /* A fleet table taller than its module scrolls inside it, and the
-   "Showing x of y" line stays pinned at the bottom. */
+   "Showing x of y" line stays pinned at the bottom. The line paints
+   no surface of its own: the card's glass shows through it. A second
+   glass layer here stacked to near-opaque and read as a solid slab. */
 .grid.home-grid > .card[data-widget="fleet"] { min-height: 0; overflow: hidden; }
 .grid.home-grid > .card[data-widget="fleet"] > .card-body { display: flex; flex-direction: column; min-height: 0; }
 .grid.home-grid > .card[data-widget="fleet"] > .card-body > .tw { flex: 1 1 auto; min-height: 0; overflow: auto; }
-.grid.home-grid > .card[data-widget="fleet"] .fleet-foot { flex: none; position: sticky; bottom: 0; padding-top: 0.3rem; background: var(--glass); border-top: 1px solid rgba(255, 110, 0, 0.14); }
+.grid.home-grid > .card[data-widget="fleet"] .fleet-foot { flex: none; position: sticky; bottom: 0; padding-top: 0.3rem; background: transparent; border-top: 1px solid rgba(255, 110, 0, 0.14); }
 
 /* Wallet flow donuts: income and spend by type. Slice colours
    are a fixed palette, the same order in both donuts and their

@@ -290,8 +290,8 @@ html[data-theme="light"] .btn.btn-quiet {
 }
 #main-content > .section-tabs a.active {
   background: var(--glass);
-  -webkit-backdrop-filter: blur(25px) saturate(0.9);
-  backdrop-filter: blur(25px) saturate(0.9);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+  backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
   border-top: 3px solid var(--accent);
   border-left-color: var(--glass-edge);
   border-right-color: var(--glass-edge);

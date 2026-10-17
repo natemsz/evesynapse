@@ -106,20 +106,34 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 			t.Errorf("bg.css is missing the tab/item-lead rule %q", want)
 		}
 	}
-	// Below the corporation strip's wrap point (1,740px viewport)
-	// the folder strip falls back to pills inside the glass: the
-	// row takes the panel's glass and joins it with no seam, the
-	// pills wrap across rows, and the active pill carries the
-	// accent fill and edge instead of the stripe.
+	// Below the widest flat strip's wrap point (the market
+	// strip, ~1,279px viewport; corporation is grouped and no
+	// longer sets it) the folder strip becomes a detached glass
+	// rail: one row of pills on the panel's glass, scrolling
+	// sideways with the scrollbar hidden and both ends faded by
+	// a mask gradient, the panel's top border and rounded top
+	// corners restored under it, and the active pill carrying
+	// the accent fill and edge instead of the stripe. A grouped
+	// section's sub-row sits joined to the panel under the
+	// strip at full width and rails the same way below it.
 	for _, want := range []string{
-		"@media (max-width: 1739px) {",
-		"#main-content:has(> .section-tabs) > .page-body { border-top: none; }",
-		"padding: 0.85rem 1.25rem 0.9rem;",
+		"@media (max-width: 1313px) {",
+		"flex-wrap: nowrap;",
+		"overflow-x: auto;",
+		"scrollbar-width: none;",
+		"#main-content > .section-tabs::-webkit-scrollbar { display: none; }",
+		"#main-content > .section-subtabs::-webkit-scrollbar { display: none; }",
+		"mask-image: linear-gradient(to right,",
+		"border-top: 1px solid var(--glass-edge);",
+		"border-top-left-radius: var(--r-lg);",
 		"border-top: 1px solid rgba(255, 106, 0, 0.40);",
 		"border-bottom: 1px solid rgba(255, 106, 0, 0.40);",
+		"#main-content > .section-subtabs {",
+		"#main-content > .section-subtabs a.active {",
+		"#main-content:has(> .section-subtabs) > .page-body { border-top: none; }",
 	} {
 		if !strings.Contains(bg, want) {
-			t.Errorf("bg.css is missing the mobile tab fallback rule %q", want)
+			t.Errorf("bg.css is missing the tab rail rule %q", want)
 		}
 	}
 	if !strings.Contains(style, ".page-body { padding: 1.25rem 1.25rem 1.5rem; }") ||

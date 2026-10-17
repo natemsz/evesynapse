@@ -217,101 +217,15 @@ html[data-theme="light"] .btn.btn-quiet {
   .pchart text { font-size: 6px; }
 }
 
-/* Section tabs outside the glass: base.html now renders each
-   page's section tab nav (its pagetabs block) between the page
-   title and .page-body, and the tabs are shaped as actual folder
-   tabs attached to the panel's top edge. The row aligns with the
-   panel (1.25rem sides, no horizontal padding on the row, so the
-   first tab's left border sits flush with the panel's left
-   border), overlaps its top border by 1px, and the
-   panel gives up its own top margin when a tab row sits on it.
-   The active tab is the panel's own tab: the glass recipe, no
-   bottom border, and its only orange is a thicker accent stripe
-   across the top (the nav bar's single-stripe vocabulary) with
-   bright text. Inactive tabs keep the warm translucent pill fill
-   in the tab silhouette. Hover removes the tab's background
-   color and raises saturation to 1.5 over a 150ms transition.
-   A tabbed panel also squares its top corners (folder body);
-   pages without a tab row keep all four rounded corners. */
-#main-content > h1 { font-size: 1.75rem; }
-#main-content > .section-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin: 0.6rem 1.25rem -1px;
-  padding: 0;
-  position: relative;
-  z-index: 1;
-}
-#main-content:has(> .section-tabs) > .page-body { margin-top: 0; }
-/* A tabbed panel is a folder body: its top edge runs straight
-   under the tab row. The panel's rounded top corners would curve
-   away beneath the first and last tabs, leaving a notch of sky
-   under the active tab's corner and breaking its merge into the
-   panel — so a tabbed panel squares its top corners and keeps
-   the radius only at the bottom. */
-#main-content:has(> .section-tabs) > .page-body { border-top-left-radius: 0; border-top-right-radius: 0; }
-#main-content > .section-tabs a {
-  border: 1px solid rgba(255, 110, 0, 0.22);
-  border-radius: 0.5rem 0.5rem 0 0;
-  background: rgba(23, 17, 13, 0.55);
-  -webkit-backdrop-filter: blur(10px) saturate(1.2);
-  backdrop-filter: blur(10px) saturate(1.2);
-  padding: 0.4rem 0.85rem;
-  transition: background-color 150ms ease, border-color 150ms ease, filter 150ms ease;
-}
-#main-content > .section-tabs a:hover {
-  background: transparent;
-  border-color: rgba(255, 130, 20, 0.45);
-  filter: saturate(1.5);
-}
-#main-content > .section-tabs a.active {
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(25px) saturate(0.9);
-  backdrop-filter: blur(25px) saturate(0.9);
-  border-top: 3px solid var(--accent);
-  border-left-color: var(--glass-edge);
-  border-right-color: var(--glass-edge);
-  border-bottom: none;
-  padding-top: calc(0.4rem - 2px);
-  color: var(--text-bright);
-}
-html[data-theme="light"] #main-content > .section-tabs a {
-  background: rgba(253, 251, 246, 0.72);
-  border-color: #d3c7ae;
-}
-html[data-theme="light"] #main-content > .section-tabs a.active {
-  background: var(--glass);
-  border-top-color: var(--accent);
-  border-left-color: var(--glass-edge);
-  border-right-color: var(--glass-edge);
-}
-@media (max-width: 719px) {
-  #main-content > .section-tabs {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: thin;
-    padding-bottom: 0.2rem;
-    margin-top: 0.45rem;
-  }
-  #main-content > .section-tabs a { flex: none; }
-}
-
-/* Item page lead (the description placement mock): the icon sits
-   in a framed 128px tile and the description in its own sub-card
-   beside it, under the item name and above the facts table. These
-   are the mock's proposed rules, landed verbatim. */
-.item-lead { display: flex; gap: 1rem; align-items: stretch; margin: 0.6rem 0 1.1rem; }
-.item-art {
-  flex: 0 0 auto; width: 128px; height: 128px; border-radius: 0.5rem;
-  border: 1px solid rgba(255, 110, 0, 0.22); background: rgba(0, 0, 0, 0.35);
-  display: flex; align-items: center; justify-content: center; overflow: hidden;
-}
-.item-art img { width: 128px; height: 128px; display: block; }
-.item-desc {
-  flex: 1 1 auto; min-width: 0; border-radius: 0.5rem; padding: 0.75rem 1rem 0.85rem;
-  background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 110, 0, 0.14);
-}
-.item-desc .k { display: block; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.4rem; }
-.item-desc p { margin: 0 0 0.55rem; line-height: 1.55; }
-.item-desc p:last-child { margin-bottom: 0; }
+/* Home KPI glyphs: the mockup's little Lucide mark in each
+   tile's top right (wallet, coins, package, book) — the same
+   16px ember treatment the briefing cards carry (.brief-icon
+   in style.css). The glyphs ride inline in the template (the
+   .kpi-spark precedent): bg.css bans SVG data URIs outright
+   (the starfield guard), and style.css has outgrown a
+   whole-file push; bg.css loads after it and wins ties. The
+   label of an icon-bearing tile keeps clear of the glyph. */
+.kpi { position: relative; }
+.kpi:has(> .kpi-icon) .kpi-k { padding-right: 1.5rem; }
+.kpi-icon { position: absolute; top: 0.55rem; right: 0.6rem; width: 16px; height: 16px; opacity: 0.85; pointer-events: none; }
+.kpi-icon svg { display: block; width: 16px; height: 16px; }

@@ -84,12 +84,23 @@ func TestLandingAnonymous(t *testing.T) {
 // The Small Injector's seeded days deliberately lag the
 // region's freshest days: each item prices from its OWN two
 // most recent days, not the region-wide latest pair.
+//
+// Regression guard (2026-10-16): type_names deliberately
+// carries NONE of the watched rows, matching production —
+// it is a sparse, lazily-warmed name cache, and the strip
+// once built its watched set from it, so history flowed for
+// all three items while the live strip stayed empty (twice,
+// behind green tests that seeded the cache). Display names
+// resolve from sde_types, the complete catalog, so the
+// watched types are seeded there instead.
 func TestLandingStripFromStoredRows(t *testing.T) {
 	rig := apptest.Build(t, nil)
 	conn := rig.DB()
 	ctx := context.Background()
 	stmts := []string{
-		`INSERT INTO type_names (type_id, name) VALUES (44992, 'PLEX'), (40520, 'Large Skill Injector'), (45635, 'Small Skill Injector'), (34, 'Tritanium')`,
+		`INSERT INTO sde_groups (group_id, name, category_id) VALUES (18, 'Mineral', 4)`,
+		`INSERT INTO sde_types (type_id, name, group_id) VALUES (44992, 'PLEX', 18), (40520, 'Large Skill Injector', 18), (45635, 'Small Skill Injector', 18), (34, 'Tritanium', 18)`,
+		`INSERT INTO type_names (type_id, name) VALUES (34, 'Tritanium')`,
 		`INSERT INTO market_history (region_id, type_id, date, average, highest, lowest, volume, order_count) VALUES
 		   (19000001, 44992, '2026-10-14', 5900000.00, 6000000, 5800000, 100000, 900),
 		   (19000001, 44992, '2026-10-15', 6200000.00, 6300000, 6100000, 110000, 950),

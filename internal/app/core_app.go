@@ -222,6 +222,12 @@ type Application struct {
 	// names to entity_names (entity_names.go).
 	names   *nameWriter
 	namesWG sync.WaitGroup // the first-start bulk name fill
+
+	// anonMarketOffState is the live anonymous-market switch
+	// (market_anon.go): seeded from the stored setting or the
+	// MARKET_ANON boot default at startup, flipped by the Admin
+	// page without a restart.
+	anonMarketOffState atomic.Bool
 }
 
 // New opens the database (applying the embedded baseline schema
@@ -271,6 +277,7 @@ func New(cfg Config) (*Application, error) {
 	app.esi.SetUserAgent(cfg.esiUserAgent())
 	// Every stored name is in memory before the first request, and
 	// every name learned from here on is kept (entity_names.go).
+	app.loadAnonMarketSetting(context.Background())
 	app.loadEntityNames(context.Background())
 	app.names = newNameWriter(app.db)
 	app.esi.SetNameSink(app.names.enqueue)
@@ -452,6 +459,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		// What the Sync and Admin search boxes suggest while typing.
 		r.Get("/suggest", app.handleCharacterSuggest)
 		r.Post("/accounts/remove", app.handleAdminAccountRemove)
+		r.Post("/market-anon", app.handleAdminMarketAnon)
 	})
 
 	r.Route("/corporations", func(r chi.Router) {
@@ -517,8 +525,10 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/market", func(r chi.Router) {
 		// Public: the market reads shared data. Anonymous visitors
 		// are throttled per address and their renders read stored
-		// data only (no live order book, no queued work); the
-		// personal pieces (restock, watches) stay signed-in.
+		// data only (the order book is the stored sweep snapshot,
+		// never a fetch); they may queue market wants only, and
+		// even that the admin can switch off live (market_anon.go).
+		// The personal pieces (restock, watches) stay signed-in.
 		r.With(anonPages).Get("/", app.handleMarket)
 		r.With(anonPages).Get("/suggest", app.handleMarketSuggest)
 		r.With(anonPages).Get("/history-fragment", app.handleMarketHistoryFragment)

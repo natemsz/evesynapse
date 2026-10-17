@@ -256,6 +256,13 @@ var pgLinkChoicesSchema string
 //go:embed schema_pg/049_trade_ideas_rows.sql
 var pgTradeIdeasRowsSchema string
 
+// Step 050: the stored market book (top orders per side, kept by
+// each completed region sweep), the sweep staging table's system
+// id column, and site_settings for live operator switches.
+//
+//go:embed schema_pg/050_market_book_snapshot.sql
+var pgMarketBookSnapshotSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -334,6 +341,7 @@ func schemaSteps() []schemaStep {
 		{47, "entity_names", pgEntityNamesSchema, ""},
 		{48, "link_choices", pgLinkChoicesSchema, ""},
 		{49, "trade_ideas_rows", pgTradeIdeasRowsSchema, ""},
+		{50, "market_book_snapshot", pgMarketBookSnapshotSchema, ""},
 	}
 }
 

@@ -263,6 +263,18 @@ type LocalFitting struct {
 	RatingSum   int64     `json:"rating_sum"`
 }
 
+type MarketBookOrder struct {
+	RegionID     int64     `json:"region_id"`
+	TypeID       int64     `json:"type_id"`
+	IsBuyOrder   int64     `json:"is_buy_order"`
+	Rank         int64     `json:"rank"`
+	Price        float64   `json:"price"`
+	VolumeRemain int64     `json:"volume_remain"`
+	LocationID   int64     `json:"location_id"`
+	SystemID     int64     `json:"system_id"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
 type MarketFetchState struct {
 	Kind        string    `json:"kind"`
 	State       string    `json:"state"`
@@ -351,6 +363,7 @@ type MarketSweepOrder struct {
 	Price        float64 `json:"price"`
 	VolumeRemain int64   `json:"volume_remain"`
 	LocationID   int64   `json:"location_id"`
+	SystemID     int64   `json:"system_id"`
 }
 
 type MarketSweepState struct {
@@ -687,6 +700,12 @@ type Session struct {
 	Token  string    `json:"token"`
 	Data   []byte    `json:"data"`
 	Expiry time.Time `json:"expiry"`
+}
+
+type SiteSetting struct {
+	Key       string    `json:"key"`
+	Value     string    `json:"value"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type SkillPlan struct {

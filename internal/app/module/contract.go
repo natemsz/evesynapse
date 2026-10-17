@@ -752,6 +752,7 @@ type ShellData struct {
 	NotifySettings any
 	NavLinks       map[string][]NavLink
 	SectionTabs    []NavLink
+	SectionSubTabs []NavLink
 	NavCharacter   int64
 }
 

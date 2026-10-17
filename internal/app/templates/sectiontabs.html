@@ -1,3 +1,5 @@
 {{define "sectiontabs"}}{{with .SectionTabs}}<nav class="section-tabs" aria-label="Pages in this section">
   {{range .}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="page"{{end}}>{{.Label}}</a>{{end}}
+</nav>{{end}}{{with .SectionSubTabs}}<nav class="section-subtabs" aria-label="Pages in this group">
+  {{range .}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="page"{{end}}>{{.Label}}</a>{{end}}
 </nav>{{end}}{{end}}

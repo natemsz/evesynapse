@@ -98,10 +98,11 @@
   });
 
   // --- Section tabs --------------------------------------------
-  // On a phone the section's tabs scroll sideways; start with the
-  // current page's tab in view rather than off the right edge.
+  // Below the fit width the tab strip (and a grouped section's
+  // sub-row) is a sideways-scrolling rail; start with the current
+  // page's tab in view rather than off the right edge.
   function revealSectionTab(root) {
-    var strips = root.querySelectorAll(".section-tabs");
+    var strips = root.querySelectorAll(".section-tabs, .section-subtabs");
     for (var i = 0; i < strips.length; i++) {
       var strip = strips[i], on = strip.querySelector("a.active");
       if (!on || strip.scrollWidth <= strip.clientWidth) continue;

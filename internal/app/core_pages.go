@@ -196,7 +196,7 @@ func (app *Application) fillShell(ctx context.Context, shell *module.ShellData, 
 		shell.NavCharacter = navCharacterFrom(ctx)
 	}
 	shell.NavLinks = navLinksFor(shell.Section, shell.NavPage, shell.NavCharacter)
-	shell.SectionTabs = sectionTabsFor(shell.NavLinks, shell.Section)
+	shell.SectionTabs, shell.SectionSubTabs = sectionTabsGrouped(shell.NavLinks, shell.Section)
 	if len(shell.Scripts) == 0 {
 		if p, ok := registeredPages[page]; ok {
 			shell.Scripts = p.Scripts

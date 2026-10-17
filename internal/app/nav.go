@@ -156,3 +156,86 @@ func sectionTabsFor(links map[string][]navLink, section string) []navLink {
 	}
 	return nil
 }
+
+// navGroup is one cluster of a grouped section's pages. Membership
+// is by href; the order of pages inside a group is the section's
+// nav order, so module registration still decides it.
+type navGroup struct {
+	Label string
+	Hrefs []string
+}
+
+// sectionGroups clusters a section's pages for the tab strip.
+// Only corporation is grouped: at thirteen pages its strip was
+// the widest in the app by a third again, and no single row of
+// folder tabs holds it under a very wide window. The sidebar
+// menus always render the flat list; grouping is a tab-strip
+// structure only, and no page's route changes.
+var sectionGroups = map[string][]navGroup{
+	"corporation": {
+		{"People", []string{"/corporations/", "/corporations/members/", "/groups/"}},
+		{"Assets & Money", []string{"/corporations/wallets/", "/corporations/orders/", "/corporations/assets/", "/corporations/structures/"}},
+		{"Programs", []string{"/doctrines/", "/doctrines/fits/", "/srp/"}},
+		{"Comms & Admin", []string{"/corporations/killmails/", "/discord/servers", "/corporations/settings/"}},
+	},
+}
+
+// sectionTabsGrouped is a page's tab strip data: for an ungrouped
+// section, its pages and no sub-row. For a grouped one, the strip
+// shows the groups — labelled by cluster, linking at the cluster's
+// first page in nav order, active when one of its pages is — and
+// the sub-row shows the active group's pages. A group with no
+// compiled-in pages is skipped. A strip the group map does not
+// cover exactly falls back to the flat strip whole, so a page no
+// group claims can never vanish from the nav; TestSectionGroups
+// pins the map against the registry so the fallback stays a
+// safety net, not a state anyone ships in.
+func sectionTabsGrouped(links map[string][]navLink, section string) ([]navLink, []navLink) {
+	tabs := sectionTabsFor(links, section)
+	groups, grouped := sectionGroups[section]
+	if !grouped || tabs == nil {
+		return tabs, nil
+	}
+	member := make(map[string]int, len(tabs))
+	for gi, g := range groups {
+		for _, h := range g.Hrefs {
+			member[h] = gi
+		}
+	}
+	buckets := make([][]navLink, len(groups))
+	for _, t := range tabs {
+		gi, ok := member[baseHref(t.Href)]
+		if !ok {
+			return tabs, nil
+		}
+		buckets[gi] = append(buckets[gi], t)
+	}
+	var groupTabs, sub []navLink
+	for gi, g := range groups {
+		pages := buckets[gi]
+		if len(pages) == 0 {
+			continue
+		}
+		gt := navLink{Href: pages[0].Href, Label: g.Label}
+		for _, p := range pages {
+			if p.Active {
+				gt.Active = true
+				sub = pages
+			}
+		}
+		groupTabs = append(groupTabs, gt)
+	}
+	if len(groupTabs) < 2 || sub == nil {
+		return tabs, nil
+	}
+	return groupTabs, sub
+}
+
+// baseHref is a rendered link's path, without the ?character= a
+// section's own links carry.
+func baseHref(href string) string {
+	if at := strings.Index(href, "?"); at >= 0 {
+		return href[:at]
+	}
+	return href
+}

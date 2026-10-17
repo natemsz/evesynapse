@@ -1,0 +1,38 @@
+{{define "title"}}My Jobs{{end}}
+{{define "pagetitle"}}<h1><span class="gt">My Jobs</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{template "charselector" .IndustryChars}}
+
+{{if .Industry}}
+<h2>{{.Industry.CharacterName}}</h2>
+
+<section class="foldable">
+<h3>Jobs</h3>
+{{if .Industry.Jobs.Note}}
+<p><small>{{.Industry.Jobs.Note}}</small></p>
+{{else if .Industry.Jobs.Warming}}
+<p><small>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</small></p>
+{{else if .Industry.JobRows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Activity</th><th>Blueprint</th><th>Product</th><th>Installer</th><th>Facility</th><th>Runs</th><th>Status</th><th>Ends</th><th>Cost</th></tr></thead>
+  <tbody>
+  {{range .Industry.JobRows}}
+    <tr><td>{{.Activity}}</td><td>{{itemLink .BlueprintTypeID .Blueprint}}</td><td>{{if .Product}}{{itemLink .ProductTypeID .Product}}{{end}}</td><td>{{charLink $.ViewerChars .InstallerID .Installer}}</td><td>{{placeLink .Facility}}</td><td>{{.Runs}}</td><td>{{.Status}}</td><td>{{.Ends}}</td><td>{{.Cost}} ISK</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{if .Industry.JobsCut}}<p><small>+ {{.Industry.JobsCut}} older jobs in this snapshot.</small></p>{{end}}
+{{else}}
+<p><small>No industry jobs in the latest snapshot.</small></p>
+{{end}}
+</section>
+{{else}}
+<p>No character to show yet. Link a character first.</p>
+{{end}}
+{{end}}

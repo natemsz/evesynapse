@@ -331,7 +331,7 @@ func briefingAggSummary(rule string, total int) (string, bool) {
 			`. <a href="/orders/">Orders</a>: `, true
 	case "job-ready":
 		return fmt.Sprintf("%d industry job%s finished and waiting for delivery", total, pluralSuffix(total)) +
-			`. <a href="/industry/">Industry</a>: `, true
+			`. <a href="/industry/jobs/">My Jobs</a>: `, true
 	case "contract-waiting":
 		return fmt.Sprintf("%d contract%s waiting for your answer", total, pluralSuffix(total)) +
 			`. <a href="/contracts/">Contracts</a>: `, true
@@ -554,7 +554,7 @@ func (bb *briefingBuilder) industryLines(ctx context.Context, b *charSnaps, pref
 			if readyItem != "" {
 				line += template.HTML(fmt.Sprintf(" — first up: %s", string(readyItem)))
 			}
-			line += template.HTML(fmt.Sprintf(". <a href=\"/industry/?character=%d\">Industry</a>", b.ch.CharacterID))
+			line += template.HTML(fmt.Sprintf(". <a href=\"/industry/jobs/?character=%d\">My Jobs</a>", b.ch.CharacterID))
 			bb.addAgg(briefingKey(b.ch.CharacterID, "job-ready"), briefingJobReady, readyAt, line, "job-ready", readyN, prefix)
 		}
 
@@ -564,11 +564,11 @@ func (bb *briefingBuilder) industryLines(ctx context.Context, b *charSnaps, pref
 			researchMax := 1 + levels[slotSkillIDs["Laboratory Operation"]] + levels[slotSkillIDs["Advanced Laboratory Operation"]]
 			if idle := manufMax - activeManuf; idle > 0 {
 				bb.add(briefingKey(b.ch.CharacterID, "idle-manufacturing"), briefingIdleSlots, time.Time{},
-					template.HTML(fmt.Sprintf("%s has %d of %d manufacturing slots idle. <a href=\"/industry/?character=%d\">Industry</a>", prefix, idle, manufMax, b.ch.CharacterID)))
+					template.HTML(fmt.Sprintf("%s has %d of %d manufacturing slots idle. <a href=\"/industry/jobs/?character=%d\">My Jobs</a>", prefix, idle, manufMax, b.ch.CharacterID)))
 			}
 			if idle := researchMax - activeResearch; idle > 0 {
 				bb.add(briefingKey(b.ch.CharacterID, "idle-research"), briefingIdleSlots, time.Time{},
-					template.HTML(fmt.Sprintf("%s has %d of %d research slots idle. <a href=\"/industry/?character=%d\">Industry</a>", prefix, idle, researchMax, b.ch.CharacterID)))
+					template.HTML(fmt.Sprintf("%s has %d of %d research slots idle. <a href=\"/industry/jobs/?character=%d\">My Jobs</a>", prefix, idle, researchMax, b.ch.CharacterID)))
 			}
 		}
 	}

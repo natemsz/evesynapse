@@ -47,6 +47,7 @@ var Module = module.Module{
 		// session) and the SDE-only picker. Handlers branch on the session.
 		r.With(deps.AnonPages()).Get("/fittings/", h((*tool).handleFittings))
 		r.With(deps.AnonSim()).Post("/fittings/simulate/", h((*tool).handleFitSimulate))
+		r.With(deps.AnonSim()).Post("/fittings/solve-implants/", h((*tool).handleFitSolveImplants))
 		r.With(deps.AnonPages()).Get("/fittings/picker.json", h((*tool).handleFitPickerJSON))
 		auth := r.With(deps.RequireAuth())
 		auth.Get("/fittings/saved/", h((*tool).handleFittingsSaved))

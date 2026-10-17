@@ -72,16 +72,21 @@ type stationKey struct {
 }
 
 // stationAccum gathers one place-and-type's book during a sweep:
-// just the best price on each side, the order counts, and the
-// remaining volumes. Whole orders are never kept, same memory
-// discipline as the region accumulators.
+// the best and typical (median) prices on each side, the order
+// counts, and the remaining volumes. The bests, counts and
+// volumes come from the staged book's SQL aggregates; the
+// typicals are distilled from the per-type price lists the
+// region pass already walks (see storeRegionSweep), so no
+// second pass over the book is needed.
 type stationAccum struct {
-	BestSell   float64 // lowest sell price seen; 0 = none yet
-	BestBuy    float64 // highest buy price seen; 0 = none yet
-	SellOrders int64
-	BuyOrders  int64
-	SellVolume int64
-	BuyVolume  int64
+	BestSell    float64 // lowest sell price seen; 0 = none yet
+	BestBuy     float64 // highest buy price seen; 0 = none yet
+	TypicalSell float64 // median sell price; 0 = no sell orders
+	TypicalBuy  float64 // median buy price; 0 = no buy orders
+	SellOrders  int64
+	BuyOrders   int64
+	SellVolume  int64
+	BuyVolume   int64
 }
 
 // regionSweepOutcome is one region's advance in a sweep pass:
@@ -334,6 +339,15 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 	}
 	bookByType := make(map[int64][]bookRow, len(typeIDs))
 	statsByType := make(map[int64]*regionTypeStats, len(typeIDs))
+	// Station typicals are distilled in this same per-type pass:
+	// each type's staged prices, split by place and side, feed
+	// summarizePrices exactly as the region grain's do. The
+	// slices held at once are one type's prices partitioned by
+	// station -- the same memory the region figures already use.
+	type stationSidePrices struct {
+		sells, buys []float64
+	}
+	stationPrices := make(map[stationKey]*stationSidePrices)
 	for _, typeID := range typeIDs {
 		rows, err := app.queries.ListMarketSweepTypeOrders(ctx, db.ListMarketSweepTypeOrdersParams{
 			RegionID: regionID, TypeID: typeID,
@@ -357,6 +371,19 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 				sellPrices = append(sellPrices, row.Price)
 				st.sellVolume += row.VolumeRemain
 				sells = append(sells, br)
+			}
+			if row.LocationID > 0 {
+				key := stationKey{LocationID: row.LocationID, TypeID: typeID}
+				sp := stationPrices[key]
+				if sp == nil {
+					sp = &stationSidePrices{}
+					stationPrices[key] = sp
+				}
+				if row.IsBuyOrder == 1 {
+					sp.buys = append(sp.buys, row.Price)
+				} else {
+					sp.sells = append(sp.sells, row.Price)
+				}
 			}
 		}
 		// The staged rows arrive price-ascending per side: the
@@ -390,7 +417,11 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 	}
 
 	// Station grain (P2): the staged book aggregated per place
-	// and type, so the spread scanner never re-reads a book.
+	// and type, so the spread scanner never re-reads a book. The
+	// aggregates carry the bests, counts and volumes; the
+	// typicals distilled in the per-type pass above join them
+	// here, so the scanner can price a station's book the way
+	// the region's is priced -- median against median.
 	stationRows, err := app.queries.ListMarketSweepStationAggregates(ctx, regionID)
 	if err != nil {
 		return 0, 0, err
@@ -411,6 +442,18 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 			acc.BestSell = row.MinPrice
 			acc.SellOrders = row.OrderCount
 			acc.SellVolume = row.TotalVolume
+		}
+	}
+	for key, sp := range stationPrices {
+		acc := stations[key]
+		if acc == nil {
+			continue // no aggregate row: not a station book the scanner reads
+		}
+		if len(sp.sells) > 0 {
+			acc.TypicalSell = summarizePrices(sp.sells).Median // sorts in place
+		}
+		if len(sp.buys) > 0 {
+			acc.TypicalBuy = summarizePrices(sp.buys).Median // sorts in place
 		}
 	}
 	stationKeys := make([]stationKey, 0, len(stations))
@@ -513,6 +556,7 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 		if err := qtx.UpsertMarketStationStat(ctx, db.UpsertMarketStationStatParams{
 			LocationID: k.LocationID, RegionID: regionID, TypeID: k.TypeID,
 			BestSell: sacc.BestSell, BestBuy: sacc.BestBuy,
+			TypicalSell: sacc.TypicalSell, TypicalBuy: sacc.TypicalBuy,
 			SellOrders: sacc.SellOrders, BuyOrders: sacc.BuyOrders,
 			SellVolume: sacc.SellVolume, BuyVolume: sacc.BuyVolume,
 			UpdatedAt: now,

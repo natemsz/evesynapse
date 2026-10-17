@@ -357,16 +357,18 @@ type MarketStationLeaderboard struct {
 }
 
 type MarketStationStat struct {
-	LocationID int64     `json:"location_id"`
-	RegionID   int64     `json:"region_id"`
-	TypeID     int64     `json:"type_id"`
-	BestSell   float64   `json:"best_sell"`
-	BestBuy    float64   `json:"best_buy"`
-	SellOrders int64     `json:"sell_orders"`
-	BuyOrders  int64     `json:"buy_orders"`
-	SellVolume int64     `json:"sell_volume"`
-	BuyVolume  int64     `json:"buy_volume"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	LocationID  int64     `json:"location_id"`
+	RegionID    int64     `json:"region_id"`
+	TypeID      int64     `json:"type_id"`
+	BestSell    float64   `json:"best_sell"`
+	BestBuy     float64   `json:"best_buy"`
+	SellOrders  int64     `json:"sell_orders"`
+	BuyOrders   int64     `json:"buy_orders"`
+	SellVolume  int64     `json:"sell_volume"`
+	BuyVolume   int64     `json:"buy_volume"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	TypicalSell float64   `json:"typical_sell"`
+	TypicalBuy  float64   `json:"typical_buy"`
 }
 
 type MarketSweepOrder struct {

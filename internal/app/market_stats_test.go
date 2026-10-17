@@ -133,8 +133,12 @@ func TestMarketPageHonestPrices(t *testing.T) {
 		"9 in 10 sell orders at or under 8.00 ISK",
 		"Typical buy <b>4.00</b>",
 		"9 in 10 buy orders at or over 3.00 ISK",
-		`class="kpi sp-red"`,
-		"-99.2%",
+		// The spread is priced from those typicals, so the joke
+		// 500 bid -- still shown as the best buy, a fact of the
+		// book -- no longer crosses the card: (6.25-4)/4 = 56.2%,
+		// where the best-based card read -99.2% and banded red.
+		`class="kpi sp-blue"`,
+		"56.2%",
 		`kpi-k">Average price`,
 		"5.90 <small>ISK</small>",
 		`kpi-k">Adjusted price`,

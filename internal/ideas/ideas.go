@@ -244,8 +244,8 @@ func composeIdea(content string, rows []Row) string {
 		for _, r := range rows {
 			if r.N == n {
 				line := "**" + r.Item + "** · " + r.Station +
-					" · Highest buy " + r.Buy +
-					" · Lowest sell " + r.Sell +
+					" · Typical buy " + r.Buy +
+					" · Typical sell " + r.Sell +
 					" · Spread " + r.Spread +
 					" · " + r.Sold + " sold per day" +
 					" · Estimated daily profit " + r.Profit

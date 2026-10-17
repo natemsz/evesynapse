@@ -76,13 +76,25 @@ func TestStationSweepStoresAndCleansVanished(t *testing.T) {
 	if a34.BestSell != 6.0 || a34.BestBuy != 4.0 || a34.SellOrders != 2 || a34.BuyOrders != 1 || a34.SellVolume != 150 || a34.BuyVolume != 40 {
 		t.Fatalf("station A type 34: %+v, want best 6/4, 2/1 orders, 150/40 volume", a34)
 	}
+	// Station typicals (schema 053): the median order per side --
+	// A's sells are 6 and 7 (median 6.5), its one buy is 4.
+	if a34.TypicalSell != 6.5 || a34.TypicalBuy != 4.0 {
+		t.Fatalf("station A type 34 typicals: %v/%v, want 6.5/4", a34.TypicalSell, a34.TypicalBuy)
+	}
 	b34 := byKey[stationKey{LocationID: stationB, TypeID: 34}]
 	if b34.BestSell != 5.0 || b34.BestBuy != 4.5 || b34.SellOrders != 1 || b34.BuyOrders != 2 || b34.SellVolume != 200 || b34.BuyVolume != 130 {
 		t.Fatalf("station B type 34: %+v, want best 5/4.5, 1/2 orders, 200/130 volume", b34)
 	}
+	// B's buys are 4.5 and 3 (median 3.75); its one sell is 5.
+	if b34.TypicalSell != 5.0 || b34.TypicalBuy != 3.75 {
+		t.Fatalf("station B type 34 typicals: %v/%v, want 5/3.75", b34.TypicalSell, b34.TypicalBuy)
+	}
 	a35 := byKey[stationKey{LocationID: stationA, TypeID: 35}]
 	if a35.BestSell != 100.0 || a35.BestBuy != 90.0 {
 		t.Fatalf("station A type 35: %+v, want best 100/90", a35)
+	}
+	if a35.TypicalSell != 100.0 || a35.TypicalBuy != 90.0 {
+		t.Fatalf("station A type 35 typicals: %v/%v, want 100/90", a35.TypicalSell, a35.TypicalBuy)
 	}
 
 	// Station B leaves the book; a re-sweep drops only its rows.
@@ -125,13 +137,17 @@ func TestScannerMathFiltersSortAndCap(t *testing.T) {
 			t.Fatalf("seed sde: %v", err)
 		}
 	}
-	// Type 34: spread (10-4)/4 = 150%, profit (10-4)*min(20,100,50)=120.
-	// Type 35: spread (100-90)/90 = 11.1%, profit 10*min(100,10,5)=50.
-	// Type 36: no buy side -- never a row.
+	// Spreads are priced typical against typical now: type 34's
+	// typicals give (10-4)/4 = 150%, profit (10-4)*min(20,100,50)=120.
+	// Type 35: (100-90)/90 = 11.1%, profit 10*min(100,10,5)=50.
+	// Type 36: no buy side -- never a row. (These seeds used to
+	// carry one order a side and still list: that pinned the old
+	// extremes basis and its missing depth gate, and is exactly
+	// the behaviour the credibility fix removes.)
 	for _, seed := range []db.UpsertMarketStationStatParams{
-		{LocationID: stationA, RegionID: 10000002, TypeID: 34, BestSell: 10, BestBuy: 4, SellOrders: 1, BuyOrders: 1, SellVolume: 100, BuyVolume: 50, UpdatedAt: now},
-		{LocationID: stationA, RegionID: 10000002, TypeID: 35, BestSell: 100, BestBuy: 90, SellOrders: 1, BuyOrders: 1, SellVolume: 10, BuyVolume: 5, UpdatedAt: now},
-		{LocationID: stationA, RegionID: 10000002, TypeID: 36, BestSell: 50, BestBuy: 0, SellOrders: 1, BuyOrders: 0, SellVolume: 10, BuyVolume: 0, UpdatedAt: now},
+		{LocationID: stationA, RegionID: 10000002, TypeID: 34, BestSell: 10, BestBuy: 4, TypicalSell: 10, TypicalBuy: 4, SellOrders: 5, BuyOrders: 5, SellVolume: 100, BuyVolume: 50, UpdatedAt: now},
+		{LocationID: stationA, RegionID: 10000002, TypeID: 35, BestSell: 100, BestBuy: 90, TypicalSell: 100, TypicalBuy: 90, SellOrders: 5, BuyOrders: 5, SellVolume: 10, BuyVolume: 5, UpdatedAt: now},
+		{LocationID: stationA, RegionID: 10000002, TypeID: 36, BestSell: 50, BestBuy: 0, TypicalSell: 50, TypicalBuy: 0, SellOrders: 5, BuyOrders: 0, SellVolume: 10, BuyVolume: 0, UpdatedAt: now},
 	} {
 		if err := q.UpsertMarketStationStat(ctx, seed); err != nil {
 			t.Fatalf("seed station stat: %v", err)
@@ -177,7 +193,7 @@ func TestScannerMathFiltersSortAndCap(t *testing.T) {
 		}
 		if err := q.UpsertMarketStationStat(ctx, db.UpsertMarketStationStatParams{
 			LocationID: stationA, RegionID: 10000002, TypeID: typeID,
-			BestSell: 20, BestBuy: 10, SellOrders: 1, BuyOrders: 1,
+			BestSell: 20, BestBuy: 10, TypicalSell: 20, TypicalBuy: 10, SellOrders: 5, BuyOrders: 5,
 			SellVolume: 1000, BuyVolume: 1000, UpdatedAt: now,
 		}); err != nil {
 			t.Fatalf("seed cap stat: %v", err)
@@ -187,6 +203,83 @@ func TestScannerMathFiltersSortAndCap(t *testing.T) {
 	view = scanner.BuildView(ctx, app, url.Values{})
 	if len(view.Rows) != scannerRowCap {
 		t.Fatalf("capped scanner rows: %d, want %d", len(view.Rows), scannerRowCap)
+	}
+}
+
+// TestScannerSuppressesThinAndImplausibleBooks is the spread
+// audit's Offender A, plus the long-shot cross-check's two
+// directions and one honest row that must survive all of it.
+//
+// The region trades every type below at typicals 104.90 buy /
+// 105.60 sell, 40,000 a day (a Jita-priced book). Against that:
+//   - type 34 at a minor station is ONE fishing bid at 5.25
+//     under ONE hopeful ask at 110.25. The old scanner printed
+//     this as a 2000.0% spread with 4.2M ISK of phantom daily
+//     profit; the depth gate now keeps it out entirely.
+//   - type 35 at the hub has depth, but its typical sell is
+//     twenty times the region's typical sell.
+//   - type 36 at the hub has depth, but its typical buy is a
+//     twentieth of the region's typical buy.
+//   - type 37 at the minor station has depth and a genuine
+//     wide typical spread (130.00 / 100.00): the one row left.
+func TestScannerSuppressesThinAndImplausibleBooks(t *testing.T) {
+	transport := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	const hub = int64(60003760)
+	const minor = int64(60003761)
+
+	for _, stmt := range []string{
+		`INSERT INTO sde_types (type_id, name, group_id) VALUES (34, 'Tritanium', 18), (35, 'Pyerite', 18), (36, 'Mexallon', 18), (37, 'Isogen', 18)`,
+		`INSERT INTO sde_stations (station_id, name, system_id) VALUES (60003760, 'Jita 4 - Moon 4 - Caldari Navy Assembly Plant', 30000142), (60003761, 'Jita 4 - Moon 10 - Food Packaging Plant', 30000142)`,
+		`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30000142, 'Jita', 10000002, 0.9)`,
+		`INSERT INTO sde_regions (region_id, name) VALUES (10000002, 'The Forge')`,
+	} {
+		if _, err := conn.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed sde: %v", err)
+		}
+	}
+	// One upsert per type carries typicals and volume together:
+	// the region upsert writes every column, so a second call
+	// would zero the typicals the cross-check reads.
+	for _, typeID := range []int64{34, 35, 36, 37} {
+		if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+			RegionID: 10000002, TypeID: typeID,
+			TypicalSell: 105.60, TypicalBuy: 104.90,
+			AvgDailyVolume: 40000, UpdatedAt: now,
+		}); err != nil {
+			t.Fatalf("seed region stat type %d: %v", typeID, err)
+		}
+	}
+	for _, seed := range []db.UpsertMarketStationStatParams{
+		{LocationID: minor, RegionID: 10000002, TypeID: 34, BestSell: 110.25, BestBuy: 5.25, TypicalSell: 110.25, TypicalBuy: 5.25, SellOrders: 1, BuyOrders: 1, SellVolume: 800000, BuyVolume: 2000000, UpdatedAt: now},
+		{LocationID: hub, RegionID: 10000002, TypeID: 35, BestSell: 2112, BestBuy: 104.90, TypicalSell: 2112, TypicalBuy: 104.90, SellOrders: 8, BuyOrders: 8, SellVolume: 5000, BuyVolume: 5000, UpdatedAt: now},
+		{LocationID: hub, RegionID: 10000002, TypeID: 36, BestSell: 105.60, BestBuy: 5.245, TypicalSell: 105.60, TypicalBuy: 5.245, SellOrders: 8, BuyOrders: 8, SellVolume: 5000, BuyVolume: 5000, UpdatedAt: now},
+		{LocationID: minor, RegionID: 10000002, TypeID: 37, BestSell: 130, BestBuy: 100, TypicalSell: 130, TypicalBuy: 100, SellOrders: 6, BuyOrders: 6, SellVolume: 9000, BuyVolume: 9000, UpdatedAt: now},
+	} {
+		if err := q.UpsertMarketStationStat(ctx, seed); err != nil {
+			t.Fatalf("seed station stat: %v", err)
+		}
+	}
+
+	view := scanner.BuildView(ctx, app, url.Values{})
+	if !view.HasData {
+		t.Fatal("scanner has no data after seeding station rows")
+	}
+	if len(view.Rows) != 1 || view.Rows[0].TypeID != 37 {
+		t.Fatalf("scanner rows: %+v, want only type 37 (the honest deep book)", view.Rows)
+	}
+	row := view.Rows[0]
+	if row.SpreadPct != "30.0%" || row.TypicalBuy != esi.FormatISK(100) || row.TypicalSell != esi.FormatISK(130) {
+		t.Fatalf("honest row: %+v, want typicals 100/130 and a 30.0%% spread", row)
+	}
+	// Profit on typicals: (130-100) * min(40000, 9000, 9000).
+	if row.DailyProfit != esi.FormatISK(270000) {
+		t.Fatalf("honest row profit: %s, want %s", row.DailyProfit, esi.FormatISK(270000))
+	}
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("scanner build made %d outbound calls, want 0", got)
 	}
 }
 
@@ -212,7 +305,7 @@ func TestScannerPageRendersStoredRowsZeroOutbound(t *testing.T) {
 	}
 	if err := q.UpsertMarketStationStat(ctx, db.UpsertMarketStationStatParams{
 		LocationID: 60003760, RegionID: 10000002, TypeID: 34,
-		BestSell: 10, BestBuy: 4, SellOrders: 1, BuyOrders: 1,
+		BestSell: 10, BestBuy: 4, TypicalSell: 10, TypicalBuy: 4, SellOrders: 5, BuyOrders: 5,
 		SellVolume: 100, BuyVolume: 50, UpdatedAt: now,
 	}); err != nil {
 		t.Fatalf("seed station stat: %v", err)
@@ -221,7 +314,7 @@ func TestScannerPageRendersStoredRowsZeroOutbound(t *testing.T) {
 	// lists, named plainly -- never a bare number.
 	if err := q.UpsertMarketStationStat(ctx, db.UpsertMarketStationStatParams{
 		LocationID: 1022734985671, RegionID: 10000002, TypeID: 34,
-		BestSell: 12, BestBuy: 4, SellOrders: 1, BuyOrders: 1,
+		BestSell: 12, BestBuy: 4, TypicalSell: 12, TypicalBuy: 4, SellOrders: 5, BuyOrders: 5,
 		SellVolume: 100, BuyVolume: 50, UpdatedAt: now,
 	}); err != nil {
 		t.Fatalf("seed structure stat: %v", err)
@@ -295,8 +388,9 @@ func TestScannerProfitRankingAndCapInSQL(t *testing.T) {
 		}
 	}
 	// 105 qualifying rows with strictly increasing profit
-	// (1000+10i ISK): the single bounded query must return
-	// exactly the top 100 in profit-descending order.
+	// (1000+10i ISK, priced on typicals): the single bounded
+	// query must return exactly the top 100 in profit-descending
+	// order.
 	for i := int64(0); i < 105; i++ {
 		typeID := int64(5000 + i)
 		if _, err := conn.ExecContext(ctx, `INSERT INTO sde_types (type_id, name, group_id) VALUES ($1, $2, 18)`, typeID, fmt.Sprintf("Rank Item %d", i)); err != nil {
@@ -304,7 +398,7 @@ func TestScannerProfitRankingAndCapInSQL(t *testing.T) {
 		}
 		if err := q.UpsertMarketStationStat(ctx, db.UpsertMarketStationStatParams{
 			LocationID: stationA, RegionID: 10000002, TypeID: typeID,
-			BestSell: 200 + float64(i), BestBuy: 100, SellOrders: 1, BuyOrders: 1,
+			BestSell: 200 + float64(i), BestBuy: 100, TypicalSell: 200 + float64(i), TypicalBuy: 100, SellOrders: 5, BuyOrders: 5,
 			SellVolume: 1000, BuyVolume: 1000, UpdatedAt: now,
 		}); err != nil {
 			t.Fatalf("seed rank stat: %v", err)

@@ -552,7 +552,8 @@ func TestSchemaRecordTimestampStepKeepsStoredTimes(t *testing.T) {
 		   (1003, 'New Keep', 'resolved', '2026-10-01T00:00:00Z'),
 		   (1004, '', 'missing', '2026-01-01T00:00:00Z')`,
 		`INSERT INTO structure_context (structure_id, owner_corporation_id, updated_at) VALUES
-		   (1002, 98000001, '2026-09-30T08:00:00Z')`,
+		   (1002, 98000001, '2026-09-30T08:00:00Z'),
+		   (1003, 98000001, '2026-10-01T00:00:00Z')`,
 		`INSERT INTO planet_names (planet_id) VALUES (2001)`,
 		`INSERT INTO planet_names (planet_id, name, state, resolved_at) VALUES
 		   (2002, 'Jita IV', 'resolved', '2026-09-30T08:00:00Z')`,
@@ -627,7 +628,7 @@ func TestSchemaRecordTimestampStepKeepsStoredTimes(t *testing.T) {
 	}
 	sameOrNever("named structure resolved_at", named.ResolvedAt, "2026-01-01T00:00:00Z")
 	// Waiting first, then what is past its re-check window; the one
-	// resolved today is left alone.
+	// resolved today, its context already recorded, is left alone.
 	structures, err := q.ListStructureResolutions(ctx, db.ListStructureResolutionsParams{
 		ResolvedCutoff:  now.Add(-30 * 24 * time.Hour),
 		MissingCutoff:   now.Add(-24 * time.Hour),

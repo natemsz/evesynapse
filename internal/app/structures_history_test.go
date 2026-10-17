@@ -55,7 +55,7 @@ func (s *defectTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		if s.struct403 {
 			return s.respond(403, `{"error":"forbidden"}`), nil
 		}
-		return s.respond(200, `{"name":"Perimeter >> Tranquility Trading Tower","solar_system_id":30000142,"type_id":35834}`), nil
+		return s.respond(200, `{"name":"Perimeter >> Tranquility Trading Tower","owner_id":98000099,"solar_system_id":30000142,"type_id":35834}`), nil
 	case strings.Contains(path, "/history/"):
 		return s.respond(200, `[]`), nil
 	default:
@@ -112,6 +112,118 @@ func TestStructureResolutionSuccessAndCacheOnlyRender(t *testing.T) {
 	resolved, _ = app.resolveStructureNames(ctx, []db.Character{ch}, &fetchBudget{left: 120})
 	if resolved != 0 || transport.callCount() != 1 {
 		t.Fatalf("second pass: resolved=%d calls=%d, want 0/1", resolved, transport.callCount())
+	}
+}
+
+func TestStructureLookupWritesContext(t *testing.T) {
+	transport := &defectTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	ch := seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	ch.Scopes = "esi-universe.read_structures.v1"
+
+	const structureID = int64(1044752365771)
+	app.noteStructureIDs(ctx, structureID)
+	resolved, _ := app.resolveStructureNames(ctx, []db.Character{ch}, &fetchBudget{left: 120})
+	if resolved != 1 {
+		t.Fatalf("resolve: resolved=%d, want 1", resolved)
+	}
+	// The lookup payload's owner/system/type landed as context,
+	// so the structure page renders facts for a structure no
+	// corporation snapshot covers.
+	sc, err := q.GetStructureContext(ctx, structureID)
+	if err != nil {
+		t.Fatalf("context after lookup: %v", err)
+	}
+	if sc.OwnerCorporationID != 98000099 || sc.SystemID != 30000142 || sc.TypeID != 35834 {
+		t.Fatalf("context after lookup: %+v, want owner 98000099, system 30000142, type 35834", sc)
+	}
+}
+
+func TestStructureContextlessResolvedIsDue(t *testing.T) {
+	transport := &defectTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	ch := seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	ch.Scopes = "esi-universe.read_structures.v1"
+
+	now := time.Now().UTC()
+	due := func() []int64 {
+		ids, err := q.ListStructureResolutions(ctx, db.ListStructureResolutionsParams{
+			ResolvedCutoff:  now.Add(-30 * 24 * time.Hour),
+			MissingCutoff:   now.Add(-24 * time.Hour),
+			ResolutionLimit: 100,
+		})
+		if err != nil {
+			t.Fatalf("list resolutions: %v", err)
+		}
+		return ids
+	}
+	contains := func(ids []int64, id int64) bool {
+		for _, got := range ids {
+			if got == id {
+				return true
+			}
+		}
+		return false
+	}
+
+	// A freshly resolved name with no context row is due: the
+	// backfill case (names resolved before lookups wrote context).
+	const bareID = int64(1044752365888)
+	if err := q.SetStructureName(ctx, db.SetStructureNameParams{
+		StructureID: bareID, Name: "Bare Name", State: esi.StructureResolved, Source: esi.StructureSourceESI, ResolvedAt: timeSet(now),
+	}); err != nil {
+		t.Fatalf("seed bare resolved: %v", err)
+	}
+	// A freshly resolved name WITH context is not due.
+	const coveredID = int64(1044752365999)
+	if err := q.SetStructureName(ctx, db.SetStructureNameParams{
+		StructureID: coveredID, Name: "Covered Name", State: esi.StructureResolved, Source: esi.StructureSourceESI, ResolvedAt: timeSet(now),
+	}); err != nil {
+		t.Fatalf("seed covered resolved: %v", err)
+	}
+	if err := q.SetStructureContext(ctx, db.SetStructureContextParams{
+		StructureID: coveredID, OwnerCorporationID: 98000099, SystemID: 30000142, TypeID: 35834, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("seed covered context: %v", err)
+	}
+	ids := due()
+	if !contains(ids, bareID) {
+		t.Fatalf("due list %v missing contextless resolved %d", ids, bareID)
+	}
+	if contains(ids, coveredID) {
+		t.Fatalf("due list %v includes resolved-with-context %d", ids, coveredID)
+	}
+
+	// The backfill pass resolves the bare id once, writes its
+	// context, and afterwards it is no longer due or re-fetched.
+	resolved, _ := app.resolveStructureNames(ctx, []db.Character{ch}, &fetchBudget{left: 120})
+	if resolved != 1 {
+		t.Fatalf("backfill resolve: resolved=%d, want 1", resolved)
+	}
+	sc, err := q.GetStructureContext(ctx, bareID)
+	if err != nil {
+		t.Fatalf("context after backfill: %v", err)
+	}
+	if sc.OwnerCorporationID != 98000099 || sc.SystemID != 30000142 || sc.TypeID != 35834 {
+		t.Fatalf("context after backfill: %+v, want owner 98000099, system 30000142, type 35834", sc)
+	}
+	if ids := due(); contains(ids, bareID) {
+		t.Fatalf("backfilled id %d still due: %v", bareID, ids)
+	}
+	calls := transport.callCount()
+	app.resolveStructureNames(ctx, []db.Character{ch}, &fetchBudget{left: 120})
+	if transport.callCount() != calls {
+		t.Fatalf("settled backfill re-fetched: calls %d -> %d", calls, transport.callCount())
 	}
 }
 

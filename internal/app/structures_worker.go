@@ -176,6 +176,7 @@ idsLoop:
 			}
 			if app.storeStructureName(ctx, id, info.Name, esi.StructureResolved, esi.StructureSourceESI, now) {
 				app.esi.StoreStructureName(id, info.Name)
+				app.storeStructureLookupContext(ctx, id, info, now)
 				resolved++
 			}
 			negatives = -1 // settled: not an all-negative outcome
@@ -189,6 +190,29 @@ idsLoop:
 		}
 	}
 	return resolved, false
+}
+
+// storeStructureLookupContext persists the owner/system/type
+// facts a successful per-structure lookup carried in its payload,
+// so the structure page renders context for structures no
+// corporation snapshot covers (public structures especially).
+// The lookup is live ESI truth, the same tier as the corporation
+// snapshots that otherwise feed SetStructureContext; the fresher
+// write wins. A payload carrying none of the facts (never in
+// practice) leaves any existing context row untouched.
+func (app *Application) storeStructureLookupContext(ctx context.Context, structureID int64, info esi.UniverseStructure, at time.Time) {
+	if info.OwnerID <= 0 && info.SolarSystemID <= 0 && info.TypeID <= 0 {
+		return
+	}
+	if err := app.queries.SetStructureContext(ctx, db.SetStructureContextParams{
+		StructureID:        structureID,
+		OwnerCorporationID: info.OwnerID,
+		SystemID:           info.SolarSystemID,
+		TypeID:             info.TypeID,
+		UpdatedAt:          at,
+	}); err != nil {
+		logging.Errorf("worker: structures: store lookup context for %d: %v", structureID, err)
+	}
 }
 
 // persistStructureContexts distils one corporation-structures

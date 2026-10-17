@@ -567,6 +567,21 @@ WHERE t.published = 1 AND t.market_group_id > 0
   AND (@q = '' OR strpos(lower(t.name), lower(@q)) > 0)
 ORDER BY CASE WHEN strpos(lower(t.name), lower(@q)) = 1 THEN 0 ELSE 1 END, t.name
 LIMIT @lim::bigint;
+-- ListFitResourceImplants: hardwirings that raise a ship's CPU
+-- or powergrid output -- the implant solver's ladder. A candidate
+-- is an implant type (slot from attribute 331) carrying an effect
+-- whose modifier lands on cpuOutput (48) or powerOutput (11); the
+-- bonus is the implant's own value of the modifier's attribute
+-- (the ladder percent for the output families).
+-- name: ListFitResourceImplants :many
+SELECT DISTINCT t.type_id, t.name, slot.value::bigint AS slot, mod.modified_attr AS resource_attr, bonus.value AS bonus
+FROM sde_types t
+JOIN sde_type_attributes slot ON slot.type_id = t.type_id AND slot.attribute_id = 331
+JOIN sde_type_effects te ON te.type_id = t.type_id
+JOIN sde_effect_modifiers mod ON mod.effect_id = te.effect_id AND mod.modified_attr IN (48, 11)
+JOIN sde_type_attributes bonus ON bonus.type_id = t.type_id AND bonus.attribute_id = mod.modifying_attr
+WHERE t.published = 1 AND t.market_group_id > 0
+ORDER BY mod.modified_attr, bonus.value, t.type_id;
 -- name: ListFitChargeTypes :many
 SELECT t.type_id, t.name
 FROM sde_types t

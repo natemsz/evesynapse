@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"math"
@@ -106,9 +108,13 @@ type marketItem struct {
 	Name   string
 	// Anonymous: rendered for a visitor without a session. The page
 	// is read-only for them: no watch controls, and the order book
-	// only when one is already held (BookPending otherwise).
+	// comes from what is held -- a freshly fetched book, or the
+	// stored sweep snapshot (BookStoredAt set) -- never a fetch of
+	// their own (BookPending when neither exists, or when the
+	// anonymous-market switch is off).
 	Anonymous     bool
 	BookPending   bool
+	BookStoredAt  string // age of the stored sweep book shown, "" unless it came from one
 	AveragePrice  string // esi.FormatISK, "" when unknown
 	AdjustedPrice string // esi.FormatISK, "" when unknown
 	RegionID      int64
@@ -321,11 +327,15 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 	}
 	data.Market = view
 	userID := app.userID(ctx)
-	// Anonymous renders never fetch or queue work, like the public
-	// item pages: no live order book, no history wants, no guesses,
-	// and search reads the local SDE only. A signed-in visit warms
-	// what an anonymous one then reads.
+	// Anonymous renders never fetch and never queue anything but
+	// market wants: search reads the local SDE only, no guesses,
+	// but market history wants are theirs to leave too (the public
+	// market endpoints carry a huge ESI allowance, and the Market
+	// page is a public-facing tool) -- unless the anonymous-market
+	// switch is off (market_anon.go), which restores the old rule
+	// that a signed-in visit warms what an anonymous one then reads.
 	anon := userID == 0
+	anonMarket := anon && !app.anonMarketBlocked()
 
 	if typeID, err := strconv.ParseInt(q.Get("type"), 10, 64); err == nil && typeID > 0 {
 		view.Region = marketRegionForType(typeID, view.Region)
@@ -345,15 +355,17 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 		app.attachRegionStats(ctx, view.Item)
 		if !anon {
 			app.markGuessHit(ctx, pageWantHistory, typeID, view.Region)
-			if view.Item != nil && view.Item.HistoryPending {
-				app.notePageWant(ctx, pageWantHistory, typeID, view.Region)
-			}
+		}
+		if (!anon || anonMarket) && view.Item != nil && view.Item.HistoryPending {
+			app.notePageWant(ctx, pageWantHistory, typeID, view.Region)
 		}
 	} else if view.Query != "" {
 		view.Matches = app.searchTypes(ctx, view.Query, anon)
 		// Prefetch: every result's history is wanted now, so a
 		// tap on any of them lands on a chart instead of a wait.
-		if !anon {
+		// Anonymous searches prefetch too while the market switch
+		// is on: these are market wants like any other.
+		if !anon || anonMarket {
 			app.noteSearchHistoryWants(ctx, view.Region, view.Matches)
 		}
 	}
@@ -560,8 +572,8 @@ func (app *Application) attachHistory(ctx context.Context, item *marketItem, typ
 			}
 			return
 		}
-		if item != nil && item.Anonymous {
-			return // anonymous renders queue no work
+		if item != nil && item.Anonymous && app.anonMarketBlocked() {
+			return // the market switch is off: anonymous renders queue no work
 		}
 		if err := app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
 			RegionID: regionID, TypeID: typeID,
@@ -773,14 +785,31 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 
 	var sells, buys []esi.MarketOrder
 	var truncated bool
+	// fromSnapshot: the book is the stored sweep snapshot (top
+	// orders only), so the whole-book figures (depth, typicals,
+	// bands) come from the region stats row, not from these rows.
+	var fromSnapshot *db.MarketRegionStat
 	if anon {
-		// Only a book a signed-in view fetched lately.
+		// First choice: a book a signed-in view fetched lately.
 		held, ok := app.books.get(marketKey{RegionID: regionID, TypeID: typeID}, time.Now())
-		if !ok {
+		if ok {
+			sells, buys, truncated = append([]esi.MarketOrder(nil), held.sells...), append([]esi.MarketOrder(nil), held.buys...), held.truncated
+		} else if !app.anonMarketBlocked() {
+			// The stored book: the top orders the last completed
+			// region sweep kept, with the sweep's own stats row.
+			// A region+type no sweep has covered stays pending.
+			stored, stat, sok := app.storedBook(ctx, regionID, typeID)
+			if !sok {
+				item.BookPending = true
+				return item, nil
+			}
+			sells, buys = stored.sells, stored.buys
+			fromSnapshot = stat
+			item.BookStoredAt = ageText(time.Now(), stat.UpdatedAt)
+		} else {
 			item.BookPending = true
 			return item, nil
 		}
-		sells, buys, truncated = append([]esi.MarketOrder(nil), held.sells...), append([]esi.MarketOrder(nil), held.buys...), held.truncated
 	} else {
 		var err error
 		if sells, buys, truncated, err = app.fetchOrderBook(ctx, regionID, typeID); err != nil {
@@ -788,18 +817,25 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 		}
 	}
 	item.Truncated = truncated
-	item.SellOrders = len(sells)
-	item.BuyOrders = len(buys)
+	if fromSnapshot != nil {
+		item.SellOrders = int(fromSnapshot.SellOrders)
+		item.BuyOrders = int(fromSnapshot.BuyOrders)
+		item.SellVolume = esi.FormatInt(fromSnapshot.SellVolume)
+		item.BuyVolume = esi.FormatInt(fromSnapshot.BuyVolume)
+	} else {
+		item.SellOrders = len(sells)
+		item.BuyOrders = len(buys)
 
-	var sellVol, buyVol int64
-	for _, o := range sells {
-		sellVol += o.VolumeRemain
+		var sellVol, buyVol int64
+		for _, o := range sells {
+			sellVol += o.VolumeRemain
+		}
+		for _, o := range buys {
+			buyVol += o.VolumeRemain
+		}
+		item.SellVolume = esi.FormatInt(sellVol)
+		item.BuyVolume = esi.FormatInt(buyVol)
 	}
-	for _, o := range buys {
-		buyVol += o.VolumeRemain
-	}
-	item.SellVolume = esi.FormatInt(sellVol)
-	item.BuyVolume = esi.FormatInt(buyVol)
 
 	sort.Slice(sells, func(i, j int) bool { return sells[i].Price < sells[j].Price })
 	sort.Slice(buys, func(i, j int) bool { return buys[i].Price > buys[j].Price })
@@ -837,13 +873,27 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 		item.SpreadBand = spreadBand(pct)
 	}
 
-	if stats, ok := summarizeBook(sells); ok {
-		item.TypicalSell = esi.FormatISK(stats.Median)
-		item.SellBand = esi.FormatISK(stats.High90)
-	}
-	if stats, ok := summarizeBook(buys); ok {
-		item.TypicalBuy = esi.FormatISK(stats.Median)
-		item.BuyBand = esi.FormatISK(stats.Low90)
+	if fromSnapshot != nil {
+		// The sweep's own whole-book figures: summarizing the
+		// top few stored orders would invent a median the full
+		// book never had.
+		if fromSnapshot.TypicalSell > 0 {
+			item.TypicalSell = esi.FormatISK(fromSnapshot.TypicalSell)
+			item.SellBand = esi.FormatISK(fromSnapshot.SellBand)
+		}
+		if fromSnapshot.TypicalBuy > 0 {
+			item.TypicalBuy = esi.FormatISK(fromSnapshot.TypicalBuy)
+			item.BuyBand = esi.FormatISK(fromSnapshot.BuyBand)
+		}
+	} else {
+		if stats, ok := summarizeBook(sells); ok {
+			item.TypicalSell = esi.FormatISK(stats.Median)
+			item.SellBand = esi.FormatISK(stats.High90)
+		}
+		if stats, ok := summarizeBook(buys); ok {
+			item.TypicalBuy = esi.FormatISK(stats.Median)
+			item.BuyBand = esi.FormatISK(stats.Low90)
+		}
 	}
 
 	for i, o := range sells {
@@ -867,6 +917,47 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 		})
 	}
 	return item, nil
+}
+
+// storedBook is one type's stored sweep book: the top orders the
+// last completed region sweep kept (market_book_orders), split
+// into sides in display order, plus the sweep's region stats row
+// (the whole-book figures those top rows cannot speak for). ok is
+// false when no sweep has stored a book for this region+type --
+// a stats row alone is not a book.
+type storedBook struct {
+	sells, buys []esi.MarketOrder
+}
+
+func (app *Application) storedBook(ctx context.Context, regionID, typeID int64) (storedBook, *db.MarketRegionStat, bool) {
+	stat, err := app.queries.GetMarketRegionStat(ctx, db.GetMarketRegionStatParams{RegionID: regionID, TypeID: typeID})
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			logging.Errorf("market: region stat for type %d in region %d: %v", typeID, regionID, err)
+		}
+		return storedBook{}, nil, false
+	}
+	rows, err := app.queries.ListMarketBookOrders(ctx, db.ListMarketBookOrdersParams{RegionID: regionID, TypeID: typeID})
+	if err != nil {
+		logging.Errorf("market: stored book for type %d in region %d: %v", typeID, regionID, err)
+		return storedBook{}, nil, false
+	}
+	if len(rows) == 0 {
+		return storedBook{}, nil, false
+	}
+	book := storedBook{}
+	for _, row := range rows {
+		o := esi.MarketOrder{
+			TypeID: typeID, Price: row.Price, VolumeRemain: row.VolumeRemain,
+			LocationID: row.LocationID, SystemID: row.SystemID, IsBuyOrder: row.IsBuyOrder == 1,
+		}
+		if o.IsBuyOrder {
+			book.buys = append(book.buys, o)
+		} else {
+			book.sells = append(book.sells, o)
+		}
+	}
+	return book, &stat, true
 }
 
 // orderPlace is orderLocation classified for the link policy: an

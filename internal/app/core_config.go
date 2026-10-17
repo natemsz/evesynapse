@@ -60,6 +60,15 @@ type Config struct {
 	foresightOff     bool
 	foresightFetches int
 
+	// anonMarketOff (MARKET_ANON=off) is the BOOT DEFAULT for the
+	// anonymous-market switch (market_anon.go): while off, anonymous
+	// visitors get the market order book from stored sweep data and
+	// may queue market history wants. The Admin page flips the live
+	// setting at runtime (persisted in site_settings); the stored
+	// row wins over this default once it exists, so the env value
+	// only decides a fresh install's starting state.
+	anonMarketOff bool
+
 	// dbConns is how many database connections the app may hold
 	// (DB_MAX_CONNS); 0 means the store's default.
 	dbConns int
@@ -214,6 +223,7 @@ func LoadConfig() (Config, error) {
 		workerFetches:       parseWorkerFetches(os.Getenv("WORKER_FETCHES_PER_CYCLE")),
 		workerLanes:         parseWorkerLanes(os.Getenv("WORKER_LANES")),
 		foresightOff:        strings.EqualFold(strings.TrimSpace(os.Getenv("FORESIGHT")), "off"),
+		anonMarketOff:       strings.EqualFold(strings.TrimSpace(os.Getenv("MARKET_ANON")), "off"),
 		foresightFetches:    parseForesightFetches(os.Getenv("FORESIGHT_FETCHES_PER_CYCLE")),
 		dbConns:             parseDBConns(os.Getenv("DB_MAX_CONNS")),
 		discordClientID:     os.Getenv("DISCORD_CLIENT_ID"),

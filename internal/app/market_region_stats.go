@@ -239,6 +239,7 @@ func (app *Application) stageSweepPage(ctx context.Context, state db.MarketSweep
 		if err := qtx.InsertMarketSweepOrder(ctx, db.InsertMarketSweepOrderParams{
 			RegionID: state.RegionID, TypeID: o.TypeID, IsBuyOrder: isBuy,
 			Price: o.Price, VolumeRemain: o.VolumeRemain, LocationID: o.LocationID,
+			SystemID: o.SystemID,
 		}); err != nil {
 			return err
 		}
@@ -291,6 +292,8 @@ func (app *Application) fetchRegionBookPage(ctx context.Context, regionID int64,
 // storeRegionSweep distills a completed sweep from its staged
 // book: the region's rows are replaced wholesale inside one
 // transaction (a type that left the book loses its row), the
+// top orders per side are kept as the stored book the Market
+// page serves (market_book_orders, schema 050), the
 // station-grain rows for the spread scanner are replaced in the
 // same transaction, today's daily snapshot rows are upserted
 // alongside, the sweep's staging rows and cursor are deleted,
@@ -319,6 +322,17 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 		sellOrders, buyOrders           int64
 		sellVolume, buyVolume           int64
 	}
+	// bookRow is one stored-book row: the top orders per side the
+	// sweep keeps for the Market page (schema 050), in display
+	// order (sells price-ascending, buys price-descending).
+	type bookRow struct {
+		isBuy                int64
+		rank                 int64
+		price                float64
+		volumeRemain         int64
+		locationID, systemID int64
+	}
+	bookByType := make(map[int64][]bookRow, len(typeIDs))
 	statsByType := make(map[int64]*regionTypeStats, len(typeIDs))
 	for _, typeID := range typeIDs {
 		rows, err := app.queries.ListMarketSweepTypeOrders(ctx, db.ListMarketSweepTypeOrdersParams{
@@ -329,15 +343,35 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 		}
 		st := &regionTypeStats{}
 		var sellPrices, buyPrices []float64
+		var sells, buys []bookRow
 		for _, row := range rows {
+			br := bookRow{
+				isBuy: row.IsBuyOrder, price: row.Price, volumeRemain: row.VolumeRemain,
+				locationID: row.LocationID, systemID: row.SystemID,
+			}
 			if row.IsBuyOrder == 1 {
 				buyPrices = append(buyPrices, row.Price)
 				st.buyVolume += row.VolumeRemain
+				buys = append(buys, br)
 			} else {
 				sellPrices = append(sellPrices, row.Price)
 				st.sellVolume += row.VolumeRemain
+				sells = append(sells, br)
 			}
 		}
+		// The staged rows arrive price-ascending per side: the
+		// top sells are the head, the top buys the tail reversed.
+		var top []bookRow
+		for i := 0; i < len(sells) && i < topMarketOrders; i++ {
+			sells[i].rank = int64(i)
+			top = append(top, sells[i])
+		}
+		for i := 0; i < len(buys) && i < topMarketOrders; i++ {
+			b := buys[len(buys)-1-i]
+			b.rank = int64(i)
+			top = append(top, b)
+		}
+		bookByType[typeID] = top
 		st.sellOrders = int64(len(sellPrices))
 		st.buyOrders = int64(len(buyPrices))
 		if len(sellPrices) > 0 {
@@ -484,6 +518,23 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 			UpdatedAt: now,
 		}); err != nil {
 			return 0, 0, err
+		}
+	}
+	// The stored book replaces wholesale in the same transaction:
+	// the region's snapshot rows go, then each type's top orders
+	// land beside the stats distilled from the same staged book.
+	if err := qtx.DeleteMarketBookOrdersByRegion(ctx, regionID); err != nil {
+		return 0, 0, err
+	}
+	for _, typeID := range typeIDs {
+		for _, br := range bookByType[typeID] {
+			if err := qtx.InsertMarketBookOrder(ctx, db.InsertMarketBookOrderParams{
+				RegionID: regionID, TypeID: typeID, IsBuyOrder: br.isBuy, Rank: br.rank,
+				Price: br.price, VolumeRemain: br.volumeRemain,
+				LocationID: br.locationID, SystemID: br.systemID, UpdatedAt: now,
+			}); err != nil {
+				return 0, 0, err
+			}
 		}
 	}
 	if err := qtx.DeleteMarketSweepOrdersByRegion(ctx, regionID); err != nil {

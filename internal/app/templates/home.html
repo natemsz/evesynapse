@@ -40,24 +40,28 @@
   {{with .Glance}}
   <div class="kpis">
     <div class="kpi">
+      <span class="kpi-icon kpi-icon-wallet" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#ffa25e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg></span>
       <span class="kpi-k">Fleet net worth</span>
       <span class="kpi-v">{{if .NetWorth.Any}}{{.NetWorth.Total}} <small>ISK</small>{{template "kpi-trend" .NetWorth.TotalTrend}}{{else}}—{{end}}</span>
       {{if .NetWorth.SparkPoints}}<svg class="kpi-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true" focusable="false"><polygon class="kpi-spark-area" points="{{.NetWorth.SparkArea}}"/><polyline class="kpi-spark-line" points="{{.NetWorth.SparkPoints}}"/></svg>{{end}}
       <span class="kpi-sub">{{if .NetWorth.Wallet}}Wallets {{.NetWorth.Wallet}}{{end}}{{if and .NetWorth.Wallet .NetWorth.AssetsKnown}} · {{end}}{{if .NetWorth.AssetsKnown}}Assets {{.NetWorth.Assets}}{{end}}</span>
     </div>
     <div class="kpi">
+      <span class="kpi-icon kpi-icon-coins" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#ffa25e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M13.744 17.736a6 6 0 1 1-7.48-7.48"/><path d="M15 6h1v4"/><path d="m6.134 14.768.866-.5 2 3.464"/><circle cx="16" cy="8" r="6"/></svg></span>
       <span class="kpi-k">Liquid wallets</span>
       <span class="kpi-v">{{if .NetWorth.Wallet}}{{.NetWorth.Wallet}} <small>ISK</small>{{template "kpi-trend" .NetWorth.WalletTrend}}{{else}}—{{end}}</span>
       {{if .NetWorth.WalletBar}}<span class="kpi-bar"><span data-w="{{.NetWorth.WalletBar}}"></span></span>{{end}}
       <span class="kpi-sub">{{if .NetWorth.WalletPct}}{{.NetWorth.WalletPct}} of net worth{{end}}</span>
     </div>
     <div class="kpi">
+      <span class="kpi-icon kpi-icon-assets" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#ffa25e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><polyline points="3.29 7 12 12 20.71 7"/><path d="m7.5 4.27 9 5.15"/></svg></span>
       <span class="kpi-k">Hangar &amp; asset value</span>
       <span class="kpi-v">{{if .NetWorth.AssetsKnown}}{{.NetWorth.Assets}} <small>ISK</small>{{template "kpi-trend" .NetWorth.AssetsTrend}}{{else}}—{{end}}</span>
       {{if .NetWorth.AssetsBar}}<span class="kpi-bar"><span data-w="{{.NetWorth.AssetsBar}}"></span></span>{{end}}
       <span class="kpi-sub">{{if .NetWorth.AssetsNote}}{{.NetWorth.AssetsNote}}{{else if .NetWorth.Escrow}}Order escrow {{.NetWorth.Escrow}}{{end}}{{if and .NetWorth.AssetsPct (not .NetWorth.AssetsNote)}} · {{.NetWorth.AssetsPct}} priced{{end}}</span>
     </div>
     <div class="kpi">
+      <span class="kpi-icon kpi-icon-skills" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#ffa25e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z"/></svg></span>
       <span class="kpi-k">Skill training</span>
       <span class="kpi-v">{{if .Pilots}}{{.Training}} / {{.Pilots}} <small>training</small>{{else}}—{{end}}</span>
       {{if .TrainBar}}<span class="kpi-bar{{if .Idle}} warn{{end}}"><span data-w="{{.TrainBar}}"></span></span>{{end}}

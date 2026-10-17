@@ -78,15 +78,11 @@ func TestHomeKPISparkAndPricedBar(t *testing.T) {
 		{ItemID: 31, TypeID: 34, Quantity: 100},
 		{ItemID: 32, TypeID: 999999, Quantity: 7},
 	})
-	if err := q.UpsertGuidePrice(ctx, db.UpsertGuidePriceParams{
-		TypeID: 34, AdjustedPrice: 4, AveragePrice: 5,
+	if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+		RegionID: 10000002, TypeID: 34, TypicalSell: 5, AvgDailyVolume: 1_000_000,
+		UpdatedAt: time.Now().UTC(),
 	}); err != nil {
-		t.Fatalf("seed guide price: %v", err)
-	}
-	if err := q.UpsertGuidePricesMeta(ctx, db.UpsertGuidePricesMetaParams{
-		FetchedAt: time.Now().UTC(), CachedUntil: mustTime("2999-01-01T00:00:00Z"),
-	}); err != nil {
-		t.Fatalf("seed guide meta: %v", err)
+		t.Fatalf("seed region stat: %v", err)
 	}
 	setHomeLayout(t, q, user.ID, `[{"id":"glance"}]`)
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")

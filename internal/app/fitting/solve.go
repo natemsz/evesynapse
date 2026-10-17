@@ -90,7 +90,8 @@ func (app *tool) handleFitSolveImplants(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	prices := app.deps.ValuationPrices(ctx)
+	typicals := app.deps.TypicalSells(ctx)
+	trueValues := app.deps.TrueValues(ctx)
 	candidates := make([]fit.ResourceImplant, 0, len(rows))
 	strongest := make(map[int64]float64, 2)
 	ladderSlots := make(map[int64]map[int]bool, 2)
@@ -98,7 +99,7 @@ func (app *tool) handleFitSolveImplants(w http.ResponseWriter, r *http.Request) 
 		if row.Bonus <= 0 {
 			continue
 		}
-		price, _ := fitview.FitUnitPrice(prices, row.TypeID)
+		price, _ := fitview.FitUnitPrice(typicals, trueValues, row.TypeID)
 		candidates = append(candidates, fit.ResourceImplant{
 			TypeID: row.TypeID, Slot: int(row.Slot), Resource: row.ResourceAttr,
 			Bonus: row.Bonus, Price: price,
@@ -120,7 +121,7 @@ func (app *tool) handleFitSolveImplants(w http.ResponseWriter, r *http.Request) 
 	}
 	out := make([]map[string]any, 0, len(picks))
 	for _, p := range picks {
-		price, known := fitview.FitUnitPrice(prices, p.TypeID)
+		price, known := fitview.FitUnitPrice(typicals, trueValues, p.TypeID)
 		pick := map[string]any{
 			"slot": p.Slot, "typeId": p.TypeID, "name": candNames[p.TypeID],
 			"resource": solveResourceName(p.Resource), "bonus": p.Bonus,

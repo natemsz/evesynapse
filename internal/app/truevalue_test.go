@@ -19,8 +19,9 @@ import (
 // ---------------------------------------------------------------------------
 // True values (schema 051): the contracts filter's honesty, the
 // worker pass's arithmetic over a fixture SDE, and every
-// consumer's resolution order -- average, then the estimated
-// sell, then CCP's adjusted price.
+// consumer's resolution order -- The Forge's swept typical
+// sell, then the estimated sell, then unpriced. The guide's
+// average prices nothing, anywhere.
 // ---------------------------------------------------------------------------
 
 func TestTrueValueContractFilters(t *testing.T) {
@@ -336,6 +337,80 @@ func TestTrueValueWorkerPass(t *testing.T) {
 	}
 }
 
+// TestTrueValueLeafPriceHouseOrder: a BOM leaf prices in the
+// house order inside the pass itself — the stored estimated
+// sell when the sweep has no typical for it — and a leaf only
+// the guide knows (average and adjusted both present) prices
+// nothing, leaving the product that builds from it unpriced
+// rather than fossil-priced.
+func TestTrueValueLeafPriceHouseOrder(t *testing.T) {
+	transport := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	for _, stmt := range []string{
+		`INSERT INTO sde_categories (category_id, name) VALUES (900, 'Fixture')`,
+		`INSERT INTO sde_groups (group_id, name, category_id) VALUES (910, 'Fixture Goods', 900)`,
+		`INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES
+			(7001, 'Fixture Exotic', 910, 2, 1),
+			(7002, 'Fixture Fossil', 910, 2, 1),
+			(6002, 'Fixture Gadget', 910, 2, 1),
+			(6003, 'Fixture Gizmo', 910, 2, 1)`,
+		`INSERT INTO sde_blueprints (blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds) VALUES
+			(8002, 6002, 1, 100, 60),
+			(8003, 6003, 1, 100, 60)`,
+		`INSERT INTO sde_blueprint_materials (blueprint_type_id, material_type_id, quantity) VALUES
+			(8002, 7001, 10),
+			(8003, 7002, 5)`,
+		`INSERT INTO sde_type_attributes (type_id, attribute_id, value) VALUES
+			(35827, 2600, 0.99), (35827, 2601, 0.95),
+			(37147, 2594, -2.4), (37147, 2357, 2.1)`,
+	} {
+		if _, err := conn.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed sde: %v", err)
+		}
+	}
+	// The fossil leaf carries the guide's full hand — an
+	// average and an adjusted — and nothing else.
+	if err := q.UpsertGuidePrice(ctx, db.UpsertGuidePriceParams{
+		TypeID: 7002, AveragePrice: 50, AdjustedPrice: 40,
+	}); err != nil {
+		t.Fatalf("seed guide: %v", err)
+	}
+	if err := q.UpsertGuidePricesMeta(ctx, db.UpsertGuidePricesMetaParams{
+		FetchedAt: now, CachedUntil: mustTime("2999-01-01T00:00:00Z"),
+	}); err != nil {
+		t.Fatalf("seed guide meta: %v", err)
+	}
+	if err := q.UpsertIndustryCostIndex(ctx, db.UpsertIndustryCostIndexParams{
+		SolarSystemID: trueValueReferenceSystemID, Activity: "manufacturing", CostIndex: 0.02,
+	}); err != nil {
+		t.Fatalf("seed cost index: %v", err)
+	}
+	// The exotic leaf's stored estimate from an earlier pass.
+	seedTrueValue(t, q, 7001, 90, 123, 2)
+
+	app.refreshTrueValues(ctx)
+
+	// Gadget: ceil(10 x .9 x .940104) = 9 exotic at the stored
+	// estimate 123 = 1107. No guide row for 7001, so no EIV
+	// base exists and the job fee is left out entirely.
+	gadget, err := q.GetTrueValue(ctx, 6002)
+	if err != nil {
+		t.Fatalf("gadget true value: %v", err)
+	}
+	if math.Abs(gadget.BuildCost-1107) > 0.01 {
+		t.Errorf("gadget build cost = %v, want 1107 (leaves at the stored estimated sell)", gadget.BuildCost)
+	}
+
+	// Gizmo: its only leaf prices from nothing the house
+	// trusts, so the gizmo stays unpriced — no row at all.
+	if _, err := q.GetTrueValue(ctx, 6003); err != sql.ErrNoRows {
+		t.Errorf("gizmo true value err = %v, want no row (guide-priced leaves price nothing)", err)
+	}
+}
+
 // tvPricesTransport serves one price guide; every other call
 // fails (the page fetches its book and finds none, which the
 // market page renders honestly).
@@ -350,6 +425,7 @@ func (s *tvPricesTransport) RoundTrip(req *http.Request) (*http.Response, error)
 			{TypeID: 11567, AveragePrice: 0, AdjustedPrice: 64840457150.95},
 			{TypeID: 3001, AveragePrice: 250, AdjustedPrice: 200},
 			{TypeID: 3002, AveragePrice: 0, AdjustedPrice: 40},
+			{TypeID: 3005, AveragePrice: 777, AdjustedPrice: 700},
 		})
 		return &http.Response{StatusCode: http.StatusOK, Header: header,
 			Body: io.NopCloser(strings.NewReader(string(body)))}, nil
@@ -381,6 +457,9 @@ func seedTrueValue(t *testing.T, q *db.Queries, typeID int64, build, est float64
 // TestTrueValueFitPricing: an Avatar-hulled fit prices its
 // hull at the estimated sell, not at CCP's 64.8B fossil --
 // in the stored reprice and in the fitting tool's own sum.
+// A line the sweep prices goes at its Forge typical; a line
+// only the guide knows (3005: average 777, adjusted 700)
+// prices nothing at all.
 func TestTrueValueFitPricing(t *testing.T) {
 	transport := &tvPricesTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
@@ -391,12 +470,18 @@ func TestTrueValueFitPricing(t *testing.T) {
 	}
 	seedTrueValue(t, q, 11567, 550e9, 590e9, 4)
 	seedTrueValue(t, q, 3002, 30, 45, 0) // a module tier too: avg 0, adj 40, est 45
+	if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+		RegionID: 10000002, TypeID: 3001, TypicalSell: 250, AvgDailyVolume: 100,
+		UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("seed region stat: %v", err)
+	}
 
 	saved := time.Now().UTC().Add(-48 * time.Hour).Truncate(time.Second)
 	row, err := q.CreateLocalFitting(ctx, db.CreateLocalFittingParams{
 		UserID: user.ID, Name: "Avatar fixture", ShipTypeID: 11567, IsPublic: true,
 		CreatedAt: saved, UpdatedAt: saved,
-		ItemsJson: `{"name":"Avatar fixture","shipTypeId":11567,"items":[{"typeId":3001,"qty":2},{"typeId":3002,"qty":3}]}`,
+		ItemsJson: `{"name":"Avatar fixture","shipTypeId":11567,"items":[{"typeId":3001,"qty":2},{"typeId":3002,"qty":3},{"typeId":3005,"qty":1}]}`,
 	})
 	if err != nil {
 		t.Fatalf("create fitting: %v", err)
@@ -409,18 +494,21 @@ func TestTrueValueFitPricing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := 590e9 + 2*250 + 3*45 // hull at est, 3001 at average, 3002 at est
+	want := 590e9 + 2*250 + 3*45 // hull at est, 3001 at Forge typical, 3002 at est; 3005 unpriced
 	if got.TotalPrice != want {
 		t.Errorf("repriced fit = %v ISK, want %v (hull at estimated sell, not the 64.8B adjusted)", got.TotalPrice, want)
 	}
 
 	doc := &fitview.FitDoc{
 		ShipTypeID: 11567,
-		Items:      []fitview.FitDocItem{{TypeID: 3001, Qty: 2}, {TypeID: 3002, Qty: 3}},
+		Items:      []fitview.FitDocItem{{TypeID: 3001, Qty: 2}, {TypeID: 3002, Qty: 3}, {TypeID: 3005, Qty: 1}},
 	}
 	cost := app.FitBuilder().FitCost(ctx, doc)
 	if cost.HullRaw != 590e9 || cost.TotalRaw != want {
 		t.Errorf("FitCost hull/total = %v / %v, want 590e9 / %v", cost.HullRaw, cost.TotalRaw, want)
+	}
+	if cost.Unpriced != 1 {
+		t.Errorf("FitCost unpriced lines = %d, want 1 (the guide-average-only module)", cost.Unpriced)
 	}
 }
 
@@ -517,9 +605,10 @@ func TestTrueValueMarketPage(t *testing.T) {
 }
 
 // TestTrueValueNetWorthFallback: net worth and the daily
-// sampler price a hangar in the house order -- the estimated
-// sell covers both a type the guide lacks entirely and one
-// whose only guide price is the adjusted fossil.
+// sampler price a hangar in the house order -- the Forge
+// typical beats the guide average where both exist, and the
+// estimated sell covers both a type the guide lacks entirely
+// and one whose only guide price is the adjusted fossil.
 func TestTrueValueNetWorthFallback(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
@@ -531,7 +620,7 @@ func TestTrueValueNetWorthFallback(t *testing.T) {
 	ch := seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
 	seedSnapshot(t, q, fixtureCharA, esi.SnapWallet, 1000.5)
 	seedSnapshot(t, q, fixtureCharA, esi.SnapAssets, []esi.Asset{
-		{ItemID: 31, TypeID: 34, Quantity: 100}, // guide average 5
+		{ItemID: 31, TypeID: 34, Quantity: 100}, // Forge typical 6 (guide average 5 must not win)
 		{ItemID: 32, TypeID: 5001, Quantity: 1}, // guide adjusted 40 only; est 700
 		{ItemID: 33, TypeID: 4242, Quantity: 2}, // no guide row at all; est 500
 	})
@@ -553,16 +642,22 @@ func TestTrueValueNetWorthFallback(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed guide meta: %v", err)
 	}
+	if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+		RegionID: 10000002, TypeID: 34, TypicalSell: 6, AvgDailyVolume: 1_000_000,
+		UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("seed region stat: %v", err)
+	}
 	seedTrueValue(t, q, 5001, 650, 700, 2)
 	seedTrueValue(t, q, 4242, 480, 500, 0)
 
-	// Assets: 100x5 + 1x700 + 2x500 = 2200; total 3200.50,
+	// Assets: 100x6 + 1x700 + 2x500 = 2300; total 3300.50,
 	// every stack priced.
 	code, body := getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
-	mustContain(t, "/", body, "2,200.00", "3,200.50")
+	mustContain(t, "/", body, "2,300.00", "3,300.50")
 	if strings.Contains(body, "items priced") {
 		t.Error("net worth reports partial coverage when every stack priced via true values")
 	}
@@ -574,7 +669,7 @@ func TestTrueValueNetWorthFallback(t *testing.T) {
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("samples: %v (%d rows)", err, len(rows))
 	}
-	if !rows[0].NetWorth.Valid || rows[0].NetWorth.Float64 != 3200.5 {
-		t.Errorf("sample net worth = %+v, want 3200.5 (same order as the widget)", rows[0].NetWorth)
+	if !rows[0].NetWorth.Valid || rows[0].NetWorth.Float64 != 3300.5 {
+		t.Errorf("sample net worth = %+v, want 3300.5 (same order as the widget)", rows[0].NetWorth)
 	}
 }

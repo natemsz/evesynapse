@@ -540,10 +540,20 @@ func TestWalletHistorySamplerOneRowPerDay(t *testing.T) {
 		t.Fatalf("samples after refetch: %+v, want one row at 2000.25", rows)
 	}
 
-	// With a warm price cache and stored assets/orders, the next
-	// wallet refresh also lands the net-worth estimate:
-	// 2000.25 + 100 × 10 + 50.5 escrow.
-	app.prices[34] = esi.MarketPrice{AveragePrice: 10}
+	// With a house price stored and stored assets/orders, the
+	// next wallet refresh also lands the net-worth estimate:
+	// 2000.25 + 100 × 10 + 50.5 escrow. The Forge's sweep has
+	// Tritanium at a typical sell of 10.00.
+	if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+		RegionID: 10000002, TypeID: 34, TypicalSell: 10, AvgDailyVolume: 1_000_000,
+		UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("seed region stat: %v", err)
+	}
+	// The sweep landing mid-test: the cache window lapses.
+	app.forgeTypicalsMu.Lock()
+	app.forgeTypicalsCache = nil
+	app.forgeTypicalsMu.Unlock()
 	seedSnapshot(t, q, fixtureCharA, esi.SnapAssets, []esi.Asset{{TypeID: 34, Quantity: 100}})
 	seedSnapshot(t, q, fixtureCharA, esi.SnapOrders, []esi.CharOrder{{IsBuyOrder: true, Escrow: 50.5}})
 	if err := q.UpsertSnapshot(ctx, db.UpsertSnapshotParams{

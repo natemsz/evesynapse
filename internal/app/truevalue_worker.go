@@ -243,20 +243,20 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	}
 
 	// Leaf prices: Forge typical sell first (the price a
-	// builder actually pays), then the guide's average, then
-	// its adjusted. The EIV base for job fees follows the
-	// planner: adjusted where present, average behind it.
+	// builder actually pays), then the stored estimated sell
+	// from the previous pass. The guide's average is banned
+	// as a price source (owner doctrine, 2026-10-17) and the
+	// adjusted price is not one either: a leaf neither house
+	// source knows is unpriced, and whatever builds from it
+	// stays unpriced with it — an honest gap, never a fossil.
+	// The EIV base for job fees follows the planner: adjusted
+	// where present, average behind it (fees only).
 	leafPrice := func(typeID int64) (float64, bool) {
 		if v := typicalSell[typeID]; v > 0 {
 			return v, true
 		}
-		if p, ok := guide[typeID]; ok {
-			if p.AveragePrice > 0 {
-				return p.AveragePrice, true
-			}
-			if p.AdjustedPrice > 0 {
-				return p.AdjustedPrice, true
-			}
+		if tv, ok := existing[typeID]; ok && tv.EstSell.Valid && tv.EstSell.Float64 > 0 {
+			return tv.EstSell.Float64, true
 		}
 		return 0, false
 	}

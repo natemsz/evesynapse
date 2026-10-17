@@ -197,32 +197,38 @@ LIMIT sqlc.arg(rlimit)::bigint;
 -- name: SetLocalFittingPrice :exec
 UPDATE local_fittings SET total_price = $1 WHERE id = $2 AND user_id = $3;
 
--- RepriceLocalFittings sets every fit's total_price from the guide
--- mirror: the hull plus each item line, each priced in the house
--- order -- the market average, then the stored true-value
--- estimated sell (schema 051: the bottom-up price for types the
--- market cannot price, supercapital hulls above all), then the
--- adjusted price (fitUnitPrice), the sum fitDocPrice makes when
--- a fit is saved (0 when nothing in the fit is priced). Rows
--- whose price is unchanged are not written, and an empty guide
--- prices nothing. updated_at is left alone: a new price is not
+-- RepriceLocalFittings sets every fit's total_price from the
+-- stored price sources: the hull plus each item line, each
+-- priced in the house order -- The Forge's swept typical sell
+-- (market_region_stats, region 10000002 = defaultMarketRegion),
+-- then the stored true-value estimated sell (schema 051: the
+-- price for types the market cannot price, supercapital hulls
+-- above all) (fitview.FitUnitPrice), the sum FitDocPrice makes
+-- when a fit is saved (0 when nothing in the fit is priced).
+-- The guide's average and adjusted price nothing. Rows whose
+-- price is unchanged are not written, and empty price sources
+-- price nothing. updated_at is left alone: a new price is not
 -- an edit.
 -- name: RepriceLocalFittings :execrows
 UPDATE local_fittings lf
 SET total_price = priced.total
 FROM (
   SELECT f.id,
-         (COALESCE((SELECT COALESCE(NULLIF(gp.average_price, 0), tv.est_sell, gp.adjusted_price) FROM guide_prices gp LEFT JOIN true_values tv ON tv.type_id = gp.type_id WHERE gp.type_id = f.ship_type_id), 0) +
-          COALESCE((SELECT SUM((it->>'qty')::numeric * COALESCE(NULLIF(gp.average_price, 0), tv.est_sell, gp.adjusted_price))
+         (COALESCE((SELECT COALESCE(NULLIF(mrs.typical_sell, 0), tv.est_sell)
+                     FROM (SELECT 1) one
+                     LEFT JOIN market_region_stats mrs ON mrs.region_id = 10000002 AND mrs.type_id = f.ship_type_id
+                     LEFT JOIN true_values tv ON tv.type_id = f.ship_type_id), 0) +
+          COALESCE((SELECT SUM((it->>'qty')::numeric * COALESCE(NULLIF(mrs.typical_sell, 0), tv.est_sell))
                     FROM jsonb_array_elements(
                         CASE WHEN jsonb_typeof(f.items_json::jsonb -> 'items') = 'array' THEN f.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
-                    JOIN guide_prices gp ON gp.type_id = (it->>'typeId')::bigint
-                    LEFT JOIN true_values tv ON tv.type_id = gp.type_id), 0))::float8 AS total
+                    LEFT JOIN market_region_stats mrs ON mrs.region_id = 10000002 AND mrs.type_id = (it->>'typeId')::bigint
+                    LEFT JOIN true_values tv ON tv.type_id = (it->>'typeId')::bigint), 0))::float8 AS total
   FROM local_fittings f
 ) priced
 WHERE priced.id = lf.id
   AND lf.total_price IS DISTINCT FROM priced.total
-  AND EXISTS (SELECT 1 FROM guide_prices);
+  AND (EXISTS (SELECT 1 FROM market_region_stats WHERE region_id = 10000002 AND typical_sell > 0)
+       OR EXISTS (SELECT 1 FROM true_values WHERE est_sell > 0));
 
 -- name: SitemapTopFits :many
 SELECT lf.id, lf.updated_at

@@ -8,7 +8,8 @@
 -- (linked characters' finished contracts -- certain sales),
 -- 'vanished' (watched listings gone before expiry -- likely
 -- sold), 'listing' (live public asks), '' while anchored.
--- Consumers resolve: average, then est_sell, then adjusted.
+-- Consumers resolve: The Forge's swept typical sell, then
+-- est_sell, then unpriced (the guide average is never a price).
 -- Written only by the worker's true-value pass.
 
 -- name: UpsertTrueValue :exec

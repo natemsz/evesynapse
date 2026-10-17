@@ -768,6 +768,12 @@ func (s *ShellData) Shell() *ShellData {
 type Deps interface {
 	DB() *db.Queries
 	ValuationPrices(ctx context.Context) map[int64]esi.MarketPrice
+	// TypicalSells is The Forge's swept typical sell per type —
+	// the first tier of the house price order.
+	TypicalSells(ctx context.Context) map[int64]float64
+	// TrueValues is the stored true-value estimated sell per
+	// type (thin types only) — the order's second tier.
+	TrueValues(ctx context.Context) map[int64]float64
 	LoadCorpSnapshot(ctx context.Context, characterID int64, kind string, out any) bool
 	PINotEnabled(ctx context.Context, ch db.Character) bool
 	PublicShell(ctx context.Context) ShellData

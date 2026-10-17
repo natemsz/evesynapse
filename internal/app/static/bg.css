@@ -201,3 +201,21 @@ html[data-theme="light"] .btn.btn-quiet {
 .kpi.sp-blue .spread-v { color: #a9d6ff; }
 .kpi.sp-blue { border-color: rgba(169, 214, 255, 0.45); }
 .kpi.sp-blue .spread-bar span.on { background: #a9d6ff; }
+
+/* Item page lead: the type icon beside the description card,
+   at the top of the item card instead of below the history. */
+.item-lead { display: flex; gap: 1rem; align-items: stretch; margin: 0.6rem 0 1.1rem; }
+.item-art {
+  flex: 0 0 auto; width: 128px; height: 128px; border-radius: 0.5rem;
+  border: 1px solid rgba(255, 110, 0, 0.22); background: rgba(0, 0, 0, 0.35);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.item-art img { width: 128px; height: 128px; display: block; }
+.item-desc {
+  flex: 1 1 auto; min-width: 0; border-radius: 0.5rem; padding: 0.75rem 1rem 0.85rem;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 110, 0, 0.14);
+}
+.item-desc .k { display: block; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.4rem; }
+@media (max-width: 40rem) {
+  .item-lead { flex-wrap: wrap; }
+}

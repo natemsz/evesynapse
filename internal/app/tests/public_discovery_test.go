@@ -792,7 +792,14 @@ func TestPublicItemAndShipPages(t *testing.T) {
 		"Price history — The Forge",
 		`<div class="pchart" data-chart-scrub="true">`,
 		`stroke="#ffb84d"`,
+		`class="item-lead"`,
+		"https://images.evetech.net/types/587/icon?size=128",
 	)
+	// The description leads the page now, in its card beside the
+	// type icon — it used to sit below the price history.
+	if i, j := strings.Index(body, "The Rifter is a frigate."), strings.Index(body, "Hub prices"); i < 0 || j < 0 || i > j {
+		t.Error("item page: the description does not lead (it belongs above the hub prices)")
+	}
 	if code, _ := apptest.GetPage(t, rig, nil, "/items/type/999999/"); code != http.StatusSeeOther {
 		t.Errorf("unknown item status = %d, want 303 to the browser", code)
 	}

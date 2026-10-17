@@ -710,6 +710,14 @@ type NavLink struct {
 	Active bool
 }
 
+// NavGroup is one labelled cluster of a grouped section's links:
+// the sidebar menu renders a grouped section as clusters under
+// their headings, mirroring the section's tab strip.
+type NavGroup struct {
+	Label string
+	Links []NavLink
+}
+
 // SwitcherEntry is one linked character in the header switcher.
 type SwitcherEntry struct {
 	ID          int64
@@ -752,6 +760,7 @@ type ShellData struct {
 	NotifyPrompt   any
 	NotifySettings any
 	NavLinks       map[string][]NavLink
+	NavGroups      map[string][]NavGroup
 	SectionTabs    []NavLink
 	SectionSubTabs []NavLink
 	NavCharacter   int64

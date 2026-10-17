@@ -167,18 +167,18 @@ type navGroup struct {
 	Hrefs []string
 }
 
-// sectionGroups clusters a section's pages for the tab strip.
-// Only corporation is grouped: at thirteen pages its strip was
-// the widest in the app by a third again, and no single row of
-// folder tabs holds it under a very wide window. The sidebar
-// menus always render the flat list; grouping is a tab-strip
-// structure only, and no page's route changes.
+// sectionGroups clusters a section's pages for the tab strip
+// and the sidebar menu alike: the two render the same groups, so
+// a page sits under the same heading in both. Only corporation
+// is grouped: at thirteen pages its strip was the widest in the
+// app by a third again, and no single row of folder tabs holds
+// it under a very wide window. No page's route changes.
 var sectionGroups = map[string][]navGroup{
 	"corporation": {
-		{"People", []string{"/corporations/", "/corporations/members/", "/groups/"}},
+		{"People", []string{"/corporations/", "/corporations/members/", "/groups/", "/corporations/killmails/"}},
 		{"Assets & Money", []string{"/corporations/wallets/", "/corporations/orders/", "/corporations/assets/", "/corporations/structures/"}},
 		{"Programs", []string{"/doctrines/", "/doctrines/fits/", "/srp/"}},
-		{"Comms & Admin", []string{"/corporations/killmails/", "/discord/servers", "/corporations/settings/"}},
+		{"Comms & Admin", []string{"/discord/servers", "/corporations/settings/"}},
 	},
 }
 
@@ -231,6 +231,56 @@ func sectionTabsGrouped(links map[string][]navLink, section string) ([]navLink, 
 		return tabs, nil
 	}
 	return groupTabs, sub
+}
+
+// navGroupsFor is the sidebar's view of sectionGroups: each
+// grouped section's flat links bucketed under their group
+// headings, in map order, pages inside a group in nav order —
+// the tab strip's grouping mirrored, not a second opinion of
+// it. A section the map does not cover exactly (a page no
+// group claims, a group with no compiled-in pages) is left
+// out, and its menu renders the flat list whole, the same
+// safety net sectionTabsGrouped keeps for the strip.
+func navGroupsFor(links map[string][]navLink) map[string][]module.NavGroup {
+	out := make(map[string][]module.NavGroup, len(sectionGroups))
+	for section, groups := range sectionGroups {
+		flat := links[section]
+		if len(flat) == 0 {
+			continue
+		}
+		member := make(map[string]int, len(flat))
+		for gi, g := range groups {
+			for _, h := range g.Hrefs {
+				member[h] = gi
+			}
+		}
+		buckets := make([][]navLink, len(groups))
+		claimed := 0
+		for _, l := range flat {
+			gi, ok := member[baseHref(l.Href)]
+			if !ok {
+				claimed = -1
+				break
+			}
+			buckets[gi] = append(buckets[gi], l)
+			claimed++
+		}
+		if claimed != len(flat) {
+			continue
+		}
+		var menu []module.NavGroup
+		for gi, g := range groups {
+			if len(buckets[gi]) == 0 {
+				continue
+			}
+			menu = append(menu, module.NavGroup{Label: g.Label, Links: buckets[gi]})
+		}
+		if len(menu) < 2 {
+			continue
+		}
+		out[section] = menu
+	}
+	return out
 }
 
 // baseHref is a rendered link's path, without the ?character= a

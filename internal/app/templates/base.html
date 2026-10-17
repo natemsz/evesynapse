@@ -75,8 +75,10 @@
       <details class="branch{{if eq .Section "corporation"}} active{{end}}"{{if and (eq .Section "corporation") (ne .NavState "rail")}} open{{end}} data-nav-category="corporation">
         <summary data-tip="Corporation"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg nav-icon-corporation" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.7l2.45 4.97 5.48.8-3.97 3.87.94 5.46L12 16.24l-4.9 2.56.94-5.46L4.07 9.47l5.48-.8Z" fill="url(#nav-glyph-gradient)"/></svg></span><span class="nav-label">Corporation</span></summary>
         <div class="menu">
-          {{range index .NavLinks "corporation"}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
-          {{end}}
+          {{with index .NavGroups "corporation"}}{{range .}}<p class="nav-group-label">{{.Label}}</p>
+          {{range .Links}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
+          {{end}}{{end}}{{else}}{{range index .NavLinks "corporation"}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
+          {{end}}{{end}}
         </div>
       </details>
       {{if index .NavLinks "intel"}}

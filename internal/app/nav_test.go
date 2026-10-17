@@ -46,16 +46,16 @@ func TestSectionTabs(t *testing.T) {
 
 	// The corporation strip is grouped: the strip shows the four
 	// clusters, and the page itself is marked in the sub-row under
-	// its cluster. The corporation killmails page lights Comms &
-	// Admin (whose first page Killmails is) and Corporation >
-	// Killmails in the sub-row, not Pilot > Killmails.
+	// its cluster. The corporation killmails page lights People
+	// (Killmails is a People page) and Corporation > Killmails
+	// in the sub-row, not Pilot > Killmails.
 	_, body = getPage(t, app, cookie, "/corporations/killmails/")
 	tabs = sectionTabsBlock(t, body)
 	for _, want := range []string{
-		`<a href="/corporations/">People</a>`,
+		`<a href="/corporations/" class="active" aria-current="page">People</a>`,
 		`<a href="/corporations/wallets/">Assets &amp; Money</a>`,
 		`<a href="/doctrines/">Programs</a>`,
-		`<a href="/corporations/killmails/" class="active" aria-current="page">Comms &amp; Admin</a>`,
+		`<a href="/discord/servers">Comms &amp; Admin</a>`,
 	} {
 		mustContain(t, "corp killmails group tabs", tabs, want)
 	}
@@ -64,8 +64,9 @@ func TestSectionTabs(t *testing.T) {
 	}
 	sub := sectionSubTabsBlock(t, body)
 	mustContain(t, "corp killmails subtabs", sub, `<a href="/corporations/killmails/" class="active" aria-current="page">Killmails</a>`)
-	mustContain(t, "corp killmails subtabs", sub, `<a href="/discord/servers">Discord Server</a>`)
-	mustContain(t, "corp killmails subtabs", sub, `<a href="/corporations/settings/">Settings</a>`)
+	mustContain(t, "corp killmails subtabs", sub, `<a href="/corporations/">Overview</a>`)
+	mustContain(t, "corp killmails subtabs", sub, `<a href="/corporations/members/">Members</a>`)
+	mustContain(t, "corp killmails subtabs", sub, `<a href="/groups/">Groups</a>`)
 	if strings.Count(sub, `class="active"`) != 1 {
 		t.Errorf("corp killmails subtabs mark %d pages, want 1", strings.Count(sub, `class="active"`))
 	}
@@ -82,6 +83,7 @@ func TestSectionTabs(t *testing.T) {
 	mustContain(t, "corp overview subtabs", sub, `<a href="/corporations/" class="active" aria-current="page">Overview</a>`)
 	mustContain(t, "corp overview subtabs", sub, `<a href="/corporations/members/">Members</a>`)
 	mustContain(t, "corp overview subtabs", sub, `<a href="/groups/">Groups</a>`)
+	mustContain(t, "corp overview subtabs", sub, `<a href="/corporations/killmails/">Killmails</a>`)
 
 	// A page asked for one character passes it to its section's
 	// tabs, so switching tabs keeps the pilot; other sections' links
@@ -150,7 +152,7 @@ func TestSectionGroups(t *testing.T) {
 		{Href: "/corporations/", Label: "People"},
 		{Href: "/corporations/wallets/", Label: "Assets & Money", Active: true},
 		{Href: "/doctrines/", Label: "Programs"},
-		{Href: "/corporations/killmails/", Label: "Comms & Admin"},
+		{Href: "/discord/servers", Label: "Comms & Admin"},
 	}
 	if len(tabs) != len(wantTabs) {
 		t.Fatalf("grouped strip has %d tabs, want %d", len(tabs), len(wantTabs))
@@ -177,5 +179,102 @@ func TestSectionGroups(t *testing.T) {
 	flat, flatSub := sectionTabsGrouped(navLinksFor("market", "market.html", 0), "market")
 	if flatSub != nil || len(flat) != len(sectionNav["market"]) {
 		t.Error("the market strip changed shape under grouping")
+	}
+}
+
+// TestNavGroupsMirror pins the sidebar's grouped menus against
+// the same map the tab strip renders from: corporation's menu
+// carries the four group headings in map order, each group's
+// pages in nav order, and every corporation page appears under
+// exactly one heading — a grouping that exists in the strip but
+// not the menu (or the other way round) fails here. Ungrouped
+// sections get no menu groups at all.
+func TestNavGroupsMirror(t *testing.T) {
+	links := navLinksFor("corporation", "corp_fits.html", 0)
+	groups := navGroupsFor(links)["corporation"]
+	want := []struct {
+		label string
+		hrefs []string
+	}{
+		{"People", []string{"/corporations/", "/corporations/members/", "/corporations/killmails/", "/groups/"}},
+		{"Assets & Money", []string{"/corporations/wallets/", "/corporations/orders/", "/corporations/assets/", "/corporations/structures/"}},
+		{"Programs", []string{"/doctrines/", "/doctrines/fits/", "/srp/"}},
+		{"Comms & Admin", []string{"/discord/servers", "/corporations/settings/"}},
+	}
+	if len(groups) != len(want) {
+		t.Fatalf("sidebar has %d corporation groups, want %d", len(groups), len(want))
+	}
+	seen := map[string]int{}
+	for gi, w := range want {
+		g := groups[gi]
+		if g.Label != w.label {
+			t.Errorf("sidebar group %d = %q, want %q", gi, g.Label, w.label)
+		}
+		if len(g.Links) != len(w.hrefs) {
+			t.Fatalf("sidebar group %q has %d pages, want %d", w.label, len(g.Links), len(w.hrefs))
+		}
+		for li, href := range w.hrefs {
+			if g.Links[li].Href != href {
+				t.Errorf("sidebar group %q page %d = %s, want %s", w.label, li, g.Links[li].Href, href)
+			}
+			seen[href]++
+		}
+	}
+	for _, e := range sectionNav["corporation"] {
+		if seen[e.Href] != 1 {
+			t.Errorf("corporation page %s appears %d times in the sidebar groups, want 1", e.Href, seen[e.Href])
+		}
+	}
+	// The viewed page is marked inside its group.
+	programs := groups[2]
+	if !programs.Links[1].Active {
+		t.Error("the loadouts page is not marked in the sidebar's Programs group")
+	}
+	// No group map, no grouped menu.
+	if _, ok := navGroupsFor(navLinksFor("pilot", "character.html", 0))["pilot"]; ok {
+		t.Error("the pilot menu gained groups; only mapped sections group")
+	}
+
+	// The rendered sidebar carries the headings: the corporation
+	// menu on a corporation page shows the four labels, in
+	// order, with Groups up in People (not down in the flat
+	// list's tail where the registry order puts it).
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	user, err := q.CreateUser(context.Background())
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+	_, body := getPage(t, app, cookie, "/corporations/killmails/")
+	at := strings.Index(body, `data-nav-category="corporation"`)
+	if at < 0 {
+		t.Fatal("no corporation branch in the sidebar")
+	}
+	menu := body[at:]
+	if end := strings.Index(menu, "</details>"); end >= 0 {
+		menu = menu[:end]
+	}
+	last := -1
+	for _, label := range []string{"People", "Assets &amp; Money", "Programs", "Comms &amp; Admin"} {
+		i := strings.Index(menu, `<p class="nav-group-label">`+label+`</p>`)
+		if i < 0 {
+			t.Errorf("sidebar corporation menu misses the %s heading", label)
+			continue
+		}
+		if i < last {
+			t.Errorf("sidebar group heading %s is out of order", label)
+		}
+		last = i
+	}
+	peopleAt := strings.Index(menu, `<p class="nav-group-label">People</p>`)
+	assetsAt := strings.Index(menu, `<p class="nav-group-label">Assets &amp; Money</p>`)
+	groupsAt := strings.Index(menu, `href="/groups/"`)
+	if peopleAt < 0 || assetsAt < 0 || groupsAt < 0 {
+		t.Fatalf("sidebar menu landmarks missing: people %d, assets %d, groups link %d", peopleAt, assetsAt, groupsAt)
+	}
+	if !(peopleAt < groupsAt && groupsAt < assetsAt) {
+		t.Error("the Groups page does not render inside the sidebar's People group")
 	}
 }

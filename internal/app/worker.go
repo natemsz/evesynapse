@@ -309,6 +309,13 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		c.limited = true
 	}
 
+	// True values ride behind both: the bottom-up price of
+	// everything manufacturable, computed from the stored
+	// guide, the Forge sweep and the cost indices above
+	// (plus the bounded public-contracts crawl), ahead of
+	// the character pass so valuation reads fresh rows.
+	app.refreshTrueValues(ctx)
+
 	// The character pass, several characters at a time
 	// (worker_lanes.go).
 	c.refreshCharacters(ctx, eligible)

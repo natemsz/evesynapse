@@ -35,7 +35,7 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		"--r-lg: 0.5rem;",
 		"--r-md: 0.5rem;",
 		"--r-sm: 0.5rem;",
-		"grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));",
+		"grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));",
 		"--row: rgba(16, 13, 10, 0.55)",
 		"--row-alt: rgba(255, 255, 255, 0.03)",
 		".chip:hover",

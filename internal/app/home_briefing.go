@@ -87,7 +87,12 @@ type briefingLine struct {
 	// one card (the flushIdle grouping, generalized).
 	aggRule   string
 	aggCount  int
+	aggSub    int // secondary tally (planets under a pi-stopped line)
 	aggPrefix string
+	// count is the card's top-right tally ("5 Pilots",
+	// "3 Pilots / 17 Planets"), set on grouped and collapsed
+	// lines; single-character lines leave it empty.
+	count string
 }
 
 type briefingWidget struct {
@@ -106,6 +111,25 @@ type briefingItem struct {
 	HTML     template.HTML
 	Severity string // critical | warning | info
 	Kind     string // icon category: mail | orders | skills | pi | ...
+	Title    string // card headline for the digest rules that carry one
+	Count    string // top-right tally on grouped/collapsed cards
+}
+
+// briefingTitle is the card headline for the digest rules that
+// carry one: the short name of the alert, shown big above the
+// line's detail. Rules without an entry keep the bare line.
+func briefingTitle(rank int) string {
+	switch rank {
+	case briefingNotTraining:
+		return "Skill Queues Empty"
+	case briefingStoppedExtractor:
+		return "Extractors Paused"
+	case briefingMail:
+		return "Unread EVE Mails"
+	case briefingSkillEnding:
+		return "Queue Running Dry"
+	}
+	return ""
 }
 
 // briefingKind maps a rule rank to the icon category its card
@@ -298,7 +322,7 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 		w.Lines = append(w.Lines, l)
 		w.HTMLLines = append(w.HTMLLines, template.HTML(l.html))
 		sev := briefingSeverity(l.Rank)
-		w.Items = append(w.Items, briefingItem{HTML: template.HTML(l.html), Severity: sev, Kind: briefingKind(l.Rank)})
+		w.Items = append(w.Items, briefingItem{HTML: template.HTML(l.html), Severity: sev, Kind: briefingKind(l.Rank), Title: briefingTitle(l.Rank), Count: l.count})
 		switch sev {
 		case "critical":
 			w.Counts.Critical++
@@ -362,11 +386,13 @@ func aggregateBriefing(lines []briefingLine) []briefingLine {
 			continue
 		}
 		total := 0
+		subTotal := 0
 		latest := time.Time{}
 		segs := make([]string, 0, len(idxs))
 		for n, i := range idxs {
 			l := lines[i]
 			total += l.aggCount
+			subTotal += l.aggSub
 			if l.At.After(latest) {
 				latest = l.At
 			}
@@ -378,10 +404,15 @@ func aggregateBriefing(lines []briefingLine) []briefingLine {
 			segs = append(segs, fmt.Sprintf("and %d more", len(idxs)-4))
 		}
 		summary, _ := briefingAggSummary(rule, total)
+		count := fmt.Sprintf("%d Total", total)
+		if rule == "pi-stopped" {
+			count = fmt.Sprintf("%d Pilots / %d Planets", len(idxs), subTotal)
+		}
 		first := lines[idxs[0]]
 		merged[idxs[0]] = briefingLine{
 			html: summary + strings.Join(segs, ", "),
 			Rank: first.Rank, At: latest, key: "agg-" + rule,
+			count: count,
 		}
 		for _, i := range idxs[1:] {
 			drop[i] = true
@@ -445,8 +476,9 @@ func (bb *briefingBuilder) flushIdle() {
 				latest = l.at
 			}
 		}
-		bb.add("not-training-group", briefingNotTraining, latest,
-			template.HTML(fmt.Sprintf("%d skill queues empty — %s. <a href=\"/characters/\">Characters</a>", len(bb.idle), strings.Join(names, ", "))))
+		bb.addCounted("not-training-group", briefingNotTraining, latest,
+			template.HTML(fmt.Sprintf("%d skill queues empty — %s. <a href=\"/characters/\">Characters</a>", len(bb.idle), strings.Join(names, ", "))),
+			fmt.Sprintf("%d Pilots", len(bb.idle)))
 		return
 	}
 	for _, l := range bb.idle {
@@ -456,23 +488,29 @@ func (bb *briefingBuilder) flushIdle() {
 }
 
 func (bb *briefingBuilder) add(key string, rank int, at time.Time, html template.HTML) {
+	bb.addCounted(key, rank, at, html, "")
+}
+
+// addCounted is add for a line that also carries the card tally
+// shown at its top right (the grouped idle-queue line).
+func (bb *briefingBuilder) addCounted(key string, rank int, at time.Time, html template.HTML, count string) {
 	if bb.seen[key] {
 		return
 	}
 	bb.seen[key] = true
-	bb.lines = append(bb.lines, briefingLine{html: string(html), Rank: rank, At: at, key: key})
+	bb.lines = append(bb.lines, briefingLine{html: string(html), Rank: rank, At: at, key: key, count: count})
 }
 
 // addAgg is add for a count-bearing rule: it also records the rule,
 // the count and the character link so the line can take part in
 // cross-character aggregation (see aggregateBriefing).
-func (bb *briefingBuilder) addAgg(key string, rank int, at time.Time, html template.HTML, rule string, count int, prefix string) {
+func (bb *briefingBuilder) addAgg(key string, rank int, at time.Time, html template.HTML, rule string, count, sub int, prefix string) {
 	if bb.seen[key] {
 		return
 	}
 	bb.seen[key] = true
 	bb.lines = append(bb.lines, briefingLine{html: string(html), Rank: rank, At: at, key: key,
-		aggRule: rule, aggCount: count, aggPrefix: prefix})
+		aggRule: rule, aggCount: count, aggSub: sub, aggPrefix: prefix})
 }
 
 // linkLines: the standing lines about the link itself (a character
@@ -555,7 +593,7 @@ func (bb *briefingBuilder) industryLines(ctx context.Context, b *charSnaps, pref
 				line += template.HTML(fmt.Sprintf(" — first up: %s", string(readyItem)))
 			}
 			line += template.HTML(fmt.Sprintf(". <a href=\"/industry/jobs/?character=%d\">My Jobs</a>", b.ch.CharacterID))
-			bb.addAgg(briefingKey(b.ch.CharacterID, "job-ready"), briefingJobReady, readyAt, line, "job-ready", readyN, prefix)
+			bb.addAgg(briefingKey(b.ch.CharacterID, "job-ready"), briefingJobReady, readyAt, line, "job-ready", readyN, 0, prefix)
 		}
 
 		if b.skillsKnown && len(b.jobs) > 0 {
@@ -602,7 +640,7 @@ func (bb *briefingBuilder) orderLines(ctx context.Context, b *charSnaps, prefix 
 				line += template.HTML(fmt.Sprintf(" — most recently %s", string(expiredItem)))
 			}
 			line += template.HTML(fmt.Sprintf(". <a href=\"/orders/?character=%d\">Orders</a>", b.ch.CharacterID))
-			bb.addAgg(briefingKey(b.ch.CharacterID, "order-expired"), briefingOrderExpired, expiredAt, line, "order-expired", expiredN, prefix)
+			bb.addAgg(briefingKey(b.ch.CharacterID, "order-expired"), briefingOrderExpired, expiredAt, line, "order-expired", expiredN, 0, prefix)
 		}
 	}
 	if b.ordersKnown {
@@ -626,7 +664,7 @@ func (bb *briefingBuilder) orderLines(ctx context.Context, b *charSnaps, prefix 
 				line += template.HTML(fmt.Sprintf(" — soonest: %s in %s", string(expiringItem), humanDuration(time.Until(expiringAt))))
 			}
 			line += template.HTML(fmt.Sprintf(". <a href=\"/orders/?character=%d\">Orders</a>", b.ch.CharacterID))
-			bb.addAgg(briefingKey(b.ch.CharacterID, "order-expiring"), briefingOrderExpiring, expiringAt, line, "order-expiring", expiringN, prefix)
+			bb.addAgg(briefingKey(b.ch.CharacterID, "order-expiring"), briefingOrderExpiring, expiringAt, line, "order-expiring", expiringN, 0, prefix)
 		}
 	}
 }
@@ -670,7 +708,7 @@ func (bb *briefingBuilder) planetLines(ctx context.Context, b *charSnaps, prefix
 			bb.addAgg(briefingKey(b.ch.CharacterID, "pi-stopped"), briefingStoppedExtractor, time.Time{},
 				template.HTML(fmt.Sprintf("%s — %d extractor%s have stopped across %d planet%s. <a href=\"/planets/?character=%d\">Colonies</a>",
 					prefix, stoppedN, pluralSuffix(stoppedN), stoppedPlanets, pluralSuffix(stoppedPlanets), b.ch.CharacterID)),
-				"pi-stopped", stoppedN, prefix)
+				"pi-stopped", stoppedN, stoppedPlanets, prefix)
 		}
 		if dryN > 0 {
 			bb.add(briefingKey(b.ch.CharacterID, "pi-dry"), briefingExtractorDry, dryAt,
@@ -716,7 +754,7 @@ func (bb *briefingBuilder) contractLines(b *charSnaps, prefix string) {
 			bb.addAgg(briefingKey(b.ch.CharacterID, "contract-waiting"), briefingContract, waitingAt,
 				template.HTML(fmt.Sprintf("%s — %d contract%s waiting for your answer. <a href=\"/contracts/?character=%d\">Contracts</a>",
 					prefix, waitingN, pluralSuffix(waitingN), b.ch.CharacterID)),
-				"contract-waiting", waitingN, prefix)
+				"contract-waiting", waitingN, 0, prefix)
 		}
 	}
 }
@@ -760,7 +798,7 @@ func (bb *briefingBuilder) mailLines(b *charSnaps, prefix string) {
 				}
 			}
 		}
-		bb.addAgg(briefingKey(b.ch.CharacterID, "mail"), briefingMail, time.Time{}, line, "mail", int(b.mailLabels.TotalUnreadCount), prefix)
+		bb.addAgg(briefingKey(b.ch.CharacterID, "mail"), briefingMail, time.Time{}, line, "mail", int(b.mailLabels.TotalUnreadCount), 0, prefix)
 	}
 }
 

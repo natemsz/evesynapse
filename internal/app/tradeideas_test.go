@@ -83,8 +83,8 @@ func seedTradeIdeasScanner(t *testing.T, conn *sql.DB, q *db.Queries) {
 		}
 	}
 	for _, seed := range []db.UpsertMarketStationStatParams{
-		{LocationID: 60003760, RegionID: 10000002, TypeID: 34, BestSell: 10, BestBuy: 4, SellOrders: 1, BuyOrders: 1, SellVolume: 100, BuyVolume: 50, UpdatedAt: now},
-		{LocationID: 60003760, RegionID: 10000002, TypeID: 35, BestSell: 100, BestBuy: 90, SellOrders: 1, BuyOrders: 1, SellVolume: 10, BuyVolume: 5, UpdatedAt: now},
+		{LocationID: 60003760, RegionID: 10000002, TypeID: 34, BestSell: 10, BestBuy: 4, TypicalSell: 10, TypicalBuy: 4, SellOrders: 5, BuyOrders: 5, SellVolume: 100, BuyVolume: 50, UpdatedAt: now},
+		{LocationID: 60003760, RegionID: 10000002, TypeID: 35, BestSell: 100, BestBuy: 90, TypicalSell: 100, TypicalBuy: 90, SellOrders: 5, BuyOrders: 5, SellVolume: 10, BuyVolume: 5, UpdatedAt: now},
 	} {
 		if err := q.UpsertMarketStationStat(ctx, seed); err != nil {
 			t.Fatalf("seed station stat: %v", err)
@@ -129,6 +129,49 @@ func TestTradeIdeasCSVBounded(t *testing.T) {
 	}
 }
 
+// TestTradeIdeasCSVSkipsJokeStationBook: the audit's Offender A
+// book -- one fishing bid at 5.25 under one hopeful ask at
+// 110.25 at a minor Forge station, for a type trading 40,000 a
+// day at Jita typicals -- used to reach the model as a 2000.0%
+// "opportunity". Trade Ideas reads the scanner's query, so the
+// depth gate keeps it out of the CSV entirely: no rows, no ask.
+func TestTradeIdeasCSVSkipsJokeStationBook(t *testing.T) {
+	transport := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	for _, stmt := range []string{
+		`INSERT INTO sde_types (type_id, name, group_id) VALUES (34, 'Tritanium', 18)`,
+		`INSERT INTO sde_stations (station_id, name, system_id) VALUES (60003761, 'Jita 4 - Moon 10 - Food Packaging Plant', 30000142)`,
+		`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30000142, 'Jita', 10000002, 0.9)`,
+		`INSERT INTO sde_regions (region_id, name) VALUES (10000002, 'The Forge')`,
+	} {
+		if _, err := conn.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed sde: %v", err)
+		}
+	}
+	if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+		RegionID: 10000002, TypeID: 34,
+		TypicalSell: 105.60, TypicalBuy: 104.90,
+		AvgDailyVolume: 40000, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("seed region stat: %v", err)
+	}
+	if err := q.UpsertMarketStationStat(ctx, db.UpsertMarketStationStatParams{
+		LocationID: 60003761, RegionID: 10000002, TypeID: 34,
+		BestSell: 110.25, BestBuy: 5.25, TypicalSell: 110.25, TypicalBuy: 5.25,
+		SellOrders: 1, BuyOrders: 1, SellVolume: 800000, BuyVolume: 2000000, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("seed station stat: %v", err)
+	}
+	if _, ok := tradeideas.BuildCSV(ctx, app, csvRows); ok {
+		t.Fatal("CSV built from a one-order-each-side joke book, want no CSV at all")
+	}
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("CSV build made %d outbound calls, want 0", got)
+	}
+}
+
 func TestTradeIdeasCSVRowCap(t *testing.T) {
 	transport := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, transport)
@@ -150,7 +193,7 @@ func TestTradeIdeasCSVRowCap(t *testing.T) {
 		}
 		if err := q.UpsertMarketStationStat(ctx, db.UpsertMarketStationStatParams{
 			LocationID: 60003760, RegionID: 10000002, TypeID: typeID,
-			BestSell: 20, BestBuy: 10, SellOrders: 1, BuyOrders: 1,
+			BestSell: 20, BestBuy: 10, TypicalSell: 20, TypicalBuy: 10, SellOrders: 5, BuyOrders: 5,
 			SellVolume: 1000, BuyVolume: 1000, UpdatedAt: now,
 		}); err != nil {
 			t.Fatalf("seed stat: %v", err)
@@ -355,7 +398,7 @@ func TestTradeIdeasPageComposesFromRows(t *testing.T) {
 		t.Fatalf("GET /market/ideas/: status %d", code)
 	}
 	mustContain(t, "/market/ideas/ (composed)", body,
-		"<strong>Tritanium</strong>", "Highest buy 4.00", "Lowest sell 10.00",
+		"<strong>Tritanium</strong>", "Typical buy 4.00", "Typical sell 10.00",
 		"Spread 150.0%", "20 sold per day", "Estimated daily profit 120.00", "deep volume at the hub")
 	if strings.Contains(body, "(#1)") {
 		t.Error("the row reference is rendered on the page")

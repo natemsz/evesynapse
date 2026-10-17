@@ -17,8 +17,8 @@ var goldenRows = []Row{
 
 const goldenLegacy = "### Station Flips\n" +
 	"*Fast movers at the hub.*\n" +
-	"* **Tritanium** · Jita IV - Moon 4 - Caldari Navy Assembly Plant · Highest buy 4.00 · Lowest sell 10.00 · Spread 150.0% · 20 sold per day · Estimated daily profit 120.00 — deep volume at the hub\n" +
-	"* **Pyerite** · Amarr VIII - Oris - Emperor Family Academy · Highest buy 90.10 · Lowest sell 100.40 · Spread 11.4% · 2,000 sold per day · Estimated daily profit 20,600.00 — steady margin, calm route\n"
+	"* **Tritanium** · Jita IV - Moon 4 - Caldari Navy Assembly Plant · Typical buy 4.00 · Typical sell 10.00 · Spread 150.0% · 20 sold per day · Estimated daily profit 120.00 — deep volume at the hub\n" +
+	"* **Pyerite** · Amarr VIII - Oris - Emperor Family Academy · Typical buy 90.10 · Typical sell 100.40 · Spread 11.4% · 2,000 sold per day · Estimated daily profit 20,600.00 — steady margin, calm route\n"
 
 const goldenModern = "### Station Flips\n" +
 	"*Fast movers at the hub.*\n" +
@@ -70,7 +70,7 @@ func TestParseReferenceFallbacks(t *testing.T) {
 			t.Fatalf("%s: groups %+v", name, groups)
 		}
 		got := string(groups[0].Ideas[0])
-		if strings.Contains(got, "Highest buy") || strings.Contains(got, "(#") {
+		if strings.Contains(got, "Typical buy") || strings.Contains(got, "(#") {
 			t.Errorf("%s: fallback line carries figures or a reference: %q", name, got)
 		}
 		if !strings.Contains(got, "<strong>Pyerite</strong>") || !strings.Contains(got, "reason") {
@@ -86,7 +86,7 @@ func TestParseLegacyBodyWithoutRows(t *testing.T) {
 	if len(groups) != 1 || len(groups[0].Ideas) != 2 {
 		t.Fatalf("groups: %+v", groups)
 	}
-	if !strings.Contains(string(groups[0].Ideas[0]), "Highest buy 4.00") {
+	if !strings.Contains(string(groups[0].Ideas[0]), "Typical buy 4.00") {
 		t.Errorf("a legacy line did not render verbatim: %q", groups[0].Ideas[0])
 	}
 	if got := DecodeRows(""); got != nil {

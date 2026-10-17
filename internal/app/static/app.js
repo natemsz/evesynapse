@@ -1663,6 +1663,19 @@
         var state = fresh.getAttribute("data-poll-state");
         if (state !== "pending" && state !== "loading") {
           stop();
+          // The page title renders above the panel (base.html's
+          // pagetitle block), outside this region, so a title
+          // that depended on the loaded record would never catch
+          // up. The fragment carries it as data-title-text; sync
+          // the heading before the region itself is replaced.
+          var titleText = fresh.getAttribute("data-title-text");
+          if (titleText) {
+            var h1 = document.querySelector("#main-content > h1");
+            if (h1) {
+              var gt = h1.querySelector(".gt");
+              (gt || h1).textContent = titleText;
+            }
+          }
           region.outerHTML = html;
         } else {
           schedule();

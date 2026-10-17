@@ -55,6 +55,20 @@ func TestItemPageHistoryChart(t *testing.T) {
 	if strings.Contains(body, `class="spark"`) {
 		t.Error("item page still renders the old bare sparkline")
 	}
+	// Per the owner's mock, the price history sits on the page
+	// glass below the item card, not inside it: the history
+	// heading follows the card's close, while Hub prices stays
+	// inside the card.
+	cardAt := strings.Index(body, `<section class="card">`)
+	cardEnd := cardAt + strings.Index(body[cardAt:], "</section>")
+	hubAt := strings.Index(body, "<h3>Hub prices</h3>")
+	histAt := strings.Index(body, "<h3>Price history")
+	if cardAt < 0 || hubAt < cardAt || hubAt > cardEnd {
+		t.Error("hub prices no longer inside the item card")
+	}
+	if histAt < cardEnd {
+		t.Error("price history renders inside the item card; the mock puts it on the glass below the card")
+	}
 }
 
 func TestItemPageHistoryPendingQueuesWant(t *testing.T) {

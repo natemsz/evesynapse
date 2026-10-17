@@ -583,16 +583,17 @@ func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
 		app.attachHistory(ctx, history, typeID, forge, app.userID(ctx))
 		detail.HistoryView = history
 		// The same warming contract as the Market item view:
-		// a signed-in visit whose history is still pending
-		// leaves a page want, and the section's live region
-		// polls the shared fragment until the chart swaps in.
-		// Anonymous renders queue nothing; a signed-in visit
-		// warms what an anonymous one then reads.
+		// a visit whose history is still pending leaves a page
+		// want, and the section's live region polls the shared
+		// fragment until the chart swaps in. This is a market
+		// want, so anonymous visits leave it too while the
+		// anonymous-market switch is on (market_anon.go); the
+		// type-description want above stays signed-in only.
 		if data.LoggedIn {
 			app.markGuessHit(ctx, pageWantHistory, typeID, forge)
-			if history.HistoryPending {
-				app.notePageWant(ctx, pageWantHistory, typeID, forge)
-			}
+		}
+		if (data.LoggedIn || !app.anonMarketBlocked()) && history.HistoryPending {
+			app.notePageWant(ctx, pageWantHistory, typeID, forge)
 		}
 	}
 
@@ -607,7 +608,7 @@ func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
 // guide prices and manufacturing links. UsedIn caps at 50 rows:
 // bulk materials feed thousands of blueprints. Shared by the
 // signed-in item page and the public one; callers own want
-// queueing (the public page never queues).
+// queueing (the public page queues nothing itself).
 func (app *Application) buildItemTypeDetail(ctx context.Context, t db.SdeType) *itemTypeDetail {
 	typeID := t.TypeID
 	detail := &itemTypeDetail{

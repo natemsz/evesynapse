@@ -38,13 +38,18 @@ type adminView struct {
 	Characters   string
 	Parked       string
 	AnyParked    bool
-	Newest       []adminAccountRow
-	Empty        []adminAccountRow // accounts with no character linked
-	EmptyMore    bool
-	Lookup       characterLookupView
-	NoAccount    bool              // ?account= named one that does not exist
-	Account      *adminAccountView // nil until one is found
-	Sections     []template.HTML   // what the modules add (the shared cache)
+	// The anonymous-market switch (market_anon.go): its live
+	// state, and whether a stored setting (rather than the
+	// MARKET_ANON boot default) is what decides it.
+	AnonMarketOff    bool
+	AnonMarketStored bool
+	Newest           []adminAccountRow
+	Empty            []adminAccountRow // accounts with no character linked
+	EmptyMore        bool
+	Lookup           characterLookupView
+	NoAccount        bool              // ?account= named one that does not exist
+	Account          *adminAccountView // nil until one is found
+	Sections         []template.HTML   // what the modules add (the shared cache)
 }
 
 // adminAccountRow is one line of the newest-accounts list.
@@ -115,6 +120,11 @@ func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	view.AnonMarketOff = app.anonMarketBlocked()
+	if _, err := app.queries.GetSiteSetting(ctx, siteSettingMarketAnon); err == nil {
+		view.AnonMarketStored = true
+	}
+
 	found, lookup := app.lookupCharacter(ctx, r.URL.Query().Get("q"))
 	view.Lookup = lookup
 	view.Sections = app.moduleSections(ctx, func(m module.Module) []module.PageSection { return m.AdminSections }, nil)
@@ -151,6 +161,45 @@ func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	app.render(ctx, w, http.StatusOK, "admin.html", data)
+}
+
+// handleAdminMarketAnon flips the anonymous-market switch
+// (POST /admin/market-anon, form field state=on|off). The flip is
+// live -- the next anonymous market request reads the new state --
+// and persisted in site_settings, so it also survives a restart;
+// MARKET_ANON only ever supplied the boot default. Turning it off
+// restores the pre-switch behavior for anonymous visitors (stored
+// book not served, no market wants queued); signed-in visitors
+// are never affected.
+func (app *Application) handleAdminMarketAnon(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	back := app.flashBack(w, r, "/admin/")
+	if r.ParseForm() != nil {
+		back("That request could not be read.")
+		return
+	}
+	var off bool
+	switch r.Form.Get("state") {
+	case "off":
+		off = true
+	case "on":
+		off = false
+	default:
+		back("Nothing changed: the switch needs a state of on or off.")
+		return
+	}
+	if err := app.setAnonMarketOff(ctx, off); err != nil {
+		logging.Errorf("admin: flip anonymous market switch: %v", err)
+		back("The switch could not be saved; nothing changed.")
+		return
+	}
+	by := app.userID(ctx)
+	if off {
+		logging.Warnf("admin: account %d turned anonymous market access OFF", by)
+		back("Anonymous market access is now off: the stored book is not served to anonymous visitors and their market views queue no wants, until you turn it back on here.")
+	}
+	logging.Warnf("admin: account %d turned anonymous market access ON", by)
+	back("Anonymous market access is now on: anonymous visitors get the stored sweep book and may queue market wants.")
 }
 
 // handleAdminAccountRemove deletes one account and everything it owns

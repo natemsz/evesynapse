@@ -221,7 +221,9 @@ html[data-theme="light"] .btn.btn-quiet {
    page's section tab nav (its pagetabs block) between the page
    title and .page-body, and the tabs are shaped as actual folder
    tabs attached to the panel's top edge. The row aligns with the
-   panel (1.25rem sides), overlaps its top border by 1px, and the
+   panel (1.25rem sides, no horizontal padding on the row, so the
+   first tab's left border sits flush with the panel's left
+   border), overlaps its top border by 1px, and the
    panel gives up its own top margin when a tab row sits on it.
    The active tab is the panel's own tab: the glass recipe, no
    bottom border, and its only orange is a thicker accent stripe
@@ -235,7 +237,7 @@ html[data-theme="light"] .btn.btn-quiet {
   flex-wrap: wrap;
   gap: 0.35rem;
   margin: 0.6rem 1.25rem -1px;
-  padding: 0 0.1rem;
+  padding: 0;
   position: relative;
   z-index: 1;
 }

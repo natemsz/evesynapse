@@ -157,6 +157,28 @@
     return t === "slow-2g" || t === "2g";
   }
 
+  // An image carrying data-fallback-src trades its src for the
+  // fallback, exactly once: the attribute comes off as the src
+  // goes on, so a fallback that also fails cannot loop. The
+  // argument is element-shaped (getAttribute / removeAttribute /
+  // src), so the rule stays unit-testable without a DOM.
+  function applyImgFallback(img) {
+    if (!img || typeof img.getAttribute !== "function") return false;
+    var fb = img.getAttribute("data-fallback-src");
+    if (!fb) return false;
+    img.removeAttribute("data-fallback-src");
+    img.src = fb;
+    return true;
+  }
+
+  // Pure: has this image already finished loading — and failed?
+  // A completed image holding no pixels will never fire another
+  // event worth waiting for, so it is swept rather than listened
+  // for.
+  function imgSettledFailed(img) {
+    return !!img && img.complete === true && img.naturalWidth === 0;
+  }
+
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
       shouldSwapClick: shouldSwapClick,
@@ -166,6 +188,8 @@
       bestNavHref: bestNavHref,
       normalizePath: normalizePath,
       isSlowConnection: isSlowConnection,
+      applyImgFallback: applyImgFallback,
+      imgSettledFailed: imgSettledFailed,
       deniedTarget: deniedTarget,
       deniedPrefetch: deniedPrefetch
     };
@@ -209,6 +233,24 @@
     }
   }
   hoistModals(document);
+
+  // Image fallbacks: EVE's image server answers a render only
+  // for types that have one, so a page leads with the render and
+  // names the icon in data-fallback-src (the item page's art
+  // tile). A resource error does not bubble, so the listener
+  // sits in the capture phase; images that already failed
+  // before this script ran are swept once here. Templates
+  // cannot do this themselves — the CSP allows no inline event
+  // handlers, which is why the swap lives here.
+  document.addEventListener("error", function (ev) {
+    var t = ev.target;
+    if (t && t.tagName === "IMG") applyImgFallback(t);
+  }, true);
+  var fallbackImgs = document.querySelectorAll("img[data-fallback-src]");
+  for (var fi = 0; fi < fallbackImgs.length; fi++) {
+    if (imgSettledFailed(fallbackImgs[fi])) applyImgFallback(fallbackImgs[fi]);
+  }
+
   // The shell owns scroll: the browser's own restoration would
   // fight the swap (a second jump after the paint), so it stays
   // off while the swapper is active.

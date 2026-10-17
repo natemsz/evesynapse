@@ -94,6 +94,10 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		"filter: saturate(1.5);",
 		"transition: background-color 150ms ease, border-color 150ms ease, filter 150ms ease;",
 		"#main-content:has(> .section-tabs) > .page-body { margin-top: 0; }",
+		// A tabbed panel squares its top corners: the rounded
+		// corner curves away under the tab row and notches the
+		// active tab's merge into the panel.
+		"#main-content:has(> .section-tabs) > .page-body { border-top-left-radius: 0; border-top-right-radius: 0; }",
 		".item-lead { display: flex;",
 		".item-desc {",
 	} {

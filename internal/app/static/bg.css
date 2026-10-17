@@ -230,7 +230,9 @@ html[data-theme="light"] .btn.btn-quiet {
    across the top (the nav bar's single-stripe vocabulary) with
    bright text. Inactive tabs keep the warm translucent pill fill
    in the tab silhouette. Hover removes the tab's background
-   color and raises saturation to 1.5 over a 150ms transition. */
+   color and raises saturation to 1.5 over a 150ms transition.
+   A tabbed panel also squares its top corners (folder body);
+   pages without a tab row keep all four rounded corners. */
 #main-content > h1 { font-size: 1.75rem; }
 #main-content > .section-tabs {
   display: flex;
@@ -242,6 +244,13 @@ html[data-theme="light"] .btn.btn-quiet {
   z-index: 1;
 }
 #main-content:has(> .section-tabs) > .page-body { margin-top: 0; }
+/* A tabbed panel is a folder body: its top edge runs straight
+   under the tab row. The panel's rounded top corners would curve
+   away beneath the first and last tabs, leaving a notch of sky
+   under the active tab's corner and breaking its merge into the
+   panel — so a tabbed panel squares its top corners and keeps
+   the radius only at the bottom. */
+#main-content:has(> .section-tabs) > .page-body { border-top-left-radius: 0; border-top-right-radius: 0; }
 #main-content > .section-tabs a {
   border: 1px solid rgba(255, 110, 0, 0.22);
   border-radius: 0.5rem 0.5rem 0 0;

@@ -11,8 +11,18 @@ import (
 	"time"
 )
 
+const deleteTVContractObservation = `-- name: DeleteTVContractObservation :exec
+DELETE FROM true_value_contract_observations
+WHERE contract_id = $1
+`
+
+func (q *Queries) DeleteTVContractObservation(ctx context.Context, contractID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteTVContractObservation, contractID)
+	return err
+}
+
 const getTrueValue = `-- name: GetTrueValue :one
-SELECT type_id, build_cost, est_sell, sell_samples, computed_at, profile_version
+SELECT type_id, build_cost, est_sell, sell_samples, computed_at, profile_version, sell_source
 FROM true_values
 WHERE type_id = $1
 `
@@ -27,12 +37,90 @@ func (q *Queries) GetTrueValue(ctx context.Context, typeID int64) (TrueValue, er
 		&i.SellSamples,
 		&i.ComputedAt,
 		&i.ProfileVersion,
+		&i.SellSource,
 	)
 	return i, err
 }
 
+const listTVContractObservationsByRegion = `-- name: ListTVContractObservationsByRegion :many
+SELECT contract_id, region_id, type_id, shape, listed_price, sample_price, first_seen_at, last_seen_at, expires_at, vanished_at
+FROM true_value_contract_observations
+WHERE region_id = $1 AND vanished_at IS NULL
+ORDER BY last_seen_at
+`
+
+func (q *Queries) ListTVContractObservationsByRegion(ctx context.Context, regionID int64) ([]TrueValueContractObservation, error) {
+	rows, err := q.db.QueryContext(ctx, listTVContractObservationsByRegion, regionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TrueValueContractObservation
+	for rows.Next() {
+		var i TrueValueContractObservation
+		if err := rows.Scan(
+			&i.ContractID,
+			&i.RegionID,
+			&i.TypeID,
+			&i.Shape,
+			&i.ListedPrice,
+			&i.SamplePrice,
+			&i.FirstSeenAt,
+			&i.LastSeenAt,
+			&i.ExpiresAt,
+			&i.VanishedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTVVanishedSamplesSince = `-- name: ListTVVanishedSamplesSince :many
+SELECT type_id, sample_price, vanished_at
+FROM true_value_contract_observations
+WHERE vanished_at IS NOT NULL AND vanished_at >= $1
+ORDER BY type_id, vanished_at
+`
+
+type ListTVVanishedSamplesSinceRow struct {
+	TypeID      int64        `json:"type_id"`
+	SamplePrice float64      `json:"sample_price"`
+	VanishedAt  sql.NullTime `json:"vanished_at"`
+}
+
+func (q *Queries) ListTVVanishedSamplesSince(ctx context.Context, vanishedAt sql.NullTime) ([]ListTVVanishedSamplesSinceRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTVVanishedSamplesSince, vanishedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTVVanishedSamplesSinceRow
+	for rows.Next() {
+		var i ListTVVanishedSamplesSinceRow
+		if err := rows.Scan(&i.TypeID, &i.SamplePrice, &i.VanishedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTrueValues = `-- name: ListTrueValues :many
-SELECT type_id, build_cost, est_sell, sell_samples, computed_at, profile_version
+SELECT type_id, build_cost, est_sell, sell_samples, computed_at, profile_version, sell_source
 FROM true_values
 ORDER BY type_id
 `
@@ -53,6 +141,7 @@ func (q *Queries) ListTrueValues(ctx context.Context) ([]TrueValue, error) {
 			&i.SellSamples,
 			&i.ComputedAt,
 			&i.ProfileVersion,
+			&i.SellSource,
 		); err != nil {
 			return nil, err
 		}
@@ -67,16 +156,111 @@ func (q *Queries) ListTrueValues(ctx context.Context) ([]TrueValue, error) {
 	return items, nil
 }
 
+const markTVContractObservationVanished = `-- name: MarkTVContractObservationVanished :exec
+UPDATE true_value_contract_observations
+SET vanished_at = $2
+WHERE contract_id = $1
+`
+
+type MarkTVContractObservationVanishedParams struct {
+	ContractID int64        `json:"contract_id"`
+	VanishedAt sql.NullTime `json:"vanished_at"`
+}
+
+func (q *Queries) MarkTVContractObservationVanished(ctx context.Context, arg MarkTVContractObservationVanishedParams) error {
+	_, err := q.db.ExecContext(ctx, markTVContractObservationVanished, arg.ContractID, arg.VanishedAt)
+	return err
+}
+
+const purgeTVContractObservations = `-- name: PurgeTVContractObservations :exec
+DELETE FROM true_value_contract_observations
+WHERE (vanished_at IS NULL AND expires_at < $1)
+   OR (vanished_at IS NOT NULL AND vanished_at < $2)
+`
+
+type PurgeTVContractObservationsParams struct {
+	ExpiresAt  time.Time    `json:"expires_at"`
+	VanishedAt sql.NullTime `json:"vanished_at"`
+}
+
+func (q *Queries) PurgeTVContractObservations(ctx context.Context, arg PurgeTVContractObservationsParams) error {
+	_, err := q.db.ExecContext(ctx, purgeTVContractObservations, arg.ExpiresAt, arg.VanishedAt)
+	return err
+}
+
+const touchTVContractObservation = `-- name: TouchTVContractObservation :exec
+UPDATE true_value_contract_observations
+SET last_seen_at = $2
+WHERE contract_id = $1
+`
+
+type TouchTVContractObservationParams struct {
+	ContractID int64     `json:"contract_id"`
+	LastSeenAt time.Time `json:"last_seen_at"`
+}
+
+func (q *Queries) TouchTVContractObservation(ctx context.Context, arg TouchTVContractObservationParams) error {
+	_, err := q.db.ExecContext(ctx, touchTVContractObservation, arg.ContractID, arg.LastSeenAt)
+	return err
+}
+
+const upsertTVContractObservation = `-- name: UpsertTVContractObservation :exec
+
+INSERT INTO true_value_contract_observations
+    (contract_id, region_id, type_id, shape, listed_price, sample_price, first_seen_at, last_seen_at, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8)
+ON CONFLICT (contract_id) DO UPDATE SET
+    region_id = EXCLUDED.region_id,
+    type_id = EXCLUDED.type_id,
+    shape = EXCLUDED.shape,
+    listed_price = EXCLUDED.listed_price,
+    sample_price = EXCLUDED.sample_price,
+    last_seen_at = EXCLUDED.last_seen_at,
+    expires_at = EXCLUDED.expires_at
+`
+
+type UpsertTVContractObservationParams struct {
+	ContractID  int64     `json:"contract_id"`
+	RegionID    int64     `json:"region_id"`
+	TypeID      int64     `json:"type_id"`
+	Shape       string    `json:"shape"`
+	ListedPrice float64   `json:"listed_price"`
+	SamplePrice float64   `json:"sample_price"`
+	FirstSeenAt time.Time `json:"first_seen_at"`
+	ExpiresAt   time.Time `json:"expires_at"`
+}
+
+// Contract observations (schema 052): the crawl's memory of
+// every public contract the sampler accepted, kept so later
+// crawls can tell whether the listing is still there. A
+// listing that disappears well before its expiry is marked
+// vanished (probable-sale evidence); rows are bookkeeping
+// only and are never read by a page.
+func (q *Queries) UpsertTVContractObservation(ctx context.Context, arg UpsertTVContractObservationParams) error {
+	_, err := q.db.ExecContext(ctx, upsertTVContractObservation,
+		arg.ContractID,
+		arg.RegionID,
+		arg.TypeID,
+		arg.Shape,
+		arg.ListedPrice,
+		arg.SamplePrice,
+		arg.FirstSeenAt,
+		arg.ExpiresAt,
+	)
+	return err
+}
+
 const upsertTrueValue = `-- name: UpsertTrueValue :exec
 
-INSERT INTO true_values (type_id, build_cost, est_sell, sell_samples, computed_at, profile_version)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO true_values (type_id, build_cost, est_sell, sell_samples, computed_at, profile_version, sell_source)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (type_id) DO UPDATE SET
     build_cost = EXCLUDED.build_cost,
     est_sell = EXCLUDED.est_sell,
     sell_samples = EXCLUDED.sell_samples,
     computed_at = EXCLUDED.computed_at,
-    profile_version = EXCLUDED.profile_version
+    profile_version = EXCLUDED.profile_version,
+    sell_source = EXCLUDED.sell_source
 `
 
 type UpsertTrueValueParams struct {
@@ -86,6 +270,7 @@ type UpsertTrueValueParams struct {
 	SellSamples    int64           `json:"sell_samples"`
 	ComputedAt     time.Time       `json:"computed_at"`
 	ProfileVersion int64           `json:"profile_version"`
+	SellSource     string          `json:"sell_source"`
 }
 
 // True values (schema 051): the worker's bottom-up price per
@@ -93,9 +278,13 @@ type UpsertTrueValueParams struct {
 // building the type at the standard pricing profile; est_sell
 // is the estimated sell price for types with no real market
 // (NULL while the market price rules); sell_samples counts the
-// public contracts behind est_sell (0 = anchored to build
-// cost). Consumers resolve: average, then est_sell, then
-// adjusted. Written only by the worker's true-value pass.
+// samples of the tier behind est_sell (0 = anchored to build
+// cost); sell_source names that tier (schema 052): 'fulfilled'
+// (linked characters' finished contracts -- certain sales),
+// 'vanished' (watched listings gone before expiry -- likely
+// sold), 'listing' (live public asks), ” while anchored.
+// Consumers resolve: average, then est_sell, then adjusted.
+// Written only by the worker's true-value pass.
 func (q *Queries) UpsertTrueValue(ctx context.Context, arg UpsertTrueValueParams) error {
 	_, err := q.db.ExecContext(ctx, upsertTrueValue,
 		arg.TypeID,
@@ -104,6 +293,7 @@ func (q *Queries) UpsertTrueValue(ctx context.Context, arg UpsertTrueValueParams
 		arg.SellSamples,
 		arg.ComputedAt,
 		arg.ProfileVersion,
+		arg.SellSource,
 	)
 	return err
 }

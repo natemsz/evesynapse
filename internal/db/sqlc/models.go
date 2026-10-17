@@ -867,6 +867,20 @@ type TrueValue struct {
 	SellSamples    int64           `json:"sell_samples"`
 	ComputedAt     time.Time       `json:"computed_at"`
 	ProfileVersion int64           `json:"profile_version"`
+	SellSource     string          `json:"sell_source"`
+}
+
+type TrueValueContractObservation struct {
+	ContractID  int64        `json:"contract_id"`
+	RegionID    int64        `json:"region_id"`
+	TypeID      int64        `json:"type_id"`
+	Shape       string       `json:"shape"`
+	ListedPrice float64      `json:"listed_price"`
+	SamplePrice float64      `json:"sample_price"`
+	FirstSeenAt time.Time    `json:"first_seen_at"`
+	LastSeenAt  time.Time    `json:"last_seen_at"`
+	ExpiresAt   time.Time    `json:"expires_at"`
+	VanishedAt  sql.NullTime `json:"vanished_at"`
 }
 
 type TypeDetail struct {

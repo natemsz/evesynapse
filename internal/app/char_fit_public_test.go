@@ -194,13 +194,16 @@ func TestPrefetchIsNotAView(t *testing.T) {
 
 // TestPublicFitCostIsHullPlusParts: a public fit costs its hull plus
 // every line on it, the same number on its page, in its stored price
-// and in the fitting tool's own stats panel. The guide's market
-// average wins; a type with only an adjusted price falls back to it.
+// and in the fitting tool's own stats panel. Prices resolve in the
+// house order: The Forge's swept typical sell wins where the sweep
+// has one, and a type with only a stored estimated sell falls back
+// to it. The guide fixture carries decoys — if the average or the
+// adjusted priced anything, the total would move.
 func TestPublicFitCostIsHullPlusParts(t *testing.T) {
 	transport := &pricesTransport{body: `[
-		{"type_id":1001,"average_price":1000,"adjusted_price":900},
-		{"type_id":3001,"average_price":0,"adjusted_price":250},
-		{"type_id":3002,"average_price":40,"adjusted_price":35}
+		{"type_id":1001,"average_price":9999,"adjusted_price":8888},
+		{"type_id":3001,"average_price":777,"adjusted_price":999},
+		{"type_id":3002,"average_price":666,"adjusted_price":555}
 	]`}
 	app, conn, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
@@ -223,6 +226,17 @@ func TestPublicFitCostIsHullPlusParts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create fitting: %v", err)
 	}
+	// The house sources: typical sells for the hull and 3002,
+	// a stored estimated sell for 3001.
+	for typeID, typical := range map[int64]float64{1001: 1000, 3002: 40} {
+		if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+			RegionID: 10000002, TypeID: typeID, TypicalSell: typical,
+			AvgDailyVolume: 100, UpdatedAt: now,
+		}); err != nil {
+			t.Fatalf("seed region stat %d: %v", typeID, err)
+		}
+	}
+	seedTrueValue(t, q, 3001, 200, 250, 2)
 	if stored, limited := app.refreshGuidePrices(ctx); limited || !stored {
 		t.Fatalf("guide refresh = (stored %v, limited %v), want (true, false)", stored, limited)
 	}
@@ -230,7 +244,7 @@ func TestPublicFitCostIsHullPlusParts(t *testing.T) {
 		t.Fatalf("built %d public fit pages, want 1", n)
 	}
 
-	// Hull 1,000 (average) + 2 x 250 (adjusted, no average) + 3 x 40.
+	// Hull 1,000 (typical) + 2 x 250 (estimated sell) + 3 x 40 (typical).
 	const hull, parts, total = 1000.0, 620.0, 1620.0
 	code, body := getSwapPage(t, app, nil, publicFitsPath+"fit/"+strconv.FormatInt(row.ID, 10)+"/")
 	if code != http.StatusOK {

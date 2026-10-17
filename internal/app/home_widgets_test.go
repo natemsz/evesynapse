@@ -315,12 +315,14 @@ func TestWatchlistWidgetHome(t *testing.T) {
 	}
 }
 
-// TestNetWorthGuidePrices: with only the worker-stored guide
-// present (no Market visit, cold in-memory cache) the Net worth
-// card shows a real assets number with coverage — never
-// "prices not loaded yet" — and the daily sampler's net worth
-// rides the same fallback.
-func TestNetWorthGuidePrices(t *testing.T) {
+// TestNetWorthHousePrices: net worth prices assets in the house
+// order — The Forge's swept typical sells, then stored estimated
+// sells. The guide's average prices nothing (owner doctrine,
+// 2026-10-17): with only the guide present the card shows a
+// real assets number with honest coverage — never "prices not
+// loaded yet" — and the daily sampler's net worth rides the
+// same sources.
+func TestNetWorthHousePrices(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
@@ -338,8 +340,9 @@ func TestNetWorthGuidePrices(t *testing.T) {
 	setHomeLayout(t, q, user.ID, `[{"id":"networth"}]`)
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 
-	// No guide anywhere yet: still a real number (0 priced),
-	// with the coverage spelled out — and never the old copy.
+	// No price source anywhere yet: still a real number
+	// (0 priced), with the coverage spelled out — and never
+	// the old copy.
 	code, body := getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
@@ -349,7 +352,9 @@ func TestNetWorthGuidePrices(t *testing.T) {
 		t.Error("net worth fell back to the old not-loaded copy")
 	}
 
-	// The worker-stored guide lands: Tritanium prices at 5.00.
+	// The worker-stored guide lands, Tritanium's average at
+	// 5.00: the average is banned as a price source, so the
+	// stack still prices nothing.
 	if err := q.UpsertGuidePrice(ctx, db.UpsertGuidePriceParams{
 		TypeID: 34, AdjustedPrice: 4, AveragePrice: 5,
 	}); err != nil {
@@ -362,15 +367,33 @@ func TestNetWorthGuidePrices(t *testing.T) {
 	}
 	code, body = getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
-		t.Fatalf("GET / (guided): status %d", code)
+		t.Fatalf("GET / (guide only): status %d", code)
 	}
-	mustContain(t, "/ (guided)", body,
+	mustContain(t, "/ (guide only)", body, "1,000.50", "0 of 2 items priced")
+
+	// The Forge sweep lands: Tritanium prices at its typical
+	// sell of 5.00.
+	if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+		RegionID: 10000002, TypeID: 34, TypicalSell: 5, AvgDailyVolume: 1_000_000,
+		UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("seed region stat: %v", err)
+	}
+	// The sweep landing mid-test: the cache window lapses.
+	app.forgeTypicalsMu.Lock()
+	app.forgeTypicalsCache = nil
+	app.forgeTypicalsMu.Unlock()
+	code, body = getPage(t, app, cookie, "/")
+	if code != http.StatusOK {
+		t.Fatalf("GET / (swept): status %d", code)
+	}
+	mustContain(t, "/ (swept)", body,
 		"500.00",   // 100 × 5.00 of assets
 		"1,500.50", // wallet + assets total
 		"1 of 2 items priced",
 	)
 
-	// The sampler's net worth uses the same stored guide.
+	// The sampler's net worth uses the same house sources.
 	app.sampleWalletHistory(ctx, ch, time.Now())
 	rows, err := q.ListWalletHistorySamples(ctx, db.ListWalletHistorySamplesParams{
 		UserID: user.ID, CharacterID: fixtureCharA,
@@ -409,15 +432,18 @@ func (s *pricesTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}, nil
 }
 
-// TestFitPricesFollowTheGuide: a saved fit is priced when it is
-// saved, and used to keep that price for good. Each guide refresh
-// now reprices the stored fits: hull plus modules at adjusted price,
-// the same sum the save handler makes.
-func TestFitPricesFollowTheGuide(t *testing.T) {
+// TestFitPricesFollowStoredPrices: a saved fit is priced when it
+// is saved, and used to keep that price for good. Each price
+// refresh now reprices the stored fits in the house order: hull
+// plus modules at The Forge's swept typical sells, the same sum
+// the save handler makes. The guide fixture below carries decoy
+// adjusted prices — if anything priced from the guide, the
+// totals would change.
+func TestFitPricesFollowStoredPrices(t *testing.T) {
 	transport := &pricesTransport{body: `[
-		{"type_id":1001,"average_price":0,"adjusted_price":1000},
-		{"type_id":3001,"average_price":0,"adjusted_price":250},
-		{"type_id":3002,"average_price":0,"adjusted_price":40}
+		{"type_id":1001,"average_price":0,"adjusted_price":9000},
+		{"type_id":3001,"average_price":0,"adjusted_price":8000},
+		{"type_id":3002,"average_price":0,"adjusted_price":7000}
 	]`}
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
@@ -446,6 +472,17 @@ func TestFitPricesFollowTheGuide(t *testing.T) {
 		}
 	}
 
+	// The Forge sweep has typical sells for the hull and both
+	// modules: 1,000 / 250 / 40.
+	for typeID, typical := range map[int64]float64{1001: 1000, 3001: 250, 3002: 40} {
+		if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+			RegionID: 10000002, TypeID: typeID, TypicalSell: typical,
+			AvgDailyVolume: 100, UpdatedAt: time.Now().UTC(),
+		}); err != nil {
+			t.Fatalf("seed region stat %d: %v", typeID, err)
+		}
+	}
+
 	if stored, limited := app.refreshGuidePrices(ctx); limited || !stored {
 		t.Fatalf("guide refresh = (stored %v, limited %v), want (true, false)", stored, limited)
 	}
@@ -453,7 +490,7 @@ func TestFitPricesFollowTheGuide(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 1,000 hull + 2 x 250 + 3 x 40.
+	// 1,000 hull + 2 x 250 + 3 x 40, all at typical sells.
 	if got.TotalPrice != 1620 {
 		t.Errorf("repriced fit = %v ISK, want 1620", got.TotalPrice)
 	}
@@ -462,21 +499,21 @@ func TestFitPricesFollowTheGuide(t *testing.T) {
 	if !got.UpdatedAt.Equal(saved) {
 		t.Errorf("repricing moved updated_at to %v, want it left at %v", got.UpdatedAt, saved)
 	}
-	// Nothing in the guide for this hull or its module: unknown (0),
+	// No price source knows this hull or its module: unknown (0),
 	// not the old figure.
 	if got, _ := q.GetPublicFitting(ctx, unknown); got.TotalPrice != 0 {
-		t.Errorf("fit with no guide prices = %v ISK, want 0 (unknown)", got.TotalPrice)
+		t.Errorf("fit with no known prices = %v ISK, want 0 (unknown)", got.TotalPrice)
 	}
 
-	// An empty guide prices nothing: the stored figures stand.
-	if _, err := app.db.ExecContext(ctx, `DELETE FROM guide_prices`); err != nil {
+	// Empty price sources price nothing: the stored figures stand.
+	if _, err := app.db.ExecContext(ctx, `DELETE FROM market_region_stats`); err != nil {
 		t.Fatal(err)
 	}
 	if n := app.repriceFittings(ctx); n != 0 {
-		t.Errorf("repricing against an empty guide rewrote %d fits, want 0", n)
+		t.Errorf("repricing against empty price sources rewrote %d fits, want 0", n)
 	}
 	if got, _ := q.GetPublicFitting(ctx, stale); got.TotalPrice != 1620 {
-		t.Errorf("empty guide changed the price to %v, want 1620 kept", got.TotalPrice)
+		t.Errorf("empty price sources changed the price to %v, want 1620 kept", got.TotalPrice)
 	}
 }
 

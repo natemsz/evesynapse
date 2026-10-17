@@ -1016,8 +1016,8 @@ footer .version-number {
    (sectiontabs.html, nav.go). They wrap on wide screens and scroll
    sideways on phones, the current page scrolled into view. */
 .section-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.6rem 0 1rem; }
-.section-tabs a { padding: 0.35rem 0.8rem; border: 1px solid var(--border, #333); border-radius: var(--r-sm); text-decoration: none; white-space: nowrap; }
-.section-tabs a:hover { border-color: #555; }
+.section-tabs a { padding: 0.35rem 0.8rem; border: 1px solid var(--border, #333); border-radius: var(--r-sm); text-decoration: none; white-space: nowrap; transition: filter 0.15s ease, border-color 0.15s ease; }
+.section-tabs a:hover { border-color: #555; filter: saturate(1.45) brightness(1.07); }
 /* In-page section anchors land clear of the sticky top bar. */
 .card[id] { scroll-margin-top: 4.5rem; }
 .section-tabs a.active { border-color: var(--accent); color: var(--text-bright); background: var(--row-hover); }
@@ -4563,6 +4563,11 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
    moves the backdrops there) and the tooltips are absolutely
    positioned against the workbench itself, so no fixed element
    is left for the wrapper's backdrop-filter to capture. */
+/* Page titles render above the glass panel (each page's
+   pagetitle block, invoked by base.html) instead of inside it:
+   the title sits on the nebula, aligned with the panel's edge,
+   and the panel's own top margin is the gap under the title. */
+#main-content > h1 { margin: 0.25rem 1.25rem 0; }
 .page-body {
   margin: 1rem 1.25rem 1.25rem;
   background: var(--glass);

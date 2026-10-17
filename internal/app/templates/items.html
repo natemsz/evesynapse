@@ -16,7 +16,7 @@
   <thead><tr><th>Category</th><th>Types</th></tr></thead>
   <tbody>
   {{range $v.Categories}}
-    <tr><td><a href="/items/category/{{.ID}}/{{if $v.MarketOnly}}?market=1{{end}}">{{.Name}}</a></td><td>{{.Types}}</td></tr>
+    <tr data-pubcount="{{.Published}}"{{if and $v.PublishedOnly (eq .Published 0)}} hidden{{end}}><td><a href="/items/category/{{.ID}}/{{if $v.PublishedOnly}}?published=1{{end}}">{{.Name}}</a></td><td data-count data-total="{{.Types}}" data-pub="{{.PublishedTypes}}">{{if $v.PublishedOnly}}{{.PublishedTypes}}{{else}}{{.Types}}{{end}}</td></tr>
   {{end}}
   </tbody>
 </table>
@@ -27,10 +27,10 @@
 {{end}}
 
 {{if eq $v.Mode "category"}}
-<p><small><a href="/items/{{if $v.MarketOnly}}?market=1{{end}}">Item Database</a> › {{$v.Category.Name}}</small></p>
+<p><small><a href="/items/{{if $v.PublishedOnly}}?published=1{{end}}">Item Database</a> › {{$v.Category.Name}}</small></p>
 <h2>{{$v.Category.Name}}</h2>
 <form method="get" action="/items/category/{{$v.Category.ID}}/">
-  <label><small><input type="checkbox" name="market" value="1" data-autosubmit{{if $v.MarketOnly}} checked{{end}}> Market items only</small></label>
+  <label><small><input type="checkbox" name="published" value="1" data-published-toggle{{if $v.PublishedOnly}} checked{{end}}> Published items only</small></label>
   <button class="btn" type="submit">Filter</button>
 </form>
 {{if $v.Groups}}
@@ -39,7 +39,7 @@
   <thead><tr><th>Group</th><th>Types</th></tr></thead>
   <tbody>
   {{range $v.Groups}}
-    <tr><td><a href="/items/group/{{.ID}}/{{if $v.MarketOnly}}?market=1{{end}}">{{.Name}}</a></td><td>{{.Types}}</td></tr>
+    <tr data-pubcount="{{.Published}}"{{if and $v.PublishedOnly (eq .Published 0)}} hidden{{end}}><td><a href="/items/group/{{.ID}}/{{if $v.PublishedOnly}}?published=1{{end}}">{{.Name}}</a></td><td data-count data-total="{{.Types}}" data-pub="{{.PublishedTypes}}">{{if $v.PublishedOnly}}{{.PublishedTypes}}{{else}}{{.Types}}{{end}}</td></tr>
   {{end}}
   </tbody>
 </table>
@@ -53,7 +53,7 @@
 {{template "items-search-form" $v}}
 {{if $v.SearchResults}}
 {{range $v.SearchSections}}
-<h3 class="item-section">{{if .CategoryID}}<a href="/items/category/{{.CategoryID}}/{{if $v.MarketOnly}}?market=1{{end}}">{{.CategoryName}}</a>{{else}}<small>No category</small>{{end}}{{if .GroupID}} › <a href="/items/group/{{.GroupID}}/{{if $v.MarketOnly}}?market=1{{end}}">{{.GroupName}}</a>{{end}}</h3>
+<h3 class="item-section">{{if .CategoryID}}<a href="/items/category/{{.CategoryID}}/{{if $v.PublishedOnly}}?published=1{{end}}">{{.CategoryName}}</a>{{else}}<small>No category</small>{{end}}{{if .GroupID}} › <a href="/items/group/{{.GroupID}}/{{if $v.PublishedOnly}}?published=1{{end}}">{{.GroupName}}</a>{{end}}</h3>
 <div class="tw">
 <table>
   <thead><tr><th>Item</th><th>Market</th></tr></thead>
@@ -68,20 +68,20 @@
 </table>
 </div>
 {{end}}
-<p><small>{{$v.TotalTypes}} items{{if $v.SearchQuery}} matching "{{$v.SearchQuery}}"{{end}}{{if $v.MarketOnly}} on the market{{end}} · page {{$v.Page}} of {{$v.TotalPages}}</small>
-{{if $v.HasPrev}} · <a href="/items/?q={{$v.SearchQuery}}{{if $v.MarketOnly}}&market=1{{end}}{{if $v.CategoryID}}&category={{$v.CategoryID}}{{end}}{{if $v.GroupID}}&group={{$v.GroupID}}{{end}}&page={{$v.PrevPage}}">← Prev</a>{{end}}
-{{if $v.HasNext}} · <a href="/items/?q={{$v.SearchQuery}}{{if $v.MarketOnly}}&market=1{{end}}{{if $v.CategoryID}}&category={{$v.CategoryID}}{{end}}{{if $v.GroupID}}&group={{$v.GroupID}}{{end}}&page={{$v.NextPage}}">Next →</a>{{end}}</p>
+<p><small>{{$v.TotalTypes}} items{{if $v.SearchQuery}} matching "{{$v.SearchQuery}}"{{end}}{{if $v.PublishedOnly}}, published only{{end}} · page {{$v.Page}} of {{$v.TotalPages}}</small>
+{{if $v.HasPrev}} · <a href="/items/?q={{$v.SearchQuery}}{{if $v.PublishedOnly}}&published=1{{end}}{{if $v.CategoryID}}&category={{$v.CategoryID}}{{end}}{{if $v.GroupID}}&group={{$v.GroupID}}{{end}}&page={{$v.PrevPage}}">← Prev</a>{{end}}
+{{if $v.HasNext}} · <a href="/items/?q={{$v.SearchQuery}}{{if $v.PublishedOnly}}&published=1{{end}}{{if $v.CategoryID}}&category={{$v.CategoryID}}{{end}}{{if $v.GroupID}}&group={{$v.GroupID}}{{end}}&page={{$v.NextPage}}">Next →</a>{{end}}</p>
 {{else}}
-<p><small>No items{{if $v.SearchQuery}} matching "{{$v.SearchQuery}}"{{end}}{{if $v.MarketOnly}} on the market{{end}} in the local static data.{{if $v.MarketOnly}} Try turning off “Market items only”: many items can't be traded.{{end}}</small></p>
+<p><small>No items{{if $v.SearchQuery}} matching "{{$v.SearchQuery}}"{{end}}{{if $v.PublishedOnly}} published{{end}} in the local static data.{{if $v.PublishedOnly}} Try turning off “Published items only”: many items in the static data are unpublished.{{end}}</small></p>
 {{end}}
 {{end}}
 
 {{if eq $v.Mode "group"}}
-<p><small><a href="/items/{{if $v.MarketOnly}}?market=1{{end}}">Item Database</a>{{if $v.Category}} › <a href="/items/category/{{$v.Category.ID}}/{{if $v.MarketOnly}}?market=1{{end}}">{{$v.Category.Name}}</a>{{end}} › {{$v.Group.Name}}</small></p>
+<p><small><a href="/items/{{if $v.PublishedOnly}}?published=1{{end}}">Item Database</a>{{if $v.Category}} › <a href="/items/category/{{$v.Category.ID}}/{{if $v.PublishedOnly}}?published=1{{end}}">{{$v.Category.Name}}</a>{{end}} › {{$v.Group.Name}}</small></p>
 <h2>{{$v.Group.Name}}</h2>
 <form method="get" action="/items/group/{{$v.Group.ID}}/">
   <input type="search" name="q" value="{{$v.Query}}" placeholder="Filter types in this group">
-  <label><small><input type="checkbox" name="market" value="1" data-autosubmit{{if $v.MarketOnly}} checked{{end}}> Market items only</small></label>
+  <label><small><input type="checkbox" name="published" value="1" data-published-toggle{{if $v.PublishedOnly}} checked{{end}}> Published items only</small></label>
   <button class="btn" type="submit">Filter</button>
 </form>
 {{if $v.Types}}
@@ -90,14 +90,14 @@
   <thead><tr><th>Type</th><th>Market</th></tr></thead>
   <tbody>
   {{range $v.Types}}
-    <tr><td>{{itemLink .ID .Name}}</td><td>{{if .OnMarket}}<small>on market</small>{{else}}<small>—</small>{{end}}</td></tr>
+    <tr data-published="{{if .Published}}1{{else}}0{{end}}"{{if and $v.PublishedOnly (not .Published)}} hidden{{end}}><td>{{itemLink .ID .Name}}</td><td>{{if .OnMarket}}<small>on market</small>{{else}}<small>—</small>{{end}}</td></tr>
   {{end}}
   </tbody>
 </table>
 </div>
-<p><small>{{$v.TotalTypes}} types{{if $v.Query}} matching "{{$v.Query}}"{{end}}{{if $v.MarketOnly}} on the market{{end}} · page {{$v.Page}} of {{$v.TotalPages}}</small>
-{{if $v.HasPrev}} · <a href="/items/group/{{$v.Group.ID}}/?page={{$v.PrevPage}}{{if $v.Query}}&q={{$v.Query}}{{end}}{{if $v.MarketOnly}}&market=1{{end}}">← Prev</a>{{end}}
-{{if $v.HasNext}} · <a href="/items/group/{{$v.Group.ID}}/?page={{$v.NextPage}}{{if $v.Query}}&q={{$v.Query}}{{end}}{{if $v.MarketOnly}}&market=1{{end}}">Next →</a>{{end}}</p>
+<p><small>{{$v.TotalTypes}} types{{if $v.Query}} matching "{{$v.Query}}"{{end}} · page {{$v.Page}} of {{$v.TotalPages}}</small>
+{{if $v.HasPrev}} · <a href="/items/group/{{$v.Group.ID}}/?page={{$v.PrevPage}}{{if $v.Query}}&q={{$v.Query}}{{end}}{{if $v.PublishedOnly}}&published=1{{end}}">← Prev</a>{{end}}
+{{if $v.HasNext}} · <a href="/items/group/{{$v.Group.ID}}/?page={{$v.NextPage}}{{if $v.Query}}&q={{$v.Query}}{{end}}{{if $v.PublishedOnly}}&published=1{{end}}">Next →</a>{{end}}</p>
 {{else}}
 <p><small>No types{{if $v.Query}} matching "{{$v.Query}}"{{end}} in this group.</small></p>
 {{end}}
@@ -185,7 +185,7 @@
     <input type="search" name="q" id="items-q" value="{{.SearchQuery}}" placeholder="Search every item by name" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="items-suggest" aria-autocomplete="list">
     <ul class="suggest" id="items-suggest" role="listbox" hidden></ul>
   </span>
-  <label><small><input type="checkbox" name="market" value="1" data-autosubmit{{if .MarketOnly}} checked{{end}}> Market items only</small></label>
+  <label><small><input type="checkbox" name="published" value="1" {{if eq .Mode "search"}}data-autosubmit{{else}}data-published-toggle{{end}}{{if .PublishedOnly}} checked{{end}}> Published items only</small></label>
   <label><small>Category
     <select name="category" data-autosubmit>
       <option value="">All categories</option>

@@ -37,7 +37,7 @@ func TestGroupSearchRows(t *testing.T) {
 
 // TestItemsSearchKeepsCategorisation: search and filter results come
 // back under Category › Group headings, ordered by category then group
-// (not as one flat name-sorted list), the market-only filter drops
+// (not as one flat name-sorted list), the published-only filter drops
 // items but keeps the headings of what is left, and the filter controls
 // apply themselves as they change.
 func TestItemsSearchKeepsCategorisation(t *testing.T) {
@@ -85,16 +85,16 @@ func TestItemsSearchKeepsCategorisation(t *testing.T) {
 		t.Errorf("in Fixture Minerals, a name starting with the query (at %d) should come before one that only contains it (at %d)", exact, contains)
 	}
 
-	// Market-only keeps the tree: the relic's group (unpublished, no
-	// market group) disappears with its only item; the others keep
+	// Published-only keeps the tree: the relic's group (its only
+	// item is unpublished) disappears with it; the others keep
 	// their headings.
-	_, body = getPage(t, app, cookie, "/items/?q=tritanium&market=1")
+	_, body = getPage(t, app, cookie, "/items/?q=tritanium&published=1")
 	if strings.Contains(body, "Fixture Ores") {
-		t.Error("market-only still shows the heading of a group with nothing left in it")
+		t.Error("published-only still shows the heading of a group with nothing left in it")
 	}
-	for _, want := range []string{"Far Group", "Fixture Minerals", "/items/group/910/?market=1"} {
+	for _, want := range []string{"Far Group", "Fixture Minerals", "/items/group/910/?published=1"} {
 		if !strings.Contains(body, want) {
-			t.Errorf("market-only results missing %q", want)
+			t.Errorf("published-only results missing %q", want)
 		}
 	}
 	// No flat list: no per-row Group/Category columns any more.
@@ -102,8 +102,9 @@ func TestItemsSearchKeepsCategorisation(t *testing.T) {
 		t.Error("results still carry the flat Group/Category columns")
 	}
 
-	// The controls apply themselves.
-	mustContain(t, "/items/", body,
-		`name="market" value="1" data-autosubmit checked`,
+	// The controls apply themselves: in a live search the
+	// published-only box still submits at once.
+	mustContain(t, "/items/?q=tritanium&published=1", body,
+		`name="published" value="1" data-autosubmit checked`,
 		`<select name="category" data-autosubmit>`)
 }

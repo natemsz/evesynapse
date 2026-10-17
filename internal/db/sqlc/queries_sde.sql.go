@@ -194,22 +194,22 @@ SELECT COUNT(*)
 FROM sde_types t
 LEFT JOIN sde_groups g ON g.group_id = t.group_id
 WHERE strpos(lower(t.name), lower($1)) > 0
-  AND (CAST($2 AS BIGINT) = 0 OR (t.market_group_id > 0 AND t.published = 1))
+  AND (CAST($2 AS BIGINT) = 0 OR t.published = 1)
   AND (CAST($3 AS BIGINT) = 0 OR g.category_id = $3)
   AND (CAST($4 AS BIGINT) = 0 OR t.group_id = $4)
 `
 
 type CountSDETypesFilteredParams struct {
-	Q          string `json:"q"`
-	MarketOnly int64  `json:"market_only"`
-	CategoryID int64  `json:"category_id"`
-	GroupID    int64  `json:"group_id"`
+	Q             string `json:"q"`
+	PublishedOnly int64  `json:"published_only"`
+	CategoryID    int64  `json:"category_id"`
+	GroupID       int64  `json:"group_id"`
 }
 
 func (q *Queries) CountSDETypesFiltered(ctx context.Context, arg CountSDETypesFilteredParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countSDETypesFiltered,
 		arg.Q,
-		arg.MarketOnly,
+		arg.PublishedOnly,
 		arg.CategoryID,
 		arg.GroupID,
 	)
@@ -218,20 +218,18 @@ func (q *Queries) CountSDETypesFiltered(ctx context.Context, arg CountSDETypesFi
 	return count, err
 }
 
-const countSDETypesInGroupFiltered = `-- name: CountSDETypesInGroupFiltered :one
+const countSDETypesInGroup = `-- name: CountSDETypesInGroup :one
 SELECT COUNT(*) FROM sde_types
 WHERE group_id = $1 AND strpos(lower(name), lower($2)) > 0
-  AND (CAST($3 AS BIGINT) = 0 OR (market_group_id > 0 AND published = 1))
 `
 
-type CountSDETypesInGroupFilteredParams struct {
-	GroupID    int64  `json:"group_id"`
-	Lower      string `json:"lower"`
-	MarketOnly int64  `json:"market_only"`
+type CountSDETypesInGroupParams struct {
+	GroupID int64  `json:"group_id"`
+	Lower   string `json:"lower"`
 }
 
-func (q *Queries) CountSDETypesInGroupFiltered(ctx context.Context, arg CountSDETypesInGroupFilteredParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSDETypesInGroupFiltered, arg.GroupID, arg.Lower, arg.MarketOnly)
+func (q *Queries) CountSDETypesInGroup(ctx context.Context, arg CountSDETypesInGroupParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSDETypesInGroup, arg.GroupID, arg.Lower)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -1152,7 +1150,8 @@ func (q *Queries) ListSDEBlueprintsUsingMaterial(ctx context.Context, materialTy
 }
 
 const listSDECategoriesWithCounts = `-- name: ListSDECategoriesWithCounts :many
-SELECT c.category_id, c.name, COUNT(t.type_id) AS type_count
+SELECT c.category_id, c.name, COUNT(t.type_id) AS type_count,
+       COUNT(t.type_id) FILTER (WHERE t.published = 1) AS published_count
 FROM sde_categories c
 LEFT JOIN sde_groups g ON g.category_id = c.category_id
 LEFT JOIN sde_types t ON t.group_id = g.group_id
@@ -1161,9 +1160,10 @@ ORDER BY c.name
 `
 
 type ListSDECategoriesWithCountsRow struct {
-	CategoryID int64  `json:"category_id"`
-	Name       string `json:"name"`
-	TypeCount  int64  `json:"type_count"`
+	CategoryID     int64  `json:"category_id"`
+	Name           string `json:"name"`
+	TypeCount      int64  `json:"type_count"`
+	PublishedCount int64  `json:"published_count"`
 }
 
 func (q *Queries) ListSDECategoriesWithCounts(ctx context.Context) ([]ListSDECategoriesWithCountsRow, error) {
@@ -1175,51 +1175,7 @@ func (q *Queries) ListSDECategoriesWithCounts(ctx context.Context) ([]ListSDECat
 	var items []ListSDECategoriesWithCountsRow
 	for rows.Next() {
 		var i ListSDECategoriesWithCountsRow
-		if err := rows.Scan(&i.CategoryID, &i.Name, &i.TypeCount); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listSDECategoriesWithCountsFiltered = `-- name: ListSDECategoriesWithCountsFiltered :many
-SELECT c.category_id, c.name, COUNT(t.type_id) AS type_count
-FROM sde_categories c
-LEFT JOIN sde_groups g ON g.category_id = c.category_id
-LEFT JOIN sde_types t ON t.group_id = g.group_id
-  AND (CAST($1 AS BIGINT) = 0 OR (t.market_group_id > 0 AND t.published = 1))
-WHERE CAST($1 AS BIGINT) = 0 OR EXISTS (
-  SELECT 1 FROM sde_groups g2
-  JOIN sde_types t2 ON t2.group_id = g2.group_id
-  WHERE g2.category_id = c.category_id AND t2.market_group_id > 0 AND t2.published = 1
-)
-GROUP BY c.category_id, c.name
-ORDER BY c.name
-`
-
-type ListSDECategoriesWithCountsFilteredRow struct {
-	CategoryID int64  `json:"category_id"`
-	Name       string `json:"name"`
-	TypeCount  int64  `json:"type_count"`
-}
-
-func (q *Queries) ListSDECategoriesWithCountsFiltered(ctx context.Context, marketOnly int64) ([]ListSDECategoriesWithCountsFilteredRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDECategoriesWithCountsFiltered, marketOnly)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListSDECategoriesWithCountsFilteredRow
-	for rows.Next() {
-		var i ListSDECategoriesWithCountsFilteredRow
-		if err := rows.Scan(&i.CategoryID, &i.Name, &i.TypeCount); err != nil {
+		if err := rows.Scan(&i.CategoryID, &i.Name, &i.TypeCount, &i.PublishedCount); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1348,7 +1304,8 @@ func (q *Queries) ListSDEEffectsByIDs(ctx context.Context, effectIds []int64) ([
 }
 
 const listSDEGroupsInCategory = `-- name: ListSDEGroupsInCategory :many
-SELECT g.group_id, g.name, COUNT(t.type_id) AS type_count
+SELECT g.group_id, g.name, COUNT(t.type_id) AS type_count,
+       COUNT(t.type_id) FILTER (WHERE t.published = 1) AS published_count
 FROM sde_groups g
 LEFT JOIN sde_types t ON t.group_id = g.group_id
 WHERE g.category_id = $1
@@ -1357,9 +1314,10 @@ ORDER BY g.name
 `
 
 type ListSDEGroupsInCategoryRow struct {
-	GroupID   int64  `json:"group_id"`
-	Name      string `json:"name"`
-	TypeCount int64  `json:"type_count"`
+	GroupID        int64  `json:"group_id"`
+	Name           string `json:"name"`
+	TypeCount      int64  `json:"type_count"`
+	PublishedCount int64  `json:"published_count"`
 }
 
 func (q *Queries) ListSDEGroupsInCategory(ctx context.Context, categoryID int64) ([]ListSDEGroupsInCategoryRow, error) {
@@ -1371,55 +1329,7 @@ func (q *Queries) ListSDEGroupsInCategory(ctx context.Context, categoryID int64)
 	var items []ListSDEGroupsInCategoryRow
 	for rows.Next() {
 		var i ListSDEGroupsInCategoryRow
-		if err := rows.Scan(&i.GroupID, &i.Name, &i.TypeCount); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listSDEGroupsInCategoryFiltered = `-- name: ListSDEGroupsInCategoryFiltered :many
-SELECT g.group_id, g.name, COUNT(t.type_id) AS type_count
-FROM sde_groups g
-LEFT JOIN sde_types t ON t.group_id = g.group_id
-  AND (CAST($1 AS BIGINT) = 0 OR (t.market_group_id > 0 AND t.published = 1))
-WHERE g.category_id = $2
-  AND (CAST($1 AS BIGINT) = 0 OR EXISTS (
-    SELECT 1 FROM sde_types t2
-    WHERE t2.group_id = g.group_id AND t2.market_group_id > 0 AND t2.published = 1
-  ))
-GROUP BY g.group_id, g.name
-ORDER BY g.name
-`
-
-type ListSDEGroupsInCategoryFilteredParams struct {
-	MarketOnly int64 `json:"market_only"`
-	CategoryID int64 `json:"category_id"`
-}
-
-type ListSDEGroupsInCategoryFilteredRow struct {
-	GroupID   int64  `json:"group_id"`
-	Name      string `json:"name"`
-	TypeCount int64  `json:"type_count"`
-}
-
-func (q *Queries) ListSDEGroupsInCategoryFiltered(ctx context.Context, arg ListSDEGroupsInCategoryFilteredParams) ([]ListSDEGroupsInCategoryFilteredRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDEGroupsInCategoryFiltered, arg.MarketOnly, arg.CategoryID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListSDEGroupsInCategoryFilteredRow
-	for rows.Next() {
-		var i ListSDEGroupsInCategoryFilteredRow
-		if err := rows.Scan(&i.GroupID, &i.Name, &i.TypeCount); err != nil {
+		if err := rows.Scan(&i.GroupID, &i.Name, &i.TypeCount, &i.PublishedCount); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -2001,32 +1911,30 @@ func (q *Queries) ListSDETypesByNames(ctx context.Context, names []string) ([]Li
 }
 
 const listSDETypesInGroup = `-- name: ListSDETypesInGroup :many
-SELECT type_id, name, market_group_id FROM sde_types
+SELECT type_id, name, market_group_id, published FROM sde_types
 WHERE group_id = $1 AND strpos(lower(name), lower($2)) > 0
-  AND (CAST($3 AS BIGINT) = 0 OR (market_group_id > 0 AND published = 1))
 ORDER BY name
-LIMIT $5::bigint OFFSET $4::bigint
+LIMIT $4::bigint OFFSET $3::bigint
 `
 
 type ListSDETypesInGroupParams struct {
-	GroupID    int64  `json:"group_id"`
-	Lower      string `json:"lower"`
-	MarketOnly int64  `json:"market_only"`
-	RowOffset  int64  `json:"row_offset"`
-	RowLimit   int64  `json:"row_limit"`
+	GroupID   int64  `json:"group_id"`
+	Lower     string `json:"lower"`
+	RowOffset int64  `json:"row_offset"`
+	RowLimit  int64  `json:"row_limit"`
 }
 
 type ListSDETypesInGroupRow struct {
 	TypeID        int64  `json:"type_id"`
 	Name          string `json:"name"`
 	MarketGroupID int64  `json:"market_group_id"`
+	Published     int64  `json:"published"`
 }
 
 func (q *Queries) ListSDETypesInGroup(ctx context.Context, arg ListSDETypesInGroupParams) ([]ListSDETypesInGroupRow, error) {
 	rows, err := q.db.QueryContext(ctx, listSDETypesInGroup,
 		arg.GroupID,
 		arg.Lower,
-		arg.MarketOnly,
 		arg.RowOffset,
 		arg.RowLimit,
 	)
@@ -2037,7 +1945,7 @@ func (q *Queries) ListSDETypesInGroup(ctx context.Context, arg ListSDETypesInGro
 	var items []ListSDETypesInGroupRow
 	for rows.Next() {
 		var i ListSDETypesInGroupRow
-		if err := rows.Scan(&i.TypeID, &i.Name, &i.MarketGroupID); err != nil {
+		if err := rows.Scan(&i.TypeID, &i.Name, &i.MarketGroupID, &i.Published); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -2696,7 +2604,7 @@ FROM sde_types t
 LEFT JOIN sde_groups g ON g.group_id = t.group_id
 LEFT JOIN sde_categories c ON c.category_id = g.category_id
 WHERE strpos(lower(t.name), lower($1)) > 0
-  AND (CAST($2 AS BIGINT) = 0 OR (t.market_group_id > 0 AND t.published = 1))
+  AND (CAST($2 AS BIGINT) = 0 OR t.published = 1)
   AND (CAST($3 AS BIGINT) = 0 OR g.category_id = $3)
   AND (CAST($4 AS BIGINT) = 0 OR t.group_id = $4)
 ORDER BY COALESCE(c.name, ''), COALESCE(g.name, ''),
@@ -2705,12 +2613,12 @@ LIMIT $6::bigint OFFSET $5::bigint
 `
 
 type SearchSDETypesFilteredParams struct {
-	Q          string `json:"q"`
-	MarketOnly int64  `json:"market_only"`
-	CategoryID int64  `json:"category_id"`
-	GroupID    int64  `json:"group_id"`
-	Off        int64  `json:"off"`
-	Lim        int64  `json:"lim"`
+	Q             string `json:"q"`
+	PublishedOnly int64  `json:"published_only"`
+	CategoryID    int64  `json:"category_id"`
+	GroupID       int64  `json:"group_id"`
+	Off           int64  `json:"off"`
+	Lim           int64  `json:"lim"`
 }
 
 type SearchSDETypesFilteredRow struct {
@@ -2727,8 +2635,8 @@ type SearchSDETypesFilteredRow struct {
 // ---------------------------------------------------------------------
 // Next-1 (search & findability): the Items DB global search and
 // the one shared suggestion feed behind every autocomplete box.
-// All local SDE reads; the market-only predicate is the same
-// marketable+published pair everywhere it appears.
+// All local SDE reads; the search filter predicate is the SDE
+// published flag alone, everywhere it appears.
 // ---------------------------------------------------------------------
 // Category and group first, so a page of results reads as the browse
 // tree does (consecutive rows share a heading); within a group, names
@@ -2738,7 +2646,7 @@ type SearchSDETypesFilteredRow struct {
 func (q *Queries) SearchSDETypesFiltered(ctx context.Context, arg SearchSDETypesFilteredParams) ([]SearchSDETypesFilteredRow, error) {
 	rows, err := q.db.QueryContext(ctx, searchSDETypesFiltered,
 		arg.Q,
-		arg.MarketOnly,
+		arg.PublishedOnly,
 		arg.CategoryID,
 		arg.GroupID,
 		arg.Off,

@@ -2836,13 +2836,13 @@
   });
 
   // --- Filters that apply as they change -----------------------
-  // A control marked data-autosubmit (the Item Database's "Market
-  // items only" box and its category and group pickers) submits its
-  // form the moment it changes, so a filter applies at once and the
-  // result keeps its Category › Group layout; the form's own button
-  // stays for readers without JavaScript. Picking a different
-  // category clears the group first: the old group would otherwise
-  // pull the category back.
+  // A control marked data-autosubmit (the Item Database search's
+  // category and group pickers and its published-only box) submits
+  // its form the moment it changes, so a filter applies at once
+  // and the result keeps its Category › Group layout; the form's
+  // own button stays for readers without JavaScript. Picking a
+  // different category clears the group first: the old group
+  // would otherwise pull the category back.
   document.addEventListener("change", function (ev) {
     var control = ev.target && ev.target.closest ? ev.target.closest("[data-autosubmit]") : null;
     if (!control || !control.form) return;
@@ -2851,6 +2851,40 @@
     }
     if (control.form.requestSubmit) control.form.requestSubmit();
     else control.form.submit();
+  });
+
+  // --- Item Database: published-only, applied in place --------
+  // On the browse tree (the category list, a category's groups,
+  // a group's types) the "Published items only" box carries
+  // data-published-toggle instead: flipping it prunes the rows
+  // already on the page rather than navigating. Branches with
+  // no published types disappear, counts read as published
+  // counts while it is on, unpublished type rows hide, and the
+  // drill-down links pick the state up so it survives the next
+  // click. Every figure rides in data attributes, so toggling
+  // back restores the full tree exactly as it was.
+  document.addEventListener("change", function (ev) {
+    var box = ev.target && ev.target.closest ? ev.target.closest("[data-published-toggle]") : null;
+    if (!box) return;
+    var on = box.checked;
+    Array.prototype.forEach.call(document.querySelectorAll("tr[data-pubcount]"), function (row) {
+      row.hidden = on && row.getAttribute("data-pubcount") === "0";
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-count]"), function (cell) {
+      cell.textContent = on ? cell.getAttribute("data-pub") : cell.getAttribute("data-total");
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("tr[data-published]"), function (row) {
+      row.hidden = on && row.getAttribute("data-published") === "0";
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('a[href^="/items/"]'), function (a) {
+      var href = a.getAttribute("href");
+      var has = /[?&]published=1(&|$)/.test(href);
+      if (on && !has) {
+        a.setAttribute("href", href + (href.indexOf("?") >= 0 ? "&" : "?") + "published=1");
+      } else if (!on && has) {
+        a.setAttribute("href", href.replace("&published=1", "").replace("?published=1&", "?").replace(/\?published=1$/, ""));
+      }
+    });
   });
 
   // --- Buttons that navigate -----------------------------------

@@ -24,8 +24,9 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	for _, want := range []string{
 		"--glass: color-mix(in srgb, var(--panel) 83%, transparent)",
 		"--glass-edge: color-mix(in srgb, var(--accent) 24%, transparent)",
-		"-webkit-backdrop-filter: blur(25px) saturate(0.9)",
-		"backdrop-filter: blur(25px) saturate(0.9)",
+		"--glass-blur: 47px",
+		"-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9)",
+		"backdrop-filter: blur(var(--glass-blur)) saturate(0.9)",
 		".brief-card:hover, .brief-card:focus-within",
 		"transform: translateY(-2px)",
 		"color-mix(in srgb, var(--sev-glow, var(--accent)) 55%, transparent)",
@@ -116,7 +117,7 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	// browse panel paints its own glass again, and the two pages
 	// that floated entirely on the sky (PI planner, public fit)
 	// wrap their bodies in a card.
-	if !strings.Contains(style, "backdrop-filter: blur(25px) saturate(0.9); }") ||
+	if !strings.Contains(style, "backdrop-filter: blur(var(--glass-blur)) saturate(0.9); }") ||
 		!strings.Contains(style, ".foldable .tw { background: none;") {
 		t.Error("the foldable section lost its glass surface or its nested-table suppression")
 	}

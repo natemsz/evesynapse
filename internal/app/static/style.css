@@ -739,13 +739,33 @@ tbody tr:hover td, tbody tr:hover th { background: rgba(255, 106, 0, 0.045); }
   padding: 0.6rem 0.85rem;
   box-shadow: rgba(0, 0, 0, 0.425) 0 1px 0, rgba(255, 255, 255, 0.08) 0 1px 0 inset;
 }
+/* The notice takes the pill buttons' treatment (.btn-quiet,
+   .region-pills): their dark glass paint under the amber tint,
+   and their backdrop blur at the same level. The paint layer is
+   the half that shows everywhere — where the panel glass is
+   stripped (home) the bar rides the raw sky, and a backdrop
+   filter samples nothing over the fixed sky layer in some
+   engines, the same failure the header documents; the pills
+   stay readable there on their paint. The light theme keeps
+   the tint alone over its paper glass, matching the pills'
+   light paint. */
 .ok,
 .notice {
-  background: rgba(255, 184, 77, 0.14);
+  background:
+    linear-gradient(rgba(255, 184, 77, 0.14), rgba(255, 184, 77, 0.14)),
+    rgba(23, 17, 13, 0.55);
   border: 1px solid var(--success);
   border-radius: var(--r-sm);
   color: #f7ecd8;
   padding: 0.6rem 0.85rem;
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  backdrop-filter: blur(10px) saturate(1.2);
+}
+html[data-theme="light"] .ok,
+html[data-theme="light"] .notice {
+  background:
+    linear-gradient(rgba(255, 184, 77, 0.14), rgba(255, 184, 77, 0.14)),
+    rgba(253, 251, 246, 0.72);
 }
 
 img.portrait {

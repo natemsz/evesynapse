@@ -44,8 +44,7 @@ func fitSolveSeed(t *testing.T, app *Application) {
 		`INSERT INTO sde_effects (effect_id, name, category) VALUES (9101, 'fixtureCPUOutputBonus', 0)`,
 		`INSERT INTO sde_effect_modifiers (effect_id, domain, func, modified_attr, modifying_attr, operation, group_id, skill_type_id)
 		 VALUES (9101, 'shipID', 'ItemModifier', 48, 9601, 6, 0, 0)`,
-		`INSERT INTO guide_prices (type_id, adjusted_price, average_price) VALUES (7104, 1200000, 1234567)`,
-		`INSERT INTO guide_prices_meta (id, fetched_at, cached_until) VALUES (1, '2026-01-01T00:00:00Z', '2027-01-01T00:00:00Z')`,
+		`INSERT INTO market_region_stats (region_id, type_id, typical_sell, avg_daily_volume, updated_at) VALUES (10000002, 7104, 1234567, 100, '2026-01-01T00:00:00Z')`,
 		// The Drones skill for the gauge case: the fixture drone
 		// requires it, and charA flies it at V (snapshot below),
 		// so both carried drones count as in space (bandwidth
@@ -95,8 +94,8 @@ func postSolve(t *testing.T, app *Application, cookie *http.Cookie, payload stri
 
 // TestFitSolveImplantsEndToEnd: the hog fit (156 tf on a 150 tf
 // hull) is solved by the +4% hardwiring — not the +3% (154.5,
-// still over) and not the +5% — and the pick carries its guide
-// price.
+// still over) and not the +5% — and the pick carries its Forge
+// typical price.
 func TestFitSolveImplantsEndToEnd(t *testing.T) {
 	app, cookie := fitTestApp(t)
 	fitSolveSeed(t, app)
@@ -120,7 +119,7 @@ func TestFitSolveImplantsEndToEnd(t *testing.T) {
 		t.Errorf("pick name = %q", pick.Name)
 	}
 	if !pick.PriceKnown || pick.Price != 1234567 {
-		t.Errorf("pick price = %v (known %v), want guide average 1234567", pick.Price, pick.PriceKnown)
+		t.Errorf("pick price = %v (known %v), want Forge typical sell 1234567", pick.Price, pick.PriceKnown)
 	}
 	// The round trip: posting the pick as a document implant
 	// override through the ordinary simulator makes the fit

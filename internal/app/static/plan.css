@@ -317,7 +317,7 @@ proportional bar under the text, colored by the decision. */
 }
 /* --- PI Planner (/industry/pi/) --- */
 .pi-controls label { margin-right: 1rem; white-space: nowrap; }
-.pi-planets { border: 1px solid var(--border, #333); border-radius: 4px; margin: 0.6rem 0; }
+.pi-planets { border: 1px solid var(--glass-edge); border-radius: var(--r-sm); margin: 0.6rem 0; padding: 0.55rem 0.8rem 0.7rem; }
 .pi-planet { white-space: nowrap; margin-right: 0.8rem; }
 .pi-coverage.pos { color: #3fce7a; font-weight: 600; }
 .pi-coverage.neg { color: #ff5a4e; font-weight: 600; }
@@ -335,6 +335,65 @@ proportional bar under the text, colored by the decision. */
 .pi-node.covered { border-color: #3fce7a; background: var(--row-hover); }
 .pi-node.source, .pi-node.dimmed.can-supply { opacity: 1; border-color: #c9a06a; border-style: dashed; }
 @media (max-width: 60rem) { .pi-col { min-width: 9rem; flex-basis: 9rem; } }
+/* Controls card: the generic nested-card rule flattens it
+   (padding 0), so the form rows sat on the page card's edge.
+   Restore the foldable padding rhythm, scoped to this page. */
+#pi-wrap .pi-controls { padding: 0.9rem 1rem 1rem; }
+/* Fields in the controls card: number inputs arrive with a flat
+   #2a2a2a border and selects with no site styling at all. Give
+   both the shared field shape with the warm glass edge the glow
+   rounds standardized on, instead of the greys. */
+#pi-wrap .pi-controls select {
+  background: var(--input-bg);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  box-sizing: border-box;
+  min-height: var(--control-h);
+  padding: 0.2rem 0.6rem;
+  font: inherit;
+}
+#pi-wrap .pi-controls input[type="number"] { border-color: var(--glass-edge); }
+#pi-wrap .pi-controls select:focus,
+#pi-wrap .pi-controls input[type="number"]:focus { border-color: var(--accent); }
+html[data-theme="light"] #pi-wrap .pi-controls select,
+html[data-theme="light"] #pi-wrap .pi-controls input[type="number"] { border-color: #d8cdb8; }
+/* Recalculate is a plain <button>, so it wore the default loud
+   orange gradient slab. Restyle it as a quiet glass pill — the
+   .btn-quiet recipe: warm translucent fill, ember edge, light
+   blur; the accent stays in the border and the hover. */
+#pi-form button[type="submit"] {
+  background: rgba(23, 17, 13, 0.55);
+  border: 1px solid rgba(255, 110, 0, 0.22);
+  color: var(--text);
+  text-shadow: none;
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  backdrop-filter: blur(10px) saturate(1.2);
+}
+#pi-form button[type="submit"]:hover:not(:disabled) {
+  background: rgba(23, 17, 13, 0.55);
+  border-color: rgba(255, 130, 20, 0.45);
+  color: var(--text-bright);
+}
+html[data-theme="light"] #pi-form button[type="submit"] {
+  background: rgba(253, 251, 246, 0.72);
+  border-color: #d3c7ae;
+}
+/* Suggested colonies: the nested-foldable rule flattens them
+   (padding 0, no border, no background), so the sections ran
+   together as one unbroken text block. Give each colony its box
+   back on the foldable rhythm — same padding, same separation,
+   warm glass edge; the backdrop filter stays off inside the
+   card's own glass. */
+#pi-wrap .pi-colony {
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.30), rgba(0, 0, 0, 0) 55%), var(--glass);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-lg);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+  padding: 0.9rem 1rem 1rem;
+  margin-bottom: 1.25rem;
+}
+html[data-theme="light"] #pi-wrap .pi-colony { background: #fdfbf6; border-color: #ddd2bd; box-shadow: none; }
 /* The planner search sits in the shared panel: its row needs no
    margin of its own inside it. */
 .searchpanel .plan-searchrow { margin: 0; }

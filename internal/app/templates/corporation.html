@@ -15,7 +15,7 @@
 {{end}}
 
 {{define "corporation-body"}}
-<div data-poll-state="{{.State}}"{{if eq .State "loading"}} data-live-region data-poll-url="/corporation/fragment?corporation={{.CorporationID}}"{{end}}>
+<div data-poll-state="{{.State}}"{{if eq .State "loading"}} data-live-region data-poll-url="/corporation/fragment?corporation={{.CorporationID}}"{{end}}{{if eq .State "ready"}} data-title-text="{{.Name}}{{if .Ticker}} [{{.Ticker}}]{{end}}"{{end}}>
 
 {{if eq .State "missing"}}
 <p><small>EVE has no public record for that corporation.</small></p>

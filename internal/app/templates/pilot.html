@@ -15,7 +15,7 @@
 {{end}}
 
 {{define "pilot-body"}}
-<div data-poll-state="{{.State}}"{{if eq .State "loading"}} data-live-region data-poll-url="/pilot/fragment?character={{.CharacterID}}"{{end}}>
+<div data-poll-state="{{.State}}"{{if eq .State "loading"}} data-live-region data-poll-url="/pilot/fragment?character={{.CharacterID}}"{{end}}{{if eq .State "ready"}} data-title-text="{{.Name}}"{{end}}>
 
 {{if eq .State "missing"}}
 <p><small>EVE has no public record for that character.</small></p>

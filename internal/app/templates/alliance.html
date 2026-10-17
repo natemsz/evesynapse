@@ -15,7 +15,7 @@
 {{end}}
 
 {{define "alliance-body"}}
-<div data-poll-state="{{.State}}"{{if eq .State "loading"}} data-live-region data-poll-url="/alliance/fragment?alliance={{.AllianceID}}"{{end}}>
+<div data-poll-state="{{.State}}"{{if eq .State "loading"}} data-live-region data-poll-url="/alliance/fragment?alliance={{.AllianceID}}"{{end}}{{if eq .State "ready"}} data-title-text="{{.Name}}{{if .Ticker}} [{{.Ticker}}]{{end}}"{{end}}>
 
 {{if eq .State "missing"}}
 <p><small>EVE has no public record for that alliance.</small></p>

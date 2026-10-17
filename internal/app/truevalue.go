@@ -140,11 +140,21 @@ func estSellOf(rows map[int64]db.TrueValue, typeID int64) float64 {
 }
 
 // trueValueBasis is the estimated sell's provenance in plain
-// end-user words: the contracts behind it, or the anchor it
-// fell back to when contracts had nothing clean to say.
+// end-user words, tier by tier: recorded sales are sales,
+// vanished listings are only ever "likely" sales (a listing
+// can also have been withdrawn), live listings are asks, and
+// the anchor is named when no tier had two samples to speak
+// with.
 func trueValueBasis(tv db.TrueValue) string {
 	if tv.SellSamples >= 2 {
-		return fmt.Sprintf("from %d public contracts", tv.SellSamples)
+		switch tv.SellSource {
+		case tvSampleFulfilled:
+			return fmt.Sprintf("from %d recorded sales", tv.SellSamples)
+		case tvSampleVanished:
+			return fmt.Sprintf("from %d likely sales", tv.SellSamples)
+		default:
+			return fmt.Sprintf("from %d public contracts", tv.SellSamples)
+		}
 	}
 	return "anchored to build cost"
 }

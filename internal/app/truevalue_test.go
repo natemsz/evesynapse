@@ -49,30 +49,100 @@ func TestTrueValueContractFilters(t *testing.T) {
 		t.Error("a sub-floor header passed")
 	}
 
+	// The netting pricer: stored prices in the house order
+	// (Forge typical sell, then the stored estimated sell,
+	// then adjusted). The guide's average is never a source:
+	// 3005 carries one and nothing else, and must come back
+	// unpriced. 3010 carries all three real sources and the
+	// typical must win; 3002 only an estimated sell; 3003 an
+	// estimate and an adjusted (estimate first); 3004 only
+	// an adjusted.
+	priceOf := tvStoredPricerFrom(
+		map[int64]float64{34: 5.5, 3001: 250, 3010: 100, 3011: 1e10},
+		map[int64]db.TrueValue{
+			3002: {TypeID: 3002, EstSell: sql.NullFloat64{Float64: 45, Valid: true}},
+			3003: {TypeID: 3003, EstSell: sql.NullFloat64{Float64: 50, Valid: true}},
+			3010: {TypeID: 3010, EstSell: sql.NullFloat64{Float64: 90, Valid: true}},
+		},
+		map[int64]esi.MarketPrice{
+			34:   {AveragePrice: 6, AdjustedPrice: 4},
+			3001: {AveragePrice: 260, AdjustedPrice: 200},
+			3003: {AdjustedPrice: 40},
+			3004: {AdjustedPrice: 40},
+			3005: {AveragePrice: 777},
+			3010: {AveragePrice: 110, AdjustedPrice: 80},
+		})
+	for id, want := range map[int64]float64{34: 5.5, 3001: 250, 3002: 45, 3003: 50, 3004: 40, 3010: 100} {
+		if got, ok := priceOf(id); !ok || got != want {
+			t.Errorf("priceOf(%d) = (%v, %v), want (%v, true)", id, got, ok, want)
+		}
+	}
+	if _, ok := priceOf(9999); ok {
+		t.Error("priceOf priced a type nothing stored knows")
+	}
+	if _, ok := priceOf(3005); ok {
+		t.Error("priceOf priced a type from the guide average, which is never a price source")
+	}
+
 	// Item-list filter: exactly the thin type, at an in-band
-	// unit price.
+	// unit price (the single shape).
 	item := func(id int64, qty int64) tvPublicContractItem {
 		return tvPublicContractItem{TypeID: id, Quantity: qty, IsIncluded: true}
 	}
-	if id, unit, ok := tvContractSampleFor(real, []tvPublicContractItem{item(11567, 1)}, thin, ships); !ok || id != 11567 || unit != 590e9 {
-		t.Errorf("clean hull contract = (%d, %v, %v), want (11567, 590e9, true)", id, unit, ok)
+	if id, unit, shape, ok := tvContractSampleFor(real.Price, []tvPublicContractItem{item(11567, 1)}, thin, ships, priceOf); !ok || id != 11567 || unit != 590e9 || shape != tvContractShapeSingle {
+		t.Errorf("clean hull contract = (%d, %v, %q, %v), want (11567, 590e9, single, true)", id, unit, shape, ok)
 	}
-	if _, _, ok := tvContractSampleFor(scam, []tvPublicContractItem{item(11567, 1)}, thin, ships); ok {
+	if _, _, _, ok := tvContractSampleFor(scam.Price, []tvPublicContractItem{item(11567, 1)}, thin, ships, priceOf); ok {
 		t.Error("scam-priced hull contract sampled")
 	}
-	if _, _, ok := tvContractSampleFor(real, []tvPublicContractItem{item(11567, 1), item(34, 500)}, thin, ships); ok {
-		t.Error("bundled contract sampled (a hull plus minerals is a fit, not a price)")
-	}
-	if _, _, ok := tvContractSampleFor(real, []tvPublicContractItem{item(11567, 2)}, thin, ships); ok {
+	if _, _, _, ok := tvContractSampleFor(real.Price, []tvPublicContractItem{item(11567, 2)}, thin, ships, priceOf); ok {
 		t.Error("two-hull contract sampled (ships sample at quantity 1)")
 	}
-	if _, _, ok := tvContractSampleFor(real, []tvPublicContractItem{item(9999, 1)}, thin, ships); ok {
+	if _, _, _, ok := tvContractSampleFor(real.Price, []tvPublicContractItem{item(9999, 1)}, thin, ships, priceOf); ok {
 		t.Error("contract for a non-thin type sampled")
 	}
 	// A non-ship thin type samples per unit across quantity.
-	bulk := tvPublicContract{ContractID: 3, Type: "item_exchange", Status: "outstanding", Price: 9e6}
-	if id, unit, ok := tvContractSampleFor(bulk, []tvPublicContractItem{item(2001, 5)}, thin, ships); !ok || id != 2001 || unit != 1.8e6 {
-		t.Errorf("bulk contract = (%d, %v, %v), want (2001, 1.8e6, true)", id, unit, ok)
+	if id, unit, shape, ok := tvContractSampleFor(9e6, []tvPublicContractItem{item(2001, 5)}, thin, ships, priceOf); !ok || id != 2001 || unit != 1.8e6 || shape != tvContractShapeSingle {
+		t.Errorf("bulk contract = (%d, %v, %q, %v), want (2001, 1.8e6, single, true)", id, unit, shape, ok)
+	}
+
+	// The fitted shape: one hull plus other items, netted at
+	// stored prices, the residual under the same band. A hull
+	// with minerals aboard is a fit whose price the netting
+	// can speak for -- the shape titans actually trade in.
+	fitted := []tvPublicContractItem{item(11567, 1), item(3001, 2), item(3002, 3)}
+	if id, unit, shape, ok := tvContractSampleFor(590e9, fitted, thin, ships, priceOf); !ok || id != 11567 || unit != 590e9-635 || shape != tvContractShapeFitted {
+		t.Errorf("fitted hull contract = (%d, %v, %q, %v), want (11567, %v, fitted, true)", id, unit, shape, ok, 590e9-635)
+	}
+	if id, unit, shape, ok := tvContractSampleFor(real.Price, []tvPublicContractItem{item(11567, 1), item(34, 500)}, thin, ships, priceOf); !ok || id != 11567 || unit != 590e9-2750 || shape != tvContractShapeFitted {
+		t.Errorf("hull plus minerals = (%d, %v, %q, %v), want (11567, %v, fitted, true)", id, unit, shape, ok, 590e9-2750)
+	}
+	// The residual must still land in the band: netting 30B
+	// of modules out of a 130B contract leaves 100B against
+	// a 110B floor.
+	heavy := []tvPublicContractItem{item(11567, 1), item(3011, 3)}
+	if _, _, _, ok := tvContractSampleFor(130e9, heavy, thin, ships, priceOf); ok {
+		t.Error("fitted contract with an out-of-band residual sampled")
+	}
+	// An extra item stored prices cannot value rejects the
+	// contract outright -- the residual would be a guess.
+	if _, _, _, ok := tvContractSampleFor(590e9, []tvPublicContractItem{item(11567, 1), item(9999, 1)}, thin, ships, priceOf); ok {
+		t.Error("fitted contract with an unpriceable extra sampled")
+	}
+	// Two thin hulls aboard: which one is the subject is
+	// ambiguous, netting or not.
+	thin2 := map[int64]float64{11567: 550e9, 2001: 2e6, 22852: 44e9}
+	ships2 := map[int64]bool{11567: true, 22852: true}
+	if _, _, _, ok := tvContractSampleFor(600e9, []tvPublicContractItem{item(11567, 1), item(22852, 1)}, thin2, ships2, priceOf); ok {
+		t.Error("two-thin-hull contract sampled")
+	}
+	// A second thin type of any kind aboard rejects too.
+	if _, _, _, ok := tvContractSampleFor(590e9, []tvPublicContractItem{item(11567, 1), item(2001, 5)}, thin, ships, priceOf); ok {
+		t.Error("fitted contract with another thin type aboard sampled")
+	}
+	// Two units of the hull is not the fitted shape either.
+	if _, _, _, ok := tvContractSampleFor(590e9, []tvPublicContractItem{item(11567, 2), item(3001, 1)}, thin, ships, priceOf); ok {
+		t.Error("fitted contract with two hulls sampled")
 	}
 
 	// Estimated sell: the median once two samples agree,
@@ -89,6 +159,45 @@ func TestTrueValueContractFilters(t *testing.T) {
 	}
 	if got := estimatedSell(550e9, []tvContractSample{sample(700e9), sample(590e9), sample(610e9)}); got != 610e9 {
 		t.Errorf("three samples: est = %v, want median 610e9", got)
+	}
+
+	// Tiered estimates: the strongest tier with two samples
+	// speaks -- recorded sales over likely sales over asks --
+	// and a lone sample at any tier cannot.
+	tiered := func(p float64, source string) tvContractSample {
+		return tvContractSample{price: p, at: time.Now(), source: source}
+	}
+	if est, source, n := estimatedSellTiered(550e9, []tvContractSample{
+		tiered(600e9, tvSampleFulfilled), tiered(620e9, tvSampleFulfilled),
+		tiered(590e9, tvSampleListing), tiered(595e9, tvSampleListing), tiered(598e9, tvSampleListing),
+	}); est != 610e9 || source != tvSampleFulfilled || n != 2 {
+		t.Errorf("fulfilled over listings = (%v, %q, %d), want (610e9, fulfilled, 2)", est, source, n)
+	}
+	if est, source, n := estimatedSellTiered(550e9, []tvContractSample{
+		tiered(600e9, tvSampleFulfilled),
+		tiered(500e9, tvSampleVanished), tiered(520e9, tvSampleVanished),
+		tiered(590e9, tvSampleListing), tiered(610e9, tvSampleListing),
+	}); est != 510e9 || source != tvSampleVanished || n != 2 {
+		t.Errorf("vanished over listings = (%v, %q, %d), want (510e9, vanished, 2)", est, source, n)
+	}
+	if est, source, n := estimatedSellTiered(550e9, []tvContractSample{
+		tiered(600e9, tvSampleFulfilled), tiered(500e9, tvSampleVanished), tiered(590e9, tvSampleListing),
+	}); est != 550e9 || source != "" || n != 3 {
+		t.Errorf("one sample per tier = (%v, %q, %d), want (550e9 anchor, \"\", 3)", est, source, n)
+	}
+
+	// The vanish margin: gone a day or more before expiry is
+	// an exit expiry cannot explain; gone inside it is not
+	// evidence.
+	nowT := time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
+	if !tvVanishedBeforeExpiry(nowT, nowT.Add(25*time.Hour)) {
+		t.Error("vanished 25h before expiry not counted")
+	}
+	if tvVanishedBeforeExpiry(nowT, nowT.Add(23*time.Hour)) {
+		t.Error("vanished 23h before expiry counted")
+	}
+	if tvVanishedBeforeExpiry(nowT, nowT.Add(-time.Hour)) {
+		t.Error("vanished after expiry counted")
 	}
 
 	// Thin: no average at all, or an average over a market

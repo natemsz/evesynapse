@@ -271,6 +271,15 @@ var pgMarketBookSnapshotSchema string
 //go:embed schema_pg/051_true_values.sql
 var pgTrueValuesSchema string
 
+// Step 052: true-value evidence tiers -- true_values gains
+// the provenance of its estimated sell (sell_source), and the
+// contract crawl gains its longitudinal observation table,
+// where a watched listing that vanishes before expiry turns
+// into probable-sale evidence.
+//
+//go:embed schema_pg/052_true_value_evidence.sql
+var pgTrueValueEvidenceSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -351,6 +360,7 @@ func schemaSteps() []schemaStep {
 		{49, "trade_ideas_rows", pgTradeIdeasRowsSchema, ""},
 		{50, "market_book_snapshot", pgMarketBookSnapshotSchema, ""},
 		{51, "true_values", pgTrueValuesSchema, ""},
+		{52, "true_value_evidence", pgTrueValueEvidenceSchema, ""},
 	}
 }
 

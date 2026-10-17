@@ -371,6 +371,30 @@ type MarketStationStat struct {
 	TypicalBuy  float64   `json:"typical_buy"`
 }
 
+type MarketStatsFallback struct {
+	RegionID    int64     `json:"region_id"`
+	TypeID      int64     `json:"type_id"`
+	MedianSell  float64   `json:"median_sell"`
+	FivepctSell float64   `json:"fivepct_sell"`
+	MedianBuy   float64   `json:"median_buy"`
+	FivepctBuy  float64   `json:"fivepct_buy"`
+	SellOrders  int64     `json:"sell_orders"`
+	BuyOrders   int64     `json:"buy_orders"`
+	SellVolume  float64   `json:"sell_volume"`
+	BuyVolume   float64   `json:"buy_volume"`
+	Source      string    `json:"source"`
+	OrdersetID  int64     `json:"orderset_id"`
+	SourceAsof  time.Time `json:"source_asof"`
+	FetchedAt   time.Time `json:"fetched_at"`
+}
+
+type MarketStatsFallbackMetum struct {
+	ID         int32        `json:"id"`
+	OrdersetID int64        `json:"orderset_id"`
+	FetchedAt  sql.NullTime `json:"fetched_at"`
+	RowCount   int64        `json:"row_count"`
+}
+
 type MarketSweepOrder struct {
 	RegionID     int64   `json:"region_id"`
 	TypeID       int64   `json:"type_id"`

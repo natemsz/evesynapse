@@ -492,6 +492,35 @@ SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical
 FROM market_region_stats
 WHERE type_id = $1
 ORDER BY region_id;
+-- Fallback stats (schema 054): the Fuzzwork aggregate mirror.
+-- One wholesale replacement per orderset inside one
+-- transaction (delete, then insert), the guide-prices pattern;
+-- readers pick between this table and market_region_stats at
+-- read time and never see a half-written snapshot.
+-- name: DeleteMarketStatsFallback :exec
+DELETE FROM market_stats_fallback;
+-- name: InsertMarketStatsFallback :exec
+INSERT INTO market_stats_fallback (region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
+-- name: GetMarketStatsFallback :one
+SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at
+FROM market_stats_fallback
+WHERE region_id = $1 AND type_id = $2;
+-- name: ListMarketStatsFallbackByType :many
+SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at
+FROM market_stats_fallback
+WHERE type_id = $1
+ORDER BY region_id;
+-- name: GetMarketStatsFallbackMeta :one
+SELECT id, orderset_id, fetched_at, row_count FROM market_stats_fallback_meta
+WHERE id = 1;
+-- name: UpsertMarketStatsFallbackMeta :exec
+INSERT INTO market_stats_fallback_meta (id, orderset_id, fetched_at, row_count)
+VALUES (1, $1, $2, $3)
+ON CONFLICT (id) DO UPDATE SET
+    orderset_id = excluded.orderset_id,
+    fetched_at  = excluded.fetched_at,
+    row_count   = excluded.row_count;
 -- name: ListMarketRegionStatsByRegion :many
 SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
 FROM market_region_stats

@@ -140,6 +140,11 @@ type Application struct {
 	// restart resumes from the staged cursor.
 	sweepMu sync.Mutex
 
+	// pubContractMu serializes public-contract sweep passes
+	// (pub_contracts.go): one pass walks every region's cursor,
+	// and passes never overlap.
+	pubContractMu sync.Mutex
+
 	// The worker-stored market guide (market_guide_prices.go), cached
 	// in memory under its fetched_at stamp so renders reload
 	// only when a refresh has landed.
